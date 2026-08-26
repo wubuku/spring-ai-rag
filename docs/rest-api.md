@@ -88,6 +88,72 @@ management console with one. Responses include `Cache-Control: no-store`.
 See the [Business Service Integration Guide](business-client-integration.md)
 for production binding and rotation.
 
+#### `GET /api/v1/rag/integration-capabilities`
+
+Returns a versioned, low-sensitivity integration contract projected for the
+current caller. When authentication is enabled, the endpoint requires a valid
+credential, but a database NORMAL principal does not need an additional
+`RAG_READ` capability merely to discover its contract. Responses include
+`Cache-Control: no-store`.
+
+```json
+{
+  "protocol": {
+    "name": "spring-ai-rag-integration",
+    "version": "1.0",
+    "apiVersion": "1.0.0"
+  },
+  "principal": {
+    "principalType": "DATABASE_API_KEY",
+    "principalRole": "NORMAL",
+    "capabilities": ["RAG_READ"],
+    "collectionAccessMode": "RESTRICTED",
+    "allowedCollectionKeys": ["customer-42:records:v1"]
+  },
+  "features": {
+    "provisioning": {
+      "idempotencyKey": true,
+      "replayReturnsSecret": false,
+      "rawCredentialShownOnce": true
+    },
+    "dataPlane": {
+      "collectionKey": true,
+      "jsonRecords": {
+        "upsert": true,
+        "search": true,
+        "payloadContains": true,
+        "revisionCas": true,
+        "exactReplay": true,
+        "tombstoneRestore": true
+      },
+      "embedding": {
+        "asyncPolicy": true,
+        "readinessEndpoint": true
+      },
+      "bindingPreflight": true
+    },
+    "optional": {
+      "documentSyncRuns": false,
+      "openAiCompatibility": false
+    }
+  },
+  "limits": {
+    "maxCollectionKeysPerPrincipal": 100,
+    "collectionKeyMaxLength": 128,
+    "sourceNamespaceMaxLength": 128,
+    "externalIdMaxLength": 255,
+    "sourceRevisionMaxLength": 255
+  }
+}
+```
+
+The response intentionally omits credential/principal IDs, provider settings,
+database details, and secrets. Runtime feature flags are reflected directly.
+If a restricted ACL cannot be mapped completely to stable Collection keys, the
+endpoint returns `503 SERVICE_UNAVAILABLE` rather than publishing a partial
+contract. Use this endpoint to select supported client behavior, then use
+`/auth/me` and Collection probes to verify the exact deployment binding.
+
 For database NORMAL principals, `GET`/`HEAD`/`OPTIONS` and explicit read-only
 POST routes (Search, Chat, JSON-record search, model comparison,
 non-persisting evaluation, and `/v1/chat/completions`) require `RAG_READ`.
@@ -710,6 +776,13 @@ collections. `allowedCollectionIds` is deprecated. `capabilities` accepts only
 `["RAG_READ"]` or `["RAG_READ", "RAG_WRITE"]`; omission defaults to full
 read/write.
 
+An optional `Idempotency-Key` header makes provisioning safely retryable
+within the configured retention window. The key must contain 1-255 visible
+ASCII characters and is scoped to the authenticated provisioning principal.
+The same key may be reused only with the same normalized request; Collection
+keys and their equivalent resolved numeric IDs produce the same fingerprint.
+Malformed or repeated header values return `400 IDEMPOTENCY_KEY_INVALID`.
+
 **Request body**:
 ```json
 {
@@ -721,7 +794,7 @@ read/write.
 }
 ```
 
-The raw secret appears only in the `201 Created` response, which includes
+The raw secret appears only in the first `201 Created` response, which includes
 `Cache-Control: no-store`:
 
 ```json
@@ -736,9 +809,38 @@ The raw secret appears only in the `201 Created` response, which includes
   "allowedCollectionIds": [1, 2],
   "expiresAt": "2026-10-01T00:00:00",
   "requestsPerMinute": 120,
-  "capabilities": ["RAG_READ"]
+  "capabilities": ["RAG_READ"],
+  "secretAvailable": true,
+  "idempotentReplay": false,
+  "currentCredentialActive": true
 }
 ```
+
+An exact keyed replay returns `200 OK`,
+`X-RAG-Idempotent-Replay: true`, and `Cache-Control: no-store`. It never
+replays the raw secret:
+
+```json
+{
+  "keyId": "rag_k_xyz789",
+  "principalId": "rag_k_xyz789",
+  "credentialVersion": 1,
+  "rawKey": null,
+  "name": "My API Key",
+  "secretAvailable": false,
+  "idempotentReplay": true,
+  "currentCredentialActive": true
+}
+```
+
+Reusing the same owner/key with a different request returns
+`409 IDEMPOTENCY_KEY_REUSED`. The ledger stores only hashes and result
+metadata, never the raw credential. After rotation, replay reports the current
+credential ID/version with `rawKey=null`; after revocation or expiry it reports
+`keyId=null`, `credentialVersion=null`, and
+`currentCredentialActive=false`. If the ledger is disabled or unavailable, a
+keyed request fails closed with `503`; it does not silently fall back to a
+non-idempotent create.
 
 ### `PUT /api/v1/rag/api-keys/principals/{principalId}/policy`
 

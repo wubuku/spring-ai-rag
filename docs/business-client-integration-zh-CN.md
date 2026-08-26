@@ -10,14 +10,14 @@ credential、Collection、JSON Record、重试、升级和验收边界。外部�
 
 如果你正在为独立后端服务接入 RAG 数据面，按以下顺序即可覆盖生产启用阻断项：
 
-1. 锁定已验证的源码或镜像基线。当前通用业务接入 checkpoint 是
-   `business-client-p0-clean-baseline-2026-08-26`（commit `9f219a94`）。
+1. 锁定通过接入验收门禁的精确源码 commit 或不可变镜像，并随部署记录。
 2. 按[配置参考](configuration-zh-CN.md)和[部署文档](DEPLOYMENT.md)启动服务并执行
    Flyway；environment root 只用于运维面。
 3. 由 operator 创建稳定 `collectionKey`，再按
    [API 密钥管理](rest-api-zh-CN.md#api-密钥管理)为查询和投递职责创建 restricted
    business principal，精确配置 `capabilities` 与 `allowedCollectionKeys`。
-4. 每个业务实例启动时执行 `/auth/me` 和 Collection by-key 探针，或运行
+4. 每个业务实例启动时先发现 `/integration-capabilities`，再执行 `/auth/me` 和
+   Collection by-key 探针，或运行
    [已部署实例 Binding 预检](#41-已部署实例-binding-预检)；任何不匹配都失败关闭，
    不能回退到 root、legacy key 或 unrestricted principal。
 5. 调用方把权威业务对象编译为 allow-list JSON 投影，使用稳定三元身份和 opaque revision，
@@ -89,7 +89,17 @@ X-API-Key: <business-credential>
 
 ### 自省与 binding
 
-业务服务启动时调用：
+业务服务启动时先调用：
+
+```text
+GET /api/v1/rag/integration-capabilities
+```
+
+要求 protocol 为 `spring-ai-rag-integration` version `1.0`，再核对所需
+provisioning/data-plane feature 和 limits。该响应是按当前调用方投影的低敏合同，不替代
+身份 binding。
+
+随后调用：
 
 ```text
 GET /api/v1/rag/auth/me
@@ -146,16 +156,20 @@ JSON Record 分开保存：
 
 1. operator 使用 environment root 创建目标 Collection。
 2. operator 创建 restricted business principal，并设置唯一名称、到期时间、RPM 和
-   `allowedCollectionKeys`，同时显式指定 `capabilities`。
+   `allowedCollectionKeys`，同时显式指定 `capabilities` 和调用方生成的
+   `Idempotency-Key`。
 3. 在创建响应中一次性接收 raw credential，立即写入 secret manager。
 4. 业务服务只从环境变量、挂载 secret 或等价 secret provider 读取 credential。
 5. 服务启动时执行 `/auth/me`，精确核对 principal、能力集合与 allow-list。
 6. 对目标 Collection 执行只读 by-key 探针，再开始消费业务事件。
 7. 发布后运行本指南第 8 节的合同门禁。
 
-当前 provisioning 没有幂等键。创建请求超时后，不要盲目重复创建；先由 operator 在管理面
-按稳定名称/目标 binding 对账。若 principal 已存在但 raw credential 未安全保存，轮换其当前
-credential，而不是再创建一个无主 principal。
+同一个 `Idempotency-Key` 只能与完全相同的规范化请求复用。首次成功返回 `201` 并只展示
+一次 raw credential；精确重试返回 `200`、`X-RAG-Idempotent-Replay: true` 和
+`rawKey=null`。同 owner/key 携带不同请求返回 `409 IDEMPOTENCY_KEY_REUSED`。若首次响应
+丢失，replay 可以确认 principal，但不能恢复 raw secret；应轮换当前 credential，而不是再
+创建无主 principal。默认 replay 保证窗口是配置的 400 天 retention，超过窗口后不得复用旧
+key。
 
 ### 4.1 已部署实例 Binding 预检
 
@@ -291,16 +305,15 @@ durable embedding job 的 `default-max-attempts`/`max-attempts` 是两层独立�
 - embedding 可用性读取文档 lifecycle 或
   `/api/v1/rag/collections/embedding-readiness`；业务 binding 另用 `/auth/me` 和
   Collection by-key。
-- 空库或升级环境必须按顺序执行 Flyway V1-V49。V49 为 stable principal 增加
-  operation capabilities；既有 principal 默认完整读写，升级后可通过 policy CAS
-  收敛为只读。
+- 空库或升级环境必须按顺序执行 Flyway V1-V50。V49 为 stable principal 增加
+  operation capabilities；V50 增加不保存 raw credential 的成功 provisioning 幂等 ledger。
 - 生产调用方应锁定已验收的 Git commit 或由该 commit 构建的不可变镜像。当前 Maven/API
   版本仍为 `1.0.0`。
 - `/auth/me` 的新增字段保持向后兼容；旧 client 会忽略，依赖 capability/ACL 自检的
   client 必须先运行合同门禁，再升级业务实例。
-- V49 是向前兼容加列迁移，不执行破坏性 schema 回退。若应用回滚到不识别 operation
-  capabilities 的版本，应继续保留 V49 schema，并停止依赖只读能力边界的新 client，
-  不能降级为“允许启动”。
+- V49/V50 都是向前兼容增量迁移，不执行破坏性 schema 回退。若应用回滚到不识别
+  operation capabilities 或 keyed provisioning 的版本，应继续保留 schema，并停止依赖
+  对应合同的 client，不能宽松启动或退化为无幂等 create。
 
 ## 8. 一键接入验收
 
@@ -328,6 +341,8 @@ BUSINESS_CLIENT_VERIFY_PHASE=real \
 `mvn clean compile test-compile`、WebUI typecheck/Vitest/生产构建、核心 Mock
 Playwright、文档/禁锁/密钥/diff 门禁，以及真实 Spring Boot、包含已部署 binding
 preflight 的 HTTP 合同和真实 API Key Playwright。HTTP 合同明确验证只读 query principal
+之前，还验证 keyed principal create 可跨实例安全重试、不重放 secret、轮换/吊销后 replay
+返回当前 credential 状态，并暴露按调用方投影的运行时 capability 合同。随后验证 query
 可以 lookup/search、不能 upsert/delete，且拒绝后 revision 和状态不变；读写 dispatcher
 继续负责 mutation，credential 轮换保持原能力。合同还运行代表性的租户/共享拓扑：同一个
 query principal 绑定两个 Collection，两个 dispatcher 不能交叉写入，另一租户仍不可访问；
@@ -355,10 +370,9 @@ embedding HTTP 路径及 503 失败保留合同，但本能力不改变 Chat，�
 
 ## 9. 当前限制
 
-- principal provisioning 尚无幂等键。
-- 尚无独立的运行时 capability discovery 端点；当前以 OpenAPI、Git commit 和离线
-  `release-manifest.json` 锁定兼容性。
 - 当前身份体系是 environment root + 数据库业务 principal，不提供 OAuth/OIDC federation
   或独立 tenant 层级。
+- capability discovery 描述受支持协议行为和当前 principal 投影；仍必须使用 `/auth/me`、
+  Collection 探针和部署特定 binding 检查。
 
 这些后续边界见 [TODO](TODO-zh-CN.md#受管-api-principal-后续边界)。

@@ -1,10 +1,10 @@
 # 托管调用方幂等 provisioning 与运行时能力发现实施进度
 
-> **状态**：规划已完成，待实施
+> **状态**：预合并统一验收与实现 `3/3` 通过，待同步最新 `origin/main`
 >
 > **对应规划**：[NEXT_HIGH_VALUE_FEATURES_PLAN.md](NEXT_HIGH_VALUE_FEATURES_PLAN.md)
 >
-> **规划基线**：`main` / `origin/main` @ `0abc667e`（2026-08-26）
+> **规划基线**：`main` / `origin/main` @ `cf740943`（2026-08-26）
 >
 > **实施分支**：`feat/managed-provisioning-capability-discovery-20260826`
 >
@@ -25,9 +25,12 @@
 - [x] 完成本规划三轮无修改审查。
 - [x] 提交并推送规划，建立保护 checkpoint。
 - [x] 创建最新 `main` 基础的隔离特性 worktree。
-- [ ] 实施 API、迁移、测试、脚本和文档。
-- [ ] 完成基本硬门槛和必要真实服务验收。
-- [ ] 完成实现三轮无修改审查。
+- [x] Slice A：公共 DTO、配置、V50 迁移和 provisioning ledger 持久化模型。
+- [x] Slice B：幂等 provisioning service/controller 与 capability discovery。
+- [x] Slice C：API/service/PostgreSQL/并发/生命周期/OpenAPI/能力投影验收测试完成。
+- [x] Slice D：脚本和双语长青文档。
+- [x] 完成基本硬门槛和必要真实服务验收。
+- [x] 完成实现三轮无修改审查。
 - [ ] 合并、推送 `main`、确认干净并移除特性 worktree。
 
 ## 2. 已冻结的关键决策
@@ -62,10 +65,39 @@
 | 时间 | 阶段 | 命令/范围 | 结果 | 证据 |
 |---|---|---|---|---|
 | 2026-08-26 | 规划前探索 | 当前 main、V48/V49、principal/service/controller/repository、历史 plan/TODO、WebUI retry | PASS | 本地代码与归档文档 |
+| 2026-08-26 | 实施基线 | 特性分支从 `cf740943` 创建；进度账本 checkpoint `9a4ab5cf` | PASS | `git status --short --branch`、`git log` |
+| 2026-08-26 | Slice A/B | 新增 V50 ledger、幂等 create/replay、owner projection、capability discovery endpoint 和认证例外 | PASS（编译+既有专项 45/45） | `mvn -pl spring-ai-rag-core -am -DskipTests compile`；API key/capability tests |
+| 2026-08-26 | PostgreSQL 初次验收 | 容器启动、V1→V50 迁移和 13 个测试均执行；发现 replay unrestricted ACL 的空值处理缺陷，另发现 capability 顺序测试夹具与语义不一致 | FAIL（已定位，待重跑） | `TESTCONTAINERS_RYUK_DISABLED=true mvn -pl spring-ai-rag-core -am -Dtest=ManagedApiPrincipalPostgresIntegrationTest -Dsurefire.failIfNoSpecifiedTests=false -Dmanaged-api-principal.it.enabled=true test` |
+| 2026-08-26 | PostgreSQL 第二次验收 | 空值缺陷已修复；唯一剩余失败为重试夹具重新生成了不同 `expiresAt`，不符合幂等请求必须复用同一请求体的约束 | FAIL（已修正夹具，待重跑） | 同上命令；失败位于 `idempotentProvisioningReplaysAndRejectsFingerprintConflict` |
+| 2026-08-26 | PostgreSQL 专项验收 | V1→V50、明文 secret 禁写、幂等 replay/conflict、owner 隔离、并发唯一竞争、rotation/revoke 后状态与 cleanup | PASS（13/13） | `ManagedApiPrincipalPostgresIntegrationTest`，真实 `pgvector/pgvector:pg16` |
+| 2026-08-26 | cleanup 事务复核 | 发现 service 外层事务捕获数据库异常后仍可能在提交阶段抛出 rollback-only；删除事务下沉到 repository，service 在事务边界外捕获完整失败 | FIXED（待受影响门槛重跑） | `ApiKeyProvisioningOperationRepository.deleteCompletedBefore` |
+| 2026-08-26 | cleanup 修复回归 | service 专项与真实 PostgreSQL 矩阵重跑 | PASS（11/11 + 13/13） | `ApiKeyManagementServiceTest`；`ManagedApiPrincipalPostgresIntegrationTest` |
+| 2026-08-26 | API/能力/OpenAPI 合同 | 四类 identity projection、restricted/unrestricted ACL、完整解析失败 503、feature flag、create 200/409/503、OpenAPI path/schema/response | PASS（71/71） | `IntegrationCapabilityCatalogTest`、controller/filter tests、`OpenApiContractTest` |
+| 2026-08-26 20:44 CST | Slice D 文档与脚本 | capability/provisioning 公共合同、V50 inventory、接入可发现性、Shell 语法、链接、双语结构、密钥与 whitespace | PASS（文档 11/11） | `./scripts/verify-project-docs.sh`；`bash -n scripts/verify-managed-api-principals.sh`；`git diff --check` |
+| 2026-08-26 20:46 CST | 首次统一 PostgreSQL 矩阵 | 广域 Hibernate schema validation 与历史 PostgreSQL migration expectations | FAIL（已停止后续阶段并修复） | V50 hash 列 `CHAR(64)` 与实体 `VARCHAR(64)` 不一致；3 个最新迁移断言及 2 个 lifecycle 断言仍为 V49 |
+| 2026-08-26 20:51 CST | PostgreSQL/证据脚本修复 | V50 hash 列改为 `VARCHAR(64)` 并保留 hex CHECK；最新迁移断言更新为 V50；新增列类型回归断言；中断运行必须记录 FAIL | FIXED（待矩阵重跑） | V50 migration、5 个 PostgreSQL integration assertions、`verify-managed-api-principals.sh` |
+| 2026-08-26 20:53 CST | 修复后 PostgreSQL 核心矩阵 | Chat session、Chat turn operation、既有 high-value control planes、managed principal/V50 provisioning | PASS（46/46，skipped=0） | 4 个真实 `pgvector/pgvector:pg16` integration suites |
+| 2026-08-26 20:55 CST | 文档生命周期迁移回归 | V39/V42→V50 升级、本地索引 backfill 与 lifecycle 合同 | PASS（12/12，skipped=0） | `DocumentLifecyclePostgresIntegrationTest` |
+| 2026-08-26 21:00 CST | 首次修复后统一门槛 | PostgreSQL、Maven、双实例后端合同通过；隔离 worktree 未安装 `node_modules` | PARTIAL（前端命令 127，真实 WebUI 未启动） | run `20260826-205633`；后端 create/replay/conflict/rotation/revoke、capability、quota、V50 终态均 PASS |
+| 2026-08-26 21:07 CST | 前端依赖与门槛 | `npm ci` 后运行 Vitest、TypeScript、生产构建、alignment 与核心 Mock Playwright | PASS（218/218 + build + 1/1） | `spring-ai-rag-webui/package-lock.json` 锁定安装；无截图断言 |
+| 2026-08-26 21:14 CST | 预合并统一验收 | PostgreSQL 46/46、Maven clean/compile/test-compile、全量 Maven、WebUI Vitest/TypeScript/build/alignment、Mock Playwright、文档/锁/whitespace、双实例真实全栈与真实 provider | PASS（13/13 steps） | run `20260826-final-premerge`；API 541、Documents 74、Core 3043（7 个环境门控 skip）、Starter 44；WebUI 218/218；真实 WebUI 1/1；真实 provider 5 calls |
 
-## 5. 恢复入口
+## 5. 实现审查账本
 
-规划已完成连续 `3/3` 无实质问题审查。下一步提交并推送规划，建立保护 checkpoint，
-然后基于最新本地 `main` 创建专用特性分支和隔离 worktree。实施时每个关键切片先更新
-本进度文档；若实现阶段发现影响正确性、成本安全、兼容性或数据一致性的实质问题，修复
-代码后重跑受影响门槛，并将实现审查计数重置为 `0`。
+| 轮次 | 时间 | 固定范围 | 发现/处理 | 连续计数 |
+|---|---|---|---|---:|
+| 1 | 2026-08-26 21:17 CST | 事务、迁移、并发、清理、secret 与失败恢复 | 未发现实质问题。 | 1 |
+| 2 | 2026-08-26 21:20 CST | HTTP/OpenAPI、认证授权、能力/ACL 投影与兼容主路径 | 未发现实质问题。 | 2 |
+| 3 | 2026-08-26 21:23 CST | 验收脚本、测试证据、文档、发布回滚、密钥与 Git 风险 | 发现架构表使用概念列名且误称存在 `principal_id` 查询索引；已按 V50 实际 schema 修正中英文文档，计数重置。 | 0 |
+| 1（重启） | 2026-08-26 21:25 CST | V50 事务、迁移、并发、清理、secret 与失败恢复 | 未发现实质问题。 | 1 |
+| 2（重启） | 2026-08-26 21:27 CST | HTTP/OpenAPI、认证授权、能力/ACL 投影与兼容主路径 | 未发现实质问题。 | 2 |
+| 3（重启） | 2026-08-26 21:29 CST | 统一脚本、真实调用证据、长青文档、发布回滚、密钥与 Git 风险 | 未发现实质问题；实现达到连续 `3/3`。 | 3 |
+
+## 6. 恢复入口
+
+规划已完成连续 `3/3` 无实质问题审查，规划 checkpoint 已提交推送，当前特性 worktree
+已建立并完成首个进度 checkpoint。Slice A/B/C/D 已完成，预合并统一验收
+`20260826-final-premerge` 的 13 个步骤全部通过，实现收敛检查达到连续 `3/3`。下一步先创建
+本地保护提交，再 fetch/merge 最新 `origin/main`，记录合并后的 commit/数据库/隔离端口基线，
+并完整重跑统一验收与合并后 `3/3`。若发现影响正确性、成本安全、兼容性或数据一致性的实质问题，
+先修复并重跑受影响门槛，审查计数重置为 `0`。

@@ -158,7 +158,7 @@ class DocumentLifecyclePostgresIntegrationTest {
 
         flyway(null).migrate();
 
-        assertEquals("49", jdbcTemplate.queryForObject(
+        assertEquals("50", jdbcTemplate.queryForObject(
                 "SELECT version FROM flyway_schema_history "
                         + "WHERE success = true "
                         + "ORDER BY installed_rank DESC LIMIT 1",
@@ -347,7 +347,7 @@ class DocumentLifecyclePostgresIntegrationTest {
 
         flyway(null).migrate();
 
-        assertEquals("49", jdbcTemplate.queryForObject(
+        assertEquals("50", jdbcTemplate.queryForObject(
                 "SELECT version FROM flyway_schema_history "
                         + "WHERE success = true "
                         + "ORDER BY installed_rank DESC LIMIT 1",

@@ -5,9 +5,12 @@ import com.springairag.api.dto.ApiKeyCreatedResponse;
 import com.springairag.api.dto.ApiPrincipalPolicyUpdateRequest;
 import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.entity.ApiKeyRole;
+import com.springairag.core.entity.ApiKeyProvisioningOperation;
 import com.springairag.core.entity.RagApiKey;
 import com.springairag.core.entity.RagApiPrincipal;
 import com.springairag.core.exception.RagException;
+import com.springairag.core.config.RagProperties;
+import com.springairag.core.repository.ApiKeyProvisioningOperationRepository;
 import com.springairag.core.repository.RagApiKeyRepository;
 import com.springairag.core.repository.RagApiPrincipalRepository;
 import com.springairag.core.security.AuthenticatedApiPrincipal;
@@ -35,6 +38,7 @@ class ApiKeyManagementServiceTest {
     @Mock RagApiPrincipalRepository principalRepository;
     @Mock CollectionIdentityResolver collectionIdentityResolver;
     @Mock JdbcTemplate jdbcTemplate;
+    @Mock ApiKeyProvisioningOperationRepository provisioningRepository;
 
     private ApiKeyManagementService service;
 
@@ -44,7 +48,10 @@ class ApiKeyManagementServiceTest {
                 credentialRepository,
                 principalRepository,
                 collectionIdentityResolver,
-                jdbcTemplate);
+                jdbcTemplate,
+                provisioningRepository,
+                new RagProperties(),
+                null);
     }
 
     @Test
@@ -226,6 +233,81 @@ class ApiKeyManagementServiceTest {
         String id = service.generateKeyId();
         assertTrue(raw.matches("rag_sk_[0-9a-f]{64}"));
         assertTrue(id.matches("rag_k_[0-9a-f]{32}"));
+    }
+
+    @Test
+    void idempotentCreateReplaysWithoutReturningSecret() {
+        ApiKeyCreateRequest request = new ApiKeyCreateRequest(
+                "Indexer", LocalDateTime.now().plusDays(30));
+        request.setAllowedCollectionIds(List.of(7L, 3L));
+        when(provisioningRepository.findByOwnerIdAndIdempotencyKeyHash(
+                "root:environment-root", "hash"))
+                .thenReturn(Optional.empty());
+
+        ApiKeyManagementService.ProvisioningResult first =
+                service.generateIdempotentKey(
+                        request, ApiKeyRole.NORMAL,
+                        "root:environment-root", "hash", true);
+        ArgumentCaptor<ApiKeyProvisioningOperation> operationCaptor =
+                ArgumentCaptor.forClass(ApiKeyProvisioningOperation.class);
+        verify(provisioningRepository).saveAndFlush(operationCaptor.capture());
+        ApiKeyProvisioningOperation operation = operationCaptor.getValue();
+        RagApiPrincipal principal = principal(first.response().getPrincipalId());
+        principal.setName(first.response().getName());
+        principal.setExpiresAt(first.response().getExpiresAt());
+        principal.setAllowedCollectionIds("3,7");
+        RagApiKey current = credential(
+                first.response().getKeyId(),
+                principal.getPrincipalId(), 1, true);
+        when(principalRepository.findByPrincipalId(principal.getPrincipalId()))
+                .thenReturn(Optional.of(principal));
+        when(credentialRepository.findFirstByPrincipalIdAndEnabledTrue(
+                principal.getPrincipalId())).thenReturn(Optional.of(current));
+        when(provisioningRepository.findByOwnerIdAndIdempotencyKeyHash(
+                "root:environment-root", "hash"))
+                .thenReturn(Optional.of(operation));
+
+        ApiKeyManagementService.ProvisioningResult replay =
+                service.generateIdempotentKey(
+                        reordered(request), ApiKeyRole.NORMAL,
+                        "root:environment-root", "hash", true);
+
+        assertFalse(first.replay());
+        assertTrue(replay.replay());
+        assertEquals(first.response().getPrincipalId(), replay.response().getPrincipalId());
+        assertNull(replay.response().getRawKey());
+        assertFalse(replay.response().getSecretAvailable());
+        assertTrue(replay.response().getIdempotentReplay());
+    }
+
+    @Test
+    void idempotentCreateRejectsSameOwnerAndKeyForDifferentRequest() {
+        ApiKeyProvisioningOperation operation = new ApiKeyProvisioningOperation();
+        operation.setOwnerId("root:environment-root");
+        operation.setIdempotencyKeyHash("hash");
+        operation.setRequestFingerprintSha256("different");
+        operation.setPrincipalId("rag_k_existing");
+        when(provisioningRepository.findByOwnerIdAndIdempotencyKeyHash(
+                "root:environment-root", "hash"))
+                .thenReturn(Optional.of(operation));
+
+        RagException error = assertThrows(
+                RagException.class,
+                () -> service.generateIdempotentKey(
+                        new ApiKeyCreateRequest(
+                                "Indexer", LocalDateTime.now().plusDays(30)),
+                        ApiKeyRole.NORMAL,
+                        "root:environment-root", "hash", true));
+
+        assertEquals(ErrorCode.IDEMPOTENCY_KEY_REUSED, error.getErrorCodeEnum());
+        verifyNoInteractions(credentialRepository);
+    }
+
+    private ApiKeyCreateRequest reordered(ApiKeyCreateRequest original) {
+        ApiKeyCreateRequest request = new ApiKeyCreateRequest(
+                original.getName(), original.getExpiresAt());
+        request.setAllowedCollectionIds(List.of(3L, 7L));
+        return request;
     }
 
     private RagApiPrincipal principal(String id) {

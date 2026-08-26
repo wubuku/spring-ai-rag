@@ -282,12 +282,13 @@ check_business_client_discoverability() {
       docs/business-client-integration.md \
       docs/business-client-integration-zh-CN.md; do
     for contract in \
-        'business-client-p0-clean-baseline-2026-08-26' \
+        '/api/v1/rag/integration-capabilities' \
         '/api/v1/rag/auth/me' \
         '/api/v1/rag/collections/by-key' \
         '/api/v1/rag/json-records/upsert' \
         '/api/v1/rag/json-records/search' \
         '/api/v1/rag/collections/embedding-readiness' \
+        'Idempotency-Key' \
         'business-client-binding-preflight.sh' \
         'verify-business-client-readiness.sh'; do
       rg -F -q "$contract" "$guide" || {
@@ -307,8 +308,8 @@ check_project_invariants() {
       | tail -1
   )"
 
-  [[ "$latest_migration" == "49" ]] || {
-    echo "Expected latest Flyway migration V49, found V${latest_migration:-unknown}." >&2
+  [[ "$latest_migration" == "50" ]] || {
+    echo "Expected latest Flyway migration V50, found V${latest_migration:-unknown}." >&2
     return 1
   }
 
@@ -317,7 +318,7 @@ check_project_invariants() {
   rg -q '18081' AGENTS.md docs/developer-reference.md docs/developer-reference-zh-CN.md
   rg -q 'postgresql' AGENTS.md docs/developer-reference.md docs/developer-reference-zh-CN.md
   rg -q '1024' AGENTS.md docs/developer-reference.md docs/developer-reference-zh-CN.md
-  rg -q 'V1.?V49' AGENTS.md docs/developer-reference.md docs/developer-reference-zh-CN.md
+  rg -q 'V1.?V50' AGENTS.md docs/developer-reference.md docs/developer-reference-zh-CN.md
 
   if rg -n -i 'base-url:[[:space:]]*https?://[^[:space:]`]+/v1([/[:space:]`]|$)' \
       AGENTS.md CLAUDE.md README.md README-zh-CN.md docs \

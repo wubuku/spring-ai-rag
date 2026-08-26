@@ -28,8 +28,8 @@
 | PostgreSQL shared principal quota | Shipped in V48 | Replicas share fixed-minute buckets by stable principal; rotation does not reset quota and database failure fails closed |
 | Schema-level plaintext-secret prohibition | Shipped in V48 | Migration clears plaintext, removes its index, and enforces `api_key IS NULL` |
 | Operation-scoped `RAG_READ` / `RAG_WRITE` enforcement | Shipped in V49 | A central filter enforces capabilities after authentication and before rate limiting; read-only principals may Search/Chat and writes return `403` |
-| Principal-provisioning idempotency key | Separate future plan | After a create timeout, an operator must reconcile by stable name/binding; create cannot yet be retried blindly |
-| Machine-readable integration protocol version / capability discovery | Separate future plan | Compatibility is currently pinned through OpenAPI, a Git commit, `/auth/me`, and the business-service contract gate |
+| Principal-provisioning idempotency key | Shipped in V50 | Optional keyed creation supports exact replay without returning the shown-once secret; semantic reuse conflicts and ledger failure fail closed |
+| Machine-readable integration protocol version / capability discovery | Shipped in V50 | An authenticated, no-store endpoint projects protocol, caller policy, supported data-plane behaviors, optional features, and stable limits |
 | OAuth/OIDC and an independent tenant hierarchy | Separate future plan | The current system remains environment root plus managed business principals and has no third-party identity federation |
 | Persistent token/cost observability per model invocation | Future implementation candidate | Final Chat response usage covers only the last response and omits query transform/expand, AGENT rounds, summaries, fallbacks, and application retries; the candidate has not completed planning `3/3` |
 | Token/cost hard limits, billing, and settlement | Separate future plan | These require authorization, reservation, settlement, cross-instance overspend protection, and crash recovery; they cannot rely directly on a best-effort observability ledger |
@@ -41,9 +41,8 @@ among older rotation rows. Per-invocation usage and configured-cost
 observability is preserved in the
 [historical archive](drafts/archive/README.md) as a future implementation
 candidate, but it is not the current active plan and is not presented as a
-provider invoice or hard-limit settlement source. Provisioning idempotency,
-protocol capability discovery, OAuth/OIDC, tenant hierarchy, Redis,
-token/cost hard limits and billing,
+provider invoice or hard-limit settlement source. OAuth/OIDC, tenant
+hierarchy, Redis, token/cost hard limits and billing,
 per-Collection embedding-profile routing, and `EACH_COLLECTION` remain
 independent planning subjects.
 

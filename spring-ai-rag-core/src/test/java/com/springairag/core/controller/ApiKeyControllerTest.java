@@ -29,6 +29,7 @@ import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
+import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -408,6 +409,117 @@ class ApiKeyControllerTest {
 
         verify(apiKeyService).generateManagedKey(any(ApiKeyCreateRequest.class));
         verify(apiKeyService, never()).generateKey(any());
+    }
+
+    @Test
+    void createKey_withIdempotencyKeyReturnsCreatedThenReplayContract() throws Exception {
+        when(rootCredentialResolver.isConfigured()).thenReturn(true);
+        ApiKeyCreatedResponse first = new ApiKeyCreatedResponse(
+                "rag_k_idempotent", "rag_sk_once", "Service A",
+                LocalDateTime.now().plusDays(30));
+        first.setSecretAvailable(true);
+        first.setIdempotentReplay(false);
+        first.setCurrentCredentialActive(true);
+        ApiKeyCreatedResponse replay = new ApiKeyCreatedResponse(
+                "rag_k_idempotent", null, "Service A", first.getExpiresAt());
+        replay.setPrincipalId("rag_k_idempotent");
+        replay.setSecretAvailable(false);
+        replay.setIdempotentReplay(true);
+        replay.setCurrentCredentialActive(true);
+        when(apiKeyService.generateIdempotentKey(
+                any(), eq(ApiKeyRole.NORMAL), eq("root:environment-root"),
+                anyString(), eq(true)))
+                .thenReturn(new ApiKeyManagementService.ProvisioningResult(first, false))
+                .thenReturn(new ApiKeyManagementService.ProvisioningResult(replay, true));
+
+        mockMvc.perform(post("/api/v1/rag/api-keys")
+                        .with(rootCaller())
+                        .header("Idempotency-Key", "provision-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Service A","expiresAt":"2026-09-13T00:00:00"}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.rawKey").value("rag_sk_once"))
+                .andExpect(jsonPath("$.secretAvailable").value(true))
+                .andExpect(jsonPath("$.idempotentReplay").value(false))
+                .andExpect(header().doesNotExist("X-RAG-Idempotent-Replay"));
+
+        mockMvc.perform(post("/api/v1/rag/api-keys")
+                        .with(rootCaller())
+                        .header("Idempotency-Key", "provision-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"expiresAt":"2026-09-13T00:00:00","name":"Service A"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.rawKey").value(nullValue()))
+                .andExpect(jsonPath("$.secretAvailable").value(false))
+                .andExpect(jsonPath("$.idempotentReplay").value(true))
+                .andExpect(header().string("X-RAG-Idempotent-Replay", "true"))
+                .andExpect(header().string("Cache-Control", "no-store"));
+    }
+
+    @Test
+    void createKey_rejectsInvalidIdempotencyHeader() throws Exception {
+        when(rootCredentialResolver.isConfigured()).thenReturn(true);
+
+        mockMvc.perform(post("/api/v1/rag/api-keys")
+                        .with(rootCaller())
+                        .header("Idempotency-Key", "a,b")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Service A","expiresAt":"2026-09-13T00:00:00"}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("IDEMPOTENCY_KEY_INVALID"));
+
+        verify(apiKeyService, never()).generateIdempotentKey(
+                any(), any(), anyString(), anyString(), anyBoolean());
+    }
+
+    @Test
+    void createKey_reportsIdempotencyFingerprintConflict() throws Exception {
+        when(rootCredentialResolver.isConfigured()).thenReturn(true);
+        when(apiKeyService.generateIdempotentKey(
+                any(), eq(ApiKeyRole.NORMAL), eq("root:environment-root"),
+                anyString(), eq(true)))
+                .thenThrow(new RagException(
+                        ErrorCode.IDEMPOTENCY_KEY_REUSED,
+                        "The Idempotency-Key was already used for a different request"));
+
+        mockMvc.perform(post("/api/v1/rag/api-keys")
+                        .with(rootCaller())
+                        .header("Idempotency-Key", "provision-conflict")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Different","expiresAt":"2026-09-13T00:00:00"}
+                                """))
+                .andExpect(status().isConflict())
+                .andExpect(content().contentType("application/problem+json"))
+                .andExpect(jsonPath("$.error").value("IDEMPOTENCY_KEY_REUSED"));
+    }
+
+    @Test
+    void createKey_failsClosedWhenProvisioningLedgerIsUnavailable() throws Exception {
+        when(rootCredentialResolver.isConfigured()).thenReturn(true);
+        when(apiKeyService.generateIdempotentKey(
+                any(), eq(ApiKeyRole.NORMAL), eq("root:environment-root"),
+                anyString(), eq(true)))
+                .thenThrow(new RagException(
+                        ErrorCode.SERVICE_UNAVAILABLE,
+                        "API key provisioning ledger is unavailable"));
+
+        mockMvc.perform(post("/api/v1/rag/api-keys")
+                        .with(rootCaller())
+                        .header("Idempotency-Key", "provision-unavailable")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Service A","expiresAt":"2026-09-13T00:00:00"}
+                                """))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(content().contentType("application/problem+json"))
+                .andExpect(jsonPath("$.error").value("SERVICE_UNAVAILABLE"));
     }
 
     @Test

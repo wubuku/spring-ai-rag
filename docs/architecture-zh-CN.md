@@ -306,7 +306,10 @@ key 按原值、区分大小写地一次批量解析。不受限调用方的未�
   `rag_api_principal.allowed_collection_ids` 保存权威内部 ID ACL。活动 credential 保留
   兼容 snapshot，请求授权使用 indexed join 加载的不可变 principal policy。V49 在同一
   principal policy 中保存 `RAG_READ` / `RAG_WRITE`，认证后、共享限流前的中央过滤器
-  对 NORMAL principal 执行操作能力；未知 mutation 默认要求 write。
+  对 NORMAL principal 执行操作能力；未知 mutation 默认要求 write。V50 按 requester
+  owner 与 idempotency-key hash 保存成功的 principal provisioning operation。请求
+  fingerprint 基于解析后的有效 policy；replay 读取 principal 当前 credential 状态，
+  不保存或重建原始 secret。
 - 删除 Collection 会尝试软删除集合；若存在 `externalId` 非空的外部托管文档则返回 `409`，
   不会执行删除，因为清空 `collection_id` 会破坏
   `collectionKey + sourceNamespace + externalId` 稳定身份。
@@ -585,6 +588,7 @@ rag_audit_log           # 审计日志（集合操作）
 | `rag_api_principal` | principal_id, role, allowed_collection_ids, capabilities, policy_version, requests_per_minute | stable 调用方 owner 与权威 policy（V48/V49） |
 | `rag_api_key` | key_id, principal_id, credential_version, key_hash, enabled | 版本化 credential；每个 principal 最多一个 active version |
 | `rag_api_rate_limit_bucket` | principal_id, window_start, request_count | 共享 UTC 固定分钟 quota bucket |
+| `rag_api_provisioning_operation` | owner_id, idempotency_key_hash, request_fingerprint_sha256, principal_id, completed_at | 不保存 raw credential 的成功 provisioning replay 账本（V50） |
 | `rag_chat_history` | session_id, user_message, ai_response | 业务审计 |
 | `rag_retrieval_logs` | query, strategy, result_count, latency_ms, outcome_code, empty_reason_code | 检索诊断（V35） |
 | `rag_evaluation_suites` | suite_key, owner_principal_id | 受管质量套件（V38） |
@@ -600,6 +604,7 @@ rag_audit_log           # 审计日志（集合操作）
 - `rag_documents.jsonb_payload`：V34 partial GIN `jsonb_path_ops`（enabled JSON record 的 `@>` 包含过滤）
 - `rag_documents.metadata`：V36 GIN（`metadataContains` `@>` 下推）
 - `rag_embedding_jobs`：活动任务 partial unique、claim、batch、document 与 status/created 索引
+- `rag_api_provisioning_operation`：owner/key-hash 唯一身份与 completed-at 清理索引
 
 ### 5.3 全文检索配置
 

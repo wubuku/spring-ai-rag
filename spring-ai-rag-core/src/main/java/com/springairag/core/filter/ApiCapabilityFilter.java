@@ -93,7 +93,8 @@ public class ApiCapabilityFilter extends OncePerRequestFilter {
         return path.equals("/api/v1/rag/auth")
                 || path.startsWith("/api/v1/rag/auth/")
                 || path.equals("/api/v1/rag/api-keys")
-                || path.startsWith("/api/v1/rag/api-keys/");
+                || path.startsWith("/api/v1/rag/api-keys/")
+                || path.equals("/api/v1/rag/integration-capabilities");
     }
 
     private static String normalizePath(String requestUri) {

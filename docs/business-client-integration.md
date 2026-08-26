@@ -13,9 +13,8 @@ for the full source-synchronization algorithm.
 For an independent backend service integrating with the RAG data plane, the
 following sequence covers the production launch blockers:
 
-1. Pin a validated source or image baseline. The current generic
-   business-integration checkpoint is
-   `business-client-p0-clean-baseline-2026-08-26` (commit `9f219a94`).
+1. Pin the exact source commit or immutable image that passed the integration
+   acceptance gate, and record it with the deployment.
 2. Start the service and run Flyway using the
    [Configuration Reference](configuration.md) and
    [Deployment Guide](DEPLOYMENT.md). Use the environment root only for
@@ -24,8 +23,9 @@ following sequence covers the production launch blockers:
    [API key management](rest-api.md#api-keys--key-management) to create
    restricted business principals for query and dispatch responsibilities
    with exact `capabilities` and `allowedCollectionKeys`.
-4. At startup, every business-service instance must run `/auth/me` and the
-   Collection by-key probes, or run the
+4. At startup, every business-service instance must discover
+   `/integration-capabilities`, then run `/auth/me` and the Collection by-key
+   probes, or run the
    [deployed binding preflight](#41-deployed-binding-preflight). Fail closed on
    any mismatch; never fall back to root, a legacy key, or an unrestricted
    principal.
@@ -122,7 +122,18 @@ payload, or browser storage. Root mode rejects `?apiKey=`.
 
 ### Introspection and binding
 
-At service startup, call:
+At service startup, first call:
+
+```text
+GET /api/v1/rag/integration-capabilities
+```
+
+Require protocol `spring-ai-rag-integration` version `1.0`, then verify that
+the required provisioning/data-plane features and limits are present. The
+response is low-sensitivity and projected for the current caller; it does not
+replace identity binding.
+
+Then call:
 
 ```text
 GET /api/v1/rag/auth/me
@@ -186,7 +197,8 @@ Recommended sequence:
 
 1. An operator uses environment root to create the target Collection.
 2. The operator creates a restricted business principal with a unique name,
-   expiry, RPM, `allowedCollectionKeys`, and explicit `capabilities`.
+   expiry, RPM, `allowedCollectionKeys`, explicit `capabilities`, and a
+   caller-generated `Idempotency-Key`.
 3. Receive the raw credential once and immediately store it in a secret
    manager.
 4. The business service reads it only from an environment variable, mounted
@@ -196,11 +208,14 @@ Recommended sequence:
 6. Probe the target Collections by key before consuming business events.
 7. Run the contract gate in section 8 after deployment.
 
-Provisioning currently has no idempotency key. After a create timeout, do not
-blindly create another principal. Reconcile by stable name and target binding
-in the operator management plane. If the principal exists but the raw
-credential was not stored safely, rotate its current credential instead of
-creating an orphan principal.
+Reuse the same `Idempotency-Key` only with the exact same normalized request.
+The first success returns `201` and the raw credential once; an exact retry
+returns `200`, `X-RAG-Idempotent-Replay: true`, and `rawKey=null`. A different
+request with the same owner/key returns `409 IDEMPOTENCY_KEY_REUSED`. If the
+first response was lost, replay can confirm the principal but cannot recover
+the raw secret; rotate the current credential instead of creating an orphan
+principal. The default replay guarantee is the configured 400-day retention
+window, so callers must not reuse an old key after that window.
 
 ### 4.1 Deployed Binding Preflight
 
@@ -368,18 +383,19 @@ conditions.
 - Read document lifecycle or
   `/api/v1/rag/collections/embedding-readiness` for embedding availability.
   Use `/auth/me` plus Collection by-key probes for business binding.
-- Empty and upgraded databases must run Flyway V1-V49 in order. V49 adds
-  operation capabilities to stable principals; existing principals default to
-  full read/write and may later be narrowed through policy CAS.
+- Empty and upgraded databases must run Flyway V1-V50 in order. V49 adds
+  operation capabilities to stable principals; V50 adds the successful
+  provisioning idempotency ledger without storing raw credentials.
 - Pin production callers to an accepted Git commit or an immutable image built
   from it. Maven/API version remains `1.0.0`.
 - The added `/auth/me` fields remain backward-compatible. Older clients ignore
   them; clients that depend on capability/ACL verification must run the
   contract gate before rollout.
-- V49 is a forward-compatible additive migration; do not destructively roll
-  back its schema. If the application is rolled back to a version that does not
-  understand operation capabilities, retain the V49 schema and stop clients
-  that require a read-only boundary rather than starting permissively.
+- V49/V50 are forward-compatible additive migrations; do not destructively
+  roll back their schema. If the application is rolled back to a version that
+  does not understand operation capabilities or keyed provisioning, retain the
+  schema and stop clients that require those contracts rather than starting
+  permissively or retrying creates without idempotency.
 
 ## 8. One-Command Integration Acceptance
 
@@ -408,6 +424,9 @@ matrices, `mvn clean compile test-compile`, WebUI typecheck/Vitest/production
 build, core Mock Playwright, documentation/lock/secret/diff gates, and then a
 real Spring Boot service, the HTTP contract including deployed binding
 preflight, and real API-key Playwright. The HTTP contract proves that a
+keyed principal create is safe across instances, never replays a secret,
+reports current credential state after rotation/revocation, and exposes a
+caller-projected runtime capability contract. It also proves that a
 read-only query principal can lookup/search but cannot upsert/delete and that
 the rejected writes leave revision/state unchanged; a read/write dispatcher
 continues to own mutations, and rotation preserves capabilities. It also runs
@@ -444,12 +463,11 @@ gate does not call a Chat LLM.
 
 ## 9. Current Limitations
 
-- Principal provisioning has no idempotency key.
-- There is no separate runtime capability-discovery endpoint. Compatibility
-  is pinned through OpenAPI, a Git commit, and the offline
-  `release-manifest.json`.
 - The identity system is environment root plus database business principals;
   it does not provide OAuth/OIDC federation or an independent tenant hierarchy.
+- Capability discovery describes supported protocol behavior and current
+  principal projection; `/auth/me`, Collection probes, and deployment-specific
+  binding checks remain required.
 
 See the [TODO](TODO.md#managed-api-principal-follow-ups) for these follow-up
 boundaries.

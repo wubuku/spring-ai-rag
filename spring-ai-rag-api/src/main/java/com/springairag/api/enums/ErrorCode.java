@@ -123,6 +123,7 @@ public enum ErrorCode {
     DOCUMENT_RELOCATION_DISABLED(503, "Document Relocation Disabled"),
     DERIVATION_REPAIR_DISABLED(503, "Derivation Repair Disabled"),
     RATE_LIMIT_STORE_UNAVAILABLE(503, "Rate Limit Store Unavailable"),
+    API_KEY_PROVISIONING_IDEMPOTENCY_DISABLED(503, "API Key Provisioning Idempotency Disabled"),
 
     // ==================== 504 Gateway Timeout ====================
 

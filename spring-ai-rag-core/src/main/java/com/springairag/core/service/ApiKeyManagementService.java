@@ -8,11 +8,15 @@ import com.springairag.api.dto.ApiKeyResponse;
 import com.springairag.api.dto.ApiPrincipalPolicyUpdateRequest;
 import com.springairag.api.dto.ApiPrincipalResponse;
 import com.springairag.api.enums.ErrorCode;
+import com.springairag.core.config.RagApiKeyProvisioningProperties;
+import com.springairag.core.config.RagProperties;
 import com.springairag.core.entity.ApiKeyRole;
+import com.springairag.core.entity.ApiKeyProvisioningOperation;
 import com.springairag.core.entity.RagApiKey;
 import com.springairag.core.entity.RagApiPrincipal;
 import com.springairag.core.exception.RagException;
 import com.springairag.core.filter.ApiKeyAuthFilter;
+import com.springairag.core.repository.ApiKeyProvisioningOperationRepository;
 import com.springairag.core.repository.RagApiKeyRepository;
 import com.springairag.core.repository.RagApiPrincipalRepository;
 import com.springairag.core.security.ApiKeyCollectionAccess;
@@ -21,7 +25,11 @@ import com.springairag.core.security.AuthenticatedApiPrincipal;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -56,6 +64,9 @@ public class ApiKeyManagementService {
     private final RagApiPrincipalRepository principalRepository;
     private final CollectionIdentityResolver collectionIdentityResolver;
     private final JdbcTemplate jdbcTemplate;
+    private final ApiKeyProvisioningOperationRepository provisioningOperationRepository;
+    private final RagApiKeyProvisioningProperties provisioningProperties;
+    private final TransactionTemplate provisioningTransaction;
 
     public ApiKeyManagementService(
             RagApiKeyRepository apiKeyRepository,
@@ -63,10 +74,29 @@ public class ApiKeyManagementService {
             @org.springframework.beans.factory.annotation.Autowired(required = false)
             CollectionIdentityResolver collectionIdentityResolver,
             JdbcTemplate jdbcTemplate) {
+        this(apiKeyRepository, principalRepository, collectionIdentityResolver, jdbcTemplate,
+                null, new RagProperties(), null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public ApiKeyManagementService(
+            RagApiKeyRepository apiKeyRepository,
+            RagApiPrincipalRepository principalRepository,
+            @org.springframework.beans.factory.annotation.Autowired(required = false)
+            CollectionIdentityResolver collectionIdentityResolver,
+            JdbcTemplate jdbcTemplate,
+            ApiKeyProvisioningOperationRepository provisioningOperationRepository,
+            RagProperties ragProperties,
+            PlatformTransactionManager transactionManager) {
         this.apiKeyRepository = apiKeyRepository;
         this.principalRepository = principalRepository;
         this.collectionIdentityResolver = collectionIdentityResolver;
         this.jdbcTemplate = jdbcTemplate;
+        this.provisioningOperationRepository = provisioningOperationRepository;
+        this.provisioningProperties = ragProperties.getApiKeyProvisioning();
+        this.provisioningTransaction = transactionManager == null
+                ? null
+                : new TransactionTemplate(transactionManager);
     }
 
     @Transactional
@@ -78,6 +108,185 @@ public class ApiKeyManagementService {
     public ApiKeyCreatedResponse generateManagedKey(ApiKeyCreateRequest request) {
         validateManagedExpiry(request.getExpiresAt());
         return createPrincipal(request, ApiKeyRole.NORMAL);
+    }
+
+    /**
+     * Creates or replays a key-backed provisioning operation.
+     *
+     * <p>The ledger insert is in the same transaction as the principal and
+     * credential. A unique constraint is the concurrency coordinator; a
+     * losing transaction retries from a new transaction and reads the winner.
+     */
+    public ProvisioningResult generateIdempotentKey(
+            ApiKeyCreateRequest request,
+            ApiKeyRole role,
+            String ownerId,
+            String idempotencyKeyHash,
+            boolean managed) {
+        if (!provisioningProperties.isEnabled()) {
+            throw new RagException(
+                    ErrorCode.API_KEY_PROVISIONING_IDEMPOTENCY_DISABLED,
+                    "API key provisioning idempotency is disabled");
+        }
+        if (provisioningOperationRepository == null) {
+            throw new RagException(
+                    ErrorCode.SERVICE_UNAVAILABLE,
+                    "API key provisioning ledger is unavailable");
+        }
+        Objects.requireNonNull(request, "request must not be null");
+        if (managed) {
+            validateManagedExpiry(request.getExpiresAt());
+        }
+        if (ownerId == null || ownerId.isBlank()
+                || idempotencyKeyHash == null || idempotencyKeyHash.isBlank()) {
+            throw new IllegalArgumentException("Provisioning owner and idempotency hash are required");
+        }
+
+        String fingerprint = ApiKeyProvisioningFingerprint.sha256(request, role.name());
+        int attempts = provisioningProperties.getConcurrentRetryAttempts();
+        for (int attempt = 0; attempt < attempts; attempt++) {
+            try {
+                ProvisioningResult result = runProvisioningTransaction(
+                        request, role, ownerId, idempotencyKeyHash, fingerprint);
+                if (result != null) {
+                    return result;
+                }
+            } catch (DataIntegrityViolationException race) {
+                if (attempt + 1 >= attempts) {
+                    throw new RagException(
+                            ErrorCode.SERVICE_UNAVAILABLE,
+                            "Unable to resolve a concurrent provisioning request", race);
+                }
+                try {
+                    Thread.sleep(25L * (attempt + 1));
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    throw new RagException(
+                            ErrorCode.SERVICE_UNAVAILABLE,
+                            "Provisioning retry was interrupted", interrupted);
+                }
+            }
+        }
+        throw new RagException(
+                ErrorCode.SERVICE_UNAVAILABLE,
+                "Unable to resolve API key provisioning");
+    }
+
+    private ProvisioningResult runProvisioningTransaction(
+            ApiKeyCreateRequest request,
+            ApiKeyRole role,
+            String ownerId,
+            String idempotencyKeyHash,
+            String fingerprint) {
+        if (provisioningTransaction == null) {
+            return provisionInCurrentTransaction(
+                    request, role, ownerId, idempotencyKeyHash, fingerprint);
+        }
+        return provisioningTransaction.execute(status ->
+                provisionInCurrentTransaction(
+                        request, role, ownerId, idempotencyKeyHash, fingerprint));
+    }
+
+    private ProvisioningResult provisionInCurrentTransaction(
+            ApiKeyCreateRequest request,
+            ApiKeyRole role,
+            String ownerId,
+            String idempotencyKeyHash,
+            String fingerprint) {
+        Optional<ApiKeyProvisioningOperation> existing =
+                provisioningOperationRepository.findByOwnerIdAndIdempotencyKeyHash(
+                        ownerId, idempotencyKeyHash);
+        if (existing.isPresent()) {
+            ApiKeyProvisioningOperation operation = existing.get();
+            if (!fingerprint.equals(operation.getRequestFingerprintSha256())) {
+                throw new RagException(
+                        ErrorCode.IDEMPOTENCY_KEY_REUSED,
+                        "The Idempotency-Key was already used for a different request");
+            }
+            return new ProvisioningResult(replayResponse(operation), true);
+        }
+
+        ApiKeyCreatedResponse response = createPrincipal(request, role);
+        LocalDateTime now = LocalDateTime.now();
+        ApiKeyProvisioningOperation operation = new ApiKeyProvisioningOperation();
+        operation.setOwnerId(ownerId);
+        operation.setIdempotencyKeyHash(idempotencyKeyHash);
+        operation.setRequestFingerprintSha256(fingerprint);
+        operation.setPrincipalId(response.getPrincipalId());
+        operation.setCredentialId(response.getKeyId());
+        operation.setCredentialVersion(response.getCredentialVersion());
+        operation.setCreatedAt(now);
+        operation.setUpdatedAt(now);
+        operation.setCompletedAt(now);
+        provisioningOperationRepository.saveAndFlush(operation);
+        return new ProvisioningResult(response, false);
+    }
+
+    private ApiKeyCreatedResponse replayResponse(ApiKeyProvisioningOperation operation) {
+        RagApiPrincipal principal = principalRepository
+                .findByPrincipalId(operation.getPrincipalId())
+                .orElseThrow(() -> new RagException(
+                        ErrorCode.SERVICE_UNAVAILABLE,
+                        "The provisioning result no longer has a principal"));
+        RagApiKey current = apiKeyRepository
+                .findFirstByPrincipalIdAndEnabledTrue(operation.getPrincipalId())
+                .orElse(null);
+        boolean active = current != null
+                && principal.getRevokedAt() == null
+                && !isExpired(principal.getExpiresAt());
+        ApiKeyCreatedResponse response = active
+                ? new ApiKeyCreatedResponse(
+                        current.getKeyId(), null, principal.getName(),
+                        principal.getExpiresAt(),
+                        allowedIds(principal))
+                : new ApiKeyCreatedResponse(
+                        null, null, principal.getName(),
+                        principal.getExpiresAt(),
+                        allowedIds(principal));
+        response.setPrincipalId(principal.getPrincipalId());
+        response.setCredentialVersion(active ? current.getCredentialVersion() : null);
+        response.setPolicyVersion(principal.getPolicyVersion());
+        response.setRequestsPerMinute(principal.getRequestsPerMinute());
+        response.setCapabilities(ApiCapabilitySupport.effectiveForRole(
+                principal.getRole(),
+                ApiCapabilitySupport.normalizePersisted(principal.getCapabilities())));
+        response.setAllowedCollectionKeys(
+                active ? collectionKeys(allowedIds(principal)) : null);
+        response.setSecretAvailable(false);
+        response.setIdempotentReplay(true);
+        response.setCurrentCredentialActive(active);
+        response.setWarning(
+                "The principal already exists. The raw credential cannot be shown again; "
+                        + "rotate the current credential if the original secret was not saved.");
+        return response;
+    }
+
+    private List<Long> allowedIds(RagApiPrincipal principal) {
+        List<Long> ids = ApiKeyCollectionAccess.parseAllowedIds(
+                principal.getAllowedCollectionIds());
+        return ids.isEmpty() ? null : ids;
+    }
+
+    @Scheduled(
+            fixedDelayString = "${rag.api-key-provisioning.cleanup-interval-ms:3600000}",
+            zone = "${spring.task.scheduling.timezone:Asia/Shanghai}")
+    public void cleanupProvisioningLedger() {
+        if (!provisioningProperties.isEnabled()
+                || provisioningOperationRepository == null) {
+            return;
+        }
+        try {
+            provisioningOperationRepository.deleteCompletedBefore(
+                    LocalDateTime.now().minus(provisioningProperties.getRetention()),
+                    provisioningProperties.getCleanupBatchSize());
+        } catch (DataAccessException error) {
+            log.warn("API key provisioning ledger cleanup failed");
+        }
+    }
+
+    public record ProvisioningResult(
+            ApiKeyCreatedResponse response,
+            boolean replay) {
     }
 
     private ApiKeyCreatedResponse createPrincipal(
@@ -450,6 +659,9 @@ public class ApiKeyManagementService {
                 principal.getRole(),
                 ApiCapabilitySupport.normalizePersisted(principal.getCapabilities())));
         response.setAllowedCollectionKeys(collectionKeys(allowedIds));
+        response.setSecretAvailable(rawKey != null);
+        response.setIdempotentReplay(false);
+        response.setCurrentCredentialActive(true);
         return response;
     }
 
@@ -517,7 +729,8 @@ public class ApiKeyManagementService {
     }
 
     private List<String> collectionKeys(List<Long> allowedIds) {
-        if (allowedIds.isEmpty() || collectionIdentityResolver == null) {
+        if (allowedIds == null || allowedIds.isEmpty()
+                || collectionIdentityResolver == null) {
             return null;
         }
         return collectionIdentityResolver.mapKeys(allowedIds).values().stream().toList();

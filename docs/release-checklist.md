@@ -16,7 +16,7 @@ Release date: `2026-07-21`
 - [x] Helm `version` and `appVersion` are `1.0.0`
 - [x] Docker/Helm default image tag is `1.0.0`
 - [x] Local, Docker, and Helm default port is `8081`
-- [x] Flyway inventory is V1-V49
+- [x] Flyway inventory is V1-V50
 - [x] JSONB structured-record API, payload snapshots, and collection lifecycle are covered
 - [x] `scripts/verify-jsonb-records.sh` records focused backend/database/frontend verification
 - [x] Document PATCH/disable/restore/permanent-delete and external triple identity are covered
@@ -124,6 +124,24 @@ Release date: `2026-07-21`
 - [x] The real-LLM gate uses an explicit `RAG_READ` principal. Write rejection
   and idempotent replay do not increase the provider counter, while native and
   OpenAI-compatible JSON/SSE require exactly five real provider calls.
+
+### 2026-08-26 Provisioning And Capability Discovery Gates
+
+- [x] V50 adds a requester-scoped provisioning operation ledger with
+  key/fingerprint hashes and result metadata only; raw credentials remain
+  shown once and are never persisted for replay.
+- [x] A keyed create returns `201`; exact cross-instance replay returns `200`,
+  `X-RAG-Idempotent-Replay: true`, and `rawKey: null`; semantic key reuse
+  returns `409 IDEMPOTENCY_KEY_REUSED`.
+- [x] PostgreSQL and real HTTP acceptance cover concurrent first create,
+  requester isolation, rotation/revocation replay state, bounded cleanup, and
+  fail-closed ledger/configuration errors.
+- [x] Authenticated `GET /api/v1/rag/integration-capabilities` reports the
+  versioned protocol, caller policy/Collection projection, supported
+  data-plane behavior, optional features, and stable limits without secrets.
+- [x] The unified managed-principal gate covers PostgreSQL, Maven, WebUI
+  typecheck/Vitest/build/alignment, Mock Playwright, two-instance HTTP, real
+  browser DOM/network assertions, and optional real-provider Chat.
 
 ### Final Evidence (2026-07-21)
 

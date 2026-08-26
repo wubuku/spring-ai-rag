@@ -263,6 +263,12 @@ rag:
     # When configured, /api/** requires this root key or a valid database-backed business key.
     root-api-key: ${RAG_ROOT_API_KEY:}
 
+  api-key-provisioning:
+    enabled: ${RAG_API_KEY_PROVISIONING_ENABLED:true}
+    retention: ${RAG_API_KEY_PROVISIONING_RETENTION:400d}
+    cleanup-batch-size: ${RAG_API_KEY_PROVISIONING_CLEANUP_BATCH_SIZE:500}
+    concurrent-retry-attempts: ${RAG_API_KEY_PROVISIONING_CONCURRENT_RETRY_ATTEMPTS:3}
+
   openai-compatibility:
     # 受控网络预览入口。默认关闭，不改变现有 /api/v1/rag/**。
     enabled: ${RAG_OPENAI_COMPATIBILITY_ENABLED:false}

@@ -6,6 +6,7 @@ import com.springairag.api.dto.ApiKeyResponse;
 import com.springairag.api.dto.ApiPrincipalPolicyUpdateRequest;
 import com.springairag.api.dto.ErrorResponse;
 import com.springairag.core.entity.ApiKeyRole;
+import com.springairag.core.chat.IdempotencyKeyValidator;
 import com.springairag.core.filter.ApiKeyAuthFilter;
 import com.springairag.core.security.ApiAccessPolicy;
 import com.springairag.core.security.EnvironmentRootCredentialResolver;
@@ -13,6 +14,8 @@ import com.springairag.core.security.ApiKeyCollectionAccess;
 import com.springairag.core.service.ApiKeyManagementService;
 import com.springairag.core.service.CollectionIdentityResolver;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -27,6 +30,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.LinkedHashSet;
+import java.util.Collections;
 
 /**
  * API Key management REST controller.
@@ -55,12 +59,32 @@ public class ApiKeyController {
         this.collectionIdentityResolver = collectionIdentityResolver;
     }
 
-    @Operation(summary = "Create a new API key",
-               description = "Generates a new API key. The raw key is returned only in this response — save it securely.")
+    @Operation(
+            summary = "Create a new API key",
+            description = "Generates a new API key. The raw key is returned only for the first "
+                    + "successful request and is never returned by an idempotent replay.",
+            parameters = @Parameter(
+                    name = "Idempotency-Key",
+                    in = ParameterIn.HEADER,
+                    required = false,
+                    description = "Optional provisioning idempotency key. Reuse it only with "
+                            + "the same normalized request.",
+                    schema = @Schema(type = "string", minLength = 1, maxLength = 255)))
     @ApiResponses({
-        @ApiResponse(responseCode = "201", description = "API key created successfully"),
+        @ApiResponse(responseCode = "200", description = "Existing provisioning result replayed",
+                content = @Content(schema = @Schema(
+                        implementation = ApiKeyCreatedResponse.class))),
+        @ApiResponse(responseCode = "201", description = "API key created successfully",
+                content = @Content(schema = @Schema(
+                        implementation = ApiKeyCreatedResponse.class))),
         @ApiResponse(responseCode = "400", description = "Invalid request",
-                     content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+                content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+        @ApiResponse(responseCode = "409",
+                description = "Idempotency key reused for a different request",
+                content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+        @ApiResponse(responseCode = "503",
+                description = "Provisioning idempotency ledger unavailable or disabled",
+                content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
     @PostMapping
     public ResponseEntity<?> createKey(
@@ -97,6 +121,24 @@ public class ApiKeyController {
         request.setAllowedCollectionIds(
                 ApiKeyCollectionAccess.resolveDelegatedAllowedIds(
                         requestedIds, getCaller(httpRequest)));
+        String idempotencyKey = IdempotencyKeyValidator.normalize(
+                Collections.list(httpRequest.getHeaders("Idempotency-Key")));
+        if (idempotencyKey != null) {
+            ApiKeyManagementService.ProvisioningResult result =
+                    apiKeyService.generateIdempotentKey(
+                            request,
+                            ApiKeyRole.NORMAL,
+                            provisioningOwner(httpRequest),
+                            IdempotencyKeyValidator.hash(idempotencyKey),
+                            rootCredentialResolver.isConfigured());
+            ResponseEntity.BodyBuilder builder = ResponseEntity.status(
+                    result.replay() ? HttpStatus.OK : HttpStatus.CREATED)
+                    .cacheControl(CacheControl.noStore());
+            if (result.replay()) {
+                builder.header("X-RAG-Idempotent-Replay", "true");
+            }
+            return builder.body(result.response());
+        }
         ApiKeyCreatedResponse response = rootCredentialResolver.isConfigured()
                 ? apiKeyService.generateManagedKey(request)
                 : apiKeyService.generateKey(request);
@@ -254,6 +296,23 @@ public class ApiKeyController {
 
     private ApiAccessPolicy getCaller(HttpServletRequest request) {
         return ApiKeyCollectionAccess.currentPolicy(request);
+    }
+
+    private String provisioningOwner(HttpServletRequest request) {
+        Object type = request.getAttribute(ApiKeyAuthFilter.AUTHENTICATED_PRINCIPAL_TYPE);
+        Object id = request.getAttribute(ApiKeyAuthFilter.AUTHENTICATED_KEY_ATTRIBUTE);
+        if (ApiKeyAuthFilter.PRINCIPAL_ENVIRONMENT_ROOT.equals(type)) {
+            return "root:environment-root";
+        }
+        if (ApiKeyAuthFilter.PRINCIPAL_DATABASE_API_KEY.equals(type)
+                && id instanceof String principalId && !principalId.isBlank()) {
+            return "db:" + principalId;
+        }
+        if (ApiKeyAuthFilter.PRINCIPAL_LEGACY_STATIC.equals(type)
+                || getCaller(request) != null) {
+            return "legacy:static";
+        }
+        return "local:auth-disabled";
     }
 
     private ResponseEntity<ErrorResponse> requireEnvironmentRoot(

@@ -828,6 +828,11 @@ rag:
     root-api-key: ${RAG_ROOT_API_KEY:}
     api-key: ${RAG_API_KEY:}
     enabled: false
+  api-key-provisioning:
+    enabled: ${RAG_API_KEY_PROVISIONING_ENABLED:true}
+    retention: ${RAG_API_KEY_PROVISIONING_RETENTION:400d}
+    cleanup-batch-size: ${RAG_API_KEY_PROVISIONING_CLEANUP_BATCH_SIZE:500}
+    concurrent-retry-attempts: ${RAG_API_KEY_PROVISIONING_CONCURRENT_RETRY_ATTEMPTS:3}
 ```
 
 | Property | Default | Description |
@@ -835,6 +840,13 @@ rag:
 | `rag.security.root-api-key` | `""` | Standalone-service root credential; environment variable `RAG_ROOT_API_KEY` |
 | `rag.security.enabled` | `false` | Enable API Key authentication |
 | `rag.security.api-key` | `""` | Legacy static unrestricted key; ignored for authentication in root mode |
+
+| Property | Default | Description |
+|----------|---------|-------------|
+| `rag.api-key-provisioning.enabled` | `true` | Enables keyed API-principal provisioning; when disabled, requests carrying `Idempotency-Key` fail closed with `503` |
+| `rag.api-key-provisioning.retention` | `400d` | Successful provisioning ledger retention and guaranteed replay window; accepted range 7–3650 days |
+| `rag.api-key-provisioning.cleanup-batch-size` | `500` | Maximum completed ledger rows deleted per scheduled cleanup, clamped to 10–5000 |
+| `rag.api-key-provisioning.concurrent-retry-attempts` | `3` | Bounded attempts used to observe the winner of a same-owner/key unique-constraint race, clamped to 1–8 |
 
 Setting a valid `RAG_ROOT_API_KEY` enables standalone-service MVP security mode:
 
@@ -869,10 +881,12 @@ read/write, policy-update omission preserves the current value, and rotation
 inherits it. NORMAL-principal reads and explicit read-only POST routes require
 `RAG_READ`; other mutations require `RAG_WRITE`, with rejection before shared
 quota accounting. ADMIN, environment-root, legacy-static, and auth-disabled
-compatibility paths remain unrestricted. Authentication queries the authoritative credential
-and principal on every request; only the approximate `last_used_at` write is
-suppressed for five minutes. The legacy `api_key` column is retained for
-migration compatibility but constrained to `NULL`. See
+compatibility paths remain unrestricted. V50 adds the successful provisioning
+ledger used by optional `Idempotency-Key`; it stores only owner/key/request
+hashes and result metadata, never raw credentials. Authentication queries the
+authoritative credential and principal on every request; only the approximate
+`last_used_at` write is suppressed for five minutes. The legacy `api_key`
+column is retained for migration compatibility but constrained to `NULL`. See
 [rest-api.md](rest-api.md).
 
 ## API Rate Limiting Configuration

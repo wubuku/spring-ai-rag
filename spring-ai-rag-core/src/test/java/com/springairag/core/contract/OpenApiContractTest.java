@@ -82,7 +82,9 @@ class OpenApiContractTest {
             "CollectionCloneRequest",
             "CollectionUpdateRequest",
             "ApiKeyCreateRequest",
+            "ApiKeyCreatedResponse",
             "ApiKeyIdentityResponse",
+            "IntegrationCapabilitiesResponse",
             "ErrorResponse",
             "HealthResponse",
             "BatchDocumentRequest",
@@ -128,6 +130,8 @@ class OpenApiContractTest {
             "/rag/documents/by-external-id",
             "/rag/documents/relocate",
             "/rag/auth/me",
+            "/rag/api-keys",
+            "/rag/integration-capabilities",
             "/rag/health",
             "/rag/models",
             "/rag/retrieval-traces",
@@ -975,6 +979,35 @@ class OpenApiContractTest {
     @Nested
     @DisplayName("B9-1 — OpenAPI Spec Completeness")
     class SpecCompletenessContract {
+
+        @Test
+        @DisplayName("Provisioning and capability discovery contracts expose required responses")
+        void provisioningAndCapabilityDiscoveryContractsAreComplete() throws Exception {
+            JsonNode paths = loadSpec().path("paths");
+
+            JsonNode create = findPath(paths, "/rag/api-keys").path("post");
+            assertThat(create.isMissingNode()).isFalse();
+            assertThat(findParameter(create, "Idempotency-Key")
+                    .path("in").asText()).isEqualTo("header");
+            assertThat(findParameter(create, "Idempotency-Key")
+                    .path("required").asBoolean()).isFalse();
+            for (String responseCode : java.util.List.of(
+                    "200", "201", "400", "409", "503")) {
+                assertThat(create.path("responses").has(responseCode))
+                        .as("POST /api-keys must document %s", responseCode)
+                        .isTrue();
+            }
+
+            JsonNode capabilities = findPath(
+                    paths, "/rag/integration-capabilities").path("get");
+            assertThat(capabilities.isMissingNode()).isFalse();
+            for (String responseCode : java.util.List.of("200", "401", "503")) {
+                assertThat(capabilities.path("responses").has(responseCode))
+                        .as("GET /integration-capabilities must document %s",
+                                responseCode)
+                        .isTrue();
+            }
+        }
 
         @Test
         @DisplayName("All required schemas are defined")

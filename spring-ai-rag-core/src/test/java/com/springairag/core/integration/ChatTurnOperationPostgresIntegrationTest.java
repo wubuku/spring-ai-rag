@@ -121,8 +121,8 @@ class ChatTurnOperationPostgresIntegrationTest {
     }
 
     @Test
-    void migrationThroughV49PreservesOperationTableAndTurnIdentityConstraints() {
-        assertEquals("49", jdbc.queryForObject(
+    void migrationThroughV50PreservesOperationTableAndTurnIdentityConstraints() {
+        assertEquals("50", jdbc.queryForObject(
                 """
                 SELECT version FROM flyway_schema_history
                 WHERE success = TRUE

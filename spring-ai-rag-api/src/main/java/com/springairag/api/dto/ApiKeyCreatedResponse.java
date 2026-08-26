@@ -1,5 +1,6 @@
 package com.springairag.api.dto;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.LocalDateTime;
@@ -16,7 +17,9 @@ public class ApiKeyCreatedResponse {
     @Schema(description = "Public key identifier", example = "rag_k_abc123def456")
     private String keyId;
 
-    @Schema(description = "The raw API key — shown ONLY now. Store it securely; it cannot be retrieved again.", example = "rag_sk_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    @Schema(description = "Raw credential. Present only in the first successful create/rotate response; null on an idempotent replay.",
+            example = "rag_sk_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", nullable = true)
     private String rawKey;
 
     @Schema(description = "Human-readable name", example = "Production Server")
@@ -41,6 +44,9 @@ public class ApiKeyCreatedResponse {
     private Long policyVersion;
     private Integer requestsPerMinute;
     private List<String> capabilities;
+    private Boolean secretAvailable;
+    private Boolean idempotentReplay;
+    private Boolean currentCredentialActive;
 
     public ApiKeyCreatedResponse() {
     }
@@ -96,6 +102,14 @@ public class ApiKeyCreatedResponse {
     public void setRequestsPerMinute(Integer requestsPerMinute) { this.requestsPerMinute = requestsPerMinute; }
     public List<String> getCapabilities() { return capabilities; }
     public void setCapabilities(List<String> capabilities) { this.capabilities = capabilities; }
+    public Boolean getSecretAvailable() { return secretAvailable; }
+    public void setSecretAvailable(Boolean secretAvailable) { this.secretAvailable = secretAvailable; }
+    public Boolean getIdempotentReplay() { return idempotentReplay; }
+    public void setIdempotentReplay(Boolean idempotentReplay) { this.idempotentReplay = idempotentReplay; }
+    public Boolean getCurrentCredentialActive() { return currentCredentialActive; }
+    public void setCurrentCredentialActive(Boolean currentCredentialActive) {
+        this.currentCredentialActive = currentCredentialActive;
+    }
 
     @Override
     public boolean equals(Object o) {
@@ -113,14 +127,18 @@ public class ApiKeyCreatedResponse {
                 Objects.equals(credentialVersion, that.credentialVersion) &&
                 Objects.equals(policyVersion, that.policyVersion) &&
                 Objects.equals(requestsPerMinute, that.requestsPerMinute) &&
-                Objects.equals(capabilities, that.capabilities);
+                Objects.equals(capabilities, that.capabilities) &&
+                Objects.equals(secretAvailable, that.secretAvailable) &&
+                Objects.equals(idempotentReplay, that.idempotentReplay) &&
+                Objects.equals(currentCredentialActive, that.currentCredentialActive);
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(keyId, rawKey, name, expiresAt, warning,
                 allowedCollectionIds, allowedCollectionKeys, principalId,
-                credentialVersion, policyVersion, requestsPerMinute, capabilities);
+                credentialVersion, policyVersion, requestsPerMinute, capabilities,
+                secretAvailable, idempotentReplay, currentCredentialActive);
     }
 
     @Override
@@ -136,6 +154,9 @@ public class ApiKeyCreatedResponse {
                 ", policyVersion=" + policyVersion +
                 ", requestsPerMinute=" + requestsPerMinute +
                 ", capabilities=" + capabilities +
+                ", secretAvailable=" + secretAvailable +
+                ", idempotentReplay=" + idempotentReplay +
+                ", currentCredentialActive=" + currentCredentialActive +
                 ", warning='" + warning + '\'' +
                 // rawKey intentionally excluded from toString (security)
                 '}';

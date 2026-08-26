@@ -41,6 +41,8 @@ MOCK_PID=""
 ROOT_KEY=""
 RUNTIME_CLASSPATH=""
 DB_PORT=""
+CURRENT_STEP_NAME=""
+CURRENT_STEP_LOG=""
 
 slugify() {
   printf '%s' "$1" | tr '[:upper:] ' '[:lower:]-' | tr -cd 'a-z0-9._-'
@@ -60,6 +62,8 @@ run_step() {
   shift
   STEP_INDEX=$((STEP_INDEX + 1))
   local log="$LOG_DIR/${STEP_INDEX}-$(slugify "$name").log"
+  CURRENT_STEP_NAME="$name"
+  CURRENT_STEP_LOG="$log"
   echo
   echo "=== ${name} ==="
   "$@" > >(tee "$log") 2>&1
@@ -71,6 +75,8 @@ run_step() {
     echo "FAIL: ${name} (exit ${rc})" >&2
     record "$name" FAIL "$rc" "$log"
   fi
+  CURRENT_STEP_NAME=""
+  CURRENT_STEP_LOG=""
   return 0
 }
 
@@ -115,8 +121,17 @@ cleanup() {
   write_summary
 }
 
+interrupt() {
+  if [[ -n "$CURRENT_STEP_NAME" ]]; then
+    record "$CURRENT_STEP_NAME" FAIL 130 "$CURRENT_STEP_LOG"
+    CURRENT_STEP_NAME=""
+    CURRENT_STEP_LOG=""
+  fi
+  exit 130
+}
+
 trap cleanup EXIT
-trap 'exit 130' INT TERM
+trap interrupt INT TERM
 
 prerequisites() {
   local command_name
@@ -384,6 +399,175 @@ run_two_instance_contract() {
   local private="$LOG_DIR/private"
   local code accepted=0 rejected=0 i endpoint
 
+  code="$(curl -sS -o "$private/capabilities-unauthenticated.json" \
+    -w '%{http_code}' "${a}/api/v1/rag/integration-capabilities")"
+  assert_code "$code" 401 "unauthenticated capability discovery" || return 1
+
+  code="$(root_curl -o "$private/capabilities-root.json" -w '%{http_code}' \
+    "${a}/api/v1/rag/integration-capabilities")"
+  assert_code "$code" 200 "root capability discovery" || return 1
+  jq -e '
+    .protocol.name == "spring-ai-rag-integration"
+    and .protocol.version == "1.0"
+    and .protocol.apiVersion == "1.0.0"
+    and .principal.principalType == "ENVIRONMENT_ROOT"
+    and .principal.collectionAccessMode == "UNRESTRICTED"
+    and .principal.allowedCollectionKeys == null
+    and .features.provisioning.idempotencyKey == true
+    and .features.provisioning.replayReturnsSecret == false
+    and .features.provisioning.rawCredentialShownOnce == true
+    and .features.optional.openAiCompatibility == true
+  ' "$private/capabilities-root.json" >/dev/null || return 1
+
+  local capability_collection_key="managed-capability-${RUN_ID}"
+  code="$(root_curl -X POST "${a}/api/v1/rag/collections" \
+    -H 'Content-Type: application/json' \
+    -d "{\"collectionKey\":\"${capability_collection_key}\",\"name\":\"Managed capability ${RUN_ID}\",\"description\":\"Disposable capability projection\",\"dimensions\":1024}" \
+    -o "$private/capability-collection.json" -w '%{http_code}')"
+  assert_code "$code" 200 "create capability Collection" || return 1
+
+  local provisioning_key="managed-provisioning-${RUN_ID}"
+  jq -n \
+    --arg name "Idempotent provisioning ${RUN_ID}" \
+    --arg expiresAt "2099-12-31T23:59:00" \
+    --arg collectionKey "$capability_collection_key" \
+    '{
+      name:$name,
+      expiresAt:$expiresAt,
+      requestsPerMinute:100,
+      capabilities:["RAG_READ"],
+      allowedCollectionKeys:[$collectionKey]
+    }' > "$private/provisioning-request.json"
+
+  code="$(root_curl -X POST "${a}/api/v1/rag/api-keys" \
+    -H 'Content-Type: application/json' \
+    -H "Idempotency-Key: ${provisioning_key}" \
+    --data-binary "@$private/provisioning-request.json" \
+    -D "$private/provisioning-first.headers" \
+    -o "$private/provisioning-first.json" -w '%{http_code}')"
+  assert_code "$code" 201 "first idempotent provisioning" || return 1
+  jq -e '
+    (.rawKey | startswith("rag_sk_"))
+    and .secretAvailable == true
+    and .idempotentReplay == false
+    and .currentCredentialActive == true
+    and .credentialVersion == 1
+    and .capabilities == ["RAG_READ"]
+  ' "$private/provisioning-first.json" >/dev/null || return 1
+  ! grep -qi '^X-RAG-Idempotent-Replay:' \
+    "$private/provisioning-first.headers" || return 1
+  grep -qi '^Cache-Control:.*no-store' \
+    "$private/provisioning-first.headers" || return 1
+
+  local provisioned_principal provisioned_key_id provisioned_raw
+  provisioned_principal="$(jq -r '.principalId' \
+    "$private/provisioning-first.json")"
+  provisioned_key_id="$(jq -r '.keyId' \
+    "$private/provisioning-first.json")"
+  provisioned_raw="$(jq -r '.rawKey' \
+    "$private/provisioning-first.json")"
+
+  code="$(root_curl -X POST "${b}/api/v1/rag/api-keys" \
+    -H 'Content-Type: application/json' \
+    -H "Idempotency-Key: ${provisioning_key}" \
+    --data-binary "@$private/provisioning-request.json" \
+    -D "$private/provisioning-replay.headers" \
+    -o "$private/provisioning-replay.json" -w '%{http_code}')"
+  assert_code "$code" 200 "cross-instance provisioning replay" || return 1
+  jq -e --arg principal "$provisioned_principal" \
+    --arg keyId "$provisioned_key_id" '
+    .principalId == $principal
+    and .keyId == $keyId
+    and .rawKey == null
+    and .secretAvailable == false
+    and .idempotentReplay == true
+    and .currentCredentialActive == true
+    and .credentialVersion == 1
+  ' "$private/provisioning-replay.json" >/dev/null || return 1
+  grep -qi '^X-RAG-Idempotent-Replay:[[:space:]]*true' \
+    "$private/provisioning-replay.headers" || return 1
+  grep -qi '^Cache-Control:.*no-store' \
+    "$private/provisioning-replay.headers" || return 1
+  ! rg -F -- "$provisioned_raw" \
+    "$private/provisioning-replay.json" >/dev/null || return 1
+
+  jq -n \
+    --arg name "Conflicting provisioning ${RUN_ID}" \
+    --arg expiresAt "2099-12-31T23:59:00" \
+    '{name:$name,expiresAt:$expiresAt,requestsPerMinute:100}' \
+    > "$private/provisioning-conflict-request.json"
+  code="$(root_curl -X POST "${b}/api/v1/rag/api-keys" \
+    -H 'Content-Type: application/json' \
+    -H "Idempotency-Key: ${provisioning_key}" \
+    --data-binary "@$private/provisioning-conflict-request.json" \
+    -o "$private/provisioning-conflict.json" -w '%{http_code}')"
+  assert_code "$code" 409 "provisioning fingerprint conflict" || return 1
+  jq -e '.error == "IDEMPOTENCY_KEY_REUSED"' \
+    "$private/provisioning-conflict.json" >/dev/null || return 1
+
+  code="$(curl -sS -H "X-API-Key: ${provisioned_raw}" \
+    -o "$private/capabilities-restricted.json" -w '%{http_code}' \
+    "${b}/api/v1/rag/integration-capabilities")"
+  assert_code "$code" 200 "restricted capability discovery" || return 1
+  jq -e --arg collectionKey "$capability_collection_key" '
+    .principal.principalType == "DATABASE_API_KEY"
+    and .principal.principalRole == "NORMAL"
+    and .principal.capabilities == ["RAG_READ"]
+    and .principal.collectionAccessMode == "RESTRICTED"
+    and .principal.allowedCollectionKeys == [$collectionKey]
+    and .features.provisioning.idempotencyKey == true
+  ' "$private/capabilities-restricted.json" >/dev/null || return 1
+
+  code="$(root_curl -X POST \
+    "${a}/api/v1/rag/api-keys/${provisioned_key_id}/rotate" \
+    -o "$private/provisioning-rotated.json" -w '%{http_code}')"
+  assert_code "$code" 201 "rotate provisioned principal" || return 1
+  local provisioned_rotated_key_id
+  provisioned_rotated_key_id="$(jq -r '.keyId' \
+    "$private/provisioning-rotated.json")"
+  jq -e --arg principal "$provisioned_principal" '
+    .principalId == $principal
+    and .credentialVersion == 2
+    and .secretAvailable == true
+    and .currentCredentialActive == true
+  ' "$private/provisioning-rotated.json" >/dev/null || return 1
+
+  code="$(root_curl -X POST "${b}/api/v1/rag/api-keys" \
+    -H 'Content-Type: application/json' \
+    -H "Idempotency-Key: ${provisioning_key}" \
+    --data-binary "@$private/provisioning-request.json" \
+    -o "$private/provisioning-after-rotate.json" -w '%{http_code}')"
+  assert_code "$code" 200 "provisioning replay after rotation" || return 1
+  jq -e --arg keyId "$provisioned_rotated_key_id" '
+    .keyId == $keyId
+    and .credentialVersion == 2
+    and .rawKey == null
+    and .secretAvailable == false
+    and .idempotentReplay == true
+    and .currentCredentialActive == true
+  ' "$private/provisioning-after-rotate.json" >/dev/null || return 1
+
+  code="$(root_curl -X DELETE \
+    "${a}/api/v1/rag/api-keys/${provisioned_rotated_key_id}" \
+    -o /dev/null -w '%{http_code}')"
+  assert_code "$code" 204 "revoke provisioned principal" || return 1
+  code="$(root_curl -X POST "${b}/api/v1/rag/api-keys" \
+    -H 'Content-Type: application/json' \
+    -H "Idempotency-Key: ${provisioning_key}" \
+    --data-binary "@$private/provisioning-request.json" \
+    -o "$private/provisioning-after-revoke.json" -w '%{http_code}')"
+  assert_code "$code" 200 "provisioning replay after revoke" || return 1
+  jq -e '
+    .keyId == null
+    and .credentialVersion == null
+    and .rawKey == null
+    and .secretAvailable == false
+    and .idempotentReplay == true
+    and .currentCredentialActive == false
+  ' "$private/provisioning-after-revoke.json" >/dev/null || return 1
+  echo "provisioning_idempotency create=201 replay=200 conflict=409 rotation=current revoke=inactive"
+  echo "integration_capabilities unauthenticated=401 root=unrestricted database=restricted"
+
   code="$(create_principal "$a" "Shared quota ${RUN_ID}" 6 "$private/quota-create.json")"
   assert_code "$code" 201 "create quota principal" || return 1
   local quota_key
@@ -527,12 +711,12 @@ run_two_instance_contract() {
   local db_facts
   db_facts="$(docker exec "$PG_CONTAINER" psql -U postgres \
     -d managed_api_principal_gate -At -F, -c \
-    "SELECT (SELECT version FROM flyway_schema_history WHERE success ORDER BY installed_rank DESC LIMIT 1), (SELECT count(*) FROM rag_api_key WHERE api_key IS NOT NULL), (SELECT count(*) FROM (SELECT principal_id FROM rag_api_key WHERE enabled GROUP BY principal_id HAVING count(*) > 1) duplicate_active)")"
-  [[ "$db_facts" == "49,0,0" ]] || {
+    "SELECT (SELECT version FROM flyway_schema_history WHERE success ORDER BY installed_rank DESC LIMIT 1), (SELECT count(*) FROM rag_api_key WHERE api_key IS NOT NULL), (SELECT count(*) FROM (SELECT principal_id FROM rag_api_key WHERE enabled GROUP BY principal_id HAVING count(*) > 1) duplicate_active), (SELECT count(*) FROM rag_api_provisioning_operation)")"
+  [[ "$db_facts" == "50,0,0,1" ]] || {
     echo "Unexpected database facts: ${db_facts}" >&2
     return 1
   }
-  echo "database_facts migration=49 raw_credentials=0 duplicate_active=0"
+  echo "database_facts migration=50 raw_credentials=0 duplicate_active=0 provisioning_operations=1"
 }
 
 start_frontend() {

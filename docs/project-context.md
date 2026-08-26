@@ -386,7 +386,7 @@ See [multi-model-external-config.md](multi-model-external-config.md).
 ### Database
 
 - PostgreSQL with pgvector.
-- Flyway is currently V1–V49.
+- Flyway is currently V1–V50.
 - V27/V28 add, backfill, validate, uniquely constrain, and make immutable the
   Collection business key; V29 adds JSONB structured records; V30 adds the
   external-document synchronization schema; V31 normalizes stored external
@@ -412,7 +412,9 @@ See [multi-model-external-config.md](multi-model-external-config.md).
   opaque turn identity shared by operation status and business history; V48
   adds stable API principals, versioned credentials, a plaintext-secret guard,
   shared quota buckets, and the legacy ADMIN guard; V49 adds principal-scoped
-  `RAG_READ` / `RAG_WRITE` operation capabilities and a database constraint.
+  `RAG_READ` / `RAG_WRITE` operation capabilities and a database constraint;
+  V50 adds the requester-scoped provisioning idempotency ledger, storing only
+  key/fingerprint hashes and result metadata, never raw credentials.
 - The data-access layer forbids explicit `SELECT ... FOR UPDATE`,
   `SKIP LOCKED`, JPA `PESSIMISTIC_*`, and PostgreSQL advisory locks.
   Concurrent writes use conditional `UPDATE/DELETE ... RETURNING`, `@Version`,
@@ -438,7 +440,8 @@ The main namespace is `/api/v1/rag/**`:
 | `/search` | Hybrid retrieval |
 | `/collections` | Knowledge collections, embedding/derivation readiness, and bounded derivation repair control plane |
 | `/evaluation` | Evaluation and feedback |
-| `/api-keys` | API-key management |
+| `/api-keys` | API-key management with optional idempotent principal provisioning |
+| `/integration-capabilities` | Authenticated, versioned runtime integration contract |
 | `/files` | PDF and file import |
 | `/json-records` | JSONB structured-record upsert, search, and detail |
 | `/documents/upsert` | External triple identity, revision CAS, and tombstone synchronization |
@@ -496,6 +499,18 @@ Managed database callers consist of a stable `rag_api_principal` and versioned
   `403` responses occur before quota accounting. Rotation inherits
   capabilities, while policy CAS may update them. ADMIN, root, legacy-static,
   and auth-disabled paths remain unrestricted.
+- Root-managed principal creation accepts an optional `Idempotency-Key`.
+  The first successful request returns `201` and shows the raw credential once;
+  an exact replay returns `200`, current credential metadata, and an explicit
+  `rawKey: null`. Reusing the same owner/key for different effective semantics
+  returns `409`. Rotation or revocation changes the current credential
+  projection returned by later replay without making the original secret
+  recoverable.
+- `GET /api/v1/rag/integration-capabilities` is an authenticated, no-store,
+  low-sensitivity contract for protocol version, the caller's effective
+  capabilities and Collection scope, supported data-plane behaviors, optional
+  features, and stable input limits. Restricted ACL projection fails closed
+  with `503` when all Collection keys cannot be resolved.
 - Chat, Search, Collections, Documents, PDF-to-RAG, evaluation, and background
   workers all use the immutable ACL snapshot or reload policy by stable owner.
 

@@ -82,6 +82,68 @@ allow-list。数据库业务 Key 不能用该端点查看其他 principal；WebU
 响应带 `Cache-Control: no-store`。完整生产 binding 和轮换流程见
 [业务服务接入指南](business-client-integration-zh-CN.md)。
 
+#### `GET /api/v1/rag/integration-capabilities`
+
+返回按当前调用方投影的版本化、低敏集成合同。启用认证时必须提供有效 credential；
+数据库 NORMAL principal 仅为发现自身合同不额外要求 `RAG_READ`。响应带
+`Cache-Control: no-store`。
+
+```json
+{
+  "protocol": {
+    "name": "spring-ai-rag-integration",
+    "version": "1.0",
+    "apiVersion": "1.0.0"
+  },
+  "principal": {
+    "principalType": "DATABASE_API_KEY",
+    "principalRole": "NORMAL",
+    "capabilities": ["RAG_READ"],
+    "collectionAccessMode": "RESTRICTED",
+    "allowedCollectionKeys": ["customer-42:records:v1"]
+  },
+  "features": {
+    "provisioning": {
+      "idempotencyKey": true,
+      "replayReturnsSecret": false,
+      "rawCredentialShownOnce": true
+    },
+    "dataPlane": {
+      "collectionKey": true,
+      "jsonRecords": {
+        "upsert": true,
+        "search": true,
+        "payloadContains": true,
+        "revisionCas": true,
+        "exactReplay": true,
+        "tombstoneRestore": true
+      },
+      "embedding": {
+        "asyncPolicy": true,
+        "readinessEndpoint": true
+      },
+      "bindingPreflight": true
+    },
+    "optional": {
+      "documentSyncRuns": false,
+      "openAiCompatibility": false
+    }
+  },
+  "limits": {
+    "maxCollectionKeysPerPrincipal": 100,
+    "collectionKeyMaxLength": 128,
+    "sourceNamespaceMaxLength": 128,
+    "externalIdMaxLength": 255,
+    "sourceRevisionMaxLength": 255
+  }
+}
+```
+
+响应有意不暴露 credential/principal ID、provider 配置、数据库细节或 secret，并直接反映
+运行时 feature flag。restricted ACL 无法完整映射为稳定 Collection key 时返回
+`503 SERVICE_UNAVAILABLE`，不会发布部分合同。客户端先用该端点选择受支持行为，再用
+`/auth/me` 和 Collection 探针验证精确部署 binding。
+
 对数据库 NORMAL principal，`GET`/`HEAD`/`OPTIONS` 和明确的只读 POST
 （Search、Chat、JSON Record search、model compare、非持久化 evaluation、
 `/v1/chat/completions`）需要 `RAG_READ`；其他 `POST`/`PUT`/`PATCH`/`DELETE`
@@ -225,6 +287,11 @@ root 模式下 `expiresAt` 必填且必须在未来，不设固定的最长有�
 `allowedCollectionIds` 已 deprecated。`capabilities` 只接受 `["RAG_READ"]` 或
 `["RAG_READ", "RAG_WRITE"]`；省略时默认完整读写。
 
+可选 `Idempotency-Key` Header 使 provisioning 在配置的保留窗口内可以安全重试。key
+必须是 1-255 个可见 ASCII 字符，并按实际认证 provisioning principal 隔离。同一个 key
+只能与同一个规范化请求复用；Collection key 与解析后等价的 numeric ID 会生成相同
+fingerprint。非法或重复 Header 返回 `400 IDEMPOTENCY_KEY_INVALID`。
+
 ```json
 {
   "name": "My API Key",
@@ -235,7 +302,7 @@ root 模式下 `expiresAt` 必填且必须在未来，不设固定的最长有�
 }
 ```
 
-原始密钥仅在 `201 Created` 响应中返回一次，响应带
+原始密钥仅在首次 `201 Created` 响应中返回一次，响应带
 `Cache-Control: no-store`：
 
 ```json
@@ -250,9 +317,34 @@ root 模式下 `expiresAt` 必填且必须在未来，不设固定的最长有�
   "allowedCollectionIds": [1, 2],
   "expiresAt": "2026-10-01T00:00:00",
   "requestsPerMinute": 120,
-  "capabilities": ["RAG_READ"]
+  "capabilities": ["RAG_READ"],
+  "secretAvailable": true,
+  "idempotentReplay": false,
+  "currentCredentialActive": true
 }
 ```
+
+精确 keyed replay 返回 `200 OK`、`X-RAG-Idempotent-Replay: true` 和
+`Cache-Control: no-store`，绝不重放 raw secret：
+
+```json
+{
+  "keyId": "rag_k_xyz789",
+  "principalId": "rag_k_xyz789",
+  "credentialVersion": 1,
+  "rawKey": null,
+  "name": "My API Key",
+  "secretAvailable": false,
+  "idempotentReplay": true,
+  "currentCredentialActive": true
+}
+```
+
+同一 owner/key 携带不同请求时返回 `409 IDEMPOTENCY_KEY_REUSED`。ledger 只保存 hash
+和结果 metadata，不保存 raw credential。轮换后 replay 返回当前 credential ID/version，
+仍保持 `rawKey=null`；吊销或到期后返回 `keyId=null`、
+`credentialVersion=null`、`currentCredentialActive=false`。ledger 被关闭或不可用时，
+keyed 请求 fail closed 返回 `503`，不会静默退化为非幂等 create。
 
 #### `PUT /api/v1/rag/api-keys/principals/{principalId}/policy`
 

@@ -67,6 +67,8 @@ public class RagProperties {
     private final RagEvaluationProperties evaluation = new RagEvaluationProperties();
     private final RagDocumentLifecycleProperties documentLifecycle =
             new RagDocumentLifecycleProperties();
+    private final RagApiKeyProvisioningProperties apiKeyProvisioning =
+            new RagApiKeyProvisioningProperties();
 
     public RagEmbeddingProperties getEmbedding() {
         return embedding;
@@ -166,5 +168,9 @@ public class RagProperties {
 
     public RagDocumentLifecycleProperties getDocumentLifecycle() {
         return documentLifecycle;
+    }
+
+    public RagApiKeyProvisioningProperties getApiKeyProvisioning() {
+        return apiKeyProvisioning;
     }
 }

@@ -10,8 +10,10 @@ import com.springairag.core.exception.RagException;
 import com.springairag.core.ratelimit.PostgresRateLimitStore;
 import com.springairag.core.repository.RagApiKeyRepository;
 import com.springairag.core.repository.RagApiPrincipalRepository;
+import com.springairag.core.repository.ApiKeyProvisioningOperationRepository;
 import com.springairag.core.security.AuthenticatedApiPrincipal;
 import com.springairag.core.security.ApiCapabilitySupport;
+import com.springairag.core.config.RagProperties;
 import com.springairag.core.service.ApiKeyManagementService;
 import jakarta.persistence.EntityManagerFactory;
 import org.flywaydb.core.Flyway;
@@ -140,7 +142,7 @@ class ManagedApiPrincipalPostgresIntegrationTest {
 
         flyway().migrate();
 
-        assertEquals("49", migrationJdbc.queryForObject(
+        assertEquals("50", migrationJdbc.queryForObject(
                 "SELECT version FROM flyway_schema_history WHERE success = TRUE "
                         + "ORDER BY installed_rank DESC LIMIT 1",
                 String.class));
@@ -161,6 +163,19 @@ class ManagedApiPrincipalPostgresIntegrationTest {
         assertEquals("RAG_READ,RAG_WRITE", migrationJdbc.queryForObject(
                 "SELECT capabilities FROM rag_api_principal WHERE principal_id='rag_k_legacy'",
                 String.class));
+        assertEquals(0, migrationJdbc.queryForObject(
+                "SELECT COUNT(*) FROM rag_api_provisioning_operation",
+                Integer.class));
+        assertEquals(2, migrationJdbc.queryForObject("""
+                SELECT COUNT(*)
+                FROM information_schema.columns
+                WHERE table_name = 'rag_api_provisioning_operation'
+                  AND column_name IN (
+                    'idempotency_key_hash',
+                    'request_fingerprint_sha256'
+                  )
+                  AND data_type = 'character varying'
+                """, Integer.class));
     }
 
     @Test
@@ -375,6 +390,148 @@ class ManagedApiPrincipalPostgresIntegrationTest {
     }
 
     @Test
+    void idempotentProvisioningReplaysAndRejectsFingerprintConflict() {
+        ApiKeyCreateRequest request = request(
+                "Idempotent", 50, List.of(ApiCapabilitySupport.RAG_WRITE,
+                        ApiCapabilitySupport.RAG_READ));
+        request.setAllowedCollectionIds(List.of(7L, 3L));
+
+        ApiKeyManagementService.ProvisioningResult first =
+                service.generateIdempotentKey(
+                        request, com.springairag.core.entity.ApiKeyRole.NORMAL,
+                        "root:environment-root", "a".repeat(64), true);
+        assertFalse(first.replay());
+        assertNotNull(first.response().getRawKey());
+        assertEquals(1, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM rag_api_provisioning_operation", Integer.class));
+        assertEquals(1, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM rag_api_principal", Integer.class));
+
+        ApiKeyCreateRequest reordered = request(
+                "Idempotent", 50, List.of(ApiCapabilitySupport.RAG_READ,
+                        ApiCapabilitySupport.RAG_WRITE));
+        reordered.setExpiresAt(request.getExpiresAt());
+        reordered.setAllowedCollectionIds(List.of(3L, 7L));
+        ApiKeyManagementService.ProvisioningResult replay =
+                service.generateIdempotentKey(
+                        reordered, com.springairag.core.entity.ApiKeyRole.NORMAL,
+                        "root:environment-root", "a".repeat(64), true);
+        assertTrue(replay.replay());
+        assertEquals(first.response().getPrincipalId(), replay.response().getPrincipalId());
+        assertNull(replay.response().getRawKey());
+        assertFalse(replay.response().getSecretAvailable());
+        assertTrue(replay.response().getCurrentCredentialActive());
+
+        ApiKeyCreateRequest changed = request("Different", 50, null);
+        RagException conflict = assertThrows(
+                RagException.class,
+                () -> service.generateIdempotentKey(
+                        changed, com.springairag.core.entity.ApiKeyRole.NORMAL,
+                        "root:environment-root", "a".repeat(64), true));
+        assertEquals(ErrorCode.IDEMPOTENCY_KEY_REUSED, conflict.getErrorCodeEnum());
+        assertEquals(1, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM rag_api_principal", Integer.class));
+    }
+
+    @Test
+    void idempotentProvisioningUsesOwnerIsolationAndCurrentCredentialAfterLifecycleChanges() {
+        ApiKeyCreateRequest request = request("Owner scoped", 50);
+        ApiKeyManagementService.ProvisioningResult root =
+                service.generateIdempotentKey(
+                        request, com.springairag.core.entity.ApiKeyRole.NORMAL,
+                        "root:environment-root", "b".repeat(64), true);
+        ApiKeyManagementService.ProvisioningResult local =
+                service.generateIdempotentKey(
+                        request, com.springairag.core.entity.ApiKeyRole.NORMAL,
+                        "local:auth-disabled", "b".repeat(64), true);
+        assertNotEquals(root.response().getPrincipalId(), local.response().getPrincipalId());
+        assertEquals(2, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM rag_api_provisioning_operation", Integer.class));
+
+        ApiKeyCreatedResponse rotated = service.rotateManagedKey(root.response().getKeyId());
+        ApiKeyManagementService.ProvisioningResult afterRotate =
+                service.generateIdempotentKey(
+                        request, com.springairag.core.entity.ApiKeyRole.NORMAL,
+                        "root:environment-root", "b".repeat(64), true);
+        assertTrue(afterRotate.replay());
+        assertEquals(rotated.getKeyId(), afterRotate.response().getKeyId());
+        assertEquals(rotated.getCredentialVersion(),
+                afterRotate.response().getCredentialVersion());
+
+        assertTrue(service.revokeManagedKey(rotated.getKeyId()));
+        ApiKeyManagementService.ProvisioningResult afterRevoke =
+                service.generateIdempotentKey(
+                        request, com.springairag.core.entity.ApiKeyRole.NORMAL,
+                        "root:environment-root", "b".repeat(64), true);
+        assertTrue(afterRevoke.replay());
+        assertNull(afterRevoke.response().getKeyId());
+        assertNull(afterRevoke.response().getCredentialVersion());
+        assertFalse(afterRevoke.response().getCurrentCredentialActive());
+        assertEquals(2, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM rag_api_principal", Integer.class));
+    }
+
+    @Test
+    void concurrentSameOwnerAndKeyCreatesOnePrincipal() throws Exception {
+        ApiKeyCreateRequest request = request("Concurrent idempotent", 50);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            List<Future<ApiKeyManagementService.ProvisioningResult>> futures =
+                    List.of(
+                            executor.submit(() -> {
+                                start.await(5, TimeUnit.SECONDS);
+                                return service.generateIdempotentKey(
+                                        request, com.springairag.core.entity.ApiKeyRole.NORMAL,
+                                        "root:environment-root", "c".repeat(64), true);
+                            }),
+                            executor.submit(() -> {
+                                start.await(5, TimeUnit.SECONDS);
+                                return service.generateIdempotentKey(
+                                        request, com.springairag.core.entity.ApiKeyRole.NORMAL,
+                                        "root:environment-root", "c".repeat(64), true);
+                            }));
+            start.countDown();
+            List<ApiKeyManagementService.ProvisioningResult> results = futures.stream()
+                    .map(future -> {
+                        try {
+                            return future.get(15, TimeUnit.SECONDS);
+                        } catch (Exception error) {
+                            throw new RuntimeException(error);
+                        }
+                    }).toList();
+            assertEquals(1, results.stream().filter(result -> !result.replay()).count());
+            assertEquals(1, results.stream().filter(ApiKeyManagementService.ProvisioningResult::replay).count());
+        } finally {
+            executor.shutdownNow();
+            assertTrue(executor.awaitTermination(5, TimeUnit.SECONDS));
+        }
+        assertEquals(1, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM rag_api_principal", Integer.class));
+        assertEquals(1, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM rag_api_provisioning_operation", Integer.class));
+    }
+
+    @Test
+    void provisioningCleanupDeletesOnlyExpiredLedgerRows() {
+        ApiKeyManagementService.ProvisioningResult result =
+                service.generateIdempotentKey(
+                        request("Cleanup", 50),
+                        com.springairag.core.entity.ApiKeyRole.NORMAL,
+                        "root:environment-root", "d".repeat(64), true);
+        jdbc.update("""
+                UPDATE rag_api_provisioning_operation
+                SET completed_at = clock_timestamp() - INTERVAL '401 days'
+                WHERE principal_id=?
+                """, result.response().getPrincipalId());
+        service.cleanupProvisioningLedger();
+        assertEquals(0, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM rag_api_provisioning_operation", Integer.class));
+        assertEquals(1, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM rag_api_principal", Integer.class));
+    }
+
+    @Test
     void concurrentLegacyAdminRevocationCannotRemoveTheLastAdmin() throws Exception {
         insertAdmin("rag_k_admin_a");
         insertAdmin("rag_k_admin_b");
@@ -526,9 +683,17 @@ class ManagedApiPrincipalPostgresIntegrationTest {
         @Bean ApiKeyManagementService apiKeyManagementService(
                 RagApiKeyRepository credentials,
                 RagApiPrincipalRepository principals,
-                JdbcTemplate jdbcTemplate) {
+                JdbcTemplate jdbcTemplate,
+                ApiKeyProvisioningOperationRepository provisioningOperations,
+                RagProperties ragProperties,
+                PlatformTransactionManager transactionManager) {
             return new ApiKeyManagementService(
-                    credentials, principals, null, jdbcTemplate);
+                    credentials, principals, null, jdbcTemplate,
+                    provisioningOperations, ragProperties, transactionManager);
+        }
+
+        @Bean RagProperties ragProperties() {
+            return new RagProperties();
         }
 
         @Bean PostgresRateLimitStore postgresRateLimitStore(JdbcTemplate jdbcTemplate) {

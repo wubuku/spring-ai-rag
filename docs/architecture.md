@@ -338,7 +338,10 @@ Data model and current boundaries:
   V49 stores `RAG_READ` / `RAG_WRITE` on the same principal policy. A central
   filter after authentication and before shared rate limiting enforces
   operation capabilities for NORMAL principals; unknown mutations require
-  write by default.
+  write by default. V50 stores successful principal-provisioning operations by
+  requester owner plus idempotency-key hash. The request fingerprint is based
+  on resolved effective policy, and replay reads the principal's current
+  credential state without storing or reconstructing the original secret.
 - Deleting a Collection attempts a soft delete. If it contains any externally managed
   document with a nonblank `externalId`, the service returns `409` and does not
   delete the Collection, because clearing `collection_id` would destroy the
@@ -652,6 +655,7 @@ rag_audit_log           # Audit logs (collection operations)
 | `rag_api_principal` | principal_id, role, allowed_collection_ids, capabilities, policy_version, requests_per_minute | Stable caller owner and authoritative policy (V48/V49) |
 | `rag_api_key` | key_id, principal_id, credential_version, key_hash, enabled | Versioned credential with at most one active version per principal |
 | `rag_api_rate_limit_bucket` | principal_id, window_start, request_count | Shared fixed UTC-minute quota bucket |
+| `rag_api_provisioning_operation` | owner_id, idempotency_key_hash, request_fingerprint_sha256, principal_id, completed_at | Successful provisioning replay ledger without raw credentials (V50) |
 | `rag_chat_history` | session_id, user_message, ai_response | Business audit |
 | `rag_retrieval_logs` | query, strategy, result_count, latency_ms, outcome_code, empty_reason_code | Retrieval diagnostics (V35) |
 | `rag_evaluation_suites` | suite_key, owner_principal_id | Managed quality suites (V38) |
@@ -668,6 +672,8 @@ rag_audit_log           # Audit logs (collection operations)
 - `rag_documents.jsonb_payload`: V34 partial GIN `jsonb_path_ops` for enabled JSON-record `@>` containment
 - `rag_documents.metadata`: V36 GIN for `metadataContains` `@>` pushdown
 - `rag_embedding_jobs`: active-job partial unique, claim, batch, document, and status/created indexes
+- `rag_api_provisioning_operation`: unique owner/key-hash identity and a
+  completed-at cleanup index
 
 ### 5.3 Full-Text Search Configuration
 

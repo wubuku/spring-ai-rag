@@ -394,7 +394,7 @@ mvn jacoco:report-aggregate
 ## 测试数据库
 
 单元测试使用 Mock 或 H2 兼容路径。Embedding Profile 迁移使用显式 PostgreSQL 集成测试，
-因为它需要 pgvector，并验证 Flyway V1-V49、固定向量列、Profile 专属索引、原子替换、
+因为它需要 pgvector，并验证 Flyway V1-V50、固定向量列、Profile 专属索引、原子替换、
 Legacy 认领、检索新鲜度和 Spring Data Repository 查询。
 
 启动 PostgreSQL 16 + pgvector 数据库后执行：
@@ -448,7 +448,7 @@ WebUI 验收要求 `npm run test:run`、`npm run build` 和 Mock API Playwright 
 范围实现具备 DTO、Resolver、ACL、SQL fragment、Vector/Full-text provider、
 Chat/Search/JSON、MockMvc、OpenAPI、WebUI 和 PostgreSQL 覆盖。真实
 PostgreSQL/Testcontainers 测试会启动 `pgvector/pgvector:pg16`，从空 schema 执行
-Flyway V1-V49，并用实际 PostgreSQL `bigint[]` 绑定执行 Vector 查询：
+Flyway V1-V50，并用实际 PostgreSQL `bigint[]` 绑定执行 Vector 查询：
 
 ```bash
 TESTCONTAINERS_RYUK_DISABLED=true \
@@ -474,7 +474,7 @@ WebUI 验收覆盖三种模式、多选、服务端 Collection 搜索和分页�
 ### JSONB 结构化记录验收门禁
 
 JSONB 实现同时具备 Mock HTTP/Service 覆盖和真实 PostgreSQL/Testcontainers 测试。后者会
-启动 `pgvector/pgvector:pg16`，从空库执行 Flyway V1-V49，并验证 JSONB round-trip、
+启动 `pgvector/pgvector:pg16`，从空库执行 Flyway V1-V50，并验证 JSONB round-trip、
 嵌套 `payloadContains`、V34 GIN planner、仅更新 payload 的版本记录、相同描述下不同
 记录共存以及级联清理：
 
@@ -518,7 +518,7 @@ text-only messages、未知 alias 错误、非流式 JSON、SSE role/content/fin
 ```
 
 脚本串行执行 service/worker/Controller focused tests，自动启动隔离 PostgreSQL 并从空库
-执行 V1–V49，验证 V33 active-job coalesce、force 原子升级和并发 worker 原子条件
+执行 V1–V50，验证 V33 active-job coalesce、force 原子升级和并发 worker 原子条件
 claim，再执行 `test-compile`、Shell 语法和空白检查。已有隔离数据库时可用
 `EMBEDDING_JOBS_IT_JDBC_URL` 覆盖。
 
@@ -555,8 +555,9 @@ Collection decoy 泄漏和 JSONB 明确空结果。外部 provider、数据库�
 
 ### 受管 API Principal PostgreSQL 矩阵
 
-在真实 PostgreSQL 上执行 V48→V49 迁移、credential lifecycle、operation capability、
-policy concurrency、last-ADMIN、last-used、共享 quota 与有界清理矩阵：
+在真实 PostgreSQL 上执行 V48→V50 迁移、credential lifecycle、operation capability、
+幂等 provisioning/replay/conflict、owner 隔离、并发首次创建、rotation/revoke 后 replay
+状态、policy concurrency、last-ADMIN、last-used、共享 quota 与有界清理矩阵：
 
 ```bash
 TESTCONTAINERS_RYUK_DISABLED=true \
@@ -583,8 +584,9 @@ MANAGED_API_REAL_ENV_FILE=.env \
 脚本串行执行 PostgreSQL 迁移/并发矩阵、`mvn clean compile test-compile`、Maven 全量测试、
 WebUI Vitest/TypeScript/生产构建/alignment、核心 Mock Playwright、禁锁与文档门禁；随后
 启动两个共享一次性 PostgreSQL 的真实后端和一个 Vite 前端，验证只读 identity/GET 与
-写入 `403`、轮换继承能力、非法能力不落库、全局 quota、policy CAS、跨实例轮换/撤销、
-quota store 故障关闭和无截图真实 Playwright。真实 LLM 模式还覆盖 native
+写入 `403`、轮换继承能力、非法能力不落库、认证 capability discovery、跨实例 keyed
+provisioning 的 create/replay/conflict、rotation/revoke 后 replay、全局 quota、policy
+CAS、跨实例轮换/撤销、quota store 故障关闭和无截图真实 Playwright。真实 LLM 模式还覆盖 native
 JSON/SSE 与 OpenAI-compatible JSON/SSE。真实 Chat principal 显式只有 `RAG_READ`；
 脚本先验证写请求 `403` 且 provider counter 不变，再证明幂等重放不产生重复模型调用，
 并要求真实 provider 调用总数严格等于 5。证据写入

@@ -772,6 +772,11 @@ rag:
     root-api-key: ${RAG_ROOT_API_KEY:}
     api-key: ${RAG_API_KEY:}
     enabled: false
+  api-key-provisioning:
+    enabled: ${RAG_API_KEY_PROVISIONING_ENABLED:true}
+    retention: ${RAG_API_KEY_PROVISIONING_RETENTION:400d}
+    cleanup-batch-size: ${RAG_API_KEY_PROVISIONING_CLEANUP_BATCH_SIZE:500}
+    concurrent-retry-attempts: ${RAG_API_KEY_PROVISIONING_CONCURRENT_RETRY_ATTEMPTS:3}
 ```
 
 | 属性 | 默认值 | 说明 |
@@ -779,6 +784,13 @@ rag:
 | `rag.security.root-api-key` | `""` | 独立服务 root 凭据；对应环境变量 `RAG_ROOT_API_KEY` |
 | `rag.security.enabled` | `false`（本地）/ `true`（`prod`） | 启用 API Key 认证 |
 | `rag.security.api-key` | `""` | Legacy 静态全库 Key；root 模式下不参与认证 |
+
+| 属性 | 默认值 | 说明 |
+|------|--------|------|
+| `rag.api-key-provisioning.enabled` | `true` | 启用 keyed API principal provisioning；关闭后携带 `Idempotency-Key` 的请求 fail closed 返回 `503` |
+| `rag.api-key-provisioning.retention` | `400d` | 成功 provisioning ledger 的保留时间和保证 replay 窗口；范围 7–3650 天 |
+| `rag.api-key-provisioning.cleanup-batch-size` | `500` | 每次定时清理最多删除的已完成 ledger 行数，限制为 10–5000 |
+| `rag.api-key-provisioning.concurrent-retry-attempts` | `3` | 同 owner/key 唯一约束竞争后读取胜者的有界尝试次数，限制为 1–8 |
 
 配置有效 `RAG_ROOT_API_KEY` 后进入独立服务 MVP 安全模式：
 
@@ -804,9 +816,11 @@ V49 在 principal policy 中增加规范化 `capabilities`：只允许 `RAG_READ
 `RAG_READ,RAG_WRITE`；创建省略时默认完整读写，策略更新省略时保留现值，轮换继承现值。
 NORMAL principal 的读取和明确的只读 POST 需要 `RAG_READ`，其他写请求需要
 `RAG_WRITE`；能力拒绝发生在共享 quota 计数之前。ADMIN、environment root、legacy
-static 和关闭认证的兼容路径保持完整权限。
-每次请求都联查权威 credential/principal；仅近似审计字段 `last_used_at` 的写入在五分钟内
-抑制。legacy `api_key` 列为迁移兼容继续存在，但被约束为只能是 `NULL`。详见
+static 和关闭认证的兼容路径保持完整权限。V50 增加可选 `Idempotency-Key` 使用的成功
+provisioning ledger，只保存 owner/key/request hash 和结果 metadata，绝不保存 raw
+credential。每次请求都联查权威 credential/principal；仅近似审计字段 `last_used_at`
+的写入在五分钟内抑制。legacy `api_key` 列为迁移兼容继续存在，但被约束为只能是
+`NULL`。详见
 [rest-api-zh-CN.md](rest-api-zh-CN.md)。
 
 ## API 限流配置

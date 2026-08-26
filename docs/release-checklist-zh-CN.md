@@ -15,7 +15,7 @@
 - [x] Helm `version` 与 `appVersion` 均为 `1.0.0`
 - [x] Docker/Helm 默认镜像 tag 为 `1.0.0`
 - [x] 本地、Docker 与 Helm 默认端口均为 `8081`
-- [x] Flyway 迁移范围为 V1-V49
+- [x] Flyway 迁移范围为 V1-V50
 - [x] JSONB 结构化记录 API、payload 快照和 Collection 生命周期已覆盖
 - [x] `scripts/verify-jsonb-records.sh` 固化后端/数据库/前端聚焦验证
 - [x] 文档 PATCH/禁用/恢复/永久删除与外部三元身份已覆盖
@@ -108,6 +108,22 @@
   验证读成功、写 `403`、状态不变和 rotation 能力继承。
 - [x] 真实 LLM 门禁使用显式 `RAG_READ` principal，写拒绝和幂等 replay 不增加 provider
   counter，原生/OpenAI-compatible JSON/SSE 总 provider 调用严格等于 5。
+
+### 2026-08-26 Provisioning 与能力发现门禁
+
+- [x] V50 增加按 requester 隔离的 provisioning operation 账本，只保存
+  key/fingerprint hash 与结果 metadata；raw credential 仍只展示一次，不为 replay
+  持久化。
+- [x] keyed create 返回 `201`；跨实例精确 replay 返回 `200`、
+  `X-RAG-Idempotent-Replay: true` 和 `rawKey: null`；语义复用返回
+  `409 IDEMPOTENCY_KEY_REUSED`。
+- [x] PostgreSQL 与真实 HTTP 验收覆盖并发首次创建、requester 隔离、rotation/revoke 后
+  replay 状态、有界清理，以及账本/配置故障 fail closed。
+- [x] 认证的 `GET /api/v1/rag/integration-capabilities` 返回版本化协议、当前调用方
+  policy/Collection 投影、数据面行为、可选特性和稳定上限，不返回 secret。
+- [x] 统一 managed-principal 门禁覆盖 PostgreSQL、Maven、WebUI
+  typecheck/Vitest/build/alignment、Mock Playwright、双实例 HTTP、真实浏览器 DOM/网络
+  断言和可选真实 provider Chat。
 
 ### 最终证据（2026-07-21）
 
