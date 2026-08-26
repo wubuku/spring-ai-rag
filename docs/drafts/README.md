@@ -38,9 +38,8 @@ Active plans are listed here and in `docs/index*`.
 
 ## Current Active Plans
 
-There is currently no active plan. After code and documentation exploration,
-the next planning round should use stable filenames in this directory and add
-nearby links in this section.
+- [Durable Collection-create idempotency implementation plan](NEXT_HIGH_VALUE_FEATURES_PLAN.md)
+- [Implementation progress ledger](NEXT_HIGH_VALUE_FEATURES_PROGRESS.md)
 
 Completed, stopped, and superseded materials remain available in the
 [historical archive](archive/README.md).

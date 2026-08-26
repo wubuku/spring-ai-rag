@@ -32,7 +32,7 @@
 
 ## 当前活跃规划
 
-当前没有活动规划。创建下一轮规划时，在完成代码与文档探索后使用稳定文件名写入本目录，
-并在本节增加近距离入口。
+- [Collection 创建持久化幂等性实施规划](NEXT_HIGH_VALUE_FEATURES_PLAN.md)
+- [配套实施进度账本](NEXT_HIGH_VALUE_FEATURES_PROGRESS.md)
 
 已完成、已停止和被替代的材料可从[历史归档](archive/README-zh-CN.md)追溯。
