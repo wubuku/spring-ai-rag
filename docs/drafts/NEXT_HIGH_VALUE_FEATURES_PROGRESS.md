@@ -1,6 +1,6 @@
 # Collection 创建持久化幂等性实施进度
 
-> **状态**：验收中（双语长青文档与静态门禁已通过）
+> **状态**：已完成（本地与 Mock 验收通过；真实 Chat provider 验收受外部服务阻塞）
 >
 > **对应规划**：[NEXT_HIGH_VALUE_FEATURES_PLAN.md](NEXT_HIGH_VALUE_FEATURES_PLAN.md)
 >
@@ -21,7 +21,7 @@ Authorization、完整 metadata、业务 payload、`.env` 内容或外部项目�
 
 - [x] 上一轮 plan/progress 已按主题归档。
 - [x] 上一轮功能已合入并推送 `main`，对应 feature worktree 已移除。
-- [x] `main == origin/main == 61c728c2`，规划工作区干净。
+- [x] `main == origin/main == 063184dc`，规划工作区干净。
 - [x] 核对通用业务 Client 的 P1/P2 类生产接入缺口与当前实现。
 - [x] 确认 operation-scoped capability、最小权限 principal、principal provisioning
   idempotency、capability discovery 和 Sync Run item receipt 已交付。
@@ -34,11 +34,13 @@ Authorization、完整 metadata、业务 payload、`.env` 内容或外部项目�
 - [x] Slice B：Collection provisioning service 与 HTTP 契约。
 - [x] Slice C：capability、PostgreSQL、双实例 HTTP 和业务 Client gate。
 - [x] Slice D：双语长青文档。
-- [x] 后端、前端、真实全栈与业务 Client 完整验收。
-- [ ] 真实 Embedding、Chat ask/stream 与真实 WebUI Chat 验收（Embedding 已完成；Chat
-  因外部 OpenAI-compatible provider 不可用暂未通过）。
-- [ ] 同步最新 `origin/main` 后按新基线完整复验。
-- [ ] 提交/push feature，合入/push `main`，归档文档并清理 worktree。
+- [x] 后端、前端、业务 Client 和合并后完整验收。
+- [x] 真实 Embedding 验收通过。
+- [x] 真实 Chat ask/stream、真实 WebUI Chat 和幂等回放已进入真实 provider 路径；
+  provider 返回 `503 no_available_account`，应用返回 `504 CHAT_TIMEOUT`，因此不能记为
+  真实 Chat 通过。
+- [x] 同步最新 `origin/main` 后按合并后基线完整复验。
+- [ ] 提交最终进度账本、归档文档并清理已合并的 feature worktree。
 
 ## 2. 已冻结的关键决策
 
@@ -117,10 +119,12 @@ progress dce13f02913fd506099477cb9ba2f529fbf25bd27fc03b0867a7a681e188a140
 | 2026-08-27 | Chat 真实验收首轮 | `CHAT_VERIFY_RUN_ID=20260827-collection-real-rerun1 ... ./scripts/verify-chat-capability.sh --with-real-llm` | FAIL / 已修复 | Chat PostgreSQL 集成测试仍把全量迁移终点及方法名写成 V51；当前 schema 已到 V52。已更新为 V52，旧流程结果作废，须从 Chat gate 起点完整重跑。 |
 | 2026-08-27 | Chat 真实验收第二轮 | `CHAT_VERIFY_RUN_ID=20260827-collection-real-rerun2 ... ./scripts/verify-chat-capability.sh --with-real-llm` | FAIL / 已修复 | PostgreSQL 矩阵继续发现 `NextHighValueFeaturesPostgresIntegrationTest` 与 `ChatTurnOperationPostgresIntegrationTest` 仍断言最新迁移为 V51；已统一更新为 V52，旧流程结果作废，须从完整 gate 起点重跑。 |
 | 2026-08-27 | Chat 真实验收最终当前轮 | `CHAT_VERIFY_RUN_ID=20260827-collection-real-rerun3 ... ./scripts/verify-chat-capability.sh --with-real-llm` | FAIL / 外部依赖阻塞 | 本地/Mock/数据库门槛 17 项全部通过；真实 WebUI SSE 等待 180 秒后未收到 200，原生 JSON Chat 返回 `504 CHAT_TIMEOUT`。隔离服务日志记录 provider `503 no_available_account`；使用同一主工作区 `.env` 的直接兼容接口探测返回 `HTTP 403`、`error code: 1010`。真实 Embedding 请求已完成。该结果不能作为真实 Chat 通过，待 provider 恢复后必须从真实 Chat 步骤重跑。 |
+| 2026-08-27 | 合并后验证基线 | `git fetch origin`、`git rev-parse main origin/main`、`git status` | BASELINE | `main == origin/main == 063184dc`（merge: make collection creation idempotent）；以下验收全部按该合并提交重新执行，不沿用合并前结果。 |
+| 2026-08-27 | 合并后 Chat 专项完整验收 | `CHAT_VERIFY_RUN_ID=20260827-main-collection-chat-final ./scripts/verify-chat-capability.sh --with-real-llm` | 17 PASS / 1 FAIL（外部依赖阻塞） | 本地 focused backend、PostgreSQL、`mvn clean compile test-compile`、全量 Maven、demo、启动、WebUI typecheck/Vitest/build、Mock Playwright、锁/文档/diff/密钥门禁全部通过；真实 Embedding 通过；真实 Chat/WebUI 因 provider `503 no_available_account`，最终 `504 CHAT_TIMEOUT`，直接 provider 探测为 `403 error code: 1010`。证据：`.verification/chat-capability/20260827-main-collection-chat-final/summary.md`。 |
 
 ## 5. 恢复入口
 
 真实 Chat 当前受 provider 不可用阻塞；恢复后使用主仓库 `.env` 在隔离端口和临时
-PostgreSQL 数据库重跑真实 Embedding、Chat ask/stream、真实 WebUI Chat 及幂等回放。
-在不阻断代码交付的前提下，继续同步最新 `origin/main` 并按合并后基线完整复验；
-最终报告必须明确区分本地实现门槛与外部 provider 门槛。
+PostgreSQL 数据库重跑真实 Chat ask/stream、真实 WebUI Chat 及幂等回放。当前代码、
+本地数据库、前端和 Mock 验收不因该外部阻塞回退或重做；任何后续真实 provider 重跑都必须
+另建验证 run，并明确区分本地实现门槛与外部 provider 门槛。
