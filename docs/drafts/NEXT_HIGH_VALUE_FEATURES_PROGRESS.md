@@ -1,6 +1,6 @@
 # 托管调用方幂等 provisioning 与运行时能力发现实施进度
 
-> **状态**：预合并统一验收与实现 `3/3` 通过，待同步最新 `origin/main`
+> **状态**：最终组合完整复验通过，待提交、合并并清理隔离 worktree
 >
 > **对应规划**：[NEXT_HIGH_VALUE_FEATURES_PLAN.md](NEXT_HIGH_VALUE_FEATURES_PLAN.md)
 >
@@ -31,6 +31,7 @@
 - [x] Slice D：脚本和双语长青文档。
 - [x] 完成基本硬门槛和必要真实服务验收。
 - [x] 完成实现三轮无修改审查。
+- [x] 同步 `origin/main` 后完成最终组合完整复验（13/13，真实 provider 5 calls）。
 - [ ] 合并、推送 `main`、确认干净并移除特性 worktree。
 
 ## 2. 已冻结的关键决策
@@ -81,6 +82,9 @@
 | 2026-08-26 21:00 CST | 首次修复后统一门槛 | PostgreSQL、Maven、双实例后端合同通过；隔离 worktree 未安装 `node_modules` | PARTIAL（前端命令 127，真实 WebUI 未启动） | run `20260826-205633`；后端 create/replay/conflict/rotation/revoke、capability、quota、V50 终态均 PASS |
 | 2026-08-26 21:07 CST | 前端依赖与门槛 | `npm ci` 后运行 Vitest、TypeScript、生产构建、alignment 与核心 Mock Playwright | PASS（218/218 + build + 1/1） | `spring-ai-rag-webui/package-lock.json` 锁定安装；无截图断言 |
 | 2026-08-26 21:14 CST | 预合并统一验收 | PostgreSQL 46/46、Maven clean/compile/test-compile、全量 Maven、WebUI Vitest/TypeScript/build/alignment、Mock Playwright、文档/锁/whitespace、双实例真实全栈与真实 provider | PASS（13/13 steps） | run `20260826-final-premerge`；API 541、Documents 74、Core 3043（7 个环境门控 skip）、Starter 44；WebUI 218/218；真实 WebUI 1/1；真实 provider 5 calls |
+| 2026-08-26 21:31 CST | 最终组合基线 | fetch 后 `origin/main` 仍为 `cf740943`，是特性分支 merge-base；无新增上游提交，不创建空 merge | READY | feature `a61e38ed`；PostgreSQL 一次性数据库；后端 `18181/18182`；前端 `15181`；真实 provider 配置来自 main worktree `.env` |
+| 2026-08-26 21:33 CST | 最终组合首次统一复验 | 前 12 步及双实例/真实 WebUI 合同通过；首个真实 native JSON Chat 未成功 | FAIL（12/13） | run `20260826-final-postmerge`；供应商连续返回 `503 no_available_account`，应用在既定 deadline 后返回 `504 CHAT_TIMEOUT`；provider counter 增量为 0，未观察到成功 provider invocation |
+| 2026-08-26 21:42 CST | 最终组合完整重跑 | PostgreSQL 46/46、document lifecycle 12/12、Maven clean/compile/test-compile、全量 Maven、WebUI Vitest/TypeScript/build/alignment、Mock Playwright、文档/锁/whitespace、双实例真实全栈、真实 WebUI 与真实 provider | PASS（13/13 steps） | run `20260826-final-postmerge-rerun1`；API 541、Documents 74、Core 3043（7 个环境门控 skip）、Starter 44；WebUI 218/218；真实 WebUI 1/1；真实 provider 5 calls；主体连续性与只读权限均通过 |
 
 ## 5. 实现审查账本
 
@@ -95,9 +99,9 @@
 
 ## 6. 恢复入口
 
-规划已完成连续 `3/3` 无实质问题审查，规划 checkpoint 已提交推送，当前特性 worktree
-已建立并完成首个进度 checkpoint。Slice A/B/C/D 已完成，预合并统一验收
-`20260826-final-premerge` 的 13 个步骤全部通过，实现收敛检查达到连续 `3/3`。下一步先创建
-本地保护提交，再 fetch/merge 最新 `origin/main`，记录合并后的 commit/数据库/隔离端口基线，
-并完整重跑统一验收与合并后 `3/3`。若发现影响正确性、成本安全、兼容性或数据一致性的实质问题，
-先修复并重跑受影响门槛，审查计数重置为 `0`。
+规划已完成连续 `3/3` 无实质问题审查，Slice A/B/C/D 已完成，实现收敛检查达到连续
+`3/3`，本地保护提交为 `a61e38ed`。fetch 后 `origin/main` 仍为共同基线 `cf740943`，没有
+需要合入的新提交。最终组合完整重跑 `20260826-final-postmerge-rerun1` 已通过全部 13 个
+步骤，包含双实例真实全栈、真实 WebUI 和 5 次成功 provider 调用。下一步执行最终限定范围
+检查，提交本进度记录，推送特性分支，并在 main 专用 worktree 合并、推送和清理本特性
+worktree。
