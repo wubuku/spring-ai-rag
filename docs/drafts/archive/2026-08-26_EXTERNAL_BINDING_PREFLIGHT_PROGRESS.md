@@ -45,7 +45,7 @@
 - [x] Slice B：纳入真实 Spring Boot/PostgreSQL/embedding HTTP 黑盒验收。
 - [x] Slice C：更新双语长青文档。
 - [x] 完整后端、前端、真实服务与质量门槛。
-- [ ] 同步最新 `origin/main` 后完整复验与 Git 交付。
+- [x] 同步最新 `origin/main` 后完整复验与 Git 交付。
 - [ ] 合并并推送 `main`，清理隔离 worktree。
 
 ## 3. 规划检查账本
@@ -142,3 +142,7 @@
   禁锁/密钥/whitespace 门禁、真实服务 HTTP 合同 `129` 项和真实 API-key Playwright
   `1/1` 均通过。随后发现负向自测输出仍写着 `8`，已修正为实际的 `9` 个场景；修正后
   自测已通过，待以最终工作树重新运行交付门禁。
+- 2026-08-26：最终提交 `30ac001f` 上重新运行完整验收
+  `preflight-final-20260826`，`16/16` 全部通过；其中自测输出已准确报告 `9` 个负向
+  场景。最终证据目录为 `.verification/preflight-final-20260826/`，工作树在门禁开始时
+  为干净状态。
