@@ -40,6 +40,7 @@
 14. **数据访问并发**：禁止显式悲观锁、`SKIP LOCKED` 和 PostgreSQL advisory lock；使用条件写入/CAS、版本号、唯一约束、lease 与有界重试。运行 `scripts/verify-no-pessimistic-locks.sh`。
 15. **大块特性交付**：在专用 worktree/分支开发，持续合并已推送的 `origin/main`；合并后按固定顺序完整复验，最终把特性分支合回并推送 `main`。见 [delivery-workflow-zh-CN.md](docs/delivery-workflow-zh-CN.md) §8。
 16. **复杂功能交付**：修改代码前完成自包含规划和规划 `3/3`；实现后先过基本集成硬门槛，再做实现 `3/3`。测试证据不能由 review 或用户首次手测替代。见 [规划、实施与验收工作流](docs/delivery-workflow-zh-CN.md)。
+17. **外部 Client 边界**：把外部项目需求改写为本仓自包含的通用能力、契约和测试；跟踪代码与文档不得依赖外部项目名称、私有协议或背景知识。见 [delivery-workflow-zh-CN.md](docs/delivery-workflow-zh-CN.md) §2。
 
 更全的陷阱列表：[docs/index-zh-CN.md](docs/index-zh-CN.md) §4、[docs/troubleshooting-zh-CN.md](docs/troubleshooting-zh-CN.md)。
 

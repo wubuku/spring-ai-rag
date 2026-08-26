@@ -69,6 +69,16 @@ of pausing for choices that current evidence can resolve. Use the plan tool for
 live execution state; active plan/progress documents keep durable context across
 sessions.
 
+Requirements learned from an external client or reference project are input
+evidence, not an implicit context dependency for this repository. Plans and
+implementations must restate generally useful requirements as self-contained
+spring-ai-rag capabilities, HTTP/data contracts, failure semantics, and test
+fixtures. Tracked code and documentation must not require maintainers to know
+an external project's name, private domain model, protocol, or deployment
+background. When compatibility with client-owned envelopes is useful, use a
+clearly labeled generic example/test fixture and document the actual
+server-side RAG contract separately.
+
 ## 3. Three Consecutive Plan Reviews
 
 After the plan is complete and before implementation, run a bounded convergence

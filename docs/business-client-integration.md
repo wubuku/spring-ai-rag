@@ -348,17 +348,18 @@ Collections, separate dispatchers cannot cross-write, another tenant remains
 inaccessible, scoped searches merge deterministically, sanitized projections
 can be rebuilt into a browser-safe DTO, and query rotation preserves both
 Collection bindings without any data-plane root fallback. Client-owned
-mutation envelopes are compiled by the test client into stable hashed
-identities and allow-listed projections; PROJECT update/delete/restore and
-post-rotation delete plus PLATFORM_SHARED publish/revoke all use real HTTP and
-prove that `mediaRef`, URLs, and internal event/candidate/fingerprint material
-do not enter RAG.
+generic record-mutation envelopes are compiled by the test client into stable
+hashed identities and allow-listed projections. `TENANT_PRIVATE` record
+update/delete/restore and post-rotation delete, plus `SHARED_CATALOG` record
+publish/revoke, all use real HTTP and prove that `privateAttachment`, URLs, and
+internal event/record/fingerprint material do not enter RAG.
 
 To accept real envelopes exported by an external client, set
 `BUSINESS_CLIENT_CLIENT_ENVELOPE_DIR=<fixture-dir>`; see the lifecycle and file
 requirements in the [testing guide](testing-guide.md#business-service-readiness-gate).
 This is test-client input, not a dependency from RAG to the external project or
-an assertion that RAG owns compilation of the external outbox.
+an assertion that RAG adopts the example envelope protocol or owns compilation
+of the external outbox.
 
 Defaults use isolated ports `18084`, `18085`, `15184`, and `15185` with a
 disposable `pgvector/pgvector:pg16`. Evidence is written under

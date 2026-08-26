@@ -13,9 +13,9 @@
 - 计划实施 worktree：
   `/Users/yangjiefeng/.hermes/workspace/spring-ai-rag-business-binding-capability-profiles`
 - Flyway：V1-V49；本轮无 migration。
-- 当前阶段：原能力画像交付已经合入 `main`；后续通用客户生命周期验收、真实
-  Chat/Embedding 验证、并发补强和文档去客户化已完成 dirty-tree 基线验证，正在准备提交、
-  同步最新 `origin/main` 并在 clean candidate 上完整复验。
+- 当前阶段：原能力画像交付已经合入 `main`；后续通用 Client 生命周期验收、真实
+  Chat/Embedding 验证、并发补强和文档去客户化已经完成。泛化后的 dirty-tree 完整
+  readiness 已通过，正在同步最新 `origin/main` 并准备最终 clean candidate 复验。
 
 ## 2. 已完成探索
 
@@ -42,6 +42,11 @@
 - release manifest 记录验证过的两个画像，运行时 migration 与仓库动态 latest 相等。
 - 受管 principal 回归使用显式只读 principal，并把 5 次调用作为确定性预期值以验证拒绝和
   replay 不增加调用；它不是完整客户生命周期验收的总调用上限。
+- 真实 LLM/Embedding 客户生命周期验收不设置总调用次数预算；以写入、真实嵌入、检索、
+  JSON/SSE Chat、Memory、幂等、轮换、失败恢复和重启连续性等场景证据充分为停止条件。
+- 当前交付结束前扫描全部 Git 跟踪的代码和文档，禁止残留任何特定客户项目名称、背景知识
+  或只有该客户团队才能理解的叙述；有通用价值的内容改写为本项目自包含的“典型外部
+  Client 需求与通用设计”。
 - 本轮不新增 API、schema、V50 或外部业务模型。
 
 ## 4. 规划审查账本
@@ -102,15 +107,15 @@
 | 真实 LLM 只读 principal 合同 | 已完成 | 显式 `RAG_READ`；写拒绝不计 provider；确定性合同调用数为 5 |
 | 双语长青文档 | 已完成 | integration/testing/release/TODO 中英文同步 |
 | 完整 Mock/真实 HTTP/真实 LLM 验收 | 已完成 | readiness 16/16；managed principal 13/13；确定性合同 5 次真实调用，另有按场景驱动的客户生命周期验收 |
-| merge main、tag、push、清理 worktree | 待开始 | |
+| 原特性分支 merge main、tag、push、清理 worktree | 已完成 | `origin/main=2fb58078`；tag `business-client-p0-ready-2026-08-26` |
+| 后续生命周期补强、去客户化与最终交付 | 进行中 | 本文 §9；等待同步 `origin/main` 后最终复验与推送 |
 
 ## 6. 下一步
 
-1. 提交当前实现与验收账本。
-2. 获取并合并最新 `origin/main`，记录合并后基线。
-3. 按合并后代码重跑完整 readiness、真实 LLM 双实例验收与限定范围三轮审查。
-4. 推送特性分支，合并并推送 `main`，创建发布 tag，确认引用一致且工作区干净。
-5. 安全移除隔离特性 worktree。
+1. 获取并合并最新 `origin/main`，记录合并后基线。
+2. 按合并后代码重跑完整 readiness 与必要的真实 LLM/Embedding 生命周期验收。
+3. 归档当前 plan/progress，执行文档、禁锁、diff 和新增行密钥检查。
+4. 提交并推送 `main`，确认本地与远端引用一致且工作区干净。
 
 ## 7. 实施记录
 
@@ -196,8 +201,45 @@
   matrix 停止。共享 quota 并发测试从 `16:31:58` 跨到 `16:32:11`，固定分钟桶按契约重置，
   因而 50 个请求在两个窗口中成功 `20 + 12` 次；这不是产品原子性失效，而是测试把跨窗口
   总成功数错误地断言为单窗口上限。
-- 下一步：让该集成测试在数据库当前分钟至少剩余 20 秒时才发起并发请求，重新提交后从头
-  执行 clean readiness 与真实 Chat/Embedding 验收；只采用修复后的完整结果作为最终结论。
+- 2026-08-26 16:33 CST：为共享 quota 并发断言增加“当前数据库分钟至少剩余 20 秒”的
+  前置等待，聚焦真实 PostgreSQL 测试 `9/9` 通过；修复提交为 `c4e72614`。
+- 2026-08-26 16:42 CST：基于 clean candidate `c4e72614` 的完整 readiness
+  `20260826-postmerge-clean-client-lifecycle-2` 通过 `16/16`：
+  - 聚焦后端/API 合同 `135/135`；
+  - PostgreSQL managed principal、document lifecycle、JSONB record 与并发矩阵全部通过；
+  - `mvn clean compile test-compile`、WebUI TypeScript、`218` 个 Vitest、生产构建、
+    Mock Playwright、文档、禁锁、空白与新增行密钥检查全部通过；
+  - 真实服务 HTTP 合同 `251` 项、真实 WebUI DOM 验收、后端重启、principal/外部身份/
+    exact replay/异步 embedding 恢复全部通过。
+- 2026-08-26 16:49 CST：同一 clean candidate 的真实 LLM 双实例验收
+  `20260826-postmerge-clean-real-llm-1` 通过 `13/13`：
+  - 完整 Maven 为 Core `3029` 项通过、`7` 项按设计跳过，Starter `44` 项通过；
+  - WebUI `218` 项 Vitest、TypeScript、生产构建、alignment、Mock/真实 Playwright 通过；
+  - 真实 native/OpenAI-compatible JSON/SSE、只读写拒绝、跨实例 replay、credential
+    rotation/revocation 和 principal continuity 全部通过；
+  - 确定性合同观察到 `5` 次真实 provider 调用，拒绝与 replay 的调用增量均为 `0`。
+- 2026-08-26 17:18 CST：外部 Client 视角黑盒生命周期验收完成 `77` 项断言，证据位于
+  `.verification/real-provider-lifecycle/20260826-postmerge-clean/external-client-lifecycle/`：
+  - 两个 Collection、相互隔离的读写 dispatcher 和同时绑定两者的只读 query principal；
+  - 真实 SiliconFlow BGE-M3 1024 维 embedding、双路 vector/hybrid Search；
+  - 真实 `grok-4.5` KNOWLEDGE JSON/SSE Chat、多轮记忆、更新/删除/恢复后的回答变化；
+  - stale CAS `409`、exact replay、query/dispatcher credential 轮换与旧凭据 `401`；
+  - 后端与 WebUI 受控重启后的 principal、向量、检索、Chat、replay 和继续 mutation。
+- 首次轮换后 SSE 请求返回 `500 No acceptable representation`，根因是验收客户端遗漏
+  `Accept: text/event-stream`；修正请求头后从断点继续并完整通过。这是测试客户端错误，
+  没有据此修改产品实现。
+- 2026-08-26 17:44 CST：完成全仓客户项目痕迹清理。Git 跟踪代码、脚本、活动文档和历史
+  文档均不包含外部项目名称或仓库名；客户派生的 fixture 已改写为
+  `generic-client-record-mutation-v1`、`TENANT_PRIVATE` / `SHARED_CATALOG` 和通用记录术语。
+  示例 envelope 明确只是测试客户端输入，不是服务端 RAG API 契约。
+- 2026-08-26 17:44 CST：泛化后的完整 readiness
+  `20260826-generic-client-cleanup` 通过 `16/16`：
+  - 聚焦后端/API 合同 `135/135`，PostgreSQL managed principal `9/9`、document
+    lifecycle `12/12`、JSONB record `3/3`；
+  - `mvn clean compile test-compile`、WebUI TypeScript、`218` 个 Vitest、生产构建、
+    核心 Mock Playwright、文档、禁锁、空白与新增行密钥检查全部通过；
+  - 真实 Spring Boot/PostgreSQL/embedding stub HTTP 合同 `251` 项、真实 WebUI
+    Playwright、服务重启、principal/外部身份/exact replay/持久异步 embedding 恢复通过。
 
 ## 8. 实现收敛审查
 

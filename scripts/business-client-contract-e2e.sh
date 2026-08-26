@@ -38,7 +38,7 @@ ROOT_CONFIG="${CONTRACT_PRIVATE}/root.curl"
 NO_AUTH_CONFIG="${CONTRACT_PRIVATE}/no-auth.curl"
 RESTRICTED_KEY_ID=""
 RESTRICTED_B_KEY_ID=""
-PLATFORM_KEY_ID=""
+SHARED_KEY_ID=""
 CANARY_KEY_ID=""
 UNRESTRICTED_KEY_ID=""
 QUERY_KEY_ID=""
@@ -125,7 +125,7 @@ cleanup() {
   root_delete_key "$UNRESTRICTED_KEY_ID"
   root_delete_key "$THROTTLED_KEY_ID"
   root_delete_key "$CANARY_KEY_ID"
-  root_delete_key "$PLATFORM_KEY_ID"
+  root_delete_key "$SHARED_KEY_ID"
   root_delete_key "$RESTRICTED_CURRENT_KEY_ID"
   root_delete_key "$RESTRICTED_B_KEY_ID"
   rm -rf "$CONTRACT_PRIVATE"
@@ -247,25 +247,26 @@ from pathlib import Path
 import sys
 
 forbidden_keys = {
-    "mediaref",
+    "privateattachment",
     "url",
     "publicurl",
     "signedurl",
+    "downloadurl",
     "objectkey",
-    "managedstorageobjectid",
+    "storageobjectid",
     "providerid",
     "apikey",
     "token",
     "secret",
-    "tenantkey",
+    "clientkey",
     "eventid",
-    "candidatekey",
-    "candidateincarnation",
-    "sourcechangeid",
+    "recordkey",
+    "recordincarnation",
+    "changeid",
     "sourcefingerprint",
     "documentfingerprint",
     "dedupkey",
-    "previouscandidatekey",
+    "previousrecordkey",
     "deleteidentity",
 }
 
@@ -290,15 +291,15 @@ PY
   pass "$description"
 }
 
-assert_client_envelope_has_private_media() {
+assert_client_envelope_has_private_transport() {
   local target="$1" description="$2"
   jq -e '
-    .protocolVersion == "material-rag-mutation-v1"
+    .protocolVersion == "generic-client-record-mutation-v1"
     and .operation == "UPSERT"
-    and (.mediaRef | type) == "object"
-    and (.mediaRef | length) > 0
+    and (.privateAttachment | type) == "object"
+    and (.privateAttachment | length) > 0
   ' "$target" >/dev/null || {
-    echo "${description}: client envelope does not contain private media material" >&2
+    echo "${description}: client envelope lacks private transport material" >&2
     return 1
   }
   pass "$description"
@@ -549,35 +550,36 @@ def fingerprint(value):
     ).encode("utf-8")
     return "sha256:" + hashlib.sha256(encoded).hexdigest()
 
-def write(name, *, scope, owner, kind, source_id, revision, operation,
-          document=None, media_ref=None, incarnation="inc-1"):
+def write(name, *, scope, scope_key, record_type, record_id, revision,
+          operation, document=None, private_attachment=None,
+          incarnation="inc-1"):
     identity = "\n".join((
-        "tenant-client-fixture",
+        "generic-client-fixture",
         scope,
-        owner,
-        kind,
-        source_id,
+        scope_key,
+        record_type,
+        record_id,
         "<NONE>",
         "<NONE>",
     ))
     payload = {
-        "protocolVersion": "material-rag-mutation-v1",
-        "eventId": "aro_" + hashlib.sha256(
+        "protocolVersion": "generic-client-record-mutation-v1",
+        "eventId": "evt_" + hashlib.sha256(
             f"{identity}:{revision}:{operation}".encode("utf-8")
         ).hexdigest()[:40],
         "operation": operation,
-        "tenantKey": "tenant-client-fixture",
-        "sourceScope": scope,
-        "scopeOwnerKey": owner,
-        "sourceKind": kind,
-        "sourceId": source_id,
-        "sourceVariantKey": "<NONE>",
-        "semanticBindingKey": "<NONE>",
-        "candidateKey": "mat_" + hashlib.sha256(
+        "clientKey": "generic-client-fixture",
+        "recordScope": scope,
+        "scopeKey": scope_key,
+        "recordType": record_type,
+        "recordId": record_id,
+        "variantKey": "<NONE>",
+        "bindingKey": "<NONE>",
+        "recordKey": "rec_" + hashlib.sha256(
             f"{identity}:{incarnation}".encode("utf-8")
         ).hexdigest()[:40],
-        "candidateIncarnation": incarnation,
-        "sourceChangeId": "chg_" + hashlib.sha256(
+        "recordIncarnation": incarnation,
+        "changeId": "chg_" + hashlib.sha256(
             f"{identity}:{revision}".encode("utf-8")
         ).hexdigest()[:40],
         "sourceRevision": revision,
@@ -586,25 +588,25 @@ def write(name, *, scope, owner, kind, source_id, revision, operation,
             "revision": revision,
             "operation": operation,
         }),
-        "targetIndexGeneration": "keyword-metadata-v1",
+        "indexGeneration": "keyword-metadata-v1",
         "occurredAt": f"2026-08-26T00:00:0{revision}Z",
         "documentSchemaVersion": 1,
         "documentFingerprint": fingerprint(document or {}),
     }
     if operation == "UPSERT":
-        payload["document"] = document or {}
-        payload["mediaRef"] = media_ref or {}
+        payload["searchDocument"] = document or {}
+        payload["privateAttachment"] = private_attachment or {}
     else:
         payload.update({
-            "previousCandidateKey": payload["candidateKey"],
-            "previousSourceChangeId": "previous-change",
+            "previousRecordKey": payload["recordKey"],
+            "previousChangeId": "previous-change",
             "previousSourceFingerprint": "sha256:" + "1" * 64,
             "previousDocumentFingerprint": "sha256:" + "2" * 64,
             "deleteIdentity": "del_" + hashlib.sha256(
                 f"{identity}:{revision}".encode("utf-8")
             ).hexdigest()[:40],
         })
-    payload["dedupKey"] = "ARM1:" + hashlib.sha256(
+    payload["dedupKey"] = "GCR1:" + hashlib.sha256(
         json.dumps(
             payload, ensure_ascii=True, separators=(",", ":"), sort_keys=True
         ).encode("utf-8")
@@ -612,133 +614,126 @@ def write(name, *, scope, owner, kind, source_id, revision, operation,
     (target / name).write_text(
         json.dumps(payload, ensure_ascii=True, indent=2) + "\n",
         encoding="utf-8",
-    )
+)
 
-project_document_v1 = {
-    "name": "Generated project video",
-    "description": "Midnight neon city production material",
-    "keywords": ["midnight", "neon", "city"],
+private_document_v1 = {
+    "name": "Tenant warranty policy",
+    "description": "Private warranty and replacement terms for one tenant.",
+    "keywords": ["warranty", "replacement", "support"],
     "structured": {
-        "mediaKind": "VIDEO",
-        "originType": "VIDEO_TASK_RESULT",
-        "durationSec": 8.5,
+        "category": "SUPPORT_POLICY",
+        "locale": "en-US",
     },
 }
-project_document_v2 = {
-    **project_document_v1,
-    "description": "Updated midnight neon city hero production material",
+private_document_v2 = {
+    **private_document_v1,
+    "description": "Updated private warranty and replacement terms.",
 }
-project_media = {
-    "kind": "ASSET",
-    "assetId": "asset-entry-1001",
-    "managedStorageObjectId": "managed-private-1001",
-    "url": "https://private.example.test/project/video.mp4",
+private_attachment = {
+    "storageObjectId": "private-object-1001",
+    "downloadUrl": "https://private.example.test/tenant/policy.pdf",
 }
 write(
-    "project-lifecycle-v1.json",
-    scope="PROJECT",
-    owner="project-42",
-    kind="ASSET_VIDEO",
-    source_id="asset-entry-1001",
+    "private-lifecycle-v1.json",
+    scope="TENANT_PRIVATE",
+    scope_key="tenant-42",
+    record_type="KNOWLEDGE_ARTICLE",
+    record_id="support-policy-1001",
     revision=1,
     operation="UPSERT",
-    document=project_document_v1,
-    media_ref=project_media,
+    document=private_document_v1,
+    private_attachment=private_attachment,
 )
 write(
-    "project-lifecycle-v2.json",
-    scope="PROJECT",
-    owner="project-42",
-    kind="ASSET_VIDEO",
-    source_id="asset-entry-1001",
+    "private-lifecycle-v2.json",
+    scope="TENANT_PRIVATE",
+    scope_key="tenant-42",
+    record_type="KNOWLEDGE_ARTICLE",
+    record_id="support-policy-1001",
     revision=2,
     operation="UPSERT",
-    document=project_document_v2,
-    media_ref=project_media,
+    document=private_document_v2,
+    private_attachment=private_attachment,
 )
 write(
-    "project-lifecycle-v3.json",
-    scope="PROJECT",
-    owner="project-42",
-    kind="ASSET_VIDEO",
-    source_id="asset-entry-1001",
+    "private-lifecycle-v3.json",
+    scope="TENANT_PRIVATE",
+    scope_key="tenant-42",
+    record_type="KNOWLEDGE_ARTICLE",
+    record_id="support-policy-1001",
     revision=3,
     operation="DELETE",
 )
 write(
-    "project-lifecycle-v4.json",
-    scope="PROJECT",
-    owner="project-42",
-    kind="ASSET_VIDEO",
-    source_id="asset-entry-1001",
+    "private-lifecycle-v4.json",
+    scope="TENANT_PRIVATE",
+    scope_key="tenant-42",
+    record_type="KNOWLEDGE_ARTICLE",
+    record_id="support-policy-1001",
     revision=4,
     operation="UPSERT",
-    document=project_document_v2,
-    media_ref=project_media,
+    document=private_document_v2,
+    private_attachment=private_attachment,
     incarnation="inc-2",
 )
 write(
-    "project-lifecycle-v5.json",
-    scope="PROJECT",
-    owner="project-42",
-    kind="ASSET_VIDEO",
-    source_id="asset-entry-1001",
+    "private-lifecycle-v5.json",
+    scope="TENANT_PRIVATE",
+    scope_key="tenant-42",
+    record_type="KNOWLEDGE_ARTICLE",
+    record_id="support-policy-1001",
     revision=5,
     operation="DELETE",
     incarnation="inc-2",
 )
 
-platform_document = {
-    "name": "Shared sunrise publication",
-    "description": "Warm studio lighting reference",
+shared_document = {
+    "name": "Shared support glossary",
+    "description": "Common terminology available to all authorized tenants.",
 }
-platform_media = {
-    "kind": "REFERENCE_IMAGE",
-    "media": [{
-        "url": "https://private.example.test/platform/image.png",
-        "mediaId": "managed-platform-private-9001",
-        "objectKey": "private/platform/image.png",
-    }],
+shared_attachment = {
+    "signedUrl": "https://private.example.test/shared/glossary.json",
+    "objectKey": "private/shared/glossary.json",
 }
 write(
-    "platform-lifecycle-v1.json",
-    scope="PLATFORM_SHARED",
-    owner="platform-public",
-    kind="IMAGE_REFERENCE",
-    source_id="publication-9001",
+    "shared-lifecycle-v1.json",
+    scope="SHARED_CATALOG",
+    scope_key="common-reference",
+    record_type="GLOSSARY_ENTRY",
+    record_id="glossary-entry-9001",
     revision=1,
     operation="UPSERT",
-    document=platform_document,
-    media_ref=platform_media,
-    incarnation="publication-9001",
+    document=shared_document,
+    private_attachment=shared_attachment,
+    incarnation="glossary-entry-9001",
 )
 write(
-    "platform-lifecycle-v2.json",
-    scope="PLATFORM_SHARED",
-    owner="platform-public",
-    kind="IMAGE_REFERENCE",
-    source_id="publication-9001",
+    "shared-lifecycle-v2.json",
+    scope="SHARED_CATALOG",
+    scope_key="common-reference",
+    record_type="GLOSSARY_ENTRY",
+    record_id="glossary-entry-9001",
     revision=2,
     operation="DELETE",
-    incarnation="publication-9001",
+    incarnation="glossary-entry-9001",
 )
 PY
   fi
 
-  PROJECT_ENVELOPE_V1="${fixture_dir}/project-lifecycle-v1.json"
-  PROJECT_ENVELOPE_V2="${fixture_dir}/project-lifecycle-v2.json"
-  PROJECT_ENVELOPE_V3="${fixture_dir}/project-lifecycle-v3.json"
-  PROJECT_ENVELOPE_V4="${fixture_dir}/project-lifecycle-v4.json"
-  PROJECT_ENVELOPE_V5="${fixture_dir}/project-lifecycle-v5.json"
-  PLATFORM_ENVELOPE_V1="${fixture_dir}/platform-lifecycle-v1.json"
-  PLATFORM_ENVELOPE_V2="${fixture_dir}/platform-lifecycle-v2.json"
+  PRIVATE_ENVELOPE_V1="${fixture_dir}/private-lifecycle-v1.json"
+  PRIVATE_ENVELOPE_V2="${fixture_dir}/private-lifecycle-v2.json"
+  PRIVATE_ENVELOPE_V3="${fixture_dir}/private-lifecycle-v3.json"
+  PRIVATE_ENVELOPE_V4="${fixture_dir}/private-lifecycle-v4.json"
+  PRIVATE_ENVELOPE_V5="${fixture_dir}/private-lifecycle-v5.json"
+  SHARED_ENVELOPE_V1="${fixture_dir}/shared-lifecycle-v1.json"
+  SHARED_ENVELOPE_V2="${fixture_dir}/shared-lifecycle-v2.json"
 
   local fixture
   for fixture in \
-      "$PROJECT_ENVELOPE_V1" "$PROJECT_ENVELOPE_V2" \
-      "$PROJECT_ENVELOPE_V3" "$PROJECT_ENVELOPE_V4" \
-      "$PROJECT_ENVELOPE_V5" "$PLATFORM_ENVELOPE_V1" \
-      "$PLATFORM_ENVELOPE_V2"; do
+      "$PRIVATE_ENVELOPE_V1" "$PRIVATE_ENVELOPE_V2" \
+      "$PRIVATE_ENVELOPE_V3" "$PRIVATE_ENVELOPE_V4" \
+      "$PRIVATE_ENVELOPE_V5" "$SHARED_ENVELOPE_V1" \
+      "$SHARED_ENVELOPE_V2"; do
     [[ -f "$fixture" ]] || {
       echo "Business-client envelope fixture is missing: $(basename "$fixture")" >&2
       return 1
@@ -776,24 +771,22 @@ def require_text(field):
         raise SystemExit(f"client envelope requires non-blank {field}")
     return value.strip()
 
-if envelope.get("protocolVersion") != "material-rag-mutation-v1":
+if envelope.get("protocolVersion") != "generic-client-record-mutation-v1":
     raise SystemExit("unsupported client envelope protocolVersion")
 if envelope.get("operation") != expected_operation:
     raise SystemExit("unexpected client envelope operation")
-if envelope.get("sourceScope") != expected_scope:
-    raise SystemExit("unexpected client envelope sourceScope")
+if envelope.get("recordScope") != expected_scope:
+    raise SystemExit("unexpected client envelope recordScope")
 
-tenant_key = require_text("tenantKey")
-scope = require_text("sourceScope")
-owner = require_text("scopeOwnerKey")
-kind = require_text("sourceKind")
-source_id = require_text("sourceId")
-variant = require_text("sourceVariantKey")
-binding = require_text("semanticBindingKey")
-if source_id.lower().startswith(("http://", "https://")):
-    raise SystemExit("sourceId must be a stable locator, not a URL")
-if scope == "PLATFORM_SHARED" and owner != "platform-public":
-    raise SystemExit("platform-shared envelope must use platform-public owner")
+client_key = require_text("clientKey")
+scope = require_text("recordScope")
+scope_key = require_text("scopeKey")
+record_type = require_text("recordType")
+record_id = require_text("recordId")
+variant = require_text("variantKey")
+binding = require_text("bindingKey")
+if record_id.lower().startswith(("http://", "https://")):
+    raise SystemExit("recordId must be a stable locator, not a URL")
 
 revision_value = envelope.get("sourceRevision")
 if isinstance(revision_value, bool) or revision_value is None:
@@ -803,21 +796,21 @@ if not revision or len(revision) > 255:
     raise SystemExit("compiled sourceRevision exceeds the RAG contract")
 
 identity = "\n".join((
-    tenant_key,
+    client_key,
     scope,
-    owner,
-    kind,
-    source_id,
+    scope_key,
+    record_type,
+    record_id,
     variant,
     binding,
 ))
-external_id = "rmd_" + hashlib.sha256(identity.encode("utf-8")).hexdigest()
+external_id = "client_" + hashlib.sha256(identity.encode("utf-8")).hexdigest()
 if len(external_id) > 80:
     raise SystemExit("compiled externalId exceeds the client contract")
 
 result = {
     "collectionKey": collection_key,
-    "sourceNamespace": "external-client.material-rag.v1",
+    "sourceNamespace": "generic-client.record-mutation.v1",
     "externalId": external_id,
     "sourceRevision": revision,
 }
@@ -825,12 +818,12 @@ if expected_revision:
     result["expectedSourceRevision"] = expected_revision
 
 if expected_operation == "UPSERT":
-    document = envelope.get("document")
-    media_ref = envelope.get("mediaRef")
+    document = envelope.get("searchDocument")
+    private_attachment = envelope.get("privateAttachment")
     if not isinstance(document, dict) or not document:
-        raise SystemExit("UPSERT envelope requires a non-empty document")
-    if not isinstance(media_ref, dict) or not media_ref:
-        raise SystemExit("UPSERT envelope requires private mediaRef material")
+        raise SystemExit("UPSERT envelope requires a non-empty searchDocument")
+    if not isinstance(private_attachment, dict) or not private_attachment:
+        raise SystemExit("UPSERT envelope requires private transport material")
 
     text_values = []
 
@@ -856,30 +849,30 @@ if expected_operation == "UPSERT":
         "description",
         "tags",
         "keywords",
-        "profile",
-        "videoRefPrompt",
+        "summary",
+        "body",
         "structured",
     ):
         if key in document:
             add_text(document[key])
     if not text_values:
-        text_values.extend((kind, source_id))
+        text_values.extend((record_type, record_id))
 
-    title = document.get("name") or document.get("title") or f"{scope} material"
+    title = document.get("name") or document.get("title") or f"{scope} record"
     title = " ".join(str(title).split())[:255]
-    visibility = "ACTIVE" if scope == "PROJECT" else "VISIBLE"
+    visibility = "PRIVATE" if scope == "TENANT_PRIVATE" else "SHARED"
     result.update({
         "title": title,
         "retrievalText": "\n".join(text_values),
         "jsonbPayload": {
-            "schemaVersion": "external-client.material-rag-json-v1",
-            "sourceScope": scope,
-            "scopeOwnerKey": owner,
-            "sourceKind": kind,
-            "sourceId": source_id,
+            "schemaVersion": "generic-client.record-projection-v1",
+            "recordScope": scope,
+            "scopeKey": scope_key,
+            "recordType": record_type,
+            "recordId": record_id,
             "visibility": visibility,
         },
-        "source": "external-client-material-projection",
+        "source": "generic-client-record-projection",
         "embeddingPolicy": "ASYNC",
     })
 
@@ -891,21 +884,21 @@ PY
 }
 
 write_scoped_search_request() {
-  local output="$1" collection_key="$2" source_scope="$3"
-  local scope_owner_key="$4" visibility="$5" query="$6"
+  local output="$1" collection_key="$2" record_scope="$3"
+  local scope_key="$4" visibility="$5" query="$6"
   jq -n \
     --arg key "$collection_key" \
-    --arg scope "$source_scope" \
-    --arg owner "$scope_owner_key" \
+    --arg scope "$record_scope" \
+    --arg scopeKey "$scope_key" \
     --arg visibility "$visibility" \
     --arg query "$query" \
     '{
       query:$query,
       collectionKeys:[$key],
       payloadContains:{
-        schemaVersion:"external-client.material-rag-json-v1",
-        sourceScope:$scope,
-        scopeOwnerKey:$owner,
+        schemaVersion:"generic-client.record-projection-v1",
+        recordScope:$scope,
+        scopeKey:$scopeKey,
         visibility:$visibility
       },
       config:{
@@ -1037,7 +1030,7 @@ write_no_auth_config "$NO_AUTH_CONFIG"
 RUN_TOKEN="$(printf '%s' "$RUN_ID" | tr -cd 'a-zA-Z0-9' | tail -c 20)"
 COLLECTION_A="bc.${RUN_TOKEN}.a"
 COLLECTION_B="bc.${RUN_TOKEN}.b"
-COLLECTION_PLATFORM="bc.${RUN_TOKEN}.platform"
+COLLECTION_SHARED="bc.${RUN_TOKEN}.shared"
 COLLECTION_CANARY="bc.${RUN_TOKEN}.canary"
 COLLECTION_THROTTLED="bc.${RUN_TOKEN}.throttled"
 UNKNOWN_COLLECTION="bc.${RUN_TOKEN}.missing"
@@ -1070,7 +1063,7 @@ for collection_spec in \
     "${MINIMUM_COLLECTION}|One character Collection key" \
     "${COLLECTION_A}|Contract Collection A" \
     "${COLLECTION_B}|Contract Collection B" \
-    "${COLLECTION_PLATFORM}|Shared platform Collection" \
+    "${COLLECTION_SHARED}|Shared reference Collection" \
     "${COLLECTION_CANARY}|Binding preflight canary Collection" \
     "${COLLECTION_THROTTLED}|Rate limit recovery Collection" \
     "${BOUNDARY_KEY}|128 character Collection key"; do
@@ -1138,20 +1131,20 @@ extract_secret "$RESTRICTED_B_CREATE" "$RESTRICTED_B_SECRET_FILE"
 RESTRICTED_B_CONFIG="${CONTRACT_PRIVATE}/restricted-b.curl"
 write_auth_config "$RESTRICTED_B_CONFIG" x-api-key "$RESTRICTED_B_SECRET_FILE"
 
-PLATFORM_CREATE="${CONTRACT_PRIVATE}/platform-create.json"
-PLATFORM_CREATE_HEADERS="${PLATFORM_CREATE}.headers"
-code="$(create_principal "Shared Platform Dispatcher" "$COLLECTION_PLATFORM" \
-  "READ_WRITE" "$PLATFORM_CREATE" "$PLATFORM_CREATE_HEADERS")"
-assert_status "$code" 201 "create shared platform dispatcher"
-assert_no_store "$PLATFORM_CREATE_HEADERS" "shared platform dispatcher creation"
-assert_capability_profile "$PLATFORM_CREATE" "READ_WRITE" \
-  "shared platform dispatcher creation returns exact capabilities"
-PLATFORM_KEY_ID="$(jq -er '.keyId' "$PLATFORM_CREATE")"
-PLATFORM_PRINCIPAL_ID="$(jq -er '.principalId' "$PLATFORM_CREATE")"
-PLATFORM_SECRET_FILE="${CONTRACT_PRIVATE}/platform.key"
-extract_secret "$PLATFORM_CREATE" "$PLATFORM_SECRET_FILE"
-PLATFORM_CONFIG="${CONTRACT_PRIVATE}/platform.curl"
-write_auth_config "$PLATFORM_CONFIG" x-api-key "$PLATFORM_SECRET_FILE"
+SHARED_CREATE="${CONTRACT_PRIVATE}/shared-create.json"
+SHARED_CREATE_HEADERS="${SHARED_CREATE}.headers"
+code="$(create_principal "Shared Record Dispatcher" "$COLLECTION_SHARED" \
+  "READ_WRITE" "$SHARED_CREATE" "$SHARED_CREATE_HEADERS")"
+assert_status "$code" 201 "create shared-record dispatcher"
+assert_no_store "$SHARED_CREATE_HEADERS" "shared-record dispatcher creation"
+assert_capability_profile "$SHARED_CREATE" "READ_WRITE" \
+  "shared-record dispatcher creation returns exact capabilities"
+SHARED_KEY_ID="$(jq -er '.keyId' "$SHARED_CREATE")"
+SHARED_PRINCIPAL_ID="$(jq -er '.principalId' "$SHARED_CREATE")"
+SHARED_SECRET_FILE="${CONTRACT_PRIVATE}/shared.key"
+extract_secret "$SHARED_CREATE" "$SHARED_SECRET_FILE"
+SHARED_CONFIG="${CONTRACT_PRIVATE}/shared.curl"
+write_auth_config "$SHARED_CONFIG" x-api-key "$SHARED_SECRET_FILE"
 
 CANARY_CREATE="${CONTRACT_PRIVATE}/canary-create.json"
 CANARY_CREATE_HEADERS="${CANARY_CREATE}.headers"
@@ -1184,7 +1177,7 @@ QUERY_CREATE="${CONTRACT_PRIVATE}/query-create.json"
 QUERY_CREATE_HEADERS="${QUERY_CREATE}.headers"
 code="$(create_principal_for_collections "Restricted Query Principal" \
   "READ_ONLY" "$QUERY_CREATE" "$QUERY_CREATE_HEADERS" \
-  "$COLLECTION_A" "$COLLECTION_PLATFORM")"
+  "$COLLECTION_A" "$COLLECTION_SHARED")"
 assert_status "$code" 201 "create restricted read-only query principal"
 assert_no_store "$QUERY_CREATE_HEADERS" "read-only query principal creation"
 assert_capability_profile "$QUERY_CREATE" "READ_ONLY" \
@@ -1229,7 +1222,7 @@ code="$(request GET "${API}/api-keys/principals" "$ROOT_CONFIG" \
 assert_status "$code" 200 "list principal metadata"
 for secret_file in \
     "$RESTRICTED_SECRET_FILE" "$RESTRICTED_B_SECRET_FILE" \
-    "$PLATFORM_SECRET_FILE" "$CANARY_SECRET_FILE" \
+    "$SHARED_SECRET_FILE" "$CANARY_SECRET_FILE" \
     "$UNRESTRICTED_SECRET_FILE" "$QUERY_SECRET_FILE" \
     "$THROTTLED_SECRET_FILE"; do
   assert_secret_absent "$secret_file" "$KEY_LIST" "credential list hides raw secrets"
@@ -1278,24 +1271,24 @@ assert_json_with_args "$QUERY_IDENTITY" \
   "query introspection returns exact read-only binding" \
   --arg principal "$QUERY_PRINCIPAL_ID" \
   --arg tenantKey "$COLLECTION_A" \
-  --arg platformKey "$COLLECTION_PLATFORM" \
+  --arg sharedKey "$COLLECTION_SHARED" \
   '.principalType == "DATABASE_API_KEY"
     and .principalId == $principal
     and .principalRole == "NORMAL"
     and .collectionAccessMode == "RESTRICTED"
-    and (.allowedCollectionKeys | sort) == ([$tenantKey,$platformKey] | sort)
+    and (.allowedCollectionKeys | sort) == ([$tenantKey,$sharedKey] | sort)
     and .capabilities == ["RAG_READ"]
     and .credentialVersion == 1
     and .policyVersion == 1'
 
-PLATFORM_IDENTITY="${CONTRACT_PRIVATE}/platform-identity.json"
-PLATFORM_IDENTITY_HEADERS="${PLATFORM_IDENTITY}.headers"
-code="$(request GET "${API}/auth/me" "$PLATFORM_CONFIG" \
-  "$PLATFORM_IDENTITY" "$PLATFORM_IDENTITY_HEADERS")"
-assert_status "$code" 200 "shared platform dispatcher authentication"
-assert_json_with_args "$PLATFORM_IDENTITY" \
-  "shared platform dispatcher returns only the shared Collection" \
-  --arg principal "$PLATFORM_PRINCIPAL_ID" --arg key "$COLLECTION_PLATFORM" \
+SHARED_IDENTITY="${CONTRACT_PRIVATE}/shared-identity.json"
+SHARED_IDENTITY_HEADERS="${SHARED_IDENTITY}.headers"
+code="$(request GET "${API}/auth/me" "$SHARED_CONFIG" \
+  "$SHARED_IDENTITY" "$SHARED_IDENTITY_HEADERS")"
+assert_status "$code" 200 "shared-record dispatcher authentication"
+assert_json_with_args "$SHARED_IDENTITY" \
+  "shared-record dispatcher returns only the shared Collection" \
+  --arg principal "$SHARED_PRINCIPAL_ID" --arg key "$COLLECTION_SHARED" \
   '.principalId == $principal
     and .collectionAccessMode == "RESTRICTED"
     and .allowedCollectionKeys == [$key]
@@ -1388,14 +1381,14 @@ assert_json_with_args "$THROTTLED_REPLAY_RESPONSE" \
 PREFLIGHT_A_COLLECTIONS="${CONTRACT_PRIVATE}/preflight-a-collections.json"
 jq -n --arg key "$COLLECTION_A" '[$key]' > "$PREFLIGHT_A_COLLECTIONS"
 PREFLIGHT_QUERY_COLLECTIONS="${CONTRACT_PRIVATE}/preflight-query-collections.json"
-jq -n --arg keyA "$COLLECTION_A" --arg keyPlatform "$COLLECTION_PLATFORM" \
-  '[$keyA,$keyPlatform]' > "$PREFLIGHT_QUERY_COLLECTIONS"
+jq -n --arg keyA "$COLLECTION_A" --arg keyShared "$COLLECTION_SHARED" \
+  '[$keyA,$keyShared]' > "$PREFLIGHT_QUERY_COLLECTIONS"
 PREFLIGHT_QUERY_WRONG_COLLECTIONS="${CONTRACT_PRIVATE}/preflight-query-wrong-collections.json"
 jq -n \
   --arg keyA "$COLLECTION_A" \
   --arg keyB "$COLLECTION_B" \
-  --arg keyPlatform "$COLLECTION_PLATFORM" \
-  '[$keyA,$keyPlatform,$keyB]' > "$PREFLIGHT_QUERY_WRONG_COLLECTIONS"
+  --arg keyShared "$COLLECTION_SHARED" \
+  '[$keyA,$keyShared,$keyB]' > "$PREFLIGHT_QUERY_WRONG_COLLECTIONS"
 PREFLIGHT_CANARY_COLLECTIONS="${CONTRACT_PRIVATE}/preflight-canary-collections.json"
 jq -n --arg key "$COLLECTION_CANARY" '[$key]' > "$PREFLIGHT_CANARY_COLLECTIONS"
 
@@ -1405,7 +1398,7 @@ run_binding_preflight \
 assert_binding_report \
   "readonly-pass" "PASS" "" "" "$QUERY_SECRET_FILE" \
   "READ_ONLY" "READ_ONLY" \
-  "$COLLECTION_A" "$COLLECTION_PLATFORM"
+  "$COLLECTION_A" "$COLLECTION_SHARED"
 
 run_binding_preflight \
   "readwrite-pass" "READ_ONLY" "X_API_KEY" "$RESTRICTED_SECRET_FILE" \
@@ -1420,7 +1413,7 @@ run_binding_preflight \
 assert_binding_report \
   "readonly-wrong-allow-list" "FAIL" "POLICY_MISMATCH" "" \
   "$QUERY_SECRET_FILE" "READ_ONLY" "" \
-  "$COLLECTION_A" "$COLLECTION_PLATFORM" "$COLLECTION_B"
+  "$COLLECTION_A" "$COLLECTION_SHARED" "$COLLECTION_B"
 
 run_binding_preflight \
   "capability-profile-mismatch" "READ_ONLY" "X_API_KEY" "$QUERY_SECRET_FILE" \
@@ -1428,7 +1421,7 @@ run_binding_preflight \
 assert_binding_report \
   "capability-profile-mismatch" "FAIL" "POLICY_MISMATCH" "" \
   "$QUERY_SECRET_FILE" "READ_WRITE" "" \
-  "$COLLECTION_A" "$COLLECTION_PLATFORM"
+  "$COLLECTION_A" "$COLLECTION_SHARED"
 
 run_binding_preflight \
   "canary-success" "CANARY_MUTATION" "BEARER" "$CANARY_SECRET_FILE" \
@@ -1755,260 +1748,260 @@ assert_json_with_args "$RESTORE_RESPONSE" \
 wait_for_fresh_embedding "$COLLECTION_A" "$READINESS_RESPONSE" "$READINESS_HEADERS"
 
 prepare_client_envelopes
-assert_client_envelope_has_private_media "$PROJECT_ENVELOPE_V1" \
-  "project client envelope contains private media material before compilation"
-assert_client_envelope_has_private_media "$PLATFORM_ENVELOPE_V1" \
-  "shared client envelope contains private media material before compilation"
+assert_client_envelope_has_private_transport "$PRIVATE_ENVELOPE_V1" \
+  "private-record envelope contains private transport material before compilation"
+assert_client_envelope_has_private_transport "$SHARED_ENVELOPE_V1" \
+  "shared-record envelope contains private transport material before compilation"
 
-PROJECT_CLIENT_REQUEST="${CONTRACT_PRIVATE}/external-client-project-v1.request.json"
+PRIVATE_CLIENT_REQUEST="${CONTRACT_PRIVATE}/external-client-private-v1.request.json"
 compile_client_envelope \
-  "$PROJECT_ENVELOPE_V1" "$COLLECTION_A" "PROJECT" "UPSERT" \
-  "$PROJECT_CLIENT_REQUEST"
-PROJECT_UPDATE_REQUEST="${CONTRACT_PRIVATE}/external-client-project-v2.request.json"
+  "$PRIVATE_ENVELOPE_V1" "$COLLECTION_A" "TENANT_PRIVATE" "UPSERT" \
+  "$PRIVATE_CLIENT_REQUEST"
+PRIVATE_UPDATE_REQUEST="${CONTRACT_PRIVATE}/external-client-private-v2.request.json"
 compile_client_envelope \
-  "$PROJECT_ENVELOPE_V2" "$COLLECTION_A" "PROJECT" "UPSERT" \
-  "$PROJECT_UPDATE_REQUEST" "$(jq -er '.sourceRevision | tostring' "$PROJECT_ENVELOPE_V1")"
-PROJECT_DELETE_V3="${CONTRACT_PRIVATE}/external-client-project-v3.delete.json"
+  "$PRIVATE_ENVELOPE_V2" "$COLLECTION_A" "TENANT_PRIVATE" "UPSERT" \
+  "$PRIVATE_UPDATE_REQUEST" "$(jq -er '.sourceRevision | tostring' "$PRIVATE_ENVELOPE_V1")"
+PRIVATE_DELETE_V3="${CONTRACT_PRIVATE}/external-client-private-v3.delete.json"
 compile_client_envelope \
-  "$PROJECT_ENVELOPE_V3" "$COLLECTION_A" "PROJECT" "DELETE" \
-  "$PROJECT_DELETE_V3" "$(jq -er '.sourceRevision | tostring' "$PROJECT_ENVELOPE_V2")"
-PROJECT_RESTORE_REQUEST="${CONTRACT_PRIVATE}/external-client-project-v4.request.json"
+  "$PRIVATE_ENVELOPE_V3" "$COLLECTION_A" "TENANT_PRIVATE" "DELETE" \
+  "$PRIVATE_DELETE_V3" "$(jq -er '.sourceRevision | tostring' "$PRIVATE_ENVELOPE_V2")"
+PRIVATE_RESTORE_REQUEST="${CONTRACT_PRIVATE}/external-client-private-v4.request.json"
 compile_client_envelope \
-  "$PROJECT_ENVELOPE_V4" "$COLLECTION_A" "PROJECT" "UPSERT" \
-  "$PROJECT_RESTORE_REQUEST" "$(jq -er '.sourceRevision | tostring' "$PROJECT_ENVELOPE_V3")"
-PROJECT_DELETE_V5="${CONTRACT_PRIVATE}/external-client-project-v5.delete.json"
+  "$PRIVATE_ENVELOPE_V4" "$COLLECTION_A" "TENANT_PRIVATE" "UPSERT" \
+  "$PRIVATE_RESTORE_REQUEST" "$(jq -er '.sourceRevision | tostring' "$PRIVATE_ENVELOPE_V3")"
+PRIVATE_DELETE_V5="${CONTRACT_PRIVATE}/external-client-private-v5.delete.json"
 compile_client_envelope \
-  "$PROJECT_ENVELOPE_V5" "$COLLECTION_A" "PROJECT" "DELETE" \
-  "$PROJECT_DELETE_V5" "$(jq -er '.sourceRevision | tostring' "$PROJECT_ENVELOPE_V4")"
+  "$PRIVATE_ENVELOPE_V5" "$COLLECTION_A" "TENANT_PRIVATE" "DELETE" \
+  "$PRIVATE_DELETE_V5" "$(jq -er '.sourceRevision | tostring' "$PRIVATE_ENVELOPE_V4")"
 
-PLATFORM_CLIENT_REQUEST="${CONTRACT_PRIVATE}/external-client-platform-v1.request.json"
+SHARED_CLIENT_REQUEST="${CONTRACT_PRIVATE}/external-client-shared-v1.request.json"
 compile_client_envelope \
-  "$PLATFORM_ENVELOPE_V1" "$COLLECTION_PLATFORM" "PLATFORM_SHARED" "UPSERT" \
-  "$PLATFORM_CLIENT_REQUEST"
-PLATFORM_DELETE_V2="${CONTRACT_PRIVATE}/external-client-platform-v2.delete.json"
+  "$SHARED_ENVELOPE_V1" "$COLLECTION_SHARED" "SHARED_CATALOG" "UPSERT" \
+  "$SHARED_CLIENT_REQUEST"
+SHARED_DELETE_V2="${CONTRACT_PRIVATE}/external-client-shared-v2.delete.json"
 compile_client_envelope \
-  "$PLATFORM_ENVELOPE_V2" "$COLLECTION_PLATFORM" "PLATFORM_SHARED" "DELETE" \
-  "$PLATFORM_DELETE_V2" "$(jq -er '.sourceRevision | tostring' "$PLATFORM_ENVELOPE_V1")"
+  "$SHARED_ENVELOPE_V2" "$COLLECTION_SHARED" "SHARED_CATALOG" "DELETE" \
+  "$SHARED_DELETE_V2" "$(jq -er '.sourceRevision | tostring' "$SHARED_ENVELOPE_V1")"
 
 for request_file in \
-    "$PROJECT_CLIENT_REQUEST" "$PROJECT_UPDATE_REQUEST" \
-    "$PROJECT_RESTORE_REQUEST" "$PLATFORM_CLIENT_REQUEST"; do
+    "$PRIVATE_CLIENT_REQUEST" "$PRIVATE_UPDATE_REQUEST" \
+    "$PRIVATE_RESTORE_REQUEST" "$SHARED_CLIENT_REQUEST"; do
   assert_projection_is_sanitized "$request_file" \
     "$(basename "$request_file") excludes private envelope and credential material"
 done
 
-PROJECT_EXTERNAL_ID="$(jq -er '.externalId' "$PROJECT_CLIENT_REQUEST")"
-PROJECT_SOURCE_ID="$(jq -er '.jsonbPayload.sourceId' "$PROJECT_CLIENT_REQUEST")"
-PROJECT_SCOPE_OWNER="$(jq -er '.jsonbPayload.scopeOwnerKey' "$PROJECT_CLIENT_REQUEST")"
-PROJECT_SOURCE_KIND="$(jq -er '.jsonbPayload.sourceKind' "$PROJECT_CLIENT_REQUEST")"
-PROJECT_REVISION_V1="$(jq -er '.sourceRevision' "$PROJECT_CLIENT_REQUEST")"
-PROJECT_REVISION_V2="$(jq -er '.sourceRevision' "$PROJECT_UPDATE_REQUEST")"
-PROJECT_REVISION_V3="$(jq -er '.sourceRevision' "$PROJECT_DELETE_V3")"
-PROJECT_REVISION_V4="$(jq -er '.sourceRevision' "$PROJECT_RESTORE_REQUEST")"
-PROJECT_REVISION_V5="$(jq -er '.sourceRevision' "$PROJECT_DELETE_V5")"
-PROJECT_QUERY_TEXT="$(jq -er '.retrievalText' "$PROJECT_RESTORE_REQUEST")"
-PLATFORM_EXTERNAL_ID="$(jq -er '.externalId' "$PLATFORM_CLIENT_REQUEST")"
-PLATFORM_SOURCE_ID="$(jq -er '.jsonbPayload.sourceId' "$PLATFORM_CLIENT_REQUEST")"
-PLATFORM_SCOPE_OWNER="$(jq -er '.jsonbPayload.scopeOwnerKey' "$PLATFORM_CLIENT_REQUEST")"
-PLATFORM_SOURCE_KIND="$(jq -er '.jsonbPayload.sourceKind' "$PLATFORM_CLIENT_REQUEST")"
-PLATFORM_REVISION_V1="$(jq -er '.sourceRevision' "$PLATFORM_CLIENT_REQUEST")"
-PLATFORM_REVISION_V2="$(jq -er '.sourceRevision' "$PLATFORM_DELETE_V2")"
-PLATFORM_QUERY_TEXT="$(jq -er '.retrievalText' "$PLATFORM_CLIENT_REQUEST")"
+PRIVATE_EXTERNAL_ID="$(jq -er '.externalId' "$PRIVATE_CLIENT_REQUEST")"
+PRIVATE_RECORD_ID="$(jq -er '.jsonbPayload.recordId' "$PRIVATE_CLIENT_REQUEST")"
+PRIVATE_SCOPE_KEY="$(jq -er '.jsonbPayload.scopeKey' "$PRIVATE_CLIENT_REQUEST")"
+PRIVATE_RECORD_TYPE="$(jq -er '.jsonbPayload.recordType' "$PRIVATE_CLIENT_REQUEST")"
+PRIVATE_REVISION_V1="$(jq -er '.sourceRevision' "$PRIVATE_CLIENT_REQUEST")"
+PRIVATE_REVISION_V2="$(jq -er '.sourceRevision' "$PRIVATE_UPDATE_REQUEST")"
+PRIVATE_REVISION_V3="$(jq -er '.sourceRevision' "$PRIVATE_DELETE_V3")"
+PRIVATE_REVISION_V4="$(jq -er '.sourceRevision' "$PRIVATE_RESTORE_REQUEST")"
+PRIVATE_REVISION_V5="$(jq -er '.sourceRevision' "$PRIVATE_DELETE_V5")"
+PRIVATE_QUERY_TEXT="$(jq -er '.retrievalText' "$PRIVATE_RESTORE_REQUEST")"
+SHARED_EXTERNAL_ID="$(jq -er '.externalId' "$SHARED_CLIENT_REQUEST")"
+SHARED_RECORD_ID="$(jq -er '.jsonbPayload.recordId' "$SHARED_CLIENT_REQUEST")"
+SHARED_SCOPE_KEY="$(jq -er '.jsonbPayload.scopeKey' "$SHARED_CLIENT_REQUEST")"
+SHARED_RECORD_TYPE="$(jq -er '.jsonbPayload.recordType' "$SHARED_CLIENT_REQUEST")"
+SHARED_REVISION_V1="$(jq -er '.sourceRevision' "$SHARED_CLIENT_REQUEST")"
+SHARED_REVISION_V2="$(jq -er '.sourceRevision' "$SHARED_DELETE_V2")"
+SHARED_QUERY_TEXT="$(jq -er '.retrievalText' "$SHARED_CLIENT_REQUEST")"
 
 for lifecycle_file in \
-    "$PROJECT_UPDATE_REQUEST" "$PROJECT_DELETE_V3" \
-    "$PROJECT_RESTORE_REQUEST" "$PROJECT_DELETE_V5"; do
-  [[ "$(jq -er '.externalId' "$lifecycle_file")" == "$PROJECT_EXTERNAL_ID" ]] || {
-    echo "Project lifecycle did not compile to one stable externalId" >&2
+    "$PRIVATE_UPDATE_REQUEST" "$PRIVATE_DELETE_V3" \
+    "$PRIVATE_RESTORE_REQUEST" "$PRIVATE_DELETE_V5"; do
+  [[ "$(jq -er '.externalId' "$lifecycle_file")" == "$PRIVATE_EXTERNAL_ID" ]] || {
+    echo "Private lifecycle did not compile to one stable externalId" >&2
     exit 1
   }
 done
-[[ "$(jq -er '.externalId' "$PLATFORM_DELETE_V2")" == "$PLATFORM_EXTERNAL_ID" ]] || {
-  echo "Platform lifecycle did not compile to one stable externalId" >&2
+[[ "$(jq -er '.externalId' "$SHARED_DELETE_V2")" == "$SHARED_EXTERNAL_ID" ]] || {
+  echo "Shared lifecycle did not compile to one stable externalId" >&2
   exit 1
 }
 pass "client envelope lifecycles compile to stable hashed external identities"
 
-PROJECT_CLIENT_RESPONSE="${CONTRACT_PRIVATE}/external-client-project.json"
-PROJECT_CLIENT_HEADERS="${PROJECT_CLIENT_RESPONSE}.headers"
+PRIVATE_CLIENT_RESPONSE="${CONTRACT_PRIVATE}/external-client-private.json"
+PRIVATE_CLIENT_HEADERS="${PRIVATE_CLIENT_RESPONSE}.headers"
 code="$(request POST "${API}/json-records/upsert" "$RESTRICTED_X_CONFIG" \
-  "$PROJECT_CLIENT_RESPONSE" "$PROJECT_CLIENT_HEADERS" "$PROJECT_CLIENT_REQUEST")"
-assert_status "$code" 200 "tenant dispatcher writes project-scoped material"
-assert_json_with_args "$PROJECT_CLIENT_RESPONSE" \
-  "project-scoped material persists with asynchronous embedding" \
-  --arg revision "$PROJECT_REVISION_V1" \
+  "$PRIVATE_CLIENT_RESPONSE" "$PRIVATE_CLIENT_HEADERS" "$PRIVATE_CLIENT_REQUEST")"
+assert_status "$code" 200 "tenant dispatcher writes private-scoped record"
+assert_json_with_args "$PRIVATE_CLIENT_RESPONSE" \
+  "private-scoped record persists with asynchronous embedding" \
+  --arg revision "$PRIVATE_REVISION_V1" \
   '.action == "CREATED"
     and .sourceRevision == $revision
     and (.embeddingAction == "ASYNC_QUEUED"
       or .embeddingAction == "ASYNC_COALESCED")'
-PROJECT_CLIENT_DOCUMENT_ID="$(jq -er '.documentId' "$PROJECT_CLIENT_RESPONSE")"
+PRIVATE_CLIENT_DOCUMENT_ID="$(jq -er '.documentId' "$PRIVATE_CLIENT_RESPONSE")"
 
-PROJECT_UPDATE_RESPONSE="${CONTRACT_PRIVATE}/external-client-project-v2.json"
-PROJECT_UPDATE_HEADERS="${PROJECT_UPDATE_RESPONSE}.headers"
+PRIVATE_UPDATE_RESPONSE="${CONTRACT_PRIVATE}/external-client-private-v2.json"
+PRIVATE_UPDATE_HEADERS="${PRIVATE_UPDATE_RESPONSE}.headers"
 code="$(request POST "${API}/json-records/upsert" "$RESTRICTED_X_CONFIG" \
-  "$PROJECT_UPDATE_RESPONSE" "$PROJECT_UPDATE_HEADERS" "$PROJECT_UPDATE_REQUEST")"
+  "$PRIVATE_UPDATE_RESPONSE" "$PRIVATE_UPDATE_HEADERS" "$PRIVATE_UPDATE_REQUEST")"
 assert_status "$code" 200 "tenant dispatcher applies client CAS update"
-assert_json_with_args "$PROJECT_UPDATE_RESPONSE" \
+assert_json_with_args "$PRIVATE_UPDATE_RESPONSE" \
   "client CAS update preserves document identity and advances revision" \
-  --argjson documentId "$PROJECT_CLIENT_DOCUMENT_ID" \
-  --arg revision "$PROJECT_REVISION_V2" \
+  --argjson documentId "$PRIVATE_CLIENT_DOCUMENT_ID" \
+  --arg revision "$PRIVATE_REVISION_V2" \
   '.documentId == $documentId and .sourceRevision == $revision
     and .action == "UPDATED"'
 
-PROJECT_DELETE_V3_RESPONSE="${CONTRACT_PRIVATE}/external-client-project-v3.json"
-PROJECT_DELETE_V3_HEADERS="${PROJECT_DELETE_V3_RESPONSE}.headers"
+PRIVATE_DELETE_V3_RESPONSE="${CONTRACT_PRIVATE}/external-client-private-v3.json"
+PRIVATE_DELETE_V3_HEADERS="${PRIVATE_DELETE_V3_RESPONSE}.headers"
 code="$(query_request DELETE "${API}/json-records/by-external-id" \
-  "$RESTRICTED_X_CONFIG" "$PROJECT_DELETE_V3_RESPONSE" \
-  "$PROJECT_DELETE_V3_HEADERS" \
+  "$RESTRICTED_X_CONFIG" "$PRIVATE_DELETE_V3_RESPONSE" \
+  "$PRIVATE_DELETE_V3_HEADERS" \
   "collectionKey=${COLLECTION_A}" \
-  "sourceNamespace=$(jq -er '.sourceNamespace' "$PROJECT_DELETE_V3")" \
-  "externalId=${PROJECT_EXTERNAL_ID}" \
-  "sourceRevision=${PROJECT_REVISION_V3}" \
-  "expectedSourceRevision=$(jq -er '.expectedSourceRevision' "$PROJECT_DELETE_V3")")"
+  "sourceNamespace=$(jq -er '.sourceNamespace' "$PRIVATE_DELETE_V3")" \
+  "externalId=${PRIVATE_EXTERNAL_ID}" \
+  "sourceRevision=${PRIVATE_REVISION_V3}" \
+  "expectedSourceRevision=$(jq -er '.expectedSourceRevision' "$PRIVATE_DELETE_V3")")"
 assert_status "$code" 200 "tenant dispatcher applies client tombstone"
-assert_json_with_args "$PROJECT_DELETE_V3_RESPONSE" \
+assert_json_with_args "$PRIVATE_DELETE_V3_RESPONSE" \
   "client tombstone preserves identity and disables searchability" \
-  --argjson documentId "$PROJECT_CLIENT_DOCUMENT_ID" \
-  --arg revision "$PROJECT_REVISION_V3" \
+  --argjson documentId "$PRIVATE_CLIENT_DOCUMENT_ID" \
+  --arg revision "$PRIVATE_REVISION_V3" \
   '.documentId == $documentId and .sourceRevision == $revision
     and .enabled == false
     and .lifecycle.documentState == "TOMBSTONED"
     and .lifecycle.searchability == "DISABLED"'
 
-PROJECT_RESTORE_RESPONSE="${CONTRACT_PRIVATE}/external-client-project-v4.json"
-PROJECT_RESTORE_HEADERS="${PROJECT_RESTORE_RESPONSE}.headers"
+PRIVATE_RESTORE_RESPONSE="${CONTRACT_PRIVATE}/external-client-private-v4.json"
+PRIVATE_RESTORE_HEADERS="${PRIVATE_RESTORE_RESPONSE}.headers"
 code="$(request POST "${API}/json-records/upsert" "$RESTRICTED_X_CONFIG" \
-  "$PROJECT_RESTORE_RESPONSE" "$PROJECT_RESTORE_HEADERS" \
-  "$PROJECT_RESTORE_REQUEST")"
-assert_status "$code" 200 "tenant dispatcher restores client material"
-assert_json_with_args "$PROJECT_RESTORE_RESPONSE" \
+  "$PRIVATE_RESTORE_RESPONSE" "$PRIVATE_RESTORE_HEADERS" \
+  "$PRIVATE_RESTORE_REQUEST")"
+assert_status "$code" 200 "tenant dispatcher restores client record"
+assert_json_with_args "$PRIVATE_RESTORE_RESPONSE" \
   "client restore upsert reuses identity and returns to active lifecycle" \
-  --argjson documentId "$PROJECT_CLIENT_DOCUMENT_ID" \
-  --arg revision "$PROJECT_REVISION_V4" \
+  --argjson documentId "$PRIVATE_CLIENT_DOCUMENT_ID" \
+  --arg revision "$PRIVATE_REVISION_V4" \
   '.documentId == $documentId and .sourceRevision == $revision
     and .lifecycle.documentState == "ACTIVE"'
 
-PROJECT_RESTORE_LOOKUP="${CONTRACT_PRIVATE}/external-client-project-v4.lookup.json"
-PROJECT_RESTORE_LOOKUP_HEADERS="${PROJECT_RESTORE_LOOKUP}.headers"
+PRIVATE_RESTORE_LOOKUP="${CONTRACT_PRIVATE}/external-client-private-v4.lookup.json"
+PRIVATE_RESTORE_LOOKUP_HEADERS="${PRIVATE_RESTORE_LOOKUP}.headers"
 code="$(query_request GET "${API}/json-records/by-external-id" \
-  "$RESTRICTED_X_CONFIG" "$PROJECT_RESTORE_LOOKUP" \
-  "$PROJECT_RESTORE_LOOKUP_HEADERS" \
+  "$RESTRICTED_X_CONFIG" "$PRIVATE_RESTORE_LOOKUP" \
+  "$PRIVATE_RESTORE_LOOKUP_HEADERS" \
   "collectionKey=${COLLECTION_A}" \
-  "sourceNamespace=$(jq -er '.sourceNamespace' "$PROJECT_RESTORE_REQUEST")" \
-  "externalId=${PROJECT_EXTERNAL_ID}")"
-assert_status "$code" 200 "tenant dispatcher reads restored client material"
-assert_json_with_args "$PROJECT_RESTORE_LOOKUP" \
+  "sourceNamespace=$(jq -er '.sourceNamespace' "$PRIVATE_RESTORE_REQUEST")" \
+  "externalId=${PRIVATE_EXTERNAL_ID}")"
+assert_status "$code" 200 "tenant dispatcher reads restored client record"
+assert_json_with_args "$PRIVATE_RESTORE_LOOKUP" \
   "persisted client restore reuses identity and is enabled" \
-  --argjson documentId "$PROJECT_CLIENT_DOCUMENT_ID" \
-  --arg revision "$PROJECT_REVISION_V4" \
+  --argjson documentId "$PRIVATE_CLIENT_DOCUMENT_ID" \
+  --arg revision "$PRIVATE_REVISION_V4" \
   '.documentId == $documentId and .sourceRevision == $revision
     and .enabled == true
     and .lifecycle.documentState == "ACTIVE"
     and .lifecycle.searchability != "DISABLED"'
 
-PLATFORM_CLIENT_RESPONSE="${CONTRACT_PRIVATE}/external-client-platform.json"
-PLATFORM_CLIENT_HEADERS="${PLATFORM_CLIENT_RESPONSE}.headers"
-code="$(request POST "${API}/json-records/upsert" "$PLATFORM_CONFIG" \
-  "$PLATFORM_CLIENT_RESPONSE" "$PLATFORM_CLIENT_HEADERS" \
-  "$PLATFORM_CLIENT_REQUEST")"
-assert_status "$code" 200 "platform dispatcher writes shared publication"
-assert_json_with_args "$PLATFORM_CLIENT_RESPONSE" \
-  "shared publication persists with asynchronous embedding" \
-  --arg revision "$PLATFORM_REVISION_V1" \
+SHARED_CLIENT_RESPONSE="${CONTRACT_PRIVATE}/external-client-shared.json"
+SHARED_CLIENT_HEADERS="${SHARED_CLIENT_RESPONSE}.headers"
+code="$(request POST "${API}/json-records/upsert" "$SHARED_CONFIG" \
+  "$SHARED_CLIENT_RESPONSE" "$SHARED_CLIENT_HEADERS" \
+  "$SHARED_CLIENT_REQUEST")"
+assert_status "$code" 200 "shared dispatcher writes shared-scoped record"
+assert_json_with_args "$SHARED_CLIENT_RESPONSE" \
+  "shared-scoped record persists with asynchronous embedding" \
+  --arg revision "$SHARED_REVISION_V1" \
   '.action == "CREATED"
     and .sourceRevision == $revision
     and (.embeddingAction == "ASYNC_QUEUED"
       or .embeddingAction == "ASYNC_COALESCED")'
-PLATFORM_CLIENT_DOCUMENT_ID="$(jq -er '.documentId' "$PLATFORM_CLIENT_RESPONSE")"
+SHARED_CLIENT_DOCUMENT_ID="$(jq -er '.documentId' "$SHARED_CLIENT_RESPONSE")"
 
 wait_for_fresh_embedding \
   "$COLLECTION_A" "$READINESS_RESPONSE" "$READINESS_HEADERS" 2
-PLATFORM_READINESS_RESPONSE="${CONTRACT_PRIVATE}/platform-embedding-readiness.json"
-PLATFORM_READINESS_HEADERS="${PLATFORM_READINESS_RESPONSE}.headers"
+SHARED_READINESS_RESPONSE="${CONTRACT_PRIVATE}/shared-embedding-readiness.json"
+SHARED_READINESS_HEADERS="${SHARED_READINESS_RESPONSE}.headers"
 wait_for_fresh_embedding \
-  "$COLLECTION_PLATFORM" "$PLATFORM_READINESS_RESPONSE" \
-  "$PLATFORM_READINESS_HEADERS"
+  "$COLLECTION_SHARED" "$SHARED_READINESS_RESPONSE" \
+  "$SHARED_READINESS_HEADERS"
 
 assert_denied_data_plane \
-  "$RESTRICTED_X_CONFIG" "$COLLECTION_PLATFORM" \
-  "external-client.material-rag.v1" "$PLATFORM_EXTERNAL_ID" \
-  "tenant dispatcher denies shared platform Collection" \
-  "$PLATFORM_CLIENT_DOCUMENT_ID"
+  "$RESTRICTED_X_CONFIG" "$COLLECTION_SHARED" \
+  "generic-client.record-mutation.v1" "$SHARED_EXTERNAL_ID" \
+  "tenant dispatcher denies shared-scope Collection" \
+  "$SHARED_CLIENT_DOCUMENT_ID"
 assert_denied_data_plane \
-  "$PLATFORM_CONFIG" "$COLLECTION_A" \
-  "external-client.material-rag.v1" "$PROJECT_EXTERNAL_ID" \
-  "platform dispatcher denies tenant Collection" \
-  "$PROJECT_CLIENT_DOCUMENT_ID"
+  "$SHARED_CONFIG" "$COLLECTION_A" \
+  "generic-client.record-mutation.v1" "$PRIVATE_EXTERNAL_ID" \
+  "shared dispatcher denies tenant Collection" \
+  "$PRIVATE_CLIENT_DOCUMENT_ID"
 
-PROJECT_QUERY_REQUEST="${CONTRACT_PRIVATE}/external-client-project-search.request.json"
+PRIVATE_QUERY_REQUEST="${CONTRACT_PRIVATE}/external-client-private-search.request.json"
 write_scoped_search_request \
-  "$PROJECT_QUERY_REQUEST" "$COLLECTION_A" "PROJECT" \
-  "$PROJECT_SCOPE_OWNER" "ACTIVE" "$PROJECT_QUERY_TEXT"
-PROJECT_QUERY_RESPONSE="${CONTRACT_PRIVATE}/external-client-project-search.json"
-PROJECT_QUERY_HEADERS="${PROJECT_QUERY_RESPONSE}.headers"
+  "$PRIVATE_QUERY_REQUEST" "$COLLECTION_A" "TENANT_PRIVATE" \
+  "$PRIVATE_SCOPE_KEY" "PRIVATE" "$PRIVATE_QUERY_TEXT"
+PRIVATE_QUERY_RESPONSE="${CONTRACT_PRIVATE}/external-client-private-search.json"
+PRIVATE_QUERY_HEADERS="${PRIVATE_QUERY_RESPONSE}.headers"
 code="$(request POST "${API}/json-records/search" "$QUERY_X_CONFIG" \
-  "$PROJECT_QUERY_RESPONSE" "$PROJECT_QUERY_HEADERS" "$PROJECT_QUERY_REQUEST")"
+  "$PRIVATE_QUERY_RESPONSE" "$PRIVATE_QUERY_HEADERS" "$PRIVATE_QUERY_REQUEST")"
 assert_status "$code" 200 "dual-Collection query searches tenant route"
-assert_json_with_args "$PROJECT_QUERY_RESPONSE" \
-  "tenant route returns only the project-scoped fixture" \
-  --argjson documentId "$PROJECT_CLIENT_DOCUMENT_ID" \
-  --arg owner "$PROJECT_SCOPE_OWNER" \
-  --arg kind "$PROJECT_SOURCE_KIND" \
-  --arg sourceId "$PROJECT_SOURCE_ID" \
+assert_json_with_args "$PRIVATE_QUERY_RESPONSE" \
+  "tenant route returns only the private-scoped fixture" \
+  --argjson documentId "$PRIVATE_CLIENT_DOCUMENT_ID" \
+  --arg scopeKey "$PRIVATE_SCOPE_KEY" \
+  --arg recordType "$PRIVATE_RECORD_TYPE" \
+  --arg recordId "$PRIVATE_RECORD_ID" \
   '(.results | length) >= 1
     and (.results | map(.documentId) | index($documentId)) != null
     and all(.results[];
-      .jsonbPayload.schemaVersion == "external-client.material-rag-json-v1"
-      and .jsonbPayload.sourceScope == "PROJECT"
-      and .jsonbPayload.scopeOwnerKey == $owner
-      and .jsonbPayload.sourceKind == $kind
-      and .jsonbPayload.sourceId == $sourceId
-      and .jsonbPayload.visibility == "ACTIVE")'
+      .jsonbPayload.schemaVersion == "generic-client.record-projection-v1"
+      and .jsonbPayload.recordScope == "TENANT_PRIVATE"
+      and .jsonbPayload.scopeKey == $scopeKey
+      and .jsonbPayload.recordType == $recordType
+      and .jsonbPayload.recordId == $recordId
+      and .jsonbPayload.visibility == "PRIVATE")'
 
-PLATFORM_QUERY_REQUEST="${CONTRACT_PRIVATE}/external-client-platform-search.request.json"
+SHARED_QUERY_REQUEST="${CONTRACT_PRIVATE}/external-client-shared-search.request.json"
 write_scoped_search_request \
-  "$PLATFORM_QUERY_REQUEST" "$COLLECTION_PLATFORM" \
-  "PLATFORM_SHARED" "$PLATFORM_SCOPE_OWNER" "VISIBLE" "$PLATFORM_QUERY_TEXT"
-PLATFORM_QUERY_RESPONSE="${CONTRACT_PRIVATE}/external-client-platform-search.json"
-PLATFORM_QUERY_HEADERS="${PLATFORM_QUERY_RESPONSE}.headers"
+  "$SHARED_QUERY_REQUEST" "$COLLECTION_SHARED" \
+  "SHARED_CATALOG" "$SHARED_SCOPE_KEY" "SHARED" "$SHARED_QUERY_TEXT"
+SHARED_QUERY_RESPONSE="${CONTRACT_PRIVATE}/external-client-shared-search.json"
+SHARED_QUERY_HEADERS="${SHARED_QUERY_RESPONSE}.headers"
 code="$(request POST "${API}/json-records/search" "$QUERY_X_CONFIG" \
-  "$PLATFORM_QUERY_RESPONSE" "$PLATFORM_QUERY_HEADERS" \
-  "$PLATFORM_QUERY_REQUEST")"
+  "$SHARED_QUERY_RESPONSE" "$SHARED_QUERY_HEADERS" \
+  "$SHARED_QUERY_REQUEST")"
 assert_status "$code" 200 "dual-Collection query searches shared route"
-assert_json_with_args "$PLATFORM_QUERY_RESPONSE" \
-  "shared route returns only the public publication fixture" \
-  --argjson documentId "$PLATFORM_CLIENT_DOCUMENT_ID" \
-  --arg owner "$PLATFORM_SCOPE_OWNER" \
-  --arg kind "$PLATFORM_SOURCE_KIND" \
-  --arg sourceId "$PLATFORM_SOURCE_ID" \
+assert_json_with_args "$SHARED_QUERY_RESPONSE" \
+  "shared route returns only the shared-scoped fixture" \
+  --argjson documentId "$SHARED_CLIENT_DOCUMENT_ID" \
+  --arg scopeKey "$SHARED_SCOPE_KEY" \
+  --arg recordType "$SHARED_RECORD_TYPE" \
+  --arg recordId "$SHARED_RECORD_ID" \
   '(.results | length) >= 1
     and (.results | map(.documentId) | index($documentId)) != null
     and all(.results[];
-      .jsonbPayload.schemaVersion == "external-client.material-rag-json-v1"
-      and .jsonbPayload.sourceScope == "PLATFORM_SHARED"
-      and .jsonbPayload.scopeOwnerKey == $owner
-      and .jsonbPayload.sourceKind == $kind
-      and .jsonbPayload.sourceId == $sourceId
-      and .jsonbPayload.visibility == "VISIBLE")'
+      .jsonbPayload.schemaVersion == "generic-client.record-projection-v1"
+      and .jsonbPayload.recordScope == "SHARED_CATALOG"
+      and .jsonbPayload.scopeKey == $scopeKey
+      and .jsonbPayload.recordType == $recordType
+      and .jsonbPayload.recordId == $recordId
+      and .jsonbPayload.visibility == "SHARED")'
 
-SAFE_BROWSER_RESPONSE="${CONTRACT_PRIVATE}/browser-safe-candidates.json"
+SAFE_BROWSER_RESPONSE="${CONTRACT_PRIVATE}/browser-safe-records.json"
 python3 - \
-  "$PROJECT_QUERY_RESPONSE" "$PLATFORM_QUERY_RESPONSE" \
-  "$PROJECT_CLIENT_DOCUMENT_ID" "$PLATFORM_CLIENT_DOCUMENT_ID" \
-  "$SAFE_BROWSER_RESPONSE" "$PROJECT_SOURCE_ID" "$PLATFORM_SOURCE_ID" <<'PY'
+  "$PRIVATE_QUERY_RESPONSE" "$SHARED_QUERY_RESPONSE" \
+  "$PRIVATE_CLIENT_DOCUMENT_ID" "$SHARED_CLIENT_DOCUMENT_ID" \
+  "$SAFE_BROWSER_RESPONSE" "$PRIVATE_RECORD_ID" "$SHARED_RECORD_ID" <<'PY'
 import json
 from pathlib import Path
 import sys
 
-project = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
-platform = json.loads(Path(sys.argv[2]).read_text(encoding="utf-8"))
+private_record = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+shared_record = json.loads(Path(sys.argv[2]).read_text(encoding="utf-8"))
 expected = sorted((int(sys.argv[3]), int(sys.argv[4])))
-project_source_id = sys.argv[6]
-platform_source_id = sys.argv[7]
+private_source_id = sys.argv[6]
+shared_source_id = sys.argv[7]
 
 def merge(left, right):
     unique = {}
-    for route, response in (("PROJECT", left), ("PLATFORM_SHARED", right)):
+    for route, response in (("TENANT_PRIVATE", left), ("SHARED_CATALOG", right)):
         for result in response["results"]:
             unique[(route, int(result["documentId"]))] = {
                 "route": route,
@@ -2016,8 +2009,8 @@ def merge(left, right):
             }
     return sorted(unique.values(), key=lambda item: (item["route"], item["documentId"]))
 
-first = merge(project, platform)
-second = merge(project, platform)
+first = merge(private_record, shared_record)
+second = merge(private_record, shared_record)
 if first != second:
     raise SystemExit("two-route merge is not deterministic")
 ids = sorted(item["documentId"] for item in first)
@@ -2029,14 +2022,14 @@ if not all(document_id in ids for document_id in expected):
 safe = {
     "items": [
         {
-            "kind": "PROJECT_MATERIAL",
-            "materialId": project_source_id,
-            "displayName": "Authorized project material",
+            "kind": "PRIVATE_RECORD",
+            "recordId": private_source_id,
+            "displayName": "Authorized private record",
         },
         {
-            "kind": "PLATFORM_PUBLICATION",
-            "publicationId": platform_source_id,
-            "displayName": "Visible platform publication",
+            "kind": "SHARED_RECORD",
+            "recordId": shared_source_id,
+            "displayName": "Visible shared record",
         },
     ]
 }
@@ -2222,91 +2215,91 @@ assert_json_with_args "$QUERY_NEW_AFTER_ROTATE" \
   "query rotation preserves both Collection bindings without root fallback" \
   --arg principal "$QUERY_PRINCIPAL_ID" \
   --arg tenantKey "$COLLECTION_A" \
-  --arg platformKey "$COLLECTION_PLATFORM" \
+  --arg sharedKey "$COLLECTION_SHARED" \
   '.principalId == $principal
     and .credentialVersion == 2
     and .policyVersion == 1
     and .collectionAccessMode == "RESTRICTED"
-    and (.allowedCollectionKeys | sort) == ([$tenantKey,$platformKey] | sort)
+    and (.allowedCollectionKeys | sort) == ([$tenantKey,$sharedKey] | sort)
     and .capabilities == ["RAG_READ"]'
 
-QUERY_ROTATED_PROJECT_RESPONSE="${CONTRACT_PRIVATE}/query-rotated-project.json"
-QUERY_ROTATED_PROJECT_HEADERS="${QUERY_ROTATED_PROJECT_RESPONSE}.headers"
+QUERY_ROTATED_PRIVATE_RESPONSE="${CONTRACT_PRIVATE}/query-rotated-private.json"
+QUERY_ROTATED_PRIVATE_HEADERS="${QUERY_ROTATED_PRIVATE_RESPONSE}.headers"
 code="$(request POST "${API}/json-records/search" "$QUERY_ROTATED_CONFIG" \
-  "$QUERY_ROTATED_PROJECT_RESPONSE" "$QUERY_ROTATED_PROJECT_HEADERS" \
-  "$PROJECT_QUERY_REQUEST")"
+  "$QUERY_ROTATED_PRIVATE_RESPONSE" "$QUERY_ROTATED_PRIVATE_HEADERS" \
+  "$PRIVATE_QUERY_REQUEST")"
 assert_status "$code" 200 "rotated query credential searches tenant route"
-assert_json_with_args "$QUERY_ROTATED_PROJECT_RESPONSE" \
+assert_json_with_args "$QUERY_ROTATED_PRIVATE_RESPONSE" \
   "rotated query credential retains tenant result" \
-  --argjson documentId "$PROJECT_CLIENT_DOCUMENT_ID" \
+  --argjson documentId "$PRIVATE_CLIENT_DOCUMENT_ID" \
   '(.results | map(.documentId) | index($documentId)) != null'
 
-QUERY_ROTATED_PLATFORM_RESPONSE="${CONTRACT_PRIVATE}/query-rotated-platform.json"
-QUERY_ROTATED_PLATFORM_HEADERS="${QUERY_ROTATED_PLATFORM_RESPONSE}.headers"
+QUERY_ROTATED_SHARED_RESPONSE="${CONTRACT_PRIVATE}/query-rotated-shared.json"
+QUERY_ROTATED_SHARED_HEADERS="${QUERY_ROTATED_SHARED_RESPONSE}.headers"
 code="$(request POST "${API}/json-records/search" "$QUERY_ROTATED_CONFIG" \
-  "$QUERY_ROTATED_PLATFORM_RESPONSE" "$QUERY_ROTATED_PLATFORM_HEADERS" \
-  "$PLATFORM_QUERY_REQUEST")"
+  "$QUERY_ROTATED_SHARED_RESPONSE" "$QUERY_ROTATED_SHARED_HEADERS" \
+  "$SHARED_QUERY_REQUEST")"
 assert_status "$code" 200 "rotated query credential searches shared route"
-assert_json_with_args "$QUERY_ROTATED_PLATFORM_RESPONSE" \
+assert_json_with_args "$QUERY_ROTATED_SHARED_RESPONSE" \
   "rotated query credential retains shared result" \
-  --argjson documentId "$PLATFORM_CLIENT_DOCUMENT_ID" \
+  --argjson documentId "$SHARED_CLIENT_DOCUMENT_ID" \
   '(.results | map(.documentId) | index($documentId)) != null'
 
-PROJECT_DELETE_V5_RESPONSE="${CONTRACT_PRIVATE}/external-client-project-v5.json"
-PROJECT_DELETE_V5_HEADERS="${PROJECT_DELETE_V5_RESPONSE}.headers"
+PRIVATE_DELETE_V5_RESPONSE="${CONTRACT_PRIVATE}/external-client-private-v5.json"
+PRIVATE_DELETE_V5_HEADERS="${PRIVATE_DELETE_V5_RESPONSE}.headers"
 code="$(query_request DELETE "${API}/json-records/by-external-id" \
-  "$ROTATED_CONFIG" "$PROJECT_DELETE_V5_RESPONSE" \
-  "$PROJECT_DELETE_V5_HEADERS" \
+  "$ROTATED_CONFIG" "$PRIVATE_DELETE_V5_RESPONSE" \
+  "$PRIVATE_DELETE_V5_HEADERS" \
   "collectionKey=${COLLECTION_A}" \
-  "sourceNamespace=$(jq -er '.sourceNamespace' "$PROJECT_DELETE_V5")" \
-  "externalId=${PROJECT_EXTERNAL_ID}" \
-  "sourceRevision=${PROJECT_REVISION_V5}" \
-  "expectedSourceRevision=$(jq -er '.expectedSourceRevision' "$PROJECT_DELETE_V5")")"
+  "sourceNamespace=$(jq -er '.sourceNamespace' "$PRIVATE_DELETE_V5")" \
+  "externalId=${PRIVATE_EXTERNAL_ID}" \
+  "sourceRevision=${PRIVATE_REVISION_V5}" \
+  "expectedSourceRevision=$(jq -er '.expectedSourceRevision' "$PRIVATE_DELETE_V5")")"
 assert_status "$code" 200 "rotated tenant dispatcher applies final client tombstone"
-assert_json_with_args "$PROJECT_DELETE_V5_RESPONSE" \
-  "final project tombstone preserves identity and revision" \
-  --argjson documentId "$PROJECT_CLIENT_DOCUMENT_ID" \
-  --arg revision "$PROJECT_REVISION_V5" \
+assert_json_with_args "$PRIVATE_DELETE_V5_RESPONSE" \
+  "final private-record tombstone preserves identity and revision" \
+  --argjson documentId "$PRIVATE_CLIENT_DOCUMENT_ID" \
+  --arg revision "$PRIVATE_REVISION_V5" \
   '.documentId == $documentId and .sourceRevision == $revision
     and .enabled == false
     and .lifecycle.documentState == "TOMBSTONED"'
 
-PLATFORM_DELETE_V2_RESPONSE="${CONTRACT_PRIVATE}/external-client-platform-v2.json"
-PLATFORM_DELETE_V2_HEADERS="${PLATFORM_DELETE_V2_RESPONSE}.headers"
+SHARED_DELETE_V2_RESPONSE="${CONTRACT_PRIVATE}/external-client-shared-v2.json"
+SHARED_DELETE_V2_HEADERS="${SHARED_DELETE_V2_RESPONSE}.headers"
 code="$(query_request DELETE "${API}/json-records/by-external-id" \
-  "$PLATFORM_CONFIG" "$PLATFORM_DELETE_V2_RESPONSE" \
-  "$PLATFORM_DELETE_V2_HEADERS" \
-  "collectionKey=${COLLECTION_PLATFORM}" \
-  "sourceNamespace=$(jq -er '.sourceNamespace' "$PLATFORM_DELETE_V2")" \
-  "externalId=${PLATFORM_EXTERNAL_ID}" \
-  "sourceRevision=${PLATFORM_REVISION_V2}" \
-  "expectedSourceRevision=$(jq -er '.expectedSourceRevision' "$PLATFORM_DELETE_V2")")"
-assert_status "$code" 200 "platform dispatcher applies publication tombstone"
-assert_json_with_args "$PLATFORM_DELETE_V2_RESPONSE" \
-  "platform tombstone preserves identity and revision" \
-  --argjson documentId "$PLATFORM_CLIENT_DOCUMENT_ID" \
-  --arg revision "$PLATFORM_REVISION_V2" \
+  "$SHARED_CONFIG" "$SHARED_DELETE_V2_RESPONSE" \
+  "$SHARED_DELETE_V2_HEADERS" \
+  "collectionKey=${COLLECTION_SHARED}" \
+  "sourceNamespace=$(jq -er '.sourceNamespace' "$SHARED_DELETE_V2")" \
+  "externalId=${SHARED_EXTERNAL_ID}" \
+  "sourceRevision=${SHARED_REVISION_V2}" \
+  "expectedSourceRevision=$(jq -er '.expectedSourceRevision' "$SHARED_DELETE_V2")")"
+assert_status "$code" 200 "shared dispatcher applies shared-record tombstone"
+assert_json_with_args "$SHARED_DELETE_V2_RESPONSE" \
+  "shared-record tombstone preserves identity and revision" \
+  --argjson documentId "$SHARED_CLIENT_DOCUMENT_ID" \
+  --arg revision "$SHARED_REVISION_V2" \
   '.documentId == $documentId and .sourceRevision == $revision
     and .enabled == false
     and .lifecycle.documentState == "TOMBSTONED"'
 
-PROJECT_AFTER_DELETE_RESPONSE="${CONTRACT_PRIVATE}/external-client-project-after-delete.json"
-PROJECT_AFTER_DELETE_HEADERS="${PROJECT_AFTER_DELETE_RESPONSE}.headers"
+PRIVATE_AFTER_DELETE_RESPONSE="${CONTRACT_PRIVATE}/external-client-private-after-delete.json"
+PRIVATE_AFTER_DELETE_HEADERS="${PRIVATE_AFTER_DELETE_RESPONSE}.headers"
 code="$(request POST "${API}/json-records/search" "$QUERY_ROTATED_CONFIG" \
-  "$PROJECT_AFTER_DELETE_RESPONSE" "$PROJECT_AFTER_DELETE_HEADERS" \
-  "$PROJECT_QUERY_REQUEST")"
+  "$PRIVATE_AFTER_DELETE_RESPONSE" "$PRIVATE_AFTER_DELETE_HEADERS" \
+  "$PRIVATE_QUERY_REQUEST")"
 assert_status "$code" 200 "rotated query searches tenant route after tombstone"
-assert_json "$PROJECT_AFTER_DELETE_RESPONSE" '.results == []' \
-  "project tombstone removes the client material from search"
+assert_json "$PRIVATE_AFTER_DELETE_RESPONSE" '.results == []' \
+  "private-record tombstone removes the client record from search"
 
-PLATFORM_AFTER_DELETE_RESPONSE="${CONTRACT_PRIVATE}/external-client-platform-after-delete.json"
-PLATFORM_AFTER_DELETE_HEADERS="${PLATFORM_AFTER_DELETE_RESPONSE}.headers"
+SHARED_AFTER_DELETE_RESPONSE="${CONTRACT_PRIVATE}/external-client-shared-after-delete.json"
+SHARED_AFTER_DELETE_HEADERS="${SHARED_AFTER_DELETE_RESPONSE}.headers"
 code="$(request POST "${API}/json-records/search" "$QUERY_ROTATED_CONFIG" \
-  "$PLATFORM_AFTER_DELETE_RESPONSE" "$PLATFORM_AFTER_DELETE_HEADERS" \
-  "$PLATFORM_QUERY_REQUEST")"
+  "$SHARED_AFTER_DELETE_RESPONSE" "$SHARED_AFTER_DELETE_HEADERS" \
+  "$SHARED_QUERY_REQUEST")"
 assert_status "$code" 200 "rotated query searches shared route after tombstone"
-assert_json "$PLATFORM_AFTER_DELETE_RESPONSE" '.results == []' \
-  "platform tombstone removes the publication from search"
+assert_json "$SHARED_AFTER_DELETE_RESPONSE" '.results == []' \
+  "shared-record tombstone removes the shared record from search"
 
 root_delete_key "$ROTATED_KEY_ID"
 RESTRICTED_CURRENT_KEY_ID=""

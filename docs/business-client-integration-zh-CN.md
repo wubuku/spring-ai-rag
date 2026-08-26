@@ -287,14 +287,15 @@ preflight 的 HTTP 合同和真实 API Key Playwright。HTTP 合同明确验证�
 query principal 绑定两个 Collection，两个 dispatcher 不能交叉写入，另一租户仍不可访问；
 两路 scope 检索可确定性归并，清洗后的投影可以重建为浏览器安全 DTO，并且 query
 credential 轮换后保留两个 Collection binding，数据面不会回退到 root。客户端拥有的
-mutation envelope 会在测试客户端中编译为稳定哈希身份和 allow-list 投影；PROJECT 的
-更新、删除、恢复、轮换后删除，以及 PLATFORM_SHARED 的发布/撤销都通过真实 HTTP 执行，
-并证明 `mediaRef`、URL 与内部 event/candidate/fingerprint 材料不会进入 RAG。
+通用记录 mutation envelope 会在测试客户端中编译为稳定哈希身份和 allow-list 投影；
+`TENANT_PRIVATE` 记录的更新、删除、恢复、轮换后删除，以及 `SHARED_CATALOG` 记录的
+发布/撤销都通过真实 HTTP 执行，并证明 `privateAttachment`、URL 与内部
+event/record/fingerprint 材料不会进入 RAG。
 
 若要以某个外部客户端的真实 envelope 做验收，设置
 `BUSINESS_CLIENT_CLIENT_ENVELOPE_DIR=<fixture-dir>`；文件名和生命周期要求见
 [测试指南](testing-guide-zh-CN.md#业务服务接入就绪验收门禁)。该输入只是测试客户端夹具，
-不意味着 RAG 服务依赖外部项目或负责外部 outbox 的编译逻辑。
+不意味着 RAG 服务依赖外部项目、采用示例 envelope 协议或负责外部 outbox 的编译逻辑。
 
 脚本默认使用隔离端口 `18084`、`18085`、`15184`、`15185` 和一次性
 `pgvector/pgvector:pg16`。证据写入
