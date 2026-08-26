@@ -57,5 +57,7 @@
   `2026-08-26_BUSINESS_BINDING_CAPABILITY_PROFILES_*`
 - 托管 principal 幂等 provisioning 与运行时能力发现：
   `2026-08-26_MANAGED_PROVISIONING_CAPABILITY_DISCOVERY_*`
+- Sync Run 持久化逐项回执、状态过滤和终态稳定游标遍历：
+  `2026-08-26_SYNC_RUN_ITEM_RECEIPTS_*`
 
 该列表只帮助历史定位，不代表优先级或当前能力状态。

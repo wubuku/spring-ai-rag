@@ -1,6 +1,6 @@
 # Sync Run 持久化 item receipt 与游标状态查询实施规划
 
-> **状态**：规划审查 `3/3` 通过，实施与验收中
+> **状态**：已实施、验收并合入 `main`
 >
 > **规划日期**：2026-08-26
 >
@@ -114,11 +114,11 @@ DocumentSyncRunController
 
 近距离长青入口：
 
-- [REST API：权威来源全量快照对账](../rest-api-zh-CN.md#权威来源全量快照对账)
-- [外部文档同步 Client 指南](../external-document-sync-client-guide-zh-CN.md)
-- [配置参考：document lifecycle](../configuration-zh-CN.md#文档生命周期配置)
-- [测试指南](../testing-guide-zh-CN.md)
-- [交付工作流](../delivery-workflow-zh-CN.md)
+- [REST API：权威来源全量快照对账](../../rest-api-zh-CN.md#权威来源全量快照对账)
+- [外部文档同步 Client 指南](../../external-document-sync-client-guide-zh-CN.md)
+- [配置参考：document lifecycle](../../configuration-zh-CN.md#文档生命周期配置)
+- [测试指南](../../testing-guide-zh-CN.md)
+- [交付工作流](../../delivery-workflow-zh-CN.md)
 
 ### 3.2 V42 item ledger 已保存的事实
 
@@ -690,6 +690,6 @@ git diff --check
 ## 12. 进度记录
 
 实施进度单独维护在
-[NEXT_HIGH_VALUE_FEATURES_PROGRESS.md](NEXT_HIGH_VALUE_FEATURES_PROGRESS.md)。每次关键进展
+[2026-08-26_SYNC_RUN_ITEM_RECEIPTS_PROGRESS.md](2026-08-26_SYNC_RUN_ITEM_RECEIPTS_PROGRESS.md)。每次关键进展
 先更新进度账本，再进入下一阶段；不得记录 raw credential、cursor、externalId、完整 error、
 payload、外部项目路径或 `.env` 内容。

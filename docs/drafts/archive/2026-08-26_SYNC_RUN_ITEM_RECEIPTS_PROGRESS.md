@@ -1,8 +1,8 @@
 # Sync Run 持久化 item receipt 与游标状态查询实施进度
 
-> **状态**：隔离特性分支最终验收完成，待 Git 交付
+> **状态**：已完成、已合入并推送 `main`
 >
-> **对应规划**：[NEXT_HIGH_VALUE_FEATURES_PLAN.md](NEXT_HIGH_VALUE_FEATURES_PLAN.md)
+> **对应规划**：[2026-08-26_SYNC_RUN_ITEM_RECEIPTS_PLAN.md](2026-08-26_SYNC_RUN_ITEM_RECEIPTS_PLAN.md)
 >
 > **规划基线**：`main` / `origin/main` @ `67f69bfe`（2026-08-26）
 >
@@ -34,7 +34,7 @@
 - [x] Slice D：双语长青文档。
 - [x] 基本硬门槛与交付前完整验收。
 - [x] 同步 `origin/main` 后最终完整复验。
-- [ ] 推送特性分支、合入并推送 `main`、清理 worktree。
+- [x] 推送特性分支、合入并推送 `main`、清理 worktree。
 
 ## 2. 已冻结的关键决策
 
@@ -102,11 +102,11 @@
 | 2026-08-26 深夜 | 最终远端基线 | 当前实现已提交为 `ff45de00`；fetch 后 `origin/main` 仍为 `82cf3db5`，且是特性分支祖先；显式 merge 返回 `Already up to date` | READY | 最终复验基线 `ff45de00` + 本行进度记录；无远端冲突或额外代码变化 |
 | 2026-08-26 深夜 | 最终业务 Client 生命周期复验 | 聚焦后端/合同 137 tests、PostgreSQL V1-V51、Maven 编译门槛、WebUI typecheck/Vitest 218/build、无截图 Mock Playwright、文档/锁/密钥/diff、251 条真实 HTTP/WebUI 断言、服务故障恢复 | PASS（16/16） | `.verification/business-client-readiness/20260826-sync-run-receipts-final/summary.md` |
 | 2026-08-26 深夜 | 最终真实 LLM/full-stack 复验 | PostgreSQL V1-V51、Maven 编译与全量测试、WebUI 全门槛、无截图 Mock Playwright、双实例真实全栈、真实原生/OpenAI-compatible JSON/SSE | PASS（13/13） | `.verification/managed-api-principals/20260827-001913/summary.md`；5 次 provider 调用，read-only 与幂等 replay 均为 0 额外调用，轮换后 principal continuity=true |
+| 2026-08-26 深夜 | Git 交付与清理 | 特性分支提交并推送，使用独立 merge commit 合入并推送 `main`，确认远端一致后移除隔离 worktree | PASS | feature `63d41261`；`main == origin/main == 4ddde497`；feature commit 是 `main` 祖先 |
 
 ## 5. 恢复入口
 
-规划 checkpoint 与实现提交均已完成。Slice A/B/C/D、定向与全量测试、认证 Sync Run
-HTTP acceptance、业务 Client 生命周期、双实例真实全栈、真实 LLM/provider 以及双语
-长青文档门禁均已通过；最终复验基线为 `ff45de00`，`origin/main` 仍为 `82cf3db5`。
-下一步只需提交本进度账本、推送特性分支、合入并推送 `main`，随后确认工作区干净并安全
-移除隔离 worktree。
+本轮已完成。稳定契约已经同步到双语 REST API、外部同步 Client 指南、业务接入指南、
+架构、项目上下文、配置、测试、发布检查和 TODO；特性分支已合入并推送 `main`，隔离
+worktree 已安全移除。本文与对应规划只保留历史追溯价值，后续事实以代码、迁移和双语
+长青文档为准。

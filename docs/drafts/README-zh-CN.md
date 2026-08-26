@@ -32,12 +32,7 @@
 
 ## 当前活跃规划
 
-当前活动规划：
-
-- [Sync Run 持久化 item receipt 与游标状态查询实施规划](NEXT_HIGH_VALUE_FEATURES_PLAN.md)
-- [对应实施进度](NEXT_HIGH_VALUE_FEATURES_PROGRESS.md)
-
-本轮规划正在准备和审查；通过规划 `3/3` 后进入隔离 worktree 实施。
-完成实施、验收和长青文档同步后，才会按生命周期规则移入历史归档。
+当前没有活动规划。创建下一轮规划时，在完成代码与文档探索后使用稳定文件名写入本目录，
+并在本节增加近距离入口。
 
 已完成、已停止和被替代的材料可从[历史归档](archive/README-zh-CN.md)追溯。

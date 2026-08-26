@@ -38,15 +38,9 @@ Active plans are listed here and in `docs/index*`.
 
 ## Current Active Plans
 
-Current active plans:
-
-- [Durable Sync Run item receipts and cursor status queries](NEXT_HIGH_VALUE_FEATURES_PLAN.md)
-- [Implementation progress](NEXT_HIGH_VALUE_FEATURES_PROGRESS.md)
-
-This plan is being prepared and reviewed. Implementation starts in an isolated
-worktree after planning reaches `3/3`. It will move to the historical archive
-only after implementation, acceptance, and evergreen-document updates are
-complete.
+There is currently no active plan. After code and documentation exploration,
+the next planning round should use stable filenames in this directory and add
+nearby links in this section.
 
 Completed, stopped, and superseded materials remain available in the
 [historical archive](archive/README.md).

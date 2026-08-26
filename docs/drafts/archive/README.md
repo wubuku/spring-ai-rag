@@ -77,6 +77,8 @@ relevant evergreen guide/reference, `docs/TODO*`, and the
   `2026-08-26_BUSINESS_BINDING_CAPABILITY_PROFILES_*`
 - Managed-principal idempotent provisioning and runtime capability discovery:
   `2026-08-26_MANAGED_PROVISIONING_CAPABILITY_DISCOVERY_*`
+- Durable Sync Run item receipts, status filtering, and stable terminal-run
+  cursor traversal: `2026-08-26_SYNC_RUN_ITEM_RECEIPTS_*`
 
 This list is only an aid for historical discovery. It does not state current
 priority or capability status.
