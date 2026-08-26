@@ -6,9 +6,10 @@
 >
 > **规划基线**：`main` / `origin/main` @ `0abc667e`（2026-08-26）
 >
-> **实施分支**：规划完成后从最新本地 `main` 新建；当前尚未创建
+> **实施分支**：`feat/managed-provisioning-capability-discovery-20260826`
 >
-> **实施 worktree**：规划完成后创建；当前尚未创建
+> **实施 worktree**：
+> `/Users/yangjiefeng/.hermes/workspace/spring-ai-rag-managed-provisioning-capability-discovery`
 
 本文是跨会话恢复账本，不是稳定架构事实。不得记录 raw credential、完整
 `Idempotency-Key`、Authorization、API Key、完整请求体、业务 payload 或外部项目路径。
@@ -22,8 +23,8 @@
 - [x] 已核对现有 `IdempotencyKeyValidator`、Chat 幂等错误码、API principal 认证和
   WebUI create retry 相关实现。
 - [x] 完成本规划三轮无修改审查。
-- [ ] 提交并推送规划，建立保护 checkpoint。
-- [ ] 创建最新 `main` 基础的隔离特性 worktree。
+- [x] 提交并推送规划，建立保护 checkpoint。
+- [x] 创建最新 `main` 基础的隔离特性 worktree。
 - [ ] 实施 API、迁移、测试、脚本和文档。
 - [ ] 完成基本硬门槛和必要真实服务验收。
 - [ ] 完成实现三轮无修改审查。
