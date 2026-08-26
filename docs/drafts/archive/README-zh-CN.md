@@ -55,5 +55,7 @@
   `2026-08-26_OPERATION_SCOPED_API_CAPABILITIES_*`
 - 业务 binding 能力画像、通用 Client 生命周期与真实模型发布验收闭环：
   `2026-08-26_BUSINESS_BINDING_CAPABILITY_PROFILES_*`
+- 托管 principal 幂等 provisioning 与运行时能力发现：
+  `2026-08-26_MANAGED_PROVISIONING_CAPABILITY_DISCOVERY_*`
 
 该列表只帮助历史定位，不代表优先级或当前能力状态。

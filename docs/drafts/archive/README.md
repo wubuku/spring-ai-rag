@@ -75,6 +75,8 @@ relevant evergreen guide/reference, `docs/TODO*`, and the
 - Business-binding capability profiles, generic Client lifecycle acceptance,
   and real-provider release closure:
   `2026-08-26_BUSINESS_BINDING_CAPABILITY_PROFILES_*`
+- Managed-principal idempotent provisioning and runtime capability discovery:
+  `2026-08-26_MANAGED_PROVISIONING_CAPABILITY_DISCOVERY_*`
 
 This list is only an aid for historical discovery. It does not state current
 priority or capability status.

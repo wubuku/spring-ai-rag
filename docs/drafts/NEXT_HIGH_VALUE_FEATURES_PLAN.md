@@ -1,751 +1,695 @@
-# 托管调用方幂等 provisioning 与运行时能力发现实施规划
+# Sync Run 持久化 item receipt 与游标状态查询实施规划
 
-> **状态**：规划已完成，待实施
+> **状态**：规划审查 `3/3` 通过，尚未实施
 >
 > **规划日期**：2026-08-26
 >
-> **规划基线**：`main` / `origin/main` @ `0abc667e`；Spring Boot `3.5.16`；
-> Spring AI `1.1.8`；Java `21`；Flyway `V1-V49`
+> **规划基线**：`main` / `origin/main` @ `67f69bfe`；Spring Boot `3.5.16`；
+> Spring AI `1.1.8`；Java `21`；Flyway `V1-V50`
 >
 > **规划工作区**：
 > `/Users/yangjiefeng/.hermes/workspace/spring-ai-rag-main-delivery`
 >
-> 本文是当前仓库的单语实施规划。它只描述通用 RAG 服务能力，不依赖任何外部项目的名称、
-> 私有协议、领域模型或部署背景。稳定行为在实施和验收完成后提升到双语长青文档。
+> 本文是当前仓库的单语过程文档。它描述通用大规模同步 Client 的可恢复状态需求，不依赖
+> 任何外部项目的名称、领域模型、私有协议或部署背景。实施完成后，稳定事实提升到双语
+> 长青文档，本文与进度账本归档。
 
 ## 1. 执行摘要
 
-本轮补齐托管 API principal 控制面的两个直接生产缺口：
-
-1. **principal provisioning 幂等**：为 `POST /api/v1/rag/api-keys` 增加可选
-   `Idempotency-Key`。网络超时或调用方丢失响应后，调用方可以安全重试，而不会重复创建
-   principal。系统只持久化幂等键哈希、规范化请求指纹和结果元数据，绝不持久化或重放
-   raw credential。
-2. **运行时能力发现**：增加一个认证的、只读的、版本化的 capability discovery endpoint，
-   让后端调用方能够从部署中的实例发现实际可用的协议、授权、Collection、结构化记录、
-   异步派生和 binding 约束，而不必把 OpenAPI、Git SHA、离线清单和人工约定拼接成一套
-   隐含判断。
-
-这两个能力属于同一条外部后端集成控制面：前者保证 operator 自动化创建稳定、可对账的
-principal，后者保证调用方在启动或升级时能以机器可读合同确认服务能力。它们不改变现有
-JSON Record、Chat、Collection ACL、embedding job 或 tool calling 的业务语义。
-
-### 1.1 本轮交付结果
-
-- `POST /api/v1/rag/api-keys` 支持可选单值 `Idempotency-Key`；
-- 首次成功返回 `201`、raw credential 一次性展示、`Cache-Control: no-store`；
-- 同一 owner、同一幂等键、同一规范化请求的精确重试返回稳定元数据，不返回
-  `rawKey`，并带 `X-RAG-Idempotent-Replay: true`；
-- 同一幂等键对应不同请求返回 `409 IDEMPOTENCY_KEY_REUSED`；
-- 同一幂等键的并发首请求由数据库唯一约束协调；竞争请求在有界次数内重新读取胜者，
-  不对外伪造一个没有持久事实支撑的 `IN_PROGRESS` 状态；
-- 幂等账本以 requester principal 归属，root 使用固定 environment-root owner；不同
-  requester 不能通过碰撞的幂等键读取或影响对方的 provisioning 结果；
-- capability discovery endpoint 返回稳定的协议版本、实际 capability、限制、失败语义
-  和 binding 合同，不返回 secret、hash、数据库细节、provider 凭据或业务数据；
-- WebUI 不执行 provisioning 幂等流程，也不接收或保存新的幂等键；管理界面继续保持
-  raw credential 只在创建/轮换成功响应中展示一次。WebUI 的 TypeScript 不因新服务端
-  字段而破坏构建；
-- 双语长青文档补充 provisioning retry 和 capability discovery 的公共契约，TODO、
-  REST API、测试和开发者参考同步更新。
-
-### 1.2 关键安全结论
-
-V48 已加入数据库约束 `rag_api_key.api_key IS NULL`。因此本轮禁止以下方案：
-
-- 在幂等表保存 raw credential；
-- 对 raw credential 做可逆加密后保存；
-- 从 root secret、幂等键或请求指纹确定性推导 raw credential；
-- replay 时重新生成一个不同 credential 并声称它是原始结果；
-- 通过日志、响应 snapshot、测试摘要或 capability 文档泄露 secret。
-
-原始 credential 丢失后的恢复路径是：从首次响应之外无法取回 secret；operator 使用稳定
-`principalId` 或创建响应中的标识调用既有 rotate endpoint，重新在一次响应边界内保存新
-credential。幂等 replay 明确告诉调用方 secret 不可用，而不是伪造可恢复的 secret。
-
-## 2. 当前基线与问题定义
-
-### 2.1 已核对的认证与 provisioning 事实
-
-当前认证链为：
+本轮为已有 Document Sync Run 增加**授权后的持久化 item receipt/status 查询**：
 
 ```text
-ApiKeyAuthFilter
-  -> environment root / database credential
-  -> immutable AuthenticatedApiPrincipal
-  -> central capability filter
-  -> controller
+GET /api/v1/rag/document-sync-runs/{runId}/items
 ```
 
-当前托管创建路径：
+当前 Sync Run 已经把每个 manifest item 的外部身份、请求 fingerprint、当前状态、错误、
+document ID 和最近处理时间持久化到 `rag_document_sync_run_items`。但这些逐项事实只在
+`batch-upsert` 的同步响应中返回；响应丢失、Client 重启或 run 包含很多 batch 时，公开 API
+只能查询 run 级状态，不能分页列出当前失败项、确认某项是否已经落地，或形成可恢复的
+运营对账。
+
+新增能力直接读取现有权威 ledger，不复制正文、JSONB payload、lease token 或 credential：
+
+1. 按 run + Collection binding 授权；
+2. 按当前 item 状态可选过滤；
+3. 使用 `seen_at + external_id` 的 opaque keyset cursor 有界分页；
+4. 返回当前 item 状态汇总，明确区别于已有 run 级累计处理结果计数；
+5. 对 terminal run 提供稳定遍历；active run 只提供 eventually-consistent 观察，并要求
+   调用方在终态后从头复扫，避免把分页 cursor 误当作跨事务快照；
+6. 在 runtime capability contract 中声明该可选能力；
+7. 通过 V51 索引、真实 PostgreSQL、真实 HTTP、权限合同和完整构建门槛验证。
+
+这比新建另一套通用 mutation operation 表风险更低：Sync Run 已经具备稳定 run identity、
+Collection/namespace binding、item fingerprint、失败重试和 durable 状态，本轮只补齐读取
+控制面，不改变 mutation、CAS、tombstone、embedding 或 lease 语义。
+
+## 2. 为什么这是下一批高价值功能
+
+### 2.1 已交付能力排除了旧候选
+
+截至基线 `67f69bfe`，以下生产接入缺口已经交付：
+
+- stable principal、versioned credential、即时吊销和共享 PostgreSQL quota；
+- `RAG_READ` / `RAG_WRITE` 操作级强制授权；
+- 按职责创建 restricted principal；
+- API principal 可选 `Idempotency-Key` provisioning；
+- `/integration-capabilities` 机器可读运行时合同；
+- JSON Record 的外部三元身份、opaque revision、CAS、exact replay、tombstone/restore；
+- bounded Document Sync Run、item fingerprint ledger、失败重试和 missing preview/complete。
+
+因此，继续重复设计授权、provisioning 或 capability discovery 不再是高价值工作。真正剩余的
+可恢复性缺口是：已有 durable item ledger 没有公开、授权、可扩展的读取 API。
+
+### 2.2 当前失败场景
 
 ```text
-POST /api/v1/rag/api-keys
-  -> require environment root (root mode)
-  -> resolve allowedCollectionKeys to internal IDs
-  -> ApiKeyManagementService.generateManagedKey(...)
-  -> create principal + credential hash in one transaction
-  -> 201 + rawKey
+client -> POST run/{id}/batch-upsert (100 items)
+server -> commits item states
+network X response lost
+client restarts
 ```
 
-已核对的代码与文档事实：
+Client 当前只有三种选择：
 
-- `ApiKeyController` 目前没有读取 `Idempotency-Key`；
-- `ApiKeyManagementService.createPrincipal` 每次都会随机生成新的 principal/key ID 和
-  raw credential；
-- `RagApiPrincipal` / `RagApiKey` 只保存 credential hash，不保存 raw credential；
-- V48 的 `ck_rag_api_key_plaintext_forbidden` 强制 `api_key IS NULL`；
-- `IdempotencyKeyValidator` 已为 Chat、Document relocation 等公共语义提供单值、可见
-  ASCII、1-255 字符和 SHA-256 规则；
-- `ChatTurnOperationService` 已有 `IDEMPOTENCY_KEY_REUSED`、`IDEMPOTENCY_OPERATION_IN_PROGRESS`
-  和 bounded retry-after 语义，但其 operation 表是 Chat 专用，不应被 provisioning
-  隐式复用；
-- `ApiCapabilityFilter` 将 API key management 和 identity 路径排除在数据面 capability
-  enforcement 之外，root 是管理端点的当前授权边界；
-- `/api/v1/rag/auth/me` 已能返回当前数据库 principal 的 role、capability、access mode
-  和 allow-list，但它不是完整协议能力目录；
-- `business-client-binding-preflight.sh` 已在客户端侧验证一部分部署能力，但当前还需
-  结合 OpenAPI、Git SHA 和固定脚本知识，无法仅从运行实例得到版本化能力声明；
-- WebUI 的 Axios client 对网络/5xx 有自动 retry；管理界面的 create mutation 当前没有
-  发送幂等键，无法安全区分同一表单提交的自动重试。
+1. 重放整批。精确 fingerprint 可以保证 mutation 幂等，但会增加请求、日志和数据库工作，
+   且无法直接列出 run 中其他历史失败项；
+2. 逐个读取业务 Document。它需要重新拼装外部身份，并且 Document 当前状态不等于该 run
+   item 的处理状态；
+3. 只读 run 级 `failedCount`。该字段是累计处理结果计数，失败项重试成功后不会倒减，不能
+   代表 ledger 中“当前仍失败”的 item 数量。
 
-近距离事实入口：
+这些做法都无法形成可靠的批量 receipt/status 工作流。
 
-- [REST API：认证和 API Key 管理](../rest-api-zh-CN.md#认证)
-- [业务服务接入指南](../business-client-integration-zh-CN.md)
-- [项目上下文：安全与 Collection ACL](../project-context-zh-CN.md#安全与-collection-acl)
+### 2.3 为什么优先扩展 Sync Run
+
+- V42 已有 durable run/item schema 和安全边界；
+- item ledger 不保存正文或 payload，符合低敏 receipt 目标；
+- run 已绑定 `collection_id + source_namespace`，可复用现有 ACL 与 anti-enumeration；
+- item 主键 `(run_id, external_id)` 和 `seen_at` 足以为 terminal run 建立稳定 keyset
+  cursor；active run 的限制单独写入并发合同；
+- `batch-upsert` 已有 exact replay 和 FAILED retry，不需要再引入第二套幂等状态机；
+- 大规模增量投递仍可继续使用普通 JSON Record upsert；只有需要完整 manifest、逐项 receipt
+  或 missing reconciliation 的工作流才启用 Sync Run。
+
+## 3. 当前代码、schema 与契约事实
+
+### 3.1 主链
+
+```text
+DocumentSyncRunController
+  -> DocumentSyncRunService
+     -> rag_document_sync_runs
+     -> rag_document_sync_run_items
+     -> DocumentMutationService
+     -> CollectionIdentityResolver + ApiKeyCollectionAccess
+```
+
+代码锚点：
+
+- `spring-ai-rag-core/src/main/java/com/springairag/core/controller/DocumentSyncRunController.java`
+- `spring-ai-rag-core/src/main/java/com/springairag/core/service/DocumentSyncRunService.java`
+- `spring-ai-rag-core/src/main/resources/db/migration/V42__document_sync_runs.sql`
+- `spring-ai-rag-api/src/main/java/com/springairag/api/dto/DocumentSyncRunItemResponse.java`
+- `scripts/verify-document-sync-runs.sh`
+
+近距离长青入口：
+
+- [REST API：权威来源全量快照对账](../rest-api-zh-CN.md#权威来源全量快照对账)
+- [外部文档同步 Client 指南](../external-document-sync-client-guide-zh-CN.md)
+- [配置参考：document lifecycle](../configuration-zh-CN.md#文档生命周期配置)
+- [测试指南](../testing-guide-zh-CN.md)
 - [交付工作流](../delivery-workflow-zh-CN.md)
-- `spring-ai-rag-core/src/main/java/com/springairag/core/controller/ApiKeyController.java`
-- `spring-ai-rag-core/src/main/java/com/springairag/core/service/ApiKeyManagementService.java`
-- `spring-ai-rag-core/src/main/java/com/springairag/core/chat/IdempotencyKeyValidator.java`
-- `spring-ai-rag-core/src/main/resources/db/migration/V48__managed_api_principals_and_shared_quota.sql`
-- `spring-ai-rag-core/src/main/resources/db/migration/V49__operation_scoped_api_capabilities.sql`
 
-### 2.2 问题场景
+### 3.2 V42 item ledger 已保存的事实
 
-没有幂等键时，以下时序无法安全处理：
+`rag_document_sync_run_items` 当前列：
 
-```text
-operator/client -> POST create
-server          -> principal + credential committed
-network         X response lost
-operator/client -> retry POST create
-server          -> creates a second principal and second credential
-```
+| 列 | 语义 |
+|---|---|
+| `run_id` | 所属 Sync Run |
+| `external_id` | run namespace 内的外部身份；与 `run_id` 组成主键 |
+| `document_kind` | `TEXT` / `JSON_RECORD` |
+| `item_fingerprint` | canonical item 请求摘要 |
+| `source_revision` | 本次 item 的 opaque 来源 revision |
+| `document_id` | 成功或跳过后可关联的当前 Document |
+| `status` | `APPLIED` / `UNCHANGED` / `SKIPPED_NEWER_MUTATION` / `FAILED` |
+| `error_code` / `error_message` | error code 与最多 500 字符的失败信息；现有写路径只截断，历史行不保证已脱敏 |
+| `seen_at` | 最近一次处理或重试落账时间 |
 
-调用方既不能凭名称判断哪一个 principal 是本次结果，也无法重新取得第一条 credential。
-结果可能是 orphan principal、错误 binding 或不必要的权限对象。
+表中没有 content、retrieval text、JSONB payload、metadata、lease 明文、credential 或
+provider secret。本轮不得增加这些字段。
 
-没有机器可读 capability discovery 时，调用方必须自行假设：
+### 3.3 当前计数语义
 
-- 当前服务是否支持 operation-scoped capability；
-- 当前服务是否支持 JSON Record CAS、tombstone/restore、`payloadContains`；
-- ASYNC embedding 的 mutation/readiness 语义；
-- capability profile、Collection key 限制和 binding preflight 约束；
-- 服务端协议版本和需要重新执行的合同测试范围。
+`rag_document_sync_runs.applied_count`、`unchanged_count`、`skipped_count`、
+`failed_count` 在每次 item 进入相应结果时递增。FAILED item 之后成功重试时，历史
+`failed_count` 不倒减，新的成功结果继续递增。因此这些字段是**累计处理结果计数**，不是
+当前 ledger 状态分布。
 
-这些假设会随部署版本漂移，且调用方可能在能力不满足时继续发送数据。
+本轮不重定义或回写这些既有字段，避免破坏历史响应。新 item page 单独返回从 item ledger
+实时聚合的 `currentSummary`，明确表示当前每个唯一 item 的最终可见状态。
 
-## 3. 目标、非目标与冻结决策
+### 3.4 当前授权和 feature flag
 
-### 3.1 目标
+- `rag.document-lifecycle.sync-runs-enabled=false` 默认关闭全部 Sync Run API；
+- run 的 begin/batch/preview/complete/abort 使用 Collection ACL，每次操作重新授权；
+- `GET` 路径由中央 `ApiCapabilityFilter` 自动要求 `RAG_READ`；
+- restricted caller 对未授权 Collection 统一得到 `403`；授权 Collection 下 run ID 或
+  namespace 不匹配返回 `404`；
+- status 查询不需要 `X-RAG-Sync-Lease`。lease 只证明 active run mutation 所有权，不应成为
+  读取 receipt 的长期 secret；
+- `/integration-capabilities` 已能反映 `documentSyncRuns` feature flag，但尚未声明 item
+  receipt/status 查询能力。
 
-1. 为 root-managed provisioning 提供可选的 HTTP 幂等键，保持没有该 header 的旧调用方
-   继续得到既有 `201 + rawKey` 语义。
-2. 以服务端根据认证上下文生成的 `requester_owner + idempotency_key_hash` 唯一定位一个
-   provisioning operation：root、数据库 principal、legacy static 和 auth-disabled
-   分别使用稳定的服务端 owner 映射。
-3. 对请求使用服务端有效语义生成 canonical fingerprint，而不是直接使用 JSON 文本。
-4. 在数据库约束和条件写入保护下支持并发首请求；不得使用 `FOR UPDATE`、`SKIP LOCKED`
-   或 PostgreSQL advisory lock。
-5. 精确重放只返回结果 metadata，显式标记 `secretAvailable=false` 和
-   `idempotentReplay=true`，并提供 `principalId`、当前 credential ID/version 和恢复
-   所需的稳定标识。
-6. 以版本化 JSON 提供认证 capability discovery，且输出只包含低敏、可审计的能力和限制。
-7. 让客户端可以在服务启动、部署 binding 和升级时依据 capability endpoint fail closed。
-8. 通过 MockMvc、PostgreSQL 并发集成、真实 HTTP 合同和 WebUI type/build 证明契约。
+## 4. 目标、非目标与冻结决策
 
-### 3.2 非目标
+### 4.1 目标
 
-- 不持久化、加密或确定性推导 raw credential；
-- 不改变 credential rotation、revoke、policy CAS、ACL、quota、Chat 或 JSON Record 语义；
-- 不把历史无幂等创建自动合并到新账本；历史 orphan principal 由 operator 对账；
-- 不为普通业务 principal 开放创建、列出或修改其他 principal；当前管理授权边界保持不变；
-- 不把 capability endpoint 变成 OpenAPI 的替代品，不返回完整 schema、SQL、数据库版本、
-  provider 配置、模型 credential、业务数据或部署 secret；
-- 不实现 OAuth/OIDC、tenant hierarchy、secret manager、收费/计费、distributed lock 或
-  跨服务 provisioning saga；
-- 不让 capability endpoint 根据调用方提供的 principal ID 读取别人的能力；
-- 不要求本轮真实 Chat/LLM 调用来证明未触及的 Chat 行为；真实 provider 门禁只在既有
-  全量 readiness gate 要求且环境可用时执行；
-- 不在 WebUI 中提供 capability endpoint 的管理面板；该 endpoint 是后端集成契约。
+1. 新增授权的 Sync Run item page API，支持 terminal 和 active run。
+2. 支持可选 `status` 过滤，首版枚举与 ledger 当前四种状态完全一致。
+3. 使用 opaque keyset cursor，不使用 OFFSET 扫描大 run。
+4. 返回当前唯一 item 状态汇总和 bounded page。
+5. 保持响应低敏：不返回 fingerprint、正文、payload、metadata、lease/hash 或 credential。
+6. 明确 active run 的并发分页语义和 terminal run 的稳定语义。
+7. 通过 runtime capability endpoint 暴露 feature availability。
+8. 用 V51 索引保证按 run、status、cursor 的查询路径可预测。
+9. 对新写入、即时 batch 响应和 durable receipt 统一执行敏感信息 masking；读取时再次
+   masking，覆盖 V42 以来可能存在的历史未脱敏行。
+10. 更新现有一键 Sync Run 验收脚本，而不是新建平行脚本。
 
-### 3.3 推荐默认与可逆边界
+### 4.2 非目标
+
+- 不新增通用异步 mutation queue、outbox、webhook 或 callback；
+- 不为普通 `json-records/batch-upsert` 新建另一套 operation/receipt ledger；
+- 不保存或重放 batch 原始响应；
+- 不改变 Sync Run begin、lease、item fingerprint、mutation、missing preview 或 complete；
+- 不把 receipt 状态等同于 embedding readiness；embedding 继续使用 lifecycle/readiness/job
+  API；
+- 不允许按 run ID 绕过 Collection/namespace binding；
+- 不允许客户端通过 cursor 注入 SQL、跨 status 复用内部位置或读取任意 external ID；
+- 不在 WebUI 增加 Sync Run 页面；该能力面向后端同步 Client 和运维自动化；
+- 不引入显式悲观锁、`SKIP LOCKED` 或 advisory lock；
+- 不在 metrics tag、日志摘要或验证 manifest 中写 externalId。
+
+### 4.3 推荐默认与可逆边界
 
 | 事项 | 冻结默认 | 理由与可逆边界 |
 |---|---|---|
-| 幂等 header | 可选 `Idempotency-Key` | 旧调用方兼容；未来可在新 API 版本要求必填 |
-| 幂等键规则 | 复用 `IdempotencyKeyValidator` | 避免不同 endpoint 出现不一致的 header 语义 |
-| 幂等 owner | 按 3.4 的服务端身份映射生成 stable owner | rotation 不改变 owner；未来 federation 可增加 owner 类型 |
-| replay 状态码 | 首次 `201`；精确 replay `200` | 反映未创建新资源；未来可新增 response header 不破坏 body |
-| replay secret | 永不返回；`secretAvailable=false` | V48 明文禁存；只能 rotate 恢复 |
-| 并发首请求 | 数据库唯一约束 + 有界重试；无法确认结果时 `503` | 不持久化未完成 placeholder，避免崩溃后留下无法恢复的“进行中”资源 |
-| 账本 retention | 默认 400 天，配置范围 7-3650 天 | 防止无限增长；幂等保证只覆盖账本保留期，调用方必须在该期限内重试 |
-| cleanup 方式 | 定时/启动时批量删除已完成且超过 retention 的条目 | 不影响当前请求；批量大小有界，失败可重试 |
-| discovery authentication | 鉴权启用或 root mode 时需要现有 API credential；auth-disabled 仅保留本地开发兼容语义 | capability 与当前 principal 的可用操作有关；生产部署不应依赖 auth-disabled |
-| discovery caching | `Cache-Control: no-store` | capability 可能随部署配置和 policy 变化，调用方应按启动/升级重新读取 |
-| protocol version | 服务端维护整数 major/minor 字符串，首版 `1.0` | 不把 Git SHA 当协议版本；minor 向后兼容，major 需要重新合同验收 |
+| endpoint | `GET /document-sync-runs/{runId}/items` | 是既有 run 资源的只读子资源 |
+| binding 参数 | 必填 `collectionKey`，`sourceNamespace` 默认 `default` | 与既有 `GET /{runId}` 一致，阻止裸 run ID 枚举 |
+| 状态过滤 | 可选单个 `status` | 首版保持查询与索引简单；未来可增加多值过滤 |
+| page size | `limit=100`，范围 `1..200` | 足以覆盖当前 batch 上限并保持响应/SQL 有界 |
+| cursor | URL-safe Base64、无 padding、版本化 JSON payload | 绑定 run/status，隐藏内部结构但不提供加密；不得承载 secret，未来可升级版本 |
+| 排序 | `seen_at ASC, external_id ASC` | 对 terminal run 稳定；active run 中把通常的重试移动到后续位置 |
+| active scan | eventually consistent，可能重复或遗漏并发变化 | 仅用于观察；Client 必须在 terminal 后无 cursor 从头复扫 |
+| summary | 每次从当前 ledger `GROUP BY status` | 与累计 run counters 分离，保证当前失败项可判断 |
+| retention | 沿用 Sync Run 现有生命周期 | 本轮不引入自动删除历史 run，后续单独规划 |
+| feature flag | 复用 `sync-runs-enabled` | receipt 不应在主功能关闭时单独暴露 |
 
-### 3.4 Provisioning owner 与语义规范化
+## 5. HTTP 契约
 
-幂等账本的 owner 由服务端认证上下文决定，绝不由请求体、header 或 query 参数提供。
-首版 owner 映射固定如下：
-
-| 当前请求身份 | 幂等 owner |
-|---|---|
-| `ENVIRONMENT_ROOT` | `root:environment-root` |
-| `DATABASE_API_KEY` | `db:{principalId}`，使用认证快照中的 stable principal ID |
-| `LEGACY_STATIC` | `legacy:static` |
-| auth-disabled 本地开发请求 | `local:auth-disabled` |
-
-legacy/static 和 auth-disabled 只是兼容部署投影：同一部署中的调用方共享对应 owner，
-不能借此获得生产环境的身份隔离；启用 root 或数据库 principal 后，owner 由新的认证身份
-决定。owner 字符串只在服务端生成和比较，不能被调用方覆盖。
-
-canonical fingerprint 必须基于 controller/service 已完成授权解析后的**有效语义**构造：
-
-- `allowedCollectionKeys` 只作为输入解析，fingerprint 只使用排序、去重后的内部
-  `allowedCollectionIds`；同一 Collection 通过 key 或 numeric ID 表达时必须命中同一账本；
-- `capabilities` 使用 `ApiCapabilitySupport` 归一化后的有效列表；
-- `null` 与“无限制”在允许的字段上采用同一 canonical 表示；
-- 字段排序、数组排序和 UTF-8 JSON 编码稳定；不会把原始 key header、原始 JSON 字段顺序、
-  URL、Authorization、provider 配置或客户端未生效字段纳入 fingerprint。
-
-## 4. 对外 HTTP 契约
-
-### 4.1 Create API 的幂等请求
-
-请求仍为：
+### 5.1 请求
 
 ```http
-POST /api/v1/rag/api-keys
-Idempotency-Key: provision-2026-08-26-0001
-X-API-Key: <environment-root>
-Content-Type: application/json
+GET /api/v1/rag/document-sync-runs/{runId}/items
+    ?collectionKey=customer-42:records:v1
+    &sourceNamespace=default
+    &status=FAILED
+    &limit=100
+    &cursor=<opaque>
+X-API-Key: <business credential>
 ```
 
-`Idempotency-Key`：
+参数：
 
-- 至多一个 header 值；
-- trim 后 1-255 个可见 ASCII 字符；
-- 不允许逗号、空白或控制字符；
-- header 原文不进入数据库；数据库只保存 SHA-256 小写十六进制摘要；
-- 同一个 raw header 经现有 OWS 规范化后才参与 hash。
+| 参数 | 规则 |
+|---|---|
+| `runId` | UUID path parameter |
+| `collectionKey` | 必填，1-128 visible ASCII；按当前 principal ACL 解析 |
+| `sourceNamespace` | 可选，默认 `default`；沿用现有 namespace 规则 |
+| `status` | 可选，四种 `DocumentSyncItemStatus` |
+| `limit` | 默认 100，范围 1-200 |
+| `cursor` | 可选，最多 1024 字符；非法、版本不支持或与 status filter 不匹配返回 400 |
 
-请求指纹使用 controller 完成 Collection key 解析、默认 capability 归一化和 delegated
-ACL 解析后的有效语义。canonical JSON 必须只使用解析后的内部 Collection ID，不使用原始
-`allowedCollectionKeys` 表达；必须稳定排序字段和 Collection ID，至少包含：
+状态码：
+
+- `200`：返回 page；
+- `400`：参数或 cursor 非法；
+- `401`：未认证；
+- `403`：当前 principal 无 `RAG_READ`，或 Collection 不在 allow-list；
+- `404`：授权 Collection 下没有该 run，或 namespace 不匹配；
+- `503 SYNC_RUNS_DISABLED`：feature flag 关闭。
+
+响应必须带 `Cache-Control: no-store`，因为 error 和 external identity 可能包含业务信息。
+
+### 5.2 响应
 
 ```json
 {
-  "name": "Indexer Service",
-  "expiresAt": "2027-12-31T23:59:00",
-  "allowedCollectionIds": [3, 7],
-  "capabilities": ["RAG_READ"],
-  "requestsPerMinute": 75,
-  "role": "NORMAL"
-}
-```
-
-不得把 raw credential、header 原文、URL、Authorization、provider 配置、日志字段或任意
-未持久化的客户端 metadata 放入 fingerprint。指纹计算采用 canonical UTF-8 JSON 的
-SHA-256；同一有效请求字段顺序不同仍视为同一请求。
-
-### 4.2 Create API 响应
-
-首次成功保持现有响应，并额外返回：
-
-```json
-{
-  "keyId": "rag_k_abc",
-  "principalId": "rag_k_abc",
-  "credentialVersion": 1,
-  "policyVersion": 1,
-  "rawKey": "rag_sk_<64 hex>",
-  "secretAvailable": true,
-  "idempotentReplay": false,
-  "currentCredentialActive": true,
-  "name": "Indexer Service",
-  "warning": "Save this key now — it will not be shown again."
-}
-```
-
-约束：
-
-- `201`；
-- `Cache-Control: no-store`；
-- `secretAvailable=true`，`idempotentReplay=false`；
-- `rawKey` 仅首个成功响应存在；
-- 旧客户端忽略新增字段仍可工作。
-
-精确 replay：
-
-```json
-{
-  "keyId": "rag_k_abc",
-  "principalId": "rag_k_abc",
-  "credentialVersion": 1,
-  "policyVersion": 1,
-  "rawKey": null,
-  "secretAvailable": false,
-  "idempotentReplay": true,
-  "currentCredentialActive": true,
-  "name": "Indexer Service",
-  "warning": "The principal already exists. The raw credential cannot be shown again; rotate the current credential if the original secret was not saved."
-}
-```
-
-约束：
-
-- `200`；
-- `X-RAG-Idempotent-Replay: true`；
-- `Cache-Control: no-store`；
-- `rawKey` 必须显式 JSON `null`，不能被全局 null inclusion 配置省略；
-- `secretAvailable=false`，`idempotentReplay=true`；
-- replay 的 `keyId` 和 `credentialVersion` 表示当前仍可用 credential 的 public ID/version；
-  账本中的首次 credential ID/version 仅用于审计，不应在 rotation 后继续被误报为 current；
-  不返回其他 principal 数据；
-- 如当前 principal 已在 replay 前被 revoked/expired，仍返回账本记录的资源 metadata，但响应
-  设置 `currentCredentialActive=false`，并把 `keyId`、`credentialVersion` 置为 `null`；
-  调用方必须转入 operator recovery，不得把 replay 当作可用 credential。
-- replay 只在对应账本记录仍处于 retention 期内时成立。记录被 cleanup 删除后，再次使用同一
-  owner/key 会按新的 provisioning 请求处理，可能创建新的 principal；调用方不得把该 key
-  当作永久去重标识，超出 retention 的重试应先由 operator 对账或改用新的 key。
-
-本轮不改变现有 ID 兼容约定：新建 principal 的 `principalId` 继续等于首个 credential
-的 `keyId`（当前生成格式均为 `rag_k_...`）；credential rotation 只生成新的 `keyId`，
-并保持 `principalId` 稳定。只有未来单独设计并迁移 principal ID namespace 时，才允许
-引入 `rag_p_...` 等新格式。
-
-### 4.3 冲突和失败
-
-| 条件 | HTTP | error code/header | 语义 |
-|---|---:|---|---|
-| key 的首请求并发提交 | 由服务端有界等待/重试后返回 `200` replay 或 `201` 首次结果；无法确认时 `503` | 不暴露没有 durable 状态依据的假 `IN_PROGRESS` |
-| 同 owner/key 对应不同 canonical fingerprint | 409 | `IDEMPOTENCY_KEY_REUSED` | 禁止把同一 key 重新用于另一资源 |
-| key 格式非法/多值 | 400 | `IDEMPOTENCY_KEY_INVALID` | 与 Chat 等 endpoint 一致 |
-| 幂等功能关闭但请求携带 key | 503 | `API_KEY_PROVISIONING_IDEMPOTENCY_DISABLED` | fail closed，不退回非幂等创建 |
-| service 事务失败且未提交结果 | 原有错误 | 原有错误码 | 失败记录可重试，不能留下“成功但无结果”的账本 |
-| 数据库故障读取/写入账本 | 503/500 | `SERVICE_UNAVAILABLE` 或 `DATABASE_ERROR` | 不创建第二个 principal，不绕过幂等 |
-
-本轮复用已有 `IDEMPOTENCY_KEY_INVALID`、`IDEMPOTENCY_KEY_REUSED`；provisioning 关闭需要新增
-专用 `API_KEY_PROVISIONING_IDEMPOTENCY_DISABLED`，不能复用标题明确为 Chat 的
-`IDEMPOTENCY_DISABLED`；并发竞争的内部重试次数默认 3，范围 1-8，每次重试采用有限退避，
-不能由客户端输入控制。已有 `IDEMPOTENCY_OPERATION_IN_PROGRESS` 继续服务 Chat 等已有
-operation 语义，本轮 provisioning 不使用它。
-
-### 4.4 Capability discovery endpoint
-
-新增：
-
-```text
-GET /api/v1/rag/integration-capabilities
-```
-
-认证：
-
-- 在启用鉴权或 root mode 时需要现有 API credential；auth-disabled 模式沿用当前服务的
-  公开本地开发语义，并将 principal 投影为 `LOCAL_AUTH_DISABLED`，生产部署不应依赖该模式；
-- root、数据库 principal、legacy static（在 legacy 模式）的身份语义沿用当前 `/auth/me`；
-- auth-disabled 模式不设置认证 request attribute，capability endpoint 应显式构造
-  `principalType=LOCAL_AUTH_DISABLED`、`principalRole=null`、`collectionAccessMode=UNRESTRICTED`
-  的开发投影；该投影只继承既有未鉴权 API 的本地语义，不表示生产调用方可以省略认证；
-- 数据库 NORMAL principal 只能看到其自身有效 capability 与“当前请求可使用”的合同；
-- endpoint 不接受 principal ID、Collection ID 或 Collection key 查询参数来切换观察对象。
-
-首版响应：
-
-```json
-{
-  "protocol": {
-    "name": "spring-ai-rag-integration",
-    "version": "1.0",
-    "apiVersion": "1.0.0"
-  },
-  "principal": {
-    "principalType": "DATABASE_API_KEY",
-    "principalRole": "NORMAL",
-    "capabilities": ["RAG_READ", "RAG_WRITE"],
-    "collectionAccessMode": "RESTRICTED",
-    "allowedCollectionKeys": ["customer-42:records:v1"]
-  },
-  "features": {
-    "provisioning": {
-      "idempotencyKey": true,
-      "replayReturnsSecret": false,
-      "rawCredentialShownOnce": true
-    },
-    "dataPlane": {
-      "collectionKey": true,
-      "jsonRecords": {
-        "upsert": true,
-        "search": true,
-        "payloadContains": true,
-        "revisionCas": true,
-        "exactReplay": true,
-        "tombstoneRestore": true
-      },
-      "embedding": {
-        "asyncPolicy": true,
-        "readinessEndpoint": true
-      },
-      "bindingPreflight": true
-    },
-    "optional": {
-      "documentSyncRuns": false,
-      "openAiCompatibility": false
+  "runId": "2e3be660-4c08-4d07-9607-7ccca4c0ae4e",
+  "runStatus": "ACTIVE",
+  "statusFilter": "FAILED",
+  "items": [
+    {
+      "externalId": "record-42",
+      "documentKind": "JSON_RECORD",
+      "status": "FAILED",
+      "documentId": null,
+      "sourceRevision": "opaque-r7",
+      "errorCode": "BAD_REQUEST",
+      "error": "jsonbPayload is required",
+      "seenAt": "2026-08-26T13:55:00Z"
     }
+  ],
+  "currentSummary": {
+    "total": 101,
+    "applied": 96,
+    "unchanged": 2,
+    "skippedNewerMutation": 1,
+    "failed": 2
   },
-  "limits": {
-    "maxCollectionKeysPerPrincipal": 100,
-    "collectionKeyMaxLength": 128,
-    "sourceNamespaceMaxLength": 128,
-    "externalIdMaxLength": 255,
-    "sourceRevisionMaxLength": 255
-  }
+  "limit": 100,
+  "hasMore": false,
+  "nextCursor": null
 }
 ```
 
-`principal` projection 固定如下：
-
-| 身份 | `principalType` | `principalRole` | `capabilities` | Collection access |
-|---|---|---|---|---|
-| environment root | `ENVIRONMENT_ROOT` | `null` | `RAG_READ`, `RAG_WRITE`, `API_KEY_MANAGE` | `UNRESTRICTED`，allow-list 为 `null` |
-| database API key | `DATABASE_API_KEY` | 实际 role | 认证快照中的 effective capability | 按实际 policy；restricted 必须返回完整 allow-list |
-| legacy static key | `LEGACY_STATIC` | `null` | `RAG_READ`, `RAG_WRITE` | `UNRESTRICTED`，allow-list 为 `null` |
-| auth-disabled 本地请求 | `LOCAL_AUTH_DISABLED` | `null` | `RAG_READ`, `RAG_WRITE` | `UNRESTRICTED`，allow-list 为 `null` |
-
-`bindingPreflight=true` 的含义是：该服务实例提供了预检脚本所需的服务端合同字段和
-只读探测路径；它不表示服务端执行或拥有调用方的预检脚本。调用方仍需在自己的部署流程
-中执行预检。
-
-冻结规则：
-
-- 顶层字段 `protocol`、`principal`、`features`、`limits` 是首版必需字段；
-- boolean 能力只描述已经由当前仓库实现和测试证明的行为；
-- `allowedCollectionKeys=null` 表示 unrestricted，restricted principal 必须返回完整
-  allow-list；无法完整解析策略时 endpoint 返回 `503`，不能返回部分数据；
-- capability endpoint 的 `principal` 不包含 credential ID、credential version、policy
-  version、hash、raw secret；如调用方需要 binding 版本，继续使用 `/auth/me`；
-- 不返回 active model/provider、database host/schema、Flyway 表、部署路径、环境变量、
-  LLM API key、工具 endpoint allow-list 或业务数据；
-- 列表顺序稳定；能力名和 feature key 只能新增，删除/改语义必须提升 major；
-- response `Cache-Control: no-store`；
-- OpenAPI 必须描述 response schema、认证、503 和字段语义。
-
-### 4.5 capability endpoint 与 `/auth/me` 的职责
-
-两者不合并：
-
-- `/auth/me`：当前 credential 的身份、版本、实际 policy 和 Collection allow-list；
-- `/integration-capabilities`：该实例对集成调用方承诺的协议能力、功能开关和限制；
-- 调用方先读取 capability contract，再读取 `/auth/me` 做身份/权限 binding，最后运行
-  Collection by-key probe 或既有 preflight。
-
-这样 capability contract 不需要重复暴露 credential 生命周期字段，也不把 `/auth/me` 变成
-不可演进的大型 feature catalog。
-
-## 5. 数据模型与并发设计
-
-### 5.1 Flyway V50
-
-新增 `rag_api_provisioning_operation`，建议字段：
-
-| 字段 | 类型/约束 | 用途 |
-|---|---|---|
-| `id` | `BIGINT` identity primary key | 内部行标识 |
-| `owner_id` | `VARCHAR(128)` not null | 3.4 定义的 root、database、legacy/static 或 auth-disabled stable owner |
-| `idempotency_key_hash` | `CHAR(64)` not null | SHA-256，不保存 header 原文 |
-| `request_fingerprint_sha256` | `CHAR(64)` not null | 有效请求 canonical fingerprint |
-| `principal_id` | `VARCHAR(64)` not null | 创建结果 stable principal |
-| `credential_id` | `VARCHAR(64)` not null | 首次创建结果 credential ID |
-| `credential_version` | `INTEGER` not null | 首次结果 credential version |
-| `created_at` | `TIMESTAMP` not null | operation 创建时间 |
-| `updated_at` | `TIMESTAMP` not null | 状态/审计时间 |
-| `completed_at` | `TIMESTAMP` nullable | 成功结果可 replay 的时间 |
-
-本轮只登记成功且已提交的 provisioning 结果；未成功的事务由数据库回滚，不写失败占位行。
-这使 retry 在首个事务失败后仍能重新尝试，而不会把 transient failure 永久封死。
-
 约束：
 
-- `UNIQUE(owner_id, idempotency_key_hash)`；
-- owner/key/fingerprint/principal/credential 长度和非空检查；
-- `credential_version > 0`；
-- `completed_at IS NOT NULL` 的成功记录才能被视为 replay；
-- `principal_id`、`credential_id` 使用现有 key 格式长度约束；
-- 外键可选：不对 `rag_api_principal` 使用默认 `ON DELETE` 级联，以免 cleanup 或历史
-  运维删除破坏 provisioning ledger；replay 对缺失结果返回 `503`，而不是创建第二资源。
+- `items` 只来自指定 run；
+- `statusFilter` 显式返回当前过滤条件，未过滤时为 `null`；
+- `currentSummary` 始终是 run 全部唯一 item 的当前状态分布，不受当前 page/status filter
+  限制；
+- `currentSummary` 的 total 与各状态计数使用 JSON integer / Java `long`，不复用 run 表的
+  `INTEGER` 累计计数类型；
+- `error` 使用 `SensitiveDataMaskingConverter.maskSensitiveData(...)` 后再截断到 500 字符；
+  receipt 读取时再次执行相同处理，避免历史行原样暴露；
+- 不返回 `itemFingerprint`、lease/hash、正文、payload、metadata 或 embedding provider
+  信息；
+- `embeddingAction` / `embeddingJobId` 不进入 durable receipt，因为 V42 ledger 没有保存
+  它们。Client 根据 `documentId` 使用 document lifecycle、Collection readiness 或
+  embedding job API 查询派生状态。
 
-不保存 canonical JSON 本文；只保存 fingerprint hash。审计需要时由无敏日志记录 owner、
-hash 前缀和资源标识，不能记录 header、请求体或 secret。
+### 5.3 Cursor
 
-### 5.2 事务顺序
+服务端 cursor codec 使用 UTF-8 canonical payload：
 
-首个 keyed create：
-
-```text
-1. Controller 验证 header、解析 collection keys、归一化 capabilities
-2. 计算 owner、canonical request、fingerprint
-3. 读取 owner+key 的已有 operation
-4. 已有 operation:
-   a. fingerprint 不同 -> KEY_REUSED
-   b. 成功 -> replay metadata
-   c. 未完成（本轮不会持久化此状态） -> 由数据库提交结果后重读
-5. 生成随机 principal ID、credential ID、raw credential
-6. 同一个短事务写 principal + credential hash + provisioning ledger（ledger 最后写入）
-7. 唯一约束竞争失败 -> 当前事务整体回滚；在事务外按有限退避重新读取 operation，并按
-   4a-4b 处理
-8. commit 后返回 201 + raw credential
+```json
+{
+  "v": 1,
+  "r": "2e3be660-4c08-4d07-9607-7ccca4c0ae4e",
+  "s": "FAILED",
+  "t": "2026-08-26T13:55:00Z",
+  "e": "record-42"
+}
 ```
 
-controller 解析得到的有效 request 必须在 service 内再次形成 canonical request，防止未来
-新增入口绕过 controller 时产生不同指纹；service 接收的内部
-`ManagedProvisioningRequest` 必须携带已解析的 Collection ID，不依赖再次解释外部 key。
-service 不接受 raw header，只接受 owner、经过验证的 idempotency key hash 和有效请求字段。
+使用 Jackson 解析/生成结构化 JSON，再编码为 URL-safe Base64 without padding；禁止使用
+分隔符拆分等 ad hoc parser。cursor 是不透明分页位置，不是授权 token：
 
-### 5.3 并发与事务边界
+- opaque 只表示 Client 不应依赖内部结构，不表示内容加密；Base64 payload 可被解码，
+  因此 cursor 按业务敏感数据处理；
+- 每次请求仍重新执行 principal、Collection、namespace 和 run binding 授权；
+- cursor 中 run ID 或 status 与当前请求不一致时返回 400；
+- 时间或 externalId 无法解析、长度超限、版本未知时返回 400；
+- cursor 原文不写入日志或数据库；
+- SQL 使用绑定参数和 row comparison，不拼接 cursor 内容。
 
-本轮不引入独立 `IN_PROGRESS` 持久状态，也不在数据库中创建未完成 placeholder。由于
-principal、credential 和 ledger 在同一事务内提交：
+repository 根据是否存在 status filter 选择两条固定 SQL，不使用
+`(:status IS NULL OR status = :status)`，避免可选 OR 让 PostgreSQL 产生不稳定计划。
+未过滤查询：
 
-- 同一 key 的第二请求如果在首事务提交前读不到 ledger，可能与首请求并行进入；
-- 两个事务各自生成资源，只有一个能赢得 `UNIQUE(owner,keyHash)`；PostgreSQL 会在唯一
-  索引竞争上等待，不需要应用显式锁；
-- 失败事务必须整体回滚 principal/credential，胜者 ledger 成为唯一事实；
-- 失败事务捕获唯一约束冲突后必须退出当前事务，再在新的只读事务中读取并返回 replay；
-- 若数据库隔离级别/异常无法安全判断唯一竞争，返回 `503` 并让客户端稍后重试，不产生
-  第二个已提交 principal。
+```sql
+WHERE run_id = :runId
+  AND (
+    :cursorSeenAt IS NULL
+    OR (seen_at, external_id) > (:cursorSeenAt, :cursorExternalId)
+  )
+ORDER BY seen_at, external_id
+LIMIT :limitPlusOne
+```
 
-为避免 JPA 在唯一约束异常后把当前事务标记为 rollback-only，外层 keyed create 不使用
-一个包住全流程的 `@Transactional` 方法。它通过 `TransactionTemplate`（或独立的
-`REQUIRES_NEW` transaction component）执行一次完整创建；唯一竞争异常离开事务后，最多
-重试 3 次。普通无幂等 create 和既有 rotate 继续沿用当前事务边界。
+过滤查询在同一条件中额外使用 `status = :status`，对应
+`(run_id, status, seen_at, external_id)` 索引。两条 SQL 都只使用绑定参数。
 
-### 5.4 Cleanup
+读取 `limit + 1` 行判断 `hasMore`。返回的 `nextCursor` 指向本页最后一条实际返回 item。
 
-新增 `rag.api-key.provisioning.*` 配置：
+### 5.4 并发语义
 
-- `enabled`：默认 `true`，允许关闭 ledger 读取/写入前必须 fail closed；
-- `retention`：默认 `400d`，范围 7-3650 天；
-- `cleanup-batch-size`：默认 500，范围 10-5000；
-- `concurrent-retry-attempts`：默认 3，范围 1-8。
+- terminal run 的 item 不再被 batch retry 修改，完整 cursor scan 稳定且每项一次；
+- active run 中，FAILED item 重试会更新 `seen_at`，通常会在后续 page 再次出现；
+- 但 `CURRENT_TIMESTAMP` 不能表达事务提交顺序，并发 insert/update 可能在跨页时产生重复或
+  遗漏，因此 active scan 不是 snapshot，也不承诺 at-least-once；
+- Client 在 active run 上只能把 page 当作观察结果，并按 `externalId` 去重；
+- 若 Client 需要最终稳定清单，应等待 run 进入 `COMPLETED`、`ABORTED` 或 `EXPIRED` 后从
+  无 cursor 起点重新扫描；
+- 本轮不持有长事务 snapshot，也不创建服务端 cursor session。
 
-cleanup 只删除 `completed_at < now-retention` 的记录，按 `id` 有界批次执行；不删除
-principal、credential 或 Collection。cleanup 失败只记录脱敏 warning，不能影响正常认证；
-读取/写入 ledger 的数据库故障仍按请求失败关闭，避免重复创建。
+## 6. 数据库与实现设计
 
-若实现采用 `@Scheduled`，必须保证未配置调度器时不阻塞启动，并在 PostgreSQL 多实例下
-允许多个实例安全地重复尝试删除同一批已过期行；删除使用条件批量 SQL，不使用显式锁。
+### 6.1 V51
 
-## 6. Capability contract 的实现来源
+新增 `V51__document_sync_run_item_receipt_indexes.sql`：
 
-capability 响应不得通过扫描 controller 或读取任意配置动态猜测。新增一个 core 内部
-`IntegrationCapabilityCatalog`，集中维护：
+```sql
+CREATE INDEX idx_rag_sync_run_item_cursor
+    ON rag_document_sync_run_items(run_id, seen_at, external_id);
 
-- contract name/version；
-- 已验证的数据面 feature；
-- 已验证的限制常量；
-- feature flag 影响的能力（例如 disabled 的服务端能力必须返回 `false`，不能静态写
-  `true`）；
-- 对当前 authenticated principal 的 projection。
+CREATE INDEX idx_rag_sync_run_item_status_cursor
+    ON rag_document_sync_run_items(run_id, status, seen_at, external_id);
+```
 
-能力值的来源规则：
+V51 只新增索引：
 
-1. 协议能力和数据合同来自代码/测试固定声明；
-2. feature flag 从配置读取：`embedding.asyncPolicy` 反映
-   `rag.embedding-jobs.enabled`，`optional.documentSyncRuns` 反映
-   `rag.document-lifecycle.sync-runs-enabled`，`optional.openAiCompatibility` 反映
-   `rag.openai-compatibility.enabled`；
-3. principal capability/access mode 来自当前 request 的 immutable auth snapshot；root、
-   legacy/static 和 auth-disabled 使用本节固定 projection；
-4. Collection allow-list 只从当前 snapshot + identity resolver 完整解析；
-5. 不把模型 provider 是否在线、当前数据库连接细节或 secret 状态当作 capability。
+- 不改写 V42；
+- 不增加正文或敏感字段；
+- 不回填表；
+- 对已有 run 立即可用；
+- 应使用普通事务内 `CREATE INDEX`，保持 Flyway 默认语义；不使用
+  `CREATE INDEX CONCURRENTLY` 破坏事务假设；
+- 普通 `CREATE INDEX` 会在构建期间阻塞该 ledger 的写入。发布前应统计 item 表规模并安排
+  维护窗口，部署时观察 PostgreSQL lock wait 与 Flyway 日志；若无法获得锁或构建超出窗口，
+  让迁移失败并保留旧应用，不绕过 Flyway 手工标记成功。
 
-capability endpoint 需要在无 Collection resolver、ACL 解析不完整或 feature catalog 无法
-构造时返回 `503`，不返回部分 JSON。
+### 6.2 DTO
 
-## 7. 文件级实施顺序
+在 API 模块新增：
 
-以下顺序在新特性 worktree 中执行，规划和最终文档提升在 `main` 完成：
+- `DocumentSyncRunItemReceiptResponse`
+- `DocumentSyncRunItemPageResponse`
+- `DocumentSyncRunItemCurrentSummary`
 
-### Slice A：公共 API 与 schema
+`DocumentSyncRunItemResponse` 继续表示同步 `batch-upsert` 的即时结果，不复用为 durable
+receipt，避免给历史 ledger 伪造 `embeddingAction=NONE` / `embeddingJobId=null` 的含义。
 
-- `spring-ai-rag-api`：新增 provisioning response 的 `secretAvailable`、
-  `idempotentReplay`、`currentCredentialActive`，必要时新增 replay warning 常量；
-- 新增 capability DTO、feature DTO、limits DTO 和 protocol DTO；
-- 增加 `V50__api_provisioning_idempotency.sql`；
-- 增加 `ApiKeyProvisioningOperation` entity/repository；
-- 明确 Jackson `null` 序列化和 OpenAPI schema。
+### 6.3 Service
 
-### Slice B：service/controller
+`DocumentSyncRunService.listItems(...)`：
 
-- 新增 immutable canonical request/fingerprint builder；
-- 在 `ApiKeyManagementService` 增加 keyed create、精确 replay、唯一竞争重读和 retention
-  cleanup；
-- `ApiKeyController` 读取 `HttpServletRequest` 的所有幂等 header 值，复用 validator，
-  解析完 ACL 后传入 service；
-- 新增 `IntegrationCapabilityCatalog` 和 `IntegrationCapabilitiesController`；
-- 将 endpoint 纳入认证/普通数据库 capability filter 的 identity 例外；认证仍由现有
-  `ApiKeyAuthFilter` 执行，identity 例外只是不额外要求 `RAG_READ`；
-- root 与数据库 principal 权限保持与 `/auth/me` 一致，不允许通过参数观察他人。
+1. `requireEnabled()`；
+2. 校验公开的 limit/status 参数；
+3. `requireReadableCollection(collectionKey)`；
+4. `requireRun(runId, collectionId, namespace)`；
+5. 解码 cursor，并验证 version、run ID、status、时间与 externalId；因此未授权 Collection
+   或错误 run binding 不会因 cursor 内容不同而从 `403/404` 变成 `400`；
+6. 查询当前状态 summary；
+7. 按可选 status + keyset cursor 读取 `limit + 1`；
+8. 对历史 `error_message` 再次 masking + 截断，构建低敏 item receipt 和 next cursor；
+9. 返回 run 当前 status 与 page metadata。
 
-### Slice C：测试
+同一 service 内把现有错误写入和即时 `batch-upsert` response 收口到一个
+`sanitizeError(...)` helper：先调用 `SensitiveDataMaskingConverter.maskSensitiveData(...)`，
+再按 500 字符上限截断。这样新 ledger 行与即时响应不再产生新的未脱敏值；read-time masking
+负责兼容既有行，不依赖破坏性回填。
 
-- API DTO/Jackson/OpenAPI contract；
-- controller MockMvc：首次、replay、fingerprint conflict、invalid/multi-value、
-  root/normal/legacy-static/auth-disabled、owner 隔离、no-store、secret null；并发竞争不要求伪造
-  `IN_PROGRESS`，改为验证有限竞争恢复；
-- service 并发/唯一竞争和 cleanup 单元；
-- cleanup 后复用同一 owner/key 的行为必须明确测试为“新的 provisioning 周期”，不把过期
-  ledger 误判为永久幂等；
-- PostgreSQL V50 migration、明文 secret 约束、同 owner/key 只有一条 principal、
-  不同 owner 隔离、rotation/revoke 后 replay metadata；
-- 真实 HTTP contract：root create timeout-like replay、ACL canonicalization、capability
-  response、restricted/unrestricted、feature flag、敏感字段不泄露；
-- WebUI typecheck/Vitest/build，确保新增 response 字段不破坏现有一次性 secret UI；
-- 核心 Mock Playwright 继续覆盖创建和轮换，不把 raw secret 写入 URL/storage/log；
-- Playwright 仅用 DOM、可访问状态、网络和 JSON 断言，不使用截图。
+为了避免继续扩大单个 service 的 SQL 体积，可新增包内
+`DocumentSyncRunItemReceiptRepository`，使用 `JdbcTemplate` 封装：
 
-### Slice D：文档与运行脚本
+- `currentSummary(runId)`；
+- `page(runId, status, cursor, limitPlusOne)`；
+- row mapper。
 
-- 双语 `business-client-integration`：加入 keyed provisioning retry、secret recovery
-  和 capability discovery fast path；
-- 双语 `rest-api`：加入 endpoint/schema/error；
-- 双语 `project-context`、`architecture`、`testing-guide`、`developer-reference`、
-  `release-checklist` 和 `TODO` 最小同步；
-- 扩展 `business-client-contract-e2e.sh` 或新增通用合同脚本，覆盖 provisioning replay
-  和 capability projection；
-- 新增/扩展 `verify-business-client-readiness.sh`，确保新门禁实际被执行；
-- `AGENTS.md` 只在命令/事实入口变化时增加短链接，不复制规划正文。
+repository 不执行授权；授权与 run binding 保持在 service。
+repository 为 filtered/unfiltered page 使用两条固定 SQL，分别匹配 V51 的 status cursor
+索引和普通 cursor 索引。
 
-## 8. 一次性验收矩阵
+### 6.4 Runtime capability
 
-| 层级 | 必须证明 | 证据 |
-|---|---|---|
-| API DTO/Jackson | 首次 raw secret、replay null、boolean 标志、旧字段兼容 | API module tests |
-| Controller | header 规范化、owner、精确冲突、状态码/header/no-store、权限边界 | `ApiKeyControllerTest`、identity/capability controller tests |
-| Service | canonical fingerprint、唯一竞争、失败回滚、replay current metadata、cleanup | service tests |
-| PostgreSQL/Flyway | V50 从 V49 可迁移；唯一约束；不存 raw；并发只留一个 principal/ledger | `ManagedApiPrincipalPostgresIntegrationTest` 或专项 IT |
-| Auth/filter | database/root/legacy/auth-disabled 只看到允许的 projection；路径受保护 | web integration/filter tests |
-| Capability | fixed contract、feature flag、restricted allow-list、503 fail closed、无敏感字段 | OpenAPI + HTTP contract |
-| Real HTTP | 一次创建、同 key 精确 retry、不同 body conflict、不同 owner isolation、rotation/revoke、capability JSON | disposable PostgreSQL + real Boot |
-| WebUI | create/rotate DOM 可见，secret 不入 storage/URL/log，build/typecheck 通过 | Vitest + Mock/real Playwright |
-| Backend build | compile/test-compile，目标 profile 可启动、health OK | Maven + startup smoke |
-| Docs/security | 双语结构、链接、空白、禁锁、secret scan | project-docs/readiness gates |
-| Real LLM | 本轮不改 Chat/LLM 路径，真实 LLM 行为 N/A；若全量 readiness gate 含既有 provider smoke，则按既有门禁执行并记录 | existing real-provider gate |
+`IntegrationCapabilitiesResponse.OptionalFeatures` 增加
+`documentSyncRunItemReceipts`：
 
-### 8.1 真实服务合同用例
+- 保留现有双参数 constructor，内部默认新字段与 `documentSyncRuns` 一致，降低 Java
+  source/binary 兼容风险；
+- catalog 在 `sync-runs-enabled=true` 时返回 `true`；
+- runtime protocol 继续报告 `1.0`：该字段位于 optional feature catalog，属于旧 Client
+  必须忽略的 additive JSON 字段；同步更新双语 Client 指南，明确同一协议版本内允许新增
+  optional field；
+- 删除字段、收紧旧字段或改变既有字段语义时不能借 additive 规则掩盖，必须按 protocol
+  兼容策略升级版本并重新验收；
+- capability endpoint 自身仍不暴露 run、Collection 或 item 数据。
 
-必须一次性规划并实现以下顺序，测试 fixture 使用随机 run ID，结束由 trap 清理：
+### 6.5 Controller
 
-1. root 创建 restricted read-only principal，发送唯一幂等键；
-2. 首次响应 `201`、raw secret 存在、secret not persisted；
-3. 重复完全相同 JSON 且字段顺序变化，响应 `200`、replay header、raw `null`、资源
-   identity 相同；
-4. 同 key 修改 name/capability/Collection，得到 `409 IDEMPOTENCY_KEY_REUSED`，数据库
-   principal 数量不增加；
-5. 用另一个 owner 不能读取或复用当前 owner 的账本；测试覆盖 root、database、
-   legacy/static 和 auth-disabled 的服务端 owner 映射，并以 service/PostgreSQL owner
-   predicate 断言，不能把 owner 作为客户端可控字段；
-6. 轮换 replay 返回的 current credential，旧 credential 失效、新 credential 可认证；
-7. capability endpoint 用 restricted credential 返回精确 allow-list、capability 和
-   feature contract，确认不含 raw/hash/provider/db 字段；
-8. revoke 后 capability endpoint 返回认证失败；数据库 ledger 仍不生成第二 principal；
-9. cleanup 只清理 ledger，不删除 principal/credential。
+`DocumentSyncRunController` 新增 `GET /{runId}/items`：
 
-## 9. 真实 LLM 与成本边界
+- 使用 validation annotation 限制参数；
+- `Cache-Control: no-store`；
+- 不接收 lease header；
+- OpenAPI 明确 active/terminal cursor 语义和 400/401/403/404/503；
+- GET 已由中央 capability classifier 要求 `RAG_READ`，仍增加 classifier 回归断言防止
+  后续误改。
 
-本轮是 credential/control-plane 改动，不改变 Chat model、embedding model、tool loop、
-memory 或 retrieval。Mock 和真实 HTTP contract 足以覆盖本轮新增行为，不应为了“看起来
-完整”向真实 LLM 发送无关请求。
+## 7. 兼容性、安全与可观测性
 
-如果最终使用既有全量 readiness 门禁，该门禁中的真实 provider/LLM 用例仍必须按项目规则
-执行；本轮进度只记录其实际结果，不把已有 Chat 通过结果冒充 provisioning 正确性证据。
+### 7.1 兼容性
 
-## 10. 发布、回滚与兼容
+- 只新增 endpoint、DTO、capability JSON 字段和索引；
+- 既有 begin/batch/preview/complete/get/list 响应保持不变；
+- V51 可与旧应用共存，旧应用忽略新索引；
+- 不改变 API 版本 `1.0.0`；runtime integration protocol 保持 `1.0`。新增 optional JSON
+  字段不改变既有字段含义，旧 Client 必须忽略未知 optional field；
+- rollback 应保留 V51 索引，不执行破坏性 schema downgrade。
 
-### 10.1 发布
+### 7.2 安全
 
-1. Flyway 先执行 V50；
-2. 部署包含新 API/API docs；
-3. root operator 升级后用新幂等键创建一个受限 principal；
-4. 调用方先读取 capability contract，再读取 `/auth/me` 和运行 binding preflight；
-5. 观察 provisioning conflict/replay/in-progress、capability 503 和 cleanup 指标/日志。
+- Collection ACL 在读取 run 前执行；
+- restricted caller 的未知/未授权 key 继续 `403`，不泄露 run 是否存在；
+- Collection 已授权但 run ID/namespace 不匹配返回统一 `404`；
+- cursor 解码在上述 Collection/run binding 之后执行；未授权或错误 binding 不因 malformed
+  cursor 获得差异化错误；
+- endpoint 需要 `RAG_READ`，不需要 `RAG_WRITE`；
+- cursor 不是身份凭证，不能替代每次授权；
+- cursor 不含 credential、lease、fingerprint、payload 或其他 secret；尽管经过 Base64，
+  仍按可解码的业务敏感数据处理；
+- response `no-store`；
+- 日志、metrics 和验证 summary 不记录 cursor、externalId、error 明文、payload 或 credential；
+- SQL 全部参数绑定；
+- error 在新写入、即时 batch response 和 receipt 读取三个边界都使用同一 masking +
+  truncate 规则；历史未脱敏 ledger 行不能绕过 read-time masking。
 
-### 10.2 回滚
+### 7.3 可观测性
 
-- 代码回滚到旧版本后，V50 表可以保留；旧代码不读取它，不影响 V49 认证；
-- 不回滚已执行 Flyway migration，不手工删除表；
-- 若 capability endpoint 发现严重问题，可停止调用该 endpoint，旧的 OpenAPI +
-  `/auth/me` + preflight 路径仍可工作；
-- 若 keyed create 发现账本问题，应暂时关闭 provisioning idempotency 配置并停止携带
-  header，不能静默退回带 key 的非幂等创建；无 key 的旧路径仍按兼容语义运行；
-- 任何数据库 constraint 修复必须新增后续 migration，不改写 V50。
+只增加低基数指标：
 
-### 10.3 可观测性
+- `rag.document-sync-runs.items` timer；
+- outcome 依赖现有 HTTP status metrics；
+- 可选统计 page size、hasMore、filtered/unfiltered，但不能把 run ID、Collection key、
+  principal ID、externalId、cursor 或 error code 作为 tag。
 
-- Micrometer 计数：首次 keyed create、replay、fingerprint conflict、in-progress、
-  unique-race recovery、capability 200/503、cleanup deleted/failed；
-- 日志仅记录 owner 类型、principal/credential public ID、结果类别和 hash 前缀；
-- 禁止记录 `Idempotency-Key` 原文、Authorization、X-API-Key、raw credential、完整
-  request body 或 capability response；
-- response body 中的 `rawKey` 仍只允许在首个成功 create/rotate response。
+## 8. 文件级实施顺序
 
-## 11. 工作流与完成定义
+### Slice A：公共契约与 cursor
 
-### 11.1 规划阶段
+1. 新增 receipt/page/summary DTO。
+2. 新增 package-private cursor value/codec，覆盖 round-trip、非法输入、status mismatch、
+   run mismatch、长度和 UTC 时间；使用 Jackson，不手写 delimiter parser。
+3. 扩展 runtime capability DTO/catalog 和测试：覆盖新字段序列化、旧双参数 constructor
+   以及 protocol `1.0` 保持不变。
 
-- 在 `main` 写本规划和 `NEXT_HIGH_VALUE_FEATURES_PROGRESS.md`；
-- 规划检查固定为三轮：需求闭环与自包含性；代码/schema/API/安全/并发可实施性；
-  验收/发布/回滚/文档闭环；
-- 任何实质问题修正文档后计数归零；连续三轮无修改才进入实施；
-- 规划完成后先 commit/push，并建立保护 checkpoint。
+### Slice B：数据库读取主链
 
-### 11.2 实施阶段
+1. 新增 V51 两个索引。
+2. 新增 receipt repository。
+3. `DocumentSyncRunService` 增加统一错误脱敏和授权后的 listItems。
+4. Controller 增加 GET endpoint、no-store 和 OpenAPI。
+5. 更新 capability filter 回归测试。
 
-- 从最新本地 `main` 创建新专用分支和隔离 worktree；
-- 每个关键切片先更新 progress，再修改代码；
-- 基本硬门槛先行：
+### Slice C：验收
 
-  ```bash
-  mvn clean compile test-compile
-  ./scripts/verify-no-pessimistic-locks.sh
-  ./scripts/verify-project-docs.sh
-  ```
+1. 扩展 `DocumentSyncRunsPostgresIntegrationTest`：
+   - V1→V51；
+   - 索引存在；
+   - current summary；
+   - status filter；
+   - terminal cursor 无重复无遗漏；
+   - active retry 的 eventually-consistent 行为，不把 cursor 断言为一致性快照；
+   - cursor 参数化、run/status binding，未授权 malformed cursor 不改变 `403/404`；
+   - 新错误写入和历史 error receipt 均屏蔽 credential-like 原值。
+2. 扩展 controller Web 测试：
+   - 参数映射；
+   - no-store；
+   - JSON schema；
+   - invalid cursor / disabled / not found 传播。
+3. 扩展 `scripts/verify-document-sync-runs.sh`：
+   - 从当前 auth-disabled 模式改为启用认证，运行时生成临时 environment-root credential；
+   - 用 root 创建目标/非目标 Collection，再创建 restricted read-write principal 执行
+     begin/batch/complete，并创建只含 `RAG_READ` 的 restricted principal 查询 receipt；
+   - 临时 credential 只存在于进程环境或权限收紧的临时文件，不写命令行、日志、evidence
+     或 Git；
+   - 响应丢失后的 receipt 查询；
+   - `limit=1` 多页 cursor；
+   - FAILED filter/current summary；
+   - read-only principal 可查；
+   - 未授权 Collection `403`；
+   - run/namespace mismatch `404`；
+   - capability flag；
+   - evidence 不写 externalId、credential 或 URL。
 
-  然后执行本任务 PostgreSQL/HTTP 集成、WebUI `tsc`/Vitest/build/核心 Mock Playwright、
-  真实服务合同和适用的真实 provider gate；
-- 基本门槛全部通过后，按固定范围完成实现 `3/3` 无修改审查；任何实质修复计数归零并
-  重跑受影响门槛；
-- 合并最新 `origin/main` 到特性分支后，以合并后代码重跑完整顺序，不沿用合并前结果。
+### Slice D：长青文档
 
-### 11.3 交付
+同步中英文：
 
-- 更新双语长青文档，先归档本轮 plan/progress；
-- 特性分支 commit/push；
-- 合并并推送 `main`；
-- 确认 `main == origin/main`、工作区干净；
-- 安全移除仅本轮创建的隔离特性 worktree；
-- 进入下一轮高价值需求探索，直到用户要求停止。
+- `docs/rest-api*`
+- `docs/external-document-sync-client-guide*`
+- `docs/configuration*`
+- `docs/architecture*`
+- `docs/project-context*`
+- `docs/testing-guide*`
+- `docs/developer-reference*`
+- `docs/release-checklist*`
+- `docs/TODO*`
+- `AGENTS.md`、project-docs Skill 和 migration inventory（V1-V51）
 
-## 12. 规划完成后的检查记录
+## 9. 一次性验收矩阵
 
-规划正文已于 2026-08-26 完成三轮连续无实质修改审查，达到 `3/3`。检查范围依次为：
+### 9.1 快速专项
 
-1. 需求闭环、自包含性、默认决策与非目标；
-2. 代码、schema、API、安全、并发与兼容可实施性；
-3. 实施顺序、验收矩阵、发布、回滚、文档闭环与交付风险。
+```bash
+mvn -pl spring-ai-rag-core -am \
+  -Dtest=DocumentSyncRunControllerWebTest,IntegrationCapabilityCatalogTest,\
+DocumentSyncRunItemCursorTest \
+  -Dsurefire.failIfNoSpecifiedTests=false test
+```
 
-检查期间未发现需要修正规划正文的实质问题。下一步是提交并推送规划 checkpoint，
-再从最新 `main` 创建隔离特性 worktree 开始实施。
+预期：
+
+- controller/cursor/capability 全绿；
+- 未启动外部 provider；
+- 无测试被意外跳过。
+
+### 9.2 真实 PostgreSQL 与 HTTP
+
+```bash
+./scripts/verify-document-sync-runs.sh
+```
+
+脚本必须从一次性 PostgreSQL 执行 V1→V51，并启动真实 Spring Boot。至少验证：
+
+- migration/index；
+- begin + batch；
+- 丢失 batch response 后 GET receipt 恢复；
+- current summary 与累计 run counter 区别；
+- status filter；
+- cursor 全遍历；
+- active 观察与 terminal 后从头复扫；
+- 即时 batch error 和 durable receipt 均不暴露测试注入的 credential-like 原值；
+- Collection ACL / RAG_READ；
+- no-store；
+- response 不含 fingerprint/payload/lease/hash；
+- 禁悲观锁。
+
+### 9.3 后端硬门槛
+
+```bash
+mvn clean compile test-compile
+mvn test
+```
+
+服务必须使用 `postgresql` profile 启动并通过 health/readiness。
+
+### 9.4 前端共享契约门槛
+
+即使不改 WebUI 页面，也要验证公共 OpenAPI/DTO 和静态资源构建未回归：
+
+```bash
+cd spring-ai-rag-webui
+npm run typecheck
+npm run test:run
+npm run build
+npm run check:alignment
+npx playwright test e2e/api-key-mvp.spec.ts --project=chromium
+```
+
+Playwright 只使用 DOM、可访问状态和网络断言，不使用截图判定。
+
+### 9.5 真实全栈与 provider 回归
+
+Mock 和专项门槛通过后：
+
+1. 在隔离端口运行扩展后的 Sync Run HTTP acceptance；
+2. 运行 `./scripts/verify-business-client-readiness.sh`，确认通用 Client 认证、Collection
+   binding、真实 API Key Playwright 与共享数据面未回归；
+3. 运行 `./scripts/verify-managed-api-principals.sh --with-real-llm`，使用 main worktree
+   `.env` 的真实 provider 配置覆盖双实例 principal/credential 生命周期、真实浏览器
+   DOM/网络断言和真实 LLM 路径；持续观察脚本 summary 与 backend 日志；
+4. 若需单独定位 provider，使用隔离端口运行 `scripts/start-real-e2e-server.sh`，再执行
+   `BASE_URL=<isolated-url> ./scripts/real-llm-e2e-smoke.sh`，不得把 credential 写入命令记录；
+5. 本功能不改变模型输出；真实 provider 证据用于证明共享认证/filter/application 配置没有
+   回归，不能替代 receipt 的 PostgreSQL/HTTP 断言。
+
+### 9.6 文档与安全
+
+```bash
+./scripts/verify-project-docs.sh
+./scripts/verify-no-pessimistic-locks.sh
+bash -n scripts/verify-document-sync-runs.sh
+git diff --check
+```
+
+补充扫描：
+
+- 新增行密钥扫描；
+- 外部项目名称扫描；
+- response/schema 不含 `itemFingerprint`、lease/hash、payload；
+- evidence summary 不含 externalId、credential、URL 或本机外部路径。
+
+## 10. 规划与实现收敛范围
+
+### 10.1 规划 3/3
+
+1. 需求闭环、自包含性、默认决策和非目标；
+2. schema/SQL/cursor、授权、安全、并发和兼容可实施性；
+3. 测试矩阵、发布、回滚、文档和 Git/worktree 交付。
+
+发现实质问题立即修正规划并重置计数。连续三轮无修改后才实施。
+
+### 10.2 实现 3/3
+
+基本硬门槛全部通过后，固定范围检查：
+
+1. V51、SQL cursor、active retry、current summary、事务与数据一致性；
+2. HTTP/OpenAPI、ACL、RAG_READ、低敏 response 和兼容路径；
+3. PostgreSQL/HTTP/provider 证据、文档、发布回滚、密钥与 Git 风险。
+
+只修复影响正确性、成本安全、兼容性或数据一致性的缺陷。任何实质修改重置计数并重跑受影响
+门槛，避免在 review 阶段发散增加可选功能。
+
+## 11. 发布、回滚与完成定义
+
+### 发布
+
+1. 规划在 `main` 完成 `3/3`，commit/push 建立 checkpoint；
+2. 从最新本地 `main` 创建专用分支和隔离 worktree；
+3. 实施期间记录 progress；
+4. 基本门槛、实现 `3/3`、最终全量验收；
+5. fetch `origin/main`，如有变化 merge 到特性分支；
+6. 合并后从头执行最终验证序列；
+7. 推送特性分支，合入并推送 `main`；
+8. 确认 main/origin/main 和工作区干净，安全移除特性 worktree。
+
+### 回滚
+
+- 应用回滚时保留 V51 索引；
+- 旧应用不会调用新 endpoint，也不受索引影响；
+- 已依赖 receipt 的 Client 必须在服务版本回退时 fail closed，不能把 run counters 当成
+  current item 状态；
+- 不删除历史 run/item ledger。
+
+### 完成定义
+
+- endpoint、cursor、summary、ACL 和 capability flag 按本规划实现；
+- V1→V51 真实 PostgreSQL 与真实 HTTP acceptance 通过；
+- `mvn clean compile test-compile`、全量 Maven、服务启动通过；
+- 前端 typecheck/Vitest/build/alignment/核心 Mock Playwright 通过；
+- 真实全栈和真实 provider 回归通过；
+- 文档/锁/diff/密钥/外部名称检查通过；
+- 实现达到连续 `3/3`；
+- 双语长青文档同步；
+- 特性分支和 main 均推送，隔离 worktree 清理。
+
+## 12. 进度记录
+
+实施进度单独维护在
+[NEXT_HIGH_VALUE_FEATURES_PROGRESS.md](NEXT_HIGH_VALUE_FEATURES_PROGRESS.md)。每次关键进展
+先更新进度账本，再进入下一阶段；不得记录 raw credential、cursor、externalId、完整 error、
+payload、外部项目路径或 `.env` 内容。

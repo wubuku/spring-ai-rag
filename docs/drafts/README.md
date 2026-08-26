@@ -40,12 +40,13 @@ Active plans are listed here and in `docs/index*`.
 
 Current active plans:
 
-- [Managed caller idempotent provisioning and runtime capability discovery](NEXT_HIGH_VALUE_FEATURES_PLAN.md)
+- [Durable Sync Run item receipts and cursor status queries](NEXT_HIGH_VALUE_FEATURES_PLAN.md)
 - [Implementation progress](NEXT_HIGH_VALUE_FEATURES_PROGRESS.md)
 
-This plan has passed its planning review and is awaiting implementation. It will
-move to the historical archive only after implementation, acceptance, and
-evergreen-document updates are complete.
+This plan is being prepared and reviewed. Implementation starts in an isolated
+worktree after planning reaches `3/3`. It will move to the historical archive
+only after implementation, acceptance, and evergreen-document updates are
+complete.
 
 Completed, stopped, and superseded materials remain available in the
 [historical archive](archive/README.md).
