@@ -46,6 +46,7 @@ public class ApiKeyResponse {
     private Boolean currentCredential;
     private Long policyVersion;
     private Integer requestsPerMinute;
+    private List<String> capabilities;
 
     public ApiKeyResponse() {
     }
@@ -101,6 +102,8 @@ public class ApiKeyResponse {
     public void setPolicyVersion(Long policyVersion) { this.policyVersion = policyVersion; }
     public Integer getRequestsPerMinute() { return requestsPerMinute; }
     public void setRequestsPerMinute(Integer requestsPerMinute) { this.requestsPerMinute = requestsPerMinute; }
+    public List<String> getCapabilities() { return capabilities; }
+    public void setCapabilities(List<String> capabilities) { this.capabilities = capabilities; }
 
     @Override
     public boolean equals(Object o) {
@@ -120,7 +123,8 @@ public class ApiKeyResponse {
                 Objects.equals(credentialVersion, that.credentialVersion) &&
                 Objects.equals(currentCredential, that.currentCredential) &&
                 Objects.equals(policyVersion, that.policyVersion) &&
-                Objects.equals(requestsPerMinute, that.requestsPerMinute);
+                Objects.equals(requestsPerMinute, that.requestsPerMinute) &&
+                Objects.equals(capabilities, that.capabilities);
     }
 
     @Override
@@ -128,7 +132,7 @@ public class ApiKeyResponse {
         return Objects.hash(keyId, name, createdAt, lastUsedAt, expiresAt,
                 enabled, role, allowedCollectionIds, allowedCollectionKeys,
                 principalId, credentialVersion, currentCredential, policyVersion,
-                requestsPerMinute);
+                requestsPerMinute, capabilities);
     }
 
     @Override
@@ -148,6 +152,7 @@ public class ApiKeyResponse {
                 ", currentCredential=" + currentCredential +
                 ", policyVersion=" + policyVersion +
                 ", requestsPerMinute=" + requestsPerMinute +
+                ", capabilities=" + capabilities +
                 '}';
     }
 }

@@ -19,7 +19,7 @@
 | 真实 LLM E2E 端口 | `18081` |
 | Embedding | SiliconFlow `BAAI/bge-m3` |
 | 向量维度 | `1024` |
-| Flyway | V1–V48 |
+| Flyway | V1–V49 |
 
 OpenAI / Embedding 的 `base-url` **不要带 `/v1`**。Spring AI 会自行追加 `/v1/chat/completions` 或 `/v1/embeddings`。
 
@@ -364,7 +364,9 @@ MANAGED_API_REAL_ENV_FILE=.env \
 ```
 
 该门槛在 Mock 与构建检查通过后，使用两个后端（默认 `18181`、`18182`）、一个 Vite
-前端（默认 `15181`）和一次性 PostgreSQL 执行真实全栈及有界真实 LLM 验收。端口冲突时可
+前端（默认 `15181`）和一次性 PostgreSQL 执行真实全栈及有界真实 LLM 验收。V49 矩阵还
+验证 NORMAL principal 的只读/读写能力、策略 CAS、轮换继承，以及写请求在限流前返回
+`403`。端口冲突时可
 分别覆盖 `MANAGED_API_BACKEND_A_PORT`、`MANAGED_API_BACKEND_B_PORT` 和
 `MANAGED_API_FRONTEND_PORT`；证据位于
 `.verification/managed-api-principals/<run-id>/`。
@@ -404,7 +406,7 @@ PostgreSQL 镜像可用 `BUSINESS_CLIENT_POSTGRES_IMAGE` 覆盖。证据写入
 `.verification/business-client-readiness/<run-id>/`，private credential 文件、容器、
 端口和进程由退出 trap 清理。真实 HTTP 合同当前为 109 项，并包含 provider `503` 后
 Record 保留语义。目录中的 `release-manifest.json` 锁定完整 Git SHA、初始 tree state、
-项目/OpenAPI 版本、API base path、V48、passed steps、PostgreSQL image 和 HTTP 检查数；
+项目/OpenAPI 版本、API base path、V49、passed steps、PostgreSQL image 和 HTTP 检查数；
 未到达的运行时事实为 JSON `null`，不记录 credential、URL、payload、external ID 或
 private path。
 

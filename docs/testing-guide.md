@@ -255,7 +255,7 @@ covers:
   the committed Record identity, revision, payload, enabled state, and
   document revision;
 - shown-once credentials, rotation, old-key invalidation, and revocation;
-- PostgreSQL facts for Flyway V48, zero plaintext credentials, and a succeeded
+- PostgreSQL facts for Flyway V49, zero plaintext credentials, and a succeeded
   embedding job;
 - WebUI typecheck, Vitest, production build, core Mock Playwright, and real
   API-key Playwright.
@@ -408,7 +408,7 @@ mvn jacoco:report-aggregate
 
 Unit tests use mocks or H2-compatible paths. The Embedding Profile migration has
 an explicit PostgreSQL integration test because it requires pgvector and validates
-Flyway V1-V48, fixed vector columns, Profile-specific indexes, atomic replacement,
+Flyway V1-V49, fixed vector columns, Profile-specific indexes, atomic replacement,
 Legacy adoption, retrieval freshness, and Spring Data repository queries.
 
 Start a PostgreSQL 16 + pgvector database, then run:
@@ -467,7 +467,7 @@ inputs.
 The scope implementation has DTO, resolver, ACL, SQL-fragment, vector/full-text
 provider, Chat/Search/JSON, MockMvc, OpenAPI, WebUI, and PostgreSQL coverage.
 The real PostgreSQL/Testcontainers test starts `pgvector/pgvector:pg16`, runs
-Flyway V1-V48 from an empty schema, and exercises the vector query with actual
+Flyway V1-V49 from an empty schema, and exercises the vector query with actual
 PostgreSQL `bigint[]` bindings:
 
 ```bash
@@ -498,7 +498,7 @@ object request. Run `npm run test:run`, `npx tsc -b --pretty false`,
 
 The JSONB implementation has both mocked HTTP/service coverage and a real
 PostgreSQL/Testcontainers test. The latter starts `pgvector/pgvector:pg16`,
-executes Flyway V1-V48 from an empty database, and verifies JSONB round-trip,
+executes Flyway V1-V49 from an empty database, and verifies JSONB round-trip,
 nested `payloadContains`, V34 GIN planner use, payload-only versioning,
 identical descriptions with distinct records, and cascade cleanup:
 
@@ -544,7 +544,7 @@ checks, writing evidence under
 ```
 
 The script serially runs service/worker/controller focused tests, starts
-isolated PostgreSQL, migrates an empty database through V1–V48, verifies V33
+isolated PostgreSQL, migrates an empty database through V1–V49, verifies V33
 active-job coalescing, atomic force upgrades, and concurrent-worker atomic
 conditional claims, then runs `test-compile`, shell syntax, and whitespace
 checks. Set `EMBEDDING_JOBS_IT_JDBC_URL` to reuse an existing isolated database.
@@ -585,8 +585,9 @@ never reported as quality passes.
 
 ### Managed API Principal PostgreSQL Matrix
 
-Run the V48 migration, credential lifecycle, policy concurrency, last-ADMIN,
-last-used, shared-quota, and bounded-cleanup matrix against real PostgreSQL:
+Run the V48-to-V49 migration, credential lifecycle, operation-capability,
+policy-concurrency, last-ADMIN, last-used, shared-quota, and bounded-cleanup
+matrix against real PostgreSQL:
 
 ```bash
 TESTCONTAINERS_RYUK_DISABLED=true \
@@ -615,8 +616,10 @@ The script serially runs the PostgreSQL migration/concurrency matrix,
 `mvn clean compile test-compile`, the full Maven suite, WebUI Vitest/TypeScript/
 production build/alignment, core Mock Playwright, and lock/documentation gates.
 It then starts two real backends sharing a disposable PostgreSQL database plus
-one Vite frontend to verify global quota, policy CAS, cross-instance rotation
-and revocation, quota-store failure closure, and no-screenshot real Playwright.
+one Vite frontend to verify read-only identity/GET access, write `403`,
+capability inheritance across rotation, rejection without persistence for
+invalid capabilities, global quota, policy CAS, cross-instance rotation and
+revocation, quota-store failure closure, and no-screenshot real Playwright.
 Real-LLM mode also covers native JSON/SSE and OpenAI-compatible JSON/SSE, using
 the provider counter to prove that idempotent replay does not call the model
 again and that total provider calls remain bounded. Evidence is written to

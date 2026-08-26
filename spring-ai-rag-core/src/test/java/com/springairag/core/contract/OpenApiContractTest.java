@@ -833,6 +833,7 @@ class OpenApiContractTest {
 
             JsonNode apiKey = schemas.path("ApiKeyCreateRequest").path("properties");
             assertThat(apiKey.has("allowedCollectionKeys")).isTrue();
+            assertThat(apiKey.has("capabilities")).isTrue();
             assertThat(apiKey.path("allowedCollectionIds")
                     .path("deprecated").asBoolean()).isTrue();
 

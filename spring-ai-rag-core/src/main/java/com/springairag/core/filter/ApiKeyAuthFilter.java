@@ -5,6 +5,7 @@ import com.springairag.api.openai.OpenAiErrorResponse;
 import com.springairag.core.security.AuthenticatedApiPrincipal;
 import com.springairag.core.security.EnvironmentRootCredentialResolver;
 import com.springairag.core.service.ApiKeyManagementService;
+import com.springairag.core.security.ApiCapabilitySupport;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -165,6 +166,10 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
                         request.getMethod(), path);
                 sendServiceUnavailable(response, path);
                 return;
+            } catch (ApiCapabilitySupport.InvalidPersistedCapabilitiesException e) {
+                log.error("API principal policy is invalid: {} {}", request.getMethod(), path);
+                sendPolicyUnavailable(response, path);
+                return;
             }
             if (validatedPrincipal != null) {
                 log.debug("API credential validated (database): principalId={}, version={}, {} {}",
@@ -295,6 +300,29 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
                 .error("CREDENTIAL_SERVICE_UNAVAILABLE")
                 .status(HttpStatus.SERVICE_UNAVAILABLE.value())
                 .message("API credential service is unavailable.")
+                .build();
+        response.getWriter().write(objectMapper.writeValueAsString(errorResponse));
+    }
+
+    private void sendPolicyUnavailable(
+            HttpServletResponse response,
+            String path) throws IOException {
+        response.setStatus(HttpStatus.SERVICE_UNAVAILABLE.value());
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        if (path != null && path.startsWith("/v1/")) {
+            response.getWriter().write(objectMapper.writeValueAsString(
+                    OpenAiErrorResponse.of(
+                            "API principal policy is unavailable.",
+                            "server_error",
+                            null,
+                            "policy_service_unavailable")));
+            return;
+        }
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .error("POLICY_SERVICE_UNAVAILABLE")
+                .status(HttpStatus.SERVICE_UNAVAILABLE.value())
+                .message("API principal policy is unavailable.")
+                .path(path)
                 .build();
         response.getWriter().write(objectMapper.writeValueAsString(errorResponse));
     }

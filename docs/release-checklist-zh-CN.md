@@ -15,7 +15,7 @@
 - [x] Helm `version` 与 `appVersion` 均为 `1.0.0`
 - [x] Docker/Helm 默认镜像 tag 为 `1.0.0`
 - [x] 本地、Docker 与 Helm 默认端口均为 `8081`
-- [x] Flyway 迁移范围为 V1-V48
+- [x] Flyway 迁移范围为 V1-V49
 - [x] JSONB 结构化记录 API、payload 快照和 Collection 生命周期已覆盖
 - [x] `scripts/verify-jsonb-records.sh` 固化后端/数据库/前端聚焦验证
 - [x] 文档 PATCH/禁用/恢复/永久删除与外部三元身份已覆盖
@@ -94,6 +94,15 @@
   schema 与 secret-safety 验证。
 - [x] 双语业务服务接入指南固化 root/业务 credential、binding、CAS/tombstone/ASYNC、
   轮换、升级与回滚边界。
+
+### 2026-08-26 操作级 API 能力门禁
+
+- [x] V49 为 stable principal 增加受数据库约束的 `RAG_READ` / `RAG_WRITE` policy，
+  V48 数据默认兼容为完整读写。
+- [x] 中央 capability filter 在认证后、共享限流前执行；只读 principal 可 Search/Chat，
+  但写请求返回 `403`，OpenAI 兼容错误码为 `insufficient_permissions`。
+- [x] 创建、策略 CAS、轮换、`/auth/me`、WebUI 与 PostgreSQL/真实 HTTP 验收使用同一份
+  权威能力，非法集合不持久化，ADMIN 不允许降级为只读。
 
 ### 最终证据（2026-07-21）
 

@@ -40,6 +40,7 @@ public class ApiKeyCreatedResponse {
     private Integer credentialVersion;
     private Long policyVersion;
     private Integer requestsPerMinute;
+    private List<String> capabilities;
 
     public ApiKeyCreatedResponse() {
     }
@@ -93,6 +94,8 @@ public class ApiKeyCreatedResponse {
     public void setPolicyVersion(Long policyVersion) { this.policyVersion = policyVersion; }
     public Integer getRequestsPerMinute() { return requestsPerMinute; }
     public void setRequestsPerMinute(Integer requestsPerMinute) { this.requestsPerMinute = requestsPerMinute; }
+    public List<String> getCapabilities() { return capabilities; }
+    public void setCapabilities(List<String> capabilities) { this.capabilities = capabilities; }
 
     @Override
     public boolean equals(Object o) {
@@ -109,14 +112,15 @@ public class ApiKeyCreatedResponse {
                 Objects.equals(principalId, that.principalId) &&
                 Objects.equals(credentialVersion, that.credentialVersion) &&
                 Objects.equals(policyVersion, that.policyVersion) &&
-                Objects.equals(requestsPerMinute, that.requestsPerMinute);
+                Objects.equals(requestsPerMinute, that.requestsPerMinute) &&
+                Objects.equals(capabilities, that.capabilities);
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(keyId, rawKey, name, expiresAt, warning,
                 allowedCollectionIds, allowedCollectionKeys, principalId,
-                credentialVersion, policyVersion, requestsPerMinute);
+                credentialVersion, policyVersion, requestsPerMinute, capabilities);
     }
 
     @Override
@@ -131,6 +135,7 @@ public class ApiKeyCreatedResponse {
                 ", credentialVersion=" + credentialVersion +
                 ", policyVersion=" + policyVersion +
                 ", requestsPerMinute=" + requestsPerMinute +
+                ", capabilities=" + capabilities +
                 ", warning='" + warning + '\'' +
                 // rawKey intentionally excluded from toString (security)
                 '}';

@@ -14,6 +14,7 @@ public class ApiPrincipalResponse {
     private LocalDateTime expiresAt;
     private Integer requestsPerMinute;
     private Long policyVersion;
+    private List<String> capabilities;
     private String status;
     private LocalDateTime lastUsedAt;
     private String currentCredentialId;
@@ -35,6 +36,8 @@ public class ApiPrincipalResponse {
     public void setRequestsPerMinute(Integer requestsPerMinute) { this.requestsPerMinute = requestsPerMinute; }
     public Long getPolicyVersion() { return policyVersion; }
     public void setPolicyVersion(Long policyVersion) { this.policyVersion = policyVersion; }
+    public List<String> getCapabilities() { return capabilities; }
+    public void setCapabilities(List<String> capabilities) { this.capabilities = capabilities; }
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
     public LocalDateTime getLastUsedAt() { return lastUsedAt; }

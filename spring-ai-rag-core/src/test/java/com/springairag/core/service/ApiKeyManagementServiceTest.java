@@ -11,6 +11,7 @@ import com.springairag.core.exception.RagException;
 import com.springairag.core.repository.RagApiKeyRepository;
 import com.springairag.core.repository.RagApiPrincipalRepository;
 import com.springairag.core.security.AuthenticatedApiPrincipal;
+import com.springairag.core.security.ApiCapabilitySupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -52,6 +53,7 @@ class ApiKeyManagementServiceTest {
                 "Indexer", LocalDateTime.now().plusDays(30));
         request.setAllowedCollectionIds(List.of(7L, 3L, 7L));
         request.setRequestsPerMinute(120);
+        request.setCapabilities(List.of("RAG_READ"));
 
         ApiKeyCreatedResponse created = service.generateManagedKey(request);
 
@@ -59,6 +61,7 @@ class ApiKeyManagementServiceTest {
         assertEquals(1, created.getCredentialVersion());
         assertEquals(1L, created.getPolicyVersion());
         assertEquals(120, created.getRequestsPerMinute());
+        assertEquals(List.of("RAG_READ"), created.getCapabilities());
         assertTrue(created.getRawKey().startsWith("rag_sk_"));
         assertFalse(created.toString().contains(created.getRawKey()));
 
@@ -67,6 +70,7 @@ class ApiKeyManagementServiceTest {
         verify(principalRepository).save(principal.capture());
         assertEquals("3,7", principal.getValue().getAllowedCollectionIds());
         assertEquals(2, principal.getValue().getNextCredentialVersion());
+        assertEquals("RAG_READ", principal.getValue().getCapabilities());
 
         ArgumentCaptor<RagApiKey> credential =
                 ArgumentCaptor.forClass(RagApiKey.class);
@@ -86,6 +90,7 @@ class ApiKeyManagementServiceTest {
         when(projection.getRole()).thenReturn(ApiKeyRole.NORMAL);
         when(projection.getPolicyVersion()).thenReturn(4L);
         when(projection.getRequestsPerMinute()).thenReturn(80);
+        when(projection.getCapabilities()).thenReturn("RAG_READ");
         when(credentialRepository.authenticate(anyString(), any(LocalDateTime.class)))
                 .thenReturn(Optional.of(projection));
 
@@ -96,6 +101,7 @@ class ApiKeyManagementServiceTest {
         assertEquals("rag_k_v2", first.getCredentialId());
         assertEquals(2, first.getCredentialVersion());
         assertEquals(4L, first.getPolicyVersion());
+        assertEquals(List.of("RAG_READ"), first.getCapabilities());
         assertEquals(first, second);
         verify(credentialRepository, times(2))
                 .authenticate(anyString(), any(LocalDateTime.class));
@@ -190,6 +196,24 @@ class ApiKeyManagementServiceTest {
     }
 
     @Test
+    void adminCannotBeDowngradedToReadOnly() {
+        RagApiPrincipal principal = principal("rag_admin", ApiKeyRole.ADMIN);
+        when(principalRepository.acquireManagementWrite(principal.getPrincipalId()))
+                .thenReturn(1);
+        when(principalRepository.findByPrincipalId(principal.getPrincipalId()))
+                .thenReturn(Optional.of(principal));
+        ApiPrincipalPolicyUpdateRequest request = policyRequest(principal);
+        request.setCapabilities(List.of(ApiCapabilitySupport.RAG_READ));
+
+        RagException error = assertThrows(
+                RagException.class,
+                () -> service.updatePolicy(
+                        principal.getPrincipalId(), request, null, true));
+        assertEquals(ErrorCode.BAD_REQUEST, error.getErrorCodeEnum());
+        assertEquals("RAG_READ,RAG_WRITE", principal.getCapabilities());
+    }
+
+    @Test
     void nonManagedCredentialPrefixesNeverReachDatabase() {
         assertNull(service.authenticate("legacy-static"));
         assertNull(service.authenticate(null));
@@ -205,18 +229,31 @@ class ApiKeyManagementServiceTest {
     }
 
     private RagApiPrincipal principal(String id) {
+        return principal(id, ApiKeyRole.NORMAL);
+    }
+
+    private RagApiPrincipal principal(String id, ApiKeyRole role) {
         RagApiPrincipal principal = new RagApiPrincipal();
         principal.setPrincipalId(id);
         principal.setName("Indexer");
-        principal.setRole(ApiKeyRole.NORMAL);
+        principal.setRole(role);
         principal.setAllowedCollectionIds("3,7");
         principal.setExpiresAt(LocalDateTime.now().plusDays(30));
         principal.setRequestsPerMinute(120);
         principal.setPolicyVersion(3L);
         principal.setNextCredentialVersion(2);
+        principal.setCapabilities("RAG_READ,RAG_WRITE");
         principal.setCreatedAt(LocalDateTime.now().minusDays(1));
         principal.setUpdatedAt(LocalDateTime.now().minusDays(1));
         return principal;
+    }
+
+    private ApiPrincipalPolicyUpdateRequest policyRequest(RagApiPrincipal principal) {
+        ApiPrincipalPolicyUpdateRequest request = new ApiPrincipalPolicyUpdateRequest();
+        request.setExpectedPolicyVersion(principal.getPolicyVersion());
+        request.setName(principal.getName());
+        request.setExpiresAt(principal.getExpiresAt());
+        return request;
     }
 
     private RagApiKey credential(

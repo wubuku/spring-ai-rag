@@ -386,7 +386,7 @@ See [multi-model-external-config.md](multi-model-external-config.md).
 ### Database
 
 - PostgreSQL with pgvector.
-- Flyway is currently V1–V48.
+- Flyway is currently V1–V49.
 - V27/V28 add, backfill, validate, uniquely constrain, and make immutable the
   Collection business key; V29 adds JSONB structured records; V30 adds the
   external-document synchronization schema; V31 normalizes stored external
@@ -411,7 +411,8 @@ See [multi-model-external-config.md](multi-model-external-config.md).
   operations, immutable replay snapshots, bounded lease/reclaim state, and
   opaque turn identity shared by operation status and business history; V48
   adds stable API principals, versioned credentials, a plaintext-secret guard,
-  shared quota buckets, and the legacy ADMIN guard.
+  shared quota buckets, and the legacy ADMIN guard; V49 adds principal-scoped
+  `RAG_READ` / `RAG_WRITE` operation capabilities and a database constraint.
 - The data-access layer forbids explicit `SELECT ... FOR UPDATE`,
   `SKIP LOCKED`, JPA `PESSIMISTIC_*`, and PostgreSQL advisory locks.
   Concurrent writes use conditional `UPDATE/DELETE ... RETURNING`, `@Version`,
@@ -459,8 +460,9 @@ Standalone-service MVP mode is enabled explicitly by `RAG_ROOT_API_KEY`:
 - The root unlocks the administration UI at `/webui/unlock`; the browser keeps
   it only in page memory and requires it again after refresh.
 - Only the root can create, list, rotate, and revoke business keys.
-- Root-created keys have a fixed `FULL_RAG` data-plane profile. They can read
-  and write RAG data and may be Collection-scoped, but cannot manage keys.
+- Root-created NORMAL keys may use read-only `RAG_READ` or full
+  `RAG_READ + RAG_WRITE` data-plane capabilities and may be Collection-scoped,
+  but cannot manage keys. Omission remains backward-compatible full read/write.
 - Business-key expiry is required and must be in the future, with no fixed
   maximum lifetime. Raw secrets appear only in create or rotate responses.
 - Root mode accepts only Bearer or `X-API-Key` headers, rejects query
@@ -471,8 +473,9 @@ Without a root credential, legacy ADMIN/NORMAL/static-key behavior remains.
 Managed database callers consist of a stable `rag_api_principal` and versioned
 `rag_api_key` credentials:
 
-- The principal owns role, Collection ACL, expiry, policy version, and an
-  optional quota; a credential owns only its hash, version, and active state.
+- The principal owns role, Collection ACL, expiry, policy version, an optional
+  quota, and canonical operation capabilities; a credential owns only its
+  hash, version, and active state.
 - V48 deterministically backfills existing keys with `principalId=old keyId`,
   preserving historical `db:{keyId}` owners. Later rotations replace only the
   credential and retain the stable owner.
@@ -487,6 +490,12 @@ Managed database callers consist of a stable `rag_api_principal` and versioned
 - With `backend=postgresql`, all instances share a stable-principal UTC
   fixed-minute quota. Rotation does not reset usage, and store failure fails
   closed with `503`.
+- An authenticated central capability filter enforces `RAG_READ` /
+  `RAG_WRITE` for database NORMAL principals. Reads and explicit read-only POST
+  routes require read; other mutations require write by default. Capability
+  `403` responses occur before quota accounting. Rotation inherits
+  capabilities, while policy CAS may update them. ADMIN, root, legacy-static,
+  and auth-disabled paths remain unrestricted.
 - Chat, Search, Collections, Documents, PDF-to-RAG, evaluation, and background
   workers all use the immutable ACL snapshot or reload policy by stable owner.
 

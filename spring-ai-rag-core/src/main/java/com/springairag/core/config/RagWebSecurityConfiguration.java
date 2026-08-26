@@ -1,6 +1,7 @@
 package com.springairag.core.config;
 
 import com.springairag.core.filter.ApiKeyAuthFilter;
+import com.springairag.core.filter.ApiCapabilityFilter;
 import com.springairag.core.filter.RateLimitFilter;
 import com.springairag.core.ratelimit.PostgresRateLimitStore;
 import com.springairag.core.ratelimit.RateLimitObservability;
@@ -54,6 +55,17 @@ public class RagWebSecurityConfiguration {
         registration.addUrlPatterns("/api/*", "/v1/*");
         // 认证先于限流，确保限流只使用稳定 principal ID，不接触 root 明文。
         registration.setOrder(-10);
+        return registration;
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(name = "apiCapabilityFilterRegistration")
+    public FilterRegistrationBean<ApiCapabilityFilter> apiCapabilityFilterRegistration() {
+        FilterRegistrationBean<ApiCapabilityFilter> registration =
+                new FilterRegistrationBean<>(new ApiCapabilityFilter());
+        registration.addUrlPatterns("/api/*", "/v1/*");
+        // capability gate must see the authenticated snapshot and run before quota accounting.
+        registration.setOrder(-5);
         return registration;
     }
 

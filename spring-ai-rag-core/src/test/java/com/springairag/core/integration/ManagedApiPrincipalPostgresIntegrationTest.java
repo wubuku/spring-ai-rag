@@ -11,6 +11,7 @@ import com.springairag.core.ratelimit.PostgresRateLimitStore;
 import com.springairag.core.repository.RagApiKeyRepository;
 import com.springairag.core.repository.RagApiPrincipalRepository;
 import com.springairag.core.security.AuthenticatedApiPrincipal;
+import com.springairag.core.security.ApiCapabilitySupport;
 import com.springairag.core.service.ApiKeyManagementService;
 import jakarta.persistence.EntityManagerFactory;
 import org.flywaydb.core.Flyway;
@@ -139,7 +140,7 @@ class ManagedApiPrincipalPostgresIntegrationTest {
 
         flyway().migrate();
 
-        assertEquals("48", migrationJdbc.queryForObject(
+        assertEquals("49", migrationJdbc.queryForObject(
                 "SELECT version FROM flyway_schema_history WHERE success = TRUE "
                         + "ORDER BY installed_rank DESC LIMIT 1",
                 String.class));
@@ -157,15 +158,20 @@ class ManagedApiPrincipalPostgresIntegrationTest {
         assertEquals(1, migrationJdbc.queryForObject(
                 "SELECT non_revoked_admin_count FROM rag_api_admin_guard WHERE singleton=TRUE",
                 Integer.class));
+        assertEquals("RAG_READ,RAG_WRITE", migrationJdbc.queryForObject(
+                "SELECT capabilities FROM rag_api_principal WHERE principal_id='rag_k_legacy'",
+                String.class));
     }
 
     @Test
     void createRotateAuthenticateAndRevokePreserveStablePrincipal() {
         ApiKeyCreatedResponse first = service.generateManagedKey(
-                request("External client", 40));
+                request("External client", 40, List.of(ApiCapabilitySupport.RAG_READ)));
+        assertEquals(List.of(ApiCapabilitySupport.RAG_READ), first.getCapabilities());
         AuthenticatedApiPrincipal firstAuth = service.authenticate(first.getRawKey());
         assertNotNull(firstAuth);
         assertEquals(first.getPrincipalId(), firstAuth.getPrincipalId());
+        assertEquals(List.of(ApiCapabilitySupport.RAG_READ), firstAuth.getCapabilities());
         assertEquals(first.getKeyId(), firstAuth.getCredentialId());
 
         ApiKeyCreatedResponse second = service.rotateManagedKey(first.getKeyId());
@@ -175,6 +181,7 @@ class ManagedApiPrincipalPostgresIntegrationTest {
         AuthenticatedApiPrincipal secondAuth = service.authenticate(second.getRawKey());
         assertEquals(first.getPrincipalId(), secondAuth.getPrincipalId());
         assertEquals(second.getKeyId(), secondAuth.getCredentialId());
+        assertEquals(List.of(ApiCapabilitySupport.RAG_READ), secondAuth.getCapabilities());
 
         RagException stale = assertThrows(
                 RagException.class,
@@ -241,23 +248,67 @@ class ManagedApiPrincipalPostgresIntegrationTest {
         update.setName("Policy v2");
         update.setExpiresAt(LocalDateTime.now().plusDays(90));
         update.setRequestsPerMinute(25);
+        update.setCapabilities(List.of(ApiCapabilitySupport.RAG_READ));
 
         var response = service.updatePolicy(
                 created.getPrincipalId(), update, List.of(11L, 7L), true);
         assertEquals(2L, response.getPolicyVersion());
         assertEquals(25, response.getRequestsPerMinute());
+        assertEquals(List.of(ApiCapabilitySupport.RAG_READ), response.getCapabilities());
+        assertEquals("RAG_READ", jdbc.queryForObject(
+                "SELECT capabilities FROM rag_api_principal WHERE principal_id=?",
+                String.class, created.getPrincipalId()));
         assertEquals("7,11", jdbc.queryForObject(
                 "SELECT allowed_collection_ids FROM rag_api_principal WHERE principal_id=?",
                 String.class, created.getPrincipalId()));
         assertEquals("7,11", jdbc.queryForObject(
                 "SELECT allowed_collection_ids FROM rag_api_key WHERE key_id=?",
                 String.class, created.getKeyId()));
+        assertEquals(List.of(ApiCapabilitySupport.RAG_READ),
+                service.authenticate(created.getRawKey()).getCapabilities());
+
+        ApiPrincipalPolicyUpdateRequest preserve = new ApiPrincipalPolicyUpdateRequest();
+        preserve.setExpectedPolicyVersion(2L);
+        preserve.setName("Policy v3");
+        preserve.setExpiresAt(LocalDateTime.now().plusDays(120));
+        preserve.setRequestsPerMinute(30);
+        var preserved = service.updatePolicy(
+                created.getPrincipalId(), preserve, List.of(7L, 11L), true);
+        assertEquals(3L, preserved.getPolicyVersion());
+        assertEquals(List.of(ApiCapabilitySupport.RAG_READ),
+                preserved.getCapabilities());
+        assertEquals("RAG_READ", jdbc.queryForObject(
+                "SELECT capabilities FROM rag_api_principal WHERE principal_id=?",
+                String.class, created.getPrincipalId()));
 
         RagException stale = assertThrows(
                 RagException.class,
                 () -> service.updatePolicy(
                         created.getPrincipalId(), update, null, true));
         assertEquals(ErrorCode.POLICY_VERSION_CONFLICT, stale.getErrorCodeEnum());
+    }
+
+    @Test
+    void adminPolicyCannotBeDowngradedAndDatabaseStateRemainsUnchanged() {
+        insertAdmin("rag_k_admin_capability");
+        ApiPrincipalPolicyUpdateRequest update = new ApiPrincipalPolicyUpdateRequest();
+        update.setExpectedPolicyVersion(1L);
+        update.setName("Admin capability downgrade");
+        update.setExpiresAt(LocalDateTime.now().plusDays(30));
+        update.setCapabilities(List.of(ApiCapabilitySupport.RAG_READ));
+
+        RagException error = assertThrows(
+                RagException.class,
+                () -> service.updatePolicy(
+                        "rag_k_admin_capability", update, null, true));
+
+        assertEquals(ErrorCode.BAD_REQUEST, error.getErrorCodeEnum());
+        assertEquals("RAG_READ,RAG_WRITE", jdbc.queryForObject(
+                "SELECT capabilities FROM rag_api_principal WHERE principal_id=?",
+                String.class, "rag_k_admin_capability"));
+        assertEquals(1L, jdbc.queryForObject(
+                "SELECT policy_version FROM rag_api_principal WHERE principal_id=?",
+                Long.class, "rag_k_admin_capability"));
     }
 
     @Test
@@ -398,9 +449,15 @@ class ManagedApiPrincipalPostgresIntegrationTest {
     }
 
     private ApiKeyCreateRequest request(String name, Integer quota) {
+        return request(name, quota, null);
+    }
+
+    private ApiKeyCreateRequest request(
+            String name, Integer quota, List<String> capabilities) {
         ApiKeyCreateRequest request = new ApiKeyCreateRequest(
                 name, LocalDateTime.now().plusDays(30));
         request.setRequestsPerMinute(quota);
+        request.setCapabilities(capabilities);
         return request;
     }
 

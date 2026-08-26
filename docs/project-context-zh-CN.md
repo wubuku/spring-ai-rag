@@ -309,7 +309,7 @@ job enqueue 分开提交，HTTP 不同步循环调用 provider。只读诊断默
 ### 数据库
 
 - PostgreSQL + pgvector。
-- Flyway 当前为 V1–V48。
+- Flyway 当前为 V1–V49。
 - V27/V28 负责新增、回填、校验、唯一约束及不可变 Collection 业务 key；V29 增加 JSONB
   结构化记录；V30 增加外部文档同步 schema；V31 在不改写已发布 V30 的前提下规范化
   已存储的外部文档身份；V32 增加按 principal 归属的 Chat history、来源快照、turn
@@ -326,7 +326,8 @@ job enqueue 分开提交，HTTP 不同步循环调用 provider。只读诊断默
   version CAS 支持有界会话摘要；V47 增加按 principal 隔离的 durable Chat turn
   operation、不可变 replay 快照、有界 lease/接管状态，以及供 operation status 与
   业务 history 共用的 opaque turn identity；V48 增加 stable API principal、版本化
-  credential、明文 secret 禁写约束、共享 quota bucket 与 legacy ADMIN guard。
+  credential、明文 secret 禁写约束、共享 quota bucket 与 legacy ADMIN guard；V49
+  增加 principal 级 `RAG_READ` / `RAG_WRITE` 操作能力及数据库约束。
 - 数据访问层禁止显式 `SELECT ... FOR UPDATE`、`SKIP LOCKED`、JPA
   `PESSIMISTIC_*` 与 PostgreSQL advisory lock。并发写使用条件
   `UPDATE/DELETE ... RETURNING`、`@Version`、唯一约束、lease 和有界重试；普通 DML
@@ -370,8 +371,9 @@ job enqueue 分开提交，HTTP 不同步循环调用 provider。只读诊断默
 - environment root 自动保护 `/api/**`，不依赖 legacy 认证开关。
 - root 可通过 `/webui/unlock` 解锁管理台；凭据只保存在页面内存，刷新后重新输入。
 - 只有 root 能创建、列出、轮换和吊销业务 Key。
-- root 创建的 Key固定为 `FULL_RAG` 数据面能力，可读写 RAG 数据、可限制 Collection，
-  但不能管理其他 Key。
+- root 创建的 NORMAL Key 可选择只读 `RAG_READ` 或完整
+  `RAG_READ + RAG_WRITE` 数据面能力，可限制 Collection，但不能管理其他 Key；省略
+  capabilities 时兼容为完整读写。
 - 业务 Key expiry 必填、必须在未来且不设固定最长有效期；raw secret 仅在创建或轮换
   响应中显示一次。
 - root 模式只接受 Bearer / `X-API-Key` Header，拒绝 query credential，并禁用旧 ADMIN
@@ -381,7 +383,8 @@ job enqueue 分开提交，HTTP 不同步循环调用 provider。只读诊断默
 
 数据库受管调用方由 stable `rag_api_principal` 和版本化 `rag_api_key` credential 组成：
 
-- principal 持有 `ADMIN` / `NORMAL`、Collection ACL、expiry、policy version 与可选 quota；
+- principal 持有 `ADMIN` / `NORMAL`、Collection ACL、expiry、policy version、可选 quota
+  与规范化 operation capabilities；
   credential 只持有 hash、version 和启停状态。
 - V48 对既有 Key确定性回填 `principalId=旧 keyId`，历史 `db:{keyId}` owner 因而保持
   可读；之后的 rotation 只替换 credential，稳定 owner 不变。
@@ -393,6 +396,10 @@ job enqueue 分开提交，HTTP 不同步循环调用 provider。只读诊断默
   singleton guard 防止并发吊销最后一个 ADMIN。
 - `backend=postgresql` 时，按 stable principal 使用共享 UTC 固定分钟 quota；rotation
   不重置用量，存储故障 fail closed 返回 `503`。
+- 数据库 NORMAL principal 由认证后的中央 capability filter 执行 `RAG_READ` /
+  `RAG_WRITE`；读取和显式只读 POST 需要 read，其他 mutation 默认需要 write。能力
+  `403` 在 quota 计数前返回；rotation 继承能力，policy CAS 可更新能力。ADMIN、root、
+  legacy static 与 auth-disabled 路径保持 unrestricted。
 - Chat、Search、Collection、Document、PDF-to-RAG、评估与后台 worker 都使用统一 ACL
   snapshot 或按 stable owner 重载当前 policy。
 

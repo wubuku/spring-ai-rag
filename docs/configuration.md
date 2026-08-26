@@ -848,9 +848,10 @@ Setting a valid `RAG_ROOT_API_KEY` enables standalone-service MVP security mode:
 - The root is not stored in the database or logs. The WebUI keeps it only in
   page memory and requires it again after refresh.
 - Empty-table ADMIN bootstrap and raw-secret logging are disabled.
-- Root-created business keys have the fixed `FULL_RAG` data-plane profile,
-  cannot manage keys, and require a future expiry without a fixed maximum
-  lifetime.
+- Root-created business keys may use read-only `RAG_READ` or full
+  `RAG_READ + RAG_WRITE` data-plane capabilities and cannot manage keys.
+  Omitting capabilities remains backward-compatible full read/write. A future
+  expiry is required without a fixed maximum lifetime.
 
 Without `RAG_ROOT_API_KEY`, legacy behavior remains: `rag.security.enabled`
 controls authentication, while `rag.security.api-key` and database
@@ -862,7 +863,13 @@ Database business keys define their external scope with
 `allowedCollectionIds` remains compatible. V48 separates the stable
 `rag_api_principal` policy from versioned `rag_api_key` credentials. Rotation
 therefore preserves the `db:{principalId}` owner, role, Collection ACL, expiry,
-policy version, and quota. Authentication queries the authoritative credential
+policy version, and quota. V49 adds canonical principal `capabilities`, allowing
+only `RAG_READ` or `RAG_READ,RAG_WRITE`. Create omission defaults to full
+read/write, policy-update omission preserves the current value, and rotation
+inherits it. NORMAL-principal reads and explicit read-only POST routes require
+`RAG_READ`; other mutations require `RAG_WRITE`, with rejection before shared
+quota accounting. ADMIN, environment-root, legacy-static, and auth-disabled
+compatibility paths remain unrestricted. Authentication queries the authoritative credential
 and principal on every request; only the approximate `last_used_at` write is
 suppressed for five minutes. The legacy `api_key` column is retained for
 migration compatibility but constrained to `NULL`. See

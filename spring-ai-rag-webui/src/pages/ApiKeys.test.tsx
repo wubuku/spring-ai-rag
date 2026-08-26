@@ -60,6 +60,7 @@ const mockPrincipals = [
     currentCredentialId: 'rag_k_abc123_v2',
     currentCredentialVersion: 2,
     requestsPerMinute: 120,
+    capabilities: ['RAG_READ', 'RAG_WRITE'],
   },
   {
     principalId: 'rag_p_def456',
@@ -73,6 +74,7 @@ const mockPrincipals = [
     policyVersion: 1,
     currentCredentialId: 'rag_k_def456',
     currentCredentialVersion: 1,
+    capabilities: ['RAG_READ'],
   },
   {
     principalId: 'rag_p_key_scope',
@@ -86,6 +88,7 @@ const mockPrincipals = [
     policyVersion: 3,
     currentCredentialId: 'rag_k_key_scope_v3',
     currentCredentialVersion: 3,
+    capabilities: ['RAG_READ'],
     allowedCollectionKeys: ['customer:manual'],
   },
 ];
@@ -204,6 +207,7 @@ describe('ApiKeys', () => {
 
     expect(mockMutateFn).toHaveBeenCalledWith(expect.objectContaining({
       name: 'Scoped Key',
+      capabilities: ['RAG_READ', 'RAG_WRITE'],
       allowedCollectionKeys: ['customer:manual'],
       requestsPerMinute: 75,
       expiresAt: expect.stringMatching(/T\d{2}:\d{2}:00$/),
@@ -239,6 +243,7 @@ describe('ApiKeys', () => {
       expectedPolicyVersion: 2,
       name: 'Production Agent',
       expiresAt: '2027-01-01T00:00:00',
+      capabilities: ['RAG_READ', 'RAG_WRITE'],
       requestsPerMinute: 240,
     });
   });
@@ -281,6 +286,7 @@ describe('ApiKeys', () => {
     expect(mockMutateFn).toHaveBeenCalledWith({
       name: 'Slow Keyboard Entry',
       expiresAt: '2099-12-31T23:59:00',
+      capabilities: ['RAG_READ', 'RAG_WRITE'],
     });
   });
 
@@ -314,6 +320,7 @@ describe('ApiKeys', () => {
     expect(mockMutateFn).toHaveBeenCalledWith({
       name: 'Long-lived Service',
       expiresAt: '2027-12-31T23:59:00',
+      capabilities: ['RAG_READ', 'RAG_WRITE'],
     });
   });
 

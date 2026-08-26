@@ -19,7 +19,7 @@ Documentation hub: [index.md](index.md). Stable project context: [project-contex
 | Real-LLM E2E port | `18081` |
 | Embedding | SiliconFlow `BAAI/bge-m3` |
 | Vector dimension | `1024` |
-| Flyway | V1–V48 |
+| Flyway | V1–V49 |
 
 Do **not** append `/v1` to an OpenAI or Embedding `base-url`. Spring AI appends `/v1/chat/completions` or `/v1/embeddings`.
 
@@ -384,7 +384,10 @@ MANAGED_API_REAL_ENV_FILE=.env \
 
 After the Mock and build gates pass, this command uses two backends (default
 `18181` and `18182`), one Vite frontend (default `15181`), and disposable
-PostgreSQL for real full-stack plus bounded real-LLM acceptance. Override port
+PostgreSQL for real full-stack plus bounded real-LLM acceptance. The V49
+matrix also verifies read-only/read-write capabilities for NORMAL principals,
+policy CAS, rotation inheritance, and write rejection before quota accounting.
+Override port
 conflicts with `MANAGED_API_BACKEND_A_PORT`, `MANAGED_API_BACKEND_B_PORT`, and
 `MANAGED_API_FRONTEND_PORT`. Evidence is written under
 `.verification/managed-api-principals/<run-id>/`.
@@ -429,7 +432,7 @@ credential files, containers, ports, and processes. The real HTTP contract
 currently contains 129 assertions, including read-only and canary binding
 preflight scenarios plus Record preservation after a provider `503`.
 `release-manifest.json` pins the full Git SHA, initial tree
-state, project/OpenAPI versions, API base path, V48, passed steps, PostgreSQL
+state, project/OpenAPI versions, API base path, V49, passed steps, PostgreSQL
 image, and HTTP-check count. Runtime facts not reached are JSON `null`; it
 stores no credential, URL, payload, external ID, or private path.
 

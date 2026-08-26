@@ -335,6 +335,10 @@ Data model and current boundaries:
   authoritative internal-ID ACL on `rag_api_principal.allowed_collection_ids`.
   The active credential carries a compatibility snapshot, while request-time
   authorization uses an immutable principal policy loaded by an indexed join.
+  V49 stores `RAG_READ` / `RAG_WRITE` on the same principal policy. A central
+  filter after authentication and before shared rate limiting enforces
+  operation capabilities for NORMAL principals; unknown mutations require
+  write by default.
 - Deleting a Collection attempts a soft delete. If it contains any externally managed
   document with a nonblank `externalId`, the service returns `409` and does not
   delete the Collection, because clearing `collection_id` would destroy the
@@ -645,7 +649,7 @@ rag_audit_log           # Audit logs (collection operations)
 | `rag_embedding_jobs` | document_id, embedding_profile_id, content_hash, request_generation, document_kind, chunker_version, status, lease_expires_at, origin | Generation-aware durable embedding/reindex state machine |
 | `rag_document_chunks` | document_id, local_index_generation, content_hash, chunker_version, chunk_text, chunk_index | Profile-neutral local keyword chunks |
 | `rag_document_local_index_state` | document_id, local_index_status, local_index_generation, content_hash, chunker_version, chunk_count | Current local keyword generation and freshness |
-| `rag_api_principal` | principal_id, role, allowed_collection_ids, policy_version, requests_per_minute | Stable caller owner and authoritative policy (V48) |
+| `rag_api_principal` | principal_id, role, allowed_collection_ids, capabilities, policy_version, requests_per_minute | Stable caller owner and authoritative policy (V48/V49) |
 | `rag_api_key` | key_id, principal_id, credential_version, key_hash, enabled | Versioned credential with at most one active version per principal |
 | `rag_api_rate_limit_bucket` | principal_id, window_start, request_count | Shared fixed UTC-minute quota bucket |
 | `rag_chat_history` | session_id, user_message, ai_response | Business audit |
