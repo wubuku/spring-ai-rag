@@ -410,6 +410,8 @@ try:
             reject("CANARY_CONFIRMATION_REQUIRED")
         if canary_key not in collections:
             reject("CANARY_COLLECTION_NOT_ALLOWED")
+        if len(collections) != 1 or canary_key != collections[0]:
+            reject("CANARY_COLLECTION_MUST_BE_ONLY_EXPECTED")
     elif canary_key or canary_confirm:
         reject("CANARY_INPUT_NOT_ALLOWED_IN_READ_ONLY")
 
@@ -702,6 +704,7 @@ lookup_canary() {
 }
 
 wait_for_canary_ready() {
+  local expected_revision="${1:-$REV_CREATED}"
   local deadline now remaining timeout response headers
   deadline=$(( $(date +%s) + READY_TIMEOUT_SECONDS ))
   response="${PRIVATE_DIR}/canary-ready.json"
@@ -724,7 +727,7 @@ wait_for_canary_ready() {
     require_http "canary_readiness" 200 || return 1
     if ! jq -e \
         --argjson documentId "$DOCUMENT_ID" \
-        --arg revision "$REV_CREATED" \
+        --arg revision "$expected_revision" \
         '.documentId == $documentId
           and .sourceRevision == $revision
           and .enabled == true
@@ -956,6 +959,7 @@ canary_mutation_preflight() {
     return 1
   fi
   pass_step "canary_restore" "$HTTP_CODE"
+  wait_for_canary_ready "$REV_RESTORED" || return 1
 
   response="${PRIVATE_DIR}/canary-cleanup.json"
   headers="${response}.headers"

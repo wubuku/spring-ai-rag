@@ -97,6 +97,11 @@ run_negative \
   "CANARY_MUTATION" "BEARER" "YES" "sample-missing"
 
 run_negative \
+  "canary-only-expected" "CANARY_COLLECTION_MUST_BE_ONLY_EXPECTED" \
+  "https://rag.example.invalid" \
+  "CANARY_MUTATION" "BEARER" "YES" "sample-a"
+
+run_negative \
   "unexpected-auth-scheme" "INVALID_AUTH_SCHEME" \
   "https://rag.example.invalid" \
   "READ_ONLY" "INVALID" "" ""

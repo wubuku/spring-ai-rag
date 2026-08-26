@@ -103,3 +103,34 @@
   第 1 轮核对 runner 输入/TLS/认证/状态机/报告安全，第 2 轮重新执行脚本自检、
   禁锁/文档/whitespace 门禁并核对 cleanup 与生命周期，第 3 轮核对双语长青文档、
   验证证据、Git 祖先关系和完成定义。
+- 2026-08-26：合并后真实全量复验首次暴露 canary 成功路径的并发缺口：restore 的 ASYNC
+  embedding 尚未稳定时立即发送最终 tombstone，可能与 embedding worker 的派生任务更新
+  形成 PostgreSQL deadlock 并返回 HTTP 500。已修复 runner：restore 后先按同一有界预算
+  等待当前 revision 达到 `searchability=READY`，再执行最终 tombstone；实现审查计数重置
+  为 `0/3`，需重新通过基本门槛和连续三轮审查。
+- 2026-08-26：修复后的全量验收重新通过 `16/16`。其中 focused 后端测试
+  `119` 项、PostgreSQL 集成矩阵、`mvn clean compile test-compile`、WebUI
+  typecheck/Vitest `218/218`/production build、核心 Mock Playwright、脚本/锁/文档/密钥/
+  whitespace 门禁，以及真实服务 HTTP 合同 `129` 项和真实 API-key Playwright `1/1`
+  均通过；证据目录为 `.verification/preflight-fix-20260826/`。现在重新开始实现阶段
+  三轮固定范围只读审查，计数为 `0/3`。
+- 2026-08-26：第 3 轮实现审查发现 mutation 安全边界与长青文档不一致：实现允许
+  canary key 与其他期望 Collection 一起进入 `CANARY_MUTATION`，而文档要求 mutation
+  只能针对专用 canary Collection。已收紧输入校验为“期望集合恰好一个且等于 canary key”，
+  增加负向自测并同步规划；本轮修改使实现审查计数重置为 `0/3`，需重新通过受影响门槛。
+- 2026-08-26：重新门槛在负向自测中发现分类顺序缺口：当 canary key 不在期望集合时，
+  必须保留 `CANARY_COLLECTION_NOT_ALLOWED`，不能被 only-expected 校验覆盖。已将两项
+  校验改为先判“未授权 key”、再判“非单独 canary 集合”；门槛重新运行。
+- 2026-08-26：分类顺序修复后的统一全量门槛重新通过 `16/16`。新增
+  `canary-only-expected` 负向自测与原有 8 个 runner 负向场景均通过；focused 后端
+  `119` 项、PostgreSQL 矩阵、Maven、WebUI `218/218`、构建、Mock Playwright、文档/
+  禁锁/密钥/whitespace 门禁、真实服务 HTTP 合同 `129` 项和真实 API-key Playwright
+  `1/1` 均通过。证据目录为 `.verification/preflight-canary-boundary-r2-20260826/`；
+  实现审查重新从 `0/3` 开始。
+- 2026-08-26：重新开始的实现审查第 1 轮发现归档规划的 mutation 流程仍把 canary
+  描述为 allow-list 成员，未同步“唯一 expected Collection”安全默认。已修正文档并
+  重跑文档门禁；实现审查计数保持 `0/3`。
+- 2026-08-26：修复后的 fresh 实现三轮限定范围审查连续 `3/3` 无实质问题、期间无
+  代码或测试修改。第 1 轮核对输入安全与规划/双语文档一致性，第 2 轮核对异步
+  readiness、restore revision、cleanup 与失败报告，第 3 轮核对验收证据、密钥/whitespace
+  门禁、文档归档和 `origin/main` 祖先关系；仅在三轮完成后写入本总结。
