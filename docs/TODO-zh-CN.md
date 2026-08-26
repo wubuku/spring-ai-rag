@@ -43,6 +43,7 @@ limit/billing、多 embedding profile 路由与 `EACH_COLLECTION` 继续独立�
 | 项目 | 优先级 | 当前缺口 |
 |------|--------|----------|
 | 权威来源全量快照对账 | 本批已交付 | V42 API 和 reference client 支持有界权威 run、preview fingerprint、删除保护和 reconciliation tombstone |
+| Sync Run 持久化 item receipt | V51 已交付 | `RAG_READ` 查询支持状态过滤、有界 cursor、当前 ledger 摘要和脱敏错误；终态遍历稳定，active run 需最终一致去重并在终态后复扫 |
 | 外部文档原子 Collection 迁移 | 本批已交付 | V44 提供双 ACL、幂等精确重放、Sync Run fencing 和永久 retired-address guard；默认由 feature flag 关闭 |
 | Collection 派生索引完整性诊断与受控修复 | 本批已交付 | V45 提供共享物理 freshness、集合级有界诊断和最多 100 项的 durable preview/apply/status；有副作用的 repair 默认关闭 |
 | 历史版本受控恢复 | 本批已交付 | 开启 feature flag 后，本地 `FULL` 快照可恢复为新 revision；外部文档仍由来源系统负责 |

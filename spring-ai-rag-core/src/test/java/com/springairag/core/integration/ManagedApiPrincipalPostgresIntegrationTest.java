@@ -142,7 +142,7 @@ class ManagedApiPrincipalPostgresIntegrationTest {
 
         flyway().migrate();
 
-        assertEquals("50", migrationJdbc.queryForObject(
+        assertEquals("51", migrationJdbc.queryForObject(
                 "SELECT version FROM flyway_schema_history WHERE success = TRUE "
                         + "ORDER BY installed_rank DESC LIMIT 1",
                 String.class));

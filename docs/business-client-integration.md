@@ -131,7 +131,15 @@ GET /api/v1/rag/integration-capabilities
 Require protocol `spring-ai-rag-integration` version `1.0`, then verify that
 the required provisioning/data-plane features and limits are present. The
 response is low-sensitivity and projected for the current caller; it does not
-replace identity binding.
+replace identity binding. A client using authoritative snapshots must require
+`features.optional.documentSyncRuns=true`; response-loss recovery,
+failed-item lookup, or terminal audit additionally requires
+`features.optional.documentSyncRunItemReceipts=true`. Older clients must
+ignore unknown optional fields and must not treat a missing field as enabled.
+The durable receipt endpoint is
+`GET /api/v1/rag/document-sync-runs/{runId}/items`; see the
+[External Document Synchronization Client Guide](external-document-sync-client-guide.md#7-authoritative-snapshot-reconciliation)
+for recovery and terminal-rescan behavior.
 
 Then call:
 
@@ -383,19 +391,21 @@ conditions.
 - Read document lifecycle or
   `/api/v1/rag/collections/embedding-readiness` for embedding availability.
   Use `/auth/me` plus Collection by-key probes for business binding.
-- Empty and upgraded databases must run Flyway V1-V50 in order. V49 adds
+- Empty and upgraded databases must run Flyway V1-V51 in order. V49 adds
   operation capabilities to stable principals; V50 adds the successful
-  provisioning idempotency ledger without storing raw credentials.
+  provisioning idempotency ledger without storing raw credentials; V51 adds
+  unfiltered and status-filtered keyset indexes for Sync Run item receipts.
 - Pin production callers to an accepted Git commit or an immutable image built
   from it. Maven/API version remains `1.0.0`.
 - The added `/auth/me` fields remain backward-compatible. Older clients ignore
   them; clients that depend on capability/ACL verification must run the
   contract gate before rollout.
-- V49/V50 are forward-compatible additive migrations; do not destructively
+- V49/V50/V51 are forward-compatible additive migrations; do not destructively
   roll back their schema. If the application is rolled back to a version that
-  does not understand operation capabilities or keyed provisioning, retain the
-  schema and stop clients that require those contracts rather than starting
-  permissively or retrying creates without idempotency.
+  does not understand operation capabilities, keyed provisioning, or item
+  receipts, retain the schema and stop clients that require those contracts
+  rather than starting permissively, retrying creates without idempotency, or
+  assuming the receipt endpoint remains available.
 
 ## 8. One-Command Integration Acceptance
 

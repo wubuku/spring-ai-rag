@@ -215,17 +215,23 @@ mutation 成功表示来源状态已被接受，不一定表示已可检索。
    `snapshotMode`、`missingPolicy`，以及 opaque 的 `X-RAG-Sync-Lease` header。
 2. 使用有界的 `batch-upsert` 发送 manifest item。item 继承 run 的 Collection 和
    `sourceNamespace`，必须包含 `externalId` 与 `sourceRevision`。
-3. 调用 `preview-missing`，保存返回的 opaque preview token，再调用 `complete`。
-4. 只有来源能建立一致性 cut 时才使用 `ONLINE_CUT + TOMBSTONE`。静态 manifest 的安全
+3. 如果 batch 响应丢失或需要恢复，使用具备 `RAG_READ` 的同范围 credential 调用
+   `GET /api/v1/rag/document-sync-runs/{runId}/items`。按 `externalId` 对 active run 的
+   分页结果去重，只重试当前为 `FAILED` 的同 fingerprint item；不要把 cursor 当作授权或
+   持久 checkpoint。
+4. 调用 `preview-missing`，保存返回的 opaque preview token，再调用 `complete`。
+5. 只有来源能建立一致性 cut 时才使用 `ONLINE_CUT + TOMBSTONE`。静态 manifest 的安全
    默认是 `OFFLINE_MANIFEST + NONE`。
-5. `EXCLUSIVE_OFFLINE + TOMBSTONE` 必须显式发送
+6. `EXCLUSIVE_OFFLINE + TOMBSTONE` 必须显式发送
    `confirmExclusiveOffline=true`，并且 connector 必须保证整个 run 期间来源独占写入。
    这是有破坏性的显式操作，不能作为默认值。
 
 TOMBSTONE run 在完成前必须用相同 fingerprint 重试失败 item。服务会保护 snapshot 边界
 之后被修改的文档，执行删除阈值保护，并且不会在 run ledger 中存储正文或 JSONB payload。
 每个 run mutation 都会重新检查当前 API Key 的 Collection ACL；lease token 不是绕过 ACL
-的凭据。具体字段、响应和错误码见[REST API 合同](rest-api-zh-CN.md#外部快照同步-run)。
+的凭据。run 进入终态后，应从无 cursor 起点重新扫描全部 receipt；只有终态遍历才是稳定的，
+而 `currentSummary` 表示当前 ledger 状态，不等同于 run 的累计处理计数。具体字段、响应和
+错误码见[REST API 合同](rest-api-zh-CN.md#外部快照同步-run)。
 
 ## 8. Reference Client
 
@@ -261,6 +267,8 @@ JSONL 文件视为不可变；下一批投递使用新的文件和 checkpoint。
 - 需要迁移时保存一个业务事件级 `Idempotency-Key`，直到 relocation 明确成功或冲突收敛。
 - 普通批量/CDC 投递默认使用 `ASYNC`。
 - HTTP 成功后才持久化 checkpoint 和已接受 revision。
+- batch 响应超时后先查 durable receipt；不要盲目改变 item 内容或 revision 后重试。
+- 终态后从头扫描 receipt，确认 `currentSummary.failed=0` 或进入明确的人工处置。
 - 日志不得记录 API Key、完整正文和敏感 payload。
 - 永久 4xx 只用 identity 与安全错误码进入 dead letter，不保存完整正文。
 - 对 lifecycle `FAILED`、任务排队时间和 Collection 未就绪数量告警。

@@ -4,19 +4,26 @@ import com.springairag.api.dto.DocumentSyncRunBatchUpsertRequest;
 import com.springairag.api.dto.DocumentSyncRunBatchUpsertResponse;
 import com.springairag.api.dto.DocumentSyncRunBeginRequest;
 import com.springairag.api.dto.DocumentSyncRunCompleteRequest;
+import com.springairag.api.dto.DocumentSyncRunItemPageResponse;
 import com.springairag.api.dto.DocumentSyncRunPreviewResponse;
 import com.springairag.api.dto.DocumentSyncRunResponse;
 import com.springairag.api.dto.DocumentSyncRunStatusResponse;
+import com.springairag.api.enums.DocumentSyncItemStatus;
 import com.springairag.core.service.DocumentSyncRunService;
 import com.springairag.core.versioning.ApiVersion;
 import io.micrometer.core.annotation.Timed;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -115,10 +122,58 @@ public class DocumentSyncRunController {
             description = "Get document sync run")
     public ResponseEntity<DocumentSyncRunResponse> get(
             @PathVariable UUID runId,
-            @RequestParam @NotBlank @Size(max = 128) String collectionKey,
+            @RequestParam @NotBlank @Size(min = 1, max = 128)
+            String collectionKey,
             @RequestParam(defaultValue = "default")
             @Size(max = 128) String sourceNamespace) {
         return ResponseEntity.ok(service.get(runId, collectionKey, sourceNamespace));
+    }
+
+    @Operation(summary = "List durable item receipts for one sync run",
+            description = "Terminal runs provide stable cursor traversal. "
+                    + "Active runs are eventually consistent and must be "
+                    + "rescanned from the beginning after reaching a terminal state.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Item receipt page returned"),
+            @ApiResponse(responseCode = "400", description = "Invalid page parameter or cursor"),
+            @ApiResponse(responseCode = "401", description = "Authentication required"),
+            @ApiResponse(responseCode = "403", description = "Read capability or Collection denied"),
+            @ApiResponse(responseCode = "404", description = "Bound sync run not found"),
+            @ApiResponse(responseCode = "503", description = "Sync runs are disabled")
+    })
+    @GetMapping("/{runId}/items")
+    @Timed(value = "rag.document-sync-runs.items",
+            description = "List document sync run item receipts")
+    public ResponseEntity<DocumentSyncRunItemPageResponse> listItems(
+            @PathVariable UUID runId,
+            @Parameter(schema = @Schema(
+                    type = "string", minLength = 1, maxLength = 128))
+            @RequestParam @NotBlank @Size(min = 1, max = 128)
+            String collectionKey,
+            @Parameter(schema = @Schema(
+                    type = "string", minLength = 0, maxLength = 128))
+            @RequestParam(defaultValue = "default")
+            @Size(max = 128) String sourceNamespace,
+            @RequestParam(required = false) DocumentSyncItemStatus status,
+            @Parameter(schema = @Schema(
+                    type = "integer",
+                    minimum = "1",
+                    maximum = "200",
+                    defaultValue = "100"))
+            @RequestParam(defaultValue = "100") @Min(1) @Max(200) int limit,
+            @Parameter(schema = @Schema(
+                    type = "string", minLength = 0, maxLength = 1024))
+            @RequestParam(required = false)
+            @Size(max = 1024) String cursor) {
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .body(service.listItems(
+                        runId,
+                        collectionKey,
+                        sourceNamespace,
+                        status,
+                        limit,
+                        cursor));
     }
 
     @Operation(summary = "List sync runs for an authorized collection")

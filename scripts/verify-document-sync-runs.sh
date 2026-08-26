@@ -13,6 +13,7 @@ MIRROR_BASE_URL="${MIRROR_BASE_URL:-docker.m.daocloud.io}"
 JDBC_URL="${DOCUMENT_SYNC_RUNS_IT_JDBC_URL:-}"
 DB_USERNAME="${DOCUMENT_SYNC_RUNS_IT_USERNAME:-}"
 DB_PASSWORD="${DOCUMENT_SYNC_RUNS_IT_PASSWORD:-}"
+ROOT_KEY="${DOCUMENT_SYNC_RUNS_VERIFY_ROOT_KEY:-rag_root_$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')}"
 TEMP_DATABASE=""
 POSTGRES_CONTAINER=""
 BACKEND_PID=""
@@ -170,8 +171,8 @@ start_backend() {
     SPRING_DATASOURCE_URL="$JDBC_URL" \
     SPRING_DATASOURCE_USERNAME="$DB_USERNAME" \
     SPRING_DATASOURCE_PASSWORD="$DB_PASSWORD" \
-    RAG_SECURITY_ENABLED=false \
-    RAG_ROOT_API_KEY= \
+    RAG_SECURITY_ENABLED=true \
+    RAG_ROOT_API_KEY="$ROOT_KEY" \
     RAG_DOCUMENT_SYNC_RUNS_ENABLED=true \
     RAG_DOCUMENT_VERSION_RESTORE_ENABLED=true \
     RAG_EMBEDDING_JOBS_ENABLED=false \
@@ -206,8 +207,10 @@ start_backend() {
 }
 
 run_http_acceptance() {
-  python3 - "$BACKEND_PORT" "$RUN_ID" "$LOG_DIR/http-acceptance.json" <<'PY'
+  DOCUMENT_SYNC_RUNS_VERIFY_ROOT_KEY="$ROOT_KEY" \
+    python3 - "$BACKEND_PORT" "$RUN_ID" "$LOG_DIR/http-acceptance.json" <<'PY'
 import json
+import os
 import secrets
 import sys
 import urllib.error
@@ -216,20 +219,31 @@ import urllib.request
 
 port, run_id, evidence_path = sys.argv[1:]
 base = f"http://127.0.0.1:{port}/api/v1/rag"
+root_key = os.environ["DOCUMENT_SYNC_RUNS_VERIFY_ROOT_KEY"]
 
-def request(method, path, payload=None, headers=None, expected=(200,)):
+def request(method, path, payload=None, headers=None, expected=(200,),
+            api_key=root_key, capture_headers=False):
     body = None if payload is None else json.dumps(payload).encode()
     merged = {"Content-Type": "application/json"}
+    if api_key:
+        merged["X-API-Key"] = api_key
     if headers:
         merged.update(headers)
     req = urllib.request.Request(
         base + path, data=body, headers=merged, method=method)
+    response_headers = {}
     try:
-        with urllib.request.urlopen(req, timeout=10) as response:
+        with urllib.request.urlopen(req, timeout=15) as response:
             status = response.status
+            response_headers = {
+                key.lower(): value for key, value in response.headers.items()
+            }
             data = json.loads(response.read().decode() or "{}")
     except urllib.error.HTTPError as error:
         status = error.code
+        response_headers = {
+            key.lower(): value for key, value in error.headers.items()
+        }
         raw = error.read().decode()
         try:
             data = json.loads(raw or "{}")
@@ -237,17 +251,71 @@ def request(method, path, payload=None, headers=None, expected=(200,)):
             data = {"raw": raw[:200]}
     if status not in expected:
         raise AssertionError(f"{method} {path} returned {status}: {data}")
-    return data
+    return (data, response_headers) if capture_headers else data
+
+def create_principal(name, collection_key, capabilities):
+    response = request("POST", "/api-keys", {
+        "name": name,
+        "expiresAt": "2099-12-31T23:59:00",
+        "requestsPerMinute": 1000,
+        "allowedCollectionKeys": [collection_key],
+        "capabilities": capabilities,
+    }, expected=(201,))
+    assert response["secretAvailable"] is True
+    assert response["capabilities"] == capabilities
+    return response["rawKey"]
+
+def auth_headers(lease):
+    return {"X-RAG-Sync-Lease": lease}
+
+def receipt_path(run_value, source_namespace, **params):
+    query = {
+        "collectionKey": collection_key,
+        "sourceNamespace": source_namespace,
+        **params,
+    }
+    return (
+        f"/document-sync-runs/{run_value}/items?"
+        + urllib.parse.urlencode(query)
+    )
 
 collection_key = f"sync-run-{run_id}-{secrets.token_hex(4)}"
+other_collection_key = f"sync-run-other-{run_id}-{secrets.token_hex(4)}"
 namespace = "cms-main"
 other_namespace = "erp-main"
-lease = secrets.token_urlsafe(32)
 collection = request("POST", "/collections", {
     "collectionKey": collection_key,
     "name": "Sync Run verification",
     "dimensions": 1024,
 })
+request("POST", "/collections", {
+    "collectionKey": other_collection_key,
+    "name": "Sync Run ACL verification",
+    "dimensions": 1024,
+})
+writer_key = create_principal(
+    f"Sync Run writer {run_id}",
+    collection_key,
+    ["RAG_READ", "RAG_WRITE"])
+reader_key = create_principal(
+    f"Sync Run reader {run_id}",
+    collection_key,
+    ["RAG_READ"])
+
+unauthenticated = request(
+    "GET", "/integration-capabilities", expected=(401,), api_key=None)
+assert unauthenticated["error"] == "UNAUTHORIZED"
+capabilities, capability_headers = request(
+    "GET",
+    "/integration-capabilities",
+    api_key=reader_key,
+    capture_headers=True)
+assert capabilities["protocol"]["version"] == "1.0"
+assert capabilities["features"]["optional"]["documentSyncRuns"] is True
+assert capabilities["features"]["optional"][
+    "documentSyncRunItemReceipts"] is True
+assert capabilities["principal"]["capabilities"] == ["RAG_READ"]
+assert "no-store" in capability_headers.get("cache-control", "")
 
 def upsert(source_namespace, external_id, revision, content, expected=None):
     payload = {
@@ -262,12 +330,13 @@ def upsert(source_namespace, external_id, revision, content, expected=None):
     }
     if expected is not None:
         payload["expectedSourceRevision"] = expected
-    return request("POST", "/documents/upsert", payload)
+    return request("POST", "/documents/upsert", payload, api_key=writer_key)
 
 missing = upsert(namespace, "missing-1", "r1", "missing before cut")
 newer = upsert(namespace, "newer-1", "r1", "will be updated after cut")
 isolated = upsert(other_namespace, "missing-1", "r1", "different namespace")
 
+lease = secrets.token_urlsafe(32)
 begin_payload = {
     "collectionKey": collection_key,
     "sourceNamespace": namespace,
@@ -276,65 +345,188 @@ begin_payload = {
     "missingPolicy": "TOMBSTONE",
     "leaseSeconds": 900,
 }
-run = request("POST", "/document-sync-runs", begin_payload,
-              {"X-RAG-Sync-Lease": lease})
+run = request(
+    "POST",
+    "/document-sync-runs",
+    begin_payload,
+    auth_headers(lease),
+    api_key=writer_key)
 run_id_value = run["runId"]
 status_path = run["statusPath"]
 assert status_path.startswith("/api/v1/rag/document-sync-runs/")
-status = request("GET", status_path.removeprefix("/api/v1/rag"))
+status = request(
+    "GET",
+    status_path.removeprefix("/api/v1/rag"),
+    api_key=reader_key)
 assert status["runId"] == run_id_value
-replay = request("POST", "/document-sync-runs", begin_payload,
-                 {"X-RAG-Sync-Lease": lease})
+replay = request(
+    "POST",
+    "/document-sync-runs",
+    begin_payload,
+    auth_headers(lease),
+    api_key=writer_key)
 assert replay["runId"] == run_id_value
+
+read_only_write = request(
+    "POST",
+    "/document-sync-runs",
+    {
+        **begin_payload,
+        "clientRunId": f"read-only-denied-{run_id}",
+    },
+    auth_headers(secrets.token_urlsafe(32)),
+    expected=(403,),
+    api_key=reader_key)
+assert read_only_write["error"] == "FORBIDDEN"
 
 upsert(namespace, "newer-1", "r2", "updated after cut", "r1")
 
-batch_headers = {"X-RAG-Sync-Lease": lease}
-batch = request("POST", f"/document-sync-runs/{run_id_value}/batch-upsert", {
-    "items": [
-        {
-            "documentKind": "TEXT",
-            "externalId": "seen-1",
-            "sourceRevision": "r1",
-            "title": "seen-1",
-            "content": "seen in authoritative snapshot",
-            "embeddingPolicy": "SKIP",
-        },
-        {
-            "documentKind": "JSON_RECORD",
-            "externalId": "json-1",
-            "sourceRevision": "r1",
-            "title": "json-1",
-            "retrievalText": "JSON record description",
-            "jsonbPayload": {"kind": "verification", "active": True},
-            "embeddingPolicy": "SKIP",
-        },
-    ],
-}, batch_headers)
+batch_headers = auth_headers(lease)
+batch = request(
+    "POST",
+    f"/document-sync-runs/{run_id_value}/batch-upsert",
+    {
+        "items": [
+            {
+                "documentKind": "TEXT",
+                "externalId": "seen-1",
+                "sourceRevision": "r1",
+                "title": "seen-1",
+                "content": "seen in authoritative snapshot",
+                "embeddingPolicy": "SKIP",
+            },
+            {
+                "documentKind": "JSON_RECORD",
+                "externalId": "json-1",
+                "sourceRevision": "r1",
+                "title": "json-1",
+                "retrievalText": "JSON record description",
+                "jsonbPayload": {"kind": "verification", "active": True},
+                "embeddingPolicy": "SKIP",
+            },
+        ],
+    },
+    batch_headers,
+    api_key=writer_key)
 assert [item["status"] for item in batch["items"]] == ["APPLIED", "APPLIED"]
 
+# Simulate a committed batch whose response was not retained by the client.
+request(
+    "POST",
+    f"/document-sync-runs/{run_id_value}/batch-upsert",
+    {
+        "items": [{
+            "documentKind": "TEXT",
+            "externalId": "response-lost-1",
+            "sourceRevision": "r1",
+            "title": "response-lost-1",
+            "content": "committed while the client discards the response",
+            "embeddingPolicy": "SKIP",
+        }],
+    },
+    batch_headers,
+    api_key=writer_key)
+
+active_first, receipt_headers = request(
+    "GET",
+    receipt_path(run_id_value, namespace, limit=1),
+    api_key=reader_key,
+    capture_headers=True)
+assert active_first["runStatus"] == "ACTIVE"
+assert active_first["hasMore"] is True
+assert active_first["currentSummary"] == {
+    "total": 3,
+    "applied": 3,
+    "unchanged": 0,
+    "skippedNewerMutation": 0,
+    "failed": 0,
+}
+assert "no-store" in receipt_headers.get("cache-control", "")
+first_cursor = active_first["nextCursor"]
+assert first_cursor
+
+active_items = list(active_first["items"])
+cursor = first_cursor
+while cursor:
+    page = request(
+        "GET",
+        receipt_path(run_id_value, namespace, limit=1, cursor=cursor),
+        api_key=reader_key)
+    active_items.extend(page["items"])
+    cursor = page["nextCursor"]
+assert len(active_items) == 3
+assert len({item["externalId"] for item in active_items}) == 3
+for item in active_items:
+    assert "itemFingerprint" not in item
+    assert "payload" not in item
+    assert "metadata" not in item
+    assert "embeddingJobId" not in item
+
+unauthorized = request(
+    "GET",
+    f"/document-sync-runs/{run_id_value}/items?"
+    + urllib.parse.urlencode({
+        "collectionKey": other_collection_key,
+        "sourceNamespace": namespace,
+        "cursor": "malformed",
+    }),
+    expected=(403,),
+    api_key=reader_key)
+assert unauthorized["error"] == "FORBIDDEN"
+wrong_namespace = request(
+    "GET",
+    receipt_path(run_id_value, other_namespace, cursor="malformed"),
+    expected=(404,),
+    api_key=reader_key)
+assert wrong_namespace["error"] == "NOT_FOUND"
+status_mismatch = request(
+    "GET",
+    receipt_path(
+        run_id_value,
+        namespace,
+        status="FAILED",
+        cursor=first_cursor),
+    expected=(400,),
+    api_key=reader_key)
+assert status_mismatch["status"] == 400
+
 preview = request(
-    "POST", f"/document-sync-runs/{run_id_value}/preview-missing",
-    headers=batch_headers)
+    "POST",
+    f"/document-sync-runs/{run_id_value}/preview-missing",
+    headers=batch_headers,
+    api_key=writer_key)
 assert preview["candidateCount"] == 1
 assert preview["protectedByNewerMutationCount"] >= 1
 assert preview["jsonRecordCount"] == 0
 
 complete = request(
-    "POST", f"/document-sync-runs/{run_id_value}/complete",
+    "POST",
+    f"/document-sync-runs/{run_id_value}/complete",
     {"previewToken": preview["previewToken"], "confirmMissingCount": 1},
-    batch_headers)
+    batch_headers,
+    api_key=writer_key)
 assert complete["status"] == "COMPLETED"
 assert complete["tombstonedCount"] == 1
+terminal = request(
+    "GET",
+    receipt_path(run_id_value, namespace, limit=100),
+    api_key=reader_key)
+assert terminal["runStatus"] == "COMPLETED"
+assert terminal["hasMore"] is False
+assert len(terminal["items"]) == 3
 
 failed_lease = secrets.token_urlsafe(32)
 failed_run = request(
-    "POST", "/document-sync-runs", {
+    "POST",
+    "/document-sync-runs",
+    {
         **begin_payload,
         "clientRunId": f"failed-tombstone-{run_id}",
-    }, {"X-RAG-Sync-Lease": failed_lease})
+    },
+    auth_headers(failed_lease),
+    api_key=writer_key)
 failed_run_id = failed_run["runId"]
-failed_headers = {"X-RAG-Sync-Lease": failed_lease}
+failed_headers = auth_headers(failed_lease)
 bad_item = {
     "documentKind": "JSON_RECORD",
     "externalId": "bad-1",
@@ -345,25 +537,75 @@ bad_item = {
     "embeddingPolicy": "SKIP",
 }
 failed_first = request(
-    "POST", f"/document-sync-runs/{failed_run_id}/batch-upsert",
-    {"items": [bad_item]}, failed_headers)
+    "POST",
+    f"/document-sync-runs/{failed_run_id}/batch-upsert",
+    {"items": [bad_item]},
+    failed_headers,
+    api_key=writer_key)
 failed_retry = request(
-    "POST", f"/document-sync-runs/{failed_run_id}/batch-upsert",
-    {"items": [bad_item]}, failed_headers)
+    "POST",
+    f"/document-sync-runs/{failed_run_id}/batch-upsert",
+    {"items": [bad_item]},
+    failed_headers,
+    api_key=writer_key)
 assert failed_first["items"][0]["status"] == "FAILED"
 assert failed_retry["items"][0]["status"] == "FAILED"
+failed_receipts = request(
+    "GET",
+    receipt_path(failed_run_id, namespace, status="FAILED"),
+    api_key=reader_key)
+assert failed_receipts["currentSummary"]["failed"] == 1
+assert failed_receipts["currentSummary"]["total"] == 1
+assert len(failed_receipts["items"]) == 1
+assert failed_receipts["items"][0]["status"] == "FAILED"
+assert len(failed_receipts["items"][0]["error"]) <= 500
+
+failed_status = request(
+    "GET",
+    failed_run["statusPath"].removeprefix("/api/v1/rag"),
+    api_key=reader_key)
+assert failed_status["failedCount"] == 1
 failed_preview = request(
-    "POST", f"/document-sync-runs/{failed_run_id}/preview-missing",
-    headers=failed_headers)
+    "POST",
+    f"/document-sync-runs/{failed_run_id}/preview-missing",
+    headers=failed_headers,
+    api_key=writer_key)
 incomplete = request(
-    "POST", f"/document-sync-runs/{failed_run_id}/complete",
+    "POST",
+    f"/document-sync-runs/{failed_run_id}/complete",
     {"previewToken": failed_preview["previewToken"]},
     failed_headers,
-    expected=(409,))
+    expected=(409,),
+    api_key=writer_key)
 assert incomplete["error"] == "SYNC_RUN_INCOMPLETE"
 request(
-    "POST", f"/document-sync-runs/{failed_run_id}/abort",
-    headers=failed_headers)
+    "POST",
+    f"/document-sync-runs/{failed_run_id}/abort",
+    headers=failed_headers,
+    api_key=writer_key)
+
+other_lease = secrets.token_urlsafe(32)
+other_run = request(
+    "POST",
+    "/document-sync-runs",
+    {
+        **begin_payload,
+        "clientRunId": f"cursor-binding-{run_id}",
+        "missingPolicy": "NONE",
+    },
+    auth_headers(other_lease),
+    api_key=writer_key)
+cross_run = request(
+    "GET",
+    receipt_path(other_run["runId"], namespace, cursor=first_cursor),
+    expected=(400,),
+    api_key=reader_key)
+assert cross_run["status"] == 400
+request(
+    "POST",
+    f"/document-sync-runs/{other_run['runId']}/abort",
+    headers=auth_headers(other_lease),
+    api_key=writer_key)
 
 def lookup(source_namespace, external_id):
     query = urllib.parse.urlencode({
@@ -371,7 +613,10 @@ def lookup(source_namespace, external_id):
         "sourceNamespace": source_namespace,
         "externalId": external_id,
     })
-    return request("GET", f"/documents/by-external-id?{query}")
+    return request(
+        "GET",
+        f"/documents/by-external-id?{query}",
+        api_key=reader_key)
 
 missing_after = lookup(namespace, "missing-1")
 newer_after = lookup(namespace, "newer-1")
@@ -384,29 +629,34 @@ assert newer_after["sourceRevision"] == "r2"
 assert isolated_after["enabled"] is True
 
 bad_mode = request(
-    "POST", "/document-sync-runs",
+    "POST",
+    "/document-sync-runs",
     {
         **begin_payload,
         "clientRunId": f"offline-invalid-{run_id}",
         "snapshotMode": "OFFLINE_MANIFEST",
         "missingPolicy": "TOMBSTONE",
     },
-    {"X-RAG-Sync-Lease": secrets.token_urlsafe(32)},
-    expected=(400,))
+    auth_headers(secrets.token_urlsafe(32)),
+    expected=(400,),
+    api_key=writer_key)
 
 exclusive_lease = secrets.token_urlsafe(32)
 exclusive_without_confirmation = request(
-    "POST", "/document-sync-runs",
+    "POST",
+    "/document-sync-runs",
     {
         **begin_payload,
         "clientRunId": f"exclusive-without-confirmation-{run_id}",
         "snapshotMode": "EXCLUSIVE_OFFLINE",
         "missingPolicy": "TOMBSTONE",
     },
-    {"X-RAG-Sync-Lease": exclusive_lease},
-    expected=(400,))
+    auth_headers(exclusive_lease),
+    expected=(400,),
+    api_key=writer_key)
 exclusive = request(
-    "POST", "/document-sync-runs",
+    "POST",
+    "/document-sync-runs",
     {
         **begin_payload,
         "clientRunId": f"exclusive-confirmed-{run_id}",
@@ -414,17 +664,29 @@ exclusive = request(
         "missingPolicy": "TOMBSTONE",
         "confirmExclusiveOffline": True,
     },
-    {"X-RAG-Sync-Lease": exclusive_lease})
+    auth_headers(exclusive_lease),
+    api_key=writer_key)
 assert exclusive["status"] == "ACTIVE"
 request(
-    "POST", f"/document-sync-runs/{exclusive['runId']}/abort",
-    headers={"X-RAG-Sync-Lease": exclusive_lease})
+    "POST",
+    f"/document-sync-runs/{exclusive['runId']}/abort",
+    headers=auth_headers(exclusive_lease),
+    api_key=writer_key)
 
 evidence = {
     "collectionCreated": bool(collection),
-    "runId": run_id_value,
-    "batchStatuses": [item["status"] for item in batch["items"]],
-    "failedRetryStatus": failed_retry["items"][0]["status"],
+    "capabilityReceiptDiscovery": True,
+    "readOnlyReceipt": True,
+    "readOnlyWriteDenied": True,
+    "unauthorizedCollectionDenied": True,
+    "wrongBindingNotFound": True,
+    "cursorRunAndStatusBound": True,
+    "activeReceiptCount": len(active_items),
+    "terminalReceiptCount": len(terminal["items"]),
+    "currentAppliedCount": terminal["currentSummary"]["applied"],
+    "currentFailedCount": failed_receipts["currentSummary"]["failed"],
+    "cumulativeFailedCount": failed_status["failedCount"],
+    "failedReplayDeduplicated": failed_status["failedCount"] == 1,
     "failedTombstoneCompletionError": incomplete["error"],
     "candidateCount": preview["candidateCount"],
     "protectedByNewerMutationCount": preview["protectedByNewerMutationCount"],
@@ -434,10 +696,13 @@ evidence = {
     "invalidOfflineModeStatus": 400,
     "exclusiveConfirmationRequired": 400,
     "exclusiveConfirmationAccepted": exclusive["status"] == "ACTIVE",
+    "noStore": True,
 }
 with open(evidence_path, "w", encoding="utf-8") as stream:
     json.dump(evidence, stream, indent=2, sort_keys=True)
-print("Sync Run HTTP acceptance passed: applied=2, failed-retry=2, tombstoned=1")
+print(
+    "Sync Run HTTP acceptance passed: "
+    "receipts=3, failed-replay-deduplicated=true, tombstoned=1")
 PY
 }
 
@@ -463,7 +728,7 @@ load_local_env
 prepare_database
 log_step "disposable-postgresql"
 start_backend
-log_step "spring-boot-with-flyway-v42"
+log_step "spring-boot-with-flyway-v51"
 run_http_acceptance
 log_step "sync-run-http-contract"
 ./scripts/verify-no-pessimistic-locks.sh >"$LOG_DIR/no-locks.log"
@@ -477,7 +742,7 @@ cat > "$LOG_DIR/summary.md" <<EOF
 - Run: \`$RUN_ID\`
 - Backend port: \`$BACKEND_PORT\`
 - Evidence: \`$LOG_DIR/http-acceptance.json\`
-- Flyway: V1–V45
+- Flyway: V1–V51
 - Result: PASS
 EOF
 echo "Document Sync Run verification passed: $LOG_DIR/summary.md"

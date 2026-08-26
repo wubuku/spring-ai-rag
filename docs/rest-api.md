@@ -134,6 +134,7 @@ credential, but a database NORMAL principal does not need an additional
     },
     "optional": {
       "documentSyncRuns": false,
+      "documentSyncRunItemReceipts": false,
       "openAiCompatibility": false
     }
   },
@@ -1434,6 +1435,71 @@ use the existing TEXT or JSON_RECORD representations and must include a stable
 An item that was changed after the run's snapshot boundary returns
 `SKIPPED_NEWER_MUTATION` and is not overwritten. Failed items can be retried
 with the same fingerprint.
+
+### `GET /api/v1/rag/document-sync-runs/{runId}/items`
+
+Returns low-sensitivity durable item receipts for response-loss recovery,
+failed-item retry, and terminal audit. The endpoint requires `RAG_READ` and
+revalidates `collectionKey`, `sourceNamespace`, run binding, and Collection
+ACL. It neither requires nor accepts the lease token.
+
+```http
+GET /api/v1/rag/document-sync-runs/{runId}/items
+    ?collectionKey=customer-42:catalog:v1
+    &sourceNamespace=cms-main
+    &status=FAILED
+    &limit=100
+    &cursor=<opaque>
+```
+
+Optional `status` is `APPLIED`, `UNCHANGED`, `SKIPPED_NEWER_MUTATION`, or
+`FAILED`. `limit` defaults to 100 and is bounded to 1–200. `cursor` is an
+opaque keyset cursor of at most 1024 characters, bound to the run and status
+filter. It is not an authorization token; clients must not parse or log it.
+Responses always include `Cache-Control: no-store`.
+
+```json
+{
+  "runId": "2e3be660-4c08-4d07-9607-7ccca4c0ae4e",
+  "runStatus": "ACTIVE",
+  "statusFilter": "FAILED",
+  "items": [
+    {
+      "externalId": "record-42",
+      "documentKind": "JSON_RECORD",
+      "status": "FAILED",
+      "documentId": null,
+      "sourceRevision": "opaque-r7",
+      "errorCode": "BAD_REQUEST",
+      "error": "jsonbPayload is required",
+      "seenAt": "2026-08-26T13:55:00Z"
+    }
+  ],
+  "currentSummary": {
+    "total": 101,
+    "applied": 96,
+    "unchanged": 2,
+    "skippedNewerMutation": 1,
+    "failed": 2
+  },
+  "limit": 100,
+  "hasMore": false,
+  "nextCursor": null
+}
+```
+
+`currentSummary` is the current status distribution of every unique ledger
+item and is independent of the page or `status` filter. It is distinct from
+the cumulative processing counters on the run response. Receipts omit item
+fingerprints, bodies, JSONB payloads, metadata, lease/hash material,
+credentials, and provider details. `error` is masked on write and read and is
+capped at 500 characters.
+
+Cursor traversal is stable for a terminal run. An active run may still add
+items or move failed items by updating `seenAt`, so traversal is only
+eventually consistent and may duplicate or temporarily miss items. Deduplicate
+by `externalId`, then rescan from the beginning after the run reaches
+`COMPLETED`, `ABORTED`, or `EXPIRED`.
 
 ### `POST /api/v1/rag/document-sync-runs/{runId}/preview-missing`
 

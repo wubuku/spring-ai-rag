@@ -118,7 +118,14 @@ public class IntegrationCapabilitiesResponse {
 
     public record OptionalFeatures(
             boolean documentSyncRuns,
+            boolean documentSyncRunItemReceipts,
             boolean openAiCompatibility) {
+
+        public OptionalFeatures(
+                boolean documentSyncRuns,
+                boolean openAiCompatibility) {
+            this(documentSyncRuns, documentSyncRuns, openAiCompatibility);
+        }
     }
 
     public record Limits(

@@ -16,7 +16,7 @@ Release date: `2026-07-21`
 - [x] Helm `version` and `appVersion` are `1.0.0`
 - [x] Docker/Helm default image tag is `1.0.0`
 - [x] Local, Docker, and Helm default port is `8081`
-- [x] Flyway inventory is V1-V50
+- [x] Flyway inventory is V1-V51
 - [x] JSONB structured-record API, payload snapshots, and collection lifecycle are covered
 - [x] `scripts/verify-jsonb-records.sh` records focused backend/database/frontend verification
 - [x] Document PATCH/disable/restore/permanent-delete and external triple identity are covered
@@ -142,6 +142,27 @@ Release date: `2026-07-21`
 - [x] The unified managed-principal gate covers PostgreSQL, Maven, WebUI
   typecheck/Vitest/build/alignment, Mock Playwright, two-instance HTTP, real
   browser DOM/network assertions, and optional real-provider Chat.
+
+### 2026-08-26 Sync Run Item Receipt Gates
+
+- [x] V51 adds unfiltered and status-filtered keyset indexes to the existing
+  Sync Run item ledger without duplicating mutation data or storing bodies,
+  payloads, metadata, credentials, or provider details.
+- [x] `GET /api/v1/rag/document-sync-runs/{runId}/items` requires `RAG_READ`
+  plus Collection/run/namespace binding, supports status filtering and bounded
+  1–200 pagination with a run/status-bound opaque cursor, and reports a
+  separate current-ledger summary.
+- [x] Terminal traversal is stable. Active traversal is explicitly eventually
+  consistent, requiring `externalId` deduplication and a fresh terminal rescan.
+  Errors are masked on write and read, capped at 500 characters, and responses
+  use `no-store`.
+- [x] Capability discovery reports runtime availability through
+  `features.optional.documentSyncRunItemReceipts` as an additive protocol
+  `1.0` field.
+- [x] PostgreSQL service and authenticated HTTP acceptance cover V1-V51,
+  restricted read/write and read-only principals, ACL anti-enumeration, cursor
+  binding, active/terminal paging, exact failed replay, missing reconciliation,
+  and secret-safe evidence.
 
 ### Final Evidence (2026-07-21)
 

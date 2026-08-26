@@ -353,15 +353,38 @@ The script serially runs:
 6. WebUI Vitest, production build, alignment, and Documents Mock Playwright;
 7. bilingual project-documentation and `git diff --check` gates.
 
-The focused V42 HTTP contract can also be run independently:
+The focused V42/V51 Sync Run HTTP contract can also be run independently:
 
 ```bash
 ./scripts/verify-document-sync-runs.sh
 ```
 
-It migrates a disposable database through V45, exercises Sync Run begin,
-batch idempotency, failure retry, preview/complete tombstoning, namespace
-isolation, and the no-pessimistic-lock gate.
+It migrates an empty disposable database through V51, enables authentication,
+creates restricted read/write and read-only principals, and exercises Sync Run
+begin, batch idempotency, exact failed replay, preview/complete tombstoning,
+namespace and Collection ACLs, anti-enumeration, durable item receipts, status
+filtering, `limit=1` cursor pagination, active/terminal traversal semantics,
+`Cache-Control: no-store`, sensitive-error masking, and the
+no-pessimistic-lock gate. Evidence is written under
+`.verification/document-sync-runs/<run-id>/summary.md` without credentials,
+cursors, external IDs, or business payloads.
+
+The focused PostgreSQL service test can also use an explicitly disposable
+local database:
+
+```bash
+DOCUMENT_SYNC_RUNS_IT_JDBC_URL=jdbc:postgresql://127.0.0.1:5432/<disposable-db> \
+DOCUMENT_SYNC_RUNS_IT_USERNAME=postgres \
+DOCUMENT_SYNC_RUNS_IT_PASSWORD= \
+DOCUMENT_SYNC_RUNS_IT_CLEAN_CONFIRM=YES \
+mvn -pl spring-ai-rag-core -am \
+  -Ddocument-sync-runs.it.enabled=true \
+  -Dtest=DocumentSyncRunsPostgresIntegrationTest \
+  -Dsurefire.failIfNoSpecifiedTests=false test
+```
+
+The test repeatedly calls `Flyway.clean()` and must never target development
+or production.
 
 ### Local Keyword / Vector Decoupling Gate
 
@@ -439,7 +462,7 @@ mvn jacoco:report-aggregate
 
 Unit tests use mocks or H2-compatible paths. The Embedding Profile migration has
 an explicit PostgreSQL integration test because it requires pgvector and validates
-Flyway V1-V50, fixed vector columns, Profile-specific indexes, atomic replacement,
+Flyway V1-V51, fixed vector columns, Profile-specific indexes, atomic replacement,
 Legacy adoption, retrieval freshness, and Spring Data repository queries.
 
 Start a PostgreSQL 16 + pgvector database, then run:
@@ -498,7 +521,7 @@ inputs.
 The scope implementation has DTO, resolver, ACL, SQL-fragment, vector/full-text
 provider, Chat/Search/JSON, MockMvc, OpenAPI, WebUI, and PostgreSQL coverage.
 The real PostgreSQL/Testcontainers test starts `pgvector/pgvector:pg16`, runs
-Flyway V1-V50 from an empty schema, and exercises the vector query with actual
+Flyway V1-V51 from an empty schema, and exercises the vector query with actual
 PostgreSQL `bigint[]` bindings:
 
 ```bash
@@ -529,7 +552,7 @@ object request. Run `npm run test:run`, `npx tsc -b --pretty false`,
 
 The JSONB implementation has both mocked HTTP/service coverage and a real
 PostgreSQL/Testcontainers test. The latter starts `pgvector/pgvector:pg16`,
-executes Flyway V1-V50 from an empty database, and verifies JSONB round-trip,
+executes Flyway V1-V51 from an empty database, and verifies JSONB round-trip,
 nested `payloadContains`, V34 GIN planner use, payload-only versioning,
 identical descriptions with distinct records, and cascade cleanup:
 
@@ -575,7 +598,7 @@ checks, writing evidence under
 ```
 
 The script serially runs service/worker/controller focused tests, starts
-isolated PostgreSQL, migrates an empty database through V1–V50, verifies V33
+isolated PostgreSQL, migrates an empty database through V1–V51, verifies V33
 active-job coalescing, atomic force upgrades, and concurrent-worker atomic
 conditional claims, then runs `test-compile`, shell syntax, and whitespace
 checks. Set `EMBEDDING_JOBS_IT_JDBC_URL` to reuse an existing isolated database.

@@ -656,6 +656,8 @@ rag_audit_log           # Audit logs (collection operations)
 | `rag_api_key` | key_id, principal_id, credential_version, key_hash, enabled | Versioned credential with at most one active version per principal |
 | `rag_api_rate_limit_bucket` | principal_id, window_start, request_count | Shared fixed UTC-minute quota bucket |
 | `rag_api_provisioning_operation` | owner_id, idempotency_key_hash, request_fingerprint_sha256, principal_id, completed_at | Successful provisioning replay ledger without raw credentials (V50) |
+| `rag_document_sync_runs` | id, collection_id, source_namespace, status, lease_token_hash, cumulative counters | Authoritative source-snapshot run control plane; only the lease hash is stored |
+| `rag_document_sync_run_items` | run_id, external_id, document_kind, source_revision, status, error_message, seen_at | Idempotent item ledger and durable low-sensitivity receipt source without bodies, payloads, or metadata |
 | `rag_chat_history` | session_id, user_message, ai_response | Business audit |
 | `rag_retrieval_logs` | query, strategy, result_count, latency_ms, outcome_code, empty_reason_code | Retrieval diagnostics (V35) |
 | `rag_evaluation_suites` | suite_key, owner_principal_id | Managed quality suites (V38) |
@@ -674,6 +676,10 @@ rag_audit_log           # Audit logs (collection operations)
 - `rag_embedding_jobs`: active-job partial unique, claim, batch, document, and status/created indexes
 - `rag_api_provisioning_operation`: unique owner/key-hash identity and a
   completed-at cleanup index
+- `rag_document_sync_run_items`: V51 B-Trees on
+  `(run_id, seen_at, external_id)` and
+  `(run_id, status, seen_at, external_id)` for bounded unfiltered and
+  status-filtered keyset receipt queries
 
 ### 5.3 Full-Text Search Configuration
 

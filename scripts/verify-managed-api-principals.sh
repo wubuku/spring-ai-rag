@@ -712,11 +712,11 @@ run_two_instance_contract() {
   db_facts="$(docker exec "$PG_CONTAINER" psql -U postgres \
     -d managed_api_principal_gate -At -F, -c \
     "SELECT (SELECT version FROM flyway_schema_history WHERE success ORDER BY installed_rank DESC LIMIT 1), (SELECT count(*) FROM rag_api_key WHERE api_key IS NOT NULL), (SELECT count(*) FROM (SELECT principal_id FROM rag_api_key WHERE enabled GROUP BY principal_id HAVING count(*) > 1) duplicate_active), (SELECT count(*) FROM rag_api_provisioning_operation)")"
-  [[ "$db_facts" == "50,0,0,1" ]] || {
+  [[ "$db_facts" == "51,0,0,1" ]] || {
     echo "Unexpected database facts: ${db_facts}" >&2
     return 1
   }
-  echo "database_facts migration=50 raw_credentials=0 duplicate_active=0 provisioning_operations=1"
+  echo "database_facts migration=51 raw_credentials=0 duplicate_active=0 provisioning_operations=1"
 }
 
 start_frontend() {

@@ -97,7 +97,12 @@ GET /api/v1/rag/integration-capabilities
 
 要求 protocol 为 `spring-ai-rag-integration` version `1.0`，再核对所需
 provisioning/data-plane feature 和 limits。该响应是按当前调用方投影的低敏合同，不替代
-身份 binding。
+身份 binding。使用权威快照协议的 Client 必须要求
+`features.optional.documentSyncRuns=true`；需要响应丢失恢复、失败项查询或终态审计时，
+还必须要求 `features.optional.documentSyncRunItemReceipts=true`。旧 Client 应忽略未知
+optional 字段，不能把缺少该字段误判为可用。持久化回执入口是
+`GET /api/v1/rag/document-sync-runs/{runId}/items`；恢复与终态复扫流程见
+[外部文档同步 Client 指南](external-document-sync-client-guide-zh-CN.md#7-来源权威全量快照对账)。
 
 随后调用：
 
@@ -305,15 +310,17 @@ durable embedding job 的 `default-max-attempts`/`max-attempts` 是两层独立�
 - embedding 可用性读取文档 lifecycle 或
   `/api/v1/rag/collections/embedding-readiness`；业务 binding 另用 `/auth/me` 和
   Collection by-key。
-- 空库或升级环境必须按顺序执行 Flyway V1-V50。V49 为 stable principal 增加
-  operation capabilities；V50 增加不保存 raw credential 的成功 provisioning 幂等 ledger。
+- 空库或升级环境必须按顺序执行 Flyway V1-V51。V49 为 stable principal 增加
+  operation capabilities；V50 增加不保存 raw credential 的成功 provisioning 幂等
+  ledger；V51 为 Sync Run item receipt 增加未过滤和按状态过滤的 keyset 索引。
 - 生产调用方应锁定已验收的 Git commit 或由该 commit 构建的不可变镜像。当前 Maven/API
   版本仍为 `1.0.0`。
 - `/auth/me` 的新增字段保持向后兼容；旧 client 会忽略，依赖 capability/ACL 自检的
   client 必须先运行合同门禁，再升级业务实例。
-- V49/V50 都是向前兼容增量迁移，不执行破坏性 schema 回退。若应用回滚到不识别
-  operation capabilities 或 keyed provisioning 的版本，应继续保留 schema，并停止依赖
-  对应合同的 client，不能宽松启动或退化为无幂等 create。
+- V49/V50/V51 都是向前兼容增量迁移，不执行破坏性 schema 回退。若应用回滚到不识别
+  operation capabilities、keyed provisioning 或 item receipt 查询的版本，应继续保留
+  schema，并停止依赖对应合同的 client，不能宽松启动、退化为无幂等 create，或假定
+  receipt endpoint 仍存在。
 
 ## 8. 一键接入验收
 
