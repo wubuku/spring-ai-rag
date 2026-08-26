@@ -134,3 +134,6 @@
   代码或测试修改。第 1 轮核对输入安全与规划/双语文档一致性，第 2 轮核对异步
   readiness、restore revision、cleanup 与失败报告，第 3 轮核对验收证据、密钥/whitespace
   门禁、文档归档和 `origin/main` 祖先关系；仅在三轮完成后写入本总结。
+- 2026-08-26：特性分支修复提交 `fbe09292` 已推送；fetch 后确认
+  `origin/main=5d4145c3`，合并结果为 Already up to date。现在按该合并后组合重新执行
+  完整 `16/16` 验收，不能沿用合并前证据作为最终结论。
