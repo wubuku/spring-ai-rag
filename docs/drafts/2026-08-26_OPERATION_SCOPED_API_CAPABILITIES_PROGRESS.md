@@ -12,8 +12,8 @@
 - 计划实施分支：`feat/operation-scoped-api-capabilities-20260826`
 - 计划实施 worktree：`/Users/yangjiefeng/.hermes/workspace/spring-ai-rag-operation-scoped-api-capabilities`
 - Flyway 基线：V1–V48；目标 V49。
-- 当前阶段：后端、WebUI 与双语长青文档完成；统一完整验收与真实 LLM 阶段已通过，
-  待同步 `origin/main` 后执行合并后完整复验和 Git 交付。
+- 当前阶段：后端、WebUI 与双语长青文档完成；特性分支已推送并合并到 `main`，
+  main 合并后完整验收与真实 LLM 阶段已通过，待推送 main 并清理隔离 worktree。
 
 ## 2. 已完成探索
 
@@ -123,7 +123,7 @@
 - [x] 双语文档门禁：10/10；`git diff --check` 已通过。
 - [x] 统一完整门禁、真实双实例 HTTP/Playwright 与真实 LLM JSON/SSE 验收。
 - [x] 禁锁与最终密钥检查。
-- [ ] merge 最新 `origin/main` 后完整复验。
+- [x] merge 最新 `origin/main` 后完整复验。
 - [ ] 特性分支和 main push，最终状态干净。
 
 ## 7. 已知限制
@@ -184,3 +184,9 @@
   provider 再次完成原生 JSON/SSE 与 OpenAI 兼容 JSON/SSE，幂等 replay 未重复
   调用，provider 调用总数严格为 5。最终证据目录：
   `.verification/managed-api-principals/20260826-operation-capabilities-postmerge-real8/`。
+- 2026-08-26 11:44 CST：特性分支 `daa0d787` 已合并到干净的 `main` worktree，
+  生成 main 合并提交；合并后的完整验收运行
+  `20260826-operation-capabilities-main-final9` 通过全部 13 个门槛。该次再次
+  使用真实 `grok-4.5` provider 完成原生 JSON/SSE、OpenAI 兼容 JSON/SSE、幂等
+  replay、凭据轮换后的会话连续性和严格 5 次调用预算验证。证据目录：
+  `.verification/managed-api-principals/20260826-operation-capabilities-main-final9/`。
