@@ -100,7 +100,8 @@ provisioning/data-plane feature 和 limits。该响应是按当前调用方投�
 身份 binding。使用权威快照协议的 Client 必须要求
 `features.optional.documentSyncRuns=true`；需要响应丢失恢复、失败项查询或终态审计时，
 还必须要求 `features.optional.documentSyncRunItemReceipts=true`。旧 Client 应忽略未知
-optional 字段，不能把缺少该字段误判为可用。持久化回执入口是
+optional 字段，不能把缺少该字段误判为可用。自动化控制面会重试 Collection 创建时，
+还必须要求 `features.provisioning.collectionCreateIdempotencyKey=true`。持久化回执入口是
 `GET /api/v1/rag/document-sync-runs/{runId}/items`；恢复与终态复扫流程见
 [外部文档同步 Client 指南](external-document-sync-client-guide-zh-CN.md#7-来源权威全量快照对账)。
 
@@ -159,7 +160,8 @@ JSON Record 分开保存：
 
 推荐顺序：
 
-1. operator 使用 environment root 创建目标 Collection。
+1. operator 使用 environment root 和调用方生成的 `Idempotency-Key` 创建各目标
+   Collection；在一个逻辑命令得到确定结果前始终复用同一个 key。
 2. operator 创建 restricted business principal，并设置唯一名称、到期时间、RPM 和
    `allowedCollectionKeys`，同时显式指定 `capabilities` 和调用方生成的
    `Idempotency-Key`。
@@ -169,12 +171,17 @@ JSON Record 分开保存：
 6. 对目标 Collection 执行只读 by-key 探针，再开始消费业务事件。
 7. 发布后运行本指南第 8 节的合同门禁。
 
-同一个 `Idempotency-Key` 只能与完全相同的规范化请求复用。首次成功返回 `201` 并只展示
-一次 raw credential；精确重试返回 `200`、`X-RAG-Idempotent-Replay: true` 和
-`rawKey=null`。同 owner/key 携带不同请求返回 `409 IDEMPOTENCY_KEY_REUSED`。若首次响应
-丢失，replay 可以确认 principal，但不能恢复 raw secret；应轮换当前 credential，而不是再
-创建无主 principal。默认 replay 保证窗口是配置的 400 天 retention，超过窗口后不得复用旧
-key。
+Collection 创建的 keyed 首次成功返回 `201`；同 owner 精确 replay 返回 `200`、
+`X-RAG-Idempotent-Replay: true` 和 Collection 当前状态。同 owner/key 携带不同有效请求
+返回 `409 IDEMPOTENCY_KEY_REUSED`。Collection 后续 update 或软删除后，replay 返回当前
+状态但绝不恢复资源；账本故障返回 `503`，不会退化为不安全的普通创建。
+
+principal 创建遵循相同 header 纪律，但使用独立账本和一次性 secret 合同：首次成功返回
+`201` 并只展示一次 raw credential；精确重试返回 `200`、
+`X-RAG-Idempotent-Replay: true` 和 `rawKey=null`。若首次响应丢失，replay 可以确认
+principal，但不能恢复 raw secret；应轮换当前 credential，而不是创建无主 principal。
+两个端点的同一个 `Idempotency-Key` 都只能与完全相同的规范化请求复用。默认 replay
+保证窗口是配置的 400 天 retention，超过窗口后不得复用旧 key。
 
 ### 4.1 已部署实例 Binding 预检
 
@@ -310,17 +317,18 @@ durable embedding job 的 `default-max-attempts`/`max-attempts` 是两层独立�
 - embedding 可用性读取文档 lifecycle 或
   `/api/v1/rag/collections/embedding-readiness`；业务 binding 另用 `/auth/me` 和
   Collection by-key。
-- 空库或升级环境必须按顺序执行 Flyway V1-V51。V49 为 stable principal 增加
+- 空库或升级环境必须按顺序执行 Flyway V1-V52。V49 为 stable principal 增加
   operation capabilities；V50 增加不保存 raw credential 的成功 provisioning 幂等
-  ledger；V51 为 Sync Run item receipt 增加未过滤和按状态过滤的 keyset 索引。
+  ledger；V51 为 Sync Run item receipt 增加未过滤和按状态过滤的 keyset 索引；V52
+  增加独立、按 owner 隔离的 Collection 创建幂等账本。
 - 生产调用方应锁定已验收的 Git commit 或由该 commit 构建的不可变镜像。当前 Maven/API
   版本仍为 `1.0.0`。
 - `/auth/me` 的新增字段保持向后兼容；旧 client 会忽略，依赖 capability/ACL 自检的
   client 必须先运行合同门禁，再升级业务实例。
-- V49/V50/V51 都是向前兼容增量迁移，不执行破坏性 schema 回退。若应用回滚到不识别
-  operation capabilities、keyed provisioning 或 item receipt 查询的版本，应继续保留
-  schema，并停止依赖对应合同的 client，不能宽松启动、退化为无幂等 create，或假定
-  receipt endpoint 仍存在。
+- V49/V50/V51/V52 都是向前兼容增量迁移，不执行破坏性 schema 回退。若应用回滚到
+  不识别 operation capabilities、keyed principal/Collection provisioning 或 item receipt
+  查询的版本，应继续保留 schema，并停止依赖对应合同的 client，不能宽松启动、退化为
+  无幂等 create，或假定 receipt endpoint 仍存在。
 
 ## 8. 一键接入验收
 
@@ -328,6 +336,12 @@ durable embedding job 的 `default-max-attempts`/`max-attempts` 是两层独立�
 
 ```bash
 ./scripts/verify-business-client-readiness.sh
+```
+
+Collection provisioning 可靠性专项门禁：
+
+```bash
+./scripts/verify-collection-provisioning.sh
 ```
 
 最终候选 commit 的可复现门禁：

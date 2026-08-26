@@ -19,7 +19,7 @@ Documentation hub: [index.md](index.md). Stable project context: [project-contex
 | Real-LLM E2E port | `18081` |
 | Embedding | SiliconFlow `BAAI/bge-m3` |
 | Vector dimension | `1024` |
-| Flyway | V1–V51 |
+| Flyway | V1–V52 |
 
 Do **not** append `/v1` to an OpenAI or Embedding `base-url`. Spring AI appends `/v1/chat/completions` or `/v1/embeddings`.
 
@@ -73,6 +73,19 @@ The gate creates temporary restricted read/write and read-only principals and
 verifies ACLs, cursor pagination, terminal-rescan semantics, failed-receipt
 recovery, `no-store`, and sensitive-data protection. Evidence excludes
 credentials, cursors, external IDs, and business payloads.
+
+For caller-scoped, durable Collection-create idempotency across PostgreSQL,
+two backend instances, and process restart:
+
+```bash
+./scripts/verify-collection-provisioning.sh
+```
+
+The gate covers V52 migration and constraints, exact replay, semantic key
+reuse, owner isolation, restricted ACLs, concurrent first create, current
+soft-deleted state, one create audit, ledger failure closure, and secret-safe
+database facts. Use `COLLECTION_PROVISIONING_VERIFY_PHASE=http` to rerun only
+the disposable dual-instance HTTP phase.
 
 For the V43 local-keyword/vector derivation boundary:
 

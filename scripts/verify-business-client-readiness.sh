@@ -980,6 +980,7 @@ script_static_checks() {
   bash -n scripts/business-client-binding-preflight.sh || return 1
   bash -n scripts/test-support/business-client-binding-preflight-self-test.sh || return 1
   bash -n scripts/business-client-contract-e2e.sh || return 1
+  bash -n scripts/verify-collection-provisioning.sh || return 1
   bash -n scripts/verify-business-client-readiness.sh || return 1
   scripts/test-support/business-client-binding-preflight-self-test.sh || return 1
   python3 -c '
@@ -1016,6 +1017,9 @@ run_step "Frontend dependency readiness" frontend_dependencies
 
 if [[ "$VERIFY_PHASE" == "real" ]]; then
   run_step "Maven clean compile test-compile" backend_compile
+  run_step "Collection provisioning dual-instance readiness" \
+    env COLLECTION_PROVISIONING_VERIFY_PHASE=http \
+      scripts/verify-collection-provisioning.sh
   run_step "Disposable PostgreSQL startup" start_postgres
   run_step "Real service HTTP and WebUI acceptance" real_fullstack_acceptance
 else
@@ -1023,6 +1027,9 @@ else
   run_step "Disposable PostgreSQL startup" start_postgres
   run_step "PostgreSQL integration matrix" postgres_integration_matrix
   run_step "Maven clean compile test-compile" backend_compile
+  run_step "Collection provisioning dual-instance readiness" \
+    env COLLECTION_PROVISIONING_VERIFY_PHASE=http \
+      scripts/verify-collection-provisioning.sh
   run_step "WebUI TypeScript" frontend_typecheck
   run_step "WebUI Vitest" frontend_vitest
   run_step "WebUI production build" frontend_build

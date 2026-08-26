@@ -102,6 +102,7 @@ class IntegrationCapabilityCatalogTest {
     @Test
     void reflectsRuntimeFeatureFlags() {
         properties.getApiKeyProvisioning().setEnabled(false);
+        properties.getCollectionProvisioning().setEnabled(false);
         properties.getEmbeddingJobs().setEnabled(false);
         properties.getDocumentLifecycle().setSyncRunsEnabled(true);
         properties.getOpenAiCompatibility().setEnabled(true);
@@ -110,6 +111,7 @@ class IntegrationCapabilityCatalogTest {
                 catalog.describe(new MockHttpServletRequest()).getFeatures();
 
         assertFalse(features.provisioning().idempotencyKey());
+        assertFalse(features.provisioning().collectionCreateIdempotencyKey());
         assertFalse(features.dataPlane().embedding().asyncPolicy());
         assertTrue(features.optional().documentSyncRuns());
         assertTrue(features.optional().documentSyncRunItemReceipts());
@@ -129,6 +131,16 @@ class IntegrationCapabilityCatalogTest {
         assertFalse(disabled.documentSyncRuns());
         assertFalse(disabled.documentSyncRunItemReceipts());
         assertTrue(disabled.openAiCompatibility());
+    }
+
+    @Test
+    void keepsLegacyProvisioningConstructorAdditive() {
+        IntegrationCapabilitiesResponse.Provisioning legacy =
+                new IntegrationCapabilitiesResponse.Provisioning(
+                        true, false, true);
+
+        assertTrue(legacy.idempotencyKey());
+        assertFalse(legacy.collectionCreateIdempotencyKey());
     }
 
     @Test

@@ -15,7 +15,7 @@
 - [x] Helm `version` 与 `appVersion` 均为 `1.0.0`
 - [x] Docker/Helm 默认镜像 tag 为 `1.0.0`
 - [x] 本地、Docker 与 Helm 默认端口均为 `8081`
-- [x] Flyway 迁移范围为 V1-V51
+- [x] Flyway 迁移范围为 V1-V52
 - [x] JSONB 结构化记录 API、payload 快照和 Collection 生命周期已覆盖
 - [x] `scripts/verify-jsonb-records.sh` 固化后端/数据库/前端聚焦验证
 - [x] 文档 PATCH/禁用/恢复/永久删除与外部三元身份已覆盖
@@ -137,9 +137,26 @@
 - [x] capability discovery 通过
   `features.optional.documentSyncRunItemReceipts` 公布运行时可用性，protocol 保持 `1.0`
   的 additive 兼容。
-- [x] PostgreSQL service 与认证 HTTP 验收覆盖 V1-V51、受限读写/只读 principal、
+- [x] PostgreSQL service 与认证 HTTP 验收覆盖 V1-V52、受限读写/只读 principal、
   ACL 防枚举、cursor binding、active/terminal 分页、FAILED 精确重放、missing
   reconciliation 和证据脱敏。
+
+### 2026-08-26 Collection Provisioning 幂等门禁
+
+- [x] V52 增加独立、按 owner 隔离的 Collection 创建 operation ledger，保存
+  key/fingerprint hash 和受约束的 Collection 外键；不保存 raw key 或请求体。
+- [x] 无 header 创建保持 `200`；keyed 首次创建返回 `201`；跨实例或重启后精确 replay
+  返回 `200` 和 `X-RAG-Idempotent-Replay: true`；语义复用返回
+  `409 IDEMPOTENCY_KEY_REUSED`。
+- [x] replay 返回 Collection 当前状态和当前文档数，包括软删除状态；不恢复资源，也不
+  写第二条创建审计。
+- [x] 配置关闭或账本不可用时 keyed 请求 fail closed 返回 `503`；同 owner 并发竞争使用
+  唯一约束和有界重读，不使用显式悲观锁。
+- [x] `verify-collection-provisioning.sh` 覆盖聚焦合同、9 个 PostgreSQL 测试、两个真实
+  后端实例、重启恢复、owner/ACL 隔离、数据库事实和证据脱敏；WebUI 测试证明 Axios
+  retry 复用一次提交生成的 UUID。
+- [x] capability discovery 通过 additive protocol `1.0` 字段
+  `features.provisioning.collectionCreateIdempotencyKey` 公布能力。
 
 ### 最终证据（2026-07-21）
 

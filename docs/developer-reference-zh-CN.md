@@ -19,7 +19,7 @@
 | 真实 LLM E2E 端口 | `18081` |
 | Embedding | SiliconFlow `BAAI/bge-m3` |
 | 向量维度 | `1024` |
-| Flyway | V1–V51 |
+| Flyway | V1–V52 |
 
 OpenAI / Embedding 的 `base-url` **不要带 `/v1`**。Spring AI 会自行追加 `/v1/chat/completions` 或 `/v1/embeddings`。
 
@@ -72,6 +72,17 @@ open spring-ai-rag-core/target/site/jacoco/index.html
 该门禁会创建临时受限读写/只读 principal，并验证 ACL、游标分页、终态复扫语义、
 失败回执恢复、`no-store` 与敏感信息保护；证据不保存 credential、cursor、external ID
 或业务 payload。
+
+针对按调用方隔离、跨 PostgreSQL/双后端实例/进程重启恢复的 Collection 创建持久化幂等：
+
+```bash
+./scripts/verify-collection-provisioning.sh
+```
+
+该门禁覆盖 V52 迁移与约束、精确 replay、key 语义复用冲突、owner 隔离、restricted
+ACL、并发首次创建、软删除后的当前状态、恰好一次创建审计、账本故障关闭和不含 secret
+的数据库事实。只复跑一次性双实例 HTTP 阶段可设置
+`COLLECTION_PROVISIONING_VERIFY_PHASE=http`。
 
 针对 V43 本地关键词/向量派生解耦边界：
 

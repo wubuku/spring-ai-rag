@@ -92,7 +92,15 @@ public class IntegrationCapabilitiesResponse {
     public record Provisioning(
             boolean idempotencyKey,
             boolean replayReturnsSecret,
-            boolean rawCredentialShownOnce) {
+            boolean rawCredentialShownOnce,
+            boolean collectionCreateIdempotencyKey) {
+
+        public Provisioning(
+                boolean idempotencyKey,
+                boolean replayReturnsSecret,
+                boolean rawCredentialShownOnce) {
+            this(idempotencyKey, replayReturnsSecret, rawCredentialShownOnce, false);
+        }
     }
 
     public record DataPlane(

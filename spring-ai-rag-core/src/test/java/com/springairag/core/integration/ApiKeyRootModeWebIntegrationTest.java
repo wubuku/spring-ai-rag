@@ -9,6 +9,7 @@ import com.springairag.core.controller.ApiKeyIdentityController;
 import com.springairag.core.controller.GlobalExceptionHandler;
 import com.springairag.core.entity.ApiKeyRole;
 import com.springairag.core.security.AuthenticatedApiPrincipal;
+import com.springairag.core.security.ProvisioningOwnerResolver;
 import com.springairag.core.service.ApiKeyManagementService;
 import com.springairag.core.service.CollectionIdentityResolver;
 import org.junit.jupiter.api.Test;
@@ -43,6 +44,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         RagWebSecurityConfiguration.class,
         CorsConfig.class,
         GlobalExceptionHandler.class,
+        ProvisioningOwnerResolver.class,
         ApiKeyRootModeWebIntegrationTest.CapabilityProbeController.class
 })
 @EnableConfigurationProperties(RagProperties.class)

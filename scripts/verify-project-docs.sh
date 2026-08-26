@@ -290,8 +290,10 @@ check_business_client_discoverability() {
         '/api/v1/rag/document-sync-runs/{runId}/items' \
         '/api/v1/rag/collections/embedding-readiness' \
         'documentSyncRunItemReceipts' \
+        'collectionCreateIdempotencyKey' \
         'Idempotency-Key' \
         'business-client-binding-preflight.sh' \
+        'verify-collection-provisioning.sh' \
         'verify-business-client-readiness.sh'; do
       rg -F -q "$contract" "$guide" || {
         echo "$guide is missing critical business-client contract: $contract" >&2
@@ -310,8 +312,8 @@ check_project_invariants() {
       | tail -1
   )"
 
-  [[ "$latest_migration" == "51" ]] || {
-    echo "Expected latest Flyway migration V51, found V${latest_migration:-unknown}." >&2
+  [[ "$latest_migration" == "52" ]] || {
+    echo "Expected latest Flyway migration V52, found V${latest_migration:-unknown}." >&2
     return 1
   }
 
@@ -320,7 +322,7 @@ check_project_invariants() {
   rg -q '18081' AGENTS.md docs/developer-reference.md docs/developer-reference-zh-CN.md
   rg -q 'postgresql' AGENTS.md docs/developer-reference.md docs/developer-reference-zh-CN.md
   rg -q '1024' AGENTS.md docs/developer-reference.md docs/developer-reference-zh-CN.md
-  rg -q 'V1.?V51' AGENTS.md docs/developer-reference.md docs/developer-reference-zh-CN.md
+  rg -q 'V1.?V52' AGENTS.md docs/developer-reference.md docs/developer-reference-zh-CN.md
 
   if rg -n -i 'base-url:[[:space:]]*https?://[^[:space:]`]+/v1([/[:space:]`]|$)' \
       AGENTS.md CLAUDE.md README.md README-zh-CN.md docs \
@@ -354,6 +356,7 @@ check_scripts_and_commands() {
       scripts/verify-document-sync-runs.sh \
       scripts/verify-keyword-vector-decoupling.sh \
       scripts/business-client-binding-preflight.sh \
+      scripts/verify-collection-provisioning.sh \
       scripts/verify-business-client-readiness.sh \
       scripts/verify-no-pessimistic-locks.sh \
       scripts/run-claude-grok.sh; do

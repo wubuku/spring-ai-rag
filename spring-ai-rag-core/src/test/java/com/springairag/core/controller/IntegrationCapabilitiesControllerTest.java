@@ -57,6 +57,9 @@ class IntegrationCapabilitiesControllerTest {
                 .andExpect(jsonPath("$.features.provisioning.replayReturnsSecret")
                         .value(false))
                 .andExpect(jsonPath(
+                        "$.features.provisioning.collectionCreateIdempotencyKey")
+                        .value(true))
+                .andExpect(jsonPath(
                         "$.features.optional.documentSyncRunItemReceipts")
                         .value(false))
                 .andExpect(jsonPath("$.limits.collectionKeyMaxLength").value(128))
@@ -84,7 +87,8 @@ class IntegrationCapabilitiesControllerTest {
                         "spring-ai-rag-integration", "1.0", "1.0.0"),
                 principal,
                 new IntegrationCapabilitiesResponse.Features(
-                        new IntegrationCapabilitiesResponse.Provisioning(true, false, true),
+                        new IntegrationCapabilitiesResponse.Provisioning(
+                                true, false, true, true),
                         new IntegrationCapabilitiesResponse.DataPlane(
                                 true,
                                 new IntegrationCapabilitiesResponse.JsonRecords(

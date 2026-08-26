@@ -359,7 +359,7 @@ The focused V42/V51 Sync Run HTTP contract can also be run independently:
 ./scripts/verify-document-sync-runs.sh
 ```
 
-It migrates an empty disposable database through V51, enables authentication,
+It migrates an empty disposable database through V52, enables authentication,
 creates restricted read/write and read-only principals, and exercises Sync Run
 begin, batch idempotency, exact failed replay, preview/complete tombstoning,
 namespace and Collection ACLs, anti-enumeration, durable item receipts, status
@@ -462,7 +462,7 @@ mvn jacoco:report-aggregate
 
 Unit tests use mocks or H2-compatible paths. The Embedding Profile migration has
 an explicit PostgreSQL integration test because it requires pgvector and validates
-Flyway V1-V51, fixed vector columns, Profile-specific indexes, atomic replacement,
+Flyway V1-V52, fixed vector columns, Profile-specific indexes, atomic replacement,
 Legacy adoption, retrieval freshness, and Spring Data repository queries.
 
 Start a PostgreSQL 16 + pgvector database, then run:
@@ -516,12 +516,40 @@ create, by-key get/update, clone with a new target key, export/import with a new
 key, soft delete, restore, duplicate conflict, and document/search/chat key
 inputs.
 
+### Collection Provisioning Idempotency Acceptance Gate
+
+```bash
+./scripts/verify-collection-provisioning.sh
+```
+
+The seven-stage gate first runs focused owner, fingerprint, configuration,
+service, controller, capability, OpenAPI, and WebUI retry tests. It then
+migrates disposable PostgreSQL through V52 and requires all nine integration
+tests to execute with `skipped=0`. The final HTTP phase starts two real backend
+instances on one database and proves first create, cross-instance and
+post-restart replay, canonical request equivalence, semantic conflict, owner
+isolation, restricted ACL rejection, soft-deleted current-state replay,
+exactly one create audit, and `503` fail-closed behavior when the ledger is
+unavailable. Database assertions confirm V52, expected ledger/Collection
+counts, and no plaintext credential.
+
+Rerun only the disposable dual-instance HTTP phase with:
+
+```bash
+COLLECTION_PROVISIONING_VERIFY_PHASE=http \
+./scripts/verify-collection-provisioning.sh
+```
+
+WebUI coverage asserts through request interception that one user submission
+uses one UUID across Axios retries and a later submission uses a different
+UUID. No screenshot is used as acceptance evidence.
+
 ### Multi-Collection Retrieval Acceptance Gate
 
 The scope implementation has DTO, resolver, ACL, SQL-fragment, vector/full-text
 provider, Chat/Search/JSON, MockMvc, OpenAPI, WebUI, and PostgreSQL coverage.
 The real PostgreSQL/Testcontainers test starts `pgvector/pgvector:pg16`, runs
-Flyway V1-V51 from an empty schema, and exercises the vector query with actual
+Flyway V1-V52 from an empty schema, and exercises the vector query with actual
 PostgreSQL `bigint[]` bindings:
 
 ```bash
@@ -552,7 +580,7 @@ object request. Run `npm run test:run`, `npx tsc -b --pretty false`,
 
 The JSONB implementation has both mocked HTTP/service coverage and a real
 PostgreSQL/Testcontainers test. The latter starts `pgvector/pgvector:pg16`,
-executes Flyway V1-V51 from an empty database, and verifies JSONB round-trip,
+executes Flyway V1-V52 from an empty database, and verifies JSONB round-trip,
 nested `payloadContains`, V34 GIN planner use, payload-only versioning,
 identical descriptions with distinct records, and cascade cleanup:
 
@@ -598,7 +626,7 @@ checks, writing evidence under
 ```
 
 The script serially runs service/worker/controller focused tests, starts
-isolated PostgreSQL, migrates an empty database through V1–V51, verifies V33
+isolated PostgreSQL, migrates an empty database through V1–V52, verifies V33
 active-job coalescing, atomic force upgrades, and concurrent-worker atomic
 conditional claims, then runs `test-compile`, shell syntax, and whitespace
 checks. Set `EMBEDDING_JOBS_IT_JDBC_URL` to reuse an existing isolated database.

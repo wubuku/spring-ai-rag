@@ -8,7 +8,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -21,13 +20,10 @@ import java.util.Map;
  * Audit Log Service
  *
  * <p>Provides structured audit logging for critical business operations (create/update/delete).
- * Registered conditionally via {@link ConditionalOnBean} — only created when RagAuditLogRepository is available.
- *
  * <p>Audit events inject traceId via MDC and obtain clientIp from HttpServletRequest.
  * Failures do not block the business flow (resilience mode).
  */
 @Service
-@ConditionalOnBean(RagAuditLogRepository.class)
 public class AuditLogService {
 
     private static final Logger log = LoggerFactory.getLogger(AuditLogService.class);

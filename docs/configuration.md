@@ -833,6 +833,12 @@ rag:
     retention: ${RAG_API_KEY_PROVISIONING_RETENTION:400d}
     cleanup-batch-size: ${RAG_API_KEY_PROVISIONING_CLEANUP_BATCH_SIZE:500}
     concurrent-retry-attempts: ${RAG_API_KEY_PROVISIONING_CONCURRENT_RETRY_ATTEMPTS:3}
+  collection-provisioning:
+    enabled: ${RAG_COLLECTION_PROVISIONING_ENABLED:true}
+    retention: ${RAG_COLLECTION_PROVISIONING_RETENTION:400d}
+    cleanup-batch-size: ${RAG_COLLECTION_PROVISIONING_CLEANUP_BATCH_SIZE:500}
+    cleanup-interval-ms: ${RAG_COLLECTION_PROVISIONING_CLEANUP_INTERVAL_MS:3600000}
+    concurrent-retry-attempts: ${RAG_COLLECTION_PROVISIONING_CONCURRENT_RETRY_ATTEMPTS:3}
 ```
 
 | Property | Default | Description |
@@ -847,6 +853,20 @@ rag:
 | `rag.api-key-provisioning.retention` | `400d` | Successful provisioning ledger retention and guaranteed replay window; accepted range 7–3650 days |
 | `rag.api-key-provisioning.cleanup-batch-size` | `500` | Maximum completed ledger rows deleted per scheduled cleanup, clamped to 10–5000 |
 | `rag.api-key-provisioning.concurrent-retry-attempts` | `3` | Bounded attempts used to observe the winner of a same-owner/key unique-constraint race, clamped to 1–8 |
+
+| Property | Default | Description |
+|----------|---------|-------------|
+| `rag.collection-provisioning.enabled` | `true` | Enables caller-scoped keyed Collection creation; when disabled, `POST /collections` requests carrying `Idempotency-Key` fail closed with `503` |
+| `rag.collection-provisioning.retention` | `400d` | Successful Collection-create ledger retention and guaranteed replay window; accepted range 7–3650 days |
+| `rag.collection-provisioning.cleanup-batch-size` | `500` | Maximum completed Collection-operation rows deleted per cleanup, clamped to 10–5000 |
+| `rag.collection-provisioning.cleanup-interval-ms` | `3600000` | Fixed delay between best-effort cleanup runs, clamped to 10,000–86,400,000 ms |
+| `rag.collection-provisioning.concurrent-retry-attempts` | `3` | Bounded attempts used to observe the winner of a same-owner/key create race, clamped to 1–8 |
+
+Collection provisioning stores only the server-derived owner, the
+`Idempotency-Key` hash, the canonical request fingerprint, and the resulting
+Collection ID. Disabling the feature does not disable ordinary unkeyed
+Collection creation; it only rejects keyed requests instead of silently
+discarding their retry guarantee.
 
 Setting a valid `RAG_ROOT_API_KEY` enables standalone-service MVP security mode:
 
@@ -1069,7 +1089,11 @@ revisions, complete snapshots, source namespaces, generation fencing, and the
 lifecycle/idempotency contract. V42 adds authoritative external snapshot
 reconciliation runs and source/reconciliation deletion markers. V43 adds
 profile-neutral local keyword chunks and independent local-index lifecycle
-state.
+state. V44/V45 add external-document relocation and Collection derivation
+repair control planes; V46/V47 add durable Chat summaries and turn operations;
+V48–V50 add stable managed principals, operation capabilities, shared quota,
+and principal-provisioning idempotency; V51 adds Sync Run item-receipt cursor
+indexes; V52 adds the caller-scoped Collection-create idempotency ledger.
 
 ## Profile Overview
 

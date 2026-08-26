@@ -67,6 +67,12 @@ class OpenApiContractTest {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @Autowired
+    private CollectionProvisioningService collectionProvisioningService;
+
+    @Autowired
+    private AuditLogService auditLogService;
+
     private static final String OPENAPI_SPEC_PATH = "/v3/api-docs";
 
     // Schemas that MUST be defined (critical DTOs for API contract)
@@ -203,6 +209,12 @@ class OpenApiContractTest {
     @MockBean
     private RagCollectionRepository collectionRepository;
 
+    @MockBean
+    private CollectionProvisioningOperationRepository collectionProvisioningOperationRepository;
+
+    @MockBean
+    private RagAuditLogRepository auditLogRepository;
+
     // AB Test
     @MockBean
     private AbTestService abTestService;
@@ -256,6 +268,18 @@ class OpenApiContractTest {
 
     @MockBean
     private com.springairag.core.repository.FsFileRepository fsFileRepository;
+
+    @Nested
+    @DisplayName("Application Wiring")
+    class ApplicationWiring {
+
+        @Test
+        @DisplayName("Collection provisioning service is registered in the runtime context")
+        void collectionProvisioningService_isRegistered() {
+            assertThat(collectionProvisioningService).isNotNull();
+            assertThat(auditLogService).isNotNull();
+        }
+    }
 
     @Nested
     @DisplayName("Spec Accessibility")
@@ -999,6 +1023,20 @@ class OpenApiContractTest {
                     "200", "201", "400", "409", "503")) {
                 assertThat(create.path("responses").has(responseCode))
                         .as("POST /api-keys must document %s", responseCode)
+                        .isTrue();
+            }
+
+            JsonNode collectionCreate =
+                    findPath(paths, "/rag/collections").path("post");
+            assertThat(collectionCreate.isMissingNode()).isFalse();
+            assertThat(findParameter(collectionCreate, "Idempotency-Key")
+                    .path("in").asText()).isEqualTo("header");
+            assertThat(findParameter(collectionCreate, "Idempotency-Key")
+                    .path("required").asBoolean()).isFalse();
+            for (String responseCode : java.util.List.of(
+                    "200", "201", "400", "409", "503")) {
+                assertThat(collectionCreate.path("responses").has(responseCode))
+                        .as("POST /collections must document %s", responseCode)
                         .isTrue();
             }
 

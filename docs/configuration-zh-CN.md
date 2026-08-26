@@ -777,6 +777,12 @@ rag:
     retention: ${RAG_API_KEY_PROVISIONING_RETENTION:400d}
     cleanup-batch-size: ${RAG_API_KEY_PROVISIONING_CLEANUP_BATCH_SIZE:500}
     concurrent-retry-attempts: ${RAG_API_KEY_PROVISIONING_CONCURRENT_RETRY_ATTEMPTS:3}
+  collection-provisioning:
+    enabled: ${RAG_COLLECTION_PROVISIONING_ENABLED:true}
+    retention: ${RAG_COLLECTION_PROVISIONING_RETENTION:400d}
+    cleanup-batch-size: ${RAG_COLLECTION_PROVISIONING_CLEANUP_BATCH_SIZE:500}
+    cleanup-interval-ms: ${RAG_COLLECTION_PROVISIONING_CLEANUP_INTERVAL_MS:3600000}
+    concurrent-retry-attempts: ${RAG_COLLECTION_PROVISIONING_CONCURRENT_RETRY_ATTEMPTS:3}
 ```
 
 | 属性 | 默认值 | 说明 |
@@ -791,6 +797,18 @@ rag:
 | `rag.api-key-provisioning.retention` | `400d` | 成功 provisioning ledger 的保留时间和保证 replay 窗口；范围 7–3650 天 |
 | `rag.api-key-provisioning.cleanup-batch-size` | `500` | 每次定时清理最多删除的已完成 ledger 行数，限制为 10–5000 |
 | `rag.api-key-provisioning.concurrent-retry-attempts` | `3` | 同 owner/key 唯一约束竞争后读取胜者的有界尝试次数，限制为 1–8 |
+
+| 属性 | 默认值 | 说明 |
+|------|--------|------|
+| `rag.collection-provisioning.enabled` | `true` | 启用按调用方隔离的 keyed Collection 创建；关闭后携带 `Idempotency-Key` 的 `POST /collections` fail closed 返回 `503` |
+| `rag.collection-provisioning.retention` | `400d` | Collection 创建成功账本的保留时间和保证 replay 窗口；范围 7–3650 天 |
+| `rag.collection-provisioning.cleanup-batch-size` | `500` | 每次清理最多删除的已完成 Collection operation 行数，限制为 10–5000 |
+| `rag.collection-provisioning.cleanup-interval-ms` | `3600000` | best-effort 清理的固定延迟，限制为 10,000–86,400,000 毫秒 |
+| `rag.collection-provisioning.concurrent-retry-attempts` | `3` | 同 owner/key 创建竞争后读取胜者的有界尝试次数，限制为 1–8 |
+
+Collection provisioning 只保存服务端派生 owner、`Idempotency-Key` hash、规范化请求
+fingerprint 和结果 Collection ID。关闭该功能不会关闭普通无 header 的 Collection 创建；
+它只会拒绝 keyed 请求，避免静默丢失重试保证。
 
 配置有效 `RAG_ROOT_API_KEY` 后进入独立服务 MVP 安全模式：
 
@@ -995,7 +1013,10 @@ external ID，并重建局部唯一索引；V32–V39 增加 Chat lease、持久
 运营和无悲观锁协调；V40/V41 增加文档业务 revision、完整快照、source namespace、
 generation fencing 与 lifecycle/idempotency contract；V42 增加权威外部快照对账 run
 以及 SOURCE/RECONCILIATION 删除标记；V43 增加与 Profile 无关的本地关键词 chunk 和
-独立的本地索引生命周期状态。
+独立的本地索引生命周期状态；V44/V45 增加外部文档迁移和 Collection 派生 repair
+控制面；V46/V47 增加持久化 Chat 摘要与 turn operation；V48–V50 增加 stable managed
+principal、operation capability、共享 quota 和 principal provisioning 幂等；V51
+增加 Sync Run item receipt 游标索引；V52 增加按调用方隔离的 Collection 创建幂等账本。
 
 ## Profile 一览
 

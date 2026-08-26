@@ -134,8 +134,8 @@ class ChatSessionPostgresIntegrationTest {
     }
 
     @Test
-    void fullMigrationThroughV51PreservesChatContractsAndRejectsInvalidNewRows() {
-        assertEquals("51", jdbcTemplate.queryForObject(
+    void fullMigrationThroughV52PreservesChatContractsAndRejectsInvalidNewRows() {
+        assertEquals("52", jdbcTemplate.queryForObject(
                 "SELECT version FROM flyway_schema_history "
                         + "WHERE success = true ORDER BY installed_rank DESC LIMIT 1",
                 String.class));

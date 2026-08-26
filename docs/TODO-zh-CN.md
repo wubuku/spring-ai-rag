@@ -26,6 +26,7 @@
 | 明文 secret schema 禁写 | V48 已交付 | 迁移清空明文、移除索引并约束 `api_key IS NULL` |
 | operation-scoped `RAG_READ` / `RAG_WRITE` 强制授权 | V49 已交付 | 中央 filter 在认证后、限流前按 operation 强制能力；只读 principal 可 Search/Chat，写请求 `403` |
 | principal provisioning 幂等键 | V50 已交付 | 可选 keyed create 支持不返回一次性 secret 的精确重放；语义复用冲突和账本故障均 fail closed |
+| Collection 创建幂等键 | V52 已交付 | 可选、按 owner 隔离的 keyed 创建支持跨实例/重启 replay 当前 Collection 状态；语义复用和账本故障均 fail closed |
 | machine-readable 集成协议版本 / 能力发现 | V50 已交付 | 认证、no-store endpoint 投影协议、调用方 policy、数据面行为、可选特性和稳定上限 |
 | OAuth/OIDC 与独立租户层级 | 后续独立规划 | 当前仍是 environment root + 受管业务 principal，不提供第三方身份 federation |
 | 模型 invocation 级 token/cost 持久用量账本 | 未来实施候选 | 最终 Chat response usage 只代表最后响应，不能覆盖 query transform/expand、AGENT 多轮、summary、fallback 和应用 retry；候选尚未完成规划 `3/3` |

@@ -331,6 +331,11 @@ Data model and current boundaries:
 - Collection create/import/clone require a caller-supplied key. By-key CRUD,
   restore, document association, and export use query parameters rather than
   path segments because valid keys may contain URL-reserved punctuation.
+- V52 adds optional caller-scoped idempotency to Collection create. The
+  successful Collection row and operation ledger commit together under a
+  server-derived owner plus key hash. Exact replay returns the Collection's
+  current state without another create audit; semantic key reuse conflicts,
+  and disabled or unavailable ledger state fails closed.
 - API-key management exposes `allowedCollectionKeys`; V48 stores the
   authoritative internal-ID ACL on `rag_api_principal.allowed_collection_ids`.
   The active credential carries a compatibility snapshot, while request-time
@@ -656,6 +661,7 @@ rag_audit_log           # Audit logs (collection operations)
 | `rag_api_key` | key_id, principal_id, credential_version, key_hash, enabled | Versioned credential with at most one active version per principal |
 | `rag_api_rate_limit_bucket` | principal_id, window_start, request_count | Shared fixed UTC-minute quota bucket |
 | `rag_api_provisioning_operation` | owner_id, idempotency_key_hash, request_fingerprint_sha256, principal_id, completed_at | Successful provisioning replay ledger without raw credentials (V50) |
+| `rag_collection_provisioning_operation` | owner_id, idempotency_key_hash, request_fingerprint_sha256, collection_id, completed_at | Successful Collection-create replay ledger without raw keys or request bodies (V52) |
 | `rag_document_sync_runs` | id, collection_id, source_namespace, status, lease_token_hash, cumulative counters | Authoritative source-snapshot run control plane; only the lease hash is stored |
 | `rag_document_sync_run_items` | run_id, external_id, document_kind, source_revision, status, error_message, seen_at | Idempotent item ledger and durable low-sensitivity receipt source without bodies, payloads, or metadata |
 | `rag_chat_history` | session_id, user_message, ai_response | Business audit |
@@ -676,6 +682,9 @@ rag_audit_log           # Audit logs (collection operations)
 - `rag_embedding_jobs`: active-job partial unique, claim, batch, document, and status/created indexes
 - `rag_api_provisioning_operation`: unique owner/key-hash identity and a
   completed-at cleanup index
+- `rag_collection_provisioning_operation`: unique owner/key-hash identity,
+  restricted Collection foreign key, hash-shape checks, and completed-at
+  cleanup index
 - `rag_document_sync_run_items`: V51 B-Trees on
   `(run_id, seen_at, external_id)` and
   `(run_id, status, seen_at, external_id)` for bounded unfiltered and
