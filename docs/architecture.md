@@ -822,8 +822,9 @@ rag_audit_log           # Audit logs (collection operations)
 | `rag_chat_history_source_document` / `rag_user_feedback_document` | history_id/feedback_id, document_id | V56 normalized content references for safe purge attribution |
 | `rag_collection_purge_preview` | owner_key, collection_id, token_hash, fingerprint, status, result_payload | Body-free preview/apply lease and result replay without plaintext tokens |
 | `rag_document_local_index_state` | document_id, local_index_status, local_index_generation, content_hash, chunker_version, chunk_count | Current local keyword generation and freshness |
-| `rag_api_principal` | principal_id, role, allowed_collection_ids, capabilities, policy_version, requests_per_minute | Stable caller owner and authoritative policy (V48/V49) |
+| `rag_api_principal` | principal_id, role, allowed_collection_ids, capabilities, policy_version, requests_per_minute, expiry_alert_checked_at | Stable caller owner, authoritative policy, and V57 fair expiry-alert scan cursor |
 | `rag_api_key` | key_id, principal_id, credential_version, key_hash, enabled, retire_at | Versioned credential with at most one current and one bounded retiring version per principal |
+| `rag_alerts` | dedupe_key, condition_state, state_version, notified_version, status, version | Ordinary alerts plus V57 managed conditions; PostgreSQL/CAS converges active dedupe, phase transitions, and notification claims |
 | `rag_api_rate_limit_bucket` | principal_id, window_start, request_count | Shared fixed UTC-minute quota bucket |
 | `rag_api_provisioning_operation` | owner_id, idempotency_key_hash, request_fingerprint_sha256, principal_id, completed_at | Successful provisioning replay ledger without raw credentials (V50) |
 | `rag_api_key_rotation` | rotation_id, principal_id, source_credential_id, target_credential_id, expires_at, status | Bounded staged-rotation ledger without raw credentials or header values (V55) |
@@ -997,6 +998,24 @@ rag:
 - Latency alert: P95 > threshold triggers WARNING
 - Error rate alert: error rate > threshold triggers CRITICAL
 - Silence period: same alert won't repeat within 60 minutes
+
+V57 also provides managed API-principal expiry conditions:
+
+- Principal creation, expiry-policy updates, and family revocation publish a
+  Spring Event after commit; a bounded asynchronous worker immediately reloads
+  and reconciles the authoritative principal.
+- An hourly Scheduled fallback handles only missed events and time-threshold
+  crossings, scans least-recently checked candidates first, and bounds each
+  pass to avoid frequent database polling.
+- A PostgreSQL partial unique index, JPA version, and conditional DML/CAS keep
+  at most one active alert per principal and upgrade the same row through
+  `WARNING → CRITICAL → EXPIRED`.
+- Extension beyond the window or revocation resolves the alert. Independent
+  state/notified-version claims prevent duplicate notification attempts for
+  repeated events in the same phase.
+- The Alerts control plane is limited to environment root, database ADMIN,
+  legacy static, and auth-disabled direct loopback. Ordinary business
+  principals are rejected before repository access.
 
 ### 7.3 A/B Experiments
 

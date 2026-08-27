@@ -71,20 +71,9 @@ public class AlertServiceImpl implements AlertService {
     @Override
     public boolean shouldAlert(String alertType, String metricName,
                                double currentValue, double threshold) {
-        // Check if silenced by schedule (database-backed)
-        String alertKey = alertType + ":" + metricName;
-        if (isSilencedBySchedule(alertKey)) {
+        if (isSilenced(alertType, metricName)) {
             return false;
         }
-
-        // Check if silenced (in-memory)
-        ZonedDateTime silencedUntil = silencedAlerts.get(alertKey);
-        if (silencedUntil != null && ZonedDateTime.now().isBefore(silencedUntil)) {
-            return false;
-        }
-
-        // Clean up expired silence records
-        cleanupExpiredSilenceRecords();
 
         return switch (alertType) {
             case "THRESHOLD_HIGH" -> currentValue > threshold;
@@ -109,7 +98,7 @@ public class AlertServiceImpl implements AlertService {
         Objects.requireNonNull(severity, "severity must not be null");
         // Final silence check as safeguard (schedule may have been activated since shouldAlert)
         String alertKey = alertType + ":" + metricName;
-        if (isSilencedBySchedule(alertKey)) {
+        if (isSilenced(alertType, metricName)) {
             log.info("Alert {} silenced by schedule, skipping fire", alertKey);
             return null;
         }
@@ -141,6 +130,19 @@ public class AlertServiceImpl implements AlertService {
         }
 
         return alert.getId();
+    }
+
+    @Override
+    public boolean isSilenced(String alertType, String alertName) {
+        String alertKey = alertType + ":" + alertName;
+        if (isSilencedBySchedule(alertKey)) {
+            return true;
+        }
+        ZonedDateTime silencedUntil = silencedAlerts.get(alertKey);
+        boolean silenced = silencedUntil != null
+                && ZonedDateTime.now().isBefore(silencedUntil);
+        cleanupExpiredSilenceRecords();
+        return silenced;
     }
 
     @Override
@@ -323,6 +325,7 @@ public class AlertServiceImpl implements AlertService {
         record.setMetrics(alert.getMetrics());
         record.setStatus(alert.getStatus());
         record.setResolution(alert.getResolution());
+        record.setConditionState(alert.getConditionState());
         record.setFiredAt(alert.getFiredAt());
         record.setResolvedAt(alert.getResolvedAt());
         record.setSilencedUntil(alert.getSilencedUntil());

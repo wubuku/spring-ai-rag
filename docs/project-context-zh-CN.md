@@ -325,7 +325,7 @@ job enqueue 分开提交，HTTP 不同步循环调用 provider。只读诊断默
 ### 数据库
 
 - PostgreSQL + pgvector。
-- Flyway 当前为 V1–V56。
+- Flyway 当前为 V1–V57。
 - V27/V28 负责新增、回填、校验、唯一约束及不可变 Collection 业务 key；V29 增加 JSONB
   结构化记录；V30 增加外部文档同步 schema；V31 在不改写已发布 V30 的前提下规范化
   已存储的外部文档身份；V32 增加按 principal 归属的 Chat history、来源快照、turn
@@ -351,7 +351,8 @@ job enqueue 分开提交，HTTP 不同步循环调用 provider。只读诊断默
   小时级 integration operation 与已授权 Collection contribution 聚合；V55 增加有界
   分阶段 API credential 轮换、overlap deadline 与不保存 secret 的轮换 operation 账本；
   V56 增加 Collection 退役 tombstone、Chat commit fence、Chat/feedback 规范化文档引用
-  与完整性标记，以及不保存正文或明文 token 的 durable purge preview。
+  与完整性标记，以及不保存正文或明文 token 的 durable purge preview；V57 增加受管
+  API principal 到期告警的去重状态、通知版本和公平恢复扫描游标。
 - 数据访问层禁止显式 `SELECT ... FOR UPDATE`、`SKIP LOCKED`、JPA
   `PESSIMISTIC_*` 与 PostgreSQL advisory lock。并发写使用条件
   `UPDATE/DELETE ... RETURNING`、`@Version`、唯一约束、lease 和有界重试；普通 DML
@@ -445,6 +446,10 @@ job enqueue 分开提交，HTTP 不同步循环调用 provider。只读诊断默
   retiring，cancel 禁用 replacement 并恢复旧 credential，expiry 与 family revoke 都
   fail closed。prepare 精确 replay 永不返回 raw secret。两个 credential 共享同一
   principal、policy、Chat/session owner、用量归因和 PostgreSQL quota。
+- V57 在 principal 创建、expiry policy 更新和 family revoke 提交后通过 Spring Event
+  唤醒异步到期告警 worker。PostgreSQL 保存唯一 active 条件、阶段与通知版本；
+  默认每小时的公平 Scheduled 扫描只作为漏事件和时间跨阈值的兜底。延期出预警窗口或
+  吊销会自动解决，普通业务 principal 不能访问 Alerts 管理面。
 - Collection 创建也支持可选 `Idempotency-Key`，但使用独立 V52 账本且不保存响应
   snapshot。replay 返回绑定 Collection 的当前状态和当前文档数；软删除保持可见且绝不
   被逆转。keyed provisioning 关闭或不可用时返回 `503`，不会退化为普通创建。

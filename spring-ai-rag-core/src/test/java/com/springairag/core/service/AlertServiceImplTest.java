@@ -572,6 +572,7 @@ class AlertServiceImplTest {
         alert.setSeverity("WARNING");
         alert.setMetrics(Map.of("hit_rate", 0.7));
         alert.setStatus("ACTIVE");
+        alert.setConditionState("WARNING");
         alert.setFiredAt(ZonedDateTime.now().minusMinutes(5));
 
         when(alertRepository.findByStatusOrderByFiredAtDesc("ACTIVE")).thenReturn(List.of(alert));
@@ -586,6 +587,7 @@ class AlertServiceImplTest {
         assertEquals("hit_rate < 0.85", r.getMessage());
         assertEquals("WARNING", r.getSeverity());
         assertEquals("ACTIVE", r.getStatus());
+        assertEquals("WARNING", r.getConditionState());
         assertNotNull(r.getMetrics());
         assertNotNull(r.getFiredAt());
     }

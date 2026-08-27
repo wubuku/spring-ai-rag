@@ -55,6 +55,9 @@ public class RagApiPrincipal {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
+    @Column(name = "expiry_alert_checked_at")
+    private LocalDateTime expiryAlertCheckedAt;
+
     public String getPrincipalId() { return principalId; }
     public void setPrincipalId(String principalId) { this.principalId = principalId; }
     public String getName() { return name; }
@@ -81,4 +84,8 @@ public class RagApiPrincipal {
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
+    public LocalDateTime getExpiryAlertCheckedAt() { return expiryAlertCheckedAt; }
+    public void setExpiryAlertCheckedAt(LocalDateTime value) {
+        expiryAlertCheckedAt = value;
+    }
 }

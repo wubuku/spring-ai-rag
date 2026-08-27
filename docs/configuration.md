@@ -1000,6 +1000,13 @@ rag:
     operation-retention: ${RAG_API_KEY_ROTATION_OPERATION_RETENTION:400d}
     cleanup-interval-ms: ${RAG_API_KEY_ROTATION_CLEANUP_INTERVAL_MS:60000}
     cleanup-batch-size: ${RAG_API_KEY_ROTATION_CLEANUP_BATCH_SIZE:500}
+  api-key-expiry-alerts:
+    enabled: ${RAG_API_KEY_EXPIRY_ALERTS_ENABLED:true}
+    warning-window: ${RAG_API_KEY_EXPIRY_ALERTS_WARNING_WINDOW:P30D}
+    critical-window: ${RAG_API_KEY_EXPIRY_ALERTS_CRITICAL_WINDOW:P7D}
+    fallback-scan-interval: ${RAG_API_KEY_EXPIRY_ALERTS_FALLBACK_SCAN_INTERVAL:PT1H}
+    fallback-scan-limit: ${RAG_API_KEY_EXPIRY_ALERTS_FALLBACK_SCAN_LIMIT:10000}
+    event-retry-attempts: ${RAG_API_KEY_EXPIRY_ALERTS_EVENT_RETRY_ATTEMPTS:3}
   collection-provisioning:
     enabled: ${RAG_COLLECTION_PROVISIONING_ENABLED:true}
     retention: ${RAG_COLLECTION_PROVISIONING_RETENTION:400d}
@@ -1028,6 +1035,24 @@ rag:
 | `rag.api-key-rotation.operation-retention` | `400d` | Terminal operation retention and idempotent replay/status window; whole days from 7 through 3650 days |
 | `rag.api-key-rotation.cleanup-interval-ms` | `60000` | Fixed delay for expiring pending operations and deleting old terminal rows; 1,000–86,400,000 ms |
 | `rag.api-key-rotation.cleanup-batch-size` | `500` | Maximum expired/terminal operations processed per cleanup pass; 10–5000 |
+
+| Property | Default | Description |
+|----------|---------|-------------|
+| `rag.api-key-expiry-alerts.enabled` | `true` | Enables creation and escalation of managed-principal expiry conditions; cleared active conditions still resolve when disabled |
+| `rag.api-key-expiry-alerts.warning-window` | `P30D` | WARNING window, from 1 through 180 days |
+| `rag.api-key-expiry-alerts.critical-window` | `P7D` | CRITICAL window, at least 1 hour and strictly smaller than the WARNING window |
+| `rag.api-key-expiry-alerts.fallback-scan-interval` | `PT1H` | Low-frequency recovery for missed events and time threshold crossings; 10 minutes through 24 hours |
+| `rag.api-key-expiry-alerts.fallback-scan-limit` | `10000` | Fair-scan bound per pass, from 100 through 100000 |
+| `rag.api-key-expiry-alerts.event-retry-attempts` | `3` | Bounded unique-constraint/CAS race retries, from 1 through 10 |
+
+Principal creation, expiry-policy updates, and family revocation publish a
+Spring Event after commit, so the asynchronous worker normally reconciles
+almost immediately. Scheduled polling is a low-frequency recovery path, not
+the primary consumer, and should not be reduced to seconds. PostgreSQL allows
+at most one active expiry alert per principal, with a `WARNING`, `CRITICAL`,
+or `EXPIRED` phase; extension beyond the window or revocation resolves it.
+Email and DingTalk defaults include `API_PRINCIPAL_EXPIRY`, while an explicitly
+configured deployment allow-list remains authoritative.
 
 | Property | Default | Description |
 |----------|---------|-------------|

@@ -19,7 +19,7 @@ Documentation hub: [index.md](index.md). Stable project context: [project-contex
 | Real-LLM E2E port | `18081` |
 | Embedding | SiliconFlow `BAAI/bge-m3` |
 | Vector dimension | `1024` |
-| Flyway | V1–V56 |
+| Flyway | V1–V57 |
 
 Do **not** append `/v1` to an OpenAI or Embedding `base-url`. Spring AI appends `/v1/chat/completions` or `/v1/embeddings`.
 
@@ -456,6 +456,27 @@ conflicts with `MANAGED_API_BACKEND_A_PORT`, `MANAGED_API_BACKEND_B_PORT`, and
 `minimax`, or `anthropic`; the script validates and loads only the selected
 provider. Evidence is written under
 `.verification/managed-api-principals/<run-id>/`.
+
+### Managed API Principal Expiry Alert Verification
+
+```bash
+# Focused backend, V1-V57 PostgreSQL, and frontend Mock gates
+API_KEY_EXPIRY_ALERT_VERIFY_PHASE=focused \
+./scripts/verify-api-key-expiry-alerts.sh
+
+# Add Maven clean, lock, documentation, shell, diff, and added-line secret gates
+./scripts/verify-api-key-expiry-alerts.sh
+```
+
+The script covers expiry-property validation, after-commit Spring Events, the
+asynchronous proxy contract, create/update/revoke lifecycle integration,
+operator-only Alerts APIs, notification channels, V57 multi-instance
+deduplication/CAS, phase transitions, automatic resolution, fair fallback
+scans, the WebUI `firedAt` contract, and no-screenshot Alerts Mock Playwright.
+It uses `pgvector/pgvector:pg16` Testcontainers by default.
+`API_PRINCIPAL_EXPIRY_ALERT_IT_JDBC_URL` and related variables may instead
+select an explicitly disposable database. Evidence is written under
+`.verification/api-key-expiry-alerts/<run-id>/`.
 
 <a id="business-service-integration-readiness-verification"></a>
 

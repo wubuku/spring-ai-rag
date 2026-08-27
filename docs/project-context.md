@@ -409,7 +409,7 @@ See [multi-model-external-config.md](multi-model-external-config.md).
 ### Database
 
 - PostgreSQL with pgvector.
-- Flyway is currently V1–V56.
+- Flyway is currently V1–V57.
 - V27/V28 add, backfill, validate, uniquely constrain, and make immutable the
   Collection business key; V29 adds JSONB structured records; V30 adds the
   external-document synchronization schema; V31 normalizes stored external
@@ -447,7 +447,8 @@ See [multi-model-external-config.md](multi-model-external-config.md).
   rotation operation ledger; V56 adds the retired Collection tombstone, Chat
   commit fence, normalized Chat/feedback document references and completeness
   markers, and a durable purge preview that stores neither bodies nor plaintext
-  confirmation tokens.
+  confirmation tokens; V57 adds deduplicated managed API-principal expiry
+  state, notification versions, and a fair recovery-scan cursor.
 - The data-access layer forbids explicit `SELECT ... FOR UPDATE`,
   `SKIP LOCKED`, JPA `PESSIMISTIC_*`, and PostgreSQL advisory locks.
   Concurrent writes use conditional `UPDATE/DELETE ... RETURNING`, `@Version`,
@@ -562,6 +563,13 @@ Managed database callers consist of a stable `rag_api_principal` and versioned
   family revocation fail closed. Exact prepare replay never returns the raw
   secret. Both credentials share the same principal, policy, Chat/session
   owner, usage attribution, and PostgreSQL quota.
+- V57 publishes a Spring Event after principal creation, expiry-policy update,
+  and family revocation to wake an asynchronous expiry-alert worker.
+  PostgreSQL stores the unique active condition plus phase and notification
+  versions. An hourly fair Scheduled scan is only a fallback for missed events
+  and time-threshold crossings. Extension beyond the warning window or
+  revocation resolves the condition, and ordinary business principals cannot
+  access the Alerts control plane.
 - Collection creation also accepts an optional `Idempotency-Key`, but uses a
   separate V52 ledger and never stores a response snapshot. Replay returns the
   bound Collection's current state and document count; soft deletion remains

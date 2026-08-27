@@ -19,7 +19,7 @@
 | 真实 LLM E2E 端口 | `18081` |
 | Embedding | SiliconFlow `BAAI/bge-m3` |
 | 向量维度 | `1024` |
-| Flyway | V1–V56 |
+| Flyway | V1–V57 |
 
 OpenAI / Embedding 的 `base-url` **不要带 `/v1`**。Spring AI 会自行追加 `/v1/chat/completions` 或 `/v1/embeddings`。
 
@@ -423,6 +423,24 @@ provider counter。端口冲突时可
 `MANAGED_API_FRONTEND_PORT`。`MANAGED_API_REAL_LLM_PROVIDER` 支持 `openai`、
 `minimax` 和 `anthropic`，脚本只校验并装载所选 provider 的配置；证据位于
 `.verification/managed-api-principals/<run-id>/`。
+
+### 受管 API Principal 到期告警一键验证
+
+```bash
+# 聚焦后端、V1-V57 PostgreSQL 与前端 Mock 门槛
+API_KEY_EXPIRY_ALERT_VERIFY_PHASE=focused \
+./scripts/verify-api-key-expiry-alerts.sh
+
+# 加上 Maven clean、禁锁、文档、shell、diff 与新增行密钥扫描
+./scripts/verify-api-key-expiry-alerts.sh
+```
+
+脚本覆盖到期配置校验、事务 after-commit Spring Event、异步代理合同、create/update/revoke
+生命周期、operator-only Alerts API、通知渠道、V57 多实例 dedupe/CAS、阶段升级、自动解决、
+公平 fallback scan、WebUI `firedAt` 与无截图 Alerts Mock Playwright。默认使用
+`pgvector/pgvector:pg16` Testcontainers；也可通过
+`API_PRINCIPAL_EXPIRY_ALERT_IT_JDBC_URL` 等变量指向明确允许清空的一次性数据库。证据写入
+`.verification/api-key-expiry-alerts/<run-id>/`。
 
 <a id="业务服务接入就绪一键验证"></a>
 

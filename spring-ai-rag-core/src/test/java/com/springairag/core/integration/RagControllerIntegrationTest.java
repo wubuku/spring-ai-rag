@@ -20,7 +20,9 @@ import com.springairag.core.retrieval.ReRankingService;
 import com.springairag.core.retrieval.RetrievalOutcome;
 import com.springairag.core.retrieval.RetrievalScope;
 import com.springairag.core.service.AlertService;
+import com.springairag.core.service.AlertManagementAuthorization;
 import com.springairag.core.service.CollectionDocumentResolver;
+import com.springairag.core.service.CollectionPurgeService;
 import com.springairag.core.service.CollectionRetrievalScopeResolver;
 import com.springairag.core.service.RetrievalEvaluationService;
 import com.springairag.core.service.UserFeedbackService;
@@ -151,6 +153,7 @@ class RagControllerIntegrationTest {
     @MockBean private RagCollectionRepository collectionRepository;
     @MockBean private com.springairag.core.service.RagCollectionService ragCollectionService;
     @MockBean private com.springairag.core.service.CollectionIdentityResolver collectionIdentityResolver;
+    @MockBean private CollectionPurgeService collectionPurgeService;
 
     // ==================== AB Test ====================
     @MockBean private AbTestService abTestService;
@@ -161,6 +164,7 @@ class RagControllerIntegrationTest {
 
     // ==================== Alert ====================
     @MockBean private AlertService alertService;
+    @MockBean private AlertManagementAuthorization alertManagementAuthorization;
     @MockBean private com.springairag.core.repository.SloConfigRepository sloConfigRepository;
     @MockBean private com.springairag.core.repository.RagSilenceScheduleRepository silenceScheduleRepository;
 

@@ -40,7 +40,12 @@ public class NotificationConfig {
         private String webhookUrl;
         private String secret;
         private boolean enabled = true;
-        private List<String> alertTypes = List.of("THRESHOLD_HIGH", "THRESHOLD_LOW", "SLO_BREACH", "AVAILABILITY");
+        private List<String> alertTypes = List.of(
+                "THRESHOLD_HIGH",
+                "THRESHOLD_LOW",
+                "SLO_BREACH",
+                "AVAILABILITY",
+                "API_PRINCIPAL_EXPIRY");
 
         public String getName() {
             return name;
@@ -115,7 +120,10 @@ public class NotificationConfig {
         private String password;
         private String from;
         private List<String> to = new ArrayList<>();
-        private List<String> alertTypes = List.of("CRITICAL", "SLO_BREACH");
+        private List<String> alertTypes = List.of(
+                "CRITICAL",
+                "SLO_BREACH",
+                "API_PRINCIPAL_EXPIRY");
 
         public boolean isEnabled() {
             return enabled;

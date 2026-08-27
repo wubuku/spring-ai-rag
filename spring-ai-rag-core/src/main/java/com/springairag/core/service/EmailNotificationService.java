@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Email notification service for alert delivery via SMTP.
@@ -35,16 +36,20 @@ public class EmailNotificationService implements NotificationService {
     }
 
     @Override
-    @Async
-    public boolean sendAlert(String alertType, String alertName, String severity,
-                             String message, Map<String, Object> metadata) {
+    @Async("taskExecutor")
+    public CompletableFuture<Boolean> sendAlert(
+            String alertType,
+            String alertName,
+            String severity,
+            String message,
+            Map<String, Object> metadata) {
         NotificationConfig.EmailConfig emailConfig = notificationConfig.getEmail();
         if (!notificationConfig.isEnabled() || !emailConfig.isEnabled()) {
-            return false;
+            return CompletableFuture.completedFuture(false);
         }
 
         if (!emailConfig.getAlertTypes().contains(alertType)) {
-            return false;
+            return CompletableFuture.completedFuture(false);
         }
 
         Exception lastException = null;
@@ -53,7 +58,7 @@ public class EmailNotificationService implements NotificationService {
                 sendEmail(emailConfig, alertType, alertName, severity, message, metadata);
                 log.info("Email notification sent: alertType={} alertName={} to={}",
                         alertType, alertName, emailConfig.getTo());
-                return true;
+                return CompletableFuture.completedFuture(true);
             } catch (Exception e) {
                 lastException = e;
                 if (attempt < MAX_RETRIES) {
@@ -63,14 +68,14 @@ public class EmailNotificationService implements NotificationService {
                     } catch (InterruptedException ie) {
                         Thread.currentThread().interrupt();
                         log.warn("Email notification interrupted during retry backoff: alertType={}", alertType);
-                        return false;
+                        return CompletableFuture.completedFuture(false);
                     }
                 }
             }
         }
         log.warn("Failed to send email notification after {} attempts: alertType={} error={}",
                 MAX_RETRIES, alertType, lastException != null ? unwrapMailException(lastException) : "unknown");
-        return false;
+        return CompletableFuture.completedFuture(false);
     }
 
     /**

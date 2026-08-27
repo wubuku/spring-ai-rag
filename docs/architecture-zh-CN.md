@@ -723,8 +723,9 @@ rag_audit_log           # 审计日志（集合操作）
 | `rag_chat_history_source_document` / `rag_user_feedback_document` | history_id/feedback_id, document_id | V56 规范化内容引用，用于安全 purge 归因 |
 | `rag_collection_purge_preview` | owner_key, collection_id, token_hash, fingerprint, status, result_payload | 不保存正文或明文 token 的 preview/apply lease 与结果 replay |
 | `rag_document_local_index_state` | document_id, local_index_status, local_index_generation, content_hash, chunker_version, chunk_count | 当前本地关键词 generation 与 freshness |
-| `rag_api_principal` | principal_id, role, allowed_collection_ids, capabilities, policy_version, requests_per_minute | stable 调用方 owner 与权威 policy（V48/V49） |
+| `rag_api_principal` | principal_id, role, allowed_collection_ids, capabilities, policy_version, requests_per_minute, expiry_alert_checked_at | stable 调用方 owner、权威 policy 与 V57 到期告警公平扫描游标 |
 | `rag_api_key` | key_id, principal_id, credential_version, key_hash, enabled, retire_at | 版本化 credential；每个 principal 至多一个 current 和一个有界 retiring version |
+| `rag_alerts` | dedupe_key, condition_state, state_version, notified_version, status, version | 普通告警与 V57 受管条件告警；active dedupe、阶段升级和通知 claim 由 PostgreSQL/CAS 收敛 |
 | `rag_api_rate_limit_bucket` | principal_id, window_start, request_count | 共享 UTC 固定分钟 quota bucket |
 | `rag_api_provisioning_operation` | owner_id, idempotency_key_hash, request_fingerprint_sha256, principal_id, completed_at | 不保存 raw credential 的成功 provisioning replay 账本（V50） |
 | `rag_api_key_rotation` | rotation_id, principal_id, source_credential_id, target_credential_id, expires_at, status | 不保存 raw credential 或 Header 原值的有界 staged rotation 账本（V55） |
@@ -877,6 +878,19 @@ rag:
 - 延迟告警：P95 > 阈值触发 WARNING
 - 错误率告警：错误率 > 阈值触发 CRITICAL
 - 静默期：同一告警 60 分钟内不重复触发
+
+V57 还提供受管 API principal 到期条件：
+
+- principal 创建、expiry policy 更新和 family revoke 在事务提交后发布 Spring Event，
+  有界异步 worker 立即按 principal 权威重读并对账；
+- 默认每小时的 Scheduled 扫描只恢复漏事件和时间跨阈值，按最久未检查优先并限制单轮
+  候选数量，避免高频轮询数据库；
+- PostgreSQL partial unique index、JPA version 与条件 DML/CAS 保证同一 principal 最多
+  一条 active 告警，阶段按 `WARNING → CRITICAL → EXPIRED` 原行升级；
+- 延期出窗口或吊销会自动解决；通知按独立 state/notified version claim，重复事件不会
+  重复发起同一阶段通知；
+- Alerts 管理面只允许 environment root、数据库 ADMIN、legacy static 和
+  auth-disabled direct loopback，普通业务 principal 在查询前即被拒绝。
 
 ### 7.3 A/B 实验
 

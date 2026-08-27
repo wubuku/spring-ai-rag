@@ -20,6 +20,7 @@ import java.time.Duration;
 import java.util.Base64;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * DingTalk robot webhook notification service.
@@ -54,11 +55,15 @@ public class DingTalkNotificationService implements NotificationService {
     }
 
     @Override
-    @Async
-    public boolean sendAlert(String alertType, String alertName, String severity,
-                             String message, Map<String, Object> metadata) {
+    @Async("taskExecutor")
+    public CompletableFuture<Boolean> sendAlert(
+            String alertType,
+            String alertName,
+            String severity,
+            String message,
+            Map<String, Object> metadata) {
         if (!notificationConfig.isEnabled() || notificationConfig.getDingtalk().isEmpty()) {
-            return false;
+            return CompletableFuture.completedFuture(false);
         }
 
         for (NotificationConfig.DingTalkConfig dtConfig : notificationConfig.getDingtalk()) {
@@ -69,14 +74,14 @@ public class DingTalkNotificationService implements NotificationService {
                 sendToDingTalk(dtConfig, alertType, alertName, severity, message, metadata);
                 log.info("DingTalk notification sent: channel={} alertType={} alertName={}",
                         dtConfig.getName(), alertType, alertName);
-                return true;
+                return CompletableFuture.completedFuture(true);
             } catch (Exception e) {
                 // Resilience: one DingTalk channel failure must not block other channels or abort alerting
                 log.warn("Failed to send DingTalk notification: channel={} error={}",
                         dtConfig.getName(), e.getMessage());
             }
         }
-        return false;
+        return CompletableFuture.completedFuture(false);
     }
 
     private static final int MAX_RETRIES = 3;

@@ -16,7 +16,7 @@ Release date: `2026-07-21`
 - [x] Helm `version` and `appVersion` are `1.0.0`
 - [x] Docker/Helm default image tag is `1.0.0`
 - [x] Local, Docker, and Helm default port is `8081`
-- [x] Flyway inventory is V1-V56
+- [x] Flyway inventory is V1-V57
 - [x] JSONB structured-record API, payload snapshots, and collection lifecycle are covered
 - [x] `scripts/verify-jsonb-records.sh` records focused backend/database/frontend verification
 - [x] Document PATCH/disable/restore/permanent-delete and external triple identity are covered
@@ -184,7 +184,7 @@ Release date: `2026-07-21`
   PostgreSQL tests, two real backend instances, restart recovery, owner/ACL
   isolation, database facts, and secret-safe evidence. WebUI tests prove one
   generated UUID is reused across Axios retries.
-- [x] Capability discovery reports the additive protocol `1.0` field
+- [x] Capability discovery reports protocol `1.1` and the additive field
   `features.provisioning.collectionCreateIdempotencyKey`.
 
 ### 2026-08-26 Model-Invocation Usage Ledger Gates
@@ -214,7 +214,7 @@ Release date: `2026-07-21`
 - [x] V54 adds bounded UTC hourly request totals and authorized Collection
   contributions without request/response bodies, queries, payloads, external
   IDs, credentials, dynamic URLs, or exception text.
-- [x] `/integration-capabilities` keeps protocol `1.0` and additively publishes
+- [x] `/integration-capabilities` reports protocol `1.1` and additively publishes
   structured-record, Sync Run, and observability runtime limits plus
   `features.optional.integrationObservability`.
 - [x] `GET /api/v1/rag/integration-observability` provides self/current-ACL
@@ -286,6 +286,26 @@ Release date: `2026-07-21`
   **3/3**, and the Maven/frontend/documentation gates;
   `real-provider-post-merge-20260828-r2` passed the real lifecycle **12/12**,
   with clean log and redacted-evidence checks.
+
+### 2026-08-27 Managed API Principal Expiry Alert Gates
+
+- [x] V57 adds the active-managed-alert partial unique index, phase/notification
+  versions, a fair principal scan cursor, and check constraints without storing
+  credentials, names, Collection allow-lists, quotas, or business payloads.
+- [x] Principal creation, expiry-policy update, and family revocation wake a
+  bounded asynchronous worker through an after-commit Spring Event. The hourly
+  Scheduled scan handles only missed events and time-threshold crossings.
+- [x] Every Alerts route is operator-only. The WebUI uses `firedAt`, displays
+  the server phase, principal, and expiry, and does not recalculate thresholds.
+- [x] The focused gate covers backend **218/218**, PostgreSQL V1-V57 lifecycle
+  **6/6**, WebUI Vitest **234/234**, production build, and Alerts Mock
+  Playwright **1/1**.
+- [ ] Complete Maven, WebUI, startup, lock, documentation, diff, shell, and
+  secret gates have passed.
+- [ ] Isolated PostgreSQL plus real LLM/Embedding
+  principal/document/Chat/alert lifecycle acceptance has passed.
+- [ ] The latest `origin/main` has been merged and the full merged-baseline
+  matrix has been rerun with final evidence.
 
 ### Final Evidence (2026-07-21)
 

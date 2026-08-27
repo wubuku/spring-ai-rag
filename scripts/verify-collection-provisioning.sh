@@ -341,7 +341,7 @@ http_contract() {
     "${a}/api/v1/rag/integration-capabilities")"
   assert_code "$code" 200 "capability discovery" || return 1
   jq -e '
-    .protocol.version == "1.0"
+    .protocol.version == "1.1"
     and .features.provisioning.collectionCreateIdempotencyKey == true
   ' "$PRIVATE_DIR/capabilities.json" >/dev/null || return 1
 

@@ -245,8 +245,8 @@ if payload["result"] == "PASS":
     actual = payload["principal"]["capabilityProfile"]
     if expected is None or actual != expected:
         raise SystemExit("successful report requires a verified capability profile")
-    if payload["capability"]["protocolVersion"] != "1.0":
-        raise SystemExit("successful report requires capability protocol 1.0")
+    if payload["capability"]["protocolVersion"] != "1.1":
+        raise SystemExit("successful report requires capability protocol 1.1")
     if not isinstance(payload["capability"]["jsonBatchItems"], int):
         raise SystemExit("successful report requires a verified JSON batch limit")
     if not isinstance(payload["capability"]["jsonBatchPayloadBytes"], int):
@@ -692,7 +692,7 @@ capability_preflight() {
   fi
   if ! jq -e '
       .protocol.name == "spring-ai-rag-integration"
-      and .protocol.version == "1.0"
+      and .protocol.version == "1.1"
       and (.limits.structuredRecords.maxBatchItems | type == "number")
       and (.limits.structuredRecords.maxBatchItems >= 1)
       and (.limits.structuredRecords.maxBatchPayloadBytes | type == "number")

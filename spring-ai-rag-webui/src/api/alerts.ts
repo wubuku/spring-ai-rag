@@ -7,7 +7,9 @@ export interface Alert {
   message: string;
   severity: 'INFO' | 'WARNING' | 'ERROR' | 'CRITICAL';
   status: 'ACTIVE' | 'RESOLVED' | 'SILENCED';
-  triggeredAt: string;
+  conditionState?: 'WARNING' | 'CRITICAL' | 'EXPIRED';
+  metrics?: Record<string, unknown>;
+  firedAt: string;
   resolvedAt?: string;
 }
 

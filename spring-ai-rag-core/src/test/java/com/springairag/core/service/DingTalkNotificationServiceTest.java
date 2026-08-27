@@ -218,7 +218,7 @@ class DingTalkNotificationServiceTest {
         when(notificationConfig.isEnabled()).thenReturn(false);
 
         boolean result = service.sendAlert("THRESHOLD_HIGH", "Test Alert", "WARNING",
-                "test message", null);
+                "test message", null).join();
 
         assertFalse(result);
     }
@@ -229,7 +229,7 @@ class DingTalkNotificationServiceTest {
         when(notificationConfig.getDingtalk()).thenReturn(List.of());
 
         boolean result = service.sendAlert("THRESHOLD_HIGH", "Test Alert", "WARNING",
-                "test message", null);
+                "test message", null).join();
 
         assertFalse(result);
     }
@@ -244,7 +244,7 @@ class DingTalkNotificationServiceTest {
         when(notificationConfig.getDingtalk()).thenReturn(List.of(config));
 
         boolean result = service.sendAlert("THRESHOLD_HIGH", "Test Alert", "WARNING",
-                "test message", null);
+                "test message", null).join();
 
         assertFalse(result);
     }
@@ -260,7 +260,7 @@ class DingTalkNotificationServiceTest {
         when(notificationConfig.getDingtalk()).thenReturn(List.of(config));
 
         boolean result = service.sendAlert("THRESHOLD_HIGH", "Test Alert", "WARNING",
-                "test message", null);
+                "test message", null).join();
 
         assertFalse(result);
     }
@@ -281,7 +281,7 @@ class DingTalkNotificationServiceTest {
                 .thenReturn(new ResponseEntity<>("{\"errcode\":0}", HttpStatus.OK));
 
         boolean result = service.sendAlert("THRESHOLD_HIGH", "High CPU", "WARNING",
-                "CPU above 90%", null);
+                "CPU above 90%", null).join();
 
         assertTrue(result);
         verify(restTemplate).postForEntity(
@@ -305,7 +305,7 @@ class DingTalkNotificationServiceTest {
                 .thenThrow(new RuntimeException("Network error"));
 
         boolean result = service.sendAlert("THRESHOLD_HIGH", "Test Alert", "WARNING",
-                "test message", null);
+                "test message", null).join();
 
         assertFalse(result);
     }
@@ -325,7 +325,7 @@ class DingTalkNotificationServiceTest {
                 .thenReturn(new ResponseEntity<>("{\"errcode\":0}", HttpStatus.OK));
 
         boolean result = service.sendAlert("THRESHOLD_HIGH", "High CPU", "CRITICAL",
-                "CPU exceeded 95%", null);
+                "CPU exceeded 95%", null).join();
 
         assertTrue(result);
         // Verify URL contains signature parameters
@@ -357,7 +357,7 @@ class DingTalkNotificationServiceTest {
                 .thenReturn(new ResponseEntity<>("{\"errcode\":0}", HttpStatus.OK));
 
         boolean result = service.sendAlert("THRESHOLD_HIGH", "High CPU", "WARNING",
-                "CPU above 90%", null);
+                "CPU above 90%", null).join();
 
         assertTrue(result);
         verify(restTemplate).postForEntity(
@@ -381,7 +381,7 @@ class DingTalkNotificationServiceTest {
                 .thenReturn(new ResponseEntity<>("{\"errcode\":0}", HttpStatus.OK));
 
         boolean result = service.sendAlert("THRESHOLD_HIGH", "High CPU", "WARNING",
-                "CPU above 90%", null);
+                "CPU above 90%", null).join();
 
         assertTrue(result);
     }
@@ -401,7 +401,7 @@ class DingTalkNotificationServiceTest {
                 .thenThrow(new RuntimeException("Connection timeout"));
 
         boolean result = service.sendAlert("THRESHOLD_HIGH", "Test Alert", "WARNING",
-                "test message", null);
+                "test message", null).join();
 
         assertFalse(result);
         // Verify 3 attempts were made (MAX_RETRIES = 3)
@@ -425,7 +425,7 @@ class DingTalkNotificationServiceTest {
                 .thenReturn(new ResponseEntity<>("{\"errcode\":0}", HttpStatus.OK));
 
         boolean result = service.sendAlert("THRESHOLD_HIGH", "Test Alert", "WARNING",
-                "test message", null);
+                "test message", null).join();
 
         assertTrue(result);
         // Verify 2 attempts were made (failed once, succeeded on second)

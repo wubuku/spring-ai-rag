@@ -95,7 +95,7 @@ X-API-Key: <business-credential>
 GET /api/v1/rag/integration-capabilities
 ```
 
-要求 protocol 为 `spring-ai-rag-integration` version `1.0`，再核对所需
+要求 protocol 为 `spring-ai-rag-integration` version `1.1`，再核对所需
 provisioning/data-plane feature 和 limits。该响应是按当前调用方投影的低敏合同，不替代
 身份 binding。使用权威快照协议的 Client 必须要求
 `features.optional.documentSyncRuns=true`；需要响应丢失恢复、失败项查询或终态审计时，
@@ -226,8 +226,8 @@ RAG_BINDING_REQUIRE_OPERATION_OBSERVABILITY=true \
 ```
 
 item/payload 最低值是可选的正整数；observability 要求只接受 `true` 或 `false`。runner
-始终要求 capability protocol `1.0` 和合法的机器可读 structured-record 限制；这些最低
-要求只增加部署特定约束，不改变协议版本。
+始终要求 capability protocol `1.1` 和合法的机器可读 structured-record 限制；这些最低
+要求只增加部署特定约束，不改变服务端公布的协议版本。
 
 只有在预先创建了、且不承载业务数据的专用 canary Collection 时，才可以显式启用有界
 mutation smoke。它要求同时设置 mode 和确认标志，并且该 canary key 必须是该 binding
@@ -336,6 +336,12 @@ durable embedding job 的 `default-max-attempts`/`max-attempts` 是两层独立�
 需要原子切换时仍可使用即时 `/rotate`，它会立即使旧 credential 失效。吊销、principal
 expiry 和 overlap expiry 都应视为终止错误，不能无界重试。
 
+平台 operator 应通过 `/api/v1/rag/alerts/active` 监控
+`API_PRINCIPAL_EXPIRY`，在 `WARNING` / `CRITICAL` 阶段完成轮换或 expiry policy 延期。
+业务 `NORMAL` principal 不能读取 Alerts 管理面，也不应为了自检而持有 root/ADMIN
+credential；调用方仍以 `/auth/me` 的当前 principal、credential 和 expiry 投影作为启动
+绑定事实。延期出窗口、吊销或重新创建后的告警收敛由服务端完成。
+
 ## 7. 部署、升级与回滚
 
 - liveness 使用 `/actuator/health/liveness`；readiness 使用
@@ -344,19 +350,19 @@ expiry 和 overlap expiry 都应视为终止错误，不能无界重试。
 - embedding 可用性读取文档 lifecycle 或
   `/api/v1/rag/collections/embedding-readiness`；业务 binding 另用 `/auth/me` 和
   Collection by-key。
-- 空库或升级环境必须按顺序执行 Flyway V1-V56。V49 为 stable principal 增加
+- 空库或升级环境必须按顺序执行 Flyway V1-V57。V49 为 stable principal 增加
   operation capabilities；V50 增加不保存 raw credential 的成功 provisioning 幂等
   ledger；V51 为 Sync Run item receipt 增加未过滤和按状态过滤的 keyset 索引；V52
   增加独立、按 owner 隔离的 Collection 创建幂等账本；V53 增加模型调用用量账本；
   V54 增加有界 UTC 小时级 integration operation 与已授权 Collection contribution 聚合；
   V55 增加有界 staged credential rotation 及不保存 secret 的 operation ledger；V56
   增加永久 Collection 退役 tombstone、Chat/feedback 文档引用索引和 durable purge
-  preview。
+  preview；V57 增加受管 principal 到期告警的持久去重、阶段版本和公平恢复扫描。
 - 生产调用方应锁定已验收的 Git commit 或由该 commit 构建的不可变镜像。当前 Maven/API
   版本仍为 `1.0.0`。
 - `/auth/me` 的新增字段保持向后兼容；旧 client 会忽略，依赖 capability/ACL 自检的
   client 必须先运行合同门禁，再升级业务实例。
-- V49 至 V56 都是向前兼容增量迁移，不执行破坏性 schema 回退。若应用回滚到
+- V49 至 V57 都是向前兼容增量迁移，不执行破坏性 schema 回退。若应用回滚到
   不识别 operation capabilities、keyed principal/Collection provisioning 或 item receipt
   查询、usage 聚合、integration observability、staged rotation 或 Collection 退役的版本，
   应继续保留 schema，并停止依赖对应合同的 client，不能宽松启动或假定缺失 endpoint
@@ -368,6 +374,9 @@ expiry 和 overlap expiry 都应视为终止错误，不能无界重试。
 - V55/V56 混合 fleet 期间必须保持 `rag.collection-purge.enabled=false`。旧 binary 不识别
   `purged_at`，不能承担退役后 restore/write/retrieval 防护。只有全部实例运行 V56 后才
   启用 purge；完成任何 purge 后，不允许回滚到 V55 承担数据面流量。
+- V56/V57 混合 fleet 允许继续认证与数据面流量，但只有 V57 实例维护 principal 到期
+  告警。部署完成前不要把告警当作唯一轮换触发器；回滚应用时保留 V57 schema，新版本再次
+  上线后由低频恢复扫描补齐状态。
 
 ### Operation observability
 

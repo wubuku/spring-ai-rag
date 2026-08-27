@@ -35,7 +35,8 @@ class EmailNotificationServiceTest {
     @Test
     void sendAlert_emailDisabled_returnsFalse() {
         notificationConfig.getEmail().setEnabled(false);
-        boolean result = emailService.sendAlert("CRITICAL", "Test", "CRITICAL", "msg", Map.of());
+        boolean result = emailService.sendAlert(
+                "CRITICAL", "Test", "CRITICAL", "msg", Map.of()).join();
         assertFalse(result);
         verifyNoInteractions(mailSender);
     }
@@ -44,7 +45,8 @@ class EmailNotificationServiceTest {
     void sendAlert_globalDisabled_returnsFalse() {
         notificationConfig.setEnabled(false);
         notificationConfig.getEmail().setEnabled(true);
-        boolean result = emailService.sendAlert("CRITICAL", "Test", "CRITICAL", "msg", Map.of());
+        boolean result = emailService.sendAlert(
+                "CRITICAL", "Test", "CRITICAL", "msg", Map.of()).join();
         assertFalse(result);
     }
 
@@ -52,7 +54,8 @@ class EmailNotificationServiceTest {
     void sendAlert_alertTypeNotConfigured_returnsFalse() {
         notificationConfig.getEmail().setEnabled(true);
         notificationConfig.getEmail().setAlertTypes(java.util.List.of("SLO_BREACH"));
-        boolean result = emailService.sendAlert("CRITICAL", "Test", "CRITICAL", "msg", Map.of());
+        boolean result = emailService.sendAlert(
+                "CRITICAL", "Test", "CRITICAL", "msg", Map.of()).join();
         assertFalse(result);
     }
 
@@ -71,7 +74,8 @@ class EmailNotificationServiceTest {
         when(mailSender.createMimeMessage()).thenReturn(mockMimeMessage);
 
         boolean result = emailService.sendAlert("CRITICAL", "P99 Latency", "CRITICAL",
-                "P99 exceeds threshold", Map.of("p99_ms", 2500, "slo_threshold_ms", 1000));
+                "P99 exceeds threshold",
+                Map.of("p99_ms", 2500, "slo_threshold_ms", 1000)).join();
 
         assertTrue(result);
         verify(mailSender).send(any(MimeMessage.class));
@@ -88,7 +92,7 @@ class EmailNotificationServiceTest {
         when(mailSender.createMimeMessage()).thenThrow(new RuntimeException("SMTP error"));
 
         boolean result = emailService.sendAlert("CRITICAL", "P99 Latency", "CRITICAL",
-                "P99 exceeds threshold", Map.of());
+                "P99 exceeds threshold", Map.of()).join();
 
         assertFalse(result);
         // Retry logic: 3 attempts before giving up
@@ -111,7 +115,7 @@ class EmailNotificationServiceTest {
                 .thenReturn(mockMimeMessage);
 
         boolean result = emailService.sendAlert("CRITICAL", "P99 Latency", "CRITICAL",
-                "P99 exceeds threshold", Map.of());
+                "P99 exceeds threshold", Map.of()).join();
 
         assertTrue(result);
         verify(mailSender, times(2)).createMimeMessage();
@@ -188,7 +192,8 @@ class EmailNotificationServiceTest {
         notificationConfig.getEmail().setFrom("noreply@example.com");
         notificationConfig.getEmail().setTo(java.util.List.of());
 
-        boolean result = emailService.sendAlert("CRITICAL", "Test", "CRITICAL", "msg", Map.of());
+        boolean result = emailService.sendAlert(
+                "CRITICAL", "Test", "CRITICAL", "msg", Map.of()).join();
         assertFalse(result);
     }
 
@@ -200,7 +205,7 @@ class EmailNotificationServiceTest {
         notificationConfig.getEmail().setAlertTypes(java.util.List.of("CRITICAL"));
 
         boolean result = serviceWithoutMail.sendAlert("CRITICAL", "Test Alert", "CRITICAL",
-                "test message", Map.of());
+                "test message", Map.of()).join();
 
         assertFalse(result);
     }
