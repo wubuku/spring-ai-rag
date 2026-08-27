@@ -38,8 +38,8 @@ Active plans are listed here and in `docs/index*`.
 
 ## Current Active Plans
 
-There is no active plan. Register the next batch after repository exploration
-and planning convergence.
+- [Managed API principal expiry alerting and lifecycle reconciliation plan](NEXT_HIGH_VALUE_FEATURES_PLAN.md)
+- [Companion implementation progress](NEXT_HIGH_VALUE_FEATURES_PROGRESS.md)
 
 Completed, stopped, and superseded materials remain available in the
 [historical archive](archive/README.md).
