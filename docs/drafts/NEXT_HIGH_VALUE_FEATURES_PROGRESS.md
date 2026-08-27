@@ -1,6 +1,6 @@
 # 模型调用级持久用量账本实施进度
 
-> **状态**：已合并到 `main`，usage ledger worktree 待清理
+> **状态**：已合并到 `main` 并完成 Git/worktree 交付
 >
 > **对应规划**：[NEXT_HIGH_VALUE_FEATURES_PLAN.md](NEXT_HIGH_VALUE_FEATURES_PLAN.md)
 >
@@ -44,7 +44,7 @@ answer、tool 参数/结果、异常正文、`.env` 内容或外部项目路径�
 - [x] 按用户要求跳过额外三轮实现代码 review；以一次性完整自动化门禁和真实 provider 验收作为本轮收口证据。
 - [x] merge 最新 origin/main 后完整复验。
 - [x] feature 合回 main 并 push；`main` 与特性分支均指向 `89b73ad5`。
-- [ ] usage ledger worktree 清理。
+- [x] usage ledger worktree 已确认干净并安全移除。
 
 ## 2. 已冻结的关键决策
 
@@ -123,6 +123,7 @@ answer、tool 参数/结果、异常正文、`.env` 内容或外部项目路径�
 | 2026-08-27 | 最终专项硬门槛 | `LLM_USAGE_LEDGER_VERIFY_RUN_ID=ledger-final-20260827-094227 ./scripts/verify-llm-usage-ledger.sh` | PASS；12/12：定向后端、PostgreSQL V1-V53、`mvn clean compile test-compile`、Maven 全量 3088 项、WebUI typecheck/Vitest 222/build/alignment、Mock Playwright 14 项、禁锁、文档和 diff | `.verification/llm-usage-ledger/ledger-final-20260827-094227/summary.md` |
 | 2026-08-27 | 合并后验证基线 | 先合并 `origin/main@19149aad` 到特性分支，再运行 `LLM_USAGE_LEDGER_VERIFY_RUN_ID=ledger-post-merge-20260827-131543 ./scripts/verify-llm-usage-ledger.sh` | PASS；12/12：合并后定向后端、PostgreSQL V1-V53、`mvn clean compile test-compile`、Maven 全量 3088 项、WebUI typecheck/Vitest 222/build/alignment、Mock Playwright 14 项、禁锁、文档和 diff；未发现合并回归 | `.verification/llm-usage-ledger/ledger-post-merge-20260827-131543/summary.md`；合并提交 `e49110e0` |
 | 2026-08-27 | Git 交付 | 推送 `feat/llm-usage-ledger-20260826`，在 `main` worktree 快进合并并推送 `main` | PASS；`main`、`origin/main`、特性分支和远端特性分支均指向 `89b73ad5`；待删除旧特性 worktree | Git refs |
+| 2026-08-27 | Worktree 清理 | 确认特性 worktree 干净、特性提交为 `main` 祖先且无隔离服务监听后，执行 `git worktree remove` | PASS；`/Users/yangjiefeng/.hermes/workspace/spring-ai-rag-llm-usage-ledger` 已从 worktree 列表移除 | `main@1cb47cc0` 后续 checkpoint |
 
 ## 5. 当前实现收口
 
@@ -137,6 +138,6 @@ answer、tool 参数/结果、异常正文、`.env` 内容或外部项目路径�
 
 ## 6. 恢复入口
 
-usage ledger 实现已完成，合并后专项门禁已通过并已推送到 `main`；当前只剩旧特性
-worktree 清理。不得把
+usage ledger 实现已完成，合并后专项门禁已通过并已推送到 `main`，旧特性 worktree 已安全
+移除。不得把
 本地真实 provider 失败或模型能力限制改写成通过结论。
