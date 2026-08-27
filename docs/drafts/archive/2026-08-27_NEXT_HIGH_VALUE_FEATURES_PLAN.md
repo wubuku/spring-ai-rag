@@ -1,9 +1,9 @@
 # 下一批高价值功能实施规划：有界零停机 API Credential 轮换
 
-> 状态：实施完成，等待合并后完整复验与 Git 交付  
+> 状态：已实施、已合并到 `main`，最终验收通过
 > 日期：2026-08-27  
-> 基线：`main` / `origin/main` = `1da13c03f0c1df524a35733496ba502dde5caa23`  
-> 配套进度：[NEXT_HIGH_VALUE_FEATURES_PROGRESS.md](NEXT_HIGH_VALUE_FEATURES_PROGRESS.md)
+> 最终提交：`main` / `origin/main` = `0873755d`
+> 配套进度：[NEXT_HIGH_VALUE_FEATURES_PROGRESS.md](2026-08-27_NEXT_HIGH_VALUE_FEATURES_PROGRESS.md)
 
 ## 1. 摘要
 
@@ -33,17 +33,17 @@ quota，不会因轮换获得双倍配额或越权。
 
 ### 2.1 已确认的代码事实
 
-- [`ApiKeyManagementService.rotate`](../../spring-ai-rag-core/src/main/java/com/springairag/core/service/ApiKeyManagementService.java)
+- [`ApiKeyManagementService.rotate`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/service/ApiKeyManagementService.java)
   在一个事务中先调用 `disableByKeyId`，再保存新 credential。
-- [`V48__managed_api_principals_and_shared_quota.sql`](../../spring-ai-rag-core/src/main/resources/db/migration/V48__managed_api_principals_and_shared_quota.sql)
+- [`V48__managed_api_principals_and_shared_quota.sql`](../../../spring-ai-rag-core/src/main/resources/db/migration/V48__managed_api_principals_and_shared_quota.sql)
   的 `uk_rag_api_key_active_principal` 保证每个 principal 最多一个 `enabled=true` row。
-- 认证由 [`RagApiKeyRepository.authenticate`](../../spring-ai-rag-core/src/main/java/com/springairag/core/repository/RagApiKeyRepository.java)
+- 认证由 [`RagApiKeyRepository.authenticate`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/repository/RagApiKeyRepository.java)
   每次权威联查 credential 与 principal；没有正向授权缓存。
 - quota、Chat owner、幂等 owner 和 usage ledger 都使用 stable principal，因此允许短期双
   credential 不需要复制或迁移这些状态。
-- [`ApiPrincipalResponse`](../../spring-ai-rag-api/src/main/java/com/springairag/api/dto/ApiPrincipalResponse.java)
+- [`ApiPrincipalResponse`](../../../spring-ai-rag-api/src/main/java/com/springairag/api/dto/ApiPrincipalResponse.java)
   和 WebUI 当前只表达一个 current credential，没有 pending rotation 状态。
-- [`verify-managed-api-principals.sh`](../../scripts/verify-managed-api-principals.sh)
+- [`verify-managed-api-principals.sh`](../../../scripts/verify-managed-api-principals.sh)
   与真实 WebUI Playwright 都把“旧 key 立即 401”作为现有即时轮换合同。
 
 ### 2.2 生产影响

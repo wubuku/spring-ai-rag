@@ -1,20 +1,19 @@
 # 下一批高价值功能实施进度：有界零停机 API Credential 轮换
 
-> 日期：2026-08-27  
-> 规划：[NEXT_HIGH_VALUE_FEATURES_PLAN.md](NEXT_HIGH_VALUE_FEATURES_PLAN.md)
+> 日期：2026-08-27 至 2026-08-28
+> 规划：[NEXT_HIGH_VALUE_FEATURES_PLAN.md](2026-08-27_NEXT_HIGH_VALUE_FEATURES_PLAN.md)
 
 ## 1. 恢复入口
 
 - 工作区：`/Users/yangjiefeng/Documents/wubuku/spring-ai-rag`
-- 当前规划基线：`main` / `origin/main` =
-  `1da13c03f0c1df524a35733496ba502dde5caa23`
+- 最终交付提交：`main` / `origin/main` = `0873755d`
 - 用户约束：只使用当前工作区；除非明确安排并行，不创建 worktree。
-- 当前分支：`feature/api-credential-rotation-20260827`。
+- 当前分支：`main`。
 - 当前阶段：V55 实现、长青文档、完整 Mock/构建门槛、双实例真实 HTTP/WebUI、
   MiniMax 真实 Chat 生命周期和 SiliconFlow 真实 Embedding/RAG 均已通过；合并后
-  基线的统一 13 项门禁和独立真实 RAG smoke 也已完成，正在收口 Git 交付。
-- 下一步：提交并推送特性分支，合并并推送 `main`，再从最终提交重跑固定门禁并确认
-  工作区干净。
+  基线的统一 13 项门禁和独立真实 RAG smoke 也已完成，特性分支已合并并推送到
+  `main`，工作区干净。
+- 该进度记录随本轮完成后归档；下一轮工作应建立新的活动 plan/progress。
 
 ## 2. 已完成
 
@@ -80,7 +79,7 @@
 - [x] Slice D：WebUI、Vitest、Mock Playwright（真实Playwright待统一门禁运行验收）
 - [x] Slice E：双语长青文档、真实LLM、完整门槛
 - [x] 同步最新 origin/main并按合并后基线完整复验
-- [ ] 合并推送 main、归档 plan/progress、进入下一轮
+- [x] 合并推送 main、按最终提交完成复验、归档 plan/progress
 
 ## 6. 验证证据
 
@@ -322,9 +321,31 @@
 - 下一步从头执行新的合并后统一 13 项门禁，包含真实 WebUI 和真实 MiniMax 生命周期；任何
   旧运行结果均不替代该最终结论。
 
-## 7. 已知风险与下一步
+### 2026-08-28 合并后最终统一门禁
+
+- 执行提交 `0873755d` 上的
+  `MANAGED_API_VERIFY_RUN_ID=v55-main-20260827-r1
+  MANAGED_API_REAL_ENV_FILE=.env MANAGED_API_REAL_LLM_PROVIDER=minimax
+  MANAGED_API_BACKEND_A_PORT=18281 MANAGED_API_BACKEND_B_PORT=18282
+  MANAGED_API_FRONTEND_PORT=15281 MANAGED_API_MOCK_PORT=4299
+  ./scripts/verify-managed-api-principals.sh --with-real-llm`。
+- 结果：`13 passed, 0 failed`。通过项包括 PostgreSQL 集成矩阵、`mvn clean compile
+  test-compile`、完整 Maven test、WebUI Vitest/typecheck/build/alignment、核心 Mock
+  Playwright、禁悲观锁、项目文档、Git 空白和双实例真实全栈验收。
+- 真实生命周期合同通过：真实 WebUI 1/1；只读 principal 的写请求为 `403` 且 provider
+  增量为 0；MiniMax 真实 native JSON、replay、会话连续性、staged complete/cancel/
+  revoke 均通过；真实 provider 调用数为 9。
+- 运行摘要：
+  `.verification/managed-api-principals/v55-main-20260827-r1/summary.md`。
+- `git status --short --branch` 最终为 `## main...origin/main`，没有未提交修改或额外
+  worktree。
+
+## 7. 已知边界
 
 - V54 binary 不认识双 enabled credential；部署和回滚必须遵守 plan 的管理写冻结条件。
 - staged prepare的 raw secret仍只展示一次；响应丢失通过查询 pending状态和 cancel恢复，
   不能重放 secret。
-- 下一步一次性编写并运行后端 lifecycle、并发、HTTP/no-store 与能力发现测试。
+- V55 binary 不认识双 enabled credential；部署和回滚必须遵守长青部署文档中的管理写冻结
+  条件。
+- staged prepare 的 raw secret 仍只展示一次；响应丢失通过查询 pending 状态和
+  cancel 恢复，不能重放 secret。
