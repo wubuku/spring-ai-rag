@@ -226,7 +226,10 @@
   显式拒绝/默认范围排除的生命周期验收；`real-provider-20260828-r8` 为 `12/12`，
   全局/Collection purge rollup 均为正，日志无 observation drop/Provider/数据库异常，
   持久化证据不含密钥、正文、明文 token 或完整模型回答。
-- [ ] 同步最新 `origin/main` 后从合并基线完整重跑专项门禁和真实生命周期验收。
+- [x] 同步最新 `origin/main` 后从合并基线完整重跑：`post-merge-20260828-r1`
+  专项门禁 **9/9**，含后端 **186/186**、PostgreSQL **11/11**、WebUI Vitest
+  **233/233**、Mock Playwright **3/3** 和 Maven/前端/文档门槛；
+  `real-provider-post-merge-20260828-r2` 真实生命周期 **12/12**，日志和脱敏证据复核通过。
 
 ### 最终证据（2026-07-21）
 

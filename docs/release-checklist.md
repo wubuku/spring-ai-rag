@@ -280,8 +280,12 @@ Release date: `2026-07-21`
   `12/12`; global and Collection purge rollups are positive, logs contain no
   observation drop/provider/database failure, and durable evidence contains no
   key, body, plaintext token, or full model answer.
-- [ ] After syncing the latest `origin/main`, rerun the focused gate and real
-  lifecycle acceptance from the merged baseline.
+- [x] After syncing the latest `origin/main`, reran the merged baseline:
+  `post-merge-20260828-r1` passed all **9/9** focused stages, including backend
+  **186/186**, PostgreSQL **11/11**, WebUI Vitest **233/233**, Mock Playwright
+  **3/3**, and the Maven/frontend/documentation gates;
+  `real-provider-post-merge-20260828-r2` passed the real lifecycle **12/12**,
+  with clean log and redacted-evidence checks.
 
 ### Final Evidence (2026-07-21)
 

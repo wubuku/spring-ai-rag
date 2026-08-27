@@ -575,6 +575,66 @@
   重启隔离真实服务并重新执行完整真实 Provider 生命周期；不得沿用合并前结果作为最终
   交付结论。
 
+### 2026-08-28：同步远端后的复验基线
+
+- 全部工作区修改已保护提交为 `5ddcabfa`。
+- `git fetch origin` 后，`origin/main` 仍为 `90ee276c`；当前特性分支已经包含该提交，
+  `git merge origin/main` 返回 `Already up to date`，没有冲突或额外树变化。
+- 尽管精确代码树未因 merge 改变，最终结论仍按合并后流程重建：新的 9 阶段 run-id、
+  新的一次性 PostgreSQL 数据库，以及从当前 classes 重启的新一轮真实 Provider 服务和
+  生命周期证据。
+
+### 2026-08-28：合并后完整自动化门槛
+
+- 使用新的一次性数据库 `spring_ai_rag_purge_verify_postmerge_r1` 执行
+  `post-merge-20260828-r1` 专项门槛，**9/9** 阶段通过：
+  - 禁止显式悲观锁与 advisory lock；
+  - 聚焦后端测试 **186/186**；
+  - PostgreSQL V1-V56 purge **5/5** 与 observability 兼容矩阵 **6/6**，合计
+    **11/11**，零 failure/error/skip；
+  - `mvn clean compile test-compile`；
+  - WebUI typecheck、Vitest **233/233**、lint、alignment 与 production build；
+  - Collection Mock Playwright **3/3**；
+  - 项目文档门禁 **11/11**、shell 语法和 `git diff --check`。
+- 最终摘要位于
+  `.verification/collection-purge/post-merge-20260828-r1/summary.md`。下一步从当前
+  clean-compiled classes 重启隔离真实服务，使用新的真实验收数据库重新执行完整
+  LLM/Embedding/purge 生命周期。
+
+### 2026-08-28：合并后真实 Provider 生命周期 12/12
+
+- 第一次启动命令在 `dev.sh` 报告 ready 后结束了工具托管的父会话，后端随进程组退出；
+  `real-provider-post-merge-20260828-r1` 在 health 请求前失败，没有发生模型调用或形成
+  有效证据，不得引用。
+- 保持启动器父会话存活后，从合并后 classes 重启隔离栈，使用
+  `spring_ai_rag_purge_real_postmerge_r1` 空库和隔离端口 `18087/15187` 执行
+  `real-provider-post-merge-20260828-r2`，完整生命周期 **12/12**：
+  - environment root、异步 embedding 和 purge capability 可见；
+  - Spring Event 在 60 秒 Scheduled 恢复扫描前启动 persisted job；
+  - 真实 BGE-M3 embedding、readiness 和纯向量检索通过；
+  - 两轮原生 MiniMax Chat 保持 durable session/citation，OpenAI-compatible Chat
+    命中目标事实；
+  - preview/apply/exact replay、Search/Chat/OpenAI 显式退役 `409`、默认范围排除和最小
+    tombstone 通过；
+  - 全局 preview/apply rollup 为 `1/2`，Collection preview/apply rollup 为 `1/2`。
+- 后端完整日志无 ERROR、Provider/SQL 异常、`DataIntegrityViolationException` 或
+  observation batch drop；两条 `COLLECTION_ALREADY_RETIRED` WARN 是预期业务拒绝。
+- `summary.json` 脱敏扫描通过，不含 API key、Authorization、confirmation token、
+  文档正文、完整模型回答、`chunkText` 或测试 token。
+- 合并后自动化和真实 Provider 验收均已完成。下一步重跑文档、锁策略、diff、密钥与
+  客户特定名称检查，提交交付记录并推送特性分支。
+
+### 2026-08-28：最终交付门禁
+
+- `verify-project-docs.sh` **11/11** 通过，192 个 Markdown 文件和 1225 条相对链接有效，
+  双语结构、项目不变量、脚本可发现性和 added-line secret scan 通过。
+- 禁止显式悲观锁/advisory lock、两个新增脚本的 `bash -n`、`git diff --check` 通过。
+- staged/unstaged 密钥模式扫描通过；真实证据的密钥、正文和 token 扫描通过。
+- 当前非归档 tracked 文件不包含客户特定项目名称；公开契约和文档继续使用通用外部
+  Client 视角。
+- 发布清单中合并后自动化 `9/9` 与真实 Provider `12/12` 已同步为完成。下一步只进行
+  Git 交付和运行时/一次性数据库清理，不再修改本批次产品行为。
+
 ## 恢复入口
 
 1. 阅读 plan 的第 2、3、4 节，确认当前代码事实和冻结契约。
