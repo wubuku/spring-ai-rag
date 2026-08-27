@@ -395,5 +395,10 @@ embedding HTTP 路径及 503 失败保留合同，但本能力不改变 Chat，�
   或独立 tenant 层级。
 - capability discovery 描述受支持协议行为和当前 principal 投影；仍必须使用 `/auth/me`、
   Collection 探针和部署特定 binding 检查。
+- capability discovery 当前只发布核心身份/地址上限；JSON Record 的 batch、payload、filter、
+  search 和 Sync Run 分页上限仍需读取配置/合同文档，尚不能完全由运行时响应发现。
+- 当前 endpoint timer、SLO、限流指标和 Collection readiness 是分散的运行事实；服务尚未提供
+  跨重启、按 stable principal 与授权 Collection 自助查询的数据面 operation 汇总。不要把
+  principal ID 或 Collection key 临时加入 Micrometer 高基数标签来绕过该边界。
 
 这些后续边界见 [TODO](TODO-zh-CN.md#受管-api-principal-后续边界)。
