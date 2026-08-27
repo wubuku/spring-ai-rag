@@ -1,6 +1,6 @@
 # 模型调用级持久用量账本实施进度
 
-> **状态**：实施完成，等待合并前硬门槛与 Git 交付
+> **状态**：已合并到 `main`，usage ledger worktree 待清理
 >
 > **对应规划**：[NEXT_HIGH_VALUE_FEATURES_PLAN.md](NEXT_HIGH_VALUE_FEATURES_PLAN.md)
 >
@@ -43,7 +43,8 @@ answer、tool 参数/结果、异常正文、`.env` 内容或外部项目路径�
 - [x] 修改验收脚本/进度文档后的专项硬门槛重跑。
 - [x] 按用户要求跳过额外三轮实现代码 review；以一次性完整自动化门禁和真实 provider 验收作为本轮收口证据。
 - [x] merge 最新 origin/main 后完整复验。
-- [ ] feature 合回 main、push、状态干净、worktree 清理。
+- [x] feature 合回 main 并 push；`main` 与特性分支均指向 `89b73ad5`。
+- [ ] usage ledger worktree 清理。
 
 ## 2. 已冻结的关键决策
 
@@ -121,6 +122,7 @@ answer、tool 参数/结果、异常正文、`.env` 内容或外部项目路径�
 | 2026-08-27 | Slice E 摘要压缩真实生命周期 | 独立服务 `28085`、独立 PostgreSQL、真实 MiniMax，启用低阈值 compaction；同一 session 连续 5 轮真实 Chat | PASS；第 4 轮触发并持久化版本 1 摘要，数据库确认 `CHAT/SUCCEEDED=5`、`SUMMARY/SUCCEEDED=2`；第 5 轮输出超限按设计有界降级，不破坏主 Chat 结果 | `.verification/real-chat/ledger-summary-20260827-093721-83249/summary.jsonl`；只读 PostgreSQL 查询确认摘要游标、模型、token 与终态 |
 | 2026-08-27 | 最终专项硬门槛 | `LLM_USAGE_LEDGER_VERIFY_RUN_ID=ledger-final-20260827-094227 ./scripts/verify-llm-usage-ledger.sh` | PASS；12/12：定向后端、PostgreSQL V1-V53、`mvn clean compile test-compile`、Maven 全量 3088 项、WebUI typecheck/Vitest 222/build/alignment、Mock Playwright 14 项、禁锁、文档和 diff | `.verification/llm-usage-ledger/ledger-final-20260827-094227/summary.md` |
 | 2026-08-27 | 合并后验证基线 | 先合并 `origin/main@19149aad` 到特性分支，再运行 `LLM_USAGE_LEDGER_VERIFY_RUN_ID=ledger-post-merge-20260827-131543 ./scripts/verify-llm-usage-ledger.sh` | PASS；12/12：合并后定向后端、PostgreSQL V1-V53、`mvn clean compile test-compile`、Maven 全量 3088 项、WebUI typecheck/Vitest 222/build/alignment、Mock Playwright 14 项、禁锁、文档和 diff；未发现合并回归 | `.verification/llm-usage-ledger/ledger-post-merge-20260827-131543/summary.md`；合并提交 `e49110e0` |
+| 2026-08-27 | Git 交付 | 推送 `feat/llm-usage-ledger-20260826`，在 `main` worktree 快进合并并推送 `main` | PASS；`main`、`origin/main`、特性分支和远端特性分支均指向 `89b73ad5`；待删除旧特性 worktree | Git refs |
 
 ## 5. 当前实现收口
 
@@ -135,6 +137,6 @@ answer、tool 参数/结果、异常正文、`.env` 内容或外部项目路径�
 
 ## 6. 恢复入口
 
-usage ledger 实现已完成，合并后专项门禁已通过；当前只剩特性分支与 `main` 的 Git 交付
-及 worktree 清理。不得把
+usage ledger 实现已完成，合并后专项门禁已通过并已推送到 `main`；当前只剩旧特性
+worktree 清理。不得把
 本地真实 provider 失败或模型能力限制改写成通过结论。
