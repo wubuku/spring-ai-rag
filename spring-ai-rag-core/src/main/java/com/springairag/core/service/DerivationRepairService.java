@@ -100,6 +100,7 @@ public class DerivationRepairService {
         Set<String> buckets = upperSet(request.buckets());
         Set<String> vectorConditions = upperSet(request.vectorConditions());
         validateSelection(buckets, vectorConditions);
+        collectionResolver.beginActiveWrite(collection.getId());
         long selected = integrityRepository.countRepairSelection(
                 collection.getId(), buckets, vectorConditions);
         List<DerivationIntegrityRepository.Snapshot> candidates = integrityRepository
@@ -299,6 +300,8 @@ public class DerivationRepairService {
 
     private boolean applyLocalPhase(
             PreviewRow preview, long documentId, String leaseHash) {
+        CollectionIdentityResolver.ActiveCollectionToken token =
+                collectionResolver.beginActiveWrite(preview.collectionId());
         if (!lockItemLease(preview.id(), documentId, leaseHash)) {
             return false;
         }
@@ -318,8 +321,6 @@ public class DerivationRepairService {
             finishSkipped(preview.id(), documentId, leaseHash, "SKIPPED_CHANGED");
             return false;
         }
-        CollectionIdentityResolver.ActiveCollectionToken token =
-                collectionResolver.beginActiveWrite(preview.collectionId());
         jdbcTemplate.update(
                 "UPDATE rag_derivation_repair_items SET local_action_status = 'APPLYING' "
                         + "WHERE repair_id = ? AND document_id = ? AND lease_owner_hash = ?",
@@ -346,6 +347,8 @@ public class DerivationRepairService {
     private PhaseResult applyVectorPhase(
             PreviewRow preview, long documentId, String leaseHash) {
         requireActiveProfile(preview.profileId());
+        CollectionIdentityResolver.ActiveCollectionToken token =
+                collectionResolver.beginActiveWrite(preview.collectionId());
         if (!lockItemLease(preview.id(), documentId, leaseHash)) {
             return null;
         }
@@ -373,8 +376,6 @@ public class DerivationRepairService {
         UUID jobId = null;
         String resultCode = "REBUILT_LOCAL";
         if ("PLANNED".equals(vectorAction)) {
-            CollectionIdentityResolver.ActiveCollectionToken token =
-                    collectionResolver.beginActiveWrite(preview.collectionId());
             if (current.vectorFresh()) {
                 jdbcTemplate.update(
                         "UPDATE rag_derivation_repair_items SET vector_action_status = 'SKIPPED' "

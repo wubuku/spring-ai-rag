@@ -165,7 +165,41 @@
     "description": "Description",
     "descriptionPlaceholder": "What is this collection for?",
     "createNamePlaceholder": "e.g., Product Documentation",
-    "createDescriptionPlaceholder": "Optional description for this collection"
+    "createDescriptionPlaceholder": "Optional description for this collection",
+    "purge": {
+      "action": "Permanently purge",
+      "title": "Permanently purge and retire Collection",
+      "description": "Review the deletion plan for {{collectionKey}}. This operation cannot be undone and the Collection key remains permanently reserved.",
+      "previewLoading": "Preparing a deletion preview…",
+      "previewError": "Unable to create purge preview",
+      "retryPreview": "Retry preview",
+      "previewRequired": "A valid purge preview is required.",
+      "warningTitle": "Irreversible operation",
+      "warning": "All RAG documents and their derived data will be deleted. Referencing feedback and persisted chat sessions will also be removed.",
+      "expiresAt": "Preview expires at {{time}}.",
+      "confirmLabel": "Type {{collectionKey}} to confirm",
+      "confirmAction": "Purge and retire",
+      "applying": "Purging…",
+      "applyError": "Collection purge failed",
+      "success": "Collection was permanently purged and retired",
+      "resultTitle": "Collection retired",
+      "resultSummary": "{{collectionKey}} was retired and {{count}} document(s) were permanently deleted.",
+      "resultVersion": "Final Collection version: {{version}}",
+      "metrics": {
+        "documents": "Documents",
+        "localDocuments": "Local documents",
+        "externalDocuments": "External documents",
+        "embeddings": "Embeddings",
+        "embeddingJobs": "Embedding jobs",
+        "versions": "Document versions",
+        "keywordChunks": "Keyword chunks",
+        "derivedRows": "Derived/control rows",
+        "feedback": "Feedback records",
+        "affectedSessions": "Affected chat sessions",
+        "chatRows": "Persisted chat rows",
+        "auditRows": "Content-bearing audit rows"
+      }
+    }
   },
   "collectionScope": {
     "label": "Retrieval scope",

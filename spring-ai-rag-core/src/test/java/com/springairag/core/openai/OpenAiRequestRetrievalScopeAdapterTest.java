@@ -5,6 +5,8 @@ import com.springairag.api.openai.OpenAiChatCompletionRequest;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.entity.RagApiKey;
 import com.springairag.core.filter.ApiKeyAuthFilter;
+import com.springairag.core.exception.RagException;
+import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.retrieval.RetrievalScope;
 import com.springairag.core.service.CollectionRetrievalScopeResolver;
 import org.junit.jupiter.api.BeforeEach;
@@ -134,5 +136,33 @@ class OpenAiRequestRetrievalScopeAdapterTest {
 
         assertEquals(403, error.getStatus());
         assertEquals("collection_not_allowed", error.getCode());
+    }
+
+    @Test
+    void retiredCollectionErrorIsPreservedForOpenAiExceptionEnvelope() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        OpenAiChatCompletionRequest.Scope scope =
+                new OpenAiChatCompletionRequest.Scope();
+        scope.setMode(CollectionScopeMode.SELECTED_COLLECTIONS);
+        scope.setCollectionKeys(List.of("retired"));
+        OpenAiChatCompletionRequest.RagOptions rag =
+                new OpenAiChatCompletionRequest.RagOptions();
+        rag.setScope(scope);
+        when(resolver.resolve(
+                CollectionScopeMode.SELECTED_COLLECTIONS,
+                null,
+                List.of("retired"),
+                null,
+                null,
+                null)).thenThrow(new RagException(
+                        ErrorCode.COLLECTION_ALREADY_RETIRED,
+                        "Collection is permanently retired"));
+
+        RagException error = assertThrows(
+                RagException.class,
+                () -> adapter.resolve(rag, request));
+
+        assertEquals(ErrorCode.COLLECTION_ALREADY_RETIRED,
+                error.getErrorCodeEnum());
     }
 }

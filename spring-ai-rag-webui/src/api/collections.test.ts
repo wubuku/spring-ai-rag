@@ -56,3 +56,48 @@ describe('collectionsApi.create', () => {
     );
   });
 });
+
+describe('collectionsApi purge contract', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('requests caller-aware integration capabilities', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue({ data: {} } as never);
+
+    await collectionsApi.integrationCapabilities();
+
+    expect(apiClient.get).toHaveBeenCalledWith('/integration-capabilities');
+  });
+
+  it('creates a preview by stable Collection key', async () => {
+    vi.mocked(apiClient.post).mockResolvedValue({ data: {} } as never);
+
+    await collectionsApi.previewPurge('tenant:catalog:v1');
+
+    expect(apiClient.post).toHaveBeenCalledWith(
+      '/collections/by-key/purge/preview',
+      undefined,
+      { params: { collectionKey: 'tenant:catalog:v1' } },
+    );
+  });
+
+  it('applies the complete frozen preview envelope', async () => {
+    vi.mocked(apiClient.post).mockResolvedValue({ data: {} } as never);
+    const request = {
+      collectionKey: 'tenant:catalog:v1',
+      previewId: '33333333-3333-4333-8333-333333333333',
+      confirmationToken: 'secret-token',
+      fingerprint: 'sha256-fingerprint',
+      expectedCollectionVersion: 7,
+      expectedChatCommitFenceVersion: 12,
+    };
+
+    await collectionsApi.applyPurge(request);
+
+    expect(apiClient.post).toHaveBeenCalledWith(
+      '/collections/by-key/purge',
+      request,
+    );
+  });
+});

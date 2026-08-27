@@ -33,6 +33,7 @@ public class EmbeddingDispatchService {
     private final DocumentDerivationDescriptorProvider descriptorProvider;
     private final EmbeddingJobExecutor jobExecutor;
     private KeywordIndexPersistenceService keywordIndexPersistenceService;
+    private EmbeddingJobWakeupPublisher wakeupPublisher;
 
     @Autowired
     public EmbeddingDispatchService(
@@ -54,6 +55,12 @@ public class EmbeddingDispatchService {
     void setKeywordIndexPersistenceService(
             KeywordIndexPersistenceService keywordIndexPersistenceService) {
         this.keywordIndexPersistenceService = keywordIndexPersistenceService;
+    }
+
+    @Autowired(required = false)
+    void setWakeupPublisher(
+            EmbeddingJobWakeupPublisher wakeupPublisher) {
+        this.wakeupPublisher = wakeupPublisher;
     }
 
     public EmbeddingDispatchService(
@@ -125,6 +132,7 @@ public class EmbeddingDispatchService {
                 jobRepository.updateDocumentProcessing(
                         document.getId(), "PENDING", null);
             }
+            publishWakeupIfQueued(updated.job());
             return new Result(
                     EmbeddingAction.ASYNC_COALESCED,
                     updated.job().status().name(),
@@ -163,6 +171,7 @@ public class EmbeddingDispatchService {
                 document.getId(), profile.id(), generation, created.job().id());
         jobRepository.updateDocumentProcessing(
                 document.getId(), "PENDING", null);
+        publishWakeupIfQueued(created.job());
         return new Result(
                 created.coalesced()
                         ? EmbeddingAction.ASYNC_COALESCED
@@ -234,6 +243,14 @@ public class EmbeddingDispatchService {
                         "JSON_RECORD", "json-record-v1:single")
                 : new DocumentDerivationDescriptorProvider.Descriptor(
                         "TEXT", "legacy-compatible");
+    }
+
+    private void publishWakeupIfQueued(EmbeddingJob job) {
+        if (wakeupPublisher != null
+                && job != null
+                && job.status() == EmbeddingJobStatus.QUEUED) {
+            wakeupPublisher.publishAfterCommit();
+        }
     }
 
     public record Result(

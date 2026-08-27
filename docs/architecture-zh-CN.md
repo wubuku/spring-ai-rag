@@ -198,6 +198,10 @@ IntegrationObservationFilter
 V54 保存 UTC 小时级请求总量和已授权 Collection contribution。request 表中每个请求只
 计一次；Collection 表记录在当前授权范围内成功解析的 Collection，其行是 contribution，
 不能相加冒充请求总量。未知或未授权 Collection key 不会进入 Collection rollup。
+两张 rollup 表都以数据库 `CHECK` 约束 operation 的有限枚举；后续迁移新增
+`IntegrationOperation` 时，必须在同一迁移中同步扩展两张表的约束，并以真实 PostgreSQL
+测试证明全局与 Collection rollup 都能写入。只修改 Java 枚举会使业务请求成功但异步
+观测批次被数据库拒绝。
 
 记录是异步且 fail-open 的。queue 溢出、repository 故障和有界停机 drain 丢失不会改变
 业务响应，也不会触发 provider/mutation retry。查询 API 通过
@@ -474,8 +478,10 @@ POST /api/v1/rag/embedding-jobs
 rag_embedding_jobs（V33/V37）
   │ active job coalesce + bounded retry
   │ origin / requested_by_principal_id
+  │ 同事务提交后发布本地 Spring Event
   ▼
 EmbeddingJobWorker
+  │ 事件立即唤醒；30s 低频扫描仅恢复遗漏通知/重启任务
   │ 条件 UPDATE ... RETURNING 原子 claim + lease + heartbeat
   │ worker-concurrency 限制
   │ provider 调用前后检查取消/Profile/generation/chunker/content hash
@@ -490,7 +496,9 @@ SUCCEEDED | FAILED | CANCELLED | STALE
 `SKIP`；省略时保持 `embed=true→SYNC`、`embed=false→SKIP`。显式 embed/re-embed 拒绝
 `SKIP`。`ASYNC` 要求 `rag.embedding-jobs.enabled=true`，否则 `503`。V41 起 job worker
 默认开启，因为正文 mutation 的 `SYNC` 与 `ASYNC` 都先持久化任务。就绪接口按
-Collection 返回互斥计数。
+Collection 返回互斥计数。提交后 Spring Event 只提供低延迟本地通知，数据库 job/state
+继续承担可靠性、多实例互斥和恢复；同一事务的多个入队会合并成一次事件，worker 也会合并
+并发唤醒。Scheduled 默认每 `30s` 扫描一次，只兜底事件丢失、实例重启或处理器异常。
 
 ### 4.4 JSON 结构化记录流程
 
@@ -552,6 +560,7 @@ ExternalDocumentService / DocumentMutationService
 rag_documents（保留同一个 documentId）
   │ 内容变化 -> 新 content hash / request generation
   │ 同事务提交 state + durable job
+  │ after-commit Spring Event
   ▼
 EmbeddingJobWorker / EmbeddingJobExecutor（事务提交后）
   │ 分块 -> provider -> generation/hash/chunker/Profile/lease 提交门
@@ -584,7 +593,46 @@ JPA `PESSIMISTIC_*` 和 PostgreSQL advisory lock。worker 使用带状态、owne
 写入仍会由 PostgreSQL 内部获取必要的行/索引锁，这不属于应用显式悲观协调。规则由
 `scripts/verify-no-pessimistic-locks.sh` 守护。
 
-### 4.6 OpenAI Chat Completions 兼容流
+### 4.6 Collection 受保护清理与退役
+
+```text
+POST /collections/by-key/purge/preview
+  │ root / database ADMIN / 显式本地 loopback 授权
+  │ 读取计数 + 引用完整性 + active run/repair/session lease
+  ▼
+rag_collection_purge_preview
+  │ token hash + owner + fingerprint + Collection/Chat fence version
+  │ 不保存正文或明文 token
+  ▼
+POST /collections/by-key/purge
+  │ 校验 preview 并取得 APPLYING lease
+  │ Collection-first 条件写入推进 version/chat fence
+  │ 重建并比对冻结计划
+  ▼
+单事务删除 documents/derivations/referencing feedback/chat/audit
+  │ rag_collection 保留最小 tombstone
+  ▼
+RETIRED + 有界成功结果 replay
+```
+
+V56 为 Chat history 和 feedback 建立规范化 document reference，并保存
+`content_reference_index_complete`。历史 JSON 损坏不会阻断迁移，但任一 incomplete 行会
+使 purge fail closed，直到修复并重建引用。一个持久化 Chat 会话只要引用目标文档，就按
+owner/session 删除全部 history、Spring AI memory、summary 和 turn replay，避免回答或
+工具结果中的正文摘录残留。
+
+所有会创建、移动、恢复或复制 Collection 内容的生产写路径先按 Collection ID 排序消费
+active-write token，再触碰 document/控制面行。purge 使用相同 Collection-first 顺序：
+业务先提交会推进版本并使旧 preview 失效；purge 先提交会令业务 reservation 更新不到
+active 行并回滚。Chat commit 另推进 `chat_commit_fence_version`，session lease 保持到
+summary compaction 停止写入。embedding worker 的最终 generation/hash/profile/lease 提交
+门在 document/job 被删除后失效，因此迟到 provider 响应不能回写退役 Collection。
+
+最终 tombstone 永久占用 `collectionKey`，但固定化 name 并清空 description/metadata。
+独立 `fs_files` 没有可靠 Collection 外键，不根据路径或文件名推断删除。能力默认关闭且有
+同步事务上限；超过上限拒绝，不分段执行半完成清理。
+
+### 4.7 OpenAI Chat Completions 兼容流
 
 ```text
 OpenAI client
@@ -611,7 +659,7 @@ ChatExecutionService
 共享执行内核，但使用独立 DTO、错误信封和标准 SSE 映射，不暴露原生 RAG
 `tool_start/tool_result/sources/done` 事件。
 
-### 4.7 受管质量套件与 Citation
+### 4.8 受管质量套件与 Citation
 
 Chat 在启用时把协议级 `citationValidation` 写入 metadata；只解析约定的 `[S1]` token，
 不是覆盖率评分。受管套件（V38）默认关闭：version 一经创建不可变，相关文档必须使用
@@ -641,8 +689,11 @@ rag_documents  (1) ──→ (1) rag_document_local_index_state
 rag_embedding_profiles (1) ──→ (N) rag_document_embedding_state
 rag_embedding_profiles (1) ──→ (N) rag_embeddings
 rag_embedding_profiles (1) ──→ (N) rag_embedding_jobs
+rag_chat_history (1) ──→ (N) rag_chat_history_source_document
+rag_user_feedback (1) ──→ (N) rag_user_feedback_document
+rag_collection (1) ──→ (N) rag_collection_purge_preview
 
-rag_chat_history        # 对话历史（独立表）
+rag_chat_history        # 对话历史与规范化来源引用
 rag_retrieval_logs      # 检索日志
 rag_ab_experiments      # A/B 实验定义
 rag_ab_results          # A/B 实验结果
@@ -661,7 +712,7 @@ rag_audit_log           # 审计日志（集合操作）
 
 | 表 | 关键列 | 说明 |
 |---|--------|------|
-| `rag_collection` | id, collection_key, name, description, embedding_model | 内部数字身份与稳定外部 Collection key |
+| `rag_collection` | id, collection_key, name, description, embedding_model, purged_at, chat_commit_fence_version | 内部数字身份、稳定外部 key、退役 tombstone 与 Chat 提交围栏 |
 | `rag_documents` | title, content, content_hash, collection_id, source_namespace, external_id, source_revision, document_revision, source_deleted_at, jsonb_payload | 文档真相源、业务 CAS、外部身份与结构化 payload |
 | `rag_document_versions` | document_id, version_number, 完整快照字段, snapshot_completeness | 文档 mutation 的完整审计快照 |
 | `rag_embedding_profiles` | profile_key, provider, model_name, dimensions, distance_metric | 不可变向量空间身份 |
@@ -669,6 +720,8 @@ rag_audit_log           # 审计日志（集合操作）
 | `rag_embeddings` | document_id, chunk_index, embedding_profile_id, embedding_1024 VECTOR(1024), content | Profile 级文本块与向量 |
 | `rag_embedding_jobs` | document_id, embedding_profile_id, content_hash, request_generation, document_kind, chunker_version, status, lease_expires_at, origin | generation-aware 持久化 embedding/reindex 状态机 |
 | `rag_document_chunks` | document_id, local_index_generation, content_hash, chunker_version, chunk_text, chunk_index | 与 Profile 无关的本地关键词 chunk |
+| `rag_chat_history_source_document` / `rag_user_feedback_document` | history_id/feedback_id, document_id | V56 规范化内容引用，用于安全 purge 归因 |
+| `rag_collection_purge_preview` | owner_key, collection_id, token_hash, fingerprint, status, result_payload | 不保存正文或明文 token 的 preview/apply lease 与结果 replay |
 | `rag_document_local_index_state` | document_id, local_index_status, local_index_generation, content_hash, chunker_version, chunk_count | 当前本地关键词 generation 与 freshness |
 | `rag_api_principal` | principal_id, role, allowed_collection_ids, capabilities, policy_version, requests_per_minute | stable 调用方 owner 与权威 policy（V48/V49） |
 | `rag_api_key` | key_id, principal_id, credential_version, key_hash, enabled, retire_at | 版本化 credential；每个 principal 至多一个 current 和一个有界 retiring version |

@@ -120,9 +120,9 @@ class IntegrationObservabilityPostgresIntegrationTest {
     }
 
     @Test
-    void migratesThroughV54AndCreatesBoundedRollupIndexes() {
+    void migratesThroughV56AndCreatesBoundedRollupIndexes() {
         assertEquals(
-                "55",
+                "56",
                 jdbc.queryForObject(
                         """
                         SELECT version
@@ -151,6 +151,44 @@ class IntegrationObservabilityPostgresIntegrationTest {
                                 + "WHERE indexname = "
                                 + "'idx_rag_api_collection_operation_hourly_collection_time'",
                         Long.class));
+    }
+
+    @Test
+    void v56AcceptsCollectionPurgeOperationsInBothRollups() {
+        long collection = insertCollection("purge-observability");
+        Instant bucket = Instant.parse("2026-08-27T03:00:00Z");
+
+        transaction.executeWithoutResult(ignored -> repository.upsert(
+                List.of(
+                        observation(
+                                bucket,
+                                IntegrationOperation.COLLECTION_PURGE_PREVIEW,
+                                200,
+                                12,
+                                List.of(collection)),
+                        observation(
+                                bucket,
+                                IntegrationOperation.COLLECTION_PURGE_APPLY,
+                                409,
+                                18,
+                                List.of(collection))),
+                2_000));
+
+        assertEquals(
+                List.of(
+                        IntegrationOperation.COLLECTION_PURGE_APPLY.name(),
+                        IntegrationOperation.COLLECTION_PURGE_PREVIEW.name()),
+                jdbc.queryForList(
+                        "SELECT operation FROM rag_api_operation_hourly "
+                                + "ORDER BY operation",
+                        String.class));
+        assertEquals(
+                2L,
+                jdbc.queryForObject(
+                        "SELECT COUNT(*) FROM rag_api_collection_operation_hourly "
+                                + "WHERE collection_id = ?",
+                        Long.class,
+                        collection));
     }
 
     @Test
@@ -441,11 +479,25 @@ class IntegrationObservabilityPostgresIntegrationTest {
             int status,
             long durationMs,
             List<Long> collectionIds) {
+        return observation(
+                bucket,
+                IntegrationOperation.JSON_RECORD_SEARCH,
+                status,
+                durationMs,
+                collectionIds);
+    }
+
+    private static IntegrationObservation observation(
+            Instant bucket,
+            IntegrationOperation operation,
+            int status,
+            long durationMs,
+            List<Long> collectionIds) {
         return new IntegrationObservation(
                 bucket,
                 "DATABASE_API_KEY",
                 "principal-a",
-                IntegrationOperation.JSON_RECORD_SEARCH,
+                operation,
                 status,
                 durationMs,
                 collectionIds);

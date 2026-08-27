@@ -120,10 +120,18 @@ public class RagCollectionService {
         Objects.requireNonNull(id, "id must not be null");
         log.info("Soft-deleting collection: id={}", id);
 
-        return collectionRepository.findByIdAndDeletedFalse(id)
-                .map(collection -> {
+        Optional<RagCollection> active =
+                collectionRepository.findByIdAndDeletedFalse(id);
+        if (active.isEmpty()) {
+            rejectRetired(id);
+            return Optional.empty();
+        }
+        return active.map(collection -> {
                     long expectedVersion = collection.getVersion() == null
                             ? 0L : collection.getVersion();
+                    CollectionIdentityResolver.ActiveCollectionToken token =
+                            identityResolver.beginActiveWrite(id);
+                    expectedVersion = token.version();
                     long externalManaged =
                             documentRepository.countExternalManagedByCollectionId(id);
                     if (externalManaged > 0) {
@@ -170,6 +178,13 @@ public class RagCollectionService {
     public Optional<RestoreResult> restoreCollection(Long id) {
         Objects.requireNonNull(id, "id must not be null");
         log.info("Restoring collection: id={}", id);
+        collectionRepository.findById(id)
+                .filter(collection -> collection.getPurgedAt() != null)
+                .ifPresent(collection -> {
+                    throw new RagException(
+                            ErrorCode.COLLECTION_ALREADY_RETIRED,
+                            "Collection is permanently retired");
+                });
 
         int updated = collectionRepository.restore(id);
         if (updated == 0) {
@@ -217,8 +232,13 @@ public class RagCollectionService {
         }
         log.info("Cloning collection: id={}", id);
 
-        return identityResolver.findActive(id, null)
-                .map(source -> {
+        Optional<RagCollection> active = identityResolver.findActive(id, null);
+        if (active.isEmpty()) {
+            rejectRetired(id);
+            return Optional.empty();
+        }
+        return active.map(source -> {
+                    identityResolver.beginActiveWrite(source.getId());
                     // Build new collection as a copy
                     RagCollection cloned = new RagCollection();
                     cloned.setCollectionKey(collectionKey);
@@ -286,6 +306,16 @@ public class RagCollectionService {
                             source.getCollectionKey(),
                             source.getName(),
                             clonedCount);
+                });
+    }
+
+    private void rejectRetired(Long id) {
+        collectionRepository.findById(id)
+                .filter(collection -> collection.getPurgedAt() != null)
+                .ifPresent(collection -> {
+                    throw new RagException(
+                            ErrorCode.COLLECTION_ALREADY_RETIRED,
+                            "Collection is permanently retired");
                 });
     }
 

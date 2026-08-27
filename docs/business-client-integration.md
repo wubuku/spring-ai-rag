@@ -437,31 +437,37 @@ conditions.
 - Read document lifecycle or
   `/api/v1/rag/collections/embedding-readiness` for embedding availability.
   Use `/auth/me` plus Collection by-key probes for business binding.
-- Empty and upgraded databases must run Flyway V1-V55 in order. V49 adds
+- Empty and upgraded databases must run Flyway V1-V56 in order. V49 adds
   operation capabilities to stable principals; V50 adds the successful
   provisioning idempotency ledger without storing raw credentials; V51 adds
   unfiltered and status-filtered keyset indexes for Sync Run item receipts;
   V52 adds a separate owner-scoped Collection-create idempotency ledger; V53
   adds the model-invocation usage ledger; V54 adds bounded hourly integration
   operation and authorized Collection-contribution rollups; V55 adds bounded
-  staged credential rotation and its secret-free operation ledger.
+  staged credential rotation and its secret-free operation ledger; V56 adds
+  permanent Collection-retirement tombstones, Chat/feedback document-reference
+  indexes, and durable purge previews.
 - Pin production callers to an accepted Git commit or an immutable image built
   from it. Maven/API version remains `1.0.0`.
 - The added `/auth/me` fields remain backward-compatible. Older clients ignore
   them; clients that depend on capability/ACL verification must run the
   contract gate before rollout.
-- V49 through V55 are forward-compatible additive migrations; do not destructively
+- V49 through V56 are forward-compatible additive migrations; do not destructively
   roll back their schema. If the application is rolled back to a version that
   does not understand operation capabilities, keyed principal/Collection
   provisioning, item receipts, usage aggregation, integration observability,
-  or staged rotation, retain the schema and stop clients that require those
-  contracts rather than starting permissively or assuming the missing endpoint
-  remains available.
+  staged rotation, or Collection retirement, retain the schema and stop clients
+  that require those contracts rather than starting permissively or assuming
+  the missing endpoint remains available.
 - During a mixed V54/V55 fleet, freeze API-key management writes and do not
   prepare staged rotations; a V54 binary does not understand two enabled
   credential rows. Enable staged rotation only after every instance runs V55.
   Before rolling application code back to V54, verify that there are no
   enabled retiring credentials and no `PENDING` rotation operations.
+- Keep `rag.collection-purge.enabled=false` during a mixed V55/V56 fleet. Older
+  binaries do not understand `purged_at` and cannot enforce post-retirement
+  restore/write/retrieval fences. Enable purge only after every instance runs
+  V56; after any purge completes, do not roll data-plane traffic back to V55.
 
 ### Operation Observability
 

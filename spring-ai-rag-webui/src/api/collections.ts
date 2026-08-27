@@ -12,6 +12,7 @@ export interface Collection {
   createdAt: string;
   updatedAt: string;
   documentCount: number;
+  purgedAt?: string | null;
 }
 
 export interface CollectionListResponse {
@@ -21,7 +22,82 @@ export interface CollectionListResponse {
   limit: number;
 }
 
+export interface IntegrationCapabilities {
+  principal: {
+    principalType: string;
+  };
+  features: {
+    optional: {
+      collectionPurge: boolean;
+    };
+  };
+}
+
+export interface CollectionPurgePreview {
+  previewId: string;
+  collectionId: number;
+  collectionKey: string;
+  collectionVersion: number;
+  chatCommitFenceVersion: number;
+  status: 'PREVIEWED';
+  documentCount: number;
+  externalDocumentCount: number;
+  localDocumentCount: number;
+  embeddingCount: number;
+  embeddingJobCount: number;
+  versionCount: number;
+  keywordChunkCount: number;
+  repairPreviewCount: number;
+  repairItemCount: number;
+  derivedRowCount: number;
+  documentIdempotencyOperationCount: number;
+  feedbackCount: number;
+  feedbackDocumentReferenceCount: number;
+  documentAuditCount: number;
+  collectionAuditCount: number;
+  relocationMarkerCount: number;
+  affectedChatSessionCount: number;
+  chatHistoryCount: number;
+  chatMemoryCount: number;
+  chatSummaryCount: number;
+  chatTurnOperationCount: number;
+  activeSyncRunCount: number;
+  activeDerivationRepairCount: number;
+  activeChatSessionCount: number;
+  unindexedChatReferenceCount: number;
+  unindexedFeedbackReferenceCount: number;
+  confirmationToken: string;
+  fingerprint: string;
+  previewExpiresAt: string;
+  operationExpiresAt: string;
+}
+
+export interface CollectionPurgeApplyRequest {
+  collectionKey: string;
+  previewId: string;
+  confirmationToken: string;
+  fingerprint: string;
+  expectedCollectionVersion: number;
+  expectedChatCommitFenceVersion: number;
+}
+
+export interface CollectionPurgeResult {
+  previewId: string;
+  status: 'RETIRED';
+  collectionId: number;
+  collectionKey: string;
+  purgedDocumentCount: number;
+  purgedExternalDocumentCount: number;
+  purgedLocalDocumentCount: number;
+  deletedAt: string;
+  purgedAt: string;
+  collectionVersion: number;
+}
+
 export const collectionsApi = {
+  integrationCapabilities: () =>
+    apiClient.get<IntegrationCapabilities>('/integration-capabilities'),
+
   list: (params?: { page?: number; size?: number; query?: string }) =>
     apiClient.get<CollectionListResponse>('/collections', {
       params: {
@@ -56,6 +132,19 @@ export const collectionsApi = {
   delete: (id: number) => apiClient.delete(`/collections/${id}`),
   deleteByKey: (collectionKey: string) =>
     apiClient.delete('/collections/by-key', { params: { collectionKey } }),
+
+  previewPurge: (collectionKey: string) =>
+    apiClient.post<CollectionPurgePreview>(
+      '/collections/by-key/purge/preview',
+      undefined,
+      { params: { collectionKey } },
+    ),
+
+  applyPurge: (request: CollectionPurgeApplyRequest) =>
+    apiClient.post<CollectionPurgeResult>(
+      '/collections/by-key/purge',
+      request,
+    ),
 
   addDocuments: (id: number, documentIds: number[]) =>
     apiClient.post(`/collections/${id}/documents`, { documentIds }),

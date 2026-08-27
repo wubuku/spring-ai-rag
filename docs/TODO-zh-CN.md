@@ -56,7 +56,7 @@ limit/billing、多 embedding profile 路由与 `EACH_COLLECTION` 继续独立�
 | Collection 派生索引完整性诊断与受控修复 | 本批已交付 | V45 提供共享物理 freshness、集合级有界诊断和最多 100 项的 durable preview/apply/status；有副作用的 repair 默认关闭 |
 | 历史版本受控恢复 | 本批已交付 | 开启 feature flag 后，本地 `FULL` 快照可恢复为新 revision；外部文档仍由来源系统负责 |
 | 本地 chunk/full-text 与远程向量解耦 | 本批已交付 | V43 保存与 Profile 无关的本地 chunk/state；provider 故障时当前正文仍以 `KEYWORD_ONLY` 可用，旧 generation 继续被排除 |
-| 外部托管文档受保护 purge 与 Collection 退役 | 后续独立规划 | Collection 删除会正确拒绝仍含稳定外部身份的文档，但公开 permanent-delete 也拒绝外部托管文档；目前只能保留/恢复 Collection，或在 relocation 开启时先迁移，缺少带显式确认、审计和有界清理的公开 purge |
+| 外部托管文档受保护 purge 与 Collection 退役 | V56 已交付 | 默认关闭的 preview/apply 使用 root/ADMIN 权限、token/fingerprint、Collection/Chat fence、完整引用索引和同步上限；保留永久 key tombstone，独立文件不按路径猜测删除 |
 
 ### 当前边界
 
@@ -73,6 +73,8 @@ limit/billing、多 embedding profile 路由与 `EACH_COLLECTION` 继续独立�
 - 所有并发协调继续使用条件 DML/CAS、唯一约束、lease 和有界重试，禁止显式悲观锁。
 - 派生 repair 只重建/排队派生，不改正文；批次最多 100 项，明文 token 不落库，且不会
   在 HTTP 请求中同步循环调用 embedding provider。
+- Collection purge 是整座知识库的有界同步运维能力，不是普通文档 retention 或对象存储
+  清理。超限场景仍需未来单独设计异步任务；当前实现会 fail closed，绝不截断删除计划。
 
 剩余实施范围和批次顺序以
 [当前活跃规划](drafts/README-zh-CN.md) 为准；已发布契约仍以

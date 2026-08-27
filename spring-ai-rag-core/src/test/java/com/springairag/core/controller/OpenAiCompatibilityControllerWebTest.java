@@ -10,6 +10,8 @@ import com.springairag.core.chat.ChatTurnOperationService;
 import com.springairag.core.openai.OpenAiChatRequestMapper;
 import com.springairag.core.openai.OpenAiModelAliasRegistry;
 import com.springairag.core.openai.OpenAiProtocolException;
+import com.springairag.core.exception.RagException;
+import com.springairag.api.enums.ErrorCode;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -169,6 +171,32 @@ class OpenAiCompatibilityControllerWebTest {
                         .value("invalid_request_error"))
                 .andExpect(jsonPath("$.error.code")
                         .value("model_not_found"));
+    }
+
+    @Test
+    void retiredCollectionUsesOpenAiErrorEnvelope() throws Exception {
+        when(requestMapper.map(any(), any())).thenThrow(
+                new RagException(
+                        ErrorCode.COLLECTION_ALREADY_RETIRED,
+                        "Collection is permanently retired"));
+
+        mockMvc.perform(post("/v1/chat/completions")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "model": "rag-default",
+                                  "messages": [
+                                    {"role": "user", "content": "hello"}
+                                  ]
+                                }
+                                """))
+                .andExpect(status().isConflict())
+                .andExpect(content()
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.error.type")
+                        .value("invalid_request_error"))
+                .andExpect(jsonPath("$.error.code")
+                        .value("COLLECTION_ALREADY_RETIRED"));
     }
 
     @Test

@@ -20,5 +20,7 @@ public enum IntegrationOperation {
     SYNC_RUN_ABORT,
     SYNC_RUN_GET,
     SYNC_RUN_ITEMS,
-    SYNC_RUN_LIST
+    SYNC_RUN_LIST,
+    COLLECTION_PURGE_PREVIEW,
+    COLLECTION_PURGE_APPLY
 }

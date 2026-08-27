@@ -39,9 +39,11 @@ public class FeedbackRequest {
     private String comment;
 
     @Schema(description = "List of retrieved document IDs")
+    @Size(max = 1000, message = "Retrieved document IDs must not exceed 1000 entries")
     private List<Long> retrievedDocumentIds;
 
     @Schema(description = "List of document IDs the user found useful")
+    @Size(max = 1000, message = "Selected document IDs must not exceed 1000 entries")
     private List<Long> selectedDocumentIds;
 
     @Schema(description = "User dwell time in milliseconds")

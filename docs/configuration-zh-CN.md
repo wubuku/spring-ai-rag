@@ -252,14 +252,16 @@ rag:
 
 job worker 用于持久化、可重试的 embedding/reindex。V41 起默认开启，因为文档正文
 `SYNC` 与 `ASYNC` mutation 都先在同一事务中持久化任务；`SYNC` 只是对同一个任务做有界
-等待。还可通过 `/api/v1/rag/embedding-jobs` 创建、查询、取消和重试运维任务。
+等待。任务事务提交后会发布轻量 Spring Event，立即唤醒本实例的有界 worker；事件不承载
+正文或可靠状态，数据库任务表仍是唯一事实来源。还可通过
+`/api/v1/rag/embedding-jobs` 创建、查询、取消和重试运维任务。
 
 ```yaml
 rag:
   embedding-jobs:
     enabled: ${RAG_EMBEDDING_JOBS_ENABLED:true}
     sync-wait-seconds: ${RAG_EMBEDDING_JOBS_SYNC_WAIT_SECONDS:30}
-    poll-interval-ms: ${RAG_EMBEDDING_JOBS_POLL_INTERVAL_MS:1000}
+    poll-interval-ms: ${RAG_EMBEDDING_JOBS_POLL_INTERVAL_MS:30000}
     claim-batch-size: ${RAG_EMBEDDING_JOBS_CLAIM_BATCH_SIZE:4}
     lease-seconds: ${RAG_EMBEDDING_JOBS_LEASE_SECONDS:120}
     default-max-attempts: ${RAG_EMBEDDING_JOBS_DEFAULT_MAX_ATTEMPTS:3}
@@ -268,6 +270,11 @@ rag:
     retry-backoff-seconds: ${RAG_EMBEDDING_JOBS_RETRY_BACKOFF_SECONDS:10}
     worker-concurrency: ${RAG_EMBEDDING_JOBS_WORKER_CONCURRENCY:4}
 ```
+
+`poll-interval-ms` 是遗漏通知、进程重启和异常恢复的低频扫描周期，不是正常任务的主触发
+路径；默认 `30000ms`，配置下限为 `10000ms`。同一事务创建多个任务只发布一次提交后
+事件，worker 内部继续合并并发唤醒，并使用既有 semaphore、claim batch 和数据库 lease
+约束并发。事务回滚不会发布事件；本地事件丢失也不会丢任务，最迟由恢复扫描重新发现。
 
 worker 使用 PostgreSQL lease 与带状态/过期条件的原子 `UPDATE ... RETURNING` 支持多
 worker claim，并在提交向量前校验活动 Profile、任务 lease、取消标记、request generation、
@@ -328,6 +335,54 @@ JSON record upsert 仍兼容 deprecated 数字输入，但最终解析到同一�
 `collectionKey` 和 `sourceNamespace` 各 128 个字符，`externalId` 255 个字符。
 这些上限属于外部 Client 契约，后续迁移不得缩短。`default` 是兼容 namespace，不是默认
 Collection；`NULL` Collection 只表示本地/未归属状态。
+
+### Collection 永久清理与退役
+
+高风险 purge 默认关闭。启用前必须完成专项 PostgreSQL、WebUI 和真实生命周期验收：
+
+```yaml
+rag:
+  collection-purge:
+    enabled: ${RAG_COLLECTION_PURGE_ENABLED:false}
+    allow-auth-disabled: ${RAG_COLLECTION_PURGE_ALLOW_AUTH_DISABLED:false}
+    confirmation-window: 15m
+    operation-window: 1h
+    result-retention: 24h
+    apply-lease: 2m
+    max-active-previews-per-owner: 20
+    cleanup-batch-size: 500
+    cleanup-interval: 1h
+    max-documents: 10000
+    max-embeddings: 100000
+    max-versions: 100000
+    max-derived-rows: 250000
+    max-affected-chat-sessions: 1000
+    max-chat-rows: 50000
+```
+
+| 属性 | 默认值 | 说明 |
+|------|--------|------|
+| `rag.collection-purge.enabled` | `false` | 暴露 caller-aware capability 和 preview/apply；关闭时 endpoint 返回 `503` |
+| `rag.collection-purge.allow-auth-disabled` | `false` | 仅用于显式关闭认证的本地开发；仍要求 Servlet 直接来源为 loopback，且不信任转发地址 Header |
+| `confirmation-window` | `15m` | 明文一次性确认 token 与 preview 的有效窗口，范围 1m–1h |
+| `operation-window` | `1h` | 已开始 apply 的总操作窗口，不能短于 confirmation window，最大 24h |
+| `result-retention` | `24h` | 成功结果精确 replay 的保留期，不能短于 operation window，最大 7d |
+| `apply-lease` | `2m` | APPLYING owner lease，范围 15s–15m |
+| `max-active-previews-per-owner` | `20` | 单 owner 未终结 preview 上限，范围 1–100 |
+| `cleanup-batch-size` | `500` | 过期 preview/result 的有界清理批次，范围 10–5000 |
+| `cleanup-interval` | `1h` | preview/result 恢复与清理周期，范围 1m–24h |
+| `max-documents` | `10000` | 单次同步 purge 文档上限，范围 1–100000 |
+| `max-embeddings` | `100000` | 单次向量行上限，范围 1–1000000 |
+| `max-versions` | `100000` | 单次文档版本行上限，范围 1–1000000 |
+| `max-derived-rows` | `250000` | 其他派生/控制行总上限，范围 1–2000000 |
+| `max-affected-chat-sessions` | `1000` | 受影响 owner/session 上限，范围 1–10000 |
+| `max-chat-rows` | `50000` | history/memory/summary/turn replay 总行上限，范围 1–500000 |
+
+所有配置在启动时 fail fast 校验。能力开启时还要求 Chat durable coordinator、事务管理器
+和必要引用索引可用；不能以放宽配置跳过完整性检查。超过任一上限时 preview 返回冲突，
+不会截断计划或执行部分清理。正式 API、权限和保留边界见
+[REST API](rest-api-zh-CN.md#受保护的-collection-清理与退役)，专项门禁为
+`./scripts/verify-collection-purge.sh`。
 
 ## 检索配置
 

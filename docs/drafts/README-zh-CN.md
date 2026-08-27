@@ -32,7 +32,8 @@
 
 ## 当前活跃规划
 
-当前没有正在实施的活动规划。新的功能批次应先在本目录创建自包含 plan，并在开始实施
-后创建对应的 progress 记录。
+- [Collection 受保护清理与退役实施规划](COLLECTION_PURGE_AND_RETIREMENT_PLAN.md)
+  - 状态：实施与验收中
+  - 进度：[实施进度](COLLECTION_PURGE_AND_RETIREMENT_PROGRESS.md)
 
 已完成、已停止和被替代的材料可从[历史归档](archive/README-zh-CN.md)追溯。

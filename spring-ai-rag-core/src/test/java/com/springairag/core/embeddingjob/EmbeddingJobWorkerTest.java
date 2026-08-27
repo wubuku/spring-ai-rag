@@ -26,6 +26,8 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.atLeast;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.when;
@@ -67,7 +69,10 @@ class EmbeddingJobWorkerTest {
         EmbeddingJob first = job(UUID.randomUUID(), null);
         EmbeddingJob second = job(UUID.randomUUID(), null);
         when(repository.claim(anyString(), eq(1), anyInt()))
-                .thenReturn(List.of(first), List.of(second));
+                .thenReturn(
+                        List.of(first),
+                        List.of(second),
+                        List.of());
         when(repository.isCommitAllowed(
                 any(UUID.class), anyString(), anyLong()))
                 .thenReturn(true);
@@ -82,16 +87,102 @@ class EmbeddingJobWorkerTest {
         when(embedService.embedDocumentForJob(
                 anyLong(), anyBoolean(), any(EmbeddingCommitGuard.class)))
                 .thenReturn(Map.of("status", "COMPLETED"));
+        when(repository.markSucceeded(
+                any(UUID.class), anyString(), eq(true)))
+                .thenReturn(1);
 
         worker.poll();
 
         ArgumentCaptor<String> owners = ArgumentCaptor.forClass(String.class);
-        verify(repository, timeout(2000).times(2))
+        verify(repository, timeout(2000).atLeast(2))
                 .claim(owners.capture(), eq(1), anyInt());
-        assertEquals(2, owners.getAllValues().size());
+        org.junit.jupiter.api.Assertions.assertTrue(
+                owners.getAllValues().size() >= 2);
         assertNotEquals(
                 owners.getAllValues().get(0),
                 owners.getAllValues().get(1));
+    }
+
+    @Test
+    void springEventWakeUpDrainsPastInitialConcurrency() {
+        RagProperties properties = new RagProperties();
+        properties.getEmbeddingJobs().setWorkerConcurrency(1);
+        properties.getEmbeddingJobs().setClaimBatchSize(4);
+        worker.shutdown();
+        worker = new EmbeddingJobWorker(
+                repository, embedService, profileProvider, properties);
+        EmbeddingJob first = job(UUID.randomUUID(), null);
+        EmbeddingJob second = job(UUID.randomUUID(), null);
+        when(repository.claim(anyString(), eq(1), anyInt()))
+                .thenReturn(
+                        List.of(first),
+                        List.of(second),
+                        List.of());
+        when(repository.isCommitAllowed(
+                any(UUID.class), anyString(), anyLong()))
+                .thenReturn(true);
+        when(repository.claimCommitAllowed(
+                any(UUID.class), anyString(), anyLong(), anyInt()))
+                .thenReturn(true);
+        when(repository.find(any(UUID.class))).thenAnswer(invocation -> {
+            UUID id = invocation.getArgument(0);
+            return java.util.Optional.of(
+                    first.id().equals(id) ? first : second);
+        });
+        when(embedService.embedDocumentForJob(
+                anyLong(), anyBoolean(), any(EmbeddingCommitGuard.class)))
+                .thenReturn(Map.of("status", "COMPLETED"));
+        when(repository.markSucceeded(
+                any(UUID.class), anyString(), eq(true)))
+                .thenReturn(1);
+
+        worker.onJobsAvailable(new EmbeddingJobsAvailableEvent());
+
+        verify(embedService, timeout(2000).times(2))
+                .embedDocumentForJob(
+                        anyLong(),
+                        anyBoolean(),
+                        any(EmbeddingCommitGuard.class));
+        verify(repository, timeout(2000).atLeast(3))
+                .claim(anyString(), eq(1), anyInt());
+    }
+
+    @Test
+    void manyWakeUpsDoNotProcessTheSameQueuedJobTwice() {
+        EmbeddingJob job = job(UUID.randomUUID(), null);
+        java.util.concurrent.CountDownLatch allowClaim =
+                new java.util.concurrent.CountDownLatch(1);
+        when(repository.claim(anyString(), eq(1), anyInt()))
+                .thenAnswer(invocation -> {
+                    allowClaim.await(2, java.util.concurrent.TimeUnit.SECONDS);
+                    return List.of(job);
+                })
+                .thenReturn(List.of());
+        when(repository.isCommitAllowed(
+                any(UUID.class), anyString(), anyLong()))
+                .thenReturn(true);
+        when(repository.claimCommitAllowed(
+                any(UUID.class), anyString(), anyLong(), anyInt()))
+                .thenReturn(true);
+        when(repository.find(job.id())).thenReturn(
+                java.util.Optional.of(job));
+        when(embedService.embedDocumentForJob(
+                anyLong(), anyBoolean(), any(EmbeddingCommitGuard.class)))
+                .thenReturn(Map.of("status", "COMPLETED"));
+        when(repository.markSucceeded(
+                any(UUID.class), anyString(), eq(true)))
+                .thenReturn(1);
+
+        worker.wakeUp();
+        worker.wakeUp();
+        worker.wakeUp();
+        allowClaim.countDown();
+
+        verify(embedService, timeout(2000).times(1))
+                .embedDocumentForJob(
+                        anyLong(),
+                        anyBoolean(),
+                        any(EmbeddingCommitGuard.class));
     }
 
     @Test

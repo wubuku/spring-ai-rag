@@ -145,6 +145,7 @@ public class DocumentMutationService {
                         request, collectionId, policy, force,
                         originalFilename, jsonbPayload, enabledOverride);
         Prepared prepared = requireResult(transactionTemplate.execute(status -> {
+            reserveCollections(null, collectionId);
             IdempotencyReservation reservation = reserveIdempotency(
                     idempotencyKey, origin, fingerprint);
             if (reservation.replayDocumentId() != null) {
@@ -240,6 +241,7 @@ public class DocumentMutationService {
         validateCreate(request);
         Prepared prepared = requireResult(transactionTemplate.execute(status -> {
             RagDocument document = requireLocal(existingDocumentId);
+            reserveCollections(document.getCollectionId(), collectionId);
             String title = request.getTitle().trim();
             String content = request.getContent();
             String source = normalizeOptional(request.getSource());
@@ -346,6 +348,7 @@ public class DocumentMutationService {
             Long collectionId = request.isCollectionKeyPresent()
                     ? resolveUpdateCollection(document, request.getCollectionKey())
                     : document.getCollectionId();
+            reserveCollections(document.getCollectionId(), collectionId);
 
             boolean contentChanged = !Objects.equals(document.getContent(), content);
             boolean metadataChanged = !Objects.equals(
@@ -413,6 +416,7 @@ public class DocumentMutationService {
         Prepared prepared = requireResult(transactionTemplate.execute(status -> {
             RagDocument document = requireLocal(documentId);
             requireRevision(document, request.getExpectedDocumentRevision());
+            reserveCollections(document.getCollectionId());
             if (!Boolean.TRUE.equals(document.getEnabled())) {
                 return new Prepared(
                         document.getId(), "UNCHANGED",
@@ -444,6 +448,7 @@ public class DocumentMutationService {
         Prepared prepared = requireResult(transactionTemplate.execute(status -> {
             RagDocument document = requireLocal(documentId);
             requireRevision(document, request.getExpectedDocumentRevision());
+            reserveCollections(document.getCollectionId());
             if (Boolean.TRUE.equals(document.getEnabled())) {
                 return new Prepared(
                         document.getId(), "UNCHANGED",
@@ -529,6 +534,7 @@ public class DocumentMutationService {
                         ErrorCode.RESTORE_NOT_ALLOWED,
                         "A Collection-restricted key cannot restore an unassigned snapshot");
             }
+            reserveCollections(document.getCollectionId(), targetCollectionId);
 
             String content = version.getContentSnapshot();
             String documentType = normalizeDocumentType(
@@ -621,6 +627,7 @@ public class DocumentMutationService {
         return requireResult(transactionTemplate.execute(status -> {
             RagDocument document = requireLocal(documentId);
             requireRevision(document, expectedRevision);
+            reserveCollections(document.getCollectionId());
             long embeddings = embeddingRepository.countByDocumentId(documentId);
             dispatchService.cancelActiveInCurrentTransaction(documentId);
             embeddingRepository.deleteByDocumentId(documentId);
@@ -886,6 +893,7 @@ public class DocumentMutationService {
                                 > snapshotStartSequence)) {
                 return false;
             }
+            reserveCollections(document.getCollectionId());
             document.setEnabled(false);
             document.setDisabledAt(null);
             document.setSourceDeletedAt(LocalDateTime.now());
@@ -929,6 +937,7 @@ public class DocumentMutationService {
         String revision = requireText(
                 sourceRevision, "sourceRevision", 255);
         ExternalPrepared prepared = executeExternalInTransaction(jsonRecord, () -> {
+            reserveCollections(collection.getId());
             long mutationSequence = allocateSourceSequence(
                     collection.getId(), namespace);
             requireAddressNotRetired(
@@ -1043,9 +1052,7 @@ public class DocumentMutationService {
             Long snapshotStartSequence,
             boolean allowReconciliationRecovery) {
         CollectionIdentityResolver.ActiveCollectionToken collectionToken =
-                snapshotStartSequence == null
-                        ? null
-                        : collectionIdentityResolver.beginActiveWrite(collectionId);
+                collectionIdentityResolver.beginActiveWrite(collectionId);
         requireAddressNotRetired(collectionId, namespace, externalId);
         String contentHash = DigestUtils.sha256(content);
         RagDocument document = documentRepository
@@ -1284,6 +1291,13 @@ public class DocumentMutationService {
         if (token != null) {
             collectionIdentityResolver.confirmActiveWrite(token);
         }
+    }
+
+    private void reserveCollections(Long... collectionIds) {
+        collectionIdentityResolver.beginActiveWrites(
+                java.util.Arrays.stream(collectionIds)
+                        .filter(Objects::nonNull)
+                        .toList());
     }
 
     private long allocateSourceSequence(

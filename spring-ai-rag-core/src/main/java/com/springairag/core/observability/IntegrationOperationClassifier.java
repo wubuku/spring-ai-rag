@@ -49,7 +49,11 @@ public final class IntegrationOperationClassifier {
             entry("GET", "/api/v1/rag/document-sync-runs/{runId}/items",
                     IntegrationOperation.SYNC_RUN_ITEMS),
             entry("GET", "/api/v1/rag/document-sync-runs",
-                    IntegrationOperation.SYNC_RUN_LIST));
+                    IntegrationOperation.SYNC_RUN_LIST),
+            entry("POST", "/api/v1/rag/collections/by-key/purge/preview",
+                    IntegrationOperation.COLLECTION_PURGE_PREVIEW),
+            entry("POST", "/api/v1/rag/collections/by-key/purge",
+                    IntegrationOperation.COLLECTION_PURGE_APPLY));
 
     private static final List<Route> PATTERNS = EXACT.entrySet().stream()
             .filter(entry -> entry.getKey().contains("{"))

@@ -269,7 +269,10 @@ layers so one failed task cannot cause unbounded external calls.
 The job worker provides durable, retryable embedding/reindexing. It is enabled
 by default from V41 because both `SYNC` and `ASYNC` document-content mutations
 persist a job in the same transaction; `SYNC` only performs a bounded wait on
-that same job. Operational callers can create, inspect, cancel, and retry jobs through
+that same job. After the transaction commits, a lightweight Spring event wakes
+the bounded worker in the same application instance. The event carries neither
+content nor reliable state; the database job table remains the sole source of
+truth. Operational callers can create, inspect, cancel, and retry jobs through
 `/api/v1/rag/embedding-jobs`.
 
 ```yaml
@@ -277,7 +280,7 @@ rag:
   embedding-jobs:
     enabled: ${RAG_EMBEDDING_JOBS_ENABLED:true}
     sync-wait-seconds: ${RAG_EMBEDDING_JOBS_SYNC_WAIT_SECONDS:30}
-    poll-interval-ms: ${RAG_EMBEDDING_JOBS_POLL_INTERVAL_MS:1000}
+    poll-interval-ms: ${RAG_EMBEDDING_JOBS_POLL_INTERVAL_MS:30000}
     claim-batch-size: ${RAG_EMBEDDING_JOBS_CLAIM_BATCH_SIZE:4}
     lease-seconds: ${RAG_EMBEDDING_JOBS_LEASE_SECONDS:120}
     default-max-attempts: ${RAG_EMBEDDING_JOBS_DEFAULT_MAX_ATTEMPTS:3}
@@ -286,6 +289,15 @@ rag:
     retry-backoff-seconds: ${RAG_EMBEDDING_JOBS_RETRY_BACKOFF_SECONDS:10}
     worker-concurrency: ${RAG_EMBEDDING_JOBS_WORKER_CONCURRENCY:4}
 ```
+
+`poll-interval-ms` is the low-frequency recovery scan for missed notifications,
+process restarts, and worker failures, not the primary trigger for ordinary
+jobs. It defaults to `30000ms` and is clamped to at least `10000ms`. Multiple
+jobs created in one transaction produce one after-commit event. Concurrent
+wake-ups are coalesced inside the worker, while the existing semaphore, claim
+batch, and database lease still bound concurrency. Rollbacks publish no event;
+a lost local event cannot lose work because the recovery scan rediscovers the
+durable job.
 
 Workers use PostgreSQL leases and atomic `UPDATE ... RETURNING` statements with
 state and expiry predicates for multi-worker claims. Before committing vectors,
@@ -357,6 +369,58 @@ for `collectionKey` and `sourceNamespace`, and 255 for `externalId`. These
 limits are part of the external client contract and must not be reduced by a
 future migration. `default` is a compatibility namespace, not a default
 Collection; a `NULL` Collection is only the local/unassigned state.
+
+### Permanent Collection Purge And Retirement
+
+The high-risk purge capability is disabled by default. Run the focused
+PostgreSQL, WebUI, and real lifecycle acceptance before enabling it:
+
+```yaml
+rag:
+  collection-purge:
+    enabled: ${RAG_COLLECTION_PURGE_ENABLED:false}
+    allow-auth-disabled: ${RAG_COLLECTION_PURGE_ALLOW_AUTH_DISABLED:false}
+    confirmation-window: 15m
+    operation-window: 1h
+    result-retention: 24h
+    apply-lease: 2m
+    max-active-previews-per-owner: 20
+    cleanup-batch-size: 500
+    cleanup-interval: 1h
+    max-documents: 10000
+    max-embeddings: 100000
+    max-versions: 100000
+    max-derived-rows: 250000
+    max-affected-chat-sessions: 1000
+    max-chat-rows: 50000
+```
+
+| Property | Default | Description |
+|----------|---------|-------------|
+| `rag.collection-purge.enabled` | `false` | Publishes the caller-aware capability and preview/apply endpoints; disabled endpoints return `503` |
+| `rag.collection-purge.allow-auth-disabled` | `false` | Explicit local-development exception when authentication is off; the direct Servlet peer must still be loopback and forwarded-address headers are ignored |
+| `confirmation-window` | `15m` | Validity of the one-time plaintext token and preview, range 1m–1h |
+| `operation-window` | `1h` | Total apply window; at least the confirmation window and at most 24h |
+| `result-retention` | `24h` | Exact successful-result replay retention; at least the operation window and at most 7d |
+| `apply-lease` | `2m` | APPLYING owner lease, range 15s–15m |
+| `max-active-previews-per-owner` | `20` | Unterminated previews per owner, range 1–100 |
+| `cleanup-batch-size` | `500` | Bounded expired preview/result cleanup batch, range 10–5000 |
+| `cleanup-interval` | `1h` | Preview/result recovery and cleanup interval, range 1m–24h |
+| `max-documents` | `10000` | Documents per synchronous purge, range 1–100000 |
+| `max-embeddings` | `100000` | Vector rows per purge, range 1–1000000 |
+| `max-versions` | `100000` | Document-version rows per purge, range 1–1000000 |
+| `max-derived-rows` | `250000` | Other derived/control rows, range 1–2000000 |
+| `max-affected-chat-sessions` | `1000` | Affected owner/session pairs, range 1–10000 |
+| `max-chat-rows` | `50000` | Total history/memory/summary/turn-replay rows, range 1–500000 |
+
+Startup validation fails fast for invalid combinations. When enabled, the
+application also requires the durable Chat coordinator, transaction manager,
+and reference-index dependencies; configuration cannot bypass integrity
+checks. A preview above any limit returns a conflict instead of truncating or
+partially applying a plan. See
+[REST API](rest-api.md#guarded-collection-purge-and-retirement) for the
+contract, authorization, and retention boundary. Run
+`./scripts/verify-collection-purge.sh` as the focused gate.
 
 ## Retrieval Configuration
 

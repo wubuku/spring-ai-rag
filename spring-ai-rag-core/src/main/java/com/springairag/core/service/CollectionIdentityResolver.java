@@ -20,6 +20,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.ArrayList;
+import java.util.Comparator;
 
 /**
  * Converts external Collection identities into the internal numeric ID.
@@ -75,11 +77,11 @@ public class CollectionIdentityResolver {
     }
 
     /**
-     * Capture an active collection lifecycle version for an optimistic write.
+     * Reserve an active Collection write position before dependent rows are written.
      *
-     * <p>The token is checked again after the caller has written its documents.
-     * A concurrent soft-delete or other lifecycle mutation then causes the
-     * transaction to fail and roll back.
+     * <p>The conditional update is the first write in the caller's transaction.
+     * Its row lock is held until commit or rollback, so purge and every protected
+     * mutation share the same Collection-first lock order.
      */
     public ActiveCollectionToken beginActiveWrite(Long id) {
         if (id == null || id <= 0) {
@@ -87,20 +89,38 @@ public class CollectionIdentityResolver {
         }
         RagCollection collection = requireActive(id, null);
         long version = collection.getVersion() == null ? 0L : collection.getVersion();
-        return new ActiveCollectionToken(id, version);
+        if (!Boolean.TRUE.equals(collection.getEnabled())
+                || repository.advanceActiveVersion(id, version) != 1) {
+            throw new ObjectOptimisticLockingFailureException(
+                    RagCollection.class, id);
+        }
+        return new ActiveCollectionToken(id, version + 1);
     }
 
     /**
-     * Consume a lifecycle version token using a conditional update.
+     * Reserve multiple Collections in a stable order.
+     */
+    public List<ActiveCollectionToken> beginActiveWrites(
+            Collection<Long> collectionIds) {
+        if (collectionIds == null || collectionIds.isEmpty()) {
+            return List.of();
+        }
+        List<Long> ordered = new ArrayList<>(new LinkedHashSet<>(collectionIds));
+        ordered.removeIf(Objects::isNull);
+        ordered.sort(Comparator.naturalOrder());
+        List<ActiveCollectionToken> tokens = new ArrayList<>(ordered.size());
+        for (Long id : ordered) {
+            tokens.add(beginActiveWrite(id));
+        }
+        return List.copyOf(tokens);
+    }
+
+    /**
+     * Compatibility no-op. The token is consumed by {@link #beginActiveWrite(Long)}
+     * before dependent writes.
      */
     public void confirmActiveWrite(ActiveCollectionToken token) {
-        if (token == null) {
-            return;
-        }
-        if (repository.advanceActiveVersion(token.collectionId(), token.version()) != 1) {
-            throw new ObjectOptimisticLockingFailureException(
-                    RagCollection.class, token.collectionId());
-        }
+        // Kept so existing callers can migrate without a flag day.
     }
 
     /**
@@ -116,10 +136,21 @@ public class CollectionIdentityResolver {
      */
     public RagCollection requireActiveWithinAllowed(
             String key, Collection<Long> allowedIds) {
-        RagCollection collection = findWithinAllowed(key, allowedIds, false)
-                .orElseThrow(() -> new RagException(
-                        ErrorCode.COLLECTION_NOT_FOUND,
-                        "Collection not found: collectionKey=" + key));
+        Optional<RagCollection> active = findWithinAllowed(
+                key, allowedIds, false);
+        if (active.isEmpty()) {
+            Optional<RagCollection> existing = findWithinAllowed(
+                    key, allowedIds, true);
+            if (existing.filter(collection -> collection.getPurgedAt() != null)
+                    .isPresent()) {
+                throw new RagException(
+                        ErrorCode.COLLECTION_ALREADY_RETIRED,
+                        "Collection is permanently retired");
+            }
+        }
+        RagCollection collection = active.orElseThrow(() -> new RagException(
+                ErrorCode.COLLECTION_NOT_FOUND,
+                "Collection not found: collectionKey=" + key));
         IntegrationObservationContext.addAuthorizedCollection(collection.getId());
         return collection;
     }
@@ -190,6 +221,13 @@ public class CollectionIdentityResolver {
         for (String key : requestedKeys) {
             RagCollection collection = foundByKey.get(key);
             if (collection == null) {
+                if (repository.findByCollectionKey(key)
+                        .filter(existing -> existing.getPurgedAt() != null)
+                        .isPresent()) {
+                    throw new RagException(
+                            ErrorCode.COLLECTION_ALREADY_RETIRED,
+                            "Collection is permanently retired");
+                }
                 throw new RagException(
                         ErrorCode.COLLECTION_NOT_FOUND,
                         "Collection not found: collectionKey=" + key);
@@ -212,10 +250,17 @@ public class CollectionIdentityResolver {
             throw new IllegalArgumentException("Collection scope must not be empty");
         }
         Map<String, Long> allowedKeys = new LinkedHashMap<>();
+        Map<String, RagCollection> allowedCollections = new LinkedHashMap<>();
         repository.findAllById(allowedIds).stream()
-                .filter(collection -> !Boolean.TRUE.equals(collection.getDeleted()))
-                .forEach(collection -> allowedKeys.put(
-                        collection.getCollectionKey(), collection.getId()));
+                .forEach(collection -> {
+                    allowedCollections.put(
+                            collection.getCollectionKey(), collection);
+                    if (!Boolean.TRUE.equals(collection.getDeleted())) {
+                        allowedKeys.put(
+                                collection.getCollectionKey(),
+                                collection.getId());
+                    }
+                });
 
         LinkedHashSet<Long> resolved = new LinkedHashSet<>();
         for (String key : keys) {
@@ -225,6 +270,12 @@ public class CollectionIdentityResolver {
             }
             Long id = allowedKeys.get(key);
             if (id == null) {
+                RagCollection existing = allowedCollections.get(key);
+                if (existing != null && existing.getPurgedAt() != null) {
+                    throw new RagException(
+                            ErrorCode.COLLECTION_ALREADY_RETIRED,
+                            "Collection is permanently retired");
+                }
                 throw new RagException(
                         ErrorCode.COLLECTION_NOT_FOUND,
                         "Collection not found: collectionKey=" + key);
@@ -297,11 +348,21 @@ public class CollectionIdentityResolver {
     }
 
     private RagCollection requireActiveUnobserved(Long id, String key) {
-        return findActive(id, key)
-                .orElseThrow(() -> new RagException(
-                        ErrorCode.COLLECTION_NOT_FOUND,
-                        key != null
-                                ? "Collection not found: collectionKey=" + key
-                                : "Collection not found: id=" + id));
+        Optional<RagCollection> active = findActive(id, key);
+        if (active.isPresent()) {
+            return active.get();
+        }
+        Optional<RagCollection> existing = findIncludingDeleted(id, key);
+        if (existing.filter(collection -> collection.getPurgedAt() != null)
+                .isPresent()) {
+            throw new RagException(
+                    ErrorCode.COLLECTION_ALREADY_RETIRED,
+                    "Collection is permanently retired");
+        }
+        throw new RagException(
+                ErrorCode.COLLECTION_NOT_FOUND,
+                key != null
+                        ? "Collection not found: collectionKey=" + key
+                        : "Collection not found: id=" + id);
     }
 }

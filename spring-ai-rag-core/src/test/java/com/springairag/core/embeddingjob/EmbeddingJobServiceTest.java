@@ -45,6 +45,7 @@ class EmbeddingJobServiceTest {
     private RagProperties properties;
     private DocumentDerivationDescriptorProvider descriptorProvider;
     private DocumentEmbedService documentEmbedService;
+    private EmbeddingJobWakeupPublisher wakeupPublisher;
 
     @BeforeEach
     void setUp() {
@@ -56,6 +57,7 @@ class EmbeddingJobServiceTest {
         descriptorProvider =
                 new DocumentDerivationDescriptorProvider(properties);
         documentEmbedService = mock(DocumentEmbedService.class);
+        wakeupPublisher = mock(EmbeddingJobWakeupPublisher.class);
     }
 
     @Test
@@ -137,6 +139,7 @@ class EmbeddingJobServiceTest {
                 eq(11L),
                 eq("TEXT"),
                 eq(descriptorProvider.textDescriptor().chunkerVersion()));
+        verify(wakeupPublisher).publishAfterCommit();
     }
 
     @Test
@@ -240,6 +243,7 @@ class EmbeddingJobServiceTest {
 
         assertEquals(active.id(), response.id());
         assertTrue(response.coalesced());
+        verify(wakeupPublisher).publishAfterCommit();
     }
 
     @Test
@@ -282,7 +286,7 @@ class EmbeddingJobServiceTest {
     }
 
     private EmbeddingJobService service() {
-        return new EmbeddingJobService(
+        EmbeddingJobService service = new EmbeddingJobService(
                 jobRepository,
                 documentRepository,
                 scopeResolver,
@@ -290,6 +294,8 @@ class EmbeddingJobServiceTest {
                 properties,
                 descriptorProvider,
                 documentEmbedService);
+        service.setWakeupPublisher(wakeupPublisher);
+        return service;
     }
 
     private RagDocument document(long id) {

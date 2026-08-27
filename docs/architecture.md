@@ -223,6 +223,11 @@ Collections that were successfully resolved within the current authorization
 scope; its rows are contributions and must not be added together as a request
 total. Unknown or unauthorized Collection keys never enter Collection
 rollups.
+Both rollup tables constrain the finite operation enum with database `CHECK`
+constraints. A later migration that adds an `IntegrationOperation` must extend
+both constraints in the same migration and prove global and Collection rollup
+writes against real PostgreSQL. Updating only the Java enum lets the business
+request succeed while the asynchronous observation batch is rejected.
 
 Recording is asynchronous and fail-open. Queue overflow, repository failure,
 and bounded shutdown drain loss do not change the business response or trigger
@@ -538,8 +543,10 @@ POST /api/v1/rag/embedding-jobs
 rag_embedding_jobs (V33/V37)
   | active-job coalescing + bounded retry
   | origin / requested_by_principal_id
+  | publish a local Spring event after the transaction commits
   v
 EmbeddingJobWorker
+  | event-driven wake-up; 30s recovery scan only for missed work/restarts
   | conditional UPDATE ... RETURNING claim + lease + heartbeat
   | worker-concurrency limit
   | recheck cancellation/Profile/version/content hash around provider calls
@@ -556,7 +563,12 @@ The job table never copies document content. Write APIs can choose
 `SKIP`. `ASYNC` requires `rag.embedding-jobs.enabled=true` or returns `503`.
 The worker is enabled by default from V41 because content mutations persist a
 durable job for both `SYNC` and `ASYNC`. The readiness API returns exclusive
-Collection buckets.
+Collection buckets. The after-commit Spring event is only a low-latency local
+notification; the database job/state remains responsible for durability,
+multi-instance exclusion, and recovery. Jobs created in one transaction
+coalesce to one event, and the worker coalesces concurrent wake-ups. A scheduled
+scan runs every `30s` by default only to recover lost events, restarted
+instances, or worker failures.
 
 ### 4.4 JSON Structured-Record Flow
 
@@ -625,6 +637,7 @@ ExternalDocumentService / DocumentMutationService
 rag_documents (same documentId)
   | content change -> new content hash / request generation
   | commit state + durable job in the same transaction
+  | after-commit Spring event
   v
 EmbeddingJobWorker / EmbeddingJobExecutor (after commit)
   | chunk -> provider -> generation/hash/chunker/Profile/lease commit fence
@@ -665,7 +678,54 @@ PostgreSQL may still take ordinary short-lived row or index locks internally
 for writes; those are not application-requested pessimistic coordination.
 `scripts/verify-no-pessimistic-locks.sh` enforces this rule.
 
-### 4.6 OpenAI Chat Completions Compatibility Flow
+### 4.6 Guarded Collection Purge And Retirement
+
+```text
+POST /collections/by-key/purge/preview
+  | root / database ADMIN / explicitly local loopback authorization
+  | counts + reference integrity + active run/repair/session lease checks
+  v
+rag_collection_purge_preview
+  | token hash + owner + fingerprint + Collection/Chat fence versions
+  | no body or plaintext token persistence
+  v
+POST /collections/by-key/purge
+  | validate preview and acquire APPLYING lease
+  | Collection-first conditional version/chat-fence advancement
+  | rebuild and compare the frozen plan
+  v
+one transaction deletes documents/derivations/referencing feedback/chat/audit
+  | retain a minimal rag_collection tombstone
+  v
+RETIRED + bounded successful-result replay
+```
+
+V56 normalizes document references for Chat history and feedback and records
+`content_reference_index_complete`. Malformed historical JSON does not block
+migration, but any incomplete row makes purge fail closed until repaired and
+reindexed. If one persisted Chat turn references a target document, the whole
+owner/session history, Spring AI memory, summaries, and turn replay are
+deleted so excerpts in answers or tool results cannot remain.
+
+Every production write path that creates, moves, restores, or copies
+Collection content consumes active-write tokens in sorted Collection-ID order
+before touching document/control-plane rows. Purge uses the same
+Collection-first ordering. A business write that commits first advances the
+version and invalidates the old preview; a purge that commits first makes the
+business reservation fail and roll back. Chat commit separately advances
+`chat_commit_fence_version`, and its session lease remains live until summary
+compaction stops writing. The embedding worker's final
+generation/hash/profile/lease guard becomes ineligible after document/job
+deletion, so a late provider response cannot write back into a retired
+Collection.
+
+The final tombstone permanently reserves `collectionKey`, fixes the name, and
+clears description/metadata. Independent `fs_files` rows have no reliable
+Collection foreign key and are never deleted by guessing from filenames or
+paths. The capability is disabled by default and has bounded synchronous
+limits; oversized plans are rejected instead of partially segmented.
+
+### 4.7 OpenAI Chat Completions Compatibility Flow
 
 ```text
 OpenAI client
@@ -694,7 +754,7 @@ native `/api/v1/rag/chat/stream` but uses isolated DTOs, error envelopes, and
 standard SSE mapping without native RAG
 `tool_start/tool_result/sources/done` events.
 
-### 4.7 Managed Quality Suites And Citations
+### 4.8 Managed Quality Suites And Citations
 
 When enabled, Chat writes protocol-level `citationValidation` into metadata.
 It only parses the agreed `[S1]` tokens and is not a coverage score. Managed
@@ -728,8 +788,11 @@ rag_documents  (1) ──→ (1) rag_document_local_index_state
 rag_embedding_profiles (1) ──→ (N) rag_document_embedding_state
 rag_embedding_profiles (1) ──→ (N) rag_embeddings
 rag_embedding_profiles (1) ──→ (N) rag_embedding_jobs
+rag_chat_history (1) ──→ (N) rag_chat_history_source_document
+rag_user_feedback (1) ──→ (N) rag_user_feedback_document
+rag_collection (1) ──→ (N) rag_collection_purge_preview
 
-rag_chat_history        # Conversation history (standalone table)
+rag_chat_history        # Conversation history plus normalized source references
 rag_retrieval_logs      # Retrieval logs
 rag_ab_experiments      # A/B experiment definitions
 rag_ab_results          # A/B experiment results
@@ -748,7 +811,7 @@ rag_audit_log           # Audit logs (collection operations)
 
 | Table | Key Columns | Description |
 |-------|-------------|-------------|
-| `rag_collection` | id, collection_key, name, description, embedding_model | Internal numeric identity plus stable external Collection key |
+| `rag_collection` | id, collection_key, name, description, embedding_model, purged_at, chat_commit_fence_version | Internal numeric identity, stable external key, retired tombstone, and Chat commit fence |
 | `rag_documents` | title, content, content_hash, collection_id, source_namespace, external_id, source_revision, document_revision, source_deleted_at, jsonb_payload | Document source of truth, business CAS, external identity, and structured payload |
 | `rag_document_versions` | document_id, version_number, complete snapshot fields, snapshot_completeness | Complete audit snapshots for document mutations |
 | `rag_embedding_profiles` | profile_key, provider, model_name, dimensions, distance_metric | Immutable vector-space identity |
@@ -756,6 +819,8 @@ rag_audit_log           # Audit logs (collection operations)
 | `rag_embeddings` | document_id, chunk_index, embedding_profile_id, embedding_1024 VECTOR(1024), content | Profile-scoped text chunks + vectors |
 | `rag_embedding_jobs` | document_id, embedding_profile_id, content_hash, request_generation, document_kind, chunker_version, status, lease_expires_at, origin | Generation-aware durable embedding/reindex state machine |
 | `rag_document_chunks` | document_id, local_index_generation, content_hash, chunker_version, chunk_text, chunk_index | Profile-neutral local keyword chunks |
+| `rag_chat_history_source_document` / `rag_user_feedback_document` | history_id/feedback_id, document_id | V56 normalized content references for safe purge attribution |
+| `rag_collection_purge_preview` | owner_key, collection_id, token_hash, fingerprint, status, result_payload | Body-free preview/apply lease and result replay without plaintext tokens |
 | `rag_document_local_index_state` | document_id, local_index_status, local_index_generation, content_hash, chunker_version, chunk_count | Current local keyword generation and freshness |
 | `rag_api_principal` | principal_id, role, allowed_collection_ids, capabilities, policy_version, requests_per_minute | Stable caller owner and authoritative policy (V48/V49) |
 | `rag_api_key` | key_id, principal_id, credential_version, key_hash, enabled, retire_at | Versioned credential with at most one current and one bounded retiring version per principal |

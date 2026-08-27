@@ -41,6 +41,7 @@ public enum ErrorCode {
     // ==================== 403 Forbidden ====================
 
     FORBIDDEN(403, "Forbidden"),
+    COLLECTION_PURGE_FORBIDDEN(403, "Collection Purge Forbidden"),
 
     // ==================== 404 Not Found ====================
 
@@ -91,6 +92,10 @@ public enum ErrorCode {
     PRINCIPAL_NOT_ACTIVE(409, "API Principal Is Not Active"),
     POLICY_VERSION_CONFLICT(409, "API Principal Policy Version Conflict"),
     LAST_ADMIN_REQUIRED(409, "Last Administrator Is Required"),
+    COLLECTION_PURGE_CONFLICT(409, "Collection Purge Conflict"),
+    COLLECTION_PURGE_PREVIEW_EXPIRED(409, "Collection Purge Preview Expired"),
+    COLLECTION_PURGE_CONFIRMATION_INVALID(409, "Collection Purge Confirmation Invalid"),
+    COLLECTION_ALREADY_RETIRED(409, "Collection Already Retired"),
 
     // ==================== 422 Unprocessable Entity ====================
 
@@ -131,6 +136,7 @@ public enum ErrorCode {
             503, "Collection Provisioning Idempotency Disabled"),
     INTEGRATION_OBSERVABILITY_DISABLED(
             503, "Integration Observability Disabled"),
+    COLLECTION_PURGE_DISABLED(503, "Collection Purge Disabled"),
 
     // ==================== 504 Gateway Timeout ====================
 

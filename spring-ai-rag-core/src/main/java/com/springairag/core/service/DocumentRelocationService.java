@@ -74,12 +74,6 @@ public class DocumentRelocationService {
                     "External document relocation is disabled");
         }
         NormalizedRequest normalized = normalize(request);
-        Reservation reservation = reserve(rawIdempotencyKey, fingerprint(normalized));
-        if (reservation.replayPayload() != null) {
-            recheckReplayAcl(reservation.sourceCollectionId(), reservation.targetCollectionId());
-            return readResponseEnvelope(reservation.replayPayload());
-        }
-
         ApiAccessPolicy caller = ApiKeyCollectionAccess.currentPolicy();
         RagCollection source = ApiKeyCollectionAccess.requireActiveCollectionByKey(
                 normalized.sourceCollectionKey(), caller, collectionResolver);
@@ -97,9 +91,18 @@ public class DocumentRelocationService {
         expireAndRejectActiveRuns(source.getId(), target.getId(), normalized.sourceNamespace());
 
         List<CollectionIdentityResolver.ActiveCollectionToken> collectionTokens =
-                orderedCollections.stream()
-                        .map(c -> collectionResolver.beginActiveWrite(c.getId()))
-                        .toList();
+                collectionResolver.beginActiveWrites(
+                        orderedCollections.stream()
+                                .map(RagCollection::getId)
+                                .toList());
+        Reservation reservation = reserve(
+                rawIdempotencyKey, fingerprint(normalized));
+        if (reservation.replayPayload() != null) {
+            recheckReplayAcl(
+                    reservation.sourceCollectionId(),
+                    reservation.targetCollectionId());
+            return readResponseEnvelope(reservation.replayPayload());
+        }
 
         Map<String, Object> documentRow = findDocument(
                 source.getId(), normalized.sourceNamespace(), normalized.externalId());

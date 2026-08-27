@@ -22,7 +22,7 @@ import java.util.Map;
 public class IntegrationCapabilityCatalog {
 
     private static final String CONTRACT_NAME = "spring-ai-rag-integration";
-    private static final String CONTRACT_VERSION = "1.0";
+    private static final String CONTRACT_VERSION = "1.1";
     private static final String API_VERSION = "1.0.0";
 
     private final RagProperties properties;
@@ -57,7 +57,8 @@ public class IntegrationCapabilityCatalog {
                                 properties.getDocumentLifecycle().isSyncRunsEnabled(),
                                 properties.getDocumentLifecycle().isSyncRunsEnabled(),
                                 properties.getOpenAiCompatibility().isEnabled(),
-                                properties.getIntegrationObservability().isEnabled()),
+                                properties.getIntegrationObservability().isEnabled(),
+                                collectionPurgeVisible(request)),
                         new IntegrationCapabilitiesResponse.CredentialRotation(
                                 true,
                                 true,
@@ -98,7 +99,39 @@ public class IntegrationCapabilityCatalog {
                         new IntegrationCapabilitiesResponse.ObservabilityLimits(
                                 observability.retentionDays(),
                                 observability.maxQueryRangeDays(),
-                                observability.getMaxCollectionBreakdownItems())));
+                                observability.getMaxCollectionBreakdownItems()),
+                        new IntegrationCapabilitiesResponse.CollectionPurgeLimits(
+                                properties.getCollectionPurge().getMaxDocuments(),
+                                properties.getCollectionPurge().getMaxEmbeddings(),
+                                properties.getCollectionPurge().getMaxVersions(),
+                                properties.getCollectionPurge().getMaxDerivedRows(),
+                                properties.getCollectionPurge()
+                                        .getMaxAffectedChatSessions(),
+                                properties.getCollectionPurge().getMaxChatRows())));
+    }
+
+    private boolean collectionPurgeVisible(HttpServletRequest request) {
+        if (!properties.getCollectionPurge().isEnabled()) {
+            return false;
+        }
+        Object type = request.getAttribute(
+                ApiKeyAuthFilter.AUTHENTICATED_PRINCIPAL_TYPE);
+        if (ApiKeyAuthFilter.PRINCIPAL_ENVIRONMENT_ROOT.equals(type)) {
+            return true;
+        }
+        if (ApiKeyAuthFilter.PRINCIPAL_DATABASE_API_KEY.equals(type)
+                && request.getAttribute(
+                ApiKeyAuthFilter.AUTHENTICATED_API_PRINCIPAL_ATTRIBUTE)
+                instanceof AuthenticatedApiPrincipal principal) {
+            return principal.getRole()
+                    == com.springairag.core.entity.ApiKeyRole.ADMIN;
+        }
+        return type == null
+                && request.getAttribute(
+                ApiKeyAuthFilter.AUTHENTICATED_KEY_ATTRIBUTE) == null
+                && properties.getCollectionPurge().isAllowAuthDisabled()
+                && CollectionPurgeAuthorization.isDirectLoopback(
+                request.getRemoteAddr());
     }
 
     private IntegrationCapabilitiesResponse.Principal principalProjection(

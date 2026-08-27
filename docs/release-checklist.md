@@ -16,7 +16,7 @@ Release date: `2026-07-21`
 - [x] Helm `version` and `appVersion` are `1.0.0`
 - [x] Docker/Helm default image tag is `1.0.0`
 - [x] Local, Docker, and Helm default port is `8081`
-- [x] Flyway inventory is V1-V55
+- [x] Flyway inventory is V1-V56
 - [x] JSONB structured-record API, payload snapshots, and collection lifecycle are covered
 - [x] `scripts/verify-jsonb-records.sh` records focused backend/database/frontend verification
 - [x] Document PATCH/disable/restore/permanent-delete and external triple identity are covered
@@ -251,6 +251,37 @@ Release date: `2026-07-21`
   the latest `origin/main`: `v55-minimax-postmerge-20260828-r2` passed 13/13.
   Independent real RAG `v55-minimax-postmerge-20260827-r5` passed `10/10`,
   including revision-guarded permanent deletion and final database facts.
+
+### 2026-08-27 Guarded Collection Purge And Retirement Gates
+
+- [x] V56 adds the permanent-key tombstone, Chat commit fence, normalized
+  Chat/feedback document references and completeness markers, and a durable
+  purge preview that stores neither bodies nor plaintext tokens.
+- [x] Preview/apply authorizes environment root, database ADMIN, or an explicit
+  auth-disabled direct-loopback caller. The caller-aware capability protocol is
+  `1.1` and publishes synchronous purge bounds.
+- [x] Collection-first conditional writes protect document mutation, sync,
+  repair, feedback, Chat, restore/relocation/clone, and purge without explicit
+  pessimistic locks.
+- [x] The five-scenario PostgreSQL matrix covers complete cascades, unrelated
+  data/independent-file retention, active lease/run blocking, malformed
+  historical-reference fail-closed behavior, authorization, rollback, exact
+  replay, cleanup, and retired scopes.
+- [x] The WebUI exposes the action only to environment root when capability is
+  visible; the token is not rendered, exact key input is required, success
+  remains accessible while the active list refreshes, and `409` is not retried
+  automatically.
+- [x] `verify-collection-purge.sh` fixes the focused backend, PostgreSQL, Maven
+  clean, WebUI, Mock Playwright, lock, documentation, shell, and whitespace
+  gates.
+- [x] Completed isolated PostgreSQL plus real LLM/Embedding lifecycle acceptance
+  for pre-retirement write/retrieval/Chat, purge, and post-retirement explicit
+  rejection/default-scope exclusion. `real-provider-20260828-r8` passed
+  `12/12`; global and Collection purge rollups are positive, logs contain no
+  observation drop/provider/database failure, and durable evidence contains no
+  key, body, plaintext token, or full model answer.
+- [ ] After syncing the latest `origin/main`, rerun the focused gate and real
+  lifecycle acceptance from the merged baseline.
 
 ### Final Evidence (2026-07-21)
 

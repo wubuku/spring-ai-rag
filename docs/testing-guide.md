@@ -578,6 +578,73 @@ WebUI coverage asserts through request interception that one user submission
 uses one UUID across Axios retries and a later submission uses a different
 UUID. No screenshot is used as acceptance evidence.
 
+### Guarded Collection Purge And Retirement Acceptance Gate
+
+```bash
+./scripts/verify-collection-purge.sh
+```
+
+This nine-stage gate runs the no-pessimistic-lock check, focused
+purge/Collection/feedback/audit/OpenAI-scope tests, the real PostgreSQL
+V1-V56 purge matrix, `mvn clean compile test-compile`, full WebUI
+typecheck/Vitest/lint/production build, Collection Mock Playwright, bilingual
+documentation validation, shell syntax, and whitespace checks. Each run writes
+step evidence to
+`.verification/collection-purge/<run-id>/summary.md`.
+
+The PostgreSQL phase uses Testcontainers by default and requires all five
+purge scenarios plus all six integration-observability V56 compatibility
+scenarios to execute with `failures=errors=skipped=0`. A caller-provided
+disposable database can be selected explicitly:
+
+```bash
+COLLECTION_PURGE_IT_JDBC_URL=jdbc:postgresql://127.0.0.1:55439/purge_it \
+COLLECTION_PURGE_IT_USERNAME=postgres \
+COLLECTION_PURGE_IT_PASSWORD=postgres \
+COLLECTION_PURGE_IT_CLEAN_CONFIRM=YES \
+./scripts/verify-collection-purge.sh
+```
+
+The matrix covers empty and populated Collections, mixed local/external
+documents and all derivations, feedback/Chat reference cascades, unrelated
+data and independent-file retention, active sync/repair/session-lease
+blocking, malformed historical-reference fail-closed behavior, root/ADMIN/
+loopback authorization, whole-transaction rollback after a changed preview,
+exact successful replay, expiry cleanup, and the retired tombstone. Mock
+Playwright uses only DOM, accessibility state, request JSON, and network
+responses to prove capability gating, token non-rendering, exact-key
+confirmation, active-card removal after success, and no automatic retry after
+a `409`. Screenshots are not acceptance evidence.
+
+The fast gate does not include real providers. After all mocks pass, start a
+real service on isolated PostgreSQL/ports and run:
+
+```bash
+BASE_URL=http://127.0.0.1:18081 \
+REAL_LLM_ENV_FILE=.env \
+REAL_COLLECTION_PURGE_LOG_DIR=.verification/collection-purge/real-provider \
+POSTGRES_HOST=127.0.0.1 \
+POSTGRES_PORT=5432 \
+POSTGRES_DATABASE=spring_ai_rag_purge_acceptance \
+POSTGRES_USER=postgres \
+POSTGRES_PASSWORD=postgres \
+./scripts/real-collection-purge-e2e-smoke.sh
+```
+
+The script covers real embedding, Spring Event worker wake-up before the
+Scheduled recovery scan, readiness, vector-only natural-language retrieval,
+two native Chat turns, OpenAI-compatible Chat, preview/apply/exact replay,
+three explicit retired-path rejections, default-scope exclusion, global and
+Collection purge-operation rollups, and database tombstone facts. Durable
+evidence contains only status, model, answer length, boolean assertions,
+counts, and source IDs. It must not contain API keys, request bodies,
+plaintext confirmation tokens, document bodies, or full model answers. Watch
+backend logs during the run; any observation drop, provider error, or
+database-constraint failure must be explained and resolved. All four global
+and Collection preview/apply rollups must be positive. The script fails with
+explicit conditions instead of relying on Bash-version-specific interaction
+between arithmetic commands and `set -e`.
+
 ### Multi-Collection Retrieval Acceptance Gate
 
 The scope implementation has DTO, resolver, ACL, SQL-fragment, vector/full-text

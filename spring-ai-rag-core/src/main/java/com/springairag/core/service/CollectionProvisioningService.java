@@ -255,6 +255,11 @@ public class CollectionProvisioningService {
                 .findById(operation.getCollectionId())
                 .orElseThrow(() -> unavailable(
                         "The Collection provisioning result is unavailable", null));
+        if (collection.getPurgedAt() != null) {
+            throw new RagException(
+                    ErrorCode.COLLECTION_ALREADY_RETIRED,
+                    "Collection is permanently retired");
+        }
         return result(collection, true);
     }
 

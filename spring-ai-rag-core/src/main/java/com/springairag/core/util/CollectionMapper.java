@@ -39,6 +39,8 @@ public final class CollectionMapper {
         map.put("updatedAt", c.getUpdatedAt());
         map.put("deleted", c.getDeleted());
         map.put("deletedAt", c.getDeletedAt());
+        map.put("purgedAt", c.getPurgedAt());
+        map.put("retired", c.getPurgedAt() != null);
         map.put("documentCount", documentCount);
         return map;
     }

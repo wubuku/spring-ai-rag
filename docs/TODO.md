@@ -64,7 +64,7 @@ independent planning subjects.
 | Collection derivation-integrity diagnostics and controlled repair | Shipped in this batch | V45 provides shared physical freshness, bounded Collection diagnostics, and durable preview/apply/status for at most 100 items; side-effecting repair defaults off |
 | Controlled historical-version restore | Shipped in this batch | Local `FULL` snapshots can be restored as a new revision when the feature flag is enabled; external documents remain source-owned |
 | Decouple local chunks/full text from remote vectors | Shipped in this batch | V43 stores profile-neutral local chunks/state; provider failures leave current content available as `KEYWORD_ONLY` while stale generations remain excluded |
-| Guarded purge for external-managed documents and Collection retirement | Separate future plan | Collection deletion correctly rejects documents with stable external identities, while public permanent-delete also rejects external-managed documents. Operators can currently retain/restore the Collection or relocate records when enabled, but there is no audited, explicitly confirmed, bounded public purge |
+| Guarded purge for external-managed documents and Collection retirement | Shipped in V56 | Disabled-by-default preview/apply uses root/ADMIN authorization, token/fingerprint checks, Collection/Chat fences, complete reference indexes, and synchronous bounds; it retains a permanent-key tombstone and never guesses file ownership from paths |
 
 ### Current Boundaries
 
@@ -90,6 +90,10 @@ independent planning subjects.
 - Derivation repair rebuilds or queues derived data only. It does not modify
   content, is bounded to 100 items, never stores clear tokens, and does not loop
   over synchronous embedding-provider calls in the HTTP request.
+- Collection purge is a bounded synchronous whole-knowledge-base operation,
+  not ordinary document retention or object-storage cleanup. Oversized plans
+  still need a future asynchronous design; the current implementation fails
+  closed and never truncates a deletion plan.
 
 See [current active plans](drafts/README.md) for remaining implementation scope
 and batch ordering. Shipped contracts remain in the [REST API reference](rest-api.md) and

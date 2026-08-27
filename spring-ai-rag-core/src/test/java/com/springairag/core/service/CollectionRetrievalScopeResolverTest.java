@@ -112,14 +112,27 @@ class CollectionRetrievalScopeResolverTest {
     }
 
     @Test
-    void unknownNumericIdRemainsASelectedZeroHitScope() {
-        RetrievalScope scope = resolver.resolve(
-                CollectionScopeMode.SELECTED_COLLECTIONS,
-                List.of(999L), null, null, null, null);
+    void explicitUnknownAndRetiredNumericIdsAreRejected() {
+        when(identityResolver.requireActive(999L, null))
+                .thenThrow(new RagException(
+                        ErrorCode.COLLECTION_NOT_FOUND, "missing"));
+        when(identityResolver.requireActive(998L, null))
+                .thenThrow(new RagException(
+                        ErrorCode.COLLECTION_ALREADY_RETIRED, "retired"));
 
-        assertEquals(List.of(999L), scope.collectionIds());
-        verify(identityResolver, never()).resolveActiveIds(
-                List.of(999L), null);
+        RagException missing = assertThrows(RagException.class,
+                () -> resolver.resolve(
+                        CollectionScopeMode.SELECTED_COLLECTIONS,
+                        List.of(999L), null, null, null, null));
+        RagException retired = assertThrows(RagException.class,
+                () -> resolver.resolve(
+                        CollectionScopeMode.SELECTED_COLLECTIONS,
+                        List.of(998L), null, null, null, null));
+
+        assertEquals(ErrorCode.COLLECTION_NOT_FOUND,
+                missing.getErrorCodeEnum());
+        assertEquals(ErrorCode.COLLECTION_ALREADY_RETIRED,
+                retired.getErrorCodeEnum());
     }
 
     @Test
@@ -144,6 +157,10 @@ class CollectionRetrievalScopeResolverTest {
 
     @Test
     void rejectsMismatchedIdsAndKeys() {
+        com.springairag.core.entity.RagCollection one =
+                new com.springairag.core.entity.RagCollection();
+        one.setId(1L);
+        when(identityResolver.requireActive(1L, null)).thenReturn(one);
         when(identityResolver.resolveActiveIds(
                 null, List.of("two"))).thenReturn(List.of(2L));
 

@@ -49,6 +49,7 @@ public class EmbeddingJobService {
     private final RagEmbeddingJobProperties properties;
     private final DocumentDerivationDescriptorProvider descriptorProvider;
     private final DocumentEmbedService documentEmbedService;
+    private EmbeddingJobWakeupPublisher wakeupPublisher;
 
     public EmbeddingJobService(
             EmbeddingJobRepository jobRepository,
@@ -65,6 +66,12 @@ public class EmbeddingJobService {
         this.properties = properties.getEmbeddingJobs();
         this.descriptorProvider = descriptorProvider;
         this.documentEmbedService = documentEmbedService;
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setWakeupPublisher(
+            EmbeddingJobWakeupPublisher wakeupPublisher) {
+        this.wakeupPublisher = wakeupPublisher;
     }
 
     @Transactional
@@ -85,6 +92,7 @@ public class EmbeddingJobService {
         List<EmbeddingJobResponse> responses =
                 new ArrayList<>(documentIds.size());
         int coalesced = 0;
+        boolean queued = false;
         for (Long documentId : documentIds) {
             RagDocument document = documentRepository.findById(documentId)
                     .orElseThrow(() -> new DocumentNotFoundException(documentId));
@@ -151,8 +159,12 @@ public class EmbeddingJobService {
             if (result.coalesced()) {
                 coalesced++;
             }
+            queued |= result.job().status() == EmbeddingJobStatus.QUEUED;
             responses.add(toResponse(
                     result.job(), result.coalesced()));
+        }
+        if (queued && wakeupPublisher != null) {
+            wakeupPublisher.publishAfterCommit();
         }
         return new EmbeddingJobBatchResponse(
                 requestedBatch,
@@ -248,6 +260,7 @@ public class EmbeddingJobService {
         return toResponse(updated, false);
     }
 
+    @Transactional
     public EmbeddingJobResponse retry(UUID id, Integer requestedMaxAttempts) {
         requireEnabled();
         EmbeddingJob current = requireAuthorized(id);
@@ -255,18 +268,20 @@ public class EmbeddingJobService {
                 ? resolveMaxAttempts(requestedMaxAttempts)
                 : current.maxAttempts();
         try {
-            return jobRepository.retry(id, maxAttempts)
-                    .map(job -> toResponse(job, false))
+            EmbeddingJob target = jobRepository.retry(id, maxAttempts)
                     .orElseGet(() -> activeRetryTarget(current)
-                            .map(job -> toResponse(job, true))
                             .orElseThrow(() -> new RagException(
                                     ErrorCode.DUPLICATE_RESOURCE,
                                     "Only FAILED, STALE, or CANCELLED jobs "
                                             + "without another active job can be retried")));
+            boolean coalesced = !target.id().equals(id);
+            publishWakeupIfQueued(target);
+            return toResponse(target, coalesced);
         } catch (DataIntegrityViolationException race) {
-            return activeRetryTarget(current)
-                    .map(job -> toResponse(job, true))
+            EmbeddingJob target = activeRetryTarget(current)
                     .orElseThrow(() -> race);
+            publishWakeupIfQueued(target);
+            return toResponse(target, true);
         }
     }
 
@@ -405,6 +420,14 @@ public class EmbeddingJobService {
             throw new RagException(
                     ErrorCode.EMBEDDING_JOBS_DISABLED,
                     "Persistent embedding jobs are disabled");
+        }
+    }
+
+    private void publishWakeupIfQueued(EmbeddingJob job) {
+        if (wakeupPublisher != null
+                && job != null
+                && job.status() == EmbeddingJobStatus.QUEUED) {
+            wakeupPublisher.publishAfterCommit();
         }
     }
 

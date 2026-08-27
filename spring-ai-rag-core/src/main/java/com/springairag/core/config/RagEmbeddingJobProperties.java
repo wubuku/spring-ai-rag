@@ -7,7 +7,7 @@ public class RagEmbeddingJobProperties {
 
     private boolean enabled = true;
     private int syncWaitSeconds = 30;
-    private int pollIntervalMs = 1000;
+    private int pollIntervalMs = 30_000;
     private int claimBatchSize = 4;
     private int leaseSeconds = 120;
     private int defaultMaxAttempts = 3;
@@ -19,7 +19,9 @@ public class RagEmbeddingJobProperties {
     public boolean isEnabled() { return enabled; }
     public void setEnabled(boolean enabled) { this.enabled = enabled; }
     public int getPollIntervalMs() { return pollIntervalMs; }
-    public void setPollIntervalMs(int value) { pollIntervalMs = Math.max(250, value); }
+    public void setPollIntervalMs(int value) {
+        pollIntervalMs = Math.max(10_000, value);
+    }
     public int getClaimBatchSize() { return claimBatchSize; }
     public void setClaimBatchSize(int value) { claimBatchSize = Math.max(1, Math.min(32, value)); }
     public int getLeaseSeconds() { return leaseSeconds; }

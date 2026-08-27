@@ -19,7 +19,7 @@ Documentation hub: [index.md](index.md). Stable project context: [project-contex
 | Real-LLM E2E port | `18081` |
 | Embedding | SiliconFlow `BAAI/bge-m3` |
 | Vector dimension | `1024` |
-| Flyway | V1–V55 |
+| Flyway | V1–V56 |
 
 Do **not** append `/v1` to an OpenAI or Embedding `base-url`. Spring AI appends `/v1/chat/completions` or `/v1/embeddings`.
 
@@ -86,6 +86,22 @@ reuse, owner isolation, restricted ACLs, concurrent first create, current
 soft-deleted state, one create audit, ledger failure closure, and secret-safe
 database facts. Use `COLLECTION_PROVISIONING_VERIFY_PHASE=http` to rerun only
 the disposable dual-instance HTTP phase.
+
+For V56 Collection content cleanup, permanent-key tombstones, reference
+cascades, and the WebUI preview/apply flow:
+
+```bash
+./scripts/verify-collection-purge.sh
+```
+
+The default run uses Testcontainers for five real PostgreSQL scenarios. A
+caller-provided disposable database can be selected with
+`COLLECTION_PURGE_IT_JDBC_URL`, `COLLECTION_PURGE_IT_USERNAME`,
+`COLLECTION_PURGE_IT_PASSWORD`, and
+`COLLECTION_PURGE_IT_CLEAN_CONFIRM=YES`. The script also runs focused backend
+tests, the Maven clean compile gate, the complete WebUI gates, no-screenshot
+Collection Mock Playwright, lock/document/shell-syntax/whitespace checks, and
+writes evidence under `.verification/collection-purge/<run-id>/`.
 
 For the durable model-invocation usage ledger and its principal-scoped
 aggregate API:
@@ -276,6 +292,13 @@ The flow performs provider preflight, unique-document creation, embedding, searc
 stream. When `RAG_ROOT_API_KEY` is configured, pass it through `RAG_API_KEY` (or the
 equivalent `X-API-Key` header); the script also loads the root key from `.env`. Mock
 Playwright is not a substitute for real-LLM validation.
+
+The guarded Collection purge real-provider lifecycle uses
+`scripts/real-collection-purge-e2e-smoke.sh`. It requires a running isolated
+service and disposable database, then verifies event-first embedding, real
+retrieval/Chat, purge/replay, retired rejection, and the tombstone. See the
+[testing guide](testing-guide.md#guarded-collection-purge-and-retirement-acceptance-gate)
+for the full command and evidence-safety boundary.
 
 This Chat-turn idempotency delivery has a separate PLAIN smoke that does not require an
 Embedding provider:
