@@ -7,8 +7,8 @@
 
 ## 当前状态
 
-- 阶段：主体实现、focused/完整前后端门槛、双语长青文档、项目门禁和真实
-  LLM/Embedding 客户生命周期均已通过；准备同步最新 `origin/main` 并按合并后基线复验
+- 阶段：主体实现、focused/完整前后端门槛、双语长青文档、项目门禁、真实
+  LLM/Embedding 客户生命周期及最新 `origin/main` 基线复验均已通过；准备 Git 交付
 - 规划审查计数：`3/3`
 - 实现审查：按用户最新要求不执行重复三轮代码 review，以完整自动化验收和运行时证据收敛
 - worktree：只使用主工作区；未创建额外 worktree，未使用 stash
@@ -274,6 +274,23 @@
   - 同一告警行复用，state/notified version、低敏 metrics、API/history/数据库事实一致。
 - 下一步：更新最终证据索引，拉取并合并最新 `origin/main`，按合并后代码完整重跑门槛和
   真实 provider 生命周期，再完成特性分支与 `main` 交付。
+
+### 2026-08-28：最新 origin/main 基线完整复验
+
+- 已执行 `git fetch origin --prune`；`origin/main` 仍为 `73ded395`，与本批次规划基线
+  一致；`git merge origin/main` 返回 `Already up to date`。
+- 已在本地保护提交 `173c7906` 上重新执行：
+  `MANAGED_API_REAL_ENV_FILE=.env MANAGED_API_REAL_LLM_PROVIDER=minimax MANAGED_API_VERIFY_RUN_ID=v57-post-origin-main-20260828-r4 ./scripts/verify-managed-api-principals.sh --with-real-llm`。
+- 结果：`13 passed, 0 failed`；证据：
+  `.verification/managed-api-principals/v57-post-origin-main-20260828-r4/summary.md`。
+- 合并后基线再次确认：
+  - PostgreSQL、Maven compile/test-compile/full test、WebUI Vitest/typecheck/build/alignment、
+    Mock 与真实 Playwright、文档、禁锁和 diff 全部通过；
+  - 真实 Chat `9` 次 provider 调用与所有轮换/流式/兼容合同通过；
+  - 真实 Event-driven Embedding、vector-only Search、`KNOWLEDGE` Chat 与引用通过；
+  - `WARNING -> CRITICAL -> RESOLVED` 均在 `0s` 内被双实例事件消费者收敛，Scheduled
+    fallback 仍保持一小时。
+- 下一步：重跑本次文档追加后的文档/静态门禁，提交并推送特性分支，合并和推送 `main`。
 
 ## 后续硬门槛
 
