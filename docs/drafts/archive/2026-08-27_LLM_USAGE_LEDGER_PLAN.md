@@ -161,13 +161,13 @@ invocation 事实。
 
 近距离长青入口：
 
-- [项目上下文](../project-context-zh-CN.md)
-- [架构](../architecture-zh-CN.md)
-- [Chat 记忆、RAG 与工具调用](../chat-memory-rag-tool-calling-zh-CN.md)
-- [多模型配置](../multi-model-external-config-zh-CN.md)
-- [REST API](../rest-api-zh-CN.md)
-- [测试指南](../testing-guide-zh-CN.md)
-- [交付工作流](../delivery-workflow-zh-CN.md)
+- [项目上下文](../../project-context-zh-CN.md)
+- [架构](../../architecture-zh-CN.md)
+- [Chat 记忆、RAG 与工具调用](../../chat-memory-rag-tool-calling-zh-CN.md)
+- [多模型配置](../../multi-model-external-config-zh-CN.md)
+- [REST API](../../rest-api-zh-CN.md)
+- [测试指南](../../testing-guide-zh-CN.md)
+- [交付工作流](../../delivery-workflow-zh-CN.md)
 
 ## 3. 价值、目标与非目标
 

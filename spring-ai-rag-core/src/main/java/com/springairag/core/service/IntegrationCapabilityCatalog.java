@@ -1,5 +1,6 @@
 package com.springairag.core.service;
 
+import com.springairag.api.contract.DocumentSyncRunLimits;
 import com.springairag.api.dto.IntegrationCapabilitiesResponse;
 import com.springairag.api.enums.CollectionAccessMode;
 import com.springairag.core.config.RagProperties;
@@ -55,14 +56,37 @@ public class IntegrationCapabilityCatalog {
                         new IntegrationCapabilitiesResponse.OptionalFeatures(
                                 properties.getDocumentLifecycle().isSyncRunsEnabled(),
                                 properties.getDocumentLifecycle().isSyncRunsEnabled(),
-                                properties.getOpenAiCompatibility().isEnabled()));
+                                properties.getOpenAiCompatibility().isEnabled(),
+                                properties.getIntegrationObservability().isEnabled()));
+        var structuredRecords = properties.getStructuredRecords();
+        var observability = properties.getIntegrationObservability();
         return new IntegrationCapabilitiesResponse(
                 new IntegrationCapabilitiesResponse.Protocol(
                         CONTRACT_NAME, CONTRACT_VERSION, API_VERSION),
                 principal,
                 features,
                 new IntegrationCapabilitiesResponse.Limits(
-                        100, 128, 128, 255, 255));
+                        100,
+                        128,
+                        128,
+                        255,
+                        255,
+                        new IntegrationCapabilitiesResponse.StructuredRecordsLimits(
+                                structuredRecords.getMaxJsonbPayloadBytes(),
+                                structuredRecords.getMaxRetrievalTextChars(),
+                                structuredRecords.getMaxBatchSize(),
+                                structuredRecords.getMaxBatchPayloadBytes(),
+                                structuredRecords.getMaxSearchResults(),
+                                structuredRecords.getMaxPayloadFilterBytes(),
+                                structuredRecords.getMaxPayloadFilterDepth()),
+                        new IntegrationCapabilitiesResponse.SyncRunsLimits(
+                                DocumentSyncRunLimits.MAX_BATCH_ITEMS,
+                                DocumentSyncRunLimits.MAX_ITEM_RECEIPT_PAGE_ITEMS,
+                                DocumentSyncRunLimits.MAX_RUN_LIST_PAGE_ITEMS),
+                        new IntegrationCapabilitiesResponse.ObservabilityLimits(
+                                observability.retentionDays(),
+                                observability.maxQueryRangeDays(),
+                                observability.getMaxCollectionBreakdownItems())));
     }
 
     private IntegrationCapabilitiesResponse.Principal principalProjection(

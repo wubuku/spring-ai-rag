@@ -13,6 +13,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
@@ -116,6 +117,44 @@ class IntegrationCapabilityCatalogTest {
         assertTrue(features.optional().documentSyncRuns());
         assertTrue(features.optional().documentSyncRunItemReceipts());
         assertTrue(features.optional().openAiCompatibility());
+        assertTrue(features.optional().integrationObservability());
+    }
+
+    @Test
+    void projectsRuntimeLimitsFromConfigurationAndSharedConstants() {
+        properties.getStructuredRecords().setMaxJsonbPayloadBytes(2_000);
+        properties.getStructuredRecords().setMaxRetrievalTextChars(3_000);
+        properties.getStructuredRecords().setMaxBatchSize(7);
+        properties.getStructuredRecords().setMaxBatchPayloadBytes(9_000);
+        properties.getStructuredRecords().setMaxSearchResults(11);
+        properties.getStructuredRecords().setMaxPayloadFilterBytes(4_000);
+        properties.getStructuredRecords().setMaxPayloadFilterDepth(6);
+        properties.getIntegrationObservability().setEnabled(false);
+        properties.getIntegrationObservability()
+                .setRetention(Duration.ofDays(120));
+        properties.getIntegrationObservability()
+                .setMaxQueryRange(Duration.ofDays(45));
+        properties.getIntegrationObservability()
+                .setMaxCollectionBreakdownItems(75);
+
+        IntegrationCapabilitiesResponse response =
+                catalog.describe(new MockHttpServletRequest());
+        IntegrationCapabilitiesResponse.Limits limits = response.getLimits();
+
+        assertEquals(2_000, limits.structuredRecords().maxJsonbPayloadBytes());
+        assertEquals(3_000, limits.structuredRecords().maxRetrievalTextChars());
+        assertEquals(7, limits.structuredRecords().maxBatchItems());
+        assertEquals(9_000, limits.structuredRecords().maxBatchPayloadBytes());
+        assertEquals(11, limits.structuredRecords().maxSearchResults());
+        assertEquals(4_000, limits.structuredRecords().maxPayloadFilterBytes());
+        assertEquals(6, limits.structuredRecords().maxPayloadFilterDepth());
+        assertEquals(100, limits.syncRuns().maxBatchItems());
+        assertEquals(200, limits.syncRuns().maxItemReceiptPageItems());
+        assertEquals(100, limits.syncRuns().maxRunListPageItems());
+        assertEquals(120, limits.observability().retentionDays());
+        assertEquals(45, limits.observability().maxQueryRangeDays());
+        assertEquals(75, limits.observability().maxCollectionBreakdownItems());
+        assertFalse(response.getFeatures().optional().integrationObservability());
     }
 
     @Test
@@ -128,9 +167,11 @@ class IntegrationCapabilityCatalogTest {
         assertTrue(enabled.documentSyncRuns());
         assertTrue(enabled.documentSyncRunItemReceipts());
         assertFalse(enabled.openAiCompatibility());
+        assertFalse(enabled.integrationObservability());
         assertFalse(disabled.documentSyncRuns());
         assertFalse(disabled.documentSyncRunItemReceipts());
         assertTrue(disabled.openAiCompatibility());
+        assertFalse(disabled.integrationObservability());
     }
 
     @Test
@@ -141,6 +182,18 @@ class IntegrationCapabilityCatalogTest {
 
         assertTrue(legacy.idempotencyKey());
         assertFalse(legacy.collectionCreateIdempotencyKey());
+    }
+
+    @Test
+    void keepsLegacyLimitsConstructorAdditive() {
+        IntegrationCapabilitiesResponse.Limits legacy =
+                new IntegrationCapabilitiesResponse.Limits(
+                        100, 128, 128, 255, 255);
+
+        assertEquals(100, legacy.maxCollectionKeysPerPrincipal());
+        assertNull(legacy.structuredRecords());
+        assertNull(legacy.syncRuns());
+        assertNull(legacy.observability());
     }
 
     @Test

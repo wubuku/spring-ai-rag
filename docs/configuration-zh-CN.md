@@ -485,13 +485,13 @@ rag:
 ```yaml
 rag:
   structured-records:
-    max-jsonb-payload-bytes: 1048576
-    max-retrieval-text-chars: 10000
-    max-batch-size: 20
-    max-batch-payload-bytes: 10485760
-    max-search-results: 20
-    max-payload-filter-bytes: 16384
-    max-payload-filter-depth: 8
+    max-jsonb-payload-bytes: ${RAG_STRUCTURED_RECORDS_MAX_JSONB_PAYLOAD_BYTES:1048576}
+    max-retrieval-text-chars: ${RAG_STRUCTURED_RECORDS_MAX_RETRIEVAL_TEXT_CHARS:10000}
+    max-batch-size: ${RAG_STRUCTURED_RECORDS_MAX_BATCH_SIZE:20}
+    max-batch-payload-bytes: ${RAG_STRUCTURED_RECORDS_MAX_BATCH_PAYLOAD_BYTES:10485760}
+    max-search-results: ${RAG_STRUCTURED_RECORDS_MAX_SEARCH_RESULTS:20}
+    max-payload-filter-bytes: ${RAG_STRUCTURED_RECORDS_MAX_PAYLOAD_FILTER_BYTES:16384}
+    max-payload-filter-depth: ${RAG_STRUCTURED_RECORDS_MAX_PAYLOAD_FILTER_DEPTH:8}
     agent-tool-enabled: ${RAG_JSON_AGENT_TOOL_ENABLED:false}
     agent-tool-max-results: 5
     agent-tool-max-payload-bytes: 32768
@@ -503,6 +503,45 @@ hash；API 设计上也没有 payload hash 配置。`payloadContains` 使用 Pos
 `jsonb @>` 做精确子树包含过滤，默认限制 16 KiB 和 8 层嵌套。可选的
 `searchJsonRecords` Spring AI Tool 默认关闭；启用后仍由服务端注入 Collection/ACL
 范围，模型只能提供查询、payload 子树和结果数。
+
+## 集成 operation 可观测性
+
+```yaml
+rag:
+  integration-observability:
+    enabled: ${RAG_INTEGRATION_OBSERVABILITY_ENABLED:true}
+    retention: ${RAG_INTEGRATION_OBSERVABILITY_RETENTION:90d}
+    max-query-range: ${RAG_INTEGRATION_OBSERVABILITY_MAX_QUERY_RANGE:31d}
+    max-collection-breakdown-items: ${RAG_INTEGRATION_OBSERVABILITY_MAX_COLLECTION_BREAKDOWN_ITEMS:100}
+    queue-capacity: ${RAG_INTEGRATION_OBSERVABILITY_QUEUE_CAPACITY:10000}
+    flush-batch-size: ${RAG_INTEGRATION_OBSERVABILITY_FLUSH_BATCH_SIZE:500}
+    flush-interval: ${RAG_INTEGRATION_OBSERVABILITY_FLUSH_INTERVAL:1s}
+    shutdown-drain-timeout: ${RAG_INTEGRATION_OBSERVABILITY_SHUTDOWN_DRAIN_TIMEOUT:5s}
+    cleanup-batch-size: ${RAG_INTEGRATION_OBSERVABILITY_CLEANUP_BATCH_SIZE:5000}
+    cleanup-interval: ${RAG_INTEGRATION_OBSERVABILITY_CLEANUP_INTERVAL:1h}
+```
+
+| 配置 | 默认值 | 校验 / 含义 |
+|---|---:|---|
+| `enabled` | `true` | 开启记录与查询 API；关闭时查询返回 `503` |
+| `retention` | `90d` | 整天，7–730 天 |
+| `max-query-range` | `31d` | 整天，1–90 天，且不能超过 retention |
+| `max-collection-breakdown-items` | `100` | 1–1000 条 Collection contribution |
+| `queue-capacity` | `10000` | 100–100000 个请求观测 |
+| `flush-batch-size` | `500` | 10–5000，且不能超过 queue capacity |
+| `flush-interval` | `1s` | 100 ms–60 s |
+| `shutdown-drain-timeout` | `5s` | 0–30 s |
+| `cleanup-batch-size` | `5000` | 每次有界删除 100–50000 条过期行 |
+| `cleanup-interval` | `1h` | 1 分钟–24 小时 |
+
+记录器只分类有限的稳定集成路由，捕获最终 HTTP status 与 wall duration，并异步 upsert
+UTC 小时聚合。queue/repository 故障对业务请求 fail-open，并通过固定 reason counter
+暴露。`GET /api/v1/rag/integration-observability` 返回 best-effort 聚合，不是 billing、
+quota、审计或 mutation receipt。
+
+Micrometer 只使用固定低基数标签：`operation`、`status_class`、`principal_type`、
+`result` 与 `reason`。principal ID、Collection key、external ID、请求路径和 payload
+都不进入标签。V54 只在 PostgreSQL 聚合行中保存 stable principal/Collection 引用。
 
 ## Chat 执行配置
 
@@ -1065,7 +1104,8 @@ generation fencing 与 lifecycle/idempotency contract；V42 增加权威外部�
 控制面；V46/V47 增加持久化 Chat 摘要与 turn operation；V48–V50 增加 stable managed
 principal、operation capability、共享 quota 和 principal provisioning 幂等；V51
 增加 Sync Run item receipt 游标索引；V52 增加按调用方隔离的 Collection 创建幂等账本；
-V53 增加按 principal 隔离的模型调用用量账本。
+V53 增加按 principal 隔离的模型调用用量账本；V54 增加有界 UTC 小时级 integration
+operation 与已授权 Collection contribution 聚合。
 
 ## Profile 一览
 

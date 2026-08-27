@@ -14,6 +14,9 @@ CAPABILITY_PROFILE="${RAG_BINDING_EXPECTED_CAPABILITY_PROFILE:-READ_WRITE}"
 EVIDENCE_DIR="${RAG_BINDING_PREFLIGHT_EVIDENCE_DIR:-}"
 REQUEST_TIMEOUT_SECONDS="${RAG_BINDING_REQUEST_TIMEOUT_SECONDS:-30}"
 READY_TIMEOUT_SECONDS="${RAG_BINDING_READY_TIMEOUT_SECONDS:-180}"
+MIN_JSON_BATCH_ITEMS="${RAG_BINDING_MIN_JSON_BATCH_ITEMS:-}"
+MIN_JSON_BATCH_PAYLOAD_BYTES="${RAG_BINDING_MIN_JSON_BATCH_PAYLOAD_BYTES:-}"
+REQUIRE_OPERATION_OBSERVABILITY="${RAG_BINDING_REQUIRE_OPERATION_OBSERVABILITY:-}"
 
 PRIVATE_DIR=""
 STEPS_FILE=""
@@ -30,6 +33,10 @@ FAILED_STEP=""
 FAILURE_CATEGORY=""
 PASSED_STEPS=0
 API_VERSION=""
+CAPABILITY_PROTOCOL_VERSION=""
+VERIFIED_JSON_BATCH_ITEMS=""
+VERIFIED_JSON_BATCH_PAYLOAD_BYTES=""
+VERIFIED_OPERATION_OBSERVABILITY=""
 PRINCIPAL_TYPE=""
 PRINCIPAL_ROLE=""
 ACCESS_MODE=""
@@ -144,6 +151,13 @@ write_report() {
   REPORT_MODE="$MODE" \
   REPORT_TARGET_LABEL="$TARGET_LABEL" \
   REPORT_API_VERSION="$API_VERSION" \
+  REPORT_CAPABILITY_PROTOCOL_VERSION="$CAPABILITY_PROTOCOL_VERSION" \
+  REPORT_VERIFIED_JSON_BATCH_ITEMS="$VERIFIED_JSON_BATCH_ITEMS" \
+  REPORT_VERIFIED_JSON_BATCH_PAYLOAD_BYTES="$VERIFIED_JSON_BATCH_PAYLOAD_BYTES" \
+  REPORT_VERIFIED_OPERATION_OBSERVABILITY="$VERIFIED_OPERATION_OBSERVABILITY" \
+  REPORT_MIN_JSON_BATCH_ITEMS="$MIN_JSON_BATCH_ITEMS" \
+  REPORT_MIN_JSON_BATCH_PAYLOAD_BYTES="$MIN_JSON_BATCH_PAYLOAD_BYTES" \
+  REPORT_REQUIRE_OPERATION_OBSERVABILITY="$REQUIRE_OPERATION_OBSERVABILITY" \
   REPORT_AUTH_SCHEME="$AUTH_SCHEME" \
   REPORT_EXPECTED_CAPABILITY_PROFILE="$CAPABILITY_PROFILE" \
   REPORT_VERIFIED_CAPABILITY_PROFILE="$VERIFIED_CAPABILITY_PROFILE" \
@@ -171,6 +185,14 @@ def nullable_int(name):
     value = nullable(name)
     return int(value) if value is not None else None
 
+def nullable_bool(name):
+    value = nullable(name)
+    if value is None:
+        return None
+    if value not in {"true", "false"}:
+        raise SystemExit(f"{name} must be true or false")
+    return value == "true"
+
 payload = {
     "schemaVersion": 1,
     "runId": os.environ["REPORT_RUN_ID"],
@@ -178,6 +200,25 @@ payload = {
     "mode": nullable("REPORT_MODE"),
     "targetLabel": nullable("REPORT_TARGET_LABEL"),
     "apiVersion": nullable("REPORT_API_VERSION"),
+    "capability": {
+        "protocolVersion": nullable("REPORT_CAPABILITY_PROTOCOL_VERSION"),
+        "jsonBatchItems": nullable_int("REPORT_VERIFIED_JSON_BATCH_ITEMS"),
+        "jsonBatchPayloadBytes": nullable_int(
+            "REPORT_VERIFIED_JSON_BATCH_PAYLOAD_BYTES"
+        ),
+        "operationObservability": nullable_bool(
+            "REPORT_VERIFIED_OPERATION_OBSERVABILITY"
+        ),
+    },
+    "requirements": {
+        "minJsonBatchItems": nullable_int("REPORT_MIN_JSON_BATCH_ITEMS"),
+        "minJsonBatchPayloadBytes": nullable_int(
+            "REPORT_MIN_JSON_BATCH_PAYLOAD_BYTES"
+        ),
+        "requireOperationObservability": nullable_bool(
+            "REPORT_REQUIRE_OPERATION_OBSERVABILITY"
+        ),
+    },
     "credentialTransport": nullable("REPORT_AUTH_SCHEME"),
     "expectedCapabilityProfile": nullable(
         "REPORT_EXPECTED_CAPABILITY_PROFILE"
@@ -204,6 +245,18 @@ if payload["result"] == "PASS":
     actual = payload["principal"]["capabilityProfile"]
     if expected is None or actual != expected:
         raise SystemExit("successful report requires a verified capability profile")
+    if payload["capability"]["protocolVersion"] != "1.0":
+        raise SystemExit("successful report requires capability protocol 1.0")
+    if not isinstance(payload["capability"]["jsonBatchItems"], int):
+        raise SystemExit("successful report requires a verified JSON batch limit")
+    if not isinstance(payload["capability"]["jsonBatchPayloadBytes"], int):
+        raise SystemExit(
+            "successful report requires a verified JSON batch payload limit"
+        )
+    if not isinstance(payload["capability"]["operationObservability"], bool):
+        raise SystemExit(
+            "successful report requires a verified observability feature"
+        )
 path = Path(sys.argv[1])
 temporary = path.with_suffix(".json.tmp")
 temporary.write_text(
@@ -224,6 +277,13 @@ PY
     echo "- Verified capability profile: \`${VERIFIED_CAPABILITY_PROFILE:-unavailable}\`"
     echo "- Result: **${RESULT}**"
     echo "- API version: \`${API_VERSION:-unavailable}\`"
+    echo "- Capability protocol: \`${CAPABILITY_PROTOCOL_VERSION:-unavailable}\`"
+    echo "- Verified JSON batch items: \`${VERIFIED_JSON_BATCH_ITEMS:-unavailable}\`"
+    echo "- Verified JSON batch payload bytes: \`${VERIFIED_JSON_BATCH_PAYLOAD_BYTES:-unavailable}\`"
+    echo "- Operation observability: \`${VERIFIED_OPERATION_OBSERVABILITY:-unavailable}\`"
+    echo "- Minimum JSON batch items: \`${MIN_JSON_BATCH_ITEMS:-not-required}\`"
+    echo "- Minimum JSON batch payload bytes: \`${MIN_JSON_BATCH_PAYLOAD_BYTES:-not-required}\`"
+    echo "- Operation observability required: \`${REQUIRE_OPERATION_OBSERVABILITY:-not-required}\`"
     echo "- Passed steps: **${PASSED_STEPS}**"
     echo "- Canary final state: \`${CANARY_FINAL_STATE:-not-applicable}\`"
     if [[ "$RESULT" != "PASS" ]]; then
@@ -288,6 +348,9 @@ validate_inputs() {
     INPUT_ALLOW_HTTP_LOOPBACK="${RAG_BINDING_ALLOW_HTTP_LOOPBACK:-false}" \
     INPUT_REQUEST_TIMEOUT="$REQUEST_TIMEOUT_SECONDS" \
     INPUT_READY_TIMEOUT="$READY_TIMEOUT_SECONDS" \
+    INPUT_MIN_JSON_BATCH_ITEMS="$MIN_JSON_BATCH_ITEMS" \
+    INPUT_MIN_JSON_BATCH_PAYLOAD_BYTES="$MIN_JSON_BATCH_PAYLOAD_BYTES" \
+    INPUT_REQUIRE_OPERATION_OBSERVABILITY="$REQUIRE_OPERATION_OBSERVABILITY" \
       python3 <<'PY'
 import ipaddress
 import json
@@ -428,6 +491,33 @@ try:
     if not 1 <= request_timeout <= 120 or not 1 <= ready_timeout <= 900:
         reject("INVALID_TIMEOUT")
 
+    def optional_positive_int(name, category, maximum):
+        raw = os.environ.get(name, "")
+        if not raw:
+            return None
+        if not re.fullmatch(r"[1-9][0-9]{0,8}", raw):
+            reject(category)
+        value = int(raw)
+        if value > maximum:
+            reject(category)
+        return value
+
+    min_json_batch_items = optional_positive_int(
+        "INPUT_MIN_JSON_BATCH_ITEMS",
+        "INVALID_MIN_JSON_BATCH_ITEMS",
+        100_000,
+    )
+    min_json_batch_payload_bytes = optional_positive_int(
+        "INPUT_MIN_JSON_BATCH_PAYLOAD_BYTES",
+        "INVALID_MIN_JSON_BATCH_PAYLOAD_BYTES",
+        1_073_741_824,
+    )
+    require_operation_observability = os.environ.get(
+        "INPUT_REQUIRE_OPERATION_OBSERVABILITY", ""
+    )
+    if require_operation_observability not in {"", "true", "false"}:
+        reject("INVALID_REQUIRE_OPERATION_OBSERVABILITY")
+
     canary_key = os.environ.get("INPUT_CANARY_COLLECTION_KEY", "")
     canary_confirm = os.environ.get("INPUT_CANARY_CONFIRM", "")
     canary_retrieval_marker = os.environ.get("INPUT_CANARY_RETRIEVAL_MARKER", "")
@@ -459,6 +549,13 @@ try:
         "requestTimeoutSeconds": request_timeout,
         "readyTimeoutSeconds": ready_timeout,
         "httpLoopback": parts.scheme == "http",
+        "minJsonBatchItems": min_json_batch_items,
+        "minJsonBatchPayloadBytes": min_json_batch_payload_bytes,
+        "requireOperationObservability": (
+            require_operation_observability == "true"
+            if require_operation_observability
+            else None
+        ),
     }
     Path(os.environ["VALIDATED_OUTPUT"]).write_text(
         json.dumps(output, ensure_ascii=True, separators=(",", ":")) + "\n",
@@ -481,6 +578,18 @@ PY
     || return 1
   READY_TIMEOUT_SECONDS="$(jq -er '.readyTimeoutSeconds' "$VALIDATED_INPUT")" \
     || return 1
+  MIN_JSON_BATCH_ITEMS="$(jq -r '.minJsonBatchItems // ""' "$VALIDATED_INPUT")" \
+    || return 1
+  MIN_JSON_BATCH_PAYLOAD_BYTES="$(
+    jq -r '.minJsonBatchPayloadBytes // ""' "$VALIDATED_INPUT"
+  )" || return 1
+  if [[ "$(jq -r '.requireOperationObservability' "$VALIDATED_INPUT")" == "true" ]]; then
+    REQUIRE_OPERATION_OBSERVABILITY="true"
+  elif [[ "$(jq -r '.requireOperationObservability' "$VALIDATED_INPUT")" == "false" ]]; then
+    REQUIRE_OPERATION_OBSERVABILITY="false"
+  else
+    REQUIRE_OPERATION_OBSERVABILITY=""
+  fi
   EXPECTED_COLLECTION_COUNT="$(
     jq -er '.expectedCollectionCount' "$VALIDATED_INPUT"
   )" || return 1
@@ -567,6 +676,62 @@ require_http() {
   fi
 }
 
+capability_preflight() {
+  local response headers
+  response="${PRIVATE_DIR}/capabilities.json"
+  headers="${response}.headers"
+  if ! http_request GET "${API}/integration-capabilities" \
+      "$AUTH_CONFIG" "$response" "$headers" "$REQUEST_TIMEOUT_SECONDS"; then
+    fail_step "integration_capabilities" "TRANSPORT_ERROR"
+    return 1
+  fi
+  require_http "integration_capabilities" 200 || return 1
+  if ! tr -d '\r' < "$headers" | rg -qi '^cache-control:.*no-store'; then
+    fail_step "integration_capabilities" "NO_STORE_REQUIRED" "$HTTP_CODE"
+    return 1
+  fi
+  if ! jq -e '
+      .protocol.name == "spring-ai-rag-integration"
+      and .protocol.version == "1.0"
+      and (.limits.structuredRecords.maxBatchItems | type == "number")
+      and (.limits.structuredRecords.maxBatchItems >= 1)
+      and (.limits.structuredRecords.maxBatchPayloadBytes | type == "number")
+      and (.limits.structuredRecords.maxBatchPayloadBytes >= 1)
+      and (.features.optional.integrationObservability | type == "boolean")
+    ' "$response" >/dev/null; then
+    fail_step "integration_capabilities" "CAPABILITY_CONTRACT_MISMATCH" "$HTTP_CODE"
+    return 1
+  fi
+
+  CAPABILITY_PROTOCOL_VERSION="$(jq -er '.protocol.version' "$response")" || return 1
+  VERIFIED_JSON_BATCH_ITEMS="$(
+    jq -er '.limits.structuredRecords.maxBatchItems' "$response"
+  )" || return 1
+  VERIFIED_JSON_BATCH_PAYLOAD_BYTES="$(
+    jq -er '.limits.structuredRecords.maxBatchPayloadBytes' "$response"
+  )" || return 1
+  VERIFIED_OPERATION_OBSERVABILITY="$(
+    jq -r '.features.optional.integrationObservability' "$response"
+  )" || return 1
+
+  if [[ -n "$MIN_JSON_BATCH_ITEMS" ]] \
+      && (( VERIFIED_JSON_BATCH_ITEMS < MIN_JSON_BATCH_ITEMS )); then
+    fail_step "integration_capabilities" "CAPABILITY_LIMIT_TOO_LOW" "$HTTP_CODE"
+    return 1
+  fi
+  if [[ -n "$MIN_JSON_BATCH_PAYLOAD_BYTES" ]] \
+      && (( VERIFIED_JSON_BATCH_PAYLOAD_BYTES < MIN_JSON_BATCH_PAYLOAD_BYTES )); then
+    fail_step "integration_capabilities" "CAPABILITY_LIMIT_TOO_LOW" "$HTTP_CODE"
+    return 1
+  fi
+  if [[ "$REQUIRE_OPERATION_OBSERVABILITY" == "true" \
+      && "$VERIFIED_OPERATION_OBSERVABILITY" != "true" ]]; then
+    fail_step "integration_capabilities" "CAPABILITY_FEATURE_REQUIRED" "$HTTP_CODE"
+    return 1
+  fi
+  pass_step "integration_capabilities" "$HTTP_CODE"
+}
+
 read_only_preflight() {
   local response headers index key
 
@@ -583,6 +748,8 @@ read_only_preflight() {
     return 1
   fi
   pass_step "service_readiness" "$HTTP_CODE"
+
+  capability_preflight || return 1
 
   response="${PRIVATE_DIR}/openapi.json"
   headers="${response}.headers"

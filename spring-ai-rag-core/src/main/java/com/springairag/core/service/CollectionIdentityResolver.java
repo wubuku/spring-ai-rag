@@ -5,6 +5,7 @@ import com.springairag.api.validation.CollectionKeyValidator;
 import com.springairag.core.entity.RagCollection;
 import com.springairag.core.exception.RagException;
 import com.springairag.core.repository.RagCollectionRepository;
+import com.springairag.core.observability.IntegrationObservationContext;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -59,12 +60,9 @@ public class CollectionIdentityResolver {
     }
 
     public RagCollection requireActive(Long id, String key) {
-        return findActive(id, key)
-                .orElseThrow(() -> new RagException(
-                        ErrorCode.COLLECTION_NOT_FOUND,
-                        key != null
-                                ? "Collection not found: collectionKey=" + key
-                                : "Collection not found: id=" + id));
+        RagCollection collection = requireActiveUnobserved(id, key);
+        IntegrationObservationContext.addAuthorizedCollection(collection.getId());
+        return collection;
     }
 
     public RagCollection requireIncludingDeleted(Long id, String key) {
@@ -118,10 +116,12 @@ public class CollectionIdentityResolver {
      */
     public RagCollection requireActiveWithinAllowed(
             String key, Collection<Long> allowedIds) {
-        return findWithinAllowed(key, allowedIds, false)
+        RagCollection collection = findWithinAllowed(key, allowedIds, false)
                 .orElseThrow(() -> new RagException(
                         ErrorCode.COLLECTION_NOT_FOUND,
                         "Collection not found: collectionKey=" + key));
+        IntegrationObservationContext.addAuthorizedCollection(collection.getId());
+        return collection;
     }
 
     /**
@@ -153,7 +153,9 @@ public class CollectionIdentityResolver {
 
         List<Long> resolvedIds = ids == null
                 ? null
-                : ids.stream().map(id -> resolveActiveId(id, null)).toList();
+                : ids.stream()
+                        .map(id -> requireActiveUnobserved(id, null).getId())
+                        .toList();
         List<Long> resolvedKeys = keys == null
                 ? null
                 : resolveActiveKeyIds(keys);
@@ -163,7 +165,10 @@ public class CollectionIdentityResolver {
                     "collectionIds and collectionKeys identify different collections");
         }
         List<Long> result = resolvedKeys != null ? resolvedKeys : resolvedIds;
-        return List.copyOf(new LinkedHashSet<>(result));
+        List<Long> uniqueResult = List.copyOf(new LinkedHashSet<>(result));
+        uniqueResult.forEach(
+                IntegrationObservationContext::addAuthorizedCollection);
+        return uniqueResult;
     }
 
     private List<Long> resolveActiveKeyIds(List<String> keys) {
@@ -226,7 +231,9 @@ public class CollectionIdentityResolver {
             }
             resolved.add(id);
         }
-        return List.copyOf(resolved);
+        List<Long> result = List.copyOf(resolved);
+        result.forEach(IntegrationObservationContext::addAuthorizedCollection);
+        return result;
     }
 
     public Map<Long, String> mapKeys(Collection<Long> ids) {
@@ -287,5 +294,14 @@ public class CollectionIdentityResolver {
                     "collectionId and collectionKey identify different collections");
         }
         return collection;
+    }
+
+    private RagCollection requireActiveUnobserved(Long id, String key) {
+        return findActive(id, key)
+                .orElseThrow(() -> new RagException(
+                        ErrorCode.COLLECTION_NOT_FOUND,
+                        key != null
+                                ? "Collection not found: collectionKey=" + key
+                                : "Collection not found: id=" + id));
     }
 }

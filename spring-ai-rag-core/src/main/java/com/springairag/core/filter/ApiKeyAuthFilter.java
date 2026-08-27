@@ -65,6 +65,8 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
     public static final String AUTHENTICATED_PRINCIPAL_TYPE = "authenticatedPrincipalType";
     public static final String ROOT_AUTHENTICATED_ATTRIBUTE = "environmentRootAuthenticated";
     public static final String ROOT_MODE_ACTIVE_ATTRIBUTE = "environmentRootModeActive";
+    public static final String AUTHENTICATION_REQUIRED_ATTRIBUTE =
+            "apiAuthenticationRequired";
 
     public static final String PRINCIPAL_ENVIRONMENT_ROOT = "ENVIRONMENT_ROOT";
     public static final String PRINCIPAL_DATABASE_API_KEY = "DATABASE_API_KEY";
@@ -108,6 +110,9 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
                                     FilterChain filterChain) throws ServletException, IOException {
         boolean rootMode = rootCredentialResolver.isConfigured();
         request.setAttribute(ROOT_MODE_ACTIVE_ATTRIBUTE, rootMode);
+        request.setAttribute(
+                AUTHENTICATION_REQUIRED_ATTRIBUTE,
+                rootMode || authEnabled);
 
         // 有效 root 配置自动启用 /api/** 鉴权；未配置时保留 legacy 开关语义。
         if (!rootMode && !authEnabled) {

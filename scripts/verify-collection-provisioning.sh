@@ -13,6 +13,13 @@ POSTGRES_USERNAME="${COLLECTION_PROVISIONING_POSTGRES_USERNAME:-postgres}"
 POSTGRES_PASSWORD="${COLLECTION_PROVISIONING_POSTGRES_PASSWORD:-postgres}"
 BACKEND_A_PORT="${COLLECTION_PROVISIONING_BACKEND_A_PORT:-18191}"
 BACKEND_B_PORT="${COLLECTION_PROVISIONING_BACKEND_B_PORT:-18192}"
+LATEST_FLYWAY_MIGRATION="$(
+  find spring-ai-rag-core/src/main/resources/db/migration \
+    -maxdepth 1 -type f -name 'V*__*.sql' -exec basename {} \; \
+    | sed -nE 's/^V([0-9]+)__.*[.]sql$/\1/p' \
+    | sort -n \
+    | tail -1
+)"
 
 PRIVATE_DIR="$(mktemp -d "/tmp/spring-ai-rag-collection-provisioning-${RUN_ID}.XXXXXX")"
 POSTGRES_CONTAINER=""
@@ -152,6 +159,10 @@ prerequisites() {
   done
   [[ "$BACKEND_A_PORT" != "$BACKEND_B_PORT" ]] || {
     echo "Backend verification ports must be distinct" >&2
+    return 1
+  }
+  [[ "$LATEST_FLYWAY_MIGRATION" =~ ^[0-9]+$ ]] || {
+    echo "Could not determine latest Flyway migration" >&2
     return 1
   }
 }
@@ -578,7 +589,7 @@ http_contract() {
       || ',' ||
       (SELECT count(*) FROM rag_api_key WHERE api_key IS NOT NULL)
   ")"
-  [[ "$database_facts" == "52,2,2,0" ]] || {
+  [[ "$database_facts" == "${LATEST_FLYWAY_MIGRATION},2,2,0" ]] || {
     echo "Unexpected database facts: ${database_facts}" >&2
     return 1
   }
@@ -603,7 +614,7 @@ http_contract() {
   echo "collection_provisioning_contract=PASS"
   echo "cross_instance=true restart=true owner_isolation=true acl=true"
   echo "soft_delete_current_state=true audit_create_once=true fail_closed=true"
-  echo "database_facts=migration_52 ledger_2 collections_2 plaintext_credentials_0"
+  echo "database_facts=migration_${LATEST_FLYWAY_MIGRATION} ledger_2 collections_2 plaintext_credentials_0"
 }
 
 run_step "Prerequisites and isolated ports" prerequisites

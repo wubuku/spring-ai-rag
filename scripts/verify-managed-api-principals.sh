@@ -12,6 +12,13 @@ BACKEND_B_PORT="${MANAGED_API_BACKEND_B_PORT:-18182}"
 FRONTEND_PORT="${MANAGED_API_FRONTEND_PORT:-15181}"
 MOCK_PORT="${MANAGED_API_MOCK_PORT:-4199}"
 PG_IMAGE="${TESTCONTAINERS_PG_IMAGE:-pgvector/pgvector:pg16}"
+LATEST_FLYWAY_MIGRATION="$(
+  find spring-ai-rag-core/src/main/resources/db/migration \
+    -maxdepth 1 -type f -name 'V*__*.sql' -exec basename {} \; \
+    | sed -nE 's/^V([0-9]+)__.*[.]sql$/\1/p' \
+    | sort -n \
+    | tail -1
+)"
 RUN_REAL_LLM=0
 
 while [[ $# -gt 0 ]]; do
@@ -712,11 +719,11 @@ run_two_instance_contract() {
   db_facts="$(docker exec "$PG_CONTAINER" psql -U postgres \
     -d managed_api_principal_gate -At -F, -c \
     "SELECT (SELECT version FROM flyway_schema_history WHERE success ORDER BY installed_rank DESC LIMIT 1), (SELECT count(*) FROM rag_api_key WHERE api_key IS NOT NULL), (SELECT count(*) FROM (SELECT principal_id FROM rag_api_key WHERE enabled GROUP BY principal_id HAVING count(*) > 1) duplicate_active), (SELECT count(*) FROM rag_api_provisioning_operation)")"
-  [[ "$db_facts" == "51,0,0,1" ]] || {
+  [[ "$db_facts" == "${LATEST_FLYWAY_MIGRATION},0,0,1" ]] || {
     echo "Unexpected database facts: ${db_facts}" >&2
     return 1
   }
-  echo "database_facts migration=51 raw_credentials=0 duplicate_active=0 provisioning_operations=1"
+  echo "database_facts migration=${LATEST_FLYWAY_MIGRATION} raw_credentials=0 duplicate_active=0 provisioning_operations=1"
 }
 
 start_frontend() {

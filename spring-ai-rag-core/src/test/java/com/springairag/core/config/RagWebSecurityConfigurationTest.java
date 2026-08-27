@@ -2,10 +2,13 @@ package com.springairag.core.config;
 
 import com.springairag.core.filter.ApiKeyAuthFilter;
 import com.springairag.core.filter.ApiCapabilityFilter;
+import com.springairag.core.observability.IntegrationObservationRecorder;
+import com.springairag.core.observability.IntegrationObservationFilter;
 import com.springairag.core.ratelimit.PostgresRateLimitStore;
 import com.springairag.core.ratelimit.RateLimitObservability;
 import com.springairag.core.security.EnvironmentRootCredentialResolver;
 import com.springairag.core.service.ApiKeyManagementService;
+import jakarta.servlet.Filter;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -14,6 +17,8 @@ import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.JdbcTemplate;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -87,6 +92,65 @@ class RagWebSecurityConfigurationTest {
     }
 
     @Test
+    void observationRegistrationWrapsAuthenticationAndRateLimit() {
+        RagProperties properties = new RagProperties();
+        IntegrationObservationRecorder recorder =
+                mock(IntegrationObservationRecorder.class);
+        ObjectProvider<IntegrationObservationRecorder> recorders =
+                mock(ObjectProvider.class);
+        when(recorders.getIfAvailable()).thenReturn(recorder);
+        ObjectProvider<io.micrometer.core.instrument.MeterRegistry> registries =
+                mock(ObjectProvider.class);
+        when(registries.getIfAvailable())
+                .thenReturn(new SimpleMeterRegistry());
+
+        FilterRegistrationBean<Filter> registration =
+                configuration.integrationObservationFilterRegistration(
+                        properties,
+                        recorders,
+                        registries);
+
+        assertTrue(registration.getUrlPatterns().contains("/api/*"));
+        assertTrue(registration.getUrlPatterns().contains("/v1/*"));
+        assertEquals(-20, registration.getOrder());
+        assertTrue(registration.isEnabled());
+        assertInstanceOf(
+                IntegrationObservationFilter.class,
+                registration.getFilter());
+    }
+
+    @Test
+    void observationRegistrationBacksOffWithoutRecorder() {
+        contextRunner.run(context -> {
+            assertThat(context).hasNotFailed();
+            assertThat(context)
+                    .hasBean("integrationObservationFilterRegistration");
+            FilterRegistrationBean<?> registration = context.getBean(
+                    "integrationObservationFilterRegistration",
+                    FilterRegistrationBean.class);
+            assertFalse(registration.isEnabled());
+        });
+    }
+
+    @Test
+    void observationRegistrationIsCreatedWhenRecorderExists() {
+        contextRunner
+                .withUserConfiguration(ObservationConfiguration.class)
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(context)
+                            .hasBean("integrationObservationFilterRegistration");
+                    FilterRegistrationBean<?> registration = context.getBean(
+                            "integrationObservationFilterRegistration",
+                            FilterRegistrationBean.class);
+                    assertTrue(registration.isEnabled());
+                    assertInstanceOf(
+                            IntegrationObservationFilter.class,
+                            registration.getFilter());
+                });
+    }
+
+    @Test
     void localRateLimitDoesNotRequirePostgresStore() {
         RagProperties properties = new RagProperties();
         ObjectProvider<PostgresRateLimitStore> stores = mock(ObjectProvider.class);
@@ -149,6 +213,19 @@ class RagWebSecurityConfigurationTest {
         @Bean
         JdbcTemplate jdbcTemplate() {
             return mock(JdbcTemplate.class);
+        }
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    static class ObservationConfiguration {
+        @Bean
+        IntegrationObservationRecorder integrationObservationRecorder() {
+            return mock(IntegrationObservationRecorder.class);
+        }
+
+        @Bean
+        MeterRegistry meterRegistry() {
+            return new SimpleMeterRegistry();
         }
     }
 }

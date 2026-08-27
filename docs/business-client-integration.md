@@ -247,8 +247,9 @@ The default execution mode is read-only, while the default credential profile
 remains `READ_WRITE` for compatibility. Execution mode says whether the
 preflight mutates data; credential profile says which authority the caller
 should hold. The preflight verifies readiness, OpenAPI `1.0.0`, required
-operations, `/auth/me`, the capability profile, exact restricted allow-list
-equality, and the active state of every expected Collection:
+operations, `/integration-capabilities`, `/auth/me`, the capability profile,
+exact restricted allow-list equality, and the active state of every expected
+Collection:
 
 ```bash
 RAG_BINDING_BASE_URL=https://rag.example \
@@ -271,6 +272,22 @@ The Collection file is a JSON array of 1-100 unique visible-ASCII keys. The
 runner rejects query credentials, user-info, redirects, non-loopback HTTP, and
 insecure TLS bypasses. It accepts `X-API-Key` by default; set
 `RAG_BINDING_AUTH_SCHEME=BEARER` to use the equivalent Bearer header.
+
+Callers can fail closed when a deployment's runtime contract is below their
+minimum batch envelope or lacks operation observability:
+
+```bash
+RAG_BINDING_MIN_JSON_BATCH_ITEMS=10 \
+RAG_BINDING_MIN_JSON_BATCH_PAYLOAD_BYTES=1048576 \
+RAG_BINDING_REQUIRE_OPERATION_OBSERVABILITY=true \
+  ./scripts/business-client-binding-preflight.sh
+```
+
+The minimum item/payload values are optional positive integers. The
+observability requirement accepts only `true` or `false`. The runner always
+requires capability protocol `1.0` and valid machine-readable
+structured-record limits; configured minimums add deployment-specific
+constraints without changing the protocol version.
 
 An explicitly provisioned, non-business canary Collection may opt into a
 bounded mutation smoke. It requires both the mode and confirmation flag, and
@@ -298,11 +315,13 @@ Every run writes `preflight-report.json`, `summary.md`, and `steps.tsv` under
 `RAG_BINDING_PREFLIGHT_EVIDENCE_DIR` (or the default verification directory).
 The JSON report records the caller's `expectedCapabilityProfile` separately
 from `principal.capabilityProfile`, which remains `null` until introspection
-has verified the profile. It otherwise contains only low-sensitivity labels,
-counts, versions, status, and failure categories. It does not contain
-credentials, URLs, Collection keys, external IDs, payloads, or response
-bodies. Treat a failed preflight as a binding failure; do not continue
-delivery or weaken the checks to make a deployment pass.
+has verified the profile. It also records the capability protocol, verified
+JSON batch limits, observability feature, and configured minimum requirements.
+The report otherwise contains only low-sensitivity labels, counts, versions,
+status, and failure categories. It does not contain credentials, URLs,
+Collection keys, external IDs, payloads, or response bodies. Treat a failed
+preflight as a binding failure; do not continue delivery or weaken the checks
+to make a deployment pass.
 
 ## 5. JSON Record Mutation Contract
 
@@ -403,22 +422,45 @@ conditions.
 - Read document lifecycle or
   `/api/v1/rag/collections/embedding-readiness` for embedding availability.
   Use `/auth/me` plus Collection by-key probes for business binding.
-- Empty and upgraded databases must run Flyway V1-V52 in order. V49 adds
+- Empty and upgraded databases must run Flyway V1-V54 in order. V49 adds
   operation capabilities to stable principals; V50 adds the successful
   provisioning idempotency ledger without storing raw credentials; V51 adds
   unfiltered and status-filtered keyset indexes for Sync Run item receipts;
-  V52 adds a separate owner-scoped Collection-create idempotency ledger.
+  V52 adds a separate owner-scoped Collection-create idempotency ledger; V53
+  adds the model-invocation usage ledger; V54 adds bounded hourly integration
+  operation and authorized Collection-contribution rollups.
 - Pin production callers to an accepted Git commit or an immutable image built
   from it. Maven/API version remains `1.0.0`.
 - The added `/auth/me` fields remain backward-compatible. Older clients ignore
   them; clients that depend on capability/ACL verification must run the
   contract gate before rollout.
-- V49/V50/V51/V52 are forward-compatible additive migrations; do not destructively
+- V49 through V54 are forward-compatible additive migrations; do not destructively
   roll back their schema. If the application is rolled back to a version that
   does not understand operation capabilities, keyed principal/Collection
-  provisioning, or item receipts, retain the schema and stop clients that
-  require those contracts rather than starting permissively, retrying creates
-  without idempotency, or assuming the receipt endpoint remains available.
+  provisioning, item receipts, usage aggregation, or integration observability,
+  retain the schema and stop clients that require those contracts rather than
+  starting permissively or assuming the missing endpoint remains available.
+
+### Operation Observability
+
+When `features.optional.integrationObservability=true`, a principal with
+`RAG_READ` can query:
+
+```text
+GET /api/v1/rag/integration-observability
+```
+
+The default window is the latest 24 hours and the default bucket is `HOUR`.
+Use `operation` and `collectionKey` to narrow a diagnosis. NORMAL principals
+remain restricted to themselves and their current Collection authorization;
+root and database ADMIN may select `principalId` or query the global view.
+
+The response is a best-effort operational aggregate, not a mutation receipt,
+audit trail, quota counter, provider bill, or settlement source. Each request
+contributes once to totals; a multi-Collection request may also contribute to
+multiple authorized Collection rows, so Collection contributions must not be
+summed as request totals. Use JSON Record lookup/revision, Sync Run receipts,
+and lifecycle/readiness as the authoritative recovery mechanisms.
 
 ## 8. One-Command Integration Acceptance
 
@@ -448,14 +490,18 @@ BUSINESS_CLIENT_VERIFY_PHASE=real \
 ./scripts/verify-business-client-readiness.sh
 ```
 
-The full gate runs focused backend tests, three isolated PostgreSQL integration
+The full gate runs focused backend tests, four isolated PostgreSQL integration
 matrices, `mvn clean compile test-compile`, WebUI typecheck/Vitest/production
 build, core Mock Playwright, documentation/lock/secret/diff gates, and then a
 real Spring Boot service, the HTTP contract including deployed binding
 preflight, and real API-key Playwright. The HTTP contract proves that a
 keyed principal create is safe across instances, never replays a secret,
 reports current credential state after rotation/revocation, and exposes a
-caller-projected runtime capability contract. It also proves that a
+caller-projected runtime capability contract. Non-default limits of three JSON
+batch items and 2048 batch bytes prove the capability values match the real
+`400` enforcement boundary. The contract also queries operation/status/
+Collection rollups, denies cross-principal and cross-Collection observation,
+and verifies persistence across a service restart. It also proves that a
 read-only query principal can lookup/search but cannot upsert/delete and that
 the rejected writes leave revision/state unchanged; a read/write dispatcher
 continues to own mutations, and rotation preserves capabilities. It also runs
@@ -482,8 +528,9 @@ disposable `pgvector/pgvector:pg16`. Evidence is written under
 `.verification/business-client-readiness/<run-id>/`; exit traps delete private
 credential files. `release-manifest.json` records the result, verification
 phase, full Git SHA, initial tree state, project/OpenAPI versions, API base
-path, latest Flyway migration, passed steps, PostgreSQL image, and HTTP
-contract-check count, plus the verified `READ_ONLY` and `READ_WRITE` profiles.
+path, latest Flyway migration, passed steps, PostgreSQL image, HTTP
+contract-check count, verified `READ_ONLY`/`READ_WRITE` profiles, and the
+observed JSON batch item/payload limits plus operation-observability state.
 Runtime facts that were not reached are JSON `null`; the manifest stores no
 credential, URL, payload, external ID, or private path. The deterministic
 embedding stub verifies the real Spring AI embedding HTTP path and the 503
@@ -497,15 +544,12 @@ gate does not call a Chat LLM.
 - Capability discovery describes supported protocol behavior and current
   principal projection; `/auth/me`, Collection probes, and deployment-specific
   binding checks remain required.
-- Capability discovery currently publishes only the core identity and address
-  bounds. JSON Record batch, payload, filter, search, and Sync Run pagination
-  limits still come from configuration and contract documentation rather than
-  a complete runtime response.
-- Endpoint timers, SLOs, rate-limit meters, and Collection readiness are
-  currently separate runtime facts. The service does not yet expose a durable,
-  self-scoped data-plane operation aggregate by stable principal and authorized
-  Collection. Do not work around this boundary by adding principal IDs or
-  Collection keys as high-cardinality Micrometer tags.
+- Operation observability is an hourly, best-effort aggregate. Queue/database
+  failure can drop observations, the current-instance drop count is not a
+  cluster-wide loss ledger, and the API does not provide per-request traces.
+- The operation catalog is intentionally finite and focused on the integration
+  data plane. Do not work around that boundary by adding principal IDs,
+  Collection keys, dynamic URLs, or external IDs as Micrometer tags.
 
 See the [TODO](TODO.md#managed-api-principal-follow-ups) for these follow-up
 boundaries.

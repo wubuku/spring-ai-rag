@@ -526,13 +526,13 @@ rag:
 ```yaml
 rag:
   structured-records:
-    max-jsonb-payload-bytes: 1048576
-    max-retrieval-text-chars: 10000
-    max-batch-size: 20
-    max-batch-payload-bytes: 10485760
-    max-search-results: 20
-    max-payload-filter-bytes: 16384
-    max-payload-filter-depth: 8
+    max-jsonb-payload-bytes: ${RAG_STRUCTURED_RECORDS_MAX_JSONB_PAYLOAD_BYTES:1048576}
+    max-retrieval-text-chars: ${RAG_STRUCTURED_RECORDS_MAX_RETRIEVAL_TEXT_CHARS:10000}
+    max-batch-size: ${RAG_STRUCTURED_RECORDS_MAX_BATCH_SIZE:20}
+    max-batch-payload-bytes: ${RAG_STRUCTURED_RECORDS_MAX_BATCH_PAYLOAD_BYTES:10485760}
+    max-search-results: ${RAG_STRUCTURED_RECORDS_MAX_SEARCH_RESULTS:20}
+    max-payload-filter-bytes: ${RAG_STRUCTURED_RECORDS_MAX_PAYLOAD_FILTER_BYTES:16384}
+    max-payload-filter-depth: ${RAG_STRUCTURED_RECORDS_MAX_PAYLOAD_FILTER_DEPTH:8}
     agent-tool-enabled: ${RAG_JSON_AGENT_TOOL_ENABLED:false}
     agent-tool-max-results: 5
     agent-tool-max-payload-bytes: 32768
@@ -546,6 +546,49 @@ intentionally has no payload hash setting. `payloadContains` uses PostgreSQL
 and maximum depth 8. The optional Spring AI `searchJsonRecords` tool is disabled
 by default. When enabled, the server injects Collection/ACL scope; the model may
 only supply the query, payload subtree, and result limit.
+
+## Integration Operation Observability
+
+```yaml
+rag:
+  integration-observability:
+    enabled: ${RAG_INTEGRATION_OBSERVABILITY_ENABLED:true}
+    retention: ${RAG_INTEGRATION_OBSERVABILITY_RETENTION:90d}
+    max-query-range: ${RAG_INTEGRATION_OBSERVABILITY_MAX_QUERY_RANGE:31d}
+    max-collection-breakdown-items: ${RAG_INTEGRATION_OBSERVABILITY_MAX_COLLECTION_BREAKDOWN_ITEMS:100}
+    queue-capacity: ${RAG_INTEGRATION_OBSERVABILITY_QUEUE_CAPACITY:10000}
+    flush-batch-size: ${RAG_INTEGRATION_OBSERVABILITY_FLUSH_BATCH_SIZE:500}
+    flush-interval: ${RAG_INTEGRATION_OBSERVABILITY_FLUSH_INTERVAL:1s}
+    shutdown-drain-timeout: ${RAG_INTEGRATION_OBSERVABILITY_SHUTDOWN_DRAIN_TIMEOUT:5s}
+    cleanup-batch-size: ${RAG_INTEGRATION_OBSERVABILITY_CLEANUP_BATCH_SIZE:5000}
+    cleanup-interval: ${RAG_INTEGRATION_OBSERVABILITY_CLEANUP_INTERVAL:1h}
+```
+
+| Property | Default | Validation / meaning |
+|---|---:|---|
+| `enabled` | `true` | Enables recording and the query API; disabled queries return `503` |
+| `retention` | `90d` | Whole days, 7–730 days |
+| `max-query-range` | `31d` | Whole days, 1–90 days, and no greater than retention |
+| `max-collection-breakdown-items` | `100` | 1–1000 Collection contribution rows |
+| `queue-capacity` | `10000` | 100–100000 request observations |
+| `flush-batch-size` | `500` | 10–5000 and no greater than queue capacity |
+| `flush-interval` | `1s` | 100 ms–60 s |
+| `shutdown-drain-timeout` | `5s` | 0–30 s |
+| `cleanup-batch-size` | `5000` | 100–50000 expired rows per bounded delete |
+| `cleanup-interval` | `1h` | 1 minute–24 hours |
+
+The recorder classifies a finite set of stable integration routes, captures
+final HTTP status and wall duration, and asynchronously upserts UTC hourly
+rollups. Queue/repository failure is fail-open for the business request and is
+visible through fixed-reason counters. `GET /api/v1/rag/integration-observability`
+returns best-effort aggregate data; it is not billing, quota, audit, or a
+mutation receipt.
+
+Micrometer uses only fixed low-cardinality tags:
+`operation`, `status_class`, `principal_type`, `result`, and `reason`.
+Principal IDs, Collection keys, external IDs, request paths, and payloads are
+not tags. V54 stores stable principal/Collection references only in PostgreSQL
+aggregate rows.
 
 ## Chat Execution Configuration
 
@@ -1148,7 +1191,8 @@ repair control planes; V46/V47 add durable Chat summaries and turn operations;
 V48–V50 add stable managed principals, operation capabilities, shared quota,
 and principal-provisioning idempotency; V51 adds Sync Run item-receipt cursor
 indexes; V52 adds the caller-scoped Collection-create idempotency ledger; V53
-adds the principal-scoped model-invocation usage ledger.
+adds the principal-scoped model-invocation usage ledger; V54 adds bounded UTC
+hourly integration-operation and authorized Collection-contribution rollups.
 
 ## Profile Overview
 

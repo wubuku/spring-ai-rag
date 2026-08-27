@@ -115,9 +115,9 @@ class LlmUsagePostgresIntegrationTest {
     }
 
     @Test
-    void migratesThroughV53AndCreatesBoundedLedgerIndexes() {
+    void latestMigrationRetainsV53LedgerAndBoundedIndexes() {
         assertEquals(
-                "53",
+                "54",
                 jdbc.queryForObject(
                         """
                         SELECT version

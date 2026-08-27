@@ -322,6 +322,9 @@ run_binding_preflight() {
   RAG_BINDING_PREFLIGHT_MODE="$mode" \
   RAG_BINDING_AUTH_SCHEME="$auth_scheme" \
   RAG_BINDING_EXPECTED_CAPABILITY_PROFILE="$capability_profile" \
+  RAG_BINDING_MIN_JSON_BATCH_ITEMS=3 \
+  RAG_BINDING_MIN_JSON_BATCH_PAYLOAD_BYTES=2048 \
+  RAG_BINDING_REQUIRE_OPERATION_OBSERVABILITY=true \
   RAG_BINDING_CANARY_CONFIRM="$([[ "$mode" == "CANARY_MUTATION" ]] && printf 'YES' || true)" \
   RAG_BINDING_CANARY_COLLECTION_KEY="$([[ "$mode" == "CANARY_MUTATION" ]] && jq -er '.[0]' "$collections_file" || true)" \
   RAG_BINDING_CANARY_RETRIEVAL_MARKER="$marker" \
@@ -363,6 +366,13 @@ assert_binding_report() {
       and .expectedCapabilityProfile == $expectedProfile
       and .principal.capabilityProfile
         == (if $verifiedProfile == "" then null else $verifiedProfile end)
+      and .capability.protocolVersion == "1.0"
+      and .capability.jsonBatchItems == 3
+      and .capability.jsonBatchPayloadBytes == 2048
+      and .capability.operationObservability == true
+      and .requirements.minJsonBatchItems == 3
+      and .requirements.minJsonBatchPayloadBytes == 2048
+      and .requirements.requireOperationObservability == true
       and .verification.requiredOperationCount == 6
       and .failureCategory == (if $result == "PASS" then null else $category end)
       and .verification.canaryFinalState
@@ -525,6 +535,53 @@ write_upsert_request() {
         embeddingPolicy:$embeddingPolicy
       }' > "$output"
   fi
+}
+
+write_batch_request() {
+  local output="$1" collection_key="$2" item_count="$3"
+  local payload_chars="${4:-32}"
+  jq -n \
+    --arg key "$collection_key" \
+    --argjson count "$item_count" \
+    --argjson payloadChars "$payload_chars" \
+    '{
+      items:[
+        range(0; $count) as $index
+        | {
+          collectionKey:$key,
+          sourceNamespace:"business-client.batch-contract.v1",
+          externalId:("batch-record-" + ($index | tostring)),
+          sourceRevision:"batch-rev-1",
+          title:("Batch Record " + ($index | tostring)),
+          retrievalText:("batch contract record " + ($index | tostring)),
+          jsonbPayload:{
+            schemaVersion:"batch-contract.v1",
+            index:$index,
+            padding:("x" * $payloadChars)
+          },
+          embeddingPolicy:"SKIP"
+        }
+      ]
+    }' > "$output"
+}
+
+wait_for_operation_rollup() {
+  local auth_config="$1" operation="$2" expected_count="$3"
+  local output="$4"
+  local attempt code
+  for attempt in $(seq 1 80); do
+    code="$(query_request GET "${API}/integration-observability" \
+      "$auth_config" "$output" "${output}.headers" \
+      "operation=${operation}")"
+    if [[ "$code" == "200" ]] \
+        && jq -e --argjson expected "$expected_count" \
+          '.totals.requestCount == $expected' "$output" >/dev/null; then
+      return 0
+    fi
+    sleep 0.1
+  done
+  echo "Timed out waiting for ${operation} rollup count ${expected_count}" >&2
+  return 1
 }
 
 prepare_client_envelopes() {
@@ -1423,6 +1480,87 @@ assert_binding_report \
   "$QUERY_SECRET_FILE" "READ_WRITE" "" \
   "$COLLECTION_A" "$COLLECTION_SHARED"
 
+BATCH_SUCCESS_REQUEST="${CONTRACT_PRIVATE}/batch-success.request.json"
+write_batch_request "$BATCH_SUCCESS_REQUEST" "$COLLECTION_THROTTLED" 3 32
+BATCH_SUCCESS_RESPONSE="${CONTRACT_PRIVATE}/batch-success.json"
+BATCH_SUCCESS_HEADERS="${BATCH_SUCCESS_RESPONSE}.headers"
+code="$(request POST "${API}/json-records/batch-upsert" \
+  "$THROTTLED_CONFIG" "$BATCH_SUCCESS_RESPONSE" \
+  "$BATCH_SUCCESS_HEADERS" "$BATCH_SUCCESS_REQUEST")"
+assert_status "$code" 200 "runtime-advertised JSON batch item boundary"
+assert_json "$BATCH_SUCCESS_RESPONSE" \
+  '.summary.total == 3 and .summary.persistenceFailed == 0' \
+  "three-item JSON batch succeeds at the advertised limit"
+
+BATCH_TOO_MANY_REQUEST="${CONTRACT_PRIVATE}/batch-too-many.request.json"
+write_batch_request "$BATCH_TOO_MANY_REQUEST" "$COLLECTION_THROTTLED" 4 8
+BATCH_TOO_MANY_RESPONSE="${CONTRACT_PRIVATE}/batch-too-many.json"
+BATCH_TOO_MANY_HEADERS="${BATCH_TOO_MANY_RESPONSE}.headers"
+code="$(request POST "${API}/json-records/batch-upsert" \
+  "$THROTTLED_CONFIG" "$BATCH_TOO_MANY_RESPONSE" \
+  "$BATCH_TOO_MANY_HEADERS" "$BATCH_TOO_MANY_REQUEST")"
+assert_status "$code" 400 "JSON batch above advertised item limit"
+
+BATCH_TOO_LARGE_REQUEST="${CONTRACT_PRIVATE}/batch-too-large.request.json"
+write_batch_request "$BATCH_TOO_LARGE_REQUEST" "$COLLECTION_THROTTLED" 1 2100
+BATCH_TOO_LARGE_RESPONSE="${CONTRACT_PRIVATE}/batch-too-large.json"
+BATCH_TOO_LARGE_HEADERS="${BATCH_TOO_LARGE_RESPONSE}.headers"
+code="$(request POST "${API}/json-records/batch-upsert" \
+  "$THROTTLED_CONFIG" "$BATCH_TOO_LARGE_RESPONSE" \
+  "$BATCH_TOO_LARGE_HEADERS" "$BATCH_TOO_LARGE_REQUEST")"
+assert_status "$code" 400 "JSON batch above advertised payload limit"
+
+BATCH_OBSERVABILITY="${CONTRACT_PRIVATE}/batch-observability.json"
+wait_for_operation_rollup \
+  "$THROTTLED_CONFIG" "JSON_RECORD_BATCH_UPSERT" 3 "$BATCH_OBSERVABILITY"
+assert_no_store "${BATCH_OBSERVABILITY}.headers" \
+  "self integration observability"
+assert_json_with_args "$BATCH_OBSERVABILITY" \
+  "self observability reports exact batch status totals" \
+  --arg principal "$THROTTLED_PRINCIPAL_ID" \
+  '.scope.principalId == $principal
+    and .scope.operation == "JSON_RECORD_BATCH_UPSERT"
+    and .totals.requestCount == 3
+    and (.byStatus | map({key:(.httpStatus | tostring), value:.totals.requestCount})
+      | from_entries) == {"200":1,"400":2}
+    and .byOperation == [{
+      operation:"JSON_RECORD_BATCH_UPSERT",
+      totals:.totals
+    }]
+    and .completeness.mode == "BEST_EFFORT"
+    and .completeness.recordingEnabled == true'
+
+BATCH_COLLECTION_OBSERVABILITY="${CONTRACT_PRIVATE}/batch-collection-observability.json"
+code="$(query_request GET "${API}/integration-observability" \
+  "$THROTTLED_CONFIG" "$BATCH_COLLECTION_OBSERVABILITY" \
+  "${BATCH_COLLECTION_OBSERVABILITY}.headers" \
+  "operation=JSON_RECORD_BATCH_UPSERT" \
+  "collectionKey=${COLLECTION_THROTTLED}")"
+assert_status "$code" 200 "Collection-scoped self observability"
+assert_json_with_args "$BATCH_COLLECTION_OBSERVABILITY" \
+  "Collection contribution excludes pre-resolution rejected batches" \
+  --arg key "$COLLECTION_THROTTLED" \
+  '.scope.collectionKey == $key
+    and .totals.requestCount == 1
+    and .collectionContributions == [{
+      collectionKey:$key,
+      totals:.totals
+    }]'
+
+BATCH_CROSS_PRINCIPAL="${CONTRACT_PRIVATE}/batch-cross-principal.json"
+code="$(query_request GET "${API}/integration-observability" \
+  "$THROTTLED_CONFIG" "$BATCH_CROSS_PRINCIPAL" \
+  "${BATCH_CROSS_PRINCIPAL}.headers" \
+  "principalId=${QUERY_PRINCIPAL_ID}")"
+assert_status "$code" 403 "normal principal cross-principal observability"
+
+BATCH_CROSS_COLLECTION="${CONTRACT_PRIVATE}/batch-cross-collection.json"
+code="$(query_request GET "${API}/integration-observability" \
+  "$THROTTLED_CONFIG" "$BATCH_CROSS_COLLECTION" \
+  "${BATCH_CROSS_COLLECTION}.headers" \
+  "collectionKey=${COLLECTION_A}")"
+assert_status "$code" 403 "normal principal cross-Collection observability"
+
 run_binding_preflight \
   "canary-success" "CANARY_MUTATION" "BEARER" "$CANARY_SECRET_FILE" \
   "$PREFLIGHT_CANARY_COLLECTIONS" "READ_WRITE" 0
@@ -2320,6 +2458,8 @@ UNRESTRICTED_KEY_ID=""
   printf 'identity_boundary=namespace_128_external_255_revision_255\n'
   printf 'principal_contract=root_two_restricted_unrestricted\n'
   printf 'capability_contract=query_read_only_dispatcher_read_write_preflight_rotation\n'
+  printf 'runtime_limit_contract=non_default_batch_items_payload_enforced\n'
+  printf 'observability_contract=self_status_collection_acl_restart_persistence\n'
   printf 'dual_collection_contract=tenant_and_shared_query_cross_dispatcher_acl_rotation\n'
   printf 'client_envelope_contract=compiled_sanitized_cas_tombstone_restore_lifecycle\n'
   printf 'acl_contract=bidirectional_full_data_plane_anti_enumeration\n'

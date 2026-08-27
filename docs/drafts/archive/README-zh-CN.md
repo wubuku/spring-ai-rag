@@ -59,5 +59,7 @@
   `2026-08-26_MANAGED_PROVISIONING_CAPABILITY_DISCOVERY_*`
 - Sync Run 持久化逐项回执、状态过滤和终态稳定游标遍历：
   `2026-08-26_SYNC_RUN_ITEM_RECEIPTS_*`
+- 外部接入运行时限制自发现、数据面操作聚合与隐私安全的运维查询：
+  `2026-08-27_EXTERNAL_INTEGRATION_OPERABILITY_*`
 
 该列表只帮助历史定位，不代表优先级或当前能力状态。

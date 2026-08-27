@@ -4,11 +4,16 @@ import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.entity.RagCollection;
 import com.springairag.core.exception.RagException;
 import com.springairag.core.repository.RagCollectionRepository;
+import com.springairag.core.observability.IntegrationObservationContext;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.util.List;
 import java.util.Map;
@@ -33,6 +38,11 @@ class CollectionIdentityResolverTest {
     @BeforeEach
     void setUp() {
         resolver = new CollectionIdentityResolver(repository);
+    }
+
+    @AfterEach
+    void clearRequestContext() {
+        RequestContextHolder.resetRequestAttributes();
     }
 
     @Test
@@ -142,6 +152,7 @@ class CollectionIdentityResolverTest {
 
     @Test
     void activeKeysUseOneBatchRepositoryCallAndPreserveOrder() {
+        MockHttpServletRequest request = bindRequest();
         when(repository.findAllByCollectionKeyInAndDeletedFalse(any()))
                 .thenReturn(List.of(
                         collection(1L, "one", false),
@@ -153,22 +164,45 @@ class CollectionIdentityResolverTest {
         verify(repository).findAllByCollectionKeyInAndDeletedFalse(any());
         verify(repository, never())
                 .findByCollectionKeyAndDeletedFalse(any());
+        assertEquals(List.of(1L, 2L),
+                IntegrationObservationContext.authorizedCollectionIds(request));
     }
 
     @Test
     void restrictedResolutionOnlyLoadsAllowedCollections() {
+        MockHttpServletRequest request = bindRequest();
         when(repository.findAllById(List.of(2L, 4L))).thenReturn(List.of(
                 collection(2L, "two", false),
                 collection(4L, "four", false)));
 
         assertEquals(List.of(4L, 2L), resolver.resolveActiveIdsWithinAllowed(
                 List.of("four", "two", "four"), List.of(2L, 4L)));
+        assertEquals(List.of(2L, 4L),
+                IntegrationObservationContext.authorizedCollectionIds(request));
         verify(repository, never()).findByCollectionKeyAndDeletedFalse("four");
 
+        RequestContextHolder.resetRequestAttributes();
+        request = bindRequest();
         RagException unauthorized = assertThrows(RagException.class,
                 () -> resolver.resolveActiveIdsWithinAllowed(
                         List.of("outside"), List.of(2L, 4L)));
         assertEquals(ErrorCode.COLLECTION_NOT_FOUND, unauthorized.getErrorCodeEnum());
+        assertEquals(List.of(),
+                IntegrationObservationContext.authorizedCollectionIds(request));
+    }
+
+    @Test
+    void mixedBatchScopeCapturesOnlyAfterIdsAndKeysAgree() {
+        MockHttpServletRequest request = bindRequest();
+        when(repository.findByIdAndDeletedFalse(1L))
+                .thenReturn(Optional.of(collection(1L, "one", false)));
+        when(repository.findAllByCollectionKeyInAndDeletedFalse(any()))
+                .thenReturn(List.of(collection(2L, "two", false)));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> resolver.resolveActiveIds(List.of(1L), List.of("two")));
+        assertEquals(List.of(),
+                IntegrationObservationContext.authorizedCollectionIds(request));
     }
 
     @Test
@@ -209,5 +243,11 @@ class CollectionIdentityResolverTest {
         collection.setName(key);
         collection.setDeleted(deleted);
         return collection;
+    }
+
+    private MockHttpServletRequest bindRequest() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
+        return request;
     }
 }

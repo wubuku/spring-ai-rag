@@ -16,7 +16,7 @@ Release date: `2026-07-21`
 - [x] Helm `version` and `appVersion` are `1.0.0`
 - [x] Docker/Helm default image tag is `1.0.0`
 - [x] Local, Docker, and Helm default port is `8081`
-- [x] Flyway inventory is V1-V53
+- [x] Flyway inventory is V1-V54
 - [x] JSONB structured-record API, payload snapshots, and collection lifecycle are covered
 - [x] `scripts/verify-jsonb-records.sh` records focused backend/database/frontend verification
 - [x] Document PATCH/disable/restore/permanent-delete and external triple identity are covered
@@ -207,6 +207,28 @@ Release date: `2026-07-21`
 - [ ] Real-LLM lifecycle acceptance records plain, knowledge, agent, fallback,
   summary, replay, and usage-ledger evidence without storing prompts, answers,
   keys, or tool payloads.
+
+### 2026-08-27 External Integration Operability Gates
+
+- [x] V54 adds bounded UTC hourly request totals and authorized Collection
+  contributions without request/response bodies, queries, payloads, external
+  IDs, credentials, dynamic URLs, or exception text.
+- [x] `/integration-capabilities` keeps protocol `1.0` and additively publishes
+  structured-record, Sync Run, and observability runtime limits plus
+  `features.optional.integrationObservability`.
+- [x] `GET /api/v1/rag/integration-observability` provides self/current-ACL
+  NORMAL access and root/ADMIN management access with bounded HOUR/DAY windows,
+  status/operation/Collection breakdowns, and explicit best-effort
+  completeness.
+- [x] Recording uses an asynchronous bounded queue, grouped PostgreSQL upsert,
+  bounded retention/shutdown drain, fail-open business semantics, and fixed
+  low-cardinality Micrometer tags.
+- [x] The deployed binding preflight can require minimum JSON batch item/
+  payload limits and operation observability; its report and the readiness
+  release manifest retain only non-sensitive runtime facts.
+- [ ] The final merged-baseline readiness gate records focused/PostgreSQL/
+  Maven/WebUI/Mock/real-HTTP evidence, real LLM/Embedding acceptance, and three
+  consecutive no-change reviews.
 
 ### Final Evidence (2026-07-21)
 

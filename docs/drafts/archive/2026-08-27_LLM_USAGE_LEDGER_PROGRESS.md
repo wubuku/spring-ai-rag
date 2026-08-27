@@ -2,7 +2,7 @@
 
 > **状态**：已合并到 `main` 并完成 Git/worktree 交付
 >
-> **对应规划**：[NEXT_HIGH_VALUE_FEATURES_PLAN.md](NEXT_HIGH_VALUE_FEATURES_PLAN.md)
+> **对应规划**：[2026-08-27_LLM_USAGE_LEDGER_PLAN.md](2026-08-27_LLM_USAGE_LEDGER_PLAN.md)
 >
 > **规划基线**：`main` / `origin/main` @ `7b6f01ad`（2026-08-26）
 >

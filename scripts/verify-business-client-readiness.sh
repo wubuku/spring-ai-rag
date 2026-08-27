@@ -12,6 +12,7 @@ POSTGRES_DATABASE="${BUSINESS_CLIENT_POSTGRES_DATABASE:-business_client_readines
 MANAGED_DATABASE="${POSTGRES_DATABASE}_managed"
 LIFECYCLE_DATABASE="${POSTGRES_DATABASE}_lifecycle"
 JSONB_DATABASE="${POSTGRES_DATABASE}_jsonb"
+OBSERVABILITY_DATABASE="${POSTGRES_DATABASE}_observability"
 POSTGRES_USERNAME="${BUSINESS_CLIENT_POSTGRES_USERNAME:-postgres}"
 POSTGRES_PASSWORD="${BUSINESS_CLIENT_POSTGRES_PASSWORD:-postgres}"
 BACKEND_PORT="${BUSINESS_CLIENT_BACKEND_PORT:-18084}"
@@ -34,6 +35,9 @@ STEP_INDEX=0
 API_VERSION=""
 HTTP_CONTRACT_CHECKS=""
 RUNTIME_FLYWAY_MIGRATION=""
+RUNTIME_JSON_BATCH_ITEMS=""
+RUNTIME_JSON_BATCH_PAYLOAD_BYTES=""
+RUNTIME_OPERATION_OBSERVABILITY=""
 EMBEDDING_FAIL_MARKER="${BUSINESS_CLIENT_EMBEDDING_FAIL_MARKER:-contract-failure-${RUN_ID}}"
 
 mkdir -p "$PRIVATE_DIR"
@@ -180,6 +184,9 @@ write_release_manifest() {
   MANIFEST_PASSED_STEPS="$PASS_COUNT" \
   MANIFEST_POSTGRES_IMAGE="$POSTGRES_IMAGE" \
   MANIFEST_HTTP_CHECKS="$HTTP_CONTRACT_CHECKS" \
+  MANIFEST_JSON_BATCH_ITEMS="$RUNTIME_JSON_BATCH_ITEMS" \
+  MANIFEST_JSON_BATCH_PAYLOAD_BYTES="$RUNTIME_JSON_BATCH_PAYLOAD_BYTES" \
+  MANIFEST_OPERATION_OBSERVABILITY="$RUNTIME_OPERATION_OBSERVABILITY" \
     python3 - "$LOG_DIR/release-manifest.json" <<'PY'
 import json
 import os
@@ -193,6 +200,14 @@ def nullable_string(name: str):
 def nullable_int(name: str):
     value = os.environ.get(name, "").strip()
     return int(value) if value else None
+
+def nullable_bool(name: str):
+    value = os.environ.get(name, "").strip()
+    if not value:
+        return None
+    if value not in {"true", "false"}:
+        raise SystemExit(f"{name} must be true or false")
+    return value == "true"
 
 manifest = {
     "schemaVersion": 1,
@@ -215,6 +230,15 @@ manifest = {
         "postgresImage": os.environ["MANIFEST_POSTGRES_IMAGE"],
         "httpContractChecks": nullable_int("MANIFEST_HTTP_CHECKS"),
         "capabilityProfiles": ["READ_ONLY", "READ_WRITE"],
+        "runtimeLimits": {
+            "jsonBatchItems": nullable_int("MANIFEST_JSON_BATCH_ITEMS"),
+            "jsonBatchPayloadBytes": nullable_int(
+                "MANIFEST_JSON_BATCH_PAYLOAD_BYTES"
+            ),
+            "operationObservability": nullable_bool(
+                "MANIFEST_OPERATION_OBSERVABILITY"
+            ),
+        },
     },
 }
 path = Path(sys.argv[1])
@@ -271,6 +295,7 @@ assert artifact["latestFlywayMigration"] > 0
 verification = manifest["verification"]
 assert set(verification) == {
     "passedSteps", "postgresImage", "httpContractChecks", "capabilityProfiles",
+    "runtimeLimits",
 }
 assert isinstance(verification["passedSteps"], int)
 assert verification["passedSteps"] >= 0
@@ -281,6 +306,21 @@ assert verification["httpContractChecks"] is None or (
     and verification["httpContractChecks"] > 0
 )
 assert verification["capabilityProfiles"] == ["READ_ONLY", "READ_WRITE"]
+runtime_limits = verification["runtimeLimits"]
+assert set(runtime_limits) == {
+    "jsonBatchItems", "jsonBatchPayloadBytes", "operationObservability",
+}
+assert runtime_limits["jsonBatchItems"] is None or (
+    isinstance(runtime_limits["jsonBatchItems"], int)
+    and runtime_limits["jsonBatchItems"] > 0
+)
+assert runtime_limits["jsonBatchPayloadBytes"] is None or (
+    isinstance(runtime_limits["jsonBatchPayloadBytes"], int)
+    and runtime_limits["jsonBatchPayloadBytes"] > 0
+)
+assert runtime_limits["operationObservability"] is None or isinstance(
+    runtime_limits["operationObservability"], bool
+)
 
 if manifest["result"] == "PASS":
     assert artifact["apiVersion"] == "1.0.0"
@@ -288,6 +328,11 @@ if manifest["result"] == "PASS":
     runtime_flyway = os.environ.get("EXPECTED_RUNTIME_FLYWAY", "").strip()
     assert runtime_flyway
     assert int(runtime_flyway) == artifact["latestFlywayMigration"]
+    assert runtime_limits == {
+        "jsonBatchItems": 3,
+        "jsonBatchPayloadBytes": 2048,
+        "operationObservability": True,
+    }
 if manifest["result"] == "PASS" and os.environ["EXPECTED_REQUIRE_CLEAN"] == "true":
     assert git["treeState"] == "CLEAN"
 PY
@@ -390,7 +435,11 @@ focused_backend_tests() {
 ApiCapabilityFilterTest,OpenApiContractTest,ApiKeyAuthFilterTest,\
 ApiKeyCollectionAccessTest,\
 RagJsonRecordControllerWebTest,JsonRecordServiceTest,CollectionKeyValidatorTest,\
-SourceNamespaceValidatorTest,EmbeddingModelConfigTest,DocumentMutationServiceTest \
+SourceNamespaceValidatorTest,EmbeddingModelConfigTest,DocumentMutationServiceTest,\
+IntegrationObservabilityQueryServiceTest,IntegrationObservabilityControllerWebTest,\
+IntegrationOperationClassifierTest,IntegrationPrincipalProjectionTest,\
+IntegrationObservationTest,IntegrationObservationContextTest,\
+IntegrationObservationRecorderTest,IntegrationObservationFilterTest \
     -Dsurefire.failIfNoSpecifiedTests=false test
 }
 
@@ -442,7 +491,8 @@ start_postgres() {
 
   local database_name
   for database_name in \
-      "$MANAGED_DATABASE" "$LIFECYCLE_DATABASE" "$JSONB_DATABASE"; do
+      "$MANAGED_DATABASE" "$LIFECYCLE_DATABASE" "$JSONB_DATABASE" \
+      "$OBSERVABILITY_DATABASE"; do
     docker exec "$POSTGRES_CONTAINER" createdb \
       -U "$POSTGRES_USERNAME" "$database_name" || return 1
   done
@@ -464,6 +514,7 @@ postgres_integration_matrix() {
   local managed_url="jdbc:postgresql://127.0.0.1:${POSTGRES_PORT}/${MANAGED_DATABASE}"
   local lifecycle_url="jdbc:postgresql://127.0.0.1:${POSTGRES_PORT}/${LIFECYCLE_DATABASE}"
   local jsonb_url="jdbc:postgresql://127.0.0.1:${POSTGRES_PORT}/${JSONB_DATABASE}"
+  local observability_url="jdbc:postgresql://127.0.0.1:${POSTGRES_PORT}/${OBSERVABILITY_DATABASE}"
 
   MANAGED_API_PRINCIPAL_IT_JDBC_URL="$managed_url" \
   MANAGED_API_PRINCIPAL_IT_USERNAME="$POSTGRES_USERNAME" \
@@ -491,8 +542,18 @@ postgres_integration_matrix() {
     "-Djsonb.it.username=${POSTGRES_USERNAME}" \
     "-Djsonb.it.password=${POSTGRES_PASSWORD}" \
     -Dtest=JsonbStructuredRecordsPostgresIntegrationTest \
-    -Dsurefire.failIfNoSpecifiedTests=false test || return 1
-  assert_surefire_report JsonbStructuredRecordsPostgresIntegrationTest
+      -Dsurefire.failIfNoSpecifiedTests=false test || return 1
+  assert_surefire_report JsonbStructuredRecordsPostgresIntegrationTest || return 1
+
+  INTEGRATION_OBSERVABILITY_IT_JDBC_URL="$observability_url" \
+  INTEGRATION_OBSERVABILITY_IT_USERNAME="$POSTGRES_USERNAME" \
+  INTEGRATION_OBSERVABILITY_IT_PASSWORD="$POSTGRES_PASSWORD" \
+  INTEGRATION_OBSERVABILITY_IT_CLEAN_CONFIRM=YES \
+    mvn -pl spring-ai-rag-core -am \
+      -Dintegration-observability.it.enabled=true \
+      -Dtest=IntegrationObservabilityPostgresIntegrationTest \
+      -Dsurefire.failIfNoSpecifiedTests=false test || return 1
+  assert_surefire_report IntegrationObservabilityPostgresIntegrationTest
 }
 
 backend_compile() {
@@ -625,6 +686,10 @@ start_backend() {
     export RAG_EMBEDDING_JOBS_RETRY_BACKOFF_SECONDS=1
     export RAG_EMBEDDING_JOBS_DEFAULT_MAX_ATTEMPTS=1
     export RAG_EMBEDDING_JOBS_MAX_ATTEMPTS=1
+    export RAG_STRUCTURED_RECORDS_MAX_BATCH_SIZE=3
+    export RAG_STRUCTURED_RECORDS_MAX_BATCH_PAYLOAD_BYTES=2048
+    export RAG_INTEGRATION_OBSERVABILITY_ENABLED=true
+    export RAG_INTEGRATION_OBSERVABILITY_FLUSH_INTERVAL=250ms
     exec java -cp "$RUNTIME_CLASSPATH" \
       com.springairag.core.SpringAiRagApplication
   ) > "$log_path" 2>&1 &
@@ -656,6 +721,28 @@ start_backend() {
     "$api_docs_file")" || return 1
   [[ "$API_VERSION" == "1.0.0" ]] || {
     echo "Unexpected runtime OpenAPI version: ${API_VERSION}" >&2
+    return 1
+  }
+
+  local root_config="${PRIVATE_DIR}/runtime-root.curl"
+  local capability_file="${LOG_DIR}/runtime-capabilities.json"
+  write_private_auth_config "$root_config" "${PRIVATE_DIR}/root.key"
+  curl --config "$root_config" \
+    "http://127.0.0.1:${BACKEND_PORT}/api/v1/rag/integration-capabilities" \
+    > "$capability_file" || return 1
+  RUNTIME_JSON_BATCH_ITEMS="$(
+    jq -er '.limits.structuredRecords.maxBatchItems' "$capability_file"
+  )" || return 1
+  RUNTIME_JSON_BATCH_PAYLOAD_BYTES="$(
+    jq -er '.limits.structuredRecords.maxBatchPayloadBytes' "$capability_file"
+  )" || return 1
+  RUNTIME_OPERATION_OBSERVABILITY="$(
+    jq -r '.features.optional.integrationObservability' "$capability_file"
+  )" || return 1
+  [[ "$RUNTIME_JSON_BATCH_ITEMS" == "3"
+      && "$RUNTIME_JSON_BATCH_PAYLOAD_BYTES" == "2048"
+      && "$RUNTIME_OPERATION_OBSERVABILITY" == "true" ]] || {
+    echo "Unexpected runtime integration capability limits" >&2
     return 1
   }
 }
@@ -987,6 +1074,8 @@ script_static_checks() {
 from pathlib import Path
 
 path = Path("scripts/test-support/openai-embedding-stub.py")
+compile(path.read_text(encoding="utf-8"), str(path), "exec")
+path = Path("scripts/test-support/business-client-capability-stub.py")
 compile(path.read_text(encoding="utf-8"), str(path), "exec")
 '
   [[ "$INITIAL_COMMIT" =~ ^[0-9a-f]{40}$ ]] || return 1

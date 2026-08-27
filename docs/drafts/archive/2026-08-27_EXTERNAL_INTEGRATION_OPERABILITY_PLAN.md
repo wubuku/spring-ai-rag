@@ -1,19 +1,20 @@
 # 外部业务接入合同完备性与数据面可运维性实施规划
 
-> **状态**：规划完成后等待人工审查；未获授权前不得开始实施
+> **状态**：实施与最终验收完成；已归档
 >
 > **规划日期**：2026-08-27
 >
-> **代码事实基线**：`main` / `origin/main` @ `5f6d4eb0`；Spring Boot `3.5.16`；
-> Spring AI `1.1.8`；Java `21`；Flyway 已发布到 `V52`
+> **实施事实基线**：`main` / `origin/main` @ `0993b702`；Spring Boot `3.5.16`；
+> Spring AI `1.1.8`；Java `21`；Flyway 已发布到 `V53`
 >
-> **规划工作区**：
-> `/Users/yangjiefeng/.hermes/workspace/spring-ai-rag-main-delivery`
+> **实施分支**：`feat/external-integration-operability-20260827`
 >
-> **并行工作约束**：当前另有模型调用用量账本在专用 worktree 实施，预占 `V53`、
-> `usage` 包和 WebUI Metrics 页面。本规划不修改该任务的 plan/progress，不复用 `V53`，
-> 不把数据面可观测性塞进 `/usage` 或 Metrics 页面。后续实施必须等该任务合入 `main`，
-> 从最新 `origin/main` 创建新的隔离 worktree，并使用 `V54`。
+> **实施 worktree**：
+> `/Users/yangjiefeng/.hermes/workspace/spring-ai-rag-external-integration-operability`
+>
+> 模型调用用量账本已经完整交付并合入 `main`，占用 `V53`、`usage` 包和 WebUI Metrics
+> 页面。本规划继续使用独立的 `V54`、独立 endpoint/package，且不把数据面可观测性塞进
+> `/usage` 或 Metrics 页面。
 
 本文是当前项目内部的单语、自包含过程文档。输入是典型客户需求，但本文只描述通用 RAG
 服务应提供的能力，不依赖任何特定业务系统的名称、领域模型、资源拓扑、私有协议或代码。
@@ -59,7 +60,7 @@ lookup 对账；需要权威全量快照与持久 item receipt 的场景已有�
 
 本次不把需求文档、历史规划或会话记忆当作实现事实。判断顺序固定为：
 
-1. `main@5f6d4eb0` 的代码、Flyway、配置绑定和自动化测试；
+1. `main@0993b702` 的代码、Flyway、配置绑定和自动化测试；
 2. `docs/rest-api*`、`docs/business-client-integration*`、`docs/project-context*` 等双语长青文档；
 3. 已归档规划只用于解释设计来源，不用于宣称当前状态；
 4. 并行 worktree 的未提交代码只用于避免冲突，不计入当前已交付能力。
@@ -194,8 +195,8 @@ lookup 对账；需要权威全量快照与持久 item receipt 的场景已有�
 
 | 事项 | 冻结默认 | 理由与可逆边界 |
 |---|---|---|
-| 实施起点 | 并行 V53 任务合入后的最新 `origin/main` | 避免 migration、Metrics 和共享文档冲突 |
-| migration | `V54__add_api_operation_rollups.sql` | V53 已由并行任务预占；不得动态抢号 |
+| 实施起点 | 已包含 V53 用量账本的 `origin/main@0993b702` | migration、Metrics 和共享文档冲突已经在基线处收敛 |
+| migration | `V54__add_api_operation_rollups.sql` | V53 已发布；不得改写或复用已发布版本 |
 | capability protocol | 保持 `spring-ai-rag-integration` `1.0` | 新字段 additive；现有 preflight 精确要求 `1.0`，不能无收益破坏 |
 | limit contract | 在现有 `limits` 下增加 nested groups | 旧 Client 忽略未知字段；旧五字段保持原值和位置 |
 | observation API | `GET /api/v1/rag/integration-observability` | 与模型 `/usage` 和旧 `/metrics` 解耦 |
@@ -588,16 +589,17 @@ rag:
 
 ## 12. 实施切片
 
-### Slice 0：并行任务收口与基线
+### Slice 0：上一轮收口与实施基线
 
 退出条件：
 
-- 并行 V53 功能已合入并推送 `main`；
+- V53 用量账本已合入并推送 `main@0993b702`；
 - main 工作区干净，`main == origin/main`；
 - 当前活动规划/进度已按生命周期归档，稳定事实已进入双语长青文档；
-- 本规划仍与最新代码相符；如 V53 改动触及 filter、principal、capability 或 shared metrics，
-  先只修订规划并重新执行规划 3/3；
-- 从最新 `origin/main` 创建全新 `codex/integration-operability-20260827` 分支和隔离 worktree。
+- 本规划仍与最新代码相符；V53 没有改变本规划冻结的 filter、principal、capability 或
+  shared metrics 边界；
+- 已从最新 `origin/main` 创建
+  `feat/external-integration-operability-20260827` 分支和隔离 worktree。
 
 ### Slice A：限制合同
 
@@ -795,7 +797,7 @@ principal 数 x operation 数 x status 数 x active hour
 | recorder 影响业务 | 无同步 DB 写、fail open、不进入业务事务、不触发 retry |
 | capability 与实际限制漂移 | 配置直读 + shared constants + 非默认配置合同测试 |
 | protocol version 破坏旧 preflight | 保持 1.0，使用 additive fields/feature；未来 breaking change 再升 major/minor |
-| 与并行 V53/前端冲突 | 等 V53 先合入；V54；独立 endpoint/package；本轮无 WebUI |
+| 与 V53 usage/前端边界冲突 | 以已发布 V53 为基线；使用 V54、独立 endpoint/package；本轮无 WebUI |
 | 审查发散 | 先过硬门槛，再做三轮互不重叠、限时、只读审查 |
 
 ## 16. 实现后三轮收敛审查
@@ -812,15 +814,17 @@ principal 数 x operation 数 x status 数 x active hour
 的实质问题时立即修复，重跑受影响硬门槛，计数归零；风格和可选优化记录到 backlog，不在该
 循环中扩展范围。连续三轮无实质修改才允许 merge。
 
-## 17. Git 与 worktree 交付
+## 17. Git 与工作区交付
 
 1. 本规划先在 main 提交、push；未获人工授权前停止；
-2. 实施时从最新已 push 的 `origin/main` 创建专用分支/worktree；
+2. 实施时从最新已 push 的 `origin/main` 创建专用分支；只有明确安排并行任务时才创建
+   额外 worktree；
 3. 实施期间关键进展先写独立 `EXTERNAL_INTEGRATION_OPERABILITY_PROGRESS.md`；
 4. 大块完成后 merge 最新 `origin/main`，按合并后基线完整复验；
 5. feature 提交/push 后合回 main，再执行 main 最终门禁；
 6. 更新双语长青文档、归档 plan/progress、push main；
-7. 确认 main 与 origin/main 相同、工作区干净、无测试服务后安全移除 feature worktree；
+7. 确认 main 与 origin/main 相同、工作区干净、无测试服务；本轮已有 feature worktree
+   在交付完成后安全移除；
 8. 不删除远端 feature branch，不使用 stash，不丢弃其他工作区的任何修改。
 
 ## 18. 完成定义

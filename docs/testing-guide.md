@@ -278,6 +278,8 @@ covers:
   and full-data-plane anti-enumeration;
 - JSON Record exact replay, CAS, payload containment, tombstone/restore, and
   no re-embedding for payload-only changes;
+- capability protocol `1.0`, non-default JSON batch limits, real `400`
+  enforcement at those limits, and the optional operation-observability flag;
 - `ASYNC` durable-job convergence through the real Spring AI embedding HTTP
   path;
 - deterministic provider `503` convergence to a `FAILED` job while preserving
@@ -304,17 +306,20 @@ covers:
   embedding completion and an external mutation, proving that the service
   retries in fresh bounded transactions instead of reporting ordinary
   business-CAS conflict for internal derivation contention;
-- PostgreSQL facts for Flyway V49, zero plaintext credentials, and a succeeded
-  embedding job;
+- self operation/status/Collection observability, cross-principal and
+  cross-Collection denial, bounded latency summaries, and restart persistence;
+- PostgreSQL facts through Flyway V54, zero plaintext credentials, a succeeded
+  embedding job, and integration-operation rollups;
 - WebUI typecheck, Vitest, production build, core Mock Playwright, and real
   API-key Playwright.
 
 In addition to the business-client contract, the real HTTP phase runs the
 deployed binding preflight as a black-box client: successful `READ_ONLY` and
 `READ_WRITE` profiles, capability-profile mismatch failure, exact allow-list
-failure, Bearer canary mutation success, and provider-failure cleanup with a
-final tombstone. The preflight report is checked for schema validity and
-absence of credentials, URLs, Collection keys, external IDs, and payloads.
+failure, runtime minimum-limit/feature requirements, Bearer canary mutation
+success, and provider-failure cleanup with a final tombstone. The preflight
+report is checked for schema validity and absence of credentials, URLs,
+Collection keys, external IDs, and payloads.
 
 Enable the clean-tree gate
 for a final candidate commit:
@@ -336,8 +341,9 @@ fixtures; their envelope protocol is not a server-side RAG API contract.
 Every run writes `release-manifest.json` in the evidence directory. It records
 PASS/FAIL, verification phase, full Git SHA, initial tree state,
 project/OpenAPI versions, API base path, latest Flyway migration, passed
-steps, PostgreSQL image, HTTP-check count, and the verified
-`["READ_ONLY","READ_WRITE"]` profiles. Runtime facts not reached are JSON
+steps, PostgreSQL image, HTTP-check count, the verified
+`["READ_ONLY","READ_WRITE"]` profiles, and observed JSON batch item/payload
+limits plus operation-observability state. Runtime facts not reached are JSON
 `null`; the manifest stores no credential, URL, payload, external ID, or
 private path.
 

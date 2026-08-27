@@ -136,7 +136,8 @@ credential, but a database NORMAL principal does not need an additional
     "optional": {
       "documentSyncRuns": false,
       "documentSyncRunItemReceipts": false,
-      "openAiCompatibility": false
+      "openAiCompatibility": false,
+      "integrationObservability": true
     }
   },
   "limits": {
@@ -144,17 +145,78 @@ credential, but a database NORMAL principal does not need an additional
     "collectionKeyMaxLength": 128,
     "sourceNamespaceMaxLength": 128,
     "externalIdMaxLength": 255,
-    "sourceRevisionMaxLength": 255
+    "sourceRevisionMaxLength": 255,
+    "structuredRecords": {
+      "maxJsonbPayloadBytes": 1048576,
+      "maxRetrievalTextChars": 10000,
+      "maxBatchItems": 20,
+      "maxBatchPayloadBytes": 10485760,
+      "maxSearchResults": 20,
+      "maxPayloadFilterBytes": 16384,
+      "maxPayloadFilterDepth": 8
+    },
+    "syncRuns": {
+      "maxBatchItems": 100,
+      "maxItemReceiptPageItems": 200,
+      "maxRunListPageItems": 100
+    },
+    "observability": {
+      "retentionDays": 90,
+      "maxQueryRangeDays": 31,
+      "maxCollectionBreakdownItems": 100
+    }
   }
 }
 ```
 
 The response intentionally omits credential/principal IDs, provider settings,
-database details, and secrets. Runtime feature flags are reflected directly.
+database details, and secrets. Runtime feature flags and configurable
+structured-record/observability limits are reflected directly; fixed Sync Run
+limits come from the same constants used by request validation.
 If a restricted ACL cannot be mapped completely to stable Collection keys, the
 endpoint returns `503 SERVICE_UNAVAILABLE` rather than publishing a partial
 contract. Use this endpoint to select supported client behavior, then use
 `/auth/me` and Collection probes to verify the exact deployment binding.
+
+#### `GET /api/v1/rag/integration-observability`
+
+Returns bounded, best-effort UTC rollups for the stable external-integration
+operations published by the service. It requires `RAG_READ` for a database
+NORMAL principal and always returns `Cache-Control: no-store`.
+
+Query parameters:
+
+| Parameter | Default | Contract |
+|---|---|---|
+| `from` | 24 hours before `to` | Inclusive ISO-8601 instant |
+| `to` | Current time | Exclusive ISO-8601 instant |
+| `bucket` | `HOUR` | `HOUR` or `DAY` |
+| `operation` | All supported operations | `IntegrationOperation` enum value |
+| `collectionKey` | All currently authorized Collections | Active Collection key |
+| `principalId` | Current principal, or all for a management caller | Root/ADMIN only |
+
+The configured query window is bounded to 31 days by default. A database
+NORMAL principal can query only its own stable principal and current
+Collection authorization. Root and database ADMIN callers can query globally
+or select one database principal. Legacy static and anonymous identities are
+denied; auth-disabled local mode provides only the local global view. Invalid
+input returns `400`, unauthorized scope returns `403`, and disabled or
+unresolvable observability returns `503`.
+
+The response contains total requests, average/max duration, histogram-derived
+P50/P95 upper bounds, status and operation breakdowns, authorized Collection
+contributions, and an hourly/daily timeline. A request total is counted once;
+Collection contributions describe authorized participation and must not be
+summed as request totals. `completeness.mode=BEST_EFFORT` and
+`currentInstanceDropped` make the non-billing boundary explicit.
+
+V54 stores only UTC hourly aggregates in `rag_api_operation_hourly` and
+`rag_api_collection_operation_hourly`. It does not store request/response
+bodies, queries, payloads, external IDs, credentials, dynamic URLs, or
+exception text. Recording uses an asynchronous bounded queue and fails open
+for business requests. Micrometer tags are restricted to fixed operation,
+status-class, principal-type, result, and drop-reason values; principal IDs
+and Collection keys are never metric tags.
 
 For database NORMAL principals, `GET`/`HEAD`/`OPTIONS` and explicit read-only
 POST routes (Search, Chat, JSON-record search, model comparison,

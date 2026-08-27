@@ -127,12 +127,22 @@ public class IntegrationCapabilitiesResponse {
     public record OptionalFeatures(
             boolean documentSyncRuns,
             boolean documentSyncRunItemReceipts,
-            boolean openAiCompatibility) {
+            boolean openAiCompatibility,
+            boolean integrationObservability) {
+
+        public OptionalFeatures(
+                boolean documentSyncRuns,
+                boolean documentSyncRunItemReceipts,
+                boolean openAiCompatibility) {
+            this(documentSyncRuns, documentSyncRunItemReceipts,
+                    openAiCompatibility, false);
+        }
 
         public OptionalFeatures(
                 boolean documentSyncRuns,
                 boolean openAiCompatibility) {
-            this(documentSyncRuns, documentSyncRuns, openAiCompatibility);
+            this(documentSyncRuns, documentSyncRuns,
+                    openAiCompatibility, false);
         }
     }
 
@@ -141,6 +151,42 @@ public class IntegrationCapabilitiesResponse {
             int collectionKeyMaxLength,
             int sourceNamespaceMaxLength,
             int externalIdMaxLength,
-            int sourceRevisionMaxLength) {
+            int sourceRevisionMaxLength,
+            StructuredRecordsLimits structuredRecords,
+            SyncRunsLimits syncRuns,
+            ObservabilityLimits observability) {
+
+        public Limits(
+                int maxCollectionKeysPerPrincipal,
+                int collectionKeyMaxLength,
+                int sourceNamespaceMaxLength,
+                int externalIdMaxLength,
+                int sourceRevisionMaxLength) {
+            this(maxCollectionKeysPerPrincipal, collectionKeyMaxLength,
+                    sourceNamespaceMaxLength, externalIdMaxLength,
+                    sourceRevisionMaxLength, null, null, null);
+        }
+    }
+
+    public record StructuredRecordsLimits(
+            int maxJsonbPayloadBytes,
+            int maxRetrievalTextChars,
+            int maxBatchItems,
+            int maxBatchPayloadBytes,
+            int maxSearchResults,
+            int maxPayloadFilterBytes,
+            int maxPayloadFilterDepth) {
+    }
+
+    public record SyncRunsLimits(
+            int maxBatchItems,
+            int maxItemReceiptPageItems,
+            int maxRunListPageItems) {
+    }
+
+    public record ObservabilityLimits(
+            int retentionDays,
+            int maxQueryRangeDays,
+            int maxCollectionBreakdownItems) {
     }
 }

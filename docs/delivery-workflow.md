@@ -112,7 +112,8 @@ Every active task chooses one durable progress mechanism: append progress to the
 plan, or maintain a matching progress document. Record each material milestone
 before starting the next stage. At minimum, include:
 
-- current branch, baseline, and applicable worktree;
+- current branch, baseline, and workspace; record extra worktrees only when the
+  user explicitly requests parallel tasks;
 - completed slices and material decisions;
 - validation commands, results, and evidence locations;
 - current review counter, known issues, next step, and resume entry point;
@@ -158,8 +159,8 @@ When the user permits real LLM testing, first use Mock tests to verify the basic
 flow, branches, and error handling in seconds, then start the real provider for
 the necessary model paths. Watch backend and acceptance-script logs throughout
 real calls; investigate as soon as timeout, authentication, model-name, or
-protocol failures are visible instead of waiting silently. A non-`main`
-worktree/branch uses isolated ports and a disposable test database. Prefer
+protocol failures are visible instead of waiting silently. Verification on a
+non-`main` branch uses isolated ports and a disposable test database. Prefer
 `scripts/dev.sh`, which loads `.env`, for joint frontend/backend runs, and never
 write credentials into command records, documentation, or Git.
 
@@ -217,11 +218,17 @@ artifacts, and any required runtime evidence.
 
 ## 8. Git Delivery In Concurrent Worktrees
 
-Never discard, overwrite, or hide existing or concurrent worktree changes with
+Never discard, overwrite, or hide existing or concurrent workspace changes with
 `stash`. Inspect `git status` and the diff at the beginning and before commit,
-understand all changes, and commit the complete state in the autonomous delivery
-worktree designated by the task. Unless the task owner explicitly asks for a
-split, do not silently omit changes left by another collaborator.
+understand all changes, and commit the complete state on the task branch. Unless
+the task owner explicitly asks for a split, do not silently omit changes left
+by another collaborator.
+
+Use the current workspace by default for a single task or serial feature
+development. Create an isolated worktree only when the user explicitly assigns
+multiple people or tasks to run in parallel, and record each worktree's branch
+ownership, baseline, and cleanup condition. Do not add workspace switching only
+for isolation.
 
 When push is required, use this non-destructive sequence:
 
@@ -232,16 +239,16 @@ When push is required, use this non-destructive sequence:
 
 Ordinary human PRs may follow the branch/rebase conventions in
 [CONTRIBUTING](../CONTRIBUTING.md). The merge sequence above applies when an
-Agent is explicitly asked to complete commit/push from a shared or designated
-worktree. The worktree should be clean after push. If another process creates
-new WIP afterward, do not chase absolute cleanliness with endless commits;
-report the last pushed commit and the new state.
+Agent is explicitly asked to complete commit/push. The workspace should be
+clean after push. If another process creates new WIP afterward, do not chase
+absolute cleanliness with endless commits; report the last pushed commit and
+the new state.
 
 Substantial features use a dedicated branch based on the latest local `main`;
-an isolated worktree is recommended but does not change branch ownership.
-Fetch regularly and merge the pushed `origin/main` into the feature branch so
-conflicts do not accumulate until delivery. Once implementation is complete,
-if `origin/main` has commits not present in the feature branch, merge
+this does not require an additional worktree. Fetch regularly and merge the
+pushed `origin/main` into the feature branch so conflicts do not accumulate
+until delivery. Once implementation is complete, if `origin/main` has commits
+not present in the feature branch, merge
 `origin/main` into the feature branch without rebasing delivered history.
 Record the post-merge feature HEAD, `origin/main`, disposable database, and
 isolated ports as the final verification baseline. Pre-merge test results are

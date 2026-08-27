@@ -15,7 +15,7 @@
 - [x] Helm `version` 与 `appVersion` 均为 `1.0.0`
 - [x] Docker/Helm 默认镜像 tag 为 `1.0.0`
 - [x] 本地、Docker 与 Helm 默认端口均为 `8081`
-- [x] Flyway 迁移范围为 V1-V53
+- [x] Flyway 迁移范围为 V1-V54
 - [x] JSONB 结构化记录 API、payload 快照和 Collection 生命周期已覆盖
 - [x] `scripts/verify-jsonb-records.sh` 固化后端/数据库/前端聚焦验证
 - [x] 文档 PATCH/禁用/恢复/永久删除与外部三元身份已覆盖
@@ -172,6 +172,23 @@
   WebUI、Mock Playwright、禁锁、文档和空白门槛。
 - [ ] 真实 LLM 生命周期验收记录 plain、knowledge、agent、fallback、summary、replay
   和用量账本证据，不保存 prompt、answer、密钥或工具 payload。
+
+### 2026-08-27 外部集成可运维性门禁
+
+- [x] V54 增加有界 UTC 小时级请求总量与已授权 Collection contribution，不保存请求/
+  响应正文、query、payload、external ID、credential、动态 URL 或异常正文。
+- [x] `/integration-capabilities` 保持 protocol `1.0`，以 additive 字段发布
+  structured-record、Sync Run、observability 运行时上限和
+  `features.optional.integrationObservability`。
+- [x] `GET /api/v1/rag/integration-observability` 为 NORMAL principal 提供 self/当前
+  ACL 视图，为 root/ADMIN 提供管理视图，并支持有界 HOUR/DAY 窗口、status/operation/
+  Collection breakdown 和显式 best-effort 完整性说明。
+- [x] 记录器使用异步有界 queue、分组 PostgreSQL upsert、有界 retention/停机 drain、
+  fail-open 业务语义和固定低基数 Micrometer 标签。
+- [x] 已部署 binding preflight 可要求最低 JSON batch item/payload 上限与 operation
+  observability；其报告和 readiness release manifest 只保存非敏感运行时事实。
+- [ ] 最终合并基线 readiness 门禁需记录 focused/PostgreSQL/Maven/WebUI/Mock/真实 HTTP、
+  真实 LLM/Embedding 验收与连续三轮无修改审查证据。
 
 ### 最终证据（2026-07-21）
 

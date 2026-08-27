@@ -1,5 +1,6 @@
 package com.springairag.core.controller;
 
+import com.springairag.api.contract.DocumentSyncRunLimits;
 import com.springairag.api.dto.DocumentSyncRunBatchUpsertRequest;
 import com.springairag.api.dto.DocumentSyncRunBatchUpsertResponse;
 import com.springairag.api.dto.DocumentSyncRunBeginRequest;
@@ -158,9 +159,15 @@ public class DocumentSyncRunController {
             @Parameter(schema = @Schema(
                     type = "integer",
                     minimum = "1",
-                    maximum = "200",
-                    defaultValue = "100"))
-            @RequestParam(defaultValue = "100") @Min(1) @Max(200) int limit,
+                    maximum = DocumentSyncRunLimits.MAX_ITEM_RECEIPT_PAGE_ITEMS_TEXT,
+                    defaultValue =
+                            DocumentSyncRunLimits.DEFAULT_ITEM_RECEIPT_PAGE_ITEMS_TEXT))
+            @RequestParam(
+                    defaultValue =
+                            DocumentSyncRunLimits.DEFAULT_ITEM_RECEIPT_PAGE_ITEMS_TEXT)
+            @Min(1)
+            @Max(DocumentSyncRunLimits.MAX_ITEM_RECEIPT_PAGE_ITEMS)
+            int limit,
             @Parameter(schema = @Schema(
                     type = "string", minLength = 0, maxLength = 1024))
             @RequestParam(required = false)
@@ -184,8 +191,19 @@ public class DocumentSyncRunController {
             @RequestParam @NotBlank @Size(max = 128) String collectionKey,
             @RequestParam(required = false) @Size(max = 128)
             String sourceNamespace,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @Parameter(schema = @Schema(
+                    type = "integer",
+                    minimum = "1",
+                    maximum = DocumentSyncRunLimits.MAX_RUN_LIST_PAGE_ITEMS_TEXT,
+                    defaultValue =
+                            DocumentSyncRunLimits.DEFAULT_RUN_LIST_PAGE_ITEMS_TEXT))
+            @RequestParam(
+                    defaultValue =
+                            DocumentSyncRunLimits.DEFAULT_RUN_LIST_PAGE_ITEMS_TEXT)
+            @Min(1)
+            @Max(DocumentSyncRunLimits.MAX_RUN_LIST_PAGE_ITEMS)
+            int size) {
         return ResponseEntity.ok(service.list(
                 collectionKey, sourceNamespace, page, size));
     }

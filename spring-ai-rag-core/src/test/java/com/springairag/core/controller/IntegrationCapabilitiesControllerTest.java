@@ -62,7 +62,16 @@ class IntegrationCapabilitiesControllerTest {
                 .andExpect(jsonPath(
                         "$.features.optional.documentSyncRunItemReceipts")
                         .value(false))
+                .andExpect(jsonPath(
+                        "$.features.optional.integrationObservability")
+                        .value(true))
                 .andExpect(jsonPath("$.limits.collectionKeyMaxLength").value(128))
+                .andExpect(jsonPath(
+                        "$.limits.structuredRecords.maxBatchItems").value(20))
+                .andExpect(jsonPath(
+                        "$.limits.syncRuns.maxItemReceiptPageItems").value(200))
+                .andExpect(jsonPath(
+                        "$.limits.observability.retentionDays").value(90))
                 .andExpect(jsonPath("$.credentialId").doesNotExist())
                 .andExpect(jsonPath("$.provider").doesNotExist())
                 .andExpect(jsonPath("$.database").doesNotExist());
@@ -95,8 +104,26 @@ class IntegrationCapabilitiesControllerTest {
                                         true, true, true, true, true, true),
                                 new IntegrationCapabilitiesResponse.Embedding(true, true),
                                 true),
-                        new IntegrationCapabilitiesResponse.OptionalFeatures(false, false)),
-                new IntegrationCapabilitiesResponse.Limits(100, 128, 128, 255, 255));
+                        new IntegrationCapabilitiesResponse.OptionalFeatures(
+                                false, false, false, true)),
+                new IntegrationCapabilitiesResponse.Limits(
+                        100,
+                        128,
+                        128,
+                        255,
+                        255,
+                        new IntegrationCapabilitiesResponse.StructuredRecordsLimits(
+                                1_048_576,
+                                10_000,
+                                20,
+                                10_485_760,
+                                20,
+                                16_384,
+                                8),
+                        new IntegrationCapabilitiesResponse.SyncRunsLimits(
+                                100, 200, 100),
+                        new IntegrationCapabilitiesResponse.ObservabilityLimits(
+                                90, 31, 100)));
     }
 
     @TestConfiguration

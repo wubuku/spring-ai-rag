@@ -2,6 +2,7 @@ package com.springairag.core.config;
 
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
@@ -183,5 +184,32 @@ class RagPropertiesTest {
 
         assertTrue(props.getRateLimit().isEnabled());
         assertEquals(120, props.getRateLimit().getRequestsPerMinute());
+    }
+
+    @Test
+    void integrationObservabilityDefaultsAndValidation() {
+        RagIntegrationObservabilityProperties observability =
+                new RagProperties().getIntegrationObservability();
+
+        assertTrue(observability.isEnabled());
+        assertEquals(Duration.ofDays(90), observability.getRetention());
+        assertEquals(Duration.ofDays(31), observability.getMaxQueryRange());
+        assertEquals(100, observability.getMaxCollectionBreakdownItems());
+        assertEquals(10_000, observability.getQueueCapacity());
+        assertEquals(500, observability.getFlushBatchSize());
+        assertEquals(Duration.ofSeconds(1), observability.getFlushInterval());
+        assertEquals(
+                Duration.ofSeconds(5),
+                observability.getShutdownDrainTimeout());
+        assertEquals(5_000, observability.getCleanupBatchSize());
+        assertEquals(Duration.ofHours(1), observability.getCleanupInterval());
+        assertDoesNotThrow(observability::validate);
+
+        observability.setMaxQueryRange(Duration.ofDays(91));
+        assertThrows(IllegalArgumentException.class, observability::validate);
+
+        observability.setMaxQueryRange(Duration.ofDays(31));
+        observability.setFlushBatchSize(10_001);
+        assertThrows(IllegalArgumentException.class, observability::validate);
     }
 }

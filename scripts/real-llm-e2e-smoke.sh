@@ -78,10 +78,11 @@ need() { command -v "$1" >/dev/null || { echo "need $1"; exit 2; }; }
 cleanup() {
   set +e
   if [[ -n "$DOC_ID" ]]; then
-    curl -s "${API_AUTH_ARGS[@]}" -X DELETE "$API/documents/$DOC_ID" >/dev/null
+    curl -s ${API_AUTH_ARGS[@]+"${API_AUTH_ARGS[@]}"} \
+      -X DELETE "$API/documents/$DOC_ID" >/dev/null
   fi
   if [[ -n "$COLLECTION_KEY" ]]; then
-    curl -s "${API_AUTH_ARGS[@]}" -X DELETE \
+    curl -s ${API_AUTH_ARGS[@]+"${API_AUTH_ARGS[@]}"} -X DELETE \
       "$API/collections/by-key?collectionKey=$COLLECTION_KEY" >/dev/null
   fi
 }

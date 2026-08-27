@@ -126,6 +126,8 @@ public enum ErrorCode {
     API_KEY_PROVISIONING_IDEMPOTENCY_DISABLED(503, "API Key Provisioning Idempotency Disabled"),
     COLLECTION_PROVISIONING_IDEMPOTENCY_DISABLED(
             503, "Collection Provisioning Idempotency Disabled"),
+    INTEGRATION_OBSERVABILITY_DISABLED(
+            503, "Integration Observability Disabled"),
 
     // ==================== 504 Gateway Timeout ====================
 

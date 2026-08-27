@@ -276,6 +276,18 @@ rag:
     cleanup-interval-ms: ${RAG_COLLECTION_PROVISIONING_CLEANUP_INTERVAL_MS:3600000}
     concurrent-retry-attempts: ${RAG_COLLECTION_PROVISIONING_CONCURRENT_RETRY_ATTEMPTS:3}
 
+  integration-observability:
+    enabled: ${RAG_INTEGRATION_OBSERVABILITY_ENABLED:true}
+    retention: ${RAG_INTEGRATION_OBSERVABILITY_RETENTION:90d}
+    max-query-range: ${RAG_INTEGRATION_OBSERVABILITY_MAX_QUERY_RANGE:31d}
+    max-collection-breakdown-items: ${RAG_INTEGRATION_OBSERVABILITY_MAX_COLLECTION_BREAKDOWN_ITEMS:100}
+    queue-capacity: ${RAG_INTEGRATION_OBSERVABILITY_QUEUE_CAPACITY:10000}
+    flush-batch-size: ${RAG_INTEGRATION_OBSERVABILITY_FLUSH_BATCH_SIZE:500}
+    flush-interval: ${RAG_INTEGRATION_OBSERVABILITY_FLUSH_INTERVAL:1s}
+    shutdown-drain-timeout: ${RAG_INTEGRATION_OBSERVABILITY_SHUTDOWN_DRAIN_TIMEOUT:5s}
+    cleanup-batch-size: ${RAG_INTEGRATION_OBSERVABILITY_CLEANUP_BATCH_SIZE:5000}
+    cleanup-interval: ${RAG_INTEGRATION_OBSERVABILITY_CLEANUP_INTERVAL:1h}
+
   openai-compatibility:
     # 受控网络预览入口。默认关闭，不改变现有 /api/v1/rag/**。
     enabled: ${RAG_OPENAI_COMPATIBILITY_ENABLED:false}
@@ -384,13 +396,13 @@ rag:
     default-chunk-overlap: 100
 
   structured-records:
-    max-jsonb-payload-bytes: 1048576
-    max-retrieval-text-chars: 10000
-    max-batch-size: 20
-    max-batch-payload-bytes: 10485760
-    max-search-results: 20
-    max-payload-filter-bytes: 16384
-    max-payload-filter-depth: 8
+    max-jsonb-payload-bytes: ${RAG_STRUCTURED_RECORDS_MAX_JSONB_PAYLOAD_BYTES:1048576}
+    max-retrieval-text-chars: ${RAG_STRUCTURED_RECORDS_MAX_RETRIEVAL_TEXT_CHARS:10000}
+    max-batch-size: ${RAG_STRUCTURED_RECORDS_MAX_BATCH_SIZE:20}
+    max-batch-payload-bytes: ${RAG_STRUCTURED_RECORDS_MAX_BATCH_PAYLOAD_BYTES:10485760}
+    max-search-results: ${RAG_STRUCTURED_RECORDS_MAX_SEARCH_RESULTS:20}
+    max-payload-filter-bytes: ${RAG_STRUCTURED_RECORDS_MAX_PAYLOAD_FILTER_BYTES:16384}
+    max-payload-filter-depth: ${RAG_STRUCTURED_RECORDS_MAX_PAYLOAD_FILTER_DEPTH:8}
     agent-tool-enabled: ${RAG_JSON_AGENT_TOOL_ENABLED:false}
     agent-tool-max-results: 5
     agent-tool-max-payload-bytes: 32768

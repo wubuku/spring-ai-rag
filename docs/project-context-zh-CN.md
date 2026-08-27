@@ -325,7 +325,7 @@ job enqueue 分开提交，HTTP 不同步循环调用 provider。只读诊断默
 ### 数据库
 
 - PostgreSQL + pgvector。
-- Flyway 当前为 V1–V53。
+- Flyway 当前为 V1–V54。
 - V27/V28 负责新增、回填、校验、唯一约束及不可变 Collection 业务 key；V29 增加 JSONB
   结构化记录；V30 增加外部文档同步 schema；V31 在不改写已发布 V30 的前提下规范化
   已存储的外部文档身份；V32 增加按 principal 归属的 Chat history、来源快照、turn
@@ -347,7 +347,8 @@ job enqueue 分开提交，HTTP 不同步循环调用 provider。只读诊断默
   requester 隔离的 provisioning 幂等账本，只保存 key/fingerprint hash 与结果 metadata，
   从不保存 raw credential；V51 为 Sync Run item ledger 增加按 run/status 的有界游标索引；
   V52 增加按 owner 隔离、具有受约束 Collection 外键的 Collection 创建幂等账本；
-  V53 增加按 principal 隔离的模型调用级 append-only 用量账本。
+  V53 增加按 principal 隔离的模型调用级 append-only 用量账本；V54 增加有界 UTC
+  小时级 integration operation 与已授权 Collection contribution 聚合。
 - 数据访问层禁止显式 `SELECT ... FOR UPDATE`、`SKIP LOCKED`、JPA
   `PESSIMISTIC_*` 与 PostgreSQL advisory lock。并发写使用条件
   `UPDATE/DELETE ... RETURNING`、`@Version`、唯一约束、lease 和有界重试；普通 DML
@@ -362,6 +363,11 @@ job enqueue 分开提交，HTTP 不同步循环调用 provider。只读诊断默
   provider usage、调用开始时的配置价格、终态和耗时；刻意排除 prompt、answer、工具
   参数/结果、credential 和异常正文。记录 fail-open，聚合查询按 principal 隔离，保留
   任务使用有界批次。
+- `rag_api_operation_hourly` 对每个已分类集成请求只计一次；
+  `rag_api_collection_operation_hourly` 保存已授权 Collection contribution。两者只保存
+  UTC 小时聚合与有界 operation/status/latency 维度。记录异步且 fail-open，查询时重新
+  校验当前授权，Collection contribution 不能相加冒充请求总量。这些表用于诊断，不是
+  billing、审计、quota 或 mutation receipt。
 
 ### HTTP
 
@@ -376,6 +382,7 @@ job enqueue 分开提交，HTTP 不同步循环调用 provider。只读诊断默
 | `/evaluation` | 评估与反馈 |
 | `/api-keys` | API Key 管理与可选的 principal 幂等 provisioning |
 | `/integration-capabilities` | 认证后可读取的版本化运行时集成合同 |
+| `/integration-observability` | 按 principal/ACL 隔离的 best-effort 集成 operation 聚合 |
 | `/files` | PDF / 文件导入 |
 | `/json-records` | JSONB 结构化记录 upsert、检索与详情 |
 | `/documents/upsert` | 普通外部文档三元身份、revision CAS 与 tombstone 同步 |
@@ -433,10 +440,16 @@ job enqueue 分开提交，HTTP 不同步循环调用 provider。只读诊断默
   snapshot。replay 返回绑定 Collection 的当前状态和当前文档数；软删除保持可见且绝不
   被逆转。keyed provisioning 关闭或不可用时返回 `503`，不会退化为普通创建。
 - `GET /api/v1/rag/integration-capabilities` 提供认证、`no-store`、低敏的运行时合同，
-  返回协议版本、当前调用方有效能力与 Collection 范围、数据面行为、可选特性和稳定输入
-  上限，其中 `documentSyncRunItemReceipts` 明确表示持久化回执查询是否可用，
+  返回协议版本、当前调用方有效能力与 Collection 范围、数据面行为、可选特性和运行时输入
+  上限，包括 structured-record batch/payload/search/filter、固定 Sync Run batch/page
+  上限及 observability retention/query 限制。其中 `documentSyncRunItemReceipts`
+  明确表示持久化回执查询是否可用，
   `features.provisioning.collectionCreateIdempotencyKey` 表示 V52 控制面能力。restricted
   ACL 无法完整解析为 Collection key 时以 `503` fail closed。
+- `GET /api/v1/rag/integration-observability` 对 NORMAL principal 要求 `RAG_READ`，
+  使用不包含的时间上界，并支持 HOUR/DAY、operation、Collection 和管理 principal
+  过滤。NORMAL principal 只能查询自身/当前 ACL；root 与数据库 ADMIN 可查询更宽范围；
+  功能关闭或范围无法完整解析时返回 `503`。
 - `GET /api/v1/rag/usage` 要求 `RAG_READ`，使用包含首尾的 UTC 日期范围；普通 principal
   只能查询自身，ADMIN 和 environment root 可以查询全部或指定 principal。默认最近
   30 个 UTC 日，最多 366 日。usage 或 pricing 缺失会显式计数，不会被推断为零。

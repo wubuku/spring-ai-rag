@@ -409,7 +409,7 @@ See [multi-model-external-config.md](multi-model-external-config.md).
 ### Database
 
 - PostgreSQL with pgvector.
-- Flyway is currently V1–V53.
+- Flyway is currently V1–V54.
 - V27/V28 add, backfill, validate, uniquely constrain, and make immutable the
   Collection business key; V29 adds JSONB structured records; V30 adds the
   external-document synchronization schema; V31 normalizes stored external
@@ -441,7 +441,8 @@ See [multi-model-external-config.md](multi-model-external-config.md).
   bounded run/status cursor indexes for the Sync Run item ledger; V52 adds the
   owner-scoped Collection-create idempotency ledger with a restricted
   Collection foreign key; V53 adds the principal-scoped append-only
-  model-invocation usage ledger.
+  model-invocation usage ledger; V54 adds bounded UTC hourly integration
+  operation and authorized Collection-contribution rollups.
 - The data-access layer forbids explicit `SELECT ... FOR UPDATE`,
   `SKIP LOCKED`, JPA `PESSIMISTIC_*`, and PostgreSQL advisory locks.
   Concurrent writes use conditional `UPDATE/DELETE ... RETURNING`, `@Version`,
@@ -461,6 +462,13 @@ See [multi-model-external-config.md](multi-model-external-config.md).
   prompts, answers, tool arguments/results, credentials, and exception bodies.
   Recording is fail-open, aggregate reads are principal-scoped, and retention
   is bounded.
+- `rag_api_operation_hourly` counts each classified integration request once;
+  `rag_api_collection_operation_hourly` stores authorized Collection
+  contributions. Both contain only UTC hourly aggregates with bounded
+  operation/status/latency dimensions. Recording is asynchronous and fail-open,
+  current authorization is rechecked on query, and Collection contributions
+  must not be summed as request totals. These tables are diagnostic
+  observability, not billing, audit, quota, or mutation receipts.
 
 ### HTTP
 
@@ -475,6 +483,7 @@ The main namespace is `/api/v1/rag/**`:
 | `/evaluation` | Evaluation and feedback |
 | `/api-keys` | API-key management with optional idempotent principal provisioning |
 | `/integration-capabilities` | Authenticated, versioned runtime integration contract |
+| `/integration-observability` | Principal/ACL-scoped best-effort integration operation rollups |
 | `/files` | PDF and file import |
 | `/json-records` | JSONB structured-record upsert, search, and detail |
 | `/documents/upsert` | External triple identity, revision CAS, and tombstone synchronization |
@@ -547,12 +556,19 @@ Managed database callers consist of a stable `rag_api_principal` and versioned
 - `GET /api/v1/rag/integration-capabilities` is an authenticated, no-store,
   low-sensitivity contract for protocol version, the caller's effective
   capabilities and Collection scope, supported data-plane behaviors, optional
-  features, and stable input limits. `documentSyncRunItemReceipts` explicitly
-  reports whether durable receipt lookup is available, while
+  features, and runtime input limits. It publishes structured-record
+  batch/payload/search/filter bounds, fixed Sync Run batch/page bounds, and
+  observability retention/query limits. `documentSyncRunItemReceipts`
+  explicitly reports whether durable receipt lookup is available, while
   `features.provisioning.collectionCreateIdempotencyKey` reports the V52
   control-plane capability. Restricted ACL
   projection fails closed with `503` when all Collection keys cannot be
   resolved.
+- `GET /api/v1/rag/integration-observability` requires `RAG_READ` for NORMAL
+  principals, uses an exclusive upper time bound, and supports HOUR/DAY,
+  operation, Collection, and management principal filters. NORMAL principals
+  are self/current-ACL only; root and database ADMIN can query broader scopes.
+  Disabled or incompletely resolved scope returns `503`.
 - `GET /api/v1/rag/usage` requires `RAG_READ` and accepts an inclusive UTC date
   range. Normal principals are restricted to themselves; ADMIN and environment
   root may select all or one principal. The default range is the latest 30 UTC

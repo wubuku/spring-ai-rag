@@ -141,8 +141,8 @@ class NextHighValueFeaturesPostgresIntegrationTest {
     }
 
     @Test
-    void migrationsCreateDurableControlPlanesFromEmptyDatabase() {
-        assertEquals("52", jdbc.queryForObject(
+    void latestMigrationsCreateDurableControlPlanesFromEmptyDatabase() {
+        assertEquals("54", jdbc.queryForObject(
                 "SELECT version FROM flyway_schema_history WHERE success = TRUE ORDER BY installed_rank DESC LIMIT 1",
                 String.class));
         assertEquals(2L, jdbc.queryForObject(

@@ -1,0 +1,24 @@
+package com.springairag.api.enums;
+
+/**
+ * 可被外部业务接入合同识别的固定 HTTP operation。
+ */
+public enum IntegrationOperation {
+    INTEGRATION_CAPABILITIES,
+    CURRENT_PRINCIPAL,
+    COLLECTION_LOOKUP,
+    COLLECTION_READINESS,
+    JSON_RECORD_UPSERT,
+    JSON_RECORD_BATCH_UPSERT,
+    JSON_RECORD_SEARCH,
+    JSON_RECORD_LOOKUP,
+    JSON_RECORD_TOMBSTONE,
+    SYNC_RUN_BEGIN,
+    SYNC_RUN_BATCH_UPSERT,
+    SYNC_RUN_PREVIEW,
+    SYNC_RUN_COMPLETE,
+    SYNC_RUN_ABORT,
+    SYNC_RUN_GET,
+    SYNC_RUN_ITEMS,
+    SYNC_RUN_LIST
+}

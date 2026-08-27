@@ -201,7 +201,50 @@ values; unavailable provider usage or pricing is counted rather than guessed.
 The ledger is observability data, not provider billing, settlement, or a
 hard-limit enforcement source.
 
-### 3.4 Dual-Table Conversation Memory
+### 3.4 Integration Data-Plane Observability
+
+The external integration data plane uses a separate request-observation path:
+
+```text
+IntegrationObservationFilter
+  -> fixed method/path classifier
+  -> final HTTP status + wall duration
+  -> stable principal projection
+  -> authorized Collection request context
+  -> bounded IntegrationObservationRecorder queue
+  -> grouped PostgreSQL upsert
+       -> rag_api_operation_hourly
+       -> rag_api_collection_operation_hourly
+```
+
+V54 stores UTC hourly request totals and authorized Collection contributions.
+The request table counts each request once. The Collection table records the
+Collections that were successfully resolved within the current authorization
+scope; its rows are contributions and must not be added together as a request
+total. Unknown or unauthorized Collection keys never enter Collection
+rollups.
+
+Recording is asynchronous and fail-open. Queue overflow, repository failure,
+and bounded shutdown drain loss do not change the business response or trigger
+provider/mutation retries. The query API explicitly reports
+`completeness.mode=BEST_EFFORT`, the current process's dropped count, retention,
+and the oldest included bucket.
+
+`GET /api/v1/rag/integration-observability` enforces current authorization
+before reading historical aggregates. NORMAL principals can query only
+themselves and their current Collection scope. Environment root and database
+ADMIN can query globally or select a database principal. Queries are bounded
+by time range, HOUR/DAY granularity, a finite operation enum, and a maximum
+Collection breakdown.
+
+Micrometer exposes request count/duration plus queue, flush, cleanup, and drop
+signals using fixed low-cardinality dimensions only. Stable principal IDs and
+Collection IDs exist only in PostgreSQL aggregates; credentials, request
+bodies, response bodies, queries, external IDs, dynamic URLs, and exception
+text are never recorded. These rollups support diagnosis, not billing,
+security audit, hard quota, or mutation recovery.
+
+### 3.5 Dual-Table Conversation Memory
 
 | Table | Purpose | Managed by |
 |-------|---------|------------|
@@ -227,7 +270,7 @@ Client cancellation disposes the model stream and does not commit an
 incomplete turn. Streaming fallback is allowed only before the first
 client-visible event.
 
-### 3.5 Domain Extension Mechanism
+### 3.6 Domain Extension Mechanism
 
 Explicit domain customization uses the `DomainRagExtension` interface:
 

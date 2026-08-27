@@ -258,6 +258,8 @@ PostgreSQL 数据库，并显式设置 `EXTERNAL_DOCUMENT_IT_CLEAN_CONFIRM=YES`�
   长度边界、双向跨 Collection ACL 和全数据面防枚举；
 - JSON Record 精确重放、CAS、payload containment、tombstone/恢复和 payload-only
   不重嵌入；
+- capability protocol `1.0`、非默认 JSON batch 上限、对应上限的真实 `400` 强制边界，
+  以及可选 operation-observability feature；
 - `ASYNC` 持久化 job 经真实 Spring AI embedding HTTP 路径收敛为 fresh；
 - 确定性 provider `503` 使 job 收敛为 `FAILED`，但保留已提交的 Record identity、
   revision、payload、enabled 状态和 document revision；
@@ -275,12 +277,16 @@ PostgreSQL 数据库，并显式设置 `EXTERNAL_DOCUMENT_IT_CLEAN_CONFIRM=YES`�
 - 确定性回归测试和真实 envelope 快速更新/删除路径共同覆盖异步 embedding 完成与外部
   mutation 的乐观锁竞态，确认服务以全新事务有界重试，并且不把内部派生竞争误报成普通业务
   CAS 冲突；
-- Flyway V49、明文 credential 为零、成功 embedding job 的 PostgreSQL 只读事实；
+- self operation/status/Collection observability、跨 principal/Collection 拒绝、有界延迟
+  摘要与重启持久化；
+- Flyway V54、明文 credential 为零、成功 embedding job 与 integration-operation
+  rollup 的 PostgreSQL 只读事实；
 - WebUI typecheck、Vitest、生产构建、核心 Mock Playwright 与真实 API Key Playwright。
 
 真实 HTTP 阶段除业务客户端合同外，还会把已部署 binding preflight 作为黑盒 client
 执行：`READ_ONLY` 与 `READ_WRITE` 画像成功、能力画像不匹配失败、allow-list 精确不匹配
-失败、Bearer canary mutation 成功，以及 provider 失败后的清理和最终 tombstone。测试会
+失败、运行时最低限制/feature 要求、Bearer canary mutation 成功，以及 provider 失败后的
+清理和最终 tombstone。测试会
 校验 preflight 报告 schema，并确认报告不包含 credential、URL、Collection key、
 external ID 或 payload。
 
@@ -300,9 +306,10 @@ RAG；不会把原始 envelope、私有 transport 引用或该目录路径写入
 
 每次运行都会在证据目录生成 `release-manifest.json`，记录 PASS/FAIL、验证阶段、完整 Git
 SHA、初始 tree state、项目/OpenAPI 版本、API base path、最新 Flyway migration、passed
-steps、PostgreSQL image、HTTP 检查数和
-`["READ_ONLY","READ_WRITE"]` 验证画像。未执行到的运行时事实为 JSON `null`；manifest
-不保存 credential、URL、payload、external ID 或 private path。
+steps、PostgreSQL image、HTTP 检查数、
+`["READ_ONLY","READ_WRITE"]` 验证画像，以及实测 JSON batch item/payload 上限与
+operation-observability 状态。未执行到的运行时事实为 JSON `null`；manifest 不保存
+credential、URL、payload、external ID 或 private path。
 
 聚焦复跑真实阶段：
 

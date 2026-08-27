@@ -91,6 +91,7 @@ class OpenApiContractTest {
             "ApiKeyCreatedResponse",
             "ApiKeyIdentityResponse",
             "IntegrationCapabilitiesResponse",
+            "IntegrationObservabilityResponse",
             "DocumentSyncRunItemPageResponse",
             "DocumentSyncRunItemReceiptResponse",
             "DocumentSyncRunItemCurrentSummary",
@@ -142,6 +143,7 @@ class OpenApiContractTest {
             "/rag/auth/me",
             "/rag/api-keys",
             "/rag/integration-capabilities",
+            "/rag/integration-observability",
             "/rag/document-sync-runs/{runId}/items",
             "/rag/health",
             "/rag/models",
@@ -594,7 +596,7 @@ class OpenApiContractTest {
         }
 
         @Test
-        @DisplayName("All responses use application/json content type")
+        @DisplayName("All responses use a supported JSON content type")
         void responsesUseJsonContentType() throws Exception {
             MvcResult result = mockMvc.perform(get(OPENAPI_SPEC_PATH))
                     .andExpect(status().isOk())
@@ -626,10 +628,13 @@ class OpenApiContractTest {
                                 // Skip SSE (text/event-stream) and HTML responses - they don't produce JSON
                                 boolean isNonJson = content.has("text/event-stream") || content.has("text/html");
                                 if (isNonJson) continue;
-                                // Accept application/json OR */* (springdoc uses */* for Map<String,Object> return types)
-                                boolean hasJsonOrWildcard = content.has("application/json") || content.has("*/*");
+                                // RFC 7807 errors use application/problem+json. Springdoc uses */* for
+                                // some Map<String, Object> response types.
+                                boolean hasJsonOrWildcard = content.has("application/json")
+                                        || content.has("application/problem+json")
+                                        || content.has("*/*");
                                 assertThat(hasJsonOrWildcard)
-                                        .as("Response %s for %s %s should specify application/json or */*",
+                                        .as("Response %s for %s %s should specify a supported JSON content type",
                                                 currentStatus, currentMethod, currentPath)
                                         .isTrue();
                             }
@@ -1066,6 +1071,33 @@ class OpenApiContractTest {
                                 responseCode)
                         .isTrue();
             }
+
+            JsonNode observability = findPath(
+                    paths, "/rag/integration-observability").path("get");
+            assertThat(observability.isMissingNode()).isFalse();
+            for (String parameter : java.util.List.of(
+                    "from",
+                    "to",
+                    "bucket",
+                    "operation",
+                    "collectionKey",
+                    "principalId")) {
+                assertThat(findParameter(observability, parameter).isMissingNode())
+                        .as("GET /integration-observability parameter %s",
+                                parameter)
+                        .isFalse();
+            }
+            for (String responseCode : java.util.List.of(
+                    "200", "400", "403", "503")) {
+                assertThat(observability.path("responses").has(responseCode))
+                        .as("GET /integration-observability must document %s",
+                                responseCode)
+                        .isTrue();
+            }
+            assertThat(observability.path("responses").path("200")
+                    .path("content").path("application/json")
+                    .path("schema").path("$ref").asText())
+                    .endsWith("/IntegrationObservabilityResponse");
         }
 
         @Test

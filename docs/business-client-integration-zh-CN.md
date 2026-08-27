@@ -191,8 +191,9 @@ principal，但不能恢复 raw secret；应轮换当前 credential，而不是�
 
 默认执行模式是只读，但默认 credential 画像为兼容既有调用方的 `READ_WRITE`。执行模式
 描述预检是否会产生 mutation，credential 画像描述调用方应该持有什么权限，两者不能混为
-一谈。预检会检查 readiness、OpenAPI `1.0.0`、所需 operation、`/auth/me`、能力画像、
-restricted allow-list 的精确相等关系，以及每个期望 Collection 当前是否 active：
+一谈。预检会检查 readiness、OpenAPI `1.0.0`、所需 operation、
+`/integration-capabilities`、`/auth/me`、能力画像、restricted allow-list 的精确相等关系，
+以及每个期望 Collection 当前是否 active：
 
 ```bash
 RAG_BINDING_BASE_URL=https://rag.example \
@@ -213,6 +214,20 @@ credential 文件必须是 owner-only 可读的普通文件，并且只包含一
 ASCII key 的 JSON 数组。runner 会拒绝 query credential、URL user-info、redirect、非
 loopback HTTP 和关闭 TLS 校验的选项。默认使用 `X-API-Key`；设置
 `RAG_BINDING_AUTH_SCHEME=BEARER` 可改用等价的 Bearer Header。
+
+调用方可以要求部署实例的运行时合同达到最低 batch envelope，并要求 operation
+observability；不满足时预检 fail closed：
+
+```bash
+RAG_BINDING_MIN_JSON_BATCH_ITEMS=10 \
+RAG_BINDING_MIN_JSON_BATCH_PAYLOAD_BYTES=1048576 \
+RAG_BINDING_REQUIRE_OPERATION_OBSERVABILITY=true \
+  ./scripts/business-client-binding-preflight.sh
+```
+
+item/payload 最低值是可选的正整数；observability 要求只接受 `true` 或 `false`。runner
+始终要求 capability protocol `1.0` 和合法的机器可读 structured-record 限制；这些最低
+要求只增加部署特定约束，不改变协议版本。
 
 只有在预先创建了、且不承载业务数据的专用 canary Collection 时，才可以显式启用有界
 mutation smoke。它要求同时设置 mode 和确认标志，并且该 canary key 必须是该 binding
@@ -236,9 +251,11 @@ mutation 流程使用本次运行唯一的外部身份，验证 ASYNC 持久化�
 每次运行会在 `RAG_BINDING_PREFLIGHT_EVIDENCE_DIR` 指定的目录（未指定时使用默认
 verification 目录）生成 `preflight-report.json`、`summary.md` 和 `steps.tsv`。
 JSON 报告分别记录调用方期望的 `expectedCapabilityProfile` 和成功自省后确认的
-`principal.capabilityProfile`；后者在能力未验证时为 `null`。报告只包含低敏标签、计数、
-版本、状态和失败类别，不包含 credential、URL、Collection key、external ID、payload
-或响应正文。预检失败应视为 binding 失败，不能继续投递，也不能为了让部署通过而削弱检查。
+`principal.capabilityProfile`；后者在能力未验证时为 `null`。报告还会记录 capability
+protocol、已验证 JSON batch 上限、observability feature 和调用方设置的最低要求。其余
+内容只包含低敏标签、计数、版本、状态和失败类别，不包含 credential、URL、Collection
+key、external ID、payload 或响应正文。预检失败应视为 binding 失败，不能继续投递，也
+不能为了让部署通过而削弱检查。
 
 ## 5. JSON Record mutation 合同
 
@@ -317,18 +334,37 @@ durable embedding job 的 `default-max-attempts`/`max-attempts` 是两层独立�
 - embedding 可用性读取文档 lifecycle 或
   `/api/v1/rag/collections/embedding-readiness`；业务 binding 另用 `/auth/me` 和
   Collection by-key。
-- 空库或升级环境必须按顺序执行 Flyway V1-V52。V49 为 stable principal 增加
+- 空库或升级环境必须按顺序执行 Flyway V1-V54。V49 为 stable principal 增加
   operation capabilities；V50 增加不保存 raw credential 的成功 provisioning 幂等
   ledger；V51 为 Sync Run item receipt 增加未过滤和按状态过滤的 keyset 索引；V52
-  增加独立、按 owner 隔离的 Collection 创建幂等账本。
+  增加独立、按 owner 隔离的 Collection 创建幂等账本；V53 增加模型调用用量账本；
+  V54 增加有界 UTC 小时级 integration operation 与已授权 Collection contribution 聚合。
 - 生产调用方应锁定已验收的 Git commit 或由该 commit 构建的不可变镜像。当前 Maven/API
   版本仍为 `1.0.0`。
 - `/auth/me` 的新增字段保持向后兼容；旧 client 会忽略，依赖 capability/ACL 自检的
   client 必须先运行合同门禁，再升级业务实例。
-- V49/V50/V51/V52 都是向前兼容增量迁移，不执行破坏性 schema 回退。若应用回滚到
+- V49 至 V54 都是向前兼容增量迁移，不执行破坏性 schema 回退。若应用回滚到
   不识别 operation capabilities、keyed principal/Collection provisioning 或 item receipt
-  查询的版本，应继续保留 schema，并停止依赖对应合同的 client，不能宽松启动、退化为
-  无幂等 create，或假定 receipt endpoint 仍存在。
+  查询、usage 聚合或 integration observability 的版本，应继续保留 schema，并停止依赖
+  对应合同的 client，不能宽松启动或假定缺失 endpoint 仍存在。
+
+### Operation observability
+
+当 `features.optional.integrationObservability=true` 时，具有 `RAG_READ` 的 principal
+可以调用：
+
+```text
+GET /api/v1/rag/integration-observability
+```
+
+默认窗口是最近 24 小时，默认粒度为 `HOUR`。可用 `operation` 与 `collectionKey`
+缩小故障定位范围。普通 principal 只能查询自身及其当前 Collection 授权范围；root 和
+数据库 ADMIN 可以指定 `principalId` 或查询全局视图。
+
+该响应是 best-effort 运维聚合，不是 mutation receipt、审计轨迹、quota 计数、provider
+账单或结算来源。每个请求在 totals 中只贡献一次；多 Collection 请求可能同时对多个已授权
+Collection 行贡献，不能把 Collection contribution 相加当作请求总量。权威恢复仍使用
+JSON Record lookup/revision、Sync Run receipt 与 lifecycle/readiness。
 
 ## 8. 一键接入验收
 
@@ -358,12 +394,15 @@ BUSINESS_CLIENT_VERIFY_PHASE=real \
 ./scripts/verify-business-client-readiness.sh
 ```
 
-完整门禁串行执行 focused 后端测试、三个隔离 PostgreSQL 集成矩阵、
+完整门禁串行执行 focused 后端测试、四个隔离 PostgreSQL 集成矩阵、
 `mvn clean compile test-compile`、WebUI typecheck/Vitest/生产构建、核心 Mock
 Playwright、文档/禁锁/密钥/diff 门禁，以及真实 Spring Boot、包含已部署 binding
 preflight 的 HTTP 合同和真实 API Key Playwright。HTTP 合同明确验证只读 query principal
 之前，还验证 keyed principal create 可跨实例安全重试、不重放 secret、轮换/吊销后 replay
-返回当前 credential 状态，并暴露按调用方投影的运行时 capability 合同。随后验证 query
+返回当前 credential 状态，并暴露按调用方投影的运行时 capability 合同。门禁以 JSON
+batch items `3`、batch payload `2048` 的非默认限制，验证 capability 返回值与真实 `400`
+边界一致；还会查询 operation/status/Collection rollup，拒绝跨 principal/Collection
+观测，并验证服务重启后聚合仍存在。随后验证 query
 可以 lookup/search、不能 upsert/delete，且拒绝后 revision 和状态不变；读写 dispatcher
 继续负责 mutation，credential 轮换保持原能力。合同还运行代表性的租户/共享拓扑：同一个
 query principal 绑定两个 Collection，两个 dispatcher 不能交叉写入，另一租户仍不可访问；
@@ -384,8 +423,9 @@ event/record/fingerprint 材料不会进入 RAG。
 `.verification/business-client-readiness/<run-id>/`；private credential 文件由退出 trap
 删除。`release-manifest.json` 记录运行结果、验证阶段、完整 Git SHA、初始 tree state、
 项目/OpenAPI 版本、API base path、最新 Flyway migration、passed steps、PostgreSQL image
-、HTTP contract check 数和已验证的 `READ_ONLY`/`READ_WRITE` 画像；未到达的运行时事实
-使用 JSON `null`，不保存 credential、URL、payload、external ID 或 private path。确定性
+、HTTP contract check 数、已验证的 `READ_ONLY`/`READ_WRITE` 画像，以及实测 JSON batch
+item/payload 上限和 operation-observability 状态；未到达的运行时事实使用 JSON `null`，
+不保存 credential、URL、payload、external ID 或 private path。确定性
 embedding stub 验证真实 Spring AI
 embedding HTTP 路径及 503 失败保留合同，但本能力不改变 Chat，因此该门禁不调用 Chat LLM。
 
@@ -395,10 +435,9 @@ embedding HTTP 路径及 503 失败保留合同，但本能力不改变 Chat，�
   或独立 tenant 层级。
 - capability discovery 描述受支持协议行为和当前 principal 投影；仍必须使用 `/auth/me`、
   Collection 探针和部署特定 binding 检查。
-- capability discovery 当前只发布核心身份/地址上限；JSON Record 的 batch、payload、filter、
-  search 和 Sync Run 分页上限仍需读取配置/合同文档，尚不能完全由运行时响应发现。
-- 当前 endpoint timer、SLO、限流指标和 Collection readiness 是分散的运行事实；服务尚未提供
-  跨重启、按 stable principal 与授权 Collection 自助查询的数据面 operation 汇总。不要把
-  principal ID 或 Collection key 临时加入 Micrometer 高基数标签来绕过该边界。
+- operation observability 是小时级 best-effort 聚合；queue/database 故障可能丢失观测，
+  当前实例 drop 计数不是集群级丢失账本，API 也不提供逐请求 trace。
+- operation catalog 有意保持有限，只覆盖集成数据面。不得为了绕过该边界把 principal ID、
+  Collection key、动态 URL 或 external ID 加入 Micrometer 标签。
 
 这些后续边界见 [TODO](TODO-zh-CN.md#受管-api-principal-后续边界)。

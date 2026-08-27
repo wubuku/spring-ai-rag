@@ -79,6 +79,9 @@ relevant evergreen guide/reference, `docs/TODO*`, and the
   `2026-08-26_MANAGED_PROVISIONING_CAPABILITY_DISCOVERY_*`
 - Durable Sync Run item receipts, status filtering, and stable terminal-run
   cursor traversal: `2026-08-26_SYNC_RUN_ITEM_RECEIPTS_*`
+- External-integration runtime-limit discovery, data-plane operation rollups,
+  and privacy-safe operability queries:
+  `2026-08-27_EXTERNAL_INTEGRATION_OPERABILITY_*`
 
 This list is only an aid for historical discovery. It does not state current
 priority or capability status.

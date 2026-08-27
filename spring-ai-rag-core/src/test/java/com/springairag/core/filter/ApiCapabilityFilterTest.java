@@ -28,6 +28,9 @@ class ApiCapabilityFilterTest {
                         "GET", "/api/v1/rag/document-sync-runs/run-id/items"));
         assertEquals("RAG_READ",
                 ApiCapabilityFilter.requiredCapability(
+                        "GET", "/api/v1/rag/integration-observability"));
+        assertEquals("RAG_READ",
+                ApiCapabilityFilter.requiredCapability(
                         "POST", "/api/v1/rag/chat/ask"));
         assertEquals("RAG_READ",
                 ApiCapabilityFilter.requiredCapability(

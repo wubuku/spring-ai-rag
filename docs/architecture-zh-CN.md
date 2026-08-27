@@ -179,7 +179,42 @@ ADMIN 和 environment root 可以查询全部 principal 或指定 principal。to
 成本都是显式聚合值；provider usage 或价格缺失时计数但不猜测。该账本是可观测性数据，
 不是 provider 账单、结算或 hard-limit 执行依据。
 
-### 3.4 双表对话记忆
+### 3.4 集成数据面可观测性
+
+外部集成数据面使用独立的请求观测链路：
+
+```text
+IntegrationObservationFilter
+  -> 固定 method/path 分类
+  -> 最终 HTTP status + wall duration
+  -> stable principal 投影
+  -> 已授权 Collection request context
+  -> 有界 IntegrationObservationRecorder queue
+  -> 分组 PostgreSQL upsert
+       -> rag_api_operation_hourly
+       -> rag_api_collection_operation_hourly
+```
+
+V54 保存 UTC 小时级请求总量和已授权 Collection contribution。request 表中每个请求只
+计一次；Collection 表记录在当前授权范围内成功解析的 Collection，其行是 contribution，
+不能相加冒充请求总量。未知或未授权 Collection key 不会进入 Collection rollup。
+
+记录是异步且 fail-open 的。queue 溢出、repository 故障和有界停机 drain 丢失不会改变
+业务响应，也不会触发 provider/mutation retry。查询 API 通过
+`completeness.mode=BEST_EFFORT`、当前进程 dropped count、retention 与最早包含 bucket
+明确暴露完整性边界。
+
+`GET /api/v1/rag/integration-observability` 会先按当前授权校验范围，再读取历史聚合。
+NORMAL principal 只能查询自身及其当前 Collection 范围；environment root 与数据库
+ADMIN 可以查询全局或指定数据库 principal。查询受到时间窗口、HOUR/DAY 粒度、有限
+operation 枚举和 Collection breakdown 上限约束。
+
+Micrometer 只使用固定低基数维度暴露请求数量/耗时以及 queue、flush、cleanup、drop
+信号。stable principal ID 和 Collection ID 只存在于 PostgreSQL 聚合；credential、
+请求/响应正文、query、external ID、动态 URL 与异常正文都不会被记录。这些 rollup
+用于故障定位，不是 billing、安全审计、hard quota 或 mutation 恢复依据。
+
+### 3.5 双表对话记忆
 
 | 表 | 用途 | 管理方 |
 |---|------|--------|
@@ -202,7 +237,7 @@ session 都返回 `SESSION_NOT_FOUND`，避免会话枚举。
 客户端取消会 dispose 模型流，不提交未完成 turn；流式 fallback 只允许发生在第一个
 客户端可见事件之前。
 
-### 3.5 领域扩展机制
+### 3.6 领域扩展机制
 
 通过 `DomainRagExtension` 接口实现显式领域定制：
 

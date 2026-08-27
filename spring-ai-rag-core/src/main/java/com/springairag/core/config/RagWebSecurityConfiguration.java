@@ -6,9 +6,12 @@ import com.springairag.core.filter.RateLimitFilter;
 import com.springairag.core.ratelimit.PostgresRateLimitStore;
 import com.springairag.core.ratelimit.RateLimitObservability;
 import com.springairag.core.ratelimit.SharedRateLimitMaintenance;
+import com.springairag.core.observability.IntegrationObservationFilter;
+import com.springairag.core.observability.IntegrationObservationRecorder;
 import io.micrometer.core.instrument.MeterRegistry;
 import com.springairag.core.security.EnvironmentRootCredentialResolver;
 import com.springairag.core.service.ApiKeyManagementService;
+import jakarta.servlet.Filter;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -55,6 +58,36 @@ public class RagWebSecurityConfiguration {
         registration.addUrlPatterns("/api/*", "/v1/*");
         // 认证先于限流，确保限流只使用稳定 principal ID，不接触 root 明文。
         registration.setOrder(-10);
+        return registration;
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(name = "integrationObservationFilterRegistration")
+    public FilterRegistrationBean<Filter>
+    integrationObservationFilterRegistration(
+            RagProperties properties,
+            ObjectProvider<IntegrationObservationRecorder> recorders,
+            ObjectProvider<MeterRegistry> registries) {
+        IntegrationObservationRecorder recorder = recorders.getIfAvailable();
+        if (recorder == null) {
+            FilterRegistrationBean<Filter> registration =
+                    new FilterRegistrationBean<>(
+                            (request, response, chain) ->
+                                    chain.doFilter(request, response));
+            registration.setEnabled(false);
+            return registration;
+        }
+        MeterRegistry registry = registries.getIfAvailable();
+        if (registry == null) {
+            throw new IllegalStateException(
+                    "Integration observation requires a MeterRegistry");
+        }
+        FilterRegistrationBean<Filter> registration =
+                new FilterRegistrationBean<>(
+                        new IntegrationObservationFilter(recorder, properties, registry));
+        registration.addUrlPatterns("/api/*", "/v1/*");
+        // 外层包裹认证、capability 和限流，以便记录 401/403/429。
+        registration.setOrder(-20);
         return registration;
     }
 

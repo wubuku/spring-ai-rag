@@ -2,7 +2,7 @@
 
 > 📖 [English](TODO.md) · [中文](TODO-zh-CN.md)
 >
-> 最后复核：2026-08-26。本文只记录当前代码和正式 API 之外的后续事项，不代表
+> 最后复核：2026-08-27。本文只记录当前代码和正式 API 之外的后续事项，不代表
 > 已发布的 API 能力。
 
 ## 已交付的接入门禁
@@ -16,6 +16,8 @@
   不匹配、Bearer canary 成功和 provider 失败清理场景的 secret-safe 报告。
 - [x] preflight 精确验证 `READ_ONLY` / `READ_WRITE` credential 画像；真实 HTTP 合同拆分
   只读 query 与读写 dispatcher，并验证写拒绝后状态不变。
+- [x] capability preflight 可要求最低运行时 JSON batch 上限与 operation observability；
+  V54 增加按 principal/ACL 隔离的 best-effort 小时聚合、低基数指标与脱敏证据。
 
 ## 受管 API Principal 后续边界
 
@@ -27,7 +29,8 @@
 | operation-scoped `RAG_READ` / `RAG_WRITE` 强制授权 | V49 已交付 | 中央 filter 在认证后、限流前按 operation 强制能力；只读 principal 可 Search/Chat，写请求 `403` |
 | principal provisioning 幂等键 | V50 已交付 | 可选 keyed create 支持不返回一次性 secret 的精确重放；语义复用冲突和账本故障均 fail closed |
 | Collection 创建幂等键 | V52 已交付 | 可选、按 owner 隔离的 keyed 创建支持跨实例/重启 replay 当前 Collection 状态；语义复用和账本故障均 fail closed |
-| machine-readable 集成协议版本 / 能力发现 | V50 已交付 | 认证、no-store endpoint 投影协议、调用方 policy、数据面行为、可选特性和稳定上限 |
+| machine-readable 集成协议版本 / 能力发现 | V50 交付，V54 补全 | 认证、no-store endpoint 投影协议、调用方 policy、数据面行为、structured-record/Sync Run/observability 上限和可选特性 |
+| 按 principal/Collection 的集成 operation 可观测性 | V54 已交付 | 有界 fail-open 小时 rollup 支持 self/当前 ACL 定位与 root/ADMIN 管理查询，不使用高基数 metric 标签 |
 | OAuth/OIDC 与独立租户层级 | 后续独立规划 | 当前仍是 environment root + 受管业务 principal，不提供第三方身份 federation |
 | 模型 invocation 级 token/cost 持久用量账本 | V53 已交付 | `BudgetedChatModel` 为 Chat、query transform/expand、summary、fallback、应用 retry 和 AGENT 轮次记录有界的 principal/session/trace 归因；`GET /api/v1/rag/usage` 提供 UTC 聚合用量和配置成本估算 |
 | token/cost hard limit、billing 与结算 | 后续独立规划 | 需要预授权、预留、结算、跨实例超额保护和崩溃恢复，不能直接建立在 best-effort 观测账本上 |

@@ -72,6 +72,8 @@ public class RagProperties {
     private final RagCollectionProvisioningProperties collectionProvisioning =
             new RagCollectionProvisioningProperties();
     private final RagUsageProperties usage = new RagUsageProperties();
+    private final RagIntegrationObservabilityProperties integrationObservability =
+            new RagIntegrationObservabilityProperties();
 
     public RagEmbeddingProperties getEmbedding() {
         return embedding;
@@ -183,5 +185,9 @@ public class RagProperties {
 
     public RagUsageProperties getUsage() {
         return usage;
+    }
+
+    public RagIntegrationObservabilityProperties getIntegrationObservability() {
+        return integrationObservability;
     }
 }

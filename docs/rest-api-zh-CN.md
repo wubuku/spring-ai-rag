@@ -128,7 +128,8 @@ allow-list。数据库业务 Key 不能用该端点查看其他 principal；WebU
     "optional": {
       "documentSyncRuns": false,
       "documentSyncRunItemReceipts": false,
-      "openAiCompatibility": false
+      "openAiCompatibility": false,
+      "integrationObservability": true
     }
   },
   "limits": {
@@ -136,15 +137,67 @@ allow-list。数据库业务 Key 不能用该端点查看其他 principal；WebU
     "collectionKeyMaxLength": 128,
     "sourceNamespaceMaxLength": 128,
     "externalIdMaxLength": 255,
-    "sourceRevisionMaxLength": 255
+    "sourceRevisionMaxLength": 255,
+    "structuredRecords": {
+      "maxJsonbPayloadBytes": 1048576,
+      "maxRetrievalTextChars": 10000,
+      "maxBatchItems": 20,
+      "maxBatchPayloadBytes": 10485760,
+      "maxSearchResults": 20,
+      "maxPayloadFilterBytes": 16384,
+      "maxPayloadFilterDepth": 8
+    },
+    "syncRuns": {
+      "maxBatchItems": 100,
+      "maxItemReceiptPageItems": 200,
+      "maxRunListPageItems": 100
+    },
+    "observability": {
+      "retentionDays": 90,
+      "maxQueryRangeDays": 31,
+      "maxCollectionBreakdownItems": 100
+    }
   }
 }
 ```
 
 响应有意不暴露 credential/principal ID、provider 配置、数据库细节或 secret，并直接反映
-运行时 feature flag。restricted ACL 无法完整映射为稳定 Collection key 时返回
+运行时 feature flag、可配置 structured-record/observability 限制；固定 Sync Run 上限
+与请求校验复用同一组常量。restricted ACL 无法完整映射为稳定 Collection key 时返回
 `503 SERVICE_UNAVAILABLE`，不会发布部分合同。客户端先用该端点选择受支持行为，再用
 `/auth/me` 和 Collection 探针验证精确部署 binding。
+
+#### `GET /api/v1/rag/integration-observability`
+
+返回服务稳定外部接入 operation 的有界、best-effort UTC 聚合。数据库 NORMAL
+principal 调用时要求 `RAG_READ`，响应始终带 `Cache-Control: no-store`。
+
+查询参数：
+
+| 参数 | 默认值 | 合同 |
+|---|---|---|
+| `from` | `to` 之前 24 小时 | 包含边界的 ISO-8601 instant |
+| `to` | 当前时间 | 不包含边界的 ISO-8601 instant |
+| `bucket` | `HOUR` | `HOUR` 或 `DAY` |
+| `operation` | 全部受支持 operation | `IntegrationOperation` 枚举值 |
+| `collectionKey` | 当前有权访问的全部 Collection | active Collection key |
+| `principalId` | 当前 principal；管理调用方默认全部 | 仅 root/ADMIN 可指定 |
+
+查询窗口默认最多 31 天。数据库 NORMAL principal 只能查询自身 stable principal 和当前
+Collection 授权范围；root 与数据库 ADMIN 可查询全局或指定一个数据库 principal。
+legacy static 与匿名身份被拒绝；关闭认证的本地模式只提供本地全局视图。非法输入返回
+`400`，越权范围返回 `403`，观测关闭或授权范围无法完整解析时返回 `503`。
+
+响应包含请求总量、平均/最大耗时、由 histogram 估算的 P50/P95 上界、status/operation
+拆分、已授权 Collection contribution 以及小时/日时间线。每个请求总量只计一次；
+Collection contribution 表示已授权参与关系，不能相加冒充请求总量。
+`completeness.mode=BEST_EFFORT` 与 `currentInstanceDropped` 明确说明其不是计费账本。
+
+V54 只在 `rag_api_operation_hourly` 与
+`rag_api_collection_operation_hourly` 保存 UTC 小时聚合，不保存请求/响应正文、query、
+payload、external ID、credential、动态 URL 或异常正文。记录器使用异步有界队列，故障
+对业务请求 fail-open。Micrometer 标签仅允许固定 operation、status class、principal
+type、result 和 drop reason；principal ID 与 Collection key 不会进入 metric 标签。
 
 对数据库 NORMAL principal，`GET`/`HEAD`/`OPTIONS` 和明确的只读 POST
 （Search、Chat、JSON Record search、model compare、非持久化 evaluation、

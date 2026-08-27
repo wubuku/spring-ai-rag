@@ -19,7 +19,7 @@
 | 真实 LLM E2E 端口 | `18081` |
 | Embedding | SiliconFlow `BAAI/bge-m3` |
 | 向量维度 | `1024` |
-| Flyway | V1–V53 |
+| Flyway | V1–V54 |
 
 OpenAI / Embedding 的 `base-url` **不要带 `/v1`**。Spring AI 会自行追加 `/v1/chat/completions` 或 `/v1/embeddings`。
 
@@ -408,7 +408,7 @@ MANAGED_API_REAL_ENV_FILE=.env \
 ./scripts/verify-business-client-readiness.sh
 ```
 
-该门槛从 focused API/core 测试开始，串行创建三个 PostgreSQL 集成测试数据库，执行
+该门槛从 focused API/core 测试开始，串行创建一次性 PostgreSQL 集成测试数据库，执行
 `mvn clean compile test-compile`、WebUI typecheck/Vitest/生产构建、核心 Mock
 Playwright、文档/禁锁/密钥/diff 检查，最后启动一次性 PostgreSQL、确定性 embedding
 stub、真实 Spring Boot 和真实 Vite 前端，运行通用业务 credential HTTP 合同与真实 API
@@ -433,20 +433,24 @@ BUSINESS_CLIENT_REQUIRE_CLEAN_GIT=true \
 `BUSINESS_CLIENT_MOCK_FRONTEND_PORT`、`BUSINESS_CLIENT_REAL_FRONTEND_PORT` 覆盖。
 PostgreSQL 镜像可用 `BUSINESS_CLIENT_POSTGRES_IMAGE` 覆盖。证据写入
 `.verification/business-client-readiness/<run-id>/`，private credential 文件、容器、
-端口和进程由退出 trap 清理。真实 HTTP 合同当前为 109 项，并包含 provider `503` 后
-Record 保留语义。目录中的 `release-manifest.json` 锁定完整 Git SHA、初始 tree state、
-项目/OpenAPI 版本、API base path、V49、passed steps、PostgreSQL image 和 HTTP 检查数；
-未到达的运行时事实为 JSON `null`，不记录 credential、URL、payload、external ID 或
-private path。
+端口和进程由退出 trap 清理。真实 HTTP 合同包含只读/canary binding preflight、运行时
+限制强制、按 principal/Collection 隔离的 operation observability、重启持久化，以及
+provider `503` 后的 Record 保留语义。`release-manifest.json` 锁定完整 Git SHA、初始
+tree state、项目/OpenAPI 版本、API base path、最新 Flyway migration、passed steps、
+PostgreSQL image、HTTP 检查数、已验证 credential 画像，以及实测 JSON batch
+item/payload 上限与 operation-observability 状态；未到达的运行时事实为 JSON `null`，
+不记录 credential、URL、payload、external ID 或 private path。
 
-真实 HTTP 合同当前为 129 项，包含只读 binding preflight、canary 场景以及 provider
-`503` 后 Record 保留。也可以对已经运行的实例单独执行已部署 binding runner：
+也可以对已经运行的实例单独执行已部署 binding runner：
 
 ```bash
 ./scripts/business-client-binding-preflight.sh
 ```
 
 它默认只读。`RAG_BINDING_*` 输入见[业务服务接入指南](business-client-integration-zh-CN.md)；
+`RAG_BINDING_MIN_JSON_BATCH_ITEMS`、
+`RAG_BINDING_MIN_JSON_BATCH_PAYLOAD_BYTES` 与
+`RAG_BINDING_REQUIRE_OPERATION_OBSERVABILITY` 可以增加 fail-closed 的运行时要求。
 Mutation 模式必须使用专用 canary Collection，并且机器报告不包含 credential、URL、
 Collection key、external ID 或 payload。
 

@@ -2,6 +2,7 @@ package com.springairag.core.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.springairag.api.contract.DocumentSyncRunLimits;
 import com.springairag.api.dto.DocumentSyncRunBatchUpsertRequest;
 import com.springairag.api.dto.DocumentSyncRunBatchUpsertResponse;
 import com.springairag.api.dto.DocumentSyncRunBeginRequest;
@@ -173,6 +174,11 @@ public class DocumentSyncRunService {
         Objects.requireNonNull(request, "request");
         if (request.items() == null || request.items().isEmpty()) {
             throw new IllegalArgumentException("items must not be empty");
+        }
+        if (request.items().size() > DocumentSyncRunLimits.MAX_BATCH_ITEMS) {
+            throw new IllegalArgumentException(
+                    "items must contain at most "
+                            + DocumentSyncRunLimits.MAX_BATCH_ITEMS + " entries");
         }
         String tokenHash = hashToken(token);
         List<DocumentSyncRunItemResponse> results = new ArrayList<>(
@@ -404,8 +410,11 @@ public class DocumentSyncRunService {
             int limit,
             String cursor) {
         requireEnabled();
-        if (limit < 1 || limit > 200) {
-            throw new IllegalArgumentException("limit must be 1..200");
+        if (limit < 1
+                || limit > DocumentSyncRunLimits.MAX_ITEM_RECEIPT_PAGE_ITEMS) {
+            throw new IllegalArgumentException(
+                    "limit must be 1.."
+                            + DocumentSyncRunLimits.MAX_ITEM_RECEIPT_PAGE_ITEMS);
         }
         RagCollection collection = requireReadableCollection(collectionKey);
         RunRow run = requireRun(
@@ -452,8 +461,12 @@ public class DocumentSyncRunService {
             int page,
             int size) {
         requireEnabled();
-        if (page < 0 || size < 1 || size > 100) {
-            throw new IllegalArgumentException("page must be >= 0 and size must be 1..100");
+        if (page < 0
+                || size < 1
+                || size > DocumentSyncRunLimits.MAX_RUN_LIST_PAGE_ITEMS) {
+            throw new IllegalArgumentException(
+                    "page must be >= 0 and size must be 1.."
+                            + DocumentSyncRunLimits.MAX_RUN_LIST_PAGE_ITEMS);
         }
         RagCollection collection = requireReadableCollection(collectionKey);
         String namespace = sourceNamespace == null

@@ -198,6 +198,21 @@ class DocumentSyncRunControllerWebTest {
                 "opaque-cursor");
     }
 
+    @Test
+    void rejectsPagingLimitsAbovePublishedCapability() throws Exception {
+        UUID runId = UUID.randomUUID();
+
+        mockMvc.perform(get("/api/v1/rag/document-sync-runs/" + runId + "/items")
+                        .param("collectionKey", "catalog")
+                        .param("limit", "201"))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(get("/api/v1/rag/document-sync-runs")
+                        .param("collectionKey", "catalog")
+                        .param("size", "101"))
+                .andExpect(status().isBadRequest());
+    }
+
     private static DocumentSyncRunResponse response(
             UUID runId,
             DocumentSyncRunStatus status) {

@@ -2,7 +2,7 @@
 
 > 📖 [English](TODO.md) · [中文](TODO-zh-CN.md)
 >
-> Last reviewed: 2026-08-26. This file records follow-up work outside the
+> Last reviewed: 2026-08-27. This file records follow-up work outside the
 > current code and public API; it does not describe shipped capabilities.
 
 ## Delivered Integration Gates
@@ -19,6 +19,9 @@
 - [x] The preflight verifies exact `READ_ONLY` / `READ_WRITE` credential
   profiles. The real HTTP contract separates a read-only query principal from
   a read/write dispatcher and proves rejected writes leave state unchanged.
+- [x] Capability preflight can require minimum runtime JSON batch limits and
+  operation observability. V54 adds principal/ACL-scoped, best-effort hourly
+  operation aggregates with low-cardinality metrics and secret-safe evidence.
 
 ## Managed API Principal Follow-Ups
 
@@ -30,7 +33,8 @@
 | Operation-scoped `RAG_READ` / `RAG_WRITE` enforcement | Shipped in V49 | A central filter enforces capabilities after authentication and before rate limiting; read-only principals may Search/Chat and writes return `403` |
 | Principal-provisioning idempotency key | Shipped in V50 | Optional keyed creation supports exact replay without returning the shown-once secret; semantic reuse conflicts and ledger failure fail closed |
 | Collection-create idempotency key | Shipped in V52 | Optional owner-scoped keyed creation supports cross-instance/restart replay of current Collection state; semantic reuse and ledger failure fail closed |
-| Machine-readable integration protocol version / capability discovery | Shipped in V50 | An authenticated, no-store endpoint projects protocol, caller policy, supported data-plane behaviors, optional features, and stable limits |
+| Machine-readable integration protocol version / capability discovery | Shipped in V50, completed in V54 | An authenticated, no-store endpoint projects protocol, caller policy, supported behavior, structured-record/Sync Run/observability limits, and optional features |
+| Principal/Collection integration operation observability | Shipped in V54 | A bounded fail-open hourly rollup supports self/current-ACL diagnosis plus root/ADMIN management queries without high-cardinality metric tags |
 | OAuth/OIDC and an independent tenant hierarchy | Separate future plan | The current system remains environment root plus managed business principals and has no third-party identity federation |
 | Persistent token/cost observability per model invocation | Shipped in V53 | `BudgetedChatModel` records bounded principal/session/trace attribution for Chat, query transform/expand, summaries, fallbacks, application retries, and AGENT rounds; `GET /api/v1/rag/usage` exposes UTC aggregate usage and configured-cost estimates |
 | Token/cost hard limits, billing, and settlement | Separate future plan | These require authorization, reservation, settlement, cross-instance overspend protection, and crash recovery; they cannot rely directly on a best-effort observability ledger |
