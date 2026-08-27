@@ -15,7 +15,7 @@
 - [x] Helm `version` 与 `appVersion` 均为 `1.0.0`
 - [x] Docker/Helm 默认镜像 tag 为 `1.0.0`
 - [x] 本地、Docker 与 Helm 默认端口均为 `8081`
-- [x] Flyway 迁移范围为 V1-V55
+- [x] Flyway 迁移范围为 V1-V56
 - [x] JSONB 结构化记录 API、payload 快照和 Collection 生命周期已覆盖
 - [x] `scripts/verify-jsonb-records.sh` 固化后端/数据库/前端聚焦验证
 - [x] 文档 PATCH/禁用/恢复/永久删除与外部三元身份已覆盖
@@ -207,6 +207,29 @@
   `v55-minimax-postmerge-20260828-r2` 为 13/13 通过；独立真实 RAG
   `v55-minimax-postmerge-20260827-r5` 为 `PASS=10 FAIL=0`，并完成带 revision 的
   永久删除及最终数据库事实确认。
+
+### 2026-08-27 Collection 受保护清理与退役门禁
+
+- [x] V56 增加永久 key tombstone、Chat commit fence、Chat/feedback 规范化文档引用与
+  完整性标记，以及不保存正文/明文 token 的 durable purge preview。
+- [x] preview/apply 使用 environment root、数据库 ADMIN 或显式 auth-disabled direct
+  loopback 权限；caller-aware capability protocol 升为 `1.1`，并发布同步清理上限。
+- [x] Collection-first 条件写入统一保护文档 mutation、同步、repair、feedback、Chat、
+  restore/relocation/clone 和 purge；禁止显式悲观锁。
+- [x] PostgreSQL 5 场景矩阵覆盖完整级联、无关数据/独立文件保留、活动 lease/run 阻断、
+  坏历史引用 fail closed、权限、回滚、精确 replay、cleanup 与退役 scope。
+- [x] WebUI 只为 environment root 且 capability 可见时显示入口；token 不渲染，必须精确
+  输入 key，成功结果保持可访问并刷新 active-only 列表，409 不自动重试。
+- [x] `verify-collection-purge.sh` 固化聚焦后端、PostgreSQL、Maven clean、WebUI、
+  Mock Playwright、禁锁、文档、脚本和空白门槛。
+- [x] 使用隔离 PostgreSQL 和真实 LLM/Embedding 完成退役前写入/检索/Chat、purge 与退役后
+  显式拒绝/默认范围排除的生命周期验收；`real-provider-20260828-r8` 为 `12/12`，
+  全局/Collection purge rollup 均为正，日志无 observation drop/Provider/数据库异常，
+  持久化证据不含密钥、正文、明文 token 或完整模型回答。
+- [x] 同步最新 `origin/main` 后从合并基线完整重跑：`post-merge-20260828-r1`
+  专项门禁 **9/9**，含后端 **186/186**、PostgreSQL **11/11**、WebUI Vitest
+  **233/233**、Mock Playwright **3/3** 和 Maven/前端/文档门槛；
+  `real-provider-post-merge-20260828-r2` 真实生命周期 **12/12**，日志和脱敏证据复核通过。
 
 ### 最终证据（2026-07-21）
 

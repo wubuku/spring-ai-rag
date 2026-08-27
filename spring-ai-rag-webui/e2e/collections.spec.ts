@@ -72,6 +72,146 @@ test.describe('Collection creation idempotency', () => {
     });
 });
 
+test.describe('Collection purge', () => {
+  test('previews and applies the frozen plan while retaining the result',
+    async ({ page }) => {
+      await mockAllApiCalls(page);
+      let collectionActive = true;
+      let applyBody: Record<string, unknown> | null = null;
+      let listRequests = 0;
+
+      await page.route(/\/api\/v1\/rag\/collections(?:\?.*)?$/, async route => {
+        if (route.request().method() !== 'GET') {
+          await route.fallback();
+          return;
+        }
+        listRequests += 1;
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            collections: collectionActive ? [{
+              id: 1,
+              collectionKey: 'sample-collection',
+              name: 'Sample Collection',
+              embeddingModel: 'bge-m3',
+              dimensions: 1024,
+              documentCount: 5,
+            }] : [],
+            total: collectionActive ? 1 : 0,
+            offset: 0,
+            limit: 20,
+          }),
+        });
+      });
+      await page.route(
+        '/api/v1/rag/collections/by-key/purge',
+        async route => {
+          applyBody = route.request().postDataJSON();
+          collectionActive = false;
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+              previewId: '33333333-3333-4333-8333-333333333333',
+              status: 'RETIRED',
+              collectionId: 1,
+              collectionKey: 'sample-collection',
+              purgedDocumentCount: 5,
+              purgedExternalDocumentCount: 2,
+              purgedLocalDocumentCount: 3,
+              deletedAt: '2026-08-27T12:01:00',
+              purgedAt: '2026-08-27T12:01:00',
+              collectionVersion: 8,
+            }),
+          });
+        },
+      );
+
+      await openProtectedPage(page, '/webui/collections');
+      await page.getByRole('button', { name: 'Permanently purge' }).click();
+
+      const dialog = page.getByRole('dialog', {
+        name: 'Permanently purge and retire Collection',
+      });
+      await expect(dialog).toBeVisible();
+      await expect(dialog.getByText('Documents', { exact: true })).toBeVisible();
+      await expect(dialog.getByText('5', { exact: true })).toBeVisible();
+      await expect(dialog.getByText('mock-confirmation-token')).toHaveCount(0);
+
+      const confirmButton = dialog.getByRole('button', {
+        name: 'Purge and retire',
+      });
+      await expect(confirmButton).toBeDisabled();
+      await dialog.getByRole('textbox', {
+        name: 'Type sample-collection to confirm',
+      }).fill('sample-collection');
+      await expect(confirmButton).toBeEnabled();
+      await confirmButton.click();
+
+      await expect(dialog.getByText('Collection retired', { exact: true }))
+        .toBeVisible();
+      await expect(dialog.getByText(
+        'sample-collection was retired and 5 document(s) were permanently deleted.',
+      )).toBeVisible();
+      await expect(page.getByText('Sample Collection')).toHaveCount(0);
+      await expect.poll(() => listRequests).toBeGreaterThan(1);
+      expect(applyBody).toEqual({
+        collectionKey: 'sample-collection',
+        previewId: '33333333-3333-4333-8333-333333333333',
+        confirmationToken: 'mock-confirmation-token',
+        fingerprint: 'mock-purge-fingerprint',
+        expectedCollectionVersion: 7,
+        expectedChatCommitFenceVersion: 12,
+      });
+    });
+
+  test('shows an apply conflict and does not resubmit automatically',
+    async ({ page }) => {
+      await mockAllApiCalls(page);
+      let applyCalls = 0;
+      await page.route(
+        '/api/v1/rag/collections/by-key/purge',
+        async route => {
+          applyCalls += 1;
+          await route.fulfill({
+            status: 409,
+            contentType: 'application/problem+json',
+            body: JSON.stringify({
+              type: 'about:blank',
+              title: 'Conflict',
+              status: 409,
+              detail: 'Collection purge plan changed; create a new preview',
+              error: 'COLLECTION_PURGE_CONFLICT',
+            }),
+          });
+        },
+      );
+
+      await openProtectedPage(page, '/webui/collections');
+      const targetCard = page.locator('div').filter({
+        has: page.getByText('sample-collection', { exact: true }),
+      }).filter({
+        has: page.getByRole('button', { name: 'Permanently purge' }),
+      }).last();
+      await targetCard.getByRole('button', { name: 'Permanently purge' }).click();
+      const dialog = page.getByRole('dialog', {
+        name: 'Permanently purge and retire Collection',
+      });
+      await dialog.getByRole('textbox', {
+        name: 'Type sample-collection to confirm',
+      }).fill('sample-collection');
+      await dialog.getByRole('button', { name: 'Purge and retire' }).click();
+
+      await expect(dialog.getByText(
+        'Collection purge plan changed; create a new preview',
+      )).toBeVisible();
+      await expect(dialog.getByRole('button', { name: 'Purge and retire' }))
+        .toBeEnabled();
+      expect(applyCalls).toBe(1);
+    });
+});
+
 async function createCollection(
   page: import('@playwright/test').Page,
   collectionKey: string,

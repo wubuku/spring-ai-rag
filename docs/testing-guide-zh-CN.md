@@ -513,6 +513,61 @@ COLLECTION_PROVISIONING_VERIFY_PHASE=http \
 WebUI 通过请求拦截断言同一次用户提交在 Axios retry 中复用一个 UUID，后续新提交使用
 另一个 UUID；验收证据不使用截图。
 
+### Collection 受保护清理与退役验收门禁
+
+```bash
+./scripts/verify-collection-purge.sh
+```
+
+该 9 阶段门禁依次执行禁悲观锁检查、purge/Collection/feedback/audit/OpenAI scope
+聚焦测试、真实 PostgreSQL V1–V56 清理矩阵、`mvn clean compile test-compile`、完整
+WebUI typecheck/Vitest/lint/生产构建、Collection Mock Playwright、双语文档门禁、脚本
+语法和空白检查。每次运行在
+`.verification/collection-purge/<run-id>/summary.md` 记录逐步证据。
+
+PostgreSQL 测试默认使用 Testcontainers，并要求 purge 矩阵 5 个场景与
+integration-observability V56 兼容矩阵 6 个场景全部执行，且
+`failures=errors=skipped=0`。也可显式指定一次性数据库：
+
+```bash
+COLLECTION_PURGE_IT_JDBC_URL=jdbc:postgresql://127.0.0.1:55439/purge_it \
+COLLECTION_PURGE_IT_USERNAME=postgres \
+COLLECTION_PURGE_IT_PASSWORD=postgres \
+COLLECTION_PURGE_IT_CLEAN_CONFIRM=YES \
+./scripts/verify-collection-purge.sh
+```
+
+矩阵覆盖空/非空 Collection、local/external 混合文档和全部派生数据、feedback/Chat
+引用级联、无关数据与独立文件保留、active sync/repair/session lease 阻断、坏历史引用
+fail closed、root/ADMIN/loopback 权限、preview 变化整体回滚、成功精确 replay、过期清理和
+退役 tombstone。Mock Playwright 只使用 DOM、可访问状态、请求 JSON 和网络响应，验证
+capability 门控、token 不渲染、精确 key 确认、成功后 active 卡片移除及 409 不自动重试；
+不使用截图作为证据。
+
+真实依赖阶段不包含在上述快速门禁中。Mock 全部通过后，使用隔离 PostgreSQL/端口启动
+真实服务，然后执行：
+
+```bash
+BASE_URL=http://127.0.0.1:18081 \
+REAL_LLM_ENV_FILE=.env \
+REAL_COLLECTION_PURGE_LOG_DIR=.verification/collection-purge/real-provider \
+POSTGRES_HOST=127.0.0.1 \
+POSTGRES_PORT=5432 \
+POSTGRES_DATABASE=spring_ai_rag_purge_acceptance \
+POSTGRES_USER=postgres \
+POSTGRES_PASSWORD=postgres \
+./scripts/real-collection-purge-e2e-smoke.sh
+```
+
+该脚本覆盖真实 embedding 写入、Spring Event 在 Scheduled 恢复扫描前唤醒 worker、
+readiness、纯向量自然语言检索、两轮原生 Chat、OpenAI-compatible Chat、preview/apply/
+精确 replay、三条显式退役路径拒绝、默认范围排除、purge operation 的全局/Collection
+rollup 和数据库 tombstone 事实。持久化证据只包含状态、模型、回答长度、布尔断言、计数
+和来源 ID；不得包含 API key、请求正文、明文 confirmation token、文档正文或完整模型
+回答。验收期间必须观察后端日志，任何 observation drop、provider 错误或数据库约束错误
+都要解释并处理。四项全局/Collection preview/apply rollup 必须分别为正；脚本使用显式
+条件失败，不能依赖不同 Bash 版本对 arithmetic command 与 `set -e` 的组合行为。
+
 ### 多 Collection 检索范围验收门禁
 
 范围实现具备 DTO、Resolver、ACL、SQL fragment、Vector/Full-text provider、

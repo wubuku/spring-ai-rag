@@ -1,6 +1,7 @@
 package com.springairag.core.integration;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.springairag.api.dto.ChatSource;
 import com.springairag.api.enums.ChatMode;
 import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.chat.ChatCommand;
@@ -135,7 +136,7 @@ class ChatSessionPostgresIntegrationTest {
 
     @Test
     void fullMigrationThroughLatestPreservesChatContractsAndRejectsInvalidNewRows() {
-        assertEquals("55", jdbcTemplate.queryForObject(
+        assertEquals("56", jdbcTemplate.queryForObject(
                 "SELECT version FROM flyway_schema_history "
                         + "WHERE success = true ORDER BY installed_rank DESC LIMIT 1",
                 String.class));
@@ -274,6 +275,11 @@ class ChatSessionPostgresIntegrationTest {
                 "SELECT session_id FROM rag_chat_history "
                         + "WHERE user_message = 'invalid old question'",
                 String.class));
+        assertFalse(jdbcTemplate.queryForObject(
+                "SELECT content_reference_index_complete "
+                        + "FROM rag_chat_history "
+                        + "WHERE user_message = 'invalid old question'",
+                Boolean.class));
         assertFalse(Boolean.TRUE.equals(jdbcTemplate.queryForObject(
                 "SELECT convalidated FROM pg_constraint "
                         + "WHERE conname = 'ck_rag_chat_history_session_id'",
@@ -479,7 +485,7 @@ class ChatSessionPostgresIntegrationTest {
     }
 
     @Test
-    void successfulCommitPersistsHistoryAndMemoryThenReleasesLease() {
+    void successfulCommitPersistsHistoryAndMemoryWhileHoldingLeaseForSummary() {
         ChatCommand command = command(principal("key-a"), "commit-success");
         ChatSessionCoordinator.LeaseHandle handle =
                 coordinator.acquire(command, false);
@@ -493,12 +499,101 @@ class ChatSessionPostgresIntegrationTest {
 
         assertEquals(1L, historyCount(command));
         assertEquals(2L, memoryCount(command));
-        assertEquals(0L, leaseCount(command));
+        assertEquals(1L, leaseCount(command));
         assertNotNull(jdbcTemplate.queryForObject(
                 "SELECT sources FROM rag_chat_history "
                         + "WHERE owner_principal_id = ? AND session_id = ?",
                 String.class,
                 command.principal().id(), command.sessionId()));
+        assertTrue(jdbcTemplate.queryForObject(
+                "SELECT content_reference_index_complete "
+                        + "FROM rag_chat_history "
+                        + "WHERE owner_principal_id = ? AND session_id = ?",
+                Boolean.class,
+                command.principal().id(), command.sessionId()));
+
+        coordinator.release(handle);
+        assertEquals(0L, leaseCount(command));
+    }
+
+    @Test
+    void durableCommitIndexesReferenceUnionAndAdvancesCollectionFences() {
+        ChatCommand command = command(
+                principal("reference-index"), "reference-index");
+        long collectionA = seedCollection("chat-ref-a");
+        long collectionB = seedCollection("chat-ref-b");
+        long documentA = seedDocument(collectionA, "Document A");
+        long documentB = seedDocument(collectionB, "Document B");
+        ChatSource sourceA = source(String.valueOf(documentA));
+        ChatSource staticSource = source("static:company-policy");
+        ChatSessionCoordinator.LeaseHandle handle =
+                coordinator.acquire(command, false);
+
+        coordinator.commit(
+                handle,
+                command,
+                result(command, List.of(sourceA, staticSource)),
+                messages(),
+                "[" + documentA + ",\"" + documentB + "\"]");
+
+        assertEquals(2L, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) "
+                        + "FROM rag_chat_history_source_document ref "
+                        + "JOIN rag_chat_history history "
+                        + "ON history.id = ref.history_id "
+                        + "WHERE history.owner_principal_id = ? "
+                        + "AND history.session_id = ?",
+                Long.class,
+                command.principal().id(), command.sessionId()));
+        assertEquals(List.of(documentA, documentB), jdbcTemplate.queryForList(
+                "SELECT ref.document_id "
+                        + "FROM rag_chat_history_source_document ref "
+                        + "JOIN rag_chat_history history "
+                        + "ON history.id = ref.history_id "
+                        + "WHERE history.owner_principal_id = ? "
+                        + "AND history.session_id = ? "
+                        + "ORDER BY ref.document_id",
+                Long.class,
+                command.principal().id(), command.sessionId()));
+        assertEquals(1L, chatFenceVersion(collectionA));
+        assertEquals(1L, chatFenceVersion(collectionB));
+        assertEquals(1L, leaseCount(command));
+
+        coordinator.release(handle);
+    }
+
+    @Test
+    void inactiveNumericReferenceRejectsWholeDurableCommit() {
+        ChatCommand command = command(
+                principal("reference-conflict"), "reference-conflict");
+        long collectionId = seedCollection("chat-ref-conflict");
+        long documentId = seedDocument(collectionId, "Retired source");
+        jdbcTemplate.update(
+                "UPDATE rag_collection SET enabled = FALSE WHERE id = ?",
+                collectionId);
+        ChatSessionCoordinator.LeaseHandle handle =
+                coordinator.acquire(command, false);
+
+        RagException conflict = assertThrows(RagException.class, () ->
+                coordinator.commit(
+                        handle,
+                        command,
+                        result(command, List.of(source(
+                                String.valueOf(documentId)))),
+                        messages(),
+                        "[" + documentId + "]"));
+
+        assertEquals(ErrorCode.COLLECTION_PURGE_CONFLICT.name(),
+                conflict.getErrorCode());
+        assertEquals(0L, historyCount(command));
+        assertEquals(0L, memoryCount(command));
+        assertEquals(0L, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM rag_chat_history_source_document",
+                Long.class));
+        assertEquals(0L, chatFenceVersion(collectionId));
+        assertEquals(1L, leaseCount(command));
+
+        coordinator.release(handle);
     }
 
     @Test
@@ -540,6 +635,7 @@ class ChatSessionPostgresIntegrationTest {
         assertEquals(AssistantMessage.class, persisted.get(1).getClass());
         assertEquals("answer", persisted.get(1).getText());
         assertEquals(2L, memoryCount(command));
+        coordinator.release(handle);
     }
 
     @Test
@@ -582,23 +678,23 @@ class ChatSessionPostgresIntegrationTest {
     }
 
     @Test
-    void failureAfterMemoryWriteRollsBackHistoryMemoryAndLeaseDelete() {
-        ChatCommand command = command(principal("key-a"), "release-failure");
+    void leaseRenewFailureRollsBackHistoryAndMemory() {
+        ChatCommand command = command(principal("key-a"), "renew-failure");
+        ChatSessionCoordinator.LeaseHandle handle =
+                coordinator.acquire(command, false);
         jdbcTemplate.execute("""
-                CREATE OR REPLACE FUNCTION fail_chat_lease_delete()
+                CREATE OR REPLACE FUNCTION fail_chat_lease_update()
                 RETURNS trigger AS $$
                 BEGIN
-                    RAISE EXCEPTION 'injected lease release failure';
+                    RAISE EXCEPTION 'injected lease renewal failure';
                 END;
                 $$ LANGUAGE plpgsql
                 """);
         jdbcTemplate.execute("""
-                CREATE TRIGGER trg_fail_chat_lease_delete
-                BEFORE DELETE ON rag_chat_session_lease
-                FOR EACH ROW EXECUTE FUNCTION fail_chat_lease_delete()
+                CREATE TRIGGER trg_fail_chat_lease_update
+                BEFORE UPDATE ON rag_chat_session_lease
+                FOR EACH ROW EXECUTE FUNCTION fail_chat_lease_update()
                 """);
-        ChatSessionCoordinator.LeaseHandle handle =
-                coordinator.acquire(command, false);
 
         RagException failure = assertThrows(RagException.class,
                 () -> coordinator.commit(
@@ -613,6 +709,7 @@ class ChatSessionPostgresIntegrationTest {
         assertEquals(0L, historyCount(command));
         assertEquals(0L, memoryCount(command));
         assertEquals(1L, leaseCount(command));
+        coordinator.release(handle);
     }
 
     private static void buildPersistence() {
@@ -687,6 +784,12 @@ class ChatSessionPostgresIntegrationTest {
     }
 
     private static ChatExecutionResult result(ChatCommand command) {
+        return result(command, List.of());
+    }
+
+    private static ChatExecutionResult result(
+            ChatCommand command,
+            List<ChatSource> sources) {
         return new ChatExecutionResult(
                 "answer",
                 command.sessionId(),
@@ -694,11 +797,49 @@ class ChatSessionPostgresIntegrationTest {
                 null,
                 "test/model",
                 command.mode(),
-                List.of(),
+                sources,
                 Map.of(),
                 "STOP",
                 List.of(),
                 Map.of("mode", command.mode().name()));
+    }
+
+    private static ChatSource source(String documentId) {
+        ChatSource source = new ChatSource();
+        source.setDocumentId(documentId);
+        source.setTitle("Source " + documentId);
+        source.setChunkText("reference content");
+        return source;
+    }
+
+    private static long seedCollection(String key) {
+        return jdbcTemplate.queryForObject(
+                "INSERT INTO rag_collection "
+                        + "(collection_key, name, dimensions) "
+                        + "VALUES (?, ?, 1024) RETURNING id",
+                Long.class,
+                key,
+                "Collection " + key);
+    }
+
+    private static long seedDocument(long collectionId, String title) {
+        return jdbcTemplate.queryForObject(
+                "INSERT INTO rag_documents "
+                        + "(collection_id, title, content, content_hash) "
+                        + "VALUES (?, ?, ?, ?) RETURNING id",
+                Long.class,
+                collectionId,
+                title,
+                "content for " + title,
+                UUID.randomUUID().toString().replace("-", ""));
+    }
+
+    private static long chatFenceVersion(long collectionId) {
+        return jdbcTemplate.queryForObject(
+                "SELECT chat_commit_fence_version "
+                        + "FROM rag_collection WHERE id = ?",
+                Long.class,
+                collectionId);
     }
 
     private static List<Message> messages() {

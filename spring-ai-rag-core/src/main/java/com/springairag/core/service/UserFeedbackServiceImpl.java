@@ -2,8 +2,12 @@ package com.springairag.core.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.entity.RagUserFeedback;
+import com.springairag.core.exception.RagException;
 import com.springairag.core.repository.RagUserFeedbackRepository;
+import com.springairag.core.security.ApiAccessPolicy;
+import com.springairag.core.security.ApiKeyCollectionAccess;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
@@ -11,8 +15,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.ZonedDateTime;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * User Feedback Service Implementation
@@ -22,14 +29,22 @@ import java.util.Objects;
 public class UserFeedbackServiceImpl implements UserFeedbackService {
 
     private static final Logger log = LoggerFactory.getLogger(UserFeedbackServiceImpl.class);
+    private static final int MAX_DOCUMENT_REFERENCES = 1000;
 
     private final RagUserFeedbackRepository feedbackRepository;
     private final ObjectMapper objectMapper;
+    private final FeedbackDocumentReferenceStore referenceStore;
+    private final CollectionIdentityResolver collectionIdentityResolver;
 
-    public UserFeedbackServiceImpl(RagUserFeedbackRepository feedbackRepository,
-                                   ObjectMapper objectMapper) {
+    public UserFeedbackServiceImpl(
+            RagUserFeedbackRepository feedbackRepository,
+            ObjectMapper objectMapper,
+            FeedbackDocumentReferenceStore referenceStore,
+            CollectionIdentityResolver collectionIdentityResolver) {
         this.feedbackRepository = feedbackRepository;
         this.objectMapper = objectMapper;
+        this.referenceStore = referenceStore;
+        this.collectionIdentityResolver = collectionIdentityResolver;
     }
 
     @Override
@@ -39,19 +54,93 @@ public class UserFeedbackServiceImpl implements UserFeedbackService {
                                           Long dwellTimeMs) {
         Objects.requireNonNull(sessionId, "sessionId must not be null");
         Objects.requireNonNull(query, "query must not be null");
+        List<Long> retrievedIds = normalizeIds(
+                retrievedDocumentIds, "retrievedDocumentIds");
+        List<Long> selectedIds = normalizeIds(
+                selectedDocumentIds, "selectedDocumentIds");
+        List<Long> referenceIds = referenceUnion(retrievedIds, selectedIds);
+        validateAndReserveReferences(referenceIds);
+
         RagUserFeedback feedback = new RagUserFeedback();
         feedback.setSessionId(sessionId);
         feedback.setQuery(query);
         feedback.setFeedbackType(feedbackType);
         feedback.setRating(rating);
         feedback.setComment(comment);
-        feedback.setRetrievedDocumentIds(toJson(retrievedDocumentIds));
-        feedback.setSelectedDocumentIds(toJson(selectedDocumentIds));
+        feedback.setRetrievedDocumentIds(toJson(retrievedIds));
+        feedback.setSelectedDocumentIds(toJson(selectedIds));
         feedback.setDwellTimeMs(dwellTimeMs);
+        feedback.setContentReferenceIndexComplete(true);
 
-        RagUserFeedback saved = feedbackRepository.save(feedback);
-        log.info("[UserFeedback] type={}, session={}, query=\"{}\"", feedbackType, sessionId, query);
+        RagUserFeedback saved = feedbackRepository.saveAndFlush(feedback);
+        if (!referenceIds.isEmpty()) {
+            referenceStore.insert(saved.getId(), referenceIds);
+        }
+        log.info("[UserFeedback] type={}, session={}, documentReferences={}",
+                feedbackType, sessionId, referenceIds.size());
         return saved;
+    }
+
+    private void validateAndReserveReferences(List<Long> referenceIds) {
+        if (referenceIds.isEmpty()) {
+            return;
+        }
+        ApiAccessPolicy policy = ApiKeyCollectionAccess.currentPolicy();
+        List<FeedbackDocumentReferenceStore.DocumentSnapshot> before =
+                referenceStore.load(referenceIds);
+        validateSnapshots(referenceIds, before, policy);
+
+        List<Long> collectionIds = before.stream()
+                .map(FeedbackDocumentReferenceStore.DocumentSnapshot::collectionId)
+                .distinct()
+                .sorted()
+                .toList();
+        collectionIdentityResolver.beginActiveWrites(collectionIds);
+
+        List<FeedbackDocumentReferenceStore.DocumentSnapshot> after =
+                referenceStore.load(referenceIds);
+        validateSnapshots(referenceIds, after, policy);
+        if (!before.equals(after)) {
+            throw new RagException(
+                    ErrorCode.CONCURRENT_MODIFICATION,
+                    "Feedback document references changed during submission");
+        }
+    }
+
+    private void validateSnapshots(
+            List<Long> expectedIds,
+            List<FeedbackDocumentReferenceStore.DocumentSnapshot> snapshots,
+            ApiAccessPolicy policy) {
+        if (snapshots.size() != expectedIds.size()) {
+            if (!ApiKeyCollectionAccess.isUnrestricted(policy)) {
+                throw new SecurityException(
+                        "Feedback document references are not authorized");
+            }
+            throw new RagException(
+                    ErrorCode.DOCUMENT_NOT_FOUND,
+                    "One or more feedback documents are unavailable");
+        }
+        for (int index = 0; index < expectedIds.size(); index++) {
+            FeedbackDocumentReferenceStore.DocumentSnapshot snapshot =
+                    snapshots.get(index);
+            if (snapshot.documentId() != expectedIds.get(index)) {
+                throw new RagException(
+                        ErrorCode.CONCURRENT_MODIFICATION,
+                        "Feedback document references changed during submission");
+            }
+            if (!snapshot.enabled()) {
+                throw new RagException(
+                        ErrorCode.DOCUMENT_DISABLED,
+                        "Feedback cannot reference a disabled document");
+            }
+            if (snapshot.collectionId() == null) {
+                throw new RagException(
+                        ErrorCode.DOCUMENT_NOT_FOUND,
+                        "Feedback document is not assigned to an active Collection");
+            }
+            ApiKeyCollectionAccess.requireCollectionId(
+                    snapshot.collectionId(), policy);
+        }
     }
 
     @Override
@@ -107,13 +196,48 @@ public class UserFeedbackServiceImpl implements UserFeedbackService {
         return feedbackRepository.findByFeedbackTypeOrderByCreatedAtDesc(feedbackType, PageRequest.of(page, size));
     }
 
+    private List<Long> normalizeIds(List<Long> values, String field) {
+        if (values == null) {
+            return null;
+        }
+        Set<Long> normalized = new LinkedHashSet<>();
+        for (Long value : values) {
+            if (value == null || value <= 0) {
+                throw new IllegalArgumentException(
+                        field + " must contain positive document IDs");
+            }
+            normalized.add(value);
+            if (normalized.size() > MAX_DOCUMENT_REFERENCES) {
+                throw new IllegalArgumentException(
+                        "Feedback must not reference more than "
+                                + MAX_DOCUMENT_REFERENCES + " documents");
+            }
+        }
+        return normalized.stream().sorted().toList();
+    }
+
+    private List<Long> referenceUnion(
+            List<Long> retrievedDocumentIds,
+            List<Long> selectedDocumentIds) {
+        Set<Long> union = new LinkedHashSet<>();
+        if (retrievedDocumentIds != null) {
+            union.addAll(retrievedDocumentIds);
+        }
+        if (selectedDocumentIds != null) {
+            union.addAll(selectedDocumentIds);
+        }
+        List<Long> result = new ArrayList<>(union);
+        result.sort(Long::compareTo);
+        return List.copyOf(result);
+    }
+
     private String toJson(List<Long> list) {
         if (list == null) return null;
         try {
             return objectMapper.writeValueAsString(list);
         } catch (JsonProcessingException e) {
-            log.error("Failed to serialize list to JSON", e);
-            return "[]";
+            throw new IllegalStateException(
+                    "Failed to serialize feedback document references", e);
         }
     }
 }

@@ -13,6 +13,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
 import java.time.ZonedDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -123,14 +124,19 @@ public class AuditLogService {
     private void logAudit(String operation, String entityType, String entityId,
                           String description, Map<String, Object> details, String sessionId) {
         try {
+            boolean contentFree = isContentBearingEntity(entityType);
             RagAuditLog entry = new RagAuditLog();
             entry.setOperation(operation);
             entry.setEntityType(entityType);
             entry.setEntityId(entityId);
-            entry.setDescription(description);
+            entry.setDescription(contentFree
+                    ? entityType + " " + operation + " recorded"
+                    : description);
             entry.setSessionId(sessionId);
             entry.setTraceId(MDC.get("traceId"));
-            entry.setDetails(toJson(details));
+            entry.setDetails(toJson(contentFree
+                    ? contentFreeDetails(details)
+                    : details));
 
             repository.save(entry);
 
@@ -140,6 +146,25 @@ public class AuditLogService {
             log.warn("[AUDIT] Failed to record audit log: {} {} id={} - {}",
                     operation, entityType, entityId, e.getMessage());
         }
+    }
+
+    private boolean isContentBearingEntity(String entityType) {
+        return ENTITY_DOCUMENT.equals(entityType)
+                || ENTITY_COLLECTION.equals(entityType);
+    }
+
+    private Map<String, Object> contentFreeDetails(
+            Map<String, Object> details) {
+        if (details == null || details.isEmpty()) {
+            return null;
+        }
+        Map<String, Object> safe = new LinkedHashMap<>();
+        details.forEach((key, value) -> {
+            if (value instanceof Number || value instanceof Boolean) {
+                safe.put(key, value);
+            }
+        });
+        return safe;
     }
 
     /**

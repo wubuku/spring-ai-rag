@@ -72,6 +72,12 @@ public class RagCollection {
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
 
+    @Column(name = "purged_at")
+    private LocalDateTime purgedAt;
+
+    @Column(name = "chat_commit_fence_version", nullable = false)
+    private Long chatCommitFenceVersion = 0L;
+
     public RagCollection() {
     }
 
@@ -117,4 +123,10 @@ public class RagCollection {
     public LocalDateTime getDeletedAt() { return deletedAt; }
 
     public void setDeletedAt(LocalDateTime deletedAt) { this.deletedAt = deletedAt; }
+
+    public LocalDateTime getPurgedAt() { return purgedAt; }
+    public void setPurgedAt(LocalDateTime purgedAt) { this.purgedAt = purgedAt; }
+
+    public Long getChatCommitFenceVersion() { return chatCommitFenceVersion; }
+    public void setChatCommitFenceVersion(Long value) { chatCommitFenceVersion = value; }
 }

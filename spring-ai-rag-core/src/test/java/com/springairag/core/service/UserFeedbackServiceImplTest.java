@@ -1,8 +1,14 @@
 package com.springairag.core.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.springairag.api.enums.ErrorCode;
+import com.springairag.core.entity.ApiKeyRole;
 import com.springairag.core.entity.RagUserFeedback;
+import com.springairag.core.exception.RagException;
+import com.springairag.core.filter.ApiKeyAuthFilter;
 import com.springairag.core.repository.RagUserFeedbackRepository;
+import com.springairag.core.security.ApiAccessPolicy;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -14,6 +20,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.time.ZonedDateTime;
 import java.util.List;
@@ -31,11 +40,26 @@ class UserFeedbackServiceImplTest {
     @Mock
     private RagUserFeedbackRepository repository;
 
+    @Mock
+    private FeedbackDocumentReferenceStore referenceStore;
+
+    @Mock
+    private CollectionIdentityResolver collectionIdentityResolver;
+
     private UserFeedbackServiceImpl service;
 
     @BeforeEach
     void setUp() {
-        service = new UserFeedbackServiceImpl(repository, new ObjectMapper());
+        service = new UserFeedbackServiceImpl(
+                repository,
+                new ObjectMapper(),
+                referenceStore,
+                collectionIdentityResolver);
+    }
+
+    @AfterEach
+    void tearDown() {
+        RequestContextHolder.resetRequestAttributes();
     }
 
     // ==================== submitFeedback ====================
@@ -43,7 +67,10 @@ class UserFeedbackServiceImplTest {
     @Test
     @DisplayName("Submitting thumbs-up feedback saves all fields correctly")
     void submitFeedback_thumbsUp_savesCorrectly() {
-        when(repository.save(any(RagUserFeedback.class))).thenAnswer(inv -> {
+        allowReferences(
+                snapshot(1L, 10L),
+                snapshot(2L, 20L));
+        when(repository.saveAndFlush(any(RagUserFeedback.class))).thenAnswer(inv -> {
             RagUserFeedback f = inv.getArgument(0);
             f.setId(1L);
             return f;
@@ -55,7 +82,7 @@ class UserFeedbackServiceImplTest {
         );
 
         ArgumentCaptor<RagUserFeedback> captor = ArgumentCaptor.forClass(RagUserFeedback.class);
-        verify(repository).save(captor.capture());
+        verify(repository).saveAndFlush(captor.capture());
         RagUserFeedback saved = captor.getValue();
 
         assertEquals("session-1", saved.getSessionId());
@@ -65,13 +92,16 @@ class UserFeedbackServiceImplTest {
         assertEquals(5000L, saved.getDwellTimeMs());
         assertEquals("[1,2]", saved.getRetrievedDocumentIds());
         assertEquals("[1]", saved.getSelectedDocumentIds());
+        assertTrue(saved.getContentReferenceIndexComplete());
         assertEquals(1L, result.getId());
+        verify(collectionIdentityResolver).beginActiveWrites(List.of(10L, 20L));
+        verify(referenceStore).insert(1L, List.of(1L, 2L));
     }
 
     @Test
     @DisplayName("Submitting rating feedback saves rating field correctly")
     void submitFeedback_rating_savesRating() {
-        when(repository.save(any(RagUserFeedback.class))).thenAnswer(inv -> {
+        when(repository.saveAndFlush(any(RagUserFeedback.class))).thenAnswer(inv -> {
             RagUserFeedback f = inv.getArgument(0);
             f.setId(2L);
             return f;
@@ -83,13 +113,15 @@ class UserFeedbackServiceImplTest {
         );
 
         ArgumentCaptor<RagUserFeedback> captor = ArgumentCaptor.forClass(RagUserFeedback.class);
-        verify(repository).save(captor.capture());
+        verify(repository).saveAndFlush(captor.capture());
         RagUserFeedback saved = captor.getValue();
 
         assertEquals("RATING", saved.getFeedbackType());
         assertEquals(4, saved.getRating());
         assertEquals("回答不错", saved.getComment());
         assertNull(saved.getRetrievedDocumentIds());
+        assertTrue(saved.getContentReferenceIndexComplete());
+        verifyNoInteractions(referenceStore, collectionIdentityResolver);
     }
 
     @Test
@@ -115,7 +147,8 @@ class UserFeedbackServiceImplTest {
     @Test
     @DisplayName("Submitting thumbs-down feedback serializes empty doc list as null")
     void submitFeedback_thumbsDown_nullDocIds() {
-        when(repository.save(any(RagUserFeedback.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(repository.saveAndFlush(any(RagUserFeedback.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
 
         service.submitFeedback(
                 "session-3", "错误的问题", "THUMBS_DOWN",
@@ -123,12 +156,114 @@ class UserFeedbackServiceImplTest {
         );
 
         ArgumentCaptor<RagUserFeedback> captor = ArgumentCaptor.forClass(RagUserFeedback.class);
-        verify(repository).save(captor.capture());
+        verify(repository).saveAndFlush(captor.capture());
         RagUserFeedback saved = captor.getValue();
 
         assertEquals("THUMBS_DOWN", saved.getFeedbackType());
         assertNull(saved.getRetrievedDocumentIds());
         assertEquals("完全不相关", saved.getComment());
+    }
+
+    @Test
+    @DisplayName("Document reference union is deduplicated and sorted")
+    void submitFeedback_referenceUnionIsDeduplicatedAndSorted() {
+        allowReferences(
+                snapshot(1L, 10L),
+                snapshot(2L, 10L),
+                snapshot(3L, 20L));
+        when(repository.saveAndFlush(any(RagUserFeedback.class))).thenAnswer(inv -> {
+            RagUserFeedback feedback = inv.getArgument(0);
+            feedback.setId(9L);
+            return feedback;
+        });
+
+        RagUserFeedback result = service.submitFeedback(
+                "session-union", "query", "THUMBS_UP",
+                null, null, List.of(3L, 1L, 3L), List.of(2L, 1L), null);
+
+        assertEquals("[1,3]", result.getRetrievedDocumentIds());
+        assertEquals("[1,2]", result.getSelectedDocumentIds());
+        verify(collectionIdentityResolver).beginActiveWrites(List.of(10L, 20L));
+        verify(referenceStore).insert(9L, List.of(1L, 2L, 3L));
+    }
+
+    @Test
+    @DisplayName("Missing referenced document rejects feedback atomically")
+    void submitFeedback_missingDocumentRejectsWrite() {
+        when(referenceStore.load(List.of(1L))).thenReturn(List.of());
+
+        RagException error = assertThrows(RagException.class, () ->
+                service.submitFeedback(
+                        "session-missing", "query", "THUMBS_DOWN",
+                        null, "comment", List.of(1L), null, null));
+
+        assertEquals(ErrorCode.DOCUMENT_NOT_FOUND, error.getErrorCodeEnum());
+        verify(repository, never()).saveAndFlush(any());
+        verify(referenceStore, never()).insert(anyLong(), anyList());
+        verifyNoInteractions(collectionIdentityResolver);
+    }
+
+    @Test
+    @DisplayName("Disabled referenced document rejects feedback")
+    void submitFeedback_disabledDocumentRejectsWrite() {
+        when(referenceStore.load(List.of(1L)))
+                .thenReturn(List.of(new FeedbackDocumentReferenceStore.DocumentSnapshot(
+                        1L, 10L, false)));
+
+        RagException error = assertThrows(RagException.class, () ->
+                service.submitFeedback(
+                        "session-disabled", "query", "THUMBS_DOWN",
+                        null, "comment", List.of(1L), null, null));
+
+        assertEquals(ErrorCode.DOCUMENT_DISABLED, error.getErrorCodeEnum());
+        verify(repository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    @DisplayName("Restricted caller cannot reference unauthorized Collection")
+    void submitFeedback_unauthorizedCollectionRejectsWrite() {
+        ApiAccessPolicy policy = mock(ApiAccessPolicy.class);
+        when(policy.getRole()).thenReturn(ApiKeyRole.NORMAL);
+        when(policy.getAllowedCollectionIds()).thenReturn("10");
+        bindPolicy(policy);
+        when(referenceStore.load(List.of(1L)))
+                .thenReturn(List.of(snapshot(1L, 20L)));
+
+        assertThrows(SecurityException.class, () ->
+                service.submitFeedback(
+                        "session-forbidden", "query", "THUMBS_DOWN",
+                        null, "comment", List.of(1L), null, null));
+
+        verify(repository, never()).saveAndFlush(any());
+        verifyNoInteractions(collectionIdentityResolver);
+    }
+
+    @Test
+    @DisplayName("Reference relocation during reservation rejects feedback")
+    void submitFeedback_referenceRelocationRejectsWrite() {
+        when(referenceStore.load(List.of(1L))).thenReturn(
+                List.of(snapshot(1L, 10L)),
+                List.of(snapshot(1L, 20L)));
+
+        RagException error = assertThrows(RagException.class, () ->
+                service.submitFeedback(
+                        "session-race", "query", "THUMBS_DOWN",
+                        null, "comment", List.of(1L), null, null));
+
+        assertEquals(ErrorCode.CONCURRENT_MODIFICATION, error.getErrorCodeEnum());
+        verify(collectionIdentityResolver).beginActiveWrites(List.of(10L));
+        verify(repository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    @DisplayName("Non-positive reference rejects feedback before database access")
+    void submitFeedback_nonPositiveReferenceRejectsWrite() {
+        assertThrows(IllegalArgumentException.class, () ->
+                service.submitFeedback(
+                        "session-invalid", "query", "THUMBS_DOWN",
+                        null, "comment", List.of(0L), null, null));
+
+        verifyNoInteractions(referenceStore, collectionIdentityResolver, repository);
     }
 
     // ==================== getStats ====================
@@ -233,6 +368,31 @@ class UserFeedbackServiceImplTest {
         f.setRating(rating);
         f.setDwellTimeMs(dwellTime);
         return f;
+    }
+
+    private void allowReferences(
+            FeedbackDocumentReferenceStore.DocumentSnapshot... snapshots) {
+        List<FeedbackDocumentReferenceStore.DocumentSnapshot> values =
+                List.of(snapshots);
+        List<Long> ids = values.stream()
+                .map(FeedbackDocumentReferenceStore.DocumentSnapshot::documentId)
+                .toList();
+        when(referenceStore.load(ids)).thenReturn(values, values);
+    }
+
+    private FeedbackDocumentReferenceStore.DocumentSnapshot snapshot(
+            long documentId, long collectionId) {
+        return new FeedbackDocumentReferenceStore.DocumentSnapshot(
+                documentId, collectionId, true);
+    }
+
+    private void bindPolicy(ApiAccessPolicy policy) {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setAttribute(
+                ApiKeyAuthFilter.AUTHENTICATED_API_PRINCIPAL_ATTRIBUTE,
+                policy);
+        RequestContextHolder.setRequestAttributes(
+                new ServletRequestAttributes(request));
     }
 
     // ==================== FeedbackStats equals/hashCode/toString Tests ====================

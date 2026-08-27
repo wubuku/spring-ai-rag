@@ -92,7 +92,7 @@ allow-list。数据库业务 Key 不能用该端点查看其他 principal；WebU
 {
   "protocol": {
     "name": "spring-ai-rag-integration",
-    "version": "1.0",
+    "version": "1.1",
     "apiVersion": "1.0.0"
   },
   "principal": {
@@ -129,7 +129,8 @@ allow-list。数据库业务 Key 不能用该端点查看其他 principal；WebU
       "documentSyncRuns": false,
       "documentSyncRunItemReceipts": false,
       "openAiCompatibility": false,
-      "integrationObservability": true
+      "integrationObservability": true,
+      "collectionPurge": false
     },
     "credentialRotation": {
       "immediate": true,
@@ -166,6 +167,14 @@ allow-list。数据库业务 Key 不能用该端点查看其他 principal；WebU
       "retentionDays": 90,
       "maxQueryRangeDays": 31,
       "maxCollectionBreakdownItems": 100
+    },
+    "collectionPurge": {
+      "maxDocuments": 10000,
+      "maxEmbeddings": 100000,
+      "maxVersions": 100000,
+      "maxDerivedRows": 250000,
+      "maxAffectedChatSessions": 1000,
+      "maxChatRows": 50000
     }
   }
 }
@@ -176,6 +185,11 @@ allow-list。数据库业务 Key 不能用该端点查看其他 principal；WebU
 与请求校验复用同一组常量。restricted ACL 无法完整映射为稳定 Collection key 时返回
 `503 SERVICE_UNAVAILABLE`，不会发布部分合同。客户端先用该端点选择受支持行为，再用
 `/auth/me` 和 Collection 探针验证精确部署 binding。
+
+`features.optional.collectionPurge` 是调用方感知字段：只有服务开关开启，且当前身份是
+environment root、数据库 `ADMIN`，或显式允许的 auth-disabled 直接 loopback 调用时才为
+`true`。数据库 `NORMAL`、legacy static 和普通远程匿名调用始终看到 `false`。限制字段可
+用于提前判断同步清理上限，但不替代 preview 时的实时冲突和引用完整性检查。
 
 #### `GET /api/v1/rag/integration-observability`
 
@@ -1949,10 +1963,73 @@ Paginated collection query.
 
 删除为软删除，并解除普通旧文档关联，但不会删除文档或 embedding。若 Collection 中
 存在非空 `externalId` 的外部托管文档，则返回 `409`，因为解绑会破坏
-`collectionKey + sourceNamespace + externalId` 稳定身份。当前公开 API 不提供外部托管文档
-的永久 purge；可在启用 relocation 功能时先把它们迁移到其他 Collection，否则应保留或恢复
-原 Collection。受保护的 purge/退役流程仍是后续项。key 仍保持占用；恢复沿用原 key，且
-不会自动恢复普通旧文档关联。
+`collectionKey + sourceNamespace + externalId` 稳定身份。需要永久删除整个 Collection
+内容时，使用下方受保护的 preview/apply；不要用普通软删除模拟 purge。key 仍保持占用；
+恢复沿用原 key，且不会自动恢复普通旧文档关联。
+
+---
+
+### 受保护的 Collection 清理与退役
+
+该能力默认关闭。先读取
+`GET /api/v1/rag/integration-capabilities`，只有
+`features.optional.collectionPurge=true` 时才显示或调用。允许的身份是 environment root
+或数据库 `ADMIN`；auth-disabled 模式还必须显式开启本地开发开关，且 Servlet 直接来源
+必须是 loopback。该判断不信任 `Forwarded` 或 `X-Forwarded-For`。
+
+先创建短期预览：
+
+```http
+POST /api/v1/rag/collections/by-key/purge/preview?collectionKey=customer-42%3Amanual%3Av3
+```
+
+响应不包含正文，但会返回待删除的文档、embedding、version、关键词派生、feedback、
+审计和受影响 Chat 会话计数，以及一次性 `confirmationToken`、`fingerprint`、
+Collection version、Chat commit fence version 和两个过期时间。调用方不得记录或持久化
+明文 token。
+
+确认实时计划未变化后提交：
+
+```json
+{
+  "collectionKey": "customer-42:manual:v3",
+  "previewId": "33333333-3333-4333-8333-333333333333",
+  "confirmationToken": "returned-only-by-preview",
+  "fingerprint": "sha256",
+  "expectedCollectionVersion": 7,
+  "expectedChatCommitFenceVersion": 12
+}
+```
+
+```http
+POST /api/v1/rag/collections/by-key/purge
+```
+
+apply 在一个事务中重新校验 owner、token、fingerprint、版本、活动 Sync Run/repair、
+有效 Chat lease 和完整引用索引。计划改变、存在活动写入或超过配置上限时返回 `409`，
+不会部分删除。成功结果为 `status=RETIRED`，并返回删除文档数、`deletedAt`、`purgedAt`
+和最终 Collection version。结果保留窗口内精确重试同一 preview 会返回相同最小结果；
+窗口外返回稳定的 preview unavailable/expired 冲突。
+
+清理会物理删除 Collection 下全部本地、外部和 JSON 文档，以及它们的 embedding、任务、
+版本、关键词分块和派生状态。引用目标文档的 feedback 会整体删除；曾引用目标文档的持久化
+Chat 会话会按 owner/session 整体删除 history、Spring AI memory、summary 和 turn replay，
+避免保留回答或工具结果中的正文摘录。精确归属的 Document/Collection 内容审计也会删除。
+
+Collection 行保留为最小退役 tombstone：ID、永久 `collectionKey`、技术 embedding profile、
+版本和时间保留，name 固定化，description/metadata 清空。key 永久不能复用；这不是稳定
+标识匿名化。`fs_files` 属于独立文件子系统，没有可靠 Collection 外键，因此不会根据文件名
+或路径猜测并删除。退役后 restore、写入、显式检索/Chat、导出和 clone 返回
+`409 COLLECTION_ALREADY_RETIRED`；未显式指定 Collection 的检索只排除退役 tombstone。
+
+主要错误：
+
+- `403 COLLECTION_PURGE_FORBIDDEN`
+- `409 COLLECTION_PURGE_CONFLICT`
+- `409 COLLECTION_PURGE_PREVIEW_EXPIRED`
+- `409 COLLECTION_PURGE_CONFIRMATION_INVALID`
+- `409 COLLECTION_ALREADY_RETIRED`
+- `503 COLLECTION_PURGE_DISABLED`
 
 ---
 

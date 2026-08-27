@@ -113,7 +113,9 @@ public class CollectionRetrievalScopeResolver {
 
     private List<Long> authorizeIds(List<Long> requestedIds, ApiAccessPolicy caller) {
         if (ApiKeyCollectionAccess.isUnrestricted(caller)) {
-            return requestedIds;
+            return requestedIds.stream()
+                    .map(id -> identityResolver.requireActive(id, null).getId())
+                    .toList();
         }
         Set<Long> allowed = ApiKeyCollectionAccess.restrictedCollectionIds(caller)
                 .orElseThrow();
@@ -121,6 +123,7 @@ public class CollectionRetrievalScopeResolver {
             if (!allowed.contains(id)) {
                 throw new SecurityException("Collection is not authorized");
             }
+            identityResolver.requireActive(id, null);
         }
         return requestedIds;
     }
@@ -135,7 +138,9 @@ public class CollectionRetrievalScopeResolver {
                     ApiKeyCollectionAccess.restrictedCollectionIds(caller)
                             .orElseThrow());
         } catch (RagException e) {
-            if (!ApiKeyCollectionAccess.isUnrestricted(caller)) {
+            if (!ApiKeyCollectionAccess.isUnrestricted(caller)
+                    && e.getErrorCodeEnum()
+                    != com.springairag.api.enums.ErrorCode.COLLECTION_ALREADY_RETIRED) {
                 throw new SecurityException("Collection is not authorized");
             }
             throw e;

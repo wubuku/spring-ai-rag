@@ -3,14 +3,21 @@ package com.springairag.core.integration;
 import com.springairag.api.dto.DocumentRequest;
 import com.springairag.api.enums.EmbeddingPolicy;
 import com.springairag.core.config.EmbeddingProfile;
+import com.springairag.core.config.EmbeddingProfileProvider;
+import com.springairag.core.config.RagProperties;
 import com.springairag.core.embeddingjob.EmbeddingDispatchService;
+import com.springairag.core.embeddingjob.EmbeddingJobExecutor;
 import com.springairag.core.embeddingjob.EmbeddingJobRepository;
 import com.springairag.core.embeddingjob.EmbeddingJobStatus;
+import com.springairag.core.embeddingjob.EmbeddingJobWakeupPublisher;
+import com.springairag.core.embeddingjob.EmbeddingJobsAvailableEvent;
+import com.springairag.core.embeddingjob.EmbeddingJobWorker;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.repository.RagDocumentRepository;
 import com.springairag.core.repository.RagEmbeddingRepository;
 import com.springairag.core.service.BatchDocumentService;
 import com.springairag.core.service.DocumentEmbedService;
+import com.springairag.core.service.DocumentDerivationDescriptorProvider;
 import com.springairag.core.service.EmbeddingPersistenceService;
 import com.springairag.core.retrieval.EmbeddingBatchService;
 import com.springairag.documents.chunk.TextChunk;
@@ -42,9 +49,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.timeout;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -168,9 +178,10 @@ class EmbeddingJobsPostgresIntegrationTest {
                 INSERT INTO rag_embedding_jobs (
                     id, batch_id, document_id, embedding_profile_id,
                     force, content_hash, document_version, status,
-                    attempt_count, max_attempts, finished_at
+                    attempt_count, max_attempts, finished_at,
+                    document_kind, chunker_version
                 ) VALUES (?, ?, ?, ?, false, ?, 7, 'FAILED', 3, 3,
-                    CURRENT_TIMESTAMP)
+                    CURRENT_TIMESTAMP, 'TEXT', 'legacy-compatible')
                 """,
                 terminalId,
                 UUID.randomUUID(),
@@ -180,6 +191,93 @@ class EmbeddingJobsPostgresIntegrationTest {
         assertTrue(repository.retry(terminalId, 3).isEmpty());
         assertEquals(first.job().id(), repository.findActive(
                 documentId, profileId, hash).orElseThrow().id());
+    }
+
+    @Test
+    void afterCommitEventProcessesJobWithoutRecoveryPoll() {
+        long collectionId = jdbcTemplate.queryForObject(
+                "INSERT INTO rag_collection "
+                        + "(collection_key, name, dimensions) "
+                        + "VALUES (?, 'event-jobs', 1024) RETURNING id",
+                Long.class, "event-jobs-" + UUID.randomUUID());
+        String hash = "abcdef0123456789abcdef0123456789"
+                + "abcdef0123456789abcdef0123456789";
+        long documentId = insertDocument(collectionId, hash, true);
+        String profileKey = "event-profile-" + UUID.randomUUID();
+        long profileId = jdbcTemplate.queryForObject(
+                "INSERT INTO rag_embedding_profiles "
+                        + "(profile_key, provider, model_name, model_revision, "
+                        + "dimensions, distance_metric, normalization, enabled) "
+                        + "VALUES (?, 'test', 'model', 'v1', 1024, "
+                        + "'COSINE', 'NONE', true) RETURNING id",
+                Long.class, profileKey);
+        EmbeddingProfile profile = new EmbeddingProfile(
+                profileId, profileKey, "test", "model", "v1",
+                1024, "COSINE", "NONE", true);
+        EmbeddingProfileProvider profileProvider =
+                mock(EmbeddingProfileProvider.class);
+        when(profileProvider.getActiveProfile()).thenReturn(profile);
+        DocumentEmbedService embedService =
+                mock(DocumentEmbedService.class);
+        when(embedService.hasFreshEmbedding(any(RagDocument.class)))
+                .thenReturn(false);
+        when(embedService.embedDocumentForJob(
+                anyLong(), anyBoolean(), any()))
+                .thenReturn(java.util.Map.of("status", "COMPLETED"));
+        RagProperties properties = new RagProperties();
+        properties.getEmbeddingJobs().setWorkerConcurrency(1);
+        properties.getEmbeddingJobs().setClaimBatchSize(1);
+        DocumentDerivationDescriptorProvider descriptors =
+                new DocumentDerivationDescriptorProvider(properties);
+        EmbeddingJobExecutor executor = new EmbeddingJobExecutor(
+                repository, embedService, profileProvider, properties);
+        EmbeddingJobWorker worker = new EmbeddingJobWorker(
+                repository, executor, properties);
+        EmbeddingJobWakeupPublisher publisher =
+                new EmbeddingJobWakeupPublisher(event -> {
+                    if (event instanceof EmbeddingJobsAvailableEvent available) {
+                        worker.onJobsAvailable(available);
+                    }
+                });
+        EmbeddingDispatchService dispatch = new EmbeddingDispatchService(
+                embedService,
+                repository,
+                profileProvider,
+                properties,
+                descriptors,
+                executor);
+        ReflectionTestUtils.setField(
+                dispatch, "wakeupPublisher", publisher);
+        RagDocument document = new RagDocument();
+        document.setId(documentId);
+        document.setCollectionId(collectionId);
+        document.setContentHash(hash);
+        document.setVersion(1L);
+        document.setEnabled(true);
+        document.setDocumentType("text");
+        TransactionTemplate transaction = new TransactionTemplate(
+                new DataSourceTransactionManager(dataSource));
+
+        try {
+            UUID jobId = transaction.execute(status ->
+                    dispatch.enqueueInCurrentTransaction(
+                                    document,
+                                    true,
+                                    false,
+                                    "EVENT_INTEGRATION_TEST")
+                            .embeddingJobId());
+
+            assertTrue(jobId != null);
+            awaitStatus(jobId, EmbeddingJobStatus.SUCCEEDED);
+            verify(embedService, timeout(5000))
+                    .embedDocumentForJob(
+                            org.mockito.ArgumentMatchers.eq(documentId),
+                            org.mockito.ArgumentMatchers.eq(false),
+                            any());
+        } finally {
+            worker.shutdown();
+            executor.shutdown();
+        }
     }
 
     @Test
@@ -302,6 +400,14 @@ class EmbeddingJobsPostgresIntegrationTest {
         var created = repository.createOrCoalesce(
                 UUID.randomUUID(), documentId, profileId,
                 hash, 1L, false, 3);
+        jdbcTemplate.update("""
+                INSERT INTO rag_document_embedding_state (
+                    document_id, embedding_profile_id, content_hash,
+                    chunker_version, status, chunk_count, request_generation,
+                    active_job_id
+                ) VALUES (?, ?, ?, 'legacy-compatible', 'QUEUED', 0, 1, ?)
+                """,
+                documentId, profileId, hash, created.job().id());
         assertEquals(1, repository.claim("execution-a", 1, 60).size());
 
         EmbeddingPersistenceService persistence =
@@ -450,23 +556,45 @@ class EmbeddingJobsPostgresIntegrationTest {
                         + "chunker_version, status, chunk_count) "
                         + "VALUES (?, ?, ?, 'test', 'FAILED', 0)",
                 failed, profileId, hash);
+        UUID queuedJobId = UUID.randomUUID();
         jdbcTemplate.update("""
                 INSERT INTO rag_embedding_jobs (
                     id, batch_id, document_id, embedding_profile_id,
                     force, content_hash, document_version, status,
-                    attempt_count, max_attempts)
-                VALUES (?, ?, ?, ?, false, ?, 1, 'QUEUED', 0, 3)
+                    attempt_count, max_attempts, request_generation,
+                    document_kind, chunker_version)
+                VALUES (?, ?, ?, ?, false, ?, 1, 'QUEUED', 0, 3, 1,
+                    'TEXT', 'test')
                 """,
-                UUID.randomUUID(), UUID.randomUUID(), queued, profileId, hash);
+                queuedJobId, UUID.randomUUID(), queued, profileId, hash);
+        jdbcTemplate.update("""
+                INSERT INTO rag_document_embedding_state (
+                    document_id, embedding_profile_id, content_hash,
+                    chunker_version, status, chunk_count, request_generation,
+                    active_job_id
+                ) VALUES (?, ?, ?, 'test', 'QUEUED', 0, 1, ?)
+                """,
+                queued, profileId, hash, queuedJobId);
+        UUID runningJobId = UUID.randomUUID();
         jdbcTemplate.update("""
                 INSERT INTO rag_embedding_jobs (
                     id, batch_id, document_id, embedding_profile_id,
                     force, content_hash, document_version, status,
-                    attempt_count, max_attempts, lease_owner, lease_expires_at)
+                    attempt_count, max_attempts, lease_owner, lease_expires_at,
+                    request_generation, document_kind, chunker_version)
                 VALUES (?, ?, ?, ?, false, ?, 1, 'RUNNING', 1, 3,
-                    'worker-a', CURRENT_TIMESTAMP + INTERVAL '60 seconds')
+                    'worker-a', CURRENT_TIMESTAMP + INTERVAL '60 seconds',
+                    1, 'TEXT', 'test')
                 """,
-                UUID.randomUUID(), UUID.randomUUID(), running, profileId, hash);
+                runningJobId, UUID.randomUUID(), running, profileId, hash);
+        jdbcTemplate.update("""
+                INSERT INTO rag_document_embedding_state (
+                    document_id, embedding_profile_id, content_hash,
+                    chunker_version, status, chunk_count, request_generation,
+                    active_job_id
+                ) VALUES (?, ?, ?, 'test', 'PROCESSING', 0, 1, ?)
+                """,
+                running, profileId, hash, runningJobId);
 
         var readiness = repository.readiness(
                 collectionId,
@@ -560,5 +688,29 @@ class EmbeddingJobsPostgresIntegrationTest {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("Interrupted while waiting for test latch", e);
         }
+    }
+
+    private void awaitStatus(
+            UUID jobId,
+            EmbeddingJobStatus expected) {
+        long deadline = System.nanoTime()
+                + TimeUnit.SECONDS.toNanos(5);
+        while (System.nanoTime() < deadline) {
+            if (repository.find(jobId)
+                    .map(job -> job.status() == expected)
+                    .orElse(false)) {
+                return;
+            }
+            try {
+                Thread.sleep(25);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException(
+                        "Interrupted while waiting for job status", e);
+            }
+        }
+        throw new IllegalStateException(
+                "Timed out waiting for embedding job "
+                        + jobId + " to reach " + expected);
     }
 }

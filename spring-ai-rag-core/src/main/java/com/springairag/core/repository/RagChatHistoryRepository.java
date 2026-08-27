@@ -1,12 +1,15 @@
 package com.springairag.core.repository;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.springairag.api.dto.ChatHistoryResponse;
 import com.springairag.api.dto.ChatSource;
 import com.springairag.api.enums.ChatMode;
+import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.chat.ChatPrincipal;
 import com.springairag.core.entity.RagChatHistory;
+import com.springairag.core.exception.RagException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
@@ -15,8 +18,10 @@ import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.TreeSet;
 import java.util.UUID;
 
 
@@ -66,6 +71,8 @@ public class RagChatHistoryRepository {
             entity.setAiResponse(aiResponse);
             entity.setRelatedDocumentIds(relatedDocumentIds);
             entity.setMetadata(metadata);
+            entity.setContentReferenceIndexComplete(
+                    relatedDocumentIds == null || relatedDocumentIds.isBlank());
             jpaRepository.save(entity);
             log.debug("Saved chat history for session: {}", sessionId);
         } catch (Exception e) { // Resilience: chat history is non-critical
@@ -86,6 +93,30 @@ public class RagChatHistoryRepository {
             List<ChatSource> sources,
             String turnStatus,
             Map<String, Object> metadata) {
+        DurableContentReferences references =
+                reserveDurableContentReferences(relatedDocumentIds, sources);
+        return saveDurable(
+                principal,
+                sessionId,
+                userMessage,
+                aiResponse,
+                relatedDocumentIds,
+                sources,
+                turnStatus,
+                metadata,
+                references);
+    }
+
+    public RagChatHistory saveDurable(
+            ChatPrincipal principal,
+            String sessionId,
+            String userMessage,
+            String aiResponse,
+            String relatedDocumentIds,
+            List<ChatSource> sources,
+            String turnStatus,
+            Map<String, Object> metadata,
+            DurableContentReferences references) {
         Objects.requireNonNull(principal, "principal must not be null");
         Objects.requireNonNull(sessionId, "sessionId must not be null");
         Objects.requireNonNull(userMessage, "userMessage must not be null");
@@ -98,7 +129,7 @@ public class RagChatHistoryRepository {
         entity.setSources(sources);
         entity.setTurnStatus(turnStatus != null ? turnStatus : "COMPLETE");
         entity.setMetadata(metadata);
-        return jpaRepository.saveAndFlush(entity);
+        return saveAndIndex(entity, requireReferences(references));
     }
 
     public RagChatHistory saveDurable(
@@ -111,6 +142,35 @@ public class RagChatHistoryRepository {
             String turnStatus,
             Map<String, Object> metadata,
             UUID turnId) {
+        DurableContentReferences references =
+                reserveDurableContentReferences(relatedDocumentIds, sources);
+        return saveDurable(
+                principal,
+                sessionId,
+                userMessage,
+                aiResponse,
+                relatedDocumentIds,
+                sources,
+                turnStatus,
+                metadata,
+                turnId,
+                references);
+    }
+
+    public RagChatHistory saveDurable(
+            ChatPrincipal principal,
+            String sessionId,
+            String userMessage,
+            String aiResponse,
+            String relatedDocumentIds,
+            List<ChatSource> sources,
+            String turnStatus,
+            Map<String, Object> metadata,
+            UUID turnId,
+            DurableContentReferences references) {
+        Objects.requireNonNull(principal, "principal must not be null");
+        Objects.requireNonNull(sessionId, "sessionId must not be null");
+        Objects.requireNonNull(userMessage, "userMessage must not be null");
         RagChatHistory entity = new RagChatHistory();
         entity.setTurnId(turnId);
         entity.setOwnerPrincipalId(principal.id());
@@ -121,7 +181,49 @@ public class RagChatHistoryRepository {
         entity.setSources(sources);
         entity.setTurnStatus(turnStatus != null ? turnStatus : "COMPLETE");
         entity.setMetadata(metadata);
-        return jpaRepository.saveAndFlush(entity);
+        return saveAndIndex(entity, requireReferences(references));
+    }
+
+    /**
+     * Reserves every active source Collection before operation/history/memory
+     * rows are written. The caller must invoke this inside its commit transaction.
+     */
+    public DurableContentReferences reserveDurableContentReferences(
+            String relatedDocumentIds,
+            List<ChatSource> sources) {
+        List<Long> documentIds = normalizeDocumentIds(
+                relatedDocumentIds, sources);
+        if (documentIds.isEmpty()) {
+            return new DurableContentReferences(List.of(), Map.of());
+        }
+
+        Map<Long, Long> initialCollections = loadActiveDocumentCollections(
+                documentIds);
+        TreeSet<Long> collectionIds = new TreeSet<>(
+                initialCollections.values());
+        for (Long collectionId : collectionIds) {
+            int updated = jdbcTemplate.update("""
+                    UPDATE rag_collection
+                    SET chat_commit_fence_version =
+                            chat_commit_fence_version + 1
+                    WHERE id = ?
+                      AND deleted = FALSE
+                      AND enabled = TRUE
+                      AND purged_at IS NULL
+                    """, collectionId);
+            if (updated != 1) {
+                throw staleSourceReference();
+            }
+        }
+
+        Map<Long, Long> currentCollections = loadActiveDocumentCollections(
+                documentIds);
+        if (!initialCollections.equals(currentCollections)) {
+            throw staleSourceReference();
+        }
+        return new DurableContentReferences(
+                List.copyOf(documentIds),
+                Map.copyOf(currentCollections));
     }
 
     /**
@@ -295,6 +397,135 @@ public class RagChatHistoryRepository {
                 || principal.id().equals("local:auth-disabled");
     }
 
+    private RagChatHistory saveAndIndex(
+            RagChatHistory entity,
+            DurableContentReferences references) {
+        entity.setContentReferenceIndexComplete(false);
+        RagChatHistory saved = jpaRepository.saveAndFlush(entity);
+        if (!references.documentIds().isEmpty()) {
+            List<Object[]> rows = references.documentIds().stream()
+                    .map(documentId -> new Object[] { saved.getId(), documentId })
+                    .toList();
+            int[] inserted = jdbcTemplate.batchUpdate("""
+                    INSERT INTO rag_chat_history_source_document(
+                        history_id, document_id
+                    ) VALUES (?, ?)
+                    """, rows);
+            for (int count : inserted) {
+                if (count != 1) {
+                    throw new IllegalStateException(
+                            "Failed to index a Chat document reference");
+                }
+            }
+        }
+        int marked = jdbcTemplate.update("""
+                UPDATE rag_chat_history
+                SET content_reference_index_complete = TRUE
+                WHERE id = ?
+                  AND content_reference_index_complete = FALSE
+                """, saved.getId());
+        if (marked != 1) {
+            throw new IllegalStateException(
+                    "Failed to mark Chat content references complete");
+        }
+        saved.setContentReferenceIndexComplete(true);
+        return saved;
+    }
+
+    private DurableContentReferences requireReferences(
+            DurableContentReferences references) {
+        return Objects.requireNonNull(
+                references, "durable content references must not be null");
+    }
+
+    private List<Long> normalizeDocumentIds(
+            String relatedDocumentIds,
+            List<ChatSource> sources) {
+        TreeSet<Long> ids = new TreeSet<>();
+        if (sources != null) {
+            for (ChatSource source : sources) {
+                if (source != null) {
+                    addPositiveLong(ids, source.getDocumentId());
+                }
+            }
+        }
+        if (relatedDocumentIds != null && !relatedDocumentIds.isBlank()) {
+            try {
+                JsonNode root = objectMapper.readTree(relatedDocumentIds);
+                if (root == null || !root.isArray()) {
+                    throw new IllegalArgumentException(
+                            "relatedDocumentIds must be a JSON array");
+                }
+                for (JsonNode item : root) {
+                    if (item.isIntegralNumber()) {
+                        if (item.canConvertToLong() && item.longValue() > 0) {
+                            ids.add(item.longValue());
+                        }
+                    } else if (item.isTextual()) {
+                        addPositiveLong(ids, item.textValue());
+                    } else {
+                        throw new IllegalArgumentException(
+                                "relatedDocumentIds contains an unsupported value");
+                    }
+                }
+            } catch (RagException error) {
+                throw error;
+            } catch (Exception error) {
+                throw new RagException(
+                        ErrorCode.CHAT_HISTORY_PERSIST_FAILED,
+                        "Chat document references are invalid",
+                        error);
+            }
+        }
+        return List.copyOf(ids);
+    }
+
+    private void addPositiveLong(TreeSet<Long> target, String value) {
+        if (value == null || !value.matches("[1-9][0-9]{0,18}")) {
+            return;
+        }
+        try {
+            long parsed = Long.parseLong(value);
+            if (parsed > 0) {
+                target.add(parsed);
+            }
+        } catch (NumberFormatException ignored) {
+            // Values outside BIGINT cannot identify a database document.
+        }
+    }
+
+    private Map<Long, Long> loadActiveDocumentCollections(
+            List<Long> documentIds) {
+        Map<Long, Long> result = new LinkedHashMap<>();
+        for (Long documentId : documentIds) {
+            List<DocumentReferenceRow> rows = jdbcTemplate.query("""
+                    SELECT d.id, d.collection_id
+                    FROM rag_documents d
+                    JOIN rag_collection c ON c.id = d.collection_id
+                    WHERE d.id = ?
+                      AND d.enabled = TRUE
+                      AND c.deleted = FALSE
+                      AND c.enabled = TRUE
+                      AND c.purged_at IS NULL
+                    """,
+                    (resultSet, rowNum) -> new DocumentReferenceRow(
+                            resultSet.getLong("id"),
+                            resultSet.getLong("collection_id")),
+                    documentId);
+            if (rows.size() != 1) {
+                throw staleSourceReference();
+            }
+            result.put(documentId, rows.get(0).collectionId());
+        }
+        return Map.copyOf(result);
+    }
+
+    private RagException staleSourceReference() {
+        return new RagException(
+                ErrorCode.COLLECTION_PURGE_CONFLICT,
+                "Chat source documents changed before the turn could be committed");
+    }
+
     private String stringValue(Map<String, Object> metadata, String key) {
         Object value = metadata != null ? metadata.get(key) : null;
         return value != null ? String.valueOf(value) : null;
@@ -314,5 +545,19 @@ public class RagChatHistoryRepository {
         } catch (IllegalArgumentException ignored) {
             return fallback;
         }
+    }
+
+    public record DurableContentReferences(
+            List<Long> documentIds,
+            Map<Long, Long> collectionIdsByDocument) {
+        public DurableContentReferences {
+            documentIds = documentIds == null
+                    ? List.of() : List.copyOf(documentIds);
+            collectionIdsByDocument = collectionIdsByDocument == null
+                    ? Map.of() : Map.copyOf(collectionIdsByDocument);
+        }
+    }
+
+    private record DocumentReferenceRow(long documentId, long collectionId) {
     }
 }

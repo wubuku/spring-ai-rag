@@ -123,7 +123,8 @@ class IntegrationCapabilitiesControllerTest {
                         new IntegrationCapabilitiesResponse.SyncRunsLimits(
                                 100, 200, 100),
                         new IntegrationCapabilitiesResponse.ObservabilityLimits(
-                                90, 31, 100)));
+                                90, 31, 100),
+                        null));
     }
 
     @TestConfiguration

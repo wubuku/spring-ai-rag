@@ -38,9 +38,9 @@ Active plans are listed here and in `docs/index*`.
 
 ## Current Active Plans
 
-There are currently no active implementation plans. A new feature batch should
-first create a self-contained plan in this directory and add a matching
-progress ledger once implementation begins.
+- [Guarded Collection Purge And Retirement Plan](COLLECTION_PURGE_AND_RETIREMENT_PLAN.md)
+  - Status: implementation and acceptance in progress
+  - Progress: [implementation ledger](COLLECTION_PURGE_AND_RETIREMENT_PROGRESS.md)
 
 Completed, stopped, and superseded materials remain available in the
 [historical archive](archive/README.md).

@@ -45,6 +45,8 @@ class RagCollectionServiceTest {
     @BeforeEach
     void setUp() {
         service = new RagCollectionService(collectionRepository, documentRepository, auditLogService);
+        lenient().when(collectionRepository.advanceActiveVersion(
+                anyLong(), anyLong())).thenReturn(1);
     }
 
     private RagCollection createCollection(Long id, String name) {
@@ -182,7 +184,7 @@ class RagCollectionServiceTest {
             when(collectionRepository.findByIdAndDeletedFalse(1L))
                 .thenReturn(Optional.of(collection));
             when(collectionRepository.softDeleteIfVersion(
-                    eq(1L), eq(0L), any(LocalDateTime.class))).thenReturn(1);
+                    eq(1L), eq(1L), any(LocalDateTime.class))).thenReturn(1);
             when(documentRepository.countByCollectionId(1L)).thenReturn(5L);
 
             Optional<RagCollectionService.DeleteResult> result = service.deleteCollection(1L);
@@ -193,7 +195,7 @@ class RagCollectionServiceTest {
 
             verify(documentRepository).clearCollectionIdByCollectionId(1L);
             verify(collectionRepository).softDeleteIfVersion(
-                    eq(1L), eq(0L), any(LocalDateTime.class));
+                    eq(1L), eq(1L), any(LocalDateTime.class));
             verify(auditLogService).logDelete(eq("Collection"), eq("1"), anyString());
         }
 
@@ -204,7 +206,7 @@ class RagCollectionServiceTest {
             when(collectionRepository.findByIdAndDeletedFalse(1L))
                 .thenReturn(Optional.of(collection));
             when(collectionRepository.softDeleteIfVersion(
-                    eq(1L), eq(0L), any(LocalDateTime.class))).thenReturn(1);
+                    eq(1L), eq(1L), any(LocalDateTime.class))).thenReturn(1);
             when(documentRepository.countByCollectionId(1L)).thenReturn(0L);
 
             Optional<RagCollectionService.DeleteResult> result = service.deleteCollection(1L);
@@ -213,7 +215,7 @@ class RagCollectionServiceTest {
             assertEquals(0L, result.get().documentsUnlinked());
             verify(documentRepository, never()).clearCollectionIdByCollectionId(anyLong());
             verify(collectionRepository).softDeleteIfVersion(
-                    eq(1L), eq(0L), any(LocalDateTime.class));
+                    eq(1L), eq(1L), any(LocalDateTime.class));
         }
 
         @Test
@@ -237,12 +239,31 @@ class RagCollectionServiceTest {
             when(collectionRepository.findByIdAndDeletedFalse(1L))
                 .thenReturn(Optional.of(collection));
             when(collectionRepository.softDeleteIfVersion(
-                    eq(1L), eq(0L), any(LocalDateTime.class))).thenReturn(1);
+                    eq(1L), eq(1L), any(LocalDateTime.class))).thenReturn(1);
             when(documentRepository.countByCollectionId(1L)).thenReturn(0L);
 
             Optional<RagCollectionService.DeleteResult> result = svcNoAudit.deleteCollection(1L);
 
             assertTrue(result.isPresent());
+        }
+
+        @Test
+        @DisplayName("rejects permanently retired collections")
+        void retiredCollectionIsRejected() {
+            RagCollection retired = createCollection(1L, "Retired");
+            retired.setDeleted(true);
+            retired.setPurgedAt(LocalDateTime.now());
+            when(collectionRepository.findByIdAndDeletedFalse(1L))
+                    .thenReturn(Optional.empty());
+            when(collectionRepository.findById(1L))
+                    .thenReturn(Optional.of(retired));
+
+            RagException error = assertThrows(
+                    RagException.class,
+                    () -> service.deleteCollection(1L));
+
+            assertEquals(ErrorCode.COLLECTION_ALREADY_RETIRED,
+                    error.getErrorCodeEnum());
         }
     }
 
@@ -285,7 +306,7 @@ class RagCollectionServiceTest {
             Optional<RagCollectionService.RestoreResult> result = service.restoreCollection(999L);
 
             assertTrue(result.isEmpty());
-            verify(collectionRepository, never()).findById(anyLong());
+            verify(collectionRepository).findById(999L);
         }
 
         @Test
@@ -301,6 +322,24 @@ class RagCollectionServiceTest {
             Optional<RagCollectionService.RestoreResult> result = svcNoAudit.restoreCollection(1L);
 
             assertTrue(result.isPresent());
+        }
+
+        @Test
+        @DisplayName("rejects permanently retired collections")
+        void retiredCollectionIsRejected() {
+            RagCollection retired = createCollection(1L, "Retired");
+            retired.setDeleted(true);
+            retired.setPurgedAt(LocalDateTime.now());
+            when(collectionRepository.findById(1L))
+                    .thenReturn(Optional.of(retired));
+
+            RagException error = assertThrows(
+                    RagException.class,
+                    () -> service.restoreCollection(1L));
+
+            assertEquals(ErrorCode.COLLECTION_ALREADY_RETIRED,
+                    error.getErrorCodeEnum());
+            verify(collectionRepository, never()).restore(1L);
         }
     }
 
@@ -445,6 +484,27 @@ class RagCollectionServiceTest {
                     svcNoAudit.cloneCollection(1L, "clone-no-audit");
 
             assertTrue(result.isPresent());
+        }
+
+        @Test
+        @DisplayName("rejects permanently retired source collections")
+        void retiredCollectionIsRejected() {
+            RagCollection retired = createCollection(1L, "Retired");
+            retired.setDeleted(true);
+            retired.setPurgedAt(LocalDateTime.now());
+            when(collectionRepository.findByIdAndDeletedFalse(1L))
+                    .thenReturn(Optional.empty());
+            when(collectionRepository.findById(1L))
+                    .thenReturn(Optional.of(retired));
+
+            RagException error = assertThrows(
+                    RagException.class,
+                    () -> service.cloneCollection(1L, "clone-retired"));
+
+            assertEquals(ErrorCode.COLLECTION_ALREADY_RETIRED,
+                    error.getErrorCodeEnum());
+            verify(collectionRepository, never())
+                    .saveAndFlush(any(RagCollection.class));
         }
     }
 

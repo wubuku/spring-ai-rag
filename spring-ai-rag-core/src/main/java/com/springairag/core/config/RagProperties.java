@@ -76,6 +76,8 @@ public class RagProperties {
     private final RagUsageProperties usage = new RagUsageProperties();
     private final RagIntegrationObservabilityProperties integrationObservability =
             new RagIntegrationObservabilityProperties();
+    private final RagCollectionPurgeProperties collectionPurge =
+            new RagCollectionPurgeProperties();
 
     public RagEmbeddingProperties getEmbedding() {
         return embedding;
@@ -195,5 +197,9 @@ public class RagProperties {
 
     public RagIntegrationObservabilityProperties getIntegrationObservability() {
         return integrationObservability;
+    }
+
+    public RagCollectionPurgeProperties getCollectionPurge() {
+        return collectionPurge;
     }
 }

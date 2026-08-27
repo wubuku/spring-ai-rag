@@ -100,7 +100,7 @@ credential, but a database NORMAL principal does not need an additional
 {
   "protocol": {
     "name": "spring-ai-rag-integration",
-    "version": "1.0",
+    "version": "1.1",
     "apiVersion": "1.0.0"
   },
   "principal": {
@@ -137,7 +137,8 @@ credential, but a database NORMAL principal does not need an additional
       "documentSyncRuns": false,
       "documentSyncRunItemReceipts": false,
       "openAiCompatibility": false,
-      "integrationObservability": true
+      "integrationObservability": true,
+      "collectionPurge": false
     },
     "credentialRotation": {
       "immediate": true,
@@ -174,6 +175,14 @@ credential, but a database NORMAL principal does not need an additional
       "retentionDays": 90,
       "maxQueryRangeDays": 31,
       "maxCollectionBreakdownItems": 100
+    },
+    "collectionPurge": {
+      "maxDocuments": 10000,
+      "maxEmbeddings": 100000,
+      "maxVersions": 100000,
+      "maxDerivedRows": 250000,
+      "maxAffectedChatSessions": 1000,
+      "maxChatRows": 50000
     }
   }
 }
@@ -187,6 +196,13 @@ If a restricted ACL cannot be mapped completely to stable Collection keys, the
 endpoint returns `503 SERVICE_UNAVAILABLE` rather than publishing a partial
 contract. Use this endpoint to select supported client behavior, then use
 `/auth/me` and Collection probes to verify the exact deployment binding.
+
+`features.optional.collectionPurge` is caller-aware. It is `true` only when
+the service flag is enabled and the current identity is the environment root,
+a database `ADMIN`, or an explicitly allowed auth-disabled direct-loopback
+caller. Database `NORMAL`, legacy static, and ordinary remote anonymous callers
+always see `false`. The published limits support early sizing, but do not
+replace preview-time conflict and reference-integrity checks.
 
 #### `GET /api/v1/rag/integration-observability`
 
@@ -2242,12 +2258,86 @@ supported.
 Delete is a soft delete and unlinks legacy documents without deleting documents
 or embeddings. A Collection containing any document with a nonblank
 `externalId` returns `409`, because unlinking would destroy the
-`collectionKey + sourceNamespace + externalId` identity. The public API does
-not currently expose permanent purge for external-managed documents. Move them
-to another Collection when relocation is enabled; otherwise retain or restore
-the original Collection. A guarded purge/retirement workflow remains a
-follow-up. The key remains reserved. Restore preserves the same key and does
-not re-link legacy documents automatically.
+`collectionKey + sourceNamespace + externalId` identity. Use the guarded
+preview/apply flow below when an entire Collection must be permanently
+removed; do not simulate purge with ordinary soft delete. The key remains
+reserved. Restore preserves the same key and does not re-link legacy documents
+automatically.
+
+---
+
+### Guarded Collection Purge And Retirement
+
+This capability is disabled by default. Read
+`GET /api/v1/rag/integration-capabilities` first and expose or call the flow
+only when `features.optional.collectionPurge=true`. Allowed identities are the
+environment root and database `ADMIN`. Auth-disabled mode additionally needs
+an explicit local-development flag and a direct loopback Servlet peer; forwarded
+address headers are not trusted.
+
+Create a short-lived preview first:
+
+```http
+POST /api/v1/rag/collections/by-key/purge/preview?collectionKey=customer-42%3Amanual%3Av3
+```
+
+The response contains no document body. It reports document, embedding,
+version, keyword-derived, feedback, audit, and affected Chat-session counts,
+plus a one-time `confirmationToken`, fingerprint, Collection version, Chat
+commit-fence version, and expiry timestamps. Clients must not log or persist
+the plaintext token.
+
+After reviewing the unchanged plan, submit:
+
+```json
+{
+  "collectionKey": "customer-42:manual:v3",
+  "previewId": "33333333-3333-4333-8333-333333333333",
+  "confirmationToken": "returned-only-by-preview",
+  "fingerprint": "sha256",
+  "expectedCollectionVersion": 7,
+  "expectedChatCommitFenceVersion": 12
+}
+```
+
+```http
+POST /api/v1/rag/collections/by-key/purge
+```
+
+Apply revalidates the owner, token, fingerprint, versions, active Sync
+Runs/repairs, live Chat leases, and complete reference indexes in one
+transaction. A changed plan, active write, or configured-limit breach returns
+`409` without partial deletion. Success returns `status=RETIRED`, deleted
+document counts, `deletedAt`, `purgedAt`, and the final Collection version. An
+exact replay during the result-retention window returns the same minimal
+result; after cleanup it returns a stable preview unavailable/expired conflict.
+
+Purge physically removes all local, external, and JSON documents in the
+Collection together with embeddings, jobs, versions, keyword chunks, and
+derived state. Feedback referencing a target document is deleted as a whole.
+Any persisted Chat session that cited a target document is removed at the
+owner/session level, including history, Spring AI memory, summaries, and turn
+replay, so copied excerpts in answers or tool results do not remain. Precisely
+attributed content-bearing Document/Collection audit rows are also deleted.
+
+The Collection row remains as a minimal retired tombstone: ID, permanent
+`collectionKey`, technical embedding profile, versions, and timestamps remain;
+the name is fixed and description/metadata are cleared. The key can never be
+reused, so this is not anonymization of the stable identifier. `fs_files` has
+an independent file-subsystem lifecycle and no reliable Collection foreign key;
+purge never guesses ownership from filenames or paths. Restore, writes,
+explicit retrieval/Chat, export, and clone return
+`409 COLLECTION_ALREADY_RETIRED`. Retrieval without an explicit Collection
+scope simply excludes retired tombstones.
+
+Primary errors:
+
+- `403 COLLECTION_PURGE_FORBIDDEN`
+- `409 COLLECTION_PURGE_CONFLICT`
+- `409 COLLECTION_PURGE_PREVIEW_EXPIRED`
+- `409 COLLECTION_PURGE_CONFIRMATION_INVALID`
+- `409 COLLECTION_ALREADY_RETIRED`
+- `503 COLLECTION_PURGE_DISABLED`
 
 ---
 

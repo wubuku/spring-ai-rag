@@ -77,6 +77,12 @@ public class RagChatHistory {
     private UUID turnId;
 
     /**
+     * Whether every durable database-document reference has been normalized.
+     */
+    @Column(name = "content_reference_index_complete", nullable = false)
+    private Boolean contentReferenceIndexComplete = false;
+
+    /**
      * Chat metadata (JSONB format).
      */
     @JdbcTypeCode(SqlTypes.JSON)
@@ -125,6 +131,13 @@ public class RagChatHistory {
 
     public UUID getTurnId() { return turnId; }
     public void setTurnId(UUID turnId) { this.turnId = turnId; }
+
+    public Boolean getContentReferenceIndexComplete() {
+        return contentReferenceIndexComplete;
+    }
+    public void setContentReferenceIndexComplete(Boolean value) {
+        this.contentReferenceIndexComplete = value;
+    }
 
     public Map<String, Object> getMetadata() { return metadata; }
     public void setMetadata(Map<String, Object> metadata) { this.metadata = metadata; }

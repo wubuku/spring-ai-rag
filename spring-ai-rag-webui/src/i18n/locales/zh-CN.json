@@ -167,7 +167,41 @@
     "description": "描述",
     "descriptionPlaceholder": "这个知识库的用途是什么？",
     "createNamePlaceholder": "例如：产品文档",
-    "createDescriptionPlaceholder": "可选的集合描述"
+    "createDescriptionPlaceholder": "可选的集合描述",
+    "purge": {
+      "action": "永久清理",
+      "title": "永久清理并退役 Collection",
+      "description": "请审查 {{collectionKey}} 的删除计划。此操作无法撤销，Collection key 将被永久保留且不能复用。",
+      "previewLoading": "正在生成删除预览…",
+      "previewError": "无法生成清理预览",
+      "retryPreview": "重试预览",
+      "previewRequired": "必须先获得有效的清理预览。",
+      "warningTitle": "不可逆操作",
+      "warning": "全部 RAG 文档及其派生数据将被删除；引用这些文档的反馈和持久化会话也会被整体删除。",
+      "expiresAt": "预览过期时间：{{time}}。",
+      "confirmLabel": "请输入 {{collectionKey}} 以确认",
+      "confirmAction": "清理并退役",
+      "applying": "正在清理…",
+      "applyError": "Collection 清理失败",
+      "success": "Collection 已永久清理并退役",
+      "resultTitle": "Collection 已退役",
+      "resultSummary": "{{collectionKey}} 已退役，共永久删除 {{count}} 个文档。",
+      "resultVersion": "最终 Collection 版本：{{version}}",
+      "metrics": {
+        "documents": "文档",
+        "localDocuments": "本地文档",
+        "externalDocuments": "外部文档",
+        "embeddings": "向量",
+        "embeddingJobs": "嵌入任务",
+        "versions": "文档版本",
+        "keywordChunks": "关键词分块",
+        "derivedRows": "派生/控制行",
+        "feedback": "反馈记录",
+        "affectedSessions": "受影响会话",
+        "chatRows": "持久化会话行",
+        "auditRows": "含内容审计行"
+      }
+    }
   },
   "collectionScope": {
     "label": "检索范围",

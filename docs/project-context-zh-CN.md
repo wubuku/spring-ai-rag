@@ -325,7 +325,7 @@ job enqueue 分开提交，HTTP 不同步循环调用 provider。只读诊断默
 ### 数据库
 
 - PostgreSQL + pgvector。
-- Flyway 当前为 V1–V55。
+- Flyway 当前为 V1–V56。
 - V27/V28 负责新增、回填、校验、唯一约束及不可变 Collection 业务 key；V29 增加 JSONB
   结构化记录；V30 增加外部文档同步 schema；V31 在不改写已发布 V30 的前提下规范化
   已存储的外部文档身份；V32 增加按 principal 归属的 Chat history、来源快照、turn
@@ -349,7 +349,9 @@ job enqueue 分开提交，HTTP 不同步循环调用 provider。只读诊断默
   V52 增加按 owner 隔离、具有受约束 Collection 外键的 Collection 创建幂等账本；
   V53 增加按 principal 隔离的模型调用级 append-only 用量账本；V54 增加有界 UTC
   小时级 integration operation 与已授权 Collection contribution 聚合；V55 增加有界
-  分阶段 API credential 轮换、overlap deadline 与不保存 secret 的轮换 operation 账本。
+  分阶段 API credential 轮换、overlap deadline 与不保存 secret 的轮换 operation 账本；
+  V56 增加 Collection 退役 tombstone、Chat commit fence、Chat/feedback 规范化文档引用
+  与完整性标记，以及不保存正文或明文 token 的 durable purge preview。
 - 数据访问层禁止显式 `SELECT ... FOR UPDATE`、`SKIP LOCKED`、JPA
   `PESSIMISTIC_*` 与 PostgreSQL advisory lock。并发写使用条件
   `UPDATE/DELETE ... RETURNING`、`@Version`、唯一约束、lease 和有界重试；普通 DML
@@ -379,7 +381,7 @@ job enqueue 分开提交，HTTP 不同步循环调用 provider。只读诊断默
 | `/chat`, `/chat/stream` | KNOWLEDGE / AGENT / PLAIN 对话与结构化 SSE |
 | `/documents` | 本地文档 CRUD/lifecycle/embedding，以及外部文档幂等同步与原子 relocation |
 | `/search` | 混合检索 |
-| `/collections` | 知识库、embedding/derivation readiness 与有界派生 repair 控制面 |
+| `/collections` | 知识库、embedding/derivation readiness、有界派生 repair，以及默认关闭的受保护 purge/退役控制面 |
 | `/evaluation` | 评估与反馈 |
 | `/api-keys` | API Key 管理与可选的 principal 幂等 provisioning |
 | `/integration-capabilities` | 认证后可读取的版本化运行时集成合同 |
@@ -453,8 +455,10 @@ job enqueue 分开提交，HTTP 不同步循环调用 provider。只读诊断默
   immediate/staged/cancel、幂等与 secret replay 行为、默认/最大 overlap 和 operation
   retention。其中 `documentSyncRunItemReceipts`
   明确表示持久化回执查询是否可用，
-  `features.provisioning.collectionCreateIdempotencyKey` 表示 V52 控制面能力。restricted
-  ACL 无法完整解析为 Collection key 时以 `503` fail closed。
+  `features.provisioning.collectionCreateIdempotencyKey` 表示 V52 控制面能力；
+  caller-aware 的 `features.optional.collectionPurge` 只有在服务开关开启且当前身份为
+  environment root、数据库 ADMIN 或显式本地 loopback 时为 true，并同时发布同步清理
+  上限。restricted ACL 无法完整解析为 Collection key 时以 `503` fail closed。
 - `GET /api/v1/rag/integration-observability` 对 NORMAL principal 要求 `RAG_READ`，
   使用不包含的时间上界，并支持 HOUR/DAY、operation、Collection 和管理 principal
   过滤。NORMAL principal 只能查询自身/当前 ACL；root 与数据库 ADMIN 可查询更宽范围；
@@ -464,6 +468,10 @@ job enqueue 分开提交，HTTP 不同步循环调用 provider。只读诊断默
   30 个 UTC 日，最多 366 日。usage 或 pricing 缺失会显式计数，不会被推断为零。
 - Chat、Search、Collection、Document、PDF-to-RAG、评估与后台 worker 都使用统一 ACL
   snapshot 或按 stable owner 重载当前 policy。
+- Collection purge 默认关闭；开启后使用 preview/token/fingerprint、Collection-first
+  条件写入、Chat fence 与 session lease，在一个事务中清理目标内容和引用它的
+  feedback/持久化会话。最终保留永久 key tombstone，退役后不能 restore、写入、显式
+  检索、导出或 clone；独立文件子系统不按路径猜测删除。
 
 这完成了受管 API principal 的多实例基础加固，但不是完整的租户身份平台：OAuth/OIDC、
 租户层级、token/cost billing、管理面 recovery 和关闭全部 legacy static/query 兼容仍不在

@@ -67,6 +67,10 @@ public class RagUserFeedback {
     @Column(columnDefinition = "jsonb")
     private Map<String, Object> metadata;
 
+    /** Whether normalized content references were fully indexed. */
+    @Column(name = "content_reference_index_complete", nullable = false)
+    private Boolean contentReferenceIndexComplete = false;
+
     /** Creation time */
     @Column(name = "created_at", nullable = false)
     private ZonedDateTime createdAt = ZonedDateTime.now();
@@ -98,6 +102,12 @@ public class RagUserFeedback {
     public void setDwellTimeMs(Long dwellTimeMs) { this.dwellTimeMs = dwellTimeMs; }
     public Map<String, Object> getMetadata() { return metadata; }
     public void setMetadata(Map<String, Object> metadata) { this.metadata = metadata; }
+    public Boolean getContentReferenceIndexComplete() {
+        return contentReferenceIndexComplete;
+    }
+    public void setContentReferenceIndexComplete(Boolean value) {
+        this.contentReferenceIndexComplete = value;
+    }
     public ZonedDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(ZonedDateTime createdAt) { this.createdAt = createdAt; }
 }

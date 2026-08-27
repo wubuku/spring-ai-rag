@@ -148,21 +148,31 @@ public class IntegrationCapabilitiesResponse {
             boolean documentSyncRuns,
             boolean documentSyncRunItemReceipts,
             boolean openAiCompatibility,
-            boolean integrationObservability) {
+            boolean integrationObservability,
+            boolean collectionPurge) {
 
         public OptionalFeatures(
                 boolean documentSyncRuns,
                 boolean documentSyncRunItemReceipts,
                 boolean openAiCompatibility) {
             this(documentSyncRuns, documentSyncRunItemReceipts,
-                    openAiCompatibility, false);
+                    openAiCompatibility, false, false);
         }
 
         public OptionalFeatures(
                 boolean documentSyncRuns,
                 boolean openAiCompatibility) {
             this(documentSyncRuns, documentSyncRuns,
-                    openAiCompatibility, false);
+                    openAiCompatibility, false, false);
+        }
+
+        public OptionalFeatures(
+                boolean documentSyncRuns,
+                boolean documentSyncRunItemReceipts,
+                boolean openAiCompatibility,
+                boolean integrationObservability) {
+            this(documentSyncRuns, documentSyncRunItemReceipts,
+                    openAiCompatibility, integrationObservability, false);
         }
     }
 
@@ -174,7 +184,8 @@ public class IntegrationCapabilitiesResponse {
             int sourceRevisionMaxLength,
             StructuredRecordsLimits structuredRecords,
             SyncRunsLimits syncRuns,
-            ObservabilityLimits observability) {
+            ObservabilityLimits observability,
+            CollectionPurgeLimits collectionPurge) {
 
         public Limits(
                 int maxCollectionKeysPerPrincipal,
@@ -184,7 +195,7 @@ public class IntegrationCapabilitiesResponse {
                 int sourceRevisionMaxLength) {
             this(maxCollectionKeysPerPrincipal, collectionKeyMaxLength,
                     sourceNamespaceMaxLength, externalIdMaxLength,
-                    sourceRevisionMaxLength, null, null, null);
+                    sourceRevisionMaxLength, null, null, null, null);
         }
     }
 
@@ -208,5 +219,14 @@ public class IntegrationCapabilitiesResponse {
             int retentionDays,
             int maxQueryRangeDays,
             int maxCollectionBreakdownItems) {
+    }
+
+    public record CollectionPurgeLimits(
+            int maxDocuments,
+            int maxEmbeddings,
+            int maxVersions,
+            int maxDerivedRows,
+            int maxAffectedChatSessions,
+            int maxChatRows) {
     }
 }

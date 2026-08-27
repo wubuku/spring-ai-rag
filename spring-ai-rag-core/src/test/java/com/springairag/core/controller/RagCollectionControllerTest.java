@@ -366,7 +366,8 @@ class RagCollectionControllerTest {
 
     @Test
     void listDocuments_collectionExists_returnsPagedDocs() {
-        when(collectionRepository.existsById(1L)).thenReturn(true);
+        when(collectionRepository.findByIdAndDeletedFalse(1L))
+                .thenReturn(Optional.of(createCollection(1L, "Collection")));
 
         RagDocument doc = new RagDocument();
         doc.setId(10L);
@@ -385,7 +386,8 @@ class RagCollectionControllerTest {
 
     @Test
     void listDocuments_collectionNotExists_returns404() {
-        when(collectionRepository.existsById(999L)).thenReturn(false);
+        when(collectionRepository.findByIdAndDeletedFalse(999L))
+                .thenReturn(Optional.empty());
 
         ResponseEntity<CollectionDocumentListResponse> response = controller.listDocuments(999L, 0, 20, null, null, null);
 
@@ -394,7 +396,8 @@ class RagCollectionControllerTest {
 
     @Test
     void addDocument_collectionAndDocExist_linksDocument() {
-        when(collectionRepository.existsById(1L)).thenReturn(true);
+        when(collectionRepository.findByIdAndDeletedFalse(1L))
+                .thenReturn(Optional.of(createCollection(1L, "Collection")));
         RagDocument doc = new RagDocument();
         doc.setId(10L);
         when(documentRepository.findById(10L)).thenReturn(Optional.of(doc));
@@ -416,7 +419,8 @@ class RagCollectionControllerTest {
 
     @Test
     void addDocument_collectionNotExists_returns404() {
-        when(collectionRepository.existsById(999L)).thenReturn(false);
+        when(collectionRepository.findByIdAndDeletedFalse(999L))
+                .thenReturn(Optional.empty());
 
         ResponseEntity<DocumentAddedResponse> response = controller.addDocument(999L, Map.of("documentId", 10L));
 
@@ -425,7 +429,8 @@ class RagCollectionControllerTest {
 
     @Test
     void addDocument_documentNotExists_returns404() {
-        when(collectionRepository.existsById(1L)).thenReturn(true);
+        when(collectionRepository.findByIdAndDeletedFalse(1L))
+                .thenReturn(Optional.of(createCollection(1L, "Collection")));
         when(documentRepository.findById(999L)).thenReturn(Optional.empty());
 
         ResponseEntity<DocumentAddedResponse> response = controller.addDocument(1L, Map.of("documentId", 999L));
@@ -594,7 +599,8 @@ class RagCollectionControllerTest {
         document.setId(10L);
         document.setCollectionId(1L);
         document.setExternalId("cms:article:10");
-        when(collectionRepository.existsById(2L)).thenReturn(true);
+        when(collectionRepository.findByIdAndDeletedFalse(2L))
+                .thenReturn(Optional.of(createCollection(2L, "Target")));
         when(documentRepository.findById(10L)).thenReturn(Optional.of(document));
 
         assertThrows(com.springairag.core.exception.DocumentRevisionConflictException.class,
@@ -610,7 +616,8 @@ class RagCollectionControllerTest {
         document.setId(10L);
         document.setCollectionId(3L);
         document.setExternalId("cms:article:10");
-        when(collectionRepository.existsById(2L)).thenReturn(true);
+        when(collectionRepository.findByIdAndDeletedFalse(2L))
+                .thenReturn(Optional.of(createCollection(2L, "Target")));
         when(documentRepository.findById(10L)).thenReturn(Optional.of(document));
 
         assertThrows(SecurityException.class,
@@ -624,7 +631,8 @@ class RagCollectionControllerTest {
         setRestrictedKey(2L);
         RagDocument document = new RagDocument();
         document.setId(10L);
-        when(collectionRepository.existsById(2L)).thenReturn(true);
+        when(collectionRepository.findByIdAndDeletedFalse(2L))
+                .thenReturn(Optional.of(createCollection(2L, "Target")));
         when(documentRepository.findById(10L)).thenReturn(Optional.of(document));
 
         assertThrows(SecurityException.class,
@@ -702,6 +710,36 @@ class RagCollectionControllerTest {
         assertEquals("source-key", response.getBody().sourceCollectionKey());
         assertEquals("target-key", response.getBody().clonedCollectionKey());
         verify(collectionService).cloneCollection(1L, "target-key");
+    }
+
+    @Test
+    void retiredCollectionIsRejectedByNumericReadAndContentRoutes() {
+        RagCollection retired = createCollection(7L, "Retired");
+        retired.setDeleted(true);
+        retired.setDeletedAt(LocalDateTime.now());
+        retired.setPurgedAt(LocalDateTime.now());
+        when(collectionRepository.findByIdAndDeletedFalse(7L))
+                .thenReturn(Optional.empty());
+        when(collectionRepository.findById(7L))
+                .thenReturn(Optional.of(retired));
+
+        for (org.junit.jupiter.api.function.Executable call
+                : List.<org.junit.jupiter.api.function.Executable>of(
+                () -> controller.getById(7L),
+                () -> controller.listDocuments(
+                        7L, 0, 20, null, null, null),
+                () -> controller.addDocument(
+                        7L, Map.of("documentId", 10L)),
+                () -> controller.exportCollection(7L))) {
+            com.springairag.core.exception.RagException error =
+                    assertThrows(
+                            com.springairag.core.exception.RagException.class,
+                            call);
+            assertEquals(
+                    com.springairag.api.enums.ErrorCode
+                            .COLLECTION_ALREADY_RETIRED,
+                    error.getErrorCodeEnum());
+        }
     }
 
     private void setRestrictedKey(Long... collectionIds) {

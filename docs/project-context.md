@@ -409,7 +409,7 @@ See [multi-model-external-config.md](multi-model-external-config.md).
 ### Database
 
 - PostgreSQL with pgvector.
-- Flyway is currently V1–V55.
+- Flyway is currently V1–V56.
 - V27/V28 add, backfill, validate, uniquely constrain, and make immutable the
   Collection business key; V29 adds JSONB structured records; V30 adds the
   external-document synchronization schema; V31 normalizes stored external
@@ -444,7 +444,10 @@ See [multi-model-external-config.md](multi-model-external-config.md).
   model-invocation usage ledger; V54 adds bounded UTC hourly integration
   operation and authorized Collection-contribution rollups; V55 adds bounded
   staged API credential rotation, overlap deadlines, and a secret-free
-  rotation operation ledger.
+  rotation operation ledger; V56 adds the retired Collection tombstone, Chat
+  commit fence, normalized Chat/feedback document references and completeness
+  markers, and a durable purge preview that stores neither bodies nor plaintext
+  confirmation tokens.
 - The data-access layer forbids explicit `SELECT ... FOR UPDATE`,
   `SKIP LOCKED`, JPA `PESSIMISTIC_*`, and PostgreSQL advisory locks.
   Concurrent writes use conditional `UPDATE/DELETE ... RETURNING`, `@Version`,
@@ -481,7 +484,7 @@ The main namespace is `/api/v1/rag/**`:
 | `/chat`, `/chat/stream` | KNOWLEDGE / AGENT / PLAIN chat and structured SSE |
 | `/documents` | Local CRUD/lifecycle/embedding plus external idempotent sync and atomic relocation |
 | `/search` | Hybrid retrieval |
-| `/collections` | Knowledge collections, embedding/derivation readiness, and bounded derivation repair control plane |
+| `/collections` | Knowledge collections, embedding/derivation readiness, bounded derivation repair, and the disabled-by-default guarded purge/retirement control plane |
 | `/evaluation` | Evaluation and feedback |
 | `/api-keys` | API-key management with optional idempotent principal provisioning |
 | `/integration-capabilities` | Authenticated, versioned runtime integration contract |
@@ -575,7 +578,11 @@ Managed database callers consist of a stable `rag_api_principal` and versioned
   `documentSyncRunItemReceipts`
   explicitly reports whether durable receipt lookup is available, while
   `features.provisioning.collectionCreateIdempotencyKey` reports the V52
-  control-plane capability. Restricted ACL
+  control-plane capability. Caller-aware
+  `features.optional.collectionPurge` is true only when the service flag is
+  enabled and the identity is environment root, database ADMIN, or an
+  explicitly local loopback caller; it also publishes synchronous purge
+  limits. Restricted ACL
   projection fails closed with `503` when all Collection keys cannot be
   resolved.
 - `GET /api/v1/rag/integration-observability` requires `RAG_READ` for NORMAL
@@ -590,6 +597,12 @@ Managed database callers consist of a stable `rag_api_principal` and versioned
   explicitly rather than inferred as zero.
 - Chat, Search, Collections, Documents, PDF-to-RAG, evaluation, and background
   workers all use the immutable ACL snapshot or reload policy by stable owner.
+- Collection purge is disabled by default. When enabled, preview/token/
+  fingerprint checks, Collection-first conditional writes, the Chat fence, and
+  session leases remove target content and referencing feedback/persisted Chat
+  state in one transaction. A permanent-key tombstone remains; retired
+  Collections cannot be restored, written, explicitly retrieved, exported, or
+  cloned. The independent file subsystem is never deleted by path guessing.
 
 This completes the managed-principal multi-instance foundation, not a complete
 tenant identity platform. OAuth/OIDC, tenant hierarchy, token/cost billing,

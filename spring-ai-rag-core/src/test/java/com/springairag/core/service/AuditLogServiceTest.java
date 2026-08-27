@@ -77,23 +77,25 @@ class AuditLogServiceTest {
         assertEquals("CREATE", captured.getOperation());
         assertEquals("Collection", captured.getEntityType());
         assertEquals("col-123", captured.getEntityId());
-        assertEquals("Created collection test", captured.getDescription());
+        assertEquals("Collection CREATE recorded", captured.getDescription());
         assertNull(captured.getDetails());
         assertNull(captured.getSessionId());
     }
 
     @Test
-    @DisplayName("logCreate with details serializes details to JSON")
-    void logCreate_withDetails_serializesToJson() throws Exception {
+    @DisplayName("Document audit keeps numeric facts and removes content strings")
+    void logCreate_documentDetailsAreContentFree() throws Exception {
         Map<String, Object> details = Map.of("size", 1024, "type", "pdf");
-        when(objectMapper.writeValueAsString(details)).thenReturn("{\"size\":1024,\"type\":\"pdf\"}");
+        when(objectMapper.writeValueAsString(Map.of("size", 1024)))
+                .thenReturn("{\"size\":1024}");
         when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         auditLogService.logCreate("Document", "doc-456", "Uploaded document", details);
 
         verify(repository).save(auditLogCaptor.capture());
         RagAuditLog captured = auditLogCaptor.getValue();
-        assertEquals("{\"size\":1024,\"type\":\"pdf\"}", captured.getDetails());
+        assertEquals("Document CREATE recorded", captured.getDescription());
+        assertEquals("{\"size\":1024}", captured.getDetails());
     }
 
     // --- logUpdate ---
@@ -110,19 +112,22 @@ class AuditLogServiceTest {
         assertEquals("UPDATE", captured.getOperation());
         assertEquals("Document", captured.getEntityType());
         assertEquals("doc-789", captured.getEntityId());
+        assertEquals("Document UPDATE recorded", captured.getDescription());
     }
 
     @Test
-    @DisplayName("logUpdate with details saves details JSON")
-    void logUpdate_withDetails_savesDetailsJson() throws Exception {
+    @DisplayName("Collection audit removes name changes from details")
+    void logUpdate_collectionDetailsRemoveContent() {
         Map<String, Object> details = Map.of("oldName", "old", "newName", "new");
-        when(objectMapper.writeValueAsString(details)).thenReturn("{\"oldName\":\"old\",\"newName\":\"new\"}");
         when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         auditLogService.logUpdate("Collection", "col-111", "Renamed collection", details);
 
         verify(repository).save(auditLogCaptor.capture());
-        assertEquals("{\"oldName\":\"old\",\"newName\":\"new\"}", auditLogCaptor.getValue().getDetails());
+        assertEquals("Collection UPDATE recorded",
+                auditLogCaptor.getValue().getDescription());
+        assertNull(auditLogCaptor.getValue().getDetails());
+        verifyNoInteractions(objectMapper);
     }
 
     // --- logDelete ---
@@ -142,16 +147,17 @@ class AuditLogServiceTest {
     }
 
     @Test
-    @DisplayName("logDelete with details saves details JSON")
-    void logDelete_withDetails_savesDetailsJson() throws Exception {
+    @DisplayName("Document delete audit removes free-text reason")
+    void logDelete_documentDetailsRemoveContent() {
         Map<String, Object> details = Map.of("reason", "user requested");
-        when(objectMapper.writeValueAsString(details)).thenReturn("{\"reason\":\"user requested\"}");
         when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         auditLogService.logDelete("Document", "doc-555", "Deleted document", details);
 
         verify(repository).save(auditLogCaptor.capture());
-        assertEquals("{\"reason\":\"user requested\"}", auditLogCaptor.getValue().getDetails());
+        assertEquals("Document DELETE recorded",
+                auditLogCaptor.getValue().getDescription());
+        assertNull(auditLogCaptor.getValue().getDetails());
     }
 
     // --- MDC traceId ---
@@ -213,10 +219,23 @@ class AuditLogServiceTest {
                 .thenThrow(new com.fasterxml.jackson.core.JsonProcessingException("test") {});
         when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        auditLogService.logCreate("Document", "doc-1", "test", details);
+        auditLogService.logCreate("Alert", "alert-1", "test", details);
 
         verify(repository).save(auditLogCaptor.capture());
         assertNull(auditLogCaptor.getValue().getDetails());
+    }
+
+    @Test
+    @DisplayName("Non-content-bearing entity audit retains supplied description")
+    void nonContentBearingEntityRetainsDescription() {
+        when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        auditLogService.logDelete(
+                "Alert", "alert-2", "Deleted alert rule");
+
+        verify(repository).save(auditLogCaptor.capture());
+        assertEquals("Deleted alert rule",
+                auditLogCaptor.getValue().getDescription());
     }
 
     // --- Resilience ---

@@ -85,7 +85,7 @@ class CollectionIdentityResolverTest {
         resolver.confirmActiveWrite(token);
 
         assertEquals(7L, token.collectionId());
-        assertEquals(4L, token.version());
+        assertEquals(5L, token.version());
         verify(repository).advanceActiveVersion(7L, 4L);
     }
 

@@ -11,6 +11,9 @@ import com.springairag.api.dto.CollectionImportRequest;
 import com.springairag.api.dto.CollectionRequest;
 import com.springairag.api.dto.CollectionUpdateRequest;
 import com.springairag.api.dto.CollectionRestoreResponse;
+import com.springairag.api.dto.CollectionPurgeApplyRequest;
+import com.springairag.api.dto.CollectionPurgePreviewResponse;
+import com.springairag.api.dto.CollectionPurgeResultResponse;
 import com.springairag.api.dto.DocumentAddedResponse;
 import com.springairag.api.dto.DocumentSummary;
 import com.springairag.api.dto.DocumentUpdateRequest;
@@ -31,6 +34,7 @@ import com.springairag.core.service.AuditLogService;
 import com.springairag.core.service.CollectionProvisioningService;
 import com.springairag.core.service.RagCollectionService;
 import com.springairag.core.service.CollectionIdentityResolver;
+import com.springairag.core.service.CollectionPurgeService;
 import com.springairag.core.service.JsonRecordService;
 import com.springairag.core.service.DocumentMutationService;
 import com.springairag.core.util.DigestUtils;
@@ -87,6 +91,7 @@ public class RagCollectionController {
     private DocumentMutationService documentMutationService;
     private AuditLogService auditLogService;  // optional: null when RagAuditLogRepository unavailable
     private CollectionProvisioningService collectionProvisioningService;
+    private CollectionPurgeService collectionPurgeService;
     private ProvisioningOwnerResolver provisioningOwnerResolver =
             new ProvisioningOwnerResolver();
 
@@ -110,6 +115,11 @@ public class RagCollectionController {
     }
 
     @Autowired
+    public void setCollectionPurgeService(CollectionPurgeService service) {
+        this.collectionPurgeService = service;
+    }
+
+    @Autowired
     public RagCollectionController(RagCollectionRepository collectionRepository,
                                     RagDocumentRepository documentRepository,
                                     RagCollectionService collectionService,
@@ -120,6 +130,49 @@ public class RagCollectionController {
         this.collectionService = collectionService;
         this.identityResolver = identityResolver;
         this.auditLogService = auditLogService;
+    }
+
+    @Operation(
+            summary = "Preview permanent Collection purge",
+            description = "Creates a short-lived, body-free deletion plan and returns "
+                    + "a one-time confirmation token.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Purge preview created"),
+            @ApiResponse(responseCode = "403", description = "Administrative caller required"),
+            @ApiResponse(responseCode = "409", description = "Collection is busy or plan is unsafe"),
+            @ApiResponse(responseCode = "503", description = "Collection purge is disabled")
+    })
+    @PostMapping("/by-key/purge/preview")
+    public CollectionPurgePreviewResponse previewPurge(
+            @RequestParam String collectionKey,
+            HttpServletRequest request) {
+        return requirePurgeService().preview(collectionKey, request);
+    }
+
+    @Operation(
+            summary = "Permanently purge and retire a Collection",
+            description = "Applies an unchanged purge preview in one transaction. "
+                    + "The Collection key remains permanently reserved.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Collection retired"),
+            @ApiResponse(responseCode = "403", description = "Administrative caller required"),
+            @ApiResponse(responseCode = "409", description = "Preview or lifecycle conflict"),
+            @ApiResponse(responseCode = "503", description = "Collection purge is disabled")
+    })
+    @PostMapping("/by-key/purge")
+    public CollectionPurgeResultResponse applyPurge(
+            @Valid @RequestBody CollectionPurgeApplyRequest requestBody,
+            HttpServletRequest request) {
+        return requirePurgeService().apply(requestBody, request);
+    }
+
+    private CollectionPurgeService requirePurgeService() {
+        if (collectionPurgeService == null) {
+            throw new RagException(
+                    ErrorCode.SERVICE_UNAVAILABLE,
+                    "Collection purge service is unavailable");
+        }
+        return collectionPurgeService;
     }
 
     public RagCollectionController(RagCollectionRepository collectionRepository,
@@ -264,7 +317,7 @@ public class RagCollectionController {
                 id, ApiKeyCollectionAccess.currentPolicy());
         log.info("Getting collection: id={}", id);
 
-        return collectionRepository.findByIdAndDeletedFalse(id)
+        return findActiveCollection(id)
                 .map(c -> {
                     long docCount = documentRepository.countByCollectionId(id);
                     return ResponseEntity.ok(CollectionMapper.toMap(c, docCount));
@@ -331,7 +384,7 @@ public class RagCollectionController {
                 id, ApiKeyCollectionAccess.currentPolicy());
         log.info("Updating collection: id={}", id);
 
-        return collectionRepository.findByIdAndDeletedFalse(id)
+        return findActiveCollection(id)
                 .map(existing -> {
                     existing.setName(request.getName());
                     existing.setDescription(request.getDescription());
@@ -535,7 +588,7 @@ public class RagCollectionController {
         ApiKeyCollectionAccess.requireCollectionId(
                 id, ApiKeyCollectionAccess.currentPolicy());
 
-        if (!collectionRepository.existsById(id)) {
+        if (findActiveCollection(id).isEmpty()) {
             return ResponseEntity.notFound().build();
         }
 
@@ -630,7 +683,7 @@ public class RagCollectionController {
             throw new IllegalArgumentException("documentId is required");
         }
 
-        if (!collectionRepository.existsById(id)) {
+        if (findActiveCollection(id).isEmpty()) {
             return ResponseEntity.notFound().build();
         }
 
@@ -692,7 +745,7 @@ public class RagCollectionController {
                 id, ApiKeyCollectionAccess.currentPolicy());
         log.info("Exporting collection: id={}", id);
 
-        return collectionRepository.findByIdAndDeletedFalse(id)
+        return findActiveCollection(id)
                 .map(collection -> {
                     List<RagDocument> docs = documentRepository.findAllByCollectionId(id);
                     CollectionExportResponse response = buildExportResponse(collection, docs);
@@ -931,6 +984,21 @@ public class RagCollectionController {
                 collectionKey,
                 ApiKeyCollectionAccess.currentPolicy(),
                 identityResolver);
+    }
+
+    private java.util.Optional<RagCollection> findActiveCollection(Long id) {
+        java.util.Optional<RagCollection> active =
+                collectionRepository.findByIdAndDeletedFalse(id);
+        if (active.isEmpty()) {
+            collectionRepository.findById(id)
+                    .filter(collection -> collection.getPurgedAt() != null)
+                    .ifPresent(collection -> {
+                        throw new RagException(
+                                ErrorCode.COLLECTION_ALREADY_RETIRED,
+                                "Collection is permanently retired");
+                    });
+        }
+        return active;
     }
 
     // Null-safe generic audit helper (AuditLogService is optional)

@@ -110,6 +110,7 @@ public class DocumentSyncRunService {
 
         try {
             return requireResult(transactionTemplate.execute(status -> {
+                collectionIdentityResolver.beginActiveWrite(collection.getId());
                 expireActiveRuns(collection.getId(), namespace);
                 RunRow existing = findByClientRun(
                         collection.getId(), namespace, clientRunId);

@@ -92,7 +92,8 @@ public interface RagCollectionRepository extends JpaRepository<RagCollection, Lo
      */
     @Modifying
     @Query("UPDATE RagCollection c SET c.version = c.version + 1 "
-            + "WHERE c.id = :id AND c.deleted = false AND c.version = :expectedVersion")
+            + "WHERE c.id = :id AND c.deleted = false AND c.enabled = true "
+            + "AND c.purgedAt IS NULL AND c.version = :expectedVersion")
     int advanceActiveVersion(
             @Param("id") Long id,
             @Param("expectedVersion") Long expectedVersion);
@@ -102,7 +103,8 @@ public interface RagCollectionRepository extends JpaRepository<RagCollection, Lo
      */
     @Modifying
     @Query("UPDATE RagCollection c SET c.deleted = false, c.deletedAt = null, "
-           + "c.version = c.version + 1 WHERE c.id = :id AND c.deleted = true")
+           + "c.version = c.version + 1 WHERE c.id = :id AND c.deleted = true "
+           + "AND c.purgedAt IS NULL")
     int restore(@Param("id") Long id);
 
     /**

@@ -83,6 +83,42 @@ export async function mockAllApiCalls(page: Page) {
     await route.fulfill({ status: 204, body: '' });
   });
 
+  await page.route('/api/v1/rag/integration-capabilities', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        protocol: {
+          name: 'spring-ai-rag-integration',
+          version: '1.1',
+          apiVersion: '1.0.0',
+        },
+        principal: {
+          principalType: 'ENVIRONMENT_ROOT',
+          principalRole: null,
+          capabilities: ['RAG_READ', 'RAG_WRITE', 'API_KEY_MANAGE'],
+          collectionAccessMode: 'UNRESTRICTED',
+          allowedCollectionKeys: null,
+        },
+        features: {
+          optional: {
+            collectionPurge: true,
+          },
+        },
+        limits: {
+          collectionPurge: {
+            maxDocuments: 10000,
+            maxEmbeddings: 100000,
+            maxVersions: 100000,
+            maxDerivedRows: 250000,
+            maxAffectedChatSessions: 1000,
+            maxChatRows: 50000,
+          },
+        },
+      }),
+    });
+  });
+
   await page.route('**/api/v1/rag/embedding-jobs**', async route => {
     await route.fulfill({
       status: 200,
@@ -419,6 +455,70 @@ export async function mockAllApiCalls(page: Page) {
   // Mock collections list
   page.route(/\/api\/v1\/rag\/collections.*/, async route => {
     const path = new URL(route.request().url()).pathname;
+    if (path.endsWith('/by-key/purge/preview')) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          previewId: '33333333-3333-4333-8333-333333333333',
+          collectionId: 1,
+          collectionKey: 'sample-collection',
+          collectionVersion: 7,
+          chatCommitFenceVersion: 12,
+          status: 'PREVIEWED',
+          documentCount: 5,
+          externalDocumentCount: 2,
+          localDocumentCount: 3,
+          embeddingCount: 9,
+          embeddingJobCount: 2,
+          versionCount: 6,
+          keywordChunkCount: 10,
+          repairPreviewCount: 0,
+          repairItemCount: 0,
+          derivedRowCount: 31,
+          documentIdempotencyOperationCount: 2,
+          feedbackCount: 1,
+          feedbackDocumentReferenceCount: 1,
+          documentAuditCount: 2,
+          collectionAuditCount: 1,
+          relocationMarkerCount: 1,
+          affectedChatSessionCount: 2,
+          chatHistoryCount: 4,
+          chatMemoryCount: 4,
+          chatSummaryCount: 1,
+          chatTurnOperationCount: 2,
+          activeSyncRunCount: 0,
+          activeDerivationRepairCount: 0,
+          activeChatSessionCount: 0,
+          unindexedChatReferenceCount: 0,
+          unindexedFeedbackReferenceCount: 0,
+          confirmationToken: 'mock-confirmation-token',
+          fingerprint: 'mock-purge-fingerprint',
+          previewExpiresAt: '2026-08-27T12:15:00Z',
+          operationExpiresAt: '2026-08-27T12:30:00Z',
+        }),
+      });
+      return;
+    }
+    if (path.endsWith('/by-key/purge')) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          previewId: '33333333-3333-4333-8333-333333333333',
+          status: 'RETIRED',
+          collectionId: 1,
+          collectionKey: 'sample-collection',
+          purgedDocumentCount: 5,
+          purgedExternalDocumentCount: 2,
+          purgedLocalDocumentCount: 3,
+          deletedAt: '2026-08-27T12:01:00',
+          purgedAt: '2026-08-27T12:01:00',
+          collectionVersion: 8,
+        }),
+      });
+      return;
+    }
     if (path.endsWith('/derivation-readiness')) {
       await route.fulfill({
         status: 200,

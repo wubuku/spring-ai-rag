@@ -6,6 +6,8 @@ import com.springairag.core.exception.RagException;
 import com.springairag.core.repository.ChatTurnOperationRepository;
 import com.springairag.core.repository.RagChatHistoryRepository;
 import jakarta.annotation.PreDestroy;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.memory.repository.jdbc.JdbcChatMemoryRepository;
@@ -36,6 +38,9 @@ import java.util.function.Supplier;
  */
 @Component
 public class ChatSessionCoordinator {
+
+    private static final Logger log =
+            LoggerFactory.getLogger(ChatSessionCoordinator.class);
 
     private static final String ACQUIRE_SQL = """
             INSERT INTO rag_chat_session_lease
@@ -144,13 +149,7 @@ public class ChatSessionCoordinator {
                 token,
                 deadline(streaming),
                 false);
-        long renewEveryMs = renewIntervalMs();
-        ScheduledFuture<?> renewal = renewExecutor.scheduleAtFixedRate(
-                () -> renew(handle),
-                renewEveryMs,
-                renewEveryMs,
-                TimeUnit.MILLISECONDS);
-        handle.renewal.set(renewal);
+        scheduleRenewal(handle);
         return handle;
     }
 
@@ -195,8 +194,11 @@ public class ChatSessionCoordinator {
         beginCommit(handle);
         try {
             transactionTemplate.executeWithoutResult(status -> {
+                RagChatHistoryRepository.DurableContentReferences references =
+                        historyRepository.reserveDurableContentReferences(
+                                relatedDocumentIds, result.sources());
                 if (!handle.stateless) {
-                    consumeLease(handle);
+                    renewLeaseForCommit(handle);
                 }
                 historyRepository.saveDurable(
                         command.principal(),
@@ -206,7 +208,8 @@ public class ChatSessionCoordinator {
                         relatedDocumentIds,
                         result.sources(),
                         "COMPLETE",
-                        result.metadata());
+                        result.metadata(),
+                        references);
                 if (command.memoryMode() == MemoryMode.SERVER) {
                     sharedMemory.clear(command.memoryConversationId());
                     if (committedMessages != null && !committedMessages.isEmpty()) {
@@ -216,7 +219,7 @@ public class ChatSessionCoordinator {
                     }
                 }
             });
-            handle.state.set(State.TERMINAL);
+            resumeAfterSuccessfulCommit(handle);
         } catch (RagException e) {
             throw e;
         } catch (RuntimeException e) {
@@ -229,8 +232,8 @@ public class ChatSessionCoordinator {
 
     /**
      * Commits a keyed turn and its durable operation in one database
-     * transaction. The operation CAS is deliberately the first write; a later
-     * history or memory failure rolls the operation and lease back together.
+     * transaction. Source Collections are fenced before the operation CAS so
+     * purge and Chat always use the same Collection-first lock order.
      */
     public void commitOperation(
             LeaseHandle handle,
@@ -250,6 +253,12 @@ public class ChatSessionCoordinator {
         beginCommit(handle);
         try {
             transactionTemplate.executeWithoutResult(status -> {
+                RagChatHistoryRepository.DurableContentReferences references =
+                        historyRepository.reserveDurableContentReferences(
+                                relatedDocumentIds, result.sources());
+                if (!handle.stateless) {
+                    renewLeaseForCommit(handle);
+                }
                 if (!operationRepository.completeSuccess(
                         operation,
                         executionSnapshot,
@@ -258,9 +267,6 @@ public class ChatSessionCoordinator {
                     throw new RagException(
                             ErrorCode.CHAT_HISTORY_PERSIST_FAILED,
                             "Chat operation lease was lost before completion");
-                }
-                if (!handle.stateless) {
-                    consumeLease(handle);
                 }
                 historyRepository.saveDurable(
                         command.principal(),
@@ -271,7 +277,8 @@ public class ChatSessionCoordinator {
                         result.sources(),
                         "COMPLETE",
                         result.metadata(),
-                        operation.turnId());
+                        operation.turnId(),
+                        references);
                 if (command.memoryMode() == MemoryMode.SERVER) {
                     sharedMemory.clear(command.memoryConversationId());
                     if (committedMessages != null && !committedMessages.isEmpty()) {
@@ -281,7 +288,7 @@ public class ChatSessionCoordinator {
                     }
                 }
             });
-            handle.state.set(State.TERMINAL);
+            resumeAfterSuccessfulCommit(handle);
         } catch (RagException e) {
             throw e;
         } catch (RuntimeException e) {
@@ -472,9 +479,7 @@ public class ChatSessionCoordinator {
     }
 
     /**
-     * Atomically consumes the active lease at the beginning of the commit
-     * transaction. A rollback restores the lease row; a successful commit
-     * releases it without an explicit lock.
+     * Atomically consumes an active lease for terminal failure/clear paths.
      */
     private void consumeLease(LeaseHandle handle) {
         List<String> rows = jdbcTemplate.query(
@@ -487,6 +492,47 @@ public class ChatSessionCoordinator {
             handle.lost.set(true);
             throw leaseLost();
         }
+    }
+
+    private void renewLeaseForCommit(LeaseHandle handle) {
+        int affected = jdbcTemplate.update(
+                RENEW_SQL,
+                leaseTtlMs(),
+                handle.principalId,
+                handle.sessionId,
+                handle.ownerToken);
+        if (affected != 1) {
+            handle.lost.set(true);
+            throw leaseLost();
+        }
+    }
+
+    private void resumeAfterSuccessfulCommit(LeaseHandle handle) {
+        if (handle.stateless) {
+            handle.state.set(State.TERMINAL);
+            return;
+        }
+        synchronized (handle.renewMonitor) {
+            handle.state.set(State.RUNNING);
+            try {
+                scheduleRenewal(handle);
+            } catch (RuntimeException error) {
+                log.warn(
+                        "Failed to resume Chat session lease renewal for session {}: {}",
+                        handle.sessionId,
+                        error.getMessage());
+            }
+        }
+    }
+
+    private void scheduleRenewal(LeaseHandle handle) {
+        long renewEveryMs = renewIntervalMs();
+        ScheduledFuture<?> renewal = renewExecutor.scheduleAtFixedRate(
+                () -> renew(handle),
+                renewEveryMs,
+                renewEveryMs,
+                TimeUnit.MILLISECONDS);
+        handle.renewal.set(renewal);
     }
 
     private void assertActive(LeaseHandle handle) {

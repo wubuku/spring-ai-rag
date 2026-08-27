@@ -8,6 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -16,11 +17,13 @@ import jakarta.annotation.PreDestroy;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * 有界轮询、租约化的 embedding job worker。
+ * 事件唤醒、低频扫描兜底、租约化的有界 embedding job worker。
  */
 @Component
 @ConditionalOnProperty(
@@ -38,6 +41,9 @@ public class EmbeddingJobWorker {
             .toString().replace("-", "").substring(0, 16);
     private final Semaphore slots;
     private final ExecutorService workers;
+    private final AtomicBoolean wakeRequested = new AtomicBoolean();
+    private final AtomicBoolean dispatchScheduled = new AtomicBoolean();
+    private final AtomicBoolean shuttingDown = new AtomicBoolean();
 
     @Autowired
     public EmbeddingJobWorker(
@@ -67,8 +73,60 @@ public class EmbeddingJobWorker {
     }
 
     @Scheduled(
-            fixedDelayString = "${rag.embedding-jobs.poll-interval-ms:1000}")
+            fixedDelayString = "${rag.embedding-jobs.poll-interval-ms:30000}")
     public void poll() {
+        wakeUp();
+    }
+
+    @EventListener
+    public void onJobsAvailable(EmbeddingJobsAvailableEvent event) {
+        wakeUp();
+    }
+
+    /**
+     * 合并并异步执行唤醒，不在提交事务线程中查询数据库或调用模型。
+     */
+    public void wakeUp() {
+        if (shuttingDown.get()) {
+            return;
+        }
+        wakeRequested.set(true);
+        scheduleDispatch();
+    }
+
+    private void scheduleDispatch() {
+        if (!dispatchScheduled.compareAndSet(false, true)) {
+            return;
+        }
+        try {
+            workers.submit(this::dispatchLoop);
+        } catch (RejectedExecutionException e) {
+            dispatchScheduled.set(false);
+            if (!shuttingDown.get()) {
+                log.warn("Embedding job wake-up was rejected; "
+                        + "the recovery scan will retry", e);
+            }
+        }
+    }
+
+    private void dispatchLoop() {
+        try {
+            do {
+                wakeRequested.set(false);
+                dispatchAvailableJobs();
+            } while (wakeRequested.get() && !shuttingDown.get());
+        } catch (RuntimeException e) {
+            log.warn("Embedding job wake-up failed; "
+                    + "the recovery scan will retry", e);
+        } finally {
+            dispatchScheduled.set(false);
+            if (wakeRequested.get() && !shuttingDown.get()) {
+                scheduleDispatch();
+            }
+        }
+    }
+
+    private void dispatchAvailableJobs() {
         int claimLimit = Math.min(
                 properties.getClaimBatchSize(), slots.availablePermits());
         for (int i = 0; i < claimLimit; i++) {
@@ -89,18 +147,29 @@ public class EmbeddingJobWorker {
                 break;
             }
             EmbeddingJob job = claimed.getFirst();
-            workers.submit(() -> {
-                try {
-                    process(job, leaseOwner);
-                } finally {
-                    slots.release();
+            try {
+                workers.submit(() -> {
+                    try {
+                        process(job, leaseOwner);
+                    } finally {
+                        slots.release();
+                        wakeUp();
+                    }
+                });
+            } catch (RejectedExecutionException e) {
+                slots.release();
+                if (!shuttingDown.get()) {
+                    log.warn("Claimed embedding job could not be submitted; "
+                            + "its lease will be recovered", e);
                 }
-            });
+                break;
+            }
         }
     }
 
     @PreDestroy
     public void shutdown() {
+        shuttingDown.set(true);
         workers.shutdown();
         try {
             if (!workers.awaitTermination(5, TimeUnit.SECONDS)) {

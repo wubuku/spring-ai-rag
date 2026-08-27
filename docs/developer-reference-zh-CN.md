@@ -19,7 +19,7 @@
 | 真实 LLM E2E 端口 | `18081` |
 | Embedding | SiliconFlow `BAAI/bge-m3` |
 | 向量维度 | `1024` |
-| Flyway | V1–V55 |
+| Flyway | V1–V56 |
 
 OpenAI / Embedding 的 `base-url` **不要带 `/v1`**。Spring AI 会自行追加 `/v1/chat/completions` 或 `/v1/embeddings`。
 
@@ -83,6 +83,20 @@ open spring-ai-rag-core/target/site/jacoco/index.html
 ACL、并发首次创建、软删除后的当前状态、恰好一次创建审计、账本故障关闭和不含 secret
 的数据库事实。只复跑一次性双实例 HTTP 阶段可设置
 `COLLECTION_PROVISIONING_VERIFY_PHASE=http`。
+
+针对 V56 Collection 内容清理、永久 key tombstone、引用级联和 WebUI preview/apply：
+
+```bash
+./scripts/verify-collection-purge.sh
+```
+
+默认使用 Testcontainers 运行 5 个真实 PostgreSQL 场景；也可用
+`COLLECTION_PURGE_IT_JDBC_URL`、`COLLECTION_PURGE_IT_USERNAME`、
+`COLLECTION_PURGE_IT_PASSWORD` 和
+`COLLECTION_PURGE_IT_CLEAN_CONFIRM=YES` 指向调用方提供的一次性数据库。脚本同时执行
+聚焦后端、Maven clean 编译门槛、完整 WebUI、无截图 Collection Mock Playwright、
+禁锁、文档、脚本语法和空白检查，证据写入
+`.verification/collection-purge/<run-id>/`。
 
 针对模型调用级持久用量账本及按 principal 隔离的聚合 API：
 
@@ -264,6 +278,11 @@ RAG_API_KEY="$RAG_ROOT_API_KEY" \
 如果配置了 `RAG_ROOT_API_KEY`，必须通过 `RAG_API_KEY` 或等价的 `X-API-Key` 传给
 数据面请求；脚本也会自动从 `.env` 读取 root key。Mock Playwright 不能替代真实
 LLM 验证。
+
+Collection 受保护清理的真实 provider 生命周期使用
+`scripts/real-collection-purge-e2e-smoke.sh`。它要求运行中的隔离服务和一次性数据库，
+并验证事件优先嵌入、真实检索/Chat、purge/replay、退役拒绝与 tombstone；完整命令和
+证据安全边界见 [测试指南](testing-guide-zh-CN.md#collection-受保护清理与退役验收门禁)。
 
 本轮 Chat turn 幂等性验收使用独立的 PLAIN smoke，不要求 Embedding provider：
 

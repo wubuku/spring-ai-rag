@@ -258,6 +258,22 @@ app:
 # Embedding Model Configuration (independent of Chat provider, always active)
 # ============================================
 rag:
+  collection-purge:
+    enabled: ${RAG_COLLECTION_PURGE_ENABLED:false}
+    allow-auth-disabled: ${RAG_COLLECTION_PURGE_ALLOW_AUTH_DISABLED:false}
+    confirmation-window: 15m
+    operation-window: 1h
+    result-retention: 24h
+    apply-lease: 2m
+    max-active-previews-per-owner: 20
+    cleanup-batch-size: 500
+    cleanup-interval: 1h
+    max-documents: 10000
+    max-embeddings: 100000
+    max-versions: 100000
+    max-derived-rows: 250000
+    max-affected-chat-sessions: 1000
+    max-chat-rows: 50000
   security:
     # Dedicated deployment root for unlocking the Web console and managing business API keys.
     # When configured, /api/** requires this root key or a valid database-backed business key.
@@ -329,7 +345,8 @@ rag:
     # 文档正文 mutation 的 SYNC/ASYNC 都依赖持久化任务，默认启用。
     enabled: ${RAG_EMBEDDING_JOBS_ENABLED:true}
     sync-wait-seconds: ${RAG_EMBEDDING_JOBS_SYNC_WAIT_SECONDS:30}
-    poll-interval-ms: ${RAG_EMBEDDING_JOBS_POLL_INTERVAL_MS:1000}
+    # 正常任务由事务提交后的 Spring Event 唤醒；这里只做遗漏通知/重启恢复。
+    poll-interval-ms: ${RAG_EMBEDDING_JOBS_POLL_INTERVAL_MS:30000}
     claim-batch-size: ${RAG_EMBEDDING_JOBS_CLAIM_BATCH_SIZE:4}
     lease-seconds: ${RAG_EMBEDDING_JOBS_LEASE_SECONDS:120}
     default-max-attempts: ${RAG_EMBEDDING_JOBS_DEFAULT_MAX_ATTEMPTS:3}
