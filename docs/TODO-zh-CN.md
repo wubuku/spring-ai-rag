@@ -18,6 +18,9 @@
   只读 query 与读写 dispatcher，并验证写拒绝后状态不变。
 - [x] capability preflight 可要求最低运行时 JSON batch 上限与 operation observability；
   V54 增加按 principal/ACL 隔离的 best-effort 小时聚合、低基数指标与脱敏证据。
+- [x] V55 为调用方滚动部署提供有界 staged credential rotation，包括不重放 secret 的
+  幂等 prepare、complete/cancel/deadline 收敛、family revoke 与能力发现；即时轮换继续
+  作为明确的兼容路径。
 
 ## 受管 API Principal 后续边界
 
@@ -31,6 +34,7 @@
 | Collection 创建幂等键 | V52 已交付 | 可选、按 owner 隔离的 keyed 创建支持跨实例/重启 replay 当前 Collection 状态；语义复用和账本故障均 fail closed |
 | machine-readable 集成协议版本 / 能力发现 | V50 交付，V54 补全 | 认证、no-store endpoint 投影协议、调用方 policy、数据面行为、structured-record/Sync Run/observability 上限和可选特性 |
 | 按 principal/Collection 的集成 operation 可观测性 | V54 已交付 | 有界 fail-open 小时 rollup 支持 self/当前 ACL 定位与 root/ADMIN 管理查询，不使用高基数 metric 标签 |
+| 有界 staged credential rotation | V55 已交付 | 一个 current 与至多一个有 deadline 的 retiring credential 共享 stable principal 和 quota；prepare 幂等但不重放一次性 secret，complete/cancel/expiry/revoke 最终收敛到一个或零个 active credential |
 | OAuth/OIDC 与独立租户层级 | 后续独立规划 | 当前仍是 environment root + 受管业务 principal，不提供第三方身份 federation |
 | 模型 invocation 级 token/cost 持久用量账本 | V53 已交付 | `BudgetedChatModel` 为 Chat、query transform/expand、summary、fallback、应用 retry 和 AGENT 轮次记录有界的 principal/session/trace 归因；`GET /api/v1/rag/usage` 提供 UTC 聚合用量和配置成本估算 |
 | token/cost hard limit、billing 与结算 | 后续独立规划 | 需要预授权、预留、结算、跨实例超额保护和崩溃恢复，不能直接建立在 best-effort 观测账本上 |

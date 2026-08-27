@@ -13,6 +13,11 @@ export interface ApiPrincipalResponse {
   lastUsedAt?: string;
   currentCredentialId?: string;
   currentCredentialVersion?: number;
+  rotationPending?: boolean;
+  pendingRotationId?: string;
+  retiringCredentialId?: string;
+  retiringCredentialVersion?: number;
+  rotationExpiresAt?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -48,6 +53,22 @@ export interface ApiPrincipalPolicyUpdateRequest {
   requestsPerMinute?: number;
 }
 
+export interface ApiKeyRotationResponse {
+  rotationId: string;
+  status: 'PENDING' | 'COMPLETED' | 'CANCELED' | 'EXPIRED' | 'REVOKED';
+  principalId: string;
+  keyId: string;
+  credentialVersion: number;
+  rawKey: string | null;
+  secretAvailable: boolean;
+  idempotentReplay: boolean;
+  currentCredentialActive: boolean;
+  rotationPending: boolean;
+  retiringCredentialId?: string;
+  retiringCredentialVersion?: number;
+  rotationExpiresAt?: string;
+}
+
 export const apiKeysApi = {
   listPrincipals: () =>
     apiClient.get<ApiPrincipalResponse[]>('/api-keys/principals'),
@@ -60,6 +81,32 @@ export const apiKeysApi = {
 
   rotateKey: (keyId: string) =>
     apiClient.post<ApiKeyCreatedResponse>(`/api-keys/${encodeURIComponent(keyId)}/rotate`),
+
+  prepareRotation: (
+    keyId: string,
+    overlapSeconds: number | undefined,
+    idempotencyKey: string,
+  ) =>
+    apiClient.post<ApiKeyRotationResponse>(
+      `/api-keys/${encodeURIComponent(keyId)}/rotations`,
+      overlapSeconds === undefined ? {} : { overlapSeconds },
+      { headers: { 'Idempotency-Key': idempotencyKey } },
+    ),
+
+  getRotation: (rotationId: string) =>
+    apiClient.get<ApiKeyRotationResponse>(
+      `/api-keys/rotations/${encodeURIComponent(rotationId)}`,
+    ),
+
+  completeRotation: (rotationId: string) =>
+    apiClient.post<ApiKeyRotationResponse>(
+      `/api-keys/rotations/${encodeURIComponent(rotationId)}/complete`,
+    ),
+
+  cancelRotation: (rotationId: string) =>
+    apiClient.post<ApiKeyRotationResponse>(
+      `/api-keys/rotations/${encodeURIComponent(rotationId)}/cancel`,
+    ),
 
   updatePolicy: (principalId: string, data: ApiPrincipalPolicyUpdateRequest) =>
     apiClient.put<ApiPrincipalResponse>(

@@ -3,8 +3,12 @@ package com.springairag.core.controller;
 import com.springairag.api.dto.ApiKeyCreateRequest;
 import com.springairag.api.dto.ApiKeyCreatedResponse;
 import com.springairag.api.dto.ApiKeyResponse;
+import com.springairag.api.dto.ApiKeyRotationPrepareRequest;
+import com.springairag.api.dto.ApiKeyRotationResponse;
 import com.springairag.api.dto.ApiPrincipalPolicyUpdateRequest;
 import com.springairag.api.dto.ErrorResponse;
+import com.springairag.api.enums.ErrorCode;
+import com.springairag.core.exception.RagException;
 import com.springairag.core.entity.ApiKeyRole;
 import com.springairag.core.chat.IdempotencyKeyValidator;
 import com.springairag.core.filter.ApiKeyAuthFilter;
@@ -32,6 +36,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.LinkedHashSet;
 import java.util.Collections;
+import java.util.UUID;
 
 /**
  * API Key management REST controller.
@@ -294,6 +299,83 @@ public class ApiKeyController {
                 .body(response);
     }
 
+    @PostMapping("/{keyId}/rotations")
+    public ResponseEntity<?> prepareRotation(
+            @PathVariable String keyId,
+            @Valid @RequestBody(required = false)
+            ApiKeyRotationPrepareRequest body,
+            HttpServletRequest request) {
+        ResponseEntity<ErrorResponse> denied = requireEnvironmentRoot(request);
+        if (denied != null) {
+            return denied;
+        }
+        String idempotencyKey = IdempotencyKeyValidator.normalize(
+                Collections.list(request.getHeaders("Idempotency-Key")));
+        if (idempotencyKey == null) {
+            throw new RagException(
+                    ErrorCode.IDEMPOTENCY_KEY_INVALID,
+                    "Idempotency-Key is required for staged credential rotation");
+        }
+        ApiKeyManagementService.RotationResult result =
+                apiKeyService.prepareRotation(
+                        keyId,
+                        body == null ? null : body.getOverlapSeconds(),
+                        IdempotencyKeyValidator.hash(idempotencyKey),
+                        getCaller(request),
+                        rootCredentialResolver.isConfigured());
+        if (result == null) {
+            return ResponseEntity.notFound()
+                    .cacheControl(CacheControl.noStore())
+                    .build();
+        }
+        ResponseEntity.BodyBuilder builder = ResponseEntity.status(
+                        result.replay() ? HttpStatus.OK : HttpStatus.CREATED)
+                .cacheControl(CacheControl.noStore());
+        if (result.replay()) {
+            builder.header("X-RAG-Idempotent-Replay", "true");
+        }
+        return builder.body(result.response());
+    }
+
+    @GetMapping("/rotations/{rotationId}")
+    public ResponseEntity<ApiKeyRotationResponse> getRotation(
+            @PathVariable UUID rotationId,
+            HttpServletRequest request) {
+        requireStagedAccess(request);
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .body(apiKeyService.getRotation(
+                        rotationId,
+                        getCaller(request),
+                        rootCredentialResolver.isConfigured()));
+    }
+
+    @PostMapping("/rotations/{rotationId}/complete")
+    public ResponseEntity<ApiKeyRotationResponse> completeRotation(
+            @PathVariable UUID rotationId,
+            HttpServletRequest request) {
+        requireStagedAccess(request);
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .body(apiKeyService.completeRotation(
+                        rotationId,
+                        getCaller(request),
+                        rootCredentialResolver.isConfigured()));
+    }
+
+    @PostMapping("/rotations/{rotationId}/cancel")
+    public ResponseEntity<ApiKeyRotationResponse> cancelRotation(
+            @PathVariable UUID rotationId,
+            HttpServletRequest request) {
+        requireStagedAccess(request);
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .body(apiKeyService.cancelRotation(
+                        rotationId,
+                        getCaller(request),
+                        rootCredentialResolver.isConfigured()));
+    }
+
     /**
      * Determine the role of the authenticated caller.
      *
@@ -319,8 +401,25 @@ public class ApiKeyController {
                 ApiKeyAuthFilter.ROOT_AUTHENTICATED_ATTRIBUTE))) {
             return null;
         }
-        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+        ResponseEntity.BodyBuilder builder =
+                ResponseEntity.status(HttpStatus.FORBIDDEN);
+        if (request.getRequestURI().contains("/rotations")) {
+            builder.cacheControl(CacheControl.noStore());
+        }
+        return builder
                 .body(forbidden("Only the environment root can manage API keys"));
+    }
+
+    private void requireStagedAccess(HttpServletRequest request) {
+        ResponseEntity<ErrorResponse> denied = requireEnvironmentRoot(request);
+        if (denied != null) {
+            throw new SecurityException(
+                    "Only the environment root can manage API keys");
+        }
+        if (!rootCredentialResolver.isConfigured() && getCaller(request) == null) {
+            throw new SecurityException(
+                    "A database-backed ADMIN or owning credential is required");
+        }
     }
 
     private ErrorResponse forbidden(String detail) {

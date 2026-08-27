@@ -15,7 +15,7 @@
 - [x] Helm `version` 与 `appVersion` 均为 `1.0.0`
 - [x] Docker/Helm 默认镜像 tag 为 `1.0.0`
 - [x] 本地、Docker 与 Helm 默认端口均为 `8081`
-- [x] Flyway 迁移范围为 V1-V54
+- [x] Flyway 迁移范围为 V1-V55
 - [x] JSONB 结构化记录 API、payload 快照和 Collection 生命周期已覆盖
 - [x] `scripts/verify-jsonb-records.sh` 固化后端/数据库/前端聚焦验证
 - [x] 文档 PATCH/禁用/恢复/永久删除与外部三元身份已覆盖
@@ -107,7 +107,8 @@
   release manifest 固定记录两个已验画像，HTTP 合同使用只读 query 与读写 dispatcher
   验证读成功、写 `403`、状态不变和 rotation 能力继承。
 - [x] 真实 LLM 门禁使用显式 `RAG_READ` principal，写拒绝和幂等 replay 不增加 provider
-  counter，原生/OpenAI-compatible JSON/SSE 总 provider 调用严格等于 5。
+  counter；原生/OpenAI-compatible JSON/SSE 加 staged complete/cancel/pending-family-revoke
+  生命周期要求恰好 9 次成功真实 provider 调用。
 
 ### 2026-08-26 Provisioning 与能力发现门禁
 
@@ -189,6 +190,23 @@
   observability；其报告和 readiness release manifest 只保存非敏感运行时事实。
 - [ ] 最终合并基线 readiness 门禁需记录 focused/PostgreSQL/Maven/WebUI/Mock/真实 HTTP、
   真实 LLM/Embedding 验收与连续三轮无修改审查证据。
+
+### 2026-08-27 有界 staged credential 轮换门禁
+
+- [x] V55 对每个 stable principal 最多允许一个 current、一个有 deadline 的 retiring
+  credential，以及一个 PENDING rotation operation。
+- [x] prepare 必须携带 `Idempotency-Key`，replacement secret 只展示一次，精确 replay
+  不返回 secret，并通过 `features.credentialRotation` 发布运行时上限。
+- [x] complete、cancel、deadline expiry、policy expiry clamp、即时兼容轮换和 family
+  revoke 均可收敛，不复制 principal identity、ACL、capabilities、Chat owner、usage 或 quota。
+- [x] WebUI 以 staged rotation 为推荐路径，secret 只保存在页面内存，支持 complete/cancel
+  与响应丢失恢复，并把即时路径保留为明确的次级操作。
+- [x] V55 合并前验收已记录 PostgreSQL 54/54、Maven/WebUI/Mock/真实 Playwright、
+  双实例 HTTP 生命周期、9 次真实 provider 调用及拒绝/replay 零增量、真实 Embedding/RAG。
+- [x] 合并最新 `origin/main` 后已从合并后基线重新执行同一完整矩阵：
+  `v55-minimax-postmerge-20260828-r2` 为 13/13 通过；独立真实 RAG
+  `v55-minimax-postmerge-20260827-r5` 为 `PASS=10 FAIL=0`，并完成带 revision 的
+  永久删除及最终数据库事实确认。
 
 ### 最终证据（2026-07-21）
 

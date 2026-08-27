@@ -6,6 +6,7 @@ import com.springairag.core.security.AuthenticatedApiPrincipal;
 import com.springairag.core.security.EnvironmentRootCredentialResolver;
 import com.springairag.core.service.ApiKeyManagementService;
 import com.springairag.core.security.ApiCapabilitySupport;
+import com.springairag.core.web.ApiKeyRotationHttpPolicy;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -108,6 +109,7 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
+        ApiKeyRotationHttpPolicy.mark(request, response);
         boolean rootMode = rootCredentialResolver.isConfigured();
         request.setAttribute(ROOT_MODE_ACTIVE_ATTRIBUTE, rootMode);
         request.setAttribute(

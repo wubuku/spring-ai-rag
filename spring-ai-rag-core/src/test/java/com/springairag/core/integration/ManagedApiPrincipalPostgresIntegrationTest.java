@@ -2,8 +2,10 @@ package com.springairag.core.integration;
 
 import com.springairag.api.dto.ApiKeyCreateRequest;
 import com.springairag.api.dto.ApiKeyCreatedResponse;
+import com.springairag.api.dto.ApiKeyRotationResponse;
 import com.springairag.api.dto.ApiPrincipalPolicyUpdateRequest;
 import com.springairag.api.enums.ErrorCode;
+import com.springairag.core.entity.ApiKeyRotationStatus;
 import com.springairag.core.entity.RagApiKey;
 import com.springairag.core.entity.RagApiPrincipal;
 import com.springairag.core.exception.RagException;
@@ -11,6 +13,7 @@ import com.springairag.core.ratelimit.PostgresRateLimitStore;
 import com.springairag.core.repository.RagApiKeyRepository;
 import com.springairag.core.repository.RagApiPrincipalRepository;
 import com.springairag.core.repository.ApiKeyProvisioningOperationRepository;
+import com.springairag.core.repository.ApiKeyRotationOperationRepository;
 import com.springairag.core.security.AuthenticatedApiPrincipal;
 import com.springairag.core.security.ApiCapabilitySupport;
 import com.springairag.core.config.RagProperties;
@@ -44,6 +47,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -142,7 +146,7 @@ class ManagedApiPrincipalPostgresIntegrationTest {
 
         flyway().migrate();
 
-        assertEquals("54", migrationJdbc.queryForObject(
+        assertEquals("55", migrationJdbc.queryForObject(
                 "SELECT version FROM flyway_schema_history WHERE success = TRUE "
                         + "ORDER BY installed_rank DESC LIMIT 1",
                 String.class));
@@ -176,6 +180,413 @@ class ManagedApiPrincipalPostgresIntegrationTest {
                   )
                   AND data_type = 'character varying'
                 """, Integer.class));
+        assertEquals(1, migrationJdbc.queryForObject("""
+                SELECT COUNT(*)
+                FROM information_schema.columns
+                WHERE table_name = 'rag_api_key'
+                  AND column_name = 'retire_at'
+                """, Integer.class));
+        assertEquals(1, migrationJdbc.queryForObject("""
+                SELECT COUNT(*)
+                FROM information_schema.tables
+                WHERE table_name = 'rag_api_key_rotation'
+                """, Integer.class));
+    }
+
+    @Test
+    void migrationFromV54PreservesCurrentCredentialAndEnforcesBoundedIndexes() {
+        flyway().clean();
+        Flyway v54 = Flyway.configure()
+                .dataSource(dataSource)
+                .locations("classpath:db/migration")
+                .target(MigrationVersion.fromVersion("54"))
+                .load();
+        v54.migrate();
+        JdbcTemplate migrationJdbc = new JdbcTemplate(dataSource);
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime expiresAt = now.plusDays(30);
+        migrationJdbc.update("""
+                INSERT INTO rag_api_principal (
+                    principal_id, name, role, expires_at, policy_version,
+                    next_credential_version, created_at, updated_at, capabilities
+                ) VALUES (
+                    'rag_p_v54', 'V54 fixture', 'NORMAL', ?, 1, 2, ?, ?,
+                    'RAG_READ'
+                )
+                """, expiresAt, now, now);
+        migrationJdbc.update("""
+                INSERT INTO rag_api_key (
+                    key_id, key_hash, name, created_at, expires_at,
+                    enabled, role, principal_id, credential_version
+                ) VALUES (
+                    'rag_k_v54', ?, 'V54 fixture', ?, ?, TRUE, 'NORMAL',
+                    'rag_p_v54', 1
+                )
+                """, "1".repeat(64), now, expiresAt);
+
+        flyway().migrate();
+
+        assertEquals("55", migrationJdbc.queryForObject(
+                "SELECT version FROM flyway_schema_history WHERE success=TRUE "
+                        + "ORDER BY installed_rank DESC LIMIT 1",
+                String.class));
+        assertNull(migrationJdbc.queryForObject(
+                "SELECT retire_at FROM rag_api_key WHERE key_id='rag_k_v54'",
+                LocalDateTime.class));
+        assertEquals(2, migrationJdbc.queryForObject("""
+                SELECT COUNT(*) FROM pg_indexes
+                WHERE tablename='rag_api_key'
+                  AND indexname IN (
+                    'uk_rag_api_key_current_principal',
+                    'uk_rag_api_key_retiring_principal'
+                  )
+                """, Integer.class));
+
+        assertThrows(DataIntegrityViolationException.class, () ->
+                insertCredential(
+                        migrationJdbc, "rag_k_second_current", "2".repeat(64),
+                        "rag_p_v54", 2, null));
+
+        migrationJdbc.update("""
+                UPDATE rag_api_key
+                SET retire_at=clock_timestamp() + INTERVAL '5 minutes'
+                WHERE key_id='rag_k_v54'
+                """);
+        insertCredential(
+                migrationJdbc, "rag_k_v55_current", "3".repeat(64),
+                "rag_p_v54", 2, null);
+        assertThrows(DataIntegrityViolationException.class, () ->
+                insertCredential(
+                        migrationJdbc, "rag_k_second_retiring", "4".repeat(64),
+                        "rag_p_v54", 3, now.plusMinutes(5)));
+
+        UUID pending = UUID.randomUUID();
+        insertRotation(
+                migrationJdbc, pending, "rag_p_v54", "5".repeat(64),
+                "6".repeat(64), "rag_k_v54", "rag_k_v55_current",
+                "PENDING", null);
+        assertThrows(DataIntegrityViolationException.class, () ->
+                insertRotation(
+                        migrationJdbc, UUID.randomUUID(), "rag_p_v54",
+                        "7".repeat(64), "8".repeat(64),
+                        "rag_k_v54", "rag_k_v55_current",
+                        "PENDING", null));
+        assertThrows(DataIntegrityViolationException.class, () ->
+                insertRotation(
+                        migrationJdbc, UUID.randomUUID(), "rag_p_v54",
+                        "9".repeat(64), "a".repeat(64),
+                        "rag_k_v54", "rag_k_v55_current",
+                        "COMPLETED", null));
+        assertEquals(1, migrationJdbc.queryForObject("""
+                SELECT COUNT(*) FROM rag_api_key_rotation
+                WHERE principal_id='rag_p_v54' AND status='PENDING'
+                """, Integer.class));
+    }
+
+    @Test
+    void stagedRotationLifecycleIsBoundedRecoverableAndPrincipalStable() {
+        ApiKeyCreatedResponse first = service.generateManagedKey(
+                request("Staged lifecycle", 20,
+                        List.of(ApiCapabilitySupport.RAG_READ)));
+        AuthenticatedApiPrincipal preparingCaller =
+                service.authenticate(first.getRawKey());
+
+        ApiKeyManagementService.RotationResult prepared =
+                service.prepareRotation(
+                        first.getKeyId(), 120, "a".repeat(64),
+                        preparingCaller, false);
+        ApiKeyRotationResponse rotation = prepared.response();
+        assertFalse(prepared.replay());
+        assertEquals("PENDING", rotation.getStatus());
+        assertNotNull(rotation.getRawKey());
+        assertTrue(rotation.getSecretAvailable());
+        assertEquals(first.getPrincipalId(), rotation.getPrincipalId());
+        assertEquals(2, rotation.getCredentialVersion());
+        assertEquals(first.getKeyId(), rotation.getRetiringCredentialId());
+
+        AuthenticatedApiPrincipal oldAuth = service.authenticate(first.getRawKey());
+        AuthenticatedApiPrincipal newAuth =
+                service.authenticate(rotation.getRawKey());
+        assertNotNull(oldAuth);
+        assertNotNull(newAuth);
+        assertEquals(oldAuth.getPrincipalId(), newAuth.getPrincipalId());
+        assertEquals(oldAuth.getPolicyVersion(), newAuth.getPolicyVersion());
+        assertEquals(oldAuth.getCapabilities(), newAuth.getCapabilities());
+
+        ApiKeyManagementService.RotationResult replay =
+                service.prepareRotation(
+                        first.getKeyId(), 120, "a".repeat(64), null, true);
+        assertTrue(replay.replay());
+        assertEquals(rotation.getRotationId(), replay.response().getRotationId());
+        assertNull(replay.response().getRawKey());
+        assertFalse(replay.response().getSecretAvailable());
+        RagException fingerprintConflict = assertThrows(
+                RagException.class,
+                () -> service.prepareRotation(
+                        first.getKeyId(), 121, "a".repeat(64), null, true));
+        assertEquals(ErrorCode.IDEMPOTENCY_KEY_REUSED,
+                fingerprintConflict.getErrorCodeEnum());
+
+        assertTrue(rateLimitStore.consume(oldAuth.getPrincipalId(), 1).allowed());
+        assertFalse(rateLimitStore.consume(newAuth.getPrincipalId(), 1).allowed());
+
+        ApiKeyRotationResponse completed = service.completeRotation(
+                rotation.getRotationId(), newAuth, false);
+        assertEquals("COMPLETED", completed.getStatus());
+        assertNull(service.authenticate(first.getRawKey()));
+        assertNotNull(service.authenticate(rotation.getRawKey()));
+        assertEquals("COMPLETED", service.completeRotation(
+                rotation.getRotationId(), null, true).getStatus());
+
+        assertEquals(1, jdbc.queryForObject("""
+                SELECT COUNT(*) FROM rag_api_key
+                WHERE principal_id=? AND enabled=TRUE AND retire_at IS NULL
+                """, Integer.class, first.getPrincipalId()));
+        assertEquals(0, jdbc.queryForObject("""
+                SELECT COUNT(*) FROM rag_api_key
+                WHERE principal_id=? AND enabled=TRUE AND retire_at IS NOT NULL
+                """, Integer.class, first.getPrincipalId()));
+        assertEquals(0, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM rag_api_key WHERE api_key IS NOT NULL",
+                Integer.class));
+    }
+
+    @Test
+    void stagedRotationClampsPrincipalExpiryAndRejectsCompetingActions() {
+        ApiKeyCreateRequest request = request("Bounded overlap", null);
+        LocalDateTime principalExpiry =
+                LocalDateTime.now().plusMinutes(5).withNano(0);
+        request.setExpiresAt(principalExpiry);
+        ApiKeyCreatedResponse source = service.generateManagedKey(request);
+        ApiKeyManagementService.RotationResult prepared =
+                service.prepareRotation(
+                        source.getKeyId(), 3600, "f".repeat(64), null, true);
+
+        assertEquals(principalExpiry,
+                prepared.response().getRotationExpiresAt());
+        RagException secondPrepare = assertThrows(
+                RagException.class,
+                () -> service.prepareRotation(
+                        prepared.response().getKeyId(), 60,
+                        "0".repeat(64), null, true));
+        assertEquals(ErrorCode.CREDENTIAL_ROTATION_PENDING,
+                secondPrepare.getErrorCodeEnum());
+        RagException immediate = assertThrows(
+                RagException.class,
+                () -> service.rotateManagedKey(
+                        prepared.response().getKeyId()));
+        assertEquals(ErrorCode.CREDENTIAL_ROTATION_PENDING,
+                immediate.getErrorCodeEnum());
+    }
+
+    @Test
+    void stagedRotationCancelExpiryAndRevokeConvergeWithoutVersionReuse() {
+        ApiKeyCreatedResponse cancelSource = service.generateManagedKey(
+                request("Cancel", null));
+        ApiKeyManagementService.RotationResult cancelPrepared =
+                service.prepareRotation(
+                        cancelSource.getKeyId(), 120, "b".repeat(64), null, true);
+        String canceledRaw = cancelPrepared.response().getRawKey();
+        ApiKeyRotationResponse canceled = service.cancelRotation(
+                cancelPrepared.response().getRotationId(), null, true);
+        assertEquals("CANCELED", canceled.getStatus());
+        assertNotNull(service.authenticate(cancelSource.getRawKey()));
+        assertNull(service.authenticate(canceledRaw));
+        assertEquals("CANCELED", service.cancelRotation(
+                cancelPrepared.response().getRotationId(), null, true).getStatus());
+
+        ApiKeyManagementService.RotationResult versionThree =
+                service.prepareRotation(
+                        cancelSource.getKeyId(), 120, "c".repeat(64), null, true);
+        assertEquals(3, versionThree.response().getCredentialVersion());
+        jdbc.update("""
+                UPDATE rag_api_key_rotation
+                SET expires_at=clock_timestamp() - INTERVAL '1 second'
+                WHERE rotation_id=?
+                """, versionThree.response().getRotationId());
+        jdbc.update("""
+                UPDATE rag_api_key
+                SET retire_at=clock_timestamp() - INTERVAL '1 second'
+                WHERE key_id=?
+                """, cancelSource.getKeyId());
+        RagException expired = assertThrows(
+                RagException.class,
+                () -> service.cancelRotation(
+                        versionThree.response().getRotationId(), null, true));
+        assertEquals(ErrorCode.CREDENTIAL_ROTATION_EXPIRED,
+                expired.getErrorCodeEnum());
+        assertNull(service.authenticate(cancelSource.getRawKey()));
+        assertNotNull(service.authenticate(versionThree.response().getRawKey()));
+        assertEquals("EXPIRED", service.getRotation(
+                versionThree.response().getRotationId(), null, true).getStatus());
+
+        ApiKeyCreatedResponse revokeSource = service.generateManagedKey(
+                request("Revoke pending", null));
+        ApiKeyManagementService.RotationResult revokePrepared =
+                service.prepareRotation(
+                        revokeSource.getKeyId(), 120, "d".repeat(64), null, true);
+        assertTrue(service.revokeManagedKey(
+                revokePrepared.response().getKeyId()));
+        assertNull(service.authenticate(revokeSource.getRawKey()));
+        assertNull(service.authenticate(revokePrepared.response().getRawKey()));
+        assertEquals("REVOKED", service.getRotation(
+                revokePrepared.response().getRotationId(), null, true).getStatus());
+    }
+
+    @Test
+    void policyShorteningClampsPendingRotationButExtensionDoesNotExtendIt() {
+        ApiKeyCreatedResponse source = service.generateManagedKey(
+                request("Clamp", null));
+        ApiKeyManagementService.RotationResult prepared =
+                service.prepareRotation(
+                        source.getKeyId(), 3600, "e".repeat(64), null, true);
+        LocalDateTime originalDeadline =
+                prepared.response().getRotationExpiresAt();
+        LocalDateTime shortenedExpiry =
+                LocalDateTime.now().plusMinutes(10).withNano(0);
+        ApiPrincipalPolicyUpdateRequest shorten = new ApiPrincipalPolicyUpdateRequest();
+        shorten.setExpectedPolicyVersion(1L);
+        shorten.setName("Clamp short");
+        shorten.setExpiresAt(shortenedExpiry);
+        service.updatePolicy(source.getPrincipalId(), shorten, null, true);
+
+        ApiKeyRotationResponse clamped = service.getRotation(
+                prepared.response().getRotationId(), null, true);
+        assertEquals(shortenedExpiry, clamped.getRotationExpiresAt());
+        assertTrue(clamped.getRotationExpiresAt().isBefore(originalDeadline));
+        assertEquals(shortenedExpiry, jdbc.queryForObject(
+                "SELECT retire_at FROM rag_api_key WHERE key_id=?",
+                LocalDateTime.class, source.getKeyId()));
+
+        ApiPrincipalPolicyUpdateRequest extend = new ApiPrincipalPolicyUpdateRequest();
+        extend.setExpectedPolicyVersion(2L);
+        extend.setName("Clamp extended principal");
+        extend.setExpiresAt(LocalDateTime.now().plusDays(30));
+        service.updatePolicy(source.getPrincipalId(), extend, null, true);
+        assertEquals(shortenedExpiry, service.getRotation(
+                prepared.response().getRotationId(), null, true)
+                .getRotationExpiresAt());
+    }
+
+    @Test
+    void rotationActionsFailClosedWhenLedgerReferencesAnotherPrincipal() {
+        ApiKeyCreatedResponse owner =
+                service.generateManagedKey(request("Owner", null));
+        ApiKeyManagementService.RotationResult prepared =
+                service.prepareRotation(
+                        owner.getKeyId(), 120, "b".repeat(64), null, true);
+        ApiKeyCreatedResponse unrelated =
+                service.generateManagedKey(request("Unrelated", null));
+        jdbc.update("""
+                UPDATE rag_api_key_rotation
+                SET source_credential_id=?
+                WHERE rotation_id=?
+                """, unrelated.getKeyId(), prepared.response().getRotationId());
+
+        RagException corrupted = assertThrows(
+                RagException.class,
+                () -> service.completeRotation(
+                        prepared.response().getRotationId(), null, true));
+
+        assertEquals(ErrorCode.SERVICE_UNAVAILABLE,
+                corrupted.getErrorCodeEnum());
+        assertNotNull(service.authenticate(owner.getRawKey()));
+        assertNotNull(service.authenticate(unrelated.getRawKey()));
+    }
+
+    @Test
+    void cleanupExpiresPendingAndDeletesOnlyOldTerminalOperations() {
+        ApiKeyCreatedResponse expiredSource =
+                service.generateManagedKey(request("Expired cleanup", null));
+        ApiKeyManagementService.RotationResult expired =
+                service.prepareRotation(
+                        expiredSource.getKeyId(), 120,
+                        "c".repeat(64), null, true);
+        jdbc.update("""
+                UPDATE rag_api_key_rotation
+                SET expires_at=clock_timestamp() - INTERVAL '1 second'
+                WHERE rotation_id=?
+                """, expired.response().getRotationId());
+        jdbc.update("""
+                UPDATE rag_api_key
+                SET retire_at=clock_timestamp() - INTERVAL '1 second'
+                WHERE key_id=?
+                """, expiredSource.getKeyId());
+
+        ApiKeyCreatedResponse oldSource =
+                service.generateManagedKey(request("Old terminal", null));
+        ApiKeyManagementService.RotationResult old =
+                service.prepareRotation(
+                        oldSource.getKeyId(), 120,
+                        "d".repeat(64), null, true);
+        service.completeRotation(old.response().getRotationId(), null, true);
+        jdbc.update("""
+                UPDATE rag_api_key_rotation
+                SET terminal_at=clock_timestamp() - INTERVAL '401 days'
+                WHERE rotation_id=?
+                """, old.response().getRotationId());
+
+        ApiKeyCreatedResponse recentSource =
+                service.generateManagedKey(request("Recent terminal", null));
+        ApiKeyManagementService.RotationResult recent =
+                service.prepareRotation(
+                        recentSource.getKeyId(), 120,
+                        "e".repeat(64), null, true);
+        service.completeRotation(recent.response().getRotationId(), null, true);
+
+        service.cleanupCredentialRotations();
+
+        assertEquals("EXPIRED", jdbc.queryForObject("""
+                SELECT status FROM rag_api_key_rotation WHERE rotation_id=?
+                """, String.class, expired.response().getRotationId()));
+        assertNull(service.authenticate(expiredSource.getRawKey()));
+        assertEquals(0, jdbc.queryForObject("""
+                SELECT COUNT(*) FROM rag_api_key_rotation WHERE rotation_id=?
+                """, Integer.class, old.response().getRotationId()));
+        assertEquals(1, jdbc.queryForObject("""
+                SELECT COUNT(*) FROM rag_api_key_rotation WHERE rotation_id=?
+                """, Integer.class, recent.response().getRotationId()));
+    }
+
+    @Test
+    void concurrentStagedPrepareHasOneWinnerAndOneBoundedConflict()
+            throws Exception {
+        ApiKeyCreatedResponse source = service.generateManagedKey(
+                request("Concurrent staged", null));
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            List<Future<Object>> futures = List.of(
+                    executor.submit(() -> prepareAfter(
+                            start, source.getKeyId(), "1".repeat(64))),
+                    executor.submit(() -> prepareAfter(
+                            start, source.getKeyId(), "2".repeat(64))));
+            start.countDown();
+            List<Object> results = futures.stream().map(future -> {
+                try {
+                    return future.get(10, TimeUnit.SECONDS);
+                } catch (Exception error) {
+                    throw new RuntimeException(error);
+                }
+            }).toList();
+            assertEquals(1, results.stream()
+                    .filter(ApiKeyManagementService.RotationResult.class::isInstance)
+                    .count());
+            assertEquals(1, results.stream()
+                    .filter(ErrorCode.CREDENTIAL_ROTATION_PENDING::equals)
+                    .count());
+        } finally {
+            executor.shutdownNow();
+            assertTrue(executor.awaitTermination(5, TimeUnit.SECONDS));
+        }
+        assertEquals(1, jdbc.queryForObject("""
+                SELECT COUNT(*) FROM rag_api_key_rotation
+                WHERE principal_id=? AND status='PENDING'
+                """, Integer.class, source.getPrincipalId()));
+        assertEquals(2, jdbc.queryForObject("""
+                SELECT COUNT(*) FROM rag_api_key
+                WHERE principal_id=? AND enabled=TRUE
+                """, Integer.class, source.getPrincipalId()));
     }
 
     @Test
@@ -599,6 +1010,19 @@ class ManagedApiPrincipalPostgresIntegrationTest {
         }
     }
 
+    private Object prepareAfter(
+            CountDownLatch start,
+            String credentialId,
+            String idempotencyHash) throws InterruptedException {
+        start.await(5, TimeUnit.SECONDS);
+        try {
+            return service.prepareRotation(
+                    credentialId, 120, idempotencyHash, null, true);
+        } catch (RagException conflict) {
+            return conflict.getErrorCodeEnum();
+        }
+    }
+
     private void insertAdmin(String principalId) {
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime expiresAt = now.plusDays(30);
@@ -629,6 +1053,50 @@ class ManagedApiPrincipalPostgresIntegrationTest {
         request.setRequestsPerMinute(quota);
         request.setCapabilities(capabilities);
         return request;
+    }
+
+    private static void insertCredential(
+            JdbcTemplate target,
+            String keyId,
+            String keyHash,
+            String principalId,
+            int version,
+            LocalDateTime retireAt) {
+        target.update("""
+                INSERT INTO rag_api_key (
+                    key_id, key_hash, name, created_at, expires_at,
+                    enabled, role, principal_id, credential_version, retire_at
+                ) VALUES (
+                    ?, ?, ?, clock_timestamp(),
+                    clock_timestamp() + INTERVAL '30 days',
+                    TRUE, 'NORMAL', ?, ?, ?
+                )
+                """, keyId, keyHash, keyId, principalId, version, retireAt);
+    }
+
+    private static void insertRotation(
+            JdbcTemplate target,
+            UUID rotationId,
+            String principalId,
+            String idempotencyHash,
+            String fingerprint,
+            String sourceCredentialId,
+            String targetCredentialId,
+            String status,
+            LocalDateTime terminalAt) {
+        target.update("""
+                INSERT INTO rag_api_key_rotation (
+                    rotation_id, principal_id, idempotency_key_hash,
+                    request_fingerprint_sha256, source_credential_id,
+                    target_credential_id, overlap_seconds, expires_at,
+                    status, created_at, updated_at, terminal_at
+                ) VALUES (
+                    ?, ?, ?, ?, ?, ?, 120,
+                    clock_timestamp() + INTERVAL '2 minutes',
+                    ?, clock_timestamp(), clock_timestamp(), ?
+                )
+                """, rotationId, principalId, idempotencyHash, fingerprint,
+                sourceCredentialId, targetCredentialId, status, terminalAt);
     }
 
     private static Flyway flyway() {
@@ -685,11 +1153,13 @@ class ManagedApiPrincipalPostgresIntegrationTest {
                 RagApiPrincipalRepository principals,
                 JdbcTemplate jdbcTemplate,
                 ApiKeyProvisioningOperationRepository provisioningOperations,
+                ApiKeyRotationOperationRepository rotationOperations,
                 RagProperties ragProperties,
                 PlatformTransactionManager transactionManager) {
             return new ApiKeyManagementService(
                     credentials, principals, null, jdbcTemplate,
-                    provisioningOperations, ragProperties, transactionManager);
+                    provisioningOperations, rotationOperations, ragProperties,
+                    transactionManager);
         }
 
         @Bean RagProperties ragProperties() {

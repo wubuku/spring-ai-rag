@@ -83,10 +83,30 @@ public class IntegrationCapabilitiesResponse {
         }
     }
 
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     public record Features(
             Provisioning provisioning,
             DataPlane dataPlane,
-            OptionalFeatures optional) {
+            OptionalFeatures optional,
+            CredentialRotation credentialRotation) {
+
+        public Features(
+                Provisioning provisioning,
+                DataPlane dataPlane,
+                OptionalFeatures optional) {
+            this(provisioning, dataPlane, optional, null);
+        }
+    }
+
+    public record CredentialRotation(
+            boolean immediate,
+            boolean staged,
+            boolean cancel,
+            boolean idempotencyKeyRequired,
+            int defaultOverlapSeconds,
+            int maxOverlapSeconds,
+            boolean replayReturnsSecret,
+            int operationRetentionDays) {
     }
 
     public record Provisioning(

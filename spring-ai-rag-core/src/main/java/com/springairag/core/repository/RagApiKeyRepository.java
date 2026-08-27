@@ -36,7 +36,26 @@ public interface RagApiKeyRepository extends JpaRepository<RagApiKey, Long> {
      */
     Optional<RagApiKey> findByKeyId(String keyId);
 
+    /**
+     * @deprecated current credential 必须显式排除 retiring row。
+     */
+    @Deprecated
     Optional<RagApiKey> findFirstByPrincipalIdAndEnabledTrue(String principalId);
+
+    Optional<RagApiKey> findByPrincipalIdAndEnabledTrueAndRetireAtIsNull(
+            String principalId);
+
+    Optional<RagApiKey> findByPrincipalIdAndEnabledTrueAndRetireAtIsNotNull(
+            String principalId);
+
+    @Query("SELECT k FROM RagApiKey k WHERE k.principalId = :principalId "
+            + "AND k.enabled = true AND k.retireAt IS NOT NULL "
+            + "AND k.retireAt > :now")
+    Optional<RagApiKey> findLiveRetiring(
+            @Param("principalId") String principalId,
+            @Param("now") LocalDateTime now);
+
+    List<RagApiKey> findAllByPrincipalIdAndEnabledTrue(String principalId);
 
     List<RagApiKey> findAllByPrincipalIdOrderByCredentialVersionDesc(String principalId);
 
@@ -60,6 +79,24 @@ public interface RagApiKeyRepository extends JpaRepository<RagApiKey, Long> {
         return disableByKeyId(keyId, LocalDateTime.now());
     }
 
+    @Modifying
+    @Query("UPDATE RagApiKey k SET k.enabled = false, k.revokedAt = :revokedAt "
+            + "WHERE k.principalId = :principalId AND k.enabled = true")
+    int disableAllActiveByPrincipalId(
+            @Param("principalId") String principalId,
+            @Param("revokedAt") LocalDateTime revokedAt);
+
+    @Modifying
+    @Query("UPDATE RagApiKey k SET k.name = :name, k.role = :role, "
+            + "k.expiresAt = :expiresAt, k.allowedCollectionIds = :allowedCollectionIds "
+            + "WHERE k.principalId = :principalId AND k.enabled = true")
+    int updateActivePolicySnapshots(
+            @Param("principalId") String principalId,
+            @Param("name") String name,
+            @Param("role") ApiKeyRole role,
+            @Param("expiresAt") LocalDateTime expiresAt,
+            @Param("allowedCollectionIds") String allowedCollectionIds);
+
     /**
      * Find a key by its SHA-256 hash (O(log n) via index instead of O(n) full scan).
      */
@@ -73,6 +110,7 @@ public interface RagApiKeyRepository extends JpaRepository<RagApiKey, Long> {
             + "FROM RagApiKey k, RagApiPrincipal p "
             + "WHERE k.keyHash = :keyHash AND k.principalId = p.principalId "
             + "AND k.enabled = true AND k.revokedAt IS NULL "
+            + "AND (k.retireAt IS NULL OR k.retireAt > :now) "
             + "AND p.revokedAt IS NULL AND (p.expiresAt IS NULL OR p.expiresAt > :now)")
     Optional<AuthenticationProjection> authenticate(
             @Param("keyHash") String keyHash,

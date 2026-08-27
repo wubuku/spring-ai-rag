@@ -930,6 +930,12 @@ rag:
     retention: ${RAG_API_KEY_PROVISIONING_RETENTION:400d}
     cleanup-batch-size: ${RAG_API_KEY_PROVISIONING_CLEANUP_BATCH_SIZE:500}
     concurrent-retry-attempts: ${RAG_API_KEY_PROVISIONING_CONCURRENT_RETRY_ATTEMPTS:3}
+  api-key-rotation:
+    default-overlap: ${RAG_API_KEY_ROTATION_DEFAULT_OVERLAP:15m}
+    max-overlap: ${RAG_API_KEY_ROTATION_MAX_OVERLAP:1h}
+    operation-retention: ${RAG_API_KEY_ROTATION_OPERATION_RETENTION:400d}
+    cleanup-interval-ms: ${RAG_API_KEY_ROTATION_CLEANUP_INTERVAL_MS:60000}
+    cleanup-batch-size: ${RAG_API_KEY_ROTATION_CLEANUP_BATCH_SIZE:500}
   collection-provisioning:
     enabled: ${RAG_COLLECTION_PROVISIONING_ENABLED:true}
     retention: ${RAG_COLLECTION_PROVISIONING_RETENTION:400d}
@@ -950,6 +956,14 @@ rag:
 | `rag.api-key-provisioning.retention` | `400d` | Successful provisioning ledger retention and guaranteed replay window; accepted range 7–3650 days |
 | `rag.api-key-provisioning.cleanup-batch-size` | `500` | Maximum completed ledger rows deleted per scheduled cleanup, clamped to 10–5000 |
 | `rag.api-key-provisioning.concurrent-retry-attempts` | `3` | Bounded attempts used to observe the winner of a same-owner/key unique-constraint race, clamped to 1–8 |
+
+| Property | Default | Description |
+|----------|---------|-------------|
+| `rag.api-key-rotation.default-overlap` | `15m` | Default staged-rotation overlap; must be a positive whole-second duration no greater than `max-overlap` |
+| `rag.api-key-rotation.max-overlap` | `1h` | Maximum caller-requested overlap; whole seconds from 1 second through 24 hours |
+| `rag.api-key-rotation.operation-retention` | `400d` | Terminal operation retention and idempotent replay/status window; whole days from 7 through 3650 days |
+| `rag.api-key-rotation.cleanup-interval-ms` | `60000` | Fixed delay for expiring pending operations and deleting old terminal rows; 1,000–86,400,000 ms |
+| `rag.api-key-rotation.cleanup-batch-size` | `500` | Maximum expired/terminal operations processed per cleanup pass; 10–5000 |
 
 | Property | Default | Description |
 |----------|---------|-------------|
@@ -1003,7 +1017,14 @@ ledger used by optional `Idempotency-Key`; it stores only owner/key/request
 hashes and result metadata, never raw credentials. Authentication queries the
 authoritative credential and principal on every request; only the approximate
 `last_used_at` write is suppressed for five minutes. The legacy `api_key`
-column is retained for migration compatibility but constrained to `NULL`. See
+column is retained for migration compatibility but constrained to `NULL`.
+V55 adds bounded staged rotation. Prepare requires `Idempotency-Key`, creates
+one new current credential, and marks the previous credential retiring until
+the effective deadline. Both credentials remain tied to the same principal,
+ACL, capabilities, owner, usage attribution, and shared quota. Authentication
+checks the deadline directly; complete, cancel, expiry, or family revocation
+converges back to at most one active credential. The operation ledger stores
+hashes and metadata only and never stores or replays a raw secret. See
 [rest-api.md](rest-api.md).
 
 ## API Rate Limiting Configuration

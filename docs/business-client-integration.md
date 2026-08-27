@@ -406,11 +406,26 @@ Only transient/network failures are retried with exponential backoff. This
 budget is independent from the durable embedding-job
 `default-max-attempts`/`max-attempts` budget; bound both in production.
 
-Rotation is initiated by an operator using root. The new raw credential is
-again shown once; the old credential becomes invalid immediately, while the
-new credential preserves `principalId` and policy. Distribute the new secret
-safely, roll all instances, and verify `/auth/me` before ending the old
-deployment. Treat revocation and expiry as terminal errors, not unbounded retry
+Rotation is initiated by an operator using root. Prefer staged rotation for a
+rolling deployment:
+
+1. Discover `features.credentialRotation` and ensure `staged=true`.
+2. Prepare from the current credential with a deployment-scoped
+   `Idempotency-Key`. Persist the shown-once replacement secret and stable
+   `rotationId` atomically in the operator workflow.
+3. On timeout, replay the exact prepare with the same idempotency key. The
+   replay confirms metadata but returns `rawKey=null`; never create another
+   principal to compensate for a lost response.
+4. Roll instances to the replacement credential and verify `/auth/me`, the
+   exact Collection binding, and representative read/write probes. During the
+   bounded overlap, old and new credentials share one principal and quota.
+5. Complete the rotation only after every instance is healthy. Cancel before
+   the deadline if rollout must be abandoned. After the deadline, the retiring
+   credential fails authentication even if cleanup has not run.
+
+The immediate `/rotate` endpoint remains available when an atomic cutover is
+intentional; it invalidates the old credential immediately. Treat revocation,
+principal expiry, and overlap expiry as terminal errors, not unbounded retry
 conditions.
 
 ## 7. Deployment, Upgrade, And Rollback
@@ -422,24 +437,31 @@ conditions.
 - Read document lifecycle or
   `/api/v1/rag/collections/embedding-readiness` for embedding availability.
   Use `/auth/me` plus Collection by-key probes for business binding.
-- Empty and upgraded databases must run Flyway V1-V54 in order. V49 adds
+- Empty and upgraded databases must run Flyway V1-V55 in order. V49 adds
   operation capabilities to stable principals; V50 adds the successful
   provisioning idempotency ledger without storing raw credentials; V51 adds
   unfiltered and status-filtered keyset indexes for Sync Run item receipts;
   V52 adds a separate owner-scoped Collection-create idempotency ledger; V53
   adds the model-invocation usage ledger; V54 adds bounded hourly integration
-  operation and authorized Collection-contribution rollups.
+  operation and authorized Collection-contribution rollups; V55 adds bounded
+  staged credential rotation and its secret-free operation ledger.
 - Pin production callers to an accepted Git commit or an immutable image built
   from it. Maven/API version remains `1.0.0`.
 - The added `/auth/me` fields remain backward-compatible. Older clients ignore
   them; clients that depend on capability/ACL verification must run the
   contract gate before rollout.
-- V49 through V54 are forward-compatible additive migrations; do not destructively
+- V49 through V55 are forward-compatible additive migrations; do not destructively
   roll back their schema. If the application is rolled back to a version that
   does not understand operation capabilities, keyed principal/Collection
-  provisioning, item receipts, usage aggregation, or integration observability,
-  retain the schema and stop clients that require those contracts rather than
-  starting permissively or assuming the missing endpoint remains available.
+  provisioning, item receipts, usage aggregation, integration observability,
+  or staged rotation, retain the schema and stop clients that require those
+  contracts rather than starting permissively or assuming the missing endpoint
+  remains available.
+- During a mixed V54/V55 fleet, freeze API-key management writes and do not
+  prepare staged rotations; a V54 binary does not understand two enabled
+  credential rows. Enable staged rotation only after every instance runs V55.
+  Before rolling application code back to V54, verify that there are no
+  enabled retiring credentials and no `PENDING` rotation operations.
 
 ### Operation Observability
 

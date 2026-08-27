@@ -244,7 +244,38 @@ bodies, response bodies, queries, external IDs, dynamic URLs, and exception
 text are never recorded. These rollups support diagnosis, not billing,
 security audit, hard quota, or mutation recovery.
 
-### 3.5 Dual-Table Conversation Memory
+### 3.5 Bounded Staged Credential Rotation
+
+V55 extends versioned API credentials with a bounded two-credential state:
+
+```text
+one stable rag_api_principal
+  -> one current rag_api_key       (enabled, retire_at is null)
+  -> at most one retiring key      (enabled, retire_at is a future deadline)
+  -> at most one PENDING rag_api_key_rotation operation
+```
+
+Prepare changes the old current row into the retiring row and creates the next
+credential version as current in one principal-serialized transaction. The
+operation ledger stores only a generated rotation ID, principal/credential
+references, idempotency and request-fingerprint hashes, overlap/deadline,
+status, and lifecycle timestamps. It never stores the raw secret or original
+header value.
+
+Authentication remains authoritative on every request and requires
+`retire_at IS NULL OR retire_at > now`. Therefore the overlap closes at the
+deadline even if scheduled cleanup is delayed. Complete disables the retiring
+credential; cancel disables the replacement and restores the retiring row as
+current; expiry disables the retiring credential; principal revocation
+disables the whole family. Partial unique indexes enforce at most one current,
+one retiring, and one pending operation per principal.
+
+Both credentials project the same stable principal policy, Collection ACL,
+operation capabilities, Chat/session owner, usage attribution, and PostgreSQL
+quota. Staged rotation changes only authentication material and cannot create
+a second authorization identity or quota bucket.
+
+### 3.6 Dual-Table Conversation Memory
 
 | Table | Purpose | Managed by |
 |-------|---------|------------|
@@ -270,7 +301,7 @@ Client cancellation disposes the model stream and does not commit an
 incomplete turn. Streaming fallback is allowed only before the first
 client-visible event.
 
-### 3.6 Domain Extension Mechanism
+### 3.7 Domain Extension Mechanism
 
 Explicit domain customization uses the `DomainRagExtension` interface:
 
@@ -727,9 +758,10 @@ rag_audit_log           # Audit logs (collection operations)
 | `rag_document_chunks` | document_id, local_index_generation, content_hash, chunker_version, chunk_text, chunk_index | Profile-neutral local keyword chunks |
 | `rag_document_local_index_state` | document_id, local_index_status, local_index_generation, content_hash, chunker_version, chunk_count | Current local keyword generation and freshness |
 | `rag_api_principal` | principal_id, role, allowed_collection_ids, capabilities, policy_version, requests_per_minute | Stable caller owner and authoritative policy (V48/V49) |
-| `rag_api_key` | key_id, principal_id, credential_version, key_hash, enabled | Versioned credential with at most one active version per principal |
+| `rag_api_key` | key_id, principal_id, credential_version, key_hash, enabled, retire_at | Versioned credential with at most one current and one bounded retiring version per principal |
 | `rag_api_rate_limit_bucket` | principal_id, window_start, request_count | Shared fixed UTC-minute quota bucket |
 | `rag_api_provisioning_operation` | owner_id, idempotency_key_hash, request_fingerprint_sha256, principal_id, completed_at | Successful provisioning replay ledger without raw credentials (V50) |
+| `rag_api_key_rotation` | rotation_id, principal_id, source_credential_id, target_credential_id, expires_at, status | Bounded staged-rotation ledger without raw credentials or header values (V55) |
 | `rag_collection_provisioning_operation` | owner_id, idempotency_key_hash, request_fingerprint_sha256, collection_id, completed_at | Successful Collection-create replay ledger without raw keys or request bodies (V52) |
 | `rag_document_sync_runs` | id, collection_id, source_namespace, status, lease_token_hash, cumulative counters | Authoritative source-snapshot run control plane; only the lease hash is stored |
 | `rag_document_sync_run_items` | run_id, external_id, document_kind, source_revision, status, error_message, seen_at | Idempotent item ledger and durable low-sensitivity receipt source without bodies, payloads, or metadata |
@@ -751,6 +783,11 @@ rag_audit_log           # Audit logs (collection operations)
 - `rag_embedding_jobs`: active-job partial unique, claim, batch, document, and status/created indexes
 - `rag_api_provisioning_operation`: unique owner/key-hash identity and a
   completed-at cleanup index
+- `rag_api_key`: partial unique indexes for one enabled current
+  (`retire_at IS NULL`) and one enabled retiring (`retire_at IS NOT NULL`)
+  credential per principal, plus an active-retirement deadline index
+- `rag_api_key_rotation`: unique principal/idempotency hash, one-PENDING
+  partial unique index, expiry scan index, and terminal-retention index
 - `rag_collection_provisioning_operation`: unique owner/key-hash identity,
   restricted Collection foreign key, hash-shape checks, and completed-at
   cleanup index

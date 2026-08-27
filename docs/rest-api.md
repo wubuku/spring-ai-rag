@@ -138,6 +138,16 @@ credential, but a database NORMAL principal does not need an additional
       "documentSyncRunItemReceipts": false,
       "openAiCompatibility": false,
       "integrationObservability": true
+    },
+    "credentialRotation": {
+      "immediate": true,
+      "staged": true,
+      "cancel": true,
+      "idempotencyKeyRequired": true,
+      "defaultOverlapSeconds": 900,
+      "maxOverlapSeconds": 3600,
+      "replayReturnsSecret": false,
+      "operationRetentionDays": 400
     }
   },
   "limits": {
@@ -798,6 +808,8 @@ never returned. New management UIs should use the principal endpoint below.
   "principalId": "rag_p_service",
   "credentialVersion": 2,
   "currentCredential": true,
+  "retiringCredential": false,
+  "retireAt": null,
   "name": "Production Server",
   "role": "NORMAL",
   "capabilities": ["RAG_READ", "RAG_WRITE"],
@@ -827,6 +839,11 @@ metadata but no raw secret, hash, or complete credential history:
   "status": "ACTIVE",
   "currentCredentialId": "rag_k_abc123",
   "currentCredentialVersion": 2,
+  "rotationPending": true,
+  "pendingRotationId": "c675b6d2-f9b2-47aa-b7c0-cc46cd70e02b",
+  "retiringCredentialId": "rag_k_previous",
+  "retiringCredentialVersion": 1,
+  "rotationExpiresAt": "2026-08-27T20:15:00",
   "lastUsedAt": "2026-08-23T12:00:00",
   "expiresAt": "2026-10-01T00:00:00"
 }]
@@ -929,10 +946,92 @@ be downgraded to read-only.
 
 ### `POST /api/v1/rag/api-keys/{keyId}/rotate`
 
-Disable the current credential and create the next credential version for the
-same stable principal. Owner, role, policy version, ACL, expiry, quota, and capabilities stay
-unchanged. A stale credential ID returns `409 CREDENTIAL_NOT_CURRENT`; the new
-raw secret appears only in this `201 Created` response.
+Immediate compatibility path. It disables the current credential and creates
+the next credential version in one transaction. Owner, role, policy version,
+ACL, expiry, quota, and capabilities stay unchanged. A stale credential ID
+returns `409 CREDENTIAL_NOT_CURRENT`; an active staged rotation returns
+`409 CREDENTIAL_ROTATION_PENDING`. The new raw secret appears only in this
+`201 Created` response.
+
+For rolling production deployments, use the bounded staged workflow below
+instead.
+
+### `POST /api/v1/rag/api-keys/{currentKeyId}/rotations`
+
+Prepare a staged rotation. `Idempotency-Key` is required. The optional request
+body selects the overlap in seconds; omission uses the configured default:
+
+```http
+POST /api/v1/rag/api-keys/rag_k_current/rotations
+Idempotency-Key: deploy-2026-08-27-service-a
+Content-Type: application/json
+
+{"overlapSeconds":900}
+```
+
+The first success returns `201 Created`, `Cache-Control: no-store`, a stable
+`rotationId`, and the new raw credential once:
+
+```json
+{
+  "rotationId": "c675b6d2-f9b2-47aa-b7c0-cc46cd70e02b",
+  "status": "PENDING",
+  "principalId": "rag_p_service",
+  "keyId": "rag_k_new",
+  "credentialVersion": 2,
+  "rawKey": "rag_sk_...",
+  "secretAvailable": true,
+  "idempotentReplay": false,
+  "currentCredentialActive": true,
+  "rotationPending": true,
+  "retiringCredentialId": "rag_k_current",
+  "retiringCredentialVersion": 1,
+  "rotationExpiresAt": "2026-08-27T20:15:00"
+}
+```
+
+During `PENDING`, both the new current credential and the retiring credential
+authenticate against the same stable principal. They share ACLs,
+capabilities, Chat/session ownership, usage attribution, and PostgreSQL quota;
+the overlap does not create a second identity or quota bucket. The effective
+deadline is capped by principal expiry and is enforced directly by
+authentication, so delayed cleanup cannot extend the old credential's
+lifetime.
+
+Retry the exact request with the same `Idempotency-Key` after a timeout. It
+returns `200 OK`, `X-RAG-Idempotent-Replay: true`, the same `rotationId`, and
+`rawKey:null`; the service never reconstructs the shown-once secret. Reusing
+the key with another current credential or overlap returns
+`409 IDEMPOTENCY_KEY_REUSED`.
+
+### `GET /api/v1/rag/api-keys/rotations/{rotationId}`
+
+Read the current operation state. A pending operation becomes `EXPIRED` on or
+after its deadline and the retiring credential is disabled. Terminal states
+are `COMPLETED`, `CANCELED`, `EXPIRED`, and `REVOKED`. Responses never include
+a raw credential and always use `Cache-Control: no-store`.
+
+### `POST /api/v1/rag/api-keys/rotations/{rotationId}/complete`
+
+Complete a pending rotation after every caller instance has deployed and
+verified the new credential. The retiring credential is disabled immediately;
+the new credential remains current. Repeating complete for the same completed
+operation is idempotent. Completing after the deadline returns
+`409 CREDENTIAL_ROTATION_EXPIRED`.
+
+### `POST /api/v1/rag/api-keys/rotations/{rotationId}/cancel`
+
+Cancel a pending rotation before its deadline. The replacement credential is
+disabled and the retiring credential becomes current again. Repeating cancel
+for the same canceled operation is idempotent. Credential versions are never
+reused; a later rotation creates the next version. Cancel after the deadline
+returns `409 CREDENTIAL_ROTATION_EXPIRED`.
+
+All four staged endpoints return `Cache-Control: no-store` on success and
+errors. In root mode only the environment root may call them. In legacy mode a
+database ADMIN may manage any principal; a NORMAL principal may prepare only
+from its own authenticated current credential and may inspect/complete/cancel
+only its own operation.
 
 ### `DELETE /api/v1/rag/api-keys/{keyId}`
 
@@ -940,7 +1039,9 @@ Revoke the principal family through its current credential ID. Repeating DELETE
 for that last version is idempotent; a stale older credential returns
 `409 CREDENTIAL_NOT_CURRENT`. Legacy mode prevents concurrent operations from
 revoking the last ADMIN (`409 LAST_ADMIN_REQUIRED`); environment root mode may
-explicitly revoke it. Success returns `204 No Content`.
+explicitly revoke it. If a staged rotation is pending, revocation disables both
+current and retiring credentials and marks the operation `REVOKED`. Success
+returns `204 No Content`.
 
 The management console is available at `/webui/unlock`. It keeps the root
 credential only in page memory and requires it again after refresh or sign-out.

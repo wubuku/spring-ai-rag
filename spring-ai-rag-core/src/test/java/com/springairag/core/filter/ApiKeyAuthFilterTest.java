@@ -107,6 +107,44 @@ class ApiKeyAuthFilterTest {
     }
 
     @Test
+    void stagedRotationAuthenticationFailuresAreAlwaysNoStore()
+            throws ServletException, IOException {
+        ApiKeyManagementService apiKeyService =
+                mock(ApiKeyManagementService.class);
+        ApiKeyAuthFilter filter =
+                new ApiKeyAuthFilter("", true, apiKeyService);
+
+        request.setRequestURI(
+                "/api/v1/rag/api-keys/rag_k_v1/rotations");
+        filter.doFilterInternal(request, response, filterChain);
+        assertEquals(401, response.getStatus());
+        assertEquals("no-store", response.getHeader("Cache-Control"));
+
+        request = new MockHttpServletRequest();
+        response = new MockHttpServletResponse();
+        request.setRequestURI(
+                "/api/v1/rag/api-keys/rag_k_v1/rotations");
+        request.addHeader("X-API-Key", "rag_sk_invalid");
+        when(apiKeyService.authenticate("rag_sk_invalid")).thenReturn(null);
+        filter.doFilterInternal(request, response, filterChain);
+        assertEquals(401, response.getStatus());
+        assertEquals("no-store", response.getHeader("Cache-Control"));
+
+        request = new MockHttpServletRequest();
+        response = new MockHttpServletResponse();
+        request.setRequestURI(
+                "/api/v1/rag/api-keys/rag_k_v1/rotations");
+        request.addHeader("X-API-Key", "rag_sk_unavailable");
+        when(apiKeyService.authenticate("rag_sk_unavailable"))
+                .thenThrow(new DataAccessResourceFailureException("offline"));
+        filter.doFilterInternal(request, response, filterChain);
+        assertEquals(503, response.getStatus());
+        assertEquals("no-store", response.getHeader("Cache-Control"));
+
+        verify(filterChain, never()).doFilter(any(), any());
+    }
+
+    @Test
     void excludedPath_actuator_passesThrough() throws ServletException, IOException {
         ApiKeyAuthFilter filter = new ApiKeyAuthFilter("secret", true);
         request.setRequestURI("/actuator/health");

@@ -32,7 +32,7 @@ CREATE DATABASE spring_ai_rag
 
 项目使用 Flyway 自动迁移。首次启动时按顺序执行
 `db/migration/V1__*.sql` 至当前最新迁移（目前为
-`V54__add_api_operation_rollups.sql`）。
+`V55__bounded_api_credential_rotation.sql`）。
 
 如需手动迁移：
 
@@ -117,8 +117,9 @@ export RAG_ROOT_API_KEY="$(openssl rand -base64 48 | tr -d '\n')"
 ```
 
 启动后访问 `http://localhost:8081/webui/unlock`，输入 root 解锁控制台。root 只保存在
-当前页面内存；刷新、关闭页面或退出后需要重新输入。控制台可创建、列出、轮换和吊销
-`FULL_RAG` 业务 Key，业务 Key用于外部系统调用 RAG 数据面，不需要访问 WebUI。
+当前页面内存；刷新、关闭页面或退出后需要重新输入。控制台可创建、列出、分阶段轮换、
+即时轮换和吊销 `FULL_RAG` 业务 Key，业务 Key 用于外部系统调用 RAG 数据面，不需要
+访问 WebUI。
 
 ```bash
 curl http://localhost:8081/api/v1/rag/search?query=example \
@@ -127,11 +128,42 @@ curl http://localhost:8081/api/v1/rag/search?query=example \
 
 部署边界：
 
-- 当前 MVP 只承诺单实例。
+- `postgresql` profile 下，受管 principal、Collection ACL、共享 quota、即时吊销和
+  V55 分阶段轮换以 PostgreSQL 为多实例共同真相源；本地 quota backend 仍只适合显式的
+  单实例兼容环境。
 - 数据面必须使用 TLS；WebUI 只部署在本地或受控管理网络。
 - root 通过 Secret 管理系统或环境变量注入，不写入镜像、YAML、日志或 Git。
 - 修改 root 后重启实例生效；没有 WebUI 修改 root 的接口。
 - root 模式拒绝 `?apiKey=`，只接受 Bearer 或 `X-API-Key` Header。
+
+#### 分阶段 Credential 轮换
+
+滚动更新多个调用实例时，优先使用 staged rotation：
+
+1. 先从能力发现响应确认 `features.credentialRotation.staged=true`。
+2. 使用稳定的 `Idempotency-Key` prepare，并把首次响应中的一次性 replacement secret
+   和 `rotationId` 原子写入受控 Secret 存储。
+3. 在有界 overlap 内滚动更新调用实例，并分别验证 `/auth/me`、Collection binding 和
+   代表性读写请求。新旧 credential 共享同一个 stable principal、ACL 和 quota。
+4. 全部实例切换成功后 complete；需要放弃部署时必须在 deadline 前 cancel。deadline
+   到达后 retiring credential 会在认证查询中立即失效，不依赖 cleanup 是否及时执行。
+
+即时 `/api/v1/rag/api-keys/{keyId}/rotate` 仍用于明确要求原子切换的兼容场景；它会在
+事务提交后立即禁用旧 credential。完整 HTTP 契约见
+[rest-api-zh-CN.md](rest-api-zh-CN.md#api-key-管理)，调用方操作手册见
+[business-client-integration-zh-CN.md](business-client-integration-zh-CN.md#6-重试与-credential-生命周期)。
+
+#### V54/V55 滚动升级与回滚
+
+- Flyway V55 是向前兼容的增量迁移，不执行破坏性 schema 回退。
+- V54/V55 混合实例期间必须冻结 API Key 管理写，尤其禁止 prepare staged rotation；
+  V54 binary 不理解同一 principal 同时存在 current 与 retiring 两个 enabled row。
+- 只有所有服务实例都运行 V55 后，才允许调用方使用 staged rotation。
+- 应用回滚到 V54 前，必须确认不存在 enabled retiring credential，也不存在
+  `PENDING` rotation operation。保留 V55 schema，并暂停依赖 staged rotation 的调用方。
+- 合并或升级基线后必须重新执行 PostgreSQL、Maven、WebUI、Mock/真实 HTTP 与真实模型
+  验收，不能沿用升级前结果。命令见
+  [testing-guide-zh-CN.md](testing-guide-zh-CN.md)。
 
 ## 4. 构建与运行
 

@@ -118,6 +118,17 @@ class IntegrationCapabilityCatalogTest {
         assertTrue(features.optional().documentSyncRunItemReceipts());
         assertTrue(features.optional().openAiCompatibility());
         assertTrue(features.optional().integrationObservability());
+        assertTrue(features.credentialRotation().immediate());
+        assertTrue(features.credentialRotation().staged());
+        assertTrue(features.credentialRotation().cancel());
+        assertTrue(features.credentialRotation().idempotencyKeyRequired());
+        assertEquals(900,
+                features.credentialRotation().defaultOverlapSeconds());
+        assertEquals(3600,
+                features.credentialRotation().maxOverlapSeconds());
+        assertFalse(features.credentialRotation().replayReturnsSecret());
+        assertEquals(400,
+                features.credentialRotation().operationRetentionDays());
     }
 
     @Test

@@ -130,6 +130,16 @@ allow-list。数据库业务 Key 不能用该端点查看其他 principal；WebU
       "documentSyncRunItemReceipts": false,
       "openAiCompatibility": false,
       "integrationObservability": true
+    },
+    "credentialRotation": {
+      "immediate": true,
+      "staged": true,
+      "cancel": true,
+      "idempotencyKeyRequired": true,
+      "defaultOverlapSeconds": 900,
+      "maxOverlapSeconds": 3600,
+      "replayReturnsSecret": false,
+      "operationRetentionDays": 400
     }
   },
   "limits": {
@@ -301,6 +311,8 @@ root 模式下，本节所有管理端点只允许 environment root。通过 roo
   "principalId": "rag_p_service",
   "credentialVersion": 2,
   "currentCredential": true,
+  "retiringCredential": false,
+  "retireAt": null,
   "name": "Production Server",
   "role": "NORMAL",
   "capabilities": ["RAG_READ", "RAG_WRITE"],
@@ -330,6 +342,11 @@ secret、hash 或完整 history：
   "status": "ACTIVE",
   "currentCredentialId": "rag_k_abc123",
   "currentCredentialVersion": 2,
+  "rotationPending": true,
+  "pendingRotationId": "c675b6d2-f9b2-47aa-b7c0-cc46cd70e02b",
+  "retiringCredentialId": "rag_k_previous",
+  "retiringCredentialVersion": 1,
+  "rotationExpiresAt": "2026-08-27T20:15:00",
   "lastUsedAt": "2026-08-23T12:00:00",
   "expiresAt": "2026-10-01T00:00:00"
 }]
@@ -421,16 +438,88 @@ keyed 请求 fail closed 返回 `503`，不会静默退化为非幂等 create。
 
 #### `POST /api/v1/rag/api-keys/{keyId}/rotate`
 
-禁用当前 credential，并为同一 stable principal 创建下一个 credential version。
-owner、role、policy version、ACL、expiry、quota 与 capabilities 均保持不变。使用旧 credential ID
-返回 `409 CREDENTIAL_NOT_CURRENT`；raw secret 仅在本次 `201 Created` 响应中返回。
+这是即时切换的兼容路径：在一个事务中禁用当前 credential，并创建同一 stable principal
+的下一个 credential version。owner、role、policy version、ACL、expiry、quota 与
+capabilities 均保持不变。使用旧 credential ID 返回
+`409 CREDENTIAL_NOT_CURRENT`；已有 staged rotation 时返回
+`409 CREDENTIAL_ROTATION_PENDING`；raw secret 仅在本次 `201 Created` 响应中返回。
+
+生产滚动部署应优先使用下面的有界 staged 工作流。
+
+#### `POST /api/v1/rag/api-keys/{currentKeyId}/rotations`
+
+准备分阶段轮换。`Idempotency-Key` 必填；可选请求体以秒指定 overlap，省略时使用服务端
+默认值：
+
+```http
+POST /api/v1/rag/api-keys/rag_k_current/rotations
+Idempotency-Key: deploy-2026-08-27-service-a
+Content-Type: application/json
+
+{"overlapSeconds":900}
+```
+
+首次成功返回 `201 Created`、`Cache-Control: no-store`、稳定 `rotationId`，并且只展示
+一次新 raw credential：
+
+```json
+{
+  "rotationId": "c675b6d2-f9b2-47aa-b7c0-cc46cd70e02b",
+  "status": "PENDING",
+  "principalId": "rag_p_service",
+  "keyId": "rag_k_new",
+  "credentialVersion": 2,
+  "rawKey": "rag_sk_...",
+  "secretAvailable": true,
+  "idempotentReplay": false,
+  "currentCredentialActive": true,
+  "rotationPending": true,
+  "retiringCredentialId": "rag_k_current",
+  "retiringCredentialVersion": 1,
+  "rotationExpiresAt": "2026-08-27T20:15:00"
+}
+```
+
+`PENDING` 期间，新 current credential 与 retiring credential 都可以使用同一 stable
+principal 认证。两者共享 ACL、capabilities、Chat/session owner、用量归因和 PostgreSQL
+quota；overlap 不会创建第二个身份或配额 bucket。实际 deadline 会被 principal expiry
+截短，并直接进入认证条件，因此 cleanup 延迟不会延长旧 credential 的有效期。
+
+请求超时后使用同一个 `Idempotency-Key` 精确重试。响应为 `200 OK`、
+`X-RAG-Idempotent-Replay: true`、相同 `rotationId` 和 `rawKey:null`；服务绝不重建
+一次性 secret。同一个 key 改用其他 current credential 或 overlap 时返回
+`409 IDEMPOTENCY_KEY_REUSED`。
+
+#### `GET /api/v1/rag/api-keys/rotations/{rotationId}`
+
+读取当前 operation 状态。pending operation 到达 deadline 后会推进为 `EXPIRED`，并禁用
+retiring credential。终态包括 `COMPLETED`、`CANCELED`、`EXPIRED` 和 `REVOKED`。
+响应绝不包含 raw credential，并始终带 `Cache-Control: no-store`。
+
+#### `POST /api/v1/rag/api-keys/rotations/{rotationId}/complete`
+
+所有调用实例已经部署并验证新 credential 后完成 pending rotation。retiring credential
+立即失效，新 credential 保持 current。对同一个已完成 operation 重复 complete 幂等；
+deadline 后调用返回 `409 CREDENTIAL_ROTATION_EXPIRED`。
+
+#### `POST /api/v1/rag/api-keys/rotations/{rotationId}/cancel`
+
+在 deadline 前取消 pending rotation。replacement credential 被禁用，retiring credential
+恢复为 current。对同一个已取消 operation 重复 cancel 幂等。credential version 永不复用，
+之后再次轮换会创建更高版本。deadline 后调用返回
+`409 CREDENTIAL_ROTATION_EXPIRED`。
+
+四个 staged endpoint 的成功和错误响应都带 `Cache-Control: no-store`。root 模式只允许
+environment root 调用；legacy 模式下数据库 ADMIN 可管理任意 principal，NORMAL principal
+只能从自己当前认证的 credential 发起 prepare，也只能查询、完成或取消自己的 operation。
 
 #### `DELETE /api/v1/rag/api-keys/{keyId}`
 
 通过当前 credential ID 吊销整个 principal family。对最后一个版本重复 DELETE 幂等；
 旧版本返回 `409 CREDENTIAL_NOT_CURRENT`。legacy 模式通过事务 guard 防止并发吊销最后一个
-ADMIN（`409 LAST_ADMIN_REQUIRED`）；environment root 模式可显式吊销。成功返回
-`204 No Content`。
+ADMIN（`409 LAST_ADMIN_REQUIRED`）；environment root 模式可显式吊销。若存在 staged
+rotation，吊销会同时禁用 current 与 retiring credential，并把 operation 标为 `REVOKED`。
+成功返回 `204 No Content`。
 
 WebUI 管理台入口为 `/webui/unlock`。root credential 只保存在页面内存，刷新或退出后
 需要重新输入；外部调用方不需要 WebUI，只需持有分发的业务 Key：

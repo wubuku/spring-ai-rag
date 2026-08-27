@@ -16,7 +16,7 @@ Release date: `2026-07-21`
 - [x] Helm `version` and `appVersion` are `1.0.0`
 - [x] Docker/Helm default image tag is `1.0.0`
 - [x] Local, Docker, and Helm default port is `8081`
-- [x] Flyway inventory is V1-V54
+- [x] Flyway inventory is V1-V55
 - [x] JSONB structured-record API, payload snapshots, and collection lifecycle are covered
 - [x] `scripts/verify-jsonb-records.sh` records focused backend/database/frontend verification
 - [x] Document PATCH/disable/restore/permanent-delete and external triple identity are covered
@@ -122,8 +122,9 @@ Release date: `2026-07-21`
   read/write dispatcher to prove successful reads, write `403`, unchanged
   state, and capability inheritance across rotation.
 - [x] The real-LLM gate uses an explicit `RAG_READ` principal. Write rejection
-  and idempotent replay do not increase the provider counter, while native and
-  OpenAI-compatible JSON/SSE require exactly five real provider calls.
+  and idempotent replay do not increase the provider counter. Native and
+  OpenAI-compatible JSON/SSE plus staged complete/cancel/pending-family-revoke
+  lifecycles require exactly nine successful real provider calls.
 
 ### 2026-08-26 Provisioning And Capability Discovery Gates
 
@@ -229,6 +230,27 @@ Release date: `2026-07-21`
 - [ ] The final merged-baseline readiness gate records focused/PostgreSQL/
   Maven/WebUI/Mock/real-HTTP evidence, real LLM/Embedding acceptance, and three
   consecutive no-change reviews.
+
+### 2026-08-27 Bounded Staged Credential Rotation Gates
+
+- [x] V55 permits at most one current and one deadline-bounded retiring
+  credential per stable principal, plus one PENDING rotation operation.
+- [x] Prepare requires `Idempotency-Key`, shows the replacement secret once,
+  returns secret-free exact replay, and exposes runtime limits through
+  `features.credentialRotation`.
+- [x] Complete, cancel, deadline expiry, policy-expiry clamp, immediate
+  compatibility rotation, and family revoke converge without duplicating
+  principal identity, ACL, capabilities, Chat ownership, usage, or quota.
+- [x] WebUI makes staged rotation the recommended path, keeps secrets in page
+  memory, supports complete/cancel and response-loss recovery, and retains the
+  immediate path as an explicit secondary action.
+- [x] Pre-merge V55 acceptance records 54/54 PostgreSQL tests, Maven/WebUI/
+  Mock/real-Playwright gates, dual-instance HTTP lifecycle evidence, nine real
+  provider calls with zero rejected/replay increments, and real Embedding/RAG.
+- [x] Reran the same complete matrix from the post-merge baseline after merging
+  the latest `origin/main`: `v55-minimax-postmerge-20260828-r2` passed 13/13.
+  Independent real RAG `v55-minimax-postmerge-20260827-r5` passed `10/10`,
+  including revision-guarded permanent deletion and final database facts.
 
 ### Final Evidence (2026-07-21)
 

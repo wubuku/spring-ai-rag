@@ -36,6 +36,10 @@ vi.mock('../api/apikeys', () => ({
     createKey: vi.fn(),
     revokeKey: vi.fn(),
     rotateKey: vi.fn(),
+    prepareRotation: vi.fn(),
+    getRotation: vi.fn(),
+    completeRotation: vi.fn(),
+    cancelRotation: vi.fn(),
     updatePolicy: vi.fn(),
   },
 }));

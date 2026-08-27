@@ -57,7 +57,19 @@ public class IntegrationCapabilityCatalog {
                                 properties.getDocumentLifecycle().isSyncRunsEnabled(),
                                 properties.getDocumentLifecycle().isSyncRunsEnabled(),
                                 properties.getOpenAiCompatibility().isEnabled(),
-                                properties.getIntegrationObservability().isEnabled()));
+                                properties.getIntegrationObservability().isEnabled()),
+                        new IntegrationCapabilitiesResponse.CredentialRotation(
+                                true,
+                                true,
+                                true,
+                                true,
+                                properties.getApiKeyRotation()
+                                        .defaultOverlapSeconds(),
+                                properties.getApiKeyRotation()
+                                        .maxOverlapSeconds(),
+                                false,
+                                properties.getApiKeyRotation()
+                                        .operationRetentionDays()));
         var structuredRecords = properties.getStructuredRecords();
         var observability = properties.getIntegrationObservability();
         return new IntegrationCapabilitiesResponse(

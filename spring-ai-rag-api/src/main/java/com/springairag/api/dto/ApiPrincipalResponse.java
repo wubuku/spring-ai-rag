@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
 
 @Schema(description = "Stable managed API principal and current policy")
 public class ApiPrincipalResponse {
@@ -19,6 +20,11 @@ public class ApiPrincipalResponse {
     private LocalDateTime lastUsedAt;
     private String currentCredentialId;
     private Integer currentCredentialVersion;
+    private Boolean rotationPending;
+    private UUID pendingRotationId;
+    private String retiringCredentialId;
+    private Integer retiringCredentialVersion;
+    private LocalDateTime rotationExpiresAt;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
@@ -46,6 +52,26 @@ public class ApiPrincipalResponse {
     public void setCurrentCredentialId(String currentCredentialId) { this.currentCredentialId = currentCredentialId; }
     public Integer getCurrentCredentialVersion() { return currentCredentialVersion; }
     public void setCurrentCredentialVersion(Integer currentCredentialVersion) { this.currentCredentialVersion = currentCredentialVersion; }
+    public Boolean getRotationPending() { return rotationPending; }
+    public void setRotationPending(Boolean rotationPending) {
+        this.rotationPending = rotationPending;
+    }
+    public UUID getPendingRotationId() { return pendingRotationId; }
+    public void setPendingRotationId(UUID pendingRotationId) {
+        this.pendingRotationId = pendingRotationId;
+    }
+    public String getRetiringCredentialId() { return retiringCredentialId; }
+    public void setRetiringCredentialId(String retiringCredentialId) {
+        this.retiringCredentialId = retiringCredentialId;
+    }
+    public Integer getRetiringCredentialVersion() { return retiringCredentialVersion; }
+    public void setRetiringCredentialVersion(Integer retiringCredentialVersion) {
+        this.retiringCredentialVersion = retiringCredentialVersion;
+    }
+    public LocalDateTime getRotationExpiresAt() { return rotationExpiresAt; }
+    public void setRotationExpiresAt(LocalDateTime rotationExpiresAt) {
+        this.rotationExpiresAt = rotationExpiresAt;
+    }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }

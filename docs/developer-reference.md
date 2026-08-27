@@ -19,7 +19,7 @@ Documentation hub: [index.md](index.md). Stable project context: [project-contex
 | Real-LLM E2E port | `18081` |
 | Embedding | SiliconFlow `BAAI/bge-m3` |
 | Vector dimension | `1024` |
-| Flyway | V1–V54 |
+| Flyway | V1–V55 |
 
 Do **not** append `/v1` to an OpenAI or Embedding `base-url`. Spring AI appends `/v1/chat/completions` or `/v1/embeddings`.
 
@@ -414,18 +414,24 @@ Playwright preview's initial port with `NEXT_HIGH_VALUE_PLAYWRIGHT_PORT`.
 
 ```bash
 MANAGED_API_REAL_ENV_FILE=.env \
+MANAGED_API_REAL_LLM_PROVIDER=minimax \
 ./scripts/verify-managed-api-principals.sh --with-real-llm
 ```
 
 After the Mock and build gates pass, this command uses two backends (default
 `18181` and `18182`), one Vite frontend (default `15181`), and disposable
-PostgreSQL for real full-stack plus bounded real-LLM acceptance. The V50
-matrix also verifies idempotent provisioning across two instances, runtime
+PostgreSQL for real full-stack plus bounded real-LLM acceptance. The V55
+matrix verifies idempotent provisioning across two instances, runtime
 capability discovery, read-only/read-write capabilities for NORMAL principals,
-policy CAS, rotation inheritance, and write rejection before quota accounting.
-Override port
+policy CAS, staged prepare/replay/complete/cancel/deadline/family revoke,
+shared quota during overlap, and write rejection before quota accounting.
+Real-LLM mode requires nine successful provider calls across immediate data
+access and staged complete/cancel/revoke lifecycles, while replayed or rejected
+requests must not increase the provider counter. Override port
 conflicts with `MANAGED_API_BACKEND_A_PORT`, `MANAGED_API_BACKEND_B_PORT`, and
-`MANAGED_API_FRONTEND_PORT`. Evidence is written under
+`MANAGED_API_FRONTEND_PORT`. `MANAGED_API_REAL_LLM_PROVIDER` accepts `openai`,
+`minimax`, or `anthropic`; the script validates and loads only the selected
+provider. Evidence is written under
 `.verification/managed-api-principals/<run-id>/`.
 
 <a id="business-service-integration-readiness-verification"></a>

@@ -44,6 +44,8 @@ public class ApiKeyResponse {
     private String principalId;
     private Integer credentialVersion;
     private Boolean currentCredential;
+    private Boolean retiringCredential;
+    private LocalDateTime retireAt;
     private Long policyVersion;
     private Integer requestsPerMinute;
     private List<String> capabilities;
@@ -98,6 +100,12 @@ public class ApiKeyResponse {
     public void setCredentialVersion(Integer credentialVersion) { this.credentialVersion = credentialVersion; }
     public Boolean getCurrentCredential() { return currentCredential; }
     public void setCurrentCredential(Boolean currentCredential) { this.currentCredential = currentCredential; }
+    public Boolean getRetiringCredential() { return retiringCredential; }
+    public void setRetiringCredential(Boolean retiringCredential) {
+        this.retiringCredential = retiringCredential;
+    }
+    public LocalDateTime getRetireAt() { return retireAt; }
+    public void setRetireAt(LocalDateTime retireAt) { this.retireAt = retireAt; }
     public Long getPolicyVersion() { return policyVersion; }
     public void setPolicyVersion(Long policyVersion) { this.policyVersion = policyVersion; }
     public Integer getRequestsPerMinute() { return requestsPerMinute; }
@@ -122,6 +130,8 @@ public class ApiKeyResponse {
                 Objects.equals(principalId, that.principalId) &&
                 Objects.equals(credentialVersion, that.credentialVersion) &&
                 Objects.equals(currentCredential, that.currentCredential) &&
+                Objects.equals(retiringCredential, that.retiringCredential) &&
+                Objects.equals(retireAt, that.retireAt) &&
                 Objects.equals(policyVersion, that.policyVersion) &&
                 Objects.equals(requestsPerMinute, that.requestsPerMinute) &&
                 Objects.equals(capabilities, that.capabilities);
@@ -131,7 +141,8 @@ public class ApiKeyResponse {
     public int hashCode() {
         return Objects.hash(keyId, name, createdAt, lastUsedAt, expiresAt,
                 enabled, role, allowedCollectionIds, allowedCollectionKeys,
-                principalId, credentialVersion, currentCredential, policyVersion,
+                principalId, credentialVersion, currentCredential,
+                retiringCredential, retireAt, policyVersion,
                 requestsPerMinute, capabilities);
     }
 
@@ -150,6 +161,8 @@ public class ApiKeyResponse {
                 ", principalId='" + principalId + '\'' +
                 ", credentialVersion=" + credentialVersion +
                 ", currentCredential=" + currentCredential +
+                ", retiringCredential=" + retiringCredential +
+                ", retireAt=" + retireAt +
                 ", policyVersion=" + policyVersion +
                 ", requestsPerMinute=" + requestsPerMinute +
                 ", capabilities=" + capabilities +

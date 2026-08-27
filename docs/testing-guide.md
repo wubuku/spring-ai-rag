@@ -308,7 +308,7 @@ covers:
   business-CAS conflict for internal derivation contention;
 - self operation/status/Collection observability, cross-principal and
   cross-Collection denial, bounded latency summaries, and restart persistence;
-- PostgreSQL facts through Flyway V54, zero plaintext credentials, a succeeded
+- PostgreSQL facts through Flyway V55, zero plaintext credentials, a succeeded
   embedding job, and integration-operation rollups;
 - WebUI typecheck, Vitest, production build, core Mock Playwright, and real
   API-key Playwright.
@@ -701,10 +701,12 @@ never reported as quality passes.
 
 ### Managed API Principal PostgreSQL Matrix
 
-Run the V48-to-V50 migration, credential lifecycle, operation-capability,
+Run the V48-to-V55 migration, credential lifecycle, operation-capability,
 idempotent provisioning/replay/conflict, owner isolation, concurrent first
-create, rotation/revocation replay state, policy concurrency, last-ADMIN,
-last-used, shared-quota, and bounded-cleanup matrix against real PostgreSQL:
+create, immediate and staged rotation, complete/cancel/expiry/family revoke,
+policy deadline clamping, rotation/revocation replay state, policy concurrency,
+last-ADMIN, last-used, shared-quota, and bounded-cleanup matrix against real
+PostgreSQL:
 
 ```bash
 TESTCONTAINERS_RYUK_DISABLED=true \
@@ -726,6 +728,7 @@ Use the unified script for the complete release gate:
 
 # Explicitly exercise the real provider after every Mock gate passes
 MANAGED_API_REAL_ENV_FILE=.env \
+MANAGED_API_REAL_LLM_PROVIDER=minimax \
 ./scripts/verify-managed-api-principals.sh --with-real-llm
 ```
 
@@ -736,20 +739,27 @@ It then starts two real backends sharing a disposable PostgreSQL database plus
 one Vite frontend to verify read-only identity/GET access, write `403`,
 capability inheritance across rotation, rejection without persistence for
 invalid capabilities, authenticated capability discovery, cross-instance
-keyed provisioning/create/replay/conflict, replay after rotation/revocation,
-global quota, policy CAS, cross-instance rotation and revocation, quota-store
-failure closure, and no-screenshot real Playwright.
+keyed provisioning/create/replay/conflict, staged prepare/replay/conflict/
+complete/cancel/deadline/family-revoke, shared quota across overlap credentials,
+replay after rotation/revocation, global quota, policy CAS, quota-store failure
+closure, and no-screenshot real Playwright.
 Real-LLM mode also covers native JSON/SSE and OpenAI-compatible JSON/SSE with a
 principal explicitly limited to `RAG_READ`. It first proves that a write
 returns `403` without changing the provider counter, then proves idempotent
-replay does not call the model again and requires exactly five real provider
-calls. Evidence is written to
+replay does not call the model again. It exercises staged complete, cancel with
+session restoration, and pending-family revoke, requiring exactly nine
+successful real provider calls while rejected/replayed requests add zero.
+Evidence is written to
 `.verification/managed-api-principals/<run-id>/summary.md`; sensitive responses
 remain only in the gitignored, permission-restricted `private/` directory.
 
-Those five calls are the deterministic expected count for this managed-
-principal regression contract, proving that rejection and replay add no model
-calls. They are not an upper limit for broader client-lifecycle acceptance,
+`MANAGED_API_REAL_LLM_PROVIDER` accepts `openai`, `minimax`, or `anthropic`.
+The script requires a key, base URL, and model only for the selected provider;
+the summary records the provider selection without recording its key.
+
+Those nine calls are the deterministic expected count for this managed-
+principal staged-lifecycle contract. They are not an upper limit for broader
+client-lifecycle acceptance,
 which should continue through real Chat and Embedding paths for create, update,
 delete, restore, credential rotation, and post-restart behavior.
 

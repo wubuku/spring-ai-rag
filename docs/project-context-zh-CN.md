@@ -325,7 +325,7 @@ job enqueue 分开提交，HTTP 不同步循环调用 provider。只读诊断默
 ### 数据库
 
 - PostgreSQL + pgvector。
-- Flyway 当前为 V1–V54。
+- Flyway 当前为 V1–V55。
 - V27/V28 负责新增、回填、校验、唯一约束及不可变 Collection 业务 key；V29 增加 JSONB
   结构化记录；V30 增加外部文档同步 schema；V31 在不改写已发布 V30 的前提下规范化
   已存储的外部文档身份；V32 增加按 principal 归属的 Chat history、来源快照、turn
@@ -348,7 +348,8 @@ job enqueue 分开提交，HTTP 不同步循环调用 provider。只读诊断默
   从不保存 raw credential；V51 为 Sync Run item ledger 增加按 run/status 的有界游标索引；
   V52 增加按 owner 隔离、具有受约束 Collection 外键的 Collection 创建幂等账本；
   V53 增加按 principal 隔离的模型调用级 append-only 用量账本；V54 增加有界 UTC
-  小时级 integration operation 与已授权 Collection contribution 聚合。
+  小时级 integration operation 与已授权 Collection contribution 聚合；V55 增加有界
+  分阶段 API credential 轮换、overlap deadline 与不保存 secret 的轮换 operation 账本。
 - 数据访问层禁止显式 `SELECT ... FOR UPDATE`、`SKIP LOCKED`、JPA
   `PESSIMISTIC_*` 与 PostgreSQL advisory lock。并发写使用条件
   `UPDATE/DELETE ... RETURNING`、`@Version`、唯一约束、lease 和有界重试；普通 DML
@@ -417,7 +418,7 @@ job enqueue 分开提交，HTTP 不同步循环调用 provider。只读诊断默
 
 - principal 持有 `ADMIN` / `NORMAL`、Collection ACL、expiry、policy version、可选 quota
   与规范化 operation capabilities；
-  credential 只持有 hash、version 和启停状态。
+  credential 只持有 hash、version、启停状态和可选 retire deadline。
 - V48 对既有 Key确定性回填 `principalId=旧 keyId`，历史 `db:{keyId}` owner 因而保持
   可读；之后的 rotation 只替换 credential，稳定 owner 不变。
 - 每次认证都执行 credential/principal 权威联查并把不可变 policy snapshot 放入 request；
@@ -436,13 +437,21 @@ job enqueue 分开提交，HTTP 不同步循环调用 provider。只读诊断默
   一次 raw credential；精确重放返回 `200`、当前 credential metadata 与显式
   `rawKey: null`。同一 owner/key 被用于不同有效语义时返回 `409`。后续 rotation 或
   revoke 会改变 replay 返回的当前 credential 投影，但不会使原 secret 可恢复。
+- V55 保留即时 `/rotate` 兼容路径，并增加适合滚动部署的有界 staged rotation。prepare
+  必须携带 `Idempotency-Key`，返回稳定 `rotationId`，只展示一次 replacement secret，
+  并在服务端强制 deadline 前允许一个 current 和一个 retiring credential。complete 禁用
+  retiring，cancel 禁用 replacement 并恢复旧 credential，expiry 与 family revoke 都
+  fail closed。prepare 精确 replay 永不返回 raw secret。两个 credential 共享同一
+  principal、policy、Chat/session owner、用量归因和 PostgreSQL quota。
 - Collection 创建也支持可选 `Idempotency-Key`，但使用独立 V52 账本且不保存响应
   snapshot。replay 返回绑定 Collection 的当前状态和当前文档数；软删除保持可见且绝不
   被逆转。keyed provisioning 关闭或不可用时返回 `503`，不会退化为普通创建。
 - `GET /api/v1/rag/integration-capabilities` 提供认证、`no-store`、低敏的运行时合同，
   返回协议版本、当前调用方有效能力与 Collection 范围、数据面行为、可选特性和运行时输入
   上限，包括 structured-record batch/payload/search/filter、固定 Sync Run batch/page
-  上限及 observability retention/query 限制。其中 `documentSyncRunItemReceipts`
+  上限及 observability retention/query 限制。`features.credentialRotation` 会发布
+  immediate/staged/cancel、幂等与 secret replay 行为、默认/最大 overlap 和 operation
+  retention。其中 `documentSyncRunItemReceipts`
   明确表示持久化回执查询是否可用，
   `features.provisioning.collectionCreateIdempotencyKey` 表示 V52 控制面能力。restricted
   ACL 无法完整解析为 Collection key 时以 `503` fail closed。

@@ -20,12 +20,14 @@ LATEST_FLYWAY_MIGRATION="$(
     | tail -1
 )"
 RUN_REAL_LLM=0
+REAL_LLM_PROVIDER="not-requested"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --with-real-llm) RUN_REAL_LLM=1 ;;
     -h|--help)
       echo "Usage: $0 [--with-real-llm]"
+      echo "  MANAGED_API_REAL_LLM_PROVIDER=openai|minimax|anthropic"
       exit 0
       ;;
     *) echo "Unknown option: $1" >&2; exit 2 ;;
@@ -100,6 +102,7 @@ write_summary() {
     echo "- Result: **${result}**"
     echo "- Counts: ${PASS_COUNT} passed, ${FAIL_COUNT} failed"
     echo "- Real LLM requested: \`${RUN_REAL_LLM}\`"
+    echo "- Real LLM provider: \`${REAL_LLM_PROVIDER}\`"
     echo
     echo "| Step | Status | Exit | Evidence |"
     echo "|------|--------|------|----------|"
@@ -275,6 +278,7 @@ start_database() {
 }
 
 load_provider_environment() {
+  local requested_provider key base_url model
   ROOT_KEY="managed-root-$(openssl rand -hex 32)"
   if [[ "$RUN_REAL_LLM" == "1" ]]; then
     set +u
@@ -283,22 +287,85 @@ load_provider_environment() {
     source "$ENV_FILE"
     set +a
     set -u
+    requested_provider="${MANAGED_API_REAL_LLM_PROVIDER:-${LLM_PROVIDER:-${APP_LLM_PROVIDER:-openai}}}"
+    REAL_LLM_PROVIDER="$(printf '%s' "$requested_provider" | tr '[:upper:]' '[:lower:]')"
+    case "$REAL_LLM_PROVIDER" in
+      openai)
+        key="${SPRING_AI_OPENAI_API_KEY:-${OPENAI_API_KEY:-}}"
+        base_url="${SPRING_AI_OPENAI_BASE_URL:-${OPENAI_BASE_URL:-}}"
+        model="${SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL:-${OPENAI_MODEL:-}}"
+        [[ -n "$key" ]] || {
+          echo "Selected provider openai requires SPRING_AI_OPENAI_API_KEY or OPENAI_API_KEY" >&2
+          return 1
+        }
+        [[ -n "$base_url" ]] || {
+          echo "Selected provider openai requires SPRING_AI_OPENAI_BASE_URL or OPENAI_BASE_URL" >&2
+          return 1
+        }
+        [[ -n "$model" ]] || {
+          echo "Selected provider openai requires SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL or OPENAI_MODEL" >&2
+          return 1
+        }
+        export SPRING_AI_OPENAI_API_KEY="$key"
+        export SPRING_AI_OPENAI_BASE_URL="${base_url%/}"
+        export SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL="$model"
+        ;;
+      minimax)
+        key="${SPRING_AI_MINIMAX_API_KEY:-${MINIMAX_API_KEY:-}}"
+        base_url="${SPRING_AI_MINIMAX_BASE_URL:-${MINIMAX_BASE_URL:-}}"
+        model="${SPRING_AI_MINIMAX_CHAT_OPTIONS_MODEL:-${MINIMAX_MODEL:-}}"
+        [[ -n "$key" ]] || {
+          echo "Selected provider minimax requires SPRING_AI_MINIMAX_API_KEY or MINIMAX_API_KEY" >&2
+          return 1
+        }
+        [[ -n "$base_url" ]] || {
+          echo "Selected provider minimax requires SPRING_AI_MINIMAX_BASE_URL or MINIMAX_BASE_URL" >&2
+          return 1
+        }
+        [[ -n "$model" ]] || {
+          echo "Selected provider minimax requires SPRING_AI_MINIMAX_CHAT_OPTIONS_MODEL or MINIMAX_MODEL" >&2
+          return 1
+        }
+        export SPRING_AI_MINIMAX_API_KEY="$key"
+        export SPRING_AI_MINIMAX_BASE_URL="${base_url%/}"
+        export SPRING_AI_MINIMAX_CHAT_OPTIONS_MODEL="$model"
+        export MINIMAX_API_KEY="$key"
+        export MINIMAX_BASE_URL="${base_url%/}"
+        export MINIMAX_MODEL="$model"
+        ;;
+      anthropic)
+        key="${SPRING_AI_ANTHROPIC_API_KEY:-${ANTHROPIC_API_KEY:-}}"
+        base_url="${SPRING_AI_ANTHROPIC_BASE_URL:-${ANTHROPIC_BASE_URL:-}}"
+        model="${SPRING_AI_ANTHROPIC_CHAT_OPTIONS_MODEL:-${ANTHROPIC_MODEL:-}}"
+        [[ -n "$key" ]] || {
+          echo "Selected provider anthropic requires SPRING_AI_ANTHROPIC_API_KEY or ANTHROPIC_API_KEY" >&2
+          return 1
+        }
+        [[ -n "$base_url" ]] || {
+          echo "Selected provider anthropic requires SPRING_AI_ANTHROPIC_BASE_URL or ANTHROPIC_BASE_URL" >&2
+          return 1
+        }
+        [[ -n "$model" ]] || {
+          echo "Selected provider anthropic requires SPRING_AI_ANTHROPIC_CHAT_OPTIONS_MODEL or ANTHROPIC_MODEL" >&2
+          return 1
+        }
+        export SPRING_AI_ANTHROPIC_API_KEY="$key"
+        export SPRING_AI_ANTHROPIC_BASE_URL="${base_url%/}"
+        export SPRING_AI_ANTHROPIC_CHAT_OPTIONS_MODEL="$model"
+        ;;
+      *)
+        echo "Unsupported MANAGED_API_REAL_LLM_PROVIDER: ${REAL_LLM_PROVIDER}" >&2
+        return 1
+        ;;
+    esac
+    export APP_LLM_PROVIDER="$REAL_LLM_PROVIDER"
+    export LLM_PROVIDER="$REAL_LLM_PROVIDER"
+    export REAL_LLM_CHAT_PROVIDER="$REAL_LLM_PROVIDER"
+    echo "Selected real LLM provider=${REAL_LLM_PROVIDER} model=${model}"
+  else
+    REAL_LLM_PROVIDER="mock-openai"
     export APP_LLM_PROVIDER=openai
     export LLM_PROVIDER=openai
-    [[ -n "${SPRING_AI_OPENAI_API_KEY:-}" ]] || {
-      echo "SPRING_AI_OPENAI_API_KEY is missing" >&2
-      return 1
-    }
-    [[ -n "${SPRING_AI_OPENAI_BASE_URL:-}" ]] || {
-      echo "SPRING_AI_OPENAI_BASE_URL is missing" >&2
-      return 1
-    }
-    [[ -n "${SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL:-}" ]] || {
-      echo "SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL is missing" >&2
-      return 1
-    }
-  else
-    export APP_LLM_PROVIDER=openai
     export SPRING_AI_OPENAI_API_KEY=dummy
     export SPRING_AI_OPENAI_BASE_URL=http://127.0.0.1:9
     export SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL=dummy-chat
@@ -423,6 +490,15 @@ run_two_instance_contract() {
     and .features.provisioning.idempotencyKey == true
     and .features.provisioning.replayReturnsSecret == false
     and .features.provisioning.rawCredentialShownOnce == true
+    and .features.credentialRotation.immediate == true
+    and .features.credentialRotation.staged == true
+    and .features.credentialRotation.cancel == true
+    and .features.credentialRotation.idempotencyKeyRequired == true
+    and .features.credentialRotation.replayReturnsSecret == false
+    and .features.credentialRotation.defaultOverlapSeconds >= 1
+    and .features.credentialRotation.maxOverlapSeconds
+      >= .features.credentialRotation.defaultOverlapSeconds
+    and .features.credentialRotation.operationRetentionDays >= 1
     and .features.optional.openAiCompatibility == true
   ' "$private/capabilities-root.json" >/dev/null || return 1
 
@@ -703,6 +779,260 @@ run_two_instance_contract() {
     -H "X-API-Key: ${v2}" "${b}/api/v1/rag/auth/me")"
   assert_code "$code" 401 "cross-instance revoke" || return 1
 
+  code="$(create_principal "$a" "Staged complete ${RUN_ID}" 100 \
+    "$private/staged-complete-v1.json")"
+  assert_code "$code" 201 "create staged-complete principal" || return 1
+  local staged_principal staged_source_id staged_v1 staged_rotation_id
+  local staged_target_id staged_v2
+  staged_principal="$(jq -r '.principalId' "$private/staged-complete-v1.json")"
+  staged_source_id="$(jq -r '.keyId' "$private/staged-complete-v1.json")"
+  staged_v1="$(jq -r '.rawKey' "$private/staged-complete-v1.json")"
+
+  code="$(root_curl -X POST \
+    "${a}/api/v1/rag/api-keys/${staged_source_id}/rotations" \
+    -H 'Content-Type: application/json' \
+    -H "Idempotency-Key: staged-complete-${RUN_ID}" \
+    -d '{"overlapSeconds":120}' \
+    -D "$private/staged-prepare.headers" \
+    -o "$private/staged-prepare.json" -w '%{http_code}')"
+  assert_code "$code" 201 "staged prepare" || return 1
+  grep -qi '^Cache-Control:.*no-store' \
+    "$private/staged-prepare.headers" || return 1
+  jq -e --arg principal "$staged_principal" \
+    --arg source "$staged_source_id" '
+    .status == "PENDING"
+    and .principalId == $principal
+    and .retiringCredentialId == $source
+    and .credentialVersion == 2
+    and (.rawKey | startswith("rag_sk_"))
+    and .secretAvailable == true
+    and .idempotentReplay == false
+    and .currentCredentialActive == true
+    and .rotationPending == true
+  ' "$private/staged-prepare.json" >/dev/null || return 1
+  staged_rotation_id="$(jq -r '.rotationId' "$private/staged-prepare.json")"
+  staged_target_id="$(jq -r '.keyId' "$private/staged-prepare.json")"
+  staged_v2="$(jq -r '.rawKey' "$private/staged-prepare.json")"
+
+  code="$(root_curl -X POST \
+    "${b}/api/v1/rag/api-keys/${staged_source_id}/rotations" \
+    -H 'Content-Type: application/json' \
+    -H "Idempotency-Key: staged-complete-${RUN_ID}" \
+    -d '{"overlapSeconds":120}' \
+    -D "$private/staged-replay.headers" \
+    -o "$private/staged-replay.json" -w '%{http_code}')"
+  assert_code "$code" 200 "cross-instance staged replay" || return 1
+  grep -qi '^Cache-Control:.*no-store' \
+    "$private/staged-replay.headers" || return 1
+  grep -qi '^X-RAG-Idempotent-Replay:[[:space:]]*true' \
+    "$private/staged-replay.headers" || return 1
+  jq -e --arg rotationId "$staged_rotation_id" '
+    .rotationId == $rotationId
+    and .status == "PENDING"
+    and .rawKey == null
+    and .secretAvailable == false
+    and .idempotentReplay == true
+  ' "$private/staged-replay.json" >/dev/null || return 1
+  ! rg -F -- "$staged_v2" "$private/staged-replay.json" >/dev/null || return 1
+
+  code="$(root_curl -X POST \
+    "${b}/api/v1/rag/api-keys/${staged_source_id}/rotations" \
+    -H 'Content-Type: application/json' \
+    -H "Idempotency-Key: staged-complete-${RUN_ID}" \
+    -d '{"overlapSeconds":121}' \
+    -D "$private/staged-conflict.headers" \
+    -o "$private/staged-conflict.json" -w '%{http_code}')"
+  assert_code "$code" 409 "staged fingerprint conflict" || return 1
+  grep -qi '^Cache-Control:.*no-store' \
+    "$private/staged-conflict.headers" || return 1
+  jq -e '.error == "IDEMPOTENCY_KEY_REUSED"' \
+    "$private/staged-conflict.json" >/dev/null || return 1
+
+  code="$(curl -sS -o "$private/staged-old-before-complete.json" \
+    -w '%{http_code}' -H "X-API-Key: ${staged_v1}" \
+    "${b}/api/v1/rag/auth/me")"
+  assert_code "$code" 200 "staged retiring credential during overlap" || return 1
+  code="$(curl -sS -o "$private/staged-new-before-complete.json" \
+    -w '%{http_code}' -H "X-API-Key: ${staged_v2}" \
+    "${a}/api/v1/rag/auth/me")"
+  assert_code "$code" 200 "staged current credential during overlap" || return 1
+  jq -e --arg principal "$staged_principal" '
+    .principalId == $principal and .credentialVersion == 1
+  ' "$private/staged-old-before-complete.json" >/dev/null || return 1
+  jq -e --arg principal "$staged_principal" '
+    .principalId == $principal and .credentialVersion == 2
+  ' "$private/staged-new-before-complete.json" >/dev/null || return 1
+
+  code="$(root_curl -X POST \
+    "${b}/api/v1/rag/api-keys/rotations/${staged_rotation_id}/complete" \
+    -D "$private/staged-complete.headers" \
+    -o "$private/staged-complete.json" -w '%{http_code}')"
+  assert_code "$code" 200 "cross-instance staged complete" || return 1
+  grep -qi '^Cache-Control:.*no-store' \
+    "$private/staged-complete.headers" || return 1
+  jq -e --arg rotationId "$staged_rotation_id" \
+    --arg keyId "$staged_target_id" '
+    .rotationId == $rotationId
+    and .status == "COMPLETED"
+    and .keyId == $keyId
+    and .rawKey == null
+    and .rotationPending == false
+  ' "$private/staged-complete.json" >/dev/null || return 1
+  code="$(root_curl -X POST \
+    "${a}/api/v1/rag/api-keys/rotations/${staged_rotation_id}/complete" \
+    -o "$private/staged-complete-retry.json" -w '%{http_code}')"
+  assert_code "$code" 200 "staged complete retry" || return 1
+  jq -e '.status == "COMPLETED" and .rawKey == null' \
+    "$private/staged-complete-retry.json" >/dev/null || return 1
+  code="$(curl -sS -o /dev/null -w '%{http_code}' \
+    -H "X-API-Key: ${staged_v1}" "${a}/api/v1/rag/auth/me")"
+  assert_code "$code" 401 "retiring credential after complete" || return 1
+  code="$(curl -sS -o /dev/null -w '%{http_code}' \
+    -H "X-API-Key: ${staged_v2}" "${b}/api/v1/rag/auth/me")"
+  assert_code "$code" 200 "current credential after complete" || return 1
+
+  code="$(create_principal "$a" "Staged quota ${RUN_ID}" 6 \
+    "$private/staged-quota-v1.json")"
+  assert_code "$code" 201 "create staged-quota principal" || return 1
+  local staged_quota_source_id staged_quota_v1 staged_quota_v2
+  local staged_quota_target_id staged_quota_accepted=0 staged_quota_rejected=0
+  staged_quota_source_id="$(jq -r '.keyId' "$private/staged-quota-v1.json")"
+  staged_quota_v1="$(jq -r '.rawKey' "$private/staged-quota-v1.json")"
+  code="$(root_curl -X POST \
+    "${a}/api/v1/rag/api-keys/${staged_quota_source_id}/rotations" \
+    -H 'Content-Type: application/json' \
+    -H "Idempotency-Key: staged-quota-${RUN_ID}" \
+    -d '{"overlapSeconds":120}' \
+    -o "$private/staged-quota-prepare.json" -w '%{http_code}')"
+  assert_code "$code" 201 "prepare staged-quota principal" || return 1
+  staged_quota_v2="$(jq -r '.rawKey' "$private/staged-quota-prepare.json")"
+  staged_quota_target_id="$(jq -r '.keyId' "$private/staged-quota-prepare.json")"
+  for i in $(seq 1 12); do
+    endpoint="$a"
+    (( i % 2 == 0 )) && endpoint="$b"
+    local staged_quota_key="$staged_quota_v1"
+    (( i % 2 == 0 )) && staged_quota_key="$staged_quota_v2"
+    code="$(curl -sS -o "$private/staged-quota-${i}.json" \
+      -w '%{http_code}' -H "X-API-Key: ${staged_quota_key}" \
+      "${endpoint}/api/v1/rag/auth/me")"
+    if [[ "$code" == "200" ]]; then
+      staged_quota_accepted=$((staged_quota_accepted + 1))
+    elif [[ "$code" == "429" ]]; then
+      staged_quota_rejected=$((staged_quota_rejected + 1))
+    else
+      echo "Unexpected staged shared quota status: ${code}" >&2
+      return 1
+    fi
+  done
+  [[ "$staged_quota_accepted" -eq 6 && "$staged_quota_rejected" -eq 6 ]] || {
+    echo "Staged shared quota mismatch: accepted=${staged_quota_accepted}, rejected=${staged_quota_rejected}" >&2
+    return 1
+  }
+  code="$(root_curl -X DELETE \
+    "${a}/api/v1/rag/api-keys/${staged_quota_target_id}" \
+    -o /dev/null -w '%{http_code}')"
+  assert_code "$code" 204 "revoke staged-quota family" || return 1
+
+  code="$(create_principal "$a" "Staged cancel ${RUN_ID}" 100 \
+    "$private/staged-cancel-v1.json")"
+  assert_code "$code" 201 "create staged-cancel principal" || return 1
+  local cancel_source_id cancel_v1 cancel_v2 cancel_rotation_id
+  cancel_source_id="$(jq -r '.keyId' "$private/staged-cancel-v1.json")"
+  cancel_v1="$(jq -r '.rawKey' "$private/staged-cancel-v1.json")"
+  code="$(root_curl -X POST \
+    "${a}/api/v1/rag/api-keys/${cancel_source_id}/rotations" \
+    -H 'Content-Type: application/json' \
+    -H "Idempotency-Key: staged-cancel-${RUN_ID}" \
+    -d '{"overlapSeconds":120}' \
+    -o "$private/staged-cancel-prepare.json" -w '%{http_code}')"
+  assert_code "$code" 201 "prepare staged-cancel principal" || return 1
+  cancel_v2="$(jq -r '.rawKey' "$private/staged-cancel-prepare.json")"
+  cancel_rotation_id="$(jq -r '.rotationId' \
+    "$private/staged-cancel-prepare.json")"
+  code="$(root_curl -X POST \
+    "${b}/api/v1/rag/api-keys/rotations/${cancel_rotation_id}/cancel" \
+    -o "$private/staged-cancel.json" -w '%{http_code}')"
+  assert_code "$code" 200 "cross-instance staged cancel" || return 1
+  jq -e '.status == "CANCELED" and .rawKey == null and .rotationPending == false' \
+    "$private/staged-cancel.json" >/dev/null || return 1
+  code="$(root_curl -X POST \
+    "${a}/api/v1/rag/api-keys/rotations/${cancel_rotation_id}/cancel" \
+    -o "$private/staged-cancel-retry.json" -w '%{http_code}')"
+  assert_code "$code" 200 "staged cancel retry" || return 1
+  jq -e '.status == "CANCELED"' \
+    "$private/staged-cancel-retry.json" >/dev/null || return 1
+  code="$(curl -sS -o /dev/null -w '%{http_code}' \
+    -H "X-API-Key: ${cancel_v1}" "${a}/api/v1/rag/auth/me")"
+  assert_code "$code" 200 "retiring credential restored after cancel" || return 1
+  code="$(curl -sS -o /dev/null -w '%{http_code}' \
+    -H "X-API-Key: ${cancel_v2}" "${b}/api/v1/rag/auth/me")"
+  assert_code "$code" 401 "new credential disabled after cancel" || return 1
+
+  code="$(create_principal "$a" "Staged expiry ${RUN_ID}" 100 \
+    "$private/staged-expiry-v1.json")"
+  assert_code "$code" 201 "create staged-expiry principal" || return 1
+  local expiry_source_id expiry_v1 expiry_v2 expiry_rotation_id
+  expiry_source_id="$(jq -r '.keyId' "$private/staged-expiry-v1.json")"
+  expiry_v1="$(jq -r '.rawKey' "$private/staged-expiry-v1.json")"
+  code="$(root_curl -X POST \
+    "${a}/api/v1/rag/api-keys/${expiry_source_id}/rotations" \
+    -H 'Content-Type: application/json' \
+    -H "Idempotency-Key: staged-expiry-${RUN_ID}" \
+    -d '{"overlapSeconds":1}' \
+    -o "$private/staged-expiry-prepare.json" -w '%{http_code}')"
+  assert_code "$code" 201 "prepare staged-expiry principal" || return 1
+  expiry_v2="$(jq -r '.rawKey' "$private/staged-expiry-prepare.json")"
+  expiry_rotation_id="$(jq -r '.rotationId' \
+    "$private/staged-expiry-prepare.json")"
+  sleep 2
+  code="$(curl -sS -o /dev/null -w '%{http_code}' \
+    -H "X-API-Key: ${expiry_v1}" "${b}/api/v1/rag/auth/me")"
+  assert_code "$code" 401 "retiring credential after deadline" || return 1
+  code="$(curl -sS -o /dev/null -w '%{http_code}' \
+    -H "X-API-Key: ${expiry_v2}" "${a}/api/v1/rag/auth/me")"
+  assert_code "$code" 200 "current credential after deadline" || return 1
+  code="$(root_curl \
+    "${b}/api/v1/rag/api-keys/rotations/${expiry_rotation_id}" \
+    -o "$private/staged-expiry-status.json" -w '%{http_code}')"
+  assert_code "$code" 200 "staged expiry status" || return 1
+  jq -e '.status == "EXPIRED" and .rawKey == null and .rotationPending == false' \
+    "$private/staged-expiry-status.json" >/dev/null || return 1
+
+  code="$(create_principal "$a" "Staged revoke ${RUN_ID}" 100 \
+    "$private/staged-revoke-v1.json")"
+  assert_code "$code" 201 "create staged-revoke principal" || return 1
+  local revoke_source_id revoke_v1 revoke_v2 revoke_target_id revoke_rotation_id
+  revoke_source_id="$(jq -r '.keyId' "$private/staged-revoke-v1.json")"
+  revoke_v1="$(jq -r '.rawKey' "$private/staged-revoke-v1.json")"
+  code="$(root_curl -X POST \
+    "${a}/api/v1/rag/api-keys/${revoke_source_id}/rotations" \
+    -H 'Content-Type: application/json' \
+    -H "Idempotency-Key: staged-revoke-${RUN_ID}" \
+    -d '{"overlapSeconds":120}' \
+    -o "$private/staged-revoke-prepare.json" -w '%{http_code}')"
+  assert_code "$code" 201 "prepare staged-revoke principal" || return 1
+  revoke_v2="$(jq -r '.rawKey' "$private/staged-revoke-prepare.json")"
+  revoke_target_id="$(jq -r '.keyId' "$private/staged-revoke-prepare.json")"
+  revoke_rotation_id="$(jq -r '.rotationId' \
+    "$private/staged-revoke-prepare.json")"
+  code="$(root_curl -X DELETE \
+    "${b}/api/v1/rag/api-keys/${revoke_target_id}" \
+    -o /dev/null -w '%{http_code}')"
+  assert_code "$code" 204 "revoke pending credential family" || return 1
+  for staged_revoked_key in "$revoke_v1" "$revoke_v2"; do
+    code="$(curl -sS -o /dev/null -w '%{http_code}' \
+      -H "X-API-Key: ${staged_revoked_key}" \
+      "${a}/api/v1/rag/auth/me")"
+    assert_code "$code" 401 "pending family credential after revoke" || return 1
+  done
+  code="$(root_curl \
+    "${a}/api/v1/rag/api-keys/rotations/${revoke_rotation_id}" \
+    -o "$private/staged-revoke-status.json" -w '%{http_code}')"
+  assert_code "$code" 200 "staged revoke status" || return 1
+  jq -e '.status == "REVOKED" and .rawKey == null and .rotationPending == false' \
+    "$private/staged-revoke-status.json" >/dev/null || return 1
+  echo "staged_rotation prepare=replay=complete cancel=restore expiry=fail_closed revoke=family quota=shared"
+
   code="$(create_principal "$a" "Store failure ${RUN_ID}" 100 "$private/store-failure.json")"
   assert_code "$code" 201 "create store-failure principal" || return 1
   local failure_key
@@ -718,12 +1048,26 @@ run_two_instance_contract() {
   local db_facts
   db_facts="$(docker exec "$PG_CONTAINER" psql -U postgres \
     -d managed_api_principal_gate -At -F, -c \
-    "SELECT (SELECT version FROM flyway_schema_history WHERE success ORDER BY installed_rank DESC LIMIT 1), (SELECT count(*) FROM rag_api_key WHERE api_key IS NOT NULL), (SELECT count(*) FROM (SELECT principal_id FROM rag_api_key WHERE enabled GROUP BY principal_id HAVING count(*) > 1) duplicate_active), (SELECT count(*) FROM rag_api_provisioning_operation)")"
-  [[ "$db_facts" == "${LATEST_FLYWAY_MIGRATION},0,0,1" ]] || {
+    "SELECT
+       (SELECT version FROM flyway_schema_history WHERE success ORDER BY installed_rank DESC LIMIT 1),
+       (SELECT count(*) FROM rag_api_key WHERE api_key IS NOT NULL),
+       (SELECT count(*) FROM (
+          SELECT principal_id FROM rag_api_key
+          WHERE enabled AND retire_at IS NULL
+          GROUP BY principal_id HAVING count(*) > 1
+        ) duplicate_current),
+       (SELECT count(*) FROM (
+          SELECT principal_id FROM rag_api_key
+          WHERE enabled AND retire_at IS NOT NULL
+          GROUP BY principal_id HAVING count(*) > 1
+        ) duplicate_retiring),
+       (SELECT count(*) FROM rag_api_key_rotation WHERE status = 'PENDING'),
+       (SELECT count(*) FROM rag_api_provisioning_operation)")"
+  [[ "$db_facts" == "${LATEST_FLYWAY_MIGRATION},0,0,0,0,1" ]] || {
     echo "Unexpected database facts: ${db_facts}" >&2
     return 1
   }
-  echo "database_facts migration=${LATEST_FLYWAY_MIGRATION} raw_credentials=0 duplicate_active=0 provisioning_operations=1"
+  echo "database_facts migration=${LATEST_FLYWAY_MIGRATION} raw_credentials=0 duplicate_current=0 duplicate_retiring=0 pending_rotations=0 provisioning_operations=1"
 }
 
 start_frontend() {
@@ -770,7 +1114,7 @@ real_llm_contract() {
   code="$(create_principal "$a" "Real LLM ${RUN_ID}" 100 \
     "$private/real-v1.json" '["RAG_READ"]')"
   assert_code "$code" 201 "create real LLM principal" || return 1
-  local principal key_id v1 v2 new_key_id turn_id
+  local principal key_id v1 v2 new_key_id rotation_id turn_id
   principal="$(jq -r '.principalId' "$private/real-v1.json")"
   key_id="$(jq -r '.keyId' "$private/real-v1.json")"
   v1="$(jq -r '.rawKey' "$private/real-v1.json")"
@@ -832,25 +1176,31 @@ real_llm_contract() {
   }
   echo "real_native_json_replay=PASS provider_delta=0"
 
-  code="$(root_curl -X POST "${a}/api/v1/rag/api-keys/${key_id}/rotate" \
+  code="$(root_curl -X POST \
+    "${a}/api/v1/rag/api-keys/${key_id}/rotations" \
+    -H 'Content-Type: application/json' \
+    -H "Idempotency-Key: real-staged-${RUN_ID}" \
+    -d '{"overlapSeconds":300}' \
+    -D "$private/real-staged.headers" \
     -o "$private/real-v2.json" -w '%{http_code}')"
-  assert_code "$code" 201 "rotate real LLM principal" || return 1
+  assert_code "$code" 201 "prepare staged real LLM principal" || return 1
+  grep -qi '^Cache-Control:.*no-store' \
+    "$private/real-staged.headers" || return 1
   v2="$(jq -r '.rawKey' "$private/real-v2.json")"
   new_key_id="$(jq -r '.keyId' "$private/real-v2.json")"
+  rotation_id="$(jq -r '.rotationId' "$private/real-v2.json")"
   jq -e --arg principal "$principal" \
-    '.principalId == $principal and .capabilities == ["RAG_READ"]' \
+    '.principalId == $principal
+      and .status == "PENDING"
+      and .credentialVersion == 2
+      and .capabilities == null
+      and .secretAvailable == true
+      and .rotationPending == true' \
     "$private/real-v2.json" >/dev/null || return 1
-
-  code="$(curl -sS --max-time 15 -o "$private/real-old-rejected.json" -w '%{http_code}' \
-    -H "X-API-Key: ${v1}" -H 'Content-Type: application/json' \
-    -d '{"message":"This must not reach the provider.","mode":"PLAIN"}' \
-    "${b}/api/v1/rag/chat/ask")"
-  assert_code "$code" 401 "old real credential rejected" || return 1
-  [[ "$(provider_counter)" == "$after_first" ]] || return 1
 
   code="$(curl -sS -o "$private/real-identity-v2.json" -w '%{http_code}' \
     -H "X-API-Key: ${v2}" "${b}/api/v1/rag/auth/me")"
-  assert_code "$code" 200 "rotated real LLM read-only identity" || return 1
+  assert_code "$code" 200 "staged real LLM current identity" || return 1
   jq -e --arg principal "$principal" \
     '.principalId == $principal
       and .credentialVersion == 2
@@ -859,17 +1209,36 @@ real_llm_contract() {
 
   code="$(curl -sS -o "$private/real-history-after-rotate.json" -w '%{http_code}' \
     -H "X-API-Key: ${v2}" "${b}/api/v1/rag/chat/history/${session}")"
-  assert_code "$code" 200 "history continuity after rotation" || return 1
+  assert_code "$code" 200 "history continuity during staged overlap" || return 1
   jq -e --arg session "$session" 'length >= 1 and all(.[]; .sessionId == $session)' \
     "$private/real-history-after-rotate.json" >/dev/null || return 1
 
   code="$(curl -sS --max-time 180 -o "$private/real-second.json" -w '%{http_code}' \
     -H "X-API-Key: ${v2}" -H 'Content-Type: application/json' \
     -H "Idempotency-Key: managed-real-second-${RUN_ID}" \
-    -d "{\"message\":\"Reply briefly that credential rotation preserved this session.\",\"sessionId\":\"${session}\",\"mode\":\"PLAIN\"}" \
+    -d "{\"message\":\"Reply briefly that staged credential overlap preserved this session.\",\"sessionId\":\"${session}\",\"mode\":\"PLAIN\"}" \
     "${b}/api/v1/rag/chat/ask")"
-  assert_code "$code" 200 "real native JSON v2" || return 1
+  assert_code "$code" 200 "real native JSON with staged current credential" || return 1
   jq -e '.answer | strings | length > 0' "$private/real-second.json" >/dev/null || return 1
+
+  code="$(root_curl -X POST \
+    "${b}/api/v1/rag/api-keys/rotations/${rotation_id}/complete" \
+    -o "$private/real-staged-complete.json" -w '%{http_code}')"
+  assert_code "$code" 200 "complete staged real LLM rotation" || return 1
+  jq -e '.status == "COMPLETED" and .rawKey == null and .rotationPending == false' \
+    "$private/real-staged-complete.json" >/dev/null || return 1
+
+  local after_complete
+  after_complete="$(provider_counter)" || return 1
+  code="$(curl -sS --max-time 15 -o "$private/real-old-rejected.json" -w '%{http_code}' \
+    -H "X-API-Key: ${v1}" -H 'Content-Type: application/json' \
+    -d '{"message":"This must not reach the provider after complete.","mode":"PLAIN"}' \
+    "${b}/api/v1/rag/chat/ask")"
+  assert_code "$code" 401 "retiring real credential rejected after complete" || return 1
+  [[ "$(provider_counter)" == "$after_complete" ]] || {
+    echo "Rejected retiring credential called the provider" >&2
+    return 1
+  }
 
   code="$(curl -sS -N --max-time 180 -o "$private/real-native-sse.txt" -w '%{http_code}' \
     -H "X-API-Key: ${v2}" -H 'Content-Type: application/json' \
@@ -895,9 +1264,126 @@ real_llm_contract() {
   rg -q '^data:.*\[DONE\]' "$private/real-openai-sse.txt" || return 1
   rg -q '"delta"' "$private/real-openai-sse.txt" || return 1
 
+  local cancel_session cancel_principal cancel_key_id cancel_v1 cancel_v2
+  local cancel_rotation_id cancel_after_new
+  cancel_session="mpr-cancel-$(openssl rand -hex 12)"
+  code="$(create_principal "$a" "Real LLM cancel ${RUN_ID}" 100 \
+    "$private/real-cancel-v1.json" '["RAG_READ"]')"
+  assert_code "$code" 201 "create real LLM cancel principal" || return 1
+  cancel_principal="$(jq -r '.principalId' "$private/real-cancel-v1.json")"
+  cancel_key_id="$(jq -r '.keyId' "$private/real-cancel-v1.json")"
+  cancel_v1="$(jq -r '.rawKey' "$private/real-cancel-v1.json")"
+
+  code="$(curl -sS --max-time 180 -o "$private/real-cancel-first.json" \
+    -w '%{http_code}' -H "X-API-Key: ${cancel_v1}" \
+    -H 'Content-Type: application/json' \
+    -H "Idempotency-Key: managed-real-cancel-first-${RUN_ID}" \
+    -d "{\"message\":\"Reply briefly before a cancelable credential rotation.\",\"sessionId\":\"${cancel_session}\",\"mode\":\"PLAIN\"}" \
+    "${a}/api/v1/rag/chat/ask")"
+  assert_code "$code" 200 "real cancel principal before prepare" || return 1
+  jq -e '.answer | strings | length > 0' \
+    "$private/real-cancel-first.json" >/dev/null || return 1
+
+  code="$(root_curl -X POST \
+    "${a}/api/v1/rag/api-keys/${cancel_key_id}/rotations" \
+    -H 'Content-Type: application/json' \
+    -H "Idempotency-Key: real-cancel-staged-${RUN_ID}" \
+    -d '{"overlapSeconds":300}' \
+    -o "$private/real-cancel-v2.json" -w '%{http_code}')"
+  assert_code "$code" 201 "prepare real LLM cancel rotation" || return 1
+  cancel_v2="$(jq -r '.rawKey' "$private/real-cancel-v2.json")"
+  cancel_rotation_id="$(jq -r '.rotationId' "$private/real-cancel-v2.json")"
+
+  code="$(curl -sS --max-time 180 -o "$private/real-cancel-new.json" \
+    -w '%{http_code}' -H "X-API-Key: ${cancel_v2}" \
+    -H 'Content-Type: application/json' \
+    -H "Idempotency-Key: managed-real-cancel-new-${RUN_ID}" \
+    -d "{\"message\":\"Reply briefly while the replacement credential is active.\",\"sessionId\":\"${cancel_session}\",\"mode\":\"PLAIN\"}" \
+    "${b}/api/v1/rag/chat/ask")"
+  assert_code "$code" 200 "real cancel principal with replacement" || return 1
+  jq -e '.answer | strings | length > 0' \
+    "$private/real-cancel-new.json" >/dev/null || return 1
+
+  code="$(root_curl -X POST \
+    "${b}/api/v1/rag/api-keys/rotations/${cancel_rotation_id}/cancel" \
+    -o "$private/real-cancel.json" -w '%{http_code}')"
+  assert_code "$code" 200 "cancel real LLM staged rotation" || return 1
+  jq -e '.status == "CANCELED" and .rawKey == null and .rotationPending == false' \
+    "$private/real-cancel.json" >/dev/null || return 1
+  cancel_after_new="$(provider_counter)" || return 1
+  code="$(curl -sS --max-time 15 -o "$private/real-cancel-new-rejected.json" \
+    -w '%{http_code}' -H "X-API-Key: ${cancel_v2}" \
+    -H 'Content-Type: application/json' \
+    -d '{"message":"This replacement must not reach the provider after cancel.","mode":"PLAIN"}' \
+    "${a}/api/v1/rag/chat/ask")"
+  assert_code "$code" 401 "canceled replacement rejected" || return 1
+  [[ "$(provider_counter)" == "$cancel_after_new" ]] || {
+    echo "Canceled replacement called the provider" >&2
+    return 1
+  }
+
+  code="$(curl -sS --max-time 180 -o "$private/real-cancel-restored.json" \
+    -w '%{http_code}' -H "X-API-Key: ${cancel_v1}" \
+    -H 'Content-Type: application/json' \
+    -H "Idempotency-Key: managed-real-cancel-restored-${RUN_ID}" \
+    -d "{\"message\":\"Reply briefly that cancel restored the original credential and session.\",\"sessionId\":\"${cancel_session}\",\"mode\":\"PLAIN\"}" \
+    "${b}/api/v1/rag/chat/ask")"
+  assert_code "$code" 200 "real cancel principal restored original" || return 1
+  jq -e '.answer | strings | length > 0' \
+    "$private/real-cancel-restored.json" >/dev/null || return 1
+  code="$(curl -sS -o "$private/real-cancel-history.json" -w '%{http_code}' \
+    -H "X-API-Key: ${cancel_v1}" \
+    "${a}/api/v1/rag/chat/history/${cancel_session}")"
+  assert_code "$code" 200 "real cancel session continuity" || return 1
+  jq -e --arg session "$cancel_session" \
+    'length >= 3 and all(.[]; .sessionId == $session)' \
+    "$private/real-cancel-history.json" >/dev/null || return 1
+
+  local revoke_key_id revoke_v1 revoke_v2 revoke_target_id revoke_counter
+  code="$(create_principal "$a" "Real LLM revoke ${RUN_ID}" 100 \
+    "$private/real-revoke-v1.json" '["RAG_READ"]')"
+  assert_code "$code" 201 "create real LLM revoke principal" || return 1
+  revoke_key_id="$(jq -r '.keyId' "$private/real-revoke-v1.json")"
+  revoke_v1="$(jq -r '.rawKey' "$private/real-revoke-v1.json")"
+  code="$(root_curl -X POST \
+    "${a}/api/v1/rag/api-keys/${revoke_key_id}/rotations" \
+    -H 'Content-Type: application/json' \
+    -H "Idempotency-Key: real-revoke-staged-${RUN_ID}" \
+    -d '{"overlapSeconds":300}' \
+    -o "$private/real-revoke-v2.json" -w '%{http_code}')"
+  assert_code "$code" 201 "prepare real LLM revoke rotation" || return 1
+  revoke_v2="$(jq -r '.rawKey' "$private/real-revoke-v2.json")"
+  revoke_target_id="$(jq -r '.keyId' "$private/real-revoke-v2.json")"
+
+  code="$(curl -sS --max-time 180 -o "$private/real-revoke-before.json" \
+    -w '%{http_code}' -H "X-API-Key: ${revoke_v2}" \
+    -H 'Content-Type: application/json' \
+    -H "Idempotency-Key: managed-real-revoke-before-${RUN_ID}" \
+    -d '{"message":"Reply briefly before this pending credential family is revoked.","mode":"PLAIN"}' \
+    "${a}/api/v1/rag/chat/ask")"
+  assert_code "$code" 200 "real pending family before revoke" || return 1
+  jq -e '.answer | strings | length > 0' \
+    "$private/real-revoke-before.json" >/dev/null || return 1
+  code="$(root_curl -X DELETE \
+    "${b}/api/v1/rag/api-keys/${revoke_target_id}" \
+    -o /dev/null -w '%{http_code}')"
+  assert_code "$code" 204 "revoke real pending credential family" || return 1
+  revoke_counter="$(provider_counter)" || return 1
+  for revoked_key in "$revoke_v1" "$revoke_v2"; do
+    code="$(curl -sS --max-time 15 -o /dev/null -w '%{http_code}' \
+      -H "X-API-Key: ${revoked_key}" -H 'Content-Type: application/json' \
+      -d '{"message":"This revoked credential must not reach the provider.","mode":"PLAIN"}' \
+      "${b}/api/v1/rag/chat/ask")"
+    assert_code "$code" 401 "revoked pending family credential" || return 1
+  done
+  [[ "$(provider_counter)" == "$revoke_counter" ]] || {
+    echo "Revoked pending family called the provider" >&2
+    return 1
+  }
+
   after_all="$(provider_counter)" || return 1
-  awk -v before="$before" -v after="$after_all" 'BEGIN {exit !(after == before + 5)}' || {
-    echo "Expected five bounded provider calls, got ${before} -> ${after_all}" >&2
+  awk -v before="$before" -v after="$after_all" 'BEGIN {exit !(after == before + 9)}' || {
+    echo "Expected nine bounded provider calls, got ${before} -> ${after_all}" >&2
     return 1
   }
   code="$(root_curl -X DELETE "${a}/api/v1/rag/api-keys/${new_key_id}" \
@@ -906,7 +1392,7 @@ real_llm_contract() {
   code="$(curl -sS -o /dev/null -w '%{http_code}' \
     -H "X-API-Key: ${v2}" "${b}/api/v1/rag/auth/me")"
   assert_code "$code" 401 "real credential revoked across instances" || return 1
-  echo "real_llm_contract=PASS provider_calls=5 principal_continuity=true read_only=true"
+  echo "real_llm_contract=PASS provider_calls=9 staged_complete=true staged_cancel=true pending_revoke=true principal_continuity=true read_only=true"
   echo "backend_log_tail:"
   rg 'Chat execution|provider|credential|API principal' "$LOG_DIR/backend-a.log" \
     | tail -20 | sed -E 's/rag_sk_[A-Za-z0-9_-]+/***REDACTED***/g' || true

@@ -38,7 +38,8 @@ Active plans are listed here and in `docs/index*`.
 
 ## Current Active Plans
 
-There are currently no active plans.
+- [Next high-value feature plan: bounded zero-downtime API credential rotation](NEXT_HIGH_VALUE_FEATURES_PLAN.md)
+- [Implementation progress ledger](NEXT_HIGH_VALUE_FEATURES_PROGRESS.md)
 
 Completed, stopped, and superseded materials remain available in the
 [historical archive](archive/README.md).

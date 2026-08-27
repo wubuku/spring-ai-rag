@@ -269,6 +269,13 @@ rag:
     cleanup-batch-size: ${RAG_API_KEY_PROVISIONING_CLEANUP_BATCH_SIZE:500}
     concurrent-retry-attempts: ${RAG_API_KEY_PROVISIONING_CONCURRENT_RETRY_ATTEMPTS:3}
 
+  api-key-rotation:
+    default-overlap: ${RAG_API_KEY_ROTATION_DEFAULT_OVERLAP:15m}
+    max-overlap: ${RAG_API_KEY_ROTATION_MAX_OVERLAP:1h}
+    operation-retention: ${RAG_API_KEY_ROTATION_OPERATION_RETENTION:400d}
+    cleanup-interval-ms: ${RAG_API_KEY_ROTATION_CLEANUP_INTERVAL_MS:60000}
+    cleanup-batch-size: ${RAG_API_KEY_ROTATION_CLEANUP_BATCH_SIZE:500}
+
   collection-provisioning:
     enabled: ${RAG_COLLECTION_PROVISIONING_ENABLED:true}
     retention: ${RAG_COLLECTION_PROVISIONING_RETENTION:400d}

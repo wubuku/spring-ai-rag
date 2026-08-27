@@ -60,6 +60,9 @@ public class RagApiKey implements ApiAccessPolicy {
     @Column(name = "revoked_at")
     private LocalDateTime revokedAt;
 
+    @Column(name = "retire_at")
+    private LocalDateTime retireAt;
+
     /**
      * Role for permission layering (ADMIN or NORMAL).
      * Defaults to NORMAL. Use ADMIN for keys that can manage other keys.
@@ -121,4 +124,6 @@ public class RagApiKey implements ApiAccessPolicy {
     public void setCredentialVersion(Integer credentialVersion) { this.credentialVersion = credentialVersion; }
     public LocalDateTime getRevokedAt() { return revokedAt; }
     public void setRevokedAt(LocalDateTime revokedAt) { this.revokedAt = revokedAt; }
+    public LocalDateTime getRetireAt() { return retireAt; }
+    public void setRetireAt(LocalDateTime retireAt) { this.retireAt = retireAt; }
 }

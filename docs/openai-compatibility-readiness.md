@@ -5,8 +5,9 @@
 > **Purpose**: Record the current server-side OpenAI Chat Completions
 > implementation, controlled-preview boundary, and remaining public /
 > multi-instance production security work.
-> **Code baseline**: `main`, including Chat-turn reliability and V48 managed-principal hardening.
-> **Last verified**: 2026-08-23
+> **Code baseline**: current delivery baseline, including Chat-turn reliability,
+> V48 managed-principal hardening, and V55 bounded staged credential rotation.
+> **Last verified**: 2026-08-27
 > **Status**: `/v1/models` and `/v1/chat/completions` are implemented but
 > disabled by default. This document does not claim public production readiness.
 
@@ -29,11 +30,12 @@ Exposing this project through an OpenAI Chat Completions interface has clear val
 Protocol compatibility and public production readiness are different concerns.
 The project has implemented the standalone-service API-key MVP, V48 stable
 managed principals, and a disabled-by-default `/v1` adapter. Stable ownership,
-versioned credentials, immediate cross-instance revocation, PostgreSQL shared
-request quotas, and fail-closed quota-store behavior are now present. The
-adapter remains a controlled preview rather than a blanket public-production
-claim because legacy compatibility, identity federation, operator recovery,
-deployment controls, and token/cost governance remain separate concerns.
+versioned credentials, bounded staged rotation, immediate cross-instance
+revocation, PostgreSQL shared request quotas, and fail-closed quota-store
+behavior are now present. The adapter remains a controlled preview rather than
+a blanket public-production claim because legacy compatibility, identity
+federation, operator recovery, deployment controls, and token/cost governance
+remain separate concerns.
 
 The adapter is not an agent/subagent orchestrator. It provides a stable
 "RAG-as-a-model" boundary; orchestration belongs to the caller or a later independent
@@ -49,7 +51,7 @@ module.
 | `spring-ai-rag-core` | RAG implementation and runnable app | Owns the shared execution layer, compatibility controller, model-alias registry, and error mapping |
 | `spring-ai-rag-starter` | Auto-configuration | Registers authentication, rate limiting, and observability for `/v1` in both topologies |
 | `spring-ai-rag-documents` | Document processing | Must remain independent of the OpenAI protocol |
-| `spring-ai-rag-webui` | React admin UI | Root unlock manages one row per stable principal, including policy CAS, quota, current credential rotation/revocation, and shown-once secrets |
+| `spring-ai-rag-webui` | React admin UI | Root unlock manages one row per stable principal, including policy CAS, quota, staged/immediate credential rotation, revocation, and shown-once secrets |
 
 There are two runtime topologies:
 
@@ -102,7 +104,8 @@ The current implementation provides an accepted standalone-service MVP:
 
 - Raw secrets use a `rag_sk_` prefix; public identifiers use `rag_k_...`.
 - Authentication looks up a SHA-256 hash.
-- Create, list, revoke, rotate, expiration, and `last_used_at` are supported.
+- Create, list, revoke, immediate rotate, bounded staged rotate, expiration, and
+  `last_used_at` are supported.
 - Roles are `ADMIN` and `NORMAL`.
 - V24 adds `allowed_collection_ids`, allowing data paths to enforce collection ACLs.
 - `RAG_ROOT_API_KEY` provides an environment-root principal and automatically protects
@@ -117,8 +120,13 @@ The current implementation provides an accepted standalone-service MVP:
   during upgrade.
 - V48 separates stable principal policy from versioned credential hashes;
   rotation preserves `db:{principalId}` ownership and policy.
+- V55 permits one current and at most one deadline-bounded retiring credential
+  per stable principal. Prepare is idempotent without replaying the shown-once
+  replacement secret; complete, cancel, deadline expiry, policy-expiry
+  clamping, and family revocation converge without widening ACL or quota.
 - Authentication performs an authoritative credential/principal join on every
-  request; revocation is visible to every instance on its next authentication.
+  request; revocation and retiring-credential deadline expiry are visible to
+  every instance on its next authentication.
 - A PostgreSQL fixed UTC-minute backend shares request quota by stable principal
   and fails closed without raw-key or IP fallback.
 - The legacy plaintext column is constrained to `NULL`, and legacy ADMIN
@@ -144,7 +152,7 @@ Relevant code:
 | URL and credential format | `/v1/*` uses Bearer/header authentication; root mode rejects query credentials and emits OpenAI error envelopes | Public enablement should remove legacy query/static compatibility and require managed principals |
 | Identity federation | Managed principals are service-issued secrets, not OAuth/OIDC identities | Public multi-tenant deployments may need issuer, audience, tenant, and revocation contracts outside this credential family |
 | Cost governance | Shared quotas count requests in fixed UTC-minute windows | Token, provider-cost, daily budget, and billing-ledger controls remain independent capabilities |
-| Operations | Code-level shared quotas and revocation are implemented | TLS, network isolation, database capacity, alerting, backup/restore, and rotation runbooks remain deployment responsibilities |
+| Operations | Code-level shared quotas, staged rotation, and revocation are implemented | TLS, network isolation, database capacity, alerting, backup/restore, Secret-store integration, and rotation runbooks remain deployment responsibilities |
 
 These are service-readiness requirements, not protocol details. Historical V48
 design rationale remains in the active delivery plan while the batch is being
@@ -164,14 +172,19 @@ completed; live API and configuration facts are maintained in the references.
    request and API-key ACL and rejects unauthorized expansion.
 6. In root mode, `/v1` accepts Bearer / `X-API-Key` and rejects query-string secrets.
 7. PostgreSQL limiting uses the authenticated stable principal and is shared
-   across instances; rotation does not reset it. The local backend remains an
-   explicit single-instance compatibility option.
+   across instances; immediate or staged rotation does not reset it. The local
+   backend remains an explicit single-instance compatibility option.
 8. Credential and PostgreSQL quota-store failures fail closed. Public
    enablement should still remove legacy static/query compatibility.
 9. Existing `/api/v1/rag/**` contracts remain independent and continue to work when
    compatibility is disabled.
 10. Authentication, authorization, rate limiting, and observability are tested in both
     core-standalone and starter-consumer topologies.
+11. A mixed V54/V55 fleet must freeze API-key management writes and staged
+    prepare. Staged rotation is enabled only after all instances run V55; before
+    application rollback to V54, operators must clear enabled retiring
+    credentials and `PENDING` rotation operations while retaining the V55
+    schema.
 
 ---
 

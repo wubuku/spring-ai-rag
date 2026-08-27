@@ -126,7 +126,7 @@ class ApiKeyManagementServiceTest {
                 .thenReturn(1);
         when(principalRepository.findByPrincipalId(principal.getPrincipalId()))
                 .thenReturn(Optional.of(principal));
-        when(credentialRepository.findFirstByPrincipalIdAndEnabledTrue(
+        when(credentialRepository.findByPrincipalIdAndEnabledTrueAndRetireAtIsNull(
                 principal.getPrincipalId())).thenReturn(Optional.of(current));
         when(credentialRepository.disableByKeyId(eq("rag_k_v1"), any(LocalDateTime.class)))
                 .thenReturn(1);
@@ -156,7 +156,7 @@ class ApiKeyManagementServiceTest {
                 .thenReturn(1);
         when(principalRepository.findByPrincipalId(principal.getPrincipalId()))
                 .thenReturn(Optional.of(principal));
-        when(credentialRepository.findFirstByPrincipalIdAndEnabledTrue(
+        when(credentialRepository.findByPrincipalIdAndEnabledTrueAndRetireAtIsNull(
                 principal.getPrincipalId())).thenReturn(Optional.of(current));
 
         RagException error = assertThrows(
@@ -171,6 +171,7 @@ class ApiKeyManagementServiceTest {
         principal.setNextCredentialVersion(3);
         principal.setRevokedAt(LocalDateTime.now());
         RagApiKey latest = credential("rag_k_v2", principal.getPrincipalId(), 2, false);
+        latest.setRevokedAt(principal.getRevokedAt());
         when(credentialRepository.findByKeyId(latest.getKeyId()))
                 .thenReturn(Optional.of(latest));
         when(principalRepository.acquireManagementWrite(principal.getPrincipalId()))
@@ -261,7 +262,7 @@ class ApiKeyManagementServiceTest {
                 principal.getPrincipalId(), 1, true);
         when(principalRepository.findByPrincipalId(principal.getPrincipalId()))
                 .thenReturn(Optional.of(principal));
-        when(credentialRepository.findFirstByPrincipalIdAndEnabledTrue(
+        when(credentialRepository.findByPrincipalIdAndEnabledTrueAndRetireAtIsNull(
                 principal.getPrincipalId())).thenReturn(Optional.of(current));
         when(provisioningRepository.findByOwnerIdAndIdempotencyKeyHash(
                 "root:environment-root", "hash"))

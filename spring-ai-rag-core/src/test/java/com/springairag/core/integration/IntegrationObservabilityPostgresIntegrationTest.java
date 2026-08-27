@@ -122,7 +122,7 @@ class IntegrationObservabilityPostgresIntegrationTest {
     @Test
     void migratesThroughV54AndCreatesBoundedRollupIndexes() {
         assertEquals(
-                "54",
+                "55",
                 jdbc.queryForObject(
                         """
                         SELECT version

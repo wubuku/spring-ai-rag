@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.springairag.api.dto.ApiKeyCreateRequest;
 import com.springairag.api.dto.ApiKeyCreatedResponse;
 import com.springairag.api.dto.ApiKeyResponse;
+import com.springairag.api.dto.ApiKeyRotationResponse;
 import com.springairag.api.dto.ApiPrincipalResponse;
 import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.config.RagProperties;
@@ -27,6 +28,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
@@ -75,6 +77,8 @@ class ApiKeyControllerTest {
     private static RagApiKey mockCaller(String keyId, ApiKeyRole role) {
         RagApiKey key = new RagApiKey();
         key.setKeyId(keyId);
+        key.setPrincipalId(keyId);
+        key.setCredentialVersion(1);
         key.setName("Test Key");
         key.setRole(role);
         key.setEnabled(true);
@@ -671,5 +675,184 @@ class ApiKeyControllerTest {
 
         verify(apiKeyService).rotateManagedKey("rag_k_old");
         verify(apiKeyService, never()).rotateKey(anyString());
+    }
+
+    @Test
+    void stagedPrepareReturnsShownOnceSecretThenMetadataOnlyReplay()
+            throws Exception {
+        when(rootCredentialResolver.isConfigured()).thenReturn(true);
+        UUID rotationId = UUID.randomUUID();
+        ApiKeyRotationResponse first = rotationResponse(
+                rotationId, "PENDING", "rag_k_v2", "rag_sk_once");
+        ApiKeyRotationResponse replay = rotationResponse(
+                rotationId, "PENDING", "rag_k_v2", null);
+        replay.setSecretAvailable(false);
+        replay.setIdempotentReplay(true);
+        when(apiKeyService.prepareRotation(
+                eq("rag_k_v1"), eq(120), anyString(), isNull(), eq(true)))
+                .thenReturn(new ApiKeyManagementService.RotationResult(first, false))
+                .thenReturn(new ApiKeyManagementService.RotationResult(replay, true));
+
+        mockMvc.perform(post("/api/v1/rag/api-keys/rag_k_v1/rotations")
+                        .with(rootCaller())
+                        .header("Idempotency-Key", "rotation-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"overlapSeconds\":120}"))
+                .andExpect(status().isCreated())
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(header().doesNotExist("X-RAG-Idempotent-Replay"))
+                .andExpect(jsonPath("$.rotationId").value(rotationId.toString()))
+                .andExpect(jsonPath("$.rawKey").value("rag_sk_once"))
+                .andExpect(jsonPath("$.secretAvailable").value(true));
+
+        mockMvc.perform(post("/api/v1/rag/api-keys/rag_k_v1/rotations")
+                        .with(rootCaller())
+                        .header("Idempotency-Key", "rotation-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"overlapSeconds\":120}"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(header().string("X-RAG-Idempotent-Replay", "true"))
+                .andExpect(jsonPath("$.rotationId").value(rotationId.toString()))
+                .andExpect(jsonPath("$.rawKey").value(nullValue()))
+                .andExpect(jsonPath("$.secretAvailable").value(false));
+    }
+
+    @Test
+    void stagedEndpointsExposeStatusCompleteAndCancelWithNoStore()
+            throws Exception {
+        when(rootCredentialResolver.isConfigured()).thenReturn(true);
+        UUID rotationId = UUID.randomUUID();
+        when(apiKeyService.getRotation(
+                eq(rotationId), isNull(), eq(true)))
+                .thenReturn(rotationResponse(
+                        rotationId, "PENDING", "rag_k_v2", null));
+        when(apiKeyService.completeRotation(
+                eq(rotationId), isNull(), eq(true)))
+                .thenReturn(rotationResponse(
+                        rotationId, "COMPLETED", "rag_k_v2", null));
+        when(apiKeyService.cancelRotation(
+                eq(rotationId), isNull(), eq(true)))
+                .thenReturn(rotationResponse(
+                        rotationId, "CANCELED", "rag_k_v1", null));
+
+        mockMvc.perform(get("/api/v1/rag/api-keys/rotations/" + rotationId)
+                        .with(rootCaller()))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(jsonPath("$.status").value("PENDING"));
+        mockMvc.perform(post("/api/v1/rag/api-keys/rotations/"
+                        + rotationId + "/complete").with(rootCaller()))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(jsonPath("$.status").value("COMPLETED"));
+        mockMvc.perform(post("/api/v1/rag/api-keys/rotations/"
+                        + rotationId + "/cancel").with(rootCaller()))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(jsonPath("$.status").value("CANCELED"));
+    }
+
+    @Test
+    void stagedValidationAndBusinessErrorsAreNoStore() throws Exception {
+        when(rootCredentialResolver.isConfigured()).thenReturn(true);
+
+        mockMvc.perform(post("/api/v1/rag/api-keys/rag_k_v1/rotations")
+                        .with(rootCaller())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"overlapSeconds\":0}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(jsonPath("$.error").value("VALIDATION_FAILED"));
+
+        when(apiKeyService.prepareRotation(
+                eq("rag_k_v1"), eq(120), anyString(), isNull(), eq(true)))
+                .thenThrow(new RagException(
+                        ErrorCode.CREDENTIAL_ROTATION_PENDING,
+                        "pending"));
+        mockMvc.perform(post("/api/v1/rag/api-keys/rag_k_v1/rotations")
+                        .with(rootCaller())
+                        .header("Idempotency-Key", "rotation-conflict")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"overlapSeconds\":120}"))
+                .andExpect(status().isConflict())
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(jsonPath("$.error")
+                        .value("CREDENTIAL_ROTATION_PENDING"));
+    }
+
+    @Test
+    void legacyNormalPassesStableOwningPrincipalToRotationService()
+            throws Exception {
+        RagApiKey caller = mockCaller("rag_k_v1", ApiKeyRole.NORMAL);
+        caller.setPrincipalId("rag_p_owner");
+        UUID rotationId = UUID.randomUUID();
+        when(apiKeyService.prepareRotation(
+                eq("rag_k_v1"), isNull(), anyString(), same(caller), eq(false)))
+                .thenReturn(new ApiKeyManagementService.RotationResult(
+                        rotationResponse(
+                                rotationId, "PENDING", "rag_k_v2", "rag_sk_once"),
+                        false));
+
+        mockMvc.perform(post("/api/v1/rag/api-keys/rag_k_v1/rotations")
+                        .with(request -> {
+                            request.setAttribute(
+                                    ApiKeyAuthFilter.AUTHENTICATED_API_KEY_ENTITY,
+                                    caller);
+                            return request;
+                        })
+                        .header("Idempotency-Key", "self-rotation")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isCreated())
+                .andExpect(header().string("Cache-Control", "no-store"));
+    }
+
+    @Test
+    void rootModeBusinessCredentialCannotUseStagedManagement()
+            throws Exception {
+        when(rootCredentialResolver.isConfigured()).thenReturn(true);
+
+        mockMvc.perform(post("/api/v1/rag/api-keys/rag_k_v1/rotations")
+                        .with(request -> {
+                            request.setAttribute(
+                                    ApiKeyAuthFilter.AUTHENTICATED_API_KEY_ENTITY,
+                                    mockCaller("rag_k_business", ApiKeyRole.NORMAL));
+                            return request;
+                        })
+                        .header("Idempotency-Key", "forbidden-rotation")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isForbidden())
+                .andExpect(header().string("Cache-Control", "no-store"));
+
+        verify(apiKeyService, never()).prepareRotation(
+                anyString(), any(), anyString(), any(), anyBoolean());
+    }
+
+    private ApiKeyRotationResponse rotationResponse(
+            UUID rotationId,
+            String status,
+            String currentCredentialId,
+            String rawKey) {
+        ApiKeyRotationResponse response = new ApiKeyRotationResponse();
+        response.setRotationId(rotationId);
+        response.setStatus(status);
+        response.setPrincipalId("rag_p_owner");
+        response.setKeyId(currentCredentialId);
+        response.setCredentialVersion(
+                "rag_k_v1".equals(currentCredentialId) ? 1 : 2);
+        response.setRawKey(rawKey);
+        response.setSecretAvailable(rawKey != null);
+        response.setIdempotentReplay(false);
+        response.setCurrentCredentialActive(true);
+        response.setRotationPending("PENDING".equals(status));
+        response.setRetiringCredentialId(
+                "PENDING".equals(status) ? "rag_k_v1" : null);
+        response.setRetiringCredentialVersion(
+                "PENDING".equals(status) ? 1 : null);
+        response.setRotationExpiresAt(
+                LocalDateTime.of(2026, 8, 27, 23, 0));
+        return response;
     }
 }

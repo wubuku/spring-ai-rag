@@ -19,7 +19,7 @@
 | 真实 LLM E2E 端口 | `18081` |
 | Embedding | SiliconFlow `BAAI/bge-m3` |
 | 向量维度 | `1024` |
-| Flyway | V1–V54 |
+| Flyway | V1–V55 |
 
 OpenAI / Embedding 的 `base-url` **不要带 `/v1`**。Spring AI 会自行追加 `/v1/chat/completions` 或 `/v1/embeddings`。
 
@@ -389,15 +389,20 @@ Playwright 的 Vite preview 起始端口。
 
 ```bash
 MANAGED_API_REAL_ENV_FILE=.env \
+MANAGED_API_REAL_LLM_PROVIDER=minimax \
 ./scripts/verify-managed-api-principals.sh --with-real-llm
 ```
 
 该门槛在 Mock 与构建检查通过后，使用两个后端（默认 `18181`、`18182`）、一个 Vite
-前端（默认 `15181`）和一次性 PostgreSQL 执行真实全栈及有界真实 LLM 验收。V50 矩阵还
+前端（默认 `15181`）和一次性 PostgreSQL 执行真实全栈及有界真实 LLM 验收。V55 矩阵
 验证跨实例 provisioning 幂等、运行时能力发现、NORMAL principal 的只读/读写能力、
-策略 CAS、轮换继承，以及写请求在限流前返回 `403`。端口冲突时可
+策略 CAS、staged prepare/replay/complete/cancel/deadline/family revoke、overlap 共享
+quota，以及写请求在限流前返回 `403`。真实 LLM 模式要求即时数据访问和 staged
+complete/cancel/revoke 生命周期共 9 次成功 provider 调用，同时 replay 和拒绝请求不能增加
+provider counter。端口冲突时可
 分别覆盖 `MANAGED_API_BACKEND_A_PORT`、`MANAGED_API_BACKEND_B_PORT` 和
-`MANAGED_API_FRONTEND_PORT`；证据位于
+`MANAGED_API_FRONTEND_PORT`。`MANAGED_API_REAL_LLM_PROVIDER` 支持 `openai`、
+`minimax` 和 `anthropic`，脚本只校验并装载所选 provider 的配置；证据位于
 `.verification/managed-api-principals/<run-id>/`。
 
 <a id="业务服务接入就绪一键验证"></a>

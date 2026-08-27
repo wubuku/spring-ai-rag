@@ -214,7 +214,34 @@ Micrometer 只使用固定低基数维度暴露请求数量/耗时以及 queue�
 请求/响应正文、query、external ID、动态 URL 与异常正文都不会被记录。这些 rollup
 用于故障定位，不是 billing、安全审计、hard quota 或 mutation 恢复依据。
 
-### 3.5 双表对话记忆
+### 3.5 有界分阶段 Credential 轮换
+
+V55 把版本化 API credential 扩展为有界的双 credential 状态：
+
+```text
+一个 stable rag_api_principal
+  -> 一个 current rag_api_key       (enabled, retire_at 为空)
+  -> 至多一个 retiring key           (enabled, retire_at 为未来 deadline)
+  -> 至多一个 PENDING rag_api_key_rotation operation
+```
+
+prepare 在同一个按 principal 串行化的事务中，把旧 current row 改为 retiring，并创建
+下一个 credential version 作为 current。operation ledger 只保存服务生成的 rotation ID、
+principal/credential 引用、幂等与请求 fingerprint hash、overlap/deadline、状态和生命周期
+时间；绝不保存 raw secret 或原始 Header 值。
+
+每次认证仍执行权威查询，并要求
+`retire_at IS NULL OR retire_at > now`。因此即使定时 cleanup 延迟，overlap 也会在
+deadline 立即关闭。complete 禁用 retiring credential；cancel 禁用 replacement 并把
+retiring row 恢复为 current；expiry 禁用 retiring credential；principal revoke 禁用整个
+family。partial unique index 保证每个 principal 至多一个 current、一个 retiring 和一个
+pending operation。
+
+两个 credential 投影同一 stable principal policy、Collection ACL、operation
+capabilities、Chat/session owner、用量归因和 PostgreSQL quota。staged rotation 只替换认证
+材料，不能创建第二个授权身份或 quota bucket。
+
+### 3.6 双表对话记忆
 
 | 表 | 用途 | 管理方 |
 |---|------|--------|
@@ -237,7 +264,7 @@ session 都返回 `SESSION_NOT_FOUND`，避免会话枚举。
 客户端取消会 dispose 模型流，不提交未完成 turn；流式 fallback 只允许发生在第一个
 客户端可见事件之前。
 
-### 3.6 领域扩展机制
+### 3.7 领域扩展机制
 
 通过 `DomainRagExtension` 接口实现显式领域定制：
 
@@ -644,9 +671,10 @@ rag_audit_log           # 审计日志（集合操作）
 | `rag_document_chunks` | document_id, local_index_generation, content_hash, chunker_version, chunk_text, chunk_index | 与 Profile 无关的本地关键词 chunk |
 | `rag_document_local_index_state` | document_id, local_index_status, local_index_generation, content_hash, chunker_version, chunk_count | 当前本地关键词 generation 与 freshness |
 | `rag_api_principal` | principal_id, role, allowed_collection_ids, capabilities, policy_version, requests_per_minute | stable 调用方 owner 与权威 policy（V48/V49） |
-| `rag_api_key` | key_id, principal_id, credential_version, key_hash, enabled | 版本化 credential；每个 principal 最多一个 active version |
+| `rag_api_key` | key_id, principal_id, credential_version, key_hash, enabled, retire_at | 版本化 credential；每个 principal 至多一个 current 和一个有界 retiring version |
 | `rag_api_rate_limit_bucket` | principal_id, window_start, request_count | 共享 UTC 固定分钟 quota bucket |
 | `rag_api_provisioning_operation` | owner_id, idempotency_key_hash, request_fingerprint_sha256, principal_id, completed_at | 不保存 raw credential 的成功 provisioning replay 账本（V50） |
+| `rag_api_key_rotation` | rotation_id, principal_id, source_credential_id, target_credential_id, expires_at, status | 不保存 raw credential 或 Header 原值的有界 staged rotation 账本（V55） |
 | `rag_collection_provisioning_operation` | owner_id, idempotency_key_hash, request_fingerprint_sha256, collection_id, completed_at | 不保存 raw key 或请求体的 Collection 创建成功 replay 账本（V52） |
 | `rag_document_sync_runs` | id, collection_id, source_namespace, status, lease_token_hash, 累计计数 | 权威来源快照 run 控制面；lease 只保存 hash |
 | `rag_document_sync_run_items` | run_id, external_id, document_kind, source_revision, status, error_message, seen_at | 幂等 item ledger 与持久化低敏 receipt 来源；不保存正文、payload 或 metadata |
@@ -666,6 +694,11 @@ rag_audit_log           # 审计日志（集合操作）
 - `rag_documents.metadata`：V36 GIN（`metadataContains` `@>` 下推）
 - `rag_embedding_jobs`：活动任务 partial unique、claim、batch、document 与 status/created 索引
 - `rag_api_provisioning_operation`：owner/key-hash 唯一身份与 completed-at 清理索引
+- `rag_api_key`：分别约束一个 enabled current（`retire_at IS NULL`）与一个 enabled
+  retiring（`retire_at IS NOT NULL`）credential 的 partial unique index，以及 active
+  retirement deadline 索引
+- `rag_api_key_rotation`：principal/idempotency hash 唯一约束、single-PENDING partial
+  unique index、expiry 扫描索引和 terminal retention 索引
 - `rag_collection_provisioning_operation`：owner/key-hash 唯一身份、受约束的 Collection
   外键、hash 形状检查与 completed-at 清理索引
 - `rag_document_sync_run_items`：V51 提供 `(run_id, seen_at, external_id)` 与

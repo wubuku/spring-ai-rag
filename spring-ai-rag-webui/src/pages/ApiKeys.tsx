@@ -5,6 +5,7 @@ import {
   apiKeysApi,
   type ApiKeyCreatedResponse,
   type ApiKeyCreateRequest,
+  type ApiKeyRotationResponse,
   type ApiPrincipalPolicyUpdateRequest,
   type ApiPrincipalResponse,
 } from '../api/apikeys';
@@ -15,6 +16,11 @@ import styles from './ApiKeys.module.css';
 const DEFAULT_EXPIRY_DAYS = 365;
 const READ_ONLY_CAPABILITIES = ['RAG_READ'];
 const FULL_CAPABILITIES = ['RAG_READ', 'RAG_WRITE'];
+const API_PRINCIPALS_QUERY_KEY = ['api-principals'] as const;
+
+type ApiPrincipalQueryData = Awaited<
+  ReturnType<typeof apiKeysApi.listPrincipals>
+>;
 
 function normalizedCapabilities(capabilities?: string[]): string[] {
   return capabilities?.length ? capabilities : FULL_CAPABILITIES;
@@ -54,6 +60,37 @@ function formatMutationError(fallback: string, error: unknown): string {
   return `${fallback}: ${error.message}`;
 }
 
+function formatDateTime(dateStr?: string): string {
+  if (!dateStr) return '—';
+  try {
+    return new Date(dateStr).toLocaleString();
+  } catch {
+    return dateStr;
+  }
+}
+
+function principalFromCreatedKey(
+  created: ApiKeyCreatedResponse,
+): ApiPrincipalResponse {
+  const now = new Date().toISOString();
+  return {
+    principalId: created.principalId,
+    name: created.name,
+    role: 'NORMAL',
+    capabilities: normalizedCapabilities(created.capabilities),
+    allowedCollectionKeys: created.allowedCollectionKeys,
+    expiresAt: created.expiresAt,
+    requestsPerMinute: created.requestsPerMinute,
+    policyVersion: created.policyVersion,
+    status: 'ACTIVE',
+    currentCredentialId: created.keyId,
+    currentCredentialVersion: created.credentialVersion,
+    rotationPending: false,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
 export function ApiKeys() {
   const { t } = useTranslation();
   return (
@@ -72,7 +109,7 @@ function KeyList() {
   const [showRotate, setShowRotate] = useState<ApiPrincipalResponse | null>(null);
   const [showEdit, setShowEdit] = useState<ApiPrincipalResponse | null>(null);
   const { data, isPending, isError } = useQuery({
-    queryKey: ['api-principals'],
+    queryKey: API_PRINCIPALS_QUERY_KEY,
     queryFn: () => apiKeysApi.listPrincipals(),
   });
 
@@ -164,16 +201,40 @@ function PrincipalRow({
     },
   });
 
-  const statusBadge = getStatusBadge(principal.status, t);
+  const completeRotationMutation = useMutation({
+    mutationKey: ['complete-api-key-rotation', principal.pendingRotationId],
+    mutationFn: () => apiKeysApi.completeRotation(principal.pendingRotationId!),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['api-principals'] });
+      showToast(t('apiKeys.rotationCompleted'), 'success');
+    },
+    onError: (error) => {
+      showToast(
+        formatMutationError(t('apiKeys.rotationCompleteError'), error),
+        'error',
+      );
+    },
+  });
 
-  const formatDate = (dateStr?: string) => {
-    if (!dateStr) return '—';
-    try {
-      return new Date(dateStr).toLocaleString();
-    } catch {
-      return dateStr;
-    }
-  };
+  const cancelRotationMutation = useMutation({
+    mutationKey: ['cancel-api-key-rotation', principal.pendingRotationId],
+    mutationFn: () => apiKeysApi.cancelRotation(principal.pendingRotationId!),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['api-principals'] });
+      showToast(t('apiKeys.rotationCanceled'), 'success');
+    },
+    onError: (error) => {
+      showToast(
+        formatMutationError(t('apiKeys.rotationCancelError'), error),
+        'error',
+      );
+    },
+  });
+
+  const statusBadge = getStatusBadge(principal.status, t);
+  const rotationPending = Boolean(
+    principal.rotationPending && principal.pendingRotationId,
+  );
 
   return (
     <div className={styles.tableRow}>
@@ -182,8 +243,20 @@ function PrincipalRow({
       <span className={styles.credential}>
         {principal.currentCredentialId ? (
           <>
-            <code title={principal.currentCredentialId}>{principal.currentCredentialId}</code>
+            <small>{t('apiKeys.currentCredential')}</small>
+            <code title={principal.currentCredentialId}>
+              {principal.currentCredentialId}
+            </code>
             <small>v{principal.currentCredentialVersion}</small>
+            {rotationPending && principal.retiringCredentialId && (
+              <span className={styles.retiringCredential}>
+                <small>{t('apiKeys.retiringCredential')}</small>
+                <code title={principal.retiringCredentialId}>
+                  {principal.retiringCredentialId}
+                </code>
+                <small>v{principal.retiringCredentialVersion}</small>
+              </span>
+            )}
           </>
         ) : '—'}
       </span>
@@ -199,9 +272,23 @@ function PrincipalRow({
           : t('apiKeys.allCollections')}
       </span>
       <span>{principal.requestsPerMinute ?? t('apiKeys.defaultQuota')}</span>
-      <span className={styles.date}>{formatDate(principal.lastUsedAt)}</span>
-      <span>{statusBadge}</span>
-      <span className={styles.date}>{formatDate(principal.expiresAt)}</span>
+      <span className={styles.date}>{formatDateTime(principal.lastUsedAt)}</span>
+      <span className={styles.statusStack}>
+        {statusBadge}
+        {rotationPending && (
+          <>
+            <span className={`${styles.badge} ${styles.badgePending}`}>
+              {t('apiKeys.rotationPending')}
+            </span>
+            <small>
+              {t('apiKeys.rotationDeadline', {
+                deadline: formatDateTime(principal.rotationExpiresAt),
+              })}
+            </small>
+          </>
+        )}
+      </span>
+      <span className={styles.date}>{formatDateTime(principal.expiresAt)}</span>
       <span className={styles.rowActions}>
         <button
           className={styles.btnLink}
@@ -213,11 +300,43 @@ function PrincipalRow({
         <button
           className={styles.btnLink}
           onClick={onRotate}
-          disabled={principal.status !== 'ACTIVE' || !principal.currentCredentialId}
-          title={t('apiKeys.rotateTooltip')}
+          disabled={
+            principal.status !== 'ACTIVE'
+            || !principal.currentCredentialId
+            || rotationPending
+          }
+          title={
+            rotationPending
+              ? t('apiKeys.rotationAlreadyPending')
+              : t('apiKeys.rotateTooltip')
+          }
         >
           {t('apiKeys.rotate')}
         </button>
+        {rotationPending && (
+          <>
+            <button
+              className={styles.btnLink}
+              onClick={() => completeRotationMutation.mutate()}
+              disabled={
+                completeRotationMutation.isPending
+                || cancelRotationMutation.isPending
+              }
+            >
+              {t('apiKeys.completeRotation')}
+            </button>
+            <button
+              className={styles.btnLink}
+              onClick={() => cancelRotationMutation.mutate()}
+              disabled={
+                completeRotationMutation.isPending
+                || cancelRotationMutation.isPending
+              }
+            >
+              {t('apiKeys.cancelRotation')}
+            </button>
+          </>
+        )}
         <button
           className={styles.btnLink}
           onClick={() => revokeMutation.mutate()}
@@ -274,11 +393,33 @@ function CreateKeyModal({ onClose }: { onClose: () => void }) {
 
   const createMutation = useMutation({
     mutationFn: (data: ApiKeyCreateRequest) => apiKeysApi.createKey(data),
+    onMutate: () => queryClient.cancelQueries({
+      queryKey: API_PRINCIPALS_QUERY_KEY,
+    }),
     onSuccess: (response) => {
-      setCreatedKey(response.data);
-      queryClient.invalidateQueries({ queryKey: ['api-principals'] });
+      const created = response.data;
+      const createdPrincipal = principalFromCreatedKey(created);
+      setCreatedKey(created);
+      queryClient.setQueryData<ApiPrincipalQueryData>(
+        API_PRINCIPALS_QUERY_KEY,
+        current => current ? ({
+          ...current,
+          data: [
+            createdPrincipal,
+            ...current.data.filter(
+              principal => principal.principalId !== created.principalId,
+            ),
+          ],
+        }) : current,
+      );
+      void queryClient.invalidateQueries({
+        queryKey: API_PRINCIPALS_QUERY_KEY,
+      });
     },
     onError: (error) => {
+      void queryClient.invalidateQueries({
+        queryKey: API_PRINCIPALS_QUERY_KEY,
+      });
       showToast(formatMutationError(t('apiKeys.createError'), error), 'error');
     },
   });
@@ -706,6 +847,8 @@ function EditPolicyModal({
 
 // ==================== Rotate Key Modal ====================
 
+type RotationMode = 'staged' | 'immediate';
+
 function RotateKeyModal({
   principal,
   onClose,
@@ -714,31 +857,84 @@ function RotateKeyModal({
   onClose: () => void;
 }) {
   const { t } = useTranslation();
-  const [rotatedKey, setRotatedKey] = useState<ApiKeyCreatedResponse | null>(null);
+  const [mode, setMode] = useState<RotationMode>('staged');
+  const [overlapSeconds, setOverlapSeconds] = useState('900');
+  const [idempotencyKey] = useState(() => crypto.randomUUID());
+  const [preparedRotation, setPreparedRotation] =
+    useState<ApiKeyRotationResponse | null>(null);
+  const [immediateKey, setImmediateKey] =
+    useState<ApiKeyCreatedResponse | null>(null);
   const { showToast } = useToast();
   const queryClient = useQueryClient();
 
-  const rotateMutation = useMutation({
-    mutationFn: () => apiKeysApi.rotateKey(principal.currentCredentialId!),
+  const prepareMutation = useMutation({
+    mutationKey: ['prepare-api-key-rotation', principal.principalId],
+    mutationFn: ({
+      overlap,
+      requestKey,
+    }: {
+      overlap: number | undefined;
+      requestKey: string;
+    }) => apiKeysApi.prepareRotation(
+      principal.currentCredentialId!,
+      overlap,
+      requestKey,
+    ),
     onSuccess: (response) => {
-      setRotatedKey(response.data);
+      setPreparedRotation(response.data);
       queryClient.invalidateQueries({ queryKey: ['api-principals'] });
     },
-    onError: () => {
-      showToast(t('apiKeys.rotateError'), 'error');
+    onError: (error) => {
+      showToast(
+        formatMutationError(t('apiKeys.rotationPrepareError'), error),
+        'error',
+      );
+    },
+  });
+
+  const immediateMutation = useMutation({
+    mutationKey: ['immediate-api-key-rotation', principal.principalId],
+    mutationFn: () => apiKeysApi.rotateKey(principal.currentCredentialId!),
+    onSuccess: (response) => {
+      setImmediateKey(response.data);
+      queryClient.invalidateQueries({ queryKey: ['api-principals'] });
+    },
+    onError: (error) => {
+      showToast(formatMutationError(t('apiKeys.rotateError'), error), 'error');
     },
   });
 
   const handleClose = () => {
-    setRotatedKey(null);
+    setPreparedRotation(null);
+    setImmediateKey(null);
     onClose();
   };
 
   const copyRawKey = async () => {
-    if (!rotatedKey) return;
-    await navigator.clipboard.writeText(rotatedKey.rawKey);
+    const rawKey = preparedRotation?.rawKey ?? immediateKey?.rawKey;
+    if (!rawKey) return;
+    await navigator.clipboard.writeText(rawKey);
     showToast(t('apiKeys.copied'), 'success');
   };
+
+  const prepare = () => {
+    const normalizedOverlap = overlapSeconds.trim()
+      ? Number(overlapSeconds)
+      : undefined;
+    if (normalizedOverlap !== undefined
+        && (!Number.isInteger(normalizedOverlap)
+          || normalizedOverlap < 1
+          || normalizedOverlap > 86400)) {
+      return;
+    }
+    prepareMutation.mutate({
+      overlap: normalizedOverlap,
+      requestKey: idempotencyKey,
+    });
+  };
+
+  const shownOnceSecret = preparedRotation?.rawKey ?? immediateKey?.rawKey;
+  const completedResult = preparedRotation ?? immediateKey;
 
   return (
     <div className={styles.modal} onClick={(e) => e.target === e.currentTarget && handleClose()}>
@@ -748,56 +944,159 @@ function RotateKeyModal({
           <button className={styles.modalClose} onClick={handleClose}>✕</button>
         </div>
 
-        {!rotatedKey ? (
+        {!completedResult ? (
           <div>
-            <div className={styles.rotateInfo}>
-              {t('apiKeys.rotateInfo')}
-            </div>
             <div className={styles.formGroup}>
               <label className={styles.label}>{t('apiKeys.credential')}</label>
               <div className={styles.mono} style={{ fontSize: '0.8rem' }}>
                 {principal.currentCredentialId} (v{principal.currentCredentialVersion})
               </div>
             </div>
+            <fieldset className={styles.scopeFieldset}>
+              <legend className={styles.label}>{t('apiKeys.rotationMode')}</legend>
+              <label className={styles.scopeOption}>
+                <input
+                  type="radio"
+                  name="rotationMode"
+                  checked={mode === 'staged'}
+                  onChange={() => setMode('staged')}
+                />
+                <span>
+                  <strong>{t('apiKeys.stagedRotation')}</strong>
+                  <small>{t('apiKeys.stagedRotationHint')}</small>
+                </span>
+              </label>
+              <label className={styles.scopeOption}>
+                <input
+                  type="radio"
+                  name="rotationMode"
+                  checked={mode === 'immediate'}
+                  onChange={() => setMode('immediate')}
+                />
+                <span>
+                  <strong>{t('apiKeys.immediateRotation')}</strong>
+                  <small>{t('apiKeys.immediateRotationHint')}</small>
+                </span>
+              </label>
+            </fieldset>
+            {mode === 'staged' ? (
+              <>
+                <div className={styles.rotateInfo}>
+                  {t('apiKeys.stagedRotationInfo')}
+                </div>
+                <div className={styles.formGroup}>
+                  <label className={styles.label} htmlFor="rotation-overlap">
+                    {t('apiKeys.overlapSeconds')}
+                  </label>
+                  <input
+                    id="rotation-overlap"
+                    type="number"
+                    className={styles.input}
+                    min="1"
+                    max="86400"
+                    step="1"
+                    value={overlapSeconds}
+                    onChange={event => setOverlapSeconds(event.target.value)}
+                  />
+                  <div className={styles.hint}>{t('apiKeys.overlapHint')}</div>
+                </div>
+              </>
+            ) : (
+              <div className={styles.dangerInfo}>
+                {t('apiKeys.rotateInfo')}
+              </div>
+            )}
             <div className={styles.modalActions}>
               <button type="button" className={styles.btnSecondary} onClick={handleClose}>
                 {t('common.cancel')}
               </button>
-              <button
-                className={styles.btnPrimary}
-                onClick={() => rotateMutation.mutate()}
-                disabled={rotateMutation.isPending}
-              >
-                {rotateMutation.isPending ? t('common.loading') : t('apiKeys.rotateConfirm')}
-              </button>
+              {mode === 'staged' ? (
+                <button
+                  className={styles.btnPrimary}
+                  onClick={prepare}
+                  disabled={
+                    prepareMutation.isPending
+                    || !overlapSeconds.trim()
+                    || Number(overlapSeconds) < 1
+                    || Number(overlapSeconds) > 86400
+                    || !Number.isInteger(Number(overlapSeconds))
+                  }
+                >
+                  {prepareMutation.isPending
+                    ? t('common.loading')
+                    : t('apiKeys.prepareRotation')}
+                </button>
+              ) : (
+                <button
+                  className={styles.btnDanger}
+                  onClick={() => immediateMutation.mutate()}
+                  disabled={immediateMutation.isPending}
+                >
+                  {immediateMutation.isPending
+                    ? t('common.loading')
+                    : t('apiKeys.rotateImmediately')}
+                </button>
+              )}
             </div>
           </div>
         ) : (
           <div>
             <p style={{ marginBottom: '0.75rem', color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>
-              {t('apiKeys.keyRotated')}
+              {preparedRotation
+                ? shownOnceSecret
+                  ? t('apiKeys.rotationPrepared')
+                  : t('apiKeys.rotationReplayRecovered')
+                : t('apiKeys.keyRotated')}
             </p>
             <div className={styles.rawKeyBox}>
-              <div className={styles.rawKeyLabel}>{t('apiKeys.name')}</div>
-              <div className={styles.name}>{rotatedKey.name}</div>
-              <div className={styles.rawKeyLabel} style={{ marginTop: '0.75rem' }}>{t('apiKeys.keyId')}</div>
-              <div className={styles.mono}>{rotatedKey.keyId}</div>
-              <div className={styles.rawKeyLabel} style={{ marginTop: '0.75rem' }}>{t('apiKeys.rawKey')}</div>
-              <div className={styles.rawKeyRow}>
-                <div className={styles.rawKey}>{rotatedKey.rawKey}</div>
-                <button type="button" className={styles.copyBtn} onClick={copyRawKey}>
-                  {t('apiKeys.copy')}
-                </button>
-              </div>
+              {immediateKey && (
+                <>
+                  <div className={styles.rawKeyLabel}>{t('apiKeys.name')}</div>
+                  <div className={styles.name}>{immediateKey.name}</div>
+                </>
+              )}
+              {preparedRotation && (
+                <>
+                  <div className={styles.rawKeyLabel}>{t('apiKeys.rotationId')}</div>
+                  <div className={styles.mono}>{preparedRotation.rotationId}</div>
+                </>
+              )}
               <div className={styles.rawKeyLabel} style={{ marginTop: '0.75rem' }}>
-                {t('apiKeys.capabilities')}
+                {t('apiKeys.keyId')}
               </div>
-              <div className={styles.capabilities}>
-                {normalizedCapabilities(rotatedKey.capabilities).map(capability => (
-                  <code key={capability}>{capability}</code>
-                ))}
+              <div className={styles.mono}>
+                {preparedRotation?.keyId ?? immediateKey?.keyId}
               </div>
-              <div className={styles.warning}>{rotatedKey.warning}</div>
+              {preparedRotation?.rotationExpiresAt && (
+                <>
+                  <div className={styles.rawKeyLabel} style={{ marginTop: '0.75rem' }}>
+                    {t('apiKeys.overlapDeadline')}
+                  </div>
+                  <div>{formatDateTime(preparedRotation.rotationExpiresAt)}</div>
+                </>
+              )}
+              {shownOnceSecret ? (
+                <>
+                  <div className={styles.rawKeyLabel} style={{ marginTop: '0.75rem' }}>
+                    {t('apiKeys.rawKey')}
+                  </div>
+                  <div className={styles.rawKeyRow}>
+                    <div className={styles.rawKey}>{shownOnceSecret}</div>
+                    <button type="button" className={styles.copyBtn} onClick={copyRawKey}>
+                      {t('apiKeys.copy')}
+                    </button>
+                  </div>
+                  <div className={styles.warning}>
+                    {preparedRotation
+                      ? t('apiKeys.stagedSecretWarning')
+                      : immediateKey?.warning}
+                  </div>
+                </>
+              ) : (
+                <div className={styles.recoveryInfo}>
+                  {t('apiKeys.rotationReplayNoSecret')}
+                </div>
+              )}
             </div>
             <div className={styles.modalActions}>
               <button className={styles.btnPrimary} onClick={handleClose}>

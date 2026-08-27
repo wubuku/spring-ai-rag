@@ -4,8 +4,9 @@
 
 > **用途**：记录 OpenAI Chat Completions 服务端兼容层的当前实现、受控预览边界和
 > 公网/多实例生产仍需完成的安全工作。
-> **代码基线**：`main`，包含 Chat turn 可靠性与 V48 受管 principal 加固。
-> **最近复核**：2026-08-23
+> **代码基线**：当前交付基线，包含 Chat turn 可靠性、V48 受管 principal 加固与
+> V55 有界 staged credential rotation。
+> **最近复核**：2026-08-27
 > **状态**：`/v1/models` 与 `/v1/chat/completions` 已实现但默认关闭；本文不宣称公网生产就绪。
 
 文档总入口：[index-zh-CN.md](index-zh-CN.md)。当前可调用契约和配置以
@@ -23,9 +24,9 @@
 
 协议兼容和公网生产就绪是两件事。当前系统已经完成独立 RAG 服务 MVP、V48 stable
 managed principal 与默认关闭的 `/v1` 兼容适配层。stable owner、versioned credential、
-即时跨实例吊销、PostgreSQL 共享请求 quota 和 quota store fail-closed 已经落地。兼容层
-仍是受控预览而非全面公网生产声明，因为 legacy 兼容、身份 federation、operator recovery、
-部署控制与 token/cost 治理仍是独立问题。
+有界 staged rotation、即时跨实例吊销、PostgreSQL 共享请求 quota 和 quota store
+fail-closed 已经落地。兼容层仍是受控预览而非全面公网生产声明，因为 legacy 兼容、
+身份 federation、operator recovery、部署控制与 token/cost 治理仍是独立问题。
 
 兼容层本身不是 Agent/subagent 编排器。它提供稳定的“RAG-as-a-model”边界；编排由
 调用方或后续独立模块承担。
@@ -40,7 +41,7 @@ managed principal 与默认关闭的 `/v1` 兼容适配层。stable owner、vers
 | `spring-ai-rag-core` | RAG 实现和可运行应用 | 承载共享执行层、兼容 Controller、model alias registry 和错误映射 |
 | `spring-ai-rag-starter` | 自动配置 | standalone/starter 拓扑都注册 `/v1` 所需鉴权、限流和观测组件 |
 | `spring-ai-rag-documents` | 文档处理 | 不应依赖 OpenAI 协议 |
-| `spring-ai-rag-webui` | React 管理台 | root unlock 按 stable principal 管理 policy CAS、quota、当前 credential 轮换/吊销和 shown-once secret |
+| `spring-ai-rag-webui` | React 管理台 | root unlock 按 stable principal 管理 policy CAS、quota、staged/immediate credential 轮换、吊销和 shown-once secret |
 
 项目存在两种运行拓扑：
 
@@ -90,7 +91,7 @@ managed principal 与默认关闭的 `/v1` 兼容适配层。stable owner、vers
 
 - raw secret 格式为 `rag_sk_` + 随机值，公开标识为 `rag_k_...`。
 - 认证时使用 SHA-256 hash 查询。
-- 支持创建、列举、吊销、轮换、过期时间和 `last_used_at`。
+- 支持创建、列举、吊销、即时轮换、有界 staged 轮换、过期时间和 `last_used_at`。
 - 角色为 `ADMIN` / `NORMAL`。
 - V24 增加 `allowed_collection_ids`，数据访问路径可按 Collection ACL 收敛。
 - `RAG_ROOT_API_KEY` 提供 environment-root principal；root 模式自动保护 `/api/**`。
@@ -102,7 +103,12 @@ managed principal 与默认关闭的 `/v1` 兼容适配层。stable owner、vers
 - WebUI credential 只保存在页面内存，旧 localStorage 凭据会在升级时清理。
 - V48 将 stable principal policy 与 versioned credential hash 分离；rotation 保留
   `db:{principalId}` owner 与 policy。
+- V55 允许每个 stable principal 同时有一个 current 与至多一个受 deadline 约束的
+  retiring credential。prepare 幂等但不重放一次性 replacement secret；complete、
+  cancel、deadline expiry、policy expiry clamp 与 family revoke 会收敛，且不会扩大
+  ACL 或 quota。
 - 每次认证都执行权威 credential/principal 联查；吊销在其他实例的下一次认证立即生效。
+- retiring credential 的 deadline 也直接由认证查询强制执行，不依赖 cleanup 是否及时。
 - PostgreSQL UTC 固定分钟 backend 按 stable principal 共享请求 quota，且故障 fail
   closed，不使用 raw key 或 IP fallback。
 - legacy 明文列被约束为只能是 `NULL`；legacy ADMIN 吊销有事务化 last-ADMIN guard。
@@ -127,7 +133,7 @@ managed principal 与默认关闭的 `/v1` 兼容适配层。stable owner、vers
 | URL 和凭据格式 | `/v1/*` 已接入 Bearer/Header 认证；root 模式拒绝 query credential，并使用 OpenAI 错误信封 | 公网启用仍应关闭 legacy query/static 兼容并明确只允许受管 principal |
 | 身份 federation | managed principal 是服务签发 secret，不是 OAuth/OIDC 身份 | 公网多租户可能需要本 credential family 之外的 issuer、audience、tenant 与 revocation 契约 |
 | 成本治理 | 共享 quota 按 UTC 固定分钟统计请求数 | token、provider cost、日预算和 billing ledger 仍是独立能力 |
-| 运营 | 代码层共享 quota 与即时吊销已经实现 | TLS、网络隔离、数据库容量、告警、备份恢复和轮换 runbook 仍属部署职责 |
+| 运营 | 代码层共享 quota、staged rotation 与即时吊销已经实现 | TLS、网络隔离、数据库容量、告警、备份恢复、Secret 存储集成和轮换 runbook 仍属部署职责 |
 
 这些是 service readiness 问题，不是协议细节。V48 的历史设计理由在本轮交付完成前仍可
 从活跃规划追溯；当前事实以 live API 和配置参考为准。
@@ -150,6 +156,9 @@ managed principal 与默认关闭的 `/v1` 兼容适配层。stable owner、vers
    static/query 兼容。
 9. 保持 `/api/v1/rag/**` 现有契约，兼容能力关闭后旧 API 仍独立工作。
 10. core standalone 和 starter consumer 两种拓扑都必须有认证、授权、限流和观测测试。
+11. V54/V55 混合 fleet 必须冻结 API Key 管理写和 staged prepare。只有全部实例运行 V55
+    后才能启用 staged rotation；应用回滚到 V54 前，必须清零 enabled retiring
+    credential 和 `PENDING` rotation operation，同时保留 V55 schema。
 
 ---
 

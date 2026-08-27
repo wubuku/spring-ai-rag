@@ -409,7 +409,7 @@ See [multi-model-external-config.md](multi-model-external-config.md).
 ### Database
 
 - PostgreSQL with pgvector.
-- Flyway is currently V1–V54.
+- Flyway is currently V1–V55.
 - V27/V28 add, backfill, validate, uniquely constrain, and make immutable the
   Collection business key; V29 adds JSONB structured records; V30 adds the
   external-document synchronization schema; V31 normalizes stored external
@@ -442,7 +442,9 @@ See [multi-model-external-config.md](multi-model-external-config.md).
   owner-scoped Collection-create idempotency ledger with a restricted
   Collection foreign key; V53 adds the principal-scoped append-only
   model-invocation usage ledger; V54 adds bounded UTC hourly integration
-  operation and authorized Collection-contribution rollups.
+  operation and authorized Collection-contribution rollups; V55 adds bounded
+  staged API credential rotation, overlap deadlines, and a secret-free
+  rotation operation ledger.
 - The data-access layer forbids explicit `SELECT ... FOR UPDATE`,
   `SKIP LOCKED`, JPA `PESSIMISTIC_*`, and PostgreSQL advisory locks.
   Concurrent writes use conditional `UPDATE/DELETE ... RETURNING`, `@Version`,
@@ -520,7 +522,7 @@ Managed database callers consist of a stable `rag_api_principal` and versioned
 
 - The principal owns role, Collection ACL, expiry, policy version, an optional
   quota, and canonical operation capabilities; a credential owns only its
-  hash, version, and active state.
+  hash, version, active state, and optional retirement deadline.
 - V48 deterministically backfills existing keys with `principalId=old keyId`,
   preserving historical `db:{keyId}` owners. Later rotations replace only the
   credential and retain the stable owner.
@@ -548,6 +550,15 @@ Managed database callers consist of a stable `rag_api_principal` and versioned
   returns `409`. Rotation or revocation changes the current credential
   projection returned by later replay without making the original secret
   recoverable.
+- V55 retains the immediate `/rotate` compatibility path and adds bounded
+  staged rotation for rolling deployments. Prepare requires an
+  `Idempotency-Key`, returns a stable `rotationId`, shows the replacement
+  secret once, and permits one current plus one retiring credential until a
+  server-enforced deadline. Complete disables the retiring credential; cancel
+  disables the replacement and restores the previous credential; expiry and
+  family revocation fail closed. Exact prepare replay never returns the raw
+  secret. Both credentials share the same principal, policy, Chat/session
+  owner, usage attribution, and PostgreSQL quota.
 - Collection creation also accepts an optional `Idempotency-Key`, but uses a
   separate V52 ledger and never stores a response snapshot. Replay returns the
   bound Collection's current state and document count; soft deletion remains
@@ -558,7 +569,10 @@ Managed database callers consist of a stable `rag_api_principal` and versioned
   capabilities and Collection scope, supported data-plane behaviors, optional
   features, and runtime input limits. It publishes structured-record
   batch/payload/search/filter bounds, fixed Sync Run batch/page bounds, and
-  observability retention/query limits. `documentSyncRunItemReceipts`
+  observability retention/query limits. `features.credentialRotation`
+  publishes immediate/staged/cancel support, idempotency and secret-replay
+  behavior, default/maximum overlap, and operation retention.
+  `documentSyncRunItemReceipts`
   explicitly reports whether durable receipt lookup is available, while
   `features.provisioning.collectionCreateIdempotencyKey` reports the V52
   control-plane capability. Restricted ACL

@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.time.LocalDateTime;
 import java.time.ZonedDateTime;
 
@@ -2763,6 +2764,34 @@ class DtoTest {
         assertTrue(str.contains("Save now."));
         // rawKey intentionally excluded from toString (security)
         assertFalse(str.contains("rag_sk_"));
+    }
+
+    @Test
+    void apiKeyRotationResponse_roundTripsFieldsWithoutLoggingRawSecret() {
+        UUID rotationId = UUID.randomUUID();
+        LocalDateTime deadline =
+                LocalDateTime.of(2026, 8, 27, 23, 0);
+        ApiKeyRotationResponse response =
+                new ApiKeyRotationResponse();
+        response.setRotationId(rotationId);
+        response.setStatus("PENDING");
+        response.setPrincipalId("rag_p_owner");
+        response.setKeyId("rag_k_v2");
+        response.setCredentialVersion(2);
+        response.setRawKey("rag_sk_shown_once");
+        response.setSecretAvailable(true);
+        response.setIdempotentReplay(false);
+        response.setCurrentCredentialActive(true);
+        response.setRotationPending(true);
+        response.setRetiringCredentialId("rag_k_v1");
+        response.setRetiringCredentialVersion(1);
+        response.setRotationExpiresAt(deadline);
+
+        assertEquals(rotationId, response.getRotationId());
+        assertEquals("rag_sk_shown_once", response.getRawKey());
+        assertEquals(deadline, response.getRotationExpiresAt());
+        assertFalse(response.toString().contains("rag_sk_shown_once"));
+        assertTrue(response.toString().contains(rotationId.toString()));
     }
 
     // ========== ApiKeyResponse equals/hashCode/toString ==========

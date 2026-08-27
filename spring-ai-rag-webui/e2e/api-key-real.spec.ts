@@ -21,7 +21,9 @@ test('manages a real stable principal without persisting shown-once credentials'
   let principalId: string | undefined;
   let currentCredentialId: string | undefined;
   let firstRawKey: string | undefined;
-  let rotatedRawKey: string | undefined;
+  let stagedRawKey: string | undefined;
+  let retiringCredentialId: string | undefined;
+  let rotationId: string | undefined;
 
   page.on('console', message => consoleMessages.push(message.text()));
   page.on('request', outbound => requestUrls.push(outbound.url()));
@@ -111,30 +113,48 @@ test('manages a real stable principal without persisting shown-once credentials'
       hasText: `${principalName} Updated`,
     });
     await editedRow.getByRole('button', { name: 'Rotate' }).click();
-    const rotateResponsePromise = page.waitForResponse(response =>
-      response.url().endsWith(`/api-keys/${currentCredentialId}/rotate`)
+    await expect(page.getByRole('radio', {
+      name: /Staged rotation/,
+    })).toBeChecked();
+    await page.locator('#rotation-overlap').fill('120');
+    const prepareRequestPromise = page.waitForRequest(outbound =>
+      outbound.url().endsWith(`/api-keys/${currentCredentialId}/rotations`)
+      && outbound.method() === 'POST',
+    );
+    const prepareResponsePromise = page.waitForResponse(response =>
+      response.url().endsWith(`/api-keys/${currentCredentialId}/rotations`)
       && response.request().method() === 'POST',
     );
-    await page.getByRole('button', { name: 'Rotate Key' }).click();
-    const rotateResponse = await rotateResponsePromise;
-    expect(rotateResponse.status()).toBe(201);
-    expect(rotateResponse.headers()['cache-control']).toContain('no-store');
-    const rotated = await rotateResponse.json();
-    rotatedRawKey = rotated.rawKey;
-    currentCredentialId = rotated.keyId;
-    expect(rotated.principalId).toBe(principalId);
-    expect(rotated.credentialVersion).toBe(2);
-    expect(rotated.policyVersion).toBe(2);
-    expect(rotated.capabilities).toEqual(['RAG_READ']);
-    await expect(page.getByText(rotatedRawKey, { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Prepare rotation' }).click();
+    const prepareRequest = await prepareRequestPromise;
+    const prepareResponse = await prepareResponsePromise;
+    expect(prepareRequest.headers()['idempotency-key']).toBeTruthy();
+    expect(prepareRequest.postDataJSON()).toEqual({ overlapSeconds: 120 });
+    expect(prepareResponse.status()).toBe(201);
+    expect(prepareResponse.headers()['cache-control']).toContain('no-store');
+    const prepared = await prepareResponse.json();
+    stagedRawKey = prepared.rawKey;
+    retiringCredentialId = prepared.retiringCredentialId;
+    currentCredentialId = prepared.keyId;
+    rotationId = prepared.rotationId;
+    expect(prepared.principalId).toBe(principalId);
+    expect(prepared.credentialVersion).toBe(2);
+    expect(prepared.status).toBe('PENDING');
+    expect(prepared.secretAvailable).toBe(true);
+    expect(prepared.idempotentReplay).toBe(false);
+    expect(retiringCredentialId).toBeTruthy();
+    expect(rotationId).toBeTruthy();
+    await expect(page.getByText(stagedRawKey, { exact: true })).toBeVisible();
+    await expect(page.getByText('Overlap deadline')).toBeVisible();
     await page.getByRole('button', { name: 'Close' }).click();
+    await expect(page.getByText(stagedRawKey, { exact: true })).toHaveCount(0);
 
     const oldIdentity = await request.get(`${API_PREFIX}/auth/me`, {
       headers: { 'X-API-Key': firstRawKey! },
     });
-    expect(oldIdentity.status()).toBe(401);
+    expect(oldIdentity.status()).toBe(200);
     const newIdentity = await request.get(`${API_PREFIX}/auth/me`, {
-      headers: { 'X-API-Key': rotatedRawKey },
+      headers: { 'X-API-Key': stagedRawKey },
     });
     expect(newIdentity.status()).toBe(200);
     expect(await newIdentity.json()).toMatchObject({
@@ -148,18 +168,60 @@ test('manages a real stable principal without persisting shown-once credentials'
       allowedCollectionKeys: null,
     });
 
-    const rotatedRow = page.locator('[class*="tableRow"]').filter({
+    const pendingRow = page.locator('[class*="tableRow"]').filter({
       hasText: `${principalName} Updated`,
     });
     await expect(
-      rotatedRow.locator('code').filter({ hasText: currentCredentialId! }),
+      pendingRow.locator('code').filter({ hasText: currentCredentialId! }),
     ).toBeVisible();
-    await expect(rotatedRow.getByText('RAG_READ', { exact: true })).toBeVisible();
-    await expect(rotatedRow.getByText('v2', { exact: true })).toBeVisible();
-    await rotatedRow.getByRole('button', { name: 'Revoke' }).click();
-    await expect(rotatedRow.getByText('Revoked', { exact: true })).toBeVisible();
+    await expect(
+      pendingRow.locator('code').filter({ hasText: retiringCredentialId! }),
+    ).toBeVisible();
+    await expect(pendingRow.getByText('Rotation pending', {
+      exact: true,
+    })).toBeVisible();
+    await expect(pendingRow.getByRole('button', {
+      name: 'Rotate',
+    })).toBeDisabled();
+
+    const completeResponsePromise = page.waitForResponse(response =>
+      response.url().endsWith(`/api-keys/rotations/${rotationId}/complete`)
+      && response.request().method() === 'POST',
+    );
+    await pendingRow.getByRole('button', { name: 'Complete' }).click();
+    const completeResponse = await completeResponsePromise;
+    expect(completeResponse.status()).toBe(200);
+    expect(completeResponse.headers()['cache-control']).toContain('no-store');
+    expect(await completeResponse.json()).toMatchObject({
+      rotationId,
+      status: 'COMPLETED',
+      principalId,
+      keyId: currentCredentialId,
+      rotationPending: false,
+      rawKey: null,
+    });
+    await expect(pendingRow.getByText('Rotation pending', {
+      exact: true,
+    })).toHaveCount(0);
+
+    const retiredIdentity = await request.get(`${API_PREFIX}/auth/me`, {
+      headers: { 'X-API-Key': firstRawKey! },
+    });
+    expect(retiredIdentity.status()).toBe(401);
+    const completedIdentity = await request.get(`${API_PREFIX}/auth/me`, {
+      headers: { 'X-API-Key': stagedRawKey },
+    });
+    expect(completedIdentity.status()).toBe(200);
+
+    const completedRow = page.locator('[class*="tableRow"]').filter({
+      hasText: `${principalName} Updated`,
+    });
+    await completedRow.getByRole('button', { name: 'Revoke' }).click();
+    await expect(completedRow.getByText('Revoked', {
+      exact: true,
+    })).toBeVisible();
     const revokedIdentity = await request.get(`${API_PREFIX}/auth/me`, {
-      headers: { 'X-API-Key': rotatedRawKey },
+      headers: { 'X-API-Key': stagedRawKey },
     });
     expect(revokedIdentity.status()).toBe(401);
 
@@ -167,7 +229,7 @@ test('manages a real stable principal without persisting shown-once credentials'
       local: { ...localStorage },
       session: { ...sessionStorage },
     }));
-    for (const secret of [firstRawKey, rotatedRawKey]) {
+    for (const secret of [firstRawKey, stagedRawKey]) {
       expect(requestUrls.join('\n')).not.toContain(secret);
       expect(consoleMessages.join('\n')).not.toContain(secret);
       expect(browserStorage).not.toContain(secret);

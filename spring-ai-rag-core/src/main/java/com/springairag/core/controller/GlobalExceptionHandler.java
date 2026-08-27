@@ -6,6 +6,7 @@ import com.springairag.core.exception.RagException;
 import com.springairag.core.exception.ChatTurnInProgressException;
 import com.springairag.core.logging.SensitiveDataMaskingConverter;
 import com.springairag.core.security.ApiCapabilitySupport;
+import com.springairag.core.web.ApiKeyRotationHttpPolicy;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
@@ -100,7 +101,9 @@ public class GlobalExceptionHandler {
                 .path(request.getRequestURI())
                 .build();
 
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+        return ApiKeyRotationHttpPolicy.apply(
+                        ResponseEntity.status(HttpStatus.BAD_REQUEST),
+                        request)
                 .contentType(PROBLEM_JSON)
                 .body(body);
     }
@@ -182,7 +185,9 @@ public class GlobalExceptionHandler {
                 .instance(request.getRequestURI())
                 .build();
         body.setTitle(code.getTitle());
-        ResponseEntity.BodyBuilder builder = ResponseEntity.status(code.getHttpStatus())
+        ResponseEntity.BodyBuilder builder = ApiKeyRotationHttpPolicy.apply(
+                        ResponseEntity.status(code.getHttpStatus()),
+                        request)
                 .contentType(PROBLEM_JSON);
         return builder.body(body);
     }
@@ -223,7 +228,9 @@ public class GlobalExceptionHandler {
                 .build();
         // Set human-readable title without triggering the builder's title() side effect
         body.setTitle(code.getTitle());
-        ResponseEntity.BodyBuilder builder = ResponseEntity.status(code.getHttpStatus())
+        ResponseEntity.BodyBuilder builder = ApiKeyRotationHttpPolicy.apply(
+                        ResponseEntity.status(code.getHttpStatus()),
+                        request)
                 .contentType(PROBLEM_JSON)
                 ;
         if (e instanceof ChatTurnInProgressException inProgress) {
@@ -257,7 +264,9 @@ public class GlobalExceptionHandler {
                 .path(request.getRequestURI())
                 .build();
 
-        return ResponseEntity.status(status)
+        return ApiKeyRotationHttpPolicy.apply(
+                        ResponseEntity.status(status),
+                        request)
                 .contentType(PROBLEM_JSON)
                 .body(body);
     }

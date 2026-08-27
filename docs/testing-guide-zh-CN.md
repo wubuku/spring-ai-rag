@@ -279,7 +279,7 @@ PostgreSQL 数据库，并显式设置 `EXTERNAL_DOCUMENT_IT_CLEAN_CONFIRM=YES`�
   CAS 冲突；
 - self operation/status/Collection observability、跨 principal/Collection 拒绝、有界延迟
   摘要与重启持久化；
-- Flyway V54、明文 credential 为零、成功 embedding job 与 integration-operation
+- Flyway V55、明文 credential 为零、成功 embedding job 与 integration-operation
   rollup 的 PostgreSQL 只读事实；
 - WebUI typecheck、Vitest、生产构建、核心 Mock Playwright 与真实 API Key Playwright。
 
@@ -625,8 +625,9 @@ Collection decoy 泄漏和 JSONB 明确空结果。外部 provider、数据库�
 
 ### 受管 API Principal PostgreSQL 矩阵
 
-在真实 PostgreSQL 上执行 V48→V50 迁移、credential lifecycle、operation capability、
-幂等 provisioning/replay/conflict、owner 隔离、并发首次创建、rotation/revoke 后 replay
+在真实 PostgreSQL 上执行 V48→V55 迁移、credential lifecycle、operation capability、
+幂等 provisioning/replay/conflict、owner 隔离、并发首次创建、即时与 staged rotation、
+complete/cancel/expiry/family revoke、policy deadline clamp、rotation/revoke 后 replay
 状态、policy concurrency、last-ADMIN、last-used、共享 quota 与有界清理矩阵：
 
 ```bash
@@ -648,6 +649,7 @@ mvn -pl spring-ai-rag-core -am \
 
 # Mock 门槛全部通过后，显式执行真实 provider 验收
 MANAGED_API_REAL_ENV_FILE=.env \
+MANAGED_API_REAL_LLM_PROVIDER=minimax \
 ./scripts/verify-managed-api-principals.sh --with-real-llm
 ```
 
@@ -655,16 +657,22 @@ MANAGED_API_REAL_ENV_FILE=.env \
 WebUI Vitest/TypeScript/生产构建/alignment、核心 Mock Playwright、禁锁与文档门禁；随后
 启动两个共享一次性 PostgreSQL 的真实后端和一个 Vite 前端，验证只读 identity/GET 与
 写入 `403`、轮换继承能力、非法能力不落库、认证 capability discovery、跨实例 keyed
-provisioning 的 create/replay/conflict、rotation/revoke 后 replay、全局 quota、policy
-CAS、跨实例轮换/撤销、quota store 故障关闭和无截图真实 Playwright。真实 LLM 模式还覆盖 native
-JSON/SSE 与 OpenAI-compatible JSON/SSE。真实 Chat principal 显式只有 `RAG_READ`；
-脚本先验证写请求 `403` 且 provider counter 不变，再证明幂等重放不产生重复模型调用，
-并要求真实 provider 调用总数严格等于 5。证据写入
+provisioning 的 create/replay/conflict、staged prepare/replay/conflict/complete/cancel/
+deadline/family revoke、overlap 双 credential 共享 quota、rotation/revoke 后 replay、
+全局 quota、policy CAS、quota store 故障关闭和无截图真实 Playwright。真实 LLM 模式还
+覆盖 native JSON/SSE 与 OpenAI-compatible JSON/SSE。真实 Chat principal 显式只有
+`RAG_READ`；脚本先验证写请求 `403` 且 provider counter 不变，再证明幂等重放不产生重复
+模型调用；随后覆盖 staged complete、cancel 后会话恢复和 pending family revoke，要求恰好
+9 次成功真实 provider 调用，所有拒绝/replay 路径增量为 0。证据写入
 `.verification/managed-api-principals/<run-id>/summary.md`，敏感响应只保存在 gitignored、
 权限受限的 `private/` 子目录。
 
-这里的 5 次是该受管 principal 回归合同的确定性预期值，用于证明拒绝与 replay 不会产生
-额外调用；它不是更广泛客户生命周期验收的调用上限。完整接入验收应按实际场景继续覆盖创建、
+`MANAGED_API_REAL_LLM_PROVIDER` 支持 `openai`、`minimax` 和 `anthropic`。脚本只要求
+`.env` 提供所选 provider 的 key、base URL 和 model，不会因未选择 provider 的变量缺失而
+失败；摘要会记录实际选择，但不会记录 key。
+
+这里的 9 次是该受管 principal staged 生命周期合同的确定性预期值，不是更广泛客户生命周期
+验收的调用上限。完整接入验收应按实际场景继续覆盖创建、
 更新、删除、恢复、凭据轮换和重启后的真实 Chat/Embedding 路径。
 
 ### Chat 对话能力重构验收门禁

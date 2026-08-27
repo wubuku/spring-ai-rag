@@ -69,6 +69,8 @@ public class RagProperties {
             new RagDocumentLifecycleProperties();
     private final RagApiKeyProvisioningProperties apiKeyProvisioning =
             new RagApiKeyProvisioningProperties();
+    private final RagApiKeyRotationProperties apiKeyRotation =
+            new RagApiKeyRotationProperties();
     private final RagCollectionProvisioningProperties collectionProvisioning =
             new RagCollectionProvisioningProperties();
     private final RagUsageProperties usage = new RagUsageProperties();
@@ -177,6 +179,10 @@ public class RagProperties {
 
     public RagApiKeyProvisioningProperties getApiKeyProvisioning() {
         return apiKeyProvisioning;
+    }
+
+    public RagApiKeyRotationProperties getApiKeyRotation() {
+        return apiKeyRotation;
     }
 
     public RagCollectionProvisioningProperties getCollectionProvisioning() {

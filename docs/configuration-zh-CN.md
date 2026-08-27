@@ -864,6 +864,12 @@ rag:
     retention: ${RAG_API_KEY_PROVISIONING_RETENTION:400d}
     cleanup-batch-size: ${RAG_API_KEY_PROVISIONING_CLEANUP_BATCH_SIZE:500}
     concurrent-retry-attempts: ${RAG_API_KEY_PROVISIONING_CONCURRENT_RETRY_ATTEMPTS:3}
+  api-key-rotation:
+    default-overlap: ${RAG_API_KEY_ROTATION_DEFAULT_OVERLAP:15m}
+    max-overlap: ${RAG_API_KEY_ROTATION_MAX_OVERLAP:1h}
+    operation-retention: ${RAG_API_KEY_ROTATION_OPERATION_RETENTION:400d}
+    cleanup-interval-ms: ${RAG_API_KEY_ROTATION_CLEANUP_INTERVAL_MS:60000}
+    cleanup-batch-size: ${RAG_API_KEY_ROTATION_CLEANUP_BATCH_SIZE:500}
   collection-provisioning:
     enabled: ${RAG_COLLECTION_PROVISIONING_ENABLED:true}
     retention: ${RAG_COLLECTION_PROVISIONING_RETENTION:400d}
@@ -884,6 +890,14 @@ rag:
 | `rag.api-key-provisioning.retention` | `400d` | 成功 provisioning ledger 的保留时间和保证 replay 窗口；范围 7–3650 天 |
 | `rag.api-key-provisioning.cleanup-batch-size` | `500` | 每次定时清理最多删除的已完成 ledger 行数，限制为 10–5000 |
 | `rag.api-key-provisioning.concurrent-retry-attempts` | `3` | 同 owner/key 唯一约束竞争后读取胜者的有界尝试次数，限制为 1–8 |
+
+| 属性 | 默认值 | 说明 |
+|------|--------|------|
+| `rag.api-key-rotation.default-overlap` | `15m` | staged rotation 默认 overlap；必须为正整数秒且不大于 `max-overlap` |
+| `rag.api-key-rotation.max-overlap` | `1h` | 调用方可请求的最大 overlap；范围 1 秒至 24 小时，必须为整数秒 |
+| `rag.api-key-rotation.operation-retention` | `400d` | 终态 operation 保留期及幂等 replay/status 窗口；范围 7–3650 个整天 |
+| `rag.api-key-rotation.cleanup-interval-ms` | `60000` | 推进过期 operation 和清理旧终态行的固定延迟；范围 1,000–86,400,000 毫秒 |
+| `rag.api-key-rotation.cleanup-batch-size` | `500` | 每轮最多处理的过期/终态 operation 数；范围 10–5000 |
 
 | 属性 | 默认值 | 说明 |
 |------|--------|------|
@@ -925,7 +939,11 @@ static 和关闭认证的兼容路径保持完整权限。V50 增加可选 `Idem
 provisioning ledger，只保存 owner/key/request hash 和结果 metadata，绝不保存 raw
 credential。每次请求都联查权威 credential/principal；仅近似审计字段 `last_used_at`
 的写入在五分钟内抑制。legacy `api_key` 列为迁移兼容继续存在，但被约束为只能是
-`NULL`。详见
+`NULL`。V55 增加有界 staged rotation：prepare 必须携带 `Idempotency-Key`，创建一个
+新 current credential，并把旧 credential 标为在有效 deadline 前 retiring。两者仍绑定
+同一 principal、ACL、capabilities、owner、用量归因和共享 quota。认证直接检查 deadline；
+complete、cancel、expiry 或 family revoke 都会收敛回至多一个 active credential。
+operation ledger 只保存 hash 和 metadata，绝不保存或重放 raw secret。详见
 [rest-api-zh-CN.md](rest-api-zh-CN.md)。
 
 ## API 限流配置

@@ -32,6 +32,7 @@
 
 ## 当前活跃规划
 
-当前没有活跃规划。
+- [下一批高价值功能实施规划：有界零停机 API Credential 轮换](NEXT_HIGH_VALUE_FEATURES_PLAN.md)
+- [配套实施进度](NEXT_HIGH_VALUE_FEATURES_PROGRESS.md)
 
 已完成、已停止和被替代的材料可从[历史归档](archive/README-zh-CN.md)追溯。
