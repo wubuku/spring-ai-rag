@@ -4,6 +4,7 @@ import com.springairag.api.dto.ApiKeyCreateRequest;
 import com.springairag.api.dto.ApiKeyCreatedResponse;
 import com.springairag.api.dto.ApiPrincipalPolicyUpdateRequest;
 import com.springairag.api.enums.ErrorCode;
+import com.springairag.core.apikeyalert.ApiPrincipalLifecycleEventPublisher;
 import com.springairag.core.entity.ApiKeyRole;
 import com.springairag.core.entity.ApiKeyProvisioningOperation;
 import com.springairag.core.entity.RagApiKey;
@@ -39,6 +40,7 @@ class ApiKeyManagementServiceTest {
     @Mock CollectionIdentityResolver collectionIdentityResolver;
     @Mock JdbcTemplate jdbcTemplate;
     @Mock ApiKeyProvisioningOperationRepository provisioningRepository;
+    @Mock ApiPrincipalLifecycleEventPublisher lifecycleEventPublisher;
 
     private ApiKeyManagementService service;
 
@@ -50,8 +52,10 @@ class ApiKeyManagementServiceTest {
                 collectionIdentityResolver,
                 jdbcTemplate,
                 provisioningRepository,
+                null,
                 new RagProperties(),
-                null);
+                null,
+                lifecycleEventPublisher);
     }
 
     @Test
@@ -85,6 +89,49 @@ class ApiKeyManagementServiceTest {
         assertEquals(principal.getValue().getPrincipalId(),
                 credential.getValue().getPrincipalId());
         assertEquals(1, credential.getValue().getCredentialVersion());
+        verify(lifecycleEventPublisher).publishAfterCommit(
+                principal.getValue().getPrincipalId());
+    }
+
+    @Test
+    void updateAndRevokePublishLifecycleEvents() {
+        RagApiPrincipal updated = principal("rag_k_update");
+        when(principalRepository.acquireManagementWrite(
+                updated.getPrincipalId())).thenReturn(1);
+        when(principalRepository.findByPrincipalId(
+                updated.getPrincipalId())).thenReturn(Optional.of(updated));
+        ApiPrincipalPolicyUpdateRequest update = policyRequest(updated);
+        update.setExpiresAt(LocalDateTime.now().plusDays(20));
+
+        service.updatePolicy(
+                updated.getPrincipalId(), update, null, true);
+
+        verify(lifecycleEventPublisher).publishAfterCommit(
+                updated.getPrincipalId());
+
+        RagApiPrincipal revoked = principal("rag_k_revoke");
+        RagApiKey current = credential(
+                "rag_k_revoke_current",
+                revoked.getPrincipalId(),
+                1,
+                true);
+        when(credentialRepository.findByKeyId(current.getKeyId()))
+                .thenReturn(Optional.of(current));
+        when(principalRepository.acquireManagementWrite(
+                revoked.getPrincipalId())).thenReturn(1);
+        when(principalRepository.findByPrincipalId(
+                revoked.getPrincipalId())).thenReturn(Optional.of(revoked));
+        when(credentialRepository
+                .findByPrincipalIdAndEnabledTrueAndRetireAtIsNull(
+                        revoked.getPrincipalId()))
+                .thenReturn(Optional.of(current));
+        when(credentialRepository.disableAllActiveByPrincipalId(
+                eq(revoked.getPrincipalId()), any(LocalDateTime.class)))
+                .thenReturn(1);
+
+        assertTrue(service.revokeManagedKey(current.getKeyId()));
+        verify(lifecycleEventPublisher).publishAfterCommit(
+                revoked.getPrincipalId());
     }
 
     @Test

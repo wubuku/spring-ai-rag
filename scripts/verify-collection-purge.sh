@@ -213,7 +213,7 @@ done
 
 run_step "No explicit pessimistic locks" ./scripts/verify-no-pessimistic-locks.sh
 run_step "Focused purge backend tests" focused_backend_tests
-run_step "Disposable PostgreSQL V1-V56 purge acceptance" postgres_tests
+run_step "Disposable PostgreSQL V1-V57 purge acceptance" postgres_tests
 run_step "Maven clean compile test-compile" mvn clean compile test-compile
 run_step "WebUI typecheck Vitest lint build" webui_checks
 run_step "Collection Mock Playwright" mock_playwright

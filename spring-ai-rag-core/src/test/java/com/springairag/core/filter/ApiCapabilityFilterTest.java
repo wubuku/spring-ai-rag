@@ -46,6 +46,8 @@ class ApiCapabilityFilterTest {
         assertNull(ApiCapabilityFilter.requiredCapability(
                 "GET", "/api/v1/rag/api-keys/principals"));
         assertNull(ApiCapabilityFilter.requiredCapability(
+                "GET", "/api/v1/rag/alerts/active"));
+        assertNull(ApiCapabilityFilter.requiredCapability(
                 "GET", "/api/v1/rag/integration-capabilities"));
     }
 

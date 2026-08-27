@@ -258,7 +258,7 @@ PostgreSQL 数据库，并显式设置 `EXTERNAL_DOCUMENT_IT_CLEAN_CONFIRM=YES`�
   长度边界、双向跨 Collection ACL 和全数据面防枚举；
 - JSON Record 精确重放、CAS、payload containment、tombstone/恢复和 payload-only
   不重嵌入；
-- capability protocol `1.0`、非默认 JSON batch 上限、对应上限的真实 `400` 强制边界，
+- capability protocol `1.1`、非默认 JSON batch 上限、对应上限的真实 `400` 强制边界，
   以及可选 operation-observability feature；
 - `ASYNC` 持久化 job 经真实 Spring AI embedding HTTP 路径收敛为 fresh；
 - 确定性 provider `503` 使 job 收敛为 `FAILED`，但保留已提交的 Record identity、
@@ -520,7 +520,7 @@ WebUI 通过请求拦截断言同一次用户提交在 Axios retry 中复用一�
 ```
 
 该 9 阶段门禁依次执行禁悲观锁检查、purge/Collection/feedback/audit/OpenAI scope
-聚焦测试、真实 PostgreSQL V1–V56 清理矩阵、`mvn clean compile test-compile`、完整
+聚焦测试、真实 PostgreSQL V1–V57 清理矩阵、`mvn clean compile test-compile`、完整
 WebUI typecheck/Vitest/lint/生产构建、Collection Mock Playwright、双语文档门禁、脚本
 语法和空白检查。每次运行在
 `.verification/collection-purge/<run-id>/summary.md` 记录逐步证据。
@@ -729,6 +729,23 @@ deadline/family revoke、overlap 双 credential 共享 quota、rotation/revoke �
 这里的 9 次是该受管 principal staged 生命周期合同的确定性预期值，不是更广泛客户生命周期
 验收的调用上限。完整接入验收应按实际场景继续覆盖创建、
 更新、删除、恢复、凭据轮换和重启后的真实 Chat/Embedding 路径。
+
+### 受管 API Principal 到期告警门禁
+
+```bash
+API_KEY_EXPIRY_ALERT_VERIFY_PHASE=focused \
+./scripts/verify-api-key-expiry-alerts.sh
+
+./scripts/verify-api-key-expiry-alerts.sh
+```
+
+focused 阶段一次性执行受影响后端测试、空库 V1-V57 PostgreSQL 生命周期矩阵、WebUI
+typecheck/Vitest/alignment/production build 和 Alerts Mock Playwright。PostgreSQL 场景覆盖
+8 路并发只产生一个 active condition/通知 claim、`WARNING → CRITICAL → EXPIRED` 原行
+升级、同阶段刷新、延期/吊销解决、重新进入窗口的新历史、漏事件恢复、超过单批上限的公平
+扫描和低敏持久化投影。Playwright 只使用网络、JSON、DOM 可见性与可访问断言，不使用截图。
+`all` 阶段再执行 `mvn clean compile test-compile`、禁悲观锁、双语文档、Shell、diff 与
+新增行密钥检查。真实 provider 生命周期验收在 Mock 门槛通过后单独执行，并持续观察服务日志。
 
 ### Chat 对话能力重构验收门禁
 

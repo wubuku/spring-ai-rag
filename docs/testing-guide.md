@@ -278,7 +278,7 @@ covers:
   and full-data-plane anti-enumeration;
 - JSON Record exact replay, CAS, payload containment, tombstone/restore, and
   no re-embedding for payload-only changes;
-- capability protocol `1.0`, non-default JSON batch limits, real `400`
+- capability protocol `1.1`, non-default JSON batch limits, real `400`
   enforcement at those limits, and the optional operation-observability flag;
 - `ASYNC` durable-job convergence through the real Spring AI embedding HTTP
   path;
@@ -586,7 +586,7 @@ UUID. No screenshot is used as acceptance evidence.
 
 This nine-stage gate runs the no-pessimistic-lock check, focused
 purge/Collection/feedback/audit/OpenAI-scope tests, the real PostgreSQL
-V1-V56 purge matrix, `mvn clean compile test-compile`, full WebUI
+V1-V57 purge matrix, `mvn clean compile test-compile`, full WebUI
 typecheck/Vitest/lint/production build, Collection Mock Playwright, bilingual
 documentation validation, shell syntax, and whitespace checks. Each run writes
 step evidence to
@@ -829,6 +829,28 @@ principal staged-lifecycle contract. They are not an upper limit for broader
 client-lifecycle acceptance,
 which should continue through real Chat and Embedding paths for create, update,
 delete, restore, credential rotation, and post-restart behavior.
+
+### Managed API Principal Expiry Alert Gate
+
+```bash
+API_KEY_EXPIRY_ALERT_VERIFY_PHASE=focused \
+./scripts/verify-api-key-expiry-alerts.sh
+
+./scripts/verify-api-key-expiry-alerts.sh
+```
+
+The focused phase runs the affected backend tests, an empty-database V1-V57
+PostgreSQL lifecycle matrix, WebUI typecheck/Vitest/alignment/production build,
+and Alerts Mock Playwright in one pass. PostgreSQL scenarios cover eight-way
+concurrency producing one active condition/notification claim, same-row
+`WARNING → CRITICAL → EXPIRED` transitions, same-phase refresh, extension and
+revocation resolution, a new history row after re-entry, missed-event recovery,
+fair scanning beyond one batch, and the low-sensitivity durable projection.
+Playwright uses network, JSON, DOM visibility, and accessibility assertions
+only, never screenshots. The `all` phase also runs
+`mvn clean compile test-compile`, no-pessimistic-lock, bilingual-documentation,
+shell, diff, and added-line secret gates. Real-provider lifecycle acceptance
+runs separately after the Mock gates and requires continuous log observation.
 
 ### Chat Capability Redesign Acceptance Gate
 

@@ -49,7 +49,7 @@ class IntegrationCapabilitiesControllerTest {
                 .andExpect(header().string("Cache-Control", "no-store"))
                 .andExpect(jsonPath("$.protocol.name")
                         .value("spring-ai-rag-integration"))
-                .andExpect(jsonPath("$.protocol.version").value("1.0"))
+                .andExpect(jsonPath("$.protocol.version").value("1.1"))
                 .andExpect(jsonPath("$.principal.principalType")
                         .value("DATABASE_API_KEY"))
                 .andExpect(jsonPath("$.principal.allowedCollectionKeys[0]")
@@ -93,7 +93,7 @@ class IntegrationCapabilitiesControllerTest {
             IntegrationCapabilitiesResponse.Principal principal) {
         return new IntegrationCapabilitiesResponse(
                 new IntegrationCapabilitiesResponse.Protocol(
-                        "spring-ai-rag-integration", "1.0", "1.0.0"),
+                        "spring-ai-rag-integration", "1.1", "1.0.0"),
                 principal,
                 new IntegrationCapabilitiesResponse.Features(
                         new IntegrationCapabilitiesResponse.Provisioning(

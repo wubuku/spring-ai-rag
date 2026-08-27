@@ -115,16 +115,18 @@ class NotificationConfigTest {
         assertNull(dt.getWebhookUrl());
         assertNull(dt.getSecret());
         assertTrue(dt.isEnabled());
-        assertEquals(4, dt.getAlertTypes().size());
+        assertEquals(5, dt.getAlertTypes().size());
         assertTrue(dt.getAlertTypes().contains("THRESHOLD_HIGH"));
+        assertTrue(dt.getAlertTypes().contains("API_PRINCIPAL_EXPIRY"));
     }
 
     @Test
     void emailConfig_defaultAlertTypes() {
         NotificationConfig.EmailConfig email = new NotificationConfig.EmailConfig();
-        assertEquals(2, email.getAlertTypes().size());
+        assertEquals(3, email.getAlertTypes().size());
         assertTrue(email.getAlertTypes().contains("CRITICAL"));
         assertTrue(email.getAlertTypes().contains("SLO_BREACH"));
+        assertTrue(email.getAlertTypes().contains("API_PRINCIPAL_EXPIRY"));
     }
 
     @Test

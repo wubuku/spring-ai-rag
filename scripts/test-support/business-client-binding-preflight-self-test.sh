@@ -78,7 +78,7 @@ run_negative() {
 run_capability_case() {
   local name="$1" expected_exit="$2" expected_category="$3"
   local batch_items="$4" batch_payload="$5" observability="$6"
-  local protocol="${7:-1.0}" extra_env="${8:-}"
+  local protocol="${7:-1.1}" extra_env="${8:-}"
   local evidence="${ROOT_DIR}/${name}" output="${ROOT_DIR}/${name}.out"
   local error="${ROOT_DIR}/${name}.err" report port_file stub_pid rc
 
@@ -228,7 +228,7 @@ run_capability_case "capability-pass" 0 "" 20 10485760 true
 run_capability_case "capability-low-items" 1 "CAPABILITY_LIMIT_TOO_LOW" 9 10485760 true
 run_capability_case "capability-low-payload" 1 "CAPABILITY_LIMIT_TOO_LOW" 20 999999 true
 run_capability_case "capability-feature-required" 1 "CAPABILITY_FEATURE_REQUIRED" 20 10485760 false
-run_capability_case "capability-protocol-mismatch" 1 "CAPABILITY_CONTRACT_MISMATCH" 20 10485760 true 1.1
+run_capability_case "capability-protocol-mismatch" 1 "CAPABILITY_CONTRACT_MISMATCH" 20 10485760 true 1.0
 
 set +e
 RAG_BINDING_BASE_URL="https://rag.example.invalid" \

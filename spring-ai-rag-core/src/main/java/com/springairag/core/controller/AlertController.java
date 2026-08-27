@@ -12,6 +12,7 @@ import com.springairag.core.entity.RagSloConfig;
 import com.springairag.core.repository.RagSilenceScheduleRepository;
 import com.springairag.core.repository.SloConfigRepository;
 import com.springairag.core.service.AlertService;
+import com.springairag.core.service.AlertManagementAuthorization;
 import com.springairag.core.service.AuditLogService;
 import com.springairag.core.versioning.ApiVersion;
 import io.swagger.v3.oas.annotations.Operation;
@@ -20,6 +21,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -44,15 +46,35 @@ public class AlertController {
     private final AlertService alertService;
     private final SloConfigRepository sloConfigRepository;
     private final RagSilenceScheduleRepository silenceScheduleRepository;
+    private final AlertManagementAuthorization managementAuthorization;
     private AuditLogService auditLogService;  // optional: null when RagAuditLogRepository unavailable
 
     public AlertController(AlertService alertService, SloConfigRepository sloConfigRepository,
                            RagSilenceScheduleRepository silenceScheduleRepository,
                            @Autowired(required = false) AuditLogService auditLogService) {
+        this(alertService, sloConfigRepository, silenceScheduleRepository,
+                auditLogService, null);
+    }
+
+    @Autowired
+    public AlertController(
+            AlertService alertService,
+            SloConfigRepository sloConfigRepository,
+            RagSilenceScheduleRepository silenceScheduleRepository,
+            @Autowired(required = false) AuditLogService auditLogService,
+            AlertManagementAuthorization managementAuthorization) {
         this.alertService = alertService;
         this.sloConfigRepository = sloConfigRepository;
         this.silenceScheduleRepository = silenceScheduleRepository;
         this.auditLogService = auditLogService;
+        this.managementAuthorization = managementAuthorization;
+    }
+
+    @ModelAttribute
+    void requireOperator(HttpServletRequest request) {
+        if (managementAuthorization != null) {
+            managementAuthorization.requireAllowed(request);
+        }
     }
 
     /**

@@ -103,7 +103,7 @@ def main() -> None:
     parser.add_argument("--batch-items", type=int, default=20)
     parser.add_argument("--batch-payload-bytes", type=int, default=10485760)
     parser.add_argument("--observability", choices=("true", "false"), default="true")
-    parser.add_argument("--protocol-version", default="1.0")
+    parser.add_argument("--protocol-version", default="1.1")
     args = parser.parse_args()
 
     server = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)

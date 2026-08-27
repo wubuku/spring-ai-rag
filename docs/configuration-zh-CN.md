@@ -925,6 +925,13 @@ rag:
     operation-retention: ${RAG_API_KEY_ROTATION_OPERATION_RETENTION:400d}
     cleanup-interval-ms: ${RAG_API_KEY_ROTATION_CLEANUP_INTERVAL_MS:60000}
     cleanup-batch-size: ${RAG_API_KEY_ROTATION_CLEANUP_BATCH_SIZE:500}
+  api-key-expiry-alerts:
+    enabled: ${RAG_API_KEY_EXPIRY_ALERTS_ENABLED:true}
+    warning-window: ${RAG_API_KEY_EXPIRY_ALERTS_WARNING_WINDOW:P30D}
+    critical-window: ${RAG_API_KEY_EXPIRY_ALERTS_CRITICAL_WINDOW:P7D}
+    fallback-scan-interval: ${RAG_API_KEY_EXPIRY_ALERTS_FALLBACK_SCAN_INTERVAL:PT1H}
+    fallback-scan-limit: ${RAG_API_KEY_EXPIRY_ALERTS_FALLBACK_SCAN_LIMIT:10000}
+    event-retry-attempts: ${RAG_API_KEY_EXPIRY_ALERTS_EVENT_RETRY_ATTEMPTS:3}
   collection-provisioning:
     enabled: ${RAG_COLLECTION_PROVISIONING_ENABLED:true}
     retention: ${RAG_COLLECTION_PROVISIONING_RETENTION:400d}
@@ -953,6 +960,21 @@ rag:
 | `rag.api-key-rotation.operation-retention` | `400d` | 终态 operation 保留期及幂等 replay/status 窗口；范围 7–3650 个整天 |
 | `rag.api-key-rotation.cleanup-interval-ms` | `60000` | 推进过期 operation 和清理旧终态行的固定延迟；范围 1,000–86,400,000 毫秒 |
 | `rag.api-key-rotation.cleanup-batch-size` | `500` | 每轮最多处理的过期/终态 operation 数；范围 10–5000 |
+
+| 属性 | 默认值 | 说明 |
+|------|--------|------|
+| `rag.api-key-expiry-alerts.enabled` | `true` | 启用受管 principal 到期条件的创建与升级；关闭后仍会解决已不成立的 active 条件 |
+| `rag.api-key-expiry-alerts.warning-window` | `P30D` | WARNING 窗口，范围 1–180 天 |
+| `rag.api-key-expiry-alerts.critical-window` | `P7D` | CRITICAL 窗口，至少 1 小时且必须小于 WARNING 窗口 |
+| `rag.api-key-expiry-alerts.fallback-scan-interval` | `PT1H` | 漏事件和时间跨阈值的低频兜底；范围 10 分钟至 24 小时 |
+| `rag.api-key-expiry-alerts.fallback-scan-limit` | `10000` | 单轮公平扫描上限，范围 100–100000 |
+| `rag.api-key-expiry-alerts.event-retry-attempts` | `3` | 唯一约束/CAS 竞争的有界重试次数，范围 1–10 |
+
+principal 创建、expiry policy 更新和 family revoke 在事务提交后发布 Spring Event，
+异步 worker 通常会准实时对账。Scheduled 只负责低频恢复，不是主消费路径，默认不要降低到
+秒级轮询。PostgreSQL 中同一 principal 最多一条 active 到期告警，阶段为 `WARNING`、
+`CRITICAL` 或 `EXPIRED`；延期出窗口或吊销会自动解决。Email/DingTalk 的默认
+`alertTypes` 包含 `API_PRINCIPAL_EXPIRY`，部署显式配置 allow-list 时以部署值为准。
 
 | 属性 | 默认值 | 说明 |
 |------|--------|------|

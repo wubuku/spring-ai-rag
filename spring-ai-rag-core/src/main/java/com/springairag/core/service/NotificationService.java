@@ -1,5 +1,7 @@
 package com.springairag.core.service;
 
+import java.util.concurrent.CompletableFuture;
+
 /**
  * Notification service for sending alert notifications to external channels.
  * Implementations handle DingTalk webhooks, email, Slack, etc.
@@ -14,7 +16,12 @@ public interface NotificationService {
      * @param severity   CRITICAL / WARNING / INFO
      * @param message    alert message
      * @param metadata   additional alert metadata
-     * @return true if notification was sent successfully
+     * @return asynchronously completed send result
      */
-    boolean sendAlert(String alertType, String alertName, String severity, String message, java.util.Map<String, Object> metadata);
+    CompletableFuture<Boolean> sendAlert(
+            String alertType,
+            String alertName,
+            String severity,
+            String message,
+            java.util.Map<String, Object> metadata);
 }

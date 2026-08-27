@@ -128,7 +128,7 @@ At service startup, first call:
 GET /api/v1/rag/integration-capabilities
 ```
 
-Require protocol `spring-ai-rag-integration` version `1.0`, then verify that
+Require protocol `spring-ai-rag-integration` version `1.1`, then verify that
 the required provisioning/data-plane features and limits are present. The
 response is low-sensitivity and projected for the current caller; it does not
 replace identity binding. A client using authoritative snapshots must require
@@ -285,9 +285,9 @@ RAG_BINDING_REQUIRE_OPERATION_OBSERVABILITY=true \
 
 The minimum item/payload values are optional positive integers. The
 observability requirement accepts only `true` or `false`. The runner always
-requires capability protocol `1.0` and valid machine-readable
+requires capability protocol `1.1` and valid machine-readable
 structured-record limits; configured minimums add deployment-specific
-constraints without changing the protocol version.
+constraints without changing the protocol version advertised by the service.
 
 An explicitly provisioned, non-business canary Collection may opt into a
 bounded mutation smoke. It requires both the mode and confirmation flag, and
@@ -428,6 +428,14 @@ intentional; it invalidates the old credential immediately. Treat revocation,
 principal expiry, and overlap expiry as terminal errors, not unbounded retry
 conditions.
 
+Platform operators should monitor `API_PRINCIPAL_EXPIRY` through
+`/api/v1/rag/alerts/active` and complete rotation or extend the expiry policy
+during the `WARNING` / `CRITICAL` phases. A business `NORMAL` principal cannot
+read the Alerts control plane and must not receive root/ADMIN credentials for
+self-checks. Callers continue to use the current principal, credential, and
+expiry projection from `/auth/me` as their startup-binding fact. The service
+converges alert resolution after extension, revocation, or replacement.
+
 ## 7. Deployment, Upgrade, And Rollback
 
 - Use `/actuator/health/liveness` for liveness and
@@ -437,7 +445,7 @@ conditions.
 - Read document lifecycle or
   `/api/v1/rag/collections/embedding-readiness` for embedding availability.
   Use `/auth/me` plus Collection by-key probes for business binding.
-- Empty and upgraded databases must run Flyway V1-V56 in order. V49 adds
+- Empty and upgraded databases must run Flyway V1-V57 in order. V49 adds
   operation capabilities to stable principals; V50 adds the successful
   provisioning idempotency ledger without storing raw credentials; V51 adds
   unfiltered and status-filtered keyset indexes for Sync Run item receipts;
@@ -446,13 +454,14 @@ conditions.
   operation and authorized Collection-contribution rollups; V55 adds bounded
   staged credential rotation and its secret-free operation ledger; V56 adds
   permanent Collection-retirement tombstones, Chat/feedback document-reference
-  indexes, and durable purge previews.
+  indexes, and durable purge previews; V57 adds durable deduplication, phase
+  versions, and a fair recovery scan for managed-principal expiry alerts.
 - Pin production callers to an accepted Git commit or an immutable image built
   from it. Maven/API version remains `1.0.0`.
 - The added `/auth/me` fields remain backward-compatible. Older clients ignore
   them; clients that depend on capability/ACL verification must run the
   contract gate before rollout.
-- V49 through V56 are forward-compatible additive migrations; do not destructively
+- V49 through V57 are forward-compatible additive migrations; do not destructively
   roll back their schema. If the application is rolled back to a version that
   does not understand operation capabilities, keyed principal/Collection
   provisioning, item receipts, usage aggregation, integration observability,
@@ -468,6 +477,11 @@ conditions.
   binaries do not understand `purged_at` and cannot enforce post-retirement
   restore/write/retrieval fences. Enable purge only after every instance runs
   V56; after any purge completes, do not roll data-plane traffic back to V55.
+- A mixed V56/V57 fleet may continue authentication and data-plane traffic,
+  but only V57 instances maintain principal-expiry alerts. Until rollout is
+  complete, do not treat alerts as the sole rotation trigger. Retain the V57
+  schema during application rollback; the low-frequency recovery scan
+  reconciles state when the newer binary returns.
 
 ### Operation Observability
 

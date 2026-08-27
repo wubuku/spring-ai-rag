@@ -40,10 +40,12 @@
 | Machine-readable integration protocol version / capability discovery | Shipped in V50, completed in V54 | An authenticated, no-store endpoint projects protocol, caller policy, supported behavior, structured-record/Sync Run/observability limits, and optional features |
 | Principal/Collection integration operation observability | Shipped in V54 | A bounded fail-open hourly rollup supports self/current-ACL diagnosis plus root/ADMIN management queries without high-cardinality metric tags |
 | Bounded staged credential rotation | Shipped in V55 | One current and at most one deadline-bounded retiring credential share the stable principal and quota; prepare is idempotent without replaying the shown-once secret, while complete/cancel/expiry/revoke converge to one or zero active credentials |
+| Managed-principal expiry alerting | Shipped in V57 | After-commit Spring Events normally reconcile immediately, with an hourly fair-scan fallback; PostgreSQL/CAS converges one active alert, phase transitions, notification claims, and extension/revocation resolution |
 | OAuth/OIDC and an independent tenant hierarchy | Separate future plan | The current system remains environment root plus managed business principals and has no third-party identity federation |
 | Persistent token/cost observability per model invocation | Shipped in V53 | `BudgetedChatModel` records bounded principal/session/trace attribution for Chat, query transform/expand, summaries, fallbacks, application retries, and AGENT rounds; `GET /api/v1/rag/usage` exposes UTC aggregate usage and configured-cost estimates |
 | Token/cost hard limits, billing, and settlement | Separate future plan | These require authorization, reservation, settlement, cross-instance overspend protection, and crash recovery; they cannot rely directly on a best-effort observability ledger |
 | Management recovery and removal of legacy compatibility | Evaluate before public enablement | Legacy static/query behavior remains a compatibility boundary; operator recovery relies on the environment root |
+| Durable notification outbox / provider delivery receipts | Separate future plan | The V57 PostgreSQL active alert is authoritative, while Email/DingTalk delivery remains best-effort; a process exit after claim may lose that phase's external notification |
 
 V48 performs a deterministic one-principal-per-credential backfill for rows
 present during migration; it does not guess unprovable family relationships

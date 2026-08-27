@@ -35,10 +35,12 @@
 | machine-readable 集成协议版本 / 能力发现 | V50 交付，V54 补全 | 认证、no-store endpoint 投影协议、调用方 policy、数据面行为、structured-record/Sync Run/observability 上限和可选特性 |
 | 按 principal/Collection 的集成 operation 可观测性 | V54 已交付 | 有界 fail-open 小时 rollup 支持 self/当前 ACL 定位与 root/ADMIN 管理查询，不使用高基数 metric 标签 |
 | 有界 staged credential rotation | V55 已交付 | 一个 current 与至多一个有 deadline 的 retiring credential 共享 stable principal 和 quota；prepare 幂等但不重放一次性 secret，complete/cancel/expiry/revoke 最终收敛到一个或零个 active credential |
+| 受管 principal 到期预警 | V57 已交付 | after-commit Spring Event 准实时对账，默认每小时公平扫描兜底；PostgreSQL/CAS 收敛唯一 active 告警、阶段升级、通知 claim 与延期/吊销解决 |
 | OAuth/OIDC 与独立租户层级 | 后续独立规划 | 当前仍是 environment root + 受管业务 principal，不提供第三方身份 federation |
 | 模型 invocation 级 token/cost 持久用量账本 | V53 已交付 | `BudgetedChatModel` 为 Chat、query transform/expand、summary、fallback、应用 retry 和 AGENT 轮次记录有界的 principal/session/trace 归因；`GET /api/v1/rag/usage` 提供 UTC 聚合用量和配置成本估算 |
 | token/cost hard limit、billing 与结算 | 后续独立规划 | 需要预授权、预留、结算、跨实例超额保护和崩溃恢复，不能直接建立在 best-effort 观测账本上 |
 | 管理面 recovery 与彻底关闭 legacy 兼容 | 公网启用前评估 | legacy static/query 行为仍为兼容边界；operator recovery 依赖 environment root |
+| 告警通知 durable outbox / 供应商投递回执 | 后续独立规划 | V57 的 PostgreSQL active alert 是权威状态，外部 Email/DingTalk 仍是 best-effort；进程在 claim 后退出可能漏掉该阶段外部通知 |
 
 V48 只对迁移时存在的每个历史 credential 做一对一 deterministic principal 回填；它不会
 猜测旧 rotation rows 之间无法证明的 family 关系。模型 invocation 用量与配置成本可观测性

@@ -21,6 +21,11 @@ LATEST_FLYWAY_MIGRATION="$(
 )"
 RUN_REAL_LLM=0
 REAL_LLM_PROVIDER="not-requested"
+EMBEDDING_API_KEY="dummy"
+EMBEDDING_BASE_URL="http://127.0.0.1:9"
+EMBEDDING_MODEL="dummy-embedding"
+EMBEDDING_PROVIDER="verification"
+EMBEDDING_MODEL_REVISION="v1"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -279,6 +284,7 @@ start_database() {
 
 load_provider_environment() {
   local requested_provider key base_url model
+  local embedding_base_url
   ROOT_KEY="managed-root-$(openssl rand -hex 32)"
   if [[ "$RUN_REAL_LLM" == "1" ]]; then
     set +u
@@ -362,6 +368,23 @@ load_provider_environment() {
     export LLM_PROVIDER="$REAL_LLM_PROVIDER"
     export REAL_LLM_CHAT_PROVIDER="$REAL_LLM_PROVIDER"
     echo "Selected real LLM provider=${REAL_LLM_PROVIDER} model=${model}"
+
+    EMBEDDING_API_KEY="${SILICONFLOW_API_KEY:-}"
+    embedding_base_url="${SILICONFLOW_URL:-https://api.siliconflow.cn}"
+    embedding_base_url="${embedding_base_url%/}"
+    EMBEDDING_BASE_URL="${embedding_base_url%/v1}"
+    EMBEDDING_MODEL="${SILICONFLOW_MODEL:-BAAI/bge-m3}"
+    EMBEDDING_PROVIDER="siliconflow"
+    EMBEDDING_MODEL_REVISION="real-e2e"
+    [[ -n "$EMBEDDING_API_KEY" ]] || {
+      echo "Real provider acceptance requires SILICONFLOW_API_KEY" >&2
+      return 1
+    }
+    [[ -n "$EMBEDDING_BASE_URL" && -n "$EMBEDDING_MODEL" ]] || {
+      echo "Real provider acceptance requires a valid SiliconFlow URL and model" >&2
+      return 1
+    }
+    echo "Selected real embedding provider=siliconflow model=${EMBEDDING_MODEL}"
   else
     REAL_LLM_PROVIDER="mock-openai"
     export APP_LLM_PROVIDER=openai
@@ -391,13 +414,15 @@ start_backend() {
     RAG_CORS_ALLOWED_ORIGINS_0="http://127.0.0.1:${FRONTEND_PORT}" \
     RAG_OPENAI_COMPATIBILITY_ENABLED=true \
     SPRING_APPLICATION_JSON='{"rag":{"openai-compatibility":{"enabled":true,"models":{"rag-default":{"candidates":[],"mode":"PLAIN","memory":"STATELESS"}}}}}' \
-    RAG_EMBEDDING_API_KEY=dummy \
-    RAG_EMBEDDING_BASE_URL=http://127.0.0.1:9 \
-    RAG_EMBEDDING_MODEL=dummy-embedding \
+    RAG_EMBEDDING_API_KEY="$EMBEDDING_API_KEY" \
+    RAG_EMBEDDING_BASE_URL="$EMBEDDING_BASE_URL" \
+    RAG_EMBEDDING_MODEL="$EMBEDDING_MODEL" \
     RAG_EMBEDDING_DIMENSIONS=1024 \
     RAG_EMBEDDING_PROFILE_KEY=managed-principal-gate-1024-v1 \
-    RAG_EMBEDDING_PROVIDER=verification \
-    RAG_EMBEDDING_MODEL_REVISION=v1 \
+    RAG_EMBEDDING_PROVIDER="$EMBEDDING_PROVIDER" \
+    RAG_EMBEDDING_MODEL_REVISION="$EMBEDDING_MODEL_REVISION" \
+    RAG_EMBEDDING_JOBS_POLL_INTERVAL_MS=60000 \
+    RAG_API_KEY_EXPIRY_ALERTS_FALLBACK_SCAN_INTERVAL=PT1H \
     java -cp "$RUNTIME_CLASSPATH" com.springairag.core.SpringAiRagApplication \
       > "$log" 2>&1 &
   printf '%s\n' "$!"
@@ -432,12 +457,89 @@ create_principal() {
     -o "$output" -w '%{http_code}'
 }
 
+create_expiring_principal() {
+  local base="$1" name="$2" expiry="$3" collection_key="$4" output="$5"
+  root_curl -X POST "${base}/api/v1/rag/api-keys" \
+    -H 'Content-Type: application/json' \
+    -d "$(
+      jq -nc \
+        --arg name "$name" \
+        --arg expiresAt "$expiry" \
+        --arg collectionKey "$collection_key" \
+        '{
+          name: $name,
+          expiresAt: $expiresAt,
+          allowedCollectionKeys: [$collectionKey],
+          requestsPerMinute: 100,
+          capabilities: ["RAG_READ", "RAG_WRITE"]
+        }'
+    )" \
+    -o "$output" -w '%{http_code}'
+}
+
 assert_code() {
   local actual="$1" expected="$2" label="$3"
   [[ "$actual" == "$expected" ]] || {
     echo "${label}: expected HTTP ${expected}, got ${actual}" >&2
     return 1
   }
+}
+
+iso_local_after_days() {
+  node -e '
+    const days = Number(process.argv[1]);
+    process.stdout.write(
+      new Date(Date.now() + days * 86400000)
+        .toISOString()
+        .replace(/\.\d{3}Z$/, "")
+    );
+  ' "$1"
+}
+
+poll_active_expiry_alert() {
+  local base="$1" principal="$2" phase="$3" output="$4"
+  local timeout_seconds="${5:-30}"
+  local deadline=$(( $(date +%s) + timeout_seconds ))
+  local code
+  while (( $(date +%s) <= deadline )); do
+    code="$(root_curl -o "$output" -w '%{http_code}' \
+      "${base}/api/v1/rag/alerts/active")" || return 1
+    if [[ "$code" == "200" ]] && jq -e \
+        --arg principal "$principal" \
+        --arg phase "$phase" '
+          any(.[];
+            .alertType == "API_PRINCIPAL_EXPIRY"
+            and .conditionState == $phase
+            and .metrics.principalId == $principal)
+        ' "$output" >/dev/null; then
+      return 0
+    fi
+    sleep 1
+  done
+  echo "Expiry alert did not reach ${phase} for principal ${principal}" >&2
+  return 1
+}
+
+poll_absent_expiry_alert() {
+  local base="$1" principal="$2" output="$3"
+  local timeout_seconds="${4:-30}"
+  local deadline=$(( $(date +%s) + timeout_seconds ))
+  local code
+  while (( $(date +%s) <= deadline )); do
+    code="$(root_curl -o "$output" -w '%{http_code}' \
+      "${base}/api/v1/rag/alerts/active")" || return 1
+    if [[ "$code" == "200" ]] && jq -e \
+        --arg principal "$principal" '
+          all(.[];
+            .alertType != "API_PRINCIPAL_EXPIRY"
+            or .metrics.principalId != $principal)
+        ' "$output" >/dev/null; then
+      return 0
+    fi
+    sleep 1
+  done
+  echo "Expiry alert remained active for principal ${principal}" >&2
+  return 1
 }
 
 provider_counter_for_port() {
@@ -482,7 +584,7 @@ run_two_instance_contract() {
   assert_code "$code" 200 "root capability discovery" || return 1
   jq -e '
     .protocol.name == "spring-ai-rag-integration"
-    and .protocol.version == "1.0"
+    and .protocol.version == "1.1"
     and .protocol.apiVersion == "1.0.0"
     and .principal.principalType == "ENVIRONMENT_ROOT"
     and .principal.collectionAccessMode == "UNRESTRICTED"
@@ -1398,6 +1500,411 @@ real_llm_contract() {
     | tail -20 | sed -E 's/rag_sk_[A-Za-z0-9_-]+/***REDACTED***/g' || true
 }
 
+real_embedding_and_expiry_alert_contract() {
+  local a="http://127.0.0.1:${BACKEND_A_PORT}"
+  local b="http://127.0.0.1:${BACKEND_B_PORT}"
+  local private="$LOG_DIR/private"
+  local suffix collection_key external_id token
+  local warning_expiry critical_expiry extended_expiry
+  local code principal key_id client_key alert_id document_id job_id
+  local warning_started warning_elapsed critical_started critical_elapsed
+  local resolved_started resolved_elapsed provider_before provider_after
+  local job_status="" event_started=0
+
+  suffix="$(openssl rand -hex 8)"
+  collection_key="managed-real-${suffix}"
+  external_id="policy-${suffix}"
+  token="MPR_REAL_${suffix}"
+  warning_expiry="$(iso_local_after_days 10)"
+  critical_expiry="$(iso_local_after_days 1)"
+  extended_expiry="$(iso_local_after_days 60)"
+
+  code="$(root_curl -X POST "${a}/api/v1/rag/collections" \
+    -H 'Content-Type: application/json' \
+    -d "$(
+      jq -nc \
+        --arg key "$collection_key" \
+        '{
+          collectionKey: $key,
+          name: "Managed principal real acceptance",
+          description: "Disposable customer lifecycle verification",
+          domainId: "default"
+        }'
+    )" \
+    -o "$private/real-lifecycle-collection.json" -w '%{http_code}')"
+  assert_code "$code" 200 "create real lifecycle Collection" || return 1
+  jq -e --arg key "$collection_key" \
+    '.collectionKey == $key and (.id | numbers) > 0' \
+    "$private/real-lifecycle-collection.json" >/dev/null || return 1
+
+  warning_started="$(date +%s)"
+  code="$(create_expiring_principal \
+    "$a" "Real lifecycle ${RUN_ID}" "$warning_expiry" "$collection_key" \
+    "$private/real-lifecycle-principal.json")"
+  assert_code "$code" 201 "create expiring real lifecycle principal" || return 1
+  principal="$(jq -er '.principalId' "$private/real-lifecycle-principal.json")"
+  key_id="$(jq -er '.keyId' "$private/real-lifecycle-principal.json")"
+  client_key="$(jq -er '.rawKey' "$private/real-lifecycle-principal.json")"
+  jq -e \
+    --arg principal "$principal" \
+    --arg key "$collection_key" '
+      .principalId == $principal
+      and .capabilities == ["RAG_READ", "RAG_WRITE"]
+      and .allowedCollectionKeys == [$key]
+      and .policyVersion == 1
+    ' "$private/real-lifecycle-principal.json" >/dev/null || return 1
+
+  code="$(curl -sS -H "X-API-Key: ${client_key}" \
+    -o "$private/real-lifecycle-alert-forbidden.json" -w '%{http_code}' \
+    "${b}/api/v1/rag/alerts/active")"
+  assert_code "$code" 403 "normal principal alert management rejection" || return 1
+  jq -e '.error == "FORBIDDEN"
+      and .detail == "Alert management requires operator access"' \
+    "$private/real-lifecycle-alert-forbidden.json" >/dev/null || return 1
+
+  poll_active_expiry_alert \
+    "$b" "$principal" WARNING \
+    "$private/real-lifecycle-warning-active.json" 30 || return 1
+  warning_elapsed=$(( $(date +%s) - warning_started ))
+  (( warning_elapsed < 60 )) || {
+    echo "WARNING alert did not converge before the one-hour fallback" >&2
+    return 1
+  }
+  jq -e \
+    --arg principal "$principal" \
+    --arg name "Real lifecycle ${RUN_ID}" \
+    --arg collectionKey "$collection_key" '
+      [.[] | select(
+        .alertType == "API_PRINCIPAL_EXPIRY"
+        and .metrics.principalId == $principal
+      )] as $alerts
+      | ($alerts | length) == 1
+      and ($alerts[0].conditionState == "WARNING")
+      and ($alerts[0].severity == "WARNING")
+      and ($alerts[0].status == "ACTIVE")
+      and ($alerts[0].firedAt != null)
+      and (($alerts[0] | has("triggeredAt")) | not)
+      and ($alerts[0].metrics.policyVersion == 1)
+      and ($alerts[0].metrics.phase == "WARNING")
+      and (($alerts[0].metrics | keys | sort) == [
+        "expiresAt",
+        "phase",
+        "policyVersion",
+        "principalId",
+        "principalRole",
+        "secondsRemaining",
+        "timeZone"
+      ])
+      and ((tostring | contains($name)) | not)
+      and ((tostring | contains($collectionKey)) | not)
+    ' "$private/real-lifecycle-warning-active.json" >/dev/null || return 1
+  alert_id="$(jq -er \
+    --arg principal "$principal" '
+      .[] | select(
+        .alertType == "API_PRINCIPAL_EXPIRY"
+        and .metrics.principalId == $principal
+      ) | .id
+    ' "$private/real-lifecycle-warning-active.json")"
+
+  code="$(curl -sS -H "X-API-Key: ${client_key}" \
+    -X POST "${a}/api/v1/rag/documents/upsert" \
+    -H 'Content-Type: application/json' \
+    -d "$(
+      jq -nc \
+        --arg collectionKey "$collection_key" \
+        --arg externalId "$external_id" \
+        --arg token "$token" \
+        '{
+          collectionKey: $collectionKey,
+          sourceNamespace: "managed-principal-real-acceptance",
+          externalId: $externalId,
+          sourceRevision: "revision-1",
+          title: "Expedited replacement policy",
+          content: (
+            "The expedited replacement service tier is cobalt. "
+            + "The authoritative customer verification token is " + $token
+            + ". Return the token verbatim when this policy is requested."
+          ),
+          source: "managed-principal-real-acceptance",
+          documentType: "text",
+          metadata: {purpose: "automated-real-provider-acceptance"},
+          embeddingPolicy: "ASYNC"
+        }'
+    )" \
+    -o "$private/real-lifecycle-upsert.json" -w '%{http_code}')"
+  assert_code "$code" 200 "real client ASYNC document upsert" || return 1
+  document_id="$(jq -er '.documentId' "$private/real-lifecycle-upsert.json")"
+  job_id="$(jq -er '.embeddingJobId' "$private/real-lifecycle-upsert.json")"
+  jq -e '
+    (.action == "CREATED" or .action == "UPDATED")
+    and .embeddingAction == "ASYNC_QUEUED"
+    and .lifecycle.searchability == "KEYWORD_ONLY"
+    and .lifecycle.embeddingStatus == "INDEXING"
+  ' "$private/real-lifecycle-upsert.json" >/dev/null || return 1
+
+  local embedding_started_at embedding_event_deadline embedding_deadline
+  embedding_started_at="$(date +%s)"
+  embedding_event_deadline=$(( embedding_started_at + 20 ))
+  while (( $(date +%s) <= embedding_event_deadline )); do
+    code="$(curl -sS -H "X-API-Key: ${client_key}" \
+      -o "$private/real-lifecycle-job.json" -w '%{http_code}' \
+      "${b}/api/v1/rag/embedding-jobs/${job_id}")"
+    assert_code "$code" 200 "read real embedding job" || return 1
+    job_status="$(jq -r '.status' "$private/real-lifecycle-job.json")"
+    if [[ "$job_status" == "RUNNING" || "$job_status" == "SUCCEEDED" ]]; then
+      event_started=1
+      break
+    fi
+    if [[ "$job_status" == "FAILED" || "$job_status" == "CANCELLED" \
+        || "$job_status" == "STALE" ]]; then
+      echo "Real embedding job reached terminal failure: ${job_status}" >&2
+      return 1
+    fi
+    sleep 1
+  done
+  [[ "$event_started" == "1" ]] || {
+    echo "Embedding job did not start before the 60-second recovery scan" >&2
+    return 1
+  }
+
+  embedding_deadline=$(( embedding_started_at + 180 ))
+  while (( $(date +%s) <= embedding_deadline )); do
+    code="$(curl -sS -H "X-API-Key: ${client_key}" \
+      -o "$private/real-lifecycle-job.json" -w '%{http_code}' \
+      "${b}/api/v1/rag/embedding-jobs/${job_id}")"
+    assert_code "$code" 200 "poll real embedding job" || return 1
+    job_status="$(jq -r '.status' "$private/real-lifecycle-job.json")"
+    [[ "$job_status" == "SUCCEEDED" ]] && break
+    if [[ "$job_status" == "FAILED" || "$job_status" == "CANCELLED" \
+        || "$job_status" == "STALE" ]]; then
+      echo "Real embedding job reached terminal failure: ${job_status}" >&2
+      return 1
+    fi
+    sleep 2
+  done
+  [[ "$job_status" == "SUCCEEDED" ]] || {
+    echo "Real embedding job did not succeed within 180 seconds" >&2
+    return 1
+  }
+
+  code="$(curl -sS -G -H "X-API-Key: ${client_key}" \
+    --data-urlencode "collectionKey=${collection_key}" \
+    -o "$private/real-lifecycle-readiness.json" -w '%{http_code}' \
+    "${a}/api/v1/rag/collections/embedding-readiness")"
+  assert_code "$code" 200 "real Collection embedding readiness" || return 1
+  jq -e '
+    .enabledDocuments == 1
+    and .freshDocuments == 1
+    and .queuedDocuments == 0
+    and .runningDocuments == 0
+    and .failedDocuments == 0
+    and .staleOrMissingDocuments == 0
+  ' "$private/real-lifecycle-readiness.json" >/dev/null || return 1
+
+  code="$(curl -sS -H "X-API-Key: ${client_key}" \
+    -X POST "${b}/api/v1/rag/search" \
+    -H 'Content-Type: application/json' \
+    -d "$(
+      jq -nc \
+        --arg collectionKey "$collection_key" \
+        --argjson documentId "$document_id" \
+        '{
+          query: "Which service tier is used for expedited replacement?",
+          collectionScopeMode: "SELECTED_COLLECTIONS",
+          collectionKeys: [$collectionKey],
+          documentIds: [$documentId],
+          config: {
+            maxResults: 5,
+            minScore: 0,
+            useHybridSearch: false,
+            useRerank: false,
+            vectorWeight: 1,
+            fulltextWeight: 0
+          }
+        }'
+    )" \
+    -o "$private/real-lifecycle-search.json" -w '%{http_code}')"
+  assert_code "$code" 200 "real client vector-only search" || return 1
+  jq -e --arg documentId "$document_id" '
+    length > 0
+    and all(.[]; .documentId == $documentId)
+    and any(.[]; (.chunkText // "") | ascii_downcase | contains("cobalt"))
+  ' "$private/real-lifecycle-search.json" >/dev/null || return 1
+
+  provider_before="$(provider_counter)" || return 1
+  code="$(curl -sS --max-time 240 -H "X-API-Key: ${client_key}" \
+    -X POST "${a}/api/v1/rag/chat/ask" \
+    -H 'Content-Type: application/json' \
+    -H "Idempotency-Key: managed-real-knowledge-${suffix}" \
+    -d "$(
+      jq -nc \
+        --arg collectionKey "$collection_key" \
+        --arg token "$token" \
+        --argjson documentId "$document_id" \
+        --arg sessionId "managed-real-${suffix}" \
+        '{
+          message: (
+            "Using only the selected policy document, answer with the expedited "
+            + "replacement service tier and the authoritative verification token "
+            + $token + "."
+          ),
+          sessionId: $sessionId,
+          mode: "KNOWLEDGE",
+          maxResults: 5,
+          minScore: 0,
+          useHybridSearch: false,
+          useRerank: false,
+          collectionKeys: [$collectionKey],
+          documentIds: [$documentId]
+        }'
+    )" \
+    -o "$private/real-lifecycle-chat.json" -w '%{http_code}')"
+  assert_code "$code" 200 "real client KNOWLEDGE Chat" || return 1
+  jq -e \
+    --arg token "$token" \
+    --arg documentId "$document_id" '
+      (.answer | contains($token))
+      and (.answer | ascii_downcase | contains("cobalt"))
+      and any(.sources[]; .documentId == $documentId)
+    ' "$private/real-lifecycle-chat.json" >/dev/null || return 1
+  provider_after="$(provider_counter)" || return 1
+  awk -v before="$provider_before" -v after="$provider_after" \
+    'BEGIN {exit !(after > before)}' || {
+      echo "KNOWLEDGE Chat did not call the real provider" >&2
+      return 1
+    }
+
+  critical_started="$(date +%s)"
+  code="$(root_curl -X PUT \
+    "${b}/api/v1/rag/api-keys/principals/${principal}/policy" \
+    -H 'Content-Type: application/json' \
+    -d "$(
+      jq -nc \
+        --arg name "Real lifecycle ${RUN_ID}" \
+        --arg expiresAt "$critical_expiry" \
+        --arg collectionKey "$collection_key" \
+        '{
+          expectedPolicyVersion: 1,
+          name: $name,
+          expiresAt: $expiresAt,
+          allowedCollectionKeys: [$collectionKey],
+          requestsPerMinute: 100,
+          capabilities: ["RAG_READ", "RAG_WRITE"]
+        }'
+    )" \
+    -o "$private/real-lifecycle-critical-policy.json" -w '%{http_code}')"
+  assert_code "$code" 200 "move real lifecycle principal to critical window" || return 1
+  jq -e '.policyVersion == 2' \
+    "$private/real-lifecycle-critical-policy.json" >/dev/null || return 1
+  poll_active_expiry_alert \
+    "$a" "$principal" CRITICAL \
+    "$private/real-lifecycle-critical-active.json" 30 || return 1
+  critical_elapsed=$(( $(date +%s) - critical_started ))
+  (( critical_elapsed < 60 )) || {
+    echo "CRITICAL alert did not converge before the one-hour fallback" >&2
+    return 1
+  }
+  jq -e \
+    --argjson alertId "$alert_id" \
+    --arg principal "$principal" '
+      [.[] | select(
+        .alertType == "API_PRINCIPAL_EXPIRY"
+        and .metrics.principalId == $principal
+      )] as $alerts
+      | ($alerts | length) == 1
+      and $alerts[0].id == $alertId
+      and $alerts[0].conditionState == "CRITICAL"
+      and $alerts[0].severity == "CRITICAL"
+      and $alerts[0].metrics.phase == "CRITICAL"
+      and $alerts[0].metrics.policyVersion == 2
+    ' "$private/real-lifecycle-critical-active.json" >/dev/null || return 1
+
+  resolved_started="$(date +%s)"
+  code="$(root_curl -X PUT \
+    "${a}/api/v1/rag/api-keys/principals/${principal}/policy" \
+    -H 'Content-Type: application/json' \
+    -d "$(
+      jq -nc \
+        --arg name "Real lifecycle ${RUN_ID}" \
+        --arg expiresAt "$extended_expiry" \
+        --arg collectionKey "$collection_key" \
+        '{
+          expectedPolicyVersion: 2,
+          name: $name,
+          expiresAt: $expiresAt,
+          allowedCollectionKeys: [$collectionKey],
+          requestsPerMinute: 100,
+          capabilities: ["RAG_READ", "RAG_WRITE"]
+        }'
+    )" \
+    -o "$private/real-lifecycle-extended-policy.json" -w '%{http_code}')"
+  assert_code "$code" 200 "extend real lifecycle principal outside warning window" || return 1
+  jq -e '.policyVersion == 3' \
+    "$private/real-lifecycle-extended-policy.json" >/dev/null || return 1
+  poll_absent_expiry_alert \
+    "$b" "$principal" "$private/real-lifecycle-resolved-active.json" 30 \
+    || return 1
+  resolved_elapsed=$(( $(date +%s) - resolved_started ))
+  (( resolved_elapsed < 60 )) || {
+    echo "Resolved alert did not converge before the one-hour fallback" >&2
+    return 1
+  }
+
+  code="$(root_curl -G \
+    --data-urlencode 'startDate=2020-01-01T00:00:00Z' \
+    --data-urlencode 'endDate=2100-01-01T00:00:00Z' \
+    --data-urlencode 'alertType=API_PRINCIPAL_EXPIRY' \
+    -o "$private/real-lifecycle-alert-history.json" -w '%{http_code}' \
+    "${a}/api/v1/rag/alerts/history")"
+  assert_code "$code" 200 "read resolved expiry alert history" || return 1
+  jq -e \
+    --argjson alertId "$alert_id" \
+    --arg principal "$principal" '
+      [.[] | select(
+        .id == $alertId
+        and .alertType == "API_PRINCIPAL_EXPIRY"
+        and .metrics.principalId == $principal
+      )] as $alerts
+      | ($alerts | length) == 1
+      and $alerts[0].status == "RESOLVED"
+      and $alerts[0].conditionState == "CRITICAL"
+      and $alerts[0].resolvedAt != null
+      and ($alerts[0].resolution | strings | length > 0)
+    ' "$private/real-lifecycle-alert-history.json" >/dev/null || return 1
+
+  local alert_fact
+  alert_fact="$(docker exec "$PG_CONTAINER" psql \
+    -U postgres -d managed_api_principal_gate -At -F '|' -c "
+      SELECT
+        COUNT(*),
+        COUNT(*) FILTER (WHERE status = 'ACTIVE'),
+        COUNT(*) FILTER (WHERE status = 'RESOLVED'),
+        MIN(id),
+        MAX(id),
+        MAX(state_version),
+        MAX(notified_version)
+      FROM rag_alerts
+      WHERE dedupe_key = 'api-principal-expiry:${principal}';
+    ")"
+  [[ "$alert_fact" == "1|0|1|${alert_id}|${alert_id}|2|2" ]] || {
+    echo "Unexpected managed alert database fact: ${alert_fact}" >&2
+    return 1
+  }
+
+  code="$(root_curl -X DELETE "${b}/api/v1/rag/api-keys/${key_id}" \
+    -o /dev/null -w '%{http_code}')"
+  assert_code "$code" 204 "revoke real lifecycle principal" || return 1
+  code="$(curl -sS -H "X-API-Key: ${client_key}" \
+    -o /dev/null -w '%{http_code}' "${a}/api/v1/rag/auth/me")"
+  assert_code "$code" 401 "real lifecycle credential revoked across instances" || return 1
+
+  echo "real_embedding_alert_contract=PASS event_embedding=true vector_search=true knowledge_chat=true warning_seconds=${warning_elapsed} critical_seconds=${critical_elapsed} resolved_seconds=${resolved_elapsed} alert_row_reused=true operator_only=true"
+  echo "real_provider_log_tail:"
+  rg 'Embedding job|Chat execution|API principal expiry|Reconciled API principal' \
+    "$LOG_DIR/backend-a.log" "$LOG_DIR/backend-b.log" \
+    | tail -30 | sed -E 's/rag_sk_[A-Za-z0-9_-]+/***REDACTED***/g' || true
+}
+
 fullstack_contract() {
   echo "fullstack_stage=prepare_runtime"
   prepare_runtime || return 1
@@ -1418,6 +1925,8 @@ fullstack_contract() {
   if [[ "$RUN_REAL_LLM" == "1" ]]; then
     echo "fullstack_stage=real_llm_contract"
     real_llm_contract || return 1
+    echo "fullstack_stage=real_embedding_and_expiry_alert_contract"
+    real_embedding_and_expiry_alert_contract || return 1
   fi
 }
 

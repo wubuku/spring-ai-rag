@@ -15,7 +15,7 @@
 - [x] Helm `version` 与 `appVersion` 均为 `1.0.0`
 - [x] Docker/Helm 默认镜像 tag 为 `1.0.0`
 - [x] 本地、Docker 与 Helm 默认端口均为 `8081`
-- [x] Flyway 迁移范围为 V1-V56
+- [x] Flyway 迁移范围为 V1-V57
 - [x] JSONB 结构化记录 API、payload 快照和 Collection 生命周期已覆盖
 - [x] `scripts/verify-jsonb-records.sh` 固化后端/数据库/前端聚焦验证
 - [x] 文档 PATCH/禁用/恢复/永久删除与外部三元身份已覆盖
@@ -136,7 +136,7 @@
 - [x] 终态遍历稳定；active run 明确为最终一致观察，Client 必须按 `externalId` 去重并在
   终态后从头复扫。错误在写入和读取时脱敏并限制为 500 字符，响应使用 `no-store`。
 - [x] capability discovery 通过
-  `features.optional.documentSyncRunItemReceipts` 公布运行时可用性，protocol 保持 `1.0`
+  `features.optional.documentSyncRunItemReceipts` 公布运行时可用性，当前 protocol 为 `1.1`
   的 additive 兼容。
 - [x] PostgreSQL service 与认证 HTTP 验收覆盖 V1-V52、受限读写/只读 principal、
   ACL 防枚举、cursor binding、active/terminal 分页、FAILED 精确重放、missing
@@ -156,7 +156,7 @@
 - [x] `verify-collection-provisioning.sh` 覆盖聚焦合同、9 个 PostgreSQL 测试、两个真实
   后端实例、重启恢复、owner/ACL 隔离、数据库事实和证据脱敏；WebUI 测试证明 Axios
   retry 复用一次提交生成的 UUID。
-- [x] capability discovery 通过 additive protocol `1.0` 字段
+- [x] capability discovery 通过 protocol `1.1` 的 additive 字段
   `features.provisioning.collectionCreateIdempotencyKey` 公布能力。
 
 ### 2026-08-26 模型调用级用量账本门禁
@@ -178,7 +178,7 @@
 
 - [x] V54 增加有界 UTC 小时级请求总量与已授权 Collection contribution，不保存请求/
   响应正文、query、payload、external ID、credential、动态 URL 或异常正文。
-- [x] `/integration-capabilities` 保持 protocol `1.0`，以 additive 字段发布
+- [x] `/integration-capabilities` 报告 protocol `1.1`，以 additive 字段发布
   structured-record、Sync Run、observability 运行时上限和
   `features.optional.integrationObservability`。
 - [x] `GET /api/v1/rag/integration-observability` 为 NORMAL principal 提供 self/当前
@@ -230,6 +230,20 @@
   专项门禁 **9/9**，含后端 **186/186**、PostgreSQL **11/11**、WebUI Vitest
   **233/233**、Mock Playwright **3/3** 和 Maven/前端/文档门槛；
   `real-provider-post-merge-20260828-r2` 真实生命周期 **12/12**，日志和脱敏证据复核通过。
+
+### 2026-08-27 受管 API Principal 到期告警门禁
+
+- [x] V57 增加 active managed alert partial unique index、阶段/通知版本、principal 公平
+  扫描游标与检查约束，不保存 credential、名称、Collection allow-list、quota 或业务 payload。
+- [x] principal 创建、expiry policy 更新和 family revoke 提交后通过 Spring Event 唤醒
+  有界异步 worker；默认每小时 Scheduled 扫描只负责漏事件和时间跨阈值恢复。
+- [x] Alerts 全路由收紧为 operator 管理面；WebUI 修正为 `firedAt`，并展示服务端阶段、
+  principal 和 expiry，不在浏览器计算阈值。
+- [x] focused 门禁覆盖后端 **218/218**、PostgreSQL V1-V57 生命周期 **6/6**、WebUI
+  Vitest **234/234**、production build 和 Alerts Mock Playwright **1/1**。
+- [ ] 完整 Maven、WebUI、服务启动、禁锁、文档、diff、shell 与密钥门禁完成。
+- [ ] 隔离 PostgreSQL 与真实 LLM/Embedding principal/document/Chat/alert 生命周期验收完成。
+- [ ] 合并最新 `origin/main` 后按合并基线完整复验并记录最终证据。
 
 ### 最终证据（2026-07-21）
 

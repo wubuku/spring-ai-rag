@@ -30,6 +30,20 @@ public class RagAlert {
     @Version
     private Long version;
 
+    /** 受管条件的内部去重键；不通过 AlertRecord 暴露。 */
+    @Column(name = "dedupe_key", length = 160)
+    private String dedupeKey;
+
+    /** 受管条件当前阶段。 */
+    @Column(name = "condition_state", length = 32)
+    private String conditionState;
+
+    @Column(name = "state_version", nullable = false)
+    private Integer stateVersion = 0;
+
+    @Column(name = "notified_version", nullable = false)
+    private Integer notifiedVersion = 0;
+
     /** Alert type: THRESHOLD_HIGH / THRESHOLD_LOW / SLO_BREACH */
     @Column(name = "alert_type", nullable = false, length = 50)
     private String alertType;
@@ -75,10 +89,29 @@ public class RagAlert {
     @Column(name = "created_at", nullable = false)
     private ZonedDateTime createdAt = ZonedDateTime.now();
 
+    @Column(name = "updated_at", nullable = false)
+    private ZonedDateTime updatedAt = ZonedDateTime.now();
+
     // ==================== Getters and Setters ====================
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
+    public Long getVersion() { return version; }
+    public void setVersion(Long version) { this.version = version; }
+    public String getDedupeKey() { return dedupeKey; }
+    public void setDedupeKey(String dedupeKey) { this.dedupeKey = dedupeKey; }
+    public String getConditionState() { return conditionState; }
+    public void setConditionState(String conditionState) {
+        this.conditionState = conditionState;
+    }
+    public Integer getStateVersion() { return stateVersion; }
+    public void setStateVersion(Integer stateVersion) {
+        this.stateVersion = stateVersion;
+    }
+    public Integer getNotifiedVersion() { return notifiedVersion; }
+    public void setNotifiedVersion(Integer notifiedVersion) {
+        this.notifiedVersion = notifiedVersion;
+    }
 
     public String getAlertType() { return alertType; }
     public void setAlertType(String alertType) { this.alertType = alertType; }
@@ -112,4 +145,6 @@ public class RagAlert {
 
     public ZonedDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(ZonedDateTime createdAt) { this.createdAt = createdAt; }
+    public ZonedDateTime getUpdatedAt() { return updatedAt; }
+    public void setUpdatedAt(ZonedDateTime updatedAt) { this.updatedAt = updatedAt; }
 }

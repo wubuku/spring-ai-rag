@@ -9,6 +9,7 @@ import com.springairag.api.dto.ApiKeyRotationResponse;
 import com.springairag.api.dto.ApiPrincipalPolicyUpdateRequest;
 import com.springairag.api.dto.ApiPrincipalResponse;
 import com.springairag.api.enums.ErrorCode;
+import com.springairag.core.apikeyalert.ApiPrincipalLifecycleEventPublisher;
 import com.springairag.core.config.RagApiKeyProvisioningProperties;
 import com.springairag.core.config.RagApiKeyRotationProperties;
 import com.springairag.core.config.RagProperties;
@@ -78,6 +79,7 @@ public class ApiKeyManagementService {
     private final RagApiKeyRotationProperties rotationProperties;
     private final TransactionTemplate provisioningTransaction;
     private final TransactionTemplate rotationTransaction;
+    private final ApiPrincipalLifecycleEventPublisher lifecycleEventPublisher;
 
     public ApiKeyManagementService(
             RagApiKeyRepository apiKeyRepository,
@@ -86,7 +88,7 @@ public class ApiKeyManagementService {
             CollectionIdentityResolver collectionIdentityResolver,
             JdbcTemplate jdbcTemplate) {
         this(apiKeyRepository, principalRepository, collectionIdentityResolver, jdbcTemplate,
-                null, null, new RagProperties(), null);
+                null, null, new RagProperties(), null, null);
     }
 
     public ApiKeyManagementService(
@@ -100,7 +102,23 @@ public class ApiKeyManagementService {
             PlatformTransactionManager transactionManager) {
         this(apiKeyRepository, principalRepository, collectionIdentityResolver,
                 jdbcTemplate, provisioningOperationRepository, null, ragProperties,
-                transactionManager);
+                transactionManager, null);
+    }
+
+    public ApiKeyManagementService(
+            RagApiKeyRepository apiKeyRepository,
+            RagApiPrincipalRepository principalRepository,
+            @org.springframework.beans.factory.annotation.Autowired(required = false)
+            CollectionIdentityResolver collectionIdentityResolver,
+            JdbcTemplate jdbcTemplate,
+            ApiKeyProvisioningOperationRepository provisioningOperationRepository,
+            ApiKeyRotationOperationRepository rotationOperationRepository,
+            RagProperties ragProperties,
+            PlatformTransactionManager transactionManager) {
+        this(apiKeyRepository, principalRepository, collectionIdentityResolver,
+                jdbcTemplate, provisioningOperationRepository,
+                rotationOperationRepository, ragProperties, transactionManager,
+                null);
     }
 
     @org.springframework.beans.factory.annotation.Autowired
@@ -113,7 +131,9 @@ public class ApiKeyManagementService {
             ApiKeyProvisioningOperationRepository provisioningOperationRepository,
             ApiKeyRotationOperationRepository rotationOperationRepository,
             RagProperties ragProperties,
-            PlatformTransactionManager transactionManager) {
+            PlatformTransactionManager transactionManager,
+            @org.springframework.beans.factory.annotation.Autowired(required = false)
+            ApiPrincipalLifecycleEventPublisher lifecycleEventPublisher) {
         this.apiKeyRepository = apiKeyRepository;
         this.principalRepository = principalRepository;
         this.collectionIdentityResolver = collectionIdentityResolver;
@@ -128,6 +148,7 @@ public class ApiKeyManagementService {
         this.rotationTransaction = transactionManager == null
                 ? null
                 : new TransactionTemplate(transactionManager);
+        this.lifecycleEventPublisher = lifecycleEventPublisher;
     }
 
     @Transactional
@@ -622,6 +643,7 @@ public class ApiKeyManagementService {
 
         RagApiKey credential = credential(keyId, rawKey, 1, principal, now);
         apiKeyRepository.save(credential);
+        publishLifecycleAfterCommit(keyId);
         log.info("API principal created: principalId={}, credentialVersion=1", keyId);
         return createdResponse(rawKey, credential, principal);
     }
@@ -690,6 +712,7 @@ public class ApiKeyManagementService {
                     });
         }
         lastUsedTouchCache.invalidate(principalId);
+        publishLifecycleAfterCommit(principalId);
         log.info("API principal revoked: principalId={}, credentialId={}", principalId, keyId);
         return true;
     }
@@ -849,7 +872,15 @@ public class ApiKeyManagementService {
                 principal.getExpiresAt(),
                 principal.getAllowedCollectionIds());
         clampPendingRotationDeadline(principalId, principal.getExpiresAt(), now);
-        return toPrincipalResponse(principal);
+        ApiPrincipalResponse response = toPrincipalResponse(principal);
+        publishLifecycleAfterCommit(principalId);
+        return response;
+    }
+
+    private void publishLifecycleAfterCommit(String principalId) {
+        if (lifecycleEventPublisher != null) {
+            lifecycleEventPublisher.publishAfterCommit(principalId);
+        }
     }
 
     /** 每次调用都执行 credential/principal 权威联表查询。 */

@@ -2293,13 +2293,44 @@ Get experiment results list.
 
 ## Alerts — Monitoring & Alerting
 
+本节全部路由属于 operator 管理面。允许 environment root、数据库 `ADMIN`、legacy static，
+以及关闭认证时的 direct loopback；数据库 `NORMAL` principal 会在读取告警数据前收到通用
+`403 FORBIDDEN`。
+
 ### `GET /api/v1/rag/alerts/active`
 
-Get active alerts.
+返回所有 active 告警。V57 的 `API_PRINCIPAL_EXPIRY` 受管告警会输出服务端权威
+`conditionState` 和低敏 `metrics`：
+
+```json
+[{
+  "id": 42,
+  "alertType": "API_PRINCIPAL_EXPIRY",
+  "alertName": "Managed API principal expiry",
+  "message": "Managed API principal rag_p_example is in WARNING phase and expires at 2026-09-20T00:00+08:00[Asia/Shanghai]",
+  "severity": "WARNING",
+  "status": "ACTIVE",
+  "conditionState": "WARNING",
+  "metrics": {
+    "principalId": "rag_p_example",
+    "principalRole": "NORMAL",
+    "expiresAt": "2026-09-20T00:00+08:00[Asia/Shanghai]",
+    "timeZone": "Asia/Shanghai",
+    "phase": "WARNING",
+    "secondsRemaining": 1987200,
+    "policyVersion": 3
+  },
+  "firedAt": "2026-08-27T12:00:00+08:00"
+}]
+```
+
+同一 principal 同时最多一条 active 到期告警；阶段在原行上升级。expiry 延期出窗口或
+principal 吊销后自动解决。响应不包含 raw credential、hash、principal name、Collection
+allow-list、quota 或业务 payload。时间字段名是 `firedAt`，不是 `triggeredAt`。
 
 ### `GET /api/v1/rag/alerts/history`
 
-Get alert history.
+查询告警历史；支持现有时间、severity 和 alert type 过滤。
 
 ### `GET /api/v1/rag/alerts/stats`
 

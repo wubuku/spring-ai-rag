@@ -2613,13 +2613,48 @@ Get experiment results list.
 
 ## Alerts — Monitoring & Alerting
 
+Every route in this section belongs to the operator control plane. Environment
+root, database `ADMIN`, legacy static, and auth-disabled direct-loopback
+callers are allowed. A database `NORMAL` principal receives a generic
+`403 FORBIDDEN` before alert data is read.
+
 ### `GET /api/v1/rag/alerts/active`
 
-Get active alerts.
+Get active alerts. V57-managed `API_PRINCIPAL_EXPIRY` alerts expose the
+server-authoritative `conditionState` and a low-sensitivity `metrics`
+projection:
+
+```json
+[{
+  "id": 42,
+  "alertType": "API_PRINCIPAL_EXPIRY",
+  "alertName": "Managed API principal expiry",
+  "message": "Managed API principal rag_p_example is in WARNING phase and expires at 2026-09-20T00:00+08:00[Asia/Shanghai]",
+  "severity": "WARNING",
+  "status": "ACTIVE",
+  "conditionState": "WARNING",
+  "metrics": {
+    "principalId": "rag_p_example",
+    "principalRole": "NORMAL",
+    "expiresAt": "2026-09-20T00:00+08:00[Asia/Shanghai]",
+    "timeZone": "Asia/Shanghai",
+    "phase": "WARNING",
+    "secondsRemaining": 1987200,
+    "policyVersion": 3
+  },
+  "firedAt": "2026-08-27T12:00:00+08:00"
+}]
+```
+
+At most one active expiry alert exists per principal, with phase transitions
+updating the same row. Extending expiry beyond the warning window or revoking
+the principal resolves it automatically. Responses exclude raw credentials,
+hashes, principal names, Collection allow-lists, quotas, and business payloads.
+The time field is `firedAt`, not `triggeredAt`.
 
 ### `GET /api/v1/rag/alerts/history`
 
-Get alert history.
+Get alert history with the existing time, severity, and alert-type filters.
 
 ### `GET /api/v1/rag/alerts/stats`
 

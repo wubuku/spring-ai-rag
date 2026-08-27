@@ -58,10 +58,16 @@ describe('Alerts', () => {
         data: [
           {
             id: 1,
+            alertType: 'API_PRINCIPAL_EXPIRY',
             alertName: 'High Latency',
             severity: 'WARNING',
             message: 'Average latency exceeded 1s',
-            triggeredAt: '2024-01-01T12:00:00Z',
+            conditionState: 'WARNING',
+            firedAt: '2024-01-01T12:00:00Z',
+            metrics: {
+              principalId: 'rag_k_test',
+              expiresAt: '2026-09-01T12:00:00+08:00[Asia/Shanghai]',
+            },
           },
         ],
       },
@@ -72,5 +78,27 @@ describe('Alerts', () => {
     expect(screen.getByText('High Latency')).toBeInTheDocument();
     expect(screen.getByText('WARNING')).toBeInTheDocument();
     expect(screen.getByText('Average latency exceeded 1s')).toBeInTheDocument();
+    expect(screen.getByText('alerts.phase: WARNING')).toBeInTheDocument();
+    expect(screen.getByText('alerts.principal: rag_k_test')).toBeInTheDocument();
+  });
+
+  it('uses a stable fallback for an invalid firedAt value', () => {
+    mockUseQuery.mockReturnValue({
+      data: {
+        data: [{
+          id: 2,
+          alertType: 'THRESHOLD_HIGH',
+          alertName: 'Invalid time fixture',
+          severity: 'CRITICAL',
+          message: 'Fixture',
+          firedAt: 'not-a-date',
+        }],
+      },
+      isPending: false,
+    });
+
+    renderAlerts();
+    expect(screen.getByText('alerts.triggeredAt: alerts.timeUnavailable')).toBeInTheDocument();
+    expect(screen.queryByText(/Invalid Date/)).not.toBeInTheDocument();
   });
 });

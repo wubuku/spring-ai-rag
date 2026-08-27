@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
-import { alertsApi, type SloConfig, type SilenceSchedule } from '../api/alerts';
+import { alertsApi, type Alert, type SloConfig, type SilenceSchedule } from '../api/alerts';
 import styles from './Alerts.module.css';
 
 type Tab = 'alerts' | 'slo-configs' | 'silence-schedules';
@@ -81,19 +81,50 @@ function AlertsTab() {
   return (
     <div className={styles.list}>
       {data.data.map(alert => (
-        <div key={alert.id} className={styles.item} data-severity={alert.severity}>
+        <article
+          key={alert.id}
+          className={styles.item}
+          data-severity={alert.severity}
+          aria-label={`${alert.alertName} ${alert.severity}`}
+        >
           <div className={styles.header}>
             <span className={styles.name}>{alert.alertName}</span>
             <span className={styles.severity} data-level={alert.severity}>{alert.severity}</span>
           </div>
-          <div className={styles.message}>{alert.message}</div>
-          <div className={styles.time}>
-            {t('alerts.triggeredAt')}: {new Date(alert.triggeredAt).toLocaleString()}
+          <div className={styles.meta}>
+            <span>{t('alerts.alertType')}: {alert.alertType}</span>
+            {alert.conditionState && (
+              <span>{t('alerts.phase')}: {alert.conditionState}</span>
+            )}
           </div>
-        </div>
+          <div className={styles.message}>{alert.message}</div>
+          {alert.alertType === 'API_PRINCIPAL_EXPIRY' && (
+            <div className={styles.meta}>
+              <span>{t('alerts.principal')}: {metricText(alert, 'principalId')}</span>
+              <span>{t('alerts.expiresAt')}: {metricText(alert, 'expiresAt')}</span>
+            </div>
+          )}
+          <div className={styles.time}>
+            {t('alerts.triggeredAt')}: {formatAlertTime(alert.firedAt, t('alerts.timeUnavailable'))}
+          </div>
+        </article>
       ))}
     </div>
   );
+}
+
+function metricText(alert: Alert, key: string): string {
+  const value = alert.metrics?.[key];
+  return typeof value === 'string' || typeof value === 'number'
+    ? String(value)
+    : '-';
+}
+
+function formatAlertTime(value: string, fallback: string): string {
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp)
+    ? new Date(timestamp).toLocaleString()
+    : fallback;
 }
 
 // ==================== SLO Configs Tab ====================

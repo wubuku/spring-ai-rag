@@ -47,6 +47,11 @@ public interface AlertService {
                    String severity, Map<String, Object> metrics);
 
     /**
+     * 判断指定告警键当前是否被内存或持久静默规则抑制。
+     */
+    boolean isSilenced(String alertType, String alertName);
+
+    /**
      * Get alert history.
      *
      * @param startDate start date
@@ -139,6 +144,7 @@ public interface AlertService {
         private Map<String, Object> metrics;
         private String status;
         private String resolution;
+        private String conditionState;
         private ZonedDateTime firedAt;
         private ZonedDateTime resolvedAt;
         private ZonedDateTime silencedUntil;
@@ -159,6 +165,10 @@ public interface AlertService {
         public void setStatus(String status) { this.status = status; }
         public String getResolution() { return resolution; }
         public void setResolution(String resolution) { this.resolution = resolution; }
+        public String getConditionState() { return conditionState; }
+        public void setConditionState(String conditionState) {
+            this.conditionState = conditionState;
+        }
         public ZonedDateTime getFiredAt() { return firedAt; }
         public void setFiredAt(ZonedDateTime firedAt) { this.firedAt = firedAt; }
         public ZonedDateTime getResolvedAt() { return resolvedAt; }
@@ -179,6 +189,7 @@ public interface AlertService {
                     && Objects.equals(metrics, that.metrics)
                     && Objects.equals(status, that.status)
                     && Objects.equals(resolution, that.resolution)
+                    && Objects.equals(conditionState, that.conditionState)
                     && Objects.equals(firedAt, that.firedAt)
                     && Objects.equals(resolvedAt, that.resolvedAt)
                     && Objects.equals(silencedUntil, that.silencedUntil);
@@ -186,7 +197,9 @@ public interface AlertService {
 
         @Override
         public int hashCode() {
-            return Objects.hash(id, alertType, alertName, message, severity, metrics, status, resolution, firedAt, resolvedAt, silencedUntil);
+            return Objects.hash(id, alertType, alertName, message, severity, metrics,
+                    status, resolution, conditionState, firedAt, resolvedAt,
+                    silencedUntil);
         }
 
         @Override
@@ -196,6 +209,7 @@ public interface AlertService {
                     + ", alertName='" + alertName + '\''
                     + ", severity='" + severity + '\''
                     + ", status='" + status + '\''
+                    + ", conditionState='" + conditionState + '\''
                     + ", firedAt=" + firedAt
                     + ", resolvedAt=" + resolvedAt
                     + ", silencedUntil=" + silencedUntil

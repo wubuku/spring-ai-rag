@@ -122,7 +122,7 @@ class ChatTurnOperationPostgresIntegrationTest {
 
     @Test
     void latestMigrationPreservesOperationTableAndTurnIdentityConstraints() {
-        assertEquals("55", jdbc.queryForObject(
+        assertEquals("57", jdbc.queryForObject(
                 """
                 SELECT version FROM flyway_schema_history
                 WHERE success = TRUE

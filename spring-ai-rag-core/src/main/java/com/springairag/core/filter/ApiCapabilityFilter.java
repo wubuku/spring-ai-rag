@@ -94,6 +94,8 @@ public class ApiCapabilityFilter extends OncePerRequestFilter {
                 || path.startsWith("/api/v1/rag/auth/")
                 || path.equals("/api/v1/rag/api-keys")
                 || path.startsWith("/api/v1/rag/api-keys/")
+                || path.equals("/api/v1/rag/alerts")
+                || path.startsWith("/api/v1/rag/alerts/")
                 || path.equals("/api/v1/rag/integration-capabilities");
     }
 
