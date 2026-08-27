@@ -2,8 +2,8 @@
 
 > 状态：待实施
 > 日期：2026-08-27
-> 配套进度：[COLLECTION_PURGE_AND_RETIREMENT_PROGRESS.md](COLLECTION_PURGE_AND_RETIREMENT_PROGRESS.md)
-> 交付规则：[规划、实施与验收工作流](../delivery-workflow-zh-CN.md)
+> 配套进度：[2026-08-28_COLLECTION_PURGE_AND_RETIREMENT_PROGRESS.md](2026-08-28_COLLECTION_PURGE_AND_RETIREMENT_PROGRESS.md)
+> 交付规则：[规划、实施与验收工作流](../../delivery-workflow-zh-CN.md)
 
 ## 1. 目标与范围
 
@@ -49,14 +49,14 @@
 实现必须以以下代码和迁移为准，而不能假设旧 plan 仍准确：
 
 - Collection 生命周期：
-  - [RagCollectionService.java](../../spring-ai-rag-core/src/main/java/com/springairag/core/service/RagCollectionService.java)
+  - [RagCollectionService.java](../../../spring-ai-rag-core/src/main/java/com/springairag/core/service/RagCollectionService.java)
     的 `deleteCollection` 是带 Collection version CAS 的软删除，并拒绝外部托管文档；
-  - [RagCollectionController.java](../../spring-ai-rag-core/src/main/java/com/springairag/core/controller/RagCollectionController.java)
+  - [RagCollectionController.java](../../../spring-ai-rag-core/src/main/java/com/springairag/core/controller/RagCollectionController.java)
     已有按 key 和数字 ID 的 delete/restore 路由；
-  - [RagCollection.java](../../spring-ai-rag-core/src/main/java/com/springairag/core/entity/RagCollection.java)
+  - [RagCollection.java](../../../spring-ai-rag-core/src/main/java/com/springairag/core/entity/RagCollection.java)
     的 `collectionKey` 不可更新，且仓库唯一约束覆盖已删除行。
 - 文档 mutation：
-  - [DocumentMutationService.java](../../spring-ai-rag-core/src/main/java/com/springairag/core/service/DocumentMutationService.java)
+  - [DocumentMutationService.java](../../../spring-ai-rag-core/src/main/java/com/springairag/core/service/DocumentMutationService.java)
     的 `hardDeleteLocal` 只允许本地文档，并取消活动 embedding job、删除向量后物理删文档；
   - 外部文档通过 `tombstoneExternal` 进入禁用状态；外部身份是
     `collectionKey + sourceNamespace + externalId`。
@@ -73,8 +73,8 @@
     使用 `ON DELETE SET NULL`；
   - V44 的 `rag_document_relocated_addresses` 对文档使用 `ON DELETE SET NULL`，对 source
     和 target Collection 使用默认 `RESTRICT`；
-  - [DocumentSyncRunService.java](../../spring-ai-rag-core/src/main/java/com/springairag/core/service/DocumentSyncRunService.java)
-    和 [DocumentRelocationService.java](../../spring-ai-rag-core/src/main/java/com/springairag/core/service/DocumentRelocationService.java)
+  - [DocumentSyncRunService.java](../../../spring-ai-rag-core/src/main/java/com/springairag/core/service/DocumentSyncRunService.java)
+    和 [DocumentRelocationService.java](../../../spring-ai-rag-core/src/main/java/com/springairag/core/service/DocumentRelocationService.java)
     使用 active-run 检查、CAS 和 lease，不能在 purge 中绕过。
 - 其他持久化数据：
   - V45 的 `rag_derivation_repair_previews` 直接引用 Collection，items 的
@@ -99,12 +99,12 @@
   - V32 后的 durable chat history 同时拥有 owner、session 和 source snapshot，适合建立
     规范化文档引用索引，并据此执行会话级清理。
 - 安全：
-  - [ApiKeyAuthFilter.java](../../spring-ai-rag-core/src/main/java/com/springairag/core/filter/ApiKeyAuthFilter.java)
+  - [ApiKeyAuthFilter.java](../../../spring-ai-rag-core/src/main/java/com/springairag/core/filter/ApiKeyAuthFilter.java)
     区分 environment root、数据库 principal、legacy static 和 auth-disabled；
-  - [ApiAccessPolicy.java](../../spring-ai-rag-core/src/main/java/com/springairag/core/security/ApiAccessPolicy.java)
+  - [ApiAccessPolicy.java](../../../spring-ai-rag-core/src/main/java/com/springairag/core/security/ApiAccessPolicy.java)
     目前只有 `RAG_READ`/`RAG_WRITE` 能力，不能把高风险 purge 随意交给普通
     `RAG_WRITE`；
-- [ChatPrincipal.java](../../spring-ai-rag-core/src/main/java/com/springairag/core/chat/ChatPrincipal.java)
+- [ChatPrincipal.java](../../../spring-ai-rag-core/src/main/java/com/springairag/core/chat/ChatPrincipal.java)
     可提供稳定 owner namespace，且不保存原始凭据。
   - 当前 WebUI 管理控制台只允许 environment root 解锁；数据库 `ADMIN` 是 API 管理
     principal，但不会通过现有控制台 unlock 流程进入 WebUI。

@@ -61,5 +61,7 @@
   `2026-08-26_SYNC_RUN_ITEM_RECEIPTS_*`
 - 外部接入运行时限制自发现、数据面操作聚合与隐私安全的运维查询：
   `2026-08-27_EXTERNAL_INTEGRATION_OPERABILITY_*`
+- Collection 受保护清理、永久 key tombstone、引用内容清除与事件驱动 embedding 唤醒：
+  `2026-08-28_COLLECTION_PURGE_AND_RETIREMENT_*`
 
 该列表只帮助历史定位，不代表优先级或当前能力状态。

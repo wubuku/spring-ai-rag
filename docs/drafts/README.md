@@ -38,9 +38,8 @@ Active plans are listed here and in `docs/index*`.
 
 ## Current Active Plans
 
-- [Guarded Collection Purge And Retirement Plan](COLLECTION_PURGE_AND_RETIREMENT_PLAN.md)
-  - Status: implementation and acceptance in progress
-  - Progress: [implementation ledger](COLLECTION_PURGE_AND_RETIREMENT_PROGRESS.md)
+There is no active plan. Register the next batch after repository exploration
+and planning convergence.
 
 Completed, stopped, and superseded materials remain available in the
 [historical archive](archive/README.md).

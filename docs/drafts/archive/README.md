@@ -82,6 +82,9 @@ relevant evergreen guide/reference, `docs/TODO*`, and the
 - External-integration runtime-limit discovery, data-plane operation rollups,
   and privacy-safe operability queries:
   `2026-08-27_EXTERNAL_INTEGRATION_OPERABILITY_*`
+- Guarded Collection purge, permanent key tombstones, referenced-content
+  cleanup, and event-driven embedding wake-up:
+  `2026-08-28_COLLECTION_PURGE_AND_RETIREMENT_*`
 
 This list is only an aid for historical discovery. It does not state current
 priority or capability status.

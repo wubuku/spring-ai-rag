@@ -1,6 +1,6 @@
 # Collection 受保护清理与退役实施进度
 
-> 对应规划：[COLLECTION_PURGE_AND_RETIREMENT_PLAN.md](COLLECTION_PURGE_AND_RETIREMENT_PLAN.md)
+> 对应规划：[2026-08-28_COLLECTION_PURGE_AND_RETIREMENT_PLAN.md](2026-08-28_COLLECTION_PURGE_AND_RETIREMENT_PLAN.md)
 > 工作区：`/Users/yangjiefeng/Documents/wubuku/spring-ai-rag`
 > 当前分支：`feature/collection-purge-retirement-20260827`
 > 基线：`90ee276c`（2026-08-27）

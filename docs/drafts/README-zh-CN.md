@@ -32,8 +32,6 @@
 
 ## 当前活跃规划
 
-- [Collection 受保护清理与退役实施规划](COLLECTION_PURGE_AND_RETIREMENT_PLAN.md)
-  - 状态：实施与验收中
-  - 进度：[实施进度](COLLECTION_PURGE_AND_RETIREMENT_PROGRESS.md)
+当前没有活跃规划；下一批功能完成探索和规划收敛后再登记。
 
 已完成、已停止和被替代的材料可从[历史归档](archive/README-zh-CN.md)追溯。
