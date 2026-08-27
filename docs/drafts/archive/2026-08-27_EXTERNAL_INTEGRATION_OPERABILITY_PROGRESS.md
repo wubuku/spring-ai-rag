@@ -1,6 +1,6 @@
 # 外部业务接入合同完备性与数据面可运维性实施进度
 
-> **状态**：实施与最终验收完成；已归档，Git 交付进行中
+> **状态**：实施与最终验收完成；已归档，特性分支已提交并推送
 >
 > **对应规划**：
 > [2026-08-27_EXTERNAL_INTEGRATION_OPERABILITY_PLAN.md](2026-08-27_EXTERNAL_INTEGRATION_OPERABILITY_PLAN.md)
@@ -154,8 +154,9 @@ API key、Authorization、原始请求/响应、业务 payload、外部 ID、Col
 | 2026-08-27 18:41 +0800 | 最终远端同步基线 | `git fetch origin --prune`；比较 feature HEAD、local `main`、`origin/main` | PASS；三者均为 `0993b702`，ahead/behind 为 `0/0`，没有需要合并的远端提交。该确认后的工作树作为最终完整复验基线；不沿用合并前 `r9` 作为最终结论 | Git refs 与 rev-list |
 | 2026-08-27 18:52 +0800 | 远端同步后完整 readiness | `external-operability-final-20260827-r1`；端口 `18184`、`18185`、`15284`、`15285` | PASS；17/17。聚焦后端与合同 227/227、四组 PostgreSQL 矩阵 33/33、`mvn clean compile test-compile`、双实例 Collection 生命周期、WebUI typecheck/Vitest 222/222/build、核心 Mock Playwright、文档/锁/密钥/空白门禁、真实服务客户合同 261 项和真实 WebUI Playwright 全部通过；重启、未知结果精确重放、异步 embedding 恢复、credential 轮换和双 Collection 查询均成立 | `.verification/business-client-readiness/external-operability-final-20260827-r1/summary.md`；脱敏 release manifest |
 | 2026-08-27 18:53 +0800 | 最终资源与客户痕迹检查 | readiness 隔离端口/容器、全跟踪代码与文档、历史归档、`git diff --check`、no-lock | PASS；隔离端口全部释放，无残留测试容器；未发现特定外部客户名称或项目背景痕迹；空白和无悲观锁门禁通过 | 当前命令输出 |
+| 2026-08-27 18:58 +0800 | 特性分支提交与推送 | 全工作区 staged 空白/密钥检查；提交并推送 `feat/external-integration-operability-20260827` | PASS；产品与文档提交为 `8f182d20`，远端特性分支创建成功；push 前重新 fetch 确认 `origin/main` 仍为 `0993b702` 且无待合并提交 | Git commit 与远端跟踪分支 |
 
 ## 5. 下一恢复点
 
-实施和最终验收已经完成。下一步仅执行文档归档、feature commit/push、合并并 push `main`，
-确认两个工作区干净且无测试资源后，安全移除本轮已有的 feature worktree。
+实施、最终验收、文档归档和特性分支提交/push 已完成。下一步仅将最终特性 HEAD 快进合并并
+push 到 `main`，确认两个工作区干净且无测试资源后，安全移除本轮已有的 feature worktree。
