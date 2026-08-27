@@ -1147,7 +1147,12 @@ public class ChatExecutionService {
                 agent.getMaxToolRounds(),
                 agent.getMaxToolCalls(),
                 agent.getMaxToolCallsPerName(),
-                agent.getMaxToolResultCharactersTotal());
+                agent.getMaxToolResultCharactersTotal(),
+                java.util.UUID.randomUUID(),
+                command.principal().id(),
+                command.sessionId(),
+                MDC.get(RequestTraceFilter.TRACE_ID_KEY),
+                command.mode());
     }
 
     private void putIfNotNull(

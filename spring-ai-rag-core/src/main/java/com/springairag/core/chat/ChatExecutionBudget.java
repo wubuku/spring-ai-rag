@@ -1,14 +1,17 @@
 package com.springairag.core.chat;
 
+import com.springairag.api.enums.ChatMode;
 import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.exception.RagException;
 import com.springairag.core.http.HttpToolExecutionState;
+import com.springairag.core.usage.ChatExecutionAttribution;
 
 import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -34,8 +37,14 @@ public final class ChatExecutionBudget {
     private final int maxToolCalls;
     private final int maxToolCallsPerName;
     private final int maxToolResultCharactersTotal;
+    private final UUID logicalExecutionId;
+    private final String principalId;
+    private final String sessionId;
+    private final String requestTraceId;
+    private final ChatMode chatMode;
     private final AtomicInteger candidateAttempts = new AtomicInteger();
     private final AtomicInteger modelCalls = new AtomicInteger();
+    private final AtomicInteger invocationOrdinals = new AtomicInteger();
     private final AtomicInteger toolRounds = new AtomicInteger();
     private final AtomicInteger totalToolCalls = new AtomicInteger();
     private final AtomicInteger summaryCalls = new AtomicInteger();
@@ -59,6 +68,34 @@ public final class ChatExecutionBudget {
             int maxToolCalls,
             int maxToolCallsPerName,
             int maxToolResultCharactersTotal) {
+        this(
+                deadline,
+                maxCandidateAttempts,
+                maxModelCalls,
+                maxToolRounds,
+                maxToolCalls,
+                maxToolCallsPerName,
+                maxToolResultCharactersTotal,
+                UUID.randomUUID(),
+                ChatPrincipal.local().id(),
+                "legacy",
+                null,
+                ChatMode.PLAIN);
+    }
+
+    public ChatExecutionBudget(
+            Instant deadline,
+            int maxCandidateAttempts,
+            int maxModelCalls,
+            int maxToolRounds,
+            int maxToolCalls,
+            int maxToolCallsPerName,
+            int maxToolResultCharactersTotal,
+            UUID logicalExecutionId,
+            String principalId,
+            String sessionId,
+            String requestTraceId,
+            ChatMode chatMode) {
         this.deadline = deadline != null
                 ? deadline
                 : Instant.now().plus(Duration.ofMinutes(2));
@@ -68,6 +105,12 @@ public final class ChatExecutionBudget {
         this.maxToolCalls = positive(maxToolCalls);
         this.maxToolCallsPerName = positive(maxToolCallsPerName);
         this.maxToolResultCharactersTotal = positive(maxToolResultCharactersTotal);
+        this.logicalExecutionId = logicalExecutionId != null
+                ? logicalExecutionId : UUID.randomUUID();
+        this.principalId = requiredAttribution(principalId, 128, "principalId");
+        this.sessionId = requiredAttribution(sessionId, 255, "sessionId");
+        this.requestTraceId = optionalAttribution(requestTraceId, 128, "requestTraceId");
+        this.chatMode = chatMode != null ? chatMode : ChatMode.PLAIN;
     }
 
     public boolean tryReserveCandidateAttempt() {
@@ -77,11 +120,12 @@ public final class ChatExecutionBudget {
         return reserve(candidateAttempts, maxCandidateAttempts);
     }
 
-    public void reserveModelCall() {
+    public int reserveModelCall() {
         ensureDeadline();
         if (!reserve(modelCalls, maxModelCalls)) {
             throw exhausted("model call budget exhausted");
         }
+        return invocationOrdinals.incrementAndGet();
     }
 
     public void recordSummaryCall() {
@@ -249,6 +293,36 @@ public final class ChatExecutionBudget {
         return modelCalls.get();
     }
 
+    public UUID logicalExecutionId() {
+        return logicalExecutionId;
+    }
+
+    public String principalId() {
+        return principalId;
+    }
+
+    public String sessionId() {
+        return sessionId;
+    }
+
+    public String requestTraceId() {
+        return requestTraceId;
+    }
+
+    public ChatMode chatMode() {
+        return chatMode;
+    }
+
+    public ChatExecutionAttribution attribution(int callOrdinal) {
+        return new ChatExecutionAttribution(
+                logicalExecutionId,
+                callOrdinal,
+                principalId,
+                sessionId,
+                requestTraceId,
+                chatMode);
+    }
+
     public boolean hasModelCallCapacity() {
         return !isExpired() && modelCalls.get() < maxModelCalls;
     }
@@ -284,6 +358,13 @@ public final class ChatExecutionBudget {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("candidateAttempts", candidateAttempts());
         result.put("modelCalls", modelCalls());
+        result.put("logicalExecutionId", logicalExecutionId.toString());
+        result.put("principalId", principalId);
+        result.put("sessionId", sessionId);
+        if (requestTraceId != null) {
+            result.put("requestTraceId", requestTraceId);
+        }
+        result.put("chatMode", chatMode.name());
         result.put("toolRounds", toolRounds());
         result.put("toolCalls", totalToolCalls());
         result.put("summaryCalls", summaryCalls());
@@ -325,5 +406,24 @@ public final class ChatExecutionBudget {
 
     private static int positive(int value) {
         return Math.max(1, value);
+    }
+
+    private static String requiredAttribution(
+            String value, int maximum, String name) {
+        if (value == null || value.isBlank() || value.length() > maximum
+                || value.chars().anyMatch(ch -> ch < 0x20 || ch > 0x7e)) {
+            throw new IllegalArgumentException(
+                    name + " must contain printable ASCII characters within 1-"
+                            + maximum);
+        }
+        return value;
+    }
+
+    private static String optionalAttribution(
+            String value, int maximum, String name) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return requiredAttribution(value, maximum, name);
     }
 }

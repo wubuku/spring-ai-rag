@@ -32,18 +32,16 @@
 | Collection-create idempotency key | Shipped in V52 | Optional owner-scoped keyed creation supports cross-instance/restart replay of current Collection state; semantic reuse and ledger failure fail closed |
 | Machine-readable integration protocol version / capability discovery | Shipped in V50 | An authenticated, no-store endpoint projects protocol, caller policy, supported data-plane behaviors, optional features, and stable limits |
 | OAuth/OIDC and an independent tenant hierarchy | Separate future plan | The current system remains environment root plus managed business principals and has no third-party identity federation |
-| Persistent token/cost observability per model invocation | Current active plan | Final Chat response usage covers only the last response and omits query transform/expand, AGENT rounds, summaries, fallbacks, and application retries; implementation is tracked in [the active plan](drafts/NEXT_HIGH_VALUE_FEATURES_PLAN.md) |
+| Persistent token/cost observability per model invocation | Shipped in V53 | `BudgetedChatModel` records bounded principal/session/trace attribution for Chat, query transform/expand, summaries, fallbacks, application retries, and AGENT rounds; `GET /api/v1/rag/usage` exposes UTC aggregate usage and configured-cost estimates |
 | Token/cost hard limits, billing, and settlement | Separate future plan | These require authorization, reservation, settlement, cross-instance overspend protection, and crash recovery; they cannot rely directly on a best-effort observability ledger |
 | Management recovery and removal of legacy compatibility | Evaluate before public enablement | Legacy static/query behavior remains a compatibility boundary; operator recovery relies on the environment root |
 
 V48 performs a deterministic one-principal-per-credential backfill for rows
 present during migration; it does not guess unprovable family relationships
 among older rotation rows. Per-invocation usage and configured-cost
-observability is preserved in the
-[historical archive](drafts/archive/README.md) as a future implementation
-candidate, but it is not the current active plan and is not presented as a
-provider invoice or hard-limit settlement source. OAuth/OIDC, tenant
-hierarchy, Redis, token/cost hard limits and billing,
+observability is now implemented by V53 as a fail-open append-only ledger; it
+is not presented as a provider invoice or hard-limit settlement source.
+OAuth/OIDC, tenant hierarchy, Redis, token/cost hard limits and billing,
 per-Collection embedding-profile routing, and `EACH_COLLECTION` remain
 independent planning subjects.
 

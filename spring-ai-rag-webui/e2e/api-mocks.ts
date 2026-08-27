@@ -671,6 +671,109 @@ export async function mockAllApiCalls(page: Page) {
     });
   });
 
+  // Mock durable model usage endpoint
+  page.route('/api/v1/rag/usage', route => {
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        recordingEnabled: true,
+        localLostEventsSinceStart: 0,
+        scope: { type: 'SELF', principalId: 'db:mock-user' },
+        from: '2026-08-01',
+        to: '2026-08-27',
+        totals: {
+          logicalExecutionCount: 3,
+          invocationCount: 5,
+          succeededCount: 4,
+          failedCount: 1,
+          cancelledCount: 0,
+          promptTokens: '1200',
+          completionTokens: '450',
+          totalTokens: '1650',
+          usageAvailableCount: 4,
+          usageUnavailableCount: 1,
+          pricingUnavailableCount: 1,
+          costUnavailableCount: 1,
+        },
+        costs: [{
+          unit: 'USD_ESTIMATE',
+          configuredCost: '0.00420000',
+          invocationCount: 5,
+          costAvailableCount: 4,
+        }],
+        byModel: [{
+          modelRef: 'mock/model',
+          totals: {
+            logicalExecutionCount: 3,
+            invocationCount: 5,
+            succeededCount: 4,
+            failedCount: 1,
+            cancelledCount: 0,
+            promptTokens: '1200',
+            completionTokens: '450',
+            totalTokens: '1650',
+            usageAvailableCount: 4,
+            usageUnavailableCount: 1,
+            pricingUnavailableCount: 1,
+            costUnavailableCount: 1,
+          },
+        }],
+        byPurpose: [{
+          purpose: 'CHAT',
+          totals: {
+            logicalExecutionCount: 3,
+            invocationCount: 5,
+            succeededCount: 4,
+            failedCount: 1,
+            cancelledCount: 0,
+            promptTokens: '1200',
+            completionTokens: '450',
+            totalTokens: '1650',
+            usageAvailableCount: 4,
+            usageUnavailableCount: 1,
+            pricingUnavailableCount: 1,
+            costUnavailableCount: 1,
+          },
+        }],
+        byMode: [{
+          mode: 'KNOWLEDGE',
+          totals: {
+            logicalExecutionCount: 3,
+            invocationCount: 5,
+            succeededCount: 4,
+            failedCount: 1,
+            cancelledCount: 0,
+            promptTokens: '1200',
+            completionTokens: '450',
+            totalTokens: '1650',
+            usageAvailableCount: 4,
+            usageUnavailableCount: 1,
+            pricingUnavailableCount: 1,
+            costUnavailableCount: 1,
+          },
+        }],
+        byDay: [{
+          day: '2026-08-27',
+          totals: {
+            logicalExecutionCount: 3,
+            invocationCount: 5,
+            succeededCount: 4,
+            failedCount: 1,
+            cancelledCount: 0,
+            promptTokens: '1200',
+            completionTokens: '450',
+            totalTokens: '1650',
+            usageAvailableCount: 4,
+            usageUnavailableCount: 1,
+            pricingUnavailableCount: 1,
+            costUnavailableCount: 1,
+          },
+        }],
+      }),
+    });
+  });
+
   // Mock alerts endpoints
   page.route(/\/api\/v1\/rag\/alerts.*/, route => {
     const pathname = new URL(route.request().url()).pathname;

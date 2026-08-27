@@ -41,6 +41,57 @@ export interface ModelMetricsResponse {
   multiModelEnabled: boolean;
 }
 
+export type UsageNumericValue = number | string;
+
+export interface LlmUsageTotals {
+  logicalExecutionCount: number;
+  invocationCount: number;
+  succeededCount: number;
+  failedCount: number;
+  cancelledCount: number;
+  promptTokens: UsageNumericValue;
+  completionTokens: UsageNumericValue;
+  totalTokens: UsageNumericValue;
+  usageAvailableCount: number;
+  usageUnavailableCount: number;
+  pricingUnavailableCount: number;
+  costUnavailableCount: number;
+}
+
+export interface LlmUsageResponse {
+  recordingEnabled: boolean;
+  localLostEventsSinceStart: number;
+  scope: {
+    type: 'SELF' | 'ALL' | 'PRINCIPAL';
+    principalId: string | null;
+  };
+  from: string;
+  to: string;
+  totals: LlmUsageTotals;
+  costs: Array<{
+    unit: string;
+    configuredCost: UsageNumericValue;
+    invocationCount: number;
+    costAvailableCount: number;
+  }>;
+  byModel: Array<{
+    modelRef: string;
+    totals: LlmUsageTotals;
+  }>;
+  byPurpose: Array<{
+    purpose: 'CHAT' | 'QUERY_TRANSFORM' | 'QUERY_EXPAND' | 'SUMMARY';
+    totals: LlmUsageTotals;
+  }>;
+  byMode: Array<{
+    mode: ChatMode;
+    totals: LlmUsageTotals;
+  }>;
+  byDay: Array<{
+    day: string;
+    totals: LlmUsageTotals;
+  }>;
+}
+
 // Documents API
 export interface Document {
   id: number;

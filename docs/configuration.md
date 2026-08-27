@@ -119,6 +119,60 @@ the configured primary/fallback chain. An external JSON file fully replaces
 the YAML model registry; see
 [multi-model-external-config.md](multi-model-external-config.md).
 
+### Durable Model-Invocation Usage Ledger
+
+The usage ledger records one bounded terminal fact for each model invocation
+that belongs to a Chat execution. It includes provider-reported token usage
+when available, the model and invocation purpose, outcome, duration, and a
+configuration-based cost estimate. It never stores prompts, answers, tool
+arguments/results, credentials, or exception bodies. Recording is fail-open:
+provider results and Chat responses do not fail because the ledger is
+temporarily unavailable.
+
+```yaml
+rag:
+  usage:
+    enabled: ${RAG_USAGE_ENABLED:true}
+    cost-unit: ${RAG_USAGE_COST_UNIT:CONFIGURED_MODEL_COST}
+    retention-days: ${RAG_USAGE_RETENTION_DAYS:400}
+    cleanup-enabled: ${RAG_USAGE_CLEANUP_ENABLED:true}
+    cleanup-batch-size: ${RAG_USAGE_CLEANUP_BATCH_SIZE:1000}
+    cleanup-max-batches: ${RAG_USAGE_CLEANUP_MAX_BATCHES:20}
+    cleanup-cron: ${RAG_USAGE_CLEANUP_CRON:0 20 * * * *}
+    recorder-threads: ${RAG_USAGE_RECORDER_THREADS:2}
+    recorder-queue-capacity: ${RAG_USAGE_RECORDER_QUEUE_CAPACITY:1000}
+    record-timeout-ms: ${RAG_USAGE_RECORD_TIMEOUT_MS:2000}
+```
+
+| Property | Default | Description |
+|----------|---------|-------------|
+| `rag.usage.enabled` | `true` | Record new invocation facts and enable durable usage aggregation |
+| `rag.usage.cost-unit` | `CONFIGURED_MODEL_COST` | Printable identifier for the configured estimate currency/unit |
+| `rag.usage.retention-days` | `400` | Retain events for 30–3650 days |
+| `rag.usage.cleanup-enabled` | `true` | Enable bounded scheduled deletion of expired events |
+| `rag.usage.cleanup-batch-size` | `1000` | Rows per cleanup batch, 100–10000 |
+| `rag.usage.cleanup-max-batches` | `20` | Maximum batches per scheduled run, 1–100 |
+| `rag.usage.cleanup-cron` | `0 20 * * * *` | Spring cron for retention cleanup |
+| `rag.usage.recorder-threads` | `2` | Fixed recorder worker count, 1–16 |
+| `rag.usage.recorder-queue-capacity` | `1000` | Bounded recorder queue, 100–10000 |
+| `rag.usage.record-timeout-ms` | `2000` | Timeout for synchronous record confirmation, 100–10000 ms |
+
+The ledger is additive and stored in `rag_llm_usage_event` by Flyway V53.
+Non-streaming terminal facts wait only for the bounded record timeout;
+streaming terminal facts are queued asynchronously. A full queue, timeout, or
+database error increments the local lost-event metric and is not retried by
+the provider path. Retention uses bounded batches and a short database
+statement timeout.
+
+`GET /api/v1/rag/usage` exposes principal-scoped aggregate data for an
+inclusive UTC date range. A normal authenticated principal can query only
+itself; an ADMIN or environment root may query all principals or one selected
+principal. Token totals are `BigDecimal` aggregates because the response is
+not limited to a single database integer. Missing provider usage, missing
+model pricing, and unavailable cost estimates are represented explicitly
+instead of being inferred as zero. See the [REST API reference](rest-api.md)
+for the response shape and privacy boundary.
+
 ### OpenAI Chat Completions Server Compatibility
 
 The controlled adapter is disabled by default. When enabled, it exposes
@@ -1093,7 +1147,8 @@ state. V44/V45 add external-document relocation and Collection derivation
 repair control planes; V46/V47 add durable Chat summaries and turn operations;
 V48–V50 add stable managed principals, operation capabilities, shared quota,
 and principal-provisioning idempotency; V51 adds Sync Run item-receipt cursor
-indexes; V52 adds the caller-scoped Collection-create idempotency ledger.
+indexes; V52 adds the caller-scoped Collection-create idempotency ledger; V53
+adds the principal-scoped model-invocation usage ledger.
 
 ## Profile Overview
 

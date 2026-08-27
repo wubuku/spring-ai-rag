@@ -212,7 +212,8 @@ public class ChatModelRouter {
             return null;
         }
         String canonical = configuredFactory != null
-                ? configuredFactory.canonicalRef(modelRef)
+                && configuredFactory.resolve(modelRef) == model
+                        ? configuredFactory.canonicalRef(modelRef)
                 : null;
         if (canonical != null) {
             MultiModelProperties.ModelItem item =
@@ -227,7 +228,8 @@ public class ChatModelRouter {
                     item != null ? item.maxTokens() : null,
                     item == null
                             || item.contextWindow() == null
-                            || item.maxTokens() == null);
+                            || item.maxTokens() == null,
+                    item != null ? item.cost() : null);
         }
         String provider = legacyProviderFor(model);
         String ref = provider != null ? provider : modelRef.trim();
@@ -249,10 +251,11 @@ public class ChatModelRouter {
                     return new ChatModelCandidate(
                             descriptor.ref(),
                             model,
-                            descriptor.capabilities(),
-                            descriptor.contextWindow(),
-                            descriptor.maxTokens(),
-                            descriptor.estimatedModelLimits());
+                    descriptor.capabilities(),
+                    descriptor.contextWindow(),
+                    descriptor.maxTokens(),
+                    descriptor.estimatedModelLimits(),
+                    modelCost(descriptor.ref()));
                 }
             }
         }
@@ -408,7 +411,8 @@ public class ChatModelRouter {
             MultiModelProperties.ModelCapabilities capabilities,
             Integer contextWindow,
             Integer maxTokens,
-            boolean estimatedModelLimits) {
+            boolean estimatedModelLimits,
+            MultiModelProperties.ModelCost cost) {
 
         public ChatModelCandidate(
                 String ref,
@@ -424,7 +428,18 @@ public class ChatModelRouter {
                 Integer contextWindow,
                 Integer maxTokens) {
             this(ref, model, capabilities, contextWindow, maxTokens,
-                    contextWindow == null || maxTokens == null);
+                    contextWindow == null || maxTokens == null, null);
+        }
+
+        public ChatModelCandidate(
+                String ref,
+                ChatModel model,
+                MultiModelProperties.ModelCapabilities capabilities,
+                Integer contextWindow,
+                Integer maxTokens,
+                boolean estimatedModelLimits) {
+            this(ref, model, capabilities, contextWindow, maxTokens,
+                    estimatedModelLimits, null);
         }
 
         public ChatModelCandidate {
@@ -440,6 +455,12 @@ public class ChatModelRouter {
         public boolean supportsToolCalling() {
             return capabilities.supportsToolCalling();
         }
+    }
+
+    private MultiModelProperties.ModelCost modelCost(String ref) {
+        MultiModelProperties.ModelItem item =
+                multiModelProperties.getModelItem(ref);
+        return item != null ? item.cost() : null;
     }
 
     private String legacyApiType(ChatModel model) {

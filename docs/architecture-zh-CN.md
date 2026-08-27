@@ -160,7 +160,26 @@ attempt。该摘要不包含 query 文本、Document ID、正文、metadata 值�
 旧 `QueryRewriteAdvisor`、`HybridSearchAdvisor` 与 `RerankAdvisor` 仍可作为组件级/
 兼容 API 使用，但不是生产 mode-aware Chat 的执行链。
 
-### 3.3 双表对话记忆
+### 3.3 模型调用级用量归因
+
+`BudgetedChatModel` 是 Chat execution 的模型调用级持久用量边界。每一次属于
+Chat execution 的 `ChatModel.call` 或流式订阅最多写入一条终态事件，内容包括
+logical execution、call ordinal、principal/session/trace、规范化模型引用、Chat
+模式、调用用途、结果、是否流式、provider usage、调用开始时捕获的价格快照以及有界
+耗时。主回答、查询转换/扩展、摘要、fallback candidate、应用重试和 AGENT 工具调用
+轮次，只要经过 mode-aware 或兼容 Chat 入口，都会进入同一归因链路。
+
+V53 新增 append-only 的 `rag_llm_usage_event` 表。`JdbcLlmUsageRecorder` 对非流式
+调用使用有界同步确认，对流式调用使用有界异步记录。记录超时、队列拒绝或数据库
+故障均对 Chat 结果 fail-open，并只暴露进程本地丢失事件计数；保留任务按有界批次
+删除过期事件。
+
+`GET /api/v1/rag/usage` 只读取聚合结果。普通 principal 只能查询自身 owner 的事件；
+ADMIN 和 environment root 可以查询全部 principal 或指定 principal。token 总量和配置
+成本都是显式聚合值；provider usage 或价格缺失时计数但不猜测。该账本是可观测性数据，
+不是 provider 账单、结算或 hard-limit 执行依据。
+
+### 3.4 双表对话记忆
 
 | 表 | 用途 | 管理方 |
 |---|------|--------|
@@ -183,7 +202,7 @@ session 都返回 `SESSION_NOT_FOUND`，避免会话枚举。
 客户端取消会 dispose 模型流，不提交未完成 turn；流式 fallback 只允许发生在第一个
 客户端可见事件之前。
 
-### 3.4 领域扩展机制
+### 3.5 领域扩展机制
 
 通过 `DomainRagExtension` 接口实现显式领域定制：
 

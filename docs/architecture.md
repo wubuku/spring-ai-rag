@@ -175,7 +175,33 @@ The old `QueryRewriteAdvisor`, `HybridSearchAdvisor`, and `RerankAdvisor` remain
 component-level/compatibility APIs, but they are not the production
 mode-aware Chat pipeline.
 
-### 3.3 Dual-Table Conversation Memory
+### 3.3 Model-Invocation Usage Attribution
+
+`BudgetedChatModel` is the model-call boundary for durable usage attribution.
+It records at most one terminal event for each `ChatModel.call` or stream
+subscription that belongs to a Chat execution. The event contains the logical
+execution and call ordinal, principal/session/trace, canonical model reference,
+Chat mode, purpose, outcome, streaming flag, normalized provider usage,
+invocation-start pricing snapshot, and bounded duration. The attribution covers
+the final Chat call, query transform/expansion, summary, fallback candidates,
+application retries, and AGENT rounds that pass through the mode-aware or
+compatibility Chat entry points.
+
+V53 adds the append-only `rag_llm_usage_event` table. The
+`JdbcLlmUsageRecorder` uses bounded synchronous confirmation for non-streaming
+calls and bounded asynchronous recording for streaming calls. Recorder timeout,
+queue rejection, and database failure are fail-open for Chat correctness and
+are exposed only as a process-local lost-event counter/metric. A retention job
+deletes old rows in bounded batches.
+
+`GET /api/v1/rag/usage` reads aggregate projections only. Normal principals
+are restricted to their own owner rows; ADMIN and environment root may select
+all or one principal. Token totals and configured costs are explicit aggregate
+values; unavailable provider usage or pricing is counted rather than guessed.
+The ledger is observability data, not provider billing, settlement, or a
+hard-limit enforcement source.
+
+### 3.4 Dual-Table Conversation Memory
 
 | Table | Purpose | Managed by |
 |-------|---------|------------|
@@ -201,7 +227,7 @@ Client cancellation disposes the model stream and does not commit an
 incomplete turn. Streaming fallback is allowed only before the first
 client-visible event.
 
-### 3.4 Domain Extension Mechanism
+### 3.5 Domain Extension Mechanism
 
 Explicit domain customization uses the `DomainRagExtension` interface:
 

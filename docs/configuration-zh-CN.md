@@ -117,6 +117,54 @@ app:
 YAML 模型注册表，见
 [multi-model-external-config-zh-CN.md](multi-model-external-config-zh-CN.md)。
 
+### 持久化模型调用用量账本
+
+用量账本为属于 Chat execution 的每次模型调用记录一个有界终态事实。
+记录 provider 在可用时返回的 token 用量、模型、调用用途、终态、耗时和
+基于配置的成本估算。它不会保存 prompt、answer、工具参数/结果、凭据或
+异常正文。记录采用 fail-open：账本暂时不可用时不能让 provider 结果或
+Chat 响应失败。
+
+```yaml
+rag:
+  usage:
+    enabled: ${RAG_USAGE_ENABLED:true}
+    cost-unit: ${RAG_USAGE_COST_UNIT:CONFIGURED_MODEL_COST}
+    retention-days: ${RAG_USAGE_RETENTION_DAYS:400}
+    cleanup-enabled: ${RAG_USAGE_CLEANUP_ENABLED:true}
+    cleanup-batch-size: ${RAG_USAGE_CLEANUP_BATCH_SIZE:1000}
+    cleanup-max-batches: ${RAG_USAGE_CLEANUP_MAX_BATCHES:20}
+    cleanup-cron: ${RAG_USAGE_CLEANUP_CRON:0 20 * * * *}
+    recorder-threads: ${RAG_USAGE_RECORDER_THREADS:2}
+    recorder-queue-capacity: ${RAG_USAGE_RECORDER_QUEUE_CAPACITY:1000}
+    record-timeout-ms: ${RAG_USAGE_RECORD_TIMEOUT_MS:2000}
+```
+
+| 属性 | 默认值 | 说明 |
+|------|--------|------|
+| `rag.usage.enabled` | `true` | 是否记录新的调用事实并启用持久化用量聚合 |
+| `rag.usage.cost-unit` | `CONFIGURED_MODEL_COST` | 配置估算的可打印单位/币种标识 |
+| `rag.usage.retention-days` | `400` | 保留 30–3650 天 |
+| `rag.usage.cleanup-enabled` | `true` | 是否启用有界定时清理过期事件 |
+| `rag.usage.cleanup-batch-size` | `1000` | 每批清理行数，范围 100–10000 |
+| `rag.usage.cleanup-max-batches` | `20` | 每次任务最多批次数，范围 1–100 |
+| `rag.usage.cleanup-cron` | `0 20 * * * *` | retention 清理的 Spring cron |
+| `rag.usage.recorder-threads` | `2` | 固定账本线程数，范围 1–16 |
+| `rag.usage.recorder-queue-capacity` | `1000` | 有界账本队列容量，范围 100–10000 |
+| `rag.usage.record-timeout-ms` | `2000` | 同步记账等待确认的超时，范围 100–10000 毫秒 |
+
+账本通过 Flyway V53 以增量方式写入 `rag_llm_usage_event`。非流式终态
+只等待有界记账超时；流式终态异步排队。队列满、超时或数据库错误会增加
+实例本地的丢失事件指标，但不会从 provider 调用路径发起重试。retention
+使用有界批次和较短的数据库 statement timeout。
+
+`GET /api/v1/rag/usage` 返回按 principal 隔离、按 UTC 日期范围聚合的用量。
+普通认证 principal 只能查询自身；ADMIN 或 environment root 可以查询全部
+principal 或指定 principal。因为响应可能聚合大量数据库行，token 合计使用
+`BigDecimal`，而不是单个数据库整数。provider 未返回 usage、模型没有价格
+配置或成本无法计算时都会显式表示，不会猜测为零。响应结构和隐私边界见
+[REST API 参考](rest-api-zh-CN.md)。
+
 ### OpenAI Chat Completions 服务端兼容
 
 受控兼容入口默认关闭。启用后提供 `GET /v1/models`、`GET /v1/models/{id}` 和
@@ -1016,7 +1064,8 @@ generation fencing 与 lifecycle/idempotency contract；V42 增加权威外部�
 独立的本地索引生命周期状态；V44/V45 增加外部文档迁移和 Collection 派生 repair
 控制面；V46/V47 增加持久化 Chat 摘要与 turn operation；V48–V50 增加 stable managed
 principal、operation capability、共享 quota 和 principal provisioning 幂等；V51
-增加 Sync Run item receipt 游标索引；V52 增加按调用方隔离的 Collection 创建幂等账本。
+增加 Sync Run item receipt 游标索引；V52 增加按调用方隔离的 Collection 创建幂等账本；
+V53 增加按 principal 隔离的模型调用用量账本。
 
 ## Profile 一览
 

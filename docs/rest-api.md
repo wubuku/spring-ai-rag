@@ -2569,6 +2569,104 @@ Get RAG service key metrics summary (request count, success rate, retrieval resu
 
 ---
 
+### `GET /api/v1/rag/usage`
+
+Get durable model-invocation usage aggregated over an inclusive UTC date
+range. This endpoint requires `RAG_READ`. A normal database principal can
+query only its own events. An ADMIN or environment root can query all
+principals, or one selected principal through `principalId`.
+
+The default range is the latest 30 UTC calendar days. The maximum range is
+366 days. `from` and `to` use `YYYY-MM-DD`; both endpoints are inclusive.
+Configured costs are estimates based on the model price snapshot captured at
+invocation start. They are not provider invoices, billing records, or
+hard-limit settlement data.
+
+**Query parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `from` | date | No | Inclusive UTC start date; defaults to 30 days before `to` |
+| `to` | date | No | Inclusive UTC end date; defaults to today in UTC |
+| `principalId` | string | No | Requested principal scope; ADMIN/root only may select another principal |
+
+**Response:**
+
+```json
+{
+  "recordingEnabled": true,
+  "localLostEventsSinceStart": 0,
+  "scope": {
+    "type": "SELF",
+    "principalId": "rag_p_service"
+  },
+  "from": "2026-08-01",
+  "to": "2026-08-27",
+  "totals": {
+    "logicalExecutionCount": 12,
+    "invocationCount": 18,
+    "succeededCount": 16,
+    "failedCount": 1,
+    "cancelledCount": 1,
+    "promptTokens": 12500,
+    "completionTokens": 3800,
+    "totalTokens": 16300,
+    "usageAvailableCount": 17,
+    "usageUnavailableCount": 1,
+    "pricingUnavailableCount": 2,
+    "costUnavailableCount": 3
+  },
+  "costs": [
+    {
+      "unit": "CONFIGURED_MODEL_COST",
+      "configuredCost": 0.24560000,
+      "invocationCount": 18,
+      "costAvailableCount": 15
+    }
+  ],
+  "byModel": [
+    {
+      "modelRef": "openrouter/example-model",
+      "totals": {}
+    }
+  ],
+  "byPurpose": [
+    {
+      "purpose": "CHAT",
+      "totals": {}
+    }
+  ],
+  "byMode": [
+    {
+      "mode": "KNOWLEDGE",
+      "totals": {}
+    }
+  ],
+  "byDay": [
+    {
+      "day": "2026-08-27",
+      "totals": {}
+    }
+  ]
+}
+```
+
+Each nested `totals` object has the same fields as the top-level `totals`.
+`byModel`, `byPurpose`, `byMode`, and `byDay` are returned in stable
+ascending order. The purpose values are `CHAT`, `QUERY_TRANSFORM`,
+`QUERY_EXPAND`, and `SUMMARY`; the mode values are `PLAIN`, `KNOWLEDGE`, and
+`AGENT`.
+
+`localLostEventsSinceStart` counts events that this process could not confirm
+because its bounded recorder timed out, was rejected, or encountered a
+database failure. It is process-local and is not a substitute for a durable
+missing-event count. When provider usage or configured pricing is unavailable,
+the corresponding counters increase and token/cost values are not guessed.
+The ledger never stores prompts, answers, tool payloads, credentials, or
+exception bodies.
+
+---
+
 ### `GET /api/v1/rag/metrics/slow-queries`
 
 Get slow query statistics from the database connection pool (HikariCP). Returns aggregated stats and recent slow query records.

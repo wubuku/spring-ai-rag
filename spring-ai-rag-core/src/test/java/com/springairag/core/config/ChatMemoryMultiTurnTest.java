@@ -381,7 +381,8 @@ class ChatMemoryMultiTurnTest {
         when(promptSpec.stream()).thenReturn(streamResponse);
         when(streamResponse.content()).thenReturn(reactor.core.publisher.Flux.just("chunk1", "chunk2"));
 
-        service.chatStream("流式问题", "session-stream");
+        // Streaming execution is lazy; subscribing triggers prompt construction and advisor binding.
+        service.chatStream("流式问题", "session-stream").blockLast();
 
         // chatStream uses advisors(a -> a.param(CONVERSATION_ID, sessionId))
         verify(promptSpec).advisors(any(java.util.function.Consumer.class));

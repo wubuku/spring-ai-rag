@@ -1,6 +1,6 @@
 # 模型调用级持久用量账本实施进度
 
-> **状态**：实施进行中，Slice A 启动
+> **状态**：实施完成，等待合并前硬门槛与 Git 交付
 >
 > **对应规划**：[NEXT_HIGH_VALUE_FEATURES_PLAN.md](NEXT_HIGH_VALUE_FEATURES_PLAN.md)
 >
@@ -29,14 +29,19 @@ answer、tool 参数/结果、异常正文、`.env` 内容或外部项目路径�
 - [x] 已写入自包含活动规划。
 - [x] 规划连续三轮无修改审查。
 - [x] 规划 checkpoint 提交并推送：`main@81d5b131`。
-- [x] 从最新 origin/main 创建专用 feature worktree（准备执行）。
-- [ ] Slice A：配置、领域对象、V53、normalizer/cost 单测。
-- [ ] Slice B：repository、recorder、retention、PostgreSQL 集成。
-- [ ] Slice C：mode-aware 与 legacy 全调用边界。
-- [ ] Slice D：usage API、WebUI、双语长青文档。
-- [ ] Slice E：专项脚本、真实全栈和真实 LLM。
-- [ ] 基本硬门槛。
-- [ ] 实现连续三轮无实质修改审查。
+- [x] 从最新 origin/main 创建专用 feature worktree：`origin/main@5f6d4eb0`。
+- [x] Slice A：配置、领域对象、归因、usage/cost 归一化、预算包装与边界单测已完成；
+  `BudgetedChatModelTest` 7 项与 `ChatExecutionBudgetTest` 5 项定向测试通过，共 12 项。
+- [x] Slice B：repository、recorder、retention、PostgreSQL 集成；空库执行 V1-V53，
+  `LlmUsagePostgresIntegrationTest` 4 项全部通过。
+- [x] Slice C：mode-aware 与 legacy 全调用边界；定向调用链测试 45 项全绿，
+  已覆盖 fallback、流式首事件边界、legacy 入口和模式工厂。
+- [x] Slice D：usage API、WebUI、双语长青文档、项目门禁。
+- [x] Slice E：专项脚本、真实全栈和真实 LLM。
+- [x] 基本硬门槛（专项门禁 12/12 通过）。
+- [x] 真实生命周期验收完成；明确记录 provider 不可用和模型能力限制。
+- [x] 修改验收脚本/进度文档后的专项硬门槛重跑。
+- [x] 按用户要求跳过额外三轮实现代码 review；以一次性完整自动化门禁和真实 provider 验收作为本轮收口证据。
 - [ ] merge 最新 origin/main 后完整复验。
 - [ ] feature 合回 main、push、状态干净、worktree 清理。
 
@@ -79,10 +84,56 @@ answer、tool 参数/结果、异常正文、`.env` 内容或外部项目路径�
 | 2026-08-26 | 文档归档 checkpoint | `verify-project-docs.sh`、`git diff --check`、commit/push | PASS | `main@7b6f01ad` |
 | 2026-08-26 | 需求探索 | Chat execution、Budget、Spring AI 1.1.8、legacy API、model cost、Metrics、V52 | PASS | 当前代码与历史候选 |
 | 2026-08-26 | 规划门禁 | 第 3 轮固定范围检查、`verify-project-docs.sh`、`git diff --check` | PASS；规划连续 `3/3` 无修改 | `main@81d5b131` |
+| 2026-08-26 | Slice A 准备 | 核对 Spring AI 1.1.8 `Usage`/`EmptyUsage`、模型候选、预算、V52 迁移与现有测试基座 | PASS；开始分小切片实现，上一组补丁未产生部分修改 | 当前特性 worktree |
+| 2026-08-27 | Slice A 实现 | 新增 invocation attribution、purpose/outcome、usage normalizer/cost、模型成本快照和 recorder 接口；定向编译通过 | 发现 `BudgetedChatModel` 流式/非流式标记及异步记录尚未符合规划，继续收口后再进入持久化 | 当前特性 worktree |
+| 2026-08-27 | Slice A 核心验证 | `mvn -pl spring-ai-rag-core -am -Dtest=BudgetedChatModelTest,ChatExecutionBudgetTest -Dsurefire.failIfNoSpecifiedTests=false test` | PASS；6 项测试通过；开始接入 purpose-aware recorder 与持久化切片 | 当前特性 worktree |
+| 2026-08-27 | Slice A 现场复核 | 复核 `BudgetedChatModel`、`ChatExecutionBudget`、`ChatModelRouter`、`ModeAwareChatClientFactory`、`ConversationSummaryService`、Maven 依赖和现有 JDBC/安全模式 | 确认摘要服务源码无重复行；确认流式 provider 直接抛错时仍错误标记 `streaming=false`；确认 recorder、V53、repository、聚合 API 和 WebUI 尚未实现；确认 candidate cost 已具备但工厂尚未传入 wrapper | 当前特性 worktree |
+| 2026-08-27 | Slice A 边界验证 | `mvn -pl spring-ai-rag-core -am -Dtest=BudgetedChatModelTest,ChatExecutionBudgetTest -Dsurefire.failIfNoSpecifiedTests=false test` | PASS；12 项测试通过；确认同步/流式成功、失败、取消、同步建流失败、exactly-once、fail-open、usage/pricing/cost 快照 | 当前特性 worktree |
+| 2026-08-27 | Slice A 完成 checkpoint | 同上；进入 Slice B 前复核工作区与恢复入口 | PASS；Slice A 已冻结，下一步为 V53、JDBC repository、fail-open recorder 与 retention | 当前特性 worktree |
+| 2026-08-27 | Slice B 编译与定向测试 | `mvn -pl spring-ai-rag-core -am -DskipTests compile test-compile`；账本定向测试 | PASS；生产/测试编译通过，`BudgetedChatModelTest` 7 项、`ChatExecutionBudgetTest` 5 项通过；未开启 PostgreSQL 开关的集成类 0 tests 不计入验收 | 当前特性 worktree |
+| 2026-08-27 | Slice B PostgreSQL 首次尝试 | `mvn ... -Dllm-usage.it.enabled=true` | BLOCKED；Docker 可用但 Testcontainers 拉取 `testcontainers/ryuk:0.11.0` 被 registry TLS 证书代理拒绝；未产生测试断言结果，不能计为通过 | Maven/Testcontainers 日志 |
+| 2026-08-27 | Slice B PostgreSQL 本地镜像复验 | `TESTCONTAINERS_RYUK_DISABLED=true TESTCONTAINERS_CHECKS_DISABLE=true mvn ... -Dllm-usage.it.enabled=true -Dtestcontainers.pg.image=pgvector/pgvector:pg16` | FAIL（测试夹具）：V1-V53 迁移成功，4 项中 3 项通过；约束断言前的原生 `Instant` 参数绑定触发 `BadSqlGrammarException`，已改为显式 `Timestamp`，待重跑 | Maven/Testcontainers 日志 |
+| 2026-08-27 | Slice B PostgreSQL 修复后复验 | `TESTCONTAINERS_RYUK_DISABLED=true TESTCONTAINERS_CHECKS_DISABLE=true mvn ... -Dllm-usage.it.enabled=true -Dtestcontainers.pg.image=pgvector/pgvector:pg16` | PASS；V1-V53 从空库迁移成功，`LlmUsagePostgresIntegrationTest` 4 项全部通过，Maven reactor 成功 | Maven/Testcontainers 日志 |
+| 2026-08-27 | Slice C 入口 | 更新调用链接入边界：主回答、查询转换、查询扩展、摘要和兼容入口均须使用同一逻辑预算，并携带 principal/session/trace/mode、purpose、candidate 成本快照 | 进行中；先接入生产构造路径，再补 recorder fail-open 与端到端归因测试 | 当前特性 worktree |
+| 2026-08-27 | Slice C legacy 接入 | `RagChatService` 兼容非流式入口改用 candidate descriptor、共享 `ChatExecutionBudget` 和 purpose-aware `BudgetedChatModel`；legacy LLM query rewrite 通过 advisor context 使用 `QUERY_TRANSFORM` wrapper；兼容流式入口在订阅时包装实际首候选并保留原有不 fallback 行为 | 编译通过；专项归因与 recorder failure 测试待补 | 当前特性 worktree |
+| 2026-08-27 | Slice D usage API 入口 | 新增只读 `/api/v1/rag/usage` DTO、UTC 日期窗口/主体范围解析、固定维度聚合 repository 与 Metrics controller 入口；修正 PostgreSQL 按 UTC 日截断并保留旧 controller 构造签名 | 实现已落地；待执行编译和 API/聚合/权限测试 | 当前特性 worktree |
+| 2026-08-27 | Slice D usage API 验证补强 | 修正查询服务严格 Mockito 测试的日期上限断言；补充 `RagMetricsControllerWebTest`，覆盖 self、ADMIN 全局/指定主体、非法日期、超长日期窗口、越权 403、problem+json 和 BigDecimal JSON；补正 PostgreSQL 聚合断言并验证单主体 cost unit 隔离 | 查询服务已通过；HTTP 与 PostgreSQL 定向测试待最终复验 | 当前特性 worktree |
+| 2026-08-27 | Slice D HTTP 定向复验 | `mvn -pl spring-ai-rag-core -am -Dtest=RagMetricsControllerWebTest,LlmUsageQueryServiceTest -Dsurefire.failIfNoSpecifiedTests=false test` | PASS；9 项测试通过；修复多构造器 controller 未显式选择注入构造器的问题 | Maven/Surefire |
+| 2026-08-27 | Slice C 调用边界复验 | `mvn -pl spring-ai-rag-core -am -Dtest=RagChatServiceTest,ChatExecutionServiceTest,ModeAwareChatClientFactoryTest -Dsurefire.failIfNoSpecifiedTests=false test` | PASS；45 项测试通过；覆盖 mode-aware、legacy、fallback、流式首事件边界和查询/摘要用途接入 | Maven/Surefire |
+| 2026-08-27 | Slice D 契约与 recorder 复验 | `mvn -pl spring-ai-rag-core -am -Dtest=JdbcLlmUsageRecorderTest,OpenApiContractTest -Dsurefire.failIfNoSpecifiedTests=false test` | PASS；38 项测试通过；确认 `/rag/usage` OpenAPI 200/400/403 和同步失败、同步超时、异步失败 fail-open | Maven/Surefire |
+| 2026-08-27 | Slice D WebUI 实现 | typed `/usage` client、Metrics 持久用量区域、成本/可用性/模型/用途/模式/日期展示和双语 i18n | 实现已落地；TypeScript、Vitest、build 与 Mock Playwright 待执行 | 当前特性 worktree |
+| 2026-08-27 | Slice D WebUI Mock Playwright | `VITE_DEV_PORT=4176 npm run dev -- --host 127.0.0.1 --strictPort`；`BASE_URL=http://127.0.0.1:4176 npx playwright test e2e/pages.spec.ts` | PASS；14 项通过；网络断言确认 `/api/v1/rag/usage` 为 200，JSON scope/totals/cost unit 与 Metrics summary/table/免责声明均可见；前置无服务的 8081 运行仅为 `ERR_CONNECTION_REFUSED`，不计为实现结果 | Playwright/Surefire |
+| 2026-08-26 | Slice D 文档收口 | 补齐 architecture、project-context、configuration、REST API、developer reference、testing guide、release checklist、TODO 的中英文长青事实，并修正架构章节编号；新增 usage ledger 一键门禁入口 | PASS；文档表述已区分 V53 当前事实、可观测性账本与 provider billing/hard limit；真实 LLM 尚未宣称通过 | 当前特性 worktree |
+| 2026-08-26 | Slice D 专项门禁启动 | `./scripts/verify-llm-usage-ledger.sh` | 进行中；将依次执行聚焦后端、V1-V53 PostgreSQL、Maven、WebUI、Mock Playwright、禁锁、文档和空白检查 | 当前特性 worktree |
+| 2026-08-26 | Slice D 专项门禁预检 | 首次执行因新脚本缺少 executable mode 返回 `126`；已补齐 `scripts/verify-llm-usage-ledger.sh` 可执行权限 | 修复后重跑；尚未计入通过 | 当前特性 worktree |
+| 2026-08-26 | Slice D 专项门禁 PostgreSQL 预检 | 脚本自行创建一次性 PostgreSQL 后未传 `-Dllm-usage.it.clean-confirm=YES`，集成测试按保护规则拒绝执行；已在脚本中区分内部一次性库默认确认与外部 URL 显式确认 | 修复后重跑；该预检不计入通过 | 当前特性 worktree |
+| 2026-08-27 | Slice D 专项门禁全量 Maven | 全量测试发现 `ChatMemoryMultiTurnTest.stream_passesConversationId` 仍按旧的 eager streaming 假设断言；实现使用 `Flux.defer` 将预算和 provider 调用绑定到订阅时刻 | 已将测试改为订阅后断言 advisor 参数；受影响测试和专项门禁需重跑 | Maven/Surefire |
+| 2026-08-27 | Slice E 真实服务启动预检 | 使用主工作区 `.env`、隔离数据库 `pgvector/pg16`（随机端口）和 `openai` 兼容配置启动 `28081`；健康检查与 V1-V53 迁移通过，但启动脚本退出后后台 Java 进程未保持存活，首轮 smoke 无法连接 | 不计为真实验收结果；改用前台会话托管服务后重试，保留现有 `18081` 服务不变 | 隔离服务日志 `/tmp/spring-ai-rag-llm-usage-real-20260827.log` |
+| 2026-08-27 | Slice E PLAIN 幂等验收前置预检 | 首次 PLAIN 请求未携带隔离服务 root API key，返回 `401`；未产生 provider 调用，也未计入验收通过 | 补齐进程内认证 header 后重跑同一组首次/重放/冲突/status 请求 | 隔离服务 HTTP 响应 |
+| 2026-08-27 | Slice E PLAIN 幂等验收夹具预检 | 补齐认证后，测试生成的 session ID 超过接口 36 字符限制，返回 `400 VALIDATION_FAILED`；未产生 provider 调用 | 使用长度合规的隔离 session ID 重跑，继续核对真实 provider 单次调用和 turn 重放 | 隔离服务 HTTP 响应 |
+| 2026-08-27 | Slice E 真实 keyed JSON/SSE 生命周期 | 隔离服务 `28081`、数据库 `rag-llm-usage-e2e-20260827`；真实模型由当前多模型路由解析为 `minimax/MiniMax-M2.7` | PASS；JSON 首次/重放均 `200` 且 turn/answer 一致，复用同 key 的不同请求为 `409 IDEMPOTENCY_KEY_REUSED`；SSE 首次/重放均 `200`，`done`、内容和 turn 一致；JSON 与 SSE 各只增加 1 次 provider call（计数 `3→4→5`）；两个 turn 均 `SUCCEEDED` 且 `replayAvailable=true` | `.verification/real-chat/ledger-real-20260827-084549-44268/`；只读 PostgreSQL 查询确认两个新 `CHAT` 事件各 `call_ordinal=1`、`usage_available=true`，模型、价格、token usage 与响应一致 |
+| 2026-08-27 | Slice E 真实 provider 预检修复 | `real-llm-e2e-smoke.sh` 原先无视实际 `LLM_PROVIDER`、优先探测 MiniMax，可能把其他 provider 的不可用状态误判为可用；已改为严格按 `REAL_LLM_CHAT_PROVIDER` / `LLM_PROVIDER` / `APP_LLM_PROVIDER` 选择并仅发送对应协议请求 | PASS（脚本语法与 diff 检查）；后续真实验收必须使用该版本脚本，不能沿用旧预检结果 | 当前特性 worktree |
+| 2026-08-27 | Slice E OpenAI-compatible 真实 provider 复核 | 隔离服务 `28083` 按 `LLM_PROVIDER=openai` 启动，健康检查、Flyway V1-V53 和真实 Embedding 已通过；配置的上游 Chat 预检返回 `503 no_available_account`，应用 Chat 最终返回 `504 CHAT_TIMEOUT` | 外部 provider 不可用，不能计为 OpenAI Chat 通过；保留失败证据并继续使用实际可用 provider 完成应用生命周期验收 | `/tmp/spring-ai-rag-llm-usage-openai-20260827.log`；隔离数据库 `rag-llm-usage-openai-20260827` |
+| 2026-08-27 | Slice E PLAIN 真实生命周期 | 隔离服务 `28081`，显式 `mode=PLAIN`、独立 session 和幂等 key；响应由真实 `minimax/MiniMax-M2.7` 生成 | PASS；HTTP `200`、终态 `end_turn`、answer 非空、无检索 sources、响应 `resolvedModel` 与服务默认模型一致 | `.verification/real-chat/ledger-plain-20260827-092507-74452/`；证据只保留状态和非敏感摘要 |
+| 2026-08-27 | Slice E AGENT 真实能力边界 | 使用隔离知识库、真实模型和 `mode=AGENT` 请求，要求通过检索工具返回一次性验证码 | 明确阻断：HTTP `400 MODEL_CAPABILITY_UNSUPPORTED`，当前实际模型 `minimax/MiniMax-M2.7` 未声明 tool-calling；不把该请求记为 AGENT 通过，已有 Mock/定向测试仍覆盖 AGENT 控制流 | 真实 HTTP 响应（未保存原始 prompt/answer）；后续必须使用声明 tool-calling 的真实模型才可补做 AGENT provider 验收 |
+| 2026-08-27 | Slice E OpenAI provider failure 生命周期 | 独立服务 `28083`、独立 PostgreSQL、`LLM_PROVIDER=openai`，真实请求经过应用 retry 后收敛 | PASS（失败收敛语义）；HTTP `504 CHAT_TIMEOUT`，数据库只读查询确认新增 `QUERY_EXPAND/FAILED` 事件；该 provider 上游 `503 no_available_account`，不宣称 Chat 成功 | `.verification/real-chat/ledger-provider-failure-20260827-092905-77671/`；`rag-llm-usage-openai-20260827` |
+| 2026-08-27 | Slice E 摘要压缩服务启动预检 | 独立 PostgreSQL `rag-llm-usage-summary-20260827`、端口 `28085`，Flyway V1-V53 与真实 MiniMax 初始化通过；后台启动方式在本地命令会话结束后未保持监听，首次请求为连接失败 | 不计入验收；改用前台托管 Java 进程重跑，保留同一隔离数据库和压缩配置 | `/tmp/spring-ai-rag-llm-usage-summary-20260827.log` |
+| 2026-08-27 | Slice E 摘要压缩真实生命周期 | 独立服务 `28085`、独立 PostgreSQL、真实 MiniMax，启用低阈值 compaction；同一 session 连续 5 轮真实 Chat | PASS；第 4 轮触发并持久化版本 1 摘要，数据库确认 `CHAT/SUCCEEDED=5`、`SUMMARY/SUCCEEDED=2`；第 5 轮输出超限按设计有界降级，不破坏主 Chat 结果 | `.verification/real-chat/ledger-summary-20260827-093721-83249/summary.jsonl`；只读 PostgreSQL 查询确认摘要游标、模型、token 与终态 |
+| 2026-08-27 | 最终专项硬门槛 | `LLM_USAGE_LEDGER_VERIFY_RUN_ID=ledger-final-20260827-094227 ./scripts/verify-llm-usage-ledger.sh` | PASS；12/12：定向后端、PostgreSQL V1-V53、`mvn clean compile test-compile`、Maven 全量 3088 项、WebUI typecheck/Vitest 222/build/alignment、Mock Playwright 14 项、禁锁、文档和 diff | `.verification/llm-usage-ledger/ledger-final-20260827-094227/summary.md` |
 
-## 5. 恢复入口
+## 5. 当前实现收口
 
-规划三轮无修改后，已提交并推送规划 checkpoint；接下来从最新 `origin/main` 建立
-`feat/llm-usage-ledger-20260826` 专用 worktree。实施中每次关键进展先更新本文件，再执行
-下一步。Mock 和 PostgreSQL 通过后才使用 `.env` 做真实 LLM 验证；provider 不可用时保留
-明确失败证据，不把 Mock 结果写成真实通过。
+1. `BudgetedChatModel` 的同步、流式、取消和同步建流异常都记录单一终态事件；
+2. Chat、查询转换/扩展、摘要、fallback 与 legacy 入口共享有界预算和用途归因；
+3. V53 账本只保存有界维度、token、价格快照、成本估算和终态，不保存 prompt、answer、
+   工具参数/结果或异常正文；
+4. recorder fail-open；账本故障不能改变 provider 结果或触发 provider retry；
+5. usage API 按 principal 隔离，WebUI 使用 typed usage 区域；旧 metrics 保持兼容；
+6. 真实验收已证明 MiniMax 的 PLAIN、KNOWLEDGE、SSE、幂等、摘要压缩和失败收敛路径；
+   AGENT 仍需声明 tool-calling 的真实模型，OpenAI-compatible 结果受上游可用性限制。
+
+## 6. 恢复入口
+
+当前工作区包含全部待提交实现修改；最终专项门禁已通过。继续工作时先提交当前修改，
+再处理合并 `origin/main`、合并后完整复验和 Git 交付。不得把
+本地真实 provider 失败或模型能力限制改写成通过结论。

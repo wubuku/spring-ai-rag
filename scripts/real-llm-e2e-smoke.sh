@@ -5,7 +5,8 @@
 # Pipeline against a RUNNING backend (default from start-real-e2e-server.sh):
 #   1) health
 #   2) preflight embedding key (SiliconFlow)
-#   3) preflight chat key (MiniMax / Anthropic-gateway / OpenAI-compat)
+#   3) preflight the configured chat provider (MiniMax / Anthropic-gateway /
+#      OpenAI-compatible)
 #   4) create an isolated collection + document with a unique verification code
 #   5) embed (real Embedding API)
 #   6) search (real vector/fulltext)
@@ -16,8 +17,9 @@
 #   - PostgreSQL + pgvector
 #   - .env keys matching start-real-e2e-server.sh defaults:
 #       SILICONFLOW_API_KEY (+ optional SILICONFLOW_URL/MODEL)
-#       SPRING_AI_MINIMAX_API_KEY + SPRING_AI_MINIMAX_BASE_URL + MiniMax-M3
-#         (or ANTHROPIC_* for MiniMax Anthropic-compatible gateway)
+#       LLM_PROVIDER=minimax: SPRING_AI_MINIMAX_API_KEY + ...
+#       LLM_PROVIDER=anthropic: ANTHROPIC_API_KEY + ...
+#       LLM_PROVIDER=openai: SPRING_AI_OPENAI_API_KEY + ...
 #   - Backend: ./scripts/start-real-e2e-server.sh
 #
 # Usage:
@@ -122,38 +124,64 @@ if [[ "$CODE" != "200" ]]; then
 fi
 ok "embedding API HTTP 200 (${EMB_BASE} ${EMB_MODEL})"
 
-step "0c) Probe chat API (MiniMax preferred, then Anthropic-gateway, then OpenAI-compat)"
+PROVIDER="${REAL_LLM_CHAT_PROVIDER:-${LLM_PROVIDER:-${APP_LLM_PROVIDER:-openai}}}"
+PROVIDER="$(printf '%s' "$PROVIDER" | tr '[:upper:]' '[:lower:]')"
+step "0c) Probe configured chat API provider=${PROVIDER}"
 CHAT_OK=0
-# 1) MiniMax OpenAI-compatible
-MM_KEY="${SPRING_AI_MINIMAX_API_KEY:-${MINIMAX_API_KEY:-}}"
-MM_BASE=$(echo "${SPRING_AI_MINIMAX_BASE_URL:-${MINIMAX_BASE_URL:-https://api.minimaxi.com}}" | sed 's|/$||; s|/v1$||')
-MM_MODEL="${SPRING_AI_MINIMAX_CHAT_OPTIONS_MODEL:-${MINIMAX_MODEL:-MiniMax-M3}}"
-if [[ -n "$MM_KEY" ]]; then
+case "$PROVIDER" in
+  minimax)
+    CHAT_KEY="${SPRING_AI_MINIMAX_API_KEY:-${MINIMAX_API_KEY:-}}"
+    CHAT_BASE=$(echo "${SPRING_AI_MINIMAX_BASE_URL:-${MINIMAX_BASE_URL:-https://api.minimaxi.com}}" | sed 's|/$||; s|/v1$||')
+    CHAT_MODEL="${SPRING_AI_MINIMAX_CHAT_OPTIONS_MODEL:-${MINIMAX_MODEL:-MiniMax-M3}}"
+    CHAT_URL="${CHAT_BASE}/v1/chat/completions"
+    CHAT_BODY="{\"model\":\"${CHAT_MODEL}\",\"messages\":[{\"role\":\"user\",\"content\":\"ping\"}],\"max_tokens\":8,\"temperature\":0.1}"
+    ;;
+  openai)
+    CHAT_KEY="${SPRING_AI_OPENAI_API_KEY:-${OPENAI_API_KEY:-${SILICONFLOW_API_KEY:-}}}"
+    CHAT_BASE=$(echo "${SPRING_AI_OPENAI_BASE_URL:-${OPENAI_BASE_URL:-https://api.siliconflow.cn}}" | sed 's|/$||; s|/v1$||')
+    CHAT_MODEL="${SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL:-${OPENAI_MODEL:-Qwen/Qwen2.5-7B-Instruct}}"
+    CHAT_URL="${CHAT_BASE}/v1/chat/completions"
+    CHAT_BODY="{\"model\":\"${CHAT_MODEL}\",\"messages\":[{\"role\":\"user\",\"content\":\"ping\"}],\"max_tokens\":5}"
+    ;;
+  anthropic)
+    CHAT_KEY="${ANTHROPIC_API_KEY:-${SPRING_AI_MINIMAX_API_KEY:-}}"
+    CHAT_BASE=$(echo "${ANTHROPIC_BASE_URL:-https://api.minimaxi.com/anthropic}" | sed 's|/$||')
+    CHAT_MODEL="${ANTHROPIC_MODEL:-${SPRING_AI_MINIMAX_CHAT_OPTIONS_MODEL:-MiniMax-M3}}"
+    CHAT_URL="${CHAT_BASE}/v1/messages"
+    CHAT_BODY="{\"model\":\"${CHAT_MODEL}\",\"max_tokens\":8,\"messages\":[{\"role\":\"user\",\"content\":\"ping\"}]}"
+    ;;
+  *)
+    echo "Unsupported LLM_PROVIDER '${PROVIDER}'" >&2
+    exit 2
+    ;;
+esac
+if [[ -z "${CHAT_KEY:-}" ]]; then
+  echo "Configured provider '${PROVIDER}' has no chat API key" >&2
+  exit 2
+fi
+if [[ "$PROVIDER" == "anthropic" ]]; then
   CODE=$(curl -s -o /tmp/rag-chat-probe.json -w "%{http_code}" \
-    -X POST "${MM_BASE}/v1/chat/completions" \
-    -H "Authorization: Bearer ${MM_KEY}" \
+    -X POST "$CHAT_URL" \
+    -H "x-api-key: ${CHAT_KEY}" \
+    -H "anthropic-version: 2023-06-01" \
     -H "Content-Type: application/json" \
-    -d "{\"model\":\"${MM_MODEL}\",\"messages\":[{\"role\":\"user\",\"content\":\"ping\"}],\"max_tokens\":8,\"temperature\":0.1}" || true)
-  echo "minimax probe ${MM_BASE} ${MM_MODEL} -> HTTP $CODE"
-  if [[ "$CODE" == "200" ]]; then CHAT_OK=1; CHAT_DESC="minimax ${MM_MODEL}"; fi
+    -d "$CHAT_BODY" || true)
+else
+  CODE=$(curl -s -o /tmp/rag-chat-probe.json -w "%{http_code}" \
+    -X POST "$CHAT_URL" \
+    -H "Authorization: Bearer ${CHAT_KEY}" \
+    -H "Content-Type: application/json" \
+    -d "$CHAT_BODY" || true)
 fi
-# 2) OpenAI-compatible (SiliconFlow chat etc.)
-if [[ "$CHAT_OK" != "1" ]]; then
-  OA_BASE=$(echo "${SPRING_AI_OPENAI_BASE_URL:-${OPENAI_BASE_URL:-https://api.siliconflow.cn}}" | sed 's|/$||; s|/v1$||')
-  OA_MODEL="${SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL:-${OPENAI_MODEL:-Qwen/Qwen2.5-7B-Instruct}}"
-  for candidate in "${SPRING_AI_OPENAI_API_KEY:-}" "${OPENAI_API_KEY:-}" "${SILICONFLOW_API_KEY:-}"; do
-    [[ -z "$candidate" ]] && continue
-    CODE=$(curl -s -o /tmp/rag-chat-probe.json -w "%{http_code}" \
-      -X POST "${OA_BASE}/v1/chat/completions" \
-      -H "Authorization: Bearer ${candidate}" \
-      -H "Content-Type: application/json" \
-      -d "{\"model\":\"${OA_MODEL}\",\"messages\":[{\"role\":\"user\",\"content\":\"ping\"}],\"max_tokens\":5}" || true)
-    echo "openai-compat probe ${OA_BASE} ${OA_MODEL} key_len=${#candidate} -> HTTP $CODE"
-    if [[ "$CODE" == "200" ]]; then CHAT_OK=1; CHAT_DESC="openai-compat ${OA_MODEL}"; break; fi
-  done
+echo "${PROVIDER} probe ${CHAT_BASE} ${CHAT_MODEL} key_len=${#CHAT_KEY} -> HTTP $CODE"
+if [[ "$CODE" == "200" ]]; then
+  CHAT_OK=1
+  CHAT_DESC="${PROVIDER} ${CHAT_MODEL}"
+else
+  echo "Chat provider response: $(head -c 300 /tmp/rag-chat-probe.json)" >&2
 fi
 if [[ "$CHAT_OK" != "1" ]]; then
-  echo "No working chat API key. For default stack set SPRING_AI_MINIMAX_API_KEY (MiniMax-M3) in .env"
+  echo "Configured chat provider '${PROVIDER}' is unavailable" >&2
   exit 2
 fi
 ok "chat API HTTP 200 (${CHAT_DESC})"

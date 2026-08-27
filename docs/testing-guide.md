@@ -93,6 +93,34 @@ and response-protocol errors are detected early. A non-`main` worktree uses
 isolated `BACKEND_PORT` and `FRONTEND_PORT` values plus a disposable test
 database; prefer `scripts/dev.sh`, which loads `.env`, for the joint stack.
 
+### Durable Model-Invocation Usage Ledger Gate
+
+Run the focused and full non-provider acceptance gate:
+
+```bash
+LLM_USAGE_LEDGER_VERIFY_RUN_ID=usage-ledger-gate \
+./scripts/verify-llm-usage-ledger.sh
+```
+
+It requires focused attribution/recorder/API tests, an isolated PostgreSQL
+database migrated from V1 through V53, `mvn clean compile test-compile`, the
+full Maven suite, WebUI typecheck/Vitest/build/alignment, the durable-usage
+Mock Playwright flow, the lock gate, the documentation gate, and
+`git diff --check`. The browser phase proves the `/api/v1/rag/usage` response
+and Metrics DOM using requests, JSON, and accessible DOM state; screenshots are
+not correctness evidence.
+
+After the Mock and disposable-PostgreSQL phases pass, real-provider acceptance
+must use an isolated service and database. Cover at least one PLAIN request,
+one KNOWLEDGE request that exercises query transformation/expansion and the
+final answer, one AGENT request with a bounded tool loop, a fallback or
+provider-failure path, a summary-compaction path, a keyed replay, and a
+read-only usage query. Observe service logs during each phase. Verify from
+the response JSON/SSE and read-only database aggregates that provider
+invocation count, purpose/mode attribution, terminal outcomes, replay
+non-duplication, and usage aggregation agree. Do not record prompts, answers,
+tool arguments/results, credentials, or exception bodies in evidence.
+
 ## Test Categories
 
 ### Unit Tests (JUnit 5 + Mockito)

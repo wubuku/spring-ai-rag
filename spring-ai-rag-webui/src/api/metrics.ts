@@ -1,4 +1,5 @@
 import { apiClient } from './client';
+import type { LlmUsageResponse, RagMetricsResponse } from '../types/api';
 
 export const metricsApi = {
   overview: () =>
@@ -10,5 +11,7 @@ export const metricsApi = {
       cacheHitRate: number;
     }>('/metrics/overview'),
 
-  get: () => apiClient.get('/metrics'),
+  get: () => apiClient.get<RagMetricsResponse>('/metrics'),
+
+  usage: () => apiClient.get<LlmUsageResponse>('/usage'),
 };

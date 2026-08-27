@@ -3,7 +3,7 @@
 > [English](project-context.md) | [中文](project-context-zh-CN.md)
 
 > **用途**：为开发者和 Agent 提供稳定、代码支撑的项目认知。
-> **最近复核**：2026-08-19。
+> **最近复核**：2026-08-27。
 > 本文记录当前事实；目标设计和未实施能力必须明确标注为规划。
 
 文档总入口：[index-zh-CN.md](index-zh-CN.md)。命令参考：[developer-reference-zh-CN.md](developer-reference-zh-CN.md)。
@@ -86,6 +86,14 @@ RagChatController
 - Spring AI Memory 与业务 history 分开存储，但完成 turn 会原子提交。Spring AI `1.1.8`
   JDBC 只保存可恢复的 user/plain assistant 消息；完整工具交换以有界 `toolTranscript`
   写入业务 history metadata，供后续摘要使用。
+- `BudgetedChatModel` 为属于 Chat execution 的每次模型调用或流式订阅最多记录一条
+  有界终态用量事件。V53 将 append-only 事件写入 `rag_llm_usage_event`；经过
+  mode-aware 或兼容入口的主回答、查询转换/扩展、摘要、fallback candidate、应用重试
+  和 AGENT 轮次都会被归因。
+- 用量记录对 Chat 正确性 fail-open：非流式事件使用有界同步确认，流式事件使用有界
+  异步写入，保留任务按有界批次删除旧记录。不保存 prompt、answer、工具参数/结果、
+  credential 或异常正文。按 principal 隔离的 `GET /api/v1/rag/usage` 只提供 token
+  与配置成本估算聚合，不是供应商账单或 hard-limit 结算源。
 
 ### Chat 会话与流式协议
 
@@ -317,7 +325,7 @@ job enqueue 分开提交，HTTP 不同步循环调用 provider。只读诊断默
 ### 数据库
 
 - PostgreSQL + pgvector。
-- Flyway 当前为 V1–V52。
+- Flyway 当前为 V1–V53。
 - V27/V28 负责新增、回填、校验、唯一约束及不可变 Collection 业务 key；V29 增加 JSONB
   结构化记录；V30 增加外部文档同步 schema；V31 在不改写已发布 V30 的前提下规范化
   已存储的外部文档身份；V32 增加按 principal 归属的 Chat history、来源快照、turn
@@ -338,7 +346,8 @@ job enqueue 分开提交，HTTP 不同步循环调用 provider。只读诊断默
   增加 principal 级 `RAG_READ` / `RAG_WRITE` 操作能力及数据库约束；V50 增加按
   requester 隔离的 provisioning 幂等账本，只保存 key/fingerprint hash 与结果 metadata，
   从不保存 raw credential；V51 为 Sync Run item ledger 增加按 run/status 的有界游标索引；
-  V52 增加按 owner 隔离、具有受约束 Collection 外键的 Collection 创建幂等账本。
+  V52 增加按 owner 隔离、具有受约束 Collection 外键的 Collection 创建幂等账本；
+  V53 增加按 principal 隔离的模型调用级 append-only 用量账本。
 - 数据访问层禁止显式 `SELECT ... FOR UPDATE`、`SKIP LOCKED`、JPA
   `PESSIMISTIC_*` 与 PostgreSQL advisory lock。并发写使用条件
   `UPDATE/DELETE ... RETURNING`、`@Version`、唯一约束、lease 和有界重试；普通 DML
@@ -349,6 +358,10 @@ job enqueue 分开提交，HTTP 不同步循环调用 provider。只读诊断默
 - `rag_document_local_index_state` 为每份文档保存当前本地 generation。它独立于
   embedding Profile 状态，通过条件 DML/generation 检查推进，不使用悲观锁。
 - Chat memory、业务历史、检索日志、评估、反馈、A/B、告警、API Key 和文件数据分别持久化。
+- `rag_llm_usage_event` 是 append-only 的可观测性账本，保存有界调用归因、规范化
+  provider usage、调用开始时的配置价格、终态和耗时；刻意排除 prompt、answer、工具
+  参数/结果、credential 和异常正文。记录 fail-open，聚合查询按 principal 隔离，保留
+  任务使用有界批次。
 
 ### HTTP
 
@@ -424,6 +437,9 @@ job enqueue 分开提交，HTTP 不同步循环调用 provider。只读诊断默
   上限，其中 `documentSyncRunItemReceipts` 明确表示持久化回执查询是否可用，
   `features.provisioning.collectionCreateIdempotencyKey` 表示 V52 控制面能力。restricted
   ACL 无法完整解析为 Collection key 时以 `503` fail closed。
+- `GET /api/v1/rag/usage` 要求 `RAG_READ`，使用包含首尾的 UTC 日期范围；普通 principal
+  只能查询自身，ADMIN 和 environment root 可以查询全部或指定 principal。默认最近
+  30 个 UTC 日，最多 366 日。usage 或 pricing 缺失会显式计数，不会被推断为零。
 - Chat、Search、Collection、Document、PDF-to-RAG、评估与后台 worker 都使用统一 ACL
   snapshot 或按 stable owner 重载当前 policy。
 

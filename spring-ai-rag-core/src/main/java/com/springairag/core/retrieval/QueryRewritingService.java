@@ -128,6 +128,18 @@ public class QueryRewritingService {
      * @return list of rewritten queries (including original and expanded queries)
      */
     public List<String> rewriteQuery(String originalQuery) {
+        return rewriteQuery(originalQuery, null);
+    }
+
+    /**
+     * Rewrites using an execution-scoped model when supplied.
+     *
+     * <p>The override is used by legacy Chat execution so an optional LLM
+     * rewrite shares the same budget and usage ledger attribution as the
+     * primary answer. Independent callers retain the configured singleton
+     * model behavior.</p>
+     */
+    public List<String> rewriteQuery(String originalQuery, ChatModel executionModel) {
         if (config == null || !config.isEnabled() || originalQuery == null || originalQuery.isBlank()) {
             return List.of(originalQuery);
         }
@@ -143,7 +155,7 @@ public class QueryRewritingService {
 
         // 3. LLM-assisted rewrite (optional)
         if (config.isLlmEnabled()) {
-            queries.addAll(llmRewrite(originalQuery));
+            queries.addAll(llmRewrite(originalQuery, executionModel));
         }
 
         // Deduplicate
@@ -160,14 +172,22 @@ public class QueryRewritingService {
      * @return list of LLM-generated rewritten queries
      */
     public List<String> llmRewrite(String originalQuery) {
-        if (chatModel == null) {
+        return llmRewrite(originalQuery, null);
+    }
+
+    /**
+     * LLM rewrite with an optional execution-scoped ChatModel override.
+     */
+    public List<String> llmRewrite(String originalQuery, ChatModel executionModel) {
+        ChatModel effectiveModel = executionModel != null ? executionModel : chatModel;
+        if (effectiveModel == null) {
             log.warn("LLM rewrite enabled but ChatModel not configured, skipping");
             return List.of();
         }
 
         try {
             String prompt = buildRewritePrompt(originalQuery);
-            String response = callLlm(prompt);
+            String response = callLlm(prompt, effectiveModel);
             if (response == null || response.isBlank()) {
                 log.warn("LLM returned empty response");
                 return List.of();
@@ -194,8 +214,8 @@ public class QueryRewritingService {
                 config.getLlmMaxRewrites(), originalQuery);
     }
 
-    private String callLlm(String prompt) {
-        ChatClient client = ChatClient.builder(chatModel).build();
+    private String callLlm(String prompt, ChatModel model) {
+        ChatClient client = ChatClient.builder(model).build();
         Supplier<String> llmCall = () -> client.prompt(prompt).call().content();
         if (retryTemplate != null) {
             try {

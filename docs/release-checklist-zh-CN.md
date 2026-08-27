@@ -15,7 +15,7 @@
 - [x] Helm `version` 与 `appVersion` 均为 `1.0.0`
 - [x] Docker/Helm 默认镜像 tag 为 `1.0.0`
 - [x] 本地、Docker 与 Helm 默认端口均为 `8081`
-- [x] Flyway 迁移范围为 V1-V52
+- [x] Flyway 迁移范围为 V1-V53
 - [x] JSONB 结构化记录 API、payload 快照和 Collection 生命周期已覆盖
 - [x] `scripts/verify-jsonb-records.sh` 固化后端/数据库/前端聚焦验证
 - [x] 文档 PATCH/禁用/恢复/永久删除与外部三元身份已覆盖
@@ -157,6 +157,21 @@
   retry 复用一次提交生成的 UUID。
 - [x] capability discovery 通过 additive protocol `1.0` 字段
   `features.provisioning.collectionCreateIdempotencyKey` 公布能力。
+
+### 2026-08-26 模型调用级用量账本门禁
+
+- [x] V53 增加 append-only 的 `rag_llm_usage_event` 表，包含有界字段、
+  principal/session/trace 归因、调用开始时价格快照、规范化 usage、终态结果和耗时。
+- [x] `BudgetedChatModel` 在 Chat、query transform/expand、summary、fallback、应用
+  retry 和 AGENT 轮次中，为每次模型调用或流式订阅最多记录一条终态事件。
+- [x] 记录 fail-open：非流式使用有界同步确认，流式使用有界异步记录，维护进程本地
+  丢失计数并按有界批次清理；不保存 prompt、answer、工具 payload、credential 或异常正文。
+- [x] `GET /api/v1/rag/usage` 提供包含首尾的 UTC 聚合窗口、稳定 breakdown、usage/pricing
+  缺失计数和按 principal 隔离的授权。
+- [x] `verify-llm-usage-ledger.sh` 覆盖后端聚焦测试、PostgreSQL V1-V53 集成、Maven、
+  WebUI、Mock Playwright、禁锁、文档和空白门槛。
+- [ ] 真实 LLM 生命周期验收记录 plain、knowledge、agent、fallback、summary、replay
+  和用量账本证据，不保存 prompt、answer、密钥或工具 payload。
 
 ### 最终证据（2026-07-21）
 

@@ -8,6 +8,8 @@ import com.springairag.core.config.RagProperties;
 import com.springairag.core.exception.RagException;
 import com.springairag.core.repository.RagChatHistoryRepository;
 import com.springairag.core.repository.RagChatMemorySummaryRepository;
+import com.springairag.core.usage.LlmInvocationPurpose;
+import com.springairag.core.usage.LlmUsageRecorder;
 import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -60,6 +62,8 @@ public final class ConversationSummaryService {
     private final ChatModelRouter modelRouter;
     private final RagChatProperties properties;
     private final PromptTokenEstimator estimator;
+    private final LlmUsageRecorder usageRecorder;
+    private final String usageCostUnit;
     private final ExecutorService summaryExecutor = Executors.newCachedThreadPool(
             runnable -> {
                 Thread thread = new Thread(runnable, "rag-chat-summary");
@@ -72,11 +76,26 @@ public final class ConversationSummaryService {
             RagChatHistoryRepository historyRepository,
             ChatModelRouter modelRouter,
             com.springairag.core.config.RagProperties ragProperties) {
+        this(repository, historyRepository, modelRouter, ragProperties, null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public ConversationSummaryService(
+            RagChatMemorySummaryRepository repository,
+            RagChatHistoryRepository historyRepository,
+            ChatModelRouter modelRouter,
+            com.springairag.core.config.RagProperties ragProperties,
+            @org.springframework.beans.factory.annotation.Autowired(required = false)
+            LlmUsageRecorder usageRecorder) {
         this.repository = repository;
         this.historyRepository = historyRepository;
         this.modelRouter = modelRouter;
         this.properties = ragProperties.getChat();
         this.estimator = new JTokkitPromptTokenEstimator();
+        this.usageRecorder = usageRecorder != null
+                ? usageRecorder
+                : LlmUsageRecorder.NOOP;
+        this.usageCostUnit = ragProperties.getUsage().getCostUnit();
     }
 
     @PreDestroy
@@ -299,7 +318,11 @@ public final class ConversationSummaryService {
                         context.getSafetyMarginTokens(),
                         context.getMaxToolSchemaTokens(),
                         estimator,
-                        true))
+                        LlmInvocationPurpose.SUMMARY,
+                        usageRecorder,
+                        candidate.cost(),
+                        usageCostUnit,
+                        candidate.ref()))
                 .build();
         String prompt = """
                 Summarize the following conversation for future turns.

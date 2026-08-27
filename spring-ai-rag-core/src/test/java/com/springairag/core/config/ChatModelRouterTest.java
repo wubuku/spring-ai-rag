@@ -282,4 +282,23 @@ class ChatModelRouterTest {
         assertSame(configured, configuredRouter.resolve("openrouter/model-a"));
     }
 
+    @Test
+    @DisplayName("legacy provider keeps a replayable alias when configured model is unavailable")
+    void orderedCandidateDescriptors_legacyFallbackDoesNotUseUnavailableCanonicalRef() {
+        ConfiguredChatModelFactory factory = mock(ConfiguredChatModelFactory.class);
+        OpenAiChatModel legacy = mock(OpenAiChatModel.class);
+        when(factory.resolve("openai")).thenReturn(null);
+        when(factory.canonicalRef("openai")).thenReturn("openai/grok-4.5");
+
+        ChatModelRouter configuredRouter =
+                new ChatModelRouter(registry, factory, List.of(legacy));
+
+        List<ChatModelRouter.ChatModelCandidate> candidates =
+                configuredRouter.orderedCandidateDescriptors("openai");
+
+        assertEquals(1, candidates.size());
+        assertEquals("openai", candidates.getFirst().ref());
+        assertSame(legacy, candidates.getFirst().model());
+    }
+
 }

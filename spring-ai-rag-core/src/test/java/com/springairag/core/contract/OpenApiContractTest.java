@@ -125,7 +125,8 @@ class OpenApiContractTest {
             "EvaluationRunResponse",
             "EvaluationCompareResponse",
             "SemanticEvaluationRequest",
-            "SemanticEvaluationResponse"
+            "SemanticEvaluationResponse",
+            "LlmUsageResponse"
     );
 
     // Endpoints that MUST be documented
@@ -153,7 +154,8 @@ class OpenApiContractTest {
             "/rag/collections/derivation-repairs/apply",
             "/rag/evaluation/suites",
             "/rag/evaluation/runs",
-            "/rag/evaluation/semantic"
+            "/rag/evaluation/semantic",
+            "/rag/usage"
     );
 
     // ==================== Mock all external dependencies ====================
@@ -512,6 +514,21 @@ class OpenApiContractTest {
             assertThat(getOp).isNotNull();
             assertThat(getOp.has("responses")).isTrue();
             assertThat(getOp.get("responses").has("200")).isTrue();
+        }
+
+        @Test
+        @DisplayName("GET /rag/usage is documented with the durable usage response")
+        void usageEndpoint_hasContract() throws Exception {
+            JsonNode usagePath = findPath(loadSpec().path("paths"), "/rag/usage");
+            JsonNode get = usagePath.path("get");
+
+            assertThat(get.isMissingNode()).isFalse();
+            assertThat(get.path("responses").has("200")).isTrue();
+            assertThat(get.path("responses").has("400")).isTrue();
+            assertThat(get.path("responses").has("403")).isTrue();
+            assertThat(get.path("responses").path("200").path("content")
+                    .path("application/json").path("schema").path("$ref").asText())
+                    .isEqualTo("#/components/schemas/LlmUsageResponse");
         }
 
         @Test

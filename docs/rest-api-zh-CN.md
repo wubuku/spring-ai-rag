@@ -2187,6 +2187,99 @@ Get RAG service key metrics summary (request count, success rate, retrieval resu
 
 ---
 
+### `GET /api/v1/rag/usage`
+
+按包含边界的 UTC 日期范围聚合持久化模型调用用量。本端点要求
+`RAG_READ`。普通数据库 principal 只能查询自身事件；ADMIN 或
+environment root 可以查询全部 principal，或通过 `principalId` 查询指定
+principal。
+
+默认范围为最近 30 个 UTC 日历日，最大范围为 366 天。`from` 和 `to`
+使用 `YYYY-MM-DD`，两端都包含。成本是调用开始时捕获的模型价格快照
+计算出的配置估算，不是 provider 账单、计费记录或 hard-limit 结算数据。
+
+**查询参数：**
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `from` | date | 否 | UTC 起始日期（包含）；默认取 `to` 往前 30 天 |
+| `to` | date | 否 | UTC 结束日期（包含）；默认取当前 UTC 日期 |
+| `principalId` | string | 否 | 查询主体；只有 ADMIN/root 可以选择其他主体 |
+
+**响应：**
+
+```json
+{
+  "recordingEnabled": true,
+  "localLostEventsSinceStart": 0,
+  "scope": {
+    "type": "SELF",
+    "principalId": "rag_p_service"
+  },
+  "from": "2026-08-01",
+  "to": "2026-08-27",
+  "totals": {
+    "logicalExecutionCount": 12,
+    "invocationCount": 18,
+    "succeededCount": 16,
+    "failedCount": 1,
+    "cancelledCount": 1,
+    "promptTokens": 12500,
+    "completionTokens": 3800,
+    "totalTokens": 16300,
+    "usageAvailableCount": 17,
+    "usageUnavailableCount": 1,
+    "pricingUnavailableCount": 2,
+    "costUnavailableCount": 3
+  },
+  "costs": [
+    {
+      "unit": "CONFIGURED_MODEL_COST",
+      "configuredCost": 0.24560000,
+      "invocationCount": 18,
+      "costAvailableCount": 15
+    }
+  ],
+  "byModel": [
+    {
+      "modelRef": "openrouter/example-model",
+      "totals": {}
+    }
+  ],
+  "byPurpose": [
+    {
+      "purpose": "CHAT",
+      "totals": {}
+    }
+  ],
+  "byMode": [
+    {
+      "mode": "KNOWLEDGE",
+      "totals": {}
+    }
+  ],
+  "byDay": [
+    {
+      "day": "2026-08-27",
+      "totals": {}
+    }
+  ]
+}
+```
+
+每个嵌套 `totals` 对象与顶层 `totals` 使用相同字段。
+`byModel`、`byPurpose`、`byMode` 和 `byDay` 按稳定的升序返回。
+purpose 值为 `CHAT`、`QUERY_TRANSFORM`、`QUERY_EXPAND`、`SUMMARY`；
+mode 值为 `PLAIN`、`KNOWLEDGE`、`AGENT`。
+
+`localLostEventsSinceStart` 统计当前进程因有界 recorder 超时、被拒绝或
+数据库失败而无法确认记账的事件。它是进程本地指标，不等同于全局持久化
+的丢失事件计数。provider 没有返回 usage 或模型没有配置价格时，对应
+计数会增加，token/cost 不会被猜测为零。账本不会保存 prompt、answer、
+工具 payload、凭据或异常正文。
+
+---
+
 ## Models — 运行时选模
 
 ### `GET /api/v1/rag/models`

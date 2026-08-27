@@ -32,7 +32,7 @@ CREATE DATABASE spring_ai_rag
 
 项目使用 Flyway 自动迁移。首次启动时按顺序执行
 `db/migration/V1__*.sql` 至当前最新迁移（目前为
-`V52__collection_provisioning_idempotency.sql`）。
+`V53__add_llm_usage_event.sql`）。
 
 如需手动迁移：
 

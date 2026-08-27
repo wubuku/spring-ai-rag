@@ -98,6 +98,32 @@ test.describe('Metrics', () => {
       .catch(() => false);
     expect(hasLoading || hasMetrics).toBeTruthy();
   });
+
+  test('loads durable usage JSON and renders summaries and breakdowns', async ({ page }) => {
+    await mockAllApiCalls(page);
+    const usageResponsePromise = page.waitForResponse(response =>
+      response.url().endsWith('/api/v1/rag/usage')
+      && response.request().method() === 'GET');
+
+    await openProtectedPage(page, '/webui/metrics');
+
+    const usageResponse = await usageResponsePromise;
+    expect(usageResponse.status()).toBe(200);
+    const usage = await usageResponse.json();
+    expect(usage.scope.type).toBe('SELF');
+    expect(usage.totals.invocationCount).toBe(5);
+    expect(usage.costs[0].unit).toBe('USD_ESTIMATE');
+
+    await expect(page.getByRole('heading', { name: 'Durable model usage' })).toBeVisible();
+    await expect(page.getByText('5', { exact: true }).first()).toBeVisible();
+    await expect(page.getByText('mock/model', { exact: true })).toBeVisible();
+    await expect(page.getByText('USD_ESTIMATE', { exact: true })).toBeVisible();
+    await expect(page.getByRole('table', { name: 'Models' })).toBeVisible();
+    await expect(page.getByRole('table', { name: 'Purposes' })).toBeVisible();
+    await expect(page.getByRole('table', { name: 'Modes' })).toBeVisible();
+    await expect(page.getByRole('table', { name: 'UTC day' })).toBeVisible();
+    await expect(page.getByText('Configured cost estimates are operational guidance, not provider invoices.')).toBeVisible();
+  });
 });
 
 test.describe('Alerts', () => {

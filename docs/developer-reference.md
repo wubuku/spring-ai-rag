@@ -19,7 +19,7 @@ Documentation hub: [index.md](index.md). Stable project context: [project-contex
 | Real-LLM E2E port | `18081` |
 | Embedding | SiliconFlow `BAAI/bge-m3` |
 | Vector dimension | `1024` |
-| Flyway | V1–V52 |
+| Flyway | V1–V53 |
 
 Do **not** append `/v1` to an OpenAI or Embedding `base-url`. Spring AI appends `/v1/chat/completions` or `/v1/embeddings`.
 
@@ -86,6 +86,23 @@ reuse, owner isolation, restricted ACLs, concurrent first create, current
 soft-deleted state, one create audit, ledger failure closure, and secret-safe
 database facts. Use `COLLECTION_PROVISIONING_VERIFY_PHASE=http` to rerun only
 the disposable dual-instance HTTP phase.
+
+For the durable model-invocation usage ledger and its principal-scoped
+aggregate API:
+
+```bash
+LLM_USAGE_LEDGER_VERIFY_RUN_ID=usage-ledger-gate \
+./scripts/verify-llm-usage-ledger.sh
+```
+
+The gate runs focused attribution/recorder/API tests, migrates an isolated
+PostgreSQL database through V53, runs the full Maven and WebUI gates, verifies
+the no-pessimistic-lock and project-documentation rules, and executes the
+no-screenshot Mock Playwright Metrics checks. It writes secret-safe evidence
+under `.verification/llm-usage-ledger/<run-id>/`. The script does not perform
+real provider calls; after this gate passes, use the real-LLM lifecycle
+procedure in [testing-guide.md](testing-guide.md) with an isolated service and
+disposable database.
 
 For the V43 local-keyword/vector derivation boundary:
 

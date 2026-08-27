@@ -19,7 +19,7 @@
 | 真实 LLM E2E 端口 | `18081` |
 | Embedding | SiliconFlow `BAAI/bge-m3` |
 | 向量维度 | `1024` |
-| Flyway | V1–V52 |
+| Flyway | V1–V53 |
 
 OpenAI / Embedding 的 `base-url` **不要带 `/v1`**。Spring AI 会自行追加 `/v1/chat/completions` 或 `/v1/embeddings`。
 
@@ -83,6 +83,19 @@ open spring-ai-rag-core/target/site/jacoco/index.html
 ACL、并发首次创建、软删除后的当前状态、恰好一次创建审计、账本故障关闭和不含 secret
 的数据库事实。只复跑一次性双实例 HTTP 阶段可设置
 `COLLECTION_PROVISIONING_VERIFY_PHASE=http`。
+
+针对模型调用级持久用量账本及按 principal 隔离的聚合 API：
+
+```bash
+LLM_USAGE_LEDGER_VERIFY_RUN_ID=usage-ledger-gate \
+./scripts/verify-llm-usage-ledger.sh
+```
+
+该门禁执行归因/recorder/API 聚焦测试，把一次性 PostgreSQL 从空库迁移到 V53，执行
+完整 Maven 与 WebUI 门槛、禁悲观锁和项目文档规则，并执行不使用截图的 Metrics Mock
+Playwright。证据写入 `.verification/llm-usage-ledger/<run-id>/`，不保存密钥或业务
+内容。该脚本不调用真实 provider；专项门禁通过后，使用[测试指南](testing-guide-zh-CN.md)
+中的真实 LLM 生命周期流程，在隔离服务和一次性数据库上验收。
 
 针对 V43 本地关键词/向量派生解耦边界：
 

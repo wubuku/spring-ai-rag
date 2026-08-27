@@ -3,7 +3,7 @@
 > [English](project-context.md) | [中文](project-context-zh-CN.md)
 
 > **Purpose**: Give contributors and Agents stable, code-backed project context.
-> **Last reviewed**: 2026-08-19.
+> **Last reviewed**: 2026-08-27.
 > This document records current facts. Target designs and unimplemented capabilities must be labeled as plans.
 
 Documentation hub: [index.md](index.md). Commands: [developer-reference.md](developer-reference.md).
@@ -96,6 +96,18 @@ Key rules:
   recoverable user/plain-assistant messages; complete tool exchanges are saved
   as a bounded `toolTranscript` in business-history metadata for later summary
   input.
+- `BudgetedChatModel` records at most one bounded terminal usage event for each
+  model call or stream subscription belonging to a Chat execution. V53 stores
+  the append-only event in `rag_llm_usage_event`; attribution covers Chat,
+  query transform/expansion, summaries, fallback candidates, application
+  retries, and AGENT rounds that pass through the mode-aware or compatibility
+  entry points.
+- Usage recording is fail-open for Chat correctness. Non-streaming events use
+  bounded synchronous confirmation, streaming events use bounded asynchronous
+  recording, and retention deletes old rows in bounded batches. No prompt,
+  answer, tool payload, credential, or exception body is stored. The
+  principal-scoped `GET /api/v1/rag/usage` endpoint exposes aggregate token and
+  configured-cost estimates, not provider billing or hard-limit settlement.
 
 ### Chat Sessions And Streaming
 
@@ -397,7 +409,7 @@ See [multi-model-external-config.md](multi-model-external-config.md).
 ### Database
 
 - PostgreSQL with pgvector.
-- Flyway is currently V1–V52.
+- Flyway is currently V1–V53.
 - V27/V28 add, backfill, validate, uniquely constrain, and make immutable the
   Collection business key; V29 adds JSONB structured records; V30 adds the
   external-document synchronization schema; V31 normalizes stored external
@@ -428,7 +440,8 @@ See [multi-model-external-config.md](multi-model-external-config.md).
   key/fingerprint hashes and result metadata, never raw credentials; V51 adds
   bounded run/status cursor indexes for the Sync Run item ledger; V52 adds the
   owner-scoped Collection-create idempotency ledger with a restricted
-  Collection foreign key.
+  Collection foreign key; V53 adds the principal-scoped append-only
+  model-invocation usage ledger.
 - The data-access layer forbids explicit `SELECT ... FOR UPDATE`,
   `SKIP LOCKED`, JPA `PESSIMISTIC_*`, and PostgreSQL advisory locks.
   Concurrent writes use conditional `UPDATE/DELETE ... RETURNING`, `@Version`,
@@ -442,6 +455,12 @@ See [multi-model-external-config.md](multi-model-external-config.md).
   document. It is independent of embedding Profile state and is advanced with
   conditional DML/generation checks, never pessimistic locks.
 - Chat memory, business history, retrieval logs, evaluation, feedback, A/B tests, alerts, API keys, and files are stored separately.
+- `rag_llm_usage_event` is an append-only observability ledger. It stores
+  bounded invocation attribution, normalized provider usage, invocation-start
+  configured pricing, outcome, and duration. It intentionally excludes
+  prompts, answers, tool arguments/results, credentials, and exception bodies.
+  Recording is fail-open, aggregate reads are principal-scoped, and retention
+  is bounded.
 
 ### HTTP
 
@@ -534,6 +553,11 @@ Managed database callers consist of a stable `rag_api_principal` and versioned
   control-plane capability. Restricted ACL
   projection fails closed with `503` when all Collection keys cannot be
   resolved.
+- `GET /api/v1/rag/usage` requires `RAG_READ` and accepts an inclusive UTC date
+  range. Normal principals are restricted to themselves; ADMIN and environment
+  root may select all or one principal. The default range is the latest 30 UTC
+  days and the maximum is 366 days. Missing usage or pricing is represented
+  explicitly rather than inferred as zero.
 - Chat, Search, Collections, Documents, PDF-to-RAG, evaluation, and background
   workers all use the immutable ACL snapshot or reload policy by stable owner.
 

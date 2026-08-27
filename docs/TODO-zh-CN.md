@@ -29,14 +29,14 @@
 | Collection 创建幂等键 | V52 已交付 | 可选、按 owner 隔离的 keyed 创建支持跨实例/重启 replay 当前 Collection 状态；语义复用和账本故障均 fail closed |
 | machine-readable 集成协议版本 / 能力发现 | V50 已交付 | 认证、no-store endpoint 投影协议、调用方 policy、数据面行为、可选特性和稳定上限 |
 | OAuth/OIDC 与独立租户层级 | 后续独立规划 | 当前仍是 environment root + 受管业务 principal，不提供第三方身份 federation |
-| 模型 invocation 级 token/cost 持久用量账本 | 当前活跃规划 | 最终 Chat response usage 只代表最后响应，不能覆盖 query transform/expand、AGENT 多轮、summary、fallback 和应用 retry；实施记录见[当前规划](drafts/NEXT_HIGH_VALUE_FEATURES_PLAN.md) |
+| 模型 invocation 级 token/cost 持久用量账本 | V53 已交付 | `BudgetedChatModel` 为 Chat、query transform/expand、summary、fallback、应用 retry 和 AGENT 轮次记录有界的 principal/session/trace 归因；`GET /api/v1/rag/usage` 提供 UTC 聚合用量和配置成本估算 |
 | token/cost hard limit、billing 与结算 | 后续独立规划 | 需要预授权、预留、结算、跨实例超额保护和崩溃恢复，不能直接建立在 best-effort 观测账本上 |
 | 管理面 recovery 与彻底关闭 legacy 兼容 | 公网启用前评估 | legacy static/query 行为仍为兼容边界；operator recovery 依赖 environment root |
 
 V48 只对迁移时存在的每个历史 credential 做一对一 deterministic principal 回填；它不会
 猜测旧 rotation rows 之间无法证明的 family 关系。模型 invocation 用量与配置成本可观测性
-已保留在[历史归档](drafts/archive/README-zh-CN.md)作为未来实施候选，但它不是当前活跃
-规划，也不会被宣称为供应商账单或 hard-limit 结算源。OAuth/OIDC、租户层级、Redis、token/cost hard
+已由 V53 作为 fail-open 的 append-only 账本实现，不会被宣称为供应商账单或 hard-limit
+结算源。OAuth/OIDC、租户层级、Redis、token/cost hard
 limit/billing、多 embedding profile 路由与 `EACH_COLLECTION` 继续独立规划。
 
 ## 文档生命周期与派生索引后续项

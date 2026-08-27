@@ -5,6 +5,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.advisor.api.AdvisorChain;
+import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.Ordered;
 import org.springframework.stereotype.Component;
@@ -48,6 +49,10 @@ public class QueryRewriteAdvisor extends AbstractRagAdvisor {
     /** Context key: focused query used by retrieval and reranking */
     public static final String CTX_RETRIEVAL_QUERY = "rewrite.retrieval-query";
 
+    /** Context key for a legacy execution-scoped, purpose-aware rewrite model. */
+    public static final String CTX_EXECUTION_MODEL =
+            "rewrite.execution-model";
+
     private final QueryRewritingService queryRewritingService;
     private final AdvisorMetrics advisorMetrics;
 
@@ -85,7 +90,10 @@ public class QueryRewriteAdvisor extends AbstractRagAdvisor {
         }
 
         long startMs = System.currentTimeMillis();
-        List<String> rewrittenQueries = queryRewritingService.rewriteQuery(originalQuery);
+        Object executionModel = request.context().get(CTX_EXECUTION_MODEL);
+        List<String> rewrittenQueries = executionModel instanceof ChatModel model
+                ? queryRewritingService.rewriteQuery(originalQuery, model)
+                : queryRewritingService.rewriteQuery(originalQuery);
         // Do not infer retrieval intent from language-specific command patterns here. The
         // production Chat path uses Spring AI QueryTransformer/Tool Calling; this legacy advisor
         // keeps the original query unless an upstream component explicitly provides another one.

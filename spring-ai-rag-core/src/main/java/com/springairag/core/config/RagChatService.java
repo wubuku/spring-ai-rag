@@ -13,9 +13,12 @@ import com.springairag.core.advisor.RerankAdvisor;
 import com.springairag.core.chat.ChatCommand;
 import com.springairag.core.chat.ChatCommandMapper;
 import com.springairag.core.chat.ChatEvent;
+import com.springairag.core.chat.ChatExecutionBudget;
 import com.springairag.core.chat.ChatExecutionResult;
 import com.springairag.core.chat.ChatExecutionService;
 import com.springairag.core.chat.ChatPrincipal;
+import com.springairag.core.chat.BudgetedChatModel;
+import com.springairag.core.chat.ModeAwareChatClientFactory;
 import com.springairag.core.diagnostics.RetrievalDiagnosticsService;
 import com.springairag.core.diagnostics.RetrievalTraceSession;
 import com.springairag.core.retrieval.RetrievalFilters;
@@ -30,6 +33,7 @@ import com.springairag.core.repository.RagChatHistoryRepository;
 import com.springairag.core.retrieval.RetrievalScope;
 import com.springairag.core.resilience.LlmCircuitBreaker;
 import com.springairag.core.service.CollectionDocumentResolver;
+import com.springairag.core.usage.LlmInvocationPurpose;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -42,6 +46,7 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.memory.repository.jdbc.JdbcChatMemoryRepository;
+import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.core.Ordered;
 import org.springframework.retry.support.RetryTemplate;
 import org.springframework.stereotype.Service;
@@ -53,6 +58,8 @@ import java.util.function.Supplier;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.time.Instant;
+import java.util.UUID;
 
 /**
  * RAG Chat Service
@@ -97,6 +104,8 @@ public class RagChatService {
     private final LlmCircuitBreaker circuitBreaker; // optional, null when not enabled
     private final RetryTemplate retryTemplate; // LLM call retry template, optional
     private final CollectionDocumentResolver collectionDocumentResolver; // optional for unit tests
+    private final ModeAwareChatClientFactory usageClientFactory;
+    private final RagProperties ragProperties;
     private ChatExecutionService modeAwareExecutionService;
     private ChatCommandMapper chatCommandMapper;
     private RetrievalDiagnosticsService diagnosticsService;
@@ -128,6 +137,47 @@ public class RagChatService {
             RetryTemplate retryTemplate,
             @org.springframework.beans.factory.annotation.Autowired(required = false)
             CollectionDocumentResolver collectionDocumentResolver) {
+        this(
+                chatClientBuilder,
+                chatModelRouter,
+                queryRewriteAdvisor,
+                hybridSearchAdvisor,
+                rerankAdvisor,
+                jdbcChatMemoryRepository,
+                historyRepository,
+                domainExtensionRegistry,
+                promptCustomizerChain,
+                ragProperties,
+                metricsService,
+                customAdvisorProviders,
+                retryTemplate,
+                collectionDocumentResolver,
+                null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public RagChatService(
+            ChatClient.Builder chatClientBuilder,
+            @org.springframework.beans.factory.annotation.Autowired(required = false)
+            ChatModelRouter chatModelRouter,
+            QueryRewriteAdvisor queryRewriteAdvisor,
+            HybridSearchAdvisor hybridSearchAdvisor,
+            RerankAdvisor rerankAdvisor,
+            JdbcChatMemoryRepository jdbcChatMemoryRepository,
+            RagChatHistoryRepository historyRepository,
+            DomainExtensionRegistry domainExtensionRegistry,
+            PromptCustomizerChain promptCustomizerChain,
+            RagProperties ragProperties,
+            @org.springframework.beans.factory.annotation.Autowired(required = false)
+            RagMetricsService metricsService,
+            @org.springframework.beans.factory.annotation.Autowired(required = false)
+            List<RagAdvisorProvider> customAdvisorProviders,
+            @org.springframework.beans.factory.annotation.Autowired(required = false)
+            RetryTemplate retryTemplate,
+            @org.springframework.beans.factory.annotation.Autowired(required = false)
+            CollectionDocumentResolver collectionDocumentResolver,
+            @org.springframework.beans.factory.annotation.Autowired(required = false)
+            ModeAwareChatClientFactory usageClientFactory) {
 
         this.chatClientBuilder = chatClientBuilder;
         this.chatModelRouter = chatModelRouter;
@@ -137,6 +187,8 @@ public class RagChatService {
         this.promptCustomizerChain = promptCustomizerChain;
         this.metricsService = metricsService;
         this.collectionDocumentResolver = collectionDocumentResolver;
+        this.usageClientFactory = usageClientFactory;
+        this.ragProperties = ragProperties;
 
         if (ragProperties.getCircuitBreaker().isEnabled()) {
             this.circuitBreaker = new LlmCircuitBreaker(ragProperties.getCircuitBreaker());
@@ -409,22 +461,50 @@ public class RagChatService {
         String finalMessage = customizeUserMessage(userMessage, metadata);
         final RetrievalScope finalScope = scope != null ? scope : RetrievalScope.unscoped();
 
-        List<ChatClient> clients = resolveChatClientCandidates(model);
+        ChatExecutionBudget executionBudget = newLegacyBudget(sessionId, false);
+        List<ChatModelRouter.ChatModelCandidate> candidates =
+                resolveLegacyModelCandidates(model);
+        List<ChatClient> clients = candidates.isEmpty()
+                ? List.<ChatClient>of(this.chatClient)
+                : candidates.stream()
+                        .map(candidate -> buildLegacyClient(
+                                candidate,
+                                executionBudget,
+                                LlmInvocationPurpose.CHAT))
+                        .toList();
         RuntimeException lastFailure = null;
 
         for (int i = 0; i < clients.size(); i++) {
             ChatClient client = clients.get(i);
             final ChatClient attemptClient = client;
             final int attemptIndex = i;
+            final ChatModelRouter.ChatModelCandidate candidate =
+                    candidates.isEmpty() ? null : candidates.get(i);
             try {
                 Supplier<LlmCallResult> llmCall = () -> {
+                    if (!candidates.isEmpty()
+                            && !executionBudget.tryReserveCandidateAttempt()) {
+                        throw new com.springairag.core.exception.RagException(
+                                com.springairag.api.enums.ErrorCode.CHAT_BUDGET_EXHAUSTED,
+                                "Chat candidate-attempt budget exhausted");
+                    }
                     ChatClient.ChatClientRequestSpec s = attemptClient.prompt();
                     if (systemPrompt != null) {
                         s.system(systemPrompt);
                     }
                     s.user(finalMessage);
                     s.advisors(buildAdvisorParams(
-                            sessionId, domainId, metadata, finalScope, maxResults));
+                            sessionId,
+                            domainId,
+                            metadata,
+                            finalScope,
+                            maxResults,
+                            candidate != null
+                                    ? buildLegacyModel(
+                                            candidate,
+                                            executionBudget,
+                                            LlmInvocationPurpose.QUERY_TRANSFORM)
+                                    : null));
                     return invokeChatClient(s, System.currentTimeMillis());
                 };
                 LlmCallResult callResult = invokeWithRetry(llmCall);
@@ -493,6 +573,100 @@ public class RagChatService {
             // Prefer not to compare ChatClient identity; default already covered if router empty
         }
         return clients;
+    }
+
+    private List<ChatModelRouter.ChatModelCandidate> resolveLegacyModelCandidates(
+            String model) {
+        if (chatModelRouter == null) {
+            return List.of();
+        }
+        List<ChatModelRouter.ChatModelCandidate> candidates =
+                chatModelRouter.orderedCandidateDescriptors(model);
+        if (candidates != null && !candidates.isEmpty()) {
+            return candidates;
+        }
+        List<ChatModel> legacyModels = chatModelRouter.orderedCandidates(model);
+        if (legacyModels == null || legacyModels.isEmpty()) {
+            return List.of();
+        }
+        return legacyModels.stream()
+                .filter(java.util.Objects::nonNull)
+                .map(RagChatService::candidateForLegacyModel)
+                .toList();
+    }
+
+    private static ChatModelRouter.ChatModelCandidate candidateForLegacyModel(
+            ChatModel model) {
+        ChatOptions options = model.getDefaultOptions();
+        String ref = options != null ? options.getModel() : null;
+        return new ChatModelRouter.ChatModelCandidate(
+                ref == null || ref.isBlank() ? "UNKNOWN" : ref,
+                model,
+                MultiModelProperties.ModelCapabilities.defaults());
+    }
+
+    private ChatClient buildLegacyClient(
+            ChatModelRouter.ChatModelCandidate candidate,
+            ChatExecutionBudget budget,
+            LlmInvocationPurpose purpose) {
+        ChatModel executionModel = buildLegacyModel(candidate, budget, purpose);
+        ChatClient.Builder builder = ChatClient.builder(executionModel)
+                .defaultAdvisors(sortedAdvisors);
+        ChatOptions options = candidate.model().getDefaultOptions();
+        if (options != null) {
+            builder.defaultOptions(options.copy());
+        }
+        return builder.build();
+    }
+
+    private ChatModel buildLegacyModel(
+            ChatModelRouter.ChatModelCandidate candidate,
+            ChatExecutionBudget budget,
+            LlmInvocationPurpose purpose) {
+        if (usageClientFactory == null) {
+            return candidate.model();
+        }
+        return usageClientFactory.budgetedModelFor(candidate, budget, purpose);
+    }
+
+    private ChatExecutionBudget newLegacyBudget(
+            String sessionId,
+            boolean streaming) {
+        RagChatProperties.AgentProperties agent =
+                ragProperties.getChat().getAgent();
+        RagChatProperties.ExecutionProperties execution =
+                ragProperties.getChat().getExecution();
+        int timeoutMs = streaming
+                ? ragProperties.getTimeout().getChatStreamMs()
+                : ragProperties.getTimeout().getChatAskMs();
+        ChatPrincipal principal = ChatPrincipal.fromCurrentRequest();
+        return new ChatExecutionBudget(
+                Instant.now().plusMillis(Math.max(1_000, timeoutMs)),
+                execution.getMaxCandidateAttempts(),
+                execution.getMaxModelCalls(),
+                agent.getMaxToolRounds(),
+                agent.getMaxToolCalls(),
+                agent.getMaxToolCallsPerName(),
+                agent.getMaxToolResultCharactersTotal(),
+                UUID.randomUUID(),
+                safeAttribution(principal.id(), "local:auth-disabled", 128),
+                safeAttribution(sessionId, "legacy", 255),
+                safeAttribution(
+                        MDC.get(RequestTraceFilter.TRACE_ID_KEY),
+                        null,
+                        128),
+                com.springairag.api.enums.ChatMode.KNOWLEDGE);
+    }
+
+    private static String safeAttribution(
+            String value,
+            String fallback,
+            int maximum) {
+        if (value == null || value.isBlank() || value.length() > maximum
+                || value.chars().anyMatch(ch -> ch < 0x20 || ch > 0x7e)) {
+            return fallback;
+        }
+        return value;
     }
 
     /**
@@ -584,6 +758,22 @@ public class RagChatService {
     private java.util.function.Consumer<ChatClient.AdvisorSpec> buildAdvisorParams(
             String sessionId, String domainId, Map<String, Object> metadata,
             RetrievalScope scope, int maxResults) {
+        return buildAdvisorParams(
+                sessionId,
+                domainId,
+                metadata,
+                scope,
+                maxResults,
+                null);
+    }
+
+    private java.util.function.Consumer<ChatClient.AdvisorSpec> buildAdvisorParams(
+            String sessionId,
+            String domainId,
+            Map<String, Object> metadata,
+            RetrievalScope scope,
+            int maxResults,
+            ChatModel executionModel) {
         RetrievalScope s = scope != null ? scope : RetrievalScope.unscoped();
         return a -> {
             a.param(ChatMemory.CONVERSATION_ID, sessionId);
@@ -596,6 +786,11 @@ public class RagChatService {
             a.param(HybridSearchAdvisor.RETRIEVAL_SCOPE_KEY, s);
             if (maxResults > 0) {
                 a.param(HybridSearchAdvisor.MAX_RESULTS_KEY, maxResults);
+            }
+            if (executionModel != null) {
+                a.param(
+                        QueryRewriteAdvisor.CTX_EXECUTION_MODEL,
+                        executionModel);
             }
         };
     }
@@ -693,33 +888,54 @@ public class RagChatService {
     private Flux<String> chatStream(String userMessage, String sessionId, String domainId,
                                     String model, RetrievalScope scope,
                                     int maxResults) {
-        ChatClient effectiveClient = this.chatClient;
-        if (model != null && !model.isBlank() && chatModelRouter != null) {
-            ChatModel resolved = chatModelRouter.resolveRequired(model);
-            effectiveClient = ChatClient.builder(resolved)
-                    .defaultAdvisors(sortedAdvisors).build();
-            log.info("Streaming: routing request to model '{}' via ChatModelRouter", model);
-        }
-
-        ChatClient.ChatClientRequestSpec spec = effectiveClient.prompt();
+        ChatExecutionBudget executionBudget = newLegacyBudget(sessionId, true);
+        List<ChatModelRouter.ChatModelCandidate> candidates =
+                resolveLegacyModelCandidates(model);
+        ChatModelRouter.ChatModelCandidate candidate = candidates.isEmpty()
+                ? null
+                : candidates.get(0);
+        ChatClient effectiveClient = candidates.isEmpty()
+                ? this.chatClient
+                : buildLegacyClient(
+                        candidate,
+                        executionBudget,
+                        LlmInvocationPurpose.CHAT);
 
         String systemPrompt = buildSystemPrompt(domainId, null);
-        if (systemPrompt != null) {
-            spec.system(systemPrompt);
-        }
+        return Flux.defer(() -> {
+            if (candidate != null
+                    && !executionBudget.tryReserveCandidateAttempt()) {
+                return Flux.error(new com.springairag.core.exception.RagException(
+                        com.springairag.api.enums.ErrorCode.CHAT_BUDGET_EXHAUSTED,
+                        "Chat candidate-attempt budget exhausted"));
+            }
+            ChatClient.ChatClientRequestSpec spec = effectiveClient.prompt();
+            if (systemPrompt != null) {
+                spec.system(systemPrompt);
+            }
+            spec.user(userMessage);
+            spec.advisors(buildAdvisorParams(
+                    sessionId,
+                    domainId,
+                    null,
+                    scope,
+                    maxResults,
+                    candidate != null
+                            ? buildLegacyModel(
+                                    candidate,
+                                    executionBudget,
+                                    LlmInvocationPurpose.QUERY_TRANSFORM)
+                            : null));
 
-        spec.user(userMessage);
-        spec.advisors(buildAdvisorParams(
-                sessionId, domainId, null, scope, maxResults));
-
-        StringBuilder accumulatedAnswer = new StringBuilder();
-        return spec.stream().content()
-                .doOnNext(accumulatedAnswer::append)
-                .doOnComplete(() -> historyRepository.save(
-                        sessionId,
-                        userMessage,
-                        accumulatedAnswer.toString(),
-                        null,
-                        Map.of("streaming", true)));
+            StringBuilder accumulatedAnswer = new StringBuilder();
+            return spec.stream().content()
+                    .doOnNext(accumulatedAnswer::append)
+                    .doOnComplete(() -> historyRepository.save(
+                            sessionId,
+                            userMessage,
+                            accumulatedAnswer.toString(),
+                            null,
+                            Map.of("streaming", true)));
+        });
     }
 }

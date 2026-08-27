@@ -91,6 +91,27 @@ smoke；不要用高延迟真实调用代替基本执行路径覆盖。运行期
 隔离的 `BACKEND_PORT`、`FRONTEND_PORT` 和可处置测试数据库；联合启动优先使用会加载 `.env`
 的 `scripts/dev.sh`。
 
+### 模型调用级持久用量账本门禁
+
+执行聚焦和完整的非 provider 验收门禁：
+
+```bash
+LLM_USAGE_LEDGER_VERIFY_RUN_ID=usage-ledger-gate \
+./scripts/verify-llm-usage-ledger.sh
+```
+
+它要求归因/recorder/API 聚焦测试、一次性 PostgreSQL 从 V1 迁移到 V53、
+`mvn clean compile test-compile`、Maven 全量测试、WebUI typecheck/Vitest/build/alignment、
+持久用量 Mock Playwright、禁锁门禁、文档门禁和 `git diff --check`。浏览器阶段使用请求、
+JSON 和可访问 DOM 断言 `/api/v1/rag/usage` 与 Metrics 展示；截图不作为正确性证据。
+
+Mock 和一次性 PostgreSQL 阶段通过后，真实 provider 验收必须使用隔离服务和数据库。至少
+覆盖一次 PLAIN、一次会触发 query transform/expand 与最终回答的 KNOWLEDGE、一次带有界
+工具循环的 AGENT、fallback 或 provider 失败、summary compaction、带 key 的 replay
+以及只读 usage 查询。每个阶段都观察服务日志。通过响应 JSON/SSE 和只读数据库聚合核对
+provider 调用次数、purpose/mode 归因、终态结果、replay 不重复调用和 usage 聚合一致。
+证据不得记录 prompt、answer、工具参数/结果、credential 或异常正文。
+
 ## 测试分类
 
 ### 单元测试（JUnit 5 + Mockito）

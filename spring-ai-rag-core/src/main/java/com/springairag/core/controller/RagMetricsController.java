@@ -1,15 +1,18 @@
 package com.springairag.core.controller;
 
 import com.springairag.api.dto.ApiSloComplianceResponse;
+import com.springairag.api.dto.LlmUsageResponse;
 import com.springairag.api.dto.ModelMetricsResponse;
 import com.springairag.api.dto.RagMetricsSummary;
 import com.springairag.api.dto.SlowQueryStatsResponse;
+import com.springairag.core.chat.ChatPrincipal;
 import com.springairag.core.config.ChatModelRouter;
 import com.springairag.core.config.ModelRegistry;
 import com.springairag.core.metrics.ApiSloTrackerService;
 import com.springairag.core.metrics.ModelMetricsService;
 import com.springairag.core.metrics.RagMetricsService;
 import com.springairag.core.metrics.SlowQueryMetricsService;
+import com.springairag.core.usage.LlmUsageQueryService;
 import com.springairag.core.versioning.ApiVersion;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -20,8 +23,10 @@ import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
 
 /**
@@ -43,19 +48,36 @@ public class RagMetricsController {
     private final ChatModelRouter modelRouter;
     private final SlowQueryMetricsService slowQueryMetricsService;
     private final ApiSloTrackerService sloTrackerService;
+    private final LlmUsageQueryService usageQueryService;
 
+    @Autowired
     public RagMetricsController(RagMetricsService metricsService,
                                 ModelMetricsService modelMetricsService,
                                 ModelRegistry modelRegistry,
                                 ChatModelRouter modelRouter,
                                 @Autowired(required = false) SlowQueryMetricsService slowQueryMetricsService,
-                                @Autowired(required = false) ApiSloTrackerService sloTrackerService) {
+                                @Autowired(required = false) ApiSloTrackerService sloTrackerService,
+                                @Autowired(required = false) LlmUsageQueryService usageQueryService) {
         this.metricsService = metricsService;
         this.modelMetricsService = modelMetricsService;
         this.modelRegistry = modelRegistry;
         this.modelRouter = modelRouter;
         this.slowQueryMetricsService = slowQueryMetricsService;
         this.sloTrackerService = sloTrackerService;
+        this.usageQueryService = usageQueryService;
+    }
+
+    /**
+     * Backward-compatible constructor for existing extensions and unit fixtures.
+     */
+    public RagMetricsController(RagMetricsService metricsService,
+                                ModelMetricsService modelMetricsService,
+                                ModelRegistry modelRegistry,
+                                ChatModelRouter modelRouter,
+                                SlowQueryMetricsService slowQueryMetricsService,
+                                ApiSloTrackerService sloTrackerService) {
+        this(metricsService, modelMetricsService, modelRegistry, modelRouter,
+                slowQueryMetricsService, sloTrackerService, null);
     }
 
     @Operation(summary = "Get RAG metrics summary",
@@ -152,6 +174,30 @@ public class RagMetricsController {
             return new ApiSloComplianceResponse(false, 0, List.of());
         }
         return sloTrackerService.getCompliance();
+    }
+
+    @Operation(summary = "Get durable model usage aggregation",
+            description = "Returns principal-scoped model invocation counts, tokens, and "
+                    + "configured cost estimates for an inclusive UTC date range.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Returns durable usage aggregation"),
+            @ApiResponse(responseCode = "400", description = "Invalid date or principal"),
+            @ApiResponse(responseCode = "403", description = "Principal is not allowed to query the requested scope")
+    })
+    @GetMapping(value = "/usage", produces = MediaType.APPLICATION_JSON_VALUE)
+    public LlmUsageResponse getUsage(
+            @RequestParam(required = false) String from,
+            @RequestParam(required = false) String to,
+            @RequestParam(required = false) String principalId,
+            HttpServletRequest request) {
+        if (usageQueryService == null) {
+            throw new IllegalStateException("Durable usage query is unavailable");
+        }
+        return usageQueryService.query(
+                ChatPrincipal.from(request),
+                from,
+                to,
+                principalId);
     }
 
     private static String maskSql(String sql) {

@@ -71,6 +71,7 @@ public class RagProperties {
             new RagApiKeyProvisioningProperties();
     private final RagCollectionProvisioningProperties collectionProvisioning =
             new RagCollectionProvisioningProperties();
+    private final RagUsageProperties usage = new RagUsageProperties();
 
     public RagEmbeddingProperties getEmbedding() {
         return embedding;
@@ -178,5 +179,9 @@ public class RagProperties {
 
     public RagCollectionProvisioningProperties getCollectionProvisioning() {
         return collectionProvisioning;
+    }
+
+    public RagUsageProperties getUsage() {
+        return usage;
     }
 }

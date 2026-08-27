@@ -14,6 +14,8 @@ import com.springairag.core.rag.ProjectDocumentRetriever;
 import com.springairag.core.rag.ProjectRerankPostProcessor;
 import com.springairag.core.rag.PromptBudgetDocumentPostProcessor;
 import com.springairag.core.rag.CompositeChatDocumentRetriever;
+import com.springairag.core.usage.LlmInvocationPurpose;
+import com.springairag.core.usage.LlmUsageRecorder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
@@ -87,6 +89,7 @@ public class ModeAwareChatClientFactory {
     private final RagProperties ragProperties;
     private final List<RagAdvisorProvider> customAdvisorProviders;
     private final ToolCallingManager toolCallingManager;
+    private final LlmUsageRecorder usageRecorder;
     private final PromptBudgetDocumentPostProcessor promptBudgetDocumentPostProcessor;
     private final ProjectDocumentJoiner documentJoiner =
             new ProjectDocumentJoiner();
@@ -107,7 +110,8 @@ public class ModeAwareChatClientFactory {
                 queryAugmenter,
                 ragProperties,
                 customAdvisorProviders,
-                toolCallingManager);
+                toolCallingManager,
+                null);
     }
 
     @org.springframework.beans.factory.annotation.Autowired
@@ -121,7 +125,9 @@ public class ModeAwareChatClientFactory {
             @org.springframework.beans.factory.annotation.Autowired(required = false)
             List<RagAdvisorProvider> customAdvisorProviders,
             @org.springframework.beans.factory.annotation.Autowired(required = false)
-            ToolCallingManager toolCallingManager) {
+            ToolCallingManager toolCallingManager,
+            @org.springframework.beans.factory.annotation.Autowired(required = false)
+            LlmUsageRecorder usageRecorder) {
         this.documentRetriever = documentRetriever;
         this.compositeDocumentRetriever = compositeDocumentRetriever;
         this.rerankPostProcessor = rerankPostProcessor;
@@ -139,10 +145,35 @@ public class ModeAwareChatClientFactory {
                         ToolCallingManager.builder().build(),
                         ragProperties.getChat().getAgent()
                                 .getMaxToolResultCharacters());
+        this.usageRecorder = usageRecorder != null
+                ? usageRecorder
+                : LlmUsageRecorder.NOOP;
         this.promptBudgetDocumentPostProcessor =
                 new PromptBudgetDocumentPostProcessor(
-                        new JTokkitPromptTokenEstimator(),
+                new JTokkitPromptTokenEstimator(),
                         ragProperties.getChat());
+    }
+
+    /**
+     * 保留复合检索测试夹具和已有扩展的旧构造签名。
+     */
+    public ModeAwareChatClientFactory(
+            ProjectDocumentRetriever documentRetriever,
+            CompositeChatDocumentRetriever compositeDocumentRetriever,
+            ProjectRerankPostProcessor rerankPostProcessor,
+            CitationQueryAugmenter queryAugmenter,
+            RagProperties ragProperties,
+            List<RagAdvisorProvider> customAdvisorProviders,
+            ToolCallingManager toolCallingManager) {
+        this(
+                documentRetriever,
+                compositeDocumentRetriever,
+                rerankPostProcessor,
+                queryAugmenter,
+                ragProperties,
+                customAdvisorProviders,
+                toolCallingManager,
+                null);
     }
 
     public Attempt create(
@@ -155,7 +186,10 @@ public class ModeAwareChatClientFactory {
         ChatExecutionBudget budget = command.executionBudget();
         org.springframework.ai.chat.model.ChatModel executionModel =
                 budget != null
-                        ? budgetedModel(candidate, budget)
+                        ? budgetedModelFor(
+                                candidate,
+                                budget,
+                                LlmInvocationPurpose.CHAT)
                         : candidate.model();
         RetrievalOptions options = command.mode() == ChatMode.AGENT
                 ? capAgentOptions(command.retrievalOptions(), agent)
@@ -275,7 +309,10 @@ public class ModeAwareChatClientFactory {
         }
         ChatClient.Builder rawBuilder = ChatClient.builder(
                 budget != null
-                        ? budgetedModel(candidate, budget)
+                        ? budgetedModelFor(
+                                candidate,
+                                budget,
+                                LlmInvocationPurpose.QUERY_TRANSFORM)
                         : candidate.model());
         ChatOptions options = candidate.model().getDefaultOptions();
         if (options != null) {
@@ -305,7 +342,10 @@ public class ModeAwareChatClientFactory {
         }
         ChatClient.Builder rawBuilder = ChatClient.builder(
                 budget != null
-                        ? budgetedModel(candidate, budget)
+                        ? budgetedModelFor(
+                                candidate,
+                                budget,
+                                LlmInvocationPurpose.QUERY_EXPAND)
                         : candidate.model());
         ChatOptions options = candidate.model().getDefaultOptions();
         if (options != null) {
@@ -422,9 +462,16 @@ public class ModeAwareChatClientFactory {
         }
     }
 
-    private BudgetedChatModel budgetedModel(
+    /**
+     * Creates the same purpose-aware wrapper used by the mode-aware path.
+     *
+     * <p>Compatibility entry points use this method to avoid a second
+     * uninstrumented ChatModel wrapping implementation.</p>
+     */
+    public BudgetedChatModel budgetedModelFor(
             ChatModelRouter.ChatModelCandidate candidate,
-            ChatExecutionBudget budget) {
+            ChatExecutionBudget budget,
+            LlmInvocationPurpose purpose) {
         RagChatProperties.ContextProperties context =
                 ragProperties.getChat().getContext();
         int contextWindow = candidate.contextWindow() != null
@@ -441,7 +488,12 @@ public class ModeAwareChatClientFactory {
                 outputReserve,
                 context.getSafetyMarginTokens(),
                 context.getMaxToolSchemaTokens(),
-                new JTokkitPromptTokenEstimator());
+                new JTokkitPromptTokenEstimator(),
+                purpose,
+                usageRecorder,
+                candidate.cost(),
+                ragProperties.getUsage().getCostUnit(),
+                candidate.ref());
     }
 
     public record Attempt(

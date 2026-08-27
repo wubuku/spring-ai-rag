@@ -16,7 +16,7 @@ Release date: `2026-07-21`
 - [x] Helm `version` and `appVersion` are `1.0.0`
 - [x] Docker/Helm default image tag is `1.0.0`
 - [x] Local, Docker, and Helm default port is `8081`
-- [x] Flyway inventory is V1-V52
+- [x] Flyway inventory is V1-V53
 - [x] JSONB structured-record API, payload snapshots, and collection lifecycle are covered
 - [x] `scripts/verify-jsonb-records.sh` records focused backend/database/frontend verification
 - [x] Document PATCH/disable/restore/permanent-delete and external triple identity are covered
@@ -185,6 +185,28 @@ Release date: `2026-07-21`
   generated UUID is reused across Axios retries.
 - [x] Capability discovery reports the additive protocol `1.0` field
   `features.provisioning.collectionCreateIdempotencyKey`.
+
+### 2026-08-26 Model-Invocation Usage Ledger Gates
+
+- [x] V53 adds the append-only `rag_llm_usage_event` table with bounded fields,
+  principal/session/trace attribution, invocation-start price snapshots,
+  normalized usage, terminal outcome, and duration.
+- [x] `BudgetedChatModel` records exactly one terminal event per model call or
+  stream subscription across Chat, query transform/expansion, summaries,
+  fallbacks, application retries, and AGENT rounds.
+- [x] Recording is fail-open with bounded synchronous non-streaming confirmation,
+  bounded asynchronous streaming recording, local loss accounting, and bounded
+  retention cleanup; prompts, answers, tool payloads, credentials, and exception
+  bodies are excluded.
+- [x] `GET /api/v1/rag/usage` provides inclusive UTC aggregate windows, stable
+  breakdowns, explicit unavailable-usage/pricing counters, and principal-scoped
+  authorization.
+- [x] `verify-llm-usage-ledger.sh` covers the focused backend/API tests,
+  PostgreSQL V1-V53 integration, Maven, WebUI, Mock Playwright, lock,
+  documentation, and whitespace gates.
+- [ ] Real-LLM lifecycle acceptance records plain, knowledge, agent, fallback,
+  summary, replay, and usage-ledger evidence without storing prompts, answers,
+  keys, or tool payloads.
 
 ### Final Evidence (2026-07-21)
 

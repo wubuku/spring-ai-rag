@@ -312,8 +312,8 @@ check_project_invariants() {
       | tail -1
   )"
 
-  [[ "$latest_migration" == "52" ]] || {
-    echo "Expected latest Flyway migration V52, found V${latest_migration:-unknown}." >&2
+  [[ "$latest_migration" == "53" ]] || {
+    echo "Expected latest Flyway migration V53, found V${latest_migration:-unknown}." >&2
     return 1
   }
 
@@ -322,7 +322,7 @@ check_project_invariants() {
   rg -q '18081' AGENTS.md docs/developer-reference.md docs/developer-reference-zh-CN.md
   rg -q 'postgresql' AGENTS.md docs/developer-reference.md docs/developer-reference-zh-CN.md
   rg -q '1024' AGENTS.md docs/developer-reference.md docs/developer-reference-zh-CN.md
-  rg -q 'V1.?V52' AGENTS.md docs/developer-reference.md docs/developer-reference-zh-CN.md
+  rg -q 'V1.?V53' AGENTS.md docs/developer-reference.md docs/developer-reference-zh-CN.md
 
   if rg -n -i 'base-url:[[:space:]]*https?://[^[:space:]`]+/v1([/[:space:]`]|$)' \
       AGENTS.md CLAUDE.md README.md README-zh-CN.md docs \
@@ -358,6 +358,7 @@ check_scripts_and_commands() {
       scripts/business-client-binding-preflight.sh \
       scripts/verify-collection-provisioning.sh \
       scripts/verify-business-client-readiness.sh \
+      scripts/verify-llm-usage-ledger.sh \
       scripts/verify-no-pessimistic-locks.sh \
       scripts/run-claude-grok.sh; do
     [[ -x "$script" ]] || {
