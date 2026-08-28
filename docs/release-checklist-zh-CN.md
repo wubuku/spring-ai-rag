@@ -15,7 +15,7 @@
 - [x] Helm `version` 与 `appVersion` 均为 `1.0.0`
 - [x] Docker/Helm 默认镜像 tag 为 `1.0.0`
 - [x] 本地、Docker 与 Helm 默认端口均为 `8081`
-- [x] Flyway 迁移范围为 V1-V57
+- [x] Flyway 迁移范围为 V1-V58
 - [x] JSONB 结构化记录 API、payload 快照和 Collection 生命周期已覆盖
 - [x] `scripts/verify-jsonb-records.sh` 固化后端/数据库/前端聚焦验证
 - [x] 文档 PATCH/禁用/恢复/永久删除与外部三元身份已覆盖
@@ -239,11 +239,40 @@
   有界异步 worker；默认每小时 Scheduled 扫描只负责漏事件和时间跨阈值恢复。
 - [x] Alerts 全路由收紧为 operator 管理面；WebUI 修正为 `firedAt`，并展示服务端阶段、
   principal 和 expiry，不在浏览器计算阈值。
-- [x] focused 门禁覆盖后端 **218/218**、PostgreSQL V1-V57 生命周期 **6/6**、WebUI
+- [x] focused 门禁覆盖后端 **218/218**、PostgreSQL V1-V58 生命周期 **6/6**、WebUI
   Vitest **234/234**、production build 和 Alerts Mock Playwright **1/1**。
-- [ ] 完整 Maven、WebUI、服务启动、禁锁、文档、diff、shell 与密钥门禁完成。
-- [ ] 隔离 PostgreSQL 与真实 LLM/Embedding principal/document/Chat/alert 生命周期验收完成。
-- [ ] 合并最新 `origin/main` 后按合并基线完整复验并记录最终证据。
+- [x] 完整 Maven、WebUI、服务启动、禁锁、文档、diff、shell 与密钥门禁完成；最终证据由
+  V58 联合门禁 `20260828-durable-final-precommit` 覆盖。
+- [x] 隔离 PostgreSQL 与真实 LLM/Embedding principal/document/Chat/alert 生命周期验收
+  完成；同一联合门禁 **13/13** 通过。
+- [x] `git fetch origin --prune` 后确认 `HEAD == origin/main == 00341665`，没有上游变更
+  需要合并；联合门禁在该相同代码基线上完整通过。
+
+### 2026-08-28 告警通知 Durable Outbox 门禁
+
+- [x] V58 增加 `rag_alert_notification_delivery`、alert/version/provider 唯一约束、
+  eligible/expired-lease/query 索引和状态/lease/attempt 检查约束。
+- [x] 告警与 delivery 同事务提交；after-commit Spring Event 准实时唤醒独立有界 worker，
+  默认一分钟 Scheduled 只恢复漏事件、重启和过期 lease。
+- [x] provider 调用位于事务外且单个 ledger attempt 只调用一次；Apache HttpClient 自动
+  retry 已关闭，跨重启重试由 PostgreSQL attempt/lease/CAS 和有界退避统一管理。
+- [x] Operator API 与 Alerts WebUI 支持低敏 receipt、过滤、游标和人工 retry，不返回
+  payload、endpoint、recipient、secret、lease、错误正文或堆栈。
+- [x] 专项真实生命周期门禁 `20260828-rerun2` 通过 **9/9**：Event 首投 `0s`、
+  `503 -> DELIVERED` 恰好两次 attempt、阻塞调用中终止首实例后由第二实例使用同一 UUID
+  回收 lease，并完成真实 WebUI DOM/network Playwright。
+- [x] `mvn clean compile test-compile`、全量 Maven、WebUI Vitest **236/236**、
+  typecheck、production build、alignment 与核心 Mock Playwright 已通过。
+- [x] 真实 Chat LLM/Embedding/durable notification 联合门禁
+  `20260828-durable-final-precommit` 通过 **13/13**；真实 Chat 触发 MiniMax provider
+  **9** 次，真实 Embedding、Event-driven ASYNC、vector Search、KNOWLEDGE Chat、
+  告警状态复用和 durable notification 全部通过。
+- [x] 最终联合门禁同时通过 PostgreSQL integration matrix、`mvn clean compile
+  test-compile`、全量 Maven（Core **3240**、Starter **44**）、WebUI Vitest
+  **236/236**、typecheck、production build、alignment、核心 Mock Playwright、禁锁、
+  文档和 diff 检查。
+- [x] `git fetch origin --prune` 后确认 `HEAD == origin/main == 00341665`，没有上游变更
+  需要合并；联合门禁在该相同代码基线上完整通过。
 
 ### 最终证据（2026-07-21）
 

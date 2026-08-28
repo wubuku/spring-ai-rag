@@ -726,6 +726,7 @@ rag_audit_log           # 审计日志（集合操作）
 | `rag_api_principal` | principal_id, role, allowed_collection_ids, capabilities, policy_version, requests_per_minute, expiry_alert_checked_at | stable 调用方 owner、权威 policy 与 V57 到期告警公平扫描游标 |
 | `rag_api_key` | key_id, principal_id, credential_version, key_hash, enabled, retire_at | 版本化 credential；每个 principal 至多一个 current 和一个有界 retiring version |
 | `rag_alerts` | dedupe_key, condition_state, state_version, notified_version, status, version | 普通告警与 V57 受管条件告警；active dedupe、阶段升级和通知 claim 由 PostgreSQL/CAS 收敛 |
+| `rag_alert_notification_delivery` | id, alert_id, notification_version, provider, status, attempt_count, attempt_budget, lease_token, lease_until | V58 durable at-least-once provider delivery ledger；稳定 UUID、唯一约束、lease/CAS 与低敏回执 |
 | `rag_api_rate_limit_bucket` | principal_id, window_start, request_count | 共享 UTC 固定分钟 quota bucket |
 | `rag_api_provisioning_operation` | owner_id, idempotency_key_hash, request_fingerprint_sha256, principal_id, completed_at | 不保存 raw credential 的成功 provisioning replay 账本（V50） |
 | `rag_api_key_rotation` | rotation_id, principal_id, source_credential_id, target_credential_id, expires_at, status | 不保存 raw credential 或 Header 原值的有界 staged rotation 账本（V55） |
@@ -758,6 +759,8 @@ rag_audit_log           # 审计日志（集合操作）
 - `rag_document_sync_run_items`：V51 提供 `(run_id, seen_at, external_id)` 与
   `(run_id, status, seen_at, external_id)` B-Tree，分别支持未过滤和按状态过滤的有界
   keyset receipt 查询
+- `rag_alert_notification_delivery`：alert/version/provider 唯一约束、eligible retry、
+  expired lease 与 provider/status/operator 查询索引
 
 ### 5.3 全文检索配置
 
@@ -891,6 +894,19 @@ V57 还提供受管 API principal 到期条件：
   重复发起同一阶段通知；
 - Alerts 管理面只允许 environment root、数据库 ADMIN、legacy static 和
   auth-disabled direct loopback，普通业务 principal 在查询前即被拒绝。
+
+V58 把外部 Email/DingTalk 投递从进程内 best-effort 升级为 durable outbox：
+
+- 告警事实与匹配 provider delivery 在同一事务提交；Spring Event 只在提交后低延迟唤醒
+  有界 worker，默认一分钟 Scheduled 扫描只恢复漏事件、重启和过期 lease；
+- 多实例使用唯一约束、lease token、条件更新/CAS 与有界退避竞争，不使用消息代理或
+  悲观锁；provider 网络调用始终位于数据库事务外；
+- delivery 状态为 `PENDING`、`IN_PROGRESS`、`RETRY_WAIT`、`DELIVERED`、`FAILED`
+  或 `SUPERSEDED`。语义是 at-least-once，稳定 delivery UUID 用于解释极少量重复；
+- managed phase 升级或解除会 supersede 尚未开始的旧版本；人工 retry 保留累计
+  attempt 审计并在发送前再次核对 source alert；
+- operator API 与 WebUI 只显示 provider、状态、attempt、低敏错误码/HTTP status 和时间。
+  ledger 不保存 webhook/SMTP secret、收件人、业务 payload、provider 响应正文或堆栈。
 
 ### 7.3 A/B 实验
 

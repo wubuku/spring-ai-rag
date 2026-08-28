@@ -409,7 +409,7 @@ See [multi-model-external-config.md](multi-model-external-config.md).
 ### Database
 
 - PostgreSQL with pgvector.
-- Flyway is currently V1–V57.
+- Flyway is currently V1–V58.
 - V27/V28 add, backfill, validate, uniquely constrain, and make immutable the
   Collection business key; V29 adds JSONB structured records; V30 adds the
   external-document synchronization schema; V31 normalizes stored external
@@ -448,7 +448,10 @@ See [multi-model-external-config.md](multi-model-external-config.md).
   commit fence, normalized Chat/feedback document references and completeness
   markers, and a durable purge preview that stores neither bodies nor plaintext
   confirmation tokens; V57 adds deduplicated managed API-principal expiry
-  state, notification versions, and a fair recovery-scan cursor.
+  state, notification versions, and a fair recovery-scan cursor; V58 adds
+  `rag_alert_notification_delivery`, using stable UUIDs, uniqueness,
+  leases/CAS, cumulative attempt budgets, and low-sensitivity receipts for
+  durable at-least-once provider delivery.
 - The data-access layer forbids explicit `SELECT ... FOR UPDATE`,
   `SKIP LOCKED`, JPA `PESSIMISTIC_*`, and PostgreSQL advisory locks.
   Concurrent writes use conditional `UPDATE/DELETE ... RETURNING`, `@Version`,
@@ -475,6 +478,13 @@ See [multi-model-external-config.md](multi-model-external-config.md).
   current authorization is rechecked on query, and Collection contributions
   must not be summed as request totals. These tables are diagnostic
   observability, not billing, audit, quota, or mutation receipts.
+- Alerts and provider deliveries are persisted in one transaction. An
+  after-commit Spring Event provides low-latency wake-up, while the default
+  one-minute Scheduled scan only recovers lost events, restarts, and expired
+  leases. Provider I/O always runs outside database transactions. The delivery
+  ledger excludes webhook/SMTP secrets, recipients, business bodies, and stack
+  traces; operators can query only low-sensitivity receipts and manually retry
+  eligible terminal failures.
 
 ### HTTP
 
@@ -490,6 +500,7 @@ The main namespace is `/api/v1/rag/**`:
 | `/api-keys` | API-key management with optional idempotent principal provisioning |
 | `/integration-capabilities` | Authenticated, versioned runtime integration contract |
 | `/integration-observability` | Principal/ACL-scoped best-effort integration operation rollups |
+| `/alerts/notification-deliveries` | Operator-visible low-sensitivity delivery receipts, filters, cursor pagination, and manual retry |
 | `/files` | PDF and file import |
 | `/json-records` | JSONB structured-record upsert, search, and detail |
 | `/documents/upsert` | External triple identity, revision CAS, and tombstone synchronization |

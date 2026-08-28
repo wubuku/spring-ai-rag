@@ -40,6 +40,44 @@ export interface SilenceSchedule {
   updatedAt?: string;
 }
 
+export type NotificationDeliveryStatus =
+  | 'PENDING'
+  | 'IN_PROGRESS'
+  | 'RETRY_WAIT'
+  | 'DELIVERED'
+  | 'FAILED'
+  | 'SUPERSEDED';
+
+export type NotificationProvider = 'EMAIL' | 'DINGTALK';
+
+export interface AlertNotificationDelivery {
+  id: string;
+  alertId: number;
+  notificationVersion: number;
+  provider: NotificationProvider;
+  status: NotificationDeliveryStatus;
+  attemptCount: number;
+  attemptBudget: number;
+  manualRetryCount: number;
+  nextAttemptAt: string;
+  lastErrorCode?: string;
+  lastHttpStatus?: number;
+  lastAttemptAt?: string;
+  deliveredAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AlertNotificationDeliveryPage {
+  notificationsEnabled: boolean;
+  durableDeliveryEnabled: boolean;
+  configuredProviders: NotificationProvider[];
+  items: AlertNotificationDelivery[];
+  limit: number;
+  hasMore: boolean;
+  nextCursor?: string;
+}
+
 export const alertsApi = {
   // Active alerts
   listActive: () => apiClient.get<Alert[]>('/alerts/active'),
@@ -118,4 +156,20 @@ export const alertsApi = {
 
   deleteSilenceSchedule: (name: string) =>
     apiClient.delete(`/alerts/silence-schedules/${name}`),
+
+  listNotificationDeliveries: (params?: {
+    status?: NotificationDeliveryStatus;
+    provider?: NotificationProvider;
+    alertId?: number;
+    limit?: number;
+    cursor?: string;
+  }) => apiClient.get<AlertNotificationDeliveryPage>(
+    '/alerts/notification-deliveries',
+    { params },
+  ),
+
+  retryNotificationDelivery: (deliveryId: string) =>
+    apiClient.post<AlertNotificationDelivery>(
+      `/alerts/notification-deliveries/${deliveryId}/retry`,
+    ),
 };

@@ -2328,6 +2328,57 @@ Get experiment results list.
 principal 吊销后自动解决。响应不包含 raw credential、hash、principal name、Collection
 allow-list、quota 或业务 payload。时间字段名是 `firedAt`，不是 `triggeredAt`。
 
+### `GET /api/v1/rag/alerts/notification-deliveries`
+
+按 keyset 游标查询 V58 durable provider delivery receipt。可选参数：
+
+- `status`：`PENDING`、`IN_PROGRESS`、`RETRY_WAIT`、`DELIVERED`、`FAILED`、
+  `SUPERSEDED`；
+- `provider`：`EMAIL` 或 `DINGTALK`；
+- `alertId`：正整数；
+- `limit`：1–100，默认 50；
+- `cursor`：上页返回的不透明 `nextCursor`，与当前过滤条件绑定。
+
+```json
+{
+  "notificationsEnabled": true,
+  "durableDeliveryEnabled": true,
+  "configuredProviders": ["DINGTALK"],
+  "items": [{
+    "id": "8abf1f68-7ed4-4fca-b33e-2c9cb22c8d87",
+    "alertId": 42,
+    "notificationVersion": 2,
+    "provider": "DINGTALK",
+    "status": "DELIVERED",
+    "attemptCount": 2,
+    "attemptBudget": 8,
+    "manualRetryCount": 0,
+    "nextAttemptAt": "2026-08-28T09:00:00+08:00",
+    "lastErrorCode": null,
+    "lastHttpStatus": 200,
+    "lastAttemptAt": "2026-08-28T09:00:31+08:00",
+    "deliveredAt": "2026-08-28T09:00:31+08:00",
+    "createdAt": "2026-08-28T09:00:00+08:00",
+    "updatedAt": "2026-08-28T09:00:31+08:00"
+  }],
+  "limit": 50,
+  "hasMore": false,
+  "nextCursor": null
+}
+```
+
+envelope 的三个模式字段使空页仍可区分全局通知关闭、兼容直发、未配置 provider 和
+durable mode 暂无 receipt。响应不返回 provider endpoint、收件人、payload、lease、
+secret、错误正文或堆栈。
+
+### `POST /api/v1/rag/alerts/notification-deliveries/{deliveryId}/retry`
+
+对 `FAILED` delivery 增加一个当前配置大小的 attempt budget 周期并重新入队；
+`attemptCount` 不清零。`PENDING`、`RETRY_WAIT`、`IN_PROGRESS` 返回当前 receipt，
+不会重复入队。`DELIVERED`、`SUPERSEDED`、provider 不可用，或 managed source
+状态已经过期时返回 `409 ALERT_NOTIFICATION_DELIVERY_CONFLICT`；过期 managed receipt
+会先持久化为 `SUPERSEDED`。成功与幂等响应均为 `200`。
+
 ### `GET /api/v1/rag/alerts/history`
 
 查询告警历史；支持现有时间、severity 和 alert type 过滤。

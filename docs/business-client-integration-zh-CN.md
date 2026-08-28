@@ -342,6 +342,14 @@ expiry 和 overlap expiry 都应视为终止错误，不能无界重试。
 credential；调用方仍以 `/auth/me` 的当前 principal、credential 和 expiry 投影作为启动
 绑定事实。延期出窗口、吊销或重新创建后的告警收敛由服务端完成。
 
+启用 `rag.notifications.delivery.enabled=true` 后，平台 operator 可通过
+`GET /api/v1/rag/alerts/notification-deliveries` 查询 Email/DingTalk 的 durable
+投递回执，并对符合条件的 `FAILED` receipt 调用
+`POST /api/v1/rag/alerts/notification-deliveries/{deliveryId}/retry`。业务 client
+不应持有 operator credential，也不需要消费该 API；它是部署方确认告警渠道最终送达、
+重试次数和低敏错误码的控制面。该合同不返回通知 payload、endpoint、recipient、secret
+或异常正文。
+
 ## 7. 部署、升级与回滚
 
 - liveness 使用 `/actuator/health/liveness`；readiness 使用
@@ -350,19 +358,20 @@ credential；调用方仍以 `/auth/me` 的当前 principal、credential 和 exp
 - embedding 可用性读取文档 lifecycle 或
   `/api/v1/rag/collections/embedding-readiness`；业务 binding 另用 `/auth/me` 和
   Collection by-key。
-- 空库或升级环境必须按顺序执行 Flyway V1-V57。V49 为 stable principal 增加
+- 空库或升级环境必须按顺序执行 Flyway V1-V58。V49 为 stable principal 增加
   operation capabilities；V50 增加不保存 raw credential 的成功 provisioning 幂等
   ledger；V51 为 Sync Run item receipt 增加未过滤和按状态过滤的 keyset 索引；V52
   增加独立、按 owner 隔离的 Collection 创建幂等账本；V53 增加模型调用用量账本；
   V54 增加有界 UTC 小时级 integration operation 与已授权 Collection contribution 聚合；
   V55 增加有界 staged credential rotation 及不保存 secret 的 operation ledger；V56
   增加永久 Collection 退役 tombstone、Chat/feedback 文档引用索引和 durable purge
-  preview；V57 增加受管 principal 到期告警的持久去重、阶段版本和公平恢复扫描。
+  preview；V57 增加受管 principal 到期告警的持久去重、阶段版本和公平恢复扫描；V58
+  增加 durable notification delivery ledger、lease/CAS、低敏 receipt 与人工 retry。
 - 生产调用方应锁定已验收的 Git commit 或由该 commit 构建的不可变镜像。当前 Maven/API
   版本仍为 `1.0.0`。
 - `/auth/me` 的新增字段保持向后兼容；旧 client 会忽略，依赖 capability/ACL 自检的
   client 必须先运行合同门禁，再升级业务实例。
-- V49 至 V57 都是向前兼容增量迁移，不执行破坏性 schema 回退。若应用回滚到
+- V49 至 V58 都是向前兼容增量迁移，不执行破坏性 schema 回退。若应用回滚到
   不识别 operation capabilities、keyed principal/Collection provisioning 或 item receipt
   查询、usage 聚合、integration observability、staged rotation 或 Collection 退役的版本，
   应继续保留 schema，并停止依赖对应合同的 client，不能宽松启动或假定缺失 endpoint
@@ -377,6 +386,10 @@ credential；调用方仍以 `/auth/me` 的当前 principal、credential 和 exp
 - V56/V57 混合 fleet 允许继续认证与数据面流量，但只有 V57 实例维护 principal 到期
   告警。部署完成前不要把告警当作唯一轮换触发器；回滚应用时保留 V57 schema，新版本再次
   上线后由低频恢复扫描补齐状态。
+- V57/V58 混合 fleet 必须保持 `rag.notifications.delivery.enabled=false`，继续兼容直发；
+  全部实例升级并确认 V58 migration 后才启用 durable mode，避免旧实例直发与新实例 outbox
+  双发。首次启用后回滚到 V57 binary 会暂停 pending delivery 消费，不得把它当作安全的
+  通知回退路径。
 
 ### Operation observability
 

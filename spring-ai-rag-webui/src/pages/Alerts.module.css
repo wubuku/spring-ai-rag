@@ -91,6 +91,126 @@
   font-weight: 600;
 }
 
+.modeNotice,
+.errorState {
+  margin-bottom: 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-bg);
+  color: var(--color-text-secondary);
+  font-size: 0.875rem;
+}
+
+.errorState {
+  border-color: var(--color-error);
+  color: var(--color-error);
+}
+
+.filterBar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.filterBar label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--color-text-secondary);
+  font-size: 0.875rem;
+}
+
+.deliveryTable {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+}
+
+.deliveryHeader,
+.deliveryRow {
+  min-width: 880px;
+  display: grid;
+  grid-template-columns:
+    minmax(72px, 0.6fr)
+    minmax(96px, 0.8fr)
+    minmax(120px, 1fr)
+    minmax(88px, 0.7fr)
+    minmax(160px, 1.25fr)
+    minmax(170px, 1.25fr)
+    minmax(160px, 1.25fr)
+    minmax(90px, 0.7fr);
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.75rem 1rem;
+}
+
+.deliveryHeader {
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-text-secondary);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.deliveryRow {
+  min-height: 54px;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 0.8125rem;
+}
+
+.deliveryRow:last-child {
+  border-bottom: none;
+}
+
+.deliveryRow span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.deliveryStatus {
+  display: inline-block;
+  padding: 0.2rem 0.45rem;
+  border-radius: 4px;
+  background: var(--color-bg);
+  font-weight: 600;
+}
+
+.deliveryStatus[data-status="DELIVERED"] {
+  color: var(--color-success);
+}
+
+.deliveryStatus[data-status="FAILED"] {
+  color: var(--color-error);
+}
+
+.deliveryStatus[data-status="RETRY_WAIT"],
+.deliveryStatus[data-status="IN_PROGRESS"] {
+  color: var(--color-warning);
+}
+
+.retryBtn {
+  min-width: 72px;
+  padding: 0.4rem 0.65rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.retryBtn:hover:not(:disabled) {
+  background: var(--color-surface-hover);
+}
+
+.retryBtn:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
 /* ===== Toolbar ===== */
 
 .toolbar {

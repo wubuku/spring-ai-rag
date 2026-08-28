@@ -1007,6 +1007,23 @@ rag:
     fallback-scan-interval: ${RAG_API_KEY_EXPIRY_ALERTS_FALLBACK_SCAN_INTERVAL:PT1H}
     fallback-scan-limit: ${RAG_API_KEY_EXPIRY_ALERTS_FALLBACK_SCAN_LIMIT:10000}
     event-retry-attempts: ${RAG_API_KEY_EXPIRY_ALERTS_EVENT_RETRY_ATTEMPTS:3}
+  notifications:
+    enabled: ${RAG_NOTIFICATIONS_ENABLED:false}
+    delivery:
+      enabled: ${RAG_NOTIFICATION_DELIVERY_ENABLED:false}
+      fallback-scan-interval: ${RAG_NOTIFICATION_DELIVERY_FALLBACK_SCAN_INTERVAL:PT1M}
+      worker-concurrency: ${RAG_NOTIFICATION_DELIVERY_WORKER_CONCURRENCY:4}
+      claim-batch-size: ${RAG_NOTIFICATION_DELIVERY_CLAIM_BATCH_SIZE:100}
+      provider-attempt-timeout: ${RAG_NOTIFICATION_DELIVERY_PROVIDER_ATTEMPT_TIMEOUT:PT30S}
+      lease-duration: ${RAG_NOTIFICATION_DELIVERY_LEASE_DURATION:PT2M}
+      max-attempts: ${RAG_NOTIFICATION_DELIVERY_MAX_ATTEMPTS:8}
+      initial-backoff: ${RAG_NOTIFICATION_DELIVERY_INITIAL_BACKOFF:PT30S}
+      max-backoff: ${RAG_NOTIFICATION_DELIVERY_MAX_BACKOFF:PT1H}
+      delivered-retention: ${RAG_NOTIFICATION_DELIVERY_DELIVERED_RETENTION:P30D}
+      failed-retention: ${RAG_NOTIFICATION_DELIVERY_FAILED_RETENTION:P90D}
+      cleanup-interval: ${RAG_NOTIFICATION_DELIVERY_CLEANUP_INTERVAL:PT1H}
+      cleanup-batch-size: ${RAG_NOTIFICATION_DELIVERY_CLEANUP_BATCH_SIZE:1000}
+      max-payload-bytes: ${RAG_NOTIFICATION_DELIVERY_MAX_PAYLOAD_BYTES:65536}
   collection-provisioning:
     enabled: ${RAG_COLLECTION_PROVISIONING_ENABLED:true}
     retention: ${RAG_COLLECTION_PROVISIONING_RETENTION:400d}
@@ -1053,6 +1070,32 @@ at most one active expiry alert per principal, with a `WARNING`, `CRITICAL`,
 or `EXPIRED` phase; extension beyond the window or revocation resolves it.
 Email and DingTalk defaults include `API_PRINCIPAL_EXPIRY`, while an explicitly
 configured deployment allow-list remains authoritative.
+
+| Property | Default | Description |
+|----------|---------|-------------|
+| `rag.notifications.enabled` | `false` | Globally enables Email/DingTalk routes; when false, notifications are not sent |
+| `rag.notifications.delivery.enabled` | `false` | Enables the V58 durable outbox; false preserves compatible direct delivery, and rolling upgrades should enable it only after every instance is upgraded |
+| `rag.notifications.delivery.fallback-scan-interval` | `PT1M` | Scheduled recovery for lost events, restarts, and expired leases; 10 seconds through 10 minutes |
+| `rag.notifications.delivery.worker-concurrency` | `4` | Dedicated bounded-worker concurrency, from 1 through 32 |
+| `rag.notifications.delivery.claim-batch-size` | `100` | Eligible-claim limit per pass, from 1 through 1000 and not smaller than worker concurrency |
+| `rag.notifications.delivery.provider-attempt-timeout` | `PT30S` | Single provider-call bound, from 5 through 60 seconds |
+| `rag.notifications.delivery.lease-duration` | `PT2M` | Delivery lease, from 30 seconds through 15 minutes and at least twice the provider timeout |
+| `rag.notifications.delivery.max-attempts` | `8` | Attempt budget added by each automatic/manual retry cycle, from 1 through 20 |
+| `rag.notifications.delivery.initial-backoff` | `PT30S` | First transient retry backoff, from 1 second through 10 minutes |
+| `rag.notifications.delivery.max-backoff` | `PT1H` | Maximum backoff, no smaller than the initial value and no greater than 24 hours |
+| `rag.notifications.delivery.delivered-retention` | `P30D` | `DELIVERED` receipt retention, from 1 through 365 days |
+| `rag.notifications.delivery.failed-retention` | `P90D` | `FAILED`/`SUPERSEDED` receipt retention, from 7 through 730 days |
+| `rag.notifications.delivery.cleanup-interval` | `PT1H` | Bounded cleanup interval, from 10 minutes through 24 hours |
+| `rag.notifications.delivery.cleanup-batch-size` | `1000` | Maximum rows removed per cleanup pass, from 100 through 10000 |
+| `rag.notifications.delivery.max-payload-bytes` | `65536` | Sanitized provider-payload bound, from 4096 through 1048576 bytes |
+
+In durable mode, the alert and delivery commit in one PostgreSQL transaction,
+and an after-commit Spring Event wakes the worker almost immediately; Scheduled
+polling is not the primary consumer. Provider I/O runs outside transactions,
+while leases/CAS and bounded backoff recover failures across restarts.
+Semantics are at-least-once, not exactly-once. Receipts and payloads exclude
+channel secrets, recipients, business bodies, provider response bodies, and
+stack traces.
 
 | Property | Default | Description |
 |----------|---------|-------------|

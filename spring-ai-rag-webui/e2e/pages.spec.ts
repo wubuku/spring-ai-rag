@@ -141,11 +141,15 @@ test.describe('Alerts', () => {
     await expect(page).toHaveURL(/\/webui\/alerts\?tab=slo-configs$/);
     await page.getByRole('button', { name: 'Silence Plans' }).click();
     await expect(page).toHaveURL(/\/webui\/alerts\?tab=silence-schedules$/);
+    await page.getByRole('button', { name: 'Delivery Receipts' }).click();
+    await expect(page).toHaveURL(
+      /\/webui\/alerts\?tab=notification-deliveries$/,
+    );
 
     await page.goBack();
-    await expect(page).toHaveURL(/\/webui\/alerts\?tab=slo-configs$/);
+    await expect(page).toHaveURL(/\/webui\/alerts\?tab=silence-schedules$/);
     await expect(
-      page.getByRole('button', { name: 'SLO Config', exact: true }),
+      page.getByRole('button', { name: 'Silence Plans', exact: true }),
     ).toBeVisible();
   });
 });

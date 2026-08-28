@@ -436,6 +436,16 @@ self-checks. Callers continue to use the current principal, credential, and
 expiry projection from `/auth/me` as their startup-binding fact. The service
 converges alert resolution after extension, revocation, or replacement.
 
+After `rag.notifications.delivery.enabled=true`, platform operators can query
+durable Email/DingTalk delivery receipts through
+`GET /api/v1/rag/alerts/notification-deliveries` and call
+`POST /api/v1/rag/alerts/notification-deliveries/{deliveryId}/retry` for
+eligible `FAILED` receipts. Business clients should neither hold operator
+credentials nor consume this API; it is the deployment control plane for
+confirming eventual channel delivery, attempt counts, and low-sensitivity error
+codes. The contract excludes notification payloads, endpoints, recipients,
+secrets, and exception bodies.
+
 ## 7. Deployment, Upgrade, And Rollback
 
 - Use `/actuator/health/liveness` for liveness and
@@ -445,7 +455,7 @@ converges alert resolution after extension, revocation, or replacement.
 - Read document lifecycle or
   `/api/v1/rag/collections/embedding-readiness` for embedding availability.
   Use `/auth/me` plus Collection by-key probes for business binding.
-- Empty and upgraded databases must run Flyway V1-V57 in order. V49 adds
+- Empty and upgraded databases must run Flyway V1-V58 in order. V49 adds
   operation capabilities to stable principals; V50 adds the successful
   provisioning idempotency ledger without storing raw credentials; V51 adds
   unfiltered and status-filtered keyset indexes for Sync Run item receipts;
@@ -455,13 +465,15 @@ converges alert resolution after extension, revocation, or replacement.
   staged credential rotation and its secret-free operation ledger; V56 adds
   permanent Collection-retirement tombstones, Chat/feedback document-reference
   indexes, and durable purge previews; V57 adds durable deduplication, phase
-  versions, and a fair recovery scan for managed-principal expiry alerts.
+  versions, and a fair recovery scan for managed-principal expiry alerts; V58
+  adds the durable notification-delivery ledger, leases/CAS, low-sensitivity
+  receipts, and manual retry.
 - Pin production callers to an accepted Git commit or an immutable image built
   from it. Maven/API version remains `1.0.0`.
 - The added `/auth/me` fields remain backward-compatible. Older clients ignore
   them; clients that depend on capability/ACL verification must run the
   contract gate before rollout.
-- V49 through V57 are forward-compatible additive migrations; do not destructively
+- V49 through V58 are forward-compatible additive migrations; do not destructively
   roll back their schema. If the application is rolled back to a version that
   does not understand operation capabilities, keyed principal/Collection
   provisioning, item receipts, usage aggregation, integration observability,
@@ -482,6 +494,12 @@ converges alert resolution after extension, revocation, or replacement.
   complete, do not treat alerts as the sole rotation trigger. Retain the V57
   schema during application rollback; the low-frequency recovery scan
   reconciles state when the newer binary returns.
+- During a mixed V57/V58 fleet, keep
+  `rag.notifications.delivery.enabled=false` and use compatible direct
+  delivery. Enable durable mode only after every instance is upgraded and V58
+  is confirmed, avoiding direct-send/outbox duplicates. Once enabled, rolling
+  application code back to V57 pauses pending-delivery consumption and is not
+  a safe notification fallback.
 
 ### Operation Observability
 

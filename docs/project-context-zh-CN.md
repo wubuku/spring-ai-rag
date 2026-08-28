@@ -325,7 +325,7 @@ job enqueue 分开提交，HTTP 不同步循环调用 provider。只读诊断默
 ### 数据库
 
 - PostgreSQL + pgvector。
-- Flyway 当前为 V1–V57。
+- Flyway 当前为 V1–V58。
 - V27/V28 负责新增、回填、校验、唯一约束及不可变 Collection 业务 key；V29 增加 JSONB
   结构化记录；V30 增加外部文档同步 schema；V31 在不改写已发布 V30 的前提下规范化
   已存储的外部文档身份；V32 增加按 principal 归属的 Chat history、来源快照、turn
@@ -352,7 +352,9 @@ job enqueue 分开提交，HTTP 不同步循环调用 provider。只读诊断默
   分阶段 API credential 轮换、overlap deadline 与不保存 secret 的轮换 operation 账本；
   V56 增加 Collection 退役 tombstone、Chat commit fence、Chat/feedback 规范化文档引用
   与完整性标记，以及不保存正文或明文 token 的 durable purge preview；V57 增加受管
-  API principal 到期告警的去重状态、通知版本和公平恢复扫描游标。
+  API principal 到期告警的去重状态、通知版本和公平恢复扫描游标；V58 增加
+  `rag_alert_notification_delivery`，以稳定 UUID、唯一约束、lease/CAS、累计 attempt
+  budget 和低敏回执实现告警渠道的 durable at-least-once 投递。
 - 数据访问层禁止显式 `SELECT ... FOR UPDATE`、`SKIP LOCKED`、JPA
   `PESSIMISTIC_*` 与 PostgreSQL advisory lock。并发写使用条件
   `UPDATE/DELETE ... RETURNING`、`@Version`、唯一约束、lease 和有界重试；普通 DML
@@ -372,6 +374,10 @@ job enqueue 分开提交，HTTP 不同步循环调用 provider。只读诊断默
   UTC 小时聚合与有界 operation/status/latency 维度。记录异步且 fail-open，查询时重新
   校验当前授权，Collection contribution 不能相加冒充请求总量。这些表用于诊断，不是
   billing、审计、quota 或 mutation receipt。
+- 告警和 provider delivery 在同一事务中持久化；after-commit Spring Event 负责低延迟
+  唤醒，默认一分钟 Scheduled 扫描只恢复漏事件、重启与过期 lease。provider 调用始终在
+  数据库事务外。delivery ledger 不保存 webhook/SMTP secret、收件人、业务正文或异常堆栈，
+  operator 只能查询低敏 receipt 并对可重试终态执行人工 retry。
 
 ### HTTP
 
@@ -387,6 +393,7 @@ job enqueue 分开提交，HTTP 不同步循环调用 provider。只读诊断默
 | `/api-keys` | API Key 管理与可选的 principal 幂等 provisioning |
 | `/integration-capabilities` | 认证后可读取的版本化运行时集成合同 |
 | `/integration-observability` | 按 principal/ACL 隔离的 best-effort 集成 operation 聚合 |
+| `/alerts/notification-deliveries` | Operator 可见的低敏告警投递回执、过滤、游标分页与人工重试 |
 | `/files` | PDF / 文件导入 |
 | `/json-records` | JSONB 结构化记录 upsert、检索与详情 |
 | `/documents/upsert` | 普通外部文档三元身份、revision CAS 与 tombstone 同步 |

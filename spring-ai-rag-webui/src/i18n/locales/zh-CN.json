@@ -341,6 +341,25 @@
     "sloConfigNamePlaceholder": "例如：latency_p99",
     "silenceNamePlaceholder": "例如：周末维护",
     "silenceDescriptionPlaceholder": "留空则静默所有告警"
+    ,"deliveries": "投递回执"
+    ,"notificationsDisabled": "告警通知当前已关闭。"
+    ,"directDeliveryMode": "通知当前使用兼容直发模式，不会创建持久化投递回执。"
+    ,"noDeliveryProviders": "持久化投递已启用，但尚未配置通知提供商。"
+    ,"deliveryStatusFilter": "筛选投递状态"
+    ,"deliveryProviderFilter": "筛选通知提供商"
+    ,"deliveryLoadFailed": "无法加载通知投递回执。"
+    ,"deliveryRetryFailed": "通知投递重试请求失败。"
+    ,"noDeliveries": "暂无通知投递回执"
+    ,"provider": "提供商"
+    ,"alertId": "告警 ID"
+    ,"attempts": "尝试次数"
+    ,"nextAttempt": "下次尝试"
+    ,"lastError": "最后错误"
+    ,"updatedAt": "更新时间"
+    ,"actions": "操作"
+    ,"retry": "重试"
+    ,"retryDelivery": "重试投递 {{id}}"
+    ,"all": "全部"
   },
   "settings": {
     "title": "系统设置",

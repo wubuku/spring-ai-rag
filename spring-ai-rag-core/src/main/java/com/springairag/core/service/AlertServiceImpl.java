@@ -1,5 +1,6 @@
 package com.springairag.core.service;
 
+import com.springairag.core.alertdelivery.AlertNotificationOutboxService;
 import com.springairag.core.config.RagAlertProperties;
 import com.springairag.core.entity.RagAlert;
 import com.springairag.core.entity.RagSilenceSchedule;
@@ -9,6 +10,7 @@ import com.springairag.core.repository.RagRetrievalLogRepository;
 import com.springairag.core.repository.RagSilenceScheduleRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -53,6 +55,7 @@ public class AlertServiceImpl implements AlertService {
     private final RagSilenceScheduleRepository silenceScheduleRepository;
     private final List<NotificationService> notificationServices;
     private final RagAlertProperties alertProperties;
+    private final AlertNotificationOutboxService notificationOutboxService;
 
     public AlertServiceImpl(AlertRepository alertRepository,
                            RagRetrievalLogRepository retrievalLogRepository,
@@ -60,12 +63,26 @@ public class AlertServiceImpl implements AlertService {
                            RagSilenceScheduleRepository silenceScheduleRepository,
                            List<NotificationService> notificationServices,
                            RagAlertProperties alertProperties) {
+        this(alertRepository, retrievalLogRepository, evaluationRepository,
+                silenceScheduleRepository, notificationServices,
+                alertProperties, null);
+    }
+
+    @Autowired
+    public AlertServiceImpl(AlertRepository alertRepository,
+                           RagRetrievalLogRepository retrievalLogRepository,
+                           RagRetrievalEvaluationRepository evaluationRepository,
+                           RagSilenceScheduleRepository silenceScheduleRepository,
+                           List<NotificationService> notificationServices,
+                           RagAlertProperties alertProperties,
+                           AlertNotificationOutboxService notificationOutboxService) {
         this.alertRepository = alertRepository;
         this.retrievalLogRepository = retrievalLogRepository;
         this.evaluationRepository = evaluationRepository;
         this.silenceScheduleRepository = silenceScheduleRepository;
         this.notificationServices = notificationServices != null ? notificationServices : List.of();
         this.alertProperties = alertProperties;
+        this.notificationOutboxService = notificationOutboxService;
     }
 
     @Override
@@ -114,10 +131,13 @@ public class AlertServiceImpl implements AlertService {
         alert.setStatus("ACTIVE");
         alert.setFiredAt(ZonedDateTime.now());
 
-        alert = alertRepository.save(alert);
+        alert = alertRepository.saveAndFlush(alert);
 
-        // Send external notification (async, best-effort)
-        if (!notificationServices.isEmpty()) {
+        if (notificationOutboxService != null
+                && notificationOutboxService.isDurableEnabled()) {
+            notificationOutboxService.enqueueOrdinary(alert);
+        } else if (!notificationServices.isEmpty()) {
+            // Compatibility mode: async, best-effort direct notification.
             for (NotificationService ns : notificationServices) {
                 try {
                     ns.sendAlert(alertType, metricName, severity, message, metrics);
@@ -169,6 +189,10 @@ public class AlertServiceImpl implements AlertService {
             alert.setResolution(resolution);
             alert.setResolvedAt(ZonedDateTime.now());
             alertRepository.save(alert);
+            if (notificationOutboxService != null
+                    && alert.getConditionState() != null) {
+                notificationOutboxService.supersedeManaged(alert.getId());
+            }
             log.info("Alert resolved: {} - {}", alertId, resolution);
         });
     }

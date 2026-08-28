@@ -339,6 +339,25 @@
     "sloConfigNamePlaceholder": "e.g. latency_p99",
     "silenceNamePlaceholder": "e.g. weekend-maintenance",
     "silenceDescriptionPlaceholder": "Leave empty to silence all alerts"
+    ,"deliveries": "Delivery Receipts"
+    ,"notificationsDisabled": "Alert notifications are disabled."
+    ,"directDeliveryMode": "Notifications use compatibility direct delivery; durable receipts are not being created."
+    ,"noDeliveryProviders": "Durable delivery is enabled, but no provider is configured."
+    ,"deliveryStatusFilter": "Filter delivery status"
+    ,"deliveryProviderFilter": "Filter delivery provider"
+    ,"deliveryLoadFailed": "Notification delivery receipts could not be loaded."
+    ,"deliveryRetryFailed": "The delivery retry request failed."
+    ,"noDeliveries": "No notification delivery receipts"
+    ,"provider": "Provider"
+    ,"alertId": "Alert ID"
+    ,"attempts": "Attempts"
+    ,"nextAttempt": "Next Attempt"
+    ,"lastError": "Last Error"
+    ,"updatedAt": "Updated At"
+    ,"actions": "Actions"
+    ,"retry": "Retry"
+    ,"retryDelivery": "Retry delivery {{id}}"
+    ,"all": "All"
   },
   "settings": {
     "title": "Settings",

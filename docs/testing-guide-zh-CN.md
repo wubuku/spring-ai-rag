@@ -520,7 +520,7 @@ WebUI 通过请求拦截断言同一次用户提交在 Axios retry 中复用一�
 ```
 
 该 9 阶段门禁依次执行禁悲观锁检查、purge/Collection/feedback/audit/OpenAI scope
-聚焦测试、真实 PostgreSQL V1–V57 清理矩阵、`mvn clean compile test-compile`、完整
+聚焦测试、真实 PostgreSQL V1–V58 清理矩阵、`mvn clean compile test-compile`、完整
 WebUI typecheck/Vitest/lint/生产构建、Collection Mock Playwright、双语文档门禁、脚本
 语法和空白检查。每次运行在
 `.verification/collection-purge/<run-id>/summary.md` 记录逐步证据。
@@ -739,13 +739,37 @@ API_KEY_EXPIRY_ALERT_VERIFY_PHASE=focused \
 ./scripts/verify-api-key-expiry-alerts.sh
 ```
 
-focused 阶段一次性执行受影响后端测试、空库 V1-V57 PostgreSQL 生命周期矩阵、WebUI
+focused 阶段一次性执行受影响后端测试、空库 V1-V58 PostgreSQL 生命周期矩阵、WebUI
 typecheck/Vitest/alignment/production build 和 Alerts Mock Playwright。PostgreSQL 场景覆盖
 8 路并发只产生一个 active condition/通知 claim、`WARNING → CRITICAL → EXPIRED` 原行
 升级、同阶段刷新、延期/吊销解决、重新进入窗口的新历史、漏事件恢复、超过单批上限的公平
 扫描和低敏持久化投影。Playwright 只使用网络、JSON、DOM 可见性与可访问断言，不使用截图。
 `all` 阶段再执行 `mvn clean compile test-compile`、禁悲观锁、双语文档、Shell、diff 与
 新增行密钥检查。真实 provider 生命周期验收在 Mock 门槛通过后单独执行，并持续观察服务日志。
+
+### 告警通知 Durable Outbox 门禁
+
+```bash
+./scripts/verify-alert-notification-delivery.sh
+
+MANAGED_API_REAL_ENV_FILE=.env \
+MANAGED_API_REAL_LLM_PROVIDER=openai \
+./scripts/verify-managed-api-principals.sh \
+  --with-real-llm \
+  --with-durable-notifications
+```
+
+专项门禁从空库迁移到 V58，使用隔离 PostgreSQL、真实本地 HTTP provider stub、两个后端
+实例和真实 WebUI，验证 after-commit Event 早于一分钟 fallback、单个 ledger attempt
+恰好调用 provider 一次、`503 -> RETRY_WAIT -> DELIVERED`、进程在阻塞调用中退出后的
+过期 lease 回收、稳定 delivery UUID、低敏 receipt 与 DOM/network 前端合同。浏览器断言
+不使用截图。
+
+联合门禁只在 Mock、Maven、前端和文档门槛通过后装载 `.env`，并实际调用所选 Chat LLM
+与 Embedding 服务。`--with-durable-notifications` 自动启动隔离通知 stub，把
+WARNING/CRITICAL 生命周期接入 V58 receipt，并检查唯一性、最终送达、event-driven latency
+和密钥不落盘。真实 provider 返回错误或账号池不可用时必须记录为失败并重试，不能用
+本地 stub 结果冒充真实模型验收。
 
 ### Chat 对话能力重构验收门禁
 

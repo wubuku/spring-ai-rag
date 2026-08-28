@@ -19,7 +19,7 @@ Documentation hub: [index.md](index.md). Stable project context: [project-contex
 | Real-LLM E2E port | `18081` |
 | Embedding | SiliconFlow `BAAI/bge-m3` |
 | Vector dimension | `1024` |
-| Flyway | V1–V57 |
+| Flyway | V1–V58 |
 
 Do **not** append `/v1` to an OpenAI or Embedding `base-url`. Spring AI appends `/v1/chat/completions` or `/v1/embeddings`.
 
@@ -460,7 +460,7 @@ provider. Evidence is written under
 ### Managed API Principal Expiry Alert Verification
 
 ```bash
-# Focused backend, V1-V57 PostgreSQL, and frontend Mock gates
+# Focused backend, V1-V58 PostgreSQL, and frontend Mock gates
 API_KEY_EXPIRY_ALERT_VERIFY_PHASE=focused \
 ./scripts/verify-api-key-expiry-alerts.sh
 
@@ -477,6 +477,28 @@ It uses `pgvector/pgvector:pg16` Testcontainers by default.
 `API_PRINCIPAL_EXPIRY_ALERT_IT_JDBC_URL` and related variables may instead
 select an explicitly disposable database. Evidence is written under
 `.verification/api-key-expiry-alerts/<run-id>/`.
+
+### Durable Alert Notification Outbox Verification
+
+```bash
+./scripts/verify-alert-notification-delivery.sh
+
+MANAGED_API_REAL_ENV_FILE=.env \
+MANAGED_API_REAL_LLM_PROVIDER=openai \
+./scripts/verify-managed-api-principals.sh \
+  --with-real-llm \
+  --with-durable-notifications
+```
+
+The first command uses isolated PostgreSQL, a real local HTTP provider, two
+backend instances, and the real WebUI. It covers event-driven first delivery,
+transient retry, one HTTP call per ledger attempt, process-exit/expired-lease
+recovery, low-sensitivity receipts, and no-screenshot DOM/network Playwright.
+The second command actually calls the Chat and Embedding services from `.env`
+only after all local gates pass, while routing managed-principal WARNING and
+CRITICAL alerts through V58 durable delivery. Evidence is written under
+`.verification/alert-notification-delivery/<run-id>/` and
+`.verification/managed-api-principals/<run-id>/`.
 
 <a id="business-service-integration-readiness-verification"></a>
 

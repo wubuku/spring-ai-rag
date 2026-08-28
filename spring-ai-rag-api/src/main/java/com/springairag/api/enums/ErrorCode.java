@@ -96,6 +96,8 @@ public enum ErrorCode {
     COLLECTION_PURGE_PREVIEW_EXPIRED(409, "Collection Purge Preview Expired"),
     COLLECTION_PURGE_CONFIRMATION_INVALID(409, "Collection Purge Confirmation Invalid"),
     COLLECTION_ALREADY_RETIRED(409, "Collection Already Retired"),
+    ALERT_NOTIFICATION_DELIVERY_CONFLICT(
+            409, "Alert Notification Delivery Conflict"),
 
     // ==================== 422 Unprocessable Entity ====================
 

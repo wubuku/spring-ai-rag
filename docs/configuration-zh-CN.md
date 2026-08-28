@@ -932,6 +932,23 @@ rag:
     fallback-scan-interval: ${RAG_API_KEY_EXPIRY_ALERTS_FALLBACK_SCAN_INTERVAL:PT1H}
     fallback-scan-limit: ${RAG_API_KEY_EXPIRY_ALERTS_FALLBACK_SCAN_LIMIT:10000}
     event-retry-attempts: ${RAG_API_KEY_EXPIRY_ALERTS_EVENT_RETRY_ATTEMPTS:3}
+  notifications:
+    enabled: ${RAG_NOTIFICATIONS_ENABLED:false}
+    delivery:
+      enabled: ${RAG_NOTIFICATION_DELIVERY_ENABLED:false}
+      fallback-scan-interval: ${RAG_NOTIFICATION_DELIVERY_FALLBACK_SCAN_INTERVAL:PT1M}
+      worker-concurrency: ${RAG_NOTIFICATION_DELIVERY_WORKER_CONCURRENCY:4}
+      claim-batch-size: ${RAG_NOTIFICATION_DELIVERY_CLAIM_BATCH_SIZE:100}
+      provider-attempt-timeout: ${RAG_NOTIFICATION_DELIVERY_PROVIDER_ATTEMPT_TIMEOUT:PT30S}
+      lease-duration: ${RAG_NOTIFICATION_DELIVERY_LEASE_DURATION:PT2M}
+      max-attempts: ${RAG_NOTIFICATION_DELIVERY_MAX_ATTEMPTS:8}
+      initial-backoff: ${RAG_NOTIFICATION_DELIVERY_INITIAL_BACKOFF:PT30S}
+      max-backoff: ${RAG_NOTIFICATION_DELIVERY_MAX_BACKOFF:PT1H}
+      delivered-retention: ${RAG_NOTIFICATION_DELIVERY_DELIVERED_RETENTION:P30D}
+      failed-retention: ${RAG_NOTIFICATION_DELIVERY_FAILED_RETENTION:P90D}
+      cleanup-interval: ${RAG_NOTIFICATION_DELIVERY_CLEANUP_INTERVAL:PT1H}
+      cleanup-batch-size: ${RAG_NOTIFICATION_DELIVERY_CLEANUP_BATCH_SIZE:1000}
+      max-payload-bytes: ${RAG_NOTIFICATION_DELIVERY_MAX_PAYLOAD_BYTES:65536}
   collection-provisioning:
     enabled: ${RAG_COLLECTION_PROVISIONING_ENABLED:true}
     retention: ${RAG_COLLECTION_PROVISIONING_RETENTION:400d}
@@ -975,6 +992,29 @@ principal 创建、expiry policy 更新和 family revoke 在事务提交后发�
 秒级轮询。PostgreSQL 中同一 principal 最多一条 active 到期告警，阶段为 `WARNING`、
 `CRITICAL` 或 `EXPIRED`；延期出窗口或吊销会自动解决。Email/DingTalk 的默认
 `alertTypes` 包含 `API_PRINCIPAL_EXPIRY`，部署显式配置 allow-list 时以部署值为准。
+
+| 属性 | 默认值 | 说明 |
+|------|--------|------|
+| `rag.notifications.enabled` | `false` | 全局启用 Email/DingTalk route；关闭时不发送通知 |
+| `rag.notifications.delivery.enabled` | `false` | 启用 V58 durable outbox；关闭时保留兼容直发模式，滚动升级需全部实例升级后再开启 |
+| `rag.notifications.delivery.fallback-scan-interval` | `PT1M` | 漏事件、重启和过期 lease 的 Scheduled 兜底；范围 10 秒至 10 分钟 |
+| `rag.notifications.delivery.worker-concurrency` | `4` | 独立有界 worker 并发，范围 1–32 |
+| `rag.notifications.delivery.claim-batch-size` | `100` | 单次 eligible claim 上限，范围 1–1000，且不得小于 worker 并发 |
+| `rag.notifications.delivery.provider-attempt-timeout` | `PT30S` | 单次 provider 调用上限，范围 5–60 秒 |
+| `rag.notifications.delivery.lease-duration` | `PT2M` | delivery lease，范围 30 秒至 15 分钟，且至少为 provider timeout 的两倍 |
+| `rag.notifications.delivery.max-attempts` | `8` | 每个自动/人工 retry 周期增加的 attempt budget，范围 1–20 |
+| `rag.notifications.delivery.initial-backoff` | `PT30S` | 首次 transient retry 退避，范围 1 秒至 10 分钟 |
+| `rag.notifications.delivery.max-backoff` | `PT1H` | 最大退避，不能小于初始值且不超过 24 小时 |
+| `rag.notifications.delivery.delivered-retention` | `P30D` | `DELIVERED` receipt 保留期，范围 1–365 天 |
+| `rag.notifications.delivery.failed-retention` | `P90D` | `FAILED`/`SUPERSEDED` receipt 保留期，范围 7–730 天 |
+| `rag.notifications.delivery.cleanup-interval` | `PT1H` | 有界清理周期，范围 10 分钟至 24 小时 |
+| `rag.notifications.delivery.cleanup-batch-size` | `1000` | 单轮最多清理行数，范围 100–10000 |
+| `rag.notifications.delivery.max-payload-bytes` | `65536` | sanitizer 后 provider payload 上限，范围 4096–1048576 bytes |
+
+durable mode 中，告警与 delivery 在同一 PostgreSQL 事务提交，after-commit Spring Event
+准实时唤醒 worker；Scheduled 不是主消费路径。provider 调用位于事务外，失败通过
+lease/CAS 和有界退避跨重启恢复。语义为 at-least-once，不承诺 exactly-once。receipt
+与 payload 不保存渠道 secret、收件人、业务正文、provider 响应正文或异常堆栈。
 
 | 属性 | 默认值 | 说明 |
 |------|--------|------|

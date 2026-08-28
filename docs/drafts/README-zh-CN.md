@@ -32,7 +32,6 @@
 
 ## 当前活跃规划
 
-- [告警通知 Durable Outbox 与供应商投递回执实施规划](NEXT_HIGH_VALUE_FEATURES_PLAN.md)
-- [配套实施进度](NEXT_HIGH_VALUE_FEATURES_PROGRESS.md)
+当前没有活动规划。下一批方案应在完成代码与文档探索后写入本目录。
 
 已完成、已停止和被替代的材料可从[历史归档](archive/README-zh-CN.md)追溯。

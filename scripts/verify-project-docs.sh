@@ -293,6 +293,7 @@ check_business_client_discoverability() {
         'collectionCreateIdempotencyKey' \
         'Idempotency-Key' \
         '/api/v1/rag/alerts/active' \
+        '/api/v1/rag/alerts/notification-deliveries' \
         'API_PRINCIPAL_EXPIRY' \
         'business-client-binding-preflight.sh' \
         'verify-collection-provisioning.sh' \
@@ -314,8 +315,8 @@ check_project_invariants() {
       | tail -1
   )"
 
-  [[ "$latest_migration" == "57" ]] || {
-    echo "Expected latest Flyway migration V57, found V${latest_migration:-unknown}." >&2
+  [[ "$latest_migration" == "58" ]] || {
+    echo "Expected latest Flyway migration V58, found V${latest_migration:-unknown}." >&2
     return 1
   }
 
@@ -324,7 +325,7 @@ check_project_invariants() {
   rg -q '18081' AGENTS.md docs/developer-reference.md docs/developer-reference-zh-CN.md
   rg -q 'postgresql' AGENTS.md docs/developer-reference.md docs/developer-reference-zh-CN.md
   rg -q '1024' AGENTS.md docs/developer-reference.md docs/developer-reference-zh-CN.md
-  rg -q 'V1.?V57' AGENTS.md docs/developer-reference.md docs/developer-reference-zh-CN.md
+  rg -q 'V1.?V58' AGENTS.md docs/developer-reference.md docs/developer-reference-zh-CN.md
 
   if rg -n -i 'base-url:[[:space:]]*https?://[^[:space:]`]+/v1([/[:space:]`]|$)' \
       AGENTS.md CLAUDE.md README.md README-zh-CN.md docs \
@@ -362,6 +363,7 @@ check_scripts_and_commands() {
       scripts/verify-business-client-readiness.sh \
       scripts/verify-llm-usage-ledger.sh \
       scripts/verify-api-key-expiry-alerts.sh \
+      scripts/verify-alert-notification-delivery.sh \
       scripts/verify-no-pessimistic-locks.sh \
       scripts/run-claude-grok.sh; do
     [[ -x "$script" ]] || {

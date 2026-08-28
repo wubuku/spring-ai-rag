@@ -2,17 +2,31 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
-import { alertsApi, type Alert, type SloConfig, type SilenceSchedule } from '../api/alerts';
+import {
+  alertsApi,
+  type Alert,
+  type AlertNotificationDelivery,
+  type NotificationDeliveryStatus,
+  type NotificationProvider,
+  type SloConfig,
+  type SilenceSchedule,
+} from '../api/alerts';
 import styles from './Alerts.module.css';
 
-type Tab = 'alerts' | 'slo-configs' | 'silence-schedules';
+type Tab =
+  | 'alerts'
+  | 'slo-configs'
+  | 'silence-schedules'
+  | 'notification-deliveries';
 
 export function Alerts() {
   const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get('tab');
   const tab: Tab =
-    tabParam === 'slo-configs' || tabParam === 'silence-schedules'
+    tabParam === 'slo-configs'
+      || tabParam === 'silence-schedules'
+      || tabParam === 'notification-deliveries'
       ? tabParam
       : 'alerts';
   const [showSloForm, setShowSloForm] = useState(false);
@@ -41,6 +55,12 @@ export function Alerts() {
         >
           {t('alerts.silencePlans')}
         </button>
+        <button
+          className={`${styles.tab} ${tab === 'notification-deliveries' ? styles.tabActive : ''}`}
+          onClick={() => setSearchParams({ tab: 'notification-deliveries' })}
+        >
+          {t('alerts.deliveries')}
+        </button>
       </div>
 
       {tab === 'alerts' && <AlertsTab />}
@@ -58,6 +78,7 @@ export function Alerts() {
           onHideForm={() => setShowSilenceForm(false)}
         />
       )}
+      {tab === 'notification-deliveries' && <NotificationDeliveriesTab />}
     </div>
   );
 }
@@ -125,6 +146,219 @@ function formatAlertTime(value: string, fallback: string): string {
   return Number.isFinite(timestamp)
     ? new Date(timestamp).toLocaleString()
     : fallback;
+}
+
+// ==================== Notification Deliveries Tab ====================
+
+const DELIVERY_STATUSES: NotificationDeliveryStatus[] = [
+  'PENDING',
+  'IN_PROGRESS',
+  'RETRY_WAIT',
+  'DELIVERED',
+  'FAILED',
+  'SUPERSEDED',
+];
+
+const DELIVERY_PROVIDERS: NotificationProvider[] = ['EMAIL', 'DINGTALK'];
+
+function NotificationDeliveriesTab() {
+  const { t } = useTranslation();
+  const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const statusValue = searchParams.get('status');
+  const providerValue = searchParams.get('provider');
+  const status = DELIVERY_STATUSES.includes(statusValue as NotificationDeliveryStatus)
+    ? statusValue as NotificationDeliveryStatus
+    : undefined;
+  const provider = DELIVERY_PROVIDERS.includes(providerValue as NotificationProvider)
+    ? providerValue as NotificationProvider
+    : undefined;
+
+  const query = useQuery({
+    queryKey: ['alert-notification-deliveries', status, provider],
+    queryFn: () => alertsApi.listNotificationDeliveries({
+      status,
+      provider,
+      limit: 50,
+    }),
+    refetchInterval: 30_000,
+  });
+  const retryMutation = useMutation({
+    mutationFn: (deliveryId: string) =>
+      alertsApi.retryNotificationDelivery(deliveryId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ['alert-notification-deliveries'],
+      });
+    },
+  });
+
+  const setFilter = (
+    name: 'status' | 'provider',
+    value: string,
+  ) => {
+    const next = new URLSearchParams(searchParams);
+    next.set('tab', 'notification-deliveries');
+    if (value) next.set(name, value);
+    else next.delete(name);
+    setSearchParams(next);
+  };
+
+  if (query.isPending) {
+    return (
+      <div className={styles.loading} aria-live="polite">
+        {t('common.loading')}
+      </div>
+    );
+  }
+
+  if (query.isError || !query.data?.data) {
+    return (
+      <div className={styles.errorState} role="alert">
+        {t('alerts.deliveryLoadFailed')}
+      </div>
+    );
+  }
+
+  const envelope = query.data.data;
+  const modeMessage = !envelope.notificationsEnabled
+    ? t('alerts.notificationsDisabled')
+    : !envelope.durableDeliveryEnabled
+      ? t('alerts.directDeliveryMode')
+      : envelope.configuredProviders.length === 0
+        ? t('alerts.noDeliveryProviders')
+        : null;
+
+  return (
+    <section aria-label={t('alerts.deliveries')}>
+      {modeMessage && (
+        <div className={styles.modeNotice} role="status">
+          {modeMessage}
+        </div>
+      )}
+
+      <div className={styles.filterBar}>
+        <label>
+          <span>{t('alerts.status')}</span>
+          <select
+            aria-label={t('alerts.deliveryStatusFilter')}
+            className={styles.select}
+            value={status ?? ''}
+            onChange={event => setFilter('status', event.target.value)}
+          >
+            <option value="">{t('alerts.all')}</option>
+            {DELIVERY_STATUSES.map(value => (
+              <option key={value} value={value}>{value}</option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span>{t('alerts.provider')}</span>
+          <select
+            aria-label={t('alerts.deliveryProviderFilter')}
+            className={styles.select}
+            value={provider ?? ''}
+            onChange={event => setFilter('provider', event.target.value)}
+          >
+            <option value="">{t('alerts.all')}</option>
+            {DELIVERY_PROVIDERS.map(value => (
+              <option key={value} value={value}>{value}</option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      {retryMutation.isError && (
+        <div className={styles.errorState} role="alert">
+          {t('alerts.deliveryRetryFailed')}
+        </div>
+      )}
+
+      {envelope.items.length === 0 ? (
+        <div className={styles.empty}>{t('alerts.noDeliveries')}</div>
+      ) : (
+        <div className={styles.deliveryTable} role="table">
+          <div className={styles.deliveryHeader} role="row">
+            <span role="columnheader">{t('alerts.alertId')}</span>
+            <span role="columnheader">{t('alerts.provider')}</span>
+            <span role="columnheader">{t('alerts.status')}</span>
+            <span role="columnheader">{t('alerts.attempts')}</span>
+            <span role="columnheader">{t('alerts.nextAttempt')}</span>
+            <span role="columnheader">{t('alerts.lastError')}</span>
+            <span role="columnheader">{t('alerts.updatedAt')}</span>
+            <span role="columnheader">{t('alerts.actions')}</span>
+          </div>
+          {envelope.items.map(delivery => (
+            <NotificationDeliveryRow
+              key={delivery.id}
+              delivery={delivery}
+              retrying={
+                retryMutation.isPending
+                  && retryMutation.variables === delivery.id
+              }
+              onRetry={() => retryMutation.mutate(delivery.id)}
+            />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function NotificationDeliveryRow({
+  delivery,
+  retrying,
+  onRetry,
+}: {
+  delivery: AlertNotificationDelivery;
+  retrying: boolean;
+  onRetry: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <div
+      className={styles.deliveryRow}
+      role="row"
+      aria-label={`${delivery.provider} ${delivery.status} ${delivery.alertId}`}
+    >
+      <span role="cell">{delivery.alertId}</span>
+      <span role="cell">{delivery.provider}</span>
+      <span role="cell">
+        <span className={styles.deliveryStatus} data-status={delivery.status}>
+          {delivery.status}
+        </span>
+      </span>
+      <span role="cell">
+        {delivery.attemptCount}/{delivery.attemptBudget}
+      </span>
+      <span role="cell">
+        {formatOptionalTime(delivery.nextAttemptAt)}
+      </span>
+      <span role="cell">{delivery.lastErrorCode ?? '-'}</span>
+      <span role="cell">{formatOptionalTime(delivery.updatedAt)}</span>
+      <span role="cell">
+        {delivery.status === 'FAILED' ? (
+          <button
+            type="button"
+            className={styles.retryBtn}
+            onClick={onRetry}
+            disabled={retrying}
+            aria-label={t('alerts.retryDelivery', { id: delivery.id })}
+          >
+            {retrying ? t('common.loading') : t('alerts.retry')}
+          </button>
+        ) : '-'}
+      </span>
+    </div>
+  );
+}
+
+function formatOptionalTime(value?: string): string {
+  if (!value) return '-';
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp)
+    ? new Date(timestamp).toLocaleString()
+    : '-';
 }
 
 // ==================== SLO Configs Tab ====================

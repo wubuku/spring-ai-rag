@@ -45,7 +45,7 @@
 | Persistent token/cost observability per model invocation | Shipped in V53 | `BudgetedChatModel` records bounded principal/session/trace attribution for Chat, query transform/expand, summaries, fallbacks, application retries, and AGENT rounds; `GET /api/v1/rag/usage` exposes UTC aggregate usage and configured-cost estimates |
 | Token/cost hard limits, billing, and settlement | Separate future plan | These require authorization, reservation, settlement, cross-instance overspend protection, and crash recovery; they cannot rely directly on a best-effort observability ledger |
 | Management recovery and removal of legacy compatibility | Evaluate before public enablement | Legacy static/query behavior remains a compatibility boundary; operator recovery relies on the environment root |
-| Durable notification outbox / provider delivery receipts | Separate future plan | The V57 PostgreSQL active alert is authoritative, while Email/DingTalk delivery remains best-effort; a process exit after claim may lose that phase's external notification |
+| Durable notification outbox / provider delivery receipts | Shipped in V58 | Alerts and deliveries enqueue in one transaction; after-commit events provide low-latency wake-up with a one-minute Scheduled fallback, while leases/CAS, bounded backoff, stable UUIDs, low-sensitivity operator receipts, and manual retry provide at-least-once delivery across replicas and restarts |
 
 V48 performs a deterministic one-principal-per-credential backfill for rows
 present during migration; it does not guess unprovable family relationships

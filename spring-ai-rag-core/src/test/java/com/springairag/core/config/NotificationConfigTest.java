@@ -50,6 +50,24 @@ class NotificationConfigTest {
     void emailConfig_isNeverNull() {
         NotificationConfig config = new NotificationConfig();
         assertNotNull(config.getEmail());
+        assertNotNull(config.getDelivery());
+        assertFalse(config.getDelivery().isEnabled());
+        assertEquals(java.time.Duration.ofMinutes(1),
+                config.getDelivery().getFallbackScanInterval());
+        assertDoesNotThrow(config.getDelivery()::validate);
+    }
+
+    @Test
+    void durableDeliveryRejectsLeaseShorterThanProviderBudget() {
+        NotificationConfig config = new NotificationConfig();
+        config.getDelivery().setProviderAttemptTimeout(
+                java.time.Duration.ofSeconds(30));
+        config.getDelivery().setLeaseDuration(
+                java.time.Duration.ofSeconds(45));
+
+        assertThrows(
+                IllegalArgumentException.class,
+                config.getDelivery()::validate);
     }
 
     @Test

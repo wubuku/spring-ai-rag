@@ -1,15 +1,16 @@
 # 告警通知 Durable Outbox 与供应商投递回执实施进度
 
-> 对应规划：[NEXT_HIGH_VALUE_FEATURES_PLAN.md](NEXT_HIGH_VALUE_FEATURES_PLAN.md)
+> 对应规划：[2026-08-28_DURABLE_ALERT_NOTIFICATION_DELIVERY_PLAN.md](2026-08-28_DURABLE_ALERT_NOTIFICATION_DELIVERY_PLAN.md)
 > 工作区：`/Users/yangjiefeng/Documents/wubuku/spring-ai-rag`
 > 当前分支：`main`
 > 规划基线：`main@a078babf`
 
 ## 当前状态
 
-- 阶段：规划已收敛，准备建立实施前检查点
+- 阶段：实施与真实联合验收完成，正在执行最终 Git 交付与归档
 - 规划审查计数：`3/3`
-- 实施：未开始
+- 实施：规划检查点 `00341665` 已推送；V58、provider adapter、outbox、worker、
+  query/retry API、普通/managed 告警接入和 Alerts WebUI 已完成
 - worktree：只使用主工作区；未创建额外 worktree，未使用 stash
 
 ## 已完成探索
@@ -158,6 +159,108 @@
 
 ## 下一步
 
-1. 运行文档/链接/diff/密钥门禁；
-2. 提交并推送规划 checkpoint；
-3. 直接在 main 工作区进入 V58 实施。
+1. 实施 V58、配置、provider adapter、outbox repository 和 worker；
+2. 实施 Alerts WebUI receipt tab；
+3. 一次性补齐 PostgreSQL、provider、controller、前端和真实 transport 验收。
+
+## 实施日志
+
+### 后端 durable delivery 主链路
+
+- 新增 V58 delivery ledger、唯一约束、lease/status/attempt 约束和扫描索引。
+- 新增有界 payload sanitizer、稳定 UUID、after-commit Spring Event、独立有界 worker、
+  lease/CAS、退避、人工 retry、retention 和 operator keyset API。
+- Email/DingTalk durable adapter 改为同步单次 attempt；默认关闭时保留原异步三次短重试。
+- 普通告警使用 `saveAndFlush + enqueue`；managed 告警在同事务 enqueue、推进 watermark，
+  阶段升级或解除会 supersede 未开始的旧 delivery。
+- `mvn -q -DskipTests compile` 已通过。
+
+### stale managed 人工重试事务修复
+
+- 时间：2026-08-28
+- 发现：FAILED managed delivery 已过期时，原实现先更新为 `SUPERSEDED`，随后在同一
+  `TransactionTemplate` 内抛出 409，异常会回滚刚写入的终态。
+- 修复：事务内返回 retry outcome 并提交 `SUPERSEDED`，事务外再抛出冲突；正常人工重试
+  与幂等返回语义保持不变。
+- 验证：`AlertNotificationDeliveryPostgresIntegrationTest` 在真实
+  `pgvector/pgvector:pg16` 上从空库执行 Flyway V1–V58，全部 `6/6` 通过；新增断言确认
+  409 后状态为 `SUPERSEDED`、错误码为 `STALE_MANAGED_STATE`、未增加人工重试计数且未发布
+  wake-up event。
+
+### 专项生命周期与前端硬门槛
+
+- 时间：2026-08-28
+- `verify-alert-notification-delivery.sh` 使用隔离 PostgreSQL、真实本地 HTTP provider stub、
+  两个后端实例和真实 WebUI 完成 `9/9` 步生命周期验收。
+- 首次投递由事务提交后的 Spring Event 在 `0s` 内唤醒；`503 -> DELIVERED` 形成恰好两次
+  可审计 attempt，Apache HttpClient 自动重试已显式关闭，单个 ledger attempt 只调用一次
+  provider。
+- 在 provider 阻塞期间终止 lease owner 后，第二实例使用同一 delivery UUID 回收过期 lease
+  并送达；最终 PostgreSQL 中两条 delivery 均为 `DELIVERED`，无残留 lease、无 secret 泄漏。
+- WebUI 生产构建通过；Alerts 与通用页面核心 Mock Playwright `19/19` 通过，仅使用
+  DOM/ARIA、网络响应和 JSON 断言，不使用截图。
+
+### V58 基线、长青文档与首次真实联合验收
+
+- 时间：2026-08-28
+- 首次真实联合门禁发现 9 处 PostgreSQL 集成测试仍硬编码最新 migration 为 V57；已一次性
+  更新为 V58，四组受影响 PostgreSQL 集成矩阵重跑通过。
+- 双语 architecture、project context、configuration、REST API、testing/developer
+  reference、business-client integration、release checklist 与 TODO 已同步 V58 durable
+  delivery 事实；`AGENTS.md`、项目 Skill、索引和文档门禁的 Flyway inventory 已更新。
+- `verify-project-docs.sh` 新增 receipt API 可发现性和专项脚本存在性检查，最终
+  `11/11` 通过。
+- `20260828-durable-real-rerun1` 通过 PostgreSQL、Maven、WebUI、锁策略、双实例、真实
+  WebUI、权限/配额/轮换和真实 Embedding 配置阶段；真实 Chat provider 持续返回
+  `503 no_available_account`，最终 HTTP 504，因此该次真实 Chat 不能计为通过。
+
+### MiniMax 与真实 Embedding 联合验收通过
+
+- 时间：2026-08-28
+- 使用仓库根目录 `.env` 中的 MiniMax Chat 与 SiliconFlow BGE-M3 配置执行
+  `20260828-durable-real-minimax`，完整门禁 **13/13** 通过，证据位于
+  `.verification/managed-api-principals/20260828-durable-real-minimax/summary.md`。
+- PostgreSQL integration matrix、`mvn clean compile test-compile`、全量 Maven、WebUI
+  Vitest **236/236**、TypeScript、生产构建、alignment、核心 Mock Playwright、禁悲观锁、
+  文档和 diff 门禁全部通过。
+- 两实例真实全栈验收覆盖受限 principal、共享 quota、operation capability、staged
+  rotation、真实 WebUI DOM/network 和凭据连续性。
+- 真实 Chat 合同通过，实际触发 MiniMax provider **9** 次；JSON、native SSE、
+  OpenAI-compatible JSON/SSE、幂等 replay、轮换完成/取消和 pending family revoke 均通过。
+- 真实 Embedding、Spring Event 准实时 ASYNC worker、vector Search、KNOWLEDGE Chat、
+  `WARNING -> CRITICAL -> RESOLVED` 告警复用和 durable notification 均通过；最终输出为
+  `event_embedding=true`、`vector_search=true`、`knowledge_chat=true`、
+  `durable_notifications=1`。
+- `git fetch origin --prune` 后确认 `HEAD == origin/main == 00341665`，没有上游提交需要
+  合并；最终文档收口后仍需按同一合并后基线完成复验、提交和推送。
+
+### 最终提交前联合门禁
+
+- 时间：2026-08-28
+- 在确认 `HEAD == origin/main == 00341665` 后，以
+  `20260828-durable-final-precommit` 重跑完整联合门禁，最终 **13/13** 通过；证据位于
+  `.verification/managed-api-principals/20260828-durable-final-precommit/summary.md`。
+- PostgreSQL integration matrix、`mvn clean compile test-compile`、全量 Maven
+  （Core **3240**、Starter **44**，均无失败）、WebUI Vitest **236/236**、TypeScript、
+  production build、alignment、核心 Mock Playwright、禁悲观锁、文档与 diff 门禁全部通过。
+- 双实例真实全栈再次证明 provisioning idempotency、共享 quota、operation capability、
+  staged rotation、凭据连续性、真实 WebUI DOM/network 和只读 principal 不触发 provider。
+- 真实 MiniMax Chat 再次完成 **9** 次 provider 调用；真实 SiliconFlow BGE-M3 Embedding、
+  Spring Event 驱动 ASYNC embedding、vector Search、KNOWLEDGE Chat、
+  `WARNING -> CRITICAL -> RESOLVED` 告警复用和 durable notification 均通过。
+- 最终输出为 `event_embedding=true`、`vector_search=true`、`knowledge_chat=true`、
+  `alert_row_reused=true`、`operator_only=true`、`durable_notifications=1`；验证脚本退出后
+  已完成隔离服务和数据库清理。
+
+## 下一批已捕获的用户工作流问题
+
+以下提醒已进入下一轮规划输入，不能只保留在会话中：
+
+1. PDF 导入 UUID 必须保留为稳定内部身份，但 Files WebUI 不能只显示 UUID；应持久化并
+   展示原始文件名/可读标题，以 UUID 为次要技术标识，并支持按可读名称和 UUID 查找。
+2. `ABTest` 新建实验弹层因使用未定义的 `--color-background` 产生透明背景；下一轮必须
+   全面审计 modal、dialog、popover、menu、toast 和遮罩层，以统一设计令牌、层级、
+   可访问语义、焦点、暗色主题和移动端约束修复，不做单点补丁。
+3. 路由切换会卸载页面，只有少数状态进入 URL；下一轮必须逐页定义可分享 URL 状态、
+   会话级工作状态和不得持久化的敏感/瞬时状态，并自动验证“设置状态 -> 切页 -> 返回”
+   后的恢复行为。

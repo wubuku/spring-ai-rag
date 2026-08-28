@@ -18,6 +18,8 @@ public class NotificationConfig {
     private boolean enabled = false;
     private final List<DingTalkConfig> dingtalk = new ArrayList<>();
     private final EmailConfig email = new EmailConfig();
+    private final RagNotificationDeliveryProperties delivery =
+            new RagNotificationDeliveryProperties();
 
     public boolean isEnabled() {
         return enabled;
@@ -33,6 +35,10 @@ public class NotificationConfig {
 
     public EmailConfig getEmail() {
         return email;
+    }
+
+    public RagNotificationDeliveryProperties getDelivery() {
+        return delivery;
     }
 
     public static class DingTalkConfig {

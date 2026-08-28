@@ -11,6 +11,7 @@ BACKEND_A_PORT="${MANAGED_API_BACKEND_A_PORT:-18181}"
 BACKEND_B_PORT="${MANAGED_API_BACKEND_B_PORT:-18182}"
 FRONTEND_PORT="${MANAGED_API_FRONTEND_PORT:-15181}"
 MOCK_PORT="${MANAGED_API_MOCK_PORT:-4199}"
+NOTIFICATION_STUB_PORT="${MANAGED_API_NOTIFICATION_STUB_PORT:-4299}"
 PG_IMAGE="${TESTCONTAINERS_PG_IMAGE:-pgvector/pgvector:pg16}"
 LATEST_FLYWAY_MIGRATION="$(
   find spring-ai-rag-core/src/main/resources/db/migration \
@@ -20,6 +21,7 @@ LATEST_FLYWAY_MIGRATION="$(
     | tail -1
 )"
 RUN_REAL_LLM=0
+RUN_DURABLE_NOTIFICATIONS=0
 REAL_LLM_PROVIDER="not-requested"
 EMBEDDING_API_KEY="dummy"
 EMBEDDING_BASE_URL="http://127.0.0.1:9"
@@ -30,9 +32,11 @@ EMBEDDING_MODEL_REVISION="v1"
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --with-real-llm) RUN_REAL_LLM=1 ;;
+    --with-durable-notifications) RUN_DURABLE_NOTIFICATIONS=1 ;;
     -h|--help)
-      echo "Usage: $0 [--with-real-llm]"
+      echo "Usage: $0 [--with-real-llm] [--with-durable-notifications]"
       echo "  MANAGED_API_REAL_LLM_PROVIDER=openai|minimax|anthropic"
+      echo "  --with-durable-notifications requires --with-real-llm"
       exit 0
       ;;
     *) echo "Unknown option: $1" >&2; exit 2 ;;
@@ -52,6 +56,7 @@ BACKEND_A_PID=""
 BACKEND_B_PID=""
 FRONTEND_PID=""
 MOCK_PID=""
+NOTIFICATION_STUB_PID=""
 ROOT_KEY=""
 RUNTIME_CLASSPATH=""
 DB_PORT=""
@@ -108,6 +113,7 @@ write_summary() {
     echo "- Counts: ${PASS_COUNT} passed, ${FAIL_COUNT} failed"
     echo "- Real LLM requested: \`${RUN_REAL_LLM}\`"
     echo "- Real LLM provider: \`${REAL_LLM_PROVIDER}\`"
+    echo "- Durable notifications requested: \`${RUN_DURABLE_NOTIFICATIONS}\`"
     echo
     echo "| Step | Status | Exit | Evidence |"
     echo "|------|--------|------|----------|"
@@ -128,6 +134,7 @@ stop_pid() {
 cleanup() {
   stop_pid "$FRONTEND_PID"
   stop_pid "$MOCK_PID"
+  stop_pid "$NOTIFICATION_STUB_PID"
   stop_pid "$BACKEND_A_PID"
   stop_pid "$BACKEND_B_PID"
   if [[ -n "$PG_CONTAINER" ]]; then
@@ -163,6 +170,17 @@ prerequisites() {
       return 1
     fi
   done
+  if [[ "$RUN_DURABLE_NOTIFICATIONS" == "1" ]]; then
+    [[ "$RUN_REAL_LLM" == "1" ]] || {
+      echo "--with-durable-notifications requires --with-real-llm" >&2
+      return 1
+    }
+    if lsof -nP -iTCP:"$NOTIFICATION_STUB_PORT" \
+        -sTCP:LISTEN >/dev/null 2>&1; then
+      echo "Verification port is already in use: ${NOTIFICATION_STUB_PORT}" >&2
+      return 1
+    fi
+  fi
   if [[ "$RUN_REAL_LLM" == "1" && ! -f "$ENV_FILE" ]]; then
     echo "Real LLM environment file does not exist: ${ENV_FILE}" >&2
     return 1
@@ -397,6 +415,39 @@ load_provider_environment() {
 
 start_backend() {
   local port="$1" log="$2"
+  local app_json notifications_enabled=false durable_enabled=false
+  if [[ "$RUN_DURABLE_NOTIFICATIONS" == "1" ]]; then
+    notifications_enabled=true
+    durable_enabled=true
+    app_json="$(jq -nc \
+      --arg webhook \
+        "http://127.0.0.1:${NOTIFICATION_STUB_PORT}/robot/managed" '
+        {
+          rag: {
+            "openai-compatibility": {
+              enabled: true,
+              models: {
+                "rag-default": {
+                  candidates: [],
+                  mode: "PLAIN",
+                  memory: "STATELESS"
+                }
+              }
+            },
+            notifications: {
+              dingtalk: [{
+                name: "managed-verification",
+                enabled: true,
+                "webhook-url": $webhook,
+                "alert-types": ["API_PRINCIPAL_EXPIRY"]
+              }]
+            }
+          }
+        }
+      ')"
+  else
+    app_json='{"rag":{"openai-compatibility":{"enabled":true,"models":{"rag-default":{"candidates":[],"mode":"PLAIN","memory":"STATELESS"}}}}}'
+  fi
   env \
     SPRING_PROFILES_ACTIVE=postgresql \
     SERVER_PORT="$port" \
@@ -413,7 +464,7 @@ start_backend() {
     RAG_CORS_ENABLED=true \
     RAG_CORS_ALLOWED_ORIGINS_0="http://127.0.0.1:${FRONTEND_PORT}" \
     RAG_OPENAI_COMPATIBILITY_ENABLED=true \
-    SPRING_APPLICATION_JSON='{"rag":{"openai-compatibility":{"enabled":true,"models":{"rag-default":{"candidates":[],"mode":"PLAIN","memory":"STATELESS"}}}}}' \
+    SPRING_APPLICATION_JSON="$app_json" \
     RAG_EMBEDDING_API_KEY="$EMBEDDING_API_KEY" \
     RAG_EMBEDDING_BASE_URL="$EMBEDDING_BASE_URL" \
     RAG_EMBEDDING_MODEL="$EMBEDDING_MODEL" \
@@ -423,6 +474,13 @@ start_backend() {
     RAG_EMBEDDING_MODEL_REVISION="$EMBEDDING_MODEL_REVISION" \
     RAG_EMBEDDING_JOBS_POLL_INTERVAL_MS=60000 \
     RAG_API_KEY_EXPIRY_ALERTS_FALLBACK_SCAN_INTERVAL=PT1H \
+    RAG_NOTIFICATIONS_ENABLED="$notifications_enabled" \
+    RAG_NOTIFICATION_DELIVERY_ENABLED="$durable_enabled" \
+    RAG_NOTIFICATION_DELIVERY_FALLBACK_SCAN_INTERVAL=PT1M \
+    RAG_NOTIFICATION_DELIVERY_PROVIDER_ATTEMPT_TIMEOUT=PT5S \
+    RAG_NOTIFICATION_DELIVERY_LEASE_DURATION=PT30S \
+    RAG_NOTIFICATION_DELIVERY_INITIAL_BACKOFF=PT1S \
+    RAG_NOTIFICATION_DELIVERY_MAX_BACKOFF=PT2S \
     java -cp "$RUNTIME_CLASSPATH" com.springairag.core.SpringAiRagApplication \
       > "$log" 2>&1 &
   printf '%s\n' "$!"
@@ -540,6 +598,100 @@ poll_absent_expiry_alert() {
   done
   echo "Expiry alert remained active for principal ${principal}" >&2
   return 1
+}
+
+start_notification_stub() {
+  [[ "$RUN_DURABLE_NOTIFICATIONS" == "1" ]] || return 0
+  node scripts/test-support/alert-notification-provider-stub.mjs \
+    "$NOTIFICATION_STUB_PORT" >"$LOG_DIR/notification-stub.log" 2>&1 &
+  NOTIFICATION_STUB_PID=$!
+  local attempt
+  for attempt in $(seq 1 30); do
+    curl -fsS \
+      "http://127.0.0.1:${NOTIFICATION_STUB_PORT}/health" \
+      >/dev/null 2>&1 && return 0
+    kill -0 "$NOTIFICATION_STUB_PID" >/dev/null 2>&1 || return 1
+    sleep 1
+  done
+  return 1
+}
+
+poll_managed_delivery() {
+  local base="$1" alert_id="$2" version="$3" expected="$4"
+  local output="$5" timeout_seconds="${6:-30}"
+  local deadline=$(( $(date +%s) + timeout_seconds ))
+  local code
+  while (( $(date +%s) <= deadline )); do
+    code="$(root_curl -G \
+      --data-urlencode "alertId=${alert_id}" \
+      --data-urlencode 'provider=DINGTALK' \
+      -o "$output" -w '%{http_code}' \
+      "${base}/api/v1/rag/alerts/notification-deliveries")" || return 1
+    if [[ "$code" == "200" ]] && jq -e \
+        --argjson version "$version" --arg expected "$expected" '
+          .notificationsEnabled == true
+          and .durableDeliveryEnabled == true
+          and .configuredProviders == ["DINGTALK"]
+          and any(.items[];
+            .notificationVersion == $version
+            and .provider == "DINGTALK"
+            and .status == $expected
+            and (. | has("payload") | not)
+            and (. | has("leaseToken") | not)
+            and (. | has("leaseUntil") | not))
+        ' "$output" >/dev/null; then
+      return 0
+    fi
+    sleep 1
+  done
+  echo "Managed delivery ${alert_id}/${version} did not reach ${expected}" >&2
+  return 1
+}
+
+assert_managed_notification_evidence() {
+  local alert_id="$1"
+  local response="$LOG_DIR/private/managed-notification-requests.json"
+  curl -fsS "http://127.0.0.1:${NOTIFICATION_STUB_PORT}/requests" \
+    >"$response" || return 1
+  local delivery_ids
+  delivery_ids="$(docker exec "$PG_CONTAINER" psql -U postgres \
+    -d managed_api_principal_gate -At -c "
+      SELECT string_agg(id::text, ',' ORDER BY notification_version)
+      FROM rag_alert_notification_delivery
+      WHERE alert_id = ${alert_id} AND provider = 'DINGTALK';
+    ")" || return 1
+  IFS=',' read -r warning_id critical_id <<<"$delivery_ids"
+  [[ -n "$warning_id" && -n "$critical_id" ]] || return 1
+  jq -e --arg warningId "$warning_id" --arg criticalId "$critical_id" \
+    --arg root "$ROOT_KEY" '
+      [.requests[] | select(.path == "/robot/managed")] as $requests
+      | ($requests | length) == 2
+      and any($requests[]; .body | contains($warningId))
+      and any($requests[]; .body | contains($criticalId))
+      and all($requests[];
+        ((.body | contains($root)) | not)
+        and ((.body | contains("rag_sk_")) | not)
+        and ((.body | contains("webhook-url")) | not))
+    ' "$response" >/dev/null || return 1
+  local database_facts
+  database_facts="$(docker exec "$PG_CONTAINER" psql -U postgres \
+    -d managed_api_principal_gate -At -F '|' -c "
+      SELECT
+        COUNT(*),
+        COUNT(*) FILTER (WHERE status = 'DELIVERED'),
+        COUNT(DISTINCT notification_version),
+        COUNT(*) FILTER (WHERE lease_token IS NOT NULL),
+        COUNT(*) FILTER (
+          WHERE payload::text LIKE '%${ROOT_KEY}%'
+             OR payload::text LIKE '%rag_sk_%'
+        )
+      FROM rag_alert_notification_delivery
+      WHERE alert_id = ${alert_id} AND provider = 'DINGTALK';
+    ")" || return 1
+  [[ "$database_facts" == "2|2|2|0|0" ]] || {
+    echo "Unexpected managed notification facts: ${database_facts}" >&2
+    return 1
+  }
 }
 
 provider_counter_for_port() {
@@ -1605,6 +1757,15 @@ real_embedding_and_expiry_alert_contract() {
         and .metrics.principalId == $principal
       ) | .id
     ' "$private/real-lifecycle-warning-active.json")"
+  if [[ "$RUN_DURABLE_NOTIFICATIONS" == "1" ]]; then
+    poll_managed_delivery \
+      "$a" "$alert_id" 1 DELIVERED \
+      "$private/real-lifecycle-warning-delivery.json" 30 || return 1
+    (( $(date +%s) - warning_started < 60 )) || {
+      echo "WARNING delivery did not start before notification fallback" >&2
+      return 1
+    }
+  fi
 
   code="$(curl -sS -H "X-API-Key: ${client_key}" \
     -X POST "${a}/api/v1/rag/documents/upsert" \
@@ -1818,6 +1979,15 @@ real_embedding_and_expiry_alert_contract() {
       and $alerts[0].metrics.phase == "CRITICAL"
       and $alerts[0].metrics.policyVersion == 2
     ' "$private/real-lifecycle-critical-active.json" >/dev/null || return 1
+  if [[ "$RUN_DURABLE_NOTIFICATIONS" == "1" ]]; then
+    poll_managed_delivery \
+      "$b" "$alert_id" 2 DELIVERED \
+      "$private/real-lifecycle-critical-delivery.json" 30 || return 1
+    (( $(date +%s) - critical_started < 60 )) || {
+      echo "CRITICAL delivery did not start before notification fallback" >&2
+      return 1
+    }
+  fi
 
   resolved_started="$(date +%s)"
   code="$(root_curl -X PUT \
@@ -1890,6 +2060,9 @@ real_embedding_and_expiry_alert_contract() {
     echo "Unexpected managed alert database fact: ${alert_fact}" >&2
     return 1
   }
+  if [[ "$RUN_DURABLE_NOTIFICATIONS" == "1" ]]; then
+    assert_managed_notification_evidence "$alert_id" || return 1
+  fi
 
   code="$(root_curl -X DELETE "${b}/api/v1/rag/api-keys/${key_id}" \
     -o /dev/null -w '%{http_code}')"
@@ -1898,7 +2071,7 @@ real_embedding_and_expiry_alert_contract() {
     -o /dev/null -w '%{http_code}' "${a}/api/v1/rag/auth/me")"
   assert_code "$code" 401 "real lifecycle credential revoked across instances" || return 1
 
-  echo "real_embedding_alert_contract=PASS event_embedding=true vector_search=true knowledge_chat=true warning_seconds=${warning_elapsed} critical_seconds=${critical_elapsed} resolved_seconds=${resolved_elapsed} alert_row_reused=true operator_only=true"
+  echo "real_embedding_alert_contract=PASS event_embedding=true vector_search=true knowledge_chat=true warning_seconds=${warning_elapsed} critical_seconds=${critical_elapsed} resolved_seconds=${resolved_elapsed} alert_row_reused=true operator_only=true durable_notifications=${RUN_DURABLE_NOTIFICATIONS}"
   echo "real_provider_log_tail:"
   rg 'Embedding job|Chat execution|API principal expiry|Reconciled API principal' \
     "$LOG_DIR/backend-a.log" "$LOG_DIR/backend-b.log" \
@@ -1912,6 +2085,8 @@ fullstack_contract() {
   start_database || return 1
   echo "fullstack_stage=load_provider_environment"
   load_provider_environment || return 1
+  echo "fullstack_stage=start_notification_stub"
+  start_notification_stub || return 1
   echo "fullstack_stage=start_backend_a"
   BACKEND_A_PID="$(start_backend "$BACKEND_A_PORT" "$LOG_DIR/backend-a.log")" || return 1
   wait_backend "$BACKEND_A_PORT" "$BACKEND_A_PID" "$LOG_DIR/backend-a.log" || return 1

@@ -1,14 +1,24 @@
 package com.springairag.core.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.springairag.core.alertdelivery.AlertNotificationAttemptResult;
+import com.springairag.core.alertdelivery.AlertNotificationPayload;
+import com.springairag.core.alertdelivery.AlertNotificationProvider;
 import com.springairag.core.config.NotificationConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.HttpStatusCodeException;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
 
 import javax.crypto.Mac;
@@ -21,6 +31,7 @@ import java.util.Base64;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.CompletableFuture;
+import org.apache.hc.client5.http.impl.classic.HttpClients;
 
 /**
  * DingTalk robot webhook notification service.
@@ -37,7 +48,8 @@ import java.util.concurrent.CompletableFuture;
  * {@code sign = Base64(HMAC-SHA256(secret, "\n" + timestamp))}
  */
 @Service
-public class DingTalkNotificationService implements NotificationService {
+public class DingTalkNotificationService
+        implements NotificationService, AlertNotificationProvider {
 
     private static final Logger log = LoggerFactory.getLogger(DingTalkNotificationService.class);
     private static final String SIGNATURE_ALGORITHM = "HmacSHA256";
@@ -45,13 +57,111 @@ public class DingTalkNotificationService implements NotificationService {
 
     private final NotificationConfig notificationConfig;
     private final RestTemplate restTemplate;
+    private final ObjectMapper objectMapper;
 
-    public DingTalkNotificationService(NotificationConfig notificationConfig, RestTemplateBuilder builder) {
+    public DingTalkNotificationService(
+            NotificationConfig notificationConfig,
+            RestTemplateBuilder builder) {
+        this(notificationConfig, builder, new ObjectMapper(),
+                Duration.ofSeconds(5), Duration.ofSeconds(10));
+    }
+
+    @Autowired
+    public DingTalkNotificationService(
+            NotificationConfig notificationConfig,
+            RestTemplateBuilder builder,
+            ObjectMapper objectMapper) {
+        this(notificationConfig, builder, objectMapper,
+                notificationConfig.getDelivery().getProviderAttemptTimeout(),
+                notificationConfig.getDelivery().getProviderAttemptTimeout());
+    }
+
+    private DingTalkNotificationService(
+            NotificationConfig notificationConfig,
+            RestTemplateBuilder builder,
+            ObjectMapper objectMapper,
+            Duration connectTimeout,
+            Duration readTimeout) {
         this.notificationConfig = notificationConfig;
+        this.objectMapper = objectMapper;
         this.restTemplate = builder
-                .connectTimeout(Duration.ofSeconds(5))
-                .readTimeout(Duration.ofSeconds(10))
+                .requestFactory(() ->
+                        new HttpComponentsClientHttpRequestFactory(
+                                HttpClients.custom()
+                                        .disableAutomaticRetries()
+                                        .build()))
+                .connectTimeout(connectTimeout)
+                .readTimeout(readTimeout)
                 .build();
+    }
+
+    @Override
+    public String provider() {
+        return "DINGTALK";
+    }
+
+    @Override
+    public boolean isRoutedFor(String alertType) {
+        return notificationConfig.isEnabled()
+                && notificationConfig.getDingtalk().stream()
+                .anyMatch(config -> config.isEnabled()
+                        && config.getAlertTypes().contains(alertType));
+    }
+
+    @Override
+    public boolean isConfigured() {
+        return notificationConfig.getDingtalk().stream()
+                .anyMatch(config -> config.isEnabled()
+                        && config.getWebhookUrl() != null
+                        && !config.getWebhookUrl().isBlank());
+    }
+
+    @Override
+    public boolean isCurrentlyAvailable() {
+        return isConfigured();
+    }
+
+    @Override
+    public AlertNotificationAttemptResult deliver(
+            AlertNotificationPayload payload) {
+        if (!isRoutedFor(payload.alertType()) || !isCurrentlyAvailable()) {
+            return AlertNotificationAttemptResult.permanentFailure(
+                    "PERMANENT_CONFIGURATION", null);
+        }
+        AlertNotificationAttemptResult lastPermanent = null;
+        AlertNotificationAttemptResult lastTransient = null;
+        for (NotificationConfig.DingTalkConfig config
+                : notificationConfig.getDingtalk()) {
+            if (!config.isEnabled()
+                    || !config.getAlertTypes().contains(payload.alertType())) {
+                continue;
+            }
+            AlertNotificationAttemptResult result = sendOnce(
+                    config,
+                    buildMarkdownBody(
+                            payload.alertType(),
+                            payload.alertName(),
+                            payload.severity(),
+                            payload.message(),
+                            payload.metrics(),
+                            payload.deliveryId().toString()));
+            if (result.outcome()
+                    == AlertNotificationAttemptResult.Outcome.SUCCESS) {
+                return result;
+            }
+            if (result.outcome()
+                    == AlertNotificationAttemptResult.Outcome.TRANSIENT_FAILURE) {
+                lastTransient = result;
+            } else {
+                lastPermanent = result;
+            }
+        }
+        return lastTransient != null
+                ? lastTransient
+                : lastPermanent != null
+                        ? lastPermanent
+                        : AlertNotificationAttemptResult.permanentFailure(
+                                "PERMANENT_CONFIGURATION", null);
     }
 
     @Override
@@ -90,33 +200,106 @@ public class DingTalkNotificationService implements NotificationService {
     private void sendToDingTalk(NotificationConfig.DingTalkConfig config,
                                  String alertType, String alertName, String severity,
                                  String message, Map<String, Object> metadata) {
-        String url = buildWebhookUrl(config);
-        String body = buildMarkdownBody(alertType, alertName, severity, message, metadata);
-
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
-        HttpEntity<String> request = new HttpEntity<>(body, headers);
-
-        Exception lastException = null;
         for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-            try {
-                restTemplate.postForEntity(url, request, String.class);
+            AlertNotificationAttemptResult result = sendOnce(
+                    config,
+                    buildMarkdownBody(
+                            alertType, alertName, severity,
+                            message, metadata, null));
+            if (result.outcome()
+                    == AlertNotificationAttemptResult.Outcome.SUCCESS) {
                 return;
-            } catch (Exception e) {
-                // Retry: capture exception and attempt exponential backoff before next retry
-                lastException = e;
-                if (attempt < MAX_RETRIES) {
-                    try {
-                        long sleepMs = INITIAL_BACKOFF_MS * (1L << (attempt - 1));
-                        Thread.sleep(sleepMs);
-                    } catch (InterruptedException ie) {
-                        Thread.currentThread().interrupt();
-                        throw new RuntimeException("Interrupted during retry backoff", ie);
-                    }
+            }
+            if (result.outcome()
+                    == AlertNotificationAttemptResult.Outcome.PERMANENT_FAILURE) {
+                throw new IllegalStateException(result.errorCode());
+            }
+            if (attempt < MAX_RETRIES) {
+                try {
+                    long sleepMs = INITIAL_BACKOFF_MS * (1L << (attempt - 1));
+                    Thread.sleep(sleepMs);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(
+                            "Interrupted during retry backoff", interrupted);
                 }
             }
         }
-        throw new RuntimeException("DingTalk API failed after " + MAX_RETRIES + " attempts", lastException);
+        throw new IllegalStateException(
+                "DingTalk API failed after " + MAX_RETRIES + " attempts");
+    }
+
+    private AlertNotificationAttemptResult sendOnce(
+            NotificationConfig.DingTalkConfig config,
+            String body) {
+        if (config.getWebhookUrl() == null
+                || config.getWebhookUrl().isBlank()) {
+            return AlertNotificationAttemptResult.permanentFailure(
+                    "PERMANENT_CONFIGURATION", null);
+        }
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        HttpEntity<String> request = new HttpEntity<>(body, headers);
+        try {
+            ResponseEntity<String> response = restTemplate.postForEntity(
+                    buildWebhookUrl(config), request, String.class);
+            return classifyResponse(
+                    response.getStatusCode().value(), response.getBody(), null);
+        } catch (HttpStatusCodeException error) {
+            return classifyResponse(
+                    error.getStatusCode().value(),
+                    error.getResponseBodyAsString(),
+                    error.getResponseHeaders() == null
+                            ? null
+                            : error.getResponseHeaders().getFirst("Retry-After"));
+        } catch (ResourceAccessException error) {
+            return AlertNotificationAttemptResult.transientFailure(
+                    "TRANSIENT_NETWORK", null, null);
+        } catch (RuntimeException error) {
+            return AlertNotificationAttemptResult.transientFailure(
+                    "TRANSIENT_NETWORK", null, null);
+        }
+    }
+
+    private AlertNotificationAttemptResult classifyResponse(
+            int status,
+            String body,
+            String retryAfter) {
+        if (status == 429) {
+            return AlertNotificationAttemptResult.transientFailure(
+                    "TRANSIENT_RATE_LIMIT", status, retryAfter(retryAfter));
+        }
+        if (status >= 500) {
+            return AlertNotificationAttemptResult.transientFailure(
+                    "TRANSIENT_PROVIDER_5XX", status, null);
+        }
+        if (status < 200 || status >= 300) {
+            return AlertNotificationAttemptResult.permanentFailure(
+                    "PERMANENT_PROVIDER_REJECTED", status);
+        }
+        try {
+            JsonNode root = objectMapper.readTree(body == null ? "{}" : body);
+            JsonNode errorCode = root.get("errcode");
+            if (errorCode != null && errorCode.asInt() != 0) {
+                return AlertNotificationAttemptResult.permanentFailure(
+                        "PERMANENT_PROVIDER_REJECTED", status);
+            }
+            return AlertNotificationAttemptResult.success();
+        } catch (Exception error) {
+            return AlertNotificationAttemptResult.permanentFailure(
+                    "PERMANENT_PROVIDER_REJECTED", status);
+        }
+    }
+
+    private static Duration retryAfter(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return Duration.ofSeconds(Math.max(0, Long.parseLong(value.trim())));
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
     }
 
     String buildWebhookUrl(NotificationConfig.DingTalkConfig config) {
@@ -144,10 +327,26 @@ public class DingTalkNotificationService implements NotificationService {
 
     String buildMarkdownBody(String alertType, String alertName, String severity,
                              String message, Map<String, Object> metadata) {
+        return buildMarkdownBody(
+                alertType, alertName, severity, message, metadata, null);
+    }
+
+    private String buildMarkdownBody(
+            String alertType,
+            String alertName,
+            String severity,
+            String message,
+            Map<String, Object> metadata,
+            String deliveryId) {
         StringBuilder text = new StringBuilder();
         text.append("## ").append(severity).append(" Alert: ").append(alertName).append("\n\n");
         text.append("> **Type:** ").append(alertType).append("\n\n");
         text.append("> **Message:** ").append(message).append("\n\n");
+        if (deliveryId != null) {
+            text.append("> **Delivery ID:** ")
+                    .append(deliveryId)
+                    .append("\n\n");
+        }
 
         if (metadata != null && !metadata.isEmpty()) {
             text.append("### Details\n\n");

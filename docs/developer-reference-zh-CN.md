@@ -19,7 +19,7 @@
 | 真实 LLM E2E 端口 | `18081` |
 | Embedding | SiliconFlow `BAAI/bge-m3` |
 | 向量维度 | `1024` |
-| Flyway | V1–V57 |
+| Flyway | V1–V58 |
 
 OpenAI / Embedding 的 `base-url` **不要带 `/v1`**。Spring AI 会自行追加 `/v1/chat/completions` 或 `/v1/embeddings`。
 
@@ -427,7 +427,7 @@ provider counter。端口冲突时可
 ### 受管 API Principal 到期告警一键验证
 
 ```bash
-# 聚焦后端、V1-V57 PostgreSQL 与前端 Mock 门槛
+# 聚焦后端、V1-V58 PostgreSQL 与前端 Mock 门槛
 API_KEY_EXPIRY_ALERT_VERIFY_PHASE=focused \
 ./scripts/verify-api-key-expiry-alerts.sh
 
@@ -441,6 +441,25 @@ API_KEY_EXPIRY_ALERT_VERIFY_PHASE=focused \
 `pgvector/pgvector:pg16` Testcontainers；也可通过
 `API_PRINCIPAL_EXPIRY_ALERT_IT_JDBC_URL` 等变量指向明确允许清空的一次性数据库。证据写入
 `.verification/api-key-expiry-alerts/<run-id>/`。
+
+### 告警通知 Durable Outbox 一键验证
+
+```bash
+./scripts/verify-alert-notification-delivery.sh
+
+MANAGED_API_REAL_ENV_FILE=.env \
+MANAGED_API_REAL_LLM_PROVIDER=openai \
+./scripts/verify-managed-api-principals.sh \
+  --with-real-llm \
+  --with-durable-notifications
+```
+
+第一条命令使用隔离 PostgreSQL、真实本地 HTTP provider、双后端实例和真实 WebUI，覆盖
+Event 首投、transient retry、单 attempt 单 HTTP 调用、进程退出/过期 lease 恢复、低敏
+receipt 和无截图 DOM/network Playwright。第二条在全部本地门槛通过后再实际调用 `.env`
+中的 Chat/Embedding 服务，并让受管 principal 的 WARNING/CRITICAL 告警经过 V58 durable
+delivery。证据分别位于 `.verification/alert-notification-delivery/<run-id>/` 和
+`.verification/managed-api-principals/<run-id>/`。
 
 <a id="业务服务接入就绪一键验证"></a>
 

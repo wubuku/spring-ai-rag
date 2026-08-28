@@ -119,6 +119,13 @@ before starting the next stage. At minimum, include:
 - current review counter, known issues, next step, and resume entry point;
 - external dependencies or environment limits, but never secrets.
 
+Material reminders, boundaries, and acceptance requirements added by the user
+during execution must also be classified and recorded promptly. Batch-specific
+items belong in the active plan/progress ledger; rules that apply across tasks
+belong in the relevant bilingual evergreen document or project Skill. Chat
+history must not be the only memory source, and an unimplemented reminder must
+not be presented as an already shipped stable fact.
+
 A progress ledger is recovery state, not evergreen architecture truth. After
 delivery, extract stable facts into the relevant bilingual evergreen docs, then
 archive plan/progress according to the [draft lifecycle](drafts/README.md).

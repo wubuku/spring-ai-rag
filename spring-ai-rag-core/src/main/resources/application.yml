@@ -595,29 +595,45 @@ rag:
   #   max-retained: 100             # Max recent slow queries to retain for REST exposure
 
   # Alert notification channels (disabled by default)
-  # When enabled, fired alerts are sent to configured channels asynchronously
-  # notifications:
-  #   enabled: true
-  #   dingtalk:
-  #     - name: default
-  #       webhook-url: https://oapi.dingtalk.com/robot/send?access_token=YOUR_TOKEN
-  #       secret: SEC...            # Optional: DingTalk加签密钥 (机器人安全设置)
-  #       alert-types:              # Only notify for these alert types
-  #         - THRESHOLD_HIGH
-  #         - SLO_BREACH
-  #         - AVAILABILITY
-  #   email:
-  #     enabled: false
-  #     host: smtp.example.com
-  #     port: 587
-  #     username: alerts@example.com
-  #     password: secret
-  #     from: rag-alerts@example.com
-  #     to:
-  #       - admin@example.com
-  #     alert-types:
-  #       - CRITICAL
-  #       - SLO_BREACH
+  # Durable mode persists a delivery receipt before provider I/O. Spring Events
+  # wake the worker after commit; the one-minute scan is recovery-only.
+  notifications:
+    enabled: ${RAG_NOTIFICATIONS_ENABLED:false}
+    delivery:
+      enabled: ${RAG_NOTIFICATION_DELIVERY_ENABLED:false}
+      fallback-scan-interval: ${RAG_NOTIFICATION_DELIVERY_FALLBACK_SCAN_INTERVAL:PT1M}
+      worker-concurrency: ${RAG_NOTIFICATION_DELIVERY_WORKER_CONCURRENCY:4}
+      claim-batch-size: ${RAG_NOTIFICATION_DELIVERY_CLAIM_BATCH_SIZE:100}
+      provider-attempt-timeout: ${RAG_NOTIFICATION_DELIVERY_PROVIDER_ATTEMPT_TIMEOUT:PT30S}
+      lease-duration: ${RAG_NOTIFICATION_DELIVERY_LEASE_DURATION:PT2M}
+      max-attempts: ${RAG_NOTIFICATION_DELIVERY_MAX_ATTEMPTS:8}
+      initial-backoff: ${RAG_NOTIFICATION_DELIVERY_INITIAL_BACKOFF:PT30S}
+      max-backoff: ${RAG_NOTIFICATION_DELIVERY_MAX_BACKOFF:PT1H}
+      delivered-retention: ${RAG_NOTIFICATION_DELIVERY_DELIVERED_RETENTION:P30D}
+      failed-retention: ${RAG_NOTIFICATION_DELIVERY_FAILED_RETENTION:P90D}
+      cleanup-interval: ${RAG_NOTIFICATION_DELIVERY_CLEANUP_INTERVAL:PT1H}
+      cleanup-batch-size: ${RAG_NOTIFICATION_DELIVERY_CLEANUP_BATCH_SIZE:1000}
+      max-payload-bytes: ${RAG_NOTIFICATION_DELIVERY_MAX_PAYLOAD_BYTES:65536}
+    # dingtalk:
+    #   - name: default
+    #     webhook-url: https://oapi.dingtalk.com/robot/send?access_token=YOUR_TOKEN
+    #     secret: SEC...            # Optional DingTalk signature secret
+    #     alert-types:
+    #       - THRESHOLD_HIGH
+    #       - SLO_BREACH
+    #       - AVAILABILITY
+    # email:
+    #   enabled: false
+    #   host: smtp.example.com
+    #   port: 587
+    #   username: alerts@example.com
+    #   password: secret
+    #   from: rag-alerts@example.com
+    #   to:
+    #     - admin@example.com
+    #   alert-types:
+    #     - CRITICAL
+    #     - SLO_BREACH
 
 # ============================================
 # Server Configuration

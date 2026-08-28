@@ -243,7 +243,7 @@ trap finish EXIT
 
 run_step "Prerequisites" require_commands
 run_step "Focused expiry alert backend tests" focused_backend_tests
-run_step "Disposable PostgreSQL V1-V57 lifecycle acceptance" postgres_tests
+run_step "Disposable PostgreSQL V1-V58 lifecycle acceptance" postgres_tests
 run_step "WebUI typecheck Vitest alignment build" webui_checks
 run_step "Alerts Mock Playwright" mock_playwright
 

@@ -1,11 +1,18 @@
 package com.springairag.core.service;
 
+import com.springairag.core.alertdelivery.AlertNotificationAttemptResult;
+import com.springairag.core.alertdelivery.AlertNotificationPayload;
+import com.springairag.core.alertdelivery.AlertNotificationProvider;
 import com.springairag.core.config.NotificationConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.mail.SimpleMailMessage;
+import org.springframework.mail.MailAuthenticationException;
+import org.springframework.mail.MailException;
+import org.springframework.mail.MailParseException;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.javamail.JavaMailSenderImpl;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
@@ -20,7 +27,8 @@ import java.util.concurrent.CompletableFuture;
  * Sends HTML-formatted alert emails to configured recipients.
  */
 @Service
-public class EmailNotificationService implements NotificationService {
+public class EmailNotificationService
+        implements NotificationService, AlertNotificationProvider {
 
     private static final Logger log = LoggerFactory.getLogger(EmailNotificationService.class);
     private static final int MAX_RETRIES = 3;
@@ -33,6 +41,68 @@ public class EmailNotificationService implements NotificationService {
                                    @Autowired(required = false) JavaMailSender mailSender) {
         this.notificationConfig = notificationConfig;
         this.mailSender = mailSender;
+        configureTimeouts();
+    }
+
+    @Override
+    public String provider() {
+        return "EMAIL";
+    }
+
+    @Override
+    public boolean isRoutedFor(String alertType) {
+        NotificationConfig.EmailConfig config = notificationConfig.getEmail();
+        return notificationConfig.isEnabled()
+                && config.isEnabled()
+                && config.getAlertTypes().contains(alertType);
+    }
+
+    @Override
+    public boolean isConfigured() {
+        NotificationConfig.EmailConfig config = notificationConfig.getEmail();
+        return config.isEnabled()
+                && config.getFrom() != null
+                && !config.getFrom().isBlank()
+                && config.getTo() != null
+                && !config.getTo().isEmpty();
+    }
+
+    @Override
+    public boolean isCurrentlyAvailable() {
+        if (!isConfigured() || mailSender == null) {
+            return false;
+        }
+        return !notificationConfig.getDelivery().isEnabled()
+                || mailSender instanceof JavaMailSenderImpl;
+    }
+
+    @Override
+    public AlertNotificationAttemptResult deliver(
+            AlertNotificationPayload payload) {
+        if (!isRoutedFor(payload.alertType()) || !isCurrentlyAvailable()) {
+            return AlertNotificationAttemptResult.permanentFailure(
+                    "PERMANENT_CONFIGURATION", null);
+        }
+        try {
+            sendEmail(
+                    notificationConfig.getEmail(),
+                    payload.alertType(),
+                    payload.alertName(),
+                    payload.severity(),
+                    payload.message(),
+                    payload.metrics(),
+                    payload.deliveryId().toString());
+            return AlertNotificationAttemptResult.success();
+        } catch (MailAuthenticationException | MailParseException error) {
+            return AlertNotificationAttemptResult.permanentFailure(
+                    "PERMANENT_CONFIGURATION", null);
+        } catch (MailException | MessagingException error) {
+            return AlertNotificationAttemptResult.transientFailure(
+                    "TRANSIENT_NETWORK", null, null);
+        } catch (RuntimeException error) {
+            return AlertNotificationAttemptResult.transientFailure(
+                    "TRANSIENT_NETWORK", null, null);
+        }
     }
 
     @Override
@@ -55,7 +125,9 @@ public class EmailNotificationService implements NotificationService {
         Exception lastException = null;
         for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
             try {
-                sendEmail(emailConfig, alertType, alertName, severity, message, metadata);
+                sendEmail(
+                        emailConfig, alertType, alertName,
+                        severity, message, metadata, null);
                 log.info("Email notification sent: alertType={} alertName={} to={}",
                         alertType, alertName, emailConfig.getTo());
                 return CompletableFuture.completedFuture(true);
@@ -99,7 +171,8 @@ public class EmailNotificationService implements NotificationService {
 
     private void sendEmail(NotificationConfig.EmailConfig config,
                            String alertType, String alertName, String severity,
-                           String message, Map<String, Object> metadata) throws MessagingException {
+                           String message, Map<String, Object> metadata,
+                           String deliveryId) throws MessagingException {
         if (mailSender == null) {
             log.warn("JavaMailSender not available, skipping email notification");
             throw new MessagingException("JavaMailSender not configured");
@@ -110,7 +183,9 @@ public class EmailNotificationService implements NotificationService {
         helper.setFrom(config.getFrom());
         helper.setTo(config.getTo().toArray(new String[0]));
         helper.setSubject(buildSubject(severity, alertName));
-        helper.setText(buildHtmlBody(alertType, alertName, severity, message, metadata), true);
+        helper.setText(buildHtmlBody(
+                alertType, alertName, severity,
+                message, metadata, deliveryId), true);
 
         mailSender.send(mimeMessage);
     }
@@ -121,6 +196,17 @@ public class EmailNotificationService implements NotificationService {
 
     String buildHtmlBody(String alertType, String alertName, String severity,
                         String message, Map<String, Object> metadata) {
+        return buildHtmlBody(
+                alertType, alertName, severity, message, metadata, null);
+    }
+
+    private String buildHtmlBody(
+            String alertType,
+            String alertName,
+            String severity,
+            String message,
+            Map<String, Object> metadata,
+            String deliveryId) {
         StringBuilder html = new StringBuilder();
         html.append("<html><body style=\"font-family: Arial, sans-serif;\">");
         html.append("<div style=\"background-color: #");
@@ -133,6 +219,11 @@ public class EmailNotificationService implements NotificationService {
         html.append("<p><strong>Type:</strong> ").append(escapeHtml(alertType)).append("</p>");
         html.append("<p><strong>Severity:</strong> ").append(escapeHtml(severity)).append("</p>");
         html.append("<p><strong>Message:</strong> ").append(escapeHtml(message)).append("</p>");
+        if (deliveryId != null) {
+            html.append("<p><strong>Delivery ID:</strong> ")
+                    .append(escapeHtml(deliveryId))
+                    .append("</p>");
+        }
         html.append("</div>");
 
         if (metadata != null && !metadata.isEmpty()) {
@@ -149,6 +240,20 @@ public class EmailNotificationService implements NotificationService {
         html.append("</div></body></html>");
 
         return html.toString();
+    }
+
+    private void configureTimeouts() {
+        if (!(mailSender instanceof JavaMailSenderImpl sender)) {
+            return;
+        }
+        String timeout = String.valueOf(notificationConfig.getDelivery()
+                .getProviderAttemptTimeout().toMillis());
+        sender.getJavaMailProperties().setProperty(
+                "mail.smtp.connectiontimeout", timeout);
+        sender.getJavaMailProperties().setProperty(
+                "mail.smtp.timeout", timeout);
+        sender.getJavaMailProperties().setProperty(
+                "mail.smtp.writetimeout", timeout);
     }
 
     private String severityColor(String severity) {

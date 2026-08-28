@@ -16,7 +16,7 @@ Release date: `2026-07-21`
 - [x] Helm `version` and `appVersion` are `1.0.0`
 - [x] Docker/Helm default image tag is `1.0.0`
 - [x] Local, Docker, and Helm default port is `8081`
-- [x] Flyway inventory is V1-V57
+- [x] Flyway inventory is V1-V58
 - [x] JSONB structured-record API, payload snapshots, and collection lifecycle are covered
 - [x] `scripts/verify-jsonb-records.sh` records focused backend/database/frontend verification
 - [x] Document PATCH/disable/restore/permanent-delete and external triple identity are covered
@@ -297,15 +297,53 @@ Release date: `2026-07-21`
   Scheduled scan handles only missed events and time-threshold crossings.
 - [x] Every Alerts route is operator-only. The WebUI uses `firedAt`, displays
   the server phase, principal, and expiry, and does not recalculate thresholds.
-- [x] The focused gate covers backend **218/218**, PostgreSQL V1-V57 lifecycle
+- [x] The focused gate covers backend **218/218**, PostgreSQL V1-V58 lifecycle
   **6/6**, WebUI Vitest **234/234**, production build, and Alerts Mock
   Playwright **1/1**.
-- [ ] Complete Maven, WebUI, startup, lock, documentation, diff, shell, and
-  secret gates have passed.
-- [ ] Isolated PostgreSQL plus real LLM/Embedding
-  principal/document/Chat/alert lifecycle acceptance has passed.
-- [ ] The latest `origin/main` has been merged and the full merged-baseline
-  matrix has been rerun with final evidence.
+- [x] Complete Maven, WebUI, startup, lock, documentation, diff, shell, and
+  secret gates passed; the V58 combined run
+  `20260828-durable-final-precommit` supplies the final evidence.
+- [x] Isolated PostgreSQL plus real LLM/Embedding
+  principal/document/Chat/alert lifecycle acceptance passed **13/13** in the
+  same combined run.
+- [x] After `git fetch origin --prune`,
+  `HEAD == origin/main == 00341665`; no upstream change required a merge, and
+  the complete combined matrix passed on that identical code baseline.
+
+### 2026-08-28 Durable Alert Notification Outbox Gates
+
+- [x] V58 adds `rag_alert_notification_delivery`, unique
+  alert/version/provider identity, eligible/expired-lease/query indexes, and
+  status/lease/attempt check constraints.
+- [x] Alerts and deliveries commit in one transaction. An after-commit Spring
+  Event wakes a dedicated bounded worker almost immediately, while the default
+  one-minute Scheduled scan only recovers lost events, restarts, and expired
+  leases.
+- [x] Provider I/O runs outside transactions and one ledger attempt makes one
+  provider call. Apache HttpClient automatic retry is disabled; PostgreSQL
+  attempts/leases/CAS and bounded backoff own cross-restart retry.
+- [x] The operator API and Alerts WebUI support low-sensitivity receipts,
+  filters, cursors, and manual retry without returning payloads, endpoints,
+  recipients, secrets, leases, error bodies, or stack traces.
+- [x] Dedicated real lifecycle run `20260828-rerun2` passed **9/9**: event-first
+  delivery started in `0s`, `503 -> DELIVERED` used exactly two attempts, and
+  after killing the first instance during blocked I/O the second instance
+  recovered the lease with the same UUID; real WebUI DOM/network Playwright
+  also passed.
+- [x] `mvn clean compile test-compile`, full Maven, WebUI Vitest **236/236**,
+  typecheck, production build, alignment, and core Mock Playwright passed.
+- [x] Combined real Chat LLM/Embedding/durable-notification run
+  `20260828-durable-final-precommit` passed **13/13**. Real Chat made **9**
+  MiniMax provider calls; real embedding, event-driven ASYNC processing, vector
+  search, KNOWLEDGE Chat, alert-state reuse, and durable notification all
+  passed.
+- [x] The final combined run also passed the PostgreSQL integration matrix,
+  `mvn clean compile test-compile`, full Maven (Core **3240**, Starter **44**),
+  WebUI Vitest **236/236**, typecheck, production build, alignment, core Mock
+  Playwright, lock, documentation, and diff checks.
+- [x] After `git fetch origin --prune`,
+  `HEAD == origin/main == 00341665`; no upstream change required a merge, and
+  the complete combined matrix passed on that identical code baseline.
 
 ### Final Evidence (2026-07-21)
 

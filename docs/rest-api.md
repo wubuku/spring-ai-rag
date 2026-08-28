@@ -2652,6 +2652,62 @@ the principal resolves it automatically. Responses exclude raw credentials,
 hashes, principal names, Collection allow-lists, quotas, and business payloads.
 The time field is `firedAt`, not `triggeredAt`.
 
+### `GET /api/v1/rag/alerts/notification-deliveries`
+
+Lists V58 durable provider-delivery receipts with keyset pagination. Optional
+parameters:
+
+- `status`: `PENDING`, `IN_PROGRESS`, `RETRY_WAIT`, `DELIVERED`, `FAILED`, or
+  `SUPERSEDED`;
+- `provider`: `EMAIL` or `DINGTALK`;
+- `alertId`: a positive integer;
+- `limit`: 1–100, default 50;
+- `cursor`: the opaque `nextCursor` returned by the previous page and bound to
+  the current filters.
+
+```json
+{
+  "notificationsEnabled": true,
+  "durableDeliveryEnabled": true,
+  "configuredProviders": ["DINGTALK"],
+  "items": [{
+    "id": "8abf1f68-7ed4-4fca-b33e-2c9cb22c8d87",
+    "alertId": 42,
+    "notificationVersion": 2,
+    "provider": "DINGTALK",
+    "status": "DELIVERED",
+    "attemptCount": 2,
+    "attemptBudget": 8,
+    "manualRetryCount": 0,
+    "nextAttemptAt": "2026-08-28T09:00:00+08:00",
+    "lastErrorCode": null,
+    "lastHttpStatus": 200,
+    "lastAttemptAt": "2026-08-28T09:00:31+08:00",
+    "deliveredAt": "2026-08-28T09:00:31+08:00",
+    "createdAt": "2026-08-28T09:00:00+08:00",
+    "updatedAt": "2026-08-28T09:00:31+08:00"
+  }],
+  "limit": 50,
+  "hasMore": false,
+  "nextCursor": null
+}
+```
+
+The three mode fields make an empty page distinguish global notification
+disablement, compatible direct delivery, no configured provider, and durable
+mode with no receipts. Responses exclude provider endpoints, recipients,
+payloads, leases, secrets, error bodies, and stack traces.
+
+### `POST /api/v1/rag/alerts/notification-deliveries/{deliveryId}/retry`
+
+Adds one current configured attempt-budget cycle to a `FAILED` delivery and
+requeues it without resetting `attemptCount`. `PENDING`, `RETRY_WAIT`, and
+`IN_PROGRESS` return the current receipt without duplicate enqueue.
+`DELIVERED`, `SUPERSEDED`, unavailable providers, and stale managed source
+states return `409 ALERT_NOTIFICATION_DELIVERY_CONFLICT`; a stale managed
+receipt is first committed as `SUPERSEDED`. Successful and idempotent responses
+are `200`.
+
 ### `GET /api/v1/rag/alerts/history`
 
 Get alert history with the existing time, severity, and alert-type filters.

@@ -1,5 +1,7 @@
 package com.springairag.core.service;
 
+import com.springairag.core.alertdelivery.AlertNotificationAttemptResult;
+import com.springairag.core.alertdelivery.AlertNotificationPayload;
 import com.springairag.core.config.NotificationConfig;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -12,6 +14,7 @@ import org.springframework.mail.javamail.JavaMailSender;
 import jakarta.mail.internet.MimeMessage;
 import jakarta.mail.MessagingException;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -220,5 +223,29 @@ class EmailNotificationServiceTest {
 
         String infoHtml = emailService.buildHtmlBody("T3", "I", "INFO", "m", null);
         assertTrue(infoHtml.contains("0d6efd")); // blue
+    }
+
+    @Test
+    void durableEmailRejectsUntimeboundedCustomSender() {
+        notificationConfig.getDelivery().setEnabled(true);
+        notificationConfig.getEmail().setEnabled(true);
+        notificationConfig.getEmail().setFrom("alerts@example.com");
+        notificationConfig.getEmail().setTo(
+                java.util.List.of("operator@example.com"));
+        notificationConfig.getEmail().setAlertTypes(
+                java.util.List.of("SLO_BREACH"));
+        EmailNotificationService durable =
+                new EmailNotificationService(notificationConfig, mailSender);
+
+        AlertNotificationAttemptResult result = durable.deliver(
+                new AlertNotificationPayload(
+                        UUID.randomUUID(), "SLO_BREACH", "fixture",
+                        "CRITICAL", "fixture", Map.of(), false));
+
+        assertEquals(
+                AlertNotificationAttemptResult.Outcome.PERMANENT_FAILURE,
+                result.outcome());
+        assertEquals("PERMANENT_CONFIGURATION", result.errorCode());
+        verifyNoInteractions(mailSender);
     }
 }

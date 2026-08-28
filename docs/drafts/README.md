@@ -38,8 +38,8 @@ Active plans are listed here and in `docs/index*`.
 
 ## Current Active Plans
 
-- [Durable alert notification outbox and provider delivery receipts](NEXT_HIGH_VALUE_FEATURES_PLAN.md)
-- [Companion implementation progress](NEXT_HIGH_VALUE_FEATURES_PROGRESS.md)
+There is currently no active plan. The next batch should be added here only
+after the relevant code and documentation have been explored.
 
 Completed, stopped, and superseded materials remain available in the
 [historical archive](archive/README.md).

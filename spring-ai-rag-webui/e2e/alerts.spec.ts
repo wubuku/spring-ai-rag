@@ -94,3 +94,153 @@ test.describe('Managed API principal expiry alerts', () => {
       .toHaveCount(0);
   });
 });
+
+test.describe('Durable alert notification delivery receipts', () => {
+  test('filters low-sensitivity receipts and retries failed delivery', async ({ page }) => {
+    await mockAllApiCalls(page);
+    await page.unroute(/\/api\/v1\/rag\/alerts.*/);
+    const deliveryId = '8abf1f68-7ed4-4fca-b33e-2c9cb22c8d87';
+    await page.route(
+      /\/api\/v1\/rag\/alerts\/notification-deliveries.*/,
+      async route => {
+        const request = route.request();
+        expect(request.headers()['x-api-key']).toBe(MOCK_ROOT_API_KEY);
+        if (request.method() === 'POST') {
+          expect(request.url()).toContain(`/${deliveryId}/retry`);
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+              id: deliveryId,
+              alertId: 42,
+              notificationVersion: 1,
+              provider: 'DINGTALK',
+              status: 'PENDING',
+              attemptCount: 8,
+              attemptBudget: 16,
+              manualRetryCount: 1,
+              nextAttemptAt: '2026-08-28T08:02:00Z',
+              createdAt: '2026-08-28T08:00:00Z',
+              updatedAt: '2026-08-28T08:02:00Z',
+            }),
+          });
+          return;
+        }
+        const url = new URL(request.url());
+        expect(url.searchParams.get('status')).toBe('FAILED');
+        expect(url.searchParams.get('provider')).toBe('DINGTALK');
+        expect(url.searchParams.get('limit')).toBe('50');
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            notificationsEnabled: true,
+            durableDeliveryEnabled: true,
+            configuredProviders: ['DINGTALK'],
+            items: [{
+              id: deliveryId,
+              alertId: 42,
+              notificationVersion: 1,
+              provider: 'DINGTALK',
+              status: 'FAILED',
+              attemptCount: 8,
+              attemptBudget: 8,
+              manualRetryCount: 0,
+              nextAttemptAt: '2026-08-28T08:01:00Z',
+              lastErrorCode: 'TRANSIENT_PROVIDER_5XX',
+              lastHttpStatus: 503,
+              lastAttemptAt: '2026-08-28T08:00:30Z',
+              createdAt: '2026-08-28T08:00:00Z',
+              updatedAt: '2026-08-28T08:01:00Z',
+            }],
+            limit: 50,
+            hasMore: false,
+            nextCursor: null,
+          }),
+        });
+      },
+    );
+
+    const responsePromise = page.waitForResponse(response =>
+      response.url().includes('/notification-deliveries?')
+      && response.request().method() === 'GET',
+    );
+    await openProtectedPage(
+      page,
+      '/webui/alerts?tab=notification-deliveries&status=FAILED&provider=DINGTALK',
+    );
+    const response = await responsePromise;
+    const json = await response.json();
+    expect(json.items[0]).not.toHaveProperty('payload');
+    expect(json.items[0]).not.toHaveProperty('leaseToken');
+    expect(json.items[0]).not.toHaveProperty('endpoint');
+
+    await expect(page.getByRole('table')).toBeVisible();
+    const row = page.getByRole('row', { name: 'DINGTALK FAILED 42' });
+    await expect(row).toContainText('TRANSIENT_PROVIDER_5XX');
+    await expect(page.getByText(/secret|access_token|webhook/i)).toHaveCount(0);
+
+    const retryResponse = page.waitForResponse(candidate =>
+      candidate.url().endsWith(`/${deliveryId}/retry`)
+      && candidate.request().method() === 'POST',
+    );
+    await row.getByRole('button', {
+      name: `Retry delivery ${deliveryId}`,
+    }).click();
+    expect((await retryResponse).status()).toBe(200);
+  });
+
+  for (const fixture of [
+    {
+      name: 'disabled',
+      notificationsEnabled: false,
+      durableDeliveryEnabled: false,
+      configuredProviders: [],
+      message: 'Alert notifications are disabled.',
+    },
+    {
+      name: 'direct',
+      notificationsEnabled: true,
+      durableDeliveryEnabled: false,
+      configuredProviders: ['DINGTALK'],
+      message:
+        'Notifications use compatibility direct delivery; durable receipts are not being created.',
+    },
+    {
+      name: 'no provider',
+      notificationsEnabled: true,
+      durableDeliveryEnabled: true,
+      configuredProviders: [],
+      message: 'Durable delivery is enabled, but no provider is configured.',
+    },
+  ]) {
+    test(`explains ${fixture.name} notification mode`, async ({ page }) => {
+      await mockAllApiCalls(page);
+      await page.unroute(/\/api\/v1\/rag\/alerts.*/);
+      await page.route(
+        /\/api\/v1\/rag\/alerts\/notification-deliveries.*/,
+        route => route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            notificationsEnabled: fixture.notificationsEnabled,
+            durableDeliveryEnabled: fixture.durableDeliveryEnabled,
+            configuredProviders: fixture.configuredProviders,
+            items: [],
+            limit: 50,
+            hasMore: false,
+            nextCursor: null,
+          }),
+        }),
+      );
+
+      await openProtectedPage(
+        page,
+        '/webui/alerts?tab=notification-deliveries',
+      );
+      await expect(page.getByRole('status')).toHaveText(fixture.message);
+      await expect(page.getByText('No notification delivery receipts'))
+        .toBeVisible();
+    });
+  }
+});

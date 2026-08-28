@@ -825,6 +825,7 @@ rag_audit_log           # Audit logs (collection operations)
 | `rag_api_principal` | principal_id, role, allowed_collection_ids, capabilities, policy_version, requests_per_minute, expiry_alert_checked_at | Stable caller owner, authoritative policy, and V57 fair expiry-alert scan cursor |
 | `rag_api_key` | key_id, principal_id, credential_version, key_hash, enabled, retire_at | Versioned credential with at most one current and one bounded retiring version per principal |
 | `rag_alerts` | dedupe_key, condition_state, state_version, notified_version, status, version | Ordinary alerts plus V57 managed conditions; PostgreSQL/CAS converges active dedupe, phase transitions, and notification claims |
+| `rag_alert_notification_delivery` | id, alert_id, notification_version, provider, status, attempt_count, attempt_budget, lease_token, lease_until | V58 durable at-least-once provider delivery ledger with stable UUIDs, uniqueness, leases/CAS, and low-sensitivity receipts |
 | `rag_api_rate_limit_bucket` | principal_id, window_start, request_count | Shared fixed UTC-minute quota bucket |
 | `rag_api_provisioning_operation` | owner_id, idempotency_key_hash, request_fingerprint_sha256, principal_id, completed_at | Successful provisioning replay ledger without raw credentials (V50) |
 | `rag_api_key_rotation` | rotation_id, principal_id, source_credential_id, target_credential_id, expires_at, status | Bounded staged-rotation ledger without raw credentials or header values (V55) |
@@ -861,6 +862,8 @@ rag_audit_log           # Audit logs (collection operations)
   `(run_id, seen_at, external_id)` and
   `(run_id, status, seen_at, external_id)` for bounded unfiltered and
   status-filtered keyset receipt queries
+- `rag_alert_notification_delivery`: unique alert/version/provider identity
+  plus eligible-retry, expired-lease, and provider/status/operator query indexes
 
 ### 5.3 Full-Text Search Configuration
 
@@ -1016,6 +1019,26 @@ V57 also provides managed API-principal expiry conditions:
 - The Alerts control plane is limited to environment root, database ADMIN,
   legacy static, and auth-disabled direct loopback. Ordinary business
   principals are rejected before repository access.
+
+V58 upgrades external Email/DingTalk delivery from in-process best effort to a
+durable outbox:
+
+- The alert fact and matching provider deliveries commit in one transaction.
+  A Spring Event only wakes the bounded worker after commit; the default
+  one-minute Scheduled scan recovers lost events, restarts, and expired leases.
+- Replicas coordinate with uniqueness, lease tokens, conditional DML/CAS, and
+  bounded backoff, without a broker or pessimistic locks. Provider network I/O
+  always runs outside database transactions.
+- Delivery states are `PENDING`, `IN_PROGRESS`, `RETRY_WAIT`, `DELIVERED`,
+  `FAILED`, and `SUPERSEDED`. Semantics are at-least-once; a stable delivery
+  UUID makes rare duplicates traceable.
+- Managed-phase escalation or resolution supersedes older work that has not
+  started. Manual retry preserves cumulative attempt auditing and rechecks the
+  source alert before delivery.
+- Operator APIs and WebUI expose only provider, status, attempts,
+  low-sensitivity error/HTTP codes, and timestamps. The ledger excludes
+  webhook/SMTP secrets, recipients, business payloads, provider response
+  bodies, and stack traces.
 
 ### 7.3 A/B Experiments
 

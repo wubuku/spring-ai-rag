@@ -126,14 +126,14 @@ class AlertServiceImplTest {
         savedAlert.setSeverity("WARNING");
         savedAlert.setStatus("ACTIVE");
 
-        when(alertRepository.save(any(RagAlert.class))).thenReturn(savedAlert);
+        when(alertRepository.saveAndFlush(any(RagAlert.class))).thenReturn(savedAlert);
 
         Long alertId = alertService.fireAlert(
                 "THRESHOLD_HIGH", "High Latency Alert", "P95 exceeds 2000ms",
                 "WARNING", Map.of("latency", 2500));
 
         assertEquals(42L, alertId);
-        verify(alertRepository).save(argThat(alert ->
+        verify(alertRepository).saveAndFlush(argThat(alert ->
                 "THRESHOLD_HIGH".equals(alert.getAlertType()) &&
                 "WARNING".equals(alert.getSeverity()) &&
                 "ACTIVE".equals(alert.getStatus())
@@ -145,7 +145,7 @@ class AlertServiceImplTest {
     void fireAlert_sendsNotification() {
         RagAlert savedAlert = new RagAlert();
         savedAlert.setId(1L);
-        when(alertRepository.save(any(RagAlert.class))).thenReturn(savedAlert);
+        when(alertRepository.saveAndFlush(any(RagAlert.class))).thenReturn(savedAlert);
 
         alertService.fireAlert("SLO_BREACH", "P99 Latency", "P99 exceeded",
                 "CRITICAL", Map.of("p99_latency_ms", 5500));
@@ -501,12 +501,12 @@ class AlertServiceImplTest {
         RagAlert savedAlert = new RagAlert();
         savedAlert.setId(1L);
 
-        when(alertRepository.save(any(RagAlert.class))).thenReturn(savedAlert);
+        when(alertRepository.saveAndFlush(any(RagAlert.class))).thenReturn(savedAlert);
 
         Map<String, Object> metrics = Map.of("latency", 3000, "p95", 2500);
         alertService.fireAlert("SLO_BREACH", "Latency SLO", "P95 exceeded", "CRITICAL", metrics);
 
-        verify(alertRepository).save(argThat(alert ->
+        verify(alertRepository).saveAndFlush(argThat(alert ->
                 "SLO_BREACH".equals(alert.getAlertType()) &&
                 "Latency SLO".equals(alert.getAlertName()) &&
                 "P95 exceeded".equals(alert.getMessage()) &&

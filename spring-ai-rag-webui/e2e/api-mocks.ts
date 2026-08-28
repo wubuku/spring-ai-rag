@@ -877,7 +877,17 @@ export async function mockAllApiCalls(page: Page) {
   // Mock alerts endpoints
   page.route(/\/api\/v1\/rag\/alerts.*/, route => {
     const pathname = new URL(route.request().url()).pathname;
-    const body = pathname.endsWith('/active')
+    const body = pathname.endsWith('/notification-deliveries')
+      ? {
+          notificationsEnabled: true,
+          durableDeliveryEnabled: true,
+          configuredProviders: ['DINGTALK'],
+          items: [],
+          limit: 50,
+          hasMore: false,
+          nextCursor: null,
+        }
+      : pathname.endsWith('/active')
       || pathname.endsWith('/slos/configs')
       || pathname.endsWith('/silence-schedules')
       ? []

@@ -1,6 +1,10 @@
 package com.springairag.core.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.springairag.core.alertdelivery.AlertNotificationAttemptResult;
+import com.springairag.core.alertdelivery.AlertNotificationPayload;
 import com.springairag.core.config.NotificationConfig;
+import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -13,8 +17,12 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.client.RestTemplate;
 
 import java.time.Duration;
+import java.net.InetSocketAddress;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -36,6 +44,8 @@ class DingTalkNotificationServiceTest {
 
     @BeforeEach
     void setUp() {
+        when(restTemplateBuilder.requestFactory(
+                any(Supplier.class))).thenReturn(restTemplateBuilder);
         when(restTemplateBuilder.connectTimeout(Duration.ofSeconds(5))).thenReturn(restTemplateBuilder);
         when(restTemplateBuilder.readTimeout(Duration.ofSeconds(10))).thenReturn(restTemplateBuilder);
         when(restTemplateBuilder.build()).thenReturn(restTemplate);
@@ -211,6 +221,57 @@ class DingTalkNotificationServiceTest {
         assertTrue(body.contains("\\\""), "Body should contain escaped quote: " + body);
     }
 
+    @Test
+    void durableAttemptDoesNotUseHttpClientAutomaticRetry() throws Exception {
+        HttpServer server = HttpServer.create(
+                new InetSocketAddress("127.0.0.1", 0), 0);
+        AtomicInteger calls = new AtomicInteger();
+        server.createContext("/robot", exchange -> {
+            calls.incrementAndGet();
+            exchange.getRequestBody().readAllBytes();
+            byte[] response = "{\"errcode\":503}".getBytes();
+            exchange.sendResponseHeaders(503, response.length);
+            exchange.getResponseBody().write(response);
+            exchange.close();
+        });
+        server.start();
+        try {
+            NotificationConfig config = new NotificationConfig();
+            config.setEnabled(true);
+            config.getDelivery().setEnabled(true);
+            NotificationConfig.DingTalkConfig route =
+                    new NotificationConfig.DingTalkConfig();
+            route.setWebhookUrl(
+                    "http://127.0.0.1:" + server.getAddress().getPort()
+                            + "/robot");
+            route.setAlertTypes(List.of("SLO_BREACH"));
+            config.getDingtalk().add(route);
+            DingTalkNotificationService realService =
+                    new DingTalkNotificationService(
+                            config,
+                            new RestTemplateBuilder(),
+                            new ObjectMapper());
+
+            AlertNotificationAttemptResult result = realService.deliver(
+                    new AlertNotificationPayload(
+                            UUID.randomUUID(),
+                            "SLO_BREACH",
+                            "fixture",
+                            "CRITICAL",
+                            "fixture",
+                            Map.of(),
+                            false));
+
+            assertEquals(
+                    AlertNotificationAttemptResult.Outcome.TRANSIENT_FAILURE,
+                    result.outcome());
+            assertEquals(503, result.httpStatus());
+            assertEquals(1, calls.get());
+        } finally {
+            server.stop(0);
+        }
+    }
+
     // --- sendAlert tests ---
 
     @Test
@@ -365,6 +426,57 @@ class DingTalkNotificationServiceTest {
                 any(HttpEntity.class),
                 eq(String.class)
         );
+    }
+
+    @Test
+    void durableAttemptClassifiesProvider5xxWithoutInternalRetry() {
+        when(notificationConfig.isEnabled()).thenReturn(true);
+        NotificationConfig.DingTalkConfig config =
+                new NotificationConfig.DingTalkConfig();
+        config.setWebhookUrl("https://example.com/hook");
+        config.setAlertTypes(List.of("SLO_BREACH"));
+        when(notificationConfig.getDingtalk()).thenReturn(List.of(config));
+        when(restTemplate.postForEntity(
+                anyString(), any(HttpEntity.class), eq(String.class)))
+                .thenReturn(new ResponseEntity<>(
+                        "{\"errcode\":0}",
+                        HttpStatus.SERVICE_UNAVAILABLE));
+
+        AlertNotificationAttemptResult result = service.deliver(
+                new AlertNotificationPayload(
+                        UUID.randomUUID(), "SLO_BREACH", "fixture",
+                        "CRITICAL", "fixture", Map.of(), false));
+
+        assertEquals(
+                AlertNotificationAttemptResult.Outcome.TRANSIENT_FAILURE,
+                result.outcome());
+        assertEquals("TRANSIENT_PROVIDER_5XX", result.errorCode());
+        verify(restTemplate, times(1)).postForEntity(
+                anyString(), any(HttpEntity.class), eq(String.class));
+    }
+
+    @Test
+    void durableAttemptRejectsBusinessErrorAsPermanent() {
+        when(notificationConfig.isEnabled()).thenReturn(true);
+        NotificationConfig.DingTalkConfig config =
+                new NotificationConfig.DingTalkConfig();
+        config.setWebhookUrl("https://example.com/hook");
+        config.setAlertTypes(List.of("SLO_BREACH"));
+        when(notificationConfig.getDingtalk()).thenReturn(List.of(config));
+        when(restTemplate.postForEntity(
+                anyString(), any(HttpEntity.class), eq(String.class)))
+                .thenReturn(ResponseEntity.ok(
+                        "{\"errcode\":310000,\"errmsg\":\"rejected\"}"));
+
+        AlertNotificationAttemptResult result = service.deliver(
+                new AlertNotificationPayload(
+                        UUID.randomUUID(), "SLO_BREACH", "fixture",
+                        "CRITICAL", "fixture", Map.of(), false));
+
+        assertEquals(
+                AlertNotificationAttemptResult.Outcome.PERMANENT_FAILURE,
+                result.outcome());
+        assertEquals("PERMANENT_PROVIDER_REJECTED", result.errorCode());
     }
 
     @Test

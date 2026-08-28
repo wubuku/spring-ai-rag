@@ -1,10 +1,10 @@
 # 告警通知 Durable Outbox 与供应商投递回执实施规划
 
-> 状态：规划已通过连续三轮无修改审查，待实施
+> 状态：实施与真实联合验收已完成，待归档
 > 日期：2026-08-27
 > 当前基线：`main@a078babf`
-> 配套进度：[NEXT_HIGH_VALUE_FEATURES_PROGRESS.md](NEXT_HIGH_VALUE_FEATURES_PROGRESS.md)
-> 交付规则：[规划、实施与验收工作流](../delivery-workflow-zh-CN.md)
+> 配套进度：[2026-08-28_DURABLE_ALERT_NOTIFICATION_DELIVERY_PROGRESS.md](2026-08-28_DURABLE_ALERT_NOTIFICATION_DELIVERY_PROGRESS.md)
+> 交付规则：[规划、实施与验收工作流](../../delivery-workflow-zh-CN.md)
 
 ## 1. 问题、价值与本轮决策
 
@@ -51,9 +51,9 @@ credential 到期、SLO breach 和人工告警而言，漏发会把已经检测�
 
 ### 2.1 告警持久化与到期条件
 
-- [AlertServiceImpl.java](../../spring-ai-rag-core/src/main/java/com/springairag/core/service/AlertServiceImpl.java)
+- [AlertServiceImpl.java](../../../spring-ai-rag-core/src/main/java/com/springairag/core/service/AlertServiceImpl.java)
   在 `@Transactional fireAlert` 中保存 `RagAlert`，然后直接调用所有 `NotificationService`；
-- [ApiPrincipalExpiryAlertService.java](../../spring-ai-rag-core/src/main/java/com/springairag/core/apikeyalert/ApiPrincipalExpiryAlertService.java)
+- [ApiPrincipalExpiryAlertService.java](../../../spring-ai-rag-core/src/main/java/com/springairag/core/apikeyalert/ApiPrincipalExpiryAlertService.java)
   在短事务中创建/更新 managed alert、推进 `notified_version`，事务返回后调用 provider；
 - V57 的 `state_version` 从 1 开始表示 managed phase generation，普通历史告警保持
   `state_version=0`；

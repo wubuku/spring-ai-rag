@@ -1,17 +1,27 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { Alerts } from './Alerts';
 
 const mockUseQuery = vi.fn();
+const mockMutate = vi.fn();
+const mockInvalidateQueries = vi.fn();
 
 vi.mock('@tanstack/react-query', () => ({
   useQuery: (...args: unknown[]) => mockUseQuery(...args),
+  useMutation: () => ({
+    mutate: mockMutate,
+    isPending: false,
+    isError: false,
+  }),
+  useQueryClient: () => ({
+    invalidateQueries: mockInvalidateQueries,
+  }),
 }));
 
 describe('Alerts', () => {
-  const renderAlerts = () => render(
-    <MemoryRouter>
+  const renderAlerts = (path = '/alerts') => render(
+    <MemoryRouter initialEntries={[path]}>
       <Alerts />
     </MemoryRouter>,
   );
@@ -100,5 +110,77 @@ describe('Alerts', () => {
     renderAlerts();
     expect(screen.getByText('alerts.triggeredAt: alerts.timeUnavailable')).toBeInTheDocument();
     expect(screen.queryByText(/Invalid Date/)).not.toBeInTheDocument();
+  });
+
+  it('shows durable delivery mode, filters, receipts and retry action', () => {
+    mockUseQuery.mockReturnValue({
+      data: {
+        data: {
+          notificationsEnabled: true,
+          durableDeliveryEnabled: true,
+          configuredProviders: ['DINGTALK'],
+          items: [{
+            id: 'delivery-1',
+            alertId: 42,
+            notificationVersion: 1,
+            provider: 'DINGTALK',
+            status: 'FAILED',
+            attemptCount: 8,
+            attemptBudget: 8,
+            manualRetryCount: 0,
+            nextAttemptAt: '2026-08-28T08:00:00Z',
+            lastErrorCode: 'TRANSIENT_PROVIDER_5XX',
+            createdAt: '2026-08-28T08:00:00Z',
+            updatedAt: '2026-08-28T08:01:00Z',
+          }],
+          limit: 50,
+          hasMore: false,
+        },
+      },
+      isPending: false,
+      isError: false,
+    });
+
+    renderAlerts(
+      '/alerts?tab=notification-deliveries&status=FAILED&provider=DINGTALK',
+    );
+
+    expect(screen.getByRole('table')).toBeInTheDocument();
+    expect(screen.getByRole('combobox', {
+      name: 'alerts.deliveryStatusFilter',
+    })).toHaveValue('FAILED');
+    expect(screen.getByRole('combobox', {
+      name: 'alerts.deliveryProviderFilter',
+    })).toHaveValue('DINGTALK');
+    expect(screen.getByText('TRANSIENT_PROVIDER_5XX')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', {
+      name: 'alerts.retryDelivery',
+    }));
+    expect(mockMutate).toHaveBeenCalledWith('delivery-1');
+    expect(screen.queryByText(/payload/i)).not.toBeInTheDocument();
+  });
+
+  it('distinguishes direct compatibility mode from an empty durable ledger', () => {
+    mockUseQuery.mockReturnValue({
+      data: {
+        data: {
+          notificationsEnabled: true,
+          durableDeliveryEnabled: false,
+          configuredProviders: ['DINGTALK'],
+          items: [],
+          limit: 50,
+          hasMore: false,
+        },
+      },
+      isPending: false,
+      isError: false,
+    });
+
+    renderAlerts('/alerts?tab=notification-deliveries');
+
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'alerts.directDeliveryMode',
+    );
+    expect(screen.getByText('alerts.noDeliveries')).toBeInTheDocument();
   });
 });

@@ -2,6 +2,7 @@ package com.springairag.core.apikeyalert;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.springairag.core.alertdelivery.AlertNotificationOutboxService;
 import com.springairag.core.config.RagApiKeyExpiryAlertProperties;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.service.AlertService;
@@ -9,6 +10,7 @@ import com.springairag.core.service.NotificationService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.env.Environment;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -46,6 +48,7 @@ public class ApiPrincipalExpiryAlertService {
     private final ObjectMapper objectMapper;
     private final AlertService alertService;
     private final List<NotificationService> notificationServices;
+    private final AlertNotificationOutboxService notificationOutboxService;
     private final ApiPrincipalExpiryAlertMetrics metrics;
     private final ZoneId timeZone;
 
@@ -58,6 +61,22 @@ public class ApiPrincipalExpiryAlertService {
             List<NotificationService> notificationServices,
             ApiPrincipalExpiryAlertMetrics metrics,
             Environment environment) {
+        this(jdbcTemplate, transactionManager, ragProperties, objectMapper,
+                alertServices, notificationServices, null, metrics, environment);
+    }
+
+    @Autowired
+    public ApiPrincipalExpiryAlertService(
+            JdbcTemplate jdbcTemplate,
+            PlatformTransactionManager transactionManager,
+            RagProperties ragProperties,
+            ObjectMapper objectMapper,
+            ObjectProvider<AlertService> alertServices,
+            List<NotificationService> notificationServices,
+            @Autowired(required = false)
+            AlertNotificationOutboxService notificationOutboxService,
+            ApiPrincipalExpiryAlertMetrics metrics,
+            Environment environment) {
         this.jdbcTemplate = jdbcTemplate;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
         this.properties = ragProperties.getApiKeyExpiryAlerts();
@@ -67,6 +86,7 @@ public class ApiPrincipalExpiryAlertService {
         this.notificationServices = notificationServices == null
                 ? List.of()
                 : List.copyOf(notificationServices);
+        this.notificationOutboxService = notificationOutboxService;
         this.metrics = metrics;
         this.timeZone = ZoneId.of(environment.getProperty(
                 "spring.task.scheduling.timezone", "Asia/Shanghai"));
@@ -393,6 +413,9 @@ public class ApiPrincipalExpiryAlertService {
         if (updated != 1) {
             throw new ConcurrentReconcileException();
         }
+        if (notificationOutboxService != null) {
+            notificationOutboxService.supersedeManaged(active.id());
+        }
         return Outcome.RESOLVED;
     }
 
@@ -401,6 +424,17 @@ public class ApiPrincipalExpiryAlertService {
         if (write.notifiedVersion() >= write.stateVersion()
                 || isSilenced()) {
             return null;
+        }
+        if (notificationOutboxService != null
+                && notificationOutboxService.isDurableEnabled()) {
+            notificationOutboxService.enqueueManaged(
+                    write.id(),
+                    write.stateVersion(),
+                    ALERT_TYPE,
+                    ALERT_NAME,
+                    projection.severity(),
+                    projection.message(),
+                    projection.metrics());
         }
         List<Long> versions = jdbcTemplate.query("""
                 UPDATE rag_alerts
@@ -418,6 +452,10 @@ public class ApiPrincipalExpiryAlertService {
                 write.version());
         if (versions.isEmpty()) {
             throw new ConcurrentReconcileException();
+        }
+        if (notificationOutboxService != null
+                && notificationOutboxService.isDurableEnabled()) {
+            return null;
         }
         return new NotificationAttempt(
                 projection.severity(),
