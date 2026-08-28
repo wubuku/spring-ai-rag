@@ -3,9 +3,10 @@
 > **状态**：规划连续三轮无修改审查已达 `3/3`；可直接实施
 > **日期**：2026-08-28
 > **稳定代码基线**：`main@dae60044`
+> **规划 checkpoint**：`main@495e7fce`
 > **实施授权**：用户已授权规划完成后直接实施
 > **规划位置**：当前主工作区 `main`
-> **实施分支**：规划提交推送后，在同一工作区切换到 `feature/webui-unified-design-language`
+> **实施位置**：同一工作区的 `feature/webui-unified-design-language` 专用分支
 > **未来进度文档**：实施开始时创建 `WEBUI_UNIFIED_DESIGN_LANGUAGE_PROGRESS.md`
 > **交付规则**：[规划、实施与验收工作流](../delivery-workflow-zh-CN.md)
 > **既有长青约束**：[WebUI 水平对齐指南](../webui-alignment-guidelines-zh-CN.md)
@@ -246,8 +247,8 @@ App Shell
 
 | 事项 | 冻结默认 | 理由与可逆边界 |
 |---|---|---|
-| 实施起点 | 规划 `3/3` 后先在 `main` 提交并推送规划；只有用户另行指示后才开始实施 | 本轮只交付规划并暂停，不能把早先的实施意图覆盖最新边界 |
-| 开发位置 | 从届时最新 `origin/main` 创建 `codex/webui-design-language-20260828` 专用分支和隔离 worktree | 用户已明确规划在 main、实施在隔离 worktree；开始前仍需检查分支名和文件所有权碰撞 |
+| 实施起点 | 规划重新达到 `3/3` 后先在 `main` 提交并推送修正，再让实施分支基于最新 `origin/main` | 用户已授权直接实施；规划先落到主线并建立保护 checkpoint |
+| 开发位置 | 当前工作区切换到 `feature/webui-unified-design-language` 专用分支 | 用户未要求并行开发，不创建额外 worktree |
 | 视觉方向 | 安静、紧凑、技术工作台 | 符合管理后台和当前产品气质 |
 | 主题 | 保持 light/dark/system，一套 palette | 不制造第二套页面 CSS 或主题维度 |
 | token source | `spring-ai-rag-webui/design-tokens/tokens.json` | 结构化、可生成、可校验 |
@@ -479,12 +480,13 @@ type ResolvedTheme = 'light' | 'dark';
 
 动作：
 
-1. 本轮规划 `3/3` 后在 `main` 提交并推送规划与归档，确认 `main == origin/main`，随后暂停；
-2. 用户另行指示实施后，fetch 最新 `origin/main`，检查所有 worktree/分支的未提交文件与同名任务，
-   不覆盖、不 stash、不吸收无关 WIP；
+1. 规划重新达到 `3/3` 后在 `main` 提交并推送修正，确认 `main == origin/main`；
+2. 检查当前工作区的未提交文件与同名任务，不覆盖、不 stash、不遗漏已有 WIP；如发现外部
+   并行修改则按文件所有权避让；
 3. 重新生成本规划第 3 节的量化基线；如事实影响方案，先在 main 修订规划并重新执行规划 `3/3`；
-4. 从最新 `origin/main` 创建 `codex/webui-design-language-20260828` 专用分支和隔离 worktree；
-5. 在隔离 worktree 创建进度文档，记录基线 SHA、并行工作区、端口和验证命令。
+4. 在同一工作区切换到 `feature/webui-unified-design-language`，将其快进或合并到最新
+   `origin/main`；
+5. 创建进度文档，记录基线 SHA、工作区、端口和验证命令。
 
 退出条件：已有 WIP 全部可追溯；没有未处理的文件所有权冲突；规划与最新 main 一致。
 
@@ -767,4 +769,8 @@ type ResolvedTheme = 'light' | 'dark';
 | 2026-08-28 | 技术可实施性审查 | generated token CSS 导入顺序未冻结；替换 checker 可能破坏现有 package script 调用者 | 固定 `tokens.css` → `global.css`；保留 `check:design-tokens` 兼容入口并让 lint 聚合新门禁；计数 0 |
 | 2026-08-28 | 债务模型审查 | baseline 文件名只表达 color，但方案实际追踪 motion、typography、CSS ownership 和 alias | 统一为 `design-debt-baseline.json`，以 violation kind 覆盖全部存量设计债务；计数 0 |
 | 2026-08-28 | 可访问交互审查 | Tabs 若只共享样式/role，会让键盘行为继续散落并可能违反 ARIA pattern | 共享 Tabs 统一 roving tabindex 与方向键/Home/End；页面只拥有受控值、URL 和数据；计数 0 |
-| 2026-08-28 | 并发内容漂移审查 | 实施授权/工作区策略被并发改成“直接实施、当前工作区切分支”，且 Slice 2/3 残留旧术语 | 恢复“本轮只规划并暂停”；未来实施固定使用最新 main 的隔离 worktree；统一 design debt/Tabs 术语；计数 0 |
+| 2026-08-28 | 并发内容漂移审查 | 并发流程把最新的“直接实施、单工作区特性分支”边界误改为“暂停、隔离 worktree” | 恢复最新用户授权和单工作区策略；保留 design debt、Tabs、导入顺序等有效技术改进；计数 0 |
+| 2026-08-28 15:26 +08:00 | 修正后第 1 轮：现状、碰撞、量化基线与范围边界 | 无 | 未修改规划；计数 1 |
+| 2026-08-28 15:26 +08:00 | 修正后第 2 轮：token、主题、primitive、CSS 所有权与迁移顺序 | 无 | 未修改规划；计数 2 |
+| 2026-08-28 15:26 +08:00 | 修正后第 3 轮：验收矩阵、真实服务、回退与 Git 生命周期 | 无 | 未修改规划；计数 3，允许进入实施 |
+| 2026-08-28 | Git 并发审查 | 并行流程提前把规划初稿提交并推送为 `main@495e7fce`，其中仍含旧授权表述 | 确认该提交仅改文档、WebUI 代码仍以 `dae60044` 为基线；保留远端历史并以纠正提交交付最终规划；计数 0 |
