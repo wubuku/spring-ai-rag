@@ -826,6 +826,7 @@ rag_audit_log           # Audit logs (collection operations)
 | `rag_api_key` | key_id, principal_id, credential_version, key_hash, enabled, retire_at | Versioned credential with at most one current and one bounded retiring version per principal |
 | `rag_alerts` | dedupe_key, condition_state, state_version, notified_version, status, version | Ordinary alerts plus V57 managed conditions; PostgreSQL/CAS converges active dedupe, phase transitions, and notification claims |
 | `rag_alert_notification_delivery` | id, alert_id, notification_version, provider, status, attempt_count, attempt_budget, lease_token, lease_until | V58 durable at-least-once provider delivery ledger with stable UUIDs, uniqueness, leases/CAS, and low-sensitivity receipts |
+| `fs_import_batches` | import_id, source_type, original_filename, display_name, entry_path, original_path, file_count | V59 readable PDF-import metadata anchored to the entry artifact while UUID-backed paths remain stable |
 | `rag_api_rate_limit_bucket` | principal_id, window_start, request_count | Shared fixed UTC-minute quota bucket |
 | `rag_api_provisioning_operation` | owner_id, idempotency_key_hash, request_fingerprint_sha256, principal_id, completed_at | Successful provisioning replay ledger without raw credentials (V50) |
 | `rag_api_key_rotation` | rotation_id, principal_id, source_credential_id, target_credential_id, expires_at, status | Bounded staged-rotation ledger without raw credentials or header values (V55) |

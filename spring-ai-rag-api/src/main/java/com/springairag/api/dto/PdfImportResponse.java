@@ -20,8 +20,18 @@ public record PdfImportResponse(
         String entryMarkdown,
 
         @Schema(description = "Total number of files stored (PDF + Markdown)")
-        int filesStored
+        int filesStored,
+
+        @Schema(description = "Normalized original upload filename")
+        String originalFilename,
+
+        @Schema(description = "Human-readable display name")
+        String displayName
 ) {
+    public PdfImportResponse(String uuid, String entryMarkdown, int filesStored) {
+        this(uuid, entryMarkdown, filesStored, null, null);
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -29,12 +39,14 @@ public record PdfImportResponse(
         PdfImportResponse that = (PdfImportResponse) o;
         return filesStored == that.filesStored &&
                 Objects.equals(uuid, that.uuid) &&
-                Objects.equals(entryMarkdown, that.entryMarkdown);
+                Objects.equals(entryMarkdown, that.entryMarkdown) &&
+                Objects.equals(originalFilename, that.originalFilename) &&
+                Objects.equals(displayName, that.displayName);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(uuid, entryMarkdown, filesStored);
+        return Objects.hash(uuid, entryMarkdown, filesStored, originalFilename, displayName);
     }
 
     @Override
@@ -43,6 +55,8 @@ public record PdfImportResponse(
                 "uuid='" + uuid + '\'' +
                 ", entryMarkdown='" + entryMarkdown + '\'' +
                 ", filesStored=" + filesStored +
+                ", originalFilename='" + originalFilename + '\'' +
+                ", displayName='" + displayName + '\'' +
                 '}';
     }
 }

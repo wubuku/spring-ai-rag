@@ -405,15 +405,20 @@ test('root unlock manages shown-once business keys without browser persistence',
   await expect(page).toHaveURL(/\/webui\/api-keys$/);
   await expect(page.getByRole('heading', { name: 'API Keys' })).toBeVisible();
 
-  expect(await page.evaluate(() => ({
+  const initialBrowserStorage = await page.evaluate(() => ({
     legacyKey: localStorage.getItem('rag-api-key'),
     legacyRole: localStorage.getItem('rag-api-key-role'),
-    sessionValues: Object.values(sessionStorage),
-  }))).toEqual({
+    session: { ...sessionStorage },
+  }));
+  expect(initialBrowserStorage).toMatchObject({
     legacyKey: null,
     legacyRole: null,
-    sessionValues: [],
   });
+  const initialSessionJson = JSON.stringify(initialBrowserStorage.session);
+  expect(initialSessionJson).not.toContain(MOCK_ROOT_API_KEY);
+  expect(initialSessionJson).not.toContain(MOCK_BUSINESS_API_KEY);
+  expect(Object.keys(initialBrowserStorage.session))
+    .toEqual(['spring-ai-rag:webui:v1:routes']);
 
   await page.getByRole('button', { name: 'Create Key' }).first().click();
   await page.getByPlaceholder('e.g. Production Server').fill('Indexer Service');
@@ -443,7 +448,9 @@ test('root unlock manages shown-once business keys without browser persistence',
   await expect(
     page.locator('[class*="_rawKeyBox_"]').getByText('sample-collection', { exact: true }),
   ).toBeVisible();
-  await page.getByRole('button', { name: 'Close' }).click();
+  await page.getByRole('dialog', { name: 'Create Key' })
+    .getByText('Close', { exact: true })
+    .click();
   await expect(page.getByText(createdRawKey)).toHaveCount(0);
   await expect(page.getByText('rag_p_created')).toBeVisible();
   await expect(page.getByText('rag_k_created')).toBeVisible();
@@ -473,7 +480,7 @@ test('root unlock manages shown-once business keys without browser persistence',
   await page.getByRole('button', { name: 'Prepare rotation' }).click();
   await expect(page.getByText(stagedRawKey)).toBeVisible();
   await expect(page.getByText('Overlap deadline')).toBeVisible();
-  await page.getByRole('button', { name: 'Close' }).click();
+  await page.getByRole('dialog').getByText('Close', { exact: true }).click();
   await expect(page.getByText(stagedRawKey)).toHaveCount(0);
 
   let rotatedRow = page.getByText('rag_p_created').locator('..');
@@ -495,7 +502,7 @@ test('root unlock manages shown-once business keys without browser persistence',
   expect(prepareIdempotencyKeys[retryStartIndex]).toBe(
     prepareIdempotencyKeys[retryStartIndex + 1],
   );
-  await page.getByRole('button', { name: 'Close' }).click();
+  await page.getByRole('dialog').getByText('Close', { exact: true }).click();
 
   rotatedRow = page.getByText('rag_p_created').locator('..');
   await expect(rotatedRow.getByText('rag_k_staged_v3')).toBeVisible();
@@ -508,7 +515,7 @@ test('root unlock manages shown-once business keys without browser persistence',
   await page.getByRole('radio', { name: /Immediate rotation/ }).check();
   await page.getByRole('button', { name: 'Rotate immediately' }).click();
   await expect(page.getByText(immediateRawKey)).toBeVisible();
-  await page.getByRole('button', { name: 'Close' }).click();
+  await page.getByRole('dialog').getByText('Close', { exact: true }).click();
   await expect(page.getByText(immediateRawKey)).toHaveCount(0);
 
   rotatedRow = page.getByText('rag_p_created').locator('..');

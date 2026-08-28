@@ -15,7 +15,7 @@
 - [x] Helm `version` 与 `appVersion` 均为 `1.0.0`
 - [x] Docker/Helm 默认镜像 tag 为 `1.0.0`
 - [x] 本地、Docker 与 Helm 默认端口均为 `8081`
-- [x] Flyway 迁移范围为 V1-V58
+- [x] Flyway 迁移范围为 V1-V59
 - [x] JSONB 结构化记录 API、payload 快照和 Collection 生命周期已覆盖
 - [x] `scripts/verify-jsonb-records.sh` 固化后端/数据库/前端聚焦验证
 - [x] 文档 PATCH/禁用/恢复/永久删除与外部三元身份已覆盖
@@ -239,7 +239,7 @@
   有界异步 worker；默认每小时 Scheduled 扫描只负责漏事件和时间跨阈值恢复。
 - [x] Alerts 全路由收紧为 operator 管理面；WebUI 修正为 `firedAt`，并展示服务端阶段、
   principal 和 expiry，不在浏览器计算阈值。
-- [x] focused 门禁覆盖后端 **218/218**、PostgreSQL V1-V58 生命周期 **6/6**、WebUI
+- [x] focused 门禁覆盖后端 **218/218**、PostgreSQL V1-V59 生命周期 **6/6**、WebUI
   Vitest **234/234**、production build 和 Alerts Mock Playwright **1/1**。
 - [x] 完整 Maven、WebUI、服务启动、禁锁、文档、diff、shell 与密钥门禁完成；最终证据由
   V58 联合门禁 `20260828-durable-final-precommit` 覆盖。

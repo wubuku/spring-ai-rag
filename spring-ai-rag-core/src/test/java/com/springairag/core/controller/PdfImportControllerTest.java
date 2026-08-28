@@ -5,6 +5,7 @@ import com.springairag.api.dto.PdfToRagResponse;
 import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.entity.ApiKeyRole;
 import com.springairag.core.entity.FsFile;
+import com.springairag.core.entity.FsImportBatch;
 import com.springairag.core.entity.RagApiKey;
 import com.springairag.core.exception.RagException;
 import com.springairag.core.filter.ApiKeyAuthFilter;
@@ -28,6 +29,8 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.Map;
+import java.util.UUID;
 
 import com.springairag.api.dto.PdfImportResponse;
 
@@ -66,7 +69,9 @@ class PdfImportControllerTest {
                 "file", "test.pdf", "application/pdf", "PDF content".getBytes());
 
         PdfImportService.PdfImportResult result =
-                new PdfImportService.PdfImportResult("test-uuid", "test-uuid/default.md", 2);
+                new PdfImportService.PdfImportResult(
+                        "test-uuid", "test-uuid/default.md", 2,
+                        "test.pdf", "test.pdf");
         when(pdfImportService.importPdf(any(), eq("papers"))).thenReturn(result);
 
         ResponseEntity<Object> response = controller.importPdf(pdfFile, "papers");
@@ -78,6 +83,8 @@ class PdfImportControllerTest {
         assertEquals("test-uuid", body.uuid());
         assertEquals("test-uuid/default.md", body.entryMarkdown());
         assertEquals(2, body.filesStored());
+        assertEquals("test.pdf", body.originalFilename());
+        assertEquals("test.pdf", body.displayName());
     }
 
     @Test
@@ -247,11 +254,65 @@ class PdfImportControllerTest {
     @Test
     void listTree_nullPath_defaultsToRoot() {
         when(pdfImportService.listChildren("/")).thenReturn(List.of());
+        when(pdfImportService.getImportBatches(any())).thenReturn(Map.of());
 
         ResponseEntity<FileTreeResponse> response = controller.listTree(null);
 
         assertEquals(200, response.getStatusCode().value());
         verify(pdfImportService).listChildren("/");
+    }
+
+    @Test
+    void listTree_root_enrichesKnownImportAndKeepsLegacyFallback() {
+        UUID knownId = UUID.fromString("11111111-1111-1111-1111-111111111111");
+        UUID legacyId = UUID.fromString("22222222-2222-2222-2222-222222222222");
+        OffsetDateTime importedAt = OffsetDateTime.parse("2026-08-28T10:00:00+08:00");
+        FsFile known = new FsFile(
+                knownId + "/default.md", true, "# known".getBytes(), "# known",
+                "text/markdown", 7L);
+        FsFile legacy = new FsFile(
+                legacyId + "/default.md", true, "# legacy".getBytes(), "# legacy",
+                "text/markdown", 8L);
+        FsImportBatch batch = new FsImportBatch(
+                knownId, "PDF", "售后条款.pdf", "售后条款.pdf",
+                knownId + "/default.md", knownId + "/original.pdf", 2);
+        batch.setCreatedAt(importedAt);
+        when(pdfImportService.listChildren("/")).thenReturn(List.of(known, legacy));
+        when(pdfImportService.getImportBatches(any())).thenReturn(Map.of(knownId, batch));
+
+        FileTreeResponse body = controller.listTree(null).getBody();
+
+        assertNotNull(body);
+        assertEquals(2, body.entries().size());
+        var knownEntry = body.entries().stream()
+                .filter(entry -> entry.name().equals(knownId.toString()))
+                .findFirst().orElseThrow();
+        var legacyEntry = body.entries().stream()
+                .filter(entry -> entry.name().equals(legacyId.toString()))
+                .findFirst().orElseThrow();
+        assertEquals("售后条款.pdf", knownEntry.displayName());
+        assertEquals(knownId.toString(), knownEntry.importId());
+        assertEquals(importedAt, knownEntry.createdAt());
+        assertNull(legacyEntry.displayName());
+        assertNull(legacyEntry.importId());
+    }
+
+    @Test
+    void listTree_importDirectory_returnsMetadataEnvelope() {
+        UUID id = UUID.fromString("33333333-3333-3333-3333-333333333333");
+        FsImportBatch batch = new FsImportBatch(
+                id, "PDF", "manual.pdf", "manual.pdf",
+                id + "/default.md", id + "/original.pdf", 2);
+        when(pdfImportService.listChildren(id + "/")).thenReturn(List.of());
+        when(pdfImportService.getImportBatches(any())).thenReturn(Map.of());
+        when(pdfImportService.getImportBatch(id)).thenReturn(Optional.of(batch));
+
+        FileTreeResponse body = controller.listTree(id + "/").getBody();
+
+        assertNotNull(body);
+        assertNotNull(body.importMetadata());
+        assertEquals(id.toString(), body.importMetadata().importId());
+        assertEquals("manual.pdf", body.importMetadata().displayName());
     }
 
     // ==================== importPdfToRag tests ====================
@@ -262,7 +323,9 @@ class PdfImportControllerTest {
                 "file", "paper.pdf", "application/pdf", "PDF data".getBytes());
 
         PdfImportService.PdfImportResult importResult =
-                new PdfImportService.PdfImportResult("new-uuid", "new-uuid/default.md", 2);
+                new PdfImportService.PdfImportResult(
+                        "new-uuid", "new-uuid/default.md", 2,
+                        "paper.pdf", "paper.pdf");
         when(pdfImportService.importPdf(any(), isNull())).thenReturn(importResult);
 
         PdfToRagService.PdfToRagResult ragResult =
@@ -290,7 +353,9 @@ class PdfImportControllerTest {
                 "file", "embed.pdf", "application/pdf", "PDF data".getBytes());
 
         PdfImportService.PdfImportResult importResult =
-                new PdfImportService.PdfImportResult("sse-uuid", "sse-uuid/default.md", 2);
+                new PdfImportService.PdfImportResult(
+                        "sse-uuid", "sse-uuid/default.md", 2,
+                        "embed.pdf", "embed.pdf");
         when(pdfImportService.importPdf(any(), isNull())).thenReturn(importResult);
 
         Object response = controller.importPdfToRag(pdfFile, null, true);

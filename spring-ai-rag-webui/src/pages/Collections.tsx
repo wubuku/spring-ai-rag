@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -12,6 +12,7 @@ import { useApiKeyAuth } from '../auth/ApiKeyAuthContext';
 import { useToast } from '../components/Toast';
 import { Skeleton } from '../components/Skeleton';
 import { CreateCollectionModal } from '../components/CreateCollectionModal';
+import { Dialog } from '../components/Dialog';
 import styles from './Collections.module.css';
 
 function errorMessage(error: unknown): string {
@@ -23,6 +24,7 @@ export function Collections() {
   const [page] = useState(0);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [purgeTarget, setPurgeTarget] = useState<Collection | null>(null);
+  const createTriggerRef = useRef<HTMLButtonElement>(null);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { showToast } = useToast();
@@ -61,6 +63,7 @@ export function Collections() {
       <div className={styles.header}>
         <h1 className="page-title">{t('collections.title')}</h1>
         <button
+          ref={createTriggerRef}
           onClick={() => setShowCreateModal(true)}
           className={styles.createBtn}
         >
@@ -130,6 +133,7 @@ export function Collections() {
       <CreateCollectionModal
         isOpen={showCreateModal}
         onClose={() => setShowCreateModal(false)}
+        returnFocusRef={createTriggerRef}
       />
       {purgeTarget && (
         <CollectionPurgeDialog
@@ -205,16 +209,6 @@ function CollectionPurgeDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [collection.collectionKey]);
 
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !applyMutation.isPending) {
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [applyMutation.isPending, onClose]);
-
   const canApply =
     preview !== null
     && confirmation === collection.collectionKey
@@ -247,39 +241,40 @@ function CollectionPurgeDialog({
   };
 
   return (
-    <div
-      className={styles.purgeOverlay}
-      onClick={event => event.target === event.currentTarget && closeDialog()}
-    >
-      <section
-        className={styles.purgeDialog}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="collection-purge-title"
-        aria-describedby="collection-purge-description"
-      >
-        <header className={styles.purgeHeader}>
-          <div>
-            <h2 id="collection-purge-title" className={styles.purgeTitle}>
-              {t('collections.purge.title')}
-            </h2>
-            <p id="collection-purge-description" className={styles.purgeDescription}>
-              {t('collections.purge.description', {
-                collectionKey: collection.collectionKey,
-              })}
-            </p>
-          </div>
+    <Dialog
+      open
+      title={t('collections.purge.title')}
+      description={t('collections.purge.description', {
+        collectionKey: collection.collectionKey,
+      })}
+      onClose={closeDialog}
+      closeDisabled={applyMutation.isPending}
+      size="large"
+      actions={(
+        <>
           <button
             type="button"
-            className={styles.closeBtn}
+            className={styles.secondaryBtn}
             onClick={closeDialog}
             disabled={applyMutation.isPending}
-            aria-label={t('common.close')}
           >
-            ×
+            {result ? t('common.close') : t('common.cancel')}
           </button>
-        </header>
-
+          {preview && !result && (
+            <button
+              type="button"
+              className={styles.purgeConfirmBtn}
+              onClick={() => applyMutation.mutate()}
+              disabled={!canApply}
+            >
+              {applyMutation.isPending
+                ? t('collections.purge.applying')
+                : t('collections.purge.confirmAction')}
+            </button>
+          )}
+        </>
+      )}
+    >
         <div className={styles.purgeBody}>
           {previewMutation.isPending && (
             <p role="status">{t('collections.purge.previewLoading')}</p>
@@ -363,30 +358,6 @@ function CollectionPurgeDialog({
             </>
           )}
         </div>
-
-        <footer className={styles.purgeActions}>
-          <button
-            type="button"
-            className={styles.secondaryBtn}
-            onClick={closeDialog}
-            disabled={applyMutation.isPending}
-          >
-            {result ? t('common.close') : t('common.cancel')}
-          </button>
-          {preview && !result && (
-            <button
-              type="button"
-              className={styles.purgeConfirmBtn}
-              onClick={() => applyMutation.mutate()}
-              disabled={!canApply}
-            >
-              {applyMutation.isPending
-                ? t('collections.purge.applying')
-                : t('collections.purge.confirmAction')}
-            </button>
-          )}
-        </footer>
-      </section>
-    </div>
+    </Dialog>
   );
 }

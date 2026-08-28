@@ -221,51 +221,6 @@
   word-break: break-all;
 }
 
-/* Modal */
-.modal {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  padding: 1rem;
-}
-
-.modalContent {
-  background: var(--color-bg);
-  border-radius: 8px;
-  padding: 1.5rem;
-  width: 100%;
-  max-width: 560px;
-  max-height: 90vh;
-  overflow-y: auto;
-}
-
-.modalHeader {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1.25rem;
-}
-
-.modalTitle {
-  font-size: 1.125rem;
-  font-weight: 600;
-  margin: 0;
-}
-
-.modalClose {
-  background: none;
-  border: none;
-  font-size: 1.25rem;
-  cursor: pointer;
-  color: var(--color-text-muted);
-  padding: 0;
-  line-height: 1;
-}
-
 .formGroup {
   margin-bottom: 1rem;
 }

@@ -91,79 +91,7 @@
   cursor: pointer;
 }
 
-.purgeOverlay {
-  position: fixed;
-  inset: 0;
-  z-index: 1000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1rem;
-  background: rgba(0, 0, 0, 0.55);
-}
-
-.purgeDialog {
-  width: min(680px, 100%);
-  max-height: 90vh;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  background: var(--color-bg);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.24);
-}
-
-.purgeHeader {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 1.25rem;
-  border-bottom: 1px solid var(--color-border);
-}
-
-.purgeTitle {
-  margin: 0;
-  color: var(--color-text);
-  font-size: 1.125rem;
-}
-
-.purgeDescription {
-  margin: 0.5rem 0 0;
-  color: var(--color-text-secondary);
-  font-size: 0.875rem;
-  overflow-wrap: anywhere;
-}
-
-.closeBtn {
-  width: 2rem;
-  height: 2rem;
-  flex: 0 0 2rem;
-  padding: 0;
-  border: none;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--color-text-muted);
-  cursor: pointer;
-  font-size: 1.5rem;
-  line-height: 1;
-}
-
-.closeBtn:hover:not(:disabled) {
-  background: var(--color-surface-hover);
-  color: var(--color-text);
-}
-
-.closeBtn:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
-}
-
 .purgeBody {
-  flex: 1;
-  overflow-y: auto;
-  padding: 1.25rem;
   color: var(--color-text);
 }
 
@@ -268,14 +196,6 @@
   outline-offset: 1px;
 }
 
-.purgeActions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.75rem;
-  padding: 1rem 1.25rem;
-  border-top: 1px solid var(--color-border);
-}
-
 .secondaryBtn,
 .purgeConfirmBtn {
   min-height: 36px;
@@ -311,10 +231,6 @@
 
   .purgeMetric:nth-child(odd) {
     border-right: none;
-  }
-
-  .purgeActions {
-    flex-direction: column-reverse;
   }
 
   .secondaryBtn,

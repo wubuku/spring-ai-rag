@@ -4,7 +4,13 @@
 // ApiKeys, Files, ABTest, Documents, Collections). Moving to a separate file
 // would require updating all consumer import paths unnecessarily.
 
-import { useState, useCallback, type ReactNode } from 'react';
+import {
+  useState,
+  useCallback,
+  useEffect,
+  useRef,
+  type ReactNode,
+} from 'react';
 import { ToastContext, useToastContext } from './ToastContext';
 import { TOAST_ICONS } from './constants';
 import styles from './Toast.module.css';
@@ -27,14 +33,30 @@ interface ToastProviderProps {
 
 export function ToastProvider({ children }: ToastProviderProps) {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const dismissTimersRef = useRef(new Map<string, number>());
 
   const showToast = useCallback((message: string, type: ToastType = 'info') => {
     const id = crypto.randomUUID();
     setToasts(prev => [...prev, { id, message, type }]);
+    const timer = window.setTimeout(() => {
+      dismissTimersRef.current.delete(id);
+      setToasts(prev => prev.filter(toast => toast.id !== id));
+    }, 4000);
+    dismissTimersRef.current.set(id, timer);
   }, []);
 
   const removeToast = useCallback((id: string) => {
+    const timer = dismissTimersRef.current.get(id);
+    if (timer !== undefined) {
+      window.clearTimeout(timer);
+      dismissTimersRef.current.delete(id);
+    }
     setToasts(prev => prev.filter(t => t.id !== id));
+  }, []);
+
+  useEffect(() => () => {
+    dismissTimersRef.current.forEach(timer => window.clearTimeout(timer));
+    dismissTimersRef.current.clear();
   }, []);
 
   return (
@@ -42,10 +64,18 @@ export function ToastProvider({ children }: ToastProviderProps) {
       {children}
       <div className={styles.container}>
         {toasts.map(toast => (
-          <div key={toast.id} className={`${styles.toast} ${styles[toast.type]}`}>
+          <div
+            key={toast.id}
+            className={`${styles.toast} ${styles[toast.type]}`}
+            role={toast.type === 'error' ? 'alert' : 'status'}
+          >
             <span className={styles.icon}>{TOAST_ICONS[toast.type]}</span>
             <span className={styles.message}>{toast.message}</span>
-            <button className={styles.close} onClick={() => removeToast(toast.id)}>
+            <button
+              className={styles.close}
+              onClick={() => removeToast(toast.id)}
+              aria-label="Close notification"
+            >
               ×
             </button>
           </div>

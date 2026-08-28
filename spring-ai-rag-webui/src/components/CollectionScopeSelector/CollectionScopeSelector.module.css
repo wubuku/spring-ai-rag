@@ -74,7 +74,7 @@
 
 .modeOption:focus-within {
   position: relative;
-  z-index: 1;
+  z-index: var(--z-raised);
   box-shadow: inset 0 0 0 2px var(--color-primary);
 }
 

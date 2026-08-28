@@ -95,7 +95,9 @@ test.describe('Chat', () => {
     await expect(page.getByText('根据知识库，风格基调是克制、清晰。')).toBeVisible();
     await expect(page.getByText('Sources:')).toBeVisible();
     await expect(page.getByText('品牌风格指南')).toBeVisible();
-    await expect(page).toHaveURL(/\/webui\/chat\/agent-session-1$/);
+    await expect(page).toHaveURL(
+      /\/webui\/chat\/agent-session-1\?mode=AGENT$/,
+    );
   });
 
   test('switching back to CALLER_VISIBLE removes stale collection keys', async ({ page }) => {

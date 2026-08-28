@@ -19,7 +19,7 @@ Documentation hub: [index.md](index.md). Stable project context: [project-contex
 | Real-LLM E2E port | `18081` |
 | Embedding | SiliconFlow `BAAI/bge-m3` |
 | Vector dimension | `1024` |
-| Flyway | V1–V58 |
+| Flyway | V1–V59 |
 
 Do **not** append `/v1` to an OpenAI or Embedding `base-url`. Spring AI appends `/v1/chat/completions` or `/v1/embeddings`.
 
@@ -157,9 +157,16 @@ Status, stop, and port overrides:
 ```bash
 ./scripts/dev.sh --status
 ./scripts/dev.sh --stop
+./scripts/dev.sh --force-kill
 BACKEND_PORT=19082 FRONTEND_PORT=15174 ./scripts/dev.sh
 RAG_DEV_OPEN_BROWSER=false ./scripts/dev.sh
 ```
+
+By default, an unmanaged listener on either target port makes startup fail
+conservatively. Use `--force-kill` only after confirming that stale processes on
+the configured `BACKEND_PORT` / `FRONTEND_PORT` may be terminated. It targets
+only listeners on those two ports and their descendants, sends `TERM` first,
+uses `KILL` only after a timeout, and then continues normal startup.
 
 The launcher never performs automatic Flyway repair. If startup detects a
 migration checksum mismatch, it prints the relevant cause. Restore the applied
@@ -460,7 +467,7 @@ provider. Evidence is written under
 ### Managed API Principal Expiry Alert Verification
 
 ```bash
-# Focused backend, V1-V58 PostgreSQL, and frontend Mock gates
+# Focused backend, V1-V59 PostgreSQL, and frontend Mock gates
 API_KEY_EXPIRY_ALERT_VERIFY_PHASE=focused \
 ./scripts/verify-api-key-expiry-alerts.sh
 

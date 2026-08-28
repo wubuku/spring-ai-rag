@@ -221,5 +221,7 @@ async function createCollection(
   await page.getByRole('textbox', { name: /Collection key/ })
     .fill(collectionKey);
   await page.getByRole('textbox', { name: /^Name/ }).fill(name);
-  await page.getByRole('button', { name: 'Create', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Create Collection' })
+    .getByRole('button', { name: 'Create Collection', exact: true })
+    .click();
 }

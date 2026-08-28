@@ -273,6 +273,9 @@ class OpenApiContractTest {
     @MockBean
     private com.springairag.core.repository.FsFileRepository fsFileRepository;
 
+    @MockBean
+    private FsImportBatchRepository fsImportBatchRepository;
+
     @Nested
     @DisplayName("Application Wiring")
     class ApplicationWiring {

@@ -520,7 +520,7 @@ WebUI 通过请求拦截断言同一次用户提交在 Axios retry 中复用一�
 ```
 
 该 9 阶段门禁依次执行禁悲观锁检查、purge/Collection/feedback/audit/OpenAI scope
-聚焦测试、真实 PostgreSQL V1–V58 清理矩阵、`mvn clean compile test-compile`、完整
+聚焦测试、真实 PostgreSQL V1–V59 清理矩阵、`mvn clean compile test-compile`、完整
 WebUI typecheck/Vitest/lint/生产构建、Collection Mock Playwright、双语文档门禁、脚本
 语法和空白检查。每次运行在
 `.verification/collection-purge/<run-id>/summary.md` 记录逐步证据。
@@ -739,7 +739,7 @@ API_KEY_EXPIRY_ALERT_VERIFY_PHASE=focused \
 ./scripts/verify-api-key-expiry-alerts.sh
 ```
 
-focused 阶段一次性执行受影响后端测试、空库 V1-V58 PostgreSQL 生命周期矩阵、WebUI
+focused 阶段一次性执行受影响后端测试、空库 V1-V59 PostgreSQL 生命周期矩阵、WebUI
 typecheck/Vitest/alignment/production build 和 Alerts Mock Playwright。PostgreSQL 场景覆盖
 8 路并发只产生一个 active condition/通知 claim、`WARNING → CRITICAL → EXPIRED` 原行
 升级、同阶段刷新、延期/吊销解决、重新进入窗口的新历史、漏事件恢复、超过单批上限的公平
@@ -759,7 +759,7 @@ MANAGED_API_REAL_LLM_PROVIDER=openai \
   --with-durable-notifications
 ```
 
-专项门禁从空库迁移到 V58，使用隔离 PostgreSQL、真实本地 HTTP provider stub、两个后端
+专项门禁从空库迁移到 V59，使用隔离 PostgreSQL、真实本地 HTTP provider stub、两个后端
 实例和真实 WebUI，验证 after-commit Event 早于一分钟 fallback、单个 ledger attempt
 恰好调用 provider 一次、`503 -> RETRY_WAIT -> DELIVERED`、进程在阻塞调用中退出后的
 过期 lease 回收、稳定 delivery UUID、低敏 receipt 与 DOM/network 前端合同。浏览器断言

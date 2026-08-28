@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { documentsApi } from '../../api/documents';
 import { useToast } from '../Toast';
+import { ConfirmDialog } from '../Dialog';
 import styles from './ReembedAllButton.module.css';
 
 export function ReembedAllButton() {
@@ -10,6 +11,7 @@ export function ReembedAllButton() {
   const queryClient = useQueryClient();
   const { showToast } = useToast();
   const [isExpanded, setIsExpanded] = useState(false);
+  const [confirmForce, setConfirmForce] = useState(false);
 
   const { data: status, isLoading } = useQuery({
     queryKey: ['embeddingStatus'],
@@ -70,11 +72,7 @@ export function ReembedAllButton() {
               {reembedMutation.isPending ? t('common.loading') : t('documents.reembed') || 'Re-embed All'}
             </button>
             <button
-              onClick={() => {
-                if (confirm(t('documents.reembedForceConfirm') || 'Force re-embed will regenerate ALL embeddings. Continue?')) {
-                  reembedMutation.mutate(true);
-                }
-              }}
+              onClick={() => setConfirmForce(true)}
               disabled={reembedMutation.isPending}
               className={styles.forceBtn}
             >
@@ -83,6 +81,21 @@ export function ReembedAllButton() {
           </div>
         </div>
       )}
+      <ConfirmDialog
+        open={confirmForce}
+        title={t('documents.reembedForce') || 'Force Re-embed'}
+        description={t('documents.reembedForceConfirm')
+          || 'Force re-embed will regenerate ALL embeddings. Continue?'}
+        confirmLabel={t('documents.reembedForce') || 'Force Re-embed'}
+        cancelLabel={t('common.cancel')}
+        pending={reembedMutation.isPending}
+        danger
+        onClose={() => setConfirmForce(false)}
+        onConfirm={() => {
+          setConfirmForce(false);
+          reembedMutation.mutate(true);
+        }}
+      />
     </div>
   );
 }

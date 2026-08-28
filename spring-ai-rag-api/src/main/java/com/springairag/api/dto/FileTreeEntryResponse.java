@@ -28,10 +28,27 @@ public record FileTreeEntryResponse(
 
         @Schema(description = "Storage creation time. For a synthetic directory, the latest creation time "
                 + "among its descendant files.", example = "2026-08-16T09:30:00+08:00", nullable = true)
-        OffsetDateTime createdAt
+        OffsetDateTime createdAt,
+
+        @Schema(description = "Readable display name for a known import root", nullable = true)
+        String displayName,
+
+        @Schema(description = "Normalized original filename for a known import root", nullable = true)
+        String originalFilename,
+
+        @Schema(description = "Stable import UUID for a known import root", nullable = true)
+        String importId,
+
+        @Schema(description = "Import source type for a known import root", nullable = true)
+        String sourceType
 ) {
     public FileTreeEntryResponse(String name, String path, String type, String mimeType, long size) {
-        this(name, path, type, mimeType, size, null);
+        this(name, path, type, mimeType, size, null, null, null, null, null);
+    }
+
+    public FileTreeEntryResponse(String name, String path, String type, String mimeType,
+                                 long size, OffsetDateTime createdAt) {
+        this(name, path, type, mimeType, size, createdAt, null, null, null, null);
     }
 
     @Override
@@ -44,12 +61,17 @@ public record FileTreeEntryResponse(
                 Objects.equals(path, that.path) &&
                 Objects.equals(type, that.type) &&
                 Objects.equals(mimeType, that.mimeType) &&
-                Objects.equals(createdAt, that.createdAt);
+                Objects.equals(createdAt, that.createdAt) &&
+                Objects.equals(displayName, that.displayName) &&
+                Objects.equals(originalFilename, that.originalFilename) &&
+                Objects.equals(importId, that.importId) &&
+                Objects.equals(sourceType, that.sourceType);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(name, path, type, mimeType, size, createdAt);
+        return Objects.hash(name, path, type, mimeType, size, createdAt,
+                displayName, originalFilename, importId, sourceType);
     }
 
     @Override
@@ -61,6 +83,10 @@ public record FileTreeEntryResponse(
                 ", mimeType='" + mimeType + '\'' +
                 ", size=" + size +
                 ", createdAt=" + createdAt +
+                ", displayName='" + displayName + '\'' +
+                ", originalFilename='" + originalFilename + '\'' +
+                ", importId='" + importId + '\'' +
+                ", sourceType='" + sourceType + '\'' +
                 '}';
     }
 }

@@ -1,9 +1,14 @@
 import { useState, useEffect } from 'react';
-import { Outlet, NavLink } from 'react-router-dom';
+import { Outlet, NavLink, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ErrorBoundary } from '../ErrorBoundary';
 import { ThemeToggle } from '../ThemeToggle';
 import { useApiKeyAuth } from '../../auth/ApiKeyAuthContext';
+import {
+  rememberRoute,
+  rememberedRoute,
+  type TopLevelRoute,
+} from '../../utils/workspaceState';
 import styles from './Layout.module.css';
 
 const NAV_ITEMS = [
@@ -27,6 +32,7 @@ const MOBILE_BREAKPOINT = 768;
 export function Layout() {
   const { t } = useTranslation();
   const { logout } = useApiKeyAuth();
+  const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < MOBILE_BREAKPOINT);
 
@@ -42,6 +48,10 @@ export function Layout() {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  useEffect(() => {
+    rememberRoute(location.pathname, location.search);
+  }, [location.pathname, location.search]);
 
   // Close sidebar when navigating on mobile
   const handleNavClick = () => {
@@ -77,7 +87,7 @@ export function Layout() {
           {NAV_ITEMS.map(item => (
             <NavLink
               key={item.to}
-              to={item.to}
+              to={rememberedRoute(item.to as TopLevelRoute)}
               className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}
               onClick={handleNavClick}
             >
