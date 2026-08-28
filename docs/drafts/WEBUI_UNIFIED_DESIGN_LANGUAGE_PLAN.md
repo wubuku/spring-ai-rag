@@ -246,8 +246,8 @@ App Shell
 
 | 事项 | 冻结默认 | 理由与可逆边界 |
 |---|---|---|
-| 实施起点 | 规划重新达到 `3/3` 后先在 `main` 提交并推送修正，再让实施分支基于最新 `origin/main` | 用户已授权直接实施；规划先落到主线并建立保护 checkpoint |
-| 开发位置 | 当前工作区切换到 `feature/webui-unified-design-language` 专用分支 | 用户未要求并行开发，不创建额外 worktree |
+| 实施起点 | 规划 `3/3` 后先在 `main` 提交并推送规划；只有用户另行指示后才开始实施 | 本轮只交付规划并暂停，不能把早先的实施意图覆盖最新边界 |
+| 开发位置 | 从届时最新 `origin/main` 创建 `codex/webui-design-language-20260828` 专用分支和隔离 worktree | 用户已明确规划在 main、实施在隔离 worktree；开始前仍需检查分支名和文件所有权碰撞 |
 | 视觉方向 | 安静、紧凑、技术工作台 | 符合管理后台和当前产品气质 |
 | 主题 | 保持 light/dark/system，一套 palette | 不制造第二套页面 CSS 或主题维度 |
 | token source | `spring-ai-rag-webui/design-tokens/tokens.json` | 结构化、可生成、可校验 |
@@ -479,13 +479,12 @@ type ResolvedTheme = 'light' | 'dark';
 
 动作：
 
-1. 规划重新达到 `3/3` 后在 `main` 提交并推送修正，确认 `main == origin/main`；
-2. 检查当前工作区的未提交文件与同名任务，不覆盖、不 stash、不遗漏已有 WIP；如发现外部
-   并行修改则按文件所有权避让；
+1. 本轮规划 `3/3` 后在 `main` 提交并推送规划与归档，确认 `main == origin/main`，随后暂停；
+2. 用户另行指示实施后，fetch 最新 `origin/main`，检查所有 worktree/分支的未提交文件与同名任务，
+   不覆盖、不 stash、不吸收无关 WIP；
 3. 重新生成本规划第 3 节的量化基线；如事实影响方案，先在 main 修订规划并重新执行规划 `3/3`；
-4. 在同一工作区切换到 `feature/webui-unified-design-language`，将其快进或合并到最新
-   `origin/main`；
-5. 创建进度文档，记录基线 SHA、工作区、端口和验证命令。
+4. 从最新 `origin/main` 创建 `codex/webui-design-language-20260828` 专用分支和隔离 worktree；
+5. 在隔离 worktree 创建进度文档，记录基线 SHA、并行工作区、端口和验证命令。
 
 退出条件：已有 WIP 全部可追溯；没有未处理的文件所有权冲突；规划与最新 main 一致。
 
@@ -767,3 +766,4 @@ type ResolvedTheme = 'light' | 'dark';
 | 2026-08-28 | 可访问交互审查 | Tabs 若只共享样式/role，会让键盘行为继续散落并可能违反 ARIA pattern | 共享 Tabs 统一 roving tabindex 与方向键/Home/End；页面只拥有受控值、URL 和数据；计数 0 |
 | 2026-08-28 | 并发内容漂移审查 | 实施授权/工作区策略被并发改成“直接实施、当前工作区切分支”，且 Slice 2/3 残留旧术语 | 恢复“本轮只规划并暂停”；未来实施固定使用最新 main 的隔离 worktree；统一 design debt/Tabs 术语；计数 0 |
 | 2026-08-28 | Git 与审查记录审查 | 并行流程提前提交初稿并继续改写共享 main；失效的无问题轮次被写进正文 | 保留远端历史，从 `main@495e7fce` 建临时文档 worktree 收敛；删除失效轮次；最终 `3/3` 重新从 0 开始 |
+| 2026-08-28 | 主线合并后审查 | 合并 `origin/main@58dac02c` 后，非冲突 hunk 重新带回“直接实施/单工作区” | 按最新用户边界修正冻结决策与 Slice 0；合并后规划检查计数归 0 |
