@@ -38,8 +38,9 @@ Active plans are listed here and in `docs/index*`.
 
 ## Current Active Plans
 
-There is currently no active plan. The next batch should be added here only
-after the relevant code and documentation have been explored.
+- [WebUI work context, file discoverability, and unified overlay implementation
+  plan](NEXT_HIGH_VALUE_FEATURES_PLAN.md) (Chinese)
+- [Implementation progress ledger](NEXT_HIGH_VALUE_FEATURES_PROGRESS.md) (Chinese)
 
 Completed, stopped, and superseded materials remain available in the
 [historical archive](archive/README.md).
