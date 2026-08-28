@@ -97,13 +97,34 @@
     Documents Dialog lifecycle、API Key shown-once/rotation、Files IME/几何与全站工作上下文；
   - Toast 已改为 4 秒自动清理，提示正文不再拦截底层交互，仅关闭按钮接受 pointer。
 
+## Checkpoint 与真实运行时证据
+
+- 2026-08-28 已建立并推送 checkpoint：
+  - 分支：`feature/webui-workspace-continuity`
+  - 提交：`b2fed296 feat: make files webui a stable file manager`
+  - 推送目标：`origin/feature/webui-workspace-continuity`
+- 真实 Files 浏览器生命周期：通过 `spring-ai-rag-webui/e2e/files-real.spec.ts`，`1/1`。
+  - 使用隔离 PostgreSQL 容器、真实 Vite 代理和真实后端；
+  - 通过真实 multipart PDF 导入、可读文件名与 UUID 次级身份、目录树刷新、面板拖宽记忆、
+    目录深链、Markdown 预览、RAG embedding、中文 IME 查询、向量/全文搜索和文档回答。
+- 真实 Chat 上游预检：未通过，原因已确认在外部服务而非本地代码。
+  - 使用 `.env` 中的 OpenAI-compatible 配置向 `api.openai-next.com` 连续发起 3 次独立
+    最小请求；
+  - 三次均返回 HTTP `503`，错误码为 `no_available_account`；
+  - 因上游没有可用账号，未将真实 Chat SSE 结果宣称为通过；此前 Mock Chat、SSE 和
+    workspace 状态测试仍已通过。
+- 真实服务启动：后端在 `18083` 启动成功，Flyway 从空库完成 V1-V59，Embedding profile
+  使用 `BAAI/bge-m3`/1024 维，OpenAI ChatModel 成功创建；服务健康检查为 `UP`。
+- 前端全量硬门槛：Vitest `250/250`、Mock Playwright `87/87`、typecheck、lint、alignment、
+  design-token 和 production build 全部通过。
+- 文档与安全门禁：project-docs `11/11`、悲观锁检查、Shell syntax、`git diff --check`、
+  新增行密钥扫描全部通过。
+
 ## 当前验收切片
 
-- 前端完整硬门槛已完成，进入后端 PostgreSQL/PDF 导入集成矩阵、Maven reactor 编译与
-  服务启动验证。
-- 运行后端 focused PostgreSQL 矩阵、完整 Maven、服务启动、隔离真实 Files 运行时与一次
-  真实 Chat SSE。
-- 更新 V59 与 WebUI 工作上下文/弹层的双语长青文档后执行最终 Git 交付。
+- 代码 checkpoint 已建立；前端和真实 Files 生命周期已完成验收。
+- 真实 Chat SSE 仍等待上游恢复可用账号后重试；当前证据明确记录为外部阻断。
+- 待同步最新 `origin/main` 并按合并后基线复验，再完成特性分支与 `main` 的 Git 交付。
 
 ## 用户提醒与硬边界
 
