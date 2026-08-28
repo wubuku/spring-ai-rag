@@ -85,6 +85,9 @@ relevant evergreen guide/reference, `docs/TODO*`, and the
 - Guarded Collection purge, permanent key tombstones, referenced-content
   cleanup, and event-driven embedding wake-up:
   `2026-08-28_COLLECTION_PURGE_AND_RETIREMENT_*`
+- Managed API principal expiry warning, after-commit reconciliation, phase
+  escalation, and notification claims:
+  `2026-08-27_MANAGED_API_PRINCIPAL_EXPIRY_ALERTS_*`
 
 This list is only an aid for historical discovery. It does not state current
 priority or capability status.

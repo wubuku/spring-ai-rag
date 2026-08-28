@@ -63,5 +63,7 @@
   `2026-08-27_EXTERNAL_INTEGRATION_OPERABILITY_*`
 - Collection 受保护清理、永久 key tombstone、引用内容清除与事件驱动 embedding 唤醒：
   `2026-08-28_COLLECTION_PURGE_AND_RETIREMENT_*`
+- 受管 API Principal 到期预警、事务后事件对账、阶段升级与通知 claim：
+  `2026-08-27_MANAGED_API_PRINCIPAL_EXPIRY_ALERTS_*`
 
 该列表只帮助历史定位，不代表优先级或当前能力状态。

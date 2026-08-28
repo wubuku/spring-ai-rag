@@ -38,7 +38,7 @@ Active plans are listed here and in `docs/index*`.
 
 ## Current Active Plans
 
-- [Managed API principal expiry alerting and lifecycle reconciliation plan](NEXT_HIGH_VALUE_FEATURES_PLAN.md)
+- [Durable alert notification outbox and provider delivery receipts](NEXT_HIGH_VALUE_FEATURES_PLAN.md)
 - [Companion implementation progress](NEXT_HIGH_VALUE_FEATURES_PROGRESS.md)
 
 Completed, stopped, and superseded materials remain available in the
