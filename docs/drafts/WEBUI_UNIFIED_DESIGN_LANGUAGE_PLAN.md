@@ -1,11 +1,11 @@
 # WebUI 统一设计语言调研与实施规划
 
-> **状态**：规划连续三轮无修改审查已达 `3/3`；可直接实施
+> **状态**：规划完成；本轮只交付规划并暂停
 > **日期**：2026-08-28
 > **稳定代码基线**：`main@dae60044`
-> **实施授权**：用户已授权规划完成后直接实施
+> **实施授权**：后续实施必须等待用户另行指示
 > **规划位置**：当前主工作区 `main`
-> **实施分支**：规划提交推送后，在同一工作区切换到 `feature/webui-unified-design-language`
+> **实施位置**：后续从届时最新 `origin/main` 创建专用分支和隔离 worktree
 > **未来进度文档**：实施开始时创建 `WEBUI_UNIFIED_DESIGN_LANGUAGE_PROGRESS.md`
 > **交付规则**：[规划、实施与验收工作流](../delivery-workflow-zh-CN.md)
 > **既有长青约束**：[WebUI 水平对齐指南](../webui-alignment-guidelines-zh-CN.md)
@@ -759,12 +759,10 @@ type ResolvedTheme = 'light' | 'dark';
 | 2026-08-28 | 初始探索 | stable main 在调研期间从 `34979bc3` 前进到 `dae60044`，Dialog/layer/token 检查已交付 | 切换到最新 main 重新量化和验证；删除重复实施范围；计数 0 |
 | 2026-08-28 | 初始可实施性审查 | CSS 源码总行数硬预算可能诱导无意义压缩；颜色检查白名单和真实 LLM 脚本不够明确 | 改为构建产物与重复债务预算；明确结构性 CSS 关键字及仓库既有真实 LLM 脚本；计数 0 |
 | 2026-08-28 | 文档生命周期审查 | 上一轮 plan/progress 下移到 archive 后，正文内的仓库相对链接需要增加一层 | 修复归档文档相互链接、长青文档和源码链接；计数 0 |
-| 2026-08-28 15:20 +08:00 | 第 1 轮：现状、分支碰撞、量化基线与范围边界 | 无 | 未修改规划；计数 1 |
-| 2026-08-28 15:20 +08:00 | 第 2 轮：token、主题、primitive、CSS 所有权与迁移顺序 | 无 | 未修改规划；计数 2 |
-| 2026-08-28 15:20 +08:00 | 第 3 轮：验收矩阵、真实服务、发布回退与 Git 生命周期 | 无 | 未修改规划；计数 3，允许进入实施 |
 | 2026-08-28 | 现状与碰撞审查 | 工作树被并行流程切到同 SHA 的空特性分支；重新统计颜色字面值为 400 行/107 种 | 不使用 stash，安全切回 `main@dae60044` 并保留全部文档修改；更新量化基线；计数 0 |
 | 2026-08-28 | 实现边界预审 | “全部 primitive 搬目录”会给稳定 Dialog 制造无价值 churn；Button 与导航链接边界不够明确；SVG `none` 未列为结构语义 | 保持既有 Dialog canonical 路径；新 primitive 才进入 `ui/`；冻结 anchor 语义并补齐 checker 白名单；计数 0 |
 | 2026-08-28 | 技术可实施性审查 | generated token CSS 导入顺序未冻结；替换 checker 可能破坏现有 package script 调用者 | 固定 `tokens.css` → `global.css`；保留 `check:design-tokens` 兼容入口并让 lint 聚合新门禁；计数 0 |
 | 2026-08-28 | 债务模型审查 | baseline 文件名只表达 color，但方案实际追踪 motion、typography、CSS ownership 和 alias | 统一为 `design-debt-baseline.json`，以 violation kind 覆盖全部存量设计债务；计数 0 |
 | 2026-08-28 | 可访问交互审查 | Tabs 若只共享样式/role，会让键盘行为继续散落并可能违反 ARIA pattern | 共享 Tabs 统一 roving tabindex 与方向键/Home/End；页面只拥有受控值、URL 和数据；计数 0 |
 | 2026-08-28 | 并发内容漂移审查 | 实施授权/工作区策略被并发改成“直接实施、当前工作区切分支”，且 Slice 2/3 残留旧术语 | 恢复“本轮只规划并暂停”；未来实施固定使用最新 main 的隔离 worktree；统一 design debt/Tabs 术语；计数 0 |
+| 2026-08-28 | Git 与审查记录审查 | 并行流程提前提交初稿并继续改写共享 main；失效的无问题轮次被写进正文 | 保留远端历史，从 `main@495e7fce` 建临时文档 worktree 收敛；删除失效轮次；最终 `3/3` 重新从 0 开始 |
