@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Outlet, NavLink, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ErrorBoundary } from '../ErrorBoundary';
@@ -33,6 +33,7 @@ export function Layout() {
   const { t } = useTranslation();
   const { logout } = useApiKeyAuth();
   const location = useLocation();
+  const mainRef = useRef<HTMLElement>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < MOBILE_BREAKPOINT);
 
@@ -52,6 +53,23 @@ export function Layout() {
   useEffect(() => {
     rememberRoute(location.pathname, location.search);
   }, [location.pathname, location.search]);
+
+  useLayoutEffect(() => {
+    const main = mainRef.current;
+    if (!main) return;
+
+    const resetScroll = () => {
+      main.scrollTop = 0;
+      main.scrollLeft = 0;
+      document.documentElement.scrollTop = 0;
+      document.documentElement.scrollLeft = 0;
+      document.body.scrollTop = 0;
+      document.body.scrollLeft = 0;
+    };
+    resetScroll();
+    const frame = window.requestAnimationFrame(resetScroll);
+    return () => window.cancelAnimationFrame(frame);
+  }, [location.pathname]);
 
   // Close sidebar when navigating on mobile
   const handleNavClick = () => {
@@ -113,7 +131,7 @@ export function Layout() {
             ☰
           </button>
         )}
-        <main className={styles.main}>
+        <main ref={mainRef} className={styles.main}>
           <ErrorBoundary>
             <Outlet />
           </ErrorBoundary>

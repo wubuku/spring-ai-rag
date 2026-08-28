@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { Layout } from './Layout';
 
@@ -49,5 +50,26 @@ describe('Layout', () => {
       </MemoryRouter>
     );
     expect(screen.getByTestId('theme-toggle')).toBeInTheDocument();
+  });
+
+  it('resets the main scroll region when navigating to another page', async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={['/api-keys']}>
+        <Layout />
+      </MemoryRouter>
+    );
+    const main = screen.getByRole('main');
+    main.scrollTop = 640;
+    main.scrollLeft = 120;
+    document.documentElement.scrollTop = 480;
+    document.body.scrollTop = 320;
+
+    await user.click(screen.getByRole('link', { name: /nav\.files/ }));
+
+    expect(main.scrollTop).toBe(0);
+    expect(main.scrollLeft).toBe(0);
+    expect(document.documentElement.scrollTop).toBe(0);
+    expect(document.body.scrollTop).toBe(0);
   });
 });
