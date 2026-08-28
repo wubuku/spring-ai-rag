@@ -1,6 +1,6 @@
 # WebUI 工作上下文、文件可发现性与统一弹层实施进度
 
-> 对应规划：[NEXT_HIGH_VALUE_FEATURES_PLAN.md](NEXT_HIGH_VALUE_FEATURES_PLAN.md)
+> 对应规划：[2026-08-28_NEXT_HIGH_VALUE_FEATURES_PLAN.md](2026-08-28_NEXT_HIGH_VALUE_FEATURES_PLAN.md)
 > 工作区：`/Users/yangjiefeng/Documents/wubuku/spring-ai-rag`
 > 当前分支：`feature/webui-workspace-continuity`
 > 规划基线：`main@34979bc3`

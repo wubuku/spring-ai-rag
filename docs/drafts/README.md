@@ -38,9 +38,8 @@ Active plans are listed here and in `docs/index*`.
 
 ## Current Active Plans
 
-- [WebUI work context, file discoverability, and unified overlay implementation
-  plan](NEXT_HIGH_VALUE_FEATURES_PLAN.md) (Chinese)
-- [Implementation progress ledger](NEXT_HIGH_VALUE_FEATURES_PROGRESS.md) (Chinese)
+- [WebUI unified design language research and implementation plan](WEBUI_UNIFIED_DESIGN_LANGUAGE_PLAN.md)
+  (Chinese)
 
 Completed, stopped, and superseded materials remain available in the
 [historical archive](archive/README.md).

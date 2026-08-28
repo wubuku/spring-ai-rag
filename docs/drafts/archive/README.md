@@ -88,6 +88,8 @@ relevant evergreen guide/reference, `docs/TODO*`, and the
 - Managed API principal expiry warning, after-commit reconciliation, phase
   escalation, and notification claims:
   `2026-08-27_MANAGED_API_PRINCIPAL_EXPIRY_ALERTS_*`
+- WebUI-wide work-context continuity, file discoverability, shared Dialog, and
+  Files-workspace convergence: `2026-08-28_NEXT_HIGH_VALUE_FEATURES_*`
 
 This list is only an aid for historical discovery. It does not state current
 priority or capability status.

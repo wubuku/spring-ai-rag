@@ -65,5 +65,7 @@
   `2026-08-28_COLLECTION_PURGE_AND_RETIREMENT_*`
 - 受管 API Principal 到期预警、事务后事件对账、阶段升级与通知 claim：
   `2026-08-27_MANAGED_API_PRINCIPAL_EXPIRY_ALERTS_*`
+- WebUI 全站工作上下文、文件可发现性、统一 Dialog 与 Files 工作区收敛：
+  `2026-08-28_NEXT_HIGH_VALUE_FEATURES_*`
 
 该列表只帮助历史定位，不代表优先级或当前能力状态。

@@ -32,7 +32,6 @@
 
 ## 当前活跃规划
 
-- [WebUI 工作上下文、文件可发现性与统一弹层实施规划](NEXT_HIGH_VALUE_FEATURES_PLAN.md)
-- [配套实施进度](NEXT_HIGH_VALUE_FEATURES_PROGRESS.md)
+- [WebUI 统一设计语言调研与实施规划](WEBUI_UNIFIED_DESIGN_LANGUAGE_PLAN.md)
 
 已完成、已停止和被替代的材料可从[历史归档](archive/README-zh-CN.md)追溯。

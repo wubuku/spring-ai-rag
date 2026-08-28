@@ -3,8 +3,8 @@
 > 状态：实施中
 > 日期：2026-08-28
 > 当前基线：`main@34979bc3`
-> 配套进度：[NEXT_HIGH_VALUE_FEATURES_PROGRESS.md](NEXT_HIGH_VALUE_FEATURES_PROGRESS.md)
-> 交付规则：[规划、实施与验收工作流](../delivery-workflow-zh-CN.md)
+> 配套进度：[2026-08-28_NEXT_HIGH_VALUE_FEATURES_PROGRESS.md](2026-08-28_NEXT_HIGH_VALUE_FEATURES_PROGRESS.md)
+> 交付规则：[规划、实施与验收工作流](../../delivery-workflow-zh-CN.md)
 
 ## 1. 问题与本轮范围
 
@@ -36,9 +36,9 @@ Files 页面还存在独立的可发现性问题：PDF 导入必须使用 UUID �
 
 ### 2.1 路由与状态
 
-- [App.tsx](../../spring-ai-rag-webui/src/App.tsx) 使用 React Router 的路由级 lazy page；
+- [App.tsx](../../../spring-ai-rag-webui/src/App.tsx) 使用 React Router 的路由级 lazy page；
   页面切换会卸载前一页面。
-- [Layout.tsx](../../spring-ai-rag-webui/src/components/Layout/Layout.tsx) 的侧栏链接固定指向
+- [Layout.tsx](../../../spring-ai-rag-webui/src/components/Layout/Layout.tsx) 的侧栏链接固定指向
   `/chat`、`/search`、`/files` 等根路由，不记住上一次 session、query 或 file path。
 - Chat session ID 已在 `/chat/:sessionId`；消息历史由后端重新读取，模型偏好在
   `localStorage`。但 mode、Collection scope 和未发送输入仍是局部状态。
@@ -54,12 +54,12 @@ Files 页面还存在独立的可发现性问题：PDF 导入必须使用 UUID �
 
 ### 2.2 Files 与 PDF 导入
 
-- [V20](../../spring-ai-rag-core/src/main/resources/db/migration/V20__add_fs_files.sql) 的
+- [V20](../../../spring-ai-rag-core/src/main/resources/db/migration/V20__add_fs_files.sql) 的
   `fs_files` 以 `path TEXT PRIMARY KEY` 保存文件，没有目录行或导入批次元数据。
-- [PdfImportService.java](../../spring-ai-rag-core/src/main/java/com/springairag/core/service/PdfImportService.java)
+- [PdfImportService.java](../../../spring-ai-rag-core/src/main/java/com/springairag/core/service/PdfImportService.java)
   每次生成 UUID，保存 `{uuid}/original.pdf`、`{uuid}/default.md` 和资源文件；返回值只包含
   UUID、entry Markdown 和数量。
-- [PdfImportController.java](../../spring-ai-rag-core/src/main/java/com/springairag/core/controller/PdfImportController.java)
+- [PdfImportController.java](../../../spring-ai-rag-core/src/main/java/com/springairag/core/controller/PdfImportController.java)
   从文件 path 合成目录；`FileTreeEntryResponse.name` 对根目录就是 UUID。
 - `pdf-import:{uuid}/default.md`、现有 raw/preview URL 和 Search/Documents 的 provenance
   deep link 已是稳定合同，不能改名或用原始文件名替代 path。
@@ -71,7 +71,7 @@ Files 页面还存在独立的可发现性问题：PDF 导入必须使用 UUID �
 
 ### 2.3 弹层与设计令牌
 
-- [global.css](../../spring-ai-rag-webui/src/styles/global.css) 定义 `--color-bg`、
+- [global.css](../../../spring-ai-rag-webui/src/styles/global.css) 定义 `--color-bg`、
   `--color-surface`、`--color-text-muted` 等令牌，但没有 `--color-background`、
   `--color-text-secondary`、`--bg-primary`、`--border-color` 或 `--text-secondary`。
 - ABTest 对话框的背景和输入依赖未定义的 `--color-background`，这是透明问题的直接原因。
