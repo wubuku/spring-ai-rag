@@ -24,7 +24,7 @@
 | 为外部 client 选择 Collection 检索范围 | [REST API：外部客户端最佳实践](rest-api-zh-CN.md#外部客户端最佳实践) | [后续覆盖模式 TODO](TODO-zh-CN.md#each_collection-召回覆盖模式) |
 | 同步外部文档 / 内容源 | [外部文档同步 Client 指南](external-document-sync-client-guide-zh-CN.md) | [REST API 契约](rest-api-zh-CN.md#external-documents-idempotent-synchronization)、[一键生命周期验收](developer-reference-zh-CN.md#document-lifecycle-verification) |
 | 查看当前后续改进 / TODO | [TODO-zh-CN.md](TODO-zh-CN.md) | [英文 TODO](TODO.md) |
-| 了解外部 API Key / OpenAI 兼容安全边界 | [OpenAI 兼容就绪度与代码库上下文](openai-compatibility-readiness-zh-CN.md) | [配置参考](configuration-zh-CN.md) |
+| 评估 OpenAI Chat Completions 兼容现状、证据与改进优先级 | [OpenAI 兼容就绪度与代码库上下文](openai-compatibility-readiness-zh-CN.md) | [REST API 契约](rest-api-zh-CN.md#openai-chat-completions-兼容预览)、[配置参考](configuration-zh-CN.md) |
 | 接入 OpenAI 兼容预览 | [REST API：OpenAI 兼容预览](rest-api-zh-CN.md#openai-chat-completions-兼容预览) | [OpenAI 兼容就绪度与边界](openai-compatibility-readiness-zh-CN.md) |
 | 规划嵌入模型换模 / 向量迁移 | [项目上下文](project-context-zh-CN.md) | [架构文档](architecture-zh-CN.md) |
 | 使用 JSONB 结构化记录检索 | [REST API：JSONB Payload 检索](rest-api-zh-CN.md#json-结构化记录jsonb-payload-检索) | [外部文档同步 Client 指南](external-document-sync-client-guide-zh-CN.md) |
@@ -70,7 +70,7 @@
 | [hybrid-search-enhancement-plan.md](hybrid-search-enhancement-plan.md) | 混合检索增强规划（可能滞后于代码） |
 | [multi-model-enhancement-plan.md](multi-model-enhancement-plan.md) | 多模型增强规划 |
 | [multi-model-external-config-zh-CN.md](multi-model-external-config-zh-CN.md) | 外部 `models.json` 配置 |
-| [OpenAI 兼容就绪度与代码库上下文](openai-compatibility-readiness-zh-CN.md) | 默认关闭的受控预览、请求级 Collection scope、当前兼容子集与公网安全缺口 |
+| [OpenAI 兼容就绪度与代码库上下文](openai-compatibility-readiness-zh-CN.md) | 默认关闭的受控预览、协议矩阵、代码导航、验证证据、Starter 边界与改进优先级 |
 | [WebUI 水平对齐指南](webui-alignment-guidelines-zh-CN.md) / [English](webui-alignment-guidelines.md) | WebUI 普通内容、合理居中例外、`alignment-policy` 门禁和验证命令 |
 | [当前活跃规划](drafts/README-zh-CN.md) | 只列仍在准备或实施的方案；实施事实仍以代码与长青文档为准 |
 | [历史规划与实施记录归档](drafts/archive/README-zh-CN.md) | 仅用于追溯设计与验证证据，不是 Agent 默认阅读入口 |

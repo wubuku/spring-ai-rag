@@ -412,7 +412,7 @@ job enqueue 分开提交，HTTP 不同步循环调用 provider。只读诊断默
 
 独立服务 MVP 模式由 `RAG_ROOT_API_KEY` 显式启用：
 
-- environment root 自动保护 `/api/**`，不依赖 legacy 认证开关。
+- environment root 自动保护 `/api/**` 与 `/v1/**`，不依赖 legacy 认证开关。
 - root 可通过 `/webui/unlock` 解锁管理台；凭据只保存在页面内存，刷新后重新输入。
 - 只有 root 能创建、列出、轮换和吊销业务 Key。
 - root 创建的 NORMAL Key 可选择只读 `RAG_READ` 或完整
@@ -507,6 +507,11 @@ job enqueue 分开提交，HTTP 不同步循环调用 provider。只读诊断默
 RAG mode、memory 和后端候选链，不保存固定 Collection；请求通过 `rag.scope` 或重复
 `X-RAG-Collection-Key` 选择范围，再经过统一 Collection resolver 与 API Key ACL。
 非流式和标准 SSE 都复用 transport-neutral `ChatCommand` / `ChatExecutionService`。
+
+`/v1` 没有客户端可控的稳定 session ID；不同请求应按无状态 Chat Completions 使用并重传
+完整 `messages`。Core standalone 会完整扫描并注册兼容入口；Starter 当前只自动导入共享
+Web 安全配置，完整 `/v1` Bean 图仍依赖宿主扫描 `com.springairag` 或等价显式导入，因此
+Starter-only consumer 不是已验收的零配置入口。
 
 该能力默认关闭，当前兼容子集为 `n=1`、text-only messages，不支持 tools、structured
 output 或采样参数。原生 `/api/v1/rag/chat/stream` 仍保留项目专用工具、来源和终态事件；

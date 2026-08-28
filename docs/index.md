@@ -24,7 +24,7 @@
 | Choose Collection retrieval scope for an external client | [REST API: External-client best practices](rest-api.md#external-client-best-practices) | [Deferred coverage-mode TODO](TODO.md#each_collection-retrieval-coverage-mode) |
 | Synchronize external documents / content sources | [External Document Sync Client Guide](external-document-sync-client-guide.md) | [REST API contract](rest-api.md#external-documents-idempotent-synchronization), [one-command lifecycle verification](developer-reference.md#document-lifecycle-verification) |
 | Review current future work / TODO | [TODO.md](TODO.md) | [Chinese TODO](TODO-zh-CN.md) |
-| Understand external API-key / OpenAI compatibility security boundaries | [OpenAI compatibility readiness and codebase context](openai-compatibility-readiness.md) | [Configuration reference](configuration.md) |
+| Assess current OpenAI Chat Completions compatibility, evidence, and improvement priorities | [OpenAI compatibility readiness and codebase context](openai-compatibility-readiness.md) | [REST API contract](rest-api.md#openai-chat-completions-compatibility-preview), [configuration reference](configuration.md) |
 | Integrate the OpenAI compatibility preview | [REST API: OpenAI compatibility preview](rest-api.md#openai-chat-completions-compatibility-preview) | [OpenAI compatibility readiness and boundaries](openai-compatibility-readiness.md) |
 | Plan embedding-model / vector migration | [Project context](project-context.md) | [Architecture](architecture.md) |
 | Use JSONB structured-record retrieval | [REST API: JSONB Payload Retrieval](rest-api.md#json-structured-records--jsonb-payload-retrieval) | [External Document Sync Client Guide](external-document-sync-client-guide.md) |
@@ -70,7 +70,7 @@ Chinese counterparts use the same basename with a `-zh-CN` suffix where availabl
 | [hybrid-search-enhancement-plan.md](hybrid-search-enhancement-plan.md) | Hybrid search plan (may lag code) |
 | [multi-model-enhancement-plan.md](multi-model-enhancement-plan.md) | Multi-model plan |
 | [multi-model-external-config.md](multi-model-external-config.md) | External `models.json` config |
-| [OpenAI compatibility readiness and codebase context](openai-compatibility-readiness.md) | Disabled-by-default controlled preview, request-scoped Collections, compatibility subset, and public-service gaps |
+| [OpenAI compatibility readiness and codebase context](openai-compatibility-readiness.md) | Disabled-by-default preview, protocol matrix, code navigation, verification evidence, Starter boundary, and improvement priorities |
 | [WebUI horizontal-alignment guidelines](webui-alignment-guidelines.md) / [中文](webui-alignment-guidelines-zh-CN.md) | WebUI defaults, justified centering exceptions, the `alignment-policy` gate, and verification commands |
 | [Current active plans](drafts/README.md) | Lists only work still being prepared or implemented; code and evergreen docs remain authoritative |
 | [Historical plan and implementation archive](drafts/archive/README.md) | Design and verification provenance only; not a default reading path for Agents |

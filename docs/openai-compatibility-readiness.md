@@ -5,9 +5,9 @@
 > **Purpose**: Record the current server-side OpenAI Chat Completions
 > implementation, controlled-preview boundary, and remaining public /
 > multi-instance production security work.
-> **Code baseline**: current delivery baseline, including Chat-turn reliability,
-> V48 managed-principal hardening, and V55 bounded staged credential rotation.
-> **Last verified**: 2026-08-27
+> **Code baseline**: `main@f1cdcba1`, including Chat-turn reliability, V48
+> managed-principal hardening, and V55 bounded staged credential rotation.
+> **Last verified**: 2026-08-28
 > **Status**: `/v1/models` and `/v1/chat/completions` are implemented but
 > disabled by default. This document does not claim public production readiness.
 
@@ -37,6 +37,9 @@ a blanket public-production claim because legacy compatibility, identity
 federation, operator recovery, deployment controls, and token/cost governance
 remain separate concerns.
 
+The accurate current position is: **the Core standalone-service topology provides a
+Chat Completions compatibility subset suitable for basic trusted-network integration,
+but it is neither a complete OpenAI API replacement nor a public-production claim.**
 The adapter is not an agent/subagent orchestrator. It provides a stable
 "RAG-as-a-model" boundary; orchestration belongs to the caller or a later independent
 module.
@@ -49,7 +52,7 @@ module.
 |--------|------------------------|-----------------------------------|
 | `spring-ai-rag-api` | DTOs and SPIs | OpenAI DTOs live in an isolated `openai` package and do not change the existing `ChatRequest` contract |
 | `spring-ai-rag-core` | RAG implementation and runnable app | Owns the shared execution layer, compatibility controller, model-alias registry, and error mapping |
-| `spring-ai-rag-starter` | Auto-configuration | Registers authentication, rate limiting, and observability for `/v1` in both topologies |
+| `spring-ai-rag-starter` | Auto-configuration | Explicitly imports the shared authentication, rate-limiting, and observability configuration for `/v1`; the compatibility controller and execution beans still require host scanning of `com.springairag` or equivalent explicit imports |
 | `spring-ai-rag-documents` | Document processing | Must remain independent of the OpenAI protocol |
 | `spring-ai-rag-webui` | React admin UI | Root unlock manages one row per stable principal, including policy CAS, quota, staged/immediate credential rotation, revocation, and shown-once secrets |
 
@@ -58,9 +61,15 @@ There are two runtime topologies:
 1. Run the application from `spring-ai-rag-core`.
 2. Add `spring-ai-rag-starter` to another Spring Boot application.
 
-Security cannot work in only one topology. `/api/*` and `/v1/*` share
-authentication and rate-limit filters, with focused tests covering the
-core-standalone and starter-consumer bean boundaries.
+The Core standalone service scans `com.springairag` through
+`SpringAiRagApplication` and therefore registers the full compatibility entry point.
+The Starter's `GeneralRagAutoConfiguration` currently imports only the shared Web
+security configuration; it does not auto-import `OpenAiCompatibilityController`, the
+mapper, the alias registry, or their complete dependency graph. The demos compensate
+with `scanBasePackages = "com.springairag"`. Therefore, "adding only the Starter
+dependency provides `/v1`" is not an accepted fact. Shared Filter assembly is tested,
+but there is no Starter-consumer `/v1` HTTP integration test that works without the
+extra component scan.
 
 ---
 
@@ -77,6 +86,14 @@ core-standalone and starter-consumer bean boundaries.
 - Non-streaming returns `chat.completion`; streaming returns complete
   `chat.completion.chunk` records and exact `data: [DONE]`. Authentication,
   rate-limit, and controller errors use an OpenAI error envelope.
+- `/v1` exposes no client-controlled stable session ID. Distinct requests receive
+  distinct internal sessions by default; multi-turn clients should resend the complete
+  `messages` list as they do with standard Chat Completions. The alias `SERVER` memory
+  setting must not be described as an externally stable cross-request session contract.
+- Optional `Idempotency-Key` reuses the durable Chat turn. Exact replay preserves the
+  completion ID and result. With this header, `stream=true` completes and persists the
+  turn before emitting snapshot SSE, so it does not provide token-by-token first-byte
+  latency.
 - Native Chat SSE keeps RAG events such as `tool_start`, `tool_result`,
   `sources`, and `done`; it is a separate contract from the `/v1` stream.
 
@@ -85,7 +102,115 @@ See [architecture.md](architecture.md), [rest-api.md](rest-api.md), and
 
 ---
 
-## 4. Do Not Confuse the Two OpenAI-Compatible Directions
+## 4. Implementation Status Assessment, 2026-08-28
+
+### 4.1 Maturity Summary
+
+| Area | Current state | Conclusion |
+|------|---------------|------------|
+| Core standalone basic integration | Implemented with focused tests | Usable for basic OpenAI Chat Completions client integration on a trusted network |
+| Basic SDK wire shape | Mostly compatible | Standard JSON fields parse in the OpenAI Python SDK; the repository has no committed SDK-over-HTTP regression gate |
+| RAG semantics | Implemented | Model aliases, request-scoped Collection/document selection, JSONB filters, and API-key ACLs reuse the shared execution path |
+| Security data plane | Baseline hardening implemented | Bearer/header API keys, capabilities, ACLs, shared quota, revocation, and rotation are in the `/v1` Filter chain |
+| Starter consumer | Partially integrated | Security config is auto-imported; the complete `/v1` entry point still depends on extra host scanning and lacks a real consumer HTTP acceptance test |
+| Complete Chat Completions protocol | Not implemented | Text-only and `n=1`; sampling, tools, structured output, and multimodal inputs are unsupported |
+| Public production service | Not claimed ready | Legacy boundaries, identity, budget, TLS, networking, recovery, and operational controls remain |
+
+Accordingly, "supports OpenAI Chat Completions" means a **controlled compatibility
+subset**. Public descriptions should say "OpenAI Chat Completions-compatible preview",
+not "fully OpenAI API compatible."
+
+### 4.2 Current Protocol Matrix
+
+| Category | Supported | Explicitly unsupported or constrained |
+|----------|-----------|---------------------------------------|
+| Endpoints | `GET /v1/models`, `GET /v1/models/{id}`, `POST /v1/chat/completions` | Responses, Embeddings, Files, Batches, legacy Completions, and every other OpenAI API |
+| Messages | `system`, `developer`, `user`, `assistant`; strings or text-only parts; at most 100 messages and 1,000,000 total characters | Image/audio/file parts, tool/function messages, `name`, blank content; at least one user message is required |
+| Generation parameters | `model`, `stream`, `n=1` | `temperature`, `top_p`, token limits, `n>1`, logprobs, tools/functions, `response_format`, `stream_options`; unknown fields also fail closed |
+| RAG extensions | `rag.scope`, `rag.document_ids`, `rag.filters`, alias-policy-controlled `rag.mode` / `rag.memory`, and repeated `X-RAG-Collection-Key` | `PLAIN` rejects retrieval scope/filter; request overrides are disabled by default; structured sources are not placed in the OpenAI response |
+| Non-streaming response | Standard `chat.completion`, one choice, assistant text, `finish_reason`, and optional usage | No structured citation/source/tool-call objects |
+| Streaming response | Role chunk, content chunks, finish chunk, and `data: [DONE]` | No `stream_options.include_usage`; failures after stream start can only be sent inside the established SSE response |
+| Idempotency | Optional `Idempotency-Key`, stable replay, `X-RAG-Turn-Id`, and replay header | Keyed streaming is completion-then-snapshot SSE, not a live token stream |
+| Conversation | Complete messages can be sent on every request | No client-controlled session ID and no stable server-conversation contract across distinct requests |
+
+Basic OpenAI SDK calls generally fit this subset: set the SDK `base_url` to the
+service's `/v1`, use a RAG credential as the API key, use an alias returned by
+`/v1/models`, and send only the fields above. Agents and IDEs that automatically send
+tools, JSON schemas, sampling parameters, or multimodal parts must disable those
+features first; otherwise they receive an explicit `unsupported_parameter` rather than
+a silent downgrade.
+
+### 4.3 Code Navigation
+
+| Concern | Code entry point |
+|---------|------------------|
+| OpenAI DTOs | `spring-ai-rag-api/.../api/openai/` |
+| `/v1` controller and JSON/SSE mapping | `spring-ai-rag-core/.../controller/OpenAiCompatibilityController.java` |
+| Request validation, messages, and `ChatCommand` mapping | `spring-ai-rag-core/.../openai/OpenAiChatRequestMapper.java` |
+| Model alias and mode/memory/candidate policy | `spring-ai-rag-core/.../openai/OpenAiModelAliasRegistry.java` |
+| Collection header/body merge and ACL | `spring-ai-rag-core/.../openai/OpenAiRequestRetrievalScopeAdapter.java` |
+| OpenAI error envelope | `OpenAiCompatibilityExceptionHandler.java`, `OpenAiProtocolException.java` |
+| Authentication, capability, and quota | `ApiKeyAuthFilter.java`, `ApiCapabilityFilter.java`, `RateLimitFilter.java` |
+| Shared Chat execution | `ChatExecutionService.java`, `ChatTurnOperationService.java` |
+| Focused tests and gate | `OpenAi*Test.java`, `OpenAiCompatibilityControllerWebTest.java`, `scripts/verify-openai-compatibility.sh` |
+
+Each `...` above is under the module's
+`src/main/java/com/springairag/` or `src/test/java/com/springairag/` tree. The table is a
+fast navigation aid, not a substitute for source search.
+
+### 4.4 Current Evidence and Evidence Gaps
+
+On 2026-08-28 at `main@f1cdcba1`, the following command passed:
+
+```bash
+./scripts/verify-openai-compatibility.sh
+```
+
+All four steps passed. The focused Maven set ran 55 tests across aliases, scope
+mapping, complete text-only messages, non-streaming envelopes, protocol errors, SSE
+ordering, `[DONE]`, shared Chat fallback, and Web-security assembly. `test-compile`,
+shell syntax, and `git diff --check` then passed. A one-off wire-shape probe also
+confirmed that the standard non-streaming response parses in the locally installed
+OpenAI Python SDK.
+
+This evidence does **not** yet prove:
+
+1. Committed end-to-end JSON and SSE tests from an isolated Spring Boot service through
+   the official Python and JavaScript SDKs; the focused gate is mainly MockMvc and unit
+   contract coverage.
+2. Automatic `/v1` availability in a normal Starter-only consumer that does not scan
+   `com.springairag`.
+3. The complete feature-flag, Bearer authentication, read-only capability, Collection
+   ACL, shared quota, and real HTTP-stream matrix in one dedicated gate.
+4. That common third-party Agents, IDEs, and gateways will not automatically send an
+   unsupported OpenAI parameter.
+
+### 4.5 Improvement Priorities
+
+1. **P0: Add an SDK-level dedicated E2E gate.** Start isolated PostgreSQL, a mock
+   upstream model, and a real Spring Boot service. Use official Python and JavaScript
+   SDKs to verify models, JSON, SSE, errors, Bearer, a read-only principal, Collection
+   ACL, the feature flag, and `[DONE]`. Use HTTP/JSON/database read-only assertions,
+   never screenshots.
+2. **P0: Make the Starter product boundary explicit.** Either auto-configure the full
+   `/v1` bean graph or state that compatibility service endpoints are Core-standalone
+   only. Lock the decision with a consumer HTTP test; do not let broad demo scanning
+   hide the boundary.
+3. **P1: Add a client integration guide.** Include minimal official-SDK text-only
+   examples, `base_url=/v1`, model aliases, complete messages, Collection header/body,
+   error handling, and keyed-stream behavior.
+4. **P1: Decide the source-return contract.** OpenAI responses currently omit structured
+   RAG sources. Clients that require traceable sources should keep using the native API
+   until a cross-SDK extension-field policy is defined.
+5. **P2: Expand only from real client demand.** Prioritize sampling, structured output,
+   tools, or multimodal support based on a client matrix, without weakening alias policy
+   or server-owned tool authorization.
+6. **Separate production-readiness track:** legacy shutdown, OAuth/OIDC, token/cost hard
+   limits, TLS, network isolation, Secret management, backup/recovery, and alerting.
+
+---
+
+## 5. Do Not Confuse the Two OpenAI-Compatible Directions
 
 | Direction | Status | Meaning |
 |-----------|--------|---------|
@@ -98,7 +223,7 @@ new code must not assume otherwise.
 
 ---
 
-## 5. Current API-Key Capabilities
+## 6. Current API-Key Capabilities
 
 The current implementation provides an accepted standalone-service MVP:
 
@@ -109,11 +234,12 @@ The current implementation provides an accepted standalone-service MVP:
 - Roles are `ADMIN` and `NORMAL`.
 - V24 adds `allowed_collection_ids`, allowing data paths to enforce collection ACLs.
 - `RAG_ROOT_API_KEY` provides an environment-root principal and automatically protects
-  `/api/**` in root mode.
+  `/api/**` and `/v1/**` in root mode.
 - The root unlocks `/webui/unlock` and can create, list, rotate, and revoke business keys.
-- Root-created keys have a fixed `FULL_RAG` profile, require a future expiry
-  without a fixed maximum lifetime, and are usable by external callers without
-  the WebUI.
+- Root-created keys may be read-only `RAG_READ` or full
+  `RAG_READ + RAG_WRITE`; omission preserves full read/write compatibility. They
+  require a future expiry without a fixed maximum lifetime and are usable by external
+  callers without the WebUI.
 - Root mode accepts `Authorization: Bearer` and `X-API-Key` headers and rejects query
   credentials; legacy static/query compatibility remains when root mode is disabled.
 - The WebUI keeps credentials in page memory and clears legacy localStorage credentials
@@ -143,7 +269,7 @@ Relevant code:
 
 ---
 
-## 6. Remaining Boundaries for External Production Callers
+## 7. Remaining Boundaries for External Production Callers
 
 | Gap | Current code fact | Direct impact |
 |-----|-------------------|---------------|
@@ -160,12 +286,13 @@ completed; live API and configuration facts are maintained in the references.
 
 ---
 
-## 7. Current Implementation And Public-Enablement Boundaries
+## 8. Current Implementation And Public-Enablement Boundaries
 
 1. Compatibility is disabled by default and enabled through an explicit feature flag.
 2. `model` identifies a RAG alias; arbitrary backend model names cannot bypass retrieval or
    authorization policy.
-3. Requests are stateless by default; server-side memory requires explicit policy.
+3. Requests are stateless by default. `/v1` exposes no client-controlled session ID, so
+   multi-turn callers must resend complete messages across requests.
 4. Legacy and OpenAI HTTP/SSE mappers consume a shared structured internal result; one
    controller must not call another controller.
 5. A model alias contains no fixed Collection. Effective scope comes from the
@@ -178,8 +305,9 @@ completed; live API and configuration facts are maintained in the references.
    enablement should still remove legacy static/query compatibility.
 9. Existing `/api/v1/rag/**` contracts remain independent and continue to work when
    compatibility is disabled.
-10. Authentication, authorization, rate limiting, and observability are tested in both
-    core-standalone and starter-consumer topologies.
+10. Core standalone has focused contract tests. The Starter currently locks only shared
+    security-config assembly; the complete consumer `/v1` HTTP bean graph remains a P0
+    verification gap.
 11. A mixed V54/V55 fleet must freeze API-key management writes and staged
     prepare. Staged rotation is enabled only after all instances run V55; before
     application rollback to V54, operators must clear enabled retiring
@@ -188,7 +316,7 @@ completed; live API and configuration facts are maintained in the references.
 
 ---
 
-## 8. Maintenance And Hardening Reading Order
+## 9. Maintenance And Hardening Reading Order
 
 1. This document: current controlled-preview facts and security boundaries.
 2. [REST API](rest-api.md) and [configuration](configuration.md): callable contract.
@@ -200,7 +328,7 @@ completed; live API and configuration facts are maintained in the references.
 
 ---
 
-## 9. Maintenance Rules
+## 10. Maintenance Rules
 
 - Update this document when current implementation facts change; update the plan when the
   target design changes. Do not mix current state with planned state.

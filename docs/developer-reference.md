@@ -386,6 +386,13 @@ syntax, and whitespace checks. Evidence is written under
 `.verification/openai-compatibility/<run-id>/`. The runtime controller remains
 disabled unless `RAG_OPENAI_COMPATIBILITY_ENABLED=true`.
 
+This focused gate is primarily MockMvc and unit-level contract coverage. It does not
+start an isolated real Spring Boot HTTP service or invoke an official OpenAI SDK. By
+itself, it does not prove automatic `/v1` registration in a Starter-only consumer or
+compatibility with every default parameter emitted by third-party Agents and IDEs. See
+[OpenAI compatibility readiness](openai-compatibility-readiness.md#44-current-evidence-and-evidence-gaps)
+for the evidence boundary and P0 improvements.
+
 ### Durable Embedding Jobs Verification
 
 ```bash

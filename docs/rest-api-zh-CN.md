@@ -660,6 +660,16 @@ body 与 Header 同时出现时必须表示相同的 Collection key 集合。省
   structured output 和 `stream_options`；传入时返回明确的 OpenAI 错误信封；
 - 未知 alias 返回 `404 model_not_found`。
 
+`/v1` 当前没有客户端可指定的 session ID。不同请求默认使用不同内部 session；多轮调用方
+应在每次请求中重传完整 `messages`。即使 alias 配置为 `SERVER` memory，也不能把它理解为
+对外稳定、可由客户端寻址的跨请求会话合同。
+
+可选 `Idempotency-Key` Header 会复用持久化 Chat turn。精确重放返回稳定的 completion
+结果，并通过 `X-RAG-Turn-Id` 与 `X-RAG-Idempotent-Replay` 标识。携带该 Header 时，
+`stream=true` 会先完成并持久化 turn，再发送快照式 SSE；需要实时逐 token 首包的调用方
+不要在该请求上使用幂等 Header。完整可靠性语义见
+[Chat turn 持久化幂等](#chat-turn-持久化幂等)。
+
 非流式返回 `chat.completion`。流式返回标准 `data: <chunk>`，最后发送
 `data: [DONE]`；项目专用 tool/source 事件不会泄漏到该协议。认证、限流和运行时错误
 同样使用 `{ "error": { "message", "type", "param", "code" } }` 信封。

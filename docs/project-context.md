@@ -520,7 +520,8 @@ Two compatible operating modes are available.
 
 Standalone-service MVP mode is enabled explicitly by `RAG_ROOT_API_KEY`:
 
-- The environment root protects `/api/**` independently of the legacy auth flag.
+- The environment root protects `/api/**` and `/v1/**` independently of the legacy
+  auth flag.
 - The root unlocks the administration UI at `/webui/unlock`; the browser keeps
   it only in page memory and requires it again after refresh.
 - Only the root can create, list, rotate, and revoke business keys.
@@ -650,6 +651,13 @@ backend candidate chain, never a fixed Collection. Requests select scope
 through `rag.scope` or repeated `X-RAG-Collection-Key` headers, then use the
 shared Collection resolver and API-key ACL. Both JSON and standard SSE reuse the
 transport-neutral `ChatCommand` / `ChatExecutionService`.
+
+`/v1` exposes no client-controlled stable session ID. Distinct requests should be used
+as stateless Chat Completions calls and resend the complete `messages` list. Core
+standalone scans and registers the complete compatibility entry point. The Starter
+currently auto-imports only shared Web security configuration; the complete `/v1` bean
+graph still depends on host scanning of `com.springairag` or equivalent explicit
+imports, so a Starter-only consumer is not an accepted zero-configuration entry point.
 
 The feature is disabled by default. Its current subset is text-only, `n=1`, and
 does not support tools, structured output, or sampling parameters. Native

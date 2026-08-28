@@ -360,6 +360,11 @@ CHAT_PLAYWRIGHT_PORT=4199 ./scripts/verify-chat-capability.sh
 `.verification/openai-compatibility/<run-id>/`。兼容 Controller 默认关闭；运行服务时
 需要显式设置 `RAG_OPENAI_COMPATIBILITY_ENABLED=true`。
 
+该专项门禁主要是 MockMvc 与单元级合同测试，不启动隔离的真实 Spring Boot HTTP 服务，
+也不调用官方 OpenAI SDK。它不能单独证明 Starter-only consumer 自动注册 `/v1`，或证明
+第三方 Agent/IDE 的默认参数全部受支持。当前证据边界和 P0 改进项见
+[OpenAI 兼容就绪度](openai-compatibility-readiness-zh-CN.md#44-当前验证证据与证据缺口)。
+
 ### 持久化 Embedding Jobs 一键验证
 
 ```bash

@@ -471,6 +471,19 @@ Current compatibility subset:
   error envelopes instead of being ignored;
 - unknown aliases return `404 model_not_found`.
 
+`/v1` currently exposes no client-controlled session ID. Distinct requests use
+distinct internal sessions by default, so multi-turn callers should resend the complete
+`messages` list on every request. Even when an alias selects `SERVER` memory, it is not
+an externally stable, client-addressable cross-request conversation contract.
+
+An optional `Idempotency-Key` header reuses a durable Chat turn. Exact replay returns a
+stable completion result and is identified by `X-RAG-Turn-Id` and
+`X-RAG-Idempotent-Replay`. With this header, `stream=true` completes and persists the
+turn before emitting snapshot SSE. Callers that require live token-by-token first-byte
+latency should not use the idempotency header on that request. See
+[Durable Chat turn idempotency](#durable-chat-turn-idempotency) for the complete
+reliability contract.
+
 Non-streaming requests return `chat.completion`. Streaming returns standard
 `data: <chunk>` records followed by `data: [DONE]`; project-specific tool and
 source events are not exposed on this protocol. Authentication, rate-limit,
