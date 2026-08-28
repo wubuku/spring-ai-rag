@@ -120,6 +120,22 @@
 - 文档与安全门禁：project-docs `11/11`、悲观锁检查、Shell syntax、`git diff --check`、
   新增行密钥扫描全部通过。
 
+## 合并后基线复验
+
+- 2026-08-28 执行 `git fetch origin --prune`：`origin/main` 仍为 `34979bc3`，特性分支
+  已包含该提交，无需额外合并冲突处理。
+- 后端门槛：`mvn clean compile test-compile` 成功；启用
+  `TESTCONTAINERS_RYUK_DISABLED=true TESTCONTAINERS_CHECKS_DISABLE=true` 与
+  `-Dpdf-import.it.enabled=true` 后，`PdfImportPostgresIntegrationTest` `2/2` 通过，
+  从空 PostgreSQL/pgvector 库执行 V1-V59 迁移并完成导入元数据、历史回退、级联删除和
+  事务回滚断言。
+- 前端门槛：在合并后重新执行 typecheck、Vitest、lint、alignment、design-token、生产构建
+  和排除真实外部服务用例的 Mock Playwright，结果分别为通过、`250/250`、通过、通过、通过、
+  通过、`87/87`。
+- 合并后没有源代码变更；真实 Files 浏览器验收和真实服务启动证据对应的提交内容与该基线
+  完全一致。真实 Chat 仍只受上游服务返回的 `503 no_available_account` 阻断，不能将其
+  归因于本地实现。
+
 ## 当前验收切片
 
 - 代码 checkpoint 已建立；前端和真实 Files 生命周期已完成验收。
