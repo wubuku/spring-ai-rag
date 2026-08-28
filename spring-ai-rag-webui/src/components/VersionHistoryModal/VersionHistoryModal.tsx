@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { documentsApi } from '../../api/documents';
 import type { DocumentVersion } from '../../api/documents';
 import { computeLineDiff, truncateForPreview } from './diffUtils';
+import { Dialog } from '../Dialog';
 import styles from './VersionHistoryModal.module.css';
 
 interface VersionHistoryModalProps {
@@ -91,29 +92,16 @@ export function VersionHistoryModal({
     }
   };
 
-  // Keyboard close on Escape
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [onClose]);
-
   const totalPages = data ? Math.ceil(data.data.totalVersions / PAGE_SIZE) : 0;
 
   return (
-    <div className={styles.overlay} onClick={onClose}>
-      <div className={styles.modal} onClick={e => e.stopPropagation()}>
-        <div className={styles.modalHeader}>
-          <h2 className={styles.modalTitle}>
-            {t('versions.title', 'Version History')} — {documentTitle}
-          </h2>
-          <button className={styles.closeBtn} onClick={onClose} aria-label={t('common.close')}>
-            ×
-          </button>
-        </div>
-
+    <Dialog
+      open
+      title={`${t('versions.title', 'Version History')} — ${documentTitle}`}
+      onClose={onClose}
+      closeDisabled={restorePending}
+      size="large"
+    >
         <div className={styles.tabs}>
           <button
             className={`${styles.tab} ${tab === 'list' ? styles.tabActive : ''}`}
@@ -130,7 +118,7 @@ export function VersionHistoryModal({
           </button>
         </div>
 
-        <div className={styles.body}>
+        <div>
           {/* ── LIST TAB ── */}
           {tab === 'list' && (
             <>
@@ -303,7 +291,6 @@ export function VersionHistoryModal({
             <div className={styles.diffEmpty}>{t('versions.noDiff', 'Select two versions to compare first')}</div>
           )}
         </div>
-      </div>
-    </div>
+    </Dialog>
   );
 }

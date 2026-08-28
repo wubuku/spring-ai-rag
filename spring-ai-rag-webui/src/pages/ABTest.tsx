@@ -7,6 +7,7 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import { abtestApi, type CreateExperimentRequest } from '../api/abtest';
+import { Dialog } from '../components/Dialog';
 import { useToast } from '../components/Toast';
 import styles from './ABTest.module.css';
 
@@ -314,10 +315,33 @@ function CreateExperimentModal({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <div className={styles.modalOverlay} onClick={onClose}>
-      <div className={styles.modal} onClick={e => e.stopPropagation()}>
-        <h2>{t('abtest.createExperiment')}</h2>
-        <form onSubmit={handleSubmit}>
+    <Dialog
+      open
+      title={t('abtest.createExperiment')}
+      onClose={onClose}
+      closeDisabled={createMut.isPending}
+      actions={(
+        <>
+          <button
+            type="button"
+            className={styles.btnSecondary}
+            onClick={onClose}
+            disabled={createMut.isPending}
+          >
+            {t('common.cancel')}
+          </button>
+          <button
+            type="submit"
+            form="create-experiment-form"
+            className={styles.btnPrimary}
+            disabled={createMut.isPending}
+          >
+            {createMut.isPending ? t('common.loading') : t('abtest.create')}
+          </button>
+        </>
+      )}
+    >
+        <form id="create-experiment-form" onSubmit={handleSubmit}>
           <div className={styles.formGroup}>
             <label>{t('abtest.name')}</label>
             <input value={name} onChange={e => setName(e.target.value)} required placeholder={t('abtest.namePlaceholder')} />
@@ -354,14 +378,7 @@ function CreateExperimentModal({ onClose }: { onClose: () => void }) {
               <input type="number" min="0" max="100" value={splitB} onChange={e => setSplitB(e.target.value)} />
             </div>
           </div>
-          <div className={styles.modalActions}>
-            <button type="button" className={styles.btnSecondary} onClick={onClose}>{t('common.cancel')}</button>
-            <button type="submit" className={styles.btnPrimary} disabled={createMut.isPending}>
-              {createMut.isPending ? t('common.loading') : t('abtest.create')}
-            </button>
-          </div>
         </form>
-      </div>
-    </div>
+    </Dialog>
   );
 }

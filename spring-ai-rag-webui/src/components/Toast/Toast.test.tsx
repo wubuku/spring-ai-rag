@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { act, render, screen, fireEvent } from '@testing-library/react';
 import { ToastProvider, useToast } from './Toast';
 import { TOAST_ICONS } from './constants';
 
@@ -77,8 +77,8 @@ describe('Toast', () => {
     fireEvent.click(screen.getByText('Show Success'));
     expect(screen.getByText('Success!')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByText('×'));
-    // Toast should be removed (no longer visible)
+    fireEvent.click(screen.getByRole('button', { name: 'Close notification' }));
+    expect(screen.queryByText('Success!')).not.toBeInTheDocument();
   });
 
   it('auto-dismisses after 3 seconds', () => {
@@ -91,9 +91,8 @@ describe('Toast', () => {
     fireEvent.click(screen.getByText('Show Success'));
     expect(screen.getByText('Success!')).toBeInTheDocument();
 
-    vi.advanceTimersByTime(3000);
-
-    // Toast should be auto-dismissed
+    act(() => vi.advanceTimersByTime(4000));
+    expect(screen.queryByText('Success!')).not.toBeInTheDocument();
   });
 
   it('throws error when useToast is used outside provider', () => {

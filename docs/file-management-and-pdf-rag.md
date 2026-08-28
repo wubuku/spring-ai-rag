@@ -170,7 +170,35 @@ older backend that omit `createdAt`, or legacy rows without a usable value,
 remain visible after timestamped entries and use name order as a stable
 fallback.
 
-## 7. Current Lifecycle Boundaries
+## 7. Files Workspace Interaction
+
+The Files page uses a stable two-pane workspace:
+
+- the location bar contains the breadcrumb and refresh action;
+- the left pane lists the direct children of the current folder and can be
+  resized with the divider on desktop;
+- the right pane previews the selected artifact or summarizes the current
+  folder;
+- the current-folder **Add to RAG** action is shown only inside the folder
+  summary, never as a root-level global control.
+
+Imported directories show the readable PDF name as the primary label and keep
+the UUID as a selectable secondary identity. Historical directories without
+batch metadata fall back to their UUID. The search field filters only the
+current folder and supports IME composition without changing the URL until
+composition ends. Folder changes clear the current-folder filter, preserve the
+workspace geometry, and retain the parent-folder action for empty or
+no-match states. The directory/file list and preview pane are independent
+scroll regions, and the selected path remains shareable through
+`/webui/files?path=...&file=...`.
+
+The workspace remembers only low-risk, bounded tab state such as the selected
+RAG Collection and directory-pane width. It does not persist uploaded
+`File` objects, credentials, preview contents, mutations, or open-dialog
+state. After a successful import, all cached file-tree queries are invalidated
+so the new readable directory can be found from the root immediately.
+
+## 8. Current Lifecycle Boundaries
 
 - Importing the same PDF again creates another `fs_files` UUID directory.
 - Changed PDF content usually creates another RAG document because this path
@@ -182,7 +210,7 @@ fallback.
   related artifacts. Future generic file support can reuse `fs_files` and the
   tree API while defining explicit lifecycle and RAG-registration contracts.
 
-## 8. Code Entry Points
+## 9. Code Entry Points
 
 | Concern | Code |
 |---------|------|

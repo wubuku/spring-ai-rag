@@ -206,32 +206,6 @@
   margin-bottom: 1rem;
 }
 
-/* Modal */
-.modalOverlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 100;
-}
-
-.modal {
-  background: var(--color-background);
-  border-radius: 12px;
-  padding: 1.5rem;
-  width: min(480px, 90vw);
-  max-height: 80vh;
-  overflow-y: auto;
-}
-
-.modal h2 {
-  font-size: 1.25rem;
-  font-weight: 700;
-  margin: 0 0 1.25rem;
-}
-
 .formGroup {
   margin-bottom: 1rem;
 }
@@ -276,11 +250,4 @@
 
 .formRow .formGroup[style] {
   flex: unset;
-}
-
-.modalActions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.75rem;
-  margin-top: 1.25rem;
 }

@@ -586,7 +586,7 @@ UUID. No screenshot is used as acceptance evidence.
 
 This nine-stage gate runs the no-pessimistic-lock check, focused
 purge/Collection/feedback/audit/OpenAI-scope tests, the real PostgreSQL
-V1-V58 purge matrix, `mvn clean compile test-compile`, full WebUI
+V1-V59 purge matrix, `mvn clean compile test-compile`, full WebUI
 typecheck/Vitest/lint/production build, Collection Mock Playwright, bilingual
 documentation validation, shell syntax, and whitespace checks. Each run writes
 step evidence to
@@ -839,7 +839,7 @@ API_KEY_EXPIRY_ALERT_VERIFY_PHASE=focused \
 ./scripts/verify-api-key-expiry-alerts.sh
 ```
 
-The focused phase runs the affected backend tests, an empty-database V1-V58
+The focused phase runs the affected backend tests, an empty-database V1-V59
 PostgreSQL lifecycle matrix, WebUI typecheck/Vitest/alignment/production build,
 and Alerts Mock Playwright in one pass. PostgreSQL scenarios cover eight-way
 concurrency producing one active condition/notification claim, same-row
@@ -864,7 +864,7 @@ MANAGED_API_REAL_LLM_PROVIDER=openai \
   --with-durable-notifications
 ```
 
-The dedicated gate migrates an empty database through V58 and uses isolated
+The dedicated gate migrates an empty database through V59 and uses isolated
 PostgreSQL, a real local HTTP provider stub, two backend instances, and the
 real WebUI. It proves that after-commit events beat the one-minute fallback,
 one ledger attempt makes exactly one provider call,

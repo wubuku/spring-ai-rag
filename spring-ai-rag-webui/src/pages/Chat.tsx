@@ -1,7 +1,7 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useChatSSE } from '../hooks/useSSE';
 import { ChatSidebar, useChatSessions } from '../components/ChatSidebar';
 import { CollectionScopeSelector } from '../components/CollectionScopeSelector';
@@ -15,6 +15,11 @@ import type {
   ChatToolResultEvent,
   ChatToolStartEvent,
 } from '../hooks/useSSE';
+import {
+  readWorkspaceState,
+  removeWorkspaceState,
+  writeWorkspaceState,
+} from '../utils/workspaceState';
 import styles from './Chat.module.css';
 
 interface Message {
@@ -36,19 +41,45 @@ interface ChatToolActivity {
   status: 'running' | 'complete';
 }
 
+function readChatContext(search: string) {
+  const params = new URLSearchParams(search);
+  const modeParam = params.get('mode');
+  const mode: ChatMode =
+    modeParam === 'AGENT' || modeParam === 'PLAIN' ? modeParam : 'KNOWLEDGE';
+  const scopeParam = params.get('scopeMode');
+  const scopeMode: CollectionScopeMode =
+    scopeParam === 'ANY_COLLECTION' || scopeParam === 'SELECTED_COLLECTIONS'
+      ? scopeParam
+      : 'CALLER_VISIBLE';
+  return {
+    mode,
+    scopeMode,
+    selectedCollectionKeys: mode === 'PLAIN'
+      ? []
+      : params.getAll('collectionKey').filter(Boolean).sort(),
+  };
+}
+
 export function Chat() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const location = useLocation();
   const { sessionId } = useParams();
+  const urlContext = useMemo(
+    () => readChatContext(location.search),
+    [location.search],
+  );
   const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput] = useState('');
   const conversationId = sessionId || undefined;
+  const draftKey = `chat-draft:${conversationId ?? 'new'}`;
+  const [input, setInput] = useState(() =>
+    readWorkspaceState(draftKey, (value): value is string => typeof value === 'string') ?? '');
   const [scopeMode, setScopeMode] =
-    useState<CollectionScopeMode>('CALLER_VISIBLE');
+    useState<CollectionScopeMode>(urlContext.scopeMode);
   const [selectedCollectionKeys, setSelectedCollectionKeys] =
-    useState<string[]>([]);
+    useState<string[]>(urlContext.selectedCollectionKeys);
   const [selectedModel, setSelectedModel] = useState<string>(getSelectedModel());
-  const [mode, setMode] = useState<ChatMode>('KNOWLEDGE');
+  const [mode, setMode] = useState<ChatMode>(urlContext.mode);
   const [showSidebar, setShowSidebar] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -56,6 +87,7 @@ export function Chat() {
   const activeTurnIdRef = useRef<string | undefined>(undefined);
   const lastSentMessageRef = useRef<string | undefined>(undefined);
   const skipHistoryLoadForSessionRef = useRef<string | undefined>(undefined);
+  const draftKeyRef = useRef(draftKey);
   const { addSession } = useChatSessions();
   const addSessionRef = useRef(addSession);
   addSessionRef.current = addSession;
@@ -176,7 +208,10 @@ export function Chat() {
       );
       if (event.sessionId && event.sessionId !== conversationId) {
         skipHistoryLoadForSessionRef.current = event.sessionId;
-        navigate(`/chat/${encodeURIComponent(event.sessionId)}`, { replace: true });
+        navigate(
+          `/chat/${encodeURIComponent(event.sessionId)}${location.search}`,
+          { replace: true },
+        );
       }
       activeTurnIdRef.current = undefined;
       lastSentMessageRef.current = undefined;
@@ -228,6 +263,27 @@ export function Chat() {
   }, [conversationId]);
 
   useEffect(() => {
+    setMode(urlContext.mode);
+    setScopeMode(urlContext.scopeMode);
+    setSelectedCollectionKeys(urlContext.selectedCollectionKeys);
+  }, [urlContext]);
+
+  useEffect(() => {
+    setInput(
+      readWorkspaceState(draftKey, (value): value is string => typeof value === 'string') ?? '',
+    );
+  }, [draftKey]);
+
+  useEffect(() => {
+    if (draftKeyRef.current !== draftKey) {
+      draftKeyRef.current = draftKey;
+      return;
+    }
+    if (input) writeWorkspaceState(draftKey, input);
+    else removeWorkspaceState(draftKey);
+  }, [draftKey, input]);
+
+  useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
@@ -252,6 +308,7 @@ export function Chat() {
     }
     const userMsg = input.trim();
     setInput('');
+    removeWorkspaceState(draftKey);
     lastSentMessageRef.current = userMsg;
     const newId = crypto.randomUUID();
     setMessages(prev => [
@@ -310,9 +367,8 @@ export function Chat() {
   };
 
   const handleNewChat = () => {
-    navigate('/chat');
+    navigate(`/chat${location.search}`);
     setShowSidebar(false);
-    setMode('KNOWLEDGE');
   };
 
   const handleExport = async (format: 'json' | 'md') => {
@@ -334,8 +390,37 @@ export function Chat() {
   };
 
   const handleSelectSession = (sessionId: string) => {
-    navigate(`/chat/${encodeURIComponent(sessionId)}`);
+    navigate(`/chat/${encodeURIComponent(sessionId)}${location.search}`);
     setShowSidebar(false);
+  };
+
+  const updateContext = (
+    nextMode: ChatMode,
+    nextScopeMode: CollectionScopeMode,
+    nextCollectionKeys: string[],
+  ) => {
+    const normalizedCollectionKeys = nextMode === 'PLAIN'
+      ? []
+      : [...nextCollectionKeys].sort();
+    setMode(nextMode);
+    setScopeMode(nextScopeMode);
+    setSelectedCollectionKeys(normalizedCollectionKeys);
+
+    const params = new URLSearchParams();
+    if (nextMode !== 'KNOWLEDGE') params.set('mode', nextMode);
+    if (nextMode !== 'PLAIN') {
+      if (nextScopeMode !== 'CALLER_VISIBLE') {
+        params.set('scopeMode', nextScopeMode);
+      }
+      if (nextScopeMode === 'SELECTED_COLLECTIONS') {
+        normalizedCollectionKeys.forEach(key => params.append('collectionKey', key));
+      }
+    }
+    const search = params.toString();
+    navigate(
+      `${location.pathname}${search ? `?${search}` : ''}`,
+      { replace: true },
+    );
   };
 
   const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -478,8 +563,8 @@ export function Chat() {
                   idPrefix="chat"
                   mode={scopeMode}
                   selectedKeys={selectedCollectionKeys}
-                  onModeChange={setScopeMode}
-                  onSelectedKeysChange={setSelectedCollectionKeys}
+                  onModeChange={next => updateContext(mode, next, selectedCollectionKeys)}
+                  onSelectedKeysChange={next => updateContext(mode, scopeMode, next)}
                   disabled={isConnected}
                 />
               </div>
@@ -492,7 +577,11 @@ export function Chat() {
                 id="chat-mode"
                 className={styles.contextSelect}
                 value={mode}
-                onChange={event => setMode(event.target.value as ChatMode)}
+                onChange={event => updateContext(
+                  event.target.value as ChatMode,
+                  scopeMode,
+                  selectedCollectionKeys,
+                )}
                 disabled={isConnected}
                 data-testid="chat-mode-select"
               >

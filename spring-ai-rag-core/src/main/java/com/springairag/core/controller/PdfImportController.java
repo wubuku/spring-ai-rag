@@ -7,10 +7,12 @@ import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.embeddingjob.EmbeddingPolicyResolver;
 import com.springairag.core.exception.RagException;
 import com.springairag.api.dto.FileTreeEntryResponse;
+import com.springairag.api.dto.FileImportMetadataResponse;
 import com.springairag.api.dto.FileTreeResponse;
 import com.springairag.api.dto.PdfImportResponse;
 import com.springairag.api.dto.PdfToRagResponse;
 import com.springairag.core.entity.FsFile;
+import com.springairag.core.entity.FsImportBatch;
 import com.springairag.core.service.MarkdownRendererService;
 import com.springairag.core.service.PdfImportService;
 import com.springairag.core.service.PdfToRagService;
@@ -39,8 +41,12 @@ import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.HashSet;
+import java.util.HashMap;
 import java.util.Optional;
+import java.util.Set;
 import java.util.TreeMap;
+import java.util.UUID;
 
 /**
  * PDF Import and File Preview Controller
@@ -116,11 +122,8 @@ public class PdfImportController {
         }
 
         String filename = file.getOriginalFilename();
-        if (filename == null || !filename.toLowerCase().endsWith(".pdf")) {
-            return ResponseEntity.badRequest()
-                    .body(ErrorResponse.of("Only PDF files are supported"));
-        }
         try {
+            filename = PdfImportService.normalizeOriginalFilename(file);
             PdfImportService.PdfImportResult result = pdfImportService.importPdf(file, collection);
 
             log.info("PDF imported: uuid={}, entryMarkdown={}, files={}",
@@ -129,7 +132,9 @@ public class PdfImportController {
             return ResponseEntity.ok(new PdfImportResponse(
                     result.uuid(),
                     result.entryMarkdown(),
-                    result.filesStored()
+                    result.filesStored(),
+                    result.originalFilename(),
+                    result.displayName()
             ));
 
         } catch (IllegalArgumentException e) {
@@ -212,7 +217,7 @@ public class PdfImportController {
         }
 
         try {
-            String filename = requirePdfFilename(file);
+            requirePdfFilename(file);
             Long effectiveCollectionId = resolveWritableCollectionId(
                     collectionId, collectionKey);
             PdfImportService.PdfImportResult importResult = pdfImportService.importPdf(file, null);
@@ -222,7 +227,7 @@ public class PdfImportController {
 
             PdfToRagService.PdfToRagResult ragResult = pdfToRagService.importPdfToRag(
                     importResult.entryMarkdown(),
-                    filename,
+                    importResult.originalFilename(),
                     effectiveCollectionId,
                     false,
                     false
@@ -303,13 +308,13 @@ public class PdfImportController {
     private ResponseEntity<Object> importPdfToRagWithPolicy(
             MultipartFile file, Long collectionId, String collectionKey, EmbeddingPolicy policy) {
         try {
-            String filename = requirePdfFilename(file);
+            requirePdfFilename(file);
             Long effectiveCollectionId = resolveWritableCollectionId(
                     collectionId, collectionKey);
             PdfImportService.PdfImportResult importResult = pdfImportService.importPdf(file, null);
             PdfToRagService.PdfToRagResult ragResult = pdfToRagService.importPdfToRag(
                     importResult.entryMarkdown(),
-                    filename,
+                    importResult.originalFilename(),
                     effectiveCollectionId,
                     policy,
                     false);
@@ -364,7 +369,7 @@ public class PdfImportController {
             log.info("PDF-to-RAG step 1 complete: uuid={}, entryMarkdown={}, files={}",
                     importResult.uuid(), importResult.entryMarkdown(), importResult.filesStored());
             return streamPdfToRagWithEmbedding(
-                    importResult, filename, effectiveCollectionId);
+                    importResult, effectiveCollectionId);
         } catch (IllegalArgumentException | SecurityException e) {
             throw e;
         } catch (Exception e) {
@@ -378,11 +383,7 @@ public class PdfImportController {
         if (file == null || file.isEmpty()) {
             throw new IllegalArgumentException("No file uploaded");
         }
-        String filename = file.getOriginalFilename();
-        if (filename == null || !filename.toLowerCase().endsWith(".pdf")) {
-            throw new IllegalArgumentException("Only PDF files are supported");
-        }
-        return filename;
+        return PdfImportService.normalizeOriginalFilename(file);
     }
 
     /**
@@ -401,7 +402,6 @@ public class PdfImportController {
      */
     private ResponseEntity<SseEmitter> streamPdfToRagWithEmbedding(
             PdfImportService.PdfImportResult importResult,
-            String filename,
             Long collectionId) {
         SseEmitter emitter = SseEmitters.create();
 
@@ -412,7 +412,7 @@ public class PdfImportController {
                         new java.util.concurrent.atomic.AtomicReference<>();
                 PdfToRagService.PdfToRagResult ragResult = pdfToRagService.importPdfToRagWithEmbedding(
                         importResult.entryMarkdown(),
-                        filename,
+                        importResult.originalFilename(),
                         collectionId,
                         false,  // forceReembed=false
                         (progressEvent) -> {
@@ -933,10 +933,26 @@ public class PdfImportController {
 
         // Distinguish files from directories: a "directory" entry ends with "/" and has no stored content
         // But since we store flat files, we synthesize directory entries from paths
-        List<FileTreeEntryResponse> entries = buildTreeEntries(children, normalized);
+        Set<UUID> rootImportIds = new HashSet<>();
+        if (normalized.isEmpty()) {
+            for (FsFile child : children) {
+                String cleanPath = child.getPath().trim();
+                int slash = cleanPath.indexOf('/');
+                if (slash > 0) {
+                    parseUuid(cleanPath.substring(0, slash)).ifPresent(rootImportIds::add);
+                }
+            }
+        }
+        Map<UUID, FsImportBatch> batches = pdfImportService.getImportBatches(rootImportIds);
+        List<FileTreeEntryResponse> entries = buildTreeEntries(children, normalized, batches);
         String displayPath = normalized.isEmpty() ? "/" : normalized;
+        FileImportMetadataResponse currentImportMetadata = currentImportId(normalized)
+                .flatMap(pdfImportService::getImportBatch)
+                .map(this::toImportMetadata)
+                .orElse(null);
 
-        return ResponseEntity.ok(new FileTreeResponse(displayPath, entries, entries.size()));
+        return ResponseEntity.ok(new FileTreeResponse(
+                displayPath, entries, entries.size(), currentImportMetadata));
     }
 
     // ==================== Internal Helpers ====================
@@ -1087,7 +1103,10 @@ public class PdfImportController {
         return "application/octet-stream";
     }
 
-    private List<FileTreeEntryResponse> buildTreeEntries(List<FsFile> files, String parentPath) {
+    private List<FileTreeEntryResponse> buildTreeEntries(
+            List<FsFile> files,
+            String parentPath,
+            Map<UUID, FsImportBatch> batches) {
         Map<String, OffsetDateTime> directoryCreatedAt = new TreeMap<>();
         List<FileTreeEntryResponse> entries = new ArrayList<>();
 
@@ -1114,7 +1133,10 @@ public class PdfImportController {
             entries.add(toDirectoryEntry(
                     directory.getKey(),
                     parentPath,
-                    directory.getValue()));
+                    directory.getValue(),
+                    parentPath.isEmpty()
+                            ? parseUuid(directory.getKey()).map(batches::get).orElse(null)
+                            : null));
         }
 
         // Sort: directories first, then files alphabetically
@@ -1151,14 +1173,53 @@ public class PdfImportController {
     private FileTreeEntryResponse toDirectoryEntry(
             String dir,
             String parentPath,
-            OffsetDateTime createdAt) {
+            OffsetDateTime createdAt,
+            FsImportBatch batch) {
         return new FileTreeEntryResponse(
                 dir,
                 parentPath + dir + "/",
                 "directory",
                 null,
                 0,
-                createdAt
+                batch != null ? batch.getCreatedAt() : createdAt,
+                batch != null ? batch.getDisplayName() : null,
+                batch != null ? batch.getOriginalFilename() : null,
+                batch != null ? batch.getImportId().toString() : null,
+                batch != null ? batch.getSourceType() : null
+        );
+    }
+
+    private Optional<UUID> currentImportId(String normalizedPath) {
+        if (normalizedPath == null || normalizedPath.isEmpty()) {
+            return Optional.empty();
+        }
+        String withoutTrailingSlash = normalizedPath.endsWith("/")
+                ? normalizedPath.substring(0, normalizedPath.length() - 1)
+                : normalizedPath;
+        if (withoutTrailingSlash.contains("/")) {
+            return Optional.empty();
+        }
+        return parseUuid(withoutTrailingSlash);
+    }
+
+    private Optional<UUID> parseUuid(String value) {
+        try {
+            return Optional.of(UUID.fromString(value));
+        } catch (IllegalArgumentException ignored) {
+            return Optional.empty();
+        }
+    }
+
+    private FileImportMetadataResponse toImportMetadata(FsImportBatch batch) {
+        return new FileImportMetadataResponse(
+                batch.getImportId().toString(),
+                batch.getSourceType(),
+                batch.getOriginalFilename(),
+                batch.getDisplayName(),
+                batch.getEntryPath(),
+                batch.getOriginalPath(),
+                batch.getFileCount(),
+                batch.getCreatedAt()
         );
     }
 }

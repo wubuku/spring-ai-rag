@@ -1,6 +1,7 @@
 :root {
   --color-bg: #ffffff;
   --color-surface: #f8f9fa;
+  --color-surface-2: #f1f5f9;
   --color-surface-hover: #f3f4f6;
   --color-border: #e5e7eb;
   --color-text: #111827;
@@ -11,6 +12,25 @@
   --color-success: #22c55e;
   --color-warning: #f59e0b;
   --color-error: #ef4444;
+  --color-backdrop: rgba(17, 24, 39, 0.68);
+  --shadow-dialog: 0 18px 48px rgba(15, 23, 42, 0.28);
+  --z-raised: 1;
+  --z-navigation-backdrop: 90;
+  --z-navigation: 100;
+  --z-overlay: 300;
+  --z-dialog: 400;
+  --z-popover: 500;
+  --z-toast: 600;
+
+  /* Compatibility aliases while legacy components migrate to canonical tokens. */
+  --color-background: var(--color-bg);
+  --color-bg-secondary: var(--color-surface);
+  --color-hover: var(--color-surface-hover);
+  --color-text-secondary: var(--color-text-muted);
+  --bg-primary: var(--color-bg);
+  --bg-secondary: var(--color-surface);
+  --border-color: var(--color-border);
+  --text-secondary: var(--color-text-muted);
 
   /* Preserve the current typography baseline while removing the Vite template styles. */
   font-size: 18px;

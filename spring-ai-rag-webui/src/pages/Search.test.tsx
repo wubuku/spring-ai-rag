@@ -69,6 +69,7 @@ async function submit(query = 'test query') {
 describe('Search', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    window.sessionStorage.clear();
     (searchApi.search as ReturnType<typeof vi.fn>).mockResolvedValue({
       data: { query: 'test', total: 0, results: [] },
     });
@@ -89,6 +90,18 @@ describe('Search', () => {
     expect(screen.getByPlaceholderText(/search.placeholder/)).toBeInTheDocument();
     expect(screen.getByLabelText(/Hybrid/)).toBeChecked();
     expect(screen.getByRole('button', { name: /search.searchButton/ })).toBeDisabled();
+  });
+
+  it('restores an unsubmitted draft only for the same submitted URL', () => {
+    const first = renderSearch(['/search?query=manual']);
+    fireEvent.change(screen.getByPlaceholderText(/search.placeholder/), {
+      target: { value: 'unfinished refinement' },
+    });
+    first.unmount();
+
+    renderSearch(['/search?query=manual']);
+    expect(screen.getByPlaceholderText(/search.placeholder/))
+      .toHaveValue('unfinished refinement');
   });
 
   it('sends CALLER_VISIBLE without collection keys by default', async () => {

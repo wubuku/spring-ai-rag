@@ -1,9 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useSearchParams } from 'react-router-dom';
 import { embeddingsApi } from '../api/embeddings';
 import type { DerivationRepairPreview } from '../api/embeddings';
+import { Dialog } from '../components/Dialog';
 import styles from './Evaluation.module.css';
 
 export function Embeddings() {
@@ -16,6 +17,7 @@ export function Embeddings() {
   const selectedId = searchParams.get('jobId') ?? '';
   const [repairPreview, setRepairPreview] =
     useState<DerivationRepairPreview | null>(null);
+  const repairTriggerRef = useRef<HTMLButtonElement>(null);
 
   const jobsQ = useQuery({
     queryKey: ['embedding-jobs', status, collectionKey, batchId],
@@ -133,6 +135,7 @@ export function Embeddings() {
           <div className={styles.sectionHeader}>
             <h2>{t('embeddings.derivationIntegrity')}</h2>
             <button
+              ref={repairTriggerRef}
               type="button"
               className={styles.primaryBtn}
               disabled={previewRepairM.isPending}
@@ -164,10 +167,35 @@ export function Embeddings() {
         </section>
       )}
 
-      {repairPreview && (
-        <div role="dialog" aria-modal="true" aria-label={t('embeddings.repairPreview')}>
+      <Dialog
+        open={Boolean(repairPreview)}
+        title={t('embeddings.repairPreview')}
+        onClose={() => setRepairPreview(null)}
+        closeDisabled={applyRepairM.isPending}
+        returnFocusRef={repairTriggerRef}
+        size="large"
+        actions={repairPreview ? (
+          <>
+            <button
+              type="button"
+              onClick={() => setRepairPreview(null)}
+              disabled={applyRepairM.isPending}
+            >
+              {t('common.cancel')}
+            </button>
+            <button
+              type="button"
+              className={styles.primaryBtn}
+              disabled={applyRepairM.isPending}
+              onClick={() => applyRepairM.mutate(repairPreview)}
+            >
+              {t('embeddings.applyRepair')}
+            </button>
+          </>
+        ) : undefined}
+      >
+        {repairPreview && (
           <section className={styles.section}>
-            <h2>{t('embeddings.repairPreview')}</h2>
             <p className={styles.muted}>
               {t('embeddings.repairDocuments', { count: repairPreview.items.length })}
             </p>
@@ -191,22 +219,9 @@ export function Embeddings() {
                 </tbody>
               </table>
             </div>
-            <div className={styles.actionsRow}>
-              <button type="button" onClick={() => setRepairPreview(null)}>
-                {t('common.cancel')}
-              </button>
-              <button
-                type="button"
-                className={styles.primaryBtn}
-                disabled={applyRepairM.isPending}
-                onClick={() => applyRepairM.mutate(repairPreview)}
-              >
-                {t('embeddings.applyRepair')}
-              </button>
-            </div>
           </section>
-        </div>
-      )}
+        )}
+      </Dialog>
 
       <section className={styles.section} aria-label={t('embeddings.jobs')}>
         {jobsQ.isPending ? (

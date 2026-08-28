@@ -124,6 +124,7 @@ export function DocumentActionsMenu({
 
   const runAndClose = (action: () => void) => {
     closeMenu();
+    triggerRef.current?.focus();
     action();
   };
 

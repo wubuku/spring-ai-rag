@@ -18,8 +18,15 @@ public record FileTreeResponse(
         List<FileTreeEntryResponse> entries,
 
         @Schema(description = "Total number of entries returned", example = "2")
-        int total
+        int total,
+
+        @Schema(description = "Readable metadata for the current UUID import directory", nullable = true)
+        FileImportMetadataResponse importMetadata
 ) {
+    public FileTreeResponse(String path, List<FileTreeEntryResponse> entries, int total) {
+        this(path, entries, total, null);
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -27,12 +34,13 @@ public record FileTreeResponse(
         FileTreeResponse that = (FileTreeResponse) o;
         return total == that.total &&
                 Objects.equals(path, that.path) &&
-                Objects.equals(entries, that.entries);
+                Objects.equals(entries, that.entries) &&
+                Objects.equals(importMetadata, that.importMetadata);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(path, entries, total);
+        return Objects.hash(path, entries, total, importMetadata);
     }
 
     @Override
@@ -41,6 +49,7 @@ public record FileTreeResponse(
                 "path='" + path + '\'' +
                 ", entries=" + (entries != null ? entries.size() + " entry(ies)" : "null") +
                 ", total=" + total +
+                ", importMetadata=" + importMetadata +
                 '}';
     }
 }

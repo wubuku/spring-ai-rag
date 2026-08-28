@@ -9,6 +9,11 @@ import { SearchResults } from '../components/SearchResults';
 import { useToast } from '../components/Toast';
 import { useSearchHistory } from '../hooks/useSearchHistory';
 import type { CollectionScopeMode } from '../types/api';
+import {
+  readWorkspaceState,
+  removeWorkspaceState,
+  writeWorkspaceState,
+} from '../utils/workspaceState';
 import styles from './Search.module.css';
 
 interface SearchUrlState {
@@ -16,6 +21,21 @@ interface SearchUrlState {
   useHybrid: boolean;
   scopeMode: CollectionScopeMode;
   selectedCollectionKeys: string[];
+}
+
+interface SearchDraft extends SearchUrlState {
+  baseSubmittedSearch: string;
+}
+
+function isSearchDraft(value: unknown): value is SearchDraft {
+  if (!value || typeof value !== 'object') return false;
+  const draft = value as Partial<SearchDraft>;
+  return typeof draft.query === 'string'
+    && typeof draft.useHybrid === 'boolean'
+    && typeof draft.scopeMode === 'string'
+    && Array.isArray(draft.selectedCollectionKeys)
+    && draft.selectedCollectionKeys.every(key => typeof key === 'string')
+    && typeof draft.baseSubmittedSearch === 'string';
 }
 
 function readSearchUrlState(search: string): SearchUrlState {
@@ -43,20 +63,71 @@ export function Search() {
     () => readSearchUrlState(location.search),
     [location.search],
   );
-  const [query, setQuery] = useState<string>(urlState.query);
-  const [useHybrid, setUseHybrid] = useState(urlState.useHybrid);
-  const [scopeMode, setScopeMode] = useState<CollectionScopeMode>(urlState.scopeMode);
+  const initialDraft = useMemo(
+    () => readWorkspaceState('search-draft', isSearchDraft),
+    [],
+  );
+  const applicableDraft = initialDraft?.baseSubmittedSearch === location.search
+    ? initialDraft
+    : null;
+  const [query, setQuery] = useState<string>(applicableDraft?.query ?? urlState.query);
+  const [useHybrid, setUseHybrid] = useState(
+    applicableDraft?.useHybrid ?? urlState.useHybrid,
+  );
+  const [scopeMode, setScopeMode] = useState<CollectionScopeMode>(
+    applicableDraft?.scopeMode ?? urlState.scopeMode,
+  );
   const [selectedCollectionKeys, setSelectedCollectionKeys] =
-    useState<string[]>(urlState.selectedCollectionKeys);
+    useState<string[]>(
+      applicableDraft?.selectedCollectionKeys ?? urlState.selectedCollectionKeys,
+    );
   const { history, addQuery, removeItem, clearHistory, showHistory, setShowHistory } = useSearchHistory();
   const historyRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    const draft = readWorkspaceState('search-draft', isSearchDraft);
+    if (draft?.baseSubmittedSearch === location.search) {
+      setQuery(draft.query);
+      setUseHybrid(draft.useHybrid);
+      setScopeMode(draft.scopeMode);
+      setSelectedCollectionKeys(draft.selectedCollectionKeys);
+      return;
+    }
+    removeWorkspaceState('search-draft');
     setQuery(urlState.query);
     setUseHybrid(urlState.useHybrid);
     setScopeMode(urlState.scopeMode);
     setSelectedCollectionKeys(urlState.selectedCollectionKeys);
-  }, [urlState]);
+  }, [location.search, urlState]);
+
+  useEffect(() => {
+    const current = {
+      query,
+      useHybrid,
+      scopeMode,
+      selectedCollectionKeys: [...selectedCollectionKeys].sort(),
+    };
+    const clean = current.query === urlState.query
+      && current.useHybrid === urlState.useHybrid
+      && current.scopeMode === urlState.scopeMode
+      && current.selectedCollectionKeys.join('\0')
+        === urlState.selectedCollectionKeys.join('\0');
+    if (clean) {
+      removeWorkspaceState('search-draft');
+    } else {
+      writeWorkspaceState('search-draft', {
+        ...current,
+        baseSubmittedSearch: location.search,
+      } satisfies SearchDraft);
+    }
+  }, [
+    location.search,
+    query,
+    scopeMode,
+    selectedCollectionKeys,
+    urlState,
+    useHybrid,
+  ]);
 
   const sortedCollectionKeys = [...selectedCollectionKeys].sort();
   const selectedScopeIsValid =
@@ -113,6 +184,7 @@ export function Search() {
     if (location.search === nextSearch) {
       void refetch();
     } else {
+      removeWorkspaceState('search-draft');
       navigate(`/search${nextSearch}`);
     }
   };

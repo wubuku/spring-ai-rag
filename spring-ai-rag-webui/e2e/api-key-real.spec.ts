@@ -74,7 +74,7 @@ test('manages a real stable principal without persisting shown-once credentials'
     expect(created.requestsPerMinute).toBe(12);
     expect(created.capabilities).toEqual(['RAG_READ']);
     await expect(page.getByText(firstRawKey!, { exact: true })).toBeVisible();
-    await page.getByRole('button', { name: 'Close' }).click();
+    await page.getByRole('dialog').getByText('Close', { exact: true }).click();
     await expect(page.getByText(firstRawKey!, { exact: true })).toHaveCount(0);
 
     const principalRow = page.locator('[class*="tableRow"]').filter({
@@ -146,7 +146,7 @@ test('manages a real stable principal without persisting shown-once credentials'
     expect(rotationId).toBeTruthy();
     await expect(page.getByText(stagedRawKey, { exact: true })).toBeVisible();
     await expect(page.getByText('Overlap deadline')).toBeVisible();
-    await page.getByRole('button', { name: 'Close' }).click();
+    await page.getByRole('dialog').getByText('Close', { exact: true }).click();
     await expect(page.getByText(stagedRawKey, { exact: true })).toHaveCount(0);
 
     const oldIdentity = await request.get(`${API_PREFIX}/auth/me`, {

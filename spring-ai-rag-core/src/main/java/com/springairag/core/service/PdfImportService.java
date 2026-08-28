@@ -2,7 +2,9 @@ package com.springairag.core.service;
 
 import com.springairag.core.config.RagPdfProperties;
 import com.springairag.core.entity.FsFile;
+import com.springairag.core.entity.FsImportBatch;
 import com.springairag.core.repository.FsFileRepository;
+import com.springairag.core.repository.FsImportBatchRepository;
 import com.springairag.core.service.pdf.PdfConverter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,6 +19,7 @@ import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.stream.Stream;
 import java.util.*;
 
 /**
@@ -52,13 +55,16 @@ public class PdfImportService {
     private static final Logger log = LoggerFactory.getLogger(PdfImportService.class);
 
     private final FsFileRepository fsFileRepository;
+    private final FsImportBatchRepository fsImportBatchRepository;
     private final RagPdfProperties pdfProperties;
     private final List<PdfConverter> converters;
 
     public PdfImportService(FsFileRepository fsFileRepository,
+                            FsImportBatchRepository fsImportBatchRepository,
                             RagPdfProperties pdfProperties,
                             List<PdfConverter> converters) {
         this.fsFileRepository = fsFileRepository;
+        this.fsImportBatchRepository = fsImportBatchRepository;
         this.pdfProperties = pdfProperties;
         // Sort by priority: marker CLI first, then PDFBox
         this.converters = converters.stream()
@@ -82,16 +88,11 @@ public class PdfImportService {
             throw new IllegalStateException("PDF import is disabled (rag.pdf.enabled=false)");
         }
 
-        String originalFilename = pdfFile.getOriginalFilename();
-        if (originalFilename == null || originalFilename.isBlank()) {
-            throw new IllegalArgumentException("PDF filename must not be blank");
-        }
-        if (!originalFilename.toLowerCase().endsWith(".pdf")) {
-            throw new IllegalArgumentException("Only PDF files are supported");
-        }
+        String originalFilename = normalizeOriginalFilename(pdfFile);
 
         // Generate UUID as virtual directory name
-        String uuid = UUID.randomUUID().toString();
+        UUID importId = UUID.randomUUID();
+        String uuid = importId.toString();
         log.info("Importing PDF: originalFilename={}, uuid={}", originalFilename, uuid);
 
         // Create temp working directory
@@ -103,9 +104,10 @@ public class PdfImportService {
         }
 
         try {
-            // Copy uploaded PDF to temp location
-            Path tempPdfPath = tempWorkDir.resolve(originalFilename);
-            Files.write(tempPdfPath, pdfFile.getBytes());
+            // 客户端文件名只作为元数据，绝不参与临时路径。
+            Path tempPdfPath = tempWorkDir.resolve("source.pdf");
+            byte[] pdfBytes = pdfFile.getBytes();
+            Files.write(tempPdfPath, pdfBytes);
 
             // Find first available converter
             PdfConverter converter = findAvailableConverter();
@@ -122,86 +124,91 @@ public class PdfImportService {
                 throw new RuntimeException("PDF conversion failed using " + converter.getName());
             }
 
-            // marker output directory structure: {tempWorkDir}/{pdfName}/
-            String pdfBaseName = originalFilename;
-            if (pdfBaseName.toLowerCase().endsWith(".pdf")) {
-                pdfBaseName = pdfBaseName.substring(0, pdfBaseName.length() - 4);
+            Path markerOutputDir = tempWorkDir.resolve("source");
+            if (!Files.isDirectory(markerOutputDir)) {
+                throw new IllegalStateException(
+                        "PDF converter did not create the expected source/ output directory");
             }
-            Path markerOutputDir = tempWorkDir.resolve(pdfBaseName);
 
-            // Import entire directory tree into database
             List<FsFile> records = new ArrayList<>();
-            int[] count = {0};
-
-            // Store original PDF
-            byte[] pdfBytes = Files.readAllBytes(tempPdfPath);
-            FsFile pdfFileRecord = new FsFile(
-                    uuid + "/original.pdf",
+            String originalPath = uuid + "/original.pdf";
+            String entryMarkdownPath = uuid + "/default.md";
+            records.add(new FsFile(
+                    originalPath,
                     false,
                     pdfBytes,
                     null,
                     "application/pdf",
                     (long) pdfBytes.length
-            );
-            records.add(pdfFileRecord);
-            count[0]++;
+            ));
 
-            // Iterate through marker output directory, import all files
-            if (Files.exists(markerOutputDir)) {
-                try {
-                    Files.list(markerOutputDir).forEach(file -> {
-                        try {
-                            if (Files.isRegularFile(file)) {
-                                // Strip leading/trailing whitespace from filename to handle edge cases
-                                // where the converter may create files with extra spaces
-                                String filename = file.getFileName().toString().trim();
-                                byte[] content = Files.readAllBytes(file);
-
-                                // Markdown files become the entry (default.md)
-                                boolean isMarkdown = filename.toLowerCase().endsWith(".md");
-                                String recordPath = isMarkdown
-                                        ? uuid + "/default.md"  // Rename to default.md
-                                        : uuid + "/" + filename;
-
-                                String contentTxt = isMarkdown
-                                        ? new String(content, StandardCharsets.UTF_8)
-                                        : null;
-
-                                String mimeType = isMarkdown
-                                        ? "text/markdown"
-                                        : Files.probeContentType(file);
-
-                                FsFile fsFile = new FsFile(
-                                        recordPath,
-                                        isMarkdown,
-                                        content,
-                                        contentTxt,
-                                        mimeType != null ? mimeType : "application/octet-stream",
-                                        (long) content.length
-                                );
-                                records.add(fsFile);
-                                count[0]++;
-
-                                log.info("Imported file: {} -> {}", file, recordPath);
-                            }
-                        } catch (IOException e) {
-                            log.error("Failed to import file {}: {}", file, e.getMessage());
-                        }
-                    });
-                } catch (IOException e) {
-                    log.error("Failed to list marker output directory: {}", e.getMessage());
-                }
+            List<Path> outputFiles;
+            try (Stream<Path> stream = Files.list(markerOutputDir)) {
+                outputFiles = stream
+                        .filter(Files::isRegularFile)
+                        .sorted()
+                        .toList();
             }
 
-            fsFileRepository.saveAll(records);
+            List<Path> markdownFiles = outputFiles.stream()
+                    .filter(file -> file.getFileName().toString()
+                            .toLowerCase(Locale.ROOT).endsWith(".md"))
+                    .toList();
+            if (markdownFiles.size() != 1) {
+                throw new IllegalStateException(
+                        "PDF conversion must produce exactly one entry Markdown file");
+            }
 
-            // The entry Markdown path for preview
-            String entryMarkdownPath = uuid + "/default.md";
+            Set<String> recordPaths = new HashSet<>();
+            recordPaths.add(originalPath);
+            for (Path file : outputFiles) {
+                String filename = file.getFileName().toString().trim();
+                if (filename.isEmpty()) {
+                    throw new IllegalStateException("PDF converter produced a blank filename");
+                }
+                boolean isMarkdown = file.equals(markdownFiles.getFirst());
+                String recordPath = isMarkdown
+                        ? entryMarkdownPath
+                        : uuid + "/" + filename;
+                if (!recordPaths.add(recordPath)) {
+                    throw new IllegalStateException(
+                            "PDF converter produced duplicate output path: " + recordPath);
+                }
+
+                byte[] content = Files.readAllBytes(file);
+                String mimeType = isMarkdown ? "text/markdown" : Files.probeContentType(file);
+                records.add(new FsFile(
+                        recordPath,
+                        isMarkdown,
+                        content,
+                        isMarkdown ? new String(content, StandardCharsets.UTF_8) : null,
+                        mimeType != null ? mimeType : "application/octet-stream",
+                        (long) content.length
+                ));
+                log.info("Imported file: {} -> {}", file, recordPath);
+            }
+
+            fsFileRepository.saveAllAndFlush(records);
+            fsImportBatchRepository.save(new FsImportBatch(
+                    importId,
+                    "PDF",
+                    originalFilename,
+                    originalFilename,
+                    entryMarkdownPath,
+                    originalPath,
+                    records.size()
+            ));
 
             log.info("PDF import completed: uuid={}, entryMarkdown={}, files={}",
-                    uuid, entryMarkdownPath, count[0]);
+                    uuid, entryMarkdownPath, records.size());
 
-            return new PdfImportResult(uuid, entryMarkdownPath, count[0]);
+            return new PdfImportResult(
+                    uuid,
+                    entryMarkdownPath,
+                    records.size(),
+                    originalFilename,
+                    originalFilename
+            );
 
         } finally {
             // Cleanup temp directory
@@ -233,6 +240,49 @@ public class PdfImportService {
         }
         log.warn("No PDF converter is available");
         return null;
+    }
+
+    public static String normalizeOriginalFilename(MultipartFile pdfFile) {
+        if (pdfFile == null || pdfFile.isEmpty()) {
+            throw new IllegalArgumentException("No file uploaded");
+        }
+        String raw = pdfFile.getOriginalFilename();
+        if (raw == null) {
+            throw new IllegalArgumentException("PDF filename must not be blank");
+        }
+        String normalizedPath = raw.replace('\\', '/');
+        String filename = normalizedPath.substring(normalizedPath.lastIndexOf('/') + 1).trim();
+        if (filename.isEmpty()) {
+            throw new IllegalArgumentException("PDF filename must not be blank");
+        }
+        if (filename.length() > 512) {
+            throw new IllegalArgumentException("PDF filename must not exceed 512 characters");
+        }
+        for (int i = 0; i < filename.length(); i++) {
+            char character = filename.charAt(i);
+            if (character == 0 || character < 32 || character == 127) {
+                throw new IllegalArgumentException("PDF filename contains control characters");
+            }
+        }
+        if (!filename.toLowerCase(Locale.ROOT).endsWith(".pdf")) {
+            throw new IllegalArgumentException("Only PDF files are supported");
+        }
+        return filename;
+    }
+
+    public Optional<FsImportBatch> getImportBatch(UUID importId) {
+        return fsImportBatchRepository.findById(importId);
+    }
+
+    public Map<UUID, FsImportBatch> getImportBatches(Collection<UUID> importIds) {
+        if (importIds == null || importIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, FsImportBatch> result = new HashMap<>();
+        for (FsImportBatch batch : fsImportBatchRepository.findAllByImportIdIn(importIds)) {
+            result.put(batch.getImportId(), batch);
+        }
+        return result;
     }
 
     /**
@@ -318,6 +368,14 @@ public class PdfImportService {
             /** Path to the entry Markdown file, e.g. "{uuid}/default.md" */
             String entryMarkdown,
             /** Total number of files stored */
-            int filesStored
-    ) {}
+            int filesStored,
+            /** Normalized original upload filename */
+            String originalFilename,
+            /** Human-readable display name */
+            String displayName
+    ) {
+        public PdfImportResult(String uuid, String entryMarkdown, int filesStored) {
+            this(uuid, entryMarkdown, filesStored, null, null);
+        }
+    }
 }

@@ -5,7 +5,7 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  z-index: 9999;
+  z-index: var(--z-toast);
   pointer-events: none;
 }
 
@@ -20,7 +20,7 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   min-width: 250px;
   max-width: 400px;
-  pointer-events: auto;
+  pointer-events: none;
   animation: slideIn 0.2s ease-out;
 }
 
@@ -56,6 +56,7 @@
   color: var(--color-text-muted);
   padding: 0 0 0 8px;
   line-height: 1;
+  pointer-events: auto;
 }
 
 .close:hover {

@@ -11,6 +11,7 @@ import {
 } from '../api/apikeys';
 import { collectionsApi } from '../api/collections';
 import { useToast } from '../components/Toast';
+import { Dialog } from '../components/Dialog';
 import styles from './ApiKeys.module.css';
 
 const DEFAULT_EXPIRY_DAYS = 365;
@@ -469,13 +470,13 @@ function CreateKeyModal({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <div className={styles.modal} onClick={(e) => e.target === e.currentTarget && handleClose()}>
-      <div className={styles.modalContent}>
-        <div className={styles.modalHeader}>
-          <h2 className={styles.modalTitle}>{t('apiKeys.createKey')}</h2>
-          <button className={styles.modalClose} onClick={handleClose}>✕</button>
-        </div>
-
+    <Dialog
+      open
+      title={t('apiKeys.createKey')}
+      onClose={handleClose}
+      closeDisabled={createMutation.isPending}
+      size="large"
+    >
         {!createdKey ? (
           <form onSubmit={handleSubmit}>
             <div className={styles.formGroup}>
@@ -641,8 +642,7 @@ function CreateKeyModal({ onClose }: { onClose: () => void }) {
             </div>
           </div>
         )}
-      </div>
-    </div>
+    </Dialog>
   );
 }
 
@@ -721,12 +721,13 @@ function EditPolicyModal({
   };
 
   return (
-    <div className={styles.modal} onClick={(event) => event.target === event.currentTarget && onClose()}>
-      <div className={styles.modalContent}>
-        <div className={styles.modalHeader}>
-          <h2 className={styles.modalTitle}>{t('apiKeys.editPolicy')}</h2>
-          <button className={styles.modalClose} onClick={onClose}>✕</button>
-        </div>
+    <Dialog
+      open
+      title={t('apiKeys.editPolicy')}
+      onClose={onClose}
+      closeDisabled={updateMutation.isPending}
+      size="large"
+    >
         <form onSubmit={handleSubmit}>
           <div className={styles.formGroup}>
             <label className={styles.label} htmlFor="policy-name">{t('apiKeys.name')} *</label>
@@ -840,8 +841,7 @@ function EditPolicyModal({
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </Dialog>
   );
 }
 
@@ -937,13 +937,16 @@ function RotateKeyModal({
   const completedResult = preparedRotation ?? immediateKey;
 
   return (
-    <div className={styles.modal} onClick={(e) => e.target === e.currentTarget && handleClose()}>
-      <div className={styles.modalContent}>
-        <div className={styles.modalHeader}>
-          <h2 className={styles.modalTitle}>{t('apiKeys.rotateKey')}</h2>
-          <button className={styles.modalClose} onClick={handleClose}>✕</button>
-        </div>
-
+    <Dialog
+      open
+      title={t('apiKeys.rotateKey')}
+      onClose={handleClose}
+      closeDisabled={
+        prepareMutation.isPending
+        || immediateMutation.isPending
+      }
+      size="large"
+    >
         {!completedResult ? (
           <div>
             <div className={styles.formGroup}>
@@ -1105,8 +1108,7 @@ function RotateKeyModal({
             </div>
           </div>
         )}
-      </div>
-    </div>
+    </Dialog>
   );
 }
 

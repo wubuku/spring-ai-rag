@@ -1,21 +1,28 @@
-import { useState } from 'react';
+import { useRef, useState, type RefObject } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { collectionsApi } from '../../api/collections';
 import { useToast } from '../Toast';
+import { Dialog } from '../Dialog';
 import styles from './CreateCollectionModal.module.css';
 
 interface CreateCollectionModalProps {
   isOpen: boolean;
   onClose: () => void;
+  returnFocusRef?: RefObject<HTMLElement | null>;
 }
 
-export function CreateCollectionModal({ isOpen, onClose }: CreateCollectionModalProps) {
+export function CreateCollectionModal({
+  isOpen,
+  onClose,
+  returnFocusRef,
+}: CreateCollectionModalProps) {
   const { t } = useTranslation();
   const [name, setName] = useState('');
   const [collectionKey, setCollectionKey] = useState('');
   const [description, setDescription] = useState('');
   const [errors, setErrors] = useState<{ name?: string; collectionKey?: string; description?: string }>({});
+  const nameInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
   const { showToast } = useToast();
 
@@ -68,18 +75,36 @@ export function CreateCollectionModal({ isOpen, onClose }: CreateCollectionModal
     onClose();
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div className={styles.overlay} onClick={handleClose}>
-      <div className={styles.modal} onClick={e => e.stopPropagation()}>
-        <div className={styles.header}>
-          <h2 className={styles.title}>Create Collection</h2>
-          <button className={styles.closeBtn} onClick={handleClose}>
-            ×
+    <Dialog
+      open={isOpen}
+      title={t('collections.create')}
+      onClose={handleClose}
+      closeDisabled={createMutation.isPending}
+      initialFocusRef={nameInputRef}
+      returnFocusRef={returnFocusRef}
+      actions={(
+        <>
+          <button
+            type="button"
+            onClick={handleClose}
+            className={styles.cancelBtn}
+            disabled={createMutation.isPending}
+          >
+            {t('common.cancel')}
           </button>
-        </div>
-        <form onSubmit={handleSubmit} className={styles.form}>
+          <button
+            type="submit"
+            form="create-collection-form"
+            disabled={createMutation.isPending}
+            className={styles.submitBtn}
+          >
+            {createMutation.isPending ? t('common.loading') : t('collections.create')}
+          </button>
+        </>
+      )}
+    >
+        <form id="create-collection-form" onSubmit={handleSubmit} className={styles.form}>
           <div className={styles.field}>
             <label className={styles.label} htmlFor="collection-key">
               Collection key <span className={styles.required}>*</span>
@@ -109,8 +134,9 @@ export function CreateCollectionModal({ isOpen, onClose }: CreateCollectionModal
             <label className={styles.label} htmlFor="name">
               Name <span className={styles.required}>*</span>
             </label>
-            <input
-              id="name"
+              <input
+                ref={nameInputRef}
+                id="name"
               type="text"
               value={name}
               onChange={e => setName(e.target.value)}
@@ -137,20 +163,7 @@ export function CreateCollectionModal({ isOpen, onClose }: CreateCollectionModal
             {errors.description && <span className={styles.error}>{errors.description}</span>}
           </div>
 
-          <div className={styles.actions}>
-            <button type="button" onClick={handleClose} className={styles.cancelBtn}>
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={createMutation.isPending}
-              className={styles.submitBtn}
-            >
-              {createMutation.isPending ? 'Creating...' : 'Create'}
-            </button>
-          </div>
         </form>
-      </div>
-    </div>
+    </Dialog>
   );
 }

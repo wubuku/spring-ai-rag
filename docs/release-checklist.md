@@ -16,7 +16,7 @@ Release date: `2026-07-21`
 - [x] Helm `version` and `appVersion` are `1.0.0`
 - [x] Docker/Helm default image tag is `1.0.0`
 - [x] Local, Docker, and Helm default port is `8081`
-- [x] Flyway inventory is V1-V58
+- [x] Flyway inventory is V1-V59
 - [x] JSONB structured-record API, payload snapshots, and collection lifecycle are covered
 - [x] `scripts/verify-jsonb-records.sh` records focused backend/database/frontend verification
 - [x] Document PATCH/disable/restore/permanent-delete and external triple identity are covered
@@ -297,7 +297,7 @@ Release date: `2026-07-21`
   Scheduled scan handles only missed events and time-threshold crossings.
 - [x] Every Alerts route is operator-only. The WebUI uses `firedAt`, displays
   the server phase, principal, and expiry, and does not recalculate thresholds.
-- [x] The focused gate covers backend **218/218**, PostgreSQL V1-V58 lifecycle
+- [x] The focused gate covers backend **218/218**, PostgreSQL V1-V59 lifecycle
   **6/6**, WebUI Vitest **234/234**, production build, and Alerts Mock
   Playwright **1/1**.
 - [x] Complete Maven, WebUI, startup, lock, documentation, diff, shell, and

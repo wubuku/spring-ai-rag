@@ -3,6 +3,7 @@ package com.springairag.core.service;
 import com.springairag.core.config.RagPdfProperties;
 import com.springairag.core.entity.FsFile;
 import com.springairag.core.repository.FsFileRepository;
+import com.springairag.core.repository.FsImportBatchRepository;
 import com.springairag.core.service.pdf.PdfConverter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -32,6 +33,7 @@ import static org.mockito.Mockito.*;
 class PdfImportServiceTest {
 
     private FsFileRepository fsFileRepository;
+    private FsImportBatchRepository fsImportBatchRepository;
     private RagPdfProperties pdfProperties;
     private PdfImportService pdfImportService;
     private PdfConverter mockConverter;
@@ -42,6 +44,7 @@ class PdfImportServiceTest {
     @BeforeEach
     void setUp() {
         fsFileRepository = mock(FsFileRepository.class);
+        fsImportBatchRepository = mock(FsImportBatchRepository.class);
         pdfProperties = new RagPdfProperties();
         pdfProperties.setEnabled(true);
 
@@ -50,11 +53,15 @@ class PdfImportServiceTest {
         when(mockConverter.isAvailable()).thenReturn(true);
         when(mockConverter.getName()).thenReturn("mock-converter");
         when(mockConverter.convert(any(), any())).thenAnswer(inv -> {
-            createDirectories(inv.getArgument(1));
+            Path output = ((Path) inv.getArgument(1)).resolve("source");
+            createDirectories(output);
+            writeString(output.resolve("source.md"), "# Test");
             return true;
         });
 
-        pdfImportService = new PdfImportService(fsFileRepository, pdfProperties, List.of(mockConverter));
+        pdfImportService = new PdfImportService(
+                fsFileRepository, fsImportBatchRepository,
+                pdfProperties, List.of(mockConverter));
     }
 
     // ==================== importPdf validation ====================
@@ -106,7 +113,9 @@ class PdfImportServiceTest {
             when(failingConverter.getName()).thenReturn("failing-converter");
             when(failingConverter.convert(any(), any())).thenReturn(false);
 
-            pdfImportService = new PdfImportService(fsFileRepository, pdfProperties, List.of(failingConverter));
+            pdfImportService = new PdfImportService(
+                    fsFileRepository, fsImportBatchRepository,
+                    pdfProperties, List.of(failingConverter));
 
             MockMultipartFile file = new MockMultipartFile(
                     "file", "doc.pdf", "application/pdf", b("hello"));
@@ -130,8 +139,8 @@ class PdfImportServiceTest {
             MockMultipartFile file = new MockMultipartFile(
                     "file", "Test-Report.pdf", "application/pdf", pdfBytes);
 
-            when(fsFileRepository.save(any(FsFile.class))).thenAnswer(inv -> inv.getArgument(0));
-            when(fsFileRepository.saveAll(any())).thenAnswer(inv -> inv.getArgument(0));
+            when(fsFileRepository.saveAllAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
+            when(fsImportBatchRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
             PdfImportService.PdfImportResult result =
                     pdfImportService.importPdf(file, null);
@@ -139,8 +148,16 @@ class PdfImportServiceTest {
             assertThat(result.uuid()).isNotBlank();
             assertThat(result.entryMarkdown()).isEqualTo(result.uuid() + "/default.md");
             assertThat(result.filesStored()).isGreaterThan(0);
+            assertThat(result.originalFilename()).isEqualTo("Test-Report.pdf");
+            assertThat(result.displayName()).isEqualTo("Test-Report.pdf");
 
-            verify(mockConverter).convert(any(), any());
+            verify(mockConverter).convert(
+                    argThat(path -> ((Path) path).getFileName().toString().equals("source.pdf")),
+                    any());
+            verify(fsImportBatchRepository).save(argThat(batch ->
+                    batch.getImportId().toString().equals(result.uuid())
+                            && batch.getEntryPath().equals(result.entryMarkdown())
+                            && batch.getOriginalFilename().equals("Test-Report.pdf")));
         }
 
         @Test
@@ -150,14 +167,49 @@ class PdfImportServiceTest {
             MockMultipartFile file = new MockMultipartFile(
                     "file", "doc.pdf", "application/pdf", pdfBytes);
 
-            when(fsFileRepository.save(any(FsFile.class))).thenAnswer(inv -> inv.getArgument(0));
-            when(fsFileRepository.saveAll(any())).thenAnswer(inv -> inv.getArgument(0));
+            when(fsFileRepository.saveAllAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
+            when(fsImportBatchRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
             PdfImportService.PdfImportResult result =
                     pdfImportService.importPdf(file, null);
 
-            verify(fsFileRepository).saveAll(argThat((List<FsFile> list) ->
+            verify(fsFileRepository).saveAllAndFlush(argThat((List<FsFile> list) ->
                     list.stream().anyMatch(f -> f.getPath().equals(result.uuid() + "/original.pdf"))));
+        }
+
+        @Test
+        @DisplayName("normalizes a path-like upload name without using it as the temp path")
+        void importPdf_pathLikeFilename_usesBasenameMetadata() throws IOException {
+            MockMultipartFile file = new MockMultipartFile(
+                    "file", "../private/Quarterly Report.pdf",
+                    "application/pdf", b("fake pdf content"));
+            when(fsFileRepository.saveAllAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
+
+            PdfImportService.PdfImportResult result = pdfImportService.importPdf(file, null);
+
+            assertThat(result.originalFilename()).isEqualTo("Quarterly Report.pdf");
+            verify(mockConverter).convert(
+                    argThat(path -> ((Path) path).getFileName().toString().equals("source.pdf")),
+                    any());
+        }
+
+        @Test
+        @DisplayName("fails before persistence when no entry Markdown is produced")
+        void importPdf_withoutMarkdown_failsWithoutPersistence() {
+            doAnswer(inv -> {
+                Path output = ((Path) inv.getArgument(1)).resolve("source");
+                createDirectories(output);
+                write(output.resolve("image.png"), b("image"));
+                return true;
+            }).when(mockConverter).convert(any(), any());
+            MockMultipartFile file = new MockMultipartFile(
+                    "file", "doc.pdf", "application/pdf", b("fake pdf content"));
+
+            assertThatThrownBy(() -> pdfImportService.importPdf(file, null))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("exactly one");
+            verify(fsFileRepository, never()).saveAllAndFlush(any());
+            verifyNoInteractions(fsImportBatchRepository);
         }
     }
 

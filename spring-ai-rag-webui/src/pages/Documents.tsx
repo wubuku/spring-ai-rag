@@ -12,7 +12,14 @@ import { useToast } from '../components/Toast';
 import { Skeleton } from '../components/Skeleton';
 import { DocumentActionsMenu } from '../components/DocumentActionsMenu/DocumentActionsMenu';
 import { VersionHistoryModal } from '../components/VersionHistoryModal/VersionHistoryModal';
+import { ConfirmDialog, Dialog } from '../components/Dialog';
 import styles from './Documents.module.css';
+
+type DocumentConfirmation =
+  | { kind: 'disable'; document: Document }
+  | { kind: 'delete'; document: Document }
+  | { kind: 'restore-version'; document: Document; versionNumber: number }
+  | null;
 
 export function Documents() {
   const { t } = useTranslation();
@@ -33,6 +40,7 @@ export function Documents() {
     useState<'SYNC' | 'ASYNC' | 'SKIP'>('ASYNC');
   const [relocateDoc, setRelocateDoc] = useState<Document | null>(null);
   const [relocateTarget, setRelocateTarget] = useState('');
+  const [confirmation, setConfirmation] = useState<DocumentConfirmation>(null);
   const PAGE_SIZE = 20;
   const queryClient = useQueryClient();
   const { showToast } = useToast();
@@ -100,6 +108,7 @@ export function Documents() {
     onError: error => {
       handleMutationError(error, 'documents.disableError');
     },
+    onSettled: () => setConfirmation(null),
   });
 
   const restoreMutation = useMutation({
@@ -137,6 +146,7 @@ export function Documents() {
       queryClient.invalidateQueries({ queryKey: ['document-versions'] });
       handleMutationError(error, 'versions.restoreError');
     },
+    onSettled: () => setConfirmation(null),
   });
 
   const deleteMutation = useMutation({
@@ -151,6 +161,7 @@ export function Documents() {
     onError: error => {
       handleMutationError(error, 'documents.deleteError');
     },
+    onSettled: () => setConfirmation(null),
   });
 
   const embedMutation = useMutation({
@@ -475,17 +486,15 @@ export function Documents() {
                           id: doc.id,
                           force: doc.lifecycle?.retryable === true,
                         })}
-                        onDisable={() => {
-                          if (confirm(t('documents.disableConfirm'))) {
-                            disableMutation.mutate(doc);
-                          }
-                        }}
+                        onDisable={() => setConfirmation({
+                          kind: 'disable',
+                          document: doc,
+                        })}
                         onRestore={() => restoreMutation.mutate(doc)}
-                        onPermanentDelete={() => {
-                          if (confirm(t('documents.permanentDeleteConfirm'))) {
-                            deleteMutation.mutate(doc);
-                          }
-                        }}
+                        onPermanentDelete={() => setConfirmation({
+                          kind: 'delete',
+                          document: doc,
+                        })}
                         onRelocate={() => handleRelocate(doc)}
                         onViewDirectory={handleViewDirectory}
                         onViewIndexedFile={handleViewIndexedFile}
@@ -529,45 +538,51 @@ export function Documents() {
         </>
       )}
 
-      {/* Preview Modal */}
-      {previewDoc && (
-        <div className={styles.modalOverlay} onClick={() => setPreviewDoc(null)}>
-          <div className={styles.modal} onClick={e => e.stopPropagation()}>
-            <div className={styles.modalHeader}>
-              <h2 className={styles.modalTitle}>{previewDoc.title}</h2>
-              <button className={styles.modalClose} onClick={() => setPreviewDoc(null)}>
-                ×
-              </button>
-            </div>
-            <div className={styles.modalContent}>
-              <pre className={styles.previewContent}>{previewDoc.content}</pre>
-            </div>
-          </div>
-        </div>
-      )}
+      <Dialog
+        open={Boolean(previewDoc)}
+        title={previewDoc?.title ?? ''}
+        onClose={() => setPreviewDoc(null)}
+        size="large"
+      >
+        {previewDoc && (
+          <pre className={styles.previewContent}>{previewDoc.content}</pre>
+        )}
+      </Dialog>
 
-      {editDoc && (
-        <div className={styles.modalOverlay} onClick={() => setEditDoc(null)}>
+      <Dialog
+        open={Boolean(editDoc)}
+        title={t('documents.editDocument')}
+        onClose={() => setEditDoc(null)}
+        closeDisabled={updateMutation.isPending}
+        size="large"
+        actions={editDoc ? (
+          <>
+            <button
+              type="button"
+              onClick={() => setEditDoc(null)}
+              disabled={updateMutation.isPending}
+            >
+              {t('common.cancel')}
+            </button>
+            <button
+              type="submit"
+              form="edit-document-form"
+              disabled={updateMutation.isPending}
+            >
+              {updateMutation.isPending ? t('common.loading') : t('common.save')}
+            </button>
+          </>
+        ) : undefined}
+      >
+        {editDoc && (
           <form
-            className={styles.editModal}
+            id="edit-document-form"
             aria-label={t('documents.editDocument')}
-            onClick={event => event.stopPropagation()}
             onSubmit={event => {
               event.preventDefault();
               updateMutation.mutate();
             }}
           >
-            <div className={styles.modalHeader}>
-              <h2 className={styles.modalTitle}>{t('documents.editDocument')}</h2>
-              <button
-                type="button"
-                className={styles.modalClose}
-                aria-label={t('common.close')}
-                onClick={() => setEditDoc(null)}
-              >
-                ×
-              </button>
-            </div>
             <div className={styles.editFields}>
               <label>
                 <span>{t('documents.title')}</span>
@@ -629,42 +644,45 @@ export function Documents() {
                 />
               </label>
             </div>
-            <div className={styles.modalActions}>
-              <button type="button" onClick={() => setEditDoc(null)}>
-                {t('common.cancel')}
-              </button>
-              <button type="submit" disabled={updateMutation.isPending}>
-                {updateMutation.isPending
-                  ? t('common.loading')
-                  : t('common.save')}
-              </button>
-            </div>
           </form>
-        </div>
-      )}
+        )}
+      </Dialog>
 
-      {relocateDoc && (
-        <div className={styles.modalOverlay} onClick={() => setRelocateDoc(null)}>
+      <Dialog
+        open={Boolean(relocateDoc)}
+        title={t('documents.relocateTitle')}
+        onClose={() => setRelocateDoc(null)}
+        closeDisabled={relocateMutation.isPending}
+        size="large"
+        actions={relocateDoc ? (
+          <>
+            <button
+              type="button"
+              onClick={() => setRelocateDoc(null)}
+              disabled={relocateMutation.isPending}
+            >
+              {t('common.cancel')}
+            </button>
+            <button
+              type="submit"
+              form="relocate-document-form"
+              disabled={!relocateTarget || relocateMutation.isPending}
+            >
+              {relocateMutation.isPending
+                ? t('common.loading') : t('documents.relocateConfirm')}
+            </button>
+          </>
+        ) : undefined}
+      >
+        {relocateDoc && (
           <form
-            className={styles.editModal}
+            id="relocate-document-form"
             aria-label={t('documents.relocateTitle')}
-            onClick={event => event.stopPropagation()}
             onSubmit={event => {
               event.preventDefault();
               relocateMutation.mutate();
             }}
           >
-            <div className={styles.modalHeader}>
-              <h2 className={styles.modalTitle}>{t('documents.relocateTitle')}</h2>
-              <button
-                type="button"
-                className={styles.modalClose}
-                aria-label={t('common.close')}
-                onClick={() => setRelocateDoc(null)}
-              >
-                ×
-              </button>
-            </div>
             <div className={styles.editFields}>
               <label>
                 <span>{t('documents.collection')}</span>
@@ -701,21 +719,9 @@ export function Documents() {
                 <input value={relocateDoc.sourceRevision || ''} readOnly />
               </label>
             </div>
-            <div className={styles.modalActions}>
-              <button type="button" onClick={() => setRelocateDoc(null)}>
-                {t('common.cancel')}
-              </button>
-              <button
-                type="submit"
-                disabled={!relocateTarget || relocateMutation.isPending}
-              >
-                {relocateMutation.isPending
-                  ? t('common.loading') : t('documents.relocateConfirm')}
-              </button>
-            </div>
           </form>
-        </div>
-      )}
+        )}
+      </Dialog>
 
       {/* Version History Modal */}
       {versionsDoc && (
@@ -725,23 +731,59 @@ export function Documents() {
           documentRevision={versionsDoc.documentRevision}
           externallyManaged={Boolean(versionsDoc.externalId)}
           restorePending={restoreVersionMutation.isPending}
-          onRestoreVersion={versionNumber => {
-            const confirmed = window.confirm(
-              t('versions.restoreConfirm', {
-                version: versionNumber,
-                defaultValue: `Restore version ${versionNumber} as a new revision?`,
-              }),
-            );
-            if (confirmed) {
-              restoreVersionMutation.mutate({
-                document: versionsDoc,
-                versionNumber,
-              });
-            }
-          }}
+          onRestoreVersion={versionNumber => setConfirmation({
+            kind: 'restore-version',
+            document: versionsDoc,
+            versionNumber,
+          })}
           onClose={() => setVersionsDoc(null)}
         />
       )}
+
+      <ConfirmDialog
+        open={Boolean(confirmation)}
+        title={confirmation?.kind === 'disable'
+          ? t('documents.disable')
+          : confirmation?.kind === 'delete'
+            ? t('documents.permanentDelete')
+            : t('versions.restore', 'Restore')}
+        description={confirmation?.kind === 'disable'
+          ? t('documents.disableConfirm')
+          : confirmation?.kind === 'delete'
+            ? t('documents.permanentDeleteConfirm')
+            : t('versions.restoreConfirm', {
+                version: confirmation?.kind === 'restore-version'
+                  ? confirmation.versionNumber
+                  : '',
+                defaultValue: 'Restore this version as a new revision?',
+              })}
+        confirmLabel={confirmation?.kind === 'disable'
+          ? t('documents.disable')
+          : confirmation?.kind === 'delete'
+            ? t('documents.permanentDelete')
+            : t('versions.restore', 'Restore')}
+        cancelLabel={t('common.cancel')}
+        danger={confirmation?.kind !== 'restore-version'}
+        pending={
+          disableMutation.isPending
+          || deleteMutation.isPending
+          || restoreVersionMutation.isPending
+        }
+        onClose={() => setConfirmation(null)}
+        onConfirm={() => {
+          if (!confirmation) return;
+          if (confirmation.kind === 'disable') {
+            disableMutation.mutate(confirmation.document);
+          } else if (confirmation.kind === 'delete') {
+            deleteMutation.mutate(confirmation.document);
+          } else {
+            restoreVersionMutation.mutate({
+              document: confirmation.document,
+              versionNumber: confirmation.versionNumber,
+            });
+          }
+        }}
+      />
     </div>
   );
 }

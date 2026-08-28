@@ -19,7 +19,7 @@
 | 真实 LLM E2E 端口 | `18081` |
 | Embedding | SiliconFlow `BAAI/bge-m3` |
 | 向量维度 | `1024` |
-| Flyway | V1–V58 |
+| Flyway | V1–V59 |
 
 OpenAI / Embedding 的 `base-url` **不要带 `/v1`**。Spring AI 会自行追加 `/v1/chat/completions` 或 `/v1/embeddings`。
 
@@ -145,9 +145,14 @@ credential；macOS 默认复制到剪贴板，不写入文件或日志。状态�
 ```bash
 ./scripts/dev.sh --status
 ./scripts/dev.sh --stop
+./scripts/dev.sh --force-kill
 BACKEND_PORT=19082 FRONTEND_PORT=15174 ./scripts/dev.sh
 RAG_DEV_OPEN_BROWSER=false ./scripts/dev.sh
 ```
+
+默认启动遇到非本启动器管理的端口监听时会保守失败，不会误杀进程。仅在明确确认目标
+`BACKEND_PORT` / `FRONTEND_PORT` 上的旧进程可以终止时使用 `--force-kill`；该参数只终止
+这两个端口的监听进程及其子进程，先发送 `TERM`，超时后才发送 `KILL`，随后继续正常启动。
 
 启动器绝不自动执行 Flyway repair。若启动时检测到迁移 checksum 不一致，它会直接输出
 相关根因；正确处理方式是恢复已经执行过的迁移，并把后续变化放入新的迁移，而不是改写
@@ -427,7 +432,7 @@ provider counter。端口冲突时可
 ### 受管 API Principal 到期告警一键验证
 
 ```bash
-# 聚焦后端、V1-V58 PostgreSQL 与前端 Mock 门槛
+# 聚焦后端、V1-V59 PostgreSQL 与前端 Mock 门槛
 API_KEY_EXPIRY_ALERT_VERIFY_PHASE=focused \
 ./scripts/verify-api-key-expiry-alerts.sh
 

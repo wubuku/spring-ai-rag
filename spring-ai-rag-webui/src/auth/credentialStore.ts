@@ -21,6 +21,7 @@ export function setCredential(nextCredential: string): void {
 
 export function clearCredential(): void {
   credential = null;
+  clearWorkspaceState();
   listeners.forEach(listener => listener(null));
 }
 
@@ -37,3 +38,4 @@ export function clearLegacyCredentialStorage(): void {
     // Storage may be unavailable in restricted browser contexts.
   }
 }
+import { clearWorkspaceState } from '../utils/workspaceState';

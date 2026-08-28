@@ -65,6 +65,7 @@ function renderChat(initialEntry = '/chat') {
 describe('Chat', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    window.sessionStorage.clear();
     // Reset to default mock return value
     (useChatSSE as ReturnType<typeof vi.fn>).mockReturnValue({
       send: mockSend,
@@ -118,6 +119,19 @@ describe('Chat', () => {
     fireEvent.change(textarea, { target: { value: 'Hello world' } });
     const sendBtn = screen.getByRole('button', { name: /chat.send/ });
     expect(sendBtn).not.toBeDisabled();
+  });
+
+  it('restores an unsent draft after the route component is remounted', () => {
+    const first = renderChat('/chat?mode=AGENT');
+    fireEvent.change(screen.getByPlaceholderText(/chat.placeholder/), {
+      target: { value: 'Keep this draft' },
+    });
+    first.unmount();
+
+    renderChat('/chat?mode=AGENT');
+    expect(screen.getByPlaceholderText(/chat.placeholder/))
+      .toHaveValue('Keep this draft');
+    expect(screen.getByTestId('chat-mode-select')).toHaveValue('AGENT');
   });
 
   it('pressing Enter submits the message', async () => {

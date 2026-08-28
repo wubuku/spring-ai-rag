@@ -82,10 +82,11 @@ test.describe('Documents', () => {
       name: /Open actions for.*Local Lifecycle Document/,
     }).click();
     await page.getByRole('menuitem', { name: 'Edit document' }).click();
-    const form = page.getByRole('form', { name: 'Edit document' });
+    const dialog = page.getByRole('dialog', { name: 'Edit document' });
+    const form = dialog.getByRole('form', { name: 'Edit document' });
     await expect(form).toBeVisible();
     await form.getByLabel('Content').fill('Updated local content');
-    await form.getByRole('button', { name: 'Save' }).click();
+    await dialog.getByRole('button', { name: 'Save' }).click();
 
     const request = await patchRequest;
     expect(request.postDataJSON()).toEqual(expect.objectContaining({
@@ -99,7 +100,6 @@ test.describe('Documents', () => {
 
   test('disables and restores local documents using their current revisions', async ({ page }) => {
     await mockAllApiCalls(page);
-    page.on('dialog', dialog => dialog.accept());
     await openProtectedPage(page, '/webui/documents');
 
     const disableRequest = page.waitForRequest(request =>
@@ -109,6 +109,9 @@ test.describe('Documents', () => {
       name: /Open actions for.*Local Lifecycle Document/,
     }).click();
     await page.getByRole('menuitem', { name: 'Disable' }).click();
+    await page.getByRole('dialog', { name: 'Disable' })
+      .getByRole('button', { name: 'Disable', exact: true })
+      .click();
     expect((await disableRequest).postDataJSON()).toEqual({
       expectedDocumentRevision: 4,
     });
@@ -149,14 +152,15 @@ test.describe('Documents', () => {
 
     await page.getByRole('button', { name: /Open actions for.*Sample Document/ }).click();
     await page.getByRole('menuitem', { name: 'Relocate Collection' }).click();
-    const form = page.getByRole('form', { name: 'Relocate external document' });
+    const dialog = page.getByRole('dialog', { name: 'Relocate external document' });
+    const form = dialog.getByRole('form', { name: 'Relocate external document' });
     await expect(form).toBeVisible();
     await expect(form.getByLabel('Source namespace')).toHaveValue('cms-main');
     await expect(form.getByLabel('Source namespace')).toHaveAttribute('readonly', '');
     await expect(form.getByLabel('Source revision')).toHaveValue('etag:sample-1');
     await expect(form.getByLabel('Source revision')).toHaveAttribute('readonly', '');
     await form.getByLabel('Target Collection').selectOption('product-manual');
-    await form.getByRole('button', { name: 'Relocate' }).click();
+    await dialog.getByRole('button', { name: 'Relocate' }).click();
 
     const request = await relocationRequest;
     expect(request.headers()['idempotency-key']).toBeTruthy();

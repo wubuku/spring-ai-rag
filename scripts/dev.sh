@@ -30,6 +30,7 @@ DEV_ENV_FILE="${REQUESTED_ENV_FILE}"
 ROOT_CREDENTIAL=""
 ROOT_WAS_GENERATED=false
 STARTUP_COMPLETE=false
+FORCE_KILL=false
 
 if [[ "${DEV_ENV_FILE}" != /* ]]; then
   DEV_ENV_FILE="${REPO_ROOT}/${DEV_ENV_FILE}"
@@ -39,6 +40,7 @@ usage() {
   cat <<'EOF'
 Usage:
   ./scripts/dev.sh
+  ./scripts/dev.sh --force-kill
   ./scripts/dev.sh --status
   ./scripts/dev.sh --stop
 
@@ -186,25 +188,13 @@ collect_process_tree() {
   printf '%s\n' "${root_pid}"
 }
 
-stop_managed_process() {
-  local pid_file="$1"
-  local expected_cwd="$2"
-  local kind="$3"
-  local label="$4"
-  local root_pid
-  local process_tree
+terminate_process_tree() {
+  local process_tree="$1"
   local pid
   local remaining
   local attempt
 
-  [[ -f "${pid_file}" ]] || return 0
-  root_pid="$(managed_root_pid "${pid_file}" "${expected_cwd}" "${kind}")" || {
-    echo "  Ignored stale or unverified ${label} PID file."
-    rm -f "${pid_file}"
-    return 0
-  }
-
-  process_tree="$(collect_process_tree "${root_pid}")"
+  [[ -n "${process_tree}" ]] || return 0
   kill ${process_tree} 2>/dev/null || true
 
   for attempt in $(seq 1 50); do
@@ -214,7 +204,7 @@ stop_managed_process() {
         remaining="${remaining} ${pid}"
       fi
     done
-    [[ -z "${remaining}" ]] && break
+    [[ -z "${remaining}" ]] && return 0
     sleep 0.2
   done
 
@@ -223,8 +213,50 @@ stop_managed_process() {
       kill -9 "${pid}" 2>/dev/null || true
     fi
   done
+}
+
+stop_managed_process() {
+  local pid_file="$1"
+  local expected_cwd="$2"
+  local kind="$3"
+  local label="$4"
+  local root_pid
+  local process_tree
+
+  [[ -f "${pid_file}" ]] || return 0
+  root_pid="$(managed_root_pid "${pid_file}" "${expected_cwd}" "${kind}")" || {
+    echo "  Ignored stale or unverified ${label} PID file."
+    rm -f "${pid_file}"
+    return 0
+  }
+
+  process_tree="$(collect_process_tree "${root_pid}")"
+  terminate_process_tree "${process_tree}"
   rm -f "${pid_file}"
   echo "  Stopped managed ${label}."
+}
+
+force_kill_port_listeners() {
+  local port="$1"
+  local label="$2"
+  local listeners
+  local listener
+  local process_tree
+
+  listeners="$(lsof -nP -tiTCP:"${port}" -sTCP:LISTEN 2>/dev/null || true)"
+  [[ -n "${listeners}" ]] || return 0
+
+  echo "Force-stopping ${label} listener(s) on port ${port}:"
+  for listener in ${listeners}; do
+    echo "  PID ${listener}"
+    process_tree="$(collect_process_tree "${listener}")"
+    terminate_process_tree "${process_tree}"
+  done
+
+  if lsof -nP -tiTCP:"${port}" -sTCP:LISTEN >/dev/null 2>&1; then
+    echo "ERROR: ${label} port ${port} is still occupied after --force-kill." >&2
+    return 1
+  fi
 }
 
 assert_port_available_or_managed() {
@@ -593,6 +625,23 @@ start_stack() {
     return 1
   fi
   bash -n "${DEV_ENV_FILE}"
+  if [[ "${FORCE_KILL}" != true ]]; then
+    assert_port_available_or_managed \
+      "${BACKEND_PORT}" "${BACKEND_PID_FILE}" "${REPO_ROOT}" backend backend
+    assert_port_available_or_managed \
+      "${FRONTEND_PORT}" "${FRONTEND_PID_FILE}" "${FRONTEND_DIR}" frontend frontend
+  fi
+
+  echo "Stopping the previous launcher-owned development stack..."
+  stop_managed_process "${FRONTEND_PID_FILE}" "${FRONTEND_DIR}" frontend frontend
+  stop_managed_process "${BACKEND_PID_FILE}" "${REPO_ROOT}" backend backend
+  if [[ "${FORCE_KILL}" == true ]]; then
+    force_kill_port_listeners "${BACKEND_PORT}" backend
+    force_kill_port_listeners "${FRONTEND_PORT}" frontend
+  fi
+  assert_port_free "${BACKEND_PORT}" backend
+  assert_port_free "${FRONTEND_PORT}" frontend
+
   prepare_frontend_dependencies
   prepare_backend_dependencies
 
@@ -600,17 +649,6 @@ start_stack() {
       && { command -v openssl >/dev/null 2>&1 || command -v uuidgen >/dev/null 2>&1; }; then
     generated_root_candidate="$(generate_root_credential)"
   fi
-
-  assert_port_available_or_managed \
-    "${BACKEND_PORT}" "${BACKEND_PID_FILE}" "${REPO_ROOT}" backend backend
-  assert_port_available_or_managed \
-    "${FRONTEND_PORT}" "${FRONTEND_PID_FILE}" "${FRONTEND_DIR}" frontend frontend
-
-  echo "Stopping the previous launcher-owned development stack..."
-  stop_managed_process "${FRONTEND_PID_FILE}" "${FRONTEND_DIR}" frontend frontend
-  stop_managed_process "${BACKEND_PID_FILE}" "${REPO_ROOT}" backend backend
-  assert_port_free "${BACKEND_PORT}" backend
-  assert_port_free "${FRONTEND_PORT}" frontend
 
   umask 077
   mkdir -p "${STATE_DIR}"
@@ -712,30 +750,41 @@ start_stack() {
   open_browser
 }
 
-action="${1:-start}"
-if (( $# > 1 )); then
-  usage >&2
-  exit 2
-fi
+main() {
+  local action="${1:-start}"
 
-case "${action}" in
-  start)
-    start_stack
-    ;;
-  --status|status)
-    for command_name in lsof ps sed; do
-      require_command "${command_name}"
-    done
-    show_status
-    ;;
-  --stop|stop)
-    stop_stack
-    ;;
-  --help|-h|help)
-    usage
-    ;;
-  *)
+  if (( $# > 1 )); then
     usage >&2
-    exit 2
-    ;;
-esac
+    return 2
+  fi
+
+  case "${action}" in
+    start)
+      start_stack
+      ;;
+    --force-kill)
+      FORCE_KILL=true
+      start_stack
+      ;;
+    --status|status)
+      for command_name in lsof ps sed; do
+        require_command "${command_name}"
+      done
+      show_status
+      ;;
+    --stop|stop)
+      stop_stack
+      ;;
+    --help|-h|help)
+      usage
+      ;;
+    *)
+      usage >&2
+      return 2
+      ;;
+  esac
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi

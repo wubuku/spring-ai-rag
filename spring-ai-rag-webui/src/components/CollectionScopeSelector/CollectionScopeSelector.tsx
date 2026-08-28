@@ -93,7 +93,8 @@ export function CollectionScopeSelector({
               name={`${idPrefix}-collection-scope-mode`}
               value={scopeMode}
               checked={mode === scopeMode}
-              onChange={() => onModeChange(scopeMode)}
+              readOnly
+              onClick={() => onModeChange(scopeMode)}
               data-testid={`${idPrefix}-scope-${scopeMode}`}
             />
             <span>{t(MODE_LABEL_KEYS[scopeMode])}</span>
@@ -207,4 +208,3 @@ export function CollectionScopeSelector({
     </fieldset>
   );
 }
-

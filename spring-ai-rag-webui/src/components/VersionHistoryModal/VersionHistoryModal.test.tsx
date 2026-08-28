@@ -142,10 +142,8 @@ describe('VersionHistoryModal', () => {
       { wrapper: Wrapper }
     );
 
-    await waitFor(() => {
-      const overlay = document.querySelector('[class*="overlay"]');
-      if (overlay) fireEvent.click(overlay);
-    });
+    const backdrop = await screen.findByTestId('dialog-backdrop');
+    fireEvent.mouseDown(backdrop);
 
     expect(onClose).toHaveBeenCalled();
   });

@@ -727,6 +727,7 @@ rag_audit_log           # 审计日志（集合操作）
 | `rag_api_key` | key_id, principal_id, credential_version, key_hash, enabled, retire_at | 版本化 credential；每个 principal 至多一个 current 和一个有界 retiring version |
 | `rag_alerts` | dedupe_key, condition_state, state_version, notified_version, status, version | 普通告警与 V57 受管条件告警；active dedupe、阶段升级和通知 claim 由 PostgreSQL/CAS 收敛 |
 | `rag_alert_notification_delivery` | id, alert_id, notification_version, provider, status, attempt_count, attempt_budget, lease_token, lease_until | V58 durable at-least-once provider delivery ledger；稳定 UUID、唯一约束、lease/CAS 与低敏回执 |
+| `fs_import_batches` | import_id, source_type, original_filename, display_name, entry_path, original_path, file_count | V59 以入口文件为锚点保存可读 PDF 导入元数据，同时保持 UUID 文件路径稳定 |
 | `rag_api_rate_limit_bucket` | principal_id, window_start, request_count | 共享 UTC 固定分钟 quota bucket |
 | `rag_api_provisioning_operation` | owner_id, idempotency_key_hash, request_fingerprint_sha256, principal_id, completed_at | 不保存 raw credential 的成功 provisioning replay 账本（V50） |
 | `rag_api_key_rotation` | rotation_id, principal_id, source_credential_id, target_credential_id, expires_at, status | 不保存 raw credential 或 Header 原值的有界 staged rotation 账本（V55） |

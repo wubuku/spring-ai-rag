@@ -309,6 +309,57 @@ export async function mockAllApiCalls(page: Page) {
       },
     };
 
+    if (method === 'GET' && path === '/api/v1/rag/documents/embed-vector-status') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          totalDocuments: 4,
+          withEmbeddings: 3,
+          withoutEmbeddings: 1,
+          hasMissing: true,
+        }),
+      });
+      return;
+    }
+
+    if (method === 'POST' && path === '/api/v1/rag/documents/embed-vector-reembed') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          total: 4,
+          success: 4,
+          failed: 0,
+        }),
+      });
+      return;
+    }
+
+    if (method === 'GET' && path === '/api/v1/rag/documents/2/versions') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          documentId: 2,
+          totalVersions: 1,
+          page: 0,
+          size: 20,
+          versions: [{
+            id: 21,
+            documentId: 2,
+            versionNumber: 1,
+            changeType: 'CREATE',
+            changeDescription: 'Initial version',
+            contentHash: 'local123def456',
+            snapshotCompleteness: 'FULL',
+            createdAt: '2026-08-19T01:00:00Z',
+          }],
+        }),
+      });
+      return;
+    }
+
     if (method === 'POST' && path === '/api/v1/rag/documents/relocate') {
       await route.fulfill({
         status: 200,
@@ -455,6 +506,22 @@ export async function mockAllApiCalls(page: Page) {
   // Mock collections list
   page.route(/\/api\/v1\/rag\/collections.*/, async route => {
     const path = new URL(route.request().url()).pathname;
+    if (path.endsWith('/embedding-readiness')) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          collectionKey: 'sample-collection',
+          enabledDocuments: 1,
+          freshDocuments: 1,
+          queuedDocuments: 0,
+          runningDocuments: 0,
+          failedDocuments: 0,
+          staleOrMissingDocuments: 0,
+        }),
+      });
+      return;
+    }
     if (path.endsWith('/by-key/purge/preview')) {
       await route.fulfill({
         status: 200,
@@ -709,6 +776,10 @@ export async function mockAllApiCalls(page: Page) {
                 mimeType: null,
                 size: 0,
                 createdAt: '2026-08-15T09:00:00Z',
+                displayName: 'Readable manual.pdf',
+                originalFilename: 'Readable manual.pdf',
+                importId: 'sample-pdf',
+                sourceType: 'PDF',
               },
               {
                 name: 'newest-pdf',
@@ -719,7 +790,17 @@ export async function mockAllApiCalls(page: Page) {
                 createdAt: '2026-08-16T09:00:00Z',
               },
             ],
-        total: path ? 0 : 3,
+        total: path ? importedPdfEntries.length : 3,
+        importMetadata: path === 'sample-pdf/' ? {
+          importId: 'sample-pdf',
+          sourceType: 'PDF',
+          originalFilename: 'Readable manual.pdf',
+          displayName: 'Readable manual.pdf',
+          entryPath: 'sample-pdf/default.md',
+          originalPath: 'sample-pdf/original.pdf',
+          fileCount: 2,
+          createdAt: '2026-08-15T09:00:00Z',
+        } : null,
       }),
     });
   });

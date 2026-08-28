@@ -7,18 +7,36 @@ export interface TreeEntry {
   mimeType: string | null;
   size: number;
   createdAt?: string | null;
+  displayName?: string | null;
+  originalFilename?: string | null;
+  importId?: string | null;
+  sourceType?: string | null;
+}
+
+export interface FileImportMetadata {
+  importId: string;
+  sourceType: string;
+  originalFilename: string;
+  displayName: string;
+  entryPath: string;
+  originalPath: string;
+  fileCount: number;
+  createdAt: string;
 }
 
 export interface TreeResponse {
   path: string;
   entries: TreeEntry[];
   total: number;
+  importMetadata?: FileImportMetadata | null;
 }
 
 export interface PdfImportResponse {
   uuid: string;
   entryMarkdown: string;
   filesStored: number;
+  originalFilename?: string | null;
+  displayName?: string | null;
 }
 
 /**
