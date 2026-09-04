@@ -451,11 +451,22 @@
 - 证据：脚本 `bash -n` 通过；`verify-gated-it.sh` 全量 16/16、单套件 4/4、
   无匹配退出路径正确。
 
+### Batch 25（已交付）
+
+- 分支：`fix/search-pagination-flake-20260906`（基于 Batch 24 分支）
+- **根因结论**：失败瞬间的页面快照（error-context.md）显示列表仍停在第一页——
+  Next 的点击落在模式切换后取数窗口内的列表重挂载上，被静默吞掉（React 合成
+  事件未触发，Page Two Target 从未出现）。属测试交互时机问题，非应用逻辑缺陷。
+- 修复：切换 scope 后先等 Page One 复选框可见再点 Next；点 Next 后等
+  Page Two Target 可见再勾选。无应用代码变更。
+- 证据：search spec 连续 3 次全量 11/11（修复前每次全量必挂）；排除 `-real`
+  用例的全套件 89/89（4 个 `*-real` 失败为预期——需真实后端；连带干扰的
+  workspace-continuity 在隔离与排除 `-real` 后均复绿）；`tsc -b`/`lint`/`build` 绿。
+- 经验：跑 Vite dev server 上的 e2e 期间编辑被服务的源文件会引入 HMR/整页
+  reload 干扰（vite log 13 次 page reload 可证），应避免。
+
 ## 10. 下一批次入口（候选，按优先级）
 
-- Batch 25：search 分页 flake 根因调查（CollectionScopeSelector 重挂载竞态）。
 - Batch 26：PdfImportController / RagDocumentController 超长方法盘点与拆分。
-- Batch 27：前端 Toast/Dashboard 等剩余小模块的测试补强盘点。
-- Batch 13：Card/Modal primitive 提取（重复 .card/.panel/overlay 样式）。
-- Batch 14：后端 `DocumentSyncRunService`/`CollectionPurgeService` 超长方法拆分
-  （complete/applyItem/upsertExternalInTransaction），需 gated IT 回归护栏。
+- Batch 27：前端 Toast/Dashboard 等剩余小模块测试补强盘点。
+- Batch 28：`-real` e2e 用例的运行手册（需要完整 dev 栈）核实与文档化。
