@@ -177,8 +177,25 @@
   `verify-no-pessimistic-locks.sh` 通过；`git diff --check` 通过；
   webui `tsc -b` + `test:run` 300/300 + `lint` 绿。
 
-## 8. 下一批次入口
+### Batch 6（已交付）
 
-Batch 6：后端单测加固——为仅靠 gated IT 覆盖的 `DocumentSyncRunService`、
-`CollectionPurgeService`、`EmbeddingJobExecutor` 补充纯单元测试（CI 中这些 IT
-因 assumeTrue 静默跳过）。
+- 分支：`test/backend-unit-hardening-20260905`（基于 Batch 5 分支）
+- 内容：为 CI 中因 gated IT 静默跳过的高风险路径补纯单元测试：
+  1. `EmbeddingJobExecutorTest`（11 测试）：claim 未取得/任务未知、COMPLETED 全阶段
+     推进、stale profile → markStale/markCancelled 分支、commit 门拒绝、CACHED
+     直接成功与「CACHED→强制重嵌入升级」递归、provider FAILED、运行时异常的
+     错误脱敏 + 500 字符截断、embedding 中途 commit 拒绝。
+  2. `CollectionPurgeAuthorizationTest`（9 测试）：功能开关关闭、null request、
+     environment root、数据库 ADMIN/NORMAL、principal 缺失、auth-disabled 回退
+     的 loopback + 显式 opt-in + legacy key 排除、FORBIDDEN/DISABLED 错误码区分、
+     loopback 判定边界（IPv6/非法地址/空值）。
+- 证据：`mvn -q clean compile test-compile` 通过；定向套件 EmbeddingJob 扇区
+  （Executor 11 / Worker 7 / Dispatch 2 / Service 8）+ CollectionPurge
+  （Authorization 9 / ControllerWebTest 3）共 40/40 绿。
+- 后续：`DocumentSyncRunService`（1299 行）依赖较多，值得独立一个批次做单测拆解。
+
+## 9. 下一批次入口
+
+Batch 7：前端行为加固——`useFileUpload` 上传 fetch 支持中断（AbortController）、
+Search/Files/Documents 的 60s `revokeObjectURL` 延迟定时器在卸载时清理、
+`Settings.tsx` saved 提示定时器清理。
