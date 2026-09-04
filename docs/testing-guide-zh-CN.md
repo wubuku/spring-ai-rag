@@ -116,13 +116,23 @@ npx playwright test e2e/api-key-real.spec.ts
 |------|----------|----------|
 | `api-key-real` | `RAG_ROOT_API_KEY`（或 `REAL_E2E_API_KEY`） | 通过 |
 | `alerts-real` | 另需 `ALERT_DELIVERY_EXPECTED_ALERT_ID` 与 `ALERT_DELIVERY_EXPECTED_DELIVERY_ID`（预置的真实告警/投递 id） | 缺预置 id 则失败 |
-| `chat-real` | `/models` 须暴露至少一个**可用且支持 tool-calling** 的模型 | 模型能力缺失则报错退出 |
-| `files-real` | 真实 Embedding + Chat LLM；LLM 响应超出 deadline 时返回 504 | 依赖 provider 时延 |
+| `chat-real` | `/models` 须暴露至少一个**可用且支持 tool-calling** 的模型（实测通过：外部 models.json 配置 SiliconFlow Qwen3.5-27B + `toolCalling: true`） | 已跑通（~2 分钟，AGENT SSE + 历史恢复） |
+| `files-real` | 真实 Embedding + Chat LLM；KNOWLEDGE 长上下文生成须在 `rag.timeout.chat-ask-ms`（默认 120s）内完成，慢模型会 504 | 依赖 provider 时延 |
 | `rerank-document-diversity-real` | 另需 `RERANK_DIVERSITY_FIXTURE_FILE` 指向 fixture 文件 | 缺 fixture 则失败 |
 
 运行期间不要编辑被 dev server 服务的源文件：HMR/整页 reload 会让正在运行的
 Mock Playwright 用例出现元素 detach。根因排查记录见
 [加固循环账本](drafts/HARDENING_LOOP_PLAN.md) Batch 23/25。
+为 `chat-real` 配置 tool-calling 模型时推荐使用外部 `models.json`
+（`MODELS_CONFIG_FILE` 指向，gitignore 路径），示例骨架见
+[多模型外部配置](multi-model-external-config-zh-CN.md)。两个已踩过的坑：
+
+1. JSON 字段名是 **camelCase**（`chatModel` / `toolCalling`）；
+   误写 `chat-model` 会静默不生效并回退 legacy 默认模型。
+2. 修改后必须重启 dev 栈（`./scripts/dev.sh --stop && ./scripts/dev.sh start`），
+   并用 `GET /api/v1/rag/models` 确认目标模型 `available: true` 且
+   `capabilities.toolCalling: true`。
+
 
 
 ### 模型调用级持久用量账本门禁

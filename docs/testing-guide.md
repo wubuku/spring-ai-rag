@@ -118,14 +118,26 @@ Per-spec extra requirements (verified 2026-09-06):
 |------|--------------------|----------|
 | `api-key-real` | `RAG_ROOT_API_KEY` (or `REAL_E2E_API_KEY`) | passes |
 | `alerts-real` | also `ALERT_DELIVERY_EXPECTED_ALERT_ID` and `ALERT_DELIVERY_EXPECTED_DELIVERY_ID` (ids of a pre-created alert/delivery) | fails without preset ids |
-| `chat-real` | `/models` must expose at least one available tool-calling model | errors out if missing |
-| `files-real` | real Embedding + Chat LLM; slow providers surface as HTTP 504 | provider-latency bound |
+| `chat-real` | `/models` must expose at least one available tool-calling model (verified: external models.json with SiliconFlow Qwen3.5-27B + `toolCalling: true`) | passes (~2 min, AGENT SSE + history recovery) |
+| `files-real` | real Embedding + Chat LLM; KNOWLEDGE generation must finish within `rag.timeout.chat-ask-ms` (default 120s) or the request 504s | provider-latency bound |
 | `rerank-document-diversity-real` | also `RERANK_DIVERSITY_FIXTURE_FILE` pointing at a fixture | fails without fixture |
 
 Do not edit served source files while the dev server is running: HMR and
 full-page reloads detach elements under running Playwright tests. The root
 cause investigation lives in the hardening loop ledger, Batches 23/25
 ([drafts/HARDENING_LOOP_PLAN.md](drafts/HARDENING_LOOP_PLAN.md)).
+To configure a tool-calling model for `chat-real`, prefer the external
+`models.json` mechanism (`MODELS_CONFIG_FILE`, keep the path gitignored);
+see [multi-model external config](multi-model-external-config.md) for the
+skeleton. Two verified pitfalls:
+
+1. JSON field names are **camelCase** (`chatModel` / `toolCalling`); writing
+   `chat-model` silently no-ops and falls back to the legacy default model.
+2. Restart the dev stack afterwards (`./scripts/dev.sh --stop &&
+   ./scripts/dev.sh start`) and confirm via `GET /api/v1/rag/models` that the
+   target model reports `available: true` with
+   `capabilities.toolCalling: true`.
+
 
 
 ### Durable Model-Invocation Usage Ledger Gate

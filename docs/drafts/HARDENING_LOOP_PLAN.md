@@ -524,9 +524,28 @@
 - 覆盖率变化：src/api 全模块有契约测试（此前 11 个 0 覆盖）。
 - 证据：`tsc -b` 绿；`test:run` 330/330（55 文件，+9）；`lint`/`build` 绿。
 
+### Batch 30（已交付）
+
+- 分支：`test/api-contracts-rest-20260906`（同线叠加）
+- 内容：**chat-real 首次真实跑通**（~2 分钟，AGENT SSE + tool-calling + 历史恢复全链路）。
+  排查路径与关键发现：
+  1. legacy openai provider（.env 的 SPRING_AI_OPENAI_*）指向的 openai-next 端点已失效
+     （503 no_available_account），是此前 504 的直接原因；
+  2. curl 实测确认 SiliconFlow + Qwen/Qwen3.5-27B 返回规范 function call；
+  3. 采用外部 models.json（`MODELS_CONFIG_FILE`，.dev/ 下 gitignored）配置
+     siliconflow provider：Qwen3.5-27B（toolCalling: true）+ BGE-M3 embedding；
+  4. **踩坑**：JSON 字段名必须 camelCase（`chatModel`），误写 `chat-model`
+     会静默不生效回退 legacy（providers 部分生效而 routing 失效的混合状态很迷惑）；
+  5. 修正后 /models 暴露 `available: true + toolCalling: true`，PLAIN chat 8.6s 正常返回。
+- 运行手册双语更新：chat-real 标记已跑通、files-real 标注 chat-ask-ms=120s 约束、
+  models.json 配置要点与两个坑。文档门禁 11/11。
+- 遗留：files-real 仍受模型速度限制（KNOWLEDGE 长上下文 >120s），换更快模型或
+  调大 chat-ask-ms 可解，留待需要时处理。
+
 ## 10. 下一批次入口（候选，按优先级）
 
-- Batch 30：chat-real 的 tool-calling 模型配置排查（.env/models.json 层面）。
+- Batch 31：后端 SearchResults/VersionHistoryModal 等组件深度交互测试盘点。
+- Batch 32：models.json 的 schema 校验增强（kebab-case 字段名静默失效应报错或告警）。
 - Batch 31：后端 SearchResults/VersionHistoryModal 等组件深度交互测试盘点。
 - Batch 30：chat-real 的 tool-calling 模型配置排查（.env/models.json 层面）。
 - Batch 29：剩余 API 契约测试补齐（documents/files/evaluation/alerts/collections 扩展）。
