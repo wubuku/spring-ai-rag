@@ -123,7 +123,16 @@ Per-spec extra requirements (verified 2026-09-06):
 | `rerank-document-diversity-real` | also `RERANK_DIVERSITY_FIXTURE_FILE` pointing at a fixture | fails without fixture |
 
 Do not edit served source files while the dev server is running: HMR and
-full-page reloads detach elements under running Playwright tests. The root
+full-page reloads detach elements under running Playwright tests.
+Prefer the production-build preview server for the Mock suite (no file
+watching, immune to edits, and it surfaces production defects that dev-mode
+timing can mask):
+
+```bash
+cd spring-ai-rag-webui
+npm run test:e2e:mock   # build + vite preview (15174) + all non -real specs
+```
+ The root
 cause investigation lives in the hardening loop ledger, Batches 23/25
 ([drafts/HARDENING_LOOP_PLAN.md](drafts/HARDENING_LOOP_PLAN.md)).
 To configure a tool-calling model for `chat-real`, prefer the external

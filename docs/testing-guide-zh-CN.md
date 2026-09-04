@@ -121,7 +121,15 @@ npx playwright test e2e/api-key-real.spec.ts
 | `rerank-document-diversity-real` | 另需 `RERANK_DIVERSITY_FIXTURE_FILE` 指向 fixture 文件 | 缺 fixture 则失败 |
 
 运行期间不要编辑被 dev server 服务的源文件：HMR/整页 reload 会让正在运行的
-Mock Playwright 用例出现元素 detach。根因排查记录见
+Mock Playwright 用例出现元素 detach。
+推荐改用生产构建预览服务器跑 Mock 套件（无文件 watch，编辑零干扰，
+且能暴露 dev 时序掩盖的生产缺陷）：
+
+```bash
+cd spring-ai-rag-webui
+npm run test:e2e:mock   # build + vite preview（15174）+ 全部非 -real 用例
+```
+根因排查记录见
 [加固循环账本](drafts/HARDENING_LOOP_PLAN.md) Batch 23/25。
 为 `chat-real` 配置 tool-calling 模型时推荐使用外部 `models.json`
 （`MODELS_CONFIG_FILE` 指向，gitignore 路径），示例骨架见

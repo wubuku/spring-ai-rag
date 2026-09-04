@@ -592,9 +592,28 @@
 - 证据：`mvn -q clean compile test-compile` 绿；ChatTurnOperationServiceTest
   9 → 15 全绿；gated IT（chat.idempotency）7/7；`verify-no-pessimistic-locks` 通过。
 
+### Batch 35（已交付）
+
+- 分支：`test/component-interaction-depth-20260906`（同线叠加）
+- 内容（防呆落地为脚本级，非仅文档）：
+  1. 新增 `playwright.preview.config.ts` + `npm run test:e2e:mock`：Mock e2e
+     跑在 `vite preview`（生产构建，端口 15174，自动起停）上——无文件 watch，
+     「e2e 期间编辑源文件」结构性免疫；排除需真实后端的 `-real` 用例。
+  2. 双语 testing-guide 更新：推荐 preview 方式。
+- **重要发现（超出本批预期）**：preview（生产构建）下
+  `workspace-continuity › Chat, Search, and Files restore...` **稳定失败**
+  （复跑两次均失败；dev server 下 6/6）——从其它页面返回 Chat 后
+  `mode=AGENT` 丢失（draft 恢复了、mode 没恢复），违反「可寻址状态进 URL」
+  契约。这是 dev 时序掩盖的生产构建真实缺陷，非 flake，立 **Batch 36 修复项**
+  （优先级提升：真实用户在生产会遇到）。
+- 证据：`test:e2e:mock` 88/89（唯一失败即上述生产缺陷）；tsc/lint/build 绿
+  （本批未改应用代码）。
+
 ## 10. 下一批次入口（候选，按优先级）
 
-- Batch 35：e2e 运行期间禁编辑源文件的防呆评估（脚本级或文档已足）。
+- **Batch 36（高优）：修复 Chat mode=AGENT 在生产构建下路由往返丢失**
+  （preview 暴露的生产缺陷，违反 URL 可寻址契约）。
+- Batch 37：后端中等方法审计的继续（commandForClaim 剩余分支等）。
 - Batch 36：后端其余 20–40 行中等方法的同模式审计（commandForClaim 已部分覆盖）。
 - Batch 31：后端 SearchResults/VersionHistoryModal 等组件深度交互测试盘点。
 - Batch 30：chat-real 的 tool-calling 模型配置排查（.env/models.json 层面）。

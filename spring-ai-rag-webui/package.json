@@ -17,7 +17,8 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:headed": "playwright test --headed",
-    "test:e2e:report": "playwright show-report"
+    "test:e2e:report": "playwright show-report",
+    "test:e2e:mock": "playwright test --config playwright.preview.config.ts"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.96.2",
