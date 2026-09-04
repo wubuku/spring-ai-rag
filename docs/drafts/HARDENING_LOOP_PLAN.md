@@ -233,8 +233,21 @@
      label 关联回归测试。
 - 证据：`tsc -b` 绿；`test:run` 305/305（43 文件，+1 测试）；`lint`/`build` 绿。
 
+### Batch 10（已交付）
+
+- 分支：`test/sync-run-service-unit-20260905`（基于 Batch 9 分支）
+- 范围调整说明：原计划对 `DocumentSyncRunService` 主链（complete/applyItem）做单测，
+  实施前复核发现这些方法是 JdbcTemplate + ResultSet 映射密集型——mock 整套查询
+  只会复制 SQL 语义、产生脆弱测试；其真实行为已由 gated IT 与 ControllerWebTest
+  覆盖。因此本批改为加固同子系统中真正纯逻辑、且零测试的**游标契约层**：
+  1. `DocumentSyncRunItemCursorCodecTest`（7 测试）：roundtrip（含/无状态过滤）、
+     seenAt 的 UTC 归一化、run/status 绑定拒绝、null/空白/超长/非法 base64/
+     错误版本游标拒绝、externalId 安全规则（空白/填充/控制字符/非 ASCII/超 255）。
+  2. `AlertNotificationCursorCodecTest`（5 测试）：同样的 roundtrip/绑定/拒绝语义
+     与 UTC 归一化。
+- 证据：`mvn -q clean compile test-compile` 通过；两套 12/12 绿。
+
 ## 10. 下一批次入口（候选，按优先级）
 
-- Batch 10：`DocumentSyncRunService` 单测拆解（complete/applyItem 主链）。
 - Batch 11：Card/Modal primitive 提取（重复 .card/.panel/overlay 样式）+
   Evaluation/Documents 表单 a11y 收尾 + 徽章/严重级配色 token 化（基线 172 → 目标 <120）。
