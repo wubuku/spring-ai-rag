@@ -100,6 +100,10 @@ test.describe('Search', () => {
     });
 
     await page.getByTestId('search-scope-SELECTED_COLLECTIONS').check();
+    // KNOWN FLAKE: after clicking Next the page-two checkbox can be
+    // re-mounted repeatedly for a while (element detached, retrying). A
+    // dedicated investigation is queued in the hardening loop ledger; rerun
+    // this spec when it fires.
     await page.getByRole('button', { name: 'Next' }).click();
     await page.getByRole('checkbox', { name: /Page Two Target/ }).check();
     await searchInput(page).fill('page two');
@@ -300,4 +304,18 @@ test.describe('Search', () => {
       .toBe('sample-pdf/original.pdf');
     expect(request.headers()['x-api-key']).toBeTruthy();
   });
+  test('turning hybrid off sends useHybrid=false and keeps it in the URL', async ({ page }) => {
+    await searchInput(page).fill('keyword only query');
+    await page.getByRole('checkbox', { name: 'Hybrid' }).uncheck();
+
+    const requestPromise = page.waitForRequest(request =>
+      request.url().includes('/api/v1/rag/search?')
+    );
+    await page.getByRole('button', { name: 'Search' }).click();
+    const url = new URL((await requestPromise).url());
+
+    expect(url.searchParams.get('useHybrid')).toBe('false');
+    expect(new URL(page.url()).searchParams.get('hybrid')).toBe('false');
+  });
+
 });

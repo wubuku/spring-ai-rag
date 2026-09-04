@@ -413,11 +413,28 @@
   下游 `ChatTurnOperationServiceTest` 9/9；`verify-no-pessimistic-locks.sh` 通过；
   `mvn clean compile test-compile` 绿。
 
+### Batch 23（已交付）
+
+- 分支：`refactor/chat-execution-split-20260906`（同线叠加）
+- 内容：
+  1. 主流程 Mock Playwright 覆盖评估结论：search（10 用例：scope 三模式、分页
+     跨页选择、移动端溢出、结果恢复、URL 重载恢复、鉴权 PDF 原文）与 chat
+     （10 用例：SSE body、AGENT 工具活动、PLAIN 无检索、会话寻址恢复、幂等
+     冲突、部分流重放、stop 中断）覆盖扎实，仅一处缺口——`hybrid` 开关
+     （keyword-only，且属 URL 可寻址契约）无请求断言，已补
+     「关闭 hybrid → 请求 `useHybrid=false` + URL `hybrid=false`」用例。
+  2. 发现并定位一个**预存环境性 flake**：search 分页用例在 Vite 冷编译窗口的
+     全量跑中可能出现 checkbox 连续 detach 超时（隔离必过、预热后全量也过，
+     单 worker 11/11）；spec 内已留 KNOWN FLAKE 标记，根因调查另立批次。
+     本批未触碰任何应用代码，可排除本批引入。
+- 证据：`tsc -b` 绿；`test:run` 308/308；search+chat e2e 20/20；`lint`/`build` 绿；
+  新 hybrid 用例在多次全量与单测中稳定通过。
+
 ## 10. 下一批次入口（候选，按优先级）
 
-- Batch 23：Mock Playwright 对检索/对话主流程的覆盖率评估与补强。
 - Batch 24：评估把 gated IT 的本地运行方式接入 CI 的可行路径（mock provider）。
-- Batch 25：PdfImportController / RagDocumentController 超长方法盘点与拆分。
+- Batch 25：search 分页 flake 根因调查（CollectionScopeSelector 重挂载竞态）。
+- Batch 26：PdfImportController / RagDocumentController 超长方法盘点与拆分。
 - Batch 13：Card/Modal primitive 提取（重复 .card/.panel/overlay 样式）。
 - Batch 14：后端 `DocumentSyncRunService`/`CollectionPurgeService` 超长方法拆分
   （complete/applyItem/upsertExternalInTransaction），需 gated IT 回归护栏。
