@@ -35,6 +35,15 @@ export function Settings() {
       : 'llm';
   const [saved, setSaved] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
+  const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (savedTimerRef.current) {
+        clearTimeout(savedTimerRef.current);
+      }
+    },
+    [],
+  );
   const lastSavedRef = useRef<{
     llm: LlmConfig;
     retrieval: RetrievalConfig;
@@ -158,7 +167,10 @@ export function Settings() {
     };
     setSaved(true);
     setHasChanges(false);
-    setTimeout(() => setSaved(false), 2000);
+    if (savedTimerRef.current) {
+      clearTimeout(savedTimerRef.current);
+    }
+    savedTimerRef.current = setTimeout(() => setSaved(false), 2000);
   };
 
   const handleLanguageChange = (lang: string) => {

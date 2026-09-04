@@ -13,6 +13,7 @@ import { Skeleton } from '../components/Skeleton';
 import { DocumentActionsMenu } from '../components/DocumentActionsMenu/DocumentActionsMenu';
 import { VersionHistoryModal } from '../components/VersionHistoryModal/VersionHistoryModal';
 import { ConfirmDialog, Dialog } from '../components/Dialog';
+import { useBlobUrlOpener } from '../hooks/useBlobUrlOpener';
 import styles from './Documents.module.css';
 
 type DocumentConfirmation =
@@ -44,6 +45,7 @@ export function Documents() {
   const PAGE_SIZE = 20;
   const queryClient = useQueryClient();
   const { showToast } = useToast();
+  const openBlobUrl = useBlobUrlOpener();
 
   const { data: collectionsData } = useQuery({
     queryKey: ['collections-all'],
@@ -321,14 +323,13 @@ export function Documents() {
   const handleOpenOriginalFile = useCallback(async (path: string) => {
     try {
       const blob = await filesApi.getRawFile(path);
-      const objectUrl = URL.createObjectURL(blob);
-      window.open(objectUrl, '_blank', 'noopener,noreferrer');
-      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+            const objectUrl = URL.createObjectURL(blob);
+      openBlobUrl(objectUrl);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       showToast(t('documents.openOriginalPdfError', { error: message }), 'error');
     }
-  }, [showToast, t]);
+  }, [openBlobUrl, showToast, t]);
 
   const collections = collectionsData?.data?.collections ?? [];
   const mutationPending = updateMutation.isPending

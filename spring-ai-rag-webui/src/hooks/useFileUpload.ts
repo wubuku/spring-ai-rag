@@ -17,6 +17,7 @@ interface UseFileUploadOptions {
 interface UseFileUploadReturn {
   uploads: UploadProgress[];
   uploadFiles: (files: FileList) => void;
+  cancelUpload: () => void;
   clearUploads: () => void;
   isUploading: boolean;
 }
@@ -26,6 +27,7 @@ export function useFileUpload(options: UseFileUploadOptions): UseFileUploadRetur
   const [uploads, setUploads] = useState<UploadProgress[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const eventSourceRef = useRef<EventSource | null>(null);
+  const uploadAbortRef = useRef<AbortController | null>(null);
 
   const clearUploads = useCallback(() => {
     setUploads([]);
@@ -76,6 +78,8 @@ export function useFileUpload(options: UseFileUploadOptions): UseFileUploadRetur
       try {
         const idempotencyKey = globalThis.crypto?.randomUUID?.()
           ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+        const abortController = new AbortController();
+        uploadAbortRef.current = abortController;
         // Make the upload request
         const response = await fetch('/api/v1/rag/documents/upload', {
           method: 'POST',
@@ -84,6 +88,7 @@ export function useFileUpload(options: UseFileUploadOptions): UseFileUploadRetur
             'Idempotency-Key': idempotencyKey,
           },
           body: formData,
+          signal: abortController.signal,
         });
 
         if (!response.ok) {
@@ -97,25 +102,34 @@ export function useFileUpload(options: UseFileUploadOptions): UseFileUploadRetur
           onComplete?.(u.fileName, []);
         });
       } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : 'Upload failed';
+        const cancelled = err instanceof DOMException && err.name === 'AbortError';
+        const errorMsg = cancelled
+          ? 'Upload cancelled'
+          : err instanceof Error ? err.message : 'Upload failed';
         newUploads.forEach(u => {
           updateUpload(u.fileName, { status: 'failed', error: errorMsg });
           onError?.(u.fileName, errorMsg);
         });
       } finally {
+        uploadAbortRef.current = null;
         setIsUploading(false);
       }
     },
     [updateUpload, onComplete, onError]
   );
 
-  // Cleanup SSE on unmount
+  // Cleanup SSE on unmount and abort any in-flight upload
   useEffect(() => {
     const es = eventSourceRef.current;
     return () => {
       es?.close();
+      uploadAbortRef.current?.abort();
     };
   }, []);
 
-  return { uploads, uploadFiles, clearUploads, isUploading };
+  const cancelUpload = useCallback(() => {
+    uploadAbortRef.current?.abort();
+  }, []);
+
+  return { uploads, uploadFiles, cancelUpload, clearUploads, isUploading };
 }

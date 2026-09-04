@@ -9,6 +9,17 @@ describe('useFileUpload', () => {
     clearCredential();
   });
 
+  const oneFile = (): FileList => ({
+    0: new File(['hello'], 'test.txt', { type: 'text/plain' }),
+    length: 1,
+    item: (index: number) => index === 0
+      ? new File(['hello'], 'test.txt', { type: 'text/plain' })
+      : null,
+    [Symbol.iterator]: function* () {
+      yield this[0];
+    },
+  } as FileList);
+
   it('initializes with empty uploads and isUploading false', () => {
     const { result } = renderHook(() =>
       useFileUpload({ onProgress: vi.fn(), onComplete: vi.fn(), onError: vi.fn() })
@@ -114,5 +125,58 @@ describe('useFileUpload', () => {
         }),
       })
     );
+  });
+  it('exposes cancelUpload and aborts the in-flight request', async () => {
+    let capturedSignal: AbortSignal | null = null;
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(
+      (_url, init) => new Promise((_resolve, reject) => {
+        capturedSignal = init?.signal ?? null;
+        capturedSignal?.addEventListener('abort', () => {
+          reject(new DOMException('Aborted', 'AbortError'));
+        });
+      }),
+    );
+    const onError = vi.fn();
+    const { result } = renderHook(() =>
+      useFileUpload({ onProgress: vi.fn(), onComplete: vi.fn(), onError })
+    );
+
+    let uploadPromise: Promise<void> = Promise.resolve();
+    act(() => {
+      uploadPromise = Promise.resolve(result.current.uploadFiles(oneFile()));
+    });
+    expect(capturedSignal).not.toBeNull();
+
+    act(() => {
+      result.current.cancelUpload();
+    });
+    await act(async () => {
+      await uploadPromise;
+    });
+
+    expect(result.current.uploads[0].status).toBe('failed');
+    expect(result.current.uploads[0].error).toBe('Upload cancelled');
+    expect(onError).toHaveBeenCalledWith('test.txt', 'Upload cancelled');
+    expect(result.current.isUploading).toBe(false);
+    fetchSpy.mockRestore();
+  });
+
+  it('aborts the in-flight upload when the hook unmounts', async () => {
+    let capturedSignal: AbortSignal | null = null;
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(
+      (_url, init) => new Promise(() => {
+        capturedSignal = init?.signal ?? null;
+      }),
+    );
+    const { result, unmount } = renderHook(() => useFileUpload({}));
+
+    act(() => {
+      result.current.uploadFiles(oneFile());
+    });
+    expect(capturedSignal?.aborted).toBe(false);
+
+    unmount();
+    expect(capturedSignal?.aborted).toBe(true);
+    fetchSpy.mockRestore();
   });
 });

@@ -8,6 +8,7 @@ import { CollectionScopeSelector } from '../components/CollectionScopeSelector';
 import { SearchResults } from '../components/SearchResults';
 import { useToast } from '../components/Toast';
 import { useSearchHistory } from '../hooks/useSearchHistory';
+import { useBlobUrlOpener } from '../hooks/useBlobUrlOpener';
 import type { CollectionScopeMode } from '../types/api';
 import {
   readWorkspaceState,
@@ -59,6 +60,7 @@ export function Search() {
   const location = useLocation();
   const navigate = useNavigate();
   const { showToast } = useToast();
+  const openBlobUrl = useBlobUrlOpener();
   const urlState = useMemo(
     () => readSearchUrlState(location.search),
     [location.search],
@@ -215,13 +217,12 @@ export function Search() {
     try {
       const blob = await filesApi.getRawFile(path);
       const objectUrl = URL.createObjectURL(blob);
-      window.open(objectUrl, '_blank', 'noopener,noreferrer');
-      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+      openBlobUrl(objectUrl);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       showToast(t('search.openOriginalPdfError', { error: message }), 'error');
     }
-  }, [showToast, t]);
+  }, [openBlobUrl, showToast, t]);
 
   return (
     <div>

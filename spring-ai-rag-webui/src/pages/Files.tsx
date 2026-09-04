@@ -12,6 +12,7 @@ import { filesApi, type TreeEntry } from '../api/files';
 import { collectionsApi } from '../api/collections';
 import { useToast } from '../components/Toast';
 import { Skeleton } from '../components/Skeleton';
+import { useBlobUrlOpener } from '../hooks/useBlobUrlOpener';
 import { FilePreview } from '../components/FilePreview/FilePreview';
 import {
   readWorkspaceState,
@@ -177,6 +178,7 @@ function FileIcon({ entry }: { entry: TreeEntry }) {
 export function Files() {
   const { t } = useTranslation();
   const { showToast } = useToast();
+  const openBlobUrl = useBlobUrlOpener();
   const location = useLocation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -471,15 +473,14 @@ export function Files() {
     if (selectedEntry) {
       try {
         const blob = await filesApi.getRawFile(selectedEntry.path);
-        const objectUrl = URL.createObjectURL(blob);
-        window.open(objectUrl, '_blank', 'noopener,noreferrer');
-        window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+              const objectUrl = URL.createObjectURL(blob);
+      openBlobUrl(objectUrl);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         showToast(t('files.previewError', { error: message }), 'error');
       }
     }
-  }, [selectedEntry, showToast, t]);
+  }, [openBlobUrl, selectedEntry, showToast, t]);
 
   // ── Trigger Embedding ────────────────────────────────────────────────────
 

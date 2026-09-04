@@ -194,8 +194,21 @@
   （Authorization 9 / ControllerWebTest 3）共 40/40 绿。
 - 后续：`DocumentSyncRunService`（1299 行）依赖较多，值得独立一个批次做单测拆解。
 
-## 9. 下一批次入口
+### Batch 7（已交付）
 
-Batch 7：前端行为加固——`useFileUpload` 上传 fetch 支持中断（AbortController）、
-Search/Files/Documents 的 60s `revokeObjectURL` 延迟定时器在卸载时清理、
-`Settings.tsx` saved 提示定时器清理。
+- 分支：`fix/webui-behavior-hardening-20260905`（基于 Batch 6 分支）
+- 内容：
+  1. `useFileUpload` 增加 AbortController：fetch 透传 signal、新增 `cancelUpload()`、
+     卸载时中断在途上传；AbortError 归一为 `Upload cancelled` 失败状态。
+  2. 新增 `useBlobUrlOpener` hook：集中 Search/Files/Documents 三处重复的
+     「popup 打开 blob + 60s 延迟 revoke」模式，卸载时取消未触发的 revoke 定时器。
+     Chat.tsx 下载路径本就是即时 revoke，保持不变。
+  3. `Settings.tsx` 的 saved 提示定时器改为 ref 持有 + 卸载/重排前清理。
+- 证据：`tsc -b` 绿；`test:run` 304/304（43 文件，新增 abort 2 测试 +
+  useBlobUrlOpener 2 测试）；`lint`/`build` 绿。
+
+## 10. 下一批次入口
+
+Batch 8：CI 加固——把前端 `npm run test:coverage`（含 thresholds 门禁）接入
+`.github/workflows/ci.yml`；评估在后端 job 中为 gated PostgreSQL IT 打开
+`*.it.enabled` 系统属性（需要 service 容器支持，谨慎评估成本后决定）。
