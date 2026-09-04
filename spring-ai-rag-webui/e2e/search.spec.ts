@@ -100,11 +100,16 @@ test.describe('Search', () => {
     });
 
     await page.getByTestId('search-scope-SELECTED_COLLECTIONS').check();
-    // KNOWN FLAKE: after clicking Next the page-two checkbox can be
-    // re-mounted repeatedly for a while (element detached, retrying). A
-    // dedicated investigation is queued in the hardening loop ledger; rerun
-    // this spec when it fires.
+    // Wait for the page-one list to settle before paging: the options
+    // container remounts after the mode-switch fetch, and a Next click that
+    // lands inside that window is silently swallowed by the remount.
+    await expect(
+      page.getByRole('checkbox', { name: /Page One/ }),
+    ).toBeVisible();
     await page.getByRole('button', { name: 'Next' }).click();
+    await expect(
+      page.getByRole('checkbox', { name: /Page Two Target/ }),
+    ).toBeVisible();
     await page.getByRole('checkbox', { name: /Page Two Target/ }).check();
     await searchInput(page).fill('page two');
 
