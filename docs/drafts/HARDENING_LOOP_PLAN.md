@@ -273,9 +273,19 @@
 - 证据：`tsc -b` 绿；`test:run` 305/305；`lint`/`build` 绿；stale-baseline 拦截在
   实施中再次正确触发（FilePreview 清零后未同步基线即被门禁点名）。
 
+### Batch 13（已交付）
+
+- 分支：`refactor/webui-token-fallback-cleanup-20260905`（同线叠加）
+- 内容：复核 Evaluation/Documents 的表单 a11y。关键发现：早期扫描按
+  htmlFor/aria-label 统计，**漏掉了包裹式 label**——Evaluation 全部 10 个控件
+  与 Documents 编辑/relocate 表单本来就是包裹式关联，无需修改。真实缺口仅
+  Documents 3 处：搜索框、集合筛选 select 补 `aria-label`（复用现有 key），
+  ✕ 清除按钮补可访问名（新增 `documents.clearSearch`，en + zh-CN）。
+- 证据：`tsc -b` 绿；`test:run` 305/305；`lint`/`build` 绿；locale 完整性脚本校验
+  仅新增 1 key。
+
 ## 10. 下一批次入口（候选，按优先级）
 
-- Batch 13：Evaluation/Documents 表单 a11y 收尾（两页共 24 个 input 仅少量关联）。
 - Batch 14：Card/Modal primitive 提取（重复 .card/.panel/overlay 样式）。
 - Batch 15：后端 `DocumentSyncRunService`/`CollectionPurgeService` 超长方法拆分
   （complete/applyItem/upsertExternalInTransaction），需 gated IT 回归护栏。

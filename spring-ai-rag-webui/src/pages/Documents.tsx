@@ -375,6 +375,7 @@ export function Documents() {
       <div className={styles.searchRow}>
         <input
           type="text"
+          aria-label={t('documents.searchPlaceholder') || t('common.search')}
           placeholder={t('documents.searchPlaceholder') || t('common.search')}
           value={keyword}
           onChange={handleKeywordChange}
@@ -389,12 +390,14 @@ export function Documents() {
               setSearchParams(next);
             }}
             className={styles.clearBtn}
+            aria-label={t('documents.clearSearch')}
           >
             ✕
           </button>
         )}
         <select
           data-testid="documents-collection-filter"
+          aria-label={t('documents.collection')}
           value={selectedCollection ?? ''}
           onChange={handleCollectionChange}
           className={styles.filterSelect}
