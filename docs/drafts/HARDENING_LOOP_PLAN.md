@@ -560,10 +560,21 @@
 - 证据：`mvn -q clean compile test-compile` 绿；MultiModelConfigLoaderTest 21/21；
   dev 栈故障注入/恢复两端验证；锁扫描不涉及（无数据访问改动）。
 
+### Batch 32（已交付）
+
+- 分支：`test/component-interaction-depth-20260906`（基于 Batch 31 分支）
+- **盘点结论**：SearchResults 的溯源回调（onViewDirectory/onViewIndexedFile/
+  onOpenOriginalFile 的参数断言）既有测试已覆盖，不缺；真正缺口是
+  **VersionHistoryModal 的版本恢复交互**——canRestore 门控矩阵（FULL 快照、
+  非 externallyManaged、documentRevision 存在、onRestoreVersion 提供）、
+  restorePending 禁用态、版本号参数传递全部未测，而恢复是有副作用的写操作。
+- 补 5 个门控矩阵测试（VHM 8 → 13）。
+- 证据：`tsc -b` 绿；`test:run` 330 → 335；`lint`/`build` 绿。
+
 ## 10. 下一批次入口（候选，按优先级）
 
-- Batch 32：前端组件深度交互测试盘点（SearchResults/VersionHistoryModal 等）。
-- Batch 33：把 models.json camelCase 坑位补充到 multi-model-external-config 双语文档。
+- Batch 33：models.json camelCase 坑位补充到 multi-model-external-config 双语文档。
+- Batch 34：后端 ChatTurnOperationService.inspectExisting/replay 等中等方法审计。
 - Batch 31：后端 SearchResults/VersionHistoryModal 等组件深度交互测试盘点。
 - Batch 30：chat-real 的 tool-calling 模型配置排查（.env/models.json 层面）。
 - Batch 29：剩余 API 契约测试补齐（documents/files/evaluation/alerts/collections 扩展）。

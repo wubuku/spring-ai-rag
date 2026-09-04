@@ -228,3 +228,109 @@ describe('VersionHistoryModal', () => {
     });
   });
 });
+
+// ─── Restore interaction (canRestore gating matrix) ─────────────────
+
+function renderRestoreModal(overrides: {
+  documentRevision?: number | null;
+  externallyManaged?: boolean;
+  restorePending?: boolean;
+  onRestoreVersion?: (versionNumber: number) => void;
+  snapshotCompleteness?: string;
+}) {
+  const versions = mockVersions.map(v => ({
+    ...v,
+    snapshotCompleteness: overrides.snapshotCompleteness ?? 'FULL',
+  }));
+  vi.mocked(documentsApi.getVersions).mockResolvedValueOnce({
+    data: { documentId: 42, totalVersions: 3, page: 0, size: 20, versions },
+  } as any);
+
+  const onRestoreVersion = overrides.onRestoreVersion ?? vi.fn();
+  render(
+    <VersionHistoryModal
+      documentId={42}
+      documentTitle="Test Doc"
+      documentRevision={
+        'documentRevision' in overrides ? overrides.documentRevision : 7
+      }
+      externallyManaged={overrides.externallyManaged ?? false}
+      restorePending={overrides.restorePending ?? false}
+      onRestoreVersion={overrides.onRestoreVersion ?? onRestoreVersion}
+      onClose={vi.fn()}
+    />,
+    { wrapper: Wrapper },
+  );
+  return { onRestoreVersion };
+}
+
+describe('VersionHistoryModal restore gating', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('restores a FULL snapshot and passes its version number', async () => {
+    const { onRestoreVersion } = renderRestoreModal({});
+
+    const restoreButton = await screen.findAllByRole('button', {
+      name: 'versions.restore',
+    });
+    expect(restoreButton).toHaveLength(3);
+    expect(restoreButton[0]).toBeEnabled();
+
+    fireEvent.click(restoreButton[0]);
+    expect(onRestoreVersion).toHaveBeenCalledWith(3);
+  });
+
+  it('disables restore for snapshots that are not FULL', async () => {
+    const { onRestoreVersion } = renderRestoreModal({
+      snapshotCompleteness: 'PARTIAL',
+    });
+
+    const restoreButtons = await screen.findAllByRole('button', {
+      name: 'versions.restore',
+    });
+    for (const button of restoreButtons) {
+      expect(button).toBeDisabled();
+    }
+
+    fireEvent.click(restoreButtons[0]);
+    expect(onRestoreVersion).not.toHaveBeenCalled();
+  });
+
+  it('disables restore for externally managed documents', async () => {
+    const { onRestoreVersion } = renderRestoreModal({
+      externallyManaged: true,
+    });
+
+    const restoreButtons = await screen.findAllByRole('button', {
+      name: 'versions.restore',
+    });
+    expect(restoreButtons[0]).toBeDisabled();
+    expect(onRestoreVersion).not.toHaveBeenCalled();
+  });
+
+  it('disables restore when the document revision is unknown', async () => {
+    const { onRestoreVersion } = renderRestoreModal({
+      documentRevision: null,
+    });
+
+    const restoreButtons = await screen.findAllByRole('button', {
+      name: 'versions.restore',
+    });
+    expect(restoreButtons[0]).toBeDisabled();
+    expect(onRestoreVersion).not.toHaveBeenCalled();
+  });
+
+  it('shows the loading label and disables restore while pending', async () => {
+    renderRestoreModal({ restorePending: true });
+
+    const restoreButtons = await screen.findAllByRole('button', {
+      name: 'common.loading',
+    });
+    expect(restoreButtons).toHaveLength(3);
+    for (const button of restoreButtons) {
+      expect(button).toBeDisabled();
+    }
+  });
+});
