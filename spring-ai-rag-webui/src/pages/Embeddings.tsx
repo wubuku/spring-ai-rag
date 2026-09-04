@@ -6,7 +6,7 @@ import { embeddingsApi } from '../api/embeddings';
 import type { DerivationRepairPreview } from '../api/embeddings';
 import { Dialog } from '../components/Dialog';
 import { Card } from '../components/Card';
-import styles from './Evaluation.module.css';
+import styles from './Embeddings.module.css';
 
 export function Embeddings() {
   const { t } = useTranslation();

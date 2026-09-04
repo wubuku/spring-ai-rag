@@ -362,9 +362,18 @@
 - 至此两处最高风险超长方法（DocumentSyncRunService + CollectionPurgeService）
   均在 gated IT 护栏下完成拆分。
 
+### Batch 19（已交付）
+
+- 分支：`refactor/embeddings-own-styles-20260906`（基于 Batch 18 分支）
+- 内容：`Embeddings.tsx` 不再借用 `Evaluation.module.css`——新建自有
+  `Embeddings.module.css`（13 个类，其中 `sectionHeader` 在被借模块里本就缺失、
+  属于第二处静默样式缺口，本次一并补齐；选择器组改写为仅含所需类）。
+  跨页 CSS 借用清零。
+- 证据：`tsc -b` 绿；`test:run` 308/308（含 Batch 17 的卡片皮肤回归测试）；
+  `lint`/`build` 绿。
+
 ## 10. 下一批次入口（候选，按优先级）
 
-- Batch 19：Embeddings 页面彻底归还 Evaluation.module.css 借用（建立自有样式模块）。
 - Batch 20：把 Batch 16/18 验证过的 Testcontainers 本地运行参数写入
   china-network-guide（双语），让 gated IT 回归可复制。
 - Batch 21：后端其余超长方法（ChatTurnOperationService.claim、
