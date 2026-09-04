@@ -10,6 +10,7 @@ import {
   LineChart,
   Line,
 } from 'recharts';
+import { useChartTheme } from '../../hooks/useChartTheme';
 import styles from './MetricsCharts.module.css';
 
 interface MetricsChartsProps {
@@ -33,6 +34,7 @@ type ChartType = 'bar' | 'line';
 
 export function MetricsCharts({ data }: MetricsChartsProps) {
   const [chartType, setChartType] = useState<ChartType>('bar');
+  const palette = useChartTheme();
 
   if (!data) {
     return <div className={styles.loading}>Loading...</div>;
@@ -64,16 +66,19 @@ export function MetricsCharts({ data }: MetricsChartsProps) {
       latency: m.avgLatencyMs,
     })) ?? [];
 
-  const isDark =
-    document.documentElement.getAttribute('data-theme') === 'dark';
-
   const axisStyle = {
-    fill: isDark ? '#9ca3af' : '#6b7280',
+    fill: palette.axisText,
     fontSize: 12,
   };
 
   const gridStyle = {
-    stroke: isDark ? '#2d2d2d' : '#e5e7eb',
+    stroke: palette.gridStroke,
+  };
+
+  const tooltipStyle = {
+    backgroundColor: palette.tooltipBackground,
+    border: `1px solid ${palette.tooltipBorder}`,
+    borderRadius: 8,
   };
 
   return (
@@ -104,13 +109,9 @@ export function MetricsCharts({ data }: MetricsChartsProps) {
               <XAxis dataKey="name" {...axisStyle} />
               <YAxis {...axisStyle} />
               <Tooltip
-                contentStyle={{
-                  backgroundColor: isDark ? '#1a1a1a' : '#fff',
-                  border: `1px solid ${isDark ? '#2d2d2d' : '#e5e7eb'}`,
-                  borderRadius: 8,
-                }}
+                contentStyle={tooltipStyle}
               />
-              <Bar dataKey="value" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="value" fill={palette.primary} radius={[4, 4, 0, 0]} />
             </BarChart>
           ) : (
             <LineChart data={mainMetricsData}>
@@ -118,13 +119,9 @@ export function MetricsCharts({ data }: MetricsChartsProps) {
               <XAxis dataKey="name" {...axisStyle} />
               <YAxis {...axisStyle} />
               <Tooltip
-                contentStyle={{
-                  backgroundColor: isDark ? '#1a1a1a' : '#fff',
-                  border: `1px solid ${isDark ? '#2d2d2d' : '#e5e7eb'}`,
-                  borderRadius: 8,
-                }}
+                contentStyle={tooltipStyle}
               />
-              <Line type="monotone" dataKey="value" stroke="#3b82f6" strokeWidth={2} dot={{ r: 4 }} />
+              <Line type="monotone" dataKey="value" stroke={palette.primary} strokeWidth={2} dot={{ r: 4 }} />
             </LineChart>
           )}
         </ResponsiveContainer>
@@ -139,13 +136,9 @@ export function MetricsCharts({ data }: MetricsChartsProps) {
             <XAxis dataKey="name" {...axisStyle} />
             <YAxis {...axisStyle} />
             <Tooltip
-              contentStyle={{
-                backgroundColor: isDark ? '#1a1a1a' : '#fff',
-                border: `1px solid ${isDark ? '#2d2d2d' : '#e5e7eb'}`,
-                borderRadius: 8,
-              }}
+              contentStyle={tooltipStyle}
             />
-            <Bar dataKey="value" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="value" fill={palette.warning} radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -159,14 +152,10 @@ export function MetricsCharts({ data }: MetricsChartsProps) {
             <XAxis dataKey="name" {...axisStyle} />
             <YAxis domain={[0, 100]} {...axisStyle} />
             <Tooltip
-              contentStyle={{
-                backgroundColor: isDark ? '#1a1a1a' : '#fff',
-                border: `1px solid ${isDark ? '#2d2d2d' : '#e5e7eb'}`,
-                borderRadius: 8,
-              }}
+              contentStyle={tooltipStyle}
               formatter={(value) => [`${value}%`, 'Cache Hit Rate']}
             />
-            <Bar dataKey="value" fill="#22c55e" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="value" fill={palette.success} radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -181,14 +170,10 @@ export function MetricsCharts({ data }: MetricsChartsProps) {
               <XAxis dataKey="name" {...axisStyle} />
               <YAxis {...axisStyle} />
               <Tooltip
-                contentStyle={{
-                  backgroundColor: isDark ? '#1a1a1a' : '#fff',
-                  border: `1px solid ${isDark ? '#2d2d2d' : '#e5e7eb'}`,
-                  borderRadius: 8,
-                }}
+                contentStyle={tooltipStyle}
               />
-              <Bar dataKey="calls" fill="#3b82f6" name="Calls" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="tokens" fill="#22c55e" name="Tokens" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="calls" fill={palette.primary} name="Calls" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="tokens" fill={palette.success} name="Tokens" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>

@@ -251,6 +251,13 @@ npm run test:run
 npm run build
 ```
 
+`npm run lint` chains ESLint, `check:alignment` (horizontal alignment policy) and
+`check:design-tokens` (token definition checks, no bare z-index in CSS modules,
+and no new literal colors in src sources; existing literal colors are frozen by
+the equality baseline in `scripts/design-token-color-baseline.json`, which must
+be lowered whenever colors are removed). `test:coverage` additionally enforces
+the global coverage thresholds from `vitest.config.ts`.
+
 Development:
 
 ```bash

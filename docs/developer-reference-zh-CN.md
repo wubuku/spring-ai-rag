@@ -236,6 +236,12 @@ npm run test:run
 npm run build
 ```
 
+`npm run lint` 串联 ESLint、`check:alignment`（水平对齐策略）与
+`check:design-tokens`（token 定义校验、module.css 禁裸 z-index、src 源码禁新增
+字面颜色；存量按 `scripts/design-token-color-baseline.json` 等值基线锁死，
+减少时必须同步下调基线）。`test:coverage` 另有按 `vitest.config.ts` thresholds
+的全局覆盖率下限。
+
 开发模式：
 
 ```bash

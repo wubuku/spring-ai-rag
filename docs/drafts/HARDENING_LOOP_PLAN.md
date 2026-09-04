@@ -97,14 +97,38 @@
     接入 CI 归入后续 CI 加固批次（Batch 8 范围）。
 - Review 结论（一轮只读复核）：无生产代码改动；测试无 flaky 信号（全量重复运行两次均绿）。
 
-### Batch 1 交付
+## 4. 批次记录（按时间序）
+
+### Batch 1（已交付）
 
 - 分支：`feat/webui-test-hardening-20260905`（基于 main@d185dbfa）
-- 提交：`test(webui): add tests for untested pages/components and enforce coverage thresholds`
-- 推送：已推送 origin；未合并 main（按循环约束等待统一合并）。
+- 提交：`88dc1248`，已推送 origin；未合并 main。
+- 内容：6 个零测试文件补 39 个测试；coverage include pages + thresholds（64/63/44/65）。
+- 证据：`test:run` 290/290；threshold 拦截验证（临时 99 → ERROR）；tsc/lint/build 绿。
 
-## 4. 下一批次入口
+### Batch 2（已交付）
 
-Batch 2：design-token 机器门禁（`scripts/check-design-tokens.mjs` 增加字面颜色禁令 + 白名单基线），
-修复 `MetricsCharts.tsx` 内联 isDark 主题分支与 `ReembedAllButton.module.css` 深色主题失明。
-新增门禁必须以当前字面颜色清单为基线白名单，只防新增不回溯。
+- 分支：`feat/webui-design-token-gate-20260905`（基于 Batch 1 分支）
+- 内容：
+  1. `scripts/check-design-tokens.mjs` 扩展字面颜色禁令：扫描 src 下 css/ts/tsx
+     （hex 3/4/6/8 位 + rgb/hsl 函数；排除 global.css 与 *.test.*），基线
+     `scripts/design-token-color-baseline.json` 按文件等值锁死——新增失败、
+     减少必须同步下调（防基线虚占）。
+  2. global.css 新增 4 个 warning 面色 token（bg/bg-hover/border/text，明暗两套）。
+  3. `ReembedAllButton.module.css` 全量 token 化（原 19 处字面量清零，深色主题可用）。
+  4. 新增 `src/hooks/useChartTheme.ts`：recharts 用色从 CSS 变量解析
+     （SVG attribute 不支持 var()），MutationObserver 监听 data-theme 切换；
+     `MetricsCharts.tsx` 删除全部 isDark 三元与字面颜色（原 22 处清零），
+     亮色主题取值与原字面量一致，视觉无回归。
+- 基线变化：389 处/26 文件 → 343 处/24 文件。
+- 证据：`tsc -b` 绿；`test:run` 293/293（41 文件，新增 useChartTheme 3 测试）；
+  `lint`（含新门禁）绿；`build` 绿；`verify-project-docs.sh` 11/11；
+  门禁负向验证：干净文件加临时 `#123456` → 失败；基线人为膨胀 → stale 失败；均正确拦截。
+- 文档同步：`developer-reference-zh-CN.md` / `developer-reference.md` §6 补充
+  lint 链与 coverage 阈值说明。
+
+## 5. 下一批次入口
+
+Batch 3：提取 `Button` primitive（variant: primary/secondary/danger/link/icon），
+优先消除 `ABTest.module.css` 与 `ApiKeys.module.css` 的 `.btn*` 复制粘贴；
+迁移过程中同步下调字面颜色基线。

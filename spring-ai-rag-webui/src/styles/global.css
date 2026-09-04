@@ -11,6 +11,10 @@
   --color-primary-bg: #eff6ff;
   --color-success: #22c55e;
   --color-warning: #f59e0b;
+  --color-warning-bg: #fff3cd;
+  --color-warning-bg-hover: #ffe69c;
+  --color-warning-border: #ffc107;
+  --color-warning-text: #856404;
   --color-error: #ef4444;
   --color-backdrop: rgba(17, 24, 39, 0.68);
   --shadow-dialog: 0 18px 48px rgba(15, 23, 42, 0.28);
@@ -51,6 +55,10 @@
   --color-primary-bg: #1e3a5f;
   --color-success: #4ade80;
   --color-warning: #fbbf24;
+  --color-warning-bg: #3b2f0f;
+  --color-warning-bg-hover: #4a3c15;
+  --color-warning-border: #a16207;
+  --color-warning-text: #fbbf24;
   --color-error: #f87171;
 }
 
