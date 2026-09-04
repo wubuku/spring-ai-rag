@@ -221,103 +221,26 @@ public class ChatExecutionService {
                 AtomicReference<ModeAwareChatClientFactory.Attempt> successfulAttempt =
                         new AtomicReference<>();
                 try {
-                    Supplier<ChatClientResponse> invocation = () -> {
-                        if (!request.executionBudget()
-                                .tryReserveCandidateAttempt()) {
-                            throw new RagException(
-                                    ErrorCode.CHAT_BUDGET_EXHAUSTED,
-                                    "Chat candidate-attempt budget exhausted");
-                        }
-                        ConversationPromptPlan promptPlan = promptPlanner.plan(
-                                candidate,
-                                request,
-                                mandatoryPromptText(request),
-                                baseline,
-                                selectedSummary,
-                                toolCallbacks(request));
-                        request.executionBudget().recordContextPlan(
-                                promptPlan.snapshot());
-                        ModeAwareChatClientFactory.Attempt created =
-                                clientFactory.create(
-                                        request,
-                                        candidate,
-                                        plannedMessages(promptPlan));
-                        try {
-                            ChatClientResponse response = invoke(created, request);
-                            successfulAttempt.set(created);
-                            return response;
-                        } catch (RuntimeException e) {
-                            markAttempt(request, created, false);
-                            throw e;
-                        }
-                    };
-                    Supplier<ChatClientResponse> retried = () ->
-                            retryTemplate != null
-                                    ? retryTemplate.execute(
-                                            context -> invocation.get())
-                                    : invocation.get();
+                    Supplier<ChatClientResponse> retried = withRetries(
+                            candidateInvocation(
+                                    request, candidate, baseline,
+                                    selectedSummary, successfulAttempt));
                     ChatClientResponse response = sessionCoordinator != null
                             ? sessionCoordinator.invokeWithinDeadline(
                                     lease, retried)
                             : retried.get();
-                    ModeAwareChatClientFactory.Attempt attempt =
-                            successfulAttempt.get();
-                    if (attempt == null) {
-                        throw new IllegalStateException(
-                                "Chat retry completed without a successful attempt");
-                    }
-                    ChatExecutionResult result =
-                            toResult(command, attempt, response);
-                    ChatExecutionResult committedResult =
-                            withPersistenceMetadata(command, result);
-                    if (sessionCoordinator != null) {
-                        List<Message> committedMessages =
-                                attempt.memory() != null
-                                        ? committedMemoryMessages(
-                                                attempt.memory().get(
-                                                        command.memoryConversationId()))
-                                        : List.of();
-                        sessionCoordinator.commit(
-                                lease,
-                                command,
-                                committedResult,
-                                committedMessages,
-                                serializeDocumentIds(committedResult.sources()));
-                    } else {
-                        persist(command, committedResult);
-                    }
-                    ConversationSummaryService.CompactionResult compaction =
-                            compactSummary(
-                                    command, candidate, attempt, baseline,
-                                    committedResult.answer());
-                    committedResult = withSummaryMetadata(
-                            committedResult, compaction);
-                    committedResult = withExecutionBudgetMetadata(
-                            committedResult, command.executionBudget());
-                    if (metricsService != null) {
-                        metricsService.recordSuccess(
-                                System.currentTimeMillis() - startedAt,
-                            tokenCount(committedResult.usage()));
-                    }
-                    markAttempt(command, attempt, true);
-                    if (index > 0) {
-                        log.info("Chat fallback succeeded: requested={}, resolved={}",
-                                command.modelRef(), candidate.ref());
-                    }
-                    return committedResult;
+                    return commitExecutedTurn(
+                            command, candidate, lease, startedAt,
+                            successfulAttempt.get(), response, baseline, index);
                 } catch (RagException e) {
                     markAttempt(command, successfulAttempt.get(), false);
                     throw e;
                 } catch (RuntimeException e) {
                     markAttempt(command, successfulAttempt.get(), false);
                     lastFailure = e;
-                    if (metricsService != null) {
-                        metricsService.recordFailure(
-                                System.currentTimeMillis() - startedAt);
-                    }
-                    log.warn("Chat candidate {}/{} failed ({}): {}",
-                            index + 1, candidates.size(), candidate.ref(),
-                            e.getMessage());
+                    recordCandidateFailure(
+                            startedAt, index, candidates.size(),
+                            candidate.ref(), e, "Chat candidate");
                 }
             }
             if (lastFailure != null) {
@@ -362,90 +285,27 @@ public class ChatExecutionService {
             AtomicReference<ModeAwareChatClientFactory.Attempt> successfulAttempt =
                     new AtomicReference<>();
             try {
-                Supplier<ChatClientResponse> invocation = () -> {
-                    if (!request.executionBudget()
-                            .tryReserveCandidateAttempt()) {
-                        throw new RagException(
-                                ErrorCode.CHAT_BUDGET_EXHAUSTED,
-                                "Chat candidate-attempt budget exhausted");
-                    }
-                    ConversationPromptPlan promptPlan = promptPlanner.plan(
-                            candidate,
-                            request,
-                            mandatoryPromptText(request),
-                            baseline,
-                            selectedSummary,
-                            toolCallbacks(request));
-                    request.executionBudget().recordContextPlan(
-                            promptPlan.snapshot());
-                    ModeAwareChatClientFactory.Attempt created =
-                            clientFactory.create(
-                                    request,
-                                    candidate,
-                                    plannedMessages(promptPlan));
-                    try {
-                        ChatClientResponse response = invoke(created, request);
-                        successfulAttempt.set(created);
-                        return response;
-                    } catch (RuntimeException error) {
-                        markAttempt(request, created, false);
-                        throw error;
-                    }
-                };
-                Supplier<ChatClientResponse> retried = () ->
-                        retryTemplate != null
-                                ? retryTemplate.execute(
-                                        context -> invocation.get())
-                                : invocation.get();
+                Supplier<ChatClientResponse> retried = withRetries(
+                        candidateInvocation(
+                                request, candidate, baseline,
+                                selectedSummary, successfulAttempt));
                 ChatClientResponse response =
                         sessionCoordinator != null && lease != null
                                 ? sessionCoordinator.invokeWithinDeadline(
                                         lease, retried)
                                 : retried.get();
-                ModeAwareChatClientFactory.Attempt attempt =
-                        successfulAttempt.get();
-                if (attempt == null) {
-                    throw new IllegalStateException(
-                            "Chat retry completed without a successful attempt");
-                }
-                ChatExecutionResult result = withExecutionBudgetMetadata(
-                        withPersistenceMetadata(
-                                request,
-                                toResult(request, attempt, response)),
-                        request.executionBudget());
-                List<Message> committedMessages = attempt.memory() != null
-                        ? committedMemoryMessages(
-                                attempt.memory().get(
-                                        request.memoryConversationId()))
-                        : List.of();
-                markAttempt(request, attempt, true);
-                if (metricsService != null) {
-                    metricsService.recordSuccess(
-                            System.currentTimeMillis() - startedAt,
-                            tokenCount(result.usage()));
-                }
-                return new PreparedExecution(
-                        request,
-                        result,
-                        committedMessages,
-                        serializeDocumentIds(result.sources()),
-                        attempt,
-                        candidate);
+                return buildPreparedExecution(
+                        request, candidate, startedAt,
+                        successfulAttempt.get(), response);
             } catch (RagException error) {
                 markAttempt(request, successfulAttempt.get(), false);
                 throw error;
             } catch (RuntimeException error) {
                 markAttempt(request, successfulAttempt.get(), false);
                 lastFailure = error;
-                if (metricsService != null) {
-                    metricsService.recordFailure(
-                            System.currentTimeMillis() - startedAt);
-                }
-                log.warn("Durable Chat candidate {}/{} failed ({}): {}",
-                        index + 1,
-                        candidates.size(),
-                        candidate.ref(),
-                        error.getMessage());
+                recordCandidateFailure(
+                        startedAt, index, candidates.size(),
+                        candidate.ref(), error, "Durable Chat candidate");
             }
         }
         if (lastFailure != null) {
@@ -454,6 +314,159 @@ public class ChatExecutionService {
         throw new RagException(
                 ErrorCode.LLM_UNAVAILABLE,
                 "No eligible chat model is available");
+    }
+
+    /** 单个候选的一次预算化调用：预算预留、上下文规划、模型创建与失败标记。 */
+    private Supplier<ChatClientResponse> candidateInvocation(
+            ChatCommand request,
+            ChatModelRouter.ChatModelCandidate candidate,
+            List<Message> baseline,
+            String selectedSummary,
+            AtomicReference<ModeAwareChatClientFactory.Attempt> successfulAttempt) {
+        return () -> {
+            if (!request.executionBudget()
+                    .tryReserveCandidateAttempt()) {
+                throw new RagException(
+                        ErrorCode.CHAT_BUDGET_EXHAUSTED,
+                        "Chat candidate-attempt budget exhausted");
+            }
+            ConversationPromptPlan promptPlan = promptPlanner.plan(
+                    candidate,
+                    request,
+                    mandatoryPromptText(request),
+                    baseline,
+                    selectedSummary,
+                    toolCallbacks(request));
+            request.executionBudget().recordContextPlan(
+                    promptPlan.snapshot());
+            ModeAwareChatClientFactory.Attempt created =
+                    clientFactory.create(
+                            request,
+                            candidate,
+                            plannedMessages(promptPlan));
+            try {
+                ChatClientResponse response = invoke(created, request);
+                successfulAttempt.set(created);
+                return response;
+            } catch (RuntimeException e) {
+                markAttempt(request, created, false);
+                throw e;
+            }
+        };
+    }
+
+    private Supplier<ChatClientResponse> withRetries(
+            Supplier<ChatClientResponse> invocation) {
+        return () -> retryTemplate != null
+                ? retryTemplate.execute(context -> invocation.get())
+                : invocation.get();
+    }
+
+    private RuntimeException recordCandidateFailure(
+            long startedAt,
+            int index,
+            int candidateCount,
+            String candidateRef,
+            RuntimeException failure,
+            String logLabel) {
+        if (metricsService != null) {
+            metricsService.recordFailure(System.currentTimeMillis() - startedAt);
+        }
+        log.warn("{} {}/{} failed ({}): {}",
+                logLabel, index + 1, candidateCount, candidateRef,
+                failure.getMessage());
+        return failure;
+    }
+
+    /** execute 路径的成功收尾：提交记忆/历史、摘要压缩与指标标记。 */
+    private ChatExecutionResult commitExecutedTurn(
+            ChatCommand command,
+            ChatModelRouter.ChatModelCandidate candidate,
+            ChatSessionCoordinator.LeaseHandle lease,
+            long startedAt,
+            ModeAwareChatClientFactory.Attempt attempt,
+            ChatClientResponse response,
+            List<Message> baseline,
+            int candidateIndex) {
+        if (attempt == null) {
+            throw new IllegalStateException(
+                    "Chat retry completed without a successful attempt");
+        }
+        ChatExecutionResult result =
+                toResult(command, attempt, response);
+        ChatExecutionResult committedResult =
+                withPersistenceMetadata(command, result);
+        if (sessionCoordinator != null) {
+            List<Message> committedMessages =
+                    attempt.memory() != null
+                            ? committedMemoryMessages(
+                                    attempt.memory().get(
+                                            command.memoryConversationId()))
+                            : List.of();
+            sessionCoordinator.commit(
+                    lease,
+                    command,
+                    committedResult,
+                    committedMessages,
+                    serializeDocumentIds(committedResult.sources()));
+        } else {
+            persist(command, committedResult);
+        }
+        ConversationSummaryService.CompactionResult compaction =
+                compactSummary(
+                        command, candidate, attempt, baseline,
+                        committedResult.answer());
+        committedResult = withSummaryMetadata(
+                committedResult, compaction);
+        committedResult = withExecutionBudgetMetadata(
+                committedResult, command.executionBudget());
+        if (metricsService != null) {
+            metricsService.recordSuccess(
+                    System.currentTimeMillis() - startedAt,
+                tokenCount(committedResult.usage()));
+        }
+        markAttempt(command, attempt, true);
+        if (candidateIndex > 0) {
+            log.info("Chat fallback succeeded: requested={}, resolved={}",
+                    command.modelRef(), candidate.ref());
+        }
+        return committedResult;
+    }
+
+    /** prepareForOperation 路径的成功收尾：只组装结果，不提交任何持久状态。 */
+    private PreparedExecution buildPreparedExecution(
+            ChatCommand request,
+            ChatModelRouter.ChatModelCandidate candidate,
+            long startedAt,
+            ModeAwareChatClientFactory.Attempt attempt,
+            ChatClientResponse response) {
+        if (attempt == null) {
+            throw new IllegalStateException(
+                    "Chat retry completed without a successful attempt");
+        }
+        ChatExecutionResult result = withExecutionBudgetMetadata(
+                withPersistenceMetadata(
+                        request,
+                        toResult(request, attempt, response)),
+                request.executionBudget());
+        List<Message> committedMessages = attempt.memory() != null
+                ? committedMemoryMessages(
+                        attempt.memory().get(
+                                request.memoryConversationId()))
+                : List.of();
+        markAttempt(request, attempt, true);
+        if (metricsService != null) {
+            metricsService.recordSuccess(
+                    System.currentTimeMillis() - startedAt,
+                    tokenCount(result.usage()));
+        }
+        return new PreparedExecution(
+                request,
+                result,
+                committedMessages,
+                serializeDocumentIds(result.sources()),
+                attempt,
+                candidate);
     }
 
     /**

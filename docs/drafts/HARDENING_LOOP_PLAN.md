@@ -397,11 +397,27 @@
   ChatTurnOperationPostgresIntegrationTest 7/7（Testcontainers 真实 PG）；
   `verify-no-pessimistic-locks.sh` 通过。
 
+### Batch 22（已交付）
+
+- 分支：`refactor/chat-execution-split-20260906`（基于 Batch 21 分支）
+- 内容：`ChatExecutionService` 生产 Chat 主链的行为保持拆分：
+  1. `execute`（~135 行）与 `prepareForOperation`（~110 行）的候选循环收缩为
+     编排器（各 ~30 行），共享的「预算化单候选调用」提取为唯一的
+     `candidateInvocation`（消除两份 30 行的逐字重复）+ `withRetries` 重试包装；
+  2. execute 成功收尾提取为 `commitExecutedTurn`（协调器提交/持久化、摘要压缩、
+     预算元数据、指标与 fallback 日志）；prepareForOperation 成功收尾提取为
+     `buildPreparedExecution`（只组装、不提交任何持久状态，Javadoc 契约不变）；
+  3. 失败路径统一为 `recordCandidateFailure`（指标 + 参数化标签日志，两个原日志
+     前缀 "Chat candidate"/"Durable Chat candidate" 保持不变）。
+- 护栏：重构前 `ChatExecutionServiceTest` 基线 20/20，重构后复跑 20/20；
+  下游 `ChatTurnOperationServiceTest` 9/9；`verify-no-pessimistic-locks.sh` 通过；
+  `mvn clean compile test-compile` 绿。
+
 ## 10. 下一批次入口（候选，按优先级）
 
-- Batch 22：ChatExecutionService.execute / prepareForOperation 拆分（同护栏模式）。
 - Batch 23：Mock Playwright 对检索/对话主流程的覆盖率评估与补强。
 - Batch 24：评估把 gated IT 的本地运行方式接入 CI 的可行路径（mock provider）。
+- Batch 25：PdfImportController / RagDocumentController 超长方法盘点与拆分。
 - Batch 13：Card/Modal primitive 提取（重复 .card/.panel/overlay 样式）。
 - Batch 14：后端 `DocumentSyncRunService`/`CollectionPurgeService` 超长方法拆分
   （complete/applyItem/upsertExternalInTransaction），需 gated IT 回归护栏。
