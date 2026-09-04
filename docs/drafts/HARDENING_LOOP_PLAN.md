@@ -498,7 +498,23 @@
   按 collectionKey）、metrics（三个读取端点）。
 - 证据：`test:run` 全绿（308 → 321）；`tsc -b`/`lint`/`build` 绿。
 
+### Batch 28（已交付）
+
+- 分支：`fix/search-pagination-flake-20260906`（同线叠加）
+- 内容：
+  1. **排查上轮 dev 栈被 kill 的原因**：不是 OOM（64GB），而是 (a) 工具沙箱在
+     命令结束时清理 `nohup &` 派生的进程组；(b) 后台 shell 无 node PATH。用
+     `run_in_background` + 显式 PATH 后 dev 栈稳定启动（backend 18082 与
+     frontend 15173 均 200）。
+  2. `-real` 用例实测与需求清单化：api-key-real 通过（RAG_ROOT_API_KEY）；
+     alerts-real 需预置 ALERT_DELIVERY_EXPECTED_ALERT_ID/DELIVERY_ID；
+     chat-real 需 /models 暴露可用 tool-calling 模型；files-real 依赖真实
+     provider 时延（慢则 504）；rerank-real 需 RERANK_DIVERSITY_FIXTURE_FILE。
+  3. 运行手册写入 testing-guide 双语（WebUI `-real` Runbook 小节）。
+- 证据：dev 栈健康检查 200×2；api-key-real 1/1 通过；文档门禁 11/11。
+
 ## 10. 下一批次入口（候选，按优先级）
 
-- Batch 28：`-real` e2e 用例的运行手册（需要完整 dev 栈）核实与文档化。
+- Batch 29：剩余 API 契约测试补齐（documents/files/evaluation/alerts/collections 扩展）。
+- Batch 30：chat-real 的 tool-calling 模型配置排查（.env/models.json 层面）。
 - Batch 29：剩余 API 契约测试补齐（documents/files/evaluation/alerts/collections 扩展）。

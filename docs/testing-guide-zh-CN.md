@@ -91,6 +91,40 @@ smoke；不要用高延迟真实调用代替基本执行路径覆盖。运行期
 隔离的 `BACKEND_PORT`、`FRONTEND_PORT` 和可处置测试数据库；联合启动优先使用会加载 `.env`
 的 `scripts/dev.sh`。
 
+### WebUI `-real` 端到端用例运行手册
+
+`spring-ai-rag-webui/e2e/*-real.spec.ts` 需要完整 dev 栈与真实凭据，普通
+Mock Playwright（`npm run test:e2e` 不带 `-real` 过滤）不执行它们。已核实的
+启动与需求：
+
+```bash
+# 1. 启动完整 dev 栈（加载 .env；后端 18082、前端 15173）
+#    注意：后台 shell 需要 node 在 PATH 中（例如 nvm 用户先 source ~/.nvm/nvm.sh）
+./scripts/dev.sh start
+
+# 2. 携带真实凭据运行 -real 用例
+set -a; source .env; set +a
+cd spring-ai-rag-webui
+BASE_URL=http://127.0.0.1:15173 \
+RAG_ROOT_API_KEY="$RAG_ROOT_API_KEY" \
+npx playwright test e2e/api-key-real.spec.ts
+```
+
+各用例的额外需求（2026-09-06 实测）：
+
+| 用例 | 额外需求 | 实测状态 |
+|------|----------|----------|
+| `api-key-real` | `RAG_ROOT_API_KEY`（或 `REAL_E2E_API_KEY`） | 通过 |
+| `alerts-real` | 另需 `ALERT_DELIVERY_EXPECTED_ALERT_ID` 与 `ALERT_DELIVERY_EXPECTED_DELIVERY_ID`（预置的真实告警/投递 id） | 缺预置 id 则失败 |
+| `chat-real` | `/models` 须暴露至少一个**可用且支持 tool-calling** 的模型 | 模型能力缺失则报错退出 |
+| `files-real` | 真实 Embedding + Chat LLM；LLM 响应超出 deadline 时返回 504 | 依赖 provider 时延 |
+| `rerank-document-diversity-real` | 另需 `RERANK_DIVERSITY_FIXTURE_FILE` 指向 fixture 文件 | 缺 fixture 则失败 |
+
+运行期间不要编辑被 dev server 服务的源文件：HMR/整页 reload 会让正在运行的
+Mock Playwright 用例出现元素 detach。根因排查记录见
+[加固循环账本](drafts/HARDENING_LOOP_PLAN.md) Batch 23/25。
+
+
 ### 模型调用级持久用量账本门禁
 
 执行聚焦和完整的非 provider 验收门禁：

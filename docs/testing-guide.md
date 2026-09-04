@@ -93,6 +93,41 @@ and response-protocol errors are detected early. A non-`main` worktree uses
 isolated `BACKEND_PORT` and `FRONTEND_PORT` values plus a disposable test
 database; prefer `scripts/dev.sh`, which loads `.env`, for the joint stack.
 
+### WebUI `-real` End-to-End Runbook
+
+`spring-ai-rag-webui/e2e/*-real.spec.ts` requires a full dev stack and real
+credentials; plain Mock Playwright (`npm run test:e2e` without a `-real`
+filter) never executes them. Verified startup and requirements:
+
+```bash
+# 1. Start the full dev stack (loads .env; backend 18082, frontend 15173)
+#    Background shells need node on PATH (nvm users: source ~/.nvm/nvm.sh)
+./scripts/dev.sh start
+
+# 2. Run -real specs with real credentials
+set -a; source .env; set +a
+cd spring-ai-rag-webui
+BASE_URL=http://127.0.0.1:15173 \
+RAG_ROOT_API_KEY="$RAG_ROOT_API_KEY" \
+npx playwright test e2e/api-key-real.spec.ts
+```
+
+Per-spec extra requirements (verified 2026-09-06):
+
+| Spec | Extra requirements | Verified |
+|------|--------------------|----------|
+| `api-key-real` | `RAG_ROOT_API_KEY` (or `REAL_E2E_API_KEY`) | passes |
+| `alerts-real` | also `ALERT_DELIVERY_EXPECTED_ALERT_ID` and `ALERT_DELIVERY_EXPECTED_DELIVERY_ID` (ids of a pre-created alert/delivery) | fails without preset ids |
+| `chat-real` | `/models` must expose at least one available tool-calling model | errors out if missing |
+| `files-real` | real Embedding + Chat LLM; slow providers surface as HTTP 504 | provider-latency bound |
+| `rerank-document-diversity-real` | also `RERANK_DIVERSITY_FIXTURE_FILE` pointing at a fixture | fails without fixture |
+
+Do not edit served source files while the dev server is running: HMR and
+full-page reloads detach elements under running Playwright tests. The root
+cause investigation lives in the hardening loop ledger, Batches 23/25
+([drafts/HARDENING_LOOP_PLAN.md](drafts/HARDENING_LOOP_PLAN.md)).
+
+
 ### Durable Model-Invocation Usage Ledger Gate
 
 Run the focused and full non-provider acceptance gate:
