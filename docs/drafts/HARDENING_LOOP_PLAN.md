@@ -513,8 +513,20 @@
   3. 运行手册写入 testing-guide 双语（WebUI `-real` Runbook 小节）。
 - 证据：dev 栈健康检查 200×2；api-key-real 1/1 通过；文档门禁 11/11。
 
+### Batch 29（已交付）
+
+- 分支：`test/api-contracts-rest-20260906`（基于 Batch 28 分支）
+- 内容：补齐剩余 API 契约测试 4 个模块 9 个测试——documents（list 过滤、
+  生命周期 mutation 携带 expectedDocumentRevision、batch/embed-status）、
+  files（tree 根/子目录路径、preview/raw 端点）、evaluation（report/聚合/
+  evaluate/answer-quality/feedback）、alerts（active/history/fire/resolve/
+  silence）。
+- 覆盖率变化：src/api 全模块有契约测试（此前 11 个 0 覆盖）。
+- 证据：`tsc -b` 绿；`test:run` 330/330（55 文件，+9）；`lint`/`build` 绿。
+
 ## 10. 下一批次入口（候选，按优先级）
 
-- Batch 29：剩余 API 契约测试补齐（documents/files/evaluation/alerts/collections 扩展）。
+- Batch 30：chat-real 的 tool-calling 模型配置排查（.env/models.json 层面）。
+- Batch 31：后端 SearchResults/VersionHistoryModal 等组件深度交互测试盘点。
 - Batch 30：chat-real 的 tool-calling 模型配置排查（.env/models.json 层面）。
 - Batch 29：剩余 API 契约测试补齐（documents/files/evaluation/alerts/collections 扩展）。
