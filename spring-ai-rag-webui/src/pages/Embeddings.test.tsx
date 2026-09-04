@@ -32,17 +32,25 @@ vi.mock('../api/embeddings', () => ({
     getJob: vi.fn(),
     cancelJob: vi.fn(),
     retryJob: vi.fn(),
-    readiness: vi.fn(),
+    readiness: vi.fn().mockResolvedValue({
+      data: {
+        freshDocuments: 5,
+        queuedDocuments: 2,
+        runningDocuments: 1,
+        failedDocuments: 0,
+        staleOrMissingDocuments: 0,
+      },
+    }),
   },
 }));
 
-function renderPage() {
+function renderPage(initialEntry = '/embeddings') {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   return render(
     <QueryClientProvider client={client}>
-      <MemoryRouter>
+      <MemoryRouter initialEntries={[initialEntry]}>
         <Embeddings />
       </MemoryRouter>
     </QueryClientProvider>
@@ -59,5 +67,22 @@ describe('Embeddings page', () => {
     expect(screen.getByText('embeddings.title')).toBeInTheDocument();
     expect(await screen.findByText('QUEUED')).toBeInTheDocument();
     expect(screen.getByText('API')).toBeInTheDocument();
+  });
+
+  it('renders readiness stats on the shared card skin', async () => {
+    const { container } = renderPage('/embeddings?collectionKey=default');
+
+    // Regression guard: the stat cards used to borrow another page's CSS
+    // module, so the card skin silently disappeared when that class moved.
+    expect(await screen.findByText('embeddings.fresh')).toBeInTheDocument();
+    expect(screen.getByText('5')).toBeInTheDocument();
+    // The hashed card skin class is "_card_<hash>"; the five readiness stats
+    // each render inside one.
+    expect(
+      container.querySelectorAll('[class*="_card_"]').length,
+    ).toBeGreaterThanOrEqual(5);
+    expect(
+      screen.getByText('embeddings.fresh').closest('[class*="_card_"]'),
+    ).not.toBeNull();
   });
 });

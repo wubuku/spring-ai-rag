@@ -336,11 +336,25 @@
 - 附注：Testcontainers 需要的本地运行参数已验证，可写入 china-network-guide
   供后续 IT 回归使用（留待文档批次）。
 
+### Batch 17（已交付）
+
+- 分支：`refactor/webui-small-debt-sweep-20260906`（同线叠加）
+- 内容：
+  1. **Modal 外壳统一复核结论（原 Batch 17 计划为空操作）**：CreateCollectionModal
+     与 VersionHistoryModal 早已使用共享 `Dialog` 组件，初版扫描所称的
+     「各自 overlay/panel 重复」不成立于当前代码，无需改动。
+  2. Embeddings 卡片渲染回归测试（原 Batch 18）：readiness mock 补齐 +
+     `?collectionKey=` 启用查询，断言 5 个统计值渲染且落在哈希 Card 皮肤类
+     `_card_*` 内—— precisely 防住 Batch 15 发现的「跨文件样式借用静默丢失」回归类。
+- 证据：`tsc -b` 绿；`test:run` 308/308（44 文件，+1 回归测试）；`lint`/`build` 绿。
+
 ## 10. 下一批次入口（候选，按优先级）
 
-- Batch 17：Modal 外壳统一（CreateCollectionModal/VersionHistoryModal 收敛到 Dialog）。
-- Batch 18：Mock Playwright 补 Embeddings 卡片渲染回归（防跨文件样式回归再次漏网）。
-- Batch 19：CollectionPurgeService 超长方法拆分（同 Batch 16 护栏模式）。
+- Batch 18：CollectionPurgeService 超长方法拆分（同 Batch 16 护栏模式：先跑通
+  `collection-purge.it.enabled` 基线再动刀）。
+- Batch 19：Embeddings 页面彻底归还 Evaluation.module.css 借用（建立自有样式模块）。
+- Batch 20：把 Batch 16 验证过的 Testcontainers 本地运行参数写入
+  china-network-guide（双语），让 gated IT 回归可复制。
 - Batch 13：Card/Modal primitive 提取（重复 .card/.panel/overlay 样式）。
 - Batch 14：后端 `DocumentSyncRunService`/`CollectionPurgeService` 超长方法拆分
   （complete/applyItem/upsertExternalInTransaction），需 gated IT 回归护栏。
