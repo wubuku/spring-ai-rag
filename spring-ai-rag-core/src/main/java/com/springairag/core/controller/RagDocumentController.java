@@ -475,14 +475,39 @@ public class RagDocumentController {
         int page = offset / limit;
         var pageable = PageRequest.of(page, limit, Sort.by(Sort.Direction.DESC, "createdAt"));
 
-        LocalDateTime createdAfterDt = parseDateParam(createdAfter);
-        LocalDateTime createdBeforeDt = parseDateParam(createdBefore);
-
         var currentKey = ApiKeyCollectionAccess.currentPolicy();
         var restrictedIds = ApiKeyCollectionAccess.restrictedCollectionIds(currentKey);
         collectionId = resolveOptionalCollectionId(collectionId, collectionKey, currentKey);
         final Long resolvedCollectionId = collectionId;
-        var pageResult = restrictedIds.isPresent()
+        var pageResult = searchDocumentsForCaller(
+                restrictedIds, resolvedCollectionId,
+                title, documentType, processingStatus, enabled,
+                parseDateParam(createdAfter), parseDateParam(createdBefore),
+                pageable);
+
+        CollectionMetadata metadata = collectionMetadata(pageResult);
+        List<DocumentSummary> docs = toDocumentSummaries(pageResult, metadata);
+
+        return ResponseEntity.ok(new DocumentListResponse(
+                docs,
+                pageResult.getTotalElements(),
+                offset,
+                limit
+        ));
+    }
+
+    /** 按 ACL 分支选择仓库查询：受限调用方走 allow-list 集合查询。 */
+    private org.springframework.data.domain.Page<RagDocument> searchDocumentsForCaller(
+            java.util.Optional<java.util.Set<Long>> restrictedIds,
+            Long resolvedCollectionId,
+            String title,
+            String documentType,
+            String processingStatus,
+            Boolean enabled,
+            LocalDateTime createdAfterDt,
+            LocalDateTime createdBeforeDt,
+            org.springframework.data.domain.Pageable pageable) {
+        return restrictedIds.isPresent()
                 ? documentRepository.searchDocumentsByCollectionIds(
                         resolvedCollectionId != null
                                 ? List.of(resolvedCollectionId)
@@ -492,36 +517,41 @@ public class RagDocumentController {
                 : documentRepository.searchDocuments(
                         title, documentType, processingStatus, enabled, resolvedCollectionId,
                         createdAfterDt, createdBeforeDt, pageable);
+    }
 
-        // Batch-fetch collection names to avoid N+1 queries (one findById per document)
+    private record CollectionMetadata(
+            Map<Long, String> names,
+            Map<Long, String> keys) {
+    }
+
+    /** 批量取回集合名称与 key，避免逐文档 N+1 查询。 */
+    private CollectionMetadata collectionMetadata(
+            org.springframework.data.domain.Page<RagDocument> pageResult) {
         List<Long> collectionIds = pageResult.getContent().stream()
                 .map(RagDocument::getCollectionId)
                 .filter(Objects::nonNull)
                 .distinct()
                 .toList();
-        Map<Long, String> collectionNameMap = collectionIds.isEmpty()
-                ? Map.of()
-                : collectionRepository.findAllById(collectionIds).stream()
-                        .collect(Collectors.toMap(RagCollection::getId, RagCollection::getName));
-        Map<Long, String> collectionKeyMap = collectionIds.isEmpty()
-                ? Map.of()
-                : collectionRepository.findAllById(collectionIds).stream()
-                        .collect(Collectors.toMap(RagCollection::getId, RagCollection::getCollectionKey));
+        if (collectionIds.isEmpty()) {
+            return new CollectionMetadata(Map.of(), Map.of());
+        }
+        Map<Long, String> names = collectionRepository.findAllById(collectionIds).stream()
+                .collect(Collectors.toMap(RagCollection::getId, RagCollection::getName));
+        Map<Long, String> keys = collectionRepository.findAllById(collectionIds).stream()
+                .collect(Collectors.toMap(RagCollection::getId, RagCollection::getCollectionKey));
+        return new CollectionMetadata(names, keys);
+    }
 
-        List<DocumentSummary> docs = pageResult.getContent().stream()
+    private List<DocumentSummary> toDocumentSummaries(
+            org.springframework.data.domain.Page<RagDocument> pageResult,
+            CollectionMetadata metadata) {
+        return pageResult.getContent().stream()
                 .map(doc -> DocumentMapper.toSummary(
-                        doc, collectionNameMap, collectionKeyMap, embeddingRepository,
+                        doc, metadata.names(), metadata.keys(), embeddingRepository,
                         activeEmbeddingProfileId(),
                         documentLifecycleService == null
                                 ? null : documentLifecycleService.read(doc)))
                 .toList();
-
-        return ResponseEntity.ok(new DocumentListResponse(
-                docs,
-                pageResult.getTotalElements(),
-                offset,
-                limit
-        ));
     }
 
     public ResponseEntity<DocumentListResponse> listDocuments(
@@ -940,38 +970,52 @@ public class RagDocumentController {
     public ResponseEntity<BatchEmbedResponse> batchEmbedDocuments(
             @RequestBody Map<String, List<Long>> request,
             @RequestParam(required = false) EmbeddingPolicy embeddingPolicy) {
+        requireValidBatchIds(request.get("ids"));
         List<Long> ids = request.get("ids");
+        requireDocumentAccess(ids);
+        EmbeddingPolicy policy = EmbeddingPolicySupport.requireEmbed(embeddingPolicy, true);
+        if (policy == EmbeddingPolicy.ASYNC) {
+            return embedBatchAsync(ids);
+        }
+        return embedBatchSync(ids);
+    }
+
+    private void requireValidBatchIds(List<Long> ids) {
         if (ids == null || ids.isEmpty()) {
             throw new IllegalArgumentException("ids list cannot be empty");
         }
         if (ids.size() > 50) {
             throw new IllegalArgumentException("Batch embedding limited to 50 documents per request (API rate limit)");
         }
-        requireDocumentAccess(ids);
-        EmbeddingPolicy policy = EmbeddingPolicySupport.requireEmbed(embeddingPolicy, true);
-        if (policy == EmbeddingPolicy.ASYNC) {
-            EmbeddingPolicySupport.requireJobsEnabled(dispatchService);
-            List<RagDocument> documents = documentRepository.findAllById(ids);
-            List<BatchEmbedResponse.BatchEmbedResultItem> items = new ArrayList<>();
-            int queued = 0;
-            for (RagDocument document : documents) {
-                EmbeddingDispatchService.Result result =
-                        dispatchService.enqueueInCurrentTransaction(
-                                document, false, false, "BATCH_EMBED");
-                items.add(new BatchEmbedResponse.BatchEmbedResultItem(
-                        document.getId(),
-                        result.embeddingStatus(),
-                        null,
-                        null,
-                        result.error(),
-                        result.action().name()));
-                queued++;
-            }
-            return ResponseEntity.ok(new BatchEmbedResponse(
-                    items,
-                    new BatchEmbedResponse.BatchEmbedSummary(
-                            ids.size(), queued, 0, 0, ids.size() - queued)));
+    }
+
+    /** ASYNC 批量嵌入：持久化 job 入队，立即返回逐文档排队结果。 */
+    private ResponseEntity<BatchEmbedResponse> embedBatchAsync(List<Long> ids) {
+        EmbeddingPolicySupport.requireJobsEnabled(dispatchService);
+        List<RagDocument> documents = documentRepository.findAllById(ids);
+        List<BatchEmbedResponse.BatchEmbedResultItem> items = new ArrayList<>();
+        int queued = 0;
+        for (RagDocument document : documents) {
+            EmbeddingDispatchService.Result result =
+                    dispatchService.enqueueInCurrentTransaction(
+                            document, false, false, "BATCH_EMBED");
+            items.add(new BatchEmbedResponse.BatchEmbedResultItem(
+                    document.getId(),
+                    result.embeddingStatus(),
+                    null,
+                    null,
+                    result.error(),
+                    result.action().name()));
+            queued++;
         }
+        return ResponseEntity.ok(new BatchEmbedResponse(
+                items,
+                new BatchEmbedResponse.BatchEmbedSummary(
+                        ids.size(), queued, 0, 0, ids.size() - queued)));
+    }
+
+    /** SYNC 批量嵌入：同步调用嵌入服务，映射原始结果并写审计。 */
+    private ResponseEntity<BatchEmbedResponse> embedBatchSync(List<Long> ids) {
         Map<String, Object> raw = documentEmbedService.batchEmbedDocuments(ids);
 
         @SuppressWarnings("unchecked")
@@ -1166,52 +1210,86 @@ public class RagDocumentController {
                         filename, null, null, false, 0, content.errorMessage);
             }
 
-            DocumentRequest docReq = new DocumentRequest(content.title, content.content);
-            docReq.setSource("upload:" + filename);
-            if (collectionId != null) {
-                docReq.setCollectionId(collectionId);
-            }
-            docReq.setDeduplicationScope(
-                    com.springairag.api.enums.DocumentDeduplicationScope.NONE);
-            EmbeddingPolicy policy = EmbeddingPolicyResolver.resolve(
-                    embeddingPolicy, true);
+            DocumentRequest docReq =
+                    buildUploadDocumentRequest(file, filename, content, collectionId);
             if (documentMutationService != null) {
-                DocumentMutationService.CreatedLocal created =
-                        documentMutationService.createLocal(
-                                docReq,
-                                collectionId,
-                                policy,
-                                force,
-                                "FILE_UPLOAD",
-                                idempotencyKey,
-                                filename,
-                                null,
-                                null);
-                DocumentMutationResponse mutation = created.mutation();
-                return new FileUploadResponse.FileResult(
-                        filename, created.document().getId(), content.title,
-                        !"SKIPPED".equals(mutation.embeddingAction()),
-                        0, null, mutation.embeddingAction(),
-                        mutation.embeddingJobId());
+                return createViaMutationService(
+                        docReq, collectionId, embeddingPolicy, force,
+                        idempotencyKey, filename, content.title);
             }
-            BatchCreateResponse resp = batchDocumentService.batchCreateDocuments(
-                    List.of(docReq), true, collectionId, force, embeddingPolicy);
-            BatchCreateResponse.DocumentResult r = resp.results().getFirst();
-            return r.documentId() != null
-                    ? new FileUploadResponse.FileResult(
-                            filename, r.documentId(), content.title,
-                            !"SKIPPED".equals(r.embeddingAction()),
-                            0, null, r.embeddingAction(), r.embeddingJobId())
-                    : new FileUploadResponse.FileResult(
-                            filename, null, content.title, false, 0,
-                            r.error() != null ? r.error() : "Creation failed");
-
+            return createViaBatchService(
+                    docReq, collectionId, force, embeddingPolicy,
+                    filename, content.title);
         } catch (Exception e) { // Best-effort: file processing errors return a failure result without throwing
             log.error("Failed to process uploaded file '{}': {}", filename, e.getMessage());
             return new FileUploadResponse.FileResult(
                     filename, null, null, false, 0,
                     "Processing failed: " + e.getMessage());
         }
+    }
+
+    private DocumentRequest buildUploadDocumentRequest(
+            MultipartFile file,
+            String filename,
+            FileContentResult content,
+            Long collectionId) {
+        DocumentRequest docReq = new DocumentRequest(content.title, content.content);
+        docReq.setSource("upload:" + filename);
+        if (collectionId != null) {
+            docReq.setCollectionId(collectionId);
+        }
+        docReq.setDeduplicationScope(
+                com.springairag.api.enums.DocumentDeduplicationScope.NONE);
+        return docReq;
+    }
+
+    private FileUploadResponse.FileResult createViaMutationService(
+            DocumentRequest docReq,
+            Long collectionId,
+            EmbeddingPolicy embeddingPolicy,
+            boolean force,
+            String idempotencyKey,
+            String filename,
+            String title) {
+        EmbeddingPolicy policy = EmbeddingPolicyResolver.resolve(
+                embeddingPolicy, true);
+        DocumentMutationService.CreatedLocal created =
+                documentMutationService.createLocal(
+                        docReq,
+                        collectionId,
+                        policy,
+                        force,
+                        "FILE_UPLOAD",
+                        idempotencyKey,
+                        filename,
+                        null,
+                        null);
+        DocumentMutationResponse mutation = created.mutation();
+        return new FileUploadResponse.FileResult(
+                filename, created.document().getId(), title,
+                !"SKIPPED".equals(mutation.embeddingAction()),
+                0, null, mutation.embeddingAction(),
+                mutation.embeddingJobId());
+    }
+
+    private FileUploadResponse.FileResult createViaBatchService(
+            DocumentRequest docReq,
+            Long collectionId,
+            boolean force,
+            EmbeddingPolicy embeddingPolicy,
+            String filename,
+            String title) {
+        BatchCreateResponse resp = batchDocumentService.batchCreateDocuments(
+                List.of(docReq), true, collectionId, force, embeddingPolicy);
+        BatchCreateResponse.DocumentResult r = resp.results().getFirst();
+        return r.documentId() != null
+                ? new FileUploadResponse.FileResult(
+                        filename, r.documentId(), title,
+                        !"SKIPPED".equals(r.embeddingAction()),
+                        0, null, r.embeddingAction(), r.embeddingJobId())
+                : new FileUploadResponse.FileResult(
+                        filename, null, title, false, 0,
+                        r.error() != null ? r.error() : "Creation failed");
     }
 
     private String itemIdempotencyKey(String idempotencyKey, int index) {

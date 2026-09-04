@@ -465,8 +465,27 @@
 - 经验：跑 Vite dev server 上的 e2e 期间编辑被服务的源文件会引入 HMR/整页
   reload 干扰（vite log 13 次 page reload 可证），应避免。
 
+### Batch 26（已交付）
+
+- 分支：`refactor/controller-long-methods-20260906`（基于 Batch 25 分支）
+- **盘点结果**：RagDocumentController 最长 processUploadedFile 69 / batchEmbedDocuments 68 /
+  listDocuments 67；PdfImportController 最长 streamPdfToRagWithEmbedding 51 /
+  importPdfToRagWithoutEmbedding 50。SSE 流方法（闭包 + 虚拟线程结构）与注解密集型
+  端点拆分收益低，保留原样。
+- 拆分（行为保持，纯私有方法提取）：
+  1. `processUploadedFile`：提取 buildUploadDocumentRequest /
+     createViaMutationService / createViaBatchService（实施中 review 发现并修正了
+     embeddingPolicy 未透传的提取错误）；
+  2. `batchEmbedDocuments`：提取 requireValidBatchIds / embedBatchAsync /
+     embedBatchSync；
+  3. `listDocuments`：提取 searchDocumentsForCaller（ACL 分支）/ collectionMetadata
+     （批量取集合名防 N+1）/ toDocumentSummaries；
+  4. PdfImport `importPdfToRagWithoutEmbedding`：提取 importMarkdownWithoutEmbedding。
+- 证据：`mvn -q clean compile test-compile` 绿；护栏 RagDocumentControllerTest 44/44、
+  PdfImportControllerTest 34/34、DocumentLifecycleWebTest 4/4、DocumentAclTest 3/3、
+  ExternalDocumentWebTest 6/6；`verify-no-pessimistic-locks.sh` 通过。
+
 ## 10. 下一批次入口（候选，按优先级）
 
-- Batch 26：PdfImportController / RagDocumentController 超长方法盘点与拆分。
 - Batch 27：前端 Toast/Dashboard 等剩余小模块测试补强盘点。
 - Batch 28：`-real` e2e 用例的运行手册（需要完整 dev 栈）核实与文档化。

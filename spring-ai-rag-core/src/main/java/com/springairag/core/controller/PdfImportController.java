@@ -221,17 +221,10 @@ public class PdfImportController {
             Long effectiveCollectionId = resolveWritableCollectionId(
                     collectionId, collectionKey);
             PdfImportService.PdfImportResult importResult = pdfImportService.importPdf(file, null);
-
             log.info("PDF-to-RAG step 1 complete: uuid={}, entryMarkdown={}, files={}",
                     importResult.uuid(), importResult.entryMarkdown(), importResult.filesStored());
-
-            PdfToRagService.PdfToRagResult ragResult = pdfToRagService.importPdfToRag(
-                    importResult.entryMarkdown(),
-                    importResult.originalFilename(),
-                    effectiveCollectionId,
-                    false,
-                    false
-            );
+            PdfToRagService.PdfToRagResult ragResult =
+                    importMarkdownWithoutEmbedding(importResult, effectiveCollectionId);
 
             return ResponseEntity.ok(new PdfToRagResponse(
                     ragResult.documentId(),
@@ -303,6 +296,19 @@ public class PdfImportController {
     ResponseEntity<Object> importPdfToRagWithoutEmbedding(
             MultipartFile file, Long collectionId, String collectionKey) {
         return importPdfToRagWithoutEmbedding(file, collectionId, collectionKey, null);
+    }
+
+    /** 步骤 2：将已导入的 entry Markdown 建档为 RAG 文档（不触发 embedding）。 */
+    private PdfToRagService.PdfToRagResult importMarkdownWithoutEmbedding(
+            PdfImportService.PdfImportResult importResult,
+            Long effectiveCollectionId) {
+        return pdfToRagService.importPdfToRag(
+                importResult.entryMarkdown(),
+                importResult.originalFilename(),
+                effectiveCollectionId,
+                false,
+                false
+        );
     }
 
     private ResponseEntity<Object> importPdfToRagWithPolicy(
