@@ -131,18 +131,6 @@ export const documentsApi = {
 
   batchEmbed: (ids: number[]) => apiClient.post('/documents/batch/embed', { documentIds: ids }),
 
-  batchCreateAndEmbed: (params: {
-    collectionId?: number;
-    documents: Array<{
-      title: string;
-      content: string;
-      collectionId?: number;
-      source?: string;
-      documentType?: string;
-    }>;
-    force?: boolean;
-  }) => apiClient.post('/documents/batch/create-and-embed', params),
-
   uploadAndEmbed: (formData: FormData) =>
     apiClient.post('/documents/upload', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },

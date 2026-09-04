@@ -160,10 +160,25 @@
 - 剩余 a11y 债务（后续批次）：Settings/Evaluation/Documents 表单 label 关联、
   Alert/ApiKeys badge 对比度 token 化。
 
-## 7. 下一批次入口
+### Batch 5（已交付）
 
-Batch 5：后端 deprecated/dead code 清理——RagChatService 迁移弃用
-`ChatResponse.SourceDocument` → 现行 `ChatSource`；删除无调用方的
-`RagApiKeyRepository.findFirstByPrincipalIdAndEnabledTrue` 与
-`ApiKeyManagementService.validateKeyEntity`；后端门槛 `mvn clean compile test-compile`
-+ 相关单测。
+- 分支：`fix/backend-deprecated-cleanup-20260905`（基于 Batch 4 分支）
+- 内容：
+  1. `RagChatService`（6 处）与 `RagChatControllerTest`（4 处夹具）从弃用
+     `ChatResponse.SourceDocument` 迁移到现行 `ChatSource`。弃用类本身保留
+     （公开 API DTO，1.0 不做破坏性删除；`DtoTest` 中对其的直接测试保留，
+     类继续被覆盖）。
+  2. 删除零调用方死代码：`RagApiKeyRepository.findFirstByPrincipalIdAndEnabledTrue`、
+     `ApiKeyManagementService.validateKeyEntity`（删前 grep 全模块验证无调用方）。
+  3. 删除 webui 死代码包装 `documentsApi.batchCreateAndEmbed`（仅定义、无调用，
+     指向弃用端点 `/batch/create-and-embed`；后端端点保留为公开 API 兼容）。
+- 证据：`mvn clean compile test-compile` BUILD SUCCESS；定向测试
+  DtoTest 468 / RagChatControllerTest 32 / ApiKeyManagementServiceTest 12 全绿；
+  `verify-no-pessimistic-locks.sh` 通过；`git diff --check` 通过；
+  webui `tsc -b` + `test:run` 300/300 + `lint` 绿。
+
+## 8. 下一批次入口
+
+Batch 6：后端单测加固——为仅靠 gated IT 覆盖的 `DocumentSyncRunService`、
+`CollectionPurgeService`、`EmbeddingJobExecutor` 补充纯单元测试（CI 中这些 IT
+因 assumeTrue 静默跳过）。

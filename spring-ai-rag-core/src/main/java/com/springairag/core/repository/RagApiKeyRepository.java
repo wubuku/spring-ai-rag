@@ -35,13 +35,6 @@ public interface RagApiKeyRepository extends JpaRepository<RagApiKey, Long> {
      * Find by public keyId.
      */
     Optional<RagApiKey> findByKeyId(String keyId);
-
-    /**
-     * @deprecated current credential 必须显式排除 retiring row。
-     */
-    @Deprecated
-    Optional<RagApiKey> findFirstByPrincipalIdAndEnabledTrue(String principalId);
-
     Optional<RagApiKey> findByPrincipalIdAndEnabledTrueAndRetireAtIsNull(
             String principalId);
 

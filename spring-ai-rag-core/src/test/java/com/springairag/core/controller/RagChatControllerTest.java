@@ -3,6 +3,7 @@ package com.springairag.core.controller;
 import com.springairag.api.dto.ChatHistoryResponse;
 import com.springairag.api.dto.ChatRequest;
 import com.springairag.api.dto.ChatResponse;
+import com.springairag.api.dto.ChatSource;
 import com.springairag.api.dto.ClearHistoryResponse;
 import com.springairag.api.enums.CollectionScopeMode;
 import com.springairag.api.enums.ChatMode;
@@ -104,7 +105,7 @@ class RagChatControllerTest {
     void ask_withSources_returnsInResponse() {
         ChatRequest request = new ChatRequest("问题", "session-003");
 
-        ChatResponse.SourceDocument source = new ChatResponse.SourceDocument();
+        ChatSource source = new ChatSource();
         source.setDocumentId("doc-1");
         source.setChunkText("相关片段");
         source.setScore(0.95);
@@ -473,7 +474,7 @@ class RagChatControllerTest {
     void chat_withSources_returnsInResponse() {
         ChatRequest request = new ChatRequest("Question", "chat-session-003");
 
-        ChatResponse.SourceDocument source = new ChatResponse.SourceDocument();
+        ChatSource source = new ChatSource();
         source.setDocumentId("doc-chat-1");
         source.setChunkText("Relevant chunk");
         source.setScore(0.92);

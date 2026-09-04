@@ -919,15 +919,6 @@ public class ApiKeyManagementService {
         return principal == null ? null : principal.getPrincipalId();
     }
 
-    /** 旧测试/扩展兼容入口。生产 request context 不再使用 JPA entity。 */
-    @Deprecated
-    @Transactional
-    public RagApiKey validateKeyEntity(String rawKey) {
-        AuthenticatedApiPrincipal principal = authenticate(rawKey);
-        return principal == null ? null
-                : apiKeyRepository.findByKeyId(principal.getCredentialId()).orElse(null);
-    }
-
     @Transactional(readOnly = true)
     public AuthenticatedApiPrincipal findActivePrincipal(String principalId) {
         RagApiPrincipal principal = principalRepository.findByPrincipalId(principalId).orElse(null);

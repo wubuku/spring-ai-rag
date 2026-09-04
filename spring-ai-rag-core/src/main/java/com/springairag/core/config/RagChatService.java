@@ -1,6 +1,7 @@
 package com.springairag.core.config;
 
 import com.springairag.api.dto.ChatRequest;
+import com.springairag.api.dto.ChatSource;
 import com.springairag.api.dto.ChatResponse;
 import com.springairag.api.dto.ChatResponse.StepMetricRecord;
 import com.springairag.api.dto.RetrievalResult;
@@ -701,7 +702,7 @@ public class RagChatService {
                 throw new IllegalStateException("LLM returned null result (authentication failure or API error)");
             }
             String answer = result.getOutput().getText();
-            List<ChatResponse.SourceDocument> sources = extractSources(chatClientResponse);
+            List<ChatSource> sources = extractSources(chatClientResponse);
             List<StepMetricRecord> pipelineMetrics = extractPipelineMetrics(chatClientResponse);
             if (circuitBreaker != null) {
                 circuitBreaker.recordSuccess();
@@ -720,7 +721,7 @@ public class RagChatService {
     }
 
     /** LLM call result record */
-    private record LlmCallResult(String answer, List<ChatResponse.SourceDocument> sources,
+    private record LlmCallResult(String answer, List<ChatSource> sources,
             List<StepMetricRecord> pipelineMetrics, long elapsedMs) {}
 
     /** Builds domain extension system prompt; returns null if no extensions */
@@ -822,15 +823,15 @@ public class RagChatService {
 
     /** Extracts reranked retrieval results from advisor context as citation sources */
     @SuppressWarnings("unchecked")
-    private List<ChatResponse.SourceDocument> extractSources(ChatClientResponse chatClientResponse) {
+    private List<ChatSource> extractSources(ChatClientResponse chatClientResponse) {
         List<RetrievalResult> reranked = (List<RetrievalResult>) chatClientResponse.context()
                 .get(RerankAdvisor.RERANKED_RESULTS_KEY);
         if (reranked == null || reranked.isEmpty()) {
             return null;
         }
-        List<ChatResponse.SourceDocument> sources = new ArrayList<>();
+        List<ChatSource> sources = new ArrayList<>();
         for (RetrievalResult r : reranked) {
-            ChatResponse.SourceDocument doc = new ChatResponse.SourceDocument();
+            ChatSource doc = new ChatSource();
             doc.setDocumentId(r.getDocumentId());
             doc.setTitle(r.getTitle() != null ? r.getTitle() : r.getDocumentId());
             doc.setChunkText(r.getChunkText());
