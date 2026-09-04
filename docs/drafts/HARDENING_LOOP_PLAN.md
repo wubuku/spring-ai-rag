@@ -485,7 +485,20 @@
   PdfImportControllerTest 34/34、DocumentLifecycleWebTest 4/4、DocumentAclTest 3/3、
   ExternalDocumentWebTest 6/6；`verify-no-pessimistic-locks.sh` 通过。
 
+### Batch 27（已交付）
+
+- 分支：`test/webui-thin-coverage-20260906`（基于 Batch 26 分支）
+- **盘点结论**：全项目覆盖率最低的区块是 `src/api/*` 契约层（0–25%，此前仅
+  apikeys/collections 有测试）。API 包装层是最便宜的契约锁——mock apiClient
+  断言端点/方法/参数即可固化对外 HTTP 契约。
+- 补齐 7 个模块的契约测试（13 个）：models（list）、health（无参读取）、
+  auth（凭据只进 header 不进 URL）、chat（POST body、会话 id URL 编码、
+  blob 导出、delete 清史）、search（hybrid/scope 参数 + 可选参数省略 +
+  `indexes: null` 序列化器）、embeddings（job 过滤、生命周期动作、readiness
+  按 collectionKey）、metrics（三个读取端点）。
+- 证据：`test:run` 全绿（308 → 321）；`tsc -b`/`lint`/`build` 绿。
+
 ## 10. 下一批次入口（候选，按优先级）
 
-- Batch 27：前端 Toast/Dashboard 等剩余小模块测试补强盘点。
 - Batch 28：`-real` e2e 用例的运行手册（需要完整 dev 栈）核实与文档化。
+- Batch 29：剩余 API 契约测试补齐（documents/files/evaluation/alerts/collections 扩展）。
