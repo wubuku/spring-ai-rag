@@ -7,17 +7,18 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import { abtestApi, type CreateExperimentRequest } from '../api/abtest';
+import { useChartTheme } from '../hooks/useChartTheme';
 import { Dialog } from '../components/Dialog';
 import { useToast } from '../components/Toast';
 import { Button } from '../components/Button';
 import styles from './ABTest.module.css';
 
 const STATUS_COLORS: Record<string, string> = {
-  DRAFT: '#9ca3af',
-  RUNNING: '#22c55e',
-  PAUSED: '#f59e0b',
-  STOPPED: '#6b7280',
-  COMPLETED: '#3b82f6',
+  DRAFT: 'var(--color-text-muted)',
+  RUNNING: 'var(--color-success)',
+  PAUSED: 'var(--color-warning)',
+  STOPPED: 'var(--color-text-muted)',
+  COMPLETED: 'var(--color-primary)',
 };
 
 export function ABTest() {
@@ -82,7 +83,7 @@ function ExperimentList({ onSelect }: { onSelect: (id: number) => void }) {
               <span>
                 <span
                   className={styles.badge}
-                  style={{ background: STATUS_COLORS[exp.status] ?? '#9ca3af' }}
+                  style={{ background: STATUS_COLORS[exp.status] ?? 'var(--color-text-muted)' }}
                 >
                   {exp.status}
                 </span>
@@ -114,6 +115,7 @@ function ExperimentList({ onSelect }: { onSelect: (id: number) => void }) {
 
 function ExperimentDetail({ experimentId, onBack }: { experimentId: number; onBack: () => void }) {
   const { t } = useTranslation();
+  const palette = useChartTheme();
   const qc = useQueryClient();
   const { showToast } = useToast();
 
@@ -163,7 +165,7 @@ function ExperimentDetail({ experimentId, onBack }: { experimentId: number; onBa
         </div>
         <span
           className={styles.badge}
-          style={{ background: STATUS_COLORS[exp.data.status] ?? '#9ca3af' }}
+          style={{ background: STATUS_COLORS[exp.data.status] ?? 'var(--color-text-muted)' }}
         >
           {exp.data.status}
         </span>
@@ -230,8 +232,8 @@ function ExperimentDetail({ experimentId, onBack }: { experimentId: number; onBa
                   <YAxis />
                   <Tooltip formatter={(v, key) => [v, key]} />
                   <Legend />
-                  <Bar dataKey="samples" fill="#6366f1" name={t('abtest.samples')} />
-                  <Bar dataKey="mean" fill="#22c55e" name={t('abtest.meanValue')} />
+                  <Bar dataKey="samples" fill={palette.primary} name={t('abtest.samples')} />
+                  <Bar dataKey="mean" fill={palette.success} name={t('abtest.meanValue')} />
                 </BarChart>
               </ResponsiveContainer>
             </div>

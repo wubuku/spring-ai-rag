@@ -64,15 +64,15 @@
 }
 
 .badgeActive {
-  background: #22c55e;
+  background: var(--color-success);
 }
 
 .badgeExpired {
-  background: #ef4444;
+  background: var(--color-error);
 }
 
 .badgeDisabled {
-  background: #9ca3af;
+  background: var(--color-text-muted);
 }
 
 .name {
@@ -198,7 +198,7 @@
 .input:focus {
   outline: none;
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 15%, transparent);
 }
 
 .hint {
@@ -277,7 +277,7 @@
 }
 
 .scopeError {
-  color: #dc2626;
+  color: var(--color-error-text);
   font-size: 0.75rem;
 }
 
@@ -331,39 +331,39 @@
 
 .warning {
   font-size: 0.8rem;
-  color: #f59e0b;
+  color: var(--color-warning);
   margin-top: 0.5rem;
   font-weight: 500;
 }
 
 /* Rotate confirm */
 .rotateInfo {
-  background: #fef3c7;
-  border: 1px solid #f59e0b;
+  background: var(--color-warning-bg);
+  border: 1px solid var(--color-warning);
   border-radius: 8px;
   padding: 0.75rem;
   font-size: 0.875rem;
-  color: #92400e;
+  color: var(--color-warning-text);
   margin-bottom: 1rem;
 }
 
 .dangerInfo {
-  background: #fee2e2;
-  border: 1px solid #ef4444;
+  background: var(--color-error-bg);
+  border: 1px solid var(--color-error);
   border-radius: 8px;
   padding: 0.75rem;
   font-size: 0.875rem;
-  color: #991b1b;
+  color: var(--color-error-text);
   margin-bottom: 1rem;
 }
 
 .recoveryInfo {
-  background: #e0f2fe;
-  border: 1px solid #0284c7;
+  background: var(--color-info-bg);
+  border: 1px solid var(--color-info-border);
   border-radius: 8px;
   padding: 0.75rem;
   font-size: 0.8rem;
-  color: #075985;
+  color: var(--color-info-text);
   margin-top: 0.75rem;
 }
 
@@ -376,19 +376,19 @@
 }
 
 .badgeAdmin {
-  background: #dbeafe;
-  color: #1d4ed8;
-  border: 1px solid #bfdbfe;
+  background: var(--color-primary-bg);
+  color: var(--color-primary-hover);
+  border: 1px solid var(--color-primary-border);
 }
 
 .badgeNormal {
-  background: #f3f4f6;
-  color: #374151;
-  border: 1px solid #e5e7eb;
+  background: var(--color-surface-hover);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
 }
 
 .badgePending {
-  background: #f59e0b;
-  color: #422006;
-  border: 1px solid #d97706;
+  background: var(--color-warning);
+  color: var(--color-warning-text);
+  border: 1px solid var(--color-warning-border);
 }

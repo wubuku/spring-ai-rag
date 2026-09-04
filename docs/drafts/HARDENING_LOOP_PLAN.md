@@ -247,7 +247,24 @@
      与 UTC 归一化。
 - 证据：`mvn -q clean compile test-compile` 通过；两套 12/12 绿。
 
+### Batch 11（已交付）
+
+- 分支：`refactor/webui-token-fallback-cleanup-20260905`（基于 Batch 9 分支）
+- 内容（原计划中的 Card/Modal primitive 顺延为 Batch 12）：
+  1. global.css 新增 severity/info 面色 token（success/error 的 bg/border/text、
+     info 三件套、primary-border，均含明暗两套，全局 token 达 44 个）。
+  2. `ApiKeys.module.css`（24→0）与 `Documents.module.css`（24→0）全量 token 化：
+     凭证状态徽章、rotate 警示/danger/info 面板、生命周期徽章统一到语义 token；
+     两个近似色的 rgba 主色光晕改用 `color-mix`。
+  3. `ABTest.tsx`：STATUS_COLORS 状态徽章改用 CSS 变量；分析图表的两个 Bar 填充
+     从字面 indigo/green 收敛到 `useChartTheme` 调色板（与 MetricsCharts 同语言）。
+- 基线变化：172 → **115**（20 文件，达成 <120 目标）。
+- 证据：`tsc -b` 绿；`test:run` 305/305；`lint`（含 design-token 门禁）绿；`build` 绿。
+
 ## 10. 下一批次入口（候选，按优先级）
 
-- Batch 11：Card/Modal primitive 提取（重复 .card/.panel/overlay 样式）+
-  Evaluation/Documents 表单 a11y 收尾 + 徽章/严重级配色 token 化（基线 172 → 目标 <120）。
+- Batch 12：Evaluation/Documents 表单 a11y 收尾 + FilePreview/VersionHistoryModal/
+  Files 的 GitHub 风格预览色 token 化（基线 115 → 目标 <80）。
+- Batch 13：Card/Modal primitive 提取（重复 .card/.panel/overlay 样式）。
+- Batch 14：后端 `DocumentSyncRunService`/`CollectionPurgeService` 超长方法拆分
+  （complete/applyItem/upsertExternalInTransaction），需 gated IT 回归护栏。
