@@ -261,98 +261,140 @@ public class DocumentSyncRunService {
         String token = requireLeaseToken(leaseToken);
         Objects.requireNonNull(request, "request");
         String tokenHash = hashToken(token);
-        return requireResult(transactionTemplate.execute(status -> {
-            RunRow run = requireRun(runId);
-            requireToken(run, tokenHash);
-            requireCollectionAccess(run.collectionId());
-            if (run.status() == DocumentSyncRunStatus.COMPLETED) {
-                return toResponse(run, collectionKey(run.collectionId()));
-            }
-            if (run.status() != DocumentSyncRunStatus.ACTIVE) {
-                throw invalidState("Only an ACTIVE sync run can complete");
-            }
-            expireIfNeeded(run);
-            run = requireActiveLease(runId, tokenHash);
-            if (run.previewTokenHash() == null
-                    || !Objects.equals(
-                            run.previewTokenHash(), hashToken(request.previewToken()))) {
-                throw new RagException(
-                        ErrorCode.SYNC_RUN_PREVIEW_CONFLICT,
-                        "previewToken does not belong to this active sync run");
-            }
-            if (run.missingPolicy() == DocumentSyncMissingPolicy.TOMBSTONE
-                    && hasFailedItems(run.id())) {
-                throw new RagException(
-                        ErrorCode.SYNC_RUN_INCOMPLETE,
-                        "Retry or remove all failed snapshot items before completing a tombstone run");
-            }
+        return requireResult(transactionTemplate.execute(status ->
+                completeInTransaction(runId, tokenHash, request)));
+    }
 
-            long completeSequence =
-                    mutationService.allocateSourceSequenceForSnapshot(
-                            run.collectionId(), run.sourceNamespace());
-            CandidateSet candidates = findCandidates(run);
-            if (!Objects.equals(
-                    run.previewFingerprint(), candidates.fingerprint())) {
-                throw new RagException(
-                        ErrorCode.SYNC_RUN_PREVIEW_CONFLICT,
-                        "The missing set changed after preview; preview again");
-            }
+    private DocumentSyncRunResponse completeInTransaction(
+            UUID runId,
+            String tokenHash,
+            DocumentSyncRunCompleteRequest request) {
+        RunRow run = requireRun(runId);
+        requireToken(run, tokenHash);
+        requireCollectionAccess(run.collectionId());
+        if (run.status() == DocumentSyncRunStatus.COMPLETED) {
+            return toResponse(run, collectionKey(run.collectionId()));
+        }
+        if (run.status() != DocumentSyncRunStatus.ACTIVE) {
+            throw invalidState("Only an ACTIVE sync run can complete");
+        }
+        expireIfNeeded(run);
+        run = requireActiveLease(runId, tokenHash);
+        requireMatchingPreviewToken(run, request);
+        requireNoFailedItemsForTombstone(run);
 
-            int tombstoned = 0;
-            if (run.missingPolicy() == DocumentSyncMissingPolicy.TOMBSTONE) {
-                long activeCount = countActiveExternal(run);
-                long threshold = Math.min(
-                        properties.getSyncRunMaxMissingAbsolute(),
-                        Math.max(
-                                1L,
-                                (long) Math.ceil(activeCount
-                                        * properties.getSyncRunMaxMissingPercent()
-                                        / 100.0)));
-                int confirmedMissingCount =
-                        request.effectiveConfirmMissingCount();
-                int candidateCount = candidates.candidates().size();
-                if (confirmedMissingCount >= 0
-                        && confirmedMissingCount != candidateCount) {
-                    throw new RagException(
-                            ErrorCode.SYNC_RUN_DELETE_PROTECTION,
-                            "confirmMissingCount must equal the previewed missing count");
-                }
-                if (candidateCount > threshold && confirmedMissingCount < 0) {
-                    throw new RagException(
-                            ErrorCode.SYNC_RUN_DELETE_PROTECTION,
-                            "Missing count exceeds the configured deletion protection threshold");
-                }
-                for (Candidate candidate : candidates.candidates()) {
-                    if (mutationService.reconcileMissingExternal(
-                            candidate.documentId(),
-                            run.id(),
-                            run.snapshotStartSequence())) {
-                        tombstoned++;
-                    }
-                }
-            }
+        long completeSequence =
+                mutationService.allocateSourceSequenceForSnapshot(
+                        run.collectionId(), run.sourceNamespace());
+        CandidateSet candidates = findCandidates(run);
+        requireUnchangedPreview(run, candidates);
+        int tombstoned = reconcileMissingCandidates(run, candidates, request);
+        markRunCompleted(run, tokenHash, completeSequence, tombstoned);
+        return toResponse(
+                requireRun(run.id(), run.collectionId(), run.sourceNamespace()),
+                collectionKey(run.collectionId()));
+    }
 
-            int updated = jdbcTemplate.update("""
-                    UPDATE rag_document_sync_runs
-                    SET status = 'COMPLETED',
-                        complete_sequence = ?,
-                        tombstoned_count = tombstoned_count + ?,
-                        completed_at = CURRENT_TIMESTAMP,
-                        updated_at = CURRENT_TIMESTAMP
-                    WHERE id = ? AND lease_token_hash = ? AND status = 'ACTIVE'
-                      AND lease_expires_at >= CURRENT_TIMESTAMP
-                    """,
-                    completeSequence,
-                    tombstoned,
+    private void requireMatchingPreviewToken(
+            RunRow run,
+            DocumentSyncRunCompleteRequest request) {
+        if (run.previewTokenHash() == null
+                || !Objects.equals(
+                        run.previewTokenHash(), hashToken(request.previewToken()))) {
+            throw new RagException(
+                    ErrorCode.SYNC_RUN_PREVIEW_CONFLICT,
+                    "previewToken does not belong to this active sync run");
+        }
+    }
+
+    private void requireNoFailedItemsForTombstone(RunRow run) {
+        if (run.missingPolicy() == DocumentSyncMissingPolicy.TOMBSTONE
+                && hasFailedItems(run.id())) {
+            throw new RagException(
+                    ErrorCode.SYNC_RUN_INCOMPLETE,
+                    "Retry or remove all failed snapshot items before completing a tombstone run");
+        }
+    }
+
+    private void requireUnchangedPreview(RunRow run, CandidateSet candidates) {
+        if (!Objects.equals(
+                run.previewFingerprint(), candidates.fingerprint())) {
+            throw new RagException(
+                    ErrorCode.SYNC_RUN_PREVIEW_CONFLICT,
+                    "The missing set changed after preview; preview again");
+        }
+    }
+
+    private int reconcileMissingCandidates(
+            RunRow run,
+            CandidateSet candidates,
+            DocumentSyncRunCompleteRequest request) {
+        if (run.missingPolicy() != DocumentSyncMissingPolicy.TOMBSTONE) {
+            return 0;
+        }
+        requireMissingCountWithinThreshold(run, candidates, request);
+        int tombstoned = 0;
+        for (Candidate candidate : candidates.candidates()) {
+            if (mutationService.reconcileMissingExternal(
+                    candidate.documentId(),
                     run.id(),
-                    tokenHash);
-            if (updated != 1) {
-                throw invalidState("Sync run lease was lost while completing");
+                    run.snapshotStartSequence())) {
+                tombstoned++;
             }
-            return toResponse(
-                    requireRun(run.id(), run.collectionId(), run.sourceNamespace()),
-                    collectionKey(run.collectionId()));
-        }));
+        }
+        return tombstoned;
+    }
+
+    private void requireMissingCountWithinThreshold(
+            RunRow run,
+            CandidateSet candidates,
+            DocumentSyncRunCompleteRequest request) {
+        long activeCount = countActiveExternal(run);
+        long threshold = Math.min(
+                properties.getSyncRunMaxMissingAbsolute(),
+                Math.max(
+                        1L,
+                        (long) Math.ceil(activeCount
+                                * properties.getSyncRunMaxMissingPercent()
+                                / 100.0)));
+        int confirmedMissingCount =
+                request.effectiveConfirmMissingCount();
+        int candidateCount = candidates.candidates().size();
+        if (confirmedMissingCount >= 0
+                && confirmedMissingCount != candidateCount) {
+            throw new RagException(
+                    ErrorCode.SYNC_RUN_DELETE_PROTECTION,
+                    "confirmMissingCount must equal the previewed missing count");
+        }
+        if (candidateCount > threshold && confirmedMissingCount < 0) {
+            throw new RagException(
+                    ErrorCode.SYNC_RUN_DELETE_PROTECTION,
+                    "Missing count exceeds the configured deletion protection threshold");
+        }
+    }
+
+    private void markRunCompleted(
+            RunRow run,
+            String tokenHash,
+            long completeSequence,
+            int tombstoned) {
+        int updated = jdbcTemplate.update("""
+                UPDATE rag_document_sync_runs
+                SET status = 'COMPLETED',
+                    complete_sequence = ?,
+                    tombstoned_count = tombstoned_count + ?,
+                    completed_at = CURRENT_TIMESTAMP,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = ? AND lease_token_hash = ? AND status = 'ACTIVE'
+                  AND lease_expires_at >= CURRENT_TIMESTAMP
+                """,
+                completeSequence,
+                tombstoned,
+                run.id(),
+                tokenHash);
+        if (updated != 1) {
+            throw invalidState("Sync run lease was lost while completing");
+        }
     }
 
     public DocumentSyncRunResponse abort(
@@ -521,64 +563,113 @@ public class DocumentSyncRunService {
         String externalId = requireVisible(item.externalId(), "externalId", 255);
         String fingerprint = fingerprint(item);
         LedgerRow existing = findItem(runId, externalId);
-        boolean reopenedFailedItem = false;
         if (existing != null) {
-            if (!Objects.equals(existing.itemFingerprint(), fingerprint)
-                    || !Objects.equals(
-                            existing.documentKind().name(),
-                            item.documentKind().name())
-                    || !Objects.equals(existing.sourceRevision(), item.sourceRevision())) {
-                throw new RagException(
-                        ErrorCode.SYNC_RUN_ITEM_CONFLICT,
-                        "The same externalId was already used with different item data");
+            LedgerRow replayable =
+                    replayOrReopenExistingItem(runId, externalId, fingerprint, item, existing);
+            if (replayable != null) {
+                return toItemResponse(replayable);
             }
-            if (existing.status() == DocumentSyncItemStatus.FAILED) {
-                int reopened = jdbcTemplate.update("""
-                        UPDATE rag_document_sync_run_items
-                        SET status = 'FAILED',
-                            error_code = 'SYNC_RUN_ITEM_IN_PROGRESS',
-                            error_message = 'Item is being processed',
-                            seen_at = CURRENT_TIMESTAMP
-                        WHERE run_id = ? AND external_id = ?
-                          AND item_fingerprint = ?
-                          AND status = 'FAILED'
-                        """,
-                        runId,
-                        externalId,
-                        fingerprint);
-                if (reopened != 1) {
-                    throw new RagException(
-                            ErrorCode.SYNC_RUN_ITEM_CONFLICT,
-                            "The same sync-run item is currently being processed");
-                }
-                existing = findItem(runId, externalId);
-                reopenedFailedItem = true;
-            }
-            if (!"SYNC_RUN_ITEM_IN_PROGRESS".equals(existing.errorCode())) {
-                return toItemResponse(existing);
-            }
-            if (!reopenedFailedItem) {
-                throw new RagException(
-                        ErrorCode.SYNC_RUN_ITEM_CONFLICT,
-                        "The same sync-run item is currently being processed");
-            }
+        } else {
+            insertInProgressItem(runId, externalId, fingerprint, item);
         }
 
-        if (existing == null) {
-            jdbcTemplate.update("""
-                    INSERT INTO rag_document_sync_run_items (
-                        run_id, external_id, document_kind, item_fingerprint,
-                        source_revision, status, error_code, error_message
-                    ) VALUES (?, ?, ?, ?, ?, 'FAILED',
-                        'SYNC_RUN_ITEM_IN_PROGRESS', 'Item is being processed')
-                    """,
-                    runId,
-                    externalId,
-                    item.documentKind().name(),
-                    fingerprint,
-                    item.sourceRevision());
-        }
+        DocumentMutationService.SyncItemMutation mutation =
+                applySyncMutation(run, externalId, item);
+        finalizeItemLedger(run, externalId, mutation);
+        incrementRunCount(run, mutation.status());
+        return new DocumentSyncRunItemResponse(
+                externalId,
+                item.documentKind(),
+                mutation.status(),
+                mutation.documentId(),
+                mutation.sourceRevision(),
+                mutation.errorCode(),
+                sanitizeError(mutation.error()),
+                mutation.embeddingAction(),
+                mutation.embeddingJobId());
+    }
 
+    /**
+     * 校验既有 item 的幂等冲突并按需重开失败项。
+     *
+     * @return 可直接重放的 item 行；返回 {@code null} 表示应继续执行本次 mutation。
+     */
+    private LedgerRow replayOrReopenExistingItem(
+            UUID runId,
+            String externalId,
+            String fingerprint,
+            DocumentSyncRunItemRequest item,
+            LedgerRow existing) {
+        if (!Objects.equals(existing.itemFingerprint(), fingerprint)
+                || !Objects.equals(
+                        existing.documentKind().name(),
+                        item.documentKind().name())
+                || !Objects.equals(existing.sourceRevision(), item.sourceRevision())) {
+            throw new RagException(
+                    ErrorCode.SYNC_RUN_ITEM_CONFLICT,
+                    "The same externalId was already used with different item data");
+        }
+        boolean reopenedFailedItem = false;
+        if (existing.status() == DocumentSyncItemStatus.FAILED) {
+            reopenFailedItem(runId, externalId, fingerprint);
+            existing = findItem(runId, externalId);
+            reopenedFailedItem = true;
+        }
+        if (!"SYNC_RUN_ITEM_IN_PROGRESS".equals(existing.errorCode())) {
+            return existing;
+        }
+        if (!reopenedFailedItem) {
+            throw new RagException(
+                    ErrorCode.SYNC_RUN_ITEM_CONFLICT,
+                    "The same sync-run item is currently being processed");
+        }
+        return null;
+    }
+
+    private void reopenFailedItem(UUID runId, String externalId, String fingerprint) {
+        int reopened = jdbcTemplate.update("""
+                UPDATE rag_document_sync_run_items
+                SET status = 'FAILED',
+                    error_code = 'SYNC_RUN_ITEM_IN_PROGRESS',
+                    error_message = 'Item is being processed',
+                    seen_at = CURRENT_TIMESTAMP
+                WHERE run_id = ? AND external_id = ?
+                  AND item_fingerprint = ?
+                  AND status = 'FAILED'
+                """,
+                runId,
+                externalId,
+                fingerprint);
+        if (reopened != 1) {
+            throw new RagException(
+                    ErrorCode.SYNC_RUN_ITEM_CONFLICT,
+                    "The same sync-run item is currently being processed");
+        }
+    }
+
+    private void insertInProgressItem(
+            UUID runId,
+            String externalId,
+            String fingerprint,
+            DocumentSyncRunItemRequest item) {
+        jdbcTemplate.update("""
+                INSERT INTO rag_document_sync_run_items (
+                    run_id, external_id, document_kind, item_fingerprint,
+                    source_revision, status, error_code, error_message
+                ) VALUES (?, ?, ?, ?, ?, 'FAILED',
+                    'SYNC_RUN_ITEM_IN_PROGRESS', 'Item is being processed')
+                """,
+                runId,
+                externalId,
+                item.documentKind().name(),
+                fingerprint,
+                item.sourceRevision());
+    }
+
+    private DocumentMutationService.SyncItemMutation applySyncMutation(
+            RunRow run,
+            String externalId,
+            DocumentSyncRunItemRequest item) {
         DocumentMutationService.SyncItemMutation mutation =
                 mutationService.upsertSyncRunItemInCurrentTransaction(
                         run.collectionId(),
@@ -598,6 +689,13 @@ public class DocumentSyncRunService {
                     run.syncGeneration(),
                     mutation.documentId());
         }
+        return mutation;
+    }
+
+    private void finalizeItemLedger(
+            RunRow run,
+            String externalId,
+            DocumentMutationService.SyncItemMutation mutation) {
         jdbcTemplate.update("""
                 UPDATE rag_document_sync_run_items
                 SET document_id = ?, status = ?, error_code = ?,
@@ -610,17 +708,6 @@ public class DocumentSyncRunService {
                 sanitizeError(mutation.error()),
                 run.id(),
                 externalId);
-        incrementRunCount(run, mutation.status());
-        return new DocumentSyncRunItemResponse(
-                externalId,
-                item.documentKind(),
-                mutation.status(),
-                mutation.documentId(),
-                mutation.sourceRevision(),
-                mutation.errorCode(),
-                sanitizeError(mutation.error()),
-                mutation.embeddingAction(),
-                mutation.embeddingJobId());
     }
 
     private DocumentSyncRunItemResponse recordFailedItem(

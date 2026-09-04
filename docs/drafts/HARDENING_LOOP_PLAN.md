@@ -314,12 +314,33 @@
 - 证据：`tsc -b` 绿；`test:run` 307/307（44 文件）；`lint`/`build` 绿；
   门禁输出 `0 file(s) with grandfathered literal colors`。
 
+### Batch 16（已交付）
+
+- 分支：`refactor/webui-small-debt-sweep-20260906`（与 Batch 15 同线叠加）
+- 内容：`DocumentSyncRunService` 两个超长方法的行为保持拆分（纯私有方法提取，
+  无逻辑/SQL/错误消息变更）：
+  1. `complete`（~100 行 → 20 行编排 + 6 个聚焦 helper）：requireMatchingPreviewToken、
+     requireNoFailedItemsForTombstone、requireUnchangedPreview、
+     reconcileMissingCandidates（含 requireMissingCountWithinThreshold）、
+     markRunCompleted、completeInTransaction。
+  2. `applyItem`（~110 行 → 30 行编排 + 5 个 helper）：replayOrReopenExistingItem
+     （返回可重放行或 null 继续）、reopenFailedItem、insertInProgressItem、
+     applySyncMutation、finalizeItemLedger。
+- 回归护栏（关键）：本地 Docker 可用，gated IT 可用
+  `TESTCONTAINERS_RYUK_DISABLED=true TESTCONTAINERS_PG_IMAGE=postgres:16-pgvector`
+  跑真实 PostgreSQL（Testcontainers 拉取 ryuk 受境内网络限制，禁用后正常）。
+  重构前先跑通基线（4/4），重构后复跑同样全绿。
+- 证据：`mvn clean compile test-compile` 绿；DocumentSyncRunsPostgresIntegrationTest
+  4/4（真实 PG + Flyway 全量迁移）；DocumentSyncRunControllerWebTest 5/5；
+  OpenAPI 契约测试绿。
+- 附注：Testcontainers 需要的本地运行参数已验证，可写入 china-network-guide
+  供后续 IT 回归使用（留待文档批次）。
+
 ## 10. 下一批次入口（候选，按优先级）
 
-- Batch 16：后端 `DocumentSyncRunService`/`CollectionPurgeService` 超长方法拆分
-  （complete/applyItem/upsertExternalInTransaction），需 gated IT 回归护栏。
 - Batch 17：Modal 外壳统一（CreateCollectionModal/VersionHistoryModal 收敛到 Dialog）。
 - Batch 18：Mock Playwright 补 Embeddings 卡片渲染回归（防跨文件样式回归再次漏网）。
+- Batch 19：CollectionPurgeService 超长方法拆分（同 Batch 16 护栏模式）。
 - Batch 13：Card/Modal primitive 提取（重复 .card/.panel/overlay 样式）。
 - Batch 14：后端 `DocumentSyncRunService`/`CollectionPurgeService` 超长方法拆分
   （complete/applyItem/upsertExternalInTransaction），需 gated IT 回归护栏。
