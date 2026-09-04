@@ -443,8 +443,10 @@
      （默认禁 Ryuk + 本地 postgres:16-pgvector 镜像，均可环境变量覆盖；
      支持按类名筛选与套件登记制）。验证：全量 16/16（4+5+7），单套件筛选、
      无匹配错误路径均正确。
-  3. CI 步骤（运行同一脚本）已提交到待推送的 workflow 分支，与其 webui job
-     一起等待用户以 workflow scope 凭据推送。检索/嵌入类 IT 仍需 mock
+  3. CI 步骤（运行同一脚本）已提交到待推送的 workflow 分支，且脚本本体也已
+     cherry-pick 到该分支使其自包含（0aeebb90）；与其 webui job 一起等待用户
+     以 workflow scope 凭据执行
+     `git push origin ci/webui-job-pending-workflow-scope`。检索/嵌入类 IT 仍需 mock
      provider 或真实 secrets，维持独立规划。
 - 证据：脚本 `bash -n` 通过；`verify-gated-it.sh` 全量 16/16、单套件 4/4、
   无匹配退出路径正确。
