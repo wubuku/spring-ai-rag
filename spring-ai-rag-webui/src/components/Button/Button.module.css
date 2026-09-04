@@ -1,0 +1,39 @@
+.button {
+  padding: 0.5rem 1rem;
+  color: white;
+  background: var(--color-primary);
+  border: 1px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.875rem;
+}
+
+.button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.primary {
+  background: var(--color-primary);
+}
+
+.secondary {
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+}
+
+.danger {
+  background: var(--color-error);
+}
+
+.link {
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--color-primary);
+}
+
+.link:disabled {
+  color: var(--color-text-muted);
+}

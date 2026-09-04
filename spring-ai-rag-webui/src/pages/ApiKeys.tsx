@@ -12,6 +12,7 @@ import {
 import { collectionsApi } from '../api/collections';
 import { useToast } from '../components/Toast';
 import { Dialog } from '../components/Dialog';
+import { Button } from '../components/Button';
 import styles from './ApiKeys.module.css';
 
 const DEFAULT_EXPIRY_DAYS = 365;
@@ -117,9 +118,9 @@ function KeyList() {
   return (
     <div>
       <div className={styles.toolbar}>
-        <button className={styles.btnPrimary} onClick={() => setShowCreate(true)}>
+        <Button variant="primary" onClick={() => setShowCreate(true)}>
           {t('apiKeys.createKey')}
-        </button>
+        </Button>
       </div>
 
       {isPending ? (
@@ -129,9 +130,9 @@ function KeyList() {
       ) : !data?.data?.length ? (
         <div className={styles.empty}>
           <span>{t('apiKeys.noKeys')}</span>
-          <button className={styles.btnPrimary} onClick={() => setShowCreate(true)}>
+          <Button variant="primary" onClick={() => setShowCreate(true)}>
             {t('apiKeys.createFirst')}
-          </button>
+          </Button>
         </div>
       ) : (
         <div className={styles.table}>
@@ -291,15 +292,15 @@ function PrincipalRow({
       </span>
       <span className={styles.date}>{formatDateTime(principal.expiresAt)}</span>
       <span className={styles.rowActions}>
-        <button
-          className={styles.btnLink}
+        <Button
+          variant="link"
           onClick={onEdit}
           disabled={principal.status !== 'ACTIVE'}
         >
           {t('apiKeys.editPolicy')}
-        </button>
-        <button
-          className={styles.btnLink}
+        </Button>
+        <Button
+          variant="link"
           onClick={onRotate}
           disabled={
             principal.status !== 'ACTIVE'
@@ -313,11 +314,11 @@ function PrincipalRow({
           }
         >
           {t('apiKeys.rotate')}
-        </button>
+        </Button>
         {rotationPending && (
           <>
-            <button
-              className={styles.btnLink}
+            <Button
+              variant="link"
               onClick={() => completeRotationMutation.mutate()}
               disabled={
                 completeRotationMutation.isPending
@@ -325,9 +326,9 @@ function PrincipalRow({
               }
             >
               {t('apiKeys.completeRotation')}
-            </button>
-            <button
-              className={styles.btnLink}
+            </Button>
+            <Button
+              variant="link"
               onClick={() => cancelRotationMutation.mutate()}
               disabled={
                 completeRotationMutation.isPending
@@ -335,11 +336,11 @@ function PrincipalRow({
               }
             >
               {t('apiKeys.cancelRotation')}
-            </button>
+            </Button>
           </>
         )}
-        <button
-          className={styles.btnLink}
+        <Button
+          variant="link"
           onClick={() => revokeMutation.mutate()}
           disabled={
             revokeMutation.isPending
@@ -349,7 +350,7 @@ function PrincipalRow({
           style={{ color: '#ef4444' }}
         >
           {t('apiKeys.revoke')}
-        </button>
+        </Button>
       </span>
     </div>
   );
@@ -580,12 +581,12 @@ function CreateKeyModal({ onClose }: { onClose: () => void }) {
               )}
             </fieldset>
             <div className={styles.modalActions}>
-              <button type="button" className={styles.btnSecondary} onClick={handleClose}>
+              <Button type="button" variant="secondary" onClick={handleClose}>
                 {t('common.cancel')}
-              </button>
-              <button
+              </Button>
+              <Button
                 type="submit"
-                className={styles.btnPrimary}
+                variant="primary"
                 disabled={
                   createMutation.isPending
                   || !name.trim()
@@ -593,7 +594,7 @@ function CreateKeyModal({ onClose }: { onClose: () => void }) {
                 }
               >
                 {createMutation.isPending ? t('common.loading') : t('apiKeys.create')}
-              </button>
+              </Button>
             </div>
           </form>
         ) : (
@@ -636,9 +637,9 @@ function CreateKeyModal({ onClose }: { onClose: () => void }) {
               <div className={styles.warning}>{createdKey.warning}</div>
             </div>
             <div className={styles.modalActions}>
-              <button className={styles.btnPrimary} onClick={handleClose}>
+              <Button variant="primary" onClick={handleClose}>
                 {t('common.close')}
-              </button>
+              </Button>
             </div>
           </div>
         )}
@@ -824,12 +825,12 @@ function EditPolicyModal({
             )}
           </fieldset>
           <div className={styles.modalActions}>
-            <button type="button" className={styles.btnSecondary} onClick={onClose}>
+            <Button type="button" variant="secondary" onClick={onClose}>
               {t('common.cancel')}
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
-              className={styles.btnPrimary}
+              variant="primary"
               disabled={
                 updateMutation.isPending
                 || !name.trim()
@@ -838,7 +839,7 @@ function EditPolicyModal({
               }
             >
               {updateMutation.isPending ? t('common.loading') : t('common.save')}
-            </button>
+            </Button>
           </div>
         </form>
     </Dialog>
@@ -1010,12 +1011,12 @@ function RotateKeyModal({
               </div>
             )}
             <div className={styles.modalActions}>
-              <button type="button" className={styles.btnSecondary} onClick={handleClose}>
+              <Button type="button" variant="secondary" onClick={handleClose}>
                 {t('common.cancel')}
-              </button>
+              </Button>
               {mode === 'staged' ? (
-                <button
-                  className={styles.btnPrimary}
+                <Button
+                  variant="primary"
                   onClick={prepare}
                   disabled={
                     prepareMutation.isPending
@@ -1028,17 +1029,17 @@ function RotateKeyModal({
                   {prepareMutation.isPending
                     ? t('common.loading')
                     : t('apiKeys.prepareRotation')}
-                </button>
+                </Button>
               ) : (
-                <button
-                  className={styles.btnDanger}
+                <Button
+                  variant="danger"
                   onClick={() => immediateMutation.mutate()}
                   disabled={immediateMutation.isPending}
                 >
                   {immediateMutation.isPending
                     ? t('common.loading')
                     : t('apiKeys.rotateImmediately')}
-                </button>
+                </Button>
               )}
             </div>
           </div>
@@ -1102,9 +1103,9 @@ function RotateKeyModal({
               )}
             </div>
             <div className={styles.modalActions}>
-              <button className={styles.btnPrimary} onClick={handleClose}>
+              <Button variant="primary" onClick={handleClose}>
                 {t('common.close')}
-              </button>
+              </Button>
             </div>
           </div>
         )}

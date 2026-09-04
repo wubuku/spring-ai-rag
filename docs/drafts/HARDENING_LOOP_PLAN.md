@@ -127,8 +127,25 @@
 - 文档同步：`developer-reference-zh-CN.md` / `developer-reference.md` §6 补充
   lint 链与 coverage 阈值说明。
 
-## 5. 下一批次入口
+### Batch 3（已交付）
 
-Batch 3：提取 `Button` primitive（variant: primary/secondary/danger/link/icon），
-优先消除 `ABTest.module.css` 与 `ApiKeys.module.css` 的 `.btn*` 复制粘贴；
-迁移过程中同步下调字面颜色基线。
+- 分支：`feat/webui-button-primitive-20260905`（基于 Batch 2 分支）
+- 内容：
+  1. 新增 `src/components/Button` primitive（forwardRef、variant primary/secondary/
+     danger/link、默认 `type="button"`、默认 variant secondary、className 合并、
+     rest 透传 `form` 等 attribute；样式仅用 token，含 disabled 统一语义）。
+  2. `ABTest.tsx`（10 处）与 `ApiKeys.tsx`（16 处）全部迁移到 `<Button>`；
+     `styles.btnBack` 保留为页面局部样式。JSX 保留 `type="submit"` + `form` 透传。
+  3. 两个 module.css 删除逐字重复的 `.btn*` 块（ABTest 5 块、ApiKeys 7 块），
+     danger 色从 `#ef4444` 收敛到 `--color-error`。
+- 基线变化：343 → 341（等值基线门禁在实施中正确拦截了「减了颜色但没下调基线」）。
+- 证据：`tsc -b` 绿；`test:run` 297/297（42 文件，新增 Button 4 测试）；
+  `lint`（含 design-token 门禁）绿；`build` 绿；页面既有测试（ApiKeys 13 + rotation 5 +
+  ABTest 8）全部无修改通过，证明行为无回归。
+- Review 结论：默认 variant 从 primary 改为 secondary（强调样式应显式选择）并补测。
+
+## 6. 下一批次入口
+
+Batch 4：a11y 加固——ABTest/Settings/Evaluation/Documents 表单控件补 label 关联
+（htmlFor 或 aria-label）、ChatSidebar 删除会话按钮补 aria-label（当前只有 × + title）、
+复核 ChatSidebar 会话项 button 嵌套 button 的合法性。

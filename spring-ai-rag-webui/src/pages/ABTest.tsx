@@ -9,6 +9,7 @@ import {
 import { abtestApi, type CreateExperimentRequest } from '../api/abtest';
 import { Dialog } from '../components/Dialog';
 import { useToast } from '../components/Toast';
+import { Button } from '../components/Button';
 import styles from './ABTest.module.css';
 
 const STATUS_COLORS: Record<string, string> = {
@@ -56,9 +57,9 @@ function ExperimentList({ onSelect }: { onSelect: (id: number) => void }) {
   return (
     <div>
       <div className={styles.toolbar}>
-        <button className={styles.btnPrimary} onClick={() => setShowCreate(true)}>
+        <Button variant="primary" onClick={() => setShowCreate(true)}>
           {t('abtest.createExperiment')}
-        </button>
+        </Button>
       </div>
 
       {isPending ? (
@@ -90,12 +91,12 @@ function ExperimentList({ onSelect }: { onSelect: (id: number) => void }) {
               <span>{exp.sampleCount ?? 0}</span>
               <span>{exp.winner ?? '—'}</span>
               <span>
-                <button
-                  className={styles.btnLink}
+                <Button
+                  variant="link"
                   onClick={() => onSelect(exp.id)}
                 >
                   {t('abtest.viewDetails')}
-                </button>
+                </Button>
               </span>
             </div>
           ))}
@@ -171,24 +172,24 @@ function ExperimentDetail({ experimentId, onBack }: { experimentId: number; onBa
       {/* Actions */}
       <div className={styles.actions}>
         {exp.data.status === 'DRAFT' && (
-          <button className={styles.btnPrimary} onClick={() => startMut.mutate()}>
+          <Button variant="primary" onClick={() => startMut.mutate()}>
             {t('abtest.start')}
-          </button>
+          </Button>
         )}
         {exp.data.status === 'RUNNING' && (
-          <button className={styles.btnSecondary} onClick={() => pauseMut.mutate()}>
+          <Button variant="secondary" onClick={() => pauseMut.mutate()}>
             {t('abtest.pause')}
-          </button>
+          </Button>
         )}
         {exp.data.status === 'PAUSED' && (
-          <button className={styles.btnPrimary} onClick={() => startMut.mutate()}>
+          <Button variant="primary" onClick={() => startMut.mutate()}>
             {t('abtest.resume')}
-          </button>
+          </Button>
         )}
         {(exp.data.status === 'RUNNING' || exp.data.status === 'PAUSED') && (
-          <button className={styles.btnDanger} onClick={() => stopMut.mutate()}>
+          <Button variant="danger" onClick={() => stopMut.mutate()}>
             {t('abtest.stop')}
-          </button>
+          </Button>
         )}
       </div>
 
@@ -322,22 +323,22 @@ function CreateExperimentModal({ onClose }: { onClose: () => void }) {
       closeDisabled={createMut.isPending}
       actions={(
         <>
-          <button
+          <Button
             type="button"
-            className={styles.btnSecondary}
+            variant="secondary"
             onClick={onClose}
             disabled={createMut.isPending}
           >
             {t('common.cancel')}
-          </button>
-          <button
+          </Button>
+          <Button
             type="submit"
             form="create-experiment-form"
-            className={styles.btnPrimary}
+            variant="primary"
             disabled={createMut.isPending}
           >
             {createMut.isPending ? t('common.loading') : t('abtest.create')}
-          </button>
+          </Button>
         </>
       )}
     >
