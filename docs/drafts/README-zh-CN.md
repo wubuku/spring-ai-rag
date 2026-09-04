@@ -33,5 +33,7 @@
 ## 当前活跃规划
 
 - [WebUI 统一设计语言调研与实施规划](WEBUI_UNIFIED_DESIGN_LANGUAGE_PLAN.md)
+- [加固循环批次规划](HARDENING_LOOP_PLAN.md)：持续循环执行测试加固、WebUI UI/UX
+  重构与技术债务处理；本阶段不把新功能作为重点。
 
 已完成、已停止和被替代的材料可从[历史归档](archive/README-zh-CN.md)追溯。

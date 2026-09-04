@@ -40,6 +40,10 @@ Active plans are listed here and in `docs/index*`.
 
 - [WebUI unified design language research and implementation plan](WEBUI_UNIFIED_DESIGN_LANGUAGE_PLAN.md)
   (Chinese)
+- [Hardening batch loop plan](HARDENING_LOOP_PLAN.md) (Chinese): a recurring
+  plan/implementation/acceptance loop focused on test hardening, WebUI UI/UX
+  refactoring, and technical-debt cleanup; new features are out of scope for
+  this stage.
 
 Completed, stopped, and superseded materials remain available in the
 [historical archive](archive/README.md).
