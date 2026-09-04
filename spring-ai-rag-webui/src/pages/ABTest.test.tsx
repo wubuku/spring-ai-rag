@@ -221,6 +221,29 @@ describe('ABTest', () => {
     );
   });
 
+  it('associates every create-form control with its label', async () => {
+    const user = userEvent.setup();
+    storeQuery(['abtest', 'experiments'], []);
+
+    renderAbTest();
+    await user.click(
+      screen.getByRole('button', { name: 'abtest.createExperiment' }),
+    );
+
+    for (const label of [
+      'abtest.name',
+      'abtest.description',
+      'abtest.targetMetric',
+      `${'abtest.variant'} A`,
+      `${'abtest.traffic'}%`,
+    ]) {
+      // Labels appear twice for variant/traffic (A and B rows).
+      expect(screen.getAllByLabelText(label).length).toBeGreaterThanOrEqual(1);
+    }
+    expect(screen.getAllByLabelText('abtest.variant A')).toHaveLength(1);
+    expect(screen.getAllByLabelText('abtest.variant B')).toHaveLength(1);
+  });
+
   it('does not submit the create form when the name is blank', async () => {
     const user = userEvent.setup();
     storeQuery(['abtest', 'experiments'], []);

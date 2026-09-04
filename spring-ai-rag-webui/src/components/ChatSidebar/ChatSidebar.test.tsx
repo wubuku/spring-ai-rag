@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
-import { useChatSessions } from './ChatSidebar';
+import { render, screen } from '@testing-library/react';
+import { useChatSessions, ChatSidebar } from './ChatSidebar';
 
 const localStorageMock = {
   data: {} as Record<string, string>,
@@ -72,5 +73,35 @@ describe('useChatSessions', () => {
     });
 
     expect(result.current.sessions[0].title).toBe('New Title');
+  });
+});
+
+describe('ChatSidebar', () => {
+  beforeEach(() => {
+    localStorageMock.data = {};
+    vi.clearAllMocks();
+  });
+
+  it('exposes the delete action with an accessible name per session', () => {
+    localStorageMock.data['chat_sessions'] = JSON.stringify([
+      { id: 's1', title: 'Session 1', updatedAt: 1234567890 },
+      { id: 's2', title: 'Session 2', updatedAt: 2234567890 },
+    ]);
+
+    render(<ChatSidebar currentSessionId="s1" onSelectSession={vi.fn()} onNewChat={vi.fn()} />);
+
+    // The i18n test mock drops interpolation, so both delete buttons share the key.
+    expect(
+      screen.getAllByRole('button', { name: 'chat.deleteSession' }),
+    ).toHaveLength(2);
+    expect(screen.getByRole('button', { name: 'chat.newChat' })).toBeInTheDocument();
+    expect(screen.queryByText('chat.noHistory')).not.toBeInTheDocument();
+  });
+
+  it('renders the empty-state message when no sessions exist', () => {
+    render(<ChatSidebar currentSessionId="" onSelectSession={vi.fn()} onNewChat={vi.fn()} />);
+
+    expect(screen.getByText('chat.noHistory')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'chat.deleteSession' })).not.toBeInTheDocument();
   });
 });

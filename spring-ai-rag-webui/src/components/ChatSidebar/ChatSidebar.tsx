@@ -4,6 +4,7 @@
 // Moving to a separate file would require updating 1+ consumer import paths.
 
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import styles from './ChatSidebar.module.css';
 
 interface ChatSession {
@@ -60,6 +61,7 @@ export function useChatSessions() {
 }
 
 export function ChatSidebar({ currentSessionId, onSelectSession, onNewChat }: ChatSidebarProps) {
+  const { t } = useTranslation();
   const { sessions, deleteSession } = useChatSessions();
 
   const formatTime = (timestamp: number) => {
@@ -67,9 +69,9 @@ export function ChatSidebar({ currentSessionId, onSelectSession, onNewChat }: Ch
     const now = new Date();
     const diff = now.getTime() - date.getTime();
 
-    if (diff < 60000) return 'Just now';
-    if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
-    if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
+    if (diff < 60000) return t('chat.timeJustNow');
+    if (diff < 3600000) return t('chat.timeMinutesAgo', { count: Math.floor(diff / 60000) });
+    if (diff < 86400000) return t('chat.timeHoursAgo', { count: Math.floor(diff / 3600000) });
     return date.toLocaleDateString();
   };
 
@@ -77,12 +79,12 @@ export function ChatSidebar({ currentSessionId, onSelectSession, onNewChat }: Ch
     <div className={styles.sidebar}>
       <div className={styles.header}>
         <button onClick={onNewChat} className={styles.newChatBtn}>
-          + New Chat
+          {t('chat.newChat')}
         </button>
       </div>
       <div className={styles.sessions}>
         {sessions.length === 0 && (
-          <div className={styles.empty}>No conversations yet</div>
+          <div className={styles.empty}>{t('chat.noHistory')}</div>
         )}
         {sessions.map(session => (
           <div
@@ -102,7 +104,8 @@ export function ChatSidebar({ currentSessionId, onSelectSession, onNewChat }: Ch
                 e.stopPropagation();
                 deleteSession(session.id);
               }}
-              title="Delete"
+              aria-label={t('chat.deleteSession', { title: session.title })}
+              title={t('chat.deleteSession', { title: session.title })}
             >
               ×
             </button>

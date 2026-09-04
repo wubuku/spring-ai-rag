@@ -344,16 +344,31 @@ function CreateExperimentModal({ onClose }: { onClose: () => void }) {
     >
         <form id="create-experiment-form" onSubmit={handleSubmit}>
           <div className={styles.formGroup}>
-            <label>{t('abtest.name')}</label>
-            <input value={name} onChange={e => setName(e.target.value)} required placeholder={t('abtest.namePlaceholder')} />
+            <label htmlFor="abtest-experiment-name">{t('abtest.name')}</label>
+            <input
+              id="abtest-experiment-name"
+              value={name}
+              onChange={e => setName(e.target.value)}
+              required
+              placeholder={t('abtest.namePlaceholder')}
+            />
           </div>
           <div className={styles.formGroup}>
-            <label>{t('abtest.description')}</label>
-            <textarea value={description} onChange={e => setDescription(e.target.value)} rows={2} />
+            <label htmlFor="abtest-experiment-description">{t('abtest.description')}</label>
+            <textarea
+              id="abtest-experiment-description"
+              value={description}
+              onChange={e => setDescription(e.target.value)}
+              rows={2}
+            />
           </div>
           <div className={styles.formGroup}>
-            <label>{t('abtest.targetMetric')}</label>
-            <select value={targetMetric} onChange={e => setTargetMetric(e.target.value)}>
+            <label htmlFor="abtest-target-metric">{t('abtest.targetMetric')}</label>
+            <select
+              id="abtest-target-metric"
+              value={targetMetric}
+              onChange={e => setTargetMetric(e.target.value)}
+            >
               <option value="retrieval_precision">{t('abtest.metricPrecision')}</option>
               <option value="retrieval_recall">{t('abtest.metricRecall')}</option>
               <option value="user_satisfaction">{t('abtest.metricSatisfaction')}</option>
@@ -361,22 +376,44 @@ function CreateExperimentModal({ onClose }: { onClose: () => void }) {
           </div>
           <div className={styles.formRow}>
             <div className={styles.formGroup}>
-              <label>{t('abtest.variant')} A</label>
-              <input value={variantA} onChange={e => setVariantA(e.target.value)} />
+              <label htmlFor="abtest-variant-a">{t('abtest.variant')} A</label>
+              <input
+                id="abtest-variant-a"
+                value={variantA}
+                onChange={e => setVariantA(e.target.value)}
+              />
             </div>
             <div className={styles.formGroup} style={{ width: 80 }}>
-              <label>{t('abtest.traffic')}%</label>
-              <input type="number" min="0" max="100" value={splitA} onChange={e => setSplitA(e.target.value)} />
+              <label htmlFor="abtest-split-a">{t('abtest.traffic')}%</label>
+              <input
+                id="abtest-split-a"
+                type="number"
+                min="0"
+                max="100"
+                value={splitA}
+                onChange={e => setSplitA(e.target.value)}
+              />
             </div>
           </div>
           <div className={styles.formRow}>
             <div className={styles.formGroup}>
-              <label>{t('abtest.variant')} B</label>
-              <input value={variantB} onChange={e => setVariantB(e.target.value)} />
+              <label htmlFor="abtest-variant-b">{t('abtest.variant')} B</label>
+              <input
+                id="abtest-variant-b"
+                value={variantB}
+                onChange={e => setVariantB(e.target.value)}
+              />
             </div>
             <div className={styles.formGroup} style={{ width: 80 }}>
-              <label>{t('abtest.traffic')}%</label>
-              <input type="number" min="0" max="100" value={splitB} onChange={e => setSplitB(e.target.value)} />
+              <label htmlFor="abtest-split-b">{t('abtest.traffic')}%</label>
+              <input
+                id="abtest-split-b"
+                type="number"
+                min="0"
+                max="100"
+                value={splitB}
+                onChange={e => setSplitB(e.target.value)}
+              />
             </div>
           </div>
         </form>

@@ -245,7 +245,11 @@
     "toolActivity": "Retrieval activity",
     "toolSearching": "Searching",
     "toolFinished": "Found {{count}} result(s) ({{ms}} ms)",
-    "untitledSource": "Untitled source"
+    "untitledSource": "Untitled source",
+    "deleteSession": "Delete session {{title}}",
+    "timeJustNow": "Just now",
+    "timeMinutesAgo": "{{count}}m ago",
+    "timeHoursAgo": "{{count}}h ago"
   },
   "search": {
     "title": "Search",
@@ -338,26 +342,26 @@
     "createError": "Failed to create silence plan",
     "sloConfigNamePlaceholder": "e.g. latency_p99",
     "silenceNamePlaceholder": "e.g. weekend-maintenance",
-    "silenceDescriptionPlaceholder": "Leave empty to silence all alerts"
-    ,"deliveries": "Delivery Receipts"
-    ,"notificationsDisabled": "Alert notifications are disabled."
-    ,"directDeliveryMode": "Notifications use compatibility direct delivery; durable receipts are not being created."
-    ,"noDeliveryProviders": "Durable delivery is enabled, but no provider is configured."
-    ,"deliveryStatusFilter": "Filter delivery status"
-    ,"deliveryProviderFilter": "Filter delivery provider"
-    ,"deliveryLoadFailed": "Notification delivery receipts could not be loaded."
-    ,"deliveryRetryFailed": "The delivery retry request failed."
-    ,"noDeliveries": "No notification delivery receipts"
-    ,"provider": "Provider"
-    ,"alertId": "Alert ID"
-    ,"attempts": "Attempts"
-    ,"nextAttempt": "Next Attempt"
-    ,"lastError": "Last Error"
-    ,"updatedAt": "Updated At"
-    ,"actions": "Actions"
-    ,"retry": "Retry"
-    ,"retryDelivery": "Retry delivery {{id}}"
-    ,"all": "All"
+    "silenceDescriptionPlaceholder": "Leave empty to silence all alerts",
+    "deliveries": "Delivery Receipts",
+    "notificationsDisabled": "Alert notifications are disabled.",
+    "directDeliveryMode": "Notifications use compatibility direct delivery; durable receipts are not being created.",
+    "noDeliveryProviders": "Durable delivery is enabled, but no provider is configured.",
+    "deliveryStatusFilter": "Filter delivery status",
+    "deliveryProviderFilter": "Filter delivery provider",
+    "deliveryLoadFailed": "Notification delivery receipts could not be loaded.",
+    "deliveryRetryFailed": "The delivery retry request failed.",
+    "noDeliveries": "No notification delivery receipts",
+    "provider": "Provider",
+    "alertId": "Alert ID",
+    "attempts": "Attempts",
+    "nextAttempt": "Next Attempt",
+    "lastError": "Last Error",
+    "updatedAt": "Updated At",
+    "actions": "Actions",
+    "retry": "Retry",
+    "retryDelivery": "Retry delivery {{id}}",
+    "all": "All"
   },
   "settings": {
     "title": "Settings",
@@ -550,43 +554,43 @@
     "importSuccess": "{{name}} imported — {{count}} file(s) stored",
     "importError": "Import failed: {{error}}",
     "previewTitle": "Preview",
-  "previewError": "Preview failed: {{error}}",
-  "pdfNoPreview": "PDF preview is not available in this browser",
-  "downloadPdf": "Download PDF",
-  "selectFile": "Select a file or folder to see its details",
-  "openDirectory": "Folder 「{{name}}」",
-  "openRaw": "Raw",
-  "refresh": "Refresh",
-  "refreshDirectory": "Refresh current folder",
-  "empty": "This directory is empty",
-  "noMatches": "No matches in this folder",
-  "goUp": "Go up one level",
-  "root": "Root",
-  "location": "Current location",
-  "directoryList": "Files and folders",
-  "contents": "Files and folders",
-  "openFolder": "Open folder",
-  "openFolderTitle": "Open the selected folder",
-  "nameColumn": "Name",
-  "typeColumn": "Type",
-  "detailsColumn": "Details",
-  "folder": "Folder",
-  "file": "File",
-  "items": "items",
-  "resizeDirectoryList": "Resize directory list",
-  "sortImportedAt": "Imported",
-  "sortNewestFirstTitle": "Newest imports first; click for oldest first",
-  "sortOldestFirstTitle": "Oldest imports first; click for newest first",
-  "searchLabel": "Find in this folder",
-  "searchPlaceholder": "Name, UUID, or path",
-  "importId": "Import UUID",
-  "copyImportId": "Copy import UUID {{id}}",
-  "importIdCopied": "Import UUID copied",
-  "importIdCopyFailed": "Unable to copy import UUID",
-  "ragCollection": "RAG collection",
-  "ragDescription": "Add this import to a selected collection",
-  "noCollection": "No collection",
-  "addToRag": "Add to RAG",
+    "previewError": "Preview failed: {{error}}",
+    "pdfNoPreview": "PDF preview is not available in this browser",
+    "downloadPdf": "Download PDF",
+    "selectFile": "Select a file or folder to see its details",
+    "openDirectory": "Folder 「{{name}}」",
+    "openRaw": "Raw",
+    "refresh": "Refresh",
+    "refreshDirectory": "Refresh current folder",
+    "empty": "This directory is empty",
+    "noMatches": "No matches in this folder",
+    "goUp": "Go up one level",
+    "root": "Root",
+    "location": "Current location",
+    "directoryList": "Files and folders",
+    "contents": "Files and folders",
+    "openFolder": "Open folder",
+    "openFolderTitle": "Open the selected folder",
+    "nameColumn": "Name",
+    "typeColumn": "Type",
+    "detailsColumn": "Details",
+    "folder": "Folder",
+    "file": "File",
+    "items": "items",
+    "resizeDirectoryList": "Resize directory list",
+    "sortImportedAt": "Imported",
+    "sortNewestFirstTitle": "Newest imports first; click for oldest first",
+    "sortOldestFirstTitle": "Oldest imports first; click for newest first",
+    "searchLabel": "Find in this folder",
+    "searchPlaceholder": "Name, UUID, or path",
+    "importId": "Import UUID",
+    "copyImportId": "Copy import UUID {{id}}",
+    "importIdCopied": "Import UUID copied",
+    "importIdCopyFailed": "Unable to copy import UUID",
+    "ragCollection": "RAG collection",
+    "ragDescription": "Add this import to a selected collection",
+    "noCollection": "No collection",
+    "addToRag": "Add to RAG",
     "addToRagTitle": "Add this PDF to RAG knowledge base and trigger embedding",
     "embedding": "Embedding…",
     "embedSuccess": "Embedding completed — {{chunks}} chunks created",
@@ -668,8 +672,8 @@
     "cancel": "Cancel",
     "retry": "Retry",
     "detail": "Job detail",
-    "backToDocuments": "Back to documents"
-    ,"derivationIntegrity": "Derivation integrity",
+    "backToDocuments": "Back to documents",
+    "derivationIntegrity": "Derivation integrity",
     "previewRepair": "Preview repair",
     "repairPreview": "Repair preview",
     "repairDocuments": "{{count}} document(s) will be processed",

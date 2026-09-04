@@ -144,8 +144,26 @@
   ABTest 8）全部无修改通过，证明行为无回归。
 - Review 结论：默认 variant 从 primary 改为 secondary（强调样式应显式选择）并补测。
 
-## 6. 下一批次入口
+### Batch 4（已交付）
 
-Batch 4：a11y 加固——ABTest/Settings/Evaluation/Documents 表单控件补 label 关联
-（htmlFor 或 aria-label）、ChatSidebar 删除会话按钮补 aria-label（当前只有 × + title）、
-复核 ChatSidebar 会话项 button 嵌套 button 的合法性。
+- 分支：`feat/webui-a11y-hardening-20260905`（基于 Batch 3 分支）
+- 内容：
+  1. `ChatSidebar` 接入 i18n（原组件全部硬编码英文）：newChat/noHistory 复用现有 key，
+     新增 `chat.deleteSession`/`timeJustNow`/`timeMinutesAgo`/`timeHoursAgo`（en + zh-CN）；
+     删除会话按钮补 `aria-label`（含会话名插值）与 title。
+  2. 复核扫描报告的「button 嵌套 button」：实为 div 内兄弟节点，无嵌套问题，无需修改。
+  3. `ABTest` 创建实验弹窗 7 个表单控件全部补 `htmlFor`/`id` 关联。
+  4. 顺带技术债：两份 locale JSON 的历史遗留非标格式（行首逗号）规范化为标准
+     2 空格缩进；语义完整性已用脚本验证（除新增 4 key 外键值零变化）。
+- 证据：`tsc -b` 绿；`test:run` 300/300（42 文件，新增 ChatSidebar 渲染 2 测试 +
+  ABTest label 关联 1 测试）；`lint`/`build` 绿；locale 完整性脚本校验通过。
+- 剩余 a11y 债务（后续批次）：Settings/Evaluation/Documents 表单 label 关联、
+  Alert/ApiKeys badge 对比度 token 化。
+
+## 7. 下一批次入口
+
+Batch 5：后端 deprecated/dead code 清理——RagChatService 迁移弃用
+`ChatResponse.SourceDocument` → 现行 `ChatSource`；删除无调用方的
+`RagApiKeyRepository.findFirstByPrincipalIdAndEnabledTrue` 与
+`ApiKeyManagementService.validateKeyEntity`；后端门槛 `mvn clean compile test-compile`
++ 相关单测。
