@@ -207,8 +207,34 @@
 - 证据：`tsc -b` 绿；`test:run` 304/304（43 文件，新增 abort 2 测试 +
   useBlobUrlOpener 2 测试）；`lint`/`build` 绿。
 
-## 10. 下一批次入口
+### Batch 8（已实施，等待推送）
 
-Batch 8：CI 加固——把前端 `npm run test:coverage`（含 thresholds 门禁）接入
-`.github/workflows/ci.yml`；评估在后端 job 中为 gated PostgreSQL IT 打开
-`*.it.enabled` 系统属性（需要 service 容器支持，谨慎评估成本后决定）。
+- 内容：`.github/workflows/ci.yml` 新增独立 `webui` job（Node 24 + npm cache）：
+  `npm ci` → `tsc -b` → `lint`（ESLint + alignment + design-token）→
+  `test:run` → `test:coverage`（thresholds 门禁）→ `build` + 上传 coverage 产物。
+- gated IT 摸底结论（未开启，留待用户决策）：20+ 个 `*.it.enabled` 门控属性中，
+  检索/嵌入相关 IT 依赖真实 EmbeddingModel/ChatModel provider，而 CI 的
+  API key 只有 `test-key` 兜底；盲目打开会使 CI 必然失败。可行路径是配置
+  本地 mock provider 或提供真实 CI secrets。
+- 交付状态：提交 `aa9af630` 位于本地分支
+  `ci/webui-job-pending-workflow-scope`。GitHub 拒绝当前 OAuth 凭据推送
+  修改 workflow 的提交（缺少 `workflow` scope），需用户以带 scope 的凭据执行
+  `git push origin ci/webui-job-pending-workflow-scope` 后方可合并。
+
+### Batch 9（已交付）
+
+- 分支：`refactor/webui-token-fallback-cleanup-20260905`（基于 Batch 7 分支）
+- 内容：
+  1. 全量移除 src CSS 中冗余的 `var(--token, 颜色)` 颜色回退（169 处，8 个文件）——
+     design-token 门禁本就保证引用的 token 必有定义，回退是死重量。
+  2. 字面颜色基线从 341 → **172**（-49%，23 个文件）。
+  3. `Settings.tsx` 8 个表单控件（2 select + 6 input）补 `htmlFor`/`id` 关联
+     （checkbox 为包裹式关联、语言栏为按钮组，无需处理），新增检索 tab 的
+     label 关联回归测试。
+- 证据：`tsc -b` 绿；`test:run` 305/305（43 文件，+1 测试）；`lint`/`build` 绿。
+
+## 10. 下一批次入口（候选，按优先级）
+
+- Batch 10：`DocumentSyncRunService` 单测拆解（complete/applyItem 主链）。
+- Batch 11：Card/Modal primitive 提取（重复 .card/.panel/overlay 样式）+
+  Evaluation/Documents 表单 a11y 收尾 + 徽章/严重级配色 token 化（基线 172 → 目标 <120）。
