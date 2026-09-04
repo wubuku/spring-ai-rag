@@ -207,8 +207,22 @@
 - 证据：`tsc -b` 绿；`test:run` 304/304（43 文件，新增 abort 2 测试 +
   useBlobUrlOpener 2 测试）；`lint`/`build` 绿。
 
-## 10. 下一批次入口
+### Batch 8（已交付）
 
-Batch 8：CI 加固——把前端 `npm run test:coverage`（含 thresholds 门禁）接入
-`.github/workflows/ci.yml`；评估在后端 job 中为 gated PostgreSQL IT 打开
-`*.it.enabled` 系统属性（需要 service 容器支持，谨慎评估成本后决定）。
+- 分支：`fix/webui-behavior-hardening-20260905`（与 Batch 7 同分支叠加）
+- 内容：`.github/workflows/ci.yml` 新增独立 `webui` job（Node 24 + npm cache）：
+  `npm ci` → `tsc -b` → `lint`（ESLint + alignment + design-token）→
+  `test:run` → `test:coverage`（thresholds 门禁）→ `build`，并上传 coverage 产物。
+  至此前端类型、测试、覆盖率下限、门禁脚本全部进入 CI。
+- gated IT 摸底结论（未开启，留待用户决策）：20+ 个 `*.it.enabled` 门控属性中，
+  检索/嵌入相关 IT 依赖真实 EmbeddingModel/ChatModel provider，而 CI 的
+  `SILICONFLOW_API_KEY` 只有 `test-key` 兜底；盲目打开会使 CI 必然失败。
+  可行路径是 (a) 为 IT 配置本地 mock provider，或 (b) 提供真实 CI secrets，
+  两者都超出纯代码加固范围，需要用户确认。
+
+## 11. 下一批次入口（候选，按优先级）
+
+- Batch 9：Settings/Evaluation/Documents 表单 a11y 收尾 + 徽章/严重级配色 token 化
+  （继续下调字面颜色基线 341 → 目标 <300）。
+- Batch 10：`DocumentSyncRunService` 单测拆解（complete/applyItem 主链）。
+- Batch 11：Card/Modal primitive 提取（重复 .card/.panel/overlay 样式）。

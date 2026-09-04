@@ -145,3 +145,46 @@ jobs:
               echo "| $module | ✅ Report generated |" >> $GITHUB_STEP_SUMMARY
             fi
           done
+
+  webui:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: spring-ai-rag-webui
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: spring-ai-rag-webui/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npx tsc -b --pretty false
+
+      - name: Lint (ESLint, alignment policy, design tokens)
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm run test:run
+
+      - name: Unit tests with coverage thresholds
+        run: npm run test:coverage
+
+      - name: Production build
+        run: npm run build
+
+      - name: Upload WebUI coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: webui-coverage
+          path: spring-ai-rag-webui/coverage/
+          retention-days: 14
