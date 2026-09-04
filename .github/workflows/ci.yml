@@ -76,6 +76,14 @@ jobs:
       - name: Build & Test with JaCoCo
         run: mvn test -B
 
+      - name: Gated PostgreSQL integration tests (database-only suites)
+        env:
+          TESTCONTAINERS_RYUK_DISABLED: 'true'
+          TESTCONTAINERS_PG_IMAGE: postgres:16-pgvector
+        run: |
+          docker pull postgres:16-pgvector || true
+          ./scripts/verify-gated-it.sh
+
       - name: Flyway migration consistency check
         run: |
           echo "## Flyway Migration Status" >> $GITHUB_STEP_SUMMARY
