@@ -141,3 +141,18 @@ curl http://localhost:8081/api/v1/rag/models
 响应包含 `defaultModel`、模型级 `ref`、规范化 `capabilities` 和可用状态；当凭据或
 provider 配置缺失时还会包含 `unavailableReason`。`AGENT` Chat 要求
 `capabilities.toolCalling=true`。
+
+### 键名校验（重要）
+
+JSON 键名一律使用 **camelCase**（`chatModel`、`embeddingModel`、`inputModalities`、
+`toolCalling`……），与 YAML 的 kebab-case（`chat-model`、`input-modalities`）不同。
+加载器会做两档校验：
+
+- **kebab-case 键 → 启动失败**。此类键会整体静默失效（例如 routing 回退 legacy
+  默认模型），因此 fail-closed：错误消息会列出违规键的完整路径并给出 camelCase
+  建议（如 `chat-model (did you mean 'chatModel'?)`）。
+- **未知键 → WARN**。可能是拼写错误或废弃字段；加载继续，日志列出完整路径。
+
+真实事故示例：`"chat-model"` 写法使 providers 正常加载而 routing 静默失效，
+chat 流量全部回退到一个已失效的 legacy 端点，最终以 504 超时呈现——
+排查记录见加固循环账本 Batch 30/31。

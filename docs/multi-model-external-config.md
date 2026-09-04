@@ -144,3 +144,24 @@ The response includes `defaultModel`, model-level `ref` values, normalized
 `capabilities`, availability, and an `unavailableReason` when credentials or
 provider settings are missing. `AGENT` Chat requires
 `capabilities.toolCalling=true`.
+
+
+### Key-Name Validation (Important)
+
+JSON keys are always **camelCase** (`chatModel`, `embeddingModel`,
+`inputModalities`, `toolCalling`, ...), unlike the kebab-case used in YAML
+(`chat-model`, `input-modalities`). The loader applies two levels of
+validation:
+
+- **kebab-case keys -> startup failure**. Such a key makes its whole config
+  silently no-op (for example, routing falls back to the legacy default
+  model), so this fails closed: the error message lists the offending key's
+  full path and suggests the camelCase spelling (e.g. `chat-model (did you
+  mean 'chatModel'?)`).
+- **unknown keys -> WARN**. Possibly a typo or a retired field; loading
+  continues and the log lists the full path.
+
+Real incident: writing `"chat-model"` loaded the providers normally while
+the routing silently no-op'd, so all chat traffic fell back to a dead legacy
+endpoint and finally surfaced as 504 timeouts - see hardening loop ledger
+Batches 30/31.

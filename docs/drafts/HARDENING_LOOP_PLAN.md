@@ -571,10 +571,19 @@
 - 补 5 个门控矩阵测试（VHM 8 → 13）。
 - 证据：`tsc -b` 绿；`test:run` 330 → 335；`lint`/`build` 绿。
 
+### Batch 33（已交付）
+
+- 分支：`test/component-interaction-depth-20260906`（同线叠加）
+- 内容：multi-model-external-config 双语文档新增「键名校验」小节：camelCase
+  强约束、kebab-case fail-closed（含真实事故复盘：providers 生效而 routing
+  静默回退 legacy → 504）、未知键 WARN 语义。与 Batch 31 的校验代码配套。
+  文档门禁 11/11（顺带修复 ZH 文档 EOF 多余空行）。
+
 ## 10. 下一批次入口（候选，按优先级）
 
-- Batch 33：models.json camelCase 坑位补充到 multi-model-external-config 双语文档。
 - Batch 34：后端 ChatTurnOperationService.inspectExisting/replay 等中等方法审计。
+- Batch 35：dev 栈文件变更好习惯固化（e2e 运行期间禁编辑已写入 runbook，评估
+  是否需要脚本级防呆）。
 - Batch 31：后端 SearchResults/VersionHistoryModal 等组件深度交互测试盘点。
 - Batch 30：chat-real 的 tool-calling 模型配置排查（.env/models.json 层面）。
 - Batch 29：剩余 API 契约测试补齐（documents/files/evaluation/alerts/collections 扩展）。
