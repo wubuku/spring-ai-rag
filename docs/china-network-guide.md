@@ -81,6 +81,26 @@ If Docker remains unavailable, the Chat verifier records the PostgreSQL step as
 `SKIP`; do not change application YAML or Dockerfiles to embed a regional
 registry just to work around a developer network.
 
+### Running Gated PostgreSQL Integration Tests Directly
+
+The core `*PostgresIntegrationTest` classes skip themselves via `assumeTrue`
+unless their flag is set. When refactoring a high-risk service, run a green
+baseline first, apply the change, then re-run and compare:
+
+```bash
+TESTCONTAINERS_RYUK_DISABLED=true \
+TESTCONTAINERS_PG_IMAGE=postgres:16-pgvector \
+mvn test -Ddocument-sync-runs.it.enabled=true \
+  -Dtest='DocumentSyncRunsPostgresIntegrationTest' -pl spring-ai-rag-core
+```
+
+Pointing `TESTCONTAINERS_PG_IMAGE` at a local image (for example
+`postgres:16-pgvector`) avoids pulling `pgvector/pgvector:pg16`. Each IT is
+gated by a `<prefix>.it.enabled` system property, such as
+`collection-purge.it.enabled` or `document-sync-runs.it.enabled`. Only treat
+a refactor as behaviour-preserving when the baseline and the re-run match.
+
+
 Disabling Ryuk is a local-environment workaround, not an application setting.
 Prefer restoring a trusted registry/certificate path and re-enabling Ryuk in
 CI or shared environments.

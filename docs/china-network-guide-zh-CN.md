@@ -80,6 +80,24 @@ TESTCONTAINERS_RYUK_DISABLED=true \
 禁用 Ryuk 只是本地环境的排障手段，不是应用配置。CI 或共享环境应优先恢复可信的
 registry/证书链并重新启用 Ryuk。
 
+### 直接运行 gated PostgreSQL 集成测试
+
+核心模块的 `*PostgresIntegrationTest` 默认通过 `assumeTrue` 跳过，需要显式开启
+对应开关。重构高风险服务时，推荐先跑通基线再动刀、重构后复跑对比：
+
+```bash
+TESTCONTAINERS_RYUK_DISABLED=true \
+TESTCONTAINERS_PG_IMAGE=postgres:16-pgvector \
+mvn test -Ddocument-sync-runs.it.enabled=true \
+  -Dtest='DocumentSyncRunsPostgresIntegrationTest' -pl spring-ai-rag-core
+```
+
+`TESTCONTAINERS_PG_IMAGE` 指向本地已有镜像（如 `postgres:16-pgvector`）可以避免
+拉取 `pgvector/pgvector:pg16`；每个 IT 的开关属性名为 `<前缀>.it.enabled`，例如
+`collection-purge.it.enabled`、`document-sync-runs.it.enabled`。基线与复跑结果
+必须一致，才能把重构标记为行为保持。
+
+
 ## Maven 依赖下载慢
 
 优先在用户级 `~/.m2/settings.xml` 配置团队认可的 Maven mirror，不要把个人镜像地址或凭据提交到项目 POM。排障时先区分：

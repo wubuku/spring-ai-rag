@@ -372,12 +372,21 @@
 - 证据：`tsc -b` 绿；`test:run` 308/308（含 Batch 17 的卡片皮肤回归测试）；
   `lint`/`build` 绿。
 
+### Batch 20（已交付）
+
+- 分支：`refactor/embeddings-own-styles-20260906`（同线叠加）
+- 内容：`china-network-guide-zh-CN.md` / `china-network-guide.md` 新增
+  「直接运行 gated PostgreSQL 集成测试」小节：`TESTCONTAINERS_RYUK_DISABLED` +
+  `TESTCONTAINERS_PG_IMAGE=postgres:16-pgvector` + `-D<prefix>.it.enabled=true`
+  的完整命令、开关命名规则与「基线/复跑必须一致」的重构纪律。文档门禁 11/11。
+- 至少一个可复制路径现已存在，后续后端重构批次都能用真实 PostgreSQL 护栏。
+
 ## 10. 下一批次入口（候选，按优先级）
 
-- Batch 20：把 Batch 16/18 验证过的 Testcontainers 本地运行参数写入
-  china-network-guide（双语），让 gated IT 回归可复制。
 - Batch 21：后端其余超长方法（ChatTurnOperationService.claim、
-  ChatExecutionService.execute 等）在同样护栏模式下逐个拆分。
+  ChatExecutionService.execute、PdfImportController 等）在 gated IT/WebTest
+  护栏下逐个拆分。
+- Batch 22：Mock Playwright 对检索/对话主流程的覆盖率评估与补强。
 - Batch 13：Card/Modal primitive 提取（重复 .card/.panel/overlay 样式）。
 - Batch 14：后端 `DocumentSyncRunService`/`CollectionPurgeService` 超长方法拆分
   （complete/applyItem/upsertExternalInTransaction），需 gated IT 回归护栏。
