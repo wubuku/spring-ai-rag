@@ -542,10 +542,28 @@
 - 遗留：files-real 仍受模型速度限制（KNOWLEDGE 长上下文 >120s），换更快模型或
   调大 chat-ask-ms 可解，留待需要时处理。
 
+### Batch 31（已交付）
+
+- 分支：`fix/models-json-schema-guard-20260906`（基于 Batch 30 分支）
+- 内容：`MultiModelConfigLoader` 加载外部 models.json 时增加 schema 校验
+  （`validateSchema`）：
+  1. **键含连字符（kebab-case 误用，如 chat-model）→ 抛 IllegalStateException
+     阻止启动**，错误消息列出完整路径并给出 camelCase 建议（fail-closed：
+     静默回退 legacy 正是 Batch 30 排查的 504 事故根因）；
+  2. 未知键 → WARN 列出完整路径，不阻断加载（向后兼容）；
+  3. 实现：readTree 后递归收集问题，再 treeToValue；KNOWN_KEYS 集合为合法键全集。
+- 测试：MultiModelConfigLoaderTest 追加 2 个（kebab-case 抛异常且 YAML 配置保持
+  不被替换；未知键 WARN 且正常加载，用 ListAppender 断言日志）。21/21。
+- 真实端到端验证：向 .dev/models.json 注入 `"chat-model"` → dev.sh 启动失败，
+  后端日志出现「uses kebab-case keys ... (did you mean 'chatModel'?)」；恢复
+  camelCase 后 dev 栈恢复正常且 default 模型正确。
+- 证据：`mvn -q clean compile test-compile` 绿；MultiModelConfigLoaderTest 21/21；
+  dev 栈故障注入/恢复两端验证；锁扫描不涉及（无数据访问改动）。
+
 ## 10. 下一批次入口（候选，按优先级）
 
-- Batch 31：后端 SearchResults/VersionHistoryModal 等组件深度交互测试盘点。
-- Batch 32：models.json 的 schema 校验增强（kebab-case 字段名静默失效应报错或告警）。
+- Batch 32：前端组件深度交互测试盘点（SearchResults/VersionHistoryModal 等）。
+- Batch 33：把 models.json camelCase 坑位补充到 multi-model-external-config 双语文档。
 - Batch 31：后端 SearchResults/VersionHistoryModal 等组件深度交互测试盘点。
 - Batch 30：chat-real 的 tool-calling 模型配置排查（.env/models.json 层面）。
 - Batch 29：剩余 API 契约测试补齐（documents/files/evaluation/alerts/collections 扩展）。

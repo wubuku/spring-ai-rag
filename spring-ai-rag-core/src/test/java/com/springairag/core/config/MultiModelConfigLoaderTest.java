@@ -60,6 +60,109 @@ class MultiModelConfigLoaderTest {
         assertTrue(props.getProviders().isEmpty());
     }
 
+    // ─── Schema validation tests ──────────────────────────────────
+
+    @Test
+    @DisplayName("Rejects kebab-case keys (they would silently no-op) and keeps YAML config")
+    void loadExternalJsonIfPresent_kebabCaseKey_failsClosed() throws IOException {
+        Path jsonFile = tempDir.resolve("models.json");
+        String json = """
+                {
+                  "models": {
+                    "providers": {
+                      "siliconflow": {
+                        "displayName": "SiliconFlow",
+                        "baseUrl": "https://api.siliconflow.cn",
+                        "apiKey": "k",
+                        "apiType": "openai-chat",
+                        "enabled": true,
+                        "priority": 1,
+                        "models": [
+                          {
+                            "id": "Qwen/Qwen3.5-27B",
+                            "name": "Qwen3.5 27B",
+                            "type": "chat",
+                            "inputModalities": ["text"],
+                            "capabilities": { "streaming": true, "toolCalling": true }
+                          }
+                        ]
+                      }
+                    },
+                    "chat-model": { "primary": "siliconflow/Qwen/Qwen3.5-27B", "fallbacks": [] }
+                  }
+                }
+                """;
+        Files.writeString(jsonFile, json);
+
+        MultiModelProperties props = createProperties(jsonFile.toString());
+        MultiModelConfigLoader loader = new MultiModelConfigLoader(props);
+
+        IllegalStateException error = assertThrows(
+                IllegalStateException.class, loader::loadExternalJsonIfPresent);
+
+        assertTrue(error.getMessage().contains("chat-model"));
+        assertTrue(error.getMessage().contains("chatModel"));
+        // Fail closed: the YAML config must stay untouched.
+        assertTrue(props.getProviders().isEmpty());
+    }
+
+    @Test
+    @DisplayName("Warns on unknown keys but still loads the rest of the file")
+    void loadExternalJsonIfPresent_unknownKey_warnsAndLoads() throws IOException {
+        Path jsonFile = tempDir.resolve("models.json");
+        String json = """
+                {
+                  "models": {
+                    "providers": {
+                      "openrouter": {
+                        "displayName": "OpenRouter",
+                        "baseUrl": "https://openrouter.ai/api",
+                        "apiKey": "k",
+                        "apiType": "openai-completions",
+                        "enabled": true,
+                        "priority": 1,
+                        "models": [
+                          {
+                            "id": "x/y",
+                            "name": "X",
+                            "type": "chat",
+                            "inputModalities": ["text"],
+                            "typoedField": true
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+                """;
+        Files.writeString(jsonFile, json);
+
+        ch.qos.logback.classic.Logger loaderLogger =
+                (ch.qos.logback.classic.Logger)
+                        org.slf4j.LoggerFactory.getLogger(MultiModelConfigLoader.class);
+        ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent> appender =
+                new ch.qos.logback.core.read.ListAppender<>();
+        appender.start();
+        loaderLogger.addAppender(appender);
+        try {
+            MultiModelProperties props = createProperties(jsonFile.toString());
+            MultiModelConfigLoader loader = new MultiModelConfigLoader(props);
+            loader.loadExternalJsonIfPresent();
+
+            // Loading proceeds (backward compatible)…
+            assertTrue(props.getProviders().containsKey("openrouter"));
+            // …and the unknown key is reported with its full path.
+            boolean warned = appender.list.stream()
+                    .filter(event -> event.getLevel()
+                            == ch.qos.logback.classic.Level.WARN)
+                    .anyMatch(event -> event.getFormattedMessage()
+                            .contains("typoedField"));
+            assertTrue(warned, "expected a WARN naming the unknown key");
+        } finally {
+            loaderLogger.detachAppender(appender);
+        }
+    }
+
     // ─── Full load test ───────────────────────────────────────────
 
     @Test

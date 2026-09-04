@@ -1,6 +1,7 @@
 package com.springairag.core.config;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.slf4j.Logger;
@@ -15,8 +16,12 @@ import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * External models.json Configuration File Loader.
@@ -64,10 +69,13 @@ public class MultiModelConfigLoader {
             mapper.registerModule(new JavaTimeModule());
             mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 
-            ModelsJsonRoot root = mapper.readValue(json, ModelsJsonRoot.class);
+            JsonNode root = mapper.readTree(json);
+            validateSchema(path, root);
 
-            if (root.models != null) {
-                applyModelsConfig(root.models);
+            ModelsJsonRoot parsed = mapper.treeToValue(root, ModelsJsonRoot.class);
+
+            if (parsed.models != null) {
+                applyModelsConfig(parsed.models);
             }
 
             log.info("External models.json loaded from '{}'; YAML config overridden", configFile);
@@ -75,6 +83,86 @@ public class MultiModelConfigLoader {
         } catch (IOException e) {
             log.error("Failed to load external models.json from '{}': {}", configFile, e.getMessage());
         }
+    }
+
+    // ─── Schema validation ──────────────────────────────────────────
+
+    /**
+     * 已知的合法键全集（所有层级键均为 camelCase，不允许连字符）。
+     */
+    private static final Set<String> KNOWN_KEYS = Set.copyOf(List.of(
+            "models", "providers", "chatModel", "embeddingModel", "legacyCapabilities",
+            "displayName", "baseUrl", "apiKey", "apiType", "enabled", "priority",
+            "id", "name", "type", "reasoning", "inputModalities", "cost", "contextWindow",
+            "maxTokens", "dimension", "capabilities", "streaming", "toolCalling",
+            "primary", "fallbacks"));
+
+    /**
+     * 校验外部 models.json 的键名，尽早暴露静默失效的拼写错误：
+     *
+     * <ul>
+     *   <li>键包含连字符（如 {@code chat-model}、{@code input-modalities}，YAML 的
+     *       kebab-case 习惯误用到 JSON）会令对应配置整体静默失效并回退 legacy 默认，
+     *       属于 fail-closed 场景，直接抛出异常阻止启动；</li>
+     *   <li>未知键（可能是拼写错误或废弃字段）记录 WARN 并列出完整路径，不阻断加载。</li>
+     * </ul>
+     */
+    private void validateSchema(Path path, JsonNode root) {
+        List<String> kebabErrors = new ArrayList<>();
+        Set<String> unknownKeys = new LinkedHashSet<>();
+        collectKeyIssues(root, "", path, kebabErrors, unknownKeys);
+
+        if (!kebabErrors.isEmpty()) {
+            throw new IllegalStateException(
+                    "External models.json '" + path + "' uses kebab-case keys that are "
+                            + "silently ignored; use camelCase instead. Offending keys: "
+                            + kebabErrors);
+        }
+        if (!unknownKeys.isEmpty()) {
+            log.warn("External models.json '{}' contains unknown keys (they are ignored): {}",
+                    path, unknownKeys);
+        }
+    }
+
+    private void collectKeyIssues(
+            JsonNode node,
+            String prefix,
+            Path path,
+            List<String> kebabErrors,
+            Set<String> unknownKeys) {
+        if (node.isObject()) {
+            node.fields().forEachRemaining(entry -> {
+                String key = entry.getKey();
+                String childPath = prefix.isEmpty() ? key : prefix + "." + key;
+                if (key.contains("-")) {
+                    kebabErrors.add(childPath + " (did you mean '"
+                            + kebabToCamel(key) + "'?)");
+                } else if (!KNOWN_KEYS.contains(key)) {
+                    unknownKeys.add(childPath);
+                }
+                collectKeyIssues(entry.getValue(), childPath, path, kebabErrors, unknownKeys);
+            });
+        } else if (node.isArray()) {
+            for (JsonNode item : node) {
+                collectKeyIssues(item, prefix + "[]", path, kebabErrors, unknownKeys);
+            }
+        }
+    }
+
+    private static String kebabToCamel(String key) {
+        StringBuilder camel = new StringBuilder(key.length());
+        boolean upperNext = false;
+        for (char c : key.toCharArray()) {
+            if (c == '-') {
+                upperNext = true;
+            } else if (upperNext) {
+                camel.append(Character.toUpperCase(c));
+                upperNext = false;
+            } else {
+                camel.append(c);
+            }
+        }
+        return camel.toString();
     }
 
     private void applyModelsConfig(ModelsJsonRoot.ModelsJson jsonModels) {
