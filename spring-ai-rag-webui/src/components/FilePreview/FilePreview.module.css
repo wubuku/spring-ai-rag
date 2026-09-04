@@ -18,7 +18,7 @@
 
 .htmlContent h1 {
   font-size: 1.8em;
-  border-bottom: 2px solid #eee;
+  border-bottom: 2px solid var(--color-border);
   padding-bottom: 0.3em;
   margin-top: 1.5em;
   margin-bottom: 0.5em;
@@ -45,7 +45,7 @@
 }
 
 .htmlContent pre {
-  background: #f6f8fa;
+  background: var(--color-surface);
   border-radius: 6px;
   padding: 1em;
   overflow-x: auto;
@@ -53,7 +53,7 @@
 }
 
 .htmlContent code {
-  background: #f0f0f0;
+  background: var(--color-surface-hover);
   border-radius: 3px;
   padding: 0.1em 0.3em;
   font-size: 0.9em;
@@ -66,10 +66,10 @@
 }
 
 .htmlContent blockquote {
-  border-left: 4px solid #dfe2e5;
+  border-left: 4px solid var(--color-border);
   margin: 1em 0;
   padding: 0.5em 1em;
-  color: #6a737d;
+  color: var(--color-text-muted);
 }
 
 .htmlContent img {
@@ -87,18 +87,18 @@
 
 .htmlContent th,
 .htmlContent td {
-  border: 1px solid #dfe2e5;
+  border: 1px solid var(--color-border);
   padding: 0.5em 0.8em;
   text-align: start;
 }
 
 .htmlContent th {
-  background: #f6f8fa;
+  background: var(--color-surface);
 }
 
 .htmlContent hr {
   border: none;
-  border-top: 1px solid #dfe2e5;
+  border-top: 1px solid var(--color-border);
   margin: 2em 0;
 }
 
@@ -113,7 +113,7 @@
 }
 
 .htmlContent a {
-  color: #0366d6;
+  color: var(--color-primary);
   text-decoration: none;
 }
 
@@ -138,7 +138,7 @@
   max-height: 100%;
   object-fit: contain;
   border-radius: 4px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--color-text) 10%, transparent);
 }
 
 /* PDF preview */
@@ -175,16 +175,16 @@
 }
 
 .downloadLink {
-  color: #0366d6;
+  color: var(--color-primary);
   text-decoration: none;
   padding: 0.5rem 1rem;
-  border: 1px solid #0366d6;
+  border: 1px solid var(--color-primary);
   border-radius: 4px;
   transition: background 0.2s;
 }
 
 .downloadLink:hover {
-  background: #f0f7ff;
+  background: var(--color-info-bg);
 }
 
 /* Skeleton */
@@ -201,9 +201,9 @@
   gap: 0.5rem;
   padding: 1rem;
   margin: 1rem;
-  background: #fef2f2;
-  border: 1px solid #fecaca;
+  background: var(--color-error-bg);
+  border: 1px solid var(--color-error-border);
   border-radius: 6px;
-  color: #dc2626;
+  color: var(--color-error-text);
   font-size: 0.875rem;
 }

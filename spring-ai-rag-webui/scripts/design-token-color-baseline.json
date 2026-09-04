@@ -1,7 +1,4 @@
 {
-  "src/components/VersionHistoryModal/VersionHistoryModal.module.css": 19,
-  "src/pages/Files.module.css": 19,
-  "src/components/FilePreview/FilePreview.module.css": 16,
   "src/pages/Collections.module.css": 13,
   "src/pages/Alerts.module.css": 11,
   "src/pages/ABTest.module.css": 6,

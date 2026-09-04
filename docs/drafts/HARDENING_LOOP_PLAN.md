@@ -261,10 +261,25 @@
 - 基线变化：172 → **115**（20 文件，达成 <120 目标）。
 - 证据：`tsc -b` 绿；`test:run` 305/305；`lint`（含 design-token 门禁）绿；`build` 绿。
 
+### Batch 12（已交付）
+
+- 分支：`refactor/webui-token-fallback-cleanup-20260905`（与 Batch 9–11 同线叠加）
+- 内容：`Files.module.css`（19→0）、`FilePreview.module.css`（16→0）、
+  `VersionHistoryModal.module.css`（19→0）全量 token 化。GitHub 风格预览中性色
+  （#f6f8fa/#dfe2e5/#6a737d/#0366d6 等）映射到 surface/border/text-muted/primary，
+  差异视图红绿底色映射到 severity 面色 token，两个黑色半透明阴影改用
+  `color-mix(var(--color-text))` 以随主题变化。diff 高亮的浅黄/浅蓝徽章一并收敛。
+- 基线变化：115 → **61**（17 文件，达成 <80 目标；自 Batch 2 起 389 → 61，-84%）。
+- 证据：`tsc -b` 绿；`test:run` 305/305；`lint`/`build` 绿；stale-baseline 拦截在
+  实施中再次正确触发（FilePreview 清零后未同步基线即被门禁点名）。
+
 ## 10. 下一批次入口（候选，按优先级）
 
-- Batch 12：Evaluation/Documents 表单 a11y 收尾 + FilePreview/VersionHistoryModal/
-  Files 的 GitHub 风格预览色 token 化（基线 115 → 目标 <80）。
+- Batch 13：Evaluation/Documents 表单 a11y 收尾（两页共 24 个 input 仅少量关联）。
+- Batch 14：Card/Modal primitive 提取（重复 .card/.panel/overlay 样式）。
+- Batch 15：后端 `DocumentSyncRunService`/`CollectionPurgeService` 超长方法拆分
+  （complete/applyItem/upsertExternalInTransaction），需 gated IT 回归护栏。
+- Batch 16：剩余 61 处字面颜色逐文件清零（Toast/Dashboard/Unlock/Layout 等小户）。
 - Batch 13：Card/Modal primitive 提取（重复 .card/.panel/overlay 样式）。
 - Batch 14：后端 `DocumentSyncRunService`/`CollectionPurgeService` 超长方法拆分
   （complete/applyItem/upsertExternalInTransaction），需 gated IT 回归护栏。

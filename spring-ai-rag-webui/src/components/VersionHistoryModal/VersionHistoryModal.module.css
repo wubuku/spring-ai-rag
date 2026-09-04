@@ -35,7 +35,7 @@
 }
 
 .error {
-  color: #ef4444;
+  color: var(--color-error);
 }
 
 /* Version List */
@@ -64,7 +64,7 @@
 
 .versionItemSelected {
   border-color: var(--color-primary);
-  background: rgba(59, 130, 246, 0.05);
+  background: color-mix(in srgb, var(--color-primary) 5%, transparent);
 }
 
 .versionItem.compareMode {
@@ -78,7 +78,7 @@
 
 .versionItemSelected.compareMode:hover {
   border-color: var(--color-primary);
-  background: rgba(59, 130, 246, 0.05);
+  background: color-mix(in srgb, var(--color-primary) 5%, transparent);
 }
 
 .versionRadio {
@@ -112,18 +112,18 @@
 }
 
 .changeTypeCreate {
-  background: #dcfce7;
-  color: #166534;
+  background: var(--color-success-bg);
+  color: var(--color-success-text);
 }
 
 .changeTypeUpdate {
-  background: #fef9c3;
-  color: #713f12;
+  background: var(--color-warning-bg);
+  color: var(--color-warning-text);
 }
 
 .changeTypeForceReembed {
-  background: #dbeafe;
-  color: #1e40af;
+  background: var(--color-primary-bg);
+  color: var(--color-info-text);
 }
 
 .changeTypeUnknown {
@@ -257,29 +257,29 @@
 }
 
 .diffDelete {
-  background: #fef2f2;
+  background: var(--color-error-bg);
 }
 
 .diffDelete .diffLinePrefix {
-  color: #ef4444;
+  color: var(--color-error);
 }
 
 .diffDelete .diffLineNum {
-  background: #fee2e2;
-  color: #b91c1c;
+  background: var(--color-error-bg);
+  color: var(--color-error-text);
 }
 
 .diffInsert {
-  background: #f0fdf4;
+  background: var(--color-success-bg);
 }
 
 .diffInsert .diffLinePrefix {
-  color: #22c55e;
+  color: var(--color-success);
 }
 
 .diffInsert .diffLineNum {
-  background: #dcfce7;
-  color: #166534;
+  background: var(--color-success-bg);
+  color: var(--color-success-text);
 }
 
 .diffEqual {
@@ -306,11 +306,11 @@
 }
 
 .diffStatsInsert {
-  color: #16a34a;
+  color: var(--color-success-text);
 }
 
 .diffStatsDelete {
-  color: #dc2626;
+  color: var(--color-error-text);
 }
 
 .diffEmpty {
