@@ -175,13 +175,24 @@ public class CollectionPurgeService {
         if ("COMPLETED".equals(preview.status())) {
             return readResult(preview.resultPayload());
         }
+        requirePreviewApplicable(preview);
+        String lease = claimApplyLease(preview, owner);
+        fenceCollection(preview);
+        Plan current = requireUnchangedPlan(preview);
+        int deletedDocuments = deletePurgeTargets(preview, current);
+        return retireCollection(preview, owner, lease, current, deletedDocuments);
+    }
+
+    private void requirePreviewApplicable(Preview preview) {
         Instant now = Instant.now();
         if (!"PREVIEWED".equals(preview.status())
                 || now.isAfter(preview.previewDeadline())
                 || now.isAfter(preview.operationDeadline())) {
             throw expired();
         }
+    }
 
+    private String claimApplyLease(Preview preview, String owner) {
         String lease = DigestUtils.sha256(UUID.randomUUID().toString());
         int claimed = jdbcTemplate.update("""
                 UPDATE rag_collection_purge_preview
@@ -199,7 +210,10 @@ public class CollectionPurgeService {
         if (claimed != 1) {
             throw conflict("Collection purge preview is already being applied");
         }
+        return lease;
+    }
 
+    private void fenceCollection(Preview preview) {
         int fenced = jdbcTemplate.update("""
                 UPDATE rag_collection
                 SET deleted = TRUE,
@@ -215,7 +229,9 @@ public class CollectionPurgeService {
         if (fenced != 1) {
             throw conflict("Collection changed after purge preview");
         }
+    }
 
+    private Plan requireUnchangedPlan(Preview preview) {
         RagCollection collection = collectionRepository.findById(preview.collectionId())
                 .orElseThrow(() -> conflict("Collection disappeared during purge"));
         Plan current = buildPlan(
@@ -229,7 +245,10 @@ public class CollectionPurgeService {
             throw conflict("Collection purge plan changed; create a new preview");
         }
         validatePreviewable(current);
+        return current;
+    }
 
+    private int deletePurgeTargets(Preview preview, Plan current) {
         deleteSessions(current.sessions());
         deleteByIds("rag_user_feedback", "id", current.feedbackIds());
         deleteByIds("rag_audit_log", "id", current.auditIds());
@@ -247,7 +266,23 @@ public class CollectionPurgeService {
         if (deletedDocuments != current.counts().documentCount()) {
             throw conflict("Collection documents changed during purge");
         }
+        return deletedDocuments;
+    }
 
+    private CollectionPurgeResultResponse retireCollection(
+            Preview preview,
+            String owner,
+            String lease,
+            Plan current,
+            int deletedDocuments) {
+        markCollectionRetired(preview);
+        CollectionPurgeResultResponse result = buildRetiredResult(preview, current);
+        completePurgePreview(preview, owner, lease, json(result));
+        writePurgeAuditLog(preview, deletedDocuments);
+        return result;
+    }
+
+    private void markCollectionRetired(Preview preview) {
         int retired = jdbcTemplate.update("""
                 UPDATE rag_collection
                 SET purged_at = CURRENT_TIMESTAMP,
@@ -263,6 +298,10 @@ public class CollectionPurgeService {
         if (retired != 1) {
             throw conflict("Collection retirement fence was lost");
         }
+    }
+
+    private CollectionPurgeResultResponse buildRetiredResult(
+            Preview preview, Plan current) {
         CollectionState finalState = jdbcTemplate.queryForObject("""
                 SELECT deleted_at, purged_at, version
                 FROM rag_collection WHERE id = ?
@@ -272,14 +311,20 @@ public class CollectionPurgeService {
                         rs.getTimestamp("purged_at").toLocalDateTime(),
                         rs.getLong("version")),
                 preview.collectionId());
-        CollectionPurgeResultResponse result = new CollectionPurgeResultResponse(
+        return new CollectionPurgeResultResponse(
                 preview.id(), "RETIRED", preview.collectionId(),
                 preview.collectionKey(), current.counts().documentCount(),
                 current.counts().externalDocumentCount(),
                 current.counts().localDocumentCount(),
                 finalState.deletedAt(), finalState.purgedAt(),
                 finalState.version());
-        String payload = json(result);
+    }
+
+    private void completePurgePreview(
+            Preview preview,
+            String owner,
+            String lease,
+            String payload) {
         jdbcTemplate.update("""
                 UPDATE rag_collection_purge_preview
                 SET status = 'COMPLETED',
@@ -292,6 +337,9 @@ public class CollectionPurgeService {
                   AND apply_lease_owner_hash = ?
                 """,
                 payload, preview.id(), owner, lease);
+    }
+
+    private void writePurgeAuditLog(Preview preview, int deletedDocuments) {
         jdbcTemplate.update("""
                 INSERT INTO rag_audit_log(
                     operation, entity_type, entity_id, description, details)
@@ -303,7 +351,6 @@ public class CollectionPurgeService {
                 """,
                 Long.toString(preview.collectionId()),
                 preview.collectionId(), deletedDocuments);
-        return result;
     }
 
     private void validateFrozenRequest(

@@ -348,13 +348,27 @@
      `_card_*` 内—— precisely 防住 Batch 15 发现的「跨文件样式借用静默丢失」回归类。
 - 证据：`tsc -b` 绿；`test:run` 308/308（44 文件，+1 回归测试）；`lint`/`build` 绿。
 
+### Batch 18（已交付）
+
+- 分支：`refactor/purge-service-split-20260906`（基于 Batch 17 分支）
+- 内容：`CollectionPurgeService.applyTransaction`（~140 行 → 20 行编排 + 9 个
+  聚焦 helper，行为保持）：requirePreviewApplicable、claimApplyLease、
+  fenceCollection、requireUnchangedPlan、deletePurgeTargets、retireCollection
+  （编排 markCollectionRetired / buildRetiredResult / completePurgePreview /
+  writePurgeAuditLog）。无逻辑/SQL/错误消息变更。
+- 回归护栏：重构前 `collection-purge.it.enabled` 基线 5/5（Testcontainers 真实
+  PostgreSQL），重构后复跑 5/5；CollectionPurgeControllerWebTest 3/3；
+  `mvn clean compile test-compile` 绿。
+- 至此两处最高风险超长方法（DocumentSyncRunService + CollectionPurgeService）
+  均在 gated IT 护栏下完成拆分。
+
 ## 10. 下一批次入口（候选，按优先级）
 
-- Batch 18：CollectionPurgeService 超长方法拆分（同 Batch 16 护栏模式：先跑通
-  `collection-purge.it.enabled` 基线再动刀）。
 - Batch 19：Embeddings 页面彻底归还 Evaluation.module.css 借用（建立自有样式模块）。
-- Batch 20：把 Batch 16 验证过的 Testcontainers 本地运行参数写入
+- Batch 20：把 Batch 16/18 验证过的 Testcontainers 本地运行参数写入
   china-network-guide（双语），让 gated IT 回归可复制。
+- Batch 21：后端其余超长方法（ChatTurnOperationService.claim、
+  ChatExecutionService.execute 等）在同样护栏模式下逐个拆分。
 - Batch 13：Card/Modal primitive 提取（重复 .card/.panel/overlay 样式）。
 - Batch 14：后端 `DocumentSyncRunService`/`CollectionPurgeService` 超长方法拆分
   （complete/applyItem/upsertExternalInTransaction），需 gated IT 回归护栏。
