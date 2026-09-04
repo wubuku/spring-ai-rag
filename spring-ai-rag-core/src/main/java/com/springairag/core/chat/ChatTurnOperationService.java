@@ -239,97 +239,104 @@ public class ChatTurnOperationService {
                         prepared.principal().id(),
                         prepared.keyHash());
         if (current != null) {
-            if (!current.requestFingerprintSha256()
-                    .equals(prepared.fingerprintHash())) {
-                throw new RagException(
-                        ErrorCode.IDEMPOTENCY_KEY_REUSED,
-                        "Idempotency-Key was already used for another request");
-            }
-            if (current.status() == ChatTurnOperation.Status.SUCCEEDED) {
-                observability.replayed();
-                return new Claim(current, true, null);
-            }
-            if (current.status() == ChatTurnOperation.Status.FAILED) {
-                throw failedReplay(current);
-            }
-            if (current.leaseExpiresAt() != null
-                    && current.leaseExpiresAt().isAfter(Instant.now())) {
-                observability.inProgress();
-                throw inProgress(current);
-            }
-            if (current.attemptCount()
-                    >= properties.getIdempotency().getMaxAttempts()) {
-                ChatSessionCoordinator.LeaseHandle lease =
-                        acquireSessionLease(command, current.sessionId(), streaming);
-                try {
-                    exhaustAttempts(current, lease);
-                } finally {
-                    releaseSessionLease(lease);
-                }
-                throw failedReplay(repository.find(
-                        prepared.principal().id(), prepared.keyHash()));
-            }
-            authorizationService.verifyReplay(current, prepared.principal());
-            String reclaimedExecutionSnapshot =
-                    current.executionSnapshot() == null
-                            ? executionSnapshot(
-                                    command,
-                                    declaredModelIdentifier(prepared),
-                                    resolvedCandidateRefs(command, streaming))
-                            : null;
+            return claimExisting(prepared, command, transport, streaming, current);
+        }
+        return claimNew(prepared, command, transport, streaming);
+    }
+
+    /** 已有同 key operation 的幂等分派：重放、失败复用、续期或回收重跑。 */
+    private Claim claimExisting(
+            Prepared prepared,
+            ChatCommand command,
+            ChatTurnOperation.Transport transport,
+            boolean streaming,
+            ChatTurnOperation current) {
+        if (!current.requestFingerprintSha256()
+                .equals(prepared.fingerprintHash())) {
+            throw new RagException(
+                    ErrorCode.IDEMPOTENCY_KEY_REUSED,
+                    "Idempotency-Key was already used for another request");
+        }
+        if (current.status() == ChatTurnOperation.Status.SUCCEEDED) {
+            observability.replayed();
+            return new Claim(current, true, null);
+        }
+        if (current.status() == ChatTurnOperation.Status.FAILED) {
+            throw failedReplay(current);
+        }
+        if (current.leaseExpiresAt() != null
+                && current.leaseExpiresAt().isAfter(Instant.now())) {
+            observability.inProgress();
+            throw inProgress(current);
+        }
+        if (current.attemptCount()
+                >= properties.getIdempotency().getMaxAttempts()) {
             ChatSessionCoordinator.LeaseHandle lease =
                     acquireSessionLease(command, current.sessionId(), streaming);
-            UUID token = UUID.randomUUID();
-            ChatTurnOperation reclaimed = repository.reclaim(
-                    current,
-                    token,
-                    leaseMs(transport),
-                    reclaimedExecutionSnapshot,
-                    properties.getIdempotency().getMaxAttempts());
-            if (reclaimed != null) {
-                Claim claim = new Claim(reclaimed, false, lease);
-                startRenewal(claim);
-                observability.claimed();
-                return claim;
+            try {
+                exhaustAttempts(current, lease);
+            } finally {
+                releaseSessionLease(lease);
             }
-            releaseSessionLease(lease);
-            return claim(
-                    prepared.withOperation(repository.find(
-                            prepared.principal().id(),
-                            prepared.keyHash())),
-                    command,
-                    transport,
-                    streaming);
+            throw failedReplay(repository.find(
+                    prepared.principal().id(), prepared.keyHash()));
         }
+        return reclaimExisting(prepared, command, transport, streaming, current);
+    }
 
-        String effectiveSession = SessionIdValidator.isValid(command.sessionId())
-                ? command.sessionId()
-                : UUID.randomUUID().toString();
-        ChatCommand effectiveCommand = effectiveSession.equals(command.sessionId())
-                ? command
-                : new ChatCommand(
-                        command.message(),
-                        effectiveSession,
-                        command.principal(),
-                        command.principal().memoryConversationId(effectiveSession),
-                        command.mode(),
-                        command.memoryMode(),
-                        command.modelRef(),
-                        command.domainId(),
-                        command.retrievalScope(),
-                        command.retrievalOptions(),
-                        command.clientMetadata(),
-                        command.inputMessages(),
-                        command.modelCandidates(),
-                        command.retrievalTraceSession(),
-                        command.retrievalFilters(),
-                        command.executionBudget());
+    /** 校验重放授权后回收仍在进行中的 operation；回收失败则按最新状态重入分派。 */
+    private Claim reclaimExisting(
+            Prepared prepared,
+            ChatCommand command,
+            ChatTurnOperation.Transport transport,
+            boolean streaming,
+            ChatTurnOperation current) {
+        authorizationService.verifyReplay(current, prepared.principal());
+        String reclaimedExecutionSnapshot =
+                current.executionSnapshot() == null
+                        ? executionSnapshot(
+                                command,
+                                declaredModelIdentifier(prepared),
+                                resolvedCandidateRefs(command, streaming))
+                        : null;
+        ChatSessionCoordinator.LeaseHandle lease =
+                acquireSessionLease(command, current.sessionId(), streaming);
+        UUID token = UUID.randomUUID();
+        ChatTurnOperation reclaimed = repository.reclaim(
+                current,
+                token,
+                leaseMs(transport),
+                reclaimedExecutionSnapshot,
+                properties.getIdempotency().getMaxAttempts());
+        if (reclaimed != null) {
+            Claim claim = new Claim(reclaimed, false, lease);
+            startRenewal(claim);
+            observability.claimed();
+            return claim;
+        }
+        releaseSessionLease(lease);
+        return claim(
+                prepared.withOperation(repository.find(
+                        prepared.principal().id(),
+                        prepared.keyHash())),
+                command,
+                transport,
+                streaming);
+    }
+
+    /** 新 key 的首次 claim：规范化会话、抢占会话租约并插入 operation。 */
+    private Claim claimNew(
+            Prepared prepared,
+            ChatCommand command,
+            ChatTurnOperation.Transport transport,
+            boolean streaming) {
+        ChatCommand effectiveCommand = withEffectiveSession(command);
         List<String> resolvedCandidates = resolvedCandidateRefs(
                 effectiveCommand, streaming);
         ChatSessionCoordinator.LeaseHandle lease;
         try {
             lease = acquireSessionLease(
-                    effectiveCommand, effectiveSession, streaming);
+                    effectiveCommand, effectiveCommand.sessionId(), streaming);
         } catch (RagException error) {
             if (error.getErrorCodeEnum() != ErrorCode.SESSION_BUSY) {
                 throw error;
@@ -345,6 +352,45 @@ public class ChatTurnOperationService {
                     transport,
                     streaming);
         }
+        return insertNewOperation(
+                prepared, effectiveCommand, transport, streaming, resolvedCandidates, lease);
+    }
+
+    /** 会话 id 非法时生成新会话并派生带新会话的等价 ChatCommand。 */
+    private ChatCommand withEffectiveSession(ChatCommand command) {
+        String effectiveSession = SessionIdValidator.isValid(command.sessionId())
+                ? command.sessionId()
+                : UUID.randomUUID().toString();
+        if (effectiveSession.equals(command.sessionId())) {
+            return command;
+        }
+        return new ChatCommand(
+                command.message(),
+                effectiveSession,
+                command.principal(),
+                command.principal().memoryConversationId(effectiveSession),
+                command.mode(),
+                command.memoryMode(),
+                command.modelRef(),
+                command.domainId(),
+                command.retrievalScope(),
+                command.retrievalOptions(),
+                command.clientMetadata(),
+                command.inputMessages(),
+                command.modelCandidates(),
+                command.retrievalTraceSession(),
+                command.retrievalFilters(),
+                command.executionBudget());
+    }
+
+    /** 插入新 operation 行；插入成功则领取，竞争失败则按最新状态重入分派。 */
+    private Claim insertNewOperation(
+            Prepared prepared,
+            ChatCommand effectiveCommand,
+            ChatTurnOperation.Transport transport,
+            boolean streaming,
+            List<String> resolvedCandidates,
+            ChatSessionCoordinator.LeaseHandle lease) {
         UUID turnId = UUID.randomUUID();
         UUID token = UUID.randomUUID();
         boolean inserted;
@@ -353,7 +399,7 @@ public class ChatTurnOperationService {
                     prepared.principal().id(),
                     prepared.keyHash(),
                     prepared.fingerprintHash(),
-                    effectiveSession,
+                    effectiveCommand.sessionId(),
                     turnId,
                     transport,
                     token,

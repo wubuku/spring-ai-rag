@@ -122,14 +122,18 @@ class ChatTurnOperationPostgresIntegrationTest {
 
     @Test
     void latestMigrationPreservesOperationTableAndTurnIdentityConstraints() {
-        assertEquals("58", jdbc.queryForObject(
+        // 断言「迁移链执行到了已安装的最新版本」，避免每加一个迁移就改这里。
+        assertEquals(1L, jdbc.queryForObject(
                 """
-                SELECT version FROM flyway_schema_history
-                WHERE success = TRUE
-                ORDER BY installed_rank DESC
-                LIMIT 1
+                SELECT COUNT(*) FROM (
+                    SELECT MAX(NULLIF(version, '')::bigint) AS latest
+                    FROM flyway_schema_history WHERE success = TRUE
+                    HAVING MAX(NULLIF(version, '')::bigint) = (
+                        SELECT MAX(NULLIF(version, '')::bigint)
+                        FROM flyway_schema_history)
+                ) applied_latest
                 """,
-                String.class));
+                Long.class));
         assertEquals(1L, jdbc.queryForObject(
                 """
                 SELECT COUNT(*) FROM information_schema.tables

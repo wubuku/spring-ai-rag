@@ -381,12 +381,27 @@
   的完整命令、开关命名规则与「基线/复跑必须一致」的重构纪律。文档门禁 11/11。
 - 至少一个可复制路径现已存在，后续后端重构批次都能用真实 PostgreSQL 护栏。
 
+### Batch 21（已交付）
+
+- 分支：`refactor/purge-service-split-20260906`（同线叠加）
+- 内容：
+  1. `ChatTurnOperationService.claim`（~160 行 → 25 行分派 + 5 个聚焦 helper）：
+     claimExisting（幂等分派）、reclaimExisting、claimNew、withEffectiveSession、
+     insertNewOperation。会话租约参数由局部变量改为 `effectiveCommand.sessionId()`
+     （同一值），无逻辑/错误消息变更。
+  2. **顺带修复 gated IT 的预存缺陷**：
+     `ChatTurnOperationPostgresIntegrationTest` 硬编码「最新迁移 = 58」，V59 落地后
+     该 IT 即使被开启也必然失败（平时跳过从未暴露）。改为动态断言
+     「成功迁移链已执行到已安装的最新版本」，之后新增迁移不再破坏该测试。
+- 证据：`mvn clean compile test-compile` 绿；ChatTurnOperationServiceTest 9/9；
+  ChatTurnOperationPostgresIntegrationTest 7/7（Testcontainers 真实 PG）；
+  `verify-no-pessimistic-locks.sh` 通过。
+
 ## 10. 下一批次入口（候选，按优先级）
 
-- Batch 21：后端其余超长方法（ChatTurnOperationService.claim、
-  ChatExecutionService.execute、PdfImportController 等）在 gated IT/WebTest
-  护栏下逐个拆分。
-- Batch 22：Mock Playwright 对检索/对话主流程的覆盖率评估与补强。
+- Batch 22：ChatExecutionService.execute / prepareForOperation 拆分（同护栏模式）。
+- Batch 23：Mock Playwright 对检索/对话主流程的覆盖率评估与补强。
+- Batch 24：评估把 gated IT 的本地运行方式接入 CI 的可行路径（mock provider）。
 - Batch 13：Card/Modal primitive 提取（重复 .card/.panel/overlay 样式）。
 - Batch 14：后端 `DocumentSyncRunService`/`CollectionPurgeService` 超长方法拆分
   （complete/applyItem/upsertExternalInTransaction），需 gated IT 回归护栏。
