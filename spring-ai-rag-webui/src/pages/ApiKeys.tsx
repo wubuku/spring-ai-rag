@@ -347,7 +347,7 @@ function PrincipalRow({
             || principal.status !== 'ACTIVE'
             || !principal.currentCredentialId
           }
-          style={{ color: '#ef4444' }}
+          style={{ color: 'var(--color-error)' }}
         >
           {t('apiKeys.revoke')}
         </Button>

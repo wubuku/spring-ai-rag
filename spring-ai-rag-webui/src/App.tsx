@@ -45,7 +45,7 @@ function PageFallback() {
         alignItems: 'center',
         justifyContent: 'center',
         minHeight: '320px',
-        color: 'var(--color-text-muted, #6b7280)',
+        color: 'var(--color-text-muted)',
         fontSize: '0.875rem',
         gap: '0.5rem',
       }}

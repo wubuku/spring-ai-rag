@@ -17,7 +17,7 @@
 
 .tabActive {
   background: var(--color-primary);
-  color: #fff;
+  color: white;
   border-color: transparent;
 }
 
@@ -124,7 +124,7 @@
   align-self: flex-start;
   padding: 0.5rem 1rem;
   background: var(--color-primary);
-  color: #fff;
+  color: white;
   border: none;
   border-radius: 6px;
   cursor: pointer;
@@ -148,5 +148,5 @@
 }
 
 .error {
-  color: #b91c1c;
+  color: var(--color-error-text);
 }

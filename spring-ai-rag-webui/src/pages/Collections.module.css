@@ -66,7 +66,7 @@
 }
 
 .purgeBtn {
-  background: #7f1d1d;
+  background: var(--color-error);
 }
 
 .deleteBtn:disabled,
@@ -103,21 +103,21 @@
 }
 
 .warningPanel {
-  border-color: #d97706;
-  background: #fffbeb;
-  color: #78350f;
+  border-color: var(--color-warning-border);
+  background: var(--color-warning-bg);
+  color: var(--color-warning-text);
 }
 
 .errorPanel {
-  border-color: #dc2626;
-  background: #fef2f2;
-  color: #991b1b;
+  border-color: var(--color-error-text);
+  background: var(--color-error-bg);
+  color: var(--color-error-text);
 }
 
 .successPanel {
-  border-color: #16a34a;
-  background: #f0fdf4;
-  color: #166534;
+  border-color: var(--color-success-text);
+  background: var(--color-success-bg);
+  color: var(--color-success-text);
 }
 
 .purgeMetrics {
@@ -186,7 +186,7 @@
 
 .confirmInput:focus {
   border-color: var(--color-error);
-  outline: 2px solid rgba(220, 38, 38, 0.15);
+  outline: 2px solid color-mix(in srgb, var(--color-error-text) 15%, transparent);
   outline-offset: 1px;
 }
 
@@ -207,8 +207,8 @@
 }
 
 .purgeConfirmBtn {
-  border: 1px solid #7f1d1d;
-  background: #7f1d1d;
+  border: 1px solid var(--color-error);
+  background: var(--color-error);
   color: white;
 }
 

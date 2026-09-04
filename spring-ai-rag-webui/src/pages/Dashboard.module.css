@@ -9,13 +9,13 @@
 }
 
 .statusBanner[data-healthy="true"] {
-  background: #dcfce7;
-  color: #166534;
+  background: var(--color-success-bg);
+  color: var(--color-success-text);
 }
 
 .statusBanner[data-healthy="false"] {
-  background: #fee2e2;
-  color: #991b1b;
+  background: var(--color-error-bg);
+  color: var(--color-error-text);
 }
 
 .components {

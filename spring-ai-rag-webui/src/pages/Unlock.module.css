@@ -12,7 +12,7 @@
   border: 1px solid var(--color-border);
   border-radius: 8px;
   background: var(--color-surface);
-  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 12px 32px var(--shadow-color);
 }
 
 .brand {
@@ -58,10 +58,10 @@
 
 .error {
   padding: 0.625rem 0.75rem;
-  border: 1px solid #fca5a5;
+  border: 1px solid var(--color-error-border);
   border-radius: 6px;
-  background: #fef2f2;
-  color: #b91c1c;
+  background: var(--color-error-bg);
+  color: var(--color-error-text);
   font-size: 0.8125rem;
 }
 

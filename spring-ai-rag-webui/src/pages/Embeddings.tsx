@@ -5,6 +5,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { embeddingsApi } from '../api/embeddings';
 import type { DerivationRepairPreview } from '../api/embeddings';
 import { Dialog } from '../components/Dialog';
+import { Card } from '../components/Card';
 import styles from './Evaluation.module.css';
 
 export function Embeddings() {
@@ -121,10 +122,10 @@ export function Embeddings() {
               ['failed', readinessQ.data.failedDocuments],
               ['stale', readinessQ.data.staleOrMissingDocuments],
             ].map(([label, value]) => (
-              <div key={String(label)} className={styles.card}>
+              <Card key={String(label)}>
                 <div className={styles.cardLabel}>{t(`embeddings.${label}`)}</div>
                 <div className={styles.cardValue}>{String(value)}</div>
-              </div>
+              </Card>
             ))}
           </div>
         </section>
@@ -153,10 +154,10 @@ export function Embeddings() {
               ['corruptDocuments', derivationQ.data.corruptDocuments],
               ['vectorRepairNeededDocuments', derivationQ.data.vectorRepairNeededDocuments],
             ].map(([label, value]) => (
-              <div key={String(label)} className={styles.card}>
+              <Card key={String(label)}>
                 <div className={styles.cardLabel}>{t(`embeddings.${label}`)}</div>
                 <div className={styles.cardValue}>{String(value)}</div>
-              </div>
+              </Card>
             ))}
           </div>
           {previewRepairM.isError && (

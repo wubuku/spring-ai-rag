@@ -17,7 +17,7 @@
   border-radius: 8px;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 12px var(--shadow-color);
   min-width: 250px;
   max-width: 400px;
   pointer-events: none;
@@ -64,17 +64,17 @@
 }
 
 .success {
-  border-color: #22c55e;
+  border-color: var(--color-success);
 }
 
 .error {
-  border-color: #ef4444;
+  border-color: var(--color-error);
 }
 
 .warning {
-  border-color: #f59e0b;
+  border-color: var(--color-warning);
 }
 
 .info {
-  border-color: #3b82f6;
+  border-color: var(--color-primary);
 }

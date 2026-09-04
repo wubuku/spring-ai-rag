@@ -111,7 +111,7 @@
     transform: translateX(-100%); /* Hidden by default on mobile */
     visibility: hidden;
     pointer-events: none;
-    box-shadow: 4px 0 12px rgba(0, 0, 0, 0.15);
+    box-shadow: 4px 0 12px var(--shadow-color);
   }
 
   .sidebarOpen {
@@ -126,7 +126,7 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.4);
+    background: color-mix(in srgb, black 40%, transparent);
     z-index: var(--z-navigation-backdrop);
   }
 
@@ -164,7 +164,7 @@
     cursor: pointer;
     z-index: var(--z-navigation);
     color: var(--color-text);
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 1px 4px var(--shadow-color);
   }
 
   .menuBtn:hover {

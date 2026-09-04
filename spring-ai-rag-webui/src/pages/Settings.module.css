@@ -134,11 +134,11 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #ef4444;
+  background: var(--color-error);
 }
 
 .statusDot[data-ok='true'] {
-  background: #22c55e;
+  background: var(--color-success);
 }
 
 .checkboxLabel {

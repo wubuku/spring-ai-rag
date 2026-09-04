@@ -295,12 +295,31 @@
 - 证据：`tsc -b` 绿；`test:run` 307/307（44 文件，新增 Card 2 测试）；
   `lint`/`build` 绿；页面既有测试全部无修改通过。
 
+### Batch 15（已交付）
+
+- 分支：`refactor/webui-small-debt-sweep-20260906`（基于 Batch 14 分支）
+- 内容：
+  1. **修复 Batch 14 的跨文件回归**：`Embeddings.tsx` 一直在借用
+     `Evaluation.module.css` 的 `.card`，Batch 14 删除该类后其卡片皮肤丢失
+     （既有冒烟测试未兜住视觉回归）——已迁移到 `Card` primitive，并审计确认
+     无其他跨页 CSS 借用。
+  2. 剩余 61 处字面颜色全部清零：severity/中性色收口到语义 token；
+     8 处黑色半透明阴影统一到新 `--shadow-color` token（暗色主题加深到 0.5，
+     阴影从此随主题变化）；聚焦环/光晕用 `color-mix(var(--color-error))`；
+     三处 `#fff` 白字改用 `white` 关键字（与 Button primitive 一致）；
+     App.tsx 删除最后的 var() 颜色回退；ApiKeys.tsx 内联色改 CSS 变量。
+- 基线变化：61 → **0**（全局 token 45 个）。自 Batch 2 门禁落地以来
+  389 → 0，**-100%**；`design-token-color-baseline.json` 保留为空对象，
+  任何未来字面颜色将直接被门禁拒绝。
+- 证据：`tsc -b` 绿；`test:run` 307/307（44 文件）；`lint`/`build` 绿；
+  门禁输出 `0 file(s) with grandfathered literal colors`。
+
 ## 10. 下一批次入口（候选，按优先级）
 
-- Batch 15：后端 `DocumentSyncRunService`/`CollectionPurgeService` 超长方法拆分
+- Batch 16：后端 `DocumentSyncRunService`/`CollectionPurgeService` 超长方法拆分
   （complete/applyItem/upsertExternalInTransaction），需 gated IT 回归护栏。
-- Batch 16：剩余 61 处字面颜色逐文件清零（Toast/Dashboard/Unlock/Layout 等小户）。
 - Batch 17：Modal 外壳统一（CreateCollectionModal/VersionHistoryModal 收敛到 Dialog）。
+- Batch 18：Mock Playwright 补 Embeddings 卡片渲染回归（防跨文件样式回归再次漏网）。
 - Batch 13：Card/Modal primitive 提取（重复 .card/.panel/overlay 样式）。
 - Batch 14：后端 `DocumentSyncRunService`/`CollectionPurgeService` 超长方法拆分
   （complete/applyItem/upsertExternalInTransaction），需 gated IT 回归护栏。

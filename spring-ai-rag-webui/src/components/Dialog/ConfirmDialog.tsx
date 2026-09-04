@@ -42,7 +42,7 @@ export function ConfirmDialog({
             onClick={onConfirm}
             disabled={pending}
             style={danger
-              ? { background: 'var(--color-error)', color: '#fff', borderColor: 'var(--color-error)' }
+              ? { background: 'var(--color-error)', color: 'white', borderColor: 'var(--color-error)' }
               : undefined}
           >
             {confirmLabel}
