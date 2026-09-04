@@ -13,6 +13,7 @@ import { useToast } from '../components/Toast';
 import { Skeleton } from '../components/Skeleton';
 import { CreateCollectionModal } from '../components/CreateCollectionModal';
 import { Dialog } from '../components/Dialog';
+import { Card } from '../components/Card';
 import styles from './Collections.module.css';
 
 function errorMessage(error: unknown): string {
@@ -73,18 +74,18 @@ export function Collections() {
       {isPending ? (
         <div className={styles.grid}>
           {[1, 2, 3].map(i => (
-            <div key={i} className={styles.card}>
+            <Card key={i}>
               <Skeleton width="60%" height="1.25rem" />
               <Skeleton width="40%" height="0.875rem" />
               <Skeleton width="30%" height="0.75rem" />
               <Skeleton width="80px" height="2rem" />
-            </div>
+            </Card>
           ))}
         </div>
       ) : (
         <div className={styles.grid}>
           {data?.data?.collections?.map(col => (
-            <div key={col.collectionKey} className={styles.card}>
+            <Card key={col.collectionKey}>
               <div className={styles.name}>{col.name}</div>
               <div className={styles.meta} title={col.collectionKey}>{col.collectionKey}</div>
               <div className={styles.meta}>
@@ -123,7 +124,7 @@ export function Collections() {
                   </button>
                 )}
               </div>
-            </div>
+            </Card>
           ))}
           {data?.data?.collections?.length === 0 && (
             <div className={styles.empty}>{t('collections.noCollections')}</div>

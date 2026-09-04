@@ -1,3 +1,4 @@
+import { Card } from '../Card';
 import styles from './Skeleton.module.css';
 
 interface SkeletonProps {
@@ -32,11 +33,11 @@ export function SkeletonText({ lines = 3, lastLineWidth = '60%' }: { lines?: num
 
 export function SkeletonCard() {
   return (
-    <div className={styles.card}>
+    <Card className={styles.layout}>
       <Skeleton width="40%" height="1.25rem" />
       <SkeletonText lines={2} />
       <Skeleton width="30%" height="0.75rem" />
-    </div>
+    </Card>
   );
 }
 

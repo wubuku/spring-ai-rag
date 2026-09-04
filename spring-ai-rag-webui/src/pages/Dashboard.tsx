@@ -4,6 +4,7 @@ import { documentsApi } from '../api/documents';
 import { collectionsApi } from '../api/collections';
 import { healthApi } from '../api/health';
 import { Skeleton } from '../components/Skeleton';
+import { Card } from '../components/Card';
 import styles from './Dashboard.module.css';
 
 export function Dashboard() {
@@ -50,31 +51,31 @@ export function Dashboard() {
       </div>
 
       <div className={styles.grid}>
-        <div className={styles.card}>
+        <Card>
           {docsPending ? (
             <Skeleton width="60px" height="2rem" />
           ) : (
             <div className={styles.metric}>{docs?.data?.total ?? '—'}</div>
           )}
           <div className={styles.label}>{t('dashboard.documents')}</div>
-        </div>
-        <div className={styles.card}>
+        </Card>
+        <Card>
           {collectionsPending ? (
             <Skeleton width="60px" height="2rem" />
           ) : (
             <div className={styles.metric}>{collections?.data?.total ?? '—'}</div>
           )}
           <div className={styles.label}>{t('dashboard.collections')}</div>
-        </div>
-        <div className={styles.card}>
+        </Card>
+        <Card>
           {healthPending ? (
             <Skeleton width="60px" height="2rem" />
           ) : (
             <div className={styles.metric}>{health?.data?.components?.cache ?? '—'}</div>
           )}
           <div className={styles.label}>{t('dashboard.cache')}</div>
-        </div>
-        <div className={styles.card}>
+        </Card>
+        <Card>
           {healthPending ? (
             <Skeleton width="150px" height="2rem" />
           ) : (
@@ -83,7 +84,7 @@ export function Dashboard() {
             </div>
           )}
           <div className={styles.label}>{t('dashboard.lastCheck')}</div>
-        </div>
+        </Card>
       </div>
     </div>
   );

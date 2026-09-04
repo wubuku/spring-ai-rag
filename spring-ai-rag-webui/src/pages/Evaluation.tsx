@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 import { evaluationApi } from '../api/evaluation';
+import { Card } from '../components/Card';
 import styles from './Evaluation.module.css';
 
 type Tab = 'report' | 'history' | 'feedback' | 'judge' | 'suites' | 'runs' | 'citations';
@@ -121,10 +122,10 @@ export function Evaluation() {
           ) : (
             <div className={styles.cards}>
               {cards.map(c => (
-                <div key={c.label} className={styles.card}>
+                <Card key={c.label}>
                   <div className={styles.cardLabel}>{c.label}</div>
                   <div className={styles.cardValue}>{c.value}</div>
-                </div>
+                </Card>
               ))}
             </div>
           )}

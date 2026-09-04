@@ -284,12 +284,23 @@
 - 证据：`tsc -b` 绿；`test:run` 305/305；`lint`/`build` 绿；locale 完整性脚本校验
   仅新增 1 key。
 
+### Batch 14（已交付）
+
+- 分支：`refactor/webui-card-primitive-20260906`（基于 Batch 13 所在线）
+- 内容：新增 `components/Card` primitive（div 皮肤：surface 底 + border + 8px 圆角
+  + 1rem padding，className 合并、rest 透传），迁移 Dashboard（4）、Collections（2）、
+  Evaluation（1）、Skeleton（1）共 8 处 `.card` 复制粘贴；Skeleton 的 flex 布局
+  拆为页面本地 `.layout` 类，皮肤统一走 primitive。Dashboard 20px / Evaluation
+  0.75rem 的 padding 差异有意统一为 1rem（设计系统收敛）。
+- 证据：`tsc -b` 绿；`test:run` 307/307（44 文件，新增 Card 2 测试）；
+  `lint`/`build` 绿；页面既有测试全部无修改通过。
+
 ## 10. 下一批次入口（候选，按优先级）
 
-- Batch 14：Card/Modal primitive 提取（重复 .card/.panel/overlay 样式）。
 - Batch 15：后端 `DocumentSyncRunService`/`CollectionPurgeService` 超长方法拆分
   （complete/applyItem/upsertExternalInTransaction），需 gated IT 回归护栏。
 - Batch 16：剩余 61 处字面颜色逐文件清零（Toast/Dashboard/Unlock/Layout 等小户）。
+- Batch 17：Modal 外壳统一（CreateCollectionModal/VersionHistoryModal 收敛到 Dialog）。
 - Batch 13：Card/Modal primitive 提取（重复 .card/.panel/overlay 样式）。
 - Batch 14：后端 `DocumentSyncRunService`/`CollectionPurgeService` 超长方法拆分
   （complete/applyItem/upsertExternalInTransaction），需 gated IT 回归护栏。

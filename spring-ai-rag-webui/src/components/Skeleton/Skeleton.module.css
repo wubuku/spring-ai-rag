@@ -24,14 +24,10 @@
   gap: 0.5rem;
 }
 
-.card {
+.layout {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-  padding: 1rem;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
 }
 
 .table {
