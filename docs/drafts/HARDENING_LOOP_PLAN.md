@@ -430,11 +430,30 @@
 - 证据：`tsc -b` 绿；`test:run` 308/308；search+chat e2e 20/20；`lint`/`build` 绿；
   新 hybrid 用例在多次全量与单测中稳定通过。
 
+### Batch 24（已交付）
+
+- 分支：`refactor/chat-execution-split-20260906`（脚本部分）+
+  `ci/webui-job-pending-workflow-scope`（CI 步骤部分，仍待用户推送）
+- 内容：
+  1. 评估结论修正：并非所有 gated IT 都需要真实模型 provider——本循环已验证的
+     三个套件（DocumentSyncRuns / CollectionPurge / ChatTurnOperation）是**纯
+     DB 型**，Testcontainers PostgreSQL 即可全绿，无需 mock provider。这直接
+     解锁了 CI 接入的可行路径。
+  2. 新增 `scripts/verify-gated-it.sh`：一键回归上述纯 DB 型 gated IT 矩阵
+     （默认禁 Ryuk + 本地 postgres:16-pgvector 镜像，均可环境变量覆盖；
+     支持按类名筛选与套件登记制）。验证：全量 16/16（4+5+7），单套件筛选、
+     无匹配错误路径均正确。
+  3. CI 步骤（运行同一脚本）已提交到待推送的 workflow 分支，与其 webui job
+     一起等待用户以 workflow scope 凭据推送。检索/嵌入类 IT 仍需 mock
+     provider 或真实 secrets，维持独立规划。
+- 证据：脚本 `bash -n` 通过；`verify-gated-it.sh` 全量 16/16、单套件 4/4、
+  无匹配退出路径正确。
+
 ## 10. 下一批次入口（候选，按优先级）
 
-- Batch 24：评估把 gated IT 的本地运行方式接入 CI 的可行路径（mock provider）。
 - Batch 25：search 分页 flake 根因调查（CollectionScopeSelector 重挂载竞态）。
 - Batch 26：PdfImportController / RagDocumentController 超长方法盘点与拆分。
+- Batch 27：前端 Toast/Dashboard 等剩余小模块的测试补强盘点。
 - Batch 13：Card/Modal primitive 提取（重复 .card/.panel/overlay 样式）。
 - Batch 14：后端 `DocumentSyncRunService`/`CollectionPurgeService` 超长方法拆分
   （complete/applyItem/upsertExternalInTransaction），需 gated IT 回归护栏。
