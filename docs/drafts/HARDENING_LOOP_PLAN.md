@@ -579,11 +579,23 @@
   静默回退 legacy → 504）、未知键 WARN 语义。与 Batch 31 的校验代码配套。
   文档门禁 11/11（顺带修复 ZH 文档 EOF 多余空行）。
 
+### Batch 34（已交付）
+
+- 分支：`audit/chat-turn-medium-methods-20260906`（基于 Batch 33 分支）
+- **审计结论**：`inspectExisting`（27 行）与 `replay`（25 行）结构紧凑、无需拆分；
+  真正缺口是测试覆盖——`replay` 此前**零单测**（含「损坏快照 → INTERNAL_ERROR」
+  与授权失败透传两个安全相关分支），`inspectExisting` 仅覆盖 in-progress 分支。
+- 补 6 个分支测试：replay 拒绝非 replay/null claim、反序列化存储快照并盖 turnId、
+  损坏快照转 INTERNAL_ERROR、授权失败原样透传；inspectExisting 无 keyed
+  operation 返回 null、SUCCEEDED 返回 replay claim 并计数。
+  Claim 构造器私有，测试经公共 `claim()` + mocked repository 获得 replay claim。
+- 证据：`mvn -q clean compile test-compile` 绿；ChatTurnOperationServiceTest
+  9 → 15 全绿；gated IT（chat.idempotency）7/7；`verify-no-pessimistic-locks` 通过。
+
 ## 10. 下一批次入口（候选，按优先级）
 
-- Batch 34：后端 ChatTurnOperationService.inspectExisting/replay 等中等方法审计。
-- Batch 35：dev 栈文件变更好习惯固化（e2e 运行期间禁编辑已写入 runbook，评估
-  是否需要脚本级防呆）。
+- Batch 35：e2e 运行期间禁编辑源文件的防呆评估（脚本级或文档已足）。
+- Batch 36：后端其余 20–40 行中等方法的同模式审计（commandForClaim 已部分覆盖）。
 - Batch 31：后端 SearchResults/VersionHistoryModal 等组件深度交互测试盘点。
 - Batch 30：chat-real 的 tool-calling 模型配置排查（.env/models.json 层面）。
 - Batch 29：剩余 API 契约测试补齐（documents/files/evaluation/alerts/collections 扩展）。

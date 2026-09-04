@@ -60,6 +60,141 @@ class ChatTurnOperationServiceTest {
         service.setSessionCoordinator(sessionCoordinator);
     }
 
+    // ─── replay() branch coverage (audit Batch 34) ──────────────────
+
+    private ChatTurnOperation succeededOperationWithPayload(
+            String responsePayload) {
+        Instant now = Instant.now();
+        return new ChatTurnOperation(
+                1L,
+                ChatPrincipal.local().id(),
+                "key-hash",
+                "fingerprint-hash",
+                1,
+                "session-1",
+                UUID.randomUUID(),
+                ChatTurnOperation.Transport.NATIVE_JSON,
+                ChatTurnOperation.Status.SUCCEEDED,
+                UUID.randomUUID(),
+                null,
+                1,
+                0L,
+                1,
+                null,
+                responsePayload,
+                null,
+                null,
+                "{}",
+                now,
+                now,
+                now);
+    }
+
+    private ChatTurnOperationService.Claim claimReplayOfSucceededOperation(
+            String responsePayload) {
+        ChatPrincipal principal = ChatPrincipal.local();
+        ChatTurnOperationService.Prepared prepared = prepared(principal);
+        ChatTurnOperation succeeded = new ChatTurnOperation(
+                1L,
+                principal.id(),
+                prepared.keyHash(),
+                prepared.fingerprintHash(),
+                1,
+                "session-1",
+                UUID.randomUUID(),
+                ChatTurnOperation.Transport.NATIVE_JSON,
+                ChatTurnOperation.Status.SUCCEEDED,
+                UUID.randomUUID(),
+                null,
+                1,
+                0L,
+                1,
+                null,
+                responsePayload,
+                null,
+                null,
+                "{}",
+                Instant.now(),
+                Instant.now(),
+                Instant.now());
+        when(repository.find(principal.id(), prepared.keyHash()))
+                .thenReturn(succeeded);
+
+        return service.claim(
+                prepared,
+                command(principal),
+                ChatTurnOperation.Transport.NATIVE_JSON,
+                false);
+    }
+
+    @Test
+    void replayRejectsClaimsThatAreNotReplays() {
+        assertThrows(IllegalArgumentException.class, () -> service.replay(null));
+        assertThrows(IllegalArgumentException.class,
+                () -> service.replay(ChatTurnOperationService.Claim.unkeyed()));
+    }
+
+    @Test
+    void replayDeserializesTheStoredSnapshotAndStampsTheTurnId() {
+        ChatTurnOperationService.Claim claim =
+                claimReplayOfSucceededOperation("{\"answer\":\"cached answer\"}");
+
+        ChatResponse response = service.replay(claim);
+
+        assertEquals("cached answer", response.getAnswer());
+        assertEquals(claim.operation().turnId().toString(), response.getTurnId());
+        verify(authorizationService).verifyReplay(
+                any(ChatTurnOperation.class), any(ChatPrincipal.class));
+    }
+
+    @Test
+    void replayConvertsACorruptStoredSnapshotIntoInternalError() {
+        ChatTurnOperationService.Claim claim =
+                claimReplayOfSucceededOperation("{not valid json");
+
+        RagException error = assertThrows(
+                RagException.class, () -> service.replay(claim));
+
+        assertEquals(ErrorCode.INTERNAL_ERROR, error.getErrorCodeEnum());
+    }
+
+    @Test
+    void replayPropagatesAuthorizationFailuresVerbatim() {
+        RagException denied = new RagException(ErrorCode.FORBIDDEN, "no");
+        doThrow(denied).when(authorizationService).verifyReplay(
+                any(ChatTurnOperation.class), any(ChatPrincipal.class));
+
+        ChatTurnOperationService.Claim claim =
+                claimReplayOfSucceededOperation("{}");
+        RagException error = assertThrows(
+                RagException.class, () -> service.replay(claim));
+
+        assertEquals(ErrorCode.FORBIDDEN, error.getErrorCodeEnum());
+    }
+
+    // ─── inspectExisting() branch coverage (audit Batch 34) ─────────
+
+    @Test
+    void inspectExistingReturnsNullWithoutKeyedOperation() {
+        ChatPrincipal principal = ChatPrincipal.local();
+        ChatTurnOperationService.Prepared unkeyed = service.prepare(principal, List.of(), null);
+
+        assertEquals(null, service.inspectExisting(unkeyed));
+        assertEquals(null, service.inspectExisting(prepared(principal)));
+    }
+
+    @Test
+    void inspectExistingReturnsAReplayClaimForSucceededOperations() {
+        ChatPrincipal principal = ChatPrincipal.local();
+        ChatTurnOperationService.Prepared prepared = prepared(principal);
+        ChatTurnOperation succeeded = succeededOperationWithPayload("{}");
+
+        ChatTurnOperationService.Claim claim =
+                service.inspectExisting(prepared.withOperation(succeeded));
+
+        assertEquals(true, claim.replay());
+        verify(observability).replayed();
+    }
     @AfterEach
     void stopRenewalExecutor() {
         service.shutdown();
