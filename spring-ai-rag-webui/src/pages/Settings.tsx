@@ -228,8 +228,9 @@ export function Settings() {
             </p>
 
             <div className={styles.field}>
-              <label className={styles.label}>{t('settings.provider')}</label>
+              <label className={styles.label} htmlFor="settings-provider">{t('settings.provider')}</label>
               <select
+                id="settings-provider"
                 className={styles.select}
                 value={llmConfig.provider}
                 disabled={modelsLoading || providers.length === 0}
@@ -259,8 +260,9 @@ export function Settings() {
             </div>
 
             <div className={styles.field}>
-              <label className={styles.label}>{t('settings.model')}</label>
+              <label className={styles.label} htmlFor="settings-model">{t('settings.model')}</label>
               <select
+                id="settings-model"
                 className={styles.select}
                 value={llmConfig.model}
                 disabled={modelsLoading || providerModels.length === 0}
@@ -307,8 +309,9 @@ export function Settings() {
             </p>
 
             <div className={styles.field}>
-              <label className={styles.label}>{t('settings.vectorWeight')}</label>
+              <label className={styles.label} htmlFor="settings-vector-weight">{t('settings.vectorWeight')}</label>
               <input
+                id="settings-vector-weight"
                 type="range"
                 min="0"
                 max="1"
@@ -326,8 +329,9 @@ export function Settings() {
             </div>
 
             <div className={styles.field}>
-              <label className={styles.label}>{t('settings.fulltextWeight')}</label>
+              <label className={styles.label} htmlFor="settings-fulltext-weight">{t('settings.fulltextWeight')}</label>
               <input
+                id="settings-fulltext-weight"
                 type="range"
                 min="0"
                 max="1"
@@ -345,8 +349,9 @@ export function Settings() {
             </div>
 
             <div className={styles.field}>
-              <label className={styles.label}>{t('settings.topK')}</label>
+              <label className={styles.label} htmlFor="settings-top-k">{t('settings.topK')}</label>
               <input
+                id="settings-top-k"
                 type="number"
                 className={styles.input}
                 value={retrievalConfig.topK}
@@ -362,8 +367,9 @@ export function Settings() {
             </div>
 
             <div className={styles.field}>
-              <label className={styles.label}>{t('settings.rerankTopK')}</label>
+              <label className={styles.label} htmlFor="settings-rerank-top-k">{t('settings.rerankTopK')}</label>
               <input
+                id="settings-rerank-top-k"
                 type="number"
                 className={styles.input}
                 value={retrievalConfig.rerankTopK}
@@ -403,8 +409,9 @@ export function Settings() {
             </div>
 
             <div className={styles.field}>
-              <label className={styles.label}>{t('settings.ttlMinutes')}</label>
+              <label className={styles.label} htmlFor="settings-ttl-minutes">{t('settings.ttlMinutes')}</label>
               <input
+                id="settings-ttl-minutes"
                 type="number"
                 className={styles.input}
                 value={cacheConfig.ttlMinutes}
@@ -421,8 +428,9 @@ export function Settings() {
             </div>
 
             <div className={styles.field}>
-              <label className={styles.label}>{t('settings.maxSize')}</label>
+              <label className={styles.label} htmlFor="settings-max-size">{t('settings.maxSize')}</label>
               <input
+                id="settings-max-size"
                 type="number"
                 className={styles.input}
                 value={cacheConfig.maxSize}

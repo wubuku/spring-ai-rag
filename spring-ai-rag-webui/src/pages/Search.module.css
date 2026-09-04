@@ -91,7 +91,7 @@
   border: none;
   cursor: pointer;
   font-size: 0.8rem;
-  color: var(--color-error, #d32f2f);
+  color: var(--color-error);
   padding: 0;
 }
 
@@ -163,7 +163,7 @@
 }
 
 .historyRemove:hover {
-  color: var(--color-error, #d32f2f);
+  color: var(--color-error);
 }
 
 .hybridLabel {

@@ -82,7 +82,7 @@
 }
 
 .viewBtn {
-  background: var(--color-primary, #4f46e5);
+  background: var(--color-primary);
   color: white;
   padding: 4px 12px;
   font-size: 0.8rem;

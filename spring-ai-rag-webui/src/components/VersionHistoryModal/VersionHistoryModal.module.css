@@ -1,6 +1,6 @@
 .tabs {
   display: flex;
-  border-bottom: 1px solid var(--color-border, #e5e7eb);
+  border-bottom: 1px solid var(--color-border);
   flex-shrink: 0;
 }
 
@@ -11,19 +11,19 @@
   cursor: pointer;
   font-size: 0.875rem;
   font-weight: 500;
-  color: var(--color-text-muted, #6b7280);
+  color: var(--color-text-muted);
   border-bottom: 2px solid transparent;
   margin-bottom: -1px;
   transition: color 0.15s, border-color 0.15s;
 }
 
 .tab:hover {
-  color: var(--color-text, #111827);
+  color: var(--color-text);
 }
 
 .tabActive {
-  color: var(--color-primary, #3b82f6);
-  border-bottom-color: var(--color-primary, #3b82f6);
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
 }
 
 .loading,
@@ -31,7 +31,7 @@
 .empty {
   text-align: start;
   padding: 2rem;
-  color: var(--color-text-muted, #6b7280);
+  color: var(--color-text-muted);
 }
 
 .error {
@@ -50,20 +50,20 @@
   align-items: flex-start;
   gap: 0.75rem;
   padding: 0.75rem;
-  border: 1px solid var(--color-border, #e5e7eb);
+  border: 1px solid var(--color-border);
   border-radius: 8px;
   cursor: pointer;
   transition: border-color 0.15s, background 0.15s;
-  background: var(--color-background, #f9fafb);
+  background: var(--color-background);
 }
 
 .versionItem:hover {
-  border-color: var(--color-primary, #3b82f6);
-  background: var(--color-surface, #ffffff);
+  border-color: var(--color-primary);
+  background: var(--color-surface);
 }
 
 .versionItemSelected {
-  border-color: var(--color-primary, #3b82f6);
+  border-color: var(--color-primary);
   background: rgba(59, 130, 246, 0.05);
 }
 
@@ -72,12 +72,12 @@
 }
 
 .versionItem.compareMode:hover {
-  border-color: var(--color-border, #e5e7eb);
-  background: var(--color-background, #f9fafb);
+  border-color: var(--color-border);
+  background: var(--color-background);
 }
 
 .versionItemSelected.compareMode:hover {
-  border-color: var(--color-primary, #3b82f6);
+  border-color: var(--color-primary);
   background: rgba(59, 130, 246, 0.05);
 }
 
@@ -101,7 +101,7 @@
 .versionNumber {
   font-weight: 600;
   font-size: 0.875rem;
-  color: var(--color-text, #111827);
+  color: var(--color-text);
 }
 
 .changeType {
@@ -127,26 +127,26 @@
 }
 
 .changeTypeUnknown {
-  background: var(--color-border, #e5e7eb);
-  color: var(--color-text-muted, #6b7280);
+  background: var(--color-border);
+  color: var(--color-text-muted);
 }
 
 .changeDesc {
   font-size: 0.8125rem;
-  color: var(--color-text-muted, #6b7280);
+  color: var(--color-text-muted);
   margin-top: 0.25rem;
 }
 
 .versionDate {
   font-size: 0.75rem;
-  color: var(--color-text-muted, #6b7280);
+  color: var(--color-text-muted);
   margin-top: 0.25rem;
 }
 
 .versionHash {
   font-family: monospace;
   font-size: 0.6875rem;
-  color: var(--color-text-muted, #6b7280);
+  color: var(--color-text-muted);
   margin-left: auto;
   flex-shrink: 0;
 }
@@ -155,17 +155,17 @@
   flex-shrink: 0;
   align-self: center;
   padding: 0.3rem 0.55rem;
-  border: 1px solid var(--color-border, #e5e7eb);
+  border: 1px solid var(--color-border);
   border-radius: 6px;
-  background: var(--color-surface, #ffffff);
-  color: var(--color-text, #111827);
+  background: var(--color-surface);
+  color: var(--color-text);
   cursor: pointer;
   font-size: 0.75rem;
 }
 
 .restoreBtn:hover:not(:disabled) {
-  border-color: var(--color-primary, #3b82f6);
-  color: var(--color-primary, #2563eb);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
 }
 
 .restoreBtn:disabled {
@@ -179,32 +179,32 @@
   align-items: center;
   justify-content: space-between;
   padding: 0.75rem;
-  background: var(--color-background, #f9fafb);
+  background: var(--color-background);
   border-radius: 8px;
   margin-bottom: 1rem;
   font-size: 0.875rem;
-  color: var(--color-text-muted, #6b7280);
+  color: var(--color-text-muted);
 }
 
 .compareBar strong {
-  color: var(--color-text, #111827);
+  color: var(--color-text);
 }
 
 .compareBtn {
   padding: 0.375rem 0.875rem;
   border-radius: 6px;
-  border: 1px solid var(--color-border, #e5e7eb);
-  background: var(--color-surface, #ffffff);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
   cursor: pointer;
   font-size: 0.875rem;
   font-weight: 500;
   transition: background 0.15s, border-color 0.15s;
-  color: var(--color-text, #111827);
+  color: var(--color-text);
 }
 
 .compareBtn:hover:not(:disabled) {
-  background: var(--color-primary, #3b82f6);
-  border-color: var(--color-primary, #3b82f6);
+  background: var(--color-primary);
+  border-color: var(--color-primary);
   color: white;
 }
 
@@ -219,8 +219,8 @@
   font-size: 0.8125rem;
   line-height: 1.5;
   overflow-x: auto;
-  background: var(--color-background, #f9fafb);
-  border: 1px solid var(--color-border, #e5e7eb);
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
   border-radius: 8px;
 }
 
@@ -233,8 +233,8 @@
   width: 3rem;
   padding: 0 0.5rem;
   text-align: end;
-  color: var(--color-text-muted, #9ca3af);
-  background: var(--color-border, #e5e7eb);
+  color: var(--color-text-muted);
+  background: var(--color-border);
   user-select: none;
   flex-shrink: 0;
   font-size: 0.75rem;
@@ -283,15 +283,15 @@
 }
 
 .diffEqual {
-  color: var(--color-text-muted, #6b7280);
+  color: var(--color-text-muted);
 }
 
 .diffHeader {
   padding: 0.5rem 0.75rem;
-  background: var(--color-border, #e5e7eb);
-  border-bottom: 1px solid var(--color-border, #e5e7eb);
+  background: var(--color-border);
+  border-bottom: 1px solid var(--color-border);
   font-size: 0.75rem;
-  color: var(--color-text-muted, #6b7280);
+  color: var(--color-text-muted);
   font-weight: 600;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -301,7 +301,7 @@
   display: flex;
   gap: 1rem;
   font-size: 0.8125rem;
-  color: var(--color-text-muted, #6b7280);
+  color: var(--color-text-muted);
   margin-bottom: 0.5rem;
 }
 
@@ -317,7 +317,7 @@
   padding: 2rem;
   /* alignment-policy: allow-center -- bounded diff empty state */
   text-align: center;
-  color: var(--color-text-muted, #6b7280);
+  color: var(--color-text-muted);
   font-size: 0.875rem;
 }
 
@@ -327,23 +327,23 @@
   justify-content: center;
   gap: 1rem;
   padding-top: 1rem;
-  border-top: 1px solid var(--color-border, #e5e7eb);
+  border-top: 1px solid var(--color-border);
   margin-top: 1rem;
 }
 
 .pageBtn {
   padding: 0.375rem 0.875rem;
   border-radius: 6px;
-  border: 1px solid var(--color-border, #e5e7eb);
-  background: var(--color-surface, #ffffff);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
   cursor: pointer;
   font-size: 0.875rem;
-  color: var(--color-text, #111827);
+  color: var(--color-text);
   transition: background 0.15s;
 }
 
 .pageBtn:hover:not(:disabled) {
-  background: var(--color-background, #f9fafb);
+  background: var(--color-background);
 }
 
 .pageBtn:disabled {
@@ -353,5 +353,5 @@
 
 .pageInfo {
   font-size: 0.875rem;
-  color: var(--color-text-muted, #6b7280);
+  color: var(--color-text-muted);
 }

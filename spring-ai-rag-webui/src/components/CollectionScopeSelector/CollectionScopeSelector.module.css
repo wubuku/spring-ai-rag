@@ -132,7 +132,7 @@
 
 .validation,
 .error {
-  color: var(--color-error, #dc2626);
+  color: var(--color-error);
 }
 
 .limitMessage,

@@ -5,14 +5,14 @@
   height: 100%;
   overflow: auto;
   padding: 1rem;
-  background: var(--color-bg-secondary, #fafafa);
+  background: var(--color-bg-secondary);
 }
 
 .htmlContent {
   max-width: 900px;
   margin: 0 auto;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  color: var(--color-text, #333);
+  color: var(--color-text);
   line-height: 1.6;
 }
 
@@ -129,7 +129,7 @@
   align-items: center;
   justify-content: center;
   padding: 1rem;
-  background: var(--color-bg-secondary, #fafafa);
+  background: var(--color-bg-secondary);
   overflow: auto;
 }
 
@@ -160,7 +160,7 @@
   justify-content: center;
   height: 100%;
   gap: 1rem;
-  color: var(--color-text-muted, #6b7280);
+  color: var(--color-text-muted);
   padding: 2rem;
   /* alignment-policy: allow-center -- bounded file preview fallback */
   text-align: center;

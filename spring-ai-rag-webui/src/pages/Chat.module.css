@@ -258,7 +258,7 @@
   flex-direction: column;
   gap: 0.5rem;
   padding: 0.75rem 1rem 1rem;
-  border-top: 1px solid var(--border-color, #e5e7eb);
+  border-top: 1px solid var(--border-color);
 }
 
 .contextRow {
@@ -282,7 +282,7 @@
 
 .contextLabel {
   font-size: 0.85rem;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
   white-space: nowrap;
 }
 
@@ -290,8 +290,8 @@
   width: min(280px, 55vw);
   padding: 0.35rem 0.5rem;
   border-radius: 6px;
-  border: 1px solid var(--border-color, #d1d5db);
-  background: var(--bg-primary, #fff);
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary);
   color: var(--color-text);
   font-size: 0.875rem;
 }
@@ -314,4 +314,4 @@
 }
 
 .feedbackRow { display:flex; gap:0.35rem; margin-top:0.35rem; }
-.feedbackBtn { border:1px solid var(--color-border,#d1d5db); background:transparent; border-radius:6px; cursor:pointer; padding:0.15rem 0.4rem; }
+.feedbackBtn { border:1px solid var(--color-border); background:transparent; border-radius:6px; cursor:pointer; padding:0.15rem 0.4rem; }

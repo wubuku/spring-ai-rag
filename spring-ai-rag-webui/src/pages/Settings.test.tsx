@@ -104,4 +104,22 @@ describe('Settings', () => {
       'openrouter/xiaomi/mimo-v2-pro'
     );
   });
+
+  it('associates retrieval and cache controls with their labels', () => {
+    render(
+      <MemoryRouter initialEntries={['/settings?tab=retrieval']}>
+        <Settings />
+      </MemoryRouter>,
+    );
+
+    // Labels are rendered through the i18n test mock, which returns the key.
+    for (const label of [
+      'settings.vectorWeight',
+      'settings.fulltextWeight',
+      'settings.topK',
+      'settings.rerankTopK',
+    ]) {
+      expect(screen.getByLabelText(label)).toBeInTheDocument();
+    }
+  });
 });

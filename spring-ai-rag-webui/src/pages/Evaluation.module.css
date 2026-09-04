@@ -9,14 +9,14 @@
 .tabActive {
   padding: 0.4rem 0.9rem;
   border-radius: 6px;
-  border: 1px solid var(--color-border, #d1d5db);
-  background: var(--color-surface, #fff);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
   cursor: pointer;
   font-size: 0.9rem;
 }
 
 .tabActive {
-  background: var(--color-primary, #2563eb);
+  background: var(--color-primary);
   color: #fff;
   border-color: transparent;
 }
@@ -47,7 +47,7 @@
 .actionsRow button {
   min-height: 2.25rem;
   padding: 0.45rem 0.9rem;
-  border: 1px solid var(--color-border, #d1d5db);
+  border: 1px solid var(--color-border);
   border-radius: 6px;
 }
 
@@ -63,15 +63,15 @@
 }
 
 .card {
-  border: 1px solid var(--color-border, #e5e7eb);
+  border: 1px solid var(--color-border);
   border-radius: 8px;
   padding: 0.75rem 1rem;
-  background: var(--color-surface, #fff);
+  background: var(--color-surface);
 }
 
 .cardLabel {
   font-size: 0.8rem;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
 }
 
 .cardValue {
@@ -92,7 +92,7 @@
 
 .table th,
 .table td {
-  border-bottom: 1px solid var(--color-border, #e5e7eb);
+  border-bottom: 1px solid var(--color-border);
   padding: 0.5rem 0.6rem;
   text-align: start;
 }
@@ -121,7 +121,7 @@
 .form input,
 .form textarea {
   padding: 0.5rem 0.65rem;
-  border: 1px solid var(--color-border, #d1d5db);
+  border: 1px solid var(--color-border);
   border-radius: 6px;
   font: inherit;
 }
@@ -129,7 +129,7 @@
 .primaryBtn {
   align-self: flex-start;
   padding: 0.5rem 1rem;
-  background: var(--color-primary, #2563eb);
+  background: var(--color-primary);
   color: #fff;
   border: none;
   border-radius: 6px;
@@ -142,7 +142,7 @@
 }
 
 .pre {
-  background: var(--color-surface-2, #f3f4f6);
+  background: var(--color-surface-2);
   padding: 0.75rem;
   border-radius: 6px;
   overflow: auto;
@@ -150,7 +150,7 @@
 }
 
 .muted {
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
 }
 
 .error {
