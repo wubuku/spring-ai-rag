@@ -1062,3 +1062,16 @@
      成本接线。
 - 证据：新测试 23/23 绿；core 全量 `Tests run: 3374, Failures: 0,
   Errors: 0, Skipped: 9`，BUILD SUCCESS。
+
+### Batch 72（已交付）
+
+- 分支：`test/alert-delivery-worker`（已合入 main = `f019e718`）
+- 内容：`AlertNotificationDeliveryWorker`（事件驱动、lease 化的 durable
+  告警投递 worker）零直接测试，补 10 用例覆盖 process() 投递决策矩阵：
+  托管状态过期 markSuperseded（不触达 provider）、provider 未知/不可用的
+  PERMANENT_CONFIGURATION 落点、SUCCESS→markDelivered、PERMANENT_FAILURE
+  明细透传、TRANSIENT_FAILURE 的 retry-after 感知退避窗口（7s–1.2h）、
+  provider 异常降级 TRANSIENT_NETWORK、fallbackScan lease 恢复、
+  retention cleanup 接线、shutdown 后 wakeUp 不再派发。
+- 证据：新测试 10/10 绿；core 全量 `Tests run: 3384, Failures: 0,
+  Errors: 0, Skipped: 9`，BUILD SUCCESS。
