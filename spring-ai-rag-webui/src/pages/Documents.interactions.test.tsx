@@ -36,8 +36,10 @@ vi.mock('../api/files', () => ({
   },
 }));
 
+const mockShowToast = vi.fn();
+
 vi.mock('../components/Toast', () => ({
-  useToast: () => ({ showToast: vi.fn() }),
+  useToast: () => ({ showToast: mockShowToast }),
 }));
 
 vi.mock('../hooks/useFileUpload', () => ({
@@ -370,6 +372,96 @@ describe('Documents edit save flow', () => {
           title: 'Renamed Doc',
           content: 'new content',
         }),
+      );
+    });
+  });
+});
+
+// ─── Mutation error paths and pagination (Batch 66) ──────────────────
+
+describe('Documents mutation error paths and pagination', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(documentsApi.list).mockResolvedValue({
+      data: { documents: [LOCAL_DOC], total: 1 },
+    } as never);
+    vi.mocked(documentsApi.getEmbeddingStatus).mockResolvedValue({
+      data: {
+        totalDocuments: 1, withEmbeddings: 1, withoutEmbeddings: 0, hasMissing: false,
+      },
+    } as never);
+  });
+
+  it('shows revision conflict toast on 409 during disable', async () => {
+    const user = userEvent.setup();
+    vi.mocked(documentsApi.disable).mockRejectedValue(
+      Object.assign(new Error('Conflict'), { response: { status: 409 }, status: 409 }),
+    );
+
+    renderDocuments();
+    await screen.findByText('Local Doc');
+    await user.click(
+      screen.getByRole('button', { name: 'documents.openActions' }),
+    );
+    await user.click(screen.getByRole('menuitem', { name: 'documents.disable' }));
+    await user.click(
+      within(
+        screen.getByRole('dialog', { name: 'documents.disable' }),
+      ).getByRole('button', { name: 'documents.disable' }),
+    );
+
+    await waitFor(() => {
+      expect(mockShowToast).toHaveBeenCalledWith(
+        'documents.revisionConflict', 'error',
+      );
+    });
+  });
+
+  it('navigates to next page via pagination controls', async () => {
+    const user = userEvent.setup();
+    vi.mocked(documentsApi.list).mockResolvedValue({
+      data: {
+        documents: [LOCAL_DOC],
+        total: 25,
+      },
+    } as never);
+
+    renderDocuments();
+    await screen.findByText('Local Doc');
+
+    const nextBtn = screen.getByRole('button', { name: /common\.next/i });
+    expect(nextBtn).toBeEnabled();
+    await user.click(nextBtn);
+
+    await waitFor(() => {
+      expect(documentsApi.list).toHaveBeenCalledWith(
+        expect.objectContaining({ page: 1 }),
+      );
+    });
+  });
+
+  it('triggers embed retry from the row menu', async () => {
+    const user = userEvent.setup();
+    vi.mocked(documentsApi.list).mockResolvedValue({
+      data: {
+        documents: [{ ...LOCAL_DOC, embeddingFresh: false }],
+        total: 1,
+      },
+    } as never);
+
+    renderDocuments();
+    await screen.findByText('Local Doc');
+    await user.click(
+      screen.getByRole('button', { name: 'documents.openActions' }),
+    );
+    await user.click(
+      screen.getByRole('menuitem', { name: 'documents.retryEmbedding' }),
+    );
+
+    await waitFor(() => {
+      expect(documentsApi.embed).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.anything(),
       );
     });
   });

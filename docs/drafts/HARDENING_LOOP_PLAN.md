@@ -1004,14 +1004,19 @@
 - Batch 65：后端中等方法审计收尾 —— **已在 Batch 62 完成**（`RagCollectionService.cloneCollection` / `KeywordIndexPersistenceService.ensureCurrent` / `DocumentRelocationService.reserve` 三项均确认既有护栏已足、不拆分）。
 - Batch 66：Evaluation citations tab 渲染与失败告警测试 —— **已在 Batch 54 完成**。
 
+### Batch 66（已交付）
+
+- 分支：`test/coverage-round3-20260906`（基于 Batch 65 分支）
+- 内容：Documents.interactions.test.tsx 追加 3 个 mutation 错误路径与
+  分页交互测试：
+  1. **409 revision conflict**：disable mutation reject 409 时验证
+     revisionConflict toast 被调用（含 error 级别）；
+  2. **分页控制**：total > 1 页时 Next 按钮可点击并触发 list(page=1)；
+  3. **embed retry**：从行菜单触发 embed mutation 并断言调用参数。
+- 证据：`tsc -b` 绿；`test:run` 366/366（57 文件，+3）；`lint`/`build` 绿。
+
 ## 10. 下一批次入口（候选，按优先级）
 
-- Batch 67：Documents preview 对话框与 relocate 流程测试 —— **已在 Batch 53 完成**（`Documents.interactions.test.tsx` 的 preview fetch 断言与 relocate 五元组 + Idempotency-Key 断言）。
-- Batch 68：Evaluation manual evaluate / judge 表单提交流程测试 —— **已在 Batch 52 完成**。
-
-## 已完成批次累计（Batch 64/65 为重复条目核对，无新代码）
-
-审计地图「待评估」与队列中标注的 Documents preview 失败回退、后端中等方法审计收尾、
-Evaluation citations tab 测试均已在后续批次落地或确认既有覆盖已足，
-无重复劳动必要。当前 main = origin/main = 1b5cc12c，前端 tsc/lint/build/test:run
-（362/362，57 文件）与文档门禁 11/11 全绿。
+- Batch 67：Alerts SLO/silence 表单提交流程测试。
+- Batch 68：后端中等方法审计收尾（LegacyEmbeddingMigrationService +
+  PdfImportController 剩余方法）。
