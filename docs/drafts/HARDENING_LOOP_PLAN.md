@@ -651,23 +651,27 @@
 - 分支：`audit/medium-method-map-20260906`（基于 Batch 38 分支）
 - 内容：controller/service/chat 全量扫描（方法 ≥60 行），**剩余 15 个**，
   已在 Batch 22/26/30 拆掉 ChatExecution/ChatTurnOp/SyncRun/Purge 四处大头。
-  完整地图（长度 | 护栏 | 建议优先级）：
+  **终态地图（Batch 47 收敛，2026-09-06）**：
 
-  | 方法 | 行数 | 护栏现状 | 建议 |
+  | 方法 | 行数 | 终态 | 依据 |
   |---|---|---|---|
-  | DocumentLifecycleService.read | 160 | 无专属测试 | 高：先补单测再拆 |
-  | DerivationIntegrityRepository.classificationQuery | 148 | 无（gated IT 间接） | 低：SQL 文本主体，拆分无收益 |
-  | PdfImportService.importPdf | 144 | PdfImportControllerTest 间接 | 中：先补服务级单测 |
-  | ExternalDocumentService.persistInTransaction | 104 | ExternalDocumentWebTest 间接 | 中 |
-  | RagCollectionService.cloneCollection | 87 | Collections 页测试间接 | 中 |
-  | DerivationRepairService.apply / preview / applyVectorPhase | 87/68/64 | 无专属测试 | 高：先补单测 |
-  | LegacyEmbeddingMigrationService.adoptDocument | 82 | 无 | 低（迁移期代码） |
-  | KeywordIndexPersistenceService.ensureCurrent | 82 | 无 | 中 |
-  | DocumentSyncRunService.findCandidates | 76 | gated IT（Batch 25 flake 修复已覆盖） | 低：已够 |
-  | ChatHistoryCleanupService.cleanupSession | 76 | ChatHistoryCleanupTest | 低 |
-  | IntegrationCapabilityCatalog.describe | 74 | 契约测试 | 低 |
-  | DocumentRelocationService.reserve | 67 | ExternalDocumentWebTest 间接 | 中 |
-  | RagChatToolRegistry.validateAndFreeze | 66 | 间接 | 低 |
+  | DocumentLifecycleService.read | 160 | **已拆**（Batch 40） | 护栏 7/7 先行，deriveFromStateRow 纯函数化 |
+  | DerivationRepairService.apply | 87 | **已拆**（Batch 45） | 决策矩阵 11/11 + gated IT 10/10 前后一致 |
+  | PdfImportService.importPdf | 144 | **已拆**（Batch 43） | Fake converter 护栏 6/6，collectOutputRecords 纯静态 |
+  | ExternalDocumentService.persistInTransaction | 104 | **不拆**（Batch 44） | 专属单测已直接驱动主链；补 JSON-record 守卫 3 测 |
+  | LegacyEmbeddingMigrationService.adoptDocument | 82 | **不拆**（Batch 46） | 直线守卫链是正确形态；gated IT 实证护栏可用 |
+  | DerivationIntegrityRepository.classificationQuery | 148 | 不拆 | SQL 文本主体，拆分无收益 |
+  | DerivationRepairService.preview / applyVectorPhase | 68/64 | 不拆 | 决策核心已提取（plan 矩阵 11/11），主体为编排 |
+  | RagCollectionService.cloneCollection | 87 | 待评估（低优） | 页面/接口测试间接覆盖 |
+  | KeywordIndexPersistenceService.ensureCurrent | 82 | 待评估（低优） | 无专属测试 |
+  | DocumentRelocationService.reserve | 67 | 待评估（低优） | ExternalDocumentWebTest 间接 |
+  | DocumentSyncRunService.findCandidates | 76 | 不拆 | gated IT 覆盖（Batch 25 flake 修复后已验证） |
+  | ChatHistoryCleanupService.cleanupSession | 76 | 不拆 | ChatHistoryCleanupTest 覆盖 |
+  | IntegrationCapabilityCatalog.describe | 74 | 不拆 | 契约测试覆盖 |
+  | RagChatToolRegistry.validateAndFreeze | 66 | 不拆 | 间接覆盖充分 |
+
+  收敛结论：4 个已拆（各配护栏）、5 个有据不拆、3 个低优先待评估、3 个已足。
+  审计闭环完成；「待评估」三项不阻塞任何当前工作。
 
 - 证据：静态扫描脚本输出（本批未改应用代码，无需应用门禁）。
 
