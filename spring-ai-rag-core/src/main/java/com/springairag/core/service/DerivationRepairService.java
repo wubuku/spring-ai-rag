@@ -163,21 +163,47 @@ public class DerivationRepairService {
         requireEnabled();
         PreviewRow preview = requirePreview(request.repairId());
         requireCollectionAccess(preview.collectionId(), request.collectionKey());
+        requirePreviewIdentity(preview, request);
+        if ("COMPLETED".equals(preview.status())) {
+            return status(request.repairId());
+        }
+        requireActiveProfile(preview.profileId());
+        requirePreviewNotExpired(preview);
+        String leaseHash = claimApplyLease(preview);
+        if (leaseHash == null) {
+            return handleUnclaimedPreview(preview);
+        }
+        processPlannedItems(preview, leaseHash);
+        finishApply(preview, leaseHash);
+        return status(preview.id());
+    }
+
+    /** 校验 preview token 与 fingerprint 与申请时一致。 */
+    private void requirePreviewIdentity(
+            PreviewRow preview,
+            DerivationRepairApplyRequest request) {
         if (!DigestUtils.sha256(request.previewToken()).equals(preview.tokenHash())
                 || !request.previewFingerprint().equals(preview.fingerprint())) {
             throw new RagException(ErrorCode.DERIVATION_REPAIR_CONFLICT,
                     "Preview token or fingerprint does not match");
         }
-        if ("COMPLETED".equals(preview.status())) {
-            return status(request.repairId());
-        }
-        requireActiveProfile(preview.profileId());
+    }
+
+    private void requirePreviewNotExpired(PreviewRow preview) {
         if (preview.previewDeadline().isBefore(Instant.now())
                 && "PREVIEWED".equals(preview.status())) {
             expire(preview.id());
             throw new RagException(ErrorCode.DERIVATION_REPAIR_EXPIRED,
                     "Derivation repair preview expired");
         }
+    }
+
+    /**
+     * 抢占 apply 租约；PREVIEWED 或租约过期的 APPLYING 可抢。
+     *
+     * @return 租约哈希；{@code null} 表示未能抢占（操作已过期或他方正持有）。
+     */
+    private String claimApplyLease(PreviewRow preview) {
         String leaseHash = DigestUtils.sha256(newToken());
         int claimed = jdbcTemplate.update(
                 """
@@ -190,15 +216,21 @@ public class DerivationRepairService {
                 ) AND operation_deadline > CURRENT_TIMESTAMP
                 """,
                 leaseHash, preview.id());
-        if (claimed == 0) {
-            if (!preview.operationDeadline().isAfter(Instant.now())) {
-                expireOperation(preview.id());
-                throw new RagException(ErrorCode.DERIVATION_REPAIR_EXPIRED,
-                        "Derivation repair operation expired");
-            }
-            return status(preview.id());
-        }
+        return claimed == 1 ? leaseHash : null;
+    }
 
+    /** 未能抢占时的收尾：操作过期则标记过期并抛出，否则回读当前状态。 */
+    private DerivationRepairStatusResponse handleUnclaimedPreview(PreviewRow preview) {
+        if (!preview.operationDeadline().isAfter(Instant.now())) {
+            expireOperation(preview.id());
+            throw new RagException(ErrorCode.DERIVATION_REPAIR_EXPIRED,
+                    "Derivation repair operation expired");
+        }
+        return status(preview.id());
+    }
+
+    /** 逐文档执行 claim → local → vector → finish 三阶段，失败项单独标记。 */
+    private void processPlannedItems(PreviewRow preview, String leaseHash) {
         List<Long> itemIds = jdbcTemplate.queryForList(
                 """
                 SELECT document_id FROM rag_derivation_repair_items
@@ -229,6 +261,10 @@ public class DerivationRepairService {
                 failItem(preview.id(), documentId, leaseHash, safeError(e));
             }
         }
+    }
+
+    /** 全部计划项处理完毕后标记 COMPLETED（仍有未完成项时条件更新不生效）。 */
+    private void finishApply(PreviewRow preview, String leaseHash) {
         jdbcTemplate.update(
                 """
                 UPDATE rag_derivation_repair_previews preview
@@ -244,7 +280,6 @@ public class DerivationRepairService {
                   )
                 """,
                 preview.id(), leaseHash);
-        return status(preview.id());
     }
 
     public DerivationRepairStatusResponse status(UUID repairId) {
