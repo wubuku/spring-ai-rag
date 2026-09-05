@@ -646,8 +646,33 @@
   2. 预先 rememberRoute 的 query 会反映到导航链接 href。
 - 证据：`test:run` 335 → 337（55 文件）；`tsc -b`/`lint`/`build` 绿。
 
+### Batch 39（已交付）
+
+- 分支：`audit/medium-method-map-20260906`（基于 Batch 38 分支）
+- 内容：controller/service/chat 全量扫描（方法 ≥60 行），**剩余 15 个**，
+  已在 Batch 22/26/30 拆掉 ChatExecution/ChatTurnOp/SyncRun/Purge 四处大头。
+  完整地图（长度 | 护栏 | 建议优先级）：
+
+  | 方法 | 行数 | 护栏现状 | 建议 |
+  |---|---|---|---|
+  | DocumentLifecycleService.read | 160 | 无专属测试 | 高：先补单测再拆 |
+  | DerivationIntegrityRepository.classificationQuery | 148 | 无（gated IT 间接） | 低：SQL 文本主体，拆分无收益 |
+  | PdfImportService.importPdf | 144 | PdfImportControllerTest 间接 | 中：先补服务级单测 |
+  | ExternalDocumentService.persistInTransaction | 104 | ExternalDocumentWebTest 间接 | 中 |
+  | RagCollectionService.cloneCollection | 87 | Collections 页测试间接 | 中 |
+  | DerivationRepairService.apply / preview / applyVectorPhase | 87/68/64 | 无专属测试 | 高：先补单测 |
+  | LegacyEmbeddingMigrationService.adoptDocument | 82 | 无 | 低（迁移期代码） |
+  | KeywordIndexPersistenceService.ensureCurrent | 82 | 无 | 中 |
+  | DocumentSyncRunService.findCandidates | 76 | gated IT（Batch 25 flake 修复已覆盖） | 低：已够 |
+  | ChatHistoryCleanupService.cleanupSession | 76 | ChatHistoryCleanupTest | 低 |
+  | IntegrationCapabilityCatalog.describe | 74 | 契约测试 | 低 |
+  | DocumentRelocationService.reserve | 67 | ExternalDocumentWebTest 间接 | 中 |
+  | RagChatToolRegistry.validateAndFreeze | 66 | 间接 | 低 |
+
+- 证据：静态扫描脚本输出（本批未改应用代码，无需应用门禁）。
+
 ## 10. 下一批次入口（候选，按优先级）
 
-- Batch 39：中等方法审计收尾盘点（controller/service 剩余清单一次性列出）。
-- Batch 40：chat-real 稳定性观察与 files-real 模型速度方案取舍。
-- Batch 41：dev 栈启动需要 node PATH 的说明补入 developer-reference（双语）。
+- Batch 40：DocumentLifecycleService.read 先补单测后拆分（地图最高项）。
+- Batch 41：files-real 模型速度方案取舍（快模型 / chat-ask-ms）。
+- Batch 42：dev 栈 node PATH 说明补入 developer-reference（双语）。
