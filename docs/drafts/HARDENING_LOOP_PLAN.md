@@ -886,8 +886,22 @@
 - 与 Batch 56 同结论：数据访问/编排类大文件的「一方法一职责 + 行为护栏」
   状态良好，无需为行数而拆。
 
+### Batch 58（已交付）
+
+- 分支：`audit/pdf-controller-remaining-20260906`（基于 Batch 57 分支）
+- **快速审计结论（两项均不拆分，无代码改动）**：
+  1. `PdfImportController.triggerEmbeddingSync`（45 行）：约 20 行为路由注解
+     （双 params 条件分派 sync/async 端点），主体为单层委托
+     `pdfToRagService.triggerEmbedding` + 错误映射；护栏
+     PdfImportControllerTest 34/34。
+  2. `LegacyEmbeddingMigrationService.adoptDocument`（82 行）已于
+     Batch 46 处置完毕（不拆分、gated IT adoptLegacy 路径实证通过）。
+- 证据：静态结构审阅 + 既有护栏全绿（PdfImportControllerTest 在
+  Batch 43 验证 34/34）；本批无应用代码改动。
+
 ## 10. 下一批次入口（候选，按优先级）
 
-- Batch 58：LegacyEmbeddingMigrationService 与 PdfImportController 剩余方法
-  的同模式快速审计（沿用本批验证方式）。
-- Batch 59：前端 hooks 层覆盖复核收尾。
+- Batch 59：前端 hooks 层覆盖复核收尾（useSSE/useSearchHistory 既有测试
+  健康确认）。
+- Batch 60：循环第 60 批里程碑——全量回归（前端全套件 + 后端核心测试 +
+  文档门禁）作为阶段验收。
