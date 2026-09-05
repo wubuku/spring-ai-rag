@@ -1075,3 +1075,17 @@
   retention cleanup 接线、shutdown 后 wakeUp 不再派发。
 - 证据：新测试 10/10 绿；core 全量 `Tests run: 3384, Failures: 0,
   Errors: 0, Skipped: 9`，BUILD SUCCESS。
+
+### Batch 73（已交付）
+
+- 分支：`test/embedding-persistence`（已合入 main = `269ec714`）
+- 内容：`EmbeddingPersistenceService`（profile 级 embedding 缓存、原子
+  向量替换与失败记录）零直接测试，补 14 用例：
+  完整性快照短路与 JDBC 双查询缓存判定（metadata 四维失配、向量行数
+  完整性）、内容哈希初始化 CAS、提交门异常传播、文档变更三维权栏拒绝
+  （version/hash/enabled）、完整替换写序（DELETE→逐 chunk INSERT 含
+  向量字符串格式→state upsert→文档 CAS）、最终 CAS 失败拒绝、失败记录
+  变更静默跳过、空白错误默认值、敏感信息脱敏与 500 字符截断、失败 CAS
+  拒绝。
+- 证据：新测试 14/14 绿；core 全量 `Tests run: 3398, Failures: 0,
+  Errors: 0, Skipped: 9`，BUILD SUCCESS。
