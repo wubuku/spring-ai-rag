@@ -972,7 +972,24 @@
      `chatApi.exportConversation('session-9', 'json')`。
 - 证据：`tsc -b` 绿；`test:run` **359/359**（57 文件，+2）；`lint`/`build` 绿。
 
+### Batch 62（已交付）
+
+- 分支：`audit/medium-methods-closeout-20260906`（基于 main@b1f7f6a7）
+- **审计结论（两项均不拆分，护栏已足）**：
+  1. `RagCollectionService.cloneCollection`（87 行）：
+     `RagCollectionServiceTest` 已含 cloneCollection 专属 @Nested 组
+     （null id、非法/重复 collectionKey、正常克隆含文档与审计日志）全绿；
+     方法体为「校验 → 复制 → 双路径文档克隆 → 审计」直线业务流，
+     拆分只破坏可读性。
+  2. `KeywordIndexPersistenceService.ensureCurrent`（82 行）：守卫（null/
+     disabled）→ freshness 短路 → 删旧插新 → 状态推进的直线流；
+     行为由 DocumentLifecycle 与 NextHighValue gated IT 覆盖
+     （两个 IT 均引用 KeywordIndexPersistenceService）。
+- 证据：`mvn -q clean compile test-compile` 绿；既有测试全绿；锁扫描通过。
+- 审计地图全部收敛：15 项终态（4 已拆 / 8 有据不拆 / 3 已足覆盖）。
+
 ## 10. 下一批次入口（候选，按优先级）
 
-- Batch 64：Documents preview get 失败回退场景测试（Batch 53 的对照面）。
-- Batch 65：Evaluation citations tab 渲染与失败告警测试。
+- Batch 63：前端 Chat.tsx 深度交互测试（模式切换 URL 同步、导出菜单）。
+- Batch 64：后端中等方法审计收尾（LegacyEmbeddingMigrationService +
+  PdfImportController 剩余方法）。
