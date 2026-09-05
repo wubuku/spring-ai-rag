@@ -1173,3 +1173,17 @@
   68.5%→84.8%，全仓 83.63%。
 - 证据：`test:run` 415/415（58 文件）；`lint` 0 问题；`tsc -b` 绿；
   `build` 绿。
+
+### Batch 79（已交付）
+
+- 分支：`test/abtest-detail-states`（已合入 main = `0f4de880`）
+- 内容：`ABTest.tsx` 详情视图边界状态补 4 测试：
+  1. PAUSED 实验暴露 resume（复用 start mutation）+ stop 按钮且
+     隐藏 pause，点击驱动对应 mutation spy；
+  2. 实验查询已加载无数据（data === undefined）→ notFound 空状态
+     （mock 需返回 data: undefined 而非查询命中空数据）；
+  3. back 按钮返回列表视图（accessible name 含 ← 前缀，需正则匹配）；
+  4. 无显著性的分析渲染 notSignificant 徽章 + 置信度百分比。
+  行覆盖 69.7%→73.7%，全仓 83.75%。
+- 证据：`test:run` 419/419（58 文件）；`lint` 0 问题；`tsc -b` 绿；
+  `build` 绿。
