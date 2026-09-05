@@ -1216,3 +1216,23 @@
   （functions 100%），全仓 84.06%。
 - 证据：`test:run` 423/423（58 文件）；`lint` 0 问题；`tsc -b` 绿；
   `build` 绿。
+
+### Batch 82（已交付）
+
+- 分支：`test/retriever-mapper-classes`（已合入 main = `9ebf008e`）
+- 内容：rag 包三个零测试类补 16 用例：
+  1. **RetrievalDocumentMapperTest（8）**：组合 id、必填 metadata 注入、
+     白名单过滤、条件字段（originalFilename/source）、sourceType 推导链
+     （metadata > pdf-import 前缀 > DOCUMENT）、2000 字符截断、
+     Document 往返映射（documentId 缺失回退完整 id 含 chunk 后缀）；
+  2. **StaticKnowledgeDocumentRetrieverTest（4）**：授权上下文缺失拒绝、
+     catalog 检索接线（limit/maxToolResultCharacters 参数）与 trace
+     记录、Query 入口委派、健康快照可用性三态；
+  3. **CompositeChatDocumentRetrieverTest（4）**：上下文缺失拒绝、
+     检索预算耗尽短路、合并与 composite 上下文标记传递、按 id 去重
+     保留 project 版本。
+- 发现（记录供后续加固）：`toDocument` 将 title/score 等 getter 未
+  过滤写入 Document metadata，null 时 Document.build 抛 IAE；当前生产
+  无调用方，属潜在脆弱点而非活跃 bug。
+- 证据：新测试 16/16 绿；core 全量 `Tests run: 3414, Failures: 0,
+  Errors: 0, Skipped: 9`，BUILD SUCCESS。
