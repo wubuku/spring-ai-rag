@@ -909,8 +909,26 @@
 - 证据：`npx vitest run src/hooks/` 40/40；coverage include src/hooks 实测。
 - 本批无代码改动（纯复核记录）。
 
+### Batch 60（里程碑，已交付）
+
+- 分支：`main`（阶段验收记录，直接提交 main——纯文档无 workflow 变更）
+- **第 60 批阶段验收：全量回归结果**
+  - 前端：`tsc -b` 绿；`test:run` **355/355**（56 文件，起点 251/34）；
+    `lint`（ESLint + alignment + design-token 字面颜色零容忍）绿；`build` 绿。
+  - 后端：`mvn -q clean compile test-compile` 绿；`verify-no-pessimistic-locks`
+    通过；gated IT 本地护栏已验证（embedding-jobs 8/8、next-high-value 10/10、
+    chat.idempotency 7/7、jsonb 3/3、collection-purge 5/5、
+    document-sync-runs 4/4、embedding-profile adoptLegacy 路径绿）。
+  - 文档：`verify-project-docs.sh` 11/11。
+- 循环累计（Batch 1–60）：前端单测 251 → **355**；后端新增 40+ 决策/契约/
+  守卫单测；字面颜色 **389 → 0**；4 处超长方法拆分（ChatExecution/
+  ChatTurnOperation/SyncRun/Purge）；2 个生产缺陷修复（Chat mode 丢失、
+  Embeddings 样式借用）；2 个预存 gated IT 缺陷修复；运行手册双语化。
+- 待用户操作：`git push origin ci/webui-job-pending-workflow-scope`
+  （workflow scope；WebUI CI job + gated IT 步骤 + 脚本已就绪）。
+
 ## 10. 下一批次入口（候选，按优先级）
 
-- Batch 60：循环里程碑——全量回归（前端全套件 + 后端核心门禁 + 文档门禁）
-  作为阶段验收，并盘点审计地图余项（cloneCollection/ensureCurrent/reserve
-  三个低优先待评估）。
+- Batch 61：审计地图「待评估」三项（cloneCollection/ensureCurrent/reserve）
+  的逐一快速处置。
+- Batch 62：chat-real 模型配置稳定性观察；-real 套件运行手册维护。
