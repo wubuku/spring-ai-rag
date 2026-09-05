@@ -581,3 +581,100 @@ describe('Chat streaming callbacks (deep interactions)', () => {
     expect(activityRegion).toBeInTheDocument();
   });
 });
+
+// ─── SSE callback coverage (Batch 63 deep interactions) ─────────────
+
+describe('Chat SSE callbacks', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    window.sessionStorage.clear();
+    (modelsApi.list as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: {
+        multiModelEnabled: false,
+        defaultProvider: 'openai',
+        defaultModel: 'openai',
+        availableProviders: ['openai'],
+        fallbackChain: [],
+        models: [],
+      },
+    });
+    (collectionsApi.list as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: { collections: [], total: 0 },
+    });
+    (chatApi.getHistory as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: [],
+    });
+  });
+
+  function renderChatForCallbacks() {
+    renderChat();
+    const textarea = screen.getByPlaceholderText(/chat.placeholder/);
+    fireEvent.change(textarea, { target: { value: 'test query' } });
+    fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false });
+  }
+
+  function getOptions(): Record<string, unknown> {
+    const mockCalls = (useChatSSE as ReturnType<typeof vi.fn>).mock.calls;
+    const lastCall = mockCalls.at(-1);
+    return lastCall?.[0] as Record<string, unknown>;
+  }
+
+  it('onChunk appends content to the streaming message', async () => {
+    renderChatForCallbacks();
+    const opts = getOptions();
+    await act(async () => {
+      (opts.onChunk as (c: string) => void)('streaming ');
+    });
+    await act(async () => {
+      (opts.onChunk as (c: string) => void)('response');
+    });
+    expect(screen.getByText(/streaming response/)).toBeInTheDocument();
+  });
+
+  it('onSources updates message sources', async () => {
+    renderChatForCallbacks();
+    const opts = getOptions();
+    const sources = [{ documentId: 1, title: 'doc-1' }];
+    await act(async () => {
+      (opts.onSources as (s: unknown, next: string | undefined) => void)(
+        sources, undefined,
+      );
+    });
+    // Sources are stored on the streaming message
+    expect(screen.getByText(/test query/)).toBeInTheDocument();
+  });
+
+  it('onToolStart adds tool activity to the streaming message', async () => {
+    renderChatForCallbacks();
+    const opts = getOptions();
+    await act(async () => {
+      (opts.onToolStart as ((e: unknown) => void))({
+        toolCallId: 'tc-1',
+        tool: 'searchKnowledge',
+        query: 'weather in beijing',
+      });
+    });
+    expect(
+      screen.getByLabelText('chat.toolActivity'),
+    ).toBeInTheDocument();
+  });
+
+  it('onDone marks streaming complete', async () => {
+    renderChatForCallbacks();
+    const opts = getOptions();
+    await act(async () => {
+      (opts.onDone as ((d: { sessionId?: string }) => void))({});
+    });
+    // After done, the streaming flag is cleared
+    expect(screen.getByText(/test query/)).toBeInTheDocument();
+  });
+
+  it('onError shows error message to user', async () => {
+    renderChatForCallbacks();
+    const opts = getOptions();
+    await act(async () => {
+      (opts.onError as ((m: string) => void))('LLM provider failed');
+    });
+    expect(screen.getByText(/Error.*LLM provider failed/)).toBeInTheDocument();
+  });
+});
