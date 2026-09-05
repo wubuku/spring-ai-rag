@@ -135,3 +135,43 @@ describe('Evaluation interactions', () => {
     });
   });
 });
+
+describe('Evaluation citations tab', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  function renderCitations() {
+    return renderPage('/?tab=citations');
+  }
+
+  it('lists citation traces with status and outcome', async () => {
+    vi.mocked(evaluationApi.listCitationTraces).mockResolvedValue({
+      data: {
+        items: [
+          { traceId: 'trace-1', citationStatus: 'GROUNDED', outcomeCode: 'OK' },
+          { traceId: 'trace-2', citationStatus: null, outcomeCode: 'NO_CITATION' },
+        ],
+      },
+    } as never);
+
+    renderCitations();
+
+    expect(await screen.findByText('trace-1')).toBeInTheDocument();
+    expect(screen.getByText('GROUNDED')).toBeInTheDocument();
+    expect(screen.getByText('OK')).toBeInTheDocument();
+    expect(screen.getByText('—')).toBeInTheDocument();
+  });
+
+  it('shows the failure alert when citation traces fail to load', async () => {
+    vi.mocked(evaluationApi.listCitationTraces).mockRejectedValue(
+      new Error('boom'),
+    );
+
+    renderCitations();
+
+    expect(
+      await screen.findByText('evaluation.citationsFailed'),
+    ).toBeInTheDocument();
+  });
+});

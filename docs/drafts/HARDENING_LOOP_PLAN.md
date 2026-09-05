@@ -844,7 +844,16 @@
      收到完整五元组请求 + Idempotency-Key UUID（expect.any(String)）。
 - 证据：`tsc -b` 绿；`test:run` 349/349（57 文件，+4）；`lint`/`build` 绿。
 
+### Batch 54（已交付）
+
+- 分支：`test/evaluation-citations-tab-20260906`（基于 Batch 53 分支）
+- 内容：Evaluation citations tab 补 2 个测试——trace 行渲染
+  （traceId/citationStatus/outcome，null 值回退 '—'）与加载失败
+  （citationsFailed 告警）。
+- 证据：`tsc -b` 绿；`test:run` 350 → 352（56 文件，+2）；`lint`/`build` 绿。
+
 ## 10. 下一批次入口（候选，按优先级）
 
-- Batch 54：Evaluation manual/judge 之外的 report 读取与 citations tab 测试。
-- Batch 55：后端 EmbeddingJobRepository（1114 行）审计评估。
+- Batch 55：Documents preview 对话框正文断言补强（get 失败回退场景）。
+- Batch 56：后端 ChatExecutionService prepareForOperation 深分支审计
+  （prepareForOperation 110 行已在 Batch 22 收缩，评估残余）。
