@@ -304,3 +304,96 @@ describe('ABTest', () => {
     });
   });
 });
+
+describe('ABTest detail lifecycle and edge states', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    queryStore.clear();
+    mutationSpies.length = 0;
+    mockUseQuery.mockImplementation((options: { queryKey: readonly unknown[] }) => {
+      const key = JSON.stringify(options.queryKey);
+      return {
+        data: queryStore.get(key),
+        isPending: !queryStore.has(key),
+        error: null,
+      };
+    });
+    mockUseMutation.mockImplementation(() => {
+      const mutation = { mutate: vi.fn(), isPending: false };
+      mutationSpies.push(mutation);
+      return mutation;
+    });
+  });
+
+  it('offers resume and stop actions for a paused experiment', async () => {
+    const user = userEvent.setup();
+    storeQuery(
+      ['abtest', 'experiment', 5],
+      makeExperiment({ status: 'PAUSED' }),
+    );
+
+    renderAbTest('/abtest/5');
+
+    // PAUSED 复用 start mutation 作为 resume，并暴露 stop。
+    const resume = screen.getByRole('button', { name: 'abtest.resume' });
+    const stop = screen.getByRole('button', { name: 'abtest.stop' });
+    expect(screen.queryByRole('button', { name: 'abtest.pause' }))
+      .not.toBeInTheDocument();
+
+    await user.click(resume);
+    await user.click(stop);
+
+    expect(mutationSpies[0].mutate).toHaveBeenCalledTimes(1);
+    expect(mutationSpies[2].mutate).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows the not-found state for an unknown experiment id', () => {
+    // 实验查询已加载但无数据（data === undefined）时渲染 notFound。
+    mockUseQuery.mockImplementationOnce(
+      () => ({ data: undefined, isPending: false, error: null }),
+    );
+
+    renderAbTest('/abtest/99');
+
+    expect(screen.getByText('abtest.notFound')).toBeInTheDocument();
+  });
+
+  it('returns to the list from the detail back button', async () => {
+    const user = userEvent.setup();
+    storeQuery(['abtest', 'experiment', 5], makeExperiment());
+    storeQuery(['abtest', 'experiments'], [makeExperiment()]);
+
+    renderAbTest('/abtest/5');
+    await user.click(screen.getByRole('button', { name: /abtest\.back/ }));
+
+    // 导航回 /abtest 后列表视图重新出现。
+    expect(await screen.findByText('rerank-a-b')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'abtest.createExperiment' }),
+    ).toBeInTheDocument();
+  });
+
+  it('renders the not-significant badge for inconclusive analyses', () => {
+    const analysis: ExperimentAnalysis = {
+      experimentId: 5,
+      status: 'STOPPED',
+      variantStats: { control: controlStats },
+      confidenceLevel: 0.8,
+      isSignificant: false,
+      recommendation: 'Collect more samples',
+      analyzedAt: '2026-08-02T00:00:00Z',
+    };
+    storeQuery(
+      ['abtest', 'experiment', 5],
+      makeExperiment({ status: 'STOPPED' }),
+    );
+    storeQuery(['abtest', 'analysis', 5], analysis);
+
+    renderAbTest('/abtest/5');
+
+    expect(
+      screen.getByText(/abtest\.notSignificant/),
+    ).toHaveTextContent('Collect more samples');
+    expect(screen.getByText('80.0%')).toBeInTheDocument();
+  });
+});
