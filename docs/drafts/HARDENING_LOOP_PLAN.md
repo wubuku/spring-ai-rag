@@ -1116,3 +1116,17 @@
 - 证据：`tsc -b` 绿；`test:run` 398/398（58 文件）；`lint` 0 问题（含
   design token policy passed）；`check:alignment` 通过（12 处预期居中）；
   `build` 绿。
+
+### Batch 75（已交付）
+
+- 分支：`test/dashboard-abtest-pages`（已合入 main = `4f0fcc18`）
+- 内容：页面层覆盖率继续收敛：
+  1. **Dashboard.test.tsx**：补 queryFn 接线断言（health/documents/
+     collections 三个 useQuery 回调在 mock hook 下从未执行），断言
+     stats 分页参数 {page:0,size:1}，页面行覆盖 66.66%→100%；
+  2. **ABTest.test.tsx**：补创建对话框完整 payload 测试（name、
+     description、targetMetric 下拉、自定义 variant 名——受控输入需
+     先 clear 再 type、非对称 70/30 流量分配；A/B split 共用同一
+     label 文本按文档顺序寻址），行覆盖 63.15%→69.7%。
+- 证据：`test:run` 400/400（58 文件）；`lint` 0 问题；`tsc -b` 绿；
+  `build` 绿；全仓行覆盖 79.2%。
