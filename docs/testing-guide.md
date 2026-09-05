@@ -119,7 +119,7 @@ Per-spec extra requirements (verified 2026-09-06):
 | `api-key-real` | `RAG_ROOT_API_KEY` (or `REAL_E2E_API_KEY`) | passes |
 | `alerts-real` | also `ALERT_DELIVERY_EXPECTED_ALERT_ID` and `ALERT_DELIVERY_EXPECTED_DELIVERY_ID` (ids of a pre-created alert/delivery) | fails without preset ids |
 | `chat-real` | `/models` must expose at least one available tool-calling model (verified: external models.json with SiliconFlow Qwen3.5-27B + `toolCalling: true`) | passes (~2 min, AGENT SSE + history recovery) |
-| `files-real` | real Embedding + Chat LLM; KNOWLEDGE generation must finish within `rag.timeout.chat-ask-ms` (default 120s) or the request 504s | provider-latency bound |
+| `files-real` | real Embedding + Chat LLM; KNOWLEDGE generation must finish within `rag.timeout.chat-ask-ms` (default 120s) | passes (with a slow local provider, relax via `RAG_TIMEOUT_CHATASKMS=300000` in `.env`) |
 | `rerank-document-diversity-real` | also `RERANK_DIVERSITY_FIXTURE_FILE` pointing at a fixture | fails without fixture |
 
 Do not edit served source files while the dev server is running: HMR and

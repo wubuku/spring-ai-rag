@@ -117,7 +117,7 @@ npx playwright test e2e/api-key-real.spec.ts
 | `api-key-real` | `RAG_ROOT_API_KEY`（或 `REAL_E2E_API_KEY`） | 通过 |
 | `alerts-real` | 另需 `ALERT_DELIVERY_EXPECTED_ALERT_ID` 与 `ALERT_DELIVERY_EXPECTED_DELIVERY_ID`（预置的真实告警/投递 id） | 缺预置 id 则失败 |
 | `chat-real` | `/models` 须暴露至少一个**可用且支持 tool-calling** 的模型（实测通过：外部 models.json 配置 SiliconFlow Qwen3.5-27B + `toolCalling: true`） | 已跑通（~2 分钟，AGENT SSE + 历史恢复） |
-| `files-real` | 真实 Embedding + Chat LLM；KNOWLEDGE 长上下文生成须在 `rag.timeout.chat-ask-ms`（默认 120s）内完成，慢模型会 504 | 依赖 provider 时延 |
+| `files-real` | 真实 Embedding + Chat LLM；KNOWLEDGE 长上下文生成须在 `rag.timeout.chat-ask-ms`（默认 120s）内完成 | 已通过（本地慢 provider 时在 `.env` 设 `RAG_TIMEOUT_CHATASKMS=300000` 放宽） |
 | `rerank-document-diversity-real` | 另需 `RERANK_DIVERSITY_FIXTURE_FILE` 指向 fixture 文件 | 缺 fixture 则失败 |
 
 运行期间不要编辑被 dev server 服务的源文件：HMR/整页 reload 会让正在运行的

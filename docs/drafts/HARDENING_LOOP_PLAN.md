@@ -687,7 +687,21 @@
 - 证据：`mvn -q clean compile test-compile` 绿；护栏 7/7（拆分前后同绿）；
   DocumentLifecycleControllerWebTest 4/4；`verify-no-pessimistic-locks.sh` 通过。
 
+### Batch 41（已交付）
+
+- 分支：`test/lifecycle-read-guard-20260906`（同线叠加）
+- **取舍结论**：选择放宽本地超时（方案 B）而非换快模型（方案 A）——方案 A
+  会把 models.json 的 primary 从实测质量良好的 Qwen3.5-27B 换成 9B，
+  牺牲 chat-real 已验证的质量；方案 B 只放宽本地 dev 环境的
+  `rag.timeout.chat-ask-ms`（`.env` 设 `RAG_TIMEOUT_CHATASKMS=300000`，
+  relaxed binding 实测生效），不动共享配置。
+- 实测结果：files-real **通过**（1.9 分钟）；`-real` 套件 3/5 通过 +
+  2 个预期失败（alerts-real 缺预置告警 id、rerank-real 缺 fixture 文件，
+  均为运行手册已文档化的环境前置）。
+- 证据：dev 栈健康 200；运行手册双语更新 files-real 行；文档门禁 11/11。
+
 ## 10. 下一批次入口（候选，按优先级）
 
-- Batch 41：files-real 模型速度方案取舍（快模型 / chat-ask-ms）。
 - Batch 42：DerivationRepairService.apply/preview 先补单测后拆分（地图第二高项）。
+- Batch 43：models.json camelCase 坑位补入 multi-model 双语文档的收尾确认。
+- Batch 44：后端中等方法审计继续（按 Batch 39 地图推进）。
