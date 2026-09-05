@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { act } from '@testing-library/react';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ReembedAllButton } from './ReembedAllButton';
@@ -6,18 +7,23 @@ import { ReembedAllButton } from './ReembedAllButton';
 const mockUseQuery = vi.fn();
 const mockMutate = vi.fn();
 const mockInvalidate = vi.fn();
+const mutationHandlers: Array<Record<string, unknown>> = [];
+const toastSpy = vi.fn();
 
 vi.mock('@tanstack/react-query', () => ({
   useQuery: () => mockUseQuery(),
-  useMutation: () => ({
-    mutate: mockMutate,
-    isPending: false,
-  }),
+  useMutation: (options: Record<string, unknown>) => {
+    mutationHandlers.push(options);
+    return {
+      mutate: mockMutate,
+      isPending: false,
+    };
+  },
   useQueryClient: () => ({ invalidateQueries: mockInvalidate }),
 }));
 
 vi.mock('../Toast', () => ({
-  useToast: () => ({ showToast: vi.fn() }),
+  useToast: () => ({ showToast: toastSpy }),
 }));
 
 function embedStatus(overrides: {
@@ -136,3 +142,41 @@ describe('ReembedAllButton', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 });
+
+  it('invalidates queries and warns when a re-embed partially fails', async () => {
+    const user = userEvent.setup();
+    render(<ReembedAllButton />);
+
+    await user.click(screen.getByRole('button', { name: /documents\.missingEmbeddings/ }));
+    await user.click(screen.getByRole('button', { name: 'documents.reembed' }));
+
+    const options = mutationHandlers.at(-1) as {
+      onSuccess: (result: unknown) => void;
+      onError: (error: Error) => void;
+    };
+    // onSuccess 内会 setIsExpanded(false)，需要在 act 中触发状态更新。
+    act(() => {
+      options.onSuccess({ data: { success: 3, failed: 1 } });
+    });
+
+    expect(mockInvalidate).toHaveBeenCalledWith({ queryKey: ['embeddingStatus'] });
+    expect(mockInvalidate).toHaveBeenCalledWith({ queryKey: ['documents'] });
+    expect(toastSpy).toHaveBeenCalledWith('Re-embedded: 3 success, 1 failed', 'warning');
+  });
+
+  it('reports the error toast when a re-embed rejects', async () => {
+    const user = userEvent.setup();
+    render(<ReembedAllButton />);
+
+    await user.click(screen.getByRole('button', { name: /documents\.missingEmbeddings/ }));
+    await user.click(screen.getByRole('button', { name: 'documents.reembed' }));
+
+    const options = mutationHandlers.at(-1) as {
+      onError: (error: Error) => void;
+    };
+    act(() => {
+      options.onError(new Error('network down'));
+    });
+
+    expect(toastSpy).toHaveBeenCalledWith('Re-embed failed: network down', 'error');
+  });

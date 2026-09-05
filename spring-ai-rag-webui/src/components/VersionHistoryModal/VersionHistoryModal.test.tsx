@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { VersionHistoryModal } from './VersionHistoryModal';
 import { documentsApi } from '../../api/documents';
@@ -332,5 +333,76 @@ describe('VersionHistoryModal restore gating', () => {
     for (const button of restoreButtons) {
       expect(button).toBeDisabled();
     }
+  });
+});
+
+describe('VersionHistoryModal pagination', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  function makeVersion(id: number) {
+    return {
+      id,
+      documentId: 42,
+      versionNumber: 100 - id,
+      contentHash: `hash${id}`,
+      size: 1024,
+      changeType: 'UPDATE',
+      changeDescription: `revision ${id}`,
+      createdAt: '2026-04-08T05:00:00Z',
+    };
+  }
+
+  it('pages forward and back when total versions exceed the page size', async () => {
+    const user = userEvent.setup();
+    const firstPage = Array.from({ length: 20 }, (_, i) => makeVersion(i + 1));
+    vi.mocked(documentsApi.getVersions)
+      .mockResolvedValueOnce({
+        data: { documentId: 42, totalVersions: 21, page: 0, size: 20, versions: firstPage },
+      } as never)
+      .mockResolvedValueOnce({
+        data: {
+          documentId: 42, totalVersions: 21, page: 1, size: 20,
+          versions: [makeVersion(21)],
+        },
+      } as never)
+      // 返回首页会再次拉取第一页。
+      .mockResolvedValueOnce({
+        data: { documentId: 42, totalVersions: 21, page: 0, size: 20, versions: firstPage },
+      } as never);
+
+    render(
+      <VersionHistoryModal documentId={42} documentTitle="Test Doc" onClose={vi.fn()} />,
+      { wrapper: Wrapper },
+    );
+
+    const next = await screen.findByRole('button', { name: 'common.next' });
+    const previous = screen.getByRole('button', { name: 'common.previous' });
+    expect(next).toBeEnabled();
+    expect(previous).toBeDisabled();
+
+    await user.click(next);
+
+    await waitFor(() => {
+      expect(documentsApi.getVersions).toHaveBeenCalledWith(42, 1, 20);
+    });
+    expect(await screen.findByText('revision 21')).toBeInTheDocument();
+
+    // 末页：Next 禁用、Previous 可用（重渲染后重新查询按钮）。
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'common.next' })).toBeDisabled();
+    });
+    expect(screen.getByRole('button', { name: 'common.previous' })).toBeEnabled();
+
+    await user.click(
+      screen.getByRole('button', { name: 'common.previous' }),
+    );
+
+    await waitFor(() => {
+      expect(documentsApi.getVersions).toHaveBeenCalledWith(42, 0, 20);
+    });
+    expect(await screen.findByText('revision 1')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'common.next' })).toBeEnabled();
   });
 });
