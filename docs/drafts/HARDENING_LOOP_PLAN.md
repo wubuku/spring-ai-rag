@@ -785,7 +785,21 @@
   preview → dialog → apply 全流程测试。共 +3 测试。
 - 证据：`test:run` 337 → 340（55 文件）；`tsc -b`/`lint`/`build` 绿。
 
+### Batch 49（已交付）
+
+- 分支：`test/alerts-deep-interactions-20260906`（基于 main@21451d85）
+- 内容：Alerts 测试迁移到**真实 react-query + mock alertsApi 层**（沿用
+  Embeddings 惯例，替代 mockUseQuery），7 → 10 测试：
+  - 迁移：page title、loading（真实 pending promise）、empty、alert items、
+    invalid firedAt fallback、deliveries 模式（retry 动作改为断言
+    `retryNotificationDelivery('delivery-1')`）、direct/empty ledger 区分；
+  - 新增：SLO configs tab 渲染（latency-p99 配置 + 创建按钮）、
+    SLO 配置删除（`deleteSloConfig('latency-p99')` 断言）、
+    silence schedules tab 渲染（weekend-maintenance + 创建按钮）。
+- 证据：`tsc -b` 绿；`test:run` 340 → 343（55 文件）；lint/build 绿
+  （随 Batch 41 收尾提交一并验证的 runbook 更新包含在内）。
+
 ## 10. 下一批次入口（候选，按优先级）
 
-- Batch 49：Alerts 页 tab 切换与 SLO/silence 表单交互测试（branch 52%）。
 - Batch 50：Documents.tsx（26%，页面最低）深度交互测试补强。
+- Batch 51：Alerts SLO/silence 表单提交流程测试（create 表单提交路径）。
