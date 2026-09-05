@@ -1,6 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import axios from 'axios';
-import { AxiosHeaders } from 'axios';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import axios, { AxiosError, AxiosHeaders } from 'axios';
 import { apiClient } from './client';
 import { clearCredential, getCredential } from '../auth/credentialStore';
 
@@ -125,5 +124,91 @@ describe('apiClient error normalization', () => {
 
     expect((withAxiosMessage as Error).message).toBe('Network Error');
     expect(clearCredential).not.toHaveBeenCalled();
+  });
+});
+
+describe('apiClient retry behaviour (real axios-retry flow)', () => {
+  const originalAdapter = apiClient.defaults.adapter;
+  const originalConsoleWarn = console.warn;
+
+  afterEach(() => {
+    apiClient.defaults.adapter = originalAdapter;
+    console.warn = originalConsoleWarn;
+  });
+
+  // axios-retry 依赖 error.config 判断重试，必须携带请求 config。
+  function errorResponse(status: number, config: never) {
+    return new AxiosError(
+      'Request failed',
+      undefined,
+      config,
+      undefined,
+      {
+        status,
+        statusText: 'error',
+        data: {},
+        headers: new AxiosHeaders(),
+        config,
+      },
+    );
+  }
+
+  it('retries a 5xx response once and then succeeds', async () => {
+    let attempts = 0;
+    apiClient.defaults.adapter = async (config) => {
+      attempts += 1;
+      if (attempts === 1) {
+        throw errorResponse(502, config);
+      }
+      return {
+        data: { ok: true },
+        status: 200,
+        statusText: 'ok',
+        headers: {},
+        config,
+      } as never;
+    };
+
+    const response = await apiClient.get('/health');
+
+    expect(response.data).toEqual({ ok: true });
+    expect(attempts).toBe(2);
+  });
+
+  it('does not retry a 4xx response', async () => {
+    let attempts = 0;
+    apiClient.defaults.adapter = async (config) => {
+      attempts += 1;
+      throw errorResponse(404, config);
+    };
+
+    await expect(apiClient.get('/missing')).rejects.toThrow();
+    expect(attempts).toBe(1);
+  });
+
+  it('logs each retry attempt through console.warn', async () => {
+    const warnSpy = vi.fn();
+    console.warn = warnSpy;
+    let attempts = 0;
+    apiClient.defaults.adapter = async (config) => {
+      attempts += 1;
+      if (attempts < 3) {
+        throw errorResponse(503, config);
+      }
+      return {
+        data: { ok: true },
+        status: 200,
+        statusText: 'ok',
+        headers: {},
+        config,
+      } as never;
+    };
+
+    const response = await apiClient.get('/health');
+
+    expect(response.data).toEqual({ ok: true });
+    expect(attempts).toBe(3);
+    expect(warnSpy).toHaveBeenCalledTimes(2);
+    expect(String(warnSpy.mock.calls[0][0])).toContain('retrying (1/3)');
   });
 });
