@@ -1199,3 +1199,20 @@
   Cache/Model 恒为柱状图。行覆盖 80%→93.3%（branches 100%）。
 - 证据：`test:run` 420/420（58 文件）；`lint` 0 问题；`tsc -b` 绿；
   `build` 绿；全仓行覆盖 83.83%。
+
+### Batch 81（已交付）
+
+- 分支：`test/client-retry-flow`（已合入 main = `96d5cf1b`）
+- 内容：axios-retry v4 将配置闭包在拦截器内，client.ts 的
+  retryDelay/retryCondition/onRetry 只能通过真实重试管道覆盖。
+  用自定义 adapter 直接控制响应驱动三条路径：
+  1. 502→200：重试一次后成功（retryCondition 接受 5xx、延迟重试
+     生效）；
+  2. 404：立即失败不重试；
+  3. 503/503/200：onRetry 经 console.warn 记录 'retrying (1/3)' 与
+     '(2/3)'。
+  关键实现认知：axios-retry 依赖 error.config 才考虑重试——构造的
+  错误响应必须携带请求 config，否则静默放弃。行覆盖 65%→95%
+  （functions 100%），全仓 84.06%。
+- 证据：`test:run` 423/423（58 文件）；`lint` 0 问题；`tsc -b` 绿；
+  `build` 绿。
