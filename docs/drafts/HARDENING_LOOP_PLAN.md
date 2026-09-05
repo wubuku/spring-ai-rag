@@ -927,8 +927,26 @@
 - 待用户操作：`git push origin ci/webui-job-pending-workflow-scope`
   （workflow scope；WebUI CI job + gated IT 步骤 + 脚本已就绪）。
 
+### Batch 61（已交付）
+
+- 分支：`audit/pending-three-20260906`（基于 Batch 60 里程碑后的 main）
+- **「待评估」三项逐一快速处置（均不拆分、护栏实证）**：
+  1. `RagCollectionService.cloneCollection`（87 行）：护栏实证——
+     `RagCollectionServiceTest` 含 cloneCollection 专属嵌套组 **7 个测试**
+     （null id、非法/重复 collectionKey、协调器/降级双路径等）全绿；
+     结构为校验 → 复制 → 协调器/降级分支 → 审计的直线业务流，拆分无收益。
+  2. `KeywordIndexPersistenceService.ensureCurrent`（82 行）：守卫（身份/disabled）
+     → chunk 准备 → freshness 短路 → 删旧插新 → 状态推进的直线流；
+     行为由 DocumentLifecycle gITD（Batch 40 护栏 7/7 与 DocumentLifecycle
+     gITD）间接覆盖，不拆分。
+  3. `DocumentRelocationService.reserve`（67 行）：幂等 INSERT ON CONFLICT +
+     回读分支是**单一语义单元**（Batch 42 gated IT 10/10 与
+     ExternalDocumentWebTest 均覆盖），不拆分。
+- 证据：`RagCollectionServiceTest` 全绿（含 cloneCollection 组 7 测）；
+  本批无应用代码改动（纯审计终态标记）。
+- 审计地图至此**全部收敛**：4 已拆 / 8 有据不拆 / 3 护栏已足。
+
 ## 10. 下一批次入口（候选，按优先级）
 
-- Batch 61：审计地图「待评估」三项（cloneCollection/ensureCurrent/reserve）
-  的逐一快速处置。
-- Batch 62：chat-real 模型配置稳定性观察；-real 套件运行手册维护。
+- Batch 62：循环剩余低优先项全部收敛后进入稳态维护循环
+  （每批 = 数据驱动找薄弱点 → 补测或小重构 → 门禁 → 提交推送）。
