@@ -589,7 +589,7 @@ public class DerivationRepairService {
         });
     }
 
-    private PlanItem plan(DerivationIntegrityRepository.Snapshot snapshot) {
+    PlanItem plan(DerivationIntegrityRepository.Snapshot snapshot) {
         if (!snapshot.toResponse().repairable()) {
             return null;
         }
@@ -618,7 +618,7 @@ public class DerivationRepairService {
                 CLEANUP_BATCH_SIZE);
     }
 
-    private static void validateSelection(
+    static void validateSelection(
             Set<String> buckets, Set<String> vectorConditions) {
         if (buckets.isEmpty()) {
             throw new IllegalArgumentException("buckets must contain at least one value");
@@ -658,7 +658,7 @@ public class DerivationRepairService {
         }
     }
 
-    private static Set<String> upperSet(List<String> values) {
+    static Set<String> upperSet(List<String> values) {
         if (values == null) {
             return Set.of();
         }
@@ -697,7 +697,7 @@ public class DerivationRepairService {
         }
     }
 
-    private record PlanItem(
+    record PlanItem(
             long documentId,
             long documentRevision,
             long documentVersion,

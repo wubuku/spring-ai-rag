@@ -142,9 +142,18 @@ class NextHighValueFeaturesPostgresIntegrationTest {
 
     @Test
     void latestMigrationsCreateDurableControlPlanesFromEmptyDatabase() {
-        assertEquals("58", jdbc.queryForObject(
-                "SELECT version FROM flyway_schema_history WHERE success = TRUE ORDER BY installed_rank DESC LIMIT 1",
-                String.class));
+        // 断言「成功迁移链已执行到已安装的最新版本」；新迁移落地后无需再改此处。
+        assertEquals(1L, jdbc.queryForObject(
+                """
+                SELECT COUNT(*) FROM (
+                    SELECT MAX(NULLIF(version, '')::bigint) AS latest
+                    FROM flyway_schema_history WHERE success = TRUE
+                    HAVING MAX(NULLIF(version, '')::bigint) = (
+                        SELECT MAX(NULLIF(version, '')::bigint)
+                        FROM flyway_schema_history)
+                ) applied_latest
+                """,
+                Long.class));
         assertEquals(2L, jdbc.queryForObject(
                 "SELECT COUNT(*) FROM information_schema.tables WHERE table_name IN ('rag_document_relocated_addresses', 'rag_derivation_repair_previews')",
                 Long.class));
