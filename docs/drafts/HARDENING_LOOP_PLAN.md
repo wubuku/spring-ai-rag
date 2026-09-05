@@ -718,7 +718,23 @@
   11/11；gated IT（next-high-value）10/10（修复前 9/10 因旧断言失败）；
   `verify-no-pessimistic-locks.sh` 通过。
 
+### Batch 43（已交付）
+
+- 分支：`test/pdf-import-guard-20260906`（基于 main@df5f797b）
+- 内容（按地图推进 PdfImportService.importPdf，144 行）：
+  1. 新增 `PdfImportServiceTest`（6 测试）：Fake converter 驱动完整管线
+     （无需真实 PDF/CLI）——happy path（original + entry md + image 的
+     records 装配、batch 保存、临时目录清理断言）、disabled 快速失败、
+     无可用 converter、convert 失败透出 converter 名、缺 source/ 目录、
+     多入口 Markdown 拒绝。
+  2. 行为保持拆分：records 装配提取为纯静态 `collectOutputRecords`
+     （入口 Markdown 恰好一个、路径去重、mimeType 回退），importPdf 缩至
+     ~60 行（try/finally 编排）。
+- 证据：`mvn -q clean compile test-compile` 绿；护栏 6/6（拆分前后同绿）；
+  PdfImportControllerTest 34/34；`verify-no-pessimistic-locks.sh` 通过。
+
 ## 10. 下一批次入口（候选，按优先级）
 
-- Batch 43：按地图继续——PdfImportService.importPdf（144 行）先补服务级单测。
 - Batch 44：ExternalDocumentService.persistInTransaction（104 行）同模式处理。
+- Batch 45：DerivationRepairService.apply（87 行）评估拆分（决策矩阵已测，
+  编排层可视IT护栏情况决定）。

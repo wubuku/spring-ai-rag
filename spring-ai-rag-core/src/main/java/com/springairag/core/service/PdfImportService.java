@@ -130,63 +130,10 @@ public class PdfImportService {
                         "PDF converter did not create the expected source/ output directory");
             }
 
-            List<FsFile> records = new ArrayList<>();
+            List<FsFile> records =
+                    collectOutputRecords(uuid, markerOutputDir, pdfBytes);
             String originalPath = uuid + "/original.pdf";
             String entryMarkdownPath = uuid + "/default.md";
-            records.add(new FsFile(
-                    originalPath,
-                    false,
-                    pdfBytes,
-                    null,
-                    "application/pdf",
-                    (long) pdfBytes.length
-            ));
-
-            List<Path> outputFiles;
-            try (Stream<Path> stream = Files.list(markerOutputDir)) {
-                outputFiles = stream
-                        .filter(Files::isRegularFile)
-                        .sorted()
-                        .toList();
-            }
-
-            List<Path> markdownFiles = outputFiles.stream()
-                    .filter(file -> file.getFileName().toString()
-                            .toLowerCase(Locale.ROOT).endsWith(".md"))
-                    .toList();
-            if (markdownFiles.size() != 1) {
-                throw new IllegalStateException(
-                        "PDF conversion must produce exactly one entry Markdown file");
-            }
-
-            Set<String> recordPaths = new HashSet<>();
-            recordPaths.add(originalPath);
-            for (Path file : outputFiles) {
-                String filename = file.getFileName().toString().trim();
-                if (filename.isEmpty()) {
-                    throw new IllegalStateException("PDF converter produced a blank filename");
-                }
-                boolean isMarkdown = file.equals(markdownFiles.getFirst());
-                String recordPath = isMarkdown
-                        ? entryMarkdownPath
-                        : uuid + "/" + filename;
-                if (!recordPaths.add(recordPath)) {
-                    throw new IllegalStateException(
-                            "PDF converter produced duplicate output path: " + recordPath);
-                }
-
-                byte[] content = Files.readAllBytes(file);
-                String mimeType = isMarkdown ? "text/markdown" : Files.probeContentType(file);
-                records.add(new FsFile(
-                        recordPath,
-                        isMarkdown,
-                        content,
-                        isMarkdown ? new String(content, StandardCharsets.UTF_8) : null,
-                        mimeType != null ? mimeType : "application/octet-stream",
-                        (long) content.length
-                ));
-                log.info("Imported file: {} -> {}", file, recordPath);
-            }
 
             fsFileRepository.saveAllAndFlush(records);
             fsImportBatchRepository.save(new FsImportBatch(
@@ -231,6 +178,75 @@ public class PdfImportService {
     /**
      * Find the first available PDF converter.
      */
+
+    /**
+     * 装配导入产物：原始 PDF + converter 输出目录中的全部文件。
+     * 入口 Markdown 必须恰好一个；输出路径不得重复。
+     */
+    private static List<FsFile> collectOutputRecords(
+            String uuid,
+            Path markerOutputDir,
+            byte[] pdfBytes) throws IOException {
+        List<FsFile> records = new ArrayList<>();
+        String originalPath = uuid + "/original.pdf";
+        String entryMarkdownPath = uuid + "/default.md";
+        records.add(new FsFile(
+                originalPath,
+                false,
+                pdfBytes,
+                null,
+                "application/pdf",
+                (long) pdfBytes.length
+        ));
+
+        List<Path> outputFiles;
+        try (Stream<Path> stream = Files.list(markerOutputDir)) {
+            outputFiles = stream
+                    .filter(Files::isRegularFile)
+                    .sorted()
+                    .toList();
+        }
+
+        List<Path> markdownFiles = outputFiles.stream()
+                .filter(file -> file.getFileName().toString()
+                        .toLowerCase(Locale.ROOT).endsWith(".md"))
+                .toList();
+        if (markdownFiles.size() != 1) {
+            throw new IllegalStateException(
+                    "PDF conversion must produce exactly one entry Markdown file");
+        }
+
+        Set<String> recordPaths = new HashSet<>();
+        recordPaths.add(originalPath);
+        for (Path file : outputFiles) {
+            String filename = file.getFileName().toString().trim();
+            if (filename.isEmpty()) {
+                throw new IllegalStateException("PDF converter produced a blank filename");
+            }
+            boolean isMarkdown = file.equals(markdownFiles.getFirst());
+            String recordPath = isMarkdown
+                    ? entryMarkdownPath
+                    : uuid + "/" + filename;
+            if (!recordPaths.add(recordPath)) {
+                throw new IllegalStateException(
+                        "PDF converter produced duplicate output path: " + recordPath);
+            }
+
+            byte[] content = Files.readAllBytes(file);
+            String mimeType = isMarkdown ? "text/markdown" : Files.probeContentType(file);
+            records.add(new FsFile(
+                    recordPath,
+                    isMarkdown,
+                    content,
+                    isMarkdown ? new String(content, StandardCharsets.UTF_8) : null,
+                    mimeType != null ? mimeType : "application/octet-stream",
+                    (long) content.length
+            ));
+            log.info("Imported file: {} -> {}", file, recordPath);
+        }
+        return records;
+    }
+
     private PdfConverter findAvailableConverter() {
         for (PdfConverter converter : converters) {
             if (converter.isAvailable()) {
