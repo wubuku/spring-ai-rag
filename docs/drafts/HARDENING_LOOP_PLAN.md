@@ -822,8 +822,18 @@
      `createSilenceSchedule` 收到 objectContaining({name, silenceType})。
 - 证据：`tsc -b` 绿；`test:run` 345 → 347；`lint`/`build` 绿。
 
+### Batch 52（已交付）
+
+- 分支：`test/evaluation-interactions-20260906`（基于 Batch 51 分支）
+- 内容：Evaluation 页新增 3 个深度交互测试（真实 react-query mutation）：
+  1. manual evaluate 表单（包裹式 label 关联）：填写 query/retrieved/relevant →
+     提交断言 `evaluate` 收到**逗号+空白解析后的 doc id 数组**（'doc1, doc2,' →
+     ['doc1','doc2']——过滤空项的解析契约）；
+  2. judge 表单：query/context/answer 提交 → `answerQuality` 参数断言；
+  3. suites tab：suiteKey/suiteName 创建 → `createSuite` 参数断言。
+- 证据：`tsc -b` 绿；`test:run` 345 → 348（56 文件，+3）；`lint`/`build` 绿。
+
 ## 10. 下一批次入口（候选，按优先级）
 
-- Batch 52：Evaluation.tsx（45% 覆盖）深度交互测试（manual evaluate/judge
-  表单与 report 读取）。
-- Batch 53：Documents.tsx 残余交互（preview 对话框、relocate 流程）测试。
+- Batch 53：Documents preview 对话框与 relocate 流程测试。
+- Batch 54：后端中等方法审计按地图继续（LegacyEmbeddingMigration 已处置）。
