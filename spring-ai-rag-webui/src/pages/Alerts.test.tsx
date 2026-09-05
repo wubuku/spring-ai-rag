@@ -248,3 +248,87 @@ describe('Alerts', () => {
     ).toBeInTheDocument();
   });
 });
+
+describe('Alerts create form flows', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(alertsApi.listActive).mockResolvedValue({ data: [] } as never);
+    vi.mocked(alertsApi.listSloConfigs).mockResolvedValue({ data: [] } as never);
+    vi.mocked(alertsApi.listSilenceSchedules).mockResolvedValue({ data: [] } as never);
+    vi.mocked(alertsApi.listNotificationDeliveries).mockResolvedValue({
+      data: {
+        notificationsEnabled: false,
+        durableDeliveryEnabled: false,
+        configuredProviders: [],
+        items: [],
+        limit: 50,
+        hasMore: false,
+      },
+    } as never);
+  });
+
+  it('submits the SLO create form with parsed target value', async () => {
+    const user = userEvent.setup();
+    vi.mocked(alertsApi.createSloConfig).mockResolvedValue({} as never);
+
+    renderAlerts('/alerts?tab=slo-configs');
+    await user.click(
+      await screen.findByRole('button', { name: '+ alerts.sloConfig' }),
+    );
+
+    const sloName = screen.getByPlaceholderText('alerts.sloConfigNamePlaceholder');
+    await user.type(sloName, 'latency-p99');
+    const target = screen.getByRole('spinbutton');
+    await user.type(target, '250');
+    const selects = screen.getAllByRole('combobox');
+    await user.selectOptions(selects[0], 'AVAILABILITY');
+
+    await user.click(
+      screen.getByRole('button', { name: 'common.create' }),
+    );
+
+    await waitFor(() => {
+      expect(alertsApi.createSloConfig).toHaveBeenCalledWith({
+        sloName: 'latency-p99',
+        sloType: 'AVAILABILITY',
+        targetValue: 250,
+        unit: 'ms',
+        enabled: true,
+      });
+    });
+    // 成功后表单收起（onHideForm）
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('button', { name: 'common.create' }),
+      ).not.toBeInTheDocument();
+    });
+  });
+
+  it('submits the silence schedule form with start and end times', async () => {
+    const user = userEvent.setup();
+    vi.mocked(alertsApi.createSilenceSchedule).mockResolvedValue({} as never);
+
+    renderAlerts('/alerts?tab=silence-schedules');
+    await user.click(
+      await screen.findByRole('button', { name: '+ alerts.createSilence' }),
+    );
+
+    const name = screen.getByPlaceholderText('alerts.silenceNamePlaceholder');
+    await user.type(name, 'weekend-window');
+    const times = document.querySelectorAll('input[type="datetime-local"]');
+    expect(times.length).toBe(2);
+    await user.type(times[0], '2026-09-06T22:00');
+    await user.type(times[1], '2026-09-07T06:00');
+
+    await user.click(screen.getByRole('button', { name: 'common.create' }));
+
+    await waitFor(() => {
+      expect(alertsApi.createSilenceSchedule).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'weekend-window',
+          silenceType: 'ONE_TIME',
+        }),
+      );
+    });
+  });
+});

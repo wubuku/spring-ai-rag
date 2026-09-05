@@ -811,7 +811,19 @@
   真实 react-query + mock api 层（Documents 惯例延续 Embeddings 模式）。
 - 证据：`tsc -b` 绿；`test:run` 345/345（56 文件，+2）；`lint`/`build` 绿。
 
+### Batch 51（已交付）
+
+- 分支：`test/alerts-form-flows-20260906`（基于 Batch 50 分支）
+- 内容：Alerts 新增 2 个表单提交流程测试（真实 react-query mutation）：
+  1. SLO 创建表单：填 sloName + targetValue + 切 AVAILABILITY → 提交断言
+     `createSloConfig` 收到解析后的数字 targetValue 与完整形状；成功后
+     表单收起（onHideForm）；
+  2. Silence schedule 表单：两个 datetime-local 输入 + name → 提交断言
+     `createSilenceSchedule` 收到 objectContaining({name, silenceType})。
+- 证据：`tsc -b` 绿；`test:run` 345 → 347；`lint`/`build` 绿。
+
 ## 10. 下一批次入口（候选，按优先级）
 
-- Batch 51：Alerts SLO/silence 表单提交流程测试。
-- Batch 52：Evaluation.tsx（45%）深度交互测试。
+- Batch 52：Evaluation.tsx（45% 覆盖）深度交互测试（manual evaluate/judge
+  表单与 report 读取）。
+- Batch 53：Documents.tsx 残余交互（preview 对话框、relocate 流程）测试。
