@@ -460,3 +460,172 @@ describe('Documents mutation error paths and pagination', () => {
     });
   });
 });
+
+// ─── Restore, delete and search flows (Batch 77) ────────────────────
+
+describe('Documents restore, delete and search flows', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(documentsApi.list).mockResolvedValue({
+      data: { documents: [LOCAL_DOC], total: 1 },
+    } as never);
+    vi.mocked(documentsApi.getEmbeddingStatus).mockResolvedValue({
+      data: {
+        totalDocuments: 1,
+        withEmbeddings: 1,
+        withoutEmbeddings: 0,
+        hasMissing: false,
+      },
+    } as never);
+  });
+
+  it('restores a disabled document from the row menu', async () => {
+    const user = userEvent.setup();
+    vi.mocked(documentsApi.list).mockResolvedValue({
+      data: { documents: [{ ...LOCAL_DOC, enabled: false }], total: 1 },
+    } as never);
+    vi.mocked(documentsApi.restore).mockResolvedValue({} as never);
+
+    renderDocuments();
+    await screen.findByText('Local Doc');
+    await user.click(screen.getByRole('button', { name: 'documents.openActions' }));
+    await user.click(screen.getByRole('menuitem', { name: 'documents.restore' }));
+
+    await waitFor(() => {
+      expect(documentsApi.restore).toHaveBeenCalledWith(1, 3, 'ASYNC');
+    });
+    await waitFor(() => {
+      expect(mockShowToast).toHaveBeenCalledWith('documents.restored', 'success');
+    });
+  });
+
+  it('runs the permanent delete through its confirmation dialog', async () => {
+    const user = userEvent.setup();
+    vi.mocked(documentsApi.delete).mockResolvedValue({} as never);
+
+    renderDocuments();
+    await screen.findByText('Local Doc');
+    await user.click(screen.getByRole('button', { name: 'documents.openActions' }));
+    await user.click(
+      screen.getByRole('menuitem', { name: 'documents.permanentDelete' }),
+    );
+
+    const dialog = await screen.findByRole('dialog', {
+      name: 'documents.permanentDelete',
+    });
+    expect(dialog).toHaveTextContent('documents.permanentDeleteConfirm');
+
+    await user.click(
+      await within(dialog).findByRole('button', {
+        name: 'documents.permanentDelete',
+      }),
+    );
+
+    await waitFor(() => {
+      expect(documentsApi.delete).toHaveBeenCalledWith(1, 3);
+    });
+    await waitFor(() => {
+      expect(mockShowToast).toHaveBeenCalledWith(
+        'documents.permanentlyDeleted',
+        'success',
+      );
+    });
+  });
+
+  it('does not delete when the confirmation dialog is cancelled', async () => {
+    const user = userEvent.setup();
+
+    renderDocuments();
+    await screen.findByText('Local Doc');
+    await user.click(screen.getByRole('button', { name: 'documents.openActions' }));
+    await user.click(
+      screen.getByRole('menuitem', { name: 'documents.permanentDelete' }),
+    );
+
+    const dialog = await screen.findByRole('dialog', {
+      name: 'documents.permanentDelete',
+    });
+    await user.click(
+      await within(dialog).findByRole('button', { name: 'common.cancel' }),
+    );
+
+    expect(documentsApi.delete).not.toHaveBeenCalled();
+  });
+
+  it('shows a mapped error toast when relocation fails', async () => {
+    const user = userEvent.setup();
+    vi.mocked(documentsApi.list).mockResolvedValue({
+      data: { documents: [EXTERNAL_DOC], total: 1 },
+    } as never);
+    vi.mocked(documentsApi.get).mockResolvedValue({
+      data: {
+        ...EXTERNAL_DOC,
+        content: 'ext content',
+        collectionKey: 'source-col',
+        sourceNamespace: 'crm',
+        sourceRevision: 'etag:2',
+        externalId: 'cms:article:1',
+      },
+    } as never);
+    vi.mocked(collectionsApi.list).mockResolvedValue({
+      data: {
+        collections: [
+          { id: 10, collectionKey: 'source-col', name: 'Source', enabled: true },
+          { id: 11, collectionKey: 'target-col', name: 'Target', enabled: true },
+        ],
+        total: 2,
+      },
+    } as never);
+    vi.mocked(documentsApi.relocate).mockRejectedValue({
+      response: { data: { error: 'TARGET_COLLECTION_NOT_FOUND' } },
+    } as never);
+
+    renderDocuments();
+    await screen.findByText('External Doc');
+    await user.click(screen.getByRole('button', { name: 'documents.openActions' }));
+    await user.click(screen.getByRole('menuitem', { name: 'documents.relocate' }));
+    await waitFor(() => {
+      expect(documentsApi.get).toHaveBeenCalledWith(2);
+    });
+
+    const targetSelect = screen.getAllByRole('combobox').at(-1)!;
+    await user.selectOptions(targetSelect, 'target-col');
+    await user.click(
+      screen.getByRole('button', { name: 'documents.relocateConfirm' }),
+    );
+
+    await waitFor(() => {
+      expect(mockShowToast).toHaveBeenCalledWith(
+        'documents.relocationErrors.TARGET_COLLECTION_NOT_FOUND',
+        'error',
+      );
+    });
+  });
+
+  it('pushes the keyword filter into the search params and clears it', async () => {
+    const user = userEvent.setup();
+
+    renderDocuments();
+    await screen.findByText('Local Doc');
+
+    await user.type(
+      screen.getByRole('textbox', { name: 'documents.searchPlaceholder' }),
+      'spec',
+    );
+
+    await waitFor(() => {
+      expect(documentsApi.list).toHaveBeenCalledWith(
+        expect.objectContaining({ title: 'spec' }),
+      );
+    });
+
+    // 输入非空 keyword 后出现清除按钮，点击后移除过滤并重新拉取。
+    await user.click(screen.getByRole('button', { name: 'documents.clearSearch' }));
+
+    await waitFor(() => {
+      expect(documentsApi.list).toHaveBeenCalledWith(
+        expect.objectContaining({ title: undefined }),
+      );
+    });
+  });
+});
