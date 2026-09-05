@@ -1143,3 +1143,16 @@
      （error toast）回调，act() 包裹状态更新。
 - 证据：`test:run` 403/403（58 文件）；`lint` 0 问题；`tsc -b` 绿；
   `build` 绿；全仓行覆盖 80.84%。
+
+### Batch 77（已交付）
+
+- 分支：`test/documents-restore-delete-search`（已合入 main = `c88dd173`）
+- 内容：页面层最低的 `Documents.tsx`（60.9%）补 5 个流程测试：
+  1. 禁用文档从行菜单恢复（ASYNC restore 调用 + 成功 toast）；
+  2. 永久删除经确认对话框（delete 调用 + 成功 toast）；
+  3. 取消确认不触发 API；
+  4. relocate 失败按后端错误码映射 toast；
+  5. keyword 过滤写入 title 查询参数 + 清除按钮移除。
+  行覆盖 60.9%→72.1%，全仓 81.85%。
+- 证据：`test:run` 408/408（58 文件）；`lint` 0 问题；`tsc -b` 绿；
+  `build` 绿。
