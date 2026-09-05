@@ -746,9 +746,19 @@
 - 证据：`mvn -q clean compile test-compile` 绿；ExternalDocumentServiceTest
   9 → 12 全绿；`verify-no-pessimistic-locks.sh` 通过。
 
+### Batch 45（已交付）
+
+- 分支：`refactor/repair-apply-split-20260906`（基于 Batch 44 分支）
+- 内容：`DerivationRepairService.apply`（87 行）行为保持拆分——编排器收缩至
+  ~18 行，提取 5 个聚焦 helper：requirePreviewIdentity、requirePreviewNotExpired、
+  claimApplyLease（返回租约哈希或 null）、handleUnclaimedPreview、
+  processPlannedItems（三阶段逐项 + failItem）、finishApply。
+  无逻辑/SQL/错误消息变更。
+- 护栏（基线→拆分后一致）：决策矩阵单测 11/11；DerivationRepairControllerWebTest
+  1/1；gated IT 10/10 前后一致；`mvn -q clean compile test-compile` 绿；锁扫描通过。
+
 ## 10. 下一批次入口（候选，按优先级）
 
-- Batch 45：DerivationRepairService.apply 编排拆分评估（决策矩阵已测，
-  gated IT 护栏在）。
-- Batch 46：地图收尾——PdfImportController 剩余与 LegacyEmbeddingMigrationService
-  （迁移期代码，低优先）。
+- Batch 46：地图收尾项处置——LegacyEmbeddingMigrationService.adoptDocument
+  （82 行，迁移期代码，评估后大概率记录不拆）与 PdfImportController 剩余方法。
+- Batch 47：审计地图最终收敛确认（15 项逐一标记「已拆/不拆/护栏状态」）。
