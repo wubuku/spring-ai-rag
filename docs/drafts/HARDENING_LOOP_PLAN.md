@@ -609,11 +609,25 @@
 - 证据：`test:e2e:mock` 88/89（唯一失败即上述生产缺陷）；tsc/lint/build 绿
   （本批未改应用代码）。
 
+### Batch 36（已交付）
+
+- 分支：`fix/chat-mode-restore-production-20260906`（基于 Batch 35 分支）
+- **根因**：Layout 导航链接的 `href` 在渲染时从 sessionStorage 读取
+  （`rememberedRoute`），但 `rememberRoute` 的写入发生在 effect 里且不触发
+  Layout 重渲染——链接 href 永远是「上一次渲染时」的快照。测试点击 Chat 链接
+  时 href 还是 `/webui/chat`（无 mode=AGENT），导航后 mode 丢失。dev 与
+  preview 的差异只是渲染时序窗口不同。
+- 修复：Layout 增加 `routeMemoryVersion` state；`rememberRoute` effect 写入
+  sessionStorage 后 bump，使导航链接 href 立即重读最新路由记忆。
+- 验证：调试 spec 抓现场（sessionStorage 正确而 href 过期）→ 修复后
+  `test:e2e:mock`（preview 生产构建）**90/90 全绿**（含此前稳定失败的
+  workspace-continuity）；dev server 下 workspace-continuity + search
+  16/16 无回归；单测 335/335；`tsc -b`/`lint`/`build` 绿。
+
 ## 10. 下一批次入口（候选，按优先级）
 
-- **Batch 36（高优）：修复 Chat mode=AGENT 在生产构建下路由往返丢失**
-  （preview 暴露的生产缺陷，违反 URL 可寻址契约）。
-- Batch 37：后端中等方法审计的继续（commandForClaim 剩余分支等）。
+- Batch 37：后端中等方法审计继续（commandForClaim 剩余分支等）。
+- Batch 38：Layout 路由记忆的 Vitest 单测补齐（防 href 回归）。
 - Batch 36：后端其余 20–40 行中等方法的同模式审计（commandForClaim 已部分覆盖）。
 - Batch 31：后端 SearchResults/VersionHistoryModal 等组件深度交互测试盘点。
 - Batch 30：chat-real 的 tool-calling 模型配置排查（.env/models.json 层面）。

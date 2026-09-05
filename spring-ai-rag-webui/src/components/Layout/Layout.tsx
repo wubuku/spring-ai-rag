@@ -36,6 +36,9 @@ export function Layout() {
   const mainRef = useRef<HTMLElement>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < MOBILE_BREAKPOINT);
+  // Bumped after each route memory write so nav link hrefs re-read the
+  // freshly stored query instead of rendering a stale snapshot.
+  const [routeMemoryVersion, setRouteMemoryVersion] = useState(0);
 
   useEffect(() => {
     const handleResize = () => {
@@ -52,6 +55,7 @@ export function Layout() {
 
   useEffect(() => {
     rememberRoute(location.pathname, location.search);
+    setRouteMemoryVersion(version => version + 1);
   }, [location.pathname, location.search]);
 
   useLayoutEffect(() => {
@@ -78,6 +82,11 @@ export function Layout() {
     }
   };
 
+  const rememberedRouteFor = (route: string) => {
+    // routeMemoryVersion 仅作为依赖，确保 sessionStorage 更新后重算 href。
+    void routeMemoryVersion;
+    return rememberedRoute(route as TopLevelRoute);
+  };
   return (
     <div className={styles.layout}>
       {/* Mobile overlay */}
@@ -105,7 +114,7 @@ export function Layout() {
           {NAV_ITEMS.map(item => (
             <NavLink
               key={item.to}
-              to={rememberedRoute(item.to as TopLevelRoute)}
+              to={rememberedRouteFor(item.to)}
               className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}
               onClick={handleNavClick}
             >
