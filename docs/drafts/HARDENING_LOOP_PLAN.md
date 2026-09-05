@@ -1130,3 +1130,16 @@
      label 文本按文档顺序寻址），行覆盖 63.15%→69.7%。
 - 证据：`test:run` 400/400（58 文件）；`lint` 0 问题；`tsc -b` 绿；
   `build` 绿；全仓行覆盖 79.2%。
+
+### Batch 76（已交付）
+
+- 分支：`test/version-history-reembed`（已合入 main = `0fec0032`）
+- 内容：组件层薄弱点收敛：
+  1. **VersionHistoryModal**：补 21 版本（两页）分页驱动测试——正/反
+     向翻页、fetch 页参数断言、边界禁用按钮、重渲染后重新查询按钮
+     （模态每次翻页重建控件），行覆盖 84%→87%；
+  2. **ReembedAllButton**：useMutation mock 升级为 options 捕获式，
+     补 onSuccess（双 query 失效 + 部分失败 warning toast）与 onError
+     （error toast）回调，act() 包裹状态更新。
+- 证据：`test:run` 403/403（58 文件）；`lint` 0 问题；`tsc -b` 绿；
+  `build` 绿；全仓行覆盖 80.84%。
