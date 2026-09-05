@@ -1089,3 +1089,30 @@
   拒绝。
 - 证据：新测试 14/14 绿；core 全量 `Tests run: 3398, Failures: 0,
   Errors: 0, Skipped: 9`，BUILD SUCCESS。
+
+### Batch 74（已交付）
+
+- 分支：`test/webui-api-client-layer`（已合入 main = `8e4ba884`）
+- 内容：coverage 审计发现 WebUI API 客户端层是最大盲区，补 5 个文件
+  并新建 2 个测试文件：
+  1. **abtest.test.ts（新）**：实验 CRUD、start/pause/stop 生命周期、
+     分页结果与 analysis、删除（9%→100%）；
+  2. **files.test.ts（扩）**：multipart PDF 导入（FormData 内容断言）、
+     pdf-to-rag 参数组合（collectionKey/embed/deprecated id）、sync
+     embedding 查询串、blob/text 解包（21%→100%）；
+  3. **collections.test.ts（扩）**：offset 换算与空 query 丢弃、by-key
+     变体 CRUD、purge preview/apply 两阶段、文档批量增删、导入导出
+     （35%→100%）；
+  4. **alerts.test.ts（扩）**：SLO 配置 CRUD、静默计划 CRUD、通知投递
+     列表过滤与重试（33%→100%）；
+  5. **evaluation.test.ts（扩）**：默认分页、suite 版本 URI 编码、run
+     创建/查询/对比（50%→86%）；
+  6. **client.test.ts（新）**：请求拦截器凭据注入三态（无凭据/显式
+     X-API-Key/Authorization 优先）与错误归一化拦截器（401 清凭据、
+     detail→message→axios message 兜底），在 axios-retry 拦截器中按
+     401 分支锚定目标 handler（25%→65%）。
+- 附带：Chat 模式 URL 探针测试重写为真实断言（PLAIN/AGENT 均写入
+  ?mode=）；清理 5 个历史测试文件的未使用 import/变量（lint 7 error→0）。
+- 证据：`tsc -b` 绿；`test:run` 398/398（58 文件）；`lint` 0 问题（含
+  design token policy passed）；`check:alignment` 通过（12 处预期居中）；
+  `build` 绿。
