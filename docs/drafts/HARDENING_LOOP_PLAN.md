@@ -671,8 +671,23 @@
 
 - 证据：静态扫描脚本输出（本批未改应用代码，无需应用门禁）。
 
+### Batch 40（已交付）
+
+- 分支：`test/lifecycle-read-guard-20260906`（基于 Batch 39 分支）
+- 内容（按地图最高项执行「先护栏后拆分」）：
+  1. 新增 `DocumentLifecycleServiceTest`（7 测试）：disabled/tombstoned 分支、
+     状态行缺失 → NOT_REQUESTED、全 current → READY（无错误码）、
+     local READY + embedding QUEUED → KEYWORD_ONLY/INDEXING、embedding FAILED →
+     EMBEDDING_FAILED 错误码、local_error → LOCAL_INDEX_FAILED、
+     integrityRepository 存在时走 fromIntegrity 路径。
+  2. `read`（160 行）行为保持拆分：状态推导提取为纯静态
+     `deriveFromStateRow`（返回 DerivedLifecycle record），内部分解为
+     deriveLocalStatus / deriveEmbeddingStatus / deriveSearchability /
+     firstPresentError / deriveErrorCode。read 主体缩至 ~20 行。
+- 证据：`mvn -q clean compile test-compile` 绿；护栏 7/7（拆分前后同绿）；
+  DocumentLifecycleControllerWebTest 4/4；`verify-no-pessimistic-locks.sh` 通过。
+
 ## 10. 下一批次入口（候选，按优先级）
 
-- Batch 40：DocumentLifecycleService.read 先补单测后拆分（地图最高项）。
 - Batch 41：files-real 模型速度方案取舍（快模型 / chat-ask-ms）。
-- Batch 42：dev 栈 node PATH 说明补入 developer-reference（双语）。
+- Batch 42：DerivationRepairService.apply/preview 先补单测后拆分（地图第二高项）。

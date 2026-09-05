@@ -100,13 +100,41 @@ public class DocumentLifecycleService {
         Map<String, Object> row = rows.getFirst();
         String expectedChunker = descriptorProvider.describe(document)
                 .chunkerVersion();
+        DerivedLifecycle derived = deriveFromStateRow(
+                row, document.getContentHash(), expectedChunker);
+
+        return new DocumentLifecycleResponse(
+                "ACTIVE",
+                derived.searchability(),
+                derived.localStatus(),
+                derived.embeddingStatus(),
+                profile.profileKey(),
+                uuid(row.get("active_job_id")),
+                derived.errorCode(),
+                derived.error(),
+                !"READY".equals(derived.searchability()));
+    }
+
+    private record DerivedLifecycle(
+            String localStatus,
+            String embeddingStatus,
+            String searchability,
+            String error,
+            String errorCode) {
+    }
+
+    /** 从状态行推导公开生命周期（纯函数，便于单测覆盖状态矩阵）。 */
+    private static DerivedLifecycle deriveFromStateRow(
+            Map<String, Object> row,
+            String contentHash,
+            String expectedChunker) {
         String localState = string(row.get("local_index_status"));
         String embeddingState = string(row.get("embedding_status"));
         boolean localPresent = localState != null;
         boolean embeddingPresent = embeddingState != null;
         boolean localCurrent = localPresent
                 && "READY".equals(localState)
-                && equals(document.getContentHash(), row.get("local_content_hash"))
+                && equals(contentHash, row.get("local_content_hash"))
                 && equals(expectedChunker, row.get("local_chunker_version"))
                 && positive(row.get("local_index_generation"))
                 && positive(row.get("local_chunk_count"))
@@ -115,86 +143,114 @@ public class DocumentLifecycleService {
                         == ((Number) row.get("local_chunk_count")).intValue();
         boolean embeddingCurrent = embeddingPresent
                 && "COMPLETED".equals(embeddingState)
-                && equals(document.getContentHash(),
-                        row.get("embedding_content_hash"))
+                && equals(contentHash, row.get("embedding_content_hash"))
                 && equals(expectedChunker, row.get("embedding_chunker_version"))
                 && positive(row.get("embedding_chunk_count"));
 
-        String localStatus;
-        if (localCurrent) {
-            localStatus = "READY";
-        } else if (localPresent && "NOT_REQUESTED".equals(localState)
-                && !embeddingPresent) {
-            localStatus = "NOT_REQUESTED";
-        } else if (!localPresent && !embeddingPresent) {
-            localStatus = "NOT_REQUESTED";
-        } else {
-            localStatus = "FAILED";
-        }
+        String localStatus = deriveLocalStatus(
+                localState, localPresent, localCurrent, embeddingPresent);
+        String embeddingStatus = deriveEmbeddingStatus(
+                embeddingState, embeddingPresent, embeddingCurrent, row);
+        String searchability = deriveSearchability(localStatus, embeddingStatus);
+        String error = firstPresentError(row);
+        String errorCode = deriveErrorCode(
+                error, localStatus, embeddingStatus, searchability, localPresent);
+        return new DerivedLifecycle(
+                localStatus, embeddingStatus, searchability, error, errorCode);
+    }
 
-        String publicEmbeddingStatus;
+    private static String deriveLocalStatus(
+            String localState,
+            boolean localPresent,
+            boolean localCurrent,
+            boolean embeddingPresent) {
+        if (localCurrent) {
+            return "READY";
+        }
+        if (localPresent && "NOT_REQUESTED".equals(localState)
+                && !embeddingPresent) {
+            return "NOT_REQUESTED";
+        }
+        if (!localPresent && !embeddingPresent) {
+            return "NOT_REQUESTED";
+        }
+        return "FAILED";
+    }
+
+    private static String deriveEmbeddingStatus(
+            String embeddingState,
+            boolean embeddingPresent,
+            boolean embeddingCurrent,
+            Map<String, Object> row) {
         if (!embeddingPresent || "NOT_REQUESTED".equals(embeddingState)) {
-            publicEmbeddingStatus = "NOT_REQUESTED";
-        } else if (embeddingCurrent) {
-            publicEmbeddingStatus = "READY";
-        } else if ("QUEUED".equals(embeddingState)
+            return "NOT_REQUESTED";
+        }
+        if (embeddingCurrent) {
+            return "READY";
+        }
+        if ("QUEUED".equals(embeddingState)
                 || "PROCESSING".equals(embeddingState)
                 || "RUNNING".equals(string(row.get("job_status")))) {
-            publicEmbeddingStatus = "INDEXING";
-        } else if ("FAILED".equals(embeddingState)
+            return "INDEXING";
+        }
+        if ("FAILED".equals(embeddingState)
                 || "CANCELLED".equals(embeddingState)) {
-            publicEmbeddingStatus = "FAILED";
-        } else {
-            publicEmbeddingStatus = "NOT_REQUESTED";
+            return "FAILED";
         }
+        return "NOT_REQUESTED";
+    }
 
-        String searchability;
+    private static String deriveSearchability(
+            String localStatus, String embeddingStatus) {
         if ("READY".equals(localStatus)
-                && "READY".equals(publicEmbeddingStatus)) {
-            searchability = "READY";
-        } else if ("READY".equals(localStatus)
-                && ("INDEXING".equals(publicEmbeddingStatus)
-                    || "FAILED".equals(publicEmbeddingStatus)
-                    || "NOT_REQUESTED".equals(publicEmbeddingStatus))) {
-            searchability = "KEYWORD_ONLY";
-        } else if ("INDEXING".equals(publicEmbeddingStatus)) {
-            searchability = "INDEXING";
-        } else if ("NOT_REQUESTED".equals(localStatus)
-                && "NOT_REQUESTED".equals(publicEmbeddingStatus)) {
-            searchability = "NOT_REQUESTED";
-        } else {
-            searchability = "FAILED";
+                && "READY".equals(embeddingStatus)) {
+            return "READY";
         }
+        if ("READY".equals(localStatus)
+                && ("INDEXING".equals(embeddingStatus)
+                    || "FAILED".equals(embeddingStatus)
+                    || "NOT_REQUESTED".equals(embeddingStatus))) {
+            return "KEYWORD_ONLY";
+        }
+        if ("INDEXING".equals(embeddingStatus)) {
+            return "INDEXING";
+        }
+        if ("NOT_REQUESTED".equals(localStatus)
+                && "NOT_REQUESTED".equals(embeddingStatus)) {
+            return "NOT_REQUESTED";
+        }
+        return "FAILED";
+    }
 
+    private static String firstPresentError(Map<String, Object> row) {
         String error = string(row.get("local_error"));
-        String errorCode = null;
-        if (error != null && !"READY".equals(localStatus)) {
-            errorCode = "LOCAL_INDEX_FAILED";
-        }
         if (error == null) {
             error = string(row.get("embedding_error"));
         }
         if (error == null) {
             error = string(row.get("job_error"));
         }
-        if (error != null && "FAILED".equals(publicEmbeddingStatus)) {
+        return error;
+    }
+
+    private static String deriveErrorCode(
+            String error,
+            String localStatus,
+            String embeddingStatus,
+            String searchability,
+            boolean localPresent) {
+        String errorCode = null;
+        if (error != null && !"READY".equals(localStatus)) {
+            errorCode = "LOCAL_INDEX_FAILED";
+        }
+        if (error != null && "FAILED".equals(embeddingStatus)) {
             errorCode = "EMBEDDING_FAILED";
         }
         if (error == null && "FAILED".equals(searchability)
                 && !localPresent) {
             errorCode = "LOCAL_INDEX_MISSING";
         }
-
-        return new DocumentLifecycleResponse(
-                "ACTIVE",
-                searchability,
-                localStatus,
-                publicEmbeddingStatus,
-                profile.profileKey(),
-                uuid(row.get("active_job_id")),
-                errorCode,
-                error,
-                !"READY".equals(searchability));
+        return errorCode;
     }
 
     private DocumentLifecycleResponse fromIntegrity(
