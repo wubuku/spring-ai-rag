@@ -636,12 +636,18 @@
 - 证据：`mvn -q clean compile test-compile` 绿；ChatTurnOperationServiceTest
   17/17；`verify-no-pessimistic-locks.sh` 通过。
 
+### Batch 38（已交付）
+
+- 分支：`test/layout-route-memory-20260906`（基于 Batch 37 分支）
+- 内容：Layout 路由记忆 href 同步（Batch 36 修复）补 2 个 Vitest 回归单测：
+  1. 同路由内 query 变化（/chat → /chat?mode=AGENT）后，导航链接 href 必须
+     立即更新——精确锁定 Batch 36 缺陷；负向验证：临时撤销 routeMemoryVersion
+     bump 后该测试失败、恢复后通过，证明锁定有效；
+  2. 预先 rememberRoute 的 query 会反映到导航链接 href。
+- 证据：`test:run` 335 → 337（55 文件）；`tsc -b`/`lint`/`build` 绿。
+
 ## 10. 下一批次入口（候选，按优先级）
 
-- Batch 38：Layout 路由记忆 Vitest 单测补齐（防 href 回归，Batch 36 配套）。
-- Batch 39：controller/service 中等方法审计收尾盘点（写出剩余清单）。
-- Batch 38：Layout 路由记忆的 Vitest 单测补齐（防 href 回归）。
-- Batch 36：后端其余 20–40 行中等方法的同模式审计（commandForClaim 已部分覆盖）。
-- Batch 31：后端 SearchResults/VersionHistoryModal 等组件深度交互测试盘点。
-- Batch 30：chat-real 的 tool-calling 模型配置排查（.env/models.json 层面）。
-- Batch 29：剩余 API 契约测试补齐（documents/files/evaluation/alerts/collections 扩展）。
+- Batch 39：中等方法审计收尾盘点（controller/service 剩余清单一次性列出）。
+- Batch 40：chat-real 稳定性观察与 files-real 模型速度方案取舍。
+- Batch 41：dev 栈启动需要 node PATH 的说明补入 developer-reference（双语）。
