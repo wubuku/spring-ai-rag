@@ -946,7 +946,18 @@
   本批无应用代码改动（纯审计终态标记）。
 - 审计地图至此**全部收敛**：4 已拆 / 8 有据不拆 / 3 护栏已足。
 
+### Batch 62（已交付）
+
+- 分支：`test/coverage-round3-20260906`（基于 Batch 61 后 main）
+- 内容（数据驱动第三轮：Documents.tsx 44% 仍为页面最低）：追加
+  **edit 保存流**测试——菜单 onEdit → `documentsApi.get` 加载详情 →
+  修改 title/content → Dialog actions 的 `common.save` 提交 →
+  断言 `update(1, {expectedDocumentRevision: 3, title, content, ...})`
+  的 revision CAS 契约。
+- 证据：`tsc -b` 绿；`test:run` 350 → **352**（interactions 文件 6 测试）；
+  `lint`/`build` 绿。
+
 ## 10. 下一批次入口（候选，按优先级）
 
-- Batch 62：循环剩余低优先项全部收敛后进入稳态维护循环
-  （每批 = 数据驱动找薄弱点 → 补测或小重构 → 门禁 → 提交推送）。
+- Batch 63：Chat.tsx（58%/branch 54%）深度交互测试。
+- Batch 64：ABTest/Files/Metrics 低覆盖页补强（按 coverage 排序）。

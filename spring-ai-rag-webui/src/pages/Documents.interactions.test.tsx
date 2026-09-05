@@ -307,3 +307,70 @@ describe('Documents preview degrade path', () => {
     expect(dialog.textContent).toContain('Local Doc');
   });
 });
+
+// ─── Edit save flow (Batch 62) ──────────────────────────────────────
+
+describe('Documents edit save flow', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(documentsApi.list).mockResolvedValue({
+      data: { documents: [LOCAL_DOC], total: 1 },
+    } as never);
+    vi.mocked(documentsApi.get).mockResolvedValue({
+      data: { ...LOCAL_DOC, content: 'loaded content', source: 'loaded-src' },
+    } as never);
+    vi.mocked(documentsApi.update).mockResolvedValue({
+      data: {
+        documentId: 1,
+        action: 'UPDATED',
+        documentRevision: 4,
+        versionNumber: 2,
+        contentChanged: true,
+        metadataChanged: false,
+        scopeChanged: false,
+      },
+    } as never);
+  });
+
+  it('loads the document on edit and submits revision-guarded update', async () => {
+    const user = userEvent.setup();
+    renderDocuments();
+    await screen.findByText('Local Doc');
+
+    await user.click(
+      screen.getByRole('button', { name: 'documents.openActions' }),
+    );
+    await user.click(screen.getByRole('menuitem', { name: 'documents.edit' }));
+
+    // handleEdit 先经 documentsApi.get 加载详情
+    await waitFor(() => {
+      expect(documentsApi.get).toHaveBeenCalledWith(1);
+    });
+
+    // 修改标题与正文后提交
+    const titleInput = screen.getByDisplayValue('Local Doc');
+    await user.clear(titleInput);
+    await user.type(titleInput, 'Renamed Doc');
+    const contentArea = screen.getByDisplayValue('loaded content');
+    await user.clear(contentArea);
+    await user.type(contentArea, 'new content');
+
+    const dialog = screen.getByRole('dialog', {
+      name: 'documents.editDocument',
+    });
+    await user.click(
+      within(dialog).getByRole('button', { name: 'common.save' }),
+    );
+
+    await waitFor(() => {
+      expect(documentsApi.update).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({
+          expectedDocumentRevision: 3,
+          title: 'Renamed Doc',
+          content: 'new content',
+        }),
+      );
+    });
+  });
+});
