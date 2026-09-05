@@ -434,6 +434,46 @@ class ChatTurnOperationServiceTest {
     }
 
     @Test
+    void commandForClaimPassesThroughNullAndUnkeyedClaims() {
+        ChatPrincipal principal = ChatPrincipal.local();
+        ChatCommand command = command(principal);
+
+        assertEquals(null, service.commandForClaim(null, null));
+        assertEquals(command, service.commandForClaim(command, null));
+        assertEquals(command, service.commandForClaim(
+                command, ChatTurnOperationService.Claim.unkeyed()));
+    }
+
+    @Test
+    void commandForClaimAdoptsTheDurableSessionIdFromTheOperation() {
+        ChatPrincipal principal = ChatPrincipal.local();
+        ChatCommand command = command(principal);
+        ChatTurnOperation operation = operation(
+                principal.id(),
+                "key-hash",
+                "fingerprint-hash",
+                "durable-session",
+                ChatTurnOperation.Status.IN_PROGRESS,
+                UUID.randomUUID(),
+                Instant.now().plusSeconds(60),
+                """
+                {
+                  "executionSnapshotVersion": 1,
+                  "resolvedCandidates": ["provider/first"]
+                }
+                """);
+
+        ChatCommand effective = service.commandForClaim(
+                command,
+                new ChatTurnOperationService.Claim(operation, false));
+
+        assertEquals("durable-session", effective.sessionId());
+        assertEquals(
+                List.of("provider/first"),
+                effective.modelCandidates());
+    }
+
+    @Test
     void completePreparedReturnsTheSameControlledSnapshotThatIsPersisted()
             throws Exception {
         ChatPrincipal principal = ChatPrincipal.local();

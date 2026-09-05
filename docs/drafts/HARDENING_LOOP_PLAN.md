@@ -624,9 +624,22 @@
   workspace-continuity）；dev server 下 workspace-continuity + search
   16/16 无回归；单测 335/335；`tsc -b`/`lint`/`build` 绿。
 
+### Batch 37（已交付）
+
+- 分支：`test/turn-op-remaining-branches-20260906`（基于 Batch 36 分支）
+- 内容：`commandForClaim` 补齐剩余分支测试（15 → 17）：
+  1. `commandForClaimPassesThroughNullAndUnkeyedClaims`：null command /
+     null claim / unkeyed claim 三种透传（身份断言）；
+  2. `commandForClaimAdoptsTheDurableSessionIdFromTheOperation`：durable
+     operation 的 sessionId 覆盖调用方 sessionId，同时快照候选链生效——
+     既有测试两值相同，无法证明 withSessionId 真正生效，此处补齐。
+- 证据：`mvn -q clean compile test-compile` 绿；ChatTurnOperationServiceTest
+  17/17；`verify-no-pessimistic-locks.sh` 通过。
+
 ## 10. 下一批次入口（候选，按优先级）
 
-- Batch 37：后端中等方法审计继续（commandForClaim 剩余分支等）。
+- Batch 38：Layout 路由记忆 Vitest 单测补齐（防 href 回归，Batch 36 配套）。
+- Batch 39：controller/service 中等方法审计收尾盘点（写出剩余清单）。
 - Batch 38：Layout 路由记忆的 Vitest 单测补齐（防 href 回归）。
 - Batch 36：后端其余 20–40 行中等方法的同模式审计（commandForClaim 已部分覆盖）。
 - Batch 31：后端 SearchResults/VersionHistoryModal 等组件深度交互测试盘点。
