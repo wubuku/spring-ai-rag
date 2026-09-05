@@ -1029,3 +1029,18 @@
 
 - Batch 64：数据驱动 coverage 找新薄弱点补测。
 - Batch 65：后端 ChatExecutionService.prepareForOperation 深分支审计。
+### Batch 70（已交付）
+
+- 分支：`test/tool-loop-budget-advisor`（已合入 main = `8cdff40e`）
+- 内容：agent 工具循环安全路径零直接测试，补两个测试类 16 用例：
+  1. **BudgetedToolCallAdvisorTest（8）**：缺 ToolCallingChatOptions 拒绝、
+     collector 注入与复用、call/stream 双路径直通、工具轮 transcript 配对记录、
+     call/stream 双路径轮数预算耗尽抛 RETRIEVAL_FAILED、最终答案不耗预算；
+  2. **ToolTranscriptCollectorTest（8）**：null/非法输入忽略、无 tool calls 忽略、
+     无 ToolResponseMessage 忽略、跨轮累积有序、maxCalls/maxCharacters 有界投影、
+     静态读取无 collector 回退空。
+- 关键实现认知：mock chain 需把 request context 带回 response（真实链路行为），
+  否则 collector 读取与预算 enforcement 均不可达；tool call 与 tool response
+  配对要求 id+name 双匹配。
+- 证据：新测试 16/16 绿；core 全量 `Tests run: 3351, Failures: 0, Errors: 0,
+  Skipped: 9`，BUILD SUCCESS。
