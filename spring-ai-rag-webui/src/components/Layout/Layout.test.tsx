@@ -73,3 +73,59 @@ describe('Layout', () => {
     expect(document.body.scrollTop).toBe(0);
   });
 });
+
+// ─── Route memory href sync (Batch 36 regression guard) ─────────────
+
+import { Routes, Route, useNavigate } from 'react-router-dom';
+import { rememberRoute } from '../../utils/workspaceState';
+
+const ROUTES_KEY = 'spring-ai-rag:webui:v1:routes';
+
+function Harness({ to }: { to: string }) {
+  const navigate = useNavigate();
+  return (
+    <>
+      <button onClick={() => navigate(to, { replace: true })}>go</button>
+      <Layout />
+    </>
+  );
+}
+
+describe('Layout route memory', () => {
+  it('refreshes nav link hrefs after the current route is remembered', async () => {
+    const user = userEvent.setup();
+    const { unmount } = render(
+      <MemoryRouter initialEntries={['/chat']}>
+        <Routes>
+          <Route path="*" element={<Harness to="/chat?mode=AGENT" />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const chatLink = screen.getByRole('link', { name: /nav\.chat/ });
+    expect(chatLink.getAttribute('href')).toBe('/chat');
+
+    // Navigating to /chat?mode=AGENT must update the remembered route and
+    // re-render the nav links with the fresh query (regression guard for the
+    // stale-href defect where mode=AGENT was silently dropped).
+    await user.click(screen.getByRole('button', { name: 'go' }));
+
+    expect(chatLink.getAttribute('href')).toBe('/chat?mode=AGENT');
+    unmount();
+    sessionStorage.removeItem(ROUTES_KEY);
+  });
+
+  it('seeds nav link hrefs from previously remembered routes', () => {
+    rememberRoute('/chat', '?mode=PLAIN');
+    render(
+      <MemoryRouter initialEntries={['/dashboard']}>
+        <Layout />
+      </MemoryRouter>,
+    );
+
+    expect(
+      screen.getByRole('link', { name: /nav\.chat/ }).getAttribute('href'),
+    ).toBe('/chat?mode=PLAIN');
+    sessionStorage.removeItem(ROUTES_KEY);
+  });
+});
