@@ -1,20 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MetricsCharts } from './MetricsCharts';
 
-// Mock recharts — use module-level state to track chart type for toggle tests
-let mockChartType: 'bar' | 'line' = 'bar';
-
+// Mock recharts — 组件内部 state 决定渲染 BarChart 还是 LineChart。
 vi.mock('recharts', () => ({
-  BarChart: ({ children, data }: { children: React.ReactNode; data: unknown[] }) =>
-    mockChartType === 'bar' ? (
-      <div data-testid="bar-chart" data-length={data?.length ?? 0}>{children}</div>
-    ) : null,
+  BarChart: ({ children, data }: { children: React.ReactNode; data: unknown[] }) => (
+    <div data-testid="bar-chart" data-length={data?.length ?? 0}>{children}</div>
+  ),
   Bar: () => <div data-testid="bar" />,
-  LineChart: ({ children, data }: { children: React.ReactNode; data: unknown[] }) =>
-    mockChartType === 'line' ? (
-      <div data-testid="line-chart" data-length={data?.length ?? 0}>{children}</div>
-    ) : null,
+  LineChart: ({ children, data }: { children: React.ReactNode; data: unknown[] }) => (
+    <div data-testid="line-chart" data-length={data?.length ?? 0}>{children}</div>
+  ),
   Line: () => <div data-testid="line" />,
   XAxis: () => <div data-testid="x-axis" />,
   YAxis: () => <div data-testid="y-axis" />,
@@ -27,7 +24,7 @@ vi.mock('recharts', () => ({
 
 describe('MetricsCharts', () => {
   beforeEach(() => {
-    mockChartType = 'bar';
+    vi.clearAllMocks();
   });
 
   const mockData = {
@@ -140,5 +137,19 @@ describe('MetricsCharts', () => {
 
     expect(screen.getByText('Call Volume')).toBeInTheDocument();
     expect(screen.getAllByTestId('responsive-container').length).toBe(3);
+  });
+  it('toggles between line and bar charts from the type buttons', async () => {
+    const user = userEvent.setup();
+    render(<MetricsCharts data={mockData} />);
+    expect(screen.queryAllByTestId('line-chart').length).toBe(0);
+
+    // 只有 Call Volume 图随 toggle 切换；Latency/Cache/Model 恒为柱状图。
+    await user.click(screen.getByRole('button', { name: 'Line' }));
+    expect(screen.getAllByTestId('line-chart').length).toBe(1);
+    expect(screen.getAllByTestId('bar-chart').length).toBe(3);
+
+    await user.click(screen.getByRole('button', { name: 'Bar' }));
+    expect(screen.getAllByTestId('bar-chart').length).toBe(4);
+    expect(screen.queryAllByTestId('line-chart').length).toBe(0);
   });
 });
