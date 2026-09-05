@@ -13,14 +13,7 @@ import { chatApi } from '../api/chat';
 const mockSend = vi.fn();
 const mockClose = vi.fn();
 
-vi.mock('../hooks/useSSE', () => ({
-  useChatSSE: vi.fn(() => ({
-    send: mockSend,
-    close: mockClose,
-    stop: mockClose,
-    isConnected: false,
-  })),
-}));
+
 
 vi.mock('../api/collections', () => ({
   collectionsApi: {
@@ -465,5 +458,126 @@ describe('Chat mode URL sync and export', () => {
         'json',
       );
     });
+  });
+});
+
+// ─── Streaming chunk rendering (Batch 63 deep interactions) ─────────
+
+
+let capturedOptions: Record<string, unknown> | null = null;
+
+vi.mock('../hooks/useSSE', () => ({
+  useChatSSE: vi.fn((options: Record<string, unknown>) => {
+    capturedOptions = options;
+    return {
+      send: mockSend,
+      close: mockClose,
+      stop: mockClose,
+      isConnected: false,
+    };
+  }),
+}));
+
+describe('Chat streaming callbacks (deep interactions)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    window.sessionStorage.clear();
+    (modelsApi.list as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: {
+        multiModelEnabled: false,
+        defaultProvider: 'openai',
+        defaultModel: 'openai',
+        availableProviders: ['openai'],
+        fallbackChain: [],
+        models: [],
+      },
+    });
+    (collectionsApi.list as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: { collections: [], total: 0 },
+    });
+    (chatApi.getHistory as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: [],
+    });
+  });
+
+  it('appends streaming chunks to the streaming assistant message', async () => {
+    renderChat();
+
+    const textarea = screen.getByPlaceholderText(/chat.placeholder/);
+    await act(async () => {
+      fireEvent.change(textarea, { target: { value: 'Hello' } });
+      fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false });
+    });
+
+    // useChatSSE mock 捕获的 options 含 onChunk 等流回调
+    const opts = vi.mocked(useChatSSE).mock.calls[0][0] as Record<string, unknown>;
+    await act(async () => {
+      (opts.onChunk as (c: string) => void)('partial ');
+      (opts.onChunk as (c: string) => void)('answer');
+    });
+
+    expect(screen.getByText('partial answer')).toBeInTheDocument();
+    expect(screen.getByText('Hello')).toBeInTheDocument();
+  });
+
+  it('marks the streaming message complete on done', async () => {
+    renderChat();
+
+    const textarea = screen.getByPlaceholderText(/chat.placeholder/);
+    await act(async () => {
+      fireEvent.change(textarea, { target: { value: 'Hello' } });
+      fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false });
+    });
+
+    const opts = vi.mocked(useChatSSE).mock.calls[0][0] as Record<string, unknown>;
+    await act(async () => {
+      (opts.onChunk as (c: string) => void)('final answer');
+      (opts.onDone as (d: { sessionId?: string }) => void)({ sessionId: undefined });
+    });
+
+    expect(screen.getByText('final answer')).toBeInTheDocument();
+    expect(screen.queryByText('Hello')).toBeInTheDocument();
+  });
+
+  it('renders an error message when the stream errors', async () => {
+    renderChat();
+
+    const textarea = screen.getByPlaceholderText(/chat.placeholder/);
+    await act(async () => {
+      fireEvent.change(textarea, { target: { value: 'Hello' } });
+      fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false });
+    });
+
+    await act(async () => {
+      const opts = vi.mocked(useChatSSE).mock.calls[0][0] as Record<string, unknown>;
+      await act(async () => {
+        (opts.onError as (m: string) => void)('connection dropped');
+      });
+    });
+
+    expect(
+      screen.getByText('Error: connection dropped'),
+    ).toBeInTheDocument();
+  });
+
+  it('renders tool activity when a tool start event arrives', async () => {
+    const user = userEvent.setup();
+    renderChat();
+
+    const textarea = screen.getByPlaceholderText(/chat.placeholder/);
+    await user.type(textarea, 'Hello');
+    await user.click(screen.getByRole('button', { name: /chat\.send/ }));
+
+    await act(async () => {
+      const opts = vi.mocked(useChatSSE).mock.calls.at(-1)![0] as Record<string, unknown>;
+      (opts.onToolStart as ((e: unknown) => void))({
+        toolCallId: 'call-1',
+        tool: 'searchKnowledge',
+        query: 'beijing weather',
+      });
+    });
+
+    const activityRegion = screen.getByLabelText('chat.toolActivity');
+    expect(activityRegion).toBeInTheDocument();
   });
 });

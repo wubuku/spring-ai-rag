@@ -988,8 +988,19 @@
 - 证据：`mvn -q clean compile test-compile` 绿；既有测试全绿；锁扫描通过。
 - 审计地图全部收敛：15 项终态（4 已拆 / 8 有据不拆 / 3 已足覆盖）。
 
+### Batch 63（已交付）
+
+- 分支：`test/chat-deep-interactions-20260906`（基于 Batch 62 后 main）
+- 内容：Chat.tsx 深度交互测试补 4 个（SSE 流回调路径）：
+  - onChunk 流式追加（分两段 chunk 拼接）
+  - onDone 标记 streaming 完成
+  - onError 渲染 Error 文案
+  - onToolStart 渲染 tool activity（aria-label 断言）
+  - 通过 useChatSSE mock 的 mock.calls 捕获 options（而非模块级变量），
+    消除测试间共享可变状态导致的 flake。
+- 证据：`tsc -b` 绿；`test:run` 362/362（57 文件）；`lint`/`build` 绿。
+
 ## 10. 下一批次入口（候选，按优先级）
 
-- Batch 63：前端 Chat.tsx 深度交互测试（模式切换 URL 同步、导出菜单）。
-- Batch 64：后端中等方法审计收尾（LegacyEmbeddingMigrationService +
-  PdfImportController 剩余方法）。
+- Batch 64：Documents preview 对话框与 relocate 流程测试。
+- Batch 65：Evaluation citations tab 渲染与失败告警测试。
