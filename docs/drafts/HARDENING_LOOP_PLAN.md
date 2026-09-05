@@ -1187,3 +1187,15 @@
   行覆盖 69.7%→73.7%，全仓 83.75%。
 - 证据：`test:run` 419/419（58 文件）；`lint` 0 问题；`tsc -b` 绿；
   `build` 绿。
+
+### Batch 80（已交付）
+
+- 分支：`test/metrics-charts-toggle`（已合入 main = `6289e0c5`）
+- 内容：`MetricsCharts` 图表类型切换补测。原 recharts mock 用一个
+  死模块级标志门控 BarChart/LineChart 渲染，导致 toggle 按钮的
+  onClick 从未被执行。简化 mock 为无条件渲染、由组件 chartType
+  state 决定图表类型，并双向驱动切换断言：仅 Call Volume 图随
+  toggle 切换（line 模式 1 line + 3 bar；bar 模式 4 bar），Latency/
+  Cache/Model 恒为柱状图。行覆盖 80%→93.3%（branches 100%）。
+- 证据：`test:run` 420/420（58 文件）；`lint` 0 问题；`tsc -b` 绿；
+  `build` 绿；全仓行覆盖 83.83%。
