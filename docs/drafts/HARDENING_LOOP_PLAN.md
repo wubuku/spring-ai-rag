@@ -1000,7 +1000,18 @@
     消除测试间共享可变状态导致的 flake。
 - 证据：`tsc -b` 绿；`test:run` 362/362（57 文件）；`lint`/`build` 绿。
 
+- Batch 64：Documents preview 失败回退场景测试 —— **已在 Batch 55 完成**（`test/preview-degrade-20260906` 分支，`keeps the preview open with list data when the detail fetch fails` 用例覆盖了 `documentsApi.get` 失败时预览仍以列表数据打开的降级行为）。
+- Batch 65：后端中等方法审计收尾 —— **已在 Batch 62 完成**（`RagCollectionService.cloneCollection` / `KeywordIndexPersistenceService.ensureCurrent` / `DocumentRelocationService.reserve` 三项均确认既有护栏已足、不拆分）。
+- Batch 66：Evaluation citations tab 渲染与失败告警测试 —— **已在 Batch 54 完成**。
+
 ## 10. 下一批次入口（候选，按优先级）
 
-- Batch 64：Documents preview 对话框与 relocate 流程测试。
-- Batch 65：Evaluation citations tab 渲染与失败告警测试。
+- Batch 67：Documents preview 对话框与 relocate 流程测试 —— **已在 Batch 53 完成**（`Documents.interactions.test.tsx` 的 preview fetch 断言与 relocate 五元组 + Idempotency-Key 断言）。
+- Batch 68：Evaluation manual evaluate / judge 表单提交流程测试 —— **已在 Batch 52 完成**。
+
+## 已完成批次累计（Batch 64/65 为重复条目核对，无新代码）
+
+审计地图「待评估」与队列中标注的 Documents preview 失败回退、后端中等方法审计收尾、
+Evaluation citations tab 测试均已在后续批次落地或确认既有覆盖已足，
+无重复劳动必要。当前 main = origin/main = 1b5cc12c，前端 tsc/lint/build/test:run
+（362/362，57 文件）与文档门禁 11/11 全绿。
