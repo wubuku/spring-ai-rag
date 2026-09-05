@@ -1156,3 +1156,20 @@
   行覆盖 60.9%→72.1%，全仓 81.85%。
 - 证据：`test:run` 408/408（58 文件）；`lint` 0 问题；`tsc -b` 绿；
   `build` 绿。
+
+### Batch 78（已交付）
+
+- 分支：`test/files-page-flows`（已合入 main = `694cebc1`）
+- 内容：页面层次低 `Files.tsx`（68.5%）补 7 条路径：
+  1. CACHED embedding → info toast；FAILED → error toast + 消息展示；
+     请求异常 → alert role；
+  2. Open raw：blob 对象 URL 经 window.open（noopener）新标签打开 +
+     失败 toast；
+  3. 非 PDF 上传直接拒绝（绕过 accept 过滤派发 change）；
+  4. PDF 导入成功后导航进入新目录；
+  5. 指针拖拽调整目录面板宽度：异 pointerId 移动忽略、释放后冻结、
+     Home 键回到最小宽度。
+  另将 renderFiles 提升到模块级供新 describe 复用。行覆盖
+  68.5%→84.8%，全仓 83.63%。
+- 证据：`test:run` 415/415（58 文件）；`lint` 0 问题；`tsc -b` 绿；
+  `build` 绿。
