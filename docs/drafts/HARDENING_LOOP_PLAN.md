@@ -799,7 +799,19 @@
 - 证据：`tsc -b` 绿；`test:run` 340 → 343（55 文件）；lint/build 绿
   （随 Batch 41 收尾提交一并验证的 runbook 更新包含在内）。
 
+### Batch 50（已交付）
+
+- 分支：`test/documents-deep-interactions-20260906`（基于 Batch 49 分支）
+- 内容：新增 `Documents.interactions.test.tsx`（独立文件——vi.mock 为文件级，
+  与既有全 mock react-query 的 Documents.test.tsx 隔离）：
+  1. **disable 确认链**：行菜单 → ConfirmDialog（documents.disableConfirm）→
+     确认 → `documentsApi.disable(1, 3)`（revision 透传断言）；
+  2. **版本历史模态**：行菜单 → versions.button → VersionHistoryModal 打开
+     （dialog 含 versions.title 与 Local Doc，getVersions mock 驱动）。
+  真实 react-query + mock api 层（Documents 惯例延续 Embeddings 模式）。
+- 证据：`tsc -b` 绿；`test:run` 345/345（56 文件，+2）；`lint`/`build` 绿。
+
 ## 10. 下一批次入口（候选，按优先级）
 
-- Batch 50：Documents.tsx（26%，页面最低）深度交互测试补强。
-- Batch 51：Alerts SLO/silence 表单提交流程测试（create 表单提交路径）。
+- Batch 51：Alerts SLO/silence 表单提交流程测试。
+- Batch 52：Evaluation.tsx（45%）深度交互测试。
