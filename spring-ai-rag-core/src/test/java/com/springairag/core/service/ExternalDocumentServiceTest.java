@@ -16,6 +16,7 @@ import com.springairag.core.repository.RagEmbeddingRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.jdbc.core.ConnectionCallback;
@@ -356,4 +357,56 @@ class ExternalDocumentServiceTest {
         version.setVersionNumber(number);
         return version;
     }
+
+// ─── JSON-record guard branches in persistInTransaction (Batch 44) ──
+
+@Test
+void upsertRejectsJsonRecordDocumentTypeOnExternalIdentity() {
+    ExternalDocumentUpsertRequest request =
+            request("doc-json", "rev-1", "First title", "First content");
+    request.setDocumentType("json-record");
+
+    assertThrows(DocumentRevisionConflictException.class,
+            () -> service.upsert(request));
+    verify(documentRepository, org.mockito.Mockito.never())
+            .saveAndFlush(org.mockito.ArgumentMatchers.any(RagDocument.class));
+}
+
+@Test
+void upsertRejectsExternalIdentityThatAlreadyBelongsToAJsonRecord() {
+    RagDocument jsonRecordDocument =
+            document(41L, "doc-1", "rev-1", "previous content");
+    jsonRecordDocument.setDocumentType(RagDocument.JSON_RECORD);
+    when(documentRepository.findByCollectionIdAndExternalId(10L, "doc-1"))
+            .thenReturn(Optional.of(jsonRecordDocument));
+
+    ExternalDocumentUpsertRequest request =
+            request("doc-1", "rev-2", "Second title", "Second content");
+
+    assertThrows(DocumentRevisionConflictException.class,
+            () -> service.upsert(request));
+}
+
+@Test
+void blankDocumentTypeNormalizesToTextAndPersists() {
+    ExternalDocumentUpsertRequest request =
+            request("doc-1", "rev-1", "First title", "First content");
+    request.setDocumentType("  ");
+    when(documentRepository.findByCollectionIdAndExternalId(10L, "doc-1"))
+            .thenReturn(Optional.empty());
+    when(documentEmbedService.embedDocument(41L, false))
+            .thenReturn(Map.of(
+                    "status", "NOT_REQUESTED",
+                    "embeddingProfileKey", PROFILE.profileKey()));
+    when(documentEmbedService.hasFreshEmbedding(any(RagDocument.class)))
+            .thenReturn(false, false);
+
+    ExternalDocumentUpsertResponse response = service.upsert(request);
+
+    assertEquals(41L, response.documentId());
+    ArgumentCaptor<RagDocument> persisted =
+            ArgumentCaptor.forClass(RagDocument.class);
+    verify(documentRepository).saveAndFlush(persisted.capture());
+    assertEquals("text", persisted.getValue().getDocumentType());
+}
 }

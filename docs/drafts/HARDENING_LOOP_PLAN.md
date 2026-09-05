@@ -733,8 +733,22 @@
 - 证据：`mvn -q clean compile test-compile` 绿；护栏 6/6（拆分前后同绿）；
   PdfImportControllerTest 34/34；`verify-no-pessimistic-locks.sh` 通过。
 
+### Batch 44（已交付）
+
+- 分支：`audit/external-persist-tx-20260906`（基于 main@df5f797b）
+- **审计结论（修正地图）**：`ExternalDocumentService.persistInTransaction`（104 行）
+  的行为已被专属单测 `ExternalDocumentServiceTest`（9 测试，直接驱动 upsert 主链）
+  + WebTest + gated IT 三层覆盖——Batch 39 地图标注「仅 WebTest 间接」系低估，
+  已修正。104 行中近半为直线参数归一序列，拆分收益低，**不拆分**。
+- 实质产出：补齐 persistInTransaction 的两个 **JSON-record 守卫分支**测试
+  （此前零覆盖）：`documentType=json-record` 拒绝（且不落库）、外部身份已属于
+  JSON record 的冲突拒绝；外加 blank documentType 归一为 text 的持久化断言。
+- 证据：`mvn -q clean compile test-compile` 绿；ExternalDocumentServiceTest
+  9 → 12 全绿；`verify-no-pessimistic-locks.sh` 通过。
+
 ## 10. 下一批次入口（候选，按优先级）
 
-- Batch 44：ExternalDocumentService.persistInTransaction（104 行）同模式处理。
-- Batch 45：DerivationRepairService.apply（87 行）评估拆分（决策矩阵已测，
-  编排层可视IT护栏情况决定）。
+- Batch 45：DerivationRepairService.apply 编排拆分评估（决策矩阵已测，
+  gated IT 护栏在）。
+- Batch 46：地图收尾——PdfImportController 剩余与 LegacyEmbeddingMigrationService
+  （迁移期代码，低优先）。
