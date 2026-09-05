@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import { Documents } from './Documents';
 import { documentsApi } from '../api/documents';
+import { collectionsApi } from '../api/collections';
 
 vi.mock('../api/documents', () => ({
   documentsApi: {
@@ -18,6 +19,7 @@ vi.mock('../api/documents', () => ({
     getVersions: vi.fn(),
     getEmbeddingStatus: vi.fn(),
     reembedMissing: vi.fn(),
+    relocate: vi.fn(),
   },
 }));
 
@@ -159,5 +161,114 @@ describe('Documents deep interactions (real react-query)', () => {
     const dialog = await screen.findByRole('dialog');
     expect(dialog.textContent).toContain('versions.title');
     expect(dialog.textContent).toContain('Local Doc');
+  });
+});
+
+// ─── Preview dialog & relocate flow (Batch 53) ──────────────────────
+
+const EXTERNAL_DOC = {
+  id: 2,
+  title: 'External Doc',
+  content: '',
+  contentHash: 'hash-2',
+  documentType: 'text',
+  externalId: 'cms:article:1',
+  sourceNamespace: 'crm',
+  sourceRevision: 'etag:2',
+  collectionKey: 'source-col',
+  enabled: true,
+  createdAt: '2026-01-01T00:00:00Z',
+  updatedAt: '2026-01-01T00:00:00Z',
+};
+
+describe('Documents preview and relocate flows', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(documentsApi.getEmbeddingStatus).mockResolvedValue({
+      data: {
+        totalDocuments: 2,
+        withEmbeddings: 2,
+        withoutEmbeddings: 0,
+        hasMissing: false,
+      },
+    } as never);
+  });
+
+  it('opens the preview dialog and fetches the full document', async () => {
+    const user = userEvent.setup();
+    vi.mocked(documentsApi.list).mockResolvedValue({
+      data: { documents: [{ ...LOCAL_DOC, content: '' }], total: 1 },
+    } as never);
+    vi.mocked(documentsApi.get).mockResolvedValue({
+      data: { ...LOCAL_DOC, content: 'full content from get' },
+    } as never);
+
+    renderDocuments();
+
+    await user.click(await screen.findByText('Local Doc'));
+
+    expect(documentsApi.get).toHaveBeenCalledWith(1);
+    expect(await screen.findByText('full content from get')).toBeInTheDocument();
+  });
+
+  it('runs the relocate flow for an externally managed document', async () => {
+    const user = userEvent.setup();
+    vi.mocked(documentsApi.list).mockResolvedValue({
+      data: { documents: [EXTERNAL_DOC], total: 1 },
+    } as never);
+    vi.mocked(documentsApi.get).mockResolvedValue({
+      data: {
+        ...EXTERNAL_DOC,
+        content: 'ext content',
+        collectionKey: 'source-col',
+        sourceNamespace: 'crm',
+        sourceRevision: 'etag:2',
+        externalId: 'cms:article:1',
+      },
+    } as never);
+    vi.mocked(collectionsApi.list).mockResolvedValue({
+      data: {
+        collections: [
+          { id: 10, collectionKey: 'source-col', name: 'Source', enabled: true },
+          { id: 11, collectionKey: 'target-col', name: 'Target', enabled: true },
+        ],
+        total: 2,
+      },
+    } as never);
+    vi.mocked(documentsApi.relocate).mockResolvedValue({
+      data: { documentId: 2 } as never,
+    } as never);
+
+    renderDocuments();
+    await screen.findByText('External Doc');
+
+    // 打开行菜单并选择 relocate
+    await user.click(screen.getByRole('button', { name: 'documents.openActions' }));
+    await user.click(
+      screen.getByRole('menuitem', { name: 'documents.relocate' }),
+    );
+
+    // documentsApi.get(id) 先取详情
+    await waitFor(() => {
+      expect(documentsApi.get).toHaveBeenCalledWith(2);
+    });
+
+    // 选择目标集合并提交：relocate 是 form（aria-label=relocateTitle）的 submit
+    const targetSelect = screen.getAllByRole('combobox').at(-1)!;
+    await user.selectOptions(targetSelect, 'target-col');
+    await user.click(screen.getByRole('button', { name: 'documents.relocateConfirm' }));
+
+    await waitFor(() => {
+      expect(documentsApi.relocate).toHaveBeenCalledWith(
+        {
+          sourceCollectionKey: 'source-col',
+          targetCollectionKey: 'target-col',
+          sourceNamespace: 'crm',
+          externalId: 'cms:article:1',
+          expectedSourceRevision: 'etag:2',
+        },
+        expect.any(String),
+      );
+    });
   });
 });

@@ -833,7 +833,18 @@
   3. suites tab：suiteKey/suiteName 创建 → `createSuite` 参数断言。
 - 证据：`tsc -b` 绿；`test:run` 345 → 348（56 文件，+3）；`lint`/`build` 绿。
 
+### Batch 53（已交付）
+
+- 分支：`test/documents-preview-relocate-20260906`（基于 Batch 52 分支）
+- 内容：`Documents.interactions.test.tsx` 追加 2 个流程测试：
+  1. **preview 对话框**：点击标题按钮 → `documentsApi.get(id)` 取全文 →
+     预览渲染完整内容；
+  2. **relocate 流程**（外部管理文档）：菜单 → relocate → 详情加载 →
+     目标集合 select（过滤排除源集合）→ 提交断言 `documentsApi.relocate`
+     收到完整五元组请求 + Idempotency-Key UUID（expect.any(String)）。
+- 证据：`tsc -b` 绿；`test:run` 349/349（57 文件，+4）；`lint`/`build` 绿。
+
 ## 10. 下一批次入口（候选，按优先级）
 
-- Batch 53：Documents preview 对话框与 relocate 流程测试。
-- Batch 54：后端中等方法审计按地图继续（LegacyEmbeddingMigration 已处置）。
+- Batch 54：Evaluation manual/judge 之外的 report 读取与 citations tab 测试。
+- Batch 55：后端 EmbeddingJobRepository（1114 行）审计评估。
