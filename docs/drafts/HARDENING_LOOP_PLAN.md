@@ -874,7 +874,20 @@
 - 证据：静态扫描（40 方法最长 42 行）+ gated IT 实测 8/8 绿；
   本批无应用代码改动。
 
+### Batch 57（已交付）
+
+- 分支：`audit/json-record-service-20260906`（基于 Batch 56 分支）
+- **审计结论：JsonRecordService（1063 行，40 方法）不拆分、护栏已足**：
+  - 最长方法 49 行（batchUpsert 批量循环），无超长方法；
+  - 三层护栏实测全绿：服务级专属单测 JsonRecordServiceTest 23/23、
+    RagJsonRecordControllerWebTest 7/7、gated IT
+    JsonbStructuredRecordsPostgresIntegrationTest 3/3（真实 PG）；
+  - 锁扫描通过。
+- 与 Batch 56 同结论：数据访问/编排类大文件的「一方法一职责 + 行为护栏」
+  状态良好，无需为行数而拆。
+
 ## 10. 下一批次入口（候选，按优先级）
 
-- Batch 57：前端 hooks 层盘点收尾（useSSE/useSearchHistory 既有覆盖复核）。
-- Batch 58：后端 JsonRecordService（1063 行）同模式审计。
+- Batch 58：LegacyEmbeddingMigrationService 与 PdfImportController 剩余方法
+  的同模式快速审计（沿用本批验证方式）。
+- Batch 59：前端 hooks 层覆盖复核收尾。
