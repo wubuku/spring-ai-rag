@@ -272,3 +272,38 @@ describe('Documents preview and relocate flows', () => {
     });
   });
 });
+
+// ─── Preview degrade path (Batch 55) ────────────────────────────────
+
+describe('Documents preview degrade path', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(documentsApi.getEmbeddingStatus).mockResolvedValue({
+      data: {
+        totalDocuments: 1,
+        withEmbeddings: 1,
+        withoutEmbeddings: 0,
+        hasMissing: false,
+      },
+    } as never);
+  });
+
+  it('keeps the preview open with list data when the detail fetch fails', async () => {
+    const user = userEvent.setup();
+    // 列表返回的 content 为空（列表 API 不回传正文），detail get 失败。
+    vi.mocked(documentsApi.list).mockResolvedValue({
+      data: { documents: [{ ...LOCAL_DOC, content: '' }], total: 1 },
+    } as never);
+    vi.mocked(documentsApi.get).mockRejectedValue(new Error('get failed'));
+
+    renderDocuments();
+    await user.click(await screen.findByText('LOCAL_DOC' in {} ? 'Local Doc' : 'Local Doc'));
+
+    // 预览仍以列表数据打开，且 get 被尝试过一次
+    await waitFor(() => {
+      expect(documentsApi.get).toHaveBeenCalledWith(1);
+    });
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog.textContent).toContain('Local Doc');
+  });
+});

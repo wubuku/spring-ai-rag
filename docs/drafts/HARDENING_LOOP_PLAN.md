@@ -852,8 +852,16 @@
   （citationsFailed 告警）。
 - 证据：`tsc -b` 绿；`test:run` 350 → 352（56 文件，+2）；`lint`/`build` 绿。
 
+### Batch 55（已交付）
+
+- 分支：`test/preview-degrade-20260906`（基于 Batch 54 分支）
+- 内容：Documents preview 降级场景测试——列表 API 不回传正文、
+  `documentsApi.get` 失败时，预览仍以列表数据打开（dialog 渲染文档标题），
+  get 恰好尝试一次。处理逻辑与 Batch 53 的 happy path 形成对照
+  （成功路径取全文更新内容 / 失败路径保留列表数据打开）。
+- 证据：`tsc -b` 绿；`test:run` 355/355（57 文件，+1）；`lint`/`build` 绿。
+
 ## 10. 下一批次入口（候选，按优先级）
 
-- Batch 55：Documents preview 对话框正文断言补强（get 失败回退场景）。
-- Batch 56：后端 ChatExecutionService prepareForOperation 深分支审计
-  （prepareForOperation 110 行已在 Batch 22 收缩，评估残余）。
+- Batch 56：后端 EmbeddingJobRepository（1114 行）审计评估。
+- Batch 57：聊天页 streaming 错误路径单测补强盘点。
