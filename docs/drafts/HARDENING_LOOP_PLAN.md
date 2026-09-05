@@ -899,9 +899,18 @@
 - 证据：静态结构审阅 + 既有护栏全绿（PdfImportControllerTest 在
   Batch 43 验证 34/34）；本批无应用代码改动。
 
+### Batch 59（已交付）
+
+- 分支：`test/hooks-review-20260906`（基于 Batch 58 分支）
+- **复核结论：前端 hooks 层覆盖健康，无需补测**。5 个 hook 均有专属测试
+  共 40 个用例全绿，覆盖率 89–100%：
+  useBlobUrlOpener 100%（Batch 7 新增）/ useChartTheme 100%（Batch 2 新增）/
+  useFileUpload 89%（含 Batch 7 abort 流程）/ useSSE 89% / useSearchHistory 94%。
+- 证据：`npx vitest run src/hooks/` 40/40；coverage include src/hooks 实测。
+- 本批无代码改动（纯复核记录）。
+
 ## 10. 下一批次入口（候选，按优先级）
 
-- Batch 59：前端 hooks 层覆盖复核收尾（useSSE/useSearchHistory 既有测试
-  健康确认）。
-- Batch 60：循环第 60 批里程碑——全量回归（前端全套件 + 后端核心测试 +
-  文档门禁）作为阶段验收。
+- Batch 60：循环里程碑——全量回归（前端全套件 + 后端核心门禁 + 文档门禁）
+  作为阶段验收，并盘点审计地图余项（cloneCollection/ensureCurrent/reserve
+  三个低优先待评估）。
