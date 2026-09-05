@@ -421,12 +421,16 @@ describe('Chat mode URL sync and export', () => {
 
     renderChat('/chat');
 
-    await waitFor(() => {
-      // eslint-disable-next-line no-console
-      console.log('MODE_SELECT_VALUE:', screen.getByTestId('chat-mode-select').value);
-    });
-    // eslint-disable-next-line no-console
-    console.log('PROBE:', JSON.stringify(screen.getByTestId('loc-probe').textContent));
+    const modeSelect = await screen.findByTestId('chat-mode-select');
+    expect(modeSelect).toHaveValue('KNOWLEDGE');
+    expect(screen.getByTestId('loc-probe').textContent).toBe('/chat');
+
+    // 非默认模式都会写入查询参数；PLAIN 不携带检索参数。
+    await user.selectOptions(modeSelect, 'PLAIN');
+    expect(screen.getByTestId('loc-probe').textContent).toBe('/chat?mode=PLAIN');
+
+    await user.selectOptions(modeSelect, 'AGENT');
+    expect(screen.getByTestId('loc-probe').textContent).toBe('/chat?mode=AGENT');
   });
 
   it('exports a session through the export menu', async () => {
@@ -464,18 +468,13 @@ describe('Chat mode URL sync and export', () => {
 // ─── Streaming chunk rendering (Batch 63 deep interactions) ─────────
 
 
-let capturedOptions: Record<string, unknown> | null = null;
-
 vi.mock('../hooks/useSSE', () => ({
-  useChatSSE: vi.fn((options: Record<string, unknown>) => {
-    capturedOptions = options;
-    return {
-      send: mockSend,
-      close: mockClose,
-      stop: mockClose,
-      isConnected: false,
-    };
-  }),
+  useChatSSE: vi.fn(() => ({
+    send: mockSend,
+    close: mockClose,
+    stop: mockClose,
+    isConnected: false,
+  })),
 }));
 
 describe('Chat streaming callbacks (deep interactions)', () => {

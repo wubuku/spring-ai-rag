@@ -101,3 +101,109 @@ describe('collectionsApi purge contract', () => {
     );
   });
 });
+
+describe('collectionsApi query variants and purge flow', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('reads capabilities, pages with offset math and drops empty queries', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue({ data: {} } as never);
+
+    collectionsApi.integrationCapabilities();
+    expect(vi.mocked(apiClient.get).mock.calls[0][0]).toBe('/integration-capabilities');
+
+    collectionsApi.list({ page: 2, size: 5, query: 'pdf' });
+    expect(vi.mocked(apiClient.get).mock.calls[1]).toEqual([
+      '/collections',
+      { params: { offset: 10, limit: 5, query: 'pdf' } },
+    ]);
+
+    collectionsApi.list();
+    expect(vi.mocked(apiClient.get).mock.calls[2]).toEqual([
+      '/collections',
+      { params: { offset: 0, limit: 20, query: undefined } },
+    ]);
+  });
+
+  it('resolves collections by numeric id and stable key', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue({ data: {} } as never);
+
+    collectionsApi.get(4);
+    expect(vi.mocked(apiClient.get).mock.calls[0][0]).toBe('/collections/4');
+
+    collectionsApi.getByKey('k1');
+    expect(vi.mocked(apiClient.get).mock.calls[1]).toEqual([
+      '/collections/by-key',
+      { params: { collectionKey: 'k1' } },
+    ]);
+
+    collectionsApi.export(4);
+    expect(vi.mocked(apiClient.get).mock.calls[2][0]).toBe('/collections/4/export');
+  });
+
+  it('updates and deletes through both id and key variants', async () => {
+    vi.mocked(apiClient.put).mockResolvedValue({ data: {} } as never);
+    vi.mocked(apiClient.delete).mockResolvedValue({ data: {} } as never);
+
+    collectionsApi.update(4, { enabled: false });
+    expect(apiClient.put).toHaveBeenCalledWith('/collections/4', { enabled: false });
+
+    collectionsApi.updateByKey('k1', { name: 'n' });
+    expect(apiClient.put).toHaveBeenCalledWith(
+      '/collections/by-key',
+      { name: 'n' },
+      { params: { collectionKey: 'k1' } },
+    );
+
+    collectionsApi.delete(4);
+    expect(apiClient.delete).toHaveBeenCalledWith('/collections/4');
+
+    collectionsApi.deleteByKey('k1');
+    expect(apiClient.delete).toHaveBeenCalledWith(
+      '/collections/by-key',
+      { params: { collectionKey: 'k1' } },
+    );
+  });
+
+  it('runs the two-phase purge flow through preview and apply', async () => {
+    vi.mocked(apiClient.post).mockResolvedValue({ data: {} } as never);
+    const applyRequest = {
+      collectionKey: 'k1',
+      previewId: 'p1',
+      confirmationToken: 'tok',
+      fingerprint: 'fp',
+      expectedCollectionVersion: 3,
+      expectedChatCommitFenceVersion: 1,
+    };
+
+    collectionsApi.previewPurge('k1');
+    expect(apiClient.post).toHaveBeenCalledWith(
+      '/collections/by-key/purge/preview',
+      undefined,
+      { params: { collectionKey: 'k1' } },
+    );
+
+    await collectionsApi.applyPurge(applyRequest);
+    expect(apiClient.post).toHaveBeenCalledWith('/collections/by-key/purge', applyRequest);
+  });
+
+  it('manages collection documents and import/export payloads', async () => {
+    vi.mocked(apiClient.post).mockResolvedValue({ data: {} } as never);
+    vi.mocked(apiClient.delete).mockResolvedValue({ data: {} } as never);
+
+    collectionsApi.addDocuments(4, [1, 2]);
+    expect(apiClient.post).toHaveBeenCalledWith('/collections/4/documents', {
+      documentIds: [1, 2],
+    });
+
+    collectionsApi.removeDocuments(4, [1, 2]);
+    expect(apiClient.delete).toHaveBeenCalledWith('/collections/4/documents', {
+      data: { documentIds: [1, 2] },
+    });
+
+    await collectionsApi.importCollection({ name: 'copy', items: [] });
+    expect(apiClient.post).toHaveBeenCalledWith('/collections/import', {
+      name: 'copy',
+      items: [],
+    });
+  });
+});

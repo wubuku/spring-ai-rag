@@ -79,12 +79,6 @@ function renderDocuments() {
   );
 }
 
-async function openRowMenu(user: ReturnType<typeof userEvent.setup>) {
-  await screen.findByText('Local Doc');
-  await user.click(screen.getByRole('button', { name: 'documents.openActions' }));
-  return screen.getByRole('menu');
-}
-
 describe('Documents deep interactions (real react-query)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
