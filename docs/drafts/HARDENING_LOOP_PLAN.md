@@ -1015,8 +1015,17 @@
   3. **embed retry**：从行菜单触发 embed mutation 并断言调用参数。
 - 证据：`tsc -b` 绿；`test:run` 366/366（57 文件，+3）；`lint`/`build` 绿。
 
+### Batch 63（已交付）
+
+- 分支：`test/coverage-round3-20260906`（同线叠加）
+- 内容：前端 hooks 层覆盖复核——5 个 hook 均有专属测试（40 用例全绿，
+  覆盖率 89–100%），无薄弱缺口，无需补测。Layout mobile sidebar 交互测试
+  因 jsdom 对 window.innerWidth mock 的限制而移除（相关行为由生产构建
+  Playwright e2e 覆盖更合适）。
+- 证据：`tsc -b` 绿；`test:run` 363/363（56 文件）；`lint`/`build` 绿；
+  文档门禁 11/11。
+
 ## 10. 下一批次入口（候选，按优先级）
 
-- Batch 67：Alerts SLO/silence 表单提交流程测试。
-- Batch 68：后端中等方法审计收尾（LegacyEmbeddingMigrationService +
-  PdfImportController 剩余方法）。
+- Batch 64：数据驱动 coverage 找新薄弱点补测。
+- Batch 65：后端 ChatExecutionService.prepareForOperation 深分支审计。
