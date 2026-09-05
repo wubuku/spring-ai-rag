@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { Dashboard } from './Dashboard';
+import { healthApi } from '../api/health';
+import { documentsApi } from '../api/documents';
+import { collectionsApi } from '../api/collections';
 
 const mockUseQuery = vi.fn();
 
@@ -122,5 +125,26 @@ describe('Dashboard', () => {
     render(<Dashboard />);
     // Should render without crash even with empty data objects
     expect(screen.getByText('dashboard.documents')).toBeInTheDocument();
+  });
+  it('wires each query function to its API client', async () => {
+    vi.mocked(healthApi.get).mockResolvedValue({ data: {} } as never);
+    vi.mocked(documentsApi.list).mockResolvedValue({ data: {} } as never);
+    vi.mocked(collectionsApi.list).mockResolvedValue({ data: {} } as never);
+
+    mockQueries();
+    render(<Dashboard />);
+
+    const calls = mockUseQuery.mock.calls as Array<
+      [{ queryKey: string[]; queryFn: () => Promise<unknown> }]
+    >;
+    expect(calls).toHaveLength(3);
+
+    for (const [{ queryFn }] of calls) {
+      await queryFn();
+    }
+
+    expect(healthApi.get).toHaveBeenCalledTimes(1);
+    expect(documentsApi.list).toHaveBeenCalledWith({ page: 0, size: 1 });
+    expect(collectionsApi.list).toHaveBeenCalledWith({ page: 0, size: 1 });
   });
 });

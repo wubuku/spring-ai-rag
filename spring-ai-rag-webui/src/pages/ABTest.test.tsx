@@ -258,4 +258,49 @@ describe('ABTest', () => {
 
     expect(mutationSpies.at(-1)!.mutate).not.toHaveBeenCalled();
   });
+
+  it('sends the full create payload with metric, description and custom variants', async () => {
+    const user = userEvent.setup();
+    storeQuery(['abtest', 'experiments'], []);
+
+    renderAbTest();
+    await user.click(
+      screen.getByRole('button', { name: 'abtest.createExperiment' }),
+    );
+
+    const dialog = screen.getByRole('dialog', { name: 'abtest.createExperiment' });
+    await user.type(
+      within(dialog).getByPlaceholderText('abtest.namePlaceholder'),
+      'rerank-lift',
+    );
+    await user.type(
+      within(dialog).getByLabelText('abtest.description'),
+      'measure rerank lift',
+    );
+    await user.selectOptions(
+      within(dialog).getByLabelText('abtest.targetMetric'),
+      'user_satisfaction',
+    );
+    const variantA = within(dialog).getByLabelText('abtest.variant A') as HTMLInputElement;
+    await user.clear(variantA);
+    await user.type(variantA, 'baseline');
+
+    // A/B 两个 split 输入共用同一 label 文本，按文档顺序区分。
+    const splits = within(dialog).getAllByLabelText('abtest.traffic%') as HTMLInputElement[];
+    await user.clear(splits[0]);
+    await user.type(splits[0], '70');
+    await user.clear(splits[1]);
+    await user.type(splits[1], '30');
+
+    fireEvent.submit(dialog.querySelector('form')!);
+
+    // Typing re-renders the modal, so the live mutation instance is the latest spy.
+    expect(mutationSpies.at(-1)!.mutate).toHaveBeenCalledWith({
+      experimentName: 'rerank-lift',
+      description: 'measure rerank lift',
+      targetMetric: 'user_satisfaction',
+      trafficSplit: { 'baseline': 0.7, variant_b: 0.3 },
+      minSampleSize: 100,
+    });
+  });
 });
