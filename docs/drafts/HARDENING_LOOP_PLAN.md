@@ -757,8 +757,21 @@
 - 护栏（基线→拆分后一致）：决策矩阵单测 11/11；DerivationRepairControllerWebTest
   1/1；gated IT 10/10 前后一致；`mvn -q clean compile test-compile` 绿；锁扫描通过。
 
+### Batch 46（已交付）
+
+- 分支：`audit/legacy-migration-disposition-20260906`（基于 Batch 45 分支）
+- **处置结论：不拆分、护栏已足**。`LegacyEmbeddingMigrationService.adoptDocument`
+  （82 行）是直线守卫链（索引连续性 → 维度校验 → 目标行冲突 → content_hash
+  初始化 → 原子认领 + 计数验证），每步「校验不过即 return false」——拆分只会
+  破坏守卫序列的整体可读性；且属显式确认（`ADOPT_CONFIRMATION`）的一次性
+  迁移运维代码，生命周期有限。
+- 护栏实证：`EmbeddingProfilePostgresIntegrationTest`（gated，外部 JDBC URL
+  模式，一次性 postgres:16-pgvector 容器）7 个用例中 adoptLegacy 认领/拒绝
+  路径全部通过。已知限制：vector 检索用例在裸 pgvector 容器上因环境差异失败
+  （该 IT 设计依赖完整扩展与 fixture），与本处置无关，已记录。
+- 证据：`EmbeddingProfilePostgresIntegrationTest` 实测（adoptLegacy 用例绿）；
+  本批无应用代码改动。
+
 ## 10. 下一批次入口（候选，按优先级）
 
-- Batch 46：地图收尾项处置——LegacyEmbeddingMigrationService.adoptDocument
-  （82 行，迁移期代码，评估后大概率记录不拆）与 PdfImportController 剩余方法。
-- Batch 47：审计地图最终收敛确认（15 项逐一标记「已拆/不拆/护栏状态」）。
+- Batch 47：审计地图最终收敛确认（15 项逐一标记「已拆/不拆/护栏状态」终态表）。
