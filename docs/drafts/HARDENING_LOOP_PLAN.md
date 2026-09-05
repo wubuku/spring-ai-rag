@@ -700,8 +700,25 @@
   均为运行手册已文档化的环境前置）。
 - 证据：dev 栈健康 200；运行手册双语更新 files-real 行；文档门禁 11/11。
 
+### Batch 42（已交付）
+
+- 分支：`test/derivation-repair-guard-20260906`（基于 main@e8a6ebe2，即含 CI
+  合并后的最新 main；用户已解决凭据并推送 main，凭据阻塞解除）
+- 内容：
+  1. `DerivationRepairServiceTest` 新增 11 个纯决策单测：`plan(Snapshot)` 的
+     action 判定矩阵（tombstoned/disabled/INDEXING bucket 不修、local+vector
+     全重建、仅 local、仅 vector、vector INDEXING 视为新鲜）、
+     `validateSelection` 白名单（空/非法/合法）、`upperSet` 归一化。
+     `plan`/`validateSelection`/`upperSet`/`PlanItem` 放宽为包可见供同包直测；
+     主链（preview/apply 的 JDBC 编排）维持 gated IT + WebTest 护栏，不做脆 mock。
+  2. **修复第二个预存 IT 缺陷**：`NextHighValueFeaturesPostgresIntegrationTest`
+     同样硬编码「最新迁移 = 58」（Batch 31 所修缺陷的兄弟实例），改为动态断言
+     迁移链执行到最新版本。
+- 证据：`mvn -q clean compile test-compile` 绿；DerivationRepairServiceTest
+  11/11；gated IT（next-high-value）10/10（修复前 9/10 因旧断言失败）；
+  `verify-no-pessimistic-locks.sh` 通过。
+
 ## 10. 下一批次入口（候选，按优先级）
 
-- Batch 42：DerivationRepairService.apply/preview 先补单测后拆分（地图第二高项）。
-- Batch 43：models.json camelCase 坑位补入 multi-model 双语文档的收尾确认。
-- Batch 44：后端中等方法审计继续（按 Batch 39 地图推进）。
+- Batch 43：按地图继续——PdfImportService.importPdf（144 行）先补服务级单测。
+- Batch 44：ExternalDocumentService.persistInTransaction（104 行）同模式处理。
