@@ -861,7 +861,20 @@
   （成功路径取全文更新内容 / 失败路径保留列表数据打开）。
 - 证据：`tsc -b` 绿；`test:run` 355/355（57 文件，+1）；`lint`/`build` 绿。
 
+### Batch 56（已交付）
+
+- 分支：`audit/embedding-repo-20260906`（基于 Batch 55 分支）
+- **审计结论：EmbeddingJobRepository（1114 行，40 方法）不拆分、护栏已足**：
+  - 最长方法仅 42 行（cancelActiveForDocument 单条 UPDATE）；该类是「一方法
+    一 SQL 语义」的数据访问集合，拆分只会打散 SQL 与其映射的对应关系；
+  - gated IT `EmbeddingJobsPostgresIntegrationTest`（Testcontainers 真实 PG，
+    `embedding-jobs.it.enabled`）8/8 通过，实测覆盖核心并发语义：force 合并
+    与单 worker 认领、after-commit 事件处理、过期租约终结、过期租约写入拒绝
+    与二次认领等——executor 侧另有 Batch 6 的 11 个决策矩阵单测。
+- 证据：静态扫描（40 方法最长 42 行）+ gated IT 实测 8/8 绿；
+  本批无应用代码改动。
+
 ## 10. 下一批次入口（候选，按优先级）
 
-- Batch 56：后端 EmbeddingJobRepository（1114 行）审计评估。
-- Batch 57：聊天页 streaming 错误路径单测补强盘点。
+- Batch 57：前端 hooks 层盘点收尾（useSSE/useSearchHistory 既有覆盖复核）。
+- Batch 58：后端 JsonRecordService（1063 行）同模式审计。
