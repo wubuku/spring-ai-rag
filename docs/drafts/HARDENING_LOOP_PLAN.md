@@ -1044,3 +1044,21 @@
   配对要求 id+name 双匹配。
 - 证据：新测试 16/16 绿；core 全量 `Tests run: 3351, Failures: 0, Errors: 0,
   Skipped: 9`，BUILD SUCCESS。
+
+### Batch 71（已交付）
+
+- 分支：`test/trace-session-usage-event`（已合入 main = `b46b2b70`）
+- 内容：两个零直接测试的纯逻辑类补 23 用例：
+  1. **RetrievalTraceSessionTest（11）**：诊断会话默认值、scope attach 的
+     null 条目过滤、attempt 生命周期 RUNNING→SUCCEEDED→FAILED、null key
+     命中最新 attempt、未知 key 的全局回退、检索 replace-or-append、预算
+     耗尽标记与 query 字符捕获、queryExpansion/documentJoin null 忽略、
+     citationValidation 设置/清除、metadata 投影（schemaVersion、queryStats
+     双路径、query 文本存储策略）；
+  2. **LlmUsageEventTest（12）**：审计事件默认值填充、callOrdinal 校验、
+     required/optional 文本边界（长度/空白/非 ASCII）、modelRef UNKNOWN
+     回退、不可用 usage 的 token 归一、pricing/cost 一致性归零、小数 scale
+     归一、duration 钳制、completedAt 时间边界、costUnit 归一、from() 工厂
+     成本接线。
+- 证据：新测试 23/23 绿；core 全量 `Tests run: 3374, Failures: 0,
+  Errors: 0, Skipped: 9`，BUILD SUCCESS。
