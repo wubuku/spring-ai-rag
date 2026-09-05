@@ -776,6 +776,16 @@
 - 证据：`EmbeddingProfilePostgresIntegrationTest` 实测（adoptLegacy 用例绿）；
   本批无应用代码改动。
 
+### Batch 48（已交付）
+
+- 分支：`test/coverage-driven-round2-20260906`（基于 main@50a790c4）
+- 内容（数据驱动盘点：coverage JSON 找出非 api 层最薄弱文件）：
+  Embeddings 页深度交互——6 张派生统计卡片渲染断言、job 行 cancel/retry
+  动作经真实 react-query mutation 断言 api 调用、派生修复
+  preview → dialog → apply 全流程测试。共 +3 测试。
+- 证据：`test:run` 337 → 340（55 文件）；`tsc -b`/`lint`/`build` 绿。
+
 ## 10. 下一批次入口（候选，按优先级）
 
-- Batch 47：审计地图最终收敛确认（15 项逐一标记「已拆/不拆/护栏状态」终态表）。
+- Batch 49：Alerts 页 tab 切换与 SLO/silence 表单交互测试（branch 52%）。
+- Batch 50：Documents.tsx（26%，页面最低）深度交互测试补强。
