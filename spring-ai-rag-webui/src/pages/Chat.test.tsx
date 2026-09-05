@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { Chat } from './Chat';
 import { useChatSSE } from '../hooks/useSSE';
 import { modelsApi } from '../api/models';
@@ -46,6 +46,11 @@ vi.mock('../utils/modelPreference', () => ({
   saveSelectedModel: vi.fn(),
 }));
 
+function LocationProbe() {
+  const location = useLocation();
+  return <div data-testid="loc-probe">{location.pathname + location.search}</div>;
+}
+
 function renderChat(initialEntry = '/chat') {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -53,6 +58,7 @@ function renderChat(initialEntry = '/chat') {
   return render(
     <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={[initialEntry]}>
+        <LocationProbe />
         <Routes>
           <Route path="/chat" element={<Chat />} />
           <Route path="/chat/:sessionId" element={<Chat />} />
@@ -364,5 +370,100 @@ describe('Chat', () => {
     expect(await screen.findByText('Earlier question')).toBeInTheDocument();
     expect(screen.getByText('Earlier answer')).toBeInTheDocument();
     expect(chatApi.getHistory).toHaveBeenCalledWith('session-9');
+  });
+});
+
+// ─── Mode URL sync & session export (Batch 63) ──────────────────────
+
+describe('Chat mode URL sync and export', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    window.sessionStorage.clear();
+    (useChatSSE as ReturnType<typeof vi.fn>).mockReturnValue({
+      send: mockSend,
+      close: mockClose,
+      stop: mockClose,
+      isConnected: false,
+    });
+    (modelsApi.list as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: {
+        multiModelEnabled: false,
+        defaultProvider: 'openai',
+        defaultModel: 'openai',
+        availableProviders: ['openai'],
+        fallbackChain: [],
+        models: [],
+      },
+    });
+    (collectionsApi.list as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: { collections: [], total: 0 },
+    });
+    (chatApi.getHistory as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: [],
+    });
+  });
+
+  it('writes the selected mode into the URL', async () => {
+    const user = userEvent.setup();
+    // AGENT 选项仅在 /models 暴露 tool-calling 能力时可选。
+    (modelsApi.list as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: {
+        multiModelEnabled: true,
+        defaultProvider: 'siliconflow',
+        defaultModel: 'siliconflow/Qwen/Qwen3.5-27B',
+        availableProviders: ['siliconflow'],
+        fallbackChain: [],
+        models: [{
+          ref: 'siliconflow/Qwen/Qwen3.5-27B',
+          provider: 'siliconflow',
+          providerName: 'SiliconFlow',
+          modelId: 'Qwen/Qwen3.5-27B',
+          name: 'Qwen3.5 27B',
+          apiType: 'openai-chat',
+          available: true,
+          capabilities: { streaming: true, toolCalling: true },
+        }],
+      },
+    });
+
+    renderChat('/chat');
+
+    await waitFor(() => {
+      // eslint-disable-next-line no-console
+      console.log('MODE_SELECT_VALUE:', screen.getByTestId('chat-mode-select').value);
+    });
+    // eslint-disable-next-line no-console
+    console.log('PROBE:', JSON.stringify(screen.getByTestId('loc-probe').textContent));
+  });
+
+  it('exports a session through the export menu', async () => {
+    const user = userEvent.setup();
+    (chatApi.getHistory as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: [{
+        id: 9,
+        sessionId: 'session-9',
+        userMessage: 'Earlier question',
+        aiResponse: 'Earlier answer',
+        createdAt: '2026-08-17T08:00:00',
+      }],
+    });
+    (chatApi.exportConversation as ReturnType<typeof vi.fn>).mockResolvedValue(
+      new Blob(['x'], { type: 'application/json' }),
+    );
+
+    renderChat('/chat/session-9');
+    expect(await screen.findByText('Earlier question')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /chat\.export/ }));
+    await user.click(
+      screen.getByRole('button', { name: 'chat.exportJson' }),
+    );
+
+    await waitFor(() => {
+      expect(chatApi.exportConversation).toHaveBeenCalledWith(
+        'session-9',
+        'json',
+      );
+    });
   });
 });

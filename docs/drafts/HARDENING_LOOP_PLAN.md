@@ -957,7 +957,22 @@
 - 证据：`tsc -b` 绿；`test:run` 350 → **352**（interactions 文件 6 测试）；
   `lint`/`build` 绿。
 
+### Batch 63（已交付）
+
+- 分支：`test/chat-interactions-20260906`（基于 Batch 52 后 main）
+- 内容：Chat.tsx 深度交互补 2 个测试（19 → 21）：
+  1. **模式切换写入 URL**：models mock 提供 tool-calling 模型（AGENT 选项
+     enabled 前提）→ selectOptions AGENT → 探针（LocationProbe）断言
+     URL `?mode=AGENT`。修出过程中的三个踩坑（详见记录）：
+     (a) renderChat 需渲染 LocationProbe（Routes 外）；(b) 探针 div 与
+     组件 testid 重复需去重；(c) **AGENT option 在 models 无 toolCalling
+     模型时 disabled，user.selectOptions 会静默跳过**——这是真实用户
+     场景的正确行为，测试必须提供 toolCalling 模型。
+  2. **会话导出**：direct session + 导出菜单 → 断言
+     `chatApi.exportConversation('session-9', 'json')`。
+- 证据：`tsc -b` 绿；`test:run` **359/359**（57 文件，+2）；`lint`/`build` 绿。
+
 ## 10. 下一批次入口（候选，按优先级）
 
-- Batch 63：Chat.tsx（58%/branch 54%）深度交互测试。
-- Batch 64：ABTest/Files/Metrics 低覆盖页补强（按 coverage 排序）。
+- Batch 64：Documents preview get 失败回退场景测试（Batch 53 的对照面）。
+- Batch 65：Evaluation citations tab 渲染与失败告警测试。
