@@ -1451,3 +1451,17 @@
   （LocalDateTime 存储载荷反序列化）。core 全量 3540→3547 绿。
 - 证据：新测试 7/7 绿；core 全量 `Tests run: 3547, Failures: 0,
   Errors: 0, Skipped: 9`，BUILD SUCCESS。
+
+### Batch 98（已交付）
+
+- 分支：`test/legacy-embedding-migration`（已合入 main = `7c29254b`）
+- 内容：`LegacyEmbeddingMigrationService`（显式认领缺身份的 legacy
+  embedding：确认门 → 维度校验 → 逐文档事务认领 → 完整性门）零直接
+  测试，补 11 用例：错误确认字符串拒绝、非 1024 维 profile 拒绝、
+  null 计数归零、无遗留行返回 0、单文档认领全链（拷贝 UPDATE/
+  legacy-adopted-unknown 状态 UPSERT/原版本围栏）、缺失 content_hash
+  初始化 CAS + 版本递增、不连续 chunk 索引跳过致 incomplete 失败、
+  无效向量维度跳过、目标 profile 已存在行跳过、围栏 CAS 未命中失败、
+  循环后仍有未认领行的完整性门。core 全量 3547→3558 绿。
+- 证据：新测试 11/11 绿；core 全量 `Tests run: 3558, Failures: 0,
+  Errors: 0, Skipped: 9`，BUILD SUCCESS。
