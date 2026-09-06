@@ -1510,3 +1510,15 @@
   改为验证写副作用（reconcile×3/序列分配/完成行）。core 3574→3580 绿。
 - 证据：类累计 22/22 绿；core 全量 `Tests run: 3580, Failures: 0,
   Errors: 0, Skipped: 9`，BUILD SUCCESS。
+
+### Batch 102（已交付）
+
+- 分支：`test/settings-branches`（已合入 main = `87233374`）
+- 内容：WebUI `Settings.tsx` 分支覆盖收敛（branches 48.6% 为全应用
+  最低）补 4 行为测试：存储 JSON 恢复 retrieval/cache 配置（range
+  输入 value 为字符串形态）、损坏 JSON 回退默认值、模型三级回退
+  （存储模型优先 / 缺失时回退 defaultModel）、handleSave 持久化
+  vectorWeight/topK/cache TTL 并驱动保存按钮禁用态翻转。
+  行覆盖 74.5%→89.4%，全仓 84.37%。
+- 证据：`test:run` 428/428（58 文件）；`lint` 0 问题；`tsc -b` 绿；
+  `build` 绿。
