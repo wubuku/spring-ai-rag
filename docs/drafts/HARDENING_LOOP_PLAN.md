@@ -1573,3 +1573,16 @@
   本地/远程分支。
 - 证据：类累计 26/26 绿；core 全量 `Tests run: 3584, Failures: 0,
   Errors: 0, Skipped: 9`，BUILD SUCCESS。
+
+### Batch 107（已交付）
+
+- 分支：`test/sync-item-replay`（已合入 main = `d14f693f`）
+- 内容：`DocumentSyncRunService` 第五批（applyItem 幂等重放与重开）
+  补 3 用例：指纹匹配的成功台账行直接重放（零 mutation 调用、零
+  last_seen 回写）、APPLIED 行残留 IN_PROGRESS 标记的并发重复拒绝
+  （不重开）、FAILED 项经指纹守卫 UPDATE 重开后 mutation 重新生效。
+  期望指纹在测试内以同构 canonical Map 复现；台账行经真实 RowMapper
+  + mock ResultSet 按序列返回（支持重开后的二次读取）。
+  core 全量 3584→3587 绿。
+- 证据：新测试 3/3 绿，类累计 29/29；core 全量 `Tests run: 3587,
+  Failures: 0, Errors: 0, Skipped: 9`，BUILD SUCCESS。
