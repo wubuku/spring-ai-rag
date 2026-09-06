@@ -1236,3 +1236,16 @@
   无调用方，属潜在脆弱点而非活跃 bug。
 - 证据：新测试 16/16 绿；core 全量 `Tests run: 3414, Failures: 0,
   Errors: 0, Skipped: 9`，BUILD SUCCESS。
+
+### Batch 83（已交付）
+
+- 分支：`fix/to-document-null-safety`（已合入 main = `520929b7`）
+- 内容：Batch 82 发现的 `toDocument` null 脆弱点加固（行为变更：
+  null 输入从 IAE 变为安全降级）：
+  1. 白名单 metadata entry 携带 null 值时跳过注入；
+  2. title null 时回退 documentId（与 toChatSource 语义一致）；
+  3. documentId 经 String.valueOf 注入。
+  回归测试 `toDocumentToleratesNullTitleAndNullMetadataValues` 锁定
+  三条路径。core 全量 3415 绿。
+- 证据：`Tests run: 3415, Failures: 0, Errors: 0, Skipped: 9`，
+  BUILD SUCCESS。
