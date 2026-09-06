@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
@@ -172,6 +172,104 @@ describe('Evaluation citations tab', () => {
 
     expect(
       await screen.findByText('evaluation.citationsFailed'),
+    ).toBeInTheDocument();
+  });
+});
+
+describe('Evaluation runs and version import panels', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(evaluationApi.listSuites).mockResolvedValue({
+      data: [{ id: 'suite-1', suiteKey: 'gold-en', name: 'Gold EN' }],
+    } as never);
+    vi.mocked(evaluationApi.createRun).mockResolvedValue({
+      data: { id: 'run-9', status: 'RUNNING' },
+    } as never);
+    vi.mocked(evaluationApi.getRun).mockResolvedValue({
+      data: { id: 'run-9', status: 'RUNNING', suiteKey: 'gold-en' },
+    } as never);
+    vi.mocked(evaluationApi.createVersion).mockResolvedValue({
+      data: { id: 'v-1', version: 2 },
+    } as never);
+  });
+
+  function renderOnTab(tab: string) {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    return render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={[`/?tab=${tab}`]}>
+          <Evaluation />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+  }
+
+  it('starts a run from the runs panel and shows its status', async () => {
+    const user = userEvent.setup();
+    renderOnTab('runs');
+
+    await user.type(
+      screen.getByLabelText('evaluation.suiteKey'),
+      'gold-en',
+    );
+    await user.click(
+      screen.getByRole('button', { name: 'evaluation.startRun' }),
+    );
+
+    await waitFor(() => {
+      expect(evaluationApi.createRun).toHaveBeenCalledWith({
+        suiteKey: 'gold-en',
+      });
+    });
+    expect(await screen.findByText(/evaluation\.runStatus/))
+      .toHaveTextContent('RUNNING');
+  });
+
+  it('fetches a run by id and renders its JSON', async () => {
+    const user = userEvent.setup();
+    renderOnTab('runs');
+
+    await user.type(screen.getByLabelText('evaluation.runId'), 'run-9');
+
+    await waitFor(() => {
+      expect(evaluationApi.getRun).toHaveBeenCalledWith('run-9');
+    });
+    expect(await screen.findByText(/"status": "RUNNING"/)).toBeInTheDocument();
+  });
+
+  it('imports a suite version with the parsed definition', async () => {
+    const user = userEvent.setup();
+    renderOnTab('suites');
+
+    await user.type(
+      screen.getAllByLabelText('evaluation.suiteKey')[0],
+      'gold-en',
+    );
+    // userEvent.type 会把 { 解析为特殊键，改用 change 直接赋值。
+    fireEvent.change(
+      screen.getByLabelText('evaluation.definition'),
+      { target: { value: '{"cases":[1]}' } },
+    );
+    await user.click(
+      screen.getByRole('button', { name: 'evaluation.importVersion' }),
+    );
+
+    await waitFor(() => {
+      expect(evaluationApi.createVersion).toHaveBeenCalledWith('gold-en', {
+        cases: [1],
+      });
+    });
+  });
+
+  it('shows the suites failure alert when listing fails', async () => {
+    vi.mocked(evaluationApi.listSuites).mockRejectedValue(new Error('boom'));
+
+    renderOnTab('suites');
+
+    expect(
+      await screen.findByText('evaluation.suitesFailed'),
     ).toBeInTheDocument();
   });
 });
