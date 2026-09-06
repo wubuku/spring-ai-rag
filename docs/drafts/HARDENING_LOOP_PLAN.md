@@ -1752,3 +1752,13 @@
   改为交付 apikeys 客户端），分支名保留不影响交付内容。
 - 证据：`test:run` 452/452（58 文件）；`lint` 0 问题；`tsc -b` 绿；
   `build` 绿。
+
+### Batch 121（已交付）
+
+- 分支：`test/props-validate`（已合入 main = `0fd498b7`）
+- 内容：`RagIntegrationObservabilityProperties.validate()` 约束收敛
+  补 6 用例：默认值通过、保留期 7–730 天范围两端拒绝、非整日保留
+  拒绝、查询范围 1–90 天边界拒绝、查询范围超保留期拒绝（专用消息）、
+  容量参数非正拒绝。core 全量 3620→3635 绿。
+- 证据：新测试 6/6 绿；core 全量 `Tests run: 3635, Failures: 0,
+  Errors: 0, Skipped: 9`，BUILD SUCCESS。
