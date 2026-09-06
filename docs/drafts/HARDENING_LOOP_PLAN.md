@@ -1783,3 +1783,15 @@
   绿（Batch 122 已含 RagUsageProperties 8 用例）。
 - 证据：前端 `test:run` 452/452（58 文件）；后端全量 3643 绿；
   `lint` 0 问题；`tsc -b` 绿；`build` 绿。
+
+### Batch 124（已交付）
+
+- 分支：`test/embedding-job-repo-5`（已合入 main = `08ce884e`）
+- 内容：`EmbeddingJobRepository` 第五批（提交租约 CAS 与取消）补 5
+  用例：claimCommitAllowed RETURNING 命中/空两种结果、提交租约秒
+  下限 30（含 job id/worker id/profile id 绑定顺序）、cancel 对
+  RUNNING 作业请求取消并委托状态刷新、cancel 未知作业返回空。
+  commit 租约 UPDATE 走 UPDATE...RETURNING 查询（varargs 为
+  租约秒/jobId/workerId/profileId 四元）。core 全量 3629→3643 绿。
+- 证据：新测试 5/5 绿；core 全量 `Tests run: 3643, Failures: 0,
+  Errors: 0, Skipped: 9`，BUILD SUCCESS。
