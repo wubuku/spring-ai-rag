@@ -1612,3 +1612,19 @@
   core 全量 3587→3593 绿。
 - 证据：core 全量 `Tests run: 3593, Failures: 0, Errors: 0,
   Skipped: 9`，BUILD SUCCESS。
+
+### Batch 110（已交付）
+
+- 分支：`test/purge-apply-deep`（已合入 main = `1f38e6c8`）
+- 内容：`CollectionPurgeService.apply` 深层守卫补 3 用例：租约申请
+  被并发 apply 抢先（SET APPLYING 未命中 → conflict）、集合围栏写
+  未命中（preview 后集合被并发修改 → conflict）、重算计划指纹与
+  preview 存储指纹漂移（要求新建 preview）。空计划指纹经反射调用
+  私有 buildPlan/fingerprint 复现（counts 全零 stub），与存储值
+  精确一致而无需猜测哈希。
+  遗留：documents 计数不一致与 retire 成功链两个深层用例因 varargs
+  stub 交互不稳定暂缓（Mockito any(Object[].class) 对不同元数 varargs
+  匹配行为不一致），后续以集成测试或 Testcontainers 补齐更合适。
+  core 全量 3587→3593 绿。
+- 证据：新测试 3/3 绿；core 全量 `Tests run: 3593, Failures: 0,
+  Errors: 0, Skipped: 9`，BUILD SUCCESS。
