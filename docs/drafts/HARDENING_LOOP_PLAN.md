@@ -1262,3 +1262,15 @@
   getActiveProfile 惰性初始化。core 全量 3415→3426 绿。
 - 证据：新测试 11/11 绿；core 全量 `Tests run: 3426, Failures: 0,
   Errors: 0, Skipped: 9`，BUILD SUCCESS。
+
+### Batch 85（已交付）
+
+- 分支：`test/embedding-index-manager`（已合入 main = `30970aa3`）
+- 内容：`EmbeddingProfileIndexManager`（活动 Profile 的幂等部分 HNSW
+  索引创建，带界重试）零直接测试，补 8 用例：非正 profile id 拒绝、
+  不支持维度拒绝、索引已存在且有效时跳过 DDL、无效索引 DROP 后重建
+  并确认有效、创建后仍无效抛 ISE、瞬态失败最多重试 3 次抛最后异常、
+  重试退避期间中断的传播。通过 mock JDBC 对象直接驱动 ConnectionCallback。
+  core 全量 3426→3434 绿。
+- 证据：新测试 8/8 绿；core 全量 `Tests run: 3434, Failures: 0,
+  Errors: 0, Skipped: 9`，BUILD SUCCESS。
