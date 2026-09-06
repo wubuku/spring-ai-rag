@@ -93,6 +93,18 @@ class DocumentSyncRunServiceTest {
                 transactionManager);
         when(collectionIdentityResolver.requireActive(null, "kb"))
                 .thenReturn(collection(10L, "kb"));
+        // varargs 元素个数不定，按 SQL 分发；默认成功。
+        // COMPLETED 完成写在 answer 内切换回读状态。
+        when(jdbcTemplate.update(anyString(), any(Object[].class))).thenAnswer(
+                invocation -> {
+                    String sql = invocation.getArgument(0);
+                    if (sql != null && sql.contains("SET status = 'COMPLETED'")
+                            && runStatusRef != null) {
+                        runStatusRef.set(DocumentSyncRunStatus.COMPLETED);
+                    }
+                    return 1;
+                });
+        when(jdbcTemplate.update(anyString(), anyString())).thenReturn(1);
     }
 
     private RagCollection collection(long id, String key) {
@@ -641,5 +653,124 @@ class DocumentSyncRunServiceTest {
                 COLLECTION_ID, "default");
         verify(jdbcTemplate).update(contains("SET status = 'COMPLETED'"),
                 any(Object[].class));
+    }
+
+    // ── batchUpsert 深分支（Batch 102 候选/Batch 106 实施）────────────
+
+    private com.springairag.api.dto.DocumentSyncRunItemRequest itemOf(
+            String externalId) {
+        return new com.springairag.api.dto.DocumentSyncRunItemRequest(
+                com.springairag.api.enums.DocumentSyncDocumentKind.TEXT,
+                externalId, "etag-1", null, "body", null, null, null,
+                null, null, null);
+    }
+
+    private com.springairag.core.service.DocumentMutationService.SyncItemMutation
+            mutation(com.springairag.api.enums.DocumentSyncItemStatus status,
+                    Long documentId) {
+        return new com.springairag.core.service.DocumentMutationService.SyncItemMutation(
+                status, documentId, "etag-1", "UPSERT", null, null, null);
+    }
+
+    @Test
+    void batchUpsertAppliesNewItemThroughMutationPipeline() {
+        stubRunRow(DocumentSyncRunStatus.ACTIVE, com.springairag.core.util.DigestUtils
+                .sha256("lease-1"));
+        when(collectionIdentityResolver.mapKeys(List.of(COLLECTION_ID)))
+                .thenReturn(Map.of(COLLECTION_ID, "kb"));
+        when(mutationService.upsertSyncRunItemInCurrentTransaction(
+                any(long.class), anyString(), anyString(),
+                any(com.springairag.api.dto.DocumentSyncRunItemRequest.class),
+                any(long.class)))
+                .thenReturn(mutation(DocumentSyncItemStatus.APPLIED, 77L));
+        when(jdbcTemplate.update(contains("SET last_seen_sync_run_id"),
+                any(Object[].class))).thenReturn(1);
+        when(jdbcTemplate.update(contains("SET document_id = ?"), any(Object[].class)))
+                .thenReturn(1);
+
+        var response = service.batchUpsert(RUN_ID, "lease-1",
+                new com.springairag.api.dto.DocumentSyncRunBatchUpsertRequest(
+                        List.of(itemOf("ext-1"))));
+
+        assertEquals(1, response.summary().applied());
+        assertEquals(1, response.summary().total());
+        assertEquals(DocumentSyncItemStatus.APPLIED,
+                response.items().getFirst().status());
+        // mutation 后回写 last_seen 同步游标。
+        verify(jdbcTemplate).update(contains("SET last_seen_sync_run_id"),
+                any(Object[].class));
+    }
+
+    @Test
+    void batchUpsertFlagsFailedItemAndContinuesWithNext() {
+        stubRunRow(DocumentSyncRunStatus.ACTIVE, com.springairag.core.util.DigestUtils
+                .sha256("lease-1"));
+        when(collectionIdentityResolver.mapKeys(List.of(COLLECTION_ID)))
+                .thenReturn(Map.of(COLLECTION_ID, "kb"));
+        when(mutationService.upsertSyncRunItemInCurrentTransaction(
+                any(long.class), anyString(), anyString(),
+                any(com.springairag.api.dto.DocumentSyncRunItemRequest.class),
+                any(long.class)))
+                .thenReturn(mutation(DocumentSyncItemStatus.APPLIED, 77L))
+                .thenThrow(new RuntimeException("mutation blew up"));
+        when(jdbcTemplate.update(anyString(), any(Object[].class))).thenReturn(1);
+
+        var response = service.batchUpsert(RUN_ID, "lease-1",
+                new com.springairag.api.dto.DocumentSyncRunBatchUpsertRequest(
+                        List.of(itemOf("ext-1"), itemOf("ext-2"))));
+
+        assertEquals(2, response.summary().total());
+        assertEquals(1, response.summary().applied());
+        assertEquals(1, response.summary().failed());
+        assertEquals(DocumentSyncItemStatus.FAILED,
+                response.items().get(1).status());
+        assertEquals("BAD_REQUEST", response.items().get(1).errorCode());
+    }
+
+    @Test
+    void batchUpsertRethrowsRunControlErrorsImmediately() {
+        stubRunRow(DocumentSyncRunStatus.ACTIVE, com.springairag.core.util.DigestUtils
+                .sha256("lease-1"));
+        when(collectionIdentityResolver.mapKeys(List.of(COLLECTION_ID)))
+                .thenReturn(Map.of(COLLECTION_ID, "kb"));
+        when(mutationService.upsertSyncRunItemInCurrentTransaction(
+                any(long.class), anyString(), anyString(),
+                any(com.springairag.api.dto.DocumentSyncRunItemRequest.class),
+                any(long.class)))
+                .thenThrow(new RagException(
+                        ErrorCode.SYNC_RUN_LEASE_CONFLICT, "lease lost"));
+
+        RagException error = assertThrows(RagException.class,
+                () -> service.batchUpsert(RUN_ID, "lease-1",
+                        new com.springairag.api.dto.DocumentSyncRunBatchUpsertRequest(
+                                List.of(itemOf("ext-1")))));
+        assertEquals(ErrorCode.SYNC_RUN_LEASE_CONFLICT, error.getErrorCodeEnum());
+    }
+
+    @Test
+    void batchUpsertRejectsSameExternalIdWithDifferentItemData() {
+        stubRunRow(DocumentSyncRunStatus.ACTIVE, com.springairag.core.util.DigestUtils
+                .sha256("lease-1"));
+        // 幂等台账命中同一 externalId，但存储指纹与请求不同。
+        when(jdbcTemplate.queryForObject(contains("FROM rag_document_sync_run_items"),
+                any(RowMapper.class), any(Object[].class))).thenAnswer(invocation -> {
+                    RowMapper<?> mapper = invocation.getArgument(1);
+                    ResultSet rs = mock(ResultSet.class);
+                    when(rs.getString("external_id")).thenReturn("ext-1");
+                    when(rs.getString("document_kind")).thenReturn("TEXT");
+                    when(rs.getString("item_fingerprint")).thenReturn("different");
+                    when(rs.getString("source_revision")).thenReturn("etag-1");
+                    when(rs.getObject("document_id")).thenReturn(null);
+                    when(rs.getString("status")).thenReturn("APPLIED");
+                    when(rs.getString("error_code")).thenReturn(null);
+                    when(rs.getString("error_message")).thenReturn(null);
+                    return mapper.mapRow(rs, 0);
+                });
+
+        RagException error = assertThrows(RagException.class,
+                () -> service.batchUpsert(RUN_ID, "lease-1",
+                        new com.springairag.api.dto.DocumentSyncRunBatchUpsertRequest(
+                                List.of(itemOf("ext-1")))));
+        assertEquals(ErrorCode.SYNC_RUN_ITEM_CONFLICT, error.getErrorCodeEnum());
     }
 }
