@@ -45,6 +45,7 @@ import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -55,9 +56,16 @@ import static org.mockito.Mockito.when;
 class DocumentSyncRunServiceTest {
 
     private static final long COLLECTION_ID = 10L;
+    private static final UUID RUN_ID =
+            UUID.fromString("22222222-2222-2222-2222-222222222222");
+    private final java.util.concurrent.atomic.AtomicReference<DocumentSyncRunStatus>
+            runStatusRef =
+            new java.util.concurrent.atomic.AtomicReference<>(
+                    DocumentSyncRunStatus.ACTIVE);
 
     private JdbcTemplate jdbcTemplate;
     private CollectionIdentityResolver collectionIdentityResolver;
+    private DocumentMutationService mutationService;
     private DocumentSyncRunItemReceiptRepository itemReceiptRepository;
     private RagProperties ragProperties;
     private DocumentSyncRunService service;
@@ -67,6 +75,7 @@ class DocumentSyncRunServiceTest {
     void setUp() {
         jdbcTemplate = mock(JdbcTemplate.class);
         collectionIdentityResolver = mock(CollectionIdentityResolver.class);
+        mutationService = mock(DocumentMutationService.class);
         itemReceiptRepository = mock(DocumentSyncRunItemReceiptRepository.class);
         ragProperties = new RagProperties();
         ragProperties.getDocumentLifecycle().setSyncRunsEnabled(true);
@@ -78,7 +87,7 @@ class DocumentSyncRunServiceTest {
                 jdbcTemplate,
                 new ObjectMapper().findAndRegisterModules(),
                 collectionIdentityResolver,
-                mock(DocumentMutationService.class),
+                mutationService,
                 itemReceiptRepository,
                 ragProperties,
                 transactionManager);
@@ -98,13 +107,50 @@ class DocumentSyncRunServiceTest {
     }
 
     private void stubRunRow(DocumentSyncRunStatus status, String leaseTokenHash) {
-        // requireRun(UUID) 走 queryForObject，单 UUID varargs。
+        stubRunRowFull(status, leaseTokenHash, null, null,
+                DocumentSyncMissingPolicy.NONE);
+    }
+
+    /** 全参数运行行桩：currentStatus 可在 markRunCompleted 后切换为 COMPLETED。 */
+    private void stubRunRowFull(DocumentSyncRunStatus status,
+            String leaseTokenHash, String previewTokenHash,
+            String previewFingerprint, DocumentSyncMissingPolicy missingPolicy) {
+        runStatusRef.set(status);
         when(jdbcTemplate.queryForObject(contains("FROM rag_document_sync_runs"),
-                any(RowMapper.class), any(UUID.class)))
-                .thenAnswer(runRowAnswer(status, leaseTokenHash));
-        when(jdbcTemplate.queryForObject(contains("FROM rag_document_sync_runs"),
-                any(RowMapper.class), any(Object[].class)))
-                .thenAnswer(runRowAnswer(status, leaseTokenHash));
+                any(RowMapper.class), any(UUID.class))).thenAnswer(invocation -> {
+                    RowMapper<?> mapper = invocation.getArgument(1);
+                    ResultSet rs = mock(ResultSet.class);
+                    stubRunColumns(rs, runStatusRef.get(), leaseTokenHash,
+                            previewTokenHash, previewFingerprint, missingPolicy);
+                            return mapper.mapRow(rs, 0);
+                });
+    }
+
+    private void stubRunColumns(ResultSet rs, DocumentSyncRunStatus status,
+            String leaseTokenHash, String previewTokenHash,
+            String previewFingerprint, DocumentSyncMissingPolicy missingPolicy) {
+        try {
+        when(rs.getObject("id", UUID.class)).thenReturn(RUN_ID);
+        when(rs.getLong("collection_id")).thenReturn(COLLECTION_ID);
+        when(rs.getString("source_namespace")).thenReturn("default");
+        when(rs.getString("client_run_id")).thenReturn("client-run-1");
+        when(rs.getString("lease_token_hash")).thenReturn(leaseTokenHash);
+        when(rs.getLong("sync_generation")).thenReturn(1L);
+        when(rs.getLong("snapshot_start_sequence")).thenReturn(1L);
+        when(rs.getObject("complete_sequence")).thenReturn(null);
+        when(rs.getString("snapshot_mode"))
+                .thenReturn(DocumentSyncSnapshotMode.EXCLUSIVE_OFFLINE.name());
+        when(rs.getString("missing_policy")).thenReturn(missingPolicy.name());
+        when(rs.getString("status")).thenReturn(status.name());
+        when(rs.getObject("lease_expires_at")).thenReturn(
+                OffsetDateTime.now().plusSeconds(600));
+        when(rs.getString("preview_token_hash")).thenReturn(previewTokenHash);
+        when(rs.getString("preview_fingerprint")).thenReturn(previewFingerprint);
+        when(rs.getObject("preview_missing_count")).thenReturn(null);
+        when(rs.getInt(anyString())).thenReturn(0);
+        } catch (java.sql.SQLException error) {
+            throw new IllegalStateException(error);
+        }
     }
 
     private org.mockito.stubbing.Answer<Object> runRowAnswer() {
@@ -404,4 +450,196 @@ class DocumentSyncRunServiceTest {
         assertEquals(ErrorCode.SYNC_RUN_INVALID_STATE, error.getErrorCodeEnum());
     }
 
+
+    // ── complete 深分支（Batch 101）───────────────────────────────────
+
+    private static final String PREVIEW_TOKEN = "preview-token-1";
+    private static final String EMPTY_FINGERPRINT =
+            com.springairag.core.util.DigestUtils.sha256("");
+    private static final String LEASE_HASH =
+            com.springairag.core.util.DigestUtils.sha256("lease-1");
+    private static final String PREVIEW_HASH =
+            com.springairag.core.util.DigestUtils.sha256(PREVIEW_TOKEN);
+
+    /** TOMBSTONE complete 全流程桩：候选指纹由测试可复现拼串计算。 */
+    private void stubTombstoneComplete(List<String> candidateFingerprintLines) {
+        StringBuilder value = new StringBuilder();
+        for (String line : candidateFingerprintLines) {
+            value.append(line).append('\n');
+        }
+        String fingerprint = com.springairag.core.util.DigestUtils
+                .sha256(value.toString());
+        stubRunRowFull(DocumentSyncRunStatus.ACTIVE, LEASE_HASH, PREVIEW_HASH, fingerprint,
+                DocumentSyncMissingPolicy.TOMBSTONE);
+        when(collectionIdentityResolver.mapKeys(List.of(COLLECTION_ID)))
+                .thenReturn(Map.of(COLLECTION_ID, "kb"));
+        when(jdbcTemplate.queryForObject(
+                contains("status = 'FAILED'"), eq(Long.class), any(Object[].class)))
+                .thenReturn(0L);
+        when(jdbcTemplate.update(contains("SET status = 'COMPLETED'"),
+                any(Object[].class))).thenReturn(1);
+    }
+
+    private String candidateLine(int index, String revision) {
+        return "ext-" + index + '\u0000' + "TEXT" + '\u0000' + revision;
+    }
+
+    private String fingerprintOf(int candidateCount) {
+        StringBuilder value = new StringBuilder();
+        for (int index = 0; index < candidateCount; index++) {
+            value.append(candidateLine(index, "etag:" + index)).append('\n');
+        }
+        return com.springairag.core.util.DigestUtils.sha256(value.toString());
+    }
+
+    private void stubCandidateRows(int count) {
+        when(jdbcTemplate.query(contains("ORDER BY external_id, id"),
+                any(RowMapper.class), any(Object[].class))).thenAnswer(invocation -> {
+                    RowMapper<?> mapper = invocation.getArgument(1);
+                    List<Object> rows = new java.util.ArrayList<>();
+                    for (int index = 0; index < count; index++) {
+                        ResultSet rs = mock(ResultSet.class);
+                        String externalId = "ext-" + index;
+                        when(rs.getLong("id")).thenReturn((long) (index + 1));
+                        when(rs.getString("external_id")).thenReturn(externalId);
+                        when(rs.getString("document_type")).thenReturn("TEXT");
+                        when(rs.getString("source_revision"))
+                                .thenReturn("etag:" + index);
+                        rows.add(mapper.mapRow(rs, 0));
+                    }
+                    return rows;
+                });
+        // protectedCount 与 unresolvedLegacyCount 归零。
+        when(jdbcTemplate.queryForObject(
+                contains("source_mutation_sequence > ?"), eq(Long.class),
+                any(Object[].class))).thenReturn(0L);
+        when(jdbcTemplate.queryForObject(
+                contains("source_revision IS NULL"), eq(Long.class)))
+                .thenReturn(0L);
+        when(jdbcTemplate.queryForObject(
+                contains("external_id IS NOT NULL AND enabled = true"),
+                eq(Long.class), any(Object[].class))).thenReturn(100L);
+        // candidateCount 是唯一的 Integer 型 queryForObject：按类型锚定，
+        // 避免与 Long 型的 activeCount/protectedCount contains 匹配互抢。
+        when(jdbcTemplate.queryForObject(anyString(), eq(Integer.class),
+                any(Object[].class))).thenReturn(count);
+        when(mutationService.reconcileMissingExternal(
+                any(long.class), any(UUID.class), any(long.class)))
+                .thenReturn(true);
+    }
+
+    @Test
+    void completeRejectsForeignPreviewToken() {
+        stubRunRowFull(DocumentSyncRunStatus.ACTIVE, LEASE_HASH, PREVIEW_HASH, EMPTY_FINGERPRINT,
+                DocumentSyncMissingPolicy.TOMBSTONE);
+        when(collectionIdentityResolver.mapKeys(List.of(COLLECTION_ID)))
+                .thenReturn(Map.of(COLLECTION_ID, "kb"));
+
+        RagException error = assertThrows(RagException.class,
+                () -> service.complete(RUN_ID, "lease-1",
+                        new com.springairag.api.dto.DocumentSyncRunCompleteRequest(
+                                "other-preview-token", -1)));
+        assertEquals(ErrorCode.SYNC_RUN_PREVIEW_CONFLICT, error.getErrorCodeEnum());
+        assertTrue(error.getMessage().contains("previewToken does not belong"));
+    }
+
+    @Test
+    void completeRejectsTombstoneRunWithFailedItems() {
+        stubRunRowFull(DocumentSyncRunStatus.ACTIVE, LEASE_HASH, PREVIEW_HASH, EMPTY_FINGERPRINT,
+                DocumentSyncMissingPolicy.TOMBSTONE);
+        when(collectionIdentityResolver.mapKeys(List.of(COLLECTION_ID)))
+                .thenReturn(Map.of(COLLECTION_ID, "kb"));
+        when(jdbcTemplate.queryForObject(
+                contains("status = 'FAILED'"), eq(Long.class), any(Object[].class)))
+                .thenReturn(2L);
+
+        RagException error = assertThrows(RagException.class,
+                () -> service.complete(RUN_ID, "lease-1",
+                        new com.springairag.api.dto.DocumentSyncRunCompleteRequest(
+                                PREVIEW_TOKEN, -1)));
+        assertEquals(ErrorCode.SYNC_RUN_INCOMPLETE, error.getErrorCodeEnum());
+    }
+
+    @Test
+    void completeRejectsFingerprintDriftAfterPreview() {
+        // 预览后候选集变化：存储指纹与当前空候选指纹不一致。
+        stubRunRowFull(DocumentSyncRunStatus.ACTIVE, LEASE_HASH, PREVIEW_HASH,
+                com.springairag.core.util.DigestUtils.sha256("stale"),
+                DocumentSyncMissingPolicy.TOMBSTONE);
+        when(collectionIdentityResolver.mapKeys(List.of(COLLECTION_ID)))
+                .thenReturn(Map.of(COLLECTION_ID, "kb"));
+
+        RagException error = assertThrows(RagException.class,
+                () -> service.complete(RUN_ID, "lease-1",
+                        new com.springairag.api.dto.DocumentSyncRunCompleteRequest(
+                                PREVIEW_TOKEN, -1)));
+        assertEquals(ErrorCode.SYNC_RUN_PREVIEW_CONFLICT, error.getErrorCodeEnum());
+        assertTrue(error.getMessage().contains("changed after preview"));
+    }
+
+    @Test
+    void completeRejectsConfirmMissingCountMismatch() {
+        stubRunRowFull(DocumentSyncRunStatus.ACTIVE, LEASE_HASH, PREVIEW_HASH, EMPTY_FINGERPRINT,
+                DocumentSyncMissingPolicy.TOMBSTONE);
+        when(collectionIdentityResolver.mapKeys(List.of(COLLECTION_ID)))
+                .thenReturn(Map.of(COLLECTION_ID, "kb"));
+
+        RagException error = assertThrows(RagException.class,
+                () -> service.complete(RUN_ID, "lease-1",
+                        new com.springairag.api.dto.DocumentSyncRunCompleteRequest(
+                                PREVIEW_TOKEN, 5)));
+        assertEquals(ErrorCode.SYNC_RUN_DELETE_PROTECTION,
+                error.getErrorCodeEnum());
+        assertTrue(error.getMessage().contains("must equal the previewed"));
+    }
+
+    @Test
+    void completeRejectsMissingAboveThresholdWithoutConfirmation() {
+        // activeCount=5 → 阈值 max(1, ceil(5*20/100))=1；候选 3 > 1 且未确认。
+        stubRunRowFull(DocumentSyncRunStatus.ACTIVE, LEASE_HASH, PREVIEW_HASH,
+                fingerprintOf(3), DocumentSyncMissingPolicy.TOMBSTONE);
+        when(collectionIdentityResolver.mapKeys(List.of(COLLECTION_ID)))
+                .thenReturn(Map.of(COLLECTION_ID, "kb"));
+        stubCandidateRows(3);
+        when(jdbcTemplate.queryForObject(
+                contains("external_id IS NOT NULL AND enabled = true"),
+                eq(Long.class), any(Object[].class))).thenReturn(5L);
+
+        RagException error = assertThrows(RagException.class,
+                () -> service.complete(RUN_ID, "lease-1",
+                        new com.springairag.api.dto.DocumentSyncRunCompleteRequest(
+                                PREVIEW_TOKEN, -1)));
+        assertEquals(ErrorCode.SYNC_RUN_DELETE_PROTECTION,
+                error.getErrorCodeEnum());
+    }
+
+    @Test
+    void completeTombstonesConfirmedCandidatesAndMarksRunCompleted() {
+        // activeCount=100 → 阈值 20；3 个候选低于阈值且确认数匹配。
+        stubRunRowFull(DocumentSyncRunStatus.ACTIVE, LEASE_HASH, PREVIEW_HASH,
+                fingerprintOf(3), DocumentSyncMissingPolicy.TOMBSTONE);
+        when(collectionIdentityResolver.mapKeys(List.of(COLLECTION_ID)))
+                .thenReturn(Map.of(COLLECTION_ID, "kb"));
+        stubCandidateRows(3);
+        when(jdbcTemplate.queryForObject(
+                contains("status = 'FAILED'"), eq(Long.class), any(Object[].class)))
+                .thenReturn(0L);
+        when(mutationService.allocateSourceSequenceForSnapshot(
+                any(long.class), anyString())).thenReturn(5L);
+        when(jdbcTemplate.update(contains("SET status = 'COMPLETED'"),
+                any(Object[].class))).thenReturn(1);
+
+        // confirmMissingCount=-1 表示未确认：候选 3 低于阈值 20 → 直接完成。
+        service.complete(RUN_ID, "lease-1",
+                new com.springairag.api.dto.DocumentSyncRunCompleteRequest(
+                        PREVIEW_TOKEN, -1));
+
+        // 断言写副作用：三个候选全部墓碑化、完成序列分配、完成行落盘。
+        verify(mutationService, times(3)).reconcileMissingExternal(
+                any(long.class), any(UUID.class), any(long.class));
+        verify(mutationService).allocateSourceSequenceForSnapshot(
+                COLLECTION_ID, "default");
+        verify(jdbcTemplate).update(contains("SET status = 'COMPLETED'"),
+                any(Object[].class));
+    }
 }
