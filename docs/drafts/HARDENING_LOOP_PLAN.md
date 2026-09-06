@@ -1773,3 +1773,13 @@
   core 全量 3614→3643 绿。
 - 证据：新测试 8/8 绿；core 全量 `Tests run: 3643, Failures: 0,
   Errors: 0, Skipped: 9`，BUILD SUCCESS。
+
+### Batch 123（已交付）
+
+- 分支：`test/ratelimit-topology`（已合入 main = `2cee5a40`）
+- 内容：WebUI `Collections.test.tsx` 补 collection 删除流程 1 用例：
+  deleteByKey 成功 → deleteSuccess toast、拒绝 → deleteError toast
+  （deleteMutation onSuccess/onError 双路径）。core 全量 3629→3643
+  绿（Batch 122 已含 RagUsageProperties 8 用例）。
+- 证据：前端 `test:run` 452/452（58 文件）；后端全量 3643 绿；
+  `lint` 0 问题；`tsc -b` 绿；`build` 绿。
