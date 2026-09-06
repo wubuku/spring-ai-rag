@@ -1816,3 +1816,14 @@
   该分支标注为已知难点，未来以 Playwright e2e（真实浏览器）补测
   更合适。
 - 证据：回退后 `test:run` 452/452 全绿基线保持不变。
+
+### Batch 127（已交付）
+
+- 分支：`test/ratelimit-topology-gaps`（已合入 main = `def83b80`）
+- 内容：`RagRateLimitProperties.validateTopology` 补 5 用例细分支：
+  postgresql + principal + 空 keyLimits 合法组合通过、local 后端接受
+  keyLimits（key-limits 限制仅 postgresql）、bucketRetentionMinutes
+  非正拒绝、cleanupIntervalSeconds 非正拒绝、local 下未知 strategy
+  不参与拓扑校验。core 全量 3629→3652 绿。
+- 证据：新测试 5/5 绿；core 全量 `Tests run: 3652, Failures: 0,
+  Errors: 0, Skipped: 9`，BUILD SUCCESS。
