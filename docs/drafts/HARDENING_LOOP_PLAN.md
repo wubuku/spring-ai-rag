@@ -1522,3 +1522,15 @@
   行覆盖 74.5%→89.4%，全仓 84.37%。
 - 证据：`test:run` 428/428（58 文件）；`lint` 0 问题；`tsc -b` 绿；
   `build` 绿。
+
+### Batch 103（已交付）
+
+- 分支：`test/evaluation-page`（已合入 main = `d71b16eb`）
+- 内容：WebUI `Evaluation.tsx` 页面收敛（73%→93.2%，此前 RunsPanel
+  与版本导入整块未覆盖）补 4 行为测试：runs 面板按 suiteKey 启动
+  运行（createRun 绑定 + 状态行渲染）、按 runId 拉取并渲染运行 JSON、
+  suites 面板导入版本（解析 definition JSON；userEvent.type 会把
+  { 解析为特殊键故改用 fireEvent.change）、suites 列表失败的告警。
+  全仓行覆盖 84.95%。
+- 证据：`test:run` 432/432（58 文件）；`lint` 0 问题；`tsc -b` 绿；
+  `build` 绿。
