@@ -18,14 +18,17 @@ public class RetrievalDocumentMapper {
         Map<String, Object> metadata = new LinkedHashMap<>();
         if (result.getMetadata() != null) {
             result.getMetadata().forEach((key, value) -> {
-                if (isAllowedMetadata(key)) {
+                // Document 拒绝 null 值，白名单放行的 entry 也要跳过 null。
+                if (isAllowedMetadata(key) && value != null) {
                     metadata.put(key, value);
                 }
             });
         }
-        metadata.put("documentId", result.getDocumentId());
+        metadata.put("documentId", String.valueOf(result.getDocumentId()));
         metadata.put("chunkIndex", result.getChunkIndex());
-        metadata.put("title", result.getTitle());
+        metadata.put("title", result.getTitle() != null
+                ? result.getTitle()
+                : String.valueOf(result.getDocumentId()));
         metadata.put("score", result.getScore());
         metadata.put("vectorScore", result.getVectorScore());
         metadata.put("fulltextScore", result.getFulltextScore());

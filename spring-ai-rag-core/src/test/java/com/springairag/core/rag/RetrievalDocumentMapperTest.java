@@ -163,4 +163,26 @@ class RetrievalDocumentMapperTest {
         assertEquals("doc-7:0", source.getTitle());
         assertEquals(0.0, source.getScore());
     }
+    @Test
+    void toDocumentToleratesNullTitleAndNullMetadataValues() {
+        // title 缺失时回退 documentId；白名单 key 携带 null 值时跳过注入，
+        // Document 构造拒绝 null 值，回归防止再次触发 IAE。
+        RetrievalResult result = new RetrievalResult();
+        result.setDocumentId("doc-null");
+        result.setChunkIndex(0);
+        result.setScore(0.5);
+        result.setVectorScore(0.4);
+        result.setFulltextScore(0.3);
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        metadata.put("collectionKey", null);
+        metadata.put("language", "zh");
+        result.setMetadata(metadata);
+
+        var document = mapper.toDocument(result);
+
+        assertEquals("doc-null", document.getMetadata().get("title"));
+        assertEquals("doc-null", document.getMetadata().get("documentId"));
+        assertEquals("zh", document.getMetadata().get("language"));
+        assertTrue(!document.getMetadata().containsKey("collectionKey"));
+    }
 }
