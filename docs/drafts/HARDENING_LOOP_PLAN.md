@@ -1362,3 +1362,16 @@
   含 null completedAt）、turn_id 查询。core 全量 3471→3492 绿。
 - 证据：新测试 13/13 绿；core 全量 `Tests run: 3492, Failures: 0,
   Errors: 0, Skipped: 9`，BUILD SUCCESS。
+
+### Batch 92（已交付）
+
+- 分支：`test/sync-receipt-repo`（已合入 main = `ceac7e86`）
+- 内容：`DocumentSyncRunItemReceiptRepository`（Sync Run item receipt
+  只读 keyset 分页查询 + 状态计数摘要）零直接测试，补 7 用例：四状态
+  计数映射、四种分页谓词组合（无过滤/仅 cursor keyset/仅 status/
+  两者组合）的 SQL 形状与参数个数断言、全列行映射（枚举解析、可空
+  错误列）、seen_at 多类型转换（OffsetDateTime 直通、Timestamp/Instant
+  归一 UTC、java.sql.Date 转当日零点、不支持类型与 null 拒绝）。
+  core 全量 3492→3499 绿。
+- 证据：新测试 7/7 绿；core 全量 `Tests run: 3499, Failures: 0,
+  Errors: 0, Skipped: 9`，BUILD SUCCESS。
