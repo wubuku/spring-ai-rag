@@ -1465,3 +1465,18 @@
   循环后仍有未认领行的完整性门。core 全量 3547→3558 绿。
 - 证据：新测试 11/11 绿；core 全量 `Tests run: 3558, Failures: 0,
   Errors: 0, Skipped: 9`，BUILD SUCCESS。
+
+### Batch 99（已交付）
+
+- 分支：`test/document-sync-run-1`（已合入 main = `74927914`）
+- 内容：`DocumentSyncRunService`（1386 行）分批拆解第一批，补 8 用例：
+  SYNC_RUNS_DISABLED 公共开关门（get/list）、begin 的 null 请求/空白
+  lease/空白 collectionKey/OFFLINE_MANIFEST+TOMBSTONE 非法组合拒绝、
+  get 经真实 RowMapper + mock ResultSet 映射 RunRow 并组装响应、
+  跨集合运行隔离（NOT_FOUND）、listItems limit 范围守卫与分页组装
+  （hasMore/nextCursor/currentSummary）、单页回退、list 分页参数守卫。
+  stub 认知：requireRun(UUID) 走 queryForObject（返回单对象），单元素
+  varargs 需 any(UUID.class) 而非 any(Object[].class)。
+  core 全量 3558→3566 绿。
+- 证据：新测试 8/8 绿；core 全量 `Tests run: 3566, Failures: 0,
+  Errors: 0, Skipped: 9`，BUILD SUCCESS。
