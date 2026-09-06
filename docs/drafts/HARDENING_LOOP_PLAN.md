@@ -1437,3 +1437,17 @@
   core 全量 3528→3540 绿。
 - 证据：新测试 12/12 绿；core 全量 `Tests run: 3540, Failures: 0,
   Errors: 0, Skipped: 9`，BUILD SUCCESS。
+
+### Batch 97（已交付）
+
+- 分支：`test/purge-apply-flow`（已合入 main = `103dc73c`）
+- 内容：`CollectionPurgeService.apply` 事务流在 preview/cleanup 之外
+  再补 7 用例：授权失败传播、null 请求体、非法 collectionKey、
+  preview 缺失即过期（PREVIEW_EXPIRED）、冻结请求不匹配（期望版本
+  4 vs 存储 5 → conflict）、确认令牌错误（CONFIRMATION_INVALID）、
+  COMPLETED 幂等回放返回缓存结果且不触发租约申请/围栏写。
+  Preview 行经真实 RowMapper + mock ResultSet 构造；service fixture
+  的 ObjectMapper 补 findAndRegisterModules 与生产注入语义对齐
+  （LocalDateTime 存储载荷反序列化）。core 全量 3540→3547 绿。
+- 证据：新测试 7/7 绿；core 全量 `Tests run: 3547, Failures: 0,
+  Errors: 0, Skipped: 9`，BUILD SUCCESS。
