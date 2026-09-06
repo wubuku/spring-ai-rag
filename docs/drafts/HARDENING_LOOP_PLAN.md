@@ -1406,3 +1406,16 @@
   core 全量 3509→3521 绿。
 - 证据：新测试 12/12 绿；core 全量 `Tests run: 3521, Failures: 0,
   Errors: 0, Skipped: 9`，BUILD SUCCESS。
+
+### Batch 95（已交付）
+
+- 分支：`test/collection-purge-flow`（已合入 main = `9a54ddf0`）
+- 内容：`CollectionPurgeService` 在既有授权测试（Batch 41）之外补
+  preview 守卫链与 scheduledCleanup 共 7 用例：授权失败传播、非法
+  collectionKey、活跃预览/owner 上限冲突、未知集合 NOT_FOUND、已退役
+  集合拒绝、成功 preview 持久化 PREVIEWED 行（token/fingerprint/
+  双窗口断言）、scheduledCleanup 三段维护语句（租约回收/过期/结果
+  保留）。environment-root principal 经请求属性注入，ChatPrincipal
+  解析真实执行。core 全量 3521→3528 绿。
+- 证据：新测试 7/7 绿；core 全量 `Tests run: 3528, Failures: 0,
+  Errors: 0, Skipped: 9`，BUILD SUCCESS。
