@@ -1805,3 +1805,14 @@
   core 全量 3629→3647 绿。
 - 证据：新测试 4/4 绿；core 全量 `Tests run: 3647, Failures: 0,
   Errors: 0, Skipped: 9`，BUILD SUCCESS。
+
+### Batch 126（止损记录）
+
+- 内容：Documents.tsx provenance 页面级导航用例经三轮尝试
+  （fireEvent/userEvent、菜单展开顺序、loc-probe 断言）在 jsdom 下
+  仍时序不稳定——组件级（DocumentActionsMenu.test 的 submenu 接线
+  用例）与 API 层（embeddings repair 端点）均已覆盖，页面级仅剩
+  navigate 包装的薄分支。决策：回退不稳定用例，保持全绿基线；
+  该分支标注为已知难点，未来以 Playwright e2e（真实浏览器）补测
+  更合适。
+- 证据：回退后 `test:run` 452/452 全绿基线保持不变。
