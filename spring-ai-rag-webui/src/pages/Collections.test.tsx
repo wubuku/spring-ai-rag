@@ -259,3 +259,36 @@ describe('Collections purge flow', () => {
     })).toBeEnabled();
   });
 });
+
+  it('shows delete success and error toasts for the collection', async () => {
+    const user = userEvent.setup();
+    vi.mocked(collectionsApi.deleteByKey).mockResolvedValue({} as never);
+    mockList(collection);
+    mockCapabilities(true);
+    renderPage();
+
+    const deleteButtons = await screen.findAllByRole('button', {
+      name: 'collections.delete',
+    });
+    await user.click(deleteButtons[0]);
+
+    await waitFor(() => {
+      expect(showToast).toHaveBeenCalledWith(
+        'collections.deleteSuccess', 'success',
+      );
+    });
+
+    // 失败路径：删除拒绝 → 错误 toast。
+    vi.mocked(collectionsApi.deleteByKey).mockRejectedValue(
+      new Error('in use'),
+    );
+    await user.click(
+      (await screen.findAllByRole('button', { name: 'collections.delete' }))[0],
+    );
+    await waitFor(() => {
+      expect(showToast).toHaveBeenCalledWith(
+        'collections.deleteError', 'error',
+      );
+    });
+  });
+
