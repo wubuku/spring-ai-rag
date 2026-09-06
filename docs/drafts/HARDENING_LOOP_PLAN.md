@@ -1679,3 +1679,16 @@
   core 全量 3593→3614 绿。
 - 证据：新测试 12/12 绿；core 全量 `Tests run: 3614, Failures: 0,
   Errors: 0, Skipped: 9`，BUILD SUCCESS。
+
+### Batch 115（已交付）
+
+- 分支：`test/embedding-job-repo-1`（已合入 main = `506e1f3f`）
+- 内容：`EmbeddingJobRepository`（1114 行 durable embedding job 队列）
+  分批拆解第一批，补 6 用例轻量守卫：取消请求探测（true/false/null
+  三态）、markProgress 与 heartbeat 的 CAS 结果、提交门计数语义
+  （isCommitAllowed）、createOrCoalesce 空结果防御失败与 coalesced
+  标志（xmax <> 0）经真实 RowMapper + mock ResultSet 呈现。
+  EmbeddingJobStatus 枚举列需合法值（QUEUED）而非占位符。
+  core 全量 3614→3620 绿。第二批（claim/租约生命周期）留待后续。
+- 证据：新测试 6/6 绿；core 全量 `Tests run: 3620, Failures: 0,
+  Errors: 0, Skipped: 9`，BUILD SUCCESS。
