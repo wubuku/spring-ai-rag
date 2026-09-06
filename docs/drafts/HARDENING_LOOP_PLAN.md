@@ -1318,3 +1318,19 @@
   门控、provider 查找。core 全量 3452→3461 绿。
 - 证据：新测试 9/9 绿；core 全量 `Tests run: 3461, Failures: 0,
   Errors: 0, Skipped: 9`，BUILD SUCCESS。
+
+### Batch 89（已交付）
+
+- 分支：`test/alert-delivery-service`（已合入 main = `9b641b7e`）
+- 内容：`AlertNotificationDeliveryService`（operator 的 keyset 分页
+  投递查询与 FAILED 人工重试）零直接测试，补 10 用例：非法
+  status/provider 拒绝、大小写归一、首页响应（含 configuredProviders
+  与 durable 开关）、limit+1 探测生成 nextCursor、cursor 解码喂给
+  repository 位置参数、PENDING 在途重试短路（不触达 provider）、
+  DELIVERED 终态 conflict、缺失 NOT_FOUND、provider 不可用 conflict、
+  managed 状态过期时 markFailedAsSuperseded + conflict、成功重排队
+  RETRY_WAIT 并唤醒 worker。真实 TransactionTemplate 与 CursorCodec
+  参与测试（ObjectMapper 需 findAndRegisterModules 支持 OffsetDateTime
+  cursor）。core 全量 3461→3471 绿。
+- 证据：新测试 10/10 绿；core 全量 `Tests run: 3471, Failures: 0,
+  Errors: 0, Skipped: 9`，BUILD SUCCESS。
