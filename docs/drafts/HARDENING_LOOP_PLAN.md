@@ -1557,3 +1557,19 @@
   直接经 localStorage 预置使面板确定性展开。全仓行覆盖 85.76%。
 - 证据：`test:run` 439/439（58 文件）；`lint` 0 问题；`tsc -b` 绿；
   `build` 绿。
+
+### Batch 102-后端补充（已交付）
+
+- 提交：`398bca0c`（cherry-pick 自 test/document-sync-run-3 误置提交）
+- 内容：`DocumentSyncRunService.batchUpsert` 深分支补 4 用例：新 item
+  经 mutation 管道进入 APPLIED 并回写 last_seen 同步游标、失败 mutation
+  降级 FAILED 且批次继续下一条（BAD_REQUEST 记录）、run-control 错误
+  （SYNC_RUN_LEASE_CONFLICT）立即重抛、同 externalId 不同数据拒绝
+  （SYNC_RUN_ITEM_CONFLICT）。幂等台账行经真实 RowMapper + mock
+  ResultSet 构造。core 全量 3580→3584 绿。
+- 流程事故与恢复：本批 checkout -b 因旧分支名冲突静默失败，提交落在
+  test/document-sync-run-3（停留在 Batch 101 的旧分支），主链 push 短路
+  未生效。已定位遗留提交（ea1138a4）cherry-pick 回 main 并删除过时
+  本地/远程分支。
+- 证据：类累计 26/26 绿；core 全量 `Tests run: 3584, Failures: 0,
+  Errors: 0, Skipped: 9`，BUILD SUCCESS。
