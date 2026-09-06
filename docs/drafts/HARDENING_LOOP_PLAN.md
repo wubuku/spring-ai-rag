@@ -1692,3 +1692,14 @@
   core 全量 3614→3620 绿。第二批（claim/租约生命周期）留待后续。
 - 证据：新测试 6/6 绿；core 全量 `Tests run: 3620, Failures: 0,
   Errors: 0, Skipped: 9`，BUILD SUCCESS。
+
+### Batch 116（已交付）
+
+- 分支：`test/embedding-job-repo-2`（已合入 main = `18d7c4c5`）
+- 内容：`EmbeddingJobRepository` 第二批（claim 生命周期）补 4 用例：
+  claim 前先取消带取消请求的行并失败超预算行（两段回收查询 + 认领
+  查询）、LIMIT 下限 1 与租约秒下限 30 按 LIMIT→workerId→秒顺序
+  绑定、认领后把文档状态推进 PROCESSING 并绑定 active_job_id、
+  claimById 不可认领时返回空。core 全量 3620→3624 绿。
+- 证据：新测试 4/4 绿，类累计 10/10；core 全量 `Tests run: 3624,
+  Failures: 0, Errors: 0, Skipped: 9`，BUILD SUCCESS。
