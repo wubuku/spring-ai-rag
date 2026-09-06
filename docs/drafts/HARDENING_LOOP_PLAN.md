@@ -1334,3 +1334,16 @@
   cursor）。core 全量 3461→3471 绿。
 - 证据：新测试 10/10 绿；core 全量 `Tests run: 3471, Failures: 0,
   Errors: 0, Skipped: 9`，BUILD SUCCESS。
+
+### Batch 90（已交付）
+
+- 分支：`test/llm-usage-query-repo`（已合入 main = `af686bf1`）
+- 内容：`LlmUsageQueryRepository`（durable 模型调用台账的只读聚合
+  边界）零直接测试，补 8 用例：principal 过滤 SQL 拼装（有/无 +
+  参数个数与 Timestamp 绑定）、聚合行映射（计数、token 求和、
+  usage/pricing/cost 缺口计数）、负计数与 null 小数拒绝、
+  model/purpose/mode 维度查询与有序 CASE 表达式、UTC 日分组 +
+  LocalDate 维度键转换、成本单元聚合与空白 unit 拒绝。
+  core 全量 3471→3479 绿。
+- 证据：新测试 8/8 绿；core 全量 `Tests run: 3479, Failures: 0,
+  Errors: 0, Skipped: 9`，BUILD SUCCESS。
