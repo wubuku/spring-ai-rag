@@ -1598,3 +1598,17 @@
   sessionId 导航至会话 URL（loc-probe 断言）。全仓行覆盖 86.54%。
 - 证据：`test:run` 444/444（58 文件）；`lint` 0 问题；`tsc -b` 绿；
   `build` 绿。
+
+### Batch 109（已交付）
+
+- 分支：`test/small-guards`（已合入 main = `93ca139c`）
+- 内容：三处小守卫合并批补 8 用例：
+  1. **StaticKnowledgeChunkTest（3，新）**：必填身份字段（id/rootKey/
+     relativePath/text）空白拒绝、terms/metadata 防御性不可变拷贝；
+  2. **RetrievalDiagnosticsRetentionJobTest（2，新）**：cleanup 委托与
+     异常吞噬（保留任务失败不影响检索请求）；
+  3. **CollectionPurgeServiceTest（+1）**：apply 拒绝已过预览窗口的
+     PREVIEWED 行（PREVIEW_EXPIRED 且不申请租约）。
+  core 全量 3587→3593 绿。
+- 证据：core 全量 `Tests run: 3593, Failures: 0, Errors: 0,
+  Skipped: 9`，BUILD SUCCESS。
