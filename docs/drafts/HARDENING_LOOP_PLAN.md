@@ -1546,3 +1546,14 @@
   mockQueries。全仓行覆盖 85.14%。
 - 证据：`test:run` 436/436（58 文件）；`lint` 0 问题；`tsc -b` 绿；
   `build` 绿。
+
+### Batch 105（已交付）
+
+- 分支：`test/search-page`（已合入 main = `37ef3528`）
+- 内容：WebUI `Search.tsx` 页面收敛（71.8%→91.6%，分支 85.7%）补
+  3 组行为测试：focus 触发的搜索历史面板（列表/单条删除/一键清空——
+  清空实现写入 '[]' 空数组而非移除键）、历史项选择回填查询、原始
+  PDF 打开（window.open + createObjectURL）与失败 toast。历史条目
+  直接经 localStorage 预置使面板确定性展开。全仓行覆盖 85.76%。
+- 证据：`test:run` 439/439（58 文件）；`lint` 0 问题；`tsc -b` 绿；
+  `build` 绿。
