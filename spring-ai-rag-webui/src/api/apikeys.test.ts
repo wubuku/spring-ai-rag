@@ -69,3 +69,40 @@ describe('apiKeysApi staged rotation', () => {
     );
   });
 });
+
+  it('lists principals for the policy editor', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue({ data: [] } as never);
+
+    await apiKeysApi.listPrincipals();
+
+    expect(apiClient.get).toHaveBeenCalledWith('/api-keys/principals');
+  });
+
+  it('creates a key and binds revoke and rotate to the encoded key id', async () => {
+    vi.mocked(apiClient.post).mockResolvedValue({ data: {} } as never);
+    vi.mocked(apiClient.delete).mockResolvedValue({ data: {} } as never);
+
+    await apiKeysApi.createKey({ name: 'ci-key' } as never);
+    expect(apiClient.post).toHaveBeenCalledWith('/api-keys', { name: 'ci-key' });
+
+    await apiKeysApi.revokeKey('key/1');
+    expect(apiClient.delete).toHaveBeenCalledWith(
+      '/api-keys/key%2F1',
+    );
+
+    await apiKeysApi.rotateKey('key/1');
+    expect(apiClient.post).toHaveBeenCalledWith(
+      '/api-keys/key%2F1/rotate',
+    );
+  });
+
+  it('updates the principal policy through the encoded principal id', async () => {
+    vi.mocked(apiClient.put).mockResolvedValue({ data: {} } as never);
+
+    await apiKeysApi.updatePolicy('principal/1', { enabled: false } as never);
+
+    expect(apiClient.put).toHaveBeenCalledWith(
+      '/api-keys/principals/principal%2F1/policy',
+      { enabled: false },
+    );
+  });
