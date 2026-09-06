@@ -148,4 +148,44 @@ class RagRateLimitPropertiesTest {
         props.setRequestsPerMinute(Integer.MAX_VALUE);
         assertEquals(Integer.MAX_VALUE, props.getRequestsPerMinute());
     }
+
+    @Test
+    void postgresqlWithPrincipalStrategyAndEmptyKeyLimitsPasses() {
+        RagRateLimitProperties props = new RagRateLimitProperties();
+        props.setBackend("postgresql");
+        props.setStrategy("principal");
+        assertDoesNotThrow(props::validateTopology);
+    }
+
+    @Test
+    void localBackendAcceptsKeyLimitsWithoutPrincipalRequirement() {
+        RagRateLimitProperties props = new RagRateLimitProperties();
+        props.setBackend("local");
+        props.setStrategy("ip");
+        props.setKeyLimits(new java.util.HashMap<>(java.util.Map.of("sk-x", 5)));
+        assertDoesNotThrow(props::validateTopology);
+    }
+
+    @Test
+    void rejectsNonPositiveBucketRetentionMinutes() {
+        RagRateLimitProperties props = new RagRateLimitProperties();
+        props.setBucketRetentionMinutes(0);
+        assertThrows(IllegalStateException.class, props::validateTopology);
+    }
+
+    @Test
+    void rejectsNonPositiveCleanupIntervalSeconds() {
+        RagRateLimitProperties props = new RagRateLimitProperties();
+        props.setCleanupIntervalSeconds(0);
+        assertThrows(IllegalStateException.class, props::validateTopology);
+    }
+
+    @Test
+    void rejectsUnknownStrategyOnlyThroughTopologyForPostgresql() {
+        // 未知 strategy 在 local 后端下不参与拓扑校验（仅 postgresql 强约束）。
+        RagRateLimitProperties props = new RagRateLimitProperties();
+        props.setBackend("local");
+        props.setStrategy("tenant");
+        assertDoesNotThrow(props::validateTopology);
+    }
 }
