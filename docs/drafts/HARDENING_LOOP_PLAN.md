@@ -1739,3 +1739,16 @@
   embeddings.ts 行覆盖 66.7%→88.9%。
 - 证据：`test:run` 449/449（58 文件）；`lint` 0 问题；`tsc -b` 绿；
   `build` 绿。
+
+### Batch 120（已交付）
+
+- 分支：`test/documents-provenance`（apikeys 客户端测试，已合入
+  main = `93221d4e`）
+- 内容：`apikeys.ts` API 客户端补 3 用例：principals 列表（策略
+  编辑器数据源）、key 创建 + revoke/rotate 绑定 URI 编码 key id、
+  principal 策略更新（编码 principal id）。apikeys.ts 行覆盖
+  50%→100%。
+- 流程注记：本批分支命名与内容不符（provenance 用例调试未稳定，
+  改为交付 apikeys 客户端），分支名保留不影响交付内容。
+- 证据：`test:run` 452/452（58 文件）；`lint` 0 问题；`tsc -b` 绿；
+  `build` 绿。
