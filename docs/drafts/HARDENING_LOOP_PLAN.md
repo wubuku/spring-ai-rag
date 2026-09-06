@@ -1795,3 +1795,13 @@
   租约秒/jobId/workerId/profileId 四元）。core 全量 3629→3643 绿。
 - 证据：新测试 5/5 绿；core 全量 `Tests run: 3643, Failures: 0,
   Errors: 0, Skipped: 9`，BUILD SUCCESS。
+
+### Batch 125（已交付）
+
+- 分支：`test/embedding-job-repo-6`（已合入 main = `c795e710`）
+- 内容：`EmbeddingJobRepository` 第六批（listPage/find/list）补 4
+  用例：空授权集合短路（零 DB 交互）、页大小钳制 200 与 COUNT 总数
+  透传、find 无行返回空、list 的 batch_id 过滤拼装。
+  core 全量 3629→3647 绿。
+- 证据：新测试 4/4 绿；core 全量 `Tests run: 3647, Failures: 0,
+  Errors: 0, Skipped: 9`，BUILD SUCCESS。
