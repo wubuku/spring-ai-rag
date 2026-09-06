@@ -1,6 +1,7 @@
 package com.springairag.core.embeddingjob;
 
 import org.junit.jupiter.api.BeforeEach;
+import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 
@@ -13,8 +14,10 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -119,5 +122,77 @@ class EmbeddingJobRepositoryTest {
                 UUID.randomUUID(), 1L, 7L, "hash", 3L, false, 8);
 
         assertTrue(result.coalesced());
+    }
+
+    // ── claim/租约生命周期（Batch 116 第二批）──────────────────────────
+
+    private EmbeddingJob job() {
+        return new EmbeddingJob(
+                UUID.randomUUID(), UUID.randomUUID(), 1L, 7L, false, "hash",
+                3L, EmbeddingJobStatus.QUEUED, 0, 8,
+                java.time.OffsetDateTime.now(), null, null, null, null, null,
+                null, null, null, "manual", null, 1L, "TEXT", "legacy-compatible");
+    }
+
+    @Test
+    void claimCancelsRequestedJobsAndFailsExhaustedJobsBeforeClaiming() {
+        // 取消/失败两段回收查询返回空；认领查询命中一个候选。
+        when(jdbcTemplate.query(anyString(),
+                any(org.springframework.jdbc.core.RowMapper.class)))
+                .thenReturn(List.of());
+        EmbeddingJob job = job();
+        when(jdbcTemplate.query(contains("WITH candidates"),
+                any(org.springframework.jdbc.core.RowMapper.class),
+                any(Object[].class))).thenReturn(List.of(job));
+
+        List<EmbeddingJob> claimed = repository.claim("worker-1", 5, 60);
+
+        assertEquals(1, claimed.size());
+        // 认领后把文档状态推进为 PROCESSING 并绑定 active_job_id。
+        verify(jdbcTemplate).update(contains("active_job_id = ?"),
+                any(Object[].class));
+    }
+
+    @Test
+    void claimFloorsLimitAndLeaseSeconds() {
+        when(jdbcTemplate.query(anyString(),
+                any(org.springframework.jdbc.core.RowMapper.class)))
+                .thenReturn(List.of());
+        ArgumentCaptor<Object[]> args = ArgumentCaptor.forClass(Object[].class);
+        when(jdbcTemplate.query(contains("WITH candidates"),
+                any(org.springframework.jdbc.core.RowMapper.class),
+                args.capture())).thenReturn(List.of());
+
+        repository.claim("worker-1", 0, 5);
+
+        // 参数顺序：LIMIT（下限 1）→ workerId → 租约秒（下限 30）。
+        assertEquals(1, args.getValue()[0]);
+        assertEquals("worker-1", args.getValue()[1]);
+        assertEquals(30, args.getValue()[2]);
+    }
+
+    @Test
+    void claimByIdMarksStateProcessingWhenClaimed() {
+        EmbeddingJob job = job();
+        when(jdbcTemplate.query(contains("SET status = 'RUNNING',"),
+                any(org.springframework.jdbc.core.RowMapper.class),
+                any(Object[].class))).thenReturn(List.of(job));
+
+        var claimed = repository.claimById(job.id(), "worker-1", 60);
+
+        assertTrue(claimed.isPresent());
+        assertEquals(EmbeddingJobStatus.QUEUED, claimed.get().status());
+        verify(jdbcTemplate).update(contains("active_job_id = ?"),
+                any(Object[].class));
+    }
+
+    @Test
+    void claimByIdReturnsEmptyWhenJobNotClaimable() {
+        when(jdbcTemplate.query(contains("SET status = 'RUNNING',"),
+                any(org.springframework.jdbc.core.RowMapper.class),
+                any(Object[].class))).thenReturn(List.of());
+
+        assertTrue(repository.claimById(UUID.randomUUID(), "worker-1", 60)
+                .isEmpty());
     }
 }
