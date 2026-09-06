@@ -1628,3 +1628,16 @@
   core 全量 3587→3593 绿。
 - 证据：新测试 3/3 绿；core 全量 `Tests run: 3593, Failures: 0,
   Errors: 0, Skipped: 9`，BUILD SUCCESS。
+
+### Batch 111（已交付）
+
+- 分支：`test/zero-test-scan-2`（已合入 main = `572fe58b`）
+- 内容：`RetrievalEmptyReasonProbe`（空结果诊断探针：有界超时线程内
+  分类空检索为本地索引 vs embedding 新鲜度问题）零直接测试，补 5
+  用例：matchNone scope 与缺失 profile 短路 unavailable（available=
+  false 且 failed=false——不可判定并非探针失败）、行映射
+  （enabled/fresh 计数）、执行失败降级 probeFailed、超时取消降级
+  probeFailed（真实 500ms 阻塞 vs 100ms 窗口）。探针查询经真实
+  ResultSetExtractor + mock ResultSet 执行。core 全量 3587→3601 绿。
+- 证据：新测试 5/5 绿；core 全量 `Tests run: 3601, Failures: 0,
+  Errors: 0, Skipped: 9`，BUILD SUCCESS。
