@@ -1305,3 +1305,16 @@
   core 全量 3439→3452 绿。
 - 证据：新测试 13/13 绿；core 全量 `Tests run: 3452, Failures: 0,
   Errors: 0, Skipped: 9`，BUILD SUCCESS。
+
+### Batch 88（已交付）
+
+- 分支：`test/alert-outbox-service`（已合入 main = `f9b63356`）
+- 内容：`AlertNotificationOutboxService`（告警事务内的 durable
+  delivery 创建，(alert, version, provider) 唯一约束收敛）零直接
+  测试，补 9 用例：durable 关闭时 ordinary/managed 短路、按路由
+  fan-out 到全部 provider 并 post-commit 唤醒 worker、路由过滤、
+  仅统计插入成功的 provider（至少一个成功仍唤醒）、全部失败不唤醒、
+  managed 入队前先 supersede 旧版本、supersede 委托受 durable 开关
+  门控、provider 查找。core 全量 3452→3461 绿。
+- 证据：新测试 9/9 绿；core 全量 `Tests run: 3461, Failures: 0,
+  Errors: 0, Skipped: 9`，BUILD SUCCESS。
