@@ -1762,3 +1762,14 @@
   容量参数非正拒绝。core 全量 3620→3635 绿。
 - 证据：新测试 6/6 绿；core 全量 `Tests run: 3635, Failures: 0,
   Errors: 0, Skipped: 9`，BUILD SUCCESS。
+
+### Batch 122（已交付）
+
+- 分支：`test/usage-ratelimit-props`（已合入 main = `c575b356`）
+- 内容：`RagUsageProperties.validate()` 约束收敛补 8 用例：默认值
+  通过；保留天数（29/3651）、清理批次大小（99/10001）、清理最大
+  批次（0/101）、记录器线程（0/17）、记录器队列（99/10001）、记录
+  超时（99ms/10001ms）双边界拒绝；全部边界值显式通过。
+  core 全量 3614→3643 绿。
+- 证据：新测试 8/8 绿；core 全量 `Tests run: 3643, Failures: 0,
+  Errors: 0, Skipped: 9`，BUILD SUCCESS。
