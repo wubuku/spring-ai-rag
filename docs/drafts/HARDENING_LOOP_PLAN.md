@@ -1586,3 +1586,15 @@
   core 全量 3584→3587 绿。
 - 证据：新测试 3/3 绿，类累计 29/29；core 全量 `Tests run: 3587,
   Failures: 0, Errors: 0, Skipped: 9`，BUILD SUCCESS。
+
+### Batch 108（已交付）
+
+- 分支：`test/chat-residual`（已合入 main = `8cf1ea67`）
+- 内容：WebUI `Chat.tsx` 第五批 SSE 回调收敛（77.7%→89.7%）补 5
+  用例：onToolResult 按 toolCallId 完成运行中活动（toolFinished 替换
+  toolSearching，含 count/ms 插值——完成文本带 query 后缀需正则
+  匹配）、无 toolCallId 时按 tool 回退匹配运行中活动、onRetry 清空
+  部分流内容保留消息、onError 409 将原提示恢复到输入框、onDone 新
+  sessionId 导航至会话 URL（loc-probe 断言）。全仓行覆盖 86.54%。
+- 证据：`test:run` 444/444（58 文件）；`lint` 0 问题；`tsc -b` 绿；
+  `build` 绿。
