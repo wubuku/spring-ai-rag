@@ -1375,3 +1375,19 @@
   core 全量 3492→3499 绿。
 - 证据：新测试 7/7 绿；core 全量 `Tests run: 3499, Failures: 0,
   Errors: 0, Skipped: 9`，BUILD SUCCESS。
+
+### Batch 93（已交付）
+
+- 分支：`test/document-relocation`（已合入 main = `a265ea85`）
+- 内容：`DocumentRelocationService`（外部文档 Collection 迁移协调器，
+  400 行 relocate 主流程：幂等预约 → 序列分配 → 行 CAS 迁移 →
+  迁移地址簿记 → 版本记录 → 集合写确认）零直接测试，补 10 用例：
+  功能开关拒绝、源=目标 key 拒绝、非 ASCII namespace 拒绝、幂等键
+  空白/超长拒绝、源文档缺失 NOT_FOUND、期望修订与源行冲突、目标身份
+  已占用、端到端成功（响应断言 + confirmActiveWrite×2 + 排序 ACL
+  数组落盘）、幂等键换指纹复用拒绝。
+  关键实现认知：非 web 上下文中 ApiKeyCollectionAccess.currentPolicy()
+  返回 null → isUnrestricted(null)=true，测试无需 mock 请求上下文。
+  core 全量 3499→3509 绿。
+- 证据：新测试 10/10 绿；core 全量 `Tests run: 3509, Failures: 0,
+  Errors: 0, Skipped: 9`，BUILD SUCCESS。
