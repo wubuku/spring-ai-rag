@@ -1480,3 +1480,17 @@
   core 全量 3558→3566 绿。
 - 证据：新测试 8/8 绿；core 全量 `Tests run: 3566, Failures: 0,
   Errors: 0, Skipped: 9`，BUILD SUCCESS。
+
+### Batch 100（已交付）
+
+- 分支：`test/document-sync-run-2`（已合入 main = `c156d886`）
+- 内容：`DocumentSyncRunService` 第二批（写路径）补 8 用例：
+  batchUpsert 空/超 100 items 与 null 请求体（实现用 requireNonNull
+  守卫 NPE 而非 IAE）拒绝、空白 lease 拒绝；preview 构建候选集（经
+  真实 RowMapper；documentKind 仅识别字面量 "json-record"）、
+  preview token 哈希持久化、租约丢失 conflict；complete null 守卫、
+  COMPLETED 幂等回放、ABORTED 拒绝（SYNC_RUN_INVALID_STATE）。
+  RunRow stub 的 lease_token_hash 以真实 presented lease 摘要注入，
+  requireToken 按生产语义通过。core 全量 3566→3574 绿。
+- 证据：新增 8/8 绿，类累计 16/16；core 全量 `Tests run: 3574,
+  Failures: 0, Errors: 0, Skipped: 9`，BUILD SUCCESS。
