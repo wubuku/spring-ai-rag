@@ -1703,3 +1703,16 @@
   claimById 不可认领时返回空。core 全量 3620→3624 绿。
 - 证据：新测试 4/4 绿，类累计 10/10；core 全量 `Tests run: 3624,
   Failures: 0, Errors: 0, Skipped: 9`，BUILD SUCCESS。
+
+### Batch 117（已交付）
+
+- 分支：`test/embedding-job-repo-3`（已合入 main = `99720b2a`）
+- 内容：`EmbeddingJobRepository` 第三批（终态方法）补 5 用例：
+  markSucceeded 单参重载默认 forceSatisfied=true（job id 绑定首位）、
+  markStale/markCancelled 委托共享 terminalUpdate（CANCELLED 错误
+  为 null）、markFailure 退避秒数下限 1 并携带错误消息、
+  refreshStateFromJob 委托、retry 重置 attempts 为 QUEUED 且
+  maxAttempts 与 job id 绑定（UPDATE...RETURNING 查询形式，varargs
+  双参数）。core 全量 3620→3629 绿。
+- 证据：新测试 5/5 绿，类累计 15/15；core 全量 `Tests run: 3629,
+  Failures: 0, Errors: 0, Skipped: 9`，BUILD SUCCESS。
