@@ -20,6 +20,7 @@ vi.mock('../api/documents', () => ({
     getEmbeddingStatus: vi.fn(),
     reembedMissing: vi.fn(),
     relocate: vi.fn(),
+    restoreVersion: vi.fn(),
   },
 }));
 
@@ -42,12 +43,17 @@ vi.mock('../components/Toast', () => ({
   useToast: () => ({ showToast: mockShowToast }),
 }));
 
+const uploadHandlers: Array<Record<string, unknown>> = [];
+
 vi.mock('../hooks/useFileUpload', () => ({
-  useFileUpload: () => ({
-    uploadFiles: vi.fn(),
-    isUploading: false,
-    uploads: [],
-  }),
+  useFileUpload: (options: Record<string, unknown>) => {
+    uploadHandlers.push(options);
+    return {
+      uploadFiles: vi.fn(),
+      isUploading: false,
+      uploads: [],
+    };
+  },
 }));
 
 vi.mock('../hooks/useBlobUrlOpener', () => ({
@@ -628,4 +634,96 @@ describe('Documents restore, delete and search flows', () => {
       );
     });
   });
-});
+
+  it('restores a version through the confirmation dialog', async () => {
+    const user = userEvent.setup();
+    vi.mocked(documentsApi.restoreVersion).mockResolvedValue({} as never);
+    vi.mocked(documentsApi.getVersions).mockResolvedValue({
+      data: {
+        documentId: 1,
+        totalVersions: 1,
+        versions: [{
+          id: 5,
+          documentId: 1,
+          versionNumber: 2,
+          contentHash: 'hash-2',
+          size: 100,
+          changeType: 'UPDATE',
+          changeDescription: 'older revision',
+          snapshotCompleteness: 'FULL',
+          createdAt: '2026-01-02T00:00:00Z',
+        }],
+      },
+    } as never);
+
+    renderDocuments();
+    await screen.findByText('Local Doc');
+    await user.click(screen.getByRole('button', { name: 'documents.openActions' }));
+    await user.click(screen.getByRole('menuitem', { name: 'versions.button' }));
+
+    // 版本历史模态内点击版本行的恢复按钮 → 页面级确认对话框。
+    const restoreButtons = await screen.findAllByRole('button', {
+      name: 'versions.restore',
+    });
+    await user.click(restoreButtons[0]);
+
+    const dialog = await screen.findByRole('dialog', {
+      name: 'versions.restore',
+    });
+    await user.click(
+      await within(dialog).findByRole('button', { name: 'versions.restore' }),
+    );
+
+    await waitFor(() => {
+      expect(documentsApi.restoreVersion).toHaveBeenCalledWith(
+        1, 2, 3, 'ASYNC', 'KEEP_CURRENT',
+      );
+    });
+    await waitFor(() => {
+      expect(mockShowToast).toHaveBeenCalledWith('versions.restored', 'success');
+    });
+  });
+
+  it('surfaces upload completion and failure through callbacks', async () => {
+    renderDocuments();
+    await screen.findByText('Local Doc');
+
+    const options = uploadHandlers.at(-1) as {
+      onComplete: (name: string) => void;
+      onError: (name: string, message: string) => void;
+    };
+    options.onComplete('doc.pdf');
+    expect(mockShowToast).toHaveBeenCalledWith(
+      'doc.pdf documents.uploaded', 'success',
+    );
+
+    options.onError('doc.pdf', 'disk full');
+    expect(mockShowToast).toHaveBeenCalledWith('doc.pdf: disk full', 'error');
+  });
+
+  it('pushes the collection filter into the document list query', async () => {
+    const user = userEvent.setup();
+    vi.mocked(collectionsApi.list).mockResolvedValue({
+      data: {
+        collections: [
+          { id: 10, collectionKey: 'kb', name: 'Knowledge Base', enabled: true },
+        ],
+        total: 1,
+      },
+    } as never);
+
+    renderDocuments();
+    await screen.findByText('Local Doc');
+
+    await user.selectOptions(
+      screen.getByTestId('documents-collection-filter'),
+      'kb',
+    );
+
+    await waitFor(() => {
+      expect(documentsApi.list).toHaveBeenCalledWith(
+        expect.objectContaining({ collectionKey: 'kb' }),
+      );
+    });
+  });
+})
