@@ -676,4 +676,87 @@ describe('Chat SSE callbacks', () => {
     });
     expect(screen.getByText(/Error.*LLM provider failed/)).toBeInTheDocument();
   });
+  it('onToolResult completes the matching running activity', async () => {
+    renderChatForCallbacks();
+    const opts = getOptions();
+    await act(async () => {
+      (opts.onToolStart as ((e: unknown) => void))({
+        toolCallId: 'tc-1',
+        tool: 'searchKnowledge',
+        query: 'weather',
+      });
+    });
+    expect(screen.getByText(/chat\.toolSearching/)).toBeInTheDocument();
+
+    await act(async () => {
+      (opts.onToolResult as ((e: unknown) => void))({
+        tool: 'searchKnowledge',
+        toolCallId: 'tc-1',
+        resultCount: 5,
+        elapsedMs: 120,
+      });
+    });
+    expect(screen.getByText(/chat\.toolFinished/)).toBeInTheDocument();
+  });
+
+  it('onToolResult falls back to the running activity without an id', async () => {
+    renderChatForCallbacks();
+    const opts = getOptions();
+    await act(async () => {
+      (opts.onToolStart as ((e: unknown) => void))({
+        tool: 'searchKnowledge',
+        query: 'weather',
+      });
+    });
+
+    await act(async () => {
+      (opts.onToolResult as ((e: unknown) => void))({
+        tool: 'searchKnowledge',
+        resultCount: 3,
+        elapsedMs: 60,
+      });
+    });
+    expect(screen.getByText(/chat\.toolFinished/)).toBeInTheDocument();
+  });
+
+  it('onRetry clears the partial streaming content', async () => {
+    renderChatForCallbacks();
+    const opts = getOptions();
+    await act(async () => {
+      (opts.onChunk as (c: string) => void)('partial answer');
+    });
+    expect(screen.getByText('partial answer')).toBeInTheDocument();
+
+    await act(async () => {
+      (opts.onRetry as () => void)();
+    });
+    expect(screen.queryByText('partial answer')).not.toBeInTheDocument();
+  });
+
+  it('onError with 409 restores the prompt into the input', async () => {
+    renderChatForCallbacks();
+    const opts = getOptions();
+    const textarea = screen.getByPlaceholderText(/chat.placeholder/);
+
+    await act(async () => {
+      (opts.onError as ((m: string, e?: { status?: number }) => void))(
+        'conflict', { status: 409 },
+      );
+    });
+    expect(textarea).toHaveValue('test query');
+    expect(screen.getByText(/Error.*conflict/)).toBeInTheDocument();
+  });
+
+  it('onDone with a new session id navigates to the conversation', async () => {
+    renderChatForCallbacks();
+    const opts = getOptions();
+
+    await act(async () => {
+      (opts.onDone as ((d: { sessionId?: string }) => void))({
+        sessionId: 'session-42',
+      });
+    });
+    expect(screen.getByTestId('loc-probe'))
+      .toHaveTextContent('/chat/session-42');
+  });
 });
