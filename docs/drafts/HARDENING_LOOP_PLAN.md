@@ -1494,3 +1494,19 @@
   requireToken 按生产语义通过。core 全量 3566→3574 绿。
 - 证据：新增 8/8 绿，类累计 16/16；core 全量 `Tests run: 3574,
   Failures: 0, Errors: 0, Skipped: 9`，BUILD SUCCESS。
+
+### Batch 101（已交付）
+
+- 分支：`test/document-sync-run-3`（已合入 main = `96904c96`）
+- 内容：`DocumentSyncRunService` 第三批（complete 深分支）补 6 用例：
+  外来 previewToken 冲突（SYNC_RUN_PREVIEW_CONFLICT）、TOMBSTONE
+  运行含失败项拒绝（SYNC_RUN_INCOMPLETE）、预览后指纹漂移拒绝、
+  confirmMissingCount 与预览集不一致的删除保护、缺失数超删除保护
+  阈值且未确认拒绝、已确认 TOMBSTONE 完成墓碑化全部候选（reconcile
+  逐候选调用 + 完成序列分配 + 完成行落盘）。
+  基建升级：RunRow 桩支持全参数（preview token/fingerprint/策略），
+  运行状态经 AtomicReference 共享；candidateCount 以 Integer 类型
+  锚定避免被 Long 型 activeCount 的宽 contains 抢占。回读状态断言
+  改为验证写副作用（reconcile×3/序列分配/完成行）。core 3574→3580 绿。
+- 证据：类累计 22/22 绿；core 全量 `Tests run: 3580, Failures: 0,
+  Errors: 0, Skipped: 9`，BUILD SUCCESS。
