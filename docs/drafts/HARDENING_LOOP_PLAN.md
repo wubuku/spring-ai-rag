@@ -1287,3 +1287,21 @@
   Bootstrap）全部收敛。core 全量 3434→3439 绿。
 - 证据：新测试 5/5 绿；core 全量 `Tests run: 3439, Failures: 0,
   Errors: 0, Skipped: 9`，BUILD SUCCESS。
+
+### Batch 87（已交付）
+
+- 提交：`988b0b7e`（直接提交并推送 main——本批漏建特性分支，交付
+  内容完整且已推送，下批恢复分支流程）
+- 内容：`KeywordIndexPersistenceService`（本地关键词索引持久化协调器，
+  generation CAS 收敛）零直接测试，补 13 用例：
+  1. ensureCurrent 的身份/禁用文档守卫；新鲜度判定的完整性快照短路
+     与 JDBC 双查 chunk 计数比对、缺失状态行返回 false；
+  2. ensureContentHash 的已有哈希复用（零 DB 写）、无哈希时 sha256
+     计算 + CAS 初始化 + 实体 version 递增及其 CAS 失败拒绝；
+  3. REBUILD 全流程（generation 分配 → chunk 删除 → 批量插入 →
+     state CAS 到 READY 含八参数断言）与 CAS miss 拒绝；
+  4. markNotRequested 的 SKIP 落地与 CAS miss 拒绝；
+  5. sanitizeError 的默认值/脱敏/500 截断。
+  core 全量 3439→3452 绿。
+- 证据：新测试 13/13 绿；core 全量 `Tests run: 3452, Failures: 0,
+  Errors: 0, Skipped: 9`，BUILD SUCCESS。
