@@ -1249,3 +1249,16 @@
   三条路径。core 全量 3415 绿。
 - 证据：`Tests run: 3415, Failures: 0, Errors: 0, Skipped: 9`，
   BUILD SUCCESS。
+
+### Batch 84（已交付）
+
+- 分支：`test/embedding-profile-registry`（已合入 main = `f16e3702`）
+- 内容：`EmbeddingProfileRegistry`（启动时注册并校验活动 Embedding
+  Profile）零直接测试，补 11 用例覆盖 initialize() 守卫链：
+  身份字段空白拒绝、非 COSINE 距离拒绝、内置 profile key 防身份覆盖
+  （必须显式换 key）、自定义 key + 覆盖身份放行、缺失时插入后回读、
+  DuplicateKeyException 并发注册收敛、存储/配置身份失配报告、禁用
+  profile 拒绝、activeProfile 跨调用缓存、findRequiredByKey 未知 key、
+  getActiveProfile 惰性初始化。core 全量 3415→3426 绿。
+- 证据：新测试 11/11 绿；core 全量 `Tests run: 3426, Failures: 0,
+  Errors: 0, Skipped: 9`，BUILD SUCCESS。
