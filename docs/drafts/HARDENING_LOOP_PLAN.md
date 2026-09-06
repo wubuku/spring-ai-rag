@@ -1641,3 +1641,15 @@
   ResultSetExtractor + mock ResultSet 执行。core 全量 3587→3601 绿。
 - 证据：新测试 5/5 绿；core 全量 `Tests run: 3601, Failures: 0,
   Errors: 0, Skipped: 9`，BUILD SUCCESS。
+
+### Batch 112（已交付）
+
+- 分支：`test/documents-residual`（已合入 main = `70757196`）
+- 内容：`Documents.tsx` 残余分支收敛补 3 组测试：版本历史模态内
+  行级恢复按钮（FULL 快照完整性门）→ 页面级确认对话框 →
+  restoreVersion(id, 2, 3, ASYNC, KEEP_CURRENT) + versions.restored
+  toast；useFileUpload mock 升级为 options 捕获式（onComplete/onError
+  toast 路径可驱动）；collection 筛选 select 推送 collectionKey 到
+  列表查询。行覆盖 72.1%→79.1%，全仓 87.12%。
+- 证据：`test:run` 447/447（58 文件）；`lint` 0 问题；`tsc -b` 绿；
+  `build` 绿。
