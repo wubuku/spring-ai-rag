@@ -1728,3 +1728,14 @@
   generation 取消被取代作业。core 全量 3624→3629 绿。
 - 证据：新测试 5/5 绿；core 全量 `Tests run: 3629, Failures: 0,
   Errors: 0, Skipped: 9`，BUILD SUCCESS。
+
+### Batch 119（已交付）
+
+- 分支：`test/embeddings-repair-endpoints`（已合入 main = `530b158b`）
+- 内容：WebUI `embeddings.ts` API 客户端补 2 用例：derivation repair
+  preview 以默认桶过滤器提交（CORRUPT/LOCAL_UNAVAILABLE 桶 + FAILED/
+  STALE 向量条件 + 100 文档上限）、apply 端点携带修复身份
+  （repairId/collectionKey/previewToken/previewFingerprint）。
+  embeddings.ts 行覆盖 66.7%→88.9%。
+- 证据：`test:run` 449/449（58 文件）；`lint` 0 问题；`tsc -b` 绿；
+  `build` 绿。
