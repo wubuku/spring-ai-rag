@@ -1347,3 +1347,18 @@
   core 全量 3471→3479 绿。
 - 证据：新测试 8/8 绿；core 全量 `Tests run: 3479, Failures: 0,
   Errors: 0, Skipped: 9`，BUILD SUCCESS。
+
+### Batch 91（已交付）
+
+- 分支：`test/chat-turn-operation-repo`（已合入 main = `c4fc8d5e`）
+- 内容：`ChatTurnOperationRepository`（durable Chat turn 操作的幂等
+  插入、lease CAS 生命周期与 row-version 围栏清理）零直接测试，补
+  13 用例：幂等插入的成功/冲突报告（ON CONFLICT 子句）、短重载的
+  executionSnapshot 默认 null、reclaim CAS 命中回读/未命中 null +
+  executionSnapshot 透传、renew 命中回读与过期租约 null、
+  exhaustAttempts CAS 结果、completeSuccess 重载保留原授权快照、
+  completeFailure 结果、deleteExpired 的 retention/batch 参数绑定、
+  缺行返回 null、全字段行映射（枚举、UUID 对象、Timestamp→Instant
+  含 null completedAt）、turn_id 查询。core 全量 3471→3492 绿。
+- 证据：新测试 13/13 绿；core 全量 `Tests run: 3492, Failures: 0,
+  Errors: 0, Skipped: 9`，BUILD SUCCESS。
