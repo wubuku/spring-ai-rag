@@ -195,4 +195,78 @@ class EmbeddingJobRepositoryTest {
         assertTrue(repository.claimById(UUID.randomUUID(), "worker-1", 60)
                 .isEmpty());
     }
+
+    // ── 终态方法（Batch 117 第三批）───────────────────────────────────
+
+    @Test
+    void markSucceededOverloadDefaultsForceSatisfiedToTrue() {
+        when(jdbcTemplate.update(anyString(), any(Object[].class))).thenReturn(1);
+        UUID id = UUID.randomUUID();
+
+        assertEquals(1, repository.markSucceeded(id, "worker-1"));
+
+        ArgumentCaptor<Object[]> args = ArgumentCaptor.forClass(Object[].class);
+        verify(jdbcTemplate).update(
+                contains("SET status = 'SUCCEEDED'"), args.capture());
+        assertEquals(id, args.getValue()[0]);
+        assertEquals(Boolean.TRUE, args.getValue()[2]);
+    }
+
+    @Test
+    void markStaleAndMarkCancelledDelegateToTerminalUpdate() {
+        when(jdbcTemplate.update(anyString(), any(Object[].class))).thenReturn(1);
+        UUID id = UUID.randomUUID();
+
+        assertEquals(1, repository.markStale(id, "worker-1", "generation changed"));
+        verify(jdbcTemplate).update(contains("SET status = ?"), eq("STALE"),
+                eq("generation changed"), eq(id), eq("worker-1"));
+
+        assertEquals(1, repository.markCancelled(id, "worker-1"));
+        verify(jdbcTemplate).update(contains("SET status = ?"), eq("CANCELLED"),
+                org.mockito.ArgumentMatchers.isNull(), eq(id), eq("worker-1"));
+    }
+
+    @Test
+    void markFailureFloorsBackoffSecondsAtOne() {
+        when(jdbcTemplate.update(anyString(), any(Object[].class))).thenReturn(1);
+        UUID id = UUID.randomUUID();
+
+        assertEquals(1, repository.markFailure(id, "worker-1", "boom", -5));
+
+        ArgumentCaptor<Object[]> args = ArgumentCaptor.forClass(Object[].class);
+        verify(jdbcTemplate).update(
+                contains("SET status = CASE"), args.capture());
+        // 退避秒数下限 1：负值不会产生非法间隔。
+        assertEquals(1, args.getValue()[0]);
+        assertEquals("boom", args.getValue()[1]);
+    }
+
+    @Test
+    void refreshStateFromJobDelegatesWithJobId() {
+        when(jdbcTemplate.update(anyString(), any(Object[].class))).thenReturn(1);
+        UUID jobId = UUID.randomUUID();
+
+        repository.refreshStateFromJob(jobId);
+
+        verify(jdbcTemplate).update(
+                contains("SET status = CASE job.status"), eq(jobId));
+    }
+
+    @Test
+    void retryResetsAttemptsAndReturnsJob() {
+        EmbeddingJob job = job();
+        when(jdbcTemplate.query(contains("SET status = 'QUEUED',"),
+                any(org.springframework.jdbc.core.RowMapper.class),
+                any(Object[].class))).thenReturn(List.of(job));
+
+        var retried = repository.retry(job.id(), 12);
+
+        assertTrue(retried.isPresent());
+        assertEquals(EmbeddingJobStatus.QUEUED, retried.get().status());
+        // retry 走 UPDATE...RETURNING 查询；maxAttempts 绑定到查询参数。
+        verify(jdbcTemplate).query(
+                contains("SET status = 'QUEUED'"),
+                any(org.springframework.jdbc.core.RowMapper.class),
+                eq(12), eq(job.id()));
+    }
 }
