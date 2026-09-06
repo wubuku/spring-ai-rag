@@ -3,7 +3,12 @@ package com.springairag.core.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.springairag.api.dto.DocumentSyncRunBeginRequest;
 import com.springairag.api.dto.DocumentSyncRunItemPageResponse;
+import com.springairag.api.dto.DocumentSyncRunBatchUpsertRequest;
+import com.springairag.api.dto.DocumentSyncRunBatchUpsertResponse;
+import com.springairag.api.dto.DocumentSyncRunItemRequest;
 import com.springairag.api.dto.DocumentSyncRunItemCurrentSummary;
+import com.springairag.api.dto.DocumentSyncRunCompleteRequest;
+import com.springairag.api.dto.DocumentSyncRunPreviewResponse;
 import com.springairag.api.dto.DocumentSyncRunStatusResponse;
 import com.springairag.api.dto.DocumentSyncRunResponse;
 import com.springairag.api.enums.DocumentSyncItemStatus;
@@ -25,6 +30,7 @@ import org.springframework.transaction.TransactionStatus;
 import java.sql.ResultSet;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -39,6 +45,7 @@ import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -87,21 +94,31 @@ class DocumentSyncRunServiceTest {
     }
 
     private void stubRunRow(DocumentSyncRunStatus status) {
+        stubRunRow(status, "hash");
+    }
+
+    private void stubRunRow(DocumentSyncRunStatus status, String leaseTokenHash) {
         // requireRun(UUID) 走 queryForObject，单 UUID varargs。
         when(jdbcTemplate.queryForObject(contains("FROM rag_document_sync_runs"),
                 any(RowMapper.class), any(UUID.class)))
-                .thenAnswer(runRowAnswer());
+                .thenAnswer(runRowAnswer(status, leaseTokenHash));
         when(jdbcTemplate.queryForObject(contains("FROM rag_document_sync_runs"),
                 any(RowMapper.class), any(Object[].class)))
-                .thenAnswer(runRowAnswer());
+                .thenAnswer(runRowAnswer(status, leaseTokenHash));
     }
 
     private org.mockito.stubbing.Answer<Object> runRowAnswer() {
-        return runRowAnswer(DocumentSyncRunStatus.ACTIVE);
+        return runRowAnswer(DocumentSyncRunStatus.ACTIVE, "hash");
+    }
+
+    @SuppressWarnings("unused")
+    private org.mockito.stubbing.Answer<Object> runRowAnswer(
+            DocumentSyncRunStatus status) {
+        return runRowAnswer(status, "hash");
     }
 
     private org.mockito.stubbing.Answer<Object> runRowAnswer(
-            DocumentSyncRunStatus status) {
+            DocumentSyncRunStatus status, String leaseTokenHash) {
         return invocation -> {
                     RowMapper<?> mapper = invocation.getArgument(1);
                     ResultSet rs = mock(ResultSet.class);
@@ -110,7 +127,8 @@ class DocumentSyncRunServiceTest {
                     when(rs.getLong("collection_id")).thenReturn(COLLECTION_ID);
                     when(rs.getString("source_namespace")).thenReturn("default");
                     when(rs.getString("client_run_id")).thenReturn("client-run-1");
-                    when(rs.getString("lease_token_hash")).thenReturn("hash");
+                    when(rs.getString("lease_token_hash"))
+                            .thenReturn(leaseTokenHash);
                     when(rs.getLong("sync_generation")).thenReturn(1L);
                     when(rs.getLong("snapshot_start_sequence")).thenReturn(1L);
                     when(rs.getObject("complete_sequence")).thenReturn(null);
@@ -245,4 +263,145 @@ class DocumentSyncRunServiceTest {
         assertThrows(IllegalArgumentException.class,
                 () -> service.list("kb", "default", 0, 101));
     }
+
+    // ── 写路径（Batch 100）────────────────────────────────────────────
+
+    @Test
+    void batchUpsertRejectsEmptyAndOversizedItemLists() {
+        var emptyRequest = new com.springairag.api.dto.DocumentSyncRunBatchUpsertRequest(
+                List.of());
+        assertThrows(IllegalArgumentException.class,
+                () -> service.batchUpsert(UUID.randomUUID(), "lease-1", emptyRequest));
+        // 实现以 requireNonNull 守卫 null 请求体。
+        assertThrows(NullPointerException.class,
+                () -> service.batchUpsert(UUID.randomUUID(), "lease-1", null));
+
+        var oversized = new com.springairag.api.dto.DocumentSyncRunBatchUpsertRequest(
+                java.util.stream.IntStream.rangeClosed(0, 100)
+                        .<com.springairag.api.dto.DocumentSyncRunItemRequest>mapToObj(i -> new com.springairag.api.dto.DocumentSyncRunItemRequest(
+                                com.springairag.api.enums.DocumentSyncDocumentKind.TEXT,
+                                "ext-" + i, "etag-" + i, null, "body", null,
+                                null, null, null, null, null))
+                        .toList());
+        assertThrows(IllegalArgumentException.class,
+                () -> service.batchUpsert(UUID.randomUUID(), "lease-1", oversized));
+    }
+
+    @Test
+    void batchUpsertRejectsBlankLeaseToken() {
+        var request = new com.springairag.api.dto.DocumentSyncRunBatchUpsertRequest(
+                List.of(new com.springairag.api.dto.DocumentSyncRunItemRequest(
+                        com.springairag.api.enums.DocumentSyncDocumentKind.TEXT,
+                        "ext-1", "etag-1", null, "body", null, null, null,
+                        null, null, null)));
+        assertThrows(IllegalArgumentException.class,
+                () -> service.batchUpsert(UUID.randomUUID(), " ", request));
+    }
+
+    @Test
+    void previewRejectsBlankLeaseToken() {
+        assertThrows(IllegalArgumentException.class,
+                () -> service.preview(UUID.randomUUID(), " "));
+    }
+
+    @Test
+    void previewBuildsCandidateSetAndPersistsPreviewToken() {
+        stubRunRow(DocumentSyncRunStatus.ACTIVE, com.springairag.core.util.DigestUtils
+                .sha256("lease-1"));
+        stubCandidates(3);
+        // 预览 UPDATE 显式命中，避免依赖泛化 varargs 匹配。
+        when(jdbcTemplate.update(contains("SET preview_token_hash"),
+                any(Object[].class))).thenReturn(1);
+
+        var response = service.preview(UUID.randomUUID(), "lease-1");
+
+        assertNotNull(response.previewToken());
+        assertTrue(response.previewToken().contains("."));
+        assertNotNull(response.previewFingerprint());
+        assertEquals(2, response.candidateCount());
+        assertEquals(1, response.textCount());
+        assertEquals(1, response.jsonRecordCount());
+        assertEquals(2, response.candidates().size());
+        // 预览令牌以哈希持久化到运行行。
+        verify(jdbcTemplate).update(contains("SET preview_token_hash"),
+                any(Object[].class));
+    }
+
+    @Test
+    void previewFailsWhenLeaseIsLostDuringPreview() {
+        stubRunRow(DocumentSyncRunStatus.ACTIVE, com.springairag.core.util.DigestUtils
+                .sha256("lease-1"));
+        stubCandidates(3);
+        when(jdbcTemplate.update(contains("SET preview_token_hash"),
+                any(Object[].class))).thenReturn(0);
+
+        assertThrows(RagException.class,
+                () -> service.preview(UUID.randomUUID(), "lease-1"));
+    }
+
+    private void stubCandidates(int count) {
+        when(jdbcTemplate.queryForObject(contains(
+                "SELECT COUNT(*) FROM rag_documents"), eq(Integer.class),
+                any(Object[].class))).thenReturn(count);
+        when(jdbcTemplate.query(contains("ORDER BY external_id, id"),
+                any(RowMapper.class), any(Object[].class))).thenAnswer(invocation -> {
+                    RowMapper<?> mapper = invocation.getArgument(1);
+                    ResultSet text = mock(ResultSet.class);
+                    when(text.getLong("id")).thenReturn(1L);
+                    when(text.getString("external_id")).thenReturn("ext-1");
+                    when(text.getString("document_type")).thenReturn("TEXT");
+                    when(text.getString("source_revision")).thenReturn("etag:1");
+                    ResultSet json = mock(ResultSet.class);
+                    when(json.getLong("id")).thenReturn(2L);
+                    when(json.getString("external_id")).thenReturn("ext-2");
+                    // documentKind 仅识别字面量 "json-record"。
+                    when(json.getString("document_type")).thenReturn("json-record");
+                    when(json.getString("source_revision")).thenReturn("etag:2");
+                    return List.of(
+                            mapper.mapRow(text, 0),
+                            mapper.mapRow(json, 0));
+                });
+        // protectedCount 与 unresolvedLegacyCount 两个 queryLong。
+        when(jdbcTemplate.queryForObject(
+                contains("source_mutation_sequence > ?"), eq(Long.class),
+                any(Object[].class))).thenReturn(0L);
+        when(jdbcTemplate.queryForObject(
+                contains("source_revision IS NULL"), eq(Long.class)))
+                .thenReturn(0L);
+    }
+
+    @Test
+    void completeRejectsNullRequest() {
+        stubRunRow(DocumentSyncRunStatus.ACTIVE);
+        assertThrows(NullPointerException.class,
+                () -> service.complete(UUID.randomUUID(), "lease-1", null));
+    }
+
+    @Test
+    void completeReplaysCompletedRunIdempotently() {
+        stubRunRow(DocumentSyncRunStatus.COMPLETED, com.springairag.core.util.DigestUtils
+                .sha256("lease-1"));
+        when(collectionIdentityResolver.mapKeys(List.of(COLLECTION_ID)))
+                .thenReturn(Map.of(COLLECTION_ID, "kb"));
+
+        DocumentSyncRunResponse response = service.complete(
+                UUID.randomUUID(), "lease-1",
+                new com.springairag.api.dto.DocumentSyncRunCompleteRequest(
+                        "preview-token", -1));
+
+        assertEquals(DocumentSyncRunStatus.COMPLETED, response.status());
+    }
+
+    @Test
+    void completeRejectsAbortedRun() {
+        stubRunRow(DocumentSyncRunStatus.ABORTED, com.springairag.core.util.DigestUtils
+                .sha256("lease-1"));
+
+        RagException error = assertThrows(RagException.class,
+                () -> service.complete(UUID.randomUUID(), "lease-1",
+                        new com.springairag.api.dto.DocumentSyncRunCompleteRequest(
+                                "preview-token", -1)));
+        assertEquals(ErrorCode.SYNC_RUN_INVALID_STATE, error.getErrorCodeEnum());
+    }
+
 }
