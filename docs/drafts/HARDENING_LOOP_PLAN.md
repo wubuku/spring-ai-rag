@@ -1534,3 +1534,15 @@
   全仓行覆盖 84.95%。
 - 证据：`test:run` 432/432（58 文件）；`lint` 0 问题；`tsc -b` 绿；
   `build` 绿。
+
+### Batch 104（已交付）
+
+- 分支：`test/metrics-page`（已合入 main = `f9d34e94`）
+- 内容：WebUI `Metrics.tsx` 页面收敛（73.3%→90%，分支 76.7%）补 4
+  行为测试：超精度整数字符串经 BigInt+Intl 千分位格式化、非数字值
+  原样渲染、purpose/mode/day 三个维度表存在行时渲染、缺失数值字段
+  归零与小数成本 Intl 格式化。BigInt 用例以 queryKey 锚定的
+  mockImplementation 注册（绕开 Once 队列顺序），其余复用共享
+  mockQueries。全仓行覆盖 85.14%。
+- 证据：`test:run` 436/436（58 文件）；`lint` 0 问题；`tsc -b` 绿；
+  `build` 绿。
