@@ -1653,3 +1653,14 @@
   列表查询。行覆盖 72.1%→79.1%，全仓 87.12%。
 - 证据：`test:run` 447/447（58 文件）；`lint` 0 问题；`tsc -b` 绿；
   `build` 绿。
+
+### Batch 113（已交付）
+
+- 分支：`test/sync-skipped-mutation`（已合入 main = `a4549bc5`）
+- 内容：`batchUpsert` 的 SKIPPED_NEWER_MUTATION 分支：目标集合变更
+  序列更新时 mutation 被跳过——item 以 SKIPPED_NEWER_MUTATION 进
+  汇总（skippedNewerMutation 计数、applied 归零），且**不回写**
+  last_seen 同步游标（无 documentId 可归属，保护增量同步水位）。
+  batchUpsert item 管道至此全分支收敛。core 全量 3584→3602 绿。
+- 证据：新测试 1/1 绿，类累计 30/30；core 全量 `Tests run: 3602,
+  Failures: 0, Errors: 0, Skipped: 9`，BUILD SUCCESS。
