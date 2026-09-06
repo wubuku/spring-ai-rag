@@ -897,4 +897,35 @@ class DocumentSyncRunServiceTest {
                 any(com.springairag.api.dto.DocumentSyncRunItemRequest.class),
                 any(long.class));
     }
+
+    @Test
+    void batchUpsertSkipsNewerMutationWithoutCursorWriteback() {
+        stubRunRow(DocumentSyncRunStatus.ACTIVE, com.springairag.core.util.DigestUtils
+                .sha256("lease-1"));
+        when(collectionIdentityResolver.mapKeys(List.of(COLLECTION_ID)))
+                .thenReturn(Map.of(COLLECTION_ID, "kb"));
+        // 目标集合已有更新的变更序列：mutation 被 SKIPPED_NEWER_MUTATION，
+        // 且不带 documentId → 不得回写 last_seen 同步游标。
+        when(mutationService.upsertSyncRunItemInCurrentTransaction(
+                any(long.class), anyString(), anyString(),
+                any(com.springairag.api.dto.DocumentSyncRunItemRequest.class),
+                any(long.class)))
+                .thenReturn(mutation(
+                        DocumentSyncItemStatus.SKIPPED_NEWER_MUTATION, null));
+
+        var response = service.batchUpsert(RUN_ID, "lease-1",
+                new com.springairag.api.dto.DocumentSyncRunBatchUpsertRequest(
+                        List.of(itemOf("ext-1"))));
+
+        assertEquals(DocumentSyncItemStatus.SKIPPED_NEWER_MUTATION,
+                response.items().getFirst().status());
+        assertEquals(1, response.summary().skippedNewerMutation());
+        assertEquals(0, response.summary().applied());
+        verify(jdbcTemplate, never()).update(
+                contains("SET last_seen_sync_run_id"), any(Object[].class));
+        verify(mutationService).upsertSyncRunItemInCurrentTransaction(
+                any(long.class), anyString(), anyString(),
+                any(com.springairag.api.dto.DocumentSyncRunItemRequest.class),
+                any(long.class));
+    }
 }
