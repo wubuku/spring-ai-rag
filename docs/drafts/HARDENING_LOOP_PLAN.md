@@ -1419,3 +1419,21 @@
   解析真实执行。core 全量 3521→3528 绿。
 - 证据：新测试 7/7 绿；core 全量 `Tests run: 3528, Failures: 0,
   Errors: 0, Skipped: 9`，BUILD SUCCESS。
+
+### Batch 96（已交付）
+
+- 分支：`test/api-principal-expiry`（已合入 main = `d241eb78`）
+- 内容：`ApiPrincipalExpiryAlertService`（托管 principal 到期对账：
+  有界重试循环、阶段判定、managed 告警写入与通知认领）零直接测试，
+  补 12 用例：未知 principal MISSING、无阶段无活跃告警 NOOP（含
+  checked 时间戳标记与 NOOP 指标）、条件清除 RESOLVED + outbox
+  supersede、并发解决 CAS 未命中耗尽重试预算转 FAILURE 指标、
+  CRITICAL 阶段但告警禁用 DISABLED（零 managed 入队）、CRITICAL/
+  EXPIRED 阶段 CREATED、仅警告窗内 WARNING 分类、已通知告警
+  TRANSITIONED、候选扫描 limit+1 截断。
+  关键实现认知：快照行经真实 RowMapper + mock ResultSet 产生（映射
+  逻辑一并覆盖）；varargs stub 需区分数组整体匹配与单元素匹配；
+  claim UPDATE（SET notified_version）必须 stub 否则 ConcurrentReconcile。
+  core 全量 3528→3540 绿。
+- 证据：新测试 12/12 绿；core 全量 `Tests run: 3540, Failures: 0,
+  Errors: 0, Skipped: 9`，BUILD SUCCESS。
