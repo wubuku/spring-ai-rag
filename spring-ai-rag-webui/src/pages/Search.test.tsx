@@ -1,7 +1,9 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import userEvent from '@testing-library/user-event';
 import { collectionsApi } from '../api/collections';
+import { filesApi } from '../api/files';
 import { searchApi } from '../api/search';
 import { ToastProvider } from '../components/Toast';
 import { MemoryRouter } from 'react-router-dom';
@@ -234,5 +236,120 @@ describe('Search', () => {
     fireEvent.click(screen.getByRole('button', { name: /search.searchButton/ }));
 
     await waitFor(() => expect(searchApi.search).toHaveBeenCalledTimes(2));
+  });
+});
+
+describe('Search history and original file actions', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.removeItem('rag_search_history');
+    (collectionsApi.list as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: { collections, total: collections.length },
+    });
+    (searchApi.search as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: {
+        query: 'first query',
+        total: 1,
+        results: [{
+          documentId: '7',
+          title: 'Manual',
+          chunkText: 'Indexed text',
+          score: 0.8,
+          source: 'pdf-import:uuid-7/default.md',
+          originalFilename: 'manual.pdf',
+          fileDirectoryPath: 'uuid-7/',
+          indexedFilePath: 'uuid-7/default.md',
+          originalFilePath: 'uuid-7/original.pdf',
+        }],
+      },
+    });
+  });
+
+  async function runSearchAndOpenHistory() {
+    renderSearch();
+    await submit('first query');
+    // 有历史记录时 focus 输入框即展开历史面板。
+    const input = screen.getByPlaceholderText(/search.placeholder/);
+    fireEvent.focus(input);
+    return input;
+  }
+
+  it('tracks search history and restores a query from it', async () => {
+    const input = await runSearchAndOpenHistory();
+
+    // 历史面板出现并记录了查询。
+    expect(await screen.findByText('search.recentSearches')).toBeInTheDocument();
+    expect(screen.getByText('first query')).toBeInTheDocument();
+
+    // 选择历史项回填查询。
+    fireEvent.click(screen.getByText('first query'));
+    expect(input).toHaveValue('first query');
+  });
+
+  it('removes a single history entry and clears all entries', async () => {
+    // 直接预置两条历史记录。
+    localStorage.setItem('rag_search_history', JSON.stringify([
+      { query: 'first query', useHybrid: true, timestamp: 1000 },
+      { query: 'second query', useHybrid: false, timestamp: 2000 },
+    ]));
+    renderSearch();
+    const input = screen.getByPlaceholderText(/search.placeholder/);
+    fireEvent.focus(input);
+
+    expect(await screen.findByText('first query')).toBeInTheDocument();
+    expect(screen.getByText('second query')).toBeInTheDocument();
+
+    // 单条删除后历史计数减一。
+    fireEvent.click(screen.getAllByTitle('common.delete')[0]);
+    await waitFor(() => {
+      expect(screen.queryByText('first query')).not.toBeInTheDocument();
+    });
+    expect(screen.getByText('second query')).toBeInTheDocument();
+
+    // 一键清空后面板关闭且 localStorage 清空。
+    fireEvent.click(screen.getByText('search.clearHistory'));
+    await waitFor(() => {
+      expect(screen.queryByText('search.recentSearches')).not.toBeInTheDocument();
+    });
+    // 清空实现写入空数组而非移除键。
+    expect(localStorage.getItem('rag_search_history')).toBe('[]');
+  });
+
+  it('opens the original file as a blob and reports failures', async () => {
+    const openSpy = vi.spyOn(window, 'open').mockReturnValue(null);
+    const createObjectURL = vi.fn().mockReturnValue('blob:mock');
+    URL.createObjectURL = createObjectURL as unknown as typeof URL.createObjectURL;
+    const user = userEvent.setup();
+
+    renderSearch();
+    await submit('manual');
+    const originalBtn = await screen.findByRole('button', {
+      name: 'search.openOriginalPdf',
+    });
+    (filesApi.getRawFile as ReturnType<typeof vi.fn>).mockResolvedValue(
+      new Blob(['pdf']),
+    );
+    await user.click(originalBtn);
+
+    await waitFor(() => {
+      expect(filesApi.getRawFile).toHaveBeenCalledWith('uuid-7/original.pdf');
+      expect(createObjectURL).toHaveBeenCalled();
+      expect(openSpy).toHaveBeenCalledWith(
+        'blob:mock', '_blank', 'noopener,noreferrer',
+      );
+    });
+
+    // 失败路径以 toast 呈现。
+    (filesApi.getRawFile as ReturnType<typeof vi.fn>)
+      .mockRejectedValue(new Error('binary gone'));
+    await user.click(screen.getByRole('button', { name: 'search.openOriginalPdf' }));
+
+    // i18n mock 直通返回 key；错误 toast 以 key 文本出现。
+    await waitFor(() => {
+      expect(
+        screen.getAllByText('search.openOriginalPdfError').length,
+      ).toBeGreaterThan(0);
+    });
+    openSpy.mockRestore();
   });
 });
