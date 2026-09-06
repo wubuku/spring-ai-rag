@@ -36,4 +36,42 @@ describe('embeddingsApi', () => {
     expect(vi.mocked(apiClient.get).mock.calls[1][0])
       .toBe('/collections/derivation-readiness');
   });
+
+  it('previews derivation repairs with the default bucket filters', async () => {
+    vi.mocked(apiClient.post).mockResolvedValue({ data: {} } as never);
+
+    await embeddingsApi.previewRepair('kb');
+
+    expect(apiClient.post).toHaveBeenCalledWith(
+      '/collections/derivation-repairs/preview',
+      {
+        collectionKey: 'kb',
+        buckets: ['CORRUPT', 'LOCAL_UNAVAILABLE'],
+        vectorConditions: ['FAILED', 'STALE'],
+        maxDocuments: 100,
+      },
+    );
+  });
+
+  it('applies a derivation repair with the preview identity', async () => {
+    vi.mocked(apiClient.post).mockResolvedValue({ data: {} } as never);
+
+    const preview = {
+      repairId: 'r-1',
+      collectionKey: 'kb',
+      previewToken: 'tok',
+      previewFingerprint: 'fp',
+    };
+    await embeddingsApi.applyRepair(preview as never);
+
+    expect(apiClient.post).toHaveBeenCalledWith(
+      '/collections/derivation-repairs/apply',
+      {
+        repairId: 'r-1',
+        collectionKey: 'kb',
+        previewToken: 'tok',
+        previewFingerprint: 'fp',
+      },
+    );
+  });
 });
