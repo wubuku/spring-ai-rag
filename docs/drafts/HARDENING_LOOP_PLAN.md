@@ -1391,3 +1391,18 @@
   core 全量 3499→3509 绿。
 - 证据：新测试 10/10 绿；core 全量 `Tests run: 3509, Failures: 0,
   Errors: 0, Skipped: 9`，BUILD SUCCESS。
+
+### Batch 94（已交付）
+
+- 分支：`test/integration-observation-repo`（已合入 main = `910f9c59`）
+- 内容：`IntegrationObservationRepository`（小时级 API 操作 rollup：
+  upsert 批合并、status/operation/timeline 维度聚合、按集合贡献、
+  过期桶清理）零直接测试，补 12 用例：空批次 no-op、同键合并为单行
+  操作汇总（请求计数/状态参数索引断言）、不同 httpStatus 分组、
+  collectionId 展开、空集合范围短路返回全零聚合、聚合行映射与负数/
+  小数计数拒绝、维度列断言、UTC 日时间线分组 + Timestamp bucket 转
+  Instant 字符串、集合贡献 IN 子句与 LIMIT 绑定、oldestBucket 时间戳
+  转换与 null 直通、过期清理双表求和与参数守卫。
+  core 全量 3509→3521 绿。
+- 证据：新测试 12/12 绿；core 全量 `Tests run: 3521, Failures: 0,
+  Errors: 0, Skipped: 9`，BUILD SUCCESS。
