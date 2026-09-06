@@ -1664,3 +1664,18 @@
   batchUpsert item 管道至此全分支收敛。core 全量 3584→3602 绿。
 - 证据：新测试 1/1 绿，类累计 30/30；core 全量 `Tests run: 3602,
   Failures: 0, Errors: 0, Skipped: 9`，BUILD SUCCESS。
+
+### Batch 114（已交付）
+
+- 分支：`test/evaluation-suite-repo`（已合入 main = `bc6364d6`）
+- 内容：`EvaluationSuiteRepository`（评测框架的套件/版本/运行持久化：
+  版本号分配 CAS、并发 slot 抢占、worker 认领租约、用例结果记录）
+  零直接测试，补 12 用例：套件插入映射、findSuite 空处理、版本分配
+  CAS（RETURNING next_version - 1）缺失套件失败与顺序版本成功、
+  最新/指定版本查询、活跃运行 null 计数归零、tryInsertRun slot 冲突
+  空结果、claim 的 limit=1/租约=30 下限绑定（含 workerId 参数顺序）、
+  heartbeat/markInterrupted/finishRun CAS 结果、用例结果插入的
+  run+worker 守卫绑定与列表映射（JSON 文本列 + 可空延迟）。
+  core 全量 3593→3614 绿。
+- 证据：新测试 12/12 绿；core 全量 `Tests run: 3614, Failures: 0,
+  Errors: 0, Skipped: 9`，BUILD SUCCESS。
