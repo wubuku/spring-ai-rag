@@ -1274,3 +1274,16 @@
   core 全量 3426→3434 绿。
 - 证据：新测试 8/8 绿；core 全量 `Tests run: 3434, Failures: 0,
   Errors: 0, Skipped: 9`，BUILD SUCCESS。
+
+### Batch 86（已交付）
+
+- 分支：`test/embedding-bootstrap`（已合入 main = `cf3eb20c`）
+- 内容：`EmbeddingProfileBootstrap`（postgresql profile 下的启动编排：
+  注册 Profile → 建索引 → Legacy 迁移门禁）零直接测试，补 5 用例：
+  启动注册与建索引、显式 legacy key + confirmation 的 adopt-legacy
+  执行、legacy key 空白时回退活动 profile key、不支持迁移模式拒绝、
+  存在未认领向量时启动失败（含引导确认的完整错误信息）。
+  至此 config 包 Embedding Profile 三件套（Registry/IndexManager/
+  Bootstrap）全部收敛。core 全量 3434→3439 绿。
+- 证据：新测试 5/5 绿；core 全量 `Tests run: 3439, Failures: 0,
+  Errors: 0, Skipped: 9`，BUILD SUCCESS。
