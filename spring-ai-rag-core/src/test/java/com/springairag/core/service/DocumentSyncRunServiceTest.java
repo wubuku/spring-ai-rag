@@ -44,6 +44,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -772,5 +773,128 @@ class DocumentSyncRunServiceTest {
                         new com.springairag.api.dto.DocumentSyncRunBatchUpsertRequest(
                                 List.of(itemOf("ext-1")))));
         assertEquals(ErrorCode.SYNC_RUN_ITEM_CONFLICT, error.getErrorCodeEnum());
+    }
+
+
+    // ── applyItem replay/reopen 深分支（Batch 107）────────────────────
+
+    private String expectedItemFingerprint() throws Exception {
+        // 与服务 fingerprint(item) 相同的 canonical Map 拼装。
+        Map<String, Object> canonical = new java.util.LinkedHashMap<>();
+        canonical.put("documentKind", "TEXT");
+        canonical.put("externalId", "ext-1");
+        canonical.put("sourceRevision", "etag-1");
+        canonical.put("title", null);
+        canonical.put("content", "body");
+        canonical.put("retrievalText", null);
+        canonical.put("jsonbPayload", null);
+        canonical.put("source", null);
+        canonical.put("documentType", null);
+        canonical.put("metadata", null);
+        canonical.put("embeddingPolicy", "ASYNC");
+        return com.springairag.core.util.DigestUtils.sha256(
+                new ObjectMapper().writeValueAsString(canonical));
+    }
+
+    /** 台账查询经真实 RowMapper + mock ResultSet 生成私有 LedgerRow。 */
+    private void stubLedgerQuery(List<Object[]> rows) {
+        when(jdbcTemplate.queryForObject(contains("FROM rag_document_sync_run_items"),
+                any(RowMapper.class), eq(RUN_ID), anyString())).thenAnswer(invocation -> {
+                    RowMapper<?> mapper = invocation.getArgument(1);
+                    java.util.Iterator<Object[]> iterator = rows.iterator();
+                    if (!iterator.hasNext()) {
+                        throw new org.springframework.dao.EmptyResultDataAccessException(1);
+                    }
+                    Object[] columns = iterator.next();
+                    ResultSet rs = mock(ResultSet.class);
+                    when(rs.getString("external_id")).thenReturn((String) columns[0]);
+                    when(rs.getString("document_kind")).thenReturn((String) columns[1]);
+                    when(rs.getString("item_fingerprint")).thenReturn((String) columns[2]);
+                    when(rs.getString("source_revision")).thenReturn((String) columns[3]);
+                    when(rs.getObject("document_id")).thenReturn(columns[4]);
+                    when(rs.getString("status")).thenReturn((String) columns[5]);
+                    when(rs.getString("error_code")).thenReturn((String) columns[6]);
+                    when(rs.getString("error_message")).thenReturn((String) columns[7]);
+                    return mapper.mapRow(rs, 0);
+                });
+    }
+
+    @Test
+    void batchUpsertReplaysExistingSuccessfulItemWithoutMutation() throws Exception {
+        String fingerprint = expectedItemFingerprint();
+        stubRunRow(DocumentSyncRunStatus.ACTIVE, com.springairag.core.util.DigestUtils
+                .sha256("lease-1"));
+        when(collectionIdentityResolver.mapKeys(List.of(COLLECTION_ID)))
+                .thenReturn(Map.of(COLLECTION_ID, "kb"));
+        stubLedgerQuery(List.of(new Object[][] {
+                {"ext-1", "TEXT", fingerprint, "etag-1", 77L, "APPLIED", null, null}}));
+        when(jdbcTemplate.update(anyString(), any(Object[].class))).thenReturn(1);
+
+        var response = service.batchUpsert(RUN_ID, "lease-1",
+                new com.springairag.api.dto.DocumentSyncRunBatchUpsertRequest(
+                        List.of(itemOf("ext-1"))));
+
+        assertEquals(DocumentSyncItemStatus.APPLIED,
+                response.items().getFirst().status());
+        assertEquals(77L, response.items().getFirst().documentId());
+        // 幂等重放：不触达 mutation 管道也不重写台账。
+        verify(mutationService, never()).upsertSyncRunItemInCurrentTransaction(
+                any(long.class), anyString(), anyString(),
+                any(com.springairag.api.dto.DocumentSyncRunItemRequest.class),
+                any(long.class));
+        verify(jdbcTemplate, never()).update(
+                contains("SET last_seen_sync_run_id"), any(Object[].class));
+    }
+
+    @Test
+    void batchUpsertRejectsInProgressDuplicateWithoutReopen() throws Exception {
+        String fingerprint = expectedItemFingerprint();
+        stubRunRow(DocumentSyncRunStatus.ACTIVE, com.springairag.core.util.DigestUtils
+                .sha256("lease-1"));
+        when(collectionIdentityResolver.mapKeys(List.of(COLLECTION_ID)))
+                .thenReturn(Map.of(COLLECTION_ID, "kb"));
+        stubLedgerQuery(List.of(new Object[][] {
+                {"ext-1", "TEXT", fingerprint, "etag-1", 77L,
+                 "APPLIED", "SYNC_RUN_ITEM_IN_PROGRESS", null}}));
+
+        RagException error = assertThrows(RagException.class,
+                () -> service.batchUpsert(RUN_ID, "lease-1",
+                        new com.springairag.api.dto.DocumentSyncRunBatchUpsertRequest(
+                                List.of(itemOf("ext-1")))));
+        assertEquals(ErrorCode.SYNC_RUN_ITEM_CONFLICT, error.getErrorCodeEnum());
+        assertTrue(error.getMessage().contains("currently being processed"));
+    }
+
+    @Test
+    void batchUpsertReopensFailedItemThenAppliesMutation() throws Exception {
+        String fingerprint = expectedItemFingerprint();
+        stubRunRow(DocumentSyncRunStatus.ACTIVE, com.springairag.core.util.DigestUtils
+                .sha256("lease-1"));
+        when(collectionIdentityResolver.mapKeys(List.of(COLLECTION_ID)))
+                .thenReturn(Map.of(COLLECTION_ID, "kb"));
+        // 两次台账读取都返回 FAILED + IN_PROGRESS 标记的行。
+        stubLedgerQuery(List.of(new Object[][] {
+                {"ext-1", "TEXT", fingerprint, "etag-1", 77L,
+                 "FAILED", "SYNC_RUN_ITEM_IN_PROGRESS", null},
+                {"ext-1", "TEXT", fingerprint, "etag-1", 77L,
+                 "FAILED", "SYNC_RUN_ITEM_IN_PROGRESS", null}}));
+        when(jdbcTemplate.update(contains("SET status = 'FAILED'"),
+                any(Object[].class))).thenReturn(1);
+        when(mutationService.upsertSyncRunItemInCurrentTransaction(
+                any(long.class), anyString(), anyString(),
+                any(com.springairag.api.dto.DocumentSyncRunItemRequest.class),
+                any(long.class)))
+                .thenReturn(mutation(DocumentSyncItemStatus.APPLIED, 88L));
+
+        var response = service.batchUpsert(RUN_ID, "lease-1",
+                new com.springairag.api.dto.DocumentSyncRunBatchUpsertRequest(
+                        List.of(itemOf("ext-1"))));
+
+        assertEquals(DocumentSyncItemStatus.APPLIED,
+                response.items().getFirst().status());
+        verify(mutationService).upsertSyncRunItemInCurrentTransaction(
+                any(long.class), anyString(), anyString(),
+                any(com.springairag.api.dto.DocumentSyncRunItemRequest.class),
+                any(long.class));
     }
 }
