@@ -1716,3 +1716,15 @@
   双参数）。core 全量 3620→3629 绿。
 - 证据：新测试 5/5 绿，类累计 15/15；core 全量 `Tests run: 3629,
   Failures: 0, Errors: 0, Skipped: 9`，BUILD SUCCESS。
+
+### Batch 118（已交付）
+
+- 分支：`test/embedding-job-repo-4`（已合入 main = `62494a12`）
+- 内容：`EmbeddingJobRepository` 第四批补 5 用例：readiness 六桶
+  （fresh/queued/running/failed/stale-or-missing）分类映射、findActive
+  命中最新的 QUEUED/RUNNING 作业、findCurrentActive 要求
+  document_kind 与 chunker_version 与状态行一致、allocateGeneration
+  返回生成值或 null 回退 1、markNotRequested 写 NOT_REQUESTED 后按
+  generation 取消被取代作业。core 全量 3624→3629 绿。
+- 证据：新测试 5/5 绿；core 全量 `Tests run: 3629, Failures: 0,
+  Errors: 0, Skipped: 9`，BUILD SUCCESS。
