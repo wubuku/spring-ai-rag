@@ -294,5 +294,45 @@ class CollectionPurgeServiceTest {
                 .update(contains("SET deleted = TRUE"), any(Object[].class));
     }
 
-}
 
+    @Test
+    void applyRejectsExpiredPreview() {
+        // PREVIEWED 但预览窗口已过 → 过期冲突（不是幂等回放）。
+        String tokenHash = com.springairag.core.util.DigestUtils
+                .sha256("token-1");
+        java.time.Instant past =
+                java.time.Instant.now().minusSeconds(3_600);
+        when(jdbcTemplate.query(contains("FROM rag_collection_purge_preview"),
+                any(RowMapper.class), eq(PREVIEW_ID),
+                eq("root:environment-root"))).thenAnswer(invocation -> {
+                    RowMapper<?> mapper = invocation.getArgument(1);
+                    java.sql.ResultSet rs = mock(java.sql.ResultSet.class);
+                    when(rs.getObject("id", java.util.UUID.class))
+                            .thenReturn(PREVIEW_ID);
+                    when(rs.getString("owner_principal_id"))
+                            .thenReturn("root:environment-root");
+                    when(rs.getLong("collection_id")).thenReturn(10L);
+                    when(rs.getString("collection_key")).thenReturn("kb");
+                    when(rs.getLong("collection_version")).thenReturn(5L);
+                    when(rs.getLong("chat_commit_fence_version")).thenReturn(2L);
+                    when(rs.getString("confirmation_token_hash"))
+                            .thenReturn(tokenHash);
+                    when(rs.getString("fingerprint")).thenReturn("fp-1");
+                    when(rs.getString("status")).thenReturn("PREVIEWED");
+                    when(rs.getTimestamp("preview_deadline"))
+                            .thenReturn(java.sql.Timestamp.from(past));
+                    when(rs.getTimestamp("operation_deadline"))
+                            .thenReturn(java.sql.Timestamp.from(past));
+                    when(rs.getString("result_payload")).thenReturn(null);
+                    return List.of(mapper.mapRow(rs, 0));
+                });
+
+        RagException error = assertThrows(RagException.class,
+                () -> service.apply(applyRequest(), request()));
+        assertEquals(ErrorCode.COLLECTION_PURGE_PREVIEW_EXPIRED,
+                error.getErrorCodeEnum());
+        // 过期拒绝不触发租约申请。
+        verify(jdbcTemplate, org.mockito.Mockito.never())
+                .update(contains("SET status = 'APPLYING'"), any(Object[].class));
+    }
+}
