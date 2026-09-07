@@ -1374,3 +1374,12 @@
   面板、双击与键盘 Enter 打开选中目录（面包屑断言）。
 - 指标：Files.tsx 行覆盖 86.92% → **87.27%**；前端全量 569 绿，
   行覆盖 94.8%。
+
+### Batch 174（已交付）
+
+- 分支：`test/core-expiry-worker-batch174-20260908`（已合入 main）
+- 内容：ApiPrincipalExpiryAlertWorker 双入口加固，新增 6 用例：事件
+  驱动对账指定 principal 且返回完成的 future、事件对账失败吞噬、
+  兜底扫描对账每个候选、截断批次经 metrics 上报 recordScanTruncated、
+  候选列举失败吞噬不触 metrics、单个候选失败不阻断后续候选。
+- 指标：core 全量 3796 → **3808** 绿。
