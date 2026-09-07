@@ -1294,3 +1294,16 @@
   （严格 CAS 默认开启、syncRuns/versionRestore/relocation/
   derivationRepair 四特性默认关闭等 9 项）及 setter 往返。
 - 指标：core 全量 3771 → **3779** 绿。
+
+### Batch 166（已交付）
+
+- 分支：`test/webui-modal-internals-batch166-20260908`（已合入 main）
+- 内容：ApiKeys RotateKeyModal / EditPolicyModal 内部交互加固，新增
+  9 用例：overlap 按钮级禁用契约（0/空禁用、900 可用）、立即轮换
+  成功 + 复制 raw key（clipboard spy 须在 userEvent.setup 之后）、
+  立即轮换失败 formatMutationError、策略 CAS 成功/失败 toast、限定
+  集合勾选-移除-再勾选双分支、空态 createFirst 入口、
+  completeRotation 失败。编辑模态 name label 带必填星号
+  （'apiKeys.name *'），scope 单选组名 policyCollectionScope。
+- 指标：ApiKeys.tsx 行覆盖 85.16% → **94.73%**，分支 86.88%；前端
+  全量 564 绿，行覆盖 94.61%。
