@@ -1029,3 +1029,15 @@
   （Durable 启动门禁三分支）、ApiAccessPolicy（遗留默认全量能力与
   显式清单门禁）。
 - 指标：core 全量 3687 → **3707** 绿。
+
+### Batch 145（已交付）
+
+- 分支：`test/webui-settings-batch145-20260907`（已合入 main =
+  `08c16f00`）
+- 内容：Settings 页分支覆盖加固，新增 5 用例：不可用模型过滤且默认
+  选中、模型列表加载失败提示（modelsLoadError）、Language tab 切换
+  中文并持久化 localStorage、检索权重滑块（getAllByRole('slider')
+  按文档顺序取全文权重）与 topK/rerankTopK 整数回退（'' → 10/5）、
+  缓存开关联动禁用 ttl/maxSize 与空值默认回退（60/1000）。
+- 指标：Settings.tsx 行覆盖 89.36% → **96.8%**，分支 62.16% →
+  74.77%；前端全量 493 绿，行覆盖 90.11%。
