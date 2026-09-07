@@ -132,5 +132,64 @@ class DerivationIntegritySnapshotFromTest {
         Snapshot snapshot = fromRow(row);
 
         assertEquals("LOCAL_PHYSICAL_INTEGRITY_FAILED", snapshot.reasonCode());
+}
+
+    @Test
+    void classifiesCorruptWhenVectorRowsIncompleteWithCompletedStatus() {
+        // 向量状态 COMPLETED 但行数不完整 → vectorCorrupt 优先于 converging。
+        Map<String, Object> row = baseRow();
+        row.put("vector_actual", 1);
+        row.put("vector_distinct", 1);
+        Snapshot snapshot = fromRow(row);
+
+        assertEquals("CORRUPT", snapshot.bucket());
+        assertTrue(snapshot.vectorCorrupt());
+        assertEquals("VECTOR_PHYSICAL_INTEGRITY_FAILED", snapshot.reasonCode());
+    }
+
+    @Test
+    void classifiesTombstonedDocumentsAsDisabled() {
+        Snapshot snapshot = fromRow(Map.of("source_deleted", true));
+
+        assertEquals("DISABLED", snapshot.bucket());
+        assertTrue(snapshot.tombstoned());
+    }
+
+    @Test
+    void classifiesMissingLocalConditionWhenLocalStatusAbsent() {
+        Map<String, Object> row = baseRow();
+        row.put("local_status", null);
+        row.put("vector_status", "NOT_REQUESTED");
+        Snapshot snapshot = fromRow(row);
+
+        // 本地状态缺失 → localCondition=MISSING，双 NOT_REQUESTED 不满足 → LOCAL_UNAVAILABLE。
+        assertEquals("LOCAL_UNAVAILABLE", snapshot.bucket());
+        assertEquals("MISSING", snapshot.localCondition());
+    }
+
+    @Test
+    void classifiesFailedVectorConditionWhenVectorStatusFailed() {
+        Map<String, Object> row = baseRow();
+        row.put("local_status", "FAILED");
+        row.put("vector_status", "FAILED");
+        Snapshot snapshot = fromRow(row);
+
+        assertEquals("FAILED", snapshot.vectorCondition());
+        assertEquals("LOCAL_UNAVAILABLE", snapshot.bucket());
+    }
+
+    @Test
+    void classifiesNotRequestedLocalConditionWhenLocalNotRequested() {
+        Map<String, Object> row = baseRow();
+        row.put("local_status", "NOT_REQUESTED");
+        row.put("vector_status", "RUNNING");
+        row.put("active_job_status", "RUNNING");
+        row.put("vector_actual", 2);
+        row.put("vector_distinct", 2);
+        Snapshot snapshot = fromRow(row);
+
+        // local NOT_REQUESTED、vector 收敛中 → VECTOR_ 前缀失败态桶不适用，
+        // 归入 INDEXING（job 在收敛且本地未就绪）。
+        assertEquals("INDEXING", snapshot.bucket());
     }
 }
