@@ -1827,3 +1827,17 @@
   不参与拓扑校验。core 全量 3629→3652 绿。
 - 证据：新测试 5/5 绿；core 全量 `Tests run: 3652, Failures: 0,
   Errors: 0, Skipped: 9`，BUILD SUCCESS。
+
+### Batch 128（已交付）
+
+- 分支：`test/alertdelivery-repo-guards`（提交 `fdb8f20b` 经 cherry-pick
+  合入 main = `1db40228`；分支名笔误已如实记录）
+- 内容：`AlertNotificationDeliveryRepository`（alertdelivery 包最后
+  一个零测试的 Repository 层）补 4 用例：幂等插入冲突报告（同
+  alert/version/provider ON CONFLICT DO NOTHING）、supersedeOlderManaged
+  与 supersedeManaged 的行数计数（按 SQL 分发 stub 消除同表双片段
+  contains 互抢）、过期租约恢复计数、到期候选 id 查询
+  （PENDING/RETRY_WAIT + 过期 IN_PROGRESS 的 UNION）。
+  core 全量 3643→3656 绿。
+- 证据：新测试 4/4 绿；core 全量 `Tests run: 3656, Failures: 0,
+  Errors: 0, Skipped: 9`，BUILD SUCCESS。
