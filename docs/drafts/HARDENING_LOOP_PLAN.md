@@ -1563,3 +1563,15 @@ VersionHistoryModal 相关 100% 项等。
   OpenAI PLAIN 拒绝声明 scope/集合头（PLAIN 需显式声明）、头值
   多值/空白拒绝、角色小写与 memory 大写与模型缺省归一化。
 - 指标：core 全量 3833 → **3845** 绿。
+
+### Batch 192（已交付）
+
+- 分支：`test/core-replay-matrix-batch192-20260908`（已合入 main）
+- 内容：ChatAuthorizationService verifyReplay 授权矩阵，新增 8 用例：
+  CALLER_VISIBLE+UNRESTRICTED 当前收窄拒绝、RESTRICTED 当前扩宽无害、
+  allowList 撤销拒绝、allowList 包含放行、UNRESTRICTED+ANY 当前受限
+  拒绝、UNRESTRICTED+SELECTED 按 selected 校验放行/拒绝、
+  NOT_APPLICABLE 直接放行。MockHttpServletRequest 属性驱动
+  ChatPrincipal.from 推导 db principal，AuthenticatedApiPrincipal
+  承载受限 allowList。
+- 指标：core 全量 3845 → **3853** 绿。
