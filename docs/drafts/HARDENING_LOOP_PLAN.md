@@ -1551,3 +1551,15 @@ VersionHistoryModal 相关 100% 项等。
   ids 不触库、参数化 IN 查询与快照映射、insert 空引用短路、批量
   插入 setter 绑定——captor 泛型 T 须与首参集合元素类型一致）。
 - 指标：core 全量 3827 → **3833** 绿。
+
+### Batch 191（已交付）
+
+- 分支：`test/core-fingerprint-contract-batch191-20260908`（已合入
+  main）
+- 内容：ChatRequestFingerprint 契约加固（36% → 大幅提升），新增 12
+  用例：null 请求拒绝、元数据凭据字段（含嵌套 Authorization）与控制
+  字符拒绝、超 32KB 元数据拒绝、键序规范化不影响指纹、scope 推导、
+  PLAIN 模式 NOT_APPLICABLE、空白 sessionId → AUTO_SESSION、
+  OpenAI PLAIN 拒绝声明 scope/集合头（PLAIN 需显式声明）、头值
+  多值/空白拒绝、角色小写与 memory 大写与模型缺省归一化。
+- 指标：core 全量 3833 → **3845** 绿。
