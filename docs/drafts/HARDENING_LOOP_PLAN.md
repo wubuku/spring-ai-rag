@@ -1919,3 +1919,15 @@
   properties.getChat().getKnowledge()。core 全量 3676→3679 绿。
 - 证据：新测试 3/3 绿；core 全量 `Tests run: 3679, Failures: 0,
   Errors: 0, Skipped: 9`，BUILD SUCCESS。
+
+### Batch 137（已交付）
+
+- 分支：`test/embedding-profile-sqlscope`（已合入 main = `a14c81c3`）
+- 内容：`EmbeddingProfileSqlScope`（活动 Embedding Profile 的统一
+  检索 SQL 作用域生成器）零直接测试，补 5 用例：两参/三参重载的
+  非 profile id 拒绝、空白/null chunker 版本拒绝（SQL 字面量助手）、
+  JOIN 与 freshness 条件形状（COMPLETED 状态、content hash、按文档
+  类型 CASE、enabled）、chunker 版本字面量单引号转义、两参重载默认
+  text chunker 为 legacy-compatible。core 全量 3676→3684 绿。
+- 证据：新测试 5/5 绿；core 全量 `Tests run: 3684, Failures: 0,
+  Errors: 0, Skipped: 9`，BUILD SUCCESS。
