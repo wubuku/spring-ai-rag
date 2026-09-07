@@ -1886,3 +1886,13 @@
   INDEXING 桶要求收敛作业且本地非新鲜。core 全量 3666→3671 绿。
 - 证据：新测试 5/5 绿；core 全量 `Tests run: 3671, Failures: 0,
   Errors: 0, Skipped: 9`，BUILD SUCCESS。
+
+### Batch 133（已交付）
+
+- 分支：`test/embedding-job-repo-8`（已合入 main = `d2fe04cf`）
+- 内容：`EmbeddingJobRepository` 收尾批：listPage 的
+  allowedCollectionIds 过滤渲染为 postgres bigint 数组（ANY (?)）绑定
+  并透传 COUNT 总数；文件结构经多轮部分编辑破坏后整文件重写恢复
+  （保留原 4 测试 + 新增 ANY 绑定用例）。core 全量 3652→3672 绿。
+- 证据：新测试 5/5 绿；core 全量 `Tests run: 3672, Failures: 0,
+  Errors: 0, Skipped: 9`，BUILD SUCCESS。
