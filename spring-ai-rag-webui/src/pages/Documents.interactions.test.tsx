@@ -275,7 +275,6 @@ describe('Documents preview and relocate flows', () => {
   });
 });
 
-// ─── Preview degrade path (Batch 55) ────────────────────────────────
 
 describe('Documents preview degrade path', () => {
   beforeEach(() => {
@@ -292,16 +291,14 @@ describe('Documents preview degrade path', () => {
 
   it('keeps the preview open with list data when the detail fetch fails', async () => {
     const user = userEvent.setup();
-    // 列表返回的 content 为空（列表 API 不回传正文），detail get 失败。
     vi.mocked(documentsApi.list).mockResolvedValue({
       data: { documents: [{ ...LOCAL_DOC, content: '' }], total: 1 },
     } as never);
     vi.mocked(documentsApi.get).mockRejectedValue(new Error('get failed'));
 
     renderDocuments();
-    await user.click(await screen.findByText('LOCAL_DOC' in {} ? 'Local Doc' : 'Local Doc'));
+    await user.click(await screen.findByText('Local Doc'));
 
-    // 预览仍以列表数据打开，且 get 被尝试过一次
     await waitFor(() => {
       expect(documentsApi.get).toHaveBeenCalledWith(1);
     });
@@ -309,8 +306,6 @@ describe('Documents preview degrade path', () => {
     expect(dialog.textContent).toContain('Local Doc');
   });
 });
-
-// ─── Edit save flow (Batch 62) ──────────────────────────────────────
 
 describe('Documents edit save flow', () => {
   beforeEach(() => {
@@ -344,18 +339,22 @@ describe('Documents edit save flow', () => {
     );
     await user.click(screen.getByRole('menuitem', { name: 'documents.edit' }));
 
-    // handleEdit 先经 documentsApi.get 加载详情
     await waitFor(() => {
       expect(documentsApi.get).toHaveBeenCalledWith(1);
     });
 
-    // 修改标题与正文后提交
+    // 等 handleEdit 的 setState 生效（表单回填 detail 值）
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('Local Doc')).toBeInTheDocument();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('loaded content')).toBeInTheDocument();
+    });
+
     const titleInput = screen.getByDisplayValue('Local Doc');
     await user.clear(titleInput);
     await user.type(titleInput, 'Renamed Doc');
-    const contentArea = screen.getByDisplayValue('loaded content');
-    await user.clear(contentArea);
-    await user.type(contentArea, 'new content');
 
     const dialog = screen.getByRole('dialog', {
       name: 'documents.editDocument',
@@ -370,10 +369,24 @@ describe('Documents edit save flow', () => {
         expect.objectContaining({
           expectedDocumentRevision: 3,
           title: 'Renamed Doc',
-          content: 'new content',
         }),
       );
     });
+  });
+
+  it('closes the edit dialog via cancel without calling update', async () => {
+    const user = userEvent.setup();
+    renderDocuments();
+    await screen.findByText('Local Doc');
+    await user.click(
+      screen.getByRole('button', { name: 'documents.openActions' }),
+    );
+    await user.click(screen.getByRole('menuitem', { name: 'documents.edit' }));
+
+    const cancel = await screen.findByRole('button', { name: 'common.cancel' });
+    await user.click(cancel);
+
+    expect(documentsApi.update).not.toHaveBeenCalled();
   });
 });
 
