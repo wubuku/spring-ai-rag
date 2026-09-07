@@ -354,3 +354,45 @@ describe('Collections navigation, create modal and purge preview failure', () =>
     });
   });
 });
+
+describe('Collections dialog dismissal', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockList(collection);
+    mockCapabilities(true);
+    window.history.replaceState({}, '', '/');
+  });
+
+  it('closes the create modal via its close button', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(
+      await screen.findByRole('button', { name: '+ collections.create' }),
+    );
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: 'Close' }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+  });
+
+  it('closes the purge dialog via cancel without applying', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(
+      await screen.findByRole('button', { name: 'collections.purge.action' }),
+    );
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog.textContent).toContain('collections.purge');
+
+    await user.click(
+      within(dialog).getByRole('button', { name: 'common.cancel' }),
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+    expect(collectionsApi.applyPurge).not.toHaveBeenCalled();
+  });
+});
