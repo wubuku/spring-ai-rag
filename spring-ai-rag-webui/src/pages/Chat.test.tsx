@@ -760,3 +760,210 @@ describe('Chat SSE callbacks', () => {
       .toHaveTextContent('/chat/session-42');
   });
 });
+
+// ─── Coverage: stop flow, exports, feedback, guards (Batch 152) ──────
+
+vi.mock('../api/evaluation', () => ({
+  evaluationApi: {
+    submitFeedback: vi.fn().mockResolvedValue({}),
+  },
+}));
+
+import { evaluationApi } from '../api/evaluation';
+
+describe('Chat stop flow, exports, feedback and callback guards', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    window.sessionStorage.clear();
+    (modelsApi.list as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: {
+        multiModelEnabled: false,
+        defaultProvider: 'openai',
+        defaultModel: 'openai',
+        availableProviders: ['openai'],
+        fallbackChain: [],
+        models: [],
+      },
+    });
+    (collectionsApi.list as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: { collections: [], total: 0 },
+    });
+    (chatApi.getHistory as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: [],
+    });
+    (useChatSSE as ReturnType<typeof vi.fn>).mockReturnValue({
+      send: mockSend,
+      close: mockClose,
+      stop: mockClose,
+      isConnected: false,
+    });
+  });
+
+  function getOptions(): Record<string, unknown> {
+    const mockCalls = (useChatSSE as ReturnType<typeof vi.fn>).mock.calls;
+    return mockCalls.at(-1)?.[0] as Record<string, unknown>;
+  }
+
+  function renderChatForCallbacks() {
+    renderChat();
+    const textarea = screen.getByPlaceholderText(/chat.placeholder/);
+    fireEvent.change(textarea, { target: { value: 'test query' } });
+    fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false });
+  }
+
+  it('ignores stream callbacks when no message is streaming', async () => {
+    renderChat();
+    const opts = getOptions();
+
+    await act(async () => {
+      (opts.onChunk as (c: string) => void)('orphan');
+      (opts.onSources as (s: unknown) => void)([], undefined);
+      (opts.onToolStart as ((e: unknown) => void))({ tool: 'x' });
+      (opts.onToolResult as ((e: unknown) => void))({ tool: 'x' });
+      (opts.onTurnClaimed as ((t: string) => void))('turn-1');
+    });
+
+    // 空态保持不变，未产生任何消息或崩溃。
+    expect(screen.getByText('chat.noMessages')).toBeInTheDocument();
+  });
+
+  it('stops a streaming turn and restores the prompt into the input', async () => {
+    let connected = false;
+    (useChatSSE as ReturnType<typeof vi.fn>).mockImplementation(() => ({
+      send: mockSend,
+      close: mockClose,
+      stop: mockClose,
+      isConnected: connected,
+    }));
+
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const tree = (
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={['/chat']}>
+          <Routes>
+            <Route path="/chat" element={<Chat />} />
+            <Route path="/chat/:sessionId" element={<Chat />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
+    const view = render(tree);
+    const textarea = screen.getByPlaceholderText(/chat.placeholder/);
+    fireEvent.change(textarea, { target: { value: 'restore me' } });
+    fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false });
+
+    const opts = getOptions();
+    await act(async () => {
+      (opts.onToolStart as ((e: unknown) => void))({
+        toolCallId: 'tc-stop',
+        tool: 'searchKnowledge',
+        query: 'q',
+      });
+    });
+    expect(screen.getByText(/chat.toolSearching/)).toBeInTheDocument();
+
+    // 连接标记置为 true 并重渲染后，发送按钮变成停止按钮。
+    // 注意：rerender 传入同一元素引用会被 React 跳过，需构造新 JSX。
+    connected = true;
+    view.rerender(
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={['/chat']}>
+          <Routes>
+            <Route path="/chat" element={<Chat />} />
+            <Route path="/chat/:sessionId" element={<Chat />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /chat.stop/i }));
+
+    await waitFor(() => {
+      expect((screen.getByPlaceholderText(/chat.placeholder/) as HTMLTextAreaElement).value)
+        .toBe('restore me');
+    });
+    // 运行中的工具活动被标记为完成。
+    expect(screen.getByText(/chat.toolFinished/)).toBeInTheDocument();
+    expect(mockClose).toHaveBeenCalled();
+  });
+
+  it('skips the export when no conversation is addressed', async () => {
+    const user = userEvent.setup();
+    renderChatForCallbacks();
+
+    await user.click(screen.getByRole('button', { name: /chat\.export/ }));
+    await user.click(
+      screen.getByRole('button', { name: 'chat.exportJson' }),
+    );
+
+    expect(chatApi.exportConversation).not.toHaveBeenCalled();
+  });
+
+  it('swallows export failures without crashing', async () => {
+    const user = userEvent.setup();
+    (chatApi.exportConversation as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error('download blocked'),
+    );
+    (chatApi.getHistory as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: [{ id: 1, userMessage: 'hi', aiResponse: 'hello there', sources: [], mode: 'KNOWLEDGE' }],
+    });
+
+    renderChat('/chat/session-export');
+    // 等待历史加载渲染出的助手回复。
+    expect(await screen.findByText('hello there')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /chat\.export/ }));
+    await user.click(
+      screen.getByRole('button', { name: 'chat.exportMarkdown' }),
+    );
+
+    expect(chatApi.exportConversation).toHaveBeenCalledWith('session-export', 'md');
+    // 页面仍然渲染输入区。
+    expect(screen.getByPlaceholderText(/chat.placeholder/)).toBeInTheDocument();
+  });
+
+  it('submits thumbs feedback with the previous user prompt', async () => {
+    const user = userEvent.setup();
+    renderChatForCallbacks();
+    const opts = getOptions();
+    await act(async () => {
+      (opts.onChunk as (c: string) => void)('an answer worth rating');
+      (opts.onDone as ((d: unknown) => void))({});
+    });
+
+    await user.click(screen.getByTitle('evaluation.thumbsUp'));
+    await user.click(screen.getByTitle('evaluation.thumbsDown'));
+
+    await waitFor(() => {
+      expect(evaluationApi.submitFeedback).toHaveBeenCalledTimes(2);
+    });
+    expect(evaluationApi.submitFeedback).toHaveBeenCalledWith({
+      sessionId: undefined,
+      query: 'test query',
+      feedbackType: 'THUMBS_UP',
+    });
+  });
+
+  it('clears messages when the history load fails', async () => {
+    (chatApi.getHistory as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error('history unavailable'),
+    );
+
+    renderChat('/chat/broken-session');
+
+    expect(await screen.findByText('chat.noMessages')).toBeInTheDocument();
+  });
+
+  it('returns to a fresh chat via the new chat button', async () => {
+    const user = userEvent.setup();
+    renderChat('/chat?mode=KNOWLEDGE');
+    const textarea = screen.getByPlaceholderText(/chat.placeholder/);
+    fireEvent.change(textarea, { target: { value: 'hello' } });
+    fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false });
+
+    await user.click(screen.getByRole('button', { name: 'chat.newChat' }));
+
+    expect(screen.getByTestId('loc-probe').textContent).toBe('/chat?mode=KNOWLEDGE');
+  });
+});
