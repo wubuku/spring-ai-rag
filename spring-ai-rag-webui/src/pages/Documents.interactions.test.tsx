@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor, within, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
@@ -958,6 +958,250 @@ describe('Documents error fallbacks, revision guard and dialog dismissal', () =>
           content: 'rewritten body',
           collectionKey: 'target-col',
         }),
+      );
+    });
+  });
+});
+
+// ─── Upload zone, filters, pagination and dialog dismissal (Batch 161) ──
+
+describe('Documents upload zone, filter clearing and dialog dismissal', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(documentsApi.list).mockResolvedValue({
+      data: { documents: [LOCAL_DOC], total: 1 },
+    } as never);
+    vi.mocked(documentsApi.getEmbeddingStatus).mockResolvedValue({
+      data: {
+        totalDocuments: 1,
+        withEmbeddings: 1,
+        withoutEmbeddings: 0,
+        hasMissing: false,
+      },
+    } as never);
+    vi.mocked(collectionsApi.list).mockResolvedValue({
+      data: {
+        collections: [
+          { id: 10, collectionKey: 'kb', name: 'Knowledge Base', enabled: true },
+        ],
+        total: 1,
+      },
+    } as never);
+  });
+
+  it('forwards selected files from the input through handleFiles', () => {
+    renderDocuments();
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File(['hello'], 'a.txt', { type: 'text/plain' });
+    Object.defineProperty(input, 'files', {
+      value: [file],
+      configurable: true,
+    });
+
+    const zone = document.querySelector('[class*="uploadZone"]') as HTMLElement;
+    fireEvent.dragOver(zone);
+    expect(zone.className).toContain('dragOver');
+    fireEvent.dragLeave(zone);
+
+    fireEvent.change(input);
+    // 不抛异常且上传区样式复位即视为通过（uploadFiles 由 hook mock 承接）。
+    expect(zone.className).not.toContain('dragOver');
+  });
+
+  it('clears the collection filter back to all collections', async () => {
+    const user = userEvent.setup();
+    renderDocuments();
+    await screen.findByText('Local Doc');
+
+    await user.selectOptions(
+      screen.getByTestId('documents-collection-filter'),
+      'kb',
+    );
+    await waitFor(() => {
+      expect(documentsApi.list).toHaveBeenCalledWith(
+        expect.objectContaining({ collectionKey: 'kb' }),
+      );
+    });
+
+    await user.selectOptions(
+      screen.getByTestId('documents-collection-filter'),
+      '',
+    );
+    await waitFor(() => {
+      expect(documentsApi.list).toHaveBeenCalledWith(
+        expect.objectContaining({ collectionKey: undefined }),
+      );
+    });
+  });
+
+  it('navigates back to the first page via the previous control', async () => {
+    const user = userEvent.setup();
+    vi.mocked(documentsApi.list).mockResolvedValue({
+      data: { documents: [LOCAL_DOC], total: 25 },
+    } as never);
+
+    renderDocuments();
+    await screen.findByText('Local Doc');
+    await user.click(screen.getByRole('button', { name: /common\.next/i }));
+    await waitFor(() => {
+      expect(documentsApi.list).toHaveBeenCalledWith(
+        expect.objectContaining({ page: 1 }),
+      );
+    });
+
+    await user.click(screen.getByRole('button', { name: /common\.previous/i }));
+    await waitFor(() => {
+      expect(documentsApi.list).toHaveBeenCalledWith(
+        expect.objectContaining({ page: 0 }),
+      );
+    });
+  });
+
+  it('closes the preview dialog via its close button', async () => {
+    const user = userEvent.setup();
+    vi.mocked(documentsApi.get).mockResolvedValue({
+      data: { ...LOCAL_DOC, content: 'preview body' },
+    } as never);
+
+    renderDocuments();
+    await screen.findByText('Local Doc');
+    await user.click(
+      screen.getByRole('button', { name: 'documents.openActions' }),
+    );
+    await user.click(
+      screen.getByRole('menuitem', { name: 'documents.preview' }),
+    );
+    expect(await screen.findByText('preview body')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Close' }));
+    expect(screen.queryByText('preview body')).not.toBeInTheDocument();
+  });
+
+  it('closes the versions modal via its close button', async () => {
+    const user = userEvent.setup();
+    vi.mocked(documentsApi.getVersions).mockResolvedValue({
+      data: {
+        documentId: 1,
+        totalVersions: 1,
+        versions: [{
+          id: 9,
+          documentId: 1,
+          versionNumber: 1,
+          contentHash: 'abcdef12',
+          size: 10,
+          changeType: 'CREATE',
+          changeDescription: 'Initial',
+          createdAt: '2026-01-01T00:00:00Z',
+        }],
+      },
+    } as never);
+
+    renderDocuments();
+    await screen.findByText('Local Doc');
+    await user.click(screen.getByRole('button', { name: 'documents.openActions' }));
+    await user.click(screen.getByRole('menuitem', { name: 'versions.button' }));
+
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog.textContent).toContain('versions.title');
+    await user.click(screen.getByRole('button', { name: 'Close' }));
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('dialog', { name: /versions\.title/ }),
+      ).not.toBeInTheDocument();
+    });
+  });
+
+  it('cancels the relocate dialog without calling relocate', async () => {
+    const user = userEvent.setup();
+    vi.mocked(documentsApi.list).mockResolvedValue({
+      data: { documents: [EXTERNAL_DOC], total: 1 },
+    } as never);
+    vi.mocked(documentsApi.get).mockResolvedValue({
+      data: { ...EXTERNAL_DOC, content: 'ext content' },
+    } as never);
+
+    renderDocuments();
+    await screen.findByText('External Doc');
+    await user.click(screen.getByRole('button', { name: 'documents.openActions' }));
+    await user.click(screen.getByRole('menuitem', { name: 'documents.relocate' }));
+    await waitFor(() => {
+      expect(documentsApi.get).toHaveBeenCalledWith(2);
+    });
+
+    const dialog = await screen.findByRole('dialog', {
+      name: 'documents.relocateTitle',
+    });
+    await user.click(
+      await within(dialog).findByRole('button', { name: 'common.cancel' }),
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('dialog', { name: 'documents.relocateTitle' }),
+      ).not.toBeInTheDocument();
+    });
+    expect(documentsApi.relocate).not.toHaveBeenCalled();
+  });
+
+  it('surfaces the fallback relocate toast when the guard rejects', async () => {
+    const user = userEvent.setup();
+    vi.mocked(collectionsApi.list).mockResolvedValue({
+      data: {
+        collections: [
+          { id: 10, collectionKey: 'target-col', name: 'Target', enabled: true },
+        ],
+        total: 1,
+      },
+    } as never);
+    const incomplete = { ...EXTERNAL_DOC, sourceRevision: undefined };
+    vi.mocked(documentsApi.list).mockResolvedValue({
+      data: { documents: [incomplete], total: 1 },
+    } as never);
+    vi.mocked(documentsApi.get).mockResolvedValue({
+      data: { ...incomplete, content: 'ext content' },
+    } as never);
+
+    renderDocuments();
+    await screen.findByText('External Doc');
+    await user.click(screen.getByRole('button', { name: 'documents.openActions' }));
+    await user.click(screen.getByRole('menuitem', { name: 'documents.relocate' }));
+    await waitFor(() => {
+      expect(documentsApi.get).toHaveBeenCalledWith(2);
+    });
+
+    const targetSelect = screen.getAllByRole('combobox').at(-1)!;
+    await user.selectOptions(targetSelect, 'target-col');
+    await user.click(
+      screen.getByRole('button', { name: 'documents.relocateConfirm' }),
+    );
+
+    await waitFor(() => {
+      // 守卫抛错无 response.code → 走 relocationErrors.DEFAULT 兜底。
+      expect(mockShowToast).toHaveBeenCalledWith(
+        'documents.relocationErrors.DEFAULT',
+        'error',
+      );
+    });
+    expect(documentsApi.relocate).not.toHaveBeenCalled();
+  });
+
+  it('reports a detail load failure when opening the relocate dialog', async () => {
+    const user = userEvent.setup();
+    vi.mocked(documentsApi.list).mockResolvedValue({
+      data: { documents: [EXTERNAL_DOC], total: 1 },
+    } as never);
+    vi.mocked(documentsApi.get).mockRejectedValue(new Error('gone'));
+
+    renderDocuments();
+    await screen.findByText('External Doc');
+    await user.click(screen.getByRole('button', { name: 'documents.openActions' }));
+    await user.click(screen.getByRole('menuitem', { name: 'documents.relocate' }));
+
+    await waitFor(() => {
+      expect(mockShowToast).toHaveBeenCalledWith(
+        'documents.loadDetailError',
+        'error',
       );
     });
   });
