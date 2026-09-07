@@ -1383,3 +1383,14 @@
   兜底扫描对账每个候选、截断批次经 metrics 上报 recordScanTruncated、
   候选列举失败吞噬不触 metrics、单个候选失败不阻断后续候选。
 - 指标：core 全量 3796 → **3808** 绿。
+
+### Batch 175（已交付）
+
+- 分支：`test/core-memory-config-batch175-20260908`（已合入 main）
+- 内容：ChatMemoryRepositoryConfig 装配条件锁定，新增 3 用例
+  （ApplicationContextRunner）：jdbcTemplate+事务管理器齐备时创建
+  Postgres 方言的 JdbcChatMemoryRepository（stub 需为
+  jdbcTemplate.getDataSource() 返回 DataSource）、已存在同类型 bean
+  时 @ConditionalOnMissingBean 让位、缺事务管理器时
+  @ConditionalOnBean 不装配。
+- 指标：core 全量 3808 → **3811** 绿。
