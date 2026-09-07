@@ -1102,3 +1102,19 @@
   judge API 拒绝时失败提示、citation trace 空 status/outcome 占位。
 - 指标：Evaluation.tsx 行覆盖 93.24% → **98.64%**，分支 65.48% →
   **94.69%**；前端全量 519 绿，行覆盖 91.43%，分支 82.88%。
+
+### Batch 151（已交付）
+
+- 分支：`test/webui-usesse-retries-batch151-20260908`（已合入 main =
+  `a122be80`）
+- 内容：useChatSSE 流式重试与回放身份加固，新增 reader/流 mock
+  基建（`streamResponse` 按指定 turn id 构造 ReadableStream 响应）
+  与 6 用例：响应无 body 可重试且二轮正常、两次重试间 turn 身份
+  变更拒绝、done 回放 turnId 与响应头不匹配拒绝、`Retry-After`
+  秒数驱动有界退避（fake timers 推进后二轮成功）、`Retry-After`
+  非正数立即重试（注意：仅 409/429 视为可重试，500 不会重发）、
+  注释行/空块/非 JSON 事件解析容错。
+- 指标：useSSE.ts 行覆盖 90.52% → **97.15%**，分支 72.02% →
+  **81.54%**；前端全量 525 绿，行覆盖 91.97%，分支 83.57%。
+- 遗留：useSSE 285-286/292/343 为竞态守卫（生成代际/终止标记与
+  退避截止交叉），需要时间受控的复杂编排，投入产出低暂缓。
