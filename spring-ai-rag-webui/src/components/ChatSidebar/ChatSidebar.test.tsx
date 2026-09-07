@@ -138,3 +138,41 @@ describe('ChatSidebar relative time rendering', () => {
     expect(time?.textContent?.length ?? 0).toBeGreaterThan(0);
   });
 });
+
+describe('useChatSessions corrupted storage', () => {
+  it('returns empty sessions when localStorage holds unparseable JSON', () => {
+    localStorageMock.data['chat_sessions'] = '{not-valid-json';
+
+    const { result } = renderHook(() => useChatSessions());
+
+    expect(result.current.sessions).toHaveLength(0);
+  });
+
+  it('keeps working after recovering from corrupted storage', () => {
+    localStorageMock.data['chat_sessions'] = 'broken';
+    const { result } = renderHook(() => useChatSessions());
+
+    act(() => {
+      result.current.addSession('s-recovered', 'Recovered Session');
+    });
+
+    expect(result.current.sessions).toHaveLength(1);
+    expect(result.current.sessions[0].title).toBe('Recovered Session');
+    expect(JSON.parse(localStorageMock.data['chat_sessions'])).toHaveLength(1);
+  });
+
+  it('deleteSession removes only the matching session', () => {
+    localStorageMock.data['chat_sessions'] = JSON.stringify([
+      { id: 'a', title: 'A', updatedAt: 1 },
+      { id: 'b', title: 'B', updatedAt: 2 },
+    ]);
+    const { result } = renderHook(() => useChatSessions());
+
+    act(() => {
+      result.current.deleteSession('a');
+    });
+
+    expect(result.current.sessions).toHaveLength(1);
+    expect(result.current.sessions[0].id).toBe('b');
+  });
+});
