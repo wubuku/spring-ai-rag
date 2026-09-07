@@ -1394,3 +1394,13 @@
   时 @ConditionalOnMissingBean 让位、缺事务管理器时
   @ConditionalOnBean 不装配。
 - 指标：core 全量 3808 → **3811** 绿。
+
+### Batch 176（已交付）
+
+- 分支：`test/core-purge-props-batch176-20260908`（已合入 main）
+- 内容：RagCollectionPurgeProperties 安全边界锁定，新增 8 用例：默认
+  基线 13 项、confirmation-window 下限、operation-window 不得短于
+  confirmation-window（交叉依赖）、result-retention 不得短于
+  operation-window、apply-lease 范围、max-documents/max-chat-rows
+  行数上限、清理批次与间隔范围。
+- 指标：core 全量 3811 → **3819** 绿。
