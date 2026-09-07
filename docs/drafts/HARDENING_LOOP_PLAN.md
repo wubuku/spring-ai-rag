@@ -1506,3 +1506,13 @@ VersionHistoryModal 相关 100% 项等。
   id。
 - 指标：ChatSidebar.tsx 行覆盖 89.47% → **92.1%**；前端全量 595 绿，
   行覆盖 95.77%。
+
+### Batch 186（已交付）
+
+- 分支：`test/webui-search-batch186-20260908`（已合入 main）
+- 内容：Search 交互散点收尾，新增 6 用例：空白查询守卫、非法 draft
+  形状拒绝（isSearchDraft 32 行）、历史面板开关与面板外 mousedown
+  关闭（164-165）、hybrid 复选框载荷、provenance 目录/索引文件导航
+  （201-213，跳转卸载 Search 需两次渲染分证）。
+- 指标：Search.tsx 行覆盖 91.57% → **100%**，函数 100%；前端全量
+  601 绿，行覆盖 96.08%。
