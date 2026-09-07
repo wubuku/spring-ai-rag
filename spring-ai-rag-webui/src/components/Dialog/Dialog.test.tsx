@@ -74,3 +74,31 @@ describe('Dialog', () => {
     expect(screen.getByRole('button', { name: 'Close' })).toBeDisabled();
   });
 });
+
+describe('Dialog focus trap wrap-around', () => {
+  it('wraps focus from the first focusable back to the last on Shift+Tab', async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+    await user.click(screen.getByRole('button', { name: 'Open settings' }));
+
+    // 焦点初始在第一个可聚焦元素（Name 输入）上。
+    expect(screen.getByLabelText('Name')).toHaveFocus();
+
+    // Shift+Tab 从首个元素环绕到最后一个（Close 按钮）。
+    await user.keyboard('{Shift>}{Tab}{/Shift}');
+    expect(screen.getByRole('button', { name: 'Close' })).toHaveFocus();
+  });
+
+  it('wraps focus from the last focusable back to the first on Tab', async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+    await user.click(screen.getByRole('button', { name: 'Open settings' }));
+
+    // 先把焦点移到最后一个（Close），再正向 Tab 环绕回首元素。
+    await user.keyboard('{Shift>}{Tab}{/Shift}');
+    expect(screen.getByRole('button', { name: 'Close' })).toHaveFocus();
+
+    await user.tab();
+    expect(screen.getByLabelText('Name')).toHaveFocus();
+  });
+});
