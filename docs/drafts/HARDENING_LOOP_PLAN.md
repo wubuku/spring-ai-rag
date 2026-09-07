@@ -966,3 +966,16 @@
 - 已知遗留：Documents.tsx provenance 页面级用例（jsdom 时序不稳定，
   建议未来 Playwright e2e 补测）；EmbeddingJobRepository 深层 varargs
   stub 两个用例暂缓（适合 Testcontainers 集成测试）。
+
+### Batch 140（已交付）
+
+- 分支：`test/coverage-batch140-20260907`（已合入 main = `842c8085`）
+- 内容：新增 `ABTest.mutations.test.tsx`（12 用例）。原 ABTest 测试
+  整体 mock `useQuery`/`useMutation`，mutation 回调、query lambda、
+  toast 反馈与关窗行为均不可达；新文件改走真实 react-query +
+  `QueryClientProvider` + mock API 层：list/get/analysis 查询
+  lambda、start/pause/stop 成功与失败 toast（`invalidateQueries`
+  断言）、创建成功关窗、失败留窗、pending 禁用与 loading 文案、
+  自定义 variant B、Tooltip formatter、空转化率/置信区间占位符。
+- 指标：ABTest.tsx 行覆盖 73.68% → **100%**，分支 84.72% → 90.27%；
+  前端全量 468 绿，行覆盖 88.6%。
