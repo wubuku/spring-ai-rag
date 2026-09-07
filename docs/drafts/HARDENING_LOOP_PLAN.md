@@ -1874,3 +1874,15 @@
   reason 顺序。core 全量 3659→3666 绿。
 - 证据：新测试 7/7 绿；core 全量 `Tests run: 3666, Failures: 0,
   Errors: 0, Skipped: 9`，BUILD SUCCESS。
+
+### Batch 132（已交付）
+
+- 分支：`test/integrity-snapshot-from-2`（已合入 main = `deca796a`）
+- 内容：`Snapshot.from` 分类矩阵补 5 变体：向量行不完整且状态
+  COMPLETED → CORRUPT 优先于 converging、source_deleted 墓碑 →
+  DISABLED、local_status 缺失 → MISSING 条件归 LOCAL_UNAVAILABLE
+  （修正了对双 NOT_REQUESTED 桶条件的错误假设——localCondition 为
+  MISSING 时不满足双 NOT_REQUESTED）、local FAILED → LOCAL_UNAVAILABLE、
+  INDEXING 桶要求收敛作业且本地非新鲜。core 全量 3666→3671 绿。
+- 证据：新测试 5/5 绿；core 全量 `Tests run: 3671, Failures: 0,
+  Errors: 0, Skipped: 9`，BUILD SUCCESS。
