@@ -1365,3 +1365,12 @@
   查询参数按文档顺序透传 queryService、响应包装 200 + no-store 缓存
   头、null 默认值透传保持 no-store。
 - 指标：core 全量 3800 → **3802** 绿。
+
+### Batch 173（已交付）
+
+- 分支：`test/webui-files-guards-batch173-20260908`（已合入 main）
+- 内容：Files 交互守卫加固，新增 3 用例：非左键拖拽不启动且异
+  pointerId 的 pointerMove 被忽略、Home/End 键盘极值收缩/展开目录
+  面板、双击与键盘 Enter 打开选中目录（面包屑断言）。
+- 指标：Files.tsx 行覆盖 86.92% → **87.27%**；前端全量 569 绿，
+  行覆盖 94.8%。
