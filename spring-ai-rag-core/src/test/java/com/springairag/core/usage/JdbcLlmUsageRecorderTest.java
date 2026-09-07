@@ -145,4 +145,86 @@ class JdbcLlmUsageRecorderTest {
         }
         return false;
     }
+
+    @Test
+    void nullEventShortCircuitsWithoutTouchingRepositoryOrCounter() {
+        LlmUsageRepository repository = mock(LlmUsageRepository.class);
+        io.micrometer.core.instrument.simple.SimpleMeterRegistry registry =
+                new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
+        JdbcLlmUsageRecorder recorder = new JdbcLlmUsageRecorder(
+                repository, properties(), provider(registry));
+
+        recorder.record(null);
+        recorder.recordAsync(null);
+
+        org.mockito.Mockito.verifyNoInteractions(repository);
+        org.junit.jupiter.api.Assertions.assertEquals(0, recorder.lostEvents());
+        recorder.shutdown();
+    }
+
+    @Test
+    void disabledUsageShortCircuitsRecording() {
+        LlmUsageRepository repository = mock(LlmUsageRepository.class);
+        RagProperties properties = properties();
+        properties.getUsage().setEnabled(false);
+        io.micrometer.core.instrument.simple.SimpleMeterRegistry registry =
+                new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
+        JdbcLlmUsageRecorder recorder = new JdbcLlmUsageRecorder(
+                repository, properties, provider(registry));
+
+        recorder.record(event());
+        recorder.recordAsync(event());
+
+        org.mockito.Mockito.verifyNoInteractions(repository);
+        org.junit.jupiter.api.Assertions.assertEquals(0, recorder.lostEvents());
+        recorder.shutdown();
+    }
+
+    @Test
+    void lostEventsIsZeroWhenNoMeterRegistryIsAvailable() {
+        LlmUsageRepository repository = mock(LlmUsageRepository.class);
+        when(repository.insert(
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.anyInt()))
+                .thenThrow(new IllegalStateException("down"));
+        JdbcLlmUsageRecorder recorder = new JdbcLlmUsageRecorder(
+                repository, properties(), provider(null));
+
+        recorder.record(event());
+
+        // 无 registry 时 lostCounter 为 null，lostEvents 安全返回 0。
+        org.junit.jupiter.api.Assertions.assertEquals(0, recorder.lostEvents());
+        recorder.shutdown();
+    }
+
+    @Test
+    void asyncSubmissionAfterShutdownIsCountedAsLost() {
+        LlmUsageRepository repository = mock(LlmUsageRepository.class);
+        io.micrometer.core.instrument.simple.SimpleMeterRegistry registry =
+                new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
+        JdbcLlmUsageRecorder recorder = new JdbcLlmUsageRecorder(
+                repository, properties(), provider(registry));
+        recorder.shutdown();
+
+        recorder.recordAsync(event());
+
+        // 关闭后的 executor 拒绝提交，计入 lost 而非上抛。
+        org.junit.jupiter.api.Assertions.assertEquals(1, recorder.lostEvents());
+        org.mockito.Mockito.verifyNoInteractions(repository);
+    }
+
+    @Test
+    void syncSubmissionAfterShutdownIsCountedAsLost() {
+        LlmUsageRepository repository = mock(LlmUsageRepository.class);
+        io.micrometer.core.instrument.simple.SimpleMeterRegistry registry =
+                new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
+        JdbcLlmUsageRecorder recorder = new JdbcLlmUsageRecorder(
+                repository, properties(), provider(registry));
+        recorder.shutdown();
+
+        recorder.record(event());
+
+        org.junit.jupiter.api.Assertions.assertEquals(1, recorder.lostEvents());
+        org.mockito.Mockito.verifyNoInteractions(repository);
+}
 }
