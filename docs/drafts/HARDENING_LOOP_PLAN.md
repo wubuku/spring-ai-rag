@@ -1160,3 +1160,21 @@
   enabled 缺 ChatExecutionService / ChatSessionCoordinator 分别拒绝、
   配置越界先于 bean 解析拒绝，ObjectProvider mock 驱动）。
 - 指标：core 全量 3707 → **3718** 绿。
+
+### Batch 155（已交付）
+
+- 分支：`test/core-delivery-repo-batch155-20260908`（已合入 main =
+  `4c35326d`）
+- 内容：AlertNotificationDeliveryRepository 加固，新增 13 用例。
+  桩策略：继承 JdbcTemplate 覆写 `query/update/queryForObject` 记录
+  SQL 与参数，并把 RowMapper 应用到共享 mock ResultSet——彻底绕开
+  Mockito varargs 匹配的已知不稳定（此前多批反复踩坑）。覆盖：
+  19 列完整映射（payload JSON 反序列化、last_http_status 可空
+  Integer）、非法 payload 包装 IllegalStateException、claim 绑定
+  租约 token/毫秒时长/id、markTransientFailure 预算内 RETRY_WAIT
+  与耗尽 FAILED 决策 + 负延迟钳制为 0、错误码 bounded（null/空白 →
+  UNKNOWN、>64 截断 64）、keyset 分页 SQL 过滤顺序与 7 参数绑定、
+  无过滤仅 LIMIT、isManagedStateCurrent null 安全、插入 ON CONFLICT
+  返回语义、supersede/recoverExhaustedLeases/cleanup 计数透传、
+  findCandidateIds UNION 候选、retryFailed 预算重置。
+- 指标：core 全量 3718 → **3731** 绿。
