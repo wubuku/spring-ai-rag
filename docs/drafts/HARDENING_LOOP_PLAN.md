@@ -1211,3 +1211,14 @@
   repository RuntimeException 被吞噬不上抛、cutoff 按 retentionDays
   从当前时刻回推（ArgumentCaptor 断言时间窗口）。
 - 指标：core 全量 3737 → **3743** 绿。
+
+### Batch 159（已交付）
+
+- 分支：`test/webui-docs-errors-batch159-20260908`（已合入 main）
+- 内容：Documents 错误回退与编辑载荷加固，新增 7 用例：update 非
+  409 失败走 fallback toast、缺 documentRevision 守卫经 onError
+  呈现且不触 API、restore/delete/embed 失败专属错误 toast、编辑
+  弹窗打开失败报 loadDetailError、source/content/collectionKey
+  编辑进入 update 载荷。
+- 指标：Documents.tsx 行覆盖 81.86% → **86.04%**；前端全量 544 绿，
+  行覆盖 93.02%。
