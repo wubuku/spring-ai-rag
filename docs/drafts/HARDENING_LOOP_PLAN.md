@@ -1896,3 +1896,15 @@
   （保留原 4 测试 + 新增 ANY 绑定用例）。core 全量 3652→3672 绿。
 - 证据：新测试 5/5 绿；core 全量 `Tests run: 3672, Failures: 0,
   Errors: 0, Skipped: 9`，BUILD SUCCESS。
+
+### Batch 135（已交付）
+
+- 分支：`test/sync-cursor-codec`（已合入 main = `e8b6dbb9`）
+- 内容：`KeywordIndexSqlScope`（本地关键词 chunk 的统一 SQL
+  freshness 作用域生成器）零直接测试，补 4 用例：非正 profile id
+  拒绝、空白 chunker 版本拒绝（SQL 字面量助手）、JOIN 与 freshness
+  条件形状断言（chunks→local state→documents→向量左连接，READY
+  状态、content hash、按文档类型的 chunker CASE）、chunker 版本
+  字面量单引号转义。core 全量 3652→3676 绿。
+- 证据：新测试 4/4 绿；core 全量 `Tests run: 3676, Failures: 0,
+  Errors: 0, Skipped: 9`，BUILD SUCCESS。
