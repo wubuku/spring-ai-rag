@@ -1178,3 +1178,13 @@
   返回语义、supersede/recoverExhaustedLeases/cleanup 计数透传、
   findCandidateIds UNION 候选、retryFailed 预算重置。
 - 指标：core 全量 3718 → **3731** 绿。
+
+### Batch 156（已交付）
+
+- 分支：`test/webui-dashboard-batch156-20260908`（已合入 main）
+- 内容：Dashboard 骨架分支补齐，新增 2 用例：docs/collections 查询
+  pending 时两张指标卡渲染 60px 骨架（此前骨架分支 0 次执行）、仅
+  集合查询 pending 时文档卡显示数值。注意仪表盘还有其他卡片用
+  `?? '—'` 占位，断言需避免全页 '—' 唯一性假设。
+- 指标：Dashboard.tsx **100%/100%/100%/100%**（语句/分支/函数/行）；
+  前端全量 537 绿。
