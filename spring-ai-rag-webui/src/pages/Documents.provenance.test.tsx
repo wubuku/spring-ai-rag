@@ -107,6 +107,7 @@ describe('Documents provenance callback wiring', () => {
       <QueryClientProvider client={client}>
         <MemoryRouter initialEntries={['/documents']}>
           <Documents />
+          <output data-testid="loc-probe" />
         </MemoryRouter>
       </QueryClientProvider>,
     );
