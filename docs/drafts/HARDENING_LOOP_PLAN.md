@@ -1415,3 +1415,13 @@
   ConfigurationPropertiesScan 仅扫 core.config——value 别名优先于
   basePackages）。
 - 指标：core 全量 3819 → **3824** 绿。
+
+### Batch 178（已交付）
+
+- 分支：`test/webui-files-upload-batch178-20260908`（已合入 main）
+- 内容：Files 上传区与导航加固，新增 4 用例：上传区 dragOver 高亮/
+  dragLeave 复位（可访问名来自内容而非 title，按属性选择器定位）、
+  Enter/Space 键盘激活文件选择、嵌套目录面包屑逐层导航并回根、
+  pdf 输入空文件选择短路。
+- 指标：Files.tsx 行覆盖 87.27% → **89.39%**；前端全量 573 绿，
+  行覆盖 95.03%。
