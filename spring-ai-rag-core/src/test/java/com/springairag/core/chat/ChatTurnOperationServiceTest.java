@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.springairag.api.enums.ChatMode;
 import com.springairag.api.dto.ChatResponse;
+import com.springairag.api.dto.ChatTurnStatusResponse;
 import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.config.RagChatProperties;
 import com.springairag.core.config.RagProperties;
@@ -717,5 +718,124 @@ class ChatTurnOperationServiceTest {
                 source.createdAt(),
                 now,
                 now);
+    }
+
+// ─── fail/status 守卫与状态查询（Batch 193）──────────────────────────
+
+    @Test
+    void failCompletesRepositoryFailureForInProgressClaimWithoutLease() {
+        ChatPrincipal principal = ChatPrincipal.local();
+        ChatTurnOperation inProgress = new ChatTurnOperation(
+                1L,
+                principal.id(),
+                "key-hash",
+                "fingerprint-hash",
+                1,
+                "session-1",
+                UUID.randomUUID(),
+                ChatTurnOperation.Transport.NATIVE_JSON,
+                ChatTurnOperation.Status.IN_PROGRESS,
+                UUID.randomUUID(),
+                null,
+                1,
+                0L,
+                1,
+                null,
+                null,
+                null,
+                null,
+                "{}",
+                Instant.now(),
+                Instant.now(),
+                Instant.now().plusSeconds(60));
+
+        ChatTurnOperationService.Claim claim =
+                new ChatTurnOperationService.Claim(inProgress, false);
+        service.fail(claim, new IllegalStateException("model exploded"));
+
+        verify(observability).failed();
+        ArgumentCaptor<String> code = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> payload = ArgumentCaptor.forClass(String.class);
+        verify(repository).completeFailure(
+                same(inProgress), code.capture(), payload.capture());
+        assertEquals("INTERNAL_ERROR", code.getValue());
+        assertTrue(payload.getValue().contains("\"errorCode\":\"INTERNAL_ERROR\""));
+    }
+
+    @Test
+    void failCarriesTheRagErrorCodeIntoTheFailurePayload() {
+        ChatPrincipal principal = ChatPrincipal.local();
+        ChatTurnOperation inProgress = new ChatTurnOperation(
+                1L, principal.id(), "key-hash", "fingerprint-hash", 1,
+                "session-1", UUID.randomUUID(),
+                ChatTurnOperation.Transport.NATIVE_JSON,
+                ChatTurnOperation.Status.IN_PROGRESS,
+                UUID.randomUUID(), null, 1, 0L, 1, null, null, null, null,
+                "{}", Instant.now(), Instant.now(), Instant.now().plusSeconds(60));
+        ChatTurnOperationService.Claim claim =
+                new ChatTurnOperationService.Claim(inProgress, false);
+
+        service.fail(claim, new RagException(
+                ErrorCode.CHAT_TIMEOUT, "deadline exceeded"));
+
+        ArgumentCaptor<String> code = ArgumentCaptor.forClass(String.class);
+        verify(repository).completeFailure(
+                same(inProgress), code.capture(), any());
+        assertEquals(ErrorCode.CHAT_TIMEOUT.getCode(), code.getValue());
+    }
+
+    @Test
+    void failIsSilentForUnkeyedAndTerminalClaims() {
+        ChatTurnOperationService.Claim unkeyed =
+                ChatTurnOperationService.Claim.unkeyed();
+        service.fail(unkeyed, new IllegalStateException("x"));
+
+        ChatTurnOperation succeeded = new ChatTurnOperation(
+                1L, ChatPrincipal.local().id(), "key-hash", "fp-hash", 1,
+                "session-1", UUID.randomUUID(),
+                ChatTurnOperation.Transport.NATIVE_JSON,
+                ChatTurnOperation.Status.SUCCEEDED,
+                UUID.randomUUID(), null, 1, 0L, 1, null,
+                "{\"answer\":\"a\"}", null, null, "{}",
+                Instant.now(), Instant.now(), Instant.now());
+        ChatTurnOperationService.Claim terminal =
+                new ChatTurnOperationService.Claim(succeeded, false);
+        service.fail(terminal, new IllegalStateException("x"));
+
+        verify(observability, times(0)).failed();
+        verify(repository, times(0)).completeFailure(
+                any(), any(), any());
+    }
+
+    @Test
+    void statusThrowsWhenTheTurnDoesNotExist() {
+        when(repository.findByTurn(anyString(), any(UUID.class)))
+                .thenReturn(null);
+
+        assertThrows(RagException.class, () -> service.status(
+                ChatPrincipal.local(), UUID.randomUUID(), true));
+    }
+
+    @Test
+    void statusMarksReplayAvailableForSucceededTurns() {
+        ChatPrincipal principal = ChatPrincipal.local();
+        ChatTurnOperation succeeded = new ChatTurnOperation(
+                1L, principal.id(), "key-hash", "fp-hash", 1,
+                "session-1", UUID.randomUUID(),
+                ChatTurnOperation.Transport.NATIVE_JSON,
+                ChatTurnOperation.Status.SUCCEEDED,
+                UUID.randomUUID(), null, 1, 0L, 1, null,
+                "{\"answer\":\"cached\"}", null, null, "{}",
+                Instant.now(), Instant.now(), Instant.now());
+        when(repository.findByTurn(principal.id(), succeeded.turnId()))
+                .thenReturn(succeeded);
+
+        ChatTurnStatusResponse response =
+                service.status(principal, succeeded.turnId(), true);
+
+        org.mockito.Mockito.verify(authorizationService)
+                .verifyReplay(succeeded, principal);
+        assertTrue(response.replayAvailable());
+        assertEquals("cached", response.response().getAnswer());
     }
 }
