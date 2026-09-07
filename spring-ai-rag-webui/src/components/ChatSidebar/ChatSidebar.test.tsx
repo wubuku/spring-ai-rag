@@ -105,3 +105,36 @@ describe('ChatSidebar', () => {
     expect(screen.queryByRole('button', { name: 'chat.deleteSession' })).not.toBeInTheDocument();
   });
 });
+
+describe('ChatSidebar relative time rendering', () => {
+  const renderSidebarWithSession = (updatedAt: number) => {
+    localStorageMock.data['chat_sessions'] = JSON.stringify([
+      { id: 's-time', title: 'Timed Session', updatedAt },
+    ]);
+    return render(<ChatSidebar currentSessionId="" onSelectSession={vi.fn()} onNewChat={vi.fn()} />);
+  };
+
+  it('renders just-now for fresh sessions', () => {
+    renderSidebarWithSession(Date.now() - 10_000);
+    expect(screen.getByText('chat.timeJustNow')).toBeInTheDocument();
+  });
+
+  it('renders minutes-ago for sessions under an hour old', () => {
+    renderSidebarWithSession(Date.now() - 5 * 60_000);
+    expect(screen.getByText('chat.timeMinutesAgo')).toBeInTheDocument();
+  });
+
+  it('renders hours-ago for sessions under a day old', () => {
+    renderSidebarWithSession(Date.now() - 3 * 3_600_000);
+    expect(screen.getByText('chat.timeHoursAgo')).toBeInTheDocument();
+  });
+
+  it('falls back to the locale date for older sessions', () => {
+    renderSidebarWithSession(Date.now() - 3 * 86_400_000);
+    // 超过一天回退到 toLocaleDateString，不再使用相对时间 key。
+    expect(screen.queryByText('chat.timeJustNow')).not.toBeInTheDocument();
+    expect(screen.queryByText('chat.timeHoursAgo')).not.toBeInTheDocument();
+    const time = document.querySelector('[class*="sessionTime"]');
+    expect(time?.textContent?.length ?? 0).toBeGreaterThan(0);
+  });
+});

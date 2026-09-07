@@ -98,3 +98,30 @@ describe('evaluationApi suites, runs and feedback history', () => {
     ]);
   });
 });
+
+describe('evaluationApi feedback window and paging defaults', () => {
+  it('merges the 30-day default window with explicit feedback stats params', async () => {
+    const before = Date.now();
+    await evaluationApi.getFeedbackStats({ startDate: '2026-01-01T00:00:00Z' });
+
+    const call = vi.mocked(apiClient.get).mock.calls.at(-1)!;
+    expect(call[0]).toBe('/evaluation/feedback/stats');
+    const params = (call[1] as { params: { startDate: string; endDate: string } }).params;
+    expect(params.startDate).toBe('2026-01-01T00:00:00Z');
+    // endDate 回退到默认窗口的当前时刻。
+    const end = new Date(params.endDate).getTime();
+    expect(end).toBeGreaterThanOrEqual(before);
+  });
+
+  it('applies default paging to the feedback history query', async () => {
+    await evaluationApi.getFeedbackHistory();
+    expect(apiClient.get).toHaveBeenCalledWith('/evaluation/feedback/history', {
+      params: { page: 0, size: 20 },
+    });
+
+    await evaluationApi.getFeedbackHistory({ page: 3, size: 5 });
+    expect(apiClient.get).toHaveBeenCalledWith('/evaluation/feedback/history', {
+      params: { page: 3, size: 5 },
+    });
+  });
+});
