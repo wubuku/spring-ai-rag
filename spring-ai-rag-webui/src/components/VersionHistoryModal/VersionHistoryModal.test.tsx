@@ -406,3 +406,143 @@ describe('VersionHistoryModal pagination', () => {
     expect(screen.getByRole('button', { name: 'common.next' })).toBeEnabled();
   });
 });
+
+
+// ─── Diff flow（handleCompare 真实链路）──────────────────────────────
+
+function makeDetail(versionNumber: number, contentSnapshot: string) {
+  return {
+    data: {
+      id: versionNumber,
+      documentId: 42,
+      versionNumber,
+      contentHash: `hash${versionNumber}`,
+      size: 128,
+      changeType: 'UPDATE',
+      changeDescription: '',
+      createdAt: '2026-04-08T05:00:00Z',
+      contentSnapshot,
+    },
+  };
+}
+
+describe('VersionHistoryModal diff flow', () => {
+  beforeEach(() => {
+    // 清掉前置 describe 残留的 mockImplementation / Once 队列，避免污染。
+    vi.resetAllMocks();
+    vi.mocked(documentsApi.getVersions).mockResolvedValue({
+      data: {
+        documentId: 42, totalVersions: 2, page: 0, size: 20,
+        versions: mockVersions.slice(0, 2),
+      },
+    } as never);
+  });
+
+  it('renders diff stats and line classes after a successful compare', async () => {
+    const user = userEvent.setup();
+    vi.mocked(documentsApi.getVersion)
+      .mockResolvedValueOnce(makeDetail(3, 'Hello world\nshared line') as never)
+      .mockResolvedValueOnce(makeDetail(2, 'Hello world updated\nshared line') as never);
+
+    render(
+      <VersionHistoryModal documentId={42} documentTitle="Test Doc" onClose={vi.fn()} />,
+      { wrapper: Wrapper },
+    );
+
+    const items = await screen.findAllByText(/^v[32]$/);
+    fireEvent.click(items[0]);
+    fireEvent.click(items[1]);
+
+    await user.click(screen.getByRole('button', { name: 'versions.compare' }));
+
+    // 统计条：+1 inserted / -1 deleted。
+    expect(await screen.findByText('+1 versions.inserted')).toBeInTheDocument();
+    expect(screen.getByText('-1 versions.deleted')).toBeInTheDocument();
+    // 行渲染：删除行、插入行、相等行均保留原文。
+    expect(screen.getByText('Hello world updated')).toBeInTheDocument();
+    expect(screen.getByText('Hello world')).toBeInTheDocument();
+    expect(screen.getByText('shared line')).toBeInTheDocument();
+    // diff tab 现在可用。
+    expect(screen.getByRole('button', { name: 'versions.diffTab' })).toBeEnabled();
+  });
+
+  it('navigates back to the list tab and re-opens the diff tab', async () => {
+    const user = userEvent.setup();
+    vi.mocked(documentsApi.getVersion)
+      .mockResolvedValueOnce(makeDetail(3, 'alpha') as never)
+      .mockResolvedValueOnce(makeDetail(2, 'beta') as never);
+
+    render(
+      <VersionHistoryModal documentId={42} documentTitle="Test Doc" onClose={vi.fn()} />,
+      { wrapper: Wrapper },
+    );
+
+    const items = await screen.findAllByText(/^v[32]$/);
+    fireEvent.click(items[0]);
+    fireEvent.click(items[1]);
+    await user.click(screen.getByRole('button', { name: 'versions.compare' }));
+    expect(await screen.findByText('beta')).toBeInTheDocument();
+
+    // 通过 list tab 回到列表（选中态保留，比较条与列表各出现一次 v3）。
+    await user.click(screen.getByRole('button', { name: 'versions.listTab' }));
+    expect((await screen.findAllByText('v3')).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('versions.compare')).toBeInTheDocument();
+
+    // 通过 diff tab 按钮切回 diff 视图，diffLines 保留。
+    await user.click(screen.getByRole('button', { name: 'versions.diffTab' }));
+    expect(await screen.findByText('beta')).toBeInTheDocument();
+  });
+
+  it('stays on the list tab when version details are unavailable', async () => {
+    const user = userEvent.setup();
+    vi.mocked(documentsApi.getVersion)
+      .mockResolvedValueOnce({ data: null } as never)
+      .mockResolvedValueOnce({ data: null } as never);
+
+    render(
+      <VersionHistoryModal documentId={42} documentTitle="Test Doc" onClose={vi.fn()} />,
+      { wrapper: Wrapper },
+    );
+
+    const items = await screen.findAllByText(/^v[32]$/);
+    fireEvent.click(items[0]);
+    fireEvent.click(items[1]);
+
+    await user.click(screen.getByRole('button', { name: 'versions.compare' }));
+
+    // 详情缺失时早退：不切 tab、不置 diffLines，按钮恢复可用。
+    expect(screen.queryByText(/versions\.inserted/)).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'versions.compare' })).toBeEnabled();
+    });
+    expect(screen.getByRole('button', { name: 'versions.diffTab' })).toBeDisabled();
+  });
+
+  it('re-selects and deselects compare anchors on repeated clicks', async () => {
+    vi.mocked(documentsApi.getVersions).mockResolvedValue({
+      data: {
+        documentId: 42, totalVersions: 3, page: 0, size: 20,
+        versions: mockVersions,
+      },
+    } as never);
+
+    render(
+      <VersionHistoryModal documentId={42} documentTitle="Test Doc" onClose={vi.fn()} />,
+      { wrapper: Wrapper },
+    );
+
+    const items = await screen.findAllByText(/^v[321]$/);
+    // 选中 v3 与 v2 后，点击第三个版本替换锚点：compareA=v1、compareB 清空。
+    fireEvent.click(items[0]);
+    fireEvent.click(items[1]);
+    fireEvent.click(items[2]);
+
+    // v1 同时出现在比较条（strong）与版本列表（span）中。
+    expect(screen.getAllByText('v1').length).toBeGreaterThanOrEqual(2);
+    expect(screen.queryByText(/vs/)).not.toBeInTheDocument();
+
+    // 再点列表中的同一版本取消选中，比较条回到提示文案。
+    fireEvent.click(screen.getAllByText('v1').at(-1)!);
+    expect(screen.getByText('versions.selectTwo')).toBeInTheDocument();
+  });
+});
