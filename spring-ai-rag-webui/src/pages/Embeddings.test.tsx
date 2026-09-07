@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
@@ -207,5 +207,171 @@ describe('Embeddings derivation repair flow', () => {
       screen.getByRole('button', { name: 'embeddings.applyRepair' }),
     );
     expect(embeddingsApi.applyRepair).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('Embeddings states and filters', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  function renderEmbeddings(initialEntry = '/embeddings?collectionKey=wiki') {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    return render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={[initialEntry]}>
+          <Embeddings />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+  }
+
+  it('shows an alert when the job list fails to load', async () => {
+    vi.mocked(embeddingsApi.listJobs).mockRejectedValueOnce(new Error('boom'));
+
+    renderEmbeddings();
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'embeddings.loadFailed',
+    );
+  });
+
+  it('shows the empty state when no jobs match the filters', async () => {
+    vi.mocked(embeddingsApi.listJobs).mockResolvedValueOnce({
+      data: { items: [], page: 0, size: 50, totalElements: 0, totalPages: 0 },
+    } as never);
+
+    renderEmbeddings();
+
+    expect(await screen.findByText('embeddings.empty')).toBeInTheDocument();
+  });
+
+  it('loads the job detail when jobId is in the query string', async () => {
+    vi.mocked(embeddingsApi.getJob).mockResolvedValueOnce({
+      data: { id: 'abc-1', status: 'RUNNING', attemptCount: 1, maxAttempts: 3 },
+    } as never);
+
+    renderEmbeddings('/embeddings?collectionKey=wiki&jobId=abc-1');
+
+    expect(await screen.findByText(/RUNNING/)).toBeInTheDocument();
+    expect(embeddingsApi.getJob).toHaveBeenCalledWith('abc-1');
+    expect(
+      screen.getByRole('link', { name: 'embeddings.backToDocuments' }),
+    ).toHaveAttribute('href', '/documents');
+  });
+
+  it('opens the job detail from the row id button', async () => {
+    const user = userEvent.setup();
+    vi.mocked(embeddingsApi.getJob).mockResolvedValue({
+      data: { id: 'abc-1', status: 'DONE' },
+    } as never);
+
+    renderEmbeddings();
+
+    await user.click(await screen.findByRole('button', { name: '11111111' }));
+
+    // 点击行内 id 按钮会把 jobId 写回 URL 并触发详情查询。
+    await waitFor(() => {
+      expect(embeddingsApi.getJob).toHaveBeenCalledWith(
+        '11111111-1111-1111-1111-111111111111',
+      );
+    });
+    expect(await screen.findByText('embeddings.detail')).toBeInTheDocument();
+  });
+
+  it('propagates the status filter into the jobs query', async () => {
+    const user = userEvent.setup();
+
+    renderEmbeddings('/embeddings');
+
+    const statusInput = screen.getByPlaceholderText('QUEUED');
+    await user.type(statusInput, 'FAILED');
+
+    await waitFor(() => {
+      expect(embeddingsApi.listJobs).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'FAILED' }),
+      );
+    });
+  });
+
+  it('propagates the batchId filter into the jobs query', async () => {
+    const user = userEvent.setup();
+
+    renderEmbeddings('/embeddings');
+
+    const batchInput = screen.getByLabelText('embeddings.batchId');
+    await user.type(batchInput, 'batch-42');
+
+    await waitFor(() => {
+      expect(embeddingsApi.listJobs).toHaveBeenCalledWith(
+        expect.objectContaining({ batchId: 'batch-42' }),
+      );
+    });
+  });
+
+  it('shows the repair failure alert when the preview request errors', async () => {
+    const user = userEvent.setup();
+    vi.mocked(embeddingsApi.previewRepair).mockRejectedValueOnce(
+      new Error('boom'),
+    );
+
+    renderEmbeddings();
+
+    await user.click(
+      await screen.findByRole('button', { name: 'embeddings.previewRepair' }),
+    );
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'embeddings.repairFailed',
+    );
+    // 失败后弹窗不应打开。
+    expect(
+      screen.queryByRole('dialog', { name: 'embeddings.repairPreview' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('closes the repair dialog from its cancel action', async () => {
+    const user = userEvent.setup();
+
+    renderEmbeddings();
+
+    await user.click(
+      await screen.findByRole('button', { name: 'embeddings.previewRepair' }),
+    );
+    const dialog = await screen.findByRole('dialog', {
+      name: 'embeddings.repairPreview',
+    });
+    await user.click(
+      within(dialog).getByRole('button', { name: 'common.cancel' }),
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('dialog', { name: 'embeddings.repairPreview' }),
+      ).not.toBeInTheDocument();
+    });
+  });
+
+  it('closes the repair dialog after a successful apply', async () => {
+    const user = userEvent.setup();
+
+    renderEmbeddings();
+
+    await user.click(
+      await screen.findByRole('button', { name: 'embeddings.previewRepair' }),
+    );
+    await screen.findByRole('dialog', { name: 'embeddings.repairPreview' });
+    await user.click(
+      screen.getByRole('button', { name: 'embeddings.applyRepair' }),
+    );
+
+    // apply 成功后 onSuccess 关闭弹窗。
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('dialog', { name: 'embeddings.repairPreview' }),
+      ).not.toBeInTheDocument();
+    });
   });
 });
