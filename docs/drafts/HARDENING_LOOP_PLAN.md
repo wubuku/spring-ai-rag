@@ -1146,3 +1146,17 @@
   535 绿，行覆盖 92.67%，分支 84.18%。
 - 遗留：formatInteger 的 BigInt catch 分支（第 19 行）为无 BigInt
   环境的防御性回退，jsdom 下不可达。
+
+### Batch 154（已交付）
+
+- 分支：`test/core-validators-batch154-20260908`（已合入 main =
+  `ef2a1114`）
+- 内容：后端启动期校验加固，补 11 用例：EmbeddingVectorColumns
+  （1024 → embedding_1024 白名单、其余维度拒绝）、PostConstruct
+  校验器三件套（chat / usage / integration-observability /
+  notification-delivery——默认放行、越界与交叉冲突拒绝，注意 chat
+  分组 `invalid()` 抛 IllegalStateException 而非 IllegalArgumentException）、
+  RagCollectionPurgePropertiesValidator（disabled 免依赖 bean、
+  enabled 缺 ChatExecutionService / ChatSessionCoordinator 分别拒绝、
+  配置越界先于 bean 解析拒绝，ObjectProvider mock 驱动）。
+- 指标：core 全量 3707 → **3718** 绿。
