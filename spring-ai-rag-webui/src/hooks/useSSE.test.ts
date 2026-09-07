@@ -699,3 +699,235 @@ describe('useChatSSE streaming retries and replay identity', () => {
     expect(onError).not.toHaveBeenCalled();
   });
 });
+
+describe('useChatSSE race guards', () => {
+  const TURN_R = '44444444-4444-4444-8444-444444444444';
+  let mockFetch: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    clearCredential();
+    mockFetch = vi.fn();
+    vi.stubGlobal('fetch', mockFetch);
+  });
+
+  afterEach(() => {
+    clearCredential();
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  const streamResponse = (chunks: string[]) => ({
+    ok: true,
+    status: 200,
+    headers: new Headers({ 'X-RAG-Turn-Id': TURN_R }),
+    body: new ReadableStream({
+      pull(controller) {
+        const chunk = chunks.shift();
+        if (chunk === undefined) {
+          controller.close();
+        } else {
+          controller.enqueue(new TextEncoder().encode(chunk));
+        }
+      },
+    }),
+  });
+
+  const doneChunk = () =>
+    `event: done\ndata: {"status":"complete","turnId":"${TURN_R}"}\n\n`;
+
+  it('treats a done-typed event with non-complete status as inert', async () => {
+    // done 类型但 status 非 complete：doneEvent 置位但终态守卫不触发；
+    // 作为流最后一个事件时，读取结束即走 completed 路径而非报错。
+    mockFetch.mockResolvedValue(streamResponse([
+      'event: done\ndata: {"status":"pending","turnId":"x"}\n\n',
+    ]));
+    const onDone = vi.fn();
+    const onError = vi.fn();
+    const { result } = renderHook(() => useChatSSE({ onDone, onError }));
+
+    await act(async () => {
+      result.current.send('Hello');
+    });
+
+    expect(onDone).not.toHaveBeenCalled();
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it('stops silently when abort interrupts the in-flight stream read', async () => {
+    // fetch 捕获 abort signal：中止时让挂起的 read 以 AbortError 拒绝。
+    let rejectRead: ((reason: unknown) => void) | undefined;
+    mockFetch.mockImplementation((_url, init) => {
+      init?.signal?.addEventListener('abort', () => {
+        rejectRead?.(new DOMException('Aborted', 'AbortError'));
+      });
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'X-RAG-Turn-Id': TURN_R }),
+        body: {
+          getReader: () => ({
+            read: () => new Promise((_resolve, reject) => {
+              rejectRead = reject;
+            }),
+            cancel: vi.fn(),
+          }),
+        },
+      });
+    });
+    const onError = vi.fn();
+    const onDone = vi.fn();
+    const { result } = renderHook(() => useChatSSE({ onError, onDone }));
+
+    await act(async () => {
+      result.current.send('Aborted turn');
+    });
+    await act(async () => {
+      result.current.stop();
+    });
+
+    // 用户主动中止：错误被静默（terminalRef 已置位），不触发 onError。
+    expect(onError).not.toHaveBeenCalled();
+    expect(onDone).not.toHaveBeenCalled();
+    expect(result.current.isConnected).toBe(false);
+  });
+
+  it('ignores events drained after the generation moved on', async () => {
+    // 第一轮 read 挂起且不响应中止；第二轮发送推代际后，
+    // 再让第一轮的滞留事件到达——handleEvent 的代际守卫应丢弃。
+    let resolveRead1: ((value: unknown) => void) | undefined;
+    mockFetch
+      .mockImplementationOnce(() => Promise.resolve({
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'X-RAG-Turn-Id': TURN_R }),
+        body: {
+          getReader: () => ({
+            read: () => new Promise((resolve) => {
+              resolveRead1 = resolve;
+            }),
+            cancel: vi.fn(),
+          }),
+        },
+      }))
+      .mockResolvedValue(streamResponse([doneChunk()]));
+    const onChunk = vi.fn();
+    const onError = vi.fn();
+    const { result } = renderHook(() => useChatSSE({ onChunk, onError }));
+
+    await act(async () => {
+      result.current.send('first');
+    });
+    await act(async () => {
+      result.current.send('second');
+    });
+    await act(async () => {
+      resolveRead1?.({
+        done: false,
+        value: new TextEncoder().encode(
+          'data: {"type":"chunk","content":"stale"}\n\n',
+        ),
+      });
+    });
+
+    expect(onChunk).not.toHaveBeenCalledWith('stale');
+    expect(onError).not.toHaveBeenCalled();
+  });
+});
+
+describe('useChatSSE retry deadline exhaustion and tail retry', () => {
+  const TURN_R = '55555555-5555-4555-8555-555555555555';
+  let mockFetch: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    clearCredential();
+    mockFetch = vi.fn();
+    vi.stubGlobal('fetch', mockFetch);
+  });
+
+  afterEach(() => {
+    clearCredential();
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
+  const streamResponse = (chunks: string[]) => ({
+    ok: true,
+    status: 200,
+    headers: new Headers({ 'X-RAG-Turn-Id': TURN_R }),
+    body: new ReadableStream({
+      pull(controller) {
+        const chunk = chunks.shift();
+        if (chunk === undefined) {
+          controller.close();
+        } else {
+          controller.enqueue(new TextEncoder().encode(chunk));
+        }
+      },
+    }),
+  });
+
+  const doneChunk = () =>
+    `event: done\ndata: {"status":"complete","turnId":"${TURN_R}"}\n\n`;
+
+  it('retries when the stream ends with an incomplete non-done tail block', async () => {
+    // 末块缺换行符：读取结束时经 tail 解析为 chunk 事件，doneEvent
+    // 仍为 false → 可重试错误 → 第二轮正常完成。
+    mockFetch
+      .mockResolvedValueOnce(streamResponse([
+        'data: {"type":"chunk","content":"partial-tail"}',
+      ]))
+      .mockResolvedValueOnce(streamResponse([doneChunk()]));
+    const onRetry = vi.fn();
+    const onChunk = vi.fn();
+    const onDone = vi.fn();
+    const onError = vi.fn();
+    const { result } = renderHook(() =>
+      useChatSSE({ onRetry, onChunk, onDone, onError }));
+
+    await act(async () => {
+      result.current.send('Hello');
+    });
+
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(onChunk).toHaveBeenCalledWith('partial-tail');
+    expect(onRetry).toHaveBeenCalledTimes(1);
+    expect(onDone).toHaveBeenCalledTimes(1);
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it('stops retrying once the retry-after deadline budget is exhausted', async () => {
+    vi.useFakeTimers();
+    mockFetch.mockResolvedValue({
+      ok: false,
+      status: 429,
+      headers: new Headers({ 'Retry-After': '70' }),
+    });
+    const onRetry = vi.fn();
+    const onError = vi.fn();
+    const { result } = renderHook(() => useChatSSE({ onRetry, onError }));
+
+    let sendPromise!: Promise<void>;
+    act(() => {
+      sendPromise = Promise.resolve(result.current.send('Limited'));
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    // 第一次有界等待（约 60s）结束后第二次 bounded <= 0，直接终止。
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(61_000);
+    });
+    await act(async () => {
+      await sendPromise;
+    });
+
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(onRetry).toHaveBeenCalledTimes(1);
+    expect(onError).toHaveBeenCalledWith(
+      'HTTP 429',
+      expect.objectContaining({ message: 'HTTP 429', status: 429 }),
+    );
+  });
+});
