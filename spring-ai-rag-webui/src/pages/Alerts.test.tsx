@@ -332,3 +332,207 @@ describe('Alerts create form flows', () => {
     });
   });
 });
+
+describe('Alerts tab navigation, delivery modes and remaining form fields', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(alertsApi.listActive).mockResolvedValue({ data: [] } as never);
+    vi.mocked(alertsApi.listSloConfigs).mockResolvedValue({ data: [] } as never);
+    vi.mocked(alertsApi.listSilenceSchedules).mockResolvedValue({ data: [] } as never);
+    vi.mocked(alertsApi.listNotificationDeliveries).mockResolvedValue({
+      data: FAILED_DELIVERY_PAGE,
+    } as never);
+  });
+
+  it('switches between all four tabs via the tab buttons', async () => {
+    const user = userEvent.setup();
+    renderAlerts();
+
+    await user.click(screen.getByRole('button', { name: 'alerts.silencePlans' }));
+    expect(
+      await screen.findByRole('button', { name: '+ alerts.createSilence' }),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'alerts.deliveries' }));
+    expect(
+      await screen.findByRole('combobox', {
+        name: 'alerts.deliveryStatusFilter',
+      }),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'alerts.active' }));
+    expect(
+      await screen.findByText('alerts.noActiveAlerts'),
+    ).toBeInTheDocument();
+  });
+
+  it('shows the deliveries loading state while the ledger query is pending', async () => {
+    const user = userEvent.setup();
+    vi.mocked(alertsApi.listNotificationDeliveries).mockImplementation(
+      () => new Promise(() => {}) as never,
+    );
+
+    renderAlerts();
+    await user.click(screen.getByRole('button', { name: 'alerts.deliveries' }));
+
+    expect(await screen.findByText('common.loading')).toBeInTheDocument();
+  });
+
+  it('shows the notifications-disabled notice for the deliveries ledger', async () => {
+    vi.mocked(alertsApi.listNotificationDeliveries).mockResolvedValue({
+      data: { ...FAILED_DELIVERY_PAGE, notificationsEnabled: false },
+    } as never);
+
+    renderAlerts('/alerts?tab=notification-deliveries');
+
+    expect(
+      await screen.findByText('alerts.notificationsDisabled'),
+    ).toBeInTheDocument();
+  });
+
+  it('shows the no-providers notice when none are configured', async () => {
+    vi.mocked(alertsApi.listNotificationDeliveries).mockResolvedValue({
+      data: { ...FAILED_DELIVERY_PAGE, configuredProviders: [] },
+    } as never);
+
+    renderAlerts('/alerts?tab=notification-deliveries');
+
+    expect(
+      await screen.findByText('alerts.noDeliveryProviders'),
+    ).toBeInTheDocument();
+  });
+
+  it('filters deliveries through the status and provider selects', async () => {
+    const user = userEvent.setup();
+    renderAlerts('/alerts?tab=notification-deliveries');
+    // 回执行不渲染 id 文本，用重试按钮确认行已加载。
+    await screen.findByRole('button', { name: 'alerts.retryDelivery' });
+
+    await user.selectOptions(
+      screen.getByRole('combobox', { name: 'alerts.deliveryStatusFilter' }),
+      'FAILED',
+    );
+    await waitFor(() => {
+      expect(alertsApi.listNotificationDeliveries).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'FAILED' }),
+      );
+    });
+
+    await user.selectOptions(
+      screen.getByRole('combobox', { name: 'alerts.deliveryProviderFilter' }),
+      'EMAIL',
+    );
+    await waitFor(() => {
+      expect(alertsApi.listNotificationDeliveries).toHaveBeenCalledWith(
+        expect.objectContaining({ provider: 'EMAIL' }),
+      );
+    });
+  });
+
+  it('renders a dash for deliveries without a next attempt time', async () => {
+    vi.mocked(alertsApi.listNotificationDeliveries).mockResolvedValue({
+      data: {
+        ...FAILED_DELIVERY_PAGE,
+        items: [{ ...FAILED_DELIVERY_PAGE.items[0], nextAttemptAt: undefined }],
+      },
+    } as never);
+
+    renderAlerts('/alerts?tab=notification-deliveries');
+
+    await screen.findByRole('button', { name: 'alerts.retryDelivery' });
+    expect(screen.getAllByText('-').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('edits the SLO target value and unit before submitting', async () => {
+    const user = userEvent.setup();
+    vi.mocked(alertsApi.createSloConfig).mockResolvedValue({} as never);
+
+    renderAlerts('/alerts?tab=slo-configs');
+    await user.click(
+      await screen.findByRole('button', { name: '+ alerts.sloConfig' }),
+    );
+
+    await user.type(
+      screen.getByPlaceholderText('alerts.sloConfigNamePlaceholder'),
+      'availability-slo',
+    );
+    const target = screen.getByRole('spinbutton');
+    await user.type(target, '99.9');
+    const selects = screen.getAllByRole('combobox');
+    await user.selectOptions(selects[0], 'AVAILABILITY');
+    await user.selectOptions(selects[1], '%');
+
+    await user.click(screen.getByRole('button', { name: 'common.create' }));
+
+    await waitFor(() => {
+      expect(alertsApi.createSloConfig).toHaveBeenCalledWith({
+        sloName: 'availability-slo',
+        sloType: 'AVAILABILITY',
+        targetValue: 99.9,
+        unit: '%',
+        enabled: true,
+      });
+    });
+  });
+
+  it('edits every silence form field and deletes a schedule', async () => {
+    const user = userEvent.setup();
+    vi.mocked(alertsApi.createSilenceSchedule).mockResolvedValue({} as never);
+    vi.mocked(alertsApi.deleteSilenceSchedule).mockResolvedValue({} as never);
+    vi.mocked(alertsApi.listSilenceSchedules).mockResolvedValue({
+      data: [{
+        name: 'weekend-window',
+        alertKey: 'API_PRINCIPAL_EXPIRY',
+        silenceType: 'ONE_TIME',
+        startTime: '2026-09-06T22:00',
+        endTime: '2026-09-07T06:00',
+        description: '维护窗口',
+        enabled: true,
+      }],
+    } as never);
+
+    renderAlerts('/alerts?tab=silence-schedules');
+    await user.click(
+      await screen.findByRole('button', { name: '+ alerts.createSilence' }),
+    );
+
+    await user.type(
+      screen.getByPlaceholderText('alerts.silenceNamePlaceholder'),
+      'recurring-silence',
+    );
+    await user.type(
+      screen.getByPlaceholderText('alerts.silenceDescriptionPlaceholder'),
+      'API_PRINCIPAL_EXPIRY',
+    );
+    const silenceTypeSelect = screen.getAllByRole('combobox').at(-1)!;
+    await user.selectOptions(silenceTypeSelect, 'RECURRING');
+    await user.type(
+      screen.getByPlaceholderText('collections.descriptionPlaceholder'),
+      '每日静默',
+    );
+    const times = document.querySelectorAll('input[type="datetime-local"]');
+    await user.type(times[0], '2026-09-06T22:00');
+    await user.type(times[1], '2026-09-07T06:00');
+
+    await user.click(screen.getByRole('button', { name: 'common.create' }));
+    await waitFor(() => {
+      expect(alertsApi.createSilenceSchedule).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'recurring-silence',
+          silenceType: 'RECURRING',
+          description: '每日静默',
+        }),
+      );
+    });
+
+    const deleteButton = await screen.findByRole('button', {
+      name: 'alerts.deleteSilence',
+    });
+    await user.click(deleteButton);
+    await waitFor(() => {
+      expect(alertsApi.deleteSilenceSchedule).toHaveBeenCalledWith(
+        'weekend-window',
+      );
+    });
+  });
+});
