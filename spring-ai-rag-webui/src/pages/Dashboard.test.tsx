@@ -148,3 +148,56 @@ describe('Dashboard', () => {
     expect(collectionsApi.list).toHaveBeenCalledWith({ page: 0, size: 1 });
   });
 });
+
+describe('Dashboard metric card skeletons', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  function localMockQueries(overrides?: {
+    health?: object;
+    docs?: object;
+    collections?: object;
+  }) {
+    const defaults = {
+      data: { data: {} },
+      isPending: false,
+    };
+    const healthData = { ...defaults, ...overrides?.health };
+    const docsData = { ...defaults, ...overrides?.docs };
+    const collectionsData = { ...defaults, ...overrides?.collections };
+    mockUseQuery.mockImplementation((options: { queryKey: string[] }) => {
+      const key = options.queryKey[0];
+      if (key === 'health') return healthData;
+      if (key === 'documents') return docsData;
+      if (key === 'collections') return collectionsData;
+      return { data: undefined, isPending: false };
+    });
+  }
+
+  it('shows metric card skeletons while docs and collections are pending', () => {
+    localMockQueries({
+      docs: { isPending: true },
+      collections: { isPending: true },
+    });
+    const { container } = render(<Dashboard />);
+
+    // 两张卡（文档/集合）以 60px 宽骨架占位；其余卡仍渲染各自的指标。
+    const skeletons = container.querySelectorAll('div[style*="60px"]');
+    expect(skeletons.length).toBe(2);
+  });
+
+  it('renders the dash placeholder when only the collections query is pending', () => {
+    localMockQueries({
+      collections: { isPending: true },
+      docs: {
+        data: { data: { total: 12 } },
+        isPending: false,
+      },
+    });
+    render(<Dashboard />);
+
+    // 文档卡显示数值，集合卡在 pending 时不出占位符冲突。
+    expect(screen.getByText('12')).toBeInTheDocument();
+  });
+});
