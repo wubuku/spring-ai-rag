@@ -1462,3 +1462,13 @@
   返回的 view 作用域限定，规避残留挂载树干扰）+ embeddings getJob
   端点用例（embeddings.ts 四项 100%）。
 - 指标：前端全量 590 绿，行覆盖 95.73%。
+
+### Batch 183（已交付）
+
+- 分支：`test/webui-dialog-trap-batch183-20260908`（已合入 main）
+- 内容：Dialog 焦点陷阱双向环绕，新增 2 用例：Shift+Tab 从首个
+  可聚焦元素环绕至最后一个（Close 按钮）、正向 Tab 从最后一个环绕
+  回首个（Name 输入）。
+- 指标：前端全量 592 绿。
+- 备注：v8 覆盖映射对 Dialog keydown handler 内分支归属不稳定，
+  以行为断言为准。
