@@ -292,3 +292,65 @@ describe('Collections purge flow', () => {
     });
   });
 
+
+describe('Collections navigation, create modal and purge preview failure', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockList(collection);
+    mockCapabilities(true);
+    window.history.replaceState({}, '', '/');
+  });
+
+  it('navigates to documents and embeddings from the card actions', async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(
+      await screen.findByRole('button', { name: 'View Documents' }),
+    );
+    expect(window.location.pathname + window.location.search)
+      .toBe('/documents?collectionKey=sample-collection');
+
+    await user.click(
+      screen.getByRole('button', { name: 'embeddings.openOperations' }),
+    );
+    expect(window.location.pathname + window.location.search)
+      .toBe('/embeddings?collectionKey=sample-collection');
+  });
+
+  it('opens the create modal from the header button', async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(
+      await screen.findByRole('button', { name: '+ collections.create' }),
+    );
+
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('shows the purge preview error panel and recovers via retry', async () => {
+    const user = userEvent.setup();
+    vi.mocked(collectionsApi.previewPurge)
+      .mockRejectedValueOnce(new Error('boom'))
+      .mockResolvedValueOnce(response(preview));
+
+    renderPage();
+    await user.click(
+      await screen.findByRole('button', { name: 'collections.purge.action' }),
+    );
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('collections.purge.previewError');
+    expect(alert).toHaveTextContent('boom');
+
+    await user.click(
+      within(alert).getByRole('button', { name: 'collections.purge.retryPreview' }),
+    );
+
+    // 重试成功后错误面板消失，进入确认流程。
+    await waitFor(() => {
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    });
+  });
+});
