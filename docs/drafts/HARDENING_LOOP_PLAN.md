@@ -1243,3 +1243,19 @@
   兜底、relocate 详情拉取失败报 loadDetailError。
 - 指标：Documents.tsx 行覆盖 86.04% → **93.02%**；前端全量 552 绿，
   行覆盖 93.6%。
+
+### Batch 162（已交付）
+
+- 分支：`test/core-coordinator-lease-batch162-20260908`（已合入 main =
+  `04d39186`）
+- 内容：ChatSessionCoordinator（637 行）首个专用单测，13 用例。
+  桩策略复用并扩展：JdbcTemplate 桩子类按语句类型分类（acquire/
+  renew/consume/release）记录 SQL 并返回可配置影响行数，query 覆写
+  单独记录 RETURNING 标记。覆盖：STATELESS 获取绕过租约行与释放、
+  acquire 绑定四参数、活跃租约冲突抛 SESSION_BUSY、
+  invokeWithinDeadline 三分支（成功/透传 supplier 异常/到期抛
+  CHAT_TIMEOUT）、STATELESS commit 持久化不触租约、STATEFUL commit
+  事务内续租、未配置 operationRepository 时 IDEMPOTENCY_DISABLED、
+  failOperation 静默、release 绑定删除、clearSession 消费租约 +
+  删历史 + 空历史 SESSION_NOT_FOUND。
+- 指标：core 全量 3748 → **3761** 绿。
