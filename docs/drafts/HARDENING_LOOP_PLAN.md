@@ -1222,3 +1222,13 @@
   编辑进入 update 载荷。
 - 指标：Documents.tsx 行覆盖 81.86% → **86.04%**；前端全量 544 绿，
   行覆盖 93.02%。
+
+### Batch 160（已交付）
+
+- 分支：`test/core-recorder-gaps-batch160-20260908`（已合入 main）
+- 内容：JdbcLlmUsageRecorder 查漏，新增 5 用例：null 事件短路
+  （不触库不计数）、usage 关闭时 record/recordAsync 短路、无
+  MeterRegistry 时 lostCounter 为 null 的安全路径（lostEvents 返回
+  0 且 repository 失败不上抛）、shutdown 后 async/sync 提交被
+  AbortPolicy 拒绝并计入 lost（executor_rejected 分支）。
+- 指标：core 全量 3743 → **3748** 绿。
