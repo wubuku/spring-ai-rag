@@ -1259,3 +1259,14 @@
   failOperation 静默、release 绑定删除、clearSession 消费租约 +
   删历史 + 空历史 SESSION_NOT_FOUND。
 - 指标：core 全量 3748 → **3761** 绿。
+
+### Batch 163（已交付）
+
+- 分支：`test/webui-usesse-race-guards-batch163-20260908`（已合入 main）
+- 内容：useChatSSE 竞态守卫回补，新增 5 用例：done 类型但 status 非
+  complete 的事件为惰性且流收尾走 completed、abort 中断挂起 read 静默
+  停止、代际推进后滞留事件被 handleEvent 守卫丢弃、末尾缺换行非 done
+  块经 tail 解析触发可重试、Retry-After 预算耗尽（bounded <= 0）终止
+  重试上抛 HTTP 429。
+- 指标：useSSE.ts 行覆盖 → **100%**，分支 86.9%；前端全量 557 绿，
+  行覆盖 93.83%。
