@@ -1528,3 +1528,16 @@ VersionHistoryModal 相关 100% 项等。
   盲区（JSX 条件两侧均已由既有用例执行）。
 - 指标：Documents.tsx 行覆盖 93.02% → **95.34%**；前端全量 604 绿，
   行覆盖 96.27%。
+
+### Batch 188（已交付）
+
+- 分支：`test/core-gated-it-batch188-20260908`（已合入 main）
+- 内容：gated IT 全量实跑验证。发现并修复
+  ChatSessionPostgresIntegrationTest 的过期断言（最新迁移硬编码
+  V58，V59 落地后失败）→ 动态断言 ≥58。本机 Docker 可用，运行
+  runbook：`TESTCONTAINERS_RYUK_DISABLED=true`（境内网络拉
+  docker.io 的 ryuk 失败，禁用后用本地 pgvector/pgvector:pg16）+
+  各 IT 开关。四个 gated IT 全绿共 41 个真实 PostgreSQL 集成用例。
+- 指标：后端默认 3827 绿 + gated IT 41 绿；前端 590 绿。
+- 结论：此前「EmbeddingJobRepository 深层 varargs 暂缓」事项由该
+  gated IT 的真实 PostgreSQL 验收覆盖，正式关闭。
