@@ -51,8 +51,10 @@ vi.mock('../api/collections', () => ({
   },
 }));
 
+const toastSpy = vi.fn();
+
 vi.mock('../components/Toast', () => ({
-  useToast: () => ({ showToast: vi.fn() }),
+  useToast: () => ({ showToast: toastSpy }),
 }));
 
 vi.mock('../api/files', () => ({
@@ -142,5 +144,47 @@ describe('Documents provenance callback wiring', () => {
       'blob:captured', '_blank', 'noopener,noreferrer',
     );
     openSpy.mockRestore();
+  });
+});
+
+describe('open original pdf failure path', () => {
+  it('reports the failure through a toast with the error message', async () => {
+    vi.mocked(documentsApi.list).mockResolvedValue({
+      data: { documents: [], total: 0 },
+    } as never);
+    vi.mocked(documentsApi.getEmbeddingStatus).mockResolvedValue({
+      data: {
+        totalDocuments: 0,
+        withEmbeddings: 0,
+        withoutEmbeddings: 0,
+        hasMissing: false,
+      },
+    } as never);
+    vi.mocked(filesApi.getRawFile).mockRejectedValue(new Error('gone'));
+
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={['/documents']}>
+          <Documents />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    // 空列表时无行渲染，直接驱动最后一次捕获的菜单 props。
+    const last = menuProps.at(-1);
+    expect(last).toBeTruthy();
+    await (last!.onOpenOriginalFile as (p: string) => Promise<void>)(
+      'uuid-7/original.pdf',
+    );
+
+    await vi.waitFor(() => {
+      expect(toastSpy).toHaveBeenCalledWith(
+        expect.stringContaining('documents.openOriginalPdfError'),
+        'error',
+      );
+    });
   });
 });
