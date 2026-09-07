@@ -1357,3 +1357,11 @@
   DATABASE_API_KEY 认证属性推导出 db:key-42 principal（argThat
   断言）、get 按 traceId 转发并透传诊断服务响应。
 - 指标：core 全量 3796 → **3800** 绿。
+
+### Batch 172（已交付）
+
+- 分支：`test/core-integration-obs-batch172-20260908`（已合入 main）
+- 内容：IntegrationObservabilityController 加固，新增 2 用例：七个
+  查询参数按文档顺序透传 queryService、响应包装 200 + no-store 缓存
+  头、null 默认值透传保持 no-store。
+- 指标：core 全量 3800 → **3802** 绿。
