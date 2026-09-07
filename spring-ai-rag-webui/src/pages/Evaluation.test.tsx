@@ -273,3 +273,124 @@ describe('Evaluation runs and version import panels', () => {
     ).toBeInTheDocument();
   });
 });
+
+describe('Evaluation history, feedback and mutation failure paths', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(evaluationApi.getReport).mockResolvedValue({
+      data: { avgMrr: 0.5, avgNdcg: 0.4, totalEvaluations: 3 },
+    } as never);
+    vi.mocked(evaluationApi.getFeedbackStats).mockResolvedValue({
+      data: { thumbsUp: 2, thumbsDown: 1, avgRating: 0.66 },
+    } as never);
+  });
+
+  it('renders history rows with metric formatting and null placeholders', async () => {
+    vi.mocked(evaluationApi.getHistory).mockResolvedValue({
+      data: [
+        {
+          id: 7,
+          query: 'vector best practice',
+          mrr: 0.75,
+          ndcg: 0.8123456789,
+          hitRate: 1,
+          createdAt: '2026-09-01T00:00:00Z',
+        },
+        { query: null, mrr: null, ndcg: null, hitRate: null, createdAt: null },
+      ],
+    } as never);
+
+    renderPage('/?tab=history');
+
+    expect(await screen.findByText('vector best practice')).toBeInTheDocument();
+    // fmt 使用 toFixed(3)，hitRate 以百分比一位小数渲染。
+    expect(screen.getByText('0.750')).toBeInTheDocument();
+    expect(screen.getByText('0.812')).toBeInTheDocument();
+    expect(screen.getByText('1.000')).toBeInTheDocument();
+    // 缺失字段渲染占位符。
+    const dashes = screen.getAllByText('—');
+    expect(dashes.length).toBeGreaterThanOrEqual(4);
+  });
+
+  it('shows the empty history notice when no evaluations exist', async () => {
+    vi.mocked(evaluationApi.getHistory).mockResolvedValue({ data: [] } as never);
+
+    renderPage('/?tab=history');
+
+    expect(
+      await screen.findByText('evaluation.emptyHistory'),
+    ).toBeInTheDocument();
+  });
+
+  it('renders feedback stats json and feedback history rows', async () => {
+    vi.mocked(evaluationApi.getFeedbackHistory).mockResolvedValue({
+      data: [
+        { id: 3, query: 'rating question', feedbackType: 'UP', createdAt: '2026-09-02T00:00:00Z' },
+        { id: null, query: null, feedbackType: null, createdAt: null },
+      ],
+    } as never);
+
+    renderPage('/?tab=feedback');
+
+    // 反馈统计以 JSON 形式渲染（pre 整体文本包含字段）。
+    const statsPre = await screen.findByText((_, el) =>
+      el?.tagName === 'PRE' && el.textContent.includes('"thumbsUp": 2'));
+    expect(statsPre).toBeInTheDocument();
+    expect(screen.getByText('rating question')).toBeInTheDocument();
+    expect(screen.getByText('UP')).toBeInTheDocument();
+    const dashes = screen.getAllByText('—');
+    expect(dashes.length).toBeGreaterThanOrEqual(4);
+  });
+
+  it('shows the evaluate failure message when the api rejects', async () => {
+    const user = userEvent.setup();
+    vi.mocked(evaluationApi.evaluate).mockRejectedValue(new Error('boom'));
+
+    // 评估表单位于默认的 report tab，query 必填否则按钮禁用。
+    renderPage('/');
+
+    await user.type(
+      await screen.findByLabelText('evaluation.query'),
+      'failing query',
+    );
+    await user.type(screen.getByLabelText('evaluation.retrievedIds'), 'doc1');
+    await user.type(screen.getByLabelText('evaluation.relevantIds'), 'doc1');
+    await user.click(
+      screen.getByRole('button', { name: 'evaluation.runEvaluate' }),
+    );
+
+    expect(
+      await screen.findByText('evaluation.evaluateFailed'),
+    ).toBeInTheDocument();
+  });
+
+  it('shows the judge failure message when answer quality rejects', async () => {
+    const user = userEvent.setup();
+    vi.mocked(evaluationApi.answerQuality).mockRejectedValue(
+      new Error('judge down'),
+    );
+
+    renderPage('/?tab=judge');
+    await user.type(screen.getByLabelText('evaluation.context'), 'ctx');
+    await user.type(screen.getByLabelText('evaluation.answer'), 'ans');
+    await user.type(screen.getByLabelText('evaluation.query'), 'q');
+    await user.click(screen.getByRole('button', { name: 'evaluation.runJudge' }));
+
+    expect(
+      await screen.findByText('evaluation.judgeFailed'),
+    ).toBeInTheDocument();
+  });
+
+  it('renders citation trace placeholders for null status and outcome', async () => {
+    vi.mocked(evaluationApi.listCitationTraces).mockResolvedValue({
+      data: {
+        items: [{ traceId: 'trace-null', citationStatus: null, outcomeCode: null }],
+      },
+    } as never);
+
+    renderPage('/?tab=citations');
+
+    expect(await screen.findByText('trace-null')).toBeInTheDocument();
+    expect(screen.getAllByText('—').length).toBeGreaterThanOrEqual(2);
+  });
+});
