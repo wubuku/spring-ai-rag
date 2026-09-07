@@ -1041,3 +1041,16 @@
   缓存开关联动禁用 ttl/maxSize 与空值默认回退（60/1000）。
 - 指标：Settings.tsx 行覆盖 89.36% → **96.8%**，分支 62.16% →
   74.77%；前端全量 493 绿，行覆盖 90.11%。
+
+### Batch 146（已交付）
+
+- 分支：`test/webui-alerts-batch146-20260907`（已合入 main =
+  `5c3587c9`）
+- 内容：Alerts 页覆盖加固，新增 8 用例：四个 tab 按钮互切、
+  deliveries 查询挂起的 loading 态、notificationsDisabled 与
+  noDeliveryProviders 模式提示、status/provider 过滤下拉透传查询、
+  缺失 nextAttemptAt 的占位渲染、SLO 表单 targetValue/unit 完整
+  编辑提交、静默表单全字段编辑（alertKey/RECURRING/description）
+  与 deleteSilenceSchedule 删除。
+- 指标：Alerts.tsx 行覆盖 83.33% → **97.36%**，分支 84.11%；前端
+  全量 501 绿，行覆盖 90.73%。
