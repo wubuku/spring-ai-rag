@@ -6,7 +6,7 @@ import { collectionsApi } from '../api/collections';
 import { filesApi } from '../api/files';
 import { searchApi } from '../api/search';
 import { ToastProvider } from '../components/Toast';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import { Search } from './Search';
 
 vi.mock('../api/search', () => ({
@@ -198,6 +198,54 @@ describe('Search', () => {
     })).toBeInTheDocument();
   });
 
+  it('navigates to the indexed file from the provenance action', async () => {
+    function Probe() {
+      const location = useLocation();
+      return <div data-testid="probe">{location.pathname + location.search}</div>;
+    }
+
+    (searchApi.search as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: {
+        query: 'manual',
+        total: 1,
+        results: [{
+          documentId: '7',
+          title: 'Manual',
+          chunkText: 'Indexed text',
+          score: 0.8,
+          source: 'pdf-import:uuid-7/default.md',
+          originalFilename: 'manual.pdf',
+          fileDirectoryPath: 'uuid-7/',
+          indexedFilePath: 'uuid-7/default.md',
+          originalFilePath: 'uuid-7/original.pdf',
+        }],
+      },
+    });
+
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <ToastProvider>
+          <MemoryRouter initialEntries={['/search']}>
+            <Search />
+            <Probe />
+          </MemoryRouter>
+        </ToastProvider>
+      </QueryClientProvider>,
+    );
+    await submit('manual');
+    expect(await screen.findByText('manual.pdf')).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'search.viewIndexedFile' }),
+    );
+    expect(screen.getByTestId('probe').textContent).toBe(
+      '/files?path=uuid-7%2F&file=uuid-7%2Fdefault.md',
+    );
+  });
+
   it('replays a search from URL state after a direct navigation', async () => {
     (searchApi.search as ReturnType<typeof vi.fn>).mockResolvedValue({
       data: {
@@ -351,5 +399,115 @@ describe('Search history and original file actions', () => {
       ).toBeGreaterThan(0);
     });
     openSpy.mockRestore();
+  });
+});
+
+describe('Search guards, history panel, provenance navigation and draft validation', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    window.sessionStorage.clear();
+    (searchApi.search as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: { query: 'test', total: 0, results: [] },
+    });
+    (collectionsApi.list as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: { collections, total: collections.length, offset: 0, limit: 50 },
+    });
+  });
+
+  it('rejects a whitespace-only query without calling the search api', async () => {
+    renderSearch();
+    fireEvent.change(screen.getByPlaceholderText(/search.placeholder/), {
+      target: { value: '   ' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /search.searchButton/ }));
+
+    expect(searchApi.search).not.toHaveBeenCalled();
+  });
+
+  it('rejects a workspace draft whose shape is not a search draft', () => {
+    window.sessionStorage.setItem(
+      'spring-ai-rag:webui:v1:search-draft',
+      JSON.stringify('just-a-string'),
+    );
+
+    renderSearch();
+    expect(screen.getByPlaceholderText(/search.placeholder/)).toHaveValue('');
+  });
+
+  it('toggles the history panel and closes it on outside mousedown', async () => {
+    const user = userEvent.setup();
+    renderSearch();
+    await submit('first query');
+
+    // 提交后历史存在，开关按钮出现（title 为 i18n key）。
+    const toggle = screen.getByTitle('search.history');
+    await user.click(toggle);
+    const panelItem = await screen.findByText('first query');
+    expect(panelItem).toBeInTheDocument();
+
+    // 面板外 mousedown 关闭历史面板。
+    fireEvent.mouseDown(document.body);
+    expect(screen.queryByText('first query')).not.toBeInTheDocument();
+  });
+
+  it('toggles the hybrid checkbox into the submitted payload', async () => {
+    renderSearch();
+    const hybrid = screen.getByLabelText(/Hybrid/);
+    fireEvent.click(hybrid);
+    expect(hybrid).not.toBeChecked();
+
+    await submit('hybrid off');
+    await waitFor(() => {
+      expect(searchApi.search).toHaveBeenCalledWith(
+        expect.objectContaining({ useHybrid: false }),
+      );
+    });
+  });
+
+  it('navigates to files from the result provenance actions', async () => {
+    (searchApi.search as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: {
+        query: 'manual',
+        total: 1,
+        results: [{
+          documentId: '7',
+          title: 'Manual',
+          chunkText: 'Indexed text',
+          score: 0.8,
+          source: 'pdf-import:uuid-7/default.md',
+          originalFilename: 'manual.pdf',
+          fileDirectoryPath: 'uuid-7/',
+          indexedFilePath: 'uuid-7/default.md',
+          originalFilePath: 'uuid-7/original.pdf',
+        }],
+      },
+    });
+
+    function Probe() {
+      const location = useLocation();
+      return <div data-testid="probe">{location.pathname + location.search}</div>;
+    }
+
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <ToastProvider>
+          <MemoryRouter initialEntries={['/search']}>
+            <Search />
+            <Probe />
+          </MemoryRouter>
+        </ToastProvider>
+      </QueryClientProvider>,
+    );
+    await submit('manual');
+    expect(await screen.findByText('manual.pdf')).toBeInTheDocument();
+
+    // 跳转 /files 会卸载 Search 页，两个动作分别在两次渲染中验证。
+    fireEvent.click(
+      screen.getByRole('button', { name: 'search.viewFileDirectory' }),
+    );
+    expect(screen.getByTestId('probe').textContent).toBe('/files?path=uuid-7%2F');
   });
 });
