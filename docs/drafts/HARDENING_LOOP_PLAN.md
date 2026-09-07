@@ -1317,3 +1317,15 @@
   摘要返回空串、非空正文 trim 后夹在前后缀之间且输出稳定、clear
   委托 summaryRepository.delete 并透传删除行数。
 - 指标：core 全量 3779 → **3784** 绿。
+
+### Batch 168（已交付）
+
+- 分支：`test/webui-collections-close-batch168-20260908`（已合入 main）
+- 内容：Collections 弹窗关闭路径收尾，新增 2 用例：创建弹窗经 Close
+  按钮关闭（onClose → setShowCreateModal(false)）、purge 弹窗经
+  cancel 关闭且不触 apply API（closeDialog 的 isPending 守卫 +
+  setPurgeTarget(null)）。
+- 指标：Collections.tsx 行覆盖 92.53% → **98.5%**，函数 100%；前端
+  全量 566 绿，行覆盖 94.76%。
+- 遗留：applyMutation 的 previewRequired 守卫（第 183 行）为防御性
+  代码——apply 按钮受 canApply 门禁，UI 层不可达。
