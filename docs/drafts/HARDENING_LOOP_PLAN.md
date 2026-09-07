@@ -1054,3 +1054,19 @@
   与 deleteSilenceSchedule 删除。
 - 指标：Alerts.tsx 行覆盖 83.33% → **97.36%**，分支 84.11%；前端
   全量 501 绿，行覆盖 90.73%。
+
+### Batch 147（已交付）
+
+- 分支：`test/webui-upload-branches-batch147-20260907`（已合入 main =
+  `a5182f60`）
+- 内容：useFileUpload 分支覆盖加固，新增 6 用例：成功完成状态与逐
+  文件 onComplete 回调、后端 detail 错误文案透传（413）、错误体不可
+  解析（502 HTML）回退 Upload failed、非 Error 拒绝映射通用文案、
+  缺 `crypto.randomUUID` 时时间戳幂等键回退、二轮同名上传命中
+  `updateUpload` 的 current 分支重发 onProgress。
+- 指标：useFileUpload.ts 行覆盖 92% → **98%**，分支 50% → **85%**；
+  前端全量 507 绿，行覆盖 90.84%。
+- 备注：Documents.tsx 名义缺口为散点单语句（编辑/删除/嵌入/版本
+  恢复等 mutation 主路径已有交互用例），投入产出低暂缓；
+  useSSE.ts 深层流式重试路径（tail SSE 块、退避重试、turn id 不匹配）
+  需专用 reader mock 基建，留待后续批次。
