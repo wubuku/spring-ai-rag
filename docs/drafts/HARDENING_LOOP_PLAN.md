@@ -1329,3 +1329,13 @@
   全量 566 绿，行覆盖 94.76%。
 - 遗留：applyMutation 的 previewRequired 守卫（第 183 行）为防御性
   代码——apply 按钮受 canApply 门禁，UI 层不可达。
+
+### Batch 169（已交付）
+
+- 分支：`test/core-zero-test-cleanup-batch169-20260908`（已合入 main）
+- 内容：零测试类收尾，新增 2 类 8 用例：
+  RagApiKeyProvisioningProperties（默认基线、保留期 7–3650 天闭区间
+  边界与 null 拒绝、批次钳制 10–5000、重试钳制 1–8）、
+  EvaluationSuiteDefinition（Identity 双参构造默认 default 命名空间、
+  三参保留显式命名空间、定义记录持有 canonicalJson/sha256/用例/变体）。
+- 指标：core 全量 3784 → **3792** 绿。
