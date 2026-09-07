@@ -1348,3 +1348,12 @@
   框架管理的顺序、before/after 透传到被包装 advisor、getScheduler
   透传。
 - 指标：core 全量 3792 → **3796** 绿。
+
+### Batch 171（已交付）
+
+- 分支：`test/core-trace-controller-batch171-20260908`（已合入 main）
+- 内容：RetrievalTraceController（58 行，零测试）加固，新增 4 用例：
+  list 默认分页绑定与本地 principal 推导、七个过滤参数全量透传、
+  DATABASE_API_KEY 认证属性推导出 db:key-42 principal（argThat
+  断言）、get 按 traceId 转发并透传诊断服务响应。
+- 指标：core 全量 3796 → **3800** 绿。
