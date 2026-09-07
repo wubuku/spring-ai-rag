@@ -1852,3 +1852,13 @@
   全仓行覆盖 87.82%。
 - 证据：`test:run` 455/455（59 文件）；`lint` 0 问题；`tsc -b` 绿；
   `build` 绿。
+
+### Batch 130（已交付）
+
+- 分支：`test/embedding-job-repo-7`（已合入 main = `52a05458`）
+- 内容：`EmbeddingJobRepository` 收尾批补 3 用例：activateJob 将
+  job id 绑定到文档状态行（document_id/profile_id/generation 四元
+  断言）、cancelSuperseded 将旧代作业标 STALE 并返回受影响计数、
+  cancelActiveForDocument 全量取消运行中作业。core 全量 3643→3659 绿。
+- 证据：新测试 3/3 绿；core 全量 `Tests run: 3659, Failures: 0,
+  Errors: 0, Skipped: 9`，BUILD SUCCESS。
