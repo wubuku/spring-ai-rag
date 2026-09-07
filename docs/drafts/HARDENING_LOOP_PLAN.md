@@ -1497,3 +1497,12 @@ VersionHistoryModal 相关 100% 项等。
 3. Batch 187+：Documents.tsx 93%→95%（797/778 守卫需事件级编排）、
    MetricsCharts 93.33%、后端 gated IT（Testcontainers）补
    EmbeddingJobRepository 深层 varargs 场景。
+
+### Batch 185（已交付）
+
+- 分支：`test/webui-sidebar-storage-batch185-20260908`（已合入 main）
+- 内容：ChatSidebar 残余分支，新增 3 用例：corrupted-storage catch
+  回退空会话、恢复后 addSession 正常写入、deleteSession 仅移除匹配
+  id。
+- 指标：ChatSidebar.tsx 行覆盖 89.47% → **92.1%**；前端全量 595 绿，
+  行覆盖 95.77%。
