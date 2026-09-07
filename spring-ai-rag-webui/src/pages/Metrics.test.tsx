@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
+import { metricsApi } from '../api/metrics';
 import { Metrics } from './Metrics';
 
 const mockUseQuery = vi.fn();
@@ -296,4 +297,120 @@ describe('Metrics', () => {
     expect(screen.getByText('0.25')).toBeInTheDocument();
   });
 
+});
+
+describe('Metrics query wiring and numeric format fallbacks', () => {
+  const emptyTotals = {
+    logicalExecutionCount: undefined,
+    invocationCount: null,
+    succeededCount: undefined,
+    failedCount: undefined,
+    cancelledCount: undefined,
+    promptTokens: undefined,
+    completionTokens: undefined,
+    totalTokens: undefined,
+    usageAvailableCount: undefined,
+    usageUnavailableCount: undefined,
+    pricingUnavailableCount: undefined,
+    costUnavailableCount: undefined,
+  };
+
+  function mockUsage(usage: unknown) {
+    mockUseQuery
+      .mockReturnValueOnce({ data: { data: {} }, isPending: false })
+      .mockReturnValueOnce(usage);
+  }
+
+  beforeEach(() => {
+    mockUseQuery.mockReset();
+  });
+
+  it('wires the two queries to the metrics api calls', async () => {
+    const getSpy = vi.spyOn(metricsApi, 'get').mockResolvedValue({ data: {} } as never);
+    const usageSpy = vi.spyOn(metricsApi, 'usage').mockResolvedValue({ data: {} } as never);
+    mockUseQuery.mockImplementation((options: { queryFn: () => unknown }) => {
+      void options.queryFn();
+      return { data: undefined, isPending: true };
+    });
+
+    render(<Metrics />);
+
+    await waitFor(() => {
+      expect(getSpy).toHaveBeenCalledTimes(1);
+      expect(usageSpy).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('renders zero for undefined and null numeric values', () => {
+    mockUsage({
+      data: {
+        data: {
+          recordingEnabled: true,
+          localLostEventsSinceStart: 0,
+          scope: { type: 'SELF', principalId: 'db:test' },
+          from: '2026-08-01',
+          to: '2026-08-27',
+          totals: emptyTotals,
+          costs: [],
+          byModel: [],
+          byPurpose: [],
+          byMode: [],
+          byDay: [],
+        },
+      },
+      isPending: false,
+      isError: false,
+    });
+
+    render(<Metrics />);
+
+    // 摘要卡 4 个 undefined/null 值全部渲染为 0。
+    const zeros = screen.getAllByText('0');
+    expect(zeros.length).toBe(4);
+  });
+
+  it('renders a non-numeric configured cost as raw text', () => {
+    mockUsage({
+      data: {
+        data: {
+          recordingEnabled: true,
+          localLostEventsSinceStart: 0,
+          scope: { type: 'SELF', principalId: 'db:test' },
+          from: '2026-08-01',
+          to: '2026-08-27',
+          totals: {
+            logicalExecutionCount: 1,
+            invocationCount: 1,
+            succeededCount: 1,
+            failedCount: 0,
+            cancelledCount: 0,
+            promptTokens: 10,
+            completionTokens: 5,
+            totalTokens: 15,
+            usageAvailableCount: 1,
+            usageUnavailableCount: 0,
+            pricingUnavailableCount: 0,
+            costUnavailableCount: 0,
+          },
+          costs: [{
+            unit: 'USD_ESTIMATE',
+            configuredCost: 'not-a-number',
+            invocationCount: 1,
+            costAvailableCount: 1,
+          }],
+          byModel: [],
+          byPurpose: [],
+          byMode: [],
+          byDay: [],
+        },
+      },
+      isPending: false,
+      isError: false,
+    });
+
+    render(<Metrics />);
+
+    // formatCost 对无法转数字的值原样输出。
+    expect(screen.getByText('not-a-number')).toBeInTheDocument();
+  });
 });
