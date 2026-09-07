@@ -1541,3 +1541,13 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：后端默认 3827 绿 + gated IT 41 绿；前端 590 绿。
 - 结论：此前「EmbeddingJobRepository 深层 varargs 暂缓」事项由该
   gated IT 的真实 PostgreSQL 验收覆盖，正式关闭。
+
+### Batch 190（已交付）
+
+- 分支：`test/core-observability-feedback-batch190-20260908`（已合
+  入 main）
+- 内容：ChatObservabilityService（2 用例：registry 在场逐一计数、
+  无 registry 静默）与 FeedbackDocumentReferenceStore（4 用例：空
+  ids 不触库、参数化 IN 查询与快照映射、insert 空引用短路、批量
+  插入 setter 绑定——captor 泛型 T 须与首参集合元素类型一致）。
+- 指标：core 全量 3827 → **3833** 绿。
