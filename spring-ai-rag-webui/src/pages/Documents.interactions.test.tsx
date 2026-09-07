@@ -1206,3 +1206,96 @@ describe('Documents upload zone, filter clearing and dialog dismissal', () => {
     });
   });
 });
+
+// ─── Version restore failure and revision guard (Batch 187) ──────────
+
+describe('Documents revision guard and version restore failure', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(documentsApi.list).mockResolvedValue({
+      data: { documents: [LOCAL_DOC], total: 1 },
+    } as never);
+    vi.mocked(documentsApi.getEmbeddingStatus).mockResolvedValue({
+      data: {
+        totalDocuments: 1,
+        withEmbeddings: 1,
+        withoutEmbeddings: 0,
+        hasMissing: false,
+      },
+    } as never);
+  });
+
+  it('surfaces the version restore error toast when restore fails', async () => {
+    const user = userEvent.setup();
+    vi.mocked(documentsApi.getVersions).mockResolvedValue({
+      data: {
+        documentId: 1,
+        totalVersions: 1,
+        versions: [{
+          id: 5, documentId: 1, versionNumber: 2, contentHash: 'hash-2',
+          size: 100, changeType: 'UPDATE', changeDescription: 'older',
+          snapshotCompleteness: 'FULL', createdAt: '2026-01-02T00:00:00Z',
+        }],
+      },
+    } as never);
+    vi.mocked(documentsApi.restoreVersion).mockRejectedValue(
+      new Error('restore conflict'),
+    );
+
+    renderDocuments();
+    await screen.findByText('Local Doc');
+    await user.click(screen.getByRole('button', { name: 'documents.openActions' }));
+    await user.click(screen.getByRole('menuitem', { name: 'versions.button' }));
+
+    const restoreButtons = await screen.findAllByRole('button', {
+      name: 'versions.restore',
+    });
+    await user.click(restoreButtons[0]);
+    const dialog = await screen.findByRole('dialog', {
+      name: 'versions.restore',
+    });
+    await user.click(
+      await within(dialog).findByRole('button', { name: 'versions.restore' }),
+    );
+
+    await waitFor(() => {
+      expect(mockShowToast).toHaveBeenCalledWith(
+        'versions.restoreError',
+        'error',
+      );
+    });
+  });
+
+  it('reports the revision guard through the delete error toast', async () => {
+    const user = userEvent.setup();
+    vi.mocked(documentsApi.list).mockResolvedValue({
+      data: {
+        documents: [{ ...LOCAL_DOC, documentRevision: undefined }],
+        total: 1,
+      },
+    } as never);
+
+    renderDocuments();
+    await screen.findByText('Local Doc');
+    await user.click(screen.getByRole('button', { name: 'documents.openActions' }));
+    await user.click(
+      screen.getByRole('menuitem', { name: 'documents.permanentDelete' }),
+    );
+    const dialog = await screen.findByRole('dialog', {
+      name: 'documents.permanentDelete',
+    });
+    await user.click(
+      await within(dialog).findByRole('button', {
+        name: 'documents.permanentDelete',
+      }),
+    );
+
+    await waitFor(() => {
+      expect(mockShowToast).toHaveBeenCalledWith(
+        'documents.deleteError',
+        'error',
+      );
+    });
+    expect(documentsApi.delete).not.toHaveBeenCalled();
+  });
+});
