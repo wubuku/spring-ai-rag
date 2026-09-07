@@ -1188,3 +1188,15 @@
   `?? '—'` 占位，断言需避免全页 '—' 唯一性假设。
 - 指标：Dashboard.tsx **100%/100%/100%/100%**（语句/分支/函数/行）；
   前端全量 537 绿。
+
+### Batch 157（已交付）
+
+- 分支：`test/core-usage-repo-batch157-20260908`（已合入 main）
+- 内容：LlmUsageRepository 加固（复用 Batch 155 的 JdbcTemplate
+  桩子类模式，本批变体为捕获 PreparedStatementSetter 回放到 mock
+  PreparedStatement），新增 6 用例：24 列插入绑定逐项验证、
+  setQueryTimeout 毫秒→秒向上取整（含 1s 下限）、ON CONFLICT 幂等
+  冲突返回 false、null 事件不触库、deleteExpired 参数绑定与非法
+  入参短路。金额断言按构造器 SCALE=8 归一化值（BigDecimal.equals
+  含 scale）。
+- 指标：core 全量 3731 → **3737** 绿。
