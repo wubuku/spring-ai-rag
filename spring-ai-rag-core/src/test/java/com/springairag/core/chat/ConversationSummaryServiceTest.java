@@ -315,6 +315,59 @@ class ConversationSummaryServiceTest {
         return new ChatResponse(
                 List.of(new Generation(new AssistantMessage(text))),
                 ChatResponseMetadata.builder().build());
+
+}
+
+    @Test
+    void loadMapsTheSummaryRowIntoASnapshot() {
+        when(summaryRepository.find(any(), eq("session-1"))).thenReturn(
+                Optional.of(new RagChatMemorySummaryRepository.SummaryRow(
+                        4, 21, "summary text", "test/model", 64,
+                        LocalDateTime.now().toInstant(java.time.ZoneOffset.UTC))));
+
+        Optional<ConversationSummaryService.SummarySnapshot> snapshot =
+                service.load(principal, "session-1");
+
+        assertTrue(snapshot.isPresent());
+        assertEquals(4, snapshot.get().version());
+        assertEquals(21, snapshot.get().summarizedThroughHistoryId());
+        assertEquals("summary text", snapshot.get().text());
+        assertEquals(64, snapshot.get().estimatedTokens());
+        assertEquals("test/model", snapshot.get().modelRef());
     }
 
+    @Test
+    void loadReturnsEmptyWhenNoSummaryExists() {
+        assertTrue(service.load(principal, "session-1").isEmpty());
+    }
+
+    @Test
+    void promptTextHandlesNullEmptyAndBlankSummaries() {
+        assertEquals("", service.promptText(null));
+        assertEquals("", service.promptText(Optional.empty()));
+        assertEquals("", service.promptText(Optional.of(
+                new ConversationSummaryService.SummarySnapshot(1, 1, "   ", 1, "m"))));
+    }
+
+    @Test
+    void promptTextWrapsNonBlankSummaryTextWithPrefixAndSuffix() {
+        String text = service.promptText(Optional.of(
+                new ConversationSummaryService.SummarySnapshot(1, 1, "  keeps goals  ", 8, "m")));
+
+        // 摘要正文被 trim 且夹在前缀与后缀之间（不在开头或结尾）。
+        assertTrue(text.contains("keeps goals"));
+        assertTrue(text.indexOf("keeps goals") > 0);
+        assertTrue(text.length() > "keeps goals".length());
+        // 相同输入输出稳定。
+        assertEquals(text, service.promptText(Optional.of(
+                new ConversationSummaryService.SummarySnapshot(1, 1, "keeps goals", 8, "m"))));
+    }
+
+    @Test
+    void clearDelegatesToTheSummaryRepository() {
+        when(summaryRepository.delete(any(), eq("session-1"))).thenReturn(1);
+
+        assertEquals(1, service.clear(principal, "session-1"));
+        verify(summaryRepository).delete(principal, "session-1");
+    }
 }
