@@ -556,3 +556,114 @@ describe('Files upload and pointer resize', () => {
     expect(splitter).toHaveAttribute('aria-valuenow', '240');
   });
 });
+
+describe('Files tree rendering: icons, sizes and unsafe paths', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    window.sessionStorage.clear();
+    window.history.replaceState({}, '', '/webui/files');
+    (filesApi.triggerEmbedding as ReturnType<typeof vi.fn>).mockResolvedValue({});
+    mockUseQuery.mockImplementation((options: { queryKey: unknown[] }) => {
+      if (options.queryKey[0] === 'files-collections') {
+        return { data: { data: { collections: [] } } };
+      }
+      const path = String(options.queryKey[1] ?? '');
+      return {
+        data: {
+          data: {
+            path,
+            entries: path
+              ? []
+              : [
+                  {
+                    name: 'doc.pdf',
+                    path: 'doc.pdf',
+                    type: 'file',
+                    mimeType: 'application/pdf',
+                    size: 512,
+                    createdAt: '2026-08-16T09:00:00Z',
+                  },
+                  {
+                    name: 'photo.png',
+                    path: 'photo.png',
+                    type: 'file',
+                    mimeType: 'image/png',
+                    size: 2048,
+                    createdAt: '2026-08-16T09:00:00Z',
+                  },
+                  {
+                    name: 'data.json',
+                    path: 'data.json',
+                    type: 'file',
+                    mimeType: 'application/json',
+                    size: 3145728,
+                    createdAt: '2026-08-16T09:00:00Z',
+                  },
+                  {
+                    name: 'archive.bin',
+                    path: 'archive.bin',
+                    type: 'file',
+                    mimeType: 'application/octet-stream',
+                    size: 100,
+                    createdAt: '2026-08-16T09:00:00Z',
+                  },
+                ],
+            total: path ? 0 : 4,
+          },
+        },
+        isPending: false,
+        error: null,
+        refetch: vi.fn(),
+      };
+    });
+  });
+
+  it('renders mime-specific icons and human readable sizes', () => {
+    renderFiles();
+
+    expect(screen.getByText('doc.pdf')).toBeInTheDocument();
+    // FileIcon：pdf 📄 / image 🖼️ / json+text 📝 / 其他 📎。
+    expect(screen.getByText('📄')).toBeInTheDocument();
+    expect(screen.getByText('🖼️')).toBeInTheDocument();
+    expect(screen.getByText('📝')).toBeInTheDocument();
+    expect(screen.getByText('📎')).toBeInTheDocument();
+    // formatSize：<1KB B、<1MB KB、≥1MB MB。
+    expect(screen.getByText('512 B')).toBeInTheDocument();
+    expect(screen.getByText('2.0 KB')).toBeInTheDocument();
+    expect(screen.getByText('3.0 MB')).toBeInTheDocument();
+  });
+
+  it('rejects deep links with backslashes or control characters', () => {
+    window.history.replaceState(
+      {},
+      '',
+      '/webui/files?path=bad%5Cpath',
+    );
+    const { unmount } = renderFiles();
+    expect(screen.getByTitle('files.root')).toBeInTheDocument();
+    unmount();
+
+    window.history.replaceState(
+      {},
+      '',
+      '/webui/files?path=bad%01dir',
+    );
+    renderFiles();
+    expect(screen.getByTitle('files.root')).toBeInTheDocument();
+  });
+
+  it('strips leading slashes from deep-linked directories', () => {
+    window.history.replaceState(
+      {},
+      '',
+      '/webui/files?path=%2Fsample-pdf%2F',
+    );
+
+    renderFiles();
+
+    // 归一化后进入 sample-pdf/ 目录：面包屑出现该层级（根目录下没有）。
+    expect(
+      screen.getAllByText('sample-pdf').length,
+    ).toBeGreaterThanOrEqual(1);
+  });
+});
