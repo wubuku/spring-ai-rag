@@ -755,3 +755,94 @@ describe('Files resizer guards, keyboard extremes and selection', () => {
     ).not.toBeNull();
   });
 });
+
+describe('Files upload area, breadcrumbs and nested navigation', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    window.sessionStorage.clear();
+    window.history.replaceState({}, '', '/webui/files');
+    (filesApi.triggerEmbedding as ReturnType<typeof vi.fn>).mockResolvedValue({});
+    mockUseQuery.mockImplementation((options: { queryKey: unknown[] }) => {
+      if (options.queryKey[0] === 'files-collections') {
+        return { data: { data: { collections: [] } } };
+      }
+      const path = String(options.queryKey[1] ?? '');
+      const entries = path === 'folder/'
+        ? [{
+            name: 'inner',
+            path: 'folder/inner/',
+            type: 'directory',
+            mimeType: null,
+            size: 0,
+            createdAt: '2026-08-17T09:00:00Z',
+          }]
+        : [{
+            name: 'folder',
+            path: 'folder/',
+            type: 'directory',
+            mimeType: null,
+            size: 0,
+            createdAt: '2026-08-16T09:00:00Z',
+          }];
+      return {
+        data: { data: { path, entries, total: entries.length } },
+        isPending: false,
+        error: null,
+        refetch: vi.fn(),
+      };
+    });
+  });
+
+  it('toggles the drag-over state on the upload area via drag events', () => {
+    renderFiles();
+    // 上传区的可访问名来自内容，title 属性仅作提示，按属性直接定位。
+    const uploadArea = document.querySelector(
+      '[title="files.uploadTitle"]',
+    ) as HTMLElement;
+
+    // dragOver 置位高亮，dragLeave 复位。
+    fireEvent.dragOver(uploadArea);
+    expect(uploadArea.className).toContain('dragOver');
+    fireEvent.dragLeave(uploadArea);
+    expect(uploadArea.className).not.toContain('dragOver');
+  });
+
+  it('opens the file picker from keyboard activation of the upload area', () => {
+    renderFiles();
+    const uploadArea = document.querySelector(
+      '[title="files.uploadTitle"]',
+    ) as HTMLElement;
+
+    // 隐藏的 file input 点击在 jsdom 下为 no-op，但不得抛错。
+    expect(() => {
+      fireEvent.keyDown(uploadArea, { key: 'Enter' });
+      fireEvent.keyDown(uploadArea, { key: ' ' });
+    }).not.toThrow();
+  });
+
+  it('navigates nested directories via the breadcrumb trail', async () => {
+    const user = userEvent.setup();
+    renderFiles();
+    const folderEntry = await screen.findByText('folder');
+    fireEvent.doubleClick(folderEntry);
+
+    // 进入 folder/ 后面包屑出现 inner 层级。
+    const innerCrumb = await screen.findByText('inner');
+    await user.click(innerCrumb.closest('button')!);
+
+    // 点击根层级面包屑回到根目录。
+    await user.click(screen.getByTitle('files.root'));
+    expect(await screen.findByText('folder')).toBeInTheDocument();
+  });
+
+  it('ignores an empty file selection on the pdf input', () => {
+    renderFiles();
+    const inputs = document.querySelectorAll('input[type="file"]');
+    const pdfInput = Array.from(inputs).find(
+      input => input.accept === '.pdf',
+    ) as HTMLInputElement;
+
+    expect(() => fireEvent.change(pdfInput, { target: { files: [] } }))
+      .not.toThrow();
+  });
+});
