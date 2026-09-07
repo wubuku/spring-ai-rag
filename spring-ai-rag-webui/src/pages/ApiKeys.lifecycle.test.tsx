@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor, within, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiKeys } from './ApiKeys';
@@ -328,5 +328,231 @@ describe('ApiKeys create modal with quota and clipboard', () => {
     expect(
       (await screen.findAllByText('apiKeys.defaultQuota')).length,
     ).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe('ApiKeys rotate and edit modal internals', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.listPrincipals.mockResolvedValue({ data: [makePrincipal()] });
+    mocks.listCollections.mockResolvedValue({
+      data: {
+        collections: [
+          { id: 1, collectionKey: 'kb', name: 'Knowledge Base', enabled: true },
+        ],
+      },
+    });
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText: mocks.writeText },
+      configurable: true,
+    });
+    mocks.writeText.mockResolvedValue(undefined);
+  });
+
+  async function openRotateModal() {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('Main Principal');
+    await user.click(screen.getByRole('button', { name: 'apiKeys.rotate' }));
+    return user;
+  }
+
+  async function openEditModal() {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('Main Principal');
+    await user.click(
+      screen.getByRole('button', { name: 'apiKeys.editPolicy' }),
+    );
+    await screen.findByLabelText('apiKeys.name *');
+    return user;
+  }
+
+  it('disables prepare while the overlap window is invalid or empty', async () => {
+    mocks.prepareRotation.mockResolvedValue({
+      data: {
+        rotationId: 'rot-1',
+        status: 'PENDING',
+        principalId: 'rag_p_main',
+        keyId: 'rag_k_v2',
+        credentialVersion: 2,
+        rawKey: null,
+        secretAvailable: false,
+        idempotentReplay: false,
+        currentCredentialActive: true,
+        rotationPending: true,
+        retiringCredentialId: 'rag_k_main_v1',
+        retiringCredentialVersion: 1,
+        overlapSeconds: 900,
+      },
+    });
+    const user = await openRotateModal();
+    const overlap = screen.getByLabelText('apiKeys.overlapSeconds') as HTMLInputElement;
+    const prepareBtn = () =>
+      screen.getByRole('button', { name: 'apiKeys.prepareRotation' }) as HTMLButtonElement;
+
+    // 越界（0）与空值都会禁用按钮——UI 层是第一道防线。
+    await user.clear(overlap);
+    await user.type(overlap, '0');
+    expect(prepareBtn()).toBeDisabled();
+    await user.clear(overlap);
+    expect(prepareBtn()).toBeDisabled();
+    expect(mocks.prepareRotation).not.toHaveBeenCalled();
+
+    // 合法重叠窗口恢复可用并发出 prepare。
+    await user.type(overlap, '900');
+    expect(prepareBtn()).toBeEnabled();
+    await user.click(prepareBtn());
+    await waitFor(() => {
+      expect(mocks.prepareRotation).toHaveBeenCalledWith(
+        'rag_k_main_v1',
+        900,
+        expect.any(String),
+      );
+    });
+  });
+
+  it('runs an immediate rotation and copies the shown-once raw key', async () => {
+    const user = userEvent.setup();
+    const writeSpy = vi
+      .spyOn(navigator.clipboard, 'writeText')
+      .mockResolvedValue(undefined);
+    mocks.rotateKey.mockResolvedValue({
+      data: {
+        keyId: 'rag_k_imm_v1',
+        principalId: 'rag_p_main',
+        credentialVersion: 2,
+        policyVersion: 1,
+        rawKey: 'rag_sk_imm_raw',
+        name: 'Main Principal',
+        capabilities: ['RAG_READ'],
+        warning: 'shown once',
+      },
+    });
+
+    await openRotateModal();
+    fireEvent.click(screen.getAllByRole('radio')[1]);
+    await user.click(
+      screen.getByRole('button', { name: 'apiKeys.rotateImmediately' }),
+    );
+
+    expect(await screen.findByText('rag_sk_imm_raw')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'apiKeys.copy' }));
+    await waitFor(() => {
+      expect(writeSpy).toHaveBeenCalledWith('rag_sk_imm_raw');
+      expect(mocks.showToast).toHaveBeenCalledWith('apiKeys.copied', 'success');
+    });
+  });
+
+  it('surfaces an immediate rotation failure through formatMutationError', async () => {
+    const user = userEvent.setup();
+    mocks.rotateKey.mockRejectedValue(new Error('credential active'));
+
+    await openRotateModal();
+    fireEvent.click(screen.getAllByRole('radio')[1]);
+    await user.click(
+      screen.getByRole('button', { name: 'apiKeys.rotateImmediately' }),
+    );
+
+    await waitFor(() => {
+      expect(mocks.showToast).toHaveBeenCalledWith(
+        'apiKeys.rotateError: credential active',
+        'error',
+      );
+    });
+  });
+
+  it('submits a policy CAS update and toasts success', async () => {
+    const user = await openEditModal();
+    mocks.updatePolicy.mockResolvedValue({ data: {} });
+
+    fireEvent.change(document.querySelector('#policy-name')!, {
+      target: { value: 'Renamed Principal' },
+    });
+    await user.click(screen.getByRole('button', { name: 'common.save' }));
+
+    await waitFor(() => {
+      expect(mocks.updatePolicy).toHaveBeenCalledWith(
+        'rag_p_main',
+        expect.objectContaining({
+          expectedPolicyVersion: 1,
+          name: 'Renamed Principal',
+        }),
+      );
+      expect(mocks.showToast).toHaveBeenCalledWith(
+        'apiKeys.policyUpdated',
+        'success',
+      );
+    });
+  });
+
+  it('surfaces the policy update error toast when the CAS fails', async () => {
+    const user = await openEditModal();
+    mocks.updatePolicy.mockRejectedValue(new Error('version conflict'));
+
+    await user.click(screen.getByRole('button', { name: 'common.save' }));
+
+    await waitFor(() => {
+      expect(mocks.showToast).toHaveBeenCalledWith(
+        'apiKeys.policyUpdateError: version conflict',
+        'error',
+      );
+    });
+  });
+
+  it('restricts collection access and toggles a collection off again', async () => {
+    const user = await openEditModal();
+    mocks.updatePolicy.mockResolvedValue({ data: {} });
+
+    // 编辑模态的 scope 单选组名为 policyCollectionScope，第二枚为限定集合。
+    const scopeRadios = document.querySelectorAll(
+      'input[name="policyCollectionScope"]',
+    );
+    fireEvent.click(scopeRadios[1]);
+    const checkbox = await screen.findByRole('checkbox');
+    // 勾选 → 移除 → 再勾选：toggleCollection 两个分支都走到。
+    await user.click(checkbox);
+    await user.click(checkbox);
+    await user.click(checkbox);
+
+    fireEvent.change(document.querySelector('#policy-name')!, {
+      target: { value: 'scoped' },
+    });
+    await user.click(screen.getByRole('button', { name: 'common.save' }));
+
+    await waitFor(() => {
+      expect(mocks.updatePolicy).toHaveBeenCalledWith(
+        'rag_p_main',
+        expect.objectContaining({ name: 'scoped' }),
+      );
+    });
+  });
+
+  it('surfaces the complete rotation error through formatMutationError', async () => {
+    const user = userEvent.setup();
+    mocks.listPrincipals.mockResolvedValue({
+      data: [
+        makePrincipal({
+          rotationPending: true,
+          pendingRotationId: 'rot-err-1',
+          retiringCredentialId: 'rag_k_main_v1',
+          retiringCredentialVersion: 1,
+          rotationExpiresAt: '2026-09-10T08:00:00',
+        }),
+      ],
+    });
+    mocks.completeRotation.mockRejectedValue(new Error('lease lost'));
+
+    renderPage();
+    await user.click(
+      await screen.findByRole('button', { name: 'apiKeys.completeRotation' }),
+    );
+
+    await waitFor(() => {
+      expect(mocks.showToast).toHaveBeenCalledWith(
+        'apiKeys.rotationCompleteError: lease lost',
+        'error',
+      );
+    });
   });
 });
