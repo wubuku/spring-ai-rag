@@ -1516,3 +1516,15 @@ VersionHistoryModal 相关 100% 项等。
   （201-213，跳转卸载 Search 需两次渲染分证）。
 - 指标：Search.tsx 行覆盖 91.57% → **100%**，函数 100%；前端全量
   601 绿，行覆盖 96.08%。
+
+### Batch 187（已交付）
+
+- 分支：`test/webui-docs-guards-batch187-20260908`（已合入 main）
+- 内容：Documents 守卫与 provenance 失败路径，新增 3 用例：
+  restoreVersion 拒绝时 versions.restoreError toast、缺
+  documentRevision 守卫经 deleteError 呈现且不触 API、
+  onOpenOriginalFile 失败经 toast 报 openOriginalPdfError（provenance
+  文件 Toast mock 升级为可断言 spy）。MetricsCharts 残余为 v8 映射
+  盲区（JSX 条件两侧均已由既有用例执行）。
+- 指标：Documents.tsx 行覆盖 93.02% → **95.34%**；前端全量 604 绿，
+  行覆盖 96.27%。
