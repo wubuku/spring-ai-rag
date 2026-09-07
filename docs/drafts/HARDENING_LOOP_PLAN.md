@@ -1282,3 +1282,15 @@
   ApiKeyProvisioningFingerprint（确定性 64 位摘要、角色/名称隔离、
   canonicalJson 的 ISO 日期与集合去重排序、空集合 null 语义）。
 - 指标：core 全量 3761 → **3771** 绿。
+
+### Batch 165（已交付）
+
+- 分支：`test/core-config-defaults-batch165-20260908`（已合入 main）
+- 内容：配置默认值契约锁定，新增 ConfigurationDefaultsTest（8
+  用例）：RagStructuredRecordProperties（10 项上限/开关默认）、
+  RagEvaluationProperties（托管套件默认关闭、引用校验默认开启等 7
+  项）、RagRetrievalDiagnosticsProperties（默认采集+持久化、7 天
+  保留、不存查询文本等 6 项）、RagDocumentLifecycleProperties
+  （严格 CAS 默认开启、syncRuns/versionRestore/relocation/
+  derivationRepair 四特性默认关闭等 9 项）及 setter 往返。
+- 指标：core 全量 3771 → **3779** 绿。
