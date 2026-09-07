@@ -1575,3 +1575,13 @@ VersionHistoryModal 相关 100% 项等。
   ChatPrincipal.from 推导 db principal，AuthenticatedApiPrincipal
   承载受限 allowList。
 - 指标：core 全量 3845 → **3853** 绿。
+
+### Batch 193（已交付）
+
+- 分支：`test/core-turn-ops-batch193-20260908`（已合入 main）
+- 内容：ChatTurnOperationService 查漏，新增 5 用例：IN_PROGRESS
+  claim 无租约时 fail 经 completeFailure 落 INTERNAL_ERROR 快照、
+  RagException 错误码透传、unkeyed/终态 claim 静默、status 查无
+  turn 抛 CHAT_TURN_NOT_FOUND、SUCCEEDED + includeResponse 经
+  verifyReplay 标记 replayAvailable 并反序列化缓存响应。
+- 指标：core 全量 3845 → **3858** 绿。
