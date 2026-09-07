@@ -267,3 +267,162 @@ describe('Settings persistence and model fallback branches', () => {
     });
   });
 });
+
+describe('Settings model loading, tabs and numeric fallbacks', () => {
+  const renderSettings = () => render(
+    <MemoryRouter>
+      <Settings />
+    </MemoryRouter>,
+  );
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorageMock.getItem.mockReturnValue(null);
+    (modelsApi.list as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: {
+        multiModelEnabled: true,
+        defaultProvider: 'minimax',
+        defaultModel: 'minimax/MiniMax-M2.7',
+        availableProviders: ['minimax', 'openrouter'],
+        fallbackChain: [],
+        models: [
+          {
+            ref: 'minimax/MiniMax-M2.7',
+            provider: 'minimax',
+            providerName: 'MiniMax',
+            modelId: 'MiniMax-M2.7',
+            name: 'MiniMax M2.7',
+            apiType: 'anthropic-messages',
+            available: true,
+          },
+          {
+            ref: 'openrouter/xiaomi/mimo-v2-pro',
+            provider: 'openrouter',
+            providerName: 'OpenRouter',
+            modelId: 'xiaomi/mimo-v2-pro',
+            name: 'MiMo V2 Pro',
+            apiType: 'openai-completions',
+            available: true,
+          },
+        ],
+      },
+    });
+  });
+
+  it('filters unavailable models but keeps the default selection', async () => {
+    (modelsApi.list as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: {
+        multiModelEnabled: true,
+        defaultProvider: 'minimax',
+        defaultModel: 'minimax/MiniMax-M2.7',
+        availableProviders: ['minimax'],
+        fallbackChain: [],
+        models: [
+          {
+            ref: 'minimax/MiniMax-M2.7',
+            provider: 'minimax',
+            providerName: 'MiniMax',
+            modelId: 'MiniMax-M2.7',
+            name: 'MiniMax M2.7',
+            apiType: 'anthropic-messages',
+            available: true,
+          },
+          {
+            ref: 'openrouter/machine/unavailable',
+            provider: 'openrouter',
+            providerName: 'OpenRouter',
+            modelId: 'machine/unavailable',
+            name: 'Unavailable Model',
+            apiType: 'openai-completions',
+            available: false,
+          },
+        ],
+      },
+    });
+
+    renderSettings();
+
+    const modelSelect = await screen.findByTestId('settings-model-select') as HTMLSelectElement;
+    await waitFor(() => {
+      expect(modelSelect.value).toBe('minimax/MiniMax-M2.7');
+    });
+    // 模型下拉只包含 available 的模型。
+    expect(
+      Array.from(modelSelect.options).map(option => option.value),
+    ).toEqual(['minimax/MiniMax-M2.7']);
+    expect(screen.getByText('settings.availableProvider')).toBeInTheDocument();
+  });
+
+  it('flags the provider hint when the model list fails to load', async () => {
+    (modelsApi.list as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error('boom'),
+    );
+
+    renderSettings();
+
+    expect(
+      await screen.findByText('settings.modelsLoadError'),
+    ).toBeInTheDocument();
+  });
+
+  it('switches language from the language tab and persists the choice', async () => {
+    const user = userEvent.setup();
+    renderSettings();
+
+    await user.click(screen.getByRole('button', { name: 'Language' }));
+    await user.click(screen.getByRole('button', { name: /中文/ }));
+
+    expect(localStorageMock.setItem).toHaveBeenCalledWith('language', 'zh-CN');
+  });
+
+  it('edits retrieval weights and applies integer fallbacks', async () => {
+    const user = userEvent.setup();
+    renderSettings();
+
+    await user.click(screen.getByRole('button', { name: /settings\.retrieval/i }));
+
+    // 语义权重与全文权重两个滑块，按文档顺序取第二个（fulltextWeight）。
+    const sliders = screen.getAllByRole('slider') as HTMLInputElement[];
+    const slider = sliders[sliders.length - 1];
+    fireEvent.change(slider, { target: { value: '0.3' } });
+    expect(screen.getByText('0.3')).toBeInTheDocument();
+
+    const topK = screen.getByLabelText('settings.topK') as HTMLInputElement;
+    fireEvent.change(topK, { target: { value: '25' } });
+    expect(topK.value).toBe('25');
+    fireEvent.change(topK, { target: { value: '' } });
+    expect(topK.value).toBe('10');
+
+    const rerankTopK = screen.getByLabelText('settings.rerankTopK') as HTMLInputElement;
+    fireEvent.change(rerankTopK, { target: { value: '12' } });
+    expect(rerankTopK.value).toBe('12');
+    fireEvent.change(rerankTopK, { target: { value: '' } });
+    expect(rerankTopK.value).toBe('5');
+  });
+
+  it('toggles cache settings and applies fallback defaults', async () => {
+    const user = userEvent.setup();
+    renderSettings();
+
+    await user.click(screen.getByRole('button', { name: /settings\.cache/i }));
+
+    const checkbox = screen.getByRole('checkbox') as HTMLInputElement;
+    expect(checkbox).toBeChecked();
+    const ttl = screen.getByLabelText('settings.ttlMinutes') as HTMLInputElement;
+    const maxSize = screen.getByLabelText('settings.maxSize') as HTMLInputElement;
+    expect(ttl).toBeEnabled();
+    expect(maxSize).toBeEnabled();
+
+    // 关闭缓存后数值输入禁用。
+    await user.click(checkbox);
+    expect(ttl).toBeDisabled();
+    expect(maxSize).toBeDisabled();
+
+    // 重新开启并清空输入，回退到默认值。
+    await user.click(checkbox);
+    fireEvent.change(ttl, { target: { value: '' } });
+    expect(ttl.value).toBe('60');
+    fireEvent.change(maxSize, { target: { value: '' } });
+    expect(maxSize.value).toBe('1000');
+  });
+});
