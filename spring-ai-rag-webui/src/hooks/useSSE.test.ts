@@ -511,3 +511,191 @@ describe('useChatSSE', () => {
     expect(cancelCount).toBeGreaterThanOrEqual(1);
   });
 });
+
+describe('useChatSSE streaming retries and replay identity', () => {
+  const TURN_A = '22222222-2222-4222-8222-222222222222';
+  const TURN_B = '33333333-3333-4333-8333-333333333333';
+  let mockFetch: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    clearCredential();
+    mockFetch = vi.fn();
+    vi.stubGlobal('fetch', mockFetch);
+  });
+
+  afterEach(() => {
+    clearCredential();
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
+  // 构造带指定 turn id 头的 SSE 流响应；done 载荷需显式携带同一 turnId。
+  const streamResponse = (turnId: string, chunks: string[]) => {
+    let index = 0;
+    const stream = new ReadableStream({
+      pull(controller) {
+        if (index < chunks.length) {
+          controller.enqueue(new TextEncoder().encode(chunks[index++]));
+        } else {
+          controller.close();
+        }
+      },
+    });
+    return {
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'X-RAG-Turn-Id': turnId }),
+      body: stream,
+    };
+  };
+
+  const doneChunk = (turnId: string) =>
+    `event: done\ndata: {"status":"complete","turnId":"${turnId}"}\n\n`;
+
+  it('retries when the response has no body and then streams normally', async () => {
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'X-RAG-Turn-Id': TURN_A }),
+      })
+      .mockResolvedValueOnce(streamResponse(TURN_A, [doneChunk(TURN_A)]));
+    const onRetry = vi.fn();
+    const onDone = vi.fn();
+    const onError = vi.fn();
+    const { result } = renderHook(() => useChatSSE({ onRetry, onDone, onError }));
+
+    await act(async () => {
+      result.current.send('Hello');
+    });
+
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(onRetry).toHaveBeenCalledTimes(1);
+    expect(onDone).toHaveBeenCalledTimes(1);
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it('rejects a turn identity change between retry attempts', async () => {
+    mockFetch
+      .mockResolvedValueOnce(streamResponse(TURN_A, [
+        'data: {"type":"chunk","content":"partial"}\n\n',
+      ]))
+      .mockResolvedValueOnce(streamResponse(TURN_B, [doneChunk(TURN_B)]));
+    const onRetry = vi.fn();
+    const onDone = vi.fn();
+    const onError = vi.fn();
+    const { result } = renderHook(() => useChatSSE({ onRetry, onDone, onError }));
+
+    await act(async () => {
+      result.current.send('Hello');
+    });
+
+    // 第一次流在 done 事件前结束（可重试），第二次换了 turn 身份（拒绝）。
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(onRetry).toHaveBeenCalledTimes(1);
+    expect(onError).toHaveBeenCalledWith(
+      'Chat turn identity changed during retry',
+      expect.objectContaining({ message: 'Chat turn identity changed during retry' }),
+    );
+    expect(onDone).not.toHaveBeenCalled();
+  });
+
+  it('rejects a replay whose done event carries a different turn id', async () => {
+    mockFetch.mockResolvedValueOnce(streamResponse(TURN_A, [
+      doneChunk(TURN_B),
+    ]));
+    const onDone = vi.fn();
+    const onError = vi.fn();
+    const { result } = renderHook(() => useChatSSE({ onDone, onError }));
+
+    await act(async () => {
+      result.current.send('Hello');
+    });
+
+    expect(onError).toHaveBeenCalledWith(
+      'Chat turn identity changed during replay',
+      expect.objectContaining({ message: 'Chat turn identity changed during replay' }),
+    );
+    expect(onDone).not.toHaveBeenCalled();
+  });
+
+  it('waits for the bounded Retry-After duration between attempts', async () => {
+    vi.useFakeTimers();
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 429,
+        headers: new Headers({ 'Retry-After': '2' }),
+      })
+      .mockResolvedValueOnce(streamResponse(TURN_A, [doneChunk(TURN_A)]));
+    const onRetry = vi.fn();
+    const onDone = vi.fn();
+    const onError = vi.fn();
+    const { result } = renderHook(() => useChatSSE({ onRetry, onDone, onError }));
+
+    let sendPromise!: Promise<void>;
+    act(() => {
+      sendPromise = Promise.resolve(result.current.send({ message: 'Limited' }));
+    });
+    // 第一次尝试已失败并进入退避等待。
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2500);
+    });
+    await act(async () => {
+      await sendPromise;
+    });
+
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(onRetry).toHaveBeenCalledTimes(1);
+    expect(onDone).toHaveBeenCalledTimes(1);
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it('retries immediately when Retry-After is not a positive number', async () => {
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 429,
+        headers: new Headers({ 'Retry-After': 'soon' }),
+      })
+      .mockResolvedValueOnce(streamResponse(TURN_A, [doneChunk(TURN_A)]));
+    const onRetry = vi.fn();
+    const onDone = vi.fn();
+    const { result } = renderHook(() => useChatSSE({ onRetry, onDone }));
+
+    await act(async () => {
+      result.current.send('Hello');
+    });
+
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(onRetry).toHaveBeenCalledTimes(1);
+    expect(onDone).toHaveBeenCalledTimes(1);
+  });
+
+  it('skips comment lines, empty blocks and non-JSON events', async () => {
+    mockFetch.mockResolvedValueOnce(streamResponse(TURN_A, [
+      '\n\ndata: not-json\n\n',
+      ': keep-alive\nevent: content\ndata: {"content":"after ping"}\n\n',
+      doneChunk(TURN_A),
+    ]));
+    const onChunk = vi.fn();
+    const onDone = vi.fn();
+    const onError = vi.fn();
+    const { result } = renderHook(() => useChatSSE({ onChunk, onDone, onError }));
+
+    await act(async () => {
+      result.current.send('Hello');
+    });
+
+    expect(onChunk).toHaveBeenCalledTimes(1);
+    expect(onChunk).toHaveBeenCalledWith('after ping');
+    expect(onDone).toHaveBeenCalledTimes(1);
+    expect(onError).not.toHaveBeenCalled();
+  });
+});
