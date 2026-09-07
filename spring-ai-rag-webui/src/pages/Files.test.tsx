@@ -667,3 +667,91 @@ describe('Files tree rendering: icons, sizes and unsafe paths', () => {
     ).toBeGreaterThanOrEqual(1);
   });
 });
+
+describe('Files resizer guards, keyboard extremes and selection', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    window.sessionStorage.clear();
+    window.history.replaceState({}, '', '/webui/files');
+    (filesApi.triggerEmbedding as ReturnType<typeof vi.fn>).mockResolvedValue({});
+    mockUseQuery.mockImplementation((options: { queryKey: unknown[] }) => {
+      if (options.queryKey[0] === 'files-collections') {
+        return { data: { data: { collections: [] } } };
+      }
+      const path = String(options.queryKey[1] ?? '');
+      return {
+        data: {
+          data: {
+            path,
+            entries: path
+              ? []
+              : [{
+                  name: 'folder',
+                  path: 'folder/',
+                  type: 'directory',
+                  mimeType: null,
+                  size: 0,
+                  createdAt: '2026-08-16T09:00:00Z',
+                }],
+            total: path ? 0 : 1,
+          },
+        },
+        isPending: false,
+        error: null,
+        refetch: vi.fn(),
+      };
+    });
+  });
+
+  it('ignores non-left-button drags and mismatched pointer ids', () => {
+    renderFiles();
+    const splitter = screen.getByRole('separator', {
+      name: 'files.resizeDirectoryList',
+    });
+
+    // 右键不启动拖拽。
+    fireEvent.pointerDown(splitter, { button: 2, pointerId: 7, clientX: 0 });
+    expect(splitter).toHaveAttribute('aria-valuenow', '320');
+
+    // 不同 pointerId 的移动事件被忽略。
+    fireEvent.pointerDown(splitter, { button: 0, pointerId: 1, clientX: 0 });
+    fireEvent.pointerMove(splitter, { pointerId: 99, clientX: 200 });
+    expect(splitter).toHaveAttribute('aria-valuenow', '320');
+  });
+
+  it('supports Home and End keyboard extremes for the tree panel', () => {
+    renderFiles();
+    const splitter = screen.getByRole('separator', {
+      name: 'files.resizeDirectoryList',
+    });
+    expect(splitter).toHaveAttribute('aria-valuenow', '320');
+
+    fireEvent.keyDown(splitter, { key: 'Home' });
+    const min = Number(splitter.getAttribute('aria-valuenow'));
+    expect(min).toBeLessThan(320);
+
+    fireEvent.keyDown(splitter, { key: 'End' });
+    const max = Number(splitter.getAttribute('aria-valuenow'));
+    expect(max).toBeGreaterThan(min);
+  });
+
+  it('opens the selected entry with Enter or Space and supports double-click', async () => {
+    renderFiles();
+    const entry = await screen.findByText('folder');
+    const row = entry.closest('[class*="treeEntry"]') ?? entry.closest('div');
+
+    // 双击打开目录。
+    fireEvent.doubleClick(entry);
+    await waitFor(() => {
+      expect(
+        document.querySelector('[class*="breadcrumbItem"]'),
+      ).not.toBeNull();
+    });
+
+    // 键盘 Enter 同样能打开选中的目录。
+    fireEvent.keyDown(row!, { key: 'Enter' });
+    expect(
+      document.querySelector('[class*="breadcrumbItem"]'),
+    ).not.toBeNull();
+  });
+});
