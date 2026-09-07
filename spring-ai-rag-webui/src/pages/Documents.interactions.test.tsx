@@ -740,3 +740,225 @@ describe('Documents restore, delete and search flows', () => {
     });
   });
 })
+
+// ─── Mutation error toasts, guards and dialog dismissal (Batch 159) ──
+
+describe('Documents error fallbacks, revision guard and dialog dismissal', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(documentsApi.list).mockResolvedValue({
+      data: { documents: [LOCAL_DOC], total: 1 },
+    } as never);
+    vi.mocked(documentsApi.getEmbeddingStatus).mockResolvedValue({
+      data: {
+        totalDocuments: 1,
+        withEmbeddings: 1,
+        withoutEmbeddings: 0,
+        hasMissing: false,
+      },
+    } as never);
+    vi.mocked(collectionsApi.list).mockResolvedValue({
+      data: {
+        collections: [
+          { id: 10, collectionKey: 'target-col', name: 'Target', enabled: true },
+        ],
+        total: 1,
+      },
+    } as never);
+  });
+
+  async function openEditAndSubmit(user: ReturnType<typeof userEvent.setup>) {
+    renderDocuments();
+    await screen.findByText('Local Doc');
+    await user.click(
+      screen.getByRole('button', { name: 'documents.openActions' }),
+    );
+    await user.click(screen.getByRole('menuitem', { name: 'documents.edit' }));
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('Local Doc')).toBeInTheDocument();
+    });
+    await user.click(
+      within(screen.getByRole('dialog', { name: 'documents.editDocument' }))
+        .getByRole('button', { name: 'common.save' }),
+    );
+  }
+
+  it('surfaces the fallback update error toast for non-conflict failures', async () => {
+    const user = userEvent.setup();
+    vi.mocked(documentsApi.get).mockResolvedValue({
+      data: { ...LOCAL_DOC, content: 'loaded content' },
+    } as never);
+    vi.mocked(documentsApi.update).mockRejectedValue(
+      new Error('storage unavailable'),
+    );
+
+    await openEditAndSubmit(user);
+
+    await waitFor(() => {
+      expect(mockShowToast).toHaveBeenCalledWith(
+        'documents.updateError',
+        'error',
+      );
+    });
+  });
+
+  it('reports a missing revision guard through the update error toast', async () => {
+    const user = userEvent.setup();
+    vi.mocked(documentsApi.list).mockResolvedValue({
+      data: {
+        documents: [{ ...LOCAL_DOC, documentRevision: undefined }],
+        total: 1,
+      },
+    } as never);
+    vi.mocked(documentsApi.get).mockResolvedValue({
+      data: { ...LOCAL_DOC, documentRevision: undefined, content: 'x' },
+    } as never);
+
+    await openEditAndSubmit(user);
+
+    await waitFor(() => {
+      expect(mockShowToast).toHaveBeenCalledWith(
+        'documents.updateError',
+        'error',
+      );
+    });
+    expect(documentsApi.update).not.toHaveBeenCalled();
+  });
+
+  it('surfaces the restore error toast when restore fails', async () => {
+    const user = userEvent.setup();
+    vi.mocked(documentsApi.list).mockResolvedValue({
+      data: { documents: [{ ...LOCAL_DOC, enabled: false }], total: 1 },
+    } as never);
+    vi.mocked(documentsApi.restore).mockRejectedValue(new Error('busy'));
+
+    renderDocuments();
+    await screen.findByText('Local Doc');
+    await user.click(screen.getByRole('button', { name: 'documents.openActions' }));
+    await user.click(screen.getByRole('menuitem', { name: 'documents.restore' }));
+
+    await waitFor(() => {
+      expect(mockShowToast).toHaveBeenCalledWith(
+        'documents.restoreError',
+        'error',
+      );
+    });
+  });
+
+  it('surfaces the delete error toast when delete fails', async () => {
+    const user = userEvent.setup();
+    vi.mocked(documentsApi.delete).mockRejectedValue(new Error('referenced'));
+
+    renderDocuments();
+    await screen.findByText('Local Doc');
+    await user.click(screen.getByRole('button', { name: 'documents.openActions' }));
+    await user.click(
+      screen.getByRole('menuitem', { name: 'documents.permanentDelete' }),
+    );
+    const dialog = await screen.findByRole('dialog', {
+      name: 'documents.permanentDelete',
+    });
+    await user.click(
+      await within(dialog).findByRole('button', {
+        name: 'documents.permanentDelete',
+      }),
+    );
+
+    await waitFor(() => {
+      expect(mockShowToast).toHaveBeenCalledWith(
+        'documents.deleteError',
+        'error',
+      );
+    });
+  });
+
+  it('surfaces the embedding retry error toast when embed fails', async () => {
+    const user = userEvent.setup();
+    vi.mocked(documentsApi.list).mockResolvedValue({
+      data: {
+        documents: [{ ...LOCAL_DOC, embeddingFresh: false }],
+        total: 1,
+      },
+    } as never);
+    vi.mocked(documentsApi.embed).mockRejectedValue(new Error('queue down'));
+
+    renderDocuments();
+    await screen.findByText('Local Doc');
+    await user.click(screen.getByRole('button', { name: 'documents.openActions' }));
+    await user.click(
+      screen.getByRole('menuitem', { name: 'documents.retryEmbedding' }),
+    );
+
+    await waitFor(() => {
+      expect(mockShowToast).toHaveBeenCalledWith(
+        'documents.embeddingRetryError',
+        'error',
+      );
+    });
+  });
+
+  it('reports a detail load failure when opening the edit dialog', async () => {
+    const user = userEvent.setup();
+    vi.mocked(documentsApi.get).mockRejectedValue(new Error('gone'));
+
+    renderDocuments();
+    await screen.findByText('Local Doc');
+    await user.click(
+      screen.getByRole('button', { name: 'documents.openActions' }),
+    );
+    await user.click(screen.getByRole('menuitem', { name: 'documents.edit' }));
+
+    await waitFor(() => {
+      expect(mockShowToast).toHaveBeenCalledWith(
+        'documents.loadDetailError',
+        'error',
+      );
+    });
+  });
+
+  it('includes source and content edits in the update payload', async () => {
+    const user = userEvent.setup();
+    vi.mocked(documentsApi.get).mockResolvedValue({
+      data: {
+        ...LOCAL_DOC,
+        content: 'loaded content',
+        source: 'manual://v1',
+        collectionKey: 'target-col',
+      },
+    } as never);
+    vi.mocked(documentsApi.update).mockResolvedValue({} as never);
+
+    renderDocuments();
+    await screen.findByText('Local Doc');
+    await user.click(
+      screen.getByRole('button', { name: 'documents.openActions' }),
+    );
+    await user.click(screen.getByRole('menuitem', { name: 'documents.edit' }));
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('manual://v1')).toBeInTheDocument();
+    });
+
+    const source = screen.getByDisplayValue('manual://v1');
+    await user.clear(source);
+    await user.type(source, 'manual://v2');
+    const content = screen.getByDisplayValue('loaded content');
+    await user.clear(content);
+    await user.type(content, 'rewritten body');
+
+    await user.click(
+      within(screen.getByRole('dialog', { name: 'documents.editDocument' }))
+        .getByRole('button', { name: 'common.save' }),
+    );
+
+    await waitFor(() => {
+      expect(documentsApi.update).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({
+          source: 'manual://v2',
+          content: 'rewritten body',
+          collectionKey: 'target-col',
+        }),
+      );
+    });
+  });
+});
