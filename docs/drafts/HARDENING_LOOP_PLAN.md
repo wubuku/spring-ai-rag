@@ -928,3 +928,41 @@
 
 
 
+
+### Batch 138（已交付）
+
+- 分支：`test/noop-providers`（已合入 main = `e5477a57`）
+- 内容：`NoOpFulltextSearchProvider`（无 pg_trgm/pg_jieba 时的全文检索
+  降级策略）与 `NoOpRerankProvider`（按 ranking depth 截断原样返回）
+  零直接测试，补 6 用例：名称/可用性、两检索入口恒返回空、
+  rerank 深度内原样返回、超深截断保序、空/null 透传（null 按实现
+  语义断言）。core 全量 3659→3663 绿。
+- 注：fulltext 的 NoOp 测试此前已存在于 FulltextSearchProviderFactoryTest
+  嵌套类，本次去重。
+
+### Batch 139（最新进展留档，截至本批）
+
+**循环状态**：Batch 70 起持续迭代，后端 core 测试 3374→3672+，前端
+452→455 全绿，全仓行覆盖 87.2%+。
+
+**已收敛重点**：
+- 后端：Embedding Profile 三件套（Registry/IndexManager/Bootstrap）、
+  alertdelivery 全链路（Outbox/RepositoryGuards/DeliveryService/Worker/
+  Sanitizer/CursorCodec）、DocumentSyncRunService 七批 44 用例、
+  EmbeddingJobRepository 七批 27 用例、CollectionPurgeService 五面 25
+  用例、DocumentRelocationService、ApiPrincipalExpiryAlertService、
+  EvaluationSuiteRepository、KeywordIndexPersistenceService、
+  ChatTurnOperationRepository、IntegrationObservationRepository、
+  LlmUsageQueryRepository、LegacyEmbeddingMigrationService、
+  DerivationIntegritySnapshotFrom 分类矩阵、KeywordIndexSqlScope、
+  EmbeddingProfileSqlScope、CitationQueryAugmenter、
+  RetrievalEmptyReasonProbe、RetrievalDiagnosticsRetentionJob、
+  StaticKnowledgeChunk、RagUsageProperties/RagIntegrationObservability
+  Properties/RagRateLimitProperties 校验等。
+- 前端：Documents.tsx 81.9%、Files.tsx 84.8%、Settings.tsx 89.4%、
+  Evaluation.tsx 93.2%、Metrics.tsx 90%、Search.tsx 91.6%、Chat.tsx
+  89.7%、ABTest.tsx 73.7%、MetricsCharts 93.3%、embeddings.ts 88.9%、
+  apikeys.ts 100%、client.ts 95%。
+- 已知遗留：Documents.tsx provenance 页面级用例（jsdom 时序不稳定，
+  建议未来 Playwright e2e 补测）；EmbeddingJobRepository 深层 varargs
+  stub 两个用例暂缓（适合 Testcontainers 集成测试）。
