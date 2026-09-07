@@ -1232,3 +1232,14 @@
   0 且 repository 失败不上抛）、shutdown 后 async/sync 提交被
   AbortPolicy 拒绝并计入 lost（executor_rejected 分支）。
 - 指标：core 全量 3743 → **3748** 绿。
+
+### Batch 161（已交付）
+
+- 分支：`test/webui-docs-upload-batch161-20260908`（已合入 main）
+- 内容：Documents 剩余交互散点，新增 8 用例：文件选择转发
+  handleFiles + dragOver/dragLeave 样式复位、collection 过滤器清除、
+  分页 previous 回首、preview/versions 关闭按钮、relocate 取消不触
+  API、relocate 守卫（缺 sourceRevision）走 relocationErrors.DEFAULT
+  兜底、relocate 详情拉取失败报 loadDetailError。
+- 指标：Documents.tsx 行覆盖 86.04% → **93.02%**；前端全量 552 绿，
+  行覆盖 93.6%。
