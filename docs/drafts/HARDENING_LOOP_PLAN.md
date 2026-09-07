@@ -1841,3 +1841,14 @@
   core 全量 3643→3656 绿。
 - 证据：新测试 4/4 绿；core 全量 `Tests run: 3656, Failures: 0,
   Errors: 0, Skipped: 9`，BUILD SUCCESS。
+
+### Batch 129（已交付）
+
+- 分支：`test/documents-prov-props`（已合入 main = `abda598c`）
+- 内容：Documents 页 provenance 回调接线验证（组件 mock 捕获式）：
+  mock DocumentActionsMenu 捕获 props 后直接驱动 onViewIndexedFile
+  （路由参数拼装）与 onOpenOriginalFile（getRawFile → blob →
+  window.open noopener），绕开 jsdom 菜单弹出时序不稳定问题。
+  全仓行覆盖 87.82%。
+- 证据：`test:run` 455/455（59 文件）；`lint` 0 问题；`tsc -b` 绿；
+  `build` 绿。
