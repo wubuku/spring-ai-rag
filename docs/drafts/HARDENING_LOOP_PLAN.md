@@ -1435,3 +1435,13 @@
   族；进行中轮换 terminalAt 为 null）、AlertNotificationsAvailableEvent
   （无载荷标记事件，toString 含类型名）。
 - 指标：core 全量 → **3827** 绿。
+
+### Batch 180（已交付）
+
+- 分支：`test/webui-docs-api-batch180-20260908`（已合入 main）
+- 内容：documentsApi 全端点覆盖，documents.test.ts 3→9 用例：update
+  走 PATCH、embed 以 query param 传 force（body null）、batchEmbed、
+  uploadAndEmbed multipart 头、getVersions 分页、getVersion 单版本、
+  restoreVersion policy/visibility、relocate Idempotency-Key 头。
+- 指标：documents.ts 行覆盖 47.05% → **94.11%**，分支 100%；前端
+  全量 579 绿，行覆盖 95.34%。
