@@ -1200,3 +1200,14 @@
   入参短路。金额断言按构造器 SCALE=8 归一化值（BigDecimal.equals
   含 scale）。
 - 指标：core 全量 3731 → **3737** 绿。
+
+### Batch 158（已交付）
+
+- 分支：`test/core-retention-job-batch158-20260908`（已合入 main =
+  `895fca61`）
+- 内容：LlmUsageRetentionJob 加固，新增 6 用例：usage / cleanup
+  开关关闭时不触库、单批返回不足 batchSize 即提前终止
+  （500/500/120 三批）、达到 cleanup-max-batches 上限即停、
+  repository RuntimeException 被吞噬不上抛、cutoff 按 retentionDays
+  从当前时刻回推（ArgumentCaptor 断言时间窗口）。
+- 指标：core 全量 3737 → **3743** 绿。
