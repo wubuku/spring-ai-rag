@@ -1080,3 +1080,13 @@
   带前导斜杠目录深链归一化进入目标层级（面包屑断言）。
 - 指标：Files.tsx 行覆盖 84.8% → **86.92%**，分支 80%；前端全量
   510 绿，行覆盖 91.08%。
+
+### Batch 149（已交付）
+
+- 分支：`test/webui-collections-batch149-20260907`（已合入 main）
+- 内容：Collections 页覆盖加固，新增 3 用例：卡片动作跳转
+  documents/embeddings（URL 编码 collectionKey）、头部按钮打开创建
+  弹窗、purge preview 失败错误面板（含后端错误信息）与
+  retryPreview 重试恢复闭环。
+- 指标：Collections.tsx 行覆盖 85.07% → **92.53%**，分支 84.61%；
+  前端全量 513 绿，行覆盖 91.27%。
