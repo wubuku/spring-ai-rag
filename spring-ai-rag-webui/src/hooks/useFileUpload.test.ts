@@ -180,3 +180,158 @@ describe('useFileUpload', () => {
     fetchSpy.mockRestore();
   });
 });
+
+describe('useFileUpload success, failure and fallback branches', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    clearCredential();
+  });
+
+  const oneFile = (name = 'test.txt'): FileList => ({
+    0: new File(['hello'], name, { type: 'text/plain' }),
+    length: 1,
+    item: (index: number) => index === 0
+      ? new File(['hello'], name, { type: 'text/plain' })
+      : null,
+    [Symbol.iterator]: function* () {
+      yield this[0];
+    },
+  } as FileList);
+
+  it('marks uploads completed and reports each file through onComplete', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response('{}', { status: 200 }),
+    );
+    const onComplete = vi.fn();
+    const onError = vi.fn();
+    const onProgress = vi.fn();
+    const { result } = renderHook(() =>
+      useFileUpload({ onProgress, onComplete, onError }),
+    );
+
+    await act(async () => {
+      await result.current.uploadFiles(oneFile());
+    });
+
+    expect(result.current.uploads[0]).toMatchObject({
+      fileName: 'test.txt',
+      status: 'completed',
+      progress: 100,
+    });
+    expect(onComplete).toHaveBeenCalledTimes(1);
+    expect(onComplete).toHaveBeenCalledWith('test.txt', []);
+    expect(onError).not.toHaveBeenCalled();
+    expect(result.current.isUploading).toBe(false);
+    fetchSpy.mockRestore();
+  });
+
+  it('surfaces the backend detail message when the upload is rejected', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ detail: 'File too large' }), { status: 413 }),
+    );
+    const onError = vi.fn();
+    const { result } = renderHook(() =>
+      useFileUpload({ onProgress: vi.fn(), onComplete: vi.fn(), onError }),
+    );
+
+    await act(async () => {
+      await result.current.uploadFiles(oneFile());
+    });
+
+    expect(result.current.uploads[0]).toMatchObject({
+      status: 'failed',
+      error: 'File too large',
+    });
+    expect(onError).toHaveBeenCalledWith('test.txt', 'File too large');
+    fetchSpy.mockRestore();
+  });
+
+  it('falls back to a generic message when the error body is unparseable', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response('<html>gateway</html>', {
+        status: 502,
+        headers: { 'Content-Type': 'text/html' },
+      }),
+    );
+    const onError = vi.fn();
+    const { result } = renderHook(() =>
+      useFileUpload({ onProgress: vi.fn(), onComplete: vi.fn(), onError }),
+    );
+
+    await act(async () => {
+      await result.current.uploadFiles(oneFile());
+    });
+
+    expect(result.current.uploads[0].status).toBe('failed');
+    expect(result.current.uploads[0].error).toBe('Upload failed');
+    expect(onError).toHaveBeenCalledWith('test.txt', 'Upload failed');
+    fetchSpy.mockRestore();
+  });
+
+  it('maps non-Error rejections to the generic failure message', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockRejectedValue('network down');
+    const onError = vi.fn();
+    const { result } = renderHook(() =>
+      useFileUpload({ onProgress: vi.fn(), onComplete: vi.fn(), onError }),
+    );
+
+    await act(async () => {
+      await result.current.uploadFiles(oneFile());
+    });
+
+    expect(result.current.uploads[0].error).toBe('Upload failed');
+    expect(onError).toHaveBeenCalledWith('test.txt', 'Upload failed');
+    fetchSpy.mockRestore();
+  });
+
+  it('falls back to a timestamp-based idempotency key without crypto.randomUUID', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response('{}', { status: 200 }),
+    );
+    vi.stubGlobal('crypto', undefined);
+
+    try {
+      const { result } = renderHook(() => useFileUpload({}));
+      await act(async () => {
+        await result.current.uploadFiles(oneFile());
+      });
+      expect(fetchSpy).toHaveBeenCalledWith(
+        '/api/v1/rag/documents/upload',
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            'Idempotency-Key': expect.stringMatching(/^\d+-[0-9a-f]+$/),
+          }),
+        }),
+      );
+    } finally {
+      vi.unstubAllGlobals();
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it('re-emits progress callbacks for known uploads on a second run', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response('{}', { status: 200 }))
+      .mockImplementation(() => new Promise(() => {}));
+    const onProgress = vi.fn();
+    const { result } = renderHook(() =>
+      useFileUpload({ onProgress, onComplete: vi.fn(), onError: vi.fn() }),
+    );
+
+    // 第一轮完成后 uploads 状态被记住；updateUpload 闭包持有上一轮
+    // 状态，因此再次上传同名文件时 current 分支命中并回调 onProgress。
+    await act(async () => {
+      await result.current.uploadFiles(oneFile());
+    });
+    onProgress.mockClear();
+
+    act(() => {
+      void result.current.uploadFiles(oneFile());
+    });
+
+    expect(onProgress).toHaveBeenCalledWith(
+      expect.objectContaining({ fileName: 'test.txt', status: 'uploading' }),
+    );
+    fetchSpy.mockRestore();
+  });
+});
