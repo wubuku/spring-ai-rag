@@ -1307,3 +1307,13 @@
   （'apiKeys.name *'），scope 单选组名 policyCollectionScope。
 - 指标：ApiKeys.tsx 行覆盖 85.16% → **94.73%**，分支 86.88%；前端
   全量 564 绿，行覆盖 94.61%。
+
+### Batch 167（已交付）
+
+- 分支：`test/core-summary-gaps-batch167-20260908`（已合入 main）
+- 内容：ConversationSummaryService 查漏，新增 5 用例：load 将
+  SummaryRow 映射为 SummarySnapshot（版本/游标/正文/估算 token/
+  模型五字段）、无摘要返回 empty、promptText 对 null/empty/空白
+  摘要返回空串、非空正文 trim 后夹在前后缀之间且输出稳定、clear
+  委托 summaryRepository.delete 并透传删除行数。
+- 指标：core 全量 3779 → **3784** 绿。
