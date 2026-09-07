@@ -1016,3 +1016,16 @@
   在 setup 之后打。
 - 指标：ApiKeys.tsx 行覆盖 78.94% → **85.16%**；前端全量 488 绿，
   行覆盖 89.84%。
+
+### Batch 144（已交付）
+
+- 分支：`test/core-zero-coverage-batch144-20260907`（已合入 main =
+  `538e9865`）
+- 内容：后端零测试逻辑类扫描再收一批，补 5 类共 20 用例：
+  SessionIdValidator（空白生成 UUID、非法字符/超长拒绝、isValid
+  矩阵）、EmbeddingPolicySupport（显式 embed 入口拒绝 SKIP、jobs
+  门禁）、ApiKeyRotationHttpPolicy（轮换路径识别、mark + no-store、
+  漏标兜底、apply 选择性加头）、AlertNotificationProviderValidator
+  （Durable 启动门禁三分支）、ApiAccessPolicy（遗留默认全量能力与
+  显式清单门禁）。
+- 指标：core 全量 3687 → **3707** 绿。
