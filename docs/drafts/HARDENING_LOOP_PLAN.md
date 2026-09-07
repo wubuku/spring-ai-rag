@@ -1908,3 +1908,14 @@
   字面量单引号转义。core 全量 3652→3676 绿。
 - 证据：新测试 4/4 绿；core 全量 `Tests run: 3676, Failures: 0,
   Errors: 0, Skipped: 9`，BUILD SUCCESS。
+
+### Batch 136（已交付）
+
+- 分支：`test/citation-augmenter`（已合入 main = `5f8602d2`）
+- 内容：`CitationQueryAugmenter`（引用查询增强器：编号证据注入 +
+  空资料防编造守卫指令）零直接测试，补 3 用例：allowEmptyContext
+  开启时原查询原样返回、关闭时注入防编造守卫指令、编号参考资料
+  [S1]/[S2] 与用户问题占位拼装。注意 accessor 链为
+  properties.getChat().getKnowledge()。core 全量 3676→3679 绿。
+- 证据：新测试 3/3 绿；core 全量 `Tests run: 3679, Failures: 0,
+  Errors: 0, Skipped: 9`，BUILD SUCCESS。
