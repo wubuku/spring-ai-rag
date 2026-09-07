@@ -1090,3 +1090,15 @@
   retryPreview 重试恢复闭环。
 - 指标：Collections.tsx 行覆盖 85.07% → **92.53%**，分支 84.61%；
   前端全量 513 绿，行覆盖 91.27%。
+
+### Batch 150（已交付）
+
+- 分支：`test/webui-evaluation-batch150-20260908`（已合入 main =
+  `e7e8d1eb`）
+- 内容：Evaluation 页分支覆盖加固，新增 6 用例：history 行指标
+  格式化（fmt 走 toFixed(3)）与缺失字段占位符、空历史提示、
+  feedback tab 统计 JSON 渲染（pre 整体文本需函数匹配器）与反馈
+  行渲染、evaluate API 拒绝时失败提示（query 必填触发按钮）、
+  judge API 拒绝时失败提示、citation trace 空 status/outcome 占位。
+- 指标：Evaluation.tsx 行覆盖 93.24% → **98.64%**，分支 65.48% →
+  **94.69%**；前端全量 519 绿，行覆盖 91.43%，分支 82.88%。
