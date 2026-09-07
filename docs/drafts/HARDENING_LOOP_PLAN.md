@@ -1404,3 +1404,14 @@
   operation-window、apply-lease 范围、max-documents/max-chat-rows
   行数上限、清理批次与间隔范围。
 - 指标：core 全量 3811 → **3819** 绿。
+
+### Batch 177（已交付）
+
+- 分支：`test/core-app-contract-batch177-20260908`（已合入 main）
+- 内容：应用入口注解契约与异常错误码锁定，新增 2 类 5 用例：
+  StructuredRecordConflictException（错误码 STRUCTURED_RECORD_CONFLICT、
+  原因链保留）、SpringAiRagApplication 注解契约（扫描范围
+  com.springairag、MiniMax 双自动装配排除清单、
+  ConfigurationPropertiesScan 仅扫 core.config——value 别名优先于
+  basePackages）。
+- 指标：core 全量 3819 → **3824** 绿。
