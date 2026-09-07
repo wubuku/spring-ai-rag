@@ -19,7 +19,8 @@ import static org.mockito.Mockito.when;
 
 /**
  * 覆盖 EmbeddingJobRepository 的分页与按批查询：
- * 空授权集合短路、页大小钳制与总数透传、按批列表。
+ * 空授权集合短路、页大小钳制与总数透传、按批列表、
+ * 授权集合数组绑定。
  */
 class EmbeddingJobRepositoryListTest {
 
@@ -70,5 +71,23 @@ class EmbeddingJobRepositoryListTest {
 
         org.mockito.Mockito.verify(jdbcTemplate).query(
                 contains("AND batch_id = ?"), any(RowMapper.class), any(Object[].class));
+    }
+
+    @Test
+    void listPageBindsAllowedCollectionsAsArray() {
+        when(jdbcTemplate.queryForObject(anyString(), eq(Long.class),
+                any(Object[].class))).thenReturn(1L);
+        when(jdbcTemplate.query(anyString(),
+                any(org.springframework.jdbc.core.RowMapper.class),
+                any(Object[].class))).thenReturn(List.of());
+
+        EmbeddingJobRepository.PageResult result = repository.listPage(
+                null, null, null, List.of(10L, 20L), 20, 0);
+
+        assertEquals(1L, result.totalElements());
+        // ANY(?) 数组绑定由 pageFilter 生成。
+        org.mockito.Mockito.verify(jdbcTemplate).queryForObject(
+                contains("d.collection_id = ANY (?)"), eq(Long.class),
+                any(Object[].class));
     }
 }
