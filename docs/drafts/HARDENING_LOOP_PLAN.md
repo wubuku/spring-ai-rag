@@ -1070,3 +1070,13 @@
   恢复等 mutation 主路径已有交互用例），投入产出低暂缓；
   useSSE.ts 深层流式重试路径（tail SSE 块、退避重试、turn id 不匹配）
   需专用 reader mock 基建，留待后续批次。
+
+### Batch 148（已交付）
+
+- 分支：`test/webui-files-tree-batch148-20260907`（已合入 main）
+- 内容：Files 树渲染与路径归一化加固，新增 3 用例：mime 图标矩阵
+  （pdf→📄、image→🖼️、json/text→📝、其他→📎）与 formatSize 三档
+  （512 B / 2.0 KB / 3.0 MB）、反斜杠与控制字符深链回退根目录、
+  带前导斜杠目录深链归一化进入目标层级（面包屑断言）。
+- 指标：Files.tsx 行覆盖 84.8% → **86.92%**，分支 80%；前端全量
+  510 绿，行覆盖 91.08%。
