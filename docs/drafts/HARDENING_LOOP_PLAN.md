@@ -1445,3 +1445,11 @@
   restoreVersion policy/visibility、relocate Idempotency-Key 头。
 - 指标：documents.ts 行覆盖 47.05% → **94.11%**，分支 100%；前端
   全量 579 绿，行覆盖 95.34%。
+
+### Batch 181（已交付）
+
+- 分支：`test/webui-lowcov-batch181-20260908`（已合入 main）
+- 内容：低覆盖文件补齐，新增 6 用例：evaluation.ts 反馈窗口默认合并
+  与分页默认（86.36% → 95.45%，分支 100%）、ChatSidebar 相对时间
+  四级渲染（87.87% → 89.47%）。
+- 指标：前端全量 585 绿，行覆盖 95.42%。
