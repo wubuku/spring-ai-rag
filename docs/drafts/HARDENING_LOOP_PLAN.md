@@ -1339,3 +1339,12 @@
   EvaluationSuiteDefinition（Identity 双参构造默认 default 命名空间、
   三参保留显式命名空间、定义记录持有 canonicalJson/sha256/用例/变体）。
 - 指标：core 全量 3784 → **3792** 绿。
+
+### Batch 170（已交付）
+
+- 分支：`test/core-advisor-adapter-batch170-20260908`（已合入 main）
+- 内容：OrderedAdvisorAdapter（52 行，包私有）收口语义锁定，新增 4
+  用例：getName 返回收口后的稳定名称而非被包装者名称、getOrder 返回
+  框架管理的顺序、before/after 透传到被包装 advisor、getScheduler
+  透传。
+- 指标：core 全量 3792 → **3796** 绿。
