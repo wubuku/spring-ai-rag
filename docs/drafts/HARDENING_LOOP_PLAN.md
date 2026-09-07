@@ -1472,3 +1472,28 @@
 - 指标：前端全量 592 绿。
 - 备注：v8 覆盖映射对 Dialog keydown handler 内分支归属不稳定，
   以行为断言为准。
+
+### Batch 184（进度快照与全局复测，2026-09-08）
+
+**全局复测结果**：
+- 后端 core：mvn test **3827 绿**（0 失败，9 skipped 为 gated IT），
+  零引用类扫描清零（无任何 main 类无测试引用）。
+- 前端 webui：vitest **592 绿**（60 个测试文件），整体行覆盖
+  **95.73%**、分支 **87.05%**、函数 **93.38%**。
+
+**分文件行覆盖梯度（<95% 清单，后续批次候选）**：
+ChatSidebar 87.87 / Dialog 89.58 / Files 89.39 / VersionHistoryModal
+90.69 / Search 91.57 / Documents 93.02 / MetricsCharts 93.33 /
+ErrorBoundary+Embeddings 94.11 / DocumentActionsMenu 94.28 /
+CollectionScopeSelector 94.44 / ApiKeys 94.73 / documents.ts 94.11；
+≥95%：Layout、evaluation.ts、embeddings.ts、Collections、Settings、
+Evaluation、Chat、Search（95%+）、Dashboard/ABTest/Metrics/
+VersionHistoryModal 相关 100% 项等。
+
+**下一轮加固主题规划**：
+1. Batch 185：ChatSidebar 残余（corrupted-storage catch 与
+   deleteSession 通知分支）+ Dialog 焦点陷阱覆盖率映射器盲区复核。
+2. Batch 186：Search.tsx 91.57% → 剩余过滤器/历史交互分支。
+3. Batch 187+：Documents.tsx 93%→95%（797/778 守卫需事件级编排）、
+   MetricsCharts 93.33%、后端 gated IT（Testcontainers）补
+   EmbeddingJobRepository 深层 varargs 场景。
