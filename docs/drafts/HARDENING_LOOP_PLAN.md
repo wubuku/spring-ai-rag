@@ -992,3 +992,14 @@
   挂起 `mockImplementation`。
 - 指标：VersionHistoryModal.tsx 行覆盖 79.24% → **100%**（分支
   87.61%）；前端全量 472 绿，行覆盖 89.02%。
+
+### Batch 142（已交付）
+
+- 分支：`test/coverage-batch142-20260907`（已合入 main = `695d99e9`）
+- 内容：Embeddings 页状态与交互加固，新增 9 用例：任务列表加载失败
+  告警、空态、`?jobId=` 直达详情（含返回文档链接）、行内 id 按钮回写
+  URL 触发详情查询、status/batchId 过滤输入透传 listJobs、repair
+  preview 失败告警且不开窗、弹窗 cancel 关闭、apply 成功后 onSuccess
+  关窗。
+- 指标：Embeddings.tsx 行覆盖 78.43% → **94.11%**（分支 92.85%）；
+  前端全量 481 绿，行覆盖 89.02%+。
