@@ -1425,3 +1425,13 @@
   pdf 输入空文件选择短路。
 - 指标：Files.tsx 行覆盖 87.27% → **89.39%**；前端全量 573 绿，
   行覆盖 95.03%。
+
+### Batch 179（已交付）
+
+- 分支：`test/core-entity-roundtrip-batch179-20260908`（已合入 main）
+- 内容：零引用类清零，新增 3 用例：ApiKeyRotationOperation（12 个
+  JPA 列访问器往返——rotationId/principalId/idempotency hash/
+  fingerprint/源目标 credential/overlap/expiry/PENDING 状态/时间戳
+  族；进行中轮换 terminalAt 为 null）、AlertNotificationsAvailableEvent
+  （无载荷标记事件，toString 含类型名）。
+- 指标：core 全量 → **3827** 绿。
