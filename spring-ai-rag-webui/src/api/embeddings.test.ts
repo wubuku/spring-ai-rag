@@ -75,3 +75,13 @@ describe('embeddingsApi', () => {
     );
   });
 });
+
+describe('embeddingsApi job detail', () => {
+  it('fetches a single job by id', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue({ data: { id: 'job-1' } } as never);
+
+    await embeddingsApi.getJob('job-1');
+
+    expect(apiClient.get).toHaveBeenCalledWith('/embedding-jobs/job-1');
+  });
+});
