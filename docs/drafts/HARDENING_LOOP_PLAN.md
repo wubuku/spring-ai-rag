@@ -979,3 +979,16 @@
   自定义 variant B、Tooltip formatter、空转化率/置信区间占位符。
 - 指标：ABTest.tsx 行覆盖 73.68% → **100%**，分支 84.72% → 90.27%；
   前端全量 468 绿，行覆盖 88.6%。
+
+### Batch 141（已交付）
+
+- 分支：`test/coverage-batch141-20260907`（已合入 main）
+- 内容：VersionHistoryModal diff flow 加固。定位到既有 diff 用例的
+  mock 缺少 `{ data }` 包装，`handleCompare` 在 `!vAd || !vBd` 处早退，
+  diff 视图渲染整体不可达。新增 4 用例：成功 compare 后统计条
+  （+1 inserted / -1 deleted）与删除/插入/相等行渲染、list/diff tab
+  双向切换（diffLines 保留）、版本详情缺失时早退留在列表、比较锚点
+  替换与取消选中；describe 内用 `resetAllMocks` 隔离前置用例残留的
+  挂起 `mockImplementation`。
+- 指标：VersionHistoryModal.tsx 行覆盖 79.24% → **100%**（分支
+  87.61%）；前端全量 472 绿，行覆盖 89.02%。
