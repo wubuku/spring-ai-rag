@@ -1003,3 +1003,16 @@
   关窗。
 - 指标：Embeddings.tsx 行覆盖 78.43% → **94.11%**（分支 92.85%）；
   前端全量 481 绿，行覆盖 89.02%+。
+
+### Batch 143（已交付）
+
+- 分支：`test/coverage-batch143-20260907`（已合入 main = `4107a3fe`）
+- 内容：新增 `ApiKeys.lifecycle.test.tsx`（7 用例，真实 react-query +
+  mock API）：revoke 成功/失败 toast、REVOKED/EXPIRED 行徽章与动作
+  禁用、配额/范围/未知角色兜底占位、行内完成与取消轮换（含非 Error
+  抛出物走 `formatMutationError` 回退分支）、创建带配额 key 并复制
+  一次性 rawKey、无配额创建的 defaultQuota 占位。发现并记录：
+  `userEvent.setup()` 会接管 `navigator.clipboard`，clipboard spy 必须
+  在 setup 之后打。
+- 指标：ApiKeys.tsx 行覆盖 78.94% → **85.16%**；前端全量 488 绿，
+  行覆盖 89.84%。
