@@ -1270,3 +1270,15 @@
   重试上抛 HTTP 429。
 - 指标：useSSE.ts 行覆盖 → **100%**，分支 86.9%；前端全量 557 绿，
   行覆盖 93.83%。
+
+### Batch 164（已交付）
+
+- 分支：`test/core-maintenance-fingerprint-batch164-20260908`（已合
+  入 main）
+- 内容：零测试类扫描继续，新增 3 类 10 用例：
+  ChatTurnOperationMaintenance（按 idempotency 配置委托清理）、
+  SharedRateLimitMaintenance（开关/后端短路、参数透传、
+  DataAccessException 吞噬并记录 cleanupError）、
+  ApiKeyProvisioningFingerprint（确定性 64 位摘要、角色/名称隔离、
+  canonicalJson 的 ISO 日期与集合去重排序、空集合 null 语义）。
+- 指标：core 全量 3761 → **3771** 绿。
