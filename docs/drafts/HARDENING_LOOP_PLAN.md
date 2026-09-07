@@ -1862,3 +1862,15 @@
   cancelActiveForDocument 全量取消运行中作业。core 全量 3643→3659 绿。
 - 证据：新测试 3/3 绿；core 全量 `Tests run: 3659, Failures: 0,
   Errors: 0, Skipped: 9`，BUILD SUCCESS。
+
+### Batch 131（已交付）
+
+- 分支：`test/integrity-snapshot-from`（已合入 main = `eaa7e652`）
+- 内容：`DerivationIntegrityRepository.Snapshot.from(Map)` 分类矩阵
+  补 7 用例：全新鲜 → READY（reason CURRENT）、向量 FAILED →
+  KEYWORD_ONLY（VECTOR_FAILED 原因）、作业收敛 → INDEXING、本地行
+  无效 → CORRUPT（LOCAL_PHYSICAL_INTEGRITY_FAILED）、禁用文档 →
+  DISABLED、双派生未请求 → NOT_REQUESTED、本地损坏优先于向量损坏的
+  reason 顺序。core 全量 3659→3666 绿。
+- 证据：新测试 7/7 绿；core 全量 `Tests run: 3666, Failures: 0,
+  Errors: 0, Skipped: 9`，BUILD SUCCESS。
