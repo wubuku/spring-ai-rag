@@ -136,10 +136,13 @@ class ChatSessionPostgresIntegrationTest {
 
     @Test
     void fullMigrationThroughLatestPreservesChatContractsAndRejectsInvalidNewRows() {
-        assertEquals("58", jdbcTemplate.queryForObject(
+        // 迁移版本随演进递增，断言最新成功版本至少达到引入租约契约的 V58。
+        String latest = jdbcTemplate.queryForObject(
                 "SELECT version FROM flyway_schema_history "
                         + "WHERE success = true ORDER BY installed_rank DESC LIMIT 1",
-                String.class));
+                String.class);
+        assertTrue(Integer.parseInt(latest) >= 58,
+                "expected migrations through V58 or later but latest was " + latest);
         assertEquals(1L, jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM pg_indexes "
                         + "WHERE indexname = 'idx_rag_chat_owner_session_created'",
