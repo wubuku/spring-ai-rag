@@ -1133,3 +1133,16 @@
   反馈行仅在助手消息有内容且非流式时渲染。
 - 指标：Chat.tsx 行覆盖 89.7% → **97.54%**，分支 84.69% →
   **91.25%**；前端全量 532 绿，行覆盖 92.59%，分支 84.1%。
+
+### Batch 153（已交付）
+
+- 分支：`test/webui-metrics-batch153-20260908`（已合入 main）
+- 内容：Metrics 页覆盖加固，新增 3 用例：查询接线验证（mock
+  useQuery 捕获 queryFn 后直接调用，断言 metricsApi.get/usage 各
+  一次）、undefined/null 数值渲染为 0（formatInteger 空值分支，
+  摘要卡 4 处）、非数字 configuredCost 原样输出（formatCost 非有限
+  分支）。
+- 指标：Metrics.tsx 行覆盖 90% → **96.66%**，函数 100%；前端全量
+  535 绿，行覆盖 92.67%，分支 84.18%。
+- 遗留：formatInteger 的 BigInt catch 分支（第 19 行）为无 BigInt
+  环境的防御性回退，jsdom 下不可达。
