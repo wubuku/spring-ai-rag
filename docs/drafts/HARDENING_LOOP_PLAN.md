@@ -1585,3 +1585,14 @@ VersionHistoryModal 相关 100% 项等。
   turn 抛 CHAT_TURN_NOT_FOUND、SUCCEEDED + includeResponse 经
   verifyReplay 标记 replayAvailable 并反序列化缓存响应。
 - 指标：core 全量 3845 → **3858** 绿。
+
+### Batch 194（已交付）
+
+- 分支：`test/core-command-mapper-batch194-20260908`（已合入 main）
+- 内容：ChatCommandMapper.mapFromExecutionSnapshot 分支覆盖，新增 6
+  用例：完整快照构建（候选首元素作 modelRef、domainId、检索选项六
+  字段、SELECTED scope 排序 ids、documentType）、版本号错误、检索
+  选项缺字段、空 resolvedCandidates（textList 空数组即非法）、非正
+  整数集合 ID、空白候选——后三者均 fail-closed 为
+  IDEMPOTENCY_EXECUTION_SNAPSHOT_INVALID。
+- 指标：core 全量 3858 → **3864** 绿。
