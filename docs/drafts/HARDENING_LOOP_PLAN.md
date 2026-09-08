@@ -1618,3 +1618,45 @@ VersionHistoryModal 相关 100% 项等。
   （9,3,7 → [3,7,9]）。请求上下文经 RequestContextHolder 注入
   ApiAccessPolicy 属性。
 - 指标：core 全量 3853 → **3874** 绿。
+
+---
+
+## 进度留档（2026-09-08，应用户要求暂停点）
+
+**当前状态**：Batch 1–196 全部交付合入 main 并推送（main = `722a7674` + 本提交），
+工作区干净，无未合并分支，无未提交变更。
+
+**全局质量基线**：
+- 后端 core：mvn test **3874 绿**（0 失败，9 skipped 为 gated IT）。
+- 后端 gated IT（真实 PostgreSQL，Testcontainers）：**41 用例全绿**
+  （EmbeddingJobs 8 / ChatSession 18 / CollectionPurge 5 /
+  NextHighValueFeatures 10）。
+- 前端 webui：vitest **592 绿**，整体行覆盖 **95.73%**、分支
+  **87.05%**、函数 **93.38%**。
+- 零引用类扫描清零；目标文件行覆盖提升示例：ABTest/VersionHistory
+  Modal/Dashboard 100%、Search 100%、Evaluation 98.64%、
+  Documents 95.34%、Metrics 96.66%、Collections 98.5%、ApiKeys
+  94.73%、Files 89.39%、useSSE 100%、documents.ts 94.11%。
+
+**本批账本已沉淀的可复用测试模式**：
+1. JdbcTemplate 桩子类（按语句类型分类记录 SQL/参数，绕开 Mockito
+   varargs 不稳定）——Batch 155/157/162 三种变体。
+2. 真实 react-query + mock API 层（替代整体 mock useQuery/
+   useMutation，使 mutation 回调真实可达）——Batch 140/143。
+3. `userEvent.setup()` 接管 navigator.clipboard——clipboard spy 必须
+   在 setup 之后打——Batch 143。
+4. rerender 传同一 JSX 元素引用会被 React 跳过——Batch 166。
+5. gated IT 本机运行手册：`TESTCONTAINERS_RYUK_DISABLED=true` +
+   各 IT 开关属性（Batch 188，境内网络 ryuk 拉取失败场景）。
+
+**已知遗留（后续批次候选）**：
+- 后端 JaCoCo 梯队：DocumentMutationService 42% /
+  EvaluationSuiteService 编排深层 / SemanticEvaluationService 54% /
+  OpenAiCompatibilityController 55% 等（57 个 <75% 类清单见 Batch 184
+  快照所依据的 jacoco.xml）。
+- 前端：Files.tsx 89.39%（上传完成回调/搜索组合输入等深层）、
+  ChatSidebar 残余、Dialog 焦点陷阱（v8 映射盲区，行为已锁定）、
+  Documents.tsx 797/778 竞态守卫（需事件级编排）。
+- 流程性：verifier 明细与批次数（140–196）以账本各 Batch 条目为准。
+
+**等待用户下一步指示。**
