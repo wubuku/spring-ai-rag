@@ -1684,3 +1684,16 @@ VersionHistoryModal 相关 100% 项等。
 - 锁定真实 Spring AI 1.1.7 FactCheckingEvaluator 语义：score 丢弃
   清零、反馈驱动 pass、COMPLETED 状态透传。
 - 指标：core 全量 → **3890** 绿。
+
+### Batch 199（已交付）
+
+- 分支：`test/core-idempotency-reserve-batch199-20260909`（已合入
+  main）
+- 内容：DocumentMutationService 幂等预留语义，新增 7 用例：空白
+  Idempotency-Key 不触库、超 255 字符拒绝、首次插入绑定 owner/操作
+  类型/64 位 keyHash 且无重放、过期行删除后重查为空 fail-closed
+  （不无限重试——过期行在 DELETE 后物理移除）、指纹不一致
+  another-request 冲突、SUCCEEDED 重放 result_document_id、
+  IN_PROGRESS still-in-progress 冲突。私有 reserveIdempotency 经
+  ReflectionTestUtils 调用；StubJdbc 去 final 支持状态化子类。
+- 指标：core 全量 3890 → **3897** 绿。
