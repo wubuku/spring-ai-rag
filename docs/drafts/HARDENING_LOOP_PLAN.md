@@ -1716,3 +1716,12 @@ VersionHistoryModal 相关 100% 项等。
   payload 为 null node 拒绝；本地导入（无 externalId）经 createLocal
   持久化（title/source/enabled 断言）与 SKIP 策略不排队嵌入。
 - 指标：core 全量 3901 → **3905** 绿。
+
+### Batch 202（已交付）
+
+- 分支：`test/core-sem-timeout-batch202-20260909`（已合入 main）
+- 内容：SemanticEvaluationService TIMEOUT 降级分支，新增 1 用例：
+  求值器阻塞超过 answerQualityTimeoutSeconds 预算 → TIMEOUT 状态
+  （passed/score/feedback 均为 null），elapsed < 2s 断言验证提前
+  降级不等待阻塞链路完成。
+- 指标：core 全量 3890 → **3906** 绿。
