@@ -1852,3 +1852,17 @@ VersionHistoryModal 相关 100% 项等。
   空会话 DIAGNOSTIC_UNKNOWN、storeQueryText 开启保留原文（含耗时
   与结果数断言）、诊断禁用不落库、isEnabled 配置镜像。
 - 指标：core 全量门禁 EXIT=0 绿。
+
+### Batch 213（已交付）
+
+- 分支：`test/core-router-routing-batch213-20260909`（已合入 main）
+- 内容：ChatModelRouter 路由语义（此前仅 registry 名字查询有测
+  试），新增 13 用例：resolve 空引用/未知 provider/大小写不敏感别
+  名、resolveRequired 失败提示含可用清单、primary 经 registry 名
+  字解析、fallback 过滤不可解析项与 null、orderedCandidates 去重、
+  resolveCandidateRequired legacy 候选（默认能力/估算限制/cost
+  null）、未知引用抛错、getDefaultModelRef 主模型优先与首个可用
+  回退、modelsInfo legacy 来源标记、providerInfo 可用性与显示名、
+  isProviderAvailable 大小写兼容。Fake 类名命中 resolveProvider
+  类名启发式（zhipu）。
+- 指标：core 全量门禁 EXIT=0 绿。
