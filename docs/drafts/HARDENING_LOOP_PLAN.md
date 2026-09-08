@@ -1986,3 +1986,18 @@ VersionHistoryModal 相关 100% 项等。
   vice 的 clear/promptText 复核发现已有覆盖，未重复添加。
   Layout/FilePreview 行覆盖 100%，ApiKeys 行 94.73%→95.69%。
 - 指标：webui 全量 633 绿 + vite build 通过。
+
+### Batch 223（已交付）
+
+- 分支：`test/webui-search-mapping-batch223-20260909`（已合入
+  main）
+- 内容：Search 与 ApiKeys 交互深层，新增 4 用例：Search 结果映射
+  （fulltext/vector 混合分数字段、无 title 时 "Document {id}" 兜
+  底、chunkText 内容兜底）、原文 PDF 打开失败 toast
+  （getRawFile reject → search.openOriginalPdfError）、搜索历史下
+  拉在完成一次搜索后出现并可展开；ApiKeys 策略表单扩展断言到期时
+  间输入与"全部集合"单选（预期值同步更新为 2027-06-30T12:00）。
+  覆盖率报表中 Search 322-334 行仍标记未覆盖，属 JSX transform
+  行号归因偏差——行为已由映射用例锁定。
+- 指标：webui 全量 636 绿 + vite build 通过；ApiKeys 行
+  95.69%→96.17%。
