@@ -2145,3 +2145,17 @@ VersionHistoryModal 相关 100% 项等。
   insertCaseResult 须返回 1——0 触发租约护栏早退（首次运行暴露该
   分支）。
 - 指标：core 全量门禁 EXIT=0 绿。
+
+### Batch 235（已交付）
+
+- 分支：`test/core-summary-selection-batch235-20260909`（已合入
+  main）
+- 内容：ConversationSummaryService selectSourceRows 选择边界，新
+  增 4 用例：compactionMaxTurnsPerCall=2 上限（第 3 行留待下次推
+  进、源文本不含最新轮）、最近受保护轮次排除（protected 行永不被
+  摘要）、非 COMPLETE 状态行跳过（PROCESSING 排除）、已有摘要游标
+  后继续推进（version 4→5、findOwnedAfterHistoryId 以游标为界、
+  源文本含 prior summary）。调试发现单类运行时 BudgetedChatModel
+  链路冷加载会击穿 200ms 超时预算 → 本类放宽至 5s（超时分支已由
+  既有 timeoutDegrades 用例覆盖）。
+- 指标：core 全量门禁 EXIT=0 绿。
