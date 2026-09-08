@@ -1725,3 +1725,13 @@ VersionHistoryModal 相关 100% 项等。
   （passed/score/feedback 均为 null），elapsed < 2s 断言验证提前
   降级不等待阻塞链路完成。
 - 指标：core 全量 3890 → **3906** 绿。
+
+### Batch 203（已交付）
+
+- 分支：`test/core-relevancy-flow-batch203-20260909`（已合入 main）
+- 内容：RELEVANCY 完成流深度桩，新增 2 用例：prompt 携带
+  query/context/answer 全要素（ArgumentCaptor 捕获）、响应
+  pass/score/feedback 正确透传且状态为 COMPLETED。真实
+  RelevancyEvaluator 实例直接 evaluate EvaluationRequest，不经
+  ChatModel 路由。
+- 指标：core 全量 3901 → **3908** 绿。
