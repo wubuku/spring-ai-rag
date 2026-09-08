@@ -1815,3 +1815,15 @@ VersionHistoryModal 相关 100% 项等。
   素时 Tab 聚焦面板本体、点击 backdrop 关闭。Dialog 行覆盖 100%，
   Files 88.57% → 93.65%，整体行覆盖 96.82% → 97.63%。
 - 指标：webui 全量 622 绿 + vite build 通过。
+
+### Batch 210（已交付）
+
+- 分支：`test/core-eval-compare-batch210-20260909`（已合入 main）
+- 内容：EvaluationSuiteService（JaCoCo 指令覆盖 27%，全库垫底）
+  运行查询与 compare 对比语义，新增 7 用例：getRun 全字段映射
+  （suite/version/sha/status/cases）与 NOT_FOUND、compare 拒绝不同
+  套件版本、拒绝 variant 不一致、embedding profile 不同 → 环境漂
+  移（sameProfile=false）、collectionSnapshot 不同 → 漂移（语料变
+  更识别）、环境完全一致 → 无漂移。listSuites 桩需累积列表（两个
+  run 共存），validator.parse 桩真实 definition record。
+- 指标：core 全量门禁 EXIT=0 绿。
