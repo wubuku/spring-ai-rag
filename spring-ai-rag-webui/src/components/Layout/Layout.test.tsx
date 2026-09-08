@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { Layout } from './Layout';
@@ -22,6 +22,25 @@ vi.mock('../../auth/ApiKeyAuthContext', () => ({
     logout: vi.fn(),
   }),
 }));
+
+describe('Layout mobile sidebar', () => {
+  it('closes the mobile sidebar from its close button', () => {
+    const originalWidth = window.innerWidth;
+    window.innerWidth = 480;
+    render(
+      <MemoryRouter>
+        <Layout />
+      </MemoryRouter>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close sidebar' }));
+
+    // 关闭后 aside 不再携带展开态样式类。
+    const aside = document.querySelector('aside');
+    expect(aside?.className).not.toContain('sidebarOpen');
+    window.innerWidth = originalWidth;
+  });
+});
 
 describe('Layout', () => {
   it('renders sidebar with navigation items', () => {

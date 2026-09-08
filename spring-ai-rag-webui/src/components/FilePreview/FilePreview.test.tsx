@@ -83,6 +83,19 @@ describe('FilePreview', () => {
     expect(objectEl).toHaveAttribute('type', 'application/pdf');
   });
 
+  it('shows the error box when a pdf raw fetch fails', async () => {
+    mockGetRawFile.mockRejectedValueOnce(new Error('pdf gone'));
+    render(
+      <FilePreview
+        entry={makeEntry({ name: 'doc.pdf', mimeType: 'application/pdf' })}
+        reloadKey={0}
+      />
+    );
+
+    expect(await screen.findByText('files.previewError')).toBeInTheDocument();
+    expect(screen.queryByRole('heading')).not.toBeInTheDocument();
+  });
+
   it('renders the extracted body of markdown and html previews', async () => {
     mockGetPreviewHtml.mockResolvedValueOnce(
       '<html><head><title>t</title></head><body><p>Extracted body</p></body></html>',
