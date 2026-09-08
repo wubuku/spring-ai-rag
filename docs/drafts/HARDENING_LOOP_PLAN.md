@@ -1878,3 +1878,16 @@ VersionHistoryModal 相关 100% 项等。
   重放 COLLECTION_ALREADY_RETIRED、台账清理有界批量删除、功能禁
   用跳过清理。台账查找桩「先空后有」建模并发方写入。
 - 指标：core 全量门禁 EXIT=0 绿。
+
+### Batch 215（已交付）
+
+- 分支：`test/core-export-visibility-batch215-20260909`（已合入
+  main）
+- 内容：ChatExportService 可见性门控（JaCoCo 56.5%，此前仅无
+  principal 的旧版导出有测试），新增 7 用例：principal 变体走
+  owner 过滤查询（legacy 开关按 principal 类型推导，db:1→false、
+  root:environment-root→true）、limit>0 走数据库级 TopN 并反转为
+  时间正序、空/不可见会话 SESSION_NOT_FOUND、Markdown assistant
+  块与来源渲染（S1/标题）、CSV user/assistant 行映射（空白回复不
+  产生 assistant 行）、null principal 拒绝。
+- 指标：core 全量门禁 EXIT=0 绿。
