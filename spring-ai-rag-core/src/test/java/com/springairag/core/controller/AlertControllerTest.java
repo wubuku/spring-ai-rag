@@ -475,4 +475,92 @@ class AlertControllerTest {
         assertEquals(404, response.getStatusCode().value());
         verify(silenceScheduleRepository, never()).deleteByName(any());
     }
+
+    // ==================== updateSloConfig ====================
+
+    @Test
+    void updateSloConfig_mutatesFieldsAndAudits() {
+        SloConfigRequest request = new SloConfigRequest();
+        request.setSloType("AVAILABILITY");
+        request.setTargetValue(99.9);
+        request.setUnit("%");
+        request.setDescription("Updated SLO");
+        request.setEnabled(Boolean.FALSE);
+
+        RagSloConfig existing = new RagSloConfig();
+        existing.setSloName("latency_p99");
+        existing.setSloType("LATENCY");
+        existing.setTargetValue(200.0);
+        existing.setUnit("ms");
+        existing.setEnabled(Boolean.TRUE);
+        when(sloConfigRepository.findBySloName("latency_p99"))
+                .thenReturn(java.util.Optional.of(existing));
+        when(sloConfigRepository.save(any(RagSloConfig.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        ResponseEntity<RagSloConfig> response =
+                controller.updateSloConfig("latency_p99", request);
+
+        assertEquals(200, response.getStatusCode().value());
+        assertEquals("AVAILABILITY", response.getBody().getSloType());
+        assertEquals(99.9, response.getBody().getTargetValue());
+        assertEquals(Boolean.FALSE, response.getBody().getEnabled());
+        verify(auditLogService).logUpdate(
+                any(), eq("latency_p99"), anyString());
+    }
+
+    @Test
+    void updateSloConfig_missing_returns404() {
+        when(sloConfigRepository.findBySloName("ghost"))
+                .thenReturn(java.util.Optional.empty());
+
+        ResponseEntity<RagSloConfig> response =
+                controller.updateSloConfig("ghost", new SloConfigRequest());
+
+        assertEquals(404, response.getStatusCode().value());
+    }
+
+    // ==================== updateSilenceSchedule ====================
+
+    @Test
+    void updateSilenceSchedule_mutatesFieldsAndAudits() {
+        SilenceScheduleRequest request = new SilenceScheduleRequest();
+        request.setAlertKey("high-latency");
+        request.setSilenceType("RECURRING");
+        request.setStartTime("2026-05-01T00:00:00+08:00");
+        request.setEndTime("2026-05-02T00:00:00+08:00");
+        request.setDescription("Holiday freeze");
+        request.setEnabled(Boolean.FALSE);
+
+        RagSilenceSchedule existing = new RagSilenceSchedule();
+        existing.setName("weekend_maint");
+        existing.setAlertKey("old-key");
+        existing.setSilenceType("ONE_TIME");
+        existing.setEnabled(Boolean.TRUE);
+        when(silenceScheduleRepository.findByName("weekend_maint"))
+                .thenReturn(java.util.Optional.of(existing));
+        when(silenceScheduleRepository.save(any(RagSilenceSchedule.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        ResponseEntity<RagSilenceSchedule> response =
+                controller.updateSilenceSchedule("weekend_maint", request);
+
+        assertEquals(200, response.getStatusCode().value());
+        assertEquals("RECURRING", response.getBody().getSilenceType());
+        assertEquals(Boolean.FALSE, response.getBody().getEnabled());
+        verify(auditLogService).logUpdate(
+                any(), eq("weekend_maint"), anyString());
+    }
+
+    @Test
+    void updateSilenceSchedule_missing_returns404() {
+        when(silenceScheduleRepository.findByName("ghost"))
+                .thenReturn(java.util.Optional.empty());
+
+        ResponseEntity<RagSilenceSchedule> response =
+                controller.updateSilenceSchedule(
+                        "ghost", new SilenceScheduleRequest());
+
+        assertEquals(404, response.getStatusCode().value());
+    }
 }
