@@ -1,5 +1,6 @@
 package com.springairag.core.chat;
 
+import com.springairag.api.enums.ChatMode;
 import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.entity.ApiKeyRole;
 import com.springairag.core.exception.RagException;
@@ -19,7 +20,9 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -200,5 +203,89 @@ class ChatAuthorizationReplayMatrixTest {
                 operation(snapshot("NOT_APPLICABLE", "NOT_APPLICABLE",
                         "[]", "[]", false)),
                 ChatPrincipal.local()));
+    }
+
+// ─── snapshot 生成路径（Batch 196）───────────────────────────────────
+
+    private void setCurrentRequestPolicy(ApiAccessPolicy policy) {
+        MockHttpServletRequest request =
+                new MockHttpServletRequest("POST", "/chat/stream");
+        if (policy != null) {
+            request.setAttribute(
+                    ApiKeyAuthFilter.AUTHENTICATED_API_PRINCIPAL_ATTRIBUTE,
+                    policy);
+        }
+        org.springframework.web.context.request.RequestContextHolder
+                .setRequestAttributes(
+                        new org.springframework.web.context.request
+                                .ServletRequestAttributes(request));
+    }
+
+    private ChatCommand command(String sessionId, MemoryMode memoryMode) {
+        return new ChatCommand(
+                "question",
+                sessionId,
+                ChatPrincipal.local(),
+                ChatPrincipal.local().memoryConversationId(sessionId),
+                ChatMode.KNOWLEDGE,
+                memoryMode,
+                null,
+                null,
+                com.springairag.core.retrieval.RetrievalScope.noMatches(),
+                new RetrievalOptions(
+                        1, 0, false, false, 0, 0),
+                java.util.Map.of());
+    }
+
+    @Test
+    void initialSnapshotForPlainModeMarksEverythingNotApplicable() {
+        setCurrentRequestPolicy(restrictedPolicy("3"));
+        ChatCommand command = new ChatCommand(
+                "question",
+                "session-1",
+                ChatPrincipal.local(),
+                ChatPrincipal.local().memoryConversationId("session-1"),
+                ChatMode.PLAIN,
+                MemoryMode.STATELESS,
+                null,
+                null,
+                com.springairag.core.retrieval.RetrievalScope.noMatches(),
+                new RetrievalOptions(1, 0, false, false, 0, 0),
+                java.util.Map.of());
+
+        String json = service.initialSnapshot(command);
+
+        assertTrue(json.contains("\"scopeMode\":\"NOT_APPLICABLE\""));
+        assertTrue(json.contains("\"callerAccessMode\":\"NOT_APPLICABLE\""));
+        assertTrue(json.contains("\"unassignedDocumentsAllowed\":false"));
+        org.springframework.web.context.request.RequestContextHolder
+                .resetRequestAttributes();
+    }
+
+    @Test
+    void initialSnapshotForUnrestrictedCallerAllowsUnassignedDocuments() {
+        setCurrentRequestPolicy(null);
+        ChatCommand command = command("session-1", MemoryMode.SERVER);
+
+        String json = service.initialSnapshot(command);
+
+        assertTrue(json.contains("\"callerAccessMode\":\"UNRESTRICTED\""));
+        assertTrue(json.contains("\"unassignedDocumentsAllowed\":true"));
+        assertTrue(json.contains("\"callerAllowList\":[]"));
+        org.springframework.web.context.request.RequestContextHolder
+                .resetRequestAttributes();
+    }
+
+    @Test
+    void initialSnapshotSortsTheRestrictedCallerAllowList() {
+        setCurrentRequestPolicy(restrictedPolicy("9,3,7"));
+        ChatCommand command = command("session-1", MemoryMode.SERVER);
+
+        String json = service.initialSnapshot(command);
+
+        assertTrue(json.contains("\"callerAccessMode\":\"RESTRICTED\""));
+        assertTrue(json.contains("\"callerAllowList\":[3,7,9]"));
+        org.springframework.web.context.request.RequestContextHolder
+                .resetRequestAttributes();
     }
 }
