@@ -2122,3 +2122,13 @@ VersionHistoryModal 相关 100% 项等。
   时跳过同名 legacy 行（provider=zhipu 才覆盖）、配置行不可用则
   legacy 行兜底。ModelDescriptor 13 字段 record 全参构造。
 - 指标：core 全量门禁 EXIT=0 绿。
+
+### Batch 233（已交付）
+
+- 分支：`test/webui-settings-deep-batch233-20260909`（已合入 main）
+- 内容：Settings 深层交互（覆盖率数据驱动），新增 3 用例：连续两
+  次保存（第二次 clearTimeout 第一次的"已保存"指示器定时器，最终
+  落库 vectorWeight=0.6）、全文权重滑杆 onChange（range input
+  0.4 值绑定）、语言偏好按钮（changeLanguage('en') +
+  localStorage 'language'='en'）。Settings 行覆盖 96.8%→100%。
+- 指标：webui 全量 639 绿 + vite build 通过。
