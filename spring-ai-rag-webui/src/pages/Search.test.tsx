@@ -510,4 +510,72 @@ describe('Search guards, history panel, provenance navigation and draft validati
     );
     expect(screen.getByTestId('probe').textContent).toBe('/files?path=uuid-7%2F');
   });
+
+  it('maps hybrid scores, fallbacks and passes the submitted query', async () => {
+    (searchApi.search as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: {
+        query: 'manual',
+        total: 2,
+        results: [
+          {
+            documentId: '7',
+            title: 'Manual',
+            content: 'Full body',
+            score: 0.9,
+            fulltextScore: 0.4,
+            vectorScore: 0.5,
+          },
+          {
+            documentId: '42',
+            chunkText: 'Only chunk text',
+          },
+        ],
+      },
+    });
+
+    renderSearch();
+    await submit('manual');
+
+    expect(await screen.findByText('Full body')).toBeInTheDocument();
+    expect(screen.getByText('Document 42')).toBeInTheDocument();
+    expect(screen.getByText('Only chunk text')).toBeInTheDocument();
+  });
+
+  it('shows a toast when opening the original pdf fails', async () => {
+    (searchApi.search as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: {
+        query: 'manual',
+        total: 1,
+        results: [{
+          documentId: '7',
+          title: 'Manual',
+          content: 'Body',
+          score: 0.8,
+          originalFilePath: 'uuid-7/original.pdf',
+        }],
+      },
+    });
+    vi.mocked(filesApi.getRawFile).mockRejectedValueOnce(new Error('s3 down'));
+
+    renderSearch();
+    await submit('manual');
+
+    fireEvent.click(await screen.findByRole('button', {
+      name: 'search.openOriginalPdf',
+    }));
+    expect(await screen.findByText(
+      'search.openOriginalPdfError',
+    )).toBeInTheDocument();
+  });
+
+  it('reveals the search history dropdown after a completed search', async () => {
+    renderSearch();
+    await submit('manual');
+    await waitFor(() => expect(screen.getByTitle('search.history'))
+      .toBeInTheDocument());
+
+    const historyButton = screen.getByTitle('search.history');
+    fireEvent.click(historyButton);
+    expect(screen.getByText('manual')).toBeInTheDocument();
+  });
 });
