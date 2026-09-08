@@ -2159,3 +2159,15 @@ VersionHistoryModal 相关 100% 项等。
   链路冷加载会击穿 200ms 超时预算 → 本类放宽至 5s（超时分支已由
   既有 timeoutDegrades 用例覆盖）。
 - 指标：core 全量门禁 EXIT=0 绿。
+
+### Batch 236（已交付）
+
+- 分支：`test/webui-chat-doc-deep-batch236-20260909`（已合入
+  main）
+- 内容：Chat 与 Documents 深层交互，新增 3 用例：Chat 历史侧栏
+  打开（☰ toggle）→ 选择历史会话 → 导航至 /chat/session-1 并关闭
+  侧栏（handleSelectSession 双行 + toggle 三态全覆盖）；Documents
+  编辑对话框的集合/嵌入策略下拉 onChange（本地文档 fixture 需
+  documentRevision 才能通过修订护栏提交）；relocate 对话框 cancel
+  关闭（对话框消失且 relocate API 不被调用）。
+- 指标：webui 全量 642 绿 + vite build 通过。
