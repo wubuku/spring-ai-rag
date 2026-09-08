@@ -966,4 +966,30 @@ describe('Chat stop flow, exports, feedback and callback guards', () => {
 
     expect(screen.getByTestId('loc-probe').textContent).toBe('/chat?mode=KNOWLEDGE');
   });
+
+  it('opens the history sidebar, selects a session and navigates to it', async () => {
+    const user = userEvent.setup();
+    window.localStorage.setItem('chat_sessions', JSON.stringify([
+      { id: 'session-1', title: 'History Session', updatedAt: Date.now() },
+    ]));
+
+    renderChat('/chat');
+
+    // 侧栏默认关闭：点击 ☰ 打开后可见历史会话。
+    fireEvent.click(screen.getByTitle('Toggle history'));
+    const sessionButton = await screen.findByRole('button', {
+      name: /History Session/,
+    });
+    await user.click(sessionButton);
+
+    // onSelectSession 导航到 /chat/session-1（location probe 验证）。
+    await waitFor(() =>
+      expect(screen.getByTestId('loc-probe').textContent)
+        .toBe('/chat/session-1'),
+    );
+    expect(screen.queryByRole('button', {
+      name: /History Session/,
+    })).not.toBeInTheDocument();
+    window.localStorage.removeItem('chat_sessions');
+  });
 });

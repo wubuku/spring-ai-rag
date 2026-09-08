@@ -276,6 +276,104 @@ describe('Documents preview and relocate flows', () => {
 });
 
 
+describe('Documents edit selects and relocate cancel', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(documentsApi.getEmbeddingStatus).mockResolvedValue({
+      data: {
+        totalDocuments: 1,
+        withEmbeddings: 1,
+        withoutEmbeddings: 0,
+        hasMissing: false,
+      },
+    } as never);
+  });
+
+  const LOCAL_DOC = {
+    id: 3,
+    title: 'Local Doc',
+    content: '',
+    contentHash: 'hash-3',
+    documentType: 'text',
+    documentRevision: 3,
+    enabled: true,
+    createdAt: '2026-01-01T00:00:00Z',
+    updatedAt: '2026-01-01T00:00:00Z',
+  };
+
+  it('fires onChange for the edit dialog collection and policy selects', async () => {
+    const user = userEvent.setup();
+    vi.mocked(documentsApi.list).mockResolvedValue({
+      data: { documents: [LOCAL_DOC], total: 1 },
+    } as never);
+    vi.mocked(documentsApi.get).mockResolvedValue({
+      data: {
+        ...LOCAL_DOC,
+        content: 'loaded content',
+      },
+    } as never);
+    vi.mocked(documentsApi.update).mockResolvedValue({
+      data: { ...LOCAL_DOC } as never,
+    } as never);
+
+    renderDocuments();
+    await screen.findByText('Local Doc');
+
+    await user.click(screen.getByRole('button', { name: 'documents.openActions' }));
+    await user.click(screen.getByRole('menuitem', { name: 'documents.edit' }));
+    const dialog = await screen.findByRole('dialog', {
+      name: 'documents.editDocument',
+    });
+
+    // 触发集合与嵌入策略下拉的 onChange。
+    const selects = within(dialog).getAllByRole('combobox');
+    for (const select of selects) {
+      await user.selectOptions(select, (select as HTMLSelectElement).value);
+    }
+
+    await user.click(
+      within(dialog).getByRole('button', { name: 'common.save' }),
+    );
+    await waitFor(() => expect(documentsApi.update).toHaveBeenCalled());
+  });
+
+  it('closes the relocate dialog via cancel without calling the api', async () => {
+    const user = userEvent.setup();
+    vi.mocked(documentsApi.list).mockResolvedValue({
+      data: { documents: [EXTERNAL_DOC], total: 1 },
+    } as never);
+    vi.mocked(documentsApi.get).mockResolvedValue({
+      data: {
+        ...EXTERNAL_DOC,
+        content: 'ext content',
+        collectionKey: 'source-col',
+        sourceNamespace: 'crm',
+        sourceRevision: 'etag:2',
+        externalId: 'cms:article:1',
+      },
+    } as never);
+
+    renderDocuments();
+    await screen.findByText('External Doc');
+
+    await user.click(screen.getByRole('button', { name: 'documents.openActions' }));
+    await user.click(
+      screen.getByRole('menuitem', { name: 'documents.relocate' }),
+    );
+    const dialog = await screen.findByRole('dialog', {
+      name: 'documents.relocateTitle',
+    });
+    await user.click(
+      within(dialog).getByRole('button', { name: 'common.cancel' }),
+    );
+
+    expect(screen.queryByRole('dialog', {
+      name: 'documents.relocateTitle',
+    })).not.toBeInTheDocument();
+    expect(documentsApi.relocate).not.toHaveBeenCalled();
+  });
+});
+
 describe('Documents preview degrade path', () => {
   beforeEach(() => {
     vi.clearAllMocks();
