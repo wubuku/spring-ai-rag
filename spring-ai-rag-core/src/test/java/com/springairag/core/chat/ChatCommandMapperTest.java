@@ -154,4 +154,147 @@ class ChatCommandMapperTest {
                 ErrorCode.IDEMPOTENCY_EXECUTION_SNAPSHOT_INVALID,
                 error.getErrorCodeEnum());
     }
+
+// ─── mapFromExecutionSnapshot 分支覆盖（Batch 194）────────────────────
+
+    @Test
+    void executionSnapshotBuildsCommandWithCandidatesScopeAndOptions() {
+        String snapshot = """
+                {
+                  "executionSnapshotVersion": 1,
+                  "mode": "KNOWLEDGE",
+                  "memoryMode": "SERVER",
+                  "resolvedCandidates": ["provider/model-a", "provider/model-b"],
+                  "declaredModelIdentifier": "DEFAULT",
+                  "domainId": "domain-9",
+                  "retrievalOptions": {
+                    "maxResults": 7,
+                    "minScore": 0.25,
+                    "useHybridSearch": true,
+                    "useRerank": true,
+                    "vectorWeight": 0.6,
+                    "fulltextWeight": 0.4
+                  },
+                  "effectiveScope": {
+                    "collectionFilter": "SELECTED",
+                    "collectionIds": [5, 2],
+                    "documentIds": [11],
+                    "documentType": "text",
+                    "matchNone": false
+                  }
+                }
+                """;
+        ChatRequest request = new ChatRequest("question", "session-9");
+
+        ChatCommand command = mapper.mapFromExecutionSnapshot(
+                request, ChatPrincipal.local(), "session-9", snapshot);
+
+        assertEquals(ChatMode.KNOWLEDGE, command.mode());
+        assertEquals(MemoryMode.SERVER, command.memoryMode());
+        assertEquals("provider/model-a", command.modelRef());
+        assertEquals("domain-9", command.domainId());
+        assertEquals(7, command.retrievalOptions().maxResults());
+        assertEquals(java.util.List.of(5L, 2L), command.retrievalScope().collectionIds());
+        assertEquals("text", command.retrievalScope().documentType());
+    }
+
+    @Test
+    void executionSnapshotWithWrongVersionFailsClosed() {
+        String snapshot = """
+                {"executionSnapshotVersion": 99, "mode": "KNOWLEDGE"}""";
+
+        RagException error = assertThrows(RagException.class,
+                () -> mapper.mapFromExecutionSnapshot(
+                        new ChatRequest("q", "session-1"),
+                        ChatPrincipal.local(), "session-1", snapshot));
+        assertEquals(ErrorCode.IDEMPOTENCY_EXECUTION_SNAPSHOT_INVALID,
+                error.getErrorCodeEnum());
+    }
+
+    @Test
+    void executionSnapshotWithIncompleteRetrievalOptionsFailsClosed() {
+        String snapshot = """
+                {
+                  "executionSnapshotVersion": 1,
+                  "mode": "KNOWLEDGE",
+                  "memoryMode": "SERVER",
+                  "resolvedCandidates": ["provider/model-a"],
+                  "retrievalOptions": {"maxResults": 7}
+                }
+                """;
+
+        RagException error = assertThrows(RagException.class,
+                () -> mapper.mapFromExecutionSnapshot(
+                        new ChatRequest("q", "session-1"),
+                        ChatPrincipal.local(), "session-1", snapshot));
+        assertEquals(ErrorCode.IDEMPOTENCY_EXECUTION_SNAPSHOT_INVALID,
+                error.getErrorCodeEnum());
+    }
+
+    @Test
+    void executionSnapshotWithoutCandidatesFailsClosed() {
+        String snapshot = """
+                {
+                  "executionSnapshotVersion": 1,
+                  "mode": "KNOWLEDGE",
+                  "memoryMode": "SERVER",
+                  "resolvedCandidates": [],
+                  "declaredModelIdentifier": "DEFAULT",
+                  "retrievalOptions": {
+                    "maxResults": 5, "minScore": 0.3, "useHybridSearch": true,
+                    "useRerank": false, "vectorWeight": 0.5, "fulltextWeight": 0.5
+                  },
+                  "effectiveScope": {"collectionFilter": "NONE", "matchNone": false}
+                }
+                """;
+
+        RagException error = assertThrows(RagException.class,
+                () -> mapper.mapFromExecutionSnapshot(
+                        new ChatRequest("q", "session-1"),
+                        ChatPrincipal.local(), "session-1", snapshot));
+        assertEquals(ErrorCode.IDEMPOTENCY_EXECUTION_SNAPSHOT_INVALID,
+                error.getErrorCodeEnum());
+    }
+
+    @Test
+    void executionSnapshotWithNonIntegralCollectionIdsFailsClosed() {
+        String snapshot = """
+                {
+                  "executionSnapshotVersion": 1,
+                  "mode": "KNOWLEDGE",
+                  "memoryMode": "SERVER",
+                  "resolvedCandidates": ["provider/model-a"],
+                  "effectiveScope": {
+                    "collectionFilter": "SELECTED",
+                    "collectionIds": [0]
+                  }
+                }
+                """;
+
+        RagException error = assertThrows(RagException.class,
+                () -> mapper.mapFromExecutionSnapshot(
+                        new ChatRequest("q", "session-1"),
+                        ChatPrincipal.local(), "session-1", snapshot));
+        assertEquals(ErrorCode.IDEMPOTENCY_EXECUTION_SNAPSHOT_INVALID,
+                error.getErrorCodeEnum());
+    }
+
+    @Test
+    void executionSnapshotWithBlankCandidateFailsClosed() {
+        String snapshot = """
+                {
+                  "executionSnapshotVersion": 1,
+                  "mode": "KNOWLEDGE",
+                  "memoryMode": "SERVER",
+                  "resolvedCandidates": ["   "]
+                }
+                """;
+
+        RagException error = assertThrows(RagException.class,
+                () -> mapper.mapFromExecutionSnapshot(
+                        new ChatRequest("q", "session-1"),
+                        ChatPrincipal.local(), "session-1", snapshot));
+        assertEquals(ErrorCode.IDEMPOTENCY_EXECUTION_SNAPSHOT_INVALID,
+                error.getErrorCodeEnum());
+    }
 }
