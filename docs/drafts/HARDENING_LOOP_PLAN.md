@@ -1866,3 +1866,15 @@ VersionHistoryModal 相关 100% 项等。
   isProviderAvailable 大小写兼容。Fake 类名命中 resolveProvider
   类名启发式（zhipu）。
 - 指标：core 全量门禁 EXIT=0 绿。
+
+### Batch 214（已交付）
+
+- 分支：`test/core-provisioning-race-batch214-20260909`（已合入
+  main）
+- 内容：CollectionProvisioningService 竞态语义（JaCoCo 57.5%），
+  新增 6 用例：DUPLICATE_RESOURCE 竞态经台账重放恢复（replay=
+  true、不重复落库）、唯一约束冲突第二次尝试成功创建、重试耗尽
+  （默认 3 次）后重抛原始冲突、已清理（purgedAt 非空）集合拒绝
+  重放 COLLECTION_ALREADY_RETIRED、台账清理有界批量删除、功能禁
+  用跳过清理。台账查找桩「先空后有」建模并发方写入。
+- 指标：core 全量门禁 EXIT=0 绿。
