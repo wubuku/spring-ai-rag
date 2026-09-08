@@ -2132,3 +2132,16 @@ VersionHistoryModal 相关 100% 项等。
   0.4 值绑定）、语言偏好按钮（changeLanguage('en') +
   localStorage 'language'='en'）。Settings 行覆盖 96.8%→100%。
 - 指标：webui 全量 639 绿 + vite build 通过。
+
+### Batch 234（已交付）
+
+- 分支：`test/core-execute-run-batch234-20260909`（已合入 main）
+- 内容：EvaluationSuiteService executeRun 主生命周期（此前仅
+  worker 租约测试触达），新增 5 用例：owner 凭证失效时
+  finishRun(FAILED, AUTHORIZATION_CHANGED) fail-closed、版本缺失
+  NOT_FOUND 传播、定义越权（scopeResolver 抛 SecurityException）
+  fail-closed、语料快照漂移 → CORPUS_CHANGED 状态+错误码、通过路
+  径聚合（PASSED + avgHitRate/avgMrr=1.0、caseCount=1）。关键桩：
+  insertCaseResult 须返回 1——0 触发租约护栏早退（首次运行暴露该
+  分支）。
+- 指标：core 全量门禁 EXIT=0 绿。
