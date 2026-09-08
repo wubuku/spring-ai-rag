@@ -233,6 +233,59 @@ describe('Settings persistence and model fallback branches', () => {
     });
   });
 
+  it('clears the previous saved-indicator timer on a second save', async () => {
+    const user = userEvent.setup();
+    renderSettings('?tab=retrieval');
+
+    const vectorWeight = await screen.findByLabelText('settings.vectorWeight');
+    // 两次保存：第二次保存会 clearTimeout 第一次的指示器定时器。
+    fireEvent.change(vectorWeight, { target: { value: '0.8' } });
+    const save = screen.getByRole('button', { name: /settings\.save/i });
+    await waitFor(() => expect(save).toBeEnabled());
+    await user.click(save);
+    await waitFor(() =>
+      expect(localStorageMock.setItem).toHaveBeenCalledWith(
+        'user_settings',
+        expect.any(String),
+      ),
+    );
+
+    fireEvent.change(vectorWeight, { target: { value: '0.6' } });
+    await waitFor(() => expect(save).toBeEnabled());
+    await user.click(save);
+
+    await waitFor(() => {
+      const calls = localStorageMock.setItem.mock.calls.filter(
+        call => call[0] === 'user_settings',
+      );
+      expect(calls.length).toBeGreaterThanOrEqual(2);
+      const last = JSON.parse(calls.at(-1)![1] as string);
+      expect(last.vectorWeight).toBe(0.6);
+    });
+  });
+
+  it('persists the language preference through the language buttons', async () => {
+    const user = userEvent.setup();
+    renderSettings('?tab=language');
+
+    // 点击 English：changeLanguage('en') 并写入 localStorage。
+    await user.click(screen.getByRole('button', { name: /English/ }));
+
+    await waitFor(() => expect(localStorageMock.setItem).toHaveBeenCalledWith(
+      'language',
+      'en',
+    ));
+  });
+
+  it('updates the fulltext weight slider through its onChange', async () => {
+    renderSettings('?tab=retrieval');
+
+    const slider = await screen.findByLabelText('settings.fulltextWeight');
+    fireEvent.change(slider, { target: { value: '0.4' } });
+
+    expect(slider).toHaveValue('0.4');
+  });
+
   it('persists retrieval and cache changes through handleSave', async () => {
     const user = userEvent.setup();
     renderSettings('?tab=retrieval');
