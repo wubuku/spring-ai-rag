@@ -2043,3 +2043,18 @@ VersionHistoryModal 相关 100% 项等。
   变体带 collectionId 委托、previewHtmlFragment 的 default.md→
   paper.md 双查找回退（前导斜杠路径）。
 - 指标：core 全量门禁 EXIT=0 绿。
+
+### Batch 227（已交付）
+
+- 分支：`test/core-collection-bykey-batch227-20260909`（已合入
+  main）
+- 内容：RagCollectionController by-key 路由（JaCoCo 82.9%，此前
+  39 用例全部走数字路由），新增 5 用例：getByKey 返回集合 Map +
+  文档计数、updateByKey 经 requireActive 解析后委托数字更新
+  （findByIdAndDeletedFalse + save、name 更新断言）、deleteByKey
+  经 deleteCollection CAS 软删（id/documentsUnlinked 响应断言）、
+  restoreByKey 经 requireIncludingDeleted 解析已删除集合并恢复
+  （collectionId/documentCount 断言）、键解析失败 RagException 透
+  传。认证沿用 DATABASE_API_KEY 属性 + requireActive(null, key)
+  桩模式。
+- 指标：core 全量门禁 EXIT=0 绿。
