@@ -2171,3 +2171,16 @@ VersionHistoryModal 相关 100% 项等。
   documentRevision 才能通过修订护栏提交）；relocate 对话框 cancel
   关闭（对话框消失且 relocate API 不被调用）。
 - 指标：webui 全量 642 绿 + vite build 通过。
+
+### Batch 237（已交付）
+
+- 分支：`test/core-executor-errors-batch237-20260909`（已合入
+  main）
+- 内容：EmbeddingJobExecutor 收尾细节（既有 11 用例之外的三个缺
+  口），新增 3 用例：空白 provider 错误文本经 safeError 回退为默
+  认失败描述（"Embedding job failed" 落库 markFailure）、force 标
+  志以仓储最新状态（find 刷新）而非租约快照传入嵌入调用并影响
+  markSucceeded 的 force 参数、claim 失败且任务消失时 IllegalArgu
+  mentException。桩要点：executeNow 每次生成随机 lease owner，
+  isCommitAllowed/markSucceeded 断言需按任意 owner 匹配。
+- 指标：core 全量门禁 EXIT=0 绿。
