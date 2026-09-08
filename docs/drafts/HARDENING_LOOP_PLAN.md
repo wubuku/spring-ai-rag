@@ -1707,3 +1707,12 @@ VersionHistoryModal 相关 100% 项等。
   拒绝、文档缺失 DocumentNotFoundException。含认证属性上下文与序列
   分配 queryForObject 桩。
 - 指标：core 全量 3897 → **3901** 绿。
+
+### Batch 201（已交付）
+
+- 分支：`test/core-import-jsonrec-batch201-20260909`（已合入 main）
+- 内容：importDocument 校验分支，新增 2 用例：json-record 无
+  externalId 时缺 jsonbPayload 拒绝、json-record 带 externalId 且
+  payload 为 null node 拒绝；本地导入（无 externalId）经 createLocal
+  持久化（title/source/enabled 断言）与 SKIP 策略不排队嵌入。
+- 指标：core 全量 3901 → **3905** 绿。
