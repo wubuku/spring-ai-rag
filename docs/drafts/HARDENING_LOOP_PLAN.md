@@ -1596,3 +1596,15 @@ VersionHistoryModal 相关 100% 项等。
   整数集合 ID、空白候选——后三者均 fail-closed 为
   IDEMPOTENCY_EXECUTION_SNAPSHOT_INVALID。
 - 指标：core 全量 3858 → **3864** 绿。
+
+### Batch 195（已交付）
+
+- 分支：`test/core-eval-suite-orch-batch195-20260908`（已合入 main）
+- 内容：EvaluationSuiteService 编排加固，新增 7 用例：managed suites
+  关闭门禁、createSuite 输入修剪与 owner 绑定、DuplicateKey →
+  DUPLICATE_RESOURCE、listSuites 行映射、getSuite 缺失 NOT_FOUND、
+  createRun 版本缺失 NOT_FOUND、槽位耗尽 CONCURRENT_EVALUATION_LIMIT。
+  认证上下文经 MockHttpServletRequest 驱动
+  ChatPrincipal.fromCurrentRequest，db owner 经 resolveExecutionKey
+  的 api key 管理服务校验（SecurityException fail-closed 已确认）。
+- 指标：core 全量 3858 → **3871** 绿。
