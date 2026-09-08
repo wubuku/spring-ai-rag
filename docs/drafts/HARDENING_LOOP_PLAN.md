@@ -2029,3 +2029,17 @@ VersionHistoryModal 相关 100% 项等。
   传（不附加 trace session）、带 requestedModel 的结果经信封生成
   器正常消费。键控 replay/claim/SSE 分支由既有 WebTest 覆盖。
 - 指标：core 全量门禁 EXIT=0 绿。
+
+### Batch 226（已交付）
+
+- 分支：`test/core-pdf-embed-policy-batch226-20260909`（已合入
+  main）
+- 内容：PdfImportController 触发嵌入的策略分派（JaCoCo 75%），
+  新增 7 用例：ASYNC 端点拒绝 embed=sse 组合（RagException）、
+  ASYNC 策略经 triggerEmbeddingWithPolicy 走 4 参
+  triggerEmbedding（含 embeddingAction/jobId/batchId 的 9 字段结
+  果映射）、sync 端点携带非 SYNC 策略时转发到策略分派、SKIP 策略
+  显式拒绝、SSE 端点空白 UUID IllegalArgumentException、SSE 默认
+  变体带 collectionId 委托、previewHtmlFragment 的 default.md→
+  paper.md 双查找回退（前导斜杠路径）。
+- 指标：core 全量门禁 EXIT=0 绿。
