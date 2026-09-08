@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import { Embeddings } from './Embeddings';
 import { embeddingsApi } from '../api/embeddings';
 
@@ -181,6 +181,60 @@ describe('Embeddings interactions', () => {
     expect(embeddingsApi.retryJob).toHaveBeenCalledWith(
       '11111111-1111-1111-1111-111111111111',
     );
+  });
+});
+
+describe('Embeddings filter toggling and preview close', () => {
+  it('sets and clears the collectionKey filter through the input', async () => {
+    const user = userEvent.setup();
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    const LocationProbe = () => {
+      const location = useLocation();
+      return <output data-testid="location-search">{location.search}</output>;
+    };
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={['/embeddings']}>
+          <Embeddings />
+          <LocationProbe />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    const input = await screen.findByLabelText('embeddings.collectionKey');
+    await user.type(input, 'wiki');
+    expect(screen.getByTestId('location-search')).toHaveTextContent(
+      'collectionKey=wiki',
+    );
+
+    // 清空输入走 else 分支删除 URL 参数。
+    await user.type(input, '{backspace}{backspace}{backspace}{backspace}');
+    expect(screen.getByTestId('location-search').textContent).not.toContain(
+      'collectionKey=',
+    );
+  });
+
+  it('closes the repair preview dialog via its close action', async () => {
+    const user = userEvent.setup();
+    renderEmbeddings('/embeddings?collectionKey=wiki');
+
+    await user.click(
+      await screen.findByRole('button', { name: 'embeddings.previewRepair' }),
+    );
+    const dialog = await screen.findByRole('dialog', {
+      name: 'embeddings.repairPreview',
+    });
+    expect(dialog).toBeInTheDocument();
+
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Close' }),
+    );
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+    );
+    expect(embeddingsApi.applyRepair).not.toHaveBeenCalled();
   });
 });
 

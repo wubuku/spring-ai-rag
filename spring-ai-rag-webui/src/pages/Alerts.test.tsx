@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Alerts } from './Alerts';
 import { alertsApi } from '../api/alerts';
@@ -246,6 +246,79 @@ describe('Alerts', () => {
     expect(
       screen.getByRole('button', { name: '+ alerts.createSilence' }),
     ).toBeInTheDocument();
+  });
+});
+
+describe('Alerts deliveries filters and loading state', () => {
+  function renderAlertsWithProbe(path = '/alerts') {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    const LocationProbe = () => {
+      const location = useLocation();
+      return <output data-testid="location-search">{location.search}</output>;
+    };
+    return render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={[path]}>
+          <Alerts />
+          <LocationProbe />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(alertsApi.listActive).mockResolvedValue({ data: [] } as never);
+    vi.mocked(alertsApi.listSloConfigs).mockResolvedValue({ data: [] } as never);
+    vi.mocked(alertsApi.listSilenceSchedules).mockResolvedValue({ data: [] } as never);
+    vi.mocked(alertsApi.listNotificationDeliveries).mockResolvedValue({
+      data: {
+        notificationsEnabled: true,
+        durableDeliveryEnabled: true,
+        configuredProviders: [],
+        items: [],
+        limit: 50,
+        hasMore: false,
+      },
+    } as never);
+  });
+
+  it('shows the loading state while the deliveries query is pending', async () => {
+    const user = userEvent.setup();
+    vi.mocked(alertsApi.listNotificationDeliveries).mockReturnValue(
+      new Promise(() => {}) as never,
+    );
+    renderAlertsWithProbe('/alerts');
+
+    await user.click(screen.getByRole('button', { name: 'alerts.deliveries' }));
+
+    expect(await screen.findByText('common.loading')).toBeInTheDocument();
+  });
+
+  it('sets the delivery status filter through its select', async () => {
+    const user = userEvent.setup();
+    renderAlertsWithProbe('/alerts');
+
+    await user.click(screen.getByRole('button', { name: 'alerts.deliveries' }));
+    const select = await screen.findByLabelText('alerts.deliveryStatusFilter');
+    await user.selectOptions(select, 'FAILED');
+    expect(screen.getByTestId('location-search')).toHaveTextContent('status=FAILED');
+  });
+
+  it('clears the delivery status filter via the empty option', async () => {
+    const user = userEvent.setup();
+    // 直接以 status 参数进入；清空走 else 分支删除 URL 参数。
+    renderAlertsWithProbe('/alerts?tab=notification-deliveries&status=FAILED');
+
+    const select = await screen.findByLabelText('alerts.deliveryStatusFilter');
+    await user.selectOptions(select, '');
+    await waitFor(() =>
+      expect(
+        screen.getByTestId('location-search').textContent,
+      ).not.toContain('status='),
+    );
   });
 });
 
