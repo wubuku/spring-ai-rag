@@ -1660,3 +1660,15 @@ VersionHistoryModal 相关 100% 项等。
 - 流程性：verifier 明细与批次数（140–196）以账本各 Batch 条目为准。
 
 **等待用户下一步指示。**
+
+### Batch 197（已交付）
+
+- 分支：`test/core-derivation-fulltext-batch197-20260908`（已合入
+  main）
+- 内容：DerivationIntegrityService（5 用例：summary/embedding
+  聚合映射与 profile key、details 分页校验、快照映射、resolver 异常
+  上传播）+ FulltextSearchProvider searchInScope 默认实现的
+  fail-closed 矩阵（6 用例：null scope 视为无界、matchNone/非 NONE
+  filter/documentType/payloadFilter 均不触后端、NONE 范围透传
+  documentIds）。
+- 指标：core 全量 3864 → **3885** 绿。
