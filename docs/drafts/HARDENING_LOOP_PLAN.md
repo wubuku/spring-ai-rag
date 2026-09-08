@@ -1761,3 +1761,18 @@ VersionHistoryModal 相关 100% 项等。
   "kb") 桩集合解析；finishExternal 的 findById 回传 saveAndFlush
   同一实体（AtomicReference）。
 - 指标：core 全量门禁 EXIT=0 绿。
+
+### Batch 206（已交付）
+
+- 分支：`test/core-external-guards-batch206-20260909`（已合入 main）
+- 内容：外部文档守卫语义，新增 10 用例：requireKind 双向种类冲突
+  （text 覆写 json-record → DocumentRevisionConflict、json-record
+  覆写 text → StructuredRecordConflict）、reconcileMissingExternal
+  五类守卫返回 false（文档缺失/无 externalId/无 sourceRevision/
+  已禁用/快照后新变更）+ 合格文档墓碑化成功路径（RECONCILIATION
+  origin、runId 写入、revision 3→4、TOMBSTONE 版本、
+  markNotRequested + cancelActive）、unlinkLocalDocumentsFromCollection
+  外部托管保护拒绝与本地解绑编排（collectionId 置空 + 每文档
+  COLLECTION_MOVE 版本 + 计数 2）。setUp 统一 saveAndFlush 透传
+  与 DATABASE_API_KEY 认证桩。
+- 指标：core 全量门禁 EXIT=0 绿。
