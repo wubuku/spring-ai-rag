@@ -1973,3 +1973,16 @@ VersionHistoryModal 相关 100% 项等。
   终态行按保留期批量删除、二次校验未到期则跳过（不消费凭证不落
   库）、台账或事务缺失静默降级。stubRotationLookup lenient 化。
 - 指标：core 全量门禁 EXIT=0 绿。
+
+### Batch 222（已交付）
+
+- 分支：`test/webui-forms-preview-batch222-20260909`（已合入 main）
+- 内容：WebUI 表单与预览残余缺口（覆盖率数据驱动），新增 5 用例：
+  ApiKeys 创建表单能力单选（只读→读写往返，两个 onChange 分支）、
+  轮换模式 staged→immediate→staged 往返（回切后 overlap 输入重
+  现）、overlap 超范围（>86400）静默忽略不触发 prepareMutation、
+  Layout 移动端侧栏关闭按钮（innerWidth 置为移动断点后渲染）、
+  FilePreview PDF 原文拉取失败错误框。后端 ConversationSummarySer
+  vice 的 clear/promptText 复核发现已有覆盖，未重复添加。
+  Layout/FilePreview 行覆盖 100%，ApiKeys 行 94.73%→95.69%。
+- 指标：webui 全量 633 绿 + vite build 通过。
