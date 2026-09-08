@@ -2001,3 +2001,19 @@ VersionHistoryModal 相关 100% 项等。
   行号归因偏差——行为已由映射用例锁定。
 - 指标：webui 全量 636 绿 + vite build 通过；ApiKeys 行
   95.69%→96.17%。
+
+### Batch 224（已交付）
+
+- 分支：`test/core-chat-export-turn-batch224-20260909`（已合入
+  main）
+- 内容：RagChatController 控制器层缺口（JaCoCo 53.9%），新增 6
+  用例：exportHistory JSON 下载（application/json; charset=utf-8、
+  Content-Disposition 附件文件名 session-1.json、响应体透传）、
+  Markdown 变体（format=MD 大小写兼容、limit=25 透传、.md 文件
+  名）、非法 format=csv 抛 IllegalArgumentException、getTurnStatus
+  在幂等未配置时 fail-closed 抛 RagException、正常路径经
+  configureTurnOperationService 注入后向
+  ChatTurnOperationService.status 委托（principal/turnId/includeRe
+  sponse 断言）、导出委托使用从请求解析的 DATABASE_API_KEY
+  principal（db:key-42）。
+- 指标：core 全量门禁 EXIT=0 绿。
