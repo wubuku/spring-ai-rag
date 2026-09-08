@@ -29,6 +29,23 @@ function Harness() {
   );
 }
 
+function BareHarness() {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button type="button" onClick={() => setOpen(true)}>Open bare</button>
+      <Dialog
+        open={open}
+        title="Bare"
+        onClose={() => setOpen(false)}
+        closeDisabled
+      >
+        {null}
+      </Dialog>
+    </>
+  );
+}
+
 describe('Dialog', () => {
   it('provides modal semantics, focus containment, scroll lock and focus return', async () => {
     const user = userEvent.setup();
@@ -100,5 +117,37 @@ describe('Dialog focus trap wrap-around', () => {
 
     await user.tab();
     expect(screen.getByLabelText('Name')).toHaveFocus();
+  });
+
+  it('wraps focus from the first DOM focusable to the last via the trap handler', async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+    await user.click(screen.getByRole('button', { name: 'Open settings' }));
+
+    // DOM 顺序中 header 内的 Close 按钮是面板第一个可聚焦元素。
+    screen.getByRole('button', { name: 'Close' }).focus();
+
+    // 处理器 preventDefault 原生环绕并把焦点送到最后一个（Save）。
+    await user.keyboard('{Shift>}{Tab}{/Shift}');
+    expect(screen.getByRole('button', { name: 'Save' })).toHaveFocus();
+  });
+
+  it('focuses the panel itself when the dialog has no focusable elements', async () => {
+    const user = userEvent.setup();
+    render(<BareHarness />);
+    await user.click(screen.getByRole('button', { name: 'Open bare' }));
+
+    await user.tab();
+    expect(screen.getByRole('dialog')).toHaveFocus();
+  });
+
+  it('closes when the backdrop itself is pressed', async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+    await user.click(screen.getByRole('button', { name: 'Open settings' }));
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+
+    await user.click(screen.getByTestId('dialog-backdrop'));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 });
