@@ -1791,3 +1791,14 @@ VersionHistoryModal 相关 100% 项等。
   另发现 ReembedAllButton.test 历史上 describe 提前闭合（后两用例
   在顶层），保持原语义仅去除孤立括号。
 - 指标：webui 全量 613 绿 + vite build 通过。
+
+### Batch 208（已交付）
+
+- 分支：`test/core-sync-run-item-batch208-20260909`（已合入 main）
+- 内容：快照条目应用（upsertSyncRunItemInCurrentTransaction）分支
+  语义，新增 4 用例：文档 mutation sequence 大于快照起点 →
+  SKIPPED_NEWER_MUTATION（不落库不记版本、embeddingAction=NONE）、
+  同 revision 同状态 UNCHANGED 重放（零持久化副作用）、json-record
+  条目缺 payload → NPE、NullNode payload → IllegalArgumentException。
+  包级入口直接测试，不经事务模板包装。
+- 指标：core 全量门禁 EXIT=0 绿。
