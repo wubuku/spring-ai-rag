@@ -1827,3 +1827,16 @@ VersionHistoryModal 相关 100% 项等。
   更识别）、环境完全一致 → 无漂移。listSuites 桩需累积列表（两个
   run 共存），validator.parse 桩真实 definition record。
 - 指标：core 全量门禁 EXIT=0 绿。
+
+### Batch 211（已交付）
+
+- 分支：`test/core-dispatch-branches-batch211-20260909`（已合入
+  main）
+- 内容：EmbeddingDispatchService（JaCoCo 45.5%）分支语义，新增 9
+  用例：活跃任务合并 ASYNC_COALESCED（不重置处理状态/不重分配代
+  次、QUEUED 触发 wakeup）、force 重入队重置 PENDING、持久化任务
+  禁用 RagException、NOT_REQUESTED 标记与处理状态落库、
+  dispatchAfterCommit SKIP/SYNC/ASYNC 三策略、同步完成 SUCCEEDED →
+  SYNC_COMPLETED、FAILED → 失败状态透传 lastError、无 jobExecutor
+  与无排队任务时原样返回。
+- 指标：core 全量门禁 EXIT=0 绿。
