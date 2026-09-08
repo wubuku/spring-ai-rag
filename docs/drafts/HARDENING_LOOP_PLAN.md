@@ -2081,3 +2081,17 @@ VersionHistoryModal 相关 100% 项等。
   fail-closed、AnswerQualityResult 默认构造 + setter 合同（REVISION
   推荐）。
 - 指标：core 全量门禁 EXIT=0 绿。
+
+### Batch 230（已交付）
+
+- 分支：`test/core-pdf-policy-dispatch-batch230-20260909`（已合入
+  main）
+- 内容：PdfToRagService（JaCoCo 70.4%）显式触发嵌入的策略分派
+  （4 参 triggerEmbedding 此前无测试），新增 4 用例：SKIP 策略
+  BAD_REQUEST 拒绝、ASYNC 但分发通道缺失时 EMBEDDING_JOBS_DISABLED
+  fail-closed（requireJobsEnabled）、ASYNC 经
+  enqueueInCurrentTransaction 排队（QUEUED 状态、ASYNC_QUEUED
+  action、jobId/batchId 透传、文档新建 id=66）、SYNC 回落既有同步
+  触发（embedDocument 完成态 + chunksCreated）。dispatchService 经
+  包内 setter 注入。
+- 指标：core 全量门禁 EXIT=0 绿。
