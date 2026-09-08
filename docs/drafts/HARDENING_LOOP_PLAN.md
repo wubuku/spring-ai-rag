@@ -1917,3 +1917,17 @@ VersionHistoryModal 相关 100% 项等。
   截止时间/预算对象/每工具结果字符限制映射）。注：Effect 枚举当前
   仅 READ_ONLY，写效果分支为防御性代码不可构造。
 - 指标：core 全量门禁 EXIT=0 绿。
+
+### Batch 218（已交付）
+
+- 分支：`test/webui-page-gaps-batch218-20260909`（已合入 main）
+- 内容：WebUI 页面缺口收尾（覆盖率数据驱动），新增 7 用例：
+  Embeddings collectionKey 筛选器设值/清空走 URL 参数增删（含
+  MemoryRouter location 探针模式）、修复预览 Dialog 关闭（不触发
+  applyRepair）、Alerts 投递查询 pending 加载态、投递状态筛选器设
+  值与空选项清空（参数变更触发 refetch 会用加载态替换筛选条，清空
+  用例直接以带参数初始 URL 渲染规避竞态）、Evaluation tab 切换
+  （suites 写入参数、report 清空参数）。Collections purge 无
+  preview 分支为防御性代码（apply 按钮仅在 preview 存在时渲染）
+  不可经 UI 触发，未强造。
+- 指标：webui 全量 628 绿 + vite build 通过。
