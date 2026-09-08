@@ -1840,3 +1840,15 @@ VersionHistoryModal 相关 100% 项等。
   SYNC_COMPLETED、FAILED → 失败状态透传 lastError、无 jobExecutor
   与无排队任务时原样返回。
 - 指标：core 全量门禁 EXIT=0 绿。
+
+### Batch 212（已交付）
+
+- 分支：`test/core-diagnostics-branches-batch212-20260909`（已合入
+  main）
+- 内容：RetrievalDiagnosticsService（JaCoCo 50.8%）分支语义，新增
+  9 用例：list 分页钳制（size 500→100、page -3→0、空白过滤转
+  null）、repository 缺失时空页降级、cleanupExpired 有界批量循环
+  （500+120=620 恰两批）与保留期 0 跳过、预算耗尽 outcome 落库、
+  空会话 DIAGNOSTIC_UNKNOWN、storeQueryText 开启保留原文（含耗时
+  与结果数断言）、诊断禁用不落库、isEnabled 配置镜像。
+- 指标：core 全量门禁 EXIT=0 绿。
