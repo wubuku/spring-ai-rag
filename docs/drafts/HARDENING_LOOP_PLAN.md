@@ -1672,3 +1672,15 @@ VersionHistoryModal 相关 100% 项等。
   filter/documentType/payloadFilter 均不触后端、NONE 范围透传
   documentIds）。
 - 指标：core 全量 3864 → **3885** 绿。
+
+### Batch 198（已交付）
+
+- 分支：`test/core-semantic-exec-batch198-20260908`（已合入 main）
+- 内容：SemanticEvaluationService 执行链路加固，新增 5 用例：空白
+  模型前置拒绝不触 ChatClient、批量空列表与超 semanticBatchLimit
+  拒绝、FACT_CHECKING 深度桩 ChatClient 链（prompt/user/call/
+  entity）真实执行至 COMPLETED、求值器内部爆炸降级 FAILED、批内
+  相同语义项复用单次求值。
+- 锁定真实 Spring AI 1.1.7 FactCheckingEvaluator 语义：score 丢弃
+  清零、反馈驱动 pass、COMPLETED 状态透传。
+- 指标：core 全量 → **3890** 绿。
