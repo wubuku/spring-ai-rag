@@ -1608,3 +1608,13 @@ VersionHistoryModal 相关 100% 项等。
   ChatPrincipal.fromCurrentRequest，db owner 经 resolveExecutionKey
   的 api key 管理服务校验（SecurityException fail-closed 已确认）。
 - 指标：core 全量 3858 → **3871** 绿。
+
+### Batch 196（已交付）
+
+- 分支：`test/core-snapshot-gen-batch196-20260908`（已合入 main）
+- 内容：ChatAuthorizationService snapshot 生成路径，新增 3 用例：
+  PLAIN 模式快照全 NOT_APPLICABLE、无限制调用方 UNRESTRICTED +
+  unassignedDocumentsAllowed=true、受限调用方 allowList 排序去重
+  （9,3,7 → [3,7,9]）。请求上下文经 RequestContextHolder 注入
+  ApiAccessPolicy 属性。
+- 指标：core 全量 3853 → **3874** 绿。
