@@ -221,6 +221,18 @@ describe('ApiKeys', () => {
     }));
   });
 
+  it('toggles create-form capabilities from read-only back to full', () => {
+    render(<BrowserRouter><ApiKeys /></BrowserRouter>);
+    fireEvent.click(screen.getByRole('button', { name: 'apiKeys.createKey' }));
+
+    // 先切到只读，再切回读写：两个 onChange 分支都被触达。
+    fireEvent.click(screen.getByRole('radio', { name: 'RAG_READ' }));
+    expect(screen.getByRole('radio', { name: 'RAG_READ' })).toBeChecked();
+
+    fireEvent.click(screen.getByRole('radio', { name: 'RAG_READ, RAG_WRITE' }));
+    expect(screen.getByRole('radio', { name: 'RAG_READ, RAG_WRITE' })).toBeChecked();
+  });
+
   it('submits policy CAS updates for the stable principal', () => {
     mockUseQuery.mockImplementation((options: { queryKey: unknown[] }) => {
       if (options.queryKey[0] === 'api-principals') {

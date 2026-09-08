@@ -270,6 +270,48 @@ describe('ApiKeys staged credential rotation', () => {
     });
   });
 
+  it('round-trips rotation mode back to staged and shows the overlap input', async () => {
+    renderPage();
+
+    const row = within((await screen.findByText(principal.name)).closest(
+      '[class*="tableRow"]',
+    )!);
+    fireEvent.click(row.getByRole('button', { name: 'apiKeys.rotate' }));
+
+    // 先切到 immediate，再切回 staged：第二个 radio 的 onChange 被触达。
+    fireEvent.click(screen.getByRole('radio', {
+      name: /apiKeys\.immediateRotation/,
+    }));
+    expect(screen.queryByLabelText('apiKeys.overlapSeconds')).not
+      .toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('radio', {
+      name: /apiKeys\.stagedRotation/,
+    }));
+    expect(screen.getByLabelText('apiKeys.overlapSeconds')).toBeInTheDocument();
+  });
+
+  it('silently ignores an overlap outside the supported range', async () => {
+    renderPage();
+
+    const row = within((await screen.findByText(principal.name)).closest(
+      '[class*="tableRow"]',
+    )!);
+    fireEvent.click(row.getByRole('button', { name: 'apiKeys.rotate' }));
+
+    fireEvent.change(screen.getByLabelText('apiKeys.overlapSeconds'), {
+      target: { value: '86401' },
+    });
+    fireEvent.click(screen.getByRole('button', {
+      name: 'apiKeys.prepareRotation',
+    }));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('apiKeys.overlapSeconds')).toBeInTheDocument();
+    });
+    expect(mocks.prepareRotation).not.toHaveBeenCalled();
+  });
+
   it('keeps immediate rotation as an explicit compatibility path', async () => {
     mocks.rotateKey.mockResolvedValue({
       data: {
