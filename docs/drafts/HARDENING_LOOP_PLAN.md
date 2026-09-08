@@ -1697,3 +1697,13 @@ VersionHistoryModal 相关 100% 项等。
   IN_PROGRESS still-in-progress 冲突。私有 reserveIdempotency 经
   ReflectionTestUtils 调用；StubJdbc 去 final 支持状态化子类。
 - 指标：core 全量 3890 → **3897** 绿。
+
+### Batch 200（已交付）
+
+- 分支：`test/core-tombstone-batch200-20260909`（已合入 main）
+- 内容：DocumentMutationService.tombstoneExternal 编排加固，新增 4
+  用例：外部文档墓碑化成功（实体墓碑状态 + 版本记录 + dispatch
+  标记）、已墓碑同 revision 幂等 UNCHANGED、同 revision 仍存活冲突
+  拒绝、文档缺失 DocumentNotFoundException。含认证属性上下文与序列
+  分配 queryForObject 桩。
+- 指标：core 全量 3897 → **3901** 绿。
