@@ -2017,3 +2017,15 @@ VersionHistoryModal 相关 100% 项等。
   sponse 断言）、导出委托使用从请求解析的 DATABASE_API_KEY
   principal（db:key-42）。
 - 指标：core 全量门禁 EXIT=0 绿。
+
+### Batch 225（已交付）
+
+- 分支：`test/core-openai-basic-batch225-20260909`（已合入 main）
+- 内容：OpenAiCompatibilityController（JaCoCo 52.9%，控制器层最
+  低）非键控路径单元语义，新增 5 用例：listModels 信封（object=
+  "list" + 别名 id 映射）、getModel 按别名映射、非键控 JSON 完成
+  （mapper 映射命令 → executionService.execute 同一实例 → 200 +
+  application/json + ResponseBodyEmitter）、诊断关闭时命令原样透
+  传（不附加 trace session）、带 requestedModel 的结果经信封生成
+  器正常消费。键控 replay/claim/SSE 分支由既有 WebTest 覆盖。
+- 指标：core 全量门禁 EXIT=0 绿。
