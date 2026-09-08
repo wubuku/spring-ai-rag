@@ -2069,3 +2069,15 @@ VersionHistoryModal 相关 100% 项等。
   功路径（alertKey/silenceType/时间段/描述/enabled 变更 + 审计）
   与不存在 404。审计断言经控制器的 logUpdate 委托验证。
 - 指标：core 全量门禁 EXIT=0 绿。
+
+### Batch 229（已交付）
+
+- 分支：`test/core-eval-quality-batch229-20260909`（已合入 main）
+- 内容：EvaluationController 答案质量与语义评测端点（JaCoCo
+  71.6%），新增 6 用例：answer-quality 全字段映射（groundedness/
+  relevance/helpfulness/reasoning/recommendation 透传 + 服务入参
+  逐项断言）、semantic 单条委托、semantic/batch 批量委托、语义服
+  务缺失时 semantic 与 semantic/batch 均 IllegalStateException
+  fail-closed、AnswerQualityResult 默认构造 + setter 合同（REVISION
+  推荐）。
+- 指标：core 全量门禁 EXIT=0 绿。
