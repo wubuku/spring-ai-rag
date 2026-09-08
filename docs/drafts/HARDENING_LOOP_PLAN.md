@@ -1891,3 +1891,15 @@ VersionHistoryModal 相关 100% 项等。
   块与来源渲染（S1/标题）、CSV user/assistant 行映射（空白回复不
   产生 assistant 行）、null principal 拒绝。
 - 指标：core 全量门禁 EXIT=0 绿。
+
+### Batch 216（已交付）
+
+- 分支：`test/core-pdf-queries-batch216-20260909`（已合入 main）
+- 内容：PdfImportService 文件管理读取面（JaCoCo 62.9%，此前仅
+  importPdf 主流程有测试），新增 7 用例：原始文件名归一化（剥客
+  户端路径/空白/控制字符拒绝/非 .pdf 拒绝/超 512 拒绝/空文件拒
+  绝）、按导入 ID 单查与批量查（空/null 集合返回空 Map）、根路径
+  子项列举（/、null、空白）、直接子项过滤（深层嵌套排除、legacy
+  前导空白路径 trim 后保留）、临时文件资源加载（文件名后缀、内
+  容非空）与未知路径返回空。
+- 指标：core 全量门禁 EXIT=0 绿。
