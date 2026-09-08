@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { useChatSessions, ChatSidebar } from './ChatSidebar';
 
 const localStorageMock = {
@@ -103,6 +104,39 @@ describe('ChatSidebar', () => {
 
     expect(screen.getByText('chat.noHistory')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'chat.deleteSession' })).not.toBeInTheDocument();
+  });
+
+  it('selects a session when its row button is clicked', async () => {
+    const user = userEvent.setup();
+    localStorageMock.data['chat_sessions'] = JSON.stringify([
+      { id: 's1', title: 'Session 1', updatedAt: 1234567890 },
+      { id: 's2', title: 'Session 2', updatedAt: 2234567890 },
+    ]);
+    const onSelectSession = vi.fn();
+
+    render(
+      <ChatSidebar currentSessionId="" onSelectSession={onSelectSession} onNewChat={vi.fn()} />,
+    );
+
+    await user.click(screen.getByRole('button', { name: /Session 2/ }));
+    expect(onSelectSession).toHaveBeenCalledWith('s2');
+  });
+
+  it('deletes a session from its delete button and persists the change', async () => {
+    const user = userEvent.setup();
+    localStorageMock.data['chat_sessions'] = JSON.stringify([
+      { id: 's1', title: 'Session 1', updatedAt: 1234567890 },
+      { id: 's2', title: 'Session 2', updatedAt: 2234567890 },
+    ]);
+
+    render(<ChatSidebar currentSessionId="" onSelectSession={vi.fn()} onNewChat={vi.fn()} />);
+
+    await user.click(screen.getAllByRole('button', { name: 'chat.deleteSession' })[0]);
+
+    expect(screen.queryByText('Session 1')).not.toBeInTheDocument();
+    const remaining = JSON.parse(localStorageMock.data['chat_sessions']);
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0].id).toBe('s2');
   });
 });
 

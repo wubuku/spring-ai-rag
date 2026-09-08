@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { collectionsApi } from '../../api/collections';
 import { CreateCollectionModal } from './CreateCollectionModal';
 
 vi.mock('../../api/collections', () => ({
@@ -62,6 +63,63 @@ describe('CreateCollectionModal', () => {
     await user.type(screen.getByRole('textbox', { name: /name/i }), 'AB');
     await user.click(screen.getByRole('button', { name: /create/i }));
     expect(screen.getByText(/at least 3 characters/i)).toBeInTheDocument();
+  });
+
+  it('shows validation error when name exceeds 100 characters', async () => {
+    const user = userEvent.setup();
+    render(
+      <QueryClientProvider client={queryClient}>
+        <CreateCollectionModal isOpen={true} onClose={vi.fn()} />
+      </QueryClientProvider>
+    );
+
+    await user.type(screen.getByRole('textbox', { name: /name/i }), 'N'.repeat(101));
+    await user.click(screen.getByRole('button', { name: /create/i }));
+    expect(screen.getByText(/less than 100 characters/i)).toBeInTheDocument();
+  });
+
+  it('shows validation error when description exceeds 500 characters', async () => {
+    const user = userEvent.setup();
+    render(
+      <QueryClientProvider client={queryClient}>
+        <CreateCollectionModal isOpen={true} onClose={vi.fn()} />
+      </QueryClientProvider>
+    );
+
+    await user.type(screen.getByRole('textbox', { name: /name/i }), 'ValidName');
+    await user.type(
+      screen.getByRole('textbox', { name: /description/i }),
+      'd'.repeat(501),
+    );
+    await user.click(screen.getByRole('button', { name: /create/i }));
+    expect(screen.getByText(/less than 500 characters/i)).toBeInTheDocument();
+  });
+
+  it('shows an error toast and keeps the modal open when creation fails', async () => {
+    (collectionsApi.create as ReturnType<typeof vi.fn>)
+      .mockRejectedValueOnce(new Error('backend down'));
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    render(
+      <QueryClientProvider client={queryClient}>
+        <CreateCollectionModal isOpen={true} onClose={onClose} />
+      </QueryClientProvider>
+    );
+
+    await user.type(screen.getByRole('textbox', { name: /name/i }), 'ValidName');
+    await user.type(
+      screen.getByRole('textbox', { name: /collection key/i }),
+      'failure-case-key',
+    );
+    await user.click(screen.getByRole('button', { name: /create/i }));
+
+    await waitFor(() =>
+      expect(toastMock.showToast).toHaveBeenCalledWith(
+        'Failed to create collection: backend down',
+        'error',
+      ),
+    );
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   it('shows validation error when collection key is invalid', async () => {
