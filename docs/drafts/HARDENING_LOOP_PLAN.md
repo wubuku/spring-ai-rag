@@ -2107,3 +2107,18 @@ VersionHistoryModal 相关 100% 项等。
   言）。注意 EmbeddingJobRepository 位于 embeddingjob 包（非
   repository），listPage offset 参数为 int。
 - 指标：core 全量门禁 EXIT=0 绿。
+
+### Batch 232（已交付）
+
+- 分支：`test/core-router-configured-batch232-20260909`（已合入
+  main）
+- 内容：ChatModelRouter 的 configuredFactory 配置模型路径（接续
+  Batch 213 的 legacy 别名测试），新增 7 用例：resolve 配置模型优
+  先于 legacy 别名、resolveRequired 透传 factory 不可用原因
+  （quota exhausted）、canonical ref 候选装配（multiModel 无条目时
+  能力默认 + 限额视为估算、描述符限额不进入 canonical 候选——
+  候选去重按 ref）、orderedCandidateDescriptors 配置在前 legacy 在
+  后、getDefaultModelRef 返回 canonicalRef、modelsInfo 配置行可用
+  时跳过同名 legacy 行（provider=zhipu 才覆盖）、配置行不可用则
+  legacy 行兜底。ModelDescriptor 13 字段 record 全参构造。
+- 指标：core 全量门禁 EXIT=0 绿。
