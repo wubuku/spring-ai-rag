@@ -1961,3 +1961,15 @@ VersionHistoryModal 相关 100% 项等。
   标凭证并恢复源凭证 retireAt 为 CANCELED。凭证仓库以 keyId→实体
   Map 的 Answer 桩动态解析生成的新目标；台账共享桩 lenient 化。
 - 指标：core 全量门禁 EXIT=0 绿。
+
+### Batch 221（已交付）
+
+- 分支：`test/core-rotation-maintenance-batch221-20260909`（已合入
+  main）
+- 内容：ApiKeyManagementService 轮换台账读取与回收维护，新增 6
+  用例：getRotation 惰性过期（读取 overdue PENDING 即翻转为
+  EXPIRED 并禁用源凭证）、retiring 凭证与 rotationPending 标志映
+  射、未知轮换 NOT_FOUND；cleanupCredentialRotations 逐台账过期 +
+  终态行按保留期批量删除、二次校验未到期则跳过（不消费凭证不落
+  库）、台账或事务缺失静默降级。stubRotationLookup lenient 化。
+- 指标：core 全量门禁 EXIT=0 绿。
