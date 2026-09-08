@@ -1776,3 +1776,18 @@ VersionHistoryModal 相关 100% 项等。
   COLLECTION_MOVE 版本 + 计数 2）。setUp 统一 saveAndFlush 透传
   与 DATABASE_API_KEY 认证桩。
 - 指标：core 全量门禁 EXIT=0 绿。
+
+### Batch 207（已交付）
+
+- 分支：`test/webui-interaction-gaps-batch207-20260909`（已合入
+  main）
+- 内容：WebUI 交互缺口加固（覆盖率数据驱动），新增 9 用例：
+  ChatSidebar 会话选择回调与删除按钮持久化、CollectionScopeSelector
+  勾选取消与禁用守卫、ReembedAllButton mutationFn 走真实
+  documentsApi.reembedMissing、CreateCollectionModal 名称超 100/
+  描述超 500 校验与创建失败 error toast（模态保持打开）、
+  DocumentActionsMenu provenance 子菜单目录/原始 PDF 两项回调。
+  目标组件行覆盖全部达到 100%；整体行覆盖 96.27% → 96.82%。
+  另发现 ReembedAllButton.test 历史上 describe 提前闭合（后两用例
+  在顶层），保持原语义仅去除孤立括号。
+- 指标：webui 全量 613 绿 + vite build 通过。
