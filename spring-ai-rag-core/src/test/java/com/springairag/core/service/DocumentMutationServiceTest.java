@@ -13,6 +13,7 @@ import com.springairag.api.enums.DocumentSyncDocumentKind;
 import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.embeddingjob.EmbeddingDispatchService;
+import com.springairag.core.entity.RagCollection;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.entity.RagDocumentVersion;
 import com.springairag.core.exception.DocumentRevisionConflictException;
@@ -22,6 +23,7 @@ import com.springairag.core.repository.RagEmbeddingRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionStatus;
@@ -29,6 +31,9 @@ import org.springframework.transaction.TransactionStatus;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -87,6 +92,12 @@ class DocumentMutationServiceTest {
         document = localDocument();
         when(documentRepository.findById(41L))
                 .thenReturn(Optional.of(document));
+        // allocateSourceSequence 的序列分配查询默认成功。
+        when(jdbcTemplate.queryForObject(
+                org.mockito.ArgumentMatchers.contains("RETURNING mutation_sequence"),
+                org.mockito.ArgumentMatchers.eq(Long.class),
+                anyLong(), anyString()))
+                .thenReturn(1L);
         when(documentRepository.saveAndFlush(any(RagDocument.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
         when(versionService.forceRecordVersion(
@@ -426,5 +437,120 @@ class DocumentMutationServiceTest {
                 null,
                 !"READY".equals(searchability)
                         && !"DISABLED".equals(searchability));
+    }
+
+// ─── tombstoneExternal 编排（Batch 200）──────────────────────────────
+
+    private void authenticateAsDatabaseKey() {
+        MockHttpServletRequest request =
+                new MockHttpServletRequest("POST", "/documents");
+        request.setAttribute("authenticatedPrincipalType", "DATABASE_API_KEY");
+        request.setAttribute("authenticatedApiKey", "key-42");
+        org.springframework.web.context.request.RequestContextHolder
+                .setRequestAttributes(
+                        new org.springframework.web.context.request
+                                .ServletRequestAttributes(request));
+    }
+
+    @Test
+    void tombstonesAnExternalDocumentAndBumpsRevision() {
+        RagCollection tombstoneCollection = new RagCollection();
+        tombstoneCollection.setId(5L);
+        tombstoneCollection.setCollectionKey("kb");
+
+        authenticateAsDatabaseKey();
+        when(collectionIdentityResolver.requireActive(null, "kb"))
+                .thenReturn(tombstoneCollection);
+        document.setEnabled(true);
+        document.setSourceRevision("rev-1");
+        document.setDocumentRevision(5L);
+        when(documentRepository
+                .findByCollectionIdAndSourceNamespaceAndExternalId(
+                        5L, "crm", "ext-1"))
+                .thenReturn(Optional.of(document));
+        when(versionService.forceRecordVersion(any(RagDocument.class), any(), any()))
+                .thenAnswer(invocation -> version(6));
+        when(versionService.getLatestVersion(41L))
+                .thenReturn(Optional.empty());
+        when(lifecycleService.read(any(RagDocument.class)))
+                .thenReturn(lifecycle("DISABLED"));
+
+        var response = service.tombstoneExternal(
+                "kb", "crm", "ext-1", "rev-2", "rev-1", false);
+
+        assertEquals("DELETED", response.action());
+        assertEquals(41L, response.documentId());
+        assertEquals("rev-2", response.sourceRevision());
+        assertEquals(Boolean.FALSE, response.enabled());
+        // 语义断言：文档实体被写入墓碑状态。
+        assertEquals(Boolean.FALSE, document.getEnabled());
+        assertEquals("SOURCE", document.getDeletionOrigin());
+        verify(dispatchService).markNotRequestedInCurrentTransaction(document);
+        verify(dispatchService).cancelActiveInCurrentTransaction(41L);
+    }
+
+    @Test
+    void tombstoneIsUnchangedWhenAlreadyTombstonedAtTheSameRevision() {
+        authenticateAsDatabaseKey();
+        RagCollection tombstoneCollection = new RagCollection();
+        tombstoneCollection.setId(5L);
+        tombstoneCollection.setCollectionKey("kb");
+        document.setEnabled(false);
+        document.setSourceDeletedAt(java.time.LocalDateTime.parse("2026-09-01T00:00:00"));
+        document.setSourceRevision("rev-2");
+        document.setDocumentRevision(6L);
+        when(collectionIdentityResolver.requireActive(null, "kb"))
+                .thenReturn(tombstoneCollection);
+        when(documentRepository
+                .findByCollectionIdAndSourceNamespaceAndExternalId(
+                        5L, "crm", "ext-1"))
+                .thenReturn(Optional.of(document));
+        when(versionService.getLatestVersion(41L))
+                .thenReturn(Optional.of(version(9)));
+
+        var response = service.tombstoneExternal(
+                "kb", "crm", "ext-1", "rev-2", null, false);
+
+        assertEquals("UNCHANGED", response.action());
+        assertEquals(9, response.versionNumber());
+        verify(versionService, never()).forceRecordVersion(
+                any(RagDocument.class), any(), any());
+    }
+
+    @Test
+    void tombstoneRejectsSameRevisionWhenDocumentIsStillLive() {
+        authenticateAsDatabaseKey();
+        RagCollection tombstoneCollection = new RagCollection();
+        tombstoneCollection.setId(5L);
+        tombstoneCollection.setCollectionKey("kb");
+        document.setEnabled(true);
+        document.setSourceRevision("rev-1");
+        when(collectionIdentityResolver.requireActive(null, "kb"))
+                .thenReturn(tombstoneCollection);
+        when(documentRepository
+                .findByCollectionIdAndSourceNamespaceAndExternalId(
+                        5L, "crm", "ext-1"))
+                .thenReturn(Optional.of(document));
+        assertThrows(DocumentRevisionConflictException.class,
+                () -> service.tombstoneExternal(
+                        "kb", "crm", "ext-1", "rev-1", null, false));
+    }
+
+    @Test
+    void tombstoneThrowsNotFoundWhenTheDocumentIsMissing() {
+        authenticateAsDatabaseKey();
+        RagCollection missingCollection = new RagCollection();
+        missingCollection.setId(5L);
+        missingCollection.setCollectionKey("kb");
+        when(collectionIdentityResolver.requireActive(null, "kb"))
+                .thenReturn(missingCollection);
+        when(documentRepository
+                .findByCollectionIdAndSourceNamespaceAndExternalId(
+                        5L, "crm", "ext-missing"))
+                .thenReturn(Optional.empty());
+
+        assertThrows(com.springairag.core.exception.DocumentNotFoundException.class,
+                () -> service.tombstoneExternal(
+                        "kb", "crm", "ext-missing", "rev-9", null, false));
     }
 }
