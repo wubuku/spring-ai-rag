@@ -618,6 +618,146 @@ describe('Files tree rendering: icons, sizes and unsafe paths', () => {
     });
   });
 
+  const withImportIdentityEntry = () => {
+    mockUseQuery.mockImplementation((options: { queryKey: unknown[] }) => {
+      if (options.queryKey[0] === 'files-collections') {
+        return { data: { data: { collections: [] } } };
+      }
+      const path = String(options.queryKey[1] ?? '');
+      return {
+        data: {
+          data: {
+            path,
+            entries: path
+              ? []
+              : [
+                  {
+                    name: 'sample-pdf',
+                    path: 'sample-pdf/',
+                    type: 'directory',
+                    mimeType: null,
+                    size: 0,
+                    createdAt: '2026-08-15T09:00:00Z',
+                    displayName: 'Readable manual.pdf',
+                    originalFilename: 'Readable manual.pdf',
+                    importId: 'sample-pdf',
+                    sourceType: 'PDF',
+                  },
+                ],
+            total: path ? 0 : 1,
+          },
+        },
+      };
+    });
+  };
+
+  it('surfaces a failed pdf import with an error toast and inline error', async () => {
+    (filesApi.importPdf as ReturnType<typeof vi.fn>)
+      .mockRejectedValueOnce(new Error('boom'));
+    renderFiles();
+    await screen.findByText('files.title');
+
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    await userEvent.setup().upload(input, new File(['pdf'], 'doc.pdf'));
+
+    await waitFor(() => {
+      expect(mockShowToast).toHaveBeenCalledWith('files.importError', 'error');
+    });
+    expect(screen.getByText('files.importError')).toBeInTheDocument();
+  });
+
+  it('imports a pdf dropped onto the upload area', async () => {
+    (filesApi.importPdf as ReturnType<typeof vi.fn>).mockResolvedValue({
+      uuid: 'dropped-import',
+      filesStored: 1,
+    });
+    renderFiles();
+    await screen.findByText('files.title');
+
+    const area = screen.getByTitle('files.uploadTitle');
+    const file = new File(['pdf'], 'dropped.pdf');
+    fireEvent.drop(area, { dataTransfer: { files: [file] } });
+
+    await waitFor(() => {
+      expect(filesApi.importPdf).toHaveBeenCalledWith(file);
+    });
+  });
+
+  it('copies an import id to the clipboard with a success toast', async () => {
+    const user = userEvent.setup();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    // userEvent.setup 会接管 clipboard，桩必须在 setup 之后打。
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      configurable: true,
+    });
+    withImportIdentityEntry();
+    renderFiles();
+    await screen.findByText('files.title');
+
+    await user.click(
+      screen.getByRole('button', { name: 'files.copyImportId' }),
+    );
+
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith('sample-pdf'));
+    expect(mockShowToast).toHaveBeenCalledWith('files.importIdCopied', 'success');
+  });
+
+  it('reports a toast when copying the import id fails', async () => {
+    const user = userEvent.setup();
+    const writeText = vi.fn().mockRejectedValue(new Error('denied'));
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      configurable: true,
+    });
+    withImportIdentityEntry();
+    renderFiles();
+    await screen.findByText('files.title');
+
+    await user.click(
+      screen.getByRole('button', { name: 'files.copyImportId' }),
+    );
+
+    await waitFor(() => {
+      expect(mockShowToast).toHaveBeenCalledWith('files.importIdCopyFailed', 'error');
+    });
+  });
+
+  it('navigates to the parent directory via the go-up control', async () => {
+    renderFiles('/webui/files?path=a%2Fb%2F');
+    await screen.findByText('files.title');
+
+    const [goUpButton] = screen.getAllByRole('button', { name: 'files.goUp' });
+    await userEvent.setup().click(goUpButton);
+
+    expect(screen.getByTestId('location-search')).toHaveTextContent('path=a%2F');
+  });
+
+  it('renders the tree error box when the tree query fails', () => {
+    mockUseQuery.mockImplementation((options: { queryKey: unknown[] }) => {
+      if (options.queryKey[0] === 'files-collections') {
+        return {
+          data: {
+            data: {
+              collections: [],
+            },
+          },
+        };
+      }
+      if (options.queryKey[0] === 'files-tree') {
+        return {
+          data: undefined,
+          error: new Error('tree down'),
+          isLoading: false,
+        };
+      }
+      return { data: undefined };
+    });
+
+    renderFiles();
+    expect(screen.getByText('Error: tree down')).toBeInTheDocument();
+  });
+
   it('renders mime-specific icons and human readable sizes', () => {
     renderFiles();
 
