@@ -2095,3 +2095,15 @@ VersionHistoryModal 相关 100% 项等。
   触发（embedDocument 完成态 + chunksCreated）。dispatchService 经
   包内 setter 注入。
 - 指标：core 全量门禁 EXIT=0 绿。
+
+### Batch 231（已交付）
+
+- 分支：`test/core-job-query-page-batch231-20260909`（已合入 main）
+- 内容：EmbeddingJobService（JaCoCo 66.3%）查询与维护面，新增 5
+  用例：get 经 requireAuthorized（find + 文档存在 + ACL）映射响应、
+  缺失任务 NOT_FOUND、listPage 分页钳制（size 500→200、page -3→0、
+  总页数 0）、totalPages 计算（450 元素/50 每页 → 9 页）、cancel
+  优先取 CAS 更新后的任务并在落空时回传当前快照（CANCELLED 状态断
+  言）。注意 EmbeddingJobRepository 位于 embeddingjob 包（非
+  repository），listPage offset 参数为 int。
+- 指标：core 全量门禁 EXIT=0 绿。
