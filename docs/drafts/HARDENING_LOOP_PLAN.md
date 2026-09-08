@@ -1802,3 +1802,16 @@ VersionHistoryModal 相关 100% 项等。
   条目缺 payload → NPE、NullNode payload → IllegalArgumentException。
   包级入口直接测试，不经事务模板包装。
 - 指标：core 全量门禁 EXIT=0 绿。
+
+### Batch 209（已交付）
+
+- 分支：`test/webui-files-dialog-batch209-20260909`（已合入 main）
+- 内容：Files 与 Dialog 交互缺口加固，新增 9 用例：PDF 导入失败
+  error toast + 内联错误框、拖放 PDF 触发导入、导入 ID 复制成功/
+  失败 toast（clipboard 桩须在 userEvent.setup 之后打）、go-up 控
+  制跳转父目录（parentPath 真分支）、tree 查询失败错误框；Dialog
+  焦点陷阱真实命中分支（Shift+Tab 从 DOM 首个可聚焦元素环绕到最
+  后——此前环绕用例靠原生 tab 循环通过未触处理器）、无可聚焦元
+  素时 Tab 聚焦面板本体、点击 backdrop 关闭。Dialog 行覆盖 100%，
+  Files 88.57% → 93.65%，整体行覆盖 96.82% → 97.63%。
+- 指标：webui 全量 622 绿 + vite build 通过。
