@@ -1931,3 +1931,16 @@ VersionHistoryModal 相关 100% 项等。
   preview 分支为防御性代码（apply 按钮仅在 preview 存在时渲染）
   不可经 UI 触发，未强造。
 - 指标：webui 全量 628 绿 + vite build 通过。
+
+### Batch 219（已交付）
+
+- 分支：`test/core-turn-lifecycle-batch219-20260909`（已合入 main）
+- 内容：ChatSessionCoordinator 键控回合操作生命周期（JaCoCo
+  72%），新增 6 用例：failOperation 经 completeFailure CAS 成功收
+  尾（事务内消费状态化租约、句柄进入终态）、CAS 失败（操作租约先
+  丢）抛 CHAT_HISTORY_PERSIST_FAILED、failExpiredOperation 经
+  exhaustAttempts 专用 reclaim CAS 成功与并发状态变更失败、
+  clearSession 联动 summaryService.clear、无状态句柄跳过租约消费。
+  包内直接调用 package-private setter 注入
+  ChatTurnOperationRepository / ConversationSummaryService。
+- 指标：core 全量门禁 EXIT=0 绿。
