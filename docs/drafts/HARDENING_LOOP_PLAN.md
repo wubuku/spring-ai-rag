@@ -1944,3 +1944,20 @@ VersionHistoryModal 相关 100% 项等。
   包内直接调用 package-private setter 注入
   ChatTurnOperationRepository / ConversationSummaryService。
 - 指标：core 全量门禁 EXIT=0 绿。
+
+### Batch 220（已交付）
+
+- 分支：`test/core-rotation-lifecycle-batch220-20260909`（已合入
+  main）
+- 内容：ApiKeyManagementService 凭证轮换台账生命周期（JaCoCo
+  41.3% 全库最大缺口的正面攻坚），新增 13 用例：prepare 空幂等键
+  拒绝、未知当前凭证返回 null、匹配指纹幂等重放（无新密钥泄露、
+  不再落库）、指纹不同 IDEMPOTENCY_KEY_REUSED、已有 PENDING 互斥
+  CREDENTIAL_ROTATION_PENDING、当前凭证不一致 CREDENTIAL_NOT_CURRE
+  NT、overlap 越界（0 与 max+1）拒绝、主体已过期 PRINCIPAL_NOT_ACT
+  IVE、完整准备路径（当前凭证设置 retireAt、目标凭证版本+1、台账
+  PENDING 落库、rawKey 仅创建时返回）；complete 禁用源凭证并
+  COMPLETED、已完成幂等重放、过期 overlap EXPIRED；cancel 禁用目
+  标凭证并恢复源凭证 retireAt 为 CANCELED。凭证仓库以 keyId→实体
+  Map 的 Answer 桩动态解析生成的新目标；台账共享桩 lenient 化。
+- 指标：core 全量门禁 EXIT=0 绿。
