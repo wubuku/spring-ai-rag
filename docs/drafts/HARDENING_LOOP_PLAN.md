@@ -1903,3 +1903,17 @@ VersionHistoryModal 相关 100% 项等。
   前导空白路径 trim 后保留）、临时文件资源加载（文件名后缀、内
   容非空）与未知路径返回空。
 - 指标：core 全量门禁 EXIT=0 绿。
+
+### Batch 217（已交付）
+
+- 分支：`test/core-tool-registry-policy-batch217-20260909`（已合入
+  main）
+- 内容：RagChatToolRegistry 启动校验与请求上下文装配（JaCoCo
+  68.5%），新增 6 用例：跨 provider 重复工具名启动拒绝、策略超全
+  局上限（maxCallsPerRequest>agent 上限）启动拒绝、空白 schema 拒
+  绝（ToolDefinition 构建器先行抛 IllegalArgumentException）、非对
+  象 schema 启动拒绝、supportedModes 过滤（AGENT 专属工具不出现在
+  KNOWLEDGE 模式）、requestContext 装配（principal/模式/模型 ref/
+  截止时间/预算对象/每工具结果字符限制映射）。注：Effect 枚举当前
+  仅 READ_ONLY，写效果分支为防御性代码不可构造。
+- 指标：core 全量门禁 EXIT=0 绿。
