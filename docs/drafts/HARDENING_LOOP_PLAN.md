@@ -2058,3 +2058,14 @@ VersionHistoryModal 相关 100% 项等。
   传。认证沿用 DATABASE_API_KEY 属性 + requireActive(null, key)
   桩模式。
 - 指标：core 全量门禁 EXIT=0 绿。
+
+### Batch 228（已交付）
+
+- 分支：`test/core-alert-updates-batch228-20260909`（已合入 main）
+- 内容：AlertController 更新端点（JaCoCo 75%，PUT 路由此前无测
+  试），新增 4 用例：updateSloConfig 成功路径（type/targetValue/
+  unit/description 变更 + enabled=null 保持 + enabled=false 显式关
+  闭 + logUpdate 审计）、SLO 不存在 404；updateSilenceSchedule 成
+  功路径（alertKey/silenceType/时间段/描述/enabled 变更 + 审计）
+  与不存在 404。审计断言经控制器的 logUpdate 委托验证。
+- 指标：core 全量门禁 EXIT=0 绿。
