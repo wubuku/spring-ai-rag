@@ -253,12 +253,20 @@ describe('ApiKeys', () => {
     fireEvent.change(document.querySelector('#policy-quota')!, {
       target: { value: '240' },
     });
+    // 策略表单的到期时间与集合范围单选同样被编辑。
+    fireEvent.change(document.querySelector('#policy-expiry')!, {
+      target: { value: '2027-06-30T12:00' },
+    });
+    fireEvent.click(screen.getByRole('radio', {
+      name: /apiKeys\.allCollections/,
+    }));
+
     fireEvent.click(screen.getByRole('button', { name: 'common.save' }));
 
     expect(mockMutateFn).toHaveBeenCalledWith({
       expectedPolicyVersion: 2,
       name: 'Production Agent',
-      expiresAt: '2027-01-01T00:00:00',
+      expiresAt: '2027-06-30T12:00:00',
       capabilities: ['RAG_READ', 'RAG_WRITE'],
       requestsPerMinute: 240,
     });
