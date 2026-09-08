@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { act } from '@testing-library/react';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { documentsApi } from '../../api/documents';
 import { ReembedAllButton } from './ReembedAllButton';
 
 const mockUseQuery = vi.fn();
@@ -24,6 +25,15 @@ vi.mock('@tanstack/react-query', () => ({
 
 vi.mock('../Toast', () => ({
   useToast: () => ({ showToast: toastSpy }),
+}));
+
+vi.mock('../../api/documents', () => ({
+  documentsApi: {
+    getEmbeddingStatus: vi.fn(),
+    reembedMissing: vi
+      .fn()
+      .mockResolvedValue({ data: { success: 1, failed: 0 } }),
+  },
 }));
 
 function embedStatus(overrides: {
@@ -179,4 +189,15 @@ describe('ReembedAllButton', () => {
     });
 
     expect(toastSpy).toHaveBeenCalledWith('Re-embed failed: network down', 'error');
+  });
+
+  it('routes the mutation function to the re-embed API with the force flag', async () => {
+    render(<ReembedAllButton />);
+
+    const options = mutationHandlers.at(-1) as {
+      mutationFn: (force: boolean) => Promise<unknown>;
+    };
+    await options.mutationFn(true);
+
+    expect(documentsApi.reembedMissing).toHaveBeenCalledWith(true);
   });

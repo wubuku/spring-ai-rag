@@ -207,6 +207,40 @@ describe('DocumentActionsMenu', () => {
     expect(screen.queryByRole('menu')).not.toBeInTheDocument();
   });
 
+  it('wires the directory and original-pdf provenance entries to their handlers', async () => {
+    const user = userEvent.setup();
+    const { handlers } = setup({
+      document: makeDocument({ source: 'pdf-import:imports/uuid-2/default.md' }),
+    });
+
+    await openMenu(user);
+    await user.click(
+      within(screen.getByRole('menu')).getByRole('menuitem', {
+        name: 'documents.sourceTraceability',
+      }),
+    );
+    const submenu = screen.getAllByRole('menu').at(-1)!;
+    await user.click(
+      within(submenu).getByRole('menuitem', { name: 'documents.viewFileDirectory' }),
+    );
+    expect(handlers.onViewDirectory).toHaveBeenCalledWith('imports/uuid-2/');
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+
+    await openMenu(user);
+    await user.click(
+      within(screen.getByRole('menu')).getByRole('menuitem', {
+        name: 'documents.sourceTraceability',
+      }),
+    );
+    const reopened = screen.getAllByRole('menu').at(-1)!;
+    await user.click(
+      within(reopened).getByRole('menuitem', { name: 'documents.openOriginalPdf' }),
+    );
+    expect(handlers.onOpenOriginalFile).toHaveBeenCalledWith(
+      'imports/uuid-2/original.pdf',
+    );
+  });
+
   it('disables local mutations while a mutation is pending', async () => {
     const user = userEvent.setup();
     setup({ mutationPending: true });

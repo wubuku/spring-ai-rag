@@ -185,6 +185,31 @@ describe('CollectionScopeSelector', () => {
     expect(await screen.findByText('collectionScope.empty')).toBeInTheDocument();
   });
 
+  it('removes a preselected collection when toggled off', async () => {
+    renderSelector({
+      initialMode: 'SELECTED_COLLECTIONS',
+      initialSelected: ['collection-1'],
+    });
+
+    const first = await screen.findByRole('checkbox', { name: /Collection 1/ });
+    expect(first).toBeChecked();
+
+    fireEvent.click(first);
+    expect(first).not.toBeChecked();
+  });
+
+  it('keeps the selection when the whole selector is disabled', async () => {
+    renderSelector({
+      initialMode: 'SELECTED_COLLECTIONS',
+      initialSelected: ['collection-1'],
+      disabled: true,
+    });
+
+    const first = await screen.findByRole('checkbox', { name: /Collection 1/ });
+    expect(first).toBeDisabled();
+    expect(first).toBeChecked();
+  });
+
   it('disables all controls while the parent is streaming', async () => {
     renderSelector({
       initialMode: 'SELECTED_COLLECTIONS',
