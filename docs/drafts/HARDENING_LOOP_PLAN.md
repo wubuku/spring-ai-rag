@@ -1735,3 +1735,15 @@ VersionHistoryModal 相关 100% 项等。
   RelevancyEvaluator 实例直接 evaluate EvaluationRequest，不经
   ChatModel 路由。
 - 指标：core 全量 3901 → **3908** 绿。
+
+### Batch 204（已交付）
+
+- 分支：`test/core-import-external-batch204-20260909`（已合入 main）
+- 内容：importDocument 外部分支成功路径，新增 3 用例：externalId
+  非空新建文档全字段落库（externalId/namespace/revision/内容哈希/
+  enabled=false 透传/sourceMutationSequence=7）且 SKIP 策略不排队
+  不标记嵌入、同 revision 同状态 UNCHANGED 幂等重放（不落库不记版
+  本不分配序列、写令牌仍确认）、空 sourceNamespace 归一化为
+  default。json-record 校验分支已由 Batch 201 覆盖，本批去重后
+  聚焦成功编排；写令牌用真实 ActiveCollectionToken record 实例。
+- 指标：core 全量门禁 EXIT=0 绿。
