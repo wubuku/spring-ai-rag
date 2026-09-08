@@ -1747,3 +1747,17 @@ VersionHistoryModal 相关 100% 项等。
   default。json-record 校验分支已由 Batch 201 覆盖，本批去重后
   聚焦成功编排；写令牌用真实 ActiveCollectionToken record 实例。
 - 指标：core 全量门禁 EXIT=0 绿。
+
+### Batch 205（已交付）
+
+- 分支：`test/core-external-retry-batch205-20260909`（已合入 main）
+- 内容：executeExternalInTransaction 重试语义（MAX=3），新增 4 用
+  例：DataIntegrityViolation 首次失败第二次重试成功（CREATED、
+  sourceRevision/versionNumber 断言、lookup 恰 2 次）、可重试失败
+  耗尽 3 次 → DocumentRevisionConflictException 且 cause 保留、
+  不可重试 IllegalStateException 立即透传（恰 1 次不重试）、
+  json-record 路径耗尽 → StructuredRecordConflictException。
+  upsertExternal 经 authenticateAsDatabaseKey + requireActive(null,
+  "kb") 桩集合解析；finishExternal 的 findById 回传 saveAndFlush
+  同一实体（AtomicReference）。
+- 指标：core 全量门禁 EXIT=0 绿。
