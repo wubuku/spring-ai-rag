@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import { Evaluation } from './Evaluation';
 import { evaluationApi } from '../api/evaluation';
 
@@ -54,6 +54,36 @@ describe('Evaluation page', () => {
     renderPage();
     expect(screen.getByText('evaluation.title')).toBeInTheDocument();
     expect(await screen.findByText('evaluation.avgMrr')).toBeInTheDocument();
+  });
+
+  it('switches tabs through search params and back to report', async () => {
+    const user = userEvent.setup();
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const LocationProbe = () => {
+      const location = useLocation();
+      return <output data-testid="location-search">{location.search}</output>;
+    };
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={['/']}>
+          <Evaluation />
+          <LocationProbe />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    await user.click(await screen.findByText('evaluation.tabSuites'));
+    expect(screen.getByTestId('location-search')).toHaveTextContent(
+      'tab=suites',
+    );
+
+    // 回到 report 视图会清空 tab 参数。
+    await user.click(screen.getByText('evaluation.tabReport'));
+    expect(screen.getByTestId('location-search').textContent).not.toContain(
+      'tab=',
+    );
   });
 
   it('renders suites tab without crashing on an empty list', async () => {
