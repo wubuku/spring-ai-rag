@@ -381,9 +381,97 @@ class AllowlistedHttpToolProviderTest {
                 HttpToolExecutionState.CONTEXT_KEY, state));
     }
 
+    private ToolContext contextWithDeadline(
+            RuntimeSkillLoadSession session, Instant deadline) {
+        return new ToolContext(Map.of(
+                RagChatToolContextKeys.REQUEST,
+                new RagChatToolRequestContext(
+                        "principal", "USER", false, "session",
+                        null, ChatMode.AGENT, "test/model", deadline),
+                RuntimeSkillLoadSession.CONTEXT_KEY, session,
+                HttpToolExecutionState.CONTEXT_KEY,
+                new HttpToolExecutionState(4_000)));
+    }
+
     private AllowlistedHttpToolProvider.AddressResolver publicResolver() {
         return host -> new InetAddress[] {
                 InetAddress.getByAddress(
                         host, new byte[] {93, (byte) 184, (byte) 216, 34})};
+    }
+
+    // ── 凭证缺失 / 请求截止 / 网络不可达（Batch 260）────────────────
+
+    @Test
+    void credentialMissingReportsCredentialUnavailable() {
+        RagChatProperties properties = properties();
+        RagChatProperties.HttpEndpointProperties endpoint =
+                properties.getHttpTools().getEndpoints().getFirst();
+        endpoint.setCredentialEnv("MISSING_WEATHER_TOKEN_20260910");
+        endpoint.setCredentialHeader("Authorization");
+        RuntimeSkillCatalog catalog = catalog();
+        AtomicInteger calls = new AtomicInteger();
+        AllowlistedHttpToolProvider provider = provider(
+                properties,
+                catalog,
+                (request, timeout, maxBytes, addresses) -> {
+                    calls.incrementAndGet();
+                    return new AllowlistedHttpToolProvider.HttpResponseData(
+                            200, "application/json", "{}".getBytes());
+                },
+                publicResolver());
+
+        String result = provider.getToolCallbacks().getFirst().call(
+                "{\"city\":\"Shanghai\"}",
+                context(loadedSession(), 4_000));
+
+        assertEquals("{\"error\":\"credential_unavailable\"}", result);
+        assertEquals(0, calls.get());
+    }
+
+    @Test
+    void expiredDeadlineShortCircuitsToHttpTimeout() {
+        AtomicInteger calls = new AtomicInteger();
+        RagChatProperties properties = properties();
+        RuntimeSkillCatalog catalog = catalog();
+        AllowlistedHttpToolProvider provider = provider(
+                properties,
+                catalog,
+                (request, timeout, maxBytes, addresses) -> {
+                    calls.incrementAndGet();
+                    return new AllowlistedHttpToolProvider.HttpResponseData(
+                            200, "application/json", "{}".getBytes());
+                },
+                publicResolver());
+
+        // 截止时间已过：在传输层调用前即返回 http_timeout。
+        String result = provider.getToolCallbacks().getFirst().call(
+                "{\"city\":\"Shanghai\"}",
+                contextWithDeadline(
+                        loadedSession(), Instant.now().minusSeconds(5)));
+
+        assertEquals("{\"error\":\"http_timeout\"}", result);
+        assertEquals(0, calls.get());
+    }
+
+    @Test
+    void unknownHostReportsHttpUnavailable() {
+        AtomicInteger calls = new AtomicInteger();
+        RagChatProperties properties = properties();
+        AllowlistedHttpToolProvider provider = new AllowlistedHttpToolProvider(
+                catalog(),
+                properties,
+                new com.fasterxml.jackson.databind.ObjectMapper(),
+                (request, timeout, maxBytes, addresses) -> {
+                    calls.incrementAndGet();
+                    throw new java.net.UnknownHostException("weather.example.test");
+                },
+                publicResolver());
+
+        String result = provider.getToolCallbacks().getFirst().call(
+                "{\"city\":\"Shanghai\"}",
+                context(loadedSession(), 4_000));
+
+        assertEquals("{\"error\":\"http_unavailable\"}", result);
+        // 传输层被调用并抛出 UnknownHostException 后降级。
     }
 }
