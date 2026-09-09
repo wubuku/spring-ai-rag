@@ -2393,3 +2393,17 @@ VersionHistoryModal 相关 100% 项等。
   fail-closed。快照 JSON 构造要点：callerAllowList 必须以数组字面
   量传入（裸标量会因 longList 非数组判 invalid）。
 - 指标：core 全量门禁 EXIT=0 绿。
+
+### Batch 252（已交付）
+
+- 分支：`test/core-syncrun-fingerprint-batch252-20260910`（已合入
+  main）
+- 内容：DocumentSyncRunService preview 候选指纹与计数，新增 4 用
+  例：指纹与 externalId\0kind\0revision\n 规范串 sha256 完全一致
+  （json-record → JSON_RECORD 枚举名）、未知 document_type 回落
+  TEXT 且计数计入 textCount、候选超 MAX_PREVIEW_IDENTITIES=10000
+  安全上限 SYNC_RUN_DELETE_PROTECTION 拒绝且不读候选行、
+  protectedByNewerMutationCount/unresolvedLegacyCount 计数透传。
+  候选行桩按 [externalId, type, revision] 三元组建 List.of 显式类
+  型见证。
+- 指标：core 全量门禁 EXIT=0 绿。
