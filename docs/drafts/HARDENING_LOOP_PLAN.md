@@ -2443,3 +2443,15 @@ VersionHistoryModal 相关 100% 项等。
   空完成（onComplete 首信号）不触发 switchOnFirst 切换也不消耗预
   算，仅错误信号回退并消耗预留——耗尽必须由错误候选驱动。
 - 指标：core 全量门禁 EXIT=0 绿。
+
+### Batch 256（已交付）
+
+- 分支：`test/core-variant-parsing-batch256-20260910`（已合入
+  main）
+- 内容：EvaluationSuiteDefinitionValidator.parseVariants（31 行缺
+  口），新增 8 用例：缺省与空数组回退 default 变体、非数组拒绝、
+  超过 maxVariantsPerRun（配置为 2 + 3 变体）拒绝、重复 key 拒
+  绝、maxResults 0/101/3.5 三种非法值拒绝、完整检索配置字段解析
+  （maxResults/minScore/hybrid/rerank/vectorWeight/fulltextWeight
+  绑定断言）、非对象 filters 拒绝。
+- 指标：core 全量门禁 EXIT=0 绿。
