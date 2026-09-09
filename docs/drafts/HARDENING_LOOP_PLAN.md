@@ -2233,3 +2233,14 @@ VersionHistoryModal 相关 100% 项等。
   evalContext 时跳过轮数预算强制（不误伤）、最终答案（无工具调
   用）即使 trace 已耗尽也不触发 RETRIEVAL_FAILED。
 - 指标：core 全量门禁 EXIT=0 绿。
+
+### Batch 242（已交付）
+
+- 分支：`test/core-search-tracing-batch242-20260909`（已合入 main）
+- 内容：RagSearchController 追踪注入（traced 私有链路的 8 行缺口），
+  新增 2 用例：诊断开启时搜索响应携带 X-RAG-Retrieval-Trace-Id 头
+  （createSession 返回真实 RetrievalTraceSession、persistSearch 委
+  托验证）；诊断关闭时响应无追踪头。调试确认 createSession mock 返
+  回 null 会触发 attachScope NPE 并被 catch 吞掉（优雅降级分支本身
+  亦被此失败路径覆盖）。
+- 指标：core 全量门禁 EXIT=0 绿。
