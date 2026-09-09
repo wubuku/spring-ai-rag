@@ -2278,3 +2278,16 @@ VersionHistoryModal 相关 100% 项等。
   594-658 残余、DocumentSyncRun preview/complete 更多边界。
 - 本地已合并的 test/* 特性分支随留档清理，远端同名分支保留待远端
   策略处理。
+
+### Batch 243（已交付）
+
+- 分支：`test/core-prepared-operation-batch243-20260909`（已合入
+  main）
+- 内容：ChatExecutionService prepareForOperation（JaCoCo 31 行全未
+  覆盖的最大方法级缺口），新增 3 用例：成功路径构建
+  PreparedExecution（result.answer/sessionId、无服务端记忆时持久
+  化消息为空、candidate 与 Attempt 一致）、首候选失败降级到次候选
+  （create 恰 2 次）、RagException 快速失败不消耗后续候选（恰 1
+  次）。Attempt 需携带真实 AuthorizedRetrievalContext（null 会致
+  trace() NPE）。
+- 指标：core 全量门禁 EXIT=0 绿。
