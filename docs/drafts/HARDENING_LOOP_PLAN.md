@@ -2306,3 +2306,18 @@ VersionHistoryModal 相关 100% 项等。
   ED 调用方经 AUTHENTICATED_API_KEY_ENTITY 属性（RagApiKey 实体）
   驱动 currentPolicy()。
 - 指标：core 全量门禁 EXIT=0 绿。
+
+### Batch 245（已交付）
+
+- 分支：`test/core-openai-validation-batch245-20260909`（已合入
+  main）
+- 内容：OpenAiChatRequestMapper 请求校验分支（JaCoCo 80.4%，
+  validateRequest/validateRagShape/resolveFilters 深层），新增 8 用
+  例：空白模型 missing_required_parameter、空消息列表、消息超过
+  MAX_MESSAGES=100 invalid_value、n=2 unsupported_parameter、rag
+  顶层未知字段（rag/unsupported_parameter + 消息含字段名）、
+  rag.filters 未知字段、rag.scope 未知字段、合法 metadata_contains/
+  payload_contains 经校验器解析为 JsonbContainmentFilter 规范
+  JSON。JsonbContainmentFilter 为 record(canonicalJson)，Retrieval
+  Filters 载体组件为 payloadContainsAll 列表。
+- 指标：core 全量门禁 EXIT=0 绿。
