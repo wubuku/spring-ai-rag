@@ -2380,3 +2380,16 @@ VersionHistoryModal 相关 100% 项等。
   快速失败、UNCHANGED 条目计入汇总（unchanged=1/applied=0/total=1
   且条目状态透传）。
 - 指标：core 全量门禁 EXIT=0 绿。
+
+### Batch 251（已交付）
+
+- 分支：`test/core-authz-source-verify-batch251-20260910`（已合入
+  main）
+- 内容：ChatAuthorizationService verifyReplay 的 verifySources 文
+  档状态校验（既有矩阵用例快照均空来源，该循环零覆盖），新增 7
+  用例：来源文档缺失、禁用、墓碑化（sourceDeletedAt）、换集合
+  （collectionId 变更）、未分配文档不再允许、集合越权（白名单收
+  窄后来源集合不在当前白名单）、逃逸选定范围——全部 FORBIDDEN
+  fail-closed。快照 JSON 构造要点：callerAllowList 必须以数组字面
+  量传入（裸标量会因 longList 非数组判 invalid）。
+- 指标：core 全量门禁 EXIT=0 绿。
