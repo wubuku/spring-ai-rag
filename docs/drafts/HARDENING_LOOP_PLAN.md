@@ -2420,3 +2420,14 @@ VersionHistoryModal 相关 100% 项等。
   stream() 全链路需更重夹具而延后（依赖 ChatCommandMapper/
   Diagnostics 等协作者）。
 - 指标：core 全量门禁 EXIT=0 绿。
+
+### Batch 254（已交付）
+
+- 分支：`test/core-stream-empty-semantics-batch254-20260910`（已合
+  入 main）
+- 内容：ChatExecutionStreamBudgetTest 补充行为锁定用例：空完成的
+  首候选流不触发候选回退（switchOnFirst 仅在 onError 信号切换；
+  onComplete 直接结束），后续候选未被创建（create never 断言），
+  且响应无内容增量、无错误。此为对 Batch 253 空流回退用例的重要
+  语义补正——空完成与错误的候选选择行为不同。
+- 指标：core 全量门禁 EXIT=0 绿。
