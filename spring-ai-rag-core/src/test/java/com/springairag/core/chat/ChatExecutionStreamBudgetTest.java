@@ -33,6 +33,8 @@ import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
@@ -40,6 +42,10 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.when;
 
 class ChatExecutionStreamBudgetTest {
@@ -157,5 +163,29 @@ class ChatExecutionStreamBudgetTest {
                 .block();
         // 空完成的候选流触发回退后正常完成。
         assertNotNull(events);
+    }
+
+    @Test
+    void allEmptyCandidateStreamsCompleteWithoutContentOrError() {
+        ChatModelRouter.ChatModelCandidate first = candidate("first");
+        ChatModelRouter.ChatModelCandidate second = candidate("second");
+        when(modelRouter.orderedCandidateDescriptors(isNull()))
+                .thenReturn(List.of(first, second));
+        streamAttempt(first, Flux.empty());
+        streamAttempt(second, Flux.empty());
+
+        List<ChatEvent> events = service.stream(commandWithBudget(
+                new ChatExecutionBudget(
+                        Instant.now().plusSeconds(30),
+                        2, 8, 2, 4, 2, 20_000)))
+                .collectList()
+                .block();
+
+        assertNotNull(events);
+        assertTrue(events.stream().noneMatch(event ->
+                event.getClass().getSimpleName().contains("ContentDelta")));
+        // 空完成不触发候选回退：第二个候选从未被创建。
+        verify(clientFactory).create(any(), same(first), anyList());
+        verify(clientFactory, never()).create(any(), same(second), anyList());
     }
 }
