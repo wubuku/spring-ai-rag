@@ -2455,3 +2455,18 @@ VersionHistoryModal 相关 100% 项等。
   （maxResults/minScore/hybrid/rerank/vectorWeight/fulltextWeight
   绑定断言）、非对象 filters 拒绝。
 - 指标：core 全量门禁 EXIT=0 绿。
+
+### Batch 257（已交付）
+
+- 分支：`test/core-restore-version-batch257-20260910`（已合入
+  main）
+- 内容：DocumentMutationService.restoreLocalFromVersion（全库最大
+  方法级缺口 81 行），新增 7 用例：功能开关关闭 RESTORE_NOT_ALLOW
+  ED、版本缺失 VERSION_NOT_RESTORABLE、非 FULL 快照拒绝、内容快照
+  缺失拒绝、恢复成功全字段回写（标题/内容/来源 + 版本号 4→5 +
+  RESTORE 版本记录）、SNAPSHOT 可见性恢复禁用态并以 SKIP 派发、
+  受限密钥恢复未分配快照 RESTORE_NOT_ALLOWED。关键夹具：版本实体
+  的 titleSnapshot 等专用 setter、受限密钥经
+  AUTHENTICATED_API_KEY_ENTITY 属性、setup/afterEach 双向清理请求
+  上下文防泄漏。
+- 指标：core 全量门禁 EXIT=0 绿。
