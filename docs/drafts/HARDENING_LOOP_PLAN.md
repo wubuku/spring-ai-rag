@@ -2470,3 +2470,16 @@ VersionHistoryModal 相关 100% 项等。
   AUTHENTICATED_API_KEY_ENTITY 属性、setup/afterEach 双向清理请求
   上下文防泄漏。
 - 指标：core 全量门禁 EXIT=0 绿。
+
+### Batch 258（已交付）
+
+- 分支：`test/core-upsert-local-import-batch258-20260910`（已合入
+  main）
+- 内容：DocumentMutationService.upsertLocalImport（本地上传幂等同
+  步，69 行 lambda 缺口），新增 5 用例：无变化 UNCHANGED（不落库
+  不派发、getLatestVersion 读取）、内容变更 UPDATED（版本号 4→5、
+  enqueue contentChanged=true force=false）、force=true 绕过新鲜度
+  直接重嵌（enqueue force=true）、集合迁移记录 COLLECTION_MOVE 版
+  本、禁用+内容变更走 SKIP 派发（markNotRequested，不排队）。注
+  意 upsertLocalImport 参数序：enabledOverride 在 policy 之前。
+- 指标：core 全量门禁 EXIT=0 绿。
