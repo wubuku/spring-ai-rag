@@ -2184,3 +2184,15 @@ VersionHistoryModal 相关 100% 项等。
   mentException。桩要点：executeNow 每次生成随机 lease owner，
   isCommitAllowed/markSucceeded 断言需按任意 owner 匹配。
 - 指标：core 全量门禁 EXIT=0 绿。
+
+### Batch 238（已交付）
+
+- 分支：`test/core-syncrun-abort-batch238-20260909`（已合入 main）
+- 内容：DocumentSyncRunService.abort 端点（JaCoCo 74.9%，30 个既
+  有用例均未触达 abort），新增 5 用例：ACTIVE 租约 CAS 置
+  ABORTED（runStatusRef 联动 answer 桩、验证 ABORTED SQL）、
+  COMPLETED/EXPIRED 终态幂等回读且不再触发 CAS、CAS 落空（0 行更
+  新）抛 SYNC_RUN_INVALID_STATE、空白租约令牌 IllegalArgumentExc
+  eption。CAS answer 桩在 ABORTED SQL 时切换 runStatusRef，使二
+  次 requireRun 读到终止态。
+- 指标：core 全量门禁 EXIT=0 绿。
