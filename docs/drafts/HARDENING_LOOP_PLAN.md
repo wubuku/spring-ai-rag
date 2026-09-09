@@ -2209,3 +2209,16 @@ VersionHistoryModal 相关 100% 项等。
   查已有 4 用例覆盖（commit 后单次发布/回滚不发/无事务即时发/监
   听器失败不影响提交），未重复投入。
 - 指标：core 全量门禁 EXIT=0 绿。
+
+### Batch 240（已交付）
+
+- 分支：`test/core-tool-manager-branch-batch240-20260909`（已合入
+  main）
+- 内容：BudgetedToolCallingManager 分支补全（既有 2 用例之外），
+  新增 5 用例：响应无工具调用时直通委托、缺失预算时直通委托、
+  contextPlan toolResultTokens=1 触发 token 预算替换
+  （tool_result_too_large）、TOOL_RESULT_CHARACTER_LIMITS 按工具名
+  独立限额（search 限额替换、fetch 500 保留）、委派异常时释放预
+  留并原样重抛。调试确认 promptWithBudget 必须与 token 预算设置共
+  用同一 budget 实例（双实例曾致断言误判）。
+- 指标：core 全量门禁 EXIT=0 绿。
