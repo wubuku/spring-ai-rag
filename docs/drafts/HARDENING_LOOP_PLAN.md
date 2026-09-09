@@ -2370,3 +2370,13 @@ VersionHistoryModal 相关 100% 项等。
   INTERNAL_ERROR、FAILED 轮透传 errorCode。审计交互经
   verifyReplay mock 驱动。
 - 指标：core 全量门禁 EXIT=0 绿。
+
+### Batch 250（已交付）
+
+- 分支：`test/core-syncrun-batch-boundary-batch250-20260910`（已合
+  入 main）
+- 内容：DocumentSyncRunService.batchUpsert 边界与汇总（在既有 30
+  用例文件内追加），新增 2 用例：null 请求体 NullPointerException
+  快速失败、UNCHANGED 条目计入汇总（unchanged=1/applied=0/total=1
+  且条目状态透传）。
+- 指标：core 全量门禁 EXIT=0 绿。
