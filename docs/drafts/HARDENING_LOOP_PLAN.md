@@ -2507,3 +2507,32 @@ VersionHistoryModal 相关 100% 项等。
   输层 UnknownHostException → http_unavailable 降级（错误候选流消
   耗预留属正常）。
 - 指标：core 全量门禁 EXIT=0 绿。
+
+---
+
+## 进度留档快照（Batch 260 后 · 用户指令）
+
+- 留档时点：2026-09-10 · main @ 本快照提交（Batch 260 记录之后）
+- 循环进度：Batch 204–260 共 57 个批次全部按「规划→实施→门禁→
+  commit/push 特性分支→合并 main→账本记录」交付完成。
+- 可构建性证据：core 全量 mvn test 门禁 EXIT=0（Batch 260 后）；
+  webui 全量 645 测试绿 + vite build 通过（Batch 248 后，本次未改
+  动 webui）。
+- 近期批次重点：
+  - Batch 255：候选尝试预算耗尽（maxCandidateAttempts=2 + 3 个错
+    误候选 → 第三候选 CHAT_BUDGET_EXHAUSTED；关键语义：空完成
+    onComplete 不触发 switchOnFirst 切换也不消耗预留）
+  - Batch 256：EvaluationSuiteDefinitionValidator.parseVariants
+    （缺省/空数组回退 default、非数组/超限/重复 key/maxResults 边
+    界/非对象 filters 拒绝、全配置字段解析）
+  - Batch 257：restoreLocalFromVersion 全守卫与恢复语义（开关/缺
+    版本/非 FULL/内容缺失 fail-closed、全字段回写+版本推进、SNAP
+    SHOT 可见性 SKIP 派发、受限密钥未分配快照拒绝）
+  - Batch 258：upsertLocalImport（UNCHANGED 幂等/内容变更 UPDATED
+    /force 重嵌/COLLECTION_MOVE 版本/禁用 SKIP 派发）
+  - Batch 259：ChatTurnOperationService.claim 分派矩阵（unkeyed/
+    SUCCEEDED 重放/FAILED 复用/IN_PROGRESS inProgress/过期回收）
+  - Batch 260：AllowlistedHttpToolProvider 凭证缺失/截止超时/UnknownHost 降级
+- Batch 261 候选遗留：DocumentSyncRunService listItems 游标边界、
+  DocumentMutationService 其他 lambda 残余、WebUI 页面分支残余。
+- 工作区：本地已合并 test/* 分支随各批清理，无遗留 worktree。
