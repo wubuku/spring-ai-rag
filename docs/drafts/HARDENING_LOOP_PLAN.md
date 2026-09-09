@@ -2222,3 +2222,14 @@ VersionHistoryModal 相关 100% 项等。
   留并原样重抛。调试确认 promptWithBudget 必须与 token 预算设置共
   用同一 budget 实例（双实例曾致断言误判）。
 - 指标：core 全量门禁 EXIT=0 绿。
+
+### Batch 241（已交付）
+
+- 分支：`test/core-advisor-edge-batch241-20260909`（已合入 main）
+- 内容：BudgetedToolCallAdvisor 边界分支（既有 8 用例之外），同包
+  直调 protected 方法新增 4 用例：doInitializeLoopStream 播种
+  ToolTranscriptCollector、collector 缺失时工具轮记录快速失败
+  （IllegalStateException + 精确消息）、上下文缺少 AuthorizedRetri
+  evalContext 时跳过轮数预算强制（不误伤）、最终答案（无工具调
+  用）即使 trace 已耗尽也不触发 RETRIEVAL_FAILED。
+- 指标：core 全量门禁 EXIT=0 绿。
