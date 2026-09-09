@@ -2431,3 +2431,15 @@ VersionHistoryModal 相关 100% 项等。
   且响应无内容增量、无错误。此为对 Batch 253 空流回退用例的重要
   语义补正——空完成与错误的候选选择行为不同。
 - 指标：core 全量门禁 EXIT=0 绿。
+
+### Batch 255（已交付）
+
+- 分支：`test/core-candidate-budget-batch255-20260910`（已合入
+  main）
+- 内容：候选尝试预算耗尽（延后两批后落地），新增 1 用例：
+  execution.maxCandidateAttempts=2 且提供 3 个错误优先候选流 →
+  第 1/2 次预留成功并回退，第 3 次预留越限 → CHAT_BUDGET_EXHAUST
+  ED 拒绝且第三候选的 clientFactory.create 从未被调用。关键语义：
+  空完成（onComplete 首信号）不触发 switchOnFirst 切换也不消耗预
+  算，仅错误信号回退并消耗预留——耗尽必须由错误候选驱动。
+- 指标：core 全量门禁 EXIT=0 绿。
