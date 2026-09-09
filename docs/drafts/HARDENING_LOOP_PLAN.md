@@ -2321,3 +2321,15 @@ VersionHistoryModal 相关 100% 项等。
   JSON。JsonbContainmentFilter 为 record(canonicalJson)，Retrieval
   Filters 载体组件为 payloadContainsAll 列表。
 - 指标：core 全量门禁 EXIT=0 绿。
+
+### Batch 246（已交付）
+
+- 分支：`test/core-syncrun-preview-guards-batch246-20260910`（已合
+  入 main）
+- 内容：DocumentSyncRunService.preview 守卫分支（requireActiveLease
+  链路），新增 3 用例：非 ACTIVE（COMPLETED）运行拒绝
+  SYNC_RUN_INVALID_STATE "not ACTIVE"、租约已过期的运行翻转
+  EXPIRED（SET status = 'EXPIRED' 落库 + 回调断言）并拒绝、外来租
+  货令牌 SYNC_RUN_LEASE_CONFLICT。状态/过期标志经闭包联动
+  ResultSet 桩。
+- 指标：core 全量门禁 EXIT=0 绿。
