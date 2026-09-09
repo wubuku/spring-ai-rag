@@ -2483,3 +2483,15 @@ VersionHistoryModal 相关 100% 项等。
   本、禁用+内容变更走 SKIP 派发（markNotRequested，不排队）。注
   意 upsertLocalImport 参数序：enabledOverride 在 policy 之前。
 - 指标：core 全量门禁 EXIT=0 绿。
+
+### Batch 259（已交付）
+
+- 分支：`test/core-turn-claim-matrix-batch259-20260910`（已合入
+  main）
+- 内容：ChatTurnOperationService.claim 分派矩阵（52 行缺口），
+  新增 5 用例：无键 Prepared 直通 unkeyed Claim 且不查仓储、
+  SUCCEEDED 现有操作 → replay Claim（observability.replayed）、
+  FAILED 复用抛 INTERNAL_ERROR（原 errorCode 无法映射时兜底）、
+  IN_PROGRESS 未过期租约 → ChatTurnInProgressException（不触发回
+  收）、过期回收成功（renew CAS 续期 + 周期续期启动）。
+- 指标：core 全量门禁 EXIT=0 绿。
