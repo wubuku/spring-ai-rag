@@ -2244,3 +2244,37 @@ VersionHistoryModal 相关 100% 项等。
   回 null 会触发 attachScope NPE 并被 catch 吞掉（优雅降级分支本身
   亦被此失败路径覆盖）。
 - 指标：core 全量门禁 EXIT=0 绿。
+
+---
+
+## 进度留档快照（Batch 242 后 · 用户指令）
+
+- 留档时点：2026-09-09 · main @ d4877ac8（含本次快照提交）
+- 循环进度：Batch 204–242 全部按「规划→实施→门禁→commit/push
+  特性分支→合并 main→账本记录」交付完成，共 39 个批次。
+- 可构建性证据：core 全量 mvn test 门禁 EXIT=0（Batch 242 后）；
+  webui 全量 642 测试绿 + vite build 通过（Batch 236 后 webui 无更
+  改，本次留档复验 build 通过）。
+- 测试规模：core 后端单测约 3900+（自 Batch 204 的 ~3900 持续增
+  长并完成大量缺口收敛）；webui 前端 642（自 592 增长），整体行覆
+  盖率 96.8%+。
+- 本阶段重点成果：
+  - DocumentMutationService 系列（外部导入/重试/守卫/快照条目）
+  - EvaluationSuiteService compare/executeRun 生命周期
+  - EmbeddingJobExecutor/Service/Dispatch 分支与分页
+  - ApiKeyManagementService 凭证轮换台账（prepare/complete/
+    cancel/getRotation/cleanup）
+  - OpenAI 兼容控制器非键控路径、RagChatController 导出/轮次状
+    态、RagSearch 追踪注入、PdfImport 策略分派、Alert 更新端点
+  - WebUI：ChatSidebar/ScopeSelector/ReembedAll/CreateCollectionM
+    odal/DocumentActionsMenu/Dialog/Files/Settings/Chat/Documents
+    交互与边界全覆盖
+- 已沉淀可复用测试模式：JdbcTemplate 桩子类按 SQL 分类、ActiveColl
+  ectionToken 真实 record、DATABASE_API_KEY 认证属性、AtomicRefere
+  nce 回传 saveAndFlush 实体、lenient 化共享桩、MemoryRouter
+  location 探针、userEvent.setup 后打 clipboard 桩等。
+- Batch 239 候选遗留（后续恢复循环时可选取）：OpenAiChatRequestM
+  apper 深层、ChatExecutionService 深层、WebUI Documents.tsx
+  594-658 残余、DocumentSyncRun preview/complete 更多边界。
+- 本地已合并的 test/* 特性分支随留档清理，远端同名分支保留待远端
+  策略处理。
