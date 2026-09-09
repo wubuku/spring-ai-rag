@@ -2407,3 +2407,16 @@ VersionHistoryModal 相关 100% 项等。
   候选行桩按 [externalId, type, revision] 三元组建 List.of 显式类
   型见证。
 - 指标：core 全量门禁 EXIT=0 绿。
+
+### Batch 253（已交付）
+
+- 分支：`test/core-stream-fallback-batch253-20260910`（已合入
+  main）
+- 内容：ChatExecutionService 流式候选回退的空完成分支，新增 1 用
+  例：首候选流直接 onComplete（零事件）→ switchOnFirst 回退到次候
+  选并正常完成（Completed 事件透传 fallback 模型）。Attempt 需携
+  带真实 AuthorizedRetrievalContext（含 RetrievalTraceCollector，
+  包路径 com.springairag.core.chat）。候选尝试预算耗尽分支因
+  stream() 全链路需更重夹具而延后（依赖 ChatCommandMapper/
+  Diagnostics 等协作者）。
+- 指标：core 全量门禁 EXIT=0 绿。
