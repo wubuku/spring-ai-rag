@@ -188,4 +188,44 @@ class ChatExecutionStreamBudgetTest {
         verify(clientFactory).create(any(), same(first), anyList());
         verify(clientFactory, never()).create(any(), same(second), anyList());
     }
+
+    @Test
+    void candidateBudgetExhaustionRejectsThirdCandidate() {
+        // execution.maxCandidateAttempts=2 且提供 3 个空完成候选：
+        // 第 3 次预留越限时以 CHAT_BUDGET_EXHAUSTED 拒绝。
+        RagProperties limited = new RagProperties();
+        limited.getChat().getExecution().setMaxCandidateAttempts(2);
+        ChatExecutionService limitedService = new ChatExecutionService(
+                modelRouter,
+                clientFactory,
+                mock(KnowledgeSearchTool.class),
+                historyRepository,
+                mock(DomainExtensionRegistry.class),
+                mock(PromptCustomizerChain.class),
+                mock(RetrievalDocumentMapper.class),
+                new com.fasterxml.jackson.databind.ObjectMapper(),
+                limited,
+                null,
+                null);
+        ChatModelRouter.ChatModelCandidate first = candidate("first");
+        ChatModelRouter.ChatModelCandidate second = candidate("second");
+        ChatModelRouter.ChatModelCandidate third = candidate("third");
+        when(modelRouter.orderedCandidateDescriptors(isNull()))
+                .thenReturn(List.of(first, second, third));
+        streamAttempt(first, Flux.error(new IllegalStateException("e1")));
+        streamAttempt(second, Flux.error(new IllegalStateException("e2")));
+        streamAttempt(third, Flux.error(new IllegalStateException("e3")));
+
+        RagException error = assertThrows(RagException.class,
+                () -> limitedService.stream(commandWithBudget(
+                        new ChatExecutionBudget(
+                                Instant.now().plusSeconds(30),
+                                2, 8, 2, 4, 2, 20_000)))
+                        .collectList()
+                        .block());
+        assertEquals(ErrorCode.CHAT_BUDGET_EXHAUSTED,
+                error.getErrorCodeEnum());
+        verify(clientFactory, never()).create(
+                any(), same(third), anyList());
+    }
 }
