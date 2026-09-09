@@ -2291,3 +2291,18 @@ VersionHistoryModal 相关 100% 项等。
   次）。Attempt 需携带真实 AuthorizedRetrievalContext（null 会致
   trace() NPE）。
 - 指标：core 全量门禁 EXIT=0 绿。
+
+### Batch 244（已交付）
+
+- 分支：`test/core-authz-snapshot-batch244-20260909`（已合入 main）
+- 内容：ChatAuthorizationService 授权快照构建（JaCoCo 64.5%，既
+  有 3+矩阵用例集中在 verifyReplay），新增 5 用例：PLAIN 模式全部
+  NOT_APPLICABLE、CALLER_VISIBLE+非受限调用方允许未分配文档且快
+  照版本=1、RESTRICTED 调用方白名单去重排序（"7,9"→[7, 9]）且
+  unassignedDocumentsAllowed=false、响应来源映射到
+  sourceDocumentCollectionSnapshot（documentId/collectionId 对）与
+  sourceCollectionIdsObserved 去重排序、未知来源文档
+  IDEMPOTENCY_AUTHORIZATION_SNAPSHOT_INVALID fail-closed。RESTRICT
+  ED 调用方经 AUTHENTICATED_API_KEY_ENTITY 属性（RagApiKey 实体）
+  驱动 currentPolicy()。
+- 指标：core 全量门禁 EXIT=0 绿。
