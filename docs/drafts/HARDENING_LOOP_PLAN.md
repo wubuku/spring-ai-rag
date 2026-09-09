@@ -2495,3 +2495,15 @@ VersionHistoryModal 相关 100% 项等。
   IN_PROGRESS 未过期租约 → ChatTurnInProgressException（不触发回
   收）、过期回收成功（renew CAS 续期 + 周期续期启动）。
 - 指标：core 全量门禁 EXIT=0 绿。
+
+### Batch 260（已交付）
+
+- 分支：`test/core-http-provider-deep-batch260-20260910`（已合入
+  main）
+- 内容：AllowlistedHttpToolProvider.call 深层分支（既有 9 用例之
+  外），新增 3 用例：credentialEnv 指向缺失环境变量 →
+  credential_unavailable 且不触达传输层；请求截止时间已过 → 在传
+  输层调用前直接 http_timeout（含 contextWithDeadline 夹具）；传
+  输层 UnknownHostException → http_unavailable 降级（错误候选流消
+  耗预留属正常）。
+- 指标：core 全量门禁 EXIT=0 绿。
