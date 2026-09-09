@@ -2333,3 +2333,17 @@ VersionHistoryModal 相关 100% 项等。
   货令牌 SYNC_RUN_LEASE_CONFLICT。状态/过期标志经闭包联动
   ResultSet 桩。
 - 指标：core 全量门禁 EXIT=0 绿。
+
+### Batch 247（已交付）
+
+- 分支：`test/core-renewal-schedule-batch247-20260910`（已合入
+  main）
+- 内容：ChatTurnOperationService startRenewal/stopRenewal 调度契
+  约，新增 6 用例：无键控 Claim（Claim.unkeyed）与 replay Claim 均
+  不调度续期、键控 IN_PROGRESS 声明创建 ScheduledFuture（非完成、
+  renewalLost 初始 false）、重复 startRenewal 不重复调度（同一
+  future 实例）、stopRenewal 取消 future（isCancelled + 引用清
+  空）、release(null) 容忍空声明。注意 stopRenewal 为 private，测
+  试经公共 release(claim) 路径触达；周期体（renew CAS 成败）首轮
+  触发 ≥10s 留给仓储层保证。
+- 指标：core 全量门禁 EXIT=0 绿。
