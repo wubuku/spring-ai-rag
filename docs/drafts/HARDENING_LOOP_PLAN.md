@@ -2196,3 +2196,16 @@ VersionHistoryModal 相关 100% 项等。
   eption。CAS answer 桩在 ABORTED SQL 时切换 runStatusRef，使二
   次 requireRun 读到终止态。
 - 指标：core 全量门禁 EXIT=0 绿。
+
+### Batch 239（已交付）
+
+- 分支：`test/core-syncrun-expiry-batch239-20260909`（已合入
+  main）
+- 内容：DocumentSyncRunService complete 的租约过期守卫
+  （expireIfNeeded 分支此前无测试），新增 1 用例：租约已过期的
+  ACTIVE 运行在完成时被翻转为 EXPIRED（SET status = 'EXPIRED'
+  SQL 落库断言）并以 SYNC_RUN_INVALID_STATE + "expired" 消息拒
+  绝，防止过期租约继续驱动墓碑化。EmbeddingJobWakeupPublisher 经
+  查已有 4 用例覆盖（commit 后单次发布/回滚不发/无事务即时发/监
+  听器失败不影响提交），未重复投入。
+- 指标：core 全量门禁 EXIT=0 绿。
