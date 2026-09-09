@@ -2347,3 +2347,14 @@ VersionHistoryModal 相关 100% 项等。
   试经公共 release(claim) 路径触达；周期体（renew CAS 成败）首轮
   触发 ≥10s 留给仓储层保证。
 - 指标：core 全量门禁 EXIT=0 绿。
+
+### Batch 248（已交付）
+
+- 分支：`test/webui-docs-nav-batch248-20260910`（已合入 main）
+- 内容：Documents 深层交互补全，新增 3 用例：目录动作导航
+  （onViewDirectory → /files?path=<编码路径>，含中文路径解码断
+  言；发现该文件旧 loc-probe 为空元素未输出内容，改为真实
+  LocationProbe 组件并加 waitFor 等待路由更新）、编辑对话框
+  Escape 关闭（不触发 update）、relocate 对话框 Escape 关闭（不
+  调用 relocate API）。Documents.tsx 行覆盖 96.27%→98.13%。
+- 指标：webui 全量 645 绿 + vite build 通过。
