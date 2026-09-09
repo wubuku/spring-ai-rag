@@ -928,4 +928,38 @@ class DocumentSyncRunServiceTest {
                 any(com.springairag.api.dto.DocumentSyncRunItemRequest.class),
                 any(long.class));
     }
+
+    // ── batchUpsert 汇总与空请求边界（Batch 250）────────────────────
+
+    @Test
+    void batchUpsertNullRequestFailsFast() {
+        assertThrows(NullPointerException.class,
+                () -> service.batchUpsert(
+                        UUID.randomUUID(), "lease-1", null));
+    }
+
+    @Test
+    void batchUpsertCountsUnchangedItemsInSummary() {
+        stubRunRow(DocumentSyncRunStatus.ACTIVE, com.springairag.core.util.DigestUtils
+                .sha256("lease-1"));
+        when(collectionIdentityResolver.mapKeys(List.of(COLLECTION_ID)))
+                .thenReturn(Map.of(COLLECTION_ID, "kb"));
+        when(mutationService.upsertSyncRunItemInCurrentTransaction(
+                any(long.class), anyString(), anyString(),
+                any(com.springairag.api.dto.DocumentSyncRunItemRequest.class),
+                any(long.class)))
+                .thenReturn(mutation(DocumentSyncItemStatus.UNCHANGED, 77L));
+        when(jdbcTemplate.update(contains("SET last_seen_sync_run_id"),
+                any(Object[].class))).thenReturn(1);
+
+        var response = service.batchUpsert(RUN_ID, "lease-1",
+                new com.springairag.api.dto.DocumentSyncRunBatchUpsertRequest(
+                        List.of(itemOf("ext-1"))));
+
+        assertEquals(1, response.summary().total());
+        assertEquals(0, response.summary().applied());
+        assertEquals(1, response.summary().unchanged());
+        assertEquals(DocumentSyncItemStatus.UNCHANGED,
+                response.items().getFirst().status());
+    }
 }
