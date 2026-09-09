@@ -2358,3 +2358,15 @@ VersionHistoryModal 相关 100% 项等。
   Escape 关闭（不触发 update）、relocate 对话框 Escape 关闭（不
   调用 relocate API）。Documents.tsx 行覆盖 96.27%→98.13%。
 - 指标：webui 全量 645 绿 + vite build 通过。
+
+### Batch 249（已交付）
+
+- 分支：`test/core-turn-status-batch249-20260910`（已合入 main）
+- 内容：ChatTurnOperationService.status 分支矩阵（既有 2 用例之
+  外），新增 6 用例：成功轮 includeResponse=false 时跳过反序列化
+  但仍标记 replayAvailable、FORBIDDEN 审计失败被吞（replayAvailab
+  le=false、状态查询不阻断）、非 FORBIDDEN 审计失败重抛（快照损
+  坏）、IN_PROGRESS 轮跳过授权检查且无响应、损坏存储快照 →
+  INTERNAL_ERROR、FAILED 轮透传 errorCode。审计交互经
+  verifyReplay mock 驱动。
+- 指标：core 全量门禁 EXIT=0 绿。
