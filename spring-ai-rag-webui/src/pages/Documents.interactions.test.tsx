@@ -472,6 +472,62 @@ describe('Documents edit save flow', () => {
     });
   });
 
+  it('closes the edit dialog via Escape without calling update', async () => {
+    const user = userEvent.setup();
+    renderDocuments();
+    await screen.findByText('Local Doc');
+    await user.click(
+      screen.getByRole('button', { name: 'documents.openActions' }),
+    );
+    await user.click(screen.getByRole('menuitem', { name: 'documents.edit' }));
+    const dialog = await screen.findByRole('dialog', {
+      name: 'documents.editDocument',
+    });
+
+    await user.keyboard('{Escape}');
+
+    expect(screen.queryByRole('dialog', {
+      name: 'documents.editDocument',
+    })).not.toBeInTheDocument();
+    expect(documentsApi.update).not.toHaveBeenCalled();
+    void dialog;
+  });
+
+  it('closes the relocate dialog via Escape without calling the api', async () => {
+    const user = userEvent.setup();
+    vi.mocked(documentsApi.list).mockResolvedValue({
+      data: { documents: [EXTERNAL_DOC], total: 1 },
+    } as never);
+    vi.mocked(documentsApi.get).mockResolvedValue({
+      data: {
+        ...EXTERNAL_DOC,
+        content: 'ext content',
+        collectionKey: 'source-col',
+        sourceNamespace: 'crm',
+        sourceRevision: 'etag:2',
+        externalId: 'cms:article:1',
+      },
+    } as never);
+
+    renderDocuments();
+    await screen.findByText('External Doc');
+    await user.click(screen.getByRole('button', { name: 'documents.openActions' }));
+    await user.click(
+      screen.getByRole('menuitem', { name: 'documents.relocate' }),
+    );
+    const dialog = await screen.findByRole('dialog', {
+      name: 'documents.relocateTitle',
+    });
+
+    await user.keyboard('{Escape}');
+
+    expect(screen.queryByRole('dialog', {
+      name: 'documents.relocateTitle',
+    })).not.toBeInTheDocument();
+    expect(documentsApi.relocate).not.toHaveBeenCalled();
+    void dialog;
+  });
+
   it('closes the edit dialog via cancel without calling update', async () => {
     const user = userEvent.setup();
     renderDocuments();

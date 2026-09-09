@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Documents } from './Documents';
 import { filesApi } from '../api/files';
@@ -9,6 +9,11 @@ import { documentsApi } from '../api/documents';
 // 捕获 Documents 传给 DocumentActionsMenu 的回调 props，
 // 绕开 jsdom 下菜单弹出/悬停定位的时序问题。
 const menuProps: Array<Record<string, unknown>> = [];
+
+const LocationProbe = () => {
+  const location = useLocation();
+  return <output data-testid="loc-probe">{location.pathname + location.search}</output>;
+};
 
 vi.mock('../components/DocumentActionsMenu/DocumentActionsMenu', () => ({
   DocumentActionsMenu: (props: Record<string, unknown>) => {
@@ -109,7 +114,7 @@ describe('Documents provenance callback wiring', () => {
       <QueryClientProvider client={client}>
         <MemoryRouter initialEntries={['/documents']}>
           <Documents />
-          <output data-testid="loc-probe" />
+          <LocationProbe />
         </MemoryRouter>
       </QueryClientProvider>,
     );
@@ -126,6 +131,25 @@ describe('Documents provenance callback wiring', () => {
 
     // 回调可执行且不抛错即视为接线完成（navigate 由路由层承担）。
     expect(props.onViewIndexedFile).toBeTypeOf('function');
+  });
+
+  it('routes the directory action to the files page with an encoded path', async () => {
+    renderDocuments();
+    await screen.findByTestId('captured-actions-menu');
+
+    const props = menuProps.at(-1) as {
+      onViewDirectory: (d: string) => void;
+    };
+    props.onViewDirectory('uuid-7/内部');
+
+    // navigate 触发路由状态更新，需等待重渲染。
+    await waitFor(() =>
+      expect(screen.getByTestId('loc-probe').textContent)
+        .toContain('/files?path='),
+    );
+    expect(decodeURIComponent(
+      screen.getByTestId('loc-probe').textContent!.replace('/files?path=', ''),
+    )).toBe('uuid-7/内部');
   });
 
   it('routes the original file action through blob creation and window.open', async () => {
