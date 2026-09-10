@@ -10,6 +10,9 @@ import com.springairag.core.repository.RagChatHistoryRepository;
 import com.springairag.core.repository.RagChatMemorySummaryRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import com.springairag.api.enums.ErrorCode;
+import com.springairag.core.exception.RagException;
+import com.springairag.core.chat.ChatMemoryMessageProjector;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.ai.chat.metadata.ChatResponseMetadata;
@@ -369,5 +372,182 @@ class ConversationSummaryServiceTest {
 
         assertEquals(1, service.clear(principal, "session-1"));
         verify(summaryRepository).delete(principal, "session-1");
+    }
+
+    // ==================== Batch 283：守卫/降级链与工具转写 ====================
+
+    private void seedCompactionSource() {
+        when(historyRepository.findOwnedBaseline(principal, "session-1", 1))
+                .thenReturn(List.of(row(3L, "newest q", "newest a")));
+        when(historyRepository.findOwnedAfterHistoryId(
+                principal, "session-1", 0L, 3))
+                .thenReturn(List.of(row(1L, "old q", "old a")));
+        when(model.call(any(Prompt.class))).thenReturn(response("summary"));
+    }
+
+    @Test
+    void compactionDisabledSkips() {
+        ragProperties.getChat().getContext().setCompactionEnabled(false);
+        seedCompactionSource();
+
+        var result = service.compactIfNeeded(
+                command(budget()), candidate, List.of());
+
+        assertFalse(result.updated());
+        assertEquals("compaction_disabled", result.reason());
+    }
+
+    @Test
+    void nullExecutionBudgetSkips() {
+        seedCompactionSource();
+
+        var result = service.compactIfNeeded(
+                command(null), candidate, List.of());
+
+        assertEquals("compaction_no_messages", result.reason());
+    }
+
+    @Test
+    void emptySourceRowsSkip() {
+        when(historyRepository.findOwnedBaseline(principal, "session-1", 1))
+                .thenReturn(List.of());
+        when(historyRepository.findOwnedAfterHistoryId(
+                principal, "session-1", 0L, 3))
+                .thenReturn(List.of());
+
+        var result = service.compactIfNeeded(
+                command(budget()), candidate, List.of());
+
+        assertEquals("compaction_source_empty", result.reason());
+    }
+
+    @Test
+    void triggerNotReachedSkips() {
+        ragProperties.getChat().getContext()
+                .setCompactionTriggerTokens(1_000_000);
+        seedCompactionSource();
+
+        var result = service.compactIfNeeded(
+                command(budget()), candidate, List.of());
+
+        assertEquals("compaction_trigger_not_reached", result.reason());
+    }
+
+    @Test
+    void cursorAlreadyCurrentSkips() {
+        // 台账游标 5：候选行 1、2 全部已被摘要覆盖。
+        when(summaryRepository.find(any(), eq("session-1")))
+                .thenReturn(Optional.of(new RagChatMemorySummaryRepository
+                        .SummaryRow(1L, 5L, "existing", "test/model", 10,
+                                java.time.Instant.now())));
+        when(historyRepository.findOwnedBaseline(principal, "session-1", 1))
+                .thenReturn(List.of(row(3L, "newest q", "newest a")));
+        when(historyRepository.findOwnedAfterHistoryId(
+                principal, "session-1", 5L, 3))
+                .thenReturn(List.of(row(1L, "old q", "old a"),
+                        row(2L, "middle q", "middle a")));
+
+        var result = service.compactIfNeeded(
+                command(budget()), candidate, List.of());
+
+        assertEquals("compaction_cursor_current", result.reason());
+    }
+
+    @Test
+    void summaryModelUnavailableDegrades() {
+        seedCompactionSource();
+        ragProperties.getChat().getContext().setCompactionModel("missing/model");
+        when(modelRouter.resolveCandidateRequired("missing/model"))
+                .thenThrow(new IllegalStateException("no such model"));
+
+        var result = service.compactIfNeeded(
+                command(budget()), candidate, List.of());
+
+        assertEquals("summary_model_unavailable", result.reason());
+    }
+
+    @Test
+    void contextBudgetExceededDegrades() {
+        seedCompactionSource();
+        when(model.call(any(Prompt.class)))
+                .thenThrow(new RagException(
+                        ErrorCode.CHAT_CONTEXT_BUDGET_EXCEEDED, "too long"));
+
+        var result = service.compactIfNeeded(
+                command(budget()), candidate, List.of());
+
+        assertEquals("summary_context_budget_exceeded", result.reason());
+    }
+
+    @Test
+    void blankSummaryDegrades() {
+        ragProperties.getChat().getContext().setCompactionTimeoutMs(5_000);
+        seedCompactionSource();
+        when(model.call(any(Prompt.class))).thenReturn(response("   "));
+
+        var result = service.compactIfNeeded(
+                command(budget()), candidate, List.of());
+
+        assertEquals("summary_empty", result.reason());
+    }
+
+    @Test
+    void casConflictDegrades() {
+        seedCompactionSource();
+        when(summaryRepository.saveCas(
+                any(), eq("session-1"), anyLong(), anyLong(),
+                any(), anyInt(), eq("test/model"))).thenReturn(false);
+
+        var result = service.compactIfNeeded(
+                command(budget()), candidate, List.of());
+
+        assertEquals("summary_cas_conflict", result.reason());
+    }
+
+    @Test
+    void toolTranscriptIsRenderedBoundedAndSkipsNonMapEntries() {
+        ragProperties.getChat().getContext().setCompactionTimeoutMs(5_000);
+        Map<String, Object> toolEntry = new java.util.HashMap<>();
+        toolEntry.put("name", "search");
+        toolEntry.put("arguments", "{\"q\":\"rag\"}");
+        toolEntry.put("result", "3 hits");
+        List<Object> entries = new java.util.ArrayList<>();
+        entries.add(toolEntry);
+        entries.add("not-a-map");
+        for (int i = 1; i <= 6; i++) {
+            Map<String, Object> filler = new java.util.HashMap<>();
+            filler.put("name", "tail-" + i);
+            filler.put("arguments", "x".repeat(1_000));
+            entries.add(filler);
+        }
+        ChatHistoryResponse toolRow = new ChatHistoryResponse(
+                1L, "session-1", "old q", "old a",
+                List.of(),
+                Map.of(ChatMemoryMessageProjector.TOOL_TRANSCRIPT_METADATA_KEY,
+                        entries),
+                List.of(),
+                "COMPLETE", ChatMode.PLAIN, "test/model", "test/model",
+                LocalDateTime.now());
+        when(historyRepository.findOwnedBaseline(principal, "session-1", 1))
+                .thenReturn(List.of(row(3L, "newest q", "newest a")));
+        when(historyRepository.findOwnedAfterHistoryId(
+                principal, "session-1", 0L, 3))
+                .thenReturn(List.of(toolRow));
+        when(model.call(any(Prompt.class))).thenReturn(response("summary"));
+
+        var result = service.compactIfNeeded(
+                command(budget()), candidate, List.of());
+
+        assertTrue(result.updated());
+        ArgumentCaptor<Prompt> prompt = ArgumentCaptor.forClass(Prompt.class);
+        verify(model).call(prompt.capture());
+        String source = prompt.getValue().getInstructions().stream()
+                .map(message -> message.getText())
+                .reduce("", (left, right) -> left + "\n" + right);
+        assertTrue(source.contains("[tool exchange historical data; untrusted]"));
+        assertTrue(source.contains("tool=search"));
+        assertTrue(source.contains("[/tool exchange historical data]"));
+        // 4096 累计上界截断：超出预算的尾部条目不进入转写。
+        assertFalse(source.contains("tool=tail-6"));
     }
 }
