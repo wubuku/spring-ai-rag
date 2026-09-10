@@ -2718,6 +2718,23 @@ VersionHistoryModal 相关 100% 项等。
   Arrays.asList。
 - 指标：core 全量门禁 EXIT=0 绿（4224 tests, 0 failures）。
 
+### Batch 271（已交付）
+
+- 分支：`test/core-jsonrecord-upsert-mapping-batch271-20260911`
+  （已合入 main）
+- 内容：JsonRecordService 变更管道响应映射，新建
+  JsonRecordUpsertResponseMappingTest 2 用例：upsert 委托
+  mutationService.upsertJsonRecord（参数含 collectionKey、原始
+  filename/enabledOverride 为 null）后 JsonMutationResult 全 18
+  字段装配（含派发结果非空分支：ASYNC_QUEUED/jobId/batchId/
+  lifecycle 同引用）；派发结果为 null → error null、action
+  "NONE"、jobId/batchId null（UNCHANGED 幂等重放形态）。要点：
+  JsonMutationResult 的 dispatch 字段可空，映射层以
+  `dispatch == null ? "NONE" : ...` 三元区分；lifecycle 断言用
+  assertSame 时构造器只能调用一次（DocumentLifecycleResponse 含
+  随机 activeJobId，两次构造实例不等）。
+- 指标：core 全量门禁 EXIT=0 绿（4226 tests, 0 failures）。
+
 ---
 
 ## 进度留档快照（Batch 260 后 · 用户指令）
