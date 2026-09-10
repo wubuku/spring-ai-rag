@@ -471,22 +471,6 @@ public class OpenAiCompatibilityController {
                                                 .COLLECTION_KEY_HEADER))));
     }
 
-    private ChatTurnOperationService.Claim claimExisting(
-            ChatTurnOperationService.Prepared prepared,
-            boolean stream,
-            OpenAiChatCompletionRequest request) {
-        if (prepared == null || !prepared.keyed()
-                || prepared.operation() == null) {
-            return null;
-        }
-        return turnOperationService.claim(
-                prepared,
-                null,
-                stream
-                        ? ChatTurnOperation.Transport.OPENAI_SSE
-                        : ChatTurnOperation.Transport.OPENAI_JSON);
-    }
-
     private ChatResponse toNativeResponse(ChatExecutionResult result) {
         return ChatResponse.builder()
                 .answer(result.answer())
