@@ -10,6 +10,9 @@ const mockMutate = vi.fn();
 const mockInvalidate = vi.fn();
 const mutationHandlers: Array<Record<string, unknown>> = [];
 const toastSpy = vi.fn();
+// 渲染期闭包读取：useMutation 的 isPending 与 i18n 空翻译开关。
+let mockIsPending = false;
+let emptyTranslations = false;
 
 vi.mock('@tanstack/react-query', () => ({
   useQuery: () => mockUseQuery(),
@@ -17,10 +20,16 @@ vi.mock('@tanstack/react-query', () => ({
     mutationHandlers.push(options);
     return {
       mutate: mockMutate,
-      isPending: false,
+      isPending: mockIsPending,
     };
   },
   useQueryClient: () => ({ invalidateQueries: mockInvalidate }),
+}));
+
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (key: string) => (emptyTranslations ? '' : key),
+  }),
 }));
 
 vi.mock('../Toast', () => ({
@@ -151,7 +160,6 @@ describe('ReembedAllButton', () => {
     expect(mockMutate).toHaveBeenCalledWith(true);
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
-});
 
   it('invalidates queries and warns when a re-embed partially fails', async () => {
     const user = userEvent.setup();
@@ -201,3 +209,79 @@ describe('ReembedAllButton', () => {
 
     expect(documentsApi.reembedMissing).toHaveBeenCalledWith(true);
   });
+
+  it('shows a success toast when every re-embedded document succeeds', async () => {
+    const user = userEvent.setup();
+    render(<ReembedAllButton />);
+
+    await user.click(
+      screen.getByRole('button', { name: /documents\.missingEmbeddings/ }),
+    );
+    await user.click(screen.getByRole('button', { name: 'documents.reembed' }));
+
+    const options = mutationHandlers.at(-1) as {
+      onSuccess: (result: unknown) => void;
+    };
+    act(() => {
+      options.onSuccess({ data: { success: 5, failed: 0 } });
+    });
+
+    expect(toastSpy).toHaveBeenCalledWith('Re-embedded: 5 success', 'success');
+  });
+
+  it('falls back to hardcoded english labels when translations are empty', async () => {
+    emptyTranslations = true;
+    try {
+      const user = userEvent.setup();
+      render(<ReembedAllButton />);
+
+      const alertButton = screen.getByRole('button', {
+        name: /documents need re-embedding/,
+      });
+      expect(alertButton).toHaveAttribute(
+        'title',
+        'Documents missing embeddings',
+      );
+      await user.click(alertButton);
+
+      expect(
+        screen.getByText(/Found 1 documents without embeddings/),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: 'Re-embed All' }),
+      ).toBeInTheDocument();
+
+      await user.click(
+        screen.getByRole('button', { name: 'Force Re-embed' }),
+      );
+      const dialog = screen.getByRole('dialog', { name: 'Force Re-embed' });
+      expect(dialog).toHaveTextContent(
+        'Force re-embed will regenerate ALL embeddings. Continue?',
+      );
+    } finally {
+      emptyTranslations = false;
+    }
+  });
+
+  it('shows the loading label while a re-embed is pending', async () => {
+    mockIsPending = true;
+    try {
+      const user = userEvent.setup();
+      render(<ReembedAllButton />);
+
+      await user.click(
+        screen.getByRole('button', { name: /documents\.missingEmbeddings/ }),
+      );
+
+      // 挂起中：重嵌按钮切到 loading 文案并禁用。
+      expect(
+        screen.getByRole('button', { name: 'common.loading' }),
+      ).toBeDisabled();
+      expect(
+        screen.queryByRole('button', { name: 'documents.reembed' }),
+      ).not.toBeInTheDocument();
+    } finally {
+      mockIsPending = false;
+    }
+  });
+});

@@ -151,4 +151,16 @@ describe('useSearchHistory', () => {
     });
     expect(result.current.showHistory).toBe(true);
   });
+
+  it('ignores corrupted localStorage payloads', () => {
+    fakeLocalStorage.data[STORAGE_KEY] = 'not-valid-json{';
+    const { result } = setup();
+    expect(result.current.history).toEqual([]);
+  });
+
+  it('ignores stored payloads that are not arrays', () => {
+    fakeLocalStorage.data[STORAGE_KEY] = JSON.stringify({ query: 'oops' });
+    const { result } = setup();
+    expect(result.current.history).toEqual([]);
+  });
 });
