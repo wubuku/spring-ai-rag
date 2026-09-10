@@ -2599,6 +2599,24 @@ VersionHistoryModal 相关 100% 项等。
   量门禁的间歇阻塞。
 - 指标：core 全量门禁 EXIT=0 绿（4194 tests, 0 failures）。
 
+### Batch 265（已交付）
+
+- 分支：`test/core-apikey-mapping-batch265-20260911`（已合入
+  main）
+- 内容：ApiKeyManagementService 响应映射与查活主体，新建
+  ApiKeyManagementServiceMappingTest 5 用例：listKeys→toResponse
+  全字段装配（keyId/principalId/version/policyVersion/rpm/role、
+  currentCredential=启用∧未退役∧未吊销、allowedCollectionIds 解
+  析与 collectionKeys 保序映射、NORMAL+未持久化能力→全量能力）；
+  退役凭证判定（retireAt 未来→非当前+retiring=true）；主体现缺
+  失 fail-closed IllegalStateException；findActivePrincipal 全字
+  段映射；四类边界返回 null（主体缺失/已吊销/已过期/无当前凭证
+  轮换空窗）。要点：ApiKeyRole 枚举仅 ADMIN/NORMAL（无 WRITER）；
+  ApiKeyResponse 判定字段为 Boolean 包装（get 而非 is 前缀）；
+  collectionKeys 顺序依赖 resolver.mapKeys 返回 Map 迭代序，桩用
+  LinkedHashMap 保序。
+- 指标：core 全量门禁 EXIT=0 绿（4199 tests, 0 failures）。
+
 ---
 
 ## 进度留档快照（Batch 260 后 · 用户指令）
