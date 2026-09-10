@@ -2834,6 +2834,18 @@ VersionHistoryModal 相关 100% 项等。
   toAbsolutePath 与 toString 桩。
 - 指标：core 全量门禁 EXIT=0 绿（4248 tests, 0 failures）。
 
+### Batch 278（已交付）
+
+- 分支：`test/webui-files-sort-branches-batch278-20260911`（已合
+  入 main）
+- 内容：WebUI Files.tsx 分支加固（84.77%），追加 2 用例：① 导入
+  时间排序全分支——无 createdAt / 非法日期字符串条目稳定垫底
+  （bad-time 与 no-time 之间再按名称决胜）、同时间戳条目按名称
+  升序决胜、desc/asc 切换双向断言（6 条目混排）；② 裸斜杠
+  deep link（?path=%2F）→ normalizeVirtualPath 规范化为根目录正
+  常列出条目。webui 660 测试绿 + vite build 通过。
+- 指标：webui 660 tests 绿 + build 通过（后端未改动）。
+
 ---
 
 ## 进度留档快照（Batch 260 后 · 用户指令）
