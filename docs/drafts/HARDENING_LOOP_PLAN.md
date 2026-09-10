@@ -2991,6 +2991,26 @@ VersionHistoryModal 相关 100% 项等。
   共享记忆交互经 ChatMemoryRepository 接口 mock 验证。
 - 指标：core 全量门禁 EXIT=0 绿（4299 tests, 0 failures）。
 
+### Batch 287（已交付）
+
+- 分支：`test/core-embedding-scope-resolution-batch287-20260911`
+  （已合入 main）
+- 内容：EmbeddingJobService.resolveDocumentIds 作用域解析（20 行
+  缺口），新建 EmbeddingJobScopeResolutionTest 7 用例：documentIds
+  与 Collection scope 互斥（双给/都不给均拒）；空 documentIds 与
+  超 maxDocumentsPerBatch（1001 个）拒绝；ids 路径文档缺失 →
+  DocumentNotFoundException；scope matchNone → 空批且不触仓储；
+  NONE/ANY_ASSIGNED/SELECTED 三种过滤器各自分发到
+  findEnabledIds/findEnabledAssignedIds/findEnabledIdsByCollection
+  Ids（stubFullCreateChain 全链驱动 create 至响应组装）；作用域
+  展开超 1000 上限拒绝。要点：EmbeddingJob 是 24 组件 record
+  （id() 返回 UUID，直接构造真实实例而非 mock）；createOrCoalesce
+  12 参混排 UUID/long/boolean，匹配器必须 any(UUID.class)/anyLong/
+  anyBoolean/anyInt 精确对应（object any() 对 primitive 参数会拆
+  箱 NPE）；contentHash 桩值必须取自 document() 助手的真实 64 位
+  hex 而非任意字面量。
+- 指标：core 全量门禁 EXIT=0 绿（4306 tests, 0 failures）。
+
 ---
 
 ## 进度留档快照（Batch 260 后 · 用户指令）
