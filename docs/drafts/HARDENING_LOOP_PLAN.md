@@ -2787,6 +2787,18 @@ VersionHistoryModal 相关 100% 项等。
   态通过不了竞态路径。
 - 指标：core 全量门禁 EXIT=0 绿（4240 tests, 0 failures）。
 
+### Batch 275（已交付）
+
+- 分支：`test/webui-toast-settings-branches-batch275-20260911`
+  （已合入 main）
+- 内容：WebUI 分支残余两点：① Toast.tsx 定时器清理竞态分支
+  （timer !== undefined 否侧）——同一 act 内对关闭按钮连点两次，
+  第二次 removeToast 命中定时器登记已清理路径，断言不抛错且提示
+  消失；② Settings.tsx 缓存 maxSize 输入清空 → parseInt('') NaN
+  经 || 1000 回退默认值（受控输入先置 5555 再清空验证回显 1000）。
+  webui 658 测试绿 + vite build 通过。
+- 指标：webui 658 tests 绿 + build 通过（后端未改动）。
+
 ---
 
 ## 进度留档快照（Batch 260 后 · 用户指令）
