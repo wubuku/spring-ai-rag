@@ -2881,6 +2881,23 @@ VersionHistoryModal 相关 100% 项等。
   一次，回收竞速两次）。
 - 指标：core 全量门禁 EXIT=0 绿（4265 tests, 0 failures）。
 
+### Batch 281（已交付）
+
+- 分支：`test/core-external-finishupsert-batch281-20260911`（已合
+  入 main）
+- 内容：ExternalDocumentService.finishUpsert 嵌入结果分支（20 行
+  缺口），在 ExternalDocumentServiceTest 追加 6 用例：ASYNC 策略
+  经 dispatchService.enqueueInCurrentTransaction 排队（QUEUED 状
+  态 + job/batch ID 装配）；排队结果带错误 → EMBEDDING_FAILED +
+  错误透传；SYNC 策略经 dispatchAfterCommit（错误同样映射）；同
+  步嵌入抛异常 → FAILED + EMBEDDING_FAILED（catch 分支）；fresh
+  + SYNC → CACHED + 活动档案键 + 经 findById 重载文档的
+  processingStatus；SKIP 策略 → NOT_REQUESTED + SKIPPED + 档案键
+  兜底（profileKey 为 null 时取活动档案）。要点：finishUpsert 的
+  分支优先级为 queued → SKIP → SYNC+dispatch → 同步嵌入 → fresh
+  缓存，dispatchService 为包私有 setter 注入的可选依赖。
+- 指标：core 全量门禁 EXIT=0 绿（4271 tests, 0 failures）。
+
 ---
 
 ## 进度留档快照（Batch 260 后 · 用户指令）
