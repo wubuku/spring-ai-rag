@@ -2573,6 +2573,32 @@ VersionHistoryModal 相关 100% 项等。
   1204ms，机器负载所致；隔离复跑与重跑门禁均绿）。该基准阈值对
   环境敏感，列为后续技术债候选（warmup 或放宽阈值）。
 
+### Batch 264（已交付）
+
+- 分支：`test/core-derivation-repair-flow-batch264-20260911`（已
+  合入 main）
+- 内容：① DerivationRepairService 主链编排，新建
+  DerivationRepairServiceFlowTest 7 用例：preview 计划持久化
+  （scanRepairCandidates 双候选 → 1 项 REBUILD_LOCAL + skipped
+  Documents=4、INSERT preview/items 逐项校验）；修复关闭 →
+  DERIVATION_REPAIR_DISABLED；apply 身份不符（token/指纹双拒绝且
+  在抢租约之前）；过期 PREVIEWED → EXPIRED + DERIVATION_REPAIR_
+  EXPIRED；COMPLETED 幂等重放经 status()；status 项目映射；全链
+  用例（claim 租约 → local 阶段 keywordIndex + post-local 写回 →
+  vector 阶段 enqueue 派发 → finishSucceeded → finishApply →
+  status COMPLETED，confirmActiveWrite×2）。收敛：preview 46→<5
+  missed、applyVectorPhase 44→16、applyLocalPhase 28→7。要点：
+  PreviewRow 为 private record 经 requirePreview 的 RowMapper 回
+  调 + ResultSet 桩构造；preview 行状态用 AtomicReference 在
+  finishApply 条件更新片段命中时翻转（全链终态 COMPLETED 可断
+  言）；queryForList varargs 桩须用 any(Object.class) 避免与
+  (String,Class,Object...) 重载歧义。② 基准去抖（Batch 263 备注
+  项落地）：HybridRetrieverServiceBenchmarkTest 的
+  cosineSimilarity/vectorToString 两用例改为多次 JIT 预热 + 3 次
+  采样取最小值，阈值保持不变（病理性回归仍远超阈值），消除对全
+  量门禁的间歇阻塞。
+- 指标：core 全量门禁 EXIT=0 绿（4194 tests, 0 failures）。
+
 ---
 
 ## 进度留档快照（Batch 260 后 · 用户指令）
