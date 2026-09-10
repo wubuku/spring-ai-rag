@@ -2936,6 +2936,24 @@ VersionHistoryModal 相关 100% 项等。
   4096。
 - 指标：core 全量门禁 EXIT=0 绿（4284 tests, 0 failures）。
 
+### Batch 284（已交付）
+
+- 分支：`test/core-history-cleanup-coordinated-batch284-20260911`
+  （已合入 main）
+- 内容：ChatHistoryCleanupService 协调清理路径
+  （cleanupOwnedSessions → cleanupSession，lambda 约 20 行缺口），
+  新建 ChatHistoryCleanupCoordinatedPathTest 5 用例：候选会话获
+  取维护租约 → 消费租约 → 删除 3 行 → 摘要清理 → EXISTS 查询确
+  认仍有历史（不清 spring_ai 记忆），总数含遗留行；会话清空
+  （EXISTS=false）→ 兜底删除 spring_ai_chat_memory；活跃会话租
+  约获取失败 → 跳过会话工作（仅遗留行计入，不触消费查询与摘
+  要）；消费租约返回非 1 行 → IllegalStateException fail-closed
+  且 finally 仍释放租约；无候选会话 → 仅遗留行。要点：会话删除
+  与遗留删除 SQL 同形（均 WITH victims），按参数个数（4 vs 2）
+  与 SQL 片段区分桩；维护租约三段（INSERT 获取 / DELETE
+  RETURNING 消费 / DELETE 释放）经 SQL 片段匹配。
+- 指标：core 全量门禁 EXIT=0 绿（4289 tests, 0 failures）。
+
 ---
 
 ## 进度留档快照（Batch 260 后 · 用户指令）
