@@ -186,6 +186,55 @@ describe('Files', () => {
     expect(paths).toEqual(['older-pdf/', 'sample-pdf/', 'newest-pdf/']);
   });
 
+  it('orders timestamp-less entries last and breaks time ties by name', () => {
+    mockUseQuery.mockImplementation((options: { queryKey: unknown[] }) => {
+      if (options.queryKey[0] === 'files-collections') {
+        return { data: { data: { collections: [] } } };
+      }
+      const path = String(options.queryKey[1] ?? '');
+      const entry = (name: string, createdAt: string | null) => ({
+        name,
+        path: `${name}/`,
+        type: 'directory',
+        mimeType: null,
+        size: 0,
+        createdAt,
+      });
+      return {
+        data: { data: { path, entries: path ? [] : [
+          entry('no-time', null),
+          entry('zeta', '2026-08-15T09:00:00Z'),
+          entry('beta', '2026-08-15T09:00:00Z'),
+          entry('newer', '2026-08-16T09:00:00Z'),
+          entry('older', '2026-08-14T09:00:00Z'),
+          entry('bad-time', 'not-a-date'),
+        ], total: 6 } },
+        isPending: false,
+        error: null,
+        refetch: vi.fn(),
+      };
+    });
+
+    renderFiles();
+    const paths = () => screen.getAllByTestId('file-tree-entry')
+      .map(entry => entry.getAttribute('data-entry-path'));
+
+    // desc：有时间者新→旧，同时间按名称升序决胜；无有效时间者垫底。
+    expect(paths()).toEqual([
+      'newer/', 'beta/', 'zeta/', 'older/',
+      'bad-time/', 'no-time/',
+    ]);
+  });
+
+  it('normalizes a bare slash deep link to the root directory', () => {
+    renderFiles('/webui/files?path=%2F');
+
+    // path='/' 规范化为根目录：正常列出根级条目而非报错。
+    const paths = screen.getAllByTestId('file-tree-entry')
+      .map(entry => entry.getAttribute('data-entry-path'));
+    expect(paths).toEqual(['newest-pdf/', 'sample-pdf/', 'older-pdf/']);
+  });
+
   it('opens a safe file deep link and previews the indexed file', async () => {
     window.history.replaceState(
       {},
