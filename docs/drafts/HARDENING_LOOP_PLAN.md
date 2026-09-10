@@ -2657,6 +2657,29 @@ VersionHistoryModal 相关 100% 项等。
   88.31% → 89.27%，行覆盖 98.56%，656 测试全绿，vite build 通过。
 - 指标：webui 656 tests 绿 + build 通过（后端未改动）。
 
+### Batch 268（已交付）
+
+- 分支：`test/core-integrity-repo-query-batch268-20260911`（已合
+  入 main）
+- 内容：DerivationIntegrityRepository 读路径，新建
+  DerivationIntegrityRepositoryTest 7 用例：inspect 全值行映射
+  （34 组件 Snapshot 逐项断言）+ 空结果 → missing 回退（DISABLED
+  桶 / DOCUMENT_MISSING）；全空行 nullable/nullableNumber 兜底
+  （NullValue 路径全覆盖）；scanCollection 谓词 SQL 捕获（
+  collection_id 谓词、ORDER BY document.id、chunker/profile 前
+  置参数后下标 5 为集合 ID）；scanRepairCandidates 经分类查询
+  （SELECT id FROM bucketed + LIMIT/OFFSET）→ inspectIds IN 查询
+  回读；countRepairSelection/countCollection 的 bucketed 计数与
+  bucket 谓词有无、null 计数归零；aggregateCollection 与
+  aggregateEmbeddingReadiness 两个 ResultSetExtractor 的行读取。
+  收敛：query lambda$query$2 36→0、query 21→4。要点：query 的
+  args 前缀为 jsonChunker/textChunker/profile×3（谓词参数从下标
+  5 起）；映射器经 Map.entry 组装不接受 null title（生产由
+  rag_documents.title NOT NULL 保证，测试需显式打桩）；按列名打
+  桩的 ResultSet 须先加 anyString 宽松兜底再覆盖具体列，否则
+  strict stubs 对未打桩列报 PotentialStubbingProblem。
+- 指标：core 全量门禁 EXIT=0 绿（4211 tests, 0 failures）。
+
 ---
 
 ## 进度留档快照（Batch 260 后 · 用户指令）
