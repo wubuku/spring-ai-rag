@@ -2735,6 +2735,23 @@ VersionHistoryModal 相关 100% 项等。
   随机 activeJobId，两次构造实例不等）。
 - 指标：core 全量门禁 EXIT=0 绿（4226 tests, 0 failures）。
 
+### Batch 272（已交付）
+
+- 分支：`test/core-create-fingerprint-batch272-20260911`（已合入
+  main）
+- 内容：DocumentMutationService.localCreateFingerprint 幂等指纹
+  规范化，新建 DocumentMutationCreateFingerprintTest 4 用例
+  （ReflectionTestUtils 直调私有方法，与幂等测试同模式）：确定性
+  与标题修剪规范化（"  Padded  " ≡ "Padded"，指纹 64 位十六进
+  制）；元数据键序无关（LinkedHashMap 正/反插入经 TreeMap 排序
+  后指纹一致）；可选输入逐一变化（enabledOverride null→true、
+  originalFilename null→"file.pdf"、jsonbPayload null→节点均改
+  变指纹）；policy/force/collectionId/deduplicationScope 任一变
+  化改变指纹。要点：normalizeMetadata 经 Map.copyOf 消除原顺序、
+  TreeMap 重排保证键序无关；normalizeOptional 将空白串归一为
+  null。
+- 指标：core 全量门禁 EXIT=0 绿（4230 tests, 0 failures）。
+
 ---
 
 ## 进度留档快照（Batch 260 后 · 用户指令）
