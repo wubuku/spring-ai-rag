@@ -2914,6 +2914,28 @@ VersionHistoryModal 相关 100% 项等。
   策略用匿名 ApiAccessPolicy（role=NORMAL + allowed "10,11"）。
 - 指标：core 全量门禁 EXIT=0 绿（4274 tests, 0 failures）。
 
+### Batch 283（已交付）
+
+- 分支：`test/core-summary-guards-tooltranscript-batch283-20260911`
+  （已合入 main）
+- 内容：ConversationSummaryService 压缩守卫/降级链与工具转写
+  （合计约 36 行缺口），在既有测试类追加 10 用例：守卫——
+  compaction_disabled、executionBudget 缺失（no_messages）、候选
+  为空（source_empty）、触发阈值未达（trigger_not_reached）、游标
+  已最新（cursor_current，台账游标 5 + 候选行 1/2）；降级——压缩
+  模型缺失（summary_model_unavailable）、
+  CHAT_CONTEXT_BUDGET_EXCEEDED（summary_context_budget_exceeded）、
+  空白摘要（summary_empty）、saveCas 竞速（summary_cas_conflict）；
+  renderToolTranscript——工具行渲染（name/arguments/result）、非
+  Map 条目跳过、4096 累计上界截断（tail 条目不进转写）。要点：
+  压缩超时 200ms 会低估测试 JVM 冷启动（异步 supplyAsync 首次调
+  度超 200ms 即假报 summary_timeout），用例需将
+  compactionTimeoutMs 提到 5000；cursor_current 需要台账游标大于
+  候选行最大 id 且 findOwnedAfterHistoryId 桩匹配游标参数；转写
+  截断按累计长度（bounded 单条 1024 永远放得下），须多条累计超
+  4096。
+- 指标：core 全量门禁 EXIT=0 绿（4284 tests, 0 failures）。
+
 ---
 
 ## 进度留档快照（Batch 260 后 · 用户指令）
