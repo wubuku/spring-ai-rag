@@ -2550,6 +2550,29 @@ VersionHistoryModal 相关 100% 项等。
   初始化前 send 走早期缓存，单测可直接断言响应类型与头。
 - 指标：core 全量门禁 EXIT=0 绿（4182 tests, 0 failures）。
 
+### Batch 263（已交付）
+
+- 分支：`test/core-begin-path-deadcode-batch263-20260911`（已合入
+  main）
+- 内容：技术债 + 补测双项。① 死代码移除：Batch 262 残余核查确认
+  OpenAiCompatibilityController.claimExisting 与 RagChatController
+  .claimExisting 均为零调用（inspectExisting + 内联 claim 重构遗
+  留），两处删除（-28 行），门禁全绿即回归证据。②
+  DocumentSyncRunService.begin 主路径 5 用例：同 token+同请求幂等
+  重放（不再 INSERT、beginActiveWrite 触达）；同 clientRunId 绑定
+  不同 token / 不同 snapshotMode → SYNC_RUN_LEASE_CONFLICT；已有
+  ACTIVE 运行 → ACTIVE_SYNC_RUN_EXISTS；新建路径（allocateSource
+  SequenceForSnapshot=5 → INSERT 10 参数逐项断言 tokenHash/序列/
+  模式）；DataIntegrityViolation → ACTIVE_SYNC_RUN_EXISTS 并发映
+  射。要点：RunRow 为 private record，findByClientRun/findActive
+  桩经 RowMapper.mapRow(ResultSet) 模式（同包 stubRunColumns 复
+  用）；varargs 桩匹配按参数个数（3 参 vs 2 参分开桩）。
+- 指标：core 全量门禁 EXIT=0 绿（4187 tests, 0 failures）。
+- 备注：首轮门禁遇 HybridRetrieverServiceBenchmarkTest
+  .vectorToString_10k_under500ms 计时抖动（1000ms 阈值实测
+  1204ms，机器负载所致；隔离复跑与重跑门禁均绿）。该基准阈值对
+  环境敏感，列为后续技术债候选（warmup 或放宽阈值）。
+
 ---
 
 ## 进度留档快照（Batch 260 后 · 用户指令）
