@@ -4,8 +4,10 @@ import com.springairag.api.dto.ExternalDocumentBatchUpsertResponse;
 import com.springairag.api.dto.ExternalDocumentDeleteResponse;
 import com.springairag.api.dto.ExternalDocumentUpsertRequest;
 import com.springairag.api.dto.ExternalDocumentUpsertResponse;
+import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.config.EmbeddingProfile;
 import com.springairag.core.config.EmbeddingProfileProvider;
+import com.springairag.core.embeddingjob.EmbeddingDispatchService;
 import com.springairag.core.entity.RagCollection;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.entity.RagDocumentVersion;
@@ -28,8 +30,12 @@ import org.springframework.transaction.TransactionStatus;
 import java.util.Map;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -38,6 +44,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -409,4 +416,146 @@ void blankDocumentTypeNormalizesToTextAndPersists() {
     verify(documentRepository).saveAndFlush(persisted.capture());
     assertEquals("text", persisted.getValue().getDocumentType());
 }
+
+    // ==================== finishUpsert 分支（Batch 281） ====================
+
+    private EmbeddingDispatchService dispatchService;
+
+    private EmbeddingDispatchService.Result dispatch(
+            com.springairag.api.enums.EmbeddingAction action,
+            String status, String error) {
+        return new EmbeddingDispatchService.Result(
+                action, status, PROFILE.profileKey(),
+                UUID.randomUUID(), UUID.randomUUID(), error);
+    }
+
+    @Test
+    void asyncPolicyQueuesDispatchAndMapsJobIdentifiers() {
+        EmbeddingDispatchService dispatch = mock(EmbeddingDispatchService.class);
+        service.setDispatchService(dispatch);
+        ExternalDocumentUpsertRequest request =
+                request("doc-async", "rev-1", "Title", "Content");
+        request.setEmbeddingPolicy(com.springairag.api.enums.EmbeddingPolicy.ASYNC);
+        when(documentRepository.findByCollectionIdAndExternalId(10L, "doc-async"))
+                .thenReturn(Optional.empty());
+        when(dispatch.enqueueInCurrentTransaction(
+                any(RagDocument.class), eq(true), eq(false), eq("EXTERNAL_UPSERT")))
+                .thenReturn(dispatch(
+                        com.springairag.api.enums.EmbeddingAction.ASYNC_QUEUED,
+                        "QUEUED", null));
+
+        ExternalDocumentUpsertResponse response = service.upsert(request);
+
+        assertEquals("CREATED", response.action());
+        assertEquals("QUEUED", response.embeddingStatus());
+        assertEquals("ASYNC_QUEUED", response.embeddingAction());
+        assertNotNull(response.embeddingJobId());
+        assertNotNull(response.embeddingBatchId());
+        assertNull(response.errorCode());
+    }
+
+    @Test
+    void asyncDispatchErrorMapsEmbeddingFailure() {
+        EmbeddingDispatchService dispatch = mock(EmbeddingDispatchService.class);
+        service.setDispatchService(dispatch);
+        ExternalDocumentUpsertRequest request =
+                request("doc-async-err", "rev-1", "Title", "Content");
+        request.setEmbeddingPolicy(com.springairag.api.enums.EmbeddingPolicy.ASYNC);
+        when(documentRepository.findByCollectionIdAndExternalId(10L, "doc-async-err"))
+                .thenReturn(Optional.empty());
+        when(dispatch.enqueueInCurrentTransaction(
+                any(RagDocument.class), eq(true), eq(false), eq("EXTERNAL_UPSERT")))
+                .thenReturn(dispatch(
+                        com.springairag.api.enums.EmbeddingAction.ASYNC_QUEUED,
+                        "FAILED", "embed boom"));
+
+        ExternalDocumentUpsertResponse response = service.upsert(request);
+
+        assertEquals("FAILED", response.embeddingStatus());
+        assertEquals(ErrorCode.EMBEDDING_FAILED.getCode(), response.errorCode());
+        assertTrue(response.error().contains("embed boom"));
+    }
+
+    @Test
+    void syncPolicyDispatchesAfterCommitAndMapsError() {
+        EmbeddingDispatchService dispatch = mock(EmbeddingDispatchService.class);
+        service.setDispatchService(dispatch);
+        ExternalDocumentUpsertRequest request =
+                request("doc-sync", "rev-1", "Title", "Content");
+        request.setEmbeddingPolicy(com.springairag.api.enums.EmbeddingPolicy.SYNC);
+        when(documentRepository.findByCollectionIdAndExternalId(10L, "doc-sync"))
+                .thenReturn(Optional.empty());
+        when(dispatch.dispatchAfterCommit(
+                any(RagDocument.class),
+                eq(com.springairag.api.enums.EmbeddingPolicy.SYNC),
+                eq(true), eq("EXTERNAL_UPSERT")))
+                .thenReturn(dispatch(
+                        com.springairag.api.enums.EmbeddingAction.ASYNC_QUEUED,
+                        "COMPLETED", "sync warn"));
+
+        ExternalDocumentUpsertResponse response = service.upsert(request);
+
+        assertEquals("COMPLETED", response.embeddingStatus());
+        assertEquals(ErrorCode.EMBEDDING_FAILED.getCode(), response.errorCode());
+        assertTrue(response.error().contains("sync warn"));
+        verify(dispatch).dispatchAfterCommit(
+                any(RagDocument.class),
+                eq(com.springairag.api.enums.EmbeddingPolicy.SYNC),
+                eq(true), eq("EXTERNAL_UPSERT"));
+    }
+
+    @Test
+    void syncEmbeddingExceptionReportsFailureStatus() {
+        ExternalDocumentUpsertRequest request =
+                request("doc-sync-err", "rev-1", "Title", "Content");
+        request.setEmbeddingPolicy(com.springairag.api.enums.EmbeddingPolicy.SYNC);
+        when(documentRepository.findByCollectionIdAndExternalId(10L, "doc-sync-err"))
+                .thenReturn(Optional.empty());
+        when(documentEmbedService.hasFreshEmbedding(any(RagDocument.class)))
+                .thenReturn(false);
+        when(documentEmbedService.embedDocument(41L, false))
+                .thenThrow(new IllegalStateException("provider offline"));
+
+        ExternalDocumentUpsertResponse response = service.upsert(request);
+
+        assertEquals("FAILED", response.embeddingStatus());
+        assertEquals(ErrorCode.EMBEDDING_FAILED.getCode(), response.errorCode());
+        assertTrue(response.error().contains("provider offline"));
+    }
+
+    @Test
+    void freshSyncEmbeddingReportsCachedWithReloadedDocument() {
+        ExternalDocumentUpsertRequest request =
+                request("doc-cached", "rev-1", "Title", "Content");
+        request.setEmbeddingPolicy(com.springairag.api.enums.EmbeddingPolicy.SYNC);
+        when(documentRepository.findByCollectionIdAndExternalId(10L, "doc-cached"))
+                .thenReturn(Optional.empty());
+        when(documentEmbedService.hasFreshEmbedding(any(RagDocument.class)))
+                .thenReturn(true);
+        RagDocument reloaded = document(41L, "doc-cached", "rev-1", "Content");
+        reloaded.setProcessingStatus("COMPLETED");
+        when(documentRepository.findById(41L)).thenReturn(Optional.of(reloaded));
+
+        ExternalDocumentUpsertResponse response = service.upsert(request);
+
+        assertEquals("CACHED", response.embeddingStatus());
+        assertTrue(response.embeddingFresh());
+        assertEquals(PROFILE.profileKey(), response.embeddingProfileKey());
+        assertEquals("COMPLETED", response.processingStatus());
+        verify(documentEmbedService, never()).embedDocument(any(), any(Boolean.class));
+    }
+
+    @Test
+    void skipPolicyFallsBackToActiveProfileKey() {
+        ExternalDocumentUpsertRequest request =
+                request("doc-skip", "rev-1", "Title", "Content");
+        request.setEmbed(false);
+
+        ExternalDocumentUpsertResponse response = service.upsert(request);
+
+        assertEquals("NOT_REQUESTED", response.embeddingStatus());
+        assertEquals("SKIPPED", response.embeddingAction());
+        assertEquals(PROFILE.profileKey(), response.embeddingProfileKey());
+        assertNull(response.errorCode());
+    }
 }
