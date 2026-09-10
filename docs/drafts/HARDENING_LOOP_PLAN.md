@@ -2617,6 +2617,28 @@ VersionHistoryModal 相关 100% 项等。
   LinkedHashMap 保序。
 - 指标：core 全量门禁 EXIT=0 绿（4199 tests, 0 failures）。
 
+### Batch 266（已交付）
+
+- 分支：`test/core-keyed-sse-stream-batch266-20260911`（已合入
+  main）
+- 内容：RagChatController /stream 键控回合 SSE（Batch 260 延后项，
+  JaCoCo 缺口 nativeSnapshotEmitter 43 行），新建
+  RagChatControllerKeyedSseTest 5 用例：inspectExisting 重放经
+  replayNativeSse（X-RAG-Turn-Id / Idempotent-Replay=true 响应头、
+  不抢新 claim 不触达执行链）；claim 竞速重放（commandForClaim 从
+  未调用）；prepared 全链（mapFromExecutionSnapshot → claim
+  NATIVE_SSE → commandForClaim → 熔断检查 → prepareForOperation
+  (streaming=true) → completePrepared → finalize →
+  nativeSnapshotEmitter，Idempotent-Replay=false，无 fail）；链路
+  失败 → fail(claim, error) 原样重抛；sessionCoordinator 注入时
+  finally 释放会话租约。收敛：nativeSnapshotEmitter 43→5、
+  stream 30→7、executeKeyedSse→1、replayNativeSse→0。要点：控制
+  器可选依赖经包私有 configure* 注入（configureTurnOperationService
+  /configureModeAwareExecution/configureSessionCoordinator）；o
+  peration 的 executionSnapshot 必须非 null 才走 snapshot 映射分
+  支（null 落 mapper.map 需另桩 resolveScope 路径）。
+- 指标：core 全量门禁 EXIT=0 绿（4204 tests, 0 failures）。
+
 ---
 
 ## 进度留档快照（Batch 260 后 · 用户指令）
