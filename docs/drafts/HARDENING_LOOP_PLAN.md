@@ -2639,6 +2639,24 @@ VersionHistoryModal 相关 100% 项等。
   支（null 落 mapper.map 需另桩 resolveScope 路径）。
 - 指标：core 全量门禁 EXIT=0 绿（4204 tests, 0 failures）。
 
+### Batch 267（已交付）
+
+- 分支：`test/webui-branch-gaps-batch267-20260911`（已合入 main）
+- 内容：WebUI 分支覆盖加固（按 coverage 排序选点），4 个测试文
+  件 +188 行：① 修复 ReembedAllButton.test 结构缺陷——describe
+  提前闭合致 3 个用例游离顶层（靠 describe 内残留 mock 实现侥幸
+  通过、测试顺序耦合），全部归位并新增成功 toast（failed=0 →
+  success）、空翻译兜底标签（alert title/面板描述/Re-embed All/
+  Force 确认文案，经可切换 i18n mock）、isPending 挂起态（loading
+  文案+禁用），11 用例；② FilePreview 分支：directory 早退不拉
+  取、mimeType null 兜底（?? '' 不命中任何分支）、图片/PDF 的
+  blob URL 为空 → 'Unavailable' 错误盒、卸载后延迟 resolve（锁定
+  现存行为：createObjectURL 在 active 守卫前执行且 URL 不回收），
+  15 用例；③ useSearchHistory：损坏 JSON 与非数组载荷 → 空历史；
+  ④ ErrorBoundary：空 pathname 兜底 report 根路径。整体分支覆盖
+  88.31% → 89.27%，行覆盖 98.56%，656 测试全绿，vite build 通过。
+- 指标：webui 656 tests 绿 + build 通过（后端未改动）。
+
 ---
 
 ## 进度留档快照（Batch 260 后 · 用户指令）
