@@ -2898,6 +2898,22 @@ VersionHistoryModal 相关 100% 项等。
   缓存，dispatchService 为包私有 setter 注入的可选依赖。
 - 指标：core 全量门禁 EXIT=0 绿（4271 tests, 0 failures）。
 
+### Batch 282（已交付）
+
+- 分支：`test/core-diagnostics-visible-keys-batch282-20260911`
+  （已合入 main）
+- 内容：RetrievalDiagnosticsService.visibleCollectionKeys 脱敏
+  分支（20 行缺口），新建 RetrievalDiagnosticsVisibleKeysTest 3
+  用例（经公有 get(principal, traceId) → toDetail → visibleMeta
+  data 驱动）：非受限调用方原样返回请求键且不触达解析器（verify
+  never findActive，防行为差异）；受限调用方仅保留允许集合内的
+  键——允许键保留、未授权集合的键剔除、解析器抛异常的键静默丢
+  弃（防错误差异探测）、空白/空值键在收集阶段剔除；解析器缺失
+  时即使非受限也全部隐藏。要点：受限调用方经 RequestContextHolder
+  注入 AUTHENTICATED_API_PRINCIPAL_ATTRIBUTE（测试后必须 reset），
+  策略用匿名 ApiAccessPolicy（role=NORMAL + allowed "10,11"）。
+- 指标：core 全量门禁 EXIT=0 绿（4274 tests, 0 failures）。
+
 ---
 
 ## 进度留档快照（Batch 260 后 · 用户指令）
