@@ -2508,6 +2508,23 @@ VersionHistoryModal 相关 100% 项等。
   耗预留属正常）。
 - 指标：core 全量门禁 EXIT=0 绿。
 
+### Batch 261（已交付）
+
+- 分支：`test/core-syncrun-listitems-cursor-batch261-20260911`
+  （已合入 main）
+- 内容：DocumentSyncRunService.listItems 游标边界（既有 3 用例之
+  外），新增 3 用例：cursor 全回环——首页 hasMore 产出的 nextCursor
+  在第二页经真实 codec decode 为 CursorPosition，ArgumentCaptor 断
+  言 page 收到的 (seenAt, externalId) 恰为首页最后返回行（次页空
+  收尾 hasMore=false）；失败矩阵——他人 runId 游标 / statusFilter
+  不匹配游标 / 空白游标均抛 "cursor is invalid" 且解码先于仓库访
+  问（verifyNoInteractions）；limit=MAX_ITEM_RECEIPT_PAGE_ITEMS=200
+  上界正例且向后仓传递探测行数 limit+1=201。要点：服务内
+  itemCursorCodec 为构造器内部实例化（非注入），但 codec 包私有，
+  同包测试用真实 codec（相同 findAndRegisterModules ObjectMapper）
+  即可做端到端回环，无需打桩。
+- 指标：core 全量门禁 EXIT=0 绿（4174 tests, 0 failures）。
+
 ---
 
 ## 进度留档快照（Batch 260 后 · 用户指令）
