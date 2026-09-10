@@ -2799,6 +2799,22 @@ VersionHistoryModal 相关 100% 项等。
   webui 658 测试绿 + vite build 通过。
 - 指标：webui 658 tests 绿 + build 通过（后端未改动）。
 
+### Batch 276（已交付）
+
+- 分支：`test/core-upload-embed-batch276-20260911`（已合入 main）
+- 内容：RagDocumentController.uploadAndEmbed 批量上传（22 行缺
+  口），新建 RagDocumentControllerUploadTest 4 用例：空文件数组 →
+  400 占位 FileResult（"No file uploaded"，processed/success/
+  failed 全 0）；混合文件逐个经 batch 管道并计数（成功结果
+  documentId/title/embeddingAction/jobId 装配 + 失败结果 error
+  透传，processed=2/success=1/failed=1）；非文本且不可读 →
+  "Unsupported file type: image/png"；空白文本 → "File content
+  is empty"。要点：validateTextFile 的拒绝分支仅在非文本且
+  getBytes() 抛异常时触发（MockMultipartFile 永不抛，须 mock
+  MultipartFile 的 getBytes 抛 IOException）；batch 管道 stub 用
+  thenReturn(ok, fail) 按 FileList 顺序逐个消费。
+- 指标：core 全量门禁 EXIT=0 绿（4244 tests, 0 failures）。
+
 ---
 
 ## 进度留档快照（Batch 260 后 · 用户指令）
