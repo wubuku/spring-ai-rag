@@ -958,18 +958,6 @@ public class RagChatController {
                 ChatRequestFingerprint.nativeRequest(request, objectMapper));
     }
 
-    private ChatTurnOperationService.Claim claimExisting(
-            ChatTurnOperationService.Prepared prepared,
-            ChatTurnOperation.Transport transport,
-            ChatRequest request) {
-        if (prepared == null || !prepared.keyed()
-                || prepared.operation() == null) {
-            return null;
-        }
-        return turnOperationService.claim(
-                prepared, request.getSessionId(), transport);
-    }
-
     private ChatCommandMapper requireIdempotentMapper() {
         if (chatCommandMapper == null) {
             throw new RagException(

@@ -244,6 +244,137 @@ class DocumentSyncRunServiceTest {
         verifyNoInteractions(itemReceiptRepository);
     }
 
+    private DocumentSyncRunBeginRequest beginRequest() {
+        return new DocumentSyncRunBeginRequest("kb", "default", "client-run-1",
+                DocumentSyncSnapshotMode.EXCLUSIVE_OFFLINE,
+                DocumentSyncMissingPolicy.NONE, 600, false);
+    }
+
+    private org.mockito.stubbing.Answer<Object> runRowMappedAnswer(
+            DocumentSyncRunStatus status, String leaseTokenHash) {
+        return invocation -> {
+            RowMapper<?> mapper = invocation.getArgument(1);
+            ResultSet rs = mock(ResultSet.class);
+            stubRunColumns(rs, status, leaseTokenHash, null, null,
+                    DocumentSyncMissingPolicy.NONE);
+            return mapper.mapRow(rs, 0);
+        };
+    }
+
+    @Test
+    void beginReplaysExistingRunForSameTokenAndRequest() {
+        when(jdbcTemplate.queryForObject(contains("client_run_id = ?"),
+                any(RowMapper.class), any(), any(), any()))
+                .thenAnswer(runRowMappedAnswer(DocumentSyncRunStatus.ACTIVE,
+                        com.springairag.core.util.DigestUtils.sha256("lease-1")));
+
+        DocumentSyncRunResponse response = service.begin(
+                beginRequest(), "lease-1");
+
+        assertEquals(RUN_ID, response.runId());
+        assertEquals(DocumentSyncRunStatus.ACTIVE, response.status());
+        verify(collectionIdentityResolver).beginActiveWrite(10L);
+        // 幂等重放：不再插入新运行行。
+        verify(jdbcTemplate, never()).update(
+                contains("INSERT INTO rag_document_sync_runs"),
+                any(Object[].class));
+    }
+
+    @Test
+    void beginRejectsClientRunBoundToDifferentTokenOrMode() {
+        when(jdbcTemplate.queryForObject(contains("client_run_id = ?"),
+                any(RowMapper.class), any(), any(), any()))
+                .thenAnswer(runRowMappedAnswer(DocumentSyncRunStatus.ACTIVE,
+                        com.springairag.core.util.DigestUtils
+                                .sha256("other-lease")));
+
+        RagException tokenConflict = assertThrows(RagException.class,
+                () -> service.begin(beginRequest(), "lease-1"));
+        assertEquals(ErrorCode.SYNC_RUN_LEASE_CONFLICT,
+                tokenConflict.getErrorCodeEnum());
+
+        // 同 token 但快照模式不同：同一 clientRunId 绑定被拒绝。
+        when(jdbcTemplate.queryForObject(contains("client_run_id = ?"),
+                any(RowMapper.class), any(), any(), any()))
+                .thenAnswer(runRowMappedAnswer(DocumentSyncRunStatus.ACTIVE,
+                        com.springairag.core.util.DigestUtils.sha256("lease-1")));
+        RagException modeConflict = assertThrows(RagException.class,
+                () -> service.begin(new DocumentSyncRunBeginRequest(
+                        "kb", "default", "client-run-1",
+                        DocumentSyncSnapshotMode.OFFLINE_MANIFEST,
+                        DocumentSyncMissingPolicy.NONE, 600, false), "lease-1"));
+        assertEquals(ErrorCode.SYNC_RUN_LEASE_CONFLICT,
+                modeConflict.getErrorCodeEnum());
+    }
+
+    @Test
+    void beginRejectsWhenAnotherActiveRunExists() {
+        when(jdbcTemplate.queryForObject(contains("client_run_id = ?"),
+                any(RowMapper.class), any(), any(), any()))
+                .thenThrow(new org.springframework.dao
+                        .EmptyResultDataAccessException(1));
+        when(jdbcTemplate.queryForObject(
+                contains("ORDER BY created_at DESC LIMIT 1"),
+                any(RowMapper.class), any(), any()))
+                .thenAnswer(runRowMappedAnswer(DocumentSyncRunStatus.ACTIVE,
+                        com.springairag.core.util.DigestUtils.sha256("lease-1")));
+
+        RagException error = assertThrows(RagException.class,
+                () -> service.begin(beginRequest(), "lease-1"));
+
+        assertEquals(ErrorCode.ACTIVE_SYNC_RUN_EXISTS,
+                error.getErrorCodeEnum());
+    }
+
+    @Test
+    void beginCreatesNewRunWithAllocatedSnapshotSequence() {
+        stubRunRow(DocumentSyncRunStatus.ACTIVE);
+        when(jdbcTemplate.queryForObject(contains("client_run_id = ?"),
+                any(RowMapper.class), any(), any(), any()))
+                .thenThrow(new org.springframework.dao
+                        .EmptyResultDataAccessException(1));
+        when(jdbcTemplate.queryForObject(
+                contains("ORDER BY created_at DESC LIMIT 1"),
+                any(RowMapper.class), any(), any()))
+                .thenThrow(new org.springframework.dao
+                        .EmptyResultDataAccessException(1));
+        when(mutationService.allocateSourceSequenceForSnapshot(10L, "default"))
+                .thenReturn(5L);
+
+        DocumentSyncRunResponse response = service.begin(
+                beginRequest(), "lease-1");
+
+        assertEquals(DocumentSyncRunStatus.ACTIVE, response.status());
+        verify(collectionIdentityResolver).beginActiveWrite(10L);
+        verify(mutationService).allocateSourceSequenceForSnapshot(10L, "default");
+        ArgumentCaptor<Object[]> insertArgs =
+                ArgumentCaptor.forClass(Object[].class);
+        verify(jdbcTemplate).update(
+                contains("INSERT INTO rag_document_sync_runs"),
+                insertArgs.capture());
+        Object[] args = insertArgs.getValue();
+        assertEquals(10, args.length);
+        assertEquals("client-run-1", args[3]);
+        assertEquals(com.springairag.core.util.DigestUtils.sha256("lease-1"),
+                args[4]);
+        assertEquals(5L, args[5]);
+        assertEquals(DocumentSyncSnapshotMode.EXCLUSIVE_OFFLINE.name(), args[7]);
+    }
+
+    @Test
+    void beginMapsIntegrityViolationToActiveRunExists() {
+        when(jdbcTemplate.update(contains("SET status = 'EXPIRED'"),
+                any(Object[].class)))
+                .thenThrow(new org.springframework.dao
+                        .DataIntegrityViolationException("dup"));
+
+        RagException error = assertThrows(RagException.class,
+                () -> service.begin(beginRequest(), "lease-1"));
+
+        assertEquals(ErrorCode.ACTIVE_SYNC_RUN_EXISTS,
+                error.getErrorCodeEnum());
+    }
+
     @Test
     void getReturnsMappedRunResponse() {
         stubRunRow(DocumentSyncRunStatus.ACTIVE);
