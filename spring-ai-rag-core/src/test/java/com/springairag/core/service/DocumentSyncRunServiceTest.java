@@ -15,12 +15,14 @@ import com.springairag.api.enums.DocumentSyncItemStatus;
 import com.springairag.api.enums.DocumentSyncMissingPolicy;
 import com.springairag.api.enums.DocumentSyncRunStatus;
 import com.springairag.api.enums.DocumentSyncSnapshotMode;
+import com.springairag.api.contract.DocumentSyncRunLimits;
 import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.entity.RagCollection;
 import com.springairag.core.exception.RagException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
@@ -40,9 +42,11 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -311,6 +315,98 @@ class DocumentSyncRunServiceTest {
         assertFalse(page.hasMore());
         assertNull(page.nextCursor());
         assertTrue(page.items().isEmpty());
+    }
+
+    @Test
+    void listItemsRoundTripsCursorThroughDecodePosition() {
+        stubRunRow(DocumentSyncRunStatus.ACTIVE);
+        var row1 = new DocumentSyncRunItemReceiptRepository.ReceiptRow(
+                "ext-1", com.springairag.api.enums.DocumentSyncDocumentKind.TEXT,
+                "rev-1", 77L, DocumentSyncItemStatus.APPLIED,
+                null, null, OffsetDateTime.parse("2026-09-07T09:00:00Z"));
+        var row2 = new DocumentSyncRunItemReceiptRepository.ReceiptRow(
+                "ext-2", com.springairag.api.enums.DocumentSyncDocumentKind.TEXT,
+                "rev-2", 78L, DocumentSyncItemStatus.APPLIED,
+                null, null, OffsetDateTime.parse("2026-09-07T09:01:00Z"));
+        when(itemReceiptRepository.currentSummary(any(UUID.class)))
+                .thenReturn(new DocumentSyncRunItemCurrentSummary(2, 2, 0, 0, 0));
+        when(itemReceiptRepository.page(any(UUID.class), any(), any(), anyInt()))
+                .thenReturn(List.of(row1, row2), List.of());
+
+        DocumentSyncRunItemPageResponse firstPage = service.listItems(
+                RUN_ID, "kb", "default",
+                DocumentSyncItemStatus.APPLIED, 1, null);
+        assertTrue(firstPage.hasMore());
+        assertNotNull(firstPage.nextCursor());
+
+        DocumentSyncRunItemPageResponse secondPage = service.listItems(
+                RUN_ID, "kb", "default",
+                DocumentSyncItemStatus.APPLIED, 1, firstPage.nextCursor());
+
+        assertFalse(secondPage.hasMore());
+        assertNull(secondPage.nextCursor());
+        assertTrue(secondPage.items().isEmpty());
+        ArgumentCaptor<DocumentSyncRunItemCursorCodec.CursorPosition> positionCaptor =
+                ArgumentCaptor.forClass(DocumentSyncRunItemCursorCodec.CursorPosition.class);
+        verify(itemReceiptRepository, times(2)).page(
+                eq(RUN_ID),
+                eq(DocumentSyncItemStatus.APPLIED),
+                positionCaptor.capture(),
+                anyInt());
+        // 第二页收到的是解码后的 keyset 位置：首页最后返回行 (seenAt, externalId)。
+        var position = positionCaptor.getAllValues().get(1);
+        assertEquals(OffsetDateTime.parse("2026-09-07T09:00:00Z"), position.seenAt());
+        assertEquals("ext-1", position.externalId());
+    }
+
+    @Test
+    void listItemsRejectsMismatchedBlankAndStaleCursors() {
+        stubRunRow(DocumentSyncRunStatus.ACTIVE);
+        var codec = new DocumentSyncRunItemCursorCodec(
+                new ObjectMapper().findAndRegisterModules());
+        String staleRunCursor = codec.encode(
+                UUID.randomUUID(), DocumentSyncItemStatus.APPLIED,
+                OffsetDateTime.parse("2026-09-07T09:00:00Z"), "ext-1");
+        String foreignStatusCursor = codec.encode(
+                RUN_ID, null,
+                OffsetDateTime.parse("2026-09-07T09:00:00Z"), "ext-1");
+
+        var staleError = assertThrows(IllegalArgumentException.class,
+                () -> service.listItems(RUN_ID, "kb", "default",
+                        DocumentSyncItemStatus.APPLIED, 50, staleRunCursor));
+        assertEquals("cursor is invalid", staleError.getMessage());
+        var statusError = assertThrows(IllegalArgumentException.class,
+                () -> service.listItems(RUN_ID, "kb", "default",
+                        DocumentSyncItemStatus.APPLIED, 50, foreignStatusCursor));
+        assertEquals("cursor is invalid", statusError.getMessage());
+        var blankError = assertThrows(IllegalArgumentException.class,
+                () -> service.listItems(RUN_ID, "kb", "default",
+                        DocumentSyncItemStatus.APPLIED, 50, "  "));
+        assertEquals("cursor is invalid", blankError.getMessage());
+        // 解码发生在候选页查询之前：失败时不得触达 currentSummary/page。
+        verifyNoInteractions(itemReceiptRepository);
+    }
+
+    @Test
+    void listItemsAcceptsLimitAtUpperBound() {
+        stubRunRow(DocumentSyncRunStatus.ACTIVE);
+        when(itemReceiptRepository.currentSummary(any(UUID.class)))
+                .thenReturn(new DocumentSyncRunItemCurrentSummary(0, 0, 0, 0, 0));
+        when(itemReceiptRepository.page(any(UUID.class), any(), any(), anyInt()))
+                .thenReturn(List.of());
+
+        DocumentSyncRunItemPageResponse page = service.listItems(
+                RUN_ID, "kb", "default", null,
+                DocumentSyncRunLimits.MAX_ITEM_RECEIPT_PAGE_ITEMS, null);
+
+        assertFalse(page.hasMore());
+        assertNull(page.nextCursor());
+        assertEquals(DocumentSyncRunLimits.MAX_ITEM_RECEIPT_PAGE_ITEMS,
+                page.limit());
+        // 上界请求向后仓传递 limit+1 的探测行数 201。
+        verify(itemReceiptRepository).page(
+                eq(RUN_ID), isNull(), isNull(),
+                eq(DocumentSyncRunLimits.MAX_ITEM_RECEIPT_PAGE_ITEMS + 1));
     }
 
     @Test
