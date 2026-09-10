@@ -2971,6 +2971,26 @@ VersionHistoryModal 相关 100% 项等。
   的 PDType1Font 需 Standard14Fonts.FontName 构造。
 - 指标：core 全量门禁 EXIT=0 绿（4292 tests, 0 failures）。
 
+### Batch 286（已交付）
+
+- 分支：`test/core-commit-operation-batch286-20260911`（已合入
+  main）
+- 内容：ChatSessionCoordinator.commitOperation 持久提交事务
+  （lambda 约 21 行缺口），新建
+  ChatSessionCoordinatorCommitOperationTest 7 用例：状态化租约 +
+  SERVER 记忆全链（预留引用 → 续租 → CAS completeSuccess →
+  saveDurable → 共享记忆刷新，含续租 SQL 断言）；STATELESS 提交
+  跳过续租与共享记忆写入；completeSuccess CAS 失败 →
+  CHAT_HISTORY_PERSIST_FAILED 且不写历史；提交期续租丢失（renew
+  返回 0）→ CHAT_SESSION_LEASE_LOST；saveDurable 运行时异常 →
+  包装为 CHAT_HISTORY_PERSIST_FAILED；operationRepository 缺失 →
+  IDEMPOTENCY_DISABLED（独立两段参实例，STATELESS handle 触
+  发）。要点：MemoryMode 仅 SERVER/STATELESS（无 CLIENT）；
+  ChatMemoryRepository.saveAll 为 void（不可 when 存根，verify
+  never 即可）；JdbcChatMemoryRepository 为具体类仅作构造占位，
+  共享记忆交互经 ChatMemoryRepository 接口 mock 验证。
+- 指标：core 全量门禁 EXIT=0 绿（4299 tests, 0 failures）。
+
 ---
 
 ## 进度留档快照（Batch 260 后 · 用户指令）
