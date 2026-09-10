@@ -2752,6 +2752,23 @@ VersionHistoryModal 相关 100% 项等。
   null。
 - 指标：core 全量门禁 EXIT=0 绿（4230 tests, 0 failures）。
 
+### Batch 273（已交付）
+
+- 分支：`test/core-pdf-policy-import-batch273-20260911`（已合入
+  main）
+- 内容：PdfImportController 通用非 SSE 导入路径
+  （importPdfToRagWithPolicy，23 行缺口），新建
+  PdfImportControllerPolicyImportTest 4 用例：ASYNC 全字段响应
+  （PdfToRagResponse 11 组件含 embeddingAction/jobId/batchId）；
+  collectionKey 经 resolveActiveIds 解析为内部 ID（collectionId
+  参数 null 时以解析值调用导入服务）；导入异常 → 500
+  ErrorResponse（detail 含 "PDF-to-RAG import failed" 与原因）；
+  空文件 → 400 "No file uploaded" 且不触达导入服务。要点：4 参
+  构造器注入可选 collectionIdentityResolver；importPdfToRag 有多
+  个重载，verify 时匹配器须用具体类型（any(String.class) 等）
+  避免歧义；importPdf 声明 IOException，stub 的测试方法需 throws。
+- 指标：core 全量门禁 EXIT=0 绿（4234 tests, 0 failures）。
+
 ---
 
 ## 进度留档快照（Batch 260 后 · 用户指令）
