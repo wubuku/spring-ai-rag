@@ -2701,6 +2701,23 @@ VersionHistoryModal 相关 100% 项等。
   际递归深度写。
 - 指标：core 全量门禁 EXIT=0 绿（4218 tests, 0 failures）。
 
+### Batch 270（已交付）
+
+- 分支：`test/core-history-docrefs-batch270-20260911`（已合入
+  main）
+- 内容：RagChatHistoryRepository 持久引用链
+  （reserveDurableContentReferences → normalizeDocumentIds），追加
+  6 用例：无引用 → 空 DurableContentReferences 且不触库；来源与
+  JSON 数组并集去重升序（含 null 元素/空 documentId/非法文本忽
+  略、JSON 数值与文本混合解析）；非数组载荷 →
+  CHAT_HISTORY_PERSIST_FAILED；不支持的节点类型（对象元素）同拒；
+  非正数/超 BIGINT/科学计数文本静默跳过且不触库；文档缺失 →
+  stale 引用拒绝。要点：normalizeDocumentIds 收敛（24→残余），
+  预留链两次加载间还有按集合的预留 UPDATE（返回 0 判 stale，桩
+  须返回 1）；List.of 不接受 null 元素，混入 null 的来源列表用
+  Arrays.asList。
+- 指标：core 全量门禁 EXIT=0 绿（4224 tests, 0 failures）。
+
 ---
 
 ## 进度留档快照（Batch 260 后 · 用户指令）
