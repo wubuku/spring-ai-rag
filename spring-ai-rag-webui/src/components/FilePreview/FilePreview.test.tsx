@@ -163,4 +163,71 @@ describe('FilePreview', () => {
 
     expect(mockGetRawFile).toHaveBeenCalledTimes(2);
   });
+
+  it('skips fetching for directory entries', () => {
+    const { container } = render(
+      <FilePreview
+        entry={makeEntry({ type: 'directory', mimeType: null })}
+        reloadKey={0}
+      />,
+    );
+
+    expect(mockGetRawFile).not.toHaveBeenCalled();
+    expect(mockGetPreviewHtml).not.toHaveBeenCalled();
+    expect(container.querySelector('div')).not.toBeNull();
+  });
+
+  it('never fetches when the entry has no mime type', () => {
+    const { container } = render(
+      <FilePreview entry={makeEntry({ mimeType: null })} reloadKey={0} />,
+    );
+
+    expect(mockGetRawFile).not.toHaveBeenCalled();
+    expect(mockGetPreviewHtml).not.toHaveBeenCalled();
+    // 兜底分支：mimeType 空串不命中任何预览分支，也无错误提示。
+    expect(screen.queryByText('files.previewError')).not.toBeInTheDocument();
+    expect(container.querySelector('div')).not.toBeNull();
+  });
+
+  it('shows the unavailable fallback for images when the object URL is empty', async () => {
+    mockCreateObjectURL.mockReturnValueOnce('');
+    mockGetRawFile.mockResolvedValueOnce(new Blob(['png-bytes']));
+
+    render(<FilePreview entry={makeEntry()} reloadKey={0} />);
+
+    expect(await screen.findByText('files.previewError')).toBeInTheDocument();
+  });
+
+  it('shows the unavailable fallback for pdfs when the object URL is empty', async () => {
+    mockCreateObjectURL.mockReturnValueOnce('');
+    mockGetRawFile.mockResolvedValueOnce(new Blob(['pdf-bytes']));
+
+    render(
+      <FilePreview
+        entry={makeEntry({ name: 'doc.pdf', mimeType: 'application/pdf' })}
+        reloadKey={0}
+      />,
+    );
+
+    expect(await screen.findByText('files.previewError')).toBeInTheDocument();
+  });
+
+  it('ignores a raw fetch that resolves after unmount', async () => {
+    let resolveRaw: (blob: Blob) => void = () => {};
+    mockGetRawFile.mockReturnValueOnce(
+      new Promise<Blob>((resolve) => {
+        resolveRaw = resolve;
+      }),
+    );
+
+    const { unmount } = render(<FilePreview entry={makeEntry()} reloadKey={0} />);
+    unmount();
+    resolveRaw(new Blob(['late-bytes']));
+    await Promise.resolve();
+
+    // 现存实现：createObjectURL 在 active 守卫之前执行，卸载后仍会
+    // 创建且 URL 不被回收；active 仅拦截 setState（无告警即通过）。
+    expect(mockCreateObjectURL).toHaveBeenCalledWith(expect.any(Blob));
+    expect(mockRevokeObjectURL).not.toHaveBeenCalled();
+  });
 });

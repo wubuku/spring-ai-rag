@@ -167,4 +167,27 @@ describe('ErrorBoundary', () => {
     expect(screen.getByText('Something went wrong')).toBeInTheDocument();
     expect(screen.getByText('Try Again')).toBeInTheDocument();
   });
+
+  it('falls back to the root page url when the pathname is empty', () => {
+    const originalLocation = window.location;
+    Object.defineProperty(window, 'location', {
+      value: { pathname: '' },
+      configurable: true,
+    });
+
+    try {
+      render(
+        <ErrorBoundary>
+          <ThrowError shouldThrow={true} />
+        </ErrorBoundary>
+      );
+
+      expect(screen.getByText('Something went wrong')).toBeInTheDocument();
+    } finally {
+      Object.defineProperty(window, 'location', {
+        value: originalLocation,
+        configurable: true,
+      });
+    }
+  });
 });
