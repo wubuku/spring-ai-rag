@@ -2769,6 +2769,24 @@ VersionHistoryModal 相关 100% 项等。
   避免歧义；importPdf 声明 IOException，stub 的测试方法需 throws。
 - 指标：core 全量门禁 EXIT=0 绿（4234 tests, 0 failures）。
 
+### Batch 274（已交付）
+
+- 分支：`test/core-provisioning-race-batch274-20260911`（已合入
+  main）
+- 内容：CollectionProvisioningService.createOrReplay 并发竞态回
+  收（21 行缺口），新建 CollectionProvisioningRaceRecoveryTest 6
+  用例：DUPLICATE_RESOURCE 竞态退避重试后创建成功；唯一约束冲突
+  （DataIntegrityViolationException）同视为竞态重试；三次尝试耗
+  尽后 readExisting 从台账读回已建集合（replay=true，create-
+  Collection 恰 3 次）；台账为空时复现 DUPLICATE_RESOURCE；重放
+  集合已清退（purgedAt 非空）→ COLLECTION_ALREADY_RETIRED 且不
+  重试；readExisting 查询离线 → SERVICE_UNAVAILABLE。要点：findBy
+  是循环内每轮尝试的入口（provisionInCurrentTransaction 先查台账
+  命中即重放），竞态耗尽场景必须用连续桩
+  （empty×3 → 行/异常）区分循环期与 readExisting 期，否则测试静
+  态通过不了竞态路径。
+- 指标：core 全量门禁 EXIT=0 绿（4240 tests, 0 failures）。
+
 ---
 
 ## 进度留档快照（Batch 260 后 · 用户指令）
