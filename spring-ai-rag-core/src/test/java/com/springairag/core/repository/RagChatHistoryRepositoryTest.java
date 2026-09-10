@@ -2,11 +2,17 @@ package com.springairag.core.repository;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.springairag.api.dto.ChatHistoryResponse;
+import com.springairag.api.dto.ChatSource;
+import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.entity.RagChatHistory;
+import com.springairag.core.exception.RagException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowMapper;
+
+import java.sql.ResultSet;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -233,5 +239,78 @@ class RagChatHistoryRepositoryTest {
         assertNull(results.get(0).relatedDocumentIds());
         assertEquals("q", results.get(0).userMessage());
         assertEquals("a", results.get(0).aiResponse());
+    }
+
+    // ==================== reserveDurableContentReferences ====================
+
+    @Test
+    void reserveDurableContentReferencesReturnsEmptyWithoutReferences() {
+        RagChatHistoryRepository.DurableContentReferences refs =
+                repository.reserveDurableContentReferences(null, null);
+
+        assertEquals(List.of(), refs.documentIds());
+        assertTrue(refs.collectionIdsByDocument().isEmpty());
+        verifyNoInteractions(jdbcTemplate);
+    }
+
+    @Test
+    void reserveDurableContentReferencesCollectsValidatesAndSortsDocumentIds() {
+        ChatSource valid = new ChatSource();
+        valid.setDocumentId("7");
+        ChatSource nullElement = null;
+        ChatSource blank = new ChatSource();
+        when(jdbcTemplate.query(anyString(), any(RowMapper.class), any(Long.class)))
+                .thenAnswer(invocation -> {
+                    RowMapper<?> mapper = invocation.getArgument(1);
+                    Long documentId = invocation.getArgument(2);
+                    ResultSet rs = mock(ResultSet.class);
+                    when(rs.getLong("id")).thenReturn(documentId);
+                    when(rs.getLong("collection_id")).thenReturn(100L + documentId);
+                    return List.of(mapper.mapRow(rs, 0));
+                });
+        // 集合预留 UPDATE 需命中一行，否则判定为 stale 引用。
+        when(jdbcTemplate.update(anyString(), any(Object[].class))).thenReturn(1);
+
+        RagChatHistoryRepository.DurableContentReferences refs =
+                repository.reserveDurableContentReferences(
+                        "[3, \"9\", 7]", java.util.Arrays.asList(valid, nullElement, blank));
+
+        // 来源与 JSON 数组并集去重、升序；空元素/非法文本忽略。
+        assertEquals(List.of(3L, 7L, 9L), refs.documentIds());
+        assertEquals(Map.of(3L, 103L, 7L, 107L, 9L, 109L),
+                refs.collectionIdsByDocument());
+    }
+
+    @Test
+    void reserveDurableContentReferencesRejectsNonArrayPayload() {
+        RagException error = assertThrows(RagException.class,
+                () -> repository.reserveDurableContentReferences("{\"id\":1}", null));
+        assertEquals(ErrorCode.CHAT_HISTORY_PERSIST_FAILED,
+                error.getErrorCodeEnum());
+    }
+
+    @Test
+    void reserveDurableContentReferencesRejectsUnsupportedNodeTypes() {
+        assertThrows(RagException.class,
+                () -> repository.reserveDurableContentReferences("[{\"id\":1}]", null));
+    }
+
+    @Test
+    void reserveDurableContentReferencesSkipsNonPositiveAndOversizedValues() {
+        RagChatHistoryRepository.DurableContentReferences refs =
+                repository.reserveDurableContentReferences(
+                        "[0, -5, 99999999999999999999, \"1e3\", \"\"]", null);
+
+        assertTrue(refs.documentIds().isEmpty());
+        verifyNoInteractions(jdbcTemplate);
+    }
+
+    @Test
+    void reserveDurableContentReferencesRejectsStaleSourceWhenDocumentMissing() {
+        when(jdbcTemplate.query(anyString(), any(RowMapper.class), any(Long.class)))
+                .thenReturn(List.of());
+
+        assertThrows(RagException.class,
+                () -> repository.reserveDurableContentReferences("[5]", null));
     }
 }
