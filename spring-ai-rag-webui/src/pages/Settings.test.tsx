@@ -286,6 +286,18 @@ describe('Settings persistence and model fallback branches', () => {
     expect(slider).toHaveValue('0.4');
   });
 
+  it('resets the cache max size to the default when the input is cleared', () => {
+    renderSettings();
+    fireEvent.click(screen.getByRole('button', { name: 'settings.cache' }));
+    const input = screen.getByLabelText('settings.maxSize') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: '5555' } });
+    expect(input.value).toBe('5555');
+
+    // parseInt('') 为 NaN → 状态回退默认值 1000。
+    fireEvent.change(input, { target: { value: '' } });
+    expect(input.value).toBe('1000');
+  });
+
   it('persists retrieval and cache changes through handleSave', async () => {
     const user = userEvent.setup();
     renderSettings('?tab=retrieval');

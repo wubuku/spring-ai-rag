@@ -56,6 +56,24 @@ describe('Toast', () => {
     expect(screen.getByText(TOAST_ICONS.success)).toBeInTheDocument();
   });
 
+  it('tolerates a duplicate close click racing the timer cleanup', () => {
+    render(
+      <ToastProvider>
+        <TestConsumer />
+      </ToastProvider>
+    );
+
+    fireEvent.click(screen.getByText('Show Info'));
+    const close = screen.getByRole('button', { name: 'Close notification' });
+    // 同一 act 内连点两次：第二次 removeToast 时定时器登记已被
+    // 首次点击清理（timer undefined 分支），不得抛错。
+    act(() => {
+      close.click();
+      close.click();
+    });
+    expect(screen.queryByText('Info')).not.toBeInTheDocument();
+  });
+
   it('shows error icon for error toasts', () => {
     render(
       <ToastProvider>
