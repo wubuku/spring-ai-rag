@@ -2954,6 +2954,23 @@ VersionHistoryModal 相关 100% 项等。
   RETURNING 消费 / DELETE 释放）经 SQL 片段匹配。
 - 指标：core 全量门禁 EXIT=0 绿（4289 tests, 0 failures）。
 
+### Batch 285（已交付）
+
+- 分支：`test/core-pdfbox-real-pdf-batch285-20260911`（已合入
+  main）
+- 内容：PdfBoxConverter.convert/buildMarkdown（合计约 36 行缺
+  口），在既有测试类追加 3 用例（测试内用 PDFBox 生成真实 PDF，
+  无需外部文件）：① 含双段文本的 PDF → convert 走完整链
+  （createDirectories/readAllBytes/Loader.loadPDF/PDFTextStripper/
+  writeString）返回 true，markdown 输出至 <outputDir>/<name>/
+  <name>.md 且 .pdf 后缀剥离，断言 # 标题/## Content/段落文本/
+  生成器签名；② 空白页 PDF → buildMarkdown 空文本分支（"*No text
+  content could be extracted*"）；③ 不存在的 pdfPath → IOException
+  → false。要点：双 newLine（setLeading + 两次 newLine）制造段落
+  分隔触发 \n\s*\n 切分分支；长句 >80 触发条件分支；PDFBox 3.x
+  的 PDType1Font 需 Standard14Fonts.FontName 构造。
+- 指标：core 全量门禁 EXIT=0 绿（4292 tests, 0 failures）。
+
 ---
 
 ## 进度留档快照（Batch 260 后 · 用户指令）
