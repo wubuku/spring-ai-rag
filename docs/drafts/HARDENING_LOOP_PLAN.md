@@ -2525,6 +2525,31 @@ VersionHistoryModal 相关 100% 项等。
   即可做端到端回环，无需打桩。
 - 指标：core 全量门禁 EXIT=0 绿（4174 tests, 0 failures）。
 
+### Batch 262（已交付）
+
+- 分支：`test/core-openai-keyed-turn-batch262-20260911`（已合入
+  main）
+- 内容：OpenAiCompatibilityController 键控回合与流式语义（JaCoCo
+  最大缺口 chatCompletions 59 行），新建
+  OpenAiCompatibilityKeyedTurnTest 8 用例：幂等重放 SSE 快照流
+  （X-RAG-Turn-Id / Idempotent-Replay=true、publicModelAlias 解析、
+  重放短路不映射不执行）；重放 JSON（无 publicAlias 时
+  declaredModelIdentifier 兜底）；新鲜 claim prepared JSON 完成
+  （mapFromExecutionSnapshot → claim(OPENAI_JSON) → commandForClaim
+  → prepareForOperation(false) → completePrepared → finalize，无
+  fail/release）；prepared 失败 → fail(claim, error) 后原样重抛；
+  新鲜 claim SSE 快照流（OPENAI_SSE + streaming=true，不走实时
+  stream）；非键控 SSE 流（ContentDelta/Completed 事件映射、请求头
+  传递 validateDeclaration）；非键控流错误 → onErrorResume 错误块
+  收尾不外抛；诊断开启 → attachTraceSession + X-RAG-Retrieval-
+  Trace-Id 头。收敛：chatCompletions 59→13 missed、
+  keyedSnapshotStream 18→2、streamResponse 30→1。残余：claimExist
+  ing（疑似死代码，待核查）、toStreamError 协议分支、emitter
+  dispose lambda。要点：Claim 公有构造仅 2 参（sessionLease 恒
+  null），带租约的 release 分支留待 core.chat 包内测试；SseEmitter
+  初始化前 send 走早期缓存，单测可直接断言响应类型与头。
+- 指标：core 全量门禁 EXIT=0 绿（4182 tests, 0 failures）。
+
 ---
 
 ## 进度留档快照（Batch 260 后 · 用户指令）
