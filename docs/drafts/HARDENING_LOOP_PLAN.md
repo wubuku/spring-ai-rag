@@ -2864,6 +2864,23 @@ VersionHistoryModal 相关 100% 项等。
   resolveScope 走 legacy 分支返回 null（chat 2 参重载）。
 - 指标：core 全量门禁 EXIT=0 绿（4256 tests, 0 failures）。
 
+### Batch 280（已交付）
+
+- 分支：`test/core-native-claim-batch280-20260911`（已合入 main）
+- 内容：ChatTurnOperationService.claim 3 参重载（原生 sessionId
+  路径，29 行缺口），新建 ChatTurnOperationNativeClaimTest 9 用
+  例：SUCCEEDED 重放；FAILED 复现原错误码；租约未过期 →
+  ChatTurnInProgressException（retryAfterSeconds 夹取 1..60）；尝
+  试耗尽 → exhaustAttempts 标记 + failedReplay（find 读回
+  IDEMPOTENCY_ATTEMPTS_EXHAUSTED）；标记失败 → CHAT_HISTORY_
+  PERSIST_FAILED；过期回收成功（reclaim 4 参：无快照参数版本）→
+  非重放新 claim；回收竞速 → find 刷新后重放；新键插入（非法会
+  话 id 规范化为 UUID、授权快照含 callerAllowList 空数组）；插入
+  竞速回落一次 find 即重放。要点：3 参重载的回收不带快照重生成
+  参数（与 4 参不同）；find 调用次数取决于递归深度（插入竞速仅
+  一次，回收竞速两次）。
+- 指标：core 全量门禁 EXIT=0 绿（4265 tests, 0 failures）。
+
 ---
 
 ## 进度留档快照（Batch 260 后 · 用户指令）
