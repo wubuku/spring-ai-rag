@@ -2680,6 +2680,27 @@ VersionHistoryModal 相关 100% 项等。
   strict stubs 对未打桩列报 PotentialStubbingProblem。
 - 指标：core 全量门禁 EXIT=0 绿（4211 tests, 0 failures）。
 
+### Batch 269（已交付）
+
+- 分支：`test/core-turn-reclaim-complete-batch269-20260911`（已合
+  入 main）
+- 内容：ChatTurnOperationService 回收与完成语义，新建
+  ChatTurnOperationReclaimCompleteTest 7 用例：过期 IN_PROGRESS
+  reclaim 成功（缺快照 → 用当前命令重生成执行快照非空断言 / 已有
+  快照 → 回收参数为 null 不覆盖库值）；reclaim 竞速失败（CAS 返
+  回 null）→ 递归回落，find 首次仍返回过期行、二次才读刷新行 →
+  times(2) 后以 SUCCEEDED 走重放；complete 快照持久化（稳定
+  turnId 替换请求侧 turnId、execution JSON 含 publicModelAlias 与
+  mode、payload 含答案）；响应超 524288 字节 →
+  IDEMPOTENCY_RESPONSE_TOO_LARGE 且不触库；completeSuccess=false →
+  CHAT_HISTORY_PERSIST_FAILED；unkeyed claim 原样透传。收敛：
+  reclaimExisting 22→0、completeWithDescriptor 25→3、complete→0。
+  要点：reclaim 快照重生成依赖 executionService.resolveCandidateRefs
+  （mock 须桩非空候选链，空链抛 IDEMPOTENCY_EXECUTION_SNAPSHOT_
+  INVALID）；竞速回落是两级递归（find 逐次返回），验证次数要按实
+  际递归深度写。
+- 指标：core 全量门禁 EXIT=0 绿（4218 tests, 0 failures）。
+
 ---
 
 ## 进度留档快照（Batch 260 后 · 用户指令）
