@@ -2815,6 +2815,25 @@ VersionHistoryModal 相关 100% 项等。
   thenReturn(ok, fail) 按 FileList 顺序逐个消费。
 - 指标：core 全量门禁 EXIT=0 绿（4244 tests, 0 failures）。
 
+### Batch 277（已交付）
+
+- 分支：`test/core-marker-cli-chain-batch277-20260911`（已合入
+  main）
+- 内容：MarkerPdfConverter.convert 进程执行链（34 行缺口），在
+  既有 MarkerPdfConverterTest 追加 4 用例：① /bin/echo 作为
+  markerCli → convert 走完整进程链（ProcessBuilder 启动、输出读
+  取循环、waitFor、exit 0）返回 true；② isAvailable 对退出 0 的
+  CLI 返回 true；③ 用 java 二进制构造 "--help 退出 0 但业务调用
+  退出 1" 的命令（java --help 通过可用性检查；作为 marker_single
+  加载主类失败退出 1）→ convert 返回 false，覆盖非零退出分支；
+  ④ 不存在的 CLI → isAvailable IOException 短路 + convert 提前返
+  回 false。要点：convert 先做 isAvailable 守卫，非零退出分支需
+  要 "help 成功 / 业务失败" 的双态命令（java 恰好满足）；命令缺
+  陷（5 分钟超时与中断分支）无法在单测内低成本构造，列为可接受
+  残余；@TempDir 提供真实路径，mock Path 必须同时打
+  toAbsolutePath 与 toString 桩。
+- 指标：core 全量门禁 EXIT=0 绿（4248 tests, 0 failures）。
+
 ---
 
 ## 进度留档快照（Batch 260 后 · 用户指令）
