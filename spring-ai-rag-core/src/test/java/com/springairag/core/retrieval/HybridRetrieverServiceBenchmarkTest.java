@@ -179,20 +179,25 @@ class HybridRetrieverServiceBenchmarkTest {
             b[i] = (float) Math.random();
         }
 
-        // Warmup
-        RetrievalUtils.cosineSimilarity(a, b);
-
-        int iterations = 100_000;
-        long start = System.nanoTime();
-        double sum = 0;
-        for (int i = 0; i < iterations; i++) {
-            b[0] = (float) i / iterations; // Prevent JIT from fully optimizing away
-            sum += RetrievalUtils.cosineSimilarity(a, b);
+        // Warmup：多次预热让 JIT 完成编译，再进入正式采样。
+        for (int i = 0; i < 5_000; i++) {
+            b[0] = (float) i / 5_000;
+            RetrievalUtils.cosineSimilarity(a, b);
         }
-        long elapsedMs = (System.nanoTime() - start) / 1_000_000;
 
-        System.out.printf("[Benchmark] cosineSimilarity 100k (1024-dim): %d ms, sum=%.4f%n",
-                elapsedMs, sum);
+        double[] sumHolder = {0};
+        long elapsedMs = bestOfMs(3, () -> {
+            int iterations = 100_000;
+            double local = 0;
+            for (int i = 0; i < iterations; i++) {
+                b[0] = (float) i / iterations; // Prevent JIT from fully optimizing away
+                local += RetrievalUtils.cosineSimilarity(a, b);
+            }
+            sumHolder[0] += local;
+        });
+
+        System.out.printf("[Benchmark] cosineSimilarity 100k (1024-dim): %d ms (best of 3), sum=%.4f%n",
+                elapsedMs, sumHolder[0]);
 
         assertTrue(elapsedMs < 500,
                 String.format("10万次余弦相似度应 < 500ms，实际: %dms", elapsedMs));
@@ -204,20 +209,37 @@ class HybridRetrieverServiceBenchmarkTest {
         float[] vector = new float[1024];
         for (int i = 0; i < vector.length; i++) vector[i] = (float) Math.random();
 
-        // Warmup
-        RetrievalUtils.vectorToString(vector);
-
-        int iterations = 10_000;
-        long start = System.nanoTime();
-        for (int i = 0; i < iterations; i++) {
+        // Warmup：多次预热让 JIT 完成编译，再进入正式采样。
+        for (int i = 0; i < 2_000; i++) {
             RetrievalUtils.vectorToString(vector);
         }
-        long elapsedMs = (System.nanoTime() - start) / 1_000_000;
 
-        System.out.printf("[Benchmark] vectorToString 10k (1024-dim): %d ms%n", elapsedMs);
+        // 3 次采样取最小值：并行测试下机器负载会造成单样本计时抖动
+        // （曾两次把全量门禁拖过 1000ms 阈值），最小值才是该纯函数
+        // 的真实成本；病理性回归（如意外引入 O(n²)）仍远超阈值。
+        long elapsedMs = bestOfMs(3, () -> {
+            int iterations = 10_000;
+            for (int i = 0; i < iterations; i++) {
+                RetrievalUtils.vectorToString(vector);
+            }
+        });
+
+        System.out.printf("[Benchmark] vectorToString 10k (1024-dim): %d ms (best of 3)%n", elapsedMs);
 
         assertTrue(elapsedMs < 1000,
                 String.format("1万次向量序列化应 < 1000ms，实际: %dms", elapsedMs));
+    }
+
+    /** 多次采样取最小值，降低共享机器负载导致的计时抖动。 */
+    private static long bestOfMs(int samples, Runnable workload) {
+        long best = Long.MAX_VALUE;
+        for (int sample = 0; sample < samples; sample++) {
+            long start = System.nanoTime();
+            workload.run();
+            long elapsedMs = (System.nanoTime() - start) / 1_000_000;
+            best = Math.min(best, elapsedMs);
+        }
+        return best;
     }
 
     @Test
