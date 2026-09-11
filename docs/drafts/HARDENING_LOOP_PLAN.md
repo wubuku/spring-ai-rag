@@ -3083,6 +3083,37 @@ VersionHistoryModal 相关 100% 项等。
   useFileUpload/Documents.tsx 分支残余。
 - 工作区：本地已合并 test/* 分支随各批清理，无遗留 worktree。
 
+### Batch 300（已交付）
+
+- 分支：`test/core-slowquery-stats-batch300-20260912`（已合入
+  main）
+- 内容：SlowQueryMetricsService.getStatsSummary Hibernate
+  Statistics 路径（15 行缺口），新建
+  SlowQueryMetricsStatsSummaryTest 3 用例：SessionFactory 不可用
+  → 归零快照；有 Hibernate 数据 → queryCount/maxDuration/
+  slowCount/avg 聚合映射（executionTotalTime 以 ns 传入，生产代
+  码 /1M 转 ms）；单查询 avg 计算验证。要点：mock
+  EntityManagerFactory.unwrap(SessionFactory.class) 注入 mock
+  SessionFactory/Statistics；qs.getExecutionTotalTime 返回纳秒
+  值由生产代码 /1_000_000 转 ms。
+- 指标：core 全量门禁 EXIT=0 绿（4348 tests, 0 failures）。
+
+### Batch 295–300 补录（已交付但账本在快照后追补）
+
+- Batch 295：DocumentMutationCollectionScopeTest 3 用例（集合迁
+  移/无键保留/受限键解绑阻断）
+- Batch 296：EmailNotificationDeliverTest 7 用例（deliver 异常
+  分型 + isCurrentlyAvailable）
+- Batch 297：DocumentSyncRunServiceTest list 2 用例（行映射 +
+  null namespace 透传）
+- Batch 298：EvaluationCaseExecutorLookupTest 3 用例（lookup 身
+  份映射）
+- Batch 299：ChatTurnOperationEffectiveSessionTest 3 用例（会话
+  ID 规范化）
+
+以上各批均全量门禁 EXIT=0 绿，已按序合入 main（4327→4348 递
+增），当前 main = 5bc32b27 之后的连续交付链。
+
 ### Batch 290（已交付）
 
 - 分支：`test/core-router-deadcode-batch290-20260911`（已合入
