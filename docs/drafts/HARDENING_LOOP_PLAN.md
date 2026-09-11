@@ -3095,6 +3095,15 @@ VersionHistoryModal 相关 100% 项等。
   mock 后需 lenient stub 返回非 null EmbeddingProfile。
 - 指标：core 全量门禁 EXIT=0 绿（4350 tests, 0 failures）。
 
+### Batch 300 补充（已交付）
+
+- 分支：`test/core-embed-fresh-batch300b-20260912`（已合入 main）
+- 内容：DocumentEmbedService.hasFreshEmbedding 前置守卫分支（14
+  行缺口），新建 DocumentEmbedHasFreshEmbeddingTest 4 用例：null
+  document、null id、null contentHash、空白 contentHash 均返回
+  false。要点：hasFreshEmbedding 的前置守卫在 integrity/keyword/
+  persistence 各层之前，null 输入直接短路返回 false。
+
 ### Batch 300（已交付）
 
 - 分支：`test/core-slowquery-stats-batch300-20260912`（已合入
