@@ -3047,6 +3047,42 @@ VersionHistoryModal 相关 100% 项等。
   避免 UnnecessaryStubbing。
 - 指标：core 全量门禁 EXIT=0 绿（4309 tests, 0 failures）。
 
+## 进度留档快照（Batch 289 后 · 用户指令）
+
+- 留档时点：2026-09-11 · main @ ca919352（Batch 289 账本记录之
+  后），origin/main 同步。
+- 循环进度：Batch 261–289 共 29 个批次全部按「规划→写测试→单类
+  验证→core 全量门禁 EXIT=0 或 vitest 全绿 + vite build→commit/
+  push 特性分支→--no-ff 合并 main→账本记录→清理分支」交付完成。
+- 可构建性证据：core 全量门禁 EXIT=0（4309 tests, 0 failures，
+  Batch 289）；webui vitest 660 全绿 + vite build 通过（Batch
+  278 后未改动 webui，本次复验 build 通过）；backend test-compile
+  EXIT=0（本次复验）。
+- 近期批次重点：
+  - Batch 284：ChatHistoryCleanupService 协调清理（维护租约三段
+    获取/消费/释放、EXISTS 兜底清 spring_ai 记忆、活跃会话跳过、
+    租约丢失 fail-closed）
+  - Batch 285：PdfBoxConverter 真实 PDF 转换链（测试内 PDFBox 生
+    成 PDF、段落/长句/空文本分支）
+  - Batch 286：ChatSessionCoordinator.commitOperation 持久提交
+    （引用预留/续租/CAS/saveDurable/SERVER 记忆刷新、租约丢失、
+    仓储缺失守卫）
+  - Batch 287：EmbeddingJobService.resolveDocumentIds 作用域解析
+    （互斥/边界/NotFound/matchNone/三种过滤器分发/超限）
+  - Batch 288：CollectionPurgeService.deleteSessions 端到端（匿名
+    与归属会话双分支、四表清理、spring_ai 记忆、退役装配）
+  - Batch 289：EvaluationSuiteService.executeCases 并发路径（双变
+    体线程池、执行器线程异常包装 ISE、运行不落终态）
+- Batch 290 候选遗留：ChatModelRouter.candidateForModel（约 19
+  行——经 orderedCandidateDescriptors 的 result.isEmpty() 回退循
+  环可达性有限，getAllOrdered 仅含可解析模型，需构造
+  getPrimary 有值但 resolveCandidate 全 null 的场景，评估结论：
+  configured 描述符分支几乎不可达，建议改测 legacyProviderFor 的
+  legacy 候选分支）；PdfToRagService.importPdfToRag（18 行）；
+  DocumentRelocationService.relocate（16 行）；WebUI
+  useFileUpload/Documents.tsx 分支残余。
+- 工作区：本地已合并 test/* 分支随各批清理，无遗留 worktree。
+
 ---
 
 ## 进度留档快照（Batch 260 后 · 用户指令）
