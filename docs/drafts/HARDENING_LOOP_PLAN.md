@@ -3029,6 +3029,24 @@ VersionHistoryModal 相关 100% 项等。
   需按各表专属片段分别断言。
 - 指标：core 全量门禁 EXIT=0 绿（4307 tests, 0 failures）。
 
+### Batch 289（已交付）
+
+- 分支：`test/core-eval-concurrent-batch289-20260911`（已合入
+  main）
+- 内容：EvaluationSuiteService.executeCases 并发执行路径（20 行
+  缺口），在既有测试类追加 2 用例：① 双变体套件（default +
+  hybrid）→ 并发度 min(4, 2) = 2 走线程池路径，两变体全部执行，
+  finishRun PASSED 且 caseCount=2、insertCaseResult 恰 2 次；②
+  identityExists 在执行器线程抛异常（fixture 预检位于 executeCase
+  的 try 之外）→ future.get 包装为 IllegalStateException
+  （"Evaluation case execution failed"）且运行不落终态（finishRun
+  never）。要点：Identity 的 sourceNamespace 恒为 "default"（与变
+  体无关），按变体键构造 thenThrow 桩永不命中；失败用例改用宽匹
+  配连续桩（thenReturn(true).thenThrow(...)）驱动第 2 次调用抛
+  出；严格桩下自包含桩（不复用 helper 的 identityExists 特定桩）
+  避免 UnnecessaryStubbing。
+- 指标：core 全量门禁 EXIT=0 绿（4309 tests, 0 failures）。
+
 ---
 
 ## 进度留档快照（Batch 260 后 · 用户指令）
