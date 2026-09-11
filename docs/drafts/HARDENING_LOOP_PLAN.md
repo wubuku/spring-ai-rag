@@ -3193,6 +3193,23 @@ VersionHistoryModal 相关 100% 项等。
   afterEach 必须 reset RequestContextHolder。
 - 指标：core 全量门禁 EXIT=0 绿（4330 tests, 0 failures）。
 
+### Batch 296（已交付）
+
+- 分支：`test/core-email-deliver-batch296-20260912`（已合入 main）
+- 内容：EmailNotificationService.deliver 异常分型（15 行缺口），
+  新建 EmailNotificationDeliverTest 7 用例：正常发送 → SUCCESS；
+  alertType 未路由 → PERMANENT_FAILURE（PERMANENT_CONFIGURATION）；
+  mailSender 缺失 → 同上；MailAuthenticationException → 永久失败；
+  MailSendException → 瞬态失败（TRANSIENT_NETWORK）；
+  createMimeMessage 抛 RuntimeException → 同样映射瞬态；另有
+  isCurrentlyAvailable 的 delivery.enabled 与 JavaMailSenderImpl
+  instanceof 组合断言。要点：deliver 的 catch 链按异常类型分
+  永久/瞬态——MailAuthenticationException 与 MailParseException
+  归永久（配置问题不重试），MailException/RuntimeException 归瞬
+  态（可重试）；deliver 不走 sendAlert 的 3 次重试循环（重试由
+  AlertNotificationDeliveryWorker 负责）。
+- 指标：core 全量门禁 EXIT=0 绿（4337 tests, 0 failures）。
+
 ---
 
 ## 进度留档快照（Batch 260 后 · 用户指令）
