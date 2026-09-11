@@ -550,6 +550,62 @@ class DocumentSyncRunServiceTest {
                 () -> service.list("kb", "default", 0, 101));
     }
 
+    // ── Batch 297：list 分页列表 ─────────────────────────────────────
+
+    @Test
+    void listReturnsPaginatedRunWithMappedFields() {
+        stubRunRow(DocumentSyncRunStatus.ACTIVE);
+        when(jdbcTemplate.queryForObject(
+                contains("SELECT COUNT(*) FROM rag_document_sync_runs"),
+                eq(Long.class), any(Object[].class))).thenReturn(1L);
+        when(jdbcTemplate.query(
+                contains("ORDER BY created_at DESC"),
+                any(RowMapper.class), any(Object[].class)))
+                .thenAnswer(invocation -> {
+                    RowMapper<?> mapper = invocation.getArgument(1);
+                    ResultSet rs = mock(ResultSet.class);
+                    stubRunColumns(rs, DocumentSyncRunStatus.ACTIVE, "hash",
+                            null, null, DocumentSyncMissingPolicy.NONE);
+                    return List.of(mapper.mapRow(rs, 0));
+                });
+
+        DocumentSyncRunStatusResponse response =
+                service.list("kb", "default", 0, 20);
+
+        assertEquals(1L, response.total());
+        assertEquals(1, response.runs().size());
+        assertEquals(RUN_ID, response.runs().get(0).runId());
+        assertEquals("kb", response.runs().get(0).collectionKey());
+        assertEquals(DocumentSyncRunStatus.ACTIVE,
+                response.runs().get(0).status());
+        assertEquals("default", response.runs().get(0).sourceNamespace());
+    }
+
+    @Test
+    void listWithNullNamespacePassesNullToQueries() {
+        when(jdbcTemplate.queryForObject(
+                contains("SELECT COUNT(*) FROM rag_document_sync_runs"),
+                eq(Long.class), any(Object[].class))).thenReturn(0L);
+        when(jdbcTemplate.query(
+                contains("ORDER BY created_at DESC"),
+                any(RowMapper.class), any(Object[].class)))
+                .thenReturn(List.of());
+
+        DocumentSyncRunStatusResponse response =
+                service.list("kb", null, 0, 20);
+
+        assertEquals(0L, response.total());
+        assertTrue(response.runs().isEmpty());
+        ArgumentCaptor<Object[]> argsCaptor =
+                ArgumentCaptor.forClass(Object[].class);
+        verify(jdbcTemplate).queryForObject(
+                contains("SELECT COUNT(*) FROM rag_document_sync_runs"),
+                eq(Long.class), argsCaptor.capture());
+        // collectionId + namespace × 2（IS NULL OR 分支的两侧）。
+        assertEquals(3, argsCaptor.getValue().length);
+        assertNull(argsCaptor.getValue()[1]);
+    }
+
     // ── 写路径（Batch 100）────────────────────────────────────────────
 
     @Test
