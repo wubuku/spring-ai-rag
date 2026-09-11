@@ -3083,6 +3083,18 @@ VersionHistoryModal 相关 100% 项等。
   useFileUpload/Documents.tsx 分支残余。
 - 工作区：本地已合并 test/* 分支随各批清理，无遗留 worktree。
 
+### Batch 301（已交付）
+
+- 分支：`test/core-external-getbyidentity-batch301-20260912`（已
+  合入 main）
+- 内容：ExternalDocumentService.getByExternalIdentity 守卫分支
+  （15 行缺口），新建 ExternalDocumentServiceGetByIdentityTest 2
+  用例：文档缺失 → NOT_FOUND；JSON record →
+  DocumentRevisionConflictException。要点：toDetail 内部调用
+  embeddingProfileProvider.getActiveProfile() → profile.id()——
+  mock 后需 lenient stub 返回非 null EmbeddingProfile。
+- 指标：core 全量门禁 EXIT=0 绿（4350 tests, 0 failures）。
+
 ### Batch 300（已交付）
 
 - 分支：`test/core-slowquery-stats-batch300-20260912`（已合入
