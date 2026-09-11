@@ -3210,6 +3210,19 @@ VersionHistoryModal 相关 100% 项等。
   AlertNotificationDeliveryWorker 负责）。
 - 指标：core 全量门禁 EXIT=0 绿（4337 tests, 0 failures）。
 
+### Batch 297（已交付）
+
+- 分支：`test/core-syncrun-list-batch297-20260912`（已合入 main）
+- 内容：DocumentSyncRunService.list 分页列表（14 行缺口），在既
+  有测试类追加 2 用例：分页行映射（count 查询 + mapRun 行映射 →
+  DocumentSyncRunResponse 全字段断言含 runId/collectionKey/
+  sourceNamespace/status）与 null namespace 透传（count 参数含
+  collectionId + namespace×2 共 3 个占位符，namespace 位置为
+  null 以命中 IS NULL OR 匹配全部分支，空行列表返回空 runs）。
+  要点：list 的 count 与行查询都使用 (? IS NULL OR source_namespace
+  = ?) 模式，count 参数为 collectionId + namespace×2 共 3 个。
+- 指标：core 全量门禁 EXIT=0 绿（4339 tests, 0 failures）。
+
 ---
 
 ## 进度留档快照（Batch 260 后 · 用户指令）
