@@ -3174,6 +3174,25 @@ VersionHistoryModal 相关 100% 项等。
   素，stableSource(null) 的防御分支经 record 构造不可达。
 - 指标：core 全量门禁 EXIT=0 绿（4327 tests, 0 failures）。
 
+### Batch 295（已交付）
+
+- 分支：`test/core-mutation-collection-scope-batch295-20260912`
+  （已合入 main）
+- 内容：DocumentMutationService.updateLocal 集合作用域变更分支
+  （resolveUpdateCollection 约 14 行 + lambda$createLocal$1 部分），
+  新建 DocumentMutationCollectionScopeTest 3 用例：collectionKey
+  指向新集合 → 文档迁移 + COLLECTION_MOVE 版本记录 +
+  beginActiveWrites([10, 20])；无 collectionKey → 保留当前集合
+  且不触达解析器；受限键（NORMAL 角色 + allowed "10"）→
+  SecurityException。要点：DocumentUpdateRequest 的 setCollectionKey
+  设 collectionKeyPresent=true；无 collectionKey 时
+  resolveUpdateCollection 不会被调用（collectionId 取文档当前值），
+  restricted 分支需 setCollectionKey(null) 显式触发；
+  ApiAccessPolicy 匿名实现（NORMAL + allowed "10"）注入
+  AUTHENTICATED_API_PRINCIPAL_ATTRIBUTE 即可模拟受限调用方，
+  afterEach 必须 reset RequestContextHolder。
+- 指标：core 全量门禁 EXIT=0 绿（4330 tests, 0 failures）。
+
 ---
 
 ## 进度留档快照（Batch 260 后 · 用户指令）
