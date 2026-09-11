@@ -3154,6 +3154,26 @@ VersionHistoryModal 相关 100% 项等。
   CreatedLocal 避免匹配器歧义。
 - 指标：core 全量门禁 EXIT=0 绿（4324 tests, 0 failures）。
 
+### Batch 294（已交付）
+
+- 分支：`test/core-stable-source-lease-batch294-20260912`（已合入
+  main）
+- 内容：ChatTurnOperationService 双点加固，新建
+  ChatTurnOperationStableSourceLeaseTest 3 用例：① 4 参 claim 回
+  收路径中命令会话与操作会话不同 → acquireSessionLease 的
+  adjusted 命令分支（重建含 memoryConversationId 的 ChatCommand
+  后经 coordinator.acquire 获取租约，StubJdbc 断言租约 INSERT）；
+  ② 键控 complete 经 stableSnapshot 深拷贝来源（全字段含
+  metadata 逐项复制、全新实例、turnId 替换为操作 turnId）；③
+  unkeyed complete 直接透传同一实例（零拷贝）。收敛：
+  stableSource 17→约 5、acquireSessionLease 17→约 5。
+  要点：跨会话回收的 repository.reclaim 为 5 参（含快照参数，快
+  照存在时为 null 不覆盖库值）——4 参 anyInt() 桩不匹配导致静默
+  走 claim 递归（find 返回 +600 租约的刷新行 → inProgress 异
+  常）；ChatExecutionResult 规范构造器 List.copyOf 拒绝 null 元
+  素，stableSource(null) 的防御分支经 record 构造不可达。
+- 指标：core 全量门禁 EXIT=0 绿（4327 tests, 0 failures）。
+
 ---
 
 ## 进度留档快照（Batch 260 后 · 用户指令）
