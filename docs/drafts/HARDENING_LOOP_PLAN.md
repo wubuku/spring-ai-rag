@@ -3118,6 +3118,23 @@ VersionHistoryModal 相关 100% 项等。
   thenReturn(0) 覆盖通用 update 桩。
 - 指标：core 全量门禁 EXIT=0 绿（4317 tests, 0 failures）。
 
+### Batch 292（已交付）
+
+- 分支：`test/core-history-saveandindex-batch292-20260912`（已合
+  入 main）
+- 内容：RagChatHistoryRepository.saveAndIndex 持久索引链（16 行
+  缺口），新建 RagChatHistorySaveAndIndexTest 4 用例（经
+  saveDurable 公有入口驱动）：引用批量插入 + 标记完成全链（
+  batchUpdate 行 [7,5] 经 ArgumentCaptor 深比较——Object[] 的
+  equals 为同一性，argThat/List.of 均有陷阱）；无引用跳过批量插
+  入但仍完成标记；引用插入计数非 1 → IllegalStateException
+  fail-closed 且不再标记；标记更新非 1 → IllegalStateException。
+  要点：batchUpdate(String, List<Object[]>) 非 varargs——
+  List.of(new Object[]{...}) 会展开为 List<Long>，须
+  List.<Object[]>of 或 ArgumentCaptor 深比较；varargs 单参数存根
+  用 eq(具体值) 而非 any(Object[].class)（严格桩误报）。
+- 指标：core 全量门禁 EXIT=0 绿（4321 tests, 0 failures）。
+
 ---
 
 ## 进度留档快照（Batch 260 后 · 用户指令）
