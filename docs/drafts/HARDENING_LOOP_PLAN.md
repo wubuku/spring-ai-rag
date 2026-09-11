@@ -3223,6 +3223,22 @@ VersionHistoryModal 相关 100% 项等。
   = ?) 模式，count 参数为 collectionId + namespace×2 共 3 个。
 - 指标：core 全量门禁 EXIT=0 绿（4339 tests, 0 failures）。
 
+### Batch 298（已交付）
+
+- 分支：`test/core-evalcase-lookup-batch298-20260912`（已合入
+  main）
+- 内容：EvaluationCaseExecutor.lookup 身份映射（16 行缺口），新建
+  EvaluationCaseExecutorLookupTest 3 用例：非数字 documentId 跳过
+  + 数字 id 经 IN 查询映射为 Identity（顺序保留，占位符与输入数
+  一致）；同 id 去重 + 空 external_id 行剔除；无非数字 id 可解析
+  时不发查询。要点：query(String, RowCallbackHandler, Object...)
+  为 void 方法——stubbing 必须 doAnswer().when() 而非
+  when().thenAnswer()；varargs 展开后用 getArguments() 索引取参
+  （getArgument(n) 逐个取，varargs 从 index 2 起）；argThat lambda
+  匹配 Object[] varargs 在 Mockito 5 有歧义，直接 any(Object[]
+  .class) 即可匹配任意长度。
+- 指标：core 全量门禁 EXIT=0 绿（4342 tests, 0 failures）。
+
 ---
 
 ## 进度留档快照（Batch 260 后 · 用户指令）
