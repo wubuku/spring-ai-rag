@@ -3011,6 +3011,24 @@ VersionHistoryModal 相关 100% 项等。
   hex 而非任意字面量。
 - 指标：core 全量门禁 EXIT=0 绿（4306 tests, 0 failures）。
 
+### Batch 288（已交付）
+
+- 分支：`test/core-purge-session-cleanup-batch288-20260911`（已合
+  入 main）
+- 内容：CollectionPurgeService.deleteSessions 会话清理分支（约 19
+  行缺口），新建 CollectionPurgeSessionCleanupTest 1 个端到端用
+  例：apply 驱动非空计划（1 文档 + 匿名/归属两个会话）→ 匿名会
+  走 owner IS NULL 历史 + spring_ai 记忆删除；归属会话走历史/摘
+  要/回合操作/过期租约四表 + memoryConversationId 记忆删除；文
+  档计数一致后退役（buildRetiredResult 经最终状态查询装配）。
+  要点：非空计划指纹经反射 buildPlan+fingerprint 复算（buildPlan
+  读取 JDBC 桩数据，查询桩须覆盖 documents/sessions/feedback/
+  audit/repair/idempotency 全部分支）；退役后最终状态查询
+  （SELECT deleted_at, purged_at, version）必须单独打桩否则
+  finalState 为 null；归属会话四表 SQL 共用同一 WHERE 片段，verify
+  需按各表专属片段分别断言。
+- 指标：core 全量门禁 EXIT=0 绿（4307 tests, 0 failures）。
+
 ---
 
 ## 进度留档快照（Batch 260 后 · 用户指令）
