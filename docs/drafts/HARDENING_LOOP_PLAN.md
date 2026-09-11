@@ -3099,6 +3099,25 @@ VersionHistoryModal 相关 100% 项等。
   仍产生 zhipu 候选（移除死循环不改变可达路径行为）。
 - 指标：core 全量门禁 EXIT=0 绿（4311 tests, 0 failures）。
 
+### Batch 291（已交付）
+
+- 分支：`test/core-relocation-replay-batch291-20260911`（已合入
+  main）
+- 内容：DocumentRelocationService.relocate 回放与冲突分支（16 行
+  缺口），新建 DocumentRelocationReplayAndConflictTest 6 用例：
+  幂等信封重放（reserve 回放行指纹经捕获 INSERT setter 参数对
+  齐，重放短路不触达文档仓储与 EntityManager）；reverse 搬迁（目
+  标地址标记指向同一文档且目标为源集合 → 解析退役地址 UPDATE 命
+  中）；CAS 未命中 → CONCURRENT_MODIFICATION；reverse 解析失败 →
+  CONCURRENT_MODIFICATION（retired target address）；源地址插入
+  DataIntegrityViolation → CONCURRENT_MODIFICATION；目标标记指向
+  另一文档 → TARGET_EXTERNAL_IDENTITY_RETIRED。要点：reserve 的
+  INSERT 桩需按测试区分（非回放测试返回 [99L] 提前获得
+  Reservation；回放测试返回 [] 走 SELECT 且在桩内捕获
+  setString(4, fingerprint)）；markRetired 的 resolve 桩须以
+  thenReturn(0) 覆盖通用 update 桩。
+- 指标：core 全量门禁 EXIT=0 绿（4317 tests, 0 failures）。
+
 ---
 
 ## 进度留档快照（Batch 260 后 · 用户指令）
