@@ -3239,6 +3239,21 @@ VersionHistoryModal 相关 100% 项等。
   .class) 即可匹配任意长度。
 - 指标：core 全量门禁 EXIT=0 绿（4342 tests, 0 failures）。
 
+### Batch 299（已交付）
+
+- 分支：`test/core-effective-session-batch299-20260912`（已合入
+  main）
+- 内容：ChatTurnOperationService.withEffectiveSession 会话 ID 规
+  范化（16 行缺口），新建 ChatTurnOperationEffectiveSessionTest 3
+  用例（经原生 claim 3 参路径驱动）：非法 sessionId（含空格/特殊
+  字符）在 INSERT 前被替换为合法 UUID（capture 断言 UUID 反解一
+  致）；合法 sessionId 原样保留；insert 收到的 sessionId 捕获后
+  非 null 且可反解。要点：withEffectiveSession 的规范化仅在
+  claimNew 路径触发（3 参 claim 且 prepared.operation 为 null），
+  sessionCaptor 需从 repository.insert 的第 4 个 String 参数捕
+  获。
+- 指标：core 全量门禁 EXIT=0 绿（4345 tests, 0 failures）。
+
 ---
 
 ## 进度留档快照（Batch 260 后 · 用户指令）
