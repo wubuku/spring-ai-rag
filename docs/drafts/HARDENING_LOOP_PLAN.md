@@ -3083,6 +3083,22 @@ VersionHistoryModal 相关 100% 项等。
   useFileUpload/Documents.tsx 分支残余。
 - 工作区：本地已合并 test/* 分支随各批清理，无遗留 worktree。
 
+### Batch 290（已交付）
+
+- 分支：`test/core-router-deadcode-batch290-20260911`（已合入
+  main）
+- 内容：技术债——ChatModelRouter.candidateForModel 死代码移除
+  （约 19 行未覆盖，含其唯一调用点 orderedCandidateDescriptors
+  的 result.isEmpty() 回退循环与随之失去调用方的 modelCost）。可
+  达性证明：回退循环要求 result 为空且 getAllOrdered 非空，但
+  getAllOrdered 的每个模型（primary 解析/回退解析/legacy 别名值）
+  在预循环中都存在同名可解析 ref 且 resolveCandidate 恒非空
+  （resolve 非空时 ref 回退 modelRef.trim()），组合不可达。回归
+  测试 2 用例锁定不变量：主/回退/legacy 全不可解析 → ordered 候
+  选为空列表且 preferred 不可解析显式抛 IAE；legacy 别名可解析 →
+  仍产生 zhipu 候选（移除死循环不改变可达路径行为）。
+- 指标：core 全量门禁 EXIT=0 绿（4311 tests, 0 failures）。
+
 ---
 
 ## 进度留档快照（Batch 260 后 · 用户指令）
