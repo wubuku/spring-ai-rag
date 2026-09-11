@@ -3135,6 +3135,25 @@ VersionHistoryModal 相关 100% 项等。
   用 eq(具体值) 而非 any(Object[].class)（严格桩误报）。
 - 指标：core 全量门禁 EXIT=0 绿（4321 tests, 0 failures）。
 
+### Batch 293（已交付）
+
+- 分支：`test/core-pdf-policy-import-batch293-20260912`（已合入
+  main）
+- 内容：PdfToRagService.importPdfToRag 策略变体（18 行缺口），
+  新建 PdfToRagPolicyImportTest 3 用例：① ASYNC 无作业服务 →
+  EMBEDDING_JOBS_DISABLED fail-closed；② legacy 路径（无 mutation
+  service）ASYNC 经 dispatchService.enqueueInCurrentTransaction 排
+  队（QUEUED + ASYNC_QUEUED + job/batch ID，embedMessage 槽位承载
+  action 名称——生产行为）；③ SKIP + mutation 管道 → 委派
+  upsertLocalImport 并映射 DocumentMutationResponse（lifecycle 的
+  embeddingStatus/embeddingAction，跳过 legacy 保存与同步嵌入）。
+  要点：importPdfToRag 5 参重载中 documentMutationService 存在时
+  ASYNC 也走 mutation 管道（enqueue 仅属 legacy 路径）——测试须
+  用无 mutation 的独立实例驱动 dispatch 分支；upsertLocalImport 9
+  参混排建议宽匹配 any/anyBoolean/anyString + thenAnswer 构造
+  CreatedLocal 避免匹配器歧义。
+- 指标：core 全量门禁 EXIT=0 绿（4324 tests, 0 failures）。
+
 ---
 
 ## 进度留档快照（Batch 260 后 · 用户指令）
