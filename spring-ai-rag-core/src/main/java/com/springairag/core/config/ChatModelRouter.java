@@ -185,11 +185,6 @@ public class ChatModelRouter {
                 .map(this::resolveCandidate)
                 .forEach(candidate -> addUniqueCandidate(result, candidate));
 
-        if (result.isEmpty()) {
-            for (ChatModel model : getAllOrdered()) {
-                addUniqueCandidate(result, candidateForModel(model));
-            }
-        }
         return List.copyOf(result);
     }
 
@@ -237,35 +232,6 @@ public class ChatModelRouter {
                 ref,
                 model,
                 multiModelProperties.getLegacyCapabilities(ref));
-    }
-
-    private ChatModelCandidate candidateForModel(ChatModel model) {
-        if (model == null) {
-            return null;
-        }
-        if (configuredFactory != null) {
-            for (ConfiguredChatModelFactory.ModelDescriptor descriptor
-                    : configuredFactory.listChatModels()) {
-                ChatModel resolved = configuredFactory.resolve(descriptor.ref());
-                if (resolved == model) {
-                    return new ChatModelCandidate(
-                            descriptor.ref(),
-                            model,
-                    descriptor.capabilities(),
-                    descriptor.contextWindow(),
-                    descriptor.maxTokens(),
-                    descriptor.estimatedModelLimits(),
-                    modelCost(descriptor.ref()));
-                }
-            }
-        }
-        String provider = legacyProviderFor(model);
-        return provider == null
-                ? null
-                : new ChatModelCandidate(
-                        provider,
-                        model,
-                        multiModelProperties.getLegacyCapabilities(provider));
     }
 
     private String legacyProviderFor(ChatModel model) {
@@ -455,12 +421,6 @@ public class ChatModelRouter {
         public boolean supportsToolCalling() {
             return capabilities.supportsToolCalling();
         }
-    }
-
-    private MultiModelProperties.ModelCost modelCost(String ref) {
-        MultiModelProperties.ModelItem item =
-                multiModelProperties.getModelItem(ref);
-        return item != null ? item.cost() : null;
     }
 
     private String legacyApiType(ChatModel model) {
