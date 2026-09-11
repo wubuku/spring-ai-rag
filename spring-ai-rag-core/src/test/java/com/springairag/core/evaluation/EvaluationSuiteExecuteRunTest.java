@@ -39,6 +39,8 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -231,5 +233,86 @@ class EvaluationSuiteExecuteRunTest {
         assertTrue(aggregate.getValue().contains("\"avgHitRate\":1.0"));
         assertTrue(aggregate.getValue().contains("\"avgMrr\":1.0"));
         assertTrue(aggregate.getValue().contains("\"caseCount\":1"));
+    }
+
+    // ==================== Batch 289：并发执行路径 ====================
+
+    private RunRow runWithVariants(String... keys) {
+        var factory = new com.fasterxml.jackson.databind.node.JsonNodeFactory(
+                false);
+        var snapshot = factory.objectNode();
+        snapshot.putObject("collectionSnapshot").put("kb", 3L);
+        var variantKeys = factory.arrayNode();
+        for (String key : keys) {
+            variantKeys.add(key);
+        }
+        snapshot.set("variantKeys", variantKeys);
+        return new RunRow(
+                UUID.randomUUID(), UUID.randomUUID(), "db:key-42",
+                "RUNNING", snapshot, "rev-1", "profile-key",
+                factory.nullNode(), null, NOW, null, NOW);
+    }
+
+    @Test
+    void concurrentExecutionRunsAllVariantsAndAggregates() {
+        RunRow run = runWithVariants("default", "hybrid");
+        stubVersionAndDefinition(run, definition("default", "hybrid"));
+        when(caseExecutor.identityExists(
+                eq("kb"), eq("hybrid"), eq("d1"))).thenReturn(true);
+
+        service.executeRun(run, "worker-1");
+
+        // 并发度 min(4, 2) = 2：走线程池路径，两个变体全部执行。
+        ArgumentCaptor<String> status = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> aggregate = ArgumentCaptor.forClass(String.class);
+        verify(repository).finishRun(
+                eq(run.id()), eq("worker-1"), status.capture(),
+                aggregate.capture(), eq((String) null));
+        assertEquals("PASSED", status.getValue());
+        assertTrue(aggregate.getValue().contains("\"caseCount\":2"));
+        verify(repository, times(2)).insertCaseResult(
+                any(), any(), any(), any(), any(), any(), any(),
+                any(), any(), any());
+    }
+
+    @Test
+    void executorFailureWrapsAsIllegalStateBeforeFinishingRun() {
+        // 自包含桩：宽匹配连续桩——首次 true（default 变体），
+        // 第二次抛异常（hybrid 变体），异常在 executeCase 的
+        // fixture 预检（try 之外）发生，经 Future 包装为 ISE。
+        RunRow run = runWithVariants("default", "hybrid");
+        VersionRow version = new VersionRow(
+                UUID.randomUUID(), UUID.randomUUID(), 1,
+                new ObjectMapper().createObjectNode(), "sha-run", NOW);
+        when(repository.findVersionById(run.suiteVersionId()))
+                .thenReturn(Optional.of(version));
+        when(validator.parse(any())).thenReturn(definition("default", "hybrid"));
+        lenient().when(scopeResolver.resolve(
+                any(), any(), anyList(), any(), any(), any()))
+                .thenReturn(RetrievalScope.noMatches());
+        lenient().when(caseExecutor.search(
+                anyString(), any(), any(), any()))
+                .thenReturn(new EvaluationCaseExecutor.Executed(
+                        List.of(new EvaluationSuiteDefinition.Identity(
+                                "kb", "d1")),
+                        UUID.randomUUID(), 5L));
+        lenient().when(caseExecutor.collectionSnapshot(anyList()))
+                .thenReturn(Map.of("kb", 3L));
+        when(repository.insertCaseResult(
+                any(), any(), any(), any(), any(), any(), any(),
+                any(), any(), any())).thenReturn(1);
+        when(caseExecutor.identityExists(
+                anyString(), anyString(), anyString()))
+                .thenReturn(true)
+                .thenThrow(new IllegalStateException("fixture vanished"));
+
+        IllegalStateException error = assertThrows(
+                IllegalStateException.class,
+                () -> service.executeRun(run, "worker-1"));
+
+        assertTrue(error.getMessage()
+                .contains("Evaluation case execution failed"));
+        verify(repository, never()).finishRun(
+                any(), anyString(), any(), any(), any());
     }
 }
