@@ -166,4 +166,42 @@ class ChatModelRouterConfiguredTest {
         assertEquals("zhipu", info.get(1).get("ref"));
         assertEquals(Boolean.TRUE, info.get(1).get("available"));
     }
+
+    // ==================== Batch 290：候选回退循环移除后的不变量 ====================
+
+    @Test
+    void orderedCandidateDescriptorsReturnsEmptyWhenNothingResolves() {
+        // 原 candidateForModel 回退循环（result.isEmpty() 时遍历
+        // getAllOrdered）已被证实不可达并移除：主/回退/legacy 全部
+        // 无法解析时，ordered 候选为空列表而非异常。无 legacy 实例
+        // 确保 getAllOrdered 为空。
+        ChatModelRouter emptyRouter = new ChatModelRouter(
+                registry, factory, multiModel, List.of());
+        when(registry.getPrimaryChatModelName()).thenReturn("missing/primary");
+        when(registry.getFallbackChatModelNames())
+                .thenReturn(List.of("missing/fallback"));
+
+        List<ChatModelRouter.ChatModelCandidate> candidates =
+                emptyRouter.orderedCandidateDescriptors(null);
+
+        assertTrue(candidates.isEmpty());
+        // 指定偏好模型且不可解析 → resolveCandidateRequired 显式抛出。
+        assertThrows(IllegalArgumentException.class,
+                () -> emptyRouter.orderedCandidateDescriptors("missing/preferred"));
+    }
+
+    @Test
+    void orderedCandidateDescriptorsKeepsLegacyCandidateAfterFallbackLoopRemoval() {
+        // legacy 别名可解析时仍产生候选（回归：移除死循环不改变
+        // 可达路径的既有行为）。
+        when(registry.getPrimaryChatModelName()).thenReturn("missing/primary");
+        when(registry.getFallbackChatModelNames()).thenReturn(List.of());
+
+        List<ChatModelRouter.ChatModelCandidate> candidates =
+                router.orderedCandidateDescriptors(null);
+
+        assertEquals(1, candidates.size());
+        assertEquals("zhipu", candidates.get(0).ref());
+        assertNotNull(candidates.get(0).model());
+    }
 }
