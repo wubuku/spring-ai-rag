@@ -3083,6 +3083,17 @@ VersionHistoryModal 相关 100% 项等。
   useFileUpload/Documents.tsx 分支残余。
 - 工作区：本地已合并 test/* 分支随各批清理，无遗留 worktree。
 
+### Batch 343（已交付）
+
+- 分支：`test/ensure-current-lambda-batch343`（已合入 main）
+- 内容：KeywordIndexPersistenceService lambda$ensureCurrent$0
+  （批量插入 setter，11 行），新建 KeywordIndexBatchSetterTest 1
+  用例：stub batchUpdate 捕获 ParameterizedPreparedStatementSetter
+  并真实执行，逐列断言 9 列写入值（id/代次/哈希/分块器版本/
+  文本/序号/起止位置/空 metadata）。要点：此前 any() 匹配仅验
+  证调用发生，setter 主体从未执行。
+- 指标：core 全量门禁 EXIT=0 绿（4641 tests, 0 failures）。
+
 ### Batch 342（已交付）
 
 - 分支：`test/embed-internal-batch342`（已合入 main）
