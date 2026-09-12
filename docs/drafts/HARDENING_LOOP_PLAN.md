@@ -3083,6 +3083,20 @@ VersionHistoryModal 相关 100% 项等。
   useFileUpload/Documents.tsx 分支残余。
 - 工作区：本地已合并 test/* 分支随各批清理，无遗留 worktree。
 
+### Batch 306（已交付）
+
+- 分支：`test/http-pinned-transport-batch306`（已合入 main）
+- 内容：PinnedDnsHttpTransport 真实 socket 行为（execute/readBounded
+  29 行缺口）与 PinnedDnsResolver 守卫分支，新建
+  AllowlistedHttpToolProviderPinnedTransportTest 8 用例：经本地
+  HttpServer 验证响应映射（状态/Content-Type/响应体，无实体回退
+  空默认）、Accept 头透传、readBounded 恰好上限放行与超限抛
+  ResponseTooLargeException（反射实例化私有传输类）、读超时
+  300ms vs 2s 延迟规范化为 TimeoutException 且保留 IO 原因、
+  PinnedDnsResolver 大小写归一化/防御性副本/canonical hostname/
+  pin 空主机与空数组守卫/未固定与 null 主机拒绝。
+- 指标：core 全量门禁 EXIT=0 绿（4422 tests, 0 failures）。
+
 ### Batch 305（已交付）
 
 - 分支：`test/http-network-guard-batch305`（已合入 main）
