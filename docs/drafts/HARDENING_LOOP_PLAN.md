@@ -3083,6 +3083,16 @@ VersionHistoryModal 相关 100% 项等。
   useFileUpload/Documents.tsx 分支残余。
 - 工作区：本地已合并 test/* 分支随各批清理，无遗留 worktree。
 
+### Batch 340（已交付）
+
+- 分支：`test/prompt-planner-turns-batch340`（已合入 main）
+- 内容：ConversationPromptPlanner.selectAdditionalTurns（12 行
+  缺口），新建 ConversationPromptPlannerAdditionalTurnsTest 4
+  用例：剩余预算充足时更旧回合前置补齐、历史 token 上限内追加
+  至耗尽（3 回合保留后 2）、追加预算为 0 仅保留最近回合、空历
+  史不带 recent_history_omitted 降级标记。
+- 指标：core 全量门禁 EXIT=0 绿（4631 tests, 0 failures）。
+
 ### Batch 339（已交付）
 
 - 分支：`test/keyword-index-current-batch339`（已合入 main）
