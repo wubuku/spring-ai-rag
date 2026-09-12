@@ -3083,6 +3083,18 @@ VersionHistoryModal 相关 100% 项等。
   useFileUpload/Documents.tsx 分支残余。
 - 工作区：本地已合并 test/* 分支随各批清理，无遗留 worktree。
 
+### Batch 319（已交付）
+
+- 分支：`test/eval-maprun-diagnostics-batch319`（已合入 main）
+- 内容：EvaluationSuiteRepository.mapRun（13 行）+
+  RetrievalDiagnosticsService.toSummary（13 行）双目标。新建
+  EvaluationSuiteRepositoryMapRunTest 2 用例（findRun 全列逐字
+  段映射、空白/畸形 JSON 回退 nullNode）与
+  RetrievalDiagnosticsListSummaryTest 3 用例（列表摘要全字段 +
+  嵌套 citationValidation.status 提取、缺失/null status 与 null
+  metadata 时引用状态为空）。
+- 指标：core 全量门禁 EXIT=0 绿（4533 tests, 0 failures）。
+
 ### Batch 318（已交付）
 
 - 分支：`test/document-embed-stream-batch318`（已合入 main）
