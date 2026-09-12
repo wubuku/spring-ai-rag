@@ -3083,6 +3083,15 @@ VersionHistoryModal 相关 100% 项等。
   useFileUpload/Documents.tsx 分支残余。
 - 工作区：本地已合并 test/* 分支随各批清理，无遗留 worktree。
 
+### Batch 351（已交付）
+
+- 分支：`test/eval-answer-quality-batch351`（已合入 main）
+- 内容：RetrievalEvaluationServiceImpl.evaluateAnswerQuality（10
+  行缺口），新建 RetrievalEvaluationAnswerQualityTest 5 用例：
+  无执行器同步回退解析评审 JSON、执行器路径解析、评审超时中性
+  3/3/3 REVISION 降级、执行失败降级、畸形响应解析失败回退默认。
+- 指标：core 全量门禁 EXIT=0 绿（4672 tests, 0 failures）。
+
 ### Batch 350（已交付）
 
 - 分支：`test/catalog-fs-roots-batch350`（已合入 main）
