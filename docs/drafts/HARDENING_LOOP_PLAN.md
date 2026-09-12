@@ -3083,6 +3083,18 @@ VersionHistoryModal 相关 100% 项等。
   useFileUpload/Documents.tsx 分支残余。
 - 工作区：本地已合并 test/* 分支随各批清理，无遗留 worktree。
 
+### Batch 332（已交付）
+
+- 分支：`test/eligible-candidates-batch332`（已合入 main）
+- 内容：ChatExecutionService.eligibleCandidates（16 行缺口），
+  新建 ChatExecutionEligibleCandidatesTest 5 用例（流式路径驱
+  动）：显式 modelCandidates 逐候选过滤与合格候选胜出、全部不
+  合格 MODEL_STREAMING_UNSUPPORTED、全部不可用 SERVICE_
+  UNAVAILABLE、modelRef 显式校验（AGENT 无工具调用 →
+  MODEL_CAPABILITY_UNSUPPORTED、KNOWLEDGE 无流式 →
+  MODEL_STREAMING_UNSUPPORTED）。
+- 指标：core 全量门禁 EXIT=0 绿（4588 tests, 0 failures）。
+
 ### Batch 331（已交付）
 
 - 分支：`test/openai-compat-chat-batch331`（已合入 main）
