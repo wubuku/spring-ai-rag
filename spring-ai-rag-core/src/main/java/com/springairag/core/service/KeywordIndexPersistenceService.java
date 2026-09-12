@@ -340,44 +340,6 @@ public class KeywordIndexPersistenceService {
         return updated.getFirst();
     }
 
-    private boolean isCurrent(
-            long documentId, String contentHash, String chunkerVersion) {
-        try {
-            List<Map<String, Object>> rows = jdbcTemplate.queryForList(
-                    """
-                    SELECT local_index_generation, chunk_count
-                    FROM rag_document_local_index_state
-                    WHERE document_id = ?
-                      AND local_index_status = 'READY'
-                      AND content_hash = ?
-                      AND chunker_version = ?
-                      AND chunk_count > 0
-                    """,
-                    documentId, contentHash, chunkerVersion);
-            if (rows.isEmpty()) {
-                return false;
-            }
-            Map<String, Object> row = rows.getFirst();
-            Long count = jdbcTemplate.queryForObject(
-                    """
-                    SELECT COUNT(*)
-                    FROM rag_document_chunks
-                    WHERE document_id = ?
-                      AND local_index_generation = ?
-                      AND content_hash = ?
-                      AND chunker_version = ?
-                    """,
-                    Long.class,
-                    documentId,
-                    ((Number) row.get("local_index_generation")).longValue(),
-                    contentHash,
-                    chunkerVersion);
-            return count != null
-                    && count.intValue() == ((Number) row.get("chunk_count")).intValue();
-        } catch (DataAccessException e) {
-            return false;
-        }
-    }
 
     private void validateChunks(
             RagDocument document, List<TextChunk> chunks) {
