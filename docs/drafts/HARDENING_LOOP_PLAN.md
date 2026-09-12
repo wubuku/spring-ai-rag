@@ -3083,6 +3083,21 @@ VersionHistoryModal 相关 100% 项等。
   useFileUpload/Documents.tsx 分支残余。
 - 工作区：本地已合并 test/* 分支随各批清理，无遗留 worktree。
 
+### Batch 320（已交付）
+
+- 分支：`test/turn-op-session-batch320`（已合入 main）
+- 内容：ChatTurnOperationService.withEffectiveSession（16 行缺
+  口）验证结论 + 可达路径覆盖：其"非法会话重建"分支为防御性
+  死代码（ChatCommand 紧凑构造器经 SessionIdValidator.resolve
+  对非法非空值抛错、对空值生成 UUID，会话合法不变式在构造期
+  成立；与 stableSource 防御分支同类，按先例记档不强测）。
+  新建 ChatTurnOperationRebuildSessionTest 2 用例：4 参 claim
+  的 claimNew 全链（首查空判定新 key → 会话快速通道 → 10 参
+  insert 携带原会话 → 非重放 Claim）与 unkeyed 短路零仓储交互。
+  要点：claimNew 的 insert 走 10 参重载，9 参桩不命中会静默走
+  重派发分支。
+- 指标：core 全量门禁 EXIT=0 绿（4535 tests, 0 failures）。
+
 ### Batch 319（已交付）
 
 - 分支：`test/eval-maprun-diagnostics-batch319`（已合入 main）
