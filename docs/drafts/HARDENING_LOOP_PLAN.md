@@ -3083,6 +3083,18 @@ VersionHistoryModal 相关 100% 项等。
   useFileUpload/Documents.tsx 分支残余。
 - 工作区：本地已合并 test/* 分支随各批清理，无遗留 worktree。
 
+### Batch 328（已交付）
+
+- 分支：`test/clone-coordinator-batch328`（已合入 main）
+- 内容：RagCollectionService cloneCollection lambda$5（13 行缺
+  口），新建 RagCollectionCloneCoordinatorTest 4 用例：协调器路
+  径逐文档 createLocal(ASYNC/COLLECTION_CLONE/去重 NONE/继承来
+  源) 且不直接批量保存、legacy 路径逐条记录 CREATE 版本、键唯
+  一约束冲突映射 DUPLICATE_RESOURCE、其他完整性冲突原样上抛。
+  要点：3 参构造器内建真实 CollectionIdentityResolver，活动写
+  CAS 需打桩 advanceActiveVersion→1。
+- 指标：core 全量门禁 EXIT=0 绿（4569 tests, 0 failures）。
+
 ### Batch 327（已交付）
 
 - 分支：`test/turn-op-prepare-batch327`（已合入 main）
