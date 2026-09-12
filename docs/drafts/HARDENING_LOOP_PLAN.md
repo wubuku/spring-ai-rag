@@ -3083,6 +3083,20 @@ VersionHistoryModal 相关 100% 项等。
   useFileUpload/Documents.tsx 分支残余。
 - 工作区：本地已合并 test/* 分支随各批清理，无遗留 worktree。
 
+### Batch 314（已交付）
+
+- 分支：`test/document-create-local-batch314`（已合入 main）
+- 内容：DocumentMutationService createLocal 事务 lambda（17 行，
+  当前最大方法级缺口），新建 DocumentMutationCreateLocalTest 9
+  用例：幂等重放（INSERT 冲突 + 台账命中 SUCCEEDED → REPLAYED
+  零派发、结果文档丢失 ISE）、重复内容（非 force 零派发、
+  force+_DUPLICATE_FORCE 重嵌、revision 回退 1）、
+  DeduplicationScope.NONE 绕过查重、全新创建（dispatch(origin)
+  + CREATE 版本记录、enabledOverride=false 强制 SKIP 且落库
+  enabled=false）、4 参重载缺省 SKIP。要点：幂等指纹经 INSERT
+  桩参数捕获回填台账查询；createLocal 尾部回读需默认 findById 桩。
+- 指标：core 全量门禁 EXIT=0 绿（4501 tests, 0 failures）。
+
 ### Batch 313（已交付）
 
 - 分支：`test/collection-provisioning-batch313`（已合入 main）
