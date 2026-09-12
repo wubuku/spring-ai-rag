@@ -3083,6 +3083,22 @@ VersionHistoryModal 相关 100% 项等。
   useFileUpload/Documents.tsx 分支残余。
 - 工作区：本地已合并 test/* 分支随各批清理，无遗留 worktree。
 
+### Batch 305（已交付）
+
+- 分支：`test/http-network-guard-batch305`（已合入 main）
+- 内容：AllowlistedHttpToolProvider SSRF 地址守卫矩阵（publicAddress
+  69 分支 + hasPrefix/resolvePublicTarget 残余，合计 7 行 / 76 分
+  支，publicAddress 为全库最大分支缺口），新建
+  AllowlistedHttpToolProviderNetworkGuardTest 5 用例 25+ 断言：
+  IPv4 保留段逐段拒绝（0/8、10/8、100.64/10 首尾、169.254/16、
+  172.16/12 首尾、192.0.0.2、192.0.2、192.88.99、192.168/16、
+  198.18/15 首尾、198.51.100、203.0.113、224/4 首尾、受限广播）、
+  IPv6 拒绝（:: 非环回、fc00::/7 首尾、fe80::/10、ff00::/8、
+  2001:0000/23、3fff:0000/20）、环回与 IPv4 映射环回（原始 16
+  字节构造避开 getByName 归一化）、放行（IPv4 映射公网递归校验、
+  8.8.8.8、2620:fe::fe）、解析 null 数组/含 null 元素整体拒绝。
+- 指标：core 全量门禁 EXIT=0 绿（4414 tests, 0 failures）。
+
 ### Batch 304（已交付）
 
 - 分支：`test/http-provider-guards-batch304`（已合入 main）
