@@ -3083,6 +3083,20 @@ VersionHistoryModal 相关 100% 项等。
   useFileUpload/Documents.tsx 分支残余。
 - 工作区：本地已合并 test/* 分支随各批清理，无遗留 worktree。
 
+### Batch 317（已交付）
+
+- 分支：`test/auth-filter-eval-case-batch317`（已合入 main）
+- 内容：ApiKeyAuthFilter.sendPolicyUnavailable（14 行）+
+  EvaluationSuiteDefinitionValidator.parseCase（14 行）双目标。
+  新建 ApiKeyAuthFilterPolicyUnavailableTest 2 用例（authenticate
+  抛 InvalidPersistedCapabilitiesException → 503：/v1/* OpenAI
+  形状 policy_service_unavailable、RAG 路径 POLICY_SERVICE_
+  UNAVAILABLE+path）与 EvaluationSuiteDefinitionCaseValidationTest
+  9 用例（case 形状、scope 约束八形态、collectionKeys 元素约
+  束、relevant 身份五约束、命名空间参与唯一性、minimum 形状与
+  hitRate/mrr 边界、合法阈值解析）。
+- 指标：core 全量门禁 EXIT=0 绿（4525 tests, 0 failures）。
+
 ### Batch 316（已交付）
 
 - 分支：`test/document-batch-embed-batch316`（已合入 main）
