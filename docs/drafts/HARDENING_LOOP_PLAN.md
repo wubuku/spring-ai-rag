@@ -3083,6 +3083,16 @@ VersionHistoryModal 相关 100% 项等。
   useFileUpload/Documents.tsx 分支残余。
 - 工作区：本地已合并 test/* 分支随各批清理，无遗留 worktree。
 
+### Batch 323（已交付）
+
+- 分支：`test/pdf-content-type-batch323`（已合入 main）
+- 内容：PdfImportController.inferContentType（13 行缺口，经
+  getRawFilePath 端点驱动），新建
+  PdfImportControllerContentTypeTest 3 用例 16+ 断言：具体
+  MIME 优先、octet-stream 触发 13 种扩展名逐一映射、大写扩展
+  名识别、未知/无扩展与 null MIME 回退 octet-stream。
+- 指标：core 全量门禁 EXIT=0 绿（4546 tests, 0 failures）。
+
 ### Batch 322（已交付）
 
 - 分支：`test/fingerprint-openai-batch322`（已合入 main）
