@@ -3083,6 +3083,20 @@ VersionHistoryModal 相关 100% 项等。
   useFileUpload/Documents.tsx 分支残余。
 - 工作区：本地已合并 test/* 分支随各批清理，无遗留 worktree。
 
+### Batch 315（已交付）
+
+- 分支：`test/collection-import-docs-batch315`（已合入 main）
+- 内容：RagCollectionController.importDocuments 分支（16 行缺
+  口），新建 RagCollectionControllerImportDocumentsTest 9 用例：
+  空文档列表计数 0、同命名空间重复 externalId 拒绝、跨命名空
+  间同名放行、空白 externalId 跳过唯一性、documentMutationService
+  逐文档委派、json-record 守卫（缺 externalId/payload → IAE、
+  服务缺位 → ISE、在位 → importRecord 委派）、混合类型计数合
+  并。要点：json-record 与直接落库分支仅在 documentMutationService
+  为 null 的 legacy 路径可达。插曲：本地 socks5 代理短暂不可用，
+  退避重试后恢复推送。
+- 指标：core 全量门禁 EXIT=0 绿（4510 tests, 0 failures）。
+
 ### Batch 314（已交付）
 
 - 分支：`test/document-create-local-batch314`（已合入 main）
