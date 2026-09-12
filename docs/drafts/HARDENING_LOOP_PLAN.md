@@ -3083,6 +3083,22 @@ VersionHistoryModal 相关 100% 项等。
   useFileUpload/Documents.tsx 分支残余。
 - 工作区：本地已合并 test/* 分支随各批清理，无遗留 worktree。
 
+### Batch 308（已交付）
+
+- 分支：`test/http-endpoint-validation-batch308`（已合入 main）
+- 内容：RagChatProperties$HttpEndpointProperties.validate 配置校
+  验矩阵（16 行缺口），新建 RagChatHttpEndpointValidationTest 16
+  用例 60+ 断言：合法基线放行（含 HEAD 与无凭证）、三类标识符
+  正则逐形态拒绝、base-url https 源约束（协议/路径/userInfo/
+  query/fragment）与 URI 语法错误分列、path 安全逐项（空/缺斜
+  杠/反斜杠/../%/#/?/NUL/控制字符）、方法白名单、七字段正值与
+  上限区间（timeout 30s、4MiB、不超总预算、结果 1024~2M）、查
+  询参数 null 元素/命名/重复/参数级长度、响应内容类型空白带参
+  通配、credential-env/header 形态。要点：invalid() 抛
+  IllegalStateException；try 内 https-origin ISE 不被同方法
+  catch(IAE) 吞掉。
+- 指标：core 全量门禁 EXIT=0 绿（4447 tests, 0 failures）。
+
 ### Batch 307（已交付）
 
 - 分支：`test/json-record-tool-budget-batch307`（已合入 main）
