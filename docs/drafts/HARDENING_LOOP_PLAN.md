@@ -3083,6 +3083,18 @@ VersionHistoryModal 相关 100% 项等。
   useFileUpload/Documents.tsx 分支残余。
 - 工作区：本地已合并 test/* 分支随各批清理，无遗留 worktree。
 
+### Batch 321（已交付）
+
+- 分支：`test/embed-progress-chain-batch321`（已合入 main）
+- 内容：DocumentEmbedService.batchEmbedDocumentsWithProgress +
+  sendDocumentProgress 进度链（合计 27 行缺口），新建
+  DocumentEmbedProgressChainTest 3 用例：混合状态批次（成功/
+  缓存命中/校验失败）的 PREPARING+终态双事件与累计计数、chunk
+  进度断言、FAILED 消息、summary 汇总；NOT_FOUND 落 SKIPPED 相
+  位与 skipped 计数；超 50 建流前拒绝。要点：成功路径依赖真实
+  DocumentChunkingService，chunk 数不硬编码。
+- 指标：core 全量门禁 EXIT=0 绿（4538 tests, 0 failures）。
+
 ### Batch 320（已交付）
 
 - 分支：`test/turn-op-session-batch320`（已合入 main）
