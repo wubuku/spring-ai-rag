@@ -3083,6 +3083,19 @@ VersionHistoryModal 相关 100% 项等。
   useFileUpload/Documents.tsx 分支残余。
 - 工作区：本地已合并 test/* 分支随各批清理，无遗留 worktree。
 
+### Batch 309（已交付）
+
+- 分支：`test/apikey-rotation-clamp-batch309`（已合入 main）
+- 内容：ApiKeyManagementService.clampPendingRotationDeadline
+  （15 行缺口，经 updatePolicy 入口驱动），新建
+  ApiKeyManagementRotationClampTest 5 用例：主体过期时间清空
+  短路、无 PENDING 操作、操作截止更早不收敛、未来截止同步收敛
+  operation.expiresAt 与源凭证 retireAt（保持 PENDING）、截止已
+  过触发 expirePendingIfNecessary（禁用源凭证 + EXPIRED 终态 +
+  terminalAt）。要点：toPrincipalResponse 装配会查询轮换仓储，
+  clamp 落库须以 saveAndFlush 验证而非零交互。
+- 指标：core 全量门禁 EXIT=0 绿（4452 tests, 0 failures）。
+
 ### Batch 308（已交付）
 
 - 分支：`test/http-endpoint-validation-batch308`（已合入 main）
