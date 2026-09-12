@@ -3083,6 +3083,21 @@ VersionHistoryModal 相关 100% 项等。
   useFileUpload/Documents.tsx 分支残余。
 - 工作区：本地已合并 test/* 分支随各批清理，无遗留 worktree。
 
+### Batch 304（已交付）
+
+- 分支：`test/http-provider-guards-batch304`（已合入 main）
+- 内容：AllowlistedHttpToolProvider provider 级守卫与元数据
+  （12 行 / 12 分支缺口），新建
+  AllowlistedHttpToolProviderGuardsTest 11 用例：http-tools 关闭
+  不暴露回调/策略、技能快照不健康冻结端点、工具名重复/缺失
+  拒绝、Skill 未注册/能力未声明拒绝、getToolPolicies 只读策略
+  （READ_ONLY/maxCalls/maxResult/timeout）、ToolDefinition 名称与
+  inputSchema（属性/maxLength/required，全可选省略 required）、
+  ToolMetadata returnDirect=false、closeTransport 关闭传输且吞
+  异常。要点：setEndpoints(null) 被 setter 归一化为空列表，
+  validateAndFreeze 的 configured==null 分支为防御性不可测。
+- 指标：core 全量门禁 EXIT=0 绿（4409 tests, 0 failures）。
+
 ### Batch 303（已交付）
 
 - 分支：`test/http-tool-error-paths-batch303`（已合入 main）
