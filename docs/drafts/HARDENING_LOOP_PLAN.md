@@ -3083,6 +3083,16 @@ VersionHistoryModal 相关 100% 项等。
   useFileUpload/Documents.tsx 分支残余。
 - 工作区：本地已合并 test/* 分支随各批清理，无遗留 worktree。
 
+### Batch 329（已交付）
+
+- 分支：`test/chat-begin-trace-batch329`（已合入 main）
+- 内容：RagChatController.beginChatTrace（13 行缺口），新建
+  RagChatControllerBeginTraceTest 4 用例（6 参构造器 +
+  scopeResolver mock 使 scope 非空）：诊断关闭/服务缺位 → 无会
+  话无 traceId 头、正常路径会话贯通服务层且 traceId 回写响应
+  头、诊断故障优雅降级为 null 会话且主流程照常。
+- 指标：core 全量门禁 EXIT=0 绿（4573 tests, 0 failures）。
+
 ### Batch 328（已交付）
 
 - 分支：`test/clone-coordinator-batch328`（已合入 main）
