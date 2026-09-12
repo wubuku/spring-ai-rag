@@ -3083,6 +3083,21 @@ VersionHistoryModal 相关 100% 项等。
   useFileUpload/Documents.tsx 分支残余。
 - 工作区：本地已合并 test/* 分支随各批清理，无遗留 worktree。
 
+### Batch 307（已交付）
+
+- 分支：`test/json-record-tool-budget-batch307`（已合入 main）
+- 内容：JsonRecordSearchTool.call 预算与守卫分支（15 行缺口），
+  新建 JsonRecordSearchToolBudgetTest 9 用例：空白/非文本 query
+  拒绝、非对象与畸形参数区分报错、单参入口与缺失授权上下文键
+  拒绝、检索预算耗尽短路（budgetExhausted 空响应且服务层零调
+  用）、超 maxUniqueSources 的来源无 citationId 被跳过、结果字符
+  预算尾部逐条丢弃并打 truncated、payload 小额保留/null 省略的
+  payloadOmitted 标记、payloadContains 回显、maxResults 缺省回
+  退/非整数回退/0 与负数收敛。要点：RetrievalTraceCollector 的
+  maxRetrievalCalls 归一化下限为 1，预算耗尽路径需先手动消耗；
+  收缩到空后 error 块为不可达防御代码。
+- 指标：core 全量门禁 EXIT=0 绿（4431 tests, 0 failures）。
+
 ### Batch 306（已交付）
 
 - 分支：`test/http-pinned-transport-batch306`（已合入 main）
