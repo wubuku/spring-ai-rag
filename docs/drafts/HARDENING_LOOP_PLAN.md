@@ -3083,6 +3083,17 @@ VersionHistoryModal 相关 100% 项等。
   useFileUpload/Documents.tsx 分支残余。
 - 工作区：本地已合并 test/* 分支随各批清理，无遗留 worktree。
 
+### Batch 337（已交付）
+
+- 分支：`test/integration-capability-batch337`（已合入 main）
+- 内容：IntegrationCapabilityCatalog.collectionPurgeVisible（12
+  行缺口），新建 IntegrationCapabilityPurgeVisibilityTest 5 用
+  例：配置关闭全隐藏、环境根可见、数据库管理员可见/普通角色不
+  可见（需 KEY_ATTRIBUTE 与 principalId 一致 + allowedCollectionIds
+  解析为键）、匿名仅 allowAuthDisabled+本机回环可见、legacy 静
+  态密钥不可见。
+- 指标：core 全量门禁 EXIT=0 绿（4617 tests, 0 failures）。
+
 ### Batch 336（已交付）
 
 - 分支：`test/json-record-validate-batch336`（已合入 main）
