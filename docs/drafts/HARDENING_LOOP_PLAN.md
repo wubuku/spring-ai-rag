@@ -3083,6 +3083,17 @@ VersionHistoryModal 相关 100% 项等。
   useFileUpload/Documents.tsx 分支残余。
 - 工作区：本地已合并 test/* 分支随各批清理，无遗留 worktree。
 
+### Batch 327（已交付）
+
+- 分支：`test/turn-op-prepare-batch327`（已合入 main）
+- 内容：ChatTurnOperationService.prepare 幂等准备矩阵（13 行
+  缺口），新建 ChatTurnOperationPrepareTest 6 用例：缺键
+  disabled 准备零仓储交互、开关关闭/缺指纹/键换请求复用三类拒
+  绝、同指纹返回带既有操作的 keyed 准备、新键返回无操作 keyed
+  准备、键 OWSTrim+SHA-256 归一。要点：幂等开关位于
+  RagChatProperties。
+- 指标：core 全量门禁 EXIT=0 绿（4565 tests, 0 failures）。
+
 ### Batch 326（已交付）
 
 - 分支：`test/agent-tools-batch326`（已合入 main）
