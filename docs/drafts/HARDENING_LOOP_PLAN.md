@@ -3083,6 +3083,17 @@ VersionHistoryModal 相关 100% 项等。
   useFileUpload/Documents.tsx 分支残余。
 - 工作区：本地已合并 test/* 分支随各批清理，无遗留 worktree。
 
+### Batch 338（已交付）
+
+- 分支：`test/batch-doc-coordinator-batch338`（已合入 main）
+- 内容：BatchDocumentService.createSingleDocumentWithCoordinator
+  （12 行缺口），新建 BatchDocumentCoordinatorTest 4 用例：协调
+  器逐文档 createLocal 委托（集合回退默认/BATCH_CREATE 来源/
+  幂等键派生 key:index）+ CREATED 映射携带嵌入三元组、
+  DUPLICATE → skipped、单文档失败隔离不中止批次、文档级集合
+  覆盖批量默认。要点：ASYNC 策略需 setDispatchService。
+- 指标：core 全量门禁 EXIT=0 绿（4621 tests, 0 failures）。
+
 ### Batch 337（已交付）
 
 - 分支：`test/integration-capability-batch337`（已合入 main）
