@@ -3083,6 +3083,21 @@ VersionHistoryModal 相关 100% 项等。
   useFileUpload/Documents.tsx 分支残余。
 - 工作区：本地已合并 test/* 分支随各批清理，无遗留 worktree。
 
+### Batch 326（已交付）
+
+- 分支：`test/agent-tools-batch326`（已合入 main）
+- 内容：ChatExecutionService.applyAgentTools（14 行缺口），新
+  建 ChatExecutionAgentToolsTest 5 用例（AGENT 模式流式路径）：
+  注册表工具列表装配（List 重载）+ requestContext 并入
+  toolContext；四类上下文键按开关装配（搜索键/HTTP 状态/技能
+  会话/执行预算，无预算命令分配全新 HTTP 状态）；回退链（json
+  工具启用双工具、禁用仅 search）；ToolCallingChatOptions 默
+  认选项复制。要点：AGENT+streaming 资格要求
+  capabilities(streaming,toolCalling)=(true,true) 且默认选项为
+  ToolCallingChatOptions；toolCallbacks varargs/List 双重载分
+  别打桩。
+- 指标：core 全量门禁 EXIT=0 绿（4559 tests, 0 failures）。
+
 ### Batch 325（已交付）
 
 - 分支：`test/principal-expiry-alert-batch325`（已合入 main）
