@@ -3083,6 +3083,18 @@ VersionHistoryModal 相关 100% 项等。
   useFileUpload/Documents.tsx 分支残余。
 - 工作区：本地已合并 test/* 分支随各批清理，无遗留 worktree。
 
+### Batch 348（已交付）
+
+- 分支：`test/keyword-iscurrent-batch348`（已合入 main）
+- 内容：①死代码移除——KeywordIndexPersistenceService.isCurrent
+  （12 行）全仓零引用（新鲜度逻辑内联于 hasFreshLocalIndex），
+  移除 38 行并回归验证。②新建
+  CollectionIdentityResolverBeginActiveWritesTest 4 用例：空/null
+  集合零交互、去重去 null 按 id 升序预留且令牌携带版本递增、
+  CAS 未命中与停用集合抛 ObjectOptimisticLockingFailure、非正
+  集合 id IAE。
+- 指标：core 全量门禁 EXIT=0 绿（4656 tests, 0 failures）。
+
 ### Batch 347（已交付）
 
 - 分支：`test/branch-stage-batch347`（已合入 main）
