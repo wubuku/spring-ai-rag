@@ -3083,6 +3083,17 @@ VersionHistoryModal 相关 100% 项等。
   useFileUpload/Documents.tsx 分支残余。
 - 工作区：本地已合并 test/* 分支随各批清理，无遗留 worktree。
 
+### Batch 346（已交付）
+
+- 分支：`test/coordinator-create-batch346`（已合入 main）
+- 内容：RagDocumentController.createDocument 协调器分支（12 行
+  缺口），新建 RagDocumentControllerCoordinatorCreateTest 3 用
+  例：documentMutationService 在位时委托 createLocal（策略/幂等
+  键/来源透传）并映射 mutation 响应（status/documentRevision）+
+  文档审计、DUPLICATE → existingDocumentId + 既有内容消息、请
+  求级 embeddingPolicy 透传。
+- 指标：core 全量门禁 EXIT=0 绿（4648 tests, 0 failures）。
+
 ### Batch 345（已交付）
 
 - 分支：`test/resolve-chat-clients-batch345`（已合入 main）
