@@ -3083,6 +3083,16 @@ VersionHistoryModal 相关 100% 项等。
   useFileUpload/Documents.tsx 分支残余。
 - 工作区：本地已合并 test/* 分支随各批清理，无遗留 worktree。
 
+### Batch 350（已交付）
+
+- 分支：`test/catalog-fs-roots-batch350`（已合入 main）
+- 内容：ResourceCatalog.discoverFilesystem/configuredRootPath
+  （各 10 行缺口），新建 ResourceCatalogFilesystemRootTest 6 用
+  例：file: 单文件发现、根不存在拒绝、符号链接跳过不暴露外部
+  内容、classpath 空根回退文件名、jar 位置剥离条目前缀（含嵌
+  套子路径）、不支持协议拒绝。
+- 指标：core 全量门禁 EXIT=0 绿（4667 tests, 0 failures）。
+
 ### Batch 349（已交付）
 
 - 分支：`test/sync-run-timestamp-batch349`（已合入 main）
