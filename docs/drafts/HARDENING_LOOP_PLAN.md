@@ -3083,6 +3083,18 @@ VersionHistoryModal 相关 100% 项等。
   useFileUpload/Documents.tsx 分支残余。
 - 工作区：本地已合并 test/* 分支随各批清理，无遗留 worktree。
 
+### Batch 325（已交付）
+
+- 分支：`test/principal-expiry-alert-batch325`（已合入 main）
+- 内容：ApiPrincipalExpiryAlertService.updateSamePhase +
+  dispatchNotification（合计 26 行缺口），新建
+  ApiPrincipalExpiryAlertNotificationDispatchTest 3 用例：同相
+  位活动告警 CAS 原位刷新（REFRESHED，不重复派发/不入 outbox）、
+  同相位 CAS 未命中退避重试后上抛并记 FAILURE、通知版本落后时
+  跨三通道派发且坏通道异常被吞。要点：外层兜底失败记账的相位
+  为入口初值 NONE。
+- 指标：core 全量门禁 EXIT=0 绿（4554 tests, 0 failures）。
+
 ### Batch 324（已交付）
 
 - 分支：`test/alert-payload-sanitizer-batch324`（已合入 main）
