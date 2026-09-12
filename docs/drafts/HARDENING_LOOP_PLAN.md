@@ -3083,6 +3083,17 @@ VersionHistoryModal 相关 100% 项等。
   useFileUpload/Documents.tsx 分支残余。
 - 工作区：本地已合并 test/* 分支随各批清理，无遗留 worktree。
 
+### Batch 333（已交付）
+
+- 分支：`test/slo-status-baseline-batch333`（已合入 main）
+- 内容：AlertService$SloStatus.equals（12 行）+
+  RagChatHistoryRepository.findOwnedBaseline（12 行）双目标，
+  新建 SloStatusEqualsTest 4 用例（等值哈希、自反/null/异型拒
+  绝、10 字段逐一影响相等性、默认实例等值）与
+  RagChatHistoryFindOwnedBaselineTest 3 用例（newest-first 反
+  转为时间正序、limit 钳制 1~500、核心参数守卫）。
+- 指标：core 全量门禁 EXIT=0 绿（4595 tests, 0 failures）。
+
 ### Batch 332（已交付）
 
 - 分支：`test/eligible-candidates-batch332`（已合入 main）
