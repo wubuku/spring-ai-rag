@@ -3083,6 +3083,20 @@ VersionHistoryModal 相关 100% 项等。
   useFileUpload/Documents.tsx 分支残余。
 - 工作区：本地已合并 test/* 分支随各批清理，无遗留 worktree。
 
+### Batch 310（已交付）
+
+- 分支：`test/alert-record-equals-batch310`（已合入 main）
+- 内容：AlertService$AlertRecord.equals（15 行）+ ApiKeyManagement
+  Service.generateIdempotentKey（13 行）双目标，新增
+  AlertRecordEqualsTest 5 用例（等值哈希一致、自反/null/异型拒
+  绝、12 字段逐一影响相等性、全 null 等值、metrics 按内容比较）
+  与 ApiKeyProvisioningIdempotentKeyTest 9 用例（开关关闭、账本
+  不可用、owner/hash 必填、托管过期空/过拒绝、幂等键换请求复用
+  拒绝、指纹命中回放、回放主体缺失、竞态 1 次耗尽、默认 3 次
+  耗尽）。要点：ApiKeyProvisioningFingerprint 含过期时间，指纹
+  桩必须复用传给服务的同一 request 实例。
+- 指标：core 全量门禁 EXIT=0 绿（4466 tests, 0 failures）。
+
 ### Batch 309（已交付）
 
 - 分支：`test/apikey-rotation-clamp-batch309`（已合入 main）
