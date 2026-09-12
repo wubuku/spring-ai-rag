@@ -146,4 +146,60 @@ class RagChatHistorySaveAndIndexTest {
         assertTrue(error.getMessage()
                 .contains("Failed to mark Chat content references complete"));
     }
+
+    // ── saveDurable 重载链（Batch 311）──────────────────────────────
+
+    @Test
+    void eightArgOverloadReservesEmptyReferencesAndDefaultsStatus() {
+        // 无 relatedDocumentIds/sources → 预留为空、零 SQL 预留交互。
+        when(jdbcTemplate.update(anyString(), eq(7L))).thenReturn(1);
+
+        RagChatHistory saved = repository.saveDurable(
+                PRINCIPAL, "session-1", "question", "answer",
+                null, null, null, null);
+
+        assertEquals(7L, saved.getId());
+        // turnStatus 缺省回退 COMPLETE；无引用仍完成标记。
+        assertEquals("COMPLETE", saved.getTurnStatus());
+        verify(jdbcTemplate).update(
+                contains("SET content_reference_index_complete = TRUE"),
+                eq(7L));
+        verify(jdbcTemplate, never()).batchUpdate(
+                anyString(), org.mockito.ArgumentMatchers
+                        .<List<Object[]>>any());
+    }
+
+    @Test
+    void turnIdOverloadPreservesIdentifierAndExplicitStatus() {
+        when(jdbcTemplate.update(anyString(), eq(7L))).thenReturn(1);
+        java.util.UUID turnId = java.util.UUID.randomUUID();
+
+        RagChatHistory saved = repository.saveDurable(
+                PRINCIPAL, "session-1", "question", "answer",
+                null, List.of(), "FAILED", Map.of("retry", true),
+                turnId);
+
+        assertEquals(turnId, saved.getTurnId());
+        assertEquals("FAILED", saved.getTurnStatus());
+        assertEquals(Boolean.TRUE, saved.getMetadata().get("retry"));
+        verify(jdbcTemplate).update(
+                contains("SET content_reference_index_complete = TRUE"),
+                eq(7L));
+    }
+
+    @Test
+    void durableOverloadsRejectMissingCoreArguments() {
+        assertThrows(NullPointerException.class,
+                () -> repository.saveDurable(
+                        null, "session-1", "question", "answer",
+                        null, List.of(), null, null));
+        assertThrows(NullPointerException.class,
+                () -> repository.saveDurable(
+                        PRINCIPAL, null, "question", "answer",
+                        null, List.of(), null, null));
+        assertThrows(NullPointerException.class,
+                () -> repository.saveDurable(
+                        PRINCIPAL, "session-1", null, "answer",
+                        null, List.of(), null, null));
+    }
 }
