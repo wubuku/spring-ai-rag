@@ -3083,6 +3083,16 @@ VersionHistoryModal 相关 100% 项等。
   useFileUpload/Documents.tsx 分支残余。
 - 工作区：本地已合并 test/* 分支随各批清理，无遗留 worktree。
 
+### Batch 349（已交付）
+
+- 分支：`test/sync-run-timestamp-batch349`（已合入 main）
+- 内容：DocumentSyncRunService.readOffsetDateTime（10 行缺口，
+  私有静态纯函数经反射驱动），新建
+  DocumentSyncRunReadOffsetDateTimeTest 5 用例：OffsetDateTime
+  原样返回、Timestamp/Instant → UTC 偏移、java.sql.Date → 系统
+  时区当日零点、不支持类型与 null → IllegalStateException。
+- 指标：core 全量门禁 EXIT=0 绿（4661 tests, 0 failures）。
+
 ### Batch 348（已交付）
 
 - 分支：`test/keyword-iscurrent-batch348`（已合入 main）
