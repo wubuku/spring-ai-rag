@@ -3083,17 +3083,27 @@ VersionHistoryModal 相关 100% 项等。
   useFileUpload/Documents.tsx 分支残余。
 - 工作区：本地已合并 test/* 分支随各批清理，无遗留 worktree。
 
-### Batch 301（已交付）
+### Batch 303（已交付）
 
-- 分支：`test/core-external-getbyidentity-batch301-20260912`（已
-  合入 main）
-- 内容：ExternalDocumentService.getByExternalIdentity 守卫分支
-  （15 行缺口），新建 ExternalDocumentServiceGetByIdentityTest 2
-  用例：文档缺失 → NOT_FOUND；JSON record →
-  DocumentRevisionConflictException。要点：toDetail 内部调用
-  embeddingProfileProvider.getActiveProfile() → profile.id()——
-  mock 后需 lenient stub 返回非 null EmbeddingProfile。
-- 指标：core 全量门禁 EXIT=0 绿（4350 tests, 0 failures）。
+- 分支：`test/http-tool-error-paths-batch303`（已合入 main）
+- 内容：AllowlistedHttpToolProvider$EndpointCallback#call 错误
+  路径（31 行 / 27 分支缺口，当前最大方法级缺口），新建
+  AllowlistedHttpToolProviderErrorPathsTest 23 用例：服务端上下文
+  缺失（单参调用、REQUEST/session 键缺失）、查询参数校验（必填
+  缺失/非文本、超长/ISO 控制字符）、空格路径触发 request_uri_
+  rejected、DNS 拒绝（UnknownHost/空地址数组）、响应预算（执行
+  状态缺失、预算耗尽短路、部分预留下 ResponseTooLargeException
+  与超限响应体两类 budget_exhausted 且预留全额结转）、传输异常
+  映射（HttpTimeout/Timeout→http_timeout、interrupted→http_
+  interrupted 并恢复中断标记、Connect→http_unavailable、IO/
+  Runtime/null 响应→http_failed）、null/空白 contentType 拒绝、
+  text/plain 文本透传、空/null 响应体、结果字符预算耗尽、JSON
+  数组项/节点数溢出、凭证头按环境变量附加、截止时间收敛超时/
+  无截止保持配置超时、结果序列化失败抛 ISE。要点：私有
+  ResponseTooLargeException 经反射实例化以触发专属 catch；mock
+  ObjectMapper 需放行构造期 schema 序列化（首次 writeValueAsString）。
+- 指标：core 全量门禁 EXIT=0 绿（4397 tests, 0 failures）；
+  EndpointCallback#call 缺口 31→1 行、27→5 分支。
 
 ### Batch 302（已交付）
 
