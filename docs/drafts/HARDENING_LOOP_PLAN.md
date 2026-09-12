@@ -3083,6 +3083,17 @@ VersionHistoryModal 相关 100% 项等。
   useFileUpload/Documents.tsx 分支残余。
 - 工作区：本地已合并 test/* 分支随各批清理，无遗留 worktree。
 
+### Batch 318（已交付）
+
+- 分支：`test/document-embed-stream-batch318`（已合入 main）
+- 内容：RagDocumentController.batchEmbedDocumentsStream（15 行
+  缺口），新建 RagDocumentControllerBatchEmbedStreamTest 3 用例
+  （standalone MockMvc 异步派发）：progress 按回调次序 + done
+  携带 completed 且 text/event-stream、服务 IAE → error 事件携
+  消息优雅收流、空列表/超 50 建流前 400（standalone 注册
+  BadRequestAdvice）。要点：控制器在请求线程内同步收尾 emitter。
+- 指标：core 全量门禁 EXIT=0 绿（4528 tests, 0 failures）。
+
 ### Batch 317（已交付）
 
 - 分支：`test/auth-filter-eval-case-batch317`（已合入 main）
