@@ -3083,6 +3083,18 @@ VersionHistoryModal 相关 100% 项等。
   useFileUpload/Documents.tsx 分支残余。
 - 工作区：本地已合并 test/* 分支随各批清理，无遗留 worktree。
 
+### Batch 316（已交付）
+
+- 分支：`test/document-batch-embed-batch316`（已合入 main）
+- 内容：RagDocumentController.embedBatchAsync + batchCreateAndEmbed
+  （各 16 行缺口），新建 RagDocumentControllerBatchEmbedTest 6
+  用例：ASYNC 逐文档 BATCH_EMBED 入队与响应/汇总映射、jobs 缺
+  位拒绝、缺省 SYNC 原始结果映射 + EmbedCache 审计、ids 空列
+  表/超 50 守卫、legacy 响应换算（created/embedded/skipped/
+  failed + chunks=0）、集合作用域归一（自带 id 保留、无作用域
+  落默认、request 回写）。
+- 指标：core 全量门禁 EXIT=0 绿（4516 tests, 0 failures）。
+
 ### Batch 315（已交付）
 
 - 分支：`test/collection-import-docs-batch315`（已合入 main）
