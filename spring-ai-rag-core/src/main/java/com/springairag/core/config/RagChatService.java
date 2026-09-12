@@ -553,29 +553,6 @@ public class RagChatService {
         }
     }
 
-    /**
-     * Resolve ordered ChatClient candidates: preferred model (if any) then configured fallbacks.
-     * Always includes at least the default chatClient.
-     */
-    private List<ChatClient> resolveChatClientCandidates(String model) {
-        List<ChatClient> clients = new ArrayList<>();
-        if (chatModelRouter != null) {
-            List<ChatModel> models = chatModelRouter.orderedCandidates(model);
-            for (ChatModel m : models) {
-                clients.add(ChatClient.builder(m).defaultAdvisors(sortedAdvisors).build());
-            }
-        } else if (model != null && !model.isBlank()) {
-            log.warn("Model '{}' requested but ChatModelRouter is not available — using default client", model);
-        }
-        // Always ensure default client is available as last resort
-        if (clients.isEmpty()) {
-            clients.add(this.chatClient);
-        } else if (!clients.contains(this.chatClient)) {
-            // Prefer not to compare ChatClient identity; default already covered if router empty
-        }
-        return clients;
-    }
-
     private List<ChatModelRouter.ChatModelCandidate> resolveLegacyModelCandidates(
             String model) {
         if (chatModelRouter == null) {
