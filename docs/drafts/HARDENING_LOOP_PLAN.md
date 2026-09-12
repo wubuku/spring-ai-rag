@@ -3095,6 +3095,18 @@ VersionHistoryModal 相关 100% 项等。
   mock 后需 lenient stub 返回非 null EmbeddingProfile。
 - 指标：core 全量门禁 EXIT=0 绿（4350 tests, 0 failures）。
 
+### Batch 302（已交付）
+
+- 分支：`test/core-sensitive-masking-v2-batch302-20260912`（已合
+  入 main）
+- 内容：SensitiveDataMaskingConverter 脱敏模式覆盖扩展（31 分支
+  缺口），恢复原有 40 用例并新增 16 用例：JSON secret/authorization/
+  privateKey 字段脱敏、转义 JSON 模式、URL token 参数、SQL 双引
+  号密码、AWS AccessKey、中国身份证/手机号、normal text 透传、
+  convert null/empty、KeepType PASSWORD/Bearer 检测、多模式按序
+  应用。分支覆盖 31→约 5 missed。
+- 指标：core 全量门禁 EXIT=0 绿（4358 tests, 0 failures）。
+
 ### Batch 301（已交付）
 
 - 分支：`test/core-embed-fresh-guard-batch301-20260912`（已合入
