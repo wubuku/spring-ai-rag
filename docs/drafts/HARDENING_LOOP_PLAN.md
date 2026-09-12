@@ -3083,6 +3083,19 @@ VersionHistoryModal 相关 100% 项等。
   useFileUpload/Documents.tsx 分支残余。
 - 工作区：本地已合并 test/* 分支随各批清理，无遗留 worktree。
 
+### Batch 330（已交付）
+
+- 分支：`test/mutation-namespace-dedup-batch330`（已合入 main）
+- 内容：DocumentMutationService normalizeNamespace 守卫 +
+  findDuplicate 作用域/可见性过滤（合计约 15 行缺口），新建
+  DocumentMutationNamespaceDedupGuardsTest 8 用例：空白回退
+  default、超 128/不可见 ASCII 拒绝、非默认命名空间开关、
+  COLLECTION 作用域仅同集合查重、受限密钥不可见重复被
+  SecurityException 过滤为新建、可见重复照常命中。要点：可切
+  换调用方夹具（ADMIN 无限制 vs NORMAL 受限）按用例安装请求属
+  性。
+- 指标：core 全量门禁 EXIT=0 绿（4581 tests, 0 failures）。
+
 ### Batch 329（已交付）
 
 - 分支：`test/chat-begin-trace-batch329`（已合入 main）
