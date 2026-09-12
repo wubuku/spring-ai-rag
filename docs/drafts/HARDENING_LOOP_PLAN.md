@@ -3083,6 +3083,17 @@ VersionHistoryModal 相关 100% 项等。
   useFileUpload/Documents.tsx 分支残余。
 - 工作区：本地已合并 test/* 分支随各批清理，无遗留 worktree。
 
+### Batch 342（已交付）
+
+- 分支：`test/embed-internal-batch342`（已合入 main）
+- 内容：DocumentEmbedService.embedDocumentInternal 经 worker 入
+  口 embedDocumentForJob（11 行缺口），新建
+  DocumentEmbedJobEntryTest 5 用例：成功路径自定义提交门透传至
+  持久层 8 参 replace 并在事务内校验、null 门 NPE、provider 调
+  用失败不落失败快照不替换向量（worker 语义）、校验失败错误脱
+  敏同上、缓存命中不触发提交门。
+- 指标：core 全量门禁 EXIT=0 绿（4640 tests, 0 failures）。
+
 ### Batch 341（已交付）
 
 - 分支：`test/skill-catalog-init-batch341`（已合入 main）
