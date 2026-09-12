@@ -3083,6 +3083,19 @@ VersionHistoryModal 相关 100% 项等。
   useFileUpload/Documents.tsx 分支残余。
 - 工作区：本地已合并 test/* 分支随各批清理，无遗留 worktree。
 
+### Batch 312（已交付）
+
+- 分支：`test/derivation-vector-phase-batch312`（已合入 main）
+- 内容：DerivationRepairService.applyVectorPhase 决策矩阵（16 行
+  缺口），新建 DerivationRepairVectorPhaseTest 8 用例（本地阶段
+  预置 SUCCEEDED 直达向量阶段）：PLANNED+已收敛→ALREADY_FRESH、
+  收敛中→NOOP_ALREADY_CONVERGING 回填任务 id、未收敛→排队
+  QUEUED_VECTOR、向量代次/post_local 代次/文档版本三类漂移→
+  SKIPPED_CHANGED、本地不新鲜→failItem FAILED、NOT_PLANNED→
+  REBUILT_LOCAL 且不确认写令牌。要点：apply 助手不得在用例内
+  二次覆盖 item/document 桩。
+- 指标：core 全量门禁 EXIT=0 绿（4480 tests, 0 failures）。
+
 ### Batch 311（已交付）
 
 - 分支：`test/chat-model-budget-batch311`（已合入 main）
