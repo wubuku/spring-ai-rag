@@ -3083,6 +3083,19 @@ VersionHistoryModal 相关 100% 项等。
   useFileUpload/Documents.tsx 分支残余。
 - 工作区：本地已合并 test/* 分支随各批清理，无遗留 worktree。
 
+### Batch 324（已交付）
+
+- 分支：`test/alert-payload-sanitizer-batch324`（已合入 main）
+- 内容：AlertNotificationPayloadSanitizer.create/sanitizeValue
+  （合计 26 行缺口），新建
+  AlertNotificationPayloadSanitizerLimitsTest 5 用例：超限降级
+  链（丢指标 → 截消息 512 + truncated 标记）、最小载荷仍超限
+  抛 ISE、键截断 256 与敏感键打码（smtp/webhook/authorization）、
+  秘密值模式（Bearer/sk-/rag_sk_/api_key=）打码、标量与 null
+  透传、列表 100 项截断、深度 8 嵌套 [TRUNCATED]（遍历式断
+  言）。
+- 指标：core 全量门禁 EXIT=0 绿（4551 tests, 0 failures）。
+
 ### Batch 323（已交付）
 
 - 分支：`test/pdf-content-type-batch323`（已合入 main）
