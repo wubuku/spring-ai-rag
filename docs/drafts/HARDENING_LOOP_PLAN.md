@@ -3083,6 +3083,18 @@ VersionHistoryModal 相关 100% 项等。
   useFileUpload/Documents.tsx 分支残余。
 - 工作区：本地已合并 test/* 分支随各批清理，无遗留 worktree。
 
+### Batch 344（已交付）
+
+- 分支：`test/chat-attach-diag-batch344`（已合入 main）
+- 内容：RagChatService.attachDiagnostics（13 行缺口），新建
+  RagChatServiceAttachDiagnosticsTest 4 用例（公开 scoped chat
+  入口驱动）：诊断关闭返回原命令实例、诊断开启 createSession +
+  withTraceSession 派生命令贯通执行链且会话 scope 摘要非空、
+  attachScope 抛错降级返回原命令主流程照常、命令自带
+  RetrievalFilters 同实例透传。要点：真实 RetrievalTraceSession
+  用 scopeSummary() 可观察断言替代 mock verify。
+- 指标：core 全量门禁 EXIT=0 绿（4645 tests, 0 failures）。
+
 ### Batch 343（已交付）
 
 - 分支：`test/ensure-current-lambda-batch343`（已合入 main）
