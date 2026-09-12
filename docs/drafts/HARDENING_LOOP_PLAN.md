@@ -3083,6 +3083,20 @@ VersionHistoryModal 相关 100% 项等。
   useFileUpload/Documents.tsx 分支残余。
 - 工作区：本地已合并 test/* 分支随各批清理，无遗留 worktree。
 
+### Batch 311（已交付）
+
+- 分支：`test/chat-model-budget-batch311`（已合入 main）
+- 内容：ModeAwareChatClientFactory.budgetedModelFor（16 行）+
+  RagChatHistoryRepository.saveDurable 重载链（14 行）双目标。
+  新建 ModeAwareChatClientBudgetedModelTest 3 用例（候选限额贯
+  通用量事件 modelRef/purpose/costUnit、缺省回退配置上下文、
+  SUMMARY 目的登记 summary 调用）；扩展
+  RagChatHistorySaveAndIndexTest 3 用例（8 参重载零预留交互 +
+  turnStatus 缺省 COMPLETE、turnId 重载保留标识与显式状态、三
+  参 NPE 守卫）。要点：mock ChatExecutionBudget 需打桩
+  attribution(anyInt)；10 参重载不校验 aiResponse。
+- 指标：core 全量门禁 EXIT=0 绿（4472 tests, 0 failures）。
+
 ### Batch 310（已交付）
 
 - 分支：`test/alert-record-equals-batch310`（已合入 main）
