@@ -3083,6 +3083,19 @@ VersionHistoryModal 相关 100% 项等。
   useFileUpload/Documents.tsx 分支残余。
 - 工作区：本地已合并 test/* 分支随各批清理，无遗留 worktree。
 
+### Batch 313（已交付）
+
+- 分支：`test/collection-provisioning-batch313`（已合入 main）
+- 内容：CollectionProvisioningService.createOrReplay 决策矩阵
+  （15 行缺口），新建 CollectionProvisioningCreateOrReplayTest
+  12 用例：开关关闭/台账不可用/参数守卫、循环内
+  DataAccessException 与嵌套数据访问 RuntimeException 映射不可
+  用、纯运行时原样重抛、竞态耗尽后台账回收（指纹命中重放
+  replay=true、DUPLICATE 复现重抛、无既有报 Unable to resolve、
+  回收阶段台账故障）、成功建集合落台账（真实事务模板 + mocked
+  PlatformTransactionManager）、回放指纹冲突重抛。
+- 指标：core 全量门禁 EXIT=0 绿（4492 tests, 0 failures）。
+
 ### Batch 312（已交付）
 
 - 分支：`test/derivation-vector-phase-batch312`（已合入 main）
