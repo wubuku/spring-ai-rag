@@ -3083,6 +3083,18 @@ VersionHistoryModal 相关 100% 项等。
   useFileUpload/Documents.tsx 分支残余。
 - 工作区：本地已合并 test/* 分支随各批清理，无遗留 worktree。
 
+### Batch 322（已交付）
+
+- 分支：`test/fingerprint-openai-batch322`（已合入 main）
+- 内容：ChatRequestFingerprint.openAiRequest（14 行缺口），新建
+  ChatRequestFingerprintOpenAiTest 5 用例：缺省值回退 + 角色归
+  一 + 指纹稳定 + model 敏感、声明作用域/过滤/document_ids 排
+  序规范化、PLAIN 模式三类检索声明拒绝、PLAIN 无声明放行、
+  null 请求与 null 消息容错。要点：OpenAI DTO 为 snake_case 绑
+  定，Filters 仅绑定 metadata_contains/payload_contains（其余
+  键入 additionalProperties 不序列化）。
+- 指标：core 全量门禁 EXIT=0 绿（4543 tests, 0 failures）。
+
 ### Batch 321（已交付）
 
 - 分支：`test/embed-progress-chain-batch321`（已合入 main）
