@@ -3083,6 +3083,16 @@ VersionHistoryModal 相关 100% 项等。
   useFileUpload/Documents.tsx 分支残余。
 - 工作区：本地已合并 test/* 分支随各批清理，无遗留 worktree。
 
+### Batch 341（已交付）
+
+- 分支：`test/skill-catalog-init-batch341`（已合入 main）
+- 内容：RuntimeSkillCatalog.initialize（11 行缺口），新建
+  RuntimeSkillCatalogInitializeTest 4 用例：技能禁用 → 空健康
+  快照零代次、locations 未配置同上、failFast=false 资源发现失
+  败 → 不健康降级快照零技能、跨位置重复 Skill 名 ISE。要点：
+  failFast=true 时异常直接抛出，false 时收敛为不健康快照。
+- 指标：core 全量门禁 EXIT=0 绿（4635 tests, 0 failures）。
+
 ### Batch 340（已交付）
 
 - 分支：`test/prompt-planner-turns-batch340`（已合入 main）
