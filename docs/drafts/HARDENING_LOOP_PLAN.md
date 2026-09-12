@@ -3083,6 +3083,16 @@ VersionHistoryModal 相关 100% 项等。
   useFileUpload/Documents.tsx 分支残余。
 - 工作区：本地已合并 test/* 分支随各批清理，无遗留 worktree。
 
+### Batch 339（已交付）
+
+- 分支：`test/keyword-index-current-batch339`（已合入 main）
+- 内容：KeywordIndexPersistenceService.isCurrent（12 行缺口，
+  经 public hasFreshLocalIndex 驱动，未注入完整性仓储走 JDBC
+  双查），新建 KeywordIndexFreshnessTest 6 用例：状态行+计数一
+  致 → 新鲜、状态行缺失/计数不一致/计数 null/数据访问异常 →
+  非新鲜、文档基础字段缺失短路。
+- 指标：core 全量门禁 EXIT=0 绿（4627 tests, 0 failures）。
+
 ### Batch 338（已交付）
 
 - 分支：`test/batch-doc-coordinator-batch338`（已合入 main）
