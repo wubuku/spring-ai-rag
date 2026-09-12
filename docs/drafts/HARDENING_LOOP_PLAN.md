@@ -3083,6 +3083,17 @@ VersionHistoryModal 相关 100% 项等。
   useFileUpload/Documents.tsx 分支残余。
 - 工作区：本地已合并 test/* 分支随各批清理，无遗留 worktree。
 
+### Batch 334（已交付）
+
+- 分支：`test/resource-catalog-batch334`（已合入 main）
+- 内容：ResourceCatalog.discoverJarFile/relativePath（各 11 行
+  缺口），新建 ResourceCatalogJarGuardTest 4 用例（@TempDir 真
+  实 JAR）：缺 '!/' 条目前缀拒绝、'..' 前缀不安全拒绝、JAR 内
+  文件数超 maxFiles 中止、子目录条目保持相对子路径且扩展名过
+  滤生效。要点：目录层包装内层异常为 'Failed to load ... root'，
+  断言沿 cause 链匹配消息。
+- 指标：core 全量门禁 EXIT=0 绿（4599 tests, 0 failures）。
+
 ### Batch 333（已交付）
 
 - 分支：`test/slo-status-baseline-batch333`（已合入 main）
