@@ -3083,6 +3083,17 @@ VersionHistoryModal 相关 100% 项等。
   useFileUpload/Documents.tsx 分支残余。
 - 工作区：本地已合并 test/* 分支随各批清理，无遗留 worktree。
 
+### Batch 331（已交付）
+
+- 分支：`test/openai-compat-chat-batch331`（已合入 main）
+- 内容：OpenAiCompatibilityController.chatCompletions 的
+  claim 后重放分支（13 行缺口），新建
+  OpenAiCompatibilityClaimReplayTest 2 用例：JSON 传输 claim
+  重放（快照应答 + Turn-Id/Replay 头 + 零执行服务触达）、SSE
+  传输 claim 重放（快照流）。两用例均经
+  mapFromExecutionSnapshot 路径（executionSnapshot 非空）。
+- 指标：core 全量门禁 EXIT=0 绿（4583 tests, 0 failures）。
+
 ### Batch 330（已交付）
 
 - 分支：`test/mutation-namespace-dedup-batch330`（已合入 main）
