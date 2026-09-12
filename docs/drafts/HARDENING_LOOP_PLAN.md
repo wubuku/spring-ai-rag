@@ -3083,6 +3083,17 @@ VersionHistoryModal 相关 100% 项等。
   useFileUpload/Documents.tsx 分支残余。
 - 工作区：本地已合并 test/* 分支随各批清理，无遗留 worktree。
 
+### Batch 335（已交付）
+
+- 分支：`test/tool-policy-callback-batch335`（已合入 main）
+- 内容：RagChatToolRegistry.PolicyToolCallback#call（12 行缺
+  口），新建 RagChatToolPolicyCallbackCallTest 6 用例（经注册表
+  真实包装获得私有回调）：单参入口拒绝、ToolContext 缺 REQUEST
+  键拒绝、每名调用预算耗尽短路 tool_call_policy_exhausted、截止
+  时间已过取消并返回 tool_timeout、预算内透传委托结果、委托抛
+  错降级 tool_execution_failed。
+- 指标：core 全量门禁 EXIT=0 绿（4605 tests, 0 failures）。
+
 ### Batch 334（已交付）
 
 - 分支：`test/resource-catalog-batch334`（已合入 main）
