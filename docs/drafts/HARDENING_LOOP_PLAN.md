@@ -3083,6 +3083,17 @@ VersionHistoryModal 相关 100% 项等。
   useFileUpload/Documents.tsx 分支残余。
 - 工作区：本地已合并 test/* 分支随各批清理，无遗留 worktree。
 
+### Batch 336（已交付）
+
+- 分支：`test/json-record-validate-batch336`（已合入 main）
+- 内容：JsonRecordService.validateRequest 校验矩阵（12 行缺
+  口），新建 JsonRecordValidateRequestTest 7 用例：null 请求、
+  集合 id 空值/非正值、externalId 空/超 255、title 空/超 255、
+  retrievalText 空/超配置上限、payload null/JSON null/超字节预
+  算、source 超 255。要点：upsert 先 resolveRequestCollection，
+  null 集合且无键时异常来自集合解析而非正值校验。
+- 指标：core 全量门禁 EXIT=0 绿（4612 tests, 0 failures）。
+
 ### Batch 335（已交付）
 
 - 分支：`test/tool-policy-callback-batch335`（已合入 main）
