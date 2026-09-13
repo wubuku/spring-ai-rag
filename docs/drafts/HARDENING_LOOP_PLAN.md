@@ -3357,6 +3357,18 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 385（规划中）
+
+- 目标：①RagDocumentController embedStream/其余簇（513-642、
+  1181-1478 段扫描后选簇）；②ApiKeyManagementService 剩余
+  （918-1376 段：notify/生命周期/审计类方法）择辅。
+- 备选：RagChatController keyed JSON 路径残余、
+  upsertSyncRunItem 更深分支、JsonRecordService 后段收尾。
+- 候选技术债：RetryConfig 的 retryOnServiceUnavailable 开关被
+  通用 5xx 分支遮蔽（生产行为变更需专项批次）。
+- 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
+  性分支→--no-ff 合并 main→账本→清理。
+
 ### Batch 384（已交付）
 
 - 分支：`test/batchcreate-embed-batch384`（已合入 main）
