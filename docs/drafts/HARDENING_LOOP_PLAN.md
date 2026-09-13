@@ -3176,6 +3176,19 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 371（规划中）
+
+- 目标：①RagSearchController（8 行）；②BudgetedChatModel
+  （26 行，工具调用预算包装模型的收缩/异常分支残余）。
+- 备选：RagChatController（50 行）、JsonRecordService（87 行）、
+  ChatTurnOperationService（85 行）、DocumentMutationService
+  （85 行）、ApiKeyManagementService（约 88 行残余）、
+  RagDocumentController（108 行）。
+- 候选技术债：RetryConfig 的 retryOnServiceUnavailable 开关被
+  通用 5xx 分支遮蔽（生产行为变更需专项批次）。
+- 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
+  性分支→--no-ff 合并 main→账本→清理。
+
 ### Batch 370（已交付）
 
 - 分支：`test/openapi-provisioning-batch370`（已合入 main）
