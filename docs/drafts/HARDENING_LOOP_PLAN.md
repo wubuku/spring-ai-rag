@@ -3307,6 +3307,19 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 380（已交付）
+
+- 分支：`test/mutation-longtail-batch380`（已合入 main）
+- 内容：DocumentMutationService 对账墓碑（3 用例，新建
+  DocumentMutationReconcileTest）：①reconcileMissingExternal 一
+  票否决矩阵——文档缺失、非外部文档（无 externalId）、无
+  sourceRevision、已禁用、快照开始后代际较新 → 全部 false 且不
+  落库；②合格文档墓碑写入——enabled=false、sourceDeletedAt、
+  deletionOrigin=RECONCILIATION、reconciliationTombstoneRunId 绑
+  定 runId、TOMBSTONE 版本记录、markNotRequested + 取消活跃任务。
+- 状态：单类 3 用例绿（一次全绿）；core 全量门禁 EXIT=0
+  （4866 tests）。
+
 ### Batch 379（已交付）
 
 - 分支：`test/mutation-tombstone-batch379`（已合入 main）
