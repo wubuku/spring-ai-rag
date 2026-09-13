@@ -3083,6 +3083,24 @@ VersionHistoryModal 相关 100% 项等。
   useFileUpload/Documents.tsx 分支残余。
 - 工作区：本地已合并 test/* 分支随各批清理，无遗留 worktree。
 
+### Batch 358（已交付）
+
+- 分支：`test/embed-repo-sweep2-batch358`（已合入 main）
+- 内容：EmbeddingJobRepository 清扫第二扫（9 用例）：①claim 取
+  消/失败两段 UPDATE..RETURNING id 行映射真实执行 + 回收 job 逐
+  个刷新 state；②cancel 命中刷新/空行空 Optional 双分支；③
+  findActive/findCurrentActive 首行返回 + 5 参绑定顺序；④
+  allocateGeneration 6 参绑定 + null→1 回退；⑤markNotRequested
+  触发 cancelSuperseded（回退代际 1）；⑥claimCommitAllowed CAS
+  真假 + 租约秒下限 30（行映射常量 1 真实执行）；⑦
+  updateDocumentProcessing 绑定；⑧columnOrNull/longColumnOrZero
+  的 SQLException 吞并归 null/0；⑨listPage 三过滤器 count+item
+  双绑定（pageSize≤200、offset≥0）。
+- 状态：单类 28 用例绿；core 全量门禁 EXIT=0（4711 tests）。
+- 插曲：本批提交一度直接落在 main（忘建特性分支），按整形方法
+  `git branch <name> && git reset --hard <prev>` 挂回特性分支后
+  正常合并。
+
 ### Batch 357（已交付）
 
 - 分支：`test/embed-repo-sweep1-batch357`（已合入 main）
