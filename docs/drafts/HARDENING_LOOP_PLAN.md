@@ -3257,6 +3257,21 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 376（已交付）
+
+- 分支：`test/chat-keyed-json-batch376`（已合入 main）
+- 内容：
+  - RagChatController（3 用例，新建
+    RagChatControllerNativeSnapshotTest，反射驱动
+    nativeSnapshotEmitter）：无 claim/trace 完整事件链；空
+    answer/sources 跳过；keyed claim 写 X-RAG-Turn-Id 与
+    X-RAG-Idempotent-Replay 头（done.turnId 取操作实体）。
+  - JsonRecordService 第一扫前段（4 用例，新建
+    JsonRecordServiceFrontTest）：batchUpsert 空/null 列表、超
+    maxBatchSize、载荷超 maxBatchPayloadBytes 三守卫；六个可选
+    协作对象 setter 装配冒烟。
+- 状态：单类 3+4 用例绿；core 全量门禁 EXIT=0（4847 tests）。
+
 ### Batch 375（已交付）
 
 - 分支：`test/chatcontroller-jsonrecord-batch375`（已合入 main）
