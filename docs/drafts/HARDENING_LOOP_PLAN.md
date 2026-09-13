@@ -3176,6 +3176,21 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 370（已交付）
+
+- 分支：`test/openapi-provisioning-batch370`（已合入 main）
+- 内容：
+  - OpenApiConfig（3 用例，新建 OpenApiConfigExampleCustomizerTest）：
+    exampleResponseCustomizer 对全部 9 个已知 opId 注入表驱动示例
+    （200/201 响应码 + mediaType + default example + object schema，
+    覆盖 switch 全 case 与 ApiResponse/Content 缺失创建分支）；无
+    opId/无 responses 的操作安全跳过；已有 200 条目复用（追加内
+    容而非重建）。
+  - ApiKeyProvisioningOperation（1 用例，新建
+    ApiKeyProvisioningOperationTest）：实体 setter/getter 全字段
+    回环与初始 null 状态。
+- 状态：单类 3+1 用例绿；core 全量门禁 EXIT=0（4806 tests）。
+
 ### Batch 369（已交付）
 
 - 分支：`test/authfilter-openapi-batch369`（已合入 main）
