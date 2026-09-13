@@ -3114,6 +3114,29 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 366（已交付）
+
+- 分支：`test/retry-budget-batch366`（已合入 main）
+- 内容：
+  - RetryConfig（可测性小重构 + 9 用例，新建
+    RetryConfigClassificationTest）：分类器 lambda 提取为包私有
+    static exceptionClassifierRetryPolicy(props)（Bean 行为不变）；
+    分类矩阵直接驱动策略 canRetry——禁用、读超时、读超时回退通
+    用开关、连接超时、通用网络错误、503、其他 5xx、429、400/401。
+  - BudgetedToolCallingManager（6 用例，新建
+    BudgetedToolCallingManagerResidualTest）：双参构造 fallback
+    钳制、resolveToolDefinitions 委派、null 响应与无工具调用回退、
+    无 options 提示词跳过预算、null 委派结果零结算、无工具响应
+    消息/null 条目透传与空串零计费。
+- 重要发现（行为注记）：retryOnServiceUnavailable=false 后 503
+  仍可重试——分类器里通用 `status >= 500` 分支在 503 专属分支
+  之后再次命中，专属开关被遮蔽（现状语义已断言；如需真正可关
+  需后续批次改生产逻辑）。
+- 教训：不要用 retryTemplate.execute 驱动分类断言——首轮无异常
+  时分类器返回 never-retry 与 backoff 组合会产生超长重试循环
+  （曾致 surefire 挂起 18 分钟，jstack 定位后改直接驱动策略）。
+- 状态：单类 9+6 用例绿；core 全量门禁 EXIT=0（4775 tests）。
+
 ### Batch 365（已交付）
 
 - 分支：`test/jsonsearch-guards-batch365`（已合入 main）
