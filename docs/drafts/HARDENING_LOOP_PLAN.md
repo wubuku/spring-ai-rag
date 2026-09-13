@@ -3369,6 +3369,19 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 385（已交付）
+
+- 分支：`test/remaining-gaps-batch385`（已合入 main）
+- 内容：ApiKeyManagementService key 校验与 last-used（4 用例，
+  新建 ApiKeyManagementServiceKeyValidationTest）：validateKey 对
+  null/空白/无前缀/未知裸 key 返回 null；已知裸 key 返回
+  principalId；touchLastUsed 的 DataAccessException 容错；5 分钟
+  节流缓存（times(1) 验证）。
+- 要点：AuthenticationProjection mock 需全字段 stub——
+  capabilities 仅接受 null/RAG_READ/FULL_SERIALIZED（其余
+  fail-closed 抛 InvalidPersistedCapabilitiesException）。
+- 状态：单类 4 用例绿；core 全量门禁 EXIT=0（4884 tests）。
+
 ### Batch 384（已交付）
 
 - 分支：`test/batchcreate-embed-batch384`（已合入 main）
