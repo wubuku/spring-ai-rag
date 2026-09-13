@@ -3083,6 +3083,79 @@ VersionHistoryModal 相关 100% 项等。
   useFileUpload/Documents.tsx 分支残余。
 - 工作区：本地已合并 test/* 分支随各批清理，无遗留 worktree。
 
+### Batch 353（已交付）
+
+- 分支：`test/relocate-apply-update-batch353`（已合入 main）
+- 内容：DocumentRelocationService lambda$relocate$0（条件 UPDATE
+  的 PreparedStatementSetter，10 行），新建
+  DocumentRelocationApplyUpdateTest 1 用例：stub CAS 查询捕获
+  setter 并真实执行，逐参数断言 9 列绑定（目标集合/代次/文档
+  id/源集合/命名空间/外部 id/来源修订/版本/文档修订），执行
+  RETURNING 行映射。要点：既有 CAS 桩仅返回罐装列表，setter 主
+  体从未执行（虚假覆盖），本批改为 thenAnswer 内真实调用。
+- 指标：core 全量门禁 EXIT=0 绿（4679 tests, 0 failures）。
+
+### Batch 352（已交付）
+
+- 分支：`test/authorize-rotation-batch352`（已合入 main）
+- 内容：ApiKeyManagementService.authorizeRotation 授权矩阵（10
+  行缺口，经 prepareRotation 入口驱动），新建
+  ApiKeyRotationAuthorizeMatrixTest 6 用例：environmentRoot 豁
+  免、缺失调用方/无主体拒绝、ADMIN 越权豁免、NORMAL 异主体拒
+  绝、NORMAL prepare 凭证不一致拒绝。要点：管理写 0 早退保持
+  用例轻量。
+- 指标：core 全量门禁 EXIT=0 绿（4678 tests, 0 failures）。
+
+### Batch 351（已交付）
+
+- 分支：`test/eval-answer-quality-batch351`（已合入 main）
+- 内容：RetrievalEvaluationServiceImpl.evaluateAnswerQuality（10
+  行缺口），新建 RetrievalEvaluationAnswerQualityTest 5 用例：
+  无执行器同步回退解析评审 JSON、执行器路径解析、评审超时中性
+  3/3/3 REVISION 降级、执行失败降级、畸形响应解析失败回退默认。
+- 指标：core 全量门禁 EXIT=0 绿（4672 tests, 0 failures）。
+
+### Batch 350（已交付）
+
+- 分支：`test/catalog-fs-roots-batch350`（已合入 main）
+- 内容：ResourceCatalog.discoverFilesystem/configuredRootPath
+  （各 10 行缺口），新建 ResourceCatalogFilesystemRootTest 6 用
+  例：file: 单文件发现、根不存在拒绝、符号链接跳过不暴露外部
+  内容、classpath 空根回退文件名、jar 位置剥离条目前缀（含嵌
+  套子路径）、不支持协议拒绝。
+- 指标：core 全量门禁 EXIT=0 绿（4667 tests, 0 failures）。
+
+### Batch 349（已交付）
+
+- 分支：`test/sync-run-timestamp-batch349`（已合入 main）
+- 内容：DocumentSyncRunService.readOffsetDateTime（10 行缺口，
+  私有静态纯函数经反射驱动），新建
+  DocumentSyncRunReadOffsetDateTimeTest 5 用例：OffsetDateTime
+  原样返回、Timestamp/Instant → UTC 偏移、java.sql.Date → 系统
+  时区当日零点、不支持类型与 null → IllegalStateException。
+- 指标：core 全量门禁 EXIT=0 绿（4661 tests, 0 failures）。
+
+### Batch 348（已交付）
+
+- 分支：`test/keyword-iscurrent-batch348`（已合入 main）
+- 内容：①死代码移除——KeywordIndexPersistenceService.isCurrent
+  （12 行）全仓零引用（新鲜度逻辑内联于 hasFreshLocalIndex），
+  移除 38 行并回归验证。②新建
+  CollectionIdentityResolverBeginActiveWritesTest 4 用例：空/null
+  集合零交互、去重去 null 按 id 升序预留且令牌携带版本递增、
+  CAS 未命中与停用集合抛 ObjectOptimisticLockingFailure、非正
+  集合 id IAE。
+- 指标：core 全量门禁 EXIT=0 绿（4656 tests, 0 failures）。
+
+### Batch 347（已交付）
+
+- 分支：`test/branch-stage-batch347`（已合入 main）
+- 内容：RetrievalBranchStage.toMap 与状态谓词（10 行缺口），
+  新建 RetrievalBranchStageTest 4 用例：全字段映射且不可变、空
+  白 errorCode 省略/非空白保留、succeeded/timedOut/failed 三态
+  谓词、分支与状态常量。
+- 指标：core 全量门禁 EXIT=0 绿（4652 tests, 0 failures）。
+
 ### Batch 346（已交付）
 
 - 分支：`test/coordinator-create-batch346`（已合入 main）
