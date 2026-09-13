@@ -3232,6 +3232,20 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 374（已交付）
+
+- 分支：`test/apikey-rotate-chat-batch374`（已合入 main）
+- 内容：ApiKeyManagementService rotate 尾部与 updatePolicy 守卫
+  （9 用例，新建 ApiKeyManagementServiceRotatePolicyTest）：rotate
+  未知 key null/管理锁失败 null/PENDING 冲突/disable 计数不符/
+  成功保存替换凭据；列表查询空集回归；updatePolicy 锁失败 null/
+  principal 缺失 null/版本冲突 POLICY_VERSION_CONFLICT/非 root
+  ADMIN 过期变更 BAD_REQUEST。
+- 要点：cleanup 与轮换检查共享同一 PENDING 查询——连续
+  thenReturn(empty, present) 区分两次调用。
+- 范围调整：RagChatController（50 行）挪至 Batch 375。
+- 状态：单类 9 用例绿；core 全量门禁 EXIT=0（4834 tests）。
+
 ### Batch 373（已交付）
 
 - 分支：`test/apikey-sourcedelete-batch373`（已合入 main）
