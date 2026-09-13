@@ -420,6 +420,18 @@ class EmbeddingJobRepositoryTest {
     }
 
     @Test
+    void markNotRequestedUsesReturnedGenerationWhenPresent() {
+        // RETURNING 非 null：代际原样返回并用于取消旧代。
+        when(jdbcTemplate.queryForObject(anyString(), eq(Long.class),
+                any(Object[].class))).thenReturn(7L);
+        when(jdbcTemplate.update(anyString(), any(Object[].class))).thenReturn(1);
+
+        assertEquals(7L, repository.markNotRequested(11L, 7L, "hash-1", "v2"));
+        verify(jdbcTemplate).update(contains("Superseded by a newer"),
+                eq(11L), eq(7L), eq(7L));
+    }
+
+    @Test
     void claimCommitAllowedReflectsCasOutcomeAndFloorsLease() {
         ArgumentCaptor<Object[]> args = ArgumentCaptor.forClass(Object[].class);
         when(jdbcTemplate.query(anyString(),
