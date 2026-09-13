@@ -3189,6 +3189,19 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 371（已交付）
+
+- 分支：`test/search-budget-batch371`（已合入 main）
+- 内容：RagSearchController legacy 直搜路径（2 用例，新建
+  RagSearchControllerLegacyPathTest）：①集合过滤解析文档 id 为
+  空时直接空 SearchResponse（186-188 行短路）；②8 参 search 重
+  载委派主入口并返回计数（215 行委派）。
+- 范围调整：BudgetedChatModel（26→32 行）挪至 Batch 372——体量
+  需整批。
+- 要点：SearchResponse 是 record（total() 访问器）；
+  resolveDocumentIds 用 findIdsByCollectionIdIn。
+- 状态：单类 2 用例绿；core 全量门禁 EXIT=0（4808 tests）。
+
 ### Batch 370（已交付）
 
 - 分支：`test/openapi-provisioning-batch370`（已合入 main）
