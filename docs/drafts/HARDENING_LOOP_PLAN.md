@@ -3103,6 +3103,18 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 364（已交付）
+
+- 分支：`test/trace-context-batch364`（已合入 main）
+- 内容：RequestTraceFilter 上下文解析残余（5 用例，新建
+  RequestTraceFilterContextTest）：①外部 X-Trace-Id +
+  spanIdEnabled → 生成 16 位 spanId 注入 MDC（链内捕获——过滤器
+  出链即清 MDC）；②合法 W3C traceparent 透传 traceId/spanId；③
+  非法 traceparent 回退生成 12 字符 id，w3cFormat 下仍外发
+  traceparent（内嵌生成的 id）；④中段采样率 0.5 随机分支；⑤
+  configure 四个配置访问器。
+- 状态：单类 5 用例绿；core 全量门禁 EXIT=0（4757 tests）。
+
 ### Batch 363（已交付）
 
 - 分支：`test/gap-sweep-batch363`（已合入 main）
