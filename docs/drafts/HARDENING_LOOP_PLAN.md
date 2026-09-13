@@ -3320,6 +3320,22 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 381（已交付）
+
+- 分支：`test/jsonrecord-tombstone-batch381`（已合入 main）
+- 内容：JsonRecordService sourceDelete 委派 + tombstoneExternal
+  矩阵（5 用例，新建 JsonRecordDeleteTombstoneTest）：①
+  sourceDelete 在 mutation service 缺失时 ISE；②委派透传
+  jsonRecord=true 与全部参数；③tombstone 已墓碑同 revision →
+  UNCHANGED 幂等；④enabled 文档同 revision →
+  DocumentRevisionConflictException；⑤新 revision 墓碑写入
+  （enabled=false/新 sourceRevision/deletionOrigin=SOURCE/
+  DELETED 响应 + lifecycle 读取）。
+- 要点：allocateSourceSequence 依赖 jdbcTemplate update + 
+  queryForObject(Long) stub；墓碑尾部回读需 saveAndFlush 与
+  findById(41) stub。
+- 状态：单类 5 用例绿；core 全量门禁 EXIT=0（4871 tests）。
+
 ### Batch 380（已交付）
 
 - 分支：`test/mutation-longtail-batch380`（已合入 main）
