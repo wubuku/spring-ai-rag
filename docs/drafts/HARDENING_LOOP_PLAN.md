@@ -3421,6 +3421,20 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 389（已交付）
+
+- 分支：`test/jsonrecord-search-batch389`（已合入 main）
+- 内容：JsonRecordService search 详细管道（4 用例，新建
+  JsonRecordServiceSearchPipelineTest）：①rerank 正常路径——重
+  排序生效 + SUCCESS 阶段标记 + mapKeys 回填 collectionKey；②
+  limit 截断（候选 3 个 maxResults=2 收满即 break，经 rerank 路
+  径驱动）；③scopeAllows 过滤禁用/类型不符文档；④jsonRecordScope
+  —— text 类型授权范围 → noMatches（matchNone），兼容类型强制
+  改写 json-record 并保留 SELECTED 集合过滤。
+- 要点：collectionFilter 为 RetrievalScope.CollectionFilter 内
+  部枚举（SELECTED），非 api.enums.CollectionScopeMode。
+- 状态：单类 4 用例绿；core 全量门禁 EXIT=0（4899 tests）。
+
 ### Batch 388（已交付）
 
 - 分支：`test/jsonrecord-retry-batch388`（已合入 main）
