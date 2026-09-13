@@ -3189,6 +3189,21 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 372（规划中）
+
+- 目标：BudgetedChatModel（26→32 行缺口：44/48/58/62/73-79/93/
+  106/128/130/132/135/177/238/256/264/290-311/316——预算包装模型
+  的调用委派、收缩与异常分支；已有 BudgetedChatModelTest 与
+  ModeAwareChatClientBudgetedModelTest 可扩展）。
+- 备选：RagChatController（50 行）、JsonRecordService（87 行）、
+  ChatTurnOperationService（85 行）、DocumentMutationService
+  （85 行）、ApiKeyManagementService（约 88 行残余）、
+  RagDocumentController（108 行）。
+- 候选技术债：RetryConfig 的 retryOnServiceUnavailable 开关被
+  通用 5xx 分支遮蔽（生产行为变更需专项批次）。
+- 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
+  性分支→--no-ff 合并 main→账本→清理。
+
 ### Batch 371（已交付）
 
 - 分支：`test/search-budget-batch371`（已合入 main）
