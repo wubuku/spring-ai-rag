@@ -3307,6 +3307,19 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 381（规划中）
+
+- 目标：①JsonRecordService 第三扫（后段 persist/embedding/
+  sourceDelete 剩余 350-1059 中未覆盖簇）；②tombstoneExternal
+  （924-1010，同 DocumentMutationService）择辅。
+- 备选：RagDocumentController（108 行）、ApiKeyManagementService
+  剩余（918-1376 段）、RagChatController keyed JSON 路径残余、
+  upsertSyncRunItem 深分支（836-872）。
+- 候选技术债：RetryConfig 的 retryOnServiceUnavailable 开关被
+  通用 5xx 分支遮蔽（生产行为变更需专项批次）。
+- 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
+  性分支→--no-ff 合并 main→账本→清理。
+
 ### Batch 380（已交付）
 
 - 分支：`test/mutation-longtail-batch380`（已合入 main）
