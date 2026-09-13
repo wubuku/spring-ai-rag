@@ -3114,6 +3114,21 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 367（规划中）
+
+- 目标：小档续扫——①EmbeddingDispatchService（12 行：88/98/123/
+  152/162/177/189/206/232/241-244）；②HttpRerankProvider（8 行）
+  或 SlowQueryMetricsService（8 行）或
+  AlertNotificationOutboxService（8 行）择一。
+- 备选：ApiKeyAuthFilter（8 行）、RagSearchController（8 行）、
+  OpenApiConfig（9 行）、ApiKeyProvisioningOperation（9 行）、
+  BudgetedChatModel（26 行）。
+- 候选技术债（低优先，需专项批次）：RetryConfig 的
+  retryOnServiceUnavailable 开关被通用 5xx 分支遮蔽——如需可关
+  闭语义应调整分类器分支顺序（生产行为变更，需回归测试）。
+- 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
+  性分支→--no-ff 合并 main→账本→清理。
+
 ### Batch 366（已交付）
 
 - 分支：`test/retry-budget-batch366`（已合入 main）
