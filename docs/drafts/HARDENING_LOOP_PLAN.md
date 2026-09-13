@@ -3283,6 +3283,22 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 378（已交付）
+
+- 分支：`test/turnop-mutation-batch378`（已合入 main）
+- 内容：ChatTurnOperationService 生命周期（9 用例，新建
+  ChatTurnOperationServiceLifecycleTest）：①replay null/非
+  replay claim 拒绝；②存储快照恢复 + turnId 回写；③非法快照 →
+  INTERNAL_ERROR；④commandForClaim 非键控透传；⑤completeOpenAi
+  非键控原样返回；⑥fail null/非键控/终态跳过；⑦IN_PROGRESS +
+  lease 走协调器 failOperation（反射 3 参 Claim 注入 lease）；⑧
+  无协调器走仓储 completeFailure；⑨release null 容忍 + 租约释放。
+- 要点：ChatTurnOperation.record 第 16 分量为 responsePayload；
+  Status 无 COMPLETED（成功为 SUCCEEDED）；replay 存储的是
+  api.dto.ChatResponse（非 Spring AI 类型）；Claim 3 参构造私
+  有须反射；LeaseHandle 用包私有 stateless 工厂。
+- 状态：单类 9 用例绿；core 全量门禁 EXIT=0（4860 tests）。
+
 ### Batch 377（已交付）
 
 - 分支：`test/jsonrecord-sweep2-batch377`（已合入 main）
