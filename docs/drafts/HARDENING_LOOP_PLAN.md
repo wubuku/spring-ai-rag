@@ -3083,6 +3083,17 @@ VersionHistoryModal 相关 100% 项等。
   useFileUpload/Documents.tsx 分支残余。
 - 工作区：本地已合并 test/* 分支随各批清理，无遗留 worktree。
 
+### Batch 352（已交付）
+
+- 分支：`test/authorize-rotation-batch352`（已合入 main）
+- 内容：ApiKeyManagementService.authorizeRotation 授权矩阵（10
+  行缺口，经 prepareRotation 入口驱动），新建
+  ApiKeyRotationAuthorizeMatrixTest 6 用例：environmentRoot 豁
+  免、缺失调用方/无主体拒绝、ADMIN 越权豁免、NORMAL 异主体拒
+  绝、NORMAL prepare 凭证不一致拒绝。要点：管理写 0 早退保持
+  用例轻量。
+- 指标：core 全量门禁 EXIT=0 绿（4678 tests, 0 failures）。
+
 ### Batch 351（已交付）
 
 - 分支：`test/eval-answer-quality-batch351`（已合入 main）
