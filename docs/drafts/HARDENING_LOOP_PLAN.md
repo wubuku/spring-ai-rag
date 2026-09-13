@@ -3103,6 +3103,17 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 366（规划中）
+
+- 目标：小档双扫——①RetryConfig（12 行：69/72/81/85-87/93-95/
+  105-107，重试配置的参数校验与属性映射）；②BudgetedToolCallingManager
+  （9 行，工具调用预算管理器残余分支）。
+- 备选：EmbeddingDispatchService（12 行）、HttpRerankProvider
+  （8 行）、SlowQueryMetricsService（8 行）、
+  AlertNotificationOutboxService（8 行）。
+- 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
+  性分支→--no-ff 合并 main→账本→清理。
+
 ### Batch 365（已交付）
 
 - 分支：`test/jsonsearch-guards-batch365`（已合入 main）
