@@ -3083,6 +3083,24 @@ VersionHistoryModal 相关 100% 项等。
   useFileUpload/Documents.tsx 分支残余。
 - 工作区：本地已合并 test/* 分支随各批清理，无遗留 worktree。
 
+### Batch 360（已交付）
+
+- 分支：`test/pdf-exception-mapping-batch360`（已合入 main）
+- 内容：PdfImportController 异常映射矩阵与委托（12 用例，新建
+  PdfImportControllerExceptionMappingTest）：①async 端点拒绝
+  embed=sse；②SKIP 路径 IAE→400 / RuntimeException→500 /
+  SecurityException 重抛；③embeddingPolicy 非 SKIP 委托
+  importPdfToRagWithPolicy；④SSE 流进度回调（结果引用赋值前触发
+  → pending 分支）+ done 事件装配（虚拟线程 sleep 等待落地）；⑤
+  withEmbedding 2 参委托与默认端点委托；⑥triggerEmbeddingSync
+  空白 UUID 拒绝、IAE→400、RuntimeException→500、3 参委托；⑦
+  triggerEmbeddingSse 3 参委托。
+- 要点：PdfImportService.importPdf 声明 IOException——when() 打
+  桩方法需 throws；SSE 任务 Thread.ofVirtual() 异步执行，断言前
+  sleep(500) 等待覆盖落地。
+- 状态：单类 12 用例绿；core 全量门禁 EXIT=0（4731 tests）。
+- 插曲：提交再次忘建特性分支直接落 main，按整形方法挂回。
+
 ### Batch 359（已交付）
 
 - 分支：`test/obs-scoped-reads-batch359`（已合入 main）
