@@ -3083,16 +3083,34 @@ VersionHistoryModal 相关 100% 项等。
   useFileUpload/Documents.tsx 分支残余。
 - 工作区：本地已合并 test/* 分支随各批清理，无遗留 worktree。
 
-### Batch 356（进行中 · 已随留档提交）
+### Batch 356（已交付）
 
-- 分支：直接在 main 提交（留档指令，未走特性分支）
-- 内容：RagCollectionService.isCollectionKeyConstraint 深层判定
-  残余（10 行缺口的一部分），新建
-  RagCollectionKeyConstraintDetectionTest 2 用例：hibernate 其他
-  约束名不映射（原样上抛 DIVE）、原因链嵌套
-  （DIVE→DIVE→键约束违规）映射为 DUPLICATE_RESOURCE。PG
-  ServerErrorMessage 反射真值分支因构造脆弱暂未覆盖。
-- 状态：单类 2 用例绿；core 全量门禁 EXIT=0（4694 tests）。
+- 分支：`test/pg-constraint-embed-batch356`（已合入 main）
+- 内容（两段）：
+  - 前段（随留档提交 9569b450）：RagCollectionService.
+    isCollectionKeyConstraint 深层判定 2 用例——hibernate 其他约
+    束名不映射（原样上抛 DIVE）、原因链嵌套
+    （DIVE→DIVE→键约束违规）映射为 DUPLICATE_RESOURCE。
+  - 后段（本轮 bb0abce4）：PG ServerErrorMessage 反射真值分支 4
+    用例——真实 `PSQLException(ServerErrorMessage)` 按 PG
+    ErrorResponse 字段格式（键字符+值+\0 终止；约束键 'n'）构造：
+    约束名命中映射 DUPLICATE_RESOURCE、其他约束名不映射、无
+    serverError 跳过判定、getConstraint 反射抛出被
+    ReflectiveOperationException 吞掉原样上抛。另补
+    EmbeddingJobRepository 9 参 createOrCoalesce 委托管道用例：
+    origin/principal 透传、generation=1、documentKind=TEXT、
+    chunkerVersion=legacy-compatible。
+- 侦查要点：
+  - 9 参 createOrCoalesce 最初误判死代码——集成测试
+    EmbeddingJobsPostgresIntegrationTest 在用（写 origin/principal
+    列），撤销删除改补单测覆盖委托管道。死代码判定必须全仓含测试
+    目录核实。
+  - ServerErrorMessage 不用 Mockito：getConstraint 等 final 判定
+    引发 UnfinishedStubbing；改真实实例 + 匿名子类覆写。字段格式
+    是「键字符紧跟值，\0 终止」——键后加 \0 会解析成空值。
+  - ArgumentCaptor 命中 varargs 槽位时 getValue() 只含 varargs 部
+    分（query 参数 [0]=SQL、[1]=mapper 不在数组内）。
+- 状态：单类 6+16 用例绿；core 全量门禁 EXIT=0（4699 tests）。
 
 ## 进度留档快照（Batch 356 进行中 · 用户留档指令）
 
