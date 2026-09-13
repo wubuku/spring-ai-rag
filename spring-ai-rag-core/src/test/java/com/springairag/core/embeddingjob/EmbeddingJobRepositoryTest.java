@@ -10,6 +10,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -294,6 +295,224 @@ class EmbeddingJobRepositoryTest {
         assertEquals(3L, job.requestGeneration());
         assertEquals("TEXT", job.documentKind());
         assertEquals("v2", job.chunkerVersion());
+    }
+
+    // ── 清扫第二扫：cancel/查找/代际/提交门/文档状态（Batch 358）──────
+
+    @Test
+    void claimRefreshesStateForCancelledAndFailedJobs() {
+        // 取消与失败两段回收查询的 UPDATE..RETURNING id 行映射真实
+        // 执行，回收到的每个 job 都要刷新 embedding state。
+        UUID cancelId = UUID.randomUUID();
+        UUID failedId = UUID.randomUUID();
+        java.util.concurrent.atomic.AtomicInteger call =
+                new java.util.concurrent.atomic.AtomicInteger();
+        when(jdbcTemplate.query(anyString(),
+                any(org.springframework.jdbc.core.RowMapper.class)))
+                .thenAnswer(invocation -> {
+                    org.springframework.jdbc.core.RowMapper<?> mapper =
+                            invocation.getArgument(1);
+                    java.sql.ResultSet rs = mock(java.sql.ResultSet.class);
+                    when(rs.getObject("id", UUID.class)).thenReturn(
+                            call.incrementAndGet() == 1 ? cancelId : failedId);
+                    return List.of(mapper.mapRow(rs, 0));
+                });
+        when(jdbcTemplate.query(contains("WITH candidates"),
+                any(org.springframework.jdbc.core.RowMapper.class),
+                any(Object[].class))).thenReturn(List.of());
+        when(jdbcTemplate.update(anyString(), any(Object[].class))).thenReturn(1);
+
+        assertTrue(repository.claim("worker-1", 5, 60).isEmpty());
+
+        verify(jdbcTemplate).update(contains("SET status = CASE job.status"),
+                eq(cancelId));
+        verify(jdbcTemplate).update(contains("SET status = CASE job.status"),
+                eq(failedId));
+    }
+
+    @Test
+    void cancelReturnsJobAndRefreshesState() {
+        UUID jobId = UUID.randomUUID();
+        when(jdbcTemplate.query(anyString(),
+                any(org.springframework.jdbc.core.RowMapper.class),
+                any(Object[].class))).thenAnswer(invocation -> {
+                    org.springframework.jdbc.core.RowMapper<?> mapper =
+                            invocation.getArgument(1);
+                    return List.of(mapper.mapRow(fullJobRow(jobId), 0));
+                });
+        when(jdbcTemplate.update(anyString(), any(Object[].class))).thenReturn(1);
+
+        assertTrue(repository.cancel(jobId).isPresent());
+        verify(jdbcTemplate).update(contains("SET status = CASE job.status"),
+                eq(jobId));
+
+        // 无行返回 → 空 Optional，且不触发状态刷新。
+        when(jdbcTemplate.query(anyString(),
+                any(org.springframework.jdbc.core.RowMapper.class),
+                any(Object[].class))).thenReturn(List.of());
+        assertTrue(repository.cancel(jobId).isEmpty());
+    }
+
+    @Test
+    void findActiveAndFindCurrentActiveReturnFirstRow() {
+        EmbeddingJob job = job();
+        when(jdbcTemplate.query(anyString(),
+                any(org.springframework.jdbc.core.RowMapper.class),
+                any(Object[].class))).thenReturn(List.of(job));
+
+        assertTrue(repository.findActive(11L, 7L, "hash-1").isPresent());
+
+        ArgumentCaptor<Object[]> args = ArgumentCaptor.forClass(Object[].class);
+        when(jdbcTemplate.query(anyString(),
+                any(org.springframework.jdbc.core.RowMapper.class),
+                args.capture())).thenReturn(List.of(job));
+        assertTrue(repository.findCurrentActive(
+                11L, 7L, "hash-1", "TEXT", "v2").isPresent());
+        // 参数顺序：documentId → profileId → contentHash →
+        // documentKind → chunkerVersion。
+        assertEquals(11L, args.getValue()[0]);
+        assertEquals(7L, args.getValue()[1]);
+        assertEquals("hash-1", args.getValue()[2]);
+        assertEquals("TEXT", args.getValue()[3]);
+        assertEquals("v2", args.getValue()[4]);
+
+        // 空行 → 空 Optional（findActive 分支）。
+        when(jdbcTemplate.query(anyString(),
+                any(org.springframework.jdbc.core.RowMapper.class),
+                any(Object[].class))).thenReturn(List.of());
+        assertTrue(repository.findActive(11L, 7L, "hash-1").isEmpty());
+    }
+
+    @Test
+    void allocateGenerationBindsFiltersAndDefaultsNullToOne() {
+        ArgumentCaptor<Object[]> args = ArgumentCaptor.forClass(Object[].class);
+        when(jdbcTemplate.queryForObject(anyString(), eq(Long.class),
+                args.capture())).thenReturn(5L);
+
+        assertEquals(5L, repository.allocateGeneration(
+                11L, 7L, "hash-1", "v2", true));
+        // 参数顺序：documentId → profileId → contentHash →
+        // chunkerVersion → preserveCompleted×2。
+        assertEquals(11L, args.getValue()[0]);
+        assertEquals(7L, args.getValue()[1]);
+        assertEquals("hash-1", args.getValue()[2]);
+        assertEquals("v2", args.getValue()[3]);
+        assertEquals(Boolean.TRUE, args.getValue()[4]);
+        assertEquals(Boolean.TRUE, args.getValue()[5]);
+
+        // RETURNING 为 null（理论上不该发生）→ 代际回退 1。
+        when(jdbcTemplate.queryForObject(anyString(), eq(Long.class),
+                any(Object[].class))).thenReturn(null);
+        assertEquals(1L, repository.allocateGeneration(
+                11L, 7L, "hash-1", "v2", false));
+    }
+
+    @Test
+    void markNotRequestedCancelsSupersededAndDefaultsGeneration() {
+        when(jdbcTemplate.queryForObject(anyString(), eq(Long.class),
+                any(Object[].class))).thenReturn(null);
+        when(jdbcTemplate.update(anyString(), any(Object[].class))).thenReturn(1);
+
+        assertEquals(1L, repository.markNotRequested(11L, 7L, "hash-1", "v2"));
+        // cancelSuperseded 以回退代际 1 取消旧代任务。
+        verify(jdbcTemplate).update(contains("Superseded by a newer"),
+                eq(11L), eq(7L), eq(1L));
+    }
+
+    @Test
+    void claimCommitAllowedReflectsCasOutcomeAndFloorsLease() {
+        ArgumentCaptor<Object[]> args = ArgumentCaptor.forClass(Object[].class);
+        when(jdbcTemplate.query(anyString(),
+                any(org.springframework.jdbc.core.RowMapper.class),
+                args.capture())).thenAnswer(invocation -> {
+                    // 提交门行映射常量 1，真实执行映射 lambda。
+                    org.springframework.jdbc.core.RowMapper<?> mapper =
+                            invocation.getArgument(1);
+                    java.sql.ResultSet rs = mock(java.sql.ResultSet.class);
+                    return List.of(mapper.mapRow(rs, 0));
+                });
+        UUID jobId = UUID.randomUUID();
+
+        assertTrue(repository.claimCommitAllowed(jobId, "worker-1", 7L, 5));
+        // 租约秒下限 30；参数顺序：lease → jobId → workerId → profileId。
+        assertEquals(30, args.getValue()[0]);
+        assertEquals(jobId, args.getValue()[1]);
+        assertEquals("worker-1", args.getValue()[2]);
+        assertEquals(7L, args.getValue()[3]);
+
+        when(jdbcTemplate.query(anyString(),
+                any(org.springframework.jdbc.core.RowMapper.class),
+                any(Object[].class))).thenReturn(List.of());
+        assertFalse(repository.claimCommitAllowed(jobId, "worker-1", 7L, 60));
+    }
+
+    @Test
+    void updateDocumentProcessingBindsStatusErrorAndDocument() {
+        when(jdbcTemplate.update(anyString(), any(Object[].class))).thenReturn(1);
+
+        repository.updateDocumentProcessing(11L, "FAILED", "boom");
+
+        verify(jdbcTemplate).update(contains("processing_status = ?"),
+                eq("FAILED"), eq("boom"), eq(11L));
+    }
+
+    @Test
+    void columnHelpersSwallowSQLExceptionToNullAndZero() throws Exception {
+        // origin 列读取抛 SQLException → columnOrNull 归 null；
+        // request_generation 列抛 SQLException → longColumnOrZero 归 0。
+        UUID jobId = UUID.randomUUID();
+        when(jdbcTemplate.query(anyString(),
+                any(org.springframework.jdbc.core.RowMapper.class),
+                any(Object[].class))).thenAnswer(invocation -> {
+                    org.springframework.jdbc.core.RowMapper<?> mapper =
+                            invocation.getArgument(1);
+                    java.sql.ResultSet rs = mock(java.sql.ResultSet.class);
+                    when(rs.getObject("id", UUID.class)).thenReturn(jobId);
+                    when(rs.getObject("batch_id", UUID.class)).thenReturn(jobId);
+                    when(rs.getLong("document_id")).thenReturn(11L);
+                    when(rs.getLong("embedding_profile_id")).thenReturn(7L);
+                    when(rs.getBoolean("force")).thenReturn(false);
+                    when(rs.getString("content_hash")).thenReturn("h");
+                    when(rs.getLong("document_version")).thenReturn(1L);
+                    when(rs.getString("status")).thenReturn("QUEUED");
+                    when(rs.getInt("attempt_count")).thenReturn(0);
+                    when(rs.getInt("max_attempts")).thenReturn(8);
+                    when(rs.getString("origin"))
+                            .thenThrow(new java.sql.SQLException("bad col"));
+                    when(rs.getLong("request_generation"))
+                            .thenThrow(new java.sql.SQLException("bad col"));
+                    return List.of(mapper.mapRow(rs, 0));
+                });
+
+        EmbeddingJob job = repository.find(jobId).orElseThrow();
+
+        assertNull(job.origin());
+        assertNull(job.requestedByPrincipalId());
+        assertEquals(0L, job.requestGeneration());
+    }
+
+    @Test
+    void listPageBindsAllFiltersForCountAndItems() {
+        UUID batchId = UUID.randomUUID();
+        when(jdbcTemplate.queryForObject(anyString(), eq(Long.class),
+                any(Object[].class))).thenReturn(9L);
+        when(jdbcTemplate.query(anyString(),
+                any(org.springframework.jdbc.core.RowMapper.class),
+                any(Object[].class))).thenReturn(List.of());
+
+        EmbeddingJobRepository.PageResult page = repository.listPage(
+                batchId, EmbeddingJobStatus.RUNNING, 42L, null, 500, -5);
+
+        assertEquals(9L, page.totalElements());
+        // count 参数：batchId → status → collectionId。
+        verify(jdbcTemplate).queryForObject(
+                contains("job.batch_id = ?"), eq(Long.class),
+                eq(batchId), eq("RUNNING"), eq(42L));
+        // item 参数：batchId → status → collectionId → pageSize(≤200)
+        // → offset(≥0)。
+        verify(jdbcTemplate).query(contains("ORDER BY job.created_at DESC"),
+                any(org.springframework.jdbc.core.RowMapper.class),
+                eq(batchId), eq("RUNNING"), eq(42L), eq(200), eq(0));
     }
 
     // ── claim/租约生命周期（Batch 116 第二批）──────────────────────────
