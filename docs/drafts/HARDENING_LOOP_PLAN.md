@@ -3218,6 +3218,20 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 374（规划中）
+
+- 目标：①ApiKeyManagementService rotate 尾部（757-791：未知 key
+  null、acquire 0 null、PENDING 拒绝、disable 计数不符拒绝）与
+  notify/生命周期类方法（811-839 等）；②RagChatController
+  （50 行）择辅。
+- 备选：JsonRecordService（87 行）、ChatTurnOperationService
+  （85 行）、DocumentMutationService（85 行）、
+  RagDocumentController（108 行）。
+- 候选技术债：RetryConfig 的 retryOnServiceUnavailable 开关被
+  通用 5xx 分支遮蔽（生产行为变更需专项批次）。
+- 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
+  性分支→--no-ff 合并 main→账本→清理。
+
 ### Batch 373（已交付）
 
 - 分支：`test/apikey-sourcedelete-batch373`（已合入 main）
