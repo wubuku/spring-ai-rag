@@ -3083,6 +3083,18 @@ VersionHistoryModal 相关 100% 项等。
   useFileUpload/Documents.tsx 分支残余。
 - 工作区：本地已合并 test/* 分支随各批清理，无遗留 worktree。
 
+### Batch 353（已交付）
+
+- 分支：`test/relocate-apply-update-batch353`（已合入 main）
+- 内容：DocumentRelocationService lambda$relocate$0（条件 UPDATE
+  的 PreparedStatementSetter，10 行），新建
+  DocumentRelocationApplyUpdateTest 1 用例：stub CAS 查询捕获
+  setter 并真实执行，逐参数断言 9 列绑定（目标集合/代次/文档
+  id/源集合/命名空间/外部 id/来源修订/版本/文档修订），执行
+  RETURNING 行映射。要点：既有 CAS 桩仅返回罐装列表，setter 主
+  体从未执行（虚假覆盖），本批改为 thenAnswer 内真实调用。
+- 指标：core 全量门禁 EXIT=0 绿（4679 tests, 0 failures）。
+
 ### Batch 352（已交付）
 
 - 分支：`test/authorize-rotation-batch352`（已合入 main）
