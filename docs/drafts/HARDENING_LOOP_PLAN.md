@@ -3408,6 +3408,19 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 388（已交付）
+
+- 分支：`test/jsonrecord-retry-batch388`（已合入 main）
+- 内容：JsonRecordService persist 重试循环（3 用例，新建
+  JsonRecordServicePersistRetryTest）：①DataIntegrityViolation
+  首轮冲突 → 重试成功创建（CREATED + 单次 saveAndFlush）；②
+  ConcurrencyFailureException 持续 3 次 →
+  StructuredRecordConflictException（did not converge after 3
+  attempts）；③非可重试异常快速失败（getTransaction 仅一次）。
+- 要点：tm.getTransaction 连续 thenThrow/thenReturn 区分首轮冲
+  突与重试成功；activeProfile stub 对 embedIfRequested 必需。
+- 状态：单类 3 用例绿；core 全量门禁 EXIT=0（4895 tests）。
+
 ### Batch 387（已交付）
 
 - 分支：`test/rotation-response-batch387`（已合入 main）
