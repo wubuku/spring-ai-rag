@@ -3295,6 +3295,18 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 379（已交付）
+
+- 分支：`test/mutation-tombstone-batch379`（已合入 main）
+- 内容：DocumentMutationService 本地守卫（3 用例，新建
+  DocumentMutationLocalGuardsTest）：①upsertLocalImport(null id)
+  委派 createLocal 并深拷贝 jsonb 载荷（captor 验证保存载荷与源
+  等值）；②disableLocal 对已禁用文档 UNCHANGED 短路；③
+  restoreLocal 对已启用文档 UNCHANGED 短路。
+- 要点：saveAndFlush stub 须为新文档分配 id
+  （completeIdempotency 读取 getId() 会 NPE）。
+- 状态：单类 3 用例绿；core 全量门禁 EXIT=0（4863 tests）。
+
 ### Batch 378（已交付）
 
 - 分支：`test/turnop-mutation-batch378`（已合入 main）
