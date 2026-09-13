@@ -3083,6 +3083,35 @@ VersionHistoryModal 相关 100% 项等。
   useFileUpload/Documents.tsx 分支残余。
 - 工作区：本地已合并 test/* 分支随各批清理，无遗留 worktree。
 
+### Batch 356（进行中 · 已随留档提交）
+
+- 分支：直接在 main 提交（留档指令，未走特性分支）
+- 内容：RagCollectionService.isCollectionKeyConstraint 深层判定
+  残余（10 行缺口的一部分），新建
+  RagCollectionKeyConstraintDetectionTest 2 用例：hibernate 其他
+  约束名不映射（原样上抛 DIVE）、原因链嵌套
+  （DIVE→DIVE→键约束违规）映射为 DUPLICATE_RESOURCE。PG
+  ServerErrorMessage 反射真值分支因构造脆弱暂未覆盖。
+- 状态：单类 2 用例绿；core 全量门禁 EXIT=0（4694 tests）。
+
+## 进度留档快照（Batch 356 进行中 · 用户留档指令）
+
+- 留档时点：2026-09-14 · main @ 本次留档提交
+- 循环进度：Batch 303–355 共 53 个批次按「规划→实施→单类验
+  证→core 全量门禁 EXIT=0→commit/push 特性分支→--no-ff 合并
+  main→账本记录→分支清理」交付完成；Batch 356 完成一部分（约
+  10 行中的约束检测残余）。
+- 可构建性证据：core 全量 mvn test 门禁 EXIT=0（4694 tests,
+  0 failures）；webui vite build 通过。
+- 会话累计：core 全量测试自 4374 → 4694（+320）。
+- 留档期间处理：isCurrent/resolveChatClientCandidates 两处死代
+  码移除（零引用核实 + 全量回归）；3 处防御性/不可达分支记档
+  （withEffectiveSession 重建分支、BudgetedChatModel 结果收缩
+  error 块、setEndpoints null 归一化）。
+- 后续候选：DocumentRelocationService 其余残余、
+  IntegrationCapabilityCatalog projection、8~10 行档清零、WebUI
+  页面分支残余。
+
 ### Batch 355（已交付）
 
 - 分支：`test/spring-resources-batch355`（已合入 main）
