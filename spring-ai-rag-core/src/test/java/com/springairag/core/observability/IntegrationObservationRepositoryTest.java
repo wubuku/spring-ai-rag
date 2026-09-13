@@ -29,6 +29,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -271,6 +272,219 @@ class IntegrationObservationRepositoryTest {
                 .thenReturn(3)
                 .thenReturn(2);
 
+        assertEquals(5, repository.deleteExpired(FROM, 100, 1_000));
+    }
+
+    // ── collection 作用域读变体与守卫（Batch 359）─────────────────────
+
+    @Test
+    void totalsCollectionScopedQueriesObservationJoinWithAllFilters()
+            throws Exception {
+        ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<RowMapper<Aggregate>> mapper =
+                ArgumentCaptor.forClass(RowMapper.class);
+        ArgumentCaptor<Object[]> args = ArgumentCaptor.forClass(Object[].class);
+        when(jdbcTemplate.queryForObject(sql.capture(), mapper.capture(),
+                args.capture())).thenAnswer(invocation -> null);
+
+        // stub 返回 null：SQL/参数经捕获断言，聚合行由手工 mapRow 执行。
+        repository.totals(FROM, TO, "environment", "root",
+                IntegrationOperation.COLLECTION_LOOKUP, true, List.of(1L, 2L));
+        Aggregate aggregate = mapper.getValue()
+                .mapRow(stubAggregateRow(), 0);
+
+        assertTrue(sql.getValue()
+                .contains("rag_api_collection_operation_hourly observation"));
+        // 作用域读用带 observation. 前缀的限定聚合列。
+        assertTrue(sql.getValue().contains("observation.request_count"));
+        assertTrue(sql.getValue()
+                .contains("observation.principal_type = ?"));
+        assertTrue(sql.getValue().contains("observation.operation = ?"));
+        assertTrue(sql.getValue().contains("observation.collection_id IN (?,?)"));
+        // 参数顺序：from → to → principalType → principalRef →
+        // operation → collectionIds。
+        assertEquals(FROM, ((Timestamp) args.getValue()[0]).toInstant());
+        assertEquals("environment", args.getValue()[2]);
+        assertEquals("root", args.getValue()[3]);
+        assertEquals("COLLECTION_LOOKUP", args.getValue()[4]);
+        assertEquals(1L, args.getValue()[5]);
+        assertEquals(2L, args.getValue()[6]);
+        assertEquals(BigInteger.valueOf(20), aggregate.requestCount());
+    }
+
+    @Test
+    void byStatusAndByOperationCollectionScopedShortCircuitAndQualifiedColumns()
+            throws Exception {
+        assertTrue(repository.byStatus(FROM, TO, null, null, null,
+                true, List.of()).isEmpty());
+        assertTrue(repository.byOperation(FROM, TO, null, null, null,
+                true, List.of()).isEmpty());
+        verifyNoInteractions(jdbcTemplate);
+
+        ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<RowMapper<DimensionAggregate>> mapper =
+                ArgumentCaptor.forClass(RowMapper.class);
+        when(jdbcTemplate.query(sql.capture(), mapper.capture(),
+                any(Object[].class))).thenAnswer(invocation -> List.of());
+
+        repository.byStatus(FROM, TO, null, null, null, true, List.of(1L));
+        assertTrue(sql.getValue()
+                .contains("observation.http_status AS dimension_key"));
+        ResultSet rs = stubAggregateRow();
+        when(rs.getObject("dimension_key")).thenReturn("200");
+        DimensionAggregate dimension = mapper.getValue().mapRow(rs, 0);
+        assertEquals("200", dimension.dimension());
+
+        repository.byOperation(FROM, TO, null, null, null, true, List.of(1L));
+        assertTrue(sql.getValue()
+                .contains("observation.operation AS dimension_key"));
+    }
+
+    @Test
+    void timelineCollectionScopedShortCircuitQualifiedColumnAndKeyTypes()
+            throws Exception {
+        assertTrue(repository.timeline(FROM, TO, null, null, null,
+                IntegrationObservabilityBucket.DAY, true, List.of()).isEmpty());
+        verifyNoInteractions(jdbcTemplate);
+
+        ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<RowMapper<TimelineAggregate>> mapper =
+                ArgumentCaptor.forClass(RowMapper.class);
+        when(jdbcTemplate.query(sql.capture(), mapper.capture(),
+                any(Object[].class))).thenAnswer(invocation -> List.of());
+
+        repository.timeline(FROM, TO, null, null, null,
+                IntegrationObservabilityBucket.DAY, true, List.of(1L));
+        assertTrue(sql.getValue().contains(
+                "observation.bucket_start AT TIME ZONE 'UTC')::date"));
+
+        // dimension_key 的其余类型分支：OffsetDateTime / Instant /
+        // LocalDate / 其他对象（requiredText 文本化）。
+        ResultSet offsetRow = stubAggregateRow();
+        when(offsetRow.getObject("dimension_key"))
+                .thenReturn(java.time.OffsetDateTime.parse(
+                        "2026-09-01T10:00+01:00"));
+        assertEquals("2026-09-01T09:00:00Z",
+                mapper.getValue().mapRow(offsetRow, 0).bucketStart());
+
+        ResultSet instantRow = stubAggregateRow();
+        when(instantRow.getObject("dimension_key"))
+                .thenReturn(Instant.parse("2026-09-01T10:00:00Z"));
+        assertEquals("2026-09-01T10:00:00Z",
+                mapper.getValue().mapRow(instantRow, 0).bucketStart());
+
+        ResultSet dateRow = stubAggregateRow();
+        when(dateRow.getObject("dimension_key"))
+                .thenReturn(java.time.LocalDate.parse("2026-09-01"));
+        assertEquals("2026-09-01",
+                mapper.getValue().mapRow(dateRow, 0).bucketStart());
+
+        ResultSet otherRow = stubAggregateRow();
+        when(otherRow.getObject("dimension_key")).thenReturn(42);
+        assertEquals("42", mapper.getValue().mapRow(otherRow, 0).bucketStart());
+    }
+
+    @Test
+    void oldestBucketCollectionScopedUsesQualifiedBucketColumn() {
+        ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
+        when(jdbcTemplate.queryForObject(sql.capture(),
+                any(RowMapper.class), any(Object[].class)))
+                .thenAnswer(invocation -> null);
+
+        assertNull(repository.oldestBucket(FROM, TO, null, null, null,
+                true, List.of(1L)));
+
+        assertTrue(sql.getValue().contains("MIN(observation.bucket_start)"));
+    }
+
+    @Test
+    void deleteExpiredAppliesSetterTimeoutTimestampAndBatchSize()
+            throws Exception {
+        PreparedStatement statement = mock(PreparedStatement.class);
+        ArgumentCaptor<org.springframework.jdbc.core.PreparedStatementSetter>
+                setters = ArgumentCaptor.forClass(
+                        org.springframework.jdbc.core.PreparedStatementSetter.class);
+        when(jdbcTemplate.update(anyString(), setters.capture()))
+                .thenReturn(3)
+                .thenReturn(2);
+
         assertEquals(5, repository.deleteExpired(FROM, 100, 0));
+
+        // 两段 DELETE 都经 setter 绑定：超时下限 1 秒、cutoff、批大小。
+        // （Framework 7 起 PreparedStatementSetter.setValues 只有单参。）
+        for (var setter : setters.getAllValues()) {
+            setter.setValues(statement);
+        }
+        verify(statement, times(2)).setQueryTimeout(1);
+        verify(statement, times(2)).setTimestamp(1, Timestamp.from(FROM));
+        verify(statement, times(2)).setInt(2, 100);
+    }
+
+    @Test
+    void upsertSkipsCollectionRollupWhenObservationHasNoCollections() {
+        ArgumentCaptor<BatchPreparedStatementSetter> batches =
+                ArgumentCaptor.forClass(BatchPreparedStatementSetter.class);
+        when(jdbcTemplate.batchUpdate(anyString(), batches.capture()))
+                .thenReturn(new int[]{1});
+
+        repository.upsert(List.of(new IntegrationObservation(
+                Instant.parse("2026-09-01T10:00:00Z"),
+                "environment", "root",
+                IntegrationOperation.COLLECTION_LOOKUP, 200, 30,
+                List.of())), 1_000);
+
+        // 无授权集合 → 仅操作侧批写入，集合侧空分组直接跳过。
+        assertEquals(1, batches.getAllValues().size());
+    }
+
+    @Test
+    void upsertCollectionSetterBindsCollectionIdAndOver5000Bucket()
+            throws Exception {
+        PreparedStatement statement = mock(PreparedStatement.class);
+        ArgumentCaptor<BatchPreparedStatementSetter> batches =
+                ArgumentCaptor.forClass(BatchPreparedStatementSetter.class);
+        when(jdbcTemplate.batchUpdate(anyString(), batches.capture()))
+                .thenReturn(new int[]{1});
+
+        repository.upsert(List.of(observation(200, 6_000)), 1_000);
+
+        // 集合侧 setter：参数 4 是 collectionId（操作侧无此参数）。
+        batches.getAllValues().get(1).setValues(statement, 0);
+        verify(statement).setLong(4, 1L);
+        // 时延 6000ms → over_5000 计数 1（集合侧参数 18、操作侧 17）。
+        verify(statement).setLong(18, 1L);
+
+        PreparedStatement operationStatement = mock(PreparedStatement.class);
+        batches.getAllValues().get(0).setValues(operationStatement, 0);
+        verify(operationStatement).setLong(17, 1L);
+        verify(operationStatement).setLong(16, 0L);
+    }
+
+    @Test
+    void mappingRejectsNegativeDurationAndBlankDimensionKey() throws Exception {
+        ArgumentCaptor<RowMapper<Aggregate>> totalsMapper =
+                ArgumentCaptor.forClass(RowMapper.class);
+        when(jdbcTemplate.queryForObject(anyString(), totalsMapper.capture(),
+                any(Object[].class))).thenAnswer(invocation -> null);
+        repository.totals(FROM, TO, null, null, null);
+
+        ResultSet negativeDuration = mock(ResultSet.class);
+        when(negativeDuration.getBigDecimal(anyString()))
+                .thenReturn(BigDecimal.ONE);
+        when(negativeDuration.getBigDecimal("duration_sum_ms"))
+                .thenReturn(new BigDecimal("-5"));
+        assertThrows(IllegalStateException.class,
+                () -> totalsMapper.getValue().mapRow(negativeDuration, 0));
+
+        ArgumentCaptor<RowMapper<DimensionAggregate>> dimensionMapper =
+                ArgumentCaptor.forClass(RowMapper.class);
+        when(jdbcTemplate.query(anyString(), dimensionMapper.capture(),
+                any(Object[].class))).thenAnswer(invocation -> List.of());
+        repository.byStatus(FROM, TO, null, null, null, true, List.of(1L));
+
+        ResultSet blankKey = stubAggregateRow();
+        when(blankKey.getObject("dimension_key")).thenReturn(" ");
+        assertThrows(IllegalStateException.class,
+                () -> dimensionMapper.getValue().mapRow(blankKey, 0));
     }
 }
