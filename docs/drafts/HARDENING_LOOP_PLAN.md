@@ -3083,6 +3083,21 @@ VersionHistoryModal 相关 100% 项等。
   useFileUpload/Documents.tsx 分支残余。
 - 工作区：本地已合并 test/* 分支随各批清理，无遗留 worktree。
 
+### Batch 361（已交付）
+
+- 分支：`test/extdoc-guards-batch361`（已合入 main）
+- 内容：ExternalDocumentService 守卫与委派（7 用例，新建
+  ExternalDocumentServiceGuardsTest）：①batchUpsert 空/null 列
+  表、>50 上限、批次内容 5M 上限三守卫；②upsert 有
+  mutationService 时完全委派；③ASYNC 策略 dispatch 缺失拒绝
+  （EMBEDDING_JOBS_DISABLED）；④batchUpsert 汇总计数全矩阵
+  （CREATED×2/UPDATED/UNCHANGED/persistenceFailed/
+  embeddingFailed）；⑤getByExternalIdentity 双参默认 namespace
+  + 退役地址校验 + toDetail 详情返回；⑥事务管理器 null 构造侧
+  （transactionTemplate 置空）。
+- 状态：单类 7 用例绿（一次通过）；core 全量门禁 EXIT=0
+  （4738 tests）。
+
 ### Batch 360（已交付）
 
 - 分支：`test/pdf-exception-mapping-batch360`（已合入 main）
