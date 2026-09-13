@@ -124,6 +124,50 @@ class EmbeddingJobRepositoryTest {
         assertTrue(result.coalesced());
     }
 
+    @Test
+    void createOrCoalesceWithOriginDefaultsLegacyColumns() {
+        // 9 参重载委托 12 参主体：origin/principal 透传，代际固定 1、
+        // 文档种类与 chunker 版本回退 legacy 兼容默认值。
+        ArgumentCaptor<Object[]> args = ArgumentCaptor.forClass(Object[].class);
+        when(jdbcTemplate.query(anyString(),
+                any(org.springframework.jdbc.core.RowMapper.class),
+                args.capture())).thenAnswer(invocation -> {
+                    org.springframework.jdbc.core.RowMapper<?> mapper =
+                            invocation.getArgument(1);
+                    java.sql.ResultSet rs = mock(java.sql.ResultSet.class);
+                    when(rs.getBoolean("coalesced")).thenReturn(false);
+                    for (String column : new String[]{
+                            "id", "batch_id", "lease_owner", "last_error",
+                            "origin", "requested_by_principal_id", "status",
+                            "content_hash", "document_kind", "chunker_version"}) {
+                        when(rs.getString(column)).thenReturn(column.equals("status")
+                                ? "QUEUED" : "x");
+                    }
+                    when(rs.getLong("document_id")).thenReturn(1L);
+                    when(rs.getLong("embedding_profile_id")).thenReturn(7L);
+                    when(rs.getBoolean("force")).thenReturn(false);
+                    when(rs.getLong("document_version")).thenReturn(1L);
+                    when(rs.getInt("attempt_count")).thenReturn(0);
+                    when(rs.getInt("max_attempts")).thenReturn(8);
+                    when(rs.getLong("request_generation")).thenReturn(1L);
+                    return List.of(mapper.mapRow(rs, 0));
+                });
+
+        EmbeddingJobRepository.CreateResult result = repository.createOrCoalesce(
+                UUID.randomUUID(), 1L, 7L, "hash", 3L, false, 8,
+                "API", "db:unit");
+
+        assertEquals(EmbeddingJobStatus.QUEUED, result.job().status());
+        // captor 命中 varargs 槽位：getValue() 只含 varargs——
+        // [0]=id、[8]=origin、[9]=principal、[10]=generation、
+        // [11]=documentKind、[12]=chunkerVersion。
+        assertEquals("API", args.getValue()[8]);
+        assertEquals("db:unit", args.getValue()[9]);
+        assertEquals(1L, args.getValue()[10]);
+        assertEquals("TEXT", args.getValue()[11]);
+        assertEquals("legacy-compatible", args.getValue()[12]);
+    }
+
     // ── claim/租约生命周期（Batch 116 第二批）──────────────────────────
 
     private EmbeddingJob job() {
