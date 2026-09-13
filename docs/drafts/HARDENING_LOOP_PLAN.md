@@ -3332,6 +3332,19 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 382（已交付）
+
+- 分支：`test/doccontroller-gaps-batch382`（已合入 main）
+- 内容：RagDocumentController 嵌入守卫（4 用例，新建
+  RagDocumentControllerEmbeddingGuardsTest，反射驱动私有方法）：
+  ①buildReembedResult ASYNC 经派发状态；②SYNC 读嵌入 Map + 单
+  文档异常 best-effort error；③无描述符提供者的计数/查找（无当
+  前嵌入查询 × restrictedIds 空/非空）；④有描述符提供者的带
+  chunker 版本查询 × restrictedIds 矩阵。
+- 要点：dispatchService 为可选 setter 注入——ASYNC 分支需
+  setDispatchService 后 requireJobsEnabled 才通过。
+- 状态：单类 4 用例绿；core 全量门禁 EXIT=0（4875 tests）。
+
 ### Batch 381（已交付）
 
 - 分支：`test/jsonrecord-tombstone-batch381`（已合入 main）
