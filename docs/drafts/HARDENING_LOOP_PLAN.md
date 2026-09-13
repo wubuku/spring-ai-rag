@@ -3357,6 +3357,24 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 384（已交付）
+
+- 分支：`test/batchcreate-embed-batch384`（已合入 main）
+- 内容：
+  - RagDocumentController（2 用例，新建
+    RagDocumentControllerBatchCreateTest）：batchCreateDocuments
+    单参重载委派批次服务；集合解析（无策略直接透传）；文档集合
+    作用域按批次默认归一（collectionKey 置空）；14 参委派捕获
+    documents/嵌入标志/幂等键；审计路径。
+  - JsonRecordService persist（2 用例，新建
+    JsonRecordServicePersistTest）：ASYNC 策略派发缺失拒绝
+    （EMBEDDING_JOBS_DISABLED）；无事务管理器 + SKIP 经
+    persistInTransaction 创建新记录（CREATED、id/collection 回
+    读、SKIP 无嵌入派发）。
+- 要点：embedIfRequested 读取 activeProfile——需 stub
+  embeddingProfileProvider.getActiveProfile()。
+- 状态：单类 2+2 用例绿；core 全量门禁 EXIT=0（4880 tests）。
+
 ### Batch 383（已交付）
 
 - 分支：`test/batchcreate-syncitem-batch383`（已合入 main）
