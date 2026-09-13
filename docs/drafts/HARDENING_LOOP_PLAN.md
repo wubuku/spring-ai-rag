@@ -3129,6 +3129,24 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 368（规划中）
+
+- 目标：小档续扫——①HttpRerankProvider（8 行）；②
+  AlertNotificationOutboxService（8 行）或 ApiKeyAuthFilter
+  （8 行）或 RagSearchController（8 行）择一。
+- 备选：OpenApiConfig（9 行）、ApiKeyProvisioningOperation
+  （9 行）、BudgetedChatModel（26 行）、RagChatController
+  （50 行）。
+- 中档候选（需整批）：ApiKeyManagementService（约 88 行残余，
+  建议从 sourceDelete/rotation 尾部分支切入）、JsonRecordService
+  （87 行）、ChatTurnOperationService（85 行）、
+  DocumentMutationService（85 行）、RagDocumentController
+  （108 行）。
+- 候选技术债：RetryConfig 的 retryOnServiceUnavailable 开关被
+  通用 5xx 分支遮蔽（生产行为变更需专项批次）。
+- 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
+  性分支→--no-ff 合并 main→账本→清理。
+
 ### Batch 367（已交付）
 
 - 分支：`test/dispatch-slowquery-batch367`（已合入 main）
