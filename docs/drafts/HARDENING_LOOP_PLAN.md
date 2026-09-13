@@ -3103,6 +3103,20 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 365（已交付）
+
+- 分支：`test/jsonsearch-guards-batch365`（已合入 main）
+- 内容：JsonRecordSearchTool 残余（3 用例，新建
+  JsonRecordSearchToolResidualTest）：①工具元数据/定义；②1 参
+  call 委托（无 ToolContext → IllegalStateException）+ 正常计数
+  + 空白入参回退 {} 后 query 缺失被拒；③超大输出（3000 字符
+  query 撑爆 1024 字符预算）：记录清空后整体仍超限 → 全量替换
+  为错误信封（resultCount=0/truncated/error，原始 query 不再
+  出现）。
+- 防御分支记档：serialize 的 catch（241-242）对确定性 Map/DTO
+  输出不可达。
+- 状态：单类 3 用例绿；core 全量门禁 EXIT=0（4760 tests）。
+
 ### Batch 364（已交付）
 
 - 分支：`test/trace-context-batch364`（已合入 main）
