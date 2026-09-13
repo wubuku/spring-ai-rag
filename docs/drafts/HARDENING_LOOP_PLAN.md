@@ -3161,6 +3161,21 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 370（规划中）
+
+- 目标：①OpenApiConfig（12 行：exampleResponseCustomizer 的
+  opId 过滤/responses 空守卫/applyExamples switch 表、另一
+  customizer Bean 的 securityScheme 分支）；②ApiKeyProvisioningOperation
+  （9 行）或 RagSearchController（8 行）择一。
+- 备选：BudgetedChatModel（26 行）、RagChatController（50 行）、
+  JsonRecordService（87 行）、ChatTurnOperationService（85 行）、
+  DocumentMutationService（85 行）、ApiKeyManagementService
+  （约 88 行残余）。
+- 候选技术债：RetryConfig 的 retryOnServiceUnavailable 开关被
+  通用 5xx 分支遮蔽（生产行为变更需专项批次）。
+- 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
+  性分支→--no-ff 合并 main→账本→清理。
+
 ### Batch 369（已交付）
 
 - 分支：`test/authfilter-openapi-batch369`（已合入 main）
