@@ -62,6 +62,23 @@ public class RetryConfig {
         retryTemplate.setBackOffPolicy(backOffPolicy);
 
         // Exception-classifying retry policy
+        ExceptionClassifierRetryPolicy retryPolicy =
+                exceptionClassifierRetryPolicy(properties);
+
+        retryTemplate.setRetryPolicy(retryPolicy);
+        retryTemplate.setThrowLastExceptionOnExhausted(true);
+
+        log.info("RetryTemplate configured: enabled={}, maxAttempts={}, initialBackoff={}ms, maxBackoff={}ms, multiplier={}",
+                properties.isEnabled(), properties.getMaxAttempts(),
+                properties.getInitialBackoffMs(), properties.getMaxBackoffMs(),
+                properties.getBackoffMultiplier());
+
+        return retryTemplate;
+    }
+
+    /** 按异常类型分类重试策略（包私有便于测试直接驱动分类结果）。 */
+    static ExceptionClassifierRetryPolicy exceptionClassifierRetryPolicy(
+            RagRetryProperties properties) {
         ExceptionClassifierRetryPolicy retryPolicy = new ExceptionClassifierRetryPolicy();
         retryPolicy.setExceptionClassifier(throwable -> {
             if (!properties.isEnabled()) {
@@ -125,14 +142,6 @@ public class RetryConfig {
             };
         });
 
-        retryTemplate.setRetryPolicy(retryPolicy);
-        retryTemplate.setThrowLastExceptionOnExhausted(true);
-
-        log.info("RetryTemplate configured: enabled={}, maxAttempts={}, initialBackoff={}ms, maxBackoff={}ms, multiplier={}",
-                properties.isEnabled(), properties.getMaxAttempts(),
-                properties.getInitialBackoffMs(), properties.getMaxBackoffMs(),
-                properties.getBackoffMultiplier());
-
-        return retryTemplate;
+        return retryPolicy;
     }
 }
