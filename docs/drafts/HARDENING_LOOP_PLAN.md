@@ -3083,6 +3083,16 @@ VersionHistoryModal 相关 100% 项等。
   useFileUpload/Documents.tsx 分支残余。
 - 工作区：本地已合并 test/* 分支随各批清理，无遗留 worktree。
 
+### Batch 355（已交付）
+
+- 分支：`test/spring-resources-batch355`（已合入 main）
+- 内容：ResourceCatalog.discoverSpringResources 边界（10 行缺
+  口），新建 ResourceCatalogSpringResourcesBoundaryTest 4 用例：
+  maxFiles 超限中止、不可读资源跳过（健康空快照）、相同 URI 身
+  份去重保留首个、读取失败包装 'classpath/JAR read failed'。
+  要点：getResources 声明 IOException，桩用 doReturn。
+- 指标：core 全量门禁 EXIT=0 绿（4692 tests, 0 failures）。
+
 ### Batch 354（已交付）
 
 - 分支：`test/relocate-residual-batch354`（已合入 main）
