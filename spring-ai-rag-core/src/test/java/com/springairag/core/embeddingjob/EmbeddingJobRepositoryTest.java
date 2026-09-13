@@ -168,6 +168,134 @@ class EmbeddingJobRepositoryTest {
         assertEquals("legacy-compatible", args.getValue()[12]);
     }
 
+    // ── readiness/listPage/字段 rowMapper（Batch 357 第四批）──────────
+
+    @Test
+    void readinessMapsCountsAndBindsChunkerVersions() {
+        ArgumentCaptor<Object[]> args = ArgumentCaptor.forClass(Object[].class);
+        when(jdbcTemplate.query(anyString(),
+                any(org.springframework.jdbc.core.ResultSetExtractor.class),
+                args.capture())).thenAnswer(invocation -> {
+                    org.springframework.jdbc.core.ResultSetExtractor<?> extractor =
+                            invocation.getArgument(1);
+                    java.sql.ResultSet rs = mock(java.sql.ResultSet.class);
+                    when(rs.getLong("enabled_docs")).thenReturn(6L);
+                    when(rs.getLong("fresh_docs")).thenReturn(3L);
+                    when(rs.getLong("queued_docs")).thenReturn(1L);
+                    when(rs.getLong("running_docs")).thenReturn(1L);
+                    when(rs.getLong("failed_docs")).thenReturn(0L);
+                    when(rs.getLong("stale_docs")).thenReturn(1L);
+                    return extractor.extractData(rs);
+                });
+
+        var profile = new com.springairag.core.config.EmbeddingProfile(
+                7L, "bge-m3", "zhipu", "bge-m3", "v1", 1024,
+                "COSINE", "NONE", true);
+        var response = repository.readiness(
+                42L, "coll-key", profile, "text-v1", "json-v2");
+
+        assertEquals("coll-key", response.collectionKey());
+        assertEquals("bge-m3", response.activeEmbeddingProfileKey());
+        assertEquals(6L, response.enabledDocuments());
+        assertEquals(3L, response.freshDocuments());
+        assertEquals(1L, response.queuedDocuments());
+        assertEquals(1L, response.runningDocuments());
+        assertEquals(0L, response.failedDocuments());
+        assertEquals(1L, response.staleOrMissingDocuments());
+        // 参数顺序：json chunker → text chunker → collectionId → profileId。
+        assertEquals("json-v2", args.getValue()[0]);
+        assertEquals("text-v1", args.getValue()[1]);
+        assertEquals(42L, args.getValue()[2]);
+        assertEquals(7L, args.getValue()[3]);
+    }
+
+    @Test
+    void listPageReturnsZeroTotalWhenCountQueryReturnsNull() {
+        // count 查询返回 null（理论上不该发生）→ totalElements 归 0。
+        when(jdbcTemplate.queryForObject(contains("SELECT COUNT(*)"),
+                eq(Long.class), any(Object[].class))).thenReturn(null);
+        when(jdbcTemplate.query(anyString(),
+                any(org.springframework.jdbc.core.RowMapper.class),
+                any(Object[].class))).thenReturn(List.of());
+
+        EmbeddingJobRepository.PageResult page = repository.listPage(
+                null, null, null, null, 50, 0);
+
+        assertEquals(0, page.totalElements());
+        assertTrue(page.items().isEmpty());
+    }
+
+    private java.sql.ResultSet fullJobRow(UUID id) throws java.sql.SQLException {
+        java.sql.ResultSet rs = mock(java.sql.ResultSet.class);
+        when(rs.getObject("id", UUID.class)).thenReturn(id);
+        when(rs.getObject("batch_id", UUID.class))
+                .thenReturn(UUID.fromString("00000000-0000-0000-0000-00000000000f"));
+        when(rs.getLong("document_id")).thenReturn(11L);
+        when(rs.getLong("embedding_profile_id")).thenReturn(7L);
+        when(rs.getBoolean("force")).thenReturn(true);
+        when(rs.getString("content_hash")).thenReturn("hash-1");
+        when(rs.getLong("document_version")).thenReturn(4L);
+        when(rs.getString("status")).thenReturn("FAILED");
+        when(rs.getInt("attempt_count")).thenReturn(2);
+        when(rs.getInt("max_attempts")).thenReturn(8);
+        java.time.OffsetDateTime now = java.time.OffsetDateTime.now();
+        when(rs.getObject("available_at", java.time.OffsetDateTime.class))
+                .thenReturn(now);
+        when(rs.getString("lease_owner")).thenReturn("worker-9");
+        when(rs.getObject("lease_expires_at", java.time.OffsetDateTime.class))
+                .thenReturn(now);
+        when(rs.getObject("cancel_requested_at", java.time.OffsetDateTime.class))
+                .thenReturn(now);
+        when(rs.getString("last_error")).thenReturn("boom");
+        when(rs.getObject("created_at", java.time.OffsetDateTime.class))
+                .thenReturn(now);
+        when(rs.getObject("started_at", java.time.OffsetDateTime.class))
+                .thenReturn(now);
+        when(rs.getObject("finished_at", java.time.OffsetDateTime.class))
+                .thenReturn(now);
+        when(rs.getObject("updated_at", java.time.OffsetDateTime.class))
+                .thenReturn(now);
+        when(rs.getString("origin")).thenReturn("API");
+        when(rs.getString("requested_by_principal_id")).thenReturn("p1");
+        when(rs.getLong("request_generation")).thenReturn(3L);
+        when(rs.getString("document_kind")).thenReturn("TEXT");
+        when(rs.getString("chunker_version")).thenReturn("v2");
+        return rs;
+    }
+
+    @Test
+    void fieldRowMapperMapsAllJobColumns() {
+        // 经 find 走字段级 rowMapper（与 createOrCoalesce 内联 mapper
+        // 不同实例），验证 24 列全字段映射。
+        UUID jobId = UUID.randomUUID();
+        when(jdbcTemplate.query(anyString(),
+                any(org.springframework.jdbc.core.RowMapper.class),
+                any(Object[].class))).thenAnswer(invocation -> {
+                    org.springframework.jdbc.core.RowMapper<?> mapper =
+                            invocation.getArgument(1);
+                    return List.of(mapper.mapRow(fullJobRow(jobId), 0));
+                });
+
+        EmbeddingJob job = repository.find(jobId).orElseThrow();
+
+        assertEquals(jobId, job.id());
+        assertEquals(11L, job.documentId());
+        assertEquals(7L, job.embeddingProfileId());
+        assertTrue(job.force());
+        assertEquals("hash-1", job.contentHash());
+        assertEquals(4L, job.documentVersion());
+        assertEquals(EmbeddingJobStatus.FAILED, job.status());
+        assertEquals(2, job.attemptCount());
+        assertEquals(8, job.maxAttempts());
+        assertEquals("worker-9", job.leaseOwner());
+        assertEquals("boom", job.lastError());
+        assertEquals("API", job.origin());
+        assertEquals("p1", job.requestedByPrincipalId());
+        assertEquals(3L, job.requestGeneration());
+        assertEquals("TEXT", job.documentKind());
+        assertEquals("v2", job.chunkerVersion());
+    }
+
     // ── claim/租约生命周期（Batch 116 第二批）──────────────────────────
 
     private EmbeddingJob job() {
