@@ -3083,6 +3083,17 @@ VersionHistoryModal 相关 100% 项等。
   useFileUpload/Documents.tsx 分支残余。
 - 工作区：本地已合并 test/* 分支随各批清理，无遗留 worktree。
 
+### Batch 354（已交付）
+
+- 分支：`test/relocate-residual-batch354`（已合入 main）
+- 内容：DocumentRelocationService 残余分支（约 13 行缺口），新
+  建 DocumentRelocationResidualBranchesTest 9 用例：重放信封反
+  序列化 + ACL 复核（missing scope ISE、不支持 schema 拒绝）、
+  IN_PROGRESS/指纹不匹配拒绝、活跃同步 run 冲突、非可见 ASCII
+  命名空间/externalId 守卫、源文档缺 external_id 拒绝。要点：
+  含 null 值行须用 HashMap 构造。
+- 指标：core 全量门禁 EXIT=0 绿（4688 tests, 0 failures）。
+
 ### Batch 353（已交付）
 
 - 分支：`test/relocate-apply-update-batch353`（已合入 main）
