@@ -3161,6 +3161,22 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 369（已交付）
+
+- 分支：`test/authfilter-openapi-batch369`（已合入 main）
+- 内容：ApiKeyAuthFilter 残余（5 用例，新建
+  ApiKeyAuthFilterResidualTest）：①4 参构造 null 根凭据解析器
+  回退环境解析器（静态 key 认证不受影响）；②非 Bearer
+  Authorization 头 401；③尾部空白 Bearer 头 trim 后走 scheme
+  错误分支；④/v1/ 路径 401 OpenAI 错误形状
+  （invalid_api_key/authentication_error）；⑤/v1/ 路径凭据服务
+  不可用 503 OpenAI 错误形状
+  （credential_service_unavailable/server_error）。
+- 防御分支记档：空白 Bearer 专属分支（225-227）在 normalize
+  trim 语义下不可达。
+- 范围调整：OpenApiConfig（12 行）挪至 Batch 370。
+- 状态：单类 5 用例绿；core 全量门禁 EXIT=0（4802 tests）。
+
 ### Batch 368（已交付）
 
 - 分支：`test/rerank-outbox-batch368`（已合入 main）
