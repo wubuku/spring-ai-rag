@@ -3244,6 +3244,19 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 375（已交付）
+
+- 分支：`test/chatcontroller-jsonrecord-batch375`（已合入 main）
+- 内容：RagChatController SSE 事件分派（6 用例，新建
+  RagChatControllerSendEventTest，反射驱动私有 sendChatEvent/
+  sendChatError）：ContentDelta；ToolStarted（含可空
+  toolCallId/query）；ToolFinished；SourcesAvailable；Completed
+  含/不含 retrievalTraceId；Failed → ChatStreamFailure；
+  sendChatError 的 RagException 错误码提取与 null 消息兜底。
+- 范围调整：JsonRecordService（105 行）超出单批容量，挪至
+  Batch 376 拆分执行。
+- 状态：单类 6 用例绿；core 全量门禁 EXIT=0（4840 tests）。
+
 ### Batch 374（已交付）
 
 - 分支：`test/apikey-rotate-chat-batch374`（已合入 main）
