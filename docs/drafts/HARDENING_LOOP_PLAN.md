@@ -3421,6 +3421,18 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 390（规划中）
+
+- 目标：①RagDocumentController embedStream/batchDelete 端点层
+  （513-642 与 893-943 间剩余簇扫描后选）；②JsonRecordService
+  后段 sourceDelete/persist 收尾择辅。
+- 备选：ApiKeyManagementService 1332-1376 段、RagChatController
+  keyed JSON 路径残余。
+- 候选技术债：RetryConfig 的 retryOnServiceUnavailable 开关被
+  通用 5xx 分支遮蔽（生产行为变更需专项批次）。
+- 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
+  性分支→--no-ff 合并 main→账本→清理。
+
 ### Batch 389（已交付）
 
 - 分支：`test/jsonrecord-search-batch389`（已合入 main）
