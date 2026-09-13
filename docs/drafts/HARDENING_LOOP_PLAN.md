@@ -3345,6 +3345,18 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 383（已交付）
+
+- 分支：`test/batchcreate-syncitem-batch383`（已合入 main）
+- 内容：DocumentMutationService upsertSyncRunItem 深分支（1 用
+  例，新建 DocumentMutationSyncItemAppliedTest）：快照条目内容
+  变化（r1→r2，代际 10 ≤ 快照起点 20）→ APPLIED；SKIP 策略下派
+  发 NONE、无 job id、无错误。
+- 要点：findById 回读用 AtomicReference 返回 saveAndFlush 后实
+  例；allocateSourceSequence 需 jdbcTemplate update +
+  queryForObject RETURNING mutation_sequence 双 stub。
+- 状态：单类 1 用例绿；core 全量门禁 EXIT=0（4876 tests）。
+
 ### Batch 382（已交付）
 
 - 分支：`test/doccontroller-gaps-batch382`（已合入 main）
