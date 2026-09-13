@@ -3395,6 +3395,19 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 387（已交付）
+
+- 分支：`test/rotation-response-batch387`（已合入 main）
+- 内容：ApiKeyManagementService rotation 响应组装（3 用例，新建
+  ApiKeyManagementServiceRotationResponseTest）：①ACTIVE
+  principal + 当前凭据回填 currentCredentialId 且 rotationPending
+  =false；②REVOKED + PENDING 轮换 + retiring 凭据 → 轮换窗口字
+  段透传（pendingRotationId/retiringCredentialId/
+  rotationExpiresAt）且无当前凭据；③过期 principal → EXPIRED。
+- 要点：ApiPrincipalResponse 为 getter 型 DTO；PENDING 查询过滤
+  expiresAt 必须未来。
+- 状态：单类 3 用例绿；core 全量门禁 EXIT=0（4892 tests）。
+
 ### Batch 386（已交付）
 
 - 分支：`test/doccontroller-513-batch386`（已合入 main）
