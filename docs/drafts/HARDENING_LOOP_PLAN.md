@@ -3218,6 +3218,22 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 373（已交付）
+
+- 分支：`test/apikey-sourcedelete-batch373`（已合入 main）
+- 内容：ApiKeyManagementService 撤销路径矩阵（10 用例，新建
+  ApiKeyManagementServiceRevokeTest）：①四个构造器重载冒烟；
+  ②未知 keyId → false；③已撤销同 key 幂等 true；④已撤销不同
+  key → CREDENTIAL_NOT_CURRENT；⑤成功撤销（saveAndFlush +
+  PENDING 轮换终止 REVOKED + 保存 + 生命周期事件）；⑥ADMIN 非
+  root 守卫失败 → LAST_ADMIN_REQUIRED；⑦managed root update=1
+  成功；⑧managed root update=0 → LAST_ADMIN_REQUIRED；⑨disable
+  计数 0 → CONCURRENT_MODIFICATION；⑩非当前凭据拒绝。
+- 要点：ApiKeyRole/ApiKeyRotationStatus 在 core.entity 包；
+  rotationConflict 用 CONCURRENT_MODIFICATION；同实例 mock 实体
+  被生产代码修改后第二次调用语义改变（拆分用例规避）。
+- 状态：单类 10 用例绿；core 全量门禁 EXIT=0（4825 tests）。
+
 ### Batch 372（已交付）
 
 - 分支：`test/budgeted-model-batch372`（已合入 main）
