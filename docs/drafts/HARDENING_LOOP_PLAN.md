@@ -3083,6 +3083,22 @@ VersionHistoryModal 相关 100% 项等。
   useFileUpload/Documents.tsx 分支残余。
 - 工作区：本地已合并 test/* 分支随各批清理，无遗留 worktree。
 
+### Batch 357（已交付）
+
+- 分支：`test/embed-repo-sweep1-batch357`（已合入 main）
+- 内容：EmbeddingJobRepository 缺口清扫第一扫（3 用例，追加至
+  EmbeddingJobRepositoryTest）：①readiness 经
+  ResultSetExtractor 真实执行——6 列计数映射 +
+  CollectionEmbeddingReadinessResponse 全字段断言，参数顺序
+  jsonChunker→textChunker→collectionId→profileId 捕获验证；②
+  listPage count 查询返回 null → totalElements 归 0 防御分支；
+  ③find 经字段级 rowMapper（与 createOrCoalesce 内联 mapper 不
+  同实例）执行 24 列全字段映射断言，覆盖字段初始化 lambda 体。
+- 要点：EmbeddingJob 第 4 分量访问器为 embeddingProfileId（非
+  profileId）；mock ResultSet 的 getLong/getBoolean 声明
+  SQLException，提取的辅助方法需 throws。
+- 状态：单类 19 用例绿；core 全量门禁 EXIT=0（4702 tests）。
+
 ### Batch 356（已交付）
 
 - 分支：`test/pg-constraint-embed-batch356`（已合入 main）
