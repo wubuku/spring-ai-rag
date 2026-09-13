@@ -3382,6 +3382,17 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 386（已交付）
+
+- 分支：`test/doccontroller-513-batch386`（已合入 main）
+- 内容：RagDocumentController 列表统计与嵌入端点（5 用例，新建
+  RagDocumentControllerListingStatsTest）：①getDocumentStats 无
+  限制查询 + null 状态归并 UNKNOWN；②embedDocument ASYNC 派发
+  （embedDispatchMap status 键）；③SYNC 直调 + IAE→400；④
+  searchDocumentsForCaller 受限/无限制查询选择双分支；⑤
+  collectionMetadata 批量收集名称/key + 空页短路。
+- 状态：单类 5 用例绿；core 全量门禁 EXIT=0（4889 tests）。
+
 ### Batch 385（已交付）
 
 - 分支：`test/remaining-gaps-batch385`（已合入 main）
