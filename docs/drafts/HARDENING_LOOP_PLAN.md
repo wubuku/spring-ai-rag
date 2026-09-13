@@ -3433,6 +3433,22 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 390（已交付）
+
+- 分支：`test/embedstream-delete-batch390`（已合入 main）
+- 内容：
+  - RagDocumentController（3 用例，新建
+    RagDocumentControllerEmbedStreamTest）：embedDocumentStream
+    成功路径（进度回调消费 + done）；IllegalArgumentException →
+    error 事件；意外异常 → completeWithError。
+  - JsonRecordService 收尾（2 用例，新建
+    JsonRecordServiceIdentityTest）：getByExternalIdentity 集合
+    解析（resolveActiveIds(null, keys) 显式 stub）+ 墓碑缺失
+    DocumentNotFound + 成功回读 detail（getDetail 委托链）。
+- 要点：resolver.resolveActiveIds(null, keys) 需显式 stub；
+  Consumer 泛型擦除需显式转型。
+- 状态：单类 3+2 用例绿；core 全量门禁 EXIT=0（4904 tests）。
+
 ### Batch 389（已交付）
 
 - 分支：`test/jsonrecord-search-batch389`（已合入 main）
