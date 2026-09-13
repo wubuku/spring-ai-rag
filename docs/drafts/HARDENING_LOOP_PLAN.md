@@ -3083,6 +3083,22 @@ VersionHistoryModal 相关 100% 项等。
   useFileUpload/Documents.tsx 分支残余。
 - 工作区：本地已合并 test/* 分支随各批清理，无遗留 worktree。
 
+### Batch 362（已交付）
+
+- 分支：`test/rescatalog-discover-guards-batch362`（已合入 main）
+- 内容：ResourceCatalog.discover 入口守卫（7 用例，新建
+  ResourceCatalogDiscoverGuardsTest）：①全空位置 → 空快照；②
+  kind 非空校验（顺序在空位置检查之后）；③列表内空白位置跳过 +
+  扩展名规范化（空白/null 过滤、点前缀剥离、大写归一）+ 不匹配
+  扩展名跳过；④null 扩展名集合放行全部；⑤预算不变量：恰好触顶
+  （10/10 字节）保持健康；⑥多根累积：第二根全部文件超剩余预算
+  以诊断记录（failFast=false）；⑦无效限制（maxFilesPerRoot=0）
+  经 discoverOne 入口校验进诊断。
+- 防御分支记档：discover 外层 totalBytes > maxTotalBytes 抛出
+  （95-96 行）不可达——readBounded 按 min(maxFileBytes,
+  remaining) 封顶，单根/多根累积均无法越限。
+- 状态：单类 7 用例绿；core 全量门禁 EXIT=0（4745 tests）。
+
 ### Batch 361（已交付）
 
 - 分支：`test/extdoc-guards-batch361`（已合入 main）
