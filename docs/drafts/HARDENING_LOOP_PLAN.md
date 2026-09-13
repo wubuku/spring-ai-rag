@@ -3382,6 +3382,19 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 387（规划中）
+
+- 目标：①ApiKeyManagementService rotation 响应组装（1006-1096
+  段：toResponse 的 REVOKED/轮换中/待轮换字段与 allowedIds 空
+  归并）；②RagDocumentController batchDelete/reembed 端点层
+  （221/256-257/375-385 小簇）择辅。
+- 备选：JsonRecordService 后段收尾、RagChatController keyed
+  JSON 路径残余、upsertSyncRunItem 更深分支。
+- 候选技术债：RetryConfig 的 retryOnServiceUnavailable 开关被
+  通用 5xx 分支遮蔽（生产行为变更需专项批次）。
+- 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
+  性分支→--no-ff 合并 main→账本→清理。
+
 ### Batch 386（已交付）
 
 - 分支：`test/doccontroller-513-batch386`（已合入 main）
