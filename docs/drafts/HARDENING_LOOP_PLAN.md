@@ -3083,6 +3083,26 @@ VersionHistoryModal 相关 100% 项等。
   useFileUpload/Documents.tsx 分支残余。
 - 工作区：本地已合并 test/* 分支随各批清理，无遗留 worktree。
 
+### Batch 359（已交付）
+
+- 分支：`test/obs-scoped-reads-batch359`（已合入 main）
+- 内容：IntegrationObservationRepository collection 作用域读变体
+  与守卫（8 用例，追加至既有测试类）：①totals scoped 全过滤器
+  （COLLECTION_SOURCE 关联源、observation. 限定列、IN (?,?)、
+  principal/operation 过滤、参数顺序 from→to→principalType→
+  principalRef→operation→collectionIds）；②byStatus/byOperation
+  scoped 短路 + 限定维度列；③timeline scoped 短路 + 限定 bucket
+  列 + dimension_key 其余类型分支（OffsetDateTime/Instant/
+  LocalDate/默认文本化）；④oldestBucket scoped 限定 MIN 列；⑤
+  deleteExpired 双 DELETE setter 真实执行（超时下限 1 秒、cutoff、
+  批大小）；⑥upsert 无授权集合 → 集合侧空分组跳过（batchUpdate
+  仅一次）；⑦集合侧 setter 绑定 collectionId（参数 4）+ over_5000
+  桶（操作侧 17/集合侧 18）；⑧duration_sum_ms 负值与
+  dimension_key 空白 → ISE。
+- 要点：Framework 7 起 PreparedStatementSetter.setValues 单参
+  （原二参重载在 BatchPreparedStatementSetter 上）。
+- 状态：单类 20 用例绿；core 全量门禁 EXIT=0（4719 tests）。
+
 ### Batch 358（已交付）
 
 - 分支：`test/embed-repo-sweep2-batch358`（已合入 main）
