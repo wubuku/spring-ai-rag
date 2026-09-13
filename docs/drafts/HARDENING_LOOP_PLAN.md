@@ -3083,6 +3083,26 @@ VersionHistoryModal 相关 100% 项等。
   useFileUpload/Documents.tsx 分支残余。
 - 工作区：本地已合并 test/* 分支随各批清理，无遗留 worktree。
 
+### Batch 364（规划中）
+
+- 候选（按上轮 4752 tests 门禁后 jacoco 重扫）：
+  - ApiKeyManagementService（100 行 + 100 分支）——多批工程，首
+    批建议从 sourceDelete/rotation 尾部分支开始（已有
+    RotationClampTest/MappingTest/Test 三个测试类可扩展）。
+  - DocumentEmbedService（42 行）、JsonRecordService（87 行）、
+    ChatTurnOperationService（85 行）、DocumentMutationService
+    （85 行）。
+  - RagDocumentController（108 行）、RagChatController（50 行）、
+    PdfImportController 残余 44 行（preview/文件服务区 + 
+    resolveWritableCollectionId 的 collectionKey 路径 357 行）。
+  - 小档：RequestTraceFilter(9)、JsonRecordSearchTool(9)、
+    EmbeddingDispatchService(9)、RetryConfig(9)、
+    BudgetedToolCallingManager(9)、HttpRerankProvider(8)、
+    SlowQueryMetricsService(8)、ApiKeyAuthFilter(8)、
+    RagSearchController(8)、AlertNotificationOutboxService(8)。
+- 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
+  性分支→--no-ff 合并 main→账本→清理。
+
 ### Batch 363（已交付）
 
 - 分支：`test/gap-sweep-batch363`（已合入 main）
