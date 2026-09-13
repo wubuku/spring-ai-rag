@@ -3083,6 +3083,19 @@ VersionHistoryModal 相关 100% 项等。
   useFileUpload/Documents.tsx 分支残余。
 - 工作区：本地已合并 test/* 分支随各批清理，无遗留 worktree。
 
+### Batch 363（已交付）
+
+- 分支：`test/gap-sweep-batch363`（已合入 main）
+- 内容：小缺口清扫（7 用例）：①GlobalExceptionHandler 收尾——
+  媒体类型不支持 400（UNSUPPORTED_MEDIA_TYPE）、缺失 multipart
+  part 400（MISSING_PART）、持久化能力策略损坏 503
+  （POLICY_SERVICE_UNAVAILABLE）、ChatTurnInProgress 加
+  Retry-After 头、普通 RagException 不带该头、SecurityException
+  空消息兜底 Access denied；②EmbeddingJobRepository.markNotRequested
+  非 null 代际侧（RETURNING 7L 原样返回且 cancelSuperseded 用 7L）
+  ——embed repo 缺口清零。
+- 状态：单类 6+29 用例绿；core 全量门禁 EXIT=0（4752 tests）。
+
 ### Batch 362（已交付）
 
 - 分支：`test/rescatalog-discover-guards-batch362`（已合入 main）
