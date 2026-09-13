@@ -3204,6 +3204,24 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 372（已交付）
+
+- 分支：`test/budgeted-model-batch372`（已合入 main）
+- 内容：BudgetedChatModel 残余（7 用例，新建
+  BudgetedChatModelResidualTest）：①2/7/8 参（summaryCall
+  true/false）/11/12 参构造器重载默认值链（purpose/recorder/
+  costUnit/modelRef null 回退）；②contextWindow=0 校验直通 +
+  null prompt 委派（call((Prompt) null)）；③默认模型名解析走
+  delegate.getDefaultOptions().getModel()；④stream 取消信号
+  CANCELLED 兜底（Flux.never + dispose）；⑤SUMMARY 用途流式
+  完成记录 usage；⑥工具 schema token 计数超限拒绝
+  （CHAT_CONTEXT_BUDGET_EXCEEDED）与限额内委派；⑦prompt token
+  + 预留 + 边际 ≥ 窗口拒绝。
+- 要点：ChatModel.call(null) 在 call(String)/call(Prompt) 间二
+  义需转型；mock stub varargs/null 用 <Prompt>isNull() 类型见证；
+  reactor-test 不在依赖，取消信号用 subscribe+dispose 驱动。
+- 状态：单类 7 用例绿；core 全量门禁 EXIT=0（4815 tests）。
+
 ### Batch 371（已交付）
 
 - 分支：`test/search-budget-batch371`（已合入 main）
