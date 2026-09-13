@@ -3129,6 +3129,26 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 367（已交付）
+
+- 分支：`test/dispatch-slowquery-batch367`（已合入 main）
+- 内容：
+  - EmbeddingDispatchService（7 用例，新建
+    EmbeddingDispatchResidualTest）：ASYNC 直返排队结果（不触发
+    同步执行）；keyword 索引钩子在入队/NOT_REQUESTED 双路径；
+    null 版本文档 createOrCoalesce 参数回退 0L；新建合并报告
+    ASYNC_COALESCED；取消活跃任务委派仓储；同步完成后
+    QUEUED/RUNNING 原样返回排队结果；无描述符提供者按文档类型
+    回退 legacy/json-record 描述符。
+  - SlowQueryMetricsService（4 用例，新建
+    SlowQueryMetricsServiceResidualTest）：无 MeterRegistry 构造
+    降级（内存计数生效）；无 SessionFactory 统计为空 + summary
+    零值守卫；日志路径超长 SQL 截断；脱敏正则经日志路径执行
+    （行为注记：保留记录存原始 SQL，脱敏仅作用于日志）。
+- 防御分支记档：recordSlowQuery 的 catch 回退（149-159）对当前
+  try 块内确定性调用不可达。
+- 状态：单类 7+4 用例绿；core 全量门禁 EXIT=0（4786 tests）。
+
 ### Batch 366（已交付）
 
 - 分支：`test/retry-budget-batch366`（已合入 main）
