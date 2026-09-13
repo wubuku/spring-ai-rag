@@ -3147,6 +3147,26 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 368（已交付）
+
+- 分支：`test/rerank-outbox-batch368`（已合入 main）
+- 内容：
+  - HttpRerankProvider（8 用例，新建
+    HttpRerankProviderResidualTest）：null 配置双构造回退；空/
+    null 结果透传；HTTP 失败回退启发式；无启发式回退按深度截断
+    （深度 0 保留全部）；/v1 结尾基址短 /rerank 路径 + 深度 0 取
+    配置 topN + null query/chunkText 空串化（请求体 JSON 断言）；
+    mapResponse 拒绝空响应/无 results 数组/全无效索引；data 嵌套
+    results 接受。
+  - AlertNotificationOutboxService（3 用例，新建
+    AlertNotificationOutboxServiceResidualTest）：重复 provider
+    名构造即拒；通知总开关 notificationsEnabled；
+    configuredProviders 过滤未配置项并按名排序。
+- 要点：MockRestServiceServer 的 requestTo 匹配用 hamcrest
+  containsString（误用 Mockito contains 会得到空期望）；mock
+  构造移出 assertThrows lambda 避免与 stubbing 状态串扰。
+- 状态：单类 8+3 用例绿；core 全量门禁 EXIT=0（4797 tests）。
+
 ### Batch 367（已交付）
 
 - 分支：`test/dispatch-slowquery-batch367`（已合入 main）
