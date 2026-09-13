@@ -3270,6 +3270,20 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 377（已交付）
+
+- 分支：`test/jsonrecord-sweep2-batch377`（已合入 main）
+- 内容：JsonRecordService 中段（4 用例，新建
+  JsonRecordServiceMidTest）：①searchAuthorizedDetailed 空白
+  query 与 maxResults<1 守卫；②rerank 失败降级 limitResults 保
+  留原结果集；③getDetail 文档缺失/非 json-record 类型 →
+  DocumentNotFoundException；④batchUpsert mutationService 委派
+  汇总计数（CREATED/UPDATED/UNCHANGED/持久化失败）。
+- 要点：upsertJsonRecord 返回 JsonMutationResult（需真实
+  document 与 lifecycle record）；collectionKey 可为 null →
+  stub 用 any() 而非 anyString()。
+- 状态：单类 4 用例绿；core 全量门禁 EXIT=0（4851 tests）。
+
 ### Batch 376（已交付）
 
 - 分支：`test/chat-keyed-json-batch376`（已合入 main）
