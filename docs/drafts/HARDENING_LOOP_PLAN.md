@@ -3458,6 +3458,37 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+## 进度留档快照（Batch 392 进行中 · 用户留档指令）
+
+- 留档时点：2026-09-14 · main @ 本留档提交
+- 循环进度：Batch 356–391 共 36 个批次按固定流程交付；Batch 392
+  进行中——rotation ops（getRotation/completeRotation/
+  cancelRotation）测试类编写未完成，未提交（半成品已移除，设计
+  要点见下），随下次循环重写。
+- 可构建性证据：core 全量 mvn test 门禁 EXIT=0（4892 tests，
+  Batch 391 门禁）；webui vite build 通过（更早批次验证，本段未
+  改动 webui）。
+- 会话累计：core 全量测试自 4694 → 4892（+198）。
+- Batch 392 重写要点：
+  - 用例设计：getRotation root 调用返回 PENDING 响应；
+    completeRotation 对 EXPIRED → CREDENTIAL_ROTATION_EXPIRED、
+    对 CANCELED → CREDENTIAL_ROTATION_NOT_PENDING；成功完成
+    （source disable + operation COMPLETED + saveAndFlush）；
+    cancelRotation 对 CANCELED 幂等；成功取消（target 失效、
+    source retireAt 清空恢复）。
+  - harness：operation 为 ApiKeyRotationOperation mock
+    （getPrincipalId/getRotationId/getExpiresAt 未来/
+    getSourceCredentialId=getTargetCredentialId=getStatus 可变）；
+    findByKeyId source(version 1, enabled)/target(version 2,
+    disabled)；disableByKeyId → 1；principal stub 含
+    capabilities=FULL_SERIALIZED。
+  - 已知坑：rotation ops 依赖 authorizeRotation（root=true 放
+    行）、expirePendingIfNecessary（expiresAt 未来则跳过）、
+    rotationResponse 内再次调用 requiredRotationCredentials 与
+    principal 查询。
+- 历史留档：Batch 388–391 各批要点与防御分支记档见下方对应
+  段落。
+
 ### Batch 391（已交付）
 
 - 分支：`test/rotation-ops-batch391`（已合入 main）
