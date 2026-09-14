@@ -3489,6 +3489,19 @@ VersionHistoryModal 相关 100% 项等。
 - 历史留档：Batch 388–391 各批要点与防御分支记档见下方对应
   段落。
 
+### Batch 393（规划中，范围放大）
+
+- 目标：①DocumentMutationService 长尾（tombstone 尾部/sync-run/
+  relocate 段 1068-1798 扫描后按方法群成批覆盖）；②
+  ApiKeyManagementService prepareRotation 复杂分支（371-398 幂
+  等/过期/授权矩阵残余）。两个主目标并列，合计预期 ≥25 用例。
+- 备选：JsonRecordService 后段、RagDocumentController 1181-1478
+  段、RagChatController keyed JSON 路径残余。
+- 候选技术债：RetryConfig 的 retryOnServiceUnavailable 开关被
+  通用 5xx 分支遮蔽（生产行为变更需专项批次）。
+- 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
+  性分支→--no-ff 合并 main→账本→清理。
+
 ### Batch 392（已交付）
 
 - 分支：`test/rotation-lifecycle-batch392`（已合入 main）
