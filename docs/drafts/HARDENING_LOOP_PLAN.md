@@ -3445,6 +3445,20 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 391（已交付）
+
+- 分支：`test/rotation-ops-batch391`（已合入 main）
+- 内容：RagDocumentController 批量端点（5 用例，新建
+  RagDocumentControllerBatchOpsTest）：①batchDeleteDocuments 空
+  ids 守卫 + 委派服务透传；②batchEmbedDocuments 空/null ids 守
+  卫 + 50 上限（API 限流文案）；③SYNC 原始结果 Map →
+  BatchEmbedResultItem 映射（chunks/embeddingsStored/error/
+  reason）+ summary 归并 + 审计；④ASYNC requireJobsEnabled 后逐
+  文档排队（queued 计入 success 槽位）。
+- 要点：BatchEmbedSummary 槽位为 total/success/cached/failed/
+  skipped（ASYNC 的 queued 写入 success）。
+- 状态：单类 5 用例绿；core 全量门禁 EXIT=0（4892 tests）。
+
 ### Batch 390（已交付）
 
 - 分支：`test/embedstream-delete-batch390`（已合入 main）
