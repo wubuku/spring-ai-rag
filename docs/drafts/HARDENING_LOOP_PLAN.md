@@ -3526,7 +3526,21 @@ VersionHistoryModal 相关 100% 项等。
   断言；⑤reembed endpoint 聚合补充。
 - 状态：单类 6 用例绿；core 全量门禁 EXIT=0（4959 tests）。
 
-### Batch 394（已交付）
+### Batch 396（规划中，范围放大）
+
+- 目标：①RagDocumentController batchDelete/reembed 端点簇（946-
+  990 守卫 + 1068-1082 batchEmbedStream 矩阵）；②
+  ApiKeyManagementService provision 授权矩阵残余；③
+  JsonRecordService 后段（sourceDelete/persist 内部）择辅。
+  预期 ≥12 用例。
+- 备选：RagChatController keyed JSON 路径残余、
+  upsertSyncRunItem 更深分支、RagDocumentController 剩余长尾。
+- 候选技术债：RetryConfig 的 retryOnServiceUnavailable 开关被
+  通用 5xx 分支遮蔽（生产行为变更需专项批次）。
+- 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
+  性分支→--no-ff 合并 main→账本→清理。
+
+### Batch 395（已交付）
 
 - 分支：`test/rotation-authz-batch394`（已合入 main）
 - 内容：
