@@ -3502,6 +3502,34 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 393（已交付 · 范围放大）
+
+- 分支：`test/mutation-longtail2-batch393`（已合入 main）
+- 内容：DocumentMutationService 长尾方法群（23 用例，两个测试
+  类）：
+  - GuardsTest（12）：requireText trim/长度/null、requireContent
+    不 trim、normalizeOptional、normalizeDocumentType text 回退、
+    byteSize UTF-8、requireResult null 快速失败、requireRevision
+    匹配与 null 回退 1、incrementRevision、latestVersion 零回退、
+    rejectUnknown 字段名透出、requireLocal 缺失/外部管理拒绝/
+    放行、validateCreate 链。
+  - ExternalHelpersTest（11）：外部事务重试矩阵（DIVE 首轮冲突
+    → 恢复、耗尽按 jsonRecord 抛 Structured/DocumentRevision 双
+    类型、非可重试快速失败）、requireExpectedSourceRevision 四
+    分支矩阵（strict CAS）、requireKind 双冲突类型、
+    sameExternalState（enabled/deletion 敏感）与
+    sameExternalManagedState（不敏感）对比、normalizeNamespace
+    （default 回退/trim/128 上限/可见 ASCII/开关）、findDuplicate
+    （NONE 短路/COLLECTION 集合过滤/GLOBAL 全量/无匹配）。
+  - JsonRecordService 收尾（2 用例，IdentityTest）：
+    getByExternalIdentity 集合解析 + 墓碑缺失拒绝 + 成功回读。
+- 要点：反射调用需解包 InvocationTargetException；byteSize 按
+  UTF-8 字节；allowNonDefaultNamespace 默认开启；
+  DocumentDeduplicationScope 常量为 LEGACY_GLOBAL；
+  resolver.resolveActiveIds(null, keys) 需显式 stub。
+- 状态：单类 12+11 用例绿（另 IdentityTest 2 用例随 Batch 390
+  交付）；core 全量门禁 EXIT=0（4949 tests）。
+
 ### Batch 392（已交付）
 
 - 分支：`test/rotation-lifecycle-batch392`（已合入 main）
