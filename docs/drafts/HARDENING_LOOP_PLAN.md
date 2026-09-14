@@ -3516,6 +3516,25 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 394（已交付）
+
+- 分支：`test/rotation-authz-batch394`（已合入 main）
+- 内容：
+  - ApiKeyManagementService rotation 授权矩阵（7 用例，新建
+    RotationAuthzTest）：prepareRotation 授权（无 DB 策略拒绝、
+    NORMAL 他人 principal 拒绝、NORMAL 非当前 prepare 凭据拒绝、
+    ADMIN 任意 principal 放行 → PENDING 响应）；getRotation
+    NORMAL 他人拒绝 / ADMIN 放行（rotationResponse 组装解析
+    source/target 凭据）；requireRotationLedger 仓储缺失
+    SERVICE_UNAVAILABLE。
+  - RagDocumentController reembedMissing 端点（3 用例，
+    ReembedEndpointTest）：无候选空响应（不查嵌入）；逐文档聚
+    合（COMPLETED/QUEUED 计成功、异常计 error）；force 直通嵌入
+    服务。
+- 要点：profileProvider.getActiveProfile 链式 stub 需先 mock
+  profile 再 stub id（mock 默认 null 导致 NPE）。
+- 状态：单类 7+3 用例绿；core 全量门禁 EXIT=0（4959 tests）。
+
 ### Batch 393（已交付 · 范围放大）
 
 - 分支：`test/mutation-longtail2-batch393`（已合入 main）
