@@ -3516,6 +3516,20 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 397（规划中，范围放大）
+
+- 目标：①DocumentMutationService 长尾（upsertExternal 内部
+  created/updated 分支 1068-1176、importDocument 外部路径 1231、
+  completeIdempotency 全矩阵 1583-1598、ensureLocalForNonSkip
+  Mutation/dispatch/finish 1656-1671）；②JsonRecordService 后段
+  sourceDelete/persist 内部择辅。预期 ≥20 用例。
+- 备选：RagChatController keyed JSON 路径残余、
+  RagDocumentController 剩余长尾（1181-1478）。
+- 候选技术债：RetryConfig 的 retryOnServiceUnavailable 开关被
+  通用 5xx 分支遮蔽（生产行为变更需专项批次）。
+- 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
+  性分支→--no-ff 合并 main→账本→清理。
+
 ### Batch 396（已交付）
 
 - 分支：`test/mutation-relocate-batch396`（已合入 main）
