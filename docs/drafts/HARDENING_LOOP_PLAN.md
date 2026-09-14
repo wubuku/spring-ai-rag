@@ -3445,6 +3445,19 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 392（规划中）
+
+- 目标：①ApiKeyManagementService rotation ops（getRotation/
+  completeRotation/cancelRotation 463-576：EXPIRED/CANCELED/
+  rotationNotPending 分支与 rotationResponse 组装）；②
+  RagDocumentController 1068/1181-1478 剩余长尾择辅。
+- 备选：JsonRecordService 后段收尾、RagChatController keyed
+  JSON 路径残余、upsertSyncRunItem 更深分支。
+- 候选技术债：RetryConfig 的 retryOnServiceUnavailable 开关被
+  通用 5xx 分支遮蔽（生产行为变更需专项批次）。
+- 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
+  性分支→--no-ff 合并 main→账本→清理。
+
 ### Batch 391（已交付）
 
 - 分支：`test/rotation-ops-batch391`（已合入 main）
