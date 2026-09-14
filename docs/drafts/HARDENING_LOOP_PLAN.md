@@ -3516,6 +3516,18 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 396（已交付）
+
+- 分支：`test/mutation-relocate-batch396`（已合入 main）
+- 内容：restoreLocalFromVersion 快照可见性与内容变化矩阵（4 用
+  例，新建 DocumentMutationRestoreVisibilityMatrixTest）：①
+  SNAPSHOT 可见性 enabled=true 快照 → disabledAt 清空且无 SKIP 派
+  发；②内容未变 + 嵌入新鲜 → 无排队派发；③内容变化 → PENDING
+  复位 + processingError 清空；④禁用快照恢复为禁用。
+- 要点：restoreLocalFromVersion 无本地 revision bump（依赖
+  versionService 推进）；transactionManager 需 stub getTransaction。
+- 状态：单类 4 用例绿；core 全量门禁 EXIT=0（4969 tests）。
+
 ### Batch 395（已交付）
 
 - 分支：`test/jsonrecord-provision-batch395`（已合入 main）
