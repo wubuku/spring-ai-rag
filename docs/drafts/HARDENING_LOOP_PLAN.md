@@ -3516,6 +3516,21 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 398（已交付）
+
+- 分支：`test/longtail-sweep-batch398`（已合入 main）
+- 内容：restoreLocalFromVersion 快照恢复矩阵（10 用例，新建
+  DocumentMutationRestoreSnapshotMatrixTest）：①restoreApplies
+  SnapshotFields——title/content/source/revision 回写；②payload
+  深拷贝（jsonbPayload 传入后 get("key") 值验证）；③metadata 快
+  照恢复（Map locale=zh）；④sourceRevision 快照不回写（不参与
+  快照恢复，由 contentHash 间接管理）；⑤内容变化 → PENDING 复
+  位；⑥内容未变化 → COMPLETED 保持；⑦fresh 嵌入 → 派发 null；
+  ⑧SKIP 策略 → 无派发；⑨SYNC 策略 → 嵌入触发。
+- 要点：restoreLocalFromVersion 无本地 revision bump（依赖
+  versionService 推进）；需要 versionRestoreEnabled=true 开启。
+- 状态：单类 10 用例绿；core 全量门禁 EXIT=0（4980 tests）。
+
 ### Batch 397（规划中，范围放大）
 
 - 目标：①DocumentMutationService 长尾（upsertExternal 内部
