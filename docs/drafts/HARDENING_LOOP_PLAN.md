@@ -3535,7 +3535,20 @@ VersionHistoryModal 相关 100% 项等。
   profile 再 stub id（mock 默认 null 导致 NPE）。
 - 状态：单类 7+3 用例绿；core 全量门禁 EXIT=0（4959 tests）。
 
-### Batch 393（已交付 · 范围放大）
+### Batch 395（规划中，范围放大）
+
+- 目标：①JsonRecordService 后段收尾（persistInTransaction 更新
+  路径/coordinateLocalIndex/embedIfRequested 完整矩阵）；②
+  ApiKeyManagementService provisionInTransaction/replayResponse
+  （242-316 段）择辅。两个主目标并列，预期 ≥18 用例。
+- 备选：RagChatController keyed JSON 路径残余、
+  upsertSyncRunItem 更深分支、RagDocumentController 剩余长尾。
+- 候选技术债：RetryConfig 的 retryOnServiceUnavailable 开关被
+  通用 5xx 分支遮蔽（生产行为变更需专项批次）。
+- 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
+  性分支→--no-ff 合并 main→账本→清理。
+
+### Batch 394（已交付）
 
 - 分支：`test/mutation-longtail2-batch393`（已合入 main）
 - 内容：DocumentMutationService 长尾方法群（23 用例，两个测试
