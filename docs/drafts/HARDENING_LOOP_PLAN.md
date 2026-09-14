@@ -3489,6 +3489,31 @@ VersionHistoryModal 相关 100% 项等。
 - 历史留档：Batch 388–391 各批要点与防御分支记档见下方对应
   段落。
 
+### Batch 392（已交付）
+
+- 分支：`test/rotation-lifecycle-batch392`（已合入 main）
+- 内容：ApiKeyManagementService rotation 全生命周期（17 用例，
+  新建 ApiKeyManagementServiceRotationLifecycleTest）：
+  - prepareRotation（8）：空幂等键 IAE、未知 key null、非当前凭
+    据 CREDENTIAL_NOT_CURRENT、overlap 越界 IAE（0 与超上限）、
+    principal 过期早于重叠期 PRINCIPAL_NOT_ACTIVE、成功创建
+    PENDING（rawKey + secretAvailable）、幂等重放（fingerprint
+    匹配 → replay=true）、重用冲突（IDEMPOTENCY_KEY_REUSED）。
+  - getRotation（1）：root 调用返回 PENDING 响应。
+  - completeRotation（3）：EXPIRED overlap → 自动过期（source 失
+    效 + EXPIRED 保存）后 CREDENTIAL_ROTATION_EXPIRED；CANCELED →
+    NOT_PENDING；成功 → COMPLETED + source disable + saveAndFlush。
+  - cancelRotation（3）：CANCELED 幂等（不落库）；EXPIRED overlap
+    拒绝；成功取消（target 失效 + CANCELED 保存）。
+  - cleanupCredentialRotations（2）：空过期集 + deleteTerminalBefore
+    清理；DataAccessException 容错不打清理。
+- 要点：operation.getStatus() 用 AtomicReference + thenAnswer 驱
+  动可变状态（mock setStatus 不改 stub 值）；prepare 新建 target
+  凭据随机 keyId 需 findByKeyId(anyString()) catch-all 按 keyId
+  区分版本（source=1，target=2 才过版本一致性校验）；principal
+  需 setNextCredentialVersion。
+- 状态：单类 17 用例绿；core 全量门禁 EXIT=0（4926 tests）。
+
 ### Batch 391（已交付）
 
 - 分支：`test/rotation-ops-batch391`（已合入 main）
