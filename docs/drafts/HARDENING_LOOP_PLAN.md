@@ -3530,7 +3530,16 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
-### Batch 396（已交付）
+### Batch 395 补充（已交付）
+
+- 分支：`test/jsonrecord-provision-batch395`（已合入 main）
+- 内容：JsonRecordService 后段矩阵收尾（6 用例，新建
+  JsonRecordServicePersistMatrixTest）：persistInTransaction 更
+  新路径 UNCHANGED/UPDATED 判定、coordinateLocalIndex 钩子、
+  embedIfRequested CACHED/FAILED 分支。
+- 状态：单类 6 用例绿；core 全量门禁 EXIT=0（4959 tests）。
+
+### Batch 394（已交付）
 
 - 分支：`test/mutation-relocate-batch396`（已合入 main）
 - 内容：restoreLocalFromVersion 快照可见性与内容变化矩阵（4 用
