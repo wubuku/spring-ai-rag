@@ -3581,6 +3581,19 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 435（已交付）
+
+- 分支：`test/tool-registry-tail-batch435`（已合入 main）
+- 内容：RagChatToolRegistry 注册校验长尾（新建
+  RagChatToolRegistryValidateTailTest，7 用例）：provider 空名
+  /空注册数据/空策略表拒绝、callback 缺 definition/元数据拒绝、
+  空白与跨 provider 重名工具拒绝、未知策略键与 null 策略拒绝、
+  输入 schema 空白与非法 JSON 拒绝、策略四元组（下限 1024 字
+  符、maxCallsPerRequest 全局上限、timeout 零值）约束。
+- 要点：非法工具名/schema 需以 mock ToolCallback/ToolDefinition
+  绕过 Spring AI ToolDefinition.builder 的构建期断言。
+- 状态：单类 7 用例绿；core 全量门禁 EXIT=0（5244 tests）。
+
 ### Batch 434（已交付）
 
 - 分支：`test/command-mapper-override-tail-batch434`（已合入 main）
