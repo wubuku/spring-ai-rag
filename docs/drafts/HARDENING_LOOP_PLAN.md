@@ -3560,6 +3560,15 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 425（已交付）
+
+- 分支：`test/embed-batch-tail-batch425`（已合入 main）
+- 内容：DocumentEmbedService.batchEmbedDocuments 汇总矩阵（新建
+  DocumentEmbedServiceBatchTailTest，3 用例）：null/超 50 门卫、
+  CACHED（缓存命中）与 NOT_FOUND→skipped（文档不存在）的汇总
+  计数、provider 调用失败 → FAILED 计数与条目状态透出。
+- 状态：单类 3 用例绿；core 全量门禁 EXIT=0（5197 tests）。
+
 ### Batch 424（已交付）
 
 - 分支：`test/embed-validate-tail-batch424`（已合入 main）
