@@ -3531,6 +3531,21 @@ VersionHistoryModal 相关 100% 项等。
   versionService 推进）；需要 versionRestoreEnabled=true 开启。
 - 状态：单类 10 用例绿；core 全量门禁 EXIT=0（4980 tests）。
 
+### Batch 401（已交付）
+
+- 分支：`test/chunking-tail-batch401`（已合入 main）
+- 内容：DocumentChunkingService 专项（新建
+  DocumentChunkingServiceTest，5 用例）：null document NPE、
+  null/空白 content 守卫（含 documentId 文本）、JSON_RECORD 单
+  块直通（含 Markdown 标题不切分，span 0..length，描述符
+  json-record-v1:single）、TEXT 层级切分（缩小 chunk 参数后
+  多块且保留标题文本，版本 hierarchical-v2:40:10:5）、
+  PreparedChunks 契约（descriptor/chunks 空值拒绝、入参列表拷
+  贝、chunks 不可变）。
+- 要点：chunker 在构造函数内以 RagProperties 快照实例化，缩小
+  chunk 参数后需重建 service 才生效。
+- 状态：单类 5 用例绿；core 全量门禁 EXIT=0（4999 tests）。
+
 ### Batch 400（已交付）
 
 - 分支：`test/jsonrecord-search-guards-batch400`（已合入 main）
