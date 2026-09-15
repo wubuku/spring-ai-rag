@@ -3560,6 +3560,24 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 419（已交付）
+
+- 分支：`test/ssrf-guard-tail-batch419`（已合入 main）
+- 内容：AllowlistedHttpToolProvider 的 SSRF 公网地址守卫真值表
+  （新建 AllowlistedHttpToolProviderPublicAddressTailTest，24
+  断言用例）：公网单播（8.8.8.8/2600::1 等）判公网；IPv4 特殊
+  网段（回环/任意本地/10/172.16-31/192.168/169.254/100.64/
+  192.0.0/192.0.2/192.88.99/198.18-19/198.51.100/203.0.113/
+  组播）判非公网；IPv6 回环/ULA/链路本地/组播/文档 2001:db8/
+  6to4 2002::/4000:: 判非公网；NAT64 64:ff9b::/96 内嵌地址因
+  byte1 非零不满足内嵌条件、按普通单播判非公网；::ffff: 内嵌
+  回环判非公网；null 判非公网。
+- 发现（入档，未改生产）：①3fff:ffff:: 不落在
+  hasPrefix(20,0x3f,0xff,0x00) 的文档前缀内 → 判公网，存在潜
+  在防护缺口，待专项生产批次收窄；②NAT64 内嵌公网 IPv4 同理
+  不被识别（当前判非公网，偏保守无风险）。
+- 状态：单类 24 用例绿；core 全量门禁 EXIT=0（5176 tests）。
+
 ### Batch 418（已交付）
 
 - 分支：`test/eval-suite-variants-tail-batch418`（已合入 main）
