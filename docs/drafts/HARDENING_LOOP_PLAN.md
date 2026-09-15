@@ -3560,6 +3560,16 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 428（已交付）
+
+- 分支：`verify/interim-fullrepo-batch428`（已合入 main）
+- 内容：中期全仓聚合复验（Batch 406–427 十个批次后的健康门）：
+  ①后端全 reactor `mvn test` BUILD SUCCESS（EXIT=0，core 5207）；
+  ②WebUI 门禁 64 文件 670 用例全绿 + vite 生产构建通过 + 对齐
+  策略检查通过；③本段累计交付 16 个测试批次（406–421 于前段，
+  406–427 于本段），core 用例数自 5008 增至 5207。
+- 状态：全部门禁绿。
+
 ### Batch 427（已交付）
 
 - 分支：`test/diagnostics-tail-batch427`（已合入 main）
