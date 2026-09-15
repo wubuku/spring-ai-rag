@@ -25,7 +25,8 @@ import java.util.Random;
  * <p>Retryable exceptions:
  * <ul>
  *   <li>{@link ResourceAccessException} — timeouts, connection refused</li>
- *   <li>{@link HttpServerErrorException} 503 — service unavailable</li>
+ *   <li>{@link HttpServerErrorException} 503 — service unavailable
+ *       (仅当 retry-on-service-unavailable 开启)</li>
  *   <li>{@link HttpClientErrorException} 429 — rate limited</li>
  * </ul>
  *
@@ -82,13 +83,7 @@ public class RetryConfig {
         ExceptionClassifierRetryPolicy retryPolicy = new ExceptionClassifierRetryPolicy();
         retryPolicy.setExceptionClassifier(throwable -> {
             if (!properties.isEnabled()) {
-                // Return a policy that never retries
-                return new SimpleRetryPolicy() {
-                    @Override
-                    public boolean canRetry(RetryContext context) {
-                        return false;
-                    }
-                };
+                return notRetryable();
             }
 
             SimpleRetryPolicy simple = new SimpleRetryPolicy(properties.getMaxAttempts());
@@ -115,9 +110,13 @@ public class RetryConfig {
 
             if (throwable instanceof HttpServerErrorException httpEx) {
                 int status = httpEx.getStatusCode().value();
-                if (status == 503 && properties.isRetryOnServiceUnavailable()) {
-                    log.debug("Retryable: HTTP 503 Service Unavailable");
-                    return simple;
+                if (status == 503) {
+                    // 503 只服从专属开关：不再落入通用 5xx 分支，避免遮蔽。
+                    if (properties.isRetryOnServiceUnavailable()) {
+                        log.debug("Retryable: HTTP 503 Service Unavailable");
+                        return simple;
+                    }
+                    return notRetryable();
                 }
                 if (status >= 500) {
                     log.debug("Retryable: HTTP {} server error", status);
@@ -134,14 +133,18 @@ public class RetryConfig {
             }
 
             // Not retryable
-            return new SimpleRetryPolicy() {
-                @Override
-                public boolean canRetry(RetryContext context) {
-                    return false;
-                }
-            };
+            return notRetryable();
         });
 
         return retryPolicy;
+    }
+
+    private static SimpleRetryPolicy notRetryable() {
+        return new SimpleRetryPolicy() {
+            @Override
+            public boolean canRetry(RetryContext context) {
+                return false;
+            }
+        };
     }
 }

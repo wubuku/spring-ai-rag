@@ -100,9 +100,9 @@ class RetryConfigClassificationTest {
     }
 
     @Test
-    void http503RemainsRetryableViaGenericServerErrorCodePath() {
-        // 行为注记：503 关闭专属开关后仍可重试——通用 `status >= 500`
-        // 分支在其之后再次命中，专属开关被遮蔽（现状语义，非笔误）。
+    void http503FollowsItsOwnFlagWithoutGeneric5xxShadowing() {
+        // 行为注记（Batch 403）：503 只服从专属开关——关闭后不再
+        // 落入通用 `status >= 500` 分支，专属开关不再被遮蔽。
         RagRetryProperties props = props();
         assertTrue(canRetryAfterFailure(
                 policy(props),
@@ -111,7 +111,7 @@ class RetryConfigClassificationTest {
                         "Service Unavailable")));
 
         props.setRetryOnServiceUnavailable(false);
-        assertTrue(canRetryAfterFailure(
+        assertFalse(canRetryAfterFailure(
                 policy(props),
                 new HttpServerErrorException(
                         org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,
