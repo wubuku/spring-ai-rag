@@ -3531,6 +3531,24 @@ VersionHistoryModal 相关 100% 项等。
   versionService 推进）；需要 versionRestoreEnabled=true 开启。
 - 状态：单类 10 用例绿；core 全量门禁 EXIT=0（4980 tests）。
 
+### Batch 403（已交付）
+
+- 分支：`fix/retry-503-switch-batch403`（已合入 main）
+- 内容：清偿账本遗留技术债——RetryConfig 的
+  retry-on-service-unavailable 开关被通用 `status >= 500` 分支
+  遮蔽（生产行为变更专项批次）。503 分支改为只服从专属开关：
+  开启 → 重试；关闭 → 不可重试，不再落入通用 5xx 分支。其余
+  5xx（500/502 等）仍走通用分支重试；默认值 true 不改变现网
+  默认行为。附带把两处内联「永不重试」匿名类收敛为
+  notRetryable() 助手，类 Javadoc 同步标注 503 开关语义。
+- 测试：RetryConfigClassificationTest 的 503 用例改写为
+  http503FollowsItsOwnFlagWithoutGeneric5xxShadowing（开关开 →
+  可重试 / 关 → 不可重试）。
+- 影响面：使用方如显式配置
+  `rag.retry.retry-on-service-unavailable=false`，现在 503 确实
+  不再重试（此前配置无效）。文档未列出该开关，无文档成对更新。
+- 状态：单类 16 用例绿；core 全量门禁 EXIT=0（5008 tests）。
+
 ### Batch 402（已交付）
 
 - 分支：`test/ratelimit-tail-batch402`（已合入 main）
