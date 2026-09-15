@@ -3531,6 +3531,28 @@ VersionHistoryModal 相关 100% 项等。
   versionService 推进）；需要 versionRestoreEnabled=true 开启。
 - 状态：单类 10 用例绿；core 全量门禁 EXIT=0（4980 tests）。
 
+### Batch 399（已交付）
+
+- 分支：`test/longtail-sweep-batch399`（已合入 main）
+- 内容：①JsonRecordService batchUpsert 守卫（新建
+  JsonRecordServiceTailTest，4 用例）：null 列表/空列表拒绝、
+  超 maxBatchSize（21>20）拒绝、单超限 jsonbPayload 触发批量
+  载荷守卫（1_048_763B>10_485_760B，在逐条循环前直接拒绝）；
+  ②DocumentMutationService 长尾（新建
+  DocumentMutationServiceRetirementTailTest，9 用例）：
+  requireAddressNotRetired 无服务 no-op/精确三元组委托/退役异常
+  透传（void stub 用 doThrow）、tombstoneExternal 编排中退役地
+  址守卫先于落库（saveAndFlush/versionService 零交互）、
+  findDuplicate null 作用域回退 LEGACY_GLOBAL/受限密钥集合外过
+  滤为 null/集合内保留/无哈希命中 null、executeExternalInTransa
+  ction ConcurrencyFailureException 首轮失败重试后成功（事务恰
+  开启 2 次）。
+- 要点：批量载荷守卫只统计 jsonbPayload 序列化字节，retrievalText
+  超限属逐条校验且被逐条 try/catch 吞为 persistenceFailed，不触
+  发批量拒绝；序列分配先于退役守卫，mock jdbcTemplate 的
+  RETURNING 需 stub 为 1L。
+- 状态：两类 13 用例绿；core 全量门禁 EXIT=0（4993 tests）。
+
 ### Batch 397（规划中，范围放大）
 
 - 目标：①DocumentMutationService 长尾（upsertExternal 内部
