@@ -3560,6 +3560,18 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 424（已交付）
+
+- 分支：`test/embed-validate-tail-batch424`（已合入 main）
+- 内容：DocumentEmbedService 校验与批量长尾（新建
+  DocumentEmbedServiceValidateTailTest，8 用例）：
+  batchEmbedDocuments 的 null/超 50 门卫；
+  validateEmbeddingResults 矩阵——数量不匹配、失败/缺失结果、
+  响应顺序错位、向量缺失（既有语义：isSuccess 先行 →
+  "Embedding failed for chunk 0: null"）、维度不匹配、非有限
+  值、合法返回 null；safeError 的兜底文案与 500 字符截断。
+- 状态：单类 8 用例绿；core 全量门禁 EXIT=0（5194 tests）。
+
 ### Batch 423（已交付）
 
 - 分支：`test/embed-fresh-tail-batch423`（已合入 main）
