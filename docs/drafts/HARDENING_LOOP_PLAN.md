@@ -3581,6 +3581,17 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 438（已交付）
+
+- 分支：`test/embed-progress-tail-batch438`（已合入 main）
+- 内容：DocumentEmbedService.batchEmbedDocumentsWithProgress 长尾
+  （新建 DocumentEmbedServiceBatchProgressTailTest，2 用例）：
+  超 50 文档门卫拒绝；逐文档进度事件透出（每文档 PREPARING +
+  终态两个事件，2 文档共 4 个）且 summary 的 cached 计数正确。
+- 要点：sendDocumentProgress 每文档发两个事件（PREPARING 与终
+  态），事件计数断言需按 2 倍文档数。
+- 状态：单类 2 用例绿；core 全量门禁 EXIT=0（5254 tests）。
+
 ### Batch 437（已交付）
 
 - 分支：`test/pdf-path-tail-batch437`（已合入 main）
