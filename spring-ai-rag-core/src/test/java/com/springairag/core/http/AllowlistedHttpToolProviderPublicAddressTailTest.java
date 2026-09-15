@@ -116,11 +116,14 @@ class AllowlistedHttpToolProviderPublicAddressTailTest {
     }
 
     @Test
-    void documentationPrefixTailOutsideConfiguredBitsIsPublic()
-            throws Exception {
-        // 既有语义：3fff:ffff:: 不落在 hasPrefix(20, 0x3f,0xff,0x00)
-        // 的文档前缀内 → 判为公网（潜在防护缺口，入档待专项处理）。
+    void documentationPrefix3fffSlash20BoundaryIsCorrect() throws Exception {
+        // Batch 420 复核更正：3fff::/20 = 前 20 位 0x3ff0…
+        // 即 bytes[1]=0xff 且 bytes[2] 高半字节为 0。
+        // 文档段内 → 非公网；段外（bytes[2] 高半字节非 0）→ 公网。
+        assertFalse(isPublic("3fff::1"));
+        assertFalse(isPublic("3fff:800::9"));
         assertTrue(isPublic("3fff:ffff::9"));
+        assertTrue(isPublic("3fff:1000::9"));
     }
 
     @Test
