@@ -3560,6 +3560,21 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 421（已交付）
+
+- 分支：`test/eval-case-tail-batch421`（已合入 main）
+- 内容：EvaluationSuiteService 单用例执行长尾（新建
+  EvaluationSuiteExecuteCaseTailTest，4 用例）：fixture 缺失 →
+  SKIPPED/MISSING_FIXTURE、SecurityException → FAILED/
+  AUTHORIZATION_CHANGED、RuntimeException → FAILED/
+  PROVIDER_OR_DATABASE、minHitRate 与 minMrr 独立判定不达标 →
+  FAILED/BELOW_MINIMUM。
+- 要点：authorizeDefinition 与 executeCase 共用同一个
+  scopeResolver.resolve——要命中 executeCase 的异常分类需让
+  stub 首调用放行、第二次抛出；测试类用 MockitoExtension 严格
+  模式时未被消费的 stub 须 lenient。
+- 状态：单类 4 用例绿；core 全量门禁 EXIT=0（5180 tests）。
+
 ### Batch 420（已交付）
 
 - 分支：`fix/ssrf-doc-prefix-batch420`（已合入 main）
