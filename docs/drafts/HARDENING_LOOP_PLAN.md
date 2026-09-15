@@ -3560,6 +3560,25 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 416（已交付）
+
+- 分支：`test/chat-authz-evidence-tail-batch416`（已合入 main）
+- 内容：ChatAuthorizationService 回放校验长尾（新建
+  ChatAuthorizationSourceEvidenceTailTest，12 用例）：快照缺失
+  forbidden、版本不符 invalid、observed 与派生集合不一致
+  invalid、来源文档重复 invalid、来源 collectionId 非正
+  invalid、来源文档消失/禁用/墓碑 forbidden、来源 Collection
+  变更 forbidden、未分配文档仅在 CALLER_VISIBLE+UNRESTRICTED+
+  unassignedDocumentsAllowed 时放行、来源不在当前允许列表
+  forbidden、SELECTED_COLLECTIONS 逃逸 forbidden、owner
+  principal 失效 forbidden。
+- 要点：RESTRICTED 快照的 callerAllowList 先于 verifySources
+  做吊销检查——要命中"来源未授权"分支需快照 allowList 与当前
+  密钥一致；verifySources 的 forbidden 与 validateSnapshot 的
+  invalid 异常码不同（FORBIDDEN vs
+  IDEMPOTENCY_AUTHORIZATION_SNAPSHOT_INVALID）。
+- 状态：单类 12 用例绿；core 全量门禁 EXIT=0（5143 tests）。
+
 ### Batch 415（已交付）
 
 - 分支：`test/alert-resource-tail-batch415`（已合入 main）
