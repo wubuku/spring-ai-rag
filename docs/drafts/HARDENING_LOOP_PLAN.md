@@ -3560,6 +3560,18 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 418（已交付）
+
+- 分支：`test/eval-suite-variants-tail-batch418`（已合入 main）
+- 内容：EvaluationSuiteService 长尾（新建
+  EvaluationSuiteServiceVariantsTailTest，4 用例）：
+  selectVariants 的 null/空请求回退全部变体、未知变体名拒绝
+  （消息含 Unknown variant）、合法子集按请求返回；
+  resolveExecutionKey 的 db: 前缀逐次重授权（密钥失效/空
+  principalId 均 fail-closed、有效则返回当前策略）、非 db 前缀
+  回退当前请求策略。
+- 状态：单类 4 用例绿；core 全量门禁 EXIT=0（5152 tests）。
+
 ### Batch 417（已交付）
 
 - 分支：`test/router-tail-batch417`（已合入 main）
