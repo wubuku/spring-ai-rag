@@ -3531,6 +3531,22 @@ VersionHistoryModal 相关 100% 项等。
   versionService 推进）；需要 versionRestoreEnabled=true 开启。
 - 状态：单类 10 用例绿；core 全量门禁 EXIT=0（4980 tests）。
 
+### Batch 402（已交付）
+
+- 分支：`test/ratelimit-tail-batch402`（已合入 main）
+- 内容：ratelimit 包三件套专项（新建 RateLimitStoreTailTest，
+  9 用例）：①PostgresRateLimitStore——consume 直接返回已接受
+  Decision、拒绝后回退当前桶查询、拒绝且桶消失抛 IllegalStateException、
+  cleanup 委托 retention/batchSize 并返回删除数；②RateLimit
+  Observability——recordDecision 固定标签计数、非法标签值逐项
+  归一化 UNKNOWN（合法维度保留原值）、recordCleanupError 计数、
+  noop（null registry）不抛异常；③SharedRateLimitMaintenance——
+  disabled/非 postgresql 后端跳过清理、开启时以配置 bounds 调
+  store.cleanup、DataAccessException 记观测且不重抛。
+- 要点：mock JdbcTemplate 消耗/当前两条 SQL 用不同 varargs 签名
+  分别 stub；MeterRegistry 断言要求同一 meter 同时具备全部标签。
+- 状态：单类 9 用例绿；core 全量门禁 EXIT=0（5008 tests）。
+
 ### Batch 401（已交付）
 
 - 分支：`test/chunking-tail-batch401`（已合入 main）
