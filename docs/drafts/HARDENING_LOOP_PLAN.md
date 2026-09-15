@@ -3531,6 +3531,25 @@ VersionHistoryModal 相关 100% 项等。
   versionService 推进）；需要 versionRestoreEnabled=true 开启。
 - 状态：单类 10 用例绿；core 全量门禁 EXIT=0（4980 tests）。
 
+### Batch 400（已交付）
+
+- 分支：`test/jsonrecord-search-guards-batch400`（已合入 main）
+- 内容：①JsonRecordService search 路径守卫（新建
+  JsonRecordServiceSearchGuardTailTest，5 用例）：null 请求、
+  query 空白（null/纯空格）、query 超 10_000 字符、maxResults<1
+  拒绝、maxResults 裁剪到 maxSearchResults 上限（3<50，检索器
+  topK 与 effectiveConfig.maxResults 均为 3，且 scope 的
+  documentType 被收窄为 json-record）；②去重：删除 Batch 399
+  的 JsonRecordServiceTailTest——batchUpsert 守卫矩阵与
+  JsonRecordServiceFrontTest 完全重复（FrontTest 断言消息文本
+  且用可配置阈值，保留 FrontTest）。
+- 要点：searchAuthorizedDetailed 的守卫顺序为 query 空白→
+  长度→scope 收窄→limit 裁剪；jsonRecordScope 会把非 json-
+  record 的 documentType 归一化/置 noMatches，断言需捕获实际
+  传入 scope。
+- 状态：单类 5 用例绿；core 全量门禁 EXIT=0（4994 tests，
+  含净增 1）。
+
 ### Batch 399（已交付）
 
 - 分支：`test/longtail-sweep-batch399`（已合入 main）
