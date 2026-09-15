@@ -3560,6 +3560,17 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 422（已交付）
+
+- 分支：`test/extdoc-delete-tail-batch422`（已合入 main）
+- 内容：ExternalDocumentService sourceDelete 传统分支（mutation
+  Service 为 null 直连 deleteInTransaction；新建
+  ExternalDocumentServiceDeleteTailTest，3 用例）：目标文档缺失
+  → DOCUMENT_NOT_FOUND、JSON 记录身份拒绝
+  （DocumentRevisionConflictException）、expectedSourceRevision
+  不匹配拒绝。
+- 状态：单类 3 用例绿；core 全量门禁 EXIT=0（5183 tests）。
+
 ### Batch 421（已交付）
 
 - 分支：`test/eval-case-tail-batch421`（已合入 main）
