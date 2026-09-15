@@ -3560,6 +3560,28 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 406（已交付）
+
+- 分支：`test/ragchat-legacy-tail-batch406`（已合入 main）
+- 内容：①RagChatService 遗留路径长尾（新建
+  RagChatServiceLegacyTailTest，18 用例，JaCoCo 驱动）：
+  resolveLegacyRetrievalScope 矩阵（null request→unscoped、
+  collection 过滤经 resolver、document 过滤优先 resolver、无
+  resolver 直通、resolve 空→noMatches、无过滤不触 resolver）；
+  resolveLegacyModelCandidates（router null→空、descriptors 命
+  中直返且不回退 orderedCandidates、回退映射 model ref、options
+  null/blank→UNKNOWN、双空→空）；invokeWithRetry（无模板直调、
+  成功返回、耗尽 RuntimeException 原样抛、受检异常包
+  RuntimeException(cause)）；extractPipelineMetrics（缺
+  metrics→null、steps→StepMetricRecord 映射、空 steps→null）。
+  ②去 flake：ConversationSummaryServiceTest
+  modelFailureDegradesWithoutPersistingSummary——setUp 的
+  compactionTimeoutMs=200 在重载机器上会先于 stub 异常触发
+  summary_timeout，用例内放宽到 30s 确定性走失败分类路径。
+- 要点：invokeWithRetry 返回私有 record LlmCallResult，mock 返
+  回值需经反射构造匹配真实类型（String 会在方法返回处 CCE）。
+- 状态：单类 18 用例绿；core 全量门禁 EXIT=0（5026 tests）。
+
 ### Batch 405（已交付）
 
 - 分支：`test/webui-auth-gaps-batch405`（已合入 main）
