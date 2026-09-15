@@ -3581,6 +3581,18 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 437（已交付）
+
+- 分支：`test/pdf-path-tail-batch437`（已合入 main）
+- 内容：PdfImportController 路径辅助长尾（新建
+  PdfImportControllerPathTailTest，3 用例）：deriveMarkdownPath
+  的三种路径形态（UUID → UUID/default.md、UUID/original.pdf →
+  UUID/default.md、传统目录替换扩展名）与既有怪癖（无扩展名的
+  "/original" 走通用规则追加 .md）；extractUuid 的空串/尾斜杠/
+  首段提取；replaceLast 仅替换末次出现、target 缺失与 null/零
+  限直通。
+- 状态：单类 3 用例绿；core 全量门禁 EXIT=0（5252 tests）。
+
 ### Batch 436（已交付）
 
 - 分支：`test/collection-list-tail-batch436`（已合入 main）
