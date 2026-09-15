@@ -3581,6 +3581,23 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 434（已交付）
+
+- 分支：`test/command-mapper-override-tail-batch434`（已合入 main）
+- 内容：ChatCommandMapper 检索覆盖长尾（新建
+  ChatCommandMapperOverrideTailTest，6 用例）：PLAIN 模式下八类
+  单一覆盖来源（maxResults/useHybridSearch/useRerank 显式置位、
+  collectionScopeMode/collectionIds/collectionKeys/documentIds/
+  filters）逐一 RETRIEVAL_OPTIONS_NOT_ALLOWED；KNOWLEDGE 模式
+  metadata null 归一为空 Map、非空保留；执行快照的 DEFAULT 声
+  明模型（候选项存在时取首候选，DEFAULT 置 null 分支不可达）
+  与 domainId 空白归 null、自定义声明模型透传；未知 domain 拒
+  绝。
+- 说明：mapFromExecutionSnapshot 的 resolvedCandidates 空数组被
+  textList 拒绝，故「DEFAULT→null modelRef」分支实际不可达
+  （潜在死代码，入档）。
+- 状态：单类 6 用例绿；core 全量门禁 EXIT=0（5237 tests）。
+
 ### Batch 433（已交付）
 
 - 分支：`test/budget-tail-batch433`（已合入 main）
