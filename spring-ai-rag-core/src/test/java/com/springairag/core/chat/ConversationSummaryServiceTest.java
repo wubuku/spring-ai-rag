@@ -139,6 +139,9 @@ class ConversationSummaryServiceTest {
     @Test
     void modelFailureDegradesWithoutPersistingSummary() {
         seedSource();
+        // setUp 的 200ms 压缩超时在重载机器上会先于 stub 异常触发
+        // summary_timeout；放宽以确定性覆盖失败分类路径。
+        ragProperties.getChat().getContext().setCompactionTimeoutMs(30_000);
         when(model.call(any(Prompt.class)))
                 .thenThrow(new IllegalStateException("provider down"));
 
