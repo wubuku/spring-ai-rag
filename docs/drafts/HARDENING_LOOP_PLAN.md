@@ -3560,6 +3560,24 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 408（已交付）
+
+- 分支：`test/config-validation-tail-batch408`（已合入 main）
+- 内容：配置层校验/解析长尾（新建 2 文件，12 用例）：
+  ①StaticKnowledgeValidationTailTest（7）——经公共
+  RagChatProperties.validate() 驱动：defaults 合法、六项正值预
+  算逐项 0/-1 拒绝且消息含配置键名、chunk-overlap 负值/等于
+  chunk-max 拒绝、chunk-max-1 边界通过、visibility 大小写不
+  敏感 GLOBAL、fileExtensions null/空/null 元素/空白/含 / 与 \\
+  拒绝、大写扩展名通过；②MultiModelConfigLoaderTailTest（5）——
+  外部 models.json 部分成本字段（仅 input）归零补齐、reasoning
+  true/缺省 false、findModel null/未知 id → null、
+  getLegacyCapabilities 大小写不敏感 + 未配置/null provider 回
+  退 defaults、null map 归一为空。
+- 说明：JaCoCo 中 MultiModelConfigLoader 内部 JSON 类的 missed
+  分支大部分为生成的 equals()/hashCode()（低价值），本轮不追。
+- 状态：两文件 12 用例绿；core 全量门禁 EXIT=0（5061 tests）。
+
 ### Batch 407（已交付）
 
 - 分支：`test/rerank-jieba-mdc-tail-batch407`（已合入 main）
