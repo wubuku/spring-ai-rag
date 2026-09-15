@@ -3581,6 +3581,18 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 444（已交付）
+
+- 分支：`test/turn-snapshot-tail-batch444`（已合入 main）
+- 内容：ChatTurnOperationService 执行快照序列化长尾（新建
+  ChatTurnOperationSnapshotTailTest，5 用例）：executionSnapshot
+  序列化 mode/candidates 并把 null/空白声明归一为 DEFAULT、超
+  出 executionSnapshotMaxBytes → invalid；snapshotCandidates 的
+  空快照回退 List.of()、错误版本/空候选链/空白候选拒绝、合法
+  候选透出；resolvedCandidateRefs 缺执行器或空链 → invalid；
+  declaredModelIdentifier 的 null canonical/空白值回退 DEFAULT。
+- 状态：单类 5 用例绿；core 全量门禁 EXIT=0（5274 tests）。
+
 ### Batch 443（已交付）
 
 - 分支：`test/skill-limits-tail-batch443`（已合入 main）
