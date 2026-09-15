@@ -3581,6 +3581,21 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 431（已交付）
+
+- 分支：`test/openai-map-tail-batch431`（已合入 main）
+- 内容：OpenAiChatRequestMapper 编排长尾（新建
+  OpenAiChatRequestMapperMapTailTest，5 用例）：map 的 PLAIN
+  + filters 协议错误先于别名/scope 协作方抛出；
+  mapFromExecutionSnapshot 的快照版本不符/未知 mode 枚举/
+  声明模型缺失各自 invalid；合法快照映射 mode/memory/modelRef/
+  候选与 stream 标志。
+- 要点：invalidSnapshot 抛 RagException
+  （IDEMPOTENCY_EXECUTION_SNAPSHOT_INVALID），而 validate
+  Declaration 的协议错误抛 OpenAiProtocolException——两者类型
+  不同，断言需区分。
+- 状态：单类 5 用例绿；core 全量门禁 EXIT=0（5223 tests）。
+
 ### Batch 430（已交付）
 
 - 分支：`test/openai-snapshot-tail-batch430`（已合入 main）
