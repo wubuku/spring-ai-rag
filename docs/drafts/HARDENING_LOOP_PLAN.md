@@ -3531,6 +3531,22 @@ VersionHistoryModal 相关 100% 项等。
   versionService 推进）；需要 versionRestoreEnabled=true 开启。
 - 状态：单类 10 用例绿；core 全量门禁 EXIT=0（4980 tests）。
 
+### Batch 405（已交付）
+
+- 分支：`test/webui-auth-gaps-batch405`（已合入 main）
+- 内容：WebUI 认证/工具层直测补漏（新建 3 文件，10 用例）：
+  ①ApiKeyAuthProvider——空白凭证拒绝且不打身份 API、非 root
+  身份拒绝且不落凭证、root 身份解锁并裁剪空白、isUnlocked 与
+  身份+凭证双因子绑定、外部清空凭证经订阅回调重置身份、logout
+  清凭证；②ProtectedRoute——锁定态重定向 /unlock 并携带
+  from 原始路径（含 query），解锁后跳回来源路径渲染受保护
+  Outlet；③modelPreference——存取回写、空串移除存储键。
+- 要点：锁定态 Navigate 已把路由替换到 /unlock，解锁不会自动
+  回跳——测试以「解锁后 navigate(from)」模拟真实 Unlock 页流
+  转，而非假设自动重渲染受保护路由。
+- 状态：三文件 10 用例绿；WebUI 全量 64 文件 670 用例绿 +
+  vite build 通过 + 对齐检查通过；core 未改动。
+
 ### Batch 404（已交付）
 
 - 分支：`verify/full-repo-batch404`（已合入 main）
