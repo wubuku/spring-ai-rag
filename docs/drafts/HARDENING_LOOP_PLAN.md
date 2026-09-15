@@ -3581,6 +3581,20 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 433（已交付）
+
+- 分支：`test/budget-tail-batch433`（已合入 main）
+- 内容：ChatExecutionBudget 长尾（新建
+  ChatExecutionBudgetTailTest，5 用例）：过期截止时间下
+  tryReserveCandidateAttempt/hasModelCallCapacity/reserveModel
+  Call/reserveToolBatch 全部拒绝且错误码 CHAT_BUDGET_EXHAUSTED；
+  httpToolExecutionState 同预算稳定复用、预算变更拒绝；策略
+  工具 CAS 上限与非法输入拒绝；构造器归因校验（非法
+  principalId 拒绝、deadline/logicalExecutionId/chatMode 缺省
+  归一、空白 traceId 归 null 不入 snapshot）；settle/release 的
+  零值下限钳制。
+- 状态：单类 5 用例绿；core 全量门禁 EXIT=0（5231 tests）。
+
 ### Batch 432（已交付）
 
 - 分支：`test/extdoc-identity-tail-batch432`（已合入 main）
