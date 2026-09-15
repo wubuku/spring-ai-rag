@@ -3560,6 +3560,18 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 426（已交付）
+
+- 分支：`test/syncrun-validate-tail-batch426`（已合入 main）
+- 内容：DocumentSyncRunService 校验辅助长尾（新建
+  DocumentSyncRunServiceValidateTailTest，6 用例）：
+  validateMode 的策略对必填、OFFLINE_MANIFEST 仅支持 NONE、
+  EXCLUSIVE_OFFLINE+TOMBSTONE 需显式确认且该组合之外禁止确认
+  标志；requireVisible 的空白/超长/不可见 ASCII 拒绝与 trim；
+  normalizeNamespace 的 null/空白回退 default 与非默认命名空
+  间开关；isRunControlError 的六个控制错误码分类。
+- 状态：单类 6 用例绿；core 全量门禁 EXIT=0（5203 tests）。
+
 ### Batch 425（已交付）
 
 - 分支：`test/embed-batch-tail-batch425`（已合入 main）
