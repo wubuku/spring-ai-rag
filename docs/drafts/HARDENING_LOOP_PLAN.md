@@ -3560,6 +3560,19 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 417（已交付）
+
+- 分支：`test/router-tail-batch417`（已合入 main）
+- 内容：ChatModelRouter 长尾（新建 ChatModelRouterTailTest，
+  5 用例）：legacy 模型按类名启发式注册 provider 别名
+  （zhipu/deepseek 命中、匿名类丢弃）、getDefaultModelRef 的
+  primary→fallbacks→唯一 legacy→"none" 降级链、legacy 候选
+  缺省能力 + 无限额元数据（estimatedModelLimits=true）、
+  resolveCandidateRequired 对未知 ref 的错误信息（含 Available
+  models）、orderedCandidates 对 primary/fallback/legacy 同模
+  型的去重。
+- 状态：单类 5 用例绿；core 全量门禁 EXIT=0（5148 tests）。
+
 ### Batch 416（已交付）
 
 - 分支：`test/chat-authz-evidence-tail-batch416`（已合入 main）
