@@ -3560,6 +3560,25 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 411（已交付）
+
+- 分支：`test/lifecycle-derivation-tail-batch411`（已合入 main）
+- 内容：DocumentLifecycleService 状态推导矩阵（新建
+  DocumentLifecycleDerivationTailTest，15 用例）：
+  ①deriveFromStateRow 真值表（反射驱动私有 record）：全新鲜
+  READY、本地哈希过期→FAILED、本地 READY+embedding QUEUED→
+  KEYWORD_ONLY、job RUNNING 使 PENDING→INDEXING、EMBEDDING_
+  FAILED 覆盖 LOCAL_INDEX_FAILED、双 NOT_REQUESTED 行、embedding
+  单行 PROCESSING、本地行缺失+FAILED→LOCAL_INDEX_MISSING、
+  job_error 兜底、CANCELLED→FAILED；②fromIntegrity 经注入完整
+  性仓库映射：READY/INDEXING/KEYWORD_ONLY/未知 bucket 回退
+  FAILED、reasonCode 仅在非 READY 时透出、localFresh 短路。
+- 要点（既有语义入档）：local 行 NOT_REQUESTED/缺失但
+  embedding 行存在时 localStatus 判 FAILED（双缺失才是
+  NOT_REQUESTED）；fromIntegrity 中 localFresh 短路优先于
+  localCondition；bucket 直接决定 searchability。
+- 状态：单类 15 用例绿；core 全量门禁 EXIT=0（5103 tests）。
+
 ### Batch 410（已交付）
 
 - 分支：`test/openai-mapper-protocol-batch410`（已合入 main）
