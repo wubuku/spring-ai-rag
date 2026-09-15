@@ -3581,6 +3581,16 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 439（已交付）
+
+- 分支：`test/embed-integrity-tail-batch439`（已合入 main）
+- 内容：DocumentEmbedService 完整性委托长尾（新建
+  DocumentEmbedServiceIntegrityTailTest，2 用例）：注入
+  DerivationIntegrityRepository 后 hasFreshEmbedding 以
+  snapshot.vectorFresh() 为准（true→新鲜 / false→不新鲜），
+  缓存路径不再被询问。
+- 状态：单类 2 用例绿；core 全量门禁 EXIT=0（5256 tests）。
+
 ### Batch 438（已交付）
 
 - 分支：`test/embed-progress-tail-batch438`（已合入 main）
