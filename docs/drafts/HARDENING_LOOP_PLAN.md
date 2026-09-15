@@ -3560,6 +3560,18 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 427（已交付）
+
+- 分支：`test/diagnostics-tail-batch427`（已合入 main）
+- 内容：RetrievalDiagnosticsService 长尾（新建
+  RetrievalDiagnosticsServiceTailTest，4 用例）：strategyOf 的
+  unknown/hybrid/fulltext/vector 命名、positionalOnly 仅保留
+  rank_* 键、visibleMetadata 对受限调用方按授权集合收窄 scope
+  的 collectionKeys（未授权/未知键静默过滤）、resolveOutcome 与
+  resolveEmptyReason 在预算耗尽且结果为空时上报
+  RETRIEVAL_BUDGET_EXHAUSTED、未耗尽时透传 outcome 编码。
+- 状态：单类 4 用例绿；core 全量门禁 EXIT=0（5207 tests）。
+
 ### Batch 426（已交付）
 
 - 分支：`test/syncrun-validate-tail-batch426`（已合入 main）
