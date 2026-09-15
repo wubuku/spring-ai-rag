@@ -3531,6 +3531,21 @@ VersionHistoryModal 相关 100% 项等。
   versionService 推进）；需要 versionRestoreEnabled=true 开启。
 - 状态：单类 10 用例绿；core 全量门禁 EXIT=0（4980 tests）。
 
+### Batch 404（已交付）
+
+- 分支：`verify/full-repo-batch404`（已合入 main）
+- 内容：全仓聚合复验（非新增用例）。core 长尾批次累计 400+ 后
+  的跨模块健康门：①`mvn test` 全 reactor——api/core/documents/
+  starter 全模块 BUILD SUCCESS（EXIT=0）；②WebUI 门禁——61 个
+  测试文件 660 用例全绿 + vite 生产构建通过 + 对齐策略检查通过
+  （12 处既允许居中）；③治理脚本
+  `scripts/verify-no-pessimistic-locks.sh` 通过（生产源码无显式
+  悲观锁/advisory lock）。
+- 扫描结论：core/api/documents 各包类级测试覆盖已饱和（每类均
+  有直接或同包测试），剩余无直接测试的类均为纯 DTO/record/枚举
+  （经 controller/服务层测试间接覆盖）。
+- 状态：三门全绿；core 计数不变（5008 tests）。
+
 ### Batch 403（已交付）
 
 - 分支：`fix/retry-503-switch-batch403`（已合入 main）
