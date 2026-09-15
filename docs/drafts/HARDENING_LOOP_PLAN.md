@@ -3581,6 +3581,17 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 442（已交付）
+
+- 分支：`test/pdf-tree-tail-batch442`（已合入 main）
+- 内容：PdfImportController 目录树长尾（新建
+  PdfImportControllerTreeTailTest，4 用例）：currentImportId 仅
+  解析根级 UUID（null/空/子路径均 empty）；toFileEntry 对缺失
+  MIME/大小归一（application/octet-stream、0）；根目录树构建
+  合成目录条目优先排序且文件按名排序；listTree 端点空路径返
+  回 200 与空条目。
+- 状态：单类 4 用例绿；core 全量门禁 EXIT=0（5267 tests）。
+
 ### Batch 441（已交付）
 
 - 分支：`test/turn-inspect-tail-batch441`（已合入 main）
