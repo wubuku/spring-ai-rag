@@ -3560,6 +3560,24 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 412（已交付）
+
+- 分支：`test/skill-catalog-tail-batch412`（已合入 main）
+- 内容：RuntimeSkillCatalog 长尾（新建
+  RuntimeSkillCatalogTailTest，6 用例）：find 的 null/非法模式/
+  未知名门卫、levelOnePrompt 渲染能力标注与预算边界（0/负值→
+  空串、极小预算只保留标题）、loadBody 渲染 Version 与 Related
+  Skills（无 version 不渲染）、三类错误码
+  （skill_not_found / skill_session_missing /
+  skill_load_budget_exhausted）、readReference 的
+  skill_not_loaded / skill_reference_not_found /
+  skill_reference_budget_exhausted 路径、未初始化目录 disabled
+  且为空。
+- 要点：fixture 引用路径相对技能根（"api.md" 而非
+  "references/api.md"）；RuntimeSkillLoadSession 构造参数经
+  Math.max(1,·) 归一，预算耗尽需以 maxLoads=1 先装再装触发。
+- 状态：单类 6 用例绿；core 全量门禁 EXIT=0（5109 tests）。
+
 ### Batch 411（已交付）
 
 - 分支：`test/lifecycle-derivation-tail-batch411`（已合入 main）
