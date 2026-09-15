@@ -3581,6 +3581,16 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 440（已交付）
+
+- 分支：`test/embed-progress-guard-batch440`（已合入 main）
+- 内容：DocumentEmbedService 嵌入进度长尾（新建
+  DocumentEmbedServiceProgressTailTest，2 用例）：空内容守卫先
+  于缓存查询（IAE 文本含 documentId，缓存查询零交互）；缓存命
+  中直接透出 PREPARING+COMPLETED 两个进度事件且 provider 未被
+  调用。
+- 状态：单类 2 用例绿；core 全量门禁 EXIT=0（5258 tests）。
+
 ### Batch 439（已交付）
 
 - 分支：`test/embed-integrity-tail-batch439`（已合入 main）
