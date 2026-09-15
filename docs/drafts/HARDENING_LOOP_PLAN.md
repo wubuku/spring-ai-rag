@@ -3560,6 +3560,19 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 420（已交付）
+
+- 分支：`fix/ssrf-doc-prefix-batch420`（已合入 main）
+- 内容：复核 Batch 419 标记的"3fff:ffff:: 防护缺口"——**更正为
+  误报**：RFC 9637 的 3fff::/20 只覆盖 3fff:0000::–3fff:0fff::
+  （bytes[2] 高半字节为 0），3fff:ffff::9 的 bytes[2] 高半字节
+  为 0xf，位于文档段之外、属合法全局单播；原实现
+  hasPrefix(20, 0x3f, 0xff, 0x00) 语义正确。期间试验的两个生产
+  修改方案（掩码 0xf0 / 独立位判断）均验证后撤销，未改生产代
+  码。回归测试固化为 3fff 段边界四例：3fff::1 / 3fff:800::9
+  非公网，3fff:ffff::9 / 3fff:1000::9 公网。
+- 状态：单类 24 用例绿；core 全量门禁 EXIT=0（5176 tests）。
+
 ### Batch 419（已交付）
 
 - 分支：`test/ssrf-guard-tail-batch419`（已合入 main）
