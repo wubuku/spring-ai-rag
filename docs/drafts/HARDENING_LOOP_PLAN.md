@@ -3581,6 +3581,21 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 429（已交付）
+
+- 分支：`test/skill-parse-tail-batch429`（已合入 main）
+- 内容：RuntimeSkillCatalog 解析长尾（新建
+  RuntimeSkillCatalogParseTailTest，7 用例 + 5 个坏 fixture）：
+  frontmatter 缺失、YAML 非法、名称与目录不匹配、capabilities
+  非数组、links 非数组各自拒绝；references/ 前缀归一后仍命中
+  引用文件；含控制字符/双斜杠路径判 invalid；loadBody 截断到
+  maxCharacters。
+- 说明：原计划的 DocumentSyncRunService RunRow 相关分支因
+  RunRow 为 18 组件私有 record、构造成本过高而推迟（record
+  FailedItem/replayOrReopenExistingItem/requireMissingCount
+  WithinThreshold 留待集成层或引入包内可见构造器后处理）。
+- 状态：单类 7 用例绿；core 全量门禁 EXIT=0（5214 tests）。
+
 ### Batch 428（已交付）
 
 - 分支：`verify/interim-fullrepo-batch428`（已合入 main）
