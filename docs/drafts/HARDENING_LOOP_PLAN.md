@@ -3560,6 +3560,27 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 429（规划中，未实施）
+
+- 主目标：DocumentSyncRunService 批量与账本长尾（JaCoCo 残余
+  ~15 分支）：①batchUpsert 失败分类——mutationService 抛非控
+  制错误 → recordFailedItem 落 FAILED 且 existing 非本轮
+  IN_PROGRESS 时重放旧行；抛 run 控制错误（SYNC_RUN_* 六类）
+  → 直接上抛；②sameBeginRequest 四字段一致性（namespace/
+  clientRunId(trim)/snapshotMode/missingPolicy）；
+  ③requireMissingCountWithinThreshold 的 confirmMissingCount 与
+  预览数不一致 → SYNC_RUN_DELETE_PROTECTION。
+- 测试驱动：Batch 426 同款构造器夹具（7 参 mock），公共 API
+  batchUpsert/begin 驱动；recordFailedItem 依赖 requireActive
+  Lease（jdbcTemplate 查询 + lease token hash + 过期校验），
+  stub 成本高，可改由公共 batchUpsert 间接覆盖。
+- 更大残余（需专项批次）：ChatExecutionService（125）、
+  DocumentMutationService（101）、ExternalDocumentService（67→
+  已部分收窄）、ApiKeyManagementService（61）、RagChatController
+  stream()/ask() SSE 编排（59）。
+- 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
+  性分支→--no-ff 合并 main→账本→清理。
+
 ### Batch 428（已交付）
 
 - 分支：`verify/interim-fullrepo-batch428`（已合入 main）
