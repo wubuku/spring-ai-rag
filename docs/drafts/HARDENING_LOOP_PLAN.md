@@ -3531,6 +3531,35 @@ VersionHistoryModal 相关 100% 项等。
   versionService 推进）；需要 versionRestoreEnabled=true 开启。
 - 状态：单类 10 用例绿；core 全量门禁 EXIT=0（4980 tests）。
 
+### Batch 406（规划中，JaCoCo 扫描已完成，未实施）
+
+- 扫描方式：`mvn -pl spring-ai-rag-core jacoco:report` 后按
+  jacoco.csv 分支命中率排序（数据基于 Batch 403 后 core 全量门禁）。
+- 类级扫描结论：core/api/documents 各包类级覆盖已饱和；WebUI
+  组件/页面/API 客户端/hook 亦全部有直接测试（仅 Chat/Modal/
+  Table/Upload 四个空占位目录无内容）。
+- 下一批主目标（按未覆盖分支数排序，均为 RagChatService 内部
+  私有方法，沿用仓库既有的反射直测模式）：
+  ①resolveLegacyRetrievalScope（line≈780，missed=17）：null
+  request→unscoped、collection/document 过滤矩阵、resolver
+  有/无、过滤命中但 resolve 空→noMatches；
+  ②resolveLegacyModelCandidates + candidateForLegacyModel
+  （missed≈11）：router null→空、descriptors 命中直返、回退
+  orderedCandidates 过滤 null、options null/blank model→
+  "UNKNOWN"、ModelCapabilities.defaults()；
+  ③invokeWithRetry（missed=5）：retryTemplate null 直调、
+  execute 成功返回、耗尽后 RuntimeException 原样抛/受检异常包
+  RuntimeException(cause)。private record LlmCallResult 不可
+  直接构造，supplier 可返回 Object 哨兵。
+  备选：extractPipelineMetrics（missed=3，RagPipelineMetrics.get
+  + recordStep 造上下文）、SensitiveMdc 的 swap 边界分支、
+  EvaluationSuiteWorker（missed=12）、RerankProviderFactory
+  （missed=15）、PgJiebaFulltextProvider（missed=16）。
+- 已知非缺陷：RagChatService 的 assertCircuitBreakerAllowsCall
+  分支在单测构造器（modeAware 为 null）下不可达，留待集成层。
+- 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
+  性分支→--no-ff 合并 main→账本→清理。
+
 ### Batch 405（已交付）
 
 - 分支：`test/webui-auth-gaps-batch405`（已合入 main）
