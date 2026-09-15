@@ -3581,6 +3581,17 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 436（已交付）
+
+- 分支：`test/collection-list-tail-batch436`（已合入 main）
+- 内容：RagCollectionController.listDocuments 长尾（新建
+  RagCollectionControllerListTailTest，5 用例）：keyword 过滤裁
+  剪后路由到搜索方法且不再走普通分页、空白 keyword trim 为空
+  串透传（不转 null）、documentType/processingStatus 单独过滤
+  路由、offset/limit → 页码换算（40/20 → 第 2 页）、集合键映射
+  透出到响应。
+- 状态：单类 5 用例绿；core 全量门禁 EXIT=0（5249 tests）。
+
 ### Batch 435（已交付）
 
 - 分支：`test/tool-registry-tail-batch435`（已合入 main）
