@@ -3581,6 +3581,16 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 443（已交付）
+
+- 分支：`test/skill-limits-tail-batch443`（已合入 main）
+- 内容：RuntimeSkillCatalog 体积上限长尾（新建
+  RuntimeSkillCatalogLimitsTailTest，2 用例）：maxSkillBodyBytes
+  调小后正文超限 → "Runtime Skill body exceeds configured
+  limit"；maxReferenceBytes 调小后引用文件超限 → "Runtime Skill
+  reference exceeds configured limit"，均在 initialize 阶段抛出。
+- 状态：单类 2 用例绿；core 全量门禁 EXIT=0（5269 tests）。
+
 ### Batch 442（已交付）
 
 - 分支：`test/pdf-tree-tail-batch442`（已合入 main）
