@@ -3560,6 +3560,23 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 409（已交付）
+
+- 分支：`test/eval-worker-tail-batch409`（已合入 main）
+- 内容：调度与授权检索长尾（新建 2 文件，11 用例）：
+  ①EvaluationSuiteWorkerTailTest（6）——shutdown 后 poll 不再领
+  取、claim 异常释放槽位且下一轮可继续、空领取中止本轮（恰调用
+  一次）、领取后异步 executeRun 且成功路径不 finishRun、处理异
+  常落 FAILED（error 含原因）、safeError 的 null/空白兜底与
+  1000 字符截断；②ProjectDocumentRetrieverTailTest（5）——缺
+  失授权上下文 fail-closed（IllegalStateException）、同一 trace
+  第二次检索去重短路（hybrid 仅调用一次）、COMPOSITE 标志绕过
+  去重、matchNone + 空结果仅 recordOutcome、useRerank=true 走
+  recordCandidateOutcome。
+- 要点：Spring AI Query 的 history 不可为 null（需传空列表）；
+  worker 心跳 40s 间隔在单测中不会触发。
+- 状态：两文件 11 用例绿；core 全量门禁 EXIT=0（5072 tests）。
+
 ### Batch 408（已交付）
 
 - 分支：`test/config-validation-tail-batch408`（已合入 main）
