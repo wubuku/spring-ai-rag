@@ -3560,6 +3560,23 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 414（已交付）
+
+- 分支：`test/chat-model-factory-tail-batch414`（已合入 main）
+- 内容：ConfiguredChatModelFactory 选择矩阵（新建
+  ConfiguredChatModelFactorySelectionTailTest，6 用例）：仅
+  provider 引用的默认模型（无 routing → 第一个 chat 模型；
+  routing.primary 前缀匹配优先）、无 chat 模型的 provider 与
+  embedding 模型作 chat 引用均不可配置、跨 provider 模型 id 唯
+  一解析与歧义拒绝、unavailableReason 全原因串（disabled/
+  blank baseUrl/unsupported apiType/invalid contextWindow/
+  invalid maxTokens/key 未配置）、null/空白 ref 门卫、
+  listChatModels 描述符的 available/reasoning/
+  estimatedModelLimits 标记。
+- 要点：estimatedModelLimits 仅当 contextWindow 或 maxTokens
+  为 null 时为 true；provider-only 解析依赖 chatModels() 保序。
+- 状态：单类 6 用例绿；core 全量门禁 EXIT=0（5121 tests）。
+
 ### Batch 413（已交付）
 
 - 分支：`test/static-knowledge-search-tail-batch413`（已合入 main）
