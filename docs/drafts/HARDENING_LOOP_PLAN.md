@@ -3581,6 +3581,18 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 430（已交付）
+
+- 分支：`test/openai-snapshot-tail-batch430`（已合入 main）
+- 内容：OpenAiChatRequestMapper 执行快照解析长尾（新建
+  OpenAiChatRequestMapperSnapshotTailTest，4 用例）：
+  retrievalOptions 六字段任一缺失即 invalid 快照；
+  retrievalScope 的未知 collectionFilter / 非正 id 拒绝与合法
+  SELECTED 作用域（空白 documentType 归一 null）解析；
+  longList 对 null 与非正项拒绝；textList 对 null/空数组/空白
+  项拒绝。
+- 状态：单类 4 用例绿；core 全量门禁 EXIT=0（5218 tests）。
+
 ### Batch 429（已交付）
 
 - 分支：`test/skill-parse-tail-batch429`（已合入 main）
