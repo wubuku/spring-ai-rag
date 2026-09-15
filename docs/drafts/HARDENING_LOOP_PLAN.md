@@ -3560,6 +3560,24 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 410（已交付）
+
+- 分支：`test/openai-mapper-protocol-batch410`（已合入 main）
+- 内容：OpenAiChatRequestMapper 协议校验矩阵（新建
+  OpenAiChatRequestMapperProtocolTailTest，16 用例）：null 请求
+  体、model/messages 必填、消息 >100 拒绝、n=1 约束、采样参数
+  （temperature/tools）与未知顶层字段拒绝、PLAIN 模式拒绝
+  rag.scope / rag.document_ids / X-RAG-Collection-Key 头 /
+  非空 rag.filters、memory 大小写归一（" server " 通过、
+  "wizard" 拒绝）、消息 null 元素/name 附加字段拒绝、role 必填
+  与枚举约束、content 三形态（缺失/非文本/非法数组元素）、多段
+  text 以换行拼接、latestUser 取最后一条 user、无 user 消息
+  拒绝。
+- 要点：PLAIN 约束（含集合头）只在 mode=PLAIN 时触发，默认
+  KNOWLEDGE 不受限；collect 头检查用的是 2 参
+  validateDeclaration 重载。
+- 状态：单类 16 用例绿；core 全量门禁 EXIT=0（5088 tests）。
+
 ### Batch 409（已交付）
 
 - 分支：`test/eval-worker-tail-batch409`（已合入 main）
