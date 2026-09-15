@@ -3560,6 +3560,17 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 423（已交付）
+
+- 分支：`test/embed-fresh-tail-batch423`（已合入 main）
+- 内容：DocumentEmbedService.hasFreshEmbedding 长尾（新建
+  DocumentEmbedServiceFreshTailTest，3 用例）：null 文档/缺失
+  id/缺失或空白 contentHash 判不新鲜、关键词索引过期短路（不
+  再查缓存）、缓存命中即新鲜/未命中保持不新鲜。
+- 要点：buildChunkerVersion 经 DocumentChunkingService.prepare
+  派生，fixture 文档需带非空 content。
+- 状态：单类 3 用例绿；core 全量门禁 EXIT=0（5186 tests）。
+
 ### Batch 422（已交付）
 
 - 分支：`test/extdoc-delete-tail-batch422`（已合入 main）
