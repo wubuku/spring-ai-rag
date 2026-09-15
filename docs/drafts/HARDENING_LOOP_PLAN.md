@@ -3560,6 +3560,28 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 407（已交付）
+
+- 分支：`test/rerank-jieba-mdc-tail-batch407`（已合入 main）
+- 内容：检索提供方与日志脱敏长尾（新建 3 文件，23 用例）：
+  ①RerankProviderFactoryCredentialsTest（8）——provider null 回
+  退 heuristic、别名 trim+lowercase、rerank api-key 空白时继承
+  embedding key、已有值不覆盖、embedding key 空白不继承、
+  baseUrl 继承/保留（注意：rerank baseUrl 有非空默认值
+  siliconflow，继承分支需显式置空才触发）；②PgJiebaFulltext
+  ProviderTailTest（6）——null/空白 query 短路、matchNone 短
+  路、rank NULL 归零、embedding_id 两级排除（Number 命中排除/
+  非 Number+local_chunk_id 保留/无 embedding_id 回退 id）、检索
+  异常降级 failure(errorCode=异常类名)、query 先 trim 再入参；
+  ③SensitiveMdcBoundaryTest（9）——键名匹配边界：子串判定是
+  单向的（候选键 ⊂ 敏感键 → 敏感，如 "key"/"pass"；反向如
+  "cvv_code" 不算）、大小写不敏感、snake 双下划线/尾随下划线
+  经 camel 归一命中、前导下划线因产物首字母大写而**不**命中
+  （既有语义）、连字符命名不归一、putAll 混合键。
+- 要点：isSensitiveKey 先 lowercase 再 swapCamelToUnderscore，
+  其大写分支实际不可达（潜在死代码，留待后续专项清理批次）。
+- 状态：三文件 23 用例绿；core 全量门禁 EXIT=0（5049 tests）。
+
 ### Batch 406（已交付）
 
 - 分支：`test/ragchat-legacy-tail-batch406`（已合入 main）
