@@ -3560,6 +3560,23 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 415（已交付）
+
+- 分支：`test/alert-resource-tail-batch415`（已合入 main）
+- 内容：告警与资源路径长尾（新建 3 文件，10 用例）：
+  ①AlertNotificationWakeupPublisher——无事务立即发布、事务内
+  注册去重（重复调用仅一个 synchronization）延迟到 afterCommit、
+  发布失败吞掉不影响调用方；②ApiPrincipalExpiryAlertMetrics——
+  对账计数按 outcome/phase 累加、空值归一 NONE、扫描截断计数、
+  registry 缺失整体 no-op；③ResourceCatalog 路径辅助——
+  configuredRootPath 前缀剥离（classpath*/classpath/jar!//反斜
+  杠/前导斜杠/内嵌 !/）、normalizeRelativePath 安全拒绝（null/
+  空/../内嵌/../NUL）与清洗（反斜杠转斜杠、前导斜杠剥离）、
+  boundedMessage 兜底与 160 字符截断。
+- 说明：AlertService.AlertStats 的 missed 均为生成的
+  equals/hashCode（低价值），与 MultiModel JSON 内部类同理不追。
+- 状态：三文件 10 用例绿；core 全量门禁 EXIT=0（5131 tests）。
+
 ### Batch 414（已交付）
 
 - 分支：`test/chat-model-factory-tail-batch414`（已合入 main）
