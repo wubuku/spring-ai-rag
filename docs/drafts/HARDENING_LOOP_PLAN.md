@@ -3581,6 +3581,16 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 441（已交付）
+
+- 分支：`test/turn-inspect-tail-batch441`（已合入 main）
+- 内容：ChatTurnOperationService.inspectExisting 长尾（新建
+  ChatTurnOperationInspectTailTest，5 用例）：null/未键控
+  prepared → null、SUCCEEDED → 重放 Claim、FAILED 复现原错误
+  码（INTERNAL_ERROR）、活跃租约 → ChatTurnInProgressException
+  且 retryAfterSeconds 在 1..60、过期租约返回 null 继续重跑。
+- 状态：单类 5 用例绿；core 全量门禁 EXIT=0（5263 tests）。
+
 ### Batch 440（已交付）
 
 - 分支：`test/embed-progress-guard-batch440`（已合入 main）
