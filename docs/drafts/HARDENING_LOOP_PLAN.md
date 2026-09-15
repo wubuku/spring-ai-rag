@@ -3560,6 +3560,21 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 413（已交付）
+
+- 分支：`test/static-knowledge-search-tail-batch413`（已合入 main）
+- 内容：StaticKnowledgeCatalog.search 长尾（新建
+  StaticKnowledgeCatalogSearchTailTest，6 用例）：null/空白
+  query 与 limit/字符预算非正的门卫、不健康快照（缺根目录 +
+  failFast=false 降级）返回空、config 对请求 limit 与字符预算
+  的双向钳制、effectiveLimit/effectiveCharacters 非正短路、字
+  符预算耗尽截断结果集、短语命中分数不低于松散词命中且
+  metadata 透出 score。
+- 要点：classpath 根缺失在 failFast=true 时 discover 直接抛
+  ResourceCatalogException，需 failFast=false 才降级为不健康
+  快照。
+- 状态：单类 6 用例绿；core 全量门禁 EXIT=0（5115 tests）。
+
 ### Batch 412（已交付）
 
 - 分支：`test/skill-catalog-tail-batch412`（已合入 main）
