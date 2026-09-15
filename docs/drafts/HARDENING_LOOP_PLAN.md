@@ -3581,6 +3581,16 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 432（已交付）
+
+- 分支：`test/extdoc-identity-tail-batch432`（已合入 main）
+- 内容：ExternalDocumentService 身份查询接线长尾（新建
+  ExternalDocumentServiceIdentityTailTest，3 用例）：
+  getByExternalIdentity 存在退役地址服务时委托
+  requireNotRetired、退役拒绝透出、双参重载默认 default 命名
+  空间并返回详情。
+- 状态：单类 3 用例绿；core 全量门禁 EXIT=0（5226 tests）。
+
 ### Batch 431（已交付）
 
 - 分支：`test/openai-map-tail-batch431`（已合入 main）
