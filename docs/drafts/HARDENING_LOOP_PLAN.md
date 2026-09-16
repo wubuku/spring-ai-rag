@@ -3581,6 +3581,20 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 462（已交付）
+
+- 分支：`test/restore-collection-tail-batch462`（已合入 main）
+- 内容：DocumentMutationService.restoreLocalFromVersion 目标集合
+  ACL 长尾（新建 DocumentMutationRestoreCollectionTailTest，4 用
+  例）：快照目标集合在受限密钥白名单外 → SecurityException；
+  目标集合在白名单内 → 集合切换生效（document.collectionId=9）；
+  受限密钥恢复未分配快照 → RESTORE_NOT_ALLOWED；快照内容与当
+  前一致 → 状态保持 COMPLETED 不重置。
+- 要点：authenticateRestricted 的白名单须同时覆盖当前文档集合
+  与目标快照集合；restore 流程依赖 forceRecordVersion stub 非
+  null 返回。
+- 状态：单类 4 用例绿；core 全量门禁 EXIT=0（5342 tests）。
+
 ### Batch 461（已交付）
 
 - 分支：`test/syncrun-summary-tail-batch461`（已合入 main）
