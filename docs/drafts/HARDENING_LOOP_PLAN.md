@@ -3581,6 +3581,22 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 451（已交付）
+
+- 分支：`test/execution-eligible-tail-batch451`（已合入 main）
+- 内容：ChatExecutionService.eligibleCandidates 矩阵（新建
+  ChatExecutionServiceEligibleTailTest，6 用例）：显式候选链中
+  能力不合格者过滤（流式不支持）、不可用候选跳过、全不可用 →
+  SERVICE_UNAVAILABLE、已解析但不合格 → 按 streaming 与否抛
+  MODEL_STREAMING_UNSUPPORTED / MODEL_CAPABILITY_UNSUPPORTED；
+  默认链（无显式候选）经 orderedCandidateDescriptors 过滤 AGENT
+  工具调用能力、全不合格抛错。
+- 要点：候选对象须在 when(modelRouter...) 外预先构建（嵌套
+  stubbing 会触发 UnfinishedStubbingException）；AGENT 资格要
+  求 supportsToolCalling 且 options instanceof
+  ToolCallingChatOptions。
+- 状态：单类 6 用例绿；core 全量门禁 EXIT=0（5301 tests）。
+
 ### Batch 450（已交付）
 
 - 分支：`test/syncrun-threshold-tail-batch450`（已合入 main）
