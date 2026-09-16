@@ -3581,6 +3581,18 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 449（已交付）
+
+- 分支：`test/turn-complete-tail-batch449`（已合入 main）
+- 内容：ChatTurnOperationService 完成长尾（新建
+  ChatTurnOperationCompleteTailTest，2 用例）：responseWithTurnId
+  写入 turnId 并合并元数据（null 元数据归一为空 Map、既有键保
+  留）；principalFor 的 owner 四类归一（db:→DATABASE_API_KEY、
+  root:environment-root→ENVIRONMENT_ROOT、legacy:static→
+  LEGACY_STATIC、未知→local/AUTH_DISABLED）。
+- 要点：两方法为私有实例方法，反射调用需以服务实例为接收者。
+- 状态：单类 2 用例绿；core 全量门禁 EXIT=0（5290 tests）。
+
 ### Batch 448（已交付）
 
 - 分支：`test/syncrun-samebegin-tail-batch448`（已合入 main）
