@@ -3581,6 +3581,16 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 452（已交付）
+
+- 分支：`test/import-build-tail-batch452`（已合入 main）
+- 内容：RagCollectionController 导入文档构建长尾（新建
+  RagCollectionControllerImportBuildTailTest，5 用例）：size 缺
+  失按 UTF-8 字节数计算（中文 4 字符 → 12 字节）、显式 size 与
+  originalFilename 保留、空白 namespace 归一 default、identity
+  超 255 拒绝、sourceDeletedAt 透传与 jsonbPayload 深拷贝应用。
+- 状态：单类 5 用例绿；core 全量门禁 EXIT=0（5306 tests）。
+
 ### Batch 451（已交付）
 
 - 分支：`test/execution-eligible-tail-batch451`（已合入 main）
