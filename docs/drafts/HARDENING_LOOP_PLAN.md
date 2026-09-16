@@ -3581,6 +3581,17 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 460（已交付）
+
+- 分支：`test/mapper-snapshot-tail-batch460`（已合入 main）
+- 内容：ChatCommandMapper 快照解析辅助长尾（新建
+  ChatCommandMapperSnapshotTailTest，5 用例）：retrievalOptions
+  六字段任一缺失 → invalid；retrievalScope 未知 collectionFilter
+  / 非正 id 拒绝；longList 对 null/非正项拒绝；textList 对
+  空数组/空白项拒绝；blankAsNull 仅归一 null/空白（保留原空格
+  不 trim，既有语义入档）。
+- 状态：单类 5 用例绿；core 全量门禁 EXIT=0（5337 tests）。
+
 ### Batch 459（已交付）
 
 - 分支：`test/apikey-expire-tail-batch459`（已合入 main）
