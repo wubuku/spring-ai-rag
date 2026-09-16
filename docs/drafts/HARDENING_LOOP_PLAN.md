@@ -3581,6 +3581,19 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 455（已交付）
+
+- 分支：`test/jsonrecord-helper-tail-batch455`（已合入 main）
+- 内容：JsonRecordService 小辅助长尾（新建
+  JsonRecordServiceHelperTailTest，4 用例）：measurePayloadBytes
+  对 null 请求/payload 返回 0、否则返回序列化字节数（含引号花
+  括号 9 字节）；normalizeNamespace trim 与 default 归一、128
+  边界、非可见 ASCII 拒绝；requireExternalId trim、null/空白/
+  256 拒绝、255 边界通过。
+- 要点：SourceNamespaceValidator 仅拒绝非可见 ASCII 字符，
+  "crm#1" 等可打印符号合法（既有语义入档）。
+- 状态：单类 4 用例绿；core 全量门禁 EXIT=0（5314 tests）。
+
 ### Batch 454（已交付）
 
 - 分支：`test/catalog-read-bounded-batch453`（已合入 main）
