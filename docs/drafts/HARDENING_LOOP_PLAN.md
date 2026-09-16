@@ -3581,6 +3581,16 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 457（已交付）
+
+- 分支：`test/apikey-replay-tail-batch457`（已合入 main）
+- 内容：ApiKeyManagementService.replayResponse 长尾（新建
+  ApiKeyManagementServiceReplayTailTest，4 用例）：principal 缺
+  失 → SERVICE_UNAVAILABLE fail-closed；活跃凭证重放透出 keyId
+  与 credentialVersion；当前 key 缺失/主体撤销/过期降级为无
+  keyId 重放（仍带名称与 allowedIds）。
+- 状态：单类 4 用例绿；core 全量门禁 EXIT=0（5321 tests）。
+
 ### Batch 456（已交付）
 
 - 分支：`test/turn-session-tail-batch456`（已合入 main）
