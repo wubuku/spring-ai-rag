@@ -3581,6 +3581,21 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 450（已交付）
+
+- 分支：`test/syncrun-threshold-tail-batch450`（已合入 main）
+- 内容：DocumentSyncRunService 墓碑完成阈值长尾（新建
+  DocumentSyncRunThresholdTailTest，5 用例）：NONE 策略跳过阈值
+  校验直接返回 0；confirmMissingCount 与预览候选数不一致 →
+  SYNC_RUN_DELETE_PROTECTION；确认后即使超阈值也放行；超阈值
+  且未确认 → "Missing count exceeds" 拒绝；确认数 0 + 空候选通
+  过；reconcileMissingCandidates 按 reconcileMissingExternal 返
+  回值计数墓碑。
+- 要点：threshold = min(absolute, max(1, ceil(active × percent /
+  100)))；CandidateSet/Candidate/RunRow 均为私有 record，反射构
+  造后以纯逻辑方法为测试入口。
+- 状态：单类 5 用例绿；core 全量门禁 EXIT=0（5295 tests）。
+
 ### Batch 449（已交付）
 
 - 分支：`test/turn-complete-tail-batch449`（已合入 main）
