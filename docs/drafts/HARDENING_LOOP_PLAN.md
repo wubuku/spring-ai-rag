@@ -3581,6 +3581,19 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 458（已交付）
+
+- 分支：`test/syncrun-replay-tail-batch458`（已合入 main）
+- 内容：DocumentSyncRunService.replayOrReopenExistingItem 完整矩
+  阵（新建 DocumentSyncRunReplayTailTest，6 用例）：指纹不一致/
+  documentKind 不一致/sourceRevision 不一致各自 SYNC_RUN_ITEM_
+  CONFLICT；终态（APPLIED 且无错误）行直接重放且不触发更新；
+  FAILED 行经 reopenFailedItem 后返回 null 继续执行 mutation；
+  IN_PROGRESS 错误码未重开 → "currently being processed" 冲突。
+- 要点：fingerprint 为私有实例方法（接收 service）；LedgerRow
+  的 sourceRevision/指纹均以反射构造行注入。
+- 状态：单类 6 用例绿；core 全量门禁 EXIT=0（5327 tests）。
+
 ### Batch 457（已交付）
 
 - 分支：`test/apikey-replay-tail-batch457`（已合入 main）
