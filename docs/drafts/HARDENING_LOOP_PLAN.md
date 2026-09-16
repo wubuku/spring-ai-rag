@@ -3581,6 +3581,20 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 448（已交付）
+
+- 分支：`test/syncrun-samebegin-tail-batch448`（已合入 main）
+- 内容：DocumentSyncRunService 批量账本长尾（新建
+  DocumentSyncRunBatchRecordTailTest，3 用例）：mutation 失败后
+  recordFailedItem 对已完成账本行的重放（透出旧行状态/错误）、
+  对 IN_PROGRESS 行的原位 FAILED 改写；sameBeginRequest 的四字
+  段一致性矩阵（clientRunId trim 后等价、namespace/snapshotMode/
+  missingPolicy 任一不同即 false）。
+- 要点：findItem 在 applyItem 与 recordFailedItem 各调用一次，
+  stub 需按调用次序返回 null→行；私有 RunRow/LedgerRow 均以反
+  射构造。
+- 状态：单类 3 用例绿；core 全量门禁 EXIT=0（5288 tests）。
+
 ### Batch 447（已交付）
 
 - 分支：`test/jsonrecord-scope-tail-batch443`（已合入 main）
