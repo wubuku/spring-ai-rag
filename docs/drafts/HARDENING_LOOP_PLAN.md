@@ -3581,6 +3581,18 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 445（已交付）
+
+- 分支：`test/syncrun-failed-item-batch445`（已合入 main）
+- 内容：DocumentSyncRunService 批量长尾（新建
+  DocumentSyncRunFailedItemTailTest，2 用例）：mutation 失败经
+  recordFailedItem 落 FAILED 并计入 summary.failed；run 控制错
+  误（SYNC_RUN_ITEM_CONFLICT）直接上抛终止批次。私有 RunRow 以
+  反射 20 参构造。
+- 要点：applySyncMutation 以 mapKeys 结果（可为 null）调用
+  mutationService——stub 需用 nullable 匹配器匹配 null 键。
+- 状态：单类 2 用例绿；core 全量门禁 EXIT=0（5276 tests）。
+
 ### Batch 444（已交付）
 
 - 分支：`test/turn-snapshot-tail-batch444`（已合入 main）
