@@ -3581,6 +3581,19 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 456（已交付）
+
+- 分支：`test/turn-session-tail-batch456`（已合入 main）
+- 内容：ChatTurnOperationService 会话与尝试标记长尾（新建
+  ChatTurnSessionAttemptTailTest，3 用例）：withEffectiveSession
+  对合法会话原样返回同一命令实例；markAttempt 对 null trace
+  session 或 null attempt 直接跳过；有 trace session 时委托
+  markAttemptFinished 并透出 attemptKey 与候选 ref。
+- 要点：withEffectiveSession 的非法会话分支为纯防御——
+  ChatCommand 构造器已先行校验 sessionId，正常路径不可达（入
+  档为潜在死代码）。
+- 状态：单类 3 用例绿；core 全量门禁 EXIT=0（5317 tests）。
+
 ### Batch 455（已交付）
 
 - 分支：`test/jsonrecord-helper-tail-batch455`（已合入 main）
