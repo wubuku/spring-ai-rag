@@ -3581,6 +3581,18 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 446（已交付）
+
+- 分支：`test/retriever-tail-batch446`（已合入 main）
+- 内容：HybridRetrieverService 长尾（新建
+  HybridRetrieverServiceTailTest，4 用例）：isTimeout 因果链遍
+  历（直接/CompletionException 包装/深层包裹/无超时）；normal
+  izeErrorCode 解包 CompletionException、简单类名兜底 ERROR；
+  candidateRetrievalLimit 矩阵——越界/无 config/关闭重排/provider
+  off 原样返回，重排激活时候选池放大到 candidateLimit(20)。
+- 要点：candidateRetrievalLimit 参数顺序为 (config, requested)。
+- 状态：单类 4 用例绿；core 全量门禁 EXIT=0（5280 tests）。
+
 ### Batch 445（已交付）
 
 - 分支：`test/syncrun-failed-item-batch445`（已合入 main）
