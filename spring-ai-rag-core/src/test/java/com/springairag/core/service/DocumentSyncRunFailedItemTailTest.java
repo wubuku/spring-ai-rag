@@ -5,6 +5,8 @@ import com.springairag.api.dto.DocumentSyncRunBatchUpsertRequest;
 import com.springairag.api.dto.DocumentSyncRunItemRequest;
 import com.springairag.api.enums.DocumentSyncMissingPolicy;
 import com.springairag.api.enums.DocumentSyncSnapshotMode;
+import com.springairag.api.enums.DocumentSyncDocumentKind;
+import com.springairag.api.enums.DocumentSyncItemStatus;
 import com.springairag.api.enums.DocumentSyncRunStatus;
 import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.config.RagProperties;
@@ -123,6 +125,48 @@ class DocumentSyncRunFailedItemTailTest {
         assertEquals(1, response.summary().failed());
         assertEquals("FAILED",
                 response.items().getFirst().status().name());
+    }
+
+    @Test
+    void mixedSuccessAndFailureAreCountedSeparately() throws Exception {
+        UUID firstRun = UUID.randomUUID();
+        stubActiveRun(firstRun, "lease-1");
+        DocumentSyncRunItemRequest ok = new DocumentSyncRunItemRequest(
+                DocumentSyncDocumentKind.TEXT,
+                "ok-1", "rev-1", null, "content", null,
+                null, null, null, null,
+                com.springairag.api.enums.EmbeddingPolicy.ASYNC);
+        when(mutationService.upsertSyncRunItemInCurrentTransaction(
+                anyLong(),
+                org.mockito.ArgumentMatchers.nullable(String.class),
+                org.mockito.ArgumentMatchers.nullable(String.class),
+                eq(ok), anyLong()))
+                .thenReturn(new DocumentMutationService.SyncItemMutation(
+                        DocumentSyncItemStatus.APPLIED, 41L, "rev-1",
+                        "NONE", null, null, null));
+        DocumentSyncRunItemRequest bad = new DocumentSyncRunItemRequest(
+                DocumentSyncDocumentKind.TEXT,
+                "bad-1", "rev-1", null, "content", null,
+                null, null, null, null,
+                com.springairag.api.enums.EmbeddingPolicy.ASYNC);
+        when(mutationService.upsertSyncRunItemInCurrentTransaction(
+                anyLong(),
+                org.mockito.ArgumentMatchers.nullable(String.class),
+                org.mockito.ArgumentMatchers.nullable(String.class),
+                eq(bad), anyLong()))
+                .thenThrow(new IllegalStateException("provider down"));
+
+        var response = service.batchUpsert(firstRun, "lease-1",
+                new DocumentSyncRunBatchUpsertRequest(List.of(ok, bad)));
+
+        assertEquals(2, response.summary().total());
+        assertEquals(1, response.summary().applied());
+        assertEquals(1, response.summary().failed());
+        assertEquals(DocumentSyncItemStatus.APPLIED,
+                response.items().get(0).status());
+        assertEquals(DocumentSyncItemStatus.FAILED,
+                response.items().get(1).status());
+        assertEquals("provider down", response.items().get(1).error());
     }
 
     @Test
