@@ -3581,6 +3581,18 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 459（已交付）
+
+- 分支：`test/apikey-expire-tail-batch459`（已合入 main）
+- 内容：ApiKeyManagementService.expireRotationById 调度长尾（新建
+  ApiKeyManagementServiceExpireRotationTailTest，5 用例）：operation
+  缺失早退、非 PENDING 早退、PENDING 未到期早退、管理写竞争失
+  败早退（不落账）、到期 PENDING 过期落账（状态 EXPIRED、源密
+  钥禁用）。
+- 要点：私有 expireRotationById 以反射驱动；acquireManagementWrite
+  竞争失败时静默早退是既有语义。
+- 状态：单类 5 用例绿；core 全量门禁 EXIT=0（5332 tests）。
+
 ### Batch 458（已交付）
 
 - 分支：`test/syncrun-replay-tail-batch458`（已合入 main）
