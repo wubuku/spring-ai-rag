@@ -3581,6 +3581,17 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 466（已交付）
+
+- 分支：`test/summary-tail-batch466`（已合入 main）
+- 内容：ChatExecutionService.withSummaryMetadata 长尾（新建
+  ChatExecutionServiceWithSummaryTailTest，4 用例）：null 压缩与
+  未尝试未降级 → 原样返回同一实例；attempted → summary 元数据
+  块（attempted/updated/degraded/reason/version/
+  summarizedThroughHistoryId/estimatedTokens）；degraded → 带
+  reason 无 historyId。
+- 状态：单类 4 用例绿；core 全量门禁 EXIT=0（5351 tests）。
+
 ### Batch 465（已交付）
 
 - 分支：`test/syncrun-replay-tail-batch465`（已合入 main）
