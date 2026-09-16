@@ -3581,6 +3581,17 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 463（已交付）
+
+- 分支：`test/same-state-tail-batch463`（已合入 main）
+- 内容：DocumentMutationService 外部状态比较真值表（新建
+  DocumentMutationSameStateTailTest，4 用例）：sameExternalState
+  要求启用且无删除标记；managed 变体忽略 enabled/deleted 仅比
+  六元组（title/contentHash/source/documentType/metadata/
+  payload）；任一字段漂移（title/hash/source/type/metadata）即
+  不匹配。
+- 状态：单类 4 用例绿；core 全量门禁 EXIT=0（5346 tests）。
+
 ### Batch 462（已交付）
 
 - 分支：`test/restore-collection-tail-batch462`（已合入 main）
