@@ -3581,6 +3581,16 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 467（已交付）
+
+- 分支：`test/rotation-cancel-matrix-batch467`（已合入 main）
+- 内容：ApiKeyManagementService.cancelRotation 长尾（新建
+  ApiKeyRotationCancelMatrixTest，4 用例）：CANCELED 幂等重放、
+  EXPIRED 拒绝、COMPLETED 拒绝（CREDENTIAL_ROTATION_NOT_PENDING）、
+  PENDING 取消 → 禁用目标密钥并恢复源密钥。含 principal lookup
+  与 rotationResponse 的 stub 矩阵。
+- 状态：单类 4 用例绿；core 全量门禁 EXIT=0（5361 tests）。
+
 ### Batch 466（已交付）
 
 - 分支：`test/summary-tail-batch466`（已合入 main）
