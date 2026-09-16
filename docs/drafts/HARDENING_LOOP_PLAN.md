@@ -3581,6 +3581,16 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 465（已交付）
+
+- 分支：`test/syncrun-replay-tail-batch465`（已合入 main）
+- 内容：ChatExecutionService.loadBaseline 会话历史读取长尾（新建
+  ChatExecutionServiceLoadBaselineTailTest，2 用例）：STATELESS
+  模式不读会话历史直接空基线；SERVER 模式经 findBySessionId 读
+  取并倒序为时间正序（早对话在前，共 4 条消息 = 2 历史 ×
+  user+assistant）。
+- 状态：单类 2 用例绿；core 全量门禁 EXIT=0（5353 tests）。
+
 ### Batch 464（已交付）
 
 - 分支：`test/chat-prompt-usage-tail-batch464`（已合入 main）
