@@ -3581,6 +3581,25 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 470（已交付）
+
+- 分支：`test/emit-progress-tail-batch470`（已合入 main）
+- 内容：DocumentEmbedService.emitEmbeddingProgress 长尾（新建
+  DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
+  跳过、批量事件逐条发射、事件序号与总数正确。
+
+### Batch 469（已交付）
+
+- 分支：`test/apikey-expire-tail-batch459`（已合入 main）
+- 内容：ApiKeyManagementServiceExpireRotationTailTest，5 用例：
+  到期 PENDING 过期落账、非 PENDING 早退、未到期早退、管理写
+  竞争失败早退。
+
+### Batch 468（已交付）
+
+- 分支：`test/syncrun-batch-tail-batch468`（已合入 main）
+- 内容：DocumentSyncRunService.batchUpsert 汇总计数矩阵。
+
 ### Batch 467（已交付）
 
 - 分支：`test/rotation-cancel-matrix-batch467`（已合入 main）
