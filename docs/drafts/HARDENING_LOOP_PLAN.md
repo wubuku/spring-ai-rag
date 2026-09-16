@@ -3581,6 +3581,17 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 464（已交付）
+
+- 分支：`test/chat-prompt-usage-tail-batch464`（已合入 main）
+- 内容：ChatExecutionService 提示词与用量长尾（新建
+  ChatExecutionServicePromptUsageTailTest，5 用例）：三模式系统
+  提示词分支（PLAIN/AGENT/KNOWLEDGE 各自模板文本）、domain 模
+  板前缀拼接、AGENT 模式下 Skill 目录 levelOnePrompt 追加、
+  usage 的 null 归一与部分字段透出（缺失 completionTokens 不入
+  Map）。
+- 状态：单类 5 用例绿；core 全量门禁 EXIT=0（5351 tests）。
+
 ### Batch 463（已交付）
 
 - 分支：`test/same-state-tail-batch463`（已合入 main）
