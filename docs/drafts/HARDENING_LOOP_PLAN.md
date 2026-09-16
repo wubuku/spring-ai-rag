@@ -3581,6 +3581,16 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 454（已交付）
+
+- 分支：`test/catalog-read-bounded-batch453`（已合入 main）
+- 内容：ResourceCatalog.readBounded 守卫长尾（新建
+  ResourceCatalogReadBoundedTailTest，4 用例）：文件/流式来源的
+  单文件与总预算超限拒绝、预算内完整读取、负预算立即拒绝。
+- 要点（既有语义）：流式读取超预算即抛 ResourceCatalogException
+  而非截断。
+- 状态：单类 4 用例绿；core 全量门禁 EXIT=0（5310 tests）。
+
 ### Batch 452（已交付）
 
 - 分支：`test/import-build-tail-batch452`（已合入 main）
