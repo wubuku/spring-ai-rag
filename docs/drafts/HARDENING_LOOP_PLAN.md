@@ -3581,6 +3581,16 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 461（已交付）
+
+- 分支：`test/syncrun-summary-tail-batch461`（已合入 main）
+- 内容：DocumentSyncRunService.batchUpsert 混合成败汇总（新建
+  DocumentSyncRunFailedItemTailTest 补充用例）：同批内一项
+  APPLIED、一项 FAILED（provider down），summary 分别计数且条
+  目按输入次序保留各自状态与错误信息。
+- 状态：单类 3 用例绿（原 2 + 新 1）；core 全量门禁 EXIT=0
+  （5338 tests）。
+
 ### Batch 460（已交付）
 
 - 分支：`test/mapper-snapshot-tail-batch460`（已合入 main）
