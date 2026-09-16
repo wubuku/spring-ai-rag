@@ -3581,6 +3581,16 @@ VersionHistoryModal 相关 100% 项等。
 - 流程照旧：规划→实施→单类验证→core 全量门禁 EXIT=0→push 特
   性分支→--no-ff 合并 main→账本→清理。
 
+### Batch 447（已交付）
+
+- 分支：`test/jsonrecord-scope-tail-batch443`（已合入 main）
+- 内容：JsonRecordService.scopeAllows 真值表（新建
+  JsonRecordServiceScopeAllowsTailTest，5 用例）：null/禁用/
+  非 json-record 文档拒绝、documentIds 过滤、NONE 放行任意已分
+  配文档、ANY_ASSIGNED 要求非空 collectionId、SELECTED 要求集
+  合隶属。
+- 状态：单类 5 用例绿；core 全量门禁 EXIT=0（5285 tests）。
+
 ### Batch 446（已交付）
 
 - 分支：`test/retriever-tail-batch446`（已合入 main）
