@@ -3588,6 +3588,21 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 502（已交付）
+
+- 分支：`test/chat-sse-events-batch502`（已合入 main）
+- 内容：RagChatController.stream 未键控 SSE 长尾（新建 RagChat
+  ControllerStreamEventsTest，4 用例，测试置于 core.chat 包以构
+  造 package-private ChatEvent 记录）：ContentDelta + Completed
+  完成链（心跳停止 + emitter.complete）；错误传播经 sendChat
+  Error；Failed 事件置 terminal 不 complete；空白 sessionId 自动
+  补齐。
+- 要点：ChatEvent 记录为 core.chat 包私有，RagChatController 测
+  试类放在 core.chat 包即可同时构造事件与调用控制器公共 API；
+  SseEmitter 未连接时 send/complete 走 early-hints 缓存，不会抛
+  异常，适合单测。
+- 指标：单类 4 用例绿；core 全量门禁 EXIT=0（5613 tests）。
+
 ### Batch 501（已交付）
 
 - 分支：`test/ragchat-stream-tail-batch501`（已合入 main）
