@@ -3588,6 +3588,20 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 501（已交付）
+
+- 分支：`test/ragchat-stream-tail-batch501`（已合入 main）
+- 内容：RagChatService.chatStream 遗留流式长尾（新建 RagChat
+  ServiceChatStreamTailTest，4 用例）：无候选回退默认客户端流式
+  并按 streaming 标记落历史（累积答案 + Map.of("streaming",true)）；
+  候选路径经真实 ChatClient 聚合分块（Hel+lo → 完整答案落账）；
+  流式错误传播且不落历史；无候选空流正常完成。
+- 要点：候选路径 mock advisor 需同时透传 adviseCall 与 adviseStream
+  （真实 ChatClient 流式走 adviseStream）；chatStream(ChatRequest)
+  的 model 需显式 setModel 才会进入候选分支；maxCandidateAttempts=0
+  被预算内部钳制，预算耗尽分支无法从公开 API 触发。
+- 指标：单类 4 用例绿；core 全量门禁 EXIT=0（5609 tests）。
+
 ### Batch 500（已交付）
 
 - 分支：`test/apikey-provisioning-batch500`（已合入 main）
