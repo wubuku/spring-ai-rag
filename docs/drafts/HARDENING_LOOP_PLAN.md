@@ -3588,6 +3588,23 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 480（已交付）
+
+- 分支：`test/resource-catalog-tail-batch480`（已合入 main）
+- 内容：ResourceCatalog 发现长尾（新建
+  ResourceCatalogFilesystemLimitTailTest，5 用例）：单根文件数
+  上限的两种模式（宽松 → 整根丢弃 + diagnostics 记录 file count
+  limit exceeded；failFast → 异常链上抛）；JAR 文件不可读降级
+  （JAR read failed）；非法 file: URI 的参数校验（Resource file
+  location is invalid）；空白 location 的静态 root() 守卫。
+- 要点：discoverOne 的文件数超限发生在根级收集完成后，因此宽松
+  模式下该根的全部条目都会被丢弃（entries 为空 + 诊断行），并非
+  截断保留；discover 循环里的「累计字节上限」分支经真实文件读取
+  不可达（readBounded 先按剩余配额抛 file byte limit exceeded），
+  属防御性代码，与 withEffectiveSession 一并记为不可达分支；
+  jar 前缀逃逸 / 缺条目前缀已被 JarGuardTest 覆盖，本批未重复。
+- 指标：单类 5 用例绿；core 全量门禁 EXIT=0（5450 tests）。
+
 ### Batch 479（已交付）
 
 - 分支：`test/jsonrecord-legacy-batch479`（已合入 main）
