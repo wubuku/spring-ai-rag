@@ -3588,6 +3588,21 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 505（已交付）
+
+- 分支：`test/hybrid-fulltext-error-batch505`（已合入 main）
+- 内容：HybridRetrieverService 分支隔离长尾（新建 HybridRetriever
+  FulltextErrorTailTest，6 用例）：无全文工厂 → NoOp provider 占
+  位且向量臂 SUCCESS；空查询向量 / 维度不匹配 / 非有限值三类向量
+  异常经 runVector catch 归一为 VECTOR ERROR 分支；全文 provider
+  抛错与 SearchResult.failed 标记分别映射 FULLTEXT ERROR（含错误
+  码透出），均不拖垮整体检索结果。
+- 要点：factory.detectLang 返回 fulltext 包的 QueryLang（与
+  retrieval 包同名类区分，需全限定）；NoOp 全文 provider 走的是
+  双臂执行路径（全文空结果 SUCCESS），并非 DISABLED 占位；
+  EmbeddingProfile 构造器直接内联（9 参）。
+- 指标：单类 6 用例绿；core 全量门禁 EXIT=0（5627 tests）。
+
 ### Batch 504（已交付）
 
 - 分支：`test/pdf-trigger-embed-batch504`（已合入 main）
