@@ -3588,6 +3588,23 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 496（已交付）
+
+- 分支：`test/chat-keyed-ask-batch496`（已合入 main）
+- 内容：RagChatController keyed /ask 长尾（新建 RagChatController
+  KeyedAskTailTest，6 用例）：幂等 mapper/execution 未配置的
+  IDEMPOTENCY_DISABLED 拒绝（后者 fail 操作）；keyed JSON 成功链
+  （prepareForOperation → completePrepared → finalize →
+  X-RAG-Turn-Id/Replay=false 双头）；inspect 命中直接重放；claim
+  后快照映射重放（不触达执行服务）；执行失败 → fail + 租约释放。
+- 要点：configureModeAwareExecution 参数顺序是 (commandMapper,
+  executionService)；op 带 executionSnapshot 时控制器走
+  mapFromExecutionSnapshot 而非 map；ChatPrincipal.from 与
+  resolveScope 对无认证 Mock 请求可能返回 null，matcher 用 any()
+  而非 any(Class)；prepare 第三参对 keyed 请求是非空 fingerprint，
+  不能用 isNull()。
+- 指标：单类 6 用例绿；core 全量门禁 EXIT=0（5580 tests）。
+
 ### Batch 495（已交付）
 
 - 分支：`test/restore-metadata-tail-batch495`（已合入 main）
