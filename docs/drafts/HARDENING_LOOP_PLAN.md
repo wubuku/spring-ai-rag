@@ -3588,6 +3588,24 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 492（已交付）
+
+- 分支：`test/derivation-apply-tail-batch492`（已合入 main）
+- 内容：DerivationRepairService.apply 守卫与收尾长尾（新建
+  DerivationRepairApplyGuardsTailTest，17 用例）：入口守卫四类
+  （未知 repairId NOT_FOUND、token/指纹不匹配、集合键指向不同集
+  合、预览过期标记 EXPIRED）；COMPLETED 幂等直接返回状态；租约抢
+  占失败双分支（操作存活 → 回读状态、操作过期 → EXPIRED）；条目
+  未抢占静默 continue；缺失条目 → failItem；异常消息为空降级为
+  异常类名；空文档 SKIPPED_CHANGED；本地阶段 PLANNED 文档漂移/
+  代次漂移跳过、重建后不收敛 FAILED；条目租约在本地/向量阶段之
+  间丢失（续锁 1,0 连续 stub）；向量阶段文档漂移跳过。
+- 要点：租约续锁 SQL 片段（AND lease_expires_at > CURRENT_
+  TIMESTAMP）用连续 stub（1,0）模拟跨阶段租约丢失；文档漂移在两
+  阶段间用 findById 连续 stub（匹配→漂移）驱动向量侧 matches
+  Document false。
+- 指标：单类 17 用例绿；core 全量门禁 EXIT=0（5554 tests）。
+
 ### Batch 491（已交付）
 
 - 分支：`test/collection-import-purge-batch491`（已合入 main）
