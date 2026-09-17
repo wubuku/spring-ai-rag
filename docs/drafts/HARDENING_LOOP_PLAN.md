@@ -3588,6 +3588,24 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 509（已交付，含生产 bug 修复）
+
+- 分支：`test/kstool-call-tail-batch509`（已合入 main）
+- 内容：KnowledgeSearchTool 调用矩阵长尾 + 预算耗尽 NPE 修复
+  （新建 KnowledgeSearchToolCallTailTest，8 用例）：单参 call 缺
+  失服务端上下文 ISE、ToolContext 缺授权条目 ISE、空白 query
+  IAE、非法 JSON 包装 IAE、检索预算耗尽上报（budgetExhausted +
+  error 文案）、rerank 异常降级保留结果、非数字 maxResults 回退、
+  序列化失败包装 ISE。
+- **生产 bug 修复**：budget 耗尽分支中 `results` 被
+  `trace.cachedResults` 赋 null 后未回填，line 150 `results.
+  stream()` 直接 NPE——补 `results = List.of()`，预算耗尽改为正
+  常返回带 error 的空结果输出（有回归测试覆盖）。
+- 要点：mock ObjectMapper 需同时 stub readValue（parse 用）并
+  doThrow writeValueAsString（序列化用）；broken 工具的检索也要
+  stub 空结果以推进到序列化阶段。
+- 指标：单类 8 用例绿；core 全量门禁 EXIT=0（5649 tests）。
+
 ### Batch 508（已交付）
 
 - 分支：`test/sse-events-json-tail-batch508`（已合入 main）
