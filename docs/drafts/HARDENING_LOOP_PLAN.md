@@ -3588,6 +3588,20 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 488（已交付）
+
+- 分支：`test/coordinator-deadline-batch488`（已合入 main）
+- 内容：ChatSessionCoordinator 截止时间与过期操作长尾（新建
+  ChatSessionCoordinatorDeadlineTailTest，8 用例）：invokeWithin
+  Deadline 的空句柄 IAE、过期截止 CHAT_TIMEOUT、正常返回、供应
+  商运行时异常透传、超时取消 future；failExpiredOperation 的仓
+  库缺省 no-op、耗尽成功终止、回收竞争 → CHAT_HISTORY_PERSIST_
+  FAILED。
+- 要点：LeaseHandle.stateless(deadline) 为包私有静态工厂，同包
+  测试可直接构造（免 acquire 的 jdbc 依赖）；timeout() 错误码
+  CHAT_TIMEOUT。
+- 指标：单类 8 用例绿；core 全量门禁 EXIT=0（5520 tests）。
+
 ### Batch 487（已交付）
 
 - 分支：`test/keyword-index-tail-batch487`（已合入 main）
