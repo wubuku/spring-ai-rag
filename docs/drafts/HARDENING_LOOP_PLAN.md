@@ -3588,6 +3588,23 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 487（已交付）
+
+- 分支：`test/keyword-index-tail-batch487`（已合入 main）
+- 内容：KeywordIndexPersistenceService 分配与校验长尾（新建
+  KeywordIndexAllocateValidateTailTest，10 用例）：markNotRequested
+  （删 chunks + 状态行更新 + 代次竞争 ISE + 身份缺失 IAE）；ensure
+  Current（null/无 id/disabled 三守卫、validateChunks 空块列表/
+  空白文本/越界位置三拒绝、Happy path 走完 DELETE+batchInsert+
+  READY 状态更新）；ensureContentHash（缺失回填 + version 推进、
+  并发冲突 ISE）。
+- 要点：stub 参数里再调 mock（describe(document())）会触发
+  UnfinishedStubbing——Descriptor 提为常量；varargs 整体匹配用
+  any(Object[].class)，逐元素 any() 数量必须与实际参数一致
+  （ensureCurrent 的 READY 更新是 8 参，5 个 any() 不匹配即静默
+  返回 0）。
+- 指标：单类 10 用例绿；core 全量门禁 EXIT=0（5512 tests）。
+
 ### Batch 486（已交付）
 
 - 分支：`test/dingtalk-delivery-batch486`（已合入 main）
