@@ -3588,6 +3588,25 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 477（已交付）
+
+- 分支：`test/openai-keyed-tail-batch477`（已合入 main）
+- 内容：OpenAI 兼容层 keyed 非重放路径长尾（新建
+  OpenAiCompatibilityKeyedFailureTailTest，6 用例）：keyed JSON
+  成功路径（prepareForOperation → completePrepared → finalize
+  → toResponse 映射 + TURN-ID 头）；keyed JSON 与 keyed SSE 的
+  prepareForOperation 失败 → turnOperationService.fail + 原样
+  重抛 + finally 释放会话租约；toStreamError 三类映射（OpenAI
+  协议错误保留 type/param/code、RagException 按 httpStatus 分流
+  server_error / invalid_request_error、兜底消息）。
+- 要点：keyed claim 的 command 经 controller 的 commandForClaim
+  + attachTrace 链路（diagnosticsService 非空时会换成新实例），
+  stub 匹配需用 any() 而非 same()；keyed JSON 不经过
+  executionService.execute（那是 unkeyed 路径）；mapper 的
+  mapFromExecutionSnapshot 仅在 operation 带 executionSnapshot
+  时被调用，测试 operation 必须带快照 JSON。
+- 指标：单类 6 用例绿；core 全量门禁 EXIT=0（5427 tests）。
+
 ### Batch 476（已交付）
 
 - 分支：`test/alert-dispatch-loop-batch476`（已合入 main）
