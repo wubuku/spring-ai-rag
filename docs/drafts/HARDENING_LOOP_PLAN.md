@@ -3588,6 +3588,22 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 506（已交付）
+
+- 分支：`test/chatturn-serialization-batch506`（已合入 main）
+- 内容：ChatTurnOperationService 序列化异常路径长尾（新建 Chat
+  TurnOperationSerializationTailTest，5 用例）：claim 插入期
+  executionSnapshot 写出失败 → IDEMPOTENCY_EXECUTION_SNAPSHOT_
+  INVALID；completeOpenAi 稳定快照写出失败 → CHAT_HISTORY_
+  PERSIST_FAILED；completePrepared payload 写出失败 → IDEMPOTENCY
+  _RESPONSE_TOO_LARGE；stableStepMetrics null 元素经 stableSnapshot
+  catch 同样映射 IDEMPOTENCY_RESPONSE_TOO_LARGE；正常 stepMetrics
+  经 complete 映射透出。
+- 要点：用 mock ObjectMapper（writeValueAsString 一律抛 Json
+  ProcessingException 匿名子类）驱动三条写出失败 catch；List.of
+  拒绝 null 元素，含 null 的列表须用 Arrays.asList。
+- 指标：单类 5 用例绿；core 全量门禁 EXIT=0（5632 tests）。
+
 ### Batch 505（已交付）
 
 - 分支：`test/hybrid-fulltext-error-batch505`（已合入 main）
