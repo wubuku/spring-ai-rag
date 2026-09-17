@@ -3588,6 +3588,22 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 497（已交付）
+
+- 分支：`test/auth-snapshot-invariant-batch497`（已合入 main）
+- 内容：ChatAuthorizationService 快照不变量长尾（新建 Chat
+  AuthorizationSnapshotInvariantTailTest，9 用例）：verifyReplay
+  对篡改快照的不变量拒绝（非布尔 unassigned 标志、NOT_APPLICABLE
+  范围与脏字段互斥、NOT_APPLICABLE caller 与范围化 scope 互斥、
+  非数组集合列表、白名单非正整数、非对象来源行）；ANY_COLLECTION
+  正集合来源放行；snapshot() 对非数字 documentId 与来源读取运行
+  时异常的 INVALID 降级（含 cause 保留）。
+- 要点：verifyReplay 前置校验 owner principal 活性（需 stub
+  findActivePrincipal）与来源文档存在性（findById → 文档行），
+  放行类用例必须同时备齐两类 stub；observed 的正整数校验先于
+  ANY_COLLECTION 的集合正性禁止，0 值场景不可达 forbidden 分支。
+- 指标：单类 9 用例绿；core 全量门禁 EXIT=0（5589 tests）。
+
 ### Batch 496（已交付）
 
 - 分支：`test/chat-keyed-ask-batch496`（已合入 main）
