@@ -3588,6 +3588,24 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 493（已交付）
+
+- 分支：`test/modeaware-advisors-batch493`（已合入 main）
+- 内容：ModeAwareChatClientFactory 自定义 Advisor provider 校验
+  矩阵与预算包装长尾（新建 ModeAwareChatClientFactoryAdvisors
+  TailTest，8 用例）：空白名称 / null supportedModes / null
+  advisorScope 三拒绝；provider 返回 null advisor 忽略不中断；
+  合法 provider 的 createAdvisor 被调用（计数断言）；101 个
+  provider 超量拒绝（Too many）；带执行预算的 command 触发
+  budgetedModelFor 包装路径；spring-ai queryTransformer +
+  queryExpanderVariants=2 时预算化的 query transform/expander
+  构建成功。
+- 要点：customAdvisors 校验在 create() 期间逐 provider 执行，
+  匿名 provider 实现即可驱动；非 mock 对象不能 verify，用
+  AtomicInteger 计数；ChatCommand 预算注入需经 16 参构造器显式
+  传入 executionBudget。
+- 指标：单类 8 用例绿；core 全量门禁 EXIT=0（5562 tests）。
+
 ### Batch 492（已交付）
 
 - 分支：`test/derivation-apply-tail-batch492`（已合入 main）
