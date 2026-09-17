@@ -3588,6 +3588,21 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 489（已交付）
+
+- 分支：`test/alert-silence-slo-batch489`（已合入 main）
+- 内容：AlertServiceImpl 静默与 SLO 长尾（新建 AlertServiceImpl
+  FireSilenceSloTailTest，8 用例）：durable outbox 优先
+  （enqueueOrdinary + 跳过 legacy 通道）；legacy 通道异常吞噬
+  （fireAlert 不中断）；未知 SLO 名 → unmet；零请求可用性 →
+  actual 100 + met；ONE_TIME 静默窗口命中、时间解析失败不静默、
+  仓储异常不静默、静默命中时 fireAlert 直接跳过（返回 null 不落
+  库）。
+- 要点：8 参构造器注入 outbox mock（isDurableEnabled 切换新旧
+  两条投递路径）；静默窗口用 ZonedDateTime.now() 动态生成以避免
+  时区漂移。
+- 指标：单类 8 用例绿；core 全量门禁 EXIT=0（5528 tests）。
+
 ### Batch 488（已交付）
 
 - 分支：`test/coordinator-deadline-batch488`（已合入 main）
