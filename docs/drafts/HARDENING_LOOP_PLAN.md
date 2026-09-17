@@ -3588,6 +3588,23 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 484（已交付）
+
+- 分支：`test/apikey-rotation-guards-batch484`（已合入 main）
+- 内容：ApiKeyManagementService 轮换守卫长尾（新建
+  ApiKeyRotationGuardsTailTest，11 用例）：getRotation /
+  completeRotation / cancelRotation 的管理写竞争 NOT_FOUND；complete
+  Rotation 的正常完成（禁用源密钥）、源已禁用跳过禁用、禁用行数
+  异常 CONCURRENT_MODIFICATION；cancelRotation 的目标禁用冲突与
+  源已禁用冲突；轮换凭证缺失（SERVICE_UNAVAILABLE missing
+  credential）、属主不符（another principal）、版本倒挂（versions
+  are inconsistent）三类拒绝。
+- 要点：rotationConflict 的错误码是 CONCURRENT_MODIFICATION（非
+  CREDENTIAL_ROTATION_*）；外属主校验靠凭证的 principalId 与
+  operation 的 principalId 不一致触发，operation 本身属主要与
+  authorizeRotation 的放行路径兼容。
+- 指标：单类 11 用例绿；core 全量门禁 EXIT=0（5485 tests）。
+
 ### Batch 483（已交付）
 
 - 分支：`test/collection-adddoc-batch483`（已合入 main）
