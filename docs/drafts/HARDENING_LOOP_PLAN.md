@@ -3588,6 +3588,23 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 479（已交付）
+
+- 分支：`test/jsonrecord-legacy-batch479`（已合入 main）
+- 内容：JsonRecordService 遗留持久化路径长尾（新建
+  JsonRecordServiceLegacyUpsertTailTest，5 用例）：ASYNC 策略
+  upsert 经 enqueueInCurrentTransaction 的结果映射（outcomeFrom
+  Dispatch → QUEUED/ASYNC_QUEUED/jobId/batchId 透出）；batch
+  Upsert 计数聚合（created / embeddingStatus=FAILED 的
+  embeddingFailed / payload 缺失的 persistenceFailed+FAILED 占位
+  结果）；批次聚合负载上限拒绝（maxBatchPayloadBytes=1）；import
+  Record 空文档 IAE；batchUpsert 空列表 IAE。
+- 要点：请求缺省 embeddingPolicy 会解析为 SYNC（同步嵌入 mock
+  返回 null → 状态 FAILED），测 ASYNC 分支必须显式 setEmbedding
+  Policy(ASYNC)；遗留路径重复提交同一请求因 find-existing 恒空
+  而两次 CREATED，无法自然产生 UNCHANGED 计数（需另设 stub）。
+- 指标：单类 5 用例绿；core 全量门禁 EXIT=0（5445 tests）。
+
 ### Batch 478（已交付）
 
 - 分支：`test/apikey-guard-batch478`（已合入 main）
