@@ -3588,6 +3588,22 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 485（已交付）
+
+- 分支：`test/batchdoc-legacy-batch485`（已合入 main）
+- 内容：BatchDocumentService 遗留批量长尾（新建
+  BatchDocumentServiceLegacyTailTest，8 用例）：重复内容去重
+  （skipped + 不嵌入）；ASYNC 缺事务管理器按条目降级失败；
+  ASYNC 事务内 enqueue（ASYNC_QUEUED 透出）；SYNC 嵌入失败
+  （EMBEDDING_FAILED 落库 + 错误透出）；SYNC 缓存命中
+  （SYNC_CACHED）；重复且不强制直接返回裸结果；deleteDocument
+  级联删除与缺失拒绝；batchDelete 外部管理文档保护。
+- 要点：ASYNC 有两层门禁——批级 requireJobsEnabled（缺
+  dispatchService 直接整批拒绝）与条目级事务模板缺失（降级为
+  单条失败结果）；countByDocumentId 返回 long；嵌入失败的
+  EMBEDDING_FAILED 状态经 save 二次落库，用 atLeastOnce 捕获。
+- 指标：单类 8 用例绿；core 全量门禁 EXIT=0（5493 tests）。
+
 ### Batch 484（已交付）
 
 - 分支：`test/apikey-rotation-guards-batch484`（已合入 main）
