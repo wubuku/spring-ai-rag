@@ -3588,6 +3588,22 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 508（已交付）
+
+- 分支：`test/sse-events-json-tail-batch508`（已合入 main）
+- 内容：SSE 事件类型映射与 JSON 序列化失败长尾（新建两个测试
+  类共 5 用例）：RagChatControllerStreamEventTypesTest（3 用例，
+  置于 core.chat 包构造 package-private ChatEvent 记录）——
+  ToolStarted / ToolFinished / SourcesAvailable 三类事件的有效
+  载荷映射并正常完成（心跳调度器启用 interval=1s 创建即停）；
+  OpenAiCompatibilityToJsonFailureTailTest（2 用例）——私有
+  toJson 对自引用 Map 抛 IllegalStateException "Failed to
+  serialize"、可序列化对象原样透出。
+- 要点：事件类型矩阵通过同一 stream 入口 + 不同 Flux 事件组合
+  驱动；心跳启用仅验证调度器创建与 stop 不抛（interval 1s 内测
+  试即完成，无实际心跳发送）。
+- 指标：单类 5 用例绿；core 全量门禁 EXIT=0（5641 tests）。
+
 ### Batch 507（已交付）
 
 - 分支：`test/evalsuite-version-batch507`（已合入 main）
