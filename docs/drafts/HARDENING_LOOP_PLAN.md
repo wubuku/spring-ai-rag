@@ -3600,6 +3600,15 @@ VersionHistoryModal 相关 100% 项等。
 - 分支：`test/syncrun-batch-tail-batch468`（已合入 main）
 - 内容：DocumentSyncRunService.batchUpsert 汇总计数矩阵。
 
+### Batch 468（已交付）
+
+- 分支：`test/extdoc-managed-fields-batch468`（已合入 main）
+- 内容：ExternalDocumentService.sameManagedFields 真值表（新建
+  ExternalDocumentServiceSameManagedFieldsTailTest，6 用例）：
+  title/contentHash/source/documentType/metadata/enabled 一致性
+  比较，任一字段漂移即 false。
+- 状态：单类 6 用例绿；core 全量门禁 EXIT=0。
+
 ### Batch 467（已交付）
 
 - 分支：`test/rotation-cancel-matrix-batch467`（已合入 main）
