@@ -3588,6 +3588,28 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 474（已交付）
+
+- 分支：`test/docdoc-upload-tail-batch474`（已合入 main）
+- 内容：RagDocumentController 上传与访问守卫长尾（新建
+  RagDocumentControllerUploadAccessTailTest，12 用例）：
+  processUploadedFile 矩阵（正常创建经 mutation 服务 + 幂等键
+  按文件下标派生 `key:0` / 空白幂等键保持 null / 非文本类型
+  getBytes 抛错 → Unsupported file type / 空白内容 → File
+  content is empty / mutation 异常 best-effort "Processing
+  failed:"）；受限 API Key 单白名单自动解析目标 collection、
+  多白名单缺省拒绝（SecurityException）；requireDocumentAccess(
+  List) 三分支（受限白名单外集合拒绝且不触达批量删除 / 缺失
+  文档不阻断 / 无限制策略跳过 findAllById 早退）；外部文档服务
+  与 mutation 服务缺省时的 ISE 守卫。
+- 要点：受限策略经 MockHttpServletRequest +
+  `ApiKeyAuthFilter.AUTHENTICATED_API_KEY_ENTITY` 属性注入
+  RagApiKey（NORMAL + allowedCollectionIds）；测试后必须
+  RequestContextHolder.resetRequestAttributes() 防上下文泄漏；
+  batchDeleteDocuments 入参是 `Map<String,List<Long>>`（"ids"
+  键）而非裸列表。
+- 指标：单类 12 用例绿；core 全量门禁 EXIT=0（5405 tests）。
+
 ### Batch 473（已交付）
 
 - 分支：`test/chatturn-tail-batch473`（已合入 main）
