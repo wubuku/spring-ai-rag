@@ -3588,6 +3588,17 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 500（已交付）
+
+- 分支：`test/apikey-provisioning-batch500`（已合入 main）
+- 内容：ApiKeyManagementService 供应台账长尾（新建 ApiKey
+  ProvisioningKeyTailTest，8 用例）：generateIdempotentKey 门禁
+  矩阵（功能关闭 IDEMPOTENCY_DISABLED / 台账缺失 SERVICE_
+  UNAVAILABLE / 空请求 NPE / 空白 owner 或哈希 IAE / managed 过
+  期时间必须为未来）；cleanupProvisioningLedger 三分支（关闭跳
+  过不触库、按保留期 400d+批量 500 清理、DataAccess 异常吞噬）。
+- 指标：单类 8 用例绿；core 全量门禁 EXIT=0（5605 tests）。
+
 ### Batch 499（已交付）
 
 - 分支：`test/exec-stream-tail-batch499`（已合入 main）
