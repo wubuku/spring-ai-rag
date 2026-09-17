@@ -3588,6 +3588,17 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 491（已交付）
+
+- 分支：`test/collection-import-purge-batch491`（已合入 main）
+- 内容：RagCollectionController 导入与清理守卫长尾（新建
+  RagCollectionControllerImportPurgeTailTest，3 用例）：import
+  Collection 三拒绝（null 请求 / 空白 name / 空白 collectionKey，
+  且不触达 createCollection）；正常导入（documents 空列表 →
+  importedDocuments=0，createCollection 收到键回填的请求）；
+  purge 服务缺省时 preview/apply 均 SERVICE_UNAVAILABLE。
+- 指标：单类 3 用例绿；core 全量门禁 EXIT=0（5537 tests）。
+
 ### Batch 490（已交付）
 
 - 分支：`test/ragchat-resilience-batch490`（已合入 main）
