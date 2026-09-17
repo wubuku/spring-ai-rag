@@ -3588,6 +3588,21 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 494（已交付）
+
+- 分支：`test/expiry-alert-cas-batch494`（已合入 main）
+- 内容：ApiPrincipalExpiryAlertService CAS 竞争与通知长尾（新建
+  ApiPrincipalExpiryAlertCasTailTest，7 用例）：告警插入 CAS 未
+  命中、同阶段更新 CAS 未命中（condition_state）、通知认领 CAS
+  未命中三类 → 重试预算耗尽后抛出 + metrics FAILURE；durable
+  outbox 认领（enqueueManaged + 不直接派发通道）；失败 future 通
+  道的告警日志不抛出；重试退避被中断降级 ISE；已吊销主体 NONE
+  阶段 NOOP。
+- 要点：eventRetryAttempts=2 压缩重试预算（每次退避 25ms×n）；
+  中断用例靠预置 Thread.currentThread().interrupt() 让 sleep 立
+  即抛出，@AfterEach 清理中断标记防污染。
+- 指标：单类 7 用例绿；core 全量门禁 EXIT=0（5569 tests）。
+
 ### Batch 493（已交付）
 
 - 分支：`test/modeaware-advisors-batch493`（已合入 main）
