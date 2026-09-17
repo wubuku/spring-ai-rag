@@ -3588,6 +3588,22 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 486（已交付）
+
+- 分支：`test/dingtalk-delivery-batch486`（已合入 main）
+- 内容：DingTalk 投递长尾（新建 DingTalkDeliveryTailTest，9 用
+  例）：deliver 的路由/可用性守卫（未启用 → PERMANENT_
+  CONFIGURATION）；classifyResponse 五类判定（200+errcode=0 →
+  SUCCESS、errcode 非零 → PERMANENT_PROVIDER_REJECTED、非法
+  JSON → PERMANENT、429 → TRANSIENT_RATE_LIMIT 带 Retry-After、
+  5xx → TRANSIENT_PROVIDER_5XX、4xx → PERMANENT）；网络异常 →
+  TRANSIENT_NETWORK；空 webhook 通道早退后落到下一通道成功。
+- 要点：RestTemplateBuilder 链式 stub（requestFactory/
+  connectTimeout/readTimeout/build）注入 mock RestTemplate；
+  HttpStatusCodeException 用 HttpClientErrorException.create 携带
+  Retry-After 头驱动 retryAfter 解析。
+- 指标：单类 9 用例绿；core 全量门禁 EXIT=0（5502 tests）。
+
 ### Batch 485（已交付）
 
 - 分支：`test/batchdoc-legacy-batch485`（已合入 main）
