@@ -3588,6 +3588,21 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 507（已交付）
+
+- 分支：`test/evalsuite-version-batch507`（已合入 main）
+- 内容：EvaluationSuiteService.createVersion 编排长尾（新建
+  EvaluationSuiteCreateVersionTailTest，4 用例）：正常创建
+  （canonical/哈希经 validator.parse 后透传 insertVersion 并映射
+  响应）；套件缺失 NOT_FOUND；insertVersion 唯一约束冲突转
+  DUPLICATE_RESOURCE；authorizeDefinition 对定义 cases 内集合键
+  的范围解析（scopeResolver.resolve 六参验证）。
+- 要点：validator.parse 入参是 JsonNode（anyString() 不匹配导致
+  stub 静默脱靶）；RagProperties 需开启 evaluation.managedSuites
+  Enabled；authorizeDefinition 读取的是解析后 cases 内的集合键而
+  非原始 JSON。
+- 指标：单类 4 用例绿；core 全量门禁 EXIT=0（5636 tests）。
+
 ### Batch 506（已交付）
 
 - 分支：`test/chatturn-serialization-batch506`（已合入 main）
