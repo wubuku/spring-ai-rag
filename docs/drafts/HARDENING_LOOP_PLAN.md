@@ -3588,6 +3588,25 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 481（已交付）
+
+- 分支：`test/chathistory-repo-tail-batch481`（已合入 main）
+- 内容：RagChatHistoryRepository 主体读写长尾（新建
+  RagChatHistoryRepositoryMappingTailTest，8 用例）：findBy
+  PrincipalAndSession 的空参 NPE、limit 钳制到 500（PageRequest
+  捕获）、toDto 映射（relatedDocumentIds JSON 解析 / metadata
+  枚举 PLAIN 与非法值回退 KNOWLEDGE / requestedModel 字符串）；
+  findOwnedAfterHistoryId 的 afterHistoryId 负数 IAE；delete
+  ByPrincipalAndSession 空参 NPE 与委托；reserveDurableContent
+  References 四分支（空引用短路不触库 / 栅栏更新失败 /
+  两次读取间集合漂移 → COLLECTION_PURGE_CONFLICT / 正常预留返回
+  document→collection 映射）。
+- 要点：jdbcTemplate.query 的 RowMapper stub 用 thenAnswer + mock
+  ResultSet（getLong("id"/"collection_id")）经真实 mapper 产出
+  DocumentReferenceRow；栅栏/校验两次读取以 Mockito 连续 stub
+  返回不同集合模拟漂移。
+- 指标：单类 8 用例绿；core 全量门禁 EXIT=0（5458 tests）。
+
 ### Batch 480（已交付）
 
 - 分支：`test/resource-catalog-tail-batch480`（已合入 main）
