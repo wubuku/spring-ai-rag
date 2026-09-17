@@ -3588,6 +3588,21 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 490（已交付）
+
+- 分支：`test/ragchat-resilience-batch490`（已合入 main）
+- 内容：RagChatService 韧性长尾（新建 RagChatServiceResilience
+  TailTest，6 用例）：候选模型返回空 ChatResponse →
+  "LLM returned null result" ISE；RetryTemplate 首失败次成功
+  （SimpleRetryPolicy(2)，模型调用两次）；metricsService 失败记
+  账（recordFailure）；chatEvents 未配置 mode-aware → Flux.error
+  ISE；已配置时空流完成与错误流传播（RagException 透出）。
+- 要点：budgetedModelFor（final 类 BudgetedChatModel 返回值）的
+  usageClientFactory 分支经真实 ChatClient 链路验证存在 NPE，本
+  批未覆盖（factory 参数默认传 null 绕开）；mock 的方法间嵌套
+  调用容易误触真实代码，stub 一律放 createService 顶层。
+- 指标：单类 6 用例绿；core 全量门禁 EXIT=0（5534 tests）。
+
 ### Batch 489（已交付）
 
 - 分支：`test/alert-silence-slo-batch489`（已合入 main）
