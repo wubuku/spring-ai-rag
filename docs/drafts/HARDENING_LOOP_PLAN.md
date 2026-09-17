@@ -3588,6 +3588,22 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 476（已交付）
+
+- 分支：`test/alert-dispatch-loop-batch476`（已合入 main）
+- 内容：AlertNotificationDeliveryWorker 调度循环长尾（新建
+  AlertNotificationDeliveryWorkerDispatchLoopTest，5 用例）：
+  wakeUp → scheduleDispatch → dispatchLoop → dispatchAvailable
+  端到端（领取候选 → 异步投递 → markDelivered → 自唤醒再扫至
+  空列表静止）；claim 竞争失败释放名额后继续后续候选（丢失者不
+  投递）；fallbackScan 恢复过期租约并触发扫描轮；shutdown 后
+  wakeUp 完全静默（不扫描不领取）；候选可重复领取时自唤醒循环
+  重复投递直至静止。
+- 要点：repository.claim 第三参是 `Duration`（非 long）；异步
+  断言用 `verify(timeout).xxx` + findCandidateIds 首轮返回候选、
+  次轮返回空列表保证循环收敛，避免测试后台无限轮询。
+- 指标：单类 5 用例绿；core 全量门禁 EXIT=0（5421 tests）。
+
 ### Batch 475（已交付）
 
 - 分支：`test/mutation-idem-update-batch475`（已合入 main）
