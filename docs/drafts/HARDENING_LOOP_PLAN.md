@@ -3588,6 +3588,22 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 514（进行中，未完成）
+
+- 候选：EmbeddingJobService.retry 重试长尾（新建 EmbeddingJob
+  RetryRaceTailTest，3 用例），因多次编译错误（EmbeddingJobStatus
+  import 包路径、EmbeddingJob 22 字段构造器缺参）未完成。
+- 已删除未完成的测试文件，等待下轮重新实施。
+- 下轮实施要点：EmbeddingJob record 共 22 个字段（id, batchId,
+  documentId, embeddingProfileId, force, contentHash, document
+  Version, status, attemptCount, maxAttempts, availableAt, lease
+  Owner, leaseExpiresAt, cancelRequestedAt, lastError, createdAt,
+  startedAt, finishedAt, updatedAt, origin, requestedByPrincipalId,
+  requestGeneration, documentKind, chunkerVersion），job() 辅助方
+  法必须补齐全部字段；EmbeddingJobStatus 在 core.entity 包；retry
+  存根用 jobRepository.retry(id, 5)；findActive 签名为
+  (long documentId, long profileId, String contentHash)。
+
 ### Batch 513（已交付）
 
 - 分支：`test/coordinator-commit-batch513`（已合入 main）
@@ -6867,3 +6883,32 @@ VersionHistoryModal 相关 100% 项等。
 - Batch 261 候选遗留：DocumentSyncRunService listItems 游标边界、
   DocumentMutationService 其他 lambda 残余、WebUI 页面分支残余。
 - 工作区：本地已合并 test/* 分支随各批清理，无遗留 worktree。
+
+
+---
+
+## 进度留档快照（Batch 513 后 · 用户指令）
+
+- 留档时点：2026-09-18 · main @ 本快照提交
+- 循环进度：Batch 471–513 共 43 个批次全部按「规划→实施→单类验
+  证→core 全量门禁 EXIT=0→push 特性分支→--no-ff 合并 main→账本
+  记录→清理分支」交付完成。
+- core 测试规模：5370 → 5670（+300）。
+- 本轮生产 bug 修复：Batch 509 中 KnowledgeSearchTool 预算耗尽分
+  支 results 被 cachedResults 赋 null 后未回填导致 NPE，补 results
+  = List.of() 并添加回归测试覆盖。
+- 近期批次重点：
+  - Batch 505–506：HybridRetriever 分支隔离 + ChatTurnOperation
+    序列化异常包装
+  - Batch 507–508：EvaluationSuiteService createVersion 编排 +
+    SSE 事件类型映射 + OpenAI toJson 序列化失败
+  - Batch 509–510：KnowledgeSearchTool 调用矩阵（含生产 bug 修
+    复）+ HybridRetriever 向量超时
+  - Batch 511–512：CollectionIdentityResolver 守卫 + Document
+    MutationService 外部 SYNC finish 链
+  - Batch 513：ChatSessionCoordinator commit 链路与中断
+- Batch 514 进行中：EmbeddingJobService.retry 重试长尾，测试文件
+  已删除待重新实施。
+- 下一批候选：EmbeddingJobService.retry 重试长尾（重新实施）、
+  HybridRetrieverService 剩余超时分支、DocumentMutationService 残
+  余 sync 内部、PdfImportService 上传链路。
