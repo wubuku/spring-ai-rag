@@ -3588,6 +3588,27 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 475（已交付）
+
+- 分支：`test/mutation-idem-update-batch475`（已合入 main）
+- 内容：DocumentMutationService 幂等预留与 updateLocal 长尾
+  （新建 DocumentMutationUpdateIdempotencyTailTest，11 用例）：
+  createLocal 的 Idempotency-Key 生命周期（正常预留 + 落账
+  completeIdempotency UPDATE / 空白键完全跳过 / SUCCEEDED 重放
+  REPLAYED / 过期预留 DELETE 后重预留再创建 / 指纹漂移拒绝
+  DocumentRevisionConflictException / IN_PROGRESS 拒绝 / 超长
+  键 255 拒绝）；updateLocal 长尾（同值更新 UNCHANGED 早退且
+  不记版本不派发 / source 字段分支归一化并计入 metadataChanged /
+  禁用文档内容变更非 SKIP 拒绝 DOCUMENT_DISABLED / SKIP 放行且
+  embeddingAction=NONE）。
+- 要点：jdbc varargs stub 中 `any(Object[].class)` 可整体匹配
+  varargs，但 verify 部分参数固定时剩余参数需逐个 `any()`；
+  模拟含 null 列的预留行不能用 `Map.of`（拒绝 null 值），须用
+  HashMap；指纹捕获在 INSERT answer 中经
+  `getArguments()` 倒数第二位取参；新建文档 id 为 null 会让
+  `Prepared.documentId()` 拆箱 NPE，saveAndFlush answer 需回填。
+- 指标：单类 11 用例绿；core 全量门禁 EXIT=0（5416 tests）。
+
 ### Batch 474（已交付）
 
 - 分支：`test/docdoc-upload-tail-batch474`（已合入 main）
