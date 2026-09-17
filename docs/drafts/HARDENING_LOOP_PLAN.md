@@ -3588,6 +3588,26 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 472（已交付）
+
+- 分支：`test/ragchat-failover-batch472`（已合入 main）
+- 内容：RagChatService 遗留多模型 failover 矩阵（新建
+  RagChatServiceLegacyFailoverTest，4 用例）：候选 1 失败 → 候选
+  2 成功回退（历史落账为 fallback 答案）；全候选失败 → 传播最后
+  一个错误且不写历史；candidate-attempt 预算=1 时第 2 候选在
+  tryReserve 即被拒（CHAT_BUDGET_EXHAUSTED，模型零调用）；熔断
+  （minCalls=1, threshold=1）第一次失败记账后 OPEN、第二次进入
+  候选循环前即抛 LlmCircuitOpenException（模型仅 1 次调用）。
+  同时覆盖 14 参构造器委托与 invokeChatClient 失败记账分支。
+- 要点：候选路径走 buildLegacyClient 构造的**真实 ChatClient**
+  （mock builder 不生效）；mock 的 RAG advisor 需 stub getName()
+  非空（真实链构建时校验 advisorName）+ adviseCall 透传
+  `chain.nextCall(request)`；真实 MessageChatMemoryAdvisor 用
+  `findByConversationId → List.of()` 空会话支撑；ChatModel mock
+  的 `call(Prompt)` 直接决定成败；无检索上下文时 ChatResponse
+  sources 为 null（断言按 null-or-empty 处理）。
+- 指标：单类 4 用例绿；core 全量门禁 EXIT=0（5376 tests）。
+
 ### Batch 471（已交付）
 
 - 分支：`test/syncrun-counters-batch471`（已合入 main）
