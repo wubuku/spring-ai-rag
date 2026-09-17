@@ -3588,6 +3588,19 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 483（已交付）
+
+- 分支：`test/collection-adddoc-batch483`（已合入 main）
+- 内容：RagCollectionController addDocument 长尾（新建
+  RagCollectionControllerAddDocumentTailTest，8 用例）：legacy
+  直移（doc.setCollectionId + save）；mutation 服务迁移
+  （updateLocal 携带期望版本与 mapKeys 解析的 collectionKey）；
+  缺 expectedDocumentRevision IAE；外部管理文档
+  DocumentRevisionConflictException；documentId 缺失 IAE；集合
+  缺失 404；受限调用者附加白名单外文档 SecurityException；add
+  DocumentByKey 键路由（requireActiveCollectionByKey → 委托）。
+- 指标：单类 8 用例绿；core 全量门禁 EXIT=0（5474 tests）。
+
 ### Batch 482（已交付）
 
 - 分支：`test/extdoc-delete-tail-batch482`（已合入 main）
