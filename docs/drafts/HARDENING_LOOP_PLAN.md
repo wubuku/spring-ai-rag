@@ -3588,6 +3588,23 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 499（已交付）
+
+- 分支：`test/exec-stream-tail-batch499`（已合入 main）
+- 内容：ChatExecutionService 流式编排长尾（新建 ChatExecution
+  ServiceStreamTailTest，4 用例）：最后一个候选空流 → complete
+  StreamAttempt 的 "no usable streaming response" ISE；成功流
+  （ContentDelta + Completed 事件、sessionId 透出）；快照
+  modelCandidates 驱动候选链（resolveCandidateRequired 逐一解析
+  + 首候选失败回退次候选，路由器描述符不参与）；无任何候选时
+  stream 快速失败（MODEL_STREAMING_UNSUPPORTED）。
+- 要点：stream() 内部会用 newBudget 替换 command 预算，外部预
+  耗尽预算不可达（预算耗尽分支由非流式路径覆盖）；快照候选经
+  resolveCandidateRequired 逐 ref 解析后仍受 isEligible（stream
+  能力）过滤；argThat lambda 必须空值安全（Mockito 会对其他调用
+  以 null 探测匹配器）。
+- 指标：单类 4 用例绿；core 全量门禁 EXIT=0（5597 tests）。
+
 ### Batch 498（已交付）
 
 - 分支：`test/upsert-external-conflict-batch498`（已合入 main）
