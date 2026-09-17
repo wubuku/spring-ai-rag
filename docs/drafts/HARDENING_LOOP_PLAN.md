@@ -3588,6 +3588,23 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 482（已交付）
+
+- 分支：`test/extdoc-delete-tail-batch482`（已合入 main）
+- 内容：ExternalDocumentService 遗留删除与索引协调长尾（新建
+  ExternalDocumentServiceDeleteIndexTailTest，8 用例）：source
+  Delete 六分支（活文档墓碑化 DELETED + markNotRequested +
+  DELETE 版本、已墓碑同版本 UNCHANGED 不落库、活文档同版本
+  冲突、expectedSourceRevision 漂移冲突、JSON 记录身份拒绝、
+  缺失文档 DOCUMENT_NOT_FOUND）；coordinateLocalIndex 分支
+  （SKIP upsert → markNotRequested、启用新建 → ensureCurrent）。
+- 要点：ASYNC upsert 有 dispatchService 非空前置（否则
+  EMBEDDING_JOBS_DISABLED），fixture 需 setDispatchService；
+  删除路径复用 ExternalDocumentServiceTest 的 9 参构造器夹具
+  （resolver token / jdbcTemplate ConnectionCallback / 版本服务
+  stub）。
+- 指标：单类 8 用例绿；core 全量门禁 EXIT=0（5466 tests）。
+
 ### Batch 481（已交付）
 
 - 分支：`test/chathistory-repo-tail-batch481`（已合入 main）
