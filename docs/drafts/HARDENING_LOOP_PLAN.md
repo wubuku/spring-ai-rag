@@ -3588,6 +3588,30 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 473（已交付）
+
+- 分支：`test/chatturn-tail-batch473`（已合入 main）
+- 内容：ChatTurnOperationService 4 参 ChatCommand claim 与
+  complete 长尾（新建 ChatTurnOperationClaimCompleteTailTest，
+  17 用例）：insertNewOperation 三分支（插入成功持租约 + 快照
+  JSON 断言 / 插入竞争失败释放租约后按最新状态重派 / 插入异常
+  释放租约重抛）、claimNew 非 SESSION_BUSY 租约错误传播与
+  SESSION_BUSY 竞争无 operation 重抛、claimExisting 指纹冲突
+  （IDEMPOTENCY_KEY_REUSED）与 FAILED 拒绝（错误码回退
+  INTERNAL_ERROR）、completePrepared 五分支（unkeyed 直接映射 /
+  缺 executionSnapshot / 缺协调器租约 IDEMPOTENCY_DISABLED /
+  响应超限 IDEMPOTENCY_RESPONSE_TOO_LARGE / 正常提交
+  commitOperation 九参验证）、completeOpenAi 超限与 null 响应/
+  null source 拒绝、null metadata 值容忍、commandForClaim 坏
+  快照拒绝。
+- 要点：`withEffectiveSession` 重生成分支经 ChatCommand 构造器
+  会话校验后不可达（防御性死代码，放弃覆盖）；mock 的
+  authorizationService.initialSnapshot 必须显式返回字符串，否则
+  anyString() 不匹配 null、insert stub 全部脱靶（曾导致
+  StackOverflowError 的重派递归）；带租约 keyed Claim 经反射
+  3 参构造器构造。
+- 指标：单类 17 用例绿；core 全量门禁 EXIT=0（5393 tests）。
+
 ### Batch 472（已交付）
 
 - 分支：`test/ragchat-failover-batch472`（已合入 main）
