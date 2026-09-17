@@ -3588,6 +3588,21 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 498（已交付）
+
+- 分支：`test/upsert-external-conflict-batch498`（已合入 main）
+- 内容：DocumentMutationService 外部 upsert 冲突长尾（新建
+  DocumentMutationUpsertExternalConflictTailTest，4 用例，反射
+  调用私有 20 参 upsertExternalInTransaction）：新身份携带
+  expectedSourceRevision → DocumentRevisionConflictException；同
+  版本不同受管字段（title 漂移）→ 冲突；同版本同字段 →
+  UNCHANGED 不落库；新身份正常 CREATED（saveAndFlush 落库）。
+- 要点：external 路径版本记录同样是 forceRecordVersion（mock 未
+  打桩返回 null → getVersionNumber NPE）；existing 文档的
+  source/metadata 必须与请求对齐才能命中 UNCHANGED（sameExternal
+  State 比较所有受管字段）；saveAndFlush 需回填新建文档 id。
+- 指标：单类 4 用例绿；core 全量门禁 EXIT=0（5593 tests）。
+
 ### Batch 497（已交付）
 
 - 分支：`test/auth-snapshot-invariant-batch497`（已合入 main）
