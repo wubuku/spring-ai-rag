@@ -3588,6 +3588,22 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 511（已交付）
+
+- 分支：`test/identity-resolver-guards-batch511`（已合入 main）
+- 内容：CollectionIdentityResolver 守卫长尾（新建 Collection
+  IdentityResolverGuardTailTest，13 用例）：requireIncludingDeleted
+  缺失拒绝（id= 文案）；resolveActiveIds 的 null 返回与空列表 IAE
+  与 ids/keys 集合不一致 IAE；键解析的已清理/未知键拒绝；
+  resolveActiveIdsWithinAllowed 的非法键名与空列表 IAE；
+  requireActive 的非正 id / id-key 不匹配 / 已清理集合拒绝；
+  mapKeys 经 findAllById 解析键。
+- 要点：resolveActiveKeyIds 是 private，公开路径为 resolveActiveIds
+  (null, keys)；keys 批量查找走 findAllByCollectionKeyInAndDeleted
+  False（未打桩默认空集合）；mapKeys 用 findAllById（any() 宽松
+  匹配 LinkedHashSet 入参）。
+- 指标：单类 13 用例绿；core 全量门禁 EXIT=0（5664 tests）。
+
 ### Batch 510（已交付）
 
 - 分支：`test/hybrid-timeout-batch510`（已合入 main）
