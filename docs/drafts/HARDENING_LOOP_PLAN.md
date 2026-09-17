@@ -3588,6 +3588,23 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 503（已交付）
+
+- 分支：`test/openai-unkeyed-tail-batch503`（已合入 main）
+- 内容：OpenAiCompatibilityController 非键控执行路径长尾（新建
+  OpenAiCompatibilityUnkeyedExecuteTailTest，4 用例）：非键控
+  JSON 成功链（execute → toNativeResponse → toResponse 结果重
+  载）；非键控执行失败直接重抛（无 claim 不触发 fail）；键控下
+  快照模型标识为 DEFAULT 时回退 mapped 别名；损坏快照 JSON 容错
+  回退（JsonProcessingException 被捕获）。
+- 要点：requestMapper 有两个重载——非键控 map(request,
+  httpRequest) 两参、键控快照 mapFromExecutionSnapshot 四参且首
+  参为 OpenAiChatCompletionRequest（用 any(ChatRequest.class) 会
+  产生匹配器类型推断冲突）；OpenAiCompatibilityUnkeyedExecute
+  TailTest 与 Batch 477/501 均验证了 prepare/inspect/claim 三段
+  stub 中任一未命中即静默走默认分支的特征。
+- 指标：单类 4 用例绿；core 全量门禁 EXIT=0（5617 tests）。
+
 ### Batch 502（已交付）
 
 - 分支：`test/chat-sse-events-batch502`（已合入 main）
