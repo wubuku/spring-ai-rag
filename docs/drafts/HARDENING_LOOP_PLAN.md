@@ -3588,6 +3588,23 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 504（已交付）
+
+- 分支：`test/pdf-trigger-embed-batch504`（已合入 main）
+- 内容：PdfImportController 触发嵌入包装长尾（新建 PdfImport
+  ControllerTriggerEmbeddingTailTest，4 用例）：embed=sync 参数
+  分发到 3 参 triggerEmbedding 并 200 透出结果；服务
+  IllegalArgumentException → 400；其余异常 → 500；sse 参数 →
+  SseEmitter 200。
+- 要点：sync 路径调用 3 参 triggerEmbedding(uuid, collectionId,
+  forceReembed)（4 参带 policy 的重载走 triggerEmbeddingWithPolicy
+  分支）；SSE 分支立即返回 emitter，异常在异步任务内降级为
+  sendError，两个分支的异常映射语义不同。
+- 指标：单类 4 用例绿；core 全量门禁 EXIT=0（5621 tests）。
+- 教训：全量门禁偶发 1 失败先确认 surefire 报告非陈旧残留（本
+  次失败报告对应已不存在的测试类），清理 target/surefire-reports
+  后复跑为绿。
+
 ### Batch 503（已交付）
 
 - 分支：`test/openai-unkeyed-tail-batch503`（已合入 main）
