@@ -3588,6 +3588,21 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 495（已交付）
+
+- 分支：`test/restore-metadata-tail-batch495`（已合入 main）
+- 内容：DocumentMutationService 恢复元数据与 JSON/sync 守卫长尾
+  （新建 DocumentMutationRestoreMetadataTailTest，5 用例）：快照
+  originalFilename / metadata / jsonbPayload 三类元数据漂移 →
+  RESTORED_VERSION + metadataChanged=true + 字段回写断言；upsert
+  JsonRecord 的 JSON null payload 拒绝（IAE）；upsertSyncRunItem
+  空请求 NPE 守卫。
+- 要点：restore 动作名是 RESTORED_VERSION、版本记录 action 是
+  RESTORE（原因字符串与 changedFields 文案耦合，避免断言具体原
+  因）；内容快照与当前一致时 contentChanged=false，用于隔离元数
+  据维度的判定。
+- 指标：单类 5 用例绿；core 全量门禁 EXIT=0（5574 tests）。
+
 ### Batch 494（已交付）
 
 - 分支：`test/expiry-alert-cas-batch494`（已合入 main）
