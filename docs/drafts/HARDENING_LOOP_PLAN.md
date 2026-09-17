@@ -3588,6 +3588,22 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 478（已交付）
+
+- 分支：`test/apikey-guard-batch478`（已合入 main）
+- 内容：ApiKeyController 访问守卫矩阵长尾（新建
+  ApiKeyControllerAccessGuardTailTest，13 用例）：legacy（root
+  未配置）模式 ADMIN 门槛（listKeys/listPrincipals/updatePolicy
+  /revokeKey 的 NORMAL 403 与 ADMIN 放行）；updatePolicy 空键
+  列表 IAE、委托键解析（requireActive → resolveDelegated）与
+  未知主体 404；revokeKey 的 403/404/204 三态；rotateKey 的
+  NORMAL 只能轮换自身（keyId == credentialId）规则与 201
+  no-store 响应；root 模式 requireStagedAccess（无 caller 抛
+  SecurityException / 无 ROOT 属性抛 SecurityException / 有
+  ROOT 放行 cancelRotation）；prepareRotation 幂等键必需
+  （IDEMPOTENCY_KEY_INVALID）与重放头（OK+replay 头 / CREATED）。
+- 指标：单类 13 用例绿；core 全量门禁 EXIT=0（5440 tests）。
+
 ### Batch 477（已交付）
 
 - 分支：`test/openai-keyed-tail-batch477`（已合入 main）
