@@ -3588,6 +3588,16 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 513（已交付）
+
+- 分支：`test/coordinator-commit-batch513`（已合入 main）
+- 内容：ChatSessionCoordinator commit 链路与中断长尾（新建 Chat
+  SessionCoordinatorCommitTailTest，3 用例）：commit 提交 durable
+  历史（reserveDurableContentReferences → saveDurable 链路）、提
+  交异常包装 CHAT_HISTORY_PERSIST_FAILED、invokeWithinDeadline
+  中断时取消任务抛 CHAT_TIMEOUT。
+- 指标：单类 3 用例绿；core 全量门禁 EXIT=0（5670 tests）。
+
 ### Batch 512（已交付）
 
 - 分支：`test/mutation-sync-finish-batch512`（已合入 main）
