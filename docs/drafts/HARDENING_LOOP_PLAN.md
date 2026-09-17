@@ -3588,17 +3588,29 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 471（已交付）
+
+- 分支：`test/syncrun-counters-batch471`（已合入 main）
+- 内容：重建 Batch 468 丢失的 batchUpsert 汇总计数测试（原分支
+  因中断被 reset 清掉、从未合入，原「test/syncrun-batch-tail-
+  batch468」账本条目系失实记录，已删除）。新建
+  DocumentSyncRunBatchUpsertCountersTest，2 用例：四状态单批计
+  数矩阵（APPLIED/UNCHANGED/SKIPPED_NEWER_MUTATION/FAILED 各 1，
+  Summary 四项计数独立正确，且仅 APPLIED+UNCHANGED 回写 rag_
+  documents last_seen）；SKIPPED_NEWER_MUTATION 携带 documentId
+  时跳过 last_seen 回写（新近突变保护语义，never 验证）。补齐
+  此前仅覆盖 APPLIED+FAILED 混合计数的残余。
+- 要点：`contains("UPDATE rag_documents")` 与
+  `rag_document_sync_run_items` 的 UPDATE 不会误匹配（前缀差异
+  在 `_sync` vs `s`）；mutation stub 按 `eq(item)` 实例区分。
+- 指标：单类 2 用例绿；core 全量门禁 EXIT=0（5372 tests）。
+
 ### Batch 469（已交付）
 
 - 分支：`test/apikey-expire-tail-batch459`（已合入 main）
 - 内容：ApiKeyManagementServiceExpireRotationTailTest，5 用例：
   到期 PENDING 过期落账、非 PENDING 早退、未到期早退、管理写
   竞争失败早退。
-
-### Batch 468（已交付）
-
-- 分支：`test/syncrun-batch-tail-batch468`（已合入 main）
-- 内容：DocumentSyncRunService.batchUpsert 汇总计数矩阵。
 
 ### Batch 468（已交付）
 
