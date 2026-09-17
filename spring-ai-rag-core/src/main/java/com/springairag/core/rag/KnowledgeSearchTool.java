@@ -99,6 +99,7 @@ public class KnowledgeSearchTool implements ToolCallback {
                 if (!trace.tryBeginRetrieval(query)) {
                     budgetExhausted = true;
                     error = "retrieval budget exhausted";
+                    results = List.of();
                 } else {
                     var config = context.options().toConfig();
                     config.setMaxResults(limit);
