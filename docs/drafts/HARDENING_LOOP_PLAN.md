@@ -3588,6 +3588,19 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 510（已交付）
+
+- 分支：`test/hybrid-timeout-batch510`（已合入 main）
+- 内容：HybridRetrieverService 向量臂 orTimeout 超时分支（新建
+  HybridRetrieverVectorTimeoutTailTest，2 用例）：JDBC 慢查询
+  （1.5s > retrievalTimeoutSeconds=1）→ orTimeout 触发 → handle
+  归一为 VECTOR TIMEOUT 状态、结果为空但整体不抛、总耗时在超时
+  预算内快速返回；快查询在预算内 SUCCESS。
+- 要点：orTimeout 只对真实异步执行生效——直接执行器（Runnable::
+  run）会让 supplyAsync 同步完成后超时永不触发，测试需注入真实
+  线程池；超时状态是独立 TIMEOUT（区别于 ERROR）。
+- 指标：单类 2 用例绿；core 全量门禁 EXIT=0（5651 tests）。
+
 ### Batch 509（已交付，含生产 bug 修复）
 
 - 分支：`test/kstool-call-tail-batch509`（已合入 main）
