@@ -3588,6 +3588,21 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 512（已交付）
+
+- 分支：`test/mutation-sync-finish-batch512`（已合入 main）
+- 内容：DocumentMutationService 外部 SYNC finish 链与恢复 ASYNC
+  派发长尾（新建 DocumentMutationExternalSyncFinishTailTest，3 用
+  例）：upsertExternal SYNC 策略创建 → enqueue + completeAfterCommit
+  收尾（lifecycle 读取透出 embedStatus）；ASYNC 策略仅入队不收
+  尾（completeAfterCommit 不触达）；restoreLocalFromVersion 非
+  SKIP 策略 → LOCAL_VERSION_RESTORE 入队派发（RESTORED_VERSION）。
+- 要点：dispatch() 对非 SKIP 一律 enqueueInCurrentTransaction，
+  SYNC 的差异只在 finish 阶段的 completeAfterCommit；lifecycle
+  Service.read 必须显式打桩（finishExternal 直接读 lifecycle 字
+  段，未打桩即 NPE）。
+- 指标：单类 3 用例绿；core 全量门禁 EXIT=0（5667 tests）。
+
 ### Batch 511（已交付）
 
 - 分支：`test/identity-resolver-guards-batch511`（已合入 main）
