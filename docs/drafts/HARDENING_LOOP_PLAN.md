@@ -3588,6 +3588,24 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 518（已交付）
+
+- 分支：`codex/batch518-retrieval-trace-tail`（已合入 main）
+- 内容：RetrievalTraceCollector 重载与守卫长尾（新建 Retrieval
+  TraceCollectorTailTest，11 用例）：parentSession/attemptKey 暴露、
+  检索预算耗尽上报（tryBeginRetrieval 第二次失败 + lastBudget
+  Exhausted 标志）、recordQueryExpansionOutcome 回写（含未 configure
+  时 no-op）、null outcome 在 recordOutcome/recordCandidateOutcome
+  中 no-op、单参 recordOutcome 重载、无前序 outcome 时 recordRerank
+  经 RetrievalOutcome.ofResults 合成基线、isRepeatedQuery 归一化
+  命中、null/空白/未知缓存查询返回 null、record(List) 重载不写查询
+  缓存、citationId/markExposed null 守卫、normalizeQuery null→"" 与
+  空白折叠。
+- 要点：sources() 只返回 markExposed 过的键（断言覆盖率用
+  citationId 更直接）；recordRerank(null results) 不抛异常而是合成
+  空 outcome，不能当 no-op 断言。
+- 指标：单类 11 用例绿；core 全量门禁 EXIT=0（5056 tests）。
+
 ### Batch 517（已交付）
 
 - 分支：`codex/batch517-prompt-planner-budget-tail`（已合入 main）
