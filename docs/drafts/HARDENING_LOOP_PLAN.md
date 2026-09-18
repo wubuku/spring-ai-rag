@@ -3588,6 +3588,19 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 515（已交付）
+
+- 分支：`test/memory-summary-tail-batch515`（已合入 main）
+- 内容：RagChatMemorySummaryRepository CRUD 长尾（新建 RagChat
+  MemorySummaryRepositoryTailTest，11 用例）：find 返回 Summary
+  Row 或 empty、saveCas 的 INSERT（v0）与 UPDATE（CAS）两路径、
+  参数校验（零 historyId / null text / 空白 text / 负 tokens）、
+  delete 操作、saveCas INSERT 冲突返回 false、saveCas UPDATE CAS
+  不匹配返回 false。
+- 要点：jdbcTemplate varargs stub 用 any(Object[].class) 匹配整
+  组 varargs 最可靠（逐个 any() 容易因数量不匹配而脱靶）。
+- 指标：单类 11 用例绿；core 全量门禁 EXIT=0（5684 tests）。
+
 ### Batch 514（已交付）
 
 - 分支：`test/embedjob-retry-race-batch514`（已合入 main）
