@@ -3588,6 +3588,23 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 516（已交付）
+
+- 分支：`codex/batch516-pdf-gate-alert-validator`（已合入 main）
+- 内容：两个门禁类长尾（JaCoCo 驱动）：
+  1. PdfImportServiceImportGateTailTest（3 用例）：importPdf 在
+     rag.pdf.enabled=false 时抛 ISE、无可用转换器抛 RuntimeException
+     （No PDF converter）、仓储初始状态 0。
+  2. AlertNotificationProviderValidatorTailTest（5 用例）：delivery
+     开关关闭跳过校验、notification 开关关闭跳过校验、configured+
+     available 通过、configured+unavailable 拒绝启动（消息含 provider
+     名）、未配置 provider 不阻断启动。
+- 要点：NotificationConfig.getDelivery() 返回活对象且无 setter，测
+  试直接改 getDelivery() 返回实例；@PostConstruct validate() 包级私
+  有，同包测试可直接调用。
+- 指标：两新类 8 用例绿；core 全量门禁 EXIT=0（702 类 / 5034 tests
+  / 0 fail / 0 err / 9 skip）。
+
 ### Batch 515（已交付）
 
 - 分支：`test/memory-summary-tail-batch515`（已合入 main）
