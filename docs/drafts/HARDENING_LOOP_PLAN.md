@@ -3588,6 +3588,25 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 517（已交付）
+
+- 分支：`codex/batch517-prompt-planner-budget-tail`（已合入 main）
+- 内容：ConversationPromptPlanner 预算边界长尾（新建 Conversation
+  PromptPlannerBudgetTailTest，11 用例）：非正上下文窗口拒绝
+  （CHAT_CONTEXT_BUDGET_EXCEEDED）、超限 summary 丢弃（summary_
+  omitted）、剩余预算放不下最近一轮时 history_truncated + recent_
+  history_omitted 双标记、未达 minimumRecentTurns 即截断（2/3 轮）、
+  turns() 跳过 null 消息、null baseline 无标记、legacy（关闭自适应）
+  PLAIN 证据目标 0 且 over-limit 记录降级、legacy KNOWLEDGE 保留
+  minModeEvidence、AGENT 模式 toolResultReserve 抬升到 estimate
+  ("tool_result_too_large")=21、maxSummaryTokens=0 走 fitText 空路
+  径、工具 schema 超 maxToolSchemaTokens 拒绝。
+- 要点：RagException.getErrorCode() 返回 String（断言用 .name()）；
+  List.of 拒绝 null 元素，null 消息分组用例须用 Arrays.asList；
+  ToolDefinition 不能用 lambda mock，须 mock 接口并 stub name/
+  description/inputSchema。
+- 指标：单类 11 用例绿；core 全量门禁 EXIT=0（5045 tests）。
+
 ### Batch 516（已交付）
 
 - 分支：`codex/batch516-pdf-gate-alert-validator`（已合入 main）
