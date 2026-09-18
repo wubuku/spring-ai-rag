@@ -6934,3 +6934,33 @@ VersionHistoryModal 相关 100% 项等。
 - 下一批候选：EmbeddingJobService.retry 重试长尾（重新实施）、
   HybridRetrieverService 剩余超时分支、DocumentMutationService 残
   余 sync 内部、PdfImportService 上传链路。
+
+
+---
+
+## 进度留档快照（Batch 515 后 · 用户指令）
+
+- 留档时点：2026-09-19 · main @ 本快照提交
+- 循环进度：Batch 471–515 共 45 个批次全部按「规划→实施→单类验
+  证→core 全量门禁 EXIT=0→push 特性分支→--no-ff 合并 main→账本
+  记录→清理分支」交付完成。
+- core 测试规模：5370 → 5684（+314）。
+- 生产 bug 修复：Batch 509 中 KnowledgeSearchTool 预算耗尽分支
+  results 被 cachedResults 赋 null 后未回填导致 NPE，补 results =
+  List.of() 并添加回归测试覆盖。
+- 本轮新增批次重点：
+  - Batch 505–507：HybridRetriever 分支隔离、ChatTurnOperation
+    序列化异常、EvaluationSuite createVersion 编排
+  - Batch 508–509：SSE 事件类型映射 + KnowledgeSearchTool 调用
+    矩阵（含生产 bug 修复）
+  - Batch 510–511：HybridRetriever 向量超时 + CollectionIdentity
+    Resolver 守卫
+  - Batch 512–513：DocumentMutationService SYNC finish 链 + Chat
+    SessionCoordinator commit 链路
+  - Batch 514–515：EmbeddingJobService.retry 重试长尾 + RagChat
+    MemorySummaryRepository CRUD 长尾
+- Batch 514 进行中已重新实施并交付（EmbeddingJobRetryRaceTailTest
+  3 用例），原 Batch 516（EmbeddingJobWorker 调度异常路径）测试复
+  杂度高暂缓。
+- 下一批候选：PdfImportService 上传链路、ChatExecutionService 流
+  式内部、DocumentMutationService 残余 sync 内部。
