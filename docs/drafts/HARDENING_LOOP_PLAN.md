@@ -3588,7 +3588,16 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
-### Batch 514（进行中，未完成）
+### Batch 514（已交付）
+
+- 分支：`test/embedjob-retry-race-batch514`（已合入 main）
+- 内容：EmbeddingJobService.retry 重试长尾（新建 EmbeddingJob
+  RetryRaceTailTest，3 用例）：重试成功转 QUEUED 并发布唤醒、
+  DataIntegrityViolationException 竞争时经 activeRetryTarget 兜
+  底、无兜底目标时异常透出。
+- 之前的 Batch 514 进度备注（进行中未完成）已被本交付替代。
+
+
 
 - 候选：EmbeddingJobService.retry 重试长尾（新建 EmbeddingJob
   RetryRaceTailTest，3 用例），因多次编译错误（EmbeddingJobStatus
