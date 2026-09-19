@@ -3588,6 +3588,27 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 529（已交付）
+
+- 分支：`codex/batch529-openai-registry-fingerprint-tail`（已合入 main）
+- 内容：两类协议工具长尾：
+  1. OpenAiModelAliasRegistryTailTest（12 用例）：别名排序、非法
+     别名字符/缺失配置/空注册拒建、候选 >16 拒绝、空白候选拒绝与
+     去重修剪、require 未知别名/resolve null 抛 modelNotFound、
+     rag.mode 覆写禁用拒绝/启用生效、rag.memory 非法值拒绝、覆写
+     禁用拒绝/启用生效（含大小写与空白修剪）。
+  2. ChatRequestFingerprintTailTest（9 用例）：原生请求 null
+     message/mode/model/domainId 的缺省归一化、scope 模式按 ids
+     在场推断（SELECTED vs CALLER_VISIBLE）与 collectionIds 排序
+     去重、metadata 数组元素内凭证字段递归拒绝、null 值跳过、控制
+     字符拒绝、OpenAI 声明 scope 无模式回退 CALLER_VISIBLE、集合
+     头归一化（排序去重进入 scope）触发 SELECTED_COLLECTIONS、
+     PLAIN 携带 documentIds 拒绝 RETRIEVAL_OPTIONS_NOT_ALLOWED。
+- 要点：List.of 拒绝 null 元素（第三次踩坑），混合 null 列表一律
+  Arrays.asList；凭证字段检查是大小写不敏感的字段名匹配
+  （"ApiKey" 命中）。
+- 指标：两新类 21 用例绿；core 全量门禁 EXIT=0（5162 tests）。
+
 ### Batch 528（已交付）
 
 - 分支：`codex/batch528-scope-resolver-authz-tail`（已合入 main）
