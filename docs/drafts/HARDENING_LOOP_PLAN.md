@@ -3588,6 +3588,27 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 521（已交付）
+
+- 分支：`codex/batch521-fulltext-factory-provisioning-tail`（已合入 main）
+- 内容：两个类的策略与台账长尾（JaCoCo 驱动）：
+  1. FulltextSearchProviderFactoryTailTest（5 用例）：无参构造全禁
+     用工厂（getCapabilities null + NoOp）、legacy getProvider() 的
+     autoDetectBest 链（jieba→english→trgm→none 四档）、未知固定策
+     略回退 per-language 自动探测、pg_trgm 固定策略扩展缺失抛
+     IllegalStateException、detectLang 的 CJK/ASCII/null/空白。
+  2. CollectionProvisioningTailTest（7 用例）：enabled=false 抛
+     IDEMPOTENCY_DISABLED 且不触台账、四依赖 null 抛 SERVICE_
+     UNAVAILABLE、重试耗尽经 readExisting 收敛为 replay（真值）、
+     backoff 被中断置位中断标志并抛 unavailable（清理标志）、
+     cleanup 删除计数 >0、cleanup 吞并 DataAccessException、关闭时
+     cleanup 短路。
+- 要点：JaCoCo XML 中 sourcefile 挂在 package 下而非 class 下，按
+  class.iter('sourcefile') 统计行会误报 0（CSV 的 LINE_MISSED 才可
+  靠）；backoff 中断用例必须在 @AfterEach 用 Thread.interrupted()
+  复位标志避免污染其他测试。
+- 指标：两新类 12 用例绿；core 全量门禁 EXIT=0（5086 tests）。
+
 ### Batch 520（已交付）
 
 - 分支：`codex/batch520-purge-validate-retire-tail`（已合入 main）
