@@ -3588,6 +3588,28 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 520（已交付）
+
+- 分支：`codex/batch520-purge-validate-retire-tail`（已合入 main）
+- 内容：CollectionPurgeService 校验与收尾长尾（新建 Collection
+  PurgeValidateTailTest，8 用例）：apply 冻结版本失配拒绝
+  （validateFrozenRequest）、COMPLETED 预览坏结果负载冲突 + 好负
+  载解析返回（readResult 双路径）、空文档计划 + 非空修复 ID 的
+  apply 全链路 RETIRED（覆盖 countUuidJoin、deleteByIds 执行分支、
+  markCollectionRetired、buildRetiredResult 状态行映射、json 序列
+  化、completePurgePreview）、validatePreviewable 的未索引引用冲突
+  （Counts[24]）、活跃任务冲突（Counts[21]）、同步上限冲突（max
+  Documents=0 + Counts[0]）、零计数放行。
+- 要点：Counts/Plan 为私有 record，测试经反射 getDeclaredConstruc
+  tor（28 个 long 参数）构造并直调 validatePreviewable；Collection
+  PurgeResultResponse 的版本字段名是 collectionVersion 不是
+  version；apply 时序为 validateFrozenRequest → COMPLETED 短路 →
+  requirePreviewApplicable → claimApplyLease → fenceCollection →
+  requireUnchangedPlan（指纹 + validatePreviewable）→ 删除 → 收
+  尾；update 兜底 stub 返回 1 之外，DELETE FROM rag_documents 需
+  单独 stub 返回与 documentCount 一致的行数。
+- 指标：单类 8 用例绿；core 全量门禁 EXIT=0（5074 tests）。
+
 ### Batch 519（已交付 · 替代先前"进行中"记录）
 
 - 分支：`codex/batch519-keyword-fallback-worker-schedule`（已合入 main）
