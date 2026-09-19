@@ -3588,6 +3588,24 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 522（已交付）
+
+- 分支：`codex/batch522-embedding-worker-schedule-tail`（已合入 main）
+- 内容：EmbeddingJobWorker 调度长尾（新建 EmbeddingJobWorker
+  ScheduleTailTest，7 用例）：onJobsAvailable 事件入口触发领取扫
+  描、executor 关闭竞态下 wakeUp 走 RejectedExecutionException 复
+  位 dispatchScheduled、claim 异常释放名额后经 dispatchLoop 吞并
+  （异步路径）、反射直调 dispatchAvailableJobs 时 claim 异常透出
+  且名额归还、空领取释放名额并停止扫描、提交被拒归还名额、阻塞
+  处理下 shutdown 经 awaitTermination 超时 + shutdownNow 返回。
+- 要点：EmbeddingJob / EmbeddingJobStatus 与 EmbeddingJobWorker 同
+  包（core.embeddingjob，测试无需 import，之前记录的 core.entity
+  路径有误）；EmbeddingJobExecutor.processClaimed 返回 void，打桩
+  必须用 doAnswer(...).when(mock) 而非 when(mock.thenAnswer； Rag
+  EmbeddingJobProperties.workerConcurrency 默认 4，名额相关断言前
+  用 setWorkerConcurrency(2) 显式收敛。
+- 指标：单类 7 用例绿；core 全量门禁 EXIT=0（5093 tests）。
+
 ### Batch 521（已交付）
 
 - 分支：`codex/batch521-fulltext-factory-provisioning-tail`（已合入 main）
