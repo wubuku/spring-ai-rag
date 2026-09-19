@@ -3588,6 +3588,23 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 535（已交付）
+
+- 分支：`codex/batch535-mutation-syncitem-applied-tail`（已合入 main）
+- 内容：DocumentMutationService 同步条目应用长尾（新建 Document
+  MutationSyncItemAppliedTailTest，3 用例）：新建身份 + SKIP 策略
+  走完整创建链 → APPLIED 且 embeddingAction NONE / job null（mark
+  NotRequestedInCurrentTransaction 登记）、既有文档 + SYNC 策略 →
+  APPLIED 携带 ASYNC_QUEUED dispatch 并触发 keywordIndexPersistence
+  Service.ensureCurrent（ensureLocalForNonSkipMutation 非 SKIP 分
+  支）、仓库查询抛 DataIntegrityViolationException 原样透传。
+- 要点：新建身份需 stub allocateSourceSequence 的 "RETURNING
+  mutation_sequence"（queryForObject(Long.class)）否则抛 Cannot
+  allocate source mutation sequence；snapshotStartSequence 必须 ≥
+  既有文档 sourceMutationSequence，否则 SKIPPED_NEWER_MUTATION；
+  keyword 服务经 setKeywordIndexPersistenceService 注入。
+- 指标：单类 3 用例绿；core 全量门禁 EXIT=0（5193 tests）。
+
 ### Batch 534（已交付）
 
 - 分支：`codex/batch534-jsonrecord-dedupe-tail`（已合入 main）
