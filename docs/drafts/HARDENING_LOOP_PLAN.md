@@ -3588,6 +3588,21 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 533（已交付）
+
+- 分支：`codex/batch533-resource-catalog-jar-tail`（已合入 main）
+- 内容：ResourceCatalog 发现路径长尾（新建 ResourceCatalog
+  DiscoveryTailTest，5 用例）：@TempDir 真实 JAR 注入 —— JAR 文
+  件缺失走 "JAR read failed" 包装（failFast ISE + cause）、空前缀
+  "!/" 全量列举（仅 .md 过滤 .txt）、"!/docs" 前缀过滤跳过外部条
+  目、file: 指向单个 .md 文件作为根（单条目、相对名即文件名）、
+  POSIX 收权目录在 failFast=false 下降级为诊断（快照不健康 +
+  diagnostics=1）。
+- 发现：discoverJarFile 的 prefix.contains("..") 分支是纵深防御
+  死分支 —— normalizeLocation 在更外层已拒绝 ".."，公开 API 无法
+  达到；保留分支不删（安全语义），不追覆盖。
+- 指标：单类 5 用例绿；core 全量门禁 EXIT=0（5184 tests）。
+
 ### Batch 532（已交付）
 
 - 分支：`codex/batch532-relocation-envelope-tail`（已合入 main）
