@@ -3588,6 +3588,21 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 538（已交付）
+
+- 分支：`codex/batch538-doc-controller-file-tail`（已合入 main）
+- 内容：RagDocumentController 文件校验与审计长尾（新建 Rag
+  DocumentControllerFileValidationTailTest，5 用例）：validate
+  TextFile 三路判定（.md 扩展名白名单 / text/plain 内容类型 / 无
+  扩展名 → isText=false）、readFileContent 标题去 .md 后缀 + 空白
+  内容拒绝、auditDelete 双重载（3 参/4 参）透传 AuditLogService、
+  resolveOptionalCollectionId 双空短路返回 null、normalizeDocument
+  CollectionScopes 对 null 列表直接返回。
+- 要点：auditLogService 是第 9 个构造参数（类上无 setter）；File
+  ValidationResult / FileContentResult 是私有 record，测试统一用
+  反射访问器（isText()/extension()/title()/content()）断言。
+- 指标：单类 5 用例绿；core 全量门禁 EXIT=0（5207 tests）。
+
 ### Batch 537（已交付）
 
 - 分支：`codex/batch537-ragchat-build-helpers-tail`（已合入 main）
