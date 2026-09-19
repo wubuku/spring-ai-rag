@@ -3588,6 +3588,23 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 536（已交付）
+
+- 分支：`codex/batch536-turnop-fail-exhaust-tail`（已合入 main）
+- 内容：ChatTurnOperationService 失败持久化长尾（新建 ChatTurn
+  OperationFailExhaustTailTest，5 用例）：fail 遇 ObjectMapper 写出
+  失败回退硬编码兜底载荷并归为 INTERNAL_ERROR（repository.complete
+  Failure 校验）、RagException 时载荷与错误码取原异常（FORBIDDEN）、
+  exhaustAttempts 序列化失败回退兜底载荷（IDEMPOTENCY_ATTEMPTS_
+  EXHAUSTED，lease null → repository 分支且返回 true 不再抛）、
+  inProgress 对 leaseExpiresAt=null 的操作返回 retryAfterSeconds=2
+  （remaining 1 + 1，工厂方法返回而非抛出）、stableSource(null) IAE
+  与 stableValue(null) 直通 null。
+- 要点：inProgress 是返回异常的工厂方法；ChatTurnInProgress
+  Exception 错误码为 IDEMPOTENCY_OPERATION_IN_PROGRESS；stableValue
+  的 IAE 包装分支在真实 Jackson 下不可达（空 bean 可序列化）。
+- 指标：单类 5 用例绿；core 全量门禁 EXIT=0（5198 tests）。
+
 ### Batch 535（已交付）
 
 - 分支：`codex/batch535-mutation-syncitem-applied-tail`（已合入 main）
