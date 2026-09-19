@@ -1112,21 +1112,6 @@ public class DocumentSyncRunService {
                 item.seenAt());
     }
 
-    private DocumentSyncRunItemResponse failedItem(
-            DocumentSyncRunItemRequest item,
-            RuntimeException error) {
-        return new DocumentSyncRunItemResponse(
-                item.externalId(),
-                item.documentKind(),
-                DocumentSyncItemStatus.FAILED,
-                null,
-                item.sourceRevision(),
-                errorCode(error),
-                sanitizeError(error.getMessage()),
-                "NONE",
-                null);
-    }
-
     private int count(
             List<DocumentSyncRunItemResponse> items,
             DocumentSyncItemStatus status) {
