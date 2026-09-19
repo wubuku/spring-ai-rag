@@ -3588,31 +3588,29 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
-### Batch 519（进行中未完成 · 用户指令收尾）
+### Batch 519（已交付 · 替代先前"进行中"记录）
 
-- 候选：KeywordIndexPersistenceService.allocateGeneration 回退路径
-  （18 missed 中 17 行集中在该方法：首次 UPDATE...RETURNING 未命中
-  时的 INSERT 兜底 + 二次 UPDATE、两次未命中抛 "Document changed
-  while allocating"、ensureCurrent fresh 索引命中提前返回）。
-- 已编写 KeywordIndexAllocateFallbackTailTest（3 用例，其中 2 个通
-  过），但 fresh 索引命中用例的 stub 未生效（hasFreshLocalIndex 仍
-  返回 false 走到 allocateGeneration 抛 ISE），已按收尾指令删除未
-  完成测试文件，等待下轮重新实施。
-- 下轮实施要点：
-  1. hasFreshLocalIndex（integrityRepository 为 null 时）需同时 stub
-     queryForList(sql 含 FROM rag_document_local_index_state, 3 个
-     varargs) 返回 Map.of("local_index_generation", 5L, "chunk_
-     count", 2)，以及 queryForObject(sql 含 SELECT COUNT(*)，Long.
-     class，4 个 varargs) 返回 2L；实测两 stub 齐备后仍走 allocate，
-     疑似 try/catch 吞掉异常返回 false，下轮先确认 queryForObject
-     stub 的 varargs 匹配（可改用 any(Object[].class) 整组匹配）。
-  2. ensureCurrent 正常路径在 chunk 写入后还有 READY CAS：update
-     (sql 含 SET local_index_status，8 参 varargs) 必须 stub 返回 1，
-     否则抛 "Document changed while preparing local keyword index"。
-  3. allocateGeneration 双 UPDATE 共用 contains("RETURNING state.
-     local_index_generation") stub，可用 thenAnswer().thenAnswer()
-     连续返回 List.of() / List.of(7L) 模拟首次未命中。
-- 其余批次进度不受影响；core 编译验证通过（COMPILE_EXIT=0）。
+- 分支：`codex/batch519-keyword-fallback-worker-schedule`（已合入 main）
+- 内容：两个类的调度/回退长尾（JaCoCo 驱动）：
+  1. KeywordIndexAllocateFallbackTailTest（3 用例）：allocate
+     Generation 首次 UPDATE...RETURNING 未命中时 INSERT 兜底 + 二次
+     UPDATE 命中、两次未命中抛 "Document changed while allocating"
+     （且不进入 chunk 写入）、fresh 索引命中（状态 READY + chunk
+     计数一致）时 ensureCurrent 提前返回。
+  2. AlertNotificationDeliveryWorkerScheduleTailTest（7 用例）：
+     onAvailable 事件入口触发扫描、dispatchLoop 捕获仓储运行时异
+     常后静止、executor 关闭竞态下 wakeUp 经 RejectedExecutionExce
+     ption 复位 dispatchScheduled、dispatchAvailable 提交被拒时归
+     还名额并 break、名额耗尽（availablePermits=0）跳过扫描、指数
+     退避 initialBackoff 巨大时溢出封顶 maxBackoff±20%、阻塞投递下
+     shutdown 经 awaitTermination 超时 + shutdownNow 返回。
+- 要点（解掉上轮遗留）：JdbcTemplate.queryForList 有 (String,
+  Object...) 与 (String, Class, Object...) 两个重载，未显式类型的
+  any() 会被编译器解析到错误重载导致 stub 脱靶（MISS 用例因默认空
+  列表侥幸通过）；varargs 一律用 any(Object[].class) 整组匹配。
+  另外 ensureCurrent 成功路径在 chunk 写入后还有 READY CAS（sql 含
+  SET local_index_status，8 参），必须 stub 返回 1。
+- 指标：两新类 10 用例绿；core 全量门禁 EXIT=0（5066 tests）。
 
 ### Batch 518（已交付）
 
