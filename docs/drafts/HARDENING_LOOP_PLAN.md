@@ -3588,6 +3588,24 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 534（已交付）
+
+- 分支：`codex/batch534-jsonrecord-dedupe-tail`（已合入 main）
+- 内容：JsonRecordService 检索去重与辅助长尾（新建 JsonRecord
+  SearchDedupeTailTest，6 用例）：非数字 documentId 全部跳过 →
+  uniqueRanked 空 → 提前返回空响应（覆盖 parseDocumentId 捕获分
+  支 + searchAuthorizedDetailed 空返回）、数值 id 中仓库缺文档的
+  条目跳过（doc==null continue）、空白 query IAE、safeError 反射
+  三分支（RuntimeException null 消息回退类名 / 普通消息脱敏透传 /
+  String 600 字符截断 500+"..."）、requestCollectionKey 的 null 请
+  求与 collectionKey/collectionId 双空 → null、parseDocumentId 的
+  null/非数字/数字三分支。
+- 要点：mock ReRankingService 未打桩时 rerank() 返回 null →
+  limitResults 清空结果 → 检索断言恒为空；任何走 searchAuthorized
+  Detailed 的测试须在 RetrievalConfig 显式 useRerank(false)；limit
+  经 properties 收敛，stub 用 anyInt() 而非 eq(10)。
+- 指标：单类 6 用例绿；core 全量门禁 EXIT=0（5190 tests）。
+
 ### Batch 533（已交付）
 
 - 分支：`codex/batch533-resource-catalog-jar-tail`（已合入 main）
