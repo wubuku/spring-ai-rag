@@ -3588,6 +3588,23 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 530（已交付）
+
+- 分支：`codex/batch530-static-knowledge-parse-tail`（已合入 main）
+- 内容：StaticKnowledgeCatalog 解析与检索长尾（新建 Static
+  KnowledgeCatalogParseTailTest，4 用例）：mock ResourceCatalog
+  注入 markdown 快照，覆盖标题路径压栈与回退（## → ### → ## 时
+  removeLast 分支）、80 字符超限行走切分 else 分支（overlap 回看
+  + while 窗口切分 + 单块截断到 chunkMax）、空白行边界落块（
+  current >= chunkMax 分支）、static: 前缀块 id 与 titlePath 元数
+  据、search 的 CJK 覆盖（≥2 字符）评分、拉丁词项评分、标题短语
+  评分、多块分数降序比较器、limit=1 与字符预算 30 生效、不健康
+  快照直接返回空。
+- 要点：initialize() 是 @PostConstruct 包级私有，同包测试可直接
+  调；ResourceSnapshot 第七参是 degraded-roots 列表，传非空且
+  healthy=false 即可构造不健康快照。
+- 指标：单类 4 用例绿；core 全量门禁 EXIT=0（5166 tests）。
+
 ### Batch 529（已交付）
 
 - 分支：`codex/batch529-openai-registry-fingerprint-tail`（已合入 main）
