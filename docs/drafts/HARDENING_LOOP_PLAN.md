@@ -3588,6 +3588,27 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 524（已交付）
+
+- 分支：`codex/batch524-coordinator-lease-state-tail`（已合入 main）
+- 内容：ChatSessionCoordinator 租约状态长尾（新建 ChatSession
+  CoordinatorLeaseStateTailTest，12 用例）：已过期租约在
+  invokeWithinDeadline 入口即超时、丢失租约被 assertActive 拒绝
+  （CHAT_SESSION_LEASE_LOST）、非运行时异常原因（AssertionError）
+  包装为非受检异常、SERVER 模式 commit 收敛共享内存、commit 对
+  RagException 原样透传不二次包装、failOperation/failExpired
+  Operation 意外运行时异常包装 CHAT_HISTORY_PERSIST_FAILED、
+  renew 的 CAS 未命中/仓储故障置 lost/非 RUNNING 跳过三分支、
+  consumeLease 经行映射器产生异常名单数抛 CHAT_SESSION_LEASE_LOST、
+  keyed commit 后 resume 续排程被拒仅降级告警。
+- 要点：LeaseHandle.lost/state 为 private（反射读写，state 是
+  AtomicReference<private enum State>）；keyed handle 用 5 参私有
+  构造反射构造（principalId/sessionId/ownerToken/deadline/stateless）；
+  RENEW_SQL 匹配片段用 "UPDATE rag_chat_session_lease"；keyed
+  commit 内部会先走 renewLeaseForCommit，测 resume 拒绝前必须把续
+  租 CAS stub 命中。
+- 指标：单类 12 用例绿；core 全量门禁 EXIT=0（5109 tests）。
+
 ### Batch 523（已交付）
 
 - 分支：`codex/batch523-syncrun-deadcode-lease-tail`（已合入 main）
