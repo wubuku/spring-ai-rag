@@ -3588,6 +3588,26 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 527（已交付）
+
+- 分支：`codex/batch527-external-doc-normalize-tail`（已合入 main）
+- 内容：ExternalDocumentService 校验与事务长尾（新建 External
+  DocumentServiceNormalizeTailTest，9 用例）：upsert 新身份携带
+  expectedSourceRevision 冲突（DocumentRevisionConflictException）、
+  documentType 超 50 字符拒绝、collectionKey 含非可见 ASCII（空格）
+  拒绝、title 超 255 拒绝、source（normalizeOptional）超 255 拒绝、
+  getByExternalIdentity 空白 namespace 归一化 default（查不到文档
+  → DOCUMENT_NOT_FOUND）与超长 namespace IAE、safeError 三重载
+  （null→null、Throwable null→兜底文案、空白→"Embedding failed"、
+  普通值脱敏透传、600 字符截断到 500）、executeInTransaction 对
+  DataIntegrityViolationException 重试直至收敛（3 次尝试）与无事
+  务模板直通抛出。
+- 要点：Object 重载的 safeError 走 String.valueOf——非空白值返回
+  脱敏后的字符串而非兜底文案；getByExternalIdentity 仓储方法名是
+  findByCollectionIdAndSourceNamespaceAndExternalId（与 upsert 的
+  findByCollectionIdAndExternalId 不同）。
+- 指标：单类 9 用例绿；core 全量门禁 EXIT=0（5129 tests）。
+
 ### Batch 526（已交付）
 
 - 分支：`codex/batch526-eval-executor-snapshot-tail`（已合入 main）
