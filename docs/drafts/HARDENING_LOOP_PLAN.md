@@ -3588,6 +3588,21 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 528（已交付）
+
+- 分支：`codex/batch528-scope-resolver-authz-tail`（已合入 main）
+- 内容：CollectionRetrievalScopeResolver 授权长尾（新建 Collection
+  RetrievalScopeResolverTailTest，12 用例）：null 模式按 ids/keys
+  在场推断 SELECTED_COLLECTIONS、受限调用方（allow-list "10,11"）
+  ids 在册授权与越界 SecurityException、keys-only 经 resolveActive
+  Ids 解析、ids+keys 解析结果集合不一致 IAE、受限 keys 解析非
+  RETIRED 的 RagException 包装为 SecurityException、unrestricted 下
+  RagException 原样透传、非正 documentIds IAE、空 keys IAE、超
+  100 keys IAE、含空格 key IAE、空白 documentType IAE。
+- 要点：ApiAccessPolicy 是接口，测试用匿名实现（role NORMAL + 数
+  字 allowedCollectionIds）即可造受限调用方；null 表示 unrestricted。
+- 指标：单类 12 用例绿；core 全量门禁 EXIT=0（5141 tests）。
+
 ### Batch 527（已交付）
 
 - 分支：`codex/batch527-external-doc-normalize-tail`（已合入 main）
