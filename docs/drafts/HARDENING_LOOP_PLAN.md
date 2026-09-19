@@ -3588,6 +3588,30 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 539（已交付）
+
+- 分支：`codex/batch539-execution-openai-tail`（已合入 main）
+- 内容：两个协议组件长尾：
+  1. ChatExecutionServiceCitationMapTailTest（6 用例）：citation
+     Map 将 CitationValidation 六字段（status/available/cited/
+     invalid/citedSourceCount/sourceCount）映射为快照字典、
+     serializeDocumentIds 去重并丢弃非数字 id（空 → null，序列化
+     为 "[10,11]"）、tokenCount 读 totalTokens（Number）缺省 0、
+     parseLong 数字/null/垃圾三分支、plannedMessages 将合成摘要
+     assistant 消息置于 recent turns 之前且空白摘要省略。
+  2. OpenAiCompatibilityModelResolutionTailTest（4 用例）：model
+     For 三级回退 —— 快照 publicModelAlias → declaredModel
+     Identifier → 二者皆 DEFAULT 时落回响应 requestedModel/调用方
+     fallback、快照 JSON 损坏静默忽略走响应字段、keyedCompletionId
+     确定性（同 turnId 同值）且格式为 chatcmpl-rag- + 64 位十六进
+     制。
+- 要点：plannedMessages 接收 ConversationPromptPlan（非 Chat
+  Command）；控制器内 modelFor 的 ChatResponse 是项目 DTO（有
+  setRequestedModel，注意与 Spring AI ChatResponse 同名冲突）；
+  反射 varargs 传 null 须 (Object) 强转；OpenAiChatRequestMapper
+  在 core.openai 包。
+- 指标：两新类 10 用例绿；core 全量门禁 EXIT=0（5217 tests）。
+
 ### Batch 538（已交付）
 
 - 分支：`codex/batch538-doc-controller-file-tail`（已合入 main）
