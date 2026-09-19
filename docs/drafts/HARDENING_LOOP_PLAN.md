@@ -3588,6 +3588,20 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 532（已交付）
+
+- 分支：`codex/batch532-relocation-envelope-tail`（已合入 main）
+- 内容：DocumentRelocationService 幂等台账长尾（新建 Document
+  RelocationEnvelopeTailTest，5 用例）：源/目标解析为同集合 IAE、
+  Idempotency-Key 超 255 IAE、externalId 含控制字符被 require
+  VisibleAscii 拒绝、过期预约行（expired=true）先 DELETE 再递归重
+  新预约并以 SUCCEEDED 信封重放 RELOCATED、result_payload 损坏时
+  抛 IllegalStateException("Cannot read relocation replay
+  response")。
+- 要点：过期预约重放用 queryForList thenReturn([expired],
+  [succeeded]) 模拟两次读取；信封 schemaVersion 必须为 1。
+- 指标：单类 5 用例绿；core 全量门禁 EXIT=0（5179 tests）。
+
 ### Batch 531（已交付）
 
 - 分支：`codex/batch531-advisor-logging-summary-budget-tail`（已合入 main）
