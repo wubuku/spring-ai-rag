@@ -3588,6 +3588,26 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 523（已交付）
+
+- 分支：`codex/batch523-syncrun-deadcode-lease-tail`（已合入 main）
+- 内容：DocumentSyncRunService 技术债 + 租约长尾：
+  1. 技术债：删除死代码 failedItem（私有方法无任何调用方，FAILED
+     响应实际由 recordFailedItem 承担），-12 行（-6 未覆盖行）。
+  2. 新建 DocumentSyncRunLeaseNotFoundTailTest（4 用例）：未知
+     runId 经 requireRun 抛 NOT_FOUND、complete 流程完成态 CAS 未
+     命中抛 "lease was lost while completing"（同时覆盖空候选集
+     fingerprint(List<Candidate>) 比对路径）、batchUpsert 成功路径
+     applied_count 计数 CAS 未命中抛 "lease was lost while applying
+     an item"、RagException 错误码经 errorCode() 透传到失败条目
+     （含 findItem 空结果捕获分支）。
+- 要点：RunRow 反射构造支持 preview 字段（previewTokenHash/
+  previewFingerprint），complete 流程要求 previewFingerprint == sha
+  256("")（空候选集）且请求 previewToken 哈希匹配；后续 stub 覆盖
+  先前 stub（Mockito 后写胜出），可对同一 runId 重打桩。
+- 指标：单类 4 用例绿 + 死代码删除；core 全量门禁 EXIT=0（5097
+  tests）。
+
 ### Batch 522（已交付）
 
 - 分支：`codex/batch522-embedding-worker-schedule-tail`（已合入 main）
