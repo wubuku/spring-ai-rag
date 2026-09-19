@@ -3588,6 +3588,20 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 526（已交付）
+
+- 分支：`codex/batch526-eval-executor-snapshot-tail`（已合入 main）
+- 内容：EvaluationCaseExecutor 长尾（新建 EvaluationCaseExecutor
+  SnapshotTailTest，5 用例）：双参构造器（re-ranking null 委托）、
+  useRerank=true 但 ReRankingService 缺失时 ISE、identityExists
+  双参委托（count>0 true / count=0 false / null 视为不存在）、
+  collectionSnapshot 的 RowCallbackHandler 每键统计（enabled
+  Documents + maxUpdatedAt 非空/NULL 两分支）、空键集合空快照。
+- 要点：collectionSnapshot/lookup 的 jdbc lambda 是 RowCallback
+  Handler（void 回调），stub 用 doAnswer + handler.processRow(rs)；
+  RetrievalFilters 是 record，空过滤用 RetrievalFilters.none()。
+- 指标：单类 5 用例绿；core 全量门禁 EXIT=0（5120 tests）。
+
 ### Batch 525（已交付）
 
 - 分支：`codex/batch525-apikey-rotation-ledger-tail`（已合入 main）
