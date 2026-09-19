@@ -3588,6 +3588,32 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 519（进行中未完成 · 用户指令收尾）
+
+- 候选：KeywordIndexPersistenceService.allocateGeneration 回退路径
+  （18 missed 中 17 行集中在该方法：首次 UPDATE...RETURNING 未命中
+  时的 INSERT 兜底 + 二次 UPDATE、两次未命中抛 "Document changed
+  while allocating"、ensureCurrent fresh 索引命中提前返回）。
+- 已编写 KeywordIndexAllocateFallbackTailTest（3 用例，其中 2 个通
+  过），但 fresh 索引命中用例的 stub 未生效（hasFreshLocalIndex 仍
+  返回 false 走到 allocateGeneration 抛 ISE），已按收尾指令删除未
+  完成测试文件，等待下轮重新实施。
+- 下轮实施要点：
+  1. hasFreshLocalIndex（integrityRepository 为 null 时）需同时 stub
+     queryForList(sql 含 FROM rag_document_local_index_state, 3 个
+     varargs) 返回 Map.of("local_index_generation", 5L, "chunk_
+     count", 2)，以及 queryForObject(sql 含 SELECT COUNT(*)，Long.
+     class，4 个 varargs) 返回 2L；实测两 stub 齐备后仍走 allocate，
+     疑似 try/catch 吞掉异常返回 false，下轮先确认 queryForObject
+     stub 的 varargs 匹配（可改用 any(Object[].class) 整组匹配）。
+  2. ensureCurrent 正常路径在 chunk 写入后还有 READY CAS：update
+     (sql 含 SET local_index_status，8 参 varargs) 必须 stub 返回 1，
+     否则抛 "Document changed while preparing local keyword index"。
+  3. allocateGeneration 双 UPDATE 共用 contains("RETURNING state.
+     local_index_generation") stub，可用 thenAnswer().thenAnswer()
+     连续返回 List.of() / List.of(7L) 模拟首次未命中。
+- 其余批次进度不受影响；core 编译验证通过（COMPILE_EXIT=0）。
+
 ### Batch 518（已交付）
 
 - 分支：`codex/batch518-retrieval-trace-tail`（已合入 main）
