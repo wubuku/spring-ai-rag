@@ -3588,6 +3588,27 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 525（已交付）
+
+- 分支：`codex/batch525-apikey-rotation-ledger-tail`（已合入 main）
+- 内容：ApiKeyManagementService 轮换台账长尾（新建 ApiKeyRotation
+  LedgerTailTest，6 用例）：prepareRotation 重放指纹漂移拒绝
+  IDEMPOTENCY_KEY_REUSED、重放命中返回持久化响应（replay=true +
+  idempotentReplay）、重放引用缺失 principal 抛 SERVICE_UNAVAILABLE
+  （覆盖 rotationResponse 的 orElseThrow lambda）、cleanup 对过期
+  retiring 凭证调用 disableByKeyId / 对未到期凭证保留（两分支，借
+  PENDING 冲突作为流程终点）、generateIdempotentKey 竞态重试
+  Thread.sleep 被中断透出 "Provisioning retry was interrupted"。
+- 要点：mock 辅助方法不得在另一个 when() 的参数位置调用（产生
+  UnfinishedStubbingException），先提升为局部变量再 thenReturn；
+  rotationFingerprint = sha256(currentKeyId + "\n" + overlap 或
+  "DEFAULT") 可在测试端复算用于匹配重放指纹；requiredRotation
+  Credentials 要求 source/target 凭证均存在且 target 版本 > source
+  版本，rotation operation mock 需补 getSourceCredentialId/
+  getTargetCredentialId 与 findByKeyId 查询；服务端中断语义是保留
+  中断标志，测试 finally 里只清理不断言。
+- 指标：单类 6 用例绿；core 全量门禁 EXIT=0（5115 tests）。
+
 ### Batch 524（已交付）
 
 - 分支：`codex/batch524-coordinator-lease-state-tail`（已合入 main）
