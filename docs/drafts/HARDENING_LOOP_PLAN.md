@@ -3588,6 +3588,23 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 537（已交付）
+
+- 分支：`codex/batch537-ragchat-build-helpers-tail`（已合入 main）
+- 内容：RagChatService 构建辅助长尾（新建 RagChatServiceBuild
+  HelpersTailTest，4 用例）：getCircuitBreaker 在断路器未启用时返
+  回 null、buildSortedAdvisors 按 Ordered.getOrder() 升序排序并在
+  末尾固定追加 MessageChatMemoryAdvisor（共 4 个）、buildAdvisor
+  Params 六参重载链写入 CONVERSATION_ID/元数据键值/domainId/检索
+  作用域/maxResults=5、null scope 归一 unscoped 且 maxResults=0 不
+  写参数。
+- 要点：RagChatService 构造器内部对 ChatClient.Builder 链式调用
+  defaultAdvisors(...).build()，Builder mock 必须用 RETURNS_DEEP_
+  STUBS；buildAdvisorParams 六参重载末位是 ChatModel，反射 invoke
+  需传满 6 参；advisor 类实际包名为 core.advisor（非 core.chat）、
+  PromptCustomizerChain 在 core.extension。
+- 指标：单类 4 用例绿；core 全量门禁 EXIT=0（5202 tests）。
+
 ### Batch 536（已交付）
 
 - 分支：`codex/batch536-turnop-fail-exhaust-tail`（已合入 main）
