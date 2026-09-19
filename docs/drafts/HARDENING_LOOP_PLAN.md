@@ -3588,6 +3588,27 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 531（已交付）
+
+- 分支：`codex/batch531-advisor-logging-summary-budget-tail`（已合入 main）
+- 内容：两个检索链路组件长尾：
+  1. HybridSearchAdvisorLoggingTailTest（5 用例）：setRetrieval
+     LoggingService 注入后 before() 回放 logRetrieval 遥测（sessionId
+     从上下文取）、RETRIEVAL_SCOPE_KEY=matchNone 短路返回空且不打
+     检索、DOCUMENT_IDS_KEY 混合 Long/Integer/字符串/非数字/null
+     解析为 [1,2,3]、MAX_RESULTS_KEY=100 钳制 50、非正值回退 10。
+  2. ConversationSummaryServiceBudgetTailTest（3 用例）：无执行
+     预算（11 参命令）跳过 compaction_no_messages、reserveModelCall
+     占满后 compact 降级 summary_budget_skipped 且不落账、metadata
+     中 toolTranscript 渲染进摘要提示词（untrusted 边界标记 +
+     tool=lookup 行）。
+- 要点：HybridRetrieverService.search 有 4/5 参重载，Mockito stub
+  末参必须显式 any(RetrievalConfig.class) 消歧；ChatExecutionBudget
+  的 maxModelCalls 经 positive() 归一（0→1），构造耗尽预算须先调
+  reserveModelCall()；ChatHistoryResponse 是 12 组件 record（metadata
+  与 status 间有 sources）。
+- 指标：两新类 8 用例绿；core 全量门禁 EXIT=0（5174 tests）。
+
 ### Batch 530（已交付）
 
 - 分支：`codex/batch530-static-knowledge-parse-tail`（已合入 main）
