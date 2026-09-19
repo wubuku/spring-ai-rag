@@ -3588,6 +3588,24 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 540（已交付）
+
+- 分支：`codex/batch540-ragchat-heartbeat-clear-tail`（已合入 main）
+- 内容：RagChatController 心跳/清史/幂等响应长尾（新建 RagChat
+  ControllerHeartbeatClearTailTest，6 用例）：startHeartbeat 心跳
+  关闭（intervalSeconds=0）返回空句柄且 stop() 安全、启用（1s）启
+  动调度器并可停止、clearHistory 经 sessionCoordinator.clearSession
+  返回含 sessionId 的响应、删除 0 行抛冲突、prepareTurn 请求无
+  Idempotency-Key 时 prepare(principal, keys, null)（null 指纹），
+  idempotentResponse 对 keyed claim 写 X-RAG-Turn-Id 与 X-RAG-
+  Idempotent-Replay 双头（SUCCEEDED → true）、无 claim 无 trace 时
+  不写头。
+- 要点：RagSseProperties 的心跳开关是 heartbeatIntervalSeconds>0
+  （无独立布尔）；HeartbeatHandles 与 stop() 均包级私有（反射
+  getDeclaredMethod）；Claim.replay 由操作状态推导（SUCCEEDED →
+  true）。
+- 指标：单类 6 用例绿；core 全量门禁 EXIT=0（5223 tests）。
+
 ### Batch 539（已交付）
 
 - 分支：`codex/batch539-execution-openai-tail`（已合入 main）
