@@ -3588,6 +3588,25 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 541（已交付）
+
+- 分支：`codex/batch541-acl-delegated-tail`（已合入 main）
+- 内容：ApiKeyCollectionAccess 委托解析长尾（新建 ApiKeyCollection
+  AccessDelegatedTailTest，9 用例）：resolveDelegatedAllowedKeys 的
+  null 请求 → null、空列表 IAE、unrestricted 调用方经 resolver
+  .resolveActiveIds 解析、受限调用方解析失败（resolveActiveIds
+  WithinAllowed 抛 RagException）包装 SecurityException、resolve
+  WritableCollectionId 对 null 请求默认单一 allow-list 集合 / 多值
+  allow-list 要求显式 id（SecurityException）、parseAllowedIds 拒绝
+  空段 / 非正数 / 非数字且 "1, 2, 1" 去重为 [1,2]、serializeAllowed
+  Ids 空输入 → null 且去重序列化 "10,11"、废弃 currentKey() 委托
+  currentPolicy()。
+- 要点：受限调用方的 keys 解析在 ApiKeyCollectionAccess 内部走
+  resolveActiveIdsWithinAllowed（unrestricted 才走 resolveActiveIds），
+  stub 必须对准实际被调用的方法；SecurityException 包装仅在
+  !isUnrestricted 时发生。
+- 指标：单类 9 用例绿；core 全量门禁 EXIT=0（5232 tests）。
+
 ### Batch 540（已交付）
 
 - 分支：`codex/batch540-ragchat-heartbeat-clear-tail`（已合入 main）
