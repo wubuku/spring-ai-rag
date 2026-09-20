@@ -3588,6 +3588,20 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 555（已交付）
+
+- 分支：`codex/batch555-rerank-limits-tail`（已合入 main）
+- 内容：HeuristicRerankProvider 上限长尾（新建 HeuristicRerank
+  ProviderLimitsTailTest，9 用例）：null 配置回退默认 RagRerank
+  Properties、isAvailable/getName、rerank 对 null 与空列表原样直
+  通、NaN 原始分数归零防护、calculateDiversityScore 完全相同文本
+  对 → 0、部分相似兄弟 → 介于 0/1、单条列表 → 1.0、超长 CJK+拉丁
+  混合查询触发 MAX_LEXICAL_FEATURES 截断且分数有限、rankingDepth=
+  0 使用完整窗口、最优匹配保持在首位。
+- 要点：rerank 输出为新建 RetrievalResult（分数经 blending 重算），
+  断言用 documentId 而非 assertSame；diversity 语义 0=完全重复。
+- 指标：单类 9 用例绿；core 全量门禁 EXIT=0（5334 tests）。
+
 ### Batch 554（已交付）
 
 - 分支：`codex/batch554-relocate-guard-tail`（已合入 main）
