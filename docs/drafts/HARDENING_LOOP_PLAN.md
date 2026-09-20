@@ -7421,6 +7421,39 @@ VersionHistoryModal 相关 100% 项等。
 
 ---
 
+## 进度留档快照（Batch 541 后 · 用户指令收尾）
+
+- 留档时点：2026-09-20 · main @ 7f3a8af1（本快照随收尾提交前移）
+- 循环进度：Batch 516–541 共 26 个批次全部按「规划→实施→单类验
+  证→core 全量门禁 EXIT=0→push 特性分支→--no-ff 合并 main→台账
+  记录→清理分支」交付完成，工作区干净。
+- core 测试规模：5190 → 5232（本轮自 5034 起累计 +198）；残余
+  未覆盖行 1677 → 1466。
+- 本轮新增批次重点：
+  - Batch 516–519：PDF/告警门禁、PromptPlanner 预算、Trace
+    Collector 守卫、KeywordIndex 回退 + 投递/嵌入 worker 调度
+  - Batch 520–523：CollectionPurge 校验收尾、全文检索工厂与供应
+    台账、EmbeddingJobWorker 调度、**技术债：删除 Document
+    SyncRunService 死代码 failedItem**
+  - Batch 524–528：ChatSessionCoordinator 租约状态、ApiKey 轮换
+    台账、EvaluationCaseExecutor 快照、ExternalDocumentService 校
+    验、CollectionRetrievalScopeResolver 授权
+  - Batch 529–533：OpenAI 别名注册表与请求指纹、StaticKnowledge
+    Catalog 解析、检索日志与摘要预算、Relocation 信封、Resource
+    Catalog 发现路径
+  - Batch 534–538：JsonRecordService 检索去重、DocumentMutation
+    同步条目应用、ChatTurnOperation 失败持久化、RagChatService 构
+    建辅助、RagDocumentController 文件校验
+  - Batch 539–541：ChatExecutionService 纯函数与 OpenAI 模型归一、
+    RagChatController 心跳/清史/幂等响应、ApiKeyCollectionAccess
+    委托解析
+- 下轮候选（JaCoCo 残余 Top）：ChatExecutionService 编排主体
+  （约 77）、RagChatController stream lambdas（约 36）、RagChat
+  Service（约 23）、DocumentMutationService/ResourceCatalog 残余
+  （各约 20/15）。
+- 构建验证：后端三模块 test-compile EXIT=0；WebUI `tsc -b &&
+  vite build` EXIT=0。
+
 ## 进度留档快照（Batch 515 后 · 用户指令）
 
 - 留档时点：2026-09-19 · main @ 本快照提交
