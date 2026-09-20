@@ -3588,6 +3588,20 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 554（已交付）
+
+- 分支：`codex/batch554-relocate-guard-tail`（已合入 main）
+- 内容：DocumentRelocationService relocate 守卫长尾（新建 Document
+  RelocationRelocateGuardTailTest，5 用例）：不同键解析为同一集合
+  ID（alias → 10L 与 source-col 同 ID）→ IAE、externalId 超 255 →
+  IAE、INSERT RETURNING 命中（lambda$reserve$4 行映射覆盖）走新预
+  约后文档缺失 → DOCUMENT_NOT_FOUND、INSERT 未命中且 SELECT 空 →
+  "Idempotency reservation disappeared" ISE、并发唯一约束冲突原样
+  透传 DataIntegrityViolationException。
+- 备注：writeEnvelope/fingerprint 的 JsonProcessing 分支为不可达
+  死代码（ObjectMapper 序列化 Map/record 不会失败），未追覆盖。
+- 指标：单类 5 用例绿；core 全量门禁 EXIT=0（5325 tests）。
+
 ### Batch 553（已交付）
 
 - 分支：`codex/batch553-keyed-complete-tail`（已合入 main）
