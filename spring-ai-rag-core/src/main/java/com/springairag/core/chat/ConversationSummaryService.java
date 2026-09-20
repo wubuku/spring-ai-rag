@@ -176,9 +176,6 @@ public final class ConversationSummaryService {
         String source = renderSource(existing.map(SummarySnapshot::text).orElse(""),
                 sourceMessages);
         int sourceTokens = estimator.estimate(source);
-        if (sourceTokens > context.getCompactionMaxSourceTokens()) {
-            return CompactionResult.skipped("compaction_source_limit_exceeded");
-        }
         if (sourceTokens < context.getCompactionTriggerTokens()) {
             return CompactionResult.skipped("compaction_trigger_not_reached");
         }
