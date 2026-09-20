@@ -3588,6 +3588,18 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 560（已交付）
+
+- 分支：`codex/batch560-chat-properties-tail`（已合入 main）
+- 内容：RagChatProperties setter 与校验长尾（新建 RagChatProperties
+  SetterTailTest，6 用例）：defaultMode 读写往返、null 子配置
+  （staticKnowledge/skills/httpTools）回退新实例、setter 保留提供
+  实例（assertSame 三连）、validate 对非正 max-candidate-attempts
+  与 max-tool-rounds 抛出含配置键名的异常、正值默认通过。
+- 要点：requirePositive 抛 IllegalStateException（消息含配置键），
+  断言用异常消息而非异常类型。
+- 指标：单类 6 用例绿；core 全量门禁 EXIT=0（5358 tests）。
+
 ### Batch 559（已交付）
 
 - 分支：`codex/batch559-collection-create-import-tail`（已合入 main）
