@@ -3588,6 +3588,21 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 545（已交付）
+
+- 分支：`codex/batch545-pdfimport-fullflow-tail`（已合入 main）
+- 内容：PdfImportService 全流程长尾（新建 PdfImportServiceFullFlow
+  TailTest，5 用例）：mock PdfConverter 在 outputDir 产出 source/
+  {a-markdown.md,b-image.png} 后 importPdf 端到端成功（original
+  pdf + markdown + 图片共 3 记录、result.filesStored/entryMarkdown
+  /originalFilename 映射）、转换器成功但未产出 source 目录 → ISE、
+  getFile 委托 findById、listChildren 根路径走 findAll 且前缀模式
+  下仅保留直达子（深层 /sub/deep/x.md 被过滤）、loadFileAsResource
+  将 contentBin 写临时资源并流式可读 + 缺失路径 Optional.empty。
+- 要点：importPdf 记录数 = 1（original.pdf）+ 1（唯一 .md）+ 非_;
+  md 文件数；listChildren 直达子判定基于 remainder 的斜杠计数。
+- 指标：单类 5 用例绿；core 全量门禁 EXIT=0（5267 tests）。
+
 ### Batch 544（已交付）
 
 - 分支：`codex/batch544-mutation-missing-doc-tail`（已合入 main）
