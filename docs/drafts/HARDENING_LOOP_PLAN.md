@@ -3588,6 +3588,24 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 548（已交付）
+
+- 分支：`codex/batch548-openai-event-mapping-tail`（已合入 main）
+- 内容：OpenAiCompatibilityController 事件映射长尾（新建 OpenAi
+  CompatibilityEventMappingTailTest，8 用例）：jsonResponse 发送
+  JSON 后完成、mapEvent 三分支 —— ContentDelta → chat.completion
+  .chunk 增量块、Completed → 归一 finish reason（STOP→stop）、
+  ToolStarted 未知事件 → 空 Flux；toResponse 执行结果重载映射
+  usage 三元组（totalTokens=8）与 finish reason、原生响应重载将
+  null finish reason 归一 stop 且 usage 缺失时为 null；send 将
+  IOException 经 reactor 传播为运行时异常；prepareTurn 携带集合头
+  时生成 OpenAI 指纹（keyed prepared）。
+- 要点：OpenAiChatCompletionResponse 是 record（id()/model()/
+  choices()/usage()）；reactor.core.Exceptions.ReactiveException 非
+  公共类型，断言 RuntimeException + IOException cause；zsh 的 glob
+  不匹配会中止整条 rm 命令 —— 清理 stale 报告须用 rm -f 逐个删除。
+- 指标：单类 8 用例绿；core 全量门禁 EXIT=0（5290 tests）。
+
 ### Batch 547（已交付）
 
 - 分支：`codex/batch547-summary-render-tail`（已合入 main）
