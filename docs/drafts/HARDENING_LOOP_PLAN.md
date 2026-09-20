@@ -3588,6 +3588,20 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 556（已交付）
+
+- 分支：`codex/batch556-profile-registry-find-tail`（已合入 main）
+- 内容：EmbeddingProfileRegistry 查找与初始化长尾（新建 Embedding
+  ProfileRegistryFindTailTest，5 用例）：findRequiredByKey 命中走
+  RowMapper lambda 映射 Profile 全字段（id/provider/dimensions）、
+  未命中抛 ISE、getActiveProfile 惰性初始化并缓存同一实例（assertSame）、
+  INSERT 后仍缺失 → "Failed to create embedding profile"（127-128）、
+  禁用 Profile → "Embedding profile is disabled"。
+- 要点：findByKey 的 query(String, RowMapper, String) 桩用
+  thenAnswer 调 mapper.mapRow(mock ResultSet) 覆盖 lambda；stub 用
+  eq(profileKey) 精确匹配键。
+- 指标：单类 5 用例绿；core 全量门禁 EXIT=0（5339 tests）。
+
 ### Batch 555（已交付）
 
 - 分支：`codex/batch555-rerank-limits-tail`（已合入 main）
