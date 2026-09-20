@@ -3588,6 +3588,22 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 544（已交付）
+
+- 分支：`codex/batch544-mutation-missing-doc-tail`（已合入 main）
+- 内容：DocumentMutationService 文档消失长尾（新建 Document
+  MutationMissingDocTailTest，5 用例）：createLocal 与 upsertSync
+  RunItem 在 finish 阶段 findById 返回空 → DocumentNotFoundException
+  （消息含 id=41，两类 lambda 各覆盖）、allocateSourceSequenceFor
+  Snapshot 委托 allocateSourceSequence（RETURNING mutation_sequence
+  → 30L）、resolveUpdateCollection 无 collectionKey 且 unrestricted
+  策略 → null、localCreateFingerprint 遇 ObjectMapper 写出失败包装
+  为 "Cannot canonicalize idempotent document request"。
+- 要点：Mockito 对 Optional 返回类型默认 Optional.empty，"finish
+  阶段文档消失"用例只需不打 findById 桩即可触发 orElseThrow；
+  DocumentNotFoundException 不带 documentId 字段，断言走 message。
+- 指标：单类 5 用例绿；core 全量门禁 EXIT=0（5262 tests）。
+
 ### Batch 543（已交付）
 
 - 分支：`codex/batch543-lifecycle-derive-tail`（已合入 main）
