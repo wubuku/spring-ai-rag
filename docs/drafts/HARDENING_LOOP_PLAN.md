@@ -3588,6 +3588,21 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 552（已交付）
+
+- 分支：`codex/batch552-chat-circuit-breaker-tail`（已合入 main）
+- 内容：RagChatService 断路器模式感知链路长尾（新建 RagChatService
+  CircuitBreakerTailTest，4 用例）：断路器启用时 getCircuitBreaker
+  非空且初始 CLOSED、chat() 模式感知成功路径记录断路器成功（响应
+  透传）、execute 抛 IllegalStateException 原样传播且 failureRate
+  Threshold=1 + minimumNumberOfCalls=1 时一次失败即 OPEN、OPEN 后
+  续请求被 LlmCircuitOpenException（LLM_CIRCUIT_OPEN）拒绝。
+- 要点：模式感知链路需 RequestContextHolder 挂 MockHttpServletRequest
+  （ChatPrincipal.fromCurrentRequest）；RagCircuitBreakerProperties
+  默认 failureRateThreshold=50/minCalls=10，测试收敛为 1/1 实现
+  一次失败即熔断。
+- 指标：单类 4 用例绿；core 全量门禁 EXIT=0（5317 tests）。
+
 ### Batch 551（已交付）
 
 - 分支：`codex/batch551-resource-spring-path-tail`（已合入 main）
