@@ -3588,6 +3588,28 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 547（已交付）
+
+- 分支：`codex/batch547-summary-render-tail`（已合入 main）
+- 内容：ConversationSummaryService 渲染长尾 + 1 项技术债：
+  1. 技术债：compaction_source_limit_exceeded 分支不可达 —— select
+     SourceRows 与最终渲染共用同一 renderSource+estimator，选择预
+     算耗尽后总量恒 ≤ maxSourceTokens；删除 4 行死代码。
+  2. ConversationSummaryServiceRenderTailTest（9 用例）：source 预
+     算计入上一轮摘要（超限 → 选择空 → compaction_source_empty），
+     candidate 缺 contextWindow/maxTokens 走配置回退，模型 Runtime
+     异常降级 summary_failed，受检异常 cause（IOException）经
+     ExecutionException 包装降级，线程中断 → future.get 中断 → 降
+     级，无 metadata 行不渲染工具记录，非 Map 条目跳过 + 超长名称
+     截断 128，null 回答 → 空文本回退，模型返回 null → summary_empty。
+- 要点：repository.find 返回 Optional<RagChatMemorySummaryRepository
+  .SummaryRow>（字段序 version/summarizedThroughHistoryId/text/
+  modelRef/estimatedTokens/updatedAt），不是服务层 SummarySnapshot；
+  受检异常经 CompletableFuture 包装为 ExecutionException 后按
+  cause 类型分流。
+- 指标：单类 9 用例绿 + 死代码删除；core 全量门禁 EXIT=0（5282
+  tests）。
+
 ### Batch 546（已交付）
 
 - 分支：`codex/batch546-http-tool-callback-tail`（已合入 main）
