@@ -3588,6 +3588,19 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 558（已交付）
+
+- 分支：`codex/batch558-embedjob-guard-tail`（已合入 main）
+- 内容：EmbeddingJobService 守卫长尾（新建 EmbeddingJobService
+  GuardTailTest，4 用例）：retry 对缺失 job 抛 RagException NOT_
+  FOUND、对缺失 document 抛 DocumentNotFoundException、resolveMax
+  Attempts 反射拒绝 0 与 99（超出 1..maxAttempts）、isVisible 对
+  可访问文档 true / 缺失文档 false。
+- 备注：EmbeddingJobRepository 在 core.repository 包（同包测试无
+  需 import 的只有 worker/executor 实体类）；DocumentDerivation
+  DescriptorProvider 在 core.service 包。
+- 指标：单类 4 用例绿；core 全量门禁 EXIT=0（5347 tests）。
+
 ### Batch 557（已交付）
 
 - 分支：`codex/batch557-summary-rendersource-tail`（已合入 main）
