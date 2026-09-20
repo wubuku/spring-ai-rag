@@ -3588,6 +3588,17 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 557（已交付）
+
+- 分支：`codex/batch557-summary-rendersource-tail`（已合入 main）
+- 内容：ConversationSummaryService 渲染残余（新建 Conversation
+  SummaryServiceRenderSourceTailTest，4 用例）：renderToolTranscript
+  对 metadata=null 的行返回空串、全非 Map 条目（字符串/数字）整体
+  跳过后仅剩头部 → 空串、renderSource 对 null 消息文本回退 "user: "
+  前缀、estimate(List<Message>) 多消息求和为正（token 级估算，不
+  必等于字符数）。
+- 指标：单类 4 用例绿；core 全量门禁 EXIT=0（5343 tests）。
+
 ### Batch 556（已交付）
 
 - 分支：`codex/batch556-profile-registry-find-tail`（已合入 main）
