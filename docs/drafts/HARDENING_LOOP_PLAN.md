@@ -3588,6 +3588,22 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 551（已交付）
+
+- 分支：`codex/batch551-resource-spring-path-tail`（已合入 main）
+- 内容：ResourceCatalog spring 路径长尾（新建 ResourceCatalog
+  SpringPathTailTest，7 用例）：relativePath 按 configuredRootPath
+  剥除根标记（classpath*: docs/ → notes/guide.md）、标记不匹配时
+  文件名回退、resource.getURI() 抛异常时文件名回退（mock）、
+  springResourceRoot 对非 classpath* 直通 configuredRoot、classpath*
+  按容器路径哈希计算区分性 rootKey（同名文件不同容器 → rootKey 不
+  同）、readBounded 按 contentLength 拒绝超限资源、contentLength=-1
+  时回退流式读取（匿名子类覆盖）。
+- 要点：UrlResource(file.toUri()) 的 URI 含真实临时目录路径，
+  configuredRootPath 取 location 的尾段（classpath*: 剥前缀、!/
+  再剥、去首尾斜杠）作为标记在 URI 中 lastIndexOf 匹配。
+- 指标：单类 7 用例绿；core 全量门禁 EXIT=0（5313 tests）。
+
 ### Batch 550（已交付）
 
 - 分支：`codex/batch550-eligible-candidates-tail`（已合入 main）
