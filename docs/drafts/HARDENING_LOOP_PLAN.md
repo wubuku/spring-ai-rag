@@ -3588,6 +3588,30 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 542（已交付）
+
+- 分支：`codex/batch542-abtest-dingtalk-tail`（已合入 main）
+- 内容：两个服务实现长尾：
+  1. AbTestServiceImplLifecycleTailTest（11 用例）：重复实验名
+     IAE、创建默认 minSampleSize=100 与 DRAFT 初始态（捕获实体校
+     验）、updateExperiment 的 null id / 不存在 / RUNNING 禁改守卫
+     与 DRAFT 字段套用、start 仅 DRAFT/PAUSED、pause 仅 RUNNING、
+     stop 任意态置 COMPLETED+endTime、getVariantForSession 三类
+     IAE + 同会话确定性 + 值域约束、100% treatment 直选（哈希回退
+     前命中）、recordResult 的 null 守卫 + 会话去重跳过保存 +
+     docIds 序列化 "[3,4]" + converted 标记、analyzeExperiment 双
+     变体统计均值/胜者/显著性、单变体无裁决、null 实验拒绝、结果
+     分页映射。
+  2. DingTalkSignatureHelperTailTest（4 用例）：Retry-After 头解
+     析（null/空白→null、" 30 "→30s、"-5"→0s、垃圾→null）、
+     buildWebhookUrl 免签原样/加签追加 timestamp&sign、compute
+     Signature 确定性、escapeJson null→"" 且转义换行/引号/反斜杠。
+- 要点：RestTemplateBuilder 链式构造用 mock(..., RETURNS_SELF) +
+  build() 单独 stub；MockitoExtension 严格桩下任何不匹配参数都会
+  使后续桩返回 null；反射 varargs 单个 null 参数须 new Object[]
+  {null} 包装；浮点均值断言用 delta。
+- 指标：两新类 15 用例绿；core 全量门禁 EXIT=0（5247 tests）。
+
 ### Batch 541（已交付）
 
 - 分支：`codex/batch541-acl-delegated-tail`（已合入 main）
