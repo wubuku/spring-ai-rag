@@ -3588,6 +3588,24 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 546（已交付）
+
+- 分支：`codex/batch546-http-tool-callback-tail`（已合入 main）
+- 内容：AllowlistedHttpToolProvider.EndpointCallback 私有工具长尾
+  （新建 AllowlistedHttpToolProviderCallbackHelperTailTest，6 用例）：
+  parseInput 空白/null 归一 {}、非对象 JSON 拒绝、未知字段拒绝、
+  损坏 JSON 包装 IAE；endpointUri 斜杠归一（无尾斜杠 + 无头斜杠补
+  "/"，双斜杠去重）+ 查询参数空格编码为 %20 + baseUrl 带 fragment
+  拒绝；hasPrefix 长度守卫（地址不足 32 位）→ false、字节不匹配 →
+  false、完全匹配 → true；validateJson 嵌套深度超限 / 节点总数超限
+  / 数组元素超限三拒绝与合法嵌套放行；skillSession 与 state 对
+  null ToolContext 与缺失键上下文回退 null。
+- 要点：int 前缀数组元素必须写 0xb8（写 (byte) 0xb8 = -72 会与地
+  址字节 & 0xff 后的 184 不等，误报不匹配）；EndpointCallback 为私
+  有内部类，经 provider.getToolCallbacks().getFirst() 取实例后反射
+  调私有工具；JsonLimits 为私有静态类反射构造。
+- 指标：单类 6 用例绿；core 全量门禁 EXIT=0（5273 tests）。
+
 ### Batch 545（已交付）
 
 - 分支：`codex/batch545-pdfimport-fullflow-tail`（已合入 main）
