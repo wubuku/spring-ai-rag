@@ -3588,6 +3588,25 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 550（已交付）
+
+- 分支：`codex/batch550-eligible-candidates-tail`（已合入 main）
+- 内容：ChatExecutionService 候选筛选与校验长尾（新建 Chat
+  ExecutionServiceEligibleCandidatesTailTest，9 用例，经公共
+  resolveCandidateRefs 驱动）：配置候选解析并按能力过滤（good 留、
+  nostream 滤除）、AGENT 模式 getDefaultOptions 非 ToolCalling
+  ChatOptions → 过滤空 → MODEL_CAPABILITY_UNSUPPORTED、流式过滤 →
+  MODEL_STREAMING_UNSUPPORTED、全部解析失败（resolveCandidate
+  Required 抛 IAE）→ SERVICE_UNAVAILABLE、空 modelCandidates 回退
+  modelRouter.orderedCandidateDescriptors(modelRef)、描述为空但显
+  式请求模型仍校验（KNOWLEDGE 通过但合格列表空 → 异常）、validate
+  Candidate 反射驱动流式/工具守卫与放行。
+- 要点：eligibleCandidates/validateCandidate 为私有，前者经公共
+  resolveCandidateRefs 覆盖、后者反射 + ITE cause 解包重抛；Model
+  Capabilities.record 的 supportsToolCalling 是 Boolean.TRUE.equals
+  （必须显式 true），supportsStreaming 的 null 视为 true。
+- 指标：单类 9 用例绿；core 全量门禁 EXIT=0（5306 tests）。
+
 ### Batch 549（已交付）
 
 - 分支：`codex/batch549-collection-bykey-tail`（已合入 main）
