@@ -3588,6 +3588,20 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 559（已交付）
+
+- 分支：`codex/batch559-collection-create-import-tail`（已合入 main）
+- 内容：RagCollectionController 创建与导入构建长尾（新建 Rag
+  CollectionControllerCreateImportTailTest，5 用例）：create 携带
+  Idempotency-Key 但台账服务缺失 → SERVICE_UNAVAILABLE（232）、
+  legacy update 拒绝 collectionKey（419）、buildDocumentFromImport
+  的 enabled 缺省回退（未删除 → true / 已删除 → false，864/944）、
+  外部身份与命名空间映射、audit 无审计服务时静默跳过（1009）。
+- 要点：create 的幂等分支在 requireCollectionCreationAllowed 之后
+  检查 provisioning 服务；9 参构造不含 provisioning/审计服务时走
+  传统创建路径。
+- 指标：单类 5 用例绿；core 全量门禁 EXIT=0（5352 tests）。
+
 ### Batch 558（已交付）
 
 - 分支：`codex/batch558-embedjob-guard-tail`（已合入 main）
