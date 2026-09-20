@@ -3588,6 +3588,17 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 553（已交付）
+
+- 分支：`codex/batch553-keyed-complete-tail`（已合入 main）
+- 内容：ChatTurnOperationService keyed 完成长尾（新建 ChatTurn
+  OperationKeyedCompleteTailTest，3 用例）：completeOpenAi keyed
+  成功路径（completeSuccess true → 稳定快照返回、domainId null 记
+  录空串覆盖 569 行）、completeSuccess 返回 false → CHAT_HISTORY_
+  PERSIST_FAILED（573 行）、release(null) 与 release(keyed claim)
+  均 no-op 安全。
+- 指标：单类 3 用例绿；core 全量门禁 EXIT=0（5320 tests）。
+
 ### Batch 552（已交付）
 
 - 分支：`codex/batch552-chat-circuit-breaker-tail`（已合入 main）
