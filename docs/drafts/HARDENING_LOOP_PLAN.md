@@ -3588,6 +3588,22 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 549（已交付）
+
+- 分支：`codex/batch549-collection-bykey-tail`（已合入 main）
+- 内容：RagCollectionController by-key 路由长尾（新建 RagCollection
+  ControllerByKeyTailTest，7 用例）：listDocumentsByKey 分页透传
+  （findByCollectionId + mapKeys 键映射 + 文档摘要）、未知键 require
+  Active 抛 RagException、exportCollectionByKey 经 findAllBy
+  CollectionId 导出两份文档、cloneCollectionByKey 未命中 Optional
+  .empty → 404（orElseGet lambda）、legacy cloneCollection(Long) IAE、
+  castToMap 的 Map 透传与 null/字符串 → null、audit 在服务存在时
+  DELETE 透传 logDelete(4 参)。
+- 要点：by-key 路径经 requireActiveCollectionByKey → identity
+  Resolver.requireActive(null, key)，mock 必须打该桩（缺省返回
+  null → NPE）；受限失败包装在 ApiKeyCollectionAccess 内部。
+- 指标：单类 7 用例绿；core 全量门禁 EXIT=0（5297 tests）。
+
 ### Batch 548（已交付）
 
 - 分支：`codex/batch548-openai-event-mapping-tail`（已合入 main）
