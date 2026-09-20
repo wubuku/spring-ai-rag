@@ -3588,6 +3588,23 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 543（已交付）
+
+- 分支：`codex/batch543-lifecycle-derive-tail`（已合入 main）
+- 内容：DocumentLifecycleService 派生长尾（新建 DocumentLifecycle
+  ServiceDeriveTailTest，10 用例）：本地 NOT_REQUESTED 且嵌入在场
+  → local FAILED 且 searchability FAILED、双状态缺席 → 全 NOT_
+  REQUESTED、QUEUED/job RUNNING → embedding INDEXING、未知嵌入态
+  → NOT_REQUESTED、本地就绪 + 嵌入 QUEUED 或 FAILED → KEYWORD_ONLY
+  （本地优先）、integrity 快照 NOT_REQUESTED 桶直通 / INDEXING 向量
+  条件映射 / KEYWORD_ONLY 桶向量错误透传、profileProvider 抛异常 →
+  profileKey null、uuid 工具的 UUID 实例/null/字符串/垃圾四分支。
+- 要点：searchability 矩阵本地优先 —— local READY 时嵌入任何非
+  READY 态都归 KEYWORD_ONLY，只有双 READY 才 READY；默认 chunker
+  版本为 hierarchical-v2:1000:100:100（readyRow 必须用同值才能判
+  current）；DerivationIntegrityRepository 在 core.service 包。
+- 指标：单类 10 用例绿；core 全量门禁 EXIT=0（5257 tests）。
+
 ### Batch 542（已交付）
 
 - 分支：`codex/batch542-abtest-dingtalk-tail`（已合入 main）
