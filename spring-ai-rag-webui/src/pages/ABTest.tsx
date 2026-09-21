@@ -9,6 +9,7 @@ import {
 import { abtestApi, type CreateExperimentRequest } from '../api/abtest';
 import { useChartTheme } from '../hooks/useChartTheme';
 import { Dialog } from '../components/Dialog';
+import { ImeSafeForm } from '../components/ImeSafeForm';
 import { useToast } from '../components/Toast';
 import { Button } from '../components/Button';
 import styles from './ABTest.module.css';
@@ -344,7 +345,7 @@ function CreateExperimentModal({ onClose }: { onClose: () => void }) {
         </>
       )}
     >
-        <form id="create-experiment-form" onSubmit={handleSubmit}>
+        <ImeSafeForm id="create-experiment-form" onSubmit={handleSubmit}>
           <div className={styles.formGroup}>
             <label htmlFor="abtest-experiment-name">{t('abtest.name')}</label>
             <input
@@ -418,7 +419,7 @@ function CreateExperimentModal({ onClose }: { onClose: () => void }) {
               />
             </div>
           </div>
-        </form>
+        </ImeSafeForm>
     </Dialog>
   );
 }

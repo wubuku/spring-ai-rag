@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, useLocation } from 'react-router-dom';
@@ -214,6 +214,36 @@ describe('Embeddings filter toggling and preview close', () => {
     expect(screen.getByTestId('location-search').textContent).not.toContain(
       'collectionKey=',
     );
+  });
+
+  it('defers URL filter changes until IME composition ends', async () => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    const LocationProbe = () => {
+      const location = useLocation();
+      return <output data-testid="location-search">{location.search}</output>;
+    };
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={['/embeddings']}>
+          <Embeddings />
+          <LocationProbe />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    const input = await screen.findByLabelText('embeddings.collectionKey');
+    fireEvent.compositionStart(input);
+    fireEvent.change(input, { target: { value: '蓝色手机' } });
+    expect(screen.getByTestId('location-search')).toHaveTextContent('');
+
+    fireEvent.compositionEnd(input, { data: '蓝色手机' });
+    await waitFor(() => {
+      expect(screen.getByTestId('location-search')).toHaveTextContent(
+        'collectionKey=%E8%93%9D%E8%89%B2%E6%89%8B%E6%9C%BA',
+      );
+    });
   });
 
   it('closes the repair preview dialog via its close action', async () => {

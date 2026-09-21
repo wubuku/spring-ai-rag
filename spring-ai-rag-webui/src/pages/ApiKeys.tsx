@@ -12,6 +12,7 @@ import {
 import { collectionsApi } from '../api/collections';
 import { useToast } from '../components/Toast';
 import { Dialog } from '../components/Dialog';
+import { ImeSafeForm } from '../components/ImeSafeForm';
 import { Button } from '../components/Button';
 import styles from './ApiKeys.module.css';
 
@@ -479,7 +480,7 @@ function CreateKeyModal({ onClose }: { onClose: () => void }) {
       size="large"
     >
         {!createdKey ? (
-          <form onSubmit={handleSubmit}>
+          <ImeSafeForm onSubmit={handleSubmit}>
             <div className={styles.formGroup}>
               <label className={styles.label}>{t('apiKeys.name')} *</label>
               <input
@@ -596,7 +597,7 @@ function CreateKeyModal({ onClose }: { onClose: () => void }) {
                 {createMutation.isPending ? t('common.loading') : t('apiKeys.create')}
               </Button>
             </div>
-          </form>
+          </ImeSafeForm>
         ) : (
           <div>
             <p style={{ marginBottom: '0.75rem', color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>
@@ -729,7 +730,7 @@ function EditPolicyModal({
       closeDisabled={updateMutation.isPending}
       size="large"
     >
-        <form onSubmit={handleSubmit}>
+        <ImeSafeForm onSubmit={handleSubmit}>
           <div className={styles.formGroup}>
             <label className={styles.label} htmlFor="policy-name">{t('apiKeys.name')} *</label>
             <input
@@ -841,7 +842,7 @@ function EditPolicyModal({
               {updateMutation.isPending ? t('common.loading') : t('common.save')}
             </Button>
           </div>
-        </form>
+        </ImeSafeForm>
     </Dialog>
   );
 }

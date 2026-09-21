@@ -90,7 +90,13 @@ grep -rn "@ComponentScan" src/
 先检查启动日志中的 `Embedding configuration`。如果看到
 `Embedding configuration check: incomplete`，先在 `.env` 设置
 `RAG_EMBEDDING_API_KEY`、`RAG_EMBEDDING_BASE_URL`、`RAG_EMBEDDING_MODEL` 和
-`RAG_EMBEDDING_DIMENSIONS`。
+`RAG_EMBEDDING_DIMENSIONS`。应用不会从 Chat provider 配置或供应商专属的旧前缀中
+推断嵌入凭据。
+
+使用 `scripts/dev.sh` 时，默认 preflight 模式为 `error`，所以必须在开发栈启动前补齐
+这些配置。只有明确设置 `RAG_EMBEDDING_STARTUP_CHECK=warn` 才适合进行诊断启动；
+它不会让嵌入请求变得可用，也不会安装 mock 或 dummy embedding bean。Spring 配置本身
+在嵌入 API key 为空时同样会快速失败。
 
 **解决**：
 

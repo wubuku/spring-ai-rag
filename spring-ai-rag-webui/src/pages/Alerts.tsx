@@ -11,6 +11,7 @@ import {
   type SloConfig,
   type SilenceSchedule,
 } from '../api/alerts';
+import { ImeSafeForm } from '../components/ImeSafeForm';
 import styles from './Alerts.module.css';
 
 type Tab =
@@ -421,7 +422,7 @@ function SloConfigsTab({ showForm, onShowForm, onHideForm }: { showForm: boolean
       {showForm && (
         <div className={styles.formCard}>
           <h3>{t('alerts.sloConfig')}</h3>
-          <form onSubmit={handleSubmit} className={styles.form}>
+          <ImeSafeForm onSubmit={handleSubmit} className={styles.form}>
             <div className={styles.formRow}>
               <label className={styles.label}>{t('alerts.sloConfig')}</label>
               <input
@@ -472,7 +473,7 @@ function SloConfigsTab({ showForm, onShowForm, onHideForm }: { showForm: boolean
               </button>
               <button type="button" className={styles.cancelBtn} onClick={onHideForm}>{t('common.cancel')}</button>
             </div>
-          </form>
+          </ImeSafeForm>
         </div>
       )}
 
@@ -576,7 +577,7 @@ function SilenceSchedulesTab({ showForm, onShowForm, onHideForm }: { showForm: b
       {showForm && (
         <div className={styles.formCard}>
           <h3>{t('alerts.createSilence')}</h3>
-          <form onSubmit={handleSubmit} className={styles.form}>
+          <ImeSafeForm onSubmit={handleSubmit} className={styles.form}>
             <div className={styles.formRow}>
               <label className={styles.label}>{t('alerts.silencePlans')}</label>
               <input
@@ -638,7 +639,7 @@ function SilenceSchedulesTab({ showForm, onShowForm, onHideForm }: { showForm: b
               </button>
               <button type="button" className={styles.cancelBtn} onClick={onHideForm}>{t('common.cancel')}</button>
             </div>
-          </form>
+          </ImeSafeForm>
         </div>
       )}
 

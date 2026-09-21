@@ -20,6 +20,10 @@ export MODELS_CONFIG_FILE=file:/etc/spring-ai/models.json
 - 模型 ID 使用 provider 原生 ID，不要再添加本地 provider 前缀。
   请求中的模型引用格式为 `providerId/modelId`，例如
   `openrouter/xiaomi/mimo-v2-pro`。
+- 该文件成功加载后会完整替换 YAML 模型注册表，因此本地过期文件可能在
+  `SPRING_AI_OPENAI_*` 正确时仍覆盖 Chat provider 和路由。修改后应检查启动日志及
+  `GET /api/v1/rag/models`。如果希望在一次直接 provider smoke 中不使用外部注册表，
+  请对该进程取消设置 `MODELS_CONFIG_FILE`，或将其指向不存在的文件。
 
 ## 完整示例
 

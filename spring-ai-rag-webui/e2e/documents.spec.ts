@@ -34,6 +34,50 @@ test.describe('Documents', () => {
     expect(hasTable || hasEmpty || hasUpload || hasTitle).toBeTruthy();
   });
 
+  test('does not search while the Documents keyword is in IME composition', async ({ page }) => {
+    let listRequestCount = 0;
+    page.on('request', request => {
+      const url = new URL(request.url());
+      if (request.method() === 'GET'
+          && url.pathname === '/api/v1/rag/documents') {
+        listRequestCount += 1;
+      }
+    });
+
+    await mockAllApiCalls(page);
+    await openProtectedPage(page, '/webui/documents');
+    await expect(page.getByRole('heading', { name: 'Documents' })).toBeVisible();
+    await expect.poll(() => listRequestCount).toBeGreaterThan(0);
+    const initialListRequestCount = listRequestCount;
+
+    const searchInput = page.getByRole('textbox', {
+      name: 'documents.searchPlaceholder',
+    });
+    await searchInput.dispatchEvent('compositionstart', { data: '蓝' });
+    await searchInput.evaluate(element => {
+      const input = element as HTMLInputElement;
+      const setter = Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        'value',
+      )?.set;
+      setter?.call(input, '蓝色手机');
+      input.dispatchEvent(new InputEvent('input', {
+        bubbles: true,
+        data: '蓝色手机',
+        inputType: 'insertCompositionText',
+        isComposing: true,
+      }));
+    });
+    await expect(searchInput).toHaveValue('蓝色手机');
+    await expect(page).toHaveURL(/\/webui\/documents$/);
+    await expect.poll(() => listRequestCount).toBe(initialListRequestCount);
+
+    await searchInput.dispatchEvent('compositionend', { data: '蓝色手机' });
+    await expect.poll(() => new URL(page.url()).searchParams.get('keyword'))
+      .toBe('蓝色手机');
+    await expect.poll(() => listRequestCount).toBeGreaterThan(initialListRequestCount);
+  });
+
   test('shows external identity freshness and offers embedding retry', async ({ page }) => {
     await mockAllApiCalls(page);
     await openProtectedPage(page, '/webui/documents');

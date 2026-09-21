@@ -24,6 +24,56 @@ test.describe('Chat', () => {
     await expect(page.getByRole('button', { name: 'Send' })).toBeEnabled();
   });
 
+  test('does not send the IME confirmation Enter and sends on the next ordinary Enter', async ({ page }) => {
+    let requestCount = 0;
+    await page.route('/api/v1/rag/chat/stream', async route => {
+      requestCount += 1;
+      await route.fulfill({
+        status: 200,
+        contentType: 'text/event-stream',
+        headers: { 'X-RAG-Turn-Id': MOCK_CHAT_TURN_ID },
+        body: `event: done\ndata: {"status":"complete","turnId":"${MOCK_CHAT_TURN_ID}"}\n\n`,
+      });
+    });
+
+    const textarea = page.locator('textarea');
+    await textarea.dispatchEvent('compositionstart', { data: '中' });
+    await textarea.evaluate(element => {
+      const input = element as HTMLTextAreaElement;
+      const setter = Object.getOwnPropertyDescriptor(
+        HTMLTextAreaElement.prototype,
+        'value',
+      )?.set;
+      setter?.call(input, '中文问题');
+      input.dispatchEvent(new InputEvent('input', {
+        bubbles: true,
+        data: '中文问题',
+        inputType: 'insertCompositionText',
+        isComposing: true,
+      }));
+    });
+    await expect(textarea).toHaveValue('中文问题');
+
+    await textarea.dispatchEvent('keydown', {
+      key: 'Enter',
+      code: 'Enter',
+      keyCode: 229,
+      which: 229,
+      bubbles: true,
+    });
+    await expect.poll(() => requestCount).toBe(0);
+
+    await textarea.dispatchEvent('compositionend', { data: '中文问题' });
+    await textarea.dispatchEvent('keydown', {
+      key: 'Enter',
+      code: 'Enter',
+      keyCode: 13,
+      which: 13,
+      bubbles: true,
+    });
+    await expect.poll(() => requestCount).toBe(1);
+  });
+
   test('sends the selected model and two collection keys in the SSE body', async ({ page }) => {
     let requestBody: Record<string, unknown> = {};
     await page.route('/api/v1/rag/chat/stream', async route => {

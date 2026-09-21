@@ -62,6 +62,49 @@ test.describe('Search', () => {
     expect(visibleUrl.searchParams.getAll('collectionKeys')).toEqual([]);
   });
 
+  test('does not request collection options for an IME intermediate value', async ({ page }) => {
+    let collectionRequestCount = 0;
+    page.on('request', request => {
+      if (request.method() === 'GET'
+          && new URL(request.url()).pathname === '/api/v1/rag/collections') {
+        collectionRequestCount += 1;
+      }
+    });
+
+    await page.getByTestId('search-scope-SELECTED_COLLECTIONS').check();
+    await expect(
+      page.getByRole('checkbox', { name: /Sample Collection/ }),
+    ).toBeVisible();
+    const initialRequestCount = collectionRequestCount;
+    const query = page.getByTestId('search-collection-query');
+
+    await query.dispatchEvent('compositionstart', { data: '蓝' });
+    await query.evaluate(element => {
+      const target = element as HTMLInputElement;
+      const setter = Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        'value',
+      )?.set;
+      setter?.call(target, '蓝色手机');
+      target.dispatchEvent(new InputEvent('input', {
+        bubbles: true,
+        data: '蓝色手机',
+        inputType: 'insertCompositionText',
+        isComposing: true,
+      }));
+    });
+
+    await expect(query).toHaveValue('蓝色手机');
+    await page.waitForTimeout(350);
+    expect(collectionRequestCount).toBe(initialRequestCount);
+
+    await query.dispatchEvent('compositionend', { data: '蓝色手机' });
+    await expect.poll(() => collectionRequestCount)
+      .toBeGreaterThan(initialRequestCount);
+    await expect.poll(() => new URL(page.url()).searchParams.get('q'))
+      .toBeNull();
+  });
+
   test('loads a collection from the second page and keeps it selected', async ({ page }) => {
     await page.route(/\/api\/v1\/rag\/collections.*/, async route => {
       const url = new URL(route.request().url());

@@ -117,6 +117,31 @@ describe('CollectionScopeSelector', () => {
     );
   });
 
+  it('defers collection option requests until IME composition ends', async () => {
+    renderSelector({ initialMode: 'SELECTED_COLLECTIONS' });
+    const query = screen.getByTestId('test-collection-query');
+    await screen.findByRole('checkbox', { name: /Collection 1/ });
+    vi.mocked(collectionsApi.list).mockClear();
+
+    fireEvent.compositionStart(query);
+    fireEvent.change(query, { target: { value: '蓝' } });
+    fireEvent.change(query, { target: { value: '蓝色手机' } });
+    await new Promise(resolve => setTimeout(resolve, 300));
+
+    expect(collectionsApi.list).not.toHaveBeenCalledWith(expect.objectContaining({
+      query: '蓝色手机',
+    }));
+
+    fireEvent.compositionEnd(query, { data: '蓝色手机' });
+    await waitFor(() => {
+      expect(collectionsApi.list).toHaveBeenCalledWith({
+        page: 0,
+        size: 50,
+        query: '蓝色手机',
+      });
+    });
+  });
+
   it('retains selections across pages', async () => {
     (collectionsApi.list as ReturnType<typeof vi.fn>).mockImplementation(
       ({ page }: { page?: number }) => Promise.resolve({
@@ -220,4 +245,3 @@ describe('CollectionScopeSelector', () => {
     expect(screen.getByTestId('test-collection-query')).toBeDisabled();
   });
 });
-

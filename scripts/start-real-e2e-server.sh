@@ -51,6 +51,7 @@ _PRESERVE_EMBEDDING_DIMENSIONS="${RAG_EMBEDDING_DIMENSIONS-}"
 _PRESERVE_OPENAI_KEY="${SPRING_AI_OPENAI_API_KEY-}"
 _PRESERVE_OPENAI_BASE="${SPRING_AI_OPENAI_BASE_URL-}"
 _PRESERVE_OPENAI_MODEL="${SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL-}"
+_PRESERVE_MODELS_CONFIG_FILE="${MODELS_CONFIG_FILE-}"
 _PRESERVE_ANTHROPIC_KEY="${ANTHROPIC_API_KEY-}"
 _PRESERVE_ANTHROPIC_BASE="${ANTHROPIC_BASE_URL-}"
 _PRESERVE_ANTHROPIC_MODEL="${ANTHROPIC_MODEL-}"
@@ -85,6 +86,7 @@ fi
 [[ -n "${_PRESERVE_OPENAI_KEY}" ]] && export SPRING_AI_OPENAI_API_KEY="${_PRESERVE_OPENAI_KEY}"
 [[ -n "${_PRESERVE_OPENAI_BASE}" ]] && export SPRING_AI_OPENAI_BASE_URL="${_PRESERVE_OPENAI_BASE}"
 [[ -n "${_PRESERVE_OPENAI_MODEL}" ]] && export SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL="${_PRESERVE_OPENAI_MODEL}"
+[[ -n "${_PRESERVE_MODELS_CONFIG_FILE}" ]] && export MODELS_CONFIG_FILE="${_PRESERVE_MODELS_CONFIG_FILE}"
 [[ -n "${_PRESERVE_ANTHROPIC_KEY}" ]] && export ANTHROPIC_API_KEY="${_PRESERVE_ANTHROPIC_KEY}"
 [[ -n "${_PRESERVE_ANTHROPIC_BASE}" ]] && export ANTHROPIC_BASE_URL="${_PRESERVE_ANTHROPIC_BASE}"
 [[ -n "${_PRESERVE_ANTHROPIC_MODEL}" ]] && export ANTHROPIC_MODEL="${_PRESERVE_ANTHROPIC_MODEL}"
@@ -105,9 +107,42 @@ SECURITY_ENABLED="${RAG_SECURITY_ENABLED:-false}"
 
 # --- Embedding is independent of the selected chat provider ---
 EMB_KEY="${RAG_EMBEDDING_API_KEY:-}"
-EMB_BASE=$(echo "${RAG_EMBEDDING_BASE_URL:-https://api.siliconflow.cn}" | sed 's|/$||; s|/v1$||')
-EMB_MODEL="${RAG_EMBEDDING_MODEL:-BAAI/bge-m3}"
-EMB_DIMENSIONS="${RAG_EMBEDDING_DIMENSIONS:-1024}"
+EMB_BASE="${RAG_EMBEDDING_BASE_URL:-}"
+EMB_MODEL="${RAG_EMBEDDING_MODEL:-}"
+EMB_DIMENSIONS="${RAG_EMBEDDING_DIMENSIONS:-}"
+
+embedding_problems=()
+if [[ -z "${EMB_KEY}" ]]; then
+  embedding_problems+=("RAG_EMBEDDING_API_KEY is missing")
+  [[ -n "${SILICONFLOW_API_KEY:-}" ]] && \
+    embedding_problems+=("SILICONFLOW_API_KEY is retired; rename it to RAG_EMBEDDING_API_KEY")
+fi
+if [[ -z "${EMB_BASE}" ]]; then
+  embedding_problems+=("RAG_EMBEDDING_BASE_URL is missing")
+  [[ -n "${RAG_EMBEDDING_URL:-}" ]] && \
+    embedding_problems+=("RAG_EMBEDDING_URL is retired; rename it to RAG_EMBEDDING_BASE_URL")
+  [[ -z "${RAG_EMBEDDING_URL:-}" && -n "${SILICONFLOW_URL:-}" ]] && \
+    embedding_problems+=("SILICONFLOW_URL is retired; rename it to RAG_EMBEDDING_BASE_URL")
+fi
+if [[ -z "${EMB_MODEL}" ]]; then
+  embedding_problems+=("RAG_EMBEDDING_MODEL is missing")
+  [[ -n "${SILICONFLOW_MODEL:-}" ]] && \
+    embedding_problems+=("SILICONFLOW_MODEL is retired; rename it to RAG_EMBEDDING_MODEL")
+fi
+if [[ ! "${EMB_DIMENSIONS}" =~ ^[1-9][0-9]*$ ]]; then
+  embedding_problems+=("RAG_EMBEDDING_DIMENSIONS must be a positive integer")
+  [[ -n "${SILICONFLOW_DIMENSIONS:-}" ]] && \
+    embedding_problems+=("SILICONFLOW_DIMENSIONS is retired; rename it to RAG_EMBEDDING_DIMENSIONS")
+fi
+if [[ -n "${EMB_BASE}" && "${EMB_BASE}" =~ /v1/?$ ]]; then
+  embedding_problems+=("RAG_EMBEDDING_BASE_URL must not end with /v1")
+fi
+if (( ${#embedding_problems[@]} > 0 )); then
+  echo "ERROR: real E2E requires complete RAG_EMBEDDING_* configuration:" >&2
+  printf '  - %s\n' "${embedding_problems[@]}" >&2
+  exit 2
+fi
+EMB_BASE=$(echo "${EMB_BASE}" | sed 's|/$||; s|/v1$||')
 
 # --- Chat provider resolution ---
 strip_v1() { echo "$1" | sed 's|/$||; s|/v1$||'; }
@@ -178,35 +213,39 @@ case "${LLM_PROVIDER}" in
     ;;
 esac
 
-if [[ -z "${EMB_KEY}" ]]; then
-  echo "WARN: RAG_EMBEDDING_API_KEY is empty — embedding will fail until configured in .env"
-fi
-
 echo "Compiling..."
 mvn -pl spring-ai-rag-core -am -q -DskipTests compile
 mvn -pl spring-ai-rag-core -am -q dependency:build-classpath -Dmdep.outputFile=/tmp/rag-cp.txt -DincludeScope=runtime
 CP="spring-ai-rag-core/target/classes:spring-ai-rag-api/target/classes:spring-ai-rag-documents/target/classes:spring-ai-rag-starter/target/classes:$(cat /tmp/rag-cp.txt)"
 
 if lsof -ti ":${SERVER_PORT}" >/dev/null 2>&1; then
-  echo "Killing existing process on :${SERVER_PORT}"
-  lsof -ti ":${SERVER_PORT}" | xargs kill -9 2>/dev/null || true
-  sleep 1
+  echo "ERROR: port :${SERVER_PORT} is already in use; refusing to stop an unrelated process." >&2
+  lsof -nP -iTCP:"${SERVER_PORT}" -sTCP:LISTEN >&2 || true
+  exit 1
 fi
 
 echo "Starting SpringAiRagApplication on :${SERVER_PORT}"
 echo "  chat: ${CHAT_DESC}"
 echo "  embed: model=${EMB_MODEL} base=${EMB_BASE} dimensions=${EMB_DIMENSIONS} key_configured=$([[ -n "${EMB_KEY}" ]] && echo true || echo false)"
+echo "  models config: ${MODELS_CONFIG_FILE:-none}"
 echo "  log: ${LOG_FILE}"
 
 nohup env "${JAVA_ENV[@]}" java -cp "$CP" \
   com.springairag.core.SpringAiRagApplication \
   >"${LOG_FILE}" 2>&1 &
-echo "PID $!"
+SERVER_PID=$!
+echo "PID ${SERVER_PID}"
 
+HEALTH_FILE="${LOG_FILE}.health.json"
 for i in $(seq 1 90); do
-  if curl -sf "http://127.0.0.1:${SERVER_PORT}/actuator/health" >/dev/null 2>&1; then
+  health_code="$(curl -sS --max-time 2 \
+    -o "${HEALTH_FILE}" \
+    -w "%{http_code}" \
+    "http://127.0.0.1:${SERVER_PORT}/actuator/health" 2>/dev/null || true)"
+  if [[ "${health_code}" == "200" ]] \
+      && grep -Eq '"status"[[:space:]]*:[[:space:]]*"UP"' "${HEALTH_FILE}"; then
     echo "UP http://127.0.0.1:${SERVER_PORT} (iter $i)"
-    curl -s "http://127.0.0.1:${SERVER_PORT}/actuator/health" | head -c 220; echo
+    head -c 220 "${HEALTH_FILE}"; echo
     # Confirm which chat bean was selected
     if grep -q "Using MiniMax ChatModel as primary\|Creating MiniMax ChatModel\|Using Anthropic\|Using OpenAI" "${LOG_FILE}" 2>/dev/null; then
       grep -E "Using .* ChatModel|Creating MiniMax|Creating Anthropic|Creating OpenAI|Creating EmbeddingModel" "${LOG_FILE}" | tail -5
@@ -214,7 +253,7 @@ for i in $(seq 1 90); do
     echo "Next: BASE_URL=http://127.0.0.1:${SERVER_PORT} ./scripts/real-llm-e2e-smoke.sh"
     exit 0
   fi
-  if ! pgrep -f "com.springairag.core.SpringAiRagApplication" >/dev/null 2>&1; then
+  if ! kill -0 "${SERVER_PID}" 2>/dev/null; then
     echo "Process died — last log lines:"
     tail -60 "${LOG_FILE}"
     exit 1
@@ -222,5 +261,9 @@ for i in $(seq 1 90); do
   sleep 2
 done
 echo "TIMEOUT waiting for health"
+echo "Last health response: HTTP ${health_code:-unknown}"
+if [[ -s "${HEALTH_FILE}" ]]; then
+  head -c 500 "${HEALTH_FILE}"; echo
+fi
 tail -60 "${LOG_FILE}"
 exit 1

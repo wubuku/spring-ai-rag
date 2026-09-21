@@ -5,6 +5,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { searchApi, type SearchResult } from '../api/search';
 import { filesApi } from '../api/files';
 import { CollectionScopeSelector } from '../components/CollectionScopeSelector';
+import { ImeSafeForm } from '../components/ImeSafeForm';
 import { SearchResults } from '../components/SearchResults';
 import { useToast } from '../components/Toast';
 import { useSearchHistory } from '../hooks/useSearchHistory';
@@ -227,7 +228,7 @@ export function Search() {
   return (
     <div>
       <h1 className="page-title">{t('search.title')}</h1>
-      <form onSubmit={handleSearch} className={styles.form}>
+      <ImeSafeForm onSubmit={handleSearch} className={styles.form}>
         <div className={styles.searchWrapper}>
           <input
             value={query}
@@ -312,7 +313,7 @@ export function Search() {
         >
           {t('search.searchButton')}
         </button>
-      </form>
+      </ImeSafeForm>
 
       {urlState.query && isPending && <div className={styles.loading}>{t('common.loading')}</div>}
 

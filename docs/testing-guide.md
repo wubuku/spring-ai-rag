@@ -92,6 +92,12 @@ service logs during the run so authentication, model-name, rate-limit, timeout,
 and response-protocol errors are detected early. A non-`main` worktree uses
 isolated `BACKEND_PORT` and `FRONTEND_PORT` values plus a disposable test
 database; prefer `scripts/dev.sh`, which loads `.env`, for the joint stack.
+The real smoke requires the complete `RAG_EMBEDDING_*` contract and rejects
+retired `RAG_EMBEDDING_URL`/`SILICONFLOW_*` names. If the local `.env` points
+`MODELS_CONFIG_FILE` at an old registry, remember that the registry fully
+overrides YAML and can route Chat to a different provider; verify the effective
+model through logs and `/api/v1/rag/models`, or explicitly disable that file for
+a direct-provider smoke.
 
 ### WebUI `-real` End-to-End Runbook
 
@@ -178,6 +184,23 @@ non-duplication, and usage aggregation agree. Do not record prompts, answers,
 tool arguments/results, credentials, or exception bodies in evidence.
 
 ## Test Categories
+
+### IME interaction regression
+
+WebUI tests for action-triggering inputs must cover the IME boundary as a
+behavioral contract:
+
+- composition-phase Enter does not submit, search, save, or navigate;
+- `isComposing` and legacy `keyCode === 229` paths are covered where the
+  handler owns keyboard behavior;
+- URL updates and debounced option requests do not run for intermediate
+  composition values;
+- `compositionend` commits the final value at most once;
+- the next ordinary Enter still performs the normal action.
+
+Use Testing Library DOM assertions and Playwright accessible DOM/request
+assertions. Do not use screenshots as proof of this behavior. The shared
+implementation is `src/utils/ime.ts` and `src/components/ImeSafeForm/`.
 
 ### Unit Tests (JUnit 5 + Mockito)
 

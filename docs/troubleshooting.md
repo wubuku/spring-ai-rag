@@ -151,7 +151,15 @@ kill -9 <PID>
 First inspect the startup log for `Embedding configuration`. If it reports
 `Embedding configuration check: incomplete`, set `RAG_EMBEDDING_API_KEY`,
 `RAG_EMBEDDING_BASE_URL`, `RAG_EMBEDDING_MODEL`, and `RAG_EMBEDDING_DIMENSIONS` in
-`.env`. `SILICONFLOW_*` is not a supported configuration prefix.
+`.env`. The application does not infer embedding credentials from a chat-provider
+configuration or from a vendor-specific legacy prefix.
+
+When using `scripts/dev.sh`, the default preflight mode is `error`, so this
+configuration must be complete before the development stack starts. Use
+`RAG_EMBEDDING_STARTUP_CHECK=warn` only for an explicit diagnostic run; it does
+not make embedding calls work and does not install a mock or dummy embedding
+bean. The Spring configuration itself also fails fast if the embedding API key
+is blank.
 
 **Solution**:
 

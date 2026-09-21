@@ -1,12 +1,71 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useRef, useState } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type CompositionEvent,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useSearchParams } from 'react-router-dom';
 import { embeddingsApi } from '../api/embeddings';
 import type { DerivationRepairPreview } from '../api/embeddings';
 import { Dialog } from '../components/Dialog';
 import { Card } from '../components/Card';
+import { useImeComposition } from '../utils/ime';
 import styles from './Embeddings.module.css';
+
+function ImeSafeFilterInput({
+  label,
+  value,
+  placeholder,
+  onCommit,
+}: {
+  label: string;
+  value: string;
+  placeholder?: string;
+  onCommit: (value: string) => void;
+}) {
+  const [draft, setDraft] = useState(value);
+  const ime = useImeComposition();
+
+  useEffect(() => {
+    if (!ime.compositionActiveRef.current) {
+      setDraft(value);
+    }
+  }, [ime.compositionActiveRef, value]);
+
+  const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const next = event.target.value;
+    setDraft(next);
+    if (!ime.isComposing(event)) {
+      onCommit(next);
+    }
+  };
+
+  const handleCompositionEnd = (
+    event: CompositionEvent<HTMLInputElement>,
+  ) => {
+    ime.handleCompositionEnd();
+    const next = event.currentTarget.value;
+    setDraft(next);
+    onCommit(next);
+  };
+
+  return (
+    <label>
+      {label}
+      <input
+        aria-label={label}
+        value={draft}
+        onChange={handleChange}
+        onCompositionStart={ime.handleCompositionStart}
+        onCompositionEnd={handleCompositionEnd}
+        placeholder={placeholder}
+      />
+    </label>
+  );
+}
 
 export function Embeddings() {
   const { t } = useTranslation();
@@ -85,28 +144,22 @@ export function Embeddings() {
 
       <section className={styles.section} aria-label={t('embeddings.filters')}>
         <div className={styles.form}>
-          <label>
-            {t('embeddings.status')}
-            <input
-              value={status}
-              onChange={e => setFilter('status', e.target.value)}
-              placeholder="QUEUED"
-            />
-          </label>
-          <label>
-            {t('embeddings.collectionKey')}
-            <input
-              value={collectionKey}
-              onChange={e => setFilter('collectionKey', e.target.value)}
-            />
-          </label>
-          <label>
-            {t('embeddings.batchId')}
-            <input
-              value={batchId}
-              onChange={e => setFilter('batchId', e.target.value)}
-            />
-          </label>
+          <ImeSafeFilterInput
+            label={t('embeddings.status')}
+            value={status}
+            placeholder="QUEUED"
+            onCommit={value => setFilter('status', value)}
+          />
+          <ImeSafeFilterInput
+            label={t('embeddings.collectionKey')}
+            value={collectionKey}
+            onCommit={value => setFilter('collectionKey', value)}
+          />
+          <ImeSafeFilterInput
+            label={t('embeddings.batchId')}
+            value={batchId}
+            onCommit={value => setFilter('batchId', value)}
+          />
         </div>
       </section>
 

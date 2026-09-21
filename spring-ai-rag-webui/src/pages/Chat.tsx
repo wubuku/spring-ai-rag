@@ -20,6 +20,7 @@ import {
   removeWorkspaceState,
   writeWorkspaceState,
 } from '../utils/workspaceState';
+import { useImeComposition } from '../utils/ime';
 import styles from './Chat.module.css';
 
 interface Message {
@@ -84,6 +85,7 @@ export function Chat() {
   const [showExportMenu, setShowExportMenu] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const ime = useImeComposition();
   const activeTurnIdRef = useRef<string | undefined>(undefined);
   const lastSentMessageRef = useRef<string | undefined>(undefined);
   const skipHistoryLoadForSessionRef = useRef<string | undefined>(undefined);
@@ -360,7 +362,10 @@ export function Chat() {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key !== 'Enter' || ime.isComposing(e)) {
+      return;
+    }
+    if (!e.shiftKey) {
       e.preventDefault();
       handleSend();
     }
@@ -624,6 +629,8 @@ export function Chat() {
               ref={textareaRef}
               value={input}
               onChange={handleInput}
+              onCompositionStart={ime.handleCompositionStart}
+              onCompositionEnd={ime.handleCompositionEnd}
               onKeyDown={handleKeyDown}
               placeholder={t('chat.placeholder')}
               disabled={isConnected}

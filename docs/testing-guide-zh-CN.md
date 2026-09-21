@@ -90,6 +90,11 @@ smoke；不要用高延迟真实调用代替基本执行路径覆盖。运行期
 日志，尽早识别认证、模型名、限流、超时和响应协议错误。非 `main` worktree 使用与其他开发栈
 隔离的 `BACKEND_PORT`、`FRONTEND_PORT` 和可处置测试数据库；联合启动优先使用会加载 `.env`
 的 `scripts/dev.sh`。
+真实 smoke 要求完整的 `RAG_EMBEDDING_*` 配置契约，并拒绝退役的
+`RAG_EMBEDDING_URL`/`SILICONFLOW_*` 变量名。如果本地 `.env` 的
+`MODELS_CONFIG_FILE` 指向过期注册表，要记住它会完整覆盖 YAML，并可能把 Chat 路由到
+另一个 provider；应通过日志和 `/api/v1/rag/models` 核对生效模型，或为直接 provider
+smoke 显式禁用该文件。
 
 ### WebUI `-real` 端到端用例运行手册
 
@@ -165,6 +170,21 @@ provider 调用次数、purpose/mode 归因、终态结果、replay 不重复调
 证据不得记录 prompt、answer、工具参数/结果、credential 或异常正文。
 
 ## 测试分类
+
+### 输入法交互回归
+
+所有会触发动作的 WebUI 输入框，都必须把 IME 边界作为行为契约测试：
+
+- 组合输入阶段按 Enter 不得提交、搜索、保存或导航；
+- 输入框自己处理键盘事件时，应覆盖 `isComposing` 和兼容性的
+  `keyCode === 229` 路径；
+- 改写 URL 或启动 debounce 选项请求的输入框，不得处理组合期间的中间值；
+- `compositionend` 只用最终值处理一次；
+- 下一次普通 Enter 仍应执行正常动作。
+
+使用 Testing Library 的 DOM 断言，以及 Playwright 的可访问 DOM、请求和响应断言。
+不要使用截图证明该行为。共享实现位于 `src/utils/ime.ts` 和
+`src/components/ImeSafeForm/`。
 
 ### 单元测试（JUnit 5 + Mockito）
 

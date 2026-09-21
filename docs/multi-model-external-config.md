@@ -21,6 +21,12 @@ export MODELS_CONFIG_FILE=file:/etc/spring-ai/models.json
 - A model ID is the provider-native ID. Do not prepend the local provider ID.
   Requests use `providerId/modelId`, such as
   `openrouter/xiaomi/mimo-v2-pro`.
+- Because this file fully replaces the YAML model registry, a stale local file
+  can override the Chat provider and routing even when the normal
+  `SPRING_AI_OPENAI_*` variables are correct. Check the startup log and
+  `GET /api/v1/rag/models` after changing it. For a direct provider smoke
+  without an external registry, unset `MODELS_CONFIG_FILE` or point it to a
+  nonexistent file for that process.
 
 ## Complete Example
 

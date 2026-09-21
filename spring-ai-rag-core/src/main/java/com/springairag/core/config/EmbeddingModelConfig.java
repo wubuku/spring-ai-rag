@@ -52,16 +52,14 @@ public class EmbeddingModelConfig {
         logger.info("Creating EmbeddingModel: baseUrl={}, model={}, apiKeyConfigured={}, dimensions={}",
                 url, model, apiKeyConfigured, dimensions);
         if (!apiKeyConfigured) {
-            logger.warn(
-                    "Embedding API key is not configured; startup will continue with a placeholder "
-                            + "credential, but embedding requests may fail. Configure "
-                            + "RAG_EMBEDDING_API_KEY or rag.embedding.api-key for the "
-                            + "configured embedding provider.");
+            throw new IllegalStateException(
+                    "Embedding API key is not configured. Set RAG_EMBEDDING_API_KEY "
+                            + "or rag.embedding.api-key before starting the application.");
         }
 
         OpenAiApi openAiApi = OpenAiApi.builder()
                 .baseUrl(url)
-                .apiKey(apiKeyConfigured ? apiKey : "dummy")
+                .apiKey(apiKey)
                 .build();
 
         // Some OpenAI-compatible embedding providers reject the dimensions parameter.

@@ -131,8 +131,14 @@ alignment 和无截图 Mock Playwright 检查。
 ./scripts/dev.sh
 ```
 
-该脚本完整导出仓库根目录 `.env` 给 Maven / Spring Boot，并为后端放行本次精确的
-Vite origin；只有 root 管理 POST 探针通过后才报告 ready。默认启动：
+在启动 Maven 之前，脚本会完整检查嵌入配置契约：
+`RAG_EMBEDDING_API_KEY`、`RAG_EMBEDDING_BASE_URL`、`RAG_EMBEDDING_MODEL` 和
+`RAG_EMBEDDING_DIMENSIONS`。默认行为是快速失败；缺少或格式错误的配置会在创建后端、
+前端进程之前直接报告。只有明确设置 `RAG_EMBEDDING_STARTUP_CHECK=warn` 才会进入诊断
+启动模式；该模式会输出醒目警告，但绝不会注入 mock 模型或占位凭据。
+
+配置检查通过后，脚本才会完整导出仓库根目录 `.env` 给 Maven / Spring Boot，并为后端
+放行本次精确的 Vite origin；只有 root 管理 POST 探针通过后才报告 ready。默认启动：
 
 ```text
 Backend: http://127.0.0.1:18082
@@ -258,6 +264,26 @@ npm run dev
 spring-ai-rag-core/src/main/resources/static/webui/
 ```
 
+### 输入法（IME）安全交互
+
+所有会搜索、提交、保存、改写 URL、启动 debounce 请求，或在 Enter 时触发其他动作的
+WebUI 输入框，都必须把输入法（IME）组合过程视为中间态。这一规则适用于中文、日文、
+韩文及其他输入法，不是 Chat 或 Documents 页面的局部特例。
+
+共享的 `ImeSafeForm` 边界会阻止组合期间的意外表单提交；`Chat`、`Documents`、`Files`
+`Search`、集合范围选择器和 `Embeddings` 过滤器则直接保护各自会触发动作的输入框。实现同时识别标准的
+`nativeEvent.isComposing` 与兼容性较差但仍会出现的 `keyCode === 229` 信号。
+`compositionend` 后保留最终输入值，用户下一次普通 Enter 才执行预期动作。
+
+新增或修改会触发动作的输入框时：
+
+1. 在输入框本地维护 `compositionstart`/`compositionend` 状态，或复用
+   `useImeComposition`。
+2. Enter 事件发现任一 IME 信号有效时，直接返回，不得提交、搜索、保存或导航。
+3. 如果输入框通过 change 事件提交、改写 URL 或启动 debounce 请求，应延迟到
+   `compositionend`，并只用最终值处理一次。
+4. 为“组合期间被拦截”和“组合结束后正常动作”分别补 DOM 交互测试。截图不作为验收证据。
+
 ## 7. E2E
 
 ### 常规 HTTP E2E
@@ -287,8 +313,17 @@ RAG_API_KEY="$RAG_ROOT_API_KEY" \
 
 该流程会执行 provider preflight、创建唯一文档、embedding、search、ask 和 stream。
 如果配置了 `RAG_ROOT_API_KEY`，必须通过 `RAG_API_KEY` 或等价的 `X-API-Key` 传给
-数据面请求；脚本也会自动从 `.env` 读取 root key。Mock Playwright 不能替代真实
-LLM 验证。
+数据面请求；脚本也会自动从 `.env` 读取 root key。四个 `RAG_EMBEDDING_*` 配置项
+均为必需项；退役的 `RAG_EMBEDDING_URL` 和 `SILICONFLOW_*` 不会被自动映射。
+如果 `.env` 设置了 `MODELS_CONFIG_FILE`，要注意外部文件会完整覆盖 YAML 模型注册表。
+若要执行不使用外部注册表的直接 provider smoke，可显式指定不存在的文件：
+
+```bash
+MODELS_CONFIG_FILE=/tmp/spring-ai-rag-no-external-models.json \
+RAG_EMBEDDING_BASE_URL=https://api.siliconflow.cn \
+SERVER_PORT=18181 \
+./scripts/start-real-e2e-server.sh
+```
 
 Collection 受保护清理的真实 provider 生命周期使用
 `scripts/real-collection-purge-e2e-smoke.sh`。它要求运行中的隔离服务和一次性数据库，

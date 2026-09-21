@@ -48,6 +48,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "spring.flyway.enabled=false",
         "spring.jpa.hibernate.ddl-auto=none",
         "rag.embedding-jobs.enabled=false",
+        "rag.embedding.api-key=test-embedding-key",
         "spring.autoconfigure.exclude=" +
                 "org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration," +
                 "org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration," +

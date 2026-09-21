@@ -38,9 +38,10 @@ jobs:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY || 'test-key' }}
       OPENAI_BASE_URL: https://api.minimaxi.com
       OPENAI_MODEL: MiniMax-M2.7
-      SILICONFLOW_API_KEY: ${{ secrets.SILICONFLOW_API_KEY || 'test-key' }}
-      SILICONFLOW_BASE_URL: https://api.siliconflow.cn
-      SILICONFLOW_EMBEDDING_MODEL: BAAI/bge-m3
+      RAG_EMBEDDING_API_KEY: ${{ secrets.RAG_EMBEDDING_API_KEY || 'test-key' }}
+      RAG_EMBEDDING_BASE_URL: https://api.siliconflow.cn
+      RAG_EMBEDDING_MODEL: BAAI/bge-m3
+      RAG_EMBEDDING_DIMENSIONS: 1024
 
     steps:
       - uses: actions/checkout@v4

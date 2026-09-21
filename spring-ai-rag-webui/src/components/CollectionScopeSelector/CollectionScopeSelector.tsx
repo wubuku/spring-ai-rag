@@ -1,8 +1,16 @@
-import { useEffect, useMemo, useState } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type CompositionEvent,
+} from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { collectionsApi } from '../../api/collections';
 import type { CollectionScopeMode } from '../../types/api';
+import { useImeComposition } from '../../utils/ime';
 import styles from './CollectionScopeSelector.module.css';
 
 const PAGE_SIZE = 50;
@@ -41,14 +49,33 @@ export function CollectionScopeSelector({
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [page, setPage] = useState(0);
+  const queryIme = useImeComposition();
+  const previousQueryRef = useRef(query);
 
   useEffect(() => {
+    if (previousQueryRef.current === query) return;
+    previousQueryRef.current = query;
     const timer = window.setTimeout(() => {
+      if (queryIme.compositionActiveRef.current) return;
       setDebouncedQuery(query.trim());
       setPage(0);
     }, 250);
     return () => window.clearTimeout(timer);
-  }, [query]);
+  }, [query, queryIme.compositionActiveRef, previousQueryRef]);
+
+  const handleQueryChange = (event: ChangeEvent<HTMLInputElement>) => {
+    setQuery(event.target.value.slice(0, 256));
+  };
+
+  const handleQueryCompositionEnd = (
+    event: CompositionEvent<HTMLInputElement>,
+  ) => {
+    queryIme.handleCompositionEnd();
+    const value = event.currentTarget.value.slice(0, 256);
+    setQuery(value);
+    setDebouncedQuery(value.trim());
+    setPage(0);
+  };
 
   const collectionsQuery = useQuery({
     queryKey: ['collection-scope-options', page, debouncedQuery],
@@ -119,7 +146,9 @@ export function CollectionScopeSelector({
             id={`${idPrefix}-collection-query`}
             type="search"
             value={query}
-            onChange={event => setQuery(event.target.value)}
+            onChange={handleQueryChange}
+            onCompositionStart={queryIme.handleCompositionStart}
+            onCompositionEnd={handleQueryCompositionEnd}
             placeholder={t('collectionScope.searchPlaceholder')}
             className={styles.searchInput}
             data-testid={`${idPrefix}-collection-query`}

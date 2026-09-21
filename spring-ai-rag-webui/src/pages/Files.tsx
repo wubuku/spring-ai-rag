@@ -19,6 +19,7 @@ import {
   rememberRoute,
   writeWorkspaceState,
 } from '../utils/workspaceState';
+import { useImeComposition } from '../utils/ime';
 import styles from './Files.module.css';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -205,7 +206,7 @@ export function Files() {
   const [embeddingMessage, setEmbeddingMessage] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
-  const queryCompositionRef = useRef(false);
+  const queryIme = useImeComposition();
   const previousUrlQueryRef = useRef(deepLink.query);
   const resizeStateRef = useRef<{
     pointerId: number;
@@ -306,23 +307,19 @@ export function Files() {
   useEffect(() => {
     if (deepLink.query === previousUrlQueryRef.current) return;
     previousUrlQueryRef.current = deepLink.query;
-    if (!queryCompositionRef.current) {
+    if (!queryIme.compositionActiveRef.current) {
       setQueryDraft(deepLink.query);
     }
-  }, [deepLink.query]);
-
-  const handleQueryCompositionStart = useCallback(() => {
-    queryCompositionRef.current = true;
-  }, []);
+  }, [deepLink.query, queryIme.compositionActiveRef]);
 
   const handleQueryCompositionEnd = useCallback((
     event: React.CompositionEvent<HTMLInputElement>,
   ) => {
-    queryCompositionRef.current = false;
+    queryIme.handleCompositionEnd();
     const value = event.currentTarget.value.slice(0, 256);
     setQueryDraft(value);
     commitQuery(value);
-  }, [commitQuery]);
+  }, [commitQuery, queryIme]);
 
   const availableTreePanelMaximum = useCallback(() => {
     const measuredWidth = bodyRef.current?.getBoundingClientRect().width ?? 0;
@@ -660,15 +657,14 @@ export function Files() {
               onChange={event => {
                 const value = event.target.value.slice(0, 256);
                 setQueryDraft(value);
-                if (!queryCompositionRef.current
-                    && !(event.nativeEvent as InputEvent).isComposing) {
+                if (!queryIme.isComposing(event)) {
                   commitQuery(value);
                 }
               }}
-              onCompositionStart={handleQueryCompositionStart}
+              onCompositionStart={queryIme.handleCompositionStart}
               onCompositionEnd={handleQueryCompositionEnd}
               onBlur={() => {
-                if (!queryCompositionRef.current
+                if (!queryIme.compositionActiveRef.current
                     && queryDraft.trim() !== deepLink.query) {
                   commitQuery(queryDraft);
                 }

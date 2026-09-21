@@ -214,8 +214,8 @@ examples.
 
 Embedding model configuration is independent of the Chat provider and is always active.
 Use the provider-neutral `RAG_EMBEDDING_*` environment variables.
-The current example uses SiliconFlow BGE-M3; `SILICONFLOW_*` is no longer a valid
-embedding configuration prefix.
+The current example uses SiliconFlow BGE-M3; the environment variable names describe
+the embedding role rather than a specific vendor.
 
 ```yaml
 rag:
@@ -262,10 +262,17 @@ RAG_EMBEDDING_DIMENSIONS=1024
 
 Do not include `/v1` in `RAG_EMBEDDING_BASE_URL`; Spring AI appends
 `/v1/embeddings`. `scripts/dev.sh` checks the key, URL, model, and dimensions before
-starting. `RAG_EMBEDDING_STARTUP_CHECK=warn` (the default) reports an incomplete
-configuration and continues; `error` refuses startup. This is a local shape check,
-not proof that the remote provider accepts the key. Execute a real embedding request
-to verify provider availability.
+starting and refuses an incomplete configuration by default. Set
+`RAG_EMBEDDING_STARTUP_CHECK=warn` only for an explicit diagnostic startup; it does
+not inject a mock embedding model or placeholder credential. The check is local
+shape validation, not proof that the remote provider accepts the key. Execute a
+real embedding request to verify provider availability.
+
+`RAG_EMBEDDING_URL` and all `SILICONFLOW_*` embedding variables are retired names.
+They are not compatibility aliases and are never mapped automatically. If a local
+`.env` still contains one, rename it to the corresponding `RAG_EMBEDDING_*`
+variable before starting the development stack or real E2E scripts; the scripts
+fail with a migration hint instead of silently selecting a default.
 
 The active Profile is registered in `rag_embedding_profiles` and is immutable after creation.
 The current supported dimension is `1024`, stored in the fixed-length

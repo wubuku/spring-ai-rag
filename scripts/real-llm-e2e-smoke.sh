@@ -44,6 +44,7 @@ done
 _PRESERVE_EMBEDDING_KEY="${RAG_EMBEDDING_API_KEY-}"
 _PRESERVE_EMBEDDING_BASE="${RAG_EMBEDDING_BASE_URL-}"
 _PRESERVE_EMBEDDING_MODEL="${RAG_EMBEDDING_MODEL-}"
+_PRESERVE_EMBEDDING_DIMENSIONS="${RAG_EMBEDDING_DIMENSIONS-}"
 _PRESERVE_MM_KEY="${SPRING_AI_MINIMAX_API_KEY-}"
 _PRESERVE_OPENAI_KEY="${SPRING_AI_OPENAI_API_KEY-}"
 _PRESERVE_ANTH_KEY="${ANTHROPIC_API_KEY-}"
@@ -57,6 +58,7 @@ fi
 [[ -n "${_PRESERVE_EMBEDDING_KEY}" ]] && export RAG_EMBEDDING_API_KEY="${_PRESERVE_EMBEDDING_KEY}"
 [[ -n "${_PRESERVE_EMBEDDING_BASE}" ]] && export RAG_EMBEDDING_BASE_URL="${_PRESERVE_EMBEDDING_BASE}"
 [[ -n "${_PRESERVE_EMBEDDING_MODEL}" ]] && export RAG_EMBEDDING_MODEL="${_PRESERVE_EMBEDDING_MODEL}"
+[[ -n "${_PRESERVE_EMBEDDING_DIMENSIONS}" ]] && export RAG_EMBEDDING_DIMENSIONS="${_PRESERVE_EMBEDDING_DIMENSIONS}"
 [[ -n "${_PRESERVE_MM_KEY}" ]] && export SPRING_AI_MINIMAX_API_KEY="${_PRESERVE_MM_KEY}"
 [[ -n "${_PRESERVE_OPENAI_KEY}" ]] && export SPRING_AI_OPENAI_API_KEY="${_PRESERVE_OPENAI_KEY}"
 [[ -n "${_PRESERVE_ANTH_KEY}" ]] && export ANTHROPIC_API_KEY="${_PRESERVE_ANTH_KEY}"
@@ -111,12 +113,35 @@ ok "health UP"
 
 step "0b) Probe configured embedding API"
 EMB_KEY="${RAG_EMBEDDING_API_KEY:-}"
-EMB_BASE=$(echo "${RAG_EMBEDDING_BASE_URL:-https://api.siliconflow.cn}" | sed 's|/$||; s|/v1$||')
-EMB_MODEL="${RAG_EMBEDDING_MODEL:-BAAI/bge-m3}"
+EMB_BASE="${RAG_EMBEDDING_BASE_URL:-}"
+EMB_MODEL="${RAG_EMBEDDING_MODEL:-}"
+EMB_DIMENSIONS="${RAG_EMBEDDING_DIMENSIONS:-}"
+embedding_problems=()
 if [[ -z "$EMB_KEY" ]]; then
-  echo "RAG_EMBEDDING_API_KEY empty"
+  embedding_problems+=("RAG_EMBEDDING_API_KEY is missing")
+  [[ -n "${SILICONFLOW_API_KEY:-}" ]] && \
+    embedding_problems+=("SILICONFLOW_API_KEY is retired; rename it to RAG_EMBEDDING_API_KEY")
+fi
+if [[ -z "$EMB_BASE" ]]; then
+  embedding_problems+=("RAG_EMBEDDING_BASE_URL is missing")
+  [[ -n "${RAG_EMBEDDING_URL:-}" ]] && \
+    embedding_problems+=("RAG_EMBEDDING_URL is retired; rename it to RAG_EMBEDDING_BASE_URL")
+  [[ -z "${RAG_EMBEDDING_URL:-}" && -n "${SILICONFLOW_URL:-}" ]] && \
+    embedding_problems+=("SILICONFLOW_URL is retired; rename it to RAG_EMBEDDING_BASE_URL")
+fi
+[[ -n "$EMB_MODEL" ]] || embedding_problems+=("RAG_EMBEDDING_MODEL is missing")
+[[ "$EMB_DIMENSIONS" =~ ^[1-9][0-9]*$ ]] || \
+  embedding_problems+=("RAG_EMBEDDING_DIMENSIONS must be a positive integer")
+if [[ -n "$EMB_BASE" && "$EMB_BASE" =~ /v1/?$ ]]; then
+  embedding_problems+=("RAG_EMBEDDING_BASE_URL must not end with /v1")
+fi
+if (( ${#embedding_problems[@]} > 0 )); then
+  echo "Embedding configuration is incomplete:" >&2
+  printf '  - %s\n' "${embedding_problems[@]}" >&2
+  echo "Set the four RAG_EMBEDDING_* variables before running real E2E." >&2
   exit 2
 fi
+EMB_BASE=$(echo "$EMB_BASE" | sed 's|/$||; s|/v1$||')
 CODE=$(curl -s -o /tmp/rag-emb-probe.json -w "%{http_code}" \
   -X POST "${EMB_BASE}/v1/embeddings" \
   -H "Authorization: Bearer ${EMB_KEY}" \

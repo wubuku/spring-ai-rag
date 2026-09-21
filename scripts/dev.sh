@@ -51,7 +51,7 @@ Overrides:
   RAG_DEV_OPEN_BROWSER=false
   SPRING_PROFILES_ACTIVE=postgresql
   RAG_ROOT_API_KEY=<at-least-32-printable-ASCII-characters>
-  RAG_EMBEDDING_STARTUP_CHECK=warn|error
+  RAG_EMBEDDING_STARTUP_CHECK=error|warn
 EOF
 }
 
@@ -362,10 +362,10 @@ check_prerequisites() {
 }
 
 check_embedding_configuration() {
-  local check_mode="${RAG_EMBEDDING_STARTUP_CHECK:-warn}"
-  local base_url="${RAG_EMBEDDING_BASE_URL:-https://api.siliconflow.cn}"
-  local model="${RAG_EMBEDDING_MODEL:-BAAI/bge-m3}"
-  local dimensions="${RAG_EMBEDDING_DIMENSIONS:-1024}"
+  local check_mode="${RAG_EMBEDDING_STARTUP_CHECK:-error}"
+  local base_url="${RAG_EMBEDDING_BASE_URL:-}"
+  local model="${RAG_EMBEDDING_MODEL:-}"
+  local dimensions="${RAG_EMBEDDING_DIMENSIONS:-}"
   local key_source="none"
   local -a problems=()
 
@@ -382,16 +382,32 @@ check_embedding_configuration() {
     key_source="RAG_EMBEDDING_API_KEY"
   else
     problems+=("missing embedding API key")
+    if [[ -n "${SILICONFLOW_API_KEY:-}" ]]; then
+      problems+=("SILICONFLOW_API_KEY is retired; rename it to RAG_EMBEDDING_API_KEY")
+    fi
   fi
 
   if [[ -z "${base_url}" || ! "${base_url}" =~ ^https?://[^[:space:]]+$ ]]; then
     problems+=("embedding base URL is missing or not an http(s) URL")
+    if [[ -n "${RAG_EMBEDDING_URL:-}" ]]; then
+      problems+=("RAG_EMBEDDING_URL is retired; rename it to RAG_EMBEDDING_BASE_URL")
+    elif [[ -n "${SILICONFLOW_URL:-}" ]]; then
+      problems+=("SILICONFLOW_URL is retired; rename it to RAG_EMBEDDING_BASE_URL")
+    fi
+  elif [[ "${base_url}" =~ /v1/?$ ]]; then
+    problems+=("embedding base URL must not end with /v1")
   fi
   if [[ -z "${model}" ]]; then
     problems+=("embedding model is empty")
+    if [[ -n "${SILICONFLOW_MODEL:-}" ]]; then
+      problems+=("SILICONFLOW_MODEL is retired; rename it to RAG_EMBEDDING_MODEL")
+    fi
   fi
   if [[ ! "${dimensions}" =~ ^[1-9][0-9]*$ ]]; then
     problems+=("embedding dimensions must be a positive integer")
+    if [[ -n "${SILICONFLOW_DIMENSIONS:-}" ]]; then
+      problems+=("SILICONFLOW_DIMENSIONS is retired; rename it to RAG_EMBEDDING_DIMENSIONS")
+    fi
   fi
 
   if (( ${#problems[@]} > 0 )); then
@@ -399,13 +415,14 @@ check_embedding_configuration() {
     printf '  - %s\n' "${problems[@]}" >&2
     echo "  Set RAG_EMBEDDING_API_KEY, RAG_EMBEDDING_BASE_URL, RAG_EMBEDDING_MODEL, and" >&2
     echo "  RAG_EMBEDDING_DIMENSIONS in ${DEV_ENV_FILE}." >&2
+    echo "  Retired vendor-specific embedding variables are not read or mapped automatically." >&2
     echo "  A healthy HTTP/readiness endpoint does not prove that the embedding provider" >&2
     echo "  accepts requests." >&2
     if [[ "${check_mode}" == "error" ]]; then
       echo "ERROR: refusing to start because RAG_EMBEDDING_STARTUP_CHECK=error." >&2
       return 1
     fi
-    echo "WARNING: continuing; embedding operations may fail until the configuration is fixed." >&2
+    echo "WARNING: continuing only because RAG_EMBEDDING_STARTUP_CHECK=warn; embedding operations may fail until the configuration is fixed." >&2
     return 0
   fi
 

@@ -140,9 +140,17 @@ One-command backend and frontend development:
 ./scripts/dev.sh
 ```
 
-The launcher exports the complete repository-root `.env` to Maven / Spring Boot
-and starts. It also allows the exact Vite origin on the backend and verifies a
-root-authenticated management POST before reporting ready:
+Before starting Maven, the launcher validates the complete embedding contract:
+`RAG_EMBEDDING_API_KEY`, `RAG_EMBEDDING_BASE_URL`, `RAG_EMBEDDING_MODEL`, and
+`RAG_EMBEDDING_DIMENSIONS`. The default is fail-fast, so a missing or malformed
+embedding setting is reported before any backend or frontend process is
+created. Set `RAG_EMBEDDING_STARTUP_CHECK=warn` only for an explicit diagnostic
+startup; this mode emits a prominent warning and never injects a mock model or a
+placeholder credential.
+
+When validation passes, the launcher exports the complete repository-root `.env`
+to Maven / Spring Boot. It also allows the exact Vite origin on the backend and
+verifies a root-authenticated management POST before reporting ready:
 
 ```text
 Backend: http://127.0.0.1:18082
@@ -275,6 +283,34 @@ The release build embeds assets under:
 spring-ai-rag-core/src/main/resources/static/webui/
 ```
 
+### IME-safe input behavior
+
+All WebUI inputs that search, submit, save, update the URL, start a debounced
+request, or otherwise trigger an action on Enter must treat an active
+input-method-editor (IME) composition as an intermediate state. This applies
+to Chinese, Japanese, Korean, and other IMEs; it is not a Chat-only or
+Documents-only rule.
+
+The shared `ImeSafeForm` boundary blocks accidental form submission during
+composition, while `Chat`, `Documents`, `Files`, `Search`, collection scope
+selection, and Embeddings filters protect their action-triggering inputs
+directly. The implementation recognizes both the
+standard `nativeEvent.isComposing` signal and the legacy `keyCode === 229`
+signal. After `compositionend`, the final value is retained and the next
+ordinary Enter performs the expected action.
+
+When adding or changing an action-triggering input:
+
+1. Keep `compositionstart`/`compositionend` state local to the input or use
+   `useImeComposition`.
+2. On Enter, return without submitting, searching, saving, or navigating when
+   either IME signal is active.
+3. If the input commits on change, updates the URL, or starts a debounced
+   request, defer the commit until `compositionend` and process the final
+   value once.
+4. Add a DOM interaction test for both the blocked composition event and the
+   normal post-composition action. Screenshots are not acceptance evidence.
+
 ## 7. E2E
 
 ### HTTP E2E
@@ -305,7 +341,18 @@ RAG_API_KEY="$RAG_ROOT_API_KEY" \
 The flow performs provider preflight, unique-document creation, embedding, search, ask, and
 stream. When `RAG_ROOT_API_KEY` is configured, pass it through `RAG_API_KEY` (or the
 equivalent `X-API-Key` header); the script also loads the root key from `.env`. Mock
-Playwright is not a substitute for real-LLM validation.
+Playwright is not a substitute for real-LLM validation. The four
+`RAG_EMBEDDING_*` variables are required; retired `RAG_EMBEDDING_URL` and
+`SILICONFLOW_*` names are rejected rather than mapped. If `.env` sets
+`MODELS_CONFIG_FILE`, remember that the external file fully overrides the YAML
+model registry. For a direct provider smoke, point it to a nonexistent file:
+
+```bash
+MODELS_CONFIG_FILE=/tmp/spring-ai-rag-no-external-models.json \
+RAG_EMBEDDING_BASE_URL=https://api.siliconflow.cn \
+SERVER_PORT=18181 \
+./scripts/start-real-e2e-server.sh
+```
 
 The guarded Collection purge real-provider lifecycle uses
 `scripts/real-collection-purge-e2e-smoke.sh`. It requires a running isolated

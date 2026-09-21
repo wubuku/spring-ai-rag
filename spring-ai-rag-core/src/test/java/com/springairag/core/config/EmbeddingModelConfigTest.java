@@ -134,4 +134,20 @@ class EmbeddingModelConfigTest {
 
         assertThrows(IllegalArgumentException.class, config::embeddingModel);
     }
+
+    @Test
+    @DisplayName("embeddingModel fails fast when the provider key is missing")
+    void embeddingModel_failsFastWhenApiKeyIsMissing() {
+        EmbeddingModelConfig config = new EmbeddingModelConfig();
+        ReflectionTestUtils.setField(config, "apiKey", " ");
+        ReflectionTestUtils.setField(config, "model", "BAAI/bge-m3");
+        ReflectionTestUtils.setField(config, "dimensions", 1024);
+        ReflectionTestUtils.setField(config, "retryMaxAttempts", 1);
+
+        IllegalStateException error = assertThrows(
+                IllegalStateException.class, config::embeddingModel);
+
+        assertTrue(error.getMessage().contains("RAG_EMBEDDING_API_KEY"));
+        assertTrue(error.getMessage().contains("rag.embedding.api-key"));
+    }
 }

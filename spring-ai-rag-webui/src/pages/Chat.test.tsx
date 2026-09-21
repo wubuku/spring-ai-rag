@@ -160,6 +160,27 @@ describe('Chat', () => {
     expect(mockSend).not.toHaveBeenCalled();
   });
 
+  it('does not submit during IME composition and submits on the next Enter', async () => {
+    renderChat();
+    const textarea = screen.getByPlaceholderText(/chat.placeholder/);
+    fireEvent.change(textarea, { target: { value: '你好' } });
+
+    fireEvent.compositionStart(textarea);
+    fireEvent.keyDown(textarea, {
+      key: 'Enter',
+      keyCode: 229,
+      which: 229,
+      shiftKey: false,
+    });
+    expect(mockSend).not.toHaveBeenCalled();
+
+    fireEvent.compositionEnd(textarea, { data: '你好' });
+    await act(async () => {
+      fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false });
+    });
+    expect(mockSend).toHaveBeenCalledTimes(1);
+  });
+
   it('New Chat button is not visible when no messages', () => {
     renderChat();
     expect(screen.queryByRole('button', { name: /chat.newChat/ })).not.toBeInTheDocument();

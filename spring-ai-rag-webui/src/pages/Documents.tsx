@@ -13,7 +13,9 @@ import { Skeleton } from '../components/Skeleton';
 import { DocumentActionsMenu } from '../components/DocumentActionsMenu/DocumentActionsMenu';
 import { VersionHistoryModal } from '../components/VersionHistoryModal/VersionHistoryModal';
 import { ConfirmDialog, Dialog } from '../components/Dialog';
+import { ImeSafeForm } from '../components/ImeSafeForm';
 import { useBlobUrlOpener } from '../hooks/useBlobUrlOpener';
+import { useImeComposition } from '../utils/ime';
 import styles from './Documents.module.css';
 
 type DocumentConfirmation =
@@ -31,7 +33,7 @@ export function Documents() {
   const keyword = searchParams.get('keyword') ?? '';
   const selectedCollection = searchParams.get('collectionKey') || undefined;
   const [keywordDraft, setKeywordDraft] = useState(keyword);
-  const keywordCompositionRef = useRef(false);
+  const keywordIme = useImeComposition();
   const previousUrlKeywordRef = useRef(keyword);
   const [previewDoc, setPreviewDoc] = useState<{ id: number; title: string; content: string } | null>(null);
   const [versionsDoc, setVersionsDoc] = useState<Document | null>(null);
@@ -247,10 +249,10 @@ export function Documents() {
   useEffect(() => {
     if (keyword === previousUrlKeywordRef.current) return;
     previousUrlKeywordRef.current = keyword;
-    if (!keywordCompositionRef.current) {
+    if (!keywordIme.compositionActiveRef.current) {
       setKeywordDraft(keyword);
     }
-  }, [keyword]);
+  }, [keyword, keywordIme.compositionActiveRef]);
 
   const commitKeyword = (value: string) => {
     const next = new URLSearchParams(searchParams);
@@ -264,20 +266,15 @@ export function Documents() {
   const handleKeywordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value.slice(0, 256);
     setKeywordDraft(value);
-    if (!keywordCompositionRef.current
-        && !(e.nativeEvent as InputEvent).isComposing) {
+    if (!keywordIme.isComposing(e)) {
       commitKeyword(value);
     }
-  };
-
-  const handleKeywordCompositionStart = () => {
-    keywordCompositionRef.current = true;
   };
 
   const handleKeywordCompositionEnd = (
     e: React.CompositionEvent<HTMLInputElement>,
   ) => {
-    keywordCompositionRef.current = false;
+    keywordIme.handleCompositionEnd();
     const value = e.currentTarget.value.slice(0, 256);
     setKeywordDraft(value);
     commitKeyword(value);
@@ -412,10 +409,10 @@ export function Documents() {
           placeholder={t('documents.searchPlaceholder') || t('common.search')}
           value={keywordDraft}
           onChange={handleKeywordChange}
-          onCompositionStart={handleKeywordCompositionStart}
+          onCompositionStart={keywordIme.handleCompositionStart}
           onCompositionEnd={handleKeywordCompositionEnd}
           onBlur={() => {
-            if (!keywordCompositionRef.current
+            if (!keywordIme.compositionActiveRef.current
                 && keywordDraft.trim() !== keyword) {
               commitKeyword(keywordDraft);
             }
@@ -618,7 +615,7 @@ export function Documents() {
         ) : undefined}
       >
         {editDoc && (
-          <form
+          <ImeSafeForm
             id="edit-document-form"
             aria-label={t('documents.editDocument')}
             onSubmit={event => {
@@ -687,7 +684,7 @@ export function Documents() {
                 />
               </label>
             </div>
-          </form>
+          </ImeSafeForm>
         )}
       </Dialog>
 
@@ -718,7 +715,7 @@ export function Documents() {
         ) : undefined}
       >
         {relocateDoc && (
-          <form
+          <ImeSafeForm
             id="relocate-document-form"
             aria-label={t('documents.relocateTitle')}
             onSubmit={event => {
@@ -762,7 +759,7 @@ export function Documents() {
                 <input value={relocateDoc.sourceRevision || ''} readOnly />
               </label>
             </div>
-          </form>
+          </ImeSafeForm>
         )}
       </Dialog>
 

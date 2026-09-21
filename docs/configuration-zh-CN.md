@@ -202,7 +202,7 @@ rag:
 
 嵌入模型配置独立于 Chat 提供者，始终生效。
 环境变量统一使用与供应商无关的 `RAG_EMBEDDING_*` 前缀。当前示例默认使用
-SiliconFlow 的 BGE-M3；`SILICONFLOW_*` 不再是有效配置。
+SiliconFlow 的 BGE-M3；变量名表达的是嵌入角色，而不是某个具体供应商。
 
 ```yaml
 rag:
@@ -248,10 +248,15 @@ RAG_EMBEDDING_DIMENSIONS=1024
 ```
 
 `RAG_EMBEDDING_BASE_URL` 不要带 `/v1`；Spring AI 会自行追加
-`/v1/embeddings`。`scripts/dev.sh` 默认在启动前检查 key、URL、模型和维度：
-`RAG_EMBEDDING_STARTUP_CHECK=warn`（默认）会给出警告并继续启动；
-设置为 `error` 会在缺少配置时拒绝启动。该检查只验证本地配置形状，不代表远程
-provider 已接受 key；真实可用性仍需执行一次实际 embedding 请求。
+`/v1/embeddings`。`scripts/dev.sh` 默认在启动前检查 key、URL、模型和维度，
+缺少配置时直接拒绝启动。只有明确设置 `RAG_EMBEDDING_STARTUP_CHECK=warn` 时才会
+允许以诊断模式继续；该模式不会注入 mock embedding 或占位凭据。该检查只验证本地
+配置形状，不代表远程 provider 已接受 key；真实可用性仍需执行一次实际 embedding
+请求。
+
+`RAG_EMBEDDING_URL` 以及所有 `SILICONFLOW_*` 嵌入变量名都已经退役，不是兼容别名，
+脚本不会自动映射。如果本地 `.env` 仍保留这些变量，请在启动开发栈或真实 E2E 脚本前
+改名为对应的 `RAG_EMBEDDING_*`；脚本会明确提示迁移，而不是静默使用默认值。
 
 活动 Profile 注册在 `rag_embedding_profiles` 中，创建后身份不可变。当前支持的维度为
 `1024`，存储在固定长度的 `rag_embeddings.embedding_1024 VECTOR(1024)` 列中。兼容窗口

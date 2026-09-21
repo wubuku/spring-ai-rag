@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { collectionsApi } from '../../api/collections';
 import { useToast } from '../Toast';
 import { Dialog } from '../Dialog';
+import { ImeSafeForm } from '../ImeSafeForm';
 import styles from './CreateCollectionModal.module.css';
 
 interface CreateCollectionModalProps {
@@ -104,7 +105,7 @@ export function CreateCollectionModal({
         </>
       )}
     >
-        <form id="create-collection-form" onSubmit={handleSubmit} className={styles.form}>
+        <ImeSafeForm id="create-collection-form" onSubmit={handleSubmit} className={styles.form}>
           <div className={styles.field}>
             <label className={styles.label} htmlFor="collection-key">
               Collection key <span className={styles.required}>*</span>
@@ -163,7 +164,7 @@ export function CreateCollectionModal({
             {errors.description && <span className={styles.error}>{errors.description}</span>}
           </div>
 
-        </form>
+        </ImeSafeForm>
     </Dialog>
   );
 }

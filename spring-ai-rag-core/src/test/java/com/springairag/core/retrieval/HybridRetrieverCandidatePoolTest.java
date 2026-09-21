@@ -158,6 +158,7 @@ class HybridRetrieverCandidatePoolTest {
                 5,
                 RetrievalConfig.builder()
                         .maxResults(5)
+                        .minScore(0.5)
                         .useHybridSearch(true)
                         .useRerank(true)
                         .build(),

@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useApiKeyAuth } from '../auth/ApiKeyAuthContext';
+import { ImeSafeForm } from '../components/ImeSafeForm';
 import styles from './Unlock.module.css';
 
 interface UnlockLocationState {
@@ -43,7 +44,7 @@ export function Unlock() {
       <section className={styles.panel} aria-labelledby="unlock-title">
         <div className={styles.brand}>spring-ai-rag</div>
         <h1 id="unlock-title" className={styles.title}>{t('unlock.title')}</h1>
-        <form onSubmit={handleSubmit} className={styles.form}>
+        <ImeSafeForm onSubmit={handleSubmit} className={styles.form}>
           <label htmlFor="root-api-key" className={styles.label}>
             {t('unlock.rootApiKey')}
           </label>
@@ -66,7 +67,7 @@ export function Unlock() {
           >
             {isSubmitting ? t('unlock.unlocking') : t('unlock.submit')}
           </button>
-        </form>
+        </ImeSafeForm>
         <p className={styles.securityNote}>{t('unlock.memoryOnly')}</p>
       </section>
     </main>

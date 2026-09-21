@@ -497,6 +497,32 @@ describe('Documents edit save flow', () => {
     });
   });
 
+  it('does not save a document while an edit field is in IME composition', async () => {
+    const user = userEvent.setup();
+    renderDocuments();
+    await screen.findByText('Local Doc');
+    await user.click(
+      screen.getByRole('button', { name: 'documents.openActions' }),
+    );
+    await user.click(screen.getByRole('menuitem', { name: 'documents.edit' }));
+
+    const dialog = await screen.findByRole('dialog', {
+      name: 'documents.editDocument',
+    });
+    const titleInput = within(dialog).getByDisplayValue('Local Doc');
+    fireEvent.compositionStart(titleInput);
+    fireEvent.keyDown(titleInput, {
+      key: 'Enter',
+      keyCode: 229,
+      which: 229,
+    });
+    expect(documentsApi.update).not.toHaveBeenCalled();
+
+    fireEvent.compositionEnd(titleInput, { data: '中文' });
+    await user.click(within(dialog).getByRole('button', { name: 'common.save' }));
+    await waitFor(() => expect(documentsApi.update).toHaveBeenCalled());
+  });
+
   it('closes the edit dialog via Escape without calling update', async () => {
     const user = userEvent.setup();
     renderDocuments();

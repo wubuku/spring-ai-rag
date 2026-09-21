@@ -14,6 +14,36 @@ test.describe('Embeddings operations', () => {
     await expect(page).toHaveURL(/status=FAILED/);
   });
 
+  test('does not rewrite URL filters during IME composition', async ({ page }) => {
+    await mockAllApiCalls(page);
+    await openProtectedPage(page, '/webui/embeddings');
+
+    const input = page.getByRole('textbox', { name: 'Collection key' });
+    await input.dispatchEvent('compositionstart', { data: '蓝' });
+    await input.evaluate(element => {
+      const target = element as HTMLInputElement;
+      const setter = Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        'value',
+      )?.set;
+      setter?.call(target, '蓝色手机');
+      target.dispatchEvent(new InputEvent('input', {
+        bubbles: true,
+        data: '蓝色手机',
+        inputType: 'insertCompositionText',
+        isComposing: true,
+      }));
+    });
+
+    await expect(input).toHaveValue('蓝色手机');
+    await expect.poll(() => new URL(page.url()).searchParams.get('collectionKey'))
+      .toBeNull();
+
+    await input.dispatchEvent('compositionend', { data: '蓝色手机' });
+    await expect.poll(() => new URL(page.url()).searchParams.get('collectionKey'))
+      .toBe('蓝色手机');
+  });
+
   test('previews and applies a bounded derivation repair from network JSON', async ({ page }) => {
     await mockAllApiCalls(page);
     const previewRequest = page.waitForRequest(request =>
