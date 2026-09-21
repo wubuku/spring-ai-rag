@@ -2,7 +2,6 @@ import { act, render } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ReactNode } from 'react';
 import { ProtectedRoute } from './ProtectedRoute';
 import { ApiKeyAuthProvider } from './ApiKeyAuthProvider';
 import { useApiKeyAuth } from './ApiKeyAuthContext';
@@ -57,8 +56,9 @@ function UnlockProbe() {
 
 function renderProtectedConsole(onContext?: (value: ReturnType<typeof useApiKeyAuth>) => void) {
   function ContextProbe() {
+    const context = useApiKeyAuth();
     if (onContext) {
-      onContext(useApiKeyAuth());
+      onContext(context);
     }
     return null;
   }
