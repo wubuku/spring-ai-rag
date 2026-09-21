@@ -7731,6 +7731,35 @@ VersionHistoryModal 相关 100% 项等。
 
 ---
 
+## 进度留档快照（Batch 561 后 · 用户指令收尾）
+
+- 留档时点：2026-09-22 · main @ 587b3f32
+- 循环进度：本段循环已交付 Batch 516–561 共 46 个批次，全部按
+  「规划→实施→单类验证→core 全量门禁 EXIT=0→push 特性分支→
+  --no-ff 合并 main→台账记录→清理分支」完成，工作区干净。
+- core 测试规模：5363 tests（自 5034 起累计 +329）；残余未覆盖行
+  约 1379。
+- Batch 552–561 本段重点：
+  - 552：RagChatService 断路器模式感知链路（OPEN 拒绝）
+  - 553：ChatTurnOperationService keyed 完成（快照/租约丢失）
+  - 554–556：Relocation relocate 守卫、RerankProvider 上限、
+    EmbeddingProfileRegistry 查找初始化
+  - 557：ConversationSummaryService 渲染残余（null metadata、
+    非 Map 条目、estimate 求和）
+  - 558–559：EmbeddingJobService 守卫、RagCollectionController
+    创建与导入构建
+  - 560–561：RagChatProperties setter/校验、PdfImportController
+    路径与渲染
+- 已确认不可达/死代码（留档不再追覆盖）：ConversationSummary
+  Service 的 compaction_source_limit_exceeded（已删除）、Relocation
+  writeEnvelope/fingerprint 的 JsonProcessing 分支、ChatTurn
+  OperationService.withEffectiveSession 再生分支（公共 API 不可达）。
+- 下轮候选：ChatExecutionService 编排主体（~60）、RagChatController
+  stream lambdas、ResourceCatalog spring 残余、PdfImportController
+  SSE 任务 lambda。
+- 构建验证：后端三模块 test-compile EXIT=0；WebUI `tsc -b &&
+  vite build` EXIT=0。
+
 ## 进度留档快照（Batch 541 后 · 用户指令收尾）
 
 - 留档时点：2026-09-20 · main @ 7f3a8af1（本快照随收尾提交前移）
