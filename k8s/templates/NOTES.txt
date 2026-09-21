@@ -63,7 +63,7 @@ App:        {{ .Chart.Name }} {{ .Chart.AppVersion }}
     -f ./k8s/values-production.yaml \
     --set secrets.postgresPassword=your-password \
     --set secrets.deepseekApiKey=sk-xxx \
-    --set secrets.siliconflowApiKey=sk-xxx \
+    --set secrets.embeddingApiKey=sk-xxx \
     -n {{ .Release.Namespace }}
 
   # Dry-run (see what would be rendered):
@@ -77,7 +77,7 @@ App:        {{ .Chart.Name }} {{ .Chart.AppVersion }}
 
     secrets.postgresPassword    — PostgreSQL password
     secrets.deepseekApiKey      — DeepSeek API key (LLM)
-    secrets.siliconflowApiKey    — SiliconFlow API key (embedding)
+    secrets.embeddingApiKey      — Embedding provider API key
 
   Optional secrets:
     secrets.anthropicApiKey     — Anthropic API key
@@ -104,7 +104,7 @@ App:        {{ .Chart.Name }} {{ .Chart.AppVersion }}
     --set image.repository=ghcr.io/wubuku/spring-ai-rag \
     --set secrets.postgresPassword=postgres \
     --set secrets.deepseekApiKey=sk-xxx \
-    --set secrets.siliconflowApiKey=sk-xxx
+    --set secrets.embeddingApiKey=sk-xxx
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 

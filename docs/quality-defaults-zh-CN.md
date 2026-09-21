@@ -143,7 +143,7 @@ rag:
   rerank:
     enabled: true
     provider: http
-    api-key: ${SILICONFLOW_API_KEY}
+    api-key: ${RERANK_API_KEY}
     model: BAAI/bge-reranker-v2-m3
     base-url: https://api.siliconflow.cn
 ```

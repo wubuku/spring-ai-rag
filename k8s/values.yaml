@@ -193,8 +193,11 @@ secrets:
   openaiBaseUrl: "https://api.deepseek.com"
   openaiModel: "deepseek-chat"
 
-  # SiliconFlow embedding (BGE-M3)
-  siliconflowApiKey: ""  # REQUIRED — set via --set secrets.siliconflowApiKey=xxx
+  # Embedding provider (default example: SiliconFlow BGE-M3)
+  embeddingApiKey: ""  # REQUIRED — set via --set secrets.embeddingApiKey=xxx
+  embeddingBaseUrl: "https://api.siliconflow.cn"
+  embeddingModel: "BAAI/bge-m3"
+  embeddingDimensions: "1024"
 
   # Anthropic (optional)
   anthropicApiKey: ""

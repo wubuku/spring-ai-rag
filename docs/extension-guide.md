@@ -107,7 +107,7 @@ curl -X POST http://localhost:8081/api/v1/rag/chat/ask \
 | `getDomainName()` | ✅ | Domain display name (e.g., "Healthcare") |
 | `getSystemPromptTemplate()` | ✅ | Compatibility entry point; role, safety, and style instructions only |
 | `getSystemPromptTemplate(ChatMode)` | | Mode-safe instructions for `KNOWLEDGE`, `AGENT`, and `PLAIN` |
-| `getRetrievalConfig()` | | Retrieval config (default: 10 results, 0.5 threshold, hybrid search) |
+| `getRetrievalConfig()` | | Retrieval config (default: 10 results, 0.3 threshold, hybrid search) |
 | `postProcessAnswer()` | deprecated | Not called by production Chat; whole-answer transforms are unsafe for true streaming |
 | `isApplicable()` | deprecated | Chat uses caller-selected `domainId` and performs no implicit domain classification |
 

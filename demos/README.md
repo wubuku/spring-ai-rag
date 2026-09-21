@@ -41,7 +41,7 @@ app:
     provider: openai
 rag:
   embedding:
-    api-key: ${SILICONFLOW_API_KEY}
+    api-key: ${RAG_EMBEDDING_API_KEY}
     base-url: https://api.siliconflow.cn
     model: BAAI/bge-m3
     dimensions: 1024
@@ -167,7 +167,7 @@ public class MyRagConfig {
 **启动**：
 ```bash
 cd demos/demo-component-level
-export DEEPSEEK_API_KEY=xxx SILICONFLOW_API_KEY=xxx
+export DEEPSEEK_API_KEY=xxx RAG_EMBEDDING_API_KEY=xxx
 mvn spring-boot:run  # 端口 8081
 ```
 

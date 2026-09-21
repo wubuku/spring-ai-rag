@@ -85,7 +85,12 @@ grep -rn "@ComponentScan" src/
 
 **症状**：嵌入文档时长时间无响应，最终超时
 
-**原因**：SiliconFlow API 限流或网络问题
+**原因**：嵌入 provider 限流、网络问题或 API Key 未配置/无效。
+
+先检查启动日志中的 `Embedding configuration`。如果看到
+`Embedding configuration check: incomplete`，先在 `.env` 设置
+`RAG_EMBEDDING_API_KEY`、`RAG_EMBEDDING_BASE_URL`、`RAG_EMBEDDING_MODEL` 和
+`RAG_EMBEDDING_DIMENSIONS`。
 
 **解决**：
 
@@ -115,6 +120,8 @@ WHERE table_name = 'rag_embeddings' AND column_name = 'embedding';
 ```
 
 **解决**：确保 `rag.embedding.dimensions` 与 pgvector 列定义一致。BGE-M3 是 1024 维。
+同时确认真实 provider 能返回该维度；服务 readiness 为 `UP` 并不代表外部
+embedding provider 已验证可用。
 
 ---
 

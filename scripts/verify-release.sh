@@ -352,7 +352,7 @@ helm_verification() {
   helm template spring-ai-rag ./k8s \
     --set secrets.postgresPassword=verify \
     --set secrets.deepseekApiKey=verify \
-    --set secrets.siliconflowApiKey=verify \
+    --set secrets.embeddingApiKey=verify \
     > "$WORK_LOG_DIR/helm-template.yaml"
 }
 

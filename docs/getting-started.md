@@ -45,8 +45,11 @@ Create `.env` in the project root:
 OPENAI_API_KEY=sk-xxx
 OPENAI_BASE_URL=https://api.deepseek.com
 
-# Embedding model (SiliconFlow BGE-M3)
-SILICONFLOW_API_KEY=sk-xxx
+# Embedding model (example: SiliconFlow BGE-M3)
+RAG_EMBEDDING_API_KEY=sk-xxx
+RAG_EMBEDDING_BASE_URL=https://api.siliconflow.cn
+RAG_EMBEDDING_MODEL=BAAI/bge-m3
+RAG_EMBEDDING_DIMENSIONS=1024
 
 # Database
 DB_URL=jdbc:postgresql://localhost:5432/spring_ai_rag

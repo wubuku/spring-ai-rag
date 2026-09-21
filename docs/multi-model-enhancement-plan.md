@@ -130,7 +130,7 @@
       "siliconflow": {
         "displayName": "SiliconFlow",
         "baseUrl": "https://api.siliconflow.cn/v1",
-        "apiKey": "${SILICONFLOW_API_KEY}",
+        "apiKey": "${RAG_EMBEDDING_API_KEY}",
         "apiType": "openai-chat",
         "enabled": true,
         "models": [
@@ -215,7 +215,7 @@ app:
       siliconflow:
         displayName: SiliconFlow
         baseUrl: https://api.siliconflow.cn/v1
-        apiKey: ${SILICONFLOW_API_KEY}
+        apiKey: ${RAG_EMBEDDING_API_KEY}
         apiType: openai-chat
         enabled: true
         models:

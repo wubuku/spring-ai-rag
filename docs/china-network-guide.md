@@ -172,7 +172,7 @@ Keep the run logs after a network failure and classify the failure before retryi
 
 1. Docker `FROM` or Maven builder failure: inspect `docker-image-build.log`, then change `MIRROR_BASE_URL` or `MAVEN_MIRROR_URL`.
 2. npm succeeds but Playwright install/startup fails: inspect the npm registry, browser cache, and Playwright download path separately.
-3. Goldenset embedding calls fail: inspect `SILICONFLOW_API_KEY`, `SILICONFLOW_URL`, and proxy bypass rules.
+3. Goldenset embedding calls fail: inspect `RAG_EMBEDDING_API_KEY`, `RAG_EMBEDDING_BASE_URL`, and proxy bypass rules.
 4. Real-LLM smoke fails: inspect the provider key/base URL/model; do not add an extra `/v1` to `base-url`.
 5. External sources repeatedly time out: retain the failure evidence and record a network blocker. Do not mark the release as passed by skipping the gate.
 

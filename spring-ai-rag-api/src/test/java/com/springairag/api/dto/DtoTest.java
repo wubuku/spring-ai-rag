@@ -536,7 +536,7 @@ class DtoTest {
     void retrievalConfig_defaults() {
         RetrievalConfig config = new RetrievalConfig();
         assertEquals(10, config.getMaxResults());
-        assertEquals(0.5, config.getMinScore());
+        assertEquals(0.3, config.getMinScore());
         assertTrue(config.isUseHybridSearch());
         assertTrue(config.isUseRerank());
         assertEquals(0.5, config.getVectorWeight());

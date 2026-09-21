@@ -169,7 +169,7 @@ git -c http.proxy= -c https.proxy= push origin main
 
 1. Docker `FROM` 或 Maven builder 失败：查看 `docker-image-build.log`，切换 `MIRROR_BASE_URL` / `MAVEN_MIRROR_URL` 后重跑。
 2. npm 成功而 Playwright 安装或启动失败：分别检查 npm registry、浏览器缓存和 Playwright 下载链路。
-3. Goldenset 的 Embedding 请求失败：检查 `SILICONFLOW_API_KEY`、`SILICONFLOW_URL` 与代理绕行。
+3. Goldenset 的 Embedding 请求失败：检查 `RAG_EMBEDDING_API_KEY`、`RAG_EMBEDDING_BASE_URL` 与代理绕行。
 4. Real LLM smoke 失败：检查对应 provider 的 key/base URL/model，`base-url` 不要额外带 `/v1`。
 5. 外部源偶发超时：保留失败证据并重试；连续失败应记录为网络阻塞，不能通过跳过步骤标记发布通过。
 

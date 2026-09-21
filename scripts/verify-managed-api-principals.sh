@@ -387,19 +387,19 @@ load_provider_environment() {
     export REAL_LLM_CHAT_PROVIDER="$REAL_LLM_PROVIDER"
     echo "Selected real LLM provider=${REAL_LLM_PROVIDER} model=${model}"
 
-    EMBEDDING_API_KEY="${SILICONFLOW_API_KEY:-}"
-    embedding_base_url="${SILICONFLOW_URL:-https://api.siliconflow.cn}"
+    EMBEDDING_API_KEY="${RAG_EMBEDDING_API_KEY:-}"
+    embedding_base_url="${RAG_EMBEDDING_BASE_URL:-https://api.siliconflow.cn}"
     embedding_base_url="${embedding_base_url%/}"
     EMBEDDING_BASE_URL="${embedding_base_url%/v1}"
-    EMBEDDING_MODEL="${SILICONFLOW_MODEL:-BAAI/bge-m3}"
+    EMBEDDING_MODEL="${RAG_EMBEDDING_MODEL:-BAAI/bge-m3}"
     EMBEDDING_PROVIDER="siliconflow"
     EMBEDDING_MODEL_REVISION="real-e2e"
     [[ -n "$EMBEDDING_API_KEY" ]] || {
-      echo "Real provider acceptance requires SILICONFLOW_API_KEY" >&2
+      echo "Real provider acceptance requires RAG_EMBEDDING_API_KEY" >&2
       return 1
     }
     [[ -n "$EMBEDDING_BASE_URL" && -n "$EMBEDDING_MODEL" ]] || {
-      echo "Real provider acceptance requires a valid SiliconFlow URL and model" >&2
+      echo "Real provider acceptance requires a valid embedding URL and model" >&2
       return 1
     }
     echo "Selected real embedding provider=siliconflow model=${EMBEDDING_MODEL}"

@@ -6,7 +6,7 @@
 #   - Port:           18081  (avoids clashing with 8080/8081)
 #   - Profile:        postgresql
 #   - Chat provider:  minimax  (SPRING_AI_MINIMAX_* / MiniMax-M3 pay-as-you-go)
-#   - Embedding:      SiliconFlow BAAI/bge-m3 (SILICONFLOW_API_KEY)
+#   - Embedding:      provider-neutral RAG_EMBEDDING_* settings
 #   - Security:       disabled for local smoke (RAG_SECURITY_ENABLED=true to enable)
 #
 # .env mapping used:
@@ -14,7 +14,8 @@
 #   SPRING_AI_MINIMAX_API_KEY | MINIMAX_API_KEY | ANTHROPIC_API_KEY
 #   SPRING_AI_MINIMAX_BASE_URL | MINIMAX_BASE_URL | ANTHROPIC_BASE_URL(stripped /anthropic)
 #   SPRING_AI_MINIMAX_CHAT_OPTIONS_MODEL | MINIMAX_MODEL | ANTHROPIC_MODEL
-#   SILICONFLOW_API_KEY | SILICONFLOW_URL | SILICONFLOW_MODEL
+#   RAG_EMBEDDING_API_KEY | RAG_EMBEDDING_BASE_URL | RAG_EMBEDDING_MODEL
+#   RAG_EMBEDDING_DIMENSIONS
 #
 # Alternate providers:
 #   LLM_PROVIDER=openai     → spring.ai.openai.* (OpenAI-compatible, e.g. SiliconFlow chat)
@@ -43,8 +44,10 @@ _PRESERVE_MM_MODEL="${SPRING_AI_MINIMAX_CHAT_OPTIONS_MODEL-}"
 _PRESERVE_MM_LEGACY_KEY="${MINIMAX_API_KEY-}"
 _PRESERVE_MM_LEGACY_BASE="${MINIMAX_BASE_URL-}"
 _PRESERVE_MM_LEGACY_MODEL="${MINIMAX_MODEL-}"
-_PRESERVE_SF_KEY="${SILICONFLOW_API_KEY-}"
-_PRESERVE_SF_URL="${SILICONFLOW_URL-}"
+_PRESERVE_EMBEDDING_KEY="${RAG_EMBEDDING_API_KEY-}"
+_PRESERVE_EMBEDDING_BASE="${RAG_EMBEDDING_BASE_URL-}"
+_PRESERVE_EMBEDDING_MODEL="${RAG_EMBEDDING_MODEL-}"
+_PRESERVE_EMBEDDING_DIMENSIONS="${RAG_EMBEDDING_DIMENSIONS-}"
 _PRESERVE_OPENAI_KEY="${SPRING_AI_OPENAI_API_KEY-}"
 _PRESERVE_OPENAI_BASE="${SPRING_AI_OPENAI_BASE_URL-}"
 _PRESERVE_OPENAI_MODEL="${SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL-}"
@@ -75,8 +78,10 @@ fi
 [[ -n "${_PRESERVE_MM_LEGACY_KEY}" ]] && export MINIMAX_API_KEY="${_PRESERVE_MM_LEGACY_KEY}"
 [[ -n "${_PRESERVE_MM_LEGACY_BASE}" ]] && export MINIMAX_BASE_URL="${_PRESERVE_MM_LEGACY_BASE}"
 [[ -n "${_PRESERVE_MM_LEGACY_MODEL}" ]] && export MINIMAX_MODEL="${_PRESERVE_MM_LEGACY_MODEL}"
-[[ -n "${_PRESERVE_SF_KEY}" ]] && export SILICONFLOW_API_KEY="${_PRESERVE_SF_KEY}"
-[[ -n "${_PRESERVE_SF_URL}" ]] && export SILICONFLOW_URL="${_PRESERVE_SF_URL}"
+[[ -n "${_PRESERVE_EMBEDDING_KEY}" ]] && export RAG_EMBEDDING_API_KEY="${_PRESERVE_EMBEDDING_KEY}"
+[[ -n "${_PRESERVE_EMBEDDING_BASE}" ]] && export RAG_EMBEDDING_BASE_URL="${_PRESERVE_EMBEDDING_BASE}"
+[[ -n "${_PRESERVE_EMBEDDING_MODEL}" ]] && export RAG_EMBEDDING_MODEL="${_PRESERVE_EMBEDDING_MODEL}"
+[[ -n "${_PRESERVE_EMBEDDING_DIMENSIONS}" ]] && export RAG_EMBEDDING_DIMENSIONS="${_PRESERVE_EMBEDDING_DIMENSIONS}"
 [[ -n "${_PRESERVE_OPENAI_KEY}" ]] && export SPRING_AI_OPENAI_API_KEY="${_PRESERVE_OPENAI_KEY}"
 [[ -n "${_PRESERVE_OPENAI_BASE}" ]] && export SPRING_AI_OPENAI_BASE_URL="${_PRESERVE_OPENAI_BASE}"
 [[ -n "${_PRESERVE_OPENAI_MODEL}" ]] && export SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL="${_PRESERVE_OPENAI_MODEL}"
@@ -98,10 +103,11 @@ LLM_PROVIDER="${LLM_PROVIDER:-${APP_LLM_PROVIDER:-minimax}}"
 LLM_PROVIDER="$(echo "$LLM_PROVIDER" | tr '[:upper:]' '[:lower:]')"
 SECURITY_ENABLED="${RAG_SECURITY_ENABLED:-false}"
 
-# --- Embedding: always SiliconFlow BGE-M3 for real e2e (independent of chat provider) ---
-EMB_KEY="${SILICONFLOW_API_KEY:-}"
-EMB_BASE=$(echo "${SILICONFLOW_URL:-https://api.siliconflow.cn}" | sed 's|/$||; s|/v1$||')
-EMB_MODEL="${SILICONFLOW_MODEL:-BAAI/bge-m3}"
+# --- Embedding is independent of the selected chat provider ---
+EMB_KEY="${RAG_EMBEDDING_API_KEY:-}"
+EMB_BASE=$(echo "${RAG_EMBEDDING_BASE_URL:-https://api.siliconflow.cn}" | sed 's|/$||; s|/v1$||')
+EMB_MODEL="${RAG_EMBEDDING_MODEL:-BAAI/bge-m3}"
+EMB_DIMENSIONS="${RAG_EMBEDDING_DIMENSIONS:-1024}"
 
 # --- Chat provider resolution ---
 strip_v1() { echo "$1" | sed 's|/$||; s|/v1$||'; }
@@ -121,6 +127,7 @@ JAVA_ENV=(
   "RAG_EMBEDDING_API_KEY=${EMB_KEY}"
   "RAG_EMBEDDING_BASE_URL=${EMB_BASE}"
   "RAG_EMBEDDING_MODEL=${EMB_MODEL}"
+  "RAG_EMBEDDING_DIMENSIONS=${EMB_DIMENSIONS}"
 )
 
 case "${LLM_PROVIDER}" in
@@ -159,7 +166,7 @@ case "${LLM_PROVIDER}" in
     ;;
   openai|*)
     # OpenAI-compatible (SiliconFlow chat, DeepSeek, etc.)
-    OA_KEY="${SPRING_AI_OPENAI_API_KEY:-${OPENAI_API_KEY:-${SILICONFLOW_API_KEY:-}}}"
+    OA_KEY="${SPRING_AI_OPENAI_API_KEY:-${OPENAI_API_KEY:-}}"
     OA_BASE=$(strip_v1 "${SPRING_AI_OPENAI_BASE_URL:-${OPENAI_BASE_URL:-https://api.siliconflow.cn}}")
     OA_MODEL="${SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL:-${OPENAI_MODEL:-Qwen/Qwen2.5-7B-Instruct}}"
     JAVA_ENV+=(
@@ -172,7 +179,7 @@ case "${LLM_PROVIDER}" in
 esac
 
 if [[ -z "${EMB_KEY}" ]]; then
-  echo "WARN: SILICONFLOW_API_KEY empty — embedding will fail until set in .env"
+  echo "WARN: RAG_EMBEDDING_API_KEY is empty — embedding will fail until configured in .env"
 fi
 
 echo "Compiling..."
@@ -188,7 +195,7 @@ fi
 
 echo "Starting SpringAiRagApplication on :${SERVER_PORT}"
 echo "  chat: ${CHAT_DESC}"
-echo "  embed: siliconflow model=${EMB_MODEL} base=${EMB_BASE} key_len=${#EMB_KEY}"
+echo "  embed: model=${EMB_MODEL} base=${EMB_BASE} dimensions=${EMB_DIMENSIONS} key_configured=$([[ -n "${EMB_KEY}" ]] && echo true || echo false)"
 echo "  log: ${LOG_FILE}"
 
 nohup env "${JAVA_ENV[@]}" java -cp "$CP" \

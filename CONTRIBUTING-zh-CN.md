@@ -53,7 +53,7 @@ POSTGRES_USER=postgres
 POSTGRES_PASSWORD=your-password
 
 # 嵌入模型（SiliconFlow）
-SILICONFLOW_API_KEY=your-key
+RAG_EMBEDDING_API_KEY=your-embedding-provider-key
 ```
 
 ### 5. 验证环境

@@ -28,7 +28,7 @@ app:
 
 rag:
   embedding:
-    api-key: ${SILICONFLOW_API_KEY}
+    api-key: ${RAG_EMBEDDING_API_KEY}
 ```
 
 ## LLM Configuration
@@ -213,14 +213,17 @@ examples.
 ## Embedding Model Configuration
 
 Embedding model configuration is independent of the Chat provider and is always active.
+Use the provider-neutral `RAG_EMBEDDING_*` environment variables.
+The current example uses SiliconFlow BGE-M3; `SILICONFLOW_*` is no longer a valid
+embedding configuration prefix.
 
 ```yaml
 rag:
   embedding:
-    api-key: ${SILICONFLOW_API_KEY}
-    base-url: ${SILICONFLOW_URL:https://api.siliconflow.cn}
-    model: ${SILICONFLOW_MODEL:BAAI/bge-m3}
-    dimensions: ${SILICONFLOW_DIMENSIONS:1024}
+    api-key: ${RAG_EMBEDDING_API_KEY}
+    base-url: ${RAG_EMBEDDING_BASE_URL:https://api.siliconflow.cn}
+    model: ${RAG_EMBEDDING_MODEL:BAAI/bge-m3}
+    dimensions: ${RAG_EMBEDDING_DIMENSIONS:1024}
     retry-max-attempts: ${RAG_EMBEDDING_RETRY_MAX_ATTEMPTS:10}
     profile-key: ${RAG_EMBEDDING_PROFILE_KEY:siliconflow-bge-m3-1024-v1}
     provider: ${RAG_EMBEDDING_PROVIDER:siliconflow}
@@ -234,7 +237,7 @@ rag:
 
 | Property | Default | Description |
 |----------|---------|-------------|
-| `rag.embedding.api-key` | `""` | SiliconFlow API Key |
+| `rag.embedding.api-key` | `""` | Embedding provider API key; preferably from `RAG_EMBEDDING_API_KEY` |
 | `rag.embedding.base-url` | `https://api.siliconflow.cn` | API endpoint |
 | `rag.embedding.model` | `BAAI/bge-m3` | Embedding model name |
 | `rag.embedding.dimensions` | `1024` | Vector dimensions (must match model output) |
@@ -247,6 +250,22 @@ rag:
 | `rag.embedding.migration-mode` | `none` | Startup migration mode for explicit Legacy adoption |
 | `rag.embedding.migration-legacy-profile-key` | `""` | Existing Profile key used for Legacy adoption |
 | `rag.embedding.migration-confirm` | `""` | Exact confirmation required by the Legacy adoption operation |
+
+Minimum `.env` example:
+
+```dotenv
+RAG_EMBEDDING_API_KEY=<embedding-provider-api-key>
+RAG_EMBEDDING_BASE_URL=https://api.siliconflow.cn
+RAG_EMBEDDING_MODEL=BAAI/bge-m3
+RAG_EMBEDDING_DIMENSIONS=1024
+```
+
+Do not include `/v1` in `RAG_EMBEDDING_BASE_URL`; Spring AI appends
+`/v1/embeddings`. `scripts/dev.sh` checks the key, URL, model, and dimensions before
+starting. `RAG_EMBEDDING_STARTUP_CHECK=warn` (the default) reports an incomplete
+configuration and continues; `error` refuses startup. This is a local shape check,
+not proof that the remote provider accepts the key. Execute a real embedding request
+to verify provider availability.
 
 The active Profile is registered in `rag_embedding_profiles` and is immutable after creation.
 The current supported dimension is `1024`, stored in the fixed-length

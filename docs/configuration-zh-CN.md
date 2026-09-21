@@ -28,7 +28,7 @@ app:
 
 rag:
   embedding:
-    api-key: ${SILICONFLOW_API_KEY}
+    api-key: ${RAG_EMBEDDING_API_KEY}
 ```
 
 ## LLM 配置
@@ -201,14 +201,16 @@ rag:
 ## 嵌入模型配置
 
 嵌入模型配置独立于 Chat 提供者，始终生效。
+环境变量统一使用与供应商无关的 `RAG_EMBEDDING_*` 前缀。当前示例默认使用
+SiliconFlow 的 BGE-M3；`SILICONFLOW_*` 不再是有效配置。
 
 ```yaml
 rag:
   embedding:
-    api-key: ${SILICONFLOW_API_KEY}
-    base-url: ${SILICONFLOW_URL:https://api.siliconflow.cn}
-    model: ${SILICONFLOW_MODEL:BAAI/bge-m3}
-    dimensions: ${SILICONFLOW_DIMENSIONS:1024}
+    api-key: ${RAG_EMBEDDING_API_KEY}
+    base-url: ${RAG_EMBEDDING_BASE_URL:https://api.siliconflow.cn}
+    model: ${RAG_EMBEDDING_MODEL:BAAI/bge-m3}
+    dimensions: ${RAG_EMBEDDING_DIMENSIONS:1024}
     retry-max-attempts: ${RAG_EMBEDDING_RETRY_MAX_ATTEMPTS:10}
     profile-key: ${RAG_EMBEDDING_PROFILE_KEY:siliconflow-bge-m3-1024-v1}
     provider: ${RAG_EMBEDDING_PROVIDER:siliconflow}
@@ -222,7 +224,7 @@ rag:
 
 | 属性 | 默认值 | 说明 |
 |------|--------|------|
-| `rag.embedding.api-key` | `""` | SiliconFlow API Key |
+| `rag.embedding.api-key` | `""` | 嵌入服务 API Key；推荐由 `RAG_EMBEDDING_API_KEY` 提供 |
 | `rag.embedding.base-url` | `https://api.siliconflow.cn` | API 端点 |
 | `rag.embedding.model` | `BAAI/bge-m3` | 嵌入模型名称 |
 | `rag.embedding.dimensions` | `1024` | 向量维度（必须与模型输出一致） |
@@ -235,6 +237,21 @@ rag:
 | `rag.embedding.migration-mode` | `none` | 显式 Legacy 认领的启动迁移模式 |
 | `rag.embedding.migration-legacy-profile-key` | `""` | Legacy 认领使用的既有 Profile key |
 | `rag.embedding.migration-confirm` | `""` | Legacy 认领操作要求的精确确认值 |
+
+最小 `.env` 示例：
+
+```dotenv
+RAG_EMBEDDING_API_KEY=<embedding-provider-api-key>
+RAG_EMBEDDING_BASE_URL=https://api.siliconflow.cn
+RAG_EMBEDDING_MODEL=BAAI/bge-m3
+RAG_EMBEDDING_DIMENSIONS=1024
+```
+
+`RAG_EMBEDDING_BASE_URL` 不要带 `/v1`；Spring AI 会自行追加
+`/v1/embeddings`。`scripts/dev.sh` 默认在启动前检查 key、URL、模型和维度：
+`RAG_EMBEDDING_STARTUP_CHECK=warn`（默认）会给出警告并继续启动；
+设置为 `error` 会在缺少配置时拒绝启动。该检查只验证本地配置形状，不代表远程
+provider 已接受 key；真实可用性仍需执行一次实际 embedding 请求。
 
 活动 Profile 注册在 `rag_embedding_profiles` 中，创建后身份不可变。当前支持的维度为
 `1024`，存储在固定长度的 `rag_embeddings.embedding_1024 VECTOR(1024)` 列中。兼容窗口

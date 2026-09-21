@@ -45,8 +45,11 @@ Flyway 会自动创建表结构（首次启动时）。
 OPENAI_API_KEY=sk-xxx
 OPENAI_BASE_URL=https://api.deepseek.com
 
-# 嵌入模型（SiliconFlow BGE-M3）
-SILICONFLOW_API_KEY=sk-xxx
+# 嵌入模型（示例：SiliconFlow BGE-M3）
+RAG_EMBEDDING_API_KEY=sk-xxx
+RAG_EMBEDDING_BASE_URL=https://api.siliconflow.cn
+RAG_EMBEDDING_MODEL=BAAI/bge-m3
+RAG_EMBEDDING_DIMENSIONS=1024
 
 # 数据库
 DB_URL=jdbc:postgresql://localhost:5432/spring_ai_rag

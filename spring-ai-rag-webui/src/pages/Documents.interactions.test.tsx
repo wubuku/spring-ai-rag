@@ -128,6 +128,31 @@ describe('Documents deep interactions (real react-query)', () => {
     });
   });
 
+  it('does not submit intermediate IME composition values', async () => {
+    renderDocuments();
+
+    await screen.findByText('Local Doc');
+    const searchInput = screen.getByRole('textbox', {
+      name: 'documents.searchPlaceholder',
+    });
+    const initialCallCount = vi.mocked(documentsApi.list).mock.calls.length;
+
+    fireEvent.compositionStart(searchInput);
+    fireEvent.change(searchInput, { target: { value: '蓝' } });
+    fireEvent.change(searchInput, { target: { value: '蓝色手机' } });
+
+    expect(searchInput).toHaveValue('蓝色手机');
+    expect(vi.mocked(documentsApi.list).mock.calls).toHaveLength(initialCallCount);
+
+    fireEvent.compositionEnd(searchInput, { data: '蓝色手机' });
+
+    await waitFor(() => {
+      expect(documentsApi.list).toHaveBeenLastCalledWith(expect.objectContaining({
+        title: '蓝色手机',
+      }));
+    });
+  });
+
   it('opens the version history modal from the row menu', async () => {
     const user = userEvent.setup();
     vi.mocked(documentsApi.getVersions).mockResolvedValue({

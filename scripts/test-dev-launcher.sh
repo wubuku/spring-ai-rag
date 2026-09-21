@@ -80,3 +80,41 @@ grep -F "./scripts/dev.sh --force-kill" <(
 ) >/dev/null
 
 echo "PASS: dev.sh --force-kill only terminated listeners on the requested port."
+
+configured_output="$(
+  RAG_EMBEDDING_STARTUP_CHECK=error \
+  RAG_EMBEDDING_API_KEY=test-embedding-key \
+  RAG_EMBEDDING_BASE_URL=https://embedding.example.test \
+  RAG_EMBEDDING_MODEL=test-model \
+  RAG_EMBEDDING_DIMENSIONS=1024 \
+  DEV_ENV_FILE="${TMP_DIR}/test.env" \
+  check_embedding_configuration 2>&1
+)"
+grep -F "Embedding configuration: present" <<<"${configured_output}" >/dev/null
+grep -F "key=RAG_EMBEDDING_API_KEY" <<<"${configured_output}" >/dev/null
+! grep -F "test-embedding-key" <<<"${configured_output}" >/dev/null
+
+if (
+  unset RAG_EMBEDDING_API_KEY
+  RAG_EMBEDDING_STARTUP_CHECK=error \
+  DEV_ENV_FILE="${TMP_DIR}/test.env" \
+  check_embedding_configuration
+); then
+  echo "Expected missing embedding configuration to fail in error mode." >&2
+  exit 1
+fi
+
+if legacy_output="$(
+  unset RAG_EMBEDDING_API_KEY
+  SILICONFLOW_API_KEY=retired-key \
+  RAG_EMBEDDING_STARTUP_CHECK=error \
+  DEV_ENV_FILE="${TMP_DIR}/test.env" \
+  check_embedding_configuration 2>&1
+)"; then
+  echo "Expected retired SILICONFLOW_* variables to remain unsupported." >&2
+  exit 1
+fi
+grep -F "missing embedding API key" <<<"${legacy_output}" >/dev/null
+! grep -F "SILICONFLOW_API_KEY" <<<"${legacy_output}" >/dev/null
+
+echo "PASS: dev.sh embedding configuration checks report canonical and missing settings safely; retired aliases stay unsupported."

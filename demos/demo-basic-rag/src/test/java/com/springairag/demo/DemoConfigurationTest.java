@@ -18,7 +18,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * <p>Full E2E tests (run in a real environment):
  * <pre>
  * cd demos/demo-basic-rag
- * export DEEPSEEK_API_KEY=xxx SILICONFLOW_API_KEY=xxx
+ * export DEEPSEEK_API_KEY=xxx RAG_EMBEDDING_API_KEY=xxx
  * mvn spring-boot:run
  * curl http://localhost:8081/demo/ask?q=什么是RAG
  * curl -X POST http://localhost:8081/demo/chat \

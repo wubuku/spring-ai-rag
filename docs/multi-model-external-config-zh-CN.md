@@ -95,7 +95,7 @@ export MODELS_CONFIG_FILE=file:/etc/spring-ai/models.json
       "siliconflow": {
         "displayName": "SiliconFlow",
         "baseUrl": "https://api.siliconflow.cn",
-        "apiKey": "${SILICONFLOW_API_KEY}",
+        "apiKey": "${RAG_EMBEDDING_API_KEY}",
         "apiType": "openai-chat",
         "enabled": true,
         "priority": 3,

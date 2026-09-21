@@ -107,7 +107,7 @@ curl -X POST http://localhost:8081/api/v1/rag/chat/ask \
 | `getDomainName()` | ✅ | 领域显示名称（如"医疗健康"） |
 | `getSystemPromptTemplate()` | ✅ | 兼容入口；只写角色、安全和风格 instruction，不拼接检索上下文 |
 | `getSystemPromptTemplate(ChatMode)` | | 为 `KNOWLEDGE`、`AGENT`、`PLAIN` 返回模式安全 instruction |
-| `getRetrievalConfig()` | | 检索配置（默认：10 结果，0.5 阈值，混合检索） |
+| `getRetrievalConfig()` | | 检索配置（默认：10 结果，0.3 阈值，混合检索） |
 | `postProcessAnswer()` | deprecated | 新 Chat 主链不调用；真流式无法安全执行整段答案后处理 |
 | `isApplicable()` | deprecated | 新 Chat 只使用调用者显式提供的 `domainId`，不做隐式领域分类 |
 

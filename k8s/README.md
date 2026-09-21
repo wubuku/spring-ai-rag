@@ -27,7 +27,7 @@ helm upgrade --install spring-ai-rag ./k8s \
   \
   --set secrets.postgresPassword=your-postgres-password \
   --set secrets.deepseekApiKey=sk-xxxxxxxxxxxx \
-  --set secrets.siliconflowApiKey=sk-xxxxxxxxxxxx \
+  --set secrets.embeddingApiKey=sk-xxxxxxxxxxxx \
   \
   --set image.repository=ghcr.io/wubuku/spring-ai-rag \
   --set image.tag=1.0.0
@@ -52,7 +52,7 @@ helm upgrade spring-ai-rag ./k8s \
   \
   --set secrets.postgresPassword=your-password \
   --set secrets.deepseekApiKey=sk-xxx \
-  --set secrets.siliconflowApiKey=sk-xxx \
+  --set secrets.embeddingApiKey=sk-xxx \
   \
   --set image.tag=1.0.0
 ```
@@ -65,7 +65,7 @@ helm upgrade spring-ai-rag ./k8s \
 |-----------|----------|---------|-------------|
 | `secrets.postgresPassword` | Yes | — | PostgreSQL password |
 | `secrets.deepseekApiKey` | Yes | — | DeepSeek API key |
-| `secrets.siliconflowApiKey` | Yes | — | SiliconFlow API key |
+| `secrets.embeddingApiKey` | Yes | — | Embedding provider API key |
 | `replicaCount` | No | `1` | Number of replicas |
 | `image.repository` | No | `ghcr.io/wubuku/spring-ai-rag` | Docker image repository |
 | `image.tag` | No | `1.0.0` | Immutable Docker image tag |
@@ -83,7 +83,7 @@ helm upgrade --install spring-ai-rag ./k8s \
   \
   --set secrets.postgresPassword=xxx \
   --set secrets.deepseekApiKey=xxx \
-  --set secrets.siliconflowApiKey=xxx \
+  --set secrets.embeddingApiKey=xxx \
   \
   --set ingress.enabled=true \
   --set ingress.hosts[0].host=rag.yourdomain.com \
@@ -200,7 +200,7 @@ kubectl delete pvc -n rag-system -l app.kubernetes.io/name=spring-ai-rag
       --set image.tag=$GITHUB_SHA \
       --set secrets.postgresPassword=$POSTGRES_PASSWORD \
       --set secrets.deepseekApiKey=$DEEPSEEK_API_KEY \
-      --set secrets.siliconflowApiKey=$SILICONFLOW_API_KEY \
+      --set secrets.embeddingApiKey=$RAG_EMBEDDING_API_KEY \
       --wait --timeout 5m
 ```
 

@@ -80,7 +80,7 @@ app:
 # 嵌入模型（SiliconFlow BGE-M3）
 rag:
   embedding:
-    api-key: ${SILICONFLOW_API_KEY}
+    api-key: ${RAG_EMBEDDING_API_KEY}
     base-url: https://api.siliconflow.cn
     model: BAAI/bge-m3
     dimensions: 1024

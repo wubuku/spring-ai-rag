@@ -23,7 +23,7 @@ mvn spring-boot:run -pl spring-ai-rag-core -DskipTests
 | 变量 | 用途 |
 |------|------|
 | `SPRING_PROFILES_ACTIVE=postgresql` | **重要**，启用 PG/pgvector 配置 |
-| `SILICONFLOW_API_KEY` | Embedding（BAAI/bge-m3，1024 维） |
+| `RAG_EMBEDDING_API_KEY` | Embedding（示例：SiliconFlow BAAI/bge-m3，1024 维） |
 | `SPRING_AI_OPENAI_API_KEY` 等 | Chat（OpenAI 兼容 / 见 `.env.example`） |
 | `POSTGRES_*` | 数据源 |
 
@@ -44,7 +44,7 @@ mvn spring-boot:run -pl spring-ai-rag-core -DskipTests
    BASE_URL=http://127.0.0.1:18081 ./scripts/real-llm-e2e-smoke.sh
    ```  
    流程：preflight 密钥 → create 唯一 token → embed → search → chat/ask 必须命中 token → stream。  
-   `.env` 映射：`SPRING_AI_MINIMAX_*` + `SILICONFLOW_API_KEY`（见脚本头注释）。密钥勿写入文档。
+   `.env` 映射：`SPRING_AI_MINIMAX_*` + `RAG_EMBEDDING_*`。密钥勿写入文档。
 
 ## 文档从哪读
 

@@ -20,8 +20,8 @@ public class RetrievalConfig {
 
     @DecimalMin(value = "0.0", message = "Min score must be at least 0.0")
     @DecimalMax(value = "1.0", message = "Min score must not exceed 1.0")
-    @Schema(description = "Minimum relevance score threshold", example = "0.5", defaultValue = "0.5")
-    private double minScore = 0.5;
+    @Schema(description = "Minimum relevance score threshold", example = "0.3", defaultValue = "0.3")
+    private double minScore = 0.3;
 
     @Schema(description = "Whether to use hybrid search", example = "true", defaultValue = "true")
     private boolean useHybridSearch = true;

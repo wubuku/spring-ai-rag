@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ReembedAllButton } from '../components/ReembedAllButton';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -30,6 +30,9 @@ export function Documents() {
   const page = Number.isInteger(rawPage) && rawPage >= 0 ? rawPage : 0;
   const keyword = searchParams.get('keyword') ?? '';
   const selectedCollection = searchParams.get('collectionKey') || undefined;
+  const [keywordDraft, setKeywordDraft] = useState(keyword);
+  const keywordCompositionRef = useRef(false);
+  const previousUrlKeywordRef = useRef(keyword);
   const [previewDoc, setPreviewDoc] = useState<{ id: number; title: string; content: string } | null>(null);
   const [versionsDoc, setVersionsDoc] = useState<Document | null>(null);
   const [editDoc, setEditDoc] = useState<Document | null>(null);
@@ -241,13 +244,43 @@ export function Documents() {
     handleFiles(e.dataTransfer.files);
   };
 
-  const handleKeywordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  useEffect(() => {
+    if (keyword === previousUrlKeywordRef.current) return;
+    previousUrlKeywordRef.current = keyword;
+    if (!keywordCompositionRef.current) {
+      setKeywordDraft(keyword);
+    }
+  }, [keyword]);
+
+  const commitKeyword = (value: string) => {
     const next = new URLSearchParams(searchParams);
-    const value = e.target.value;
-    if (value) next.set('keyword', value);
+    const normalizedValue = value.trim().slice(0, 256);
+    if (normalizedValue) next.set('keyword', normalizedValue);
     else next.delete('keyword');
     next.delete('page');
     setSearchParams(next, { replace: true });
+  };
+
+  const handleKeywordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value.slice(0, 256);
+    setKeywordDraft(value);
+    if (!keywordCompositionRef.current
+        && !(e.nativeEvent as InputEvent).isComposing) {
+      commitKeyword(value);
+    }
+  };
+
+  const handleKeywordCompositionStart = () => {
+    keywordCompositionRef.current = true;
+  };
+
+  const handleKeywordCompositionEnd = (
+    e: React.CompositionEvent<HTMLInputElement>,
+  ) => {
+    keywordCompositionRef.current = false;
+    const value = e.currentTarget.value.slice(0, 256);
+    setKeywordDraft(value);
+    commitKeyword(value);
   };
 
   const handleCollectionChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -377,17 +410,23 @@ export function Documents() {
           type="text"
           aria-label={t('documents.searchPlaceholder') || t('common.search')}
           placeholder={t('documents.searchPlaceholder') || t('common.search')}
-          value={keyword}
+          value={keywordDraft}
           onChange={handleKeywordChange}
+          onCompositionStart={handleKeywordCompositionStart}
+          onCompositionEnd={handleKeywordCompositionEnd}
+          onBlur={() => {
+            if (!keywordCompositionRef.current
+                && keywordDraft.trim() !== keyword) {
+              commitKeyword(keywordDraft);
+            }
+          }}
           className={styles.searchInput}
         />
         {keyword && (
           <button
             onClick={() => {
-              const next = new URLSearchParams(searchParams);
-              next.delete('keyword');
-              next.delete('page');
-              setSearchParams(next);
+              setKeywordDraft('');
+              commitKeyword('');
             }}
             className={styles.clearBtn}
             aria-label={t('documents.clearSearch')}

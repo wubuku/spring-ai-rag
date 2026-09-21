@@ -71,12 +71,12 @@ data:
 
     # ── rag.* configuration ───────────────────────────────────────────────
     rag:
-      # Embedding model (SiliconFlow BGE-M3)
+      # Embedding model (default example: SiliconFlow BGE-M3)
       embedding:
-        api-key: ${SILICONFLOW_API_KEY:}
-        base-url: https://api.siliconflow.cn
-        model: BAAI/bge-m3
-        dimensions: 1024
+        api-key: ${RAG_EMBEDDING_API_KEY:}
+        base-url: ${RAG_EMBEDDING_BASE_URL:https://api.siliconflow.cn}
+        model: ${RAG_EMBEDDING_MODEL:BAAI/bge-m3}
+        dimensions: ${RAG_EMBEDDING_DIMENSIONS:1024}
 
       retrieval:
         default-limit: {{ .Values.config.defaultLimit }}

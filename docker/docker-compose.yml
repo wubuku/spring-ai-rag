@@ -48,8 +48,11 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-${DEEPSEEK_API_KEY:-sk-your-key-here}}
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.deepseek.com}
       OPENAI_MODEL: ${OPENAI_MODEL:-deepseek-chat}
-      # Embedding model (SiliconFlow BGE-M3)
-      SILICONFLOW_API_KEY: ${SILICONFLOW_API_KEY:-sk-your-key-here}
+      # Embedding model (example: SiliconFlow BGE-M3)
+      RAG_EMBEDDING_API_KEY: ${RAG_EMBEDDING_API_KEY:-sk-your-key-here}
+      RAG_EMBEDDING_BASE_URL: ${RAG_EMBEDDING_BASE_URL:-https://api.siliconflow.cn}
+      RAG_EMBEDDING_MODEL: ${RAG_EMBEDDING_MODEL:-BAAI/bge-m3}
+      RAG_EMBEDDING_DIMENSIONS: ${RAG_EMBEDDING_DIMENSIONS:-1024}
       # Profiles: postgresql for pgvector; prod enables API key auth + circuit breakers
       # Override with SPRING_PROFILES_ACTIVE=postgresql for open local compose without auth
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-postgresql,prod}

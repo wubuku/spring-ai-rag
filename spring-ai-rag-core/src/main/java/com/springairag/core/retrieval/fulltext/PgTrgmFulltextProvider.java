@@ -190,7 +190,12 @@ public class PgTrgmFulltextProvider implements FulltextSearchProvider {
                 + currentMetadataSql() + ", "
                 + "d.title AS document_title, d.source AS document_source, "
                 + "d.original_filename AS original_filename, "
-                + "similarity(e.chunk_text, ?) AS score_trgm";
+                + "CASE "
+                + "WHEN POSITION(LOWER(?) IN LOWER(COALESCE(e.chunk_text, ''))) > 0 "
+                + "  OR POSITION(LOWER(?) IN LOWER(COALESCE(d.title, ''))) > 0 "
+                + "THEN 1.0 "
+                + "ELSE similarity(e.chunk_text, ?) "
+                + "END AS score_trgm";
         String scope = KeywordIndexSqlScope.fromAndFreshness(
                 embeddingProfileId,
                 descriptorProvider.textDescriptor().chunkerVersion(),
@@ -198,11 +203,19 @@ public class PgTrgmFulltextProvider implements FulltextSearchProvider {
         RetrievalScopeSql.Fragment fragment =
                 RetrievalScopeSql.build(retrievalScope, filters);
         String sql = select + scope + fragment.sql()
-                + "AND similarity(e.chunk_text, ?) >= ? "
+                + "AND ("
+                + "POSITION(LOWER(?) IN LOWER(COALESCE(e.chunk_text, ''))) > 0 "
+                + "OR POSITION(LOWER(?) IN LOWER(COALESCE(d.title, ''))) > 0 "
+                + "OR similarity(e.chunk_text, ?) >= ?"
+                + ") "
                 + "ORDER BY score_trgm DESC LIMIT ?";
         List<Object> args = new ArrayList<>();
         args.add(query);
+        args.add(query);
+        args.add(query);
         args.addAll(fragment.args());
+        args.add(query);
+        args.add(query);
         args.add(query);
         args.add(SIMILARITY_THRESHOLD);
         args.add(limit);

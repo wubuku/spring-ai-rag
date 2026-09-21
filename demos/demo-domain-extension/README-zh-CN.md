@@ -110,7 +110,7 @@ mvn clean install -DskipTests
 
 # 启动 demo
 cd demos/demo-domain-extension
-mvn spring-boot:run -Dspring-boot.run.arguments="--DEEPSEEK_API_KEY=sk-xxx --SILICONFLOW_API_KEY=sk-xxx"
+mvn spring-boot:run -Dspring-boot.run.arguments="--DEEPSEEK_API_KEY=sk-xxx --RAG_EMBEDDING_API_KEY=sk-xxx"
 ```
 
 ## 扩展更多领域

@@ -89,7 +89,7 @@ app:
 
 rag:
   embedding:
-    api-key: ${SILICONFLOW_API_KEY}
+    api-key: ${RAG_EMBEDDING_API_KEY}
     base-url: https://api.siliconflow.cn
     model: BAAI/bge-m3
     dimensions: 1024

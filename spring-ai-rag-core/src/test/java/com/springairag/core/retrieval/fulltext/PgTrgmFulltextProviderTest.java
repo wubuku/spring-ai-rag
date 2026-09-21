@@ -240,10 +240,10 @@ class PgTrgmFulltextProviderTest {
         assertTrue(sql.contains("v.embedding_profile_id = 7"));
         Object[] args = argsCaptor.getValue();
         assertInstanceOf(
-                org.springframework.jdbc.support.SqlArrayValue.class, args[1]);
+                org.springframework.jdbc.support.SqlArrayValue.class, args[3]);
         assertInstanceOf(
-                org.springframework.jdbc.support.SqlArrayValue.class, args[2]);
-        assertEquals("json-record", args[3]);
+                org.springframework.jdbc.support.SqlArrayValue.class, args[4]);
+        assertEquals("json-record", args[5]);
     }
 
     @Test
@@ -285,6 +285,48 @@ class PgTrgmFulltextProviderTest {
         assertTrue(filterPosition < sql.indexOf("ORDER BY"));
         assertEquals(
                 "{\"status\":\"active\"}",
-                argsCaptor.getValue()[3]);
+                argsCaptor.getValue()[5]);
+    }
+
+    @Test
+    @DisplayName("SQL preserves exact chunk or title matches above the fuzzy threshold")
+    void search_exactMatchBypassesMinScore() {
+        JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        when(jdbc.queryForObject(anyString(), eq(Integer.class))).thenReturn(1);
+        when(jdbc.queryForObject(
+                contains("gin_trgm_ops"), eq(Boolean.class)))
+                .thenReturn(true);
+        when(jdbc.queryForList(anyString(), any(Object[].class)))
+                .thenReturn(List.of());
+
+        PgTrgmFulltextProvider provider = new PgTrgmFulltextProvider(jdbc);
+        provider.searchInScope(
+                "蓝色手机",
+                RetrievalScope.unscoped(),
+                null,
+                5,
+                0.5,
+                1L);
+
+        ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<Object[]> argsCaptor =
+                ArgumentCaptor.forClass(Object[].class);
+        verify(jdbc).queryForList(
+                sqlCaptor.capture(), argsCaptor.capture());
+
+        String sql = sqlCaptor.getValue();
+        assertTrue(sql.contains(
+                "POSITION(LOWER(?) IN LOWER(COALESCE(e.chunk_text, ''))) > 0"));
+        assertTrue(sql.contains(
+                "POSITION(LOWER(?) IN LOWER(COALESCE(d.title, ''))) > 0"));
+        assertTrue(sql.contains("similarity(e.chunk_text, ?) >= ?"));
+        assertEquals("蓝色手机", argsCaptor.getValue()[0]);
+        assertEquals("蓝色手机", argsCaptor.getValue()[1]);
+        assertEquals("蓝色手机", argsCaptor.getValue()[2]);
+        assertEquals("蓝色手机", argsCaptor.getValue()[3]);
+        assertEquals("蓝色手机", argsCaptor.getValue()[4]);
+        assertEquals("蓝色手机", argsCaptor.getValue()[5]);
+        assertEquals(0.1, argsCaptor.getValue()[6]);
+        assertEquals(5, argsCaptor.getValue()[7]);
     }
 }

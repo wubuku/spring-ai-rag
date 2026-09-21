@@ -119,7 +119,7 @@ cd demos/demo-basic-rag && export $(cat ../../.env | grep -v '^#' | xargs) && mv
 export SPRING_PROFILES_ACTIVE=postgresql
 export OPENAI_API_KEY="your-key"
 export OPENAI_BASE_URL="https://api.siliconflow.cn"
-export SILICONFLOW_API_KEY="your-key"
+export RAG_EMBEDDING_API_KEY="your-key"
 export POSTGRES_HOST="localhost"
 export POSTGRES_PORT="5432"
 export POSTGRES_DATABASE="spring_ai_rag_dev"
@@ -146,7 +146,12 @@ kill -9 <PID>
 
 **Symptom**: Document embedding hangs indefinitely, then times out
 
-**Cause**: SiliconFlow API rate limiting or network issue
+**Cause**: Embedding-provider rate limiting, network failure, or a missing/invalid API key.
+
+First inspect the startup log for `Embedding configuration`. If it reports
+`Embedding configuration check: incomplete`, set `RAG_EMBEDDING_API_KEY`,
+`RAG_EMBEDDING_BASE_URL`, `RAG_EMBEDDING_MODEL`, and `RAG_EMBEDDING_DIMENSIONS` in
+`.env`. `SILICONFLOW_*` is not a supported configuration prefix.
 
 **Solution**:
 
@@ -175,7 +180,9 @@ FROM information_schema.columns
 WHERE table_name = 'rag_embeddings' AND column_name = 'embedding';
 ```
 
-**Solution**: Ensure `rag.embedding.dimensions` matches pgvector column definition. BGE-M3 is 1024 dimensions.
+**Solution**: Ensure `rag.embedding.dimensions` matches the pgvector column definition.
+BGE-M3 is 1024 dimensions. Also verify that the real provider returns that dimension;
+readiness `UP` does not prove that the external embedding provider is usable.
 
 ---
 

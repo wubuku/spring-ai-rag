@@ -16,7 +16,7 @@
 # Prerequisites:
 #   - PostgreSQL + pgvector
 #   - .env keys matching start-real-e2e-server.sh defaults:
-#       SILICONFLOW_API_KEY (+ optional SILICONFLOW_URL/MODEL)
+#       RAG_EMBEDDING_API_KEY (+ optional RAG_EMBEDDING_BASE_URL/MODEL)
 #       LLM_PROVIDER=minimax: SPRING_AI_MINIMAX_API_KEY + ...
 #       LLM_PROVIDER=anthropic: ANTHROPIC_API_KEY + ...
 #       LLM_PROVIDER=openai: SPRING_AI_OPENAI_API_KEY + ...
@@ -41,7 +41,9 @@ for arg in "$@"; do
 done
 
 # Preserve caller overrides
-_PRESERVE_SF_KEY="${SILICONFLOW_API_KEY-}"
+_PRESERVE_EMBEDDING_KEY="${RAG_EMBEDDING_API_KEY-}"
+_PRESERVE_EMBEDDING_BASE="${RAG_EMBEDDING_BASE_URL-}"
+_PRESERVE_EMBEDDING_MODEL="${RAG_EMBEDDING_MODEL-}"
 _PRESERVE_MM_KEY="${SPRING_AI_MINIMAX_API_KEY-}"
 _PRESERVE_OPENAI_KEY="${SPRING_AI_OPENAI_API_KEY-}"
 _PRESERVE_ANTH_KEY="${ANTHROPIC_API_KEY-}"
@@ -52,7 +54,9 @@ if [[ -f .env ]]; then
   export $(grep -v '^#' .env | grep -v '^$' | xargs) || true
 fi
 
-[[ -n "${_PRESERVE_SF_KEY}" ]] && export SILICONFLOW_API_KEY="${_PRESERVE_SF_KEY}"
+[[ -n "${_PRESERVE_EMBEDDING_KEY}" ]] && export RAG_EMBEDDING_API_KEY="${_PRESERVE_EMBEDDING_KEY}"
+[[ -n "${_PRESERVE_EMBEDDING_BASE}" ]] && export RAG_EMBEDDING_BASE_URL="${_PRESERVE_EMBEDDING_BASE}"
+[[ -n "${_PRESERVE_EMBEDDING_MODEL}" ]] && export RAG_EMBEDDING_MODEL="${_PRESERVE_EMBEDDING_MODEL}"
 [[ -n "${_PRESERVE_MM_KEY}" ]] && export SPRING_AI_MINIMAX_API_KEY="${_PRESERVE_MM_KEY}"
 [[ -n "${_PRESERVE_OPENAI_KEY}" ]] && export SPRING_AI_OPENAI_API_KEY="${_PRESERVE_OPENAI_KEY}"
 [[ -n "${_PRESERVE_ANTH_KEY}" ]] && export ANTHROPIC_API_KEY="${_PRESERVE_ANTH_KEY}"
@@ -105,12 +109,12 @@ print('health status UP')
 PY
 ok "health UP"
 
-step "0b) Probe embedding API (SiliconFlow BGE-M3)"
-EMB_KEY="${SILICONFLOW_API_KEY:-}"
-EMB_BASE=$(echo "${SILICONFLOW_URL:-https://api.siliconflow.cn}" | sed 's|/$||; s|/v1$||')
-EMB_MODEL="${SILICONFLOW_MODEL:-BAAI/bge-m3}"
+step "0b) Probe configured embedding API"
+EMB_KEY="${RAG_EMBEDDING_API_KEY:-}"
+EMB_BASE=$(echo "${RAG_EMBEDDING_BASE_URL:-https://api.siliconflow.cn}" | sed 's|/$||; s|/v1$||')
+EMB_MODEL="${RAG_EMBEDDING_MODEL:-BAAI/bge-m3}"
 if [[ -z "$EMB_KEY" ]]; then
-  echo "SILICONFLOW_API_KEY empty"
+  echo "RAG_EMBEDDING_API_KEY empty"
   exit 2
 fi
 CODE=$(curl -s -o /tmp/rag-emb-probe.json -w "%{http_code}" \
@@ -120,7 +124,7 @@ CODE=$(curl -s -o /tmp/rag-emb-probe.json -w "%{http_code}" \
   -d "{\"model\":\"${EMB_MODEL}\",\"input\":\"probe\"}" || true)
 if [[ "$CODE" != "200" ]]; then
   echo "Embedding API HTTP $CODE: $(head -c 200 /tmp/rag-emb-probe.json)"
-  echo "Update SILICONFLOW_API_KEY in .env"
+  echo "Update RAG_EMBEDDING_API_KEY in .env"
   exit 2
 fi
 ok "embedding API HTTP 200 (${EMB_BASE} ${EMB_MODEL})"
@@ -138,7 +142,7 @@ case "$PROVIDER" in
     CHAT_BODY="{\"model\":\"${CHAT_MODEL}\",\"messages\":[{\"role\":\"user\",\"content\":\"ping\"}],\"max_tokens\":8,\"temperature\":0.1}"
     ;;
   openai)
-    CHAT_KEY="${SPRING_AI_OPENAI_API_KEY:-${OPENAI_API_KEY:-${SILICONFLOW_API_KEY:-}}}"
+    CHAT_KEY="${SPRING_AI_OPENAI_API_KEY:-${OPENAI_API_KEY:-}}"
     CHAT_BASE=$(echo "${SPRING_AI_OPENAI_BASE_URL:-${OPENAI_BASE_URL:-https://api.siliconflow.cn}}" | sed 's|/$||; s|/v1$||')
     CHAT_MODEL="${SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL:-${OPENAI_MODEL:-Qwen/Qwen2.5-7B-Instruct}}"
     CHAT_URL="${CHAT_BASE}/v1/chat/completions"

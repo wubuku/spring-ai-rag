@@ -47,7 +47,7 @@ public ChatClient ragChatClient(OpenAiChatModel chatModel,
 ## 运行
 
 ```bash
-export DEEPSEEK_API_KEY=xxx SILICONFLOW_API_KEY=xxx
+export DEEPSEEK_API_KEY=xxx RAG_EMBEDDING_API_KEY=xxx
 mvn spring-boot:run  # 端口 8081
 ```
 

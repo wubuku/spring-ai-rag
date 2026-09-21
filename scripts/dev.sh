@@ -51,6 +51,7 @@ Overrides:
   RAG_DEV_OPEN_BROWSER=false
   SPRING_PROFILES_ACTIVE=postgresql
   RAG_ROOT_API_KEY=<at-least-32-printable-ASCII-characters>
+  RAG_EMBEDDING_STARTUP_CHECK=warn|error
 EOF
 }
 
@@ -360,6 +361,57 @@ check_prerequisites() {
   check_java_runtime
 }
 
+check_embedding_configuration() {
+  local check_mode="${RAG_EMBEDDING_STARTUP_CHECK:-warn}"
+  local base_url="${RAG_EMBEDDING_BASE_URL:-https://api.siliconflow.cn}"
+  local model="${RAG_EMBEDDING_MODEL:-BAAI/bge-m3}"
+  local dimensions="${RAG_EMBEDDING_DIMENSIONS:-1024}"
+  local key_source="none"
+  local -a problems=()
+
+  case "${check_mode}" in
+    warn|error)
+      ;;
+    *)
+      echo "ERROR: RAG_EMBEDDING_STARTUP_CHECK must be 'warn' or 'error': ${check_mode}" >&2
+      return 1
+      ;;
+  esac
+
+  if [[ -n "${RAG_EMBEDDING_API_KEY:-}" ]]; then
+    key_source="RAG_EMBEDDING_API_KEY"
+  else
+    problems+=("missing embedding API key")
+  fi
+
+  if [[ -z "${base_url}" || ! "${base_url}" =~ ^https?://[^[:space:]]+$ ]]; then
+    problems+=("embedding base URL is missing or not an http(s) URL")
+  fi
+  if [[ -z "${model}" ]]; then
+    problems+=("embedding model is empty")
+  fi
+  if [[ ! "${dimensions}" =~ ^[1-9][0-9]*$ ]]; then
+    problems+=("embedding dimensions must be a positive integer")
+  fi
+
+  if (( ${#problems[@]} > 0 )); then
+    echo "Embedding configuration check: incomplete." >&2
+    printf '  - %s\n' "${problems[@]}" >&2
+    echo "  Set RAG_EMBEDDING_API_KEY, RAG_EMBEDDING_BASE_URL, RAG_EMBEDDING_MODEL, and" >&2
+    echo "  RAG_EMBEDDING_DIMENSIONS in ${DEV_ENV_FILE}." >&2
+    echo "  A healthy HTTP/readiness endpoint does not prove that the embedding provider" >&2
+    echo "  accepts requests." >&2
+    if [[ "${check_mode}" == "error" ]]; then
+      echo "ERROR: refusing to start because RAG_EMBEDDING_STARTUP_CHECK=error." >&2
+      return 1
+    fi
+    echo "WARNING: continuing; embedding operations may fail until the configuration is fixed." >&2
+    return 0
+  fi
+
+  echo "Embedding configuration: present (key=${key_source}, base=${base_url}, model=${model}, dimensions=${dimensions})."
+}
+
 prepare_frontend_dependencies() {
   if [[ ! -d "${FRONTEND_DIR}" || ! -f "${FRONTEND_DIR}/package.json" ]]; then
     echo "ERROR: WebUI directory is missing: ${FRONTEND_DIR}" >&2
@@ -625,6 +677,13 @@ start_stack() {
     return 1
   fi
   bash -n "${DEV_ENV_FILE}"
+  set +u
+  set -a
+  # shellcheck disable=SC1090
+  source "${DEV_ENV_FILE}"
+  set +a
+  set -u
+  check_embedding_configuration
   if [[ "${FORCE_KILL}" != true ]]; then
     assert_port_available_or_managed \
       "${BACKEND_PORT}" "${BACKEND_PID_FILE}" "${REPO_ROOT}" backend backend
@@ -653,13 +712,6 @@ start_stack() {
   umask 077
   mkdir -p "${STATE_DIR}"
   write_state
-
-  set +u
-  set -a
-  # shellcheck disable=SC1090
-  source "${DEV_ENV_FILE}"
-  set +a
-  set -u
 
   BACKEND_PORT="${REQUESTED_BACKEND_PORT}"
   FRONTEND_PORT="${REQUESTED_FRONTEND_PORT}"
