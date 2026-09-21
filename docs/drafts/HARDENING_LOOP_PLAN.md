@@ -3588,6 +3588,17 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 561（已交付）
+
+- 分支：`codex/batch561-pdf-path-render-tail`（已合入 main）
+- 内容：PdfImportController 路径与渲染长尾（新建 PdfImport
+  ControllerPathRenderTailTest，5 用例）：urlDecode 合法编码解码
+  （%20 → 空格）与损坏编码（bad%2）回退原文、wrapInHtmlPage 包含
+  标题/正文/闭合标签、escapeHtml 覆盖 null → 空串与全部保留字符
+  （&/</>/"）、getRawFilePath 对缺失文件 404、对已知 markdown 文
+  件 200 并返回可读资源。
+- 指标：单类 5 用例绿；core 全量门禁 EXIT=0（5363 tests）。
+
 ### Batch 560（已交付）
 
 - 分支：`codex/batch560-chat-properties-tail`（已合入 main）
