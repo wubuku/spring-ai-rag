@@ -3588,6 +3588,20 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 568（已交付）
+
+- 分支：`codex/batch568-candidate-failover-tail`（已合入 main）
+- 内容：ChatExecutionService 候选降级编排长尾（新建 ChatExecution
+  ServiceCandidateFailoverTailTest，3 用例）：execute 首个候选调用
+  失败降级次候选（fallback answer + resolvedModel=provider/fallback，
+  覆盖 recordCandidateFailure + lastFailure 机制）、全部候选失败抛
+  最后一次异常（second down）、路由器无候选 → MODEL_CAPABILITY_
+  UNSUPPORTED。
+- 发现：execute 的 LLM_UNAVAILABLE 分支（candidates.isEmpty() 后
+  抛）不可达 —— eligibleCandidates 空时自己先抛 MODEL_*；留档不再
+  追覆盖。
+- 指标：单类 3 用例绿；core 全量门禁 EXIT=0（5391 tests）。
+
 ### Batch 567（已交付）
 
 - 分支：`codex/batch567-pdf-filename-tail`（已合入 main）
