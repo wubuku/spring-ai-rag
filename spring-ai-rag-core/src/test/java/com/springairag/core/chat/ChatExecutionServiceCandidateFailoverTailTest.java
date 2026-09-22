@@ -35,6 +35,8 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -113,6 +115,19 @@ class ChatExecutionServiceCandidateFailoverTailTest {
         return client;
     }
 
+    private ChatClient ragFailingClient(ErrorCode code) {
+        ChatClient client = mock(ChatClient.class);
+        ChatClient.ChatClientRequestSpec spec =
+                mock(ChatClient.ChatClientRequestSpec.class);
+        when(client.prompt()).thenReturn(spec);
+        when(spec.system(anyString())).thenReturn(spec);
+        when(spec.user(anyString())).thenReturn(spec);
+        when(spec.advisors(any(Consumer.class))).thenReturn(spec);
+        when(spec.call()).thenThrow(
+                new RagException(code, "business failure"));
+        return client;
+    }
+
     private ChatClient successClient(String answer) {
         ChatClient client = mock(ChatClient.class);
         ChatClient.ChatClientRequestSpec spec =
@@ -171,6 +186,46 @@ class ChatExecutionServiceCandidateFailoverTailTest {
                 () -> service.execute(command(ChatMode.KNOWLEDGE)));
 
         assertEquals("second down", error.getMessage());
+    }
+
+    @Test
+    void prepareForOperationFallsOverToFallbackCandidate() {
+        var primary = candidate("provider/primary");
+        var fallback = candidate("provider/fallback");
+        when(modelRouter.orderedCandidateDescriptors(isNull()))
+                .thenReturn(List.of(primary, fallback));
+        stubFactory(primary, failingClient("primary down"));
+        stubFactory(fallback, successClient("prepared answer"));
+
+        ChatExecutionService.PreparedExecution prepared =
+                service.prepareForOperation(
+                        command(ChatMode.KNOWLEDGE),
+                        null,
+                        false);
+
+        assertEquals("prepared answer", prepared.result().answer());
+        assertEquals("provider/fallback", prepared.candidate().ref());
+    }
+
+    @Test
+    void prepareForOperationRethrowsRagExceptionImmediately() {
+        var primary = candidate("provider/primary");
+        var fallback = candidate("provider/fallback");
+        when(modelRouter.orderedCandidateDescriptors(isNull()))
+                .thenReturn(List.of(primary, fallback));
+        stubFactory(primary, ragFailingClient(
+                ErrorCode.CHAT_BUDGET_EXHAUSTED));
+        stubFactory(fallback, successClient("never reached"));
+
+        // RagException 不降级：首个候选抛出即终止。
+        var error = assertThrows(RagException.class,
+                () -> service.prepareForOperation(
+                        command(ChatMode.KNOWLEDGE), null, false));
+
+        assertEquals(ErrorCode.CHAT_BUDGET_EXHAUSTED,
+                error.getErrorCodeEnum());
+        verify(clientFactory, never()).create(
+                any(), eq(fallback), anyList());
     }
 
     @Test
