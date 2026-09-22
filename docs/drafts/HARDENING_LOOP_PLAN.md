@@ -3588,6 +3588,17 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 574（已交付）
+
+- 分支：`codex/batch574-evaluation-batch-tail`（已合入 main）
+- 内容：RetrievalEvaluationServiceImpl 批量评估长尾（新建 Retrieval
+  EvaluationBatchTailTest，3 用例）：batchEvaluate(null) → 空列表、
+  双用例批量评估逐例落库并递增 rag.evaluation.batch_count / hits /
+  misses 计数器、toJson 与 fromJson 的 [3,7] 往返。
+- 要点：计数器在 @PostConstruct initMetrics() 注册，单测需手动调用；
+  计数器名 rag.evaluation.batch_count / hits / misses。
+- 指标：单类 3 用例绿；core 全量门禁 EXIT=0（5416 tests）。
+
 ### Batch 573（已交付）
 
 - 分支：`codex/batch573-static-tool-context-tail`（已合入 main）
