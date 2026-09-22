@@ -3588,6 +3588,20 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 569（已交付）
+
+- 分支：`codex/batch569-stream-sse-lambda-tail`（已合入 main）
+- 内容：RagChatController stream SSE lambda 长尾（新建 RagChat
+  ControllerStreamLambdaTailTest，3 用例）：Completed 事件触发
+  emitter.complete、Failed 事件经 sendChatEvent → sendChatError →
+  emitter.complete（含 INTERNAL code 的错误载荷）、上游 Flux.error
+  经 subscribe 错误回调同步发送 chat error 并完成 emitter。
+- 要点：Flux.just/Flux.error 同步发射，stream() 返回前事件已处理
+  完毕；完成断言用「后续 send 抛 IllegalStateException（already
+  completed）」间接验证；ChatEvent.Failed 是 4 参 record（traceId/
+  sessionId/code/message）。
+- 指标：单类 3 用例绿；core 全量门禁 EXIT=0（5394 tests）。
+
 ### Batch 568（已交付）
 
 - 分支：`codex/batch568-candidate-failover-tail`（已合入 main）
