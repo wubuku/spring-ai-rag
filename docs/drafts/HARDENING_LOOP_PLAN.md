@@ -3588,6 +3588,22 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 562（已交付）
+
+- 分支：`codex/batch562-session-derive-tail`（已合入 main）
+- 内容：ChatTurnOperationService 会话派生长尾（新建 ChatTurn
+  OperationSessionDeriveTailTest，2 用例）：4 参 claim 经 claimNew
+  驱动 withEffectiveSession 快速路径（合法会话 id 原样写入 operation
+  行，ArgumentCaptor 验证）；ChatCommand 构造器强制校验会话 id →
+  非法会话无法进入 4 参 claim，withEffectiveSession 重新生成分支
+  确认为防御性死代码（更正 Batch 506 时代"公共 API 不可达"的推测：
+  3 参 claim 重载有内联规范化，不走该方法）。
+- 要点：4 参 claim 路径的 repository.insert 是 10 参（末尾 authorization
+  Service.initialSnapshot 可为 null），9 参 stub 不匹配 → inserted=
+  false → insertNewOperation 递归重入 StackOverflow；resolvedCandidate
+  Refs 委托 executionService mock（须打桩返回非空链）。
+- 指标：单类 2 用例绿；core 全量门禁 EXIT=0（5367 tests）。
+
 ### Batch 561（已交付）
 
 - 分支：`codex/batch561-pdf-path-render-tail`（已合入 main）
