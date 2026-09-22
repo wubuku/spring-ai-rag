@@ -3588,6 +3588,18 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 572（已交付）
+
+- 分支：`codex/batch572-prepare-operation-tail`（已合入 main）
+- 内容：Batch 568 测试类扩展（ChatExecutionServiceCandidateFailover
+  TailTest 增至 5 用例）：prepareForOperation 首候选失败降级次候选
+  （prepared answer + resolvedModel=provider/fallback，覆盖 293-294
+  的 markAttempt/lastFailure 与 311-312 的成功组装）、RagException
+  立即终止不降级（verify fallback 从未被 create）。
+- 要点：prepareForOperation 的 RagException rethrow 分支（302-303）
+  与 execute 的行为一致；降级仅针对 RuntimeException。
+- 指标：单类 5 用例绿；core 全量门禁 EXIT=0（5409 tests）。
+
 ### Batch 571（已交付）
 
 - 分支：`codex/batch571-pdf-sse-task-lambda-tail`（已合入 main）
