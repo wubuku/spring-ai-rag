@@ -3588,6 +3588,19 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 567（已交付）
+
+- 分支：`codex/batch567-pdf-filename-tail`（已合入 main）
+- 内容：PdfImportService 文件名规范化长尾（新建 PdfImportService
+  NormalizeFilenameTailTest，6 用例）：空上传（isEmpty）→ IAE、null
+  原始文件名 → IAE、仅目录段（"dir/"）剥离后空名 → IAE、Windows
+  反斜杠路径剥离 + 修剪（"C:\temp\ report.pdf " → report.pdf）、超
+  512 字符拒绝、listChildren 对旧数据带前导空白路径（" uuid/default
+  .md"）的直达子过滤。
+- 要点：normalizeOriginalFilename 为 public static，直接调用；根路
+  径 null → findAll 分支。
+- 指标：单类 6 用例绿；core 全量门禁 EXIT=0（5388 tests）。
+
 ### Batch 566（已交付）
 
 - 分支：`codex/batch566-observability-percentile-tail`（已合入 main）
