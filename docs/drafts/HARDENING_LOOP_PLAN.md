@@ -3588,6 +3588,20 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 564（已交付）
+
+- 分支：`codex/batch564-collection-resolve-tail`（已合入 main）
+- 内容：RagDocumentController 集合解析长尾（新建 RagDocument
+  ControllerCollectionResolveTailTest，3 用例）：resolveWritable
+  CollectionId 经 collectionKey 走 ApiKeyCollectionAccess.resolve
+  CollectionIds → identityResolver.resolveActiveIds(null, keys) 解析
+  （unrestricted 调用方）、collectionId + collectionKey 成对校验解
+  析、resolveOptionalCollectionId 在 key 存在时委托可写解析。
+- 要点：resolveWritableCollectionId 私有方法用反射驱动，ApiAccess
+  Policy 传 null 即 unrestricted；restricted 分支需受限 policy +
+  RequestContextHolder，未在本批覆盖。
+- 指标：单类 3 用例绿；core 全量门禁 EXIT=0（5374 tests）。
+
 ### Batch 563（已交付）
 
 - 分支：`codex/batch563-catalog-limits-tail`（已合入 main）
