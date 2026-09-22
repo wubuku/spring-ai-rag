@@ -3588,6 +3588,20 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 573（已交付）
+
+- 分支：`codex/batch573-static-tool-context-tail`（已合入 main）
+- 内容：StaticKnowledgeSearchTool 上下文守卫长尾（新建 Static
+  KnowledgeSearchToolContextTailTest，4 用例）：call(String) 无上下
+  文直接抛 Missing server-owned static knowledge context、context()
+  对 null ToolContext / 空上下文 / 错误类型值三类拒绝、parse 对损坏
+  JSON 包装 IllegalArgumentException（Invalid searchStaticKnowledge
+  arguments）、空白 query 归一后拒绝。
+- 要点：ProjectDocumentRetriever 在 core.rag 包且 CONTEXT_KEY =
+  "rag.authorized.retrieval"；AuthorizedRetrievalContext 可直接构
+  造注入 ToolContext。
+- 指标：单类 4 用例绿；core 全量门禁 EXIT=0（5413 tests）。
+
 ### Batch 572（已交付）
 
 - 分支：`codex/batch572-prepare-operation-tail`（已合入 main）
