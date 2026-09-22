@@ -3588,6 +3588,19 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 566（已交付）
+
+- 分支：`codex/batch566-observability-percentile-tail`（已合入 main）
+- 内容：IntegrationObservabilityQueryService 长尾（新建 Integration
+  ObservabilityQueryServicePercentileTailTest，5 用例）：percentile
+  UpperBound 无样本返回 0、le25/le50/le2500 各桶命中、全部桶不足回
+  退 durationMax、toStatusBreakdown 数字维度映射（200 → SUCCESS 分
+  类）、非数字维度与越界状态（42/999）→ serviceUnavailable。
+- 要点：toStatusBreakdown 是实例方法（反射 + ITE cause 解包）；
+  IntegrationHttpStatusClass 200 的分类名是 SUCCESS；4 参构造器末
+  位是 IntegrationObservationRecorder（null 即可）。
+- 指标：单类 5 用例绿；core 全量门禁 EXIT=0（5382 tests）。
+
 ### Batch 565（已交付）
 
 - 分支：`codex/batch565-retirement-require-tail`（已合入 main）
