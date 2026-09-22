@@ -3588,6 +3588,18 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 570（已交付）
+
+- 分支：`codex/batch570-chat-props-validate-tail`（已合入 main）
+- 内容：RagChatProperties.validate() 上下文与幂等约束长尾（新建
+  RagChatPropertiesValidateContextTailTest，9 用例）：合法配置通过、
+  output-reserve+safety ≥ window 拒绝、summary > history 拒绝、
+  evidence > rag-context 拒绝、compaction 输出 > 摘要拒绝、compaction
+  输出 ≥ 源拒绝、幂等范围上限（retention 169h / 响应快照 1B /
+  attempts 9）拒绝、agent per-name > 总调用拒绝、单候选结果字符 >
+  总字符拒绝。
+- 指标：单类 9 用例绿；core 全量门禁 EXIT=0（5403 tests）。
+
 ### Batch 569（已交付）
 
 - 分支：`codex/batch569-stream-sse-lambda-tail`（已合入 main）
