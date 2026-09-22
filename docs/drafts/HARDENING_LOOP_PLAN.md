@@ -3588,6 +3588,20 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 571（已交付）
+
+- 分支：`codex/batch571-pdf-sse-task-lambda-tail`（已合入 main）
+- 内容：PdfImportController SSE 任务 lambda 长尾（新建 PdfImport
+  ControllerSseTaskLambdaTailTest，4 用例）：虚拟线程任务成功 →
+  done 事件 + emitter 完成、IllegalArgumentException → error 通道
+  完成、IllegalStateException → error 通道完成、发送失败为 best-
+  effort 仍正常结束。全部经反射轮询 ResponseBodyEmitter 内部
+  complete 字段验证。
+- 要点：SseEmitter 未绑定 handler 时 complete() 不触发 onCompletion
+  回调（onCompletion 需经 initialize 注册），单元测试需反射读
+  complete 标志；ResponseBodyEmitter.Handler 非 public 无法实现。
+- 指标：单类 4 用例绿；core 全量门禁 EXIT=0（5407 tests）。
+
 ### Batch 570（已交付）
 
 - 分支：`codex/batch570-chat-props-validate-tail`（已合入 main）
