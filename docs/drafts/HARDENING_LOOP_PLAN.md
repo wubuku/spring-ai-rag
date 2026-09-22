@@ -3588,6 +3588,22 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 565（已交付）
+
+- 分支：`codex/batch565-retirement-require-tail`（已合入 main）
+- 内容：ExternalAddressRetirementService 永久阻断长尾（新建
+  ExternalAddressRetirementRequireTailTest，3 用例）：无退役标记放
+  行（queryForList 空）、有标记时 unrestricted 调用方拒绝消息附带
+  "; current targetCollectionKey=kb-new:v1"、受限调用方（java.lang
+  .Proxy 动态 ApiAccessPolicy，allow-list="10" 不含目标 20）拒绝时
+  不泄露目标键（SecurityException 被吞、suffix 保持空串）。
+- 要点：jdbcTemplate.queryForList(String, Object...) 的 varargs stub
+  必须用 any(Object[].class) 形式（三参 any(), any(), any() 亦可但
+  (Object[]) any() 转换形式在此路径未生效——以 any(Object[].class)
+  为准）；受限 policy 经 request attribute（ApiKeyAuthFilter
+  .AUTHENTICATED_API_PRINCIPAL_ATTRIBUTE）注入动态代理对象。
+- 指标：单类 3 用例绿；core 全量门禁 EXIT=0（5377 tests）。
+
 ### Batch 564（已交付）
 
 - 分支：`codex/batch564-collection-resolve-tail`（已合入 main）
