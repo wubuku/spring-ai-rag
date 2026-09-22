@@ -3588,6 +3588,17 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 563（已交付）
+
+- 分支：`codex/batch563-catalog-limits-tail`（已合入 main）
+- 内容：ResourceCatalog 发现预算长尾（新建 ResourceCatalogLimits
+  DiscoveryTest，4 用例）：全空白 location（"   " 与 ""）→ 空健康
+  快照（discover 95-96 前置守卫）、JAR 条目按 entry size 超限（10
+  字节上限 vs 200 字节内容）发现拒绝、文件系统单文件超限（100 上
+  限 vs 300 字节）拒绝、maxFiles=0 → "invalid resource limits" 在
+  任何发现前拒绝。
+- 指标：单类 4 用例绿；core 全量门禁 EXIT=0（5371 tests）。
+
 ### Batch 562（已交付）
 
 - 分支：`codex/batch562-session-derive-tail`（已合入 main）
