@@ -3588,6 +3588,26 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 598（已交付）
+
+- 分支：`codex/batch598-expiry-alert-tail`（已合入 main）
+- 内容：到期告警对账长尾（新建 ApiPrincipalExpiryAlertReconcile
+  TailTest，8 用例）：
+  - 便捷构造器（无 outbox）容忍 null 通知通道并完成 NOOP 对账；
+  - ConcurrentReconcileException（markChecked CAS 未命中）属可
+    重试 → 第二次尝试成功；IllegalStateException 不可重试 →
+    首次即抛且仅调用一次；DataIntegrityViolation 与
+    QueryTimeoutException 持续失败耗尽 eventRetryAttempts=2 预算。
+  - 静默期（AlertService.isSilenced=true）claim 返回 null → 通知
+    通道零调用；持久 outbox（isDurableEnabled=true）enqueueManaged
+    认领后跳过直发通道；直发对抛异常/返回 null future/完成 future
+    三种通道实现均不阻断对账。
+- 要点：claim 认领 CAS 会推进 state_version（OUTBOX 认领参数为
+  推进后的版本），verify enqueueManaged 时 stateVersion 用 anyInt。
+- 指标：1 个新测试类 8 用例绿；core 全量门禁 EXIT=0（5664 tests）；
+  ApiPrincipalExpiryAlertService 分支缺口 20→9，core 总行缺口
+  1170→1166。
+
 ### Batch 597（已交付）
 
 - 分支：`codex/batch597-skill-catalog-tail`（已合入 main）
