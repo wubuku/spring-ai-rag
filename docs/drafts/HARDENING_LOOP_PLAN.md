@@ -3588,6 +3588,30 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 600（已交付）
+
+- 分支：`codex/batch600-derivation-snapshot-tail`（已合入 main）
+- 内容：派生完整性快照分类矩阵长尾（新建 DerivationSnapshot
+  ClassificationTailTest，12 用例）：
+  - Snapshot.from 全一致行 → READY/CURRENT；禁用与墓碑 →
+    DISABLED；本地行物理不完整 → CORRUPT +
+    LOCAL_PHYSICAL_INTEGRITY_FAILED；向量哈希过期 → CORRUPT +
+    VECTOR_PHYSICAL_INTEGRITY_FAILED；本地就绪但向量缺失 →
+    KEYWORD_ONLY + VECTOR_NOT_REQUESTED；本地 PENDING + 向量
+    RUNNING + 运行中任务 → INDEXING（含 activeJobId 字符串→UUID
+    解析）；双侧 NOT_REQUESTED → NOT_REQUESTED；本地 FAILED +
+    向量 FAILED → LOCAL_UNAVAILABLE + LOCAL_FAILED；本地 PENDING +
+    向量换 chunker → LOCAL_STALE。
+  - toResponse：损坏快照产出 REBUILD_LOCAL + QUEUE_VECTOR 建议且
+    错误信息截断 500 字符；READY 快照无动作。
+  - missing 工厂 → DISABLED/MISSING/DOCUMENT_MISSING。
+- 要点：桶判定顺序 DISABLED→CORRUPT→READY→KEYWORD_ONLY→INDEXING
+  →NOT_REQUESTED→LOCAL_UNAVAILABLE；向量 status=COMPLETED 但不
+  新鲜一律判物理损坏，因此收敛（INDEXING）分支要求本地未就绪且
+  向量状态非 COMPLETED。
+- 指标：1 个新测试类 12 用例绿；core 全量门禁 EXIT=0（5684 tests）；
+  Snapshot 分支缺口 37→27，core 总行缺口 1170→1157。
+
 ### Batch 599（已交付）
 
 - 分支：`codex/batch599-embedding-job-tail`（已合入 main）
