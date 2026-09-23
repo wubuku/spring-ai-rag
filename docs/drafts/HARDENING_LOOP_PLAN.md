@@ -3588,6 +3588,19 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 581（已交付）
+
+- 分支：`codex/batch581-system-prompt-tail`（已合入 main）
+- 内容：RagChatService 系统提示词与用户消息定制长尾（新建 RagChat
+  ServiceSystemPromptTailTest，5 用例）：buildSystemPrompt 无扩展
+  返回 null、有扩展无模板返回 null、有模板经定制链替换（principal
+  上下文传空串）、customizeUserMessage 无定制直通、有定制经链替换。
+- 要点：PromptCustomizerChain.hasCustomizers() 是直通与替换的分支
+  条件；mock 链时 customizeSystemPrompt 的第二参数（principal 上
+  下文）传空串；domainExtensionRegistry / promptCustomizerChain 位
+  于 core.extension 包。
+- 指标：单类 5 用例绿；core 全量门禁 EXIT=0（5448 tests）。
+
 ### Batch 580（已交付）
 
 - 分支：`codex/batch580-catalog-relative-path-tail`（已合入 main）
