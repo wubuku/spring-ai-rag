@@ -3588,6 +3588,19 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 576（已交付）
+
+- 分支：`codex/batch576-apikey-create-guard-tail`（已合入 main）
+- 内容：ApiKeyController 创建守卫长尾（新建 ApiKeyControllerCreate
+  GuardTailTest，3 用例）：非环境 root 调用方（resolver configured
+  + attribute=false）→ 403、resolver 缺失 + allowedCollectionKeys
+  非空 → ISE "Collection key resolver is unavailable"、空解析结果
+  → IAE "Allowed collection scope must not be empty"。
+- 要点：环境 root 放行是双条件（rootCredentialResolver.isConfigured()
+  且 attribute environmentRootAuthenticated=true）；测试须打桩
+  resolver.isConfigured()=true 让 403 守卫生效。
+- 指标：单类 3 用例绿；core 全量门禁 EXIT=0（5424 tests）。
+
 ### Batch 575（已交付）
 
 - 分支：`codex/batch575-toresult-orchestration-tail`（已合入 main）
