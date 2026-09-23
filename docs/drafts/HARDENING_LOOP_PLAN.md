@@ -3588,6 +3588,34 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 588（已交付）
+
+- 分支：`codex/batch588-openai-mapper-tail`（已合入 main）
+- 内容：OpenAI 请求映射编排与校验边缘（新建 OpenAiChatRequest
+  MapperAliasTailTest 7 用例、OpenAiChatRequestMapperProtocolEdge
+  TailTest 21 用例，共 28 用例）：
+  - 编排（map）：别名强制 PLAIN 时 rag.filters 冲突在 map 层拒绝
+    （既有用例只能触达 validateDeclaration 的先导校验）；别名强制
+    PLAIN 且无 filters 直通；候选链首位作 modelRef；sessionId 覆写
+    与 memory 会话 id 派生断言；stream 缺省 false 与 "oai-" 会话
+    生成；X-RAG-Collection-Key 头读取；null 请求回退 local 主体。
+  - 校验（validateDeclaration）：PLAIN 无检索字段直通（n=1）；
+    null/空白 model；null messages；消息含 name/tool_calls/
+    function_call 拒绝；空白 role；null/空白 content；四种非法
+    multipart 形状（非对象、缺 type、text 非文本、多余字段）；
+    内容总量超 1,000,000 字符拒绝。
+  - 快照（mapFromExecutionSnapshot）：缺 declaredModelIdentifier
+    拒绝；domainId 空白归一 null；documentType 缺省保持 null；
+    retrievalOptions 空对象/缺失拒绝；effectiveScope 非对象/缺失
+    拒绝；全字段映射（权重、matchNone、主体、query）。
+- 要点：rag.filters 必须为非空 JSON 对象才能通过 RetrievalFilter
+  Validator（字符串节点按 "must be a JSON object" 拒绝），这是此前
+  map 层 PLAIN+filters 分支无法触达的根因；剩余 14 个分支主要为
+  防御性不可达 null 守卫（rag==null 的 PLAIN 块、headerValues null、
+  snapshot==null、候选链为空、requireText null 侧）。
+- 指标：2 个新测试类 28 用例绿；core 全量门禁 EXIT=0（5539 tests）；
+  OpenAiChatRequestMapper 分支缺口 42→14，core 总行缺口 1223→1216。
+
 ### Batch 587（已交付）
 
 - 分支：`codex/batch587-diagnostics-tail`（已合入 main）
