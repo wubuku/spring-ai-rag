@@ -3588,6 +3588,32 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 596（已交付）
+
+- 分支：`codex/batch596-model-router-tail`（已合入 main）
+- 内容：模型路由候选与信息投影长尾（新建 ChatModelRouterCandidate
+  TailTest，8 用例）：
+  - 配置化候选携带注册表元数据：canonical ref 命中 ModelItem 时
+    携带 normalizedCapabilities/contextWindow(200000)/maxTokens
+    (8192)/cost 且 estimatedModelLimits=false；注册项缺失时回退
+    缺省能力、限额字段为 null 且 estimatedModelLimits=true。
+  - 不可解析模型 resolveCandidateRequired 抛带可用清单的
+    IllegalArgumentException。
+  - 可用清单：getAvailableProviders/getAvailableModelRefs 过滤
+    available=false 描述符；配置化 provider 可用时 getModelsInfo
+    隐藏同 provider 的 legacy 条目（source=legacy 计数为 0）。
+  - legacy 信息投影：默认选项缺失时 modelId/name 回退 provider
+    别名（registry.getDisplayName 打桩）；有默认选项时 modelId
+    取选项模型名。
+  - getProviderInfo 对 null/未知 provider 返回 available=false
+    与空模型表；orderedCandidates/orderedCandidateDescriptors 对
+    null 与空白首选等价，primary 配置时排最前。
+- 要点：legacy 注册按类名 provider 关键字启发式（registerLegacy
+  Models）——伪造模型类名必须含关键字（如 Zhipu）才会被注册；
+  getDisplayName 需在 registry mock 上显式打桩。
+- 指标：1 个新测试类 8 用例绿；core 全量门禁 EXIT=0（5647 tests）；
+  ChatModelRouter 分支缺口 32→16，core 总行缺口 1179→1176。
+
 ### Batch 595（已交付）
 
 - 分支：`codex/batch595-query-rewrite-tail`（已合入 main）
