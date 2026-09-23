@@ -3588,6 +3588,27 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 595（已交付）
+
+- 分支：`codex/batch595-query-rewrite-tail`（已合入 main）
+- 内容：查询改写长尾（新建 QueryRewritingServiceTailTest，12 用例）：
+  - init 降级：无参构造 + init 使用默认配置；配置中的同义词表与
+    领域限定词被拾取进改写流程；运行时 setSynonymDictionary(null)
+    与 setDomainQualifiers(null) 容忍空输入。
+  - rewriteQuery：空白查询短路返回；空/缺失同义词数组跳过扩展。
+  - llmRewrite：无任何 ChatModel 静默返回空；执行模型覆盖解析
+    "1."/"-" 编号行并过滤与原查询相同的行（llmMaxRewrites=3）；
+    模型返回空 ChatResponse 降级为空；RetryTemplate（反射注入）
+    首次失败后重试、耗尽后静默降级为空。
+  - generatePaddingQueries：查询已含前缀（如何）/后缀（怎么办）
+    时跳过对应变体；长度 <2 的分词片段不参与两两组合；禁用/
+    空白/null 输入返回空列表。
+- 要点：RagProperties.queryRewrite 为 final 内联初始化，init 的
+  config==null 分支为防御性不可达；RagQueryRewriteProperties 默认
+  enabled=true，禁用场景必须显式 setEnabled(false)。
+- 指标：1 个新测试类 12 用例绿；core 全量门禁 EXIT=0（5639 tests）；
+  QueryRewritingService 分支缺口 26→10，core 总行缺口 1186→1179。
+
 ### Batch 594（已交付）
 
 - 分支：`codex/batch594-memory-rerank-tail`（已合入 main）
