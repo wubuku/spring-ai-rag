@@ -3588,6 +3588,22 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 599（已交付）
+
+- 分支：`codex/batch599-embedding-job-tail`（已合入 main）
+- 内容：嵌入任务创建与重试长尾（新建 EmbeddingJobServiceCreate
+  RetryTailTest，8 用例）：
+  - create：null 请求体拒绝；documentIds 与 Collection 作用域
+    同时给/都不给均拒绝；空 ID 清单与非正 ID 拒绝；禁用文档
+    （IAE）与无有效 contentHash 文档（ISE）拒绝；成功创建 QUEUED
+    任务后推进 PENDING、activateJob 并发布唤醒（wakeupPublisher）。
+  - readiness：作用域解析为 matchNone 时抛 SecurityException。
+  - retry：省略 requestedMaxAttempts 时沿用当前任务 maxAttempts；
+    retry 落空且无活动任务可归并时抛 DUPLICATE_RESOURCE；重试
+    目标非 QUEUED 时不发布唤醒。
+- 指标：1 个新测试类 8 用例绿；core 全量门禁 EXIT=0（5672 tests）；
+  EmbeddingJobService 分支缺口 20→11，core 总行缺口 1166→1159。
+
 ### Batch 598（已交付）
 
 - 分支：`codex/batch598-expiry-alert-tail`（已合入 main）
