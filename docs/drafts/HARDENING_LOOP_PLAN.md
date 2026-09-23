@@ -3588,6 +3588,27 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 590（已交付）
+
+- 分支：`codex/batch590-mutation-upsert-restore-tail`（已合入 main）
+- 内容：本地导入与版本恢复长尾（新建 DocumentMutationUpsertRestore
+  TailTest，14 用例）：
+  - upsertLocalImport：requestedPolicy 为 null 回退 SKIP 并标记
+    不请求；jsonbPayload 深拷贝且计入元数据变更；标题/来源/元
+    数据/文件名单字段差异触发 UPDATED；嵌入新鲜时元数据变更不
+    派发；仅启用位变化（enabledOverride=FALSE）禁用文档且不派发；
+    事务提交后 findById 落空抛 DocumentNotFoundException。
+  - restoreLocalFromVersion：内容快照缺哈希 fail-closed；受限密钥
+    恢复未分配快照拒绝（RESTORE_NOT_ALLOWED）；类型跨 kind 计入
+    内容变更并重嵌；来源差异计入元数据变更且新鲜嵌入不派发；
+    jsonb 载荷差异计入元数据变更；SNAPSHOT 可见性恢复应用禁用态、
+    派发标记不请求。
+- 要点：normalizeDocumentKind 仅区分 json-record，其余类型一律
+  归一 text——kind 级内容变更必须用 json-record 快照触发，pdf/
+  text 之间不算内容变更。
+- 指标：1 个新测试类 14 用例绿；core 全量门禁 EXIT=0（5577 tests）；
+  DocumentMutationService 分支缺口 64→45，core 总行缺口 1210→1209。
+
 ### Batch 589（已交付）
 
 - 分支：`codex/batch589-chat-authz-tail`（已合入 main）
