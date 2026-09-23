@@ -3588,6 +3588,33 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 589（已交付）
+
+- 分支：`codex/batch589-chat-authz-tail`（已合入 main）
+- 内容：授权证据快照与重放长尾（新建 ChatAuthorizationEvidence
+  TailTest，24 用例）：
+  - snapshot 侧：ANY_ASSIGNED 作用域投影 ANY_COLLECTION 且不放行
+    未分配文档；sources 为 null 容错；null collectionId 跳过观察
+    且与派生一致；null/非数值/非正 documentId 拒绝；2000 条来源
+    超 64KB 上限拒绝；ChatResponse.setSources 经 List.copyOf 阻断
+    null 元素（固化行为）。
+  - verifyReplay 侧：null 操作/缺失快照拒绝；坏 JSON 失败闭合；
+    缺失 scopeMode/unassignedDocumentsAllowed 字段、非法枚举值、
+    非布尔多选标志拒绝；NOT_APPLICABLE 一致性三连（访问模式、
+    已选集合、来源证据）；null 主体视为放宽放行；UNRESTRICTED +
+    ANY_COLLECTION 当前仍非受限时放行；未分配文档在 CALLER_VISIBLE
+    + 允许未分配 + 非受限放行、当前受限拒绝、非 CALLER_VISIBLE
+    作用域拒绝；SELECTED 来源越界拒绝与界内放行；来源行非数组/
+    非对象/缺 documentId/documentId 非正/collectionId 非数值/
+    白名单文本条目拒绝。
+- 要点：首访 UNRESTRICTED + CALLER_VISIBLE 的重放在收窄时先触发
+  "became narrower" 守卫，因此未分配来源的 RESTRICTED 拒绝场景需
+  把首访访问模式设为 RESTRICTED；剩余 13 个分支为防御性不可达
+  （ANY+非正集合与证据 >0 矛盾、守卫顺序互斥、类型不变式、
+  catch(Exception) 检查异常路径）。
+- 指标：1 个新测试类 24 用例绿；core 全量门禁 EXIT=0（5563 tests）；
+  ChatAuthorizationService 分支缺口 37→13，core 总行缺口 1216→1210。
+
 ### Batch 588（已交付）
 
 - 分支：`codex/batch588-openai-mapper-tail`（已合入 main）
