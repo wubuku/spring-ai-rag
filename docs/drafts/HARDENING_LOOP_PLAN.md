@@ -3588,6 +3588,22 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 582（已交付）
+
+- 分支：`codex/batch582-scope-summary-from-tail`（已合入 main）
+- 内容：RetrievalScopeSummary.from 长尾（新建 RetrievalScopeSummary
+  FromTailTest，9 用例）：inferMode 三分支（NONE→CALLER_VISIBLE /
+  ANY_ASSIGNED→ANY_COLLECTION / SELECTED→SELECTED_COLLECTIONS）、
+  SELECTED 计数（collectionCount=ids.size()）与键清洗（空串/null 过
+  滤后剩余 kb-a、kb-b）、100 上限截断、documentType 与 embedding
+  ProfileKey 可选键写入、matchNone 零集合、filterSummary null 过滤
+  器 → metadataContains absent + 空载荷列表、present 时 canonical
+  Bytes 与 topLevelKeyCount、countTopLevelKeys 的 null/空白/非对象
+  /三键四分支。
+- 要点：RetrievalScope.selectedCollections(ids, docIds, type) 工厂
+  与 record 构造器并存；EmbeddingProfile 在 core.config 包。
+- 指标：单类 9 用例绿；core 全量门禁 EXIT=0（5457 tests）。
+
 ### Batch 581（已交付）
 
 - 分支：`codex/batch581-system-prompt-tail`（已合入 main）
