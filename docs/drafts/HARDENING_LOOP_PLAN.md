@@ -3588,6 +3588,21 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 578（已交付）
+
+- 分支：`codex/batch578-catalog-total-bytes-tail`（已合入 main）
+- 内容：ResourceCatalog 总量与逃逸守卫长尾（新建 ResourceCatalog
+  TotalBytesTailTest，3 用例）：累计字节超限（80+80 vs 预算 100）
+  failFast 模式 ISE（file byte limit exceeded）与非 failFast 降级
+  为诊断（不健康快照 + 1 条诊断）、符号链接条目静默跳过（仅常规
+  文件入选，link.md 被 continue）。
+- 发现：extractSources 的 total byte limit exceeded（95-96）与
+  resource escapes configured root（203-204）为防御性分支——
+  remainingTotalBytes 逐文件递减使总量超限先在 readBounded 触发
+  file byte limit；符号链接在 198 行提前 continue 使 1090 的逃逸
+  检查不可达（realRoot 已 toRealPath）。
+- 指标：单类 3 用例绿；core 全量门禁 EXIT=0（5432 tests）。
+
 ### Batch 577（已交付）
 
 - 分支：`codex/batch577-doc-optional-service-tail`（已合入 main）
