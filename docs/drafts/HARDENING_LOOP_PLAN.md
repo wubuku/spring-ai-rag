@@ -3588,6 +3588,18 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 577（已交付）
+
+- 分支：`codex/batch577-doc-optional-service-tail`（已合入 main）
+- 内容：RagDocumentController 可选服务委托长尾（新建 RagDocument
+  ControllerOptionalServiceTailTest，5 用例）：relocateExternalDocument
+  服务缺失 ISE 与委托返回 200 + relocate 响应、getExternalDocument
+  服务缺失 ISE 与委托返回 detail、restoreVersion 经 documentMutation
+  Service.restoreLocalFromVersion 委托返回 200。
+- 要点：三个可选服务均为 public setter 注入；测试先 bare 构造（9
+  参构造器无服务）断言 ISE，再 setter 注入后走委托路径。
+- 指标：单类 5 用例绿；core 全量门禁 EXIT=0（5429 tests）。
+
 ### Batch 576（已交付）
 
 - 分支：`codex/batch576-apikey-create-guard-tail`（已合入 main）
