@@ -3588,6 +3588,20 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 603（已交付）
+
+- 分支：`codex/batch603-turn-lease-tail`（已合入 main）
+- 内容：轮次操作租约与命令快照长尾（新建 ChatTurnOperationLease
+  CommandTailTest，5 用例）：
+  - 三条认领路径（prepare 前置 claim、inspectExisting 只读预检、
+    keyed claimExisting 回收路径）对租约仍处有效期内（future
+    leaseExpiresAt）的 operation 均抛 ChatTurnInProgressException，
+    并记录 observability.inProgress() 观测。
+  - commandForClaim：执行快照包含 resolvedCandidates 时将其应用
+    到适配器命令（withModelCandidates），无快照时保留空候选链。
+- 指标：1 个新测试类 5 用例绿；core 全量门禁 EXIT=0（5704 tests）；
+  ChatTurnOperationService 分支缺口 26→25，core 总行缺口 1156。
+
 ### Batch 602（已交付）
 
 - 分支：`codex/batch602-model-factory-tail`（已合入 main）
