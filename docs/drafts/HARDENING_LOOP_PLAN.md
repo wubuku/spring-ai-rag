@@ -3588,6 +3588,15 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 585（已交付）
+
+- 分支：`codex/batch585-ragalert-accessors-tail`（已合入 main）
+- 内容：RagAlert 实体访问器长尾（新建 RagAlertAccessorsTailTest，
+  5 用例）：构造默认值（stateVersion=0、notifiedVersion=0、status=
+  ACTIVE，updatedAt 非空）、version 与 dedupeKey 往返、stateVersion
+  与 notifiedVersion 读写、updatedAt 读写、metrics 映射往返。
+- 指标：单类 5 用例绿；core 全量门禁 EXIT=0（5478 tests）。
+
 ### Batch 584（已交付）
 
 - 分支：`codex/batch584-budget-tool-batch-tail`（已合入 main）
