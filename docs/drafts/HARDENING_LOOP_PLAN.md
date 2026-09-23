@@ -3588,6 +3588,28 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 597（已交付）
+
+- 分支：`codex/batch597-skill-catalog-tail`（已合入 main）
+- 内容：RuntimeSkillCatalog 守卫长尾（新建 RuntimeSkillCatalog
+  GuardsTailTest 9 用例 + 5 组新 fixture）：
+  - 新 fixture：badutf8（非法 UTF-8 字节）、longname（名称 70
+    字符）、selflink（自链接）、badcapregex（能力名含空格）、
+    skills-mixed-fixture（plain 无链接无能力 + linked 文本链接
+    与重复能力）。
+  - 用例：禁用配置产出空快照且 enabled()=false；levelOnePrompt
+    零预算返回空、正常预算列出名称与能力；loadBody 对未知技能/
+    缺失会话/加载预算耗尽返回错误码；readReference 对未知技能/
+    未加载会话/非法路径（../、//、..、控制字符、空白）/引用缺失/
+    引用字符预算耗尽返回错误码；文本链接解析（description 置空）
+    与重复能力去重；Snapshot 紧凑构造器对 null digest/skills 收紧。
+- 要点：normalizeReferencePath 的 trim() 会先剥离前导 NUL 等控制
+  字符——"\u0000path" 归一为 "path" 走引用未命中分支而非路径非法
+  分支，两分支需分别断言。
+- 指标：1 个新测试类 9 用例绿（+7 个 fixture 文件）；core 全量
+  门禁 EXIT=0（5656 tests）；RuntimeSkillCatalog 分支缺口 35→22，
+  core 总行缺口 1176→1170。
+
 ### Batch 596（已交付）
 
 - 分支：`codex/batch596-model-router-tail`（已合入 main）
