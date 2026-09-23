@@ -3588,6 +3588,28 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 606（已交付）
+
+- 分支：`codex/batch606-update-unlink-tail`（已合入 main）
+- 内容：本地文档补丁与集合解绑长尾（新建 DocumentMutationUpdate
+  UnlinkTailTest，8 用例）：
+  - updateLocal：无变化短路 UNCHANGED 且不落库；缺 expected
+    DocumentRevision 即 DocumentRevisionConflictException；空可变
+    字段 EMPTY_PATCH；禁用文档改内容默认 DOCUMENT_DISABLED、
+    embeddingPolicy=SKIP 放行并走 SKIP 派发；内容变更记录 UPDATE
+    版本。
+  - unlinkLocalDocumentsFromCollection：集合含外部托管文档（非空
+    externalId）时拒绝；本地文档（含空白 externalId）全部解绑
+    置空集合并按文档数记录 COLLECTION_MOVE 版本。
+  - requireExpectedSourceRevision 矩阵：current 空禁止携带期望
+    （Legacy identities）、严格 CAS 下缺期望拒绝、修订不匹配
+    拒绝、空对空合法。
+- 要点：反射调用私有守卫需解包 InvocationTargetException 后再
+  断言；unlink 对每个解绑文档各记录一次版本。
+- 指标：1 个新测试类 8 用例绿；core 全量门禁 EXIT=0（5724 tests）；
+  DocumentMutationService 分支缺口 45→43，core 总行缺口 1135
+  （持平，本批收益在分支与行内语句侧）。
+
 ### Batch 605（已交付）
 
 - 分支：`codex/batch605-execution-orchestration-tail`（已合入 main）
