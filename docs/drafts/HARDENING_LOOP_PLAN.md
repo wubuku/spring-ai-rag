@@ -3588,6 +3588,35 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 587（已交付）
+
+- 分支：`codex/batch587-diagnostics-tail`（已合入 main）
+- 内容：检索诊断包长尾分支覆盖（新建 RetrievalTraceSessionTailTest
+  6 用例、RetrievalDiagnosticsPersistTailTest 14 用例、Retrieval
+  DiagnosticsBoundedMetadataTailTest 3 用例，共 23 用例）：
+  - Session：recordRetrieval 空结果忽略；replaceRetrieval 对未知
+    attempt 仅改全局、previous 为空时全局与 attempt 双追加；
+    recordQueryExpansion/recordDocumentJoin 未命中 attempt 静默；
+    null attemptKey 回退默认名 "attempt"；storeQueryText=true 时
+    originalQuery 为空不投影 query。
+  - Service：persistSearch 空 session/空 outcome 保护；persist 对
+    null session、null 仓库、enabled=true 但 persist=false 均跳过；
+    storeQueryText 组合（无 outcome、空原文）走 REDACTED_QUERY；
+    预算耗尽 + 最新检索为空 → RETRIEVAL_BUDGET_EXHAUSTED，而有
+    结果时保留 RESULTS_RETURNED/null；branchStages 非空时投影
+    vector 耗时与 strategy=vector；仓库缺失时 get 抛 NOT_FOUND、
+    null principal 回退 local 身份；list 非空过滤器透传；详情对
+    null/空元数据与非 List collectionKeys、null key 分数、非 rank
+    分数的裁剪；createdAt 为空投影 null。
+  - boundedMetadata：超限裁剪 attempts 并置 truncated（注意
+    setMaxDetailBytes 夹取 [1024, 262144]）；不可序列化元数据
+    回退 schemaVersion=1 + truncated 兜底。
+- 要点：诊断包仅剩 3 个防御性不可达分支（line 107 `query == null`
+  因 nullToEmpty 恒非空；line 317/327 `latest == null` 因两方法仅在
+  latest 非空时被调用），包内行缺口清零。
+- 指标：3 个新测试类 23 用例绿；core 全量门禁 EXIT=0（5511 tests）；
+  诊断包 JaCoCo 分支缺口 29→3，core 总行缺口 1231→1223。
+
 ### Batch 586（已交付）
 
 - 分支：`codex/batch586-eval-parse-variants-tail`（已合入 main）
