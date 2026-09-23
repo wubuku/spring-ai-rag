@@ -3588,6 +3588,21 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 584（已交付）
+
+- 分支：`codex/batch584-budget-tool-batch-tail`（已合入 main）
+- 内容：ChatExecutionBudget 工具批量预留长尾（新建 ChatExecution
+  BudgetToolBatchTailTest，9 用例）：空名单 → batch exceeds、名单大
+  于 maxToolCalls → batch exceeds、唯一轮次消耗后再预留 → tool round
+  exhausted、per-name 上限（search 二次）拒绝、字符总预算 600 触发
+  500+500 超限 → character budget exhausted、tryReservePolicyToolCall
+  的 null/空白/零上限拒绝与两次成功后第三次拒绝、httpToolExecution
+  State 惰性创建 + 预算变更 ISE、requestTraceId 往返、snapshot 非空。
+- 要点：2 参 reserveToolBatch 委托 3 参并返回 void（返回值断言须用
+  toolRounds/snapshot 间接验证）；字符预算 600 触发超限的用例使用
+  reserveToolBatch(List, 500) 直接抛出。
+- 指标：单类 9 用例绿；core 全量门禁 EXIT=0（5473 tests）。
+
 ### Batch 583（已交付）
 
 - 分支：`codex/batch583-openai-error-envelope-tail`（已合入 main）
