@@ -3588,6 +3588,19 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 580（已交付）
+
+- 分支：`codex/batch580-catalog-relative-path-tail`（已合入 main）
+- 内容：ResourceCatalog 相对路径与 spring 根身份长尾（新建 Resource
+  CatalogRelativePathNestedTailTest，5 用例）：relativePath 的
+  "!/root/" JAR 嵌套标记分支（非 "/root/" 首选标记，故命中第二个
+  lastIndexOf）、空根 + null 文件名返回 null、configuredRootPath 对
+  "jar:file:/app.jar!/nested/root/" 剥离为 nested/root、springResource
+  Root 对 SKILL 类型使用 skill/ 前缀且同容器摘要一致、getURI 抛异常
+  包装为 "classpath resource identity failed" ISE（反射调用外层为
+  InvocationTargetException）。
+- 指标：单类 5 用例绿；core 全量门禁 EXIT=0（5443 tests）。
+
 ### Batch 579（已交付）
 
 - 分支：`codex/batch579-summary-degrade-path-tail`（已合入 main）
