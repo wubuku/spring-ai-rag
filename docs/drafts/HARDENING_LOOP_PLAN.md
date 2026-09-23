@@ -3588,6 +3588,20 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 579（已交付）
+
+- 分支：`codex/batch579-summary-degrade-path-tail`（已合入 main）
+- 内容：ConversationSummaryService 降级路径长尾（新建 Conversation
+  SummaryServiceDegradePathTailTest，6 用例）：模型解析失败降级
+  summary_model_unavailable（broken router 抛 ISE）、空白模型答案
+  降级 summary_empty 且不落库、输出超限降级 summary_output_exceeded
+  且不落库、CAS 冲突降级 summary_cas_conflict、压缩开关关闭短路
+  compaction_disabled、成功压缩修剪答案并落库快照（text=ok summary）。
+- 要点：候选模型通过 modelRouter.resolveCandidateRequired(modelRef)
+  解析，broken router 抛 ISE 走 summary_model_unavailable；saveCas
+  返回 false 走 summary_cas_conflict。
+- 指标：单类 6 用例绿；core 全量门禁 EXIT=0（5438 tests）。
+
 ### Batch 578（已交付）
 
 - 分支：`codex/batch578-catalog-total-bytes-tail`（已合入 main）
