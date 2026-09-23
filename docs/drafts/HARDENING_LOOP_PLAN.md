@@ -3588,6 +3588,32 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 605（已交付）
+
+- 分支：`codex/batch605-execution-orchestration-tail`（已合入 main）
+- 内容：聊天执行编排深水区长尾（新建 ChatExecutionService
+  OrchestrationTailTest，7 用例，完整 13 参构造器 + 会话协调器 +
+  工具注册表 + 摘要/诊断/可观测/Skill 目录四 setter 注入）：
+  - resolveCandidateRefs：按 capabilities.streaming 过滤候选；
+    PLAIN+流式抛 MODEL_STREAMING_UNSUPPORTED。
+  - finalizePreparedOperation：null 入参直返；摘要压缩异常被吞
+    且诊断仍落库。
+  - execute：经 ChatSessionCoordinator（invokeWithinDeadline 需要
+    打桩为执行传入的 Supplier；acquire 返回 stateless lease）
+    提交轮次并计数 providerCall。
+  - AGENT 模式：装配工具注册表回调（规划+装配各一次）、Skill
+    RuntimeSkillLoadSession 上下文、HTTP 工具状态上下文，
+    candidates 能力要求 toolCalling=true 且模型默认选项为
+    ToolCallingChatOptions。
+  - stream：经协调器提交并发出 Completed 事件。
+  - persistOperationDiagnostics：无追踪会话静默，有会话委托。
+- 要点：execute 路径不自动铸造执行预算（stream 会）——命令必须
+  显式 withExecutionBudget(new ChatExecutionBudget(...))，否则
+  candidateInvocation 首行 NPE 导致 attempt=null → "Chat retry
+  completed without a successful attempt"。
+- 指标：1 个新测试类 7 用例绿；core 全量门禁 EXIT=0（5716 tests）；
+  ChatExecutionService 分支缺口 97→85，core 总行缺口 1157→1135。
+
 ### Batch 604（已交付）
 
 - 分支：`codex/batch604-turn-snapshot-chain-tail`（已合入 main）
