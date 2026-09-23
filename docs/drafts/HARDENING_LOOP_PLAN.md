@@ -3588,6 +3588,30 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 592（已交付）
+
+- 分支：`codex/batch592-apikey-provision-revoke-tail`（已合入 main）
+- 内容：API Key 供给与吊销长尾（新建 ApiKeyManagementProvisionRevoke
+  TailTest，12 用例）：
+  - 供给：generateKey 创建主体+凭证并发布生命周期事件；无事务模板
+    （transactionManager=null）时 generateIdempotentKey 直接在当前
+    事务执行且幂等重放成功；受限主体（allowedCollectionIds=7,8）
+    重放返回 keyId + 集合键；撤销主体降级重放（keyId 置空、无集合
+    键）。
+  - 清理：账本开关关闭或仓库缺失时 cleanupProvisioningLedger 跳过；
+    启用时按保留期删除已完成记录；rotationTransaction 缺失时轮换
+    清理跳过；过期 PENDING 轮换经管理锁+双读取置 EXPIRED 并删除
+    终态记录；第二次读取操作消失时静默容忍。
+  - 吊销：凭证缺失或管理锁不可用返回 false；主体行缺失抛 NOT_FOUND；
+    二次权威读取凭证消失抛 NOT_FOUND；无当前可用凭证抛
+    CREDENTIAL_NOT_CURRENT。
+- 要点：findByKeyId 在吊销流程被读取两次（预检 + 权威读取），用
+  Mockito 链式 thenReturn 区分两次结果；轮换凭证实体的 principalId
+  必须与操作记录一致，否则 requiredRotationCredentials 抛跨主体
+  SERVICE_UNAVAILABLE。
+- 指标：1 个新测试类 12 用例绿；core 全量门禁 EXIT=0（5602 tests）；
+  ApiKeyManagementService 分支缺口 39→34，core 总行缺口 1203→1201。
+
 ### Batch 591（已交付）
 
 - 分支：`codex/batch591-http-guard-tail`（已合入 main）
