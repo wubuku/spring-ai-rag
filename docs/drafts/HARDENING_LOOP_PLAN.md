@@ -3588,6 +3588,18 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 586（已交付）
+
+- 分支：`codex/batch586-eval-parse-variants-tail`（已合入 main）
+- 内容：EvaluationSuiteDefinitionValidator 解析长尾（新建 Evaluation
+  SuiteParseVariantsTailTest，8 用例）：parse 对非对象定义、cases
+  缺失或空、重复 case id 拒绝；parseVariants 对 null 回退单默认变体、
+  非数组拒绝、重复 key 拒绝；requireBoolean 对非布尔字段拒绝（
+  variant v1 flag must be a boolean）。
+- 要点：EvaluationSuiteDefinition.CaseDef 的 scope 需要 collection
+  Keys 且 relevant 数组非空（否则 "requires relevant identities"）。
+- 指标：单类 8 用例绿；core 全量门禁 EXIT=0（5486 tests）。
+
 ### Batch 585（已交付）
 
 - 分支：`codex/batch585-ragalert-accessors-tail`（已合入 main）
