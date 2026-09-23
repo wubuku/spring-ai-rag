@@ -3588,6 +3588,29 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 602（已交付）
+
+- 分支：`codex/batch602-model-factory-tail`（已合入 main）
+- 内容：配置化模型工厂解析与构建长尾（新建 ConfiguredChatModel
+  FactoryResolveTailTest，10 用例）：
+  - provider-only 引用（"zhipu"）经 chatModel.primary 路由解析为
+    默认模型，canonical 形如 "zhipu/m2"；空模型表 provider 不可
+    解析；限定引用 "zhipu/m2" 命中、"zhipu/ghost" 与 "zhipu/"
+    （末尾分隔符）拒绝；跨 provider 同名模型 ID 歧义 → null；
+    裸模型 ID 大小写不敏感匹配。
+  - 不可用原因检查链全序：disabled → baseUrl 空白 → 未支持
+    apiType（vertex）→ 非法 contextWindow/maxTokens → 密钥未
+    配置；全部通过返回 null。
+  - 构建：OpenAI 非推理模型（temperature+maxTokens）与 Anthropic
+    推理模型（无 temperature、maxCompletionTokens）构建成功且
+    重复解析命中缓存实例。
+  - normalizeBaseUrl 去尾斜杠与 /V1（大小写不敏感）后缀、null
+    返回空串；listChatModels 描述符对 null 限额省略 contextWindow/
+    maxTokens 键；apiKey 配置为 null 时直接判未配置不触发环境。
+- 指标：1 个新测试类 10 用例绿；core 全量门禁 EXIT=0（5699 tests）；
+  ConfiguredChatModelFactory 分支缺口 27→17，core 总行缺口
+  1157→1156。
+
 ### Batch 601（已交付）
 
 - 分支：`codex/batch601-tool-registry-policy-tail`（已合入 main）
