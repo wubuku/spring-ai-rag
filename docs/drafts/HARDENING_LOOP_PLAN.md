@@ -3588,6 +3588,34 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 591（已交付）
+
+- 分支：`codex/batch591-http-guard-tail`（已合入 main）
+- 内容：白名单 HTTP 工具守卫长尾（新建 AllowlistedHttpToolProvider
+  GuardTailTest，13 用例）：
+  - publicAddress 矩阵补侧：0/8 非全零与 240/4 保留段判非公网；
+    169/8、172/8、192/8、100/8 的段外兄弟段，198.20、198.51.101、
+    203.0.114 段外地址判公网；100.64/10（CGNAT 上半段）、192.0.0/24
+    判非公网；IPv6 fe00::（非全局单播掩码）、2001:100::/23（IETF
+    协议分配）判非公网；::8.8.8.8（前 10 字节全零内嵌 IPv4）递归
+    判公网。
+  - HttpToolExecutionState：非正/预算耗尽预约返回 null；commit 与
+    release 对 null 预约及重复结算免疫；commit 钳制实际字节到预约
+    上限；构造钳制最小预算为 1。
+  - 端点冻结校验：不健康 Skill 目录清空端点且无策略投影；httpTools
+    禁用时无策略无回调；重复工具名/空白工具名/未知 Skill/能力未
+    声明均在构造期抛 IllegalStateException；null 端点列表冻结为空
+    注册表。
+  - EndpointCallback：空白必填参数报 missing_query_parameter；凭证
+    环境变量缺失报 credential_unavailable；完整预算下响应超限判
+    response_too_large（区别于部分消耗时的 budget_exhausted）；
+    非 2xx 状态码报 http_status_not_allowed。
+- 要点：端点冻结校验发生在 provider 构造期（而非 getToolCallbacks），
+  非法配置的断言应包裹构造调用。
+- 指标：1 个新测试类 13 用例绿；core 全量门禁 EXIT=0（5590 tests）；
+  EndpointCallback 分支缺口 47→34（剩余主要为 IPv4 复合条件的
+  顺序不可达侧），core 总行缺口 1209→1203。
+
 ### Batch 590（已交付）
 
 - 分支：`codex/batch590-mutation-upsert-restore-tail`（已合入 main）
