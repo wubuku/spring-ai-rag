@@ -3588,6 +3588,29 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 601（已交付）
+
+- 分支：`codex/batch601-tool-registry-policy-tail`（已合入 main）
+- 内容：工具注册策略校验与过滤长尾（新建 RagChatToolRegistry
+  PolicyTailTest，5 用例）：
+  - validatePolicy 约束矩阵：maxCallsPerRequest=0/超上限、
+    maxResultCharacters 过小/超上限、timeout 零/负——全部在注册
+    期以 IllegalStateException 拒绝。
+  - 未知策略键与空白（null 键）策略键拒绝；重复工具名与空白工具
+    名拒绝（空白名需 mock ToolDefinition 绕过 builder 校验）。
+  - callbacks 按 mode/domain 过滤：KNOWLEDGE 模式无工具支持；
+    AGENT 无领域 → 仅内建；命中领域 → 内建+外部；未命中领域 →
+    仅内建。
+  - requestContext 对 executionBudget 为 null 的命令省略预算
+    上下文键，但保留工具结果字符限额表。
+- 要点：RagChatToolPolicy 紧凑构造器将 null effect 归一为
+  READ_ONLY、null timeout 归一为 30 秒，二者不是非法输入——
+  validatePolicy 的 effect 侧为防御性不可达；ToolDefinition
+  builder 自身拒绝空白名称。
+- 指标：1 个新测试类 5 用例绿；core 全量门禁 EXIT=0（5689 tests）；
+  RagChatToolRegistry 分支缺口 24→16，core 总行缺口 1170→1157
+  （含 Batch 600 增量）。
+
 ### Batch 600（已交付）
 
 - 分支：`codex/batch600-derivation-snapshot-tail`（已合入 main）
