@@ -3588,6 +3588,22 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 583（已交付）
+
+- 分支：`codex/batch583-openai-error-envelope-tail`（已合入 main）
+- 内容：OpenAI 兼容错误信封长尾（新建 OpenAiCompatibilityException
+  HandlerTailTest，7 用例）：handleUnreadable 400 固定信封（invalid
+  _request_body）、handleRag 状态码透传（5xx → server_error / 4xx →
+  invalid_request_error，param 恒 null）、ChatTurnInProgressException
+  触发 Retry-After 头（值等于 retryAfterSeconds）、handleSecurity 403
+  permission_denied 固定信封、handleArgument 400 透传原始消息、
+  handleUnexpected 503 service_unavailable 固定信封、handleProtocol
+  保留 protocol 异常的 type/param/code。
+- 要点：OpenAiErrorResponse 是 record（error() 取内嵌 Error record，
+  组件 message/type/param/code）；invalid() 工厂恒定 type=invalid_
+  request_error，param 为定位参数、code 为业务码。
+- 指标：单类 7 用例绿；core 全量门禁 EXIT=0（5464 tests）。
+
 ### Batch 582（已交付）
 
 - 分支：`codex/batch582-scope-summary-from-tail`（已合入 main）
