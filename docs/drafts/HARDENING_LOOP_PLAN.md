@@ -3588,6 +3588,21 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 575（已交付）
+
+- 分支：`codex/batch575-toresult-orchestration-tail`（已合入 main）
+- 内容：ChatExecutionService.toResult 组装长尾（新建 ChatExecution
+  ServiceToResultTailTest，5 用例）：KNOWLEDGE 模式 DOCUMENT_CONTEXT
+  来源提取（mapper 打桩返回 ChatSource）+ retrievalTraceId 元数据 +
+  retrievalExecuted=false（DOCUMENT_CONTEXT 路径不消耗检索调用）、
+  PLAIN 模式零来源、记忆回放无工具条目不写 TOOL_TRANSCRIPT_METADATA
+  _KEY、usage 组件携带 totalTokens=120、DOCUMENT_CONTEXT 列表跳过
+  非 Document 条目。
+- 要点：usage 存于 ChatExecutionResult record 的 usage 组件而非
+  metadata（metadata.putAll(result.metadata()) 在 1127 行之后另有
+  usage 键）；retrievalExecuted 反映 trace.retrievalCalls()。
+- 指标：单类 5 用例绿；core 全量门禁 EXIT=0（5421 tests）。
+
 ### Batch 574（已交付）
 
 - 分支：`codex/batch574-evaluation-batch-tail`（已合入 main）
