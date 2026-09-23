@@ -3588,6 +3588,29 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 594（已交付）
+
+- 分支：`codex/batch594-memory-rerank-tail`（已合入 main）
+- 内容：记忆投影与启发式重排长尾（新建 ChatMemoryMessageProjector
+  TailTest 9 用例、HeuristicRerankLexicalTailTest 8 用例，共 17 用例）：
+  - 投影：forPersistence 对 null/空输入返回空、合成摘要消息（元
+    数据标志）被丢弃、带工具调用的 assistant 丢弃而纯文本保留；
+    toolTranscript 对 null/空消息表/调用数 0/字符预算 0 返回空；
+    调用数上限与字符预算耗尽的截断；调用与响应数量不一致整对
+    排除；单侧空 id 不配对、双侧空 id 按工具名配对。
+  - 重排：边界感知词只出现在长 token 内部时判零分；首个出现被
+    阻塞后继续后搜命中独立词；位置加分随距离衰减（>50 字符无
+    加分）；全标点词剥离后原样返回不破坏评分；词法特征 512 上限
+    截断后自相似恒为 1；CJK+拉丁混合段切分与匹配；平假名/片假
+    名/谚文按 CJK 单字相似项判定；calculateDiversityScore 私有候
+    选特征路径。
+- 要点：AssistantMessage 的 4 参构造器为 protected、Builder 无
+  metadata 方法——合成摘要消息用 mock(AbstractMessage) 构造；
+  相似度封顶 1.0，验证位置加分需用多词查询保证匹配数不一致。
+- 指标：2 个新测试类 17 用例绿；core 全量门禁 EXIT=0（5627 tests）；
+  ChatMemoryMessageProjector 分支缺口 20→10、HeuristicRerankProvider
+  20→14，core 总行缺口 1193→1186。
+
 ### Batch 593（已交付）
 
 - 分支：`codex/batch593-external-doc-tail`（已合入 main）
