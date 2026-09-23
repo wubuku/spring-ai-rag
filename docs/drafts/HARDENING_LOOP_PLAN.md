@@ -7905,6 +7905,33 @@ VersionHistoryModal 相关 100% 项等。
 
 ---
 
+## 进度留档快照（Batch 574 后 · 用户指令收尾）
+
+- 留档时点：2026-09-23 · main @ 85050d0b（收尾提交前移一位）
+- 循环进度：Batch 562–574 段循环交付完成，本轮（自 Batch 562 恢
+  复后）共交付 13 个批次，全部按完整流程执行，工作区干净。
+- core 测试规模：5394 → 5416（+22）；残余未覆盖行约 1306。
+- 本段批次重点：
+  - 562：ChatTurnOperationService 会话派生（withEffectiveSession
+    快速路径；重新生成分支确认为防御性死代码并留档更正）
+  - 563–565：ResourceCatalog 发现预算、StaticKnowledgeSearchTool
+    上下文守卫、RagDocumentController 集合解析
+  - 566–567：可观测查询百分位与状态分解、PdfImportService 文件名
+    规范化
+  - 568–570：ChatExecutionService 候选降级编排（LLM_UNAVAILABLE
+    分支确认不可达）、stream SSE lambda、RagChatProperties 校验
+  - 571–574：PdfImportController SSE 任务 lambda（反射轮询 complete
+    标志）、prepareForOperation 降级与 RagException 透传、Static
+    KnowledgeSearchTool 上下文守卫、RetrievalEvaluation 批量评估
+- Batch 575（toResult 结果组装长尾）实施中未完成：KNOWLEDGE 模式
+  extractSources 的 mapper stub 匹配后仍 NPE（List.copyOf 中 null
+  来源待查），测试文件已删除，等待下轮重新实施。
+- 下轮候选：ChatExecutionService toResult 编排（反射驱动，需先解
+  上述 NPE）、RagChatController stream 残余、ResourceCatalog spring
+  残余、ApiKeyController 残余。
+- 构建验证：后端三模块 test-compile EXIT=0；core 全量门禁 EXIT=0
+  （5416 tests / 0 fail）；WebUI `tsc -b && vite build` EXIT=0。
+
 ## 进度留档快照（Batch 561 后 · 用户指令收尾）
 
 - 留档时点：2026-09-22 · main @ 587b3f32
