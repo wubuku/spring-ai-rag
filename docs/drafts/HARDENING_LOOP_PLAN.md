@@ -3588,6 +3588,29 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 604（已交付）
+
+- 分支：`codex/batch604-turn-snapshot-chain-tail`（已合入 main）
+- 内容：轮次操作快照候选链与重放主体长尾（新建 ChatTurnOperation
+  SnapshotCandidateChainTailTest，5 用例）：
+  - commandForClaim：执行快照缺 resolvedCandidates → "candidate
+    chain is missing"；候选含非文本（[42]）或空白项 → "candidate
+    chain is invalid"。
+  - claimNew：executionService 解析出的候选链为空 → 报
+    IDEMPOTENCY_EXECUTION_SNAPSHOT_INVALID "candidate chain is
+    empty"。
+  - failedReplay：operation.errorCode 非法（"NOT_A_REAL_CODE"）→
+    回退 INTERNAL_ERROR + "previously failed"。
+  - replay：SUCCEEDED 认领后对 db:42 / root:environment-root /
+    legacy:static / local 四类 owner 构造主体并反序列化响应快照。
+- 要点：ChatTurnOperation 构造参数顺序中 responsePayload 位于
+  authorizationScopeSnapshot 之前——重放要求 responsePayload 为
+  合法 JSON，否则 replay 以 "Stored Chat response snapshot is
+  invalid" 失败。
+- 指标：1 个新测试类 5 用例绿；core 全量门禁 EXIT=0（5709 tests）；
+  ChatTurnOperationService 分支缺口 25→23，core 总行缺口
+  1156（持平，本批收益在分支侧）。
+
 ### Batch 603（已交付）
 
 - 分支：`codex/batch603-turn-lease-tail`（已合入 main）
