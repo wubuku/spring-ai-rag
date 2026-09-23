@@ -3588,6 +3588,28 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 593（已交付）
+
+- 分支：`codex/batch593-external-doc-tail`（已合入 main）
+- 内容：外部文档服务长尾（新建 ExternalDocumentServiceTailTest，
+  8 用例）：
+  - upsert(null) 请求级 IAE 拒绝；空白 documentType 归一为默认
+    text 而非拒绝（校验守卫跳过空白）；ASYNC 策略在派发服务缺失
+    时抛 EMBEDDING_JOBS_DISABLED；可重试并发失败
+    （DataIntegrityViolationException）耗尽 3 次尝试后收敛为
+    DocumentRevisionConflictException（同时覆盖重试谓词的
+    DataIntegrity 与 ConcurrencyFailure 两侧判定）；无事务模板时
+    直写路径生效且 token 为 null 跳过 confirmActiveWrite；SKIP+
+    未变化+启用文档对关键词索引零打扰（markNotRequested 与
+    ensureCurrent 均不调用）；禁用文档同版本 upsert 触发墓碑重放
+    冲突；legacy 文档（无来源版本）携带 expectedSourceRevision
+    认领被拒。
+- 要点：禁用文档 + 同版本 upsert 在到达索引协调前即被墓碑重放
+  守卫拒绝，因此 coordinateLocalIndex 的「SKIP+禁用」分支仅能由
+  内容变化路径触达。
+- 指标：1 个新测试类 8 用例绿；core 全量门禁 EXIT=0（5610 tests）；
+  ExternalDocumentService 分支缺口 38→27，core 总行缺口 1201→1193。
+
 ### Batch 592（已交付）
 
 - 分支：`codex/batch592-apikey-provision-revoke-tail`（已合入 main）
