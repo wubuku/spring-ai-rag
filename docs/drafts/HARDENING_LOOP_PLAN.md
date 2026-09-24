@@ -3635,6 +3635,26 @@ VersionHistoryModal 相关 100% 项等。
 - 构建验证：后端 core 全量 EXIT=0；前端 webui `npm run build`
   EXIT=0（vite 产物 ~347KB gzip ~111KB）。
 
+### Batch 618（已交付）
+
+- 分支：`codex/batch618-json-validation-embed-tail`（已合入 main）
+- 内容：JSON 记录校验与嵌入投影长尾（新建 JsonRecordValidation
+  EmbedTailTest，5 用例）：
+  - upsert：null 请求 → "request must not be null"；缺 collection
+    作用域 → "collectionKey or collectionId must be provided"。
+  - changedFields 三分支投影：retrievalText / jsonbPayload /
+    metadata+title+source（私有方法名是 changedFields，非
+    buildUpdateReason）。
+  - SKIP + 内容变更 → keywordIndexPersistenceService.
+    markNotRequested。
+  - UNCHANGED + 新鲜嵌入 → embeddingStatus=CACHED、error=null。
+  - SYNC 嵌入器抛异常 → embeddingStatus=FAILED + 错误文本投影。
+- 要点：既有文档的 jsonbPayload 必须与请求一致才判 UNCHANGED
+  （payloadChanged 比较实际值）；JsonRecordService 12 参构造器
+  第 11 参为 retrievalScopeResolver（测试传 null）。
+- 指标：1 个新测试类 5 用例绿；core 全量门禁 EXIT=0（5784 tests）；
+  JsonRecordService 分支缺口 31→30，core 总行缺口 1123→1122。
+
 ### Batch 617（已交付）
 
 - 分支：`codex/batch617-catalog-normalize-tail`（已合入 main）
