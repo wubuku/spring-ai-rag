@@ -3635,6 +3635,25 @@ VersionHistoryModal 相关 100% 项等。
 - 构建验证：后端 core 全量 EXIT=0；前端 webui `npm run build`
   EXIT=0（vite 产物 ~347KB gzip ~111KB）。
 
+### Batch 623（已交付）
+
+- 分支：`codex/batch623-preview-validation-tail`（已合入 main）
+- 内容：集合清空 preview 校验长尾（新建 CollectionPurgePreview
+  ValidationTailTest，4 用例）：
+  - preview：未完成内容索引（chat 侧 content_reference_index_
+    complete = FALSE 计数 > 0）→ "Content reference indexes are
+    incomplete"；活跃同步运行（rag_document_sync_runs > 0）→
+    "active work or Chat sessions"；documentCount 1 >
+    maxDocuments 0 → "exceeds configured synchronous limits"；
+    owner 活跃 preview 数量达上限 → "Too many active Collection
+    purge previews"。
+- 要点：buildPlan 的 documents 查询走 jdbcTemplate.query(sql,
+  RowMapper, args)（longIds），打桩需匹配 (contains, RowMapper,
+  eq) 签名而非 queryForList。
+- 指标：1 个新测试类 4 用例绿；core 全量门禁 EXIT=0（5815 tests）；
+  CollectionPurgeService validatePreviewable 分支覆盖细化，core
+  总行缺口 1117。
+
 ### Batch 622（已交付）
 
 - 分支：`codex/batch622-json-search-import-tail`（已合入 main）
