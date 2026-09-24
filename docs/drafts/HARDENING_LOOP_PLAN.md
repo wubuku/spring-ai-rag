@@ -3635,6 +3635,22 @@ VersionHistoryModal 相关 100% 项等。
 - 构建验证：后端 core 全量 EXIT=0；前端 webui `npm run build`
   EXIT=0（vite 产物 ~347KB gzip ~111KB）。
 
+### Batch 620（已交付）
+
+- 分支：`codex/batch620-json-internal-tail`（已合入 main）
+- 内容：JSON 记录内部助手长尾（新建 JsonRecordServiceInternal
+  TailTest，3 用例，反射驱动）：
+  - requestCollectionKey 对 null 请求返回 null。
+  - safeError(RuntimeException) 对空白/null 消息回退异常类名
+    （RuntimeException），对有效消息透传脱敏结果。
+  - DetailedSearchResult 紧凑构造器对 null traceResults 收敛为
+    空列表（response/outcome 强制非空）。
+- 要点：JsonRecordService 构造器在初始化块读取
+  ragProperties.getStructuredRecords()——测试构造必须提供
+  RagProperties 实例，否则 NPE。
+- 指标：1 个新测试类 3 用例绿；core 全量门禁 EXIT=0（5794 tests）；
+  JsonRecordService 分支缺口 30→29，core 总行缺口 1121→1120。
+
 ### Batch 619（已交付）
 
 - 分支：`codex/batch619-run-compare-guards-tail`（已合入 main）
