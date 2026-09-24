@@ -3635,6 +3635,28 @@ VersionHistoryModal 相关 100% 项等。
 - 构建验证：后端 core 全量 EXIT=0；前端 webui `npm run build`
   EXIT=0（vite 产物 ~347KB gzip ~111KB）。
 
+### Batch 627（已交付）
+
+- 分支：`codex/batch627-ratelimit-constructor-tail`（已合入 main）
+- 内容：限流过滤器构造与 PostgreSQL 后端长尾（新建 RateLimitFilter
+  ConstructorTailTest，9 用例）：
+  - postgres 后端：缺失主体 ID → 503 + rate_limit_store_unavailable
+    （兼容 OpenAI/ErrorResponse 双投影）；缺失 store → 503；
+    allowed 决策投影 X-RateLimit-Limit=principal 自定义
+    requestsPerMinute 与 X-RateLimit-Remaining=limit-requestCount；
+    rejected 决策 → 429 + Retry-After=42；store QueryTimeout 异常
+    → 503（兼容两种错误投影）。
+  - api-key 策略：无键头/属性时回退 IP 限流；属性键优先于请求头。
+  - 自定义键限流：vip-key 限流 2，第 3 次请求 429，非 /v1 路径
+    投影 ErrorResponse（TOO_MANY_REQUESTS）。
+  - resolveClientIp：X-Forwarded-For 多级取首段、无头回退
+    RemoteAddr；isExcludedPath 覆盖五类排除前缀。
+- 要点：AuthenticatedApiPrincipal 用 requestsPerMinute 独立参数的
+  兼容构造器（11 参）投影 principal 级限流。
+- 指标：1 个新测试类 9 用例绿；core 全量门禁 EXIT=0（5851 tests）；
+  RateLimitFilter 分支缺口 20→18、行缺口 3，core 总行缺口
+  1121→1106。
+
 ### Batch 626（已交付）
 
 - 分支：`codex/batch626-resolver-scope-tail`（已合入 main）
