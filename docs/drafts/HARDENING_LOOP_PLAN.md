@@ -3635,6 +3635,21 @@ VersionHistoryModal 相关 100% 项等。
 - 构建验证：后端 core 全量 EXIT=0；前端 webui `npm run build`
   EXIT=0（vite 产物 ~347KB gzip ~111KB）。
 
+### Batch 614（已交付）
+
+- 分支：`codex/batch614-frozen-request-tail`（已合入 main）
+- 内容：集合清空冻结请求校验长尾（新建 CollectionPurgeFrozenRequest
+  TailTest，6 用例）：
+  - validateFrozenRequest：collectionKey 不一致 → CONFLICT
+    "does not match the request"；collectionVersion 过期（9 ≠ 5）→
+    同类冲突；确认令牌错配（"wrong-token"）与指纹漂移
+    （"drifted-fp"）→ CONFIRMATION_INVALID。
+  - requirePreviewApplicable：status=APPLYING → 过期拒绝；预览
+    窗口未过但操作窗口（operation_deadline）单独过期 → 同样判
+    过期。
+- 指标：1 个新测试类 6 用例绿；core 全量门禁 EXIT=0（5764 tests）；
+  CollectionPurgeService 分支缺口 23→20，core 总行缺口 1126→1125。
+
 ### Batch 613（已交付）
 
 - 分支：`codex/batch613-run-compare-tail`（已合入 main）
