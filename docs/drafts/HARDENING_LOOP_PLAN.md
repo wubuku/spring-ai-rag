@@ -3635,6 +3635,17 @@ VersionHistoryModal 相关 100% 项等。
 - 构建验证：后端 core 全量 EXIT=0；前端 webui `npm run build`
   EXIT=0（vite 产物 ~347KB gzip ~111KB）。
 
+### Batch 630（已交付）
+
+- 分支：`codex/batch630-budget-guard-tail`（已合入 main）
+- 内容：预算守卫长尾（新建 ChatExecutionBudgetGuardTailTest，5 用例）：
+  - tryReservePolicyToolCall 拒绝空白名称/零上限/负上限；达到
+    上限后拒绝递增。
+  - recordContextPlan 对 null 输入产出空 Map、对有效输入正确投影。
+  - httpToolExecutionState 对相同限制返回相同实例、对变更预算
+    抛 IllegalStateException。
+- 指标：1 个新测试类 5 用例绿；core 全量门禁 EXIT=0。
+
 ### Batch 629（已交付）
 
 - 分支：`codex/batch629-ratelimit-normalize-tail`（已合入 main）
