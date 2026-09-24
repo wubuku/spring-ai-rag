@@ -3635,6 +3635,30 @@ VersionHistoryModal 相关 100% 项等。
 - 构建验证：后端 core 全量 EXIT=0；前端 webui `npm run build`
   EXIT=0（vite 产物 ~347KB gzip ~111KB）。
 
+### Batch 633（已交付）
+
+- 分支：`codex/batch633-document-mutation-cas-tail`（已合入 main）
+- 内容：DocumentMutationService 外部 CAS 与墓碑长尾（新建
+  DocumentMutationExternalCasTailTest，16 用例）：
+  - upsertExternal CAS 矩阵：新建身份携带 expectedSourceRevision
+    拒绝、同 revision 同托管状态 UNCHANGED（confirmActiveWrite
+    验证）、同 revision 内容漂移冲突、legacy 身份（无 source
+    Revision）期望版本拒绝、严格 CAS 缺少期望版本拒绝、期望版本
+    不匹配拒绝。
+  - 命名空间序列分配返回 null → IllegalStateException 中止；
+    ConcurrencyFailureException 三次重试后收敛冲突（times(3)
+    验证）。
+  - tombstoneExternal：缺失身份 / 已墓碑同 revision UNCHANGED /
+    活跃文档同 revision 冲突 / JSON_RECORD 类型不匹配 / 事务后
+    文档消失 not found（行 991-992 清零）。
+  - 命名空间归一守卫：控制字符、超长 129、非默认且已禁用。
+- 要点：tombstone 走严格 CAS（默认 strictExternalCas=true），需
+  传 expectedSourceRevision 才能到达事务后读取路径；其余"未覆盖"
+  分支经核对多为既有套件已覆盖的等价臂，行级缺口收敛到
+  restoreLocalFromVersion/importDocument/finish 少量行。
+- 指标：DocumentMutationService 行缺口 9 → 7；1 个新测试类 16
+  用例绿；core 全量门禁 EXIT=0（5912 tests）。
+
 ### Batch 632（已交付）
 
 - 分支：`codex/batch632-ragchat-nonkeyed-sse-tail`（已合入 main）
