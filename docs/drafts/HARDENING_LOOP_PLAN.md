@@ -3588,6 +3588,19 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 608（已交付）
+
+- 分支：`codex/batch608-purge-apply-tail`（已合入 main）
+- 内容：集合清空申请长尾（新建 CollectionPurgeApplyExpiryTailTest，
+  3 用例）：apply 对预览/操作双窗口过期的 preview 抛
+  COLLECTION_PURGE_PREVIEW_EXPIRED；fence CAS（集合版本 +
+  chat_commit_fence 版本双条件）未命中抛 COLLECTION_PURGE_CONFLICT
+  （"changed after purge preview"）；请求指纹与实时计划漂移在请求
+  冻结校验层即以 COLLECTION_PURGE_CONFIRMATION_INVALID 拒绝
+  （早于 requireUnchangedPlan 的二次防御）。
+- 指标：1 个新测试类 3 用例绿；core 全量门禁 EXIT=0（5732 tests）；
+  CollectionPurgeService 分支缺口 24→23，core 总行缺口 1133。
+
 ### Batch 607（已交付）
 
 - 分支：`codex/batch607-execution-flow-tail`（已合入 main）
