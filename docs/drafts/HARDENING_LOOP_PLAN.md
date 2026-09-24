@@ -3635,6 +3635,28 @@ VersionHistoryModal 相关 100% 项等。
 - 构建验证：后端 core 全量 EXIT=0；前端 webui `npm run build`
   EXIT=0（vite 产物 ~347KB gzip ~111KB）。
 
+### Batch 626（已交付）
+
+- 分支：`codex/batch626-resolver-scope-tail`（已合入 main）
+- 内容：集合身份解析器作用域长尾（新建 CollectionIdentityResolver
+  ScopeTailTest，9 用例）：
+  - requireIncludingDeleted 按键缺失 → 消息含 collectionKey；
+  - beginActiveWrite 拒绝 null/非正 id；
+  - requireActiveWithinAllowed 对已清理（purged）套件抛
+    COLLECTION_ALREADY_RETIRED；
+  - requireIncludingDeletedWithinAllowed 缺失 → NOT_FOUND；
+  - resolveActiveKeyIds：非法键名、已清理键（ALREADY_RETIRED）、
+    未知键（NOT_FOUND）逐一拒绝；
+  - resolveActiveIdsWithinAllowed：非法键名、未知键、空作用域
+    拒绝；
+  - mapKeys：null/空入参返回空 Map；缺失 legacy ID 仅投影已知键
+    并告警；
+  - validatePair：非法键名与非正 id 拒绝；requireActive 按 id 对
+    已清理套件抛 ALREADY_RETIRED。
+- 指标：1 个新测试类 9 用例绿；core 全量门禁 EXIT=0（5842 tests）；
+  CollectionIdentityResolver 分支缺口 20→13、行缺口 4→3，core
+  总行缺口 1121→1110。
+
 ### Batch 625（已交付）
 
 - 分支：`codex/batch625-masking-keep-type-tail`（已合入 main）
