@@ -3635,6 +3635,28 @@ VersionHistoryModal 相关 100% 项等。
 - 构建验证：后端 core 全量 EXIT=0；前端 webui `npm run build`
   EXIT=0（vite 产物 ~347KB gzip ~111KB）。
 
+### Batch 632（已交付）
+
+- 分支：`codex/batch632-ragchat-nonkeyed-sse-tail`（已合入 main）
+- 内容：RagChatController 非键控与 SSE 追踪长尾（新建
+  RagChatControllerNonKeyedSseTailTest，10 用例）：
+  - 无快照键控回合（executionSnapshot=null）在 ask/chat/stream
+    三入口回退 mapper.map 归一映射，替代 mapFromExecutionSnapshot。
+  - 非键控 ask：resolver 解析 scope 委托 chat(request, scope,
+    session)；旧构造器（无 resolver）走 chat(request) 重载。
+  - 诊断会话挂载：executeKeyedJson/executeKeyedSse 中
+    withTraceSession + idempotentResponse / nativeSnapshotEmitter
+    的 TRACE_ID 响应头 + X-RAG-Turn-Id。
+  - stream 订阅前同步异常（chatEvents 抛错）→ sendChatError 兜
+    底 + 心跳关闭分支（interval=0）。
+  - 无审计服务的 clearHistory 走 sessionCoordinator.clearSession
+    且跳过审计；configureObjectMapper(null) 忽略。
+- 要点：Mockito 2+ 的 any(Class) 不匹配 null——scope 为 null 的
+  chatEvents 打桩必须用 isNull()；Claim 反射构件与
+  KeyedAskTailTest 相同（operation 22 参记录）。
+- 指标：RagChatController 分支缺口 49 → 37、行缺口 35 → 18；
+  1 个新测试类 10 用例绿；core 全量门禁 EXIT=0（5896 tests）。
+
 ### Batch 631（已交付）
 
 - 分支：`codex/batch631-chat-execution-deep-tail`（已合入 main）
