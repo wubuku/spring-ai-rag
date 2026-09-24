@@ -3635,6 +3635,28 @@ VersionHistoryModal 相关 100% 项等。
 - 构建验证：后端 core 全量 EXIT=0；前端 webui `npm run build`
   EXIT=0（vite 产物 ~347KB gzip ~111KB）。
 
+### Batch 619（已交付）
+
+- 分支：`codex/batch619-run-compare-guards-tail`（已合入 main）
+- 内容：评测运行守卫与对比长尾（新建 EvaluationSuiteRunGuards
+  CompareTailTest，7 用例）：
+  - getRun：suiteVersionId 缺失版本 → NOT_FOUND "Suite version
+    not found"；owner 套件列表缺失该套件 → NOT_FOUND "Suite not
+    found"。
+  - compare：同环境运行（profile/revision/corpus 全一致）投影
+    environmentDrift=false（四项一致性全 true）；同 suite 不同
+    版本号 → IAE "same suite version"。
+  - executeRun：未入选变体（run.variantKeys=["other"]，definition
+    ["default"]）→ PASSED 空运行（caseCount=1、search 不执行）；
+    并发路径 identityExists 抛错被用例执行器捕获 → finishRun
+    FAILED（并发包装 ISE 为防御分支）。
+- 要点：corpus drift 判定依赖 caseExecutor.collectionSnapshot
+  打桩——缺失时 Mockito 默认空 Map 导致误判 CORPUS_CHANGED；
+  runConcurrency 默认 4，顺序与并发路径异常语义不同。
+- 指标：1 个新测试类 7 用例绿；core 全量门禁 EXIT=0（5791 tests，
+  含清理陈旧编译类后复跑）；EvaluationSuiteService 分支缺口
+  14→12，core 总行缺口 1125→1121。
+
 ### Batch 618（已交付）
 
 - 分支：`codex/batch618-json-validation-embed-tail`（已合入 main）
