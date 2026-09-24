@@ -3635,6 +3635,29 @@ VersionHistoryModal 相关 100% 项等。
 - 构建验证：后端 core 全量 EXIT=0；前端 webui `npm run build`
   EXIT=0（vite 产物 ~347KB gzip ~111KB）。
 
+### Batch 615（已交付）
+
+- 分支：`codex/batch615-purge-result-read-tail`（已合入 main）
+- 内容：集合清空完成结果读取与漂移二次防御长尾（新建 Collection
+  PurgeResultReadTailTest，3 用例）：
+  - COMPLETED 预览直接回读存储结果（状态 COMPLETED、purged 数量
+    投影），且不重复执行删除与 fence 推进（times(0) 验证）。
+  - 损坏的结果载荷（非 JSON）→ COLLECTION_PURGE_CONFLICT
+    "result is invalid"。
+  - 计划漂移二次防御可达性验证：请求指纹与预览存储指纹一致、
+    冻结校验通过后，实时计划指纹漂移（计数 0→3）→ CONFLICT
+    "plan changed"。
+- 要点（修正 Batch 608 的误判）：608 漂移测试触发的
+  CONFIRMATION_INVALID 是因为请求指纹本身写成了 "drifted-fp"，
+  在冻结校验层即被拦截——只要请求指纹匹配预览存储指纹，二次防御
+  （requireUnchangedPlan）完全可达。
+- 遗留：298-299 退役 fence（retireCollection 末尾 CAS）需完整
+  删除流 fixture——简化桩下 deletePurgeTargets 的文档计数 fencing
+  先行触发，延后至基于 CollectionPurgeApplyDeepTest 全流的批次。
+- 指标：1 个新测试类 3 用例绿；core 全量门禁 EXIT=0（5767 tests）；
+  CollectionPurgeService 分支缺口 20（路径细化），core 总行缺口
+  1125。
+
 ### Batch 614（已交付）
 
 - 分支：`codex/batch614-frozen-request-tail`（已合入 main）
