@@ -3635,6 +3635,43 @@ VersionHistoryModal 相关 100% 项等。
 - 构建验证：后端 core 全量 EXIT=0；前端 webui `npm run build`
   EXIT=0（vite 产物 ~347KB gzip ~111KB）。
 
+### Batch 631（已交付）
+
+- 分支：`codex/batch631-chat-execution-deep-tail`（已合入 main）
+- 内容：ChatExecutionService 执行/准备/流式深水区长尾（新建
+  ChatExecutionServiceExecutePrepareTailTest，17 用例）：
+  - 13 参兼容构造器委托（补 jsonRecordSearchTool 桩）跑通 PLAIN
+    回合；AGENT 关闭时 validateMode 先于租约获取拒绝。
+  - execute：RagException 直接重抛不回退（clientFactory 仅创建
+    一次）；RuntimeException 兜底为 lastFailure 并记录
+    recordFailure；maxCandidateAttempts=1 时第二候选在预算预留
+    即 CHAT_BUDGET_EXHAUSTED；双候选回退成功记录 recordSuccess。
+  - prepareForOperation：无租约走 retried.get() 且不触碰协调器；
+    Attempt.memory 非空时 committedMessages 经投影非空；全部失
+    败传播最后异常。
+  - stream：orderedCandidateDescriptors 抛错时释放租约并错误上
+    抛；空流经聚合器合成响应照常发出 Completed；首个候选首事件
+    前错误回退第二候选。
+  - 多角色输入消息（USER/ASSISTANT/SYSTEM/DEVELOPER）组装为会话
+    首部 SystemMessage（含 [client system]/[client developer]
+    前缀）；引用校验启用 + 追踪会话时 citationValidation 挂载结
+    果与元数据并落诊断；Usage 部分 token 只投影 totalTokens。
+- 防御性不可达判定（已核实、勿再投入）：
+  - execute/prepareForOperation 末尾 LLM_UNAVAILABLE 兜底：
+    eligibleCandidates 空集时抛 MODEL_CAPABILITY_UNSUPPORTED /
+    SERVICE_UNAVAILABLE，永不返回空列表。
+  - completeStreamAttempt "no usable streaming response"：聚合器
+    对空流合成兜底响应，null 守卫不可达。
+  - serializeDocumentIds 的 JsonProcessingException：objectMapper
+    序列化 List<Long> 不抛。
+  - buildPreparedExecution attempt==null：重试包装仅在成功后返回
+    且成功路径必设 attempt。
+- 要点：Mockito 嵌套打桩陷阱再现——blockingClient 等含 when() 的
+  构造必须先提升为局部变量再传入 thenReturn；Attempt.candidate
+  必须传真实 ChatModelCandidate（toResult 读取 ref）。
+- 指标：ChatExecutionService 分支缺口 80 → 63、行缺口 48 → 18；
+  1 个新测试类 17 用例绿；core 全量门禁 EXIT=0（5886 tests）。
+
 ### Batch 630（已交付）
 
 - 分支：`codex/batch630-budget-guard-tail`（已合入 main）
