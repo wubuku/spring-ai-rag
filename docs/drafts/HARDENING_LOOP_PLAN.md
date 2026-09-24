@@ -3635,6 +3635,24 @@ VersionHistoryModal 相关 100% 项等。
 - 构建验证：后端 core 全量 EXIT=0；前端 webui `npm run build`
   EXIT=0（vite 产物 ~347KB gzip ~111KB）。
 
+### Batch 613（已交付）
+
+- 分支：`codex/batch613-run-compare-tail`（已合入 main）
+- 内容：评测运行读取与对比守卫长尾（新建 EvaluationSuiteRun
+  CompareTailTest，5 用例）：
+  - getRun：suiteVersionId 对应版本缺失 → NOT_FOUND "Suite
+    version not found"。
+  - compare：同环境（profile/revision/corpus 全一致）投影
+    environmentDrift=false 且 sameSuiteVersion/sameProfile/
+    sameCodeRevision/sameCollectionSnapshot 全 true；codeRevision
+    漂移 → environmentDrift=true 但 sameCorpus 保持 true；不同
+    suite 的运行对比被 IAE 拒绝。
+  - createRun：tryInsertRun 首个空闲槽位命中（返回 PENDING run）
+    时成功投影 id/status/suiteKey（补齐 OrchestrationTest 仅覆盖
+    并发上限失败分支的空白）。
+- 指标：1 个新测试类 5 用例绿；core 全量门禁 EXIT=0（5758 tests）；
+  EvaluationSuiteService 分支缺口 17→14，core 总行缺口 1126→1125。
+
 ### Batch 612（已交付）
 
 - 分支：`codex/batch612-eval-run-outcome-tail`（已合入 main）
