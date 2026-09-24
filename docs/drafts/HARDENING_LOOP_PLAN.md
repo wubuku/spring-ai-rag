@@ -3635,6 +3635,28 @@ VersionHistoryModal 相关 100% 项等。
 - 构建验证：后端 core 全量 EXIT=0；前端 webui `npm run build`
   EXIT=0（vite 产物 ~347KB gzip ~111KB）。
 
+### Batch 610（已交付）
+
+- 分支：`codex/batch610-complete-lease-tail`（已合入 main）
+- 内容：轮次操作完成与释放长尾（新建 ChatTurnOperationComplete
+  LeaseTailTest，6 用例）：
+  - completePrepared：null 认领与 unkeyed 认领均跳过快照直接投影
+    响应（不触 repository.completeSuccess）；协调器存在但租约缺失
+    → IDEMPOTENCY_DISABLED（完成必须走协调的 PostgreSQL 会话
+    服务，是显式拒绝而非降级）；不可序列化元数据经 responsePayload
+    统一包装为 IDEMPOTENCY_RESPONSE_TOO_LARGE。
+  - completeOpenAi：执行快照超限（executionSnapshotMaxBytes=1 对
+    2 字节 "{}"）抛 IDEMPOTENCY_EXECUTION_SNAPSHOT_INVALID
+    "exceeds configured size"（completeWithDescriptor 内检查）。
+  - release：活跃租约委托 coordinator.release；无租约认领不触发。
+- 要点：Claim 带租约构造器为 private，测试经 setAccessible 反射
+  构造（既有 Batch 473 fixture 模式）；completePrepared 与
+  completeOpenAi 是两条不同完成链——快照超限检查位于
+  completeWithDescriptor，completePrepared 只管响应快照大小。
+- 指标：1 个新测试类 6 用例绿；core 全量门禁 EXIT=0（5742 tests）；
+  ChatTurnOperationService 分支缺口 23→21，core 总行缺口
+  1133→1130。
+
 ### Batch 609（已交付）
 
 - 分支：`codex/batch609-execution-prompt-metadata-tail`（已合入 main）
