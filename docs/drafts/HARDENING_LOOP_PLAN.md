@@ -3635,6 +3635,21 @@ VersionHistoryModal 相关 100% 项等。
 - 构建验证：后端 core 全量 EXIT=0；前端 webui `npm run build`
   EXIT=0（vite 产物 ~347KB gzip ~111KB）。
 
+### Batch 624（已交付）
+
+- 分支：`codex/batch624-eval-metrics-tail`（已合入 main）
+- 内容：评测指标阈值与对比守卫长尾（新建 EvaluationSuiteMetrics
+  CompareTailTest，4 用例）：
+  - executeRun：minMrr 下限（mrr 1.0 < 2.0）判 FAILED 并以 FAILED
+    errorCode 收尾；SKIPPED 运行（身份缺失）投影 avgHitRate/
+    avgMrr 0.0 与 caseCount=1。
+  - compare：definitionSha 不同（同 suite 同版本号）→ IAE "same
+    suite version"。
+  - fixture 修正：caseExecutor.collectionSnapshot 打桩缺失时
+    after=空 Map 导致 CORPUS_CHANGED 误判——已补齐打桩。
+- 指标：1 个新测试类 4 用例绿；core 全量门禁 EXIT=0（5818 tests）；
+  EvaluationSuiteService 分支缺口 12→11，core 总行缺口 1121→1117。
+
 ### Batch 623（已交付）
 
 - 分支：`codex/batch623-preview-validation-tail`（已合入 main）
