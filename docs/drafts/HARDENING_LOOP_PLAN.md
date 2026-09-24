@@ -3635,6 +3635,23 @@ VersionHistoryModal 相关 100% 项等。
 - 构建验证：后端 core 全量 EXIT=0；前端 webui `npm run build`
   EXIT=0（vite 产物 ~347KB gzip ~111KB）。
 
+### Batch 612（已交付）
+
+- 分支：`codex/batch612-eval-run-outcome-tail`（已合入 main）
+- 内容：评测运行结果状态长尾（新建 EvaluationSuiteRunOutcome
+  TailTest，5 用例）：
+  - executeRun：未入选变体跳过（单变体运行时 extra 变体用例不
+    执行，caseCount=1）；CaseDef.minHitRate 下限触发 FAILED；
+    identityExists=false 判 SKIPPED；insertCaseResult 返回 0
+    （fencing 丢失）时静默早退且不写 finishRun。
+  - createRun：选中变体数超过 maxVariantsPerRun 抛
+    IllegalArgumentException "A run may use at most N variants"
+    （注意是 IAE 而非 RagException）。
+- 要点：CaseDef 最后两个参数为 minHitRate/minMrr（Double 装箱）；
+  EvaluationSuiteRepository 的 SuiteRow/VersionRow 均为 record。
+- 指标：1 个新测试类 5 用例绿；core 全量门禁 EXIT=0（5753 tests）；
+  EvaluationSuiteService 分支缺口 23→17，core 总行缺口 1133→1126。
+
 ### Batch 611（已交付）
 
 - 分支：`codex/batch611-delete-dispatch-tail`（已合入 main）
