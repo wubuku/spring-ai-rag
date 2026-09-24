@@ -3635,6 +3635,29 @@ VersionHistoryModal 相关 100% 项等。
 - 构建验证：后端 core 全量 EXIT=0；前端 webui `npm run build`
   EXIT=0（vite 产物 ~347KB gzip ~111KB）。
 
+### Batch 622（已交付）
+
+- 分支：`codex/batch622-json-search-import-tail`（已合入 main）
+- 内容：JSON 记录检索与导入守卫长尾（新建 JsonRecordSearchImport
+  TailTest，10 用例）：
+  - search：缺失集合作用域（ids 与 keys 均空）→ IAE。
+  - searchAuthorizedDetailed：null scope → noMatches 空结果；
+    matchNone scope → 空结果；SELECTED 作用域命中文档 → 投影
+    documentId/externalId/collectionKey（mapKeys 桩）；SELECTED
+    作用域外文档被 scopeAllows 过滤（resultCollectionIds 空 →
+    Map.of()）；空白查询与超 10000 字符查询拒绝。
+  - getDetail：JSON 记录正常投影（lifecycleService 缺失 →
+    lifecycle=null）；非 JSON 记录 → DocumentNotFoundException。
+  - importRecord：null 项 → IAE；originalFilename 超 255 → IAE。
+  - upsert：元数据/标题单独变更 → UPDATED 且 contentHash 保持
+    （contentChanged=false 时不重置哈希）。
+- 要点：RetrievalConfig 默认 useRerank=true 会对 reRankingService
+  mock 调 rerank（返回 null 导致空结果）——检索投影测试需显式
+  useRerank(false)；RetrievalOutcome 用 ofResults 工厂构造。
+- 指标：1 个新测试类 10 用例绿；core 全量门禁 EXIT=0（5811 tests）；
+  JsonRecordService 分支缺口 30→24、行缺口 11→9，core 总行缺口
+  1121→1117。
+
 ### Batch 621（已交付）
 
 - 分支：`codex/batch621-batch-delegate-tail`（已合入 main）
