@@ -3635,6 +3635,24 @@ VersionHistoryModal 相关 100% 项等。
 - 构建验证：后端 core 全量 EXIT=0；前端 webui `npm run build`
   EXIT=0（vite 产物 ~347KB gzip ~111KB）。
 
+### Batch 621（已交付）
+
+- 分支：`codex/batch621-batch-delegate-tail`（已合入 main）
+- 内容：外部文档批量与委托长尾（新建 ExternalDocumentBatchDelegate
+  TailTest，7 用例）：
+  - sourceDelete 在 mutation service 在场时委托 tombstoneExternal
+    并透传结果。
+  - batchUpsert：null/空清单/51 项超限逐一拒绝；批量计数投影
+    （SKIP 策略 ok 项 CREATED + 空白标题项 persistenceFailed）。
+  - 墓碑重放两变体：enabled=false 同版本 upsert 冲突；
+    sourceDeletedAt 标记但 enabled=true 的 sourceDelete UNCHANGED
+    重放。
+  - SYNC 派发：错误结果投影 EMBEDDING_FAILED + 错误文本；成功
+    结果投影 COMPLETED 元数据（errorCode=null）。
+- 指标：1 个新测试类 7 用例绿；core 全量门禁 EXIT=0（5801 tests）；
+  ExternalDocumentService 分支缺口 26→23、行缺口 5→4，core 总行
+  缺口 1121→1119。
+
 ### Batch 620（已交付）
 
 - 分支：`codex/batch620-json-internal-tail`（已合入 main）
