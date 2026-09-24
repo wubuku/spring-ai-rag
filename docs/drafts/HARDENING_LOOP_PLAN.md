@@ -3635,6 +3635,26 @@ VersionHistoryModal 相关 100% 项等。
 - 构建验证：后端 core 全量 EXIT=0；前端 webui `npm run build`
   EXIT=0（vite 产物 ~347KB gzip ~111KB）。
 
+### Batch 617（已交付）
+
+- 分支：`codex/batch617-catalog-normalize-tail`（已合入 main）
+- 内容：资源目录发现与归一长尾（新建 ResourceCatalogNormalize
+  DiscoverTailTest，8 用例）：
+  - discover：全空白位置（含 null 元素，Arrays.asList）→ 空且
+    健康快照；maxFiles=0 非法限额在 failFast=false 时记入诊断并
+    产出空快照；classpath 发现遵守扩展名过滤（.MD 归一匹配
+    policy.md）；缺 !/ 前缀的 JAR 位置与裸绝对路径（无 scheme）
+    分别记入诊断。
+  - 归一助手：normalizeExtensions 去点/小写/trim/空值过滤；
+    allowed 对无点与隐藏点（.md）文件拒绝、对路径 a/b.md 匹配；
+    root 对 .. 穿越与空白位置抛 IAE。
+- 要点：discover 的总字节上限（94-96）为防御性分支——readBounded
+  以剩余额度截断单文件后，totalBytes 数学上不可能超过 maxTotalBytes；
+  Files.walk 默认不跟随符号链接，逃逸检测（202-204）需 OS 级
+  符号链接场景，两者均记为防御性。
+- 指标：1 个新测试类 8 用例绿；core 全量门禁 EXIT=0（5779 tests）；
+  ResourceCatalog 分支缺口 24→23，core 总行缺口 1125→1123。
+
 ### Batch 616（已交付）
 
 - 分支：`codex/batch616-retire-fence-tail`（已合入 main）
