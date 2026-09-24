@@ -3588,6 +3588,53 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+## 进度留档快照（Batch 609 交付后 · 用户收尾指令 · 2026-09-24）
+
+- 留档时点：2026-09-24 · main @ 9acce7e2（Batch 609 台账提交）
+- 本会话累计交付：Batch 587–609 共 23 个批次，全部走完
+  「缺口规划 → 单类绿灯 → core 全量门禁 EXIT=0 → --no-ff 合并
+  main → 台账 → 分支清理」闭环，main 与 origin/main 同步、
+  工作区干净。
+- 质量基线：core 全量 5736 tests / 0 failures；core 总行缺口
+  1231→1133；分支缺口 Top 已收敛至 ChatExecutionService 80B、
+  RagChatController 49B、DocumentMutationService 43B。
+- 单类清零战果：RetrievalTraceSession（行+分支全清）、诊断包
+  （RetrievalDiagnosticsService 行缺口 0）、
+  ChatMemoryMessageProjector 行缺口 0、
+  DerivationIntegrityRepository.Snapshot 行缺口 0、
+  RuntimeSkillCatalog/ResourceCatalog 行缺口大幅收敛。
+- 防御性不可达分支判定（已核实、勿再投入）：
+  - ChatAuthorizationService：ANY+非正集合与证据>0 矛盾、守卫
+    顺序互斥（ANY || SELECTED 的 CALLER_VISIBLE 分支被更早的
+    narrower 守卫拦截）、类型不变式、DTO List.copyOf 阻断。
+  - CollectionPurgeService：请求指纹漂移在请求冻结校验层以
+    CONFIRMATION_INVALID 先行拒绝，requireUnchangedPlan 的二次
+    漂移分支实际不可达。
+  - JsonRecordService：空 documentType 走归一而非校验拒绝；
+    RagProperties.queryRewrite 为 final 内联初始化，config==null
+    为防御分支。
+  - ChatExecutionService：空流经聚合器合成空响应 → 不触发回退
+    （Completed 正常发出）；execute 不自动铸造执行预算。
+- 复用要点（后续批次提速）：
+  - ChatExecutionService 13 参构造器 fixture：
+    ChatExecutionServiceOrchestrationTailTest（含 sessionCoordinator
+    invokeWithinDeadline 打桩必须执行传入 Supplier）。
+  - ChatTurnOperationService fixture：ChatTurnOperationLeaseCommand
+    TailTest / ChatTurnOperationSnapshotCandidateChainTailTest。
+  - DocumentMutationService fixture：DocumentMutationUpsertRestore
+    TailTest / DocumentMutationUpdateUnlinkTailTest。
+  - 反射调用私有守卫必须解包 InvocationTargetException；Mockito
+    嵌套打桩（thenReturn 参数中再 when）会 UnfinishedStubbing。
+- 待办（下一批次）：Batch 610 已选定 ChatTurnOperationService
+  剩余 23B（508 completePrepared 空认领、522 协调器提交路径、
+  572-573 快照超限、629 release 委托、821-822/875-885/909-910
+  续约与失败路径、1268-1269 收尾），fixture 复用
+  ChatTurnOperationLeaseCommandTailTest（Claim.sessionLease 构件
+  需查 Claim record 定义）；349/361-383 withEffectiveSession 为
+  既有判定之防御性死代码，勿再投入。
+- 构建验证：后端 core 全量 EXIT=0；前端 webui `npm run build`
+  EXIT=0（vite 产物 ~347KB gzip ~111KB）。
+
 ### Batch 609（已交付）
 
 - 分支：`codex/batch609-execution-prompt-metadata-tail`（已合入 main）
