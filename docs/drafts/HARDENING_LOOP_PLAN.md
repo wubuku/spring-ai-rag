@@ -3635,6 +3635,27 @@ VersionHistoryModal 相关 100% 项等。
 - 构建验证：后端 core 全量 EXIT=0；前端 webui `npm run build`
   EXIT=0（vite 产物 ~347KB gzip ~111KB）。
 
+### Batch 611（已交付）
+
+- 分支：`codex/batch611-delete-dispatch-tail`（已合入 main）
+- 内容：外部文档删除重放与嵌入派发长尾（新建 ExternalDocument
+  DeleteDispatchTailTest，6 用例）：
+  - sourceDelete：墓碑文档同版本重放 → UNCHANGED（不记录 DELETE
+    版本）；活文档同版本删除 → 冲突（"must use a new
+    sourceRevision"）。
+  - finishUpsert 嵌入投影：ASYNC 入队结果 → QUEUED/profileKey/
+    jobId 投影且 errorCode 为空；派发错误（Result.error）→
+    EMBEDDING_FAILED + error 文本；SYNC 无派发器 → 内联
+    embedDocument，FAILED 结果投影 EMBEDDING_FAILED + 文本；
+    SYNC + 新鲜嵌入 → CACHED + profileKey。
+- 要点：创建路径 saveAndFlush stub 必须补分配 id（否则内联
+  embedDocument 收到 null id，错误文本退化为 NPE 的 null 消息）；
+  ASYNC 元数据投影依赖显式 setEmbeddingPolicy(ASYNC)——embed=
+  true 默认解析为 SYNC。
+- 指标：1 个新测试类 6 用例绿；core 全量门禁 EXIT=0（5748 tests）；
+  ExternalDocumentService 分支缺口 27→26，core 总行缺口 1133
+  （持平，收益在分支侧）。
+
 ### Batch 610（已交付）
 
 - 分支：`codex/batch610-complete-lease-tail`（已合入 main）
