@@ -3588,6 +3588,25 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 609（已交付）
+
+- 分支：`codex/batch609-execution-prompt-metadata-tail`（已合入 main）
+- 内容：聊天执行提示组装与元数据投影四期长尾（新建 ChatExecution
+  ServicePromptMetadataTailTest，4 用例）：
+  - markAttempt：命令携带追踪会话时成功路径把 attempt 标记为
+    SUCCEEDED（session.toMetadata 验证）。
+  - SERVER 记忆模式触发 summaryService.load；STATELESS 跳过。
+  - AGENT 系统提示聚合 domainExtensions 领域模板与
+    runtimeSkillCatalog.levelOnePrompt 技能目录。
+  - 显式 modelRef（"solo"）时走请求级 validateCandidate 校验路径。
+- 要点：Mockito 在 thenReturn 参数表达式里调用另一个 when() 会
+  触发 UnfinishedStubbing——嵌套 client 构造必须先提升为局部
+  变量再打桩；execute 走 spec.call()、stream 走 spec.stream()，
+  两类 client stub 不能混用；AGENT 资格需 capabilities.toolCalling
+  且模型默认选项 instanceof ToolCallingChatOptions。
+- 指标：1 个新测试类 4 用例绿；core 全量门禁 EXIT=0（5736 tests）；
+  ChatExecutionService 分支缺口 81→80，core 总行缺口 1133。
+
 ### Batch 608（已交付）
 
 - 分支：`codex/batch608-purge-apply-tail`（已合入 main）
