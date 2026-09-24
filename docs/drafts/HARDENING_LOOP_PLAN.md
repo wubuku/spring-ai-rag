@@ -3635,6 +3635,24 @@ VersionHistoryModal 相关 100% 项等。
 - 构建验证：后端 core 全量 EXIT=0；前端 webui `npm run build`
   EXIT=0（vite 产物 ~347KB gzip ~111KB）。
 
+### Batch 625（已交付）
+
+- 分支：`codex/batch625-masking-keep-type-tail`（已合入 main）
+- 内容：日志脱敏类型识别长尾（新建 SensitiveDataMaskingKeepType
+  TailTest，13 用例）：
+  - convert：null/空格式化消息透传；含敏感值的消息脱敏后不再
+    泄露原始值。
+  - maskSensitiveDataKeepType：无匹配透传；九类类型识别投影
+    （PASSWORD/API_KEY/TOKEN/SECRET/AUTH/BEARER_TOKEN/
+    BASIC_AUTH/AWS_KEY/SENSITIVE 兜底，含 URL 查询参数与键值对
+    变体）；中文身份证与手机号投影 [SENSITIVE:NATIONAL_ID/PHONE]。
+- 要点：getSensitiveType 按预编译 Pattern 对象逐一识别（identity）
+  再按 pattern 字符串关键字分类——BEARER/BASIC/AWS 等模式对
+  应各自分支；通用 key=VALUE 兜底投影 [SENSITIVE:SENSITIVE]。
+- 指标：1 个新测试类 13 用例绿；core 全量门禁 EXIT=0（5831 tests）；
+  SensitiveDataMaskingConverter 行缺口 3→0，core 总行缺口
+  1121→1114。
+
 ### Batch 624（已交付）
 
 - 分支：`codex/batch624-eval-metrics-tail`（已合入 main）
