@@ -3635,6 +3635,27 @@ VersionHistoryModal 相关 100% 项等。
 - 构建验证：后端 core 全量 EXIT=0；前端 webui `npm run build`
   EXIT=0（vite 产物 ~347KB gzip ~111KB）。
 
+### Batch 628（已交付）
+
+- 分支：`codex/batch628-chat-command-mapper-tail`（已合入 main）
+- 内容：聊天命令映射器守卫长尾（新建 ChatCommandMapperGuardsTail
+  Test，8 用例）：
+  - map：null 请求 → "chat request must not be null"；PLAIN 模式
+    携带显式 maxResults → RETRIEVAL_OPTIONS_NOT_ALLOWED；未知
+    domain → UNKNOWN_DOMAIN；domain 检索配置（maxResults=3）接线
+    到命令选项。
+  - mapFromExecutionSnapshot：缺 retrievalOptions、effectiveScope
+    非对象、collectionIds 含非数值 → 均以
+    IDEMPOTENCY_EXECUTION_SNAPSHOT_INVALID 拒绝；候选链非空时
+    modelRef 取首位、domainId 空白归一 null。
+- 要点：ChatRequest.setMaxResults(int) 同时标记显式设置；候选链
+  非空时 modelRef 恒取首位（declaredModel DEFAULT 分支仅在候选
+  链为空时可达，而空候选链会被 textList 拒绝——该三元组为防御
+  性不可达）。
+- 指标：1 个新测试类 8 用例绿；core 全量门禁 EXIT=0（5859 tests，
+  含一次 coordinator 定时 flake 复跑确认）；ChatCommandMapper
+  分支缺口 18→12、行缺口 4，core 总行缺口 1119→1104。
+
 ### Batch 627（已交付）
 
 - 分支：`codex/batch627-ratelimit-constructor-tail`（已合入 main）
