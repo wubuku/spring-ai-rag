@@ -3635,6 +3635,27 @@ VersionHistoryModal 相关 100% 项等。
 - 构建验证：后端 core 全量 EXIT=0；前端 webui `npm run build`
   EXIT=0（vite 产物 ~347KB gzip ~111KB）。
 
+### Batch 616（已交付）
+
+- 分支：`codex/batch616-retire-fence-tail`（已合入 main）
+- 内容：集合清空退役 CAS 与文档计数 fencing 长尾（新建 Collection
+  PurgeRetireFenceTailTest，3 用例）：
+  - deletePurgeTargets 文档计数 fencing：删除数 2 ≠ 计划 0 →
+    CONFLICT "documents changed during purge"。
+  - markCollectionRetired 退役 CAS 未命中（purged_at =
+    CURRENT_TIMESTAMP 更新返回 0）→ CONFLICT "retirement fence
+    was lost"（298-299，Batch 615 遗留，本轮闭环）。
+  - 全流成功路径：删除数与计划一致 → RETIRED 结果投影
+    （collectionKey 保持、purgedDocumentCount=0、collectionVersion
+    =6 经反射构造的 CollectionState 终态查询）。
+- 要点：fence SQL 与退役 SQL 都含 purged_at IS NULL——打桩需用
+  各自独有片段（deleted = TRUE vs purged_at = CURRENT_TIMESTAMP）
+  区分；CollectionState 为私有 record，反射构造需 setAccessible；
+  空计划下 DELETE 返回 0 与计划计数一致才能走到退役。
+- 指标：1 个新测试类 3 用例绿；core 全量门禁 EXIT=0（5770 tests）；
+  CollectionPurgeService 分支缺口 23→18、行缺口 7→5，core 总行
+  缺口 1125→1123。
+
 ### Batch 615（已交付）
 
 - 分支：`codex/batch615-purge-result-read-tail`（已合入 main）
