@@ -3588,6 +3588,30 @@ VersionHistoryModal 相关 100% 项等。
   DocumentEmbedServiceEmitProgressTailTest，3 用例）：null 回调
   跳过、批量事件逐条发射、事件序号与总数正确。
 
+### Batch 607（已交付）
+
+- 分支：`codex/batch607-execution-flow-tail`（已合入 main）
+- 内容：聊天执行流三期长尾（新建 ChatExecutionServiceExecution
+  FlowTailTest，5 用例）：
+  - retryTemplate 对候选内瞬时失败（首次 spec.call 抛
+    IllegalStateException）重试后成功回答。
+  - call 返回 getResult() 为空的 ChatResponse 时聚合器先行 NPE
+    ——invoke 的 "no usable chat response" ISE 为后续防御（固化
+    真实行为）。
+  - STATELESS 命令跳过摘要链（summaryService.promptText 永不
+    调用）。
+  - 空流经 ChatClientMessageAggregator 合成空响应后正常
+    Completed（resolvedModel=first），且每个候选仅创建一次
+    Attempt——"空流回退下一候选" 在聚合器语义下不可达。
+  - 多角色输入消息组装：服务端系统提示与 [client system] 合并
+    为首位 SystemMessage（共 4 条），最后一条 USER 被替换为
+    customizeUserMessage 的命令原文。
+- 要点：loadBaseline 在 sessionCoordinator 存在时改走
+  findOwnedBaseline(principal, sessionId, limit)——fixture 必须
+  分别打桩两条历史查询路径。
+- 指标：1 个新测试类 5 用例绿；core 全量门禁 EXIT=0（5729 tests）；
+  ChatExecutionService 分支缺口 85→81，core 总行缺口 1135→1133。
+
 ### Batch 606（已交付）
 
 - 分支：`codex/batch606-update-unlink-tail`（已合入 main）
