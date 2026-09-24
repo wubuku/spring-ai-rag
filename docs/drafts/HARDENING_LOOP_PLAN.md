@@ -3635,6 +3635,21 @@ VersionHistoryModal 相关 100% 项等。
 - 构建验证：后端 core 全量 EXIT=0；前端 webui `npm run build`
   EXIT=0（vite 产物 ~347KB gzip ~111KB）。
 
+### Batch 629（已交付）
+
+- 分支：`codex/batch629-ratelimit-normalize-tail`（已合入 main）
+- 内容：限流过滤器归一与辅助方法长尾（新建 RateLimitFilterNormalize
+  TailTest，5 用例）：
+  - 构造器对 null 策略/键限流表/后端归一（请求正常 200）；
+    fixedPrincipalType 对非标类型不抛异常；resolveClientIp 对
+    X-Forwarded-For 多级取首段、无头回退 RemoteAddr；
+    isExcludedPath 覆盖五类排除前缀。
+- 要点：RateLimitFilter 构造器将 null 策略归一为 "ip"、null 后端
+  归一为 "local"；resolveClientIp 为 package-private 可直接测试。
+- 指标：1 个新测试类 5 用例绿；core 全量门禁 EXIT=0（5864 tests）；
+  RateLimitFilter 分支缺口 18→15、行缺口 3→0，core 总行缺口
+  1121→1106。
+
 ### Batch 628（已交付）
 
 - 分支：`codex/batch628-chat-command-mapper-tail`（已合入 main）
