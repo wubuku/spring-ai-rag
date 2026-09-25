@@ -3662,6 +3662,37 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：2 个新测试类 5 用例绿；core 全量门禁 EXIT=0
   （5947 tests）。
 
+### Batch 639（已交付）
+
+- 分支：`codex/batch639-sse-lifecycle-memory-tail`（已合入 main）
+- 内容：ChatExecutionService 流式记忆与 RagChatController SSE 生
+  命周期长尾（新建两个测试类，9 用例）：
+  - ChatExecutionServiceStreamMemoryTailTest（3）：首候选无消息
+    异常回退（unknown-error 臂）、流式完成路径 Attempt.memory 投
+    影（committedMessages + memory.get atLeastOnce）、执行路径
+    withPersistenceMetadata 的记忆投影。
+  - RagChatControllerSseLifecycleTailTest（6）：键控 chat 的
+    claim 竞速重放（X-RAG-Idempotent-Replay: true + Turn-Id 头）、
+    诊断会话在非键控流上的 TRACE 响应头、终态后事件跳过（438）、
+    异步完成后 onCompletion 取消订阅（delaySubscription + real
+    dispose）、emitter.completeWithError 触发 onError 回调（取消
+    + 停心跳）、心跳任务 1s 间隔真实触发。
+- 防御性不可达判定（已核实、勿再投入）：
+  - ChatTurnOperationService withEffectiveSession 重建分支
+    （367-383）：ChatCommand 规范构造器已用 SessionIdValidator
+    .resolve 归一会话 id，进入时恒有效（与 Batch 610 结论一致）。
+  - streamCandidate 订阅 onNext 空消费者（657-658）：上游为
+    `.then()` 派生 Flux，永不发射 onNext。
+  - nativeSnapshotEmitter 的 catch RuntimeException（586-587）：
+    SseEmitters.sendProgress 内部吞掉全部异常。
+  - SseEmitter.onTimeout 回调（425-428）：无容器无法触发。
+- 要点：memory.get 在 toResult/completeStreamAttempt/compact
+  Summary 多处调用，断言用 atLeastOnce()；Flux.concat(Mono<Void>,
+  Flux<T>) 推断失败改用 delaySubscription；键控重放测试仍需给
+  mapper.map 打桩（claim 前会先映射命令）。
+- 指标：2 个新测试类 9 用例绿；core 全量门禁 EXIT=0（5956
+  tests）。
+
 ## 进度留档快照（Batch 638 后 · 用户指令收尾）
 
 - 留档时点：2026-09-25 · main @ 本快照提交
