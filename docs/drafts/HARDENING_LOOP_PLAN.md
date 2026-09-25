@@ -3807,6 +3807,28 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：2 个新测试类 7 用例绿；core 全量门禁 EXIT=0（5980
   tests）。
 
+### Batch 645（已交付）
+
+- 分支：`codex/batch645-detail-projection-value-tail`（已合入 main）
+- 内容：ExternalDocumentService 详情投影与 MultiModelProperties
+  值语义长尾（新建两个测试类，6 用例）：
+  - ExternalDocumentServiceDetailProjectionTailTest（3）：反射驱
+    动私有 toDetail——无集合归属文档投影空名称/键映射、集合行存
+    在时投影名称与键、集合行缺失（findById empty）投影空映射。
+  - MultiModelPropertiesValueTailTest（3）：equals/hashCode 按值
+    字段同值/差异/null/异类分支、toString 投影 configFile、
+    getLegacyCapabilities 的大小写不敏感匹配与未知/null provider
+    及 null 表回退默认能力。
+- 要点：DTO 为 record 时断言用组件访问器（collectionName()）；
+  私有投影方法可反射直驱，避免为 getDetail 铺整套身份解析桩。
+- 排障记录：一次门禁 EXIT=1 为 JaCoCo 报告阶段 "Unknown block
+  type 26"——上轮被取消的运行残留损坏 exec 文件，删除
+  target/jacoco.exec 后重跑恢复；另 HybridRetrieverService
+  BenchmarkTest.parseVector_10k_under3s 在机器负载下再次抖动
+  （3176ms > 3s），与改动无关，拟立专项批次做抗抖动加固。
+- 指标：2 个新测试类 6 用例绿；core 全量门禁 EXIT=0（5986
+  tests）。
+
 ## 进度留档快照（Batch 638 后 · 用户指令收尾）
 
 - 留档时点：2026-09-25 · main @ 本快照提交
