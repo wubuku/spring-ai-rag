@@ -3635,6 +3635,76 @@ VersionHistoryModal 相关 100% 项等。
 - 构建验证：后端 core 全量 EXIT=0；前端 webui `npm run build`
   EXIT=0（vite 产物 ~347KB gzip ~111KB）。
 
+### Batch 638（已交付）
+
+- 分支：`codex/batch638-transport-rotation-tail`（已合入 main）
+- 内容：AllowlistedHttpToolProvider 传输层与 ApiKeyManagement
+  Service 事务/轮换钳制长尾（新建两个测试类，5 用例）：
+  - AllowlistedHttpToolProviderTransportTailTest（3）：resolve
+    PublicTarget 对 null / 空白主机返回 null；HttpTransport 默认
+    close() 空实现（无操作传输实现继承默认方法）；readBounded 对
+    read()==0 的流继续读取（自定义 InputStream 相位机）。
+  - ApiKeyManagementTransactionRotationClampTailTest（2）：供给
+    幂等新建路径在事务模板内执行（generateIdempotentKey 非重放
+    分支）；prepareRotation 将当前凭证 retireAt 钳制到主体到期
+    时间（expiresAt=now+30s + overlap=3600s）。
+- 防御性不可达判定（已核实、勿再投入）：
+  - ApiKeyManagementService prepareRotation 的 "expires before a
+    rotation overlap can begin"（422-423）：ensureActive 在取 now
+    之后立即拒绝 expiresAt <= now 的主体，钳制后的 deadline 恒大
+    于 now，该臂不可达。
+  - 供给重试循环末尾 "Unable to resolve API key provisioning"
+    （222）需要 provisionInCurrentTransaction 对全新请求持续返回
+    null，常规桩不可达，留待后续。
+- 要点：prepareRotation 会对当前凭证与新生成目标凭证各调用一次
+  saveAndFlush——钳制断言需按 keyId 过滤捕获值；新目标 keyId 是
+  随机生成，findByKeyId 需用 thenAnswer 通配。
+- 指标：2 个新测试类 5 用例绿；core 全量门禁 EXIT=0
+  （5947 tests）。
+
+## 进度留档快照（Batch 638 后 · 用户指令收尾）
+
+- 留档时点：2026-09-25 · main @ 本快照提交
+- 用户已明确暂停循环，等待下一步指示。本轮（Batch 631–638 共
+  8 个批次）全部按「规划→实施→单类验证→core 全量门禁 EXIT=0→
+  push 特性分支→--no-ff 合并 main→台账记录→清理分支」交付完成，
+  工作区干净。
+- core 测试规模：5818 → 5947（+129 用例）；残余未覆盖行
+  1104 → 约 1050。
+- 本轮新增批次重点：
+  - Batch 631：ChatExecutionService 执行/准备/流式深水区（17
+    用例，分支缺口 80→63），判定 execute/prepare 末尾 LLM_
+    UNAVAILABLE 兜底、completeStreamAttempt 空响应守卫、
+    serializeDocumentIds 序列化异常为防御性不可达。
+  - Batch 632：RagChatController 非键控链路与 SSE 追踪（10 用
+    例，分支缺口 49→37），无快照键控回合 mapper.map 回退、诊断
+    会话挂载、TRACE_ID/X-RAG-Turn-Id 响应头。
+  - Batch 633：DocumentMutationService 外部 CAS 矩阵与墓碑链
+    （16 用例），CAS 拒绝/UNCHANGED/收敛冲突/事务后消失。
+  - Batch 634：RagChatService 遗留链路（8 用例，分支缺口
+    27→19），判定非 Ordered 臂、无候选 ISE、流式预算耗尽臂为
+    防御性不可达。
+  - Batch 635：PdfToRagService 辅助方法与策略委托（8 用例，
+    分支缺口 27→18）。
+  - Batch 636：JsonRecordService 守卫与解析（5 用例）。
+  - Batch 637：RagDocumentController 校验矩阵（8 用例，分支缺
+    口 35→28）+ ResourceCatalog 根守卫，判定 JAR 前缀 unsafe 与
+    escapes-root 守卫为防御性不可达。
+  - Batch 638：AllowlistedHttpToolProvider 传输层 + ApiKey
+    Management 事务/轮换钳制（5 用例），判定轮换过期守卫臂为
+    防御性不可达。
+- 复用要点沉淀见各批次条目；高频陷阱：Mockito 嵌套打桩需先提
+  升局部变量、any(Class) 不匹配 null、真实 ChatClient 需 advisor
+  透传桩、api dto 与 Spring AI 同名类型（ChatResponse）需全限定。
+- 下一轮候选（JaCoCo 残余 Top）：ChatExecutionService（63B）、
+  ChatTurnOperationService（21B+17L）、RagChatController（37B）、
+  ResourceCatalog（约 19B，多为防御性）、ApiKeyManagementService
+  （约 31B）。注意：部分 csv 分支缺口与行级数据不一致（如
+  EndpointCallback 报 34B 但行级仅 5 行未覆盖），规划时需先做行
+  级核对。
+- 构建验证：后端 core 全量 EXIT=0（5947 tests，0 failures）；
+  WebUI `npm run build` EXIT=0（vite 产物 ~347KB gzip ~111KB）。
+
 ### Batch 637（已交付）
 
 - 分支：`codex/batch637-ragdoc-validate-resourcecat-tail`（已合
