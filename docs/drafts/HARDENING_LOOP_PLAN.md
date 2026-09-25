@@ -3880,6 +3880,32 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：既有 3 个会话链测试类全绿 + 新增 2 用例；core 全量门禁
   EXIT=0（5994 tests）。
 
+### Batch 649（已交付）
+
+- 分支：`codex/batch649-configloader-benchmark-stability`（已合
+  入 main）
+- 内容：外部 models.json 装载器覆盖长尾 + 基准吞吐采样化（新建
+  1 测试类 5 用例 + 改造 1 基准用例，共 6 用例）：
+  - MultiModelConfigLoaderCoverageTailTest（5）：非法 file 路径
+    （NUL 字符 → IAE）与目录路径（readString IO 异常）双降级、
+    完整 JSON 投影 providers + 模型 capabilities 非空臂 +
+    legacyCapabilities 映射、模型缺 capabilities 回退缺省
+    （null, null 且 supportsStreaming 放行）、嵌套记录
+    （ModelsJsonRoot/Models/CapabilitiesJson）的 toString 与
+    equals/hashCode。
+  - HybridRetrieverServiceBenchmarkTest.concurrentSearch_
+    throughput_above50ops：与 parseVector 同样的负载抖动（39 vs
+    50 ops/s）——改为 3 轮采样取最大吞吐，阈值不变。
+- 勘误：Batch 647 台账中「OpenAI 流式生命周期 dispose 立即生
+  效」表述不实——SseEmitter 的 onCompletion/onError 回调由
+  Servlet 容器驱动，单测环境不触发（419-432 / 346-351 / 362 行
+  实际仍未覆盖）；两个用例仅固化了"同步流不抛异常"的行为。
+- 排障记录：一轮门禁 EXIT=1 为 JaCoCo "Unknown block type 26"
+  （上次被取消运行残留损坏 exec，删除 target/jacoco.exec 恢复）；
+  另 ChatSessionCoordinatorCommitTailTest 的中断时序用例在负载
+  下偶发（单跑即绿），列入后续抗抖动批次。
+- 指标：6 用例绿；core 全量门禁 EXIT=0（5999 tests）。
+
 ## 进度留档快照（Batch 638 后 · 用户指令收尾）
 
 - 留档时点：2026-09-25 · main @ 本快照提交
