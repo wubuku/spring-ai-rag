@@ -4009,6 +4009,22 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：2 个新测试类 4 用例绿；core 全量门禁 EXIT=0（6026
   tests）。
 
+### Batch 656（已交付）
+
+- 分支：`codex/batch656-comparison-cache-entry-tail`（已合入 main）
+- 内容：模型对比便捷入口与缓存清理长尾（新建两个测试类，5 用
+  例）：
+  - ModelComparisonServiceEntryTailTest（2）：compareProviders 按
+    provider 引用列表顺序解析并比较；compareAllProviders 经可用
+    模型引用全集比较（结果按提交顺序、modelName 投影）。
+  - CacheMetricsServiceClearCacheTailTest（3）：clearCache 的无
+    CacheManager、缓存缺失、缓存命中三条路径（0 / 0 / 1 + clear
+    调用验证）。
+- 要点：Mockito 嵌套打桩陷阱高频复发——构造 mock 模型的辅助方
+  法必须先提升为局部变量再传入 thenReturn。
+- 指标：2 个新测试类 5 用例绿；core 全量门禁 EXIT=0（6031
+  tests）。
+
 ## 进度留档快照（Batch 638 后 · 用户指令收尾）
 
 - 留档时点：2026-09-25 · main @ 本快照提交
