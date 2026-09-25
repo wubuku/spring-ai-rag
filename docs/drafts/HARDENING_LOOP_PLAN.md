@@ -3738,6 +3738,33 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：WebUI 65 文件 680 tests 全绿（+3）；typecheck/lint/
   check:alignment/check:design-tokens/build 全部 EXIT=0。
 
+### Batch 642（已交付）
+
+- 分支：`codex/batch642-renewal-retry-tail`（已合入 main）
+- 内容：ChatTurnOperationService 续约任务与 ApiKeyManagement
+  Service 供给并发重试长尾（新建两个测试类，5 用例）：
+  - ChatTurnOperationRenewalTaskTailTest（3）：反射替换内联
+    renewalExecutor 为捕获型 mock，同步驱动续约 Runnable——
+    renew 成功时 claim.updateOperation 切换到新 operation（含
+    operationRef.set）、renew 返回 null 时 markRenewalLost、
+    stopRenewal 后任务体经 renewalStopped 短路不触达仓储。
+  - ApiKeyManagementProvisionRetryTailTest（2）：并发插入竞争在
+    重试预算内耗尽（attempts=2）→ "Unable to resolve a
+    concurrent provisioning request"；退避休眠被中断 →
+    interrupted 恢复路径且中断标志复位保留。
+- 防御性不可达判定（已核实、勿再投入）：供给重试循环末尾
+  "Unable to resolve API key provisioning"（222）——
+  provisionInCurrentTransaction 恒返回非 null（重放或新建二选
+  一），result != null 恒真。
+- 要点：内联 final 字段（renewalExecutor）可经反射 setAccessible
+  替换为捕获型 mock，把时间驱动的定时任务变成同步可测；record
+  复制需用组件访问器（id() 等），无 getter 风格。
+- 备注：首轮全量门禁中 HybridRetrieverServiceBenchmarkTest 的
+  parseVector_10k_under3s 因机器负载波动超时（3322ms > 3s），
+  与本批改动无关，静默重跑通过后全量 EXIT=0。
+- 指标：2 个新测试类 5 用例绿；core 全量门禁 EXIT=0（5964
+  tests）。
+
 ## 进度留档快照（Batch 638 后 · 用户指令收尾）
 
 - 留档时点：2026-09-25 · main @ 本快照提交
