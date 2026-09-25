@@ -356,31 +356,13 @@ public class ChatTurnOperationService {
                 prepared, effectiveCommand, transport, streaming, resolvedCandidates, lease);
     }
 
-    /** 会话 id 非法时生成新会话并派生带新会话的等价 ChatCommand。 */
+    /**
+     * 会话合法性由 ChatCommand 紧凑构造器保证（非法值在构造期抛
+     * 错、空值生成 UUID），因此这里恒走快速通道原样返回；重建分
+     * 支经两轮 JaCoCo 行级核验确认为不可达，已移除（Batch 648）。
+     */
     private ChatCommand withEffectiveSession(ChatCommand command) {
-        String effectiveSession = SessionIdValidator.isValid(command.sessionId())
-                ? command.sessionId()
-                : UUID.randomUUID().toString();
-        if (effectiveSession.equals(command.sessionId())) {
-            return command;
-        }
-        return new ChatCommand(
-                command.message(),
-                effectiveSession,
-                command.principal(),
-                command.principal().memoryConversationId(effectiveSession),
-                command.mode(),
-                command.memoryMode(),
-                command.modelRef(),
-                command.domainId(),
-                command.retrievalScope(),
-                command.retrievalOptions(),
-                command.clientMetadata(),
-                command.inputMessages(),
-                command.modelCandidates(),
-                command.retrievalTraceSession(),
-                command.retrievalFilters(),
-                command.executionBudget());
+        return command;
     }
 
     /** 插入新 operation 行；插入成功则领取，竞争失败则按最新状态重入分派。 */
