@@ -106,6 +106,37 @@ describe('Chat', () => {
     expect(screen.getByRole('button', { name: /chat.send/ })).toBeInTheDocument();
   });
 
+  it('exposes accessible name and expanded state on the sidebar toggle', () => {
+    renderChat();
+
+    // 侧栏开关：可访问名称 + aria-expanded 初始为 false。
+    const sidebarToggle = screen.getByRole('button', { name: 'chat.history' });
+    expect(sidebarToggle).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(sidebarToggle);
+    expect(sidebarToggle).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('exposes menu semantics and expanded state on the export button', async () => {
+    (chatApi.getHistory as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: [{
+        id: 9,
+        sessionId: 'session-9',
+        userMessage: 'Earlier question',
+        aiResponse: 'Earlier answer',
+        createdAt: '2026-08-17T08:00:00',
+      }],
+    });
+
+    renderChat('/chat/session-9');
+    await screen.findByText('Earlier question');
+
+    const exportButton = screen.getByRole('button', { name: /chat.export/ });
+    expect(exportButton).toHaveAttribute('aria-haspopup', 'menu');
+    expect(exportButton).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(exportButton);
+    expect(exportButton).toHaveAttribute('aria-expanded', 'true');
+  });
+
   it('send button is disabled when input is empty', () => {
     renderChat();
     const sendBtn = screen.getByRole('button', { name: /chat.send/ });
@@ -997,7 +1028,7 @@ describe('Chat stop flow, exports, feedback and callback guards', () => {
     renderChat('/chat');
 
     // 侧栏默认关闭：点击 ☰ 打开后可见历史会话。
-    fireEvent.click(screen.getByTitle('Toggle history'));
+    fireEvent.click(screen.getByTitle('chat.history'));
     const sessionButton = await screen.findByRole('button', {
       name: /History Session/,
     });

@@ -70,10 +70,27 @@ describe('Settings', () => {
   it('renders settings tabs without an API key persistence tab', () => {
     renderSettings();
     // Mock returns keys: settings.llmProvider, settings.retrieval, settings.cache, language label
-    expect(screen.getByRole('button', { name: /settings\.llmProvider/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /settings\.retrieval/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /settings\.cache/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /settings\.llmProvider/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /settings\.retrieval/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /settings\.cache/i })).toBeInTheDocument();
     expect(screen.queryByText('settings.ragApiKey')).not.toBeInTheDocument();
+  });
+
+  it('exposes tablist semantics with selected state on settings tabs', () => {
+    renderSettings();
+
+    const tablist = screen.getByRole('tablist', { name: /settings\.title/i });
+    expect(tablist).toBeInTheDocument();
+
+    const llmTab = screen.getByRole('tab', { name: /settings\.llmProvider/i });
+    expect(llmTab).toHaveAttribute('aria-selected', 'true');
+
+    const retrievalTab = screen.getByRole('tab', { name: /settings\.retrieval/i });
+    expect(retrievalTab).toHaveAttribute('aria-selected', 'false');
+
+    fireEvent.click(retrievalTab);
+    expect(retrievalTab).toHaveAttribute('aria-selected', 'true');
+    expect(llmTab).toHaveAttribute('aria-selected', 'false');
   });
 
   it('shows save button disabled when no changes', () => {
@@ -193,7 +210,7 @@ describe('Settings persistence and model fallback branches', () => {
       .toHaveValue('0.9');
     expect(screen.getByLabelText('settings.topK')).toHaveValue(25);
 
-    fireEvent.click(screen.getByRole('button', { name: 'settings.cache' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'settings.cache' }));
     expect(screen.getByLabelText('settings.ttlMinutes')).toHaveValue(5);
     expect(screen.getByLabelText('settings.maxSize')).toHaveValue(42);
   });
@@ -288,7 +305,7 @@ describe('Settings persistence and model fallback branches', () => {
 
   it('resets the cache max size to the default when the input is cleared', () => {
     renderSettings();
-    fireEvent.click(screen.getByRole('button', { name: 'settings.cache' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'settings.cache' }));
     const input = screen.getByLabelText('settings.maxSize') as HTMLInputElement;
     fireEvent.change(input, { target: { value: '5555' } });
     expect(input.value).toBe('5555');
@@ -307,7 +324,7 @@ describe('Settings persistence and model fallback branches', () => {
     const topK = screen.getByLabelText('settings.topK');
     fireEvent.change(topK, { target: { value: '30' } });
 
-    fireEvent.click(screen.getByRole('button', { name: 'settings.cache' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'settings.cache' }));
     const ttl = screen.getByLabelText('settings.ttlMinutes');
     fireEvent.change(ttl, { target: { value: '15' } });
 
@@ -434,7 +451,7 @@ describe('Settings model loading, tabs and numeric fallbacks', () => {
     const user = userEvent.setup();
     renderSettings();
 
-    await user.click(screen.getByRole('button', { name: 'Language' }));
+    await user.click(screen.getByRole('tab', { name: 'Language' }));
     await user.click(screen.getByRole('button', { name: /中文/ }));
 
     expect(localStorageMock.setItem).toHaveBeenCalledWith('language', 'zh-CN');
@@ -444,7 +461,7 @@ describe('Settings model loading, tabs and numeric fallbacks', () => {
     const user = userEvent.setup();
     renderSettings();
 
-    await user.click(screen.getByRole('button', { name: /settings\.retrieval/i }));
+    await user.click(screen.getByRole('tab', { name: /settings\.retrieval/i }));
 
     // 语义权重与全文权重两个滑块，按文档顺序取第二个（fulltextWeight）。
     const sliders = screen.getAllByRole('slider') as HTMLInputElement[];
@@ -469,7 +486,7 @@ describe('Settings model loading, tabs and numeric fallbacks', () => {
     const user = userEvent.setup();
     renderSettings();
 
-    await user.click(screen.getByRole('button', { name: /settings\.cache/i }));
+    await user.click(screen.getByRole('tab', { name: /settings\.cache/i }));
 
     const checkbox = screen.getByRole('checkbox') as HTMLInputElement;
     expect(checkbox).toBeChecked();

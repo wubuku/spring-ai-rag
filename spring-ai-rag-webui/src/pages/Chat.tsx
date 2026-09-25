@@ -450,7 +450,9 @@ export function Chat() {
             <button
               className={styles.sidebarToggle}
               onClick={() => setShowSidebar(!showSidebar)}
-              title="Toggle history"
+              aria-label={t('chat.history')}
+              aria-expanded={showSidebar}
+              title={t('chat.history')}
             >
               ☰
             </button>
@@ -459,7 +461,12 @@ export function Chat() {
           {messages.length > 0 && (
             <>
               <div className={styles.exportWrapper}>
-                <button onClick={() => setShowExportMenu(!showExportMenu)} className={styles.exportBtn}>
+                <button
+                  onClick={() => setShowExportMenu(!showExportMenu)}
+                  className={styles.exportBtn}
+                  aria-haspopup="menu"
+                  aria-expanded={showExportMenu}
+                >
                   {t('chat.export')} ▾
                 </button>
                 {showExportMenu && (
@@ -535,6 +542,7 @@ export function Chat() {
                     type="button"
                     className={styles.feedbackBtn}
                     title={t('evaluation.thumbsUp')}
+                    aria-label={t('evaluation.thumbsUp')}
                     onClick={() => {
                       const prevUser = [...messages].reverse().find(m => m.role === 'user');
                       submitFeedback('THUMBS_UP', prevUser?.content);
@@ -546,6 +554,7 @@ export function Chat() {
                     type="button"
                     className={styles.feedbackBtn}
                     title={t('evaluation.thumbsDown')}
+                    aria-label={t('evaluation.thumbsDown')}
                     onClick={() => {
                       const prevUser = [...messages].reverse().find(m => m.role === 'user');
                       submitFeedback('THUMBS_DOWN', prevUser?.content);

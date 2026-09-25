@@ -243,6 +243,8 @@ export function Search() {
                 type="button"
                 className={styles.historyBtn}
                 onClick={() => setShowHistory(v => !v)}
+                aria-label={t('search.history') || 'History'}
+                aria-expanded={showHistory}
                 title={t('search.history') || 'History'}
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -277,6 +279,7 @@ export function Search() {
                           type="button"
                           className={styles.historyRemove}
                           onClick={e => { e.stopPropagation(); removeItem(item.timestamp); }}
+                          aria-label={t('common.delete')}
                           title={t('common.delete')}
                         >
                           ×
