@@ -3635,6 +3635,26 @@ VersionHistoryModal 相关 100% 项等。
 - 构建验证：后端 core 全量 EXIT=0；前端 webui `npm run build`
   EXIT=0（vite 产物 ~347KB gzip ~111KB）。
 
+### Batch 635（已交付）
+
+- 分支：`codex/batch635-pdftorag-helper-tail`（已合入 main）
+- 内容：PdfToRagService 辅助方法与策略委托长尾（新建
+  PdfToRagHelperTailTest，8 用例）：
+  - deriveTitle 空白 → Untitled、.pdf/.PDF 后缀剥离、超 200 字符
+    截断；extractUuid null / 无斜杠 / 取首段三臂。
+  - 直连嵌入路径（无 mutation 服务）：embed=true 走 doEmbed 正常
+    投影 chunksCreated；嵌入异常转 FAILED 不中断导入。
+  - 5 参入口在 mutation 服务就绪时按 embed 位委托 SKIP 策略；
+    mutation 响应 lifecycle 两臂投影（null → embeddingAction
+    NONE；有 lifecycle → embedStatus 取 embeddingStatus）。
+  - 空 / 空白 Markdown 内容 IAE 拒绝。
+- 要点：PdfToRagResult 的 mutation 变体把 mutation.embedding
+  Action() 同时投影到 embedMessage 与 embeddingAction，断言需用
+  embeddingAction()；ASYNC 策略入口要求 dispatchService 已注入
+  （requireJobsEnabled），单元桩用 SYNC。
+- 指标：PdfToRagService 分支缺口 27 → 18、行缺口 10 → 5；1 个
+  新测试类 8 用例绿；core 全量门禁 EXIT=0（5928 tests）。
+
 ### Batch 634（已交付）
 
 - 分支：`codex/batch634-ragchat-legacy-path-tail`（已合入 main）
