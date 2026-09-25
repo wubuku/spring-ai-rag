@@ -3991,6 +3991,24 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 5 用例绿；core 全量门禁 EXIT=0（6022
   tests）。
 
+### Batch 655（已交付）
+
+- 分支：`codex/batch655-derivation-scan-marker-tail`（已合入 main）
+- 内容：完整性仓库扫描分页与 Marker CLI 失败长尾（新建两个测试
+  类，4 用例）：
+  - DerivationIntegrityRepositoryScanPagingTailTest（3）：inspect
+    (RagDocument) 委托到 ID 查询；scanCollection 携带 bucket 时
+    classifiedIds 生成 bucket = ? 谓词并联动 inspectIds 映射；无
+    bucket 时 appendSelectionPredicates 空集短路且空分类结果投影
+    空快照列表。
+  - MarkerPdfConverterCliFailureTailTest（1）：marker 命令不存在
+    时 convert 捕获 IOException 以 false 收场。
+- 防御性不可达判定（已核实、勿再投入）：DerivationIntegrity
+  Repository 快照查询的 LIMIT/OFFSET 参数装配（487-492）——内部
+  三个 query 调用点全部传 null limit/offset，无任何调用方启用。
+- 指标：2 个新测试类 4 用例绿；core 全量门禁 EXIT=0（6026
+  tests）。
+
 ## 进度留档快照（Batch 638 后 · 用户指令收尾）
 
 - 留档时点：2026-09-25 · main @ 本快照提交
