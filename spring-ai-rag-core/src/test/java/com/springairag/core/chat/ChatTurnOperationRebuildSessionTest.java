@@ -12,11 +12,14 @@ import org.mockito.Mockito;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -130,5 +133,26 @@ class ChatTurnOperationRebuildSessionTest {
 
         Mockito.verifyNoInteractions(repository);
         assertFalse(claim.replay());
+    }
+
+    @Test
+    void invalidSessionIdIsRejectedAtConstructionTime() {
+        // 回归（Batch 648）：withEffectiveSession 的重建分支已删除，
+        // 会话合法性不变式必须由 ChatCommand 构造器成立。
+        assertThrows(IllegalArgumentException.class,
+                () -> new ChatCommand(
+                        "问题", "bad session!", principal, null,
+                        ChatMode.PLAIN, null, null, null, null, null,
+                        Map.of()));
+    }
+
+    @Test
+    void blankSessionIdBecomesGeneratedUuidAtConstructionTime() {
+        ChatCommand command = new ChatCommand(
+                "问题", "  ", principal, null,
+                ChatMode.PLAIN, null, null, null, null, null,
+                Map.of());
+
+        assertTrue(SessionIdValidator.isValid(command.sessionId()));
     }
 }
