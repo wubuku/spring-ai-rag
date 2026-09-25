@@ -3920,6 +3920,23 @@ VersionHistoryModal 相关 100% 项等。
     CHAT_TIMEOUT，断言恒可满足；单类连跑 3 轮 + 全量门禁均绿。
 - 指标：core 全量门禁 EXIT=0（5999 tests）。
 
+### Batch 651（已交付）
+
+- 分支：`codex/batch651-keyindex-setter-tail`（已合入 main）
+- 内容：KeywordIndexPersistenceService 语句参数装配长尾（新建
+  KeywordIndexSetterInvocationTailTest，2 用例）：
+  - 本地索引代际分配的首查命中与兜底二次更新两条条件 UPDATE 的
+    PreparedStatementSetter 真实执行——桩化的 jdbcTemplate.query
+    在返回前调用 setter，验证 hash/chunkerVersion/documentId 按
+    占位符顺序装配（setString 1/2/4 + setLong 3）。
+- 要点：mock JdbcTemplate 的 query(…, setter, mapper) 默认不执
+  行 setter lambda——thenAnswer 中先调用
+  setter.setValues(mockPreparedStatement) 再返回结果即可覆盖装
+  配体；ensureCurrent 链路另需 chunkingService.prepare 与 READY
+  CAS 的 update 桩。
+- 指标：1 个新测试类 2 用例绿；core 全量门禁 EXIT=0（6001
+  tests，突破 6000）。
+
 ## 进度留档快照（Batch 638 后 · 用户指令收尾）
 
 - 留档时点：2026-09-25 · main @ 本快照提交
