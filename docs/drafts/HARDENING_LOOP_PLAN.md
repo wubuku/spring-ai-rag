@@ -3906,6 +3906,20 @@ VersionHistoryModal 相关 100% 项等。
   下偶发（单跑即绿），列入后续抗抖动批次。
 - 指标：6 用例绿；core 全量门禁 EXIT=0（5999 tests）。
 
+### Batch 650（已交付）
+
+- 分支：`codex/batch650-interrupt-flake-fix`（已合入 main）
+- 内容：技术债——中断时序用例抗抖动（1 文件）：
+  - ChatSessionCoordinatorCommitTailTest.invokeWithinDeadline
+    HandlesInterruptedThread：原实现仅预设中断标志 + 瞬时完成的
+    供给方 "x"——future 在主线程检查中断标志前已完成时 get 直接
+    返回，断言"未抛异常"假性失败（本会话全量门禁中偶发一次）。
+  - 修复：供给方改为 CountDownLatch 阻塞等待，保证主线程真实
+    进入 future.get 等待态（已设中断标志 → 立即 InterruptedException
+    → CHAT_TIMEOUT）；即便时序异常退化，租约超时路径同样产出
+    CHAT_TIMEOUT，断言恒可满足；单类连跑 3 轮 + 全量门禁均绿。
+- 指标：core 全量门禁 EXIT=0（5999 tests）。
+
 ## 进度留档快照（Batch 638 后 · 用户指令收尾）
 
 - 留档时点：2026-09-25 · main @ 本快照提交
