@@ -3693,6 +3693,30 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：2 个新测试类 9 用例绿；core 全量门禁 EXIT=0（5956
   tests）。
 
+### Batch 640（已交付）
+
+- 分支：`codex/batch640-real-client-tail`（已合入 main）
+- 内容：ChatExecutionService 真实客户端链长尾（新建
+  ChatExecutionServiceRealClientTailTest，3 用例）：
+  - 真实 ChatClient（ChatClient.builder(mockModel).build()）包装
+    mock 模型：阻塞执行经 advisor 链拿到答案、流式执行 advisor
+    消费者真实生效并聚合 ContentDelta + Completed（覆盖
+    invokeStream 的上下文/记忆参数装配臂）。
+  - 记忆含「AssistantMessage(toolCalls) + ToolResponseMessage」配
+    对时，toResult 的工具转写元数据挂载（TOOL_TRANSCRIPT_METADATA
+    _KEY）。
+- 防御性不可达判定（已核实、勿再投入）：
+  - streamCandidates unknown-error 臂（594）：onError 信号必有
+    throwable，三元 false 臂不可达。
+  - buildPreparedExecution attempt==null（444）：重试包装仅在成
+    功后返回，成功路径必设 attempt（与 Batch 631 结论一致）。
+- 要点：工具转写配对要求第二条消息是 ToolResponseMessage 且
+  ToolResponse id 与 ToolCall id 匹配（matches 校验）；Mockito
+  嵌套打桩陷阱再次出现——ChatClient.builder(model).build() 需先
+  提升为局部变量再传入 thenReturn。
+- 指标：1 个新测试类 3 用例绿；core 全量门禁 EXIT=0（5959
+  tests）。
+
 ## 进度留档快照（Batch 638 后 · 用户指令收尾）
 
 - 留档时点：2026-09-25 · main @ 本快照提交
