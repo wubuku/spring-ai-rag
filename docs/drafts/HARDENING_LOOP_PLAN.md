@@ -3765,6 +3765,26 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：2 个新测试类 5 用例绿；core 全量门禁 EXIT=0（5964
   tests）。
 
+### Batch 643（已交付）
+
+- 分支：`codex/batch643-dingtalk-alert-tail`（已合入 main）
+- 内容：DingTalk 路由重试中断与 AlertController 静默审计长尾
+  （新建两个测试类，9 用例）：
+  - DingTalkRoutingInterruptTailTest（6）：禁用 / 类型不匹配配
+    置的路由 continue 跳过后命中匹配路由；无可达路由空转循环的
+    PERMANENT_CONFIGURATION 兜底；sendToDingTalk 永久失败立即
+    中止重试（restTemplate 零调用）；退避休眠被中断 → 中断标志
+    保留且只尝试一次；429 响应读取 Retry-After 头（含缺失头分
+    支）分类为 TRANSIENT_RATE_LIMIT。
+  - AlertControllerSilenceAuditTailTest（3）：getSilencedAlerts
+    到期时间映射投影；unsilenceAlert 已静默 / 未静默两臂的响应
+    消息与审计消息联动。
+- 防御性不可达判定（已核实、勿再投入）：DingTalk 签名计算的
+  NoSuchAlgorithmException|InvalidKeyException 兜底（322-324）
+  —— HmacSHA256 在 JVM 内恒可用。
+- 指标：2 个新测试类 9 用例绿；core 全量门禁 EXIT=0（5973
+  tests）。
+
 ## 进度留档快照（Batch 638 后 · 用户指令收尾）
 
 - 留档时点：2026-09-25 · main @ 本快照提交
