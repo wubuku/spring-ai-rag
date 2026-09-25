@@ -3829,6 +3829,17 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：2 个新测试类 6 用例绿；core 全量门禁 EXIT=0（5986
   tests）。
 
+### Batch 646（已交付）
+
+- 分支：`codex/batch646-benchmark-stability`（已合入 main）
+- 内容：技术债——parseVector 基准测试抗抖动加固（1 文件改动）：
+  - HybridRetrieverServiceBenchmarkTest.parseVector_10k_under3s
+    本会话内两次因机器负载假性失败（3322ms / 3176ms > 3s）。
+  - 修复：warm-up 由 100 次提升到 2000 次（充分 JIT 编译），测量
+    改为 3 次采样取最小值——负载噪声只会增加耗时，最小样本真实
+    反映解析能力；3s 阈值保持不变，保护意图不降级。
+- 指标：基准类 13 用例绿；core 全量门禁 EXIT=0（5986 tests）。
+
 ## 进度留档快照（Batch 638 后 · 用户指令收尾）
 
 - 留档时点：2026-09-25 · main @ 本快照提交
