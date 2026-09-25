@@ -3785,6 +3785,28 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：2 个新测试类 9 用例绿；core 全量门禁 EXIT=0（5973
   tests）。
 
+### Batch 644（已交付）
+
+- 分支：`codex/batch644-config-skill-pure-tail`（已合入 main）
+- 内容：配置化模型工厂能力长尾与 Skill 目录纯函数（新建两个测
+  试类，7 用例）：
+  - ConfiguredChatModelFactoryCapabilityTailTest（5）：不支持
+    API 类型在 reason 链 fail closed（resolve null、reason 含
+    unsupported apiType，isConfigured 仅表示选择存在）、reasoning
+    +maxTokens 走 maxCompletionTokens 构建、裸模型引用跨 provider
+    唯一匹配解析、空 provider 表短路、priority 缺省排序末位 +
+    capabilities 缺省归一投影。
+  - RuntimeSkillCatalogPureTailTest（2）：truncate 的 null/截断/
+    原样三臂、shortDigest 的 null/空白/短值/16 字符截取。
+- 防御性不可达判定（已核实、勿再投入）：工厂 build 的 unsupported
+  apiType default 臂（115-117）——unavailableReason 的
+  isSupportedApiType 检查先行拦截，resolve 永不进入该臂。
+- 要点：ModelItem 是 10 参 record（dimension 在 maxTokens 与
+  capabilities 之间）；私有实例方法反射需先构造最小实例（mock
+  依赖传入即可）。
+- 指标：2 个新测试类 7 用例绿；core 全量门禁 EXIT=0（5980
+  tests）。
+
 ## 进度留档快照（Batch 638 后 · 用户指令收尾）
 
 - 留档时点：2026-09-25 · main @ 本快照提交
