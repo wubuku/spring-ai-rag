@@ -3937,6 +3937,23 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 2 用例绿；core 全量门禁 EXIT=0（6001
   tests，突破 6000）。
 
+### Batch 652（已交付）
+
+- 分支：`codex/batch652-fulltext-alert-value-tail`（已合入 main）
+- 内容：全文检索默认方法分发与告警值对象长尾（新建两个测试类，
+  8 用例）：
+  - FulltextSearchProviderDefaultsTailTest（5）：极简匿名 provider
+    （不覆写默认方法）驱动 filters 过载三路分发（null → 无过滤
+    scope 检索；单 payload → payload 过载 fail closed；metadata
+    或双 payload → 空列表）；searchInScopeDetailed 成功/失败两臂
+    （失败臂 errorCode 为异常类名）；SearchResult 规范构造
+    （null results 归一、candidateCount 负值钳制）。
+  - AlertServiceValueSemanticsTailTest（3）：AlertRecord toString、
+    AlertStats equals/hashCode 全字段差异矩阵 + toString、Slo
+    Status toString 与时间窗访问器。
+- 指标：2 个新测试类 8 用例绿；core 全量门禁 EXIT=0（6009
+  tests）。
+
 ## 进度留档快照（Batch 638 后 · 用户指令收尾）
 
 - 留档时点：2026-09-25 · main @ 本快照提交
