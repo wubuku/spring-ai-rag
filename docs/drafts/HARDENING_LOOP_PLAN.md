@@ -3635,6 +3635,24 @@ VersionHistoryModal 相关 100% 项等。
 - 构建验证：后端 core 全量 EXIT=0；前端 webui `npm run build`
   EXIT=0（vite 产物 ~347KB gzip ~111KB）。
 
+### Batch 636（已交付）
+
+- 分支：`codex/batch636-jsonrecord-guard-tail`（已合入 main）
+- 内容：JsonRecordService 守卫与解析长尾（新建
+  JsonRecordGuardTailTest，5 用例）：
+  - upsert null 请求 IAE 拒绝；无法解析集合身份（无 collectionId
+    / collectionKey）的 upsert 拒绝。
+  - getByExternalIdentity：解析出 0 个集合的"Exactly one
+    Collection"拒绝；命中后 requireNotRetired 地址退役检查。
+  - 空检索结果投影空集合键（payloadContains 非空对象 + 检索器
+    空结果 → collectionKeys Map.of() 臂）。
+- 要点：getByExternalIdentity / getDetail 内部 List.of(collection
+  Id/Key) 不容 null——调用侧必须给非空键；resolver.resolve
+  ActiveIds 与 mapKeys 均需打桩；payloadContains 为空对象会被
+  validateObject 先行拒绝，非空对象才可达检索链。
+- 指标：JsonRecordService 分支缺口 24 → 23、行缺口 9 → 7；1 个
+  新测试类 5 用例绿；core 全量门禁 EXIT=0（5933 tests）。
+
 ### Batch 635（已交付）
 
 - 分支：`codex/batch635-pdftorag-helper-tail`（已合入 main）
