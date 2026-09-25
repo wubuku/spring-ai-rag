@@ -3954,6 +3954,24 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：2 个新测试类 8 用例绿；core 全量门禁 EXIT=0（6009
   tests）。
 
+### Batch 653（已交付）
+
+- 分支：`codex/batch653-keyaccess-static-tail`（已合入 main）
+- 内容：ApiKeyCollectionAccess 静态守卫长尾（新建
+  ApiKeyCollectionAccessStaticTailTest，8 用例）：
+  - 已废弃 currentKey(request) 委托 currentPolicy（principal 属
+    性);null 请求返回 null policy。
+  - parseAllowedIds 全空白 token（", , "）→ IllegalStateException；
+    serializeAllowedIds 含非正数 → IllegalArgumentException。
+  - 受限键 resolveCollectionIds 携带非正请求 ID → Security
+    Exception；带 keys 过载中空 requestedIds → IAE。
+  - resolveDelegatedAllowedKeys 无限制调用方失败时重抛 Rag
+    Exception（受限包装分支已有覆盖，本批补重抛臂）。
+  - resolveWritableCollectionId 受限键显式 ID 在 allow-list 内时
+    放行（requireCollectionId + 返回）。
+- 指标：1 个新测试类 8 用例绿；core 全量门禁 EXIT=0（6017
+  tests）。
+
 ## 进度留档快照（Batch 638 后 · 用户指令收尾）
 
 - 留档时点：2026-09-25 · main @ 本快照提交
