@@ -3635,6 +3635,33 @@ VersionHistoryModal 相关 100% 项等。
 - 构建验证：后端 core 全量 EXIT=0；前端 webui `npm run build`
   EXIT=0（vite 产物 ~347KB gzip ~111KB）。
 
+### Batch 634（已交付）
+
+- 分支：`codex/batch634-ragchat-legacy-path-tail`（已合入 main）
+- 内容：RagChatService 遗留链路长尾（新建
+  RagChatServiceLegacyPathTailTest，8 用例）：
+  - chatEvents 单参委托 + 遗留 scope 解析 + 熔断成功记账；上游
+    错误的熔断失败记账。
+  - 3 参 chatStream 带域系统提示（spec.system 非空臂）；
+    ChatRequest 流式重载委托。
+  - usageClientFactory 预算模型 + 默认选项拷贝（budgetedModelFor
+    返回 BudgetedChatModel mock）；遗留候选回退
+    （orderedCandidates + UNKNOWN 引用 + 首选失败回退）。
+  - safeAttribution 回退矩阵（null/控制字符/超长）；反射覆盖
+    buildAdvisorParams 3 参与 5 参委托。
+- 防御性不可达判定（已核实、勿再投入）：
+  - buildSortedAdvisors 的非 Ordered 臂：Spring AI Advisor 继承
+    Ordered，instanceof 恒真。
+  - executeChat 末尾 "No chat model available" ISE：clients 由
+    默认客户端兜底，永不为空。
+  - chatStream 预算耗尽快速失败臂：预算每次调用新建，
+    maxCandidateAttempts 由 positive() 钳制 ≥1，预留必成功。
+- 要点：真实 ChatClient 包装 mock 模型时，advisors mock 必须打
+  getName + adviseCall 透传桩，否则链路断返 null；api dto 与
+  Spring AI 的 ChatResponse 同名需全限定。
+- 指标：RagChatService 分支缺口 27 → 19、行缺口 17 → 6；1 个
+  新测试类 8 用例绿；core 全量门禁 EXIT=0（5920 tests）。
+
 ### Batch 633（已交付）
 
 - 分支：`codex/batch633-document-mutation-cas-tail`（已合入 main）
