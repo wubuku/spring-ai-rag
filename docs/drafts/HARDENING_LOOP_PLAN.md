@@ -3840,6 +3840,31 @@ VersionHistoryModal 相关 100% 项等。
     反映解析能力；3s 阈值保持不变，保护意图不降级。
 - 指标：基准类 13 用例绿；core 全量门禁 EXIT=0（5986 tests）。
 
+### Batch 647（已交付）
+
+- 分支：`codex/batch647-skill-embed-sse-tail`（已合入 main）
+- 内容：Skill 数量上限、批量进度回调与 OpenAI 流式生命周期长尾
+  （新建三个测试类，6 用例）：
+  - RuntimeSkillCatalogCountLimitTailTest（1）：可解析 Skill 数
+    超过 maxSkills（fixture 两技能 / 上限 1）→ initialize 阶段拒
+    绝。
+  - DocumentEmbedServiceSendProgressTailTest（3）：批量进度回调
+    抛异常被吞掉（best-effort）、null 回调跳过、健康回调接收计
+    数字段。
+  - OpenAiCompatibilitySseLifecycleTailTest（2）：流在订阅内同步
+    完成时 onCompletion 的 dispose 立即生效（含 subscription 置
+    空）且订阅返回后 terminated 短路追加 dispose。
+- 防御性不可达判定（已核实、勿再投入）：
+  - RuntimeSkillCatalog 引用相对路径为空的 continue（277-279）：
+    相对路径为空要求 path 以 references/ 结尾，而 274 行已排除
+    结尾斜杠路径，不可达。
+  - ChatExecutionService commitExecutedTurn attempt==null（392）、
+    jsonResponse 的 IOException 臂（308-309）：Spring 的
+    ResponseBodyEmitter 在初始化前缓存发送数据，单测中 send 不
+    抛 IO 异常。
+- 指标：3 个新测试类 6 用例绿；core 全量门禁 EXIT=0（5992
+  tests）。
+
 ## 进度留档快照（Batch 638 后 · 用户指令收尾）
 
 - 留档时点：2026-09-25 · main @ 本快照提交
