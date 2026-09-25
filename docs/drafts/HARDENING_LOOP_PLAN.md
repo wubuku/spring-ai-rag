@@ -3717,6 +3717,27 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 3 用例绿；core 全量门禁 EXIT=0（5959
   tests）。
 
+### Batch 641（已交付）
+
+- 分支：`codex/batch641-webui-a11y`（已合入 main）
+- 内容：WebUI 可访问性加固（6 文件，+3 用例）：
+  - Chat：侧栏开关（☰）补 aria-label + aria-expanded（移除硬编
+    码英文 title，改用 i18n key）；导出按钮补 aria-haspopup="menu"
+    + aria-expanded；👍/👎 反馈按钮补 aria-label。
+  - Search：历史开关（SVG 图标）补 aria-label + aria-expanded；
+    历史条目删除（×）补 aria-label。
+  - Settings：标签页容器 role="tablist" + 各标签 role="tab" +
+    aria-selected 联动。
+  - 测试：Chat 拆出 2 个 a11y 用例（侧栏开关联动、导出菜单语义
+    ——有消息态经 getHistory mock）；Search 历史开关断言可访问名
+    称与展开状态；Settings 新增 tablist 语义用例，并把既有 tab
+    查询从 button 角色迁移到 tab 角色。
+- 要点：测试 i18n mock 为恒等翻译（t 返回 key），新增 aria 属性
+  直接用 key 断言；icon-only 按钮加 role 后不再匹配 button 角色
+  查询，既有用例需同步迁移。
+- 指标：WebUI 65 文件 680 tests 全绿（+3）；typecheck/lint/
+  check:alignment/check:design-tokens/build 全部 EXIT=0。
+
 ## 进度留档快照（Batch 638 后 · 用户指令收尾）
 
 - 留档时点：2026-09-25 · main @ 本快照提交
