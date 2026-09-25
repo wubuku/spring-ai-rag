@@ -439,9 +439,11 @@ describe('Search guards, history panel, provenance navigation and draft validati
     renderSearch();
     await submit('first query');
 
-    // 提交后历史存在，开关按钮出现（title 为 i18n key）。
-    const toggle = screen.getByTitle('search.history');
+    // 提交后历史存在，开关按钮出现（可访问名称为 i18n key）。
+    const toggle = screen.getByRole('button', { name: 'search.history' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
     await user.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
     const panelItem = await screen.findByText('first query');
     expect(panelItem).toBeInTheDocument();
 

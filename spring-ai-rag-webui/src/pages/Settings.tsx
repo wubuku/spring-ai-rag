@@ -203,10 +203,12 @@ export function Settings() {
     <div className={styles.container}>
       <h1 className="page-title">{t('settings.title')}</h1>
 
-      <div className={styles.tabs}>
+      <div className={styles.tabs} role="tablist" aria-label={t('settings.title')}>
         {tabs.map(tab => (
           <button
             key={tab.id}
+            role="tab"
+            aria-selected={activeTab === tab.id}
             className={`${styles.tab} ${activeTab === tab.id ? styles.active : ''}`}
             onClick={() => setSearchParams(
               tab.id === 'llm' ? {} : { tab: tab.id },
