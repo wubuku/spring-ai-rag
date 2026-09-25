@@ -3635,6 +3635,34 @@ VersionHistoryModal 相关 100% 项等。
 - 构建验证：后端 core 全量 EXIT=0；前端 webui `npm run build`
   EXIT=0（vite 产物 ~347KB gzip ~111KB）。
 
+### Batch 637（已交付）
+
+- 分支：`codex/batch637-ragdoc-validate-resourcecat-tail`（已合
+  入 main）
+- 内容：RagDocumentController 校验矩阵与 ResourceCatalog 根守卫
+  （新建两个测试类，9 用例）：
+  - RagDocumentControllerValidateMatrixTailTest（8）：validate
+    TextFile 的 json/xml/javascript 内容类型臂、null 内容类型 +
+    全文本扩展名矩阵（恒非文本且无错误）、null 原始文件名扩展名
+    空串、非文本不可读文件的 Unsupported 报告、空文件跳过字节
+    读取；readFileContent 读取异常投影 "Failed to read file:"；
+    parseDateParam 四臂（null/空白/合法/非法）；auditCreate 双
+    重载委托。
+  - ResourceCatalogRootGuardTailTest（1）：字符设备根（/dev/
+    null）既非目录又非常规文件 → "root is not readable" 守卫。
+- 防御性不可达判定（已核实、勿再投入）：
+  - ResourceCatalog "JAR entry prefix is unsafe"（248-249）：
+    normalizeLocation 在根创建阶段即拒绝任何含 ".." 的 location，
+    前缀检查不可达。
+  - "resource escapes configured root"（203-204）需 walk 产出
+    realPath 越界的真实文件，符号链接在 198 行被先行跳过，常规
+    手段不可达。
+- 要点：ResourceCatalogException 是私有内部类且 failFast 包装为
+  IllegalStateException——断言须用异常链包含片段；MockMultipart
+  File 传 null contentType 可驱动 null 类型臂。
+- 指标：RagDocumentController 分支缺口 35 → 28、行缺口 9 → 7；
+  2 个新测试类 9 用例绿；core 全量门禁 EXIT=0（5942 tests）。
+
 ### Batch 636（已交付）
 
 - 分支：`codex/batch636-jsonrecord-guard-tail`（已合入 main）
