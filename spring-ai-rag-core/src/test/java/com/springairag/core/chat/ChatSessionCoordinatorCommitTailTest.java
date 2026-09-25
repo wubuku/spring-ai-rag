@@ -100,8 +100,20 @@ class ChatSessionCoordinatorCommitTailTest {
                 Instant.now().plusSeconds(30));
         Thread.currentThread().interrupt();
 
+        // 供给方阻塞等待，确保主线程在 future.get 中真实进入等待
+        // 状态——仅预设中断标志时，瞬时完成的 future 可能在检查中
+        // 断前直接返回（时序抖动）。
+        var gate = new java.util.concurrent.CountDownLatch(1);
         RagException error = assertThrows(RagException.class,
-                () -> coordinator.invokeWithinDeadline(handle, () -> "x"));
+                () -> coordinator.invokeWithinDeadline(handle, () -> {
+                    try {
+                        gate.await(2, java.util.concurrent.TimeUnit.SECONDS);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                    return "x";
+                }));
+        gate.countDown();
         assertEquals(ErrorCode.CHAT_TIMEOUT, error.getErrorCodeEnum());
     }
 
