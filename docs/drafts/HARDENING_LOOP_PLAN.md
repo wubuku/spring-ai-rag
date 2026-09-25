@@ -3972,6 +3972,25 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 8 用例绿；core 全量门禁 EXIT=0（6017
   tests）。
 
+### Batch 654（已交付）
+
+- 分支：`codex/batch654-registry-executor-tail`（已合入 main）
+- 内容：RagChatToolRegistry 执行器与包装回调长尾（新建
+  RagChatToolRegistryExecutorTailTest，5 用例）：
+  - 启用 JsonRecordSearchTool 时注册 builtin-structured-record
+    provider，包装回调透传委托 ToolMetadata。
+  - 结果超过策略上限 → tool_result_too_large；请求死线已过 →
+    提交前取消并返回 tool_timeout；future 超时 → tool_timeout；
+    单线程 + 容量 1 队列占满后 → tool_executor_saturated
+    （双线程 + 闩锁确定性占满）。
+- 要点：策略校验四元组边界（maxResultCharacters ∈ [1024, 24k]、
+  maxCallsPerRequest ≤ maxToolCallsPerName 默认 3）；provider 的
+  supportedDomains 为空集才能在 domainId=null 的 callbacks 查询
+  中出现；builtin-knowledge 桩必须带 definition+metadata 否则
+  validateAndFreeze 拒绝注册。
+- 指标：1 个新测试类 5 用例绿；core 全量门禁 EXIT=0（6022
+  tests）。
+
 ## 进度留档快照（Batch 638 后 · 用户指令收尾）
 
 - 留档时点：2026-09-25 · main @ 本快照提交
