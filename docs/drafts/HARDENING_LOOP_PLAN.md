@@ -3865,6 +3865,21 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：3 个新测试类 6 用例绿；core 全量门禁 EXIT=0（5992
   tests）。
 
+### Batch 648（已交付）
+
+- 分支：`codex/batch648-dead-session-branch-cleanup`（已合入 main）
+- 内容：技术债——移除 withEffectiveSession 的不可达重建分支
+  （2 文件，净 +6 行）：
+  - ChatTurnOperationService.withEffectiveSession 简化为恒等快
+    速通道：ChatCommand 紧凑构造器经 SessionIdValidator.resolve
+    保证会话合法性（非法值构造期抛错、空值生成 UUID），重建分支
+    经 Batch 610 / 647 两轮 JaCoCo 行级核验确认不可达后删除。
+  - 回归加固：ChatTurnOperationRebuildSessionTest 新增 2 用例固
+    化不变式——非法会话 id 在构造期抛 IllegalArgumentException、
+    空白会话 id 构造期生成合法 UUID。
+- 指标：既有 3 个会话链测试类全绿 + 新增 2 用例；core 全量门禁
+  EXIT=0（5994 tests）。
+
 ## 进度留档快照（Batch 638 后 · 用户指令收尾）
 
 - 留档时点：2026-09-25 · main @ 本快照提交
