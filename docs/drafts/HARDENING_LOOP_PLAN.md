@@ -4092,6 +4092,25 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 2 用例绿；core 全量门禁 EXIT=0（6046
   tests）。
 
+### Batch 661（已交付）
+
+- 分支：`codex/batch661-fulltext-probe-tail`（已合入 main）
+- 内容：HybridRetrieverService 便捷构造与全文超时长尾（新建
+  HybridRetrieverFulltextProbeTailTest，3 用例）：
+  - 公开 6 参构造器端到端装配：全文工厂 + 直通执行器跑通双分支
+    SUCCESS（覆盖便捷构造器委托体 94-102）。
+  - 全文分支 searchInScopeDetailed 阻塞超过检索超时 → orTimeout
+    触发 handle 错误臂（timeoutOrError）→ FULLTEXT 阶段归一为
+    TIMEOUT（298-302）。
+  - 空融合触发空原因探针：真实 RetrievalEmptyReasonProbe + 结果
+    集计数为 0 的 Eligibility（326）。
+- 要点：探针经 jdbcTemplate.query(sql, ResultSetExtractor, args)
+  取数——桩须在返回前调用 extractor.extractData(mockRs)，计数
+  列默认 0 产出真实 Eligibility；orTimeout 需要真实异步执行器，
+  直通执行器（Runnable::run）下超时无法触发。
+- 指标：1 个新测试类 3 用例绿；core 全量门禁 EXIT=0（6049
+  tests）。
+
 ## 进度留档快照（Batch 660 后 · 用户指令收尾）
 
 - 留档时点：2026-09-26 · main @ 本快照提交
