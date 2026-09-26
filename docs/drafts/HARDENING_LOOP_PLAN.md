@@ -4196,6 +4196,20 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 2 用例绿；core 全量门禁 EXIT=0（6072
   tests）。
 
+### Batch 667（已交付）
+
+- 分支：`codex/batch667-async-txn-tail`（已合入 main）
+- 内容：BatchDocumentService ASYNC 事务模板长尾（新建
+  BatchDocumentServiceTransactionTailTest，2 用例）：
+  - ASYNC 策略批量创建在事务模板内执行遗留创建链并提交事务
+    （transactionManager.commit 验证，175-186）。
+  - per-doc collectionId 优先于批次级 collectionId（252）。
+- 要点：ASYNC 前置门禁需要 dispatchService 已注入；enqueue
+  Result 需显式桩化（ASYNC_QUEUED）否则 NPE；Mockito 对原始
+  boolean 参数用 anyBoolean()（any() 返回 null 引发拆箱 NPE）。
+- 指标：1 个新测试类 2 用例绿；core 全量门禁 EXIT=0（6074
+  tests）。
+
 ## 进度留档快照（Batch 660 后 · 用户指令收尾）
 
 - 留档时点：2026-09-26 · main @ 本快照提交
