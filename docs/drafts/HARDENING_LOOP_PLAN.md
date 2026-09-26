@@ -4181,6 +4181,21 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 6 用例绿；core 全量门禁 EXIT=0（6070
   tests）。
 
+### Batch 666（已交付）
+
+- 分支：`codex/batch666-embed-prepare-tail`（已合入 main）
+- 内容：DocumentEmbedService 准备阶段长尾（新建
+  DocumentEmbedServicePrepareTailTest，2 用例）：
+  - chunkingService 注入后非空白文档产出零分块 → prepare 阶段
+    FAILED（result["error"] 含 "produced no chunks"）。
+  - chunkingService 注入验证（注入实例被 atLeastOnce 调用）。
+- 要点：嵌入缓存的 CacheState 是 (boolean hit, int chunkCount)
+  record；桩 findCacheState(long, EmbeddingProfile, String,
+  String) 需 anyLong + anyString 组合；prepare 在缓存未命中检查
+  与执行路径各调用一次，验证用 atLeastOnce。
+- 指标：1 个新测试类 2 用例绿；core 全量门禁 EXIT=0（6072
+  tests）。
+
 ## 进度留档快照（Batch 660 后 · 用户指令收尾）
 
 - 留档时点：2026-09-26 · main @ 本快照提交
