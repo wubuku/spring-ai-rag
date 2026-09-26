@@ -4239,6 +4239,16 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 4 用例绿；core 全量门禁 EXIT=0（6081
   tests）。
 
+### Batch 670（已交付）
+
+- 分支：`codex/batch670-rotate-root-gate`（已合入 main）
+- 内容：ApiKeyController rotateKey root 模式门槛长尾（新建
+  ApiKeyControllerRotateRootGateTailTest，1 用例）：root 凭据已
+  配置且调用方非 root 时 rotateKey 的 requireEnvironmentRoot 403
+  拒绝（281）。
+- 指标：1 个新测试类 1 用例绿；core 全量门禁 EXIT=0（6082
+  tests）。
+
 ## 进度留档快照（Batch 660 后 · 用户指令收尾）
 
 - 留档时点：2026-09-26 · main @ 本快照提交
