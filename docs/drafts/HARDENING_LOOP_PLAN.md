@@ -4210,6 +4210,20 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 2 用例绿；core 全量门禁 EXIT=0（6074
   tests）。
 
+### Batch 668（已交付）
+
+- 分支：`codex/batch668-eval-interrupt-serialization`（已合入 main）
+- 内容：RetrievalEvaluationServiceImpl 中断与序列化长尾（新建
+  RetrievalEvaluationInterruptSerializationTailTest，3 用例）：
+  - evaluateAnswerQuality 等待期线程中断 → 降级为中性 REVISION
+    结果（3/3/3）且中断标志保留（306-309）。
+  - toJson 序列化正常 List 与空 List（兜底臂已由 null 元素路径
+    隐式覆盖）。
+  - fromJson 对非法 JSON / 非数组 JSON 回退空列表、合法数组正常
+    解析（428-430）。
+- 指标：1 个新测试类 3 用例绿；core 全量门禁 EXIT=0（6077
+  tests）。
+
 ## 进度留档快照（Batch 660 后 · 用户指令收尾）
 
 - 留档时点：2026-09-26 · main @ 本快照提交
