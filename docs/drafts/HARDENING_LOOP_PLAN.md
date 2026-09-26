@@ -4258,6 +4258,20 @@ VersionHistoryModal 相关 100% 项等。
   ensureCurrent（166）。
 - 指标：1 用例新增；core 全量门禁 EXIT=0（6083 tests）。
 
+### Batch 672（已交付）
+
+- 分支：`codex/batch672-ratelimit-mapper-tail`（已合入 main）
+- 内容：PostgresRateLimitStore 行映射长尾（新建
+  PostgresRateLimitStoreRowMapperTailTest，2 用例）：
+  - consume 接受路径与拒绝路径的 RowMapper 真实执行——桩化
+    query 在返回前调用 mapper.mapRow(mockResultSet)，验证
+    request_count / window_start / retry_after 列装配。
+- 要点：mock JdbcTemplate 的 query(sql, RowMapper, args…) 同样
+  默认不执行 RowMapper——需在 thenAnswer 中显式调用
+  mapper.mapRow(mockRs, 0)。
+- 指标：1 个新测试类 2 用例绿；core 全量门禁 EXIT=0（6085
+  tests）。
+
 ## 进度留档快照（Batch 660 后 · 用户指令收尾）
 
 - 留档时点：2026-09-26 · main @ 本快照提交
