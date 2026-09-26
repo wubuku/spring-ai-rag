@@ -4272,6 +4272,22 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 2 用例绿；core 全量门禁 EXIT=0（6085
   tests）。
 
+### Batch 673（已交付）
+
+- 分支：`codex/batch673-scope-adapter-tail`（已合入 main）
+- 内容：OpenAiRequestRetrievalScopeAdapter 守卫长尾（新建
+  OpenAiRequestRetrievalScopeAdapterMoreTailTest，5 用例）：
+  - requireExplicitScope 开启 + scope 缺省 → 拒绝。
+  - rag.scope 未知字段（putAdditionalProperty）→ 拒绝。
+  - header 与 body.mode 冲突、header 与 body.collection_keys 冲
+    突 → 拒绝。
+  - SecurityException → 403 协议异常映射（含消息透传）。
+- 要点：Scope 经 @JsonAnySetter 的 putAdditionalProperty 注入未
+  建模字段；CollectionScopeMode 无 ALL 枚举（CALLER_VISIBLE /
+  ANY_COLLECTION / SELECTED_COLLECTIONS / NONE）。
+- 指标：1 个新测试类 5 用例绿；core 全量门禁 EXIT=0（6090
+  tests）。
+
 ## 进度留档快照（Batch 660 后 · 用户指令收尾）
 
 - 留档时点：2026-09-26 · main @ 本快照提交
