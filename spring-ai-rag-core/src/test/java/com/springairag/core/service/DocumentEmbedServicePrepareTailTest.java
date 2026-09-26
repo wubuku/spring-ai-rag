@@ -112,4 +112,26 @@ class DocumentEmbedServicePrepareTailTest {
         org.mockito.Mockito.verify(chunkingService,
                 org.mockito.Mockito.atLeastOnce()).prepare(any());
     }
+
+    @Test
+    void keywordIndexPersistenceServiceIsInvokedWhenPresent() {
+        var keywordIndexPersistenceService = mock(KeywordIndexPersistenceService.class);
+        when(documentRepository.findById(41L)).thenReturn(Optional.of(document()));
+        when(persistenceService.findCacheState(
+                anyLong(), any(), anyString(), anyString()))
+                .thenReturn(cacheMiss());
+        when(chunkingService.prepare(any())).thenReturn(
+                new DocumentChunkingService.PreparedChunks(
+                        new DocumentDerivationDescriptorProvider(new RagProperties())
+                                .describe(document()),
+                        List.of(new com.springairag.documents.chunk.TextChunk(
+                                "片段", 0, 2))));
+
+        var service = service();
+        service.setKeywordIndexPersistenceService(keywordIndexPersistenceService);
+        service.embedDocument(41L, false);
+
+        org.mockito.Mockito.verify(keywordIndexPersistenceService)
+                .ensureCurrent(any(RagDocument.class));
+    }
 }
