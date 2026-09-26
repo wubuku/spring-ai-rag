@@ -4224,6 +4224,21 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 3 用例绿；core 全量门禁 EXIT=0（6077
   tests）。
 
+### Batch 669（已交付）
+
+- 分支：`codex/batch669-root-gate-tail`（已合入 main）
+- 内容：ApiKeyController root 模式管理门槛长尾（新建
+  ApiKeyControllerRootGateTailTest，4 用例）：
+  - root 凭据已配置且 ROOT_AUTHENTICATED_ATTRIBUTE=FALSE 时，
+    listPrincipals / updatePolicy / revokeKey / prepareRotation
+    四个管理端点的 requireEnvironmentRoot 403 拒绝（192 / 209 /
+    253 / 281）。
+- 要点：prepareRotation 的 4 参重载首参为 body（可 null），3 参
+  重载从请求头取 Idempotency-Key；root 模式下 denied 优先于幂等
+  键校验。
+- 指标：1 个新测试类 4 用例绿；core 全量门禁 EXIT=0（6081
+  tests）。
+
 ## 进度留档快照（Batch 660 后 · 用户指令收尾）
 
 - 留档时点：2026-09-26 · main @ 本快照提交
