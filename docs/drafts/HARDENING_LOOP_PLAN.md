@@ -4249,6 +4249,15 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 1 用例绿；core 全量门禁 EXIT=0（6082
   tests）。
 
+### Batch 671（已交付）
+
+- 分支：`codex/batch671-keyindex-invoke-tail`（已合入 main）
+- 内容：DocumentEmbedService 关键词索引持久化联动长尾（扩展
+  DocumentEmbedServicePrepareTailTest，+1 用例）：注入
+  keywordIndexPersistenceService 后 embedDocument 触发
+  ensureCurrent（166）。
+- 指标：1 用例新增；core 全量门禁 EXIT=0（6083 tests）。
+
 ## 进度留档快照（Batch 660 后 · 用户指令收尾）
 
 - 留档时点：2026-09-26 · main @ 本快照提交
