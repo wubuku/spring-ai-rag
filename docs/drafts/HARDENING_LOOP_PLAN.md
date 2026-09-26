@@ -4044,6 +4044,24 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：2 个新测试类 8 用例绿；core 全量门禁 EXIT=0（6039
   tests）。
 
+### Batch 658（已交付）
+
+- 分支：`codex/batch658-batchdoc-entity-tail`（已合入 main）
+- 内容：BatchDocumentService 删除与错误脱敏长尾（新建
+  BatchDocumentServiceDeleteErrorTailTest，3 用例）：
+  - batchDeleteDocuments 硬删除对缺失 documentRevision 回退
+    revision=1L（hardDeleteLocal(id, 1L) 验证）。
+  - safeError：null / 空白错误回退 "Document creation failed"、
+    rag_sk_ 密钥被 SensitiveDataMaskingConverter 脱敏、超 500 字
+    符截断。
+  - FsImportBatch 实体全字段存取往返（importId/sourceType/原名/
+    显示名/entry/original 路径/fileCount/updatedAt）。
+- 要点：4 参构造器第 4 参是 PlatformTransactionManager，Document
+  MutationService 经包私有 setDocumentMutationService 注入（同包
+  测试直呼）；BatchDeleteResponse 的结果集访问器为 results()。
+- 指标：1 个新测试类 3 用例绿；core 全量门禁 EXIT=0（6042
+  tests）。
+
 ## 进度留档快照（Batch 638 后 · 用户指令收尾）
 
 - 留档时点：2026-09-25 · main @ 本快照提交
