@@ -4077,6 +4077,57 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 2 用例绿；core 全量门禁 EXIT=0（6044
   tests）。
 
+### Batch 660（已交付）
+
+- 分支：`codex/batch660-output-enumeration-tail`（已合入 main）
+- 内容：PdfImportService 转换产物枚举长尾（新建
+  PdfImportServiceOutputEnumerationTailTest，2 用例）：
+  - 伪转换器在 source/ 下产出纯空白文件名 → trim 后为空触发
+    "blank filename" 拒绝（224）。
+  - 两个文件名 trim 后映射同一条记录路径 → "duplicate output
+    path" 拒绝（231）。
+- 要点：枚举走 service 真实文件遍历——伪转换器直接在传入的
+  outputDir/source 下落盘即可驱动；文件名前后缀空格利用文件系
+  统允许空白名构造 trim 归一冲突。
+- 指标：1 个新测试类 2 用例绿；core 全量门禁 EXIT=0（6046
+  tests）。
+
+## 进度留档快照（Batch 660 后 · 用户指令收尾）
+
+- 留档时点：2026-09-26 · main @ 本快照提交
+- 用户已明确暂停循环，等待下一步指示。本节（Batch 639–660 共
+  22 个批次）全部按「规划→实施→单类验证→core 全量门禁 EXIT=0→
+  push 特性分支→--no-ff 合并 main→台账记录→清理分支」交付完成，
+  工作区干净。
+- core 测试规模：5818 → 6046（+228 用例，突破 6000）。
+- 本节批次重点：
+  - Batch 639–640：SSE 生命周期（claim 重放头/TRACE 头/onError
+    回调/心跳真实触发）+ ChatExecutionService 真实 ChatClient
+    链（advisor 消费者生效、工具转写元数据挂载）。
+  - Batch 641：WebUI 可访问性加固（图标按钮 aria 标签、tablist
+    语义，+3 用例）。
+  - Batch 642–646：续约任务反射驱动、供给并发重试中断路径、
+    CAS/墓碑矩阵、模型工厂能力分发、Skill/缓存/对比服务纯函数。
+  - Batch 647–649：Skill 数量上限、批量进度回调吞异常、models
+    json 装载器（非法路径/目录降级/legacyCapabilities 投影），
+    并发吞吐基准 3 轮采样化。
+  - Batch 650：中断时序用例抗抖动（阻塞供给方确保真实等待）。
+  - Batch 651–656：本地索引 setter 装配、全文检索默认方法三路
+    分发、告警值对象、静态守卫、详情投影、模型对比便捷入口、
+    clearCache 三路径。
+  - Batch 657–660：PDF 目录列举前缀剥离/资源回退名、聊天属性
+    校验、转换产物枚举（空白名/重复路径拒绝）。
+- 大量防御性不可达判定与复用要点已按批次沉淀（各批次条目）；
+  高频陷阱：Mockito 嵌套打桩、any(Class) 不匹配 null、emitter
+  回调由容器驱动单测不触发、record 访问器无 get 前缀。
+- 下一轮候选：剩余行级缺口已多为防御性/容器驱动；可转向
+  RagChatController 心跳回调（容器化测试）、ChatExecutionService
+  流式 lambda 残余、或 WebUI 新一轮 UI/UX。
+- 构建验证：后端 core 全量 EXIT=0（6046 tests，0 failures）；
+  WebUI `npm run build` EXIT=0。
+
+### Batch 659（已交付）
+
 ## 进度留档快照（Batch 638 后 · 用户指令收尾）
 
 - 留档时点：2026-09-25 · main @ 本快照提交
