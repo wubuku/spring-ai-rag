@@ -4062,6 +4062,21 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 3 用例绿；core 全量门禁 EXIT=0（6042
   tests）。
 
+### Batch 659（已交付）
+
+- 分支：`codex/batch659-skillcatalog-chunkflush-tail`（已合入 main）
+- 内容：StaticKnowledgeCatalog 分块刷新与短摘要长尾（新建
+  StaticKnowledgeCatalogChunkFlushTailTest，2 用例）：
+  - 构造 ResourceSnapshot（mock ResourceCatalog.discover）注入
+    "50 字符行 + 空行 + 第二段" 的 markdown——缓冲恰好填满时空行
+    触发分块刷新（240-243），刷新块以 50 个 w 开头断言。
+  - shortDigest 的 null/空白/短值/16 字符截取。
+- 要点：ResourceSnapshot/ResourceEntry/ResourceRoot 均为公开
+  record 可直接构造；空行刷新要求缓冲长度恰好等于
+  chunkMaxCharacters（首轮整行经 else 长行分支追加后为 50）。
+- 指标：1 个新测试类 2 用例绿；core 全量门禁 EXIT=0（6044
+  tests）。
+
 ## 进度留档快照（Batch 638 后 · 用户指令收尾）
 
 - 留档时点：2026-09-25 · main @ 本快照提交
