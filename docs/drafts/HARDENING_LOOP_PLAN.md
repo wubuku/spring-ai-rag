@@ -4111,6 +4111,26 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 3 用例绿；core 全量门禁 EXIT=0（6049
   tests）。
 
+### Batch 662（已交付）
+
+- 分支：`codex/batch662-history-evaluation-tail`（已合入 main）
+- 内容：历史增量拉取钳制与评测值对象长尾（新建两个测试类，8
+  用例）：
+  - RagChatHistoryRepositoryIncrementalTailTest（5）：findOwned
+    AfterHistoryId 的 limit 双向钳制（下限 1 / 上限 500，Pageable
+    页大小断言）、非法 afterHistoryId 拒绝、toDto 的 related
+    DocumentIds JSON 解析与畸形 JSON 容错（docIds null 不影响主
+    字段）。
+  - RetrievalEvaluationDtoTailTest（3）：EvaluationCase 全属性
+    存取、EvaluationMetrics 排名字段（precision/recall/Mrr）、
+    AggregatedMetrics 平均值与总数投影。
+- 防御性不可达判定（已核实、勿再投入）：normalizeDocumentIds
+  的 RagException 重抛（471-472）与 addPositiveLong 的
+  NumberFormatException（492）——前者 try 块内仅抛 IAE，后者正
+  则先行保证可解析。
+- 指标：2 个新测试类 8 用例绿；core 全量门禁 EXIT=0（6057
+  tests）。
+
 ## 进度留档快照（Batch 660 后 · 用户指令收尾）
 
 - 留档时点：2026-09-26 · main @ 本快照提交
