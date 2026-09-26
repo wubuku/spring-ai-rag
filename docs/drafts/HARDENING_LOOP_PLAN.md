@@ -4131,6 +4131,22 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：2 个新测试类 8 用例绿；core 全量门禁 EXIT=0（6057
   tests）。
 
+### Batch 663（已交付）
+
+- 分支：`codex/batch663-abtest-provisioning-tail`（已合入 main）
+- 内容：AbTestServiceImpl 读取面长尾（新建
+  AbTestServiceImplReadTailTest，4 用例）：
+  - getRunningExperiments 投影到 Experiment 视图。
+  - getVariantForSession 哈希分桶确定性（变体必属流量切分键）。
+  - recordResult 正常落库验证（含 metrics 序列化路径）。
+  - analyzeExperiment 对小样本双变体结果产出分析结论。
+- 要点：哈希分桶是确定性映射——会话 id 的变体归属不可预设具体
+  键，断言「属于流量切分键集合」；结果仓储读取方法为
+  findByExperimentId（分析）/ findByExperimentIdOrderByCreatedAt
+  Desc（分页）。
+- 指标：1 个新测试类 4 用例绿；core 全量门禁 EXIT=0（6061
+  tests）。
+
 ## 进度留档快照（Batch 660 后 · 用户指令收尾）
 
 - 留档时点：2026-09-26 · main @ 本快照提交
