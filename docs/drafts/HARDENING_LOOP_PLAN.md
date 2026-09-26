@@ -4025,6 +4025,25 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：2 个新测试类 5 用例绿；core 全量门禁 EXIT=0（6031
   tests）。
 
+### Batch 657（已交付）
+
+- 分支：`codex/batch657-pdfimport-properties-tail`（已合入 main）
+- 内容：PDF 目录列举/资源加载与聊天属性校验长尾（新建两个测试
+  类，8 用例）：
+  - PdfImportServiceDirectoryResourceTailTest（3）：listChildren
+    的前导斜杠路径剥离查询前缀、直接子文件（无斜杠余量）与嵌套
+    孙文件（非斜杠余量）过滤臂、loadFileAsResource 对尾随斜杠路
+    径回退 "file" 临时文件名。
+  - RagChatPropertiesNestedTailTest（5）：Skills/StaticKnowledge
+    的 locations null 归一为空列表；http-tools 的 max-total-
+    response-bytes 超 4MiB 拒绝、endpoints null 归一为空列表（通
+    过校验）、endpoints 含 null 元素拒绝。
+- 防御性不可达判定（已核实、勿再投入）：RagChatProperties
+  HttpToolProperties 的 "endpoints must not be null"（430-432）——
+  setter 已归一 null 为空列表。
+- 指标：2 个新测试类 8 用例绿；core 全量门禁 EXIT=0（6039
+  tests）。
+
 ## 进度留档快照（Batch 638 后 · 用户指令收尾）
 
 - 留档时点：2026-09-25 · main @ 本快照提交
