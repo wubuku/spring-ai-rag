@@ -4165,6 +4165,22 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 3 用例绿；core 全量门禁 EXIT=0（6064
   tests）。
 
+### Batch 665（已交付）
+
+- 分支：`codex/batch665-keyguard-matrix-tail`（已合入 main）
+- 内容：ApiKeyController 管理面守卫矩阵长尾（新建
+  ApiKeyControllerGuardMatrixTailTest，6 用例）：
+  - legacy 模式（root 未配置）下 listPrincipals / updatePolicy /
+    revokeKey 对非 ADMIN 调用方的 403 拒绝（192 / 209 / 253）。
+  - 匿名 legacy 调用方默认 NORMAL → listKeys 403（386-388）。
+  - updatePolicy 在 collectionIdentityResolver 缺失时 ISE（224）。
+  - rotate 对未知密钥返回 404 + no-store 缓存头（327-329）。
+- 要点：prepareRotation 需 Idempotency-Key 头（缺失即
+  IDEMPOTENCY_KEY_INVALID）；ADMIN 策略经
+  ApiKeyAuthFilter.AUTHENTICATED_API_PRINCIPAL_ATTRIBUTE 注入。
+- 指标：1 个新测试类 6 用例绿；core 全量门禁 EXIT=0（6070
+  tests）。
+
 ## 进度留档快照（Batch 660 后 · 用户指令收尾）
 
 - 留档时点：2026-09-26 · main @ 本快照提交
