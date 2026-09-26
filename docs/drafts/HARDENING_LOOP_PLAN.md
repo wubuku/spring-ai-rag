@@ -4147,6 +4147,24 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 4 用例绿；core 全量门禁 EXIT=0（6061
   tests）。
 
+### Batch 664（已交付）
+
+- 分支：`codex/batch664-provisioning-ledger-meter`（已合入 main）
+- 内容：CollectionProvisioningService 台账降级与指标长尾（重写
+  上轮删除的测试类，新建 CollectionProvisioningServiceLedger
+  MeterTailTest，3 用例）：
+  - 重试耗尽 → unavailable 包装保留 DataAccessResourceFailure
+    Exception 根因（cause 链断言），outcome 计数 unavailable=1。
+  - 幂等开关关闭短路 → IDEMPOTENCY_DISABLED，outcome 计数
+    disabled=1。
+  - MeterRegistry 缺失（getIfAvailable → null）时记录不失败。
+- 要点：ObjectProvider 为接口可 mock；SimpleMeterRegistry 直接
+  断言 counter("…","outcome","disabled").count() 精确为 1；观察
+  到的确定性语义——重试耗尽后 readExisting 的直接台账调用抛
+  DAVE → 169-171 unavailable 包装（含根因）。
+- 指标：1 个新测试类 3 用例绿；core 全量门禁 EXIT=0（6064
+  tests）。
+
 ## 进度留档快照（Batch 660 后 · 用户指令收尾）
 
 - 留档时点：2026-09-26 · main @ 本快照提交
