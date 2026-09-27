@@ -4436,6 +4436,25 @@ VersionHistoryModal 相关 100% 项等。
 - 防御性不可达判定累计约 35 项（详见各批次条目）。
 - 构建验证：后端 core 全量 EXIT=0（6154 tests）；WebUI build 绿。
 
+### Batch 688（已交付）
+
+- 分支：`codex/batch688-ctrl-delegate-tail`（已合入 main）
+- 内容：控制器委托长尾（新建两个测试类，8 用例）：
+  - CollectionEmbeddingReadinessControllerTailTest（4）：readiness
+    双 service 委派（有/无 integrityService）、derivationReadiness
+    委托、derivationDocuments 委托。
+  - EvaluationSuiteControllerTailTest（4）：createSuite /
+    listSuites / getSuite / createVersion 的委托路径。
+
+## 进度留档快照（Batch 688 后 · 用户指令收尾）
+
+- 留档时点：2026-09-28 · main @ 本快照提交
+- core 测试规模：5818 → 6163（+345 用例）。
+- 防御性不可达判定累计约 35 项（详见各批次条目）。
+- 构建验证：后端 core 全量 EXIT=0（6163 tests）；WebUI build 绿。
+
+### Batch 687（已交付）
+
 ### Batch 687（已交付）
 
 - 分支：`codex/batch687-filter-validator-tail`（已合入 main）
