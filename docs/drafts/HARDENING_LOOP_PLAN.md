@@ -4397,6 +4397,19 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 2 用例绿；core 全量门禁 EXIT=0（6125
   tests）。
 
+### Batch 684（已交付）
+
+- 分支：`codex/batch684-feedback-validate-tail`（已合入 main）
+- 内容：UserFeedbackServiceImpl 校验守卫长尾（新建
+  UserFeedbackServiceImplValidateTailTest，5 用例）：
+  - 受限策略下快照数不足 → SecurityException（116）。
+  - 无限制策略下快照数不足 → RagException DOCUMENT_NOT_FOUND。
+  - documentId 不匹配 → CONCURRENT_MODIFICATION（127）。
+  - collectionId 为 null → DOCUMENT_NOT_FOUND（137）。
+  - 引用数超 1000 → IllegalArgumentException（211）。
+- 指标：1 个新测试类 5 用例绿；core 全量门禁 EXIT=0（6148
+  tests）。
+
 ### Batch 683（已交付）
 
 - 分支：`codex/batch683-usage-normalizer-tail`（已合入 main）
