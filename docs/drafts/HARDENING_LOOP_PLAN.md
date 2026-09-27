@@ -4436,6 +4436,23 @@ VersionHistoryModal 相关 100% 项等。
 - 防御性不可达判定累计约 35 项（详见各批次条目）。
 - 构建验证：后端 core 全量 EXIT=0（6154 tests）；WebUI build 绿。
 
+### Batch 687（已交付）
+
+- 分支：`codex/batch687-filter-validator-tail`（已合入 main）
+- 内容：RetrievalFilterValidator 边界长尾（重写
+  RetrievalFilterValidatorBoundaryTailTest，8 用例）：
+  - validate(null request) → none（null 守卫臂）。
+  - fromJsonRecordRequest(null) → none。
+  - filters 与顶层 metadataContains 同时设置 → IAE 冲突拒绝。
+  - 仅 filters 设置 → 正常接受。
+  - giant payload 超过 MAX_FILTER_BYTES → IAE 拒绝。
+  - narrowWithPayload 组合多过滤器。
+  - canonicalize 递归排序 object keys、array 保序。
+  - toCanonicalJson 确定性（不同插入顺序同输出）。
+- 指标：1 个新测试类 8 用例绿；core 全量门禁 EXIT=0（6155
+  tests）。
+
+
 ### Batch 686（已交付）
 
 - 分支：`codex/batch686-modelregistry-lifecycle`（已合入 main）
