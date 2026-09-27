@@ -4330,6 +4330,22 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 3 用例绿；core 全量门禁 EXIT=0（6101
   tests）。
 
+### Batch 677（已交付）
+
+- 分支：`codex/batch677-memory-summary-mapper`（已合入 main）
+- 内容：RagChatMemorySummaryRepository RowMapper 与参数校验长尾
+  （新建 RagChatMemorySummaryRowMapperTailTest，5 用例）：
+  - find 的 RowMapper 真实执行（ResultSet 列装配含非 null
+    timestamp → Instant）。
+  - saveCas 参数校验：负 estimatedTokens、空白 summaryText、
+    零 summarizedThroughHistoryId 三条 IllegalArgumentException。
+  - saveCas 合法输入经 INSERT（update 返回 1）成功。
+- 要点：SummaryRow 的 updatedAt 来自 rs.getTimestamp(...).toInstant
+  ——mock 需返回非 null Timestamp；findCacheState 参数签名为
+  (long, EmbeddingProfile, String, String)，桩需 anyLong+anyString。
+- 指标：1 个新测试类 5 用例绿；core 全量门禁 EXIT=0（6106
+  tests）。
+
 ## 进度留档快照（Batch 660 后 · 用户指令收尾）
 
 - 留档时点：2026-09-26 · main @ 本快照提交
