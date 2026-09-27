@@ -4346,6 +4346,20 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 5 用例绿；core 全量门禁 EXIT=0（6106
   tests）。
 
+### Batch 678（已交付）
+
+- 分支：`codex/batch678-filter-validator-tail`（已合入 main）
+- 内容：RetrievalFilterValidator 边界与归一化长尾（新建
+  RetrievalFilterValidatorBoundaryTailTest，7 用例）：
+  - validate(null request) → none（null 守卫臂）。
+  - narrowWithPayload：base + extra 组合、giant payload 超出总字
+    节限制拒绝。
+  - canonicalize 递归排序 object keys、array 保序。
+  - toCanonicalJson 确定性（不同插入顺序同输出）。
+  - validateObject null 输入返回 null。
+- 指标：1 个新测试类 7 用例绿；core 全量门禁 EXIT=0（6113
+  tests）。
+
 ## 进度留档快照（Batch 660 后 · 用户指令收尾）
 
 - 留档时点：2026-09-26 · main @ 本快照提交
