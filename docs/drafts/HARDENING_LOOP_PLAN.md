@@ -4316,6 +4316,20 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 4 用例绿；core 全量门禁 EXIT=0（6098
   tests）。
 
+### Batch 676（已交付）
+
+- 分支：`codex/batch676-adapter-iae-null-tail`（已合入 main）
+- 内容：OpenAiRequestRetrievalScopeAdapter IAE 映射与 null 长尾
+  （新建 OpenAiRequestRetrievalScopeAdapterIaeNullTailTest，3 用
+  例）：
+  - resolver 抛 IllegalArgumentException → invalid_scope 协议异
+    常映射（104-106），消息透传。
+  - headerKeys 对 null request 返回空列表（112）。
+  - request 无 collection-key 头时 headerKeys 为空（112 同一臂的
+    另一入口形态）。
+- 指标：1 个新测试类 3 用例绿；core 全量门禁 EXIT=0（6101
+  tests）。
+
 ## 进度留档快照（Batch 660 后 · 用户指令收尾）
 
 - 留档时点：2026-09-26 · main @ 本快照提交
