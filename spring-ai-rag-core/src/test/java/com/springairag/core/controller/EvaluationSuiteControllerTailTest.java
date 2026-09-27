@@ -1,5 +1,7 @@
 package com.springairag.core.controller;
 
+import com.springairag.api.dto.EvaluationRunCreateRequest;
+import com.springairag.api.dto.EvaluationRunResponse;
 import com.springairag.api.dto.EvaluationSuiteResponse;
 import com.springairag.api.dto.EvaluationSuiteVersionResponse;
 import com.springairag.core.evaluation.EvaluationSuiteService;
@@ -7,14 +9,16 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
- * EvaluationSuiteController 委托长尾（Batch 688，JaCoCo 驱动）：
- * createSuite / listSuites / getSuite / createVersion 的委托路径。
+ * EvaluationSuiteController 委托长尾（Batch 690，JaCoCo 驱动）：
+ * createSuite / listSuites / getSuite / createVersion / createRun /
+ * getRun / compare 的委托路径。
  */
 class EvaluationSuiteControllerTailTest {
 
@@ -67,6 +71,40 @@ class EvaluationSuiteControllerTailTest {
         when(service.createVersion("my-suite", request)).thenReturn(expected);
 
         var result = controller.createVersion("my-suite", request);
+
+        assertEquals(expected, result);
+    }
+
+    @Test
+    void createRunDelegatesToService() {
+        var request = mock(EvaluationRunCreateRequest.class);
+        var expected = mock(EvaluationRunResponse.class);
+        when(service.createRun(request)).thenReturn(expected);
+
+        var result = controller.createRun(request);
+
+        assertEquals(expected, result);
+    }
+
+    @Test
+    void getRunDelegatesToService() {
+        var runId = UUID.randomUUID();
+        var expected = mock(EvaluationRunResponse.class);
+        when(service.getRun(runId)).thenReturn(expected);
+
+        var result = controller.getRun(runId);
+
+        assertEquals(expected, result);
+    }
+
+    @Test
+    void compareDelegatesToService() {
+        var leftId = UUID.randomUUID();
+        var rightId = UUID.randomUUID();
+        var expected = mock(com.springairag.api.dto.EvaluationCompareResponse.class);
+        when(service.compare(leftId, rightId)).thenReturn(expected);
+
+        var result = controller.compare(leftId, rightId);
 
         assertEquals(expected, result);
     }
