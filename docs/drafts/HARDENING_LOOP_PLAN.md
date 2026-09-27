@@ -4428,6 +4428,25 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 5 用例绿；core 全量门禁 EXIT=0（6148
   tests）。
 
+## 进度留档快照（Batch 686 后 · 用户指令收尾）
+
+- 留档时点：2026-09-28 · main @ 本快照提交
+- core 测试规模：5818 → 6154（+336 用例）。
+- 本节批次重点（639–686 汇总）：48 个批次的测试加固交付。
+- 防御性不可达判定累计约 35 项（详见各批次条目）。
+- 构建验证：后端 core 全量 EXIT=0（6154 tests）；WebUI build 绿。
+
+### Batch 686（已交付）
+
+- 分支：`codex/batch686-modelregistry-lifecycle`（已合入 main）
+- 内容：ModelRegistry 生命周期与获取长尾（新建
+  ModelRegistryLifecycleTailTest，4 用例）：
+  - register 跳过缺失 bean（NoSuchBeanDefinitionException 降级）。
+  - get 对未知 provider 抛 IAE 并列出可用 provider。
+  - getDefault 对缺失 chatModel bean 抛 NoSuchBeanDefinition
+    Exception。
+  - getDefault 返回已注册的 chatModel bean。
+
 ### Batch 685（已交付）
 
 - 分支：`codex/batch683-rerank-lexical-tail`（已合入 main）
