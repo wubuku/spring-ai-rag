@@ -4288,6 +4288,19 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 5 用例绿；core 全量门禁 EXIT=0（6090
   tests）。
 
+### Batch 674（已交付）
+
+- 分支：`codex/batch674-rerank-normalize-tail`（已合入 main）
+- 内容：RerankAdvisor 归一化与定制长尾（新建
+  RerankAdvisorNormalizeTailTest，4 用例）：
+  - MiniMax 适配器（不支持 system 角色）走归一化分支后不应残留
+    assistant 角色。
+  - setSystemContextPrefix 自定义前缀注入后系统消息包含前缀。
+  - setMaxResults 生效（rerank 调用透传 limit=3）。
+  - setSystemContextPrefix/setMaxResults setter 空跑。
+- 指标：1 个新测试类 4 用例绿；core 全量门禁 EXIT=0（6094
+  tests）。
+
 ## 进度留档快照（Batch 660 后 · 用户指令收尾）
 
 - 留档时点：2026-09-26 · main @ 本快照提交
