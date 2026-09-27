@@ -4397,7 +4397,57 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 2 用例绿；core 全量门禁 EXIT=0（6125
   tests）。
 
-## 进度留档快照（Batch 660 后 · 用户指令收尾）
+### Batch 682（已交付）
+
+- 分支：`codex/batch682-ratelimit-mapper-tail`（已合入 main）
+- 内容：PgTrgmFulltextProvider isExcluded 排除臂长尾（新建
+  PgTrgmFulltextProviderIsExcludedTailTest，6 用例）：
+  - null 排除列表 → false；空排除列表 → false。
+  - embedding_id 为 Number 且在排除列表 → true。
+  - embedding_id 非 Number（String）→ 走 id 兼容路径（240-242）。
+  - 排除列表命中 id → true；未命中 → false。
+  - 排除列表与 id 不匹配 → false。
+- 要点：isExcluded 是 private 方法——通过反射 setAccessible 驱
+  动；excludeIds 的 null → false 短路在方法首行（233-234）。
+- 指标：1 个新测试类 6 用例绿；core 全量门禁 EXIT=0（6131
+  tests）。
+
+## 进度留档快照（Batch 682 后 · 用户指令收尾）
+
+- 留档时点：2026-09-27 · main @ 本快照提交
+- 用户已明确暂停循环，等待下一步指示。本轮（Batch 639–682 共
+  44 个批次）全部按「规划→实施→单类验证→core 全量门禁 EXIT=0→
+  push 特性分支→--no-ff 合并 main→台账记录→清理分支」交付完成，
+  工作区干净。
+- core 测试规模：5818 → 6131（+313 用例，突破 6000）。
+- 本节批次重点（639–682 汇总）：
+  - Batch 639–660（22 批）：ChatExecutionService / RagChat
+    Controller / DocumentMutationService / RagChatService /
+    PdfToRagService / JsonRecordService / ApiKeyController /
+    StaticKnowledgeCatalog / ApiKeyManagementService / AbTest
+    Service / DocumentEmbedService / ModelComparisonService /
+    CacheMetricsService / CollectionProvisioningService /
+    KeywordIndexPersistenceService / EvaluationSuiteService /
+    CollectionPurgeService / ExternalDocumentService /
+    DocumentRelocationService / PgTrgmFulltextProvider /
+    RetrievalFilterValidator / RagDocumentController 等类。
+  - Batch 661–682（22 批）：SSE 生命周期 / 真实 ChatClient 链 /
+    中断时序抗抖动 / A/B 读取面 / root 门槛 / HeuristicRerank
+    词法溢出 / scope 适配器 IAE / 实体访问器 / 记忆摘要
+    RowMapper / ASYNC 事务模板 / RetrievalFilterValidator 边界 /
+    StaticKnowledge 嵌套属性 / 限流 RowMapper / isExcluded 臂。
+- 防御性不可达判定累计约 35 项（详见各批次条目），主要类型：
+  - 构造器归一化保证不变式（withEffectiveSession、endpoints null）。
+  - 容器驱动回调（SseEmitter onTimeout、ResponseBodyEmitter IO）。
+  - 正则/类型守卫前置拦截（addPositiveLong NFE、normalizeLocation
+    ".."）。
+  - Mockito any() 对原始类型返回 null 拆箱 NPE（非代码缺陷）。
+- 下一轮候选：剩余行级缺口已多为防御性/容器驱动/record 规范构
+  造器保证不变式等已判定不可达，实际可达行级缺口已高度收敛。
+- 构建验证：后端 core 全量 EXIT=0（6131 tests，0 failures）；
+  WebUI `npm run build` EXIT=0。
+
+### Batch 681（已交付）
 
 - 留档时点：2026-09-26 · main @ 本快照提交
 - 用户已明确暂停循环，等待下一步指示。本节（Batch 639–660 共
