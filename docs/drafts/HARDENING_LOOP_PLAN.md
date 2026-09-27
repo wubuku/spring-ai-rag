@@ -4301,6 +4301,21 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 4 用例绿；core 全量门禁 EXIT=0（6094
   tests）。
 
+### Batch 675（已交付）
+
+- 分支：`codex/batch675-rerank-lexical-tail`（已合入 main）
+- 内容：HeuristicRerankProvider 词法溢出与多样性长尾（新建
+  HeuristicRerankLexicalOverflowTailTest，4 用例）：
+  - 600 个互不重复 CJK 字符的文本触发 MAX_LEXICAL_FEATURES 溢出
+    （202/342/359-361/369-371），分数仍在 [0,1] 内不崩溃。
+  - calculateDiversityScore 对单条结果、calculateTextSimilarity
+    相同/不同文本的边界。
+- 要点：retrieve/documentId 类型为 String（非 Long）；TextChunk
+  在 com.springairag.documents.chunk 包；RetrievalResult 为
+  JavaBean 非 record。
+- 指标：1 个新测试类 4 用例绿；core 全量门禁 EXIT=0（6098
+  tests）。
+
 ## 进度留档快照（Batch 660 后 · 用户指令收尾）
 
 - 留档时点：2026-09-26 · main @ 本快照提交
