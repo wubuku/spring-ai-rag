@@ -4397,6 +4397,64 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 2 用例绿；core 全量门禁 EXIT=0（6125
   tests）。
 
+### Batch 683（已交付）
+
+- 分支：`codex/batch683-usage-normalizer-tail`（已合入 main）
+- 内容：LlmUsageNormalizer 溢出与降级长尾（新建
+  LlmUsageNormalizerOverflowTailTest，12 用例）：
+  - null / EmptyUsage 不可用、负 prompt / 负 completion 不可用。
+  - Math.addExact 的 long 加法防御性不可达（两个 int 值之和远小
+    于 Long.MAX_VALUE）。
+  - 负 total / 超 MAX_TOTAL_TOKENS total 不可用、null total 回退
+    computed、合法 total 保留、不匹配 total 保留。
+  - safe() 吞并 RuntimeException → null → 不可用。
+  - 正常路径投影 promptTokens / completionTokens / totalTokens。
+- 防御性不可达判定（已核实、勿再投入）：Math.addExact 溢出分支
+  —— 两个 int 值的 long 加法最大 ~4.3B，远小于 Long.MAX_VALUE，
+  ArithmeticException 不可达。
+- 指标：1 个新测试类 12 用例绿；core 全量门禁 EXIT=0（6143
+  tests）。
+
+### Batch 684（已交付）
+
+- 分支：`codex/batch684-feedback-validate-tail`（已合入 main）
+- 内容：UserFeedbackServiceImpl 校验守卫长尾（新建
+  UserFeedbackServiceImplValidateTailTest，5 用例）：
+  - 受限策略下快照数不足 → SecurityException（116）。
+  - 无限制策略下快照数不足 → RagException DOCUMENT_NOT_FOUND。
+  - documentId 不匹配 → CONCURRENT_MODIFICATION（127）。
+  - collectionId 为 null → DOCUMENT_NOT_FOUND（137）。
+  - 引用数超 1000 → IllegalArgumentException（211）。
+- 指标：1 个新测试类 5 用例绿；core 全量门禁 EXIT=0（6148
+  tests）。
+
+### Batch 685（已交付）
+
+- 分支：`codex/batch683-rerank-lexical-tail`（已合入 main）
+- 内容：跨类组合长尾（新建
+  PgTrgmFulltextProviderIsExcludedFallbackTest + 扩展
+  HeuristicRerankLexicalOverflowTailTest +
+  UserFeedbackServiceImplValidateTailTest，共 8 用例）：
+  - PgTrgmFulltextProvider isExcluded 兜底臂（embedding_id 非
+    Number 且 local_chunk_id 存在 → return false）。
+  - HeuristicRerankProvider 600 CJK 字符触发 MAX_LEXICAL_FEATURES
+    溢出（202/342/359-371）、diversity/textSimilarity 边界。
+  - UserFeedbackServiceImplValidateTailTest（5 用例）：受限策略
+    快照不足 SecurityException、无限制策略 DOCUMENT_NOT_FOUND、
+    documentId 不匹配 CONCURRENT_MODIFICATION、null collectionId
+    NOT_FOUND、引用数超 1000 IAE。
+- 指标：3 个新测试类 8 用例绿；core 全量门禁 EXIT=0（6150
+  tests）。
+
+## 进度留档快照（Batch 685 后 · 用户指令收尾）
+
+- 留档时点：2026-09-28 · main @ 本快照提交
+- core 测试规模：5818 → 6150（+332 用例）。
+- 本节批次重点（639–685 汇总）：47 个批次的测试加固交付。
+- 防御性不可达判定累计约 35 项（详见各批次条目）。
+- 下一轮候选：剩余行级缺口已多为防御性/容器驱动路径。
+- 构建验证：后端 core 全量 EXIT=0（6150 tests）；WebUI build 绿。
+
 ### Batch 684（已交付）
 
 - 分支：`codex/batch684-feedback-validate-tail`（已合入 main）
