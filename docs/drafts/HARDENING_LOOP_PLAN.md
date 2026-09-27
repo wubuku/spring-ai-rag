@@ -4397,6 +4397,24 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 2 用例绿；core 全量门禁 EXIT=0（6125
   tests）。
 
+### Batch 683（已交付）
+
+- 分支：`codex/batch683-usage-normalizer-tail`（已合入 main）
+- 内容：LlmUsageNormalizer 溢出与降级长尾（新建
+  LlmUsageNormalizerOverflowTailTest，12 用例）：
+  - null / EmptyUsage 不可用、负 prompt / 负 completion 不可用。
+  - Math.addExact 的 long 加法防御性不可达（两个 int 值之和远小
+    于 Long.MAX_VALUE）。
+  - 负 total / 超 MAX_TOTAL_TOKENS total 不可用、null total 回退
+    computed、合法 total 保留、不匹配 total 保留。
+  - safe() 吞并 RuntimeException → null → 不可用。
+  - 正常路径投影 promptTokens / completionTokens / totalTokens。
+- 防御性不可达判定（已核实、勿再投入）：Math.addExact 溢出分支
+  —— 两个 int 值的 long 加法最大 ~4.3B，远小于 Long.MAX_VALUE，
+  ArithmeticException 不可达。
+- 指标：1 个新测试类 12 用例绿；core 全量门禁 EXIT=0（6143
+  tests）。
+
 ### Batch 682（已交付）
 
 - 分支：`codex/batch682-ratelimit-mapper-tail`（已合入 main）
