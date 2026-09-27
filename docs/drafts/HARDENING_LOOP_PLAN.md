@@ -4384,6 +4384,19 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 5 用例绿；core 全量门禁 EXIT=0（6123
   tests）。
 
+### Batch 681（已交付）
+
+- 分支：`codex/batch681-entity-accessor-tail`（已合入 main）
+- 内容：实体访问器全字段往返长尾（新建
+  EntityAccessorRoundTripTest，2 用例）：
+  - RagDocument：nextHistoryVersion 默认值 1、lastSeenSyncRunId
+    (UUID) 与 lastSeenSyncGeneration (Long) 的 setter/getter 往返。
+  - CollectionProvisioningOperation：id / ownerId /
+    idempotencyKeyHash / requestFingerprintSha256 / collectionId /
+    createdAt / updatedAt 全字段存取。
+- 指标：1 个新测试类 2 用例绿；core 全量门禁 EXIT=0（6125
+  tests）。
+
 ## 进度留档快照（Batch 660 后 · 用户指令收尾）
 
 - 留档时点：2026-09-26 · main @ 本快照提交
