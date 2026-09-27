@@ -4455,6 +4455,42 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 5 用例绿；core 全量门禁 EXIT=0（6177
   tests）。
 
+### Batch 691（已交付）
+
+- 分支：`codex/batch-691-tail-arm-hardening-20260928`（已合入
+  main）
+- 内容：指纹缺省直通臂 / 竞态台账收尾 / 重排匹配臂长尾（3 个新
+  测试类，14 用例）：
+  - ChatRequestFingerprintDefaultTailTest（5 用例）：显式
+    collectionScopeMode 优先于推断（87）、null model → DEFAULT 与
+    非空 model 直通（213）、空白 domainId → null 与非空直通
+    （217）、collectionKeys 的 null 元素过滤排序（239）、metadata
+    序列化失败的 RagException 包装（274-275，spy ObjectMapper 在
+    writeValueAsBytes 抛出）。
+  - CollectionProvisioningRaceLedgerTailTest（3 用例）：事务路径
+    （公共构造器注入 mock PlatformTransactionManager，真实
+    TransactionTemplate 的 REQUIRES_NEW，getTransaction 返回 null
+    时回调照常执行）下重试耗尽后的台账竞争恢复（239-243）、台账
+    异常含 DataAccessException 因果链的 SERVICE_UNAVAILABLE 降级
+    （172-175）、指纹冲突 IDEMPOTENCY_KEY_REUSED 原样重抛
+    （172/173/177）。
+  - HeuristicRerankMatchArmTailTest（6 用例）：单字母边界感知词仅
+    在末位被阻塞后的搜索耗尽返回 -1（202）、CJK+拉丁混排段两种冲
+    刷点（单 CJK 冲刷 358-359、分隔符冲刷 369-370）、词法特征达
+    512 上限的三种提前返回（单 CJK 冲刷后 360-361、分隔符冲刷后
+    370-371、Cjk 分支入口冲刷后 341-342）。
+- 防御性不可达判定（勿再投入）：
+  - ChatRequestFingerprint 60：ChatRequest.getMode() 内建 null →
+    KNOWLEDGE 归一化，指纹层的 null 分支不可达。
+  - ChatRequestFingerprint 100-101/192-193：canonicalize 后的
+    ObjectNode 序列化实际不会失败，catch 为防御。
+  - ChatRequestFingerprint 340-341：JVM 缺少 SHA-256 算法的防御。
+  - CollectionProvisioningService 166 "created" 臂：readExisting
+    仅经 replay(...) 返回 replay=true 的结果，竞态恢复路径恒记录
+    "replay"。
+- 指标：3 个新测试类 14 用例绿；core 全量门禁 EXIT=0（6191
+  tests）。
+
 ## 进度留档快照（Batch 686 后 · 用户指令收尾）
 
 ## 进度留档快照（Batch 686 后 · 用户指令收尾）
