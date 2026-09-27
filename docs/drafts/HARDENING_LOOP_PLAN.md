@@ -4371,6 +4371,19 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 5 用例绿；core 全量门禁 EXIT=0（6118
   tests）。
 
+### Batch 680（已交付）
+
+- 分支：`codex/batch680-staticknowledge-props-tail`（已合入 main）
+- 内容：RagChatProperties StaticKnowledge 嵌套属性与 http-tools
+  长尾（新建 RagChatPropertiesStaticKnowledgeTailTest，5 用例）：
+  - Skills locations null 归一为空列表。
+  - Skills maxSkillBodyBytes / maxReferenceBytes setter 存取。
+  - StaticKnowledge visibility getter。
+  - HttpTools endpoints null 归一为空列表。
+  - HttpTools endpoint 注入与 size 验证。
+- 指标：1 个新测试类 5 用例绿；core 全量门禁 EXIT=0（6123
+  tests）。
+
 ## 进度留档快照（Batch 660 后 · 用户指令收尾）
 
 - 留档时点：2026-09-26 · main @ 本快照提交
