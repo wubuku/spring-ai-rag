@@ -4442,6 +4442,21 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 5 用例绿；core 全量门禁 EXIT=0（6148
   tests）。
 
+### Batch 690（已交付）
+
+- 分支：`codex/batch690-sensitivemdc-tail`（已合入 main）
+- 内容：SensitiveMdc 转换与操作长尾（新建
+  SensitiveMdcSwapAndClearTailTest，5 用例）：
+  - swapCamelToUnderscore 的 camelCase → snake_case 转换（无大写
+    返回原值、空串）。
+  - put 的敏感/非敏感分支（password → [MASKED]、normalKey 原值）。
+  - putAll 自动脱敏（api_key 被掩码、userId/environment 原值）。
+  - clear 移除所有条目。
+- 指标：1 个新测试类 5 用例绿；core 全量门禁 EXIT=0（6177
+  tests）。
+
+## 进度留档快照（Batch 686 后 · 用户指令收尾）
+
 ## 进度留档快照（Batch 686 后 · 用户指令收尾）
 
 - 留档时点：2026-09-28 · main @ 本快照提交
