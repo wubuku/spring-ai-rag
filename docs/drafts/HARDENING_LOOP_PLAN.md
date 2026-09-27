@@ -1,3 +1,17 @@
+### Batch 690（已交付）
+
+- 分支：`codex/batch690-eval-ctrl-tail`（已合入 main）
+- 内容：控制器委托与 ISE 长尾（新建两个测试类，13 用例）：
+  - CollectionEmbeddingReadinessControllerRequireIntegrityTailTest（6）：requireIntegrityService ISE、derivationReadiness / derivationDocuments 委托、readiness 双 service 委派。
+  - EvaluationSuiteControllerTailTest（7）：createSuite / listSuites / getSuite / createVersion / createRun / getRun / compare 的委托路径。
+
+## 进度留档快照（Batch 690 后 · 用户指令收尾）
+
+- 留档时点：2026-09-28 · main @ 本快照提交
+- core 测试规模：5818 → 6172（+354 用例）。
+- 防御性不可达判定累计约 35 项（详见各批次条目）。
+- 构建验证：后端 core 全量 EXIT=0（6172 tests）；WebUI build 绿。
+
 ### Batch 66（已交付）
 
 - 分支：`test/coverage-round3-20260906`（基于 Batch 65 分支）
