@@ -4491,6 +4491,38 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：3 个新测试类 14 用例绿；core 全量门禁 EXIT=0（6191
   tests）。
 
+### Batch 692（已交付）
+
+- 分支：`codex/batch-692-config-alert-tail-20260928`（已合入
+  main）
+- 内容：配置 null 缺省臂 / 到期告警台账长尾（2 个新测试类，12
+  用例）：
+  - RagChatPropertiesNullArmsTailTest（9 用例）：knowledge / agent
+    / history / execution / context / idempotency 六个嵌套属性
+    setter 的 null 回退（41-87）、SkillProperties 的
+    maxLoadsPerRequest / maxReferenceReadsPerRequest /
+    maxCatalogCharacters 往返（370-381）、HttpEndpointProperties
+    queryParameters 的 null → 空列表清洗（481）、默认配置全链路
+    validate 通过。
+  - ApiPrincipalExpiryAlertLedgerTailTest（3 用例）：
+    findFallbackCandidates 的 principal_id 行映射（155-157）、
+    insert RETURNING → ManagedWrite(0<1) → claimNotification 的
+    "RETURNING version" CAS 行映射（449-450）、metadata 序列化失
+    败的 IllegalStateException 包装（517-518，mock ObjectMapper
+    抛 JsonProcessingException）。
+- 防御性不可达判定（勿再投入）：
+  - RagChatProperties 431 / 589：setEndpoints(null) 与
+    setQueryParameters(null) 均在 setter 内归一化为空列表，
+    validate 中的 endpoints / queryParameters null 检查经公共
+    API 不可达。
+  - ApiPrincipalExpiryAlertService 122-124：重试循环后的
+    lastFailure 出口要求 eventRetryAttempts 为 0，但属性校验强制
+    [1,10]；124 为死臂（循环必然在末次尝试内重抛）。
+  - ApiPrincipalExpiryAlertService 104：reconcileOnce 不返回
+    null，事务结果判空为防御。
+- 指标：2 个新测试类 12 用例绿；core 全量门禁 EXIT=0（6203
+  tests）。
+
 ## 进度留档快照（Batch 686 后 · 用户指令收尾）
 
 ## 进度留档快照（Batch 686 后 · 用户指令收尾）
