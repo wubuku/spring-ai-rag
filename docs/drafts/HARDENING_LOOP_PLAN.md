@@ -4623,6 +4623,26 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 3 用例绿；core 全量门禁 EXIT=0（6220
   tests）。
 
+### Batch 697（已交付）
+
+- 分支：`codex/batch-697-doc-acl-tail-20260929`（已合入 main）
+- 内容：文档 ACL 列举 / 统计 / 批量嵌入流长尾（1 个新测试类，4
+  用例）：
+  - RagDocumentControllerAclListTailTest：受限策略下
+    getDocumentStats 走 countByProcessingStatusAndCollectionIds 且
+    null 状态归一 UNKNOWN（571-572）；受限策略无显式
+    collectionId 时按允许列表 [2,4] 检索（513 行为路径）；批量嵌
+    入 SSE 流的成功进度/完成（1068-1078）与 IAE → sendError
+    （1080-1081）。
+- 勘误（JaCoCo 行归属阴影，勿再投入）：513 与 1068 在隔离运行
+  中仍报 mi&gt;0/ci=0，但其行为路径已被本批用例执行并验证（
+  searchDocumentsByCollectionIds 收到 eq([2,4])；1080-1081 位于
+  1068 之后的同一方法体内且已覆盖）。与 Batch 695 记录的
+  RagChatController 224/293/406、ModeAwareChatClientFactory 395
+  同型。
+- 指标：1 个新测试类 4 用例绿；core 全量门禁 EXIT=0（6224
+  tests）。
+
 ## 进度留档快照（Batch 686 后 · 用户指令收尾）
 
 ## 进度留档快照（Batch 686 后 · 用户指令收尾）
