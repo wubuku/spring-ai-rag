@@ -4643,6 +4643,27 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 4 用例绿；core 全量门禁 EXIT=0（6224
   tests）。
 
+### Batch 698（已交付）
+
+- 分支：`codex/batch-698-static-knowledge-tail-20260929`（已合入
+  main）
+- 内容：静态知识计分 / 空行刷新长尾（1 个新测试类，2 用例）：
+  - StaticKnowledgeCatalogScoreFlushTailTest：crafted root 夹具
+    下拉丁词查询（"warranty"）命中后的词覆盖率计分（168 行为路
+    径，既有查询全为纯 CJK 走短路臂）；两行 24 字符经 ≤ 路径把缓
+    冲恰好填到 chunkMaxCharacters 后遇空行即时刷新（240-243，trim
+    后 49 字符且不含后续小节）。
+- 勿再投入：
+  - 193（fitCharacters 空结果 break）：要求存在空文本 chunk，分
+    块/入缓冲全链路保证文本非空。
+  - 291（chunk() 超长截断）：所有 flush 点均保证文本 ≤
+    chunkMaxCharacters（超长单行由 while 窗口切片消化）。
+  - 368/379-380：SHA-256 不可用防御。
+  - 168 为 JaCoCo 行归属阴影候补：拉丁查询用例已行为执行计分除
+    法并断言非空结果，隔离后仍报 mi=2/ci=0（待后续复测）。
+- 指标：1 个新测试类 2 用例绿；core 全量门禁 EXIT=0（6226
+  tests）。
+
 ## 进度留档快照（Batch 686 后 · 用户指令收尾）
 
 ## 进度留档快照（Batch 686 后 · 用户指令收尾）
