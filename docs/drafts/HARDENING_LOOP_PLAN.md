@@ -4551,6 +4551,36 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：2 个新测试类 5 用例绿；core 全量门禁 EXIT=0（6208
   tests）。
 
+### Batch 694（已交付）
+
+- 分支：`codex/batch-694-pdfimport-tail-20260928`（已合入 main）
+- 内容：PDF 导入 MIME 兜底 / 根列举过滤 + 嵌入包装 catch 臂（2
+  个新测试类，5 用例）：
+  - PdfImportServiceMimeTypeTailTest（3 用例）：converter 产出未
+    知扩展名文件时 probeContentType 返回 null → application/
+    octet-stream 兜底（242）、listChildren 对前缀命中但后续字符
+    非 "/" 的遗留嵌套路径（uuidx/sub/a.md）排除（353）、
+    PdfImportResult 三参便捷构造器的 originalFilename/displayName
+    null 缺省（394-395）。
+  - PdfImportControllerEmbedCatchTailTest（2 用例）：SSE 路径同
+    步段的 blank UUID IAE 逃逸到包装层 → 400（654-655）、受限
+    API Key 策略（AUTHENTICATED_API_PRINCIPAL_ATTRIBUTE +
+    RequestContextHolder 种入）下越权 collectionId 的
+    SecurityException 原样重抛（656-657）。
+- 勿再投入：
+  - PdfImportController 658-660：sync 路径的 IAE / 通用异常在 5
+    参 triggerEmbeddingSync 内部已自行捕获转 400/500（既有
+    illegalArgumentFromServiceBecomes400 / unexpectedException
+    Becomes500 的断言即来自内部捕获），包装层 catch 仅可能由 SSE
+    同步段的非 IAE/SE 异常触发，当前无已知可达来源。
+  - MarkerPdfConverter 94-96/108-114/133-137：进程超时（5 分钟）
+    /isAvailable 超时（10 秒）臂受真实墙钟限制，单测不可行。
+  - ResourceCatalog 剩余 13 行（95-96 跨根字节上限、203-204 符号
+    链接逃逸、248-249 JAR 前缀、427-428 external 路径解析）在 14
+    个既有测试类下存活，属高成本硬臂。
+- 指标：2 个新测试类 5 用例绿；core 全量门禁 EXIT=0（6213
+  tests）。
+
 ## 进度留档快照（Batch 686 后 · 用户指令收尾）
 
 ## 进度留档快照（Batch 686 后 · 用户指令收尾）
