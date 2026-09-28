@@ -4678,6 +4678,19 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 3 用例绿；core 全量门禁 EXIT=0（6229
   tests）。
 
+### Batch 700（已交付）
+
+- 分支：`codex/batch-700-outcome-metrics-tail-20260929`（已合入
+  main）
+- 内容：检索结果归一 / 序列化长尾（1 个新测试类，3 用例）：
+  - RetrievalOutcomeNormalizeTailTest：紧凑构造器对全 null 组件
+    的回退（traceId 生成 UUID、各集合/映射空回退，31-43）；
+    ofResults(null) → NO_CANDIDATES（78）；toMetadataMap 携带
+    branchStages/fusionStage/rerankStage 与 rawCandidateCount
+    （129-137）。
+- 指标：1 个新测试类 3 用例绿；core 全量门禁 EXIT=0（6232
+  tests）。
+
 ## 进度留档快照（Batch 686 后 · 用户指令收尾）
 
 ## 进度留档快照（Batch 686 后 · 用户指令收尾）
