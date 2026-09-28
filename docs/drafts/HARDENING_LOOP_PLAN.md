@@ -4523,6 +4523,34 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：2 个新测试类 12 用例绿；core 全量门禁 EXIT=0（6203
   tests）。
 
+### Batch 693（已交付）
+
+- 分支：`codex/batch-693-factory-trace-tail-20260928`（已合入
+  main）
+- 内容：工厂追踪会话 / 空基线 / 工具选项守卫 + Snapshot 归一长
+  尾（2 个新测试类，5 用例）：
+  - ModeAwareChatClientFactoryTraceTailTest（4 用例）：16 参
+    ChatCommand 携带 RetrievalTraceSession 时按 KNOWLEDGE/AGENT
+    预算构建 attempt 采集器（198-205，覆盖 201/202 两分支）、
+    SERVER 记忆 + null 基线按空处理（427）、AGENT 模式下候选模
+    型缺 ToolCallingChatOptions 的 IAE 拒绝（456-459）。要点：
+    AGENT 成功路径需真实 ToolCallingChatOptions.builder().build()
+    （mock 的嵌套 getter 全 null 会触发 "options cannot be
+    null"）。
+  - StaticKnowledgeCatalogSnapshotTailTest（1 用例）：Snapshot
+    紧凑构造器对 null digest → ""、null chunks → List.of() 的归
+    一（402-403 的 null 臂）与非 null 直通。
+- 勘误与留档：
+  - ModeAwareChatClientFactory 395 的 mi=4 为字节码行归属阴影，
+    "Too many" 异常路径已被既有 tooManyProvidersForModeIsRejected
+    覆盖（396-398 消息拼装行 ci>0），勿再投入。
+  - OpenAiCompatibilityController 剩余缺口（jsonResponse / DONE
+    发送的 IOException 臂、onCompletion/onError 处置回调）为容器
+    IO / 回调驱动，单测不可达且需生产改造才能注入，标记勿再投
+    入。
+- 指标：2 个新测试类 5 用例绿；core 全量门禁 EXIT=0（6208
+  tests）。
+
 ## 进度留档快照（Batch 686 后 · 用户指令收尾）
 
 ## 进度留档快照（Batch 686 后 · 用户指令收尾）
