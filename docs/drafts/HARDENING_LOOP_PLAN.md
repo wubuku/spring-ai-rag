@@ -4664,6 +4664,20 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 2 用例绿；core 全量门禁 EXIT=0（6226
   tests）。
 
+### Batch 699（已交付）
+
+- 分支：`codex/batch-699-pdf-raw-import-tail-20260929`（已合入
+  main）
+- 内容：raw 文件 500 / PDF-to-RAG 启动异常链长尾（1 个新测试
+  类，3 用例）：
+  - PdfImportControllerRawAndImportTailTest：getRawFile 记录存在
+    但磁盘资源缺失 → 500（863-865）；startPdfToRagEmbedding（反射
+    驱动，InvocationTargetException 解包）对 SecurityException 原
+    样重抛（379）与对未知异常的 IllegalStateException "PDF-to-RAG
+    import failed" 包装（380-382）。
+- 指标：1 个新测试类 3 用例绿；core 全量门禁 EXIT=0（6229
+  tests）。
+
 ## 进度留档快照（Batch 686 后 · 用户指令收尾）
 
 ## 进度留档快照（Batch 686 后 · 用户指令收尾）
