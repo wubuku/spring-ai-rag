@@ -4610,6 +4610,19 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：2 个新测试类 4 用例绿；core 全量门禁 EXIT=0（6217
   tests）。
 
+### Batch 696（已交付）
+
+- 分支：`codex/batch-696-version-allocation-tail-20260929`（已合
+  入 main）
+- 内容：文档版本号分配长尾（1 个新测试类，3 用例）：
+  - DocumentVersionServiceAllocationTailTest：便捷构造器（无
+    JdbcTemplate）回退到仓储历史分配（41-42 + 207-208，findLatest
+    空 → v1、最新 v4 → v5）；JdbcTemplate 的 UPDATE RETURNING 分
+    配（210-217，返回 7）；queryForObject 返回 null 的
+    IllegalStateException 防御（218-220）。
+- 指标：1 个新测试类 3 用例绿；core 全量门禁 EXIT=0（6220
+  tests）。
+
 ## 进度留档快照（Batch 686 后 · 用户指令收尾）
 
 ## 进度留档快照（Batch 686 后 · 用户指令收尾）
