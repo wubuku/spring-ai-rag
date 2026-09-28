@@ -4581,6 +4581,35 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：2 个新测试类 5 用例绿；core 全量门禁 EXIT=0（6213
   tests）。
 
+### Batch 695（已交付）
+
+- 分支：`codex/batch-695-jar-prefix-tail-20260929`（已合入 main）
+- 内容：JAR 前缀发掘 + 预算归一/快照长尾（2 个新测试类，4 用
+  例）：
+  - ResourceCatalogJarPrefixTailTest（2 用例）：JarOutputStream
+    真实 jar 夹具下，空白条目缀（"!/" 结尾归一为空前缀 → 全条
+    目）与非空条目缀（"!/docs" → 限定子目录）两种前缀拼接臂
+    （257 附近），以及条目按 relativePath 排序。
+  - ChatExecutionBudgetAttributionTailTest（2 用例）：
+    reserveToolBatch 对 null/空白工具名归一 "&lt;unknown&gt;" 且限
+    额表按归一名取值、未登记名回退 fallback（155/166/180 行为路
+    径）；snapshot() 携带 requestTraceId（365）。
+- 勿再投入 / 勘误：
+  - ResourceCatalog 248-249：JAR 条目缀 ".." 穿越检查在
+    normalizeLocation 源头（任何含 ".." 的 location 直接 IAE）就
+    已拦截，内层检查经公共 API 不可达。
+  - ResourceCatalog 95-96：跨根字节总上限为外层保险，readBounded
+    按 remainingTotalBytes 逐文件封顶，单调性保证不越界。
+  - ResourceCatalog 427-428："!/rootPart/" 标记为 "/rootPart/"
+    的子串包含关系，第二标记可命中时第一标记必已命中。
+  - RagChatController 224/293/406（mi=7/ci=0）与 ModeAwareChat
+    ClientFactory 395（mi=4）同型：行为路径已被既有 ask/chat/
+    stream 与 tooManyProviders 测试覆盖，疑似 JaCoCo 行归属阴影。
+  - ChatExecutionBudget 190：addExact 先于上限检查抛出，溢出
+    throw 臂不可达；254 为 CAS 竞态重试臂。
+- 指标：2 个新测试类 4 用例绿；core 全量门禁 EXIT=0（6217
+  tests）。
+
 ## 进度留档快照（Batch 686 后 · 用户指令收尾）
 
 ## 进度留档快照（Batch 686 后 · 用户指令收尾）
