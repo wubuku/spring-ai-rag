@@ -5072,6 +5072,21 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 6 用例绿；core 全量门禁 EXIT=0（6333
   tests）。
 
+### Batch 727（已交付）
+
+- 分支：`codex/batch-727-embed-persist-tail-20260930`（已合入
+  main）
+- 内容：嵌入持久化长尾（1 个新测试类，6 用例）：
+  - EmbeddingPersistenceServiceReplaceTailTest：ensureContentHash
+    CAS 失败/命中（108-111）；replace 快照缺失 ISE（248-249）；
+    7 参便捷重载经 allowAll 守卫委托 8 参（94-102，全链：快照 →
+    DELETE → 分块 INSERT → 状态 UPSERT → 版本 CAS）；守卫拒绝
+    短路；分块与状态落库参数验证。要点：Mockito 混用 matcher 与
+    原始值会使桩失配，须全程 eq()；宽匹配 update 桩需在测试内
+    就近注册。
+- 指标：1 个新测试类 6 用例绿；core 全量门禁 EXIT=0（6339
+  tests）。
+
 ## 进度留档快照（Batch 700 后 · 用户指令收尾）
 
 - 留档时点：2026-09-29 · main @ d992fe39 · 工作区干净。
