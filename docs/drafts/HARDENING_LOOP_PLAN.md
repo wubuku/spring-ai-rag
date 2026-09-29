@@ -5114,6 +5114,19 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 3 用例绿；core 全量门禁 EXIT=0（6344
   tests）。
 
+### Batch 730（已交付）
+
+- 分支：`codex/batch-730-delivery-worker-tail-20260930`（已合入
+  main）
+- 内容：通知投递 worker 调度/清理长尾（1 个新测试类，3 用例）：
+  - AlertNotificationDeliveryWorkerGuardTailTest：cleanup 定时入
+    口按 delivered/failed 保留期与批次委托仓储清理（236-238）；
+    fallbackScan 先 recoverExhaustedLeases 再唤醒（74-80）；
+    dispatchLoop 吞掉派发扫描运行时异常且失败后唤醒仍可恢复
+    （116-119 + finally 重派发）。
+- 指标：1 个新测试类 3 用例绿；core 全量门禁 EXIT=0（6347
+  tests）。
+
 ## 进度留档快照（Batch 700 后 · 用户指令收尾）
 
 - 留档时点：2026-09-29 · main @ d992fe39 · 工作区干净。
