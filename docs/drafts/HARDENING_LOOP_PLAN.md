@@ -4742,6 +4742,19 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 4 用例绿；core 全量门禁 EXIT=0（6248
   tests）。
 
+### Batch 704（已交付）
+
+- 分支：`codex/batch-704-alert-slo-tail-20260929`（已合入 main）
+- 内容：SLO 比较语义 / 托管通知取代长尾（1 个新测试类，4 用
+  例）：
+  - AlertServiceImplSloResolveTailTest：SLO_BREACH latency 指标未
+    达阈值不告警（100 的假臂）、`*time*` 指标名走 > 比较（100 的
+    contains("time") 臂）；resolveAlert 在 outbox 与 conditionState
+    齐备时 supersedeManaged（192-194）；scheduledSilenceCleanup
+    调度入口委托（231-232）。
+- 指标：1 个新测试类 4 用例绿；core 全量门禁 EXIT=0（6252
+  tests）。
+
 ## 进度留档快照（Batch 700 后 · 用户指令收尾）
 
 - 留档时点：2026-09-29 · main @ d992fe39 · 工作区干净。
