@@ -4972,6 +4972,19 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 4 用例绿；core 全量门禁 EXIT=0（6301
   tests）。
 
+### Batch 720（已交付）
+
+- 分支：`codex/batch-720-purge-helpers-tail-20260930`（已合入
+  main）
+- 内容：清空服务助手长尾（1 个新测试类，5 用例）：
+  - CollectionPurgeServiceHelperTailTest：version / chatFence 对
+    null 版本归零与非空透传（827-828/861/866-867）；
+    countUuidJoin 空集合短路不触库（803）与占位符查询计数
+    （806）；purge 计划序列化失败包装 ISE "Unable to serialize
+    purge plan"（833-834）与正常序列化。
+- 指标：1 个新测试类 5 用例绿；core 全量门禁 EXIT=0（6306
+  tests）。
+
 ## 进度留档快照（Batch 700 后 · 用户指令收尾）
 
 - 留档时点：2026-09-29 · main @ d992fe39 · 工作区干净。
