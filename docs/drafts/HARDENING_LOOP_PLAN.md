@@ -4796,6 +4796,20 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 2 用例绿；core 全量门禁 EXIT=0（6259
   tests）。
 
+### Batch 708（已交付）
+
+- 分支：`codex/batch-708-eval-repo-tail-20260929`（已合入 main）
+- 内容：评测仓储行映射长尾（1 个新测试类，6 用例）：
+  - EvaluationSuiteRepositoryRowMapperTailTest：mapSuite 在
+    insertSuite / findSuite 的真实 ResultSet 装配（40/67）；
+    mapVersion 在显式版本号查询（99 参数化分支）与
+    findVersionById（110）；countActiveRuns 对 null 计数归零
+    （120）；mapRun 在 insertRun 的 INSERT RETURNING 装配
+    （131-132）。夹具沿用 PostgresRateLimitStore 行映射模式
+    （thenAnswer 内调用 RowMapper）。
+- 指标：1 个新测试类 6 用例绿；core 全量门禁 EXIT=0（6265
+  tests）。
+
 ## 进度留档快照（Batch 700 后 · 用户指令收尾）
 
 - 留档时点：2026-09-29 · main @ d992fe39 · 工作区干净。
