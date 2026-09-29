@@ -5058,6 +5058,20 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 5 用例绿；core 全量门禁 EXIT=0（6327
   tests）。
 
+### Batch 726（已交付）
+
+- 分支：`codex/batch-726-abtest-record-tail-20260930`（已合入
+  main）
+- 内容：A/B 测试服务长尾（1 个新测试类，6 用例）：
+  - AbTestServiceImplRecordVariantTailTest：getVariantForSession
+    流量累计未命中回退 "control"（173）；recordResult 的
+    null session/experiment/variant 三守卫（184 + requireNonNull）；
+    重复会话早退不落库（204-206）；未知实验拒绝（206）；
+    retrievedDocIds 序列化失败回退 "[]"（223，mock ObjectMapper
+    抛 JsonProcessingException）与 null 直通不序列化。
+- 指标：1 个新测试类 6 用例绿；core 全量门禁 EXIT=0（6333
+  tests）。
+
 ## 进度留档快照（Batch 700 后 · 用户指令收尾）
 
 - 留档时点：2026-09-29 · main @ d992fe39 · 工作区干净。
