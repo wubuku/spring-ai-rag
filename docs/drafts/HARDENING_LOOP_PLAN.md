@@ -5030,6 +5030,21 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 2 用例绿；core 全量门禁 EXIT=0（6317
   tests）。
 
+### Batch 724（已交付）
+
+- 分支：`codex/batch-724-planner-legacy-tail-20260930`（已合入
+  main）
+- 内容：提示词规划器旧版路径与工具模式长尾（1 个新测试类，5
+  用例）：
+  - ConversationPromptPlannerLegacyTailTest：adaptive 关闭的旧版
+    预算路径（73/88）——历史超限产生
+    "adaptive_planning_disabled_history_over_limit" 且基线消息原
+    序保留、null 基线不产生超限降级；工具回调非空时
+    toolSchemaTokens 计入（56）；PLAIN 模式跳过证据目标（104）；
+    adaptive 开启 + null 基线短路 turns（222-226）。
+- 指标：1 个新测试类 5 用例绿；core 全量门禁 EXIT=0（6322
+  tests）。
+
 ## 进度留档快照（Batch 700 后 · 用户指令收尾）
 
 - 留档时点：2026-09-29 · main @ d992fe39 · 工作区干净。
