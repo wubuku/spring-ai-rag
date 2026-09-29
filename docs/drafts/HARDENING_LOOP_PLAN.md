@@ -4755,6 +4755,18 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 4 用例绿；core 全量门禁 EXIT=0（6252
   tests）。
 
+### Batch 705（已交付）
+
+- 分支：`codex/batch-705-search-rerank-tail-20260929`（已合入
+  main）
+- 内容：重排成功臂与便捷重载长尾（1 个新测试类，3 用例）：
+  - RagSearchControllerRerankStageTailTest：searchWithConfig 在
+    useRerank=true 且重排成功时按重排后顺序透出并更新 outcome
+    阶段（287-294）；9 参便捷 search 重载委托主流程（215）；
+    searchInScopeDetailed 返回 null 时结果空回退（179）。
+- 指标：1 个新测试类 3 用例绿；core 全量门禁 EXIT=0（6255
+  tests）。
+
 ## 进度留档快照（Batch 700 后 · 用户指令收尾）
 
 - 留档时点：2026-09-29 · main @ d992fe39 · 工作区干净。
