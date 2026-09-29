@@ -4985,6 +4985,20 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 5 用例绿；core 全量门禁 EXIT=0（6306
   tests）。
 
+### Batch 721（已交付）
+
+- 分支：`codex/batch-721-derivation-helper-tail-20260930`（已合入
+  main）
+- 内容：派生修复助手长尾（1 个新测试类，5 用例）：
+  - DerivationRepairHelperTailTest：upperSet 对 null/空/空白/大
+    小写归一（696-701）；safeError 对无消息异常回退类简名并截断
+    500（725）；json 序列化失败包装 "Cannot serialize derivation
+    repair plan"（691-692）；requireActiveProfile 对 Profile 漂
+    移抛 DERIVATION_REPAIR_CONFLICT（679-680）；number /
+    nullableNumber 转换（717/727 区域）。
+- 指标：1 个新测试类 5 用例绿；core 全量门禁 EXIT=0（6311
+  tests）。
+
 ## 进度留档快照（Batch 700 后 · 用户指令收尾）
 
 - 留档时点：2026-09-29 · main @ d992fe39 · 工作区干净。
