@@ -4902,6 +4902,21 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 2 用例绿；core 全量门禁 EXIT=0（6283
   tests）。
 
+### Batch 715（已交付）
+
+- 分支：`codex/batch-715-external-finish-tail-20260930`（已合入
+  main）
+- 内容：external 完成阶段与 json-record 导入长尾（1 个新测试
+  类，3 用例）：
+  - DocumentMutationExternalFinishTailTest：finishExternal 在
+    SYNC 策略且派发非空时于重载前 completeAfterCommit（1274-
+    1276，反射 + mock 私有 record ExternalPrepared）；文档消失抛
+    DocumentNotFound（1277）；importDocument 对 json-record 类型
+    保留 documentType=json-record 并携带 payload（1231 TRUE
+    臂）。
+- 指标：1 个新测试类 3 用例绿；core 全量门禁 EXIT=0（6286
+  tests）。
+
 ## 进度留档快照（Batch 700 后 · 用户指令收尾）
 
 - 留档时点：2026-09-29 · main @ d992fe39 · 工作区干净。
