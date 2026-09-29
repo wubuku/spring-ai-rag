@@ -4713,6 +4713,21 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：2 个新测试类 8 用例绿；core 全量门禁 EXIT=0（6240
   tests）。
 
+### Batch 702（已交付）
+
+- 分支：`codex/batch-702-config-selection-tail-20260929`（已合入
+  main）
+- 内容：模型识别与适配器 base-url 选择长尾（1 个新测试类，4 用
+  例）：
+  - SpringAiConfigSelectionTailTest：chatModel(ObjectProvider) 按
+    provider 识别 MiniMax / Anthropic 候选（205-206、214-216，反
+    射注入 @Value 字段 + ObjectProvider 迭代 mock）；provider 未
+    识别时回退 OpenAI；apiCompatibilityAdapter 按 provider 依次
+    传 anthropic / minimax / 缺省 / openai base-url 给
+    ApiAdapterFactory.getAdapter（242-247）。
+- 指标：1 个新测试类 4 用例绿；core 全量门禁 EXIT=0（6244
+  tests）。
+
 ## 进度留档快照（Batch 700 后 · 用户指令收尾）
 
 - 留档时点：2026-09-29 · main @ d992fe39 · 工作区干净。
