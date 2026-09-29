@@ -5015,6 +5015,21 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 4 用例绿；core 全量门禁 EXIT=0（6315
   tests）。
 
+### Batch 723（已交付）
+
+- 分支：`codex/batch-723-deep-chain-tail-20260930`（已合入 main）
+- 内容：迁移深链长尾（1 个新测试类，2 用例）——沿用 Batch 722
+  打通的新址夹具推进完整全新迁移链：
+  - DocumentRelocationDeepChainTailTest：mutation_sequence 分配
+    返回 null → IllegalStateException "Cannot allocate source
+    namespace sequence"（408-410）；完整链（序列分配 → 目标地址
+    空闲检查 → CAS 移动 UPDATE RETURNING → 地址级联 →
+    entityManager.clear → findById → forceRecordVersion → 完成幂
+    等 CAS 返回 0）→ "Cannot complete relocation idempotency
+    record"（331-333）。
+- 指标：1 个新测试类 2 用例绿；core 全量门禁 EXIT=0（6317
+  tests）。
+
 ## 进度留档快照（Batch 700 后 · 用户指令收尾）
 
 - 留档时点：2026-09-29 · main @ d992fe39 · 工作区干净。
