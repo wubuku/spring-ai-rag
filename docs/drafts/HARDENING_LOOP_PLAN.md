@@ -4929,6 +4929,20 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 1 用例绿；core 全量门禁 EXIT=0（6287
   tests）。
 
+### Batch 717（已交付）
+
+- 分支：`codex/batch-717-external-retry-tail-20260930`（已合入
+  main）
+- 内容：external 事务重试耗尽长尾（1 个新测试类，2 用例）：
+  - DocumentMutationExternalRetryExhaustionTailTest：
+    executeExternalInTransaction 在连续 DataIntegrityViolation
+    达 MAX_EXTERNAL_TRANSACTION_ATTEMPTS=3 后转为
+    DocumentRevisionConflict / StructuredRecordConflict 且消息含
+    "did not converge after 3"（1393-1395），每次尝试经事务模板
+    （verify getTransaction ×3）；jsonRecord 两类冲突分别映射。
+- 指标：1 个新测试类 2 用例绿；core 全量门禁 EXIT=0（6289
+  tests）。
+
 ## 进度留档快照（Batch 700 后 · 用户指令收尾）
 
 - 留档时点：2026-09-29 · main @ d992fe39 · 工作区干净。
