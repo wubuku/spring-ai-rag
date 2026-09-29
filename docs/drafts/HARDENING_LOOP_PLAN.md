@@ -4780,6 +4780,22 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 2 用例绿；core 全量门禁 EXIT=0（6257
   tests）。
 
+### Batch 707（已交付）
+
+- 分支：`codex/batch-707-mutation-tail-20260929`（已合入 main）
+- 内容：恢复派发臂与原始文件名落库长尾（1 个新测试类，2 用
+  例）：
+  - DocumentMutationRestoreDispatchTailTest：restoreLocal 在
+    hasFreshEmbedding=false 时走派发臂并按
+    enqueueInCurrentTransaction(contentChanged=true, force=false,
+    origin="LOCAL_RESTORE") 派发（470-472）；createLocal 携带
+    originalFilename 时原样落库（1152）。
+- 勘误：RagChatService 542（throw lastFailure）经查已有
+  allCandidatesFailPropagatesLastFailure 测试，疑为 JaCoCo 归因
+  阴影（与 Batch 695 记录同型）。
+- 指标：1 个新测试类 2 用例绿；core 全量门禁 EXIT=0（6259
+  tests）。
+
 ## 进度留档快照（Batch 700 后 · 用户指令收尾）
 
 - 留档时点：2026-09-29 · main @ d992fe39 · 工作区干净。
