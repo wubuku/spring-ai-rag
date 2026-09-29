@@ -4959,6 +4959,19 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：2 个新测试类 8 用例绿；core 全量门禁 EXIT=0（6297
   tests）。
 
+### Batch 719（已交付）
+
+- 分支：`codex/batch-719-recorder-shutdown-tail-20260930`（已合入
+  main）
+- 内容：用量记录器关闭与拒绝长尾（1 个新测试类，4 用例）：
+  - JdbcLlmUsageRecorderShutdownTailTest：record / recordAsync 在
+    执行器 shutdown 后经 RejectedExecutionException 走 lost 计数
+    （67-70 / 94）、recordAsync(null) 直接忽略（74）、shutdown 期
+    预置中断位 → awaitTermination 抛 InterruptedException → 复原
+    中断位并完成两级 shutdownNow（158-159）。
+- 指标：1 个新测试类 4 用例绿；core 全量门禁 EXIT=0（6301
+  tests）。
+
 ## 进度留档快照（Batch 700 后 · 用户指令收尾）
 
 - 留档时点：2026-09-29 · main @ d992fe39 · 工作区干净。
