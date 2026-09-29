@@ -4917,6 +4917,18 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 3 用例绿；core 全量门禁 EXIT=0（6286
   tests）。
 
+### Batch 716（已交付）
+
+- 分支：`codex/batch-716-stream-budget-tail-20260930`（已合入
+  main）
+- 内容：流式候选预算耗尽长尾（1 个新测试类，1 用例）：
+  - RagChatServiceStreamBudgetTailTest：maxCandidateAttempts=1
+    时同一 chatStream Flux 的第二次订阅（Flux.defer 重新求值）
+    触发 CHAT_BUDGET_EXHAUSTED，且底层 model.stream 仅被调用一
+    次（886-892）。
+- 指标：1 个新测试类 1 用例绿；core 全量门禁 EXIT=0（6287
+  tests）。
+
 ## 进度留档快照（Batch 700 后 · 用户指令收尾）
 
 - 留档时点：2026-09-29 · main @ d992fe39 · 工作区干净。
