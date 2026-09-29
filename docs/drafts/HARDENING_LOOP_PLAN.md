@@ -4691,6 +4691,28 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 3 用例绿；core 全量门禁 EXIT=0（6232
   tests）。
 
+### Batch 701（已交付）
+
+- 分支：`codex/batch-701-metrics-email-tail-20260929`（已合入
+  main）
+- 内容：慢查询统计缺省臂 / 邮件中断与解包长尾（2 个新测试类，8
+  用例）：
+  - SlowQueryMetricsServiceNullTailTest（4 用例）：无
+    EntityManagerFactory → getStatistics 空（168-169）；EMF 可用
+    时透出 Statistics（171）；SessionFactory 统计无查询时
+    statsSummary 均值归零（200）；maskSensitiveSql /
+    truncateSql 对 null 的容忍（213/219，反射直调）。
+  - EmailNotificationInterruptTailTest（4 用例）：SMTP 持续失败
+    + 退避睡眠期间线程中断 → 记录中断位并返回失败（140-143）；
+    unwrapMailException 对无消息异常回退类简名、对 mimeMessage
+    缺失返回特判消息（163 区域）；escapeHtml 对 null 返回空串与
+    转义顺序（165/169）；severityColor 四档配色（264）。
+- 勿再投入：SlowQueryMetricsService 149-159 回滚补偿——sql 在入
+  口 requireNonNull 拦截、SlowQueryRecord 仅校验 sql、队列为无界
+  Deque，经公共 API 不可达。
+- 指标：2 个新测试类 8 用例绿；core 全量门禁 EXIT=0（6240
+  tests）。
+
 ## 进度留档快照（Batch 700 后 · 用户指令收尾）
 
 - 留档时点：2026-09-29 · main @ d992fe39 · 工作区干净。
