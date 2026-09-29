@@ -4879,6 +4879,17 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 5 用例绿；core 全量门禁 EXIT=0（6279
   tests）。
 
+### Batch 713（已交付）
+
+- 分支：`codex/batch-713-upload-tail-20260930`（已合入 main）
+- 内容：上传长尾（1 个新测试类，2 用例）：
+  - RagDocumentControllerUploadTailTest：4 参 uploadAndEmbed 便
+    捷重载委托（1188，空文件数组 → 400）；processUploadedFile 对
+    缺失原始文件名归一 "unnamed" 后进入校验（1197，无扩展名在
+    校验阶段拒绝，无需导入桩）。
+- 指标：1 个新测试类 2 用例绿；core 全量门禁 EXIT=0（6281
+  tests）。
+
 ## 进度留档快照（Batch 700 后 · 用户指令收尾）
 
 - 留档时点：2026-09-29 · main @ d992fe39 · 工作区干净。
