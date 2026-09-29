@@ -4943,6 +4943,22 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 2 用例绿；core 全量门禁 EXIT=0（6289
   tests）。
 
+### Batch 718（已交付）
+
+- 分支：`codex/batch-718-cost-calc-tail-20260930`（已合入 main）
+- 内容：成本计算归一降级与代理选择器长尾（2 个新测试类，8 用
+  例）：
+  - LlmUsageCostCalculatorNormalizeTailTest：价格越界（>100 万）
+    / NaN / Infinity → 不可用（52/61/95）、无可用用量仅发布定价
+    （68）、configuredCost 负值降级（79-80）、unit 空白/超长/控
+    制字符归一 CONFIGURED_MODEL_COST 与 trim 透传（97-99）。
+    备忘：ModelCost 紧凑构造器将负价钳为 0，负价臂在计算器层防
+    御不可达。
+  - ProxySelectorFactoryTailTest：installDefault 注册成功返回并
+    安装选择器（48-50）、connectFailed 仅记录不抛出（110-111）。
+- 指标：2 个新测试类 8 用例绿；core 全量门禁 EXIT=0（6297
+  tests）。
+
 ## 进度留档快照（Batch 700 后 · 用户指令收尾）
 
 - 留档时点：2026-09-29 · main @ d992fe39 · 工作区干净。
