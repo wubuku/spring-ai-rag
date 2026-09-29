@@ -4858,6 +4858,27 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 2 用例绿；core 全量门禁 EXIT=0（6274
   tests）。
 
+### Batch 712（已交付）
+
+- 分支：`codex/batch-712-observability-guards-20260930`（已合入
+  main）
+- 内容：集成可观测性查询守卫长尾（1 个新测试类，5 用例）：
+  - IntegrationObservabilityScopeGuardTailTest：resolveScope 对
+    null 请求按匿名拒绝 FORBIDDEN（212 + 227）；LEGACY_STATIC 主
+    体拒绝（225-227）；LOCAL_AUTH_DISABLED 且未指定
+    principalId 的本地放行（233-239）；resolveCollectionFilter 对
+    ACL 格式损坏（"1,,2" → IllegalStateException）降级
+    SERVICE_UNAVAILABLE（312-313）与对不受限策略返回 null
+    （301-303）。
+- 勿再投入：
+  - 336-337（parseWindow 区间算术溢出）：Instant.parse 年份界限
+    ±999999999 内 Duration.between 恒不溢出 long，catch 臂不可
+    达。
+  - 262（principal 引用不匹配）：投影类型为 DATABASE_API_KEY 时
+    投影自身已要求 ref == principal.principalId，条件恒假。
+- 指标：1 个新测试类 5 用例绿；core 全量门禁 EXIT=0（6279
+  tests）。
+
 ## 进度留档快照（Batch 700 后 · 用户指令收尾）
 
 - 留档时点：2026-09-29 · main @ d992fe39 · 工作区干净。
