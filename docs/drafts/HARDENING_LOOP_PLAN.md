@@ -4691,6 +4691,42 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 3 用例绿；core 全量门禁 EXIT=0（6232
   tests）。
 
+## 进度留档快照（Batch 700 后 · 用户指令收尾）
+
+- 留档时点：2026-09-29 · main @ d992fe39 · 工作区干净。
+- core 测试规模：6154（Batch 686 快照）→ 6232（+78）。
+- 本节批次重点（687–700 汇总）：Batch 687–690 过滤校验/控制器委
+  派/实体访问器/SensitiveMdc；Batch 691–700 指纹直通臂、竞态台
+  账、重排匹配臂、配置 null 臂、告警台账、工厂追踪会话、PDF 导
+  入 MIME/根列举、版本号分配、JAR 前缀、检索结果归一。
+- 防御性不可达 / 勿再投入新增判定（约 20 项，详见 Batch 691–700
+  各条目）：属性 setter 归一化致 validate null 检查不可达、
+  eventRetryAttempts 范围校验致重试耗尽出口不可达、
+  normalizeLocation 源头拦截致 JAR ".." 检查不可达、
+  readBounded 逐文件封顶致总上限越界不可达、
+  "!/rootPart/" 子串包含致第二标记不可达、分块全链路非空保证致
+  fitCharacters 空回退不可达、flush 点上限保证致 chunk() 截断不
+  可达等。
+- JaCoCo 行归属阴影（行为已验证覆盖但 mi>0 持续）：ModeAware
+  ChatClientFactory 395、RagChatController 224/293/406、
+  RagDocumentController 513/1068、StaticKnowledgeCatalog 168、
+  ResourceCatalog 257、ChatExecutionBudget 155/257（待后续用新
+  exec 复测确认）。
+- 下一批候选（Batch 701，已勘察未实施）：
+  - SlowQueryMetricsService（9 行）：149-159 recordSlowQuery 的
+    RuntimeException 回滚补偿（需 SlowQueryRecord 构造抛异常——
+    其仅 requireNonNull(sql)，而 sql 在 122 行已被 requireNonNull
+    拦截，需换思路：maxRetained 边界或 offer 抛出不可行 → 可能
+    防御）；171 getSessionFactory 为 null → Optional.empty；
+    200 queryCount==0 → avg 0；213/219 mask/truncate 的 null 臂。
+  - EmailNotificationService（11 行）：中断臂 140-143/163/264
+    （transport 阻塞 + 线程中断）、退避相关。
+  - EvaluationSuiteWorker（8 行）：心跳/shutdown（历史两次因执
+    行器时序复杂度搁置）。
+  - JsonRecordService / SpringAiConfig / DocumentRelocation
+    Service / DocumentMutationService 剩余散臂。
+- 构建验证：core 全量 EXIT=0（6232 tests，0 失败）。
+
 ## 进度留档快照（Batch 686 后 · 用户指令收尾）
 
 ## 进度留档快照（Batch 686 后 · 用户指令收尾）
