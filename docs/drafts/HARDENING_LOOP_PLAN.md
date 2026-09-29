@@ -4999,6 +4999,22 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 5 用例绿；core 全量门禁 EXIT=0（6311
   tests）。
 
+### Batch 722（已交付）
+
+- 分支：`codex/batch-722-relocation-fresh-tail-20260930`（已合入
+  main）
+- 内容：迁移新址校验长尾（1 个新测试类，4 用例）——第四次重夹
+  具评估成功（此前三次搁置根因：relocation 默认关闭需在构造前
+  启用、幂等 INSERT RETURNING 需 PreparedStatementSetter/RowMapper
+  桩而非 queryForList）：
+  - DocumentRelocationFreshAddressTailTest：全新预留路径下源地
+    址文档缺失 NOT_FOUND（112-115）、非外部管理拒绝
+    （117-119）、遗留身份未认领 LEGACY_EXTERNAL_IDENTITY_
+    REQUIRES_CLAIM（120-122）、源版本不匹配
+    DOCUMENT_REVISION_CONFLICT（123-125）。
+- 指标：1 个新测试类 4 用例绿；core 全量门禁 EXIT=0（6315
+  tests）。
+
 ## 进度留档快照（Batch 700 后 · 用户指令收尾）
 
 - 留档时点：2026-09-29 · main @ d992fe39 · 工作区干净。
