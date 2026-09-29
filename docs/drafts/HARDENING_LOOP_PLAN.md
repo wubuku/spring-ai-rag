@@ -4728,6 +4728,20 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 4 用例绿；core 全量门禁 EXIT=0（6244
   tests）。
 
+### Batch 703（已交付）
+
+- 分支：`codex/batch-703-eval-validator-tail-20260929`（已合入
+  main）
+- 内容：评测套件变体与配额长尾（1 个新测试类，4 用例）：
+  - EvaluationSuiteDefinitionValidatorVariantTailTest：cases 超出
+    maxCasesPerVersion（设为 1 + 双用例）拒绝（50-51）；变体节点
+    为字符串 → "each variant must be a JSON object"（176）；变体
+    filters 为字符串 → 类型错误拒绝（218-219）；合法空对象
+    filters 经 filterValidator 校验并随 maxResults 挂载到
+    VariantDef（220-221）。
+- 指标：1 个新测试类 4 用例绿；core 全量门禁 EXIT=0（6248
+  tests）。
+
 ## 进度留档快照（Batch 700 后 · 用户指令收尾）
 
 - 留档时点：2026-09-29 · main @ d992fe39 · 工作区干净。
