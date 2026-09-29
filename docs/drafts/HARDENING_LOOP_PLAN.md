@@ -5087,6 +5087,21 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 6 用例绿；core 全量门禁 EXIT=0（6339
   tests）。
 
+### Batch 728（已交付）
+
+- 分支：`codex/batch-728-pdftorag-mutation-tail-20260930`（已合入
+  main）
+- 内容：PDF-to-RAG 变更通道与旧版嵌入链长尾（1 个新测试类，2
+  用例）：
+  - PdfToRagServiceMutationDispatchTailTest：triggerEmbedding
+    ASYNC 在注入 DocumentMutationService 时经 upsertLocalImport
+    变更通道（220，setDocumentMutationService 为包私有需反射或同
+    包测试）；importPdfToRagWithEmbedding 在无变更服务时回落旧版
+    embedDocumentWithProgress 链并透传 status/chunks（142/480-
+    481）。
+- 指标：1 个新测试类 2 用例绿；core 全量门禁 EXIT=0（6341
+  tests）。
+
 ## 进度留档快照（Batch 700 后 · 用户指令收尾）
 
 - 留档时点：2026-09-29 · main @ d992fe39 · 工作区干净。
