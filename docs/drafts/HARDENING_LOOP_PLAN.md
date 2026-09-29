@@ -4767,6 +4767,19 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 3 用例绿；core 全量门禁 EXIT=0（6255
   tests）。
 
+### Batch 706（已交付）
+
+- 分支：`codex/batch-706-worker-loop-tail-20260929`（已合入 main）
+- 内容：派发循环容错与租约补发长尾（1 个新测试类，2 用例）：
+  - EmbeddingJobWorkerDispatchLoopTailTest：dispatchLoop 内仓储
+    claim 抛运行时异常被吞掉、调度线程不中断（123-124，反射驱
+    动）；无 leaseOwner 的任务进入 process 时补发租约属主并完成
+    成功链（186）。
+- 勿再投入：178-180 的 shutdown awaitTermination 超时/中断臂受 5
+  秒墙钟限制；134 的 slots.tryAcquire 失败臂需并发竞争窗口。
+- 指标：1 个新测试类 2 用例绿；core 全量门禁 EXIT=0（6257
+  tests）。
+
 ## 进度留档快照（Batch 700 后 · 用户指令收尾）
 
 - 留档时点：2026-09-29 · main @ d992fe39 · 工作区干净。
