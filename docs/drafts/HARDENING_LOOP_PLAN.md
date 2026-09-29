@@ -5045,6 +5045,19 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 5 用例绿；core 全量门禁 EXIT=0（6322
   tests）。
 
+### Batch 725（已交付）
+
+- 分支：`codex/batch-725-eval-dto-equals-tail-20260930`（已合入
+  main）
+- 内容：检索评估 DTO 相等性契约长尾（1 个新测试类，5 用例）：
+  - RetrievalEvaluationDtoEqualsTailTest：EvaluationCase /
+    EvaluationMetrics / EvaluationReport / AggregatedMetrics /
+    AnswerQualityResult 五个接口内嵌套 DTO 的 equals/hashCode 全
+    臂（同引用、同值、异值、null、异类型）。要点：接口内嵌套类
+    隐式 public static，可直接构造。
+- 指标：1 个新测试类 5 用例绿；core 全量门禁 EXIT=0（6327
+  tests）。
+
 ## 进度留档快照（Batch 700 后 · 用户指令收尾）
 
 - 留档时点：2026-09-29 · main @ d992fe39 · 工作区干净。
