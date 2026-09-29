@@ -4845,6 +4845,19 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 2 用例绿；core 全量门禁 EXIT=0（6272
   tests）。
 
+### Batch 711（已交付）
+
+- 分支：`codex/batch-711-build-helpers-tail-20260930`（已合入
+  main）
+- 内容：构建辅助长尾（1 个新测试类，2 用例）：
+  - BuildHelpersNonOrderedTailTest：buildSortedAdvisors 对非
+    Ordered 自定义顾问回退 LOWEST_PRECEDENCE 后仍参与排序并追加
+    内存顾问（271）；validatePayloadFilter 委托
+    RetrievalFilterValidator.validateObject（非空对象通过、空对
+    象拒绝，463）。
+- 指标：1 个新测试类 2 用例绿；core 全量门禁 EXIT=0（6274
+  tests）。
+
 ## 进度留档快照（Batch 700 后 · 用户指令收尾）
 
 - 留档时点：2026-09-29 · main @ d992fe39 · 工作区干净。
