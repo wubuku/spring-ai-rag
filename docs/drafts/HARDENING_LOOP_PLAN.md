@@ -4810,6 +4810,25 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 6 用例绿；core 全量门禁 EXIT=0（6265
   tests）。
 
+### Batch 709（已交付）
+
+- 分支：`codex/batch-709-json-outcome-tail-20260930`（已合入
+  main）
+- 内容：JSON 记录嵌入结果三臂与集合解析拒绝长尾（1 个新测试
+  类，5 用例）：
+  - JsonRecordServiceEmbeddingOutcomeTailTest：embedIfRequested
+    的 CACHED（有新鲜向量）/ COMPLETED（embedDocument 成功状
+    态）/ FAILED（运行时异常吞并转 safeError）三臂（812-830，
+    Mockito mock 私有 record PersistedRecord + 反射调用）；
+    resolveRequestCollection 对非唯一集合解析结果的
+    "Exactly one Collection" 拒绝（883-884）；getDetail 在生命周
+    期服务缺省时响应携带 null lifecycle（497）。
+- 备忘：ConversationSummaryServiceTest 在全量跑时出现过一次偶发
+  失败（时序型），单独复跑 22/22 通过，门禁重跑全绿——后续关注
+  是否复现。
+- 指标：1 个新测试类 5 用例绿；core 全量门禁 EXIT=0（6270
+  tests）。
+
 ## 进度留档快照（Batch 700 后 · 用户指令收尾）
 
 - 留档时点：2026-09-29 · main @ d992fe39 · 工作区干净。
