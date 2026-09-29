@@ -5102,6 +5102,18 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 2 用例绿；core 全量门禁 EXIT=0（6341
   tests）。
 
+### Batch 729（已交付）
+
+- 分支：`codex/batch-729-hybrid-helper-tail-20260930`（已合入
+  main）
+- 内容：混合检索助手长尾（1 个新测试类，3 用例）：
+  - HybridRetrieverServiceHelperTailTest：normalizeErrorCode 对
+    匿名 Throwable（getSimpleName 为空串）回退 "ERROR"（595-601）
+    与常规异常回传类简名；mapVectorResults 委托 detailed 映射返
+    回空结果（542，空行入参）。
+- 指标：1 个新测试类 3 用例绿；core 全量门禁 EXIT=0（6344
+  tests）。
+
 ## 进度留档快照（Batch 700 后 · 用户指令收尾）
 
 - 留档时点：2026-09-29 · main @ d992fe39 · 工作区干净。
