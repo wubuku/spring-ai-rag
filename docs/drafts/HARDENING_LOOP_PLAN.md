@@ -4829,6 +4829,22 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 5 用例绿；core 全量门禁 EXIT=0（6270
   tests）。
 
+### Batch 710（已交付）
+
+- 分支：`codex/batch-710-key-rotation-tail-20260930`（已合入
+  main）
+- 内容：轮换 NOT_FOUND 与允许集合 null 归一长尾（1 个新测试
+  类，2 用例）：
+  - ApiKeyManagementRotationMissingTailTest：rotateKey 在凭据引
+    用的 principal 缺失时（acquireManagementWrite 通过后）抛
+    NOT_FOUND（392）；toResponse 对空白 allowedCollectionIds 归一
+    为 null（1042）。
+- 勿再投入：1375-1376（SHA-256 不可用）防御臂；220-222
+  （provisioning 重试耗尽/中断出口）需持续可重试失败或中断时
+  序，复杂度高暂缓。
+- 指标：1 个新测试类 2 用例绿；core 全量门禁 EXIT=0（6272
+  tests）。
+
 ## 进度留档快照（Batch 700 后 · 用户指令收尾）
 
 - 留档时点：2026-09-29 · main @ d992fe39 · 工作区干净。
