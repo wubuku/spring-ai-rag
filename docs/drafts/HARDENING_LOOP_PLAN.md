@@ -5170,6 +5170,20 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 3 用例绿；core 全量门禁 EXIT=0（6356
   tests）。
 
+### Batch 735（已交付）
+
+- 分支：`codex/batch-735-pdftorag-policy-tail-20260930`（已合入
+  main）
+- 内容：PDF-to-RAG 策略回落与变更结果映射长尾（1 个新测试类，2
+  用例）：
+  - PdfToRagServicePolicyFallbackTailTest：无变更服务 + SYNC 策
+    略回落旧版 embedDocument 链并透传 status/chunks（142/480-
+    481）；注入变更服务时 importPdfToRag 结果经 toPdfToRagResult
+    映射 mutation.lifecycle().embeddingStatus() 与
+    embeddingAction（498-510）。
+- 指标：1 个新测试类 2 用例绿；core 全量门禁 EXIT=0（6361
+  tests）。
+
 ### Batch 734（已交付）
 
 - 分支：`codex/batch-734-search-tool-budget-tail-20260930`（已合
