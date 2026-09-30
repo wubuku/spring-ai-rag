@@ -2,6 +2,18 @@
 
 - 分支：`codex/batch690-eval-ctr
 
+### Batch 749（已交付）
+
+- 分支：`codex/batch-749-json-cached-status-tail-20261001`（已合
+  入 main）
+- 内容：JSON 记录嵌入结果透传长尾（Batch 709 测试类追加 1 用
+  例）：embedDocument 返回 "CACHED" 状态 → EmbeddingOutcome 透传
+  "CACHED"（829 三元中臂）。至此 COMPLETED / CACHED / FAILED 三臂
+  全覆盖；830 残余 5 指令为 JaCoCo 三元合成归因怪癖（COMPLETED 与
+  CACHED 路径均流经该行）。
+- 指标：Batch 709 测试类追加后 6 用例绿；core 全量门禁 EXIT=0
+  （6401 tests）。
+
 ### Batch 746（已交付）
 
 - 分支：`codex/batch-746-semantic-dispatch-tail-20261001`（已合入
