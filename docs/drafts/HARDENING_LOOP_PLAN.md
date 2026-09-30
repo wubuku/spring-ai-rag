@@ -134,6 +134,24 @@
 - 指标：1 个新测试类 1 用例绿；core 全量门禁 EXIT=0（6400
   tests）。
 
+### Batch 750（勘察后搁置）
+
+- 勘察结论（已验证，未产出用例）：
+  - ConversationSummaryService.invokeSummary 的 336-340（
+    remainingBudgetMs ≤ 0 → future.cancel + TimeoutException）为
+    竞态唯一可达：hasModelCallCapacity() 对过期预算短路返回
+    false → 先行抛 CHAT_BUDGET_EXHAUSTED（RagException），永不到
+    达截止计算；仅当容量检查通过后截止时刻被跨越才可触发。反射
+    直调试验证了该路径（过期预算 → RagException 而非
+    TimeoutException），标记为竞态受限/防御。
+  - AlertNotificationPayloadSanitizer 剩余臂（97/100/140/148/
+    156-157）的 Mockito 反射调用与静态工具内部 NPE 交互复杂，
+    暂缓至独立批次。
+- 工作区状态：Batch 750 无交付物，core 全量门禁 EXIT=0（6413
+  tests 全绿）。
+
+## 进度留档快照（Batch 700 后 · 用户指令收尾）
+
 ### Batch 748（已交付）
 
 - 分支：`codex/batch-748-relocation-vanish-tail-20261001`（已合入
