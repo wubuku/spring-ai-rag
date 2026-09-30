@@ -2,6 +2,18 @@
 
 - 分支：`codex/batch690-eval-ctr
 
+### Batch 746（已交付）
+
+- 分支：`codex/batch-746-semantic-dispatch-tail-20261001`（已合入
+  main）
+- 内容：语义评估分派长尾（1 个新测试类，3 用例）：
+  - SemanticEvaluationDispatchArmsTailTest：null evaluator 归一空
+    串后触发 IAE 拒绝（57）；router 注入时 resolveBuilder 对 null
+    options 跳过 defaultOptions（183）；createEvaluationRequest 对
+    null context 归一空串（163）。
+- 指标：1 个新测试类 3 用例绿；core 全量门禁 EXIT=0（6406
+  tests）。
+
 ### Batch 737（已交付）
 
 - 分支：`codex/batch-737-hybrid-decision-tail-20261001`（已合入
