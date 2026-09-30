@@ -5143,6 +5143,18 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 3 用例绿；core 全量门禁 EXIT=0（6350
   tests）。
 
+### Batch 732（已交付）
+
+- 分支：`codex/batch-732-expander-degraded-tail-20260930`（已合
+  入 main）
+- 内容：有界多查询扩展降级长尾（1 个新测试类，3 用例）：
+  - BoundedMultiQueryExpanderDegradedTailTest：委托抛运行时异常
+    → 回退原始查询并标记降级（66-68）；委托返回 null → 降级回
+    退（70-72）；includeOriginal=false 时原始查询不预置、作为普
+    通变体去重后保留（101/115-136）。
+- 指标：1 个新测试类 3 用例绿；core 全量门禁 EXIT=0（6353
+  tests）。
+
 ## 进度留档快照（Batch 700 后 · 用户指令收尾）
 
 - 留档时点：2026-09-29 · main @ d992fe39 · 工作区干净。
