@@ -13,6 +13,19 @@
     requestedLimit（365 上游臂）；QueryStat 零长度语义（225 邻近
     行为）。
 - 指标：1 个新测试类 5 用例绿；core 全量门禁 EXIT=0（6371
+  tests）。
+
+### Batch 738（已交付）
+
+- 分支：`codex/batch-738-hybrid-fallback-tail-20261001`（已合入
+  main）
+- 内容：混合检索降级臂长尾（1 个新测试类，3 用例）：
+  - HybridRetrieverServiceFallbackArmsTailTest：timeoutOrError 对
+    非超时异常走 ERROR 阶段 + normalizeErrorCode（476-477/483/
+    487）并返回空结果；对超时异常走 TIMEOUT 阶段与 "TIMEOUT" 错
+    误码；searchInScopeDetailed(null query) 生成 0 长度 QueryStat
+    （225）。
+- 指标：1 个新测试类 3 用例绿；core 全量门禁 EXIT=0（6374
   tests）。l-tail`（已合入 main）
 - 内容：控制器委托与 ISE 长尾（新建两个测试类，13 用例）：
   - CollectionEmbeddingReadinessControllerRequireIntegrityTailTest（6）：requireIntegrityService ISE、derivationReadiness / derivationDocuments 委托、readiness 双 service 委派。
