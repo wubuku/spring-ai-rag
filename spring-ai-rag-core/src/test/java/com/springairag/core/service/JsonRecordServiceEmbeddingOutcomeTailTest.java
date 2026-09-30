@@ -172,6 +172,20 @@ class JsonRecordServiceEmbeddingOutcomeTailTest {
     }
 
     @Test
+    void embedResultCachedStatusPassesThroughAsCached() throws Exception {
+        when(documentEmbedService.hasFreshEmbedding(any(RagDocument.class)))
+                .thenReturn(false);
+        when(documentEmbedService.embedDocument(anyLong(), anyBoolean()))
+                .thenReturn(Map.of("status", "CACHED",
+                        "embeddingProfileKey", "bge-m3"));
+
+        Object outcome = invokeEmbedIfRequested(
+                new PersistedRecordShape("UPDATED", true), true);
+
+        assertEquals("CACHED", outcomeStatus(outcome));
+    }
+
+    @Test
     void embedIfRequestedMapsFailuresToFailedOutcome() throws Exception {
         when(documentEmbedService.hasFreshEmbedding(any(RagDocument.class)))
                 .thenReturn(false);
