@@ -74,6 +74,18 @@
 - 指标：2 个新测试类 13 用例绿；core 全量门禁 EXIT=0（6396
   tests）。
 
+### Batch 742（已交付）
+
+- 分支：`codex/batch-742-skill-session-tail-20261001`（已合入
+  main）
+- 内容：RuntimeSkill 会话预算语义长尾（1 个新测试类，3 用例）：
+  - RuntimeSkillLoadSessionBudgetTailTest：markLoaded 幂等与容量
+    上限（59）；reserveReference 的读取数上限拒绝（63）与负
+    数/超预算字符双闸（67）；loadedSkills/referenceReaders/
+    referenceCharacters 只读视图。
+- 指标：1 个新测试类 3 用例绿；core 全量门禁 EXIT=0（6399
+  tests）。
+
 ### Batch 740（预留）
 
 （下一批候选：HybridRetrieverService 476-487 fallback 臂反射覆盖、
