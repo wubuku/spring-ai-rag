@@ -5155,6 +5155,21 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 3 用例绿；core 全量门禁 EXIT=0（6353
   tests）。
 
+### Batch 733（已交付）
+
+- 分支：`codex/batch-733-metrics-usage-tail-20260930`（已合入
+  main）
+- 内容：指标控制器长尾（1 个新测试类，3 用例）：
+  - RagMetricsControllerUsageTailTest：getSlowQueryStats 映射慢查
+    询记录并按 maskSql 掩码字符串字面量（137-139）；
+    getUsage 在 durable 通道缺失时抛 IllegalStateException
+    （194）；通道可用时委托 LlmUsageQueryService.query 并透传响
+    应（204-205）。
+- 备忘：maskSql 的 null 臂不可达——SlowQueryRecord 紧凑构造器
+  requireNonNull(sql) 保证记录非空。
+- 指标：1 个新测试类 3 用例绿；core 全量门禁 EXIT=0（6356
+  tests）。
+
 ## 进度留档快照（Batch 700 后 · 用户指令收尾）
 
 - 留档时点：2026-09-29 · main @ d992fe39 · 工作区干净。
