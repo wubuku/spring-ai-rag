@@ -86,6 +86,18 @@
 - 指标：2 个新测试类 13 用例绿；core 全量门禁 EXIT=0（6396
   tests）。
 
+### Batch 741b（已交付）
+
+- 分支：`codex/batch-741b-capability-classifier-tail-20261001`（已
+  合入 main）
+- 内容：能力过滤器分类器长尾（1 个新测试类，5 用例）：
+  - ApiCapabilityFilterClassifierTailTest：requiredCapability 对
+    null method/URI 返回 null（73）、非 /api/ //v1/ 路径透传
+    null（77）、未知方法返回 null（88 缺省臂）、PATCH 写能力与
+    OPTIONS 读能力（88 分支）、查询串剥离与尾斜杠归一（106）。
+- 指标：1 个新测试类 5 用例绿；core 全量门禁 EXIT=0（6401
+  tests）。
+
 ### Batch 742（已交付）
 
 - 分支：`codex/batch-742-skill-session-tail-20261001`（已合入
