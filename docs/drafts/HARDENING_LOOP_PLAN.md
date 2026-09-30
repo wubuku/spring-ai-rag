@@ -5170,6 +5170,20 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 3 用例绿；core 全量门禁 EXIT=0（6356
   tests）。
 
+### Batch 734（已交付）
+
+- 分支：`codex/batch-734-search-tool-budget-tail-20260930`（已合
+  入 main）
+- 内容：静态知识搜索预算长尾（1 个新测试类，3 用例）：
+  - StaticKnowledgeSearchToolBudgetTailTest：检索预算（收集器默
+    认 3 次）耗尽后工具调用返回空结果并携带 budgetExhausted 标记
+    （90-94）；预算内正常路径不携带耗尽标记；maxResults=999 被
+    钳制到上下文上限且不抛异常（105-107 区域）。要点：
+    RetrievalTraceCollector 预算由构造器固定（默认 3），
+    configureQueryExpansion 仅写诊断摘要不改变预算。
+- 指标：1 个新测试类 3 用例绿；core 全量门禁 EXIT=0（6359
+  tests）。
+
 ## 进度留档快照（Batch 700 后 · 用户指令收尾）
 
 - 留档时点：2026-09-29 · main @ d992fe39 · 工作区干净。
