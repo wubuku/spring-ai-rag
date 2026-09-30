@@ -26,7 +26,27 @@
     误码；searchInScopeDetailed(null query) 生成 0 长度 QueryStat
     （225）。
 - 指标：1 个新测试类 3 用例绿；core 全量门禁 EXIT=0（6374
-  tests）。l-tail`（已合入 main）
+  tests）。
+
+### Batch 739（已交付）
+
+- 分支：`codex/batch-739-slo-mixed-tail-20261001`（已合入 main）
+- 内容：API SLO 追踪器长尾（1 个新测试类，4 用例）：
+  - ApiSloTrackerMixedEndpointsTailTest：recordLatency 多端点隔离
+    （无数据端点保持 100% 合规）、合规统计同时含有数据/无数据端
+    点双臂与 breach/slo 计数（153 双臂、86）、extractMethod 五种端
+    点映射（164）、percentile 空/单/多样本取值（205 区域）。
+- 备忘：HybridRetrieverServiceBenchmarkTest 的 1 万次向量序列化
+  计时断言出现一次偶发失败（1000ms 边界），单独复跑与门禁重跑
+  均全绿——计时型 flake，后续关注。
+- 指标：1 个新测试类 4 用例绿；core 全量门禁 EXIT=0（6378
+  tests）。
+
+### Batch 740（预留）
+
+（下一批候选：HybridRetrieverService 476-487 fallback 臂反射覆盖、
+SemanticEvaluationService 183-195 safeError/Disabled 臂、
+StaticKnowledgeSearchTool 137/158/169-170。）l-tail`（已合入 main）
 - 内容：控制器委托与 ISE 长尾（新建两个测试类，13 用例）：
   - CollectionEmbeddingReadinessControllerRequireIntegrityTailTest（6）：requireIntegrityService ISE、derivationReadiness / derivationDocuments 委托、readiness 双 service 委派。
   - EvaluationSuiteControllerTailTest（7）：createSuite / listSuites / getSuite / createVersion / createRun / getRun / compare 的委托路径。
