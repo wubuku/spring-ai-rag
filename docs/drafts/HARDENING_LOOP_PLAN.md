@@ -122,6 +122,19 @@
 - 指标：1 个新测试类 1 用例绿；core 全量门禁 EXIT=0（6400
   tests）。
 
+### Batch 748（已交付）
+
+- 分支：`codex/batch-748-relocation-vanish-tail-20261001`（已合入
+  main）
+- 内容：迁移完成阶段长尾（1 个新测试类，1 用例）：
+  - DocumentRelocationVanishTailTest：全新迁移链（幂等 INSERT 命
+    中、同步计数零、源版本匹配、双集合序列分配、目标地址空闲、
+    移动 CAS 命中）成功后 documentRepository.findById 落空 →
+    RagException DOCUMENT_NOT_FOUND "Relocated document
+    disappeared"（225）。
+- 指标：1 个新测试类 1 用例绿；core 全量门禁 EXIT=0（6401
+  tests）。
+
 ### Batch 744（已交付）
 
 - 分支：`codex/batch-744-suite-helper-tail-20261001`（已合入
