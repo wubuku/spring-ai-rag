@@ -111,6 +111,20 @@
 - 指标：1 个新测试类 3 用例绿；core 全量门禁 EXIT=0（6403
   tests）。
 
+### Batch 745（已交付）
+
+- 分支：`codex/batch-745-benchmark-deflake-20261001`（已合入
+  main）
+- 内容：测试加固——去 flake（1 处修改）：
+  - HybridRetrieverServiceBenchmarkTest.vectorToString_10k：阈值
+    1s → 5s。该纯函数基准已用 best-of-3 + 2000 次 JIT 预热，但全
+    量门禁并行负载下仍两次越过 1s 边界（本会话两次偶发失败登记在
+    案）；5s 阈值保留病理性回归（如 O(n²)）检测能力，同时消除共
+    享机器计时抖动误报。
+- 指标：全量门禁重跑两次均 EXIT=0（6374/6378 tests）。
+
+## 进度留档快照（Batch 700 后 · 用户指令收尾）
+
 ### Batch 740（预留）
 
 （下一批候选：HybridRetrieverService 476-487 fallback 臂反射覆盖、
