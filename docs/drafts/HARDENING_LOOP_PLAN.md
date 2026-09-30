@@ -5127,6 +5127,22 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 3 用例绿；core 全量门禁 EXIT=0（6347
   tests）。
 
+### Batch 731（已交付）
+
+- 分支：`codex/batch-731-suite-worker-tail-20260930`（已合入
+  main）
+- 内容：评测执行 worker 处理与关闭长尾（1 个新测试类，3 用例）
+  ——「墙钟受限」判定部分解除（40s 心跳首跳之外的主路径均可用
+  异步 verify 覆盖）：
+  - EvaluationSuiteWorkerProcessShutdownTailTest：poll 认领运行
+    后调度心跳并同步执行、槽位释放后可再领取（94-101）；执行异
+    常经 safeError（含掩码）转 FAILED 落账（102-104，error 用
+    contains 匹配掩码结果）；shutdown 预置中断位复原并完成两级
+    关闭（118-122）。要点：verify 用的 RunRow 必须与 claim 桩返
+    回同一实例（id 逐次随机生成）。
+- 指标：1 个新测试类 3 用例绿；core 全量门禁 EXIT=0（6350
+  tests）。
+
 ## 进度留档快照（Batch 700 后 · 用户指令收尾）
 
 - 留档时点：2026-09-29 · main @ d992fe39 · 工作区干净。
