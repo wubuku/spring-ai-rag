@@ -56,6 +56,24 @@
 - 指标：2 个新测试类 5 用例绿；core 全量门禁 EXIT=0（6383
   tests）。
 
+### Batch 741（已交付）
+
+- 分支：`codex/batch-741-cjk-rotation-tail-20261001`（已合入
+  main）
+- 内容：CJK 扩展区检测与轮换配置校验臂长尾（2 个新测试类，13
+  用例）：
+  - LanguageDetectorCjkExtensionBlocksTailTest：Extension E
+    （U+2A700）/ F（U+2B740）/ G（U+2B820）/ Compatibility
+    Supplement（U+2F800）四个补充区段的中文判定（61-75）与英文回
+    退。
+  - RagApiKeyRotationPropertiesArmsTailTest：setDefaultOverlap 超
+    maxOverlap 拒绝与整秒接受（14/19）、setMaxOverlap 越下界拒绝
+    （25）、setOperationRetention 对 null/非整天/越界拒绝与 7/3650
+    天边界接受（50）、setCleanupIntervalMs 越界拒绝与边界接受
+    （53）、capability 单位换算访问器（defaultOverlapSeconds 等）。
+- 指标：2 个新测试类 13 用例绿；core 全量门禁 EXIT=0（6396
+  tests）。
+
 ### Batch 740（预留）
 
 （下一批候选：HybridRetrieverService 476-487 fallback 臂反射覆盖、
