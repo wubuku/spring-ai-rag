@@ -1,6 +1,19 @@
 ### Batch 690（已交付）
 
-- 分支：`codex/batch690-eval-ctrl-tail`（已合入 main）
+- 分支：`codex/batch690-eval-ctr
+
+### Batch 737（已交付）
+
+- 分支：`codex/batch-737-hybrid-decision-tail-20261001`（已合入
+  main）
+- 内容：混合检索决策助手长尾（1 个新测试类，5 用例）：
+  - HybridRetrieverServiceDecisionTailTest：isFulltextAvailable 对
+    null config 放行（145 的 null 臂）与 useHybridSearch=false 拒
+    绝；candidateRetrievalLimit 在 rerank 禁用/ null config 时透传
+    requestedLimit（365 上游臂）；QueryStat 零长度语义（225 邻近
+    行为）。
+- 指标：1 个新测试类 5 用例绿；core 全量门禁 EXIT=0（6371
+  tests）。l-tail`（已合入 main）
 - 内容：控制器委托与 ISE 长尾（新建两个测试类，13 用例）：
   - CollectionEmbeddingReadinessControllerRequireIntegrityTailTest（6）：requireIntegrityService ISE、derivationReadiness / derivationDocuments 委托、readiness 双 service 委派。
   - EvaluationSuiteControllerTailTest（7）：createSuite / listSuites / getSuite / createVersion / createRun / getRun / compare 的委托路径。
