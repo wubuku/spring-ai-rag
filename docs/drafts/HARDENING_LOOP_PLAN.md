@@ -5170,6 +5170,23 @@ VersionHistoryModal 相关 100% 项等。
 - 指标：1 个新测试类 3 用例绿；core 全量门禁 EXIT=0（6356
   tests）。
 
+### Batch 736（已交付）
+
+- 分支：`codex/batch-736-json-persist-tail-20261001`（已合入
+  main）
+- 内容：JSON 记录持久化/查询/失败响应长尾（1 个新测试类，5 用
+  例）：
+  - JsonRecordServicePersistArmsTailTest：getByExternalIdentity 携
+    带生命周期与集合键（390/497）；1 参 persist 便捷入口经反射创
+    建记录（550）；5 参 persist 检出 originalFilename/enabledOverride
+    变更臂（669-673）；serializePayload 序列化失败包装 IAE
+    （899-900，mock ObjectMapper 抛 JsonProcessingException）；
+    failedResponse 对 null/非空 request 双臂（983-985）。
+- 备忘：JsonRecordUpsertResponse 的结果字段为 action()（非
+  status()）。
+- 指标：1 个新测试类 5 用例绿；core 全量门禁 EXIT=0（6366
+  tests）。
+
 ### Batch 735（已交付）
 
 - 分支：`codex/batch-735-pdftorag-policy-tail-20260930`（已合入
