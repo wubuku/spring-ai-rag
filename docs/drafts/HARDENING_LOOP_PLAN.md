@@ -98,6 +98,19 @@
 - 指标：1 个新测试类 1 用例绿；core 全量门禁 EXIT=0（6400
   tests）。
 
+### Batch 744（已交付）
+
+- 分支：`codex/batch-744-suite-helper-tail-20261001`（已合入
+  main）
+- 内容：评测套件服务助手长尾（1 个新测试类，3 用例）：
+  - EvaluationSuiteServiceHelperArmsTailTest：readVariantKeys 空配
+    置回退 List.of("default")、有 variantKeys 时逐项读取（453）；
+    currentRevision 在 GIT_COMMIT 环境变量缺失时回退 "unknown"
+    （520-521）；writeJson 正常序列化与自引用 Map 触发异常时回退
+    "{}"（526-527）。
+- 指标：1 个新测试类 3 用例绿；core 全量门禁 EXIT=0（6403
+  tests）。
+
 ### Batch 740（预留）
 
 （下一批候选：HybridRetrieverService 476-487 fallback 臂反射覆盖、
