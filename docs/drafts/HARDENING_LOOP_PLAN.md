@@ -42,6 +42,20 @@
 - 指标：1 个新测试类 4 用例绿；core 全量门禁 EXIT=0（6378
   tests）。
 
+### Batch 740（已交付）
+
+- 分支：`codex/batch-740-safeerror-args-tail-20261001`（已合入
+  main）
+- 内容：语义评估与静态知识参数归一长尾（2 个新测试类，5 用
+  例）：
+  - SemanticEvaluationSafeErrorTailTest：safeError 对 null/空白回
+    退固定文案、经掩码器透传、800 字符截断至 500（183-195）。
+  - StaticKnowledgeSearchToolArgsNormalizeTailTest：number() 对
+    null/非 Number 回退 0（137/176）；空白 toolInput 归一 "{}" 后
+    触发 blank query 拒绝（158）。
+- 指标：2 个新测试类 5 用例绿；core 全量门禁 EXIT=0（6383
+  tests）。
+
 ### Batch 740（预留）
 
 （下一批候选：HybridRetrieverService 476-487 fallback 臂反射覆盖、
