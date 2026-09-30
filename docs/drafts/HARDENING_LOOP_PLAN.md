@@ -86,6 +86,18 @@
 - 指标：1 个新测试类 3 用例绿；core 全量门禁 EXIT=0（6399
   tests）。
 
+### Batch 743（已交付）
+
+- 分支：`codex/batch-743-batch-cached-tail-20261001`（已合入
+  main）
+- 内容：批量嵌入 CACHED 分支长尾（1 个新测试类，1 用例）：
+  - DocumentEmbedBatchCachedTailTest：缓存命中文档计入 cached 桶
+    （264），summary Map 与 results 列表透传。要点：findCacheState
+    的宽匹配 miss 桩必须先注册、特定 hit 桩后注册（Mockito 最后
+    匹配桩生效）。
+- 指标：1 个新测试类 1 用例绿；core 全量门禁 EXIT=0（6400
+  tests）。
+
 ### Batch 740（预留）
 
 （下一批候选：HybridRetrieverService 476-487 fallback 臂反射覆盖、
