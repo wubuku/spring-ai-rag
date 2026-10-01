@@ -182,6 +182,19 @@ try {
     expectFailure(result, 'DRIFT_CEILING is 0');
   });
 
+  test('a ceiling left higher than the registered count is rejected', () => {
+    // The loophole an upper bound would leave open: fix a document, delete its
+    // entry, forget to lower the ceiling. The gate must not stay green while the
+    // pinned number drifts away from the truth.
+    const result = checkBilingualPairs({
+      root: cleanFixture.root,
+      files: cleanFixture.files,
+      knownDrift: [],
+      driftCeiling: 4
+    });
+    expectFailure(result, 'KNOWN_DRIFT holds 0 entries but DRIFT_CEILING is 4');
+  });
+
   test('a duplicate exemption is rejected', () => {
     const result = checkBilingualPairs({
       root: driftedFixture.root,
