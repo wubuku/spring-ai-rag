@@ -4,7 +4,7 @@
 
 ### Batch 765（已交付）
 
-- 分支：`feature/provisioning-owner-consistency-coverage-20261003`
+- 分支：**无**（见下方「流程偏离」一节——本批直接提交在 `main` 上）
 - 内容：后端分支覆盖加固 **第四批**——认证状态一致性矩阵。
 - 勘察：`ProvisioningOwnerResolver.resolve` 缺 10/30（66.7%），是安全类里
   缺口最集中的方法。它决定一次 provisioning 操作归属哪个 owner，
@@ -19,6 +19,13 @@
      snapshot == null && currentPolicy == null` 才算"认证关闭"；只挂一个快照就
      当成未认证，是最危险的一种组合：一次本应被拒绝的 provisioning 会拿到
      本地 owner 身份。
+- **流程偏离（如实记录）**：Batch 764 合并后我停在 `main` 上，Batch 765 的勘察阶段
+  **忘了先建特性分支**，18 个用例直接写在了 `main` 的工作区里并提交，
+  因此这一批没有"特性分支 + merge commit"的历史结构。
+  **没有做 force push 重写已推送的历史**——内容本身是干净的（7254/7254 全绿、
+  968 个报告 0 失败、工作区干净、`origin/main` 同步 0 0），
+  为流程完整性去 force push 已经公开的 `main` 风险远大于收益。
+  后续批次恢复"先建分支、合并回 main"的做法。
 - **顺手记一条运维纪律**：本批首次复验时 main 上出现 `BUILD FAILURE`，查下来是
   **两个 `mvn` 进程并发跑同一个模块、互相覆盖 `target/surefire-reports`**，
   不是真实回归。单进程重跑即 7254/7254 全绿，968 个报告文件 0 失败 0 错误。
