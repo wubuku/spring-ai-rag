@@ -139,32 +139,31 @@ public class SensitiveDataMaskingConverter extends MessageConverter {
     }
 
     /**
-     * Reveals only the type of sensitive data without exposing the value.
+     * Reveals the type of sensitive data without exposing the value.
      * Useful for debugging when you need to know something sensitive was present.
+     *
+     * <p><strong>Every</strong> match is replaced, not just the first one. The earlier
+     * implementation found the first match of the first matching pattern, replaced
+     * that single span and returned, leaving the rest of the message verbatim — so
+     * {@code "token=aaa secret=bbb"} came out as
+     * {@code "[SENSITIVE:TOKEN] secret=bbb"}, with a live credential still in the
+     * output. A method whose name promises masking has to mask all of it.
      */
     public static String maskSensitiveDataKeepType(String message) {
         if (message == null || message.isEmpty()) {
             return message;
         }
+        String result = message;
         for (Pattern pattern : SENSITIVE_PATTERNS) {
-            java.util.regex.Matcher matcher = pattern.matcher(message);
-            if (matcher.find()) {
-                return message.substring(0, matcher.start()) + "[SENSITIVE:" + getSensitiveType(pattern) + "]" +
-                       message.substring(matcher.end());
-            }
+            // The replacement is a fixed "[SENSITIVE:<TYPE>]" label, so it never
+            // contains '$' or '\' and needs no Matcher.quoteReplacement.
+            result = pattern.matcher(result).replaceAll(
+                    "[SENSITIVE:" + getSensitiveType(pattern) + "]");
         }
-        // Check dedicated Chinese PII patterns
-        java.util.regex.Matcher nationalIdMatcher = CHINESE_NATIONAL_ID.matcher(message);
-        if (nationalIdMatcher.find()) {
-            return message.substring(0, nationalIdMatcher.start()) + "[SENSITIVE:NATIONAL_ID]" +
-                   message.substring(nationalIdMatcher.end());
-        }
-        java.util.regex.Matcher phoneMatcher = CHINESE_PHONE.matcher(message);
-        if (phoneMatcher.find()) {
-            return message.substring(0, phoneMatcher.start()) + "[SENSITIVE:PHONE]" +
-                   message.substring(phoneMatcher.end());
-        }
-        return message;
+        result = CHINESE_NATIONAL_ID.matcher(result)
+                .replaceAll("[SENSITIVE:NATIONAL_ID]");
+        result = CHINESE_PHONE.matcher(result).replaceAll("[SENSITIVE:PHONE]");
+        return result;
     }
 
     private static String getSensitiveType(Pattern pattern) {

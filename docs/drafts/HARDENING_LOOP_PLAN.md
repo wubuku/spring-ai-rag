@@ -2,6 +2,49 @@
 
 - 分支：`codex/batch690-eval-ctr
 
+### Batch 764（已交付）
+
+- 分支：`feature/log-masking-keeptype-leak-20261003`
+- 内容：后端分支覆盖加固 **第三批**——日志脱敏与引用校验的安全边界。
+  勘察目标：`SensitiveDataMaskingConverter.getSensitiveType` 缺 9/34（73.5%）、
+  `CitationValidator.validate` 缺 9/42（78.6%）。都是**分类/校验**链，
+  与 Batch 762/763 同构。
+- **本批最重的发现是一个真实的信息泄露缺陷**（先复现再改）：
+  `maskSensitiveDataKeepType` 找到**第一个**匹配就替换并 return，
+  **其余敏感值原样留在输出里**。实测：
+  ```
+  原文   : token=first-token-12345 secret=second-secret-67890
+  旧行为 : [SENSITIVE:TOKEN] secret=second-secret-67890   ← 凭据明文
+  maskAll: ***REDACTED*** ***REDACTED***                 ← 正确路径
+  ```
+  一个名字里写着 `mask` 的方法必须把该遮的全部遮掉。现改为对每条 pattern
+  `replaceAll`，修复后同一输入输出 `[SENSITIVE:TOKEN] [SENSITIVE:SECRET]`。
+  既有 13 个测试全部只断言**单个**敏感值，所以这条行为从未暴露。
+  （`maskSensitiveData` 主路径本来就用 `replaceAll`，一直是正确的。）
+- **顺带修掉的第二个缺陷**：`CitationValidator` 把可用来源收进 `List`，
+  脏数据下两个来源共用同一 `citationId` 时，`availableIds` 会返回 `[S1, S1]`，
+  `sourceCount` 跟着虚高——前端会显示"2/2 来源已引用"，而实际只引用了一个。
+  改为 `LinkedHashSet`。
+- **又一次被自己的期望值骗到**：我断言"有来源未被引用时状态应为 PARTIAL"，
+  跑出来是 VALID。代码是对的——校验只关心**引用是否合法**，不要求每个来源都被引到。
+- **又踩了一次"无输出即通过"的陷阱**：`mvn -q` 只在有 ERROR 时输出，
+  编译错误那次没输出让我以为通过了；随后只看命令输出也会漏掉 surefire 报告里的
+  failure。**现在固定以 `target/surefire-reports/*.txt` 的 `Tests run` 行为准。**
+- 交付：
+  - `SensitiveDataMaskingKeepTypeMultiValueTest`（19 用例）：多敏感值全部标记、
+    同类型重复出现全部标记、中文身份证与手机号同时出现、类型分类链
+    （PASSWORD/API_KEY/TOKEN/SECRET/AUTH/AWS_KEY）逐项投影、兜底类型仍必须遮蔽。
+  - `CitationValidatorDeduplicationTest`（14 用例）：重复引用去重、
+    null/空 sources、含 null 元素、空白引用 id、null answer、
+    零号引用 `[S0]` 落进无效列表、非方括号形式不算引用、
+    可用来源 id 去重、PLAIN 模式短路、AGENT 模式参与校验。
+- 指标：`mvn -pl spring-ai-rag-core test` **7236 全绿**（+33）；
+  `SensitiveDataMaskingConverter` 分支覆盖 71.9% → **82.0%**（9 个未覆盖 → 9 个，
+  但换成的是多敏感值与类型投影的组合覆盖）；
+  `CitationValidator` 分支覆盖 **92.9%**（缺 42 → 3）；
+  core 总体 分支 87.91% → **87.97%**、行 98.36% → **98.37%**；
+  verify-project-docs 12/12。
+
 ### Batch 763（已交付）
 
 - 分支：`feature/derivation-snapshot-criteria-coverage-20261003`
