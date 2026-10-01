@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { Layout } from './Layout';
@@ -33,7 +33,7 @@ describe('Layout mobile sidebar', () => {
       </MemoryRouter>
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Close sidebar' }));
+    fireEvent.click(screen.getByRole('button', { name: 'nav.closeSidebar' }));
 
     // 关闭后 aside 不再携带展开态样式类。
     const aside = document.querySelector('aside');
@@ -69,6 +69,79 @@ describe('Layout', () => {
       </MemoryRouter>
     );
     expect(screen.getByTestId('theme-toggle')).toBeInTheDocument();
+  });
+
+  describe('navigation icons', () => {
+    it('renders one vector icon per navigation entry instead of emoji', () => {
+      render(
+        <MemoryRouter>
+          <Layout />
+        </MemoryRouter>
+      );
+
+      const nav = screen.getByRole('navigation');
+      const links = within(nav).getAllByRole('link');
+
+      expect(links).toHaveLength(13);
+      for (const link of links) {
+        const icon = link.querySelector('svg');
+        expect(icon).not.toBeNull();
+      }
+      // No emoji remain in the navigation, so glyph metrics cannot vary by platform.
+      expect(nav.textContent).not.toMatch(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u);
+    });
+
+    it('hides the decorative icon from assistive technology', () => {
+      render(
+        <MemoryRouter>
+          <Layout />
+        </MemoryRouter>
+      );
+
+      const nav = screen.getByRole('navigation');
+      for (const icon of nav.querySelectorAll('svg')) {
+        expect(icon).toHaveAttribute('aria-hidden', 'true');
+      }
+    });
+
+    it('keeps the link text as the accessible name', () => {
+      render(
+        <MemoryRouter>
+          <Layout />
+        </MemoryRouter>
+      );
+
+      expect(screen.getByRole('link', { name: 'nav.dashboard' })).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'nav.settings' })).toBeInTheDocument();
+    });
+
+    it('preserves the established navigation order', () => {
+      render(
+        <MemoryRouter>
+          <Layout />
+        </MemoryRouter>
+      );
+
+      const labels = within(screen.getByRole('navigation'))
+        .getAllByRole('link')
+        .map(link => link.textContent);
+
+      expect(labels).toEqual([
+        'nav.dashboard',
+        'nav.documents',
+        'nav.collections',
+        'nav.chat',
+        'nav.search',
+        'nav.metrics',
+        'nav.evaluation',
+        'nav.embeddings',
+        'nav.alerts',
+        'nav.abtest',
+        'nav.apiKeys',
+        'nav.files',
+        'nav.settings',
+      ]);
+    });
   });
 
   it('resets the main scroll region when navigating to another page', async () => {
@@ -171,20 +244,20 @@ describe('Layout responsive sidebar and logout', () => {
     renderLayout();
 
     // 桌面宽度下没有移动端菜单按钮。
-    expect(screen.queryByRole('button', { name: 'Open sidebar' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'nav.openSidebar' })).not.toBeInTheDocument();
 
     setWindowWidth(500);
     expect(
-      await screen.findByRole('button', { name: 'Open sidebar' }),
+      await screen.findByRole('button', { name: 'nav.openSidebar' }),
     ).toBeInTheDocument();
 
     // 打开侧边栏后出现遮罩，点击遮罩关闭。
-    await user.click(screen.getByRole('button', { name: 'Open sidebar' }));
+    await user.click(screen.getByRole('button', { name: 'nav.openSidebar' }));
     const overlay = document.querySelector('[class*="overlay"]');
     expect(overlay).not.toBeNull();
     await user.click(overlay!);
     expect(
-      screen.queryByRole('button', { name: 'Open sidebar' }),
+      screen.queryByRole('button', { name: 'nav.openSidebar' }),
     ).toBeInTheDocument();
   });
 
@@ -193,13 +266,13 @@ describe('Layout responsive sidebar and logout', () => {
     renderLayout();
     setWindowWidth(500);
 
-    await user.click(screen.getByRole('button', { name: 'Open sidebar' }));
+    await user.click(screen.getByRole('button', { name: 'nav.openSidebar' }));
     const navLink = screen.getAllByRole('link', { name: /nav\./ })[0];
     await user.click(navLink);
 
     // 桌面化或再次渲染后菜单按钮保持可见（sidebarOpen 已复位）。
     expect(
-      screen.getByRole('button', { name: 'Open sidebar' }),
+      screen.getByRole('button', { name: 'nav.openSidebar' }),
     ).toBeInTheDocument();
   });
 
@@ -215,7 +288,7 @@ describe('Layout responsive sidebar and logout', () => {
     setWindowWidth(500);
     const view = renderLayout();
     expect(
-      view.getByRole('button', { name: 'Open sidebar' }),
+      view.getByRole('button', { name: 'nav.openSidebar' }),
     ).toBeInTheDocument();
 
     // resize 触发的 setState 需在 act 内刷新；查询限定在本次容器内，
@@ -226,7 +299,7 @@ describe('Layout responsive sidebar and logout', () => {
     });
     await waitFor(() => {
       expect(
-        view.queryByRole('button', { name: 'Open sidebar' }),
+        view.queryByRole('button', { name: 'nav.openSidebar' }),
       ).not.toBeInTheDocument();
     });
   });

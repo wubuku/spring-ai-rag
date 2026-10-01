@@ -1,18 +1,20 @@
 {
   "nav": {
+    "abtest": "A/B 测试",
+    "alerts": "告警",
+    "apiKeys": "API 密钥",
+    "chat": "对话",
+    "closeSidebar": "关闭侧边栏",
+    "collections": "知识库",
     "dashboard": "仪表盘",
     "documents": "文档",
-    "collections": "知识库",
-    "chat": "对话",
-    "search": "检索",
-    "metrics": "指标",
-    "alerts": "告警",
-    "abtest": "A/B 测试",
-    "settings": "设置",
-    "apiKeys": "API 密钥",
-    "files": "文件",
+    "embeddings": "嵌入任务",
     "evaluation": "评估",
-    "embeddings": "嵌入任务"
+    "files": "文件",
+    "metrics": "指标",
+    "openSidebar": "打开侧边栏",
+    "search": "检索",
+    "settings": "设置"
   },
   "unlock": {
     "title": "解锁管理控制台",

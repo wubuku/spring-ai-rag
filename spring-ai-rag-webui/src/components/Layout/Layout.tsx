@@ -1,8 +1,29 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Outlet, NavLink, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import {
+  Bell,
+  ChartColumn,
+  CircleCheck,
+  Dna,
+  FileText,
+  FlaskConical,
+  KeyRound,
+  LayoutDashboard,
+  Library,
+  LogOut,
+  Menu,
+  MessageSquare,
+  Package,
+  Search,
+  Settings,
+  X,
+  type LucideIcon,
+} from 'lucide-react';
 import { ErrorBoundary } from '../ErrorBoundary';
 import { ThemeToggle } from '../ThemeToggle';
+import { IconButton } from '../ui/IconButton';
+import { Tooltip } from '../ui/Tooltip';
 import { useApiKeyAuth } from '../../auth/ApiKeyAuthContext';
 import {
   rememberRoute,
@@ -11,20 +32,23 @@ import {
 } from '../../utils/workspaceState';
 import styles from './Layout.module.css';
 
-const NAV_ITEMS = [
-  { to: '/dashboard', labelKey: 'nav.dashboard', icon: '📊' },
-  { to: '/documents', labelKey: 'nav.documents', icon: '📄' },
-  { to: '/collections', labelKey: 'nav.collections', icon: '📚' },
-  { to: '/chat', labelKey: 'nav.chat', icon: '💬' },
-  { to: '/search', labelKey: 'nav.search', icon: '🔍' },
-  { to: '/metrics', labelKey: 'nav.metrics', icon: '📈' },
-  { to: '/evaluation', labelKey: 'nav.evaluation', icon: '✅' },
-  { to: '/embeddings', labelKey: 'nav.embeddings', icon: '🧬' },
-  { to: '/alerts', labelKey: 'nav.alerts', icon: '🔔' },
-  { to: '/abtest', labelKey: 'nav.abtest', icon: '🧪' },
-  { to: '/api-keys', labelKey: 'nav.apiKeys', icon: '🔑' },
-  { to: '/files', labelKey: 'nav.files', icon: '📦' },
-  { to: '/settings', labelKey: 'nav.settings', icon: '⚙️' },
+// Navigation icons come from one tree-shaken icon set. Emoji rendered at
+// different metrics and weights across platforms, which made the sidebar
+// unstable; every icon is decorative and the link text carries the name.
+const NAV_ITEMS: { to: string; labelKey: string; Icon: LucideIcon }[] = [
+  { to: '/dashboard', labelKey: 'nav.dashboard', Icon: LayoutDashboard },
+  { to: '/documents', labelKey: 'nav.documents', Icon: FileText },
+  { to: '/collections', labelKey: 'nav.collections', Icon: Library },
+  { to: '/chat', labelKey: 'nav.chat', Icon: MessageSquare },
+  { to: '/search', labelKey: 'nav.search', Icon: Search },
+  { to: '/metrics', labelKey: 'nav.metrics', Icon: ChartColumn },
+  { to: '/evaluation', labelKey: 'nav.evaluation', Icon: CircleCheck },
+  { to: '/embeddings', labelKey: 'nav.embeddings', Icon: Dna },
+  { to: '/alerts', labelKey: 'nav.alerts', Icon: Bell },
+  { to: '/abtest', labelKey: 'nav.abtest', Icon: FlaskConical },
+  { to: '/api-keys', labelKey: 'nav.apiKeys', Icon: KeyRound },
+  { to: '/files', labelKey: 'nav.files', Icon: Package },
+  { to: '/settings', labelKey: 'nav.settings', Icon: Settings },
 ];
 
 const MOBILE_BREAKPOINT = 768;
@@ -98,33 +122,34 @@ export function Layout() {
         <div className={styles.sidebarHeader}>
           <div className={styles.logo}>spring-ai-rag</div>
           {isMobile && (
-            <button
-              className={styles.closeBtn}
+            <IconButton
+              label={t('nav.closeSidebar', 'Close sidebar')}
+              variant="ghost"
               onClick={() => setSidebarOpen(false)}
-              aria-label="Close sidebar"
             >
-              ✕
-            </button>
+              <X size={18} aria-hidden="true" />
+            </IconButton>
           )}
         </div>
         <div className={styles.themeToggle}>
           <ThemeToggle />
         </div>
         <nav className={styles.nav}>
-          {NAV_ITEMS.map(item => (
+          {NAV_ITEMS.map(({ to, labelKey, Icon }) => (
             <NavLink
-              key={item.to}
-              to={rememberedRouteFor(item.to)}
+              key={to}
+              to={rememberedRouteFor(to)}
               className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}
               onClick={handleNavClick}
             >
-              <span className={styles.icon}>{item.icon}</span>
-              {t(item.labelKey)}
+              <Icon className={styles.icon} size={18} aria-hidden="true" />
+              {t(labelKey)}
             </NavLink>
           ))}
         </nav>
         <div className={styles.consoleActions}>
           <button type="button" className={styles.logoutBtn} onClick={logout}>
+            <LogOut size={16} aria-hidden="true" />
             {t('unlock.logout')}
           </button>
         </div>
@@ -132,13 +157,16 @@ export function Layout() {
 
       <div className={styles.mainWrapper}>
         {isMobile && (
-          <button
-            className={styles.menuBtn}
-            onClick={() => setSidebarOpen(true)}
-            aria-label="Open sidebar"
-          >
-            ☰
-          </button>
+          <Tooltip content={t('nav.openSidebar', 'Open sidebar')} placement="bottom">
+            <IconButton
+              className={styles.menuBtn}
+              label={t('nav.openSidebar', 'Open sidebar')}
+              variant="secondary"
+              onClick={() => setSidebarOpen(true)}
+            >
+              <Menu size={18} aria-hidden="true" />
+            </IconButton>
+          </Tooltip>
         )}
         <main ref={mainRef} className={styles.main}>
           <ErrorBoundary>

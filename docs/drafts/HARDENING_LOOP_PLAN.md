@@ -2,6 +2,30 @@
 
 - 分支：`codex/batch690-eval-ctr
 
+### Batch 754（已交付）
+
+- 分支：`feature/webui-shell-primitives-nav-20261002`
+- 内容：WebUI 统一设计语言 **Slice 3A：命令 primitive + 导航图标 + Shell 迁移**：
+  - 新增 `src/components/ui/`：`IconButton`（ghost/secondary/danger、32/36px、
+    `label` 为必填可访问名、`type` 默认 button）与 `Tooltip`
+    （top/right/bottom/left，hover + 键盘 focus 可见、Escape 关闭、
+    关闭时 `aria-hidden`），各自 co-located CSS Module、focused 测试和 index 出口；
+  - 13 个导航入口 emoji → lucide 图标（`LayoutDashboard`/`FileText`/`Library`/
+    `MessageSquare`/`Search`/`ChartColumn`/`CircleCheck`/`Dna`/`Bell`/
+    `FlaskConical`/`KeyRound`/`Package`/`Settings`），图标一律 `aria-hidden`，
+    链接文本继续承担可访问名称；
+  - 侧边栏关闭按钮与移动端菜单按钮迁到 `IconButton`，菜单按钮外套 `Tooltip`；
+  - `Layout.module.css` 清除全部设计债务：3 处 `--color-text-secondary` →
+    `--color-text-muted`，`color-mix(in srgb, black 40%, transparent)` →
+    `--color-backdrop`；`.menuBtn` 只保留定位，外观归 primitive。
+  - 侧边栏按钮标签补 i18n（`nav.openSidebar` / `nav.closeSidebar`，中英成对）。
+- 指标：设计债务 **85 → 81**（legacy-alias 44→41、raw-color 28→27），
+  指纹 47 → 45，`Layout.module.css` 归零；`npm run test:run` 69 文件
+  **719/719**（+24）；`test:design-system` 39/39；typecheck、lint、
+  check:design-system、check:alignment、tokens:check 全通过；
+  build 通过，initial chunk 110.25 KiB gzip（仍低于 110.92 KiB 起点基线，
+  预算上限 125.92）；verify-project-docs 11/11；无悲观锁门禁通过。
+
 ### Batch 753（已交付）
 
 - 分支：`feature/webui-design-tokens-theme-gates-20261002`
