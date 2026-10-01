@@ -2,6 +2,56 @@
 
 - 分支：`codex/batch690-eval-ctr
 
+### Batch 762（已交付）
+
+- 分支：`feature/http-ssrf-boundary-coverage-20261003`
+- 内容：**转向后端分支覆盖加固**——第一批，前端连续两批已达 765/765 全绿、
+  设计债务清零，边际收益下降，而用户的第一优先级一直是"代码加固，特别是测试加固"。
+- 勘察（先跑 JaCoCo 拿真实数据，不靠记忆）：
+  - core 总体 行 **98.36%** / 分支 **87.77%**，未覆盖分支 **1827** 个。
+  - 分支覆盖最低的包：`retrieval.rerank` 7.72%、`openai` 8.80%、**`http` 10.41%**、
+    `metrics` 10.34%、`retrieval` 10.41%、`service` 10.62%。
+  - 按类排，未覆盖分支最多的是 `chat/ChatExecutionService`(61)、
+    `service/DocumentMutationService`(36)、**`http/AllowlistedHttpToolProvider$EndpointCallback`(32)**、
+    `controller/RagChatController`(31)。
+  - 选 `EndpointCallback` 的理由不是数字最大，而是**它是 agent 出站请求的完整防护链**：
+    DNS 解析后目标校验（SSRF 核心）、凭据环境变量、响应字节预算与结果字符预算、
+    内容类型白名单、截止时间。既有 2833 行测试却仍缺 32 个分支。
+- **核心发现：测了集合，没测补集。**
+  `publicAddress` 是一条 14 个条件的 `||` 链，既有测试覆盖了**每一类保留网段的范围内
+  代表值**，却没有任何一个测试断言**紧邻范围外**的地址是公网的。
+  后果很具体：把 `second <= 31` 收紧成 `<= 30`、或者从链里删掉
+  `100.64.0.0/10`（CGNAT，RFC 6598，能路由、能出公网，是 SSRF 经典绕过口），
+  **现有测试全部照常通过**。这与 Batch 760（emoji 只测了范围内的匹配式）、
+  Batch 761（门禁只测了正向）是同一个盲区。
+- 交付：
+  - `AllowlistedHttpToolProviderAddressBoundaryTest`（90 个用例）：
+    14 条 IPv4 规则**成对**断言——域内代表值 + 紧邻域外值，期望相反；
+    IPv6 侧补 `2000::/3` 两侧、`2001:0000::/23`（Teredo）边界、
+    `fe80::/10`、`fc00::/7`、`ff00::/8`、`2001:db8::/32`、`2002::/16`；
+    IPv4 内嵌的 `::ffff:` 与老式 `::a.b.c.d` 两种标记**必须给出相同判定**。
+  - `AllowlistedHttpToolProviderAssemblyBranchTest`（8 个用例）：
+    `endpointUri` 的多查询参数 `&` 分隔（既有测试只传了一个参数，`&` 分支从未走过）、
+    Skill 快照为 `null` 与"快照不健康"的区分、端点列表含 `null` 元素、
+    空白 toolName。
+- **范围克制**：动手前先扫了同包 9 个既有测试类的全部方法名，
+  发现 `parseInput`、斜杠归一化、`skillSession`/`state`、`validateJson`、凭据缺失、
+  非 2xx 状态码**都已有覆盖**。第一版草稿里有一半是重复测试，全部删掉重写。
+  重复的测试会让回归信号变钝，却不增加任何防护。
+- **写测试时被我自己的期望值骗了一次**：第一版把 `fe00::`/`fec0::`/`fbff::` 断言为
+  "公网"，理由是"它们不在 fc00::/7 黑名单里"。跑出来全红——但代码是对的：
+  IPv6 全局单播只有 `2000::/3`，这些首字节根本不在其中，被兜底规则拦下。
+  **"不在某条黑名单里"不等于"是公网"**。改写成断言"U LA 段外仍被全局性规则兜住"，
+  这比断言某个具体网段更有价值：它说明删掉 `fc00::/7` 那条规则不会让 0xfb 漏出去。
+- **踩到一个"0 失败 = 全绿"的陷阱**：第一版用 `@Nested` 分组，Surefire 的
+  `-Dtest=` 过滤器匹配不到嵌套类（`XxxTest$Nested`），**静默报 `Tests run: 0`**
+  却一个用例都没跑。已确认这是 surefire + JUnit5 的通用限制（仓库里既有的
+  `SloConfigRepositoryTest` 同样如此），因此改用 `@DisplayName` 前缀的扁平结构，
+  与本包其余 9 个测试类一致。
+- 指标：`mvn -pl spring-ai-rag-core test` **7164 全绿**（+98）；
+  `EndpointCallback` 分支覆盖 88.0% → **91.0%**（缺 32 → 26）；
+  core 总体分支 87.77% → **87.81%**；verify-project-docs 12/12。
+
 ### Batch 761（已交付）
 
 - 分支：`feature/gate-fail-closed-audit-20261003`
