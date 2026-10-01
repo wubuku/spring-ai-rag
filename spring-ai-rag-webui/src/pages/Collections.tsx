@@ -15,7 +15,7 @@ import { CreateCollectionModal } from '../components/CreateCollectionModal';
 import { Dialog } from '../components/Dialog';
 import { Card } from '../components/Card';
 import styles from './Collections.module.css';
-import { EmptyState } from '../components/ui';
+import { EmptyState, PageHeader } from '../components/ui';
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -62,16 +62,18 @@ export function Collections() {
 
   return (
     <div>
-      <div className={styles.header}>
-        <h1 className="page-title">{t('collections.title')}</h1>
-        <button
-          ref={createTriggerRef}
-          onClick={() => setShowCreateModal(true)}
-          className={styles.createBtn}
-        >
-          + {t('collections.create')}
-        </button>
-      </div>
+      <PageHeader
+        title={t('collections.title')}
+        actions={
+          <button
+            ref={createTriggerRef}
+            onClick={() => setShowCreateModal(true)}
+            className={styles.createBtn}
+          >
+            + {t('collections.create')}
+          </button>
+        }
+      />
       {isPending ? (
         <div className={styles.grid}>
           {[1, 2, 3].map(i => (

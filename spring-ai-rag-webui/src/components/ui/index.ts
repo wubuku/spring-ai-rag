@@ -4,6 +4,8 @@ export { EmptyState } from './EmptyState';
 export type { EmptyStateAlign, EmptyStateProps } from './EmptyState';
 export { IconButton } from './IconButton';
 export type { IconButtonProps, IconButtonSize, IconButtonVariant } from './IconButton';
+export { PageHeader } from './PageHeader';
+export type { PageHeaderProps } from './PageHeader';
 export { StatusBadge } from './StatusBadge';
 export type { StatusBadgeProps, StatusTone } from './StatusBadge';
 export { Tabs, tabDomIds } from './Tabs';

@@ -22,6 +22,8 @@ import {
 } from '../utils/workspaceState';
 import { useImeComposition } from '../utils/ime';
 import styles from './Chat.module.css';
+import { PanelLeft } from 'lucide-react';
+import { IconButton, PageHeader } from '../components/ui';
 
 interface Message {
   id: string;
@@ -445,22 +447,21 @@ export function Chat() {
         />
       )}
       <div className={styles.container}>
-        <div className={styles.header}>
-          <div className={styles.headerLeft}>
-            <button
-              className={styles.sidebarToggle}
+        <PageHeader
+          title={t('chat.title')}
+          leading={
+            <IconButton
+              label={t('chat.history')}
               onClick={() => setShowSidebar(!showSidebar)}
-              aria-label={t('chat.history')}
               aria-expanded={showSidebar}
-              title={t('chat.history')}
             >
-              ☰
-            </button>
-            <h1 className="page-title">{t('chat.title')}</h1>
-          </div>
-          {messages.length > 0 && (
-            <>
-              <div className={styles.exportWrapper}>
+              <PanelLeft size={18} aria-hidden="true" />
+            </IconButton>
+          }
+          actions={
+            messages.length > 0 ? (
+              <>
+                <div className={styles.exportWrapper}>
                 <button
                   onClick={() => setShowExportMenu(!showExportMenu)}
                   className={styles.exportBtn}
@@ -476,12 +477,13 @@ export function Chat() {
                   </div>
                 )}
               </div>
-              <button onClick={handleNewChat} className={styles.newChatBtn}>
-                {t('chat.newChat')}
-              </button>
-            </>
-          )}
-        </div>
+                <button onClick={handleNewChat} className={styles.newChatBtn}>
+                  {t('chat.newChat')}
+                </button>
+              </>
+            ) : undefined
+          }
+        />
 
         <div className={styles.messages}>
           {messages.length === 0 && (

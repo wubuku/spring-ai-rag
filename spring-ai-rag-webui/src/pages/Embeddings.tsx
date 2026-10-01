@@ -14,6 +14,7 @@ import { Dialog } from '../components/Dialog';
 import { Card } from '../components/Card';
 import { useImeComposition } from '../utils/ime';
 import styles from './Embeddings.module.css';
+import { PageHeader } from '../components/ui';
 
 function ImeSafeFilterInput({
   label,
@@ -139,8 +140,7 @@ export function Embeddings() {
 
   return (
     <div>
-      <h1 className="page-title">{t('embeddings.title')}</h1>
-      <p className={styles.muted}>{t('embeddings.subtitle')}</p>
+      <PageHeader title={t('embeddings.title')} description={t('embeddings.subtitle')} />
 
       <section className={styles.section} aria-label={t('embeddings.filters')}>
         <div className={styles.form}>
