@@ -188,7 +188,55 @@
   `delaySubscription` 的异步路径（本批用的是同步反射触发），覆盖面不同；
   但它们的命名与断言不符已在本条记录在案，后续应重命名或补断言。
 
+### Batch 772（已交付）
+
+- 分支：`feature/api-key-management-coverage-20261003`（后端覆盖第九批）
+- 内容：`ApiKeyManagementService` 轮换授权的**放行侧**与凭据版本一致性守卫。
+  **本批未改任何生产代码**（`git diff -- spring-ai-rag-core/src/main/` 为空），
+  纯粹是把"只测了拒绝、没测放行"这类空白补上。
+- **勘察发现的三个空白（都用 grep 计数确认，不是估计）**：
+  1. `authorizeRotation` 末尾的
+     `prepare && !Objects.equals(prepareCredentialId, caller.getCredentialId())`
+     守卫，JaCoCo 显示四个分支只覆盖两个：**拒绝侧有测试（Batch 352 的
+     `normalPrepareMustUseCurrentCredential`），放行侧一个都没有**。
+     也就是 NORMAL 凭据用**自己的**密钥发起轮换——最日常的那条路——
+     完全没有回归保护。
+  2. 另一侧 `prepare == false` 也没被走到：`getRotation` / `completeRotation` /
+     `cancelRotation` 三个调用方都传 false，而现有用例**一律**用
+     `caller = null, environmentRoot = true` 走豁免分支，
+     数据库 NORMAL 调用方一次都没进过（grep 计数 0）。
+  3. `requiredRotationCredentials` 的版本一致性守卫
+     （`"The rotation credential versions are inconsistent"`）
+     在**整个测试目录里 0 处引用**——包括"target 版本不比 source 新"
+     这条最基本的数据完整性检查。
+- 交付 `ApiKeyRotationAuthorizationAllowSideTest`（**8 用例**）：
+  - 放行侧 3 条：NORMAL 用自有凭证 prepare、getRotation / cancelRotation
+    在 `prepare=false` 且调用方凭证 id 不同时仍被放行。
+  - 版本守卫 4 条：source 版本为 null、target 版本为 null、
+    target 版本相等、target 版本更旧，一律 `SERVICE_UNAVAILABLE`。
+  - **对照组 1 条**：target 版本确实更新时必须放行，否则上面 4 条就是空转。
+- **变异测试 3 次，逐条证明"放行侧真的被钉住了"**：
+  | 变异 | 失败数 | 对应用例 |
+  |---|---|---|
+  | 守卫改成 `if (prepare)`（NORMAL 永远无法轮换） | **1** | 恰好放行侧那条 |
+  | 整个版本一致性守卫删掉 | **4** | 恰好四条版本用例 |
+  | `<=` 改成 `<`（相等版本混过去） | **1** | 恰好"版本相等"那条 |
+  第一条尤其关键：**在补这个用例之前，"NORMAL 凭据再也不能轮换自己的密钥"
+  这个致命回归会一路绿灯发布**，因为拒绝侧用例照常通过。
+- 踩到的打桩问题：prepare 流程会**当场新建 target 凭据**并立刻组装响应，
+  固定 keyId 的打桩接不住；改用"按调用顺序递增版本"的通用打桩，
+  `requiredRotationCredentials` 先取 source 再取 target，递增即可保证
+  target 版本严格更新。
+- 指标：`mvn -pl spring-ai-rag-core test` **7415 全绿**（+8，0 失败 0 错误 9 跳过），
+  BUILD SUCCESS；`ApiKeyManagementService` 分支 90.9% → **92.07%**（30 → 26 未覆盖）；
+  **L1147–1150 与 L1187–1188 从未覆盖列表中消失**；
+  core 总体分支 88.24% → **88.28%**、行 98.41% 不变。
+- 剩余 26 个未覆盖分支中，`toResponse` 的凭据状态投影
+  （`currentCredential` / `retiringCredential`，L1026–1032）
+  是一组尚未处理的候选。
+
 ### Batch 690（既有残条目，原样保留）
+
 
 
 
