@@ -6,5 +6,7 @@ export { IconButton } from './IconButton';
 export type { IconButtonProps, IconButtonSize, IconButtonVariant } from './IconButton';
 export { StatusBadge } from './StatusBadge';
 export type { StatusBadgeProps, StatusTone } from './StatusBadge';
+export { Tabs, tabDomIds } from './Tabs';
+export type { TabItem, TabsProps } from './Tabs';
 export { Tooltip } from './Tooltip';
 export type { TooltipPlacement, TooltipProps } from './Tooltip';

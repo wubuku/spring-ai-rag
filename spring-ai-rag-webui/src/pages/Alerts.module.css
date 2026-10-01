@@ -62,35 +62,6 @@
 
 /* ===== Tabs ===== */
 
-.tabs {
-  display: flex;
-  gap: 4px;
-  margin-bottom: 1.5rem;
-  border-bottom: 1px solid var(--color-border);
-}
-
-.tab {
-  padding: 0.625rem 1rem;
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 0.9375rem;
-  color: var(--color-text-muted);
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
-  transition: color 0.15s, border-color 0.15s;
-}
-
-.tab:hover {
-  color: var(--color-text);
-}
-
-.tabActive {
-  color: var(--color-primary);
-  border-bottom-color: var(--color-primary);
-  font-weight: 600;
-}
-
 .modeNotice,
 .errorState {
   margin-bottom: 1rem;

@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router-dom';
 import { modelsApi, type ModelInfo } from '../api/models';
 import { getSelectedModel, saveSelectedModel } from '../utils/modelPreference';
 import styles from './Settings.module.css';
+import { Tabs, tabDomIds } from '../components/ui';
 
 interface RetrievalConfig {
   vectorWeight: number;
@@ -203,23 +204,25 @@ export function Settings() {
     <div className={styles.container}>
       <h1 className="page-title">{t('settings.title')}</h1>
 
-      <div className={styles.tabs} role="tablist" aria-label={t('settings.title')}>
-        {tabs.map(tab => (
-          <button
-            key={tab.id}
-            role="tab"
-            aria-selected={activeTab === tab.id}
-            className={`${styles.tab} ${activeTab === tab.id ? styles.active : ''}`}
-            onClick={() => setSearchParams(
-              tab.id === 'llm' ? {} : { tab: tab.id },
-            )}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
+      {/* The tab strip comes from the shared primitive, which also supplies
+          arrow-key navigation and the tab/panel id pair. The panel below is a
+          large block this page already owns, so it is wired up by hand with
+          the same ids instead of being moved into a render prop. */}
+      <Tabs
+        idPrefix="settings-tabs"
+        ariaLabel={t('settings.title')}
+        items={tabs}
+        activeId={activeTab}
+        onChange={next => setSearchParams(next === 'llm' ? {} : { tab: next })}
+      />
 
-      <div className={styles.content}>
+      <div
+        className={styles.content}
+        role="tabpanel"
+        id={tabDomIds('settings-tabs', activeTab).panelId}
+        aria-labelledby={tabDomIds('settings-tabs', activeTab).tabId}
+        tabIndex={0}
+      >
         {activeTab === 'llm' && (
           <div className={styles.section}>
             <h2 className={styles.sectionTitle}>{t('settings.llmProvider')}</h2>

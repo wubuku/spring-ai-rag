@@ -14,6 +14,7 @@ import {
 import { ImeSafeForm } from '../components/ImeSafeForm';
 import styles from './Alerts.module.css';
 import { EmptyState } from '../components/ui';
+import { Tabs } from '../components/ui';
 
 type Tab =
   | 'alerts'
@@ -38,49 +39,46 @@ export function Alerts() {
     <div>
       <h1 className="page-title">{t('alerts.title')}</h1>
 
-      <div className={styles.tabs}>
-        <button
-          className={`${styles.tab} ${tab === 'alerts' ? styles.tabActive : ''}`}
-          onClick={() => setSearchParams({})}
-        >
-          {t('alerts.active')}
-        </button>
-        <button
-          className={`${styles.tab} ${tab === 'slo-configs' ? styles.tabActive : ''}`}
-          onClick={() => setSearchParams({ tab: 'slo-configs' })}
-        >
-          {t('alerts.sloConfig')}
-        </button>
-        <button
-          className={`${styles.tab} ${tab === 'silence-schedules' ? styles.tabActive : ''}`}
-          onClick={() => setSearchParams({ tab: 'silence-schedules' })}
-        >
-          {t('alerts.silencePlans')}
-        </button>
-        <button
-          className={`${styles.tab} ${tab === 'notification-deliveries' ? styles.tabActive : ''}`}
-          onClick={() => setSearchParams({ tab: 'notification-deliveries' })}
-        >
-          {t('alerts.deliveries')}
-        </button>
-      </div>
-
-      {tab === 'alerts' && <AlertsTab />}
-      {tab === 'slo-configs' && (
-        <SloConfigsTab
-          showForm={showSloForm}
-          onShowForm={() => setShowSloForm(true)}
-          onHideForm={() => setShowSloForm(false)}
-        />
-      )}
-      {tab === 'silence-schedules' && (
-        <SilenceSchedulesTab
-          showForm={showSilenceForm}
-          onShowForm={() => setShowSilenceForm(true)}
-          onHideForm={() => setShowSilenceForm(false)}
-        />
-      )}
-      {tab === 'notification-deliveries' && <NotificationDeliveriesTab />}
+      {/* The tab strip previously rendered four plain buttons with no tab
+          semantics, so screen readers saw unrelated controls with no link to
+          their content. <Tabs> owns the tablist and panel wiring; this page
+          still owns the active id, which maps onto the ?tab= URL parameter. */}
+      <Tabs
+        idPrefix="alerts-tabs"
+        ariaLabel={t('alerts.title')}
+        activeId={tab}
+        onChange={next => setSearchParams(next === 'alerts' ? {} : { tab: next })}
+        items={[
+          { id: 'alerts', label: t('alerts.active'), render: () => <AlertsTab /> },
+          {
+            id: 'slo-configs',
+            label: t('alerts.sloConfig'),
+            render: () => (
+              <SloConfigsTab
+                showForm={showSloForm}
+                onShowForm={() => setShowSloForm(true)}
+                onHideForm={() => setShowSloForm(false)}
+              />
+            ),
+          },
+          {
+            id: 'silence-schedules',
+            label: t('alerts.silencePlans'),
+            render: () => (
+              <SilenceSchedulesTab
+                showForm={showSilenceForm}
+                onShowForm={() => setShowSilenceForm(true)}
+                onHideForm={() => setShowSilenceForm(false)}
+              />
+            ),
+          },
+          {
+            id: 'notification-deliveries',
+            label: t('alerts.deliveries'),
+            render: () => <NotificationDeliveriesTab />,
+          },
+        ]}
+      />
     </div>
   );
 }

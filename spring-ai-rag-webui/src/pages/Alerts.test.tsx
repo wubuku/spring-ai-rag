@@ -191,7 +191,7 @@ describe('Alerts', () => {
     } as never);
 
     renderAlerts();
-    await user.click(screen.getByRole('button', { name: 'alerts.sloConfig' }));
+    await user.click(screen.getByRole('tab', { name: 'alerts.sloConfig' }));
 
     expect(await screen.findByText('latency-p99')).toBeInTheDocument();
     expect(screen.getByText('alerts.alertType')).toBeInTheDocument();
@@ -215,7 +215,7 @@ describe('Alerts', () => {
     vi.mocked(alertsApi.deleteSloConfig).mockResolvedValue({} as never);
 
     renderAlerts();
-    await user.click(screen.getByRole('button', { name: 'alerts.sloConfig' }));
+    await user.click(screen.getByRole('tab', { name: 'alerts.sloConfig' }));
     await user.click(await screen.findByText('latency-p99'));
 
     const deleteButton = screen.getByRole('button', {
@@ -292,7 +292,7 @@ describe('Alerts deliveries filters and loading state', () => {
     );
     renderAlertsWithProbe('/alerts');
 
-    await user.click(screen.getByRole('button', { name: 'alerts.deliveries' }));
+    await user.click(screen.getByRole('tab', { name: 'alerts.deliveries' }));
 
     expect(await screen.findByText('common.loading')).toBeInTheDocument();
   });
@@ -301,7 +301,7 @@ describe('Alerts deliveries filters and loading state', () => {
     const user = userEvent.setup();
     renderAlertsWithProbe('/alerts');
 
-    await user.click(screen.getByRole('button', { name: 'alerts.deliveries' }));
+    await user.click(screen.getByRole('tab', { name: 'alerts.deliveries' }));
     const select = await screen.findByLabelText('alerts.deliveryStatusFilter');
     await user.selectOptions(select, 'FAILED');
     expect(screen.getByTestId('location-search')).toHaveTextContent('status=FAILED');
@@ -421,19 +421,19 @@ describe('Alerts tab navigation, delivery modes and remaining form fields', () =
     const user = userEvent.setup();
     renderAlerts();
 
-    await user.click(screen.getByRole('button', { name: 'alerts.silencePlans' }));
+    await user.click(screen.getByRole('tab', { name: 'alerts.silencePlans' }));
     expect(
       await screen.findByRole('button', { name: '+ alerts.createSilence' }),
     ).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'alerts.deliveries' }));
+    await user.click(screen.getByRole('tab', { name: 'alerts.deliveries' }));
     expect(
       await screen.findByRole('combobox', {
         name: 'alerts.deliveryStatusFilter',
       }),
     ).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'alerts.active' }));
+    await user.click(screen.getByRole('tab', { name: 'alerts.active' }));
     expect(
       await screen.findByText('alerts.noActiveAlerts'),
     ).toBeInTheDocument();
@@ -446,7 +446,7 @@ describe('Alerts tab navigation, delivery modes and remaining form fields', () =
     );
 
     renderAlerts();
-    await user.click(screen.getByRole('button', { name: 'alerts.deliveries' }));
+    await user.click(screen.getByRole('tab', { name: 'alerts.deliveries' }));
 
     expect(await screen.findByText('common.loading')).toBeInTheDocument();
   });

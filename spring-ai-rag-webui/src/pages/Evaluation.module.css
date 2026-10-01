@@ -1,26 +1,3 @@
-.tabs {
-  display: flex;
-  gap: 0.5rem;
-  margin-bottom: 1rem;
-  flex-wrap: wrap;
-}
-
-.tab,
-.tabActive {
-  padding: 0.4rem 0.9rem;
-  border-radius: 6px;
-  border: 1px solid var(--color-border);
-  background: var(--color-surface);
-  cursor: pointer;
-  font-size: 0.9rem;
-}
-
-.tabActive {
-  background: var(--color-primary);
-  color: var(--color-on-primary);
-  border-color: transparent;
-}
-
 .section {
   display: flex;
   flex-direction: column;
@@ -61,7 +38,6 @@
   grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
   gap: 0.75rem;
 }
-
 
 .cardLabel {
   font-size: 0.8rem;

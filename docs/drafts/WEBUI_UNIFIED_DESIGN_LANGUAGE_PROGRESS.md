@@ -2,9 +2,9 @@
 
 > **对应规划**：[WEBUI_UNIFIED_DESIGN_LANGUAGE_PLAN.md](WEBUI_UNIFIED_DESIGN_LANGUAGE_PLAN.md)
 > **日期**：2026-08-28（Slice 1）· 2026-10-02（Slice 2、Slice 3A）
-> **状态**：Slice 1、Slice 2、Slice 3A、Slice 3B-1/2/3 已交付，设计债务清零；Slice 4 起待开始
+> **状态**：Slice 1、2、3A、3B-1/2/3、4A 已交付，设计债务清零；Slice 4B 起待开始
 > **工作区**：`/Users/yangjiefeng/Documents/wubuku/spring-ai-rag`
-> **分支**：`feature/webui-design-tokens-theme-gates-20261002`（Slice 2）· `feature/webui-shell-primitives-nav-20261002`（Slice 3A）· `feature/webui-status-badge-unify-20261002`（Slice 3B-1）· `feature/webui-empty-state-motion-debt-20261002`（Slice 3B-2）· `feature/webui-oncolor-contrast-20261002`（Slice 3B-3）
+> **分支**：`feature/webui-design-tokens-theme-gates-20261002`（Slice 2）· `feature/webui-shell-primitives-nav-20261002`（Slice 3A）· `feature/webui-status-badge-unify-20261002`（Slice 3B-1）· `feature/webui-empty-state-motion-debt-20261002`（Slice 3B-2）· `feature/webui-oncolor-contrast-20261002`（Slice 3B-3）· `feature/webui-chat-search-page-shell-20261002`（Slice 4A）
 > **实施基线**：Slice 1 `origin/main@c36bd43e` · Slice 2 `main@86ae9049`
 
 ## 1. 当前约束
@@ -48,7 +48,8 @@
 | Slice 3B-1：StatusBadge 与跨页徽章统一 | **已交付（Batch 755）** | 徽章跨页重复消除；warning 对比度缺陷修复；债务 81→79 |
 | Slice 3B-2：EmptyState 与 motion/特异性债务 | **已交付（Batch 756）** | `transition-all`/`!important`/`letter-spacing` 三类归零；债务 79→65 |
 | Slice 3B-3：填充面对比度 + alias 收口 | **已交付（Batch 757）** | 债务 65→0；`on-*` 双主题达 AA；兼容 alias 移除 |
-| Slice 4：Chat/Search/Documents 高频工作流迁移 | 待开始 | 每批 focused Vitest + Mock Playwright + computed style/contrast/geometry 通过后独立提交 |
+| Slice 4A：Tabs primitive 与 tab 语义修复 | **已交付（Batch 758）** | Alerts 从无语义按钮组变为真 tablist；三页统一方向键导航 |
+| Slice 4B：Chat/Search/Documents 高频工作流迁移 | 待开始 | 每批 focused Vitest + Mock Playwright + computed style/contrast/geometry 通过后独立提交 |
 | Slice 4：高频工作流迁移 | 待开始 | 每批 focused Vitest + Mock Playwright + computed style/contrast/geometry 通过后独立提交 |
 | Slice 5：运营与管理页迁移 | 待开始 | 13 个 route 全部进入统一 PageShell，迁移文件不再使用 raw color/legacy alias/数值 z-index |
 | Slice 6：债务收口与双语长青文档 | 待开始 | 全量门禁、文档与交付材料完成 |
@@ -374,3 +375,63 @@ Filled 按钮与徽章此前一律使用 `color: white` 配彩色背景。按 WC
 Slice 4：Chat / Search / Documents 高频工作流迁移（PageHeader、Toolbar、
 TableFrame、Tabs）。设计债务已清零，门禁此后只阻止**新增**，
 baseline 保持空基线即可。
+
+---
+
+# Slice 4A：Tabs primitive 与 tab 语义修复（Batch 758，2026-10-02）
+
+## S4A.1 勘察结论：重复已经分叉成 a11y 缺陷
+
+三个页面各写了一套 tab 条，且不是"风格不同"那么简单：
+
+| 页面 | 现状 |
+|---|---|
+| Alerts | 纯 `<button>`，**无任何 tab 语义**；无 `aria-selected` |
+| Settings | 有 `role="tablist"` / `role="tab"` / `aria-selected`，但**无 `tabpanel`** |
+| Evaluation | 有 `role="tablist"` / `role="tab"`，**无 `aria-selected`** |
+
+三套视觉（下划线 / 圆角顶 / 描边胶囊）也各不相同，且都没有方向键导航。
+Alerts 的问题最严重：屏幕阅读器会把它读成四个互不相关的按钮，用户无法知道
+当前处于哪个标签、也无法把标签与内容关联起来。
+
+## S4A.2 关键决定：两种使用模式
+
+`Tabs` 是受控组件（`activeId` + `onChange`），页面继续持有 active id——这是三页
+把标签映射到 `?tab=` URL 的既有约定，不能因为抽组件而丢掉。
+
+面板归属分两种：
+
+- **primitive 自持面板**（Alerts）：item 带 `render`，primitive 渲染
+  `role="tabpanel"` 并自动接线，省掉页面里四个近乎相同的按钮块。
+- **页面自持面板**（Settings、Evaluation）：面板分别是 275 行和 7 个 tab 的大块
+  JSX，塞进 render prop 会造成大量无价值搬运。因此 item 的 `render` 可选，
+  页面用导出的 `tabDomIds(idPrefix, id)` 复现同一组 id，手动接线。
+  两种模式共用一套 id 生成逻辑，不会漂移。
+
+## S4A.3 测试暴露的问题
+
+迁移后 7 个既有测试失败。逐个查看后发现，它们**固化了错误的语义**：
+
+- `getByRole('button', { name: 'alerts.sloConfig' })` 断言的是标签页**本应是按钮**
+  ——而这正是要修的缺陷。改为 `getByRole('tab', ...)`。
+- `findByLabelText('evaluation.tabSuites')` 原本只匹配按钮；加了
+  `aria-labelledby` 之后面板也被该标签关联，查询命中两个元素。改为断言
+  `aria-selected="true"` 与 `aria-labelledby` 指向 tab id——比原来更强。
+
+这类失败是"测试跟不上契约改进"的信号，不应通过回退实现来消除。
+
+## S4A.4 结果
+
+- `npm run test:run`：72 文件 **753/753 通过**（Batch 757 为 737，+16）。
+- `npm run test:design-system`：50/50；typecheck、lint、tokens:check、
+  check:design-system（0 债务）、check:alignment 全通过。
+- `npm run build`：通过；initial chunk 110.28 KiB gzip 不变。
+- 删除三页共 **95 行**重复 tab CSS。
+- `scripts/verify-project-docs.sh` 11/11、无悲观锁门禁、shell 语法、
+  `git diff --check`、新增行密钥扫描：通过。
+
+## S4A.5 下一切片入口
+
+Slice 4B：`PageHeader` primitive（标题 + 可选副标题 + 页面级主命令），
+先迁移确有主命令或副标题的页面（Collections、Files、Embeddings、Chat），
+验证 primitive 值得存在之后，再批量迁移其余仅含裸 `h1.page-title` 的页面。
