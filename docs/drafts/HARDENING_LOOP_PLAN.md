@@ -2,6 +2,21 @@
 
 - 分支：`codex/batch690-eval-ctr
 
+### Batch 752（勘察后搁置）
+
+- 勘察结论（已验证，未产出用例）：
+  - RagChatService 892（spec.system 非 null 臂）可达路径已定位：
+    DomainExtensionRegistry mock hasExtensions=true + 
+    getSystemPromptTemplate(domain-1) 返回模板 + 流式 command 即可
+    覆盖；813（reranked 映射偏导）疑同 607/613 归因怪癖。留待
+    Batch 753 以 ChatStreamTailTest 夹具实施。
+  - 括号：尝试稿因 RagChatService 15 参构造夹具未装配完整而弃
+    稿，未污染工作区。
+- 工作区状态：Batch 752 无交付物，core 全量门禁 EXIT=0（6416
+  tests 全绿）。
+
+## 进度留档快照（Batch 700 后 · 用户指令收尾）
+
 ### Batch 749（已交付）
 
 - 分支：`codex/batch-749-json-cached-status-tail-20261001`（已合
