@@ -24,7 +24,10 @@ public class CitationValidator {
             ChatMode mode,
             String answer,
             List<ChatSource> sources) {
-        List<String> available = new ArrayList<>();
+        // A set, not a list: dirty data can let two sources share one citation id.
+        // Keeping the duplicate would inflate sourceCount, so the UI would report
+        // "2/2 sources cited" for an answer that actually cites one source.
+        Set<String> available = new LinkedHashSet<>();
         if (sources != null) {
             for (ChatSource source : sources) {
                 if (source != null && source.getCitationId() != null
@@ -33,7 +36,6 @@ public class CitationValidator {
                 }
             }
         }
-        Set<String> availableSet = new LinkedHashSet<>(available);
         List<String> cited = new ArrayList<>();
         List<String> invalid = new ArrayList<>();
         if (answer != null) {
@@ -44,7 +46,7 @@ public class CitationValidator {
                 if (!seen.add(id)) {
                     continue;
                 }
-                if (availableSet.contains(id)) {
+                if (available.contains(id)) {
                     cited.add(id);
                 } else {
                     invalid.add(id);
