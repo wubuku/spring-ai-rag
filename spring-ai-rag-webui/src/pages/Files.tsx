@@ -21,6 +21,7 @@ import {
 } from '../utils/workspaceState';
 import { useImeComposition } from '../utils/ime';
 import styles from './Files.module.css';
+import { PageHeader } from '../components/ui';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -541,10 +542,10 @@ export function Files() {
     <div className={styles.container}>
 
       {/* ── Header ── */}
-      <div className={styles.header}>
-        <h1 className="page-title">{t('files.title')}</h1>
-
-        <div className={styles.actions}>
+      <PageHeader
+        title={t('files.title')}
+        actions={(
+          <div className={styles.actions}>
           {/* Upload button / area */}
           <div
             role="button"
@@ -580,8 +581,9 @@ export function Files() {
               <span>📤 {t('files.uploadBtn')}</span>
             )}
           </div>
-        </div>
-      </div>
+          </div>
+        )}
+      />
 
       {/* Upload error */}
       {uploadState === 'error' && (

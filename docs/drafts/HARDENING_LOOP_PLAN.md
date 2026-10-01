@@ -2,6 +2,33 @@
 
 - 分支：`codex/batch690-eval-ctr
 
+### Batch 759（已交付）
+
+- 分支：`feature/webui-page-header-20261002`
+- 内容：WebUI 统一设计语言 **Slice 4B：PageHeader primitive**。
+- 勘察：13 个页面都写 `<h1 className="page-title">`，其中 4 个页面的标题区还各自
+  长出了不同的头部行——Collections（`.header` + 创建按钮）、Files（`.header` +
+  `.actions` 上传区）、Embeddings（标题 + 副标题 `<p className={styles.muted}>`）、
+  Chat（`.header` > `.headerLeft`（☰ + 标题）+ 导出菜单 + 新会话按钮）。
+  四套 flex 规则、四套间距，副标题还是个与标题无关联的普通段落。
+- 交付：
+  - `src/components/ui/PageHeader/`：title + 可选 description / leading / actions，
+    9 个 focused 测试。**副标题通过 `aria-describedby` 与标题建立关联**，
+    不再是视觉上挨着但语义无关的段落。
+  - 迁移 Collections（主命令）、Embeddings（副标题）、Files（上传区作为 actions）、
+    Chat（leading 侧栏开关 + 导出/新会话 actions）。
+  - Chat 的 `☰` emoji 侧栏开关迁为 lucide `PanelLeft` + `IconButton`。
+  - 删除三页共 40 行各自为政的头部 CSS。
+- **范围克制**：本批**只迁 4 个确有主命令或副标题的页面**，没有为了凑覆盖率
+  批量替换其余 9 个只有裸 `h1` 的页面——先验证 primitive 确实值得存在。
+- 指标：`npm run test:run` 73 文件 **762/762**（+9）；`test:design-system` 50/50；
+  typecheck、lint、tokens:check、check:design-system（仍 0 债务）、
+  check:alignment 全通过；build initial chunk 110.29 KiB gzip；
+  verify-project-docs 11/11。
+- 勘察中顺带发现、留待下一批：Files / Documents / Chat / Settings /
+  ReembedAllButton / ErrorBoundary / FilePreview / SearchResults 仍有大量
+  emoji 图标（文件类型图标是最大聚集点），是 Slice 3 图标统一未完成的部分。
+
 ### Batch 758（已交付）
 
 - 分支：`feature/webui-chat-search-page-shell-20261002`

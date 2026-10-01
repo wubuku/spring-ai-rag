@@ -2,9 +2,9 @@
 
 > **对应规划**：[WEBUI_UNIFIED_DESIGN_LANGUAGE_PLAN.md](WEBUI_UNIFIED_DESIGN_LANGUAGE_PLAN.md)
 > **日期**：2026-08-28（Slice 1）· 2026-10-02（Slice 2、Slice 3A）
-> **状态**：Slice 1、2、3A、3B-1/2/3、4A 已交付，设计债务清零；Slice 4B 起待开始
+> **状态**：Slice 1、2、3A、3B-1/2/3、4A、4B 已交付，设计债务清零；Slice 5 起待开始
 > **工作区**：`/Users/yangjiefeng/Documents/wubuku/spring-ai-rag`
-> **分支**：`feature/webui-design-tokens-theme-gates-20261002`（Slice 2）· `feature/webui-shell-primitives-nav-20261002`（Slice 3A）· `feature/webui-status-badge-unify-20261002`（Slice 3B-1）· `feature/webui-empty-state-motion-debt-20261002`（Slice 3B-2）· `feature/webui-oncolor-contrast-20261002`（Slice 3B-3）· `feature/webui-chat-search-page-shell-20261002`（Slice 4A）
+> **分支**：`feature/webui-design-tokens-theme-gates-20261002`（Slice 2）· `feature/webui-shell-primitives-nav-20261002`（Slice 3A）· `feature/webui-status-badge-unify-20261002`（Slice 3B-1）· `feature/webui-empty-state-motion-debt-20261002`（Slice 3B-2）· `feature/webui-oncolor-contrast-20261002`（Slice 3B-3）· `feature/webui-chat-search-page-shell-20261002`（Slice 4A）· `feature/webui-page-header-20261002`（Slice 4B）
 > **实施基线**：Slice 1 `origin/main@c36bd43e` · Slice 2 `main@86ae9049`
 
 ## 1. 当前约束
@@ -49,7 +49,8 @@
 | Slice 3B-2：EmptyState 与 motion/特异性债务 | **已交付（Batch 756）** | `transition-all`/`!important`/`letter-spacing` 三类归零；债务 79→65 |
 | Slice 3B-3：填充面对比度 + alias 收口 | **已交付（Batch 757）** | 债务 65→0；`on-*` 双主题达 AA；兼容 alias 移除 |
 | Slice 4A：Tabs primitive 与 tab 语义修复 | **已交付（Batch 758）** | Alerts 从无语义按钮组变为真 tablist；三页统一方向键导航 |
-| Slice 4B：Chat/Search/Documents 高频工作流迁移 | 待开始 | 每批 focused Vitest + Mock Playwright + computed style/contrast/geometry 通过后独立提交 |
+| Slice 4B：PageHeader primitive | **已交付（Batch 759）** | 4 个有主命令/副标题的页面迁移；副标题与标题建立 aria 关联 |
+| Slice 5：运营与管理页迁移 + 图标统一收口 | 待开始 | 每批 focused Vitest + Mock Playwright + computed style/contrast/geometry 通过后独立提交 |
 | Slice 4：高频工作流迁移 | 待开始 | 每批 focused Vitest + Mock Playwright + computed style/contrast/geometry 通过后独立提交 |
 | Slice 5：运营与管理页迁移 | 待开始 | 13 个 route 全部进入统一 PageShell，迁移文件不再使用 raw color/legacy alias/数值 z-index |
 | Slice 6：债务收口与双语长青文档 | 待开始 | 全量门禁、文档与交付材料完成 |
@@ -435,3 +436,62 @@ Alerts 的问题最严重：屏幕阅读器会把它读成四个互不相关的�
 Slice 4B：`PageHeader` primitive（标题 + 可选副标题 + 页面级主命令），
 先迁移确有主命令或副标题的页面（Collections、Files、Embeddings、Chat），
 验证 primitive 值得存在之后，再批量迁移其余仅含裸 `h1.page-title` 的页面。
+
+---
+
+# Slice 4B：PageHeader primitive（Batch 759，2026-10-02）
+
+## S4B.1 勘察结论
+
+13 个页面都写 `<h1 className="page-title">`，其中 4 个页面的标题区已各自长出不同的
+头部行：
+
+| 页面 | 头部现状 |
+|---|---|
+| Collections | `.header` flex + 创建按钮 |
+| Files | `.header` + `.actions`（上传投放区） |
+| Embeddings | 标题 + `<p className={styles.muted}>` 副标题 |
+| Chat | `.header` > `.headerLeft`（☰ + 标题）+ 导出菜单 + 新会话 |
+
+四套 flex 规则、四套间距。Embeddings 的副标题尤其值得修：它和标题在视觉上相邻，
+语义上却毫无关联。
+
+## S4B.2 关键决定
+
+1. **副标题用 `aria-describedby` 与标题关联**，从"挨着的段落"变成真正的描述关系。
+2. **本批只迁 4 个页面**。其余 9 个只有裸 `h1.page-title`，一次全量替换属于为凑
+   覆盖率而抽象；先证明 primitive 在真实复合场景下成立，再谈批量。
+3. **顺带修 Chat 的 `☰` emoji** → lucide `PanelLeft` + `IconButton`，
+   这是 Slice 3 图标统一遗留的部分。
+
+## S4B.3 过程记录
+
+迁移 Files 时走了两次弯路，最终采用最小外科式替换（只换外层包裹与闭合标签，
+子树原地不动）：
+
+- 第一次按估算行号切割，偏移错误导致 JSX 结构断裂；
+- 第二次改用 prettier 修复格式，结果在 1000+ 行文件上产生 **342 增 / 376 删**的
+  无关重排，随即 `git checkout` 还原并放弃对该文件运行 prettier。
+
+教训记录在此：行号定位 + 全文件格式化会制造与任务无关的巨大 diff。
+
+## S4B.4 结果
+
+- `npm run test:run`：73 文件 **762/762 通过**（Batch 758 为 753，+9）。
+- `npm run test:design-system`：50/50；typecheck、lint、tokens:check、
+  check:design-system（0 债务）、check:alignment 全通过。
+- `npm run build`：通过；initial chunk 110.29 KiB gzip。
+- 删除三页共 **40 行**各自为政的头部 CSS。
+- `scripts/verify-project-docs.sh` 11/11、无悲观锁门禁、shell 语法、
+  `git diff --check`、新增行密钥扫描：通过。
+
+## S4B.5 下一切片入口
+
+Slice 5 的两块已勘察清楚：
+
+1. **图标统一收口**（Slice 3 未完成部分）：Files 的文件类型图标
+   （📁📄🖼️📝📎）、Documents（📁✕）、Chat（👍👎）、Settings（🇺🇸🇨🇳）、
+   ReembedAllButton（⚠️▲▼）、ErrorBoundary（⚠️）、FilePreview、SearchResults（🔍）。
+   Files 的 `FileIcon` 是最大聚集点，且已有测试断言具体 emoji 字符。
+2. **其余 9 个裸标题页面的批量迁移**，以及 Alerts/Settings/Evaluation 之外的
+   运营页统一。

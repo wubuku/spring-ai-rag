@@ -1,0 +1,55 @@
+.header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-16);
+  margin-bottom: var(--space-24);
+}
+
+.leading {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+}
+
+.titles {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.title {
+  font-size: var(--typography-size-24);
+  font-weight: 700;
+  line-height: var(--typography-line-height-tight);
+  color: var(--color-text);
+  margin: 0;
+}
+
+.description {
+  font-size: var(--typography-size-14);
+  line-height: var(--typography-line-height-normal);
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  flex: 0 0 auto;
+  margin-inline-start: auto;
+}
+
+/* Toolbar wraps rather than overflow; buttons keep a stable height. */
+@media (max-width: 720px) {
+  .header {
+    flex-wrap: wrap;
+  }
+
+  .actions {
+    inline-size: 100%;
+    margin-inline-start: 0;
+  }
+}
