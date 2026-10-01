@@ -42,7 +42,7 @@
   align-items: center;
   gap: 8px;
   padding: 10px 16px;
-  color: var(--color-text-secondary);
+  color: var(--color-text-muted);
   text-decoration: none;
   font-size: 0.9rem;
   transition: background 0.15s, color 0.15s;
@@ -59,8 +59,10 @@
   font-weight: 600;
 }
 
+/* Lucide icons must not shrink or stretch inside the flex nav row. */
 .icon {
-  font-size: 1.1rem;
+  flex: 0 0 auto;
+  color: currentColor;
 }
 
 .consoleActions {
@@ -69,12 +71,16 @@
 }
 
 .logoutBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-8);
   width: 100%;
-  min-height: 36px;
+  min-height: var(--control-height-36);
   border: 1px solid var(--color-border);
   border-radius: 6px;
   background: var(--color-bg);
-  color: var(--color-text-secondary);
+  color: var(--color-text-muted);
   cursor: pointer;
   font-size: 0.875rem;
 }
@@ -126,7 +132,7 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: color-mix(in srgb, black 40%, transparent);
+    background: var(--color-backdrop);
     z-index: var(--z-navigation-backdrop);
   }
 
@@ -135,7 +141,7 @@
     border: none;
     cursor: pointer;
     font-size: 1.25rem;
-    color: var(--color-text-secondary);
+    color: var(--color-text-muted);
     padding: 20px 16px;
     margin-right: 4px;
   }
@@ -152,22 +158,11 @@
     padding: 64px 16px 16px;
   }
 
+  /* Only placement is owned here; the control's look comes from <IconButton>. */
   .menuBtn {
     position: absolute;
     top: 12px;
     left: 16px;
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
-    border-radius: 6px;
-    padding: 6px 12px;
-    font-size: 1.25rem;
-    cursor: pointer;
     z-index: var(--z-navigation);
-    color: var(--color-text);
-    box-shadow: 0 1px 4px var(--shadow-color);
-  }
-
-  .menuBtn:hover {
-    background: var(--color-surface-hover);
   }
 }

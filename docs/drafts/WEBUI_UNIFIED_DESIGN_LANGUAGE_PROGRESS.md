@@ -1,10 +1,10 @@
 # WebUI 统一设计语言实施进度
 
 > **对应规划**：[WEBUI_UNIFIED_DESIGN_LANGUAGE_PLAN.md](WEBUI_UNIFIED_DESIGN_LANGUAGE_PLAN.md)
-> **日期**：2026-08-28（Slice 1）· 2026-10-02（Slice 2）
-> **状态**：Slice 1、Slice 2 已交付；Slice 3 起待开始
+> **日期**：2026-08-28（Slice 1）· 2026-10-02（Slice 2、Slice 3A）
+> **状态**：Slice 1、Slice 2、Slice 3A 已交付；Slice 3B 起待开始
 > **工作区**：`/Users/yangjiefeng/Documents/wubuku/spring-ai-rag`
-> **分支**：`feature/webui-design-tokens-theme-gates-20261002`（Slice 2）
+> **分支**：`feature/webui-design-tokens-theme-gates-20261002`（Slice 2）· `feature/webui-shell-primitives-nav-20261002`（Slice 3A）
 > **实施基线**：Slice 1 `origin/main@c36bd43e` · Slice 2 `main@86ae9049`
 
 ## 1. 当前约束
@@ -44,7 +44,8 @@
 |---|---|---|
 | Slice 1：行为与设计验收基线 | 已交付 | 滚动泄漏闭环；Mock 与交付门禁通过 |
 | Slice 2：Token、Theme 与机器门禁 | **已交付（Batch 753）** | generator 幂等；undefined variable=0；新增设计债务=0；theme/Portal/chart 合同通过 |
-| Slice 3：Primitive 与 Shell | 待开始 | Shell 在四视口、light/dark/system 下无溢出、低对比或焦点丢失；公共组件 API 有测试 |
+| Slice 3A：命令 primitive + 导航图标 + Shell | **已交付（Batch 754）** | `Layout.module.css` 债务清零；导航图标统一；可访问名称与顺序冻结 |
+| Slice 3B：其余 primitive 与 Shell 迁移 | 待开始 | Shell 在四视口、light/dark/system 下无溢出、低对比或焦点丢失；公共组件 API 有测试 |
 | Slice 4：高频工作流迁移 | 待开始 | 每批 focused Vitest + Mock Playwright + computed style/contrast/geometry 通过后独立提交 |
 | Slice 5：运营与管理页迁移 | 待开始 | 13 个 route 全部进入统一 PageShell，迁移文件不再使用 raw color/legacy alias/数值 z-index |
 | Slice 6：债务收口与双语长青文档 | 待开始 | 全量门禁、文档与交付材料完成 |
@@ -163,3 +164,59 @@
 Slice 3 实施 `src/components/ui/` primitive 与 Shell 迁移，前置条件已全部就位：
 token 单一来源、门禁可拦截、主题合同稳定、图表走桥接。迁移批次必须让 47 条基线指纹
 单调下降，且不允许以 `design-token-allow` 批量豁免换绿。
+
+---
+
+# Slice 3A：命令 Primitive、导航图标与 Shell（Batch 754，2026-10-02）
+
+## S3A.1 实施边界
+
+- 只做 Shell 层的两个命令 primitive、导航图标替换和 Layout 迁移；
+  **不迁移业务页面**，不实现 Button/Field/Badge/TableFrame 等其余 primitive。
+- `src/components/Dialog/`、`src/components/Button/` 等既有稳定组件保持 canonical
+  路径，不为目录整齐制造搬迁 diff。
+- 导航的 route-memory、顺序、可访问名称、移动端开合行为全部冻结。
+
+## S3A.2 交付内容
+
+| 交付 | 位置 | 说明 |
+|---|---|---|
+| IconButton | `src/components/ui/IconButton/` | ghost/secondary/danger × 32/36px；`label` 必填；`type` 默认 button；focus-visible 用 token |
+| Tooltip | `src/components/ui/Tooltip/` | 4 个方位；hover + focus 可见；Escape 关闭且不移焦；关闭时 `aria-hidden` |
+| 导航图标 | `src/components/Layout/Layout.tsx` | 13 个 emoji → lucide，图标 `aria-hidden`，链接文本承担名称 |
+| Shell 迁移 | `Layout.tsx` / `Layout.module.css` | 关闭/菜单按钮迁到 IconButton + Tooltip；CSS 债务清零 |
+
+按钮标签补齐 i18n：`nav.openSidebar` / `nav.closeSidebar`（en + zh-CN 成对），
+消除了此前硬编码英文 aria-label 与其余界面不一致的问题。
+
+## S3A.3 验证证据
+
+1. `npm run test:run`：69 文件 **719/719 通过**（Batch 753 为 695，+24）。
+2. `npm run test:design-system`：39/39 通过。
+3. `npm run typecheck`、`npm run lint`：通过，0 error 0 warning。
+4. `npm run check:design-system`：通过；指纹 47 → 45。
+5. `npm run check:alignment`：通过；12 个有意居中例外。
+6. `npm run build`：通过；initial chunk **110.25 KiB gzip**，仍低于 110.92 KiB
+   起点基线（预算上限 125.92 KiB）；构建 CSS 17.61 KiB gzip。
+7. `scripts/verify-project-docs.sh` 11/11、`scripts/verify-no-pessimistic-locks.sh`、
+   shell 语法、`git diff --check`、新增行密钥扫描：通过。
+8. 本切片未触碰后端、API、schema 与 LLM 路径。
+
+## S3A.4 债务变化
+
+| kind | Batch 753 | Batch 754 | delta |
+|---|---|---|---|
+| legacy-alias | 44 | 41 | -3 |
+| raw-color | 28 | 27 | -1 |
+| transition-all | 8 | 8 | 0 |
+| important | 3 | 3 | 0 |
+| letter-spacing | 2 | 2 | 0 |
+| **合计** | **85** | **81** | **-4** |
+
+`Layout.module.css` 现已完全无设计债务。
+
+## S3A.5 下一切片入口
+
+Slice 3B：`PageShell`/`PageHeader`/`Toolbar`/`Tabs`/`TableFrame`/`EmptyState`/
+`StatusBadge` primitive，迁移 Dashboard、Unlock、Toast、Skeleton、ErrorBoundary。
+要求同 Batch 754：债务继续单调下降，`design-token-allow` 不作为批量换绿手段。

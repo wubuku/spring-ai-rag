@@ -1,18 +1,20 @@
 {
   "nav": {
+    "abtest": "A/B Test",
+    "alerts": "Alerts",
+    "apiKeys": "API Keys",
+    "chat": "Chat",
+    "closeSidebar": "Close sidebar",
+    "collections": "Collections",
     "dashboard": "Dashboard",
     "documents": "Documents",
-    "collections": "Collections",
-    "chat": "Chat",
-    "search": "Search",
-    "metrics": "Metrics",
-    "alerts": "Alerts",
-    "abtest": "A/B Test",
-    "settings": "Settings",
-    "apiKeys": "API Keys",
-    "files": "Files",
+    "embeddings": "Embeddings",
     "evaluation": "Evaluation",
-    "embeddings": "Embeddings"
+    "files": "Files",
+    "metrics": "Metrics",
+    "openSidebar": "Open sidebar",
+    "search": "Search",
+    "settings": "Settings"
   },
   "unlock": {
     "title": "Unlock Management Console",
