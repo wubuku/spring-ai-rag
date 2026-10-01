@@ -14,6 +14,7 @@
  *   7. cross-page-import      one page importing another page's CSS module
  *   8. legacy-alias           call sites of compatibility aliases
  *   9. emoji-glyph            emoji or dingbats used as interface icons
+ *  10. css-syntax              a stylesheet that does not parse
  *
  * Existing debt is grandfathered through design-tokens/design-debt-baseline.json
  * using the stable fingerprint `file|kind|value`. A violation that is already
@@ -27,9 +28,10 @@
  * Run with --write-baseline to (re)record the current debt intentionally.
  */
 
-import { readFileSync, writeFileSync, readdirSync, statSync } from 'node:fs';
+import { readFileSync, writeFileSync, readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import postcss from 'postcss';
 import { buildOutputs } from './build-design-tokens.mjs';
 
 const projectRoot = fileURLToPath(new URL('..', import.meta.url));
@@ -230,6 +232,33 @@ function stripComments(source) {
 }
 
 /**
+ * Parse a stylesheet and return its syntax errors.
+ *
+ * A stylesheet that does not parse is not a style-debt problem, so it is
+ * reported separately and cannot be waived with `design-token-allow`: there is
+ * no reason a broken stylesheet is acceptable, only a reason to fix it.
+ *
+ * Until this rule existed, `npm run build` was the only thing that noticed.
+ * Vitest stubs CSS modules and the line-based rules above cannot see a stray
+ * brace, so `typecheck`, `lint` and the whole 765-test suite all passed on a
+ * `FilePreview.module.css` that shipped an extra `}`.
+ */
+function findCssSyntaxErrors(source) {
+  const errors = [];
+  try {
+    postcss.parse(source);
+  } catch (error) {
+    const line = error.line ?? 1;
+    const reason = String(error.reason ?? error.message ?? 'unparsable stylesheet')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 120);
+    errors.push({ line, reason });
+  }
+  return errors;
+}
+
+/**
  * Scan one file into violation records.
  * @returns {{file: string, kind: string, value: string, line: number, allowed: string|null}[]}
  */
@@ -256,6 +285,22 @@ export function scanSource(relativePath, source, context) {
   const violations = [];
   // Tests do not ship, so they are not scanned for style debt.
   const exemptFromDebt = isTest || isGenerated;
+
+  // A stylesheet that does not parse is reported before anything else, because
+  // every line-based rule below would otherwise read a file the browser cannot
+  // load and quietly approve it.
+  if (isCss && !isTest) {
+    for (const { line, reason } of findCssSyntaxErrors(source)) {
+      violations.push({
+        file: relativePath,
+        kind: 'css-syntax',
+        value: reason,
+        line,
+        // Deliberately not waivable: see findCssSyntaxErrors.
+        allowed: null,
+      });
+    }
+  }
 
   codeLines.forEach((line, index) => {
     const lineNumber = index + 1;
@@ -401,11 +446,34 @@ export function fingerprint(violation) {
   return `${violation.file}|${violation.kind}|${violation.value}`;
 }
 
+/**
+ * Read the debt baseline, distinguishing "absent" from "corrupt".
+ *
+ * The previous version collapsed both into an empty baseline. A corrupt file
+ * therefore read as "no debt recorded", which silently disabled the staleness
+ * check — the half of the contract that stops an over-sized entry from hiding
+ * debt that was already paid off. A gate that cannot tell the difference
+ * between "nothing to check" and "could not read what to check" is a gate that
+ * can go quiet.
+ */
 function readBaseline() {
+  let text;
   try {
-    return JSON.parse(readFileSync(baselinePath, 'utf8'));
-  } catch {
-    return { version: 1, entries: {} };
+    text = readFileSync(baselinePath, 'utf8');
+  } catch (error) {
+    if (error.code === 'ENOENT') return { version: 1, entries: {} };
+    throw new Error(
+      `Cannot read ${relative(projectRoot, baselinePath)}: ${error.message}. ` +
+        'An unreadable baseline is a failed gate, not an empty one.',
+    );
+  }
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    throw new Error(
+      `${relative(projectRoot, baselinePath)} is not valid JSON: ${error.message}. ` +
+        'Fix or delete the file; a corrupt baseline cannot be trusted to record debt.',
+    );
   }
 }
 
@@ -474,26 +542,51 @@ function main() {
     }
   }
 
-  // The retired colour baseline must not come back to life.
+  // The retired colour baseline must not come back to life. An absent file is
+  // fine; an unreadable or unparsable one is not, because that is exactly how
+  // the "must stay empty" check would be switched off without anyone noticing.
+  let legacyText;
   try {
-    const legacy = JSON.parse(readFileSync(legacyBaselinePath, 'utf8'));
-    if (Object.keys(legacy).length > 0) {
+    legacyText = readFileSync(legacyBaselinePath, 'utf8');
+  } catch (error) {
+    if (error.code !== 'ENOENT') {
       errors.push(
-        `scripts/design-token-color-baseline.json must stay empty; colour debt now lives in ` +
-          `design-tokens/design-debt-baseline.json (found ${Object.keys(legacy).length} entr(ies)).`,
+        `Cannot read ${relative(projectRoot, legacyBaselinePath)}: ${error.message}. ` +
+          'Treat it as failed, not as absent.',
       );
     }
-  } catch {
-    // Missing legacy baseline is fine.
+  }
+  if (legacyText !== undefined) {
+    try {
+      const legacy = JSON.parse(legacyText);
+      if (Object.keys(legacy).length > 0) {
+        errors.push(
+          `scripts/design-token-color-baseline.json must stay empty; colour debt now lives in ` +
+            `design-tokens/design-debt-baseline.json (found ${Object.keys(legacy).length} entr(ies)).`,
+        );
+      }
+    } catch (error) {
+      errors.push(
+        `${relative(projectRoot, legacyBaselinePath)} is not valid JSON: ${error.message}. ` +
+          'A file that cannot be parsed cannot be asserted empty.',
+      );
+    }
   }
 
   if (errors.length > 0) {
     console.error('Design system violations:');
     for (const error of errors) console.error(`- ${error}`);
-    console.error(
-      '\nFix the violations, or record a justified inline exemption with ' +
-        '`/* design-token-allow: <reason> */` on the same or previous line.',
-    );
+    if (violations.some(v => v.allowed !== null)) {
+      console.error(
+        '\nFix the violations, or record a justified inline exemption with ' +
+          '`/* design-token-allow: <reason> */` on the same or previous line.',
+      );
+    }
+    // A stylesheet that does not parse has no legitimate exemption: it is not a
+    // style preference, it is a file the browser cannot load.
+    if (violations.some(v => v.kind === 'css-syntax')) {
+      console.error('\ncss-syntax violations cannot be waived. Fix the stylesheet.');
+    }
     process.exitCode = 1;
     return;
   }

@@ -2,6 +2,50 @@
 
 - 分支：`codex/batch690-eval-ctr
 
+### Batch 761（已交付）
+
+- 分支：`feature/gate-fail-closed-audit-20261003`
+- 内容：**「门禁的不可失败性」审计**——本仓库第三次栽在同一个坑上，所以这批不是
+  修一个 bug，而是把"检查器自己能不能失败"变成受测对象。
+- **三次同源假绿的完整账目**：
+  1. `verify-no-pessimistic-locks.sh` 缺 `rg` 时打印"未发现悲观锁"并 exit 0
+     （Batch 759 已修）。
+  2. Batch 760 的一次性 emoji 扫描报告"已清零"，但那个匹配式从没覆盖过 dingbat
+     区段，结论是错的（已改成常驻门禁）。
+  3. **本批新发现**：`scripts/business-client-contract-e2e.sh` 的安全断言写成
+     `if rg ...; then fail; fi; pass`。`rg` 缺失时 `if` 条件为假，**直接落到
+     `pass`**。已用原样复现脚本验证：响应里明文带着 `sk-live-…` 和内部 collection id
+     的情况下，凭据泄露检查和禁用值检查都打印 PASS 并 **exit 0**。
+- 交付：
+  - 修 `business-client-contract-e2e.sh`：补 `rg`/`jq`/`curl`/`python3` 前置检查，
+    缺任一即 exit 2。现在缺 `rg` 时输出明确的失败信息而非静默通过。
+  - **新增第 10 类门禁违规 `css-syntax`**：用 postcss 真解析每个 `.css`。
+    之前 `FilePreview.module.css` 多一个 `}` 能同时通过 typecheck、lint 和全部
+    765 个测试——因为 jsdom 测试里 CSS module 是被 stub 的，而逐行规则看不见
+    多余的花括号。**只有 `npm run build` 兜底**，这层保护早该进常规门禁。
+  - **`css-syntax` 刻意不可豁免**：解析不过的样式表不是风格偏好，没有理由可写。
+  - 收紧基线读取：此前 `readBaseline()` 的 `catch` 把"文件不存在"和"文件损坏"
+    合并成空基线，后者会**静默关掉基线过期检查**——也就是"债务只能减"契约里
+    专门防着债务偷偷长大的那一半。现在两者分别对待。
+  - 同样收紧 legacy baseline：原来它的 `catch` 把损坏也当成不存在，
+    "必须保持为空"这条检查可以被一份坏 JSON 无声关掉。
+  - **新增仓库级第 12 项检查「Gates can fail closed」**，静态+动态两半：
+    静态半扫全部 `scripts/*.sh`，凡是用 `rg`/`jq`/`yq` 扫描却没有 `command -v`
+    前置检查的，逐个点名；动态半把 `rg` 从 PATH 移除，验证两个承重的安全门禁
+    确实非零退出。
+- **这个新检查自己第一版就是个假绿**：正则用了 look-behind，而 ripgrep 默认引擎
+  不支持，编译失败返回非零 → 被读成"干净"。改用 `--pcre2`。
+  **这恰恰说明为什么这类检查必须做反向验证**，于是静态半和动态半都各做了一次
+  故意破坏：植入无前置检查的脚本 → 精确指名报错；把某门禁的 preflight 失败动作
+  从 `exit 1` 改成 `true` → 动态半报 "exited 0 without ripgrep on PATH"。
+- **幽灵依赖**：`postcss@8.5.x` 一直在 node_modules 里，但 package.json 和
+  lockfile 根都不声明它——只是 `vite` 的传递依赖。与 Batch 753 的
+  `lucide-react@0.468.0` 同一类问题。已在门禁里直接使用，故显式加入 devDependencies。
+- 指标：`npm run test:run` 73 文件 **765/765**（不变，本批不碰组件）；
+  `test:design-system` **71/71**（+8）；typecheck、lint、tokens:check、
+  check:design-system（0 债务）、check:alignment、build 全通过；
+  initial chunk 111.15 KiB gzip 不变；**verify-project-docs 12/12**（+1）。
+
 ### Batch 760（已交付）
 
 - 分支：`feature/webui-icon-unification-20261002`

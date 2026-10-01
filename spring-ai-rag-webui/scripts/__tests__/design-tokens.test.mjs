@@ -455,6 +455,81 @@ describe('design debt gate', () => {
   });
 });
 
+describe('stylesheet syntax gate', () => {
+  const context = { definedVars: new Set([...model.cssVarToToken]) };
+  const syntax = (body, fileName = 'src/pages/__Fixture.module.css') =>
+    scanSource(fileName, body, context).filter(v => v.kind === 'css-syntax');
+
+  it('flags a stylesheet with a stray closing brace', () => {
+    // The exact defect that shipped once: `FilePreview.module.css` carried an
+    // extra `}`. typecheck, lint and all 765 Vitest cases passed on it, because
+    // jsdom stubs CSS modules and no line-based rule can see a stray brace.
+    const violations = syntax('.a { color: var(--color-text); }\n}\n');
+    expect(violations).toHaveLength(1);
+    expect(violations[0].value).toMatch(/Unexpected/);
+  });
+
+  it('reports the line the parser stopped at, not line 1', () => {
+    const violations = syntax('.a { color: var(--color-text); }\n.b { color: var(--color-bg); }\n}\n');
+    expect(violations[0].line).toBe(3);
+  });
+
+  it('accepts a well-formed stylesheet', () => {
+    expect(
+      syntax('.a { color: var(--color-text); }\n@media (min-width: 40rem) { .a { color: var(--color-bg); } }\n'),
+    ).toEqual([]);
+  });
+
+  it('accepts braces and colons inside comments', () => {
+    // Documentation inside a stylesheet must be able to show CSS.
+    expect(
+      syntax('/* example: .x { color: red; } */\n.a { color: var(--color-text); }\n'),
+    ).toEqual([]);
+  });
+
+  it('flags an unterminated block', () => {
+    expect(syntax('.a { color: var(--color-text);\n').length).toBeGreaterThan(0);
+  });
+
+  it('cannot be waived with design-token-allow', () => {
+    // A stylesheet that does not load is not a style preference.
+    const violations = syntax(
+      '.a { color: var(--color-text); }\n}\n/* design-token-allow: vendor ships this broken */\n',
+    );
+    expect(violations).toHaveLength(1);
+    expect(violations[0].allowed).toBeNull();
+  });
+
+  it('still parses a stylesheet whatever the file is called', () => {
+    // The test-file exemption exists for JS suites that embed style snippets as
+    // strings. A `.css` file on disk is a real stylesheet, so a parse failure is
+    // a parse failure regardless of its name.
+    expect(syntax('}\n', 'src/pages/__Fixture.test.css')).toHaveLength(1);
+    expect(syntax('}\n', 'src/pages/__Fixture.spec.module.css')).toHaveLength(1);
+    expect(
+      scanSource(
+        'src/pages/__Fixture.test.tsx',
+        'const style = `.a { color: red; }`;\n}\n',
+        context,
+      ).filter(v => v.kind === 'css-syntax'),
+    ).toEqual([]);
+  });
+
+  it('leaves the shipped stylesheets parseable', () => {
+    const skip = new Set(['node_modules', 'dist', 'coverage']);
+    const walk = directory =>
+      readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
+        if (entry.isDirectory()) return skip.has(entry.name) ? [] : walk(join(directory, entry.name));
+        return entry.name.endsWith('.css') ? [join(directory, entry.name)] : [];
+      });
+    const broken = walk(join(projectRoot, 'src'))
+      .flatMap(path => scanFile(path, context))
+      .filter(v => v.kind === 'css-syntax')
+      .map(v => `${v.file}:${v.line} ${v.value}`);
+    expect(broken).toEqual([]);
+  });
+});
+
 describe('emoji and dingbat gate', () => {
   const context = { definedVars: new Set([...model.cssVarToToken]) };
 
