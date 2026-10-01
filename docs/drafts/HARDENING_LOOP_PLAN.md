@@ -89,7 +89,62 @@
   - `CHANGELOG.md` ↔ `-zh-CN`：中文停在 1.0.0-SNAPSHOT 2026-04-04，英文已到 1.1.0-SNAPSHOT。
 - 本批未改任何 Java / 前端生产代码，用例数不变（core 仍 7389）。
 
+### Batch 770（已交付）
+
+- 分支：`feature/document-mutation-coverage-20261003`（后端覆盖第七批）
+- 内容：`DocumentMutationService` 对账恢复守卫的**拒绝侧**测试矩阵，
+  并去掉它内部一处被复制粘贴出来的重复比较。
+- **勘察纠正了自己 Batch 770 开工时的判断**：初稿打算写
+  "`allowReconciliationRecovery` 是零测试覆盖的生产参数"——**这是错的**。
+  `grep allowReconciliationRecovery spring-ai-rag-core/src/test/` 确实 0 命中，
+  但 JaCoCo 行级数据显示守卫的**接受侧**已被 Batch 397 的
+  `reconciliationRecoveryBypassesSameRevisionConflict` 走到。
+  真正没被覆盖的是四段守卫里每一段的**否定分支**。
+  （教训：参数名在测试里 0 命中 ≠ 分支没被覆盖；先用行级数据定位再下结论。）
+  这条初稿没有写进提交，只留在勘察过程里。
+- **实际缺口**：`allowReconciliationRecovery && "RECONCILIATION".equals(origin)
+  && sourceDeletedAt != null && sameManagedFields(...)` 四段与门禁，
+  每段都只有"通过"侧被测，"拒绝"侧一个都没有。而拒绝侧恰恰是
+  "同 revision 但托管状态漂移 → 报冲突" 这道闸门。
+- **技术债**：`sameExternalState` 与 `sameExternalManagedState`
+  各自抄了一份**完全相同的六项比较**（title / contentHash / source /
+  documentType / metadata / jsonbPayload），差别只是前者多两个
+  `enabled` / `sourceDeletedAt` 前置条件。改一处忘另一处，两条语义就会悄悄分叉。
+  合并为 `sameManagedFields`，`sameExternalState` 在其上叠加两个条件。
+  分支总量 504 → 494（去掉重复的 10 个），covered 468 → 469，
+  missed 36 → 25，**92.90% → 94.94%**。
+- 交付 `DocumentMutationReconciliationRecoveryGuardTest`（**11 用例**）：
+  - 第 1 段：`upsertExternal` 不开启恢复，RECONCILIATION 墓碑 + 同 revision
+    + 受管字段全同 → 仍必须报冲突（恢复能力只属于同步运行条目路径）。
+  - 第 2 段：`deletionOrigin` 为 `EXTERNAL_DELETE` / 为 `null` 各一。
+  - 第 3 段：仅禁用、未被源侧删除（不是墓碑，没有可恢复对象）。
+  - 第 4 段：六项受管字段**逐一**不等各一。因为比较是短路与，
+    每个用例都让被测项**之前**的项相等，否则测试在更早一项就返回、白绿。
+  - 外加一条接受侧回归，防止前面的拒绝把恢复整体打死。
+- **变异测试 4 次，逐段验证"测试真的测到了"**：
+  | 变异 | 失败数 | 预期 |
+  |---|---|---|
+  | 去掉 `allowReconciliationRecovery` | 10 | ≥1 |
+  | 去掉 RECONCILIATION origin 判定 | **2** | 恰好两个 origin 用例 |
+  | 去掉 `sourceDeletedAt != null` | **1** | 恰好该用例 |
+  | `sameManagedFields` 恒返回 true | **6** | 恰好六个字段用例 |
+  每一段被拆掉时，只有对应它的用例变红——说明用例与分支是一一对应的，
+  不存在"一个用例糊弄过去一片分支"。
+- **过程中踩到并修正的两个坑（如实记录）**：
+  1. 首轮 11 个用例里 3 个没过，**不是**并发假象：`NoSuchMethodError`
+     指出有两个既有测试类（`DocumentMutationSameStateTailTest` 4 个 +
+     `DocumentMutationServiceExternalHelpersTest` 1 个）用**反射**调用了被删掉的
+     `sameExternalManagedState`。已改为反射 `sameManagedFields`，真值表一条没动。
+  2. 一度读到**上一轮的陈旧 surefire 报告**（耗时与行号完全相同）就下判断，
+     实际那轮是编译失败。**判定必须同时核对报告 mtime**，光看 `Tests run` 行会被骗。
+- 指标：`mvn -pl spring-ai-rag-core test` **7400 全绿**（+11，0 失败 0 错误 9 跳过），
+  BUILD SUCCESS；`DocumentMutationService` 分支 92.90% → **94.94%**；
+  core 总体分支 88.18% → **88.22%**、行 98.38% 不变；
+  verify-project-docs 14/14；verify-no-pessimistic-locks 通过。
+- 剩余 25 个未覆盖分支散在 25 行，仍以"每处缺 1 个"为主，暂不逐个追。
+
 ### Batch 690（既有残条目，原样保留）
+
 
 - 分支：`codex/batch690-eval-ctr
   <!-- Batch 768 勘察时发现：此条目在 main 上即为截断状态，后续信息已丢失，
