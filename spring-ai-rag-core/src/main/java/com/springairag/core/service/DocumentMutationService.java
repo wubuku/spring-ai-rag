@@ -1096,7 +1096,7 @@ public class DocumentMutationService {
                 if (!(allowReconciliationRecovery
                         && "RECONCILIATION".equals(document.getDeletionOrigin())
                         && document.getSourceDeletedAt() != null
-                        && sameExternalManagedState(
+                        && sameManagedFields(
                                 document, title, contentHash, source,
                                 documentType, metadata, payload))) {
                     throw revisionConflict(
@@ -1422,26 +1422,17 @@ public class DocumentMutationService {
         }
     }
 
-    private boolean sameExternalState(
-            RagDocument document,
-            String title,
-            String contentHash,
-            String source,
-            String documentType,
-            Map<String, Object> metadata,
-            JsonNode payload) {
-        return Boolean.TRUE.equals(document.getEnabled())
-                && document.getSourceDeletedAt() == null
-                && Objects.equals(document.getTitle(), title)
-                && Objects.equals(document.getContentHash(), contentHash)
-                && Objects.equals(document.getSource(), source)
-                && Objects.equals(document.getDocumentType(), documentType)
-                && Objects.equals(
-                        normalizeMetadata(document.getMetadata()), metadata)
-                && Objects.equals(document.getJsonbPayload(), payload);
-    }
-
-    private boolean sameExternalManagedState(
+    /**
+     * 受管字段是否一致：标题、内容哈希、来源、文档种类、元数据、JSONB 载荷。
+     *
+     * <p>启用状态与源侧删除标记<strong>不在</strong>其中。
+     * {@link #sameExternalState} 在此之上再要求"启用且未被源侧删除"；
+     * 对账恢复路径（RECONCILIATION 墓碑复活）则只比较字段本身。
+     *
+     * <p>过去这两条各抄了一份这六项比较，改一处忘另一处就会让两条语义
+     * 悄悄分叉，而且其中一份几乎没有任何测试走到。
+     */
+    private boolean sameManagedFields(
             RagDocument document,
             String title,
             String contentHash,
@@ -1456,6 +1447,20 @@ public class DocumentMutationService {
                 && Objects.equals(
                         normalizeMetadata(document.getMetadata()), metadata)
                 && Objects.equals(document.getJsonbPayload(), payload);
+    }
+
+    private boolean sameExternalState(
+            RagDocument document,
+            String title,
+            String contentHash,
+            String source,
+            String documentType,
+            Map<String, Object> metadata,
+            JsonNode payload) {
+        return Boolean.TRUE.equals(document.getEnabled())
+                && document.getSourceDeletedAt() == null
+                && sameManagedFields(document, title, contentHash, source,
+                        documentType, metadata, payload);
     }
 
     private String normalizeNamespace(String value) {

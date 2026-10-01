@@ -263,7 +263,7 @@ class DocumentMutationServiceExternalHelpersTest {
     @Test
     void managedStateComparisonIgnoresEnabledAndDeletion() throws Exception {
         Method state = DocumentMutationService.class.getDeclaredMethod(
-                "sameExternalManagedState", RagDocument.class, String.class,
+                "sameManagedFields", RagDocument.class, String.class,
                 String.class, String.class, String.class, Map.class,
                 com.fasterxml.jackson.databind.JsonNode.class);
         state.setAccessible(true);

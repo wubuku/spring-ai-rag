@@ -20,15 +20,18 @@ import static org.mockito.Mockito.mock;
 
 /**
  * DocumentMutationService 外部状态比较真值表（Batch 463）：
- * sameExternalState 要求启用且无删除标记，managed 变体忽略启用
+ * sameExternalState 要求启用且无删除标记，sameManagedFields 忽略启用
  * 与删除标记；title/contentHash/source/documentType/metadata/
  * payload 六元组逐一参与比较。
+ *
+ * <p>Batch 770：两条比较过去各抄了一份六元组，已合并为 sameManagedFields，
+ * 本类改为反射新方法——真值表本身一条没动。
  */
 class DocumentMutationSameStateTailTest {
 
     private DocumentMutationService service;
     private Method sameExternalState;
-    private Method sameExternalManagedState;
+    private Method sameManagedFields;
 
     @BeforeEach
     void setUp() throws Exception {
@@ -49,11 +52,11 @@ class DocumentMutationSameStateTailTest {
                 String.class, String.class, String.class,
                 Map.class, com.fasterxml.jackson.databind.JsonNode.class);
         sameExternalState.setAccessible(true);
-        sameExternalManagedState = DocumentMutationService.class
-                .getDeclaredMethod("sameExternalManagedState", RagDocument.class,
+        sameManagedFields = DocumentMutationService.class
+                .getDeclaredMethod("sameManagedFields", RagDocument.class,
                         String.class, String.class, String.class, String.class,
                         Map.class, com.fasterxml.jackson.databind.JsonNode.class);
-        sameExternalManagedState.setAccessible(true);
+        sameManagedFields.setAccessible(true);
     }
 
     private RagDocument managedDocument() {
@@ -75,11 +78,11 @@ class DocumentMutationSameStateTailTest {
                 type, metadata, null);
     }
 
-    private Object sameExternalManagedState(RagDocument doc, String title,
-                                            String hash, String source, String type,
-                                            Map<String, Object> metadata) throws Exception {
-        return sameExternalManagedState.invoke(service, doc, title, hash,
-                source, type, metadata, null);
+    private Object sameManagedFields(RagDocument doc, String title,
+                                     String hash, String source, String type,
+                                     Map<String, Object> metadata) throws Exception {
+        return sameManagedFields.invoke(service, doc, title, hash, source,
+                type, metadata, null);
     }
 
     @Test
@@ -90,7 +93,7 @@ class DocumentMutationSameStateTailTest {
         assertTrue((Boolean) sameExternalState(doc, "T",
                 com.springairag.core.util.DigestUtils.sha256("c"), "cms",
                 "text", Map.of("k", "v")));
-        assertTrue((Boolean) sameExternalManagedState(doc, "T",
+        assertTrue((Boolean) sameManagedFields(doc, "T",
                 com.springairag.core.util.DigestUtils.sha256("c"), "cms",
                 "text", Map.of("k", "v")));
     }
@@ -119,7 +122,7 @@ class DocumentMutationSameStateTailTest {
         tombstoned.setTitle("T");
 
         // managed 比较不看 enabled/deleted，仅六元组字段一致即匹配。
-        assertTrue((Boolean) sameExternalManagedState(tombstoned, "T",
+        assertTrue((Boolean) sameManagedFields(tombstoned, "T",
                 com.springairag.core.util.DigestUtils.sha256("c"), "cms",
                 "text", Map.of("k", "v")));
     }
