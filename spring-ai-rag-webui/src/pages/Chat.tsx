@@ -22,7 +22,7 @@ import {
 } from '../utils/workspaceState';
 import { useImeComposition } from '../utils/ime';
 import styles from './Chat.module.css';
-import { PanelLeft } from 'lucide-react';
+import { ChevronDown, PanelLeft, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { IconButton, PageHeader } from '../components/ui';
 
 interface Message {
@@ -463,12 +463,14 @@ export function Chat() {
               <>
                 <div className={styles.exportWrapper}>
                 <button
+                  type="button"
                   onClick={() => setShowExportMenu(!showExportMenu)}
                   className={styles.exportBtn}
                   aria-haspopup="menu"
                   aria-expanded={showExportMenu}
                 >
-                  {t('chat.export')} ▾
+                  {t('chat.export')}
+                  <ChevronDown size={14} aria-hidden="true" />
                 </button>
                 {showExportMenu && (
                   <div className={styles.exportMenu}>
@@ -550,7 +552,7 @@ export function Chat() {
                       submitFeedback('THUMBS_UP', prevUser?.content);
                     }}
                   >
-                    👍
+                    <ThumbsUp size={16} aria-hidden="true" />
                   </button>
                   <button
                     type="button"
@@ -562,7 +564,7 @@ export function Chat() {
                       submitFeedback('THUMBS_DOWN', prevUser?.content);
                     }}
                   >
-                    👎
+                    <ThumbsDown size={16} aria-hidden="true" />
                   </button>
                 </div>
               )}

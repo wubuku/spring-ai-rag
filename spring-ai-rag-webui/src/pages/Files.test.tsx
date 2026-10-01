@@ -177,6 +177,20 @@ describe('Files', () => {
     expect(paths()).toEqual(['older-pdf/', 'sample-pdf/', 'newest-pdf/']);
   });
 
+  it('states the sort direction as data, not as an arrow glyph', () => {
+    // The direction used to be conveyed only by a `↓`/`↑` character, which no
+    // test could assert without pinning a Unicode code point. It is now an
+    // explicit attribute, so the affordance and the order are testable apart.
+    renderFiles();
+
+    const sort = () => screen.getByTestId('files-import-time-sort');
+    expect(sort()).toHaveAttribute('data-sort-direction', 'desc');
+
+    fireEvent.click(sort());
+
+    expect(sort()).toHaveAttribute('data-sort-direction', 'asc');
+  });
+
   it('restores ascending import-time sorting from a direct URL', () => {
     renderFiles('/webui/files?sort=asc');
 
@@ -808,14 +822,23 @@ describe('Files tree rendering: icons, sizes and unsafe paths', () => {
   });
 
   it('renders mime-specific icons and human readable sizes', () => {
-    renderFiles();
+    const { container } = renderFiles();
 
     expect(screen.getByText('doc.pdf')).toBeInTheDocument();
-    // FileIcon：pdf 📄 / image 🖼️ / json+text 📝 / 其他 📎。
-    expect(screen.getByText('📄')).toBeInTheDocument();
-    expect(screen.getByText('🖼️')).toBeInTheDocument();
-    expect(screen.getByText('📝')).toBeInTheDocument();
-    expect(screen.getByText('📎')).toBeInTheDocument();
+    // FileIcon 的映射按语义断言，而不是匹配某个 Unicode 字符：
+    // 断言的是"pdf 条目拿到 pdf 图标"，而不是"页面上出现某个字形"。
+
+    const kinds = [...container.querySelectorAll('[data-file-icon]')].map(node =>
+      node.getAttribute('data-file-icon'),
+    );
+    expect(kinds).toContain('pdf');
+    expect(kinds).toContain('image');
+    expect(kinds).toContain('text');
+    expect(kinds).toContain('file');
+    // 图标是装饰性的：语义由旁边的条目名承担。
+    for (const icon of container.querySelectorAll('[data-file-icon] svg')) {
+      expect(icon).toHaveAttribute('aria-hidden', 'true');
+    }
     // formatSize：<1KB B、<1MB KB、≥1MB MB。
     expect(screen.getByText('512 B')).toBeInTheDocument();
     expect(screen.getByText('2.0 KB')).toBeInTheDocument();

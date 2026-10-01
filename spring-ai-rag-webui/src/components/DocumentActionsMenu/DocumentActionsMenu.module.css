@@ -71,6 +71,8 @@
 }
 
 .menuItemMeta {
+  display: inline-flex;
+  align-items: center;
   flex: none;
   color: var(--color-text-muted);
   font-size: 0.75rem;

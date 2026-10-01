@@ -12,10 +12,10 @@ import {
   type ReactNode,
 } from 'react';
 import { ToastContext, useToastContext } from './ToastContext';
-import { TOAST_ICONS } from './constants';
+import { TOAST_ICONS, type ToastType } from './constants';
+import { IconButton } from '../ui';
+import { X } from 'lucide-react';
 import styles from './Toast.module.css';
-
-type ToastType = 'success' | 'error' | 'info' | 'warning';
 
 interface ToastItem {
   id: string;
@@ -25,6 +25,16 @@ interface ToastItem {
 
 export function useToast() {
   return useToastContext();
+}
+
+/**
+ * The semantic icon for a toast. Kept as its own component because the icon
+ * reference is looked up by key inside a `map` callback, where a local `const`
+ * is not expressible in JSX.
+ */
+function ToastIcon({ type }: { type: ToastType }) {
+  const Icon = TOAST_ICONS[type];
+  return <Icon size={16} aria-hidden="true" />;
 }
 
 interface ToastProviderProps {
@@ -69,15 +79,18 @@ export function ToastProvider({ children }: ToastProviderProps) {
             className={`${styles.toast} ${styles[toast.type]}`}
             role={toast.type === 'error' ? 'alert' : 'status'}
           >
-            <span className={styles.icon}>{TOAST_ICONS[toast.type]}</span>
+            <span className={styles.icon} data-toast-icon={toast.type}>
+              <ToastIcon type={toast.type} />
+            </span>
             <span className={styles.message}>{toast.message}</span>
-            <button
+            <IconButton
               className={styles.close}
               onClick={() => removeToast(toast.id)}
-              aria-label="Close notification"
+              label="Close notification"
+              size={32}
             >
-              ×
-            </button>
+              <X size={16} aria-hidden="true" />
+            </IconButton>
           </div>
         ))}
       </div>

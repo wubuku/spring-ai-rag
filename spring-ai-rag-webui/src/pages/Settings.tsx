@@ -5,6 +5,7 @@ import { modelsApi, type ModelInfo } from '../api/models';
 import { getSelectedModel, saveSelectedModel } from '../utils/modelPreference';
 import styles from './Settings.module.css';
 import { Tabs, tabDomIds } from '../components/ui';
+import { Check } from 'lucide-react';
 
 interface RetrievalConfig {
   vectorWeight: number;
@@ -475,13 +476,13 @@ export function Settings() {
                   className={`${styles.langBtn} ${i18n.language === 'en' ? styles.langActive : ''}`}
                   onClick={() => handleLanguageChange('en')}
                 >
-                  🇺🇸 English
+                  English
                 </button>
                 <button
                   className={`${styles.langBtn} ${i18n.language === 'zh-CN' ? styles.langActive : ''}`}
                   onClick={() => handleLanguageChange('zh-CN')}
                 >
-                  🇨🇳 中文
+                  中文
                 </button>
               </div>
             </div>
@@ -494,7 +495,13 @@ export function Settings() {
             className={styles.saveBtn}
             disabled={!hasChanges}
           >
-            {saved ? `✓ ${t('settings.saved')}` : t('settings.save')}
+            {saved ? (
+              <>
+                <Check size={16} aria-hidden="true" /> {t('settings.saved')}
+              </>
+            ) : (
+              t('settings.save')
+            )}
           </button>
         </div>
       </div>

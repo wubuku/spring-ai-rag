@@ -10,6 +10,8 @@ import { SearchResults } from '../components/SearchResults';
 import { useToast } from '../components/Toast';
 import { useSearchHistory } from '../hooks/useSearchHistory';
 import { useBlobUrlOpener } from '../hooks/useBlobUrlOpener';
+import { IconButton } from '../components/ui';
+import { X } from 'lucide-react';
 import type { CollectionScopeMode } from '../types/api';
 import {
   readWorkspaceState,
@@ -275,15 +277,14 @@ export function Search() {
                             {new Date(item.timestamp).toLocaleTimeString()}
                           </span>
                         </button>
-                        <button
-                          type="button"
-                          className={styles.historyRemove}
+                        <IconButton
                           onClick={e => { e.stopPropagation(); removeItem(item.timestamp); }}
-                          aria-label={t('common.delete')}
-                          title={t('common.delete')}
+                          label={t('common.delete')}
+                          variant="danger"
+                          size={32}
                         >
-                          ×
-                        </button>
+                          <X size={16} aria-hidden="true" />
+                        </IconButton>
                       </li>
                     ))}
                   </ul>

@@ -5,8 +5,9 @@
 
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { X } from 'lucide-react';
 import styles from './ChatSidebar.module.css';
-import { EmptyState } from '../ui';
+import { EmptyState, IconButton } from '../ui';
 
 interface ChatSession {
   id: string;
@@ -99,17 +100,18 @@ export function ChatSidebar({ currentSessionId, onSelectSession, onNewChat }: Ch
               <span className={styles.sessionTitle}>{session.title}</span>
               <span className={styles.sessionTime}>{formatTime(session.updatedAt)}</span>
             </button>
-            <button
+            <IconButton
               className={styles.deleteBtn}
               onClick={e => {
                 e.stopPropagation();
                 deleteSession(session.id);
               }}
-              aria-label={t('chat.deleteSession', { title: session.title })}
-              title={t('chat.deleteSession', { title: session.title })}
+              label={t('chat.deleteSession', { title: session.title })}
+              variant="danger"
+              size={32}
             >
-              ×
-            </button>
+              <X size={16} aria-hidden="true" />
+            </IconButton>
           </div>
         ))}
       </div>

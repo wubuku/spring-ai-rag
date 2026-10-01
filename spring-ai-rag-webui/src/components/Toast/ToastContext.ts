@@ -1,6 +1,5 @@
 import { createContext, useContext } from 'react';
-
-type ToastType = 'success' | 'error' | 'info' | 'warning';
+import type { ToastType } from './constants';
 
 interface ToastContextValue {
   showToast: (message: string, type?: ToastType) => void;

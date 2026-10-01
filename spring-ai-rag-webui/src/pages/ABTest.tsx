@@ -15,6 +15,7 @@ import { Button } from '../components/Button';
 import { EmptyState, StatusBadge } from '../components/ui';
 import type { StatusTone } from '../components/ui';
 import styles from './ABTest.module.css';
+import { ArrowLeft, Check, X } from 'lucide-react';
 
 // Experiment states map to semantic tones rather than to raw colours, so the
 // badge follows the theme and keeps a readable contrast in both modes. The
@@ -158,8 +159,9 @@ function ExperimentDetail({ experimentId, onBack }: { experimentId: number; onBa
 
   return (
     <div>
-      <button className={styles.btnBack} onClick={onBack}>
-        ← {t('abtest.back')}
+      <button type="button" className={styles.btnBack} onClick={onBack}>
+        <ArrowLeft size={16} aria-hidden="true" />
+        {t('abtest.back')}
       </button>
 
       <div className={styles.header}>
@@ -211,11 +213,11 @@ function ExperimentDetail({ experimentId, onBack }: { experimentId: number; onBa
 
           {analysis.data.isSignificant ? (
             <div className={styles.significanceBadge}>
-              ✓ {t('abtest.statisticallySignificant')} — {analysis.data.recommendation}
+              <Check size={16} aria-hidden="true" /> {t('abtest.statisticallySignificant')} — {analysis.data.recommendation}
             </div>
           ) : (
             <div className={styles.notSignificant}>
-              ✗ {t('abtest.notSignificant')} — {analysis.data.recommendation}
+              <X size={16} aria-hidden="true" /> {t('abtest.notSignificant')} — {analysis.data.recommendation}
             </div>
           )}
 

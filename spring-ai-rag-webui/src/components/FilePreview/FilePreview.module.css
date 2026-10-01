@@ -166,8 +166,8 @@
   text-align: center;
 }
 
-.pdfFallback span:first-child {
-  font-size: 4rem;
+.pdfFallback svg {
+  color: var(--color-text-muted);
 }
 
 .pdfFallback p {

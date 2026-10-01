@@ -3,6 +3,7 @@ import { filesApi, type TreeEntry } from '../../api/files';
 import { useTranslation } from 'react-i18next';
 import { Skeleton } from '../Skeleton';
 import styles from './FilePreview.module.css';
+import { FileText, TriangleAlert } from 'lucide-react';
 
 interface FilePreviewProps {
   entry: TreeEntry;
@@ -96,7 +97,7 @@ export function FilePreview({ entry, reloadKey }: FilePreviewProps) {
           className={styles.pdfObject}
         >
           <div className={styles.pdfFallback}>
-            <span>📄</span>
+            <FileText size={32} aria-hidden="true" />
             <p>{t('files.pdfNoPreview')}</p>
             <a
               href={objectUrl}
@@ -130,7 +131,7 @@ export function FilePreview({ entry, reloadKey }: FilePreviewProps) {
   if (error) {
     return (
       <div className={styles.errorBox}>
-        <span>⚠️</span>
+        <TriangleAlert size={32} aria-hidden="true" />
         <span>{t('files.previewError', { error })}</span>
       </div>
     );

@@ -5,6 +5,7 @@ import { documentsApi } from '../../api/documents';
 import { useToast } from '../Toast';
 import { ConfirmDialog } from '../Dialog';
 import styles from './ReembedAllButton.module.css';
+import { ChevronUp, ChevronDown, TriangleAlert } from 'lucide-react';
 
 export function ReembedAllButton() {
   const { t } = useTranslation();
@@ -50,11 +51,17 @@ export function ReembedAllButton() {
         className={styles.alertButton}
         title={t('documents.reembedAlert') || 'Documents missing embeddings'}
       >
-        <span className={styles.icon}>⚠️</span>
+        <TriangleAlert className={styles.icon} size={18} aria-hidden="true" />
         <span className={styles.text}>
           {status.data.withoutEmbeddings} {t('documents.missingEmbeddings') || 'documents need re-embedding'}
         </span>
-        <span className={styles.arrow}>{isExpanded ? '▲' : '▼'}</span>
+        <span className={styles.arrow}>
+            {isExpanded ? (
+              <ChevronUp size={16} aria-hidden="true" />
+            ) : (
+              <ChevronDown size={16} aria-hidden="true" />
+            )}
+          </span>
       </button>
 
       {isExpanded && (

@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildOutputs, parseSource, renderCss, renderTs } from '../build-design-tokens.mjs';
-import { fingerprint, scanSource } from '../check-design-system.mjs';
+import { fingerprint, scanFile, scanSource } from '../check-design-system.mjs';
 
 const projectRoot = fileURLToPath(new URL('../..', import.meta.url));
 const sourceText = readFileSync(join(projectRoot, 'design-tokens/tokens.json'), 'utf8');
@@ -452,5 +452,115 @@ describe('design debt gate', () => {
     const b = fingerprint({ file: 'src/a.css', kind: 'raw-color', value: 'white', line: 99 });
     expect(a).toBe(b);
     expect(a).toBe('src/a.css|raw-color|white');
+  });
+});
+
+describe('emoji and dingbat gate', () => {
+  const context = { definedVars: new Set([...model.cssVarToToken]) };
+
+  function glyphs(fileName, body) {
+    return scanSource(fileName, body, context).filter(v => v.kind === 'emoji-glyph');
+  }
+
+  it('flags a pictograph typed straight into JSX', () => {
+    const violations = glyphs('src/pages/__Fixture.tsx', '<span>📁</span>');
+    expect(violations).toHaveLength(1);
+    expect(violations[0].value).toBe('📁');
+  });
+
+  it('flags a dingbat delivered through a string literal', () => {
+    // This is the shape the gate most easily misses: the glyph never appears in
+    // JSX text, it is a value picked by a conditional inside an expression.
+    const violations = glyphs(
+      'src/pages/__Fixture.tsx',
+      "{open ? <ChevronUp /> : '⌄'}",
+    );
+    expect(violations.map(v => v.value)).toEqual(['⌄']);
+  });
+
+  it('flags a dingbat in every kind of quote', () => {
+    expect(glyphs('src/pages/__Fixture.tsx', `const a = '↑';`)).toHaveLength(1);
+    expect(glyphs('src/pages/__Fixture.tsx', `const a = "↑";`)).toHaveLength(1);
+    expect(glyphs('src/pages/__Fixture.tsx', 'const a = `↑`;')).toHaveLength(1);
+  });
+
+  it('flags a glyph in CSS content', () => {
+    expect(glyphs('src/pages/__Fixture.module.css', `.a::before { content: '📁'; }`)).toHaveLength(1);
+  });
+
+  it('does not flag prose arrows inside a line comment', () => {
+    // The most common false positive this rule could have: documentation that
+    // explains a data flow in Chinese using `→`. `App.tsx` is full of these.
+    const violations = glyphs(
+      'src/pages/__Fixture.tsx',
+      '// 数据流：查询 → 过滤 → 排序；失败 → 重试。',
+    );
+    expect(violations).toHaveLength(0);
+  });
+
+  it('does not flag prose inside a block comment either', () => {
+    const violations = glyphs(
+      'src/pages/__Fixture.tsx',
+      '/* 排序方向 ↑ 表示升序，↓ 表示降序。 */\n<span>ok</span>',
+    );
+    expect(violations).toHaveLength(0);
+  });
+
+  it('treats // inside a string as string content, not a comment', () => {
+    // If the scanner were naive, the `//` in this URL would start a "comment"
+    // and mask the glyph, silently hiding a real violation.
+    const violations = glyphs('src/pages/__Fixture.tsx', `const u = 'https://x.dev/📁';`);
+    expect(violations.map(v => v.value)).toEqual(['📁']);
+  });
+
+  it('does not flag layout characters that are not icons', () => {
+    // Box drawing, CJK punctuation and typographic marks are prose, not UI.
+    for (const ch of ['─', '·', '—', '、', '。', '°', '§', '€']) {
+      expect(glyphs('src/pages/__Fixture.tsx', `const s = '${ch}';`)).toHaveLength(0);
+    }
+  });
+
+  it('flags the multiplication sign, which reads as a close affordance', () => {
+    // Four hand-rolled close buttons shipped as a bare `×`. It is visually an
+    // icon even though it predates Unicode pictographs, so it must not slip
+    // through a pictograph-only rule.
+    expect(glyphs('src/pages/__Fixture.tsx', '<button>×</button>').map(v => v.value)).toEqual(['×']);
+  });
+
+  it('reports a presentation selector once, attached to its base glyph', () => {
+    // '⚠️' is two code points. Counting both would make the fingerprint depend
+    // on whether the author typed the selector, not on what is rendered.
+    const violations = glyphs('src/pages/__Fixture.tsx', `const s = '⚠️';`);
+    expect(violations.map(v => v.value)).toEqual(['⚠']);
+  });
+
+  it('does not charge glyph debt to test files', () => {
+    expect(glyphs('src/pages/__Fixture.test.tsx', '<span>☰</span>')).toHaveLength(0);
+  });
+
+  it('honours an inline design-token-allow exemption', () => {
+    const violations = glyphs(
+      'src/pages/__Fixture.tsx',
+      '// design-token-allow: pasted verbatim from the upstream chart legend\n<span>★</span>',
+    );
+    expect(violations).toHaveLength(1);
+    expect(violations[0].allowed).toMatch(/upstream/);
+  });
+
+  it('leaves the shipped source tree free of interface glyphs', () => {
+    // The regression guard the earlier batches lacked. A previous pass claimed
+    // the tree was clean using a narrower pattern and missed every dingbat.
+    const skip = new Set(['node_modules', 'dist', 'coverage', 'playwright-report', 'test-results']);
+    const walk = directory =>
+      readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
+        if (entry.isDirectory()) return skip.has(entry.name) ? [] : walk(join(directory, entry.name));
+        return /\.(css|ts|tsx|svg)$/.test(entry.name) ? [join(directory, entry.name)] : [];
+      });
+    const realContext = { definedVars: new Set([...model.cssVarToToken]) };
+    const found = walk(join(projectRoot, 'src'))
+      .flatMap(path => scanFile(path, realContext))
+      .filter(v => v.kind === 'emoji-glyph')
+      .map(v => `${v.file}:${v.line} ${v.value}`);
+    expect(found).toEqual([]);
   });
 });

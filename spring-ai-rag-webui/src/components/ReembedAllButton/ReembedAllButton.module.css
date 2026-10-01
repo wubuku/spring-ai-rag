@@ -36,7 +36,8 @@
 }
 
 .icon {
-  font-size: 18px;
+  display: inline-flex;
+  flex-shrink: 0;
 }
 
 .text {
@@ -46,7 +47,9 @@
 }
 
 .arrow {
-  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
   opacity: 0.7;
 }
 

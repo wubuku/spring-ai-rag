@@ -21,7 +21,23 @@ import {
 } from '../utils/workspaceState';
 import { useImeComposition } from '../utils/ime';
 import styles from './Files.module.css';
-import { PageHeader } from '../components/ui';
+import { IconButton, PageHeader } from '../components/ui';
+import {
+  ArrowDown,
+  ArrowUp,
+  CircleCheck,
+  CornerLeftUp,
+  FileCode,
+  FileText,
+  Folder,
+  FolderOpen,
+  Image,
+  Paperclip,
+  RotateCw,
+  Search,
+  Upload,
+  type LucideIcon,
+} from 'lucide-react';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -166,13 +182,32 @@ function sortByImportTime(
 
 // ─── FileIcon ───────────────────────────────────────────────────────────────
 
-function FileIcon({ entry }: { entry: TreeEntry }) {
-  if (entry.type === 'directory') return <span className={styles.treeIcon}>📁</span>;
+/**
+ * Type icon for a tree entry.
+ *
+ * Emoji rendered at different metrics and weights per platform and were
+ * untestable except by matching a Unicode character. The kind is exposed as
+ * `data-file-icon` so the mapping is asserted directly, and the icon itself is
+ * decorative because the entry name beside it already carries the meaning.
+ */
+type FileIconKind = 'directory' | 'pdf' | 'image' | 'text' | 'file';
+
+function fileIconKind(entry: TreeEntry): { kind: FileIconKind; Icon: LucideIcon } {
+  if (entry.type === 'directory') return { kind: 'directory', Icon: Folder };
   const mime = entry.mimeType ?? '';
-  if (mime === 'application/pdf') return <span className={styles.treeIcon}>📄</span>;
-  if (mime.startsWith('image/')) return <span className={styles.treeIcon}>🖼️</span>;
-  if (mime.startsWith('text/') || mime === 'application/json') return <span className={styles.treeIcon}>📝</span>;
-  return <span className={styles.treeIcon}>📎</span>;
+  if (mime === 'application/pdf') return { kind: 'pdf', Icon: FileText };
+  if (mime.startsWith('image/')) return { kind: 'image', Icon: Image };
+  if (mime.startsWith('text/') || mime === 'application/json') return { kind: 'text', Icon: FileCode };
+  return { kind: 'file', Icon: Paperclip };
+}
+
+function FileIcon({ entry }: { entry: TreeEntry }) {
+  const { kind, Icon } = fileIconKind(entry);
+  return (
+    <span className={styles.treeIcon} data-file-icon={kind}>
+      <Icon size={16} aria-hidden="true" />
+    </span>
+  );
 }
 
 // ─── Main Component ─────────────────────────────────────────────────────────
@@ -576,9 +611,13 @@ export function Files() {
                 <span>{t('files.importing')}</span>
               </div>
             ) : uploadState === 'done' ? (
-              <span className={styles.uploadDone}>✅ {t('files.importDone')}</span>
+              <span className={styles.uploadDone}>
+                <CircleCheck size={16} aria-hidden="true" /> {t('files.importDone')}
+              </span>
             ) : (
-              <span>📤 {t('files.uploadBtn')}</span>
+              <span>
+                <Upload size={16} aria-hidden="true" /> {t('files.uploadBtn')}
+              </span>
             )}
           </div>
           </div>
@@ -595,9 +634,8 @@ export function Files() {
       {/* Stable location and general file-manager controls. */}
       <div className={styles.commandBar} data-testid="files-command-bar">
         <div className={styles.locationGroup}>
-          <button
-            type="button"
-            className={styles.iconButton}
+          <IconButton
+            variant="secondary"
             onClick={() => navigateTo(
               parentPath(currentPath),
               undefined,
@@ -605,11 +643,10 @@ export function Files() {
               '',
             )}
             disabled={!currentPath}
-            title={t('files.goUp')}
-            aria-label={t('files.goUp')}
+            label={t('files.goUp')}
           >
-            ↑
-          </button>
+            <ArrowUp size={16} aria-hidden="true" />
+          </IconButton>
           <nav className={styles.breadcrumb} aria-label={t('files.location')}>
             <button
               type="button"
@@ -648,7 +685,9 @@ export function Files() {
         </div>
         <div className={styles.locationActions}>
           <label className={styles.searchControl} htmlFor="files-query">
-            <span className={styles.searchIcon} aria-hidden="true">⌕</span>
+            <span className={styles.searchIcon} aria-hidden="true">
+              <Search size={16} />
+            </span>
             <span className={styles.visuallyHidden}>{t('files.searchLabel')}</span>
             <input
               id="files-query"
@@ -673,15 +712,13 @@ export function Files() {
               }}
             />
           </label>
-          <button
-            type="button"
-            className={styles.iconButton}
+          <IconButton
+            variant="secondary"
             onClick={handleRefreshDirectory}
-            title={t('files.refreshDirectory')}
-            aria-label={t('files.refreshDirectory')}
+            label={t('files.refreshDirectory')}
           >
-            ↻
-          </button>
+            <RotateCw size={16} aria-hidden="true" />
+          </IconButton>
         </div>
       </div>
 
@@ -714,28 +751,31 @@ export function Files() {
               </span>
               <button
                 type="button"
-              className={styles.sortButton}
-              data-testid="files-import-time-sort"
-              onClick={() => navigateTo(
-                currentPath,
-                deepLink.filePath ?? undefined,
-                importTimeSortDirection === 'desc' ? 'asc' : 'desc',
-              )}
-              title={t(
-                importTimeSortDirection === 'desc'
-                  ? 'files.sortNewestFirstTitle'
-                  : 'files.sortOldestFirstTitle',
-              )}
-              aria-label={t(
-                importTimeSortDirection === 'desc'
-                  ? 'files.sortNewestFirstTitle'
-                  : 'files.sortOldestFirstTitle',
-              )}
-            >
-              <span>{t('files.sortImportedAt')}</span>
-              <span aria-hidden="true">
-                {importTimeSortDirection === 'desc' ? '↓' : '↑'}
-              </span>
+                className={styles.sortButton}
+                data-testid="files-import-time-sort"
+                data-sort-direction={importTimeSortDirection}
+                onClick={() => navigateTo(
+                  currentPath,
+                  deepLink.filePath ?? undefined,
+                  importTimeSortDirection === 'desc' ? 'asc' : 'desc',
+                )}
+                title={t(
+                  importTimeSortDirection === 'desc'
+                    ? 'files.sortNewestFirstTitle'
+                    : 'files.sortOldestFirstTitle',
+                )}
+                aria-label={t(
+                  importTimeSortDirection === 'desc'
+                    ? 'files.sortNewestFirstTitle'
+                    : 'files.sortOldestFirstTitle',
+                )}
+              >
+                <span>{t('files.sortImportedAt')}</span>
+                <span aria-hidden="true">
+                  {importTimeSortDirection === 'desc'
+                    ? <ArrowDown size={14} />
+                    : <ArrowUp size={14} />}
+                </span>
               </button>
             </div>
           <div className={styles.listHeader} aria-hidden="true">
@@ -772,7 +812,7 @@ export function Files() {
                     data-testid="files-parent-entry"
                   >
                     <span className={styles.treeNameCell}>
-                      <span className={styles.treeIcon} aria-hidden="true">⬆️</span>
+                      <CornerLeftUp className={styles.treeIcon} size={16} aria-hidden="true" />
                       <span className={styles.treeIdentity}>
                         <span className={styles.treeName}>{t('files.goUp')}</span>
                       </span>
@@ -887,15 +927,13 @@ export function Files() {
             </span>
             {selectedEntry && (
               <div className={styles.previewActions}>
-                <button
-                  type="button"
-                  className={styles.iconButton}
+                <IconButton
+                  variant="secondary"
                   onClick={handleRefresh}
-                  title={t('files.refresh')}
-                  aria-label={t('files.refresh')}
+                  label={t('files.refresh')}
                 >
-                  🔄
-                </button>
+                  <RotateCw size={16} aria-hidden="true" />
+                </IconButton>
                 <button
                   type="button"
                   className={styles.previewBtn}
@@ -911,7 +949,7 @@ export function Files() {
           {!selectedEntry && currentPath ? (
             <div className={styles.folderOverview}>
               <div className={styles.folderOverviewMain}>
-                <div className={styles.previewEmptyIcon}>📁</div>
+                <Folder className={styles.previewEmptyIcon} size={32} aria-hidden="true" />
                 <div className={styles.folderOverviewCopy}>
                   <strong>{currentDirectoryLabel}</strong>
                   <span>{currentDirectoryPathLabel}</span>
@@ -974,13 +1012,13 @@ export function Files() {
             </div>
           ) : !selectedEntry ? (
             <div className={styles.previewEmpty}>
-              <div className={styles.previewEmptyIcon}>📂</div>
+              <FolderOpen className={styles.previewEmptyIcon} size={32} aria-hidden="true" />
               <span>{t('files.selectFile')}</span>
             </div>
           ) : selectedEntry.type === 'directory' ? (
             <div className={styles.folderOverview}>
               <div className={styles.folderOverviewMain}>
-                <div className={styles.previewEmptyIcon}>📁</div>
+                <Folder className={styles.previewEmptyIcon} size={32} aria-hidden="true" />
                 <div className={styles.folderOverviewCopy}>
                   <strong>{selectedEntry.displayName || selectedEntry.name}</strong>
                   <span>{selectedEntry.path}</span>

@@ -256,9 +256,16 @@ npm run check:design-system   # 设计债务门禁
 npm run test:design-system    # 生成器与门禁的 focused 测试
 ```
 
-- `check:design-system` 扫描 CSS/TS/TSX/SVG，拦截 8 类违规：未定义 `var(--*)`、
-  数值 z-index、字面颜色（含 CSS 命名色）、`transition: all`、非零 `letter-spacing`、
-  无理由 `!important`、跨页 `*.module.css` import、兼容 alias 调用。
+- `check:design-system` 扫描 CSS/TS/TSX/SVG，拦截 9 类违规：未定义 `var(--*)`、
+  数值 z-index、字面颜色（含 CSS 命名色）、宽泛的 `transition` 简写、非零 `letter-spacing`、
+  无理由 `!important`、跨页 `*.module.css` import、兼容 alias 调用，
+  以及 `emoji-glyph`（拿 emoji/dingbat 当界面图标）。
+- `emoji-glyph` 覆盖象形符号区，以及浏览器仍会独立渲染的 dingbat 区段（箭头、
+  尖角、几何图形、对勾/叉号、星号）和充当关闭按钮的 `×`。
+  **规则运行前先掩码注释、但保留字符串字面量**，所以文档里可以用 `→` 讲数据流，
+  而表达式里选出来的字形仍会被抓到。制表符族（box drawing）和中文标点是排版字符、
+  不是图标，不在范围内。优先用可 tree-shake 的 `lucide-react` 组件；确实无法避免时，
+  走和其他规则一样的行内 `design-token-allow` 窄例外。
 - 存量债务记录在 `design-tokens/design-debt-baseline.json`，指纹为
   `file|kind|value`。**新增违规、计数增加、基线过期三种情况都会失败**，所以债务
   只能单调减少。

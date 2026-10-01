@@ -36,7 +36,7 @@
 }
 
 .icon {
-  font-size: 1rem;
+  display: flex;
   flex-shrink: 0;
 }
 
@@ -47,20 +47,10 @@
   line-height: 1.4;
 }
 
+/* The container and the toast body are click-through so the toast never steals
+   a click from the page beneath it; the close control opts back in. */
 .close {
-  flex-shrink: 0;
-  background: none;
-  border: none;
-  font-size: 1.2rem;
-  cursor: pointer;
-  color: var(--color-text-muted);
-  padding: 0 0 0 8px;
-  line-height: 1;
   pointer-events: auto;
-}
-
-.close:hover {
-  color: var(--color-text);
 }
 
 .success {
@@ -77,4 +67,22 @@
 
 .info {
   border-color: var(--color-primary);
+}
+
+/* The icon used to be a multicolor emoji, so tone was carried by the border
+   alone. Now that it inherits `currentColor`, tone is stated in one place. */
+.success .icon {
+  color: var(--color-success);
+}
+
+.error .icon {
+  color: var(--color-error);
+}
+
+.warning .icon {
+  color: var(--color-warning);
+}
+
+.info .icon {
+  color: var(--color-primary);
 }

@@ -17,9 +17,9 @@
 }
 
 .icon {
-  font-size: 3rem;
-  display: block;
-  margin-bottom: 1rem;
+  display: flex;
+  margin-bottom: var(--space-16);
+  color: var(--color-warning);
 }
 
 .title {

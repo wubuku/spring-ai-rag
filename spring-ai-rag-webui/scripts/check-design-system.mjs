@@ -13,6 +13,7 @@
  *   6. important              `!important` without a stated reason
  *   7. cross-page-import      one page importing another page's CSS module
  *   8. legacy-alias           call sites of compatibility aliases
+ *   9. emoji-glyph            emoji or dingbats used as interface icons
  *
  * Existing debt is grandfathered through design-tokens/design-debt-baseline.json
  * using the stable fingerprint `file|kind|value`. A violation that is already
@@ -88,6 +89,36 @@ const COLOR_LITERAL_PATTERNS = [
 
 const ALLOW_COMMENT = /design-token-allow:\s*(.+?)\s*(?:\*\/)?$/;
 
+// Emoji and dingbats must not be used as interface icons: they render at
+// different metrics per platform, cannot inherit colour, and cannot be
+// asserted on in a test except by matching a Unicode character. Use the
+// tree-shaken lucide set instead.
+//
+// The ranges are deliberately narrow — pictographs plus the dingbat blocks that
+// browsers still render as standalone glyphs (arrows, carets, geometric
+// shapes, check/cross marks, stars). Box-drawing U+2500-257F and CJK punctuation
+// are excluded: they are layout characters, not icons.
+const GLYPH_RANGES = [
+  [0x00d7, 0x00d7], // × multiplication sign, still used as a close affordance
+  [0x203c, 0x203c], // ‼
+  [0x2049, 0x2049], // ⁉
+  [0x2139, 0x2139], // ℹ
+  [0x2190, 0x21ff], // ← ↑ → ↓ ↻ ↺ ⇄ ⇅
+  [0x2300, 0x23ff], // ⌃ ⌄ ⌕ ⌘ ⌫ ⌧ ⌨
+  [0x25a0, 0x25ff], // ▾ ▸ ◀ ▶ ■ □ ▲ ▼ ◊ ○ ●
+  [0x2600, 0x27bf], // ☀ ✓ ✔ ✗ ✖ ✕ ⚠ ⚡
+  [0x2b00, 0x2bff], // ⬆ ⬛ ⭐
+  [0xfe0f, 0xfe0f], // VS16 presentation selector
+  [0x1f000, 0x1faff], // pictographs
+];
+
+const GLYPH_PATTERN = new RegExp(
+  `[${GLYPH_RANGES.map(([from, to]) =>
+    from === to ? `\\u{${from.toString(16)}}` : `\\u{${from.toString(16)}}-\\u{${to.toString(16)}}`,
+  ).join('')}]`,
+  'gu',
+);
+
 function walk(directory) {
   const entries = [];
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
@@ -138,14 +169,64 @@ function findNamedColors(line) {
 }
 
 /**
- * Replace block comments with equivalent newlines.
+ * Replace comments with spaces, leaving strings and real code untouched.
  *
  * Debt patterns must match code, not prose: a stylesheet is allowed to *write
- * down* that `transition: all` is banned. Preserving the newline count keeps
+ * down* that `transition: all` is banned, and a Chinese comment is allowed to
+ * use `→` when explaining a data flow. Preserving the newline count keeps
  * reported line numbers aligned with the real file.
+ *
+ * String literals are scanned, not masked, because a string is exactly how an
+ * interface glyph reaches the DOM (`{open ? '⌃' : '⌄'}`). The scan is
+ * string-aware so a `//` inside a string is not mistaken for a comment.
+ *
+ * Known limitation: a regular-expression literal is not modelled, so a
+ * pattern containing a bare `//` (e.g. `/\/\//`) masks the rest of its line.
+ * That can only hide a glyph on the same line, never invent a finding.
  */
-function stripBlockComments(source) {
-  return source.replace(/\/\*[\s\S]*?\*\//g, comment => comment.replace(/[^\n]/g, ' '));
+function stripComments(source) {
+  let out = '';
+  let index = 0;
+  let quote = null;
+  while (index < source.length) {
+    const char = source[index];
+    if (quote !== null) {
+      if (char === '\\') {
+        out += source.slice(index, index + 2);
+        index += 2;
+        continue;
+      }
+      if (char === quote) quote = null;
+      out += char;
+      index += 1;
+      continue;
+    }
+    if (char === '"' || char === "'" || char === '`') {
+      quote = char;
+      out += char;
+      index += 1;
+      continue;
+    }
+    if (char === '/' && source[index + 1] === '/') {
+      while (index < source.length && source[index] !== '\n') {
+        out += ' ';
+        index += 1;
+      }
+      continue;
+    }
+    if (char === '/' && source[index + 1] === '*') {
+      while (index < source.length && !(source[index] === '*' && source[index + 1] === '/')) {
+        out += source[index] === '\n' ? '\n' : ' ';
+        index += 1;
+      }
+      out += '  ';
+      index += 2;
+      continue;
+    }
+    out += char;
+    index += 1;
+  }
+  return out;
 }
 
 /**
@@ -171,7 +252,7 @@ export function scanSource(relativePath, source, context) {
   // Debt rules read the comment-free source; the allow-reason lookup still sees
   // the raw line, because a justification lives in a comment by definition.
   const rawLines = source.split(/\r?\n/);
-  const codeLines = stripBlockComments(source).split(/\r?\n/);
+  const codeLines = stripComments(source).split(/\r?\n/);
   const violations = [];
   // Tests do not ship, so they are not scanned for style debt.
   const exemptFromDebt = isTest || isGenerated;
@@ -275,6 +356,20 @@ export function scanSource(relativePath, source, context) {
           file: relativePath,
           kind: 'legacy-alias',
           value: match[1],
+          line: lineNumber,
+          allowed,
+        });
+      }
+
+      // An interface icon must be a component, not a glyph typed into markup.
+      for (const match of line.matchAll(GLYPH_PATTERN)) {
+        // U+FE0F only requests emoji presentation for the base glyph that
+        // precedes it, and that base glyph is already reported on its own.
+        if (match[0] === '\u{FE0F}') continue;
+        violations.push({
+          file: relativePath,
+          kind: 'emoji-glyph',
+          value: match[0],
           line: lineNumber,
           allowed,
         });

@@ -1,6 +1,7 @@
 import { Component, type ReactNode } from 'react';
 import { getCredentialHeaders } from '../../auth/credentialStore';
 import styles from './ErrorBoundary.module.css';
+import { TriangleAlert } from 'lucide-react';
 
 interface Props {
   children: ReactNode;
@@ -80,7 +81,7 @@ export class ErrorBoundary extends Component<Props, State> {
       return (
         <div className={styles.container}>
           <div className={styles.content}>
-            <span className={styles.icon}>⚠️</span>
+            <TriangleAlert className={styles.icon} size={24} aria-hidden="true" />
             <h2 className={styles.title}>Something went wrong</h2>
             <p className={styles.message}>
               {this.state.error?.message || 'An unexpected error occurred'}

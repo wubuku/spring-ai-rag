@@ -2,6 +2,48 @@
 
 - 分支：`codex/batch690-eval-ctr
 
+### Batch 760（已交付）
+
+- 分支：`feature/webui-icon-unification-20261002`
+- 内容：WebUI 统一设计语言 **Slice 5：图标统一收口**——把 emoji/dingbat 从界面里
+  彻底赶出去，并让门禁能挡住它再次长回来。
+- **先纠正一个假绿**：上一批交付时留下的结论是「渲染标记中剩余 emoji = 0」。
+  那个结论是**错的**——核查用的匹配式只覆盖了象形符号区（1F300–1FAFF），
+  完全漏掉了 dingbat 区段。重新用正确的范围全树扫描后，实际还剩 13 处：
+  4 个手搓的 `×` 关闭按钮、Toast 的 4 个 emoji、DocumentActionsMenu 的 `⌃`/`⌄`、
+  ABTest 的 `←`、Chat 的 `▾`、Files 的 `↑`/`⌕`/`↻`/`↓↑`。
+  **教训**：一次"扫干净了"的断言，如果没有把范围写进代码，就等于没扫。
+- 交付：
+  - **`emoji-glyph` 成为第 9 类门禁违规**。范围 = 象形符号区 + 浏览器仍会独立渲染的
+    dingbat 区段（箭头 U+2190–21FF、尖角 U+2300–23FF、几何 U+25A0–25FF、
+    对勾/叉号 U+2600–27BF、星号 U+2B00–2BFF、`ℹ`/`‼`/`⁉`、VS16）
+    加上充当关闭按钮的 `×`（U+00D7）。
+  - **规则运行前只掩码注释、保留字符串字面量**。这是本批最关键的一个设计决定：
+    中文注释里用 `→` 讲数据流是散文（`App.tsx`、`Files.test.tsx` 等十几处），
+    绝不能误报；但 `{'⌃' : '⌄'}` 这种"表达式里选出来的字形"恰恰是真实违规，
+    掩码字符串就会漏掉。扫描器是字符串感知的，所以 `'https://x/📁'` 里的
+    `//` 不会被误当成注释开头。
+  - 13 处 dingbat 全部迁为 tree-shaken 的 `lucide-react` 组件。
+    4 个 `×` 关闭按钮（Toast / Dialog / ChatSidebar / Search）统一为
+    `IconButton` + `X`，顺带删掉 3 份各自为政的关闭按钮 CSS。
+  - **顺带修掉的真实重复**：`ToastType` 联合类型被 `Toast.tsx`、`ToastContext.ts`
+    和 `constants.ts` 各抄了一遍；现在 `constants.ts` 是唯一事实源，新增一种
+    toast 只需加一项。
+  - **顺带修掉的构建期缺陷**：`FilePreview.module.css` 多了一个 `}`。Vitest 与
+    `check:design-system` 都没抓到（jsdom 测试里 CSS module 是被 stub 的），
+    只有 `npm run build` 的 postcss 报错——这说明 CSS 语法目前**只有 build 兜底**。
+- **范围克制**：设置页的 `🇺🇸`/`🇨🇳` 旗帜 emoji **直接删除**而非替换——
+  旗帜代表"English"本身就不准确，文字标签已经承载了语义。
+- **可断言性提升**：Files 的排序方向原本只能靠 `↓`/`↑` 字形表达，测试无从下手；
+  现在按钮带 `data-sort-direction`，方向与顺序可以分开断言。
+  Toast 图标从"匹配 Unicode 码点"改为 `data-toast-icon` 语义钩子。
+- 指标：`npm run test:run` 73 文件 **765/765**（+3）；`test:design-system` **63/63**
+  （+13）；typecheck、lint、tokens:check、check:design-system（0 债务）、
+  check:alignment 全通过；build initial chunk 111.15 KiB gzip
+  （110.29 → 111.15，预算上限 125.92）。
+- **新写的门禁测试第一次全树扫描就抓出了 3 个手写 grep 漏掉的位置**
+  （`×` 关闭按钮），这正是把规则写进代码而不是写进一次性命令的价值。
+
 ### Batch 759（已交付）
 
 - 分支：`feature/webui-page-header-20261002`

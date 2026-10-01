@@ -6,6 +6,8 @@ import {
   type RefObject,
 } from 'react';
 import { createPortal } from 'react-dom';
+import { X } from 'lucide-react';
+import { IconButton } from '../ui';
 import styles from './Dialog.module.css';
 
 const FOCUSABLE =
@@ -130,15 +132,14 @@ export function Dialog({
               </div>
             )}
           </div>
-          <button
-            type="button"
-            className={styles.close}
+          <IconButton
             onClick={onClose}
             disabled={closeDisabled}
-            aria-label="Close"
+            label="Close"
+            size={32}
           >
-            ×
-          </button>
+            <X size={16} aria-hidden="true" />
+          </IconButton>
         </div>
         <div className={styles.body} data-dialog-body>{children}</div>
         {actions && <div className={styles.actions}>{actions}</div>}
