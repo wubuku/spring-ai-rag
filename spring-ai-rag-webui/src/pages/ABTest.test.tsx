@@ -105,6 +105,26 @@ describe('ABTest', () => {
     expect(screen.getByText('abtest.noExperiments')).toBeInTheDocument();
   });
 
+  it('maps experiment status to a semantic badge tone instead of an inline colour', () => {
+    storeQuery(['abtest', 'experiments'], [
+      makeExperiment({ status: 'RUNNING' }),
+      makeExperiment({ status: 'DRAFT' }),
+    ]);
+    storeQuery(['abtest', 'experiment', 5], makeExperiment());
+
+    const { container } = renderAbTest();
+
+    const badgeFor = (status: string) =>
+      [...container.querySelectorAll('[data-tone]')].find(
+        node => node.textContent === status && node.className.includes('badge'),
+      );
+
+    expect(badgeFor('RUNNING')).toHaveAttribute('data-tone', 'success');
+    expect(badgeFor('DRAFT')).toHaveAttribute('data-tone', 'neutral');
+    // The old inline `background` escape hatch must not come back.
+    expect(container.querySelectorAll('[style*="background"]').length).toBe(0);
+  });
+
   it('lists experiments and opens the detail view from the row action', async () => {
     const user = userEvent.setup();
     storeQuery(['abtest', 'experiments'], [makeExperiment()]);
@@ -117,8 +137,7 @@ describe('ABTest', () => {
     await user.click(screen.getByRole('button', { name: 'abtest.viewDetails' }));
 
     expect(screen.getByRole('heading', { name: 'rerank-a-b' })).toBeInTheDocument();
-    // Detail creates start/pause/stop mutations in order; RUNNING exposes pause + stop.
-    expect(screen.getByRole('button', { name: 'abtest.pause' })).toBeInTheDocument();
+    // Detail creates start/pause/stop mutations in order; RUNNING exposes pause + stop.    expect(screen.getByRole('button', { name: 'abtest.pause' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'abtest.stop' })).toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: 'abtest.start' }),

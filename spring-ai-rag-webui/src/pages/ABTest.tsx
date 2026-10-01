@@ -12,14 +12,20 @@ import { Dialog } from '../components/Dialog';
 import { ImeSafeForm } from '../components/ImeSafeForm';
 import { useToast } from '../components/Toast';
 import { Button } from '../components/Button';
+import { StatusBadge } from '../components/ui';
+import type { StatusTone } from '../components/ui';
 import styles from './ABTest.module.css';
 
-const STATUS_COLORS: Record<string, string> = {
-  DRAFT: 'var(--color-text-muted)',
-  RUNNING: 'var(--color-success)',
-  PAUSED: 'var(--color-warning)',
-  STOPPED: 'var(--color-text-muted)',
-  COMPLETED: 'var(--color-primary)',
+// Experiment states map to semantic tones rather than to raw colours, so the
+// badge follows the theme and keeps a readable contrast in both modes. The
+// previous inline `background` overrode the palette and forced a white label
+// on the warning tone.
+const STATUS_TONES: Record<string, StatusTone> = {
+  DRAFT: 'neutral',
+  RUNNING: 'success',
+  PAUSED: 'warning',
+  STOPPED: 'neutral',
+  COMPLETED: 'primary',
 };
 
 export function ABTest() {
@@ -82,12 +88,9 @@ function ExperimentList({ onSelect }: { onSelect: (id: number) => void }) {
             <div key={exp.id} className={styles.tableRow}>
               <span className={styles.name}>{exp.experimentName}</span>
               <span>
-                <span
-                  className={styles.badge}
-                  style={{ background: STATUS_COLORS[exp.status] ?? 'var(--color-text-muted)' }}
-                >
+                <StatusBadge tone={STATUS_TONES[exp.status] ?? 'neutral'}>
                   {exp.status}
-                </span>
+                </StatusBadge>
               </span>
               <span>{exp.targetMetric ?? '—'}</span>
               <span>{exp.sampleCount ?? 0}</span>
@@ -164,12 +167,9 @@ function ExperimentDetail({ experimentId, onBack }: { experimentId: number; onBa
           <h2>{exp.data.experimentName}</h2>
           <p className={styles.desc}>{exp.data.description}</p>
         </div>
-        <span
-          className={styles.badge}
-          style={{ background: STATUS_COLORS[exp.data.status] ?? 'var(--color-text-muted)' }}
-        >
+        <StatusBadge tone={STATUS_TONES[exp.data.status] ?? 'neutral'}>
           {exp.data.status}
-        </span>
+        </StatusBadge>
       </div>
 
       {/* Actions */}

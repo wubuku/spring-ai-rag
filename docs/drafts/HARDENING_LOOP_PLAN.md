@@ -2,6 +2,32 @@
 
 - 分支：`codex/batch690-eval-ctr
 
+### Batch 755（已交付）
+
+- 分支：`feature/webui-status-badge-unify-20261002`
+- 内容：WebUI 统一设计语言 **Slice 3B-1：StatusBadge 统一跨页徽章**。
+  勘察发现 `.badge` 在 `ABTest.module.css` 与 `ApiKeys.module.css` 各定义一份
+  近乎相同的基座，而 `ApiKeys` 单页内并存两套徽章视觉（实心
+  active/expired/disabled 与柔和 admin/normal/pending）；`ABTest` 更用内联
+  `style={{ background: STATUS_COLORS[...] }}` 绕开 token，叠加 `color: white`
+  ——白字配 warning（#f59e0b）对比度仅约 2:1，是真实的可读性缺陷。
+- 交付：
+  - `src/components/ui/StatusBadge/`：6 tone（neutral/success/warning/error/
+    info/primary），**只提供 soft 一种变体**。理由写进组件注释：实心需要每个
+    tone 都配可读前景色，而现有 status token 组没有这样的色对，软质直接用
+    已存在的 bg/text/border 三元组，两种主题下对比度都成立。
+  - `ApiKeys.tsx` 6 处 call site、6 个 CSS 变体全部改走 primitive；
+  - `ABTest.tsx` 的 `STATUS_COLORS` 内联背景改为显式 `STATUS_TONES` 语义映射；
+  - 删除两个页面 module 中重复的 `.badge*` 规则（ABTest 214→206 行，
+    ApiKeys 394→363 行）。
+- 测试：StatusBadge 8 例（含"不同 tone 不得渲染成同一 styling hook"的回归护栏）、
+  ABTest 新增状态→tone 映射用例并断言内联 `background` 不复现。
+- 指标：设计债务 **81 → 79**（raw-color 27→25），指纹 45 → 43；
+  `npm run test:run` 70 文件 **731/731**（+12）；`test:design-system` 39/39；
+  typecheck、lint、check:design-system、check:alignment、tokens:check 全通过；
+  build initial chunk 110.25 KiB gzip 不变；verify-project-docs 11/11
+  （该门禁在本批实际拦下 CSS 删除遗留的 EOF 空行，已修正）。
+
 ### Batch 754（已交付）
 
 - 分支：`feature/webui-shell-primitives-nav-20261002`
