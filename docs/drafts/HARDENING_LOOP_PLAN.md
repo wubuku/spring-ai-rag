@@ -2,6 +2,35 @@
 
 - 分支：`codex/batch690-eval-ctr
 
+### Batch 758（已交付）
+
+- 分支：`feature/webui-chat-search-page-shell-20261002`
+- 内容：WebUI 统一设计语言 **Slice 4A：Tabs primitive 与 tab 语义修复**。
+- 勘察：Alerts / Settings / Evaluation 三个页面各写了一套 tab 条，**三套视觉与
+  语义都不一致**——Alerts 渲染的是**纯 `<button>`，完全没有 tab 语义**，屏幕阅读器
+  会把它们念成互不相关的控件，且与对应内容没有任何关联；Settings 有
+  `role="tablist"`/`aria-selected` 但没有 `tabpanel`；Evaluation 缺 `aria-selected`。
+  三者都没有方向键导航。
+- 交付：
+  - `src/components/ui/Tabs/`：受控 tab 组，按 WAI-ARIA tabs 模式实现
+    tablist / tab / tabpanel、roving tabindex、方向键 + Home/End 导航；
+    17 个 focused 测试。
+  - **两种使用模式**：小面板（Alerts）由 primitive 自行渲染；大面板
+    （Settings 275 行、Evaluation 7 个 tab）页面自持面板，用导出的
+    `tabDomIds()` 复现同一组 id 接线，避免把大块 JSX 塞进 render prop。
+  - 三页的 URL 状态（`?tab=`）语义完全保持，active id 仍由页面持有。
+  - 删除三页共 95 行重复 tab CSS。
+- **a11y 修复**：Alerts 从"无语义按钮组"变为真正的 tablist，屏幕阅读器现在能
+  播报标签页与面板的关联；三页统一获得方向键导航。
+- 测试相应更新：原来用 `getByRole('button')` 查询标签页的断言改为
+  `getByRole('tab')`——这些测试此前把**错误的**按钮语义固化成了预期。
+  `findByLabelText('evaluation.tabSuites')` 改为断言 `aria-selected` 与
+  `aria-labelledby` 关联，因为面板现在也被该标签关联。
+- 指标：`npm run test:run` 72 文件 **753/753**（+16）；`test:design-system` 50/50；
+  typecheck、lint、tokens:check、check:design-system（仍 0 债务）、
+  check:alignment 全通过；build initial chunk 110.28 KiB gzip 不变；
+  verify-project-docs 11/11。
+
 ### Batch 757（已交付）
 
 - 分支：`feature/webui-empty-state-motion-debt-20261002` 之后的

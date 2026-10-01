@@ -88,7 +88,11 @@ describe('Evaluation page', () => {
 
   it('renders suites tab without crashing on an empty list', async () => {
     renderPage('/?tab=suites');
-    expect(await screen.findByLabelText('evaluation.tabSuites')).toBeInTheDocument();
+    // The tab is now a real tab: assert selection through the tab role, which
+    // also proves the panel is wired to it via aria-labelledby.
+    const tab = await screen.findByRole('tab', { name: 'evaluation.tabSuites' });
+    expect(tab).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', tab.id);
     expect(screen.getByText('evaluation.suitesHint')).toBeInTheDocument();
   });
 });

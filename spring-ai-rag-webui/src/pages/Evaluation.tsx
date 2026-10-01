@@ -5,6 +5,7 @@ import { useSearchParams } from 'react-router-dom';
 import { evaluationApi } from '../api/evaluation';
 import { Card } from '../components/Card';
 import styles from './Evaluation.module.css';
+import { Tabs, tabDomIds } from '../components/ui';
 
 type Tab = 'report' | 'history' | 'feedback' | 'judge' | 'suites' | 'runs' | 'citations';
 
@@ -15,18 +16,28 @@ function fmt(n: unknown): string {
   return '—';
 }
 
+const EVALUATION_TABS = [
+  ['report', 'evaluation.tabReport'],
+  ['history', 'evaluation.tabHistory'],
+  ['feedback', 'evaluation.tabFeedback'],
+  ['judge', 'evaluation.tabJudge'],
+  ['suites', 'evaluation.tabSuites'],
+  ['runs', 'evaluation.tabRuns'],
+  ['citations', 'evaluation.tabCitations'],
+] as const;
+
 export function Evaluation() {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get('tab');
   const tab: Tab =
-    tabParam === 'history'
-    || tabParam === 'feedback'
-    || tabParam === 'judge'
-    || tabParam === 'suites'
-    || tabParam === 'runs'
-    || tabParam === 'citations'
+    tabParam === 'history' ||
+    tabParam === 'feedback' ||
+    tabParam === 'judge' ||
+    tabParam === 'suites' ||
+    tabParam === 'runs' ||
+    tabParam === 'citations'
       ? tabParam
       : 'report';
 
@@ -91,211 +102,202 @@ export function Evaluation() {
     <div>
       <h1 className="page-title">{t('evaluation.title')}</h1>
 
-      <div className={styles.tabs} role="tablist">
-        {(
-          [
-            ['report', t('evaluation.tabReport')],
-            ['history', t('evaluation.tabHistory')],
-            ['feedback', t('evaluation.tabFeedback')],
-            ['judge', t('evaluation.tabJudge')],
-            ['suites', t('evaluation.tabSuites')],
-            ['runs', t('evaluation.tabRuns')],
-            ['citations', t('evaluation.tabCitations')],
-          ] as const
-        ).map(([id, label]) => (
-          <button
-            key={id}
-            type="button"
-            role="tab"
-            className={tab === id ? styles.tabActive : styles.tab}
-            onClick={() => setSearchParams(id === 'report' ? {} : { tab: id })}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      <Tabs
+        idPrefix="evaluation-tabs"
+        ariaLabel={t('evaluation.title')}
+        items={EVALUATION_TABS.map(([id, labelKey]) => ({ id, label: t(labelKey) }))}
+        activeId={tab}
+        onChange={next => setSearchParams(next === 'report' ? {} : { tab: next })}
+      />
 
-      {tab === 'report' && (
-        <section className={styles.section}>
-          {reportQ.isPending ? (
-            <div className={styles.muted}>{t('common.loading')}</div>
-          ) : (
-            <div className={styles.cards}>
-              {cards.map(c => (
-                <Card key={c.label}>
-                  <div className={styles.cardLabel}>{c.label}</div>
-                  <div className={styles.cardValue}>{c.value}</div>
-                </Card>
-              ))}
-            </div>
-          )}
+      <div
+        role="tabpanel"
+        id={tabDomIds('evaluation-tabs', tab).panelId}
+        aria-labelledby={tabDomIds('evaluation-tabs', tab).tabId}
+        tabIndex={0}
+      >
+        {tab === 'report' && (
+          <section className={styles.section}>
+            {reportQ.isPending ? (
+              <div className={styles.muted}>{t('common.loading')}</div>
+            ) : (
+              <div className={styles.cards}>
+                {cards.map(c => (
+                  <Card key={c.label}>
+                    <div className={styles.cardLabel}>{c.label}</div>
+                    <div className={styles.cardValue}>{c.value}</div>
+                  </Card>
+                ))}
+              </div>
+            )}
 
-          {feedbackStatsQ.data && (
+            {feedbackStatsQ.data && (
+              <div className={styles.subSection}>
+                <h2>{t('evaluation.feedbackStats')}</h2>
+                <pre className={styles.pre}>{JSON.stringify(feedbackStatsQ.data, null, 2)}</pre>
+              </div>
+            )}
+
             <div className={styles.subSection}>
-              <h2>{t('evaluation.feedbackStats')}</h2>
+              <h2>{t('evaluation.manualEvaluate')}</h2>
+              <div className={styles.form}>
+                <label>
+                  {t('evaluation.query')}
+                  <input
+                    value={evalForm.query}
+                    onChange={e => setEvalForm({ ...evalForm, query: e.target.value })}
+                  />
+                </label>
+                <label>
+                  {t('evaluation.retrievedIds')}
+                  <input
+                    value={evalForm.retrieved}
+                    onChange={e => setEvalForm({ ...evalForm, retrieved: e.target.value })}
+                    placeholder="doc1, doc2"
+                  />
+                </label>
+                <label>
+                  {t('evaluation.relevantIds')}
+                  <input
+                    value={evalForm.relevant}
+                    onChange={e => setEvalForm({ ...evalForm, relevant: e.target.value })}
+                    placeholder="doc1"
+                  />
+                </label>
+                <button
+                  type="button"
+                  className={styles.primaryBtn}
+                  disabled={evaluateM.isPending || !evalForm.query.trim()}
+                  onClick={() => evaluateM.mutate()}
+                >
+                  {evaluateM.isPending ? t('common.loading') : t('evaluation.runEvaluate')}
+                </button>
+                {evaluateM.isSuccess && (
+                  <pre className={styles.pre}>{JSON.stringify(evaluateM.data?.data, null, 2)}</pre>
+                )}
+                {evaluateM.isError && (
+                  <div className={styles.error}>{t('evaluation.evaluateFailed')}</div>
+                )}
+              </div>
+            </div>
+          </section>
+        )}
+
+        {tab === 'history' && (
+          <section className={styles.section}>
+            {historyQ.isPending ? (
+              <div className={styles.muted}>{t('common.loading')}</div>
+            ) : (
+              <div className={styles.tableWrap}>
+                <table className={styles.table}>
+                  <thead>
+                    <tr>
+                      <th>ID</th>
+                      <th>{t('evaluation.query')}</th>
+                      <th>MRR</th>
+                      <th>nDCG</th>
+                      <th>Hit</th>
+                      <th>{t('evaluation.time')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(historyQ.data ?? []).map((row, i) => (
+                      <tr key={row.id ?? i}>
+                        <td>{row.id ?? '—'}</td>
+                        <td className={styles.ellipsis}>{row.query ?? '—'}</td>
+                        <td>{fmt(row.mrr)}</td>
+                        <td>{fmt(row.ndcg)}</td>
+                        <td>{fmt(row.hitRate)}</td>
+                        <td>{row.createdAt ?? '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {(historyQ.data ?? []).length === 0 && (
+                  <div className={styles.muted}>{t('evaluation.emptyHistory')}</div>
+                )}
+              </div>
+            )}
+          </section>
+        )}
+
+        {tab === 'feedback' && (
+          <section className={styles.section}>
+            {feedbackStatsQ.data && (
               <pre className={styles.pre}>{JSON.stringify(feedbackStatsQ.data, null, 2)}</pre>
-            </div>
-          )}
-
-          <div className={styles.subSection}>
-            <h2>{t('evaluation.manualEvaluate')}</h2>
-            <div className={styles.form}>
-              <label>
-                {t('evaluation.query')}
-                <input
-                  value={evalForm.query}
-                  onChange={e => setEvalForm({ ...evalForm, query: e.target.value })}
-                />
-              </label>
-              <label>
-                {t('evaluation.retrievedIds')}
-                <input
-                  value={evalForm.retrieved}
-                  onChange={e => setEvalForm({ ...evalForm, retrieved: e.target.value })}
-                  placeholder="doc1, doc2"
-                />
-              </label>
-              <label>
-                {t('evaluation.relevantIds')}
-                <input
-                  value={evalForm.relevant}
-                  onChange={e => setEvalForm({ ...evalForm, relevant: e.target.value })}
-                  placeholder="doc1"
-                />
-              </label>
-              <button
-                type="button"
-                className={styles.primaryBtn}
-                disabled={evaluateM.isPending || !evalForm.query.trim()}
-                onClick={() => evaluateM.mutate()}
-              >
-                {evaluateM.isPending ? t('common.loading') : t('evaluation.runEvaluate')}
-              </button>
-              {evaluateM.isSuccess && (
-                <pre className={styles.pre}>{JSON.stringify(evaluateM.data?.data, null, 2)}</pre>
-              )}
-              {evaluateM.isError && (
-                <div className={styles.error}>{t('evaluation.evaluateFailed')}</div>
-              )}
-            </div>
-          </div>
-        </section>
-      )}
-
-      {tab === 'history' && (
-        <section className={styles.section}>
-          {historyQ.isPending ? (
-            <div className={styles.muted}>{t('common.loading')}</div>
-          ) : (
+            )}
             <div className={styles.tableWrap}>
               <table className={styles.table}>
                 <thead>
                   <tr>
                     <th>ID</th>
                     <th>{t('evaluation.query')}</th>
-                    <th>MRR</th>
-                    <th>nDCG</th>
-                    <th>Hit</th>
+                    <th>{t('evaluation.feedbackType')}</th>
                     <th>{t('evaluation.time')}</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {(historyQ.data ?? []).map((row, i) => (
+                  {(feedbackHistoryQ.data ?? []).map((row, i) => (
                     <tr key={row.id ?? i}>
                       <td>{row.id ?? '—'}</td>
                       <td className={styles.ellipsis}>{row.query ?? '—'}</td>
-                      <td>{fmt(row.mrr)}</td>
-                      <td>{fmt(row.ndcg)}</td>
-                      <td>{fmt(row.hitRate)}</td>
+                      <td>{row.feedbackType ?? '—'}</td>
                       <td>{row.createdAt ?? '—'}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-              {(historyQ.data ?? []).length === 0 && (
-                <div className={styles.muted}>{t('evaluation.emptyHistory')}</div>
-              )}
             </div>
-          )}
-        </section>
-      )}
+          </section>
+        )}
 
-      {tab === 'feedback' && (
-        <section className={styles.section}>
-          {feedbackStatsQ.data && (
-            <pre className={styles.pre}>{JSON.stringify(feedbackStatsQ.data, null, 2)}</pre>
-          )}
-          <div className={styles.tableWrap}>
-            <table className={styles.table}>
-              <thead>
-                <tr>
-                  <th>ID</th>
-                  <th>{t('evaluation.query')}</th>
-                  <th>{t('evaluation.feedbackType')}</th>
-                  <th>{t('evaluation.time')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(feedbackHistoryQ.data ?? []).map((row, i) => (
-                  <tr key={row.id ?? i}>
-                    <td>{row.id ?? '—'}</td>
-                    <td className={styles.ellipsis}>{row.query ?? '—'}</td>
-                    <td>{row.feedbackType ?? '—'}</td>
-                    <td>{row.createdAt ?? '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
+        {tab === 'judge' && (
+          <section className={styles.section}>
+            <div className={styles.form}>
+              <label>
+                {t('evaluation.query')}
+                <textarea
+                  rows={2}
+                  value={judgeForm.query}
+                  onChange={e => setJudgeForm({ ...judgeForm, query: e.target.value })}
+                />
+              </label>
+              <label>
+                {t('evaluation.context')}
+                <textarea
+                  rows={4}
+                  value={judgeForm.context}
+                  onChange={e => setJudgeForm({ ...judgeForm, context: e.target.value })}
+                />
+              </label>
+              <label>
+                {t('evaluation.answer')}
+                <textarea
+                  rows={4}
+                  value={judgeForm.answer}
+                  onChange={e => setJudgeForm({ ...judgeForm, answer: e.target.value })}
+                />
+              </label>
+              <button
+                type="button"
+                className={styles.primaryBtn}
+                disabled={judgeM.isPending || !judgeForm.query.trim()}
+                onClick={() => judgeM.mutate()}
+              >
+                {judgeM.isPending ? t('common.loading') : t('evaluation.runJudge')}
+              </button>
+              {judgeM.isSuccess && (
+                <pre className={styles.pre}>{JSON.stringify(judgeM.data?.data, null, 2)}</pre>
+              )}
+              {judgeM.isError && <div className={styles.error}>{t('evaluation.judgeFailed')}</div>}
+            </div>
+          </section>
+        )}
 
-      {tab === 'judge' && (
-        <section className={styles.section}>
-          <div className={styles.form}>
-            <label>
-              {t('evaluation.query')}
-              <textarea
-                rows={2}
-                value={judgeForm.query}
-                onChange={e => setJudgeForm({ ...judgeForm, query: e.target.value })}
-              />
-            </label>
-            <label>
-              {t('evaluation.context')}
-              <textarea
-                rows={4}
-                value={judgeForm.context}
-                onChange={e => setJudgeForm({ ...judgeForm, context: e.target.value })}
-              />
-            </label>
-            <label>
-              {t('evaluation.answer')}
-              <textarea
-                rows={4}
-                value={judgeForm.answer}
-                onChange={e => setJudgeForm({ ...judgeForm, answer: e.target.value })}
-              />
-            </label>
-            <button
-              type="button"
-              className={styles.primaryBtn}
-              disabled={judgeM.isPending || !judgeForm.query.trim()}
-              onClick={() => judgeM.mutate()}
-            >
-              {judgeM.isPending ? t('common.loading') : t('evaluation.runJudge')}
-            </button>
-            {judgeM.isSuccess && (
-              <pre className={styles.pre}>{JSON.stringify(judgeM.data?.data, null, 2)}</pre>
-            )}
-            {judgeM.isError && <div className={styles.error}>{t('evaluation.judgeFailed')}</div>}
-          </div>
-        </section>
-      )}
-
-      {tab === 'suites' && <SuitesPanel />}
-      {tab === 'runs' && <RunsPanel />}
-      {tab === 'citations' && <CitationsPanel />}
+        {tab === 'suites' && <SuitesPanel />}
+        {tab === 'runs' && <RunsPanel />}
+        {tab === 'citations' && <CitationsPanel />}
+      </div>
     </div>
   );
 }
@@ -317,13 +319,17 @@ function SuitesPanel() {
   });
   return (
     <section className={styles.section} aria-label={t('evaluation.tabSuites')}>
-      {suitesQ.isError && <div className={styles.error} role="alert">{t('evaluation.suitesFailed')}</div>}
-      <div className={styles.muted}>
-        {t('evaluation.suitesHint')}
-      </div>
+      {suitesQ.isError && (
+        <div className={styles.error} role="alert">
+          {t('evaluation.suitesFailed')}
+        </div>
+      )}
+      <div className={styles.muted}>{t('evaluation.suitesHint')}</div>
       <ul>
         {(Array.isArray(suitesQ.data) ? suitesQ.data : []).map(suite => (
-          <li key={suite.id}>{suite.suiteKey} — {suite.name}</li>
+          <li key={suite.id}>
+            {suite.suiteKey} — {suite.name}
+          </li>
         ))}
       </ul>
       <div className={styles.form}>
@@ -373,15 +379,15 @@ function RunsPanel() {
           {t('evaluation.startRun')}
         </button>
         {startM.data?.data?.id && (
-          <div>{t('evaluation.runStatus')}: {startM.data.data.status}</div>
+          <div>
+            {t('evaluation.runStatus')}: {startM.data.data.status}
+          </div>
         )}
         <label>
           {t('evaluation.runId')}
           <input value={runId} onChange={e => setRunId(e.target.value)} />
         </label>
-        {runQ.data && (
-          <pre className={styles.pre}>{JSON.stringify(runQ.data, null, 2)}</pre>
-        )}
+        {runQ.data && <pre className={styles.pre}>{JSON.stringify(runQ.data, null, 2)}</pre>}
       </div>
     </section>
   );
@@ -397,7 +403,11 @@ function CitationsPanel() {
     <section className={styles.section} aria-label={t('evaluation.tabCitations')}>
       <p className={styles.muted}>{t('evaluation.citationsHint')}</p>
       {tracesQ.isPending && <div className={styles.muted}>{t('common.loading')}</div>}
-      {tracesQ.isError && <div className={styles.error} role="alert">{t('evaluation.citationsFailed')}</div>}
+      {tracesQ.isError && (
+        <div className={styles.error} role="alert">
+          {t('evaluation.citationsFailed')}
+        </div>
+      )}
       <div className={styles.tableWrap}>
         <table className={styles.table}>
           <thead>
