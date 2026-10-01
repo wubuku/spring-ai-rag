@@ -1,11 +1,11 @@
 # WebUI 统一设计语言实施进度
 
 > **对应规划**：[WEBUI_UNIFIED_DESIGN_LANGUAGE_PLAN.md](WEBUI_UNIFIED_DESIGN_LANGUAGE_PLAN.md)
-> **日期**：2026-08-28
-> **状态**：本批次实施完成，待 Git 交付
+> **日期**：2026-08-28（Slice 1）· 2026-10-02（Slice 2）
+> **状态**：Slice 1、Slice 2 已交付；Slice 3 起待开始
 > **工作区**：`/Users/yangjiefeng/Documents/wubuku/spring-ai-rag`
-> **分支**：`feature/webui-unified-design-language`
-> **实施基线**：`origin/main@c36bd43e`
+> **分支**：`feature/webui-design-tokens-theme-gates-20261002`（Slice 2）
+> **实施基线**：Slice 1 `origin/main@c36bd43e` · Slice 2 `main@86ae9049`
 
 ## 1. 当前约束
 
@@ -42,11 +42,11 @@
 
 | 切片 | 状态 | 下一退出条件 |
 |---|---|---|
-| Slice 1：行为与设计验收基线 | 本批次完成 | 当前滚动泄漏行为已闭环；完整 Mock 与交付门禁通过 |
-| Slice 2：Token、Theme 与机器门禁 | 待开始 | 生成幂等、主题合同和设计债务门禁通过 |
-| Slice 3：Primitive 与 Shell | 待开始 | 公共组件、导航和主题在四视口可访问且稳定 |
-| Slice 4：Chat/Search/Knowledge 页面 | 待开始 | 高频工作流迁移且行为测试无回归 |
-| Slice 5：Operations/Quality/Admin 页面 | 待开始 | 13 个顶级 route 统一页面层级 |
+| Slice 1：行为与设计验收基线 | 已交付 | 滚动泄漏闭环；Mock 与交付门禁通过 |
+| Slice 2：Token、Theme 与机器门禁 | **已交付（Batch 753）** | generator 幂等；undefined variable=0；新增设计债务=0；theme/Portal/chart 合同通过 |
+| Slice 3：Primitive 与 Shell | 待开始 | Shell 在四视口、light/dark/system 下无溢出、低对比或焦点丢失；公共组件 API 有测试 |
+| Slice 4：高频工作流迁移 | 待开始 | 每批 focused Vitest + Mock Playwright + computed style/contrast/geometry 通过后独立提交 |
+| Slice 5：运营与管理页迁移 | 待开始 | 13 个 route 全部进入统一 PageShell，迁移文件不再使用 raw color/legacy alias/数值 z-index |
 | Slice 6：债务收口与双语长青文档 | 待开始 | 全量门禁、文档与交付材料完成 |
 
 ## 4. 验证基线
@@ -78,3 +78,88 @@
 ## 7. 恢复入口
 
 下一步提交并推送当前特性分支，随后合并并推送 `main`，确认 `main == origin/main` 且工作区干净。本批次交付后暂停，不自动开启下一轮规划。
+
+---
+
+# Slice 2：Token、Theme 与机器门禁（Batch 753，2026-10-02）
+
+## S2.1 实施边界
+
+- 只交付规划 §Slice 2 的 foundation 内容：token 源、生成器、设计门禁、主题合同、
+  ThemeToggle 三态、Recharts token bridge。**不迁移任何页面样式**，不引入 primitive。
+- 冻结既有业务行为、URL 状态、请求体与权限；本切片只改视觉 token 的**来源**和
+  **约束**，不改页面外观。
+- 后端、API、schema、Embedding 与 LLM 路径全部未触碰，因此不需要真实 LLM 验收。
+- 沿用主工作区 + 专用分支（`AGENTS.md` 规则 15），不创建隔离 worktree。
+- 交接给 Slice 3 的边界：设计债务基线仍有 47 条指纹，其中 `legacy-alias` 44、
+  `raw-color` 28、`transition-all` 8、`important` 3、`letter-spacing` 2。
+  页面迁移批次负责让它们单调下降。
+
+## S2.2 勘察发现（与规划基线的偏差）
+
+规划基线写于 `main@dae60044`（2026-08-28），实施前重新统计发现两处必须纠正的事实：
+
+1. **raw color 债务已是 0**。`scripts/design-token-color-baseline.json` 早已为空，
+   旧 `check-design-tokens.mjs` 报告 "0 file(s) with grandfathered literal colors"。
+2. **旧门禁看不见命名颜色**。它只匹配 hex/rgb/hsl，因此
+   `color: white`、`color-mix(in srgb, black …)` 全部漏检。新门禁补上 CSS 命名颜色后
+   立刻查出 28 处真实 raw-color 债务。
+
+另外发现两个与 Slice 2 直接相关的真实缺陷：
+
+- `--color-surface-2` 在暗色块中**从未被覆盖**，却被 `Evaluation` 与 `Embeddings`
+  两个页面使用——暗色下这两处会拿到浅色值。新门禁的 light/dark 对称性校验从结构上
+  消除了这类遗漏。
+- `lucide-react@0.468.0` 存在于 `node_modules`，但既不在 `package.json` 也不在
+  `package-lock.json`（幽灵依赖）。Slice 2 正式声明并锁定。
+- `scripts/verify-no-pessimistic-locks.sh` 在缺少 `rg` 的机器上会打印
+  "No explicit pessimistic locks found" 并 `exit 0`——因为 `rg … || true` 吞掉了
+  command-not-found。这是一个会放过真实违规的假绿门禁，已补 `command -v` 前置检查。
+
+## S2.3 交付内容
+
+| 交付 | 位置 | 说明 |
+|---|---|---|
+| Canonical token 源 | `design-tokens/tokens.json` | color/status/chart/shadow/typography/space/radius/control/layer/motion 十组 + 8 条兼容 alias |
+| 确定性生成器 | `scripts/build-design-tokens.mjs` | 生成 `src/styles/tokens.css` 与 `src/design-system/tokens.generated.ts`；`--check` 只比对不写盘 |
+| 设计门禁 | `scripts/check-design-system.mjs` | 8 类违规：undefined var、数值 z-index、raw color（含命名色）、`transition: all`、非零 letter-spacing、无理由 `!important`、跨页 module import、legacy alias |
+| 债务基线 | `design-tokens/design-debt-baseline.json` | 指纹 `file\|kind\|value`；新增/增长/过期三种情况都失败 |
+| 主题合同 | `src/design-system/theme.ts` · `themeContext.ts` · `ThemeProvider.tsx` | 偏好与解析主题分离；DOM 只写 `data-theme=light\|dark` |
+| Pre-paint bootstrap | `index.html` | 首屏前解析偏好，深色用户不再闪白 |
+| ThemeToggle | `src/components/ThemeToggle/` | emoji + `A` 双按钮猜测语义 → lucide `Sun`/`Moon`/`Monitor` 单组三态 radio |
+| 图表 token bridge | `src/hooks/useChartTheme.ts` | 通过生成桥接读实时主题值；series 语义与数据不变 |
+
+生成器内置校验：themed 组 light/dark 必须对称、颜色组必须是颜色字面量、CSS 变量名
+唯一且 kebab-case、alias 只能指向 canonical token（结构上不可能成环）、TS bridge 键
+组限定且组内唯一。
+
+## S2.4 验证证据
+
+1. `npm run tokens:check`：通过；连续两次 `tokens:build` 产物零 diff。
+2. `npm run check:design-system`：通过；98 个 token/var 名称、47 条指纹在基线内。
+3. `npm run check:alignment`：通过；12 个有意居中例外。
+4. `npm run typecheck`：通过。
+5. `npm run test:run`：67 文件 **695/695 通过**（原 251 用例基线已随页面增长）。
+6. `npm run test:design-system`：**39/39 通过**（生成器与门禁 focused 测试）。
+7. `npm run lint`：ESLint 0 error 0 warning、alignment、design-system 全通过。
+8. `npm run build`：通过；initial `index` chunk **108.36 KiB gzip**，低于 110.92 KiB
+   起点；构建 CSS 合计 17.26 KiB gzip；route lazy split 保持。
+9. `mvn clean compile test-compile`：见仓库交付记录。
+10. `./scripts/verify-project-docs.sh`：11/11；`./scripts/verify-no-pessimistic-locks.sh`：
+    有 `rg` 通过、无 `rg` 明确失败。
+
+## S2.5 顺带修复的技术债
+
+- `CreateCollectionModal.test.tsx` 三处用 `user.type` 逐字输入 101/128/501 字符，
+  在全量负载下撞 5s 超时（695 用例中出现 1 次偶发失败，单独复跑全绿）。改为
+  `user.click` + `user.paste`：语义不变（测的是长度上限，不是按键处理），事件数从
+  O(n) 降到 O(1)，该文件测试耗时 3.15s → 1.21s，全量 22.55s → 19.21s。
+- `ThemeProvider.tsx` 同时导出组件与 `useTheme`，触发 `react-refresh/only-export-components`
+  警告；拆分出 `themeContext.ts` 后 lint 归零。
+- 新门禁扫描前先剥离块注释并保持行号，使样式表可以正当地写明自己被禁止的模式。
+
+## S2.6 下一切片入口
+
+Slice 3 实施 `src/components/ui/` primitive 与 Shell 迁移，前置条件已全部就位：
+token 单一来源、门禁可拦截、主题合同稳定、图表走桥接。迁移批次必须让 47 条基线指纹
+单调下降，且不允许以 `design-token-allow` 批量豁免换绿。

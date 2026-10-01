@@ -5,6 +5,7 @@ import { Layout } from './components/Layout/Layout';
 import { ToastProvider } from './components/Toast';
 import { ApiKeyAuthProvider } from './auth/ApiKeyAuthProvider';
 import { ProtectedRoute } from './auth/ProtectedRoute';
+import { ThemeProvider } from './design-system/ThemeProvider';
 import { Unlock } from './pages/Unlock';
 
 // Route-level code splitting: each page becomes a separate chunk.
@@ -57,10 +58,11 @@ function PageFallback() {
 
 export default function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <ToastProvider>
-        <BrowserRouter basename="/webui">
-          <ApiKeyAuthProvider>
+    <ThemeProvider>
+      <QueryClientProvider client={queryClient}>
+        <ToastProvider>
+          <BrowserRouter basename="/webui">
+            <ApiKeyAuthProvider>
             <Routes>
               <Route path="/unlock" element={<Unlock />} />
               <Route element={<ProtectedRoute />}>
@@ -193,6 +195,7 @@ export default function App() {
           </ApiKeyAuthProvider>
         </BrowserRouter>
       </ToastProvider>
-    </QueryClientProvider>
+      </QueryClientProvider>
+    </ThemeProvider>
   );
 }

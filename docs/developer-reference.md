@@ -254,17 +254,44 @@ Store real credentials only in `.env`; never put them in shell examples, Markdow
 ```bash
 cd spring-ai-rag-webui
 npm ci
+npm run tokens:check
 npm run lint
 npm run test:run
+npm run test:design-system
 npm run build
 ```
 
-`npm run lint` chains ESLint, `check:alignment` (horizontal alignment policy) and
-`check:design-tokens` (token definition checks, no bare z-index in CSS modules,
-and no new literal colors in src sources; existing literal colors are frozen by
-the equality baseline in `scripts/design-token-color-baseline.json`, which must
-be lowered whenever colors are removed). `test:coverage` additionally enforces
-the global coverage thresholds from `vitest.config.ts`.
+### 6.1 Design tokens and the design-system gate
+
+Design tokens have exactly one canonical source: `design-tokens/tokens.json`.
+`tokens.css` and `tokens.generated.ts` are generated outputs — **never edit them by
+hand**:
+
+```bash
+npm run tokens:build          # regenerate from tokens.json
+npm run tokens:check          # compare only, never writes; use this in CI
+npm run check:design-system   # design-debt gate
+npm run test:design-system    # focused tests for the generator and the gate
+```
+
+- `check:design-system` scans CSS, TS, TSX and SVG and rejects eight classes of
+  violation: undefined `var(--*)`, numeric z-index, literal colors (including CSS
+  named colors), `transition: all`, non-zero `letter-spacing`, unreasoned
+  `!important`, cross-page `*.module.css` imports, and compatibility-alias usage.
+- Existing debt is recorded in `design-tokens/design-debt-baseline.json` with the
+  fingerprint `file|kind|value`. **New violations, increased counts and stale
+  over-sized entries all fail**, so debt can only shrink.
+- A genuinely necessary exception uses an inline
+  `/* design-token-allow: <concrete reason> */` on the same or the previous line; a
+  too-thin reason is separately rejected as `weak-allow-reason`. Do not buy a green
+  gate with blanket exemptions.
+- `check:design-tokens` is kept as a compatibility entry point for
+  `check:design-system`.
+- `lint` chains ESLint, `check:alignment` and `check:design-system`.
+  `test:coverage` additionally enforces the global coverage thresholds from
+  `vitest.config.ts`.
+
+### 6.2 Development and integration
 
 Development:
 

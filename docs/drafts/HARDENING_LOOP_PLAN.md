@@ -2,6 +2,39 @@
 
 - 分支：`codex/batch690-eval-ctr
 
+### Batch 753（已交付）
+
+- 分支：`feature/webui-design-tokens-theme-gates-20261002`
+- 内容：WebUI 统一设计语言 **Slice 2：Token、Theme 与机器门禁**（替代 Batch 752
+  搁置的零散 tail 用例，改为一块完整 foundation 交付）：
+  - canonical token 源 `design-tokens/tokens.json`（10 组 + 8 条兼容 alias）与
+    确定性生成器 `build-design-tokens.mjs`，产物 `tokens.css` /
+    `tokens.generated.ts` 受 `tokens:check` 约束；
+  - 新门禁 `check-design-system.mjs` 覆盖 8 类违规，含旧门禁漏检的 **CSS 命名色**；
+  - 版本化债务基线 `design-debt-baseline.json`（指纹 `file|kind|value`），
+    新增/增长/过期三种情况均失败；
+  - 主题合同：pre-paint bootstrap + `ThemeProvider`（light/dark/system、跨 Tab
+    storage 同步且不回写），ThemeToggle 由 emoji + `A` 双按钮迁为 lucide 三态 radio；
+  - Recharts 经生成桥接读实时主题值，series 语义不变。
+- 勘察纠正的事实：
+  - raw color 债务基线早已为空（旧报告 0），旧门禁只查 hex/rgb/hsl，
+    补上命名色后查出 28 处真实债务；
+  - **`--color-surface-2` 暗色从未覆盖**却被 Evaluation / Embeddings 使用，
+    新增的 light/dark 对称性校验从结构上消除此类遗漏；
+  - `lucide-react@0.468.0` 是幽灵依赖（node_modules 有、package.json 与
+    lockfile 均无），已正式声明；
+  - **`scripts/verify-no-pessimistic-locks.sh` 是假绿门禁**：无 `rg` 的机器上
+    `rg … || true` 会打印 "No explicit pessimistic locks found" 并 exit 0，
+    已补 `command -v rg` 前置检查（有 rg 通过、无 rg exit 1）。
+- 顺带修复：CreateCollectionModal 三处 `user.type` 逐字输入 101/128/501 字符造成
+  计时 flake（全量 695 用例偶发 1 失败），改 `user.click` + `user.paste`，
+  该文件 3.15s → 1.21s、全量 22.55s → 19.21s；`ThemeProvider.tsx` 拆分
+  `themeContext.ts` 使 ESLint 警告归零；新门禁先剥离块注释并保持行号。
+- 指标：`npm run test:run` 67 文件 **695/695**；`npm run test:design-system`
+  **39/39**；typecheck 通过；lint 0 error 0 warning；build 通过，initial chunk
+  108.36 KiB gzip（低于 110.92 KiB 起点）；`mvn clean compile test-compile`
+  BUILD SUCCESS；verify-project-docs 11/11；新增设计债务 0、undefined var 0。
+
 ### Batch 752（勘察后搁置）
 
 - 勘察结论（已验证，未产出用例）：

@@ -73,7 +73,11 @@ describe('CreateCollectionModal', () => {
       </QueryClientProvider>
     );
 
-    await user.type(screen.getByRole('textbox', { name: /name/i }), 'N'.repeat(101));
+    // Focus + paste rather than `type`: these cases assert a *length limit*,
+    // not keystroke handling. Typing hundreds of characters one event at a time
+    // is what made this file time out under full-suite load.
+    await user.click(screen.getByRole('textbox', { name: /name/i }));
+    await user.paste('N'.repeat(101));
     await user.click(screen.getByRole('button', { name: /create/i }));
     expect(screen.getByText(/less than 100 characters/i)).toBeInTheDocument();
   });
@@ -87,10 +91,8 @@ describe('CreateCollectionModal', () => {
     );
 
     await user.type(screen.getByRole('textbox', { name: /name/i }), 'ValidName');
-    await user.type(
-      screen.getByRole('textbox', { name: /description/i }),
-      'd'.repeat(501),
-    );
+    await user.click(screen.getByRole('textbox', { name: /description/i }));
+    await user.paste('d'.repeat(501));
     await user.click(screen.getByRole('button', { name: /create/i }));
     expect(screen.getByText(/less than 500 characters/i)).toBeInTheDocument();
   });
@@ -145,7 +147,10 @@ describe('CreateCollectionModal', () => {
       </QueryClientProvider>
     );
 
-    await user.type(screen.getByRole('textbox', { name: /collection key/i }), 'a'.repeat(128));
+    // Pasting exactly 128 characters also exercises the input's maxLength
+    // boundary without paying for 128 individual key events.
+    await user.click(screen.getByRole('textbox', { name: /collection key/i }));
+    await user.paste('a'.repeat(128));
     await user.type(screen.getByRole('textbox', { name: /name/i }), 'ValidName');
     await user.click(screen.getByRole('button', { name: /create/i }));
 

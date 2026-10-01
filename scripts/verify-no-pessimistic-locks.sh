@@ -4,6 +4,16 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+# Without rg the scan below finds nothing and `|| true` would turn a missing
+# toolchain into a green gate. A gate that cannot fail is worse than no gate.
+for command_name in rg; do
+  command -v "$command_name" >/dev/null || {
+    echo "Missing required command: ${command_name}" >&2
+    echo "This gate cannot run; treat it as failed, not as passed." >&2
+    exit 1
+  }
+done
+
 SOURCE_ROOTS=(
   spring-ai-rag-api/src/main
   spring-ai-rag-core/src/main

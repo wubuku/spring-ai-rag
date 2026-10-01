@@ -1,93 +1,38 @@
+/* ============================================
+ * Global base layer: reset + element defaults ONLY.
+ * ============================================
+ *
+ * Design tokens live in the generated `src/styles/tokens.css`, which
+ * `src/main.tsx` imports before this file. Do not declare colours, layers or
+ * spacing here — add them to `design-tokens/tokens.json` and regenerate.
+ *
+ * Layering contract: generated tokens -> global base -> shared primitive ->
+ * component/page module. A page module must never import another page module.
+ */
+
 :root {
-  --color-bg: #ffffff;
-  --color-surface: #f8f9fa;
-  --color-surface-2: #f1f5f9;
-  --color-surface-hover: #f3f4f6;
-  --color-border: #e5e7eb;
-  --color-text: #111827;
-  --color-text-muted: #6b7280;
-  --color-primary: #3b82f6;
-  --color-primary-hover: #2563eb;
-  --color-primary-bg: #eff6ff;
-  --color-success: #22c55e;
-  --color-success-bg: #dcfce7;
-  --color-success-border: #86efac;
-  --color-success-text: #166534;
-  --color-warning: #f59e0b;
-  --color-warning-bg: #fff3cd;
-  --color-warning-bg-hover: #ffe69c;
-  --color-warning-border: #ffc107;
-  --color-warning-text: #856404;
-  --color-error: #ef4444;
-  --color-error-bg: #fee2e2;
-  --color-error-border: #fca5a5;
-  --color-error-text: #dc2626;
-  --color-info-bg: #e0f2fe;
-  --color-info-border: #0284c7;
-  --color-info-text: #075985;
-  --color-primary-border: #bfdbfe;
-  --color-backdrop: rgba(17, 24, 39, 0.68);
-  --shadow-dialog: 0 18px 48px rgba(15, 23, 42, 0.28);
-  --shadow-color: rgba(0, 0, 0, 0.15);
-  --z-raised: 1;
-  --z-navigation-backdrop: 90;
-  --z-navigation: 100;
-  --z-overlay: 300;
-  --z-dialog: 400;
-  --z-popover: 500;
-  --z-toast: 600;
-
-  /* Compatibility aliases while legacy components migrate to canonical tokens. */
-  --color-background: var(--color-bg);
-  --color-bg-secondary: var(--color-surface);
-  --color-hover: var(--color-surface-hover);
-  --color-text-secondary: var(--color-text-muted);
-  --bg-primary: var(--color-bg);
-  --bg-secondary: var(--color-surface);
-  --border-color: var(--color-border);
-  --text-secondary: var(--color-text-muted);
-
-  /* Preserve the current typography baseline while removing the Vite template styles. */
-  font-size: 18px;
-  letter-spacing: 0.18px;
+  /* Responsive root sizing is still expressed as two tokens rather than a
+     raw media-query literal, so the plan's "fixed root size" migration is a
+     token change instead of a stylesheet rewrite. Tracked as design debt. */
+  font-size: var(--typography-root-size);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
+  /* Tracking must stay 0 site-wide; non-zero letter-spacing is gated debt. */
+  letter-spacing: 0;
 }
 
-[data-theme="dark"] {
-  --color-bg: #0f0f0f;
-  --color-surface: #1a1a1a;
-  --color-surface-hover: #252525;
-  --color-border: #2d2d2d;
-  --color-text: #e5e7eb;
-  --color-text-muted: #9ca3af;
-  --color-primary: #60a5fa;
-  --color-primary-hover: #3b82f6;
-  --color-primary-bg: #1e3a5f;
-  --color-success: #4ade80;
-  --color-success-bg: #14532d;
-  --color-success-border: #166534;
-  --color-success-text: #4ade80;
-  --color-warning: #fbbf24;
-  --color-warning-bg: #3b2f0f;
-  --color-warning-bg-hover: #4a3c15;
-  --color-warning-border: #a16207;
-  --color-warning-text: #fbbf24;
-  --color-error: #f87171;
-  --color-error-bg: #450a0a;
-  --color-error-border: #7f1d1d;
-  --color-error-text: #f87171;
-  --color-info-bg: #0c4a6e;
-  --color-info-border: #0284c7;
-  --color-info-text: #7dd3fc;
-  --color-primary-border: #1e3a5f;
-  --shadow-color: rgba(0, 0, 0, 0.5);
-}
-
-*, *::before, *::after {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+}
+
+@media (max-width: 1024px) {
+  :root {
+    font-size: var(--typography-root-size-compact);
+  }
 }
 
 html,
@@ -97,10 +42,10 @@ body,
 }
 
 body {
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: var(--typography-font-family);
   background: var(--color-bg);
   color: var(--color-text);
-  line-height: 1.6;
+  line-height: var(--typography-line-height-relaxed);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -115,12 +60,14 @@ button {
   font-family: inherit;
 }
 
-input, textarea, select {
+input,
+textarea,
+select {
   font-family: inherit;
 }
 
 a {
-  color: var(--color-primary);
+  color: var(--color-link);
   text-decoration: none;
 }
 
@@ -129,14 +76,8 @@ a:hover {
 }
 
 .page-title {
-  font-size: 1.5rem;
+  font-size: var(--typography-size-24);
   font-weight: 700;
-  margin-bottom: 1.25rem;
+  margin-bottom: var(--space-20);
   color: var(--color-text);
-}
-
-@media (max-width: 1024px) {
-  :root {
-    font-size: 16px;
-  }
 }
