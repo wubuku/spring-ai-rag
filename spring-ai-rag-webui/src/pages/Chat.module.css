@@ -134,7 +134,7 @@
 .user {
   align-self: flex-end;
   background: var(--color-primary);
-  color: white;
+  color: var(--color-on-primary);
 }
 
 .assistant {
@@ -151,7 +151,9 @@
 }
 
 .user .role {
-  color: color-mix(in srgb, white 90%, transparent);
+  /* Dimmed label on the filled user bubble; driven by the same on-* token
+     as the bubble text so both themes stay in step. */
+  color: color-mix(in srgb, var(--color-on-primary) 90%, transparent);
 }
 
 .assistant .role {
@@ -238,7 +240,7 @@
 .sendBtn {
   padding: 0.75rem 1.5rem;
   background: var(--color-primary);
-  color: white;
+  color: var(--color-on-primary);
   border: none;
   border-radius: 8px;
   cursor: pointer;
@@ -260,7 +262,7 @@
   flex-direction: column;
   gap: 0.5rem;
   padding: 0.75rem 1rem 1rem;
-  border-top: 1px solid var(--border-color);
+  border-top: 1px solid var(--color-border);
 }
 
 .contextRow {
@@ -284,7 +286,7 @@
 
 .contextLabel {
   font-size: 0.85rem;
-  color: var(--text-secondary);
+  color: var(--color-text-muted);
   white-space: nowrap;
 }
 
@@ -292,8 +294,8 @@
   width: min(280px, 55vw);
   padding: 0.35rem 0.5rem;
   border-radius: 6px;
-  border: 1px solid var(--border-color);
-  background: var(--bg-primary);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
   color: var(--color-text);
   font-size: 0.875rem;
 }

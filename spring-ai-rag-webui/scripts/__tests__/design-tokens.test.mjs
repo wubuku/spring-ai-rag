@@ -29,7 +29,7 @@ describe('token source validation', () => {
   it('parses the real source and exposes every canonical var', () => {
     expect(model.groups.length).toBeGreaterThan(0);
     expect(model.cssVarToToken.has('--color-bg')).toBe(true);
-    expect(model.cssVarToToken.has('--color-background')).toBe(true);
+    expect(model.cssVarToToken.has('--color-on-primary')).toBe(true);
   });
 
   it('rejects a themed token that is missing its dark value', () => {
@@ -232,6 +232,92 @@ describe('generator output', () => {
     for (const { path, content } of outputs) {
       expect(readFileSync(path, 'utf8')).toBe(content);
     }
+  });
+});
+
+describe('accessibility of filled surfaces', () => {
+  /** Each filled surface, and the foreground token that is required on it. */
+  const PAIRS = [
+    { surface: 'primary', on: 'on-primary' },
+    { surface: 'primary-hover', on: 'on-primary-hover' },
+    { surface: 'error', on: 'on-error' },
+    { surface: 'warning', on: 'on-warning' },
+    { surface: 'success', on: 'on-success' },
+    { surface: 'accent', on: 'on-accent' },
+  ];
+
+  // Filled surfaces live in the `color` group (primary) and the `status` group
+  // (error/warning/success), so look a key up across every group.
+  const valueOf = (key, theme) =>
+    model.groups.flatMap(group => group.tokens).find(t => t.key === key)?.[theme];
+
+  function channel(c) {
+    const s = c / 255;
+    return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+  }
+
+  function luminance(hex) {
+    const h = hex.replace('#', '');
+    const [r, g, b] = [0, 2, 4].map(i => channel(parseInt(h.slice(i, i + 2), 16)));
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  }
+
+  function contrast(a, b) {
+    const la = luminance(a);
+    const lb = luminance(b);
+    return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+  }
+
+  it('defines an on-* foreground for every filled surface', () => {
+    for (const { on } of PAIRS) {
+      expect(valueOf(on, 'light'), `${on} light`).toBeTruthy();
+      expect(valueOf(on, 'dark'), `${on} dark`).toBeTruthy();
+    }
+  });
+
+  it.each(PAIRS)('$on clears WCAG AA (4.5:1) on $surface in both themes', ({ surface, on }) => {
+    // 4.5:1 is the AA threshold for normal-size text. Button and badge labels
+    // are not large text, so they are held to it rather than to 3:1.
+    for (const theme of ['light', 'dark']) {
+      const ratio = contrast(valueOf(surface, theme), valueOf(on, theme));
+      expect(ratio, `${on} on ${surface} (${theme})`).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it('never picks a foreground that reads worse than plain white', () => {
+    // The rule is not "never white" — white is correct on a dark surface — but
+    // "do not ship a worse option than the one that used to be hard-coded".
+    // A vivid fill takes a dark label; a deep fill keeps white.
+    for (const { surface, on } of PAIRS) {
+      for (const theme of ['light', 'dark']) {
+        const bg = valueOf(surface, theme);
+        expect(contrast(bg, valueOf(on, theme)), `${on} on ${surface} (${theme})`).toBeGreaterThanOrEqual(
+          contrast(bg, '#ffffff'),
+        );
+      }
+    }
+  });
+
+  it('would have failed under the previous hard-coded white label', () => {
+    // Records what this batch fixed, so the regression cannot be reintroduced
+    // by simply putting `color: white` back.
+    const regressed = PAIRS.filter(({ surface }) =>
+      ['light', 'dark'].some(theme => contrast(valueOf(surface, theme), '#ffffff') < 4.5),
+    );
+    expect(regressed.map(r => r.surface)).toEqual(
+      expect.arrayContaining(['primary', 'error', 'warning', 'success']),
+    );
+  });
+});
+
+describe('compatibility aliases', () => {
+  it('are fully retired from the token source', () => {
+    expect(model.aliases).toEqual([]);
+  });
+
+  it('emits no alias declarations into the stylesheet', () => {
+    const css = renderCss(model);
+    expect(css).not.toContain('Compatibility aliases');
   });
 });
 

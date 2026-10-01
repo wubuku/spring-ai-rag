@@ -2,9 +2,9 @@
 
 > **对应规划**：[WEBUI_UNIFIED_DESIGN_LANGUAGE_PLAN.md](WEBUI_UNIFIED_DESIGN_LANGUAGE_PLAN.md)
 > **日期**：2026-08-28（Slice 1）· 2026-10-02（Slice 2、Slice 3A）
-> **状态**：Slice 1、Slice 2、Slice 3A、Slice 3B-1、Slice 3B-2 已交付；Slice 4 起待开始
+> **状态**：Slice 1、Slice 2、Slice 3A、Slice 3B-1/2/3 已交付，设计债务清零；Slice 4 起待开始
 > **工作区**：`/Users/yangjiefeng/Documents/wubuku/spring-ai-rag`
-> **分支**：`feature/webui-design-tokens-theme-gates-20261002`（Slice 2）· `feature/webui-shell-primitives-nav-20261002`（Slice 3A）· `feature/webui-status-badge-unify-20261002`（Slice 3B-1）· `feature/webui-empty-state-motion-debt-20261002`（Slice 3B-2）
+> **分支**：`feature/webui-design-tokens-theme-gates-20261002`（Slice 2）· `feature/webui-shell-primitives-nav-20261002`（Slice 3A）· `feature/webui-status-badge-unify-20261002`（Slice 3B-1）· `feature/webui-empty-state-motion-debt-20261002`（Slice 3B-2）· `feature/webui-oncolor-contrast-20261002`（Slice 3B-3）
 > **实施基线**：Slice 1 `origin/main@c36bd43e` · Slice 2 `main@86ae9049`
 
 ## 1. 当前约束
@@ -47,6 +47,7 @@
 | Slice 3A：命令 primitive + 导航图标 + Shell | **已交付（Batch 754）** | `Layout.module.css` 债务清零；导航图标统一；可访问名称与顺序冻结 |
 | Slice 3B-1：StatusBadge 与跨页徽章统一 | **已交付（Batch 755）** | 徽章跨页重复消除；warning 对比度缺陷修复；债务 81→79 |
 | Slice 3B-2：EmptyState 与 motion/特异性债务 | **已交付（Batch 756）** | `transition-all`/`!important`/`letter-spacing` 三类归零；债务 79→65 |
+| Slice 3B-3：填充面对比度 + alias 收口 | **已交付（Batch 757）** | 债务 65→0；`on-*` 双主题达 AA；兼容 alias 移除 |
 | Slice 4：Chat/Search/Documents 高频工作流迁移 | 待开始 | 每批 focused Vitest + Mock Playwright + computed style/contrast/geometry 通过后独立提交 |
 | Slice 4：高频工作流迁移 | 待开始 | 每批 focused Vitest + Mock Playwright + computed style/contrast/geometry 通过后独立提交 |
 | Slice 5：运营与管理页迁移 | 待开始 | 13 个 route 全部进入统一 PageShell，迁移文件不再使用 raw color/legacy alias/数值 z-index |
@@ -317,3 +318,59 @@ Slice 3B-2：`EmptyState` / `PageHeader` / `TableFrame` / `Tabs` primitive，
 Slice 4：Chat / Search / Documents 高频工作流迁移。剩余债务集中在
 `legacy-alias`（40）与 `raw-color`（25），二者都指向 `color: white` 一类
 已不存在的旧契约，适合按页面批次逐个迁移。
+
+---
+
+# Slice 3B-3：填充面对比度修复与兼容 alias 收口（Batch 757，2026-10-02）
+
+## S3B3.1 核心发现：这是可访问性缺陷，不是风格分歧
+
+Filled 按钮与徽章此前一律使用 `color: white` 配彩色背景。按 WCAG 相对亮度公式
+实算，9 组「背景色 × 主题」组合中 **8 组低于 AA 要求的 4.5:1**：
+
+| 背景 | 主题 | 白字对比度 | 修复后 |
+|---|---|---|---|
+| warning `#f59e0b` | light | **2.15** | 8.72 |
+| warning `#fbbf24` | dark | **1.67** | 11.22 |
+| primary `#60a5fa` | dark | **2.54** | 7.36 |
+| primary `#3b82f6` | light | 3.68 | 5.09 |
+| error `#ef4444` | light | 3.76 | 4.98 |
+
+按钮文字约 `0.9rem` 常规字重，不满足 large text 豁免条件，因此适用 4.5:1。
+
+## S3B3.2 关键决定
+
+1. **前景值由计算得出而非目测**，并且要求**每个 token 在两个主题下都达标**——
+   这就是为什么 `on-primary-hover` 必须按主题取不同值（light 白色 5.17 /
+   dark 近黑 5.09），而其余几个可以统一取近黑。
+2. **不写"永不使用白色"的规则**：白色在 primary-hover 与 accent 上才是正确选择。
+   可执行断言写成"所选前景不劣于白色且达标"，而不是一个本身错误的绝对规则。
+   这一点是测试先写错、跑红后改对的。
+3. **顺带修正了 Batch 753 遗留的错误值**：`--color-on-primary` 当时 light 是白色
+   （3.68，不达标）。新增测试第一次运行就抓到了它。
+
+## S3B3.3 债务与 token 体系收口
+
+| 阶段 | 债务 | 指纹 |
+|---|---|---|
+| Batch 753 立项 | 85 | 48 |
+| Batch 756 后 | 65 | 32 |
+| **Batch 757 后** | **0** | **0** |
+
+8 条兼容 alias（`--color-background`、`--color-text-secondary` 等）在调用点归零后
+已从 `tokens.json` 移除，token 体系不再有双轨命名。
+
+## S3B3.4 验证证据
+
+- `npm run test:run`：71 文件 **737/737 通过**。
+- `npm run test:design-system`：**50/50 通过**（+11，含对比度断言）。
+- typecheck、lint、tokens:check、check:design-system（0 债务基线）、
+  check:alignment 全通过；build initial chunk 110.28 KiB gzip。
+- `scripts/verify-project-docs.sh` 11/11、无悲观锁门禁、shell 语法、
+  `git diff --check`、新增行密钥扫描：通过。
+
+## S3B3.5 下一切片入口
+
+Slice 4：Chat / Search / Documents 高频工作流迁移（PageHeader、Toolbar、
+TableFrame、Tabs）。设计债务已清零，门禁此后只阻止**新增**，
+baseline 保持空基线即可。
