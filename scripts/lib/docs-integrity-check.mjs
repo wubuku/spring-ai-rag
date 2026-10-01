@@ -59,21 +59,21 @@ export const KNOWN_DRIFT = [
       'Client-Error sections (135 headings against 151), so its heading sequence ' +
       'diverges from the point of the first omission onwards.'
   },
-  {
-    pair: ['docs/troubleshooting.md', 'docs/troubleshooting-zh-CN.md'],
-    reason: 'The Chinese document is missing only the trailing "Getting Help" ' +
-      'section (36 headings against 37), which offsets every heading after it.'
-  },
-  {
-    pair: ['docs/claude-grok-proxy.md', 'docs/claude-grok-proxy-zh-CN.md'],
-    reason: 'Reverse drift: the Chinese document documents five interaction-mode ' +
-      'subsections and a troubleshooting section (20 headings) that the English ' +
-      'document never gained (10 headings). The English original is behind.'
-  }
 ];
 
 // May only decrease. Lowering it is part of fixing a listed pair.
-export const DRIFT_CEILING = 4;
+//
+// 4 -> 3 in Batch 769: docs/troubleshooting.md was missing only its
+// "Duplicate RagProperties Bean" section in Chinese, which offset every heading
+// after it. The Chinese section was translated and the pair now matches, so the
+// exemption had to go.
+//
+// 3 -> 2 in the same batch: docs/claude-grok-proxy.md drifted in the opposite
+// direction. The Chinese document had five `###` subsections under "Common CLI
+// commands" and five under "Troubleshooting" that the English original had
+// flattened into bare paragraphs — the same content, different shape. The
+// English side was restructured to match; no content was invented or dropped.
+export const DRIFT_CEILING = 2;
 
 export function isBinaryPath(file) {
   return BINARY_EXTENSIONS.has(path.extname(file).toLowerCase());
@@ -255,10 +255,15 @@ export function checkBilingualPairs({
     }
   }
 
-  if (driftByEnglish.size > driftCeiling) {
+  // Exact equality, not an upper bound. An upper bound leaves a loophole: fix a
+  // document, delete its entry, and simply forget to lower the ceiling — the gate
+  // stays green while the pinned number drifts further from reality. Pinning the
+  // count exactly means the number is always the truth, and losing an entry
+  // obliges you to record that you lost it.
+  if (driftByEnglish.size !== driftCeiling) {
     errors.push(
       `KNOWN_DRIFT holds ${driftByEnglish.size} entries but DRIFT_CEILING is ${driftCeiling}. ` +
-      `Registered documentation debt may only shrink.`
+      `The ceiling is pinned to the exact count: fixing a pair obliges you to lower it.`
     );
   }
 

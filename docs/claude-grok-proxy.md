@@ -68,20 +68,20 @@ Do not set `ANTHROPIC_BASE_URL` to the remote upstream when using the wrapper. T
 
 ## 3. Common CLI commands
 
-Default interactive mode:
+### Default interactive mode
 
 ```bash
 export ANTHROPIC_AUTH_TOKEN='<rotated-key>'
 ./scripts/run-claude-grok.sh
 ```
 
-Restore Claude Code's default permission prompts:
+### Restore Claude Code's default permission prompts
 
 ```bash
 ./scripts/run-claude-grok.sh --permission-mode default
 ```
 
-One non-interactive request:
+### One non-interactive request
 
 ```bash
 ./scripts/run-claude-grok.sh \
@@ -91,20 +91,24 @@ One non-interactive request:
   'Reply with exactly OK'
 ```
 
-Continue the latest session:
+### Continue the latest session
 
 ```bash
 ./scripts/run-claude-grok.sh --continue
 ```
 
-Enable proxy diagnostics:
+### Enable proxy diagnostics
 
 ```bash
 CLAUDE_PROXY_DEBUG=1 ./scripts/run-claude-grok.sh --restart-proxy
 ./scripts/run-claude-grok.sh
 ```
 
-All arguments after the script name are forwarded unchanged to `claude`.
+All arguments after the script name are forwarded unchanged to `claude`. For example:
+
+```text
+./scripts/run-claude-grok.sh <claude arguments...>
+```
 
 ---
 
@@ -243,33 +247,49 @@ Proxy state is stored under:
 
 ## 9. Troubleshooting
 
-For `zsh: command not found: #`:
+### `zsh: command not found: #`
+
+This is an interactive zsh without comments enabled, not a model error:
 
 ```bash
 setopt interactivecomments
 ```
 
-For a missing authentication variable:
+You can also put the commented configuration in `~/.zshrc` and run `source ~/.zshrc`.
+
+### `Set ANTHROPIC_AUTH_TOKEN or ANTHROPIC_API_KEY`
+
+The authentication variable is not set:
 
 ```bash
 export ANTHROPIC_AUTH_TOKEN='<rotated-key>'
 ```
 
-If the port belongs to this proxy, it is reused automatically. If another service owns it, choose a different port:
+### Port 38473 is occupied
+
+If the occupier is this proxy, the script reuses it automatically. If another service owns it, choose a different port:
 
 ```bash
 export CLAUDE_PROXY_PORT=19082
 ./scripts/run-claude-grok.sh
 ```
 
-If `/required: null is not of type "array"` still appears, make sure Claude Code was started through the wrapper and enable diagnostics:
+### `/required: null is not of type "array"` still appears
+
+Make sure Claude Code was started through the wrapper rather than by running `claude` directly:
+
+```bash
+./scripts/run-claude-grok.sh
+```
+
+Then enable proxy diagnostics:
 
 ```bash
 CLAUDE_PROXY_DEBUG=1 ./scripts/run-claude-grok.sh --restart-proxy
 ./scripts/run-claude-grok.sh
 ```
 
-Run the proxy tests with:
+### Run the proxy tests
 
 ```bash
 node --test scripts/claude-anthropic-schema-proxy.test.js
