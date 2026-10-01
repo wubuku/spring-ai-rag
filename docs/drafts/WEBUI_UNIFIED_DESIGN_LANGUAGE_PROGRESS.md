@@ -2,9 +2,9 @@
 
 > **对应规划**：[WEBUI_UNIFIED_DESIGN_LANGUAGE_PLAN.md](WEBUI_UNIFIED_DESIGN_LANGUAGE_PLAN.md)
 > **日期**：2026-08-28（Slice 1）· 2026-10-02（Slice 2、Slice 3A）
-> **状态**：Slice 1、Slice 2、Slice 3A 已交付；Slice 3B 起待开始
+> **状态**：Slice 1、Slice 2、Slice 3A、Slice 3B-1 已交付；Slice 3B-2 起待开始
 > **工作区**：`/Users/yangjiefeng/Documents/wubuku/spring-ai-rag`
-> **分支**：`feature/webui-design-tokens-theme-gates-20261002`（Slice 2）· `feature/webui-shell-primitives-nav-20261002`（Slice 3A）
+> **分支**：`feature/webui-design-tokens-theme-gates-20261002`（Slice 2）· `feature/webui-shell-primitives-nav-20261002`（Slice 3A）· `feature/webui-status-badge-unify-20261002`（Slice 3B-1）
 > **实施基线**：Slice 1 `origin/main@c36bd43e` · Slice 2 `main@86ae9049`
 
 ## 1. 当前约束
@@ -45,7 +45,8 @@
 | Slice 1：行为与设计验收基线 | 已交付 | 滚动泄漏闭环；Mock 与交付门禁通过 |
 | Slice 2：Token、Theme 与机器门禁 | **已交付（Batch 753）** | generator 幂等；undefined variable=0；新增设计债务=0；theme/Portal/chart 合同通过 |
 | Slice 3A：命令 primitive + 导航图标 + Shell | **已交付（Batch 754）** | `Layout.module.css` 债务清零；导航图标统一；可访问名称与顺序冻结 |
-| Slice 3B：其余 primitive 与 Shell 迁移 | 待开始 | Shell 在四视口、light/dark/system 下无溢出、低对比或焦点丢失；公共组件 API 有测试 |
+| Slice 3B-1：StatusBadge 与跨页徽章统一 | **已交付（Batch 755）** | 徽章跨页重复消除；warning 对比度缺陷修复；债务 81→79 |
+| Slice 3B-2：其余 primitive 与页面迁移 | 待开始 | Shell 在四视口、light/dark/system 下无溢出、低对比或焦点丢失；公共组件 API 有测试 |
 | Slice 4：高频工作流迁移 | 待开始 | 每批 focused Vitest + Mock Playwright + computed style/contrast/geometry 通过后独立提交 |
 | Slice 5：运营与管理页迁移 | 待开始 | 13 个 route 全部进入统一 PageShell，迁移文件不再使用 raw color/legacy alias/数值 z-index |
 | Slice 6：债务收口与双语长青文档 | 待开始 | 全量门禁、文档与交付材料完成 |
@@ -220,3 +221,49 @@ token 单一来源、门禁可拦截、主题合同稳定、图表走桥接。�
 Slice 3B：`PageShell`/`PageHeader`/`Toolbar`/`Tabs`/`TableFrame`/`EmptyState`/
 `StatusBadge` primitive，迁移 Dashboard、Unlock、Toast、Skeleton、ErrorBoundary。
 要求同 Batch 754：债务继续单调下降，`design-token-allow` 不作为批量换绿手段。
+
+---
+
+# Slice 3B-1：StatusBadge 与跨页徽章统一（Batch 755，2026-10-02）
+
+## S3B1.1 勘察结论
+
+徽章是当前**跨页重复最严重**的一处，且重复已经产生行为分叉：
+
+- `ABTest.module.css` 与 `ApiKeys.module.css` 各自定义一份近乎相同的 `.badge`；
+- `ApiKeys` 单页内并存两套徽章视觉：实心 `active/expired/disabled` 与柔和
+  `admin/normal/pending`，同一概念两种表现；
+- `ABTest` 用 `style={{ background: STATUS_COLORS[...] }}` 内联覆盖调色板，
+  配合 `.badge { color: white }`——白字配 warning（`#f59e0b`）对比度约 2:1，
+  低于 WCAG AA 的 4.5:1，属于真实可读性缺陷，不只是风格不一致。
+
+## S3B1.2 关键设计决定：只提供 soft 变体
+
+实心徽章需要为每个 tone 配一个可读前景色，而现有 status token 组只提供
+bg / border / text 三元组，没有实心所需的 `on-*` 色对。强行补齐会引入一组
+没有真实使用证据的 token，违反"有限规格优于全能组件"。因此首版只提供 soft，
+直接消费既有三元组，两种主题下对比度都成立。
+
+这条决定已写进组件注释，避免后续被当成"缺功能"而不是"有意收敛"。
+
+## S3B1.3 交付与验证
+
+| 项 | 结果 |
+|---|---|
+| `src/components/ui/StatusBadge/` | 6 tone、soft 单一变体、co-located CSS、8 个 focused 测试、index 出口 |
+| `ApiKeys.tsx` | 6 处 call site、6 个 CSS 变体改走 primitive |
+| `ABTest.tsx` | `STATUS_COLORS` 内联背景 → 显式 `STATUS_TONES` 语义映射 |
+| 页面 CSS | 删除重复规则：ABTest 214→206 行，ApiKeys 394→363 行 |
+
+- `npm run test:run`：70 文件 **731/731 通过**（Batch 754 为 719，+12）。
+- `npm run test:design-system`：39/39；typecheck、lint、tokens:check、
+  check:design-system、check:alignment 全通过。
+- `npm run build`：通过；initial chunk 110.25 KiB gzip 不变。
+- 设计债务 **81 → 79**（raw-color 27→25），指纹 45 → 43。
+- `scripts/verify-project-docs.sh` 本批实际拦下 CSS 删除遗留的 EOF 空行，已修正。
+
+## S3B1.4 下一切片入口
+
+Slice 3B-2：`EmptyState` / `PageHeader` / `TableFrame` / `Tabs` primitive，
+迁移 Alerts、Metrics、Evaluation、Settings 等仍使用 `transition: all`（8 处）与
+跨页 form/table 声明的页面。

@@ -14,6 +14,7 @@ import { useToast } from '../components/Toast';
 import { Dialog } from '../components/Dialog';
 import { ImeSafeForm } from '../components/ImeSafeForm';
 import { Button } from '../components/Button';
+import { StatusBadge } from '../components/ui';
 import styles from './ApiKeys.module.css';
 
 const DEFAULT_EXPIRY_DAYS = 365;
@@ -280,9 +281,9 @@ function PrincipalRow({
         {statusBadge}
         {rotationPending && (
           <>
-            <span className={`${styles.badge} ${styles.badgePending}`}>
+            <StatusBadge tone="warning">
               {t('apiKeys.rotationPending')}
-            </span>
+            </StatusBadge>
             <small>
               {t('apiKeys.rotationDeadline', {
                 deadline: formatDateTime(principal.rotationExpiresAt),
@@ -359,22 +360,22 @@ function PrincipalRow({
 
 function getRoleBadge(role: string | undefined, t: (key: string) => string) {
   if (role === 'ADMIN') {
-    return <span className={`${styles.badge} ${styles.badgeAdmin}`}>{t('apiKeys.admin')}</span>;
+    return <StatusBadge tone="primary">{t('apiKeys.admin')}</StatusBadge>;
   }
   if (role === 'NORMAL') {
-    return <span className={`${styles.badge} ${styles.badgeNormal}`}>{t('apiKeys.normal')}</span>;
+    return <StatusBadge tone="neutral">{t('apiKeys.normal')}</StatusBadge>;
   }
-  return <span className={`${styles.badge} ${styles.badgeNormal}`}>—</span>;
+  return <StatusBadge tone="neutral">—</StatusBadge>;
 }
 
 function getStatusBadge(status: ApiPrincipalResponse['status'], t: (key: string) => string) {
   if (status === 'REVOKED') {
-    return <span className={`${styles.badge} ${styles.badgeDisabled}`}>{t('apiKeys.revoked')}</span>;
+    return <StatusBadge tone="neutral">{t('apiKeys.revoked')}</StatusBadge>;
   }
   if (status === 'EXPIRED') {
-    return <span className={`${styles.badge} ${styles.badgeExpired}`}>{t('apiKeys.expired')}</span>;
+    return <StatusBadge tone="error">{t('apiKeys.expired')}</StatusBadge>;
   }
-  return <span className={`${styles.badge} ${styles.badgeActive}`}>{t('apiKeys.active')}</span>;
+  return <StatusBadge tone="success">{t('apiKeys.active')}</StatusBadge>;
 }
 
 // ==================== Create Key Modal ====================
@@ -507,9 +508,9 @@ function CreateKeyModal({ onClose }: { onClose: () => void }) {
             </div>
             <div className={styles.formGroup}>
               <span className={styles.label}>{t('apiKeys.profile')}</span>
-              <span className={`${styles.badge} ${styles.badgeNormal}`}>
+              <StatusBadge tone="neutral">
                 {t('apiKeys.normal')}
-              </span>
+              </StatusBadge>
               <div className={styles.hint}>{t('apiKeys.normalHint')}</div>
             </div>
             <CapabilitySelector
