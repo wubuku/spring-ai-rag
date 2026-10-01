@@ -143,7 +143,53 @@
   verify-project-docs 14/14；verify-no-pessimistic-locks 通过。
 - 剩余 25 个未覆盖分支散在 25 行，仍以"每处缺 1 个"为主，暂不逐个追。
 
+### Batch 771（已交付）
+
+- 分支：`feature/sse-cancel-race-coverage-20261003`（后端覆盖第八批）
+- 内容：`RagChatController` SSE 订阅取消竞态。**本批先拆穿了一个假绿。**
+- **假绿本体**：`RagChatControllerSseLifecycleTailTest`（Batch 639）里有两个用例，
+  名字分别叫 `asyncCompletionDisposesSubscriptionOnEmitterCompletion` 和
+  `emitterErrorCallbackStopsHeartbeatAndCancelsSubscription`——
+  名字承诺了"完成回调取消订阅""错误回调停心跳并取消订阅"，
+  **断言却只有 `assertNotNull(emitter)`**，外加一段 `Thread.sleep(800)`。
+  它们什么都没验。证据：JaCoCo 显示 `if (disposable != null)`
+  **两个分支各自 0 覆盖**（2 missed / 0 covered）——即整个
+  `cancelSubscription` 在全仓测试里从未被真正触发过。
+  **测试名写了覆盖率，断言没跟上。**
+- 交付 `RagChatControllerSseCancelRaceTest`（**7 用例**），做法与旧用例根本不同：
+  - 上游用 `Flux.never().doOnCancel(计数器)`，断言的是**真实取消次数**，
+    而不是 emitter 非空；
+  - 反射取出 emitter 上真实注册的 `errorCallback`（`Consumer<Throwable>`）
+    与 `timeoutCallback` / `completionCallback`（`Runnable`）并直接触发，
+    覆盖三条取消入口；
+  - 重复触发三条入口，验证重入无害（连接抖动导致回调重入的真实形态）；
+  - 上游先 `Completed` 再 `error`，覆盖终态幂等。
+- **踩到的类型坑**：`timeoutCallback` / `completionCallback` 装的是
+  `ResponseBodyEmitter.DefaultCallback`，它实现的是 **`Runnable`**，
+  **不是** `java.util.function.Consumer`；按 Consumer 强转会
+  `ClassCastException`。`errorCallback` 才是 `Consumer<Throwable>`。
+  两种回调要用不同方式触发，类注释里写明了原因。
+- **变异测试 3 次，并如实记录其中一次没抓住**：
+  | 变异 | 结果 |
+  |---|---|
+  | `cancelSubscription` 整体改成空操作 | **5 个失败** |
+  | 去掉 `if (disposable != null)`、直接 dispose | **1 失败 + 1 NPE** |
+  | `getAndSet(null)` 换成 `get()` | **7 个用例仍然全绿** |
+  最后一条是**测试能力的真实边界**，不是漏写：Reactor 的
+  `Disposable.dispose()` 契约上就是幂等的，重复调用不产生第二个取消信号，
+  两者行为等价；`getAndSet` 的价值是**及时释放引用**，不是行为差异，
+  这点从外部行为无法观察。已在类 Javadoc 与用例注释里写明
+  "本类不假装覆盖它"，而不是让绿色的数字替它背书。
+- 指标：`mvn -pl spring-ai-rag-core test` **7407 全绿**（+7，0 失败 0 错误 9 跳过），
+  BUILD SUCCESS；`RagChatController` 分支 85.8% → **87.16%**（31 → 28 未覆盖）；
+  **L420 与 L452 从未覆盖列表中消失**；
+  core 总体分支 88.22% → **88.24%**、行 98.38% → **98.41%**。
+- 遗留：Batch 639 那两个空断言用例**保留未删**——它们确实走了
+  `delaySubscription` 的异步路径（本批用的是同步反射触发），覆盖面不同；
+  但它们的命名与断言不符已在本条记录在案，后续应重命名或补断言。
+
 ### Batch 690（既有残条目，原样保留）
+
 
 
 - 分支：`codex/batch690-eval-ctr
