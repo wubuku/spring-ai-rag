@@ -18,7 +18,9 @@
   cursor: pointer;
   font-size: 0.9rem;
   color: var(--color-text-muted);
-  transition: all 0.2s ease;
+  transition:
+    background-color var(--motion-normal) var(--motion-easing),
+    color var(--motion-normal) var(--motion-easing);
   position: relative;
 }
 
@@ -191,7 +193,9 @@
   cursor: pointer;
   font-size: 0.9rem;
   color: var(--color-text);
-  transition: all 0.2s ease;
+  transition:
+    border-color var(--motion-normal) var(--motion-easing),
+    color var(--motion-normal) var(--motion-easing);
 }
 
 .langBtn:hover {

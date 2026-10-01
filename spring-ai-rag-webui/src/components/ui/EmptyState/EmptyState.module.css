@@ -1,0 +1,10 @@
+.empty {
+  padding: var(--space-32);
+  color: var(--color-text-muted);
+  text-align: start;
+}
+
+.empty[data-align='center'] {
+  /* alignment-policy: allow-center -- table-wide empty state, centred against the table rather than a column */
+  text-align: center;
+}

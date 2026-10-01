@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import styles from './SearchResults.module.css';
+import { EmptyState } from '../ui';
 
 export interface SearchResultItem {
   documentId: number | string;
@@ -54,11 +55,11 @@ export function SearchResults({
 
   if (results.length === 0) {
     return (
-      <div className={styles.empty}>
+      <EmptyState>
         <span className={styles.emptyIcon}>🔍</span>
         <p>No results found for "{query}"</p>
         <p className={styles.emptyHint}>Try different keywords or adjust your search.</p>
-      </div>
+      </EmptyState>
     );
   }
 

@@ -8,6 +8,7 @@ import type {
   UsageNumericValue,
 } from '../types/api';
 import styles from './Metrics.module.css';
+import { EmptyState } from '../components/ui';
 
 function formatInteger(value: UsageNumericValue | undefined): string {
   if (value === undefined || value === null) return '0';
@@ -104,7 +105,7 @@ function DurableUsage({ usage }: { usage: LlmUsageResponse }) {
       )}
 
       {isEmpty ? (
-        <div className={styles.empty}>{t('metrics.noDurableUsage')}</div>
+        <EmptyState>{t('metrics.noDurableUsage')}</EmptyState>
       ) : (
         <>
           <div className={styles.summaryGrid}>
@@ -223,7 +224,7 @@ export function Metrics() {
           </details>
         </>
       ) : (
-        <div className={styles.empty}>{t('metrics.noMetrics')}</div>
+        <EmptyState>{t('metrics.noMetrics')}</EmptyState>
       )}
 
       {usageQuery.isPending ? (

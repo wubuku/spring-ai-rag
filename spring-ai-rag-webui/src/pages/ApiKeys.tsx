@@ -14,7 +14,7 @@ import { useToast } from '../components/Toast';
 import { Dialog } from '../components/Dialog';
 import { ImeSafeForm } from '../components/ImeSafeForm';
 import { Button } from '../components/Button';
-import { StatusBadge } from '../components/ui';
+import { EmptyState, StatusBadge } from '../components/ui';
 import styles from './ApiKeys.module.css';
 
 const DEFAULT_EXPIRY_DAYS = 365;
@@ -128,14 +128,14 @@ function KeyList() {
       {isPending ? (
         <div className={styles.loading}>{t('common.loading')}</div>
       ) : isError ? (
-        <div className={styles.empty}>{t('common.error')}</div>
+        <EmptyState>{t('common.error')}</EmptyState>
       ) : !data?.data?.length ? (
-        <div className={styles.empty}>
+        <EmptyState>
           <span>{t('apiKeys.noKeys')}</span>
           <Button variant="primary" onClick={() => setShowCreate(true)}>
             {t('apiKeys.createFirst')}
           </Button>
-        </div>
+        </EmptyState>
       ) : (
         <div className={styles.table}>
           <div className={styles.tableHead}>

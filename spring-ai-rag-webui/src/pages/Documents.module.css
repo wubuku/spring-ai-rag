@@ -5,7 +5,9 @@
   /* alignment-policy: allow-center -- file upload drop zone */
   text-align: center;
   margin-bottom: 1.5rem;
-  transition: all 0.2s ease;
+  transition:
+    background-color var(--motion-normal) var(--motion-easing),
+    border-color var(--motion-normal) var(--motion-easing);
   cursor: pointer;
   background: var(--color-surface);
 }
@@ -204,7 +206,7 @@
   color: var(--color-text-muted);
   font-size: 0.8rem;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0;
 }
 
 .table tbody tr:hover {
@@ -327,12 +329,6 @@
   color: var(--color-text-muted);
 }
 
-.empty {
-  /* alignment-policy: allow-center -- table-wide empty state */
-  text-align: center;
-  padding: 2rem !important;
-  color: var(--color-text-muted);
-}
 
 .actionCell {
   width: 3.5rem;
@@ -355,7 +351,9 @@
   border-radius: 6px;
   cursor: pointer;
   font-size: 0.875rem;
-  transition: all 0.2s ease;
+  transition:
+    background-color var(--motion-normal) var(--motion-easing),
+    border-color var(--motion-normal) var(--motion-easing);
 }
 
 .pageBtn:hover:not(:disabled) {

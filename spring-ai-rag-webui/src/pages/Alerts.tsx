@@ -13,6 +13,7 @@ import {
 } from '../api/alerts';
 import { ImeSafeForm } from '../components/ImeSafeForm';
 import styles from './Alerts.module.css';
+import { EmptyState } from '../components/ui';
 
 type Tab =
   | 'alerts'
@@ -97,7 +98,7 @@ function AlertsTab() {
   if (isPending) return <div className={styles.loading}>{t('common.loading')}</div>;
 
   if (!data?.data?.length) {
-    return <div className={styles.empty}>{t('alerts.noActiveAlerts')}</div>;
+    return <EmptyState>{t('alerts.noActiveAlerts')}</EmptyState>;
   }
 
   return (
@@ -276,7 +277,7 @@ function NotificationDeliveriesTab() {
       )}
 
       {envelope.items.length === 0 ? (
-        <div className={styles.empty}>{t('alerts.noDeliveries')}</div>
+        <EmptyState>{t('alerts.noDeliveries')}</EmptyState>
       ) : (
         <div className={styles.deliveryTable} role="table">
           <div className={styles.deliveryHeader} role="row">
@@ -480,7 +481,7 @@ function SloConfigsTab({ showForm, onShowForm, onHideForm }: { showForm: boolean
       {isPending ? (
         <div className={styles.loading}>{t('common.loading')}</div>
       ) : !data?.data?.length ? (
-        <div className={styles.empty}>{t('common.noData')}</div>
+        <EmptyState>{t('common.noData')}</EmptyState>
       ) : (
         <div className={styles.table}>
           <div className={styles.tableHeader}>
@@ -646,7 +647,7 @@ function SilenceSchedulesTab({ showForm, onShowForm, onHideForm }: { showForm: b
       {isPending ? (
         <div className={styles.loading}>{t('common.loading')}</div>
       ) : !data?.data?.length ? (
-        <div className={styles.empty}>{t('alerts.noSilencePlans')}</div>
+        <EmptyState>{t('alerts.noSilencePlans')}</EmptyState>
       ) : (
         <div className={styles.table}>
           <div className={styles.tableHeader}>

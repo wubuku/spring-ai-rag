@@ -97,13 +97,6 @@
   outline-offset: 2px;
 }
 
-.empty {
-  /* alignment-policy: allow-center -- complete search empty state */
-  text-align: center;
-  padding: 3rem 2rem;
-  color: var(--color-text-muted);
-}
-
 .emptyIcon {
   font-size: 3rem;
   display: block;

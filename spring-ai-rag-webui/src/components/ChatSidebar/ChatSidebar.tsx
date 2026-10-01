@@ -6,6 +6,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import styles from './ChatSidebar.module.css';
+import { EmptyState } from '../ui';
 
 interface ChatSession {
   id: string;
@@ -84,7 +85,7 @@ export function ChatSidebar({ currentSessionId, onSelectSession, onNewChat }: Ch
       </div>
       <div className={styles.sessions}>
         {sessions.length === 0 && (
-          <div className={styles.empty}>{t('chat.noHistory')}</div>
+          <EmptyState>{t('chat.noHistory')}</EmptyState>
         )}
         {sessions.map(session => (
           <div

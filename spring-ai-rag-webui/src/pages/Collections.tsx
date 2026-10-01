@@ -15,6 +15,7 @@ import { CreateCollectionModal } from '../components/CreateCollectionModal';
 import { Dialog } from '../components/Dialog';
 import { Card } from '../components/Card';
 import styles from './Collections.module.css';
+import { EmptyState } from '../components/ui';
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -127,7 +128,7 @@ export function Collections() {
             </Card>
           ))}
           {data?.data?.collections?.length === 0 && (
-            <div className={styles.empty}>{t('collections.noCollections')}</div>
+            <EmptyState>{t('collections.noCollections')}</EmptyState>
           )}
         </div>
       )}
