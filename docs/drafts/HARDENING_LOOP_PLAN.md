@@ -2,6 +2,40 @@
 
 - 分支：`codex/batch690-eval-ctr
 
+### Batch 763（已交付）
+
+- 分支：`feature/derivation-snapshot-criteria-coverage-20261003`
+- 内容：后端分支覆盖加固 **第二批**——派生完整性快照的物理判据矩阵。
+- 勘察：`DerivationIntegrityRepository$Snapshot.from` 单个方法缺 **23/128** 个分支，
+  是 core 里分支密度最高的缺口之一。它是一个**分类状态机**：
+  `localRowsComplete`（6 个 `&&`）、`vectorRowsComplete`（7 个）、
+  `localFresh`/`vectorFresh`（各 6–7 个）、`converging`（5 个），
+  再串起 `localCondition`/`vectorCondition`/`bucket`/`reasonCode` 四级三元链。
+  分类结果直接决定 `DerivationRepairService` 是否安排重建。
+- 核心发现：既有 24 个测试验证的是**整体状态**（READY / CORRUPT / KEYWORD_ONLY），
+  缺的是**每条物理判据被单独违反**时的行为。删掉 `local_max == expected - 1`
+  这一条，序号断裂或重复的 chunk 会被判为"完整"，文档永远不会被修复，
+  而且没有任何测试会变红。本批为 local 6 条、vector 8 条判据各写一个
+  **只违反该条**的用例。
+- **顺带修掉的真实缺陷**：`uuid()` 是 `from(Map)` 里唯一一个不容错的取值函数——
+  `value()` / `integer()` / `longValue()` 都对 null 和类型不符做了回退，
+  只有它直接 `UUID.fromString(...)`。而 `from(Map)` 是 **JdbcTemplate 的 RowMapper**，
+  抛异常会让整个 derive-readiness 查询失败：台账里一行脏数据，运维就看不到
+  **任何**文档的就绪状态，只能看到一条报错。现已改为降级返回 `null`，
+  并补测试钉住"job id 坏了但 `active_job_status` 仍可读、分类不受影响"。
+- **又一次被自己的期望值骗到**：我断言 `local_generation = 0` 属于"未就绪(STALE)"，
+  跑出来是 CORRUPT。代码是对的——`localCorrupt` 的定义就是
+  **"状态标称 READY 却实际不新鲜"**，代数缺失意味着这一侧的 READY 不可信。
+  判成 STALE 反而会导致 `DerivationRepairService` 不安排重建。改成把这条语义钉住。
+- **JUnit 参数化的一个坑**：`@CsvSource` 的列在目标参数是 `Object` 时会被转成
+  `String`，于是 `integer()` 的 `instanceof Number` 判定失败、把 `1` 当成 0，
+  六条判据用例全部假绿（"违反 local_invalid=1 却仍判为完整"）。
+  把参数类型改成 `int` 才让值真的是 `Number`。**假绿比红更危险。**
+- 指标：`mvn -pl spring-ai-rag-core test` **7203 全绿**（+31）；
+  `Snapshot` 分支覆盖 82.1% → **90.1%**（缺 28/156 → 16/162），
+  其中 `from` 单方法缺 23 → 14，`uuid`/`integer`/`longValue` 三个取值函数补齐；
+  core 总体分支 87.83% → **87.91%**；verify-project-docs 12/12。
+
 ### Batch 762（已交付）
 
 - 分支：`feature/http-ssrf-boundary-coverage-20261003`
