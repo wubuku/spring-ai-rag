@@ -388,6 +388,7 @@
     "ragApiKey": "RAG API Key"
   },
   "theme": {
+    "label": "Theme",
     "light": "Light",
     "dark": "Dark",
     "system": "System"

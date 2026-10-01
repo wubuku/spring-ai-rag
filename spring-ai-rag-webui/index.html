@@ -5,6 +5,29 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>spring-ai-rag WebUI</title>
+    <script>
+      // Pre-paint theme bootstrap.
+      // Runs before first paint so a dark-theme user never sees a white flash.
+      // It resolves the same preference the React ThemeProvider will, and writes
+      // only the resolved `data-theme`; the logic itself lives in
+      // src/design-system/theme.ts so both sides stay in contract.
+      (function () {
+        try {
+          var stored = window.localStorage.getItem('theme');
+          var preference =
+            stored === 'light' || stored === 'dark' || stored === 'system' ? stored : 'system';
+          var prefersDark =
+            typeof window.matchMedia === 'function' &&
+            window.matchMedia('(prefers-color-scheme: dark)').matches;
+          var resolved =
+            preference === 'system' ? (prefersDark ? 'dark' : 'light') : preference;
+          document.documentElement.setAttribute('data-theme', resolved);
+        } catch (error) {
+          // Blocked storage or an unavailable matchMedia must not block the app.
+          document.documentElement.setAttribute('data-theme', 'light');
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -237,16 +237,38 @@ Provider 默认通过 `LLM_PROVIDER` / `app.llm.provider` 选择。多模型实�
 ```bash
 cd spring-ai-rag-webui
 npm ci
+npm run tokens:check
 npm run lint
 npm run test:run
+npm run test:design-system
 npm run build
 ```
 
-`npm run lint` 串联 ESLint、`check:alignment`（水平对齐策略）与
-`check:design-tokens`（token 定义校验、module.css 禁裸 z-index、src 源码禁新增
-字面颜色；存量按 `scripts/design-token-color-baseline.json` 等值基线锁死，
-减少时必须同步下调基线）。`test:coverage` 另有按 `vitest.config.ts` thresholds
-的全局覆盖率下限。
+### 6.1 设计 token 与设计系统门禁
+
+设计 token 只有一个 canonical source：`design-tokens/tokens.json`。`tokens.css` 和
+`tokens.generated.ts` 都是生成产物，**不要手改**：
+
+```bash
+npm run tokens:build          # 从 tokens.json 重新生成产物
+npm run tokens:check          # 只比对不写盘，CI 用这个（产物过期即失败）
+npm run check:design-system   # 设计债务门禁
+npm run test:design-system    # 生成器与门禁的 focused 测试
+```
+
+- `check:design-system` 扫描 CSS/TS/TSX/SVG，拦截 8 类违规：未定义 `var(--*)`、
+  数值 z-index、字面颜色（含 CSS 命名色）、`transition: all`、非零 `letter-spacing`、
+  无理由 `!important`、跨页 `*.module.css` import、兼容 alias 调用。
+- 存量债务记录在 `design-tokens/design-debt-baseline.json`，指纹为
+  `file|kind|value`。**新增违规、计数增加、基线过期三种情况都会失败**，所以债务
+  只能单调减少。
+- 确有必要的窄例外用同行或上一行注释 `/* design-token-allow: <具体理由> */`；
+  理由过短会被单独判为 `weak-allow-reason` 失败。不要用批量豁免换绿。
+- `check:design-tokens` 保留为 `check:design-system` 的兼容入口。
+- `lint` 串联 ESLint、`check:alignment` 与 `check:design-system`。
+  `test:coverage` 另有按 `vitest.config.ts` thresholds 的全局覆盖率下限。
+
+### 6.2 运行与联调
 
 开发模式：
 

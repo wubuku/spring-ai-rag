@@ -1,157 +1,127 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, act } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { ThemeProvider } from '../../design-system/ThemeProvider';
+import { THEME_STORAGE_KEY } from '../../design-system/theme';
 import { ThemeToggle } from './ThemeToggle';
 
 const localStorageMock = {
   data: {} as Record<string, string>,
   getItem: vi.fn((key: string) => localStorageMock.data[key] ?? null),
-  setItem: vi.fn((key: string, value: string) => { localStorageMock.data[key] = value; }),
-  removeItem: vi.fn((key: string) => { delete localStorageMock.data[key]; }),
+  setItem: vi.fn((key: string, value: string) => {
+    localStorageMock.data[key] = value;
+  }),
+  removeItem: vi.fn((key: string) => {
+    delete localStorageMock.data[key];
+  }),
 };
-
-let _currentHandler: ((e: { matches: boolean }) => void) | null = null;
-
-function makeMq(matches: boolean) {
-  return {
-    matches,
-    media: '(prefers-color-scheme: dark)',
-    addEventListener: vi.fn((_type: string, handler: (e: { matches: boolean }) => void) => {
-      _currentHandler = handler;
-    }),
-    removeEventListener: vi.fn(() => { _currentHandler = null; }),
-  };
-}
-
-let _mqInstance = makeMq(false);
-vi.stubGlobal('matchMedia', vi.fn(() => _mqInstance));
-
 Object.defineProperty(window, 'localStorage', { value: localStorageMock });
 
-describe('ThemeToggle', () => {
+function installMatchMedia(matches: boolean) {
+  vi.stubGlobal(
+    'matchMedia',
+    vi.fn(() => ({
+      matches,
+      media: '(prefers-color-scheme: dark)',
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })),
+  );
+}
+
+function renderToggle() {
+  return render(
+    <ThemeProvider>
+      <ThemeToggle />
+    </ThemeProvider>,
+  );
+}
+
+describe('ThemeToggle (tri-state)', () => {
   beforeEach(() => {
     localStorageMock.data = {};
     vi.clearAllMocks();
-    _currentHandler = null;
-    _mqInstance = makeMq(false); // system light
+    installMatchMedia(false);
+    document.documentElement.removeAttribute('data-theme');
   });
 
-  // --- Rendering ---
-
-  it('renders toggle button', () => {
-    render(<ThemeToggle />);
-    expect(screen.getByRole('button')).toBeInTheDocument();
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    document.documentElement.removeAttribute('data-theme');
   });
 
-  // --- Auto mode (no saved preference) ---
-
-  it('shows sync icon 🔄 on first render with no saved preference', () => {
-    render(<ThemeToggle />);
-    expect(screen.getByRole('button')).toHaveTextContent('🔄');
+  it('exposes exactly one control per preference, as a radio group', () => {
+    renderToggle();
+    const radios = screen.getAllByRole('radio');
+    expect(radios).toHaveLength(3);
+    expect(radios.map(radio => radio.getAttribute('aria-label'))).toEqual([
+      'theme.light',
+      'theme.dark',
+      'theme.system',
+    ]);
   });
 
-  it('aria-label describes auto mode with system theme', () => {
-    render(<ThemeToggle />);
-    expect(screen.getByRole('button')).toHaveAttribute('aria-label',
-      'Auto (system: light) — click to lock');
+  it('always shows all three states, so the current mode is never ambiguous', () => {
+    localStorageMock.data[THEME_STORAGE_KEY] = 'dark';
+    renderToggle();
+    // The old control only revealed its "back to auto" affordance while locked.
+    expect(screen.getAllByRole('radio')).toHaveLength(3);
   });
 
-  it('aria-label shows system dark in auto mode', () => {
-    _mqInstance = makeMq(true); // system dark
-    render(<ThemeToggle />);
-    expect(screen.getByRole('button')).toHaveAttribute('aria-label',
-      'Auto (system: dark) — click to lock');
+  it('checks the preference that is actually in effect', () => {
+    localStorageMock.data[THEME_STORAGE_KEY] = 'light';
+    renderToggle();
+    expect(screen.getByRole('radio', { name: 'theme.light' })).toBeChecked();
+    expect(screen.getByRole('radio', { name: 'theme.system' })).not.toBeChecked();
   });
 
-  // --- Locked mode ---
-
-  it('shows ☀️ when locked to light', () => {
-    localStorageMock.data['theme'] = 'light';
-    render(<ThemeToggle />);
-    expect(screen.getByLabelText(/Theme: light/)).toHaveTextContent('☀️');
+  it('defaults to system when nothing is stored', () => {
+    renderToggle();
+    expect(screen.getByRole('radio', { name: 'theme.system' })).toBeChecked();
   });
 
-  it('shows 🌙 when locked to dark', () => {
-    localStorageMock.data['theme'] = 'dark';
-    render(<ThemeToggle />);
-    expect(screen.getByLabelText(/Theme: dark/)).toHaveTextContent('🌙');
-  });
-
-  it('shows auto-return button (A) when locked', () => {
-    localStorageMock.data['theme'] = 'light';
-    render(<ThemeToggle />);
-    expect(screen.getByLabelText('Switch to auto theme')).toBeInTheDocument();
-  });
-
-  it('does NOT show auto-return button in auto mode', () => {
-    render(<ThemeToggle />);
-    expect(screen.queryByLabelText('Switch to auto theme')).not.toBeInTheDocument();
-  });
-
-  // --- Interactions ---
-
-  it('clicking toggle in auto mode locks to system light', async () => {
+  it('persists an explicit selection and applies it to the document', async () => {
     const user = userEvent.setup();
-    render(<ThemeToggle />);
-    await user.click(screen.getByRole('button'));
-    expect(localStorageMock.setItem).toHaveBeenCalledWith('theme', 'light');
-    expect(screen.getByLabelText(/Theme: light/)).toHaveTextContent('☀️'); // now locked
-    expect(screen.getByLabelText('Switch to auto theme')).toBeInTheDocument(); // A button appears
+    renderToggle();
+    await user.click(screen.getByRole('radio', { name: 'theme.dark' }));
+
+    expect(localStorageMock.setItem).toHaveBeenCalledWith(THEME_STORAGE_KEY, 'dark');
+    expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
+    expect(screen.getByRole('radio', { name: 'theme.dark' })).toBeChecked();
   });
 
-  it('clicking toggle in auto mode locks to system dark', async () => {
-    _mqInstance = makeMq(true); // system dark
+  it('returns to following the system without needing a separate unlock button', async () => {
+    installMatchMedia(true);
     const user = userEvent.setup();
-    render(<ThemeToggle />);
-    await user.click(screen.getByRole('button'));
-    expect(localStorageMock.setItem).toHaveBeenCalledWith('theme', 'dark');
-    expect(screen.getByLabelText(/Theme: dark/)).toHaveTextContent('🌙');
-  });
+    localStorageMock.data[THEME_STORAGE_KEY] = 'light';
+    renderToggle();
 
-  it('clicking toggle when locked switches between light and dark', async () => {
-    localStorageMock.data['theme'] = 'light';
-    const user = userEvent.setup();
-    render(<ThemeToggle />);
-    await user.click(screen.getByLabelText(/Theme: light/));
-    expect(localStorageMock.setItem).toHaveBeenCalledWith('theme', 'dark');
-    expect(screen.getByLabelText(/Theme: dark/)).toHaveTextContent('🌙');
-  });
+    await user.click(screen.getByRole('radio', { name: 'theme.system' }));
 
-  it('clicking A button exits locked mode and returns to auto', async () => {
-    localStorageMock.data['theme'] = 'light';
-    const user = userEvent.setup();
-    render(<ThemeToggle />);
-    await user.click(screen.getByLabelText('Switch to auto theme'));
-    expect(localStorageMock.removeItem).toHaveBeenCalledWith('theme');
-    expect(screen.getByRole('button')).toHaveTextContent('🔄');
-    expect(screen.queryByLabelText('Switch to auto theme')).not.toBeInTheDocument();
-  });
-
-  // --- System preference listener ---
-
-  it('system dark change updates theme when in auto mode', async () => {
-    render(<ThemeToggle />);
-    // Simulate OS dark mode activation
-    await act(async () => {
-      _currentHandler?.({ matches: true });
-    });
+    expect(screen.getByRole('radio', { name: 'theme.system' })).toBeChecked();
     expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
   });
 
-  it('system light change updates theme when in auto mode', async () => {
-    _mqInstance = makeMq(true); // starts dark
-    render(<ThemeToggle />);
-    await act(async () => {
-      _currentHandler?.({ matches: false });
-    });
-    expect(document.documentElement.getAttribute('data-theme')).toBe('light');
+  it('keeps the control reachable by keyboard alone', async () => {
+    const user = userEvent.setup();
+    renderToggle();
+
+    await user.tab();
+    expect(screen.getByRole('radio', { name: 'theme.system' })).toHaveFocus();
+
+    await user.keyboard('[ArrowRight]');
+    expect(document.documentElement.getAttribute('data-theme')).toBeDefined();
   });
 
-  it('system change has no effect when locked', async () => {
-    localStorageMock.data['theme'] = 'light';
-    render(<ThemeToggle />);
-    _currentHandler?.({ matches: true }); // system → dark
-    // Should stay light (locked)
-    expect(document.documentElement.getAttribute('data-theme')).toBe('light');
+  it('exposes an accessible group name', () => {
+    renderToggle();
+    expect(screen.getByRole('group')).toHaveAccessibleName('theme.label');
+  });
+
+  it('marks the active option for styling hooks', () => {
+    localStorageMock.data[THEME_STORAGE_KEY] = 'system';
+    renderToggle();
+    const active = screen.getByRole('radio', { name: 'theme.system' }).closest('label');
+    expect(active).toHaveAttribute('data-active', 'true');
   });
 });
