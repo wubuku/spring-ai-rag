@@ -2,6 +2,39 @@
 
 - 分支：`codex/batch690-eval-ctr
 
+### Batch 766（已交付）
+
+- 分支：`feature/http-status-class-coverage-20261003`（先建分支，吸取 Batch 765 的偏离）
+- 内容：后端分支覆盖加固 **第五批**——可观测性分类与嵌入身份校验的边界矩阵。
+- 勘察：`IntegrationHttpStatusClass.from` 缺 10/29（65.5%）、
+  `EmbeddingProfileRegistry.validateConfiguredIdentity` 缺 9/28（67.9%）。
+- **`from(int)` 之前没有任何一个测试直接调用过**——十个分支全靠
+  `IntegrationObservationFilter` 间接带过。而它同时驱动两处：
+  Micrometer 的 `rag.integration.requests` 指标标签，以及
+  `IntegrationObservabilityQueryService` 的聚合维度。**分类错了就是 SLO 算错、
+  告警静默**，正是最需要测试网的地方。
+- 交付：
+  - `IntegrationHttpStatusClassBoundaryTest`（67 用例）：2xx/5xx 区间含两端、
+    401/403/409/429 各自独立且不串类、4xx 白名单八个逐个断言、
+    非白名单 4xx（402/406/410/418/451…）落 OTHER、1xx/3xx/6xx 落 OTHER、
+    零与负数状态码不抛异常、区间边界紧邻（199/200/299/300、496/500/599/600）、
+    指标标签名稳定性、枚举取值个数。
+  - **重点钉住一处刻意的设计**：4xx 只有八个在白名单里，其余全部落 `OTHER`。
+    这不是疏漏——分类必须低基数，把 410 Gone 这类正常的资源删除响应收进
+    "客户端错误率"会污染指标。测试里专门写了
+    `whitelistHasExactlyEightEntries`，谁想"顺手修好"它会先撞上这条断言。
+  - `EmbeddingProfileIdentityFieldTest`（21 用例）：六个身份字段**逐个**的
+    空白串与 null 两种情况。既有测试只把 `profileKey` 置空过一次，
+    另外五个字段各自为空白时**没有任何测试断言它会被拒绝**；
+    任何一段被误删，配置就能带着空白身份落库。
+    另含非精确 COSINE 的拒绝（大小写与首尾空格都必须拒绝，
+    否则新旧向量处在不同度量下）、内置 profileKey 不得搭配被改写的身份或维度。
+- 指标：`mvn -pl spring-ai-rag-core test` **7342 全绿**（+88）；
+  `IntegrationHttpStatusClass` 分支覆盖 65.5% → **100%**（29/29，缺 10 → 0）；
+  `EmbeddingProfileRegistry` 67.9% → **95.8%**（缺 9 → 2）；
+  core 总体分支 88.04% → **88.16%**、行 98.38% 不变；
+  verify-project-docs 12/12。
+
 ### Batch 765（已交付）
 
 - 分支：**无**（见下方「流程偏离」一节——本批直接提交在 `main` 上）
