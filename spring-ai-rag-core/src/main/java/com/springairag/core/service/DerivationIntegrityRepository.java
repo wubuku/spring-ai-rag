@@ -742,7 +742,19 @@ public class DerivationIntegrityRepository {
             if (value == null || value == NullValue.INSTANCE) {
                 return null;
             }
-            return value instanceof UUID uuid ? uuid : UUID.fromString(String.valueOf(value));
+            if (value instanceof UUID uuid) {
+                return uuid;
+            }
+            // This runs inside the JdbcTemplate RowMapper, so a parse failure here
+            // would abort the whole derive-readiness query: one malformed row
+            // would leave operators with no readiness report at all, instead of
+            // a report for the other documents. Degrade to "no job" instead —
+            // the same contract value(), integer() and longValue() already follow.
+            try {
+                return UUID.fromString(String.valueOf(value));
+            } catch (IllegalArgumentException e) {
+                return null;
+            }
         }
     }
 }
