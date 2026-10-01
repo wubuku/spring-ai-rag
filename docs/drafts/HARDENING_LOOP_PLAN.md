@@ -2,6 +2,34 @@
 
 - 分支：`codex/batch690-eval-ctr
 
+### Batch 765（已交付）
+
+- 分支：`feature/provisioning-owner-consistency-coverage-20261003`
+- 内容：后端分支覆盖加固 **第四批**——认证状态一致性矩阵。
+- 勘察：`ProvisioningOwnerResolver.resolve` 缺 10/30（66.7%），是安全类里
+  缺口最集中的方法。它决定一次 provisioning 操作归属哪个 owner，
+  **正确性直接等于越权防线**：任何"部分存在"或互相矛盾的认证状态都必须落到
+  `inconsistent()`，而不是猜测一个 owner。
+- 交付：`ProvisioningOwnerResolverConsistencyTest`（18 用例），补三类最容易在
+  重构中被改坏的组合：
+  1. **不该出现的 snapshot**——root / legacy 类型上挂了一个 database principal 快照。
+  2. **database 路径上每一项单独缺失或类型不对**——id 为 null / 空白 / 非 String、
+     快照为 null / 类型错 / principalType 对不上 / id 与快照不匹配。
+  3. **auth-disabled 路径上多出来的一个属性**——`type == null && id == null &&
+     snapshot == null && currentPolicy == null` 才算"认证关闭"；只挂一个快照就
+     当成未认证，是最危险的一种组合：一次本应被拒绝的 provisioning 会拿到
+     本地 owner 身份。
+- **顺手记一条运维纪律**：本批首次复验时 main 上出现 `BUILD FAILURE`，查下来是
+  **两个 `mvn` 进程并发跑同一个模块、互相覆盖 `target/surefire-reports`**，
+  不是真实回归。单进程重跑即 7254/7254 全绿，968 个报告文件 0 失败 0 错误。
+  **同一模块不要并发跑两次 Maven**；判断结果要同时看退出码和报告文件计数。
+- 指标：`mvn -pl spring-ai-rag-core test` **7254 全绿**（+18）；
+  `ProvisioningOwnerResolver` 分支覆盖 66.7% → **96.7%**（缺 10 → 1，
+  剩下 1 个是 `currentPolicy(request) != null` 的组合，构造代价过高，
+  且它只会让结果落到 `inconsistent()`——保守方向，不构成越权风险）；
+  core 总体 分支 87.97% → **88.04%**、行 98.37% → **98.38%**；
+  verify-project-docs 12/12。
+
 ### Batch 764（已交付）
 
 - 分支：`feature/log-masking-keeptype-leak-20261003`
