@@ -5,6 +5,9 @@
 }
 
 .btnBack {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
   background: none;
   border: none;
   color: var(--color-text-muted);

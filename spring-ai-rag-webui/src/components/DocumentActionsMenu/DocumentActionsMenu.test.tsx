@@ -207,6 +207,28 @@ describe('DocumentActionsMenu', () => {
     expect(screen.queryByRole('menu')).not.toBeInTheDocument();
   });
 
+  it('signals the provenance submenu state with a chevron that flips direction', async () => {
+    const user = userEvent.setup();
+    setup({
+      document: makeDocument({ source: 'pdf-import:imports/uuid-1/default.md' }),
+    });
+
+    await openMenu(user);
+    const provenanceItem = screen.getByRole('menuitem', { name: 'documents.sourceTraceability' });
+    const meta = provenanceItem.querySelector('[aria-hidden="true"]')!;
+    // A collapsed submenu points down. Asserted on the lucide class rather than
+    // a `⌄` code point, so the intent survives an icon swap.
+    const direction = () => Array.from(meta.querySelectorAll('svg')).map(svg => [...svg.classList]);
+
+    expect(JSON.stringify(direction())).toContain('chevron-down');
+    expect(JSON.stringify(direction())).not.toContain('chevron-up');
+
+    await user.click(provenanceItem);
+
+    expect(JSON.stringify(direction())).toContain('chevron-up');
+    expect(JSON.stringify(direction())).not.toContain('chevron-down');
+  });
+
   it('wires the directory and original-pdf provenance entries to their handlers', async () => {
     const user = userEvent.setup();
     const { handlers } = setup({

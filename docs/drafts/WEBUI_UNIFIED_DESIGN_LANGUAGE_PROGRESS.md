@@ -1,10 +1,10 @@
 # WebUI 统一设计语言实施进度
 
 > **对应规划**：[WEBUI_UNIFIED_DESIGN_LANGUAGE_PLAN.md](WEBUI_UNIFIED_DESIGN_LANGUAGE_PLAN.md)
-> **日期**：2026-08-28（Slice 1）· 2026-10-02（Slice 2、Slice 3A）
-> **状态**：Slice 1、2、3A、3B-1/2/3、4A、4B 已交付，设计债务清零；Slice 5 起待开始
+> **日期**：2026-08-28（Slice 1）· 2026-10-02（Slice 2、Slice 3A）· 2026-10-03（Slice 5 图标收口）
+> **状态**：Slice 1、2、3A、3B-1/2/3、4A、4B 已交付，设计债务清零；Slice 5 图标统一收口已交付（Batch 760），其余 Slice 5 待开始
 > **工作区**：`/Users/yangjiefeng/Documents/wubuku/spring-ai-rag`
-> **分支**：`feature/webui-design-tokens-theme-gates-20261002`（Slice 2）· `feature/webui-shell-primitives-nav-20261002`（Slice 3A）· `feature/webui-status-badge-unify-20261002`（Slice 3B-1）· `feature/webui-empty-state-motion-debt-20261002`（Slice 3B-2）· `feature/webui-oncolor-contrast-20261002`（Slice 3B-3）· `feature/webui-chat-search-page-shell-20261002`（Slice 4A）· `feature/webui-page-header-20261002`（Slice 4B）
+> **分支**：`feature/webui-design-tokens-theme-gates-20261002`（Slice 2）· `feature/webui-shell-primitives-nav-20261002`（Slice 3A）· `feature/webui-status-badge-unify-20261002`（Slice 3B-1）· `feature/webui-empty-state-motion-debt-20261002`（Slice 3B-2）· `feature/webui-oncolor-contrast-20261002`（Slice 3B-3）· `feature/webui-chat-search-page-shell-20261002`（Slice 4A）· `feature/webui-page-header-20261002`（Slice 4B）· `feature/webui-icon-unification-20261002`（Slice 5 图标收口）
 > **实施基线**：Slice 1 `origin/main@c36bd43e` · Slice 2 `main@86ae9049`
 
 ## 1. 当前约束
@@ -50,7 +50,7 @@
 | Slice 3B-3：填充面对比度 + alias 收口 | **已交付（Batch 757）** | 债务 65→0；`on-*` 双主题达 AA；兼容 alias 移除 |
 | Slice 4A：Tabs primitive 与 tab 语义修复 | **已交付（Batch 758）** | Alerts 从无语义按钮组变为真 tablist；三页统一方向键导航 |
 | Slice 4B：PageHeader primitive | **已交付（Batch 759）** | 4 个有主命令/副标题的页面迁移；副标题与标题建立 aria 关联 |
-| Slice 5：运营与管理页迁移 + 图标统一收口 | 待开始 | 每批 focused Vitest + Mock Playwright + computed style/contrast/geometry 通过后独立提交 |
+| Slice 5：图标统一收口 | **已交付（Batch 760）** | 渲染标记中 emoji/dingbat 归零；`emoji-glyph` 成为第 9 类门禁违规且基线为空 |
 | Slice 4：高频工作流迁移 | 待开始 | 每批 focused Vitest + Mock Playwright + computed style/contrast/geometry 通过后独立提交 |
 | Slice 5：运营与管理页迁移 | 待开始 | 13 个 route 全部进入统一 PageShell，迁移文件不再使用 raw color/legacy alias/数值 z-index |
 | Slice 6：债务收口与双语长青文档 | 待开始 | 全量门禁、文档与交付材料完成 |

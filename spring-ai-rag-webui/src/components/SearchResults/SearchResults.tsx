@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import styles from './SearchResults.module.css';
 import { EmptyState } from '../ui';
+import { Search } from 'lucide-react';
 
 export interface SearchResultItem {
   documentId: number | string;
@@ -56,7 +57,7 @@ export function SearchResults({
   if (results.length === 0) {
     return (
       <EmptyState>
-        <span className={styles.emptyIcon}>🔍</span>
+        <Search className={styles.emptyIcon} size={24} aria-hidden="true" />
         <p>No results found for "{query}"</p>
         <p className={styles.emptyHint}>Try different keywords or adjust your search.</p>
       </EmptyState>

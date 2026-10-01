@@ -36,6 +36,9 @@
 }
 
 .exportBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
   padding: 0.5rem 1rem;
   background: var(--color-surface);
   border: 1px solid var(--color-border);

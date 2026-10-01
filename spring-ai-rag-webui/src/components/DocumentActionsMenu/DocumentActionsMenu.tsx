@@ -7,6 +7,7 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import type { Document } from '../../api/documents';
 import { derivePdfProvenance } from '../../utils/pdfProvenance';
 import styles from './DocumentActionsMenu.module.css';
@@ -212,7 +213,11 @@ export function DocumentActionsMenu({
           >
             <span>{t('documents.sourceTraceability')}</span>
             <span className={styles.menuItemMeta} aria-hidden="true">
-              {provenance ? (provenanceOpen ? '⌃' : '⌄') : t('documents.sourceUnavailable')}
+              {provenance
+                ? (provenanceOpen
+                  ? <ChevronUp size={14} aria-hidden="true" />
+                  : <ChevronDown size={14} aria-hidden="true" />)
+                : t('documents.sourceUnavailable')}
             </span>
           </button>
 

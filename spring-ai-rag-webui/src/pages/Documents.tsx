@@ -17,7 +17,8 @@ import { ImeSafeForm } from '../components/ImeSafeForm';
 import { useBlobUrlOpener } from '../hooks/useBlobUrlOpener';
 import { useImeComposition } from '../utils/ime';
 import styles from './Documents.module.css';
-import { EmptyState } from '../components/ui';
+import { EmptyState, IconButton } from '../components/ui';
+import { Upload, X } from 'lucide-react';
 
 type DocumentConfirmation =
   | { kind: 'disable'; document: Document }
@@ -388,7 +389,7 @@ export function Documents() {
           id="file-upload"
         />
         <label htmlFor="file-upload" className={styles.uploadLabel}>
-          <span className={styles.uploadIcon}>📁</span>
+          <Upload className={styles.uploadIcon} size={20} aria-hidden="true" />
           <span>
             {isUploading ? t('common.loading') : t('documents.uploadHint')}
           </span>
@@ -421,16 +422,16 @@ export function Documents() {
           className={styles.searchInput}
         />
         {keyword && (
-          <button
+          <IconButton
+            label={t('documents.clearSearch')}
+            className={styles.clearBtn}
             onClick={() => {
               setKeywordDraft('');
               commitKeyword('');
             }}
-            className={styles.clearBtn}
-            aria-label={t('documents.clearSearch')}
           >
-            ✕
-          </button>
+            <X size={16} aria-hidden="true" />
+          </IconButton>
         )}
         <select
           data-testid="documents-collection-filter"

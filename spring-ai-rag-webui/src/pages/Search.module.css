@@ -149,23 +149,6 @@
   color: var(--color-text-muted);
 }
 
-.historyRemove {
-  padding: 0 0.625rem;
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 1.1rem;
-  color: var(--color-text-muted);
-  transition: color 0.15s ease;
-  align-self: stretch;
-  display: flex;
-  align-items: center;
-}
-
-.historyRemove:hover {
-  color: var(--color-error);
-}
-
 .hybridLabel {
   display: flex;
   align-items: center;

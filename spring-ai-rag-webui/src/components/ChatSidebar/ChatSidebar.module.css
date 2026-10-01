@@ -81,21 +81,10 @@
 }
 
 .deleteBtn {
-  padding: 8px;
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: var(--color-text-muted);
-  font-size: 1.2rem;
-  line-height: 1;
   opacity: 0;
   transition: opacity 0.15s ease;
 }
 
 .session:hover .deleteBtn {
   opacity: 1;
-}
-
-.deleteBtn:hover {
-  color: var(--color-error);
 }
