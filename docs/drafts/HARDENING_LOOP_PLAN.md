@@ -235,7 +235,46 @@
   （`currentCredential` / `retiringCredential`，L1026–1032）
   是一组尚未处理的候选。
 
+### Batch 773（已交付）
+
+- 分支：`feature/credential-state-projection-coverage-20261003`（后端覆盖第十批）
+- 内容：`ApiKeyManagementService.toResponse` 的凭据状态投影真值表。
+  **本批同样未改任何生产代码。**
+- `toResponse` 用两组布尔向客户端声明"这是当前凭证"与"这是退役中的凭证"：
+  ```
+  current  = enabled && retireAt == null          && revokedAt == null
+  retiring = enabled && retireAt != null && retireAt.isAfter(now)
+                    && revokedAt == null
+  ```
+  JaCoCo 显示这两行共 **5 个分支从未被走过**：禁用凭证、已吊销主体、
+  退役时间已过——也就是客户端据此判断"我的密钥还有效吗"的**三种否定答案**
+  全都没验证过。此前只测了肯定答案。
+- 交付 `ApiKeyCredentialStateProjectionTest`（**9 用例**），用 `listKeys()` 驱动
+  （它内部 `.map(this::toResponse)`），逐格覆盖真值表，
+  两条投影各配"肯定 + 每种否定"各一条。
+- **勘察时我自己误判了一次（如实记录）**：
+  第一次 `grep -n "toResponse(" <file>` 只找到方法声明本身，看着像**死代码**。
+  如果就此认定，最省事的做法是"给不可达的死代码写测试来提覆盖率"——
+  那正是我一直避免的凑覆盖率。第二次换成全仓 grep 才看到
+  `listKeys()` 里的 `.map(this::toResponse)`，**`::` 后面没有括号，
+  所以带括号的匹配式漏掉了它**；测试目录里还有一处反射调用。
+  **教训：判断"死代码"前，grep 的匹配式必须覆盖方法引用语法，
+  而且至少换两种写法各查一遍。**
+- **变异测试 3 次，逐条验证否定路径被钉住**：
+  | 变异 | 失败数 | 对应用例 |
+  |---|---|---|
+  | currentCredential 忽略 revokedAt | **1** | 主体已吊销那条 |
+  | retiring 的 isAfter 改成 isBefore | **3** | 退役中/退役已过/有退役标记三条 |
+  | currentCredential 忽略 enabled | **1** | 禁用凭据那条 |
+  若没有这批用例，"已吊销主体的密钥仍被标为当前有效"会一路绿灯发布——
+  客户端会据此以为密钥还能用。
+- 指标：`mvn -pl spring-ai-rag-core test` **7424 全绿**（+9，0 失败 0 错误 9 跳过），
+  BUILD SUCCESS；`ApiKeyManagementService` 分支 92.07% → **93.60%**（26 → 21 未覆盖）；
+  **L1026–L1032 全部从未覆盖列表中消失**；
+  core 总体分支 88.28% → **88.32%**、行 98.41% 不变。
+
 ### Batch 690（既有残条目，原样保留）
+
 
 
 
