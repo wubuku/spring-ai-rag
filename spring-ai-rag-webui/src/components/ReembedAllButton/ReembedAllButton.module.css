@@ -28,7 +28,7 @@
   cursor: pointer;
   font-size: 14px;
   color: var(--color-warning-text);
-  transition: all 0.2s;
+  transition: background-color var(--motion-normal) var(--motion-easing);
 }
 
 .alertButton:hover {

@@ -4,11 +4,6 @@
   gap: 0.75rem;
 }
 
-
-
-
-
-
 .btnBack {
   background: none;
   border: none;
@@ -20,11 +15,6 @@
 }
 
 .loading,
-.empty {
-  text-align: start;
-  padding: 2rem;
-  color: var(--color-text-muted);
-}
 
 .table {
   border: 1px solid var(--color-border);
@@ -67,7 +57,6 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-
 
 .header {
   display: flex;

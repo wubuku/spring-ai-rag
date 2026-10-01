@@ -12,7 +12,7 @@ import { Dialog } from '../components/Dialog';
 import { ImeSafeForm } from '../components/ImeSafeForm';
 import { useToast } from '../components/Toast';
 import { Button } from '../components/Button';
-import { StatusBadge } from '../components/ui';
+import { EmptyState, StatusBadge } from '../components/ui';
 import type { StatusTone } from '../components/ui';
 import styles from './ABTest.module.css';
 
@@ -73,7 +73,7 @@ function ExperimentList({ onSelect }: { onSelect: (id: number) => void }) {
       {isPending ? (
         <div className={styles.loading}>{t('common.loading')}</div>
       ) : !data?.data?.length ? (
-        <div className={styles.empty}>{t('abtest.noExperiments')}</div>
+        <EmptyState>{t('abtest.noExperiments')}</EmptyState>
       ) : (
         <div className={styles.table}>
           <div className={styles.tableHead}>
@@ -154,7 +154,7 @@ function ExperimentDetail({ experimentId, onBack }: { experimentId: number; onBa
   });
 
   if (expPending) return <div className={styles.loading}>{t('common.loading')}</div>;
-  if (!exp) return <div className={styles.empty}>{t('abtest.notFound')}</div>;
+  if (!exp) return <EmptyState>{t('abtest.notFound')}</EmptyState>;
 
   return (
     <div>

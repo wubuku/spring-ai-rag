@@ -28,11 +28,6 @@
 
 .loading,
 .error,
-.empty {
-  text-align: start;
-  padding: 2rem;
-  color: var(--color-text-muted);
-}
 
 .error {
   color: var(--color-error);
@@ -293,7 +288,7 @@
   font-size: 0.75rem;
   color: var(--color-text-muted);
   font-weight: 600;
-  letter-spacing: 0.05em;
+  letter-spacing: 0;
   text-transform: uppercase;
 }
 

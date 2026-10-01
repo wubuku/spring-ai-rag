@@ -17,6 +17,7 @@ import { ImeSafeForm } from '../components/ImeSafeForm';
 import { useBlobUrlOpener } from '../hooks/useBlobUrlOpener';
 import { useImeComposition } from '../utils/ime';
 import styles from './Documents.module.css';
+import { EmptyState } from '../components/ui';
 
 type DocumentConfirmation =
   | { kind: 'disable'; document: Document }
@@ -545,9 +546,9 @@ export function Documents() {
                 ))}
                 {data?.data?.documents?.length === 0 && (
                   <tr>
-                    <td colSpan={11} className={styles.empty}>
+                    <EmptyState as="td" colSpan={11} align="center">
                       {t('documents.noDocuments')}
-                    </td>
+                    </EmptyState>
                   </tr>
                 )}
               </tbody>

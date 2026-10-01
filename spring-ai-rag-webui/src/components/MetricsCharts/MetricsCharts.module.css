@@ -19,7 +19,9 @@
   color: var(--color-text-muted);
   cursor: pointer;
   font-size: 0.875rem;
-  transition: all 0.15s ease;
+  transition:
+    background-color var(--motion-fast) var(--motion-easing),
+    color var(--motion-fast) var(--motion-easing);
 }
 
 .toggle button:hover {

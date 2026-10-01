@@ -1040,10 +1040,13 @@
     display: none;
   }
 
+  /* No !important needed: this media query follows the base rule at equal
+     specificity, and the base `flex: 0 0 auto` already resolves flex-basis
+     to auto. The important flags were never load-bearing. */
   .treePanel {
-    width: 100% !important;
+    width: 100%;
     height: max(320px, 42vh);
-    flex-basis: auto !important;
+    flex-basis: auto;
     border-bottom: 1px solid var(--color-border);
   }
 

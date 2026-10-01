@@ -2,9 +2,9 @@
 
 > **对应规划**：[WEBUI_UNIFIED_DESIGN_LANGUAGE_PLAN.md](WEBUI_UNIFIED_DESIGN_LANGUAGE_PLAN.md)
 > **日期**：2026-08-28（Slice 1）· 2026-10-02（Slice 2、Slice 3A）
-> **状态**：Slice 1、Slice 2、Slice 3A、Slice 3B-1 已交付；Slice 3B-2 起待开始
+> **状态**：Slice 1、Slice 2、Slice 3A、Slice 3B-1、Slice 3B-2 已交付；Slice 4 起待开始
 > **工作区**：`/Users/yangjiefeng/Documents/wubuku/spring-ai-rag`
-> **分支**：`feature/webui-design-tokens-theme-gates-20261002`（Slice 2）· `feature/webui-shell-primitives-nav-20261002`（Slice 3A）· `feature/webui-status-badge-unify-20261002`（Slice 3B-1）
+> **分支**：`feature/webui-design-tokens-theme-gates-20261002`（Slice 2）· `feature/webui-shell-primitives-nav-20261002`（Slice 3A）· `feature/webui-status-badge-unify-20261002`（Slice 3B-1）· `feature/webui-empty-state-motion-debt-20261002`（Slice 3B-2）
 > **实施基线**：Slice 1 `origin/main@c36bd43e` · Slice 2 `main@86ae9049`
 
 ## 1. 当前约束
@@ -46,7 +46,8 @@
 | Slice 2：Token、Theme 与机器门禁 | **已交付（Batch 753）** | generator 幂等；undefined variable=0；新增设计债务=0；theme/Portal/chart 合同通过 |
 | Slice 3A：命令 primitive + 导航图标 + Shell | **已交付（Batch 754）** | `Layout.module.css` 债务清零；导航图标统一；可访问名称与顺序冻结 |
 | Slice 3B-1：StatusBadge 与跨页徽章统一 | **已交付（Batch 755）** | 徽章跨页重复消除；warning 对比度缺陷修复；债务 81→79 |
-| Slice 3B-2：其余 primitive 与页面迁移 | 待开始 | Shell 在四视口、light/dark/system 下无溢出、低对比或焦点丢失；公共组件 API 有测试 |
+| Slice 3B-2：EmptyState 与 motion/特异性债务 | **已交付（Batch 756）** | `transition-all`/`!important`/`letter-spacing` 三类归零；债务 79→65 |
+| Slice 4：Chat/Search/Documents 高频工作流迁移 | 待开始 | 每批 focused Vitest + Mock Playwright + computed style/contrast/geometry 通过后独立提交 |
 | Slice 4：高频工作流迁移 | 待开始 | 每批 focused Vitest + Mock Playwright + computed style/contrast/geometry 通过后独立提交 |
 | Slice 5：运营与管理页迁移 | 待开始 | 13 个 route 全部进入统一 PageShell，迁移文件不再使用 raw color/legacy alias/数值 z-index |
 | Slice 6：债务收口与双语长青文档 | 待开始 | 全量门禁、文档与交付材料完成 |
@@ -267,3 +268,52 @@ bg / border / text 三元组，没有实心所需的 `on-*` 色对。强行补�
 Slice 3B-2：`EmptyState` / `PageHeader` / `TableFrame` / `Tabs` primitive，
 迁移 Alerts、Metrics、Evaluation、Settings 等仍使用 `transition: all`（8 处）与
 跨页 form/table 声明的页面。
+
+---
+
+# Slice 3B-2：EmptyState 与 motion / 特异性债务清零（Batch 756，2026-10-02）
+
+## S3B2.1 勘察结论
+
+空态是本项目**跨页重复最严重**的一处：9 个文件共 15 处调用，7 份页面 CSS 各自
+重写几乎相同的三条声明。更关键的是重复已经催生了一个 hack——Documents 的空态挂在
+`<td>` 上，被 `.table td { padding: 0.75rem 1rem }` 压过，于是写了
+`padding: 2rem !important`。
+
+## S3B2.2 关键决定
+
+1. **宿主用判别联合建模**：`as="td"` 才允许 `colSpan`，`as="div"` 不允许。
+   把两者混成一个宽松联合会让错误在运行时才暴露。
+2. **渲染真正的 `<td>` 而非 div 套 class**：这让特异性冲突从根上消失，
+   而不是用 `!important` 换一个更高优先级。
+3. **两处大写标签字距归零，而不是给门禁加分类**：规划冻结了"字距全局为 0"。
+   为了两个调用点去扩宽自己刚建的规则，正是"改门禁换绿"，因此选择遵守规则。
+
+## S3B2.3 债务变化
+
+| kind | Batch 755 | Batch 756 | delta |
+|---|---|---|---|
+| transition-all | 8 | **0** | -8 |
+| important | 3 | **0** | -3 |
+| letter-spacing | 2 | **0** | -2 |
+| legacy-alias | 41 | 40 | -1 |
+| raw-color | 25 | 25 | 0 |
+| **合计** | **79** | **65** | **-14** |
+
+指纹 43 → 32；CSS 净减 67 行（27 增 / 94 删）。三类规则**彻底归零**。
+
+## S3B2.4 验证证据
+
+- `npm run test:run`：71 文件 **737/737 通过**（Batch 755 为 731，+6）。
+- `npm run test:design-system`：39/39；typecheck、lint、tokens:check、
+  check:design-system、check:alignment 全通过。
+- `npm run build`：通过；initial chunk 110.28 KiB gzip；构建 CSS 17.59 KiB gzip。
+- `scripts/verify-project-docs.sh` 11/11、`verify-no-pessimistic-locks.sh`、
+  shell 语法、`git diff --check`、新增行密钥扫描：通过。
+- 本切片未触碰后端、API、schema 与 LLM 路径。
+
+## S3B2.5 下一切片入口
+
+Slice 4：Chat / Search / Documents 高频工作流迁移。剩余债务集中在
+`legacy-alias`（40）与 `raw-color`（25），二者都指向 `color: white` 一类
+已不存在的旧契约，适合按页面批次逐个迁移。

@@ -71,7 +71,7 @@
   cursor: pointer;
   font-size: 0.9rem;
   color: var(--color-text);
-  transition: all 0.15s ease;
+  transition: background-color var(--motion-fast) var(--motion-easing);
 }
 
 .cancelBtn:hover {

@@ -10,11 +10,6 @@
 }
 
 .loading,
-.empty {
-  text-align: start;
-  padding: 2rem;
-  color: var(--color-text-muted);
-}
 
 .raw {
   margin-top: 1.5rem;

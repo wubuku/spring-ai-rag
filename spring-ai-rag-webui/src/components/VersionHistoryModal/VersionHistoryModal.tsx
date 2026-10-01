@@ -6,6 +6,7 @@ import type { DocumentVersion } from '../../api/documents';
 import { computeLineDiff, truncateForPreview } from './diffUtils';
 import { Dialog } from '../Dialog';
 import styles from './VersionHistoryModal.module.css';
+import { EmptyState } from '../ui';
 
 interface VersionHistoryModalProps {
   documentId: number;
@@ -158,7 +159,7 @@ export function VersionHistoryModal({
                   </div>
 
                   {data.data.versions.length === 0 ? (
-                    <div className={styles.empty}>{t('versions.noVersions', 'No version history found')}</div>
+                    <EmptyState>{t('versions.noVersions', 'No version history found')}</EmptyState>
                   ) : (
                     <div className={styles.versionList}>
                       {data.data.versions.map(v => {

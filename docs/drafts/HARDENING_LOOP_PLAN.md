@@ -2,6 +2,33 @@
 
 - 分支：`codex/batch690-eval-ctr
 
+### Batch 756（已交付）
+
+- 分支：`feature/webui-empty-state-motion-debt-20261002`
+- 内容：WebUI 统一设计语言 **Slice 3B-2：EmptyState primitive + motion/特异性债务清零**。
+  勘察发现 `.empty` 空态在 **9 个文件、15 处调用**被手写，**7 份页面 CSS 重复定义
+  几乎相同的三条声明**（`text-align: start; padding: 2rem; color: var(--color-text-muted)`）。
+- 交付：
+  - `src/components/ui/EmptyState/`：`align`（start 默认 / center 表格行）+ `as`
+    （`div` / `td`）宿主开关，6 个 focused 测试。**宿主类型用判别联合建模**，
+    `colSpan` 只在 `as="td"` 时合法，不是把两种属性混成宽松联合。
+  - `Documents` 的空态原本挂在 `<td>` 上，被 `.table td { padding }` 压过，
+    于是写了 `padding: 2rem !important`。改为渲染真正的 `<td>` 后，特异性冲突
+    本身消失，`!important` 不再需要。
+  - 8 处 `transition: all` 全部改为**逐一枚举实际变化的属性**并接 motion token；
+    每处的 hover/drag/active 状态只动颜色系属性，因此不存在遗漏的隐式动画。
+  - `Files` 的 2 处 `!important` 是历史遗留：媒体查询与基础规则同特异性且在源码
+    更靠后，`!important` 从未承重，直接删除并在注释中写明原因。
+  - 2 处大写微标签的 `letter-spacing: 0.05em` **归零**。这里选择了遵守规划
+    冻结的"字距全局为 0"，而不是给门禁新增一个分类来迁就两个调用点——
+    改自己的门禁换绿正是本批要避免的模式。
+- 指标：设计债务 **79 → 65**（-14），指纹 43 → 32；其中
+  `transition-all` 8→**0**、`important` 3→**0**、`letter-spacing` 2→**0**
+  三个类别彻底归零；`legacy-alias` 41→40；CSS 净减 67 行（27 增 / 94 删）；
+  `npm run test:run` 71 文件 **737/737**（+6）；`test:design-system` 39/39；
+  typecheck、lint、tokens:check、check:design-system、check:alignment 全通过；
+  build initial chunk 110.28 KiB gzip；verify-project-docs 11/11。
+
 ### Batch 755（已交付）
 
 - 分支：`feature/webui-status-badge-unify-20261002`
