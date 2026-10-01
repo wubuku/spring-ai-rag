@@ -30,6 +30,7 @@
 | 使用 JSONB 结构化记录检索 | [REST API：JSONB Payload 检索](rest-api-zh-CN.md#json-结构化记录jsonb-payload-检索) | [外部文档同步 Client 指南](external-document-sync-client-guide-zh-CN.md) |
 | 运行持久化嵌入任务 / 质量回归 | [开发者参考](developer-reference-zh-CN.md) | [测试指南](testing-guide-zh-CN.md) |
 | 治理或修改 WebUI 水平对齐 | [WebUI 水平对齐指南](webui-alignment-guidelines-zh-CN.md) | [测试指南](testing-guide-zh-CN.md) |
+| 新增 token、图标或共享 UI 基元，或被设计系统门禁拦下 | [WebUI 设计语言](webui-design-language-zh-CN.md) | [测试指南](testing-guide-zh-CN.md)、`spring-ai-rag-webui/scripts/check-design-system.mjs` |
 | 做领域定制 | [extension-guide-zh-CN.md](extension-guide-zh-CN.md) | `demos/demo-domain-extension` |
 | 写测试 / 跑回归 | [testing-guide-zh-CN.md](testing-guide-zh-CN.md) | [developer-reference-zh-CN.md](developer-reference-zh-CN.md) E2E 段 |
 | 规划、实施、验收并交付复杂功能 | [规划、实施与验收工作流](delivery-workflow-zh-CN.md) | [当前活跃规划](drafts/README-zh-CN.md)、[测试指南](testing-guide-zh-CN.md) |
@@ -72,6 +73,7 @@
 | [multi-model-external-config-zh-CN.md](multi-model-external-config-zh-CN.md) | 外部 `models.json` 配置 |
 | [OpenAI 兼容就绪度与代码库上下文](openai-compatibility-readiness-zh-CN.md) | 默认关闭的受控预览、协议矩阵、代码导航、验证证据、Starter 边界与改进优先级 |
 | [WebUI 水平对齐指南](webui-alignment-guidelines-zh-CN.md) / [English](webui-alignment-guidelines.md) | WebUI 普通内容、合理居中例外、`alignment-policy` 门禁和验证命令 |
+| [WebUI 设计语言](webui-design-language-zh-CN.md) / [English](webui-design-language.md) | Token 唯一事实源、图标规则、共享基元契约、设计系统门禁的十类违规，以及门禁为什么必须能失败 |
 | [当前活跃规划](drafts/README-zh-CN.md) | 只列仍在准备或实施的方案；实施事实仍以代码与长青文档为准 |
 | [历史规划与实施记录归档](drafts/archive/README-zh-CN.md) | 仅用于追溯设计与验证证据，不是 Agent 默认阅读入口 |
 

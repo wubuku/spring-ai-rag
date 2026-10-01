@@ -37,10 +37,11 @@
 11. **境内 Docker / 构建网络**：拉镜像或构建超时先看 [docs/china-network-guide-zh-CN.md](docs/china-network-guide-zh-CN.md)，优先 `scripts/docker-build-local.sh`；不要把区域镜像硬编码进 Dockerfile。
 12. **1.0 发版 / 验产物**：按 [docs/release-checklist-zh-CN.md](docs/release-checklist-zh-CN.md) 与 `scripts/verify-release.sh`；检索默认与 goldenset 见 [docs/quality-defaults-zh-CN.md](docs/quality-defaults-zh-CN.md)。
 13. **WebUI 对齐**：普通页面内容默认 `text-align: start`；上传投放区等明确空间语义才允许居中，新增居中必须通过 `npm run check:alignment`。见 [WebUI 水平对齐指南](docs/webui-alignment-guidelines-zh-CN.md)。
-14. **数据访问并发**：禁止显式悲观锁、`SKIP LOCKED` 和 PostgreSQL advisory lock；使用条件写入/CAS、版本号、唯一约束、lease 与有界重试。运行 `scripts/verify-no-pessimistic-locks.sh`。
-15. **大块特性交付**：使用专用分支并持续合并已推送的 `origin/main`；默认在当前工作区开发，只有用户明确安排多人或多任务并行时才创建隔离 worktree。合并后按固定顺序完整复验，最终把特性分支合回并推送 `main`。见 [delivery-workflow-zh-CN.md](docs/delivery-workflow-zh-CN.md) §8。
-16. **复杂功能交付**：修改代码前完成自包含规划和规划 `3/3`；实现后先过基本集成硬门槛，再做实现 `3/3`。测试证据不能由 review 或用户首次手测替代。见 [规划、实施与验收工作流](docs/delivery-workflow-zh-CN.md)。
-17. **外部 Client 边界**：把外部项目需求改写为本仓自包含的通用能力、契约和测试；跟踪代码与文档不得依赖外部项目名称、私有协议或背景知识。见 [delivery-workflow-zh-CN.md](docs/delivery-workflow-zh-CN.md) §2。
+14. **WebUI 设计语言**：token 只能在 `spring-ai-rag-webui/design-tokens/tokens.json` 新增；禁止 emoji/dingbat 图标；重复 UI 用 `src/components/ui/` 的共享基元；改动后必须过 `npm run check:design-system`（10 类违规）。见 [WebUI 设计语言](docs/webui-design-language-zh-CN.md)。
+15. **数据访问并发**：禁止显式悲观锁、`SKIP LOCKED` 和 PostgreSQL advisory lock；使用条件写入/CAS、版本号、唯一约束、lease 与有界重试。运行 `scripts/verify-no-pessimistic-locks.sh`。
+16. **大块特性交付**：使用专用分支并持续合并已推送的 `origin/main`；默认在当前工作区开发，只有用户明确安排多人或多任务并行时才创建隔离 worktree。合并后按固定顺序完整复验，最终把特性分支合回并推送 `main`。见 [delivery-workflow-zh-CN.md](docs/delivery-workflow-zh-CN.md) §8。
+17. **复杂功能交付**：修改代码前完成自包含规划和规划 `3/3`；实现后先过基本集成硬门槛，再做实现 `3/3`。测试证据不能由 review 或用户首次手测替代。见 [规划、实施与验收工作流](docs/delivery-workflow-zh-CN.md)。
+18. **外部 Client 边界**：把外部项目需求改写为本仓自包含的通用能力、契约和测试；跟踪代码与文档不得依赖外部项目名称、私有协议或背景知识。见 [delivery-workflow-zh-CN.md](docs/delivery-workflow-zh-CN.md) §2。
 
 更全的陷阱列表：[docs/index-zh-CN.md](docs/index-zh-CN.md) §4、[docs/troubleshooting-zh-CN.md](docs/troubleshooting-zh-CN.md)。
 
