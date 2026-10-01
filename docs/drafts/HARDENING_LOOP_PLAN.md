@@ -98,6 +98,17 @@
 - 指标：2 个新测试类 13 用例绿；core 全量门禁 EXIT=0（6396
   tests）。
 
+### Batch 751（已交付）
+
+- 分支：`codex/batch-751-skill-input-tail-20261001`（已合入 main）
+- 内容：RuntimeSkillToolProvider 回调入口长尾（1 个新测试类，3
+  用例）：
+  - RuntimeSkillToolProviderInputTailTest：1 参 call 无上下文直接
+    抛 ISE（141）；input 对 null 工具入参归一 "{}"（128-129）；
+    损坏 JSON 包装 IAE "Invalid runtime Skill tool input"（130）。
+- 指标：1 个新测试类 3 用例绿；core 全量门禁 EXIT=0（6401
+  tests）。
+
 ### Batch 741b（已交付）
 
 - 分支：`codex/batch-741b-capability-classifier-tail-20261001`（已
