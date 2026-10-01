@@ -30,6 +30,7 @@
 | Use JSONB structured-record retrieval | [REST API: JSONB Payload Retrieval](rest-api.md#json-structured-records--jsonb-payload-retrieval) | [External Document Sync Client Guide](external-document-sync-client-guide.md) |
 | Run durable embedding jobs / quality regression | [Developer reference](developer-reference.md) | [Testing guide](testing-guide.md) |
 | Govern or modify WebUI horizontal alignment | [WebUI horizontal-alignment guidelines](webui-alignment-guidelines.md) | [Testing guide](testing-guide.md) |
+| Add a token, icon, or shared UI primitive, or trip the design-system gate | [WebUI design language](webui-design-language.md) | [Testing guide](testing-guide.md), `spring-ai-rag-webui/scripts/check-design-system.mjs` |
 | Domain customization | [extension-guide.md](extension-guide.md) | `demos/demo-domain-extension` |
 | Write / run tests | [testing-guide.md](testing-guide.md) | [developer-reference.md](developer-reference.md) E2E section |
 | Plan, implement, accept, and deliver substantial work | [Planning, Implementation, And Acceptance Workflow](delivery-workflow.md) | [Current active plans](drafts/README.md), [Testing guide](testing-guide.md) |
@@ -72,6 +73,7 @@ Chinese counterparts use the same basename with a `-zh-CN` suffix where availabl
 | [multi-model-external-config.md](multi-model-external-config.md) | External `models.json` config |
 | [OpenAI compatibility readiness and codebase context](openai-compatibility-readiness.md) | Disabled-by-default preview, protocol matrix, code navigation, verification evidence, Starter boundary, and improvement priorities |
 | [WebUI horizontal-alignment guidelines](webui-alignment-guidelines.md) / [中文](webui-alignment-guidelines-zh-CN.md) | WebUI defaults, justified centering exceptions, the `alignment-policy` gate, and verification commands |
+| [WebUI design language](webui-design-language.md) / [中文](webui-design-language-zh-CN.md) | Token single source, icon rules, shared primitive contracts, the ten design-system gate violations, and why the gate must be able to fail |
 | [Current active plans](drafts/README.md) | Lists only work still being prepared or implemented; code and evergreen docs remain authoritative |
 | [Historical plan and implementation archive](drafts/archive/README.md) | Design and verification provenance only; not a default reading path for Agents |
 

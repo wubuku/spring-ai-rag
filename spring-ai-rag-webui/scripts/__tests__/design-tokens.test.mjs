@@ -639,3 +639,36 @@ describe('emoji and dingbat gate', () => {
     expect(found).toEqual([]);
   });
 });
+
+describe('design-language document tracks the gate', () => {
+  // The document enumerates the violation classes in prose. That list is a
+  // hand-maintained copy of a machine-maintained one, which is exactly the
+  // shape that rots: this batch shipped a document claiming "ten classes"
+  // while the checker enforced eleven, and `weak-allow-reason` was simply
+  // missing. Nothing failed. So the copy is now checked against the original.
+  const checkerSource = readFileSync(join(projectRoot, 'scripts/check-design-system.mjs'), 'utf8');
+
+  const enforcedKinds = () =>
+    [...new Set([...checkerSource.matchAll(/kind: '([a-z-]+)'/g)].map(match => match[1]))].sort();
+
+  const documentedKinds = (relativePath) => {
+    const text = readFileSync(join(projectRoot, '..', relativePath), 'utf8');
+    const section = text.match(/## 4\.[^\n]*\n[\s\S]*?\n### 4\.1/);
+    if (!section) throw new Error(`${relativePath} has no section 4 listing the rule kinds`);
+    return [...new Set([...section[0].matchAll(/^\d+\. `([a-z-]+)`/gm)].map(match => match[1]))].sort();
+  };
+
+  it('finds every kind the checker can emit', () => {
+    // Guards the extraction itself: a regex that silently matches nothing would
+    // make every assertion below pass for the wrong reason.
+    expect(enforcedKinds().length).toBeGreaterThanOrEqual(10);
+    expect(enforcedKinds()).toContain('css-syntax');
+    expect(enforcedKinds()).toContain('weak-allow-reason');
+  });
+
+  it('documents exactly the enforced kinds, in both languages', () => {
+    const enforced = enforcedKinds();
+    expect(documentedKinds('docs/webui-design-language.md')).toEqual(enforced);
+    expect(documentedKinds('docs/webui-design-language-zh-CN.md')).toEqual(enforced);
+  });
+});

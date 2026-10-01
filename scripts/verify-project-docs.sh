@@ -223,52 +223,31 @@ NODE
 }
 
 check_bilingual_heading_structure() {
-  node <<'NODE'
-const fs = require('node:fs');
-
-const pairs = [
-  ['README.md', 'README-zh-CN.md'],
-  ['docs/index.md', 'docs/index-zh-CN.md'],
-  ['docs/developer-reference.md', 'docs/developer-reference-zh-CN.md'],
-  ['docs/project-context.md', 'docs/project-context-zh-CN.md'],
-  ['docs/delivery-workflow.md', 'docs/delivery-workflow-zh-CN.md'],
-  ['docs/business-client-integration.md', 'docs/business-client-integration-zh-CN.md'],
-  ['docs/openai-compatibility-readiness.md', 'docs/openai-compatibility-readiness-zh-CN.md'],
-  ['docs/testing-guide.md', 'docs/testing-guide-zh-CN.md']
-];
-
-function headingSignature(file) {
-  let inFence = false;
-  const signature = [];
-  for (const line of fs.readFileSync(file, 'utf8').split(/\r?\n/)) {
-    if (/^\s*(```|~~~)/.test(line)) {
-      inFence = !inFence;
-      continue;
-    }
-    if (inFence) {
-      continue;
-    }
-    const match = /^(#{1,6})\s+/.exec(line);
-    if (match) {
-      signature.push(match[1].length);
-    }
-  }
-  return signature;
+  # The registry lives in scripts/lib/docs-integrity-check.mjs. It used to be a
+  # hard-coded list of eight pairs inside this file, which meant 27 of the 35
+  # bilingual pairs in the repository were never examined — and four of them had
+  # drifted. The checker now discovers pairs on disk instead of enumerating them.
+  node scripts/lib/docs-integrity-check.mjs bilingual
 }
 
-for (const [english, chinese] of pairs) {
-  const englishSignature = headingSignature(english);
-  const chineseSignature = headingSignature(chinese);
-  if (JSON.stringify(englishSignature) !== JSON.stringify(chineseSignature)) {
-    console.error(`Heading structure mismatch: ${english} <> ${chinese}`);
-    console.error(`  EN: ${englishSignature.join(',')}`);
-    console.error(`  ZH: ${chineseSignature.join(',')}`);
-    process.exit(1);
-  }
+check_tracked_text_cleanliness() {
+  # A single NUL byte turns a tracked file into a git binary blob, silently
+  # disabling its diff, blame, and text search. One had already landed in an
+  # 11,923-line ledger inside an inline example, so nothing reported it.
+  node scripts/lib/docs-integrity-check.mjs text
 }
 
-console.log(`BILINGUAL_STRUCTURE_OK pairs=${pairs.length}`);
-NODE
+check_docs_integrity_self_test() {
+  # Runs the negative suite that proves the checks above can actually fail.
+  # Without this, the integrity rules could rot into "always green" and nothing
+  # in the pipeline would notice — the same failure mode this repository has
+  # already produced three times.
+  node scripts/test-support/docs-integrity-self-test.mjs > /dev/null || {
+    echo "Documentation integrity self-test failed; the checks may no longer reject anything." >&2
+    node scripts/test-support/docs-integrity-self-test.mjs >&2 || true
+    return 1
+  }
+  echo "Every documentation integrity rule has at least one case that proves it rejects."
 }
 
 check_business_client_discoverability() {
@@ -381,6 +360,18 @@ for (const name of ['dev', 'build', 'lint', 'test:run', 'test:e2e']) {
   }
 }
 NODE
+
+  # Node helpers the documentation gate depends on. A missing module would make
+  # the gate fail loudly rather than quietly, but the failure would read as a
+  # repository defect instead of a packaging one, so name them here.
+  for module in \
+      scripts/lib/docs-integrity-check.mjs \
+      scripts/test-support/docs-integrity-self-test.mjs; do
+    [[ -f "$module" ]] || {
+      echo "Missing documentation integrity module: $module" >&2
+      return 1
+    }
+  done
 }
 
 check_shell_syntax() {
@@ -465,7 +456,9 @@ run_check "Prerequisites" require_commands
 run_check "OpenClaw/project Skill boundary" check_local_state_boundary
 run_check "Agent entry size limits" check_entry_sizes
 run_check "Markdown links and local-state dependencies" check_markdown_links_and_boundaries
+run_check "Tracked text files contain no NUL bytes" check_tracked_text_cleanliness
 run_check "Bilingual heading structure" check_bilingual_heading_structure
+run_check "Documentation integrity self-test" check_docs_integrity_self_test
 run_check "Business-client integration discoverability" check_business_client_discoverability
 run_check "Project invariants" check_project_invariants
 run_check "Documented scripts and commands" check_scripts_and_commands
