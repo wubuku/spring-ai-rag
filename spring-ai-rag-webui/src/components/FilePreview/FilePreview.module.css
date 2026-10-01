@@ -5,7 +5,7 @@
   height: 100%;
   overflow: auto;
   padding: 1rem;
-  background: var(--color-bg-secondary);
+  background: var(--color-surface);
 }
 
 .htmlContent {
@@ -129,7 +129,7 @@
   align-items: center;
   justify-content: center;
   padding: 1rem;
-  background: var(--color-bg-secondary);
+  background: var(--color-surface);
   overflow: auto;
 }
 

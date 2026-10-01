@@ -234,7 +234,7 @@
 
 .snippet {
   font-size: 0.9rem;
-  color: var(--color-text-secondary);
+  color: var(--color-text-muted);
   line-height: 1.5;
   overflow: hidden;
   display: -webkit-box;
@@ -245,7 +245,7 @@
 .searchBtn {
   padding: 0.625rem 1.25rem;
   background: var(--color-primary);
-  color: white;
+  color: var(--color-on-primary);
   border: none;
   border-radius: 8px;
   cursor: pointer;

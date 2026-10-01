@@ -2,6 +2,37 @@
 
 - 分支：`codex/batch690-eval-ctr
 
+### Batch 757（已交付）
+
+- 分支：`feature/webui-empty-state-motion-debt-20261002` 之后的
+  `feature/webui-oncolor-contrast-20261002`
+- 内容：WebUI 统一设计语言 **Slice 3B-3：填充面对比度修复 + 兼容 alias 收口**。
+  这是把 Slice 3B 启动时记录的 65 项设计债务**清零**的一批。
+- 勘察：raw-color 25 处**全部**是同一个旧契约 `color: white`；legacy-alias 40 处
+  只涉及 4 个别名。两个类别都是机械可迁移的，不涉及行为变更。
+- 关键发现——**这是真实的可访问性缺陷，不只是风格问题**：filled 按钮/徽章用
+  `color: white` 配彩色背景，按 WCAG 对比度计算，9 组「背景×主题」组合里 **8 组低于
+  AA 的 4.5:1**，最差的暗色 warning 仅 **1.67:1**。按钮文字约 0.9rem/常规字重，
+  不属于 large text，适用 4.5:1 而非 3:1。
+- 交付：
+  - 新增 5 个 `on-*` token（`on-primary` / `on-primary-hover` / `on-error` /
+    `on-warning` / `on-success`），取值由对比度计算得出，**在 light 与 dark 下同时
+    ≥4.5:1**；
+  - 25 处 `color: white` 按其所在规则的 `background` 自动匹配对应 `on-*`；
+    顺带修正 Batch 753 就存在的 `--color-on-primary`（当时 light 是白色，仅 3.68）；
+  - 40 处 legacy alias 按核对过的映射表改为 canonical token，随后从
+    `tokens.json` **移除 8 条兼容 alias**——token 体系真正收口；
+  - Chat 用户气泡的 `color-mix(in srgb, white 90%, transparent)` 改引用
+    `var(--color-on-primary)`；
+  - 新增对比度可执行测试：每对 `on-*`/surface 在两个主题下断言 ≥4.5:1，并断言
+    所选前景**不劣于白色**（而不是"永不使用白色"——后者是错的，primary-hover 与
+    accent 上白色才是正确选择）。
+- 指标：设计债务 **65 → 0**，`design-debt-baseline.json` 变为空基线；
+  `npm run test:run` 71 文件 **737/737**；`test:design-system` **50/50**（+11）；
+  typecheck、lint、tokens:check、check:design-system、check:alignment 全通过；
+  build initial chunk 110.28 KiB gzip；verify-project-docs 11/11。
+  至此 Batch 753 立项时记录的 85 项债务全部清零。
+
 ### Batch 756（已交付）
 
 - 分支：`feature/webui-empty-state-motion-debt-20261002`

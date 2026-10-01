@@ -8,7 +8,7 @@
 .createBtn {
   padding: 0.625rem 1.25rem;
   background: var(--color-primary);
-  color: white;
+  color: var(--color-on-primary);
   border: none;
   border-radius: 8px;
   cursor: pointer;
@@ -37,7 +37,7 @@
 
 .meta {
   font-size: 0.85rem;
-  color: var(--color-text-secondary);
+  color: var(--color-text-muted);
   margin-bottom: 4px;
 }
 
@@ -51,7 +51,7 @@
 .deleteBtn,
 .purgeBtn {
   background: var(--color-error);
-  color: white;
+  color: var(--color-on-error);
   padding: 4px 12px;
   font-size: 0.8rem;
   border: none;
@@ -71,7 +71,7 @@
 
 .viewBtn {
   background: var(--color-primary);
-  color: white;
+  color: var(--color-on-primary);
   padding: 4px 12px;
   font-size: 0.8rem;
   border: none;
@@ -140,7 +140,7 @@
 
 .purgeMetric dt {
   min-width: 0;
-  color: var(--color-text-secondary);
+  color: var(--color-text-muted);
   font-size: 0.8125rem;
 }
 
@@ -203,7 +203,7 @@
 .purgeConfirmBtn {
   border: 1px solid var(--color-error);
   background: var(--color-error);
-  color: white;
+  color: var(--color-on-error);
 }
 
 .secondaryBtn:disabled,

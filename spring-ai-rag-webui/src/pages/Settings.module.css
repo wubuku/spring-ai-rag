@@ -166,7 +166,7 @@
 .saveBtn {
   padding: 0.625rem 1.5rem;
   background: var(--color-primary);
-  color: white;
+  color: var(--color-on-primary);
   border: none;
   border-radius: 6px;
   cursor: pointer;
@@ -187,7 +187,7 @@
 
 .langBtn {
   padding: 0.625rem 1.25rem;
-  background: var(--color-background);
+  background: var(--color-bg);
   border: 1px solid var(--color-border);
   border-radius: 8px;
   cursor: pointer;
@@ -206,10 +206,10 @@
 .langActive {
   background: var(--color-primary);
   border-color: var(--color-primary);
-  color: white;
+  color: var(--color-on-primary);
 }
 
 .langActive:hover {
   background: var(--color-primary-hover);
-  color: white;
+  color: var(--color-on-primary-hover);
 }

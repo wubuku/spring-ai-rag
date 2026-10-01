@@ -74,7 +74,7 @@
   flex: 1;
   padding: 8px 16px;
   background: var(--color-primary);
-  color: white;
+  color: var(--color-on-primary);
   border: none;
   border-radius: 6px;
   cursor: pointer;
@@ -95,7 +95,7 @@
 .forceBtn {
   padding: 8px 16px;
   background: var(--color-warning);
-  color: white;
+  color: var(--color-on-warning);
   border: none;
   border-radius: 6px;
   cursor: pointer;

@@ -601,7 +601,7 @@ function CreateKeyModal({ onClose }: { onClose: () => void }) {
           </ImeSafeForm>
         ) : (
           <div>
-            <p style={{ marginBottom: '0.75rem', color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>
+            <p style={{ marginBottom: '0.75rem', color: 'var(--color-text-muted)', fontSize: '0.875rem' }}>
               {t('apiKeys.keyCreated')}
             </p>
             <div className={styles.rawKeyBox}>
@@ -1047,7 +1047,7 @@ function RotateKeyModal({
           </div>
         ) : (
           <div>
-            <p style={{ marginBottom: '0.75rem', color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>
+            <p style={{ marginBottom: '0.75rem', color: 'var(--color-text-muted)', fontSize: '0.875rem' }}>
               {preparedRotation
                 ? shownOnceSecret
                   ? t('apiKeys.rotationPrepared')

@@ -2,7 +2,7 @@
 
 .cardLabel {
   font-size: 0.8rem;
-  color: var(--text-secondary);
+  color: var(--color-text-muted);
 }
 
 
@@ -42,7 +42,7 @@
 
 
 .muted {
-  color: var(--text-secondary);
+  color: var(--color-text-muted);
 }
 
 
@@ -59,7 +59,7 @@
   align-self: flex-start;
   padding: 0.5rem 1rem;
   background: var(--color-primary);
-  color: white;
+  color: var(--color-on-primary);
   border: none;
   border-radius: 6px;
   cursor: pointer;

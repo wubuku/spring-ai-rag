@@ -39,7 +39,7 @@
 .retryBtn {
   padding: 0.625rem 1.25rem;
   background: var(--color-primary);
-  color: white;
+  color: var(--color-on-primary);
   border: none;
   border-radius: 8px;
   cursor: pointer;

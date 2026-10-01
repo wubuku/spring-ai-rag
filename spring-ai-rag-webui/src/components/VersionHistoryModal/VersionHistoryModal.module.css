@@ -49,7 +49,7 @@
   border-radius: 8px;
   cursor: pointer;
   transition: border-color 0.15s, background 0.15s;
-  background: var(--color-background);
+  background: var(--color-bg);
 }
 
 .versionItem:hover {
@@ -68,7 +68,7 @@
 
 .versionItem.compareMode:hover {
   border-color: var(--color-border);
-  background: var(--color-background);
+  background: var(--color-bg);
 }
 
 .versionItemSelected.compareMode:hover {
@@ -174,7 +174,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 0.75rem;
-  background: var(--color-background);
+  background: var(--color-bg);
   border-radius: 8px;
   margin-bottom: 1rem;
   font-size: 0.875rem;
@@ -200,7 +200,7 @@
 .compareBtn:hover:not(:disabled) {
   background: var(--color-primary);
   border-color: var(--color-primary);
-  color: white;
+  color: var(--color-on-primary);
 }
 
 .compareBtn:disabled {
@@ -214,7 +214,7 @@
   font-size: 0.8125rem;
   line-height: 1.5;
   overflow-x: auto;
-  background: var(--color-background);
+  background: var(--color-bg);
   border: 1px solid var(--color-border);
   border-radius: 8px;
 }
@@ -338,7 +338,7 @@
 }
 
 .pageBtn:hover:not(:disabled) {
-  background: var(--color-background);
+  background: var(--color-bg);
 }
 
 .pageBtn:disabled {

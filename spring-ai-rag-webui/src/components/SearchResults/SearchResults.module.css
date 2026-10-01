@@ -45,7 +45,7 @@
 
 .snippet {
   font-size: 0.9rem;
-  color: var(--color-text-secondary);
+  color: var(--color-text-muted);
   line-height: 1.5;
   overflow: hidden;
   display: -webkit-box;
