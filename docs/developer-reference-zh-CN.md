@@ -256,10 +256,11 @@ npm run check:design-system   # 设计债务门禁
 npm run test:design-system    # 生成器与门禁的 focused 测试
 ```
 
-- `check:design-system` 扫描 CSS/TS/TSX/SVG，拦截 9 类违规：未定义 `var(--*)`、
+- `check:design-system` 扫描 CSS/TS/TSX/SVG，拦截 10 类违规：未定义 `var(--*)`、
   数值 z-index、字面颜色（含 CSS 命名色）、宽泛的 `transition` 简写、非零 `letter-spacing`、
   无理由 `!important`、跨页 `*.module.css` import、兼容 alias 调用，
-  以及 `emoji-glyph`（拿 emoji/dingbat 当界面图标）。
+  `emoji-glyph`（拿 emoji/dingbat 当界面图标），
+  以及 `css-syntax`（样式表解析不过）。
 - `emoji-glyph` 覆盖象形符号区，以及浏览器仍会独立渲染的 dingbat 区段（箭头、
   尖角、几何图形、对勾/叉号、星号）和充当关闭按钮的 `×`。
   **规则运行前先掩码注释、但保留字符串字面量**，所以文档里可以用 `→` 讲数据流，
@@ -268,7 +269,12 @@ npm run test:design-system    # 生成器与门禁的 focused 测试
   走和其他规则一样的行内 `design-token-allow` 窄例外。
 - 存量债务记录在 `design-tokens/design-debt-baseline.json`，指纹为
   `file|kind|value`。**新增违规、计数增加、基线过期三种情况都会失败**，所以债务
-  只能单调减少。
+  只能单调减少。基线文件**不存在**表示"没有债务"；**读不了或格式坏了**属于报错——
+  读不动自己账本的检查器，没资格被信任去执行账本。
+- `css-syntax` 是唯一**不可豁免**的一类：`design-token-allow` 对它无效。
+  解析不过的样式表不是风格偏好问题。注意 `npm run build` 不再是唯一能发现它的地方——
+  Vitest 会 stub 掉 CSS module，所以一个多余的 `}` 过去能同时通过 typecheck、lint
+  和全部测试。
 - 确有必要的窄例外用同行或上一行注释 `/* design-token-allow: <具体理由> */`；
   理由过短会被单独判为 `weak-allow-reason` 失败。不要用批量豁免换绿。
 - `check:design-tokens` 保留为 `check:design-system` 的兼容入口。

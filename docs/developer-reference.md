@@ -274,11 +274,12 @@ npm run check:design-system   # design-debt gate
 npm run test:design-system    # focused tests for the generator and the gate
 ```
 
-- `check:design-system` scans CSS, TS, TSX and SVG and rejects nine classes of
+- `check:design-system` scans CSS, TS, TSX and SVG and rejects ten classes of
   violation: undefined `var(--*)`, numeric z-index, literal colors (including CSS
   named colors), broad `transition` shorthands, non-zero `letter-spacing`,
   unreasoned `!important`, cross-page `*.module.css` imports, compatibility-alias
-  usage, and `emoji-glyph` — an emoji or dingbat used as an interface icon.
+  usage, `emoji-glyph` (an emoji or dingbat used as an interface icon), and
+  `css-syntax` (a stylesheet that does not parse).
 - `emoji-glyph` covers pictographs plus the dingbat blocks browsers still render as
   standalone glyphs (arrows, carets, geometric shapes, check/cross marks, stars)
   and the `×` that reads as a close affordance. **Comments are masked before the
@@ -289,7 +290,14 @@ npm run test:design-system    # focused tests for the generator and the gate
   unavoidable, take the same inline `design-token-allow` route as any other rule.
 - Existing debt is recorded in `design-tokens/design-debt-baseline.json` with the
   fingerprint `file|kind|value`. **New violations, increased counts and stale
-  over-sized entries all fail**, so debt can only shrink.
+  over-sized entries all fail**, so debt can only shrink. A missing baseline file
+  means "no debt"; an unreadable or malformed one is an error, because a gate
+  that cannot read its own records cannot be trusted to enforce them.
+- `css-syntax` is the one class that **cannot** be waived with
+  `design-token-allow`. A stylesheet that does not load is not a style
+  preference. Note that `npm run build` is no longer the only thing that catches
+  it: Vitest stubs CSS modules, so a stray brace used to pass typecheck, lint and
+  the entire test suite.
 - A genuinely necessary exception uses an inline
   `/* design-token-allow: <concrete reason> */` on the same or the previous line; a
   too-thin reason is separately rejected as `weak-allow-reason`. Do not buy a green

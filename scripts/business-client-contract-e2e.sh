@@ -4,6 +4,29 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+# The security assertions below are written in the fail-on-match shape:
+#
+#   if rg -F -f "$secret_file" "$target"; then fail; fi; pass
+#
+# A missing `rg` makes that `if` condition false, so the assertion reports PASS
+# on a response that plainly still contains the credential. Verified: with `rg`
+# removed from PATH, a response carrying `sk-live-…` and an internal collection id
+# passed both the leak check and the forbidden-value check with exit 0.
+#
+# A toolchain that cannot run these checks is a failed run, never a green one.
+require_command() {
+  local command_name="$1"
+  command -v "$command_name" >/dev/null 2>&1 || {
+    echo "Missing required command: ${command_name}" >&2
+    echo "This contract run cannot verify anything; treat it as failed, not as passed." >&2
+    exit 2
+  }
+}
+
+for REQUIRED_COMMAND in rg jq curl python3; do
+  require_command "$REQUIRED_COMMAND"
+done
+
 BASE_URL="${BASE_URL:-http://127.0.0.1:18084}"
 API="${BASE_URL%/}/api/v1/rag"
 ROOT_CREDENTIAL_FILE="${ROOT_CREDENTIAL_FILE:-}"

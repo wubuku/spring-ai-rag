@@ -404,6 +404,63 @@ check_added_secrets() {
   fi
 }
 
+check_gates_can_fail() {
+  # A gate that cannot fail is worse than no gate, and this repository has now
+  # produced three separate instances of that defect:
+  #
+  #   1. verify-no-pessimistic-locks.sh printed "no locks found" and exited 0
+  #      when `rg` was missing, because the scan swallowed the tool's exit code.
+  #   2. A hand-written emoji sweep reported the tree clean while its pattern
+  #      never covered the dingbat blocks; the code only exists now as a gate.
+  #   3. business-client-contract-e2e.sh asserts secrets are absent with
+  #      `if rg ...; then fail; fi; pass`. A missing `rg` makes the condition
+  #      false, so a response still carrying the credential passed with exit 0.
+  #
+  # Static half: any script that scans with an external matcher must declare a
+  # preflight for it. Dynamic half: the two gates that carry real security
+  # weight must exit non-zero when their tool is removed from PATH.
+  local unguarded=()
+  local script
+
+  for script in scripts/*.sh; do
+    # `command -v` anywhere counts, whether written inline or in a loop.
+    grep -q 'command -v' "$script" && continue
+    # --pcre2 is required: ripgrep's default engine has no look-behind, and a
+    # pattern it cannot compile exits non-zero, which would read as "clean".
+    if rg -q --pcre2 '(?<![A-Za-z0-9_./-])(rg|jq|yq)\s+-[a-zA-Z]' "$script"; then
+      unguarded+=("$script")
+    fi
+  done
+
+  if [[ ${#unguarded[@]} -gt 0 ]]; then
+    echo "These scripts scan with an external matcher but never preflight it," >&2
+    echo "so a missing tool silently turns the check into a pass:" >&2
+    printf '  %s\n' "${unguarded[@]}" >&2
+    return 1
+  fi
+
+  # A PATH with the usual shell builtins but none of the matchers.
+  local stripped_path
+  stripped_path="$(mktemp -d)"
+  for utility in bash env cat mktemp printf; do
+    [[ -x "/usr/bin/$utility" || -x "/bin/$utility" ]] \
+      && ln -sf "$(command -v "$utility")" "$stripped_path/$utility" 2>/dev/null || true
+  done
+
+  local gate
+  for gate in scripts/verify-no-pessimistic-locks.sh scripts/business-client-contract-e2e.sh; do
+    if PATH="$stripped_path" bash "$gate" >/dev/null 2>&1; then
+      echo "$gate exited 0 without ripgrep on PATH." >&2
+      echo "A security gate that cannot run must fail, not pass." >&2
+      rm -rf "$stripped_path"
+      return 1
+    fi
+  done
+
+  rm -rf "$stripped_path"
+  echo "Every matcher-using script preflights its tool; both security gates fail closed without it."
+}
+
 run_check "Prerequisites" require_commands
 run_check "OpenClaw/project Skill boundary" check_local_state_boundary
 run_check "Agent entry size limits" check_entry_sizes
@@ -415,5 +472,6 @@ run_check "Documented scripts and commands" check_scripts_and_commands
 run_check "Shell syntax" check_shell_syntax
 run_check "Git whitespace" git diff HEAD --check
 run_check "Added-line secret scan" check_added_secrets
+run_check "Gates can fail closed" check_gates_can_fail
 
 echo "Project documentation verification: $PASS_COUNT checks passed."
