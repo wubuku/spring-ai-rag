@@ -228,10 +228,14 @@ toggle, which is why the row is a toggle button and deliberately **not**
 ## 6. A write action must report its failure
 
 `npm run check:mutation-errors` is chained into `npm run lint` and scans every
-`.tsx` under `src/` for one violation:
+`.tsx` under `src/` for three violations:
 
 - `silent-mutation` — a `useMutation` that neither passes an `onError` (usually
   `showToast`) nor has its `.isError` rendered anywhere in the same file.
+- `no-op-error-handler` — an `onError` whose body is empty. **A handler that
+  swallows is not a handler.**
+- `swallowed-rejection` — a `catch` block that discards the failure without
+  saying why that is acceptable.
 
 Batch 791 surveyed all 37 mutations in `src/` and found 6 that failed
 invisibly: `cancelM`, `retryM` and `applyRepairM` in `Embeddings`, `createM`,
@@ -244,6 +248,25 @@ the user presses it again.
 The `apiClient` response interceptor does not rescue them: it normalises the
 message and clears the credential on 401, then rejects. Nothing appears on
 screen unless a component chooses to put it there.
+
+**Batch 798 found that the first rule had been asking the wrong question for
+seven batches.** It checked whether the key `onError` appeared, which
+`onError: () => {}` satisfies. `Alerts.tsx` shipped four of them — the create
+and delete of both SLO configurations and silence schedules — and the gate was
+green the entire time. On the two create mutations it is worse than a silent
+write: `onSuccess` calls `onHideForm()`, so a **rejected create closed the form
+and cleared the fields**. That reads as success. The rule now inspects the body,
+and the strings for two of them (`alerts.createError`, `alerts.deleteError`)
+turned out to have been sitting in both locale files the whole time, written
+for exactly this handler and referenced by nothing.
+
+`swallowed-rejection` is the weakest rule here by construction — anyone can
+write `// ignore`, and that is the point. Every legitimate `catch` in `src/`
+carries a sentence saying why: "storage may be unavailable", "error reporting
+must never break the UI", "the visual theme still applies for this tab". Asking
+for that sentence costs one line at the moment the decision is made. Writing to
+the console is **not** this rule; a console trace is a decision with a visible
+trail, and which of those deserve a user-facing message is a product call.
 
 Two details the fixes had to get right, both pinned by tests:
 

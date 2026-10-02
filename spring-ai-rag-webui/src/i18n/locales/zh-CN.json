@@ -156,7 +156,8 @@
     "searchPlaceholder": "搜索文档",
     "loadError": "加载文档失败",
     "collectionsLoadFailed": "无法加载集合列表",
-    "missingEmbeddingsLoadFailed": "无法检查哪些文档缺少嵌入"
+    "missingEmbeddingsLoadFailed": "无法检查哪些文档缺少嵌入",
+    "previewContentLoadError": "无法加载文档完整内容：{{error}}"
   },
   "collections": {
     "title": "知识库管理",
@@ -267,7 +268,9 @@
     "timeJustNow": "刚刚",
     "timeMinutesAgo": "{{count}}分钟前",
     "timeHoursAgo": "{{count}}小时前",
-    "modelsLoadFailed": "无法加载模型列表"
+    "modelsLoadFailed": "无法加载模型列表",
+    "feedbackError": "反馈提交失败，请重试。",
+    "exportError": "导出对话失败"
   },
   "search": {
     "title": "文档检索",
@@ -387,7 +390,9 @@
     "all": "全部",
     "loadFailed": "无法加载告警",
     "sloConfigLoadFailed": "无法加载 SLO 配置",
-    "silenceLoadFailed": "无法加载静默计划"
+    "silenceLoadFailed": "无法加载静默计划",
+    "sloConfigCreateError": "创建 SLO 配置失败",
+    "sloConfigDeleteError": "删除 SLO 配置失败"
   },
   "settings": {
     "title": "系统设置",

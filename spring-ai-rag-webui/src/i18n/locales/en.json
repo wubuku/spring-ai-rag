@@ -156,7 +156,8 @@
     "searchPlaceholder": "Search documents",
     "loadError": "Failed to load documents",
     "collectionsLoadFailed": "Could not load the collection list",
-    "missingEmbeddingsLoadFailed": "Could not check which documents are missing embeddings"
+    "missingEmbeddingsLoadFailed": "Could not check which documents are missing embeddings",
+    "previewContentLoadError": "Could not load the full document content: {{error}}"
   },
   "collections": {
     "title": "Collections",
@@ -267,7 +268,9 @@
     "timeJustNow": "Just now",
     "timeMinutesAgo": "{{count}}m ago",
     "timeHoursAgo": "{{count}}h ago",
-    "modelsLoadFailed": "Could not load the model list"
+    "modelsLoadFailed": "Could not load the model list",
+    "feedbackError": "Could not submit your feedback. Please try again.",
+    "exportError": "Could not export the conversation"
   },
   "search": {
     "title": "Search",
@@ -387,7 +390,9 @@
     "all": "All",
     "loadFailed": "Could not load alerts",
     "sloConfigLoadFailed": "Could not load SLO configurations",
-    "silenceLoadFailed": "Could not load silence schedules"
+    "silenceLoadFailed": "Could not load silence schedules",
+    "sloConfigCreateError": "Failed to create SLO configuration",
+    "sloConfigDeleteError": "Failed to delete SLO configuration"
   },
   "settings": {
     "title": "Settings",

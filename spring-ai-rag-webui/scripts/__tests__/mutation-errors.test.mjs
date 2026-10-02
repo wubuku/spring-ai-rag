@@ -99,6 +99,109 @@ const saveM = useMutation({ mutationFn: () => api.save() });
   });
 });
 
+describe('no-op-error-handler', () => {
+  // Batch 798. The rule existed for seven batches and only ever asked whether
+  // the key `onError` appeared, so `onError: () => {}` satisfied it. Four of
+  // those shipped in `Alerts.tsx`. A handler that swallows is not a handler.
+  it('rejects a write whose onError exists but does nothing', () => {
+    const source = `
+      const deleteM = useMutation({
+        mutationFn: () => alertsApi.deleteSilenceSchedule(name),
+        onSuccess: () => queryClient.invalidateQueries({ queryKey: ['silence'] }),
+        onError: () => {},
+      });
+    `;
+    expect(kinds(source)).toEqual(['no-op-error-handler']);
+  });
+
+  it('rejects a handler whose body is null rather than empty', () => {
+    const source = `
+      const createM = useMutation({ mutationFn: () => api.create(x), onError: () => null });
+    `;
+    expect(kinds(source)).toEqual(['no-op-error-handler']);
+  });
+
+  it('judges the declaration, not whether anything fires it', () => {
+    // Stated rather than assumed: this rule reads the options object and never
+    // checks for a `.mutate(` call, the same scope the `silent-mutation` rule
+    // has always had. A dead declaration still carries a handler that would
+    // swallow if it were ever wired up, and the fix is the same either way.
+    const source = `
+      const unusedM = useMutation({ mutationFn: () => api.create(x), onError: () => {} });
+      return <div>{nothing.toString()}</div>;
+    `;
+    expect(kinds(source)).toEqual(['no-op-error-handler']);
+  });
+
+  it('accepts the same mutation once the handler reports the failure', () => {
+    const source = `
+      const createM = useMutation({
+        mutationFn: () => alertsApi.createSloConfig(form),
+        onSuccess: () => { resetForm(); onHideForm(); },
+        onError: () => showToast(t('alerts.sloConfigCreateError'), 'error'),
+      });
+    `;
+    expect(kinds(source)).toEqual([]);
+  });
+
+  it('does not treat a sibling mutation’s empty handler as coverage', () => {
+    const source = `
+      const deleteM = useMutation({ mutationFn: () => api.delete(a), onError: () => {} });
+      const createM = useMutation({ mutationFn: () => api.create(b), onError: () => showToast('x') });
+    `;
+    expect(kinds(source)).toEqual(['no-op-error-handler']);
+  });
+});
+
+describe('swallowed-rejection', () => {
+  it('rejects a catch that discards the reason without saying why', () => {
+    const source = `
+      try {
+        localStorage.setItem(KEY, value);
+      } catch {}
+    `;
+    expect(kinds(source)).toEqual(['swallowed-rejection']);
+  });
+
+  it('accepts a catch that states why discarding is acceptable', () => {
+    // Every legitimate one in `src/` is in this shape. The comment is the whole
+    // rule: it costs one line, at the moment the decision is being made.
+    const source = `
+      try {
+        localStorage.setItem(KEY, value);
+      } catch {
+        // Persisting is best-effort: the theme still applies for this tab.
+      }
+    `;
+    expect(kinds(source)).toEqual([]);
+  });
+
+  it('does not demand a reason from a catch that does something', () => {
+    const source = `
+      try {
+        await submit(x);
+      } catch {
+        showToast(t('chat.feedbackError'), 'error');
+      }
+    `;
+    expect(kinds(source)).toEqual([]);
+  });
+
+  it('leaves writing to the console alone', () => {
+    // A console trace is a decision with a visible trail. Whether one of these
+    // deserves a user-facing message is a product call this gate should not
+    // make on its own.
+    const source = `
+      try {
+        await load();
+      } catch (err) {
+        console.error('Failed to fetch document content:', err);
+      }
+    `;
+    expect(kinds(source)).toEqual([]);
+  });
+});
+
 describe('the design-language document tracks this gate', () => {
   // The design gate shipped a document claiming "ten classes" while the
   // checker enforced eleven, and the accessibility gate inherited the same

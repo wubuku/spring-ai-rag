@@ -12,6 +12,7 @@ import {
   type SilenceSchedule,
 } from '../api/alerts';
 import { ImeSafeForm } from '../components/ImeSafeForm';
+import { useToast } from '../components/Toast';
 import styles from './Alerts.module.css';
 import { EmptyState, QueryErrorBanner, Tabs } from '../components/ui';
 
@@ -387,6 +388,7 @@ interface SloFormData {
 
 function SloConfigsTab({ showForm, onShowForm, onHideForm }: { showForm: boolean; onShowForm: () => void; onHideForm: () => void }) {
   const { t } = useTranslation();
+  const { showToast } = useToast();
   const queryClient = useQueryClient();
   const { data, isPending, isError, refetch } = useQuery({
     queryKey: ['slo-configs'],
@@ -397,7 +399,10 @@ function SloConfigsTab({ showForm, onShowForm, onHideForm }: { showForm: boolean
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['slo-configs'] });
     },
-    onError: () => {},
+    // 这四处曾经是 `onError: () => {}`。而 onSuccess 会 onHideForm()、清空表单——
+    // 也就是说创建失败时表单自己关掉了、字段自己清空了，看起来就像保存成功了，
+    // 用户唯一能观察到的现象只是"新 SLO 不在列表里"。
+    onError: () => showToast(t('alerts.sloConfigDeleteError'), 'error'),
   });
   const [form, setForm] = useState<SloFormData>({
     sloName: '', sloType: 'LATENCY', targetValue: '', unit: 'ms', description: '', enabled: true,
@@ -410,7 +415,7 @@ function SloConfigsTab({ showForm, onShowForm, onHideForm }: { showForm: boolean
       setForm({ sloName: '', sloType: 'LATENCY', targetValue: '', unit: 'ms', description: '', enabled: true });
       onHideForm();
     },
-    onError: () => {},
+    onError: () => showToast(t('alerts.sloConfigCreateError'), 'error'),
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -550,6 +555,7 @@ interface SilenceFormData {
 
 function SilenceSchedulesTab({ showForm, onShowForm, onHideForm }: { showForm: boolean; onShowForm: () => void; onHideForm: () => void }) {
   const { t } = useTranslation();
+  const { showToast } = useToast();
   const queryClient = useQueryClient();
   const { data, isPending, isError, refetch } = useQuery({
     queryKey: ['silence-schedules'],
@@ -560,7 +566,9 @@ function SilenceSchedulesTab({ showForm, onShowForm, onHideForm }: { showForm: b
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['silence-schedules'] });
     },
-    onError: () => {},
+    // `alerts.deleteError` 的文案一直躺在 en.json / zh-CN.json 里，从未被任何一处
+    // 引用过——正是为这个 onError 写的，只是没接上。
+    onError: () => showToast(t('alerts.deleteError'), 'error'),
   });
   const [form, setForm] = useState<SilenceFormData>({
     name: '', alertKey: '', silenceType: 'ONE_TIME', startTime: '', endTime: '', description: '', enabled: true,
@@ -573,7 +581,7 @@ function SilenceSchedulesTab({ showForm, onShowForm, onHideForm }: { showForm: b
       setForm({ name: '', alertKey: '', silenceType: 'ONE_TIME', startTime: '', endTime: '', description: '', enabled: true });
       onHideForm();
     },
-    onError: () => {},
+    onError: () => showToast(t('alerts.createError'), 'error'),
   });
 
   const handleSubmit = (e: React.FormEvent) => {
