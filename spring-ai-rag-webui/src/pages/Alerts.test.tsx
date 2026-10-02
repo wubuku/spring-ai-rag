@@ -224,7 +224,7 @@ describe('Alerts', () => {
     await user.click(await screen.findByText('latency-p99'));
 
     const deleteButton = screen.getByRole('button', {
-      name: 'alerts.deleteSilence',
+      name: 'alerts.delete',
     });
     await user.click(deleteButton);
 
@@ -606,7 +606,7 @@ describe('Alerts tab navigation, delivery modes and remaining form fields', () =
     });
 
     const deleteButton = await screen.findByRole('button', {
-      name: 'alerts.deleteSilence',
+      name: 'alerts.delete',
     });
     await user.click(deleteButton);
     await waitFor(() => {

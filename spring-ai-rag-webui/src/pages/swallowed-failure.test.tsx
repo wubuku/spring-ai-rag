@@ -141,6 +141,33 @@ describe('Chat: a failed thumbs-up is not a received thumbs-up', () => {
     expect(showToast).not.toHaveBeenCalled();
   });
 
+  it('reports a failed model list without being crammed into the control row', async () => {
+    vi.mocked(modelsApi.list).mockRejectedValue(new Error('503'));
+
+    withClient(<Chat />, '/chat/session-1');
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('chat.modelsLoadFailed');
+
+    // The model select is the control the banner is about, and it lives in a
+    // compact `align-items: center` row. A banner with a retry button wedged
+    // between a label and that select reads as broken layout, so it belongs
+    // above the row — the composer is a column, so it gets its own line.
+    const modelSelect = screen.getByTestId('chat-model-select');
+    const control = modelSelect.parentElement!;
+    expect(control).not.toContainElement(alert);
+    expect(alert.parentElement).toContainElement(modelSelect);
+  });
+
+  it('retries the model list from the banner', async () => {
+    vi.mocked(modelsApi.list).mockRejectedValueOnce(new Error('503'));
+
+    withClient(<Chat />, '/chat/session-1');
+
+    await userEvent.click(await screen.findByRole('button', { name: 'common.retry' }));
+    await waitFor(() => expect(vi.mocked(modelsApi.list).mock.calls.length).toBeGreaterThan(1));
+  });
+
   it('says so when an export fails', async () => {
     vi.mocked(chatApi.exportConversation).mockRejectedValue(new Error('403 Forbidden'));
 

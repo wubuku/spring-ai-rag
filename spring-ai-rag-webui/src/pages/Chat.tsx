@@ -581,6 +581,22 @@ export function Chat() {
         </div>
 
         <div className={styles.composer}>
+          {/* 失败时 availableModels 是空数组，模型下拉框会静默地变成禁用
+              且没有任何说明：用户看到的是一个灰掉的控件，分不清是"没配
+              模型"还是"模型列表没加载出来"。
+
+              横幅放在 contextRow **之外**：contextRow 是一条 align-items:
+              center 的紧凑横排，塞进去会把带重试按钮的提示挤成一条细缝，
+              夹在 label 和 select 之间也读着别扭。它描述的是"这一整排控件
+              都不可信"，不是"某一个下拉框坏了"。 */}
+          {modelsError && (
+            <QueryErrorBanner
+              onRetry={() => void refetchModels()}
+              retryLabel={t('common.retry')}
+            >
+              {t('chat.modelsLoadFailed')}
+            </QueryErrorBanner>
+          )}
           <div className={styles.contextRow}>
             {mode !== 'PLAIN' && (
               <div className={styles.scopeControl}>
@@ -624,17 +640,6 @@ export function Chat() {
               <label htmlFor="chat-model" className={styles.contextLabel}>
                 {t('chat.model')}
               </label>
-              {/* 失败时 availableModels 是空数组，模型下拉框会静默地变成禁用
-                  且没有任何说明：用户看到的是一个灰掉的控件，分不清是"没配
-                  模型"还是"模型列表没加载出来"。 */}
-              {modelsError && (
-                <QueryErrorBanner
-                  onRetry={() => void refetchModels()}
-                  retryLabel={t('common.retry')}
-                >
-                  {t('chat.modelsLoadFailed')}
-                </QueryErrorBanner>
-              )}
               <select
                 id="chat-model"
                 className={styles.contextSelect}

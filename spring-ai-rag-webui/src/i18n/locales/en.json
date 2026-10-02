@@ -347,7 +347,7 @@
     "unit": "Unit",
     "silencePlans": "Silence Plans",
     "createSilence": "Create Silence Plan",
-    "deleteSilence": "Delete",
+    "delete": "Delete",
     "noActiveAlerts": "No active alerts",
     "noSilencePlans": "No silence plans",
     "alertType": "Type",

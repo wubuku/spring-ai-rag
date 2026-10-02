@@ -531,7 +531,7 @@ function SloConfigsTab({ showForm, onShowForm, onHideForm }: { showForm: boolean
                 onClick={() => deleteMutation.mutate(slo.sloName)}
                 disabled={deleteMutation.isPending}
               >
-                {t('alerts.deleteSilence')}
+                {t('alerts.delete')}
               </button>
             </div>
           ))}
@@ -706,7 +706,7 @@ function SilenceSchedulesTab({ showForm, onShowForm, onHideForm }: { showForm: b
                 onClick={() => deleteMutation.mutate(schedule.name)}
                 disabled={deleteMutation.isPending}
               >
-                {t('alerts.deleteSilence')}
+                {t('alerts.delete')}
               </button>
             </div>
           ))}
