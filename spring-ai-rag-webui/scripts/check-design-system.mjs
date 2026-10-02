@@ -186,7 +186,7 @@ function findNamedColors(line) {
  * pattern containing a bare `//` (e.g. `/\/\//`) masks the rest of its line.
  * That can only hide a glyph on the same line, never invent a finding.
  */
-function stripComments(source) {
+export function stripComments(source) {
   let out = '';
   let index = 0;
   let quote = null;

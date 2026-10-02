@@ -94,6 +94,14 @@ describe('Search', () => {
     expect(screen.getByRole('button', { name: /search.searchButton/ })).toBeDisabled();
   });
 
+  it('names the search box instead of relying on its placeholder', () => {
+    renderSearch();
+
+    // 搜索框此前只有 placeholder，是本批修掉的"17 个控件无可访问名称"之一。
+    const input = screen.getByRole('textbox', { name: 'search.inputLabel' });
+    expect(input).toBe(screen.getByPlaceholderText(/search.placeholder/));
+  });
+
   it('restores an unsubmitted draft only for the same submitted URL', () => {
     const first = renderSearch(['/search?query=manual']);
     fireEvent.change(screen.getByPlaceholderText(/search.placeholder/), {

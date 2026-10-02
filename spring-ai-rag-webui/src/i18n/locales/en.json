@@ -224,6 +224,7 @@
   "chat": {
     "title": "Chat",
     "placeholder": "Ask anything about your documents…",
+    "inputLabel": "Message",
     "send": "Send",
     "newChat": "New Chat",
     "export": "Export",
@@ -257,6 +258,7 @@
   "search": {
     "title": "Search",
     "placeholder": "Search documents…",
+    "inputLabel": "Search query",
     "searchButton": "Search",
     "noResults": "No results found",
     "resultsCount": "{{count}} result(s) found",
@@ -322,6 +324,7 @@
     "active": "Active",
     "resolved": "Resolved",
     "sloConfig": "SLO Config",
+    "unit": "Unit",
     "silencePlans": "Silence Plans",
     "createSilence": "Create Silence Plan",
     "deleteSilence": "Delete",

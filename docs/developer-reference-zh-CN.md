@@ -253,6 +253,7 @@ npm run build
 npm run tokens:build          # 从 tokens.json 重新生成产物
 npm run tokens:check          # 只比对不写盘，CI 用这个（产物过期即失败）
 npm run check:design-system   # 设计债务门禁
+npm run check:a11y-forms      # 表单可访问性门禁
 npm run test:design-system    # 生成器与门禁的 focused 测试
 ```
 
@@ -278,7 +279,12 @@ npm run test:design-system    # 生成器与门禁的 focused 测试
 - 确有必要的窄例外用同行或上一行注释 `/* design-token-allow: <具体理由> */`；
   理由过短会被单独判为 `weak-allow-reason` 失败。不要用批量豁免换绿。
 - `check:design-tokens` 保留为 `check:design-system` 的兼容入口。
-- `lint` 串联 ESLint、`check:alignment` 与 `check:design-system`。
+- `check:a11y-forms` 扫描 `src/` 下每个 `.tsx`，拦截三类违规：没有可访问名称的表单
+  控件、什么都不标的 `<label>`、以及键盘够不到的 `onClick`。placeholder 不是名称；
+  光有 `role` 也不够——还必须声明 `tabIndex` 并处理按键。它没有债务基线，因为写下它
+  时针对的每一条违规都能修。详见
+  [webui-design-language-zh-CN.md](webui-design-language-zh-CN.md#5-表单可访问性)。
+- `lint` 串联 ESLint、`check:alignment`、`check:design-system` 与 `check:a11y-forms`。
   `test:coverage` 另有按 `vitest.config.ts` thresholds 的全局覆盖率下限。
 
 ### 6.2 运行与联调

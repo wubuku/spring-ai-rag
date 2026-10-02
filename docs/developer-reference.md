@@ -271,7 +271,8 @@ hand**:
 npm run tokens:build          # regenerate from tokens.json
 npm run tokens:check          # compare only, never writes; use this in CI
 npm run check:design-system   # design-debt gate
-npm run test:design-system    # focused tests for the generator and the gate
+npm run check:a11y-forms      # form-accessibility gate
+npm run test:design-system    # focused tests for the generator and the gates
 ```
 
 - `check:design-system` scans CSS, TS, TSX and SVG and rejects ten classes of
@@ -304,7 +305,14 @@ npm run test:design-system    # focused tests for the generator and the gate
   gate with blanket exemptions.
 - `check:design-tokens` is kept as a compatibility entry point for
   `check:design-system`.
-- `lint` chains ESLint, `check:alignment` and `check:design-system`.
+- `check:a11y-forms` scans every `.tsx` under `src/` and rejects a form control
+  with no accessible name, a `<label>` that labels nothing, and an `onClick` on an
+  element the keyboard cannot reach. A `placeholder` is not a name, and a `role`
+  is not enough on its own — the element must also declare `tabIndex` and handle a
+  key. It has no debt baseline, because every violation it was written against was
+  fixable. See [webui-design-language.md](webui-design-language.md#5-form-accessibility).
+- `lint` chains ESLint, `check:alignment`, `check:design-system` and
+  `check:a11y-forms`.
   `test:coverage` additionally enforces the global coverage thresholds from
   `vitest.config.ts`.
 

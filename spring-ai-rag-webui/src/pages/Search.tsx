@@ -237,6 +237,7 @@ export function Search() {
             onChange={e => setQuery(e.target.value)}
             onFocus={() => history.length > 0 && setShowHistory(true)}
             placeholder={t('search.placeholder')}
+            aria-label={t('search.inputLabel')}
             className={styles.searchInput}
           />
           {history.length > 0 && (

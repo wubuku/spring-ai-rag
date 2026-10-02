@@ -287,7 +287,8 @@ export function Settings() {
             </div>
 
             <div className={styles.field}>
-              <label className={styles.label}>API Key</label>
+              {/* 状态说明，不是表单控件：label 必须指向控件才有意义。 */}
+              <div className={styles.label}>API Key</div>
               <div className={styles.apiKeyStatus}>
                 <span className={styles.statusDot} data-ok={Boolean(selectedModel?.available)} />
                 <span>
@@ -467,25 +468,30 @@ export function Settings() {
                 ? '选择您偏好的界面语言。更改将立即生效。'
                 : 'Choose your preferred interface language. Changes take effect immediately.'}
             </p>
-            <div className={styles.field}>
-              <label className={styles.label}>
-                {i18n.language === 'zh-CN' ? '当前语言' : 'Current Language'}
-              </label>
-              <div className={styles.languageOptions}>
-                <button
-                  className={`${styles.langBtn} ${i18n.language === 'en' ? styles.langActive : ''}`}
-                  onClick={() => handleLanguageChange('en')}
-                >
-                  English
-                </button>
-                <button
-                  className={`${styles.langBtn} ${i18n.language === 'zh-CN' ? styles.langActive : ''}`}
-                  onClick={() => handleLanguageChange('zh-CN')}
-                >
-                  中文
-                </button>
-              </div>
-            </div>
+              {/* 语言是一组按钮而不是单个控件：label 无从指向，
+                  用 fieldset/legend 表达"这组选项"的语义。 */}
+              <fieldset
+                className={styles.field}
+                style={{ border: 'none', padding: 0, margin: 0 }}
+              >
+                <legend className={styles.label}>
+                  {i18n.language === 'zh-CN' ? '当前语言' : 'Current Language'}
+                </legend>
+                <div className={styles.languageOptions}>
+                  <button
+                    className={`${styles.langBtn} ${i18n.language === 'en' ? styles.langActive : ''}`}
+                    onClick={() => handleLanguageChange('en')}
+                  >
+                    English
+                  </button>
+                  <button
+                    className={`${styles.langBtn} ${i18n.language === 'zh-CN' ? styles.langActive : ''}`}
+                    onClick={() => handleLanguageChange('zh-CN')}
+                  >
+                    中文
+                  </button>
+                </div>
+              </fieldset>
           </div>
         )}
 

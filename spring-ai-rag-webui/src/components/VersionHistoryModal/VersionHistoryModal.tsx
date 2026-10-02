@@ -173,14 +173,30 @@ export function VersionHistoryModal({
                           <div
                             key={v.id}
                             className={`${styles.versionItem} ${isSelectedA || isSelectedB ? styles.versionItemSelected : ''} ${styles.compareMode}`}
+                            // 选择语义是循环的（填 A → 填 B → 取消 → 让位），不是复选框的布尔翻转，
+                            // 所以这里用 role="button" + aria-pressed，而不是 role="checkbox"：
+                            // 后者会向读屏承诺"按空格即可切换"，而 handleSelectForCompare 并不保证这一点。
+                            role="button"
+                            tabIndex={0}
+                            aria-pressed={isSelectedA || isSelectedB}
+                            aria-label={`Version ${v.versionNumber}`}
                             onClick={() => handleSelectForCompare(v)}
+                            onKeyDown={event => {
+                              if (event.key === 'Enter' || event.key === ' ') {
+                                event.preventDefault();
+                                handleSelectForCompare(v);
+                              }
+                            }}
                           >
                             <input
                               type="checkbox"
                               className={styles.versionRadio}
                               checked={isSelectedA || isSelectedB}
                               readOnly
-                              aria-label={`Version ${v.versionNumber}`}
+                              // 状态由外层按钮角色播报；保留一个可聚焦的只读 checkbox 会让读屏
+                              // 播报出一个按空格毫无反应的幽灵控件。
+                              aria-hidden="true"
+                              tabIndex={-1}
                             />
                             <div className={styles.versionInfo}>
                               <div className={styles.versionMeta}>
