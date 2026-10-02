@@ -38,6 +38,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
+import org.mockito.ArgumentCaptor;
 
 /**
  * RagChatController Unit Tests
@@ -78,7 +79,7 @@ class RagChatControllerTest {
 
         when(ragChatService.chat(any(ChatRequest.class))).thenReturn(expected);
 
-        ResponseEntity<ChatResponse> response = controller.ask(request);
+        ResponseEntity<ChatResponse> response = controller.ask(request, null);
 
         assertEquals(200, response.getStatusCode().value());
         assertEquals("Spring AI 是 Spring 的 AI 框架。", response.getBody().getAnswer());
@@ -95,7 +96,7 @@ class RagChatControllerTest {
 
         when(ragChatService.chat(any(ChatRequest.class))).thenReturn(expected);
 
-        ResponseEntity<ChatResponse> response = controller.ask(request);
+        ResponseEntity<ChatResponse> response = controller.ask(request, null);
 
         assertEquals(200, response.getStatusCode().value());
         verify(ragChatService).chat(argThat(r -> "dermatology".equals(r.getDomainId())));
@@ -117,7 +118,7 @@ class RagChatControllerTest {
 
         when(ragChatService.chat(any(ChatRequest.class))).thenReturn(expected);
 
-        ResponseEntity<ChatResponse> response = controller.ask(request);
+        ResponseEntity<ChatResponse> response = controller.ask(request, null);
 
         assertNotNull(response.getBody().getSources());
         assertEquals(1, response.getBody().getSources().size());
@@ -236,14 +237,23 @@ class RagChatControllerTest {
 
     @Test
     void getHistory_returnsHistory() {
+        // Batch 815：原版打在旁路上，断言无作用域的 findBySessionId。改为生产签名后，
+        // 它验的是"结果按 principal 作用域取回并按时间序返回"——原先无人验证。
+        MockHttpServletRequest keyA = databaseKeyRequest("key-a");
+        ChatPrincipal principalA = new ChatPrincipal(
+                "db:key-a",
+                ApiKeyAuthFilter.PRINCIPAL_DATABASE_API_KEY,
+                false);
         List<ChatHistoryResponse> history = List.of(
                 new ChatHistoryResponse(1L, "session-001", "你好", "你好！", null, null, LocalDateTime.now()),
                 new ChatHistoryResponse(2L, "session-001", "再见", "再见！", null, null, LocalDateTime.now())
         );
 
-        when(historyRepository.findBySessionId("session-001", 50)).thenReturn(history);
+        when(historyRepository.findByPrincipalAndSession(
+                principalA, "session-001", 50)).thenReturn(history);
 
-        ResponseEntity<List<ChatHistoryResponse>> response = controller.getHistory("session-001", 50);
+        ResponseEntity<List<ChatHistoryResponse>> response =
+                productionController.getHistory("session-001", 50, keyA);
 
         assertEquals(200, response.getStatusCode().value());
         assertEquals(2, response.getBody().size());
@@ -252,23 +262,44 @@ class RagChatControllerTest {
 
     @Test
     void getHistory_customLimit() {
-        when(historyRepository.findBySessionId("session-001", 10)).thenReturn(List.of());
+        // Batch 815：这条原本打在一条丢弃 HttpServletRequest 的旁路上，
+        // 断言的是**无 principal 作用域**的 findBySessionId，还期待空结果返回 200。
+        // 迁移到生产签名后两件事都不成立：查询是带作用域的，而空结果必须报
+        // SESSION_NOT_FOUND——否则"空"和"不属于你"就能被区分开。
+        MockHttpServletRequest keyA = databaseKeyRequest("key-a");
+        when(historyRepository.findByPrincipalAndSession(
+                any(ChatPrincipal.class), eq("session-001"), eq(10)))
+                .thenReturn(List.of(new ChatHistoryResponse(
+                        1L, "session-001", "你好", "你好！", null, null, LocalDateTime.now())));
 
-        ResponseEntity<List<ChatHistoryResponse>> response = controller.getHistory("session-001", 10);
+        ResponseEntity<List<ChatHistoryResponse>> response =
+                productionController.getHistory("session-001", 10, keyA);
 
         assertEquals(200, response.getStatusCode().value());
-        assertTrue(response.getBody().isEmpty());
-        verify(historyRepository).findBySessionId("session-001", 10);
+        assertEquals(1, response.getBody().size());
+        verify(historyRepository).findByPrincipalAndSession(
+                any(ChatPrincipal.class), eq("session-001"), eq(10));
+        verify(historyRepository, never()).findBySessionId(anyString(), anyInt());
     }
 
     @Test
-    void getHistory_defaultLimitIs50() {
-        when(historyRepository.findBySessionId(anyString(), eq(50))).thenReturn(List.of());
+    void getHistory_customLimitWithNoRows_reportsNotFoundRatherThanEmpty() {
+        // 上面那条的另一半：自定义 limit 查不到东西时，不能返回 200 + 空列表。
+        MockHttpServletRequest keyA = databaseKeyRequest("key-a");
+        when(historyRepository.findByPrincipalAndSession(
+                any(ChatPrincipal.class), eq("session-001"), eq(7)))
+                .thenReturn(List.of());
 
-        controller.getHistory("session-001", 50);
+        RagException error = assertThrows(RagException.class,
+                () -> productionController.getHistory("session-001", 7, keyA));
 
-        verify(historyRepository).findBySessionId("session-001", 50);
+        assertEquals(ErrorCode.SESSION_NOT_FOUND.name(), error.getErrorCode());
     }
+
+    // Batch 815 删除了 getHistory_defaultLimitIs50：它显式传了 50，
+    // 从未触碰 @RequestParam(defaultValue = "50")，而旁路本身就绕过了那个注解。
+    // 名字承诺的"默认值"没有任何东西在验。默认值属于 Spring 的绑定层，
+    // 控制器单测里没有它可验的位置。
 
     @Test
     void productionHistory_isScopedToAuthenticatedDatabaseKey() {
@@ -420,7 +451,7 @@ class RagChatControllerTest {
 
         when(ragChatService.chat(any(ChatRequest.class))).thenReturn(expected);
 
-        ResponseEntity<ChatResponse> response = controller.chat(request);
+        ResponseEntity<ChatResponse> response = controller.chat(request, null);
 
         assertEquals(200, response.getStatusCode().value());
         assertEquals("RAG is retrieval-augmented generation.", response.getBody().getAnswer());
@@ -437,7 +468,7 @@ class RagChatControllerTest {
 
         when(ragChatService.chat(any(ChatRequest.class))).thenReturn(expected);
 
-        ResponseEntity<ChatResponse> response = controller.chat(request);
+        ResponseEntity<ChatResponse> response = controller.chat(request, null);
 
         assertEquals(200, response.getStatusCode().value());
         verify(ragChatService).chat(argThat(r -> "legal".equals(r.getDomainId())));
@@ -450,7 +481,7 @@ class RagChatControllerTest {
 
         when(ragChatService.chat(any(ChatRequest.class))).thenReturn(expected);
 
-        ResponseEntity<ChatResponse> response = controller.chat(request);
+        ResponseEntity<ChatResponse> response = controller.chat(request, null);
 
         assertEquals(200, response.getStatusCode().value());
         assertNotNull(request.getSessionId());
@@ -464,7 +495,7 @@ class RagChatControllerTest {
 
         when(ragChatService.chat(any(ChatRequest.class))).thenReturn(expected);
 
-        ResponseEntity<ChatResponse> response = controller.chat(request);
+        ResponseEntity<ChatResponse> response = controller.chat(request, null);
 
         assertEquals(200, response.getStatusCode().value());
         assertNotNull(request.getSessionId());
@@ -486,7 +517,7 @@ class RagChatControllerTest {
 
         when(ragChatService.chat(any(ChatRequest.class))).thenReturn(expected);
 
-        ResponseEntity<ChatResponse> response = controller.chat(request);
+        ResponseEntity<ChatResponse> response = controller.chat(request, null);
 
         assertEquals(200, response.getStatusCode().value());
         assertNotNull(response.getBody().getSources());
@@ -552,47 +583,55 @@ class RagChatControllerTest {
     void exportHistory_jsonFormat_returnsJsonResource() {
         String sessionId = "export-session-001";
         byte[] jsonContent = "{\"sessionId\":\"export-session-001\",\"messages\":[]}".getBytes();
-
-        when(chatExportService.exportAsJson(sessionId, 0)).thenReturn(jsonContent);
+        MockHttpServletRequest keyA = databaseKeyRequest("key-a");
+        when(chatExportService.exportAsJson(
+                any(ChatPrincipal.class), eq(sessionId), eq(0)))
+                .thenReturn(jsonContent);
 
         ResponseEntity<org.springframework.core.io.ByteArrayResource> response =
-                controller.exportHistory(sessionId, "json", 0);
+                productionController.exportHistory(sessionId, "json", 0, keyA);
 
         assertEquals(200, response.getStatusCode().value());
         assertNotNull(response.getBody());
         assertEquals("attachment; filename=\"export-session-001.json\"",
                 response.getHeaders().getFirst("Content-Disposition"));
         assertTrue(response.getHeaders().getFirst("Content-Type").contains("application/json"));
-        verify(chatExportService).exportAsJson(sessionId, 0);
+        verify(chatExportService).exportAsJson(
+                any(ChatPrincipal.class), eq(sessionId), eq(0));
     }
 
     @Test
     void exportHistory_markdownFormat_returnsMdResource() {
         String sessionId = "export-session-002";
         byte[] mdContent = "# Chat Export\n\nSession: export-session-002".getBytes();
-
-        when(chatExportService.exportAsMarkdown(sessionId, 50)).thenReturn(mdContent);
+        MockHttpServletRequest keyA = databaseKeyRequest("key-a");
+        when(chatExportService.exportAsMarkdown(
+                any(ChatPrincipal.class), eq(sessionId), eq(50)))
+                .thenReturn(mdContent);
 
         ResponseEntity<org.springframework.core.io.ByteArrayResource> response =
-                controller.exportHistory(sessionId, "md", 50);
+                productionController.exportHistory(sessionId, "md", 50, keyA);
 
         assertEquals(200, response.getStatusCode().value());
         assertNotNull(response.getBody());
         assertEquals("attachment; filename=\"export-session-002.md\"",
                 response.getHeaders().getFirst("Content-Disposition"));
         assertTrue(response.getHeaders().getFirst("Content-Type").contains("text/markdown"));
-        verify(chatExportService).exportAsMarkdown(sessionId, 50);
+        verify(chatExportService).exportAsMarkdown(
+                any(ChatPrincipal.class), eq(sessionId), eq(50));
     }
 
     @Test
     void exportHistory_markdownCaseInsensitive_returnsMdResource() {
         String sessionId = "export-session-003";
         byte[] mdContent = "# Export".getBytes();
-
-        when(chatExportService.exportAsMarkdown(sessionId, 0)).thenReturn(mdContent);
+        MockHttpServletRequest keyA = databaseKeyRequest("key-a");
+        when(chatExportService.exportAsMarkdown(
+                any(ChatPrincipal.class), eq(sessionId), eq(0)))
+                .thenReturn(mdContent);
 
         ResponseEntity<org.springframework.core.io.ByteArrayResource> response =
-                controller.exportHistory(sessionId, "MD", 0);
+                productionController.exportHistory(sessionId, "MD", 0, keyA);
 
         assertEquals(200, response.getStatusCode().value());
         assertTrue(response.getHeaders().getFirst("Content-Type").contains("text/markdown"));
@@ -601,25 +640,39 @@ class RagChatControllerTest {
     @Test
     void exportHistory_invalidFormat_throwsIllegalArgumentException() {
         String sessionId = "export-session-004";
+        MockHttpServletRequest keyA = databaseKeyRequest("key-a");
 
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () ->
-                controller.exportHistory(sessionId, "xml", 0));
+                productionController.exportHistory(sessionId, "xml", 0, keyA));
 
         assertTrue(ex.getMessage().contains("format must be 'json' or 'md'"));
+        verify(chatExportService, never()).exportAsJson(
+                any(ChatPrincipal.class), anyString(), anyInt());
     }
 
+    // Batch 815 删除了 exportHistory_emptySessionId_passesToService：它断言空 session
+    // id 会原样传给导出服务。生产路径根本到不了那个状态——SessionIdValidator.resolve
+    // 对空白值生成一个**全新的随机 UUID**，所以空 id 永远不可能命中别人的历史。
+    // 下面这条把真正成立的那件事钉住。
     @Test
-    void exportHistory_emptySessionId_passesToService() {
-        String sessionId = "";
-        byte[] jsonContent = "{}".getBytes();
+    void exportHistory_blankSessionId_becomesAFreshSessionAndCannotHitAnExistingOne() {
+        MockHttpServletRequest keyA = databaseKeyRequest("key-a");
+        when(chatExportService.exportAsJson(
+                any(ChatPrincipal.class), anyString(), eq(0)))
+                .thenReturn("{}".getBytes());
 
-        when(chatExportService.exportAsJson(sessionId, 0)).thenReturn(jsonContent);
+        productionController.exportHistory("", "json", 0, keyA);
+        productionController.exportHistory("   ", "json", 0, keyA);
 
-        ResponseEntity<org.springframework.core.io.ByteArrayResource> response =
-                controller.exportHistory(sessionId, "json", 0);
-
-        assertEquals(200, response.getStatusCode().value());
-        verify(chatExportService).exportAsJson(sessionId, 0);
+        ArgumentCaptor<String> sessions =
+                ArgumentCaptor.forClass(String.class);
+        verify(chatExportService, times(2)).exportAsJson(
+                any(ChatPrincipal.class), sessions.capture(), eq(0));
+        List<String> used = sessions.getAllValues();
+        assertFalse(used.get(0).isBlank(), "空 session 必须被替换成真实 id：" + used);
+        assertFalse(used.get(1).isBlank(), "空白 session 必须被替换成真实 id：" + used);
+        assertNotEquals(used.get(0), used.get(1),
+                "两次调用必须得到两个不同的 id，否则空 id 会退化成共享会话");
     }
 
     @Test
