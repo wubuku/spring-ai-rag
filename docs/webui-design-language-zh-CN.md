@@ -212,7 +212,37 @@ Batch 791 把 `src/` 里全部 **37 个** mutation 过了一遍，查出 **6 个
 而会误报的门禁只会被忽略。豁免用行内
 `/* mutation-error-allow: <具体理由> */`；目前没有登记任何豁免。
 
-## 7. 对齐与布局
+## 7. 你要的每个键都必须在每种语言里存在
+
+`npm run check:i18n-keys` 串在 `npm run lint` 里，强制三条规则：
+
+- `missing-locale-key` —— 组件里用了 `t('some.key')`，
+  但 `en.json` 或 `zh-CN.json` 里没有 `some.key`。
+- `locale-key-asymmetry` —— 两个语言文件的键集不相等。
+- `dead-translation-fallback` —— `t('x') || 某物`。
+
+i18next 遇到缺失的键不会大声失败，它返回**键名本身**，而那个字符串是真值：
+
+```ts
+i18next.t('common.next');                   // "common.next"（英文，Batch 792 之前）
+i18next.t('common.next', { lng: 'zh-CN' }); // "下一页"
+```
+
+所以 `t(...) || '英文兜底'` **不是**安全网——它永远不会触发。
+Batch 792 找出 16 处这样的写法，其中 3 处正是一个真缺失的键与
+页面渲染出裸的 `documents.loadError` 之间唯一的东西。
+
+那时共有 **7 个键缺失**。`common.next` 和 `common.previous` 在 `zh-CN.json` 里有、
+在 `en.json` 里没有，于是版本历史的翻页按钮在英文界面上显示的是 `common.next`。
+`documents.searchPlaceholder`、`documents.loadError`、`search.history`
+两种语言都没有。而 `common.preview` 两种语言都没有——
+**因为 Batch 789 引入了它却没有加上翻译**，正是这道门禁现在能在下一批里抓住的那类回归。
+
+动态调用（`t(\`前缀.${x}\`)`）不检查：这样的调用有 6 处，而前缀不是键。
+没有任何静态调用引用的键只报数量、不算失败。豁免用行内
+`/* i18n-allow: <具体理由> */`；目前没有登记任何豁免。
+
+## 8. 对齐与布局
 
 `npm run check:alignment` 串在 `npm run lint` 里。居中文本只有在写明理由时才被允许，
 目前有 11 处这样的豁免——每一处都是有意的决定，并记录在检查器中。
@@ -220,13 +250,14 @@ Batch 791 把 `src/` 里全部 **37 个** mutation 过了一遍，查出 **6 个
 之所以做成机器规则：正文字块居中是把布局从"可读"拖到"不可读"最常见的单一原因，
 而在代码审查里它是隐形的，因为 CSS 只有一行。
 
-## 8. 开始一次界面改动之前
+## 9. 开始一次界面改动之前
 
 1. 先跑门禁与测试，确认起点是绿的：
    ```bash
    npm run check:design-system
    npm run check:a11y-forms
    npm run check:mutation-errors
+   npm run check:i18n-keys
    npm run test:run
    ```
 2. 写新东西之前，先找有没有现成基元。
@@ -234,7 +265,7 @@ Batch 791 把 `src/` 里全部 **37 个** mutation 过了一遍，查出 **6 个
 4. 需要新共享基元时，先找到两个真实调用方。
 5. 测试在同一个 batch 里写。把门禁弄红的事情没有做完。
 
-## 9. 本文刻意不说的内容
+## 10. 本文刻意不说的内容
 
 - 不逐页罗列布局。那是代码，代码就是参考。
 - 不复述 token 目录。读 `design-tokens/tokens.json`。

@@ -317,6 +317,87 @@
   约 53 行 × 2。合并需要同时验证两条链路的 OpenAPI 注解与日志文案差异，
   风险高于本批收益，暂列后续。
 
+### Batch 792（已交付）
+
+- 分支：`feature/i18n-key-reconciliation-20261002`
+- 内容：i18n 键集双向对账——**修掉 7 个缺失键、16 处永不生效的兜底**，
+  并加门禁 `check:i18n-keys`。**本批查出了我自己上一批引入的回归。**
+- **勘察**：静态引用的翻译键逐个对照两个语言文件后量出真实基线
+  （en 651 键、zh 653 键），**7 个键任何语言文件里都没有**：
+  | 键 | en | zh | 用户看到什么 |
+  |---|---|---|---|
+  | `common.next` / `common.previous` | 缺 | 有 | 英文界面上的翻页按钮显示字面量 `common.next` |
+  | `documents.searchPlaceholder` | 缺 | 缺 | 搜索框 placeholder 是 `documents.searchPlaceholder` |
+  | `documents.loadError` | 缺 | 缺 | 列表加载失败时页面显示 `documents.loadError: …` |
+  | `search.history` | 缺 | 缺 | 历史按钮的 aria-label 与 title 都是 `search.history` |
+  | `common.preview` | 缺 | 缺 | 预览对话框标题是 `common.preview` |
+- **我自己引入的回归（如实登记，不掩饰）**：`common.preview` 是 **Batch 789**
+  为了修"对话框可访问名可能为空"而引入的——**引入了键，却没加翻译**。
+  也就是说 Batch 789 的修复让预览对话框从"标题为空"变成了"标题是裸键名"，
+  对用户仍然是坏的，而 784+ 的全量套件和 `check:a11y-forms` 全绿。
+  这正是静态门禁的盲区：形状合法不等于文案存在。
+  **Batch 792 的门禁能在下一批里抓住这一类回归。**
+- **第二类缺陷：16 处永不生效的 `t(...) || 兜底`**。i18next 遇到缺失的键
+  **返回键名本身**，而那是个**真值字符串**，所以 `||` 永远不会触发。
+  实测确认：`i18next.t('common.next')` 在英文下返回 `"common.next"`，
+  `t('common.nope')` 返回 `"common.nope"`——不是空串。
+  这 16 处里有 3 处（`documents.searchPlaceholder`、`documents.loadError`、
+  `search.history`）正是那 4 个真缺失键前面唯一的"保护"，
+  **一段看起来像防护、实际什么都防不住的代码，比没有防护更糟**。
+  全部删除（8 处在 `ReembedAllButton`、4 处在 `Documents`、
+  2 处在 `Search`、1 处在 `Chat`、1 处是 `searchParams.get()` **不是** `t()`，
+  已逐处核对后保留）。
+- **门禁 `scripts/check-i18n-keys.mjs`**，三类规则：
+  `missing-locale-key`（代码引用的键某语言没有）、
+  `locale-key-asymmetry`（两个语言文件键集不相等）、
+  `dead-translation-fallback`（`t('x') || 某物`）。
+  串进 `npm run lint`。动态调用（`t(\`前缀.${x}\`)`，6 处）不检查——
+  前缀不是键；无静态调用引用的键只报数量（**175 个**）、不算失败。
+- **测试**：
+  - 门禁自测 **19 例**（`scripts/__tests__/i18n-keys.test.mjs`），
+    含"以 `t` 结尾的其他函数（`get('collectionKey')`）不能被当成翻译调用"
+    和"注释里的键不算引用"两个易漏形态；
+  - **改写了一个钉住虚构的既有测试**：`ReembedAllButton.test.tsx` 里
+    "falls back to hardcoded english labels when translations are empty"
+    通过把 `t` mock 成返回 `''` 来验证兜底生效——**i18next 永远不返回空串**，
+    它验证的是一个生产中不存在的场景，而正是这种"看起来有防护"的写法
+    掩盖了别处 4 个真缺失键。已改写为钉住**真实**语义：
+    缺键时显示键本身、**绝不静默替换成硬编码英文**。
+    这是"删死代码 + 换掉钉住虚构的测试"，不是"删测试换绿"。
+- **勘察脚本自己算错过一次**：第一版统计脚本报 en 645 键，
+  与 `git show HEAD` 实测的 **651** 差 6。逐键 diff 复核后确认
+  **locale 文件本身没问题**，是那个临时脚本的递归统计写错了。
+  账本里的所有数字用 `git show HEAD` 对比的实测值。
+- **变异测试 3 处，各被精确抓住**：
+  | 变异 | 抓到它的检查 |
+  |---|---|
+  | 从 `en.json` 删掉 `common.next` | 门禁报 2 条 `missing-locale-key` + 1 条 `locale-key-asymmetry`，exit 1；自测 5 例变红 |
+  | 把 `|| t('common.error')` 兜底加回 `Documents.tsx` | 门禁报 `dead-translation-fallback`，exit 1 |
+  | 去掉 `t()` 正则的负向后顾（`get()` 会被误当成翻译） | 自测 `resolves every translation key in both languages` 变红 |
+- **操作事故（如实登记）**：变异验证的收尾命令里，
+  `git checkout scripts/check-i18n-keys.mjs` 对**未跟踪文件**失败，
+  于是 `||` 兜底分支把另一个门禁 `check-mutation-errors.mjs` 覆盖了过去。
+  由"139 → 127"的自测暴跌发现，重写恢复后复验 139/139。
+  教训：`git checkout` 对未跟踪文件静默失败后再跟 `||` 备份恢复，
+  组合起来会把错误文件写进目标路径。
+- 指标（实测值）：前端 **790 用例**（73 文件）全绿；
+  门禁自测 **139 用例**（4 文件，+19）全绿；
+  locale 键数 en **651→657**、zh **653→657**（+6 / +4，**删除 0 个**），
+  两种语言键集**完全一致**；静态引用 **482 个键**全部可在两种语言解析；
+  `lint`（含 `check:mutation-errors` 与 `check:i18n-keys`，各扫描 100 个组件文件）/
+  `typecheck` / `build` 通过；`verify-project-docs.sh` **15/15**。
+  本批**未改动任何 Java 源码**，无需重跑 Maven 套件。
+- 遗留技术债（如实登记，未处理）：
+  - `ApiKeyManagementService` 的恒真 null 判断 `if (retiring != null)`
+    （`retiring` 是 Spring Data 返回的 `Optional`，生产上永不为 null），
+    全仓扫描确认仅此 1 处，应改生产代码消除。
+  - 175 个 locale 键没有任何静态 `t()` 引用。其中一部分是动态拼装的，
+    另一部分可能是已废弃的——**没有门禁能区分这两者**，本批只报数量。
+  - 纯英文标题在中文文档里仍无门禁守护（Batch 786 主动放弃的规则）。
+  - `Documents` 页"版本历史 → 恢复"的叠加是设计如此还是遗漏，待产品侧确认。
+  - 147 个集成测试仍未真正跑过（本机无 Docker）。
+  - `PageShell` 脱节；`ask`/`chat` 53 行 × 2 重复。
+
 ### Batch 791（已交付）
 
 - 分支：`feature/mutation-error-visibility-20261002`

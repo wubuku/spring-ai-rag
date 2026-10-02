@@ -257,7 +257,43 @@ that hands a mutation to a child and renders the error there is a shape the
 checker cannot follow, and a rule that cries wolf gets ignored. Exemptions use
 an inline `/* mutation-error-allow: <concrete reason> */`; none are registered.
 
-## 7. Alignment and layout
+## 7. Every key you ask for must exist in every language
+
+`npm run check:i18n-keys` is chained into `npm run lint` and enforces three
+rules:
+
+- `missing-locale-key` — `t('some.key')` is used in a component, but
+  `en.json` or `zh-CN.json` does not carry `some.key`.
+- `locale-key-asymmetry` — the two locale files do not carry the same keys.
+- `dead-translation-fallback` — `t('x') || something`.
+
+i18next does not fail loudly on a missing key. It returns **the key string
+itself**, and that string is truthy:
+
+```ts
+i18next.t('common.next');            // "common.next"  (in English, before Batch 792)
+i18next.t('common.next', { lng: 'zh-CN' }); // "下一页"
+```
+
+So a `t(...) || 'English literal'` guard is not a safety net — it can never
+fire. Batch 792 found 16 of them, and three of those were the only thing
+standing between a genuinely missing key and a raw `documents.loadError`
+rendered into the page.
+
+Seven keys were missing at that point. `common.next` and `common.previous`
+existed in `zh-CN.json` but not in `en.json`, so the version-history pagination
+read "common.next" on an English screen. `documents.searchPlaceholder`,
+`documents.loadError` and `search.history` existed in neither. And
+`common.preview` existed in neither — **because Batch 789 had introduced it
+without adding the translation**, which is the kind of regression this gate now
+catches in the batch that follows.
+
+Dynamic calls (`t(\`prefix.${x}\`)`) are not checked: there are 6 of them and a
+prefix is not a key. Keys that no static call references are reported as a
+count, not a failure. Exemptions use an inline
+`/* i18n-allow: <concrete reason> */`; none are registered.
+
+## 8. Alignment and layout
 
 `npm run check:alignment` is chained into `npm run lint`. Centred text is
 allowed only with a stated reason, and there are currently 11 such exemptions —
@@ -267,13 +303,14 @@ The reason this is a machine rule: a centred block of body text is the single
 most common way a layout drifts from readable to not, and it is invisible in
 code review because the CSS is one line.
 
-## 8. Before you start a UI change
+## 9. Before you start a UI change
 
 1. Run the gate and the tests first, so you know the starting state is green:
    ```bash
    npm run check:design-system
    npm run check:a11y-forms
    npm run check:mutation-errors
+   npm run check:i18n-keys
    npm run test:run
    ```
 2. Look for an existing primitive before writing a new one.
@@ -283,7 +320,7 @@ code review because the CSS is one line.
 5. Write the test in the same batch. A change that makes the gate red is not
    finished.
 
-## 9. What this document deliberately does not say
+## 10. What this document deliberately does not say
 
 - It does not list every page and its layout. That is code, and the code is
   the reference.

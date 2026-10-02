@@ -246,9 +246,9 @@ export function Search() {
                 type="button"
                 className={styles.historyBtn}
                 onClick={() => setShowHistory(v => !v)}
-                aria-label={t('search.history') || 'History'}
+                aria-label={t('search.history')}
                 aria-expanded={showHistory}
-                title={t('search.history') || 'History'}
+                title={t('search.history')}
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <circle cx="12" cy="12" r="10"/>
