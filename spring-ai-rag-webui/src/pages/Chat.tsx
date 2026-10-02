@@ -646,6 +646,7 @@ export function Chat() {
               onCompositionEnd={ime.handleCompositionEnd}
               onKeyDown={handleKeyDown}
               placeholder={t('chat.placeholder')}
+              aria-label={t('chat.inputLabel')}
               disabled={isConnected}
               className={styles.input}
               rows={1}

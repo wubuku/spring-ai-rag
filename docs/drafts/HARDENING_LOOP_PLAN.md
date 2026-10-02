@@ -317,6 +317,67 @@
   约 53 行 × 2。合并需要同时验证两条链路的 OpenAPI 注解与日志文案差异，
   风险高于本批收益，暂列后续。
 
+### Batch 776（已交付）
+
+- 分支：`feature/webui-a11y-static-gate-20261003`（回归 WebUI）
+- 内容：表单可访问性加固 + **新增静态门禁防复发**（本批挖出的缺陷全部真实可复现）。
+- **勘察方法**：不靠印象，写了一个可复核的扫描脚本逐文件定位，并输出
+  `file:line` 供人工回溯。修复前实测基线：
+  | 类别 | 修复前 | 修复后 |
+  |---|---|---|
+  | 无可访问名称的控件 | **15** | **0** |
+  | 孤儿 `<label>`（不指向也不包裹控件） | **15** | **0** |
+  | 键盘够不到的 `onClick` | **2** | **0** |
+- **修掉的真实缺陷**：
+  1. **`VersionHistoryModal` 的对比行键盘完全不可达**（本批最严重的一处）。
+     该行是 `<div onClick>`，内部套一个 `readOnly` 且带 `aria-label` 的
+     `<input type="checkbox">`。读屏会播报出一个复选框，但按空格毫无反应——
+     选中两个版本做对比这个功能，对键盘和读屏用户**等于不存在**。
+     **修法**：行上 `role="button"` + `tabIndex={0}` + `aria-pressed` +
+     Enter/Space 处理；内部复选框 `aria-hidden` + `tabIndex={-1}`。
+  2. **刻意不用 `role="checkbox"`**。`handleSelectForCompare` 是**循环**语义
+     （填 A → 填 B → 取消 → 让位），不是布尔翻转。复选框向读屏承诺"按空格即翻转"，
+     而这个函数不保证这一点——那会用一个"看起来对"的语义盖住真实行为。
+  3. `Chat.tsx` 的消息框、`Search.tsx` 的搜索框**只有 placeholder**。
+     placeholder 是提示不是名称：字段一旦有内容它就消失，控件随即退化成什么都不播报。
+  4. `Alerts` 10 个、`ApiKeys` 3 个、`Settings` 2 个孤儿 label。其中
+     `apiKeys.credential` 与 Settings 的 "API Key" 标注的是只读信息而非控件，
+     改用 `<div>`；语言选择器改用 `<fieldset>/<legend>` 包裹。
+  5. `Layout` 的移动端遮罩是空的自闭合 `<div onClick>`，声明 `aria-hidden="true"`：
+     关闭侧栏的可键盘路径是侧栏内的关闭按钮，遮罩只是鼠标的"点外面"快捷方式。
+- **新增门禁 `check:a11y-forms`**（`scripts/check-a11y-forms.mjs`，串进 `npm run lint`）：
+  `control-no-name` / `orphan-label` / `click-non-interactive` / `weak-allow-reason`。
+  - **刻意没有债务基线**：写下它时针对的每一条违规都能修，基线只会变成一份
+    "机器同意不再上报的 bug 清单"。豁免用 `/* a11y-allow: <理由> */`。
+  - `role` 本身不算数：该元素还必须声明 `tabIndex` 并处理按键，否则 role 只是
+    给一个死元素贴了张标签。
+- **门禁本身的变异测试**（跑在**修复前**的 src 上）：**32 条违规、exit 1**，
+  修复后 0 条。首版规则有两处**假绿/假红**，都是被自测逼出来的：
+  | 问题 | 后果 | 修法 |
+  |---|---|---|
+  | 跳过自闭合标签 | `Layout` 的空遮罩（正是自闭合 div）被放行 | 不再跳过；空的自闭合 div + onClick 就是遮罩的写法 |
+  | 字符串区间只记了两个引号本身 | `const doc = '<div onClick=...>'` 里的标记被当成 JSX（假红） | 区间改为覆盖整个字符串 |
+- **自测同时照抄了设计门禁的文档漂移保护**：`VIOLATION_KINDS` 导出为单一事实源，
+  断言四种 kind 仍被强制执行、且在两种语言的 `webui-design-language` 第 5 节都有文档。
+  抽取一度只认源码里的 `kind:` 字面量，而另外三类是 `report('...', ...)` 传参，
+  于是"强制执行"侧只剩 1 条——**断言写错方向时，测试会自己变红而不是假装通过**。
+- **变异测试 3 轮，逐条验证新测试真的会红**：
+  | 变异 | 结果 |
+  |---|---|
+  | 回退 `VersionHistoryModal` 组件 | **5 个失败**，恰为新增的 5 个键盘/ARIA 用例 |
+  | 回退 `Chat`/`Search`/`Layout` 三处修复 | **3 个失败**，恰为对应 3 个新用例 |
+  | 门禁跑在修复前的 src | **32 条违规、exit 1** |
+- 指标：前端 **780/780 全绿**（73 个测试文件，+8）；design-system focused
+  **103/103**（2 个文件，+30）；`typecheck` / `lint` / `test:run` /
+  `test:design-system` / `tokens:check` / `build` / `check:alignment` /
+  `check:design-system` / `check:a11y-forms` 九项门禁全绿；
+  文档 `verify-project-docs.sh` 14/14。后端未改动，core 仍 7428。
+- **未为 Alerts/ApiKeys/Settings 逐页补测试，这是有意的**：门禁的集成用例
+  （扫真实 `src/` 并断言零违规）已经覆盖这三处，且比逐页断言某个 `htmlFor` 字符串更强；
+  再补只会重复。
+- 遗留技术债（如实登记，未处理）：Batch 775 记下的 `PageShell` 与 Slice 5
+  退出条件脱节依旧；`ask`/`chat` 53 行 × 2 重复依旧。
+
 ### Batch 775（已交付）
 
 - 分支：`feature/webui-a11y-focus-hardening-20261003`（回归 WebUI，连续 6 批后端后）

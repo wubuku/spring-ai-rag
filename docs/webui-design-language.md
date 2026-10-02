@@ -175,7 +175,51 @@ guarantee: `scripts/test-support/docs-integrity-self-test.mjs` asserts that each
 rule *rejects* bad input, and the suite was mutation-tested — restoring the old
 "only check the list" behaviour turns it red.
 
-## 5. Alignment and layout
+## 5. Form accessibility
+
+`npm run check:a11y-forms` is chained into `npm run lint` and scans every `.tsx`
+under `src/` for three violations plus the exemption rule:
+
+- `control-no-name` — a form control with no accessible name. A **placeholder is
+  not a name**: it disappears the moment the field holds a value, so the control
+  falls back to announcing nothing. `aria-label`, a `label` bound by
+  `htmlFor`/`id`, a wrapping `label`, or `aria-labelledby` all satisfy this.
+- `orphan-label` — a `<label>` that targets no control and wraps none. It looks
+  like a label, so users click it, and nothing happens.
+- `click-non-interactive` — an `onClick` on an element the keyboard cannot
+  reach. A `role` is not enough on its own: the element must also declare
+  `tabIndex` and handle a key, otherwise the role is a label on a dead element.
+  A genuinely decorative click target declares `aria-hidden="true"` instead,
+  which says plainly that the keyboard is not expected to reach it.
+- `weak-allow-reason` — an `a11y-allow` comment whose reason is under eight
+  characters.
+
+This gate has **no debt baseline**, deliberately. Every violation that existed
+when it was written was fixable, so a baseline would have been a list of bugs a
+machine had agreed to stop reporting. Exemptions use an inline
+`/* a11y-allow: <concrete reason> */` on the same or the previous line, and the
+`npm run test:design-system` suite asserts that the four kinds above are still
+enforced and still documented in both languages — the same drift check the design
+gate has, so a rule cannot quietly stop existing.
+
+### 5.1 What it found
+
+Batch 776 measured the baseline before writing the rule: **15 controls with no
+accessible name and 15 orphan labels** across `Alerts`, `ApiKeys` and `Settings`,
+plus two click handlers the keyboard could not reach at all. One of those was
+worse than unreachable: the version rows in `VersionHistoryModal` wrapped a
+focusable-looking `readOnly` checkbox inside a `<div onClick>`, so a screen
+reader announced a checkbox that did nothing when Space was pressed. The row now
+carries `role="button"`, `tabIndex={0}`, `aria-pressed` and a key handler, and the
+checkbox is `aria-hidden` — the pressed state belongs to the row, not to a control
+the user cannot operate.
+
+Selecting two versions to compare is a *cycling* interaction, not a boolean
+toggle, which is why the row is a toggle button and deliberately **not**
+`role="checkbox"`: a checkbox promises that Space toggles the value, and
+`handleSelectForCompare` does not keep that promise.
+
+## 6. Alignment and layout
 
 `npm run check:alignment` is chained into `npm run lint`. Centred text is
 allowed only with a stated reason, and there are currently 11 such exemptions —
@@ -185,11 +229,12 @@ The reason this is a machine rule: a centred block of body text is the single
 most common way a layout drifts from readable to not, and it is invisible in
 code review because the CSS is one line.
 
-## 6. Before you start a UI change
+## 7. Before you start a UI change
 
 1. Run the gate and the tests first, so you know the starting state is green:
    ```bash
    npm run check:design-system
+   npm run check:a11y-forms
    npm run test:run
    ```
 2. Look for an existing primitive before writing a new one.
@@ -199,7 +244,7 @@ code review because the CSS is one line.
 5. Write the test in the same batch. A change that makes the gate red is not
    finished.
 
-## 7. What this document deliberately does not say
+## 8. What this document deliberately does not say
 
 - It does not list every page and its layout. That is code, and the code is
   the reference.

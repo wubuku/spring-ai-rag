@@ -144,7 +144,40 @@ typecheck、lint 和全部 765 个测试。
 `scripts/test-support/docs-integrity-self-test.mjs` 断言每条规则**确实拒绝**坏输入，
 并且该套件做过变异测试——把行为退回旧的"只查列表"，套件立刻变红。
 
-## 5. 对齐与布局
+## 5. 表单可访问性
+
+`npm run check:a11y-forms` 串在 `npm run lint` 里，扫描 `src/` 下每个 `.tsx`，
+拦截三类违规，外加一条豁免规则：
+
+- `control-no-name` —— 控件没有可访问名称。**placeholder 不是名称**：字段一旦有内容
+  它就消失，控件随即退化成什么都不播报。`aria-label`、用 `htmlFor`/`id` 绑定的
+  `label`、包裹式 `label`、或 `aria-labelledby` 都算数。
+- `orphan-label` —— 既不指向控件也不包裹控件的 `<label>`。它看起来就是个标签，
+  用户会去点，然后什么也不会发生。
+- `click-non-interactive` —— 键盘够不到的 `onClick`。光有 `role` 并不够：该元素还必须
+  声明 `tabIndex` 并处理按键，否则 role 只是给一个死元素贴了张标签。真正装饰性的
+  点击目标应当声明 `aria-hidden="true"`，明确表示不指望键盘能到达它。
+- `weak-allow-reason` —— 理由不足八个字符的 `a11y-allow` 注释。
+
+这个门禁**刻意没有债务基线**。写它的时候存在的每一条违规都能修，基线只会变成一份
+"机器同意不再上报的 bug 清单"。豁免用同一行或前一行的
+`/* a11y-allow: <具体理由> */`；`npm run test:design-system` 会断言上面四类仍然被
+强制执行、并且在两种语言里都有文档——与设计门禁同一套漂移检查，规则不可能悄悄消失。
+
+### 5.1 它查出了什么
+
+Batch 776 在写下这条规则之前先量了基线：`Alerts`、`ApiKeys`、`Settings` 一共
+**15 个没有可访问名称的控件、15 个孤儿 label**，外加两处键盘完全够不到的点击处理。
+其中一处比"够不到"更糟：`VersionHistoryModal` 的版本行在一个 `<div onClick>` 里
+套了一个"看起来能聚焦"的 `readOnly` 复选框，于是读屏播报出一个按空格毫无反应的
+复选框。现在该行带 `role="button"`、`tabIndex={0}`、`aria-pressed` 和按键处理，
+复选框则 `aria-hidden`——按下状态属于这一行，不属于一个用户操作不了的控件。
+
+选两个版本做对比是**循环**交互，不是布尔开关，所以该行是 toggle button，并且
+**刻意不用** `role="checkbox"`：复选框承诺"按空格就翻转"，而
+`handleSelectForCompare` 并不保证这一点。
+
+## 6. 对齐与布局
 
 `npm run check:alignment` 串在 `npm run lint` 里。居中文本只有在写明理由时才被允许，
 目前有 11 处这样的豁免——每一处都是有意的决定，并记录在检查器中。
@@ -152,11 +185,12 @@ typecheck、lint 和全部 765 个测试。
 之所以做成机器规则：正文字块居中是把布局从"可读"拖到"不可读"最常见的单一原因，
 而在代码审查里它是隐形的，因为 CSS 只有一行。
 
-## 6. 开始一次界面改动之前
+## 7. 开始一次界面改动之前
 
 1. 先跑门禁与测试，确认起点是绿的：
    ```bash
    npm run check:design-system
+   npm run check:a11y-forms
    npm run test:run
    ```
 2. 写新东西之前，先找有没有现成基元。
@@ -164,7 +198,7 @@ typecheck、lint 和全部 765 个测试。
 4. 需要新共享基元时，先找到两个真实调用方。
 5. 测试在同一个 batch 里写。把门禁弄红的事情没有做完。
 
-## 7. 本文刻意不说的内容
+## 8. 本文刻意不说的内容
 
 - 不逐页罗列布局。那是代码，代码就是参考。
 - 不复述 token 目录。读 `design-tokens/tokens.json`。

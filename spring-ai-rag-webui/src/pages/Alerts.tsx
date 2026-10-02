@@ -423,8 +423,8 @@ function SloConfigsTab({ showForm, onShowForm, onHideForm }: { showForm: boolean
           <h3>{t('alerts.sloConfig')}</h3>
           <ImeSafeForm onSubmit={handleSubmit} className={styles.form}>
             <div className={styles.formRow}>
-              <label className={styles.label}>{t('alerts.sloConfig')}</label>
-              <input
+              <label className={styles.label} htmlFor="alerts-sloname">{t('alerts.sloConfig')}</label>
+              <input id="alerts-sloname"
                 className={styles.input}
                 value={form.sloName}
                 onChange={e => setForm({ ...form, sloName: e.target.value })}
@@ -433,8 +433,8 @@ function SloConfigsTab({ showForm, onShowForm, onHideForm }: { showForm: boolean
               />
             </div>
             <div className={styles.formRow}>
-              <label className={styles.label}>{t('alerts.alertType')}</label>
-              <select className={styles.select} value={form.sloType} onChange={e => setForm({ ...form, sloType: e.target.value })}>
+              <label className={styles.label} htmlFor="alerts-slotype">{t('alerts.alertType')}</label>
+              <select id="alerts-slotype" className={styles.select} value={form.sloType} onChange={e => setForm({ ...form, sloType: e.target.value })}>
                 <option value="LATENCY">{t('alerts.latency')}</option>
                 <option value="AVAILABILITY">{t('alerts.availability')}</option>
                 <option value="QUALITY">{t('alerts.quality')}</option>
@@ -442,8 +442,8 @@ function SloConfigsTab({ showForm, onShowForm, onHideForm }: { showForm: boolean
               </select>
             </div>
             <div className={styles.formRow}>
-              <label className={styles.label}>Target Value</label>
-              <input
+              <label className={styles.label} htmlFor="alerts-targetvalue">Target Value</label>
+              <input id="alerts-targetvalue"
                 className={styles.input}
                 type="number"
                 step="any"
@@ -451,15 +451,20 @@ function SloConfigsTab({ showForm, onShowForm, onHideForm }: { showForm: boolean
                 onChange={e => setForm({ ...form, targetValue: e.target.value })}
                 required
               />
-              <select className={styles.select} value={form.unit} onChange={e => setForm({ ...form, unit: e.target.value })}>
+              <select
+                className={styles.select}
+                aria-label={t('alerts.unit')}
+                value={form.unit}
+                onChange={e => setForm({ ...form, unit: e.target.value })}
+              >
                 <option value="ms">ms</option>
                 <option value="%">%</option>
                 <option value="score">score</option>
               </select>
             </div>
             <div className={styles.formRow}>
-              <label className={styles.label}>{t('collections.description')}</label>
-              <input
+              <label className={styles.label} htmlFor="alerts-description">{t('collections.description')}</label>
+              <input id="alerts-description"
                 className={styles.input}
                 value={form.description}
                 onChange={e => setForm({ ...form, description: e.target.value })}
@@ -578,8 +583,8 @@ function SilenceSchedulesTab({ showForm, onShowForm, onHideForm }: { showForm: b
           <h3>{t('alerts.createSilence')}</h3>
           <ImeSafeForm onSubmit={handleSubmit} className={styles.form}>
             <div className={styles.formRow}>
-              <label className={styles.label}>{t('alerts.silencePlans')}</label>
-              <input
+              <label className={styles.label} htmlFor="alerts-name">{t('alerts.silencePlans')}</label>
+              <input id="alerts-name"
                 className={styles.input}
                 value={form.name}
                 onChange={e => setForm({ ...form, name: e.target.value })}
@@ -588,8 +593,8 @@ function SilenceSchedulesTab({ showForm, onShowForm, onHideForm }: { showForm: b
               />
             </div>
             <div className={styles.formRow}>
-              <label className={styles.label}>Alert Key</label>
-              <input
+              <label className={styles.label} htmlFor="alerts-alertkey">Alert Key</label>
+              <input id="alerts-alertkey"
                 className={styles.input}
                 value={form.alertKey}
                 onChange={e => setForm({ ...form, alertKey: e.target.value })}
@@ -597,15 +602,15 @@ function SilenceSchedulesTab({ showForm, onShowForm, onHideForm }: { showForm: b
               />
             </div>
             <div className={styles.formRow}>
-              <label className={styles.label}>{t('alerts.alertType')}</label>
-              <select className={styles.select} value={form.silenceType} onChange={e => setForm({ ...form, silenceType: e.target.value })}>
+              <label className={styles.label} htmlFor="alerts-silencetype">{t('alerts.alertType')}</label>
+              <select id="alerts-silencetype" className={styles.select} value={form.silenceType} onChange={e => setForm({ ...form, silenceType: e.target.value })}>
                 <option value="ONE_TIME">ONE_TIME</option>
                 <option value="RECURRING">RECURRING</option>
               </select>
             </div>
             <div className={styles.formRow}>
-              <label className={styles.label}>{t('alerts.triggeredAt')}</label>
-              <input
+              <label className={styles.label} htmlFor="alerts-starttime">{t('alerts.triggeredAt')}</label>
+              <input id="alerts-starttime"
                 className={styles.input}
                 type="datetime-local"
                 value={form.startTime}
@@ -614,8 +619,8 @@ function SilenceSchedulesTab({ showForm, onShowForm, onHideForm }: { showForm: b
               />
             </div>
             <div className={styles.formRow}>
-              <label className={styles.label}>{t('alerts.resolvedAt')}</label>
-              <input
+              <label className={styles.label} htmlFor="alerts-endtime">{t('alerts.resolvedAt')}</label>
+              <input id="alerts-endtime"
                 className={styles.input}
                 type="datetime-local"
                 value={form.endTime}
@@ -624,8 +629,8 @@ function SilenceSchedulesTab({ showForm, onShowForm, onHideForm }: { showForm: b
               />
             </div>
             <div className={styles.formRow}>
-              <label className={styles.label}>{t('collections.description')}</label>
-              <input
+              <label className={styles.label} htmlFor="alerts-description">{t('collections.description')}</label>
+              <input id="alerts-description"
                 className={styles.input}
                 value={form.description}
                 onChange={e => setForm({ ...form, description: e.target.value })}

@@ -261,6 +261,22 @@ describe('Layout responsive sidebar and logout', () => {
     ).toBeInTheDocument();
   });
 
+  it('marks the click-catching overlay as decorative rather than a silent control', async () => {
+    const user = userEvent.setup();
+    renderLayout();
+    setWindowWidth(500);
+
+    await user.click(await screen.findByRole('button', { name: 'nav.openSidebar' }));
+    const overlay = document.querySelector('[class*="overlay"]');
+    expect(overlay).not.toBeNull();
+
+    // 遮罩只是鼠标用户的"点外面"快捷方式，关闭侧栏的可键盘路径是侧栏内的
+    // 关闭按钮。不声明 aria-hidden 的话，它就是一个读屏看得见、键盘够不着的控件。
+    expect(overlay).toHaveAttribute('aria-hidden', 'true');
+    expect(overlay).not.toHaveAttribute('role');
+    expect(overlay).not.toHaveAttribute('tabindex');
+  });
+
   it('closes the mobile sidebar when a nav link is clicked', async () => {
     const user = userEvent.setup();
     renderLayout();

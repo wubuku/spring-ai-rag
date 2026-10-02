@@ -116,6 +116,14 @@ describe('Chat', () => {
     expect(sidebarToggle).toHaveAttribute('aria-expanded', 'true');
   });
 
+  it('names the message box instead of relying on its placeholder', () => {
+    renderChat();
+
+    // placeholder 是提示不是名称：一旦输入内容它就消失，读屏会退化成什么都不播报。
+    const textarea = screen.getByRole('textbox', { name: 'chat.inputLabel' });
+    expect(textarea).toBe(screen.getByPlaceholderText(/chat.placeholder/));
+  });
+
   it('exposes menu semantics and expanded state on the export button', async () => {
     (chatApi.getHistory as ReturnType<typeof vi.fn>).mockResolvedValue({
       data: [{

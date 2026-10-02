@@ -115,7 +115,9 @@ export function Layout() {
     <div className={styles.layout}>
       {/* Mobile overlay */}
       {isMobile && sidebarOpen && (
-        <div className={styles.overlay} onClick={() => setSidebarOpen(false)} />
+        // 纯点击遮罩：关闭侧栏的可键盘路径是侧栏内的 IconButton，
+        // 这个 div 只是鼠标用户的点外面快捷方式，对读屏没有任何信息量。
+        <div className={styles.overlay} onClick={() => setSidebarOpen(false)} aria-hidden="true" />
       )}
 
       <aside className={`${styles.sidebar} ${isMobile && sidebarOpen ? styles.sidebarOpen : ''}`}>

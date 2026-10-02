@@ -174,6 +174,73 @@ describe('VersionHistoryModal', () => {
     });
   });
 
+  describe('keyboard operability of the compare rows', () => {
+    const renderRows = async () => {
+      vi.mocked(documentsApi.getVersions).mockResolvedValueOnce({
+        data: { documentId: 42, totalVersions: 3, page: 0, size: 20, versions: mockVersions },
+      } as any,
+      );
+
+      render(
+        <VersionHistoryModal documentId={42} documentTitle="Test Doc" onClose={vi.fn()} />,
+        { wrapper: Wrapper }
+      );
+
+      await screen.findByText('v3');
+      return screen.getAllByRole('button', { name: /^Version \d+$/ });
+    };
+
+    it('exposes each version row as a focusable button carrying its pressed state', async () => {
+      const rows = await renderRows();
+
+      expect(rows).toHaveLength(3);
+      expect(rows.map(row => row.getAttribute('tabindex'))).toEqual(['0', '0', '0']);
+      expect(rows.every(row => row.getAttribute('aria-pressed') === 'false')).toBe(true);
+    });
+
+    it('selects a version with Enter, which no click handler could ever do', async () => {
+      const rows = await renderRows();
+
+      // This is the Batch 776 defect: the row was a bare <div onClick>, so the
+      // whole compare feature was unreachable from the keyboard.
+      await userEvent.setup().tab();
+      fireEvent.keyDown(rows[0], { key: 'Enter' });
+
+      await waitFor(() => {
+        expect(rows[0].getAttribute('aria-pressed')).toBe('true');
+      });
+    });
+
+    it('selects a version with Space without scrolling the page', async () => {
+      const rows = await renderRows();
+      const prevented = !fireEvent.keyDown(rows[1], { key: ' ' });
+
+      expect(prevented).toBe(true);
+      await waitFor(() => {
+        expect(rows[1].getAttribute('aria-pressed')).toBe('true');
+      });
+    });
+
+    it('ignores keys that are not activation keys', async () => {
+      const rows = await renderRows();
+
+      fireEvent.keyDown(rows[0], { key: 'a' });
+      fireEvent.keyDown(rows[0], { key: 'ArrowDown' });
+
+      expect(rows[0].getAttribute('aria-pressed')).toBe('false');
+    });
+
+    it('keeps the decorative checkbox out of the accessibility tree', async () => {
+      await renderRows();
+
+      // A read-only checkbox that looks focusable announces a control the user
+      // cannot operate; the pressed state belongs to the row's button role.
+      const checkboxes = screen.queryAllByRole('checkbox');
+      expect(checkboxes).toHaveLength(0);
+      expect(document.querySelectorAll('input[aria-hidden="true"][type="checkbox"]').length).toBe(3);
+    });
+  });
+
   it('switches to diff tab after comparing versions', async () => {
     // getVersions returns IDs 1 (v3) and 2 (v2), so getVersion must mock versionNumbers 3 and 2
     vi.mocked(documentsApi.getVersions).mockResolvedValueOnce({

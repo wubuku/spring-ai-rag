@@ -226,6 +226,7 @@
   "chat": {
     "title": "RAG 对话",
     "placeholder": "输入问题，开始检索增强对话…",
+    "inputLabel": "消息输入框",
     "send": "发送",
     "newChat": "新对话",
     "export": "导出",
@@ -259,6 +260,7 @@
   "search": {
     "title": "文档检索",
     "placeholder": "搜索文档内容…",
+    "inputLabel": "搜索关键词",
     "searchButton": "搜索",
     "noResults": "未找到结果",
     "resultsCount": "找到 {{count}} 条结果",
@@ -324,6 +326,7 @@
     "active": "活跃",
     "resolved": "已解决",
     "sloConfig": "SLO 配置",
+    "unit": "单位",
     "silencePlans": "静默计划",
     "createSilence": "创建静默计划",
     "deleteSilence": "删除",

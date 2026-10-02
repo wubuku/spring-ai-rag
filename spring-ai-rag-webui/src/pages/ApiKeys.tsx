@@ -483,8 +483,9 @@ function CreateKeyModal({ onClose }: { onClose: () => void }) {
         {!createdKey ? (
           <ImeSafeForm onSubmit={handleSubmit}>
             <div className={styles.formGroup}>
-              <label className={styles.label}>{t('apiKeys.name')} *</label>
+              <label className={styles.label} htmlFor="api-key-name">{t('apiKeys.name')} *</label>
               <input
+                id="api-key-name"
                 type="text"
                 className={styles.input}
                 value={name}
@@ -495,8 +496,9 @@ function CreateKeyModal({ onClose }: { onClose: () => void }) {
               />
             </div>
             <div className={styles.formGroup}>
-              <label className={styles.label}>{t('apiKeys.expiresAt')} {t('common.required')}</label>
+              <label className={styles.label} htmlFor="api-key-expires-at">{t('apiKeys.expiresAt')} {t('common.required')}</label>
               <input
+                id="api-key-expires-at"
                 type="datetime-local"
                 name="expiresAt"
                 className={styles.input}
@@ -953,7 +955,9 @@ function RotateKeyModal({
         {!completedResult ? (
           <div>
             <div className={styles.formGroup}>
-              <label className={styles.label}>{t('apiKeys.credential')}</label>
+              {/* 下面展示的是只读信息，不是表单控件——用 label 会让它变成
+                  一个指向非控件的"标签"，对辅助技术毫无意义。改成说明性元素。 */}
+              <div className={styles.label}>{t('apiKeys.credential')}</div>
               <div className={styles.mono} style={{ fontSize: '0.8rem' }}>
                 {principal.currentCredentialId} (v{principal.currentCredentialVersion})
               </div>
