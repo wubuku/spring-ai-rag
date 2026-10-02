@@ -49,11 +49,11 @@ export function ReembedAllButton() {
       <button
         onClick={() => setIsExpanded(!isExpanded)}
         className={styles.alertButton}
-        title={t('documents.reembedAlert') || 'Documents missing embeddings'}
+        title={t('documents.reembedAlert')}
       >
         <TriangleAlert className={styles.icon} size={18} aria-hidden="true" />
         <span className={styles.text}>
-          {status.data.withoutEmbeddings} {t('documents.missingEmbeddings') || 'documents need re-embedding'}
+          {status.data.withoutEmbeddings} {t('documents.missingEmbeddings')}
         </span>
         <span className={styles.arrow}>
             {isExpanded ? (
@@ -67,8 +67,7 @@ export function ReembedAllButton() {
       {isExpanded && (
         <div className={styles.panel}>
           <p className={styles.message}>
-            {t('documents.reembedDescription') ||
-              `Found ${status.data.withoutEmbeddings} documents without embeddings. This may happen after data migration.`}
+            {t('documents.reembedDescription')}
           </p>
           <div className={styles.actions}>
             <button
@@ -76,24 +75,23 @@ export function ReembedAllButton() {
               disabled={reembedMutation.isPending}
               className={styles.reembedBtn}
             >
-              {reembedMutation.isPending ? t('common.loading') : t('documents.reembed') || 'Re-embed All'}
+              {reembedMutation.isPending ? t('common.loading') : t('documents.reembed')}
             </button>
             <button
               onClick={() => setConfirmForce(true)}
               disabled={reembedMutation.isPending}
               className={styles.forceBtn}
             >
-              {t('documents.reembedForce') || 'Force Re-embed'}
+              {t('documents.reembedForce')}
             </button>
           </div>
         </div>
       )}
       <ConfirmDialog
         open={confirmForce}
-        title={t('documents.reembedForce') || 'Force Re-embed'}
-        description={t('documents.reembedForceConfirm')
-          || 'Force re-embed will regenerate ALL embeddings. Continue?'}
-        confirmLabel={t('documents.reembedForce') || 'Force Re-embed'}
+        title={t('documents.reembedForce')}
+        description={t('documents.reembedForceConfirm')}
+        confirmLabel={t('documents.reembedForce')}
         cancelLabel={t('common.cancel')}
         pending={reembedMutation.isPending}
         danger

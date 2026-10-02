@@ -10,9 +10,8 @@ const mockMutate = vi.fn();
 const mockInvalidate = vi.fn();
 const mutationHandlers: Array<Record<string, unknown>> = [];
 const toastSpy = vi.fn();
-// 渲染期闭包读取：useMutation 的 isPending 与 i18n 空翻译开关。
+// 渲染期闭包读取：useMutation 的 isPending 与 i18n 缺键开关。
 let mockIsPending = false;
-let emptyTranslations = false;
 
 vi.mock('@tanstack/react-query', () => ({
   useQuery: () => mockUseQuery(),
@@ -28,7 +27,8 @@ vi.mock('@tanstack/react-query', () => ({
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string) => (emptyTranslations ? '' : key),
+    // 刻意与真实 i18next 行为一致：缺失的键返回键名本身（一个真值字符串）。
+    t: (key: string) => key,
   }),
 }));
 
@@ -229,38 +229,31 @@ describe('ReembedAllButton', () => {
     expect(toastSpy).toHaveBeenCalledWith('Re-embedded: 5 success', 'success');
   });
 
-  it('falls back to hardcoded english labels when translations are empty', async () => {
-    emptyTranslations = true;
-    try {
-      const user = userEvent.setup();
-      render(<ReembedAllButton />);
+  it('shows the key itself when a translation is missing, never a hardcoded label', async () => {
+    // Batch 792 removed eight `t(...) || 'English literal'` guards here. The
+    // case they were written for cannot occur: i18next returns the key string
+    // for a missing key, and that string is truthy, so the guard never fired.
+    // This test previously asserted the guard worked by mocking `t` to return
+    // '', which i18next never does — it pinned a fiction that hid four real
+    // missing keys elsewhere in the app.
+    //
+    // What is worth pinning is the real behaviour: no silent English appears.
+    // The keys themselves are guaranteed to exist by check:i18n-keys.
+    const user = userEvent.setup();
+    render(<ReembedAllButton />);
 
-      const alertButton = screen.getByRole('button', {
-        name: /documents need re-embedding/,
-      });
-      expect(alertButton).toHaveAttribute(
-        'title',
-        'Documents missing embeddings',
-      );
-      await user.click(alertButton);
+    const alertButton = screen.getByRole('button', {
+      name: /documents\.missingEmbeddings/,
+    });
+    // The key is shown, and no hardcoded English was substituted for it.
+    expect(alertButton).toHaveAttribute('title', 'documents.reembedAlert');
+    expect(screen.queryByText(/Documents missing embeddings/)).not.toBeInTheDocument();
+    await user.click(alertButton);
 
-      expect(
-        screen.getByText(/Found 1 documents without embeddings/),
-      ).toBeInTheDocument();
-      expect(
-        screen.getByRole('button', { name: 'Re-embed All' }),
-      ).toBeInTheDocument();
-
-      await user.click(
-        screen.getByRole('button', { name: 'Force Re-embed' }),
-      );
-      const dialog = screen.getByRole('dialog', { name: 'Force Re-embed' });
-      expect(dialog).toHaveTextContent(
-        'Force re-embed will regenerate ALL embeddings. Continue?',
-      );
-    } finally {
-      emptyTranslations = false;
-    }
+    expect(screen.queryByText(/Re-embed All/)).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'documents.reembedForce' }),
+    ).toBeInTheDocument();
   });
 
   it('shows the loading label while a re-embed is pending', async () => {

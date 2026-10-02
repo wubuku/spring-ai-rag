@@ -492,7 +492,7 @@ export function Chat() {
             <div className={styles.emptyState}>
               <p>{t('chat.noMessages')}</p>
               <p className={styles.hint}>
-                {t('chat.hint') || 'I will search through your knowledge base to find the most relevant information.'}
+                {t('chat.hint')}
               </p>
             </div>
           )}

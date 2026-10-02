@@ -407,8 +407,8 @@ export function Documents() {
       <div className={styles.searchRow}>
         <input
           type="text"
-          aria-label={t('documents.searchPlaceholder') || t('common.search')}
-          placeholder={t('documents.searchPlaceholder') || t('common.search')}
+          aria-label={t('documents.searchPlaceholder')}
+          placeholder={t('documents.searchPlaceholder')}
           value={keywordDraft}
           onChange={handleKeywordChange}
           onCompositionStart={keywordIme.handleCompositionStart}
@@ -455,7 +455,7 @@ export function Documents() {
         </div>
       ) : error ? (
         <div className={styles.error}>
-          {t('documents.loadError') || t('common.error')}:{' '}
+          {t('documents.loadError')}:{' '}
           {error instanceof Error ? error.message : 'Unknown error'}
         </div>
       ) : (
@@ -465,7 +465,7 @@ export function Documents() {
               <thead>
                 <tr>
                   <th>{t('documents.documentId')}</th>
-                  <th>{t('documents.title') || 'Title'}</th>
+                  <th>{t('documents.title')}</th>
                   <th>Collection</th>
                   <th>{t('documents.sourceNamespace')}</th>
                   <th>{t('documents.externalId')}</th>

@@ -41,7 +41,10 @@
     "lastCheck": "Last Check",
     "actions": "Actions",
     "optional": "(optional)",
-    "required": "(required)"
+    "required": "(required)",
+    "previous": "Previous",
+    "next": "Next",
+    "preview": "Preview"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -145,7 +148,9 @@
     "reembed": "Re-embed All",
     "reembedForce": "Force Re-embed",
     "reembedForceConfirm": "Force re-embed will regenerate ALL embeddings (may take a while). Continue?",
-    "clearSearch": "Clear search"
+    "clearSearch": "Clear search",
+    "searchPlaceholder": "Search documents",
+    "loadError": "Failed to load documents"
   },
   "collections": {
     "title": "Collections",
@@ -279,7 +284,8 @@
       "hybrid": "Meaning + keyword",
       "semantic": "Meaning match",
       "keyword": "Keyword match"
-    }
+    },
+    "history": "History"
   },
   "metrics": {
     "title": "Metrics",
