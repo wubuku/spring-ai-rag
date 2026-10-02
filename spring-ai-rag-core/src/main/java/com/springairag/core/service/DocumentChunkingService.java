@@ -50,6 +50,33 @@ public class DocumentChunkingService {
         return new PreparedChunks(descriptor, chunks);
     }
 
+    /**
+     * The chunker version this document's content would derive under, without
+     * deriving any chunks.
+     *
+     * <p>Exists because {@link #prepare(RagDocument)} does the splitting too, and
+     * asking it for a version string alone still walked the whole document
+     * through the hierarchical chunker. Cache-freshness checks did exactly that:
+     * {@code DocumentEmbedService} split the document, threw the chunks away,
+     * compared the version against the row in
+     * {@code rag_document_embedding_state}, and returned {@code CACHED} — so the
+     * common case (document unchanged, nothing to redo) paid a full chunking pass
+     * to learn it had nothing to do. It also made a blank-content document throw
+     * from a code path that was only ever going to read a status.
+     *
+     * <p>The answer is identical to {@code prepare(doc).descriptor().chunkerVersion()}
+     * — both go through {@link DocumentDerivationDescriptorProvider}, which is the
+     * single source of derivation identity. Only the work skipped differs.
+     *
+     * <p>Returns without touching {@code document.getContent()}, so a document
+     * whose content is absent or blank yields its version rather than an
+     * {@link IllegalArgumentException}.
+     */
+    public String chunkerVersionFor(RagDocument document) {
+        Objects.requireNonNull(document, "document");
+        return descriptorProvider.describe(document).chunkerVersion();
+    }
+
     public record PreparedChunks(
             DocumentDerivationDescriptorProvider.Descriptor descriptor,
             List<TextChunk> chunks) {

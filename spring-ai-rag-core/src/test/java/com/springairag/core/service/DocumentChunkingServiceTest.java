@@ -17,6 +17,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * DocumentChunkingService（Batch 401）：派生分块唯一协调入口的
  * 输入守卫、JSON_RECORD 单块直通、TEXT 层级切分与描述符一致性、
  * PreparedChunks 的空值/不可变契约。
+ *
+ * <p>Batch 807 补 {@code chunkerVersionFor}：只回答"这个文档会派生出版本号是什么"，
+ * 不派生任何分块。它与 {@code prepare} 共用同一个 descriptor provider，所以两条路径
+ * 必然给出同一个答案；测试同时钉住"答案相同"和"输入守卫不同"（空白内容下 prepare
+ * 抛异常而它不抛），后者是前者没有偷偷走 prepare 的可观测证据。
  */
 class DocumentChunkingServiceTest {
 
@@ -134,5 +139,62 @@ class DocumentChunkingServiceTest {
         assertThrows(UnsupportedOperationException.class,
                 () -> prepared.chunks().add(new TextChunk("x", 0, 1)));
         assertNotNull(prepared.descriptor());
+    }
+
+    // ── chunkerVersionFor：只取身份，不派生分块（Batch 807）────────────────────
+
+    @Test
+    void chunkerVersionForAgreesWithPrepareForEveryDocumentKind() {
+        String longText = "# Alpha\n\n" + "word ".repeat(30)
+                + "\n\n## Beta\n\n" + "term ".repeat(30);
+
+        for (String type : new String[]{RagDocument.JSON_RECORD, "TEXT", "markdown", null}) {
+            RagDocument doc = document(type, longText);
+            assertEquals(service.prepare(doc).descriptor().chunkerVersion(),
+                    service.chunkerVersionFor(doc),
+                    "descriptor-only lookup must not answer differently for type " + type);
+        }
+    }
+
+    @Test
+    void chunkerVersionForNeedsNoContentAndPrepareOnTheSameInputFails() {
+        // The reason this method exists (Batch 807): cache-freshness checks were
+        // calling prepare() for a version string, which split the whole document
+        // and threw on a blank one. prepare() still rejecting the same input is
+        // what proves the lookup is not routing through it.
+        RagDocument blank = document(RagDocument.JSON_RECORD, "   \n\t ");
+
+        assertThrows(IllegalArgumentException.class, () -> service.prepare(blank));
+
+        assertEquals("json-record-v1:single", service.chunkerVersionFor(blank));
+    }
+
+    @Test
+    void chunkerVersionForTreatsAnUnsetTypeAsText() {
+        RagDocument noType = document(null, "body");
+
+        assertEquals("TEXT", new DocumentDerivationDescriptorProvider(properties)
+                .describe(noType).documentKind());
+        assertEquals(service.prepare(noType).descriptor().chunkerVersion(),
+                service.chunkerVersionFor(noType));
+    }
+
+    @Test
+    void chunkerVersionForReadsLiveConfigurationRatherThanACachedConstant() {
+        RagDocument doc = document("TEXT", "body");
+        assertTrue(service.chunkerVersionFor(doc).startsWith("hierarchical-v2:1000:100:100"));
+
+        properties.getChunk().setDefaultChunkSize(40);
+        properties.getChunk().setMinChunkSize(10);
+        properties.getChunk().setDefaultChunkOverlap(5);
+
+        assertEquals("hierarchical-v2:40:10:5", service.chunkerVersionFor(doc));
+    }
+
+    @Test
+    void chunkerVersionForRejectsNullDocument() {
+        NullPointerException error = assertThrows(
+                NullPointerException.class, () -> service.chunkerVersionFor(null));
+        assertEquals("document", error.getMessage());
     }
 }

@@ -41,8 +41,7 @@ class DocumentEmbedServiceFreshTailTest {
                 persistenceService,
                 () -> PROFILE,
                 new RagProperties());
-        when(persistenceService.findCacheState(
-                any(Long.class), eq(PROFILE), any(String.class), any(String.class)))
+        when(persistenceService.findCacheState(any(Long.class), any(), eq(PROFILE), any(String.class)))
                 .thenReturn(EmbeddingPersistenceService.CacheState.miss());
     }
 
@@ -68,8 +67,7 @@ class DocumentEmbedServiceFreshTailTest {
         service.setKeywordIndexPersistenceService(keywordIndexPersistenceService);
         when(keywordIndexPersistenceService.hasFreshLocalIndex(
                 any(RagDocument.class))).thenReturn(false);
-        when(persistenceService.findCacheState(
-                anyLong(), eq(PROFILE), anyString(), anyString()))
+        when(persistenceService.findCacheState(anyLong(), any(), eq(PROFILE), anyString()))
                 .thenReturn(EmbeddingPersistenceService.CacheState.hit(3));
 
         // 关键词索引过期 → 直接判不新鲜，不再查缓存。
@@ -78,13 +76,11 @@ class DocumentEmbedServiceFreshTailTest {
 
     @Test
     void cacheHitMakesEmbeddingFreshAndMissKeepsItStale() {
-        when(persistenceService.findCacheState(
-                any(Long.class), eq(PROFILE), any(String.class), any(String.class)))
+        when(persistenceService.findCacheState(any(Long.class), any(), eq(PROFILE), any(String.class)))
                 .thenReturn(EmbeddingPersistenceService.CacheState.hit(2));
         assertTrue(service.hasFreshEmbedding(document("hash-1")));
 
-        when(persistenceService.findCacheState(
-                any(Long.class), eq(PROFILE), any(String.class), any(String.class)))
+        when(persistenceService.findCacheState(any(Long.class), any(), eq(PROFILE), any(String.class)))
                 .thenReturn(EmbeddingPersistenceService.CacheState.miss());
         assertFalse(service.hasFreshEmbedding(document("hash-1")));
     }

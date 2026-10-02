@@ -22,6 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.doThrow;
@@ -60,8 +61,7 @@ class DocumentEmbedServiceTest {
                 persistenceService,
                 profileProvider,
                 new RagProperties());
-        when(persistenceService.findCacheState(
-                any(Long.class), eq(PROFILE), any(String.class), any(String.class)))
+        when(persistenceService.findCacheState(any(Long.class), any(), eq(PROFILE), any(String.class)))
                 .thenReturn(EmbeddingPersistenceService.CacheState.miss());
     }
 
@@ -108,7 +108,11 @@ class DocumentEmbedServiceTest {
                 any(Long.class), any(Long.class), any(String.class), any(), anyList(), anyList());
         verify(persistenceService).recordFailureIfNoCompleted(
                 eq(2L), eq(0L), eq("hash-2"), eq(PROFILE),
-                any(String.class), any(String.class));
+                // This fixture sets no document type, and ordinary documents do
+                // not necessarily carry one — the service derives the text
+                // descriptor from anything that is not a json record.
+                isNull(),
+                any(String.class));
     }
 
     @Test
@@ -135,8 +139,7 @@ class DocumentEmbedServiceTest {
     void cacheHitSkipsModelAndReturnsProfileMetadata() {
         RagDocument document = document(4L, longContent(), "hash-4");
         when(documentRepository.findById(4L)).thenReturn(Optional.of(document));
-        when(persistenceService.findCacheState(
-                eq(4L), eq(PROFILE), eq("hash-4"), any(String.class)))
+        when(persistenceService.findCacheState(eq(4L), any(), eq(PROFILE), eq("hash-4")))
                 .thenReturn(EmbeddingPersistenceService.CacheState.hit(3));
 
         Map<String, Object> result = service.embedDocument(4L);
@@ -151,16 +154,14 @@ class DocumentEmbedServiceTest {
     void forceEmbeddingBypassesCacheWithoutDeletingFirst() {
         RagDocument document = document(5L, longContent(), "hash-5");
         when(documentRepository.findById(5L)).thenReturn(Optional.of(document));
-        when(persistenceService.findCacheState(
-                eq(5L), eq(PROFILE), eq("hash-5"), any(String.class)))
+        when(persistenceService.findCacheState(eq(5L), any(), eq(PROFILE), eq("hash-5")))
                 .thenReturn(EmbeddingPersistenceService.CacheState.hit(2));
         mockSuccessfulEmbeddings();
 
         Map<String, Object> result = service.embedDocument(5L, true);
 
         assertEquals("COMPLETED", result.get("status"));
-        verify(persistenceService, never()).findCacheState(
-                eq(5L), eq(PROFILE), any(String.class), any(String.class));
+        verify(persistenceService, never()).findCacheState(eq(5L), any(), eq(PROFILE), any(String.class));
         verify(persistenceService).replace(
                 eq(5L), eq(0L), eq("hash-5"), eq(PROFILE), anyList(), anyList());
     }

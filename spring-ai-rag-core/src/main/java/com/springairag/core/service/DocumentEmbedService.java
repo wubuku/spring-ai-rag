@@ -110,9 +110,9 @@ public class DocumentEmbedService {
         EmbeddingProfile profile = profileProvider.getActiveProfile();
         return persistenceService.findCacheState(
                 document.getId(),
+                document.getDocumentType(),
                 profile,
-                document.getContentHash(),
-                buildChunkerVersion(document)).hit();
+                document.getContentHash()).hit();
     }
 
     /**
@@ -186,7 +186,7 @@ public class DocumentEmbedService {
                         prep.documentVersion(),
                         prep.contentHash(),
                         profile,
-                        prep.chunkerVersion(),
+                        prep.documentType(),
                         error);
             }
             log.warn("Document {} embedding provider call failed without replacing old vectors",
@@ -205,7 +205,7 @@ public class DocumentEmbedService {
                         prep.documentVersion(),
                         prep.contentHash(),
                         profile,
-                        prep.chunkerVersion(),
+                        prep.documentType(),
                         validationError);
             }
             log.warn("Document {} embedding failed without replacing old vectors: {}",
@@ -443,7 +443,8 @@ public class DocumentEmbedService {
             List<TextChunk> chunks,
             String contentHash,
             long documentVersion,
-            String chunkerVersion) {
+            String chunkerVersion,
+            String documentType) {
     }
 
     /**
@@ -463,15 +464,17 @@ public class DocumentEmbedService {
             doc.setContentHash(contentHash);
             doc.setVersion(version);
         }
-        String chunkerVersion = chunkingService.prepare(doc)
-                .descriptor().chunkerVersion();
+        // Descriptor-only lookup: this value is needed both for the freshness
+        // check below and in the result, but deriving it through prepare() would
+        // chunk the whole document here and then chunk it again below.
+        String chunkerVersion = chunkingService.chunkerVersionFor(doc);
 
         if (!force) {
             EmbeddingPersistenceService.CacheState cache = persistenceService.findCacheState(
                     documentId,
+                    doc.getDocumentType(),
                     profile,
-                    contentHash,
-                    chunkerVersion);
+                    contentHash);
             if (cache.hit()) {
                 Map<String, Object> cached = buildResult(
                         documentId, cache.chunkCount(), cache.chunkCount(),
@@ -479,7 +482,7 @@ public class DocumentEmbedService {
                 cached.put("cached", true);
                 cached.put("message",
                         "Embedding already exists for the active profile and content");
-                return new EmbedPrepareResult(cached, null, contentHash, version, chunkerVersion);
+                return new EmbedPrepareResult(cached, null, contentHash, version, chunkerVersion, doc.getDocumentType());
             }
         }
 
@@ -488,10 +491,10 @@ public class DocumentEmbedService {
             Map<String, Object> failed = buildResult(
                     documentId, 0, 0, "FAILED", profile,
                     "Non-blank document produced no chunks");
-            return new EmbedPrepareResult(failed, null, contentHash, version, chunkerVersion);
+            return new EmbedPrepareResult(failed, null, contentHash, version, chunkerVersion, doc.getDocumentType());
         }
         log.info("Document {} split into {} chunks", documentId, chunks.size());
-        return new EmbedPrepareResult(null, chunks, contentHash, version, chunkerVersion);
+        return new EmbedPrepareResult(null, chunks, contentHash, version, chunkerVersion, doc.getDocumentType());
     }
 
     private String validateEmbeddingResults(
@@ -601,7 +604,7 @@ public class DocumentEmbedService {
     }
 
     private String buildChunkerVersion(RagDocument doc) {
-        return chunkingService.prepare(doc).descriptor().chunkerVersion();
+        return chunkingService.chunkerVersionFor(doc);
     }
 
     private Map<String, Object> buildResult(

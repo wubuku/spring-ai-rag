@@ -47,12 +47,9 @@ class DocumentEmbedBatchCachedTailTest {
         org.mockito.Mockito.when(documentRepository.findById(2L))
                 .thenReturn(Optional.of(document(2L, "cached body", "hash-c")));
         // 先注册宽匹配 miss，再注册特定命中：Mockito 以最后匹配的桩为准。
-        when(persistenceService.findCacheState(
-                any(Long.class), eq(PROFILE), any(String.class),
-                any(String.class)))
+        when(persistenceService.findCacheState(any(Long.class), any(), eq(PROFILE), any(String.class)))
                 .thenReturn(EmbeddingPersistenceService.CacheState.miss());
-        when(persistenceService.findCacheState(
-                eq(2L), eq(PROFILE), eq("hash-c"), anyString()))
+        when(persistenceService.findCacheState(eq(2L), any(), eq(PROFILE), eq("hash-c")))
                 .thenReturn(EmbeddingPersistenceService.CacheState.hit(2));
     }
 

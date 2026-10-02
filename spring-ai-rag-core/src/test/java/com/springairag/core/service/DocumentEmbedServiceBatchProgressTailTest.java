@@ -57,8 +57,7 @@ class DocumentEmbedServiceBatchProgressTailTest {
         document.setContentHash("hash-" + id);
         document.setContent("body " + id);
         when(documentRepository.findById(id)).thenReturn(Optional.of(document));
-        when(persistenceService.findCacheState(
-                eq(id), eq(PROFILE), anyString(), anyString()))
+        when(persistenceService.findCacheState(eq(id), any(), eq(PROFILE), anyString()))
                 .thenReturn(EmbeddingPersistenceService.CacheState.hit(2));
     }
 

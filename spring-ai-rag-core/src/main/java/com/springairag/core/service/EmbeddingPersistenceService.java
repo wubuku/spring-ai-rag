@@ -44,11 +44,31 @@ public class EmbeddingPersistenceService {
         this.integrityRepository = integrityRepository;
     }
 
+    /**
+     * Whether the stored embedding for this document is still current, i.e. the
+     * row's content hash, chunker version and chunk count all agree with what
+     * this code would derive today.
+     *
+     * <p>The caller supplies the document's type rather than the chunker version
+     * it expects. That is the same correction Batch 803 made on the write side:
+     * a version string passed in from outside is a value nothing constrains, and
+     * two call sites did derive it independently and had already drifted apart
+     * once. Deriving it here means the comparison is "what this code would write
+     * today" against "what is in the row", which is the comparison that can
+     * actually detect a mismatch — reading the type back out of the row instead
+     * would make the check self-fulfilling.
+     *
+     * <p>Deriving here also costs nothing: it is the same O(1) descriptor lookup
+     * the write side does, whereas having the caller ask
+     * {@code DocumentChunkingService.prepare(...)} for a version string chunked
+     * the whole document to answer it.
+     */
     public CacheState findCacheState(
             long documentId,
+            String documentType,
             EmbeddingProfile profile,
-            String contentHash,
-            String chunkerVersion) {
+            String contentHash) {
+        String chunkerVersion = chunkerVersionFor(documentType);
         if (integrityRepository != null) {
             DerivationIntegrityRepository.Snapshot snapshot =
                     integrityRepository.inspect(documentId);
@@ -212,14 +232,26 @@ public class EmbeddingPersistenceService {
         }
     }
 
+    /**
+     * Records a failed embedding attempt as the current state for this profile,
+     * but only while the document still matches the version the caller started
+     * from.
+     *
+     * <p>Like {@link #findCacheState}, the caller supplies the document's type
+     * rather than the chunker version it believes in, and the version is derived
+     * here. Three methods on this service now take a document type for exactly
+     * this reason; the version string is an output of the descriptor provider,
+     * not something a caller gets to state.
+     */
     @Transactional
     public void recordFailureIfNoCompleted(
             long documentId,
             long expectedVersion,
             String expectedContentHash,
             EmbeddingProfile profile,
-            String chunkerVersion,
+            String documentType,
             String error) {
+        String chunkerVersion = chunkerVersionFor(documentType);
         String safeError = sanitizeError(error);
         Map<String, Object> document = readDocumentSnapshot(documentId);
         long actualVersion = ((Number) document.get("version")).longValue();

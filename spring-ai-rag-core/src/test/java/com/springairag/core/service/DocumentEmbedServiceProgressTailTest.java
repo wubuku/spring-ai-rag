@@ -16,6 +16,7 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -65,8 +66,7 @@ class DocumentEmbedServiceProgressTailTest {
                 error.getMessage());
         // 守卫先于缓存查询。
         org.mockito.Mockito.verify(persistenceService,
-                org.mockito.Mockito.never()).findCacheState(
-                anyLong(), eq(PROFILE), anyString(), anyString());
+                org.mockito.Mockito.never()).findCacheState(anyLong(), any(), eq(PROFILE), anyString());
     }
 
     @Test
@@ -80,8 +80,7 @@ class DocumentEmbedServiceProgressTailTest {
 
         when(documentRepository.findById(41L))
                 .thenReturn(Optional.of(document));
-        when(persistenceService.findCacheState(
-                eq(41L), eq(PROFILE), anyString(), anyString()))
+        when(persistenceService.findCacheState(eq(41L), any(), eq(PROFILE), anyString()))
                 .thenReturn(EmbeddingPersistenceService.CacheState.hit(2));
         List<EmbedProgressEvent> events = new ArrayList<>();
         var result = service.embedDocumentWithProgress(41L, false, events::add);

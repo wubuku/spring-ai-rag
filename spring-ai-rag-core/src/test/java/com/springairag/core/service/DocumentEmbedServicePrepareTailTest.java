@@ -76,8 +76,7 @@ class DocumentEmbedServicePrepareTailTest {
     void blankChunksFromNonBlankDocumentProduceFailedPrepare() {
         RagDocument doc = document();
         when(documentRepository.findById(41L)).thenReturn(Optional.of(doc));
-        when(persistenceService.findCacheState(
-                anyLong(), any(), anyString(), anyString()))
+        when(persistenceService.findCacheState(anyLong(), any(), any(), anyString()))
                 .thenReturn(cacheMiss());
         when(chunkingService.prepare(any())).thenReturn(
                 new DocumentChunkingService.PreparedChunks(
@@ -95,8 +94,7 @@ class DocumentEmbedServicePrepareTailTest {
     @Test
     void chunkingServiceInjectionIsUsedForPreparation() {
         when(documentRepository.findById(41L)).thenReturn(Optional.of(document()));
-        when(persistenceService.findCacheState(
-                anyLong(), any(), anyString(), anyString()))
+        when(persistenceService.findCacheState(anyLong(), any(), any(), anyString()))
                 .thenReturn(cacheMiss());
         when(chunkingService.prepare(any())).thenReturn(
                 new DocumentChunkingService.PreparedChunks(
@@ -117,8 +115,7 @@ class DocumentEmbedServicePrepareTailTest {
     void keywordIndexPersistenceServiceIsInvokedWhenPresent() {
         var keywordIndexPersistenceService = mock(KeywordIndexPersistenceService.class);
         when(documentRepository.findById(41L)).thenReturn(Optional.of(document()));
-        when(persistenceService.findCacheState(
-                anyLong(), any(), anyString(), anyString()))
+        when(persistenceService.findCacheState(anyLong(), any(), any(), anyString()))
                 .thenReturn(cacheMiss());
         when(chunkingService.prepare(any())).thenReturn(
                 new DocumentChunkingService.PreparedChunks(
