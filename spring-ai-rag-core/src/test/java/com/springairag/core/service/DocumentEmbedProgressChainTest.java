@@ -59,9 +59,7 @@ class DocumentEmbedProgressChainTest {
                 persistenceService,
                 profileProvider,
                 new RagProperties());
-        when(persistenceService.findCacheState(
-                any(Long.class), eq(PROFILE), any(String.class),
-                any(String.class)))
+        when(persistenceService.findCacheState(any(Long.class), any(), eq(PROFILE), any(String.class)))
                 .thenReturn(EmbeddingPersistenceService.CacheState.miss());
     }
 
@@ -87,8 +85,7 @@ class DocumentEmbedProgressChainTest {
                 .thenReturn(Optional.of(document(1L, longContent(), "hash-1")));
         when(documentRepository.findById(2L))
                 .thenReturn(Optional.of(document(2L, longContent(), "hash-2")));
-        when(persistenceService.findCacheState(
-                eq(2L), eq(PROFILE), eq("hash-2"), anyString()))
+        when(persistenceService.findCacheState(eq(2L), any(), eq(PROFILE), eq("hash-2")))
                 .thenReturn(EmbeddingPersistenceService.CacheState.hit(2));
         when(documentRepository.findById(3L))
                 .thenReturn(Optional.of(document(3L,

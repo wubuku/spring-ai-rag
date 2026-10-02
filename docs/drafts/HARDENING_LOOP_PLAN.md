@@ -478,6 +478,109 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
+### Batch 807（已交付）
+
+- 分支：`feature/derive-chunker-version-20261003`
+- 内容：把"派生身份"这条线上最后三处绕过单一来源的地方收口，顺手修掉一处**为了
+  拿版本号而把整个文档切一遍块**的性能缺陷。
+- **勘察起点**：Batch 806 遗留的 `findCacheState(documentId, profile, contentHash,
+  chunkerVersion)` 仍透传裸 `String`（写侧 Batch 803 已根除，读侧是同一个 footgun 的
+  镜像）。但**先问的不是"怎么改签名"，而是"这条路径为什么会需要一个版本串"**——
+  于是顺着调用链往上翻，看到了下面这个。
+- **真实缺陷 1：缓存 freshness 判定会分块整个文档，而且分块两次**
+  `DocumentEmbedService.java:466`（Batch 806 之后）：
+  ```java
+  String chunkerVersion = chunkingService.prepare(doc).descriptor().chunkerVersion();
+  if (!force) { ...findCacheState(...)...; if (cache.hit()) return; }   // 命中就返回
+  List<TextChunk> chunks = chunkingService.prepare(doc).chunks();       // 真正要用时再分一次
+  ```
+  `DocumentChunkingService.prepare()` 不只算版本号，它**真的调用
+  `HierarchicalTextChunker.split()`**。于是"这个文档的 embedding 还是新的吗"这个
+  本该是 O(1) 数据库查询的问题，先把整篇文档切了一遍块，**把结果丢掉**，比较完
+  版本号后返回 `CACHED`——**最常见的"无事可做"路径反而付了全量分块的成本**；
+  未命中时紧接着再分一次。第三处 `buildChunkerVersion()`（重试路径 `:556`、
+  `hasFreshEmbedding` `:115`）同样是"只为比较两个字符串而分块"。
+  附带一个更硬的症状：`prepare()` 对空白内容抛 `IllegalArgumentException`，
+  于是**内容为空白的文档连"查一下缓存"都做不了**。
+- **真实缺陷 2：provider 的承诺被绕过**。`DocumentDerivationDescriptorProvider` 的
+  Javadoc 明写"派生输入身份的**单一来源**，供调度、提交门、**缓存**和检索 freshness
+  共用"。全仓 10+ 处都遵守（3 个 fulltext provider、`HybridRetrieverService`、
+  `RetrievalEmptyReasonProbe`、`RagDocumentController` ×4、`DocumentLifecycleService`），
+  **只有缓存判定这一条绕道 `prepare()`**。因为两条路径内部其实都汇到同一个 provider，
+  **当前结果是对的**——但"唯一能算版本号的地方"变成了两个，provider 的承诺失效。
+- **真实缺陷 3（顺藤摸到的）**：`recordFailureIfNoCompleted(...)` 也收裸
+  `String chunkerVersion`，与 `findCacheState` 同一类 footgun。只改前者等于重演
+  Batch 803"改了写侧没改读侧"的教训，故一并处理。
+- **被实测推翻的假设（如实记录）**：本批开工时我怀疑 Batch 806 遗留的
+  `stream()` 与非流式版的条件差异（`claim == null && prepared.keyed()` vs
+  `prepared.keyed()`）是"非流式侧漏了幂等"的 bug。读 `ChatTurnOperationService
+  .inspectExisting` 后推翻：它的返回值要么是 `null`，要么 `replay()` 必为 `true`
+  （SUCCEEDED 走 replay，FAILED 抛 `failedReplay`，in-progress 抛 `inProgress`），
+  所以 `claim != null` **蕴含** `claim.replay()`，两处写法**语义等价**。
+  剩下的只是一个冗余防御写法暗示了"可能有非 replay 的 claim"这个不存在的状态，
+  以及条件脆弱（`inspectExisting` 的契约一变，两侧就会分叉）。记为遗留，未在本批动。
+- **变更**
+  1. `DocumentChunkingService.chunkerVersionFor(RagDocument)`：O(1)，只问 provider
+     不分块；Javadoc 写明它存在的原因，以及"内容为空白时返回版本而不是抛异常"。
+  2. `buildChunkerVersion` 与 `:466` 改用它，**消除双重 `prepare()`**。
+  3. `findCacheState(documentId, documentType, profile, contentHash)` 与
+     `recordFailureIfNoCompleted(..., documentType, ...)` 去掉裸 `String
+     chunkerVersion`，服务内部统一走 803 引入的 `chunkerVersionFor(documentType)`。
+     **至此该服务三个写/读方法全部只收 documentType，版本串在生产代码里不再有
+     任何"由调用方声明"的入口。**
+  4. `EmbedPrepareResult` 增加 `documentType` 字段（private record，仅 3 个构造点），
+     让失败记录路径能拿到类型而不必重查文档。
+- **测试**：27 处调用点同步（19 处 Mockito + 6 处直接调用 + 2 处特例）。
+  `EmbeddingPersistenceServiceTest` 里 9 处 `findCacheState(1L, PROFILE, "h1", "v1")`
+  与 5 处 `stateRow(..., "v1", ...)` 改成真实推导值 `TEXT_CHUNKER_VERSION`——
+  **这些测试从此验证的是"代码今天会写什么"对"行里存了什么"**，而不是双方约定一个
+  `"v1"` 魔法字符串。新增 5 条用例（`DocumentChunkingServiceTest` 5 → 10）。
+- **变异测试**：`chunkerVersionFor` 改回 `prepare(doc).descriptor().chunkerVersion()`
+  → **恰好 1 条用例变红**并指名报出。它靠的是"空白内容上 prepare 抛异常而
+  `chunkerVersionFor` 不抛"这个可观测差异：若实现内部调了 prepare，逻辑上不可能
+  不抛，所以这条断言在逻辑上排除了"偷偷走 prepare"的可能。
+- **自罚（四个批量脚本的 bug，全部由编译器/测试当场抓住）**
+  1. 参数解析的括号深度初值写成 0，导致逗号切分条件 `depth == 1` 永不成立，
+     **首轮 dry-run 匹配 0 处**（靠 dry-run 发现，没有直接 apply）。
+  2. 重组时**漏发调用本身的右括号**，`any(String.class)))` 变成 `)))` 缺失一截。
+     `git checkout --` 撤销测试目录后重做。
+  3. **最严重的一处**：循环在找不到下一个匹配时直接 `break`，**没有把文件尾部
+     `src[pos:]` 追加进输出**——8 个测试文件从最后一个匹配处被**截断**，`document()`
+     辅助方法和后续测试整段消失。是 `git diff` 露出"39 行变 8 行"才发现的，
+     编译报"已到达文件结尾"只是症状。修复后逐个核对行数只减不增、尾部完整。
+  4. 字符串替换漏闭合引号（`TEXT_CHUNKER_VERSION",`）。
+  另有两处是**真实的语义错误**，比脚本 bug 更值得记：
+  5. **我把第 2 个参数机械改成了 `anyString()`，结果 19 个测试 NPE**。
+     原因是 **`documentType` 可以是 `null`**（普通文档常常没有显式类型，
+     fixture 里就是 null），而 **Mockito 的 `anyString()` 不匹配 null**。
+     第 4 个参数 `contentHash` 可以用 `anyString()`（前面已有 null/blank 守卫），
+     第 2 个不行——改回 `any()`。
+  6. 我**误删了集成测试的 `CHUNKER` 常量名**，而它还有 4 处 SQL 断言在用。
+     正确做法是 `CHUNKER`（期望版本）与 `TEXT_DOCUMENT_TYPE`（文档类型）两个常量并存。
+- **一个测试被"改对"了**：把 `partialFailureDoesNotReplaceExistingVectors` 里
+  `recordFailureIfNoCompleted` 的第 5 个参数断言从 `any(String.class)` 改成
+  `isNull()` 并加注释——因为那个 fixture 确实没有 documentType。**这不是为了让测试
+  变绿而放宽断言，是把"第 5 个参数的语义已经变了"这件事写进断言里。**
+- 验证：
+  - core 全量：**989 类 / 7711 用例 / 0 失败 / 154 跳过**（`TEST-*.xml` 求和，mtime 已核对）
+  - 门控 IT：**154/154 全绿**，0 跳过
+  - `verify-project-docs.sh` **15/15**；SLO 门禁通过；悲观锁检查通过
+  - 变异测试：改回 `prepare()` → 1 条如期变红
+- 指标：core 默认 7714 → **7719** 用例（XML 口径 7706 → 7711）；
+  `DocumentChunkingServiceTest` 5 → **10**；测试调用点 27 处同步；
+  `DocumentEmbedService` 净减一次 O(n) 分块。
+- 遗留（如实登记）：
+  - `stream()` 与非流式版 keyed 编排的**条件写法差异**（语义等价，见上文实测）。
+    合并两段约 30 行编排要先评估 SSE 取消竞态，已有 3 个套件在管；本批不动。
+  - `DocumentEmbedService` 的降级构造器会手工 `new DocumentDerivationDescriptorProvider`
+    （Spring 未注入 `DocumentChunkingService` 时）。本批之后版本查询统一走
+    `chunkingService`，**两个 provider 实例导致的分叉风险已经消除**，但那个手工
+    `new` 仍在（改动风险大于收益）。
+  - `ApiSloHandlerInterceptor` 与非流式端点的 `claim != null && claim.replay()`
+    冗余判断（见上文"被推翻的假设"）。
+  - **CI 里仍然一条 `scripts/verify-*.sh` 都没跑**（Batch 806 因 OAuth `workflow`
+    scope 限制摘出，补丁待手动应用）。
+
 ### Batch 806（已交付）
 
 - 分支：`feature/slo-observability-ask-chat-20261003`

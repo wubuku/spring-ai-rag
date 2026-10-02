@@ -38,6 +38,8 @@ class EmbeddingPersistenceServiceTest {
 
     /** What {@code DocumentDerivationDescriptorProvider} derives for text. */
     private static final String TEXT_CHUNKER_VERSION = "hierarchical-v2:1000:100:100";
+    /** Any type other than {@code json-record} derives the text descriptor. */
+    private static final String TEXT_DOCUMENT_TYPE = "text";
     /** ...and for a JSON record, which takes a different branch entirely. */
     private static final String JSON_CHUNKER_VERSION = "json-record-v1:single";
 
@@ -50,7 +52,7 @@ class EmbeddingPersistenceServiceTest {
         when(jdbc.queryForList(anyString(), any(Object[].class)))
                 .thenReturn(List.of());
 
-        var state = service.findCacheState(1L, PROFILE, "h1", "v1");
+        var state = service.findCacheState(1L, TEXT_DOCUMENT_TYPE, PROFILE, "h1");
 
         assertEquals(new EmbeddingPersistenceService.CacheState(false, 0), state);
     }
@@ -58,35 +60,35 @@ class EmbeddingPersistenceServiceTest {
     @Test
     void cacheMissesOnMetadataMismatch() {
         when(jdbc.queryForList(anyString(), any(Object[].class)))
-                .thenReturn(List.of(stateRow("FAILED", "h1", "v1", 3)));
+                .thenReturn(List.of(stateRow("FAILED", "h1", TEXT_CHUNKER_VERSION, 3)));
 
-        assertEquals(false, service.findCacheState(1L, PROFILE, "h1", "v1").hit());
+        assertEquals(false, service.findCacheState(1L, TEXT_DOCUMENT_TYPE, PROFILE, "h1").hit());
 
         when(jdbc.queryForList(anyString(), any(Object[].class)))
-                .thenReturn(List.of(stateRow("COMPLETED", "stale", "v1", 3)));
+                .thenReturn(List.of(stateRow("COMPLETED", "stale", TEXT_CHUNKER_VERSION, 3)));
 
-        assertEquals(false, service.findCacheState(1L, PROFILE, "h1", "v1").hit());
+        assertEquals(false, service.findCacheState(1L, TEXT_DOCUMENT_TYPE, PROFILE, "h1").hit());
 
         when(jdbc.queryForList(anyString(), any(Object[].class)))
                 .thenReturn(List.of(stateRow("COMPLETED", "h1", "other", 3)));
 
-        assertEquals(false, service.findCacheState(1L, PROFILE, "h1", "v1").hit());
+        assertEquals(false, service.findCacheState(1L, TEXT_DOCUMENT_TYPE, PROFILE, "h1").hit());
 
         when(jdbc.queryForList(anyString(), any(Object[].class)))
-                .thenReturn(List.of(stateRow("COMPLETED", "h1", "v1", 0)));
+                .thenReturn(List.of(stateRow("COMPLETED", "h1", TEXT_CHUNKER_VERSION, 0)));
 
-        assertEquals(false, service.findCacheState(1L, PROFILE, "h1", "v1").hit());
+        assertEquals(false, service.findCacheState(1L, TEXT_DOCUMENT_TYPE, PROFILE, "h1").hit());
         verify(jdbc, never()).queryForObject(anyString(), eq(Long.class), any(Object[].class));
     }
 
     @Test
     void cacheMissesWhenVectorRowsIncomplete() {
         when(jdbc.queryForList(anyString(), any(Object[].class)))
-                .thenReturn(List.of(stateRow("COMPLETED", "h1", "v1", 3)));
+                .thenReturn(List.of(stateRow("COMPLETED", "h1", TEXT_CHUNKER_VERSION, 3)));
         when(jdbc.queryForObject(anyString(), eq(Long.class), any(Object[].class)))
                 .thenReturn(2L);
 
-        var state = service.findCacheState(1L, PROFILE, "h1", "v1");
+        var state = service.findCacheState(1L, TEXT_DOCUMENT_TYPE, PROFILE, "h1");
 
         assertEquals(false, state.hit());
     }
@@ -94,11 +96,11 @@ class EmbeddingPersistenceServiceTest {
     @Test
     void cacheHitsWhenVectorRowsMatchChunkCount() {
         when(jdbc.queryForList(anyString(), any(Object[].class)))
-                .thenReturn(List.of(stateRow("COMPLETED", "h1", "v1", 3)));
+                .thenReturn(List.of(stateRow("COMPLETED", "h1", TEXT_CHUNKER_VERSION, 3)));
         when(jdbc.queryForObject(anyString(), eq(Long.class), any(Object[].class)))
                 .thenReturn(3L);
 
-        var state = service.findCacheState(1L, PROFILE, "h1", "v1");
+        var state = service.findCacheState(1L, TEXT_DOCUMENT_TYPE, PROFILE, "h1");
 
         assertEquals(new EmbeddingPersistenceService.CacheState(true, 3), state);
     }
@@ -110,14 +112,14 @@ class EmbeddingPersistenceServiceTest {
         service.setIntegrityRepository(integrity);
         when(integrity.inspect(1L)).thenReturn(snapshot(true));
 
-        var state = service.findCacheState(1L, PROFILE, "h1", "v1");
+        var state = service.findCacheState(1L, TEXT_DOCUMENT_TYPE, PROFILE, "h1");
 
         assertEquals(new EmbeddingPersistenceService.CacheState(true, 5), state);
         verify(jdbc, never()).queryForList(anyString(), any(Object[].class));
 
         when(integrity.inspect(1L)).thenReturn(snapshot(false));
 
-        assertEquals(false, service.findCacheState(1L, PROFILE, "h1", "v1").hit());
+        assertEquals(false, service.findCacheState(1L, TEXT_DOCUMENT_TYPE, PROFILE, "h1").hit());
     }
 
     @Test
@@ -275,7 +277,7 @@ class EmbeddingPersistenceServiceTest {
         when(jdbc.queryForList(anyString(), any(Object[].class)))
                 .thenReturn(List.of(documentRow(9L, "h3", true)));
 
-        service.recordFailureIfNoCompleted(1L, 3L, "h3", PROFILE, "v1", "boom");
+        service.recordFailureIfNoCompleted(1L, 3L, "h3", PROFILE, TEXT_DOCUMENT_TYPE, "boom");
 
         verify(jdbc, never()).update(anyString(), any(Object[].class));
     }
@@ -286,10 +288,10 @@ class EmbeddingPersistenceServiceTest {
                 .thenReturn(List.of(documentRow(3L, "h3", true)));
         when(jdbc.update(anyString(), any(Object[].class))).thenReturn(1);
 
-        service.recordFailureIfNoCompleted(1L, 3L, "h3", PROFILE, "v1", "  ");
+        service.recordFailureIfNoCompleted(1L, 3L, "h3", PROFILE, TEXT_DOCUMENT_TYPE, "  ");
 
         verify(jdbc).update(contains("rag_document_embedding_state"),
-                eq(1L), eq(7L), eq("h3"), eq("v1"), eq("Embedding failed"));
+                eq(1L), eq(7L), eq("h3"), eq(TEXT_CHUNKER_VERSION), eq("Embedding failed"));
         verify(jdbc).update(contains("processing_status = 'FAILED'"),
                 eq("Embedding failed"), eq(1L), eq(3L));
     }
@@ -303,10 +305,10 @@ class EmbeddingPersistenceServiceTest {
                 + "and token=eyJhbGciOiJIUzI1NiJ9.secret.part "
                 + "detail ".repeat(80);
 
-        service.recordFailureIfNoCompleted(1L, 3L, "h3", PROFILE, "v1", sensitive);
+        service.recordFailureIfNoCompleted(1L, 3L, "h3", PROFILE, TEXT_DOCUMENT_TYPE, sensitive);
 
         verify(jdbc).update(contains("rag_document_embedding_state"),
-                eq(1L), eq(7L), eq("h3"), eq("v1"),
+                eq(1L), eq(7L), eq("h3"), eq(TEXT_CHUNKER_VERSION),
                 ArgumentMatchers.<String>argThat(error -> error != null
                         && error.length() <= 500
                         && !error.contains("hunter2")));
@@ -321,7 +323,7 @@ class EmbeddingPersistenceServiceTest {
 
         assertThrows(IllegalStateException.class,
                 () -> service.recordFailureIfNoCompleted(
-                        1L, 3L, "h3", PROFILE, "v1", "boom"));
+                        1L, 3L, "h3", PROFILE, TEXT_DOCUMENT_TYPE, "boom"));
     }
 
     private EmbeddingBatchService.EmbeddingResult result(

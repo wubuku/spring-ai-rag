@@ -14,6 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -73,7 +74,7 @@ class DocumentEmbedServiceIntegrityTailTest {
         assertTrue(service.hasFreshEmbedding(document));
         // 缓存路径不再被询问（即使缓存说 miss 也不影响结果）。
         verify(persistenceService, org.mockito.Mockito.never())
-                .findCacheState(anyLong(), any(), any(), any());
+                .findCacheState(anyLong(), any(), any(), anyString());
     }
 
     @Test

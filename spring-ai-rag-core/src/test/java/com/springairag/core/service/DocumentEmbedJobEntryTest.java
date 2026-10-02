@@ -63,9 +63,7 @@ class DocumentEmbedJobEntryTest {
                 persistenceService,
                 profileProvider,
                 new RagProperties());
-        when(persistenceService.findCacheState(
-                any(Long.class), eq(PROFILE), any(String.class),
-                any(String.class)))
+        when(persistenceService.findCacheState(any(Long.class), any(), eq(PROFILE), any(String.class)))
                 .thenReturn(EmbeddingPersistenceService.CacheState.miss());
         when(documentRepository.saveAndFlush(any(RagDocument.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -184,8 +182,7 @@ class DocumentEmbedJobEntryTest {
     void jobEntryCacheHitSkipsCommitGate() {
         when(documentRepository.findById(4L))
                 .thenReturn(Optional.of(document(4L, longContent(), "hash-4")));
-        when(persistenceService.findCacheState(
-                eq(4L), eq(PROFILE), eq("hash-4"), any(String.class)))
+        when(persistenceService.findCacheState(eq(4L), any(), eq(PROFILE), eq("hash-4")))
                 .thenReturn(EmbeddingPersistenceService.CacheState.hit(3));
         AtomicBoolean gateVerified = new AtomicBoolean(false);
 

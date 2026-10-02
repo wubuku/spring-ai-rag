@@ -85,7 +85,10 @@ class NextHighValueFeaturesPostgresIntegrationTest {
             + "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     private static final String OTHER_HASH = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
             + "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        /** The chunker version {@code text} documents derive under. */
     private static final String CHUNKER = "hierarchical-v2:1000:100:100";
+    /** Any type other than {@code json-record} derives the text descriptor. */
+    private static final String TEXT_DOCUMENT_TYPE = "text";
 
     private static PostgreSQLContainer<?> postgres;
     private static DataSource dataSource;
@@ -389,7 +392,7 @@ class NextHighValueFeaturesPostgresIntegrationTest {
         EmbeddingPersistenceService persistence = new EmbeddingPersistenceService(jdbc);
         persistence.setIntegrityRepository(repository);
         assertFalse(persistence.findCacheState(
-                documentId, profile, HASH, CHUNKER).hit());
+                documentId, TEXT_DOCUMENT_TYPE, profile, HASH).hit());
     }
 
     @Test

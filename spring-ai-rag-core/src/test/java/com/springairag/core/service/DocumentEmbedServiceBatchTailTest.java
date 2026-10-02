@@ -80,8 +80,7 @@ class DocumentEmbedServiceBatchTailTest {
     void batchCountsCachedAndNotFoundSkippedStates() {
         // 文档 11 命中缓存 → CACHED；文档 99 不存在 → NOT_FOUND → skipped。
         stubDocument(11L);
-        when(persistenceService.findCacheState(
-                eq(11L), eq(PROFILE), anyString(), anyString()))
+        when(persistenceService.findCacheState(eq(11L), any(), eq(PROFILE), anyString()))
                 .thenReturn(EmbeddingPersistenceService.CacheState.hit(2));
 
         Map<String, Object> result = service.batchEmbedDocuments(List.of(11L, 99L));
@@ -97,8 +96,7 @@ class DocumentEmbedServiceBatchTailTest {
     @Test
     void batchCountsProviderFailureAsFailed() {
         stubDocument(12L);
-        when(persistenceService.findCacheState(
-                eq(12L), eq(PROFILE), anyString(), anyString()))
+        when(persistenceService.findCacheState(eq(12L), any(), eq(PROFILE), anyString()))
                 .thenReturn(EmbeddingPersistenceService.CacheState.miss());
         when(embeddingBatchService.createEmbeddingsBatch(anyList()))
                 .thenThrow(new IllegalStateException("provider down"));
