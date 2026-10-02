@@ -317,6 +317,48 @@
   约 53 行 × 2。合并需要同时验证两条链路的 OpenAPI 注解与日志文案差异，
   风险高于本批收益，暂列后续。
 
+### Batch 782（已交付）
+
+- 分支：`feature/rotate-guard-policy-changes-20261003`
+- 内容：`rotate` 与 `updatePolicy` 的**四道安全守卫**（10 例，不依赖任何外部依赖）。
+- **共同点**：去掉其中任何一条，测试**依然全绿**，而生产行为已经悄悄变了。
+  这正是"能失败的门禁"与"看不见的覆盖率"之间的差别。
+- **守卫 1–2：`rotate(keyId)` 的两道相互独立的守卫**
+  - 内存态的 keyId 校验（与 `prepareRotation` 同形但是**两份独立实现**——
+    同一个漏洞完全可以只存在于其中一份）。
+  - **并发守卫** `disableByKeyId(...) != 1` → `CREDENTIAL_NOT_CURRENT`。
+    这条此前**完全没有测试**，而它防的是一个真实窗口：读取当前凭据之后、
+    真正落库之前，那把密钥被别人禁用。内存态检查抓不到这种情况。
+    它一旦失效，后果是"旧密钥仍然有效、新密钥又已签发"，等于凭空多出一把有效密钥。
+- **守卫 3–4：`updatePolicy` 的策略变更边界**
+  - **非 root 调用方不得改动 legacy ADMIN 的到期时间**。否则等于变相延长
+    管理员寿命——把一个本应过期的凭据又续上几年。
+  - **ADMIN 的能力集不得被降级**（`fullCapabilities` 强制）。
+  - 附带钉住策略版本乐观锁：`POLICY_VERSION_CONFLICT` 防止覆盖并发修改。
+- **写测试时踩到的一个坑**：最初用 `rag:query` 当作"被降级的能力"，
+  结果被 `normalizeRequested` 以 `IllegalArgumentException` 先拒掉，
+  **永远走不到 ADMIN 能力守卫**——测到的会是另一条规则。
+  改成合法但**不完整**的 `ApiCapabilitySupport.RAG_READ`（只有读没有写）才真正命中。
+  这与 Batch 771 的教训同类：**断言必须落在真正想守住的那条规则上**。
+- **删掉了一条自己写的凑数测试**：初稿末尾有一个
+  `rotationResponseTypeIsUnchanged`，断言类名以自己结尾——同义反复，
+  对覆盖率毫无贡献。本批不保留这类用例。
+- **变异测试：4 处变异各被一条用例精确抓到**
+  | 变异 | 抓到它的用例 |
+  |---|---|
+  | `rotate` 的并发守卫失效（不再校验影响行数） | `disableAffectingNoRowIsRejected` |
+  | 非 root 也可改 legacy ADMIN 到期时间 | `nonRootCannotChangeLegacyAdminExpiry` |
+  | ADMIN 能力可被降级 | `adminCapabilitiesCannotBeDowngraded` |
+  | 策略版本冲突不再拒绝 | `policyVersionConflictIsRejected` |
+- 指标：core **7613 用例**（+10），0 失败 0 错误 154 跳过，隐形类 0；
+  `ApiKeyManagementService` 分支缺口 **16 → 14**（实测值）；
+  全局分支 **88.42% → 88.45%**、行 98.42% 不变。
+- 遗留技术债（如实登记，未处理）：
+  - `ApiKeyManagementService` 仍有未覆盖分支：`collectionKeys` 三方短路、
+    生命周期事件发布器为空、轮换 `EXPIRED` 状态、provision 重试循环等。
+  - 145 个集成测试仍未真正跑过（需 Docker）。
+  - 文档 2 笔漂移；NPE 缺陷；`PageShell` 脱节；`ask`/`chat` 重复。
+
 ### Batch 781（已交付）
 
 - 分支：`feature/rotation-guard-unit-tests-20261003`
