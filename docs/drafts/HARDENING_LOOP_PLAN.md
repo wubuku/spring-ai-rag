@@ -469,6 +469,59 @@
   - `Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前，属于 Batch 797 的遗留形态，
     视觉上略突兀；已记录，未做布局调整。
 
+### Batch 799（已交付）
+
+- 分支：`feature/floating-promise-survey-20261002`（勘察时按第一个方向命名；
+  范围随后转向覆盖率导向的测试加固，**分支名与内容不符，如实登记**）
+- 内容：**覆盖率导向前端测试加固**——找出并补上"已经上线但没有测试"的行为。
+- **勘察（先量后补，不追数字）**：
+  - 走了两个方向并**主动放弃**：
+    1. "成功时什么也没发生"的 mutation：扫全部 **37 个 `useMutation`** 的
+       `onSuccess`，**0 个**缺少用户可见变化（每个都 invalidate 查询或改状态）。
+       方向干净，无批次可做。
+    2. `useSSE.ts` 看着缺口最大（22 行未覆盖），但翻 `useSSE.test.ts` 发现
+       已有 **933 行 / 33 个用例**，覆盖了 `Retry-After` 退避、注释行与心跳、
+       截止时间耗尽、turn identity 重放。剩下的是防御性分支，
+       继续加就是**为覆盖率写测试**，放弃。
+  - 真正非做不可的：**Batch 797 我自己新写的 `Dashboard` 错误路径，
+    全量套件当时是绿的，却一行测试都没有。**
+- **实测覆盖率（`vitest --coverage`，v8）**：全局
+  行 97.98% / 分支 89.32% / 语句 97.36% / 函数 96.15%。
+  按文件排下来 `Dashboard.tsx` 是唯一的异常值：
+  **68.75% 行 / 78.26% 分支 / 50% 函数**——`45-96` 行整段未覆盖，
+  正是 797 拆出来的 `Metric` 子组件与 `systemUnreachable` 分支。
+- **补的 10 个用例**（`Dashboard.test.tsx` 新增 describe「Dashboard when reads fail」）：
+  - 连不上健康端点时显示 `systemUnreachable`，**不**显示 `systemUnhealthy`
+    （797 的核心：偏袒方向没错，但把"我不知道"说成"它坏了"会让人去查一个没坏的库）；
+  - 健康端点可达且报 DOWN 时仍然是"系统异常"——两种情况必须分开；
+  - 健康失败时提供重试，且 `refetchHealth` 真的被调用；
+  - 失败的磁贴带 `data-unavailable` + `title`，而不是光秃秃一个破折号；
+  - **服务端答"没有数据"不标记为 unavailable**——这正是 797 改出来的区分；
+  - 每块失败磁贴各自的重试，以及**逐块验证接线**（见下）；
+  - 健康载荷带时间戳时 lastCheck 磁贴显示格式化时间；
+  - 成功时不出现任何重试入口。
+- **变异测试（逐条实测，且抓到我自己测试的一个洞）**：
+  1. 把 `systemUnreachable` 分支删掉 → 1 例红 ✓
+  2. 删掉 `data-unavailable` 标记 → 1 例红 ✓
+  3. **把集合磁贴的 `onRetry` 接到 `refetchHealth`（复制粘贴写错线）
+     → 全绿，没被抓到。**原因是我的用例只点了第一块磁贴的重试，
+     从未验证第二块接的是哪个 refetch。补了「wires each tile's retry to its
+     own read」与「drives the health-backed tiles from the health read」两例后，
+     同一变异**如期变红** ✓
+  这正是"测试要断言接线、不是断言渲染"的理由：渲染对了不等于事件接对了。
+- **指标**：`Dashboard.tsx` **68.75% → 93.75% 行、78.26% → 100% 分支、
+  50% → 90% 函数**；前端 **819 → 829 用例**（77 文件，+10）；
+  design-system 184 不变；`lint` 7 门禁全绿、`typecheck` 干净；仓库门禁 **15/15**。
+- **遗留（如实登记，未处理）**：
+  - `Dashboard.tsx` 仍剩 **1 行**（96，`lastCheck` 磁贴的 `onRetry` 箭头）未覆盖。
+    **主动不追**：点它调用的 `refetchHealth` 与已覆盖的 cache 磁贴完全相同，
+    补一个只为消掉这行覆盖率而存在的点击没有行为价值。
+  - `useSSE.ts` 残余 22 行防御性分支、`VersionHistoryModal` 残余 12 行
+    状态机边界，按上面的理由未动。
+  - 覆盖率阈值（`vitest.config.ts` 的 stmts 64 / branches 63 / funcs 44 / lines 65）
+    远低于实测值（97.36 / 89.32 / 96.15 / 97.98）。**未上调**：
+    阈值是防回退的护栏，不该由单批次的实测值决定，且本次未做覆盖率相关改动。
+
 ### Batch 796（已交付）
 
 - 分支：`feature/write-button-pending-guard-20261002`
