@@ -317,6 +317,50 @@
   约 53 行 × 2。合并需要同时验证两条链路的 OpenAPI 注解与日志文案差异，
   风险高于本批收益，暂列后续。
 
+### Batch 781（已交付）
+
+- 分支：`feature/rotation-guard-unit-tests-20261003`
+- 内容：`prepareRotation` 的两个**安全守卫**——补上不依赖 Docker 的单元测试。
+- **为什么是最高优先**：Batch 780 让 21 个集成测试类"可见"之后，暴露出一个后果：
+  `ManagedApiPrincipalPostgresIntegrationTest`（21 例）是 `prepareRotation` 的**唯一**覆盖，
+  而它需要 Docker + `-Dmanaged-api-principal.it.enabled=true`。
+  也就是说，在**任何默认测试流程**里，
+  "只能用当前持有的密钥发起轮换"这条安全规则从来没有被验证过。
+  本批把这两条规则变成不依赖任何外部依赖的单元测试。
+- **守卫一：出示的 keyId 必须是当前凭据**（`CREDENTIAL_NOT_CURRENT`）
+  此前只覆盖了"根本没有当前凭据"，**"调用方拿着一个陈旧 keyId"这一侧完全没测**——
+  而后者才是这条规则真正要防的攻击面：轮换窗口会绑到错误的凭据上。
+- **守卫二：轮换重叠窗口不得比主体活得更久**。
+  `deadline = min(now + overlap, principal.expiresAt)`。此前从未验证过钳制生效，
+  也就是说"轮换窗口比主体授权活得久"这个状态是可以悄悄发生的。
+- **勘察推翻了一个假设：L422 是不可达的**。
+  `if (!deadline.isAfter(now))` 抛 `PRINCIPAL_NOT_ACTIVE` 看着可达，实则不可达——
+  `ensureActive(principal)` 在它**之前**执行（L394），对 `expiresAt <= now`
+  已经先抛了同一个错误码。要让它触发，只能让主体在两次 `LocalDateTime.now()`
+  之间恰好过期，即亚毫秒级竞态。它是一道冗余的纵深防御。
+  **按既定原则不为其编造测试**，改为在类 Javadoc 中如实记录，
+  并让 `expiredPrincipalIsRejectedBeforeDeadlineMath` 明确断言
+  "过期主体止于 ensureActive"这个真实契约。
+- **变异测试：3 处变异各被一条用例精确抓到**
+  | 变异 | 抓到它的用例 |
+  |---|---|
+  | 不再校验出示的 keyId 是否为当前凭据 | `staleCredentialIsRejected` |
+  | 不再把重叠窗口钳制到主体到期时间 | `overlapDeadlineIsClampedToPrincipalExpiry` |
+  | 重叠秒数越界时悄悄改用默认值 | `outOfRangeOverlapIsRejected` |
+- **实现要点**：`generateRawKey()` / `generateKeyId()` 是**包级可见**（不是 private），
+  因此同包测试可以用 `Mockito.spy` 固定它们，让随机生成的凭据可断言；
+  快乐路径还需要把生成的 target 凭据在仓储里补上，且其 `credentialVersion`
+  必须**严格大于**源凭据，否则 `requiredRotationCredentials` 会拒绝。
+- 指标：core **7603 用例**（+7），0 失败 0 错误 154 跳过；
+  `ApiKeyManagementService` 分支缺口 **18 → 16**（实测值）；
+  隐形类保持 **0**（`verify-project-tests` 门禁全绿）。
+- 遗留技术债（如实登记，未处理）：
+  - `rotate(keyId)` 上同形的守卫（`current == null || !keyId.equals(...)`）仍未覆盖。
+  - `ApiKeyManagementService` 仍有 16 条未覆盖分支：策略变更检测、
+    `collectionKeys` 三方短路、生命周期事件发布器为空、轮换 EXPIRED 状态等。
+  - 145 个集成测试仍未真正跑过（需 Docker）。
+  - 文档 2 笔漂移；NPE 缺陷；`PageShell` 脱节；`ask`/`chat` 重复。
+
 ### Batch 780（已交付）
 
 - 分支：`feature/apikey-rotation-deadline-guard-20261003`
