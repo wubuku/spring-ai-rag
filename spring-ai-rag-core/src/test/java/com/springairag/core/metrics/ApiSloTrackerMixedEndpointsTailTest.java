@@ -42,7 +42,7 @@ class ApiSloTrackerMixedEndpointsTailTest {
 
     @Test
     void recordLatencyIsolatesEndpoints() {
-        service.recordLatency("rag.search.post", 100L);
+        service.recordLatency("rag.search.post", "POST", 100L);
 
         var response = service.getCompliance();
 
@@ -53,9 +53,9 @@ class ApiSloTrackerMixedEndpointsTailTest {
 
     @Test
     void complianceReflectsBreachAndSloCounts() {
-        service.recordLatency("rag.search.post", 100L);
-        service.recordLatency("rag.search.post", 100L);
-        service.recordLatency("rag.search.post", 5_000L);
+        service.recordLatency("rag.search.post", "POST", 100L);
+        service.recordLatency("rag.search.post", "POST", 100L);
+        service.recordLatency("rag.search.post", "POST", 5_000L);
 
         var response = service.getCompliance();
 
@@ -66,27 +66,15 @@ class ApiSloTrackerMixedEndpointsTailTest {
         assertEquals(66.67, slo.compliancePercent());
     }
 
-    @Test
-    void extractMethodMapsEndpointKinds() throws Exception {
-        Method method = ApiSloTrackerService.class
-                .getDeclaredMethod("extractMethod", String.class);
-        method.setAccessible(true);
-
-        assertEquals("POST", method.invoke(service, "rag.search.post"));
-        assertEquals("GET", method.invoke(service, "rag.search.get"));
-        assertEquals("PUT", method.invoke(service, "rag.search.put"));
-        assertEquals("DELETE", method.invoke(service, "x.delete"));
-        assertEquals("POST", method.invoke(service, "chat.stream"));
-        assertEquals("GET", method.invoke(service, "unknown"));
-    }
-
     // ── percentile 覆盖（205 区域，经由 EndpointTracker 反射） ──
 
     private double percentile(List<Long> sorted, double p) throws Exception {
         Class<?> trackerClass = Class.forName(
                 "com.springairag.core.metrics.ApiSloTrackerService$EndpointTracker");
-        Object tracker = trackerClass.getDeclaredConstructor(long.class)
-                .newInstance(1_000L);
+        // Reflective construction, so the compiler cannot catch a constructor
+        // signature change here — it did not catch (long) -> (long, String).
+        Object tracker = trackerClass.getDeclaredConstructor(long.class, String.class)
+                .newInstance(1_000L, "POST");
         Method method = trackerClass.getDeclaredMethod(
                 "percentile", List.class, double.class);
         method.setAccessible(true);

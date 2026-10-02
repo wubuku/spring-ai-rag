@@ -3068,6 +3068,18 @@ Get API SLO compliance metrics per endpoint using a sliding time window. Tracks 
 
 Requires `rag.slo.enabled = true`.
 
+**Scope:** the report covers the endpoints named in the SLO threshold table
+(`rag.slo.thresholds`, defaulting to `rag.search.post`, `rag.search.get`,
+`rag.chat.ask`, `rag.chat.stream` and `rag.documents.embed`) — *not* every timed
+endpoint. The interceptor measures all 81 `@Timed` endpoints, but an endpoint
+absent from the threshold table is never surfaced here, so adding an SLO goal
+means adding its threshold.
+
+`POST /api/v1/rag/chat/ask` and its alias `POST /api/v1/rag/chat` both report
+under `rag.chat.ask`: they are the same operation, and they share one timer so
+that traffic split across the two URLs is judged against one threshold instead
+of appearing as two independent streams.
+
 **Response:**
 
 ```json
@@ -3103,8 +3115,9 @@ Requires `rag.slo.enabled = true`.
 | `enabled` | boolean | Whether SLO tracking is active |
 | `windowSeconds` | int | Sliding time window size in seconds |
 | `endpoints[].endpoint` | string | Endpoint identifier (e.g., `rag.search.post`) |
+| `endpoints[].method` | string \| null | HTTP method observed on the requests counted here. It is read off the live request, not inferred from the endpoint name — names do not follow a method-suffix convention (`rag.documents.embed` is POST, `rag.collection.update` is PUT). `null` when the endpoint has no recorded traffic in the window: nothing observed, so nothing is claimed. |
 | `endpoints[].thresholdMs` | long | SLO threshold in milliseconds |
-| `endpoints[].compliancePercent` | double | Percentage of requests within SLO (0–100) |
+| `endpoints[].compliancePercent` | double | Percentage of requests within SLO (0–100). An endpoint with no traffic in the window reports `100`, which is not evidence of health — check `requestCount`. |
 | `endpoints[].requestCount` | int | Total requests in the window |
 | `endpoints[].sloCount` | int | Requests meeting SLO |
 | `endpoints[].breachCount` | int | Requests breaching SLO |

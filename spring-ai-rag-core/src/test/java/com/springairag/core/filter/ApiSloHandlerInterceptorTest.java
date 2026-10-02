@@ -146,10 +146,31 @@ class ApiSloHandlerInterceptorTest {
         // Simulate some elapsed time
         when(request.getAttribute("_sloStartTime")).thenReturn(System.currentTimeMillis() - 150);
         when(request.getAttribute("_sloEndpoint")).thenReturn("rag.get.search");
+        when(request.getMethod()).thenReturn("GET");
 
         interceptor.afterCompletion(request, response, hm, null);
 
-        verify(trackerService).recordLatency(eq("rag.get.search"), any(Long.class));
+        verify(trackerService).recordLatency(eq("rag.get.search"), eq("GET"), any(Long.class));
+    }
+
+    @Test
+    @DisplayName("afterCompletion forwards the live request method, not one derived from the endpoint name")
+    void afterCompletion_forwardsRequestMethodNotOneGuessedFromName() throws Exception {
+        ApiSloTrackerService trackerService = mock(ApiSloTrackerService.class);
+        when(applicationContext.getBean(ApiSloTrackerService.class)).thenReturn(trackerService);
+        HandlerMethod hm = createHandlerMethod("handleGet");
+
+        interceptor.preHandle(request, response, hm);
+
+        when(request.getAttribute("_sloStartTime")).thenReturn(System.currentTimeMillis() - 5);
+        // "rag.documents.embed" carries no method suffix and is a POST mapping;
+        // the old substring match reported GET for it.
+        when(request.getAttribute("_sloEndpoint")).thenReturn("rag.documents.embed");
+        when(request.getMethod()).thenReturn("POST");
+
+        interceptor.afterCompletion(request, response, hm, null);
+
+        verify(trackerService).recordLatency(eq("rag.documents.embed"), eq("POST"), any(Long.class));
     }
 
     @Test
@@ -181,12 +202,13 @@ class ApiSloHandlerInterceptorTest {
 
         when(request.getAttribute("_sloStartTime")).thenReturn(System.currentTimeMillis() - 100);
         when(request.getAttribute("_sloEndpoint")).thenReturn("rag.post.documents");
+        when(request.getMethod()).thenReturn("POST");
 
         Exception ex = new RuntimeException("some error");
         interceptor.afterCompletion(request, response, hm, ex);
 
         // Latency is still recorded regardless of exception
-        verify(trackerService).recordLatency(eq("rag.post.documents"), any(Long.class));
+        verify(trackerService).recordLatency(eq("rag.post.documents"), eq("POST"), any(Long.class));
     }
 
     @Test

@@ -478,6 +478,162 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
+### Batch 806（已交付）
+
+- 分支：`feature/slo-observability-ask-chat-20261003`
+- 内容：解除 `RagChatController` 的 `ask`/`chat` 双份编排债（从 Batch 690 起每批
+  都写"不在本批范围"），并顺着它挖出 SLO 可观测性的三处同源缺陷。
+  **选它的理由**：Batch 804 修好了前端 e2e 回归网、801/802 修好了 154 个门控 IT，
+  账本上"因缺回归网而 defer"的前置条件第一次真正消失。
+- **勘察（机械 diff，不靠肉眼）**：把两段方法体各取 54 行 `diff`，**只有 4 行不同**
+  ——方法名，以及 `log.info` 那两行（`/ask` 多打一个 `collectionIds`）。加上注解层
+  3 处：`@PostMapping("/ask")` vs `@PostMapping`、`rag.chat.ask` vs
+  `rag.chat.non-stream`、`@Operation` 描述文字。`docs/rest-api-zh-CN.md:592` 早就写明
+  三个端点都接受 `Idempotency-Key`——**文档是对的，是代码漂移了**。
+- **真实缺陷 1：`/chat` 的流量完全不进 SLO 报告**。`ApiSloTrackerService.getCompliance()`
+  只遍历 `ApiSloProperties` 的阈值表，而 alias 自己的 `rag.chat.non-stream` 不在表里
+  （表里只有 ask / stream / search.post / search.get / documents.embed）。
+  结果：走 `/chat` 的每个请求都被计时、被聚合，然后被静默丢弃。**这正是那份重复
+  编排的生产后果**——两份逐行相同的代码各自演化出了不同的 metric 名。
+- **真实缺陷 2：`extractMethod` 对 37/61 个端点猜错 HTTP 方法**。该函数按
+  `.post`/`.get`/`.put`/`.delete`/`.stream` 后缀子串匹配，其余一律 fallback `"GET"`。
+  写脚本普查全部 81 个 `@Timed` 并配上真实 mapping 注解，结果 **37 个不符**，
+  包括 `rag.chat.ask`（`@PostMapping` 被报成 GET）、`rag.documents.batch-delete`
+  （DELETE 被报成 GET）、`rag.documents.update`（PATCH 被报成 GET）。
+  讽刺的是 `ApiSloHandlerInterceptor.resolveEndpointName` 的 fallback 分支**恰好生成
+  符合该约定的 `rag.post.xxx` 名字**，但 81 个手写 `@Timed` 全部绕过了它。
+- **真实缺陷 3：阈值表可静默产生假绿灯**。`tracker == null` 时 `getCompliance()`
+  返回 `compliancePercent = 100.0`。于是把一个端点改名后，它的阈值会永远报
+  100% 合规，与健康状态**完全无法区分**，且没有任何检查会报错。
+- **变更 A（去重）**：两段编排收进私有 `executeNonStreamingJson(request, httpRequest,
+  endpointLabel)`，两个入口各自只剩一行委托；`endpointLabel` 只进日志，所以调用方
+  在日志里仍能分辨走的哪条 URL。统一 `@Operation` 描述（取信息量更大的那份），
+  **统一 `@Timed` 为 `rag.chat.ask`**（消除缺陷 1），日志字段统一为带
+  `collectionIds` 的版本（消除 `/chat` 少打一个字段的漂移）。净减 18 行。
+- **变更 B（method 不再猜）**：`recordLatency(endpoint, httpMethod, latencyMs)` 携带
+  方法，`EndpointTracker` 首次见到端点时记下真实 method，`EndpointSlo.method` 报告它；
+  **`extractMethod` 整个函数删除**。`ApiSloHandlerInterceptor` 传
+  `request.getMethod()`——信息本来就在手上，此前是被"从名字反推"这个错误前提丢掉的。
+  无流量的端点现在报 `method = null`（DTO 的 `@Schema` 同步改写）：**没观测到就不声称**。
+  已核对前端**完全不消费** `ApiSloComplianceResponse`（那套 alerts SLO config 是
+  另一套机制），所以 method 变可空无消费方风险。
+- **变更 C（新门禁）**：`scripts/verify-slo-endpoint-coverage.mjs`，两条规则——
+  `stale-slo-threshold`（阈值表 key 不是任何 `@Timed` 的值）、`duplicate-timed-metric`
+  （同一 timer 名被两个 controller 占用）。先剥注释再判定。
+  自测 `scripts/test-support/slo-endpoint-coverage-self-test.mjs` 12 例；
+  串进 `verify-project-tests.sh`（8 → 10 项）。
+- **重写了两处把 bug 钉成契约的测试**（不是删除）：`getCompliance_methodExtraction`
+  带注释 `// unknown → defaults to GET` 断言了编造行为，
+  `extractMethodMapsEndpointKinds` 用反射直接调私有函数。两者都改为断言"报告原样
+  反映观测值"，并新增两条：`rag.chat.ask` 必须报 POST（正是旧猜测给 GET 的那个），
+  无流量端点的 method 必须为 `null`。
+- **自罚**：
+  1. **门禁第一版把正确代码判为违规**。我按"metric 名唯一"写规则，结果把
+     `ask`/`chat` 这对**刻意**共用 metric 的 alias 报了重复——按出现次数算而不是按
+     属主文件算。改用 `Set` 收集属主文件后通过。这条已写进自测
+     （`a name repeated in one file is not reported as a cross-controller duplicate`），
+     因为第一版自测根本没覆盖到这个形状。
+  2. **自测里我自己写错两条**：① fixture 没发布 `rag.chat.stream` 却在阈值里列了它，
+     门禁报得对、是我测试写错；② 数错了 `stripComments` 替换后的空格数。
+  3. **反射构造躲过编译器**。`EndpointTracker` 构造从 `(long)` 改成 `(long, String)`，
+     40 处 `recordLatency` 调用点编译器一次报全，但 `percentileHandlesEmptySingleAndMultiSamples`
+     是反射构造，运行期才炸。已在该处加注释说明反射签名变更编译器看不见。
+  4. **变异测试有一半没通过，如实记录**：变异 1（把 `/chat` 的 timer 改回
+     `rag.chat.non-stream`，即 Batch 806 的原始缺陷）**门禁仍报绿**。原因是这条检查
+     走的是"阈值表 → 端点"，而该边依然成立（`rag.chat.ask` 仍由 `/ask` 发布）；
+     缺的是"端点 → 阈值表"这一边，而这一边**加不得**：81 个 `@Timed` 里只有 5 个配了
+     阈值，"被测量但不在报告里"是常态而非缺陷，加进去会对每个普通端点误报。
+     曾考虑加"两个 handler 委托到同一方法却用不同 timer 名"的规则，实测后**主动放弃**：
+     它只抓得住"委托"这一种窄形态，抓不住真正的漂移形态（复制粘贴一份编排），
+     加进去只给人虚假安全感。已把盲区与放弃理由写进门禁文件头。
+     变异 2（第二个 controller 抢用同一 timer 名）如期变红并指名报出两个文件。
+  5. **发现 Surefire 的 `.txt` 汇总不可信**（见下"顺带更正"）。
+- **变更 D（文档）**：`docs/rest-api.md` 补 `endpoints[].method` 字段（原本字段表
+  **漏了它**）并写明 SLO 覆盖面 = 阈值表而非全部 81 个计时端点；
+  `docs/rest-api-zh-CN.md` 的 `GET /api/v1/rag/metrics/slo` 原本是一个**空标题**
+  （标题下什么都没有，下一节直接接上），已补齐完整章节 —— 中英同步。
+- **变更 E（把门禁接进 CI —— 本批最被低估的一项）**：勘察文档时顺带查了
+  `.github/workflows/ci.yml`，发现 **CI 里一条 `scripts/verify-*.sh` 都没跑**。
+  `mvn test`、门控 PostgreSQL IT、Flyway 一致性、WebUI 的 typecheck/lint/test/build
+  全都接好了，而从 Batch 768 起建起的整套仓库门禁（测试可见性、开关对账、
+  外部库安全、e2e 可达性，以及本批新增的 SLO 覆盖）**只在有人记得手动跑时才跑**——
+  也就是说，每一道门禁都可以静默腐烂，而那正是它们各自被写出来要防的事。
+- **⚠️ 变更 E 的代码已完成并验证，但未随本批交付**：改 `ci.yml` 需要 GitHub OAuth
+  凭证带 `workflow` scope，当前凭证没有（`gh` CLI 在本机亦不可用，无法自行补授权），
+  push 被远程拒绝：`refusing to allow an OAuth App to create or update workflow
+  .github/workflows/ci.yml without workflow scope`。经用户决定，
+  **本批改为只交付其余 13 个文件，`ci.yml` 留待手动应用**。
+  补丁已备好（48 行 diff），内容与下述方案完全一致、已实测通过：
+  1. 在 `build` job 补 `actions/setup-node@v4`（node 24，与 webui job 对齐——
+     该 job 原本不设 Node，会落到 ubuntu-latest 的预装版本上）；
+  2. 在 `mvn test` 之后、`Gated PostgreSQL integration tests` 之前插入
+     `Repository gates` 步骤，依次跑 `verify-project-docs.sh`、
+     `verify-project-tests.sh`、`verify-no-pessimistic-locks.sh`、
+     `verify-integration-test-switches.mjs`、`verify-e2e-run-paths.mjs`、
+     `verify-slo-endpoint-coverage.mjs`；
+  3. **不新建独立 job**（原因见下）。
+  在此之前 CI 里**仍然一条门禁都没跑**，这笔账继续挂着。
+- **CI 接入是实跑验证过的，不是照着写的**（这次模拟直接抓到我自己的错）：
+  1. 我第一版把门禁放进一个**独立 job**。在干净目录里按 CI 顺序实跑，`verify-project-tests.sh`
+     直接失败：`No surefire reports at .../target/surefire-reports. Run the test suite
+     first`——因为 `verify-test-visibility.mjs` **读的是 `mvn test` 刚产生的产物**。
+     那个 job 一上线就是红的。改成接在 `mvn test` 之后。
+  2. 同一次模拟里还冒出两条**属于模拟本身而非真实 CI** 的噪音，如实记下免得以后误读：
+     `fatal: not a git repository`（`actions/checkout@v4` 会提供 `.git`）和
+     `OpenClaw local-state path is not ignored: TOOLS.md`（`TOOLS.md` 未经 git 跟踪，
+     是我复制工作区时带进去的，真 CI 的 checkout 不会有）。已用 `git ls-files` 核实。
+  3. 因此定下一条做法：**新增门禁后必须在接近 CI 的环境里实跑一次**，"本地脚本跑得过"
+     不能替代它——本批这条正是靠实跑才发现独立 job 方案根本不成立。
+  4. 合并后在干净 main 上复验时又撞见同一件事的**第二面**，一并记下：
+     `test-visibility-self-test` 里有一条用例读**真实 surefire 输出**，断言
+     "opt-in 集成类应报告 skip"。我在 main 上是"先跑门控 IT、再跑门禁"，而门控 IT 的
+     154 个测试是**全部执行、0 跳过**的，于是这条自测如期变红
+     （`expected the opt-in integration classes to report a skip, saw 0`）。
+     **这不是代码缺陷，是执行顺序敏感**：重跑一次默认全量再跑门禁，10/10 全绿。
+     由此确认 CI 里的位置只能是 `mvn test` 与门控 IT **之间**——放独立 job 不行
+     （没有 surefire 产物），放到 IT 之后也不行（产物被 IT 覆盖）。现有步骤顺序恰好
+     正确，但这次是从两头各撞一次墙撞出来的，不是设计时想清楚的。
+- **顺带更正（环境事实，非缺陷）**：核对测试数时发现 **Surefire 3.5.6 写的
+  `.txt` 汇总与 `TEST-*.xml` 系统性不一致**：`SecurityPathExclusionsTest` 同一时刻
+  （mtime 相差 0 秒）、同一耗时（0.054s），`.txt` 写 `Tests run: 0` 而 XML 写
+  `tests="21"`；全量求和 `.txt` 只有 **6967**、XML 是 **7706**，其中 39 个类的 `.txt`
+  为 0。已核对**没有任何门禁读 `.txt`**（唯一出现处是
+  `real-llm-e2e-smoke.sh` 读一个无关的临时文件），门禁全部读 `TEST-*.xml`，
+  故无需修，但这解释了项目约定"以 XML 求和为准"的由来，也意味着**任何用 `.txt`
+  求和报覆盖率数字的做法都是错的**。另记：Maven 控制台汇总（7714）比 XML（7706）
+  多 8，差额来自 `@Nested` 的合并计数；两者相差 8 的方向是**漏报**（门禁少算 8 个
+  真实测试），不影响"有没有类静默消失"这一判定。
+- 验证：
+  - core 全量：**989 类 / 7706 用例 / 0 失败 / 154 跳过**（实测 `TEST-*.xml` 求和，mtime 已核对）
+  - 门控 IT：**154/154 全绿**，0 跳过（Testcontainers + OrbStack）
+  - 仓库门禁 `verify-project-docs.sh` **15/15**
+  - `verify-project-tests.sh` **10/10**（原 8 项 + SLO 自测 + SLO 门禁）
+  - SLO 门禁自测 12 例；悲观锁检查通过
+  - **CI 接入已实跑验证、但未随本批交付**：YAML 解析通过（jobs = build / webui），
+    `Repository gates` 落在 `mvn test` 之后（step 6 → 7）；因 OAuth scope 限制已摘出，
+    详见变更 E 的 ⚠️ 说明
+  - 变异测试 2 次：1 次如期变红（跨 controller 抢 timer 名，指名报出两个文件），
+    1 次**如实记录未变红**（见自罚 4）
+- 指标：core 默认 7712 → **7714** 用例；`ApiSloTrackerServiceTest` 16 → **18**；
+  `ApiSloTrackerMixedEndpointsTailTest` 4 → **3**（删反射测试）；
+  `ApiSloHandlerInterceptorTest` 12 → **13**；`verify-project-tests.sh` 8 → **10** 项；
+  SLO 门禁自测 12 例；`RagChatController` 净减 18 行；`recordLatency` 调用点
+  40 处批量 + 3 处手工同步。
+- 遗留（如实登记）：
+  - **CI 里仍然一条 `scripts/verify-*.sh` 都没跑**。本批已把整套门禁接进 `ci.yml`
+    并实测通过，但改 workflow 需要 OAuth `workflow` scope 而当前凭证没有，按用户
+    决定改为留待手动应用（补丁与方案见变更 E）。**这是本批唯一未交付的成果**，
+    在它落地之前，Batch 768 以来建立的门禁都仍然可能静默腐烂。
+  - `stream()` 的 keyed 编排（第 344 行的 `requireIdempotentMapper()`）与非流式版
+    **仍有第三份相似编排**。本批没动：它的 metric 名 `rag.chat.stream` **在阈值表内**，
+    不存在监控盲区，合并收益远小于 `/ask` 那处；要合并需单独评估 SSE 取消竞态
+    （已有 `RagChatControllerSseCancelRaceTest` 等 3 个套件在管）。
+  - `findCacheState(documentId, profile, contentHash, chunkerVersion)` 仍透传裸
+    `String`（读侧同形，Batch 803 只处理了写侧）。
+  - SLO 覆盖率门禁**抓不到**"新增端点被测量但未纳入 SLO"这一类（81 : 5 的比例决定
+    了它必然误报），已在门禁文件头写明并靠结构性修复兜底。
+  - e2e mock 套件是否进日常门禁链（2.4 分钟 vs 秒级门禁）仍未决。
+
 ### Batch 805（已交付）
 
 - 分支：`feature/unify-page-header-20261002`

@@ -2725,6 +2725,63 @@ mode 值为 `PLAIN`、`KNOWLEDGE`、`AGENT`。
 
 ### `GET /api/v1/rag/metrics/slo`
 
+按端点返回 API SLO 合规情况，统计窗口为滑动窗口。给出 p50/p95/p99 延迟与相对
+各端点阈值的合规百分比。
+
+需要 `rag.slo.enabled = true`。
+
+**统计范围：** 报告只覆盖 SLO 阈值表（`rag.slo.thresholds`）里列出的端点——默认为
+`rag.search.post`、`rag.search.get`、`rag.chat.ask`、`rag.chat.stream` 和
+`rag.documents.embed`——而**不是**全部被计时的端点。拦截器会测量全部 81 个
+`@Timed` 端点，但不在阈值表里的端点不会出现在本报告中；因此要新增一条 SLO 目标，
+必须同时为它加上阈值。
+
+`POST /api/v1/rag/chat/ask` 与其别名 `POST /api/v1/rag/chat` 统一计入
+`rag.chat.ask`：二者是同一个操作，共用一个计时器，这样分流到两个 URL 上的流量会
+按同一个阈值判定，而不是表现成两条互不相干的流。
+
+**响应：**
+
+```json
+{
+  "enabled": true,
+  "windowSeconds": 300,
+  "endpoints": [
+    {
+      "endpoint": "rag.search.post",
+      "method": "POST",
+      "thresholdMs": 500,
+      "compliancePercent": 98.5,
+      "requestCount": 1523,
+      "sloCount": 1500,
+      "breachCount": 23,
+      "stats": {
+        "p50Ms": 45.2,
+        "p95Ms": 380.5,
+        "p99Ms": 490.0,
+        "minMs": 12.3,
+        "maxMs": 1200.5,
+        "avgMs": 87.4
+      }
+    }
+  ]
+}
+```
+
+**字段说明：**
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `enabled` | boolean | SLO 追踪是否启用 |
+| `windowSeconds` | int | 滑动时间窗口大小（秒） |
+| `endpoints[].endpoint` | string | 端点标识（如 `rag.search.post`） |
+| `endpoints[].method` | string \| null | 本次统计所依据请求上**实际观测到**的 HTTP 方法。它取自真实请求，不从端点名反推——端点名并不遵循"方法后缀"约定（`rag.documents.embed` 是 POST，`rag.collection.update` 是 PUT）。窗口内没有任何流量时为 `null`：没观测到，就不声称。 |
+| `endpoints[].thresholdMs` | long | SLO 阈值（毫秒） |
+| `endpoints[].compliancePercent` | double | 达标请求占比（0–100）。窗口内无流量的端点会报 `100`，这**不能**当作健康的证据——请一并检查 `requestCount`。 |
+| `endpoints[].requestCount` | int | 窗口内请求总数 |
+| `endpoints[].sloCount` | int | 达标请求数 |
+| `endpoints[].breachCount` | int | 违反 SLO 的请求数 |
+
 ## Models — 运行时选模
 
 ### `GET /api/v1/rag/models`

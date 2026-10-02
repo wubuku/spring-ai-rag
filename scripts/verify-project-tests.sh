@@ -77,3 +77,17 @@ echo "PASS: E2E reachability self-test"
 
 node scripts/verify-e2e-run-paths.mjs
 echo "PASS: E2E reachability"
+
+# A fifth question, about observability rather than tests: a configured SLO
+# threshold whose endpoint no longer exists reports 100% compliance forever, and
+# an endpoint timed under a name the report never reads is measured and then
+# dropped. Batch 806 found both halves live in the `/ask` + `/chat` alias pair.
+node scripts/test-support/slo-endpoint-coverage-self-test.mjs >/dev/null || {
+  echo "SLO endpoint coverage self-test failed; the gate may no longer reject anything." >&2
+  node scripts/test-support/slo-endpoint-coverage-self-test.mjs >&2 || true
+  exit 1
+}
+echo "PASS: SLO endpoint coverage self-test"
+
+node scripts/verify-slo-endpoint-coverage.mjs
+echo "PASS: SLO endpoint coverage"

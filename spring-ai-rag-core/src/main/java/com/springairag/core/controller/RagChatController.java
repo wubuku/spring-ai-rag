@@ -177,57 +177,7 @@ public class RagChatController {
     @Timed(value = "rag.chat.ask", description = "RAG non-streaming chat", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<ChatResponse> ask(@Valid @RequestBody ChatRequest request,
                                             HttpServletRequest httpRequest) {
-        ChatTurnOperationService.Prepared prepared =
-                prepareTurn(request, httpRequest);
-        ChatTurnOperationService.Claim claim =
-                turnOperationService != null
-                        ? turnOperationService.inspectExisting(prepared)
-                        : null;
-        if (claim != null && claim.replay()) {
-            return idempotentResponse(
-                    turnOperationService.replay(claim), claim, null);
-        }
-        if (claim == null && prepared != null && prepared.keyed()) {
-            ChatCommandMapper mapper = requireIdempotentMapper();
-            ChatCommand command = prepared.operation() != null
-                    && prepared.operation().executionSnapshot() != null
-                    ? mapper.mapFromExecutionSnapshot(
-                            request,
-                            ChatPrincipal.from(httpRequest),
-                            prepared.operation().sessionId(),
-                            prepared.operation().executionSnapshot())
-                    : mapper.map(
-                            request,
-                            resolveScope(request, httpRequest),
-                            ChatPrincipal.from(httpRequest));
-            RetrievalScope scope = command.retrievalScope();
-            claim = turnOperationService.claim(
-                    prepared, command,
-                    ChatTurnOperation.Transport.NATIVE_JSON,
-                    false);
-            if (claim.replay()) {
-                return idempotentResponse(
-                        turnOperationService.replay(claim), claim, null);
-            }
-            command = turnOperationService.commandForClaim(command, claim);
-            scope = command.retrievalScope();
-            request.setSessionId(claim.operation().sessionId());
-            return executeKeyedJson(
-                    request, httpRequest, scope, claim, command);
-        }
-        if (request.getSessionId() == null || request.getSessionId().isBlank()) {
-            request.setSessionId(UUID.randomUUID().toString());
-        }
-        RetrievalScope scope = resolveScope(request, httpRequest);
-        log.info("RAG ask: sessionId={}, domain={}, collectionIds={}, message={}",
-                request.getSessionId(), request.getDomainId(), request.getCollectionIds(),
-                request.getMessage().length() > 100 ? request.getMessage().substring(0, 100) + "..." : request.getMessage());
-
-        RetrievalTraceSession session = beginChatTrace(request, scope, httpRequest);
-        ChatResponse response = scope != null
-                ? ragChatService.chat(request, scope, session)
-                : ragChatService.chat(request);
-        return traced(response, session);
+        return executeNonStreamingJson(request, httpRequest, "ask");
     }
 
     ResponseEntity<ChatResponse> ask(ChatRequest request) {
@@ -236,16 +186,51 @@ public class RagChatController {
 
     /**
      * RAG Q&A (non-streaming) — /chat is an alias for /ask, unified entry point.
+     *
+     * <p>Bodies of {@link #ask} and {@link #chat} are deliberately kept to a single
+     * delegated call so the two URLs cannot drift apart again: they used to carry
+     * byte-identical orchestration that had already diverged in two observable ways
+     * (the log line lost {@code collectionIds}, and this alias published its own
+     * {@code rag.chat.non-stream} timer, which is absent from
+     * {@code ApiSloProperties}' threshold table — so every call routed here was
+     * recorded and then silently dropped from the SLO compliance report).
+     *
+     * <p>Both now share {@code rag.chat.ask} and
+     * {@link #executeNonStreamingJson}, and the shared log line carries
+     * {@code collectionIds}. The two distinct {@code @Timed} values are also what
+     * made the alias invisible; a single metric is the contract, not an accident.
      */
-    @Operation(summary = "RAG Q&A (non-streaming)", description = "Send a question and receive a complete answer.")
+    @Operation(summary = "RAG Q&A (non-streaming)", description = "Send a question and receive a complete answer. Supports domainId to specify domain extension.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Q&A succeeded, returns complete answer"),
             @ApiResponse(responseCode = "400", description = "Request parameter validation failed")
     })
     @PostMapping
-    @Timed(value = "rag.chat.non-stream", description = "RAG non-streaming chat", percentiles = {0.5, 0.95, 0.99})
+    @Timed(value = "rag.chat.ask", description = "RAG non-streaming chat", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<ChatResponse> chat(@Valid @RequestBody ChatRequest request,
                                              HttpServletRequest httpRequest) {
+        return executeNonStreamingJson(request, httpRequest, "chat");
+    }
+
+    ResponseEntity<ChatResponse> chat(ChatRequest request) {
+        return chat(request, null);
+    }
+
+    /**
+     * The one non-streaming chat orchestration, shared by {@code /ask} and
+     * {@code /chat}.
+     *
+     * <p>Order of operations, unchanged from the two copies this replaced:
+     * inspect an existing turn first (so a duplicate submit replays instead of
+     * re-running), then claim a keyed turn, then fall through to the unkeyed
+     * path which mints a session id when the caller supplied none.
+     *
+     * @param endpointLabel {@code "ask"} or {@code "chat"}, used only in the log
+     *                     line so the two entry points stay distinguishable there
+     */
+    private ResponseEntity<ChatResponse> executeNonStreamingJson(ChatRequest request,
+                                                                 HttpServletRequest httpRequest,
+                                                                 String endpointLabel) {
         ChatTurnOperationService.Prepared prepared =
                 prepareTurn(request, httpRequest);
         ChatTurnOperationService.Claim claim =
@@ -288,8 +273,9 @@ public class RagChatController {
             request.setSessionId(UUID.randomUUID().toString());
         }
         RetrievalScope scope = resolveScope(request, httpRequest);
-        log.info("RAG chat: sessionId={}, domain={}, message={}",
-                request.getSessionId(), request.getDomainId(),
+        log.info("RAG {}: sessionId={}, domain={}, collectionIds={}, message={}",
+                endpointLabel, request.getSessionId(), request.getDomainId(),
+                request.getCollectionIds(),
                 request.getMessage().length() > 100 ? request.getMessage().substring(0, 100) + "..." : request.getMessage());
 
         RetrievalTraceSession session = beginChatTrace(request, scope, httpRequest);
@@ -297,10 +283,6 @@ public class RagChatController {
                 ? ragChatService.chat(request, scope, session)
                 : ragChatService.chat(request);
         return traced(response, session);
-    }
-
-    ResponseEntity<ChatResponse> chat(ChatRequest request) {
-        return chat(request, null);
     }
 
     /**
