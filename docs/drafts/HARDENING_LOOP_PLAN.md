@@ -317,6 +317,48 @@
   约 53 行 × 2。合并需要同时验证两条链路的 OpenAPI 注解与日志文案差异，
   风险高于本批收益，暂列后续。
 
+### Batch 779（已交付）
+
+- 分支：`feature/apikey-authz-truth-table-20261003`
+- 内容：`rotationResponse` 里两个 3 项**真值表**的完整枚举。
+- **为什么是真值表而不是"补几个分支"**：
+  `currentCredentialActive = current != null && revokedAt == null && !isExpired`
+  与 `rotationPending = PENDING && expiresAt > now && retiring != null`
+  各有 8 种输入组合，客户端靠这两个布尔量决定"旧密钥还能不能用"、
+  "轮换窗口是否还开着"。漏掉任何一个组合，前端就会给出与后端相反的指引。
+  这类缺陷不会让任何用例变红——除非有人专门去写那个组合。
+- **勘察发现：既有用例覆盖的是另一处同名字段**。
+  `ApiKeyManagementServiceRotationResponseTest` 测的是**列表**层的
+  `setCurrentCredentialActive(active)`，而轮换响应里的 `currentCredentialActive`
+  是另一处代码。两处同名，极易让人误以为"已经测过了"。
+  `rotationResponse` 的两个真值表此前**一条组合都没有断言过**。
+- **变异测试：3 处变异各被一条用例精确抓到**
+  | 变异（各漏掉真值表里的一个条件） | 抓到它的用例 |
+  |---|---|
+  | `currentCredentialActive` 漏掉"已吊销" | `revokedPrincipalIsInactive` |
+  | `rotationPending` 漏掉"轮换窗口已过期" | `expiredOperationIsNotPending` |
+  | `secretAvailable` 恒为 true | `missingRawKeyIsNotAvailable` |
+  任何一条被删掉，该主体/该状态就会被误报成"凭据可用"，而全量测试原本全绿。
+- **实现上的两个坑**：
+  1. DTO 字段是**装箱 `Boolean`**，访问器是 `getXxx()` 而非 `isXxx()`。
+     断言一律用 `assertEquals(Boolean.TRUE, ...)`，这样还能顺带抓住 null 投影
+     ——直接 `assertTrue(response.getX())` 遇 null 会抛 NPE 而不是给出可读的失败。
+  2. 测试脚手架里的 `project(...)` helper 会重新设置 `findByPrincipalId` 的桩，
+     **覆盖**用例自己预设的返回值，导致"主体不存在"这条永远测不到。
+     修法是把"打桩"和"反射调用"拆成两个方法。
+- 指标：core **7451 用例，0 失败 0 错误 9 跳过**（XML 权威口径，+12）；
+  `ApiKeyManagementService` 分支缺口 **21 → 18**；全局分支 **88.39% → 88.41%**、
+  行 98.42% 不变。
+- 遗留技术债（如实登记，未处理）：
+  - `ApiKeyManagementService` 仍有 18 条未覆盖分支：轮换/删除路径的
+    "当前凭据 keyId 不匹配"守卫（`current == null || !keyId.equals(...)`）、
+    主体到期早于轮换重叠窗口的钳制、`collectionKeys` 的三方短路、
+    策略变更检测（expiresAt / capabilities）等。
+  - 轮换重叠窗口的钳制分支（`principal.expiresAt < deadline` → 用到期时间；
+    `!deadline.isAfter(now)` → `PRINCIPAL_NOT_ACTIVE`）是**安全相关**的，
+    值得单独一批。
+  - 文档 2 笔漂移；NPE 缺陷；`PageShell` 脱节；`ask`/`chat` 重复。
+
 ### Batch 778（已交付）
 
 - 分支：`feature/sse-payload-assertions-20261003`
