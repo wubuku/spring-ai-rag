@@ -82,7 +82,7 @@ class EmbeddingPersistenceServiceReplaceTailTest {
 
         assertThrows(IllegalStateException.class,
                 () -> service.replace(
-                        41L, 3L, "hash-a", profile(), "chunker-1",
+                        41L, 3L, "hash-a", profile(),
                         List.of(), List.of(),
                         EmbeddingCommitGuard.allowAll()));
     }
@@ -95,7 +95,7 @@ class EmbeddingPersistenceServiceReplaceTailTest {
                 .thenReturn(1);
 
         assertDoesNotThrow(() -> service.replace(
-                41L, 3L, "hash-a", profile(), "chunker-1",
+                41L, 3L, "hash-a", profile(),
                 List.of(), List.of()));
     }
 
@@ -107,7 +107,7 @@ class EmbeddingPersistenceServiceReplaceTailTest {
 
         assertThrows(IllegalStateException.class,
                 () -> service.replace(
-                        41L, 3L, "hash-a", profile(), "chunker-1",
+                        41L, 3L, "hash-a", profile(),
                         List.of(), List.of(), guard));
     }
 
@@ -126,7 +126,7 @@ class EmbeddingPersistenceServiceReplaceTailTest {
                 "text", new float[]{0.1f, 0.2f}, null);
 
         service.replace(
-                41L, 3L, "hash-a", profile(), "chunker-1",
+                41L, 3L, "hash-a", profile(),
                 List.of(chunk), List.of(result),
                 EmbeddingCommitGuard.allowAll());
 

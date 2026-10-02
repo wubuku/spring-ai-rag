@@ -478,6 +478,93 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
+### Batch 803（已交付）
+
+- 分支：`feature/derive-chunker-version-20261002`
+- 内容：把 Batch 802 登记为"已定位债务"的那条**从生产签名上根除**，
+  而不是再修一次字面量。
+
+#### 勘察：为什么同一类漂移会连着出现两次
+
+- `chunker_version` 漂移已经出现两次（801-D 的 `'test'`、802 的 `'chunker-v1'`），
+  两次的形态一样：某个测试把值写死，生产侧谓词早就换了形状，于是**一条都匹配不上**。
+  上一批的结论是"静态分析做不到，加不了门禁，只能登记"。**这个结论本身值得再问一次**：
+  做不到的究竟是"检测字面量"，还是"让字面量不再存在"？
+- 查生产侧：`DocumentEmbedService` 的**每一处**调用方都从
+  `chunkingService.prepare(doc).descriptor().chunkerVersion()` 取值，
+  也就是同一个 `DocumentDerivationDescriptorProvider`。
+  `EmbeddingPersistenceService.replace(...)` 把它当**裸 `String`** 接过来、
+  原样写进 `rag_document_embedding_state.chunker_version`。
+- **所以它是一个纯透传参数**。生产侧没人需要它不同；而这个 `String`
+  既不能被编译器检查，也无法被静态分析认出"它必须等于某个 provider 的输出"。
+  **两次漂移都是这个透传参数允许的**，而不是两次独立的疏忽。
+- 关键可行性判断：**这件事以前做不了，现在能做**——因为 Batch 801/802 刚把
+  154 个门控集成测试修到"真的在跑"。改生产签名的前置条件是回归网，
+  而回归网在两批之前是不存在的。**技术债能不能还，取决于网什么时候织好。**
+
+#### 变更
+
+- `EmbeddingPersistenceService.replace(...)`（两个重载）**去掉 `String chunkerVersion`
+  参数**，改为在服务内部按文档的 `document_type` 推导：
+  `readDocumentSnapshot` 的 SELECT 加上 `document_type`，走
+  `jsonRecordDescriptor()` / `textDescriptor()` 两条分支——**和检索作用域
+  用的是同一个 provider**。
+- 注入方式：新增 `@Autowired` 双参构造器接收 `DocumentDerivationDescriptorProvider`
+  （它本来就是 `@Component`），保留原单参构造器给手工构造的测试，
+  它退回到 `new RagProperties()` 的默认 provider——已核对
+  `RagChunkProperties` 的字段默认值（1000/100/100）与 `application.yml`
+  的 `rag.chunk.*` 一致，所以默认配置下等价。
+- `DocumentEmbedService` 两处调用点与内部 `replaceEmbeddings` 去掉该参数；
+  它自己**仍然**用 `prep.chunkerVersion()` 做重试可复用性判断（那是读侧，
+  与写侧无关），逻辑未动。
+- 29 处测试调用点同步（`EmbeddingJobs`/`EmbeddingProfile` 集成测试、
+  `DocumentEmbedServiceTest`、`DocumentEmbedJobEntryTest`、
+  `EmbeddingPersistenceServiceTest`、`EmbeddingPersistenceServiceReplaceTailTest`），
+  以及 3 处随之位移的 `invocation.getArgument(7)` → `getArgument(6)`。
+  **编译器一次就把 27 处报了出来**——这恰好说明了为什么"加门禁"是错的方向：
+  类型系统本来就能做到的事，不该交给正则。
+
+#### 测试
+
+- `replaceWritesRowsAndCommitsAtomically` 原来断言状态行写入的是 `eq("v1")`，
+  也就是"调用方碰巧传了什么"——**这正是本批要消掉的东西**。改为断言
+  `eq(TEXT_CHUNKER_VERSION)`。
+- 新增 2 例（都是行为，不是结构）：
+  1. `replaceRecordsTheChunkerVersionTheDocumentTypeImplies`——同一个文档，
+     `document_type` 是 `document` 时写入 `hierarchical-v2:1000:100:100`，
+     是 `json-record` 时写入 `json-record-v1:single`。**两条分支都被钉住**，
+     只测一条的话，把 `chunkerVersionFor` 写成永远返回文本版本也能过。
+  2. `replaceTakesItsChunkerVersionFromTheSameProviderTheRetrievalScopeUses`——
+     把 chunk 配置调成 512/64/32，断言写入值既等于字面量
+     `hierarchical-v2:512:64:32`、又等于**同一个 provider** 的输出。
+     这是"两个会动的东西"式断言，不是复述实现。
+- **变异测试**：把 `chunkerVersionFor` 改成永远返回 `"chunker-v1"`
+  → **3 个用例如期变红**（含两个新增的），恢复后 35/35 绿 ✓
+
+#### 我自己犯的错
+
+- 写第二个新用例时，一度想调用 `tunedService.chunkerVersionForTesting("document")`——
+  也就是**给生产代码加测试钩子**。这正是我自己在 Batch 799 立下的
+  "不为覆盖率给生产代码加测试钩子"原则的违反。改成在测试里直接用 provider
+  对比，反而是更强的一条断言（比对的是两个独立推导，不是同一段代码的两次调用）。
+- 批量转换脚本第一版的判据 `sixth.startswith("List")` 只认
+  `List.of(...)` 形态，漏掉了 mock 场景里的 `anyList()`，dry-run 报
+  "两个文件 0 处"——**没有直接相信它**，把判据放宽到 `^(List|anyList)`
+  并再次 dry-run（29 处）才落盘。
+
+- 指标（实测值）：core 默认测试用例数 **不变**（2 个新增用例，替换掉
+  `EmbeddingPersistenceServiceTest` 原有计数中的 0 个净增——实际 16 例，
+  原 14 例，**+2**）；`EmbeddingPersistenceServiceTest` 14 → 16；
+  门控 IT 仍为 **154**；门禁不变。
+- 遗留（如实登记，未处理）：
+  - **`findCacheState(documentId, profile, contentHash, chunkerVersion)` 仍有同一个
+    裸 `String` 参数**，这是读侧同形的问题。本批只处理写侧（两次漂移都发生在写侧），
+    读侧没有对应的 fixture 漂移实例，且它的调用方 `DocumentEmbedService` 手里
+    确实有从文档推导出的值，改造收益低于风险。**登记为已知同形问题。**
+  - 账本 20 处"本机无 Docker"历史条目仍按 Batch 801 的勘误处理。
+  - 其余 WebUI 债务（`PageShell` 脱节、`ask`/`chat` 53 行×2 重复、
+    174 个无引用 locale 键）本批未动。
+
 ### Batch 802（已交付）
 
 - 分支：`feature/external-db-cleanup-guard-20261002`

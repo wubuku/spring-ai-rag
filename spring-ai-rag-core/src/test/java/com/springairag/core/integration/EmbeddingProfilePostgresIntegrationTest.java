@@ -220,7 +220,6 @@ class EmbeddingProfilePostgresIntegrationTest {
                 0L,
                 "hash-atomic",
                 profile,
-                chunkerVersion(),
                 List.of(new TextChunk("old chunk", 0, 9)),
                 List.of(result("old chunk", vector(1024, 1.0f)))));
 
@@ -230,7 +229,6 @@ class EmbeddingProfilePostgresIntegrationTest {
                         1L,
                         "hash-atomic",
                         profile,
-                        chunkerVersion(),
                         List.of(
                                 new TextChunk("new chunk 1", 0, 11),
                                 new TextChunk("new chunk 2", 11, 22)),
@@ -273,11 +271,11 @@ class EmbeddingProfilePostgresIntegrationTest {
                 documentA);
 
         transactionTemplate.executeWithoutResult(status -> persistence.replace(
-                documentA, 0L, HASH_A, profileA, chunkerVersion(),
+                documentA, 0L, HASH_A, profileA,
                 List.of(new TextChunk("shared searchable content", 0, 25)),
                 List.of(result("shared searchable content", vector(1024, 1.0f)))));
         transactionTemplate.executeWithoutResult(status -> persistence.replace(
-                documentB, 0L, HASH_B, profileB, chunkerVersion(),
+                documentB, 0L, HASH_B, profileB,
                 List.of(new TextChunk("shared searchable content", 0, 25)),
                 List.of(result("shared searchable content", vector(1024, 1.0f)))));
 
@@ -470,11 +468,11 @@ class EmbeddingProfilePostgresIntegrationTest {
         long documentB = insertDocument("coverage-b", "content b", "hash-b");
 
         transactionTemplate.executeWithoutResult(status -> persistence.replace(
-                documentA, 0L, "hash-a", profileA, chunkerVersion(),
+                documentA, 0L, "hash-a", profileA,
                 List.of(new TextChunk("content a", 0, 9)),
                 List.of(result("content a", vector(1024, 1.0f)))));
         transactionTemplate.executeWithoutResult(status -> persistence.replace(
-                documentB, 0L, "hash-b", profileB, chunkerVersion(),
+                documentB, 0L, "hash-b", profileB,
                 List.of(new TextChunk("content b", 0, 9)),
                 List.of(result("content b", vector(1024, 1.0f)))));
 

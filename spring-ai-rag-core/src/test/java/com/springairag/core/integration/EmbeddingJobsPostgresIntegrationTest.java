@@ -429,7 +429,6 @@ class EmbeddingJobsPostgresIntegrationTest {
                         1L,
                         hash,
                         profile,
-                        "test",
                         List.of(new TextChunk("content", 0, 7)),
                         List.of(new EmbeddingBatchService.EmbeddingResult(
                                 "content", new float[1024], null)),
