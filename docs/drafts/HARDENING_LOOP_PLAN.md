@@ -317,6 +317,68 @@
   约 53 行 × 2。合并需要同时验证两条链路的 OpenAPI 注解与日志文案差异，
   风险高于本批收益，暂列后续。
 
+### Batch 784（已交付）
+
+- 分支：`feature/null-output-chunk-guard-20261003`
+- 内容：修掉 Batch 777 登记的真实缺陷——`output` 为 null 的流式分片让**裸
+  NullPointerException 逃出聊天接口**。
+- **根因在 Spring AI 1.1.4 的 `MessageAggregator.aggregate`**：它只挡了
+  `getResult() == null`，进入该分支后对 `getResult().getOutput()` 做了**三次裸解引用**
+  （L99 读 text、L102 读 metadata、L105 读 toolCalls）。
+  `ChatClientMessageAggregator` 只是壳，真正的解引用在 `MessageAggregator`。
+  我们的 `responseEvents` 守卫挡住了"事件发射"路径，但**守卫在聚合器之外**。
+  该 NPE 经 `then(...)` 直接跳过 `completeStreamAttempt`，以一个没有错误码的异常结束 SSE 流。
+- **实测危害比预想的大**（先写只打印不断言的临时用例跑完即删）：
+  provider 吐 3 个分片、其中 1 个 `output` 为 null，用户就会丢掉**另外两段完整内容**，
+  整轮以裸 NPE 收场。一个畸形分片毁掉整条流。
+- **修法**：在进入聚合器**之前**用 `survivesMessageAggregation` 滤掉那个形状，
+  畸形分片打 WARN 日志后丢弃，其余分片照常送达。
+- **过滤器必须精确，只针对那一个形状**：`getResult() == null` 的分片**必须放行**——
+  聚合器虽然不从它取文本，但会采纳它携带的 usage / id / model 元数据，
+  提前丢掉会**少计 token**；`chatResponse == null` 也放行，上游
+  `ChatClientMessageAggregator` 自己用 `mapNotNull` 处理这一形状。
+  这条不是想当然，是变异测试逼出来的（见下表第 2 行）。
+- **本批最重要的一条记录：我自己越界了，是全量套件拦下来的**。
+  诊断时我额外发现"provider 一个分片都没给"会返回 `SourcesAvailable + Completed`，
+  也就是一次"成功但答案为空"的回答；我据此判断 `completeStreamAttempt` 的结构化守卫
+  在流式路径上是**死代码**，又把它当成"第二个缺陷"一并修了。
+  **全量套件立刻报出 5 个既有测试失败**，而它们的**名字就是契约**：
+  `streamSingleCandidateEmptyResponseStillCompletesTurn`、
+  `allEmptyCandidateStreamsCompleteWithoutContentOrError`、
+  `streamFallsBackToNextCandidateWhenFirstStreamIsEmpty`。
+  空流完成本轮是**刻意设计**——候选回退依赖"空流不算错误"，
+  否则第一个候选返回空就永远轮不到第二个候选。
+  更关键的是，`ChatExecutionServiceDegenerateResponseTest` 的类 Javadoc 早就把
+  "所有分片都残缺"与"内容为空"无法区分标注为**设计取舍**，并写明"两处都需要先决定
+  该报错还是该静默"。我把一条写明了的**设计取舍**当成了缺陷。已完整撤回。
+  **教训**：只跑自己新加的那个测试类，这个回归会一路绿灯发版；
+  `-Dtest=` 定向运行会掩盖它，全量才是仲裁者。
+- **既有用例按它自己的指示翻转**：`ChatExecutionServiceDegenerateResponseTest`
+  里的 `nullOutputChunkEscapesAsNpe` 当初**刻意断言"当前会抛裸 NPE"**并留言
+  "修好之后，它应当改为断言不抛 NPE。留一个显式的失败点，好过让缺陷消失在覆盖率里"。
+  本批照办，翻转为 `nullOutputChunkNoLongerEscapesAsNpe` 回归防线，
+  并更新了该类 Javadoc 中"未改生产代码"的表述。
+- **变异测试：2 处变异各被精确抓住**
+  | 变异 | 抓到它的用例 |
+  |---|---|
+  | 拿掉过滤器（畸形分片重新裸 NPE） | `malformedChunkDoesNotDestroyTheStream`、`allChunksMalformedCompletesEmptyTurnWithoutRawNpe`、`nullOutputChunkNoLongerEscapesAsNpe`（共 3 条） |
+  | 过滤器改**过宽**（连 `result == null` 分片一起丢） | `nullResultChunkKeepsItsUsageMetadata`（usage 由 4321 变 0，仅此 1 条） |
+- **顺带发现的一个计量陷阱（如实登记）**：删掉一个测试类**不会**清掉它在
+  `target/surefire-reports/` 下的 XML/.txt，而测试可见性门禁是**信目录不信源码树**的。
+  于是本批一度量到 984 类 / 7620 用例，比实际多 2 类 2 例——正是两个被删掉的临时诊断类。
+  清掉陈旧报告后是 **982 类 / 7618 用例**，正好等于基线 981/7613 + 1 类 5 例。
+  门禁这一侧的可信度因此打折，登记为待办。
+- 指标（实测值）：core **982 测试类 / 7618 用例**（+5），**0 失败 0 错误 154 跳过**，
+  BUILD SUCCESS；全局分支 **88.45%**（与 Batch 782 持平）；
+  `ChatExecutionService` 分支 84.92%（未覆盖分支 56 → 57，
+  新增的那一条是过滤器里 `response == null` 的防御性短路）。
+- 遗留技术债（如实登记，未处理）：
+  - **测试可见性门禁信目录不信源码树**，陈旧 surefire 报告能虚增套件规模（本批踩到）。
+  - 双语门禁只看标题不看正文语言，英文散文会静默回归（Batch 783 手工修的）。
+  - `ApiKeyManagementService` 仍有 14 条未覆盖分支。
+  - 145 个集成测试仍未真正跑过（需 Docker）。
+  - `PageShell` 脱节；`ask`/`chat` 53 行 × 2 重复。
+
 ### Batch 783（已交付）
 
 - 分支：`feature/doc-drift-clearance-20261003`

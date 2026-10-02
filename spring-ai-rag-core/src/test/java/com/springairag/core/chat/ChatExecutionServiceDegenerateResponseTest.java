@@ -32,7 +32,6 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -74,17 +73,23 @@ import static org.mockito.Mockito.when;
  * <p>把这三条跑出来只能靠给生产代码加测试钩子。本批不这么做：钩子会改变被测代码的
  * 结构，从而让"覆盖了"这件事失去意义。宁可如实记下"这些分支在公开路径上不存在"。
  *
- * <p><strong>由此发现的两处生产缺陷（如实登记，未改生产代码）</strong>：
+ * <p><strong>Batch 784 已修复其中第 1 条</strong>：
+ * {@code output} 为 null 的分片不再抛裸 NullPointerException 逃出聊天接口。
+ * 聚合器（Spring AI 的 {@code MessageAggregator}）在 {@code getResult() != null}
+ * 分支里对 {@code getOutput()} 做了三次裸解引用；现在这类分片在**进入聚合器之前**
+ * 被滤掉，因此其余分片的内容照常送达，整轮正常以 {@code Completed} 收尾。
+ * 对应用例 {@code nullOutputChunkNoLongerEscapesAsNpe} 由"断言当前缺陷"
+ * 翻转为回归防线。
+ *
+ * <p><strong>第 2 条仍是已登记的设计取舍（未改）</strong>：
  * <ol>
- * <li>{@code output} 为 null 的分片会抛出一个**裸 NullPointerException** 逃出聊天接口。
- *     {@code responseEvents} 的守卫挡住了事件发射路径，但 Spring AI 的聚合器会在守卫
- *     之外读取 {@code getOutput().getText()}。对应用例
- *     {@code nullOutputChunkEscapesAsNpe} 断言当前行为并标记缺陷。</li>
  * <li>其余残缺分片会让整轮流以"成功但没有内容"的 {@code Completed} 收尾——用户看到
  *     的是空回答而不是错误。逐分片静默丢弃在长流里是对的，但"所有分片都残缺"与
  *     "内容为空"目前无法区分。这属于设计取舍。</li>
  * </ol>
- * 两处都需要先决定"该报错还是该静默"，不是可以顺手改掉的实现细节，故不在本批范围。
+ * 它与"provider 一个分片都没给"的既有行为是同一条路径：候选回退依赖"空流不算错误"，
+ * 否则第一个候选返回空就永远不会轮到第二个候选
+ * （见 {@code ChatExecutionStreamBudgetTest#allEmptyCandidateStreamsCompleteWithoutContentOrError}）。
  */
 class ChatExecutionServiceDegenerateResponseTest {
 
@@ -309,21 +314,19 @@ class ChatExecutionServiceDegenerateResponseTest {
         }
 
         @Test
-        @DisplayName("output 为 null 的分片让 NPE 逃出整轮流（Batch 777 发现的缺陷）")
-        void nullOutputChunkEscapesAsNpe() {
-            // ── 已知缺陷，未在本批修复（修它需要一个设计决定，不属于测试加固）──
+        @DisplayName("output 为 null 的分片不再让 NPE 逃出整轮流（Batch 784 修复）")
+        void nullOutputChunkNoLongerEscapesAsNpe() {
+            // Batch 777 刻意断言"当前会抛裸 NPE"并留下一个显式失败点，
+            // 注明"修好之后，它应当改为断言不抛 NPE"。Batch 784 修好了，
+            // 本用例随之翻转为回归防线。
             //
-            // `responseEvents` 的守卫完整地挡住了"事件发射"这条路径，但聚合器
-            // （Spring AI 的 ChatClientMessageAggregator）会在**守卫之外**读取
-            // `Generation.getOutput().getText()`，于是 output 为 null 的分片
-            // 抛出一个裸 NullPointerException，从聊天接口逃出去。
+            // `responseEvents` 的守卫当初只挡住了"事件发射"这条路径；聚合器
+            // （Spring AI 的 ChatClientMessageAggregator → MessageAggregator）
+            // 在守卫之外裸解引用 `Generation.getOutput().getText()`，于是 output
+            // 为 null 的分片抛出裸 NPE。修复方式是在进入聚合器之前滤掉该形状。
             //
-            // 期望的行为是与同文件另外两种残缺分片一致——静默丢弃；若聚合结果
-            // 整体不可用，则应给出 `IllegalStateException("LLM returned no
-            // usable streaming response")`，而不是 NPE。
-            //
-            // 本用例刻意断言**当前**行为并在此标记缺陷：修好之后，它应当改为
-            // 断言不抛 NPE。留一个显式的失败点，好过让缺陷消失在覆盖率里。
+            // 期望行为与同文件另外两种残缺分片一致——静默丢弃、整轮以 Completed
+            // 收尾（与"provider 一个分片都没给"同路径，属既有契约）。
             ChatModelRouter.ChatModelCandidate only = candidate("solo", true);
             when(modelRouter.orderedCandidateDescriptors(isNull())).thenReturn(List.of(only));
             useCandidate(only, streamFixture(Flux.just(nullOutputResponse())).client());
@@ -335,12 +338,12 @@ class ChatExecutionServiceDegenerateResponseTest {
                     .onErrorResume(e -> reactor.core.publisher.Mono.just(List.<ChatEvent>of()))
                     .block();
 
-            assertNotNull(failure.get(),
-                    "该分片当前会让流以错误收尾；若已修复，请把本用例改为断言不抛错");
-            assertInstanceOf(NullPointerException.class, failure.get(),
-                    "当前逃出的是一个裸 NPE，缺少可诊断的错误信息");
-            assertTrue(events != null);
+            assertNull(failure.get(),
+                    "畸形分片不得再让裸 NPE 逃出聊天接口，实际逃出: " + failure.get());
+            assertNotNull(events);
             assertNoContentDelta(events);
+            assertTrue(events.stream().anyMatch(e -> e instanceof ChatEvent.Completed),
+                    "畸形分片不应让整轮流式失败: " + events);
         }
 
         @Test
