@@ -319,7 +319,8 @@
 
 ### Batch 794（已交付）
 
-- 分支：`feature/secure-path-exclusions-20261002`
+- 分支：（**无**）——本批**直接提交并推送到了 `main`**，没有走
+  `feature/*` 分支 + `--no-ff` 合并的流程。详见下面"流程事故"一节。
 - 内容：把 `ApiKeyAuthFilter` 与 `RateLimitFilter` 各自维护的路径排除判定，
   收敛成一份**共享、分段感知、fail closed** 的实现。
 - **勘察起点**（Batch 793 的余波）：Batch 793 修的是"信任不可信的请求头"，
@@ -376,6 +377,20 @@
   - `Documents` 页"版本历史 → 恢复"的叠加是设计如此还是遗漏，待产品侧确认。
   - 147 个集成测试仍未真正跑过（本机无 Docker）。
   - `PageShell` 脱节；`ask`/`chat` 53 行 × 2 重复。
+- **流程事故（如实登记）**：收尾时我执行了
+  `git push -u origin HEAD`，而当时的当前分支是 `main`——本应先
+  `git checkout -b feature/...`。结果是 `aceff5b7` **直接落到 main**，
+  既没有 feature 分支，也没有 `--no-ff` 合并提交。
+  这违反了本项目从 Batch 753 起一直遵守的约定（大块特性走专用分支、
+  合并后确认工作区干净），也跳过了合并提交带来的可审阅边界。
+  **代码本身是好的**（Maven 全量 986 类 / 7682 用例绿、双向对账通过、
+  工作区干净、`HEAD == origin/main`），因此**没有做 revert + 重做**——
+  那会让 main 短暂变差并多出一条 revert 提交。改为在此披露，
+  并从下一批起恢复分支流程。
+  教训：收尾命令里 `git push -u origin HEAD` 看起来与
+  `git push -u origin <branch>` 几乎一样，但它**推送当前分支**，
+  当前是什么分支就推送什么。在一个专门约束分支流程的循环里，
+  这种"几乎一样"正是最容易出错的地方。
 
 ### Batch 793（已交付）
 
