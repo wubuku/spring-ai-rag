@@ -430,7 +430,41 @@ genuinely silent query can hide behind a sibling's `isError`. It fails as a
 miss, never as a false alarm. The self-test pins that case so the gap stays
 visible.
 
-## 10. Alignment and layout
+## 10. An irreversible action must be confirmed
+
+Batch 812 surveyed every action in `src/` that destroys something and found four
+that fired on a single click, with no confirmation: deleting an SLO
+configuration, deleting a silence schedule, deleting a collection, and revoking
+an API key. The last one is the sharpest — revoking a credential is
+unrecoverable, and it sits in the same row, in the same colour, one button away
+from "edit policy".
+
+The reason this survived is worth recording, because it is not ignorance. The
+same pages already had the right component in the right place. `Documents`
+confirms before deleting a document and before re-embedding the corpus;
+`Collections` asks for the collection key to be typed out before a purge. The
+gate was not missing and the pattern was not absent — the four actions were
+simply the neighbours of four correct ones, and `npx tsc -b` has no opinion
+about a missing confirmation.
+
+**What changed is not the component, it is the tests.** Each of the four
+had a passing test that clicked once and asserted the API had been called. That
+test was pinning the unsafe behaviour, so the fix had to begin by making the
+test demand two clicks. Every destructive path in `src/` now has the same pair
+of arms: *cancelling calls nothing*, and *confirming calls exactly once*. The
+first arm is the one that matters — without it, a future refactor that
+reintroduces a one-click delete passes every existing assertion.
+
+There is no machine gate for this yet, and the honest reason is that
+"destructive" has no static marker: `onClick={() => setTarget(row)}` and
+`onClick={() => deleteMutation.mutate(row)}` are the same three tokens. A
+heuristic that counted `delete`/`revoke`/`purge` identifiers would fire on the
+`onClick` that *opens* the dialog too, which is the correct code. It would need
+a data-flow rule to tell the two apart, and a rule that is right 80% of the time
+on a safety property is worse than an honest gap. **Read the two arms as the
+rule**: an irreversible action needs a `ConfirmDialog` and both arms.
+
+## 11. Alignment and layout
 
 `npm run check:alignment` is chained into `npm run lint`. Centred text is
 allowed only with a stated reason, and there are currently 11 such exemptions —
@@ -440,7 +474,7 @@ The reason this is a machine rule: a centred block of body text is the single
 most common way a layout drifts from readable to not, and it is invisible in
 code review because the CSS is one line.
 
-## 11. Before you start a UI change
+## 12. Before you start a UI change
 
 1. Run the gate and the tests first, so you know the starting state is green:
    ```bash
@@ -456,10 +490,12 @@ code review because the CSS is one line.
 3. If you need a new token, add it in `design-tokens/tokens.json` — never in a
    stylesheet.
 4. If you need a new shared primitive, find two real callers first.
-5. Write the test in the same batch. A change that makes the gate red is not
+5. If the action destroys something, wrap it in a `ConfirmDialog` and write both
+   arms — cancelling calls nothing, confirming calls once (section 10).
+6. Write the test in the same batch. A change that makes the gate red is not
    finished.
 
-## 12. What this document deliberately does not say
+## 13. What this document deliberately does not say
 
 - It does not list every page and its layout. That is code, and the code is
   the reference.

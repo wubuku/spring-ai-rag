@@ -128,7 +128,7 @@ did not already know they existed.
 | `check-query-errors.mjs` | A read whose failure looks like an empty result | `__tests__/query-errors.test.mjs` | `npm run lint` |
 | `check-double-submit.mjs` | A write left unguarded while its request is in flight | `__tests__/double-submit.test.mjs` | `npm run lint` |
 | `check-i18n-keys.mjs` | Asymmetric key sets between the two locales; a `t()` naming a key that does not exist | `__tests__/i18n-keys.test.mjs` | `npm run lint` |
-| `check-hardcoded-copy.mjs` | A component that never calls i18n; a hard-coded user string in a file that does | `__tests__/hardcoded-copy.test.mjs` | `npm run lint` |
+| `check-hardcoded-copy.mjs` | A component that never calls i18n; a hard-coded user string in a file that does — including inside a JSX expression container, while leaving ARIA/machine attribute values and `t()` fallback strings alone | `__tests__/hardcoded-copy.test.mjs` | `npm run lint` |
 | `check-page-shell.mjs` | A protected page that bypasses `PageHeader` | `__tests__/page-shell.test.mjs` | `npm run lint` |
 
 The census has five hard rules: every gate script is registered; an automated gate

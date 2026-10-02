@@ -97,6 +97,147 @@ const PATTERNS = [
   },
 ];
 
+/**
+ * Attributes whose value is a machine identifier rather than something a user
+ * reads. `role={state === 'error' ? 'alert' : 'status'}` is not untranslated
+ * copy — 'alert' and 'status' are ARIA tokens, and translating them would break
+ * the accessibility tree rather than improve it.
+ */
+const MACHINE_VALUE_ATTRIBUTES = new Set([
+  'role', 'type', 'variant', 'size', 'id', 'name', 'as', 'to', 'href', 'form',
+  'method', 'target', 'rel', 'event', 'viewBox', 'fillRule', 'clipRule',
+  'strokeWidth', 'data-testid', 'data-test', 'data-state', 'data-tone',
+]);
+
+/**
+ * A string that is one of the *branches* of a conditional or logical expression.
+ *
+ * This is the load-bearing restriction. An earlier draft accepted any capitalised
+ * string inside any `{...}` and reported 70, of which most were not rendered text
+ * at all: `principal.status !== 'ACTIVE'`, `event.key === 'ArrowRight'`,
+ * `new Error('Tooltip expects a single React element as its trigger')`, and — the
+ * real culprit — every `{ ... }` *block* and destructuring pattern in the file,
+ * which a `{...}` regex cannot tell apart from a JSX container. Requiring the
+ * literal to sit behind `?`, `:`, `&&`, `||` or `??` is what "this string is a
+ * possible rendered value" actually means, and it drops 70 to a number worth
+ * reading.
+ */
+const SINGLE = "'([^'\\\\]*(?:\\\\.[^'\\\\]*)*)'";
+const DOUBLE = '"([^"\\\\]*(?:\\\\.[^"\\\\]*)*)"';
+const BRANCH_STRING = new RegExp(
+  `(\\?|:|&&|\\|\\||\\?\\?)\\s*(?:${SINGLE}|${DOUBLE})`, 'g',
+);
+
+/**
+ * Blanks out every `t(...)` call, arguments and all.
+ *
+ * `t('nav.closeSidebar', 'Close sidebar')` — the second argument is a fallback
+ * for a missing key, not rendered copy: i18next only reaches for it when the key
+ * is absent, which `check-i18n-keys` reports separately. Counting it as
+ * hardcoded copy would be a second gate answering the same question with a
+ * worse answer.
+ *
+ * Regex over the argument list was not enough. The shapes actually in this tree
+ * include `t('k')`, `t('k', 'Close sidebar')`, `t('k', { defaultValue: '…' })`
+ * and `` t(`prefix.${code || 'DEFAULT'}`) ``, and a pattern that matched only
+ * quoted arguments reported eight phantom strings on Settings.tsx — every one of
+ * them a fallback `defaultValue` that `check-i18n-keys` already owns. None of
+ * them is rendered text, so a scanner that balances parentheses is the honest
+ * way to exclude the whole class rather than a longer pattern.
+ *
+ * A `t(` is only a call when it is not part of a longer identifier (`format(`,
+ * `split(`), which is why the identifier boundary is checked explicitly.
+ */
+export function maskTranslationCalls(code) {
+  let out = '';
+  let i = 0;
+  while (i < code.length) {
+    const ch = code[i];
+    if (ch === '"' || ch === "'" || ch === '`') {
+      const quote = ch;
+      out += ch;
+      i += 1;
+      while (i < code.length && code[i] !== quote) {
+        if (code[i] === '\\') {
+          out += code[i] ?? '';
+          i += 1;
+        }
+        out += code[i] ?? '';
+        i += 1;
+      }
+      out += quote;
+      i += 1;
+      continue;
+    }
+    if (ch === 't' && code[i + 1] === '(' && !/[\w$.]/.test(code[i - 1] ?? '')) {
+      let depth = 0;
+      let j = i + 1;
+      for (; j < code.length; j += 1) {
+        const inner = code[j];
+        if (inner === '"' || inner === "'" || inner === '`') {
+          const quote = inner;
+          j += 1;
+          while (j < code.length && code[j] !== quote) {
+            if (code[j] === '\\') j += 1;
+            j += 1;
+          }
+          continue;
+        }
+        if (inner === '(') depth += 1;
+        else if (inner === ')') {
+          depth -= 1;
+          if (depth === 0) break;
+        }
+      }
+      out += ' '.repeat(j - i + 1);
+      i = j + 1;
+      continue;
+    }
+    out += ch;
+    i += 1;
+  }
+  return out;
+}
+
+/** `{ method: 'POST', headers: { ... } }` is a JavaScript object, not markup. */
+const OBJECT_LITERAL = /^\s*['"]?[\w-]+['"]?\s*:/;
+
+export function findExpressionContainerCopy(source) {
+  // Template interpolations first: `${code || 'DEFAULT'}` is a key segment, and
+  // the container regex would otherwise see that inner `{...}` on its own.
+  // This is a deliberate false negative — copy rendered through a template
+  // interpolation that also holds a conditional is not checked.
+  const code = source.replace(/\$\{[^{}]*\}/g, ' ');
+  const masked = maskTranslationCalls(code);
+  const found = [];
+  const container = /([A-Za-z][\w-]*)\s*=\s*\{([^{}]*)\}|\{([^{}]*)\}/g;
+  let m;
+  while ((m = container.exec(masked)) !== null) {
+    const attribute = m[1];
+    if (attribute && MACHINE_VALUE_ATTRIBUTES.has(attribute)) continue;
+    // A bare `{...}` only counts as a JSX expression container when what stands
+    // before it is markup: the end of a tag, the end of a sibling expression, an
+    // opening paren of a returned fragment, or the start of a nested one.
+    // Without this the scan reads ordinary functions — it reported the
+    // `'DISABLED' : 'READY' : 'NOT_REQUESTED'` branches of lifecycleClass(),
+    // which build a CSS class name and are never rendered.
+    const before = masked.slice(0, m.index).replace(/\s+$/, '').slice(-1);
+    if (!attribute && !['>', '}', '(', '{'].includes(before)) continue;
+    const body = m[2] ?? m[3] ?? '';
+    if (OBJECT_LITERAL.test(body)) continue;
+    for (const literal of body.matchAll(BRANCH_STRING)) {
+      const copy = (literal[2] ?? literal[3] ?? '').trim();
+      if (!/^[A-Z]/.test(copy)) continue;
+      found.push({
+        copy,
+        kind: 'jsx-expression',
+        line: code.slice(0, m.index).split('\n').length,
+      });
+    }
+  }
+  return found;
+}
+
 /** Strips comments so a string inside prose cannot be read as rendered copy. */
 export function stripComments(source) {
   return source
@@ -127,6 +268,7 @@ export function findHardcodedCopy(relPath, source) {
       });
     }
   }
+  found.push(...findExpressionContainerCopy(code));
   return found.sort((a, b) => a.line - b.line);
 }
 

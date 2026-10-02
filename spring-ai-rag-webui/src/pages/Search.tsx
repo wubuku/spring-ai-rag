@@ -275,7 +275,7 @@ export function Search() {
                         >
                           <span className={styles.historyQuery}>{item.query}</span>
                           <span className={styles.historyMeta}>
-                            {item.useHybrid ? 'Hybrid' : 'Vector'} ·{' '}
+                            {item.useHybrid ? t('search.hybrid') : t('search.vector')} ·{' '}
                             {new Date(item.timestamp).toLocaleTimeString()}
                           </span>
                         </button>

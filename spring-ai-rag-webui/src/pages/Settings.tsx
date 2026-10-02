@@ -229,9 +229,7 @@ export function Settings() {
           <div className={styles.section}>
             <h2 className={styles.sectionTitle}>{t('settings.llmProvider')}</h2>
             <p className={styles.sectionDesc}>
-              {i18n.language === 'zh-CN'
-                ? '配置用于 RAG 对话和查询改写的语言模型。'
-                : 'Configure the language model used for RAG conversations and query rewriting.'}
+              {t('settings.llmProviderDesc')}
             </p>
 
             <div className={styles.field}>
@@ -299,9 +297,7 @@ export function Settings() {
                 </span>
               </div>
               <span className={styles.hint}>
-                {i18n.language === 'zh-CN'
-                  ? 'API Key 通过环境变量管理以保障安全'
-                  : 'API key is managed via environment variables for security'}
+                {t('settings.apiKeyEnvHint')}
               </span>
             </div>
           </div>
@@ -311,9 +307,7 @@ export function Settings() {
           <div className={styles.section}>
             <h2 className={styles.sectionTitle}>{t('settings.retrieval')}</h2>
             <p className={styles.sectionDesc}>
-              {i18n.language === 'zh-CN'
-                ? '配置混合搜索权重和检索参数。'
-                : 'Configure hybrid search weights and retrieval parameters.'}
+              {t('settings.retrievalDesc')}
             </p>
 
             <div className={styles.field}>
@@ -391,7 +385,7 @@ export function Settings() {
                 max="50"
               />
               <span className={styles.hint}>
-                {i18n.language === 'zh-CN' ? '重排后保留的结果数量' : 'Number of results to include after reranking'}
+                {t('settings.rerankTopKHint')}
               </span>
             </div>
           </div>
@@ -401,7 +395,7 @@ export function Settings() {
           <div className={styles.section}>
             <h2 className={styles.sectionTitle}>{t('settings.cache')}</h2>
             <p className={styles.sectionDesc}>
-              {i18n.language === 'zh-CN' ? '配置嵌入和查询结果缓存。' : 'Configure embedding and query result caching.'}
+              {t('settings.cacheDesc')}
             </p>
 
             <div className={styles.field}>
@@ -453,7 +447,7 @@ export function Settings() {
                 disabled={!cacheConfig.enabled}
               />
               <span className={styles.hint}>
-                {i18n.language === 'zh-CN' ? '缓存项最大数量' : 'Maximum number of cached items'}
+                {t('settings.cacheMaxItemsHint')}
               </span>
             </div>
           </div>
@@ -462,12 +456,10 @@ export function Settings() {
         {activeTab === 'language' && (
           <div className={styles.section}>
             <h2 className={styles.sectionTitle}>
-              {i18n.language === 'zh-CN' ? '语言设置' : 'Language Settings'}
+              {t('settings.languageSection')}
             </h2>
             <p className={styles.sectionDesc}>
-              {i18n.language === 'zh-CN'
-                ? '选择您偏好的界面语言。更改将立即生效。'
-                : 'Choose your preferred interface language. Changes take effect immediately.'}
+              {t('settings.languageSectionDesc')}
             </p>
               {/* 语言是一组按钮而不是单个控件：label 无从指向，
                   用 fieldset/legend 表达"这组选项"的语义。 */}
@@ -476,7 +468,7 @@ export function Settings() {
                 style={{ border: 'none', padding: 0, margin: 0 }}
               >
                 <legend className={styles.label}>
-                  {i18n.language === 'zh-CN' ? '当前语言' : 'Current Language'}
+                  {t('settings.currentLanguage')}
                 </legend>
                 <div className={styles.languageOptions}>
                   <button

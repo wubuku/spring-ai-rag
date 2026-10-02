@@ -48,7 +48,12 @@
     "retry": "重试",
     "somethingWentWrong": "出错了",
     "unexpectedError": "发生了意外错误",
-    "notifications": "通知"
+    "notifications": "通知",
+    "yes": "是",
+    "no": "否",
+    "you": "你",
+    "assistant": "助手",
+    "unknownError": "未知错误"
   },
   "dashboard": {
     "title": "仪表盘",
@@ -312,7 +317,8 @@
     "history": "历史记录",
     "loadFailed": "检索请求失败",
     "hybrid": "混合检索",
-    "emptyHint": "换个关键词或调整检索条件再试。"
+    "emptyHint": "换个关键词或调整检索条件再试。",
+    "vector": "向量"
   },
   "metrics": {
     "title": "系统指标",
@@ -417,7 +423,9 @@
     "sloConfigDeleteError": "删除 SLO 配置失败",
     "target": "目标",
     "targetValue": "目标值",
-    "alertKey": "告警键"
+    "alertKey": "告警键",
+    "deleteSloConfirm": "删除 SLO 阈值“{{name}}”？它会立即停止评估。",
+    "deleteSilenceConfirm": "删除静默计划“{{name}}”？其时间窗内的告警将不再被抑制。"
   },
   "settings": {
     "title": "系统设置",
@@ -441,7 +449,16 @@
     "saved": "设置已保存！",
     "changesUnsaved": "您有未保存的更改",
     "ragApiKey": "RAG API 密钥",
-    "apiKey": "API 密钥"
+    "apiKey": "API 密钥",
+    "llmProviderDesc": "配置用于 RAG 对话和查询改写的语言模型。",
+    "apiKeyEnvHint": "API Key 通过环境变量管理以保障安全",
+    "retrievalDesc": "配置混合搜索权重和检索参数。",
+    "rerankTopKHint": "重排后保留的结果数量",
+    "cacheDesc": "配置嵌入和查询结果缓存。",
+    "cacheMaxItemsHint": "缓存项最大数量",
+    "languageSection": "语言设置",
+    "languageSectionDesc": "选择您偏好的界面语言。更改将立即生效。",
+    "currentLanguage": "当前语言"
   },
   "theme": {
     "label": "主题",
@@ -603,7 +620,8 @@
     "allCollectionsHint": "该密钥可访问当前及未来创建的所有集合。",
     "selectedCollections": "指定集合",
     "selectedCollectionsHint": "该密钥只能访问下方选中的集合。",
-    "collectionsLoadError": "加载集合失败"
+    "collectionsLoadError": "加载集合失败",
+    "revokeConfirm": "吊销该 API 密钥？仍在使用它的客户端会立即开始收到 401，且吊销不可撤销。"
   },
   "files": {
     "title": "文件管理",

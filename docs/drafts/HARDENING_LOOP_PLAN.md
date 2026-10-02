@@ -478,6 +478,86 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
+### Batch 812（已交付）
+
+- 分支：`feature/destructive-confirm-and-jsx-copy-gate-20261004`
+- 内容：两件事，都属于"看起来没问题、实际是盲区"。
+  ①**4 个不可逆操作一点即发、零确认**——删 SLO 阈值、删静默计划、删集合、吊销 API Key，
+  而同一张卡片的隔壁按钮（Documents 删文档、重新嵌入、Collections 的 purge）都走
+  `ConfirmDialog`；②**`check-hardcoded-copy` 漏掉 JSX 表达式容器里的字符串**，
+  上一批（808）接进去的 35 处里就漏了这一类。两条都指向同一个教训：
+  **一致性是最容易被误读成正确性的东西。**
+- 勘察（先证伪判据，再动手）：
+  - 把"点一次就调用删除接口"当成缺陷前，先逐个读源码确认这不是刻意的快捷路径。
+    4 处全是 `onClick={deleteMutation.mutate}` 直连，中间没有任何 state 机，
+    与同文件里已经正确实现的 `Documents` 删除确认（`setConfirmation`）对照，
+    差异只在"有没有多一个 state"。**不是设计取舍，是漏接。**
+  - 更有说服力的证据是**测试自己把不安全行为钉死了**：这 4 处各有一条通过的测试，
+    点一次按钮，断言 API 已被调用。它们不是"没测到"，是"测反了"。
+  - 硬编码普查第一版判据（"任何 `{...}` 里的首字母大写字符串"）报 **70 条**，
+    抽样读源码后确认绝大多数不是渲染文案：`principal.status !== 'ACTIVE'`、
+    `event.key === 'ArrowRight'`、`new Error('Tooltip expects …')`，
+    以及最要命的——**每个 `{ }` 代码块和解构模式**，
+    `{...}` 正则无法把它们和 JSX 容器区分开。判据连修三次：70 → 37 → 17 → 11 → **0**。
+- 变更：
+  - **源码**：`Alerts.tsx` 两处 `'Yes'/'No'`、`Chat.tsx` 的 `'You'/'Assistant'`、
+    `Search.tsx` 改用 `t('search.hybrid')`/`t('search.vector')`、
+    `Documents.tsx` 的 `'Unknown error'` 接入 `t('common.unknownError')`；
+    **`Settings.tsx` 9 处手写 `i18n.language === 'zh-CN' ? '中文' : 'English'` 全部改用 `t()`**
+    ——本批最有价值的发现：这个三元只覆盖两种语言，**第三种语言会静默掉到英文分支**，
+    而界面上写着"语言"。locale 键 **+18 ×2 语言**（en / zh-CN 均 round-trip 安全、2 缩进、
+    命名空间内追加）。
+  - **`check-hardcoded-copy.mjs` 扩展**：新增 `findExpressionContainerCopy()` +
+    `maskTranslationCalls()`（带括号平衡的扫描器，遮蔽整个 `t(...)` 调用**含对象参数**）、
+    `MACHINE_VALUE_ATTRIBUTES`（role/type/variant/size/id/… 26 个）、
+    `BRANCH_STRING`（只认 `?`/`:`/`&&`/`||`/`??` 分支）、对象字面量与模板插值排除、
+    前置字符约束（`>`/`}`/`(`/`{`）。原始 **70 → 0**，门禁 45 文件、7 条白名单。
+  - **4 个破坏性路径接入 `ConfirmDialog`**（`Alerts` ×2、`Collections`、`ApiKeys`），
+    全部 `danger`；**4 个测试文件改成两步**，并**新增 3 条"取消不删除/不吊销"负臂**。
+  - 文档：`webui-design-language{,-zh-CN}.md` 新增第 10 节"An irreversible action must be
+    confirmed"（并把原 10/11/12 顺延为 11/12/13）；`developer-reference{,-zh-CN}.md`
+    门禁表里 `check-hardcoded-copy` 那一行补上新覆盖范围。
+- 验证：
+  - **变异测试（6 个）**：M5（去掉前置字符约束）与 M6（不排除对象字面量）**如期变红**，
+    分别在真实树上捞出 `Documents.tsx:865` 的 `DISABLED`/`READY`/`NOT_REQUESTED`
+    （CSS 类名，永不渲染）和 `ErrorBoundary.tsx:80`、`Alerts.tsx:410` 的 `LATENCY`（枚举值）。
+    M1–M4 **改坏也不红**——原因如实登记：**本批已经把违规全部修干净，树上零违规，
+    移除检测在数学上不可观测**。"门禁能抓住"这件事此刻只能靠自测和注入证明。
+  - **注入实验（6 例，替代上面的失效变异）**：往真实源码注入形状再跑门禁。
+    S1 `{ok ? 'Yes please' : 'No thanks'}` 与 S6 旧形状 **各命中 2 条、exit=1**（召回成立）；
+    S2 `t('k', 'Fallback copy')`、S3 `role={bad ? 'alert' : 'status'}`、
+    S4 对象字面量、S5 普通函数返回分支 **全部 exit=0 放行**（精确率成立）。
+  - 自测 `hardcoded-copy.test.mjs` **14 → 25 例**（新增 11 例逐一钉住上述 5 类假阳性，
+    外加"分支不粘连"和"`format(` 不被当成 `t(`"）；门禁自测合计 **9 文件 / 232 例**。
+  - 前端单测 **77 文件 / 835 用例全绿**（832 → 835，+3 为新增的取消负臂）；
+    `npx tsc -b` 干净；`npm run build` 通过（825ms）。
+  - **e2e mock 套件**：首跑 **92 passed / 1 failed**——`api-key-mvp.spec.ts:524`
+    点一次 Revoke 就期待状态变 Revoked，**正是本批要改的行为**；
+    已改成两步并在两步之间加一条 `toHaveCount(0)`，把"必须先确认"也钉进 e2e。
+    连带修了 `api-key-real.spec.ts:219`（真实后端套件，本机未跑）。
+  - 仓库门禁：`verify-project-docs.sh` **16/16**、`verify-project-tests.sh` **14/14**、
+    悲观锁检查通过、`verify-gate-wiring.mjs` 47 个门禁登记。
+  - **本批不跑 Maven**：零后端改动，`spring-ai-rag-core` 的 989 类 / 7715 用例与
+    上一批逐字相同。跑一遍"证明它没变"不是证据。
+- 指标：硬编码英文（表达式容器内）**70 → 0**；无确认的不可逆操作 **4 → 0**；
+  "取消不删除"负臂 **0 → 3**；门禁自测 221 → **232**；前端单测 832 → **835**；
+  locale 键 **+18 ×2**；`webui-design-language` 章节 12 → **13**。
+- 遗留（如实登记，未处理）：
+  - **没有针对"破坏性操作必须有确认"的机器门禁。**"破坏性"没有静态标记：
+    `onClick={() => setTarget(row)}` 与 `onClick={() => deleteMutation.mutate(row)}`
+    是同样的三个 token；靠标识符计数会把**打开**对话框的那个 `onClick` 一起报出来。
+    要分清需要数据流规则，而在安全属性上只有 80% 正确的规则比诚实的缺口更糟。
+    已在 `webui-design-language` 第 10 节把"两条臂"写成规则，并在两语言同步登记。
+  - `check-hardcoded-copy` 的表达式容器规则**已知会漏**：模板插值里的条件表达式
+    （`${x ? 'A' : 'B'}`）、跨行 JSX 容器。判据取向是"宁漏勿误"。
+  - `"首字母大写"这条判据的老局限仍在**：`nDCG` 之类的小写开头缩写仍需人工登记
+    （与 `MRR` 同类）。
+  - `Collections.test.tsx` 里有**顶层 `it`（不在任何 `describe` 里）**，
+    因此没有 `beforeEach` 清 mock；本批新增的取消用例只能自带 `vi.clearAllMocks()`，
+    并用注释写明原因。这个文件结构问题未处理。
+  - `Documents` 页"版本历史 → 恢复"是否也要叠加确认，属产品决策，仍未决。
+  - CI 仍未跑仓库级 `scripts/verify-*.sh`（`/tmp/b806-ci-gates.patch` 待用户手动应用）。
+
 ### Batch 811（已交付）
 
 - 分支：`feature/name-promise-assertions-20261003`
