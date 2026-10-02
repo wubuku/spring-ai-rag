@@ -155,4 +155,96 @@ describe('Toast', () => {
 
     consoleSpy.mockRestore();
   });
+
+  // ── live region（Batch 775） ────────────────────────────────────────
+  //
+  // 断言的是「常驻容器带 aria-live」，不是「每条 toast 带 role」。
+  // 后者一直是绿的，却恰恰是缺陷本身：role 挂在随内容一起插入的节点上时，
+  // 屏幕阅读器不会播报。两种写法都通过，等于什么都没测。
+
+  it('exposes an always-mounted polite live region before any toast exists', () => {
+    render(
+      <ToastProvider>
+        <TestConsumer />
+      </ToastProvider>
+    );
+
+    const region = screen.getByTestId('toast-live-region');
+    // 关键：还没显示任何 toast 时它就已经在 DOM 里。
+    expect(region).toBeInTheDocument();
+    expect(region).toHaveAttribute('aria-live', 'polite');
+    expect(region).toHaveAttribute('aria-atomic', 'false');
+    expect(region).toBeEmptyDOMElement();
+  });
+
+  it('keeps the live region mounted and non-empty while a toast is shown', () => {
+    render(
+      <ToastProvider>
+        <TestConsumer />
+      </ToastProvider>
+    );
+
+    const region = screen.getByTestId('toast-live-region');
+    fireEvent.click(screen.getByText('Show Success'));
+
+    // 同一个容器仍在，只是内部多了内容——这正是插入式变更能被播报的前提。
+    expect(screen.getByTestId('toast-live-region')).toBe(region);
+    expect(region).not.toBeEmptyDOMElement();
+    expect(screen.getByText('Success!')).toBeInTheDocument();
+  });
+
+  it('escalates error toasts to assertive while the region stays polite', () => {
+    render(
+      <ToastProvider>
+        <TestConsumer />
+      </ToastProvider>
+    );
+
+    fireEvent.click(screen.getByText('Show Error'));
+
+    expect(screen.getByTestId('toast-live-region')).toHaveAttribute('aria-live', 'polite');
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+  });
+
+  // ── 错误 toast 常驻（Batch 775） ────────────────────────────────────
+
+  it('keeps an error toast on screen until it is dismissed', () => {
+    render(
+      <ToastProvider>
+        <TestConsumer />
+      </ToastProvider>
+    );
+
+    fireEvent.click(screen.getByText('Show Error'));
+    expect(screen.getByText('Error!')).toBeInTheDocument();
+
+    // 远超非错误 toast 的 4 秒自动消失窗口。
+    act(() => vi.advanceTimersByTime(30000));
+    expect(
+      screen.getByText('Error!'),
+      '错误消息是失败原因的唯一记录，不能被计时器抹掉'
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close notification' }));
+    expect(screen.queryByText('Error!')).not.toBeInTheDocument();
+  });
+
+  it.each(['success', 'info', 'warning'] as const)(
+    'still auto-dismisses a %s toast',
+    type => {
+      render(
+        <ToastProvider>
+          <TestConsumer />
+        </ToastProvider>
+      );
+
+      const trigger = { success: 'Show Success', info: 'Show Info', warning: 'Show Warning' }[type];
+      const label = { success: 'Success!', info: 'Info', warning: 'Warning' }[type];
+      fireEvent.click(screen.getByText(trigger));
+      expect(screen.getByText(label)).toBeInTheDocument();
+
+      act(() => vi.advanceTimersByTime(4000));
+      expect(screen.queryByText(label)).not.toBeInTheDocument();
+    }
+  );
 });

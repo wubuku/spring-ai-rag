@@ -23,3 +23,20 @@ export const TOAST_ICONS = {
   info: Info,
   warning: TriangleAlert,
 } as const satisfies Record<ToastType, LucideIcon>;
+
+/** 非错误 toast 的自动消失时长（毫秒）。 */
+export const TOAST_AUTO_DISMISS_MS = 4000;
+
+/**
+ * 哪些 toast 会自动消失。
+ *
+ * 错误 toast **不自动消失**。它承载的是一次失败操作的唯一原因
+ * （`Re-embed failed: ...`、`Failed to create collection: ...`、轮换失败原因等），
+ * 4 秒后自动抹掉等于让用户来不及读完，也让失败在事后无从追溯。
+ * 成功与提示类消息没有这类信息量，自动消失可以接受。
+ */
+export const AUTO_DISMISS_TYPES: ReadonlySet<ToastType> = new Set<ToastType>([
+  'success',
+  'info',
+  'warning',
+]);
