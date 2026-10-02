@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { PageHeader } from '../components/ui';
 import { ReembedAllButton } from '../components/ReembedAllButton';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -375,7 +376,7 @@ export function Documents() {
 
   return (
     <div>
-      <h1 className="page-title">{t('documents.title')}</h1>
+      <PageHeader title={t('documents.title')} />
 
       {/* 集合下拉过去失败时是个空列表，用户会以为"没有可选集合"，
           于是以为筛选功能坏了，或者干脆去建一个重复的集合。 */}

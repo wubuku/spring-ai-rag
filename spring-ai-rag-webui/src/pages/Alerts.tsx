@@ -14,7 +14,7 @@ import {
 import { ImeSafeForm } from '../components/ImeSafeForm';
 import { useToast } from '../components/Toast';
 import styles from './Alerts.module.css';
-import { EmptyState, QueryErrorBanner, Tabs } from '../components/ui';
+import { EmptyState, PageHeader, QueryErrorBanner, Tabs } from '../components/ui';
 
 type Tab =
   | 'alerts'
@@ -37,7 +37,7 @@ export function Alerts() {
 
   return (
     <div>
-      <h1 className="page-title">{t('alerts.title')}</h1>
+      <PageHeader title={t('alerts.title')} />
 
       {/* The tab strip previously rendered four plain buttons with no tab
           semantics, so screen readers saw unrelated controls with no link to

@@ -8,7 +8,7 @@ import type {
   UsageNumericValue,
 } from '../types/api';
 import styles from './Metrics.module.css';
-import { EmptyState } from '../components/ui';
+import { EmptyState, PageHeader } from '../components/ui';
 
 function formatInteger(value: UsageNumericValue | undefined): string {
   if (value === undefined || value === null) return '0';
@@ -210,7 +210,7 @@ export function Metrics() {
 
   return (
     <div>
-      <h1 className="page-title">{t('metrics.title')}</h1>
+      <PageHeader title={t('metrics.title')} />
       {metricsQuery.isPending ? (
         <div className={styles.loading}>{t('common.loading')}</div>
       ) : metricsQuery.isError ? (

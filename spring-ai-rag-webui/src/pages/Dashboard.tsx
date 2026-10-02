@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { documentsApi } from '../api/documents';
 import { collectionsApi } from '../api/collections';
 import { healthApi } from '../api/health';
+import { PageHeader } from '../components/ui';
 import { Skeleton } from '../components/Skeleton';
 import { Card } from '../components/Card';
 import { QueryErrorBanner } from '../components/ui';
@@ -36,7 +37,7 @@ export function Dashboard() {
 
   return (
     <div>
-      <h1 className="page-title">{t('dashboard.title')}</h1>
+      <PageHeader title={t('dashboard.title')} />
 
       {/* 连不上健康端点和"服务不健康"是两件事。过去两者都渲染
           "系统异常"：偏袒方向没错（绝不误报健康），但把"我不知道"说成

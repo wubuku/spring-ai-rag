@@ -5,7 +5,7 @@ import { useSearchParams } from 'react-router-dom';
 import { evaluationApi } from '../api/evaluation';
 import { Card } from '../components/Card';
 import styles from './Evaluation.module.css';
-import { Tabs, tabDomIds } from '../components/ui';
+import { PageHeader, Tabs, tabDomIds } from '../components/ui';
 
 type Tab = 'report' | 'history' | 'feedback' | 'judge' | 'suites' | 'runs' | 'citations';
 
@@ -100,7 +100,7 @@ export function Evaluation() {
 
   return (
     <div>
-      <h1 className="page-title">{t('evaluation.title')}</h1>
+      <PageHeader title={t('evaluation.title')} />
 
       <Tabs
         idPrefix="evaluation-tabs"

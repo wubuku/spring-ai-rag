@@ -557,7 +557,25 @@ type ResolvedTheme = 'light' | 'dark';
 - 统一 toolbar、表格、role/capability badge、字段、credential warning 和设置 tab；
 - 一次性 secret、权限和保存语义不变。
 
-退出条件：13 个 route 全部进入统一 PageShell，迁移文件不再使用 raw color/legacy alias/数值 z-index。
+退出条件：13 个受保护 route 的标题全部经由 `PageHeader` 渲染、页面留白全部来自
+`Layout` 的 `<main>`，且迁移文件不再使用 raw color/legacy alias/数值 z-index。
+
+> **Batch 805 更正了这条退出条件。** 原文写的是"13 个 route 全部进入统一
+> `PageShell`"，但 `PageShell` 这个组件**在本仓库从来不存在**（grep 0 命中），
+> 因此这条条件按字面永远无法达成，被连续十个批次登记为"不在本批范围"却从没被
+> 解决。Batch 805 用真实浏览器实测了这条条件到底想表达什么：
+>
+> - **13/13** 路由各有且仅有 1 个 `<h1>`，全部是 `h1._title_…`，父元素全部是
+>   `div._titles_…`，字号一律 24px；
+> - **13/13** 的 `<main>` padding 一律 `24px 24px`。
+>
+> 也就是说"统一外壳"的两个职责——**页面留白**与**页面标题**——**早就有人负责了**：
+> 留白在 `Layout`，标题在 `PageHeader`（此前 9/13 的页面还在手写
+> `<h1 className="page-title">`，Batch 805 已全部迁完，并删掉了那个全局类）。
+> 另立一个 `PageShell` 组件会是**纯粹的重复**：它要包的东西 `Layout` 已经在包，
+> 而各页容器确实需要不同——Chat 是 `max-width: 900px` 的居中阅读列、Settings 是
+> `700px`、Files 是 `height: 100%` 的弹性布局——把三者塞进同一个壳是**回退而不是
+> 改进**。所以条件改写成描述**现在真实成立且有门禁守护**的事实。
 
 ### Slice 6：债务收口、文档与统一门禁
 

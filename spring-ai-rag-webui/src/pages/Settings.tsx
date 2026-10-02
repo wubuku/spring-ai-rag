@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router-dom';
 import { modelsApi, type ModelInfo } from '../api/models';
 import { getSelectedModel, saveSelectedModel } from '../utils/modelPreference';
 import styles from './Settings.module.css';
+import { PageHeader } from '../components/ui';
 import { Tabs, tabDomIds } from '../components/ui';
 import { Check } from 'lucide-react';
 
@@ -203,7 +204,7 @@ export function Settings() {
 
   return (
     <div className={styles.container}>
-      <h1 className="page-title">{t('settings.title')}</h1>
+      <PageHeader title={t('settings.title')} />
 
       {/* The tab strip comes from the shared primitive, which also supplies
           arrow-key navigation and the tab/panel id pair. The panel below is a

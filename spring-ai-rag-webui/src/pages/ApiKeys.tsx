@@ -10,6 +10,7 @@ import {
   type ApiPrincipalResponse,
 } from '../api/apikeys';
 import { collectionsApi } from '../api/collections';
+import { PageHeader } from '../components/ui';
 import { useToast } from '../components/Toast';
 import { Dialog } from '../components/Dialog';
 import { ImeSafeForm } from '../components/ImeSafeForm';
@@ -99,7 +100,7 @@ export function ApiKeys() {
   const { t } = useTranslation();
   return (
     <div>
-      <h1 className="page-title">{t('apiKeys.title')}</h1>
+      <PageHeader title={t('apiKeys.title')} />
       <KeyList />
     </div>
   );
