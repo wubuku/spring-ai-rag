@@ -582,7 +582,13 @@ export function Documents() {
 
       <Dialog
         open={Boolean(previewDoc)}
-        title={previewDoc?.title ?? ''}
+        // 标题不能直接用文档标题：数据库里 title 允许是空串（NOT NULL 不排除
+        // ''），那样会渲染出空的 <h2>，aria-labelledby 指向空串，
+        // 读屏只会播报一个没有名字的"dialog"，视觉上标题栏也是空的。
+        // 与 VersionHistoryModal 同一约定：前缀保证永不为空。
+        title={previewDoc?.title
+          ? `${t('common.preview')} — ${previewDoc.title}`
+          : t('common.preview')}
         onClose={() => setPreviewDoc(null)}
         size="large"
       >

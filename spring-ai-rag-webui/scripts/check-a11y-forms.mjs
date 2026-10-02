@@ -12,12 +12,16 @@
  *   3. click-non-interactive    a click handler on an element the keyboard
  *                               cannot reach, with no interactive role
  *   4. weak-allow-reason        an exemption comment too short to be a reason
+ *   5. dialog-title-can-be-empty a <Dialog> whose accessible name can be an
+ *                               empty string, leaving an unnamed modal
  *
- * Why these three and not others: they are the ones that are *unambiguously*
+ * Why these and not others: they are the ones that are *unambiguously*
  * wrong, which is what makes a static gate worth having. A placeholder is not
  * a label — it vanishes the moment the field has content — and a click handler
  * on a <div> with no role is invisible to the tab order, so the feature simply
- * does not exist for keyboard and screen-reader users.
+ * does not exist for keyboard and screen-reader users. A modal whose own title
+ * element is empty is the same class of defect one layer up: the control is
+ * there, and it announces nothing.
  *
  * There is deliberately no debt baseline. Every violation that existed when
  * this gate was written was fixable, so the baseline would have been a list of
@@ -76,11 +80,18 @@ const ALLOW_COMMENT = /a11y-allow:\s*(.+?)\s*(?:\*\/)?$/;
  * guessing how the checker happens to spell its literals. The behavioural tests
  * still assert what each kind *means*; this only pins the names.
  */
-const [CONTROL_NO_NAME, ORPHAN_LABEL, CLICK_NON_INTERACTIVE, WEAK_ALLOW_REASON] = Object.freeze([
+const [
+  CONTROL_NO_NAME,
+  ORPHAN_LABEL,
+  CLICK_NON_INTERACTIVE,
+  WEAK_ALLOW_REASON,
+  DIALOG_EMPTY_TITLE,
+] = Object.freeze([
   'control-no-name',
   'orphan-label',
   'click-non-interactive',
   'weak-allow-reason',
+  'dialog-title-can-be-empty',
 ]);
 
 export const VIOLATION_KINDS = Object.freeze([
@@ -88,6 +99,7 @@ export const VIOLATION_KINDS = Object.freeze([
   ORPHAN_LABEL,
   CLICK_NON_INTERACTIVE,
   WEAK_ALLOW_REASON,
+  DIALOG_EMPTY_TITLE,
 ]);
 
 function walk(directory) {
@@ -375,6 +387,29 @@ export function scanSource(relativePath, source) {
         if (!keyboard) missing.push('onKeyDown');
         report(CLICK_NON_INTERACTIVE, `<${tag}> missing ${missing.join('+')}`, line, allowed);
       }
+    }
+  }
+
+  // ── Rule 5: a dialog whose accessible name can be empty ────────────────
+  //
+  // `Dialog` names itself with `aria-labelledby` pointing at its own <h2>.
+  // When the title expression can evaluate to an empty string, that <h2> is
+  // empty and the dialog announces as an unnamed "dialog" — and the header bar
+  // on screen is blank too, so the sighted user cannot tell what they opened.
+  //
+  // The shape caught here is deliberately narrow: a title that coalesces to an
+  // empty string literal, or a bare optional-chain read that yields `undefined`.
+  // A title built as `` `${prefix} — ${userValue}` `` cannot be empty, which is
+  // why VersionHistoryModal's title is not flagged.
+  for (const found of openTags(code, 'Dialog', spans)) {
+    const line = lineAt(found.start);
+    const title = attr(found.body, 'title');
+    if (!title || title.value === '') continue;
+    const expression = title.value;
+    const coalescesToEmpty = /^\s*\(?\s*[\w$.?\[\]]+\s*\)?\s*\?\?\s*(''|"")\s*$/.test(expression);
+    const bareOptionalRead = /^\s*[\w$]+\s*\?\.\s*[\w$]+\s*$/.test(expression);
+    if (coalescesToEmpty || bareOptionalRead) {
+      report(DIALOG_EMPTY_TITLE, `title={${expression}}`, line, allowFor(line));
     }
   }
 

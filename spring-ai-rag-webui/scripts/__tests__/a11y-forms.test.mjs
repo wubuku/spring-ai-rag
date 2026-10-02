@@ -211,6 +211,48 @@ describe('the design-language document tracks this gate', () => {
   });
 });
 
+describe('dialog-title-can-be-empty', () => {
+  it('reports a dialog title that coalesces to an empty string', () => {
+    // The Documents.tsx defect: `title` is NOT NULL in the database but may be
+    // '', so the <h2> is empty, `aria-labelledby` points at nothing, and the
+    // modal announces with no name at all.
+    const source = `<Dialog open={Boolean(p)} title={p?.title ?? ''} onClose={c} size="large">
+      <pre>{p?.content}</pre>
+    </Dialog>;`;
+    expect(kinds(source)).toEqual(['dialog-title-can-be-empty']);
+  });
+
+  it('reports a bare optional-chain title', () => {
+    const source = `<Dialog open={open} title={doc?.name} onClose={c}>{null}</Dialog>;`;
+    expect(kinds(source)).toEqual(['dialog-title-can-be-empty']);
+  });
+
+  it('accepts a prefixed title, which can never be empty', () => {
+    // The VersionHistoryModal convention: a literal prefix guarantees a name
+    // even when the user-supplied part is blank.
+    const source = `<Dialog open={open} title={\`\${t('versions.title')} — \${documentTitle}\`} onClose={c}>
+      {null}
+    </Dialog>;`;
+    expect(kinds(source)).toEqual([]);
+  });
+
+  it('accepts a constant title', () => {
+    const source = `<Dialog open={open} title={t('apiKeys.rotateKey')} onClose={c}>{null}</Dialog>;`;
+    expect(kinds(source)).toEqual([]);
+  });
+
+  it('accepts a conditional title with a non-empty fallback', () => {
+    const source = `<Dialog open={open} title={p?.title ? \`\${t('common.preview')} — \${p.title}\` : t('common.preview')} onClose={c}>
+      {null}
+    </Dialog>;`;
+    expect(kinds(source)).toEqual([]);
+  });
+
+  it('is listed among the kinds this gate can emit', () => {
+    expect(VIOLATION_KINDS).toContain('dialog-title-can-be-empty');
+  });
+});
+
 describe('the real component tree', () => {
   const files = walk(sourceRoot).filter(path => !/\.(test|spec)\.[jt]sx?$/.test(path));
   const violations = files.flatMap(path => {

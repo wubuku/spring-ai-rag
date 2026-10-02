@@ -317,6 +317,57 @@
   约 53 行 × 2。合并需要同时验证两条链路的 OpenAPI 注解与日志文案差异，
   风险高于本批收益，暂列后续。
 
+### Batch 789（已交付）
+
+- 分支：`feature/dialog-accessible-name-gate-20261002`
+- 内容：修掉 `Documents` 预览对话框的**可访问名可能为空**，并给
+  `check:a11y-forms` 加第 5 条规则 `dialog-title-can-be-empty` 把这类缺陷钉死。
+- **真实缺陷（跨前后端边界）**：`Documents.tsx` 的预览弹窗写的是
+  `title={previewDoc?.title ?? ''}`。数据库里 `title VARCHAR(255) NOT NULL`
+  ——**NOT NULL 不排除空串**，文档确实可以存成 `''`。三个后果同时成立：
+  1. 共享 `Dialog` 用 `aria-labelledby` 指向**自身**的 `<h2>`，标题一空，
+     读屏只播报一个没有名字的 "dialog"——用户无法确认自己打开了什么、
+     也不知道怎么关；
+  2. 视觉标题栏也是空的，明眼用户同样无从判断；
+  3. 这个 `?? ''` 正是**为了让 TypeScript 通过**而写的：空串满足 `string`，
+     掩盖了"这里可能没有名字"这件事。
+- **修法与既有约定一致**：`VersionHistoryModal` 早就用
+  `` `${t('versions.title')} — ${doc.title}` ``，字面前缀保证永不为空。
+  改成 `previewDoc?.title ? \`${t('common.preview')} — ${previewDoc.title}\`
+  : t('common.preview')`，空标题时退化为常量 `common.preview`。
+- **门禁第 5 条规则**（`check-a11y-forms.mjs`）：`<Dialog>` 的 `title`
+  可能求值为空串时报 `dialog-title-can-be-empty`。判据刻意窄——只抓
+  ①合并到空串字面量的形状 ②裸可选链读取。带字面前缀的模板字符串不可能为空，
+  不误报（`VersionHistoryModal` 因此不受影响）。
+- **自测 6 例**（2 正例 + 3 反例 + 1 种类清单断言）。反例覆盖"常量标题"、
+  "带前缀模板标题"、"换行拆开的三元标题"三种合法形态。
+- **变异测试：把 `Documents.tsx` 退回缺陷形态 → 门禁 exit 1**，并精确指到
+  `src/pages/Documents.tsx:583 [dialog-title-can-be-empty]`；恢复后 exit 0。
+- **额外查了一处真实的脆弱性**：门禁靠正则读属性，**prettier 换行会不会让它漏报**？
+  构造 5 个形态实测——单行 `?? ''`、换行 `?? ''`、换行裸 `?.` 全部 CAUGHT；
+  换行的前缀模板与换行的三元全部 clean。**换行不会削弱规则**。
+- **这次门禁自己抓了我一次**：加完规则先写了英文文档就以为完事，
+  跑 `test:design-system` 得到 108 passed / 1 failed——失败项正是
+  `documents exactly the enforced kinds, in both languages`，
+  因为中文文档第 5 节还只列 4 类。补中文条目后 109/109。
+  这正是"门禁文档必须与规则清单严格同步"那条约定的价值。
+- 指标（实测值）：前端 **784 用例**（73 文件）全绿；门禁自测 **109 用例**（2 文件）；
+  `tokens:check` / `check:alignment`（11 处有意居中）/
+  `check:design-system`（94 token，0 grandfather）/
+  `check:a11y-forms`（**91 个组件文件**）/ `typecheck` / `lint` / `build` 全通过；
+  仓库门禁 `verify-project-docs.sh` **15/15**、
+  `verify-project-tests.sh`（983 类 / 7627 用例 / 154 跳过 / 0 隐形类 /
+  980 个声明测试类双向对账）、`verify-no-pessimistic-locks.sh` 全通过。
+- 遗留技术债（如实登记，未处理）：
+  - `ApiKeyManagementService` 的恒真 null 判断 `if (retiring != null)`
+    （`retiring` 是 Spring Data 返回的 `Optional`，生产上永不为 null）——
+    **全仓扫描确认仅此 1 处**，应改生产代码消除，而不是靠堆测试做绿。
+  - 纯英文标题在中文文档里仍无门禁守护（Batch 786 主动放弃的规则），
+    需带精确豁免才能落地。
+  - `Documents` 页"版本历史 → 恢复"的叠加是设计如此还是遗漏，待产品侧确认。
+  - 145 个集成测试仍未真正跑过（需 Docker）。
+  - `PageShell` 脱节；`ask`/`chat` 53 行 × 2 重复。
+
 ### Batch 788（已交付）
 
 - 分支：`feature/dialog-stack-guard-20261003`
