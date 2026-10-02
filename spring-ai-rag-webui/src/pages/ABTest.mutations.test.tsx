@@ -106,6 +106,38 @@ describe('ABTest with real query/mutation wiring', () => {
     expect(await screen.findByText('rerank-a-b')).toBeInTheDocument();
   });
 
+  // Batch 796: 四个动作按钮此前没有任何 pending 守卫，双击会发出两次请求。
+  // 静态门禁 check-double-submit 只能证明"这个文件读过 isPending"，
+  // 证明不了"按钮真的被禁用了"——所以这里用挂起的请求把行为钉住。
+  it.each([
+    // 状态必须与组件的渲染条件对上：start 只在 DRAFT 出、resume 只在 PAUSED 出。
+    ['abtest.start', 'startExperiment', 'DRAFT'],
+    ['abtest.resume', 'startExperiment', 'PAUSED'],
+    ['abtest.pause', 'pauseExperiment', 'RUNNING'],
+    ['abtest.stop', 'stopExperiment', 'RUNNING'],
+  ])('disables %s while its request is in flight', async (label, apiMethod, status) => {
+    const user = userEvent.setup();
+    experimentRoute(5, { status });
+    // 请求永不结束，模拟慢网络。
+    mocks[apiMethod].mockReturnValue(new Promise(() => {}));
+
+    renderAbTest('/abtest/5');
+    const button = await screen.findByRole('button', { name: label });
+
+    expect(button).toBeEnabled();
+    await user.click(button);
+
+    await waitFor(() => {
+      expect(button).toBeDisabled();
+    });
+    // 文案同时切到 loading，用户能看到发生了什么。
+    expect(button).toHaveTextContent('common.loading');
+
+    // 再点一次不会再发请求——这才是这次修复要防的那一下。
+    await user.click(button);
+    expect(mocks[apiMethod]).toHaveBeenCalledTimes(1);
+  });
+
   it('renders the detail loading state while the experiment query is pending', () => {
     experimentRoute(5);
     mocks.getExperiment.mockReturnValue(new Promise(() => {}));

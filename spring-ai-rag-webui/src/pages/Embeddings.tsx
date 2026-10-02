@@ -332,10 +332,18 @@ export function Embeddings() {
                     <td>{job.progress?.stage ?? '—'}</td>
                     <td className={styles.ellipsis}>{job.lastError ?? '—'}</td>
                     <td>
-                      <button type="button" onClick={() => cancelM.mutate(job.id)}>
+                      <button
+                        type="button"
+                        onClick={() => cancelM.mutate(job.id)}
+                        disabled={cancelM.isPending}
+                      >
                         {t('embeddings.cancel')}
                       </button>
-                      <button type="button" onClick={() => retryM.mutate(job.id)}>
+                      <button
+                        type="button"
+                        onClick={() => retryM.mutate(job.id)}
+                        disabled={retryM.isPending}
+                      >
                         {t('embeddings.retry')}
                       </button>
                     </td>

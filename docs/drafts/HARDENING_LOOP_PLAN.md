@@ -317,6 +317,72 @@
   约 53 行 × 2。合并需要同时验证两条链路的 OpenAPI 注解与日志文案差异，
   风险高于本批收益，暂列后续。
 
+### Batch 796（已交付）
+
+- 分支：`feature/write-button-pending-guard-20261002`
+- 内容：修掉 **9 个没有 pending 守卫的写按钮**（双击即两次请求），
+  并加门禁 `check:double-submit`——**并如实登记它抓不住的那一类**。
+- **先说放弃的方向**：Batch 795 的同一条线索还剩两处
+  （`ApiKeyRotationHttpPolicy.isStagedRotationPath`、
+  `ApiKeyController:406` 的 `contains("/rotations")`）。
+  逐个读过后**放弃**：它们决定的是**要不要加 `Cache-Control: no-store`**，
+  失败方向是"宁多勿少"（多加 no-store 是安全的），
+  而且 `startsWith("/api/v1/rag/api-keys/")` 这个前缀检查本身能扛过路径规范化
+  （真实轮换路径必然以该前缀开头）。按 Batch 768 拒绝低价值靶子的同一标准，
+  不为凑批次去改它们。已登记为遗留。
+- **真实缺陷（逐个读代码核实，不信正则）**：
+  React Query 不会对 `mutate()` 去重，第二次点击就会发出第二次请求。
+  | 文件 | 按钮 | 后果 |
+  |---|---|---|
+  | `ABTest.tsx` | `startMut`×2、`pauseMut`、`stopMut` | 状态迁移重复触发 |
+  | `Embeddings.tsx` | `cancelM`、`retryM` | 重复取消/重试 |
+  | `Evaluation.tsx` | `createM`、`versionM`、`startM` | **建出两套同键套件**、导两次版本、**启动两次评估运行并把预算烧两遍** |
+- **勘察脚本自己翻车了（如实登记）**：第一版脚本解析 `<button>` 开标签来决定
+  有没有守卫，报出 11 处未禁用——其中 **`ApiKeys.tsx:1042` 与
+  `Collections.tsx:271` 是假阳性**，两处的下一行就写着
+  `disabled={immediateMutation.isPending}` 与 `&& !applyMutation.isPending`。
+  多行 JSX 加嵌套花括号让这种解析失手。
+  **逐个打开代码核对后**才得到真实的 9 处。差点把两处正确代码"修"成更糟的样子。
+- **门禁 `scripts/check-double-submit.mjs`**（规则 `unguarded-write`）：
+  某个 mutation 在文件里被触发，而**同一个文件里没有任何地方**读过它的
+  `isPending`。串进 `npm run lint`。
+  判据刻意做粗（文件级而非按钮级），理由就写在门禁头部：
+  上面那次假阳性说明"解析开标签"这条路会**误报**，而会对正确代码误报的门禁
+  一周内就会被忽略。文件范围的失败方式是**漏报**，方向才是对的。
+- **如实登记：门禁抓不住的那一类（变异 T 未被抓住）**
+  把 `ABTest` 的四个 `disabled` 守卫删掉之后，**门禁仍然是绿的**——
+  因为同一个文件在按钮**文案**里还在读 `startMut.isPending`。
+  控件显示"加载中"、却依然完全可点。这是这道门禁**真实的漏检**，
+  不是"通过了的测试冒充守卫"。三件事同时做了：
+  1. 把这个盲区写成一条**自测用例**钉住，让它保持可见；
+  2. 写进门禁头部的注释；
+  3. 写进本账本。
+  **真正的防线是行为测试**：
+  `ABTest.mutations.test.tsx` 新增 4 个参数化用例，用**永不结束的请求**点击，
+  断言控件已禁用、文案切到 loading、且 API **只被调用一次**。
+- **变异测试 3 处**：
+  | 变异 | 抓到它的检查 | 结果 |
+  |---|---|---|
+  | 删掉 `Evaluation` 三处守卫 | 门禁 `unguarded-write` ×3，exit 1 | 抓住 |
+  | 门禁退回"只认同一标签里的 `disabled=`"（即勘察脚本的错误做法） | 自测 2 例变红 | 抓住 |
+  | 只删 `ABTest` 的 `disabled`、保留文案里的 `isPending` | **静态门禁没抓住**；**行为测试 4 条全变红** | **如实记为门禁漏检** |
+- 指标（实测值）：前端 **794 用例**（73 文件，+4）全绿；
+  门禁自测 **153 用例**（5 文件，+13）全绿；
+  `lint`（含 `check:mutation-errors` / `check:i18n-keys` / `check:double-submit`，
+  各扫描 100 个组件文件）/ `typecheck` / `build` 通过；
+  `verify-project-docs.sh` **15/15**。
+  本批**未改动任何 Java 源码**，无需重跑 Maven 套件。
+- 遗留技术债（如实登记，未处理）：
+  - **这道门禁的漏检**（上面那条）：`isPending` 被读了但没有用于禁用点击。
+    静态判据无解，防线在行为测试。若将来这类改动变多，值得把
+    "禁用必须出现在触发点附近"做成更强的规则或运行时断言。
+  - `ApiKeyRotationHttpPolicy` / `ApiKeyController:406` 的 `contains("/rotations")`
+    （低风险，故未改）。
+  - 纯英文标题在中文文档里仍无门禁守护（Batch 786 主动放弃的规则）。
+  - `Documents` 页"版本历史 → 恢复"的叠加是设计如此还是遗漏，待产品侧确认。
+  - 147 个集成测试仍未真正跑过（本机无 Docker）。
+  - `PageShell` 脱节；`ask`/`chat` 53 行 × 2 重复。
+
 ### Batch 795（已交付）
 
 - 分支：`feature/capability-path-fail-closed-20261002`

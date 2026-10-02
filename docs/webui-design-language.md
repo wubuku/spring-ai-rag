@@ -293,7 +293,50 @@ prefix is not a key. Keys that no static call references are reported as a
 count, not a failure. Exemptions use an inline
 `/* i18n-allow: <concrete reason> */`; none are registered.
 
-## 8. Alignment and layout
+## 8. A write button must stop accepting clicks while it is in flight
+
+`npm run check:double-submit` is chained into `npm run lint` and enforces one
+rule:
+
+- `unguarded-write` — a mutation that is fired somewhere in the file
+  (`someM.mutate(...)` or `mutateAsync`) while nothing in that same file ever
+  reads `someM.isPending`.
+
+React Query does not deduplicate `mutate()` calls. A second click sends a
+second request, and the consequences are not uniform: cancelling a job twice is
+merely wasteful, while `createM` twice creates two suites with the same key and
+`startM` twice starts two evaluation runs and burns the budget twice.
+
+Batch 796 surveyed every `onClick={() => someM.mutate(...)}` and found nine
+unguarded controls — `startMut` ×2, `pauseMut` and `stopMut` in `ABTest`,
+`cancelM` and `retryM` in `Embeddings`, `createM`, `versionM` and `startM` in
+`Evaluation`. All nine now disable themselves and show a loading label.
+
+**The check is deliberately coarse, and it has a documented miss.** It asks
+whether `isPending` appears anywhere in the file, not whether the particular
+button consults it. Two reasons:
+
+1. The survey that found these defects parsed the `<button>` opening tag, and
+   reported `ApiKeys.tsx:1042` as unguarded when the very next line is
+   `disabled={immediateMutation.isPending}`. Multi-line JSX with nested braces
+   defeats that parse, and a gate that cries wolf on correct code gets ignored.
+2. File scope fails as a **miss**, never as a false alarm. A component that
+   hands its mutation to a child, or derives `isPending` into another variable,
+   is not flagged. That is the right way round.
+
+The miss is real and was demonstrated: removing the four `disabled` guards from
+`ABTest` left this gate green, because the same file still reads `isPending` in
+the button *label*. The control says "Loading…" and remains perfectly
+clickable. A behavioural test is the only thing that catches that, and
+`ABTest.mutations.test.tsx` now holds four parameterised cases that click with a
+never-settling request and assert the control is disabled and the API is called
+once. The blind spot is pinned as a self-test case too, so it stays visible
+rather than being quietly forgotten.
+
+Exemptions use an inline `/* double-submit-allow: <concrete reason> */`; none
+are registered.
+
+## 9. Alignment and layout
 
 `npm run check:alignment` is chained into `npm run lint`. Centred text is
 allowed only with a stated reason, and there are currently 11 such exemptions —
@@ -303,7 +346,7 @@ The reason this is a machine rule: a centred block of body text is the single
 most common way a layout drifts from readable to not, and it is invisible in
 code review because the CSS is one line.
 
-## 9. Before you start a UI change
+## 10. Before you start a UI change
 
 1. Run the gate and the tests first, so you know the starting state is green:
    ```bash
@@ -311,6 +354,7 @@ code review because the CSS is one line.
    npm run check:a11y-forms
    npm run check:mutation-errors
    npm run check:i18n-keys
+   npm run check:double-submit
    npm run test:run
    ```
 2. Look for an existing primitive before writing a new one.
@@ -320,7 +364,7 @@ code review because the CSS is one line.
 5. Write the test in the same batch. A change that makes the gate red is not
    finished.
 
-## 10. What this document deliberately does not say
+## 11. What this document deliberately does not say
 
 - It does not list every page and its layout. That is code, and the code is
   the reference.
