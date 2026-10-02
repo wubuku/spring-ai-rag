@@ -317,6 +317,60 @@
   约 53 行 × 2。合并需要同时验证两条链路的 OpenAPI 注解与日志文案差异，
   风险高于本批收益，暂列后续。
 
+### Batch 795（已交付）
+
+- 分支：`feature/capability-path-fail-closed-20261002`
+- 内容：把 Batch 794 的形态检查接到**第三个**安全判定点上——
+  `ApiCapabilityFilter` 的能力分类，并指出它的 fail-closed 方向与前两处**相反**。
+- **勘察**：Batch 794 修完 `ApiKeyAuthFilter` 与 `RateLimitFilter` 两个排除判定后，
+  顺着同一形状往下查，发现 `ApiCapabilityFilter.requiredCapability` 也在用
+  **原始 `getRequestURI()`**（只做了去 query 与去尾斜杠的 `normalizePath`）
+  判定"这是不是管理/身份端点、是不是只读 POST"。
+- **真实缺陷（形状与 794 同源，但严重度更高）**：
+  修复前 `/api/v1/rag/api-keys/../chat` 会命中
+  `path.startsWith("/api/v1/rag/api-keys/")` 而进入 `isManagementOrIdentityPath`，
+  于是 `requiredCapability` 返回 **`null`**——而 `null` 在这个过滤器里表示
+  **"不要求能力"**，是最宽松的结论。
+  也就是说：一个**完全没有 RAG 能力**的调用方，
+  可以用这个形态跳过能力检查去做数据面写操作。
+  与 Batch 794 的差别必须写清楚：那里"不算排除"=要鉴权（安全），
+  **这里"不算豁免"=要能力（安全）**；直觉照搬 794 的写法会得到相反且危险的结果。
+- **修法**：复用 `SecurityPathExclusions.isAmbiguous`，
+  形态可疑的 URI **一律不给任何豁免**——读类动词按 `RAG_READ`，
+  **未知动词也按 `RAG_WRITE`**（正常路径上未知动词返回 `null`，
+  形态可疑时不能沿用这个宽松结论）。
+  顺带把身份路径前缀也改成 `matchesPrefix` 分段感知：
+  `/api/v1/rag/api-keys-foo` 现在是普通数据面路径，
+  而不是静默的身份端点。
+- **测试** `ApiCapabilityFilterCapabilityClassificationTest` **11 例**：
+  既有分类保持不变（6）、分段感知（1）、fail closed（4），
+  并明确写出"这里的 fail closed 方向与 `SecurityPathExclusions` 相反"。
+- **变异测试 2 处，互不代偿**：
+  | 变异 | 抓到它的检查 |
+  |---|---|
+  | 去掉形态可疑的 fail-closed 分支（退回 794 之前的行为） | `traversalIsNotAIdentityPath`、`unknownVerbStillDemandsWriteRatherThanNoCheck` |
+  | 身份路径的 `matchesPrefix` 退回朴素 `startsWith` | `apiKeysLookalikeIsNotAnIdentityPath` |
+  第一次变异证明 fail-closed 分支有用例守着，
+  第二次证明分段匹配也有**各自独立**的用例——两处不会互相顶替。
+- 指标（实测值）：core **987 类 / 7693 用例 / 0 失败 / 0 错误 / 154 跳过**
+  （+1 类 / +11 用例）；全仓合计 **1005 类 / 8352 用例 / 0 失败 / 0 错误 / 154 跳过**；
+  全局覆盖率 分支 **88.53%**、行 **98.41%**（与 Batch 794 持平）；
+  `verify-project-docs.sh` **15/15**；无悲观锁门禁通过。
+- 遗留技术债（如实登记，未处理）：
+  - **同一条线索还没查完**：`ApiKeyRotationHttpPolicy.isStagedRotationPath`
+    与 `ApiKeyController:406` 的 `requestUri.contains("/rotations")`
+    同样在原始 URI 上做判断，本批未覆盖。`contains("/rotations")`
+    尤其宽松——任何位置出现该子串都命中。
+  - **真实容器路径规范化实测**（需 Docker + PostgreSQL）：
+    确认 `/actuator/../api/v1/rag/documents`、
+    `/api/v1/rag/api-keys/../chat` 到底是被容器规范化后路由、
+    还是直接 400。**在那之前，794/795 修的是"判定不再依赖该前提"，
+    不是"已证实可利用"。**
+  - 纯英文标题在中文文档里仍无门禁守护（Batch 786 主动放弃的规则）。
+  - `Documents` 页"版本历史 → 恢复"的叠加是设计如此还是遗漏，待产品侧确认。
+  - 147 个集成测试仍未真正跑过（本机无 Docker）。
+  - `PageShell` 脱节；`ask`/`chat` 53 行 × 2 重复。
+
 ### Batch 794（已交付）
 
 - 分支：（**无**）——本批**直接提交并推送到了 `main`**，没有走

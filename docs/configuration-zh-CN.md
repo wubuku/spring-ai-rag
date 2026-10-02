@@ -1175,6 +1175,23 @@ rag:
 > 本项目当前无法起真实容器实测（无 Docker、无数据库），因此**不断言"可利用"**，
 > 而是让判定不再依赖那个前提。改这一层不会放宽任何既有公开端点。
 
+**操作能力与同一个路径问题**
+
+`ApiCapabilityFilter` 把每个数据面请求分类为 `RAG_READ`、`RAG_WRITE`
+或"不要求能力"（管理/身份端点，如 `/api/v1/rag/api-keys`、`/api/v1/rag/alerts`、
+`/api/v1/rag/auth`，以及只读的 `POST` 列表，如 `/api/v1/rag/search`、
+`/v1/chat/completions`）。
+
+它复用同一个形态检查，但**方向是相反的**：这里返回 `null` 表示
+"不要求能力"，那是**宽松**的那一侧。因此 fail closed 在这里的含义是
+形态可疑的 URI **绝不能**拿到豁免——读类动词按 `RAG_READ`、
+其余（含未知动词）一律按 `RAG_WRITE` 要求能力。
+修复前 `/api/v1/rag/api-keys/../chat` 会命中身份路径前缀而返回 `null`，
+也就是一个**完全没有 RAG 能力**的调用方可以跳过能力检查去做数据面写操作。
+
+身份路径前缀现在也是分段感知的，`/api/v1/rag/api-keys-foo` 会被当作普通
+数据面路径，而不是一个静默的身份端点。
+
 **限流策略选择：**
 - `ip`：按客户端 IP 独立计数，适合无认证场景
 - `api-key`：按 API Key 限流（无 Key 回退 IP），适合多租户场景；`key-limits` 中未配置的 Key 使用默认 `requests-per-minute`
