@@ -1042,7 +1042,10 @@ public class PdfImportController {
      * Relative image paths in the content will be resolved against /files/raw/{uuid}/.
      */
     private String wrapInHtmlPageWithBase(String uuid, String bodyHtml) {
-        String baseTag = "<base href=\"/files/raw/" + uuid + "/\">";
+        // uuid 来自请求的 path 参数（经 extractUuid 截取第一段），必须转义后才能进
+        // HTML 属性。title 在 buildHtmlShell 里已经转义，这里曾经是全后端最后一处
+        // 未转义的请求派生值——正文的净化（MarkdownRendererService）覆盖不到它。
+        String baseTag = "<base href=\"/files/raw/" + escapeHtml(uuid) + "/\">";
         return buildHtmlShell("zh", "PDF Preview - " + uuid, baseTag, PREVIEW_CSS, bodyHtml);
     }
 

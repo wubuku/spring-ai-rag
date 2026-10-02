@@ -478,6 +478,71 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
+### Batch 814（已交付）
+
+- 分支：`feature/preview-html-shell-escaping-20261005`
+- 内容：把 Batch 813 净化**够不着**的那一层补上，并把两条 HTML 输出路径的转义边界钉成测试。
+  本批的核心判断是：**上一批修的是正文，而页面外壳是控制器手工拼的，正文净化覆盖不到它。**
+- 勘察（**又一次"看起来没问题"被证伪或证实的过程**）：
+  1. Batch 813 遗留的"未审计其它 innerHTML 形态"——**当场排除**。
+     `insertAdjacentHTML` / `outerHTML` / `innerHTML =` / `document.write` /
+     `srcdoc` 在 `src/` 与 `e2e/` 里**零命中**（只有 `useChartTheme.test.ts` 里的
+     `document.head.innerHTML`，那是测试装置）。三条 `TEXT_HTML_VALUE` 端点
+     全部在服务层净化之下。这条遗留可以关闭。
+  2. 顺着同一条链读控制器：`buildHtmlShell` 用字符串拼 `<head>`，
+     **同一行的 `title` 走了 `escapeHtml`，`baseTag` 没有**——
+     `"<base href=\"/files/raw/" + uuid + "/\">"`，而 `uuid = extractUuid(请求的 path)`。
+     全后端**最后一处未转义的请求派生值**，而且恰好在上一批修复的边界之外。
+  3. **可利用性：诚实结论是当前不可利用。**`deriveMarkdownPath` 要求该路径下
+     真的有 `default.md`，否则 404；载荷会先在文件查找处落空。
+     但这是**把"恰好安全"当成了"设计安全"**——安全性完全落在另一处的存在性检查上，
+     换一处实现就不会自动跟着对。这与 Batch 812 里"邻居按钮有确认所以我以为我也有"同源。
+  4. 顺带审计了另一个手工拼 HTML 的地方 `EmailNotificationService`：
+     **它是稳的**——`severityColor` 是封闭 `switch` 返回固定色值（不经过 severity），
+     所有动态插值都走 `escapeHtml`。假设证伪，不动手。
+- 变更：
+  - **修复**：`wrapInHtmlPageWithBase` 的 `uuid` 改走 `escapeHtml`，与同一行的
+    `title` 对齐。
+  - **新增 `PdfImportControllerHtmlShellTest`（6 例）**，首次运行 **3 例变红**，
+    失败信息是真实页面输出（`base href 属性被载荷闭合了：<!DOCTYPE html>…`）。
+    覆盖：引号闭合属性、尖括号成标签、title 回归护栏、
+    **合法 UUID 的 base 标签不能被"修坏"**、独立整页端点共用同一边界、
+    以及一条**把"安全来自哪里"钉死**的断言（文件不存在必须 404，
+    消息里写明"如果这条不再成立，转义就是唯一防线"）。
+  - **补齐 `EmailNotificationServiceTest` 的转义覆盖**：原有的 XSS 测试只覆盖
+    `message` 和 metadata 的**值**；新增 `buildHtmlBody_escapesEveryInterpolatedField`
+    把 `alertType`/`alertName`/`severity`/metadata **key** 一起纳入，
+    以及 `buildHtmlBody_severityColorIgnoresUnknownSeverity` 钉住
+    "颜色值只来自那个封闭 switch"。
+  - **`deliveryId` 刻意不写测试**：6 参重载是 `private`，唯一调用点传的是
+    `payload.deliveryId().toString()`（UUID），构造上不可控。
+    写测试等于测一个不可达状态——按"不为覆盖率写测试"的约定跳过，并在测试里写明原因。
+- 变异测试（**5 个，全部如期变红**，与 Batch 813 的 3 正 1 负不同）：
+  - N1 base href 不转义 → **3 失败**
+  - N2 title 不转义 → **3 失败**
+  - N3 邮件 `alertName` 不转义 → **1 失败**
+  - N4 邮件 metadata **key** 不转义 → **1 失败**
+  - N5 `severityColor` 改成透传 severity → **2 失败**
+- 验证：
+  - core 全量 **991 类 / 7735 用例 / 0 失败 / 0 错误 / 154 跳过**
+    （990 → 991 类，7727 → 7735 用例，+8；已核对 surefire 报告 mtime 为本次运行）。
+  - `verify-test-visibility` 仍按规矩夹在全量 `mvn test` 与门控 IT 之间。
+  - **门控 IT 真跑**（本批又动了 `PdfImportController`）：16 用例 / 0 失败，BUILD SUCCESS。
+  - 仓库门禁：docs 链 16/16、tests 链 14/14、悲观锁检查通过。
+  - WebUI 未改动，不跑前端套件。
+- 指标：core 用例 7727 → **7735**；测试类 990 → **991**；
+  未转义的请求派生值 **1 → 0**；邮件转义覆盖字段 2 → **5**。
+- 遗留（如实登记，未处理）：
+  - **仍然没有 CSP。**净化 + 转义是仅有的两道控制，纵深防御缺一层。加 CSP 会影响
+    Vite 产物、内联样式与 Swagger，属独立批次。
+  - `escapeHtml` 在两个类里各有一份实现（`PdfImportController` 与
+    `EmailNotificationService`），**没有共享**。合并成一处工具是合理的技术债务，
+    但会扩大本批改动面，未做。
+  - `EmailNotificationService` 的 6 参 `buildHtmlBody` 为 `private`，
+    其 `deliveryId != null` 分支因此**无测试覆盖**（值是 UUID，按约定不追）。
+  - Batch 813 登记的 `addProtocols("img","src",…)` 不独立承重一事，本批未再处理。
+  - CI 仍未跑仓库级 `scripts/verify-*.sh`（`/tmp/b806-ci-gates.patch` 待用户手动应用）。
+
 ### Batch 813（已交付）
 
 - 分支：`feature/markdown-preview-xss-sanitize-20261004`

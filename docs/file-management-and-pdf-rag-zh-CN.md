@@ -172,6 +172,11 @@ Search WebUI 提供**查看文件目录**、**查看索引文件**和**打开原
   在返回前会用 jsoup `Safelist` 清洗输出，剥掉 `script`、`style`、`iframe`、
   全部 `on*` 属性以及 `javascript:`/`data:` URL，同时保留标题、列表、表格、链接和图片。
   `MarkdownPreviewSanitizationTest` 钉住结果形状，让这项控制失效时是测试变红而不是静默回退。
+- **预览页外壳单独转义。**净化正文覆盖不到 `<head>`，而 `PdfImportController.buildHtmlShell`
+  是用字符串拼接手工拼出来的。`<base href="/files/raw/{uuid}/">` 的值来自请求的 `path`
+  参数，因此和 `title` 一样要转义。该路径上**必须真的有文件存在**，否则端点返回 404——
+  这就是它此前不可利用的原因；但**把转义的决定外包给另一处的文件查找**，和"相信邻居按钮
+  有确认"是同一种错误。`PdfImportControllerHtmlShellTest` 钉住这条边界。
 - 再次导入同一 PDF 会创建新的 `fs_files` UUID 目录。
 - PDF 内容变化后通常会创建另一条 RAG 文档，因为这条路径没有调用方提供的稳定外部身份。
 - 删除 RAG 文档不会删除对应的 `fs_files` 转换产物。
@@ -188,6 +193,7 @@ Search WebUI 提供**查看文件目录**、**查看索引文件**和**打开原
 | HTTP 端点与合成目录树 | `PdfImportController` |
 | PDF 转换与 `fs_files` 持久化 | `PdfImportService` |
 | Markdown → HTML 渲染与净化 | `MarkdownRendererService`、`MarkdownPreviewSanitizationTest` |
+| 预览页外壳转义 | `PdfImportControllerHtmlShellTest` |
 | `fs_files` 到 `rag_documents` 的桥接 | `PdfToRagService` |
 | 文件产物实体 | `FsFile` |
 | RAG 逻辑文档上传 | `RagDocumentController` |

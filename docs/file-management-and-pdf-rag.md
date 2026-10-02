@@ -210,6 +210,14 @@ so the new readable directory can be found from the root immediately.
   `on*` attribute and `javascript:`/`data:` URLs while keeping headings, lists,
   tables, links and images. `MarkdownPreviewSanitizationTest` pins the result
   shape, so the control fails a test rather than silently regressing.
+- **The preview page shell is escaped separately.** Sanitising the body does not
+  reach the `<head>`, which `PdfImportController.buildHtmlShell` assembles by
+  string concatenation. The `<base href="/files/raw/{uuid}/">` attribute takes a
+  value derived from the request `path`, so it is escaped like the title. A file
+  must also exist at that path or the endpoint returns 404, which is why this was
+  not exploitable before — but leaning on a lookup elsewhere to make an escaping
+  decision is the same mistake as trusting a neighbour's confirmation dialog.
+  `PdfImportControllerHtmlShellTest` pins the boundary.
 - Importing the same PDF again creates another `fs_files` UUID directory.
 - Changed PDF content usually creates another RAG document because this path
   has no caller-supplied stable external identity.
@@ -229,6 +237,7 @@ so the new readable directory can be found from the root immediately.
 | HTTP endpoints and synthetic tree | `PdfImportController` |
 | PDF conversion and `fs_files` persistence | `PdfImportService` |
 | Markdown → HTML rendering and sanitisation | `MarkdownRendererService`, `MarkdownPreviewSanitizationTest` |
+| Preview page shell escaping | `PdfImportControllerHtmlShellTest` |
 | `fs_files` to `rag_documents` bridge | `PdfToRagService` |
 | File artifact entity | `FsFile` |
 | Logical RAG document upload | `RagDocumentController` |
