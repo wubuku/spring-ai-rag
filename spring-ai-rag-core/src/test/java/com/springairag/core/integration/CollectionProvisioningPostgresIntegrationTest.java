@@ -13,6 +13,7 @@ import com.springairag.core.service.RagCollectionService;
 import jakarta.persistence.EntityManagerFactory;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationVersion;
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -54,6 +55,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 /**
  * Collection 创建幂等账本的真实 PostgreSQL、JPA 与事务验收。
  */
+@EnabledIfSystemProperty(named = "collection-provisioning.it.enabled", matches = "true")
 class CollectionProvisioningPostgresIntegrationTest {
 
     private static PostgreSQLContainer<?> postgres;

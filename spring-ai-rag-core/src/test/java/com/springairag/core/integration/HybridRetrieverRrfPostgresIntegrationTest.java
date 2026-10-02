@@ -22,6 +22,7 @@ import com.springairag.core.retrieval.fulltext.SearchCapabilities;
 import com.springairag.core.retrieval.rerank.RerankProvider;
 import com.springairag.core.retrieval.rerank.RerankProviderFactory;
 import org.flywaydb.core.Flyway;
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -52,6 +53,7 @@ import static org.mockito.Mockito.when;
  * <p>全文 provider 只负责提供可控的已排序候选，测试重点是服务的真实向量 SQL、
  * Profile freshness 过滤和融合调用，而不是外部全文引擎质量。
  */
+@EnabledIfSystemProperty(named = "hybrid-rrf.it.enabled", matches = "true")
 class HybridRetrieverRrfPostgresIntegrationTest {
 
     private static PostgreSQLContainer<?> postgres;

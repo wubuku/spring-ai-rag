@@ -2,6 +2,7 @@ package com.springairag.core.integration;
 
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationVersion;
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -30,6 +31,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 /**
  * Real PostgreSQL acceptance tests for the Collection business key contract.
  */
+@EnabledIfSystemProperty(named = "collection-key.it.enabled", matches = "true")
 class CollectionKeyPostgresIntegrationTest {
 
     private static PostgreSQLContainer<?> postgres;

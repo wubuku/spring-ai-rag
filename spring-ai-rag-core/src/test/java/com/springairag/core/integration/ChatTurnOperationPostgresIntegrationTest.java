@@ -3,6 +3,7 @@ package com.springairag.core.integration;
 import com.springairag.core.chat.ChatTurnOperation;
 import com.springairag.core.repository.ChatTurnOperationRepository;
 import org.flywaydb.core.Flyway;
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -36,6 +37,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  * <p>这里直接通过 repository 和 JDBC 触发数据库约束/CAS，避免把数据库语义
  * 错误地降级为 H2 或纯 Mockito 单测。</p>
  */
+@EnabledIfSystemProperty(named = "chat.idempotency.it.enabled", matches = "true")
 class ChatTurnOperationPostgresIntegrationTest {
 
     private static final String OWNER = "db:operation-test";

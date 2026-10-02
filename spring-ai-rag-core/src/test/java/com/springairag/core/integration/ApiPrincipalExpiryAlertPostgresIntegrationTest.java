@@ -8,6 +8,7 @@ import com.springairag.core.service.AlertService;
 import com.springairag.core.service.NotificationService;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.flywaydb.core.Flyway;
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -43,6 +44,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /** V57 API principal 到期告警在真实 PostgreSQL 上的生命周期与并发验收。 */
+@EnabledIfSystemProperty(named = "api-principal-expiry-alert.it.enabled", matches = "true")
 class ApiPrincipalExpiryAlertPostgresIntegrationTest {
 
     private static PostgreSQLContainer<?> postgres;

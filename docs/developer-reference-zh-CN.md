@@ -47,6 +47,28 @@ open spring-ai-rag-core/target/site/jacoco/index.html
 
 测试策略和更多命令见 [testing-guide-zh-CN.md](testing-guide-zh-CN.md)。
 
+### 测试可见性
+
+在后端测试跑完、报告已生成之后执行：
+
+```bash
+./scripts/verify-project-tests.sh
+```
+
+一个既没执行、也没声明自己被跳过的测试类，在 surefire 报告里写的是
+`tests="0" skipped="0"`——和一个真正为空的类**完全相同**，于是它从运行摘要里
+彻底消失。用 `@BeforeAll` 里的 `assumeTrue` 关闭一个类就会造成这种结果：
+JUnit 是**中止**容器，而不是把它标记为跳过。
+
+此前有 **21 个** PostgreSQL/Testcontainers 集成测试类处于这种状态，隐藏了约
+**145 个**测试方法——其中包括 API 密钥轮换安全守卫的**唯一**覆盖。它们现在都带有
+类级 `@EnabledIfSystemProperty`，因此被关闭的容器会把自己的真实用例数如实报告为
+skipped；本门禁则保证今后再有类"闭嘴"就会失败。
+
+因为"不能失败的门禁比没有门禁更糟"，脚本会先运行
+`scripts/test-support/test-visibility-self-test.mjs`，它断言检查器确实**拒绝**
+`tests="0" skipped="0"` 这种形态，而不只是"它跑起来了"。
+
 ### 文档体系
 
 一键检查项目文档边界、链接、双语结构、固定约定、命令、空白和敏感信息：

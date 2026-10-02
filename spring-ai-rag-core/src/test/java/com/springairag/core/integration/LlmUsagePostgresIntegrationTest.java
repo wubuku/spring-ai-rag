@@ -9,6 +9,7 @@ import com.springairag.core.usage.LlmUsageRepository;
 import com.springairag.core.usage.LlmUsageQueryRepository;
 import com.springairag.core.usage.LlmUsageSnapshot;
 import org.flywaydb.core.Flyway;
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -40,6 +41,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  * <p>Run explicitly with {@code -Dllm-usage.it.enabled=true}. Every test
  * starts from an empty disposable schema and executes all migrations.</p>
  */
+@EnabledIfSystemProperty(named = "llm-usage.it.enabled", matches = "true")
 class LlmUsagePostgresIntegrationTest {
 
     private static PostgreSQLContainer<?> postgres;

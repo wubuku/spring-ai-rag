@@ -6,6 +6,7 @@ import com.springairag.core.config.NotificationConfig;
 import com.springairag.core.entity.RagAlert;
 import com.springairag.core.exception.RagException;
 import org.flywaydb.core.Flyway;
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -42,6 +43,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /** V58 durable notification ledger 在真实 PostgreSQL 上的端到端状态机验收。 */
+@EnabledIfSystemProperty(named = "alert-notification-delivery.it.enabled", matches = "true")
 class AlertNotificationDeliveryPostgresIntegrationTest {
 
     private static PostgreSQLContainer<?> postgres;

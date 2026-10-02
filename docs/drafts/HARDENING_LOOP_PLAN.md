@@ -317,6 +317,57 @@
   约 53 行 × 2。合并需要同时验证两条链路的 OpenAPI 注解与日志文案差异，
   风险高于本批收益，暂列后续。
 
+### Batch 780（已交付）
+
+- 分支：`feature/apikey-rotation-deadline-guard-20261003`
+- 内容：**测试可见性**——145 个一直隐形、从未执行也从未被计入跳过的测试。
+- **本批真正的目标中途换了**。原本规划的是 `ApiKeyManagementService` 剩下 18 条分支，
+  勘察时发现了一件更要紧的事，先记下来再决定。
+- **重大发现：21 个测试类隐形**
+  | 指标 | 修复前 | 修复后 |
+  |---|---|---|
+  | `tests=0 且 skipped=0` 的类 | **21** | **0** |
+  | 报告中的 skipped | 9 | **154** |
+  | 测试总数（XML 权威） | 7451 | **7596** |
+  - **机制**：这 21 个 PostgreSQL/Testcontainers 集成测试类都在 `@BeforeAll` 里用
+    `assumeTrue(Boolean.getBoolean("<prop>"))` 做开关。JUnit 对此的处理是**中止容器**，
+    不是标记跳过，于是 surefire 写下 `tests="0" skipped="0"`。
+    **这和一个真正为空的类是完全同一组数字**，所以它们从运行摘要里彻底消失——
+    摘要写着"Skipped: 9"，而那 9 个只来自另外两个类，读起来像"一切都对得上账"。
+  - **规模**：约 **145 个**测试方法隐形，其中
+    `ManagedApiPrincipalPostgresIntegrationTest` 一个类就 21 例，
+    而它是 `prepareRotation`（**只能用当前持有的密钥发起轮换**这个安全守卫）
+    的**唯一**覆盖。`ChatSessionPostgresIntegrationTest` 18 例、
+    `DocumentLifecyclePostgresIntegrationTest` 12 例，依次类推。
+  - **教训**：先前多批账本里引用的 "Skipped: 9 / 7451 用例" **本身就建立在残缺数据上**。
+    这不是某一批的疏漏，是一个一直没人去核对的口径。
+- **修法**：把开关从 `@BeforeAll` 的 `assumeTrue` 提升为**类级**
+  `@EnabledIfSystemProperty(named = "<prop>", matches = "true")`。
+  属性未开启时整个类被判定为 skipped container，报告如实写出 `tests=N skipped=N`。
+  21 个类逐个按各自的属性名改（脚本化），`@BeforeAll` 里的 Docker 可用性检查保留不动。
+- **新增门禁 `scripts/verify-project-tests.sh` + `scripts/verify-test-visibility.mjs`**：
+  任何"既没跑也没声明跳过"的类一律失败。沿用本仓库既有的约定
+  （`docs-integrity-self-test.mjs` 的 node 原生负向自测），先跑
+  `scripts/test-support/test-visibility-self-test.mjs` 证明检查器**确实会拒绝**。
+- **门禁自身的变异测试**：健康目录 exit 0；混入一个 `tests=0 skipped=0` 的类后
+  exit 1 并点名该类。
+- **自测当场抓出两个真 bug**（都属于"自测存在的意义"）：
+  1. `audit` 里 `.filter(Boolean)` 写在展开**之后**——`{ ...null }` 是 `{}`，
+     属于真值，于是**畸形报告根本没被丢弃**，还会把 `undefined` 计数混进总数。
+  2. 自测自己把整个 report **对象**传给了只接受 XML 字符串的 `parseReport`，
+     于是该用例恒定失败。两条都是"断言写错方向"而非门禁失效，但都会让自测变成噪音。
+- 指标：core **7596 用例**（较 Batch 779 报告的 7451 **多出 145 个此前隐形的**），
+  0 失败 0 错误 **154 跳过**；隐形类 **21 → 0**。
+  `verify-project-docs` 14/14、`verify-project-tests` 全绿、无悲观锁。
+- 遗留技术债（如实登记，未处理）：
+  - **145 个集成测试仍然没有真正跑过**——本批只是让它们**可见**，
+    不是让它们通过。要真正执行需要 Docker 与逐个属性开关，属于环境与 CI 的事。
+  - `ApiKeyManagementService` 仍有 18 条未覆盖分支，其中
+    `prepareRotation`/`rotate` 的"当前凭据 keyId 不匹配"守卫与轮换重叠窗口钳制
+    **仍只有那批隐形集成测试在覆盖**——这是 Batch 781 的第一优先目标：
+    应当补上不依赖 Docker 的单元测试。
+  - 文档 2 笔漂移；NPE 缺陷；`PageShell` 脱节；`ask`/`chat` 重复。
+
 ### Batch 779（已交付）
 
 - 分支：`feature/apikey-authz-truth-table-20261003`

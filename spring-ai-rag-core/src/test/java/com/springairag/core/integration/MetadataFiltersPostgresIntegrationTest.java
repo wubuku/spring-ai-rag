@@ -1,6 +1,7 @@
 package com.springairag.core.integration;
 
 import org.flywaydb.core.Flyway;
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -21,6 +22,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 /**
  * V1–V36 迁移、metadata @> 语义和 GIN planner 证据。
  */
+@EnabledIfSystemProperty(named = "retrieval-filters.it.enabled", matches = "true")
 class MetadataFiltersPostgresIntegrationTest {
 
     private static PostgreSQLContainer<?> postgres;

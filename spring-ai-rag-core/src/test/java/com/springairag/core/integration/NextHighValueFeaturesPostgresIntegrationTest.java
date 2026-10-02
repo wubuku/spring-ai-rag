@@ -35,6 +35,7 @@ import com.springairag.core.service.ExternalAddressRetirementService;
 import com.springairag.core.service.KeywordIndexPersistenceService;
 import jakarta.persistence.EntityManager;
 import org.flywaydb.core.Flyway;
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -77,6 +78,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /** P0 relocation 与 P1 derivation integrity 的真实 PostgreSQL 验收。 */
+@EnabledIfSystemProperty(named = "next-high-value.it.enabled", matches = "true")
 class NextHighValueFeaturesPostgresIntegrationTest {
 
     private static final String HASH = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"

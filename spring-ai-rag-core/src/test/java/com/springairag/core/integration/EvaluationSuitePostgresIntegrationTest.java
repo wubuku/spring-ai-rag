@@ -5,6 +5,7 @@ import com.springairag.api.dto.RetrievalResult;
 import com.springairag.core.evaluation.EvaluationCaseExecutor;
 import com.springairag.core.evaluation.EvaluationSuiteRepository;
 import org.flywaydb.core.Flyway;
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -29,6 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+@EnabledIfSystemProperty(named = "evaluation-suites.it.enabled", matches = "true")
 class EvaluationSuitePostgresIntegrationTest {
 
     private static PostgreSQLContainer<?> postgres;
