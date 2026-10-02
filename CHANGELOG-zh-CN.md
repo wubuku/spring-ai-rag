@@ -4,9 +4,9 @@
 
 ---
 
-All notable changes to this project will be documented in this file.
+本项目所有值得关注的变更都记录在本文件中。
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+本文件格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 
 ## [未发布] - 2026-08-17
 
@@ -53,6 +53,222 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - 新增中英文生产质量默认值、外部模型配置和发布清单
 - 新增中英文中国境内开发网络避坑指南，以及可留存逐项日志的一键发布验证脚本
 - 更新 README、上手、配置、REST API、部署、Docker、Helm 与排障文档中的端口和版本口径
+
+## [1.0.0-SNAPSHOT] - 2026-04-11
+
+### 新增
+- `evaluateAnswerQuality` 有界超时 + 降级：`CompletableFuture.orTimeout()` 10 秒超时，LLM 调用挂起或超时时优雅降级为 "unknown" 质量
+- `EmailNotificationService` 指数退避重试：SMTP 失败重试 3 次，指数退避（2s/4s/8s），并对可重试异常分类
+- `RetrievalEvaluationServiceImpl` Micrometer 指标：`rag.evaluation.duration`（Timer）+ `rag.evaluation.count/batch_count/hits/misses`（Counter）
+- 文档日期范围过滤：`listDocuments` 端点新增 `GET /documents?createdAfter=&createdBefore=` 参数
+- `CollectionMapper` 工具类抽取：把 `toCollectionSummary/toDocumentSummary/toCollectionResponse` 从 `RagCollectionController` 中抽出以便复用
+- `DocumentMapper` 工具类抽取：把 `toDocumentResponse/toBatchEmbedResult/toReembedResult` 从 `RagDocumentController` 中抽出
+- `EmbeddingCircuitBreaker`：包裹 `EmbeddingBatchService.embedBatch()` 的熔断器——连续失败后打开、半开探测、恢复后继续
+- SSE 心跳机制：`SseEmitters.sendHeartbeat()` + `RagSseProperties.heartbeat-interval-seconds`（默认 30 秒），防止代理关闭空闲连接
+- SSE emitter 辅助工具：从 `RagChatController` 中抽出 `SseEmitters` 工具类（`sendProgress/sendDone/sendError/sendHeartbeat/completeWithError`）
+- 6 个可变实体加 `@Version` 乐观锁（`RagDocument`、`RagCollection`、`RagAlert`、`RagAbExperiment`、`RagRetrievalLog`、`RagUserFeedback`）
+- k6 压测套件（K6-1 到 K6-7）：Collection CRUD / A/B 实验 / 告警与反馈 / 聊天延迟拆分 / 爬坡到饱和 / 持久会话压力 / 向量检索压力
+- Mock LLM 服务 `scripts/mock-llm-server.js`：OpenAI 兼容的 `/v1/chat/completions` + `/v1/embeddings`，支持 SSE 流式与可配置延迟/错误率
+- WebUI：SSE 流式打字机效果、文件上传进度、深色模式自动跟随系统 + 手动开关锁定
+- WebUI：搜索历史 localStorage 持久化 + 去重
+- WebUI：错误边界与客户端错误上报（`POST /api/v1/rag/client-errors`）
+- WebUI：基于 `react-i18next` 的 i18n 框架（英文 + 中文，设置页语言切换）
+- WebUI：W12 文档版本对比界面（LCS diff 算法，双版本并排）
+- WebUI：W13 A/B 测试实时看板（Recharts 柱状图、显著性检验、变体表）
+
+### 修复
+- `listDocuments` N+1 查询：单次 `findAllById()` 批量取回所有 Collection 名称——数据库往返 O(N)→O(1)
+- `evaluateAnswerQuality` 异常路径：`TimeoutException` 返回质量 "unknown" 并附 "timed out" 原因；`InterruptedException` 向上传播并附 "interrupted" 原因
+- `batchEmbedDocumentsWithProgress` ClassCastException：`countByDocumentId` 返回的 `embeddingsStored` 是 Long 而非 Integer
+- `RagChatService.invokeChatClient()` 空检查：访问 `getContent()` 前补上 LLM 结果的空值保护
+- SSE `sendHeartbeat()` 格式：改用 `.comment()` SSE API 输出正确的注释格式，而不是 `.name("heartbeat")`
+- SSE `sendError()` 兜底：发送成功时正常完成，仅在失败时才回退到 `completeWithError()`
+- `ChatModelRouter.resolve()` NPE：为 `providerId` 增加空检查，避免多模型路由中触发 NPE
+- 移除 MiniMax base-url 的 `/v1`（MiniMax 端点本身已包含 `/v1`）
+- MiniMax `role:system` 不兼容：`ApiCompatibilityAdapter` 自动识别并把 system 转为带 `[System]` 前缀的 user
+- V17 Flyway 迁移：修正表名（`rag_document`→`rag_documents`、`rag_alert`→`rag_alerts` 等）
+- OpenApiContractTest 上下文加载：补充 `@MockBean RagClientErrorRepository`（`ClientErrorServiceImpl` 构造函数变更后需要）
+- CorsConfig 导致测试失败：RagControllerIntegrationTest 改用静态 `@TestConfiguration` 提供真实 `RagProperties` 实例
+- `RetrievalUtils` NaN 分数：`fuseResults` 现在能优雅处理全零向量/全文检索分数（不再出现除零产生的 NaN）
+- 检索分数 NaN：`ddText` 分数空值安全回退为 `?? 0.0`
+- SSE 流式解析：改用 `split('\n\n')` 正确分隔 SSE 事件
+
+### 变更
+- `RetrievalEvaluationServiceImpl`：LLM 调用有界超时 10 秒，超时时降级为 quality=3/3/3 "unknown"
+- `ApiCompatibilityAdapter`：新增 8 个边界用例（6→14），`supportsSystemMessage()`/`normalizeMessages()` 全覆盖
+- `ModelRegistry`：新增 27 个路由用例（10→37），`getPrimaryEmbeddingModel()`/`getEmbeddingModelByProvider()` 全覆盖
+- `DocumentEmbedService`：`batchEmbedDocumentsWithProgress` 重构——抽出 `sendDocumentProgress/updateBatchCounters/phaseForStatus/phaseMessage/buildBatchResult`
+- OpenAPI 合同测试：排除 `DataSourceAutoConfiguration` + `HibernateJpaAutoConfiguration` 以避免依赖数据库
+- SSE 流式：采用 OpenAI 兼容的 `data:{"choices":[{"delta":{"content":"..."}}]}` 格式并做 JSON 转义
+- Vite 配置：开发服务器把 `/api` 代理到 `http://localhost:8081`（支持只启动前端、连接真实后端开发）
+
+### 文档
+- `docs/pgvector-index-comparison.md`：HNSW 与 IVFFlat 算法对比、决策矩阵、参数调优、迁移 SQL
+- `docs/grafana/rag-service-dashboard.json`：44 面板 Grafana 看板（Advisor/Model/Cache/SlowQuery 面板）
+- `docs/SSE-PROTOCOL.md`：SSE 流式协议文档（OpenAI 兼容格式）
+- `docs/hybrid-search-enhancement-plan.md`：混合检索增强 Phase 1-4 路线图
+- `IMPLEMENTATION_COMPARISON.md` 统计更新：1513+ 测试，零 TODO/FIXME
+
+### 变更（技术栈）
+- Java 17 → **Java 21**（LTS，虚拟线程）
+- Spring Boot 3.4.x → **3.5.3**
+- Spring AI 1.1.2 → **1.1.4**
+- Maven 3.9.x → **3.9.14**
+- `spring.threads.virtual.enabled=true`（I/O 密集型操作使用虚拟线程）
+- GitHub Actions：Java 21 + `setup-java cache=maven` + Codecov 覆盖率上传
+- Dockerfile：多阶段（Maven 构建 → jlink JRE → distroless），eclipse-temurin:17-jre，非 root 用户，<200MB
+
+### 测试
+- JaCoCo 覆盖率：Core 93% 指令 / 78% 分支
+- 全部 13 个 controller 都有独立的单元测试文件（100% 覆盖）
+- 全部 service 类都有单元测试文件
+- 142 个 vitest 测试（WebUI）+ 12/12 Playwright E2E
+
+## [1.0.0-SNAPSHOT] - 2026-04-10
+
+### 新增
+- 6 个可变实体的 `@Version` 乐观锁：RagDocument、RagCollection、RagAlert、RagAbExperiment、RagRetrievalLog、RagUserFeedback
+- `V17__add_version_column.sql`：为乐观锁添加 version 列的 Flyway 迁移
+- `SilenceSchedule` 集成：`AlertServiceImpl` 在触发告警前检查生效的静默窗口——`SilenceScheduleRequest`/`SilenceAlertRequest` DTO
+- `ApiSloHandlerInterceptor` 12 个单元测试：覆盖全部 HTTP 方法、SLO 达标率计算、并发延迟记录
+- `RagCircuitBreakerProperties` 4 个单元测试：校验全部属性字段
+- `ModelController` 多模型覆盖：`multiModelEnabled=false` 用例，`listModels/getModel/compareModels` 全部测试
+- `RagAlertTest`（9 个）+ `RagAbExperimentTest`（8 个）实体单元测试
+- `RagRetrievalLogRepositoryTest` 22 个测试：全部查询方法
+- `RagRetrievalLogEntityTest` 7 个测试：version/tostring/默认值
+- `DocumentMapper` 抽取：把 `toDocumentResponse/toBatchEmbedResult/toReembedResult` 从 RagDocumentController 抽出
+- `CollectionMapper` 抽取：把 `toCollectionSummary/toDocumentSummary/toCollectionResponse` 从 RagCollectionController 抽出
+
+### 修复
+- `CollectionMapper.toCollectionSummary` N+1：单次查询批量取回所有文档计数
+- `ChatModelRouter` NPE：在 `resolve()` 中为 providerId 增加空检查
+- `SseEmitters.sendHeartbeat()`：改用 `.comment()` SSE API 输出正确的心跳注释格式
+- `SseEmitters.sendError()`：发送成功时正常完成，仅在失败时才回退到 `completeWithError()`
+- WebUI `useSearchHistory` 测试稳定性：把顺序操作拆进独立的 `act()` 块
+
+## [1.0.0-SNAPSHOT] - 2026-04-09
+
+### 新增
+- `EmbeddingCircuitBreaker`：包裹 `EmbeddingBatchService.embedBatch()`——连续失败后打开、半开探测、恢复后继续
+- SSE 心跳：`SseEmitters.sendHeartbeat()` + 可配置间隔（默认 30 秒），穿过代理保持连接
+- `SseEmitters` 工具类：`sendProgress/sendDone/sendError/sendHeartbeat/completeWithError`——从 `RagChatController` 抽出
+- k6 压测 K6-5/K6-6/K6-7：爬坡到饱和的 VU 探测 + 持久会话压力 + 向量检索压力
+- 4 个实体的 `@Version` 乐观锁：RagDocument、RagCollection、RagAlert、RagAbExperiment
+- `listDocuments` N+1 修复：单次数据库调用批量取回 Collection 名称——往返 O(N)→O(1)
+- `evaluateAnswerQuality` 异常路径：`TimeoutException` + `InterruptedException` 测试覆盖
+- `ModelRegistry` 路由测试：新增 27 个（10→37），覆盖 `getPrimaryChatModel/getModelByProvider/getPrimaryEmbeddingModel`
+- R6 主源码 i18n：26 个文件的 Javadoc/注释翻译为英文
+- R6 测试 DisplayName i18n：HybridSearchAdvisorTest、QueryRewriteAdvisorTest、RagChatServiceTest、AlertServiceImplTest、ChatMemoryMultiTurnTest、metrics 包
+- `DigestUtils` 抽取：把 SHA-256 工具从 `BatchDocumentService` 中抽出
+- `OpenApiConfig` 重构：9 个 `if` 块改为表驱动 switch 表达式 + `ExampleDef` 记录
+
+### 修复
+- `evaluateAnswerQuality` 超时：`CompletableFuture.orTimeout()` 10 秒并优雅降级
+- `batchEmbedDocumentsWithProgress` ClassCastException：`embeddingsStored` 从 Long 转型（countByDocumentId 返回 Long）
+- 检索分数 NaN：`ddText` 分数空值安全 `?? 0.0`
+- SSE `sendHeartbeat()` 格式：改用 `.comment()` 输出正确的 SSE 注释格式
+- SSE `sendError()` 兜底：成功时正常完成，仅在失败时 `completeWithError()`
+- `ChatModelRouter` NPE：在 `resolve()` 中为 `providerId` 增加空检查
+
+## [1.0.0-SNAPSHOT] - 2026-04-08
+
+### 新增
+- `RetrievalUtils` 新增 `euclideanDistance` + `dotProduct`：pgvector `<#>` 运算符所需的 L2 距离与内积
+- `LLM-as-judge` 答案质量评估：`RetrievalEvaluationService.evaluateAnswerQuality()` 用 LLM 给 RAG 答案打分（三个维度：相关性/覆盖度/简洁性）
+- `RagRetrievalLogRepositoryTest`：覆盖全部查询方法的 22 个单元测试
+- `SearchCapabilitiesTest`：15 个单元测试，覆盖无参/init=false/init=true，以及中文 FTS/英文 FTS/trigram 探测
+- `PgEnglishFtsProviderTest`：英文全文检索 provider 的 10 个单元测试
+- `SilenceSchedule` CRUD REST API：`SilenceScheduleRequest/Response` DTO、`SilenceAlertRequest`，以及静默窗口内的告警抑制
+- `NotificationConfig` 11 个单元测试：钉钉 HMAC-SHA256 + 邮件 SMTP，告警类型过滤
+- `Collection clone` 端点：`POST /{id}/clone` 深度复制整个 Collection（新名称加 "(Copy)"）及其全部文档
+- 多 Collection 检索：`POST /search` 的 `collectionIds` 参数支持跨 Collection 检索
+- WebUI W12：基于 LCS diff 算法的文档版本对比界面
+- WebUI W13：基于 Recharts 柱状图 + 显著性检验的 A/B 测试实时看板
+- WebUI W14：深色模式自动跟随系统 + 手动开关锁定 + 按 A 恢复自动
+
+### 修复
+- `RetrievalUtils` 的 `fuseResults` 产生 NaN：全零向量/全文检索分数现在返回 0.0 而非 NaN
+- V17 Flyway：修正表名（`rag_document`→`rag_documents`、`rag_alert`→`rag_alerts`）
+- SSE 流式：改用 `split('\n\n')` 正确分隔事件
+- `OpenApiContractTest` 上下文加载：解决 53 个测试错误——CorsConfig 需要 RagProperties
+- 移除 MiniMax base-url 的 `/v1`（MiniMax API 端点本身已包含 `/v1`）
+- WebUI `VersionHistoryModal`：`getVersion` 响应的空值安全
+
+## [1.0.0-SNAPSHOT] - 2026-04-07
+
+### 新增
+- `HybridRetrieverService` 语言自适应 FTS：`QueryLang` 枚举（ZH/EN_OR_OTHER）+ 使用 CJK Unicode 区段检测的 `LanguageDetector`
+- `SearchCapabilities` 类：用于中文 FTS/英文 FTS/trigram 探测的 `detectLang/getCapabilities/isAvailable`
+- `PgEnglishFtsProvider`：使用 `search_vector` tsvector + `websearch_to_tsquery` 的英文全文检索
+- `PgJiebaFulltextProvider` 增强：`websearch_to_tsquery('jiebacfg', ?)` + 预建的 `search_vector_zh` GIN 索引
+- V15/V16 Flyway 迁移：`search_vector` 列 + GIN 索引（英文 FTS）+ 条件 trigram 索引
+- `ApiSloTrackerService` 16 个单元测试：并发延迟记录、按端点达标率、SLO 违约计数
+- `AlertController` 新增 14 个 CRUD 测试：SLO 配置与静默计划端点全覆盖
+- SSE 流式嵌入进度：`POST /documents/{id}/embed/stream` + `BatchEmbedProgressEvent`
+- `ChatHistoryCleanupServiceTest`：6 个测试（TTL 关闭/异常/正常路径/null 截止时间）
+- `DocumentEmbedService` 重构：`maybeEmit()` 空值安全回调 + `emitEmbeddingProgress()` 批量进度
+
+### 修复
+- SSE 心跳：`sendHeartbeat()` 改用 `.comment()` SSE API 输出正确注释格式
+- SSE `sendError()` 兜底：成功时正常完成，仅在失败时 `completeWithError()`
+- `RetrievalUtils` NaN：全零输入分数返回 0.0 而非 NaN
+- V17 迁移：修正表名（`rag_document`→`rag_documents`、`rag_alert`→`rag_alerts`）
+- `ComponentHealthService` NPE：为 `ChatModelRouter` 的 `getModelForRequest()` 增加空检查
+
+### 变更
+- 全部 13 个 controller：Swagger/OpenAPI 注解 100% 英文（@Tag/@Operation/@ApiResponse/@Parameter 描述）
+- 全部 API DTO：@Schema 描述翻译为英文（35 个文件）
+- Service 接口：Javadoc 翻译为英文（RetrievalEvaluationService、UserFeedbackService、DocumentVersionService）
+
+## [1.0.0-SNAPSHOT] - 2026-04-06
+
+### 新增
+- `EmailNotificationService`：基于 JavaMailSender 的 SMTP 告警投递（可选依赖），重试 3 次
+- `DingTalkNotificationService` 韧性：修正 escapeJson 顺序 + HTTP 指数退避重试
+- `C40` `@Indexed` 注解评审：V13 补齐缺失的索引（rag_collection(name)、rag_documents(document_type)、rag_documents(enabled)）
+- `C24` HikariCP 慢查询监控：`RagSlowQueryProperties` + `SlowQueryMetricsService` + `GET /api/v1/rag/metrics/slow-queries`
+- `C41` Advisor 链 Micrometer：8 个 meter（`rag.advisor.{step}.duration/count/results/skipped`）覆盖 QueryRewrite/HybridSearch/Rerank
+- `C26` SpringDoc 片段 + 示例响应：`OpenApiConfig.exampleResponseCustomizer()` 覆盖 9 个端点
+- `C16` pgvector HNSW 与 IVFFlat 对比指南：`docs/pgvector-index-comparison.md`，含算法对比 + 迁移 SQL
+- `C38` HikariCP 生产调优：`validation-timeout=5000ms`、`initialization-fail-timeout=10000ms`、`register-mbeans=true`、预编译语句缓存
+- `C20` Dockerfile 优化：多阶段（Maven→jlink→distroless），eclipse-temurin:17-jre，非 root 用户，<200MB
+- `C39` Mock LLM Server：`scripts/mock-llm-server.js`——OpenAI 兼容的 `/v1/chat/completions` + `/v1/embeddings`，可配置延迟/错误率
+
+### 修复
+- `SpringAiConfig` OpenAiApi builder：移除不存在的 `.proxy()` 方法调用
+- OpenApiContractTest：修复 53 个测试上下文加载失败——用 `@MockBean RagClientErrorRepository` 解决
+- `@WebMvcTest` 中的 CorsConfig：RagControllerIntegrationTest 改用静态 `@TestConfiguration` 提供真实 `RagProperties`
+- MiniMax base-url 的 `/v1`：移除（MiniMax 端点本身已包含 `/v1`）
+- SiliconFlow embedding base-url 的 `/v1/embeddings`：移除（OpenAiApi 会自动追加 `/v1/embeddings`）
+
+### 变更
+- 抽出 `SseEmitters` 为工具类：`sendProgress/sendDone/sendError/sendHeartbeat/completeWithError`
+- SSE 流式：采用 OpenAI 兼容的 `data:{"choices":[{"delta":{"content":"..."}}]}` 格式并做 JSON 转义
+- Vite 开发代理：`/api` → `http://localhost:8081`（只开发前端）
+
+## [1.0.0-SNAPSHOT] - 2026-04-05 (Evening)
+
+### 新增
+- `POST /cache/invalidate`：用于清空 Caffeine embedding 缓存的管理端点
+- `GET /metrics/slow-queries`：HikariCP 慢查询统计 REST 端点
+- `GET /metrics/slo`：API SLO 达标率（按端点的 p50/p95/p99）
+- `POST /client-errors`：WebUI 错误边界上报客户端错误
+- `GET /client-errors/count`：客户端错误计数端点
+- `ChatExportService` + `GET /chat/export/{sessionId}`：把会话历史导出为 JSON/Markdown
+- `BatchCreateResponse` DTO：统一的批量创建响应类型
+- 演示 E2E 脚本：`demo-basic-rag-e2e.sh`（8082）/ `demo-multi-model-e2e.sh`（8083）/ `demo-component-level-e2e.sh`（8084）/ `demo-domain-extension-e2e.sh`（8085）
+
+### 修复
+- `AlertServiceImpl` bean 歧义：`@Autowired List<NotificationService>` 通过 `@Qualifier` 消歧
+- `ChatRequest.model` 字段：改为可空（多模型路由中 model 是可选的）
+- `.env` 变量：为 Maven 子进程的环境变量继承补上 `export` 前缀
+- Spring Boot 3.5：`springdoc 2.6.0` → `2.8.4` 以兼容 Spring Boot 3.5.3
+
+### 变更
+- 全部 API DTO 的 `@Schema` 描述：仅英文（35 个文件）
+- 8 个 DTO 校验消息：仅英文（30+ 条约束消息）
+- Controller 的 @Operation/@ApiResponse：仅英文（13 个 controller，100%）
+- Service Javadoc：仅英文（7 个 service 接口/实现）
 
 ## [1.0.0-SNAPSHOT] - 2026-04-05
 
