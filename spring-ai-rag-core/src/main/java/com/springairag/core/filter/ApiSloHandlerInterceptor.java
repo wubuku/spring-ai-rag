@@ -79,7 +79,10 @@ public class ApiSloHandlerInterceptor implements HandlerInterceptor {
         try {
             ApiSloTrackerService tracker = applicationContext.getBean(ApiSloTrackerService.class);
             long latencyMs = System.currentTimeMillis() - startTime;
-            tracker.recordLatency(endpoint, latencyMs);
+            // The method is read off the live request, not recovered from the
+            // endpoint name — the two are unrelated and guessing the name marked
+            // 37 of 61 metrics with the wrong method.
+            tracker.recordLatency(endpoint, request.getMethod(), latencyMs);
         } catch (org.springframework.beans.factory.NoSuchBeanDefinitionException e) {
             // ApiSloTrackerService not available in this context (e.g., @WebMvcTest without it)
             log.trace("ApiSloTrackerService not available, skipping SLO tracking");

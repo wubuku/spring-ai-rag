@@ -74,7 +74,7 @@ class ApiSloTrackerServiceTest {
 	void recordLatency_whenDisabled_doesNotRecord() {
 		when(properties.isEnabled()).thenReturn(false);
 		ApiSloTrackerService disabled = new ApiSloTrackerService(properties);
-		disabled.recordLatency("rag.search.post", 100L);
+		disabled.recordLatency("rag.search.post", "POST", 100L);
 		ApiSloComplianceResponse compliance = disabled.getCompliance();
 		for (EndpointSlo slo : compliance.endpoints()) {
 			assertEquals(100.0, slo.compliancePercent());
@@ -83,7 +83,7 @@ class ApiSloTrackerServiceTest {
 
 	@Test
 	void recordLatency_whenEnabled_recordsLatency() {
-		trackerService.recordLatency("rag.search.post", 200L);
+		trackerService.recordLatency("rag.search.post", "POST", 200L);
 		ApiSloComplianceResponse compliance = trackerService.getCompliance();
 		EndpointSlo slo = findEndpoint(compliance, "rag.search.post");
 		assertNotNull(slo);
@@ -105,9 +105,9 @@ class ApiSloTrackerServiceTest {
 
 	@Test
 	void getCompliance_allCompliant_returns100Percent() {
-		trackerService.recordLatency("rag.search.post", 100L);
-		trackerService.recordLatency("rag.search.post", 200L);
-		trackerService.recordLatency("rag.search.post", 300L);
+		trackerService.recordLatency("rag.search.post", "POST", 100L);
+		trackerService.recordLatency("rag.search.post", "POST", 200L);
+		trackerService.recordLatency("rag.search.post", "POST", 300L);
 
 		ApiSloComplianceResponse compliance = trackerService.getCompliance();
 		EndpointSlo slo = findEndpoint(compliance, "rag.search.post");
@@ -120,8 +120,8 @@ class ApiSloTrackerServiceTest {
 
 	@Test
 	void getCompliance_allBreaching_returns0Percent() {
-		trackerService.recordLatency("rag.search.post", 600L);
-		trackerService.recordLatency("rag.search.post", 1000L);
+		trackerService.recordLatency("rag.search.post", "POST", 600L);
+		trackerService.recordLatency("rag.search.post", "POST", 1000L);
 
 		ApiSloComplianceResponse compliance = trackerService.getCompliance();
 		EndpointSlo slo = findEndpoint(compliance, "rag.search.post");
@@ -135,11 +135,11 @@ class ApiSloTrackerServiceTest {
 	@Test
 	void getCompliance_mixed_returnsCorrectPercent() {
 		// 2 compliant (<=500ms), 3 breaching (>500ms) = 40% compliance
-		trackerService.recordLatency("rag.search.post", 100L);
-		trackerService.recordLatency("rag.search.post", 500L); // exactly at threshold = compliant
-		trackerService.recordLatency("rag.search.post", 600L);
-		trackerService.recordLatency("rag.search.post", 800L);
-		trackerService.recordLatency("rag.search.post", 2000L);
+		trackerService.recordLatency("rag.search.post", "POST", 100L);
+		trackerService.recordLatency("rag.search.post", "POST", 500L); // exactly at threshold = compliant
+		trackerService.recordLatency("rag.search.post", "POST", 600L);
+		trackerService.recordLatency("rag.search.post", "POST", 800L);
+		trackerService.recordLatency("rag.search.post", "POST", 2000L);
 
 		ApiSloComplianceResponse compliance = trackerService.getCompliance();
 		EndpointSlo slo = findEndpoint(compliance, "rag.search.post");
@@ -152,11 +152,11 @@ class ApiSloTrackerServiceTest {
 
 	@Test
 	void getCompliance_latencyStats_areCorrect() {
-		trackerService.recordLatency("rag.search.post", 100L);
-		trackerService.recordLatency("rag.search.post", 200L);
-		trackerService.recordLatency("rag.search.post", 300L);
-		trackerService.recordLatency("rag.search.post", 400L);
-		trackerService.recordLatency("rag.search.post", 500L);
+		trackerService.recordLatency("rag.search.post", "POST", 100L);
+		trackerService.recordLatency("rag.search.post", "POST", 200L);
+		trackerService.recordLatency("rag.search.post", "POST", 300L);
+		trackerService.recordLatency("rag.search.post", "POST", 400L);
+		trackerService.recordLatency("rag.search.post", "POST", 500L);
 
 		ApiSloComplianceResponse compliance = trackerService.getCompliance();
 		EndpointSlo slo = findEndpoint(compliance, "rag.search.post");
@@ -169,7 +169,7 @@ class ApiSloTrackerServiceTest {
 
 	@Test
 	void getCompliance_singleSample_allStatsEqual() {
-		trackerService.recordLatency("rag.search.post", 250L);
+		trackerService.recordLatency("rag.search.post", "POST", 250L);
 
 		ApiSloComplianceResponse compliance = trackerService.getCompliance();
 		EndpointSlo slo = findEndpoint(compliance, "rag.search.post");
@@ -189,8 +189,8 @@ class ApiSloTrackerServiceTest {
 				Map.entry("rag.chat.ask", 1000L)
 		));
 
-		trackerService.recordLatency("rag.search.post", 100L);   // compliant
-		trackerService.recordLatency("rag.chat.ask", 2000L);     // breaching
+		trackerService.recordLatency("rag.search.post", "POST", 100L);   // compliant
+		trackerService.recordLatency("rag.chat.ask", "POST", 2000L);     // breaching
 
 		ApiSloComplianceResponse compliance = trackerService.getCompliance();
 
@@ -207,7 +207,7 @@ class ApiSloTrackerServiceTest {
 
 	@Test
 	void getCompliance_noDataForEndpoint_returns100Percent() {
-		trackerService.recordLatency("rag.search.post", 100L);
+		trackerService.recordLatency("rag.search.post", "POST", 100L);
 
 		ApiSloComplianceResponse compliance = trackerService.getCompliance();
 
@@ -227,7 +227,7 @@ class ApiSloTrackerServiceTest {
 			final long latency = (i % 2 == 0) ? 100L : 600L; // alternating compliant/breaching
 			threads[i] = new Thread(() -> {
 				for (int j = 0; j < recordsPerThread; j++) {
-					trackerService.recordLatency("rag.search.post", latency);
+					trackerService.recordLatency("rag.search.post", "POST", latency);
 				}
 			});
 			threads[i].start();
@@ -252,11 +252,11 @@ class ApiSloTrackerServiceTest {
 				Map.entry("rag.chat.ask", 1000L)
 		));
 
-		trackerService.recordLatency("rag.search.post", 100L);
-		trackerService.recordLatency("rag.search.post", 200L);
-		trackerService.recordLatency("rag.chat.ask", 500L);
-		trackerService.recordLatency("rag.chat.ask", 1500L);
-		trackerService.recordLatency("rag.chat.ask", 2000L);
+		trackerService.recordLatency("rag.search.post", "POST", 100L);
+		trackerService.recordLatency("rag.search.post", "POST", 200L);
+		trackerService.recordLatency("rag.chat.ask", "POST", 500L);
+		trackerService.recordLatency("rag.chat.ask", "POST", 1500L);
+		trackerService.recordLatency("rag.chat.ask", "POST", 2000L);
 
 		ApiSloComplianceResponse compliance = trackerService.getCompliance();
 
@@ -271,7 +271,7 @@ class ApiSloTrackerServiceTest {
 
 	@Test
 	void getCompliance_endpointFieldsAreCorrect() {
-		trackerService.recordLatency("rag.search.post", 100L);
+		trackerService.recordLatency("rag.search.post", "POST", 100L);
 
 		ApiSloComplianceResponse compliance = trackerService.getCompliance();
 
@@ -283,7 +283,7 @@ class ApiSloTrackerServiceTest {
 	}
 
 	@Test
-	void getCompliance_methodExtraction() {
+	void getCompliance_reportsTheMethodItWasGiven_notOneRecoveredFromTheName() {
 		when(properties.getThresholds()).thenReturn(thresholds(
 				Map.entry("rag.search.post", 500L),
 				Map.entry("rag.chat.stream", 500L),
@@ -294,12 +294,15 @@ class ApiSloTrackerServiceTest {
 		));
 		ApiSloTrackerService localTracker = new ApiSloTrackerService(properties);
 
-		localTracker.recordLatency("rag.search.post", 100L);
-		localTracker.recordLatency("rag.chat.stream", 100L);
-		localTracker.recordLatency("rag.search.get", 100L);
-		localTracker.recordLatency("rag.collection.put", 100L);
-		localTracker.recordLatency("rag.collection.delete", 100L);
-		localTracker.recordLatency("rag.unknown", 100L);
+		localTracker.recordLatency("rag.search.post", "POST", 100L);
+		localTracker.recordLatency("rag.chat.stream", "POST", 100L);
+		localTracker.recordLatency("rag.search.get", "GET", 100L);
+		localTracker.recordLatency("rag.collection.put", "PUT", 100L);
+		localTracker.recordLatency("rag.collection.delete", "DELETE", 100L);
+		// No suffix in the name to key off, and deliberately unlike the "GET"
+		// the old substring match used to invent. Whatever was observed is what
+		// the report must carry.
+		localTracker.recordLatency("rag.unknown", "PATCH", 100L);
 
 		ApiSloComplianceResponse compliance = localTracker.getCompliance();
 
@@ -308,14 +311,47 @@ class ApiSloTrackerServiceTest {
 		assertEquals("GET", findEndpoint(compliance, "rag.search.get").method());
 		assertEquals("PUT", findEndpoint(compliance, "rag.collection.put").method());
 		assertEquals("DELETE", findEndpoint(compliance, "rag.collection.delete").method());
-		assertEquals("GET", findEndpoint(compliance, "rag.unknown").method()); // unknown → defaults to GET
+		assertEquals("PATCH", findEndpoint(compliance, "rag.unknown").method());
+	}
+
+	@Test
+	void getCompliance_reportsChatAskAsPost_becauseThatIsWhatItIs() {
+		when(properties.getThresholds()).thenReturn(thresholds(
+				Map.entry("rag.chat.ask", 1_000L)));
+		ApiSloTrackerService localTracker = new ApiSloTrackerService(properties);
+
+		localTracker.recordLatency("rag.chat.ask", "POST", 250L);
+
+		ApiSloComplianceResponse compliance = localTracker.getCompliance();
+
+		// @PostMapping("/ask"). The substring match used to report this GET
+		// because "rag.chat.ask" contains no method suffix.
+		assertEquals("POST", findEndpoint(compliance, "rag.chat.ask").method());
+	}
+
+	@Test
+	void getCompliance_leavesMethodUnsetForAnEndpointWithNoTraffic() {
+		when(properties.getThresholds()).thenReturn(thresholds(
+				Map.entry("rag.chat.ask", 1_000L),
+				Map.entry("rag.chat.stream", 1_500L)));
+		ApiSloTrackerService localTracker = new ApiSloTrackerService(properties);
+
+		// Only one of the two configured endpoints ever sees a request.
+		localTracker.recordLatency("rag.chat.ask", "POST", 100L);
+
+		ApiSloComplianceResponse compliance = localTracker.getCompliance();
+
+		assertEquals("POST", findEndpoint(compliance, "rag.chat.ask").method());
+		// Nothing was observed, so nothing is claimed — previously this reported a
+		// confident "GET" that was pure invention.
+		assertNull(findEndpoint(compliance, "rag.chat.stream").method());
 	}
 
 	@Test
 	void recordLatency_atExactThreshold_isCompliant() {
 		// exactly 500ms = compliant; 501ms = breaching
-		trackerService.recordLatency("rag.search.post", 500L);
-		trackerService.recordLatency("rag.search.post", 501L);
+		trackerService.recordLatency("rag.search.post", "POST", 500L);
+		trackerService.recordLatency("rag.search.post", "POST", 501L);
 
 		ApiSloComplianceResponse compliance = trackerService.getCompliance();
 		EndpointSlo slo = findEndpoint(compliance, "rag.search.post");

@@ -27,7 +27,9 @@ public record ApiSloComplianceResponse(
             @Schema(description = "Endpoint identifier (e.g., rag.search.post)")
             String endpoint,
 
-            @Schema(description = "HTTP method")
+            @Schema(description = "HTTP method observed on the requests counted here, " +
+                    "or null when this endpoint has no recorded traffic in the window " +
+                    "(nothing observed, so nothing is claimed)")
             String method,
 
             @Schema(description = "SLO threshold in milliseconds")
