@@ -20,6 +20,7 @@ import {
 } from './constants';
 import { IconButton } from '../ui';
 import { X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import styles from './Toast.module.css';
 
 interface ToastItem {
@@ -47,6 +48,7 @@ interface ToastProviderProps {
 }
 
 export function ToastProvider({ children }: ToastProviderProps) {
+  const { t } = useTranslation();
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const dismissTimersRef = useRef(new Map<string, number>());
 
@@ -95,7 +97,7 @@ export function ToastProvider({ children }: ToastProviderProps) {
         className={styles.container}
         data-testid="toast-live-region"
         role="region"
-        aria-label="Notifications"
+        aria-label={t('common.notifications')}
         aria-live="polite"
         aria-atomic="false"
       >

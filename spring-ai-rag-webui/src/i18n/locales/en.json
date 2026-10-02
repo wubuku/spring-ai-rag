@@ -45,7 +45,10 @@
     "previous": "Previous",
     "next": "Next",
     "preview": "Preview",
-    "retry": "Retry"
+    "retry": "Retry",
+    "somethingWentWrong": "Something went wrong",
+    "unexpectedError": "An unexpected error occurred",
+    "notifications": "Notifications"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -157,7 +160,9 @@
     "loadError": "Failed to load documents",
     "collectionsLoadFailed": "Could not load the collection list",
     "missingEmbeddingsLoadFailed": "Could not check which documents are missing embeddings",
-    "previewContentLoadError": "Could not load the full document content: {{error}}"
+    "previewContentLoadError": "Could not load the full document content: {{error}}",
+    "allCollections": "All Collections",
+    "supportedFormats": "Supports: {{formats}}"
   },
   "collections": {
     "title": "Collections",
@@ -216,7 +221,12 @@
       }
     },
     "loadFailed": "Could not load collections",
-    "capabilityLoadFailed": "Could not read integration capabilities, so destructive actions stay hidden"
+    "capabilityLoadFailed": "Could not read integration capabilities, so destructive actions stay hidden",
+    "collectionKey": "Collection key",
+    "generateUuid": "Generate UUID",
+    "name": "Name",
+    "viewDocuments": "View Documents",
+    "collectionKeyPlaceholder": "UUID or business key"
   },
   "collectionScope": {
     "label": "Retrieval scope",
@@ -277,8 +287,10 @@
     "placeholder": "Search documents…",
     "inputLabel": "Search query",
     "searchButton": "Search",
-    "noResults": "No results found",
-    "resultsCount": "{{count}} result(s) found",
+    "noResults": "No results found for \"{{query}}\"",
+    "resultsCount_one": "1 result for \"{{query}}\"",
+    "resultsCount_other": "{{count}} results for \"{{query}}\"",
+    "resultsCount": "{{count}} result(s) found for \"{{query}}\"",
     "similarDocuments": "Similar Documents",
     "searchHint": "Press Enter or click Search",
     "clearHistory": "Clear History",
@@ -298,7 +310,9 @@
       "keyword": "Keyword match"
     },
     "history": "History",
-    "loadFailed": "Search request failed"
+    "loadFailed": "Search request failed",
+    "hybrid": "Hybrid",
+    "emptyHint": "Try different keywords or adjust your search."
   },
   "metrics": {
     "title": "Metrics",
@@ -337,7 +351,15 @@
     "loadingDurableUsage": "Loading durable model usage",
     "usageLoadFailed": "Durable model usage could not be loaded.",
     "costDisclaimer": "Configured cost estimates are operational guidance, not provider invoices.",
-    "loadFailed": "Unable to load metrics"
+    "loadFailed": "Unable to load metrics",
+    "bar": "Bar",
+    "line": "Line",
+    "callVolume": "Call Volume",
+    "avgRetrievalLatency": "Avg Retrieval Latency (ms)",
+    "modelComparison": "Model Comparison",
+    "rawJson": "Raw JSON",
+    "retrievals": "Retrievals",
+    "llmCalls": "LLM Calls"
   },
   "alerts": {
     "title": "Alerts",
@@ -392,7 +414,10 @@
     "sloConfigLoadFailed": "Could not load SLO configurations",
     "silenceLoadFailed": "Could not load silence schedules",
     "sloConfigCreateError": "Failed to create SLO configuration",
-    "sloConfigDeleteError": "Failed to delete SLO configuration"
+    "sloConfigDeleteError": "Failed to delete SLO configuration",
+    "target": "Target",
+    "targetValue": "Target Value",
+    "alertKey": "Alert Key"
   },
   "settings": {
     "title": "Settings",
@@ -415,7 +440,8 @@
     "save": "Save Settings",
     "saved": "Settings saved!",
     "changesUnsaved": "You have unsaved changes",
-    "ragApiKey": "RAG API Key"
+    "ragApiKey": "RAG API Key",
+    "apiKey": "API Key"
   },
   "theme": {
     "label": "Theme",
@@ -686,7 +712,8 @@
     "historyLoadFailed": "Unable to load evaluation history",
     "feedbackStatsLoadFailed": "Unable to load feedback statistics",
     "feedbackHistoryLoadFailed": "Unable to load feedback history",
-    "runLoadFailed": "Unable to load the run"
+    "runLoadFailed": "Unable to load the run",
+    "hit": "Hit"
   },
   "embeddings": {
     "title": "Embedding operations",

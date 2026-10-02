@@ -42,27 +42,27 @@ describe('MetricsCharts', () => {
 
   it('renders loading state when data is null', () => {
     render(<MetricsCharts data={null} />);
-    expect(screen.getByText('Loading...')).toBeInTheDocument();
+    expect(screen.getByText('common.loading')).toBeInTheDocument();
   });
 
   it('renders loading state when data is undefined', () => {
     // @ts-expect-error — testing runtime behavior with undefined
     render(<MetricsCharts data={undefined} />);
-    expect(screen.getByText('Loading...')).toBeInTheDocument();
+    expect(screen.getByText('common.loading')).toBeInTheDocument();
   });
 
   it('renders bar chart with all sections when data is provided', () => {
     render(<MetricsCharts data={mockData} />);
 
     // Chart type toggle buttons
-    expect(screen.getByRole('button', { name: 'Bar' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Line' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'metrics.bar' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'metrics.line' })).toBeInTheDocument();
 
     // Section titles
-    expect(screen.getByText('Call Volume')).toBeInTheDocument();
-    expect(screen.getByText('Avg Retrieval Latency (ms)')).toBeInTheDocument();
+    expect(screen.getByText('metrics.callVolume')).toBeInTheDocument();
+    expect(screen.getByText('metrics.avgRetrievalLatency')).toBeInTheDocument();
     expect(screen.getByText('Cache Hit Rate (%)')).toBeInTheDocument();
-    expect(screen.getByText('Model Comparison')).toBeInTheDocument();
+    expect(screen.getByText('metrics.modelComparison')).toBeInTheDocument();
 
     // Responsive containers (one per chart section)
     const containers = screen.getAllByTestId('responsive-container');
@@ -71,8 +71,8 @@ describe('MetricsCharts', () => {
 
   it('renders Line button alongside Bar button', () => {
     render(<MetricsCharts data={mockData} />);
-    expect(screen.getByRole('button', { name: 'Line' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Bar' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'metrics.line' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'metrics.bar' })).toBeInTheDocument();
   });
 
   it('renders bar chart by default (initial state)', () => {
@@ -90,8 +90,8 @@ describe('MetricsCharts', () => {
     render(<MetricsCharts data={minimalData} />);
 
     // Still renders chart sections with zero values
-    expect(screen.getByText('Call Volume')).toBeInTheDocument();
-    expect(screen.getByText('Avg Retrieval Latency (ms)')).toBeInTheDocument();
+    expect(screen.getByText('metrics.callVolume')).toBeInTheDocument();
+    expect(screen.getByText('metrics.avgRetrievalLatency')).toBeInTheDocument();
     expect(screen.getByText('Cache Hit Rate (%)')).toBeInTheDocument();
     expect(screen.getAllByTestId('responsive-container').length).toBe(3);
   });
@@ -101,10 +101,10 @@ describe('MetricsCharts', () => {
 
     render(<MetricsCharts data={dataWithoutModels} />);
 
-    expect(screen.getByText('Call Volume')).toBeInTheDocument();
-    expect(screen.getByText('Avg Retrieval Latency (ms)')).toBeInTheDocument();
+    expect(screen.getByText('metrics.callVolume')).toBeInTheDocument();
+    expect(screen.getByText('metrics.avgRetrievalLatency')).toBeInTheDocument();
     expect(screen.getByText('Cache Hit Rate (%)')).toBeInTheDocument();
-    expect(screen.queryByText('Model Comparison')).not.toBeInTheDocument();
+    expect(screen.queryByText('metrics.modelComparison')).not.toBeInTheDocument();
 
     const containers = screen.getAllByTestId('responsive-container');
     expect(containers.length).toBe(3);
@@ -118,7 +118,7 @@ describe('MetricsCharts', () => {
 
     render(<MetricsCharts data={dataWithOneModel} />);
 
-    expect(screen.getByText('Model Comparison')).toBeInTheDocument();
+    expect(screen.getByText('metrics.modelComparison')).toBeInTheDocument();
     const containers = screen.getAllByTestId('responsive-container');
     expect(containers.length).toBe(4);
   });
@@ -135,7 +135,7 @@ describe('MetricsCharts', () => {
 
     render(<MetricsCharts data={partialData} />);
 
-    expect(screen.getByText('Call Volume')).toBeInTheDocument();
+    expect(screen.getByText('metrics.callVolume')).toBeInTheDocument();
     expect(screen.getAllByTestId('responsive-container').length).toBe(3);
   });
   it('toggles between line and bar charts from the type buttons', async () => {
@@ -144,11 +144,11 @@ describe('MetricsCharts', () => {
     expect(screen.queryAllByTestId('line-chart').length).toBe(0);
 
     // 只有 Call Volume 图随 toggle 切换；Latency/Cache/Model 恒为柱状图。
-    await user.click(screen.getByRole('button', { name: 'Line' }));
+    await user.click(screen.getByRole('button', { name: 'metrics.line' }));
     expect(screen.getAllByTestId('line-chart').length).toBe(1);
     expect(screen.getAllByTestId('bar-chart').length).toBe(3);
 
-    await user.click(screen.getByRole('button', { name: 'Bar' }));
+    await user.click(screen.getByRole('button', { name: 'metrics.bar' }));
     expect(screen.getAllByTestId('bar-chart').length).toBe(4);
     expect(screen.queryAllByTestId('line-chart').length).toBe(0);
   });

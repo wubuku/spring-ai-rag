@@ -108,7 +108,7 @@ export function CreateCollectionModal({
         <ImeSafeForm id="create-collection-form" onSubmit={handleSubmit} className={styles.form}>
           <div className={styles.field}>
             <label className={styles.label} htmlFor="collection-key">
-              Collection key <span className={styles.required}>*</span>
+              {t('collections.collectionKey')} <span className={styles.required} aria-hidden="true">*</span>
             </label>
             <div style={{ display: 'flex', gap: '0.5rem' }}>
               <input
@@ -118,14 +118,14 @@ export function CreateCollectionModal({
                 onChange={e => setCollectionKey(e.target.value)}
                 className={`${styles.input} ${errors.collectionKey ? styles.inputError : ''}`}
                 maxLength={128}
-                placeholder="UUID or business key"
+                placeholder={t('collections.collectionKeyPlaceholder')}
               />
               <button
                 type="button"
                 onClick={() => setCollectionKey(crypto.randomUUID())}
-                title="Generate UUID"
+                title={t('collections.generateUuid')}
               >
-                Generate UUID
+                {t('collections.generateUuid')}
               </button>
             </div>
             {errors.collectionKey && <span className={styles.error}>{errors.collectionKey}</span>}
@@ -133,7 +133,7 @@ export function CreateCollectionModal({
 
           <div className={styles.field}>
             <label className={styles.label} htmlFor="name">
-              Name <span className={styles.required}>*</span>
+              {t('collections.name')} <span className={styles.required} aria-hidden="true">*</span>
             </label>
               <input
                 ref={nameInputRef}
@@ -149,7 +149,7 @@ export function CreateCollectionModal({
           </div>
 
           <div className={styles.field}>
-            <label className={styles.label} htmlFor="description">Description</label>
+            <label className={styles.label} htmlFor="description">{t('collections.description')}</label>
             <textarea
               id="description"
               value={description}

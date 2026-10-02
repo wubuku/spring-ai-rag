@@ -33,7 +33,7 @@ describe('ErrorBoundary', () => {
       </ErrorBoundary>
     );
 
-    expect(screen.getByText('Something went wrong')).toBeInTheDocument();
+    expect(screen.getByText('common.somethingWentWrong')).toBeInTheDocument();
     expect(screen.getByText('Test error message')).toBeInTheDocument();
     expect(screen.queryByText('Child Content')).not.toBeInTheDocument();
     expect(container.querySelector('[data-testid="child"]')).not.toBeInTheDocument();
@@ -46,9 +46,9 @@ describe('ErrorBoundary', () => {
       </ErrorBoundary>
     );
 
-    expect(screen.getByText('Something went wrong')).toBeInTheDocument();
+    expect(screen.getByText('common.somethingWentWrong')).toBeInTheDocument();
     expect(screen.getByText('Test error message')).toBeInTheDocument();
-    expect(screen.getByText('Try Again')).toBeInTheDocument();
+    expect(screen.getByText('common.retry')).toBeInTheDocument();
   });
 
   it('shows custom fallback when fallback prop is provided', () => {
@@ -59,7 +59,7 @@ describe('ErrorBoundary', () => {
     );
 
     expect(screen.getByTestId('custom-fallback')).toBeInTheDocument();
-    expect(screen.queryByText('Something went wrong')).not.toBeInTheDocument();
+    expect(screen.queryByText('common.somethingWentWrong')).not.toBeInTheDocument();
   });
 
   it('resets error state when Try Again button is clicked (child re-throws after reset)', () => {
@@ -69,9 +69,9 @@ describe('ErrorBoundary', () => {
       </ErrorBoundary>
     );
 
-    expect(screen.getByText('Something went wrong')).toBeInTheDocument();
-    fireEvent.click(screen.getByText('Try Again'));
-    expect(screen.getByText('Something went wrong')).toBeInTheDocument();
+    expect(screen.getByText('common.somethingWentWrong')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('common.retry'));
+    expect(screen.getByText('common.somethingWentWrong')).toBeInTheDocument();
   });
 
   it('resets and recovers when child stops throwing after reset', () => {
@@ -87,14 +87,14 @@ describe('ErrorBoundary', () => {
       </ErrorBoundary>
     );
 
-    expect(screen.getByText('Something went wrong')).toBeInTheDocument();
-    fireEvent.click(screen.getByText('Try Again'));
-    expect(screen.getByText('Something went wrong')).toBeInTheDocument();
+    expect(screen.getByText('common.somethingWentWrong')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('common.retry'));
+    expect(screen.getByText('common.somethingWentWrong')).toBeInTheDocument();
 
     shouldThrow = false;
-    fireEvent.click(screen.getByText('Try Again'));
+    fireEvent.click(screen.getByText('common.retry'));
 
-    expect(screen.queryByText('Something went wrong')).not.toBeInTheDocument();
+    expect(screen.queryByText('common.somethingWentWrong')).not.toBeInTheDocument();
     expect(screen.getByTestId('recovered')).toBeInTheDocument();
 
     unmount();
@@ -124,7 +124,7 @@ describe('ErrorBoundary', () => {
       </ErrorBoundary>
     );
 
-    expect(screen.getByText('Something went wrong')).toBeInTheDocument();
+    expect(screen.getByText('common.somethingWentWrong')).toBeInTheDocument();
 
     vi.unstubAllGlobals();
   });
@@ -140,8 +140,8 @@ describe('ErrorBoundary', () => {
       </ErrorBoundary>
     );
 
-    expect(screen.getByText('Something went wrong')).toBeInTheDocument();
-    expect(screen.getByText('An unexpected error occurred')).toBeInTheDocument();
+    expect(screen.getByText('common.somethingWentWrong')).toBeInTheDocument();
+    expect(screen.getByText('common.unexpectedError')).toBeInTheDocument();
   });
 
   it('renders correctly with multiple children', () => {
@@ -164,8 +164,8 @@ describe('ErrorBoundary', () => {
       </ErrorBoundary>
     );
 
-    expect(screen.getByText('Something went wrong')).toBeInTheDocument();
-    expect(screen.getByText('Try Again')).toBeInTheDocument();
+    expect(screen.getByText('common.somethingWentWrong')).toBeInTheDocument();
+    expect(screen.getByText('common.retry')).toBeInTheDocument();
   });
 
   it('falls back to the root page url when the pathname is empty', () => {
@@ -182,7 +182,7 @@ describe('ErrorBoundary', () => {
         </ErrorBoundary>
       );
 
-      expect(screen.getByText('Something went wrong')).toBeInTheDocument();
+      expect(screen.getByText('common.somethingWentWrong')).toBeInTheDocument();
     } finally {
       Object.defineProperty(window, 'location', {
         value: originalLocation,

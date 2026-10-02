@@ -58,8 +58,8 @@ export function SearchResults({
     return (
       <EmptyState>
         <Search className={styles.emptyIcon} size={24} aria-hidden="true" />
-        <p>No results found for "{query}"</p>
-        <p className={styles.emptyHint}>Try different keywords or adjust your search.</p>
+        <p>{t('search.noResults', { query })}</p>
+        <p className={styles.emptyHint}>{t('search.emptyHint')}</p>
       </EmptyState>
     );
   }
@@ -67,7 +67,7 @@ export function SearchResults({
   return (
     <div className={styles.container}>
       <div className={styles.count}>
-        {results.length} result{results.length !== 1 ? 's' : ''} for "{query}"
+        {t('search.resultsCount', { count: results.length, query })}
       </div>
       {results.map((result, index) => {
         const rank = index + 1;

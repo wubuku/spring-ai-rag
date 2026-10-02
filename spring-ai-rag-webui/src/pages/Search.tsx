@@ -301,7 +301,7 @@ export function Search() {
             checked={useHybrid}
             onChange={e => setUseHybrid(e.target.checked)}
           />
-          Hybrid
+          {t('search.hybrid')}
         </label>
         <div className={styles.scopeSelector}>
           <CollectionScopeSelector

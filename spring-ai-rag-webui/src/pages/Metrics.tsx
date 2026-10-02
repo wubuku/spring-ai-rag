@@ -223,7 +223,7 @@ export function Metrics() {
         <>
           <MetricsCharts data={metricsQuery.data.data} />
           <details className={styles.raw}>
-            <summary>Raw JSON</summary>
+            <summary>{t('metrics.rawJson')}</summary>
             <pre className={styles.pre}>
               {JSON.stringify(metricsQuery.data.data, null, 2)}
             </pre>

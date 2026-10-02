@@ -289,7 +289,7 @@ export function Settings() {
 
             <div className={styles.field}>
               {/* 状态说明，不是表单控件：label 必须指向控件才有意义。 */}
-              <div className={styles.label}>API Key</div>
+              <div className={styles.label}>{t('settings.apiKey')}</div>
               <div className={styles.apiKeyStatus}>
                 <span className={styles.statusDot} data-ok={Boolean(selectedModel?.available)} />
                 <span>

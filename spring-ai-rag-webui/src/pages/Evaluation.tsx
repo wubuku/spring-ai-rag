@@ -212,7 +212,7 @@ export function Evaluation() {
                       <th>{t('evaluation.query')}</th>
                       <th>MRR</th>
                       <th>nDCG</th>
-                      <th>Hit</th>
+                      <th>{t('evaluation.hit')}</th>
                       <th>{t('evaluation.time')}</th>
                     </tr>
                   </thead>
