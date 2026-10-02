@@ -178,7 +178,7 @@ rule *rejects* bad input, and the suite was mutation-tested — restoring the ol
 ## 5. Form accessibility
 
 `npm run check:a11y-forms` is chained into `npm run lint` and scans every `.tsx`
-under `src/` for three violations plus the exemption rule:
+under `src/` for four violations plus the exemption rule:
 
 - `control-no-name` — a form control with no accessible name. A **placeholder is
   not a name**: it disappears the moment the field holds a value, so the control
@@ -193,12 +193,17 @@ under `src/` for three violations plus the exemption rule:
   which says plainly that the keyboard is not expected to reach it.
 - `weak-allow-reason` — an `a11y-allow` comment whose reason is under eight
   characters.
+- `dialog-title-can-be-empty` — a `<Dialog>` whose `title` can evaluate to an
+  empty string. The dialog names itself with `aria-labelledby` pointing at its
+  own `<h2>`, so an empty title leaves the modal announced with no name at all,
+  and its header bar blank on screen. A title built as
+  `` `${prefix} — ${userValue}` `` can never be empty and is not flagged.
 
 This gate has **no debt baseline**, deliberately. Every violation that existed
 when it was written was fixable, so a baseline would have been a list of bugs a
 machine had agreed to stop reporting. Exemptions use an inline
 `/* a11y-allow: <concrete reason> */` on the same or the previous line, and the
-`npm run test:design-system` suite asserts that the four kinds above are still
+`npm run test:design-system` suite asserts that the five kinds above are still
 enforced and still documented in both languages — the same drift check the design
 gate has, so a rule cannot quietly stop existing.
 

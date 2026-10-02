@@ -147,7 +147,7 @@ typecheck、lint 和全部 765 个测试。
 ## 5. 表单可访问性
 
 `npm run check:a11y-forms` 串在 `npm run lint` 里，扫描 `src/` 下每个 `.tsx`，
-拦截三类违规，外加一条豁免规则：
+拦截四类违规，外加一条豁免规则：
 
 - `control-no-name` —— 控件没有可访问名称。**placeholder 不是名称**：字段一旦有内容
   它就消失，控件随即退化成什么都不播报。`aria-label`、用 `htmlFor`/`id` 绑定的
@@ -158,10 +158,15 @@ typecheck、lint 和全部 765 个测试。
   声明 `tabIndex` 并处理按键，否则 role 只是给一个死元素贴了张标签。真正装饰性的
   点击目标应当声明 `aria-hidden="true"`，明确表示不指望键盘能到达它。
 - `weak-allow-reason` —— 理由不足八个字符的 `a11y-allow` 注释。
+- `dialog-title-can-be-empty` —— `title` 可能求值为空串的 `<Dialog>`。对话框用
+  指向自身 `<h2>` 的 `aria-labelledby` 给自己命名，标题一空，读屏就只播报一个
+  无名的 "dialog"，视觉上标题栏也是空的，明眼用户同样不知道自己打开了什么。
+  而 `` `${前缀} — ${用户数据}` `` 这种形状永远不可能为空，因此不拦——
+  `VersionHistoryModal` 的标题正是这一类。
 
 这个门禁**刻意没有债务基线**。写它的时候存在的每一条违规都能修，基线只会变成一份
 "机器同意不再上报的 bug 清单"。豁免用同一行或前一行的
-`/* a11y-allow: <具体理由> */`；`npm run test:design-system` 会断言上面四类仍然被
+`/* a11y-allow: <具体理由> */`；`npm run test:design-system` 会断言上面五类仍然被
 强制执行、并且在两种语言里都有文档——与设计门禁同一套漂移检查，规则不可能悄悄消失。
 
 ### 5.1 它查出了什么
