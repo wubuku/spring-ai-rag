@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { Dashboard } from './Dashboard';
 import { healthApi } from '../api/health';
 import { documentsApi } from '../api/documents';
@@ -146,6 +147,190 @@ describe('Dashboard', () => {
     expect(healthApi.get).toHaveBeenCalledTimes(1);
     expect(documentsApi.list).toHaveBeenCalledWith({ page: 0, size: 1 });
     expect(collectionsApi.list).toHaveBeenCalledWith({ page: 0, size: 1 });
+  });
+});
+
+/**
+ * The error paths Batch 797 introduced, which shipped without a test.
+ *
+ * The old page rendered `?? '—'` for every metric and reported a failed health
+ * probe as "unhealthy". Both were defensible in direction and wrong in wording:
+ * a dash standing for "the server said nothing" is indistinguishable from one
+ * standing for "we never got an answer", and "unhealthy" sends someone to check
+ * a database that was never broken. These cases exist because that change went
+ * out with the whole suite green and nobody asked what a failing Dashboard
+ * looked like.
+ */
+describe('Dashboard when reads fail', () => {
+  const refetchHealth = vi.fn();
+  const refetchDocs = vi.fn();
+  const refetchCollections = vi.fn();
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    refetchHealth.mockClear();
+    refetchDocs.mockClear();
+    refetchCollections.mockClear();
+  });
+
+  function mockFailing(overrides?: { health?: object; docs?: object; collections?: object }) {
+    const base = {
+      data: undefined,
+      isPending: false,
+      isError: false,
+      refetch: vi.fn(),
+    };
+    mockUseQuery.mockImplementation((options: { queryKey: string[] }) => {
+      const key = options.queryKey[0];
+      if (key === 'health') {
+        return { ...base, refetch: refetchHealth, ...overrides?.health };
+      }
+      if (key === 'documents') {
+        return { ...base, refetch: refetchDocs, ...overrides?.docs };
+      }
+      if (key === 'collections') {
+        return { ...base, refetch: refetchCollections, ...overrides?.collections };
+      }
+      return base;
+    });
+  }
+
+  it('says the health endpoint is unreachable instead of calling the system unhealthy', () => {
+    mockFailing({ health: { isError: true } });
+    render(<Dashboard />);
+
+    expect(screen.getByText('dashboard.systemUnreachable')).toBeInTheDocument();
+    expect(screen.queryByText('dashboard.systemUnhealthy')).toBeNull();
+    expect(screen.queryByText('dashboard.systemHealthy')).toBeNull();
+  });
+
+  it('still leans the safe way when health is reachable and reports DOWN', () => {
+    mockFailing({
+      health: { data: { data: { status: 'DOWN', components: { database: 'DOWN' } } } },
+    });
+    render(<Dashboard />);
+
+    expect(screen.getByText('dashboard.systemUnhealthy')).toBeInTheDocument();
+    expect(screen.queryByText('dashboard.systemUnreachable')).toBeNull();
+  });
+
+  it('surfaces a retry for a health probe that could not be answered', async () => {
+    mockFailing({ health: { isError: true } });
+    render(<Dashboard />);
+
+    expect(screen.getByRole('alert')).toHaveTextContent('dashboard.healthLoadFailed');
+    await userEvent.click(screen.getAllByRole('button', { name: 'common.retry' })[0]);
+    expect(refetchHealth).toHaveBeenCalled();
+  });
+
+  it('marks a metric whose read failed as unavailable rather than showing a bare dash', () => {
+    mockFailing({
+      docs: { isError: true },
+      collections: { data: { data: { total: 7 } } },
+    });
+    const { container } = render(<Dashboard />);
+
+    const unavailable = container.querySelectorAll('[data-unavailable="true"]');
+    // Only the documents tile's read failed. The cache and last-check tiles
+    // read the same healthy health endpoint and must not inherit its failure.
+    expect(unavailable).toHaveLength(1);
+    expect(unavailable[0]).toHaveTextContent('—');
+    expect(unavailable[0]).toHaveAttribute('title', 'dashboard.metricUnavailable');
+    // The healthy sibling keeps its real number and carries no marker.
+    expect(screen.getByText('7')).toBeInTheDocument();
+  });
+
+  it('does not mark a metric that genuinely has no value as unavailable', () => {
+    // A server that answers "no data" is a different situation from a server
+    // that never answered, and the page now has to keep them apart.
+    mockFailing({
+      docs: { data: { data: {} } },
+      collections: { data: { data: { total: 7 } } },
+    });
+    const { container } = render(<Dashboard />);
+
+    expect(container.querySelectorAll('[data-unavailable="true"]')).toHaveLength(0);
+  });
+
+  it('gives each failed metric its own retry rather than one for the page', async () => {
+    mockFailing({ docs: { isError: true }, collections: { isError: true } });
+    render(<Dashboard />);
+
+    const retries = screen.getAllByRole('button', { name: 'common.retry' });
+    // Two failed reads, two retries — and no page-level retry, because the
+    // health probe succeeded and there is nothing for a third one to ask.
+    expect(retries).toHaveLength(2);
+
+    await userEvent.click(retries[0]);
+    expect(refetchDocs).toHaveBeenCalled();
+    expect(refetchCollections).not.toHaveBeenCalled();
+  });
+
+  it('wires each tile’s retry to its own read', async () => {
+    // The four tiles are fed by three different requests, and two of them —
+    // cache and last check — share the health one. Copy-pasting a retry
+    // handler is exactly the mistake that leaves a tile retrying a request that
+    // was never the one that failed, so each is checked by name.
+    mockFailing({ docs: { isError: true }, collections: { isError: true } });
+    render(<Dashboard />);
+
+    const retries = screen.getAllByRole('button', { name: 'common.retry' });
+    await userEvent.click(retries[1]);
+
+    expect(refetchCollections).toHaveBeenCalledTimes(1);
+    expect(refetchDocs).not.toHaveBeenCalled();
+    expect(refetchHealth).not.toHaveBeenCalled();
+  });
+
+  it('shows the last-check time when the health payload carries one', () => {
+    // This tile used to be `?? '—'` alongside the others, so a healthy backend
+    // with no timestamp and a probe that never answered rendered identically.
+    const stamp = '2026-09-06T00:00:00Z';
+    mockFailing({
+      health: {
+        data: {
+          data: { status: 'UP', components: { cache: 'UP' }, timestamp: stamp },
+        },
+      },
+    });
+    render(<Dashboard />);
+
+    expect(screen.getByText(new Date(stamp).toLocaleString())).toBeInTheDocument();
+    expect(screen.queryByText('dashboard.systemUnreachable')).toBeNull();
+  });
+
+  it('drives the health-backed tiles from the health read, not the metrics', async () => {
+    mockFailing({ health: { isError: true } });
+    render(<Dashboard />);
+
+    // One banner retry, then the two tiles fed by the same failed health read.
+    const retries = screen.getAllByRole('button', { name: 'common.retry' });
+    expect(retries).toHaveLength(3);
+
+    await userEvent.click(retries[1]);
+    expect(refetchHealth).toHaveBeenCalledTimes(1);
+    expect(refetchDocs).not.toHaveBeenCalled();
+  });
+
+  it('offers no retry on a tile that succeeded', () => {
+    mockFailing({
+      docs: { data: { data: { total: 42 } } },
+      collections: { data: { data: { total: 7 } } },
+      health: {
+        data: {
+          data: {
+            status: 'UP',
+            components: { cache: 'UP' },
+            timestamp: '2026-09-06T00:00:00Z',
+          },
+        },
+      },
+    });
+    render(<Dashboard />);
+
+    expect(screen.getByText('42')).toBeInTheDocument();
+    expect(screen.getByText('7')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'common.retry' })).toBeNull();
   });
 });
 
