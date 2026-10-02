@@ -635,13 +635,15 @@ public class ChatExecutionService {
             Flux<ChatClientResponse> aggregatedFlux =
                     new ChatClientMessageAggregator()
                             .aggregateChatClientResponse(
-                                    responses.doOnNext(response -> {
-                                        lastResponse.set(response);
-                                        responseEvents(
-                                                attempt.retrievalContext(),
-                                                response)
-                                                .forEach(event -> sink.tryEmitNext(event));
-                                    }),
+                                    responses.filter(this::survivesMessageAggregation)
+                                            .doOnNext(response -> {
+                                                lastResponse.set(response);
+                                                responseEvents(
+                                                        attempt.retrievalContext(),
+                                                        response)
+                                                        .forEach(event ->
+                                                                sink.tryEmitNext(event));
+                                            }),
                                     aggregated::set);
             Disposable subscription = aggregatedFlux
                     .then(Mono.defer(() -> completeStreamAttempt(
@@ -674,6 +676,45 @@ public class ChatExecutionService {
                 markAttempt(command, attempt, false);
             }
         });
+    }
+
+    /**
+     * 判断一个流式分片能否安全进入 Spring AI 的 {@code MessageAggregator}。
+     *
+     * <p>{@code MessageAggregator.aggregate} 只挡了 {@code getResult() == null}，
+     * 进入该分支后对 {@code getResult().getOutput()} 做了三次裸解引用
+     * （读取 text、读取 metadata、读取 toolCalls）。provider 只要吐出一个
+     * {@code output} 为 {@code null} 的分片——被内容过滤器清空的块、只带
+     * tool-call 的占位块、部分网关的心跳块——聚合器就会在 {@code doOnNext} 里
+     * 抛**裸 NullPointerException**。该异常经 {@code then(...)} 直接跳过
+     * {@link #completeStreamAttempt}，最终以一个没有错误码的 NPE 结束 SSE 流。
+     *
+     * <p>所以这里滤掉的正是那个会触发 NPE 的形状，而不是"一切不完整响应"：
+     * 一个畸形分片不应该毁掉整条流，其余分片的内容照常送达。
+     *
+     * <p>特别地，{@code getResult() == null} 的分片**必须放行**：聚合器虽然不从它
+     * 取文本，但会采纳它携带的 usage / id / model 元数据，提前丢掉会少计 token。
+     * {@code chatResponse == null} 也放行——上游
+     * {@code ChatClientMessageAggregator} 自己用 {@code mapNotNull} 处理这一形状。
+     *
+     * <p>若全部分片都被滤掉，本轮流会像"provider 一个分片都没给"那样以
+     * {@code Completed} 收尾。这不是本方法该管的事：空流完成本轮是**既有契约**
+     * （候选回退依赖它——空流不算错误，才轮得到下一个候选；
+     * 见 {@code ChatExecutionStreamBudgetTest#allEmptyCandidateStreamsCompleteWithoutContentOrError}）。
+     * "所有分片都残缺"与"内容为空"无法区分是一项已登记的设计取舍，不是缺陷。
+     */
+    private boolean survivesMessageAggregation(ChatClientResponse response) {
+        var chatResponse = response == null ? null : response.chatResponse();
+        if (chatResponse == null || chatResponse.getResult() == null) {
+            return true;
+        }
+        boolean usable = chatResponse.getResult().getOutput() != null;
+        if (!usable) {
+            log.warn(
+                    "丢弃 output 为 null 的流式分片：该形状会让 Spring AI MessageAggregator "
+                            + "抛裸 NullPointerException 并中断整条流");
+        }
+        return usable;
     }
 
     private Flux<ChatEvent> completeStreamAttempt(
@@ -747,14 +788,20 @@ public class ChatExecutionService {
         diagnosticsService.persist(command.retrievalTraceSession());
     }
 
+    /**
+     * 把一个流式分片转成对外事件。
+     *
+     * <p>前置条件：调用方已用 {@link #survivesMessageAggregation} 滤掉了
+     * {@code getOutput() == null} 的分片，因此这里只需再挡 {@code chatResponse}
+     * 与 {@code result} 为 {@code null} 的形状（聚合器会放行它们，但它们没有文本可发）。
+     */
     private List<ChatEvent> responseEvents(
             AuthorizedRetrievalContext context,
             ChatClientResponse response) {
         List<ChatEvent> events = new ArrayList<>(context.trace().drainToolEvents());
         if (response == null
                 || response.chatResponse() == null
-                || response.chatResponse().getResult() == null
-                || response.chatResponse().getResult().getOutput() == null) {
+                || response.chatResponse().getResult() == null) {
             return events;
         }
         String content = response.chatResponse()
