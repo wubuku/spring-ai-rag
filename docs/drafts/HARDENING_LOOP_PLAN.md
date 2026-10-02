@@ -478,6 +478,71 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
+### Batch 811（已交付）
+
+- 分支：`feature/name-promise-assertions-20261003`
+- 内容：把 Batch 810 登记的遗留**逐条做掉**——那 5 个"名字承诺了行为、方法体却不验证"
+  的测试。本批不做普查，只做兑现，因为判据在 810 已经证明没有机械解。
+- **缺陷 1：`streamCancellationFallsBackToCancelledOutcome` 从不检查 outcome**
+  旧方法体只有三行：构造模型、`subscribe()`、`dispose()`。**一个断言都没有**。
+  于是 SUCCEEDED、FAILED，或者**账本压根没记**，这条测试都是绿的。改为注入
+  `LlmUsageRecorder` 捕获事件，断言：恰好 1 条、`outcome == CANCELLED`、`streaming == true`。
+- **缺陷 2：`summaryPurposeStreamStillRecordsUsage` 从不检查 usage**
+  旧方法体把 `Flux.empty()` 阻塞一下就结束，连账本都没碰。改为让 delegate 返回带
+  `DefaultUsage(7, 5)` 的响应，断言 purpose 是 `SUMMARY`、outcome 是 `SUCCEEDED`、
+  `usage().available()` 为真、三个 token 数（7 / 5 / 12）都对。
+- **缺陷 3：`fixedPrincipalTypeReturnsUnknownForNonStandardType` 自己的注释就承认了**
+  注释原文是"仅验证不抛异常即可（间接覆盖分支）"，而方法名承诺返回 `UNKNOWN`。
+  改用反射直接调 `fixedPrincipalType`（同文件已有反射先例），并**补上正臂**：
+  三种已知 principal 类型原样返回、属性缺失时返回 `UNKNOWN`。正臂此前无人覆盖——
+  而它决定了一个合法 principal 在指标里是否还被正确归因。
+- **缺陷 4：`commitPersistsDurableContentAndResumesLease` 承诺了它做不到的事**
+  它用的是 `LeaseHandle.stateless(...)`，而 `commit` 里 `if (!handle.stateless)` 会
+  **跳过** `renewLeaseForCommit`——这个 handle 根本不可能"resumes lease"。真正的
+  stateful 臂由 `ChatSessionCoordinatorLeaseTest:207` 用 `acquire()` 拿到的真实租约覆盖。
+  也就是说这条测试是在**重复别人已经兑现的承诺**，自己却把 `var response = result();`
+  取了值就扔了。改名为 `commitOnStatelessHandlePersistsDurableContent`（名字改准），
+  并断言它**独有**的那部分：`reserveDurableContentReferences("[]", List.of())` 与
+  `saveDurable(..., "session-1", "问题", "answer", "[]", ..., "COMPLETE", ..., references)`。
+  **另加一条负臂**：stateless handle 走 commit 时**绝不碰租约表**（`verifyNoInteractions(jdbcTemplate)`）。
+- **缺陷 5：`missingRegistryMakesAllCallsNoOp` 的名字不可验证**
+  没有 registry 可达时，"记到某个 registry"与"什么都没记"从外面看**完全一样**。
+  所以这条测试改成 `missingRegistryMakesEveryCallSafe`——名字只承诺**可验证**的那部分：
+  每个入口都必须短路而不是解引用一个没给它的 registry；断言从"裸调用"改成显式的
+  `assertDoesNotThrow`。
+- **自罚（本批我自己制造的）**
+  1. **我先写了一条同义反复的测试又把它删掉**：造一个 `SimpleMeterRegistry`、传给
+     `provider(null)`（于是包装器根本拿不到它），再断言这个 registry 的 meter 数为 0。
+     这正是"为凑覆盖率给死代码写测试"，当场删除并在账本里记下。
+  2. `saveDurable` 有两个重载（末参 `DurableContentReferences` 与 `UUID`），`any()`
+     编译期歧义。改用 `any(DurableContentReferences.class)` 后又踩了 Batch 807 记过的
+     那个坑：**`any(Class)` 不匹配 null**，而未打桩的 mock 返回 null。正确做法是打桩返回
+     一个真实 `DurableContentReferences`，并用 `eq(references)` 断言**同一个引用被透传**
+     ——这比原来的 `any()` 更强，钉住了"只算一次、就用那一次"。
+  3. 给同包的 `ApiKeyAuthFilter` 加了多余的同包 import，删掉。
+  4. 第一次批量替换因源码里两个测试的**顺序与我记的不同**而 `AssertionError` 中止，
+     文件未被写入——改成按实际行号重写。
+- **变异测试 2 次，1 正 1 负（如实记录）**
+  1. 把 `outcomeFor` 的 fallback 从 `CANCELLED` 改成 `SUCCEEDED` → **未变红**。查因：
+     取消时走的是 `observed != null` 分支，而 `observed` 的初值本就是 `CANCELLED`，
+     **我改的是死代码**。
+  2. 把那个初值从 `CANCELLED` 改成 `SUCCEEDED`（这条路径真的会被走到）→ 如期变红，
+     报 `expected: <CANCELLED> but was: <SUCCEEDED>`，并指名方法。生产代码已还原。
+- 验证：
+  - 四个受影响测试类定向全绿
+  - core 全量 **989 类 / 7715 用例 / 0 失败 / 154 跳过**（`TEST-*.xml` 口径；7712 → 7715，
+    正好等于本批净增的 3 个测试）
+  - `verify-project-tests.sh` **14/14**、`verify-project-docs.sh` **16/16**
+- 指标：4 个测试文件、5 个方法重写；**净增 3 个测试**（RateLimit 正臂 2 + 租约负臂 1），
+  另有 1 个同义反复候选被主动删除；core 用例 7712 → **7715**。
+- 遗留（如实登记）：
+  - Batch 810 普查剩下的约 20 条"不抛异常"型测试**没有也不应该有门禁**：它们的期望是
+    隐含成立的，JVM 在异常传播时就会让它们失败。判据"零误报优先于高召回"在这里与
+    "提高断言强度"直接冲突，本批选择不动它们。
+  - `RateLimitFilter.fixedPrincipalType` 仍是 private，测试靠反射访问。同文件既有的
+    构造器归一化测试也是这么做的，但这是一个已知的测试气味：把"非标准类型不外泄"这条
+    安全相关的归一化逻辑改成包级可见会更干净，涉及生产可见性变更，未在本批动。
+
 ### Batch 810（已交付）
 
 - 分支：`feature/inert-test-census-20261003`

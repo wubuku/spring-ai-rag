@@ -5,6 +5,7 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -63,11 +64,26 @@ class ApiPrincipalExpiryAlertMetricsTest {
     }
 
     @Test
-    void missingRegistryMakesAllCallsNoOp() {
+    void missingRegistryMakesEveryCallSafe() {
+        // Renamed by Batch 811. The old name promised "no-op", but no-op is not
+        // observable here: with no registry reachable, a wrapper that recorded
+        // into one and a wrapper that recorded nowhere look identical from the
+        // outside. The verifiable contract is narrower — every entry point must
+        // short-circuit instead of dereferencing a registry it was not given —
+        // so the name says that, and assertDoesNotThrow states it explicitly
+        // rather than leaving it implied by a bare call. The two sibling tests
+        // are where the counters themselves are pinned.
         ApiPrincipalExpiryAlertMetrics metrics =
                 new ApiPrincipalExpiryAlertMetrics(provider(null));
 
         metrics.recordReconcile("sent", "post-commit");
         metrics.recordScanTruncated();
+
+        assertDoesNotThrow(() -> {
+            metrics.recordReconcile(null, null);
+            metrics.recordScanTruncated();
+        });
     }
+
+
 }

@@ -4,6 +4,7 @@ import com.springairag.api.enums.ChatMode;
 import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.exception.RagException;
 import com.springairag.core.repository.RagChatHistoryRepository;
+import com.springairag.core.repository.RagChatHistoryRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -22,6 +23,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
@@ -33,6 +36,7 @@ import static org.mockito.Mockito.when;
 class ChatSessionCoordinatorCommitTailTest {
 
     private RagChatHistoryRepository historyRepository;
+    private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
     private ChatSessionCoordinator coordinator;
 
     @BeforeEach
@@ -41,8 +45,9 @@ class ChatSessionCoordinatorCommitTailTest {
         var transactionManager = mock(PlatformTransactionManager.class);
         when(transactionManager.getTransaction(any()))
                 .thenReturn(mock(org.springframework.transaction.TransactionStatus.class));
+        jdbcTemplate = mock(org.springframework.jdbc.core.JdbcTemplate.class);
         coordinator = new ChatSessionCoordinator(
-                mock(org.springframework.jdbc.core.JdbcTemplate.class),
+                jdbcTemplate,
                 historyRepository,
                 mock(org.springframework.ai.chat.memory.repository.jdbc.JdbcChatMemoryRepository.class),
                 transactionManager,
@@ -68,15 +73,44 @@ class ChatSessionCoordinatorCommitTailTest {
     }
 
     @Test
-    void commitPersistsDurableContentAndResumesLease() {
+    void commitOnStatelessHandlePersistsDurableContent() {
+        // The name used to promise "and resumes lease", which this handle cannot
+        // do: LeaseHandle.stateless(...) short-circuits renewLeaseForCommit, and
+        // the stateful arm is kept by ChatSessionCoordinatorLeaseTest, which
+        // acquires a real lease first. What the body actually did was assign a
+        // local `response` and assert nothing about it, so a commit that wrote
+        // the wrong session, the wrong answer or the wrong status still passed.
+        // Batch 811: assert the durable write this test uniquely covers.
         var handle = ChatSessionCoordinator.LeaseHandle.stateless(
                 Instant.now().plusSeconds(30));
+
+        // Stubbed rather than left null so the assertion can pin that the very
+        // references computed once are the ones persisted: `any(Class)` does not
+        // match null, and an unstubbed mock would have made the check vacuous.
+        var references = new RagChatHistoryRepository.DurableContentReferences(
+                List.of(7L), Map.of(7L, 3L));
+        when(historyRepository.reserveDurableContentReferences("[]", List.of()))
+                .thenReturn(references);
 
         coordinator.commit(handle, command(),
                 result(), List.of(), "[]");
 
-                // commit 成功即覆盖 durable 保存路径（参数校验由集成测试保证）。
-        var response = result();
+        verify(historyRepository).reserveDurableContentReferences("[]", List.of());
+        verify(historyRepository).saveDurable(
+                any(), eq("session-1"), eq("问题"), eq("answer"),
+                eq("[]"), any(), eq("COMPLETE"), any(), eq(references));
+    }
+
+    @Test
+    void commitOnStatelessHandleNeverTouchesTheLeaseTable() {
+        // The negative half: a stateless handle must not issue a lease renewal,
+        // which is the whole reason the flag exists.
+        var handle = ChatSessionCoordinator.LeaseHandle.stateless(
+                Instant.now().plusSeconds(30));
+
+        coordinator.commit(handle, command(), result(), List.of(), "[]");
+
+        verifyNoInteractions(jdbcTemplate);
     }
 
     @Test
