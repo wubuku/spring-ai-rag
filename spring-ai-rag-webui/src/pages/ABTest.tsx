@@ -12,7 +12,7 @@ import { Dialog } from '../components/Dialog';
 import { ImeSafeForm } from '../components/ImeSafeForm';
 import { useToast } from '../components/Toast';
 import { Button } from '../components/Button';
-import { EmptyState, StatusBadge } from '../components/ui';
+import { EmptyState, QueryErrorBanner, StatusBadge } from '../components/ui';
 import type { StatusTone } from '../components/ui';
 import styles from './ABTest.module.css';
 import { ArrowLeft, Check, X } from 'lucide-react';
@@ -58,7 +58,7 @@ export function ABTest() {
 function ExperimentList({ onSelect }: { onSelect: (id: number) => void }) {
   const { t } = useTranslation();
   const [showCreate, setShowCreate] = useState(false);
-  const { data, isPending } = useQuery({
+  const { data, isPending, isError, refetch } = useQuery({
     queryKey: ['abtest', 'experiments'],
     queryFn: () => abtestApi.listExperiments({ size: 100 }),
   });
@@ -73,6 +73,11 @@ function ExperimentList({ onSelect }: { onSelect: (id: number) => void }) {
 
       {isPending ? (
         <div className={styles.loading}>{t('common.loading')}</div>
+      ) : isError ? (
+        // 过去失败会落进下面的"暂无实验"：一个网络错误被讲成了"你还没有实验"。
+        <QueryErrorBanner onRetry={() => void refetch()} retryLabel={t('common.retry')}>
+          {t('abtest.experimentsLoadFailed')}
+        </QueryErrorBanner>
       ) : !data?.data?.length ? (
         <EmptyState>{t('abtest.noExperiments')}</EmptyState>
       ) : (
@@ -124,12 +129,16 @@ function ExperimentDetail({ experimentId, onBack }: { experimentId: number; onBa
   const qc = useQueryClient();
   const { showToast } = useToast();
 
-  const { data: exp, isPending: expPending } = useQuery({
+  const { data: exp, isPending: expPending, isError: expError, refetch: refetchExp } = useQuery({
     queryKey: ['abtest', 'experiment', experimentId],
     queryFn: () => abtestApi.getExperiment(experimentId),
   });
 
-  const { data: analysis } = useQuery({
+  const {
+    data: analysis,
+    isError: analysisError,
+    refetch: refetchAnalysis,
+  } = useQuery({
     queryKey: ['abtest', 'analysis', experimentId],
     queryFn: () => abtestApi.getAnalysis(experimentId),
     enabled: exp?.data?.status === 'COMPLETED' || exp?.data?.status === 'STOPPED',
@@ -155,6 +164,16 @@ function ExperimentDetail({ experimentId, onBack }: { experimentId: number; onBa
   });
 
   if (expPending) return <div className={styles.loading}>{t('common.loading')}</div>;
+  // 顺序很重要：失败必须排在"不存在"之前。过去这两行挨着，用户点开一个
+  // 刚被别处删掉的实验，网络失败也会被报成"该实验不存在"——一个把
+  // "我读不到" 说成 "它没了" 的误报。
+  if (expError) {
+    return (
+      <QueryErrorBanner onRetry={() => void refetchExp()} retryLabel={t('common.retry')}>
+        {t('abtest.experimentLoadFailed')}
+      </QueryErrorBanner>
+    );
+  }
   if (!exp) return <EmptyState>{t('abtest.notFound')}</EmptyState>;
 
   return (
@@ -223,6 +242,15 @@ function ExperimentDetail({ experimentId, onBack }: { experimentId: number; onBa
       </div>
 
       {/* Analysis Charts */}
+      {(exp.data.status === 'COMPLETED' || exp.data.status === 'STOPPED') && analysisError && (
+        // `&& analysis &&` 过去让失败的分析整段消失：实验跑完了、结论却没有，
+        // 而界面上看不出是"还没算出来"还是"算失败了"。
+        <div className={styles.section}>
+          <QueryErrorBanner onRetry={() => void refetchAnalysis()} retryLabel={t('common.retry')}>
+            {t('abtest.analysisLoadFailed')}
+          </QueryErrorBanner>
+        </div>
+      )}
       {(exp.data.status === 'COMPLETED' || exp.data.status === 'STOPPED') && analysis && (
         <div className={styles.section}>
           <h3>{t('abtest.analysis')}</h3>

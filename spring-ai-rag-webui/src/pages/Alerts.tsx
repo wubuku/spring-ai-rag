@@ -13,8 +13,7 @@ import {
 } from '../api/alerts';
 import { ImeSafeForm } from '../components/ImeSafeForm';
 import styles from './Alerts.module.css';
-import { EmptyState } from '../components/ui';
-import { Tabs } from '../components/ui';
+import { EmptyState, QueryErrorBanner, Tabs } from '../components/ui';
 
 type Tab =
   | 'alerts'
@@ -87,13 +86,24 @@ export function Alerts() {
 
 function AlertsTab() {
   const { t } = useTranslation();
-  const { data, isPending } = useQuery({
+  const { data, isPending, isError, refetch } = useQuery({
     queryKey: ['alerts'],
     queryFn: () => alertsApi.listActive(),
     refetchInterval: 30_000,
   });
 
   if (isPending) return <div className={styles.loading}>{t('common.loading')}</div>;
+
+  // 过去这里对"请求失败"和"确实没有告警"一视同仁地说"暂无活跃告警"。
+  // 在告警页面上，把连不上服务器讲成"一切正常"是最不该发生的一种误报：
+  // 它不是让人少看到一个数字，而是让人以为没有东西在烧。
+  if (isError) {
+    return (
+      <QueryErrorBanner onRetry={() => void refetch()} retryLabel={t('common.retry')}>
+        {t('alerts.loadFailed')}
+      </QueryErrorBanner>
+    );
+  }
 
   if (!data?.data?.length) {
     return <EmptyState>{t('alerts.noActiveAlerts')}</EmptyState>;
@@ -214,9 +224,12 @@ function NotificationDeliveriesTab() {
 
   if (query.isError || !query.data?.data) {
     return (
-      <div className={styles.errorState} role="alert">
+      <QueryErrorBanner
+        onRetry={() => void query.refetch()}
+        retryLabel={t('common.retry')}
+      >
         {t('alerts.deliveryLoadFailed')}
-      </div>
+      </QueryErrorBanner>
     );
   }
 
@@ -375,7 +388,7 @@ interface SloFormData {
 function SloConfigsTab({ showForm, onShowForm, onHideForm }: { showForm: boolean; onShowForm: () => void; onHideForm: () => void }) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
-  const { data, isPending } = useQuery({
+  const { data, isPending, isError, refetch } = useQuery({
     queryKey: ['slo-configs'],
     queryFn: () => alertsApi.listSloConfigs(),
   });
@@ -483,6 +496,10 @@ function SloConfigsTab({ showForm, onShowForm, onHideForm }: { showForm: boolean
 
       {isPending ? (
         <div className={styles.loading}>{t('common.loading')}</div>
+      ) : isError ? (
+        <QueryErrorBanner onRetry={() => void refetch()} retryLabel={t('common.retry')}>
+          {t('alerts.sloConfigLoadFailed')}
+        </QueryErrorBanner>
       ) : !data?.data?.length ? (
         <EmptyState>{t('common.noData')}</EmptyState>
       ) : (
@@ -534,7 +551,7 @@ interface SilenceFormData {
 function SilenceSchedulesTab({ showForm, onShowForm, onHideForm }: { showForm: boolean; onShowForm: () => void; onHideForm: () => void }) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
-  const { data, isPending } = useQuery({
+  const { data, isPending, isError, refetch } = useQuery({
     queryKey: ['silence-schedules'],
     queryFn: () => alertsApi.listSilenceSchedules(),
   });
@@ -649,6 +666,10 @@ function SilenceSchedulesTab({ showForm, onShowForm, onHideForm }: { showForm: b
 
       {isPending ? (
         <div className={styles.loading}>{t('common.loading')}</div>
+      ) : isError ? (
+        <QueryErrorBanner onRetry={() => void refetch()} retryLabel={t('common.retry')}>
+          {t('alerts.silenceLoadFailed')}
+        </QueryErrorBanner>
       ) : !data?.data?.length ? (
         <EmptyState>{t('alerts.noSilencePlans')}</EmptyState>
       ) : (

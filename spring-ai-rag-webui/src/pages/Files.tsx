@@ -21,7 +21,7 @@ import {
 } from '../utils/workspaceState';
 import { useImeComposition } from '../utils/ime';
 import styles from './Files.module.css';
-import { IconButton, PageHeader } from '../components/ui';
+import { IconButton, PageHeader, QueryErrorBanner } from '../components/ui';
 import {
   ArrowDown,
   ArrowUp,
@@ -266,7 +266,7 @@ export function Files() {
     queryFn: () => filesApi.listTree(currentPath || undefined),
     staleTime: 30_000,
   });
-  const { data: collectionsData } = useQuery({
+  const { data: collectionsData, isError: collectionsError, refetch: refetchCollections } = useQuery({
     queryKey: ['files-collections'],
     queryFn: () => collectionsApi.list({ page: 0, size: 200 }),
   });
@@ -575,6 +575,16 @@ export function Files() {
 
   return (
     <div className={styles.container}>
+
+      {/* 侧栏的集合下拉过去失败时是个空列表，和"这批文件还没归类"完全一样。 */}
+      {collectionsError && (
+        <QueryErrorBanner
+          onRetry={() => void refetchCollections()}
+          retryLabel={t('common.retry')}
+        >
+          {t('files.collectionsLoadFailed')}
+        </QueryErrorBanner>
+      )}
 
       {/* ── Header ── */}
       <PageHeader

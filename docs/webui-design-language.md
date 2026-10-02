@@ -81,6 +81,7 @@ thirteen, and why nine pages with a bare `h1` were left alone.
 | `Tabs` | WAI-ARIA tabs | `tablist`/`tab`/`tabpanel` with roving tabindex, arrow/Home/End keys. `tabDomIds()` is shared so a page may own its panels directly instead of moving large JSX into a render prop. |
 | `PageHeader` | page title block | Optional `description` is wired to the title with `aria-describedby`, so a subtitle is no longer a visually adjacent but semantically unrelated paragraph. |
 | `Tooltip` | hover/focus hint | — |
+| `QueryErrorBanner` | visible failure of a read | `role="alert"`, not `role="status"`. `onRetry` is optional and takes react-query's `refetch`; `detail` carries the thrown message. Section 9 explains why a failed read must not be allowed to look empty. |
 
 `src/components/Dialog/` keeps its own path; it predates `ui/`.
 
@@ -336,7 +337,77 @@ rather than being quietly forgotten.
 Exemptions use an inline `/* double-submit-allow: <concrete reason> */`; none
 are registered.
 
-## 9. Alignment and layout
+## 9. A read must report its failure
+
+`npm run check:query-errors` is chained into `npm run lint` and enforces two
+rules over every `useQuery` in `src/`:
+
+- `silent-query` — a read whose failure is neither handled by an `onError`
+  option nor surfaced anywhere in the render
+- `empty-panel-on-error` — a `{q.data && <section>}` guard with no error
+  branch, the specific shape that turns a failed request into "there is nothing
+  here"
+
+A write that fails silently produces a button that does nothing. A read that
+fails silently is worse, because it usually does not look broken at all — it
+looks like data. Batch 797 surveyed all 37 queries and found 21 that reported
+nothing on failure, in two forms.
+
+The named form (`const reportQ = useQuery(…)`) covered nine. The worst was
+`Evaluation.tsx`: on failure it rendered `data ?? {}`, producing a complete,
+normal-looking evaluation report in which every figure was `—`. It did not look
+like an error page. It looked measured.
+
+The destructured form (`const { data, isPending } = useQuery(…)`) covered
+twelve, and **this gate's first version did not check it at all.** It matched
+only the named form, so it judged 17 of 37 reads and printed "every read reports
+its failure". That blind spot was the batch's larger finding, and two of the
+twelve report a *negative*:
+
+- `Alerts.tsx` rendered `No active alerts` when the request failed. On the
+  active-alerts tab that is an alerting page telling an operator nothing is on
+  fire when it could not reach the server. Its own `AlertDetail`, a hundred
+  lines below, already did this correctly.
+- `ABTest.tsx` rendered `Not found` for a network error, because
+  `if (!exp) return <EmptyState>Not found</EmptyState>` cannot tell a missing
+  record from a failed read.
+
+`ReembedAllButton.tsx` had `if (isLoading || !status)`, which is permanent:
+after retries are exhausted `isLoading` is false and `status` is still
+undefined, so the block sat on a skeleton forever. `Search.tsx` rendered
+nothing at all below the form, so a failed search was indistinguishable from
+one still running. `Chat.tsx` collapsed `availableModels` to `[]` and silently
+disabled the model selector.
+
+Fix them with `QueryErrorBanner`, which takes the sentence, an optional
+`onRetry` (react-query already hands back a `refetch`), and an optional
+`detail`. It renders `role="alert"`, not `role="status"`: it appears without
+user action and reports a loss of function.
+
+**Two shapes are legitimate and are handled rather than exempted.** An inline
+`/* query-error-allow: <reason> */` exists for the rest, but it only annotates
+the failure output — it does not turn the gate green, because a comment that
+silences a check is a comment anyone can write. So the four fail-closed reads
+were fixed instead:
+
+- `Collections.tsx` reads integration capabilities. On failure the purge button
+  correctly stays hidden — that is the safe direction — but the page now says
+  why, instead of leaving a destructive action mysteriously absent.
+- `Dashboard.tsx` rendered `?? '—'` for every metric, and a dash standing for
+  "the server said nothing" is indistinguishable from one standing for "we
+  never got an answer". Those demand opposite responses. The tiles now carry
+  `data-unavailable` and a retry, and a separate `systemUnreachable` banner
+  keeps "cannot reach the health endpoint" distinct from "the system is
+  unhealthy" — the old code reported both as unhealthy, which at least failed
+  in the safe direction.
+
+**The check is file-scoped for the named form, and it has a documented miss.**
+It cannot tell which of a file's sub-components rendered a banner, so a
+genuinely silent query can hide behind a sibling's `isError`. It fails as a
+miss, never as a false alarm. The self-test pins that case so the gap stays
+visible.
+
+## 10. Alignment and layout
 
 `npm run check:alignment` is chained into `npm run lint`. Centred text is
 allowed only with a stated reason, and there are currently 11 such exemptions —
@@ -346,7 +417,7 @@ The reason this is a machine rule: a centred block of body text is the single
 most common way a layout drifts from readable to not, and it is invisible in
 code review because the CSS is one line.
 
-## 10. Before you start a UI change
+## 11. Before you start a UI change
 
 1. Run the gate and the tests first, so you know the starting state is green:
    ```bash
@@ -355,6 +426,7 @@ code review because the CSS is one line.
    npm run check:mutation-errors
    npm run check:i18n-keys
    npm run check:double-submit
+   npm run check:query-errors
    npm run test:run
    ```
 2. Look for an existing primitive before writing a new one.
@@ -364,7 +436,7 @@ code review because the CSS is one line.
 5. Write the test in the same batch. A change that makes the gate red is not
    finished.
 
-## 11. What this document deliberately does not say
+## 12. What this document deliberately does not say
 
 - It does not list every page and its layout. That is code, and the code is
   the reference.

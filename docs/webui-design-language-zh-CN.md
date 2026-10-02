@@ -68,6 +68,7 @@ Batch 757 实测 9 组「背景 × 主题」组合里，`white` 只有 1 组达�
 | `Tabs` | WAI-ARIA tabs | `tablist`/`tab`/`tabpanel` + roving tabindex + 方向键/Home/End。`tabDomIds()` 两边共用，页面可以自持面板，不必把大块 JSX 搬进 render prop。 |
 | `PageHeader` | 页面标题区 | 可选 `description` 通过 `aria-describedby` 与标题关联，副标题不再是"视觉上挨着但语义无关"的段落。 |
 | `Tooltip` | 悬停/聚焦提示 | — |
+| `QueryErrorBanner` | 读操作失败的可见呈现 | `role="alert"` 而非 `role="status"`。`onRetry` 可选，接 react-query 的 `refetch`；`detail` 承载抛出的错误消息。第 9 节说明为什么一次失败的读不允许看起来像"空的"。 |
 
 `src/components/Dialog/` 保留自己的路径，它早于 `ui/` 存在。
 
@@ -278,7 +279,63 @@ Batch 796 把每个 `onClick={() => someM.mutate(...)}` 过了一遍，
 
 豁免用行内 `/* double-submit-allow: <具体理由> */`；目前没有登记任何豁免。
 
-## 9. 对齐与布局
+## 9. 读操作必须报告失败
+
+`npm run check:query-errors` 串在 `npm run lint` 里，对 `src/` 里每一个
+`useQuery` 执行两条规则：
+
+- `silent-query` —— 一次读的失败既没有 `onError` 选项处理，渲染里也无处可见
+- `empty-panel-on-error` —— `{q.data && <section>}` 这种守卫没有错误分支，
+  正是把"请求失败"变成"这里什么都没有"的那种形态
+
+写操作失败静默，得到的是一个按了没反应的按钮。**读操作失败静默更糟，因为
+它通常一点也不像坏了——它像数据。** Batch 797 勘察了全部 37 个查询，
+找出 21 个失败时什么都不说，分两种形态。
+
+命名形态（`const reportQ = useQuery(…)`）9 个。最糟的是 `Evaluation.tsx`：
+失败时它渲染 `data ?? {}`，于是产出一份完整、正常、每个数字都是 `—` 的
+评测报告。它看上去不像错误页，它看上去像**测过了**。
+
+解构形态（`const { data, isPending } = useQuery(…)`）12 个，而**这个门禁的第一版
+根本没检查这一种。** 它只匹配命名形态，于是判了 37 个里的 17 个，然后打印
+"every read reports its failure"。这个盲区才是本批更大的发现，
+而这 12 个里有**两个在报否定结论**：
+
+- `Alerts.tsx` 在请求失败时渲染"暂无活跃告警"。在活跃告警页签上，
+  这等于告警页在告诉运维没东西在烧——而它只是连不上服务器。
+  它自己的 `AlertDetail`，在一百行之下，已经做对了。
+- `ABTest.tsx` 对网络错误渲染"不存在"，因为
+  `if (!exp) return <EmptyState>Not found</EmptyState>` 分不清
+  "记录不存在"和"这次读失败了"。
+
+`ReembedAllButton.tsx` 写的是 `if (isLoading || !status)`，这是**永久**的：
+重试耗尽后 `isLoading` 变 false 而 `status` 仍然是 undefined，
+于是这一块永远停在骨架屏上。`Search.tsx` 在表单下面什么都不渲染，
+失败的检索和仍在进行的检索长得一模一样。`Chat.tsx` 把 `availableModels`
+塌成 `[]`，静默地把模型下拉框禁用掉。
+
+用 `QueryErrorBanner` 修：它接一句话、一个可选的 `onRetry`
+（react-query 本来就把 `refetch` 递过来了）、一个可选的 `detail`。
+它渲染 `role="alert"` 而不是 `role="status"`：它不由用户动作触发，
+且报告的是功能的丧失。
+
+**有两种形态是正当的，所以是被真正修好而不是被豁免。** 剩下的可以用行内
+`/* query-error-allow: <reason> */`，但它只给失败输出加注，**不会**让门禁变绿——
+一条能消音的注释就是谁都能写的注释。所以那 4 处 fail closed 的读被真的修了：
+
+- `Collections.tsx` 读集成能力。失败时 purge 按钮正确地保持隐藏——那是安全的
+  方向——但页面现在会说明原因，而不是让一个破坏性操作无缘无故地消失。
+- `Dashboard.tsx` 过去给每个磁贴渲染 `?? '—'`，而代表"服务端什么都没说"的
+  破折号，和代表"我们根本没问到"的破折号**无法区分**，而这两者要求的反应完全
+  相反。磁贴现在带 `data-unavailable` 和一个重试，另外用独立的
+  `systemUnreachable` 横幅把"连不上健康端点"和"系统不健康"分开——
+  旧代码把两者都报成不健康，那个方向至少是安全的。
+
+**命名形态的检查是文件级的，并且它有一个已登记的漏检。** 它无法分辨一个文件里
+是哪个子组件渲染了横幅，所以一个真正静默的查询可以躲在兄弟查询的 `isError`
+背后。它只会**漏报**，绝不会误报。自测把这个case钉住了，让缺口保持可见。
+
+## 10. 对齐与布局
 
 `npm run check:alignment` 串在 `npm run lint` 里。居中文本只有在写明理由时才被允许，
 目前有 11 处这样的豁免——每一处都是有意的决定，并记录在检查器中。
@@ -286,7 +343,7 @@ Batch 796 把每个 `onClick={() => someM.mutate(...)}` 过了一遍，
 之所以做成机器规则：正文字块居中是把布局从"可读"拖到"不可读"最常见的单一原因，
 而在代码审查里它是隐形的，因为 CSS 只有一行。
 
-## 10. 开始一次界面改动之前
+## 11. 开始一次界面改动之前
 
 1. 先跑门禁与测试，确认起点是绿的：
    ```bash
@@ -295,6 +352,7 @@ Batch 796 把每个 `onClick={() => someM.mutate(...)}` 过了一遍，
    npm run check:mutation-errors
    npm run check:i18n-keys
    npm run check:double-submit
+   npm run check:query-errors
    npm run test:run
    ```
 2. 写新东西之前，先找有没有现成基元。
@@ -302,7 +360,7 @@ Batch 796 把每个 `onClick={() => someM.mutate(...)}` 过了一遍，
 4. 需要新共享基元时，先找到两个真实调用方。
 5. 测试在同一个 batch 里写。把门禁弄红的事情没有做完。
 
-## 11. 本文刻意不说的内容
+## 12. 本文刻意不说的内容
 
 - 不逐页罗列布局。那是代码，代码就是参考。
 - 不复述 token 目录。读 `design-tokens/tokens.json`。

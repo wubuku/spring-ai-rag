@@ -163,6 +163,13 @@ export function Embeddings() {
         </div>
       </section>
 
+      {/* 三个面板过去都是 `{q.data && …}`：请求失败时整段直接不渲染，
+          页面看起来就像"没有需要嵌入的文档"。失败与"确实没有"必须分开。 */}
+      {readinessQ.isError && (
+        <div className={styles.error} role="alert">
+          {t('embeddings.readinessLoadFailed')}
+        </div>
+      )}
       {readinessQ.data && (
         <section className={styles.section} aria-label={t('embeddings.readiness')}>
           <h2>{t('embeddings.readiness')}</h2>
@@ -184,6 +191,11 @@ export function Embeddings() {
         </section>
       )}
 
+      {derivationQ.isError && (
+        <div className={styles.error} role="alert">
+          {t('embeddings.derivationLoadFailed')}
+        </div>
+      )}
       {derivationQ.data && (
         <section className={styles.section} aria-label={t('embeddings.derivationIntegrity')}>
           <div className={styles.sectionHeader}>
@@ -355,6 +367,11 @@ export function Embeddings() {
         )}
       </section>
 
+      {detailQ.isError && (
+        <div className={styles.error} role="alert">
+          {t('embeddings.detailLoadFailed')}
+        </div>
+      )}
       {detailQ.data && (
         <section className={styles.section} aria-label={t('embeddings.detail')}>
           <h2>{t('embeddings.detail')}</h2>

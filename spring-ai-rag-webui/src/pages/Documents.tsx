@@ -17,7 +17,7 @@ import { ImeSafeForm } from '../components/ImeSafeForm';
 import { useBlobUrlOpener } from '../hooks/useBlobUrlOpener';
 import { useImeComposition } from '../utils/ime';
 import styles from './Documents.module.css';
-import { EmptyState, IconButton } from '../components/ui';
+import { EmptyState, IconButton, QueryErrorBanner } from '../components/ui';
 import { Upload, X } from 'lucide-react';
 
 type DocumentConfirmation =
@@ -54,7 +54,7 @@ export function Documents() {
   const { showToast } = useToast();
   const openBlobUrl = useBlobUrlOpener();
 
-  const { data: collectionsData } = useQuery({
+  const { data: collectionsData, isError: collectionsError, refetch: refetchCollections } = useQuery({
     queryKey: ['collections-all'],
     queryFn: () => collectionsApi.list({ page: 0, size: 1000 }),
   });
@@ -372,6 +372,17 @@ export function Documents() {
   return (
     <div>
       <h1 className="page-title">{t('documents.title')}</h1>
+
+      {/* 集合下拉过去失败时是个空列表，用户会以为"没有可选集合"，
+          于是以为筛选功能坏了，或者干脆去建一个重复的集合。 */}
+      {collectionsError && (
+        <QueryErrorBanner
+          onRetry={() => void refetchCollections()}
+          retryLabel={t('common.retry')}
+        >
+          {t('documents.collectionsLoadFailed')}
+        </QueryErrorBanner>
+      )}
 
       <div
         className={styles.uploadZone}
