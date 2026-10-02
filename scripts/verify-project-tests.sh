@@ -63,3 +63,17 @@ echo "PASS: External-database safety self-test"
 
 node scripts/verify-external-db-safety.mjs
 echo "PASS: External-database safety"
+
+# A fourth question: can a Playwright spec be run at all? The switch reconciler
+# says nothing about the frontend e2e suite, and Batch 804 found six of twenty
+# specs that no verification script invoked — two of which contained tests that
+# could never have passed.
+node scripts/test-support/e2e-reachability-self-test.mjs >/dev/null || {
+  echo "E2E reachability self-test failed; the gate may no longer reject anything." >&2
+  node scripts/test-support/e2e-reachability-self-test.mjs >&2 || true
+  exit 1
+}
+echo "PASS: E2E reachability self-test"
+
+node scripts/verify-e2e-run-paths.mjs
+echo "PASS: E2E reachability"

@@ -51,7 +51,12 @@ test.describe('Documents', () => {
     const initialListRequestCount = listRequestCount;
 
     const searchInput = page.getByRole('textbox', {
-      name: 'documents.searchPlaceholder',
+      // Match what a user can see, not the translation key. The key is what
+      // the unit tests stub in, but the e2e bundle loads the real dictionaries,
+      // so an accessible name of `documents.searchPlaceholder` could never
+      // match anything — and even if it could, asserting a key would couple
+      // this test to the translation system instead of to the search box.
+      name: /Search documents|搜索文档/,
     });
     await searchInput.dispatchEvent('compositionstart', { data: '蓝' });
     await searchInput.evaluate(element => {

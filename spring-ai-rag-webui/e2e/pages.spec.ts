@@ -37,18 +37,24 @@ test.describe('Settings', () => {
   test('shows settings tabs', async ({ page }) => {
     await mockAllApiCalls(page);
     await openProtectedPage(page, '/webui/settings');
-    await expect(page.getByRole('button', { name: /LLM|Provider/i })).toBeVisible();
-    await expect(page.getByRole('button', { name: /Retrieval/i })).toBeVisible();
-    await expect(page.getByRole('button', { name: /Cache/i })).toBeVisible();
+    // The shared Tabs primitive renders role="tab", not a bare button. These
+    // selectors predate that refactor; a tab strip that is not a tablist is an
+    // accessibility defect, so the locator is what should move, not the role.
+    await expect(page.getByRole('tab', { name: /LLM|Provider/i })).toBeVisible();
+    await expect(page.getByRole('tab', { name: /Retrieval/i })).toBeVisible();
+    await expect(page.getByRole('tab', { name: /Cache/i })).toBeVisible();
   });
 
   test('switches between tabs', async ({ page }) => {
     await mockAllApiCalls(page);
     await openProtectedPage(page, '/webui/settings');
-    await page.getByRole('button', { name: /Retrieval/i }).click();
+    // The shared Tabs primitive renders role="tab", not a bare button. These
+    // selectors predate that refactor; a tab strip that is not a tablist is an
+    // accessibility defect, so the locator is what should move, not the role.
+    await page.getByRole('tab', { name: /Retrieval/i }).click();
     await expect(page).toHaveURL(/\/webui\/settings\?tab=retrieval$/);
     await expect(page.getByText(/retrieval|top\s*k|vector|weight/i).first()).toBeVisible();
-    await page.getByRole('button', { name: /Cache/i }).click();
+    await page.getByRole('tab', { name: /Cache/i }).click();
     await expect(page).toHaveURL(/\/webui\/settings\?tab=cache$/);
     await expect(page.getByText(/cache|enabled|ttl/i).first()).toBeVisible();
 
@@ -137,11 +143,14 @@ test.describe('Alerts', () => {
     await mockAllApiCalls(page);
     await openProtectedPage(page, '/webui/alerts');
 
-    await page.getByRole('button', { name: 'SLO Config', exact: true }).click();
+    // The shared Tabs primitive renders role="tab", not a bare button. These
+    // selectors predate that refactor; a tab strip that is not a tablist is an
+    // accessibility defect, so the locator is what should move, not the role.
+    await page.getByRole('tab', { name: 'SLO Config', exact: true }).click();
     await expect(page).toHaveURL(/\/webui\/alerts\?tab=slo-configs$/);
-    await page.getByRole('button', { name: 'Silence Plans' }).click();
+    await page.getByRole('tab', { name: 'Silence Plans' }).click();
     await expect(page).toHaveURL(/\/webui\/alerts\?tab=silence-schedules$/);
-    await page.getByRole('button', { name: 'Delivery Receipts' }).click();
+    await page.getByRole('tab', { name: 'Delivery Receipts' }).click();
     await expect(page).toHaveURL(
       /\/webui\/alerts\?tab=notification-deliveries$/,
     );
@@ -149,7 +158,7 @@ test.describe('Alerts', () => {
     await page.goBack();
     await expect(page).toHaveURL(/\/webui\/alerts\?tab=silence-schedules$/);
     await expect(
-      page.getByRole('button', { name: 'Silence Plans', exact: true }),
+      page.getByRole('tab', { name: 'Silence Plans', exact: true }),
     ).toBeVisible();
   });
 });

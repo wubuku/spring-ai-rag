@@ -478,6 +478,113 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
+### Batch 804（已交付）
+
+- 分支：`feature/e2e-run-path-gate-20261002`
+- 内容：把 802 的问题搬到前端——**"跑不到的测试"**，这次是 Playwright e2e 那一层。
+- **勘察三个方向**：
+  1. **前端单元层：干净，无需处理。** 磁盘上 83 个测试文件
+     （`src/**` 77 个 + `scripts/**` 6 个 mjs），逐个核对是否被某个 vitest config
+     覆盖——`src/**/*.{test,spec}.{ts,tsx}` 与 `scripts/**/*.test.mjs`
+     两个 include **全部覆盖，无孤儿**。这一层此前没人查过，查完的结论是否定的。
+  2. **e2e 层：有真问题。** 20 个 spec，**14 个**被某个 `scripts/verify-*.sh`
+     显式点名，另外 **6 个没有**：
+     - `dashboard.spec.ts`、`evaluation-tabs.spec.ts`、`files.spec.ts`
+       ——脚本和文档里**任何地方**都没有；
+     - `alignment.spec.ts`、`files-real.spec.ts`、`workspace-continuity.spec.ts`
+       ——**只在 `docs/drafts/archive/` 的历史进度笔记里**。这正是 Batch 790
+       定下的校准："归档笔记是某个人做过什么的记录，不是谁都能重复的东西"。
+  3. `package.json` 里的 `test:e2e:mock` 确实能一次跑全部 15 个 mock spec，
+     但**没有任何门禁脚本调用它**——和 802 那个"没人会设的属性"是同一种死法。
+
+#### 跑了就立刻回本：93 个测试，4 个失败，全是真缺陷
+
+- `evaluation-tabs.spec.ts`（**从来没被任何门禁跑过**）里的
+  `getByLabel(/Suites|套件/)` 同时匹配 **tabpanel**（`aria-labelledby`）和
+  里面的 **section**（`aria-label`），strict mode 冲突。
+  也就是说这测试**从提交那天起就不可能通过**。改为 `getByRole('tabpanel')`。
+- `pages.spec.ts` 三个失败：Settings / Alerts 的页签已改用共享
+  `src/components/ui/Tabs/Tabs.tsx`，它渲染的是
+  `role="tablist"/"tab"/"tabpanel"`——**这是一次无障碍改进**，
+  而 spec 还在 `getByRole('button')`。**动的是定位器，不是 role。**
+- `documents.spec.ts` 一个失败，而且是**更基本的一个**：spec 拿
+  **原始 i18n 键**当可访问名（`name: 'documents.searchPlaceholder'`）。
+  Playwright 的页面快照里明明是 `textbox "Search documents"`——e2e 跑的是**真实
+  字典**，不是单元测试那种"返回键"的 mock，所以这个 locator 永远匹配不上。
+  就算能匹配上，**断言一个键也是断言错了对象**：它把测试耦合到翻译系统，
+  而不是耦合到用户看得见的搜索框。改为 `/Search documents|搜索文档/`。
+- **注意这后两类缺陷所在的 spec 是"有运行路径"的**（`pages.spec.ts` 被
+  `verify-llm-usage-ledger.sh` 点名，`documents.spec.ts` 被
+  `verify-next-high-value-feature.sh` 等点名）。也就是说
+  **"某个脚本提到过它"和"它被跑过并且是绿的"是两回事**——这正是本批要建立的
+  可达性门禁想表达的东西。
+
+#### 交付
+
+- **`scripts/verify-webui-e2e-mock.sh`**：一次跑完 15 个 mock spec
+  （`playwright.preview.config.ts` 忽略 `**/*-real.spec.ts`）。
+  不需要数据库、不需要模型 provider、不需要起后端：spec 自己 stub 掉所有 API，
+  preview 服务器提供生产构建。
+- **`scripts/verify-e2e-run-paths.mjs`**：每个 spec 必须有运行路径。判据与
+  `verify-integration-test-switches.mjs` 同源——**必须是脚本里真正的
+  Playwright 调用，而不是提到**。两条违规形态：
+  `unreachable-e2e-spec`、`stale-glob-exemption`。
+  **豁免规则从 config 读**（`parsePreviewIgnore` 解析
+  `playwright.preview.config.ts` 的 `testIgnore`），而不是在门禁里重写一遍
+  `*-real.spec.ts`；config 一改，门禁自动跟着变。
+  `-real` spec **不在**通配豁免范围内——它们需要真后端，必须有脚本点名。
+- **`files-real.spec.ts` 给了真运行路径**，没有豁免。查过它只依赖
+  `RAG_ROOT_API_KEY` + `BASE_URL`，而
+  `verify-rerank-document-diversity.sh` 的 `real_playwright` 步骤正好同时提供
+  真实后端 + 真实前端 + root key，于是把 spec 名加进那条命令。
+  **沿用 `KNOWN_UNDISCOVERABLE` 为空的先例——修掉，不豁免。**
+  同时在脚本里写明这个耦合是已知气味（文件测试挂在检索质量门禁下读起来别扭），
+  真正的修法是两个门禁共用一套全栈 harness。
+- 门禁 + 12 例自测已串进 `scripts/verify-project-tests.sh`（6 项 → 8 项）。
+
+#### 我自己犯的错（本批三个，两个由自测当场抓住）
+
+1. **门禁自己的采集器有 bug**：用一个 `g` 标志的正则去匹配
+   `e2e/*.spec.ts`，吃到第一个 spec 后 `lastIndex` 就越过了命令，
+   **同一条命令行上的第二个及以后的 spec 全部丢失**。所以我把
+   `files-real.spec.ts` 正确接进脚本之后，门禁**依然**报它不可达。
+   根因是**自测只测了纯函数 `checkReachability`，从没跑过采集器**
+   ——一个不跑采集器的自测抓不到采集器的错。补了 4 个直接喂假脚本目录的用例。
+2. **第二个采集器 bug**：按"扫描到下一个 invocation 为止"取窗口，会把两个
+   invocation 之间 `echo "run e2e/decoy.spec.ts"` 这种**提及**也算成运行路径
+   ——正是这个门禁要区分的那件事。改为按 shell 的续行规则切出**单条命令**
+   （止于第一个不以 `\` 结尾的行）。同样是自测抓到的。
+3. **自测里我自己写反了一条断言**：`coveredByPreviewSuite('nested/files-real.spec.ts', ['*/*-real.spec.ts'])`
+   我断言 `false`，实际应为 `true`——单 `*` 不跨 `/`，所以该 pattern 匹配不到
+   嵌套路径，**preview 套件反而会跑到它**。实现是对的，断言写反了。
+4. `pages.spec.ts` 我只改了点击处的定位器，漏了断言处那个
+   `exact: true` 变体，被剩下的 1 个失败当场指出。
+5. 第一版门禁里写了一段恒假的死代码
+   （`coveredByGlob.has('mock-suite') && coveredByGlob.has('mock-suite') === false`
+   永远为假），写完自己读出来才发现，换成了"config 真的丢了 testIgnore 就报
+   `stale-glob-exemption`"这条真正有意义的检查。
+6. **新门禁文件里写了裸 NUL 字节**——`globToRegExp` 用一个字面 NUL 当占位符。
+   **被 Batch 768 建的 NUL 扫描门禁当场抓住**（"NUL byte in tracked text file
+   scripts/verify-e2e-run-paths.mjs (count=2)"）。改成 `\u0000` 转义加
+   `new RegExp(SENTINEL, 'g')`。改完又踩第二个坑：修好的 Javadoc 里写了
+   字面量 `**/*-real.spec.ts`，其中的 `*/` **提前终止了块注释**，整个文件
+   语法错误——由自测的 SyntaxError 当场指出，注释里改成不含该字面量的说法。
+
+- 指标（实测值）：e2e mock 套件 **15 个 spec / 93 个测试，0 失败**
+  （修之前首次跑是 4 个失败）；门禁 **20/20 spec 有运行路径**；
+  自测 **12 例**；`verify-project-tests` **6 项 → 8 项**；
+  前端单元层不变（77 文件 / 831 用例）。
+- 遗留（如实登记，未处理）：
+  - **e2e mock 套件本身不在任何"日常"门禁链里**——`verify-webui-e2e-mock.sh`
+    要跑 `npm run build` + 全量 chromium（约 4 分钟），比仓库其他门禁重得多。
+    本批只保证它**存在且随时可跑**，没有把它塞进 `verify-project-tests.sh`
+    （那会让一个秒级门禁变成分钟级）。要进日常链需要单独决策。
+  - `files-real.spec.ts` 挂在 `verify-rerank-document-diversity.sh` 下是**已知
+    耦合气味**，正解是两个门禁共用一套全栈 harness。
+  - 账本 20 处"本机无 Docker"历史条目仍按 Batch 801 的勘误处理。
+  - 其余既有债务（`findCacheState` 读侧同形、`PageShell` 脱节、
+    `ask`/`chat` 53 行×2 重复、174 个无引用 locale 键）本批未动。
+
 ### Batch 803（已交付）
 
 - 分支：`feature/derive-chunker-version-20261002`
