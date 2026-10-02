@@ -48,3 +48,18 @@ echo "PASS: Integration-switch self-test"
 
 node scripts/verify-integration-test-switches.mjs
 echo "PASS: Integration-test switches"
+
+# A third question the switch reconciler cannot answer: it checks that a gated
+# suite has a run path, but not what happens to the database that run path
+# points at. Batch 802 found a suite that accepted a caller-named database and
+# ran `flyway.clean()` on it with no acknowledgement, while ten siblings
+# required one. That suite was also ungated, so the reconciler never saw it.
+node scripts/test-support/external-db-safety-self-test.mjs >/dev/null || {
+  echo "External-database safety self-test failed; the gate may no longer reject anything." >&2
+  node scripts/test-support/external-db-safety-self-test.mjs >&2 || true
+  exit 1
+}
+echo "PASS: External-database safety self-test"
+
+node scripts/verify-external-db-safety.mjs
+echo "PASS: External-database safety"

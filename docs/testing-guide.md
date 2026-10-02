@@ -578,10 +578,25 @@ an explicit PostgreSQL integration test because it requires pgvector and validat
 Flyway V1-V52, fixed vector columns, Profile-specific indexes, atomic replacement,
 Legacy adoption, retrieval freshness, and Spring Data repository queries.
 
-Start a PostgreSQL 16 + pgvector database, then run:
+```bash
+mvn -pl spring-ai-rag-core \
+  -Dembedding-profile.it.enabled=true \
+  -Dtest=EmbeddingProfilePostgresIntegrationTest \
+  -Dsurefire.failIfNoSpecifiedTests=false \
+  test
+```
+
+This suite is now gated like its twenty-two siblings and starts its own
+pgvector container, so it needs nothing but a Docker daemon. It used to have no
+switch at all and to require `-Drag.it.jdbc-url`, a property no script in the
+repository sets — seven tests that could not run in any automated path.
+
+To point it at a database you already have:
 
 ```bash
-mvn -pl spring-ai-rag-core -am \
+EMBEDDING_PROFILE_IT_CLEAN_CONFIRM=YES \
+mvn -pl spring-ai-rag-core \
+  -Dembedding-profile.it.enabled=true \
   -Dtest=EmbeddingProfilePostgresIntegrationTest \
   -Dsurefire.failIfNoSpecifiedTests=false \
   -Drag.it.jdbc-url=jdbc:postgresql://127.0.0.1:35267/embedding_profile_test \
@@ -590,8 +605,10 @@ mvn -pl spring-ai-rag-core -am \
   test
 ```
 
-The test is skipped when `rag.it.jdbc-url` is absent, so the explicit command is
-the required migration acceptance gate.
+The confirmation is required because the suite runs `flyway.clean()` against
+whatever URL you hand it, which drops every object in that schema.
+`scripts/verify-external-db-safety.mjs` enforces the same rule for every suite
+that accepts an external database.
 
 ### Collection Key Acceptance Gate
 

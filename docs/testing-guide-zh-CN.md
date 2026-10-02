@@ -519,7 +519,8 @@ Legacy 认领、检索新鲜度和 Spring Data Repository 查询。
 启动 PostgreSQL 16 + pgvector 数据库后执行：
 
 ```bash
-mvn -pl spring-ai-rag-core -am \
+mvn -pl spring-ai-rag-core \
+  -Dembedding-profile.it.enabled=true \
   -Dtest=EmbeddingProfilePostgresIntegrationTest \
   -Dsurefire.failIfNoSpecifiedTests=false \
   -Drag.it.jdbc-url=jdbc:postgresql://127.0.0.1:35267/embedding_profile_test \
@@ -529,6 +530,26 @@ mvn -pl spring-ai-rag-core -am \
 ```
 
 未设置 `rag.it.jdbc-url` 时该测试会跳过，因此上述显式命令是本次迁移的必要验收门槛。
+
+> **走外部库必须显式确认**。该套件会对 `-Drag.it.jdbc-url` 指向的库执行
+> `flyway.clean()`——这会**删掉该 schema 下的所有对象**——所以必须同时设置
+> `EMBEDDING_PROFILE_IT_CLEAN_CONFIRM=YES`：
+>
+> ```bash
+> EMBEDDING_PROFILE_IT_CLEAN_CONFIRM=YES mvn -pl spring-ai-rag-core \
+>   -Dembedding-profile.it.enabled=true \
+>   -Dtest=EmbeddingProfilePostgresIntegrationTest \
+>   -Dsurefire.failIfNoSpecifiedTests=false \
+>   -Drag.it.jdbc-url=jdbc:postgresql://127.0.0.1:35267/embedding_profile_test \
+>   -Drag.it.username=postgres -Drag.it.password=postgres \
+>   test
+> ```
+>
+> Batch 802 之前这个套件**既没有护栏也没有开关**：仓库里没有任何脚本设置
+> `rag.it.jdbc-url`，所以它 7 个测试在任何自动化路径里都跑不到；而唯一能让它
+> 跑起来的方式就是手动指定一个库，然后它会在无任何确认的情况下 `clean()` 掉
+> 那个库。`scripts/verify-external-db-safety.mjs` 现在对**所有**接受外部库的
+> 套件强制这条规则。
 
 ### Collection Key 验收门禁
 
