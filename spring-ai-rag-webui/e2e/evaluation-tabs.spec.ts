@@ -6,7 +6,12 @@ test.describe('Evaluation tabs', () => {
     await mockAllApiCalls(page);
     await openProtectedPage(page, '/webui/evaluation?tab=suites');
     await expect(page.getByRole('tab', { name: /Suites|套件/ })).toBeVisible();
-    await expect(page.getByLabel(/Suites|套件/)).toBeVisible();
+    // Role-scoped on purpose. `getByLabel(/Suites|套件/)` matches two things:
+    // the tabpanel (named through `aria-labelledby`) and the section inside it
+    // (named through `aria-label`), so it violates strict mode. The tabpanel is
+    // the element this line is actually about — "the selected tab rendered its
+    // panel" — and scoping by role says that without naming either string.
+    await expect(page.getByRole('tabpanel')).toBeVisible();
 
     await page.getByRole('tab', { name: /Runs|运行/ }).click();
     await expect(page).toHaveURL(/tab=runs/);

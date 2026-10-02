@@ -549,6 +549,15 @@ PY
 }
 
 real_playwright() {
+  # `files-real.spec.ts` lives here rather than in a script of its own because
+  # this is the repository's only harness that brings up a real backend, a real
+  # frontend and a root API key together, and that spec needs nothing else — it
+  # builds its own PDF in memory and posts it to /api/v1/rag/files/pdf. Before
+  # Batch 804 it had no run path at all: no verification script named it and no
+  # document outside an archived progress note did either, so its assertions had
+  # never been observed by anything. Coupling it to this step is a known smell —
+  # a files test failing inside a retrieval-quality gate reads oddly — and the
+  # proper fix is a shared full-stack harness that both can use.
   (
     cd spring-ai-rag-webui
     BASE_URL="http://127.0.0.1:${FRONTEND_PORT}" \
@@ -556,6 +565,7 @@ real_playwright() {
       RERANK_DIVERSITY_FIXTURE_FILE="$FIXTURE_FILE" \
       npx playwright test \
         e2e/rerank-document-diversity-real.spec.ts \
+        e2e/files-real.spec.ts \
         --project=chromium
   )
 }
