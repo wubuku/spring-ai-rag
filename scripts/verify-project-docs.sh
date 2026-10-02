@@ -409,6 +409,22 @@ check_added_secrets() {
   fi
 }
 
+check_pessimistic_lock_self_test() {
+  # verify-no-pessimistic-locks.sh was, until Batch 809, the only automated gate
+  # in the repository with no self-test — and the reason that mattered is the
+  # reason this suite exists. The gate it guards was a sibling of the four
+  # gates that shipped unable to reject: check-entity-migration-sync.sh (Batch
+  # 809) promised an entity-to-migration comparison and never compared anything.
+  # `check_gates_can_fail` below proves this gate fails without ripgrep; it does
+  # not prove the gate still recognises a lock when ripgrep is present.
+  bash scripts/test-support/pessimistic-locks-self-test.sh > /dev/null || {
+    echo "Pessimistic-lock self-test failed; the gate may no longer reject anything." >&2
+    bash scripts/test-support/pessimistic-locks-self-test.sh >&2 || true
+    return 1
+  }
+  echo "Every forbidden coordination form has a case that proves the gate rejects it."
+}
+
 check_gates_can_fail() {
   # A gate that cannot fail is worse than no gate, and this repository has now
   # produced three separate instances of that defect:
@@ -480,6 +496,7 @@ run_check "Documented scripts and commands" check_scripts_and_commands
 run_check "Shell syntax" check_shell_syntax
 run_check "Git whitespace" git diff HEAD --check
 run_check "Added-line secret scan" check_added_secrets
+run_check "Pessimistic-lock gate self-test" check_pessimistic_lock_self_test
 run_check "Gates can fail closed" check_gates_can_fail
 
 echo "Project documentation verification: $PASS_COUNT checks passed."

@@ -82,7 +82,7 @@ skipped；本门禁则保证今后再有类"闭嘴"就会失败。
 脚本和文档对账：
 
 ```bash
-./scripts/verify-project-tests.sh   # 两项检查连同各自的自测一起跑
+./scripts/verify-project-tests.sh   # 六项检查连同各自的自测一起跑
 ```
 
 给套件加门控是一份"总有人能把它打开"的承诺。`PdfImportPostgresIntegrationTest`
@@ -92,6 +92,55 @@ skipped；本门禁则保证今后再有类"闭嘴"就会失败。
 `verify-gated-it.sh` 清单条目指向已删除的类，或它传的开关与该类实际受控的开关对不上。
 新增受门控的套件就要同时给出它的运行路径；
 `scripts/test-support/integration-switch-self-test.mjs` 证明这四条检查都还能拒绝。
+
+### 门禁清单与门禁普查
+
+`scripts/gate-registry.mjs` 登记了本仓库每一个门禁脚本，`scripts/verify-gate-wiring.mjs`
+对它做普查。登记不是形式：Batch 809 在这份清单之前量到 **21 个门禁/入口里有 13 个在
+`docs/` 下查无一处**，包括 9 个 WebUI 检查里的 7 个——`check:mutation-errors` 和
+`check:query-errors` 这样的东西根本没人知道它存在。
+
+| 门禁 | 拒绝什么 | 自测 | 跑在哪 |
+|------|----------|------|--------|
+| `verify-test-visibility.mjs` | 既没执行也没声明跳过的测试类（`tests="0" skipped="0"`） | `test-support/test-visibility-self-test.mjs` | tests 链 |
+| `verify-integration-test-switches.mjs` | 门控开关与运行路径的双向缺口 | `test-support/integration-switch-self-test.mjs` | tests 链 |
+| `verify-external-db-safety.mjs` | 接受调用方指定库名却直接 `flyway.clean()` 的套件 | `test-support/external-db-safety-self-test.mjs` | tests 链 |
+| `verify-e2e-run-paths.mjs` | 没有任何脚本能运行的 Playwright spec | `test-support/e2e-reachability-self-test.mjs` | tests 链 |
+| `verify-slo-endpoint-coverage.mjs` | 配了阈值却已不存在的端点；跨 controller 重名的 timer | `test-support/slo-endpoint-coverage-self-test.mjs` | tests 链 |
+| `verify-gate-wiring.mjs` | 未登记、无自测、无人执行、CI 到不了的自动化门禁 | `test-support/gate-wiring-self-test.mjs` | tests 链 |
+| `verify-no-pessimistic-locks.sh` | 生产代码里的悲观锁 / `SKIP LOCKED` / advisory lock | `test-support/pessimistic-locks-self-test.sh` | docs 链 |
+| `verify-zh-translation.mjs` | 中文文档里未翻译的英文段落 | `test-support/zh-translation-self-test.mjs` | docs 链 |
+| `verify-project-tests.sh` / `verify-project-docs.sh` | 上面 8 个的聚合入口 | 由各门禁承担 | 人跑 / 待接入 CI |
+| `verify-gated-it.sh` | 154 个纯 DB 型集成套件 | 由开关对账承担 | **CI 已接** |
+| `verify-webui-e2e-mock.sh` | 15 spec / 93 用例的前端 mock 回归 | 套件自身即自测 | 单独跑（2.6 分钟） |
+| `check-alignment-policy.mjs` | 物理 `text-align`、内联 `textAlign`、全局样式表契约 | `__tests__/alignment-policy.test.mjs` | `npm run lint` |
+| `check-design-system.mjs` | 越过设计 token 的硬编码值 | `__tests__/design-tokens.test.mjs` | `npm run lint` |
+| `check-a11y-forms.mjs` | 没有可访问名的控件、没绑定的 label | `__tests__/a11y-forms.test.mjs` | `npm run lint` |
+| `check-mutation-errors.mjs` | 写操作不报告失败 | `__tests__/mutation-errors.test.mjs` | `npm run lint` |
+| `check-query-errors.mjs` | 读操作失败时看起来像"空结果" | `__tests__/query-errors.test.mjs` | `npm run lint` |
+| `check-double-submit.mjs` | 请求在途时未加锁的写操作 | `__tests__/double-submit.test.mjs` | `npm run lint` |
+| `check-i18n-keys.mjs` | 两个 locale 键集不对称；`t()` 引用不存在的键 | `__tests__/i18n-keys.test.mjs` | `npm run lint` |
+| `check-hardcoded-copy.mjs` | 从未接入 i18n 的组件；已接入文件里的硬编码用户文案 | `__tests__/hardcoded-copy.test.mjs` | `npm run lint` |
+| `check-page-shell.mjs` | 受保护页面绕过 `PageHeader` | `__tests__/page-shell.test.mjs` | `npm run lint` |
+
+普查的门禁有五条硬规则：每个门禁脚本必须在册；自动化门禁必须带自测或写明为什么
+不能带；自动化门禁必须有东西执行它；**CI 到不了的自动化门禁必须写明理由**；门禁必须
+在文档里被提到。新增门禁而不登记，下一次跑 `verify-project-tests.sh` 就会失败。
+
+最后一条规则不是为了凑数。Batch 809 删掉的 `check-entity-migration-sync.sh` 是本仓库
+**第四个**"不能失败的门禁"：它声称核对实体字段与 Flyway 迁移，函数体里却没有任何比较，
+硬编码的 11 张表里有 6 张早已改名（`rag_retrieval_log` → `rag_retrieval_logs` 等），连接的
+还是项目根本不用的 `postgres` 库；而它声称保护的不变量，`application.yml` 里的
+`ddl-auto: validate` 在每次启动时就已经强制了。它之所以能活这么久，是因为
+`verify-project-docs.sh` 里的 "Gates can fail closed" 只检查使用 `rg`/`jq`/`yq` 的脚本，
+一个 `psql` + `grep` 的门禁对它是隐形的。
+
+CI 现状：仓库级的那两个入口（`verify-project-docs.sh` / `verify-project-tests.sh`）
+**尚未接入 CI**——Batch 806 因 OAuth `workflow` scope 限制摘出，待人工应用
+`/tmp/b806-ci-gates.patch`。WebUI 的 9 个检查连同它们的自测已经在 CI 里跑（`ci.yml` 的
+webui job 执行 `npm run lint`）。普查门禁每次运行都会把这份缺口连同理由打印出来，
+补丁落地后对应行会变成 "stale" 而报错，提示删掉过期理由——**这是有意的**：
+过期的豁免正是债务基线腐烂的方式。
 
 ### 文档体系
 
