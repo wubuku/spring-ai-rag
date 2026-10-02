@@ -3,6 +3,7 @@ package com.springairag.core.integration;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.FlywayException;
 import org.flywaydb.core.api.MigrationVersion;
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -28,6 +29,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  *
  * <p>Run explicitly with {@code -Dexternal-document.it.enabled=true}.
  */
+@EnabledIfSystemProperty(named = "external-document.it.enabled", matches = "true")
 class ExternalDocumentSyncPostgresIntegrationTest {
 
     private static PostgreSQLContainer<?> postgres;

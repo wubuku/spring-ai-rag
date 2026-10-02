@@ -5,6 +5,7 @@ import com.springairag.api.enums.IntegrationOperation;
 import com.springairag.core.observability.IntegrationObservation;
 import com.springairag.core.observability.IntegrationObservationRepository;
 import org.flywaydb.core.Flyway;
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -39,6 +40,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  * <p>Run explicitly with {@code -Dintegration-observability.it.enabled=true}.
  * Each test uses a disposable database and executes all migrations.</p>
  */
+@EnabledIfSystemProperty(named = "integration-observability.it.enabled", matches = "true")
 class IntegrationObservabilityPostgresIntegrationTest {
 
     private static PostgreSQLContainer<?> postgres;

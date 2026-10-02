@@ -17,6 +17,7 @@ import com.springairag.core.service.CollectionPurgeAuthorization;
 import com.springairag.core.service.CollectionPurgeService;
 import org.flywaydb.core.Flyway;
 import org.hibernate.boot.model.naming.CamelCaseToUnderscoresNamingStrategy;
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -52,6 +53,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 /**
  * Collection 内容清理与退役的真实 PostgreSQL/JPA/事务验收。
  */
+@EnabledIfSystemProperty(named = "collection-purge.it.enabled", matches = "true")
 class CollectionPurgePostgresIntegrationTest {
 
     private static final String HASH = "a".repeat(64);

@@ -8,6 +8,7 @@ import com.springairag.core.entity.RagDocument;
 import com.springairag.core.retrieval.HybridRetrieverService;
 import com.springairag.core.retrieval.RetrievalScope;
 import org.flywaydb.core.Flyway;
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -34,6 +35,7 @@ import static org.mockito.Mockito.when;
 /**
  * 使用真实 PostgreSQL/pgvector 验证多 Collection 范围 SQL。
  */
+@EnabledIfSystemProperty(named = "multi.collection.it.enabled", matches = "true")
 class MultiCollectionRetrievalPostgresIntegrationTest {
 
     private static final Logger log = LoggerFactory.getLogger(

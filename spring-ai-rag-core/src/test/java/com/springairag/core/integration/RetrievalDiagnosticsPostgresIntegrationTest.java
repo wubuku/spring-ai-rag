@@ -1,6 +1,7 @@
 package com.springairag.core.integration;
 
 import org.flywaydb.core.Flyway;
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -21,6 +22,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 /**
  * V1–V35 迁移、JSONB metadata 和 owner predicate 的真实 PostgreSQL 验收。
  */
+@EnabledIfSystemProperty(named = "retrieval-diagnostics.it.enabled", matches = "true")
 class RetrievalDiagnosticsPostgresIntegrationTest {
 
     private static PostgreSQLContainer<?> postgres;

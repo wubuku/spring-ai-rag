@@ -21,6 +21,7 @@ import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationVersion;
 import org.hibernate.jpa.HibernatePersistenceProvider;
 import org.hibernate.boot.model.naming.CamelCaseToUnderscoresNamingStrategy;
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -59,6 +60,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 /**
  * 对话 principal、租约 fencing 和 history/Memory 原子提交的真实 PostgreSQL 验收测试。
  */
+@EnabledIfSystemProperty(named = "chat.it.enabled", matches = "true")
 class ChatSessionPostgresIntegrationTest {
 
     private static PostgreSQLContainer<?> postgres;

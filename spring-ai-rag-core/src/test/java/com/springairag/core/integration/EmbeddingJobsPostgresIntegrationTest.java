@@ -22,6 +22,7 @@ import com.springairag.core.service.EmbeddingPersistenceService;
 import com.springairag.core.retrieval.EmbeddingBatchService;
 import com.springairag.documents.chunk.TextChunk;
 import org.flywaydb.core.Flyway;
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -60,6 +61,7 @@ import static org.mockito.Mockito.when;
 /**
  * V33 任务契约、原子条件 claim、partial unique index 和租约恢复的真实 PostgreSQL 验收。
  */
+@EnabledIfSystemProperty(named = "embedding-jobs.it.enabled", matches = "true")
 class EmbeddingJobsPostgresIntegrationTest {
 
     private static PostgreSQLContainer<?> postgres;

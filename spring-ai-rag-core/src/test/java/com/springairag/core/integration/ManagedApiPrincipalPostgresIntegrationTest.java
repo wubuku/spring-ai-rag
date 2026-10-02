@@ -21,6 +21,7 @@ import com.springairag.core.service.ApiKeyManagementService;
 import jakarta.persistence.EntityManagerFactory;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationVersion;
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -58,6 +59,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /** 受管 principal、credential lifecycle 与共享 quota 的真实 PostgreSQL 验收。 */
+@EnabledIfSystemProperty(named = "managed-api-principal.it.enabled", matches = "true")
 class ManagedApiPrincipalPostgresIntegrationTest {
 
     private static PostgreSQLContainer<?> postgres;

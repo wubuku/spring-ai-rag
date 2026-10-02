@@ -17,6 +17,7 @@ import com.springairag.core.service.KeywordIndexPersistenceService;
 import com.springairag.core.entity.RagDocument;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationVersion;
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -48,6 +49,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  *
  * <p>显式通过 {@code -Ddocument-lifecycle.it.enabled=true} 运行。
  */
+@EnabledIfSystemProperty(named = "document-lifecycle.it.enabled", matches = "true")
 class DocumentLifecyclePostgresIntegrationTest {
 
     private static final String HASH_A =

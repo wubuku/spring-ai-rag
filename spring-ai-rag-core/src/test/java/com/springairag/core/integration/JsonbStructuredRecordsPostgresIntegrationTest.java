@@ -1,6 +1,7 @@
 package com.springairag.core.integration;
 
 import org.flywaydb.core.Flyway;
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -27,6 +28,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * overridden with {@code -Dtestcontainers.pg.image=} or
  * {@code TESTCONTAINERS_PG_IMAGE}; no regional mirror is hard-coded here.
  */
+@EnabledIfSystemProperty(named = "jsonb.it.enabled", matches = "true")
 class JsonbStructuredRecordsPostgresIntegrationTest {
 
     private static PostgreSQLContainer<?> postgres;

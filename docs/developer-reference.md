@@ -47,6 +47,30 @@ open spring-ai-rag-core/target/site/jacoco/index.html
 
 See [testing-guide.md](testing-guide.md) for the test strategy.
 
+### Test Visibility
+
+Run after the backend suite, once reports exist:
+
+```bash
+./scripts/verify-project-tests.sh
+```
+
+A test class that neither executes nor reports itself as skipped writes
+`tests="0" skipped="0"` to its surefire report — the same pair of numbers a
+genuinely empty class produces, so it vanishes from the run summary entirely.
+Gating a class with `assumeTrue` inside `@BeforeAll` causes exactly this:
+JUnit aborts the container rather than skipping it.
+
+Twenty-one PostgreSQL/Testcontainers integration classes were in that state,
+hiding about 145 test methods — including the only coverage of the API-key
+rotation security guards. They now carry a class-level
+`@EnabledIfSystemProperty`, so a disabled container reports its real test
+count as skipped, and this gate fails if any class goes quiet again.
+
+Because a gate that cannot fail is worse than no gate, the script first runs
+`scripts/test-support/test-visibility-self-test.mjs`, which asserts the checker
+rejects the `tests="0" skipped="0"` shape rather than merely that it runs.
+
 ### Documentation System
 
 Run the project-documentation boundary, link, bilingual-structure, invariant, command, whitespace, and secret checks with:

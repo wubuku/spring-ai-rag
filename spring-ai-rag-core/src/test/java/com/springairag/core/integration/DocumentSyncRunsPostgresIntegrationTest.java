@@ -11,6 +11,7 @@ import com.springairag.core.service.DocumentSyncRunItemReceiptRepository;
 import com.springairag.core.service.DocumentSyncRunService;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationVersion;
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -42,6 +43,7 @@ import static org.mockito.Mockito.when;
  *
  * <p>Run with {@code -Ddocument-sync-runs.it.enabled=true}.
  */
+@EnabledIfSystemProperty(named = "document-sync-runs.it.enabled", matches = "true")
 class DocumentSyncRunsPostgresIntegrationTest {
 
     private static PostgreSQLContainer<?> postgres;
