@@ -230,6 +230,20 @@ check_bilingual_heading_structure() {
   node scripts/lib/docs-integrity-check.mjs bilingual
 }
 
+check_chinese_translation() {
+  # The bilingual check above compares heading *levels*. It is structurally
+  # blind to the body: a Chinese document can carry a hundred English paragraphs
+  # and still pass. Batch 783 found 53 prose lines, 60 table rows and 34 bold
+  # labels copied verbatim out of the English original, and fixed them by hand,
+  # leaving nothing behind to stop it recurring. This is that missing check.
+  node scripts/test-support/zh-translation-self-test.mjs >/dev/null || {
+    echo "Chinese-translation self-test failed; the gate may no longer reject anything." >&2
+    node scripts/test-support/zh-translation-self-test.mjs >&2 || true
+    return 1
+  }
+  node scripts/verify-zh-translation.mjs
+}
+
 check_tracked_text_cleanliness() {
   # A single NUL byte turns a tracked file into a git binary blob, silently
   # disabling its diff, blame, and text search. One had already landed in an
@@ -458,6 +472,7 @@ run_check "Agent entry size limits" check_entry_sizes
 run_check "Markdown links and local-state dependencies" check_markdown_links_and_boundaries
 run_check "Tracked text files contain no NUL bytes" check_tracked_text_cleanliness
 run_check "Bilingual heading structure" check_bilingual_heading_structure
+run_check "Chinese documents carry no untranslated English" check_chinese_translation
 run_check "Documentation integrity self-test" check_docs_integrity_self_test
 run_check "Business-client integration discoverability" check_business_client_discoverability
 run_check "Project invariants" check_project_invariants
