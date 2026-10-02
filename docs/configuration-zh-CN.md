@@ -1109,6 +1109,41 @@ rag:
 | `rag.rate-limit.bucket-retention-minutes` | `1440` | PostgreSQL bucket 保留时间 |
 | `rag.rate-limit.cleanup-interval-seconds` | `300` | best-effort 清理间隔 |
 | `rag.rate-limit.cleanup-batch-size` | `10000` | 单轮清理最多删除的行数 |
+| `rag.rate-limit.trusted-proxies` | `[]` | 可信代理地址或 CIDR；**为空即完全不采信 `X-Forwarded-For`** |
+
+**`X-Forwarded-For` 与可信代理（安全相关，务必读完）**
+
+默认情况下过滤器**完全忽略** `X-Forwarded-For`，只用直连对端
+（`request.getRemoteAddr()`）作为限流标识。早期实现是无条件采信该头的，
+于是默认 `strategy=ip` 下，任何客户端换一个伪造的 `X-Forwarded-For`
+就能拿到一个全新的计数窗口，限流形同虚设——这正是本项目 API Key 加固计划
+4.2 中"通过假 `X-Forwarded-For` 绕过 pre-auth IP limiter"所描述的攻击。
+
+要采信该头，必须显式登记直连对端：
+
+```yaml
+rag:
+  rate-limit:
+    enabled: true
+    strategy: ip
+    trusted-proxies:
+      - 10.0.0.0/8          # IPv4 CIDR
+      - 192.168.1.5         # 精确地址
+      - 2001:db8::/32       # IPv6 CIDR
+```
+
+解析规则：直连对端不在该集合内 → 头被**完全忽略**；在集合内 →
+从右往左剥离可信代理，取**第一个不可信**的地址作为客户端标识
+（整条链都可信时取最左侧）。因此客户端往链前面塞的任何值都取不到。
+
+> **迁移提示**：部署在反向代理 / 负载均衡后面却**没有**配置
+> `trusted-proxies` 时，所有请求会算在代理 IP 上、共享同一个计数窗口——
+> 这是把安全默认设成"不信任"的必然代价。请按实际代理网段配置该项。
+> 写错的条目（非法地址、前缀越界）会在启动期 `validateTopology()` 直接失败，
+> 而不是等到第一个被限流的请求。
+
+`strategy=api-key`、`user` 与 PostgreSQL `principal` 模式不涉及客户端 IP 解析，
+不受此配置影响。
 
 **限流策略选择：**
 - `ip`：按客户端 IP 独立计数，适合无认证场景

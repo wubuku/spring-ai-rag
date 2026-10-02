@@ -237,12 +237,17 @@ class RateLimitFilterTest {
         }
 
         @Test
-        @DisplayName("X-Forwarded-For takes precedence over RemoteAddr")
+        @DisplayName("X-Forwarded-For is ignored when the peer is not a trusted proxy")
         void forwardedForUsed() throws Exception {
+            // Regression guard for the batch that closed the pre-auth IP bypass:
+            // the filter used to prefer this header unconditionally, so any
+            // client could mint a fresh window per request with a forged value.
+            // The project's own hardening plan lists that as an attack to
+            // defend against; a test asserting the opposite made it permanent.
             request.addHeader("X-Forwarded-For", "10.0.0.1, 10.0.0.2");
+            request.setRemoteAddr("203.0.113.7");
 
-            String ip = filter.resolveClientIp(request);
-            assertEquals("10.0.0.1", ip);
+            assertEquals("203.0.113.7", filter.resolveClientIp(request));
         }
 
         @Test

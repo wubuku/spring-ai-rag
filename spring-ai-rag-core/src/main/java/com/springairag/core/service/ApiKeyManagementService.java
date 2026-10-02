@@ -1201,16 +1201,18 @@ public class ApiKeyManagementService {
                     .ifPresent(operation ->
                             expirePendingIfNecessary(operation, now));
         }
+        // `retiring` 是 Spring Data 返回的 Optional，生产上永不为 null：
+        // 之前这里写着 `if (retiring != null)`，那个判断恒真、既不保护任何东西
+        // 又长得像 null 保护。Optional 为空时 filter(...) 自然产出空流，
+        // 这才是正确的表达方式。
         Optional<RagApiKey> retiring =
                 apiKeyRepository
                         .findByPrincipalIdAndEnabledTrueAndRetireAtIsNotNull(
                                 principalId);
-        if (retiring != null) {
-            retiring.filter(candidate -> !candidate.getRetireAt().isAfter(now))
-                    .ifPresent(candidate ->
-                            apiKeyRepository.disableByKeyId(
-                                    candidate.getKeyId(), now));
-        }
+        retiring.filter(candidate -> !candidate.getRetireAt().isAfter(now))
+                .ifPresent(candidate ->
+                        apiKeyRepository.disableByKeyId(
+                                candidate.getKeyId(), now));
     }
 
     private void expirePendingIfNecessary(
