@@ -317,6 +317,51 @@
   约 53 行 × 2。合并需要同时验证两条链路的 OpenAPI 注解与日志文案差异，
   风险高于本批收益，暂列后续。
 
+### Batch 788（已交付）
+
+- 分支：`feature/dialog-stack-guard-20261003`
+- 内容：修掉共享 `Dialog` 组件的**叠加对话框缺陷**——影响 8 个页面。
+- **先找到可达路径再动手**：对话框会叠加。`Documents` 页在版本历史弹窗里点
+  "恢复版本"只调用 `setConfirmation(...)`，**没有清掉 `versionsDoc`**，
+  于是 `VersionHistoryModal` 与 `ConfirmDialog` 同时打开。
+  （逐个核过：`CreateCollectionModal`、`VersionHistoryModal` 等都复用了共享
+  `Dialog`，所以缺陷在组件本体而不是各页面。）
+- **先诊断后断言**（临时用例只打印，跑完即删），实测三处症状：
+  1. 按**一次** Escape → **两个对话框全部关闭**。每个实例各挂一个 `document`
+     keydown 监听，一次按键被所有实例同时处理。
+  2. **`body` 滚动锁泄漏**：底层记下 `previousOverflow=''`、顶层记下 `'hidden'`，
+     两个 cleanup 依次写回后 `overflow` 停在 `'hidden'`——
+     **对话框全关掉了，页面却永久无法滚动，且没有任何可见线索。**
+     这是最严重的一处：用户只看到"页面滚不动了"。
+  3. 焦点归还错位。
+- **修法**：模块级登记表。`dialogStack` 按打开顺序入栈，
+  **只有栈顶处理键盘事件**（Escape 与 Tab 陷阱都受此约束——
+  底层陷阱把焦点从顶层拽走比一次关掉全部更糟）；
+  `body` 滚动锁改为**引用计数**，只在第一个打开时保存、最后一个关闭时还原一次。
+- **变异测试 2 处，各被精确抓住**
+  | 变异 | 抓到它的用例 |
+  |---|---|
+  | 去掉"只有栈顶响应键盘"守卫 | `closes only the topmost dialog on Escape`、`releases the body scroll lock exactly once`（2 条） |
+  | 引用计数还原为逐实例快照（即修复前的样子） | `releases the body scroll lock exactly once`、`releases the lock when a lower dialog is closed first`（2 条） |
+- **如实登记一条"没被抓住"的**：Tab 那条
+  （`does not let the lower dialog hijack Tab from the topmost one`）
+  **对第一处变异不敏感**——底层陷阱只在焦点恰好处于其首尾元素时才会动手。
+  它仍然是有意义的回归防线（钉住"焦点始终留在顶层弹窗内"），
+  但**不把它算作抓住了变异 A**。不虚报变异战绩。
+- 指标（实测值）：前端 **784 用例**（+4，73 文件），全绿；
+  `tokens:check` / `check:alignment`（11 处有意居中）/
+  `check:design-system`（94 token，**0 grandfather**）/
+  `check:a11y-forms`（91 个组件文件）/ `typecheck` / `lint` / `build` 全通过。
+- 遗留技术债（如实登记，未处理）：
+  - `Documents` 页"版本历史 → 恢复"的叠加是**设计如此还是遗漏**，值得产品侧确认；
+    本批只保证叠加时的行为正确。
+  - 纯英文标题在中文文档里仍无门禁守护（Batch 786 主动放弃的规则）。
+  - `ApiKeyManagementService` 里 `if (retiring != null)` 这类**恒真判断**仍在
+    （`retiring` 是 `Optional`，生产上永不为 null）——它不是 null 保护却长得像，
+    靠改生产代码消除，而不是靠堆测试做绿。
+  - 145 个集成测试仍未真正跑过（需 Docker）。
+  - `PageShell` 脱节；`ask`/`chat` 53 行 × 2 重复。
+
 ### Batch 787（已交付）
 
 - 分支：`feature/apikey-remaining-branch-coverage-20261003`
