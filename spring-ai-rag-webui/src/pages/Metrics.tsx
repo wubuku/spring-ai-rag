@@ -213,6 +213,12 @@ export function Metrics() {
       <h1 className="page-title">{t('metrics.title')}</h1>
       {metricsQuery.isPending ? (
         <div className={styles.loading}>{t('common.loading')}</div>
+      ) : metricsQuery.isError ? (
+        // 之前这里会落进 EmptyState 告诉用户"暂无数据"——把请求失败
+        // 说成了没有指标。紧邻的 usageQuery 本来就处理对了，页面自相矛盾。
+        <div className={styles.error} role="alert">
+          {t('metrics.loadFailed')}
+        </div>
       ) : metricsQuery.data?.data ? (
         <>
           <MetricsCharts data={metricsQuery.data.data} />

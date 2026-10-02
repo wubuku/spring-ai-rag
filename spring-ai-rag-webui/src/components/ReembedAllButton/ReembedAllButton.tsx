@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { documentsApi } from '../../api/documents';
 import { useToast } from '../Toast';
 import { ConfirmDialog } from '../Dialog';
+import { QueryErrorBanner } from '../ui';
 import styles from './ReembedAllButton.module.css';
 import { ChevronUp, ChevronDown, TriangleAlert } from 'lucide-react';
 
@@ -14,7 +15,13 @@ export function ReembedAllButton() {
   const [isExpanded, setIsExpanded] = useState(false);
   const [confirmForce, setConfirmForce] = useState(false);
 
-  const { data: status, isLoading } = useQuery({
+  const {
+    data: status,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
     queryKey: ['embeddingStatus'],
     queryFn: () => documentsApi.getEmbeddingStatus(),
     refetchInterval: 30000, // Refresh every 30s
@@ -35,6 +42,21 @@ export function ReembedAllButton() {
       showToast(`Re-embed failed: ${err.message}`, 'error');
     },
   });
+
+  if (isError) {
+    // `isLoading || !status` 会把失败也吞成骨架屏：react-query 重试耗尽后
+    // isLoading 变 false、status 仍是 undefined，于是这一块永远停在灰色骨架，
+    // 既不显示"还有多少文档没嵌入"，也不告诉用户为什么。
+    return (
+      <QueryErrorBanner
+        onRetry={() => void refetch()}
+        retryLabel={t('common.retry')}
+        detail={error instanceof Error ? error.message : undefined}
+      >
+        {t('documents.missingEmbeddingsLoadFailed')}
+      </QueryErrorBanner>
+    );
+  }
 
   if (isLoading || !status) {
     return <div className={styles.skeleton} />;

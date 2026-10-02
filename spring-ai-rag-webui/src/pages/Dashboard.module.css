@@ -37,6 +37,29 @@
   margin-bottom: 4px;
 }
 
+/*
+ * The dash is ambiguous on its own: it could be the server reporting nothing or
+ * the server never answering. Muted + not-bold says "we don't have this" without
+ * a flash of red, which would be wrong for a tile that is merely unread.
+ */
+.metric[data-unavailable] {
+  color: var(--color-text-muted);
+  font-weight: 400;
+}
+
+.metricRetry {
+  display: block;
+  padding: 0;
+  margin-bottom: 4px;
+  background: none;
+  border: 0;
+  font: inherit;
+  font-size: 0.75rem;
+  color: var(--color-primary, var(--color-text-muted));
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 .label {
   font-size: 0.85rem;
   color: var(--color-text-muted);

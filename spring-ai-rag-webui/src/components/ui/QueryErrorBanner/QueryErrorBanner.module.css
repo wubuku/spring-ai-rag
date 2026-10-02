@@ -1,0 +1,28 @@
+.banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-8) var(--space-12);
+  background: var(--color-error-bg);
+  color: var(--color-error-text);
+  border: 1px solid var(--color-error-border);
+  border-radius: var(--radius-4);
+}
+
+.message {
+  font-weight: 500;
+}
+
+.retry {
+  /* The banner is already the loud element; the action stays quiet. */
+  flex: none;
+}
+
+.detail {
+  flex-basis: 100%;
+  font-size: 0.75rem;
+  color: var(--color-error-text);
+  opacity: 0.85;
+  overflow-wrap: anywhere;
+}

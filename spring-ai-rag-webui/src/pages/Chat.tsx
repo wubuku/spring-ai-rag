@@ -23,7 +23,7 @@ import {
 import { useImeComposition } from '../utils/ime';
 import styles from './Chat.module.css';
 import { ChevronDown, PanelLeft, ThumbsUp, ThumbsDown } from 'lucide-react';
-import { IconButton, PageHeader } from '../components/ui';
+import { IconButton, PageHeader, QueryErrorBanner } from '../components/ui';
 
 interface Message {
   id: string;
@@ -96,7 +96,7 @@ export function Chat() {
   const addSessionRef = useRef(addSession);
   addSessionRef.current = addSession;
 
-  const { data: modelsData } = useQuery({
+  const { data: modelsData, isError: modelsError, refetch: refetchModels } = useQuery({
     queryKey: ['chat-models'],
     queryFn: async () => {
       const res = await modelsApi.list();
@@ -617,6 +617,17 @@ export function Chat() {
               <label htmlFor="chat-model" className={styles.contextLabel}>
                 {t('chat.model')}
               </label>
+              {/* 失败时 availableModels 是空数组，模型下拉框会静默地变成禁用
+                  且没有任何说明：用户看到的是一个灰掉的控件，分不清是"没配
+                  模型"还是"模型列表没加载出来"。 */}
+              {modelsError && (
+                <QueryErrorBanner
+                  onRetry={() => void refetchModels()}
+                  retryLabel={t('common.retry')}
+                >
+                  {t('chat.modelsLoadFailed')}
+                </QueryErrorBanner>
+              )}
               <select
                 id="chat-model"
                 className={styles.contextSelect}

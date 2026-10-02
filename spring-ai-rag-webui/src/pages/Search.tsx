@@ -10,7 +10,7 @@ import { SearchResults } from '../components/SearchResults';
 import { useToast } from '../components/Toast';
 import { useSearchHistory } from '../hooks/useSearchHistory';
 import { useBlobUrlOpener } from '../hooks/useBlobUrlOpener';
-import { IconButton } from '../components/ui';
+import { IconButton, QueryErrorBanner } from '../components/ui';
 import { X } from 'lucide-react';
 import type { CollectionScopeMode } from '../types/api';
 import {
@@ -141,7 +141,7 @@ export function Search() {
   const urlScopeIsValid =
     urlState.scopeMode !== 'SELECTED_COLLECTIONS'
     || urlState.selectedCollectionKeys.length > 0;
-  const { data, isPending, refetch } = useQuery({
+  const { data, isPending, isError, error, refetch } = useQuery({
     queryKey: [
       'search',
       urlState.query,
@@ -321,6 +321,19 @@ export function Search() {
       </ImeSafeForm>
 
       {urlState.query && isPending && <div className={styles.loading}>{t('common.loading')}</div>}
+
+      {/* 过去失败时 `isPending` 转 false、`data` 保持 undefined，于是搜索框
+          下面什么都不渲染：用户按了搜索，页面既没有结果也没有任何解释，
+          看起来像还在转。检索失败和"检索还在进行"必须分开。 */}
+      {urlState.query && isError && (
+        <QueryErrorBanner
+          onRetry={() => void refetch()}
+          retryLabel={t('common.retry')}
+          detail={error instanceof Error ? error.message : undefined}
+        >
+          {t('search.loadFailed')}
+        </QueryErrorBanner>
+      )}
 
       {data?.data && (
         <SearchResults

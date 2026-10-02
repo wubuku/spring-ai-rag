@@ -120,6 +120,12 @@ export function Evaluation() {
           <section className={styles.section}>
             {reportQ.isPending ? (
               <div className={styles.muted}>{t('common.loading')}</div>
+            ) : reportQ.isError ? (
+              // 之前这里直接落进 else：用 data ?? {} 渲染出一张全是 — 的
+              // "正常"报告，看起来像真数据。失败必须自己说出来。
+              <div className={styles.error} role="alert">
+                {t('evaluation.reportLoadFailed')}
+              </div>
             ) : (
               <div className={styles.cards}>
                 {cards.map(c => (
@@ -131,6 +137,11 @@ export function Evaluation() {
               </div>
             )}
 
+            {feedbackStatsQ.isError && (
+              <div className={styles.error} role="alert">
+                {t('evaluation.feedbackStatsLoadFailed')}
+              </div>
+            )}
             {feedbackStatsQ.data && (
               <div className={styles.subSection}>
                 <h2>{t('evaluation.feedbackStats')}</h2>
@@ -187,6 +198,11 @@ export function Evaluation() {
           <section className={styles.section}>
             {historyQ.isPending ? (
               <div className={styles.muted}>{t('common.loading')}</div>
+            ) : historyQ.isError ? (
+              // 失败时原来会显示"暂无历史记录"，把请求失败说成了没有数据。
+              <div className={styles.error} role="alert">
+                {t('evaluation.historyLoadFailed')}
+              </div>
             ) : (
               <div className={styles.tableWrap}>
                 <table className={styles.table}>
@@ -223,8 +239,18 @@ export function Evaluation() {
 
         {tab === 'feedback' && (
           <section className={styles.section}>
+            {feedbackStatsQ.isError && (
+              <div className={styles.error} role="alert">
+                {t('evaluation.feedbackStatsLoadFailed')}
+              </div>
+            )}
             {feedbackStatsQ.data && (
               <pre className={styles.pre}>{JSON.stringify(feedbackStatsQ.data, null, 2)}</pre>
+            )}
+            {feedbackHistoryQ.isError && (
+              <div className={styles.error} role="alert">
+                {t('evaluation.feedbackHistoryLoadFailed')}
+              </div>
             )}
             <div className={styles.tableWrap}>
               <table className={styles.table}>
@@ -417,6 +443,11 @@ function RunsPanel() {
           {t('evaluation.runId')}
           <input value={runId} onChange={e => setRunId(e.target.value)} />
         </label>
+        {runQ.isError && (
+          <div className={styles.error} role="alert">
+            {t('evaluation.runLoadFailed')}
+          </div>
+        )}
         {runQ.data && <pre className={styles.pre}>{JSON.stringify(runQ.data, null, 2)}</pre>}
       </div>
     </section>

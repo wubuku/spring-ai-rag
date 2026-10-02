@@ -44,7 +44,8 @@
     "required": "(required)",
     "previous": "Previous",
     "next": "Next",
-    "preview": "Preview"
+    "preview": "Preview",
+    "retry": "Retry"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -55,7 +56,10 @@
     "cache": "Cache",
     "lastCheck": "Last Check",
     "db": "DB",
-    "vector": "Vector"
+    "vector": "Vector",
+    "healthLoadFailed": "Could not reach the health endpoint",
+    "systemUnreachable": "Status unknown — health check unreachable",
+    "metricUnavailable": "Unavailable — the request that reports this number failed"
   },
   "documents": {
     "title": "Documents",
@@ -150,7 +154,9 @@
     "reembedForceConfirm": "Force re-embed will regenerate ALL embeddings (may take a while). Continue?",
     "clearSearch": "Clear search",
     "searchPlaceholder": "Search documents",
-    "loadError": "Failed to load documents"
+    "loadError": "Failed to load documents",
+    "collectionsLoadFailed": "Could not load the collection list",
+    "missingEmbeddingsLoadFailed": "Could not check which documents are missing embeddings"
   },
   "collections": {
     "title": "Collections",
@@ -207,7 +213,9 @@
         "chatRows": "Persisted chat rows",
         "auditRows": "Content-bearing audit rows"
       }
-    }
+    },
+    "loadFailed": "Could not load collections",
+    "capabilityLoadFailed": "Could not read integration capabilities, so destructive actions stay hidden"
   },
   "collectionScope": {
     "label": "Retrieval scope",
@@ -258,7 +266,8 @@
     "deleteSession": "Delete session {{title}}",
     "timeJustNow": "Just now",
     "timeMinutesAgo": "{{count}}m ago",
-    "timeHoursAgo": "{{count}}h ago"
+    "timeHoursAgo": "{{count}}h ago",
+    "modelsLoadFailed": "Could not load the model list"
   },
   "search": {
     "title": "Search",
@@ -285,7 +294,8 @@
       "semantic": "Meaning match",
       "keyword": "Keyword match"
     },
-    "history": "History"
+    "history": "History",
+    "loadFailed": "Search request failed"
   },
   "metrics": {
     "title": "Metrics",
@@ -323,7 +333,8 @@
     "noDurableUsage": "No model invocations were recorded in this UTC date range.",
     "loadingDurableUsage": "Loading durable model usage",
     "usageLoadFailed": "Durable model usage could not be loaded.",
-    "costDisclaimer": "Configured cost estimates are operational guidance, not provider invoices."
+    "costDisclaimer": "Configured cost estimates are operational guidance, not provider invoices.",
+    "loadFailed": "Unable to load metrics"
   },
   "alerts": {
     "title": "Alerts",
@@ -373,7 +384,10 @@
     "actions": "Actions",
     "retry": "Retry",
     "retryDelivery": "Retry delivery {{id}}",
-    "all": "All"
+    "all": "All",
+    "loadFailed": "Could not load alerts",
+    "sloConfigLoadFailed": "Could not load SLO configurations",
+    "silenceLoadFailed": "Could not load silence schedules"
   },
   "settings": {
     "title": "Settings",
@@ -469,7 +483,10 @@
     "namePlaceholder": "e.g., Hybrid vs Rerank Search",
     "metricPrecision": "Retrieval Precision",
     "metricRecall": "Retrieval Recall",
-    "metricSatisfaction": "User Satisfaction"
+    "metricSatisfaction": "User Satisfaction",
+    "experimentsLoadFailed": "Could not load experiments",
+    "experimentLoadFailed": "Could not load this experiment",
+    "analysisLoadFailed": "Could not load the analysis for this experiment"
   },
   "apiKeys": {
     "title": "API Keys",
@@ -609,7 +626,8 @@
     "embedSuccess": "Embedding completed — {{chunks}} chunks created",
     "embedCached": "Document already embedded (cached)",
     "embedFailed": "Embedding failed: {{message}}",
-    "embedError": "Failed to trigger embedding: {{error}}"
+    "embedError": "Failed to trigger embedding: {{error}}",
+    "collectionsLoadFailed": "Could not load the collection list"
   },
   "evaluation": {
     "title": "Evaluation & Feedback",
@@ -658,7 +676,12 @@
     "outcome": "Outcome code",
     "createSuiteFailed": "Unable to create the suite",
     "importVersionFailed": "Unable to import the version",
-    "startRunFailed": "Unable to start the run"
+    "startRunFailed": "Unable to start the run",
+    "reportLoadFailed": "Unable to load the evaluation report",
+    "historyLoadFailed": "Unable to load evaluation history",
+    "feedbackStatsLoadFailed": "Unable to load feedback statistics",
+    "feedbackHistoryLoadFailed": "Unable to load feedback history",
+    "runLoadFailed": "Unable to load the run"
   },
   "embeddings": {
     "title": "Embedding operations",
@@ -704,6 +727,9 @@
     "reason": "Reason",
     "cancelFailed": "Unable to cancel the job",
     "retryFailed": "Unable to retry the job",
-    "applyRepairFailed": "Unable to apply the repair"
+    "applyRepairFailed": "Unable to apply the repair",
+    "readinessLoadFailed": "Unable to load embedding readiness",
+    "derivationLoadFailed": "Unable to load derivation integrity status",
+    "detailLoadFailed": "Unable to load the job details"
   }
 }

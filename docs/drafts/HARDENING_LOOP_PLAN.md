@@ -317,6 +317,87 @@
   约 53 行 × 2。合并需要同时验证两条链路的 OpenAPI 注解与日志文案差异，
   风险高于本批收益，暂列后续。
 
+### Batch 797（已交付）
+
+- 分支：`feature/silent-query-errors-20261002`
+- 内容：**读操作失败可见性**——把"一次失败的读看起来像事实"这一整类缺陷清掉，
+  并加 `check:query-errors` 门禁。写操作失败静默在 Batch 791 处理过；
+  读操作失败静默更糟，因为它通常**一点也不像坏了**。
+- **勘察**：`src/` 共 **37 个 `useQuery`**（17 命名 + 20 解构），**21 个失败时完全不可见**。
+  分两种形态：
+  - 命名形态 9 个（`Embeddings` 的 `readinessQ`/`derivationQ`/`detailQ` 渲染
+    `{q.data && …}`，失败时整段消失；`Evaluation` 的 `reportQ` 失败会落进 `else`
+    用 `data ?? {}` 渲染一张**全是 `—` 的"正常"报告**——它不像错误页，它像**测过了**；
+    `Metrics` 的 `metricsQuery` 落进 `EmptyState` 说"暂无数据"，而紧邻的
+    `usageQuery` 本来就处理对了，同一页自相矛盾）。
+  - 解构形态 12 个，其中**两个在报否定结论**：
+    - `Alerts.tsx` 三个 tab 都是 `!data?.data?.length ? <EmptyState>`。
+      活跃告警页签上那就是**告警页在告诉运维没东西在烧，而它只是连不上服务器**。
+      而它自己的 `AlertDetail`（一百行之下）本来就做对了。
+    - `ABTest.tsx` 的 `if (!exp) return <EmptyState>Not found</EmptyState>`
+      把网络失败报成"该实验不存在"——会让人去查一个根本没被删的实验的删除审计。
+  - 其余：`ReembedAllButton` 的 `if (isLoading || !status)` 是**永久**的
+    （重试耗尽后 `isLoading` 变 false 而 `status` 仍 undefined，永远停在骨架屏）；
+    `Search.tsx` 失败时表单下面什么都不渲染（失败的检索 vs 仍在进行的检索无法区分）；
+    `Chat.tsx` 把 `availableModels` 塌成 `[]` 静默禁用模型下拉；
+    `Collections`/`Documents`/`Files` 的集合下拉失败即空列表；
+    `Metrics`/`Evaluation` 见上。
+- **修复**：全部改用**新建的共享基元 `QueryErrorBanner`**（`components/ui/`，
+  5 个自测用例）。它接一句话、可选 `onRetry`（react-query 本来就把 `refetch`
+  递过来了）、可选 `detail`，渲染 `role="alert"` 而非 `role="status"`
+  （它不由用户动作触发，且报告的是功能丧失）。
+  顺带把 `Alerts` 里 `AlertDetail` 的局部 `styles.errorState` 也统一过来。
+- **4 处 fail closed 没有走豁免，而是真正修好**：`query-error-allow` 注释与
+  写门禁一致——**只给失败输出加注，不让门禁变绿**（能消音的注释就是谁都能写的注释）。
+  所以 `Collections` 的能力查询（失败时 purge 按钮保持隐藏，方向正确）现在补一句说明；
+  `Dashboard` 过去给每个磁贴渲染 `?? '—'`，而代表"服务端什么都没说"的破折号与
+  代表"我们根本没问到"的破折号**要求完全相反的反应**——拆出 `Metric` 子组件，
+  加 `data-unavailable` 与各自的重试，并用独立的 `systemUnreachable` 横幅把
+  "连不上健康端点"和"系统不健康"分开（旧代码把两者都报成不健康，方向至少是安全的）。
+- **门禁 `check:query-errors`（已串进 `lint`）**，两条规则 `silent-query` /
+  `empty-panel-on-error`。**它的第一版有个本批最大的发现**：只匹配命名形态，
+  于是 37 个查询只判了 **17 个**却打印"every read reports its failure"——
+  覆盖率的谎报比没有门禁更危险，因为后续批次会基于它认为已经守住的方向投入。
+  补上解构形态后才真正覆盖全部 37 个。
+- **变异测试抓到门禁自己的第二个漏洞（如实记录）**：
+  1. 删掉 `Alerts` 活跃告警的 `isError` 分支（**解构保留**）→ 门禁**仍绿**。
+     "绑定了 `isError`"不等于"读了 `isError`"，而删错误横幅恰恰不会动解构。
+     已改为要求错误绑定在声明之后**被真正读取**。
+  2. 改完再测**仍绿**：`Alerts.tsx` 有三个子组件各自解构 `isError`，
+     剥掉兄弟声明也没用，因为它们的 **JSX 使用**还在区域内。
+     **这是文件级分析的根本极限**，需要作用域分析，而作用域分析猜错就会误报——
+     门禁唯一不能有的失败模式。
+  3. `reportQ` 三元退回 `else` → 门禁变红 ✓（指到 `Evaluation.tsx:44`）
+  4. 门禁退回只认 `onError` → 自测 **7 例**变红 ✓
+  5. 删掉解构分支 → 自测 **6 例**变红 ✓
+- **缺口如何收尾（不虚报）**：变异 1（兄弟组件漏检）门禁抓不到，
+  **由行为测试收尾**——同一个变异下
+  `src/pages/query-failure-visibility.test.tsx` **2 例立刻变红**（实测）。
+  该漏检以 `expect(kinds(source)).toEqual([])` 的形式**钉进自测**，
+  注释写明"这个断言钉的就是漏检本身"，将来补上要显式改这一行。
+- **顺带挖到的真实缺陷**：`Collections.tsx` 的
+  `capabilityData?.data.features.optional.collectionPurge` 可选链**只保护了第一段**，
+  200 但信封形状不符时在 `.data.features` 上抛错，**整页崩掉**——
+  为了一个只决定"要不要显示破坏性按钮"的标志。已改成全程可选，并补了一条
+  `not.toThrow()` 行为测试钉住它。
+- **我自己犯的错（如实登记）**：变异测试的还原脚本用的是 **15:30 的备份**，
+  而 `isReadAfterDeclaration` 的改进是 **15:31** 才做的——变异 3/4 的 `cp` 还原
+  **把我刚加的改进一起回滚了**。是 design-system 套件里那条自测抓住了它
+  （`reports a read that binds an error and then never reads it` 失败），
+  补回后 175/175。教训：变异备份必须在**每次改动后**刷新，不能沿用批初快照。
+- 指标：前端 **794 → 809 用例**（75 文件，+15 = 10 行为回归 + 5 基元）；
+  design-system focused **153 → 175 用例**（6 文件，+22 门禁自测）；
+  i18n 静态引用 **491 → 508** 键，两语言键集仍完全一致（各 639）；
+  `lint` 7 个门禁全绿、`typecheck` 干净、`build` 通过；
+  仓库门禁 **15/15**，`verify-project-tests` 四项全过；
+  core **987 类 / 7693 用例**未变（本批纯前端）。
+- 遗留（如实登记，未处理）：
+  - `check:query-errors` 对**命名形态**是文件级的，`Alerts.tsx` 四个子组件里
+    任何一个的 `isError` 都能替另一个背书，同样是"漏报而非误报"，已写进文档与自测。
+  - 门禁的豁免注释只加注不豁免（与写门禁一致），所以**没有**任何一处登记了豁免；
+    将来真有正当例外时，要么照实修，要么在自测里显式登记。
+  - i18n 仍有 **175 个键**只有动态模板或无人引用，无门禁能区分动态与废弃。
+
 ### Batch 796（已交付）
 
 - 分支：`feature/write-button-pending-guard-20261002`

@@ -15,7 +15,7 @@ import { CreateCollectionModal } from '../components/CreateCollectionModal';
 import { Dialog } from '../components/Dialog';
 import { Card } from '../components/Card';
 import styles from './Collections.module.css';
-import { EmptyState, PageHeader } from '../components/ui';
+import { EmptyState, PageHeader, QueryErrorBanner } from '../components/ui';
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -32,22 +32,32 @@ export function Collections() {
   const { showToast } = useToast();
   const { identity } = useApiKeyAuth();
 
-  const { data, isPending } = useQuery({
+  const { data, isPending, isError, refetch } = useQuery({
     queryKey: ['collections', page],
     queryFn: () => collectionsApi.list({ page, size: 20 }),
   });
 
-  const { data: capabilityData } = useQuery({
+  // Fail-closed: capabilityData 失败时 purgeVisible 保持 false，破坏性操作被
+  // 隐藏而不是被误展示。但"按钮不见了"本身也需要一句解释，否则用户会以为
+  // 权限被降级或功能被移除。
+  const {
+    data: capabilityData,
+    isError: capabilityError,
+    refetch: refetchCapability,
+  } = useQuery({
     queryKey: ['integration-capabilities'],
     queryFn: collectionsApi.integrationCapabilities,
     enabled: identity?.principalType === 'ENVIRONMENT_ROOT',
     staleTime: 30_000,
   });
 
+  // Every step is optional: the leading `?.` alone guards `capabilityData`, and
+  // a 200 carrying an unexpected envelope then threw on `.data.features`,
+  // taking the whole page down over a capability flag. Reading a capability is
+  // never worth a crash.
   const purgeVisible =
     identity?.principalType === 'ENVIRONMENT_ROOT'
-    && capabilityData?.data.features.optional.collectionPurge === true;
-
+    && capabilityData?.data?.features?.optional?.collectionPurge === true;
   const deleteMutation = useMutation({
     mutationKey: ['delete-collection'],
     mutationFn: (collectionKey: string) => collectionsApi.deleteByKey(collectionKey),
@@ -74,6 +84,14 @@ export function Collections() {
           </button>
         }
       />
+      {capabilityError && (
+        <QueryErrorBanner
+          onRetry={() => void refetchCapability()}
+          retryLabel={t('common.retry')}
+        >
+          {t('collections.capabilityLoadFailed')}
+        </QueryErrorBanner>
+      )}
       {isPending ? (
         <div className={styles.grid}>
           {[1, 2, 3].map(i => (
@@ -85,6 +103,13 @@ export function Collections() {
             </Card>
           ))}
         </div>
+      ) : isError ? (
+        // 过去的空态判定是 `data?.data?.collections?.length === 0`，失败时
+        // data 是 undefined，比较不成立，于是连"暂无集合"都不显示——
+        // 整页只剩一个"新建集合"按钮，看不出是没数据还是没连上。
+        <QueryErrorBanner onRetry={() => void refetch()} retryLabel={t('common.retry')}>
+          {t('collections.loadFailed')}
+        </QueryErrorBanner>
       ) : (
         <div className={styles.grid}>
           {data?.data?.collections?.map(col => (
