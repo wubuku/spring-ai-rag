@@ -180,10 +180,6 @@ public class RagChatController {
         return executeNonStreamingJson(request, httpRequest, "ask");
     }
 
-    ResponseEntity<ChatResponse> ask(ChatRequest request) {
-        return ask(request, null);
-    }
-
     /**
      * RAG Q&A (non-streaming) — /chat is an alias for /ask, unified entry point.
      *
@@ -210,10 +206,6 @@ public class RagChatController {
     public ResponseEntity<ChatResponse> chat(@Valid @RequestBody ChatRequest request,
                                              HttpServletRequest httpRequest) {
         return executeNonStreamingJson(request, httpRequest, "chat");
-    }
-
-    ResponseEntity<ChatResponse> chat(ChatRequest request) {
-        return chat(request, null);
     }
 
     /**
@@ -703,13 +695,6 @@ public class RagChatController {
         return ResponseEntity.ok(history);
     }
 
-    ResponseEntity<List<ChatHistoryResponse>> getHistory(
-            String sessionId,
-            int limit) {
-        return ResponseEntity.ok(
-                historyRepository.findBySessionId(sessionId, limit));
-    }
-
     /**
      * Clear session history.
      *
@@ -797,28 +782,6 @@ public class RagChatController {
                 .header("Content-Disposition", "attachment; filename=\"" + filename + "\"")
                 .contentType(org.springframework.http.MediaType.parseMediaType(contentType))
                 .body(resource);
-    }
-
-    ResponseEntity<ByteArrayResource> exportHistory(
-            String sessionId,
-            String format,
-            int limit) {
-        if (!format.equalsIgnoreCase("json") && !format.equalsIgnoreCase("md")) {
-            throw new IllegalArgumentException(
-                    "format must be 'json' or 'md', got: " + format);
-        }
-        byte[] content = format.equalsIgnoreCase("md")
-                ? chatExportService.exportAsMarkdown(sessionId, limit)
-                : chatExportService.exportAsJson(sessionId, limit);
-        String contentType = format.equalsIgnoreCase("md")
-                ? "text/markdown; charset=utf-8"
-                : "application/json; charset=utf-8";
-        String extension = format.equalsIgnoreCase("md") ? ".md" : ".json";
-        return ResponseEntity.ok()
-                .header("Content-Disposition",
-                        "attachment; filename=\"" + sessionId + extension + "\"")
-                .contentType(MediaType.parseMediaType(contentType))
-                .body(new ByteArrayResource(content));
     }
 
     // Null-safe audit logging helper

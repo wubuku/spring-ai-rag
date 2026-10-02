@@ -1241,6 +1241,29 @@ Playwright never imply a real model/tool-capable endpoint was validated.
 5. **Never `@Ignore` tests** — fix them or delete them
 6. **Test names use `should_ describe expected behavior` format**
 7. **Each test is independent** — no execution order dependency
+8. **Do not add a package-private production overload that only tests can reach.**
+   A convenience overload that drops a parameter is a bypass, and a test that
+   calls it pins behaviour the product can never exhibit. Batch 815 deleted four
+   of them from `RagChatController`; each had passing tests, and the tests were
+   the reason the bypass looked legitimate.
+
+   The tell is a request-derived argument that disappears. `ChatPrincipal` is
+   derived from `HttpServletRequest`, and `ChatPrincipal.from(null)` does not
+   fail — it returns `local()`. So a "just for tests" overload that passes
+   `null` does not blow up; it silently returns **unscoped** data, which is the
+   dangerous direction. If a test needs a different arity, pass an explicit
+   `MockHttpServletRequest` carrying the principal attributes and exercise the
+   signature production actually uses.
+
+9. **Run mutation experiments one at a time, and never read a file while one is
+   running.** Batch 815's first round of three mutations were all no-ops — the
+   patterns did not match, so nothing changed and the tests were green. Reading
+   the source during that window showed a line that the mutation had *temporarily*
+   written, and it looked exactly like a live authorization hole. A mutation run
+   in the background mutates the working tree; any `grep` you issue meanwhile is
+   reading experimental state. Two rules follow: serialise mutation runs, and
+   confirm a surprising finding against a copy taken **before** the experiment
+   started.
 
 ## Performance Benchmark Tests
 

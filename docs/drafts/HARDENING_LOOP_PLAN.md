@@ -478,6 +478,92 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
+### Batch 815（已交付）
+
+- 分支：`feature/remove-requestless-controller-overloads-20261005`
+- 内容：**删掉四个"只有测试够得着"的生产重载**。它们各自都丢弃 `HttpServletRequest`，
+  而 principal 正是从它派生的。本批是 Batch 810/811 那条线索的延续：
+  **"测试验证了一个生产中不存在的场景"——这一次那个场景是一条授权旁路。**
+- 勘察：
+  - 找法：扫 `RagChatController` 的 package-private 方法，发现一个**家族**——
+    `ask(ChatRequest)`、`chat(ChatRequest)` 两个把 `httpRequest` 直接传成 `null`；
+    `getHistory(String, int)` 走 `historyRepository.findBySessionId`（**不带 principal**）；
+    `exportHistory(String, String, int)` 走 `chatExportService.exportAsJson(sessionId, limit)`
+    （同样不带 principal）。四个都**只有测试在调**，生产零调用方。
+  - **关键判断，也是本批真正的发现**：
+    `ChatPrincipal.from(null)` **不抛异常，它返回 `local()`**。
+    也就是说这些旁路**不是 fail-closed，是静默降级**——
+    看起来"没有请求上下文应该会报错"，实际会安静地返回**无作用域**的数据。
+    这是最危险的失败方向。
+  - 更要紧的是：**生产路径早就有真安全测试**（`productionHistory_isScopedToAuthenticatedDatabaseKey`
+    里写着 `verify(historyRepository, never()).findBySessionId(...)`，
+    `productionHistory_hidesMissingAndForeignSessionsTheSameWay` 等），
+    而旁路上的测试在**祝福**无作用域查询。同一件事，一半测得很严，一半测得很松。
+- 变更：
+  - **删除四个重载**（`ask`/`chat` 单参、`getHistory` 两参、`exportHistory` 三参），
+    共移除 1500 字节。删除后编译器报出 **32 个错误 / 16 个调用点，全部在
+    `RagChatControllerTest`**——这正是"只有测试在用"的机器证明。
+  - **8 处 `ask`/`chat`**：机械改为显式传 `, null`。
+  - **`getHistory` 三条**：
+    - `getHistory_returnsHistory` 迁到生产签名，改为断言**带作用域**的
+      `findByPrincipalAndSession`（原先断言无作用域查询）。
+    - `getHistory_customLimit` 迁到生产签名。**自定义 limit 的透传原先其实没人验**
+      ——生产侧只用过 50，这条测试打的是旁路。
+    - `getHistory_defaultLimitIs50` **删除**。它显式传了 50，从未触碰
+      `@RequestParam(defaultValue = "50")`，而旁路本身就绕过了那个注解。
+      **名字承诺的"默认值"没有任何东西在验。**
+  - **`exportHistory` 五条**全部迁到生产签名（带 `databaseKeyRequest`）。
+    其中 `exportHistory_emptySessionId_passesToService` **删除**：它断言空 session id
+    会原样传给导出服务，而 `SessionIdValidator.resolve` 对空白值
+    **生成一个全新的随机 UUID**——生产根本到不了那个状态。
+    换成 `exportHistory_blankSessionId_becomesAFreshSessionAndCannotHitAnExistingOne`：
+    两次空白调用必须得到**两个不同**的真实 id。这才是真正成立的��全属性。
+  - **新增 `getHistory_customLimitWithNoRows_reportsNotFoundRatherThanEmpty`**：
+    迁移过程中它**自己失败了一次**，而且失败得对——生产路径把"空结果"与
+    "别人的会话"同样报成 `SESSION_NOT_FOUND`。我原先的断言（200 + 空列表）
+    是旁路语义。这条把"不可区分"钉成契约。
+  - `testing-guide{,-zh-CN}.md` 的"编写新测试的规则"新增第 8 条，
+    写明"不要为了让测试够得着而加 package-private 生产重载"及其识别特征。
+- 变异测试（3 个，全部如期变红；**第一轮全是空变异，如实记录**）：
+  - M1 让生产 `getHistory` 改用 `findBySessionId` → **4 个错误**
+  - M2 让它对空结果返回 200 而不是抛 `SESSION_NOT_FOUND` → **2 个失败**
+  - M3 让 md 导出改用无 principal 的两参 `exportAsMarkdown` → **2 个错误**
+  - M3 顺带证明了一件重要的事：生产的 md 导出**本来就是带 principal 的**。
+    如果它本来就没带，把它改成两参就是空操作，不会变红。
+- **我自己犯的错（本批最该记的一条）**：第一轮三个变异**全是空变异**——
+  正则锚点没匹配上，文件根本没被改，测试自然全绿。
+  我据此去 grep 源码，看到 `exportAsMarkdown(validSession, limit)`，
+  **当场判定"这是一个真实的越权缺陷：md 导出没带 principal，json 带了"**，
+  并且已经开始准备写进账本和 commit message。
+  **它是错的。** 那个 grep 是在**变异批次仍在后台临时改写该文件时**执行的，
+  我读到的是 M3 变异**临时打上去的内容**。恢复后的真实源码两个分支都带 principal。
+  教训有两条，第二条更要命：
+  1. **变异实验必须串行**，跑完再读文件；后台批改工作区时任何 grep 都不可信。
+  2. 断言"发现了一个安全漏洞"之前，必须有一份**未经任何变异污染的**源码快照作为依据。
+     我当时手里有 `/tmp/b815-f.bak`，却去读了工作区。
+  如果这条写进了账本，仓库里就会多一条**记录在案的假漏洞**——那比漏掉一个真漏洞更难清理。
+- 验证：
+  - core 全量 **991 类 / 7735 用例 / 0 失败 / 0 错误 / 154 跳过**。
+    净计数与 814 相同：删 1 条（`defaultLimitIs50`）、增 1 条（新用例）、
+    另有 1 条被等价替换。已核对 surefire 报告 mtime。
+  - `verify-test-visibility` 按规矩夹在全量与门控 IT 之间。
+  - **门控 IT 真跑**（本批动了 `RagChatController`）：16 用例 / 0 失败，BUILD SUCCESS。
+  - 仓库门禁：docs 链 16/16、tests 链 14/14、悲观锁检查通过。
+  - WebUI 未改动，不跑前端套件。
+- 指标：仅测试可及的生产重载 **4 → 0**；`RagChatControllerTest` **31 → 32 例**；
+  断言无作用域查询的测试 **4 → 0**；core 用例数 7735（不变，结构变了）。
+- 遗留（如实登记，未处理）：
+  - **`ChatPrincipal.from(null)` 返回 `local()` 这个行为本身没动。**
+    本批删掉了已知调用方，但**该方法在任何新代码里传 `null` 仍会静默降级**。
+    更彻底的做法是让它对 `null` 抛异常，但那会波及所有依赖 `local()` 兜底的
+    启动期与测试路径，属于独立的一批。已在测试指南第 8 条登记这个陷阱。
+  - `RagChatControllerTest` 仍有 `controller` 与 `productionController` 两个实例，
+    `ask(..., null)` 仍显式传 `null` 请求——**签名是对的，但仍是无请求上下文**。
+    这些用例验的是编排逻辑而非 principal 作用域；作用域由 `production*` 那组承担。
+  - 其它 controller 是否存在同族旁路**未普查**（本批只查了 `RagChatController`）。
+  - 仍无 CSP；两处 `escapeHtml` 仍各自独立实现。
+  - CI 仍未跑仓库级 `scripts/verify-*.sh`（`/tmp/b806-ci-gates.patch` 待用户手动应用）。
+
 ### Batch 814（已交付）
 
 - 分支：`feature/preview-html-shell-escaping-20261005`
