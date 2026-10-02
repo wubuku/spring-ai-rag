@@ -10,6 +10,7 @@ import com.springairag.core.service.CollectionIdentityResolver;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -64,6 +65,24 @@ class ApiKeyCollectionAccessTest {
         assertTrue(ApiKeyCollectionAccess.isUnrestricted(key));
         assertEquals(List.of(99L),
                 ApiKeyCollectionAccess.resolveCollectionIds(List.of(99L), key));
+    }
+
+    /**
+     * Batch 816。没有策略就是"不受限"，而这是一条**刻意保留的 fail-open 默认值**，
+     * 不是疏漏：auth 关闭的本地部署根本没有 API key 策略，此时"不受限"才是对的。
+     *
+     * <p>把它钉在这里，是因为它的危险完全体现在下游——任何把请求上下文丢成
+     * {@code null} 的调用方都会静默拿到全作用域，而不是报错。
+     * {@code verify-null-request-forwarding.mjs} 负责挡住那类调用方；
+     * 这条用例负责让下一个改这里的人知道"这是有意的，改它要连带想清楚本地部署"。
+     */
+    @Test
+    void absentPolicyMeansUnrestrictedByDesign() {
+        assertTrue(ApiKeyCollectionAccess.isUnrestricted(null),
+                "无策略必须解释为不受限（auth 关闭的本地部署）；"
+                        + "改成 false 会让本地部署检索不到任何东西");
+        assertEquals(Optional.empty(),
+                ApiKeyCollectionAccess.restrictedCollectionIds(null));
     }
 
     @Test

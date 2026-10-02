@@ -144,6 +144,12 @@ export const GATES = [
     selfTest: 'scripts/test-support/gate-wiring-self-test.mjs',
     noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
   },
+  {
+    gate: 'scripts/verify-null-request-forwarding.mjs',
+    kind: 'gate',
+    selfTest: 'scripts/test-support/null-request-forwarding-self-test.mjs',
+    noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
+  },
 
   // Run by scripts/verify-project-docs.sh.
   {

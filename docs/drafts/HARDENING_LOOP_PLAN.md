@@ -478,6 +478,80 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
+### Batch 816（已交付）
+
+- 分支：`feature/null-request-forwarding-gate-20261005`
+- 内容：把 Batch 815 的"只查了一个 controller"补齐全——**普查 28 个 controller**，
+  删掉剩下的 3 个请求上下文旁路，并加一条门禁让第 4 个没机会出现。
+- 勘察（**判据两次修正，且大部分候选被证伪**）：
+  - 先用"package-private 方法"当判据，扫出 596 条——把 `public`/`private`
+    和方法体内的 `return xxx(...)` 全算进去了，噪声压倒信号。**丢弃。**
+  - 换成可审计的信号：`return xxx(..., null)` 这类**转发置空**。得 **17 处**。
+  - 第二层判据才是关键：**被置空的到底是哪个参数**。逐个读目标签名后发现，
+    17 处里 **14 处置空的是业务参数**——`collectionKey`、`Idempotency-Key`、
+    `embeddingPolicy`、`expectedDocumentRevision`（乐观锁）——**与授权无关**，
+    是完全正当的便捷重载。**只有 3 处**置空的是 `HttpServletRequest`。
+    如果第一版判据直接对 17 处报警，就要写 14 条豁免——**债务基限冒充门禁**。
+  - 那 3 处的危害链查到底：`ApiKeyCollectionAccess.currentPolicy(null)` → `null`，
+    而 `isUnrestricted(null)` → **`true`**；`ChatPrincipal.from(null)` → **`local()`**。
+    两个派生函数对缺失上下文**都 fail-open**。也就是说"传 null"不会被拒绝，
+    会被解释成"没有限制"。这是本批真正的发现。
+- 变更：
+  - **删除 3 个重载**：`RagChatController.stream(ChatRequest)`、
+    `stream(ChatRequest, HttpServletRequest)`（只置空 `httpResponse`）、
+    `RagSearchController.searchWithConfig(SearchRequest)`。
+    编译报 58 个错误 / **29 个调用点、6 个测试文件**，再次印证"只有测试在用"。
+    迁移时脚本**过度匹配**过一次，把 JDK 的 `Arrays.stream(ids)` 也改了，
+    编译报错抓出来，已还原——**这正是让编译器当第二双眼睛的用处**。
+  - **新门禁 `scripts/verify-null-request-forwarding.mjs`**：位置敏感，只在
+    ① 同类内按名字转发 ② 目标存在含 `HttpServletRequest` 的重载
+    ③ `null` **正好落在该参数位** 时才报。当前树 **431 文件通过**；
+    对 Batch 815 之前的源码**精确命中那 2 处、12 处业务参数重载零误报**。
+  - **新门禁自测 19 例**（`scripts/test-support/null-request-forwarding-self-test.mjs`），
+    其中 **9 例是"不该报"**（业务参数、非常量 null、限定符调用、只置空 response、
+    注释与 javadoc 里的示例……）。
+  - 门禁**登记进 `gate-registry.mjs`**、**接进 tests 链（14 → 16）**。
+    登记瞬间 `gate-wiring` 自测的最后一例立刻报 `undocumented-gate`——
+    它在要求我把门禁写进文档，补完才过。**门禁自测抓门禁自己的账**，这是想要的效果。
+  - **把两个 fail-open 默认值钉成明示契约**：
+    `ApiKeyCollectionAccessTest.absentPolicyMeansUnrestrictedByDesign`、
+    新增 `ChatPrincipalNullRequestTest`（4 例）。理由写在测试注释里：
+    auth 关闭的本地部署本来就没有策略，"不受限"必须是对的；
+    危险不在默认值本身，而在**调用方**——所以门禁挡调用方，测试标默认值。
+- 变异测试（**5 个，4 正 1 负，且那个负暴露了真缺口**）：
+  - M1 去掉限定符过滤 → 自测红（1 例）
+  - M2 去掉"按位置"判定 → 自测红（2 例）
+  - M3 去掉注释遮蔽 → 自测红（2 例）
+  - **M4 清空上报循环 → 当时仍然全绿。**
+    **如实结论：第一版自测只测了纯函数，没测"门禁真的会红"**——
+    这与本仓库已删掉的四个"不能失败的门禁"是同一种病。
+    已补 3 例子进程端到端用例（fixture 树 + 断言退出码与报告文本），
+    重做 M4 → 红；再加 M5（退出码恒为 0）→ 红。
+    **教训：自测必须断言门禁的退出行为，不能只断言它的内部函数。**
+- 验证：
+  - core 全量 **992 类 / 7740 用例 / 0 失败 / 0 错误 / 154 跳过**
+    （991 → 992 类，7735 → 7740 用例，+5；已核对 surefire 报告 mtime）。
+  - `verify-test-visibility` 按规矩夹在全量与门控 IT 之间。
+  - **门控 IT 真跑**：16 用例 / 0 失败，BUILD SUCCESS。
+  - 仓库门禁：docs 链 16/16、tests 链 **14 → 16**、悲观锁检查通过；
+    门禁登记 47 → **48**（19 automated），20/23 带自测，10 个 CI 到达。
+  - WebUI 未改动，不跑前端套件。
+- 指标：仅测试可及且丢弃请求上下文的重载 **3 → 0**；
+  门禁总数 47 → **48**；tests 链 14 → **16**；门禁自测 16 → **19 例**；
+  core 用例 7735 → **7740**。
+- 遗留（如实登记，未处理）：
+  - **`isUnrestricted(null) == true` 与 `from(null) == local()` 没有改成 fail-closed。**
+    本批只证明了它们是刻意且必要的（auth 关闭的本地部署），
+    并把危险转移到调用方一侧由门禁看守。真正的收敛要改这两个默认值的语义，
+    会波及所有启动期与本地部署路径，属独立的一批。
+  - **14 处业务参数重载未处理。**它们不涉及授权，但确实是"只有测试够得着"的生产代码。
+    本批按判据明确排除，没有扩大战线。
+  - 门禁的 allowlist 结构已就位但**当前为空**；若将来出现真实豁免，每条必须写理由。
+  - 门禁只扫 `spring-ai-rag-core/src/main/java`；`spring-ai-rag-api` 与
+    `spring-ai-rag-documents` 未纳入（目前无 controller）。
+  - Batch 812–815 登记的 CSP 缺失、两处 `escapeHtml` 重复实现仍未处理。
+  - CI 仍未跑仓库级 `scripts/verify-*.sh`（`/tmp/b806-ci-gates.patch` 待用户手动应用）。
+
 ### Batch 815（已交付）
 
 - 分支：`feature/remove-requestless-controller-overloads-20261005`

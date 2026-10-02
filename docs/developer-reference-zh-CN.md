@@ -109,6 +109,7 @@ skipped；本门禁则保证今后再有类"闭嘴"就会失败。
 | `verify-slo-endpoint-coverage.mjs` | 配了阈值却已不存在的端点；跨 controller 重名的 timer | `test-support/slo-endpoint-coverage-self-test.mjs` | tests 链 |
 | `verify-gate-wiring.mjs` | 未登记、无自测、无人执行、CI 到不了的自动化门禁 | `test-support/gate-wiring-self-test.mjs` | tests 链 |
 | `verify-test-expectations.mjs` | 方法体为空、只有注释的 `@Test`（每次运行都算通过） | `test-support/inert-test-self-test.mjs` | tests 链 |
+| `verify-null-request-forwarding.mjs` | 把字面量 `null` 转发进 `HttpServletRequest` 参数位的重载——而 `ChatPrincipal.from(null)` 与 `ApiKeyCollectionAccess.isUnrestricted(null)` **双双 fail-open** | `test-support/null-request-forwarding-self-test.mjs` | tests 链 |
 | `verify-no-pessimistic-locks.sh` | 生产代码里的悲观锁 / `SKIP LOCKED` / advisory lock | `test-support/pessimistic-locks-self-test.sh` | docs 链 |
 | `verify-zh-translation.mjs` | 中文文档里未翻译的英文段落 | `test-support/zh-translation-self-test.mjs` | docs 链 |
 | `verify-project-tests.sh` / `verify-project-docs.sh` | 上面 8 个的聚合入口 | 由各门禁承担 | 人跑 / 待接入 CI |

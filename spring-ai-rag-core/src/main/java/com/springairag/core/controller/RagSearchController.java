@@ -386,8 +386,4 @@ public class RagSearchController {
         }
     }
 
-    ResponseEntity<List<RetrievalResult>> searchWithConfig(SearchRequest request) {
-        return searchWithConfig(request, null);
-    }
-
 }

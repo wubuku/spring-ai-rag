@@ -134,7 +134,7 @@ class SseStreamE2ETest {
                 Flux.just("你", "好", "，", "世", "界", "！"));
 
         ChatRequest request = new ChatRequest("你好", "session-s1");
-        SseEmitter emitter = controller.stream(request);
+        SseEmitter emitter = controller.stream(request, null, null);
 
         assertNotNull(emitter);
         verifyStream("你好", "session-s1", null);
@@ -146,7 +146,7 @@ class SseStreamE2ETest {
         stubStream("简单问题", "session-s2", null, Flux.just("这是一个回答。"));
 
         ChatRequest request = new ChatRequest("简单问题", "session-s2");
-        SseEmitter emitter = controller.stream(request);
+        SseEmitter emitter = controller.stream(request, null, null);
 
         assertNotNull(emitter);
         verifyStream("简单问题", "session-s2", null);
@@ -163,7 +163,7 @@ class SseStreamE2ETest {
                 Flux.just("Hello", " World").doOnNext(receivedChunks::add));
 
         ChatRequest request = new ChatRequest("测试", "session-s3");
-        SseEmitter emitter = controller.stream(request);
+        SseEmitter emitter = controller.stream(request, null, null);
 
         // 等待异步处理
         Thread.sleep(500);
@@ -184,7 +184,7 @@ class SseStreamE2ETest {
         ChatRequest request = new ChatRequest("皮肤问题", "session-d1");
         request.setDomainId("dermatology");
 
-        SseEmitter emitter = controller.stream(request);
+        SseEmitter emitter = controller.stream(request, null, null);
 
         assertNotNull(emitter);
         verifyStream("皮肤问题", "session-d1", "dermatology");
@@ -200,16 +200,16 @@ class SseStreamE2ETest {
         // medical
         ChatRequest req1 = new ChatRequest("问题", "s1");
         req1.setDomainId("medical");
-        controller.stream(req1);
+        controller.stream(req1, null, null);
 
         // legal
         ChatRequest req2 = new ChatRequest("问题", "s2");
         req2.setDomainId("legal");
-        controller.stream(req2);
+        controller.stream(req2, null, null);
 
         // default (no domain)
         ChatRequest req3 = new ChatRequest("问题", "s3");
-        controller.stream(req3);
+        controller.stream(req3, null, null);
 
         verifyStream("问题", "s1", "medical");
         verifyStream("问题", "s2", "legal");
@@ -224,7 +224,7 @@ class SseStreamE2ETest {
         stubStream("", "session-empty", null, Flux.empty());
 
         ChatRequest request = new ChatRequest("", "session-empty");
-        SseEmitter emitter = controller.stream(request);
+        SseEmitter emitter = controller.stream(request, null, null);
 
         assertNotNull(emitter);
         verifyStream("", "session-empty", null);
@@ -239,7 +239,7 @@ class SseStreamE2ETest {
                 Flux.error(new RuntimeException("LLM 超时")));
 
         ChatRequest request = new ChatRequest("出错", "session-err");
-        SseEmitter emitter = controller.stream(request);
+        SseEmitter emitter = controller.stream(request, null, null);
 
         assertNotNull(emitter);
         verifyStream("出错", "session-err", null);
@@ -256,7 +256,7 @@ class SseStreamE2ETest {
         stubStream("问题", "session-io", null, errorFlux);
 
         ChatRequest request = new ChatRequest("问题", "session-io");
-        SseEmitter emitter = controller.stream(request);
+        SseEmitter emitter = controller.stream(request, null, null);
 
         assertNotNull(emitter);
     }
@@ -275,7 +275,7 @@ class SseStreamE2ETest {
         stubStream("长回答", "session-long", null, Flux.fromIterable(tokens));
 
         ChatRequest request = new ChatRequest("长回答", "session-long");
-        SseEmitter emitter = controller.stream(request);
+        SseEmitter emitter = controller.stream(request, null, null);
 
         assertNotNull(emitter);
         verifyStream("长回答", "session-long", null);
@@ -290,9 +290,9 @@ class SseStreamE2ETest {
         stubStream("问题B", "session-B", null, Flux.just("B的回答"));
         stubStream("问题C", "session-C", null, Flux.just("C的回答"));
 
-        SseEmitter emitterA = controller.stream(new ChatRequest("问题A", "session-A"));
-        SseEmitter emitterB = controller.stream(new ChatRequest("问题B", "session-B"));
-        SseEmitter emitterC = controller.stream(new ChatRequest("问题C", "session-C"));
+        SseEmitter emitterA = controller.stream(new ChatRequest("问题A", "session-A"), null, null);
+        SseEmitter emitterB = controller.stream(new ChatRequest("问题B", "session-B"), null, null);
+        SseEmitter emitterC = controller.stream(new ChatRequest("问题C", "session-C"), null, null);
 
         assertNotNull(emitterA);
         assertNotNull(emitterB);
@@ -313,7 +313,7 @@ class SseStreamE2ETest {
                 Flux.just("在 Spring AI 中使用 pgvector 需要...", "（省略）"));
 
         ChatRequest request = new ChatRequest(complexMessage, "session-cn");
-        SseEmitter emitter = controller.stream(request);
+        SseEmitter emitter = controller.stream(request, null, null);
 
         assertNotNull(emitter);
         verifyStream(complexMessage, "session-cn", null);
@@ -327,7 +327,7 @@ class SseStreamE2ETest {
         stubStream("测试", "session-timeout", null, Flux.just("test"));
 
         ChatRequest request = new ChatRequest("测试", "session-timeout");
-        SseEmitter emitter = controller.stream(request);
+        SseEmitter emitter = controller.stream(request, null, null);
 
         // SseEmitter(0L) 表示无超时，无法直接访问 timeout 字段，
         // 但构造参数为 0L 是正确的行为（长连接不被中断）
