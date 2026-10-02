@@ -478,6 +478,101 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
+### Batch 808（已交付）
+
+- 分支：`feature/hardcoded-copy-gate-20261003`
+- 内容：把 WebUI 里 **35 处用户可见的硬编码英文**接入 i18n，并补上 `check:i18n-keys`
+  一直缺的那条规则。**Batch 801–807 连续七个批次都在后端**，而用户优先级里 WebUI
+  排第 2 位，本批刻意转向前端，且不从已知遗留起步，而是做一次系统普查。
+- **勘察：普查判据被我自己推翻两次**
+  - 第一轮只扫 JSX 文本节点 `>text<`，得 32 处。
+  - 修完主要部分后**发现漏了一整类**：`title="Generate UUID"`、
+    `placeholder="UUID or business key"`、`aria-label="Notifications"` 这类**属性值**
+    同样会被用户看到或被读屏念出，第一轮判据完全没覆盖。**第二轮普查把它补进去，
+    又新找出 3 处**（`Embeddings.tsx:150` 的 `title="QUEUED"` 等）。
+  - **教训**：普查判据本身是需要被证伪的假设。"扫一遍没扫到"和"不存在"不是一回事。
+- **真实缺陷 1：两个组件从未接入 i18n**。`ErrorBoundary` 的 `t()` 计数为 **0**：
+  整个错误边界显示的是 "Something went wrong" / "An unexpected error occurred" /
+  "Try Again"——**用户在应用已经崩溃时看到的那块屏幕，是唯一没有被翻译的一块**。
+  `MetricsCharts` 同样 `t()` = 0，183 行里 13 处英文，而且不止 JSX：Recharts 的
+  `{ name: 'Retrievals' }` 与 `<Bar name="Calls" />` 会落在 X 轴和 tooltip 上，
+  所以图表在非英语环境下**怎么翻译页面都不会变**。
+- **真实缺陷 2：翻译早就维护好了，却被硬编码绕过**。`common.loading`、`common.retry`、
+  `alerts.unit`、`search.collection`、`search.allCollections`、`documents.collection`
+  六个键在两个 locale 里都存在且正确；更说明问题的是
+  **`search.noResults` 与 `search.resultsCount` 完全没有调用方**——
+  页面用 JSX 手工拼了同样意思的句子，这两份翻译就这样一直被维护着、一直没人用。
+- **变更**
+  1. `ErrorBoundary`：因为边界本身必须保持 class（它实现
+     `getDerivedStateFromError`），把文案抽成函数组件 `ErrorFallback` 用
+     `useTranslation`，class 只管状态——**对外导出不变，调用方零改动**。
+  2. `MetricsCharts` / `Toast`：接入 `useTranslation`，13 + 1 处。
+  3. 其余 8 个文件 20 处零星硬编码接入；`search.noResults` /
+     `search.resultsCount` 改为携带 `{{query}}` / `{{count}}` 插值（两个键无调用方，
+     改值无副作用），于是"手工拼句子"这件事本身消失了。
+  4. locale 新增 21 键 × 2 语言。
+  5. **顺手一个真的 a11y 改进**：必填星号 `<span className={styles.required}>*</span>`
+     加 `aria-hidden="true"`。星号是视觉装饰而 input 已有 `required`，让读屏念出
+     "*" 只会污染字段的可访问名——测试正是被这一点绊住才暴露的。
+- **新门禁 `check-hardcoded-copy`**（lint 8 → **9** 项）
+  两条规则，判据写在文件头：
+  1. `component-without-i18n`：文件有用户可见英文却从不调用 i18n —— 最强信号，
+     正是它抓出上面那两个文件；
+  2. `hardcoded-user-copy`：已接 i18n 的文件里的零星字面量。
+  检测面含 JSX 文本、图表 `name`（数据与属性两种）、`aria-label` / `title` /
+  `placeholder` / `alt`——**后两类是本批自己踩出来的**。
+  白名单 **7 条技术术语**（`RECURRING` / `ASYNC` / `SYNC` / `SKIP` / `QUEUED` /
+  `MRR` / `English`），**每条都写了理由而不是只登记放过**——例如 `English` 是
+  语言选择器按惯例用各语言自己的名字标注，中文用户找 `中文` 必须能看到；
+  `RECURRING` 等是 `<option>` 的显示文本即其 `value`，翻译会让显示与存库值脱节。
+  自测 14 例（`scripts/__tests__/hardcoded-copy.test.mjs`），含一条"白名单按文件
+  生效，换个文件同样形状仍被拒"。
+- **变异测试 2 次，均如期变红**：① 往 `Search.tsx` 塞回 `Hybrid` 与
+  `title="Advanced mode"` → 门禁报 2 条并区分 `jsx-text` / `attribute`；
+  ② 删掉 `RECURRING` 白名单条目 → 门禁指名报出 `pages/Alerts.tsx:630`。
+- **自罚**
+  1. **正则替换 JSX 吞掉了 `</button>`**。把 `>Bar<` 换成 `{t('metrics.bar')}` 的
+     正则 `>(\s*)Bar(\s*)<` 里，`\s*<` 只吃到了 `<`，把 `/button>` 留在后面，
+     结果两个按钮的闭合标签都变成了开始标签，tsc 报 5 个 JSX 错误。
+     **JSX 结构不能用这种正则改**——Batch 807 刚因为脚本栽了四次，这里又栽一次，
+     而且这次破坏的是结构而不是数据。
+  2. **差点为了变绿弱化测试**。`SearchResults.test.tsx` 原本断言
+     `/1 result for "test"/` 与 `/2 results for "test"/`，**在验证复数逻辑**；
+     换成键名后这个验证就消失了。没有就此放过：i18next 解析 `key_one` / `_other`
+     并在缺失时回退到 `key`，而 `check-i18n-keys` 只要求 `key` 精确存在——
+     **两者可以同时满足，于是复数能力被恢复**，并新增一条测试用文件级
+     `tSpy` 钉住"count 与 query 确实传对了"（全局 setup 的 mock 是
+     `t: key => key`，本来没有任何单测能看见插值）。
+  3. **自测里我自己写错一处行号期望**（WITH_I18N 模板有 8 行前缀，期望 7 实际 9）。
+  4. **zh-CN 的复数键被我漏成不对称**（只加了 `_other`），被 `check-i18n-keys`
+     当场报出 `locale-key-asymmetry`。补了 `_one`（中文无单复数差异，值与 `_other`
+     相同，i18next 的 zh 规则本就不会选它）。**这是既有门禁在正确工作**，不是我该
+     改门禁。
+- 验证：
+  - 前端单测：**77 文件 / 832 用例全绿**（831 → 832，+1 为新增的插值验证；
+    过程中一度 23 失败，全部是"断言了硬编码英文"，逐个确认为断言需更新而非真缺陷）
+  - 门禁自测：**8 文件 / 208 用例**（194 → 208，+14）
+  - `npm run lint` **9/9**；`typecheck` 干净；`build` 通过（548ms）
+  - e2e mock **15 spec / 93 用例全绿**（2.6m）
+  - 变异测试 2 次均如期变红
+  - **后端未被本批触碰，仍按惯例复跑并复验**（`scripts/oc-mvn-test.sh -- -pl spring-ai-rag-core`）：
+    core **989 类 / 7711 用例 / 0 失败 / 154 跳过**（`TEST-*.xml` 口径，与 Batch 807 完全一致），
+    报告 mtime 全部为本次运行；`verify-project-tests.sh` **10/10**（须夹在全量 `mvn test` 之后，
+    故此处不跑门控 IT）；`verify-project-docs.sh` **15/15**；悲观锁检查通过
+- 指标：`lint` 8 → **9** 项；门禁自测 194 → **208**；前端单测 831 → **832**；
+  locale 键 +21（×2 语言，含 `resultsCount_one/_other`）；硬编码英文 **35 → 7**
+  （7 条全部登记理由）。
+- 遗留（如实登记）：
+  - `check-i18n-keys` 报告"175 个键只通过动态模板调用到达或未被使用"，其中包含
+    Batch 792 已登记的 174 个无静态引用 locale 键（`theme.${value}` 动态拼接，
+    已验证无法安全收敛）；本批新增的 `resultsCount_one/_other` 会被计入同一桶，
+    它们是 i18next 的复数键，**由 `resultsCount` 兜底，不属于死键**。
+  - 白名单里的 `MRR` 与旁边的 `nDCG` 一样是指标缩写但只有 MRR 登记了；
+    `nDCG` 因首字母小写不匹配本门禁的判据。判据的"首字母大写"这一条本身有局限，
+    如实记录。
+  - **CI 里仍然一条 `scripts/verify-*.sh` 都没跑**（Batch 806 因 OAuth `workflow`
+    scope 限制摘出，补丁待手动应用；`npm run lint` 里新增的这一项同受影响）。
+
 ### Batch 807（已交付）
 
 - 分支：`feature/derive-chunker-version-20261003`

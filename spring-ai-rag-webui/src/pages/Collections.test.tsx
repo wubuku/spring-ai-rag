@@ -306,7 +306,7 @@ describe('Collections navigation, create modal and purge preview failure', () =>
     renderPage();
 
     await user.click(
-      await screen.findByRole('button', { name: 'View Documents' }),
+      await screen.findByRole('button', { name: 'collections.viewDocuments' }),
     );
     expect(window.location.pathname + window.location.search)
       .toBe('/documents?collectionKey=sample-collection');

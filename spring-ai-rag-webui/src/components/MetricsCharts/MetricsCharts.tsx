@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   BarChart,
   Bar,
@@ -35,26 +36,27 @@ type ChartType = 'bar' | 'line';
 export function MetricsCharts({ data }: MetricsChartsProps) {
   const [chartType, setChartType] = useState<ChartType>('bar');
   const palette = useChartTheme();
+  const { t } = useTranslation();
 
   if (!data) {
-    return <div className={styles.loading}>Loading...</div>;
+    return <div className={styles.loading}>{t('common.loading')}</div>;
   }
 
   // Prepare chart data for main metrics
   const mainMetricsData = [
-    { name: 'Retrievals', value: data.totalRetrievals ?? 0 },
-    { name: 'LLM Calls', value: data.totalLlmCalls ?? 0 },
-    { name: 'Tokens', value: data.totalLlmTokens ?? 0 },
+    { name: t('metrics.retrievals'), value: data.totalRetrievals ?? 0 },
+    { name: t('metrics.llmCalls'), value: data.totalLlmCalls ?? 0 },
+    { name: t('metrics.tokens'), value: data.totalLlmTokens ?? 0 },
   ];
 
   // Latency data
   const latencyData = [
-    { name: 'Avg Latency', value: data.avgRetrievalLatencyMs ?? 0 },
+    { name: t('metrics.avgLatency'), value: data.avgRetrievalLatencyMs ?? 0 },
   ];
 
   // Cache hit rate (as percentage)
   const cacheData = [
-    { name: 'Cache Hit Rate', value: Math.round((data.cacheHitRate ?? 0) * 100) },
+    { name: t('metrics.cacheHitRate'), value: Math.round((data.cacheHitRate ?? 0) * 100) },
   ];
 
   // Model metrics comparison
@@ -89,19 +91,19 @@ export function MetricsCharts({ data }: MetricsChartsProps) {
           className={chartType === 'bar' ? styles.active : ''}
           onClick={() => setChartType('bar')}
         >
-          Bar
+          {t('metrics.bar')}
         </button>
         <button
           className={chartType === 'line' ? styles.active : ''}
           onClick={() => setChartType('line')}
         >
-          Line
+          {t('metrics.line')}
         </button>
       </div>
 
       {/* Main Metrics Chart */}
       <div className={styles.chartSection}>
-        <h3 className={styles.chartTitle}>Call Volume</h3>
+        <h3 className={styles.chartTitle}>{t('metrics.callVolume')}</h3>
         <ResponsiveContainer width="100%" height={250}>
           {chartType === 'bar' ? (
             <BarChart data={mainMetricsData}>
@@ -129,7 +131,7 @@ export function MetricsCharts({ data }: MetricsChartsProps) {
 
       {/* Latency Chart */}
       <div className={styles.chartSection}>
-        <h3 className={styles.chartTitle}>Avg Retrieval Latency (ms)</h3>
+        <h3 className={styles.chartTitle}>{t('metrics.avgRetrievalLatency')}</h3>
         <ResponsiveContainer width="100%" height={200}>
           <BarChart data={latencyData}>
             <CartesianGrid {...gridStyle} />
@@ -163,7 +165,7 @@ export function MetricsCharts({ data }: MetricsChartsProps) {
       {/* Model Comparison */}
       {modelData.length > 0 && (
         <div className={styles.chartSection}>
-          <h3 className={styles.chartTitle}>Model Comparison</h3>
+          <h3 className={styles.chartTitle}>{t('metrics.modelComparison')}</h3>
           <ResponsiveContainer width="100%" height={250}>
             <BarChart data={modelData}>
               <CartesianGrid {...gridStyle} />
@@ -172,8 +174,8 @@ export function MetricsCharts({ data }: MetricsChartsProps) {
               <Tooltip
                 contentStyle={tooltipStyle}
               />
-              <Bar dataKey="calls" fill={palette.primary} name="Calls" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="tokens" fill={palette.success} name="Tokens" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="calls" fill={palette.primary} name={t('metrics.llmCalls')} radius={[4, 4, 0, 0]} />
+              <Bar dataKey="tokens" fill={palette.success} name={t('metrics.tokens')} radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>

@@ -90,7 +90,7 @@ describe('Search', () => {
 
     expect(screen.getByText('search.title')).toBeInTheDocument();
     expect(screen.getByPlaceholderText(/search.placeholder/)).toBeInTheDocument();
-    expect(screen.getByLabelText(/Hybrid/)).toBeChecked();
+    expect(screen.getByLabelText('search.hybrid')).toBeChecked();
     expect(screen.getByRole('button', { name: /search.searchButton/ })).toBeDisabled();
   });
 
@@ -274,7 +274,7 @@ describe('Search', () => {
 
     expect(await screen.findByText('Manual')).toBeInTheDocument();
     expect(screen.getByPlaceholderText(/search.placeholder/)).toHaveValue('manual');
-    expect(screen.getByLabelText(/Hybrid/)).not.toBeChecked();
+    expect(screen.getByLabelText('search.hybrid')).not.toBeChecked();
     expect(searchApi.search).toHaveBeenCalledWith({
       query: 'manual',
       useHybrid: false,
@@ -462,7 +462,7 @@ describe('Search guards, history panel, provenance navigation and draft validati
 
   it('toggles the hybrid checkbox into the submitted payload', async () => {
     renderSearch();
-    const hybrid = screen.getByLabelText(/Hybrid/);
+    const hybrid = screen.getByLabelText('search.hybrid');
     fireEvent.click(hybrid);
     expect(hybrid).not.toBeChecked();
 

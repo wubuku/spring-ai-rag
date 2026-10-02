@@ -409,7 +409,11 @@ export function Documents() {
           <span>
             {isUploading ? t('common.loading') : t('documents.uploadHint')}
           </span>
-          <span className={styles.uploadHint}>Supports: txt, md, json, xml, html, csv, log</span>
+          <span className={styles.uploadHint}>
+                {t('documents.supportedFormats', {
+                  formats: 'txt, md, json, xml, html, csv, log',
+                })}
+              </span>
         </label>
       </div>
 
@@ -456,7 +460,7 @@ export function Documents() {
           onChange={handleCollectionChange}
           className={styles.filterSelect}
         >
-          <option value="">All Collections</option>
+          <option value="">{t('documents.allCollections')}</option>
           {collections.map((c: { id: number; collectionKey: string; name: string }) => (
             <option key={c.collectionKey} value={c.collectionKey}>
               {c.name} ({c.collectionKey})
@@ -482,7 +486,7 @@ export function Documents() {
                 <tr>
                   <th>{t('documents.documentId')}</th>
                   <th>{t('documents.title')}</th>
-                  <th>Collection</th>
+                  <th>{t('documents.collection')}</th>
                   <th>{t('documents.sourceNamespace')}</th>
                   <th>{t('documents.externalId')}</th>
                   <th>{t('documents.sourceRevision')}</th>

@@ -127,7 +127,7 @@ export function Collections() {
                   onClick={() => navigate(`/documents?collectionKey=${encodeURIComponent(col.collectionKey)}`)}
                   className={styles.viewBtn}
                 >
-                  View Documents
+                  {t('collections.viewDocuments')}
                 </button>
                 <button
                   onClick={() => navigate(`/embeddings?collectionKey=${encodeURIComponent(col.collectionKey)}`)}

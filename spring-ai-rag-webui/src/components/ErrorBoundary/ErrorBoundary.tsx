@@ -1,4 +1,5 @@
 import { Component, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import { getCredentialHeaders } from '../../auth/credentialStore';
 import styles from './ErrorBoundary.module.css';
 import { TriangleAlert } from 'lucide-react';
@@ -47,6 +48,32 @@ async function reportErrorToServer(payload: ClientErrorPayload): Promise<void> {
   }
 }
 
+/**
+ * The last thing a user sees when the app has already broken, and the one
+ * screen that was never translated — this is what Batch 808 fixed.
+ *
+ * A function component rather than inline JSX because the boundary itself has
+ * to stay a class (it implements `getDerivedStateFromError`), and class
+ * components cannot call `useTranslation`.
+ */
+function ErrorFallback({ message, onRetry }: { message?: string; onRetry: () => void }) {
+  const { t } = useTranslation();
+  return (
+    <div className={styles.container}>
+      <div className={styles.content}>
+        <TriangleAlert className={styles.icon} size={24} aria-hidden="true" />
+        <h2 className={styles.title}>{t('common.somethingWentWrong')}</h2>
+        <p className={styles.message}>
+          {message || t('common.unexpectedError')}
+        </p>
+        <button className={styles.retryBtn} onClick={onRetry}>
+          {t('common.retry')}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export class ErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
     super(props);
@@ -79,21 +106,10 @@ export class ErrorBoundary extends Component<Props, State> {
       }
 
       return (
-        <div className={styles.container}>
-          <div className={styles.content}>
-            <TriangleAlert className={styles.icon} size={24} aria-hidden="true" />
-            <h2 className={styles.title}>Something went wrong</h2>
-            <p className={styles.message}>
-              {this.state.error?.message || 'An unexpected error occurred'}
-            </p>
-            <button
-              className={styles.retryBtn}
-              onClick={() => this.setState({ hasError: false, error: undefined })}
-            >
-              Try Again
-            </button>
-          </div>
-        </div>
+        <ErrorFallback
+          message={this.state.error?.message}
+          onRetry={() => this.setState({ hasError: false, error: undefined })}
+        />
       );
     }
 

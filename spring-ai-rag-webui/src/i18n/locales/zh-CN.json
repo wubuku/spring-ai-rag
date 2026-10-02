@@ -45,7 +45,10 @@
     "previous": "上一页",
     "next": "下一页",
     "preview": "预览",
-    "retry": "重试"
+    "retry": "重试",
+    "somethingWentWrong": "出错了",
+    "unexpectedError": "发生了意外错误",
+    "notifications": "通知"
   },
   "dashboard": {
     "title": "仪表盘",
@@ -157,7 +160,9 @@
     "loadError": "加载文档失败",
     "collectionsLoadFailed": "无法加载集合列表",
     "missingEmbeddingsLoadFailed": "无法检查哪些文档缺少嵌入",
-    "previewContentLoadError": "无法加载文档完整内容：{{error}}"
+    "previewContentLoadError": "无法加载文档完整内容：{{error}}",
+    "allCollections": "全部集合",
+    "supportedFormats": "支持：{{formats}}"
   },
   "collections": {
     "title": "知识库管理",
@@ -216,7 +221,12 @@
       }
     },
     "loadFailed": "无法加载集合列表",
-    "capabilityLoadFailed": "无法读取集成能力，破坏性操作保持隐藏"
+    "capabilityLoadFailed": "无法读取集成能力，破坏性操作保持隐藏",
+    "collectionKey": "集合标识",
+    "generateUuid": "生成 UUID",
+    "name": "名称",
+    "viewDocuments": "查看文档",
+    "collectionKeyPlaceholder": "UUID 或业务标识"
   },
   "collectionScope": {
     "label": "检索范围",
@@ -277,8 +287,10 @@
     "placeholder": "搜索文档内容…",
     "inputLabel": "搜索关键词",
     "searchButton": "搜索",
-    "noResults": "未找到结果",
-    "resultsCount": "找到 {{count}} 条结果",
+    "noResults": "未找到与“{{query}}”匹配的结果",
+    "resultsCount_one": "为“{{query}}”找到 {{count}} 条结果",
+    "resultsCount_other": "为“{{query}}”找到 {{count}} 条结果",
+    "resultsCount": "为“{{query}}”找到 {{count}} 条结果",
     "similarDocuments": "相关内容",
     "searchHint": "按回车或点击搜索",
     "clearHistory": "清除历史",
@@ -298,7 +310,9 @@
       "keyword": "关键词匹配"
     },
     "history": "历史记录",
-    "loadFailed": "检索请求失败"
+    "loadFailed": "检索请求失败",
+    "hybrid": "混合检索",
+    "emptyHint": "换个关键词或调整检索条件再试。"
   },
   "metrics": {
     "title": "系统指标",
@@ -337,7 +351,15 @@
     "loadingDurableUsage": "正在加载持久模型用量",
     "usageLoadFailed": "无法加载持久模型用量。",
     "costDisclaimer": "配置成本仅用于运营估算，不代表模型供应商账单。",
-    "loadFailed": "无法加载指标"
+    "loadFailed": "无法加载指标",
+    "bar": "柱状图",
+    "line": "折线图",
+    "callVolume": "调用量",
+    "avgRetrievalLatency": "平均检索延迟（毫秒）",
+    "modelComparison": "模型对比",
+    "rawJson": "原始 JSON",
+    "retrievals": "检索次数",
+    "llmCalls": "LLM 调用"
   },
   "alerts": {
     "title": "告警中心",
@@ -392,7 +414,10 @@
     "sloConfigLoadFailed": "无法加载 SLO 配置",
     "silenceLoadFailed": "无法加载静默计划",
     "sloConfigCreateError": "创建 SLO 配置失败",
-    "sloConfigDeleteError": "删除 SLO 配置失败"
+    "sloConfigDeleteError": "删除 SLO 配置失败",
+    "target": "目标",
+    "targetValue": "目标值",
+    "alertKey": "告警键"
   },
   "settings": {
     "title": "系统设置",
@@ -415,7 +440,8 @@
     "save": "保存设置",
     "saved": "设置已保存！",
     "changesUnsaved": "您有未保存的更改",
-    "ragApiKey": "RAG API 密钥"
+    "ragApiKey": "RAG API 密钥",
+    "apiKey": "API 密钥"
   },
   "theme": {
     "label": "主题",
@@ -686,7 +712,8 @@
     "historyLoadFailed": "无法加载评估历史",
     "feedbackStatsLoadFailed": "无法加载反馈统计",
     "feedbackHistoryLoadFailed": "无法加载反馈历史",
-    "runLoadFailed": "无法加载运行"
+    "runLoadFailed": "无法加载运行",
+    "hit": "命中率"
   },
   "embeddings": {
     "title": "嵌入任务运营",

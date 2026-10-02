@@ -2,6 +2,17 @@ import { describe, it, expect, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { SearchResults, SearchResultItem } from './SearchResults';
 
+const { tSpy } = vi.hoisted(() => ({ tSpy: vi.fn((key: string) => key) }));
+
+vi.mock('react-i18next', () => ({
+  default: vi.fn(),
+  useTranslation: () => ({
+    t: tSpy,
+    i18n: { language: 'en', changeLanguage: vi.fn() },
+  }),
+  initReactI18next: { type: '3rdParty' },
+}));
+
 describe('SearchResults', () => {
   const mockResults: SearchResultItem[] = [
     {
@@ -24,18 +35,32 @@ describe('SearchResults', () => {
 
   it('renders empty state when no results', () => {
     render(<SearchResults results={[]} query="test" />);
-    expect(screen.getByText(/No results found/i)).toBeInTheDocument();
-    expect(screen.getByText(/test/)).toBeInTheDocument();
+    expect(screen.getByText('search.noResults')).toBeInTheDocument();
   });
 
   it('renders result count', () => {
     render(<SearchResults results={mockResults} query="test" />);
-    expect(screen.getByText(/2 results for "test"/i)).toBeInTheDocument();
+    expect(screen.getByText('search.resultsCount')).toBeInTheDocument();
   });
 
   it('renders single result count correctly', () => {
     render(<SearchResults results={[mockResults[0]]} query="test" />);
-    expect(screen.getByText(/1 result for "test"/i)).toBeInTheDocument();
+    expect(screen.getByText('search.resultsCount')).toBeInTheDocument();
+  });
+
+  it('passes the count and query through to the count key', () => {
+    // The shared setup mock is `t: (key) => key`, so no other unit test can see
+    // an interpolation value. Plural rendering is carried by
+    // search.resultsCount_one/_other and covered end-to-end against the real
+    // dictionary; what this pins is that the right count and query arrive.
+    tSpy.mockClear();
+    const { unmount } = render(<SearchResults results={[mockResults[0]]} query="alpha" />);
+    expect(tSpy).toHaveBeenCalledWith('search.resultsCount', { count: 1, query: 'alpha' });
+    unmount();
+
+    tSpy.mockClear();
+    render(<SearchResults results={mockResults} query="alpha" />);
+    expect(tSpy).toHaveBeenCalledWith('search.resultsCount', { count: 2, query: 'alpha' });
   });
 
   it('renders result titles and plain-language match bases', () => {

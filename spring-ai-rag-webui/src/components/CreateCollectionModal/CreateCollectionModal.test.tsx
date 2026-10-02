@@ -27,7 +27,7 @@ describe('CreateCollectionModal', () => {
         <CreateCollectionModal isOpen={false} onClose={vi.fn()} />
       </QueryClientProvider>
     );
-    expect(screen.queryByRole('textbox', { name: /name/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: 'collections.name' })).not.toBeInTheDocument();
   });
 
   it('renders when isOpen is true', () => {
@@ -36,8 +36,8 @@ describe('CreateCollectionModal', () => {
         <CreateCollectionModal isOpen={true} onClose={vi.fn()} />
       </QueryClientProvider>
     );
-    expect(screen.getByRole('textbox', { name: /name/i })).toBeInTheDocument();
-    expect(screen.getByRole('textbox', { name: /description/i })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'collections.name' })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'collections.description' })).toBeInTheDocument();
   });
 
   it('shows validation error when name is empty', async () => {
@@ -60,7 +60,7 @@ describe('CreateCollectionModal', () => {
       </QueryClientProvider>
     );
 
-    await user.type(screen.getByRole('textbox', { name: /name/i }), 'AB');
+    await user.type(screen.getByRole('textbox', { name: 'collections.name' }), 'AB');
     await user.click(screen.getByRole('button', { name: /create/i }));
     expect(screen.getByText(/at least 3 characters/i)).toBeInTheDocument();
   });
@@ -76,7 +76,7 @@ describe('CreateCollectionModal', () => {
     // Focus + paste rather than `type`: these cases assert a *length limit*,
     // not keystroke handling. Typing hundreds of characters one event at a time
     // is what made this file time out under full-suite load.
-    await user.click(screen.getByRole('textbox', { name: /name/i }));
+    await user.click(screen.getByRole('textbox', { name: 'collections.name' }));
     await user.paste('N'.repeat(101));
     await user.click(screen.getByRole('button', { name: /create/i }));
     expect(screen.getByText(/less than 100 characters/i)).toBeInTheDocument();
@@ -90,8 +90,8 @@ describe('CreateCollectionModal', () => {
       </QueryClientProvider>
     );
 
-    await user.type(screen.getByRole('textbox', { name: /name/i }), 'ValidName');
-    await user.click(screen.getByRole('textbox', { name: /description/i }));
+    await user.type(screen.getByRole('textbox', { name: 'collections.name' }), 'ValidName');
+    await user.click(screen.getByRole('textbox', { name: 'collections.description' }));
     await user.paste('d'.repeat(501));
     await user.click(screen.getByRole('button', { name: /create/i }));
     expect(screen.getByText(/less than 500 characters/i)).toBeInTheDocument();
@@ -108,9 +108,9 @@ describe('CreateCollectionModal', () => {
       </QueryClientProvider>
     );
 
-    await user.type(screen.getByRole('textbox', { name: /name/i }), 'ValidName');
+    await user.type(screen.getByRole('textbox', { name: 'collections.name' }), 'ValidName');
     await user.type(
-      screen.getByRole('textbox', { name: /collection key/i }),
+      screen.getByRole('textbox', { name: 'collections.collectionKey' }),
       'failure-case-key',
     );
     await user.click(screen.getByRole('button', { name: /create/i }));
@@ -132,8 +132,8 @@ describe('CreateCollectionModal', () => {
       </QueryClientProvider>
     );
 
-    await user.type(screen.getByRole('textbox', { name: /collection key/i }), 'invalid key');
-    await user.type(screen.getByRole('textbox', { name: /name/i }), 'ValidName');
+    await user.type(screen.getByRole('textbox', { name: 'collections.collectionKey' }), 'invalid key');
+    await user.type(screen.getByRole('textbox', { name: 'collections.name' }), 'ValidName');
     await user.click(screen.getByRole('button', { name: /create/i }));
 
     expect(screen.getByText(/1-128 visible ASCII characters/i)).toBeInTheDocument();
@@ -149,9 +149,9 @@ describe('CreateCollectionModal', () => {
 
     // Pasting exactly 128 characters also exercises the input's maxLength
     // boundary without paying for 128 individual key events.
-    await user.click(screen.getByRole('textbox', { name: /collection key/i }));
+    await user.click(screen.getByRole('textbox', { name: 'collections.collectionKey' }));
     await user.paste('a'.repeat(128));
-    await user.type(screen.getByRole('textbox', { name: /name/i }), 'ValidName');
+    await user.type(screen.getByRole('textbox', { name: 'collections.name' }), 'ValidName');
     await user.click(screen.getByRole('button', { name: /create/i }));
 
     await waitFor(() =>
@@ -170,9 +170,9 @@ describe('CreateCollectionModal', () => {
       </QueryClientProvider>
     );
 
-    await user.click(screen.getByRole('button', { name: /generate uuid/i }));
+    await user.click(screen.getByRole('button', { name: 'collections.generateUuid' }));
 
-    expect(screen.getByRole('textbox', { name: /collection key/i })).toHaveValue(
+    expect(screen.getByRole('textbox', { name: 'collections.collectionKey' })).toHaveValue(
       '550e8400-e29b-41d4-a716-446655440000'
     );
     randomUUID.mockRestore();
@@ -188,10 +188,10 @@ describe('CreateCollectionModal', () => {
     );
 
     await user.type(
-      screen.getByRole('textbox', { name: /collection key/i }),
+      screen.getByRole('textbox', { name: 'collections.collectionKey' }),
       'customer-test-key'
     );
-    await user.type(screen.getByRole('textbox', { name: /name/i }), 'ValidName');
+    await user.type(screen.getByRole('textbox', { name: 'collections.name' }), 'ValidName');
     await user.click(screen.getByRole('button', { name: /create/i }));
 
     await waitFor(() => expect(onClose).toHaveBeenCalled());

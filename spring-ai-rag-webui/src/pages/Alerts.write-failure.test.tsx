@@ -76,7 +76,7 @@ describe('Alerts: a rejected write must not look like a successful one', () => {
 
     await userEvent.click(await screen.findByRole('button', { name: /sloConfig/ }));
     await userEvent.type(screen.getByPlaceholderText('alerts.sloConfigNamePlaceholder'), 'db-latency');
-    await userEvent.type(screen.getByLabelText('Target Value'), '500');
+    await userEvent.type(screen.getByLabelText('alerts.targetValue'), '500');
     await userEvent.click(screen.getByRole('button', { name: 'common.create' }));
 
     await waitFor(() =>
@@ -129,7 +129,7 @@ describe('Alerts: a rejected write must not look like a successful one', () => {
 
     await userEvent.click(await screen.findByRole('button', { name: /sloConfig/ }));
     await userEvent.type(screen.getByPlaceholderText('alerts.sloConfigNamePlaceholder'), 'db-latency');
-    await userEvent.type(screen.getByLabelText('Target Value'), '500');
+    await userEvent.type(screen.getByLabelText('alerts.targetValue'), '500');
     await userEvent.click(screen.getByRole('button', { name: 'common.create' }));
 
     await waitFor(() => expect(alertsApi.createSloConfig).toHaveBeenCalled());

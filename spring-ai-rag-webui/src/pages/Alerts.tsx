@@ -460,7 +460,7 @@ function SloConfigsTab({ showForm, onShowForm, onHideForm }: { showForm: boolean
               </select>
             </div>
             <div className={styles.formRow}>
-              <label className={styles.label} htmlFor="alerts-targetvalue">Target Value</label>
+              <label className={styles.label} htmlFor="alerts-targetvalue">{t('alerts.targetValue')}</label>
               <input id="alerts-targetvalue"
                 className={styles.input}
                 type="number"
@@ -512,8 +512,8 @@ function SloConfigsTab({ showForm, onShowForm, onHideForm }: { showForm: boolean
           <div className={styles.tableHeader}>
             <span>{t('alerts.sloConfig')}</span>
             <span>{t('alerts.alertType')}</span>
-            <span>Target</span>
-            <span>Unit</span>
+            <span>{t('alerts.target')}</span>
+            <span>{t('alerts.unit')}</span>
             <span>{t('alerts.status')}</span>
             <span>{t('alerts.actions')}</span>
           </div>
@@ -618,7 +618,7 @@ function SilenceSchedulesTab({ showForm, onShowForm, onHideForm }: { showForm: b
               />
             </div>
             <div className={styles.formRow}>
-              <label className={styles.label} htmlFor="alerts-alertkey">Alert Key</label>
+              <label className={styles.label} htmlFor="alerts-alertkey">{t('alerts.alertKey')}</label>
               <input id="alerts-alertkey"
                 className={styles.input}
                 value={form.alertKey}
@@ -684,7 +684,7 @@ function SilenceSchedulesTab({ showForm, onShowForm, onHideForm }: { showForm: b
         <div className={styles.table}>
           <div className={styles.tableHeader}>
             <span>{t('alerts.silencePlans')}</span>
-            <span>Alert Key</span>
+            <span>{t('alerts.alertKey')}</span>
             <span>{t('alerts.alertType')}</span>
             <span>{t('alerts.triggeredAt')}</span>
             <span>{t('alerts.resolvedAt')}</span>
