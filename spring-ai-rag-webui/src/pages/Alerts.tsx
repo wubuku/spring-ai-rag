@@ -15,6 +15,7 @@ import { ImeSafeForm } from '../components/ImeSafeForm';
 import { useToast } from '../components/Toast';
 import styles from './Alerts.module.css';
 import { EmptyState, PageHeader, QueryErrorBanner, Tabs } from '../components/ui';
+import { ConfirmDialog } from '../components/Dialog/ConfirmDialog';
 
 type Tab =
   | 'alerts'
@@ -389,6 +390,11 @@ interface SloFormData {
 function SloConfigsTab({ showForm, onShowForm, onHideForm }: { showForm: boolean; onShowForm: () => void; onHideForm: () => void }) {
   const { t } = useTranslation();
   const { showToast } = useToast();
+  // One click used to delete the threshold outright. Documents and ReembedAll
+  // have asked for confirmation since Batch 770; these two lists had never been
+  // brought in line, and the tests pinned the unsafe behaviour by clicking the
+  // button once. Batch 812.
+  const [pendingSloDelete, setPendingSloDelete] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const { data, isPending, isError, refetch } = useQuery({
     queryKey: ['slo-configs'],
@@ -524,11 +530,11 @@ function SloConfigsTab({ showForm, onShowForm, onHideForm }: { showForm: boolean
               <span>{slo.targetValue}</span>
               <span>{slo.unit}</span>
               <span className={slo.enabled ? styles.enabled : styles.disabled}>
-                {slo.enabled ? 'Yes' : 'No'}
+                {slo.enabled ? t('common.yes') : t('common.no')}
               </span>
               <button
                 className={styles.deleteBtn}
-                onClick={() => deleteMutation.mutate(slo.sloName)}
+                onClick={() => setPendingSloDelete(slo.sloName)}
                 disabled={deleteMutation.isPending}
               >
                 {t('alerts.delete')}
@@ -537,6 +543,20 @@ function SloConfigsTab({ showForm, onShowForm, onHideForm }: { showForm: boolean
           ))}
         </div>
       )}
+      <ConfirmDialog
+        open={pendingSloDelete !== null}
+        title={t('alerts.delete')}
+        description={t('alerts.deleteSloConfirm', { name: pendingSloDelete ?? '' })}
+        confirmLabel={t('common.delete')}
+        cancelLabel={t('common.cancel')}
+        danger
+        pending={deleteMutation.isPending}
+        onConfirm={() => {
+          if (pendingSloDelete !== null) deleteMutation.mutate(pendingSloDelete);
+          setPendingSloDelete(null);
+        }}
+        onClose={() => setPendingSloDelete(null)}
+      />
     </div>
   );
 }
@@ -556,6 +576,7 @@ interface SilenceFormData {
 function SilenceSchedulesTab({ showForm, onShowForm, onHideForm }: { showForm: boolean; onShowForm: () => void; onHideForm: () => void }) {
   const { t } = useTranslation();
   const { showToast } = useToast();
+  const [pendingScheduleDelete, setPendingScheduleDelete] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const { data, isPending, isError, refetch } = useQuery({
     queryKey: ['silence-schedules'],
@@ -699,11 +720,11 @@ function SilenceSchedulesTab({ showForm, onShowForm, onHideForm }: { showForm: b
               <span>{schedule.startTime}</span>
               <span>{schedule.endTime}</span>
               <span className={schedule.enabled ? styles.enabled : styles.disabled}>
-                {schedule.enabled ? 'Yes' : 'No'}
+                {schedule.enabled ? t('common.yes') : t('common.no')}
               </span>
               <button
                 className={styles.deleteBtn}
-                onClick={() => deleteMutation.mutate(schedule.name)}
+                onClick={() => setPendingScheduleDelete(schedule.name)}
                 disabled={deleteMutation.isPending}
               >
                 {t('alerts.delete')}
@@ -712,6 +733,20 @@ function SilenceSchedulesTab({ showForm, onShowForm, onHideForm }: { showForm: b
           ))}
         </div>
       )}
+      <ConfirmDialog
+        open={pendingScheduleDelete !== null}
+        title={t('alerts.delete')}
+        description={t('alerts.deleteSilenceConfirm', { name: pendingScheduleDelete ?? '' })}
+        confirmLabel={t('common.delete')}
+        cancelLabel={t('common.cancel')}
+        danger
+        pending={deleteMutation.isPending}
+        onConfirm={() => {
+          if (pendingScheduleDelete !== null) deleteMutation.mutate(pendingScheduleDelete);
+          setPendingScheduleDelete(null);
+        }}
+        onClose={() => setPendingScheduleDelete(null)}
+      />
     </div>
   );
 }

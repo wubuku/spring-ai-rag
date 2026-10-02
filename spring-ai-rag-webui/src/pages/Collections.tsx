@@ -11,6 +11,7 @@ import {
 import { useApiKeyAuth } from '../auth/ApiKeyAuthContext';
 import { useToast } from '../components/Toast';
 import { Skeleton } from '../components/Skeleton';
+import { ConfirmDialog } from '../components/Dialog/ConfirmDialog';
 import { CreateCollectionModal } from '../components/CreateCollectionModal';
 import { Dialog } from '../components/Dialog';
 import { Card } from '../components/Card';
@@ -26,6 +27,9 @@ export function Collections() {
   const [page] = useState(0);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [purgeTarget, setPurgeTarget] = useState<Collection | null>(null);
+  // Purge on the same card already opens CollectionPurgeDialog; delete did
+  // not, so a mis-click next to a guarded button removed the collection.
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const createTriggerRef = useRef<HTMLButtonElement>(null);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -136,7 +140,7 @@ export function Collections() {
                   {t('embeddings.openOperations')}
                 </button>
                 <button
-                  onClick={() => deleteMutation.mutate(col.collectionKey)}
+                  onClick={() => setDeleteTarget(col.collectionKey)}
                   className={styles.deleteBtn}
                   disabled={deleteMutation.isPending}
                 >
@@ -170,6 +174,20 @@ export function Collections() {
           onClose={() => setPurgeTarget(null)}
         />
       )}
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title={t('collections.delete')}
+        description={t('collections.deleteConfirm')}
+        confirmLabel={t('common.delete')}
+        cancelLabel={t('common.cancel')}
+        danger
+        pending={deleteMutation.isPending}
+        onConfirm={() => {
+          if (deleteTarget !== null) deleteMutation.mutate(deleteTarget);
+          setDeleteTarget(null);
+        }}
+        onClose={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

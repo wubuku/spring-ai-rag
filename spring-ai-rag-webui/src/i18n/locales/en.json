@@ -48,7 +48,12 @@
     "retry": "Retry",
     "somethingWentWrong": "Something went wrong",
     "unexpectedError": "An unexpected error occurred",
-    "notifications": "Notifications"
+    "notifications": "Notifications",
+    "yes": "Yes",
+    "no": "No",
+    "you": "You",
+    "assistant": "Assistant",
+    "unknownError": "Unknown error"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -312,7 +317,8 @@
     "history": "History",
     "loadFailed": "Search request failed",
     "hybrid": "Hybrid",
-    "emptyHint": "Try different keywords or adjust your search."
+    "emptyHint": "Try different keywords or adjust your search.",
+    "vector": "Vector"
   },
   "metrics": {
     "title": "Metrics",
@@ -417,7 +423,9 @@
     "sloConfigDeleteError": "Failed to delete SLO configuration",
     "target": "Target",
     "targetValue": "Target Value",
-    "alertKey": "Alert Key"
+    "alertKey": "Alert Key",
+    "deleteSloConfirm": "Delete the SLO threshold \"{{name}}\"? It stops being evaluated immediately.",
+    "deleteSilenceConfirm": "Delete the silence schedule \"{{name}}\"? Alerts will no longer be suppressed during its window."
   },
   "settings": {
     "title": "Settings",
@@ -441,7 +449,16 @@
     "saved": "Settings saved!",
     "changesUnsaved": "You have unsaved changes",
     "ragApiKey": "RAG API Key",
-    "apiKey": "API Key"
+    "apiKey": "API Key",
+    "llmProviderDesc": "Configure the language model used for RAG conversations and query rewriting.",
+    "apiKeyEnvHint": "API key is managed via environment variables for security",
+    "retrievalDesc": "Configure hybrid search weights and retrieval parameters.",
+    "rerankTopKHint": "Number of results to include after reranking",
+    "cacheDesc": "Configure embedding and query result caching.",
+    "cacheMaxItemsHint": "Maximum number of cached items",
+    "languageSection": "Language Settings",
+    "languageSectionDesc": "Choose your preferred interface language. Changes take effect immediately.",
+    "currentLanguage": "Current Language"
   },
   "theme": {
     "label": "Theme",
@@ -603,7 +620,8 @@
     "allCollectionsHint": "The key can access current and future collections.",
     "selectedCollections": "Selected collections",
     "selectedCollectionsHint": "The key can only access the collections selected below.",
-    "collectionsLoadError": "Failed to load collections"
+    "collectionsLoadError": "Failed to load collections",
+    "revokeConfirm": "Revoke this API key? Any client still presenting it starts failing with 401 immediately, and the revocation cannot be undone."
   },
   "files": {
     "title": "Files",

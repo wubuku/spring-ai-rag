@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { ConfirmDialog } from '../components/Dialog/ConfirmDialog';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import {
@@ -194,6 +195,10 @@ function PrincipalRow({
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { showToast } = useToast();
+  // Revoking is the one action on this card with no way back: the credential
+  // stops working for every client holding it, immediately. Rotation in the same
+  // card is staged behind a dialog; revocation was one click. Batch 812.
+  const [confirmingRevoke, setConfirmingRevoke] = useState(false);
 
   const revokeMutation = useMutation({
     mutationFn: () => apiKeysApi.revokeKey(principal.currentCredentialId!),
@@ -344,7 +349,7 @@ function PrincipalRow({
         )}
         <Button
           variant="link"
-          onClick={() => revokeMutation.mutate()}
+          onClick={() => setConfirmingRevoke(true)}
           disabled={
             revokeMutation.isPending
             || principal.status !== 'ACTIVE'
@@ -355,6 +360,20 @@ function PrincipalRow({
           {t('apiKeys.revoke')}
         </Button>
       </span>
+      <ConfirmDialog
+        open={confirmingRevoke}
+        title={t('apiKeys.revoke')}
+        description={t('apiKeys.revokeConfirm')}
+        confirmLabel={t('apiKeys.revoke')}
+        cancelLabel={t('common.cancel')}
+        danger
+        pending={revokeMutation.isPending}
+        onConfirm={() => {
+          setConfirmingRevoke(false);
+          revokeMutation.mutate();
+        }}
+        onClose={() => setConfirmingRevoke(false)}
+      />
     </div>
   );
 }

@@ -119,10 +119,34 @@ describe('ApiKeys principal lifecycle rows', () => {
       await screen.findByRole('button', { name: 'apiKeys.revoke' }),
     );
 
+    // Batch 812: revoking is irreversible, so the row button only opens the
+    // confirmation. Nothing may reach the API until the dialog is confirmed.
+    expect(mocks.revokeKey).not.toHaveBeenCalled();
+
+    const dialog = screen.getByRole('dialog', { name: 'apiKeys.revoke' });
+    expect(within(dialog).getByText('apiKeys.revokeConfirm')).toBeTruthy();
+    await user.click(within(dialog).getByRole('button', { name: 'apiKeys.revoke' }));
+
     await waitFor(() => {
       expect(mocks.revokeKey).toHaveBeenCalledWith('rag_k_main_v1');
       expect(mocks.showToast).toHaveBeenCalledWith('apiKeys.revoked', 'success');
     });
+  });
+
+  it('keeps the credential when the revoke confirmation is cancelled', async () => {
+    const user = userEvent.setup();
+    mocks.revokeKey.mockResolvedValue({ data: {} });
+
+    renderPage();
+    await user.click(
+      await screen.findByRole('button', { name: 'apiKeys.revoke' }),
+    );
+    await user.click(
+      screen.getByRole('button', { name: 'common.cancel' }),
+    );
+
+    expect(mocks.revokeKey).not.toHaveBeenCalled();
+    expect(mocks.showToast).not.toHaveBeenCalled();
   });
 
   it('surfaces revoke failures as an error toast', async () => {
@@ -133,6 +157,8 @@ describe('ApiKeys principal lifecycle rows', () => {
     await user.click(
       await screen.findByRole('button', { name: 'apiKeys.revoke' }),
     );
+    const dialog = screen.getByRole('dialog', { name: 'apiKeys.revoke' });
+    await user.click(within(dialog).getByRole('button', { name: 'apiKeys.revoke' }));
 
     await waitFor(() => {
       expect(mocks.showToast).toHaveBeenCalledWith(

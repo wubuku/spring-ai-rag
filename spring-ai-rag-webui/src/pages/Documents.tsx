@@ -476,7 +476,7 @@ export function Documents() {
       ) : error ? (
         <div className={styles.error}>
           {t('documents.loadError')}:{' '}
-          {error instanceof Error ? error.message : 'Unknown error'}
+          {error instanceof Error ? error.message : t('common.unknownError')}
         </div>
       ) : (
         <>

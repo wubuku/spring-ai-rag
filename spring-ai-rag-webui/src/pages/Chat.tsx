@@ -509,7 +509,7 @@ export function Chat() {
               key={msg.id}
               className={`${styles.msg} ${msg.role === 'user' ? styles.user : styles.assistant}`}
             >
-              <div className={styles.role}>{msg.role === 'user' ? 'You' : 'Assistant'}</div>
+              <div className={styles.role}>{msg.role === 'user' ? t('common.you') : t('common.assistant')}</div>
               <div className={styles.content}>
                 {msg.content}
                 {msg.isStreaming && <span className={styles.cursor}>|</span>}

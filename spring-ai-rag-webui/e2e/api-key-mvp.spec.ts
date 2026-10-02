@@ -521,7 +521,14 @@ test('root unlock manages shown-once business keys without browser persistence',
   rotatedRow = page.getByText('rag_p_created').locator('..');
   await expect(rotatedRow.getByText('rag_k_immediate')).toBeVisible();
   await expect(rotatedRow.getByText('v3')).toBeVisible();
+  // Batch 812: revoking a credential is irreversible, so the row button only
+  // opens the confirmation. Assert the gap first — a one-click revoke would
+  // otherwise still pass every line below.
   await rotatedRow.getByRole('button', { name: 'Revoke' }).click();
+  const revokeDialog = page.getByRole('dialog');
+  await expect(revokeDialog.getByRole('button', { name: 'Revoke' })).toBeVisible();
+  await expect(rotatedRow.getByText('Revoked')).toHaveCount(0);
+  await revokeDialog.getByRole('button', { name: 'Revoke' }).click();
   await expect(rotatedRow.getByText('Revoked')).toBeVisible();
 
   await page.getByRole('button', { name: 'Sign out' }).click();

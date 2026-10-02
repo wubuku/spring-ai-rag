@@ -228,7 +228,38 @@ describe('Alerts', () => {
     });
     await user.click(deleteButton);
 
+    // Batch 812: the first click now only opens the confirmation, so the API
+    // must not have been called yet. This assertion is the reason the old
+    // one-click behaviour could not survive — it was pinned by this test.
+    expect(alertsApi.deleteSloConfig).not.toHaveBeenCalled();
+    expect(screen.getByText('alerts.deleteSloConfirm')).toBeTruthy();
+
+    await user.click(screen.getByRole('button', { name: 'common.delete' }));
+
     expect(alertsApi.deleteSloConfig).toHaveBeenCalledWith('latency-p99');
+  });
+
+  it('keeps an SLO when the confirmation is cancelled', async () => {
+    const user = userEvent.setup();
+    vi.mocked(alertsApi.listSloConfigs).mockResolvedValue({
+      data: [{
+        id: 7,
+        sloName: 'latency-p99',
+        sloType: 'LATENCY',
+        targetValue: 800,
+        unit: 'ms',
+        enabled: true,
+      }],
+    } as never);
+    vi.mocked(alertsApi.deleteSloConfig).mockResolvedValue({} as never);
+    renderAlerts();
+    await user.click(screen.getByRole('tab', { name: 'alerts.sloConfig' }));
+    await user.click(await screen.findByText('latency-p99'));
+
+    await user.click(screen.getByRole('button', { name: 'alerts.delete' }));
+    await user.click(screen.getByRole('button', { name: 'common.cancel' }));
+
+    expect(alertsApi.deleteSloConfig).not.toHaveBeenCalled();
   });
 
   it('lists silence schedules on their tab', async () => {
@@ -609,6 +640,8 @@ describe('Alerts tab navigation, delivery modes and remaining form fields', () =
       name: 'alerts.delete',
     });
     await user.click(deleteButton);
+    expect(alertsApi.deleteSilenceSchedule).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'common.delete' }));
     await waitFor(() => {
       expect(alertsApi.deleteSilenceSchedule).toHaveBeenCalledWith(
         'weekend-window',

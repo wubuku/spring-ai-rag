@@ -216,7 +216,12 @@ test('manages a real stable principal without persisting shown-once credentials'
     const completedRow = page.locator('[class*="tableRow"]').filter({
       hasText: `${principalName} Updated`,
     });
+    // Batch 812: revocation is irreversible, so it is confirmed first.
     await completedRow.getByRole('button', { name: 'Revoke' }).click();
+    await page
+      .getByRole('dialog')
+      .getByRole('button', { name: 'Revoke' })
+      .click();
     await expect(completedRow.getByText('Revoked', {
       exact: true,
     })).toBeVisible();

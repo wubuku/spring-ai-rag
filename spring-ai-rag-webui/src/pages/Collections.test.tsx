@@ -271,6 +271,7 @@ describe('Collections purge flow', () => {
       name: 'collections.delete',
     });
     await user.click(deleteButtons[0]);
+    await user.click(screen.getByRole('button', { name: 'common.delete' }));
 
     await waitFor(() => {
       expect(showToast).toHaveBeenCalledWith(
@@ -285,11 +286,33 @@ describe('Collections purge flow', () => {
     await user.click(
       (await screen.findAllByRole('button', { name: 'collections.delete' }))[0],
     );
+    await user.click(screen.getByRole('button', { name: 'common.delete' }));
     await waitFor(() => {
       expect(showToast).toHaveBeenCalledWith(
         'collections.deleteError', 'error',
       );
     });
+  });
+
+  it('keeps the collection when the delete confirmation is cancelled', async () => {
+    const user = userEvent.setup();
+    // This file has top-level `it` blocks outside any describe, so nothing
+    // clears the mocks for us — the delete above already called it twice.
+    vi.clearAllMocks();
+    vi.mocked(collectionsApi.deleteByKey).mockResolvedValue({} as never);
+    mockList(collection);
+    mockCapabilities(true);
+    renderPage();
+
+    await user.click(
+      (await screen.findAllByRole('button', { name: 'collections.delete' }))[0],
+    );
+    expect(collectionsApi.deleteByKey).not.toHaveBeenCalled();
+    expect(screen.getByText('collections.deleteConfirm')).toBeTruthy();
+
+    await user.click(screen.getByRole('button', { name: 'common.cancel' }));
+
+    expect(collectionsApi.deleteByKey).not.toHaveBeenCalled();
   });
 
 
