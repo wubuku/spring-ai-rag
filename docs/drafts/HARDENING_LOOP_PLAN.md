@@ -317,7 +317,43 @@
   约 53 行 × 2。合并需要同时验证两条链路的 OpenAPI 注解与日志文案差异，
   风险高于本批收益，暂列后续。
 
+### Batch 775（已交付）
+
+- 分支：`feature/webui-a11y-focus-hardening-20261003`（回归 WebUI，连续 6 批后端后）
+- 内容：Toast 组件的**两个真实 UX 缺陷**（本批首次改 WebUI 生产代码）。
+- **缺陷 1：toast 实际上不会被屏幕阅读器播报**。原实现把
+  `role="status"` / `role="alert"` 挂在**每条 toast 自己**身上，而 toast 是
+  连同内容一起插入 DOM 的。按 ARIA 的 live region 模型，辅助技术只播报
+  「**已经存在**的 live region 内部发生的变化」，因此这些提示一条都没被念出来。
+  该组件被 7+ 个页面消费（ReembedAllButton、CreateCollectionModal、ApiKeys、
+  Files、ABTest、Documents、Collections），影响面是全站的操作反馈。
+  **修法**：容器常驻并声明 `aria-live="polite"` + `aria-atomic="false"`；
+  单条 toast 仍保留 role——错误的 `role="alert"` 隐含
+  `aria-live="assertive"`，会覆盖容器的 polite，让失败消息打断播报。
+- **缺陷 2：错误 toast 4 秒后自动消失**。它承载的是一次失败操作的**唯一原因**
+  （`Re-embed failed: ...`、`Failed to create collection: ...`、轮换失败原因、
+  导入失败、打开原始 PDF 失败……），计时器抹掉之后用户来不及读完，失败也
+  无从追溯。**修法**：`AUTO_DISMISS_TYPES` 只含 success/info/warning；
+  错误常驻直到用户手动关闭。
+- **关键：测试断言的是"容器带 aria-live"，不是"每条 toast 带 role"**。
+  后者一直是绿的，却恰恰是缺陷本身——两种写法都能通过，等于什么都没测。
+  新增 6 个用例，含一条**在还没有任何 toast 时**就断言常驻容器存在且为空的正向锚点。
+- **变异测试 2 次，逐条验证新测试真的会红**：
+  | 变异 | 结果 |
+  |---|---|
+  | 回退 live region（容器去掉 aria-live） | **2 个失败**，恰好两条 live region 用例 |
+  | 回退错误常驻（所有类型都自动消失） | **1 个失败**，恰好那条常驻用例 |
+- 指标：前端 **772/772 全绿**（73 个测试文件，+6）；design-system focused 73/73；
+  tokens:check / check:alignment / check:design-system / typecheck / lint /
+  test:run / build 八项门禁全绿。后端未改动，core 仍 7428。
+- **勘察中发现的计划与现实脱节（如实登记，未处理）**：Slice 5 的退出条件写着
+  "13 个 route 全部进入统一 PageShell"，但 `PageShell` 这个组件
+  **在全仓 src 下根本不存在**（grep 0 命中），13 个 route 实际都挂在
+  `Layout` + 各页 CSS module 上。该退出条件按字面无法达成，
+  需要重新定义「统一外壳」到底指什么——属于规划文档问题，不在本批范围。
+
 ### Batch 690（既有残条目，原样保留）
+
 
 
 
