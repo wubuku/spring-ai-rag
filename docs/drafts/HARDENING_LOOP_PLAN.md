@@ -317,6 +317,60 @@
   约 53 行 × 2。合并需要同时验证两条链路的 OpenAPI 注解与日志文案差异，
   风险高于本批收益，暂列后续。
 
+### Batch 787（已交付）
+
+- 分支：`feature/apikey-remaining-branch-coverage-20261003`
+- 内容：`ApiKeyManagementService` 剩余 14 条未覆盖分支（实测自 JaCoCo HTML 行级报告，
+  不是凭账本记忆）。**只覆盖真正可达的，其余如实登记。**
+- **这些分支为什么重要**：它们的唯一覆盖是
+  `ManagedApiPrincipalPostgresIntegrationTest`——而那个类需要 Docker 且默认被跳过
+  （Batch 780 才发现它一直隐形）。也就是说，**默认测试流程里这批安全边界
+  从来没有被执行过**。本批把它们变成不依赖任何外部依赖的单元测试。
+- **写测试前先把 18 条候选逐个分类**，结果是**只有一部分真的可达**。
+  以下四处如实登记、**不编造覆盖、不为凑数给死代码写测试**：
+  1. `prepareRotation` 的 `!deadline.isAfter(now)`：上一步 `ensureActive` 已用
+     同一错误码先抛（Batch 781 已确认）。
+  2. `sha256` 的 `NoSuchAlgorithmException`：JDK 必然提供 SHA-256。
+  3. `cleanupExpiredRotationForPrincipal` 的 `if (retiring != null)`：
+     `retiring` 是 Spring Data 返回的 `Optional`，**生产上永不为 null**，
+     这个判断恒为真。它不是 null 保护却长得像 null 保护，**会误导读者**——
+     唯一的"覆盖"方式是让 mock 返回 `null`，那测的是 Mockito 的行为而不是生产行为。
+  4. `createdResponse` 的 `rawKey != null`：两个调用点传的都是刚生成的明文密钥，
+     且它在校验之前已被 `sha256` 消费过，`null` 会先在 `sha256` 里炸掉。
+     **这一条是写测试时实测撞出来的**：我先按计划写了"拿不到明文时
+     `secretAvailable` 为 false"的用例，运行后得到
+     `NullPointer ... "input" is null`——`sha256(rawKey)` 先炸。
+     于是把该用例**换掉**，而不是硬凑一个 mock。
+- **变异测试 4 处，第 3 处一开始没被抓住——这才是本批最值钱的发现**：
+  把 `rotate` 的内存态守卫 `current == null || ...` 改成
+  `current != null && ...` 后，**9 条用例全绿**。
+  原因：异常其实来自**后面**的并发守卫（`disableByKeyId` 影响行数不为 1），
+  它用**同一个错误码** `CREDENTIAL_NOT_CURRENT` 把"内存态守卫被删掉"盖了过去。
+  这与 Batch 782 的教训同类：**断言必须落在真正想守住的那条规则上**。
+  修法不是加断言数量，而是钉住**守卫的位置**——拒绝发生时不得已经写过库
+  （`verify(principalRepository, never()).saveAndFlush(any())`）。
+  改完再施加同一变异，立刻失败。
+- **变异 4 又暴露一处"错误码不足以区分路径"**：重试耗尽与循环耗尽都抛
+  `SERVICE_UNAVAILABLE`，只有**消息**不同（"concurrent provisioning request"）。
+  只断言错误码会漏掉，断言消息才抓住。
+- 变异结果：
+  | 变异 | 抓到它的用例 |
+  |---|---|
+  | `collectionKeys` 去掉 null resolver 守卫 | `collectionKeysAreNullWhenIdentityResolverIsAbsent`（NPE 信息完全对应） |
+  | 去掉生命周期发布器 null 守卫 | `policyUpdateSucceedsWithoutLifecyclePublisher` |
+  | `rotate` 不再拒绝"当前凭据不存在" | `rotationWithoutCurrentCredentialIsRejected`（**修好断言后才抓住**） |
+  | 重试耗尽后不再放弃 | `provisioningRetryExhaustionSurfacesServiceUnavailable` |
+- 指标（实测值）：core **983 测试类 / 7627 用例**（+1 类 +9 例），0 失败 0 错误 154 跳过，
+  BUILD SUCCESS；`ApiKeyManagementService` 分支缺口 **14 → 8**（covered 314 → 320），
+  剩余 8 条中 4 条已确认不可达或恒真（如实登记，不强行归零），
+  其余为短接求值链固有的形态；全局分支 **88.45% → 88.48%**。
+- 遗留技术债（如实登记，未处理）：
+  - 上述 4 处恒真/不可达分支——建议后续**改写生产代码**消除恒真判断
+    （`if (retiring != null)` 直接去掉），而不是留一个永远红的覆盖率。
+  - 纯英文标题在中文文档里仍无门禁守护（Batch 786 主动放弃的规则）。
+  - 145 个集成测试仍未真正跑过（需 Docker）。
+  - `PageShell` 脱节；`ask`/`chat` 53 行 × 2 重复。
+
 ### Batch 786（已交付）
 
 - 分支：`feature/zh-translation-gate-20261003`
