@@ -224,7 +224,40 @@ toggle, which is why the row is a toggle button and deliberately **not**
 `role="checkbox"`: a checkbox promises that Space toggles the value, and
 `handleSelectForCompare` does not keep that promise.
 
-## 6. Alignment and layout
+## 6. A write action must report its failure
+
+`npm run check:mutation-errors` is chained into `npm run lint` and scans every
+`.tsx` under `src/` for one violation:
+
+- `silent-mutation` — a `useMutation` that neither passes an `onError` (usually
+  `showToast`) nor has its `.isError` rendered anywhere in the same file.
+
+Batch 791 surveyed all 37 mutations in `src/` and found 6 that failed
+invisibly: `cancelM`, `retryM` and `applyRepairM` in `Embeddings`, `createM`,
+`versionM` and `startM` in `Evaluation`. Each had an `onSuccess` and no way to
+report a failure. Press "Cancel job" on a job whose backend returns 500 and the
+page does not flicker, does not explain, and leaves the job looking untouched —
+a rejected write is indistinguishable from a button that is simply broken, and
+the user presses it again.
+
+The `apiClient` response interceptor does not rescue them: it normalises the
+message and clears the credential on 401, then rejects. Nothing appears on
+screen unless a component chooses to put it there.
+
+Two details the fixes had to get right, both pinned by tests:
+
+- A banner shared by two sibling actions must **name which one failed**, or the
+  user blames the wrong button.
+- A failure raised while a modal is open has to render **inside the modal**,
+  because the modal covers the page. `applyRepairM` keeps the dialog open on
+  failure, so a banner behind it would never be seen.
+
+This gate is deliberately file-scoped, like the accessibility gate. A component
+that hands a mutation to a child and renders the error there is a shape the
+checker cannot follow, and a rule that cries wolf gets ignored. Exemptions use
+an inline `/* mutation-error-allow: <concrete reason> */`; none are registered.
+
+## 7. Alignment and layout
 
 `npm run check:alignment` is chained into `npm run lint`. Centred text is
 allowed only with a stated reason, and there are currently 11 such exemptions —
@@ -234,12 +267,13 @@ The reason this is a machine rule: a centred block of body text is the single
 most common way a layout drifts from readable to not, and it is invisible in
 code review because the CSS is one line.
 
-## 7. Before you start a UI change
+## 8. Before you start a UI change
 
 1. Run the gate and the tests first, so you know the starting state is green:
    ```bash
    npm run check:design-system
    npm run check:a11y-forms
+   npm run check:mutation-errors
    npm run test:run
    ```
 2. Look for an existing primitive before writing a new one.
@@ -249,7 +283,7 @@ code review because the CSS is one line.
 5. Write the test in the same batch. A change that makes the gate red is not
    finished.
 
-## 8. What this document deliberately does not say
+## 9. What this document deliberately does not say
 
 - It does not list every page and its layout. That is code, and the code is
   the reference.

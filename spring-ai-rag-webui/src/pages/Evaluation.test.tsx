@@ -306,6 +306,62 @@ describe('Evaluation runs and version import panels', () => {
       await screen.findByText('evaluation.suitesFailed'),
     ).toBeInTheDocument();
   });
+
+  // Batch 791: createM, versionM and startM each had no onError and nothing
+  // rendered their `.isError`, so a rejected write was indistinguishable from a
+  // button that does nothing. `Once` because a persistent rejection would leak
+  // into the rest of the file.
+  it('reports a rejected suite creation', async () => {
+    const user = userEvent.setup();
+    vi.mocked(evaluationApi.createSuite).mockRejectedValueOnce(new Error('boom'));
+    renderOnTab('suites');
+
+    await user.click(
+      await screen.findByRole('button', { name: 'evaluation.createSuite' }),
+    );
+
+    expect(
+      await screen.findByText('evaluation.createSuiteFailed'),
+    ).toBeInTheDocument();
+  });
+
+  it('reports a rejected version import', async () => {
+    const user = userEvent.setup();
+    vi.mocked(evaluationApi.createVersion).mockRejectedValueOnce(new Error('boom'));
+    renderOnTab('suites');
+
+    fireEvent.change(
+      await screen.findByLabelText('evaluation.definition'),
+      { target: { value: '{"cases":[]}' } },
+    );
+    await user.click(
+      screen.getByRole('button', { name: 'evaluation.importVersion' }),
+    );
+
+    expect(
+      await screen.findByText('evaluation.importVersionFailed'),
+    ).toBeInTheDocument();
+  });
+
+  it('reports a rejected run start and shows no run status', async () => {
+    const user = userEvent.setup();
+    vi.mocked(evaluationApi.createRun).mockRejectedValueOnce(new Error('boom'));
+    renderOnTab('runs');
+
+    await user.type(
+      await screen.findByLabelText('evaluation.suiteKey'),
+      'gold-en',
+    );
+    await user.click(
+      screen.getByRole('button', { name: 'evaluation.startRun' }),
+    );
+
+    expect(
+      await screen.findByText('evaluation.startRunFailed'),
+    ).toBeInTheDocument();
+    // A failed start must not leave a stale success line behind.
+    expect(screen.queryByText(/evaluation\.runStatus/)).not.toBeInTheDocument();
+  });
 });
 
 describe('Evaluation history, feedback and mutation failure paths', () => {

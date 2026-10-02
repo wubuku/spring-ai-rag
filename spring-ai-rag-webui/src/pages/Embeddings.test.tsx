@@ -182,6 +182,36 @@ describe('Embeddings interactions', () => {
       '11111111-1111-1111-1111-111111111111',
     );
   });
+
+  // Batch 791: all three of these mutations had an `onSuccess` and no way to
+  // report a failure, so a rejected write looked exactly like a dead button.
+  it('names the failing action when cancelling a job fails', async () => {
+    const user = userEvent.setup();
+    // `Once` on purpose: a persistent rejection would leak into every later
+    // test in this file, since clearAllMocks resets calls, not implementations.
+    vi.mocked(embeddingsApi.cancelJob).mockRejectedValueOnce(new Error('boom'));
+    renderEmbeddings();
+
+    await user.click(await screen.findByRole('button', { name: 'embeddings.cancel' }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('embeddings.cancelFailed');
+    // The retry banner is the sibling branch of the same element; only the
+    // action that actually failed may be named.
+    expect(alert).not.toHaveTextContent('embeddings.retryFailed');
+  });
+
+  it('names the failing action when retrying a job fails', async () => {
+    const user = userEvent.setup();
+    vi.mocked(embeddingsApi.retryJob).mockRejectedValueOnce(new Error('boom'));
+    renderEmbeddings();
+
+    await user.click(await screen.findByRole('button', { name: 'embeddings.retry' }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('embeddings.retryFailed');
+    expect(alert).not.toHaveTextContent('embeddings.cancelFailed');
+  });
 });
 
 describe('Embeddings filter toggling and preview close', () => {
@@ -291,6 +321,34 @@ describe('Embeddings derivation repair flow', () => {
       screen.getByRole('button', { name: 'embeddings.applyRepair' }),
     );
     expect(embeddingsApi.applyRepair).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports a failed repair inside the dialog, not behind the modal', async () => {
+    // The failure banner has to live inside the dialog: on failure the dialog
+    // stays open, so a banner on the page behind it would be invisible.
+    const user = userEvent.setup();
+    vi.mocked(embeddingsApi.applyRepair).mockRejectedValueOnce(new Error('boom'));
+    renderEmbeddings('/embeddings?collectionKey=wiki');
+
+    await user.click(
+      await screen.findByRole('button', { name: 'embeddings.previewRepair' }),
+    );
+    const dialog = await screen.findByRole('dialog', {
+      name: 'embeddings.repairPreview',
+    });
+    await user.click(
+      screen.getByRole('button', { name: 'embeddings.applyRepair' }),
+    );
+
+    await waitFor(() => {
+      expect(
+        within(dialog).getByRole('alert'),
+      ).toHaveTextContent('embeddings.applyRepairFailed');
+    });
+    // Still open, so the user can retry or cancel without losing the preview.
+    expect(
+      screen.getByRole('dialog', { name: 'embeddings.repairPreview' }),
+    ).toBeInTheDocument();
   });
 });
 

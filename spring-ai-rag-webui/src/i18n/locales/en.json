@@ -649,7 +649,10 @@
     "citationsFailed": "Unable to load citation traces",
     "traceId": "Trace ID",
     "citationStatus": "Citation status",
-    "outcome": "Outcome code"
+    "outcome": "Outcome code",
+    "createSuiteFailed": "Unable to create the suite",
+    "importVersionFailed": "Unable to import the version",
+    "startRunFailed": "Unable to start the run"
   },
   "embeddings": {
     "title": "Embedding operations",
@@ -692,6 +695,9 @@
     "localUnavailableDocuments": "Local unavailable",
     "corruptDocuments": "Corrupt",
     "vectorRepairNeededDocuments": "Vector repair needed",
-    "reason": "Reason"
+    "reason": "Reason",
+    "cancelFailed": "Unable to cancel the job",
+    "retryFailed": "Unable to retry the job",
+    "applyRepairFailed": "Unable to apply the repair"
   }
 }

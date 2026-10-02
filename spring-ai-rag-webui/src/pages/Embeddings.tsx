@@ -250,6 +250,13 @@ export function Embeddings() {
       >
         {repairPreview && (
           <section className={styles.section}>
+            {/* 失败提示必须放在对话框内部：失败后对话框还开着，
+                写在页面上的提示会被模态遮住，用户根本看不到。 */}
+            {applyRepairM.isError && (
+              <div className={styles.error} role="alert">
+                {t('embeddings.applyRepairFailed')}
+              </div>
+            )}
             <p className={styles.muted}>
               {t('embeddings.repairDocuments', { count: repairPreview.items.length })}
             </p>
@@ -278,6 +285,13 @@ export function Embeddings() {
       </Dialog>
 
       <section className={styles.section} aria-label={t('embeddings.jobs')}>
+        {/* 取消/重试都是逐行的按钮，失败时必须指名是哪一个动作失败了：
+            两者共用一个提示会让用户以为是另一个操作出错。 */}
+        {(cancelM.isError || retryM.isError) && (
+          <div className={styles.error} role="alert">
+            {cancelM.isError ? t('embeddings.cancelFailed') : t('embeddings.retryFailed')}
+          </div>
+        )}
         {jobsQ.isPending ? (
           <div className={styles.muted}>{t('common.loading')}</div>
         ) : jobsQ.isError ? (
