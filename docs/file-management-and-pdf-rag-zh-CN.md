@@ -165,6 +165,13 @@ Search WebUI 提供**查看文件目录**、**查看索引文件**和**打开原
 
 ## 8. 当前生命周期边界
 
+- **渲染后的 Markdown 在离开服务端之前会被净化。** commonmark-java 会原样透传
+  Markdown 源码里的裸 HTML，而所有预览都从**本应用自己的源**提供——`FilePreview`
+  用 `dangerouslySetInnerHTML` 注入该片段。不净化的渲染就是存储型 XSS：任何能写入
+  `fs_files` 的人都能在每个阅读者的会话里执行脚本。因此 `MarkdownRendererService`
+  在返回前会用 jsoup `Safelist` 清洗输出，剥掉 `script`、`style`、`iframe`、
+  全部 `on*` 属性以及 `javascript:`/`data:` URL，同时保留标题、列表、表格、链接和图片。
+  `MarkdownPreviewSanitizationTest` 钉住结果形状，让这项控制失效时是测试变红而不是静默回退。
 - 再次导入同一 PDF 会创建新的 `fs_files` UUID 目录。
 - PDF 内容变化后通常会创建另一条 RAG 文档，因为这条路径没有调用方提供的稳定外部身份。
 - 删除 RAG 文档不会删除对应的 `fs_files` 转换产物。
@@ -180,6 +187,7 @@ Search WebUI 提供**查看文件目录**、**查看索引文件**和**打开原
 | 文件 API 类型客户端 | `spring-ai-rag-webui/src/api/files.ts` |
 | HTTP 端点与合成目录树 | `PdfImportController` |
 | PDF 转换与 `fs_files` 持久化 | `PdfImportService` |
+| Markdown → HTML 渲染与净化 | `MarkdownRendererService`、`MarkdownPreviewSanitizationTest` |
 | `fs_files` 到 `rag_documents` 的桥接 | `PdfToRagService` |
 | 文件产物实体 | `FsFile` |
 | RAG 逻辑文档上传 | `RagDocumentController` |

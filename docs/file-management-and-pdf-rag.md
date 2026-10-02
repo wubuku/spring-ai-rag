@@ -200,6 +200,16 @@ so the new readable directory can be found from the root immediately.
 
 ## 8. Current Lifecycle Boundaries
 
+- **Rendered Markdown is sanitised before it leaves the server.** commonmark-java
+  passes raw HTML found in the Markdown source straight through, and every
+  preview is served from this application's own origin — `FilePreview` injects
+  the fragment with `dangerouslySetInnerHTML`. An unsanitised render is a stored
+  XSS: anyone who can write into `fs_files` could run script in every reader's
+  session. `MarkdownRendererService` therefore cleans its output against a jsoup
+  `Safelist` before returning, which drops `script`, `style`, `iframe`, every
+  `on*` attribute and `javascript:`/`data:` URLs while keeping headings, lists,
+  tables, links and images. `MarkdownPreviewSanitizationTest` pins the result
+  shape, so the control fails a test rather than silently regressing.
 - Importing the same PDF again creates another `fs_files` UUID directory.
 - Changed PDF content usually creates another RAG document because this path
   has no caller-supplied stable external identity.
@@ -218,6 +228,7 @@ so the new readable directory can be found from the root immediately.
 | Typed Files API client | `spring-ai-rag-webui/src/api/files.ts` |
 | HTTP endpoints and synthetic tree | `PdfImportController` |
 | PDF conversion and `fs_files` persistence | `PdfImportService` |
+| Markdown → HTML rendering and sanitisation | `MarkdownRendererService`, `MarkdownPreviewSanitizationTest` |
 | `fs_files` to `rag_documents` bridge | `PdfToRagService` |
 | File artifact entity | `FsFile` |
 | Logical RAG document upload | `RagDocumentController` |
