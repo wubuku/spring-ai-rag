@@ -495,7 +495,40 @@ code review because the CSS is one line.
 6. Write the test in the same batch. A change that makes the gate red is not
    finished.
 
-## 13. What this document deliberately does not say
+## 14. A heading that says only its own name
+
+`npm run check:page-shell` also requires every protected page to pass a
+`description` to `PageHeader`, and that requirement exists because the slot had
+been sitting there unused.
+
+`PageHeader` was built to host two things: the title, and one line saying what
+the page is for. The description is what `aria-describedby` links to the `h1`,
+so a screen reader announces the heading and its meaning together instead of
+announcing the word "Search". By Batch 817 every protected page routed its title
+through the component — and **one page of thirteen** passed a description. Twelve
+headings read only "Search", "Metrics", "Alerts".
+
+Nothing was broken. Every page rendered, every test passed, the build was clean.
+That is what makes it worth a rule: a convention adopted halfway looks adopted
+from a distance, and the half that was dropped was the half that told a user
+where they were. The same failure shape as the title convention before it,
+which is why both now live in the same gate.
+
+The scan is brace-aware, because a naive "up to the first `>`" reads the `>` of
+a nested `<IconButton … />` in `leading` as the end of the opening tag and then
+reports pages that do have a description. A rule that cries wolf is a rule
+somebody switches off, so the seven new self-test cases pin the awkward shapes:
+multi-line tags, a description written after a nested element, a header with
+children instead of attributes, and an exempt page.
+
+What the page actually says is the author's job, not the gate's. The existing
+`Embeddings` subtitle is the standard to read — it explains the page *and*
+corrects a misreading ("These are not probabilities"). A description that only
+restates the title is worse than none, because it looks like orientation and is
+not.
+
+## 15. What this document deliberately does not say
+
 
 - It does not list every page and its layout. That is code, and the code is
   the reference.

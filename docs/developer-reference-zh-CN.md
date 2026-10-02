@@ -123,7 +123,7 @@ skipped；本门禁则保证今后再有类"闭嘴"就会失败。
 | `check-double-submit.mjs` | 请求在途时未加锁的写操作 | `__tests__/double-submit.test.mjs` | `npm run lint` |
 | `check-i18n-keys.mjs` | 两个 locale 键集不对称；`t()` 引用不存在的键 | `__tests__/i18n-keys.test.mjs` | `npm run lint` |
 | `check-hardcoded-copy.mjs` | 从未接入 i18n 的组件；已接入文件里的硬编码用户文案——含 JSX 表达式容器内的那部分，同时放行 ARIA/机器属性值与 `t()` 兜底文案 | `__tests__/hardcoded-copy.test.mjs` | `npm run lint` |
-| `check-page-shell.mjs` | 受保护页面绕过 `PageHeader` | `__tests__/page-shell.test.mjs` | `npm run lint` |
+| `check-page-shell.mjs` | 受保护页面绕过 `PageHeader`，或渲染它时不给 `description` | `__tests__/page-shell.test.mjs` | `npm run lint` |
 
 普查的门禁有五条硬规则：每个门禁脚本必须在册；自动化门禁必须带自测或写明为什么
 不能带；自动化门禁必须有东西执行它；**CI 到不了的自动化门禁必须写明理由**；门禁必须

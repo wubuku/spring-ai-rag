@@ -100,7 +100,7 @@ export function Evaluation() {
 
   return (
     <div>
-      <PageHeader title={t('evaluation.title')} />
+      <PageHeader title={t('evaluation.title')} description={t('evaluation.subtitle')} />
 
       <Tabs
         idPrefix="evaluation-tabs"

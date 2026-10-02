@@ -210,7 +210,7 @@ export function Metrics() {
 
   return (
     <div>
-      <PageHeader title={t('metrics.title')} />
+      <PageHeader title={t('metrics.title')} description={t('metrics.subtitle')} />
       {metricsQuery.isPending ? (
         <div className={styles.loading}>{t('common.loading')}</div>
       ) : metricsQuery.isError ? (

@@ -631,8 +631,7 @@ export function Files() {
             )}
           </div>
           </div>
-        )}
-      />
+        )} description={t('files.subtitle')} />
 
       {/* Upload error */}
       {uploadState === 'error' && (

@@ -67,7 +67,8 @@
     "vector": "向量库",
     "healthLoadFailed": "无法连接健康检查端点",
     "systemUnreachable": "状态未知——健康检查无法连接",
-    "metricUnavailable": "不可用——报告该数字的请求失败"
+    "metricUnavailable": "不可用——报告该数字的请求失败",
+    "subtitle": "已索引什么、哪些健康、哪些需要处理。"
   },
   "documents": {
     "title": "文档管理",
@@ -167,7 +168,8 @@
     "missingEmbeddingsLoadFailed": "无法检查哪些文档缺少嵌入",
     "previewContentLoadError": "无法加载文档完整内容：{{error}}",
     "allCollections": "全部集合",
-    "supportedFormats": "支持：{{formats}}"
+    "supportedFormats": "支持：{{formats}}",
+    "subtitle": "供检索与 RAG 对话使用的逻辑文档。删除文档不会连带删除已导入的文件。"
   },
   "collections": {
     "title": "知识库管理",
@@ -231,7 +233,8 @@
     "generateUuid": "生成 UUID",
     "name": "名称",
     "viewDocuments": "查看文档",
-    "collectionKeyPlaceholder": "UUID 或业务标识"
+    "collectionKeyPlaceholder": "UUID 或业务标识",
+    "subtitle": "把文档组织成知识库，再以整体操作执行 purge 或重新嵌入。"
   },
   "collectionScope": {
     "label": "检索范围",
@@ -285,7 +288,8 @@
     "timeHoursAgo": "{{count}}小时前",
     "modelsLoadFailed": "无法加载模型列表",
     "feedbackError": "反馈提交失败，请重试。",
-    "exportError": "导出对话失败"
+    "exportError": "导出对话失败",
+    "subtitle": "在会话中向语料提问。历史按你的凭据隔离，换一个密钥一条都看不到。"
   },
   "search": {
     "title": "文档检索",
@@ -318,7 +322,8 @@
     "loadFailed": "检索请求失败",
     "hybrid": "混合检索",
     "emptyHint": "换个关键词或调整检索条件再试。",
-    "vector": "向量"
+    "vector": "向量",
+    "subtitle": "只检索不生成——先看清语料能召回什么，再决定是否引入模型。"
   },
   "metrics": {
     "title": "系统指标",
@@ -365,7 +370,8 @@
     "modelComparison": "模型对比",
     "rawJson": "原始 JSON",
     "retrievals": "检索次数",
-    "llmCalls": "LLM 调用"
+    "llmCalls": "LLM 调用",
+    "subtitle": "SLO 达标率、分模型延迟与成本、慢查询，以及持久化的 token 用量。"
   },
   "alerts": {
     "title": "告警中心",
@@ -425,7 +431,8 @@
     "targetValue": "目标值",
     "alertKey": "告警键",
     "deleteSloConfirm": "删除 SLO 阈值“{{name}}”？它会立即停止评估。",
-    "deleteSilenceConfirm": "删除静默计划“{{name}}”？其时间窗内的告警将不再被抑制。"
+    "deleteSilenceConfirm": "删除静默计划“{{name}}”？其时间窗内的告警将不再被抑制。",
+    "subtitle": "SLO 越界阈值、静默计划，以及每次通知实际投递到了什么。"
   },
   "settings": {
     "title": "系统设置",
@@ -458,7 +465,8 @@
     "cacheMaxItemsHint": "缓存项最大数量",
     "languageSection": "语言设置",
     "languageSectionDesc": "选择您偏好的界面语言。更改将立即生效。",
-    "currentLanguage": "当前语言"
+    "currentLanguage": "当前语言",
+    "subtitle": "模型提供方凭据、检索权重与缓存——决定一次查询如何被回答的旋钮。"
   },
   "theme": {
     "label": "主题",
@@ -534,7 +542,8 @@
     "metricSatisfaction": "用户满意度",
     "experimentsLoadFailed": "无法加载实验列表",
     "experimentLoadFailed": "无法加载该实验",
-    "analysisLoadFailed": "无法加载该实验的分析结果"
+    "analysisLoadFailed": "无法加载该实验的分析结果",
+    "subtitle": "在同一批标注问题上对比检索配置，看哪个变体真的更好。"
   },
   "apiKeys": {
     "title": "API 密钥",
@@ -621,7 +630,8 @@
     "selectedCollections": "指定集合",
     "selectedCollectionsHint": "该密钥只能访问下方选中的集合。",
     "collectionsLoadError": "加载集合失败",
-    "revokeConfirm": "吊销该 API 密钥？仍在使用它的客户端会立即开始收到 401，且吊销不可撤销。"
+    "revokeConfirm": "吊销该 API 密钥？仍在使用它的客户端会立即开始收到 401，且吊销不可撤销。",
+    "subtitle": "签发、轮换与吊销凭据。吊销立即生效，且不可撤销。"
   },
   "files": {
     "title": "文件管理",
@@ -676,7 +686,8 @@
     "embedCached": "文档已嵌入（缓存）",
     "embedFailed": "嵌入失败：{{message}}",
     "embedError": "触发嵌入失败：{{error}}",
-    "collectionsLoadFailed": "无法加载集合列表"
+    "collectionsLoadFailed": "无法加载集合列表",
+    "subtitle": "浏览导入的产物、预览转换结果，并把目录提升为 RAG 语料。"
   },
   "evaluation": {
     "title": "评估与反馈",
@@ -731,7 +742,8 @@
     "feedbackStatsLoadFailed": "无法加载反馈统计",
     "feedbackHistoryLoadFailed": "无法加载反馈历史",
     "runLoadFailed": "无法加载运行",
-    "hit": "命中率"
+    "hit": "命中率",
+    "subtitle": "在标注问题上算检索指标，旁边还有 LLM 评判与用户反馈。"
   },
   "embeddings": {
     "title": "嵌入任务运营",

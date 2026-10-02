@@ -25,6 +25,15 @@
  * header row that no longer existed, which is what a half-finished migration
  * leaves behind.
  *
+ * **Batch 817 added the second rule to this gate.** By then every protected page
+ * did route its title through `PageHeader`, but only one of thirteen passed a
+ * `description` — the slot the component exists to host, the one line that says
+ * what the page is for, and the one `PageHeader` links to the `h1` so a screen
+ * reader announces the heading and its meaning together. Twelve headings said
+ * only "Search" or "Metrics". The title rule and the description rule are the
+ * same class of mistake at different severities, so they belong in one gate:
+ * a convention that is only half-adopted looks adopted from a distance.
+ *
  * Run:
  *   node scripts/check-page-shell.mjs
  */
@@ -60,7 +69,46 @@ export function stripComments(source) {
 export const VIOLATION_KINDS = Object.freeze({
   MISSING_PAGE_HEADER: 'missing-page-header',
   HAND_ROLLED_PAGE_TITLE: 'hand-rolled-page-title',
+  MISSING_PAGE_DESCRIPTION: 'missing-page-description',
 });
+
+/**
+ * Extract the text of each `<PageHeader …>` opening tag.
+ *
+ * A `>` can appear inside a prop value — `<leading={…}>` with a nested element,
+ * or a `title={t('a > b')}` — so the scan tracks brace depth and quotes rather
+ * than stopping at the first `>`. Getting this wrong makes the new rule report
+ * a page that does have a description, and a rule that cries wolf is a rule
+ * somebody disables.
+ */
+export function pageHeaderTags(code) {
+  const tags = [];
+  const pattern = /<PageHeader\b/g;
+  let m;
+  while ((m = pattern.exec(code)) !== null) {
+    let i = m.index;
+    let depth = 0;
+    let quote = null;
+    for (; i < code.length; i += 1) {
+      const ch = code[i];
+      if (quote) {
+        if (ch === quote) quote = null;
+      } else if (ch === '"' || ch === "'") {
+        quote = ch;
+      } else if (ch === '{' || ch === '(' || ch === '[') {
+        depth += 1;
+      } else if (ch === '}' || ch === ')' || ch === ']') {
+        depth -= 1;
+      } else if (ch === '>' && depth === 0) {
+        break;
+      }
+    }
+    if (i >= code.length) break;
+    tags.push(code.slice(m.index, i + 1));
+    pattern.lastIndex = i + 1;
+  }
+  return tags;
+}
 
 export function checkPage(fileName, source, { exempt = EXEMPT_PAGES } = {}) {
   const code = stripComments(source);
@@ -87,6 +135,28 @@ export function checkPage(fileName, source, { exempt = EXEMPT_PAGES } = {}) {
         + ' consistent; register an exemption in EXEMPT_PAGES with a reason if this'
         + ' page is genuinely not a shell page.',
     });
+  } else if (!exempt.has(fileName)) {
+    // Batch 817. The description slot existed for this exact reason — it is the
+    // one piece of the page that tells a reader what the page is for, and
+    // PageHeader links it to the h1 so a screen reader announces the heading
+    // and its meaning together. One page of thirteen was using it, so twelve
+    // headings said only "Search" or "Metrics" with nothing to orient by.
+    //
+    // Requiring it is the point: a slot that almost nobody fills rots back to
+    // unused, and nothing in the test suite noticed for the whole time it sat
+    // there.
+    const tags = pageHeaderTags(code);
+    for (const tag of tags) {
+      if (!/\bdescription\s*=/.test(tag)) {
+        violations.push({
+          kind: VIOLATION_KINDS.MISSING_PAGE_DESCRIPTION,
+          detail:
+            `${fileName} renders <PageHeader> without a description. Give it`
+            + ' description={t(\'…\')} so the heading says what the page is for;'
+            + ' PageHeader links it to the h1 for assistive technology.',
+        });
+      }
+    }
   }
 
   return violations;
@@ -131,7 +201,8 @@ function main() {
   const exempt = files.filter((n) => EXEMPT_PAGES.has(n)).length;
   console.log(
     `Page-shell check passed; ${files.length} page(s) checked, all routing their title`
-    + ` through PageHeader (${exempt} exempt: ${[...EXEMPT_PAGES.keys()].join(', ')}).`,
+    + ` through PageHeader with a description (${exempt} exempt:`
+    + ` ${[...EXEMPT_PAGES.keys()].join(', ')}).`,
   );
 }
 

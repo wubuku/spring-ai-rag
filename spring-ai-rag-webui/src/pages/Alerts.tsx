@@ -38,7 +38,7 @@ export function Alerts() {
 
   return (
     <div>
-      <PageHeader title={t('alerts.title')} />
+      <PageHeader title={t('alerts.title')} description={t('alerts.subtitle')} />
 
       {/* The tab strip previously rendered four plain buttons with no tab
           semantics, so screen readers saw unrelated controls with no link to

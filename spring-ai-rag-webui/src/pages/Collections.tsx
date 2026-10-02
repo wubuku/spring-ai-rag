@@ -86,8 +86,7 @@ export function Collections() {
           >
             + {t('collections.create')}
           </button>
-        }
-      />
+        } description={t('collections.subtitle')} />
       {capabilityError && (
         <QueryErrorBanner
           onRetry={() => void refetchCapability()}

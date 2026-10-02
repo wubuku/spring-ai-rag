@@ -16,7 +16,7 @@ import { PageHeader } from '../components/ui';
 export function Settings() {
   return (
     <div>
-      <PageHeader title={t('settings.title')} />
+      <PageHeader title={t('settings.title')} description={t('settings.subtitle')} />
       <Tabs idPrefix="settings-tabs" items={tabs} />
     </div>
   );
@@ -40,10 +40,10 @@ describe('a page that uses the shared component', () => {
 
   it('is accepted with a description and page actions', () => {
     const source = good.replace(
-      "<PageHeader title={t('settings.title')} />",
+      "<PageHeader title={t('settings.title')} description={t('settings.subtitle')} />",
       `<PageHeader
          title={t('collections.title')}
-         description={t('collections.description')}
+         description={t('collections.subtitle')}
          actions={<button onClick={create}>+ {t('collections.create')}</button>}
        />`,
     );
@@ -51,9 +51,101 @@ describe('a page that uses the shared component', () => {
   });
 });
 
+describe('a page whose header says nothing about itself', () => {
+  // Batch 817. Every protected page routed its title through PageHeader, but
+  // one of thirteen passed a description — the slot the component exists to
+  // host and the one it links to the h1 for assistive technology. A heading
+  // that reads only "Search" or "Metrics" gives a reader, and a screen reader,
+  // nothing to orient by.
+
+  const withoutDescription = good.replace(
+    " description={t('settings.subtitle')}", '',
+  );
+
+  it('is rejected', () => {
+    expect(kinds(withoutDescription)).toEqual([
+      VIOLATION_KINDS.MISSING_PAGE_DESCRIPTION,
+    ]);
+  });
+
+  it('is rejected for a multi-line tag that spreads its attributes', () => {
+    const source = `
+      export function Search() {
+        return (
+          <PageHeader
+            title={t('search.title')}
+            actions={<button onClick={go}>Go</button>}
+          />
+        );
+      }
+    `;
+    expect(kinds(source, 'Search.tsx')).toEqual([
+      VIOLATION_KINDS.MISSING_PAGE_DESCRIPTION,
+    ]);
+  });
+
+  it('accepts a description that comes after a nested element in leading', () => {
+    // The scan has to balance braces: this tag contains a `>` belonging to
+    // <IconButton> long before the real end of the opening tag, and a naive
+    // first-`>` scan would stop there and miss the description entirely.
+    const source = `
+      export function Chat() {
+        return (
+          <PageHeader
+            title={t('chat.title')}
+            leading={<IconButton label={t('chat.history')} onClick={open} />}
+            description={t('chat.subtitle')}
+          />
+        );
+      }
+    `;
+    expect(kinds(source, 'Chat.tsx')).toEqual([]);
+  });
+
+  it('accepts a description written last on a single line', () => {
+    const source = good.replace(
+      "description={t('settings.subtitle')}",
+      "actions={<button>Save</button>} description={t('settings.subtitle')}",
+    );
+    expect(kinds(source)).toEqual([]);
+  });
+
+  it('does not fire on a header with children instead of attributes', () => {
+    const source = `
+      export function Files() {
+        return <PageHeader title={t('files.title')}>body</PageHeader>;
+      }
+    `;
+    expect(kinds(source, 'Files.tsx')).toEqual([
+      VIOLATION_KINDS.MISSING_PAGE_DESCRIPTION,
+    ]);
+  });
+
+  it('does not fire on an exempt page', () => {
+    expect(kinds(withoutDescription, 'Unlock.tsx')).toEqual([]);
+  });
+
+  it('reports once per header, not once per missing attribute', () => {
+    const source = `
+      export function Metrics() {
+        return (
+          <div>
+            <PageHeader title={t('metrics.title')} />
+            <PageHeader title={t('metrics.title')} />
+          </div>
+        );
+      }
+    `;
+    expect(kinds(source, 'Metrics.tsx')).toEqual([
+      VIOLATION_KINDS.MISSING_PAGE_DESCRIPTION,
+      VIOLATION_KINDS.MISSING_PAGE_DESCRIPTION,
+    ]);
+  });
+});
+
 describe('a hand-rolled page title', () => {
   const handRolled = good.replace(
-    "<PageHeader title={t('settings.title')} />",
+    "<PageHeader title={t('settings.title')} description={t('settings.subtitle')} />",
     "<h1 className=\"page-title\">{t('settings.title')}</h1>",
   );
 
@@ -79,7 +171,7 @@ describe('a hand-rolled page title', () => {
 
   it('is caught even when it sits next to a block comment', () => {
     const source = good.replace(
-      "<PageHeader title={t('settings.title')} />",
+      "<PageHeader title={t('settings.title')} description={t('settings.subtitle')} />",
       `/* header note */
        <h1 className="page-title">{t('settings.title')}</h1>`,
     );
