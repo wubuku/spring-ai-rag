@@ -180,6 +180,38 @@ class EmailNotificationServiceTest {
         assertTrue(html.contains("&lt;b&gt;bold&lt;/b&gt;"));
     }
 
+    // Batch 814：上面那条只覆盖了 message 和 metadata 的**值**。buildHtmlBody 里
+    // 另外几处插值同样走 escapeHtml，但没有任何测试守着——改坏了照样全绿。
+    // deliveryId 不在此列：唯一调用点传的是 payload.deliveryId().toString()（UUID），
+    // 构造上就不可控，写测试等于测一个不可达状态。
+    @Test
+    void buildHtmlBody_escapesEveryInterpolatedField() {
+        String payload = "<script>alert('xss')</script>";
+        String html = emailService.buildHtmlBody(
+                payload,                    // alertType
+                payload,                    // alertName
+                payload,                    // severity
+                "harmless message",
+                Map.of(payload, payload));  // metadata key 与 value
+
+        assertFalse(html.contains("<script"),
+                () -> "有插值字段未转义：" + html);
+        assertTrue(html.contains("&lt;script&gt;alert(&#39;xss&#39;)&lt;/script&gt;"),
+                () -> "载荷未被转义成实体：" + html);
+    }
+
+    @Test
+    void buildHtmlBody_severityColorIgnoresUnknownSeverity() {
+        // severity 同时进了 style 属性和正文两处；前者只能来自这个封闭 switch。
+        String html = emailService.buildHtmlBody(
+                "INFO", "Alert", "\"><script>alert(1)</script>", "msg", null);
+
+        assertFalse(html.contains("background-color: #\"><"),
+                () -> "颜色值被 severity 影响了：" + html);
+        assertTrue(html.contains("background-color: #6c757d"),
+                () -> "未知 severity 应回落到默认灰：" + html);
+    }
+
     @Test
     void buildHtmlBody_nullMetadata() {
         String html = emailService.buildHtmlBody(
