@@ -719,6 +719,31 @@ text-only messages、未知 alias 错误、非流式 JSON、SSE role/content/fin
 claim，再执行 `test-compile`、Shell 语法和空白检查。已有隔离数据库时可用
 `EMBEDDING_JOBS_IT_JDBC_URL` 覆盖。
 
+### PDF 导入 PostgreSQL 验收门禁
+
+```bash
+TESTCONTAINERS_RYUK_DISABLED=true \
+mvn -pl spring-ai-rag-core -am \
+  -Dpdf-import.it.enabled=true \
+  -Dtest=PdfImportPostgresIntegrationTest \
+  -Dsurefire.failIfNoSpecifiedTests=false \
+  test
+```
+
+`PdfImportPostgresIntegrationTest` 由 `pdf-import.it.enabled` 门控，所以普通
+`mvn test` 不需要 Docker 守护进程。套件启动 `pgvector/pgvector:pg16`
+（可用 `TESTCONTAINERS_PG_IMAGE` 覆盖），从空 schema 跑 Flyway 并断言已安装的
+最高版本号，然后用 PDFBox 生成的 PDF 通过 MockMvc 打真实的
+`/api/v1/rag/files/pdf` 端点。它验证可读元数据在导入后保留、
+`/api/v1/rag/files/tree` 能把存下来的 `pdf-import:{uuid}/default.md` 来源解析成
+预览与原始文件路由、非 PDF 文件没有导入元数据，以及批次中途失败时会把
+JPA flush 已经写下去的文件一并回滚。
+
+在 Batch 790 之前，这个开关在任何脚本和文档里都没有出现过，只在一份已归档的
+进度记录里，因此那两个测试方法没有任何有文档的运行方式。
+`scripts/verify-integration-test-switches.mjs` 现在会在受门控的套件缺少运行路径时失败，
+两个方向都查。
+
 ### 下一轮高价值能力验收门禁
 
 ```bash
