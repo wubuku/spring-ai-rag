@@ -133,6 +133,12 @@ export const GATES = [
     noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
   },
   {
+    gate: 'scripts/verify-test-expectations.mjs',
+    kind: 'gate',
+    selfTest: 'scripts/test-support/inert-test-self-test.mjs',
+    noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
+  },
+  {
     gate: 'scripts/verify-gate-wiring.mjs',
     kind: 'gate',
     selfTest: 'scripts/test-support/gate-wiring-self-test.mjs',
