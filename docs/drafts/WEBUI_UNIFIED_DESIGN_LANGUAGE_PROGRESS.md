@@ -52,7 +52,7 @@
 | Slice 4B：PageHeader primitive | **已交付（Batch 759）** | 4 个有主命令/副标题的页面迁移；副标题与标题建立 aria 关联 |
 | Slice 5：图标统一收口 | **已交付（Batch 760）** | 渲染标记中 emoji/dingbat 归零；`emoji-glyph` 成为第 9 类门禁违规且基线为空 |
 | Slice 4：高频工作流迁移 | 待开始 | 每批 focused Vitest + Mock Playwright + computed style/contrast/geometry 通过后独立提交 |
-| Slice 5：运营与管理页迁移 | 待开始 | 13 个 route 全部进入统一 PageShell，迁移文件不再使用 raw color/legacy alias/数值 z-index |
+| Slice 5：运营与管理页迁移 | 进行中（外壳已收口） | **Batch 805**：13/13 路由实测统一——各有且仅有 1 个 `h1._title_…`（父级 `div._titles_…`，24px），`<main>` padding 一律 `24px`；9 个仍在手写 `<h1 className="page-title">` 的页面已全部迁到 `PageHeader`，全局 `.page-title` 类已删除，`check:page-shell` 门禁守护。退出条件已按实测改写（原写的 `PageShell` 组件本仓库不存在） |
 | Slice 6：债务收口与双语长青文档 | 待开始 | 全量门禁、文档与交付材料完成 |
 
 ## 4. 验证基线

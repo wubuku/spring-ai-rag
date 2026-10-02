@@ -22,9 +22,13 @@ export interface PageHeaderProps {
  *
  * Four pages had grown their own header row with different flex rules and
  * different spacing, and the title alone was repeated as a bare
- * `h1.page-title` in thirteen places. Centralising the composition keeps the
- * page hierarchy predictable and gives the description a real relationship to
- * the title instead of leaving it as an unassociated paragraph.
+ * `h1.page-title` across the rest of them. Centralising the composition keeps
+ * the page hierarchy predictable and gives the description a real relationship
+ * to the title instead of leaving it as an unassociated paragraph.
+ *
+ * <p>As of Batch 805 every protected page routes its title through this
+ * component, and the global `.page-title` class is gone.
+ * `scripts/check-page-shell.mjs` keeps it that way.
  */
 export function PageHeader({
   title,

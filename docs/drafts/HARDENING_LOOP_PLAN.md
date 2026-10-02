@@ -478,6 +478,107 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
+### Batch 805（已交付）
+
+- 分支：`feature/unify-page-header-20261002`
+- 内容：**WebUI 外壳收口**（用户优先级 2），并且**清掉一笔跨了十个批次的规划债**。
+- 选它的理由：Batch 804 刚把 e2e 安全网修好（93 个用例真能跑），
+  **这是四个批次以来第一次具备改动页面外壳的回归保障**；而 `PageShell`
+  这笔债从 Batch 690 记到 800，每批都写"不在本批范围"，从没被解决过。
+
+#### 勘察：一次没做完的迁移
+
+- `PageHeader` 组件的 Javadoc 本身就写着动机："四个页面长出了各自的表头行，
+  不同的 flex 规则、不同的间距，而标题在**其余十三个地方**被重复成裸的
+  `h1.page-title`"。也就是说**迁移的意图早就写在代码注释里了**。
+- 实测 13 个受保护 route：
+  | 用法 | 页面 |
+  |---|---|
+  | `PageHeader` | Chat、Collections、Embeddings、Files |
+  | 手写 `<h1 className="page-title">` | ABTest、Alerts、ApiKeys、Dashboard、Documents、Evaluation、Metrics、Search、Settings |
+  - **9/13**，且**没有一个页面两套都用**。
+- **为什么测试套件完全没发现**：所有测试问的是
+  `getByRole('heading', { name })`，两种写法都产出 `<h1>`。
+  **这类重复对行为测试完全隐形，对一次系统普查却一目了然**——
+  和 Batch 797 在查询层发现的是同一类失效。
+- **两套写法渲染并不相同**：全局 `.page-title` 是 `margin-bottom: 20`，
+  `PageHeader` 是 `24` 且标题多一条更紧的 `line-height`。
+  也就是说 9 个页面和另外 4 个**坐在不同的垂直节奏上**。
+- 顺带挖出**半途而废的迁移留下的死 CSS**：`Files.module.css` 里的
+  `.header :global(.page-title)` 与 `.title` 各 0 处引用
+  （`styles.header` / `styles.title` 实测使用次数为 0）。
+
+#### 变更
+
+- 9 个页面全部迁到 `<PageHeader title={t('…')} />`（都是单行替换，页面无标题旁操作，
+  所以不需要重新安置按钮）。import 按各页原有风格合并，未破坏既有导入顺序。
+- 删除 `Files.module.css` 的 3 条死规则；删除 `global.css` 里的 `.page-title`。
+- `PageHeader` 的 Javadoc 更新为记录现状与守护它的门禁。
+
+#### 新门禁 `check:page-shell`
+
+- 每个页面必须经 `PageHeader` 渲染标题；引用已删除的 `page-title` 类一律拒绝；
+  缺 `PageHeader` 也拒绝。**先剥注释再判定**——`PageHeader` 的 Javadoc 里就写着
+  `h1.page-title` 这几个字，门禁必须不会把它当成违规。
+- `Unlock.tsx` 是**唯一豁免**，且必须显式登记理由（它在 `ProtectedRoute` 之外，
+  是凭据输入而非外壳页）；换个文件名同样的形状仍然会被拒。
+- 串进 `npm run lint`（7 → 8 项）。
+- **自测按项目约定改成 vitest 风格**（`scripts/__tests__/page-shell.test.mjs`，
+  与既有 6 个门禁自测同形）。第一版我写成了独立脚本，被
+  `vitest.design-system.config.ts` 判为 "No test suite found in file"——
+  **门禁在链上，但它自己的测试没被跑到**，这正是要避免的静默。
+  现 **7 文件 / 194 用例**（+10）。
+- **变异测试 2 次**：
+  1. 把 `Search.tsx` 改回手写 `h1` → 门禁与自测**双双变红**；
+  2. 把 `Unlock` 的豁免去掉 → 门禁变红。
+
+#### 清债：`PageShell` 到底该不该存在
+
+- 先量后判。**用真实浏览器逐条访问 13 个 route**（不是 grep、不是猜）：
+  - **13/13** 路由各有且仅有 **1 个** `<h1>`，全部是 `h1._title_m2b56_14`，
+    父元素全部是 `div._titles_m2b56_14`，字号一律 **24px**；
+  - **13/13** 的 `<main>` padding 一律 **24px 24px**。
+- 结论很清楚：**"统一外壳"的两个职责早就有人负责了**——留白在 `Layout`，
+  标题在 `PageHeader`。另立一个 `PageShell` 会是**纯粹的重复**：
+  它要包的东西 `Layout` 已经在包，而各页容器**确实需要不同**——
+  Chat 是 `max-width: 900px` 的居中阅读列、Settings `700px`、
+  Files 是 `height: 100%` 弹性布局。把三者塞进同一个壳是**回退而不是改进**。
+- 因此把 `WEBUI_UNIFIED_DESIGN_LANGUAGE_PLAN.md` 的退出条件**改写成现在真实成立
+  且有门禁守护的事实**（并附上实测数据与理由），PROGRESS 表同步更新。
+  **一笔被 defer 了十个批次的债，靠"先量再判"在第二批就解决了。**
+
+#### 我自己犯的错（本批三个）
+
+1. **测量假象差点变成假缺陷**：第一遍实测 13 条路由时 Dashboard 报 `h1Text: null`，
+   我差点当成"迁移没生效"甚至"页面没有标题"的真缺陷写进账本。
+   源码里 `<PageHeader>` 明明白白在第 40 行，且 `dashboard.spec.ts` 的
+   heading 断言**是通过的**——两者矛盾说明是**我的测量有问题**。
+   加 1500ms 等待后重测：`h1Count: 1`，与其余 12 个结构完全一致。
+   `openProtectedPage` 只等"Loading…"消失，而 Dashboard 的健康查询更晚落地。
+   **教训：测量出现"不该存在的异常"时，先怀疑测量，再怀疑被测物。**
+2. **静态提取根节点类的启发式抓错了对象**：用 `rfind("return (")` 找页面根元素，
+   结果抓到的是**子组件**的 return（`styles.formGroup` / `styles.toolbar` 这类）。
+   这和 Batch 800 在 `styles[\`lifecycle${value}\`]` 上踩的是同一个坑，
+   所以**放弃静态提取，改用浏览器实测**——这也顺带拿到了静态 grep 永远给不出的
+   计算样式。
+3. **自测写成独立脚本导致没被跑到**：见上，改成 vitest 风格后才发现。
+   另外自测里我有一条断言写错了（替换掉 `PageHeader` 后应当触发**两条**违规而
+   不是一条），门禁是对的、断言写反了。
+
+- 指标（实测值）：前端单测 **77 文件 / 831 用例**（不变——迁移没动任何行为断言，
+  页面标题的 e2e 断言用的就是 `getByRole('heading')`，两种写法都满足）；
+  design-system 套件 **184 → 194**（+10）；`lint` **7 → 8 项**；
+  e2e mock 套件 **15 spec / 93 用例**；typecheck 干净；build 通过；
+  仓库门禁 15/15、`verify-project-tests` 8 项全绿。
+- 遗留（如实登记，未处理）：
+  - 页面级**描述**（`PageHeader` 的 `description` 槽）目前 13 个页面**一个都没用**。
+    组件为它准备了 `aria-describedby` 关系，但没人填。这是"能力已备、内容未补"，
+    属于内容决策而非缺陷，**本批不硬塞文案**。
+  - e2e mock 套件仍未进日常门禁链（2.3–2.6 分钟 vs 秒级门禁），需单独决策。
+  - `files-real` 挂在 rerank 门禁下的耦合气味。
+  - 后端 `ask`/`chat` 53 行×2 重复、`findCacheState` 读侧同形、174 个无引用
+    locale 键（已验证阻塞）本批未动。
+
 ### Batch 804（已交付）
 
 - 分支：`feature/e2e-run-path-gate-20261002`

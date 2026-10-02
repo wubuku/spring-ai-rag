@@ -74,10 +74,3 @@ a {
 a:hover {
   text-decoration: underline;
 }
-
-.page-title {
-  font-size: var(--typography-size-24);
-  font-weight: 700;
-  margin-bottom: var(--space-20);
-  color: var(--color-text);
-}

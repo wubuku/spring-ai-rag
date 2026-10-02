@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { searchApi, type SearchResult } from '../api/search';
 import { filesApi } from '../api/files';
+import { PageHeader } from '../components/ui';
 import { CollectionScopeSelector } from '../components/CollectionScopeSelector';
 import { ImeSafeForm } from '../components/ImeSafeForm';
 import { SearchResults } from '../components/SearchResults';
@@ -229,7 +230,7 @@ export function Search() {
 
   return (
     <div>
-      <h1 className="page-title">{t('search.title')}</h1>
+      <PageHeader title={t('search.title')} />
       <ImeSafeForm onSubmit={handleSearch} className={styles.form}>
         <div className={styles.searchWrapper}>
           <input

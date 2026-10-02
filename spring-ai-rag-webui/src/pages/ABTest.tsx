@@ -8,6 +8,7 @@ import {
 } from 'recharts';
 import { abtestApi, type CreateExperimentRequest } from '../api/abtest';
 import { useChartTheme } from '../hooks/useChartTheme';
+import { PageHeader } from '../components/ui';
 import { Dialog } from '../components/Dialog';
 import { ImeSafeForm } from '../components/ImeSafeForm';
 import { useToast } from '../components/Toast';
@@ -39,7 +40,7 @@ export function ABTest() {
 
   return (
     <div>
-      <h1 className="page-title">{t('abtest.title')}</h1>
+      <PageHeader title={t('abtest.title')} />
       {selectedId === null && (
         <ExperimentList onSelect={id => navigate(`/abtest/${id}`)} />
       )}
