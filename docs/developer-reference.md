@@ -79,6 +79,25 @@ Because a gate that cannot fail is worse than no gate, the script first runs
 `scripts/test-support/test-visibility-self-test.mjs`, which asserts the checker
 rejects the `tests="0" skipped="0"` shape rather than merely that it runs.
 
+#### Integration-Test Switches
+
+The same script then reconciles the `*.it.enabled` switches that gate those
+PostgreSQL suites against the scripts and documents meant to turn them on:
+
+```bash
+./scripts/verify-project-tests.sh   # runs both checks plus their self-tests
+```
+
+Gating a suite is a promise that somebody can ungate it. `PdfImportPostgresIntegrationTest`
+— 2 test methods — had a switch that appeared in no script and in no document
+outside an archived progress note, so nothing could run it. The gate fails when
+a gated switch has no run path in either direction, when a run path names a
+switch no test class consumes, when a gated class declares no `@Test`, and when
+a `verify-gated-it.sh` suite entry points at a class that is gone or no longer
+gated by the flag the runner passes. Adding a gated suite means adding its run
+path; `scripts/test-support/integration-switch-self-test.mjs` proves each of
+those four checks can still reject.
+
 ### Documentation System
 
 Run the project-documentation boundary, link, bilingual-structure, invariant, command, whitespace, and secret checks with:

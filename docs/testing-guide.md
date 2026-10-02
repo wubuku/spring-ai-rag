@@ -811,6 +811,32 @@ active-job coalescing, atomic force upgrades, and concurrent-worker atomic
 conditional claims, then runs `test-compile`, shell syntax, and whitespace
 checks. Set `EMBEDDING_JOBS_IT_JDBC_URL` to reuse an existing isolated database.
 
+### PDF Import PostgreSQL Acceptance Gate
+
+```bash
+TESTCONTAINERS_RYUK_DISABLED=true \
+mvn -pl spring-ai-rag-core -am \
+  -Dpdf-import.it.enabled=true \
+  -Dtest=PdfImportPostgresIntegrationTest \
+  -Dsurefire.failIfNoSpecifiedTests=false \
+  test
+```
+
+`PdfImportPostgresIntegrationTest` is gated behind `pdf-import.it.enabled` so a
+plain `mvn test` never needs a Docker daemon. The suite starts
+`pgvector/pgvector:pg16` (override with `TESTCONTAINERS_PG_IMAGE`), migrates an
+empty schema through Flyway and asserts the highest installed version, then
+drives the real `/api/v1/rag/files/pdf` endpoint with PDFBox-generated PDFs
+through MockMvc. It checks that readable metadata survives the import, that
+`/api/v1/rag/files/tree` resolves the stored `pdf-import:{uuid}/default.md`
+source to preview and raw routes, that a non-PDF file has no import metadata, and
+that a mid-batch failure rolls back files a JPA flush had already written.
+
+Until Batch 790 this switch appeared in no script and in no document outside an
+archived progress note, so both test methods had no documented way to run.
+`scripts/verify-integration-test-switches.mjs` now fails when a gated suite has
+no run path, in either direction.
+
 ### Next High-Value Features Acceptance Gates
 
 ```bash

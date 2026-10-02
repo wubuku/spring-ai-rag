@@ -76,6 +76,23 @@ skipped；本门禁则保证今后再有类"闭嘴"就会失败。
 `scripts/test-support/test-visibility-self-test.mjs`，它断言检查器确实**拒绝**
 `tests="0" skipped="0"` 这种形态，而不只是"它跑起来了"。
 
+#### 集成测试开关对账
+
+同一个脚本接着把门控那些 PostgreSQL 套件的 `*.it.enabled` 开关，与本该打开它们的
+脚本和文档对账：
+
+```bash
+./scripts/verify-project-tests.sh   # 两项检查连同各自的自测一起跑
+```
+
+给套件加门控是一份"总有人能把它打开"的承诺。`PdfImportPostgresIntegrationTest`
+——2 个测试方法——的开关在任何脚本、任何文档里都没出现过，只在一份已归档的进度记录里，
+于是没有任何东西能跑它。门禁在以下情况失败：受门控的开关在任一方向上缺少运行路径；
+运行路径引用了没有测试类消费的开关；受门控的类不声明任何 `@Test`；
+`verify-gated-it.sh` 清单条目指向已删除的类，或它传的开关与该类实际受控的开关对不上。
+新增受门控的套件就要同时给出它的运行路径；
+`scripts/test-support/integration-switch-self-test.mjs` 证明这四条检查都还能拒绝。
+
 ### 文档体系
 
 一键检查项目文档边界、链接、双语结构、固定约定、命令、空白和敏感信息：

@@ -317,6 +317,79 @@
   约 53 行 × 2。合并需要同时验证两条链路的 OpenAPI 注解与日志文案差异，
   风险高于本批收益，暂列后续。
 
+### Batch 790（已交付）
+
+- 分支：`feature/integration-switch-gate-20261002`
+- 内容：给**集成测试开关**加双向对账门禁，并修掉勘察中查出的唯一一条真实漂移。
+- **勘察（先量，再写门禁）**：
+  - 全仓 22 个集成测试类受 `@EnabledIfSystemProperty(named = "*.it.enabled")` 门控，
+    共 **147 个 `@Test`**（未在 `docs/drafts` 里的 `.md`/`.sh` 双向对账后确认）；
+  - 另有 5 个集成类**没有**门控，一直照常运行，不在本门禁范围内；
+  - `docs/drafts/archive/` 与账本本身被排除——它们是"谁曾经敲过什么"的历史记录，
+    不是有人会照做的运行说明。
+- **真实缺陷：`PdfImportPostgresIntegrationTest` 无法被任何人运行**。
+  `pdf-import.it.enabled` 在任何脚本、任何非 drafts 文档里都没有出现过，
+  只在 `docs/drafts/archive/2026-08-28_NEXT_HIGH_VALUE_FEATURES_PROGRESS.md`
+  里以一句"加了 `-Dpdf-import.it.enabled=true` 后 2/2 通过"出现过。
+  **2 个测试方法事实上不可达**，而套件清单读起来是完整的。
+  反方向（幽灵开关：文档/脚本引用了却没有测试类消费）实测为 **0**。
+- **修法**：在 `docs/testing-guide.md` 与 `-zh-CN.md` 新增
+  "PDF Import PostgreSQL Acceptance Gate" 小节，给出可直接复制的完整命令
+  （含 `TESTCONTAINERS_RYUK_DISABLED`、镜像覆盖、Flyway 断言与用例覆盖范围的准确描述）。
+  **没有**把它加进 `scripts/verify-gated-it.sh`：本机没有 Docker，我无法执行验证，
+  在一个别人会照着跑的脚本里加一条未经执行验证的条目，风险高于只补文档。
+  这个取舍如实登记。
+- **门禁 `scripts/verify-integration-test-switches.mjs`**，四类规则：
+  1. `undiscoverable-switch`——受门控的开关没有任何运行路径打开它；
+  2. `ghost-switch`——脚本/文档打开了某个开关，却没有测试类消费；
+  3. `empty-gated-suite`——受门控的类里一个 `@Test` 都没有（`abstract` 基类豁免，
+     Surefire 本来就正确忽略它们）；
+  4. `gated-runner-drift`——`verify-gated-it.sh` 清单里的类已消失、重复登记，
+     或它传的开关前缀与该类实际受控的开关对不上。
+  第 4 条针对的是"静默"失效：`mvn test -Dwrong.it.enabled=true -Dtest=ChatIt`
+  会跑零个测试，Surefire 报 0，而套件读起来是通过的。
+- **判据的关键选择**："可发现"要求出现**打开开关的形状**
+  （`-D<开关>` / `<开关>=true` / `named = "<开关>"`），
+  而不只是被提到。实测这两个判据在当前仓库结论一致（都是 21/22），
+  所以收紧不损失召回，但拒绝"文档里列了个名字就算数"的糊弄。
+- **自测 16 例**（`scripts/test-support/integration-switch-self-test.mjs`），
+  覆盖四类规则的拒绝行为 + 抽象基类豁免 + 归档不算数 + 真实仓库对账必须干净。
+- **自测当场抓出我自己的两个真 bug**（初版门禁全绿是假的）：
+  1. `docs/drafts` 排除写死了模块级 `projectRoot`，导致在临时目录夹具上完全失效
+     （不可测）——改为相对 walk root 解析；
+  2. 开关名的尾随边界 `(?![a-z0-9-])` 漏了 `.`，`x.it.enabled.extra` 会被
+     当成 `x.it.enabled` 的运行路径——把 `.` 补进否定前瞻。
+  另外初版还有第三个 bug：`['.md','.sh'].includes(entry.name)` 比的是整名不是后缀，
+  于是文件遍历走了 **0 个文件**、把 22 个开关全报成不可发现。
+  三处都是先写勘察脚本时被自己的正则坑出来的，记在这里以免重犯。
+- **变异测试 4 处，各被精确抓住**：
+  | 变异 | 抓到它的检查 |
+  |---|---|
+  | 从两份 testing-guide 里删掉 pdf-import 的运行路径 | 门禁 exit 1 + 自测 `the real repository reconciles clean` 变红 |
+  | `verify-gated-it.sh` 塞一个已删除的类名 | 门禁 `gated-runner-drift` exit 1 |
+  | 把受门控测试类的 `@Test` 全换成 `@Disabled` | 门禁 `empty-gated-suite` exit 1 |
+  | 门禁退回"只看类是否存在、不看开关名"（`if (false)`） | 自测 `reports a runner flag that no longer matches the class it runs` 变红 |
+- **如实登记**：
+  - 本机**没有 Docker**（`docker: command not found`，也没有本地 PostgreSQL），
+    因此这 22 个套件、147 个测试**仍然一个都没真正跑过**。
+    本批解决的是"能不能被发现和运行"，**不是**"它们跑不跑得过"。
+  - 145/154 跳过这一事实本身没有改变，不虚报。
+- 指标（实测值）：门禁自测 **16/16**；
+  `verify-project-tests.sh` 四项全 PASS（可见性自测 + 可见性 + 开关自测 + 开关对账，
+  983 类 / 7627 用例 / 154 跳过 / 0 隐形类 / 980 个声明测试类双向对账，
+  22 个受门控开关覆盖 147 个测试全部有运行路径，0 个幽灵开关）；
+  `verify-project-docs.sh` **15/15**；`verify-no-pessimistic-locks.sh` 通过。
+  本批**未改动任何 Java 源码**，因此无需重跑 Maven 套件（已用 `git diff --stat -- '*.java'`
+  确认为空，变异 3 完整撤回）。
+- 遗留技术债（如实登记，未处理）：
+  - `ApiKeyManagementService` 的恒真 null 判断 `if (retiring != null)`
+    （`retiring` 是 Spring Data 返回的 `Optional`，生产上永不为 null）——
+    全仓扫描确认仅此 1 处，应改生产代码消除。
+  - 纯英文标题在中文文档里仍无门禁守护（Batch 786 主动放弃的规则）。
+  - `Documents` 页"版本历史 → 恢复"的叠加是设计如此还是遗漏，待产品侧确认。
+  - 147 个集成测试仍未真正跑过（本机无 Docker）。
+  - `PageShell` 脱节；`ask`/`chat` 53 行 × 2 重复。
+
 ### Batch 789（已交付）
 
 - 分支：`feature/dialog-accessible-name-gate-20261002`
