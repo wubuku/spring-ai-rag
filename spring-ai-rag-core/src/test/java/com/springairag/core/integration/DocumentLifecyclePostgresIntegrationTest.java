@@ -160,11 +160,7 @@ class DocumentLifecyclePostgresIntegrationTest {
 
         flyway(null).migrate();
 
-        assertEquals("58", jdbcTemplate.queryForObject(
-                "SELECT version FROM flyway_schema_history "
-                        + "WHERE success = true "
-                        + "ORDER BY installed_rank DESC LIMIT 1",
-                String.class));
+        MigrationVersions.assertLatestApplied(jdbcTemplate);
         assertEquals("READY", jdbcTemplate.queryForObject(
                 "SELECT local_index_status "
                         + "FROM rag_document_local_index_state "
@@ -349,11 +345,7 @@ class DocumentLifecyclePostgresIntegrationTest {
 
         flyway(null).migrate();
 
-        assertEquals("58", jdbcTemplate.queryForObject(
-                "SELECT version FROM flyway_schema_history "
-                        + "WHERE success = true "
-                        + "ORDER BY installed_rank DESC LIMIT 1",
-                String.class));
+        MigrationVersions.assertLatestApplied(jdbcTemplate);
         assertEquals("default", jdbcTemplate.queryForObject(
                 "SELECT source_namespace FROM rag_documents WHERE id = ?",
                 String.class, documentId));

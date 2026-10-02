@@ -118,13 +118,7 @@ class PdfImportPostgresIntegrationTest {
     @Test
     void importsReadableMetadataAndPreservesHistoricalFallbackAndCascade()
             throws Exception {
-        assertEquals("59", jdbc.queryForObject("""
-                SELECT version
-                FROM flyway_schema_history
-                WHERE success = TRUE
-                ORDER BY installed_rank DESC
-                LIMIT 1
-                """, String.class));
+        MigrationVersions.assertLatestApplied(jdbc);
 
         MvcResult importResult = mockMvc.perform(multipart("/api/v1/rag/files/pdf")
                         .file(new org.springframework.mock.web.MockMultipartFile(

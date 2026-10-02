@@ -132,17 +132,7 @@ class ApiPrincipalExpiryAlertPostgresIntegrationTest {
 
     @Test
     void migratesThroughV57AndEnforcesManagedAlertConstraints() {
-        assertEquals(
-                "57",
-                jdbc.queryForObject(
-                        """
-                        SELECT version
-                        FROM flyway_schema_history
-                        WHERE success = TRUE
-                        ORDER BY installed_rank DESC
-                        LIMIT 1
-                        """,
-                        String.class));
+        MigrationVersions.assertLatestApplied(jdbc);
         assertEquals(
                 1,
                 jdbc.queryForObject(

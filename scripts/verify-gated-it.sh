@@ -5,6 +5,10 @@
 # 境内网络友好：默认禁用 Ryuk 并复用本地 postgres:16-pgvector 镜像，
 # 两者都可通过环境变量覆盖。
 #
+# 不需要数据库的容器行为类 IT（例如 SecurityPathTraversalProbeTest：它测的是
+# Tomcat 怎么处理穿越请求行，与数据库无关）刻意不放进这个清单——它属于默认
+# mvn test 范围，放在开关后面只会让一条安全不变量在"有人记得加 flag"时才跑。
+#
 # 用法：
 #   ./scripts/verify-gated-it.sh                 # 跑全部纯 DB 型套件
 #   ./scripts/verify-gated-it.sh <ClassNames>    # 只跑指定套件（逗号分隔）

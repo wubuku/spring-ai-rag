@@ -744,6 +744,39 @@ JPA flush 已经写下去的文件一并回滚。
 `scripts/verify-integration-test-switches.mjs` 现在会在受门控的套件缺少运行路径时失败，
 两个方向都查。
 
+### 路径穿越探测（不设门控 — 随默认测试跑）
+
+```bash
+mvn -pl spring-ai-rag-core -Dtest=SecurityPathTraversalProbeTest test
+```
+
+`SecurityPathTraversalProbeTest` 回答的是 Batch 794 当时只能绕开的问题：
+servlet 容器拿到 `/actuator/../api/v1/rag/...` 这样的请求行**到底会怎么做**。
+套件在随机端口上起真实服务器，并把请求行用**裸 socket** 发出去——
+因为 `HttpClient` 和所有浏览器都会在请求离开进程之前就规范化 URI，
+那样测的是客户端的行为；MockMvc 同样不会走容器的 URI 映射。
+只有线路上的字节才能决定容器把请求路由到哪。
+
+实测结果由一个排在鉴权之前的过滤器记录下来：
+
+```
+requestURI  = /actuator/../api/v1/rag/probe-protected
+servletPath = /api/v1/rag/probe-protected
+```
+
+过滤器按**规范化**路径被匹配，却拿到**原始**请求行——`SecurityPathExclusions`
+要防的那个分歧是真的。请求随后**无论走不走排除判定都是 404**，
+因为 Spring MVC 按未规范化的 URI 解析 handler。
+
+**这个套件刻意不设门控。** 它不需要数据库、不需要模型 provider，
+只需要一直都在的 servlet 容器；一条只在"有人记得加 flag"时才执行的安全不变量
+是很弱的不变量。
+
+**它证明不了什么**：把 `SecurityPathExclusions` 的 fail closed 分支删掉，
+五个用例照样全绿，因为路由反正都会把穿越请求 404 掉。所以匿名用例的 404
+**不能**当作排除规则生效的证据——真正钉住那条规则的是 `SecurityPathExclusionsTest`，
+删掉分支它会红。探测负责容器层的前置事实，单元测试负责那条规则。
+
 ### 下一轮高价值能力验收门禁
 
 ```bash

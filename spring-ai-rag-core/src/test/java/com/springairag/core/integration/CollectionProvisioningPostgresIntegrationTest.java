@@ -130,7 +130,7 @@ class CollectionProvisioningPostgresIntegrationTest {
 
     @Test
     void emptyAndV51UpgradeReachLatestWithoutChangingExistingCollections() {
-        assertEquals("58", latestMigration());
+        MigrationVersions.assertLatestApplied(jdbc);
         assertEquals(0, jdbc.queryForObject(
                 "SELECT COUNT(*) FROM rag_collection_provisioning_operation",
                 Integer.class));
@@ -144,7 +144,7 @@ class CollectionProvisioningPostgresIntegrationTest {
 
         flyway(null).migrate();
 
-        assertEquals("58", latestMigration());
+        MigrationVersions.assertLatestApplied(jdbc);
         assertEquals("Existing", jdbc.queryForObject(
                 "SELECT name FROM rag_collection WHERE id = ?",
                 String.class, existingId));

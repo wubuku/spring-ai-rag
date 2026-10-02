@@ -123,17 +123,7 @@ class IntegrationObservabilityPostgresIntegrationTest {
 
     @Test
     void migratesThroughV57AndCreatesBoundedRollupIndexes() {
-        assertEquals(
-                "57",
-                jdbc.queryForObject(
-                        """
-                        SELECT version
-                        FROM flyway_schema_history
-                        WHERE success = TRUE
-                        ORDER BY installed_rank DESC
-                        LIMIT 1
-                        """,
-                        String.class));
+        MigrationVersions.assertLatestApplied(jdbc);
         assertEquals(
                 1L,
                 jdbc.queryForObject(

@@ -1,5 +1,6 @@
 package com.springairag.core.alertdelivery;
 
+import com.springairag.core.integration.MigrationVersions;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.springairag.api.dto.AlertNotificationDeliveryPageResponse;
 import com.springairag.core.config.NotificationConfig;
@@ -129,15 +130,7 @@ class AlertNotificationDeliveryPostgresIntegrationTest {
 
     @Test
     void migrationAndAtomicEnqueueCreateStableLowSensitivityReceipt() {
-        assertEquals(
-                "58",
-                jdbc.queryForObject("""
-                        SELECT version
-                        FROM flyway_schema_history
-                        WHERE success = TRUE
-                        ORDER BY installed_rank DESC
-                        LIMIT 1
-                        """, String.class));
+        MigrationVersions.assertLatestApplied(jdbc);
         assertEquals(
                 0,
                 jdbc.queryForObject("""
