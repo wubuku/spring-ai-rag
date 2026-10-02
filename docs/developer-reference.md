@@ -115,6 +115,7 @@ did not already know they existed.
 | `verify-e2e-run-paths.mjs` | A Playwright spec no script can run | `test-support/e2e-reachability-self-test.mjs` | tests chain |
 | `verify-slo-endpoint-coverage.mjs` | A threshold whose endpoint is gone; a timer name shared across controllers | `test-support/slo-endpoint-coverage-self-test.mjs` | tests chain |
 | `verify-gate-wiring.mjs` | An automated gate that is unregistered, untested, unexecuted or unreachable from CI | `test-support/gate-wiring-self-test.mjs` | tests chain |
+| `verify-test-expectations.mjs` | A `@Test` whose body is empty or holds only comments, which reports as a pass every run | `test-support/inert-test-self-test.mjs` | tests chain |
 | `verify-no-pessimistic-locks.sh` | Pessimistic locks, `SKIP LOCKED` and advisory locks in production code | `test-support/pessimistic-locks-self-test.sh` | docs chain |
 | `verify-zh-translation.mjs` | An untranslated English passage in a Chinese document | `test-support/zh-translation-self-test.mjs` | docs chain |
 | `verify-project-tests.sh` / `verify-project-docs.sh` | Aggregate entry points for the eight above | borne by each gate | by hand / not yet in CI |

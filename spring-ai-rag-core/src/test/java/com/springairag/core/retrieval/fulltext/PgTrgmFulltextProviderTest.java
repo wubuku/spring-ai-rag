@@ -10,6 +10,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.dao.DataAccessResourceFailureException;
 
 import java.util.*;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -75,24 +76,94 @@ class PgTrgmFulltextProviderTest {
     }
 
     @Test
-    @DisplayName("multi-word query: each keyword searched independently, best similarity kept")
-    void search_multiWord_takesBestScore() {
-        // Skip: requires complex varargs mocking. The multi-word search logic is tested
-        // via HybridRetrieverService integration tests which use real SQL.
+    @DisplayName("the whole trimmed query is one similarity argument, not per-keyword")
+    void search_multiWord_passesWholeQueryToSimilarity() {
+        // The previous version of this test asserted per-keyword search with the
+        // best score kept. The implementation has never done that: `executeSearch`
+        // binds the trimmed query three times for the two POSITION() probes and
+        // one `similarity(e.chunk_text, ?)`, so a multi-word query is compared as a
+        // single trigram. The test was disabled with a comment claiming the
+        // behaviour lived elsewhere; it did not. What is actually worth pinning is
+        // the argument binding, because a future "improve multi-word recall"
+        // change would otherwise land without anyone noticing which of the two
+        // behaviours it replaced.
+        JdbcTemplate jdbc = availableJdbc();
+        when(jdbc.queryForList(anyString(), (Object[]) any())).thenReturn(List.of());
+
+        PgTrgmFulltextProvider provider = new PgTrgmFulltextProvider(jdbc);
+        provider.search("  hello world  ", List.of(1L, 2L), null, 5, 0.3, 1L);
+
+        ArgumentCaptor<Object[]> args = ArgumentCaptor.forClass(Object[].class);
+        verify(jdbc).queryForList(anyString(), args.capture());
+        Object[] bound = args.getValue();
+        assertTrue(Stream.of(bound).filter("hello world"::equals).count() >= 3,
+                "the trimmed query should be bound for both POSITION probes and similarity(), got "
+                        + Arrays.toString(bound));
     }
 
     @Test
     @DisplayName("results below minScore are filtered out")
     void search_belowMinScore_filtered() {
-        // Skip: requires complex varargs mocking. minScore filtering is covered
-        // by HybridRetrieverService integration tests.
+        PgTrgmFulltextProvider provider =
+                new TestPgTrgmProviderWithFixedSearch(availableJdbc(),
+                        List.of(row(1L, 0.05), row(2L, 0.40)));
+
+        List<RetrievalResult> results = provider.search("test", SCOPE_IDS, null, 5, 0.30, 1L);
+
+        assertEquals(1, results.size(), "only the row at or above minScore survives");
+        assertEquals(0.40, results.get(0).getScore(), 1e-9);
+    }
+
+    @Test
+    @DisplayName("a row exactly at minScore is kept (the comparison is >=, not >)")
+    void search_atExactlyMinScore_kept() {
+        PgTrgmFulltextProvider provider =
+                new TestPgTrgmProviderWithFixedSearch(availableJdbc(),
+                        List.of(row(1L, 0.30)));
+
+        assertEquals(1, provider.search("test", SCOPE_IDS, null, 5, 0.30, 1L).size());
     }
 
     @Test
     @DisplayName("excludeIds are filtered from results")
     void search_excludeIds_filtered() {
-        // Skip: requires complex varargs mocking. excludeIds filtering is covered
-        // by HybridRetrieverService integration tests.
+        PgTrgmFulltextProvider provider =
+                new TestPgTrgmProviderWithFixedSearch(availableJdbc(),
+                        List.of(row(5L, 0.9), row(9L, 0.8)));
+
+        List<RetrievalResult> results =
+                provider.search("test", SCOPE_IDS, List.of(5L), 5, 0.3, 1L);
+
+        assertEquals(1, results.size(), "the excluded embedding must not reach the candidate pool");
+        assertEquals("9", results.get(0).getDocumentId());
+    }
+
+    /**
+     * RetrievalScope: a null id list means "match none" and short-circuits before
+     * the database is touched, which is why the pre-existing tests here all pass
+     * null and never reach the row mapping.
+     */
+    private static final List<Long> SCOPE_IDS = List.of(1L, 2L, 5L, 9L);
+
+    /** A row shaped like the one `executeSearchInternal` returns. */
+    private static Map<String, Object> row(long embeddingId, double score) {
+        Map<String, Object> row = new HashMap<>();
+        row.put("local_chunk_id", embeddingId);
+        row.put("embedding_id", embeddingId);
+        row.put("document_id", embeddingId);
+        row.put("chunk_text", "chunk " + embeddingId);
+        row.put("chunk_index", 0);
+        row.put("score_trgm", score);
+        row.put("metadata", Map.of());
+        return row;
+    }
+
+    /** A JdbcTemplate stubbed so `detectAvailability()` reports pg_trgm present. */
+    private static JdbcTemplate availableJdbc() {
+        JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        when(jdbc.queryForObject(anyString(), eq(Integer.class))).thenReturn(1);
+        when(jdbc.queryForObject(contains("gin_trgm_ops"), eq(Boolean.class))).thenReturn(true);
+        return jdbc;
     }
 
     @Test

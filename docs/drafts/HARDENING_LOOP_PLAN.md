@@ -478,6 +478,96 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
+### Batch 810（已交付）
+
+- 分支：`feature/inert-test-census-20261003`
+- 内容：把优先级 1 里我还没碰过的那一面摊开——**测试自己有没有在测东西**。
+  起点不是已知遗留，而是一次普查：把"每个 `@Test` 方法删掉生产代码，它还会不会失败"
+  这个问题问遍全仓。**这道题先后被我的判据坑了三次**，而每一次都是被抽样读源码推翻的。
+- **勘察：普查判据错了三次，每次都靠读源码发现**
+  1. 第一版只扫方法体里的 `assert*`/`verify*` → 报 **191** 个"无断言"。抽样第一条
+     `QueryRewriteAdvisorTest#before_blankQuery_returnsOriginalRequest` 断言是
+     `verifyNoInteractions(...)`；第二条 `WebUiConfigTest#rootIndex_returnsHtml`
+     断言是 MockMvc 的 `.andExpect(...)`。判据太窄。
+  2. 扩大判据（加 AssertJ/MockMvc/异常流）→ 报 **40**。抽样
+     `DocumentMutationReconciliationRecoveryGuardTest` 的 8 个方法断言全在私有辅助
+     `syncItemConflict()` 里的 `assertThrows`。**Java 里"把断言放进私有辅助方法"是
+     地道写法**，只看方法体必然误报。
+  3. 改成沿同类私有方法做**传递闭包** → 报 **30**。抽样
+     `SecurityPathExclusionsTest#authAndRateLimitAgree` 用手写
+     `throw new AssertionError(...)` 断言，判据又不认。补上后剩 29。
+  4. **29 条里绝大多数不是缺陷**：它们的全部契约就是"调用不应抛出"，而 JUnit 在异常
+     传播时就会让测试失败——**期望是隐含成立的**。若把它们做成门禁违规，就要写 20 多条
+     白名单，那是**债务基限冒充门禁**。仓库的判据原则是"静态门禁零误报优先于高召回"，
+     所以这条路被主动放弃。
+- **真实缺陷：`PgTrgmFulltextProviderTest` 里 3 个空体 `@Test`**
+  - `search_multiWord_takesBestScore` / `search_belowMinScore_filtered` /
+    `search_excludeIds_filtered` 三个方法体**只有注释**，写着
+    "Skip: requires complex varargs mocking. … covered by HybridRetrieverService
+    integration tests"——**这个"别处有覆盖"从未被核实过**。
+  - 而 `PgTrgmFulltextProvider:142-154` 的 Java 侧过滤（`isExcluded` + `minScore` +
+    `limit`）**只有这里被走过**：我 grep 全部检索测试，`excludeIds` 的组合断言只有
+    `HybridRetrieverServiceTest:359` 一处针对向量路径。
+  - 三个方法在**每一次运行里都算通过**，虚增通过数与覆盖率数字。
+  - 而且第一个 `@DisplayName` 本身是**错的**："each keyword searched independently,
+    best similarity kept"——实现从来不做分词，`executeSearchInternal` 把 trim 后的
+    整串 query 绑定 3 次（两个 `POSITION()` 探针 + 一个 `similarity()`）。
+- **被推翻的假设（如实记录）**：读到 `executeSearchInternal` 的 args 列表只有
+  `SIMILARITY_THRESHOLD` 常量、没有 `minScore` 时，我判断"`minScore` 参数被生产代码
+  完全忽略"是个真缺陷。**查证后推翻**：`:152` 有 `.filter(r -> r.getScore() >= minScore)`。
+  差点把一个不存在的缺陷写进账本。
+- **变更**
+  1. 3 个空体 `@Test` 换成 **4 个真测试**（多写一个 `minScore` 边界：`>=` 而非 `>`）：
+     minScore 过滤、恰好等于 minScore 时保留、excludeIds 过滤、以及"整串 query 绑定"
+     的参数断言（用 `ArgumentCaptor` 钉住，顺带把第一个测试的 `@DisplayName` 改成
+     描述真实行为）。测试用类里**已有**的 `TestPgTrgmProviderWithFixedSearch` 继承类，
+     不新增测试钩子。
+  2. 新门禁 `scripts/verify-test-expectations.mjs`：只抓**方法体为空/只有注释**的
+     `@Test`。判据收到不能再收，因为这一类没有解释空间。
+  3. 自测 `scripts/test-support/inert-test-self-test.mjs`（13 例），其中 3 例专门钉住
+     上面三次误判：调用行不得被当成方法声明、字符串字面量里的 `//` 不得被当成注释、
+     "不抛异常"型测试**不得**被判为违规（钉成非发现，防止它日后被当成基线豁免）。
+  4. 接进 `verify-project-tests.sh`（12 → **14** 项），并在 `gate-registry.mjs` 登记
+     ——**不登记的话 Batch 809 的普查门禁会当场报 `unregistered-gate`**，这条是实测到的。
+  5. 中英文 developer-reference 的门禁表各加一行（不改"13 of 21"那个历史实测值）。
+- **自罚**
+  1. `collectMethods` 用 `match.index + head.length - 1` 反推参数表位置，**算错了 3 个
+     字符**，把方法体读成 `" {"`——于是每个方法都"非空"，普查**一条都报不出来**，
+     而自测当时也是绿的。是把 `wrap('')` 的实际返回值打出来才发现的。改成从匹配位置
+     正向扫描 `(` → 平衡括号 → `{`。
+  2. 改名时漏改一处 `openIndex` 引用，13 条自测全部以 `ReferenceError` 失败。
+  3. 写 minScore 测试时留下一行同义反复 `assertEquals(0.3, 0.3)`，自己删掉。
+  4. 三个新测试第一版全部返回 0 行：沿用了同文件既有测试的 `search(..., null, null, ...)`
+     写法，而 `documentIds=null` 会让 `RetrievalScope.matchNone()` **在碰数据库之前**
+     就短路返回——也就是说这个文件里原有的测试**从未走过行映射**。这解释了为什么
+     三个空测试能一直空着：没人写过能走通的那条路。
+- **变异测试**：往 `PgTrgmFulltextProviderTest` 注入一个空体 `@Test` → 门禁如期报出
+  `...#phantomInertTest` 并指名文件；移除后复绿。
+- 验证：
+  - `verify-project-tests.sh` **14/14**（12 → 14）
+  - `verify-project-docs.sh` **16/16**
+  - `PgTrgmFulltextProviderTest` **15/15**（定向）
+  - core 全量 **989 类 / 7712 用例 / 0 失败 / 154 跳过**（`TEST-*.xml` 口径；
+    7711 → 7712：3 个空体测试换成 4 个真测试，净 +1）
+  - 变异测试 1 次如期变红
+- 指标：tests 链 12 → **14** 项；`PgTrgmFulltextProviderTest` 3 个空体 → **4 个真测试**；
+  新增用例 **13**（自测）+ 1（边界）；门禁脚本 46 → **47**。
+- 遗留（如实登记）：
+  - **"名字承诺 > 断言"这一类没有被门禁覆盖，也没有在本批修完**。普查读出来的 29 条里，
+    至少 5 条的名字承诺了方法体没有验证的行为，逐条列出以便后续处理：
+    `BudgetedChatModelResidualTest#streamCancellationFallsBackToCancelledOutcome`
+    （声称回落到 cancelled outcome，从未检查 outcome）、
+    `#summaryPurposeStreamStillRecordsUsage`（声称记录了 usage，从未检查）、
+    `RateLimitFilterNormalizeTailTest#fixedPrincipalTypeReturnsUnknownForNonStandardType`
+    （注释自己写着"仅验证不抛异常即可"，但名字承诺返回 UNKNOWN）、
+    `ChatSessionCoordinatorCommitTailTest#commitPersistsDurableContentAndResumesLease`
+    （局部变量 `response` 取了值却从未断言）、
+    `ApiPrincipalExpiryAlertMetricsTest#missingRegistryMakesAllCallsNoOp`。
+    这类需要逐个读生产代码才能断言，**没有机械判据**，故不进门禁。
+  - `scripts/verify-test-expectations.mjs` 的 Java 解析是正则实现，已知会漏：
+    多行签名、泛型方法、record 构造器都可能让它跳过整个方法。判据"宁漏勿误"，
+    漏掉的会表现为门禁沉默，而不是误报。
+
 ### Batch 809（已交付）
 
 - 分支：`feature/gate-census-20261003`

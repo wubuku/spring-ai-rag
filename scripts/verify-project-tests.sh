@@ -110,3 +110,20 @@ echo "PASS: Gate wiring self-test"
 
 node scripts/verify-gate-wiring.mjs
 echo "PASS: Gate wiring"
+
+# A seventh question, and the one closest to the point of this whole script: of
+# the tests that ran, how many would have failed had the code under test been
+# deleted? Batch 810 found three @Test methods in PgTrgmFulltextProviderTest whose
+# bodies held nothing but a comment claiming the behaviour was "covered via
+# HybridRetrieverService integration tests" — a claim nobody had checked, and the
+# only place the Java-side minScore and excludeIds filtering was ever exercised.
+# They reported as passes in every run.
+node scripts/test-support/inert-test-self-test.mjs >/dev/null || {
+  echo "Inert-test self-test failed; the gate may no longer reject anything." >&2
+  node scripts/test-support/inert-test-self-test.mjs >&2 || true
+  exit 1
+}
+echo "PASS: Inert-test self-test"
+
+node scripts/verify-test-expectations.mjs
+echo "PASS: Inert-test census"
