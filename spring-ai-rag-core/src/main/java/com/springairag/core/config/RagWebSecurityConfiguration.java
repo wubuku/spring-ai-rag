@@ -3,6 +3,7 @@ package com.springairag.core.config;
 import com.springairag.core.filter.ApiKeyAuthFilter;
 import com.springairag.core.filter.ApiCapabilityFilter;
 import com.springairag.core.filter.RateLimitFilter;
+import com.springairag.core.filter.TrustedProxyResolver;
 import com.springairag.core.ratelimit.PostgresRateLimitStore;
 import com.springairag.core.ratelimit.RateLimitObservability;
 import com.springairag.core.ratelimit.SharedRateLimitMaintenance;
@@ -152,7 +153,8 @@ public class RagWebSecurityConfiguration {
                 rateLimit.getKeyLimits(),
                 rateLimit.getBackend(),
                 postgresStore,
-                observability);
+                observability,
+                TrustedProxyResolver.of(rateLimit.getTrustedProxies()));
         FilterRegistrationBean<RateLimitFilter> registration =
                 new FilterRegistrationBean<>(filter);
         registration.addUrlPatterns("/api/*", "/v1/*");

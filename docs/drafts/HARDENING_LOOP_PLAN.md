@@ -317,6 +317,87 @@
   约 53 行 × 2。合并需要同时验证两条链路的 OpenAPI 注解与日志文案差异，
   风险高于本批收益，暂列后续。
 
+### Batch 793（已交付）
+
+- 分支：`feature/always-true-retiring-guard-20261002`
+- 内容：修掉**限流可被伪造头完全绕过**这一安全缺陷，外加同一攻击面下的
+  内存无界增长，并收掉长期登记的恒真 null 判断。
+- **这不是我推测的漏洞，是项目自己写下来却一直没实现的**：
+  - `docs/drafts/archive/2026-08-14_API_KEY_HARDENING_IMPLEMENTATION_PLAN.md`
+    4.2 需要防御的攻击**第 7 条**："通过假 `X-Forwarded-For` 绕过 pre-auth IP limiter"；
+  - 同一份计划的风险表把"直接信任 X-Forwarded-For"标为**高**风险，
+    缓解措施一栏写的就是 **trusted proxy resolver**；
+  - 同一份计划的信任边界一节写明"**不可信：所有 HTTP Header**"；
+  - 而 `RateLimitFilter.resolveClientIp` 当时是**无条件**采信该头的。
+- **真实后果（默认配置即可利用）**：`strategy=ip` 是默认值。
+  客户端每换一个伪造的 `X-Forwarded-For` 就拿到一个全新的计数窗口，
+  `rate-limit` 形同虚设——不需要任何凭据，也不需要认证。
+  全仓搜过，**没有任何可信代理配置项**——那个"缓解措施"从未落地。
+- **修法**（fail closed）：
+  1. 新增 `TrustedProxyResolver`：只有当**直连对端**属于
+     `rag.rate-limit.trusted-proxies` 时才解析该头，并**从右往左**剥离可信代理、
+     取第一个不可信地址；整条链都可信时取最左侧。
+     支持精确地址、IPv4 CIDR、IPv6 CIDR；主机名**不做 DNS 解析**
+     （限流路径上不该有阻塞且可被欺骗的解析）。
+  2. **默认空列表 = 完全不采信**。把安全默认设成"信任"等于把绕过交给
+     部署者记得配置。代价（代理后面没配 `trusted-proxies` 时所有请求算在代理 IP 上）
+     已写进中英文配置文档的迁移提示。
+  3. 配置写错（非法地址、前缀越界、null 条目）在 `validateTopology()` **启动期**失败，
+     而不是等到第一个被限流的请求。
+- **连带修掉的第二个缺陷：`windows` 只增不减**。每个新客户端标识留一条记录，
+  直到进程重启才消失。即使修好 XFF 信任，客户端地址空间本身（IPv6 尤其）
+  也足够撑爆它。改为超过阈值时机会式清扫**过期**条目；
+  清扫只删过期项，并有专门用例证明在用条目不会被误删。
+- **收掉恒真 null 判断**（Batch 787 起连续 4 批登记的债务）：
+  `ApiKeyManagementService` 的 `if (retiring != null)`——`retiring` 是
+  Spring Data 返回的 `Optional`，生产上永不为 null，该判断恒真，
+  却不保护任何东西却长得像 null 保护。改为直接用 `Optional` 的
+  `filter/ifPresent`（空 Optional 自然产出空流）。
+  本批再次全仓扫描确认：**仅此 1 处**。
+- **如实记录：恒真判断不是可变异目标**。把 `if (retiring != null)` 加回去
+  行为完全不变——**没有测试能"抓住"它，也不会有测试应该去抓它**。
+  它的正确性依据是"Optional 永不为 null"这条类型事实，
+  而这条事实只有靠删除代码本身来表达。**不虚报变异战绩。**
+- **3 个既有测试原本在断言这个漏洞**：
+  `forwardedForUsed`、`resolveClientIpPrefersForwardedFor`、
+  `resolveClientIpHandlesMultiLevelForwardedFor` 都在断言
+  "X-Forwarded-For 优先于 RemoteAddr"。已逐个改写成钉住安全默认，
+  并补上可信代理下的正向路径——**不是删测试换绿**。
+  它们的 DisplayName 也一并改掉：`X-Forwarded-For takes precedence over
+  RemoteAddr` 这个名字本身就是在替漏洞背书。
+- **新测试**：`TrustedProxyResolverTest` 26 例（IPv4/IPv6/非字节对齐前缀/
+  主机名不解析/启动期失败/从右往左剥离/空段跳过/全链可信）；
+  `RateLimitFilterTrustedProxyTest` 6 例（端到端证明伪造头拿不到新窗口、
+  未登记对端不能拆分客户端、过期条目被回收、在用条目不被误删）。
+- **变异测试 3 处，各被精确抓住**：
+  | 变异 | 抓到它的检查 |
+  |---|---|
+  | 恢复"无条件信任 X-Forwarded-For"（即漏洞形态） | **3 个测试类 6 条用例**同时变红 |
+  | 从右往左剥离改成从左往右 | `stripsTrustedProxiesFromTheRight`、`takesTheRightmostUntrustedHop` 变红 |
+  | 删掉过期窗口清扫 | `expiredWindowsAreReclaimed` 变红 |
+- **顺手删掉自己写的投机 API**：`TrustedProxyResolver` 初版带 `size()` 与
+  `equals`/`hashCode`，JaCoCo 显示其中 3 行从未被执行——**没有任何调用方**。
+  投机性 API 只会虚增未覆盖面，直接删除。
+- 指标（实测值）：core **985 类 / 7661 用例 / 0 失败 / 0 错误 / 154 跳过**
+  （+2 类 / +34 用例）；全仓合计 **1003 类 / 8320 用例 / 0 失败 / 0 错误 / 154 跳过**；
+  `verify-project-docs.sh` **15/15**。新增 `TrustedProxyResolver`
+  **行覆盖 100%（missed=0）**、分支 54/56。
+- **如实记录覆盖率的中间反复**：新增代码后第一次跑出来是
+  分支 88.48% → **88.46%**、行 98.42% → **98.39%**（**降的**），
+  因为新代码有 7 条未覆盖分支。顺手删掉自己写的投机 API
+  （`size()`、`equals`/`hashCode` 无任何调用方）并补两条测试之后，
+  最终值是分支 **88.50%**、行 **98.41%**——分支比基线高 0.02，
+  行基本持平。**中间那个下降的数也一并记下来**，不只报好看的终值。
+- 遗留技术债（如实登记，未处理）：
+  - 纯英文标题在中文文档里仍无门禁守护（Batch 786 主动放弃的规则）。
+  - `TrustedProxyResolver` 仍有 2 条未覆盖分支：IPv6 畸形字面量与
+    括号不配对（`[::1`）等边缘防御分支。它们是**防御性代码**，
+    补测试的边际价值低于继续找真缺陷。
+  - `RateLimitFilter` 未覆盖分支 76/90（与基线持平，未因本批变差）。
+  - `Documents` 页"版本历史 → 恢复"的叠加是设计如此还是遗漏，待产品侧确认。
+  - 147 个集成测试仍未真正跑过（本机无 Docker）。
+  - `PageShell` 脱节；`ask`/`chat` 53 行 × 2 重复。
+
 ### Batch 792（已交付）
 
 - 分支：`feature/i18n-key-reconciliation-20261002`

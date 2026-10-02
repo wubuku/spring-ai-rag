@@ -55,6 +55,14 @@ import java.util.concurrent.atomic.AtomicInteger;
  *   <li>Retry-After response header calculated from the active window</li>
  *   <li>JSON {@link ErrorResponse} body</li>
  * </ul>
+ *
+ * <p><b>客户端地址来源</b>：默认**不**采信 {@code X-Forwarded-For}。
+ * 只有当直连对端属于 {@code rag.rate-limit.trusted-proxies} 时才解析该头，
+ * 并且从右往左剥离可信代理、取第一个不可信地址。
+ * 早期实现无条件信任该头，于是默认 {@code strategy=ip} 下，
+ * 任何客户端换一个伪造的 {@code X-Forwarded-For} 就能拿到全新计数窗口——
+ * 这正是本项目 API Key 加固计划列为"必须防御的攻击"的那一条。
+ * 详见 {@link TrustedProxyResolver}。
  */
 public class RateLimitFilter extends OncePerRequestFilter {
 
@@ -75,6 +83,12 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
     private static final String API_KEY_HEADER = "X-API-Key";
 
+    /** 固定窗口长度（毫秒），与 Retry-After 的 60 秒保持一致。 */
+    private static final long WINDOW_MILLIS = 60_000L;
+
+    /** 窗口表超过该阈值时做一次过期清扫。 */
+    private static final int SWEEP_THRESHOLD = 10_000;
+
     private final boolean enabled;
     private final int requestsPerMinute;
     private final String strategy;
@@ -82,6 +96,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
     private final String backend;
     private final PostgresRateLimitStore postgresStore;
     private final RateLimitObservability observability;
+    private final TrustedProxyResolver trustedProxies;
 
     /** Identifier to window state mapping */
     private final ConcurrentHashMap<String, WindowState> windows = new ConcurrentHashMap<>();
@@ -117,6 +132,15 @@ public class RateLimitFilter extends OncePerRequestFilter {
                            String strategy, Map<String, Integer> keyLimits,
                            String backend, PostgresRateLimitStore postgresStore,
                            RateLimitObservability observability) {
+        this(enabled, requestsPerMinute, strategy, keyLimits, backend, postgresStore,
+                observability, TrustedProxyResolver.TRUST_NONE);
+    }
+
+    public RateLimitFilter(boolean enabled, int requestsPerMinute,
+                           String strategy, Map<String, Integer> keyLimits,
+                           String backend, PostgresRateLimitStore postgresStore,
+                           RateLimitObservability observability,
+                           TrustedProxyResolver trustedProxies) {
         this.enabled = enabled;
         this.requestsPerMinute = requestsPerMinute;
         this.strategy = strategy == null ? "ip" : strategy;
@@ -126,6 +150,9 @@ public class RateLimitFilter extends OncePerRequestFilter {
         this.observability = observability == null
                 ? RateLimitObservability.noop()
                 : observability;
+        this.trustedProxies = trustedProxies == null
+                ? TrustedProxyResolver.TRUST_NONE
+                : trustedProxies;
     }
 
     @Override
@@ -326,13 +353,31 @@ public class RateLimitFilter extends OncePerRequestFilter {
      * Gets or creates a window state; expired windows are automatically reset.
      */
     private WindowState getOrCreateWindow(String identifier) {
+        sweepExpiredWindows();
         return windows.compute(identifier, (key, existing) -> {
             long now = System.currentTimeMillis();
-            if (existing == null || now - existing.windowStart >= 60_000) {
+            if (existing == null || now - existing.windowStart >= WINDOW_MILLIS) {
                 return new WindowState(now);
             }
             return existing;
         });
+    }
+
+    /**
+     * 丢弃已经过了至少一个完整窗口的计数条目。
+     *
+     * <p>{@code windows} 曾经只增不减：每个新客户端标识留下一条记录，
+     * 直到进程重启才会消失。即便修好了 {@code X-Forwarded-For} 信任问题，
+     * 客户端地址空间本身也足够大（IPv6 尤其如此），一条永不回收的映射
+     * 就是一条可被慢慢撑爆的内存增长路径。这里在表超过阈值时做一次机会式清扫：
+     * 每次请求 O(n) 不现实，但超阈值才扫、且只删已过期的，成本可以忽略。
+     */
+    private void sweepExpiredWindows() {
+        if (windows.size() < SWEEP_THRESHOLD) {
+            return;
+        }
+        long cutoff = System.currentTimeMillis() - WINDOW_MILLIS;
+        windows.entrySet().removeIf(entry -> entry.getValue().windowStart < cutoff);
     }
 
     boolean isExcludedPath(String path) {
@@ -344,15 +389,16 @@ public class RateLimitFilter extends OncePerRequestFilter {
     }
 
     /**
-     * Resolves client IP address, preferring X-Forwarded-For header, falling back to RemoteAddr.
+     * Resolves client IP address.
+     *
+     * <p>{@code X-Forwarded-For} 只有在**直连对端本身是可信代理**时才被采信，
+     * 并且从右往左剥离可信代理、取第一个不可信地址。对端不可信时该头被完全忽略——
+     * 否则任何客户端都能靠换一个伪造的 {@code X-Forwarded-For} 拿到全新窗口，
+     * 默认 {@code strategy=ip} 下限流等于不存在。
      */
     String resolveClientIp(HttpServletRequest request) {
-        String forwarded = request.getHeader("X-Forwarded-For");
-        if (forwarded != null && !forwarded.isBlank()) {
-            int comma = forwarded.indexOf(',');
-            return comma > 0 ? forwarded.substring(0, comma).trim() : forwarded.trim();
-        }
-        return request.getRemoteAddr();
+        return trustedProxies.resolveClientAddress(
+                request.getRemoteAddr(), request.getHeader("X-Forwarded-For"));
     }
 
     // ==================== Inner Classes ====================

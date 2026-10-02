@@ -18,6 +18,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import com.springairag.core.ratelimit.RateLimitObservability;
 import static org.mockito.Mockito.when;
 
 /**
@@ -174,15 +175,32 @@ class RateLimitFilterConstructorTailTest {
     }
 
     @Test
-    void resolveClientIpPrefersForwardedFor() throws Exception {
+    void resolveClientIpIgnoresForwardedForFromAnUntrustedPeer() throws Exception {
         RateLimitFilter filter = new RateLimitFilter(true, 5);
         request.addHeader("X-Forwarded-For", "1.2.3.4, 5.6.7.8");
         request.setRemoteAddr("9.9.9.9");
 
-        assertEquals("1.2.3.4", filter.resolveClientIp(request));
+        // The default is to trust nothing. Honouring a header that any client
+        // can set is what made the IP limiter bypassable; the previous version
+        // of this test asserted the opposite and was therefore the bug's
+        // strongest advocate.
+        assertEquals("9.9.9.9", filter.resolveClientIp(request));
 
         request.removeHeader("X-Forwarded-For");
         assertEquals("9.9.9.9", filter.resolveClientIp(request));
+    }
+
+    @Test
+    void resolveClientIpHonoursForwardedForFromATrustedPeer() throws Exception {
+        RateLimitFilter filter = new RateLimitFilter(true, 5, "ip", Map.of(), "local", null,
+                RateLimitObservability.noop(),
+                TrustedProxyResolver.of(List.of("9.9.9.0/24", "10.0.0.0/8")));
+        request.addHeader("X-Forwarded-For", "1.2.3.4, 5.6.7.8");
+        request.setRemoteAddr("9.9.9.9");
+
+        // 从右往左：9.9.9.9（对端，可信）之后第一跳 5.6.7.8 不可信，它就是客户端。
+        // 若取最左侧的 1.2.3.4，攻击者就能靠往链前面塞值来伪造身份。
+        assertEquals("5.6.7.8", filter.resolveClientIp(request));
     }
 
     @Test

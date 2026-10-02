@@ -1209,6 +1209,46 @@ rag:
 | `rag.rate-limit.bucket-retention-minutes` | `1440` | PostgreSQL bucket retention horizon |
 | `rag.rate-limit.cleanup-interval-seconds` | `300` | Best-effort cleanup interval |
 | `rag.rate-limit.cleanup-batch-size` | `10000` | Maximum rows removed by one cleanup pass |
+| `rag.rate-limit.trusted-proxies` | `[]` | Trusted proxy addresses or CIDRs; **empty means `X-Forwarded-For` is ignored entirely** |
+
+**`X-Forwarded-For` and trusted proxies (security-relevant — read this)**
+
+By default the filter **ignores** `X-Forwarded-For` completely and uses the
+immediate peer (`request.getRemoteAddr()`) as the rate-limit identity. The
+earlier implementation trusted the header unconditionally, so under the
+default `strategy=ip` any client could mint a fresh counting window simply by
+sending a different forged `X-Forwarded-For` — the limiter was effectively
+absent. That is the attack the project's own API-key hardening plan lists as
+"bypass the pre-auth IP limiter with a fake `X-Forwarded-For`".
+
+To honour the header, declare the peers you actually terminate on:
+
+```yaml
+rag:
+  rate-limit:
+    enabled: true
+    strategy: ip
+    trusted-proxies:
+      - 10.0.0.0/8          # IPv4 CIDR
+      - 192.168.1.5         # exact address
+      - 2001:db8::/32       # IPv6 CIDR
+```
+
+Resolution: when the immediate peer is not in the set, the header is **ignored
+entirely**; when it is, trusted proxies are stripped from the right and the
+**first untrusted** address becomes the client identity (the left-most one when
+the whole chain is trusted). Anything a client prepends to the chain is
+therefore unreachable.
+
+> **Migration note**: a deployment behind a reverse proxy or load balancer that
+> does **not** set `trusted-proxies` will attribute every request to the proxy
+> address and share one counting window. That is the deliberate cost of making
+> "trust nothing" the secure default. Set this property to your real proxy
+> ranges. A malformed entry (non-address, out-of-range prefix) fails fast in
+> `validateTopology()` at startup rather than on the first limited request.
+
+`strategy=api-key`, `strategy=user` and the PostgreSQL `principal` backend never
+resolve a client IP and are unaffected by this setting.
 
 **Rate limit strategy selection:**
 - `ip`: Count per client IP independently, suitable for unauthenticated scenarios

@@ -6,6 +6,7 @@ import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import com.springairag.core.ratelimit.RateLimitObservability;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -40,12 +41,33 @@ class RateLimitFilterNormalizeTailTest {
 
     @Test
     void resolveClientIpHandlesMultiLevelForwardedFor() {
-        var filter = new RateLimitFilter(true, 60);
+        // A trusted proxy may relay a longer chain; the client identity is the
+        // right-most entry that is not itself a trusted proxy, which is what
+        // stops a client from injecting extra hops at the front.
+        var filter = new RateLimitFilter(true, 60, "ip", java.util.Map.of(), "local", null,
+                RateLimitObservability.noop(),
+                TrustedProxyResolver.of(java.util.List.of("192.168.1.0/24", "10.0.0.0/8")));
         var request = new MockHttpServletRequest();
         request.addHeader("X-Forwarded-For", "1.2.3.4, 5.6.7.8, 9.10.11.12");
         request.setRemoteAddr("192.168.1.1");
 
-        assertEquals("1.2.3.4", filter.resolveClientIp(request));
+        // 192.168.1.1 (peer, trusted) -> 9.10.11.12 untrusted, so that is the client
+        assertEquals("9.10.11.12", filter.resolveClientIp(request));
+    }
+
+    @Test
+    void resolveClientIpIgnoresAForgedLeftmostHop() {
+        // The classic bypass: prepend junk to X-Forwarded-For. Walking from the
+        // right and stopping at the first untrusted hop means the attacker's
+        // injected value is never reached.
+        var filter = new RateLimitFilter(true, 60, "ip", java.util.Map.of(), "local", null,
+                RateLimitObservability.noop(),
+                TrustedProxyResolver.of(java.util.List.of("192.168.1.0/24")));
+        var request = new MockHttpServletRequest();
+        request.addHeader("X-Forwarded-For", "6.6.6.6, 8.8.8.8");
+        request.setRemoteAddr("192.168.1.1");
+
+        assertEquals("8.8.8.8", filter.resolveClientIp(request));
     }
 
     @Test
