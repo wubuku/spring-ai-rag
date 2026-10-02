@@ -14,6 +14,46 @@ const FOCUSABLE =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), '
   + 'textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
+/**
+ * 打开中的对话框登记表，按打开顺序入栈。
+ *
+ * 对话框是会叠加的：`Documents` 页在版本历史弹窗里点"恢复版本"会再弹一个
+ * 确认框，而底层弹窗并不会因此关闭。逐个实例各挂一个 `document` 监听器时，
+ * 一次 Escape 会被**每一个**实例同时处理——用户只想关掉最上面那一个，
+ * 结果连底层一起消失，丢失了所在位置。
+ *
+ * 焦点陷阱同理：底层弹窗的 Tab 处理器会把焦点拽回自己，比顶层更糟。
+ * 所以只有**栈顶**处理键盘事件。
+ */
+const dialogStack: symbol[] = [];
+
+/**
+ * body 滚动锁的引用计数。
+ *
+ * 逐个实例各存各的 `previousOverflow` 会互相覆盖：底层记下 `''`、顶层记下
+ * `'hidden'`，两个 cleanup 依次写回后 `overflow` 停在 `'hidden'`——
+ * 对话框全关掉了，页面却永久无法滚动，且没有任何可见线索。
+ * 引用计数保证只在**第一个**对话框打开时保存、**最后一个**关闭时还原一次。
+ */
+let scrollLockCount = 0;
+let overflowBeforeLock: string | null = null;
+
+function acquireScrollLock() {
+  if (scrollLockCount === 0) {
+    overflowBeforeLock = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+  }
+  scrollLockCount += 1;
+}
+
+function releaseScrollLock() {
+  scrollLockCount = Math.max(0, scrollLockCount - 1);
+  if (scrollLockCount === 0 && overflowBeforeLock !== null) {
+    document.body.style.overflow = overflowBeforeLock;
+    overflowBeforeLock = null;
+  }
+}
+
 export interface DialogProps {
   open: boolean;
   title: ReactNode;
@@ -52,11 +92,12 @@ export function Dialog({
 
   useEffect(() => {
     if (!open) return;
+    const stackId = Symbol('dialog');
+    dialogStack.push(stackId);
     previousFocusRef.current = document.activeElement instanceof HTMLElement
       ? document.activeElement
       : null;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    acquireScrollLock();
     const panel = panelRef.current;
     const target = initialFocusRef?.current
       ?? panel?.querySelector<HTMLElement>('[autofocus]')
@@ -72,6 +113,9 @@ export function Dialog({
     };
 
     const handleKeyDown = (event: KeyboardEvent) => {
+      // 只有栈顶响应：否则一次 Escape 会关掉整摞对话框，底层弹窗的
+      // Tab 处理器还会把焦点从顶层拽走。
+      if (dialogStack[dialogStack.length - 1] !== stackId) return;
       if (event.key === 'Escape' && !closeDisabledRef.current) {
         event.preventDefault();
         onCloseRef.current();
@@ -97,7 +141,9 @@ export function Dialog({
     document.addEventListener('keydown', handleKeyDown);
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = previousOverflow;
+      const index = dialogStack.lastIndexOf(stackId);
+      if (index >= 0) dialogStack.splice(index, 1);
+      releaseScrollLock();
       restoreFocus();
     };
   }, [initialFocusRef, open, returnFocusRef]);
