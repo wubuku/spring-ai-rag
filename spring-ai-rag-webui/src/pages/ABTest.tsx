@@ -40,7 +40,7 @@ export function ABTest() {
 
   return (
     <div>
-      <PageHeader title={t('abtest.title')} />
+      <PageHeader title={t('abtest.title')} description={t('abtest.subtitle')} />
       {selectedId === null && (
         <ExperimentList onSelect={id => navigate(`/abtest/${id}`)} />
       )}

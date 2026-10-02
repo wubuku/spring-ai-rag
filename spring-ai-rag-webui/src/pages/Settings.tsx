@@ -204,7 +204,7 @@ export function Settings() {
 
   return (
     <div className={styles.container}>
-      <PageHeader title={t('settings.title')} />
+      <PageHeader title={t('settings.title')} description={t('settings.subtitle')} />
 
       {/* The tab strip comes from the shared primitive, which also supplies
           arrow-key navigation and the tab/panel id pair. The panel below is a

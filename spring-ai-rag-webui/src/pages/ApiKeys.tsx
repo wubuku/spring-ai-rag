@@ -101,7 +101,7 @@ export function ApiKeys() {
   const { t } = useTranslation();
   return (
     <div>
-      <PageHeader title={t('apiKeys.title')} />
+      <PageHeader title={t('apiKeys.title')} description={t('apiKeys.subtitle')} />
       <KeyList />
     </div>
   );

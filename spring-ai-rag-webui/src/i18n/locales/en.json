@@ -67,7 +67,8 @@
     "vector": "Vector",
     "healthLoadFailed": "Could not reach the health endpoint",
     "systemUnreachable": "Status unknown — health check unreachable",
-    "metricUnavailable": "Unavailable — the request that reports this number failed"
+    "metricUnavailable": "Unavailable — the request that reports this number failed",
+    "subtitle": "What is indexed, what is healthy, and what needs attention."
   },
   "documents": {
     "title": "Documents",
@@ -167,7 +168,8 @@
     "missingEmbeddingsLoadFailed": "Could not check which documents are missing embeddings",
     "previewContentLoadError": "Could not load the full document content: {{error}}",
     "allCollections": "All Collections",
-    "supportedFormats": "Supports: {{formats}}"
+    "supportedFormats": "Supports: {{formats}}",
+    "subtitle": "Logical documents for retrieval and Chat. Deleting one leaves its imported files in place."
   },
   "collections": {
     "title": "Collections",
@@ -231,7 +233,8 @@
     "generateUuid": "Generate UUID",
     "name": "Name",
     "viewDocuments": "View Documents",
-    "collectionKeyPlaceholder": "UUID or business key"
+    "collectionKeyPlaceholder": "UUID or business key",
+    "subtitle": "Group documents into collections, then purge or re-embed a whole collection as one operation."
   },
   "collectionScope": {
     "label": "Retrieval scope",
@@ -285,7 +288,8 @@
     "timeHoursAgo": "{{count}}h ago",
     "modelsLoadFailed": "Could not load the model list",
     "feedbackError": "Could not submit your feedback. Please try again.",
-    "exportError": "Could not export the conversation"
+    "exportError": "Could not export the conversation",
+    "subtitle": "Ask the corpus inside a session. History is scoped to your credential, so another key sees none of it."
   },
   "search": {
     "title": "Search",
@@ -318,7 +322,8 @@
     "loadFailed": "Search request failed",
     "hybrid": "Hybrid",
     "emptyHint": "Try different keywords or adjust your search.",
-    "vector": "Vector"
+    "vector": "Vector",
+    "subtitle": "Retrieval without generation — see what the corpus can surface before involving a model."
   },
   "metrics": {
     "title": "Metrics",
@@ -365,7 +370,8 @@
     "modelComparison": "Model Comparison",
     "rawJson": "Raw JSON",
     "retrievals": "Retrievals",
-    "llmCalls": "LLM Calls"
+    "llmCalls": "LLM Calls",
+    "subtitle": "SLO compliance, per-model latency and cost, slow queries, and durable token usage."
   },
   "alerts": {
     "title": "Alerts",
@@ -425,7 +431,8 @@
     "targetValue": "Target Value",
     "alertKey": "Alert Key",
     "deleteSloConfirm": "Delete the SLO threshold \"{{name}}\"? It stops being evaluated immediately.",
-    "deleteSilenceConfirm": "Delete the silence schedule \"{{name}}\"? Alerts will no longer be suppressed during its window."
+    "deleteSilenceConfirm": "Delete the silence schedule \"{{name}}\"? Alerts will no longer be suppressed during its window.",
+    "subtitle": "SLO breach thresholds, silence schedules, and what each notification attempt actually delivered."
   },
   "settings": {
     "title": "Settings",
@@ -458,7 +465,8 @@
     "cacheMaxItemsHint": "Maximum number of cached items",
     "languageSection": "Language Settings",
     "languageSectionDesc": "Choose your preferred interface language. Changes take effect immediately.",
-    "currentLanguage": "Current Language"
+    "currentLanguage": "Current Language",
+    "subtitle": "Provider credentials, retrieval weights and caches — the knobs that decide how a query is answered."
   },
   "theme": {
     "label": "Theme",
@@ -534,7 +542,8 @@
     "metricSatisfaction": "User Satisfaction",
     "experimentsLoadFailed": "Could not load experiments",
     "experimentLoadFailed": "Could not load this experiment",
-    "analysisLoadFailed": "Could not load the analysis for this experiment"
+    "analysisLoadFailed": "Could not load the analysis for this experiment",
+    "subtitle": "Compare retrieval configurations against labelled queries and see which variant actually wins."
   },
   "apiKeys": {
     "title": "API Keys",
@@ -621,7 +630,8 @@
     "selectedCollections": "Selected collections",
     "selectedCollectionsHint": "The key can only access the collections selected below.",
     "collectionsLoadError": "Failed to load collections",
-    "revokeConfirm": "Revoke this API key? Any client still presenting it starts failing with 401 immediately, and the revocation cannot be undone."
+    "revokeConfirm": "Revoke this API key? Any client still presenting it starts failing with 401 immediately, and the revocation cannot be undone.",
+    "subtitle": "Issue, rotate and revoke credentials. Revocation is immediate and cannot be undone."
   },
   "files": {
     "title": "Files",
@@ -676,7 +686,8 @@
     "embedCached": "Document already embedded (cached)",
     "embedFailed": "Embedding failed: {{message}}",
     "embedError": "Failed to trigger embedding: {{error}}",
-    "collectionsLoadFailed": "Could not load the collection list"
+    "collectionsLoadFailed": "Could not load the collection list",
+    "subtitle": "Browse imported artifacts, preview conversions, and promote a folder into the RAG corpus."
   },
   "evaluation": {
     "title": "Evaluation & Feedback",
@@ -731,7 +742,8 @@
     "feedbackStatsLoadFailed": "Unable to load feedback statistics",
     "feedbackHistoryLoadFailed": "Unable to load feedback history",
     "runLoadFailed": "Unable to load the run",
-    "hit": "Hit"
+    "hit": "Hit",
+    "subtitle": "Retrieval metrics over labelled queries, with an LLM judge and user feedback alongside."
   },
   "embeddings": {
     "title": "Embedding operations",

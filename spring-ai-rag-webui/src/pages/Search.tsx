@@ -230,7 +230,7 @@ export function Search() {
 
   return (
     <div>
-      <PageHeader title={t('search.title')} />
+      <PageHeader title={t('search.title')} description={t('search.subtitle')} />
       <ImeSafeForm onSubmit={handleSearch} className={styles.form}>
         <div className={styles.searchWrapper}>
           <input

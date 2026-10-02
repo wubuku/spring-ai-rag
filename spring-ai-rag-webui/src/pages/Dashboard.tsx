@@ -37,7 +37,7 @@ export function Dashboard() {
 
   return (
     <div>
-      <PageHeader title={t('dashboard.title')} />
+      <PageHeader title={t('dashboard.title')} description={t('dashboard.subtitle')} />
 
       {/* 连不上健康端点和"服务不健康"是两件事。过去两者都渲染
           "系统异常"：偏袒方向没错（绝不误报健康），但把"我不知道"说成

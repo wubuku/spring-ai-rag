@@ -376,7 +376,7 @@ export function Documents() {
 
   return (
     <div>
-      <PageHeader title={t('documents.title')} />
+      <PageHeader title={t('documents.title')} description={t('documents.subtitle')} />
 
       {/* 集合下拉过去失败时是个空列表，用户会以为"没有可选集合"，
           于是以为筛选功能坏了，或者干脆去建一个重复的集合。 */}

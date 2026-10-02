@@ -491,8 +491,7 @@ export function Chat() {
                 </button>
               </>
             ) : undefined
-          }
-        />
+          } description={t('chat.subtitle')} />
 
         <div className={styles.messages}>
           {messages.length === 0 && (

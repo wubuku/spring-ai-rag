@@ -478,6 +478,68 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
+### Batch 817（已交付）
+
+- 分支：`feature/page-header-descriptions-20261005`
+- 内容：转向 WebUI（用户优先级第 2 位，自 812 之后未碰）。
+  **12 个受保护页面的标题只写了自己的名字**，补上一行说明，并把它变成门禁不变量。
+- 勘察（**先修正了我自己记错的事实**）：
+  - 我在 812 批的遗留清单里写的是"`PageHeader.description` 槽 **13 个页面一个都没用**"。
+    **实测是 13 个页面里 1 个在用**（`Embeddings`），12 个空着。
+    差一位不影响结论，但**账本里的错数字要当场改**，否则下一个读它的人会去数错的东西。
+  - 组件自己写明了设计意图：description 是"给 description 与标题一个真实关联，
+    而不是留成无关联段落"，并且通过 `aria-describedby` 关联到 `h1`——
+    读屏会把标题和它的含义一起念出来，而不是只念"检索"。
+  - 先查有没有**已经写好却没人用**的死键可接（那会是最划算的修法）：
+    **零个** `.subtitle` 键有引用但无调用方。所以 12 条导语要自己写。
+  - 写过"这些页面是干什么的"之前，先核了两条我打算断言的事实
+    （evaluation 是否有"评测集"概念、settings 的作用范围），
+    发现其中一条无法证实，于是**把文案改成纯描述性、不带未经核实的操作断言**。
+- 变更：
+  - **12 个页面 × 2 语言 = 24 个新键**（`<ns>.subtitle`），json 模块读写、round-trip
+    安全、2 缩进、命名空间内追加。**12 个键全部有引用，零死键**（逐个实测确认）。
+  - 文案对齐 `Embeddings` 那条的写法：**解释这页做什么，并在必要处纠正一个误解**。
+    例如 `chat`："历史按你的凭据隔离，换一个密钥一条都看不到"——
+    这条正是 Batch 815 建立的 principal 作用域事实；
+    `apiKeys`："吊销立即生效，且不可撤销"——正是 812 批加确认框的理由。
+  - **`check-page-shell.mjs` 新增第三条规则** `missing-page-description`，
+    把这次清理变成持久不变量。**标题规则和 description 规则是同一类错误的不同严重度，
+    所以放进同一个门禁：只采用一半的约定远看像采用了。**
+  - 扫描**花括号感知**：朴素的"扫到第一个 `>`"会把 `leading` 里嵌套
+    `<IconButton … />` 的 `>` 当成开标签结束，然后去报其实有 description 的页面。
+    会误报的规则早晚被关掉。
+  - **自测 10 → 17 例**，新增 7 条专钉别扭形状：多行标签、description 写在嵌套元素之后、
+    用 children 的 header、豁免页、两个 header 报两条。
+  - 文档：`webui-design-language{,-zh-CN}.md` 新增第 14 节（原 13 顺延为 15）；
+    `developer-reference{,-zh-CN}.md` 门禁表补上新覆盖面。
+- 变异测试（4 个，**全部如期变红**）：
+  - V1 完全不检查 description → **4 失败**
+  - V2 去掉花括号平衡 → **3 失败**
+  - V3 豁免页也检查 → **1 失败**
+  - V4 只检查第一个 `PageHeader` → **1 失败**
+- 验证：
+  - `npm run lint` **9/9**；门禁自测 **9 文件 / 239 例**（232 → 239，+7）；
+    page-shell 汇报口径更新为 "all routing their title through PageHeader **with a description**"。
+  - 前端单测 **77 文件 / 835 用例全绿**（未变——本批没有改任何组件行为，
+    只补了静态存在性；`PageHeader` 的渲染与 aria 关联早已由组件测试覆盖）。
+  - `npx tsc -b` 干净；`npm run build` 通过（758ms）；e2e mock **93/93**。
+  - 覆盖链是完整的三段：门禁查"源码里有 `description=`" →
+    `check-i18n-keys` 查"键存在且两语言一致" → 组件测试查"它被渲染并关联到 h1"。
+    **没有为 12 个页面各写一条渲染测试**——那是同一件事测十二遍。
+  - core 未改动，不跑 Maven；仓库门禁 docs 16/16、tests 16/16、悲观锁通过。
+- 指标：留空 description 的页面 **12 → 0**；门禁自测 232 → **239**；
+  locale 键 +24（×2 语言）；`webui-design-language` 章节 13 → **15**。
+- 遗留（如实登记，未处理）：
+  - **导语质量无法机器判定。**门禁只保证"有一行说明"，不保证它有信息量。
+    只把标题复述一遍的导语能过门禁——这一点写进了 `webui-design-language` 第 14 节，
+    并以 `Embeddings` 那条作为可照抄的样板，但**没有门禁**。
+  - `i18n-keys` 汇报"176 个键只经动态模板调用或未被使用"，本批未处理这批死键。
+  - PageHeader 的 `description` 仍是可选 prop（`Unlock.tsx` 豁免），
+    门禁只在"页面用了 PageHeader"的前提下要求它。
+  - Batch 812–816 登记的遗留仍在：14 处业务参数重载、CSP 缺失、
+    两处 `escapeHtml` 重复实现、`isUnrestricted(null)` 的 fail-open 语义。
+  - CI 仍未跑仓库级 `scripts/verify-*.sh`（`/tmp/b806-ci-gates.patch` 待用户手动应用）。
+
 ### Batch 816（已交付）
 
 - 分支：`feature/null-request-forwarding-gate-20261005`
