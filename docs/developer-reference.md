@@ -27,11 +27,19 @@ Do **not** append `/v1` to an OpenAI or Embedding `base-url`. Spring AI appends 
 
 ```bash
 mvn clean compile
-mvn test
+mvn clean test
 mvn clean package -DskipTests
 ```
 
-One module or test:
+`clean` is not optional on the test run. Without it Maven keeps
+`target/test-classes` entries for test classes that were deleted from source,
+and Surefire goes on executing them: the reported suite size and every coverage
+figure derived from it are then inflated. `scripts/verify-project-tests.sh`
+reconciles the source tree against the reports both ways and fails on either
+mismatch, so a ghost cannot survive a gate.
+
+One module or test (a focused run is fine for debugging, but it does **not**
+satisfy the visibility gate, which expects the module's full suite):
 
 ```bash
 mvn test -pl spring-ai-rag-core

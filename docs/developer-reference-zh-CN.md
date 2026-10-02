@@ -27,11 +27,18 @@ OpenAI / Embedding 的 `base-url` **不要带 `/v1`**。Spring AI 会自行追�
 
 ```bash
 mvn clean compile
-mvn test
+mvn clean test
 mvn clean package -DskipTests
 ```
 
-单模块和单测试：
+测试那一步的 `clean` 不是可选项。不带它，Maven 会保留已从源码删除的测试类在
+`target/test-classes` 里的产物，Surefire 会继续执行它们——报告出来的套件规模
+以及由它推导出的每一个覆盖率数字都被虚增。
+`scripts/verify-project-tests.sh` 会把源码树与报告双向对账，任一方向不匹配即失败，
+所以幽灵类过不了门禁。
+
+单模块和单测试（定向运行可用于调试，但**不满足**可见性门禁——门禁期望的是该模块的
+全量套件）：
 
 ```bash
 mvn test -pl spring-ai-rag-core
