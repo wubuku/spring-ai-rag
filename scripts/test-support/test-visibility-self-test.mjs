@@ -8,8 +8,23 @@
 // produces, which is indistinguishable from an empty class in the run summary.
 
 import assert from 'node:assert/strict';
-import { audit, parseReport } from '../verify-test-visibility.mjs';
-import { readdirSync, readFileSync, existsSync } from 'node:fs';
+import {
+  audit,
+  parseReport,
+  reconcile,
+  collectSourceTestClasses,
+  sourceRootFor,
+} from '../verify-test-visibility.mjs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+  existsSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -82,6 +97,201 @@ test('malformed reports are dropped rather than crashing the gate', () => {
   assert.equal(totals.classes, 1);
 });
 
+test('reconcile flags a source class that never ran', () => {
+  // The failure this gate was created for, in the direction it could not see:
+  // the class exists in the source tree and simply produced no report.
+  const { unreported, ghosts } = reconcile(
+    [
+      {
+        file: '/src/RanTest.java',
+        packageName: 'com.example',
+        primary: 'Ran',
+        classNames: ['Ran'],
+      },
+      {
+        file: '/src/NeverRanTest.java',
+        packageName: 'com.example',
+        primary: 'NeverRan',
+        classNames: ['NeverRan'],
+      },
+    ],
+    [{ name: 'com.example.Ran', file: 'TEST-com.example.Ran.xml' }],
+  );
+  assert.deepEqual(unreported, ['com.example.NeverRan']);
+  assert.deepEqual(ghosts, []);
+});
+
+test('reconcile flags a report whose source is gone', () => {
+  // A deleted test class leaves its report behind, inflating every total the
+  // gate prints. This is the shape Batch 784 tripped over with its throwaway
+  // diagnostic classes.
+  const { unreported, ghosts } = reconcile(
+    [
+      {
+        file: '/src/RanTest.java',
+        packageName: 'com.example',
+        primary: 'Ran',
+        classNames: ['Ran'],
+      },
+    ],
+    [
+      { name: 'com.example.Ran', file: 'TEST-com.example.Ran.xml' },
+      { name: 'com.example.Deleted', file: 'TEST-com.example.Deleted.xml' },
+    ],
+  );
+  assert.deepEqual(ghosts, ['com.example.Deleted']);
+  assert.deepEqual(unreported, []);
+});
+
+test('reconcile accepts a fully matched tree', () => {
+  const { unreported, ghosts } = reconcile(
+    [
+      {
+        file: '/src/ATest.java',
+        packageName: 'com.example',
+        primary: 'A',
+        classNames: ['A'],
+      },
+      {
+        file: '/src/BTest.java',
+        packageName: 'com.example',
+        primary: 'B',
+        classNames: ['B'],
+      },
+    ],
+    [
+      { name: 'com.example.A', file: 'TEST-com.example.A.xml' },
+      { name: 'com.example.B', file: 'TEST-com.example.B.xml' },
+    ],
+  );
+  assert.deepEqual(unreported, []);
+  assert.deepEqual(ghosts, []);
+});
+
+test('a nested class without its own report is not called unreported', () => {
+  // Surefire does not report every `@Nested` class in a separate file: in this
+  // repository `RetrievalEvaluationServiceImplTest` folds six of them into the
+  // parent's report. Only a file's primary class is required to have one, or the
+  // gate would be permanently red.
+  const { unreported, ghosts } = reconcile(
+    [
+      {
+        file: '/src/OuterTest.java',
+        packageName: 'com.example',
+        primary: 'Outer',
+        classNames: ['Folded', 'Outer'],
+      },
+    ],
+    [{ name: 'com.example.Outer', file: 'TEST-com.example.Outer.xml' }],
+  );
+  assert.deepEqual(unreported, []);
+  assert.deepEqual(ghosts, []);
+});
+
+test('a nested class that does get its own report is not a ghost', () => {
+  // The opposite grouping: `HybridRetrieverServiceTest`'s nested classes each
+  // earn their own report, named without the outer-class prefix.
+  const { unreported, ghosts } = reconcile(
+    [
+      {
+        file: '/src/OuterTest.java',
+        packageName: 'com.example',
+        primary: 'Outer',
+        classNames: ['Outer', 'OwnReport'],
+      },
+    ],
+    [
+      { name: 'com.example.Outer', file: 'TEST-com.example.Outer.xml' },
+      { name: 'com.example.OwnReport', file: 'TEST-com.example.OwnReport.xml' },
+    ],
+  );
+  assert.deepEqual(unreported, []);
+  assert.deepEqual(ghosts, []);
+});
+
+test('collectSourceTestClasses finds nested and sibling classes, not prose', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'visibility-src-'));
+  try {
+    mkdirSync(join(dir, 'com', 'example'), { recursive: true });
+    writeFileSync(
+      join(dir, 'com', 'example', 'OuterTest.java'),
+      [
+        'package com.example;',
+        '// a class keyword in a line comment: class Commented',
+        'class OuterTest {',
+        '    private record Fixture(String s) {}',
+        '    static class PackagePrivateSibling {}',
+        '    void helper() { class DeclaredInsideAMethod {} }',
+        '    @Nested',
+        '    class FoldedIntoParent {}',
+        '}',
+        'class TopLevelSibling {}',
+      ].join('\n'),
+    );
+    writeFileSync(
+      join(dir, 'com', 'example', 'QuotedTest.java'),
+      [
+        'package com.example;',
+        'class QuotedTest {',
+        '    String s = "class InAString";',
+        "    char c = ';';",
+        '    /* class InABlockComment */',
+        '}',
+      ].join('\n'),
+    );
+
+    const byFile = new Map(
+      collectSourceTestClasses(dir).map(f => [f.packageName + '.' + f.primary, f]),
+    );
+
+    assert.deepEqual(byFile.get('com.example.OuterTest').classNames.sort(), [
+      'FoldedIntoParent',
+      'OuterTest',
+      'TopLevelSibling',
+    ]);
+    // `PackagePrivateSibling` is nested one level, `DeclaredInsideAMethod` and
+    // `Fixture` are not reportable, and nothing from comments or strings leaks in.
+    assert.deepEqual(byFile.get('com.example.QuotedTest').classNames, ['QuotedTest']);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('collectSourceTestClasses skips abstract bases and non-test sources', () => {
+  // `AbstractIntegrationTest` is compiled but never instantiated, so surefire
+  // writes no report for it; counting it as unreported would make the
+  // reconciliation permanently red.
+  const dir = mkdtempSync(join(tmpdir(), 'visibility-src-'));
+  try {
+    mkdirSync(join(dir, 'com', 'example'), { recursive: true });
+    writeFileSync(
+      join(dir, 'com', 'example', 'AbstractBaseTest.java'),
+      'package com.example;\nabstract class AbstractBaseTest {}\n',
+    );
+    writeFileSync(
+      join(dir, 'com', 'example', 'RealTest.java'),
+      'package com.example;\nclass RealTest {}\n',
+    );
+    writeFileSync(join(dir, 'com', 'example', 'Helper.java'), 'class Helper {}\n');
+    writeFileSync(
+      join(dir, 'com', 'example', 'SuiteTests.java'),
+      'package com.example;\nclass SuiteTests {}\n',
+    );
+
+    const found = collectSourceTestClasses(dir).map(f => f.primary).sort();
+    assert.deepEqual(found, ['RealTest', 'SuiteTests']);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('sourceRootFor maps a surefire directory back to its module source tree', () => {
+  assert.equal(
+    sourceRootFor('/repo/spring-ai-rag-core/target/surefire-reports'),
+    '/repo/spring-ai-rag-core/src/test/java',
+  );
+});
+
 test('the real surefire output contains no vanished class', () => {
   // Skipped when the suite has not run here: asserting a count on absent
   // reports would assert nothing at all.
@@ -105,6 +315,25 @@ test('the real surefire output contains no vanished class', () => {
   assert.ok(
     totals.skipped >= 100,
     `expected the opt-in integration classes to report a skip, saw ${totals.skipped}`,
+  );
+
+  // The live tree must also reconcile both ways. A `mvn test` that was not
+  // preceded by `clean` leaves deleted classes behind as executable ghosts, and
+  // this is the only check that notices.
+  const sourceClasses = collectSourceTestClasses(sourceRootFor(dir));
+  const { unreported, ghosts } = reconcile(
+    sourceClasses,
+    reports.map(({ file, xml }) => ({ ...parseReport(xml), file })).filter(Boolean),
+  );
+  assert.deepEqual(
+    ghosts,
+    [],
+    'surefire reports whose source no longer exists (run `mvn clean test`)',
+  );
+  assert.deepEqual(
+    unreported,
+    [],
+    'test classes in the source tree that produced no report',
   );
 });
 

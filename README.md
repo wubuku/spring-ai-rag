@@ -212,8 +212,11 @@ service guide when integrating an independent backend over HTTP:
 mvn clean compile
 
 # Test (real database, 1000+ tests)
+# `clean` is not optional: without it Maven keeps `target/test-classes` entries
+# for test classes that were deleted from source, and Surefire goes on
+# executing those ghosts, inflating the reported suite size and coverage.
 export $(cat .env | grep -v '^#' | xargs)
-mvn test
+mvn clean test
 
 # Package
 mvn clean package -DskipTests

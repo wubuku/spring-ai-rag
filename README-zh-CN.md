@@ -211,8 +211,11 @@ spring-ai-rag/
 mvn clean compile
 
 # 测试（真实数据库，964 个测试）
+# `clean` 不是可选项：不带它，Maven 会保留已从源码删除的测试类在
+# `target/test-classes` 里的产物，Surefire 继续执行这些幽灵用例，
+# 虚增报告出来的套件规模与覆盖率。
 export $(cat .env | grep -v '^#' | xargs)
-mvn test
+mvn clean test
 
 # 打包
 mvn clean package -DskipTests
