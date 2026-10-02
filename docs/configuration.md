@@ -1250,6 +1250,41 @@ therefore unreachable.
 `strategy=api-key`, `strategy=user` and the PostgreSQL `principal` backend never
 resolve a client IP and are unaffected by this setting.
 
+**Which paths skip authentication and rate limiting**
+
+`ApiKeyAuthFilter` and `RateLimitFilter` share one exclusion decision
+(`SecurityPathExclusions`), so the same URI always gets the same answer in both
+places. The current list:
+
+| Path | Form |
+|------|------|
+| `/actuator`, `/actuator/**` | segment-aware prefix |
+| `/swagger-ui.html` | exact (`springdoc.swagger-ui.path` default) |
+| `/swagger-ui`, `/swagger-ui/**` | segment-aware prefix |
+| `/v3/api-docs`, `/v3/api-docs/**` | segment-aware prefix |
+| `/health`, `/health/**` | segment-aware prefix (`RagHealthController`) |
+| `/error`, `/error/**` | segment-aware prefix |
+| `/api/v1/rag/cache/stats` | exact, legacy auth mode only |
+
+Two rules, both in the safe direction:
+
+1. **Segment-aware matching.** `/healthz` and `/actuator-admin` are no longer
+   swept in with `/health` and `/actuator`, so a future endpoint under either
+   name cannot silently escape authentication.
+2. **Ambiguous URIs are never excluded** (fail closed). `getRequestURI()`
+   returns the raw, un-normalized path the client sent, while the container
+   routes on the *normalized* path. A request shaped like
+   `/actuator/../api/v1/rag/documents` looks excluded to the filter and
+   protected to the router. A URI containing `..`/`.` as a standalone segment,
+   or an encoded `%2e`/`%2f`/`%5c`/`%00`, is treated as *not* excluded — it
+   must pass authentication and rate limiting.
+
+> **Stated plainly**: whether rule 2 is exploitable depends on the container's
+> normalization and rejection policy. This repository cannot start a real
+> container to measure it (no Docker, no database), so no claim of exploitability
+> is made here; the decision simply no longer relies on that assumption. The
+> change does not widen the set of public endpoints in any way.
+
 **Rate limit strategy selection:**
 - `ip`: Count per client IP independently, suitable for unauthenticated scenarios
 - `api-key`: Rate limit by API Key (falls back to IP if no key), suitable for multi-tenant; unconfigured keys use default `requests-per-minute`

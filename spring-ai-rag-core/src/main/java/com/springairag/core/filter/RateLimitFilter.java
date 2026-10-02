@@ -18,6 +18,7 @@ import org.springframework.http.MediaType;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -381,11 +382,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
     }
 
     boolean isExcludedPath(String path) {
-        return path.startsWith("/actuator") ||
-                path.startsWith("/swagger-ui") ||
-                path.startsWith("/v3/api-docs") ||
-                path.startsWith("/health") ||
-                path.startsWith("/error");
+        return SecurityPathExclusions.isExcluded(path, List.of());
     }
 
     /**

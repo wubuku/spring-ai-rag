@@ -1145,6 +1145,36 @@ rag:
 `strategy=api-key`、`user` 与 PostgreSQL `principal` 模式不涉及客户端 IP 解析，
 不受此配置影响。
 
+**哪些路径跳过鉴权与限流**
+
+`ApiKeyAuthFilter` 与 `RateLimitFilter` 共用同一份排除判定
+（`SecurityPathExclusions`），因此同一个 URI 在两处永远得到同一个答案。
+当前排除清单：
+
+| 路径 | 形式 |
+|------|------|
+| `/actuator`、`/actuator/**` | 分段前缀 |
+| `/swagger-ui.html` | 整条匹配（`springdoc.swagger-ui.path` 默认值） |
+| `/swagger-ui`、`/swagger-ui/**` | 分段前缀 |
+| `/v3/api-docs`、`/v3/api-docs/**` | 分段前缀 |
+| `/health`、`/health/**` | 分段前缀（`RagHealthController`） |
+| `/error`、`/error/**` | 分段前缀 |
+| `/api/v1/rag/cache/stats` | 仅 legacy auth 模式，整条匹配 |
+
+判定规则有两条，都是安全方向：
+
+1. **分段感知**。`/healthz`、`/actuator-admin` 这类**不再**被当作
+   `/health`、`/actuator` 一起排除——将来若新增这类端点，它不会被静默放过鉴权。
+2. **形态可疑的 URI 一律不算排除**（fail closed）。`getRequestURI()` 返回的是
+   客户端发来的**原始未规范化**路径，而容器按**规范化后**的路径路由。形如
+   `/actuator/../api/v1/rag/documents` 的请求在过滤器眼里以 `/actuator` 开头，
+   在路由器眼里却指向受保护端点。含 `..`/`.` 独立分段、编码的
+   `%2e`/`%2f`/`%5c`/`%00` 的 URI 一律按"不排除"处理，即**必须**通过鉴权与限流。
+
+> **如实说明**：第 2 条到底能不能被真实利用，取决于容器的规范化与拒绝策略。
+> 本项目当前无法起真实容器实测（无 Docker、无数据库），因此**不断言"可利用"**，
+> 而是让判定不再依赖那个前提。改这一层不会放宽任何既有公开端点。
+
 **限流策略选择：**
 - `ip`：按客户端 IP 独立计数，适合无认证场景
 - `api-key`：按 API Key 限流（无 Key 回退 IP），适合多租户场景；`key-limits` 中未配置的 Key 使用默认 `requests-per-minute`

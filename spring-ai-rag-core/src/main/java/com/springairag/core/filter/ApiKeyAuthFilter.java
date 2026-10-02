@@ -20,6 +20,7 @@ import org.springframework.http.MediaType;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.List;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 
@@ -259,12 +260,10 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
     }
 
     private boolean isExcludedPath(String path, boolean rootMode) {
-        return path.startsWith("/actuator") ||
-                path.startsWith("/swagger-ui") ||
-                path.startsWith("/v3/api-docs") ||
-                path.startsWith("/health") ||
-                (!rootMode && path.equals("/api/v1/rag/cache/stats")) ||
-                path.startsWith("/error");
+        // legacy auth 模式下 cache/stats 曾经是公开端点，只整条匹配。
+        List<String> legacyExact =
+                rootMode ? List.of() : List.of("/api/v1/rag/cache/stats");
+        return SecurityPathExclusions.isExcluded(path, legacyExact);
     }
 
     private void sendUnauthorized(
