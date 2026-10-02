@@ -1279,11 +1279,25 @@ Two rules, both in the safe direction:
    or an encoded `%2e`/`%2f`/`%5c`/`%00`, is treated as *not* excluded — it
    must pass authentication and rate limiting.
 
-> **Stated plainly**: whether rule 2 is exploitable depends on the container's
-> normalization and rejection policy. This repository cannot start a real
-> container to measure it (no Docker, no database), so no claim of exploitability
-> is made here; the decision simply no longer relies on that assumption. The
-> change does not widen the set of public endpoints in any way.
+> **Measured, not assumed.** `SecurityPathTraversalProbeTest` now starts a
+> real Tomcat and sends `GET /actuator/../api/v1/rag/probe-protected` over a raw
+> socket (a normal HTTP client would normalise the path before it left the
+> process, so it could only answer a question about the client). The container
+> matches the filter on the *normalized* path while handing the filter the *raw*
+> request line:
+>
+> ```
+> requestURI  = /actuator/../api/v1/rag/probe-protected
+> servletPath = /api/v1/rag/probe-protected
+> ```
+>
+> So rule 2 is guarding a real disagreement, not a hypothetical one. What the
+> measurement also shows is that on this stack the request then returns 404
+> either way, because Spring MVC resolves the handler from the unnormalised URI.
+> Rule 2 is therefore defence in depth here, not the only thing preventing
+> access — a reverse proxy, a different connector configuration, or a framework
+> upgrade could each remove that 404. The change does not widen the set of
+> public endpoints in any way.
 
 **Operation capabilities and the same path problem**
 

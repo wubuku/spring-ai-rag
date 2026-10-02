@@ -23,11 +23,30 @@ import java.util.Locale;
  *       返回的是客户端发来的<b>原始、未规范化</b>路径，而容器是按<b>规范化之后</b>
  *       的路径做路由的。形如 {@code /actuator/../api/v1/rag/documents} 的请求，
  *       在过滤器眼里以 {@code /actuator} 开头（会被排除），在路由器眼里却是
- *       {@code /api/v1/rag/documents}。到底能不能真的走通，取决于容器的
- *       规范化与拒绝策略——<b>本项目当前无法起真实容器实测（无 Docker、无数据库），
- *       因此这里不去断言"可利用"，而是让判定不再依赖那个前提</b>：
- *       含穿越段或编码分隔符的 URI 一律按"不排除"处理，即必须通过鉴权与限流。</li>
+ *       {@code /api/v1/rag/documents}。含穿越段或编码分隔符的 URI 一律按
+ *       "不排除"处理，即必须通过鉴权与限流。</li>
  * </ol>
+ *
+ * <p><b>上面这个分歧是真的，而且已经实测过</b>：{@code SecurityPathTraversalProbeTest}
+ * 起一个真实 Tomcat，用裸 socket 发穿越请求行（普通 HTTP 客户端会在请求离开
+ * 进程前就规范化路径，那样只能回答"客户端做了什么"）。测到的是
+ * {@code requestURI=/actuator/../api/v1/rag/probe-protected} 而
+ * {@code servletPath=/api/v1/rag/probe-protected}——<b>过滤器确实按规范化路径被
+ * 匹配，却拿到原始请求行</b>。所以这里防的不是假想。
+ *
+ * <p><b>也要说清它在当前栈上的分量</b>：同一批实测显示，这个请求随后
+ * <b>无论走不走排除判定都是 404</b>，因为 Spring MVC 按未规范化的 URI 解析
+ * handler，穿越根本匹配不到端点。也就是说本规则在当前栈上是<b>纵深防御</b>，
+ * 而不是唯一挡住请求的那一道。保留它的理由有三条，且都与"今天恰好 404"无关：
+ * 前面挂反向代理、改 connector 配置（例如放开编码斜杠）、或框架升级到按规范化
+ * 路径解析 handler，都可能让这个 404 消失；而"原文与规范化路径不一致"这个前提
+ * 一旦成立，判定的方向就该是保守的那一边。
+ *
+ * <p>另需注意：这条规则<b>不能</b>由容器探测来证明有效。删掉 {@link #isAmbiguous}
+ * 的分支后 {@code SecurityPathTraversalProbeTest} 依然全绿——因为路由本来就把
+ * 请求 404 掉了，匿名用例的 404 根本证明不了排除规则起了作用。真正钉住这条规则
+ * 的是 {@code SecurityPathExclusionsTest} 单元测试，删掉分支它会红。探测负责的
+ * 是容器层的前置事实：过滤器确实按规范化路径被匹配、也确实拿到原始路径。
  */
 final class SecurityPathExclusions {
 

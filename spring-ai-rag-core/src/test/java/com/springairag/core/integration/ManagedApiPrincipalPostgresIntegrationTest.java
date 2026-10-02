@@ -148,10 +148,7 @@ class ManagedApiPrincipalPostgresIntegrationTest {
 
         flyway().migrate();
 
-        assertEquals("58", migrationJdbc.queryForObject(
-                "SELECT version FROM flyway_schema_history WHERE success = TRUE "
-                        + "ORDER BY installed_rank DESC LIMIT 1",
-                String.class));
+        MigrationVersions.assertLatestApplied(migrationJdbc);
         assertEquals("rag_k_legacy", migrationJdbc.queryForObject(
                 "SELECT principal_id FROM rag_api_principal WHERE principal_id='rag_k_legacy'",
                 String.class));
@@ -228,10 +225,7 @@ class ManagedApiPrincipalPostgresIntegrationTest {
 
         flyway().migrate();
 
-        assertEquals("58", migrationJdbc.queryForObject(
-                "SELECT version FROM flyway_schema_history WHERE success=TRUE "
-                        + "ORDER BY installed_rank DESC LIMIT 1",
-                String.class));
+        MigrationVersions.assertLatestApplied(migrationJdbc);
         assertNull(migrationJdbc.queryForObject(
                 "SELECT retire_at FROM rag_api_key WHERE key_id='rag_k_v54'",
                 LocalDateTime.class));

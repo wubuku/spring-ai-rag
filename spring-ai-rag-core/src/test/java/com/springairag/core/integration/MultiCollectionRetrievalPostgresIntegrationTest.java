@@ -7,6 +7,7 @@ import com.springairag.core.config.RagProperties;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.retrieval.HybridRetrieverService;
 import com.springairag.core.retrieval.RetrievalScope;
+import com.springairag.core.service.DocumentDerivationDescriptorProvider;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.junit.jupiter.api.AfterAll;
@@ -81,6 +82,20 @@ class MultiCollectionRetrievalPostgresIntegrationTest {
         }
     }
 
+    /**
+     * The chunker version the retriever requires, resolved through the same
+     * provider the service builds for itself.
+     *
+     * <p>This test used to insert the literal {@code 'test'}. The retriever
+     * matches on {@code hierarchical-v2:<size>:<min>:<overlap>} for text and
+     * {@code json-record-v1:single} for JSON records, so <em>no</em> document
+     * matched the predicate and the first assertion failed on an empty result
+     * set — a failure that reads like "unscoped search dropped the unassigned
+     * document" and is really "the fixture never matched anything". Asking the
+     * same provider the service asks removes the possibility of drift.
+     */
+    private DocumentDerivationDescriptorProvider descriptors;
+
     @BeforeEach
     void resetDatabase() {
         Flyway flyway = Flyway.configure()
@@ -98,6 +113,7 @@ class MultiCollectionRetrievalPostgresIntegrationTest {
                 .thenReturn(vector(1.0f));
         RagProperties properties = new RagProperties();
         properties.getRetrieval().setFulltextEnabled(false);
+        descriptors = new DocumentDerivationDescriptorProvider(properties);
         retriever = new HybridRetrieverService(
                 embeddingModel,
                 () -> activeProfile,
@@ -133,7 +149,7 @@ class MultiCollectionRetrievalPostgresIntegrationTest {
         long stale = insertDocument(
                 collectionA, "Stale", "document", true, "hash-stale-current");
         insertEmbedding(
-                stale, activeProfile, "hash-stale-old", "COMPLETED");
+                stale, activeProfile, "hash-stale-old", "COMPLETED", "document");
         long wrongProfile = insertFreshDocument(
                 collectionB, "Other profile", "document",
                 true, otherProfile);
@@ -234,7 +250,7 @@ class MultiCollectionRetrievalPostgresIntegrationTest {
         String hash = "hash-" + title.toLowerCase().replace(' ', '-');
         long documentId = insertDocument(
                 collectionId, title, documentType, enabled, hash);
-        insertEmbedding(documentId, profile, hash, "COMPLETED");
+        insertEmbedding(documentId, profile, hash, "COMPLETED", documentType);
         return documentId;
     }
 
@@ -262,7 +278,11 @@ class MultiCollectionRetrievalPostgresIntegrationTest {
             long documentId,
             EmbeddingProfile profile,
             String stateContentHash,
-            String status) {
+            String status,
+            String documentType) {
+        String chunkerVersion = RagDocument.JSON_RECORD.equals(documentType)
+                ? descriptors.jsonRecordDescriptor().chunkerVersion()
+                : descriptors.textDescriptor().chunkerVersion();
         String vector = vectorText(vector(1.0f));
         jdbcTemplate.update(
                 "INSERT INTO rag_embeddings "
@@ -278,10 +298,11 @@ class MultiCollectionRetrievalPostgresIntegrationTest {
                 "INSERT INTO rag_document_embedding_state "
                         + "(document_id, embedding_profile_id, content_hash, "
                         + "chunker_version, status, chunk_count) "
-                        + "VALUES (?, ?, ?, 'test', ?, 1)",
+                        + "VALUES (?, ?, ?, ?, ?, 1)",
                 documentId,
                 profile.id(),
                 stateContentHash,
+                chunkerVersion,
                 status);
     }
 

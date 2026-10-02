@@ -1,3 +1,10 @@
+> **勘误（Batch 801）**：本文件中有 **20 处**遗留条目写着"147/145 个集成测试仍未
+> 真正跑过（本机无 Docker）"。这句话的**结论是错的**：OrbStack 一直在运行，
+> `docker` CLI 只是不在 PATH 上，Testcontainers 显式设置 `DOCKER_HOST` 即可连上。
+> 当时真实犯的错是"用 `command not found` 推出了'整个环境没有运行时'"。
+> 正确做法与更正详情见 [Batch 801](#batch-801已交付)。**下文历史条目按当时的记录
+> 原样保留，不逐条改写**——改写会让账本不再是账本。
+
 ### Batch 768（已交付）
 
 - 分支：`feature/webui-design-language-longform-docs-20261003`（从 main 正确创建，未重现 765/767 的偏离）
@@ -470,6 +477,134 @@
     Batch 800 已把键改名为 `alerts.delete`。
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
+
+### Batch 801（已交付）
+
+- 分支：`feature/gated-it-crosscheck-20261002`
+  （**分支名与内容不符，如实登记**：勘察时按原方向起的名，范围中途整个转向
+  "首次真跑门控 IT"，名字没改。）
+- 内容：**一次长期错误认知的更正 + 首次真跑全部门控 IT + 把一条"无法断言"的安全
+  规则变成实测事实**。
+
+#### 801-A/B：重大更正——"本机没有 Docker"是错的
+
+- 起因是 `scripts/verify-gated-it.sh` **意外跑通了**：Flyway 应用 59 个迁移、
+  `ChatTurnOperationPostgresIntegrationTest` 7 个测试 0 跳过、BUILD SUCCESS。
+  一个"已知不可能"的结果出现在手里，第一反应应该是怀疑测量，而不是庆祝。
+- 查下来：账本里 Batch 751–800 反复写的**"本机无 Docker、147 个集成测试一个都
+  没真正跑过"是错的**。真实情况是——`docker` CLI 确实不在 PATH（`command not found`），
+  但 **OrbStack 一直在跑**：5432 由 `/Applications/OrbStack.app` 监听，socket 在
+  `~/.orbstack/run/docker.sock`。Testcontainers 只要显式指定
+  `export DOCKER_HOST="unix://$HOME/.orbstack/run/docker.sock"` 就能连上，
+  再加 `TESTCONTAINERS_RYUK_DISABLED=true`、
+  `TESTCONTAINERS_PG_IMAGE=postgres:16-pgvector`（实测 pgvector 0.8.2）即可。
+- **为什么错了这么久**：当时的判断是"`docker` 命令找不到 ⇒ 没有容器运行时"，
+  这是一个**用错误证据支持正确结论**——恰好因为缺 CLI 就直接推到了"整个环境不行"，
+  中间跳过了"运行时可能在，只是不在 PATH 上"这一步。教训：**"工具不在 PATH"和
+  "能力不存在"是两件事**，前者是关于查找路径的观察，后者是关于系统的断言。
+- 首次全量跑完 **22 个门控套件：147 个测试，10 个失败，0 错误，0 跳过**。
+
+#### 801-C：9 处硬编码迁移版本
+
+- 9 个门控 IT 各自写死 `"55"` / `"57"` / `"58"` 去断言 `flyway_schema_history`，
+  新加一个迁移就会**同时**打破它们。新建
+  `integration/MigrationVersions.java`，从 classpath 上的 `db/migration` 推导最新版本，
+  跨 **9 个文件**替换。配套 `MigrationVersionsTest`（4 例）。
+  关键点：断言的是**两个会动的东西**（classpath 上的迁移 vs 数据库里的实际），
+  而不是把字面量换个地方写。
+- **我自己犯的错（如实登记）**：批量替换误伤了
+  `ExternalDocumentSyncPostgresIntegrationTest`——它 `migrateToV29()` 之后
+  **故意停在 V30** 做历史升级测试，属于"就是要停在旧版本"的例外。已改回
+  `assertEquals("30", ...)` 并在代码里注明原因。另清理了 5 处替换留下的多余分号。
+
+#### 801-D：`MultiCollectionRetrievalPostgresIntegrationTest` 匹配不上一条数据
+
+- 根因：测试把 `chunker_version` 写死成 `'test'`，而服务端
+  `EmbeddingProfileSqlScope` 的分块版本谓词要求
+  `hierarchical-v2:<size>:<min>:<overlap>`（文本）/ `json-record-v1:single`（JSON），
+  结果**一条都匹配不上，第一个断言就失败**——测试从来没有真正测过它声称测的东西。
+- 改为用服务端同一个 `DocumentDerivationDescriptorProvider` 推导描述符。
+  这是又一个"漂移相关的断言要比对两个会动的东西"的例子。
+
+#### 801-E：穿越探测的第一版是**空转**的
+
+- 新建 `SecurityPathTraversalProbeTest`，本意是把 Batch 794/795"无法断言可利用"
+  变成实测事实。第一次全量跑出来 **4 个用例 1 个失败**，失败的是我写的**控制用例**：
+  匿名访问受保护端点拿到 **404 而不是 401**。
+- 查下来，第一版的 `TestApplication` **只注册了 entity 和 repository，一个 controller
+  都没有**，所以穿越用例和普通用例拿到的是**同一个 404**。也就是说：4 个断言里
+  **3 个"通过"的用例，实际上只证明了 `404 ≠ 2xx`**——套件在空转，而且
+  `assertNotEquals(2, status/100)` 这种断言形状让"没路由到"和"路由到但被拒"
+  完全无法区分。**控制用例存在的意义就在这里：它是唯一能揭穿这件事的用例。**
+- 重写后的形态：
+  - 真正注册生产的 `ApiKeyAuthFilter`（同样的 `/api/*` url pattern、同样的 order），
+    不注册数据库 credential service，让 legacy 静态 key 成为唯一可用凭据；
+  - 端点定义在测试内（路由变量被钉死，只让"过滤器看到什么"变化）；
+  - 一个排在鉴权之前的**观测过滤器**把 `getRequestURI()` / `getServletPath()` /
+    `getPathInfo()` 记下来，让断言可以谈**观测值**而不是信念；
+  - **去掉 Testcontainers、去掉 `-Dpath-traversal.it.enabled` 开关**——它测的是
+    Tomcat，Tomcat 一直在。一条只在"有人记得加 flag"时才跑的安全不变量是很弱的
+    不变量。改完 **11 秒跑完 5 个用例**。
+- 写的时候自己犯了两个错，都由测试当场抓住：
+  1. 穿越形态写成 `/actuator/../..`，那是**越过根**，Tomcat 直接 400 且过滤器
+     根本没执行——测的不是规则要防的那件事。改成规则注释里写的
+     `/actuator/../api/v1/...`（一层 `..` 回到根再走进 `/api`）。
+  2. 排除 `JdbcTemplateAutoConfiguration` 后 Spring AI 的
+     `JdbcChatMemoryRepositoryAutoConfiguration` 仍然要 `JdbcTemplate`；
+     又因为没有数据源，`application.yml` 里 readiness 分组 include 的 `db` contributor
+     让健康端点自检直接失败。两次都是启动期报错，逐个排掉。
+
+#### 801-F：实测结论，以及**与预期相反的变异结果**
+
+实测到的分歧（观测过滤器记录）：
+
+```
+requestURI  = /actuator/../api/v1/rag/probe-protected
+servletPath = /api/v1/rag/probe-protected
+```
+
+- **Batch 794 推理的那个分歧是真的，不是假想**：过滤器确实**按规范化路径被匹配**，
+  却拿到**原始请求行**。
+- 但实测**同时**显示：这个请求随后**无论走不走排除判定都是 404**，因为 Spring MVC
+  按未规范化的 URI 解析 handler，穿越根本匹配不到端点。**所以 fail closed 规则在
+  当前栈上是纵深防御，不是唯一挡住请求的那一道。**
+- **变异测试（结果与我预期相反，如实登记）**：把 `SecurityPathExclusions.isAmbiguous`
+  改成 `return false`（删掉 fail closed 分支）后——
+  - `SecurityPathExclusionsTest` **3 个用例变红**（`traversalSegmentsAreNotExcluded`、
+    `singleDotSegmentsAreNotExcluded`、`percentEncodingIsMatchedCaseInsensitively`）：
+    **规则本身确实有覆盖**；
+  - `SecurityPathTraversalProbeTest` **5 个用例仍全绿**：因为路由反正都把请求 404 掉了。
+- **结论必须写清楚**：匿名用例的 404 **证明不了排除规则在工作**。容器探测拥有的是
+  **容器层的前置事实**（过滤器按规范化路径被匹配、拿到原始路径），
+  钉住排除规则的是**单元测试**。这条已同时写进探测的 Javadoc、`SecurityPathExclusions`
+  的类注释和两份 testing-guide，否则下一个读代码的人会以为 404 是排除规则的功劳。
+- 保留 fail closed 规则的理由重新论证了一遍，**且都与"今天恰好 404"无关**：
+  反向代理、connector 配置改动（例如放开编码斜杠）、框架升级到按规范化路径解析
+  handler——三者都可能让这个 404 消失。
+
+#### 801-G：更正被证伪的断言
+
+- `SecurityPathExclusions` 类注释、`docs/configuration.md`、
+  `docs/configuration-zh-CN.md` 三处都写着"本项目当前无法起真实容器实测
+  （无 Docker、无数据库）"——**理由是错的，结论（fail closed）是对的**。
+  改为陈述实测结果，并**同时**说明它在当前栈上只是纵深防御。
+  代码逻辑一行未动。
+- 同步两份 `testing-guide`（该套件不再是门控项，`verify-gated-it.sh` 的
+  `ALL_SUITES` 回到 3 个套件，开关对账 22 开关 / 147 测试 / 3 套件）。
+- **账本里 20 处"147 个集成测试仍未真正跑过（本机无 Docker）"**：不逐条改写
+  历史条目（那会篡改当时的记录），而是在本条里集中更正——当时的**事实**是
+  "CLI 不在 PATH 就被当成了没有运行时"，而不是环境真的不行。
+
+- 指标（实测值）：core 默认测试 **987 类 / 7693 → 989 类 / 7702 用例**（+2 类 +9 例：
+  `MigrationVersionsTest` 4 例 + `SecurityPathTraversalProbeTest` 5 例），
+  跳过数 **154 不变**（新加的两个类都不需要容器，因此不进跳过集）；
+  门控 IT **147 个测试全绿**（首次达成 0 失败）；仓库门禁 **15/15**、
+  `verify-project-tests` **4/4**、锁检查通过、开关对账双向干净；前端未动。
+- 遗留（如实登记，未处理）：
+  - 20 处历史账本条目里的"本机无 Docker"字样按上文集中更正，未逐条改写。
+  - `Documents` 页"版本历史 → 恢复"是否应叠加，属产品决策，未动。
+  - 其余 WebUI 债务（`PageShell` 脱节、`ask`/`chat` 53 行×2 重复、
+    174 个无引用 locale 键）本批未动。
 
 ### Batch 800（已交付）
 

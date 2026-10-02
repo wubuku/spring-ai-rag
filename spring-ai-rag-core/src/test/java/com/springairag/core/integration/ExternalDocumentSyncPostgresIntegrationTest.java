@@ -184,9 +184,14 @@ class ExternalDocumentSyncPostgresIntegrationTest {
                         + "WHERE schemaname = 'public' "
                         + "AND indexname = 'uk_rag_doc_external_identity'",
                 Long.class));
+        // Deliberately NOT MigrationVersions.assertLatestApplied: this test
+        // stops at V30 on purpose, so that V31's behaviour can be observed
+        // against the exact schema it was written for. Asserting "the newest
+        // shipped migration" would be false here by design, and a blanket sweep
+        // converting every flyway assertion to it had already broken this case.
         assertEquals("30", jdbcTemplate.queryForObject(
-                "SELECT version FROM flyway_schema_history "
-                        + "WHERE success = true ORDER BY installed_rank DESC LIMIT 1",
+                "SELECT version FROM flyway_schema_history WHERE success = TRUE "
+                        + "ORDER BY installed_rank DESC LIMIT 1",
                 String.class));
     }
 

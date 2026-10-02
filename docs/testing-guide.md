@@ -837,6 +837,43 @@ archived progress note, so both test methods had no documented way to run.
 `scripts/verify-integration-test-switches.mjs` now fails when a gated suite has
 no run path, in either direction.
 
+### Path Traversal Probe (no gate — runs in the default test run)
+
+```bash
+mvn -pl spring-ai-rag-core -Dtest=SecurityPathTraversalProbeTest test
+```
+
+`SecurityPathTraversalProbeTest` answers a question Batch 794 could only work
+around: what a servlet container actually does with a request line such as
+`/actuator/../api/v1/rag/...`. The suite starts the real server on a random port
+and writes the request line to a **raw socket**, because `HttpClient` and every
+browser normalise the URI before it leaves the process and would answer a
+question about the client; MockMvc likewise never runs the container's URI
+mapping. Only the bytes on the wire settle what the container routes.
+
+The measured result, now recorded by a filter that runs ahead of auth:
+
+```
+requestURI  = /actuator/../api/v1/rag/probe-protected
+servletPath = /api/v1/rag/probe-protected
+```
+
+The filter is matched on the normalised path and handed the raw one — the
+disagreement `SecurityPathExclusions` guards against is real. The request then
+returns 404 either way, because Spring MVC resolves the handler from the
+unnormalised URI.
+
+**This suite is deliberately not gated.** It needs no database and no model
+provider, only the servlet container that is always there; a security invariant
+that executes only when someone remembers a flag is a weak invariant.
+
+**What it does not prove.** Deleting the fail-closed branch from
+`SecurityPathExclusions` leaves all five cases green, because routing 404s the
+traversal regardless. The anonymous 404 is therefore *not* evidence that the
+exclusion rule works — `SecurityPathExclusionsTest` is what pins that rule, and
+it fails when the branch is removed. The probe owns the container-level
+precondition; the unit suite owns the rule.
+
 ### Next High-Value Features Acceptance Gates
 
 ```bash
