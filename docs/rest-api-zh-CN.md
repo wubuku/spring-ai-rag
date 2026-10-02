@@ -308,241 +308,6 @@ Chat 和 Search 接受 `collectionScopeMode`：
 8. 对 `400` 修正请求组合或上限；对 restricted caller 的 `403` 按未授权处理，不根据
    错误猜测 Collection 是否存在；不受限调用方的未知 key 返回 `404`。
 
-### API 密钥管理
-
-root 模式下，本节所有管理端点只允许 environment root。通过 root 创建的 Key固定为
-数据库 `NORMAL` 角色，可配置为只读或读写 RAG 数据面，但不能管理 Key。
-未配置 root 时保留 legacy ADMIN/NORMAL 管理语义。
-
-#### `GET /api/v1/rag/api-keys`
-
-兼容性与审计用途的 credential history。响应不会包含原始密钥或 hash；新管理界面应使用
-下方 principal 端点：
-
-```json
-[{
-  "keyId": "rag_k_abc123",
-  "principalId": "rag_p_service",
-  "credentialVersion": 2,
-  "currentCredential": true,
-  "retiringCredential": false,
-  "retireAt": null,
-  "name": "Production Server",
-  "role": "NORMAL",
-  "capabilities": ["RAG_READ", "RAG_WRITE"],
-  "allowedCollectionKeys": ["customer-42:manual:v3"],
-  "allowedCollectionIds": [1, 2],
-  "enabled": true,
-  "createdAt": "2026-08-14T00:00:00",
-  "lastUsedAt": null,
-  "expiresAt": "2026-10-01T00:00:00"
-}]
-```
-
-#### `GET /api/v1/rag/api-keys/principals`
-
-按稳定调用主体返回，每个 principal 一行。响应只带当前 credential 元数据，不返回 raw
-secret、hash 或完整 history：
-
-```json
-[{
-  "principalId": "rag_p_service",
-  "name": "Production Server",
-  "role": "NORMAL",
-  "capabilities": ["RAG_READ"],
-  "allowedCollectionKeys": ["customer-42:manual:v3"],
-  "requestsPerMinute": 120,
-  "policyVersion": 3,
-  "status": "ACTIVE",
-  "currentCredentialId": "rag_k_abc123",
-  "currentCredentialVersion": 2,
-  "rotationPending": true,
-  "pendingRotationId": "c675b6d2-f9b2-47aa-b7c0-cc46cd70e02b",
-  "retiringCredentialId": "rag_k_previous",
-  "retiringCredentialVersion": 1,
-  "rotationExpiresAt": "2026-08-27T20:15:00",
-  "lastUsedAt": "2026-08-23T12:00:00",
-  "expiresAt": "2026-10-01T00:00:00"
-}]
-```
-
-#### `POST /api/v1/rag/api-keys`
-
-root 模式下 `expiresAt` 必填且必须在未来，不设固定的最长有效期。
-`allowedCollectionKeys` 可省略；省略表示可访问全部 Collection。
-`allowedCollectionIds` 已 deprecated。`capabilities` 只接受 `["RAG_READ"]` 或
-`["RAG_READ", "RAG_WRITE"]`；省略时默认完整读写。
-
-可选 `Idempotency-Key` Header 使 provisioning 在配置的保留窗口内可以安全重试。key
-必须是 1-255 个可见 ASCII 字符，并按实际认证 provisioning principal 隔离。同一个 key
-只能与同一个规范化请求复用；Collection key 与解析后等价的 numeric ID 会生成相同
-fingerprint。非法或重复 Header 返回 `400 IDEMPOTENCY_KEY_INVALID`。
-
-```json
-{
-  "name": "My API Key",
-  "expiresAt": "2026-10-01T00:00:00",
-  "allowedCollectionKeys": ["customer-42:manual:v3"],
-  "requestsPerMinute": 120,
-  "capabilities": ["RAG_READ"]
-}
-```
-
-原始密钥仅在首次 `201 Created` 响应中返回一次，响应带
-`Cache-Control: no-store`：
-
-```json
-{
-  "keyId": "rag_k_xyz789",
-  "principalId": "rag_k_xyz789",
-  "credentialVersion": 1,
-  "policyVersion": 1,
-  "rawKey": "rag_sk_...",
-  "name": "My API Key",
-  "allowedCollectionKeys": ["customer-42:manual:v3"],
-  "allowedCollectionIds": [1, 2],
-  "expiresAt": "2026-10-01T00:00:00",
-  "requestsPerMinute": 120,
-  "capabilities": ["RAG_READ"],
-  "secretAvailable": true,
-  "idempotentReplay": false,
-  "currentCredentialActive": true
-}
-```
-
-精确 keyed replay 返回 `200 OK`、`X-RAG-Idempotent-Replay: true` 和
-`Cache-Control: no-store`，绝不重放 raw secret：
-
-```json
-{
-  "keyId": "rag_k_xyz789",
-  "principalId": "rag_k_xyz789",
-  "credentialVersion": 1,
-  "rawKey": null,
-  "name": "My API Key",
-  "secretAvailable": false,
-  "idempotentReplay": true,
-  "currentCredentialActive": true
-}
-```
-
-同一 owner/key 携带不同请求时返回 `409 IDEMPOTENCY_KEY_REUSED`。ledger 只保存 hash
-和结果 metadata，不保存 raw credential。轮换后 replay 返回当前 credential ID/version，
-仍保持 `rawKey=null`；吊销或到期后返回 `keyId=null`、
-`credentialVersion=null`、`currentCredentialActive=false`。ledger 被关闭或不可用时，
-keyed 请求 fail closed 返回 `503`，不会静默退化为非幂等 create。
-
-#### `PUT /api/v1/rag/api-keys/principals/{principalId}/policy`
-
-原子更新 name、expiry、Collection ACL、可选 principal quota 与操作能力。
-`expectedPolicyVersion` 必填，版本过期返回 `409 POLICY_VERSION_CONFLICT`。
-省略 `allowedCollectionKeys` 表示不限制 Collection；省略 `requestsPerMinute` 表示使用
-全局配额；省略 `capabilities` 保留当前能力。数据库 ADMIN 不能降级为只读。
-
-```json
-{
-  "expectedPolicyVersion": 1,
-  "name": "My API Key",
-  "expiresAt": "2027-10-01T00:00:00",
-  "allowedCollectionKeys": ["customer-42:manual:v3"],
-  "requestsPerMinute": 240,
-  "capabilities": ["RAG_READ", "RAG_WRITE"]
-}
-```
-
-#### `POST /api/v1/rag/api-keys/{keyId}/rotate`
-
-这是即时切换的兼容路径：在一个事务中禁用当前 credential，并创建同一 stable principal
-的下一个 credential version。owner、role、policy version、ACL、expiry、quota 与
-capabilities 均保持不变。使用旧 credential ID 返回
-`409 CREDENTIAL_NOT_CURRENT`；已有 staged rotation 时返回
-`409 CREDENTIAL_ROTATION_PENDING`；raw secret 仅在本次 `201 Created` 响应中返回。
-
-生产滚动部署应优先使用下面的有界 staged 工作流。
-
-#### `POST /api/v1/rag/api-keys/{currentKeyId}/rotations`
-
-准备分阶段轮换。`Idempotency-Key` 必填；可选请求体以秒指定 overlap，省略时使用服务端
-默认值：
-
-```http
-POST /api/v1/rag/api-keys/rag_k_current/rotations
-Idempotency-Key: deploy-2026-08-27-service-a
-Content-Type: application/json
-
-{"overlapSeconds":900}
-```
-
-首次成功返回 `201 Created`、`Cache-Control: no-store`、稳定 `rotationId`，并且只展示
-一次新 raw credential：
-
-```json
-{
-  "rotationId": "c675b6d2-f9b2-47aa-b7c0-cc46cd70e02b",
-  "status": "PENDING",
-  "principalId": "rag_p_service",
-  "keyId": "rag_k_new",
-  "credentialVersion": 2,
-  "rawKey": "rag_sk_...",
-  "secretAvailable": true,
-  "idempotentReplay": false,
-  "currentCredentialActive": true,
-  "rotationPending": true,
-  "retiringCredentialId": "rag_k_current",
-  "retiringCredentialVersion": 1,
-  "rotationExpiresAt": "2026-08-27T20:15:00"
-}
-```
-
-`PENDING` 期间，新 current credential 与 retiring credential 都可以使用同一 stable
-principal 认证。两者共享 ACL、capabilities、Chat/session owner、用量归因和 PostgreSQL
-quota；overlap 不会创建第二个身份或配额 bucket。实际 deadline 会被 principal expiry
-截短，并直接进入认证条件，因此 cleanup 延迟不会延长旧 credential 的有效期。
-
-请求超时后使用同一个 `Idempotency-Key` 精确重试。响应为 `200 OK`、
-`X-RAG-Idempotent-Replay: true`、相同 `rotationId` 和 `rawKey:null`；服务绝不重建
-一次性 secret。同一个 key 改用其他 current credential 或 overlap 时返回
-`409 IDEMPOTENCY_KEY_REUSED`。
-
-#### `GET /api/v1/rag/api-keys/rotations/{rotationId}`
-
-读取当前 operation 状态。pending operation 到达 deadline 后会推进为 `EXPIRED`，并禁用
-retiring credential。终态包括 `COMPLETED`、`CANCELED`、`EXPIRED` 和 `REVOKED`。
-响应绝不包含 raw credential，并始终带 `Cache-Control: no-store`。
-
-#### `POST /api/v1/rag/api-keys/rotations/{rotationId}/complete`
-
-所有调用实例已经部署并验证新 credential 后完成 pending rotation。retiring credential
-立即失效，新 credential 保持 current。对同一个已完成 operation 重复 complete 幂等；
-deadline 后调用返回 `409 CREDENTIAL_ROTATION_EXPIRED`。
-
-#### `POST /api/v1/rag/api-keys/rotations/{rotationId}/cancel`
-
-在 deadline 前取消 pending rotation。replacement credential 被禁用，retiring credential
-恢复为 current。对同一个已取消 operation 重复 cancel 幂等。credential version 永不复用，
-之后再次轮换会创建更高版本。deadline 后调用返回
-`409 CREDENTIAL_ROTATION_EXPIRED`。
-
-四个 staged endpoint 的成功和错误响应都带 `Cache-Control: no-store`。root 模式只允许
-environment root 调用；legacy 模式下数据库 ADMIN 可管理任意 principal，NORMAL principal
-只能从自己当前认证的 credential 发起 prepare，也只能查询、完成或取消自己的 operation。
-
-#### `DELETE /api/v1/rag/api-keys/{keyId}`
-
-通过当前 credential ID 吊销整个 principal family。对最后一个版本重复 DELETE 幂等；
-旧版本返回 `409 CREDENTIAL_NOT_CURRENT`。legacy 模式通过事务 guard 防止并发吊销最后一个
-ADMIN（`409 LAST_ADMIN_REQUIRED`）；environment root 模式可显式吊销。若存在 staged
-rotation，吊销会同时禁用 current 与 retiring credential，并把 operation 标为 `REVOKED`。
-成功返回 `204 No Content`。
-
-WebUI 管理台入口为 `/webui/unlock`。root credential 只保存在页面内存，刷新或退出后
-需要重新输入；外部调用方不需要 WebUI，只需持有分发的业务 Key：
-
-```bash
-curl "http://localhost:8081/api/v1/rag/search?query=Spring%20AI" \
-  -H "Authorization: Bearer ${RAG_BUSINESS_API_KEY}"
-```
-
 ### API 限流
 
 `rag.rate-limit.backend=local` 保留进程内固定分钟窗口，可使用 `ip`、`api-key` 或
@@ -571,9 +336,9 @@ X-RateLimit-Limit: 100
 X-RateLimit-Remaining: 0
 ```
 
-### Error Responses (RFC 7807 Problem Detail)
+### 错误响应（RFC 7807 Problem Detail）
 
-All error responses follow [RFC 7807](https://datatracker.ietf.org/doc/html/rfc7807) `application/problem+json` format:
+所有错误响应遵循 [RFC 7807](https://datatracker.ietf.org/doc/html/rfc7807) 定义的 `application/problem+json` 格式：
 
 ```json
 {
@@ -585,15 +350,15 @@ All error responses follow [RFC 7807](https://datatracker.ietf.org/doc/html/rfc7
 }
 ```
 
-| Field | Description |
+| 字段 | 说明 |
 |-------|-------------|
-| `type` | Problem type URI (defaults to `about:blank`) |
-| `title` | HTTP status text |
-| `status` | HTTP status code |
-| `detail` | Specific error description |
-| `instance` | Request path where the error occurred |
+| `type` | 问题类型 URI（默认 `about:blank`） |
+| `title` | HTTP 状态文本 |
+| `status` | HTTP 状态码 |
+| `detail` | 具体错误描述 |
+| `instance` | 发生错误的请求路径 |
 
-**Parameter validation errors** (400) merge multiple field errors:
+**参数校验错误** (400) merge multiple field errors:
 
 ```json
 {
@@ -915,7 +680,7 @@ cleanup 删除后，原 key 才允许重新使用。
 在 lease 保护下同时清理当前 principal 的业务 history 与 Spring AI Memory。session
 存在活动请求时返回 `409 SESSION_BUSY`。
 
-**Response:**
+**响应：**
 
 ```json
 {
@@ -943,25 +708,260 @@ cleanup 删除后，原 key 才允许重新使用。
 格式。
 
 ---
+## API 密钥管理
 
-## Search — Direct Retrieval
+root 模式下，本节所有管理端点只允许 environment root。通过 root 创建的 Key固定为
+数据库 `NORMAL` 角色，可配置为只读或读写 RAG 数据面，但不能管理 Key。
+未配置 root 时保留 legacy ADMIN/NORMAL 管理语义。
 
-> Does not go through LLM generation; used for debugging and previewing retrieval results.
+### `GET /api/v1/rag/api-keys`
+
+兼容性与审计用途的 credential history。响应不会包含原始密钥或 hash；新管理界面应使用
+下方 principal 端点：
+
+```json
+[{
+  "keyId": "rag_k_abc123",
+  "principalId": "rag_p_service",
+  "credentialVersion": 2,
+  "currentCredential": true,
+  "retiringCredential": false,
+  "retireAt": null,
+  "name": "Production Server",
+  "role": "NORMAL",
+  "capabilities": ["RAG_READ", "RAG_WRITE"],
+  "allowedCollectionKeys": ["customer-42:manual:v3"],
+  "allowedCollectionIds": [1, 2],
+  "enabled": true,
+  "createdAt": "2026-08-14T00:00:00",
+  "lastUsedAt": null,
+  "expiresAt": "2026-10-01T00:00:00"
+}]
+```
+
+### `GET /api/v1/rag/api-keys/principals`
+
+按稳定调用主体返回，每个 principal 一行。响应只带当前 credential 元数据，不返回 raw
+secret、hash 或完整 history：
+
+```json
+[{
+  "principalId": "rag_p_service",
+  "name": "Production Server",
+  "role": "NORMAL",
+  "capabilities": ["RAG_READ"],
+  "allowedCollectionKeys": ["customer-42:manual:v3"],
+  "requestsPerMinute": 120,
+  "policyVersion": 3,
+  "status": "ACTIVE",
+  "currentCredentialId": "rag_k_abc123",
+  "currentCredentialVersion": 2,
+  "rotationPending": true,
+  "pendingRotationId": "c675b6d2-f9b2-47aa-b7c0-cc46cd70e02b",
+  "retiringCredentialId": "rag_k_previous",
+  "retiringCredentialVersion": 1,
+  "rotationExpiresAt": "2026-08-27T20:15:00",
+  "lastUsedAt": "2026-08-23T12:00:00",
+  "expiresAt": "2026-10-01T00:00:00"
+}]
+```
+
+### `POST /api/v1/rag/api-keys`
+
+root 模式下 `expiresAt` 必填且必须在未来，不设固定的最长有效期。
+`allowedCollectionKeys` 可省略；省略表示可访问全部 Collection。
+`allowedCollectionIds` 已 deprecated。`capabilities` 只接受 `["RAG_READ"]` 或
+`["RAG_READ", "RAG_WRITE"]`；省略时默认完整读写。
+
+可选 `Idempotency-Key` Header 使 provisioning 在配置的保留窗口内可以安全重试。key
+必须是 1-255 个可见 ASCII 字符，并按实际认证 provisioning principal 隔离。同一个 key
+只能与同一个规范化请求复用；Collection key 与解析后等价的 numeric ID 会生成相同
+fingerprint。非法或重复 Header 返回 `400 IDEMPOTENCY_KEY_INVALID`。
+
+```json
+{
+  "name": "My API Key",
+  "expiresAt": "2026-10-01T00:00:00",
+  "allowedCollectionKeys": ["customer-42:manual:v3"],
+  "requestsPerMinute": 120,
+  "capabilities": ["RAG_READ"]
+}
+```
+
+原始密钥仅在首次 `201 Created` 响应中返回一次，响应带
+`Cache-Control: no-store`：
+
+```json
+{
+  "keyId": "rag_k_xyz789",
+  "principalId": "rag_k_xyz789",
+  "credentialVersion": 1,
+  "policyVersion": 1,
+  "rawKey": "rag_sk_...",
+  "name": "My API Key",
+  "allowedCollectionKeys": ["customer-42:manual:v3"],
+  "allowedCollectionIds": [1, 2],
+  "expiresAt": "2026-10-01T00:00:00",
+  "requestsPerMinute": 120,
+  "capabilities": ["RAG_READ"],
+  "secretAvailable": true,
+  "idempotentReplay": false,
+  "currentCredentialActive": true
+}
+```
+
+精确 keyed replay 返回 `200 OK`、`X-RAG-Idempotent-Replay: true` 和
+`Cache-Control: no-store`，绝不重放 raw secret：
+
+```json
+{
+  "keyId": "rag_k_xyz789",
+  "principalId": "rag_k_xyz789",
+  "credentialVersion": 1,
+  "rawKey": null,
+  "name": "My API Key",
+  "secretAvailable": false,
+  "idempotentReplay": true,
+  "currentCredentialActive": true
+}
+```
+
+同一 owner/key 携带不同请求时返回 `409 IDEMPOTENCY_KEY_REUSED`。ledger 只保存 hash
+和结果 metadata，不保存 raw credential。轮换后 replay 返回当前 credential ID/version，
+仍保持 `rawKey=null`；吊销或到期后返回 `keyId=null`、
+`credentialVersion=null`、`currentCredentialActive=false`。ledger 被关闭或不可用时，
+keyed 请求 fail closed 返回 `503`，不会静默退化为非幂等 create。
+
+### `PUT /api/v1/rag/api-keys/principals/{principalId}/policy`
+
+原子更新 name、expiry、Collection ACL、可选 principal quota 与操作能力。
+`expectedPolicyVersion` 必填，版本过期返回 `409 POLICY_VERSION_CONFLICT`。
+省略 `allowedCollectionKeys` 表示不限制 Collection；省略 `requestsPerMinute` 表示使用
+全局配额；省略 `capabilities` 保留当前能力。数据库 ADMIN 不能降级为只读。
+
+```json
+{
+  "expectedPolicyVersion": 1,
+  "name": "My API Key",
+  "expiresAt": "2027-10-01T00:00:00",
+  "allowedCollectionKeys": ["customer-42:manual:v3"],
+  "requestsPerMinute": 240,
+  "capabilities": ["RAG_READ", "RAG_WRITE"]
+}
+```
+
+### `POST /api/v1/rag/api-keys/{keyId}/rotate`
+
+这是即时切换的兼容路径：在一个事务中禁用当前 credential，并创建同一 stable principal
+的下一个 credential version。owner、role、policy version、ACL、expiry、quota 与
+capabilities 均保持不变。使用旧 credential ID 返回
+`409 CREDENTIAL_NOT_CURRENT`；已有 staged rotation 时返回
+`409 CREDENTIAL_ROTATION_PENDING`；raw secret 仅在本次 `201 Created` 响应中返回。
+
+生产滚动部署应优先使用下面的有界 staged 工作流。
+
+### `POST /api/v1/rag/api-keys/{currentKeyId}/rotations`
+
+准备分阶段轮换。`Idempotency-Key` 必填；可选请求体以秒指定 overlap，省略时使用服务端
+默认值：
+
+```http
+POST /api/v1/rag/api-keys/rag_k_current/rotations
+Idempotency-Key: deploy-2026-08-27-service-a
+Content-Type: application/json
+
+{"overlapSeconds":900}
+```
+
+首次成功返回 `201 Created`、`Cache-Control: no-store`、稳定 `rotationId`，并且只展示
+一次新 raw credential：
+
+```json
+{
+  "rotationId": "c675b6d2-f9b2-47aa-b7c0-cc46cd70e02b",
+  "status": "PENDING",
+  "principalId": "rag_p_service",
+  "keyId": "rag_k_new",
+  "credentialVersion": 2,
+  "rawKey": "rag_sk_...",
+  "secretAvailable": true,
+  "idempotentReplay": false,
+  "currentCredentialActive": true,
+  "rotationPending": true,
+  "retiringCredentialId": "rag_k_current",
+  "retiringCredentialVersion": 1,
+  "rotationExpiresAt": "2026-08-27T20:15:00"
+}
+```
+
+`PENDING` 期间，新 current credential 与 retiring credential 都可以使用同一 stable
+principal 认证。两者共享 ACL、capabilities、Chat/session owner、用量归因和 PostgreSQL
+quota；overlap 不会创建第二个身份或配额 bucket。实际 deadline 会被 principal expiry
+截短，并直接进入认证条件，因此 cleanup 延迟不会延长旧 credential 的有效期。
+
+请求超时后使用同一个 `Idempotency-Key` 精确重试。响应为 `200 OK`、
+`X-RAG-Idempotent-Replay: true`、相同 `rotationId` 和 `rawKey:null`；服务绝不重建
+一次性 secret。同一个 key 改用其他 current credential 或 overlap 时返回
+`409 IDEMPOTENCY_KEY_REUSED`。
+
+### `GET /api/v1/rag/api-keys/rotations/{rotationId}`
+
+读取当前 operation 状态。pending operation 到达 deadline 后会推进为 `EXPIRED`，并禁用
+retiring credential。终态包括 `COMPLETED`、`CANCELED`、`EXPIRED` 和 `REVOKED`。
+响应绝不包含 raw credential，并始终带 `Cache-Control: no-store`。
+
+### `POST /api/v1/rag/api-keys/rotations/{rotationId}/complete`
+
+所有调用实例已经部署并验证新 credential 后完成 pending rotation。retiring credential
+立即失效，新 credential 保持 current。对同一个已完成 operation 重复 complete 幂等；
+deadline 后调用返回 `409 CREDENTIAL_ROTATION_EXPIRED`。
+
+### `POST /api/v1/rag/api-keys/rotations/{rotationId}/cancel`
+
+在 deadline 前取消 pending rotation。replacement credential 被禁用，retiring credential
+恢复为 current。对同一个已取消 operation 重复 cancel 幂等。credential version 永不复用，
+之后再次轮换会创建更高版本。deadline 后调用返回
+`409 CREDENTIAL_ROTATION_EXPIRED`。
+
+四个 staged endpoint 的成功和错误响应都带 `Cache-Control: no-store`。root 模式只允许
+environment root 调用；legacy 模式下数据库 ADMIN 可管理任意 principal，NORMAL principal
+只能从自己当前认证的 credential 发起 prepare，也只能查询、完成或取消自己的 operation。
+
+### `DELETE /api/v1/rag/api-keys/{keyId}`
+
+通过当前 credential ID 吊销整个 principal family。对最后一个版本重复 DELETE 幂等；
+旧版本返回 `409 CREDENTIAL_NOT_CURRENT`。legacy 模式通过事务 guard 防止并发吊销最后一个
+ADMIN（`409 LAST_ADMIN_REQUIRED`）；environment root 模式可显式吊销。若存在 staged
+rotation，吊销会同时禁用 current 与 retiring credential，并把 operation 标为 `REVOKED`。
+成功返回 `204 No Content`。
+
+WebUI 管理台入口为 `/webui/unlock`。root credential 只保存在页面内存，刷新或退出后
+需要重新输入；外部调用方不需要 WebUI，只需持有分发的业务 Key：
+
+```bash
+curl "http://localhost:8081/api/v1/rag/search?query=Spring%20AI" \
+  -H "Authorization: Bearer ${RAG_BUSINESS_API_KEY}"
+```
+
+
+## Search — 直接检索
+
+> 不经过 LLM 生成；用于调试和预览检索结果。
 
 ### `GET /api/v1/rag/search`
 
-| Parameter | Type | Default | Description |
+| 参数 | 类型 | 默认值 | 说明 |
 |-----------|------|---------|-------------|
-| `query` | string | ✅ | Search query text |
-| `limit` | int | 10 | Number of results to return |
-| `useHybrid` | bool | true | Use hybrid search |
-| `vectorWeight` | double | 0.5 | Vector search weight |
-| `fulltextWeight` | double | 0.5 | Full-text search weight |
+| `query` | string | ✅ | 检索查询文本 |
+| `limit` | int | 10 | 返回结果条数 |
+| `useHybrid` | bool | true | 使用混合检索 |
+| `vectorWeight` | double | 0.5 | 向量检索权重 |
+| `fulltextWeight` | double | 0.5 | 全文检索权重 |
 | `collectionScopeMode` | enum | `CALLER_VISIBLE` | 显式 Collection 范围模式 |
 | `collectionKeys` | string[] | | 推荐的重复 Collection 范围参数 |
 | `collectionIds` | long[] | | deprecated 的重复数字范围参数 |
 
-**Response:**
+**响应：**
 
 ```json
 {
@@ -1016,9 +1016,9 @@ cleanup 删除后，原 key 才允许重新使用。
 
 ### `POST /api/v1/rag/search`
 
-Submit more complex retrieval configuration via request body.
+通过请求体提交更复杂的检索配置。
 
-**Request body:**
+**请求体：**
 
 ```json
 {
@@ -1529,7 +1529,7 @@ run 进入 `COMPLETED`、`ABORTED` 或 `EXPIRED` 后从无 cursor 起点重新�
 
 ---
 
-## Documents — Document Management
+## Documents — 文档管理
 
 ### `POST /api/v1/rag/documents`
 
@@ -1547,13 +1547,13 @@ run 进入 `COMPLETED`、`ABORTED` 或 `EXPIRED` 后从无 cursor 起点重新�
 }
 ```
 
-| Field | Type | Required | Description |
+| 字段 | 类型 | 必填 | 说明 |
 |-------|------|----------|-------------|
-| `title` | string | ✅ | Document title |
-| `content` | string | ✅ | Document content |
-| `source` | string | | Source identifier |
-| `documentType` | string | | Document type |
-| `metadata` | object | | Extended metadata |
+| `title` | string | ✅ | 文档标题 |
+| `content` | string | ✅ | 文档正文 |
+| `source` | string | | 来源标识 |
+| `documentType` | string | | 文档类型 |
+| `metadata` | object | | 扩展元数据 |
 | `collectionKey` | string | | 推荐的稳定 Collection key |
 | `collectionId` | long | | deprecated 数字兼容字段 |
 
@@ -1564,20 +1564,20 @@ Collection 身份的位置增加 `collectionKey`。
 
 ### `GET /api/v1/rag/documents`
 
-Paginated document query.
+分页文档查询。
 
-| Parameter | Type | Default | Description |
+| 参数 | 类型 | 默认值 | 说明 |
 |-----------|------|---------|-------------|
-| `offset` | int | 0 | Number of documents to skip |
-| `limit` | int | 20 | Maximum number of documents to return |
-| `title` | string | | Optional title filter |
-| `documentType` | string | | Optional document-type filter |
-| `processingStatus` | string | | Optional processing-status filter |
-| `enabled` | boolean | | Optional enabled-state filter |
-| `collectionId` | long | | Deprecated Collection ID filter |
-| `collectionKey` | string | | Preferred stable Collection key filter |
-| `createdAfter` | timestamp | | Lower bound for `createdAt` |
-| `createdBefore` | timestamp | | Upper bound for `createdAt` |
+| `offset` | int | 0 | 跳过的文档数 |
+| `limit` | int | 20 | 最多返回的文档数 |
+| `title` | string | | 可选，按标题过滤 |
+| `documentType` | string | | 可选，按文档类型过滤 |
+| `processingStatus` | string | | 可选，按处理状态过滤 |
+| `enabled` | boolean | | 可选，按启用状态过滤 |
+| `collectionId` | long | | 已废弃的 Collection 数字 ID 过滤 |
+| `collectionKey` | string | | 推荐的稳定 Collection key 过滤 |
+| `createdAfter` | timestamp | | `createdAt` 下界 |
+| `createdBefore` | timestamp | | `createdAt` 上界 |
 
 ---
 
@@ -1632,13 +1632,13 @@ tombstone 端点操作，不能使用本地 PATCH/disable/restore/permanent-dele
 
 ### `GET /api/v1/rag/documents/stats`
 
-Get document statistics (total count, embedded count, etc.).
+获取文档统计（总数、已向量化数等）。
 
 ---
 
 ### `POST /api/v1/rag/documents/{id}/embed`
 
-Generate embedding vectors for a specified document.
+为指定文档生成 embedding 向量。
 
 ---
 
@@ -1739,7 +1739,7 @@ key。item 级身份覆盖默认值，但仍执行 ID/key 一致性和 ACL 校�
 
 ### `DELETE /api/v1/rag/documents/batch`
 
-Batch delete documents.
+批量删除文档。
 
 ```json
 {
@@ -1751,7 +1751,7 @@ Batch delete documents.
 
 ### `POST /api/v1/rag/documents/batch/embed`
 
-Batch embed documents (documents must already exist).
+批量向量化文档（文档必须已存在）。
 
 ```json
 {
@@ -1761,22 +1761,56 @@ Batch embed documents (documents must already exist).
 
 ---
 
+### `POST /api/v1/rag/documents/batch/embed/stream`
+
+以 SSE 流式批量向量化文档，并实时推送进度事件。
+
+**SSE 事件：**
+- `progress` — `BatchEmbedProgressEvent`，含当前文档下标、文档总数、阶段（PREPARING/CHUNKING/EMBEDDING/STORING/COMPLETED/FAILED）、成功/命中缓存/失败计数
+- `done` — 结束确认，含总数与状态
+- `error` — 错误详情（校验失败时）
+
+**请求体：**
+```json
+{
+  "ids": [1, 2, 3]
+}
+```
+
+**SSE progress 事件示例：**
+```json
+{
+  "currentDocIndex": 2,
+  "totalDocs": 10,
+  "currentDocId": 42,
+  "phase": "EMBEDDING",
+  "current": 5,
+  "total": 10,
+  "message": "Document 3/10: Generating embedding for chunk 5/10",
+  "successCount": 1,
+  "failedCount": 0,
+  "cachedCount": 1
+}
+```
+
+---
+
 ### `POST /api/v1/rag/documents/upload`
 
-Upload text files and embed in one step. Suitable for direct file submission from frontend.
+一步完成文本文件上传与向量化。适合前端直接提交文件。
 
 **Content-Type:** `multipart/form-data`
 
-| Parameter | Type | Required | Description |
+| 参数 | 类型 | 必填 | 说明 |
 |-----------|------|----------|-------------|
-| `files` | MultipartFile[] | ✅ | File list (max 100) |
-| `collectionKey` | string | No | 推荐的目标 Collection key |
-| `collectionId` | long | No | deprecated 数字 Collection ID |
-| `force` | boolean | No | `true` = force re-embed |
+| `files` | MultipartFile[] | ✅ | 文件列表（最多 100 个） |
+| `collectionKey` | string | 否 | 推荐的目标 Collection key |
+| `collectionId` | long | 否 | deprecated 数字 Collection ID |
+| `force` | boolean | 否 | `true` = 强制重新向量化 |
 
-**Supported file types:** txt / md / json / xml / html / csv / log
+**支持的文件类型：** txt / md / json / xml / html / csv / log
 
-**Response:**
+**响应：**
 
 ```json
 {
@@ -1844,14 +1878,14 @@ Upload text files and embed in one step. Suitable for direct file submission fro
 
 ### `GET /api/v1/rag/documents/{id}/versions`
 
-Get document version history (recorded automatically when content_hash changes, newest first).
+获取文档版本历史（`content_hash` 变化时自动记录，最新在前）。
 
-| Parameter | Type | Default | Description |
+| 参数 | 类型 | 默认值 | 说明 |
 |-----------|------|---------|-------------|
-| `page` | int | 0 | Page number |
-| `size` | int | 20 | Page size |
+| `page` | int | 0 | 页码 |
+| `size` | int | 20 | 每页条数 |
 
-**Response:**
+**响应：**
 
 ```json
 {
@@ -1876,9 +1910,9 @@ Get document version history (recorded automatically when content_hash changes, 
 
 ### `GET /api/v1/rag/documents/{id}/versions/{versionNumber}`
 
-Get a specific version of a document (includes content snapshot).
+获取文档的指定版本（含内容快照）。
 
-**Response:**
+**响应：**
 
 ```json
 {
@@ -1894,7 +1928,7 @@ Get a specific version of a document (includes content snapshot).
 
 ---
 
-## Collections — Knowledge Base Management
+## Collections — 知识库管理
 
 ### `POST /api/v1/rag/collections`
 
@@ -1942,15 +1976,15 @@ hash 和规范化请求 fingerprint，不保存原始 key 或请求体。
 
 ### `GET /api/v1/rag/collections`
 
-Paginated collection query.
+分页 Collection 查询。
 
-| Parameter | Type | Default | Description |
+| 参数 | 类型 | 默认值 | 说明 |
 |-----------|------|---------|-------------|
-| `offset` | int | 0 | Number of collections to skip |
-| `limit` | int | 20 | Maximum number of collections to return |
-| `name` | string | | Optional collection-name filter |
+| `offset` | int | 0 | 跳过的 Collection 数 |
+| `limit` | int | 20 | 最多返回的 Collection 数 |
+| `name` | string | | 可选，按 Collection 名称过滤 |
 | `query` | string | | 对名称或原样存储 key 执行不区分大小写的子串匹配 |
-| `enabled` | boolean | | Optional enabled-state filter |
+| `enabled` | boolean | | 可选，按启用状态过滤 |
 
 受限 API Key 只能看到允许范围内的 Collection。
 
@@ -2098,7 +2132,7 @@ POST /api/v1/rag/collections/by-key/documents?collectionKey=customer-42%3Amanual
 GET /api/v1/rag/collections/by-key/export?collectionKey=customer-42%3Amanual%3Av3
 ```
 
-**Response:**
+**响应：**
 
 ```json
 {
@@ -2133,7 +2167,7 @@ GET /api/v1/rag/collections/by-key/export?collectionKey=customer-42%3Amanual%3Av
 
 **请求体：** 使用 `/export` 返回的 JSON，并设置目标 `collectionKey`。
 
-**Response:**
+**响应：**
 
 ```json
 {
@@ -2162,47 +2196,47 @@ GET /api/v1/rag/collections/by-key/export?collectionKey=customer-42%3Amanual%3Av
 
 ---
 
-## Evaluation — Retrieval Evaluation
+## Evaluation — 检索评估
 
 ### `POST /api/v1/rag/evaluation/evaluate`
 
-Execute a single retrieval evaluation.
+执行单条检索评估。
 
 ---
 
 ### `POST /api/v1/rag/evaluation/batch`
 
-Execute batch evaluations.
+执行批量评估。
 
 ---
 
 ### `GET /api/v1/rag/evaluation/metrics/calculate`
 
-Calculate retrieval metrics (Precision, Recall, MRR, etc.).
+计算检索指标（Precision、Recall、MRR 等）。
 
 ---
 
 ### `GET /api/v1/rag/evaluation/report`
 
-Get evaluation report.
+获取评估报告。
 
 ---
 
 ### `GET /api/v1/rag/evaluation/history`
 
-Get evaluation history.
+获取评估历史。
 
 ---
 
 ### `GET /api/v1/rag/evaluation/metrics/aggregated`
 
-Get aggregated metrics.
+获取聚合指标。
 
 ---
 
 ### `POST /api/v1/rag/evaluation/feedback`
 
-Submit user feedback.
+提交用户反馈。
 
 ```json
 {
@@ -2217,19 +2251,19 @@ Submit user feedback.
 
 ### `GET /api/v1/rag/evaluation/feedback/stats`
 
-Get feedback statistics.
+获取反馈统计。
 
 ---
 
 ### `GET /api/v1/rag/evaluation/feedback/history`
 
-Get feedback history.
+获取反馈历史。
 
 ---
 
 ### `GET /api/v1/rag/evaluation/feedback/type/{feedbackType}`
 
-Query feedback by type.
+按类型查询反馈。
 
 ---
 
@@ -2257,51 +2291,51 @@ citation 校验只检查 `[S1]` token。compare 在 embedding profile、代码�
 
 ---
 
-## A/B Tests — Experiment Management
+## A/B Tests — 实验管理
 
 ### `POST /api/v1/rag/ab/experiments`
 
-Create an A/B experiment.
+创建 A/B 实验。
 
 ### `PUT /api/v1/rag/ab/experiments/{id}`
 
-Update an experiment.
+更新实验。
 
 ### `POST /api/v1/rag/ab/experiments/{id}/start`
 
-Start an experiment.
+启动实验。
 
 ### `POST /api/v1/rag/ab/experiments/{id}/pause`
 
-Pause an experiment.
+暂停实验。
 
 ### `POST /api/v1/rag/ab/experiments/{id}/stop`
 
-Stop an experiment.
+停止实验。
 
 ### `GET /api/v1/rag/ab/experiments/running`
 
-Get running experiments.
+获取运行中的实验。
 
 ### `GET /api/v1/rag/ab/experiments/{id}/variant`
 
-Get experiment variant assignment.
+获取实验分组分配。
 
 ### `POST /api/v1/rag/ab/experiments/{id}/results`
 
-Record experiment results.
+记录实验结果。
 
 ### `GET /api/v1/rag/ab/experiments/{id}/analysis`
 
-Get experiment analysis report.
+获取实验分析报告。
 
 ### `GET /api/v1/rag/ab/experiments/{id}/results`
 
-Get experiment results list.
+获取实验结果列表。
 
 ---
 
-## Alerts — Monitoring & Alerting
+## Alerts — 监控与告警
 
 本节全部路由属于 operator 管理面。允许 environment root、数据库 `ADMIN`、legacy static，
 以及关闭认证时的 direct loopback；数据库 `NORMAL` principal 会在读取告警数据前收到通用
@@ -2395,37 +2429,112 @@ secret、错误正文或堆栈。
 
 ### `GET /api/v1/rag/alerts/stats`
 
-Get alert statistics.
+获取告警统计。
 
 ### `POST /api/v1/rag/alerts/{alertId}/resolve`
 
-Resolve an alert.
+解决告警。
 
 ### `POST /api/v1/rag/alerts/silence`
 
-Silence an alert.
+静默告警。
 
 ### `POST /api/v1/rag/alerts/fire`
 
-Manually trigger an alert (for testing).
+手动触发告警（用于测试）。
 
 ### `GET /api/v1/rag/alerts/slos`
 
-Get all SLO definitions.
+获取全部 SLO 定义。
 
 ### `GET /api/v1/rag/alerts/slos/{sloName}`
 
-Get details of a specific SLO.
+获取指定 SLO 的详情。
+
+### `POST /api/v1/rag/alerts/slos`
+
+创建新的 SLO 配置。
+
+**请求体：**
+```json
+{
+  "sloName": "latency_p99",
+  "sloType": "LATENCY",
+  "targetValue": 200.0,
+  "unit": "ms",
+  "description": "P99 latency should be under 200ms",
+  "enabled": true
+}
+```
+
+**响应：** `201 Created` with created SLO config.
+
+### `PUT /api/v1/rag/alerts/slos/configs/{sloName}`
+
+更新已有 SLO 配置。
+
+**请求体：** Same as POST.
+
+**响应：** `200 OK` with updated SLO config, or `404 Not Found`.
+
+### `DELETE /api/v1/rag/alerts/slos/configs/{sloName}`
+
+删除 SLO 配置。
+
+**响应：** `204 No Content`, or `404 Not Found`.
+
+### `GET /api/v1/rag/alerts/slos/configs`
+
+列出全部 SLO 配置。
+
+**响应：** Array of SLO config objects.
+
+### `GET /api/v1/rag/alerts/silence-schedules`
+
+列出全部静默计划。
+
+### `POST /api/v1/rag/alerts/silence-schedules`
+
+创建新的静默计划。
+
+**请求体：**
+```json
+{
+  "name": "weekend-maintenance",
+  "alertKey": "high-latency",
+  "silenceType": "RECURRING",
+  "startTime": "2026-04-10T02:00:00+08:00",
+  "endTime": "2026-04-10T04:00:00+08:00",
+  "description": "Scheduled maintenance window",
+  "enabled": true
+}
+```
+
+**响应：** `201 Created` with created schedule.
+
+### `GET /api/v1/rag/alerts/silence-schedules/{name}`
+
+获取指定静默计划。
+
+### `PUT /api/v1/rag/alerts/silence-schedules/{name}`
+
+更新静默计划。
+
+### `DELETE /api/v1/rag/alerts/silence-schedules/{name}`
+
+删除静默计划。
+
+**响应：** `204 No Content`.
 
 ---
 
-## Health — Health Checks
+## Health — 健康检查
 
 ### `GET /api/v1/rag/health`
 
-Service health check.
+服务健康检查。
 
-**Response:**
+**响应：**
 
 ```json
 {
@@ -2445,13 +2554,13 @@ Service health check.
 
 ---
 
-## Cache — Cache Monitoring
+## Cache — 缓存监控
 
 ### `GET /api/v1/rag/cache/stats`
 
-Get embedding cache statistics.
+获取 embedding 缓存统计。
 
-**Response:**
+**响应：**
 
 ```json
 {
@@ -2464,15 +2573,35 @@ Get embedding cache statistics.
 }
 ```
 
+### `DELETE /api/v1/rag/cache/invalidate`
+
+管理端点：清空 embedding Caffeine 缓存，强制后续 embedding 请求重新调用远端 API。
+
+**响应：**
+
+```json
+{
+  "cleared": 42,
+  "message": "Cache invalidated"
+}
+```
+
+**字段说明：**
+
+| 字段 | 类型 | 说明 |
+|-------|------|-------------|
+| `cleared` | int | 已清理的缓存条目数 |
+| `message` | string | 人类可读的状态说明 |
+
 ---
 
-## Metrics — RAG Metrics Monitoring
+## Metrics — RAG 指标监控
 
 ### `GET /api/v1/rag/metrics`
 
-Get RAG service key metrics summary (request count, success rate, retrieval result count, token consumption).
+获取 RAG 服务关键指标摘要（请求数、成功率、检索结果数、token 消耗量）。
 
-**Response:**
+**响应：**
 
 ```json
 {
@@ -2485,16 +2614,16 @@ Get RAG service key metrics summary (request count, success rate, retrieval resu
 }
 ```
 
-**Field descriptions:**
+**字段说明：**
 
-| Field | Type | Description |
+| 字段 | 类型 | 说明 |
 |-------|------|-------------|
-| `totalRequests` | long | Total requests since service startup |
-| `successfulRequests` | long | Successful requests (LLM returned normally) |
-| `failedRequests` | long | Failed requests (LLM call exception) |
-| `successRate` | double | Success rate (successful/total) |
-| `totalRetrievalResults` | long | Cumulative retrieval result count |
-| `totalLlmTokens` | long | Cumulative LLM token consumption |
+| `totalRequests` | long | 服务启动以来的请求总数 |
+| `successfulRequests` | long | 成功请求数（LLM 正常返回） |
+| `failedRequests` | long | 失败请求数（LLM 调用异常） |
+| `successRate` | double | 成功率（成功/总数） |
+| `totalRetrievalResults` | long | 累计检索结果数 |
+| `totalLlmTokens` | long | 累计 LLM token 消耗量 |
 
 ---
 
@@ -2590,6 +2719,11 @@ mode 值为 `PLAIN`、`KNOWLEDGE`、`AGENT`。
 工具 payload、凭据或异常正文。
 
 ---
+### `GET /api/v1/rag/metrics/slow-queries`
+
+获取数据库连接池（HikariCP）的慢查询统计。返回聚合统计与最近的慢查询记录。
+
+### `GET /api/v1/rag/metrics/slo`
 
 ## Models — 运行时选模
 
@@ -2749,6 +2883,9 @@ mode 值为 `PLAIN`、`KNOWLEDGE`、`AGENT`。
 
 获取每个模型的调用次数和错误率。
 
+
+用滑动时间窗口获取各端点的 API SLO 达标指标。跟踪 p50/p95/p99 延迟，以及相对各端点阈值的达标百分比。
+
 **响应：**
 
 ```json
@@ -2772,3 +2909,59 @@ mode 值为 `PLAIN`、`KNOWLEDGE`、`AGENT`。
   ]
 }
 ```
+
+---
+
+## Client Errors — WebUI 错误上报
+
+### `POST /api/v1/rag/client-errors`
+
+接收并记录 WebUI 上报的客户端错误，用于服务端聚合与分析。供 WebUI ErrorBoundary 组件调用。
+
+**请求体：**
+
+```json
+{
+  "errorType": "Error",
+  "errorMessage": "Cannot read properties of undefined",
+  "stackTrace": "TypeError: Cannot read properties of undefined\n    at Chat.render (Chat.tsx:42:10)",
+  "componentStack": "at Chat (Chat.tsx:38)\nat App (App.tsx:12)",
+  "pageUrl": "/webui/chat",
+  "sessionId": "sess-abc123",
+  "userId": null
+}
+```
+
+**字段说明：**
+
+| 字段 | 类型 | 必填 | 说明 |
+|-------|------|----------|-------------|
+| `errorType` | string | 是 | 错误类型（如 `Error`、`TypeError`、`ReferenceError`） |
+| `errorMessage` | string | 是 | 错误消息文本 |
+| `stackTrace` | string | 否 | JavaScript 调用栈（最多 8192 字符） |
+| `componentStack` | string | 否 | React 组件栈（最多 4096 字符） |
+| `pageUrl` | string | 否 | 发生错误的页面 URL（最多 512 字符） |
+| `sessionId` | string | 否 | WebUI 会话标识（最多 64 字符） |
+| `userId` | string | 否 | 已认证用户 ID（最多 64 字符） |
+
+**响应：** `202 Accepted` (empty body)
+
+---
+
+### `GET /api/v1/rag/client-errors/count`
+
+获取已记录的客户端错误总数。
+
+**响应：**
+
+```json
+{
+  "count": 42
+}
+```
+
+**响应字段：**
+
+| 字段 | 类型 | 说明 |
+|-------|------|-------------|
+| `count` | integer | 已记录的客户端错误总数 |

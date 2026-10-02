@@ -46,20 +46,24 @@ const BINARY_EXTENSIONS = new Set([
 //
 // DRIFT_CEILING below pins the count. Removing an entry is the only way to lower
 // it, which is what keeps this list a to-do list instead of a bin.
-export const KNOWN_DRIFT = [
-  {
-    pair: ['CHANGELOG.md', 'CHANGELOG-zh-CN.md'],
-    reason: 'The Chinese changelog stops at 1.0.0-SNAPSHOT 2026-04-04 (39 headings) ' +
-      'while the English one continues through 1.1.0-SNAPSHOT (67 headings). ' +
-      'Backfilling release notes is a translation task, not a structural fix.'
-  },
-  {
-    pair: ['docs/rest-api.md', 'docs/rest-api-zh-CN.md'],
-    reason: 'The Chinese reference stops before the Cache, Metrics, Models, and ' +
-      'Client-Error sections (135 headings against 151), so its heading sequence ' +
-      'diverges from the point of the first omission onwards.'
-  },
-];
+// 2 -> 0 in Batch 783: both registered pairs were repaired, so the list is
+// empty and the ceiling is exact rather than a bound.
+//
+// docs/rest-api-zh-CN.md: the registered reason said it "stops before the
+// Cache, Metrics, Models and Client-Error sections (135 headings against 151)".
+// Measurement contradicted the wording. The Chinese document did have those
+// sections; what it actually had was 27 headings at the **wrong level** — the
+// API-key endpoints sat at `####` where English used `###`, and the whole
+// key-management block was a `###` subsection of "General" instead of a
+// top-level `##` section. One level shift desynchronises the entire sequence
+// after it, so the gate reported 27 "missing" headings that were all present.
+// The real gaps were 16: 9 Alerts SLO/silence-schedule endpoints, one cache
+// endpoint, two metrics endpoints, the whole Client Errors section, and one
+// batch-embed/stream endpoint.
+//
+// CHANGELOG-zh-CN.md: seven release sections (2026-04-06 through 2026-04-11)
+// were genuinely absent, 28 headings in total. Backfilled and translated.
+export const KNOWN_DRIFT = [];
 
 // May only decrease. Lowering it is part of fixing a listed pair.
 //
@@ -73,7 +77,9 @@ export const KNOWN_DRIFT = [
 // commands" and five under "Troubleshooting" that the English original had
 // flattened into bare paragraphs — the same content, different shape. The
 // English side was restructured to match; no content was invented or dropped.
-export const DRIFT_CEILING = 2;
+//
+// 2 -> 0 in Batch 783: see the note above KNOWN_DRIFT.
+export const DRIFT_CEILING = 0;
 
 export function isBinaryPath(file) {
   return BINARY_EXTENSIONS.has(path.extname(file).toLowerCase());
