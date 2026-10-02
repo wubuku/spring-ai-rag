@@ -317,6 +317,60 @@
   约 53 行 × 2。合并需要同时验证两条链路的 OpenAPI 注解与日志文案差异，
   风险高于本批收益，暂列后续。
 
+### Batch 777（已交付）
+
+- 分支：`feature/backend-branch-coverage-chat-20261003`（回归后端，连续 2 批 WebUI 后）
+- 内容：`ChatExecutionService` 残缺模型响应的分支加固（JaCoCo 行级驱动）。
+- **勘察先纠正了两个测量口径**（都是本批的意外收获）：
+  1. **测试总数必须读 `surefire-reports/TEST-*.xml` 的 `tests=` 属性**。
+     同目录的 `.txt` 里有 **33 个类报 `Tests run: 0`** 而 XML 里有真实用例，
+     两者相差 650。按 `.txt` 求和会得到 6770，**少报 650**。
+     账本此前记的 7428 与本批开工前实测的 7420 之间的偏差即源于此。
+  2. JaCoCo XML 里 `<sourcefile>` 是 `<class>` 的**兄弟节点**（挂在 `<package>` 下），
+     在 class 内部找会得到"0 条未覆盖分支"这种看似合理的错误结论。
+- **目标定位**：`ChatExecutionService` 61 条未覆盖分支（全仓第一，是第二名的两倍多），
+  集中在三处形如 `response == null || response.chatResponse() == null || ... getOutput() == null`
+  的空响应守卫上，每条 4 个条件却只走通 1 个。
+- **关键方法：先诊断，后断言**。我没有直接照着"看起来该怎样"写断言，而是先写了一个
+  **只打印不断言的临时用例**观察真实行为，再据此落断言。诊断推翻了三个假设：
+  | 原假设 | 实测 | 结论 |
+  |---|---|---|
+  | 残缺分片会让整轮流失败 | 聚合器归一化后，流以"成功但无内容"收尾 | 假设错误，守卫压根不被触达 |
+  | 客户端空流会回退到下一个候选 | `completeStreamAttempt` 总会合成 `Completed`，候选"空"不了 | 该分支公开路径不可达 |
+  | `completeStreamAttempt` 的守卫可覆盖 | 同上，聚合器总是喂非 null 响应 | 不可达 |
+- **据此确认 3 组分支在公开路径上不可达，刻意不测**：
+  `completeStreamAttempt` 的空响应守卫、"候选无事件则回退"、
+  以及 `responseEvents` 的 `response == null`（Reactor 禁止发射 null 元素）。
+  把它们跑出来只能给生产代码加测试钩子——钩子会改变被测代码结构，
+  让"覆盖了"这件事失去意义。宁可如实记下"这些分支不存在"。
+- **新查出的真实生产缺陷（本批不修，已登记）**：
+  **`output` 为 null 的分片会让一个裸 `NullPointerException` 逃出聊天接口**——
+  `responseEvents` 的守卫挡住了事件发射路径，但 Spring AI 的
+  `ChatClientMessageAggregator` 会在守卫之外读 `getOutput().getText()`。
+  对应用例 `nullOutputChunkEscapesAsNpe` **断言当前行为并标记缺陷**，
+  修好后应改为断言不抛错。留一个显式的失败点，好过让缺陷消失在覆盖率里。
+  修它需要先决定"该报错还是该静默"，不是能顺手改掉的实现细节。
+- **又一次抓出自己写的假绿**：流式用例最初用 `onErrorResume` 把异常换成空列表，
+  于是"没有 ContentDelta"这条断言在**流直接 NPE 崩掉时也会通过**。
+  变异测试实测：删掉 4 个守卫条件中的 3 个，4 个用例只红 2 个。
+  加了"不得抛错"的显式断言后，**同一变异让 3 个用例变红**。
+  这与 Batch 639、774 是同一类错误的第三次出现。
+- **变异测试**：
+  | 变异 | 结果 |
+  |---|---|
+  | `responseEvents` 守卫 4 个条件删到只剩 1 个 | **3 个失败**（加严前只有 2 个） |
+- 指标：core **7429 用例，0 失败 0 错误 9 跳过**（XML 权威口径，较开工前 7420 **+9**）；
+  `ChatExecutionService` 分支缺口 **61 → 56**；全局分支 **88.34% → 88.38%**、
+  行 **98.41% → 98.42%**。`RagChatController`（24）与 `ApiKeyManagementService`（21）
+  本批未动，仍是下一批的目标。
+- 遗留技术债（如实登记，未处理）：
+  - 本批发现的 NPE 缺陷（见上）。
+  - "所有分片都残缺"与"内容为空"目前无法区分，用户会看到空回答而非错误。
+  - `RagChatController` 24 条、`ApiKeyManagementService` 21 条未覆盖分支。
+  - 文档 2 笔漂移：`rest-api-zh-CN` 缺 27 个标题（另有 11 个用了不同层级）、
+    `CHANGELOG-zh-CN` 缺 28 个标题。已用 LCS 对齐算出精确清单（见下批）。
+  - `PageShell` 与 Slice 5 退出条件脱节；`ask`/`chat` 53 行 × 2 重复。
+
 ### Batch 776（已交付）
 
 - 分支：`feature/webui-a11y-static-gate-20261003`（回归 WebUI）
