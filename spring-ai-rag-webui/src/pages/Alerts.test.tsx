@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { ToastProvider } from '../components/Toast';
 import { Alerts } from './Alerts';
 import { alertsApi } from '../api/alerts';
 
@@ -32,9 +33,13 @@ function renderAlerts(path = '/alerts') {
   });
   return render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={[path]}>
-        <Alerts />
-      </MemoryRouter>
+      {/* Batch 798: SLO and silence writes now report a rejection, so the page
+          needs the toast context these tests never had to provide. */}
+      <ToastProvider>
+        <MemoryRouter initialEntries={[path]}>
+          <Alerts />
+        </MemoryRouter>
+      </ToastProvider>
     </QueryClientProvider>,
   );
 }
@@ -260,10 +265,12 @@ describe('Alerts deliveries filters and loading state', () => {
     };
     return render(
       <QueryClientProvider client={client}>
-        <MemoryRouter initialEntries={[path]}>
-          <Alerts />
-          <LocationProbe />
-        </MemoryRouter>
+        <ToastProvider>
+          <MemoryRouter initialEntries={[path]}>
+            <Alerts />
+            <LocationProbe />
+          </MemoryRouter>
+        </ToastProvider>
       </QueryClientProvider>,
     );
   }

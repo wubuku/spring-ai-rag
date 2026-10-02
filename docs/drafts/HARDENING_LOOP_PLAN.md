@@ -398,6 +398,77 @@
     将来真有正当例外时，要么照实修，要么在自测里显式登记。
   - i18n 仍有 **175 个键**只有动态模板或无人引用，无门禁能区分动态与废弃。
 
+### Batch 798（已交付）
+
+- 分支：`feature/swallowed-write-failures-20261002`
+- 内容：**被吞掉的失败**——写门禁（Batch 791 加的）整整七个批次都在问错问题，
+  以及三个不是 `useMutation` 的同源缺陷。
+- **勘察**：扫 `src/` 全部"吞掉错误"的形态，得 **15 处候选**：
+  - 空 `onError`（`() => {}`）**4 处，全在 `Alerts.tsx`**
+  - 空 `catch` 块 **9 处**
+  - `.catch(() => undefined)` **1 处**
+  - `catch` 只写 console **1 处**
+  逐个定性后，**7 处是真缺陷**，8 处是正当的"尽力而为"。
+- **真缺陷 1–4：`Alerts.tsx` 的 4 个空 `onError`（SLO 配置与静默计划的增删）**。
+  比 Batch 791 那六处更糟：两个创建 mutation 的 `onSuccess` 会调 `onHideForm()`，
+  于是**被拒绝的创建会关掉表单并清空字段**——那看起来就像保存成功了。
+  用户唯一能观察到的现象只是"新 SLO 不在列表里"，于是去怀疑自己填错了。
+  `deleteMutation` 更直接：点了删除，什么都没发生。
+  **其中两条的文案（`alerts.createError`、`alerts.deleteError`）一直躺在
+  en.json / zh-CN.json 里，从未被任何一处引用过**——正是为这个 `onError` 写的，
+  只是没接上。本批把它们接了回去，无引用键 175 → 174。
+- **真缺陷 5–7：不是 `useMutation`，所以任何 mutation 门禁都够不着**
+  - `Chat.tsx` 的 `submitFeedback`：点赞/点踩失败完全静默，界面和点之前一模一样，
+    而这条反馈已经没了；
+  - `Chat.tsx` 的 `handleExport`：点了导出没有文件也没有任何解释——
+    下载没有可见产物可以对照，是最容易被当成"功能坏了"的一种；
+  - `Documents.tsx` 的 `handlePreview`：只写 `console.error`。列表接口不带正文，
+    预览先开弹窗再异步补全，补全失败时用户看到的是一个**永远补不上、
+    也不解释为什么**的弹窗，他会以为文档本来就是空的。
+- **8 处正当的 `catch`（未改，但已登记）**：`credentialStore` 清理遗留存储、
+  `ErrorBoundary` 的错误上报（"错误上报绝不能弄坏界面"）、`ThemeProvider` 持久化主题、
+  `useSearchHistory` 写 localStorage、`useSSE` 关闭 reader、`Settings` 两处
+  `JSON.parse` 带回退默认值（回退值是**可见的**，属于"未知→默认"而非静默）。
+- **门禁改造（`check-mutation-errors` 从 1 条规则变 3 条）**：
+  - `no-op-error-handler` —— `onError` 存在但函数体是空的。
+    旧规则只检查 `onError` 这个**键在不在**，而 `() => {}` 正好满足。
+  - `swallowed-rejection` —— `catch` 块丢掉失败却不说明为什么正当。
+    判定刻意跑在**原始源码**上：`stripComments` 会把规则正要的那句话一起抹掉。
+  - **写 console 不算这条规则**：console 轨迹是有可见痕迹的决定，
+    哪些该给用户看是产品判断，门禁不该替产品做。
+- **我自己写出的一个真 bug（自测当场抓住）**：`NOOP_HANDLER` 最初带 `/g` 标志，
+  而它只被 `.test()` 使用——`/g` 正则的 `lastIndex` **跨调用保留**，
+  于是同一个模块会因为"之前扫过哪个文件"给出不同答案。结果依赖测试顺序。
+  改成非全局后立刻稳定。**这是"状态藏在模块级正则里"的典型**，
+  和 Batch 796 的 `isPending` 漏检同源：规则问的和它要答的不是一回事。
+- **既有测试的连带代价（如实登记）**：`Alerts.tsx` 与 `Chat.tsx` 新接入
+  `useToast` 后，原有测试全部因缺 `ToastProvider` 报错——
+  `Alerts.test.tsx` **8 例**、`Chat.test.tsx` **45 例**受影响。
+  已逐个 render 辅助函数包上 provider（`Alerts.test.tsx` 2 处、
+  `Chat.test.tsx` 3 处，后者有 2 个 `renderChatForCallbacks` 复用同一个）。
+  这是修复的应有代价，不是回归。
+- **变异测试（逐条实测）**：
+  1. 把 `Alerts` 的 `showToast onError` 退回 `() => {}` → 门禁红，
+     指到 `Alerts.tsx:397 [no-op-error-handler]`；行为测试 **4 例**同时红；
+  2. 删掉 `useSearchHistory` 里 `catch` 的理由注释 → 门禁红，
+     指到 `useSearchHistory.ts:26 [swallowed-rejection]`；
+  3. 把 `Chat` 的 2 处与 `Documents` 的 1 处退回静默 →
+     行为测试 **3 例**红（这两个页面没有 mutation 门禁覆盖，靠行为测试兜住）。
+- 指标：前端 **809 → 819 用例**（77 文件，+10 = 5 Alerts 写失败 + 5 吞失败）；
+  design-system focused **175 → 184 用例**（+9 门禁自测）；
+  i18n 静态引用 **508 → 514** 键，两语言键集一致；
+  无静态引用的键 **175 → 174**（两条死键被接回）；
+  `lint` 7 个门禁全绿、`typecheck` 干净、`build` 通过；仓库门禁 **15/15**；
+  core **987 类 / 7693 用例**未变（本批纯前端）。
+- 遗留（如实登记，未处理）：
+  - `swallowed-rejection` 是现有门禁里**最弱的一条**：谁都可以写一句 `// ignore`，
+    而这正是它的用意——它只在"决定要不要吞"的那一刻要求一句理由。
+  - `Alerts.tsx` 的 SLO 删除按钮文案用的是 `alerts.deleteSilence`
+    （"删除静默计划"），在 SLO 页签上读起来是错的。未改：属于文案归属问题，
+    改键名要同步两种语言与历史兼容，收益低于风险。
+  - `Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前，属于 Batch 797 的遗留形态，
+    视觉上略突兀；已记录，未做布局调整。
+
 ### Batch 796（已交付）
 
 - 分支：`feature/write-button-pending-guard-20261002`

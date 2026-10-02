@@ -24,6 +24,7 @@ import { useImeComposition } from '../utils/ime';
 import styles from './Chat.module.css';
 import { ChevronDown, PanelLeft, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { IconButton, PageHeader, QueryErrorBanner } from '../components/ui';
+import { useToast } from '../components/Toast';
 
 interface Message {
   id: string;
@@ -95,6 +96,7 @@ export function Chat() {
   const { addSession } = useChatSessions();
   const addSessionRef = useRef(addSession);
   addSessionRef.current = addSession;
+  const { showToast } = useToast();
 
   const { data: modelsData, isError: modelsError, refetch: refetchModels } = useQuery({
     queryKey: ['chat-models'],
@@ -359,7 +361,10 @@ export function Chat() {
         feedbackType: type,
       });
     } catch {
-      // ignore feedback errors in UI
+      // 点赞是用户明确表达的一个判断。请求失败时静默，界面和点之前一模一样，
+      // 用户会以为"系统收到了但没什么反应"或者干脆以为自己点歪了，
+      // 而这条反馈已经没了。
+      showToast(t('chat.feedbackError'), 'error');
     }
   };
 
@@ -392,7 +397,9 @@ export function Chat() {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch {
-      // ignore download errors
+      // 点了"导出"却什么都没发生、也没有任何解释，是最容易被当成"这个功能坏了"
+      // 的一种失败——文件下载没有可见的产物可以对照。
+      showToast(t('chat.exportError'), 'error');
     }
   };
 

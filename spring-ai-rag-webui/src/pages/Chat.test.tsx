@@ -3,6 +3,7 @@ import { render, screen, fireEvent, act, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
+import { ToastProvider } from '../components/Toast';
 import { Chat } from './Chat';
 import { useChatSSE } from '../hooks/useSSE';
 import { modelsApi } from '../api/models';
@@ -50,13 +51,17 @@ function renderChat(initialEntry = '/chat') {
   });
   return render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={[initialEntry]}>
-        <LocationProbe />
-        <Routes>
-          <Route path="/chat" element={<Chat />} />
-          <Route path="/chat/:sessionId" element={<Chat />} />
-        </Routes>
-      </MemoryRouter>
+      {/* Batch 798: the page now reports a failed thumbs-up and a failed
+          export, so it needs the toast context these tests never needed. */}
+      <ToastProvider>
+        <MemoryRouter initialEntries={[initialEntry]}>
+          <LocationProbe />
+          <Routes>
+            <Route path="/chat" element={<Chat />} />
+            <Route path="/chat/:sessionId" element={<Chat />} />
+          </Routes>
+        </MemoryRouter>
+      </ToastProvider>
     </QueryClientProvider>
   );
 }
@@ -901,12 +906,14 @@ describe('Chat stop flow, exports, feedback and callback guards', () => {
     });
     const tree = (
       <QueryClientProvider client={client}>
-        <MemoryRouter initialEntries={['/chat']}>
-          <Routes>
-            <Route path="/chat" element={<Chat />} />
-            <Route path="/chat/:sessionId" element={<Chat />} />
-          </Routes>
-        </MemoryRouter>
+        <ToastProvider>
+          <MemoryRouter initialEntries={['/chat']}>
+            <Routes>
+              <Route path="/chat" element={<Chat />} />
+              <Route path="/chat/:sessionId" element={<Chat />} />
+            </Routes>
+          </MemoryRouter>
+        </ToastProvider>
       </QueryClientProvider>
     );
     const view = render(tree);
@@ -929,12 +936,14 @@ describe('Chat stop flow, exports, feedback and callback guards', () => {
     connected = true;
     view.rerender(
       <QueryClientProvider client={client}>
+        <ToastProvider>
         <MemoryRouter initialEntries={['/chat']}>
           <Routes>
             <Route path="/chat" element={<Chat />} />
             <Route path="/chat/:sessionId" element={<Chat />} />
           </Routes>
         </MemoryRouter>
+        </ToastProvider>
       </QueryClientProvider>,
     );
     fireEvent.click(screen.getByRole('button', { name: /chat.stop/i }));

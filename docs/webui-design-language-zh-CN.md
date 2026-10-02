@@ -186,10 +186,13 @@ Batch 776 在写下这条规则之前先量了基线：`Alerts`、`ApiKeys`、`S
 ## 6. 写操作必须报告失败
 
 `npm run check:mutation-errors` 串在 `npm run lint` 里，扫描 `src/` 下每个 `.tsx`，
-拦截一类违规：
+拦截三类违规：
 
 - `silent-mutation` —— 既没有传 `onError`（通常是 `showToast`），
   也没有在同一个文件里渲染它自己的 `.isError` 的 `useMutation`。
+- `no-op-error-handler` —— `onError` 存在但函数体是空的。
+  **吞掉错误的处理器不是处理器。**
+- `swallowed-rejection` —— `catch` 块丢掉了失败，却没说清为什么丢掉是正当的。
 
 Batch 791 把 `src/` 里全部 **37 个** mutation 过了一遍，查出 **6 个失败不可见**：
 `Embeddings` 的 `cancelM`、`retryM`、`applyRepairM`，以及 `Evaluation` 的
@@ -200,6 +203,21 @@ Batch 791 把 `src/` 里全部 **37 个** mutation 过了一遍，查出 **6 个
 
 `apiClient` 的响应拦截器救不了它们：它归一化消息、在 401 时清掉凭据，然后 reject。
 除非组件自己决定把它显示出来，否则屏幕上什么都不会出现。
+
+**Batch 798 发现第一条规则整整七个批次都在问错问题。** 它只检查 `onError`
+这个键在不在，而 `onError: () => {}` 正好满足。`Alerts.tsx` 就带着四个这样的
+处理器——SLO 配置与静默计划的创建和删除各一个——而门禁一直是绿的。
+在两个创建 mutation 上它比静默写更糟：`onSuccess` 会调 `onHideForm()`，
+于是**被拒绝的创建会关掉表单并清空字段**。那看起来就像保存成功了。
+规则现在检查函数体；其中两条的文案（`alerts.createError`、`alerts.deleteError`）
+原来就一直躺在两种语言文件里，正是为这个处理器写的，却从未被任何地方引用。
+
+`swallowed-rejection` 是这里最弱的一条规则——谁都可以写一句 `// ignore`，
+而这正是它的用意。`src/` 里每一个正当的 `catch` 都带着一句说明：
+"存储在受限浏览器环境下可能不可用"、"错误上报绝不能弄坏界面"、
+"主题在这个标签页里仍然生效"。要求这句话，只是在做决定的那一刻多花一行。
+**写 console 不属于这条规则**：console 轨迹是一个有可见痕迹的决定，
+而其中哪些该给用户看、哪些不该，是产品判断。
 
 修复里有两处细节必须做对，两处都有测试钉住：
 
