@@ -273,7 +273,52 @@
   **L1026–L1032 全部从未覆盖列表中消失**；
   core 总体分支 88.28% → **88.32%**、行 98.41% 不变。
 
+### Batch 774（已交付）
+
+- 分支：`feature/rag-chat-keyed-header-coverage-20261003`（后端覆盖第十一批）
+- 内容：键控 chat 的**首次调用**路径。**本批未改任何生产代码。**
+- 勘察发现：`ask`（L178–231）与 `chat`（L247–300）两个非流式 JSON 端点里，
+  各有一段**近乎逐行重复**的键控分支，只差一行日志文案
+  （"RAG ask" vs "RAG chat"）。两段都在
+  `prepared.operation() != null && executionSnapshot() != null` 为真时
+  走快照映射，为假时走 `commandMapper.map(...)`。
+- **真实缺口**：整个 controller 测试目录里，**没有任何一个用例构造过
+  "keyed 但 operation 为 null" 的 `Prepared`**（grep `null, true` 命中 0，
+  5 处 `Prepared` 构造全是 `null, false` 的非键控形状）。
+  也就是说——**每一个新 API 密钥的第一次请求**所走的那条命令映射路径，
+  在 `ask` 与 `chat` 两侧都从未被执行过。该分支若 NPE 或取错 scope，
+  现有测试照样全绿。
+- 交付 `RagChatKeyedFirstCallTest`（**4 用例**）：
+  - `ask` 与 `chat` 各自的首次键控调用，并 `verify(...).map(...)` +
+    `verify(..., never()).mapFromExecutionSnapshot(...)` 双向钉住路由；
+  - 超长消息（150 字符）在 `ask` 与 `stream` 上的越界防护。
+- **变异测试 2 次**：
+  | 变异 | 结果 |
+  |---|---|
+  | 首次调用误走快照映射（去掉 operation 判空） | **2 个 NPE**，恰好两个首次调用用例 |
+  | 日志截断去掉长度守卫 | EXIT=1——既有短消息用例直接抛越界 |
+  第一条证明缺口真实：**"新密钥的第一次调用被误路由到快照映射并 NPE"
+  本会一路绿灯发布**。第二条顺带证明那道安全网本来就存在，
+  本批补的只是长输入那一侧。
+- **拒绝为两处防御性分支编造覆盖（如实记录）**：
+  1. `if (claim != null && claim.replay())` 的"非重放 claim"一侧在生产中
+     **不可达**——`inspectExisting` 只会返回 `null` 或
+     `new Claim(current, true, null)`；
+  2. `nativeSnapshotEmitter` 的 `claim.keyed()` 守卫两侧调用点的 claim
+     都来自键控分支；要覆盖只能**给生产代码加测试专用钩子**。
+  写第一版时我确实凭空造了个 `replayNativeSseForTest(...)`，
+  随后删掉了——**为了分支数改生产代码是本末倒置**。
+  两处都写进了测试类的 Javadoc，而不是留个绿色数字替它们背书。
+- 指标：`mvn -pl spring-ai-rag-core test` **7428 全绿**（+4，0 失败 0 错误 9 跳过），
+  BUILD SUCCESS；`RagChatController` 分支 87.16% → **88.99%**（28 → 24 未覆盖）；
+  **L192 / L224 / L261 从未覆盖列表中消失**；
+  core 总体分支 88.32% → **88.34%**、行 98.41% 不变。
+- 遗留技术债（如实登记，未处理）：`ask` 与 `chat` 两段键控编排近乎逐行重复，
+  约 53 行 × 2。合并需要同时验证两条链路的 OpenAPI 注解与日志文案差异，
+  风险高于本批收益，暂列后续。
+
 ### Batch 690（既有残条目，原样保留）
+
 
 
 
