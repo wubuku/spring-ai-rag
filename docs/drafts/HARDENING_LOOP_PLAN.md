@@ -478,6 +478,119 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
+### Batch 802（已交付）
+
+- 分支：`feature/external-db-cleanup-guard-20261002`
+- 内容：把 Batch 801 的发现往前推一步——**"跑不到的测试"和"会伤到人的测试"分开查**，
+  挖出 1 个高危孤儿套件 + 1 个新门禁，并让 7 个从未运行过的测试真正跑起来。
+- **勘察方法**：不是扫"哪个类缺开关"，而是把 22 个门控 IT + 1 个非门控 IT
+  逐个回答三个问题：
+  1. 它有**可达的运行路径**吗（开关有没有被任何脚本或文档打开）？
+  2. 它 `flyway.clean()` 的库，是 Testcontainers 自建的一次性库，
+     还是**调用方传进来的**？
+  3. 如果是后者，它要求 `*_CLEAN_CONFIRM=YES` 吗？
+
+#### 真实缺陷：`EmbeddingProfilePostgresIntegrationTest` 同时踩中三条
+
+- **仓库里 22 个门控 IT 之外，只有这一个 Postgres IT 类**，而且
+  154 个被跳过的测试里有 **7 个是它的**——它和那 22 个长得一模一样，
+  却谁也没把它算进去。查下来它有**两个互相叠加的问题**：
+  1. **在任何自动化路径里都跑不到**：没有 `*.it.enabled` 开关，而唯一能让它
+     运行的方式是传 `-Drag.it.jdbc-url`——**仓库里没有任何脚本设置这个属性**
+     （两份 testing-guide 只在"如何手动跑"里提到它）。于是 7 个测试贡献了
+     零信号，却因为文件名和那 22 个一致而读起来像完整。
+  2. **对外部传入的库执行 `flyway.clean()`，且没有任何确认护栏**。
+     同样是"接受外部 JDBC URL"的另外 **10 个类全都要求
+     `*_CLEAN_CONFIRM=YES`**（`DOCUMENT_SYNC_RUNS_`、`HYBRID_RRF_`、
+     `MANAGED_API_PRINCIPAL_` …）。实测统计：12 个调 `flyway.clean()` 的类里，
+     **11 个是 Testcontainers 自建库**（clean 碰不到用户的任何东西，不需要护栏），
+     **只有它**接受外部 URL。**一个写错或过期的属性，就足以删掉一个真库的 schema。**
+- **开关对账器为什么没抓到**：它查的是 "switch ↔ 测试类" 双向可达性。
+  这个套件**根本没有开关**，所以在它的模型里不存在——它只查"有开关的类能不能被打开"，
+  不查"接受外部基础设施的类有没有护栏"。这是两个不同的问题，需要两个门禁。
+
+#### 修法
+
+- 加 `-Dembedding-profile.it.enabled=true` 开关 + Testcontainers 路径
+  （与那 22 个同形），保留 `rag.it.jdbc-url` 作为外部路径但**必须**先给
+  `EMBEDDING_PROFILE_IT_CLEAN_CONFIRM=YES`。原来那句
+  `assumeTrue(jdbcUrl != null, "Set -Drag.it.jdbc-url ...")` 的"未设置就跳过"
+  也随之改成与另外 22 个同形的"未开开关就跳过"——机制没变，但跳过的**原因**
+  从一个没人会设的属性变成了一个门禁认识、文档写着的属性。
+- 开关对账器随即从 **22 开关 / 147 测试** 变成 **23 开关 / 154 测试**，
+  新套件被正式纳入。
+
+#### 让它跑起来之后，暴露出的**两个真实缺陷**（都是"从没跑过"的代价）
+
+这两个都不是我改坏的，是这个套件**从来没运行过**所以一直存在：
+
+1. **和 Batch 801-D 完全同一类漂移，第二个实例**：测试把 `chunker_version`
+   写死成 `"chunker-v1"`，而生产侧 `EmbeddingProfileSqlScope` 过滤的是
+   `hierarchical-v2:<size>:<min>:<overlap>`，于是**一条都匹配不上**，
+   向量检索返回空——报错信息读起来像"检索器把文档弄丢了"，真实原因是
+   "fixture 根本没匹配上谓词"。改为和 `MultiCollectionRetrieval` 一样，
+   用服务端同一个 `DocumentDerivationDescriptorProvider` 推导。
+   **同一种漂移在一个仓库里出现两次，本身就是"该加门禁"的信号**（见遗留）。
+2. **fixture 停留在 V43 之前**：V43 把关键词索引从 embedding 里拆了出去，
+   新表是 `rag_document_chunks` + `rag_document_local_index_state`，
+   而这个测试的全文检索那一半**从来不往这两张表写数据**。
+   补了 `indexLocalKeywords(...)` 辅助方法，并改用 64 位十六进制哈希
+   （`rag_document_chunks` 有 `content_hash ~ '^[0-9a-fA-F]{64}$'` 约束，
+   `rag_documents` 没有——**这正是"短哈希在别处能用、在这里就是错"的原因**）。
+3. 补完数据后，全文检索返回 **2 条而不是 1 条**。查 `KeywordIndexSqlScope`
+   才明白：**V43 起全文检索就是有意不再按 embedding profile 过滤的**
+   （它对向量状态是 `LEFT JOIN`，只用 `rag_embeddings.id` 映射既有的
+   `excludeIds` 契约，类注释里写着"全文检索不再依赖 embedding profile
+   是否有向量"）。所以旧的 `assertEquals(1, fulltextResults.size())`
+   **编码的是一个被设计明确移除的契约**。
+   这里**没有为了变绿而删断言**，而是把它改写成真实契约：向量检索仍然
+   按 profile 收窄（返回 1 条，这条断言原样保留），全文检索返回两个文档；
+   并且把"陈旧"那一半也改对——A 的 hash 改掉后，向量检索为空、
+   全文检索仍能搜到 B，正好说明"**丢向量不等于文档不可搜**"这个解耦的意义。
+
+#### 新门禁：`scripts/verify-external-db-safety.mjs`
+
+- 规则只有一条：**一个测试类如果既能"从调用方那里拿到数据库"，
+  又会执行破坏性操作（`flyway.clean()` / `DROP` / `TRUNCATE`），
+  就必须先要求 `*_CLEAN_CONFIRM`**。两条违规形态：
+  `unguarded-destructive-operation`、`guard-after-destructive-operation`
+  （护栏写在破坏性调用**之后**等于没有——中途失败的运行已经把库毁掉了）。
+- **零误报优先**：只在两个条件**同时**成立时才报，所以 20 个纯 Testcontainers
+  套件不会触发。`DELETE` 刻意**不**算破坏性操作（本仓库的约定是 `clean()`，
+  放宽会在"自己收拾残局的 fixture"上误报），这条边界在自测里显式登记。
+- 两种拼写都认（新的 `*_IT_JDBC_URL` 和旧的 `rag.it.jdbc-url`）——
+  只认新的那个，门禁就会漏掉它**本来就是为**的那个缺陷。
+- **先剥注释再判定**：注释里提到 `flyway.clean()` 不算做了，
+  注释里写 `*_CLEAN_CONFIRM=YES` 也不算护栏。两条都有对应用例。
+- **自测 `scripts/test-support/external-db-safety-self-test.mjs` 9 例**，
+  其中 4 条是"必须拒绝"的负例、2 条是注释干扰、3 条是正例。
+- **变异测试**：把 `EmbeddingProfilePostgresIntegrationTest` 还原成修复前的
+  版本跑门禁 → **如期变红**并指名道姓报出这个类；装回修复版 → 变绿 ✓
+- 门禁 + 自测已串进 `scripts/verify-project-tests.sh`（第 5、6 项）。
+
+#### 我自己犯的错
+
+- 新门禁第一次跑直接崩：`import { fileURLToPath, resolve } from 'node:url'`
+  —— `resolve` 是 `node:path` 的，从 `node:url` 导入得到 `undefined`，
+  一 import 就 `ERR_INVALID_ARG_TYPE`。由自测当场抓住。
+- 生成门控清单的临时脚本 `collectGatedSuites()` 没传 root，返回 0 个套件；
+  看签名才补上。**差点让我用一份空的类清单去跑"全量"验证。**
+
+- 指标（实测值）：门控 IT **147 → 154**（23 套件，0 失败 0 跳过，首次达成）；
+  core 默认测试 7710 用例 / 154 跳过，**不变**（新套件是门控的，只影响跳过集）；
+  开关对账 **22 开关 / 147 测试 → 23 开关 / 154 测试**；新门禁自测 **9/9**；
+  仓库门禁 `verify-project-tests` 由 **4 项 → 6 项**。
+- 遗留（如实登记，未处理）：
+  - **`chunker_version` 字面量漂移已在两个文件出现两次**（801-D、802）。
+    本批只修了这两处，**没有加门禁**——因为要可靠地判定"这个字面量是否会
+    流进生产谓词"，静态分析做不到（`persistence.replace(...)` 的第 5 个参数
+    没有任何类型标记）。可靠的做法是让生产 API 接受一个类型化的描述符对象
+    而不是 `String`，那是改生产签名的活，超出本批范围。**登记为已定位的债务。**
+  - 账本里 20 处"本机无 Docker"的历史条目仍按 Batch 801 的勘误处理，未逐条改写。
+  - `Documents` 页"版本历史 → 恢复"属产品决策，未动。
+  - 其余 WebUI 债务（`PageShell` 脱节、`ask`/`chat` 53 行×2 重复、
+    174 个无引用 locale 键）本批未动。
+
 ### Batch 801（已交付）
 
 - 分支：`feature/gated-it-crosscheck-20261002`
