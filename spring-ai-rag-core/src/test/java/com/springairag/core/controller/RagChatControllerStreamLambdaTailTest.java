@@ -102,7 +102,7 @@ class RagChatControllerStreamLambdaTailTest {
                                     java.util.Map.of()));
                 }));
 
-        SseEmitter emitter = controller.stream(chatRequest());
+        SseEmitter emitter = controller.stream(chatRequest(), null, null);
 
         // Flux.just 同步发射：Completed 事件在 stream() 返回前已触发
         // emitter.complete()；后续 send 抛 IllegalStateException。
@@ -123,7 +123,7 @@ class RagChatControllerStreamLambdaTailTest {
                                     "INTERNAL", "boom"));
                 }));
 
-        SseEmitter emitter = controller.stream(chatRequest());
+        SseEmitter emitter = controller.stream(chatRequest(), null, null);
 
         // Failed 经 sendChatEvent → sendChatError → emitter.complete()。
         assertThrows(IllegalStateException.class,
@@ -144,7 +144,7 @@ class RagChatControllerStreamLambdaTailTest {
                                     "timed out"));
                 }));
 
-        SseEmitter emitter = controller.stream(chatRequest());
+        SseEmitter emitter = controller.stream(chatRequest(), null, null);
 
         // 错误处理器同步执行 sendChatError → emitter.complete()。
         assertThrows(IllegalStateException.class,

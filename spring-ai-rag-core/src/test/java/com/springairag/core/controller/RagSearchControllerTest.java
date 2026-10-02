@@ -123,7 +123,7 @@ class RagSearchControllerTest {
         RetrievalConfig config = RetrievalConfig.builder().maxResults(5).build();
         req.setConfig(config);
 
-        ResponseEntity<List<RetrievalResult>> response = controller.searchWithConfig(req);
+        ResponseEntity<List<RetrievalResult>> response = controller.searchWithConfig(req, null);
 
         assertEquals(200, response.getStatusCode().value());
         assertEquals(1, response.getBody().size());
@@ -143,7 +143,7 @@ class RagSearchControllerTest {
                 .useRerank(false)
                 .build());
 
-        ResponseEntity<List<RetrievalResult>> response = controller.searchWithConfig(req);
+        ResponseEntity<List<RetrievalResult>> response = controller.searchWithConfig(req, null);
 
         assertEquals(200, response.getStatusCode().value());
         verifyNoInteractions(reRankingService);
@@ -166,7 +166,7 @@ class RagSearchControllerTest {
                 .useRerank(true)
                 .build());
 
-        ResponseEntity<List<RetrievalResult>> response = controller.searchWithConfig(req);
+        ResponseEntity<List<RetrievalResult>> response = controller.searchWithConfig(req, null);
 
         assertEquals(List.of("doc2", "doc1"), response.getBody().stream()
                 .map(RetrievalResult::getDocumentId)
@@ -376,7 +376,7 @@ class RagSearchControllerTest {
         req.setQuery("query");
         req.setCollectionIds(List.of(1L, 2L));
 
-        ResponseEntity<List<RetrievalResult>> response = controller.searchWithConfig(req);
+        ResponseEntity<List<RetrievalResult>> response = controller.searchWithConfig(req, null);
 
         assertEquals(200, response.getStatusCode().value());
         assertEquals(1, response.getBody().size());
@@ -397,7 +397,7 @@ class RagSearchControllerTest {
         req.setCollectionIds(List.of(1L));
         req.setDocumentIds(List.of(11L, 99L));
 
-        ResponseEntity<List<RetrievalResult>> response = controller.searchWithConfig(req);
+        ResponseEntity<List<RetrievalResult>> response = controller.searchWithConfig(req, null);
 
         assertEquals(200, response.getStatusCode().value());
         verify(hybridRetriever).search(eq("query"), eq(List.of(11L)), isNull(), eq(10), any(RetrievalConfig.class));
@@ -415,7 +415,7 @@ class RagSearchControllerTest {
         req.setQuery("query");
         req.setCollectionIds(List.of(999L));
 
-        ResponseEntity<List<RetrievalResult>> response = controller.searchWithConfig(req);
+        ResponseEntity<List<RetrievalResult>> response = controller.searchWithConfig(req, null);
 
         assertEquals(200, response.getStatusCode().value());
         assertTrue(response.getBody().isEmpty());

@@ -953,12 +953,4 @@ public class RagChatController {
                 ChatPrincipal.from(httpRequest), turnId, includeResponse));
     }
 
-    SseEmitter stream(ChatRequest request) {
-        return stream(request, null, null);
-    }
-
-    SseEmitter stream(ChatRequest request, HttpServletRequest httpRequest) {
-        return stream(request, httpRequest, null);
-    }
-
 }

@@ -136,7 +136,7 @@ class RagChatControllerTest {
                         new ChatEvent.ContentDelta("Hello"),
                         new ChatEvent.ContentDelta(" World")));
 
-        SseEmitter emitter = controller.stream(request);
+        SseEmitter emitter = controller.stream(request, null, null);
 
         assertNotNull(emitter);
         verify(ragChatService).chatEvents(argThat(r ->
@@ -152,7 +152,7 @@ class RagChatControllerTest {
         when(ragChatService.chatEvents(any(ChatRequest.class), isNull(), isNull()))
                 .thenReturn(Flux.just(new ChatEvent.ContentDelta("回答")));
 
-        SseEmitter emitter = controller.stream(request);
+        SseEmitter emitter = controller.stream(request, null, null);
 
         assertNotNull(emitter);
         verify(ragChatService).chatEvents(
@@ -167,7 +167,7 @@ class RagChatControllerTest {
         when(ragChatService.chatEvents(any(ChatRequest.class), isNull(), isNull()))
                 .thenReturn(Flux.just(new ChatEvent.ContentDelta("回答")));
 
-        SseEmitter emitter = controller.stream(request);
+        SseEmitter emitter = controller.stream(request, null, null);
 
         assertNotNull(emitter);
         verify(ragChatService).chatEvents(argThat(r ->
@@ -200,7 +200,7 @@ class RagChatControllerTest {
                 productionController.ask(ask, null).getStatusCode().value());
         assertEquals(200,
                 productionController.chat(chat, null).getStatusCode().value());
-        assertNotNull(productionController.stream(stream, null));
+        assertNotNull(productionController.stream(stream, null, null));
 
         verify(scopeResolver, times(3)).resolve(
                 CollectionScopeMode.SELECTED_COLLECTIONS,

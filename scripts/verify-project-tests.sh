@@ -127,3 +127,21 @@ echo "PASS: Inert-test self-test"
 
 node scripts/verify-test-expectations.mjs
 echo "PASS: Inert-test census"
+
+# Batch 816. Every controller was surveyed for overloads that forward a literal
+# null into an HttpServletRequest position. Seventeen overloads forward a null
+# somewhere; only two put it where the request itself goes, and both derivation
+# helpers fail open on null — ChatPrincipal.from(null) is local() and
+# ApiKeyCollectionAccess.isUnrestricted(null) is true — so reaching such an
+# overload yields unscoped data rather than an error. The rule is deliberately
+# narrow, because the other fifteen null a business parameter and flagging them
+# would produce fifteen exemptions: a debt baseline wearing a gate's clothes.
+node scripts/test-support/null-request-forwarding-self-test.mjs >/dev/null || {
+  echo "Null-request forwarding self-test failed; the gate may no longer reject anything." >&2
+  node scripts/test-support/null-request-forwarding-self-test.mjs >&2 || true
+  exit 1
+}
+echo "PASS: Null-request forwarding self-test"
+
+node scripts/verify-null-request-forwarding.mjs
+echo "PASS: Null-request forwarding"
