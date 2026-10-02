@@ -2,6 +2,8 @@ package com.springairag.core.service;
 
 import com.springairag.core.config.EmbeddingProfile;
 import com.springairag.core.config.EmbeddingVectorColumns;
+import com.springairag.core.config.RagProperties;
+import com.springairag.core.entity.RagDocument;
 import com.springairag.core.logging.SensitiveDataMaskingConverter;
 import com.springairag.core.retrieval.EmbeddingBatchService;
 import com.springairag.core.retrieval.RetrievalUtils;
@@ -22,10 +24,19 @@ public class EmbeddingPersistenceService {
     private static final int MAX_ERROR_LENGTH = 500;
 
     private final JdbcTemplate jdbcTemplate;
+    private final DocumentDerivationDescriptorProvider descriptors;
     private DerivationIntegrityRepository integrityRepository;
 
     public EmbeddingPersistenceService(JdbcTemplate jdbcTemplate) {
+        this(jdbcTemplate, new DocumentDerivationDescriptorProvider(new RagProperties()));
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public EmbeddingPersistenceService(
+            JdbcTemplate jdbcTemplate,
+            DocumentDerivationDescriptorProvider descriptors) {
         this.jdbcTemplate = jdbcTemplate;
+        this.descriptors = descriptors;
     }
 
     @org.springframework.beans.factory.annotation.Autowired(required = false)
@@ -96,7 +107,6 @@ public class EmbeddingPersistenceService {
             long expectedVersion,
             String expectedContentHash,
             EmbeddingProfile profile,
-            String chunkerVersion,
             List<TextChunk> chunks,
             List<EmbeddingBatchService.EmbeddingResult> results) {
         replace(
@@ -104,7 +114,6 @@ public class EmbeddingPersistenceService {
                 expectedVersion,
                 expectedContentHash,
                 profile,
-                chunkerVersion,
                 chunks,
                 results,
                 EmbeddingCommitGuard.allowAll());
@@ -112,6 +121,20 @@ public class EmbeddingPersistenceService {
 
     /**
      * 在文档快照 CAS 和可选 worker 提交门保护下原子替换向量。
+     *
+     * <p>这个方法<b>曾经</b>接受一个 {@code String chunkerVersion} 参数，由调用方
+     * 从描述符推导后传进来。生产侧的每一处调用方都确实是从
+     * {@code DocumentDerivationDescriptorProvider} 取的值，但"每个调用方都要记得
+     * 推导对"这件事本身就是个隐患：一个裸 {@code String} 参数既不能被编译器检查，
+     * 也不能被静态分析认出"这个值必须等于某个 provider 的输出"。
+     *
+     * <p>代价是实实在在付过的：Batch 801 和 Batch 802 各有一次集成测试把
+     * {@code chunker_version} 写死成字面量（先是 {@code 'test'}，后是
+     * {@code 'chunker-v1'}），而生产检索谓词要的是
+     * {@code hierarchical-v2:<size>:<min>:<overlap>}，于是<b>一条数据都匹配不上</b>，
+     * 测试却以"检索器把文档弄丢了"的面貌失败。现在这个值由服务自己按
+     * {@code document_type} 推导，<b>写错的可能性在结构上被消除了</b>——
+     * 不再存在一个"可以传错"的参数。
      */
     @Transactional
     public void replace(
@@ -119,7 +142,6 @@ public class EmbeddingPersistenceService {
             long expectedVersion,
             String expectedContentHash,
             EmbeddingProfile profile,
-            String chunkerVersion,
             List<TextChunk> chunks,
             List<EmbeddingBatchService.EmbeddingResult> results,
             EmbeddingCommitGuard commitGuard) {
@@ -136,6 +158,7 @@ public class EmbeddingPersistenceService {
             throw new IllegalStateException(
                     "Document changed while embeddings were generated: " + documentId);
         }
+        String chunkerVersion = chunkerVersionFor((String) document.get("document_type"));
         String column = EmbeddingVectorColumns.columnFor(profile.dimensions());
         jdbcTemplate.update(
                 "DELETE FROM rag_embeddings WHERE document_id = ? AND embedding_profile_id = ?",
@@ -242,13 +265,28 @@ public class EmbeddingPersistenceService {
 
     private Map<String, Object> readDocumentSnapshot(long documentId) {
         List<Map<String, Object>> rows = jdbcTemplate.queryForList(
-                "SELECT version, content_hash, enabled FROM rag_documents "
+                "SELECT version, content_hash, enabled, document_type FROM rag_documents "
                         + "WHERE id = ?",
                 documentId);
         if (rows.isEmpty()) {
             throw new IllegalStateException("Document not found during embedding commit: " + documentId);
         }
         return rows.getFirst();
+    }
+
+    /**
+     * The chunker version the retrieval scope will look for, derived from the
+     * document's own type.
+     *
+     * <p>This is the single place that decides which
+     * {@code rag_document_embedding_state.chunker_version} a write records, and
+     * it deliberately uses the same provider the retrieval scope is built from —
+     * two derivations that can drift are exactly the bug this replaced.
+     */
+    private String chunkerVersionFor(String documentType) {
+        return RagDocument.JSON_RECORD.equals(documentType)
+                ? descriptors.jsonRecordDescriptor().chunkerVersion()
+                : descriptors.textDescriptor().chunkerVersion();
     }
 
     public record CacheState(boolean hit, int chunkCount) {

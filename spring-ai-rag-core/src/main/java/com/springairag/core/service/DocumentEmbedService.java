@@ -542,7 +542,6 @@ public class DocumentEmbedService {
                     prep.documentVersion(),
                     prep.contentHash(),
                     profile,
-                    prep.chunkerVersion(),
                     chunks,
                     results,
                     commitGuard);
@@ -560,7 +559,6 @@ public class DocumentEmbedService {
                     currentVersion,
                     prep.contentHash(),
                     profile,
-                    prep.chunkerVersion(),
                     chunks,
                     results,
                     commitGuard);
@@ -572,17 +570,18 @@ public class DocumentEmbedService {
             long documentVersion,
             String contentHash,
             EmbeddingProfile profile,
-            String chunkerVersion,
             List<TextChunk> chunks,
             List<EmbeddingBatchService.EmbeddingResult> results,
             EmbeddingCommitGuard commitGuard) {
+        // The chunker version is no longer threaded through: the persistence
+        // service derives it from the document's own type, using the same
+        // descriptor provider the retrieval scope is built from.
         if (EmbeddingCommitGuard.isAllowAll(commitGuard)) {
             persistenceService.replace(
                     documentId,
                     documentVersion,
                     contentHash,
                     profile,
-                    chunkerVersion,
                     chunks,
                     results);
             return;
@@ -592,7 +591,6 @@ public class DocumentEmbedService {
                 documentVersion,
                 contentHash,
                 profile,
-                chunkerVersion,
                 chunks,
                 results,
                 commitGuard);

@@ -106,13 +106,12 @@ class DocumentEmbedJobEntryTest {
         EmbeddingCommitGuard gate = () -> gateVerified.set(true);
         // 自定义提交门实例被透传到持久层（由持久层在事务内执行门校验）。
         org.mockito.Mockito.doAnswer(invocation -> {
-                    ((EmbeddingCommitGuard) invocation.getArgument(7))
+                    ((EmbeddingCommitGuard) invocation.getArgument(6))
                             .verify();
                     return null;
                 })
                 .when(persistenceService).replace(
-                        eq(1L), eq(0L), eq("hash-1"), eq(PROFILE),
-                        any(String.class), anyList(), anyList(),
+                        eq(1L), eq(0L), eq("hash-1"), eq(PROFILE), anyList(), anyList(),
                         org.mockito.ArgumentMatchers.same(gate));
 
         Map<String, Object> result = service.embedDocumentForJob(
@@ -121,8 +120,7 @@ class DocumentEmbedJobEntryTest {
         assertEquals("COMPLETED", result.get("status"));
         assertTrue(gateVerified.get(), "提交门应在持久层事务内被校验");
         org.mockito.Mockito.verify(persistenceService).replace(
-                eq(1L), eq(0L), eq("hash-1"), eq(PROFILE),
-                any(String.class), anyList(), anyList(),
+                eq(1L), eq(0L), eq("hash-1"), eq(PROFILE), anyList(), anyList(),
                 org.mockito.ArgumentMatchers.same(gate));
     }
 
@@ -150,7 +148,7 @@ class DocumentEmbedJobEntryTest {
                 anyString());
         verify(persistenceService, never()).replace(
                 any(Long.class), any(Long.class), any(String.class),
-                any(), any(String.class), anyList(), anyList(),
+                any(), anyList(), anyList(),
                 any(EmbeddingCommitGuard.class));
     }
 
@@ -200,7 +198,7 @@ class DocumentEmbedJobEntryTest {
         assertFalse(gateVerified.get());
         verify(persistenceService, never()).replace(
                 any(Long.class), any(Long.class), any(String.class),
-                any(), any(String.class), anyList(), anyList(),
+                any(), anyList(), anyList(),
                 any(EmbeddingCommitGuard.class));
     }
 }

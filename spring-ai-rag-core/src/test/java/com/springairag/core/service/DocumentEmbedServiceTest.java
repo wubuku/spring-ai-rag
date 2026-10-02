@@ -80,7 +80,6 @@ class DocumentEmbedServiceTest {
                 eq(0L),
                 eq("hash-1"),
                 eq(PROFILE),
-                any(String.class),
                 anyList(),
                 anyList());
         verify(persistenceService, never()).recordFailureIfNoCompleted(
@@ -106,8 +105,7 @@ class DocumentEmbedServiceTest {
         assertFalse(((String) result.get("error")).contains("secret-value"));
         assertTrue(((String) result.get("error")).contains("***REDACTED***"));
         verify(persistenceService, never()).replace(
-                any(Long.class), any(Long.class), any(String.class), any(),
-                any(String.class), anyList(), anyList());
+                any(Long.class), any(Long.class), any(String.class), any(), anyList(), anyList());
         verify(persistenceService).recordFailureIfNoCompleted(
                 eq(2L), eq(0L), eq("hash-2"), eq(PROFILE),
                 any(String.class), any(String.class));
@@ -130,8 +128,7 @@ class DocumentEmbedServiceTest {
         assertEquals("FAILED", result.get("status"));
         assertTrue(((String) result.get("error")).contains("dimension mismatch"));
         verify(persistenceService, never()).replace(
-                any(Long.class), any(Long.class), any(String.class), any(),
-                any(String.class), anyList(), anyList());
+                any(Long.class), any(Long.class), any(String.class), any(), anyList(), anyList());
     }
 
     @Test
@@ -165,8 +162,7 @@ class DocumentEmbedServiceTest {
         verify(persistenceService, never()).findCacheState(
                 eq(5L), eq(PROFILE), any(String.class), any(String.class));
         verify(persistenceService).replace(
-                eq(5L), eq(0L), eq("hash-5"), eq(PROFILE),
-                any(String.class), anyList(), anyList());
+                eq(5L), eq(0L), eq("hash-5"), eq(PROFILE), anyList(), anyList());
     }
 
     @Test
@@ -180,8 +176,7 @@ class DocumentEmbedServiceTest {
         verify(persistenceService).ensureContentHash(
                 eq(6L), eq(0L), any(String.class));
         verify(persistenceService).replace(
-                eq(6L), eq(1L), any(String.class), eq(PROFILE),
-                any(String.class), anyList(), anyList());
+                eq(6L), eq(1L), any(String.class), eq(PROFILE), anyList(), anyList());
     }
 
     @Test
@@ -209,20 +204,18 @@ class DocumentEmbedServiceTest {
                 .thenReturn(Optional.of(captured), Optional.of(changed));
         mockSuccessfulEmbeddings();
         doAnswer(invocation -> {
-            EmbeddingCommitGuard guard = invocation.getArgument(7);
+            EmbeddingCommitGuard guard = invocation.getArgument(6);
             guard.verify();
             throw new IllegalStateException("version changed");
         }).when(persistenceService).replace(
-                eq(7L), eq(7L), eq("hash-7"), eq(PROFILE),
-                any(String.class), anyList(), anyList(),
+                eq(7L), eq(7L), eq("hash-7"), eq(PROFILE), anyList(), anyList(),
                 any(EmbeddingCommitGuard.class));
         doAnswer(invocation -> {
-            EmbeddingCommitGuard guard = invocation.getArgument(7);
+            EmbeddingCommitGuard guard = invocation.getArgument(6);
             guard.verify();
             return null;
         }).when(persistenceService).replace(
-                eq(7L), eq(8L), eq("hash-7"), eq(PROFILE),
-                any(String.class), anyList(), anyList(),
+                eq(7L), eq(8L), eq("hash-7"), eq(PROFILE), anyList(), anyList(),
                 any(EmbeddingCommitGuard.class));
         AtomicInteger checks = new AtomicInteger();
 
@@ -236,8 +229,7 @@ class DocumentEmbedServiceTest {
 
         assertEquals(2, checks.get());
         verify(persistenceService).replace(
-                eq(7L), eq(8L), eq("hash-7"), eq(PROFILE),
-                any(String.class), anyList(), anyList(),
+                eq(7L), eq(8L), eq("hash-7"), eq(PROFILE), anyList(), anyList(),
                 any(EmbeddingCommitGuard.class));
     }
 
