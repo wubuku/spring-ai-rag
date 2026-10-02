@@ -341,7 +341,12 @@ function SuitesPanel() {
           {t('evaluation.suiteName')}
           <input value={name} onChange={e => setName(e.target.value)} />
         </label>
-        <button type="button" className={styles.primaryBtn} onClick={() => createM.mutate()}>
+        <button
+          type="button"
+          className={styles.primaryBtn}
+          onClick={() => createM.mutate()}
+          disabled={createM.isPending}
+        >
           {t('evaluation.createSuite')}
         </button>
         {createM.isError && (
@@ -353,7 +358,12 @@ function SuitesPanel() {
           {t('evaluation.definition')}
           <textarea rows={8} value={definition} onChange={e => setDefinition(e.target.value)} />
         </label>
-        <button type="button" className={styles.primaryBtn} onClick={() => versionM.mutate()}>
+        <button
+          type="button"
+          className={styles.primaryBtn}
+          onClick={() => versionM.mutate()}
+          disabled={versionM.isPending}
+        >
           {t('evaluation.importVersion')}
         </button>
         {versionM.isError && (
@@ -385,7 +395,12 @@ function RunsPanel() {
           {t('evaluation.suiteKey')}
           <input value={suiteKey} onChange={e => setSuiteKey(e.target.value)} />
         </label>
-        <button type="button" className={styles.primaryBtn} onClick={() => startM.mutate()}>
+        <button
+          type="button"
+          className={styles.primaryBtn}
+          onClick={() => startM.mutate()}
+          disabled={startM.isPending}
+        >
           {t('evaluation.startRun')}
         </button>
         {startM.isError && (

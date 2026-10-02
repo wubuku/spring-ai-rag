@@ -177,23 +177,39 @@ function ExperimentDetail({ experimentId, onBack }: { experimentId: number; onBa
       {/* Actions */}
       <div className={styles.actions}>
         {exp.data.status === 'DRAFT' && (
-          <Button variant="primary" onClick={() => startMut.mutate()}>
-            {t('abtest.start')}
+          <Button
+            variant="primary"
+            onClick={() => startMut.mutate()}
+            disabled={startMut.isPending}
+          >
+            {startMut.isPending ? t('common.loading') : t('abtest.start')}
           </Button>
         )}
         {exp.data.status === 'RUNNING' && (
-          <Button variant="secondary" onClick={() => pauseMut.mutate()}>
-            {t('abtest.pause')}
+          <Button
+            variant="secondary"
+            onClick={() => pauseMut.mutate()}
+            disabled={pauseMut.isPending}
+          >
+            {pauseMut.isPending ? t('common.loading') : t('abtest.pause')}
           </Button>
         )}
         {exp.data.status === 'PAUSED' && (
-          <Button variant="primary" onClick={() => startMut.mutate()}>
-            {t('abtest.resume')}
+          <Button
+            variant="primary"
+            onClick={() => startMut.mutate()}
+            disabled={startMut.isPending}
+          >
+            {startMut.isPending ? t('common.loading') : t('abtest.resume')}
           </Button>
         )}
         {(exp.data.status === 'RUNNING' || exp.data.status === 'PAUSED') && (
-          <Button variant="danger" onClick={() => stopMut.mutate()}>
-            {t('abtest.stop')}
+          <Button
+            variant="danger"
+            onClick={() => stopMut.mutate()}
+            disabled={stopMut.isPending}
+          >
+            {stopMut.isPending ? t('common.loading') : t('abtest.stop')}
           </Button>
         )}
       </div>

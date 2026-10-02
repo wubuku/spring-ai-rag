@@ -242,7 +242,43 @@ Batch 792 找出 16 处这样的写法，其中 3 处正是一个真缺失的键
 没有任何静态调用引用的键只报数量、不算失败。豁免用行内
 `/* i18n-allow: <具体理由> */`；目前没有登记任何豁免。
 
-## 8. 对齐与布局
+## 8. 写按钮在请求进行中必须停止接受点击
+
+`npm run check:double-submit` 串在 `npm run lint` 里，强制一条规则：
+
+- `unguarded-write` —— 某个 mutation 在文件里被触发
+  （`someM.mutate(...)` 或 `mutateAsync`），而**同一个文件里没有任何地方**
+  读过 `someM.isPending`。
+
+React Query 不会对 `mutate()` 调用去重。第二次点击会发出第二次请求，
+后果并不均一：把任务取消两次只是浪费，而 `createM` 点两次会用同一个键
+建出两套件，`startM` 点两次会启动两次评估运行、把预算烧两遍。
+
+Batch 796 把每个 `onClick={() => someM.mutate(...)}` 过了一遍，
+查出 **9 个**没有守卫的控件：`ABTest` 的 `startMut`×2、`pauseMut`、`stopMut`，
+`Embeddings` 的 `cancelM`、`retryM`，`Evaluation` 的 `createM`、`versionM`、`startM`。
+九个现在都会在请求进行中禁用自己并显示 loading 文案。
+
+**这个检查刻意很粗，而且它有一个已知的漏检。** 它问的是"`isPending` 有没有在
+这个文件里出现过"，而不是"这个按钮有没有读它"。两个理由：
+
+1. 找出这些缺陷的勘察脚本解析的是 `<button>` 开标签，
+   把 `ApiKeys.tsx:1042` 报成未守卫——而**下一行**就是
+   `disabled={immediateMutation.isPending}`。带嵌套花括号的多行 JSX
+   足以让这种解析失手，而会对正确代码误报的门禁，一周内就会被忽略。
+2. 文件范围的失败方式是**漏报**，从来不是误报。把 mutation 传给子组件、
+   或把 `isPending` 存进另一个变量名的形态不会被拦——方向是对的。
+
+这个漏检是真实的，而且被演示过：把 `ABTest` 的四个 `disabled` 守卫删掉之后，
+**这道门禁仍然是绿的**，因为同一个文件在按钮**文案**里还在读 `isPending`。
+控件显示"加载中"，却依然完全可点。只有行为测试能抓住它——
+`ABTest.mutations.test.tsx` 现在有四个参数化用例：用永不结束的请求点击，
+断言控件已禁用、且 API 只被调用一次。这个盲区同时被写成一条自测用例钉住，
+让它保持可见，而不是被悄悄忘掉。
+
+豁免用行内 `/* double-submit-allow: <具体理由> */`；目前没有登记任何豁免。
+
+## 9. 对齐与布局
 
 `npm run check:alignment` 串在 `npm run lint` 里。居中文本只有在写明理由时才被允许，
 目前有 11 处这样的豁免——每一处都是有意的决定，并记录在检查器中。
@@ -250,7 +286,7 @@ Batch 792 找出 16 处这样的写法，其中 3 处正是一个真缺失的键
 之所以做成机器规则：正文字块居中是把布局从"可读"拖到"不可读"最常见的单一原因，
 而在代码审查里它是隐形的，因为 CSS 只有一行。
 
-## 9. 开始一次界面改动之前
+## 10. 开始一次界面改动之前
 
 1. 先跑门禁与测试，确认起点是绿的：
    ```bash
@@ -258,6 +294,7 @@ Batch 792 找出 16 处这样的写法，其中 3 处正是一个真缺失的键
    npm run check:a11y-forms
    npm run check:mutation-errors
    npm run check:i18n-keys
+   npm run check:double-submit
    npm run test:run
    ```
 2. 写新东西之前，先找有没有现成基元。
@@ -265,7 +302,7 @@ Batch 792 找出 16 处这样的写法，其中 3 处正是一个真缺失的键
 4. 需要新共享基元时，先找到两个真实调用方。
 5. 测试在同一个 batch 里写。把门禁弄红的事情没有做完。
 
-## 10. 本文刻意不说的内容
+## 11. 本文刻意不说的内容
 
 - 不逐页罗列布局。那是代码，代码就是参考。
 - 不复述 token 目录。读 `design-tokens/tokens.json`。
