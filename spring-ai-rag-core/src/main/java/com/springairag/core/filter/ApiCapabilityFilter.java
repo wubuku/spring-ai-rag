@@ -76,10 +76,22 @@ public class ApiCapabilityFilter extends OncePerRequestFilter {
         if (!path.startsWith("/api/") && !path.startsWith("/v1/")) {
             return null;
         }
+        String verb = method.toUpperCase(java.util.Locale.ROOT);
+        if (SecurityPathExclusions.isAmbiguous(path)) {
+            // 形态可疑的 URI 拿不到任何豁免：既不给"管理/身份路径"的免检，
+            // 也不给只读 POST 列表的降级，一律按最严的那一档要求能力。
+            // 方向很重要——本过滤器里返回 null 表示"不要求能力"（更宽松），
+            // 所以 fail closed 意味着"不能返回 null"。
+            return switch (verb) {
+                case "GET", "HEAD", "OPTIONS" -> ApiCapabilitySupport.RAG_READ;
+                case "POST", "PUT", "PATCH", "DELETE" -> ApiCapabilitySupport.RAG_WRITE;
+                default -> ApiCapabilitySupport.RAG_WRITE;
+            };
+        }
         if (isManagementOrIdentityPath(path)) {
             return null;
         }
-        return switch (method.toUpperCase()) {
+        return switch (verb) {
             case "GET", "HEAD", "OPTIONS" -> ApiCapabilitySupport.RAG_READ;
             case "POST" -> READ_POST_PATHS.contains(path)
                     ? ApiCapabilitySupport.RAG_READ
@@ -90,12 +102,13 @@ public class ApiCapabilityFilter extends OncePerRequestFilter {
     }
 
     private static boolean isManagementOrIdentityPath(String path) {
+        // 分段感知：/api/v1/rag/api-keysfoo 不该被当作身份管理路径。
         return path.equals("/api/v1/rag/auth")
-                || path.startsWith("/api/v1/rag/auth/")
+                || SecurityPathExclusions.matchesPrefix(path, "/api/v1/rag/auth")
                 || path.equals("/api/v1/rag/api-keys")
-                || path.startsWith("/api/v1/rag/api-keys/")
+                || SecurityPathExclusions.matchesPrefix(path, "/api/v1/rag/api-keys")
                 || path.equals("/api/v1/rag/alerts")
-                || path.startsWith("/api/v1/rag/alerts/")
+                || SecurityPathExclusions.matchesPrefix(path, "/api/v1/rag/alerts")
                 || path.equals("/api/v1/rag/integration-capabilities");
     }
 

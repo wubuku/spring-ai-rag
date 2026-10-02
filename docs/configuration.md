@@ -1285,6 +1285,25 @@ Two rules, both in the safe direction:
 > is made here; the decision simply no longer relies on that assumption. The
 > change does not widen the set of public endpoints in any way.
 
+**Operation capabilities and the same path problem**
+
+`ApiCapabilityFilter` classifies each data-plane request into `RAG_READ`,
+`RAG_WRITE`, or "no capability required" (management and identity endpoints such
+as `/api/v1/rag/api-keys`, `/api/v1/rag/alerts`, `/api/v1/rag/auth`, plus the
+read-only `POST` list such as `/api/v1/rag/search` and `/v1/chat/completions`).
+
+It reuses the same ambiguity check, but note the direction is **opposite**:
+there, `null` means *no capability required*, which is the **permissive**
+answer. So fail closed means an ambiguous URI must never be handed an
+exemption — it is classified as `RAG_READ` for read verbs and `RAG_WRITE` for
+everything else, including unknown verbs. Before this rule,
+`/api/v1/rag/api-keys/../chat` matched the identity-path prefix and returned
+`null`, i.e. a principal holding no RAG capability at all would have skipped the
+capability check on a data-plane write.
+
+The identity-path prefixes are also segment-aware now, so `/api/v1/rag/api-keys-foo`
+is an ordinary data-plane path rather than a silent identity endpoint.
+
 **Rate limit strategy selection:**
 - `ip`: Count per client IP independently, suitable for unauthenticated scenarios
 - `api-key`: Rate limit by API Key (falls back to IP if no key), suitable for multi-tenant; unconfigured keys use default `requests-per-minute`
