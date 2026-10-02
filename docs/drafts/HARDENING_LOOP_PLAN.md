@@ -478,6 +478,87 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
+### Batch 813（已交付）
+
+- 分支：`feature/markdown-preview-xss-sanitize-20261004`
+- 内容：**修掉一个存储型 XSS**——文件预览把未经净化的 HTML 注入应用自身的源。
+  本批起点是一次失败的勘察假设（见下），终点是用户优先级第 1 位的"代码加固"。
+- 勘察（**假设被推翻两次，这是本批最值得记的部分**）：
+  1. **"154 个跳过的测试是没人维护的死测试"——不成立。** 直接查 surefire 报告：
+     154 个跳过分布在 23 个类，跳过原因**全部**是 `System property [<name>.it.enabled] does not exist`，
+     即门控集成测试的开关。它们由 `verify-gated-it.sh` 打开，且已被 tests 链的
+     "integration switches 对账"覆盖。仓库里**一个 `@Disabled`/`@Ignore` 都没有**。
+     报告一次，抽样验证，推翻，不动手。
+  2. 转向后扫 `.only`/`.skip` 残留（**零**，干净）、`@Nested`（41 个文件，已知）、
+     `dangerouslySetInnerHTML`——**只有一处**，在 `FilePreview.tsx:144`。
+  3. 顺着这一处往下读：`htmlContent` 来自 `filesApi.getPreviewHtml()` →
+     `GET /files/preview/html`，控制器上的 `@ApiResponse` 注释直接写着
+     **"Designed for WebUI fetch + innerHTML rendering"**；渲染器是
+     `MarkdownRendererService`，`HtmlRenderer.builder().build()`，**没有配 sanitizer**。
+     commonmark-java 默认原样透传 Markdown 源码里的裸 HTML，而 WebUI 又和应用同源。
+     仓库里**没有 CSP**（`Content-Security-Policy` 零处），**没有任何净化库依赖**。
+- 变更：
+  - **先用会红的测试证明缺陷，不先修。**新增
+    `MarkdownPreviewSanitizationTest`（12 例），首次运行 **9 例里 6 例变红**，
+    失败信息里是真实输出，不是推测：
+    `<img src="x" onerror="alert(1)">`、`<a href="javascript:alert(1)">`、
+    `<iframe src="https://evil.example/">`、`<style>body{display:none}</style>`
+    全部原样出现在渲染结果里。
+  - **一处修复覆盖三个入口**：净化放在 `MarkdownRendererService` 内部而不是控制器里，
+    于是 `previewHtmlFragment`（片段）、`previewHtmlPage`（独立整页，更糟，直接被导航）
+    和 legacy 端点**同时**被覆盖。
+  - 新增依赖 `org.jsoup:jsoup:1.19.1`（本地 m2 已有，离线可解），用
+    `Safelist.relaxed()` 加块级元素、`img src/alt/title/width/height`、
+    表格属性、`a title`、`code/span class`，协议白名单 `a href` 与 `img src`。
+    `Safelist` 是**允许列表**，所以 `on*` 属性不需要逐个枚举就被排除。
+- **踩到的真坑（靠实测解决，没有靠记忆）**：
+  加上净化后 `MarkdownRendererServiceTest` 立刻**红了 2 条**——相对图片路径
+  `src="image.png"` 被 jsoup 丢掉了，而那正是预览页 `<base>` 标签赖以解析的东西。
+  我对 jsoup 内部机制的记忆是错的，于是一个一个组合实测：
+  - `Jsoup.clean(html, "", safelist)` → 相对 `src` **被丢**
+  - `preserveRelativeLinks` 在 jsoup 1.19.1 **默认是 false**
+  - 显式 `.preserveRelativeLinks(true)` + 空 base → **仍被丢**
+  - `.preserveRelativeLinks(true)` + **绝对 base** → `src="image.png"` **原样保留** ✅
+  最终用了一个不可解析的哨兵主机 `https://preview-base.invalid/`，并**加一条测试断言
+  这个字符串永远不会出现在输出里**——这样"哨兵只是用来满足 jsoup"这件事就从
+  隐式依赖变成了可验证的绊线，将来 jsoup 若改成会按 base 解析，测试先红。
+- 变异测试（4 个，如实记录 3 正 1 负）：
+  - **M1 去掉净化**（直接返回渲染结果）→ 6 失败 ✅
+  - **M2 去掉 `preserveRelativeLinks`** → 4 失败 ✅
+  - **M3 哨兵 base 换成空串** → 3 失败 ✅
+  - **M4 去掉 `addProtocols("img","src",…)`** → **仍然全绿**。
+    **如实结论：这一行不是独立承重的，jsoup 本来就会剥掉 `javascript:`/`data:`。**
+    我第一版补的两条测试因此是**空洞通过**的——它们只断言"危险协议没出现"，
+    万一 commonmark 压根没解析出那张 `<img>` 也照样绿。已改成同时断言
+    **`<img>`/`<a>` 元素本身仍在、文本仍在**，断言这才有意义。
+- 验证：
+  - core 全量 **990 类 / 7727 用例 / 0 失败 / 0 错误 / 154 跳过**
+    （989 → 990 类，7715 → 7727 用例，+12 为本批新增；已核对 surefire 报告 mtime 为本次运行）。
+  - **`verify-test-visibility` 按规矩夹在全量 `mvn test` 与门控 IT 之间跑**（顺序敏感）：
+    `990 class(es), 7727 test(s), 154 reported skip(s), and no class vanished silently`。
+  - **门控 IT 真跑了**（本批改了 `MarkdownRendererService`，而
+    `PdfImportPostgresIntegrationTest` 正在用它，不能以"纯后端小改动"跳过）：
+    **16 用例 / 0 失败，BUILD SUCCESS**。
+  - 仓库门禁：docs 链 **16/16**、tests 链 **14/14**、悲观锁检查通过。
+  - WebUI 未改动，故不跑前端套件；改动面在 core。
+- 指标：core 用例 7715 → **7727**；测试类 989 → **990**；
+  预览渲染可执行面 `<script>`/`on*`/`javascript:`/`data:`/`<iframe>`/`<style>` **6 类 → 0**；
+  新增依赖 1（jsoup，本地 m2 已有）。
+- 遗留（如实登记，未处理）：
+  - **没有 CSP。**全仓库零 `Content-Security-Policy`。净化是唯一一道防线，
+    纵深防御缺一层。加 CSP 会影响 Vite 构建产物、内联样式和 Swagger，
+    是独立的一批，本批不做。
+  - `addProtocols("img", "src", "http", "https")` **变异测试证明它当前不独立承重**。
+    仍然保留：安全控制写成显式允许列表比依赖第三方库的隐式行为更稳，
+    且两条新测试会在 jsoup 升级放宽时先红。**但这条"保留的理由"没有测试支撑，
+    如实登记。**
+  - 净化发生在 `renderToHtml` 内部，因此**任何**未来的调用方自动受保护；
+    反面是它也改变了**已经存进 `fs_files` 的旧内容**的渲染结果（老文档里若有裸 HTML，
+    现在会被剥掉）。这是预期的安全方向，但属于行为变更。
+  - 未审计 `FilePreview` 之外是否还有别的 `innerHTML`/`insertAdjacentHTML` 用法——
+      本批只扫了 `dangerouslySetInnerHTML` 一种形态。
+  - CI 仍未跑仓库级 `scripts/verify-*.sh`（`/tmp/b806-ci-gates.patch` 待用户手动应用）。
+
 ### Batch 812（已交付）
 
 - 分支：`feature/destructive-confirm-and-jsx-copy-gate-20261004`

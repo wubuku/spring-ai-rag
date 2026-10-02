@@ -216,6 +216,18 @@
             <version>0.22.0</version>
         </dependency>
 
+        <!--
+          HTML sanitisation for rendered Markdown previews.
+          commonmark-java passes raw HTML in the Markdown source straight through,
+          and every preview is served on this application's own origin, so the
+          rendered fragment is cleaned against an allow-list before it is returned.
+        -->
+        <dependency>
+            <groupId>org.jsoup</groupId>
+            <artifactId>jsoup</artifactId>
+            <version>1.19.1</version>
+        </dependency>
+
         <!-- YAML frontmatter for server-owned runtime Skills -->
         <dependency>
             <groupId>com.fasterxml.jackson.dataformat</groupId>
