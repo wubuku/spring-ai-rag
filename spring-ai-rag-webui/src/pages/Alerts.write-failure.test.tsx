@@ -89,7 +89,7 @@ describe('Alerts: a rejected write must not look like a successful one', () => {
 
     renderAlerts();
 
-    await userEvent.click(await screen.findByRole('button', { name: 'alerts.deleteSilence' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'alerts.delete' }));
 
     await waitFor(() =>
       expect(showToast).toHaveBeenCalledWith('alerts.sloConfigDeleteError', 'error'),
@@ -117,7 +117,7 @@ describe('Alerts: a rejected write must not look like a successful one', () => {
 
     renderAlerts('/alerts?tab=silence-schedules');
 
-    await userEvent.click(await screen.findByRole('button', { name: 'alerts.deleteSilence' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'alerts.delete' }));
 
     await waitFor(() => expect(showToast).toHaveBeenCalledWith('alerts.deleteError', 'error'));
   });

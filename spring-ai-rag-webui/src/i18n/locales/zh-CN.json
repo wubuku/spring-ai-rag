@@ -347,7 +347,7 @@
     "unit": "单位",
     "silencePlans": "静默计划",
     "createSilence": "创建静默计划",
-    "deleteSilence": "删除",
+    "delete": "删除",
     "noActiveAlerts": "暂无活跃告警",
     "noSilencePlans": "暂无静默计划",
     "alertType": "类型",
