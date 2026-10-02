@@ -478,6 +478,111 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
+### Batch 809（已交付）
+
+- 分支：`feature/gate-census-20261003`
+- 内容：把"不能失败的门禁比没有门禁更糟"从**抽查**变成**普查**。起点是 Batch 806
+  摘出的那件事（仓库级门禁一条都没进 CI），但本批先问的是另一句：**我们到底有哪些
+  门禁，它们在哪跑，有没有人证明过它们能拒绝**。
+- **勘察：普查的结果本身就很难看**
+  - 46 个门禁脚本（`scripts/verify-*.{sh,mjs}` + WebUI 的 9 个 `check-*.mjs`）。
+  - **21 个门禁/入口里有 13 个在 `docs/` 下查无一处**，包括 9 个 WebUI 检查里的 7 个
+    ——`check:mutation-errors`、`check:query-errors` 这类东西根本没人知道存在。
+  - 仓库级 `scripts/verify-*.sh` **自 Batch 768 起一条都没在 CI 里跑过**。
+  - **208 个 WebUI 门禁自测不在任何 CI 步骤里**：`test:design-system` 没有被
+    `lint` / `test:run` / `test:coverage` 任何一条链引用。
+  - 两个自动化门禁**根本没有自测**：`verify-no-pessimistic-locks.sh`、
+    `check-alignment-policy.mjs`。
+- **真实缺陷 1：第四个"不能失败的门禁"，而且现有检查恰好看不见它**
+  `scripts/check-entity-migration-sync.sh` 的文件头写着"Check for entity fields that
+  don't have corresponding Flyway migrations"，函数体里**没有任何比较**——它只是把
+  `RagCollection.java` 的字段 grep 出来 `echo` 出去。而且：
+  - 硬编码的 11 张表里 **6 张早已改名**（`rag_retrieval_log` → `rag_retrieval_logs`、
+    `rag_ab_experiment` → `rag_ab_experiments`、`rag_ab_result` → `rag_ab_results`、
+    `rag_alert` → `rag_alerts`、`rag_retrieval_evaluation` → `rag_retrieval_evaluations`）；
+  - 它连的是 `-d postgres` 库，而项目用 `spring_ai_rag`、CI 用 `spring_ai_rag_test`；
+  - 它声称保护的不变量，`application.yml:62` 的 `ddl-auto: validate`
+    （注释原文 "FAIL fast if columns missing"）**在每次启动、每次测试上下文里都已经强制**。
+  - 全仓引用它的地方只有一份 2026-08-15 的归档计划。
+  **它能活这么久，是因为 `verify-project-docs.sh` 里的 `check_gates_can_fail` 只检查
+  使用 `rg`/`jq`/`yq` 的脚本**——那段检查的注释里已经记了三个同类实例，而第四个是
+  `psql` + `grep` 的，对它是隐形的。→ **删除**，并把虚假的安全感换成准确的陈述。
+- **真实缺陷 2：门禁的自测从来没进过 CI**
+  `ci.yml:182` 的 webui job 跑 `npm run lint`，而 `lint` 链条里**没有**
+  `test:design-system`。于是 208 条"证明门禁还能拒绝"的用例只在有人本地记得跑时才跑。
+  修法是把自测接进 `lint` 链条末尾——**不碰 workflow 文件**（OAuth scope 所限），
+  接进 CI 已经在跑的那条命令。
+- **真实缺陷 3：门禁不可发现**
+  新增 `undocumented-gate` 规则前，13 个门禁/入口在任何文档里都没有名字。
+- **变更**
+  1. 删除 `scripts/check-entity-migration-sync.sh`（归档文档保持原样：它是历史快照）。
+  2. 新增 `scripts/gate-registry.mjs`：**46 个门禁逐个登记**，分三种 kind——
+     `gate`（被某条链执行）、`entrypoint`（由人按名运行，如 `verify-project-docs.sh`）、
+     `manual`（需要真实服务与凭据的 25 个验收脚本）。每条按需带 `selfTest` 或
+     `noSelfTestReason`，带 `noCiReason` 的必须写出理由。
+  3. 新增 `scripts/verify-gate-wiring.mjs`，**8 条规则**：未登记 / 重复登记 / 未知 kind /
+     无自测且无理由 / 自测文件不存在 / 无人执行（orphan）/ CI 到不了且无理由 /
+     理由已过期（stale）/ 未文档化。它还**每次运行都把 standing gap 连同理由打印出来**，
+     11 条，无一条无理由。
+  4. 补两个自测：`pessimistic-locks-self-test.sh`（11 例）、`alignment-policy.test.mjs`
+     （13 例），**都接进各自的链**（docs 链 +1 检查，lint 链条 +1 步）。
+  5. `docs/developer-reference{,-zh-CN}.md` 各加一节"门禁清单与门禁普查"：21 行表格
+     （拒绝什么 / 自测 / 跑在哪）+ 第四个实例的完整解剖 + CI 现状。
+  6. **更正 Batch 808 的一处错误说法**（见下）。
+- **自罚（本批我自己制造、并被门禁抓到的缺陷）**
+  1. **登记表 21 个条目全忘了写 `kind`**，门禁第一次运行就报 21 条
+     `unknown-gate-kind`。这条错误是门禁自己抓到的，不是 review 抓到的。
+  2. **执行判据把 `.sh ` 当成命令**。我用 `/\bsh\s/` 找命令行，于是
+     `scripts/verify-chat-capability.sh \` 这种**清单行**（只要求文件存在）被判成
+     "被执行"——24 个 manual 脚本会显示成"已接入 docs 链"。改成左边界
+     `(?:^|[\s"'=/(])(?:node|bash|sh|npx|npm)\s` 后，拿仓库里 14 个真实形态逐一验证。
+  3. **循环列表里的路径带目录**，我的 `^[\w.-]+\.(sh|mjs)$` 不允许 `/`，于是真正被
+     `for gate in ...; bash "$gate"` 执行的悲观锁门禁被判成**孤儿**。
+  4. **YAML 的 `run:` 前缀**：我的直接路径判据只认 `^\.\.?\//`，而 fixture 里
+     `run: ./scripts/verify-gated-it.sh` 写在一行——真实 `ci.yml` 用的是多行写法
+     才侥幸没踩到。补了前缀剥离。
+  5. **pessimistic-locks 自测第一版只判退出码**。跑的时候忘了 export PATH，
+     `rg` 不在 PATH 上，门禁正确地 fail closed，于是 7 条"应当拒绝"的用例**全因错误的
+     原因通过**，只有"干净树应当通过"那一条发现了。改成**断言拒绝的理由**
+     （输出里必须有 `pessimistic coordination is forbidden`），并给自测自身加了
+     `rg` 前置检查。
+  6. **一次假读数**：变异测试 3 我先对着**已经还原**的文件跑，得到"未变红"的结论；
+     加上"变异必须真的生效"的断言重跑后才发现真正的原因（见下）。
+  7. 自测里留了一段语法错误的死代码、在 ESM 里用了 `require`、在非 async 函数里写了
+     `await`、`new URL().pathname` 当路径用、给自测的 `audit()` 忘了传 `docText`。
+- **变异测试 4 次有效 + 1 次如实记录为负**
+  1. 放一个 `scripts/verify-sneaky.mjs` 到盘上不登记 → 如期报 `unregistered-gate`。
+  2. 删掉一条 `noCiReason` → 如期报 `missing-ci-reason`。
+  3. 文档采集返回 `''` → 如期报 13 条 `undocumented-gate`。
+  4. **删掉循环解析块** → 如期报 `orphan-gate` 并指名
+     `scripts/verify-no-pessimistic-locks.sh`。
+  5. **把循环条件取反，如实记录为"未变红"**。原因是这个方向让采集器声称**更多**
+     "被执行"（把清单行也算进去），而 orphan 规则只看得见"少了谁"——它对这条规则是
+     单边的。正确的变异是删块（上一条），那个会红。
+- 验证：
+  - `verify-project-tests.sh` **12/12**（10 → 12：门禁普查的自测 + 门禁本身）
+  - `verify-project-docs.sh` **16/16**（15 → 16：悲观锁门禁自测）
+  - `npm run lint` **9 项检查 + 221 条门禁自测全绿**（8 文件/208 → 9 文件/221，+13），
+    整条命令 8.2s
+  - 前端单测 **77 文件 / 832 用例**全绿；`tsc -b` 干净
+  - 后端未被本批触碰，仍按惯例复跑：core **989 类 / 7711 用例 / 0 失败 / 154 跳过**
+    （`TEST-*.xml` 口径）
+- 指标：门禁脚本 47 → **46**（删掉 1 个装饰性）；门禁自测 208 → **221**（且首次进 CI）；
+  仓库 tests 链 10 → **12** 项；docs 链 15 → **16** 检查；未文档化门禁 13 → **0**；
+  自动化门禁 18/21 带自测（3 条写明为什么不能带）；CI 到达 10/21，缺口 11 条**全部有理由**；
+  新增用例 **47** 条（普查 23 + 悲观锁 11 + 对齐策略 13）。
+- 遗留（如实登记）：
+  - **CI 里仍然一条 `scripts/verify-*.sh` 都没跑**。本批把这件事变成了**门禁每次运行
+    都会打印的一等事实**（11 条 standing gap，各带理由），并让"理由过期"变成报错——
+    补丁落地后 `verify-project-tests.sh` 会指名哪几行该删。补丁仍在
+    `/tmp/b806-ci-gates.patch` 待人工应用。
+  - "无人执行"是按 runner 文本判定的，登记表文件头把这条限制写明了：它能抓住
+    "接到了没人跑的东西"，**抓不住"接到一句谎话"**。要真正证明执行语义需要
+    执行级的门禁自测（把 runner 放进 fixture 树里真跑一遍），本批没做，记为后续。
+  - 25 个 `manual` 脚本不在文档规则约束内（它们是各子系统的验收流程，不属于自动化
+    安全网），这条豁免是显式的选择而非遗漏。
+  - WebUI 的 e2e mock 套件（2.6 分钟）是否进 CI 仍未决，已在登记表里带理由登记。
+
 ### Batch 808（已交付）
 
 - 分支：`feature/hardcoded-copy-gate-20261003`
@@ -571,7 +676,10 @@
     `nDCG` 因首字母小写不匹配本门禁的判据。判据的"首字母大写"这一条本身有局限，
     如实记录。
   - **CI 里仍然一条 `scripts/verify-*.sh` 都没跑**（Batch 806 因 OAuth `workflow`
-    scope 限制摘出，补丁待手动应用；`npm run lint` 里新增的这一项同受影响）。
+    scope 限制摘出，补丁待手动应用）。**更正本批此前的一处错误说法**：当时写的是
+    "`npm run lint` 里新增的这一项同受影响"——**不成立**。`ci.yml:182` 的 webui job
+    跑的就是 `npm run lint`，而 `lint` 链条末尾正是 `check:hardcoded-copy`，
+    **这个新门禁确实在 CI 里跑**。真正缺的只有仓库级 `scripts/verify-*.sh` 那一层。
 
 ### Batch 807（已交付）
 

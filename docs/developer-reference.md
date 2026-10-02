@@ -85,7 +85,7 @@ The same script then reconciles the `*.it.enabled` switches that gate those
 PostgreSQL suites against the scripts and documents meant to turn them on:
 
 ```bash
-./scripts/verify-project-tests.sh   # runs both checks plus their self-tests
+./scripts/verify-project-tests.sh   # runs all six checks plus their self-tests
 ```
 
 Gating a suite is a promise that somebody can ungate it. `PdfImportPostgresIntegrationTest`
@@ -97,6 +97,65 @@ a `verify-gated-it.sh` suite entry points at a class that is gone or no longer
 gated by the flag the runner passes. Adding a gated suite means adding its run
 path; `scripts/test-support/integration-switch-self-test.mjs` proves each of
 those four checks can still reject.
+
+### Gate Inventory and the Gate Census
+
+`scripts/gate-registry.mjs` records every gate script in this repository and
+`scripts/verify-gate-wiring.mjs` censuses it. The registry is not bookkeeping:
+before it existed, Batch 809 measured that **13 of the 21 gates and entry points
+appeared nowhere under `docs/`** — including seven of the nine WebUI checks, so
+`check:mutation-errors` and `check:query-errors` were undiscoverable to anyone who
+did not already know they existed.
+
+| Gate | Rejects | Self-test | Runs in |
+|------|---------|-----------|----------|
+| `verify-test-visibility.mjs` | A test class that neither ran nor reported a skip (`tests="0" skipped="0"`) | `test-support/test-visibility-self-test.mjs` | tests chain |
+| `verify-integration-test-switches.mjs` | A gated switch missing a run path, in either direction | `test-support/integration-switch-self-test.mjs` | tests chain |
+| `verify-external-db-safety.mjs` | A suite that takes a caller-named database and runs `flyway.clean()` on it | `test-support/external-db-safety-self-test.mjs` | tests chain |
+| `verify-e2e-run-paths.mjs` | A Playwright spec no script can run | `test-support/e2e-reachability-self-test.mjs` | tests chain |
+| `verify-slo-endpoint-coverage.mjs` | A threshold whose endpoint is gone; a timer name shared across controllers | `test-support/slo-endpoint-coverage-self-test.mjs` | tests chain |
+| `verify-gate-wiring.mjs` | An automated gate that is unregistered, untested, unexecuted or unreachable from CI | `test-support/gate-wiring-self-test.mjs` | tests chain |
+| `verify-no-pessimistic-locks.sh` | Pessimistic locks, `SKIP LOCKED` and advisory locks in production code | `test-support/pessimistic-locks-self-test.sh` | docs chain |
+| `verify-zh-translation.mjs` | An untranslated English passage in a Chinese document | `test-support/zh-translation-self-test.mjs` | docs chain |
+| `verify-project-tests.sh` / `verify-project-docs.sh` | Aggregate entry points for the eight above | borne by each gate | by hand / not yet in CI |
+| `verify-gated-it.sh` | The 154 database-only integration suites | borne by switch reconciliation | **wired into CI** |
+| `verify-webui-e2e-mock.sh` | The 15 spec / 93 case WebUI mock regression | the suite is its own self-test | standalone (2.6 min) |
+| `check-alignment-policy.mjs` | Physical `text-align`, inline `textAlign`, the global-stylesheet contract | `__tests__/alignment-policy.test.mjs` | `npm run lint` |
+| `check-design-system.mjs` | Hard-coded values that bypass a design token | `__tests__/design-tokens.test.mjs` | `npm run lint` |
+| `check-a11y-forms.mjs` | A control with no accessible name, a label bound to nothing | `__tests__/a11y-forms.test.mjs` | `npm run lint` |
+| `check-mutation-errors.mjs` | A write action that does not report its failure | `__tests__/mutation-errors.test.mjs` | `npm run lint` |
+| `check-query-errors.mjs` | A read whose failure looks like an empty result | `__tests__/query-errors.test.mjs` | `npm run lint` |
+| `check-double-submit.mjs` | A write left unguarded while its request is in flight | `__tests__/double-submit.test.mjs` | `npm run lint` |
+| `check-i18n-keys.mjs` | Asymmetric key sets between the two locales; a `t()` naming a key that does not exist | `__tests__/i18n-keys.test.mjs` | `npm run lint` |
+| `check-hardcoded-copy.mjs` | A component that never calls i18n; a hard-coded user string in a file that does | `__tests__/hardcoded-copy.test.mjs` | `npm run lint` |
+| `check-page-shell.mjs` | A protected page that bypasses `PageHeader` | `__tests__/page-shell.test.mjs` | `npm run lint` |
+
+The census has five hard rules: every gate script is registered; an automated gate
+carries a self-test or says why it cannot; an automated gate is executed by
+something; **an automated gate CI cannot reach carries a written reason**; and every
+gate is mentioned in a document. Adding a gate without registering it fails the
+next run of `verify-project-tests.sh`.
+
+That last rule is not decoration. `check-entity-migration-sync.sh`, deleted in
+Batch 809, was this repository's **fourth** gate that could not fail: it claimed to
+reconcile entity fields against Flyway migrations and its body compared nothing,
+6 of its 11 hard-coded table names had been renamed out from under it
+(`rag_retrieval_log` → `rag_retrieval_logs` and five others), and it connected to a
+`postgres` database this project does not use — while the invariant it claimed to
+protect is already enforced at every startup by `ddl-auto: validate` in
+`application.yml`. It survived that long because "Gates can fail closed" in
+`verify-project-docs.sh` only inspects scripts that scan with `rg`, `jq` or `yq`,
+and a `psql` + `grep` gate is invisible to it.
+
+CI status: the two repository entry points (`verify-project-docs.sh` and
+`verify-project-tests.sh`) are **not wired into CI** — Batch 806 set them aside
+because editing `.github/workflows/` needs an OAuth token with the `workflow`
+scope, and `/tmp/b806-ci-gates.patch` is waiting on a human. The nine WebUI checks
+and their self-tests do run in CI, because ci.yml's webui job executes
+`npm run lint`. The census prints the standing gap together with its reason on
+every run; once the patch lands those entries turn *stale* and the gate fails,
+naming the lines to delete. That is deliberate: a stale exemption is how a debt
+baseline rots.
 
 ### Documentation System
 

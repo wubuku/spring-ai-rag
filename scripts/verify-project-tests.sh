@@ -91,3 +91,22 @@ echo "PASS: SLO endpoint coverage self-test"
 
 node scripts/verify-slo-endpoint-coverage.mjs
 echo "PASS: SLO endpoint coverage"
+
+# A sixth question, and the one that keeps the other five honest: are these
+# questions being asked at all? Batch 809 deleted `check-entity-migration-sync.sh`
+# after finding it compared nothing, queried six table names that no longer exist,
+# and protected an invariant Hibernate already enforces at startup — and found
+# that between Batch 768 and then, not one of the gates below ran in CI while 208
+# WebUI gate self-tests ran nowhere. The census below cannot fix the CI gap (that
+# needs a workflow change this token cannot make), but it can make the gap a
+# recorded decision instead of a silence, and it stops the next gate from being
+# born unclassified, untested and unwired.
+node scripts/test-support/gate-wiring-self-test.mjs >/dev/null || {
+  echo "Gate-wiring self-test failed; the gate may no longer reject anything." >&2
+  node scripts/test-support/gate-wiring-self-test.mjs >&2 || true
+  exit 1
+}
+echo "PASS: Gate wiring self-test"
+
+node scripts/verify-gate-wiring.mjs
+echo "PASS: Gate wiring"
