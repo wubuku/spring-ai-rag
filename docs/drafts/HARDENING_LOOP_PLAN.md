@@ -317,6 +317,46 @@
   约 53 行 × 2。合并需要同时验证两条链路的 OpenAPI 注解与日志文案差异，
   风险高于本批收益，暂列后续。
 
+### Batch 778（已交付）
+
+- 分支：`feature/sse-payload-assertions-20261003`
+- 内容：把 `RagChatControllerSendEventTest`（Batch 375）从"只验证没抛异常"升级为
+  **逐字段断言实际 SSE 载荷**。
+- **发现：既有用例对载荷回归完全失明**。该类把每个 ChatEvent 都分发一遍，但断言只有
+  `assertDoesNotThrow(...)`——**从不检查发出去的内容**。这比表面看起来更弱：
+  `SseEmitters.sendProgress` 会把发送异常整个吞掉（best-effort，注释写着"客户端多半已断开"），
+  所以"没抛异常"既证明不了载荷正确，也发现不了发送失败。
+  把 `retrievalTraceId` 删掉、把错误码写错、把 Completed 的字段名拼错——都能一路绿灯。
+- **变异测试给出了直接证据**（3 处变异，同时跑新旧两个类）：
+  | 变异 | 旧类（6 例） | 新类（10 例） |
+  |---|---|---|
+  | `firstNonBlank` 退化为恒取 preferred | **全绿** | **2 个失败** |
+  | Completed 不再透出 `retrievalTraceId` | **全绿** | **1 个失败** |
+  | code 为 null 时也写入占位 | **全绿** | **1 个失败** |
+  合计：旧类 3 处变异**一个都没抓到**，新类抓到 4 处。
+  这比任何覆盖率数字都有说服力。
+- **实现要点**：`SseEmitter.send(SseEventBuilder)` 是 public 可覆盖的，
+  `build()` 与 `DataWithMediaType.getData()` 也都是 public，
+  因此记录型 emitter **无需反射任何私有字段**即可取到真实载荷。
+  踩过一个坑：`build()` 返回的是**多个**部分（事件名累积的文本片段 + `data(...)` 放进去的载荷），
+  取"最后一个元素"会拿到文本而不是载荷——应取"最后一个 Map"。
+- **本批的方法论收获：JaCoCo 的"未覆盖分支"里有相当一部分是短接求值的结构性假象。**
+  例如 `if (completed.metadata() != null && ...get("retrievalTraceId") != null)`
+  报 `missed 1 / covered 3`——因为左值短路时右值根本没机会求值，
+  这 4 条分支里天然有 1 条无法独立触达。
+  本批 RagChatController 的 24 条"缺口"里，真正能靠测试移动的只有 2 条，
+  实际也只移动了 2 条（24 → 22）。
+  **结论：分支覆盖率可以用来"找地方看"，但不能直接当"KPI"，更不能当完成度。**
+  与 Batch 777 的结论一致：先诊断可达性，再决定写不写测试。
+- 指标：core **7439 用例，0 失败 0 错误 9 跳过**（XML 权威口径，+10）；
+  `RagChatController` 分支缺口 **24 → 22**；全局分支 **88.38% → 88.39%**、
+  行 98.42% 不变。
+- 遗留技术债（如实登记，未处理）：
+  - `ApiKeyManagementService` 21 条未覆盖分支（错误 keyId 守卫、吊销/过期授权真值表、
+    策略变更检测、`secretAvailable` 投影等，均为真业务逻辑），是下一批的目标。
+  - 本批之前发现的 NPE 缺陷（Batch 777）与"空流回退"分支的不可达性。
+  - 文档 2 笔漂移；`PageShell` 与 Slice 5 退出条件脱节；`ask`/`chat` 53 行 × 2 重复。
+
 ### Batch 777（已交付）
 
 - 分支：`feature/backend-branch-coverage-chat-20261003`（回归后端，连续 2 批 WebUI 后）
