@@ -317,6 +317,84 @@
   约 53 行 × 2。合并需要同时验证两条链路的 OpenAPI 注解与日志文案差异，
   风险高于本批收益，暂列后续。
 
+### Batch 791（已交付）
+
+- 分支：`feature/mutation-error-visibility-20261002`
+- 内容：修掉 **6 处失败完全静默的写操作**，并加门禁
+  `check:mutation-errors` 把这类缺陷钉死。
+- **勘察（先量基线，再写门禁）**：`src/` 里 **37 个** `useMutation`
+  → 27 个有 `onError` → 10 个没有 → 其中 4 个页面渲染了自己的 `.isError`
+  （实际有反馈）→ **6 个彻底静默**。
+  逐个核过，不靠肉眼：
+  | 文件 | mutation | 触发它的动作 |
+  |---|---|---|
+  | `Embeddings.tsx:113` | `cancelM` | 任务表格行内"取消" |
+  | `Embeddings.tsx:117` | `retryM` | 任务表格行内"重试" |
+  | `Embeddings.tsx:125` | `applyRepairM` | 修复预览对话框里的"应用修复" |
+  | `Evaluation.tsx:314` | `createM` | 套件页"创建套件" |
+  | `Evaluation.tsx:317` | `versionM` | 套件页"导出版本" |
+  | `Evaluation.tsx:363` | `startM` | 运行页"启动运行" |
+- **先排除一个可能的"其实不静默"**：`apiClient` 有响应拦截器，
+  但它只归一化消息、在 401 时清凭据，然后 reject——**不往屏幕上放任何东西**。
+  除非组件自己决定显示，失败就是不可见。
+- **真实后果**：后端返回 500 时按下"取消任务"，页面不闪、不解释、任务原样不变。
+  一次被拒绝的写操作与一个坏掉的按钮**完全无法区分**，用户只会再按一次。
+- **修法与两处必须做对的细节**（都被测试钉住）：
+  1. `cancelM`/`retryM` 共用一个提示时**指名是哪一个失败**
+     （`cancelM.isError ? cancelFailed : retryFailed`）——
+     共用同一条泛化提示会让用户去怪另一个按钮；
+  2. `applyRepairM` 的提示渲染在**对话框内部**：失败后对话框保持打开，
+     写在页面上的提示会被模态遮住，用户永远看不到。
+- **门禁 `scripts/check-mutation-errors.mjs`**，规则 `silent-mutation`：
+  一个 `useMutation` 既没有 `onError`、同一个文件里也没有渲染 `<name>.isError` 即报错。
+  串进 `npm run lint`。**刻意限定文件范围**（与可访问性门禁同一取舍）：
+  把 mutation 传给子组件、在子组件里渲染错误的形态检查器跟不进去，
+  会误报的门禁只会被忽略。豁免用行内
+  `/* mutation-error-allow: <理由> */`，目前**没有登记任何豁免**。
+- **测试（两类都要）**：
+  - 门禁自测 **10 例**（`scripts/__tests__/mutation-errors.test.mjs`），
+    含"只渲染了另一个 mutation 的错误"和"错误提示被注释掉"两个易漏形态，
+    以及**文档漂移断言**（两种语言都必须写到命令名与规则名）——
+    这是 Batch 789 踩过的坑：加规则忘写文档，当时是 `test:design-system` 抓住的。
+    这次直接把它写进自测，不等它再抓一次。
+  - 行为回归 **6 例**（`Embeddings.test.tsx` +3、`Evaluation.test.tsx` +3），
+    断言提示真的出现、**指名了正确的动作**、以及在对话框内部。
+- **写测试时踩到的真问题**：`mockRejectedValue` 是**持久**的，
+  而 `vi.clearAllMocks()` 只清调用记录、不重置实现——
+  我第一条用例用持久拒绝，直接把同文件里既有的"应用修复后对话框关闭"用例弄红了。
+  改用 `mockRejectedValueOnce`。这个坑已写进用例注释。
+- **变异测试 4 处，各被精确抓住**：
+  | 变异 | 抓到它的检查 |
+  |---|---|
+  | 删掉 cancelM/retryM 的失败提示 | 门禁报 2 条 `silent-mutation`，exit 1 |
+  | 删掉 applyRepairM 的提示 | 门禁报 1 条，exit 1 |
+  | 删掉 Evaluation 三处提示 | 门禁报 3 条，exit 1 |
+  | 只删生产代码的 6 处提示、保留全部测试 | **6 条行为用例各自变红**（互不代偿） |
+  | 把 applyRepair 的提示挪到对话框外 | `reports a failed repair inside the dialog, not behind the modal` 变红 |
+  | 把门禁规则整体删掉（`scanSource` 恒返回空） | 自测 5 例变红 |
+  | 把 `.isError` 匹配放宽成"文件里出现任意 isError" | 自测 `does not accept a render that only checks a different mutation` 变红 |
+  | 从中文文档第 6 节删掉规则名 | 自测 `documents this gate in both languages` 变红 |
+- 指标（实测值）：前端 **790 用例**（73 文件，+6）全绿；
+  门禁自测 **120 用例**（3 文件，+11）全绿；
+  `tokens:check` / `lint`（含新门禁，`check:mutation-errors` 扫描 **100 个组件文件**）/
+  `check:alignment`（11 处有意居中）/ `check:design-system`（94 token，0 grandfather）/
+  `check:a11y-forms`（91 个组件文件）/ `typecheck` / `build` 全通过；
+  仓库门禁 `verify-project-docs.sh` **15/15**、
+  `verify-project-tests.sh` 四项全 PASS、`verify-no-pessimistic-locks.sh` 通过。
+  本批**未改动任何 Java 源码**，无需重跑 Maven 套件。
+- 顺带查到但**未处理**（如实登记）：`zh-CN.json` 有 2 个 `en.json` 没有的键
+  （`common.next`、`common.previous`）——i18n 键集的对账目前**没有门禁**，
+  两种语言键集不等这件事不会失败。
+- 遗留技术债（如实登记，未处理）：
+  - `ApiKeyManagementService` 的恒真 null 判断 `if (retiring != null)`
+    （`retiring` 是 Spring Data 返回的 `Optional`，生产上永不为 null），
+    全仓扫描确认仅此 1 处，应改生产代码消除。
+  - i18n 键集缺少双向对账门禁。
+  - 纯英文标题在中文文档里仍无门禁守护（Batch 786 主动放弃的规则）。
+  - `Documents` 页"版本历史 → 恢复"的叠加是设计如此还是遗漏，待产品侧确认。
+  - 147 个集成测试仍未真正跑过（本机无 Docker）。
+  - `PageShell` 脱节；`ask`/`chat` 53 行 × 2 重复。
+
 ### Batch 790（已交付）
 
 - 分支：`feature/integration-switch-gate-20261002`

@@ -344,6 +344,11 @@ function SuitesPanel() {
         <button type="button" className={styles.primaryBtn} onClick={() => createM.mutate()}>
           {t('evaluation.createSuite')}
         </button>
+        {createM.isError && (
+          <div className={styles.error} role="alert">
+            {t('evaluation.createSuiteFailed')}
+          </div>
+        )}
         <label>
           {t('evaluation.definition')}
           <textarea rows={8} value={definition} onChange={e => setDefinition(e.target.value)} />
@@ -351,6 +356,11 @@ function SuitesPanel() {
         <button type="button" className={styles.primaryBtn} onClick={() => versionM.mutate()}>
           {t('evaluation.importVersion')}
         </button>
+        {versionM.isError && (
+          <div className={styles.error} role="alert">
+            {t('evaluation.importVersionFailed')}
+          </div>
+        )}
       </div>
     </section>
   );
@@ -378,6 +388,11 @@ function RunsPanel() {
         <button type="button" className={styles.primaryBtn} onClick={() => startM.mutate()}>
           {t('evaluation.startRun')}
         </button>
+        {startM.isError && (
+          <div className={styles.error} role="alert">
+            {t('evaluation.startRunFailed')}
+          </div>
+        )}
         {startM.data?.data?.id && (
           <div>
             {t('evaluation.runStatus')}: {startM.data.data.status}

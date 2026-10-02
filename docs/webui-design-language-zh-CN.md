@@ -182,7 +182,37 @@ Batch 776 在写下这条规则之前先量了基线：`Alerts`、`ApiKeys`、`S
 **刻意不用** `role="checkbox"`：复选框承诺"按空格就翻转"，而
 `handleSelectForCompare` 并不保证这一点。
 
-## 6. 对齐与布局
+## 6. 写操作必须报告失败
+
+`npm run check:mutation-errors` 串在 `npm run lint` 里，扫描 `src/` 下每个 `.tsx`，
+拦截一类违规：
+
+- `silent-mutation` —— 既没有传 `onError`（通常是 `showToast`），
+  也没有在同一个文件里渲染它自己的 `.isError` 的 `useMutation`。
+
+Batch 791 把 `src/` 里全部 **37 个** mutation 过了一遍，查出 **6 个失败不可见**：
+`Embeddings` 的 `cancelM`、`retryM`、`applyRepairM`，以及 `Evaluation` 的
+`createM`、`versionM`、`startM`。它们全都有 `onSuccess`，却没有报告失败的途径。
+在某个任务的后端返回 500 时按下"取消任务"，页面不会闪动、不作解释，
+任务看起来原封不动——一次被拒绝的写操作和一个坏掉的按钮完全无法区分，
+用户只会再按一次。
+
+`apiClient` 的响应拦截器救不了它们：它归一化消息、在 401 时清掉凭据，然后 reject。
+除非组件自己决定把它显示出来，否则屏幕上什么都不会出现。
+
+修复里有两处细节必须做对，两处都有测试钉住：
+
+- 两个兄弟动作共用一条提示时，提示必须**指名是哪一个失败**，
+  否则用户会去怪另一个按钮。
+- 模态框打开期间发生的失败，提示必须渲染在**模态框内部**，因为模态框会盖住页面。
+  `applyRepairM` 失败时对话框保持打开，写在它背后的提示用户永远看不到。
+
+这个门禁和可访问性门禁一样**刻意限定在文件范围内**。
+把 mutation 传给子组件、在子组件里渲染错误的形态，检查器跟不进去；
+而会误报的门禁只会被忽略。豁免用行内
+`/* mutation-error-allow: <具体理由> */`；目前没有登记任何豁免。
+
+## 7. 对齐与布局
 
 `npm run check:alignment` 串在 `npm run lint` 里。居中文本只有在写明理由时才被允许，
 目前有 11 处这样的豁免——每一处都是有意的决定，并记录在检查器中。
@@ -190,12 +220,13 @@ Batch 776 在写下这条规则之前先量了基线：`Alerts`、`ApiKeys`、`S
 之所以做成机器规则：正文字块居中是把布局从"可读"拖到"不可读"最常见的单一原因，
 而在代码审查里它是隐形的，因为 CSS 只有一行。
 
-## 7. 开始一次界面改动之前
+## 8. 开始一次界面改动之前
 
 1. 先跑门禁与测试，确认起点是绿的：
    ```bash
    npm run check:design-system
    npm run check:a11y-forms
+   npm run check:mutation-errors
    npm run test:run
    ```
 2. 写新东西之前，先找有没有现成基元。
@@ -203,7 +234,7 @@ Batch 776 在写下这条规则之前先量了基线：`Alerts`、`ApiKeys`、`S
 4. 需要新共享基元时，先找到两个真实调用方。
 5. 测试在同一个 batch 里写。把门禁弄红的事情没有做完。
 
-## 8. 本文刻意不说的内容
+## 9. 本文刻意不说的内容
 
 - 不逐页罗列布局。那是代码，代码就是参考。
 - 不复述 token 目录。读 `design-tokens/tokens.json`。

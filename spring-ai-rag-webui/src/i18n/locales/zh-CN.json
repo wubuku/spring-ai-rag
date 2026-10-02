@@ -651,7 +651,10 @@
     "citationsFailed": "无法加载引用校验",
     "traceId": "Trace ID",
     "citationStatus": "引用状态",
-    "outcome": "检索结果码"
+    "outcome": "检索结果码",
+    "createSuiteFailed": "无法创建套件",
+    "importVersionFailed": "无法导出版本",
+    "startRunFailed": "无法启动运行"
   },
   "embeddings": {
     "title": "嵌入任务运营",
@@ -694,6 +697,9 @@
     "localUnavailableDocuments": "本地不可用",
     "corruptDocuments": "物理损坏",
     "vectorRepairNeededDocuments": "需修复向量",
-    "reason": "原因"
+    "reason": "原因",
+    "cancelFailed": "无法取消任务",
+    "retryFailed": "无法重试任务",
+    "applyRepairFailed": "无法应用修复"
   }
 }
