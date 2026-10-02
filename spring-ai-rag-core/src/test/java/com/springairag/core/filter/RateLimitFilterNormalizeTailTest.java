@@ -29,14 +29,49 @@ class RateLimitFilterNormalizeTailTest {
         assertEquals(200, response.getStatus());
     }
 
+    /**
+     * The name promised a return value the body never looked at: it called
+     * doFilter and its own comment conceded "仅验证不抛异常即可（间接覆盖分支）",
+     * which is not the same thing. Any change that made fixedPrincipalType return
+     * the raw attribute — leaking an unrecognised principal type straight into
+     * the rate-limit observability tags — left this test green. Batch 811.
+     */
+    private String fixedPrincipalType(RateLimitFilter filter,
+                                      MockHttpServletRequest request) throws Exception {
+        var method = RateLimitFilter.class
+                .getDeclaredMethod("fixedPrincipalType",
+                        jakarta.servlet.http.HttpServletRequest.class);
+        method.setAccessible(true);
+        return (String) method.invoke(filter, request);
+    }
+
     @Test
     void fixedPrincipalTypeReturnsUnknownForNonStandardType() throws Exception {
         var request = new MockHttpServletRequest("GET", "/test");
         request.setAttribute("authenticatedPrincipalType", "WEIRD_TYPE");
-        // fixedPrincipalType 对非标类型返回 "UNKNOWN"。
+
+        assertEquals("UNKNOWN", fixedPrincipalType(new RateLimitFilter(true, 60), request));
+    }
+
+    @Test
+    void fixedPrincipalTypePassesThroughTheThreeKnownTypes() throws Exception {
+        // The other arm of the same branch, and the one that decides whether a
+        // legitimate principal is still attributed correctly in metrics.
         var filter = new RateLimitFilter(true, 60);
-        // 仅验证不抛异常即可（间接覆盖分支）。
-        filter.doFilter(request, new MockHttpServletResponse(), (req, res) -> { });
+        for (String type : new String[] {
+                ApiKeyAuthFilter.PRINCIPAL_DATABASE_API_KEY,
+                ApiKeyAuthFilter.PRINCIPAL_ENVIRONMENT_ROOT,
+                ApiKeyAuthFilter.PRINCIPAL_LEGACY_STATIC }) {
+            var request = new MockHttpServletRequest("GET", "/test");
+            request.setAttribute(ApiKeyAuthFilter.AUTHENTICATED_PRINCIPAL_TYPE, type);
+            assertEquals(type, fixedPrincipalType(filter, request));
+        }
+    }
+
+    @Test
+    void fixedPrincipalTypeIsUnknownWhenTheAttributeIsAbsent() throws Exception {
+        assertEquals("UNKNOWN", fixedPrincipalType(new RateLimitFilter(true, 60),
+                new MockHttpServletRequest("GET", "/test")));
     }
 
     @Test

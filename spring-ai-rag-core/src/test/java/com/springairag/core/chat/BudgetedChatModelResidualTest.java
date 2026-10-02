@@ -2,6 +2,11 @@ package com.springairag.core.chat;
 
 import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.exception.RagException;
+import com.springairag.core.usage.LlmInvocationOutcome;
+import com.springairag.core.usage.LlmInvocationPurpose;
+import com.springairag.core.usage.LlmUsageEvent;
+import com.springairag.core.usage.LlmUsageRecorder;
+import org.springframework.ai.chat.metadata.DefaultUsage;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -19,10 +24,12 @@ import reactor.core.publisher.Flux;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -106,12 +113,21 @@ class BudgetedChatModelResidualTest {
 
     @Test
     void streamCancellationFallsBackToCancelledOutcome() {
-        BudgetedChatModel model = new BudgetedChatModel(delegate, budget);
+        // The name made a promise the body never checked: it disposed a
+        // subscription and asserted nothing, so SUCCEEDED, FAILED, or a ledger
+        // that never records at all all passed. Batch 811.
+        RecordingRecorder recorder = new RecordingRecorder();
         when(delegate.stream(any(Prompt.class))).thenReturn(Flux.never());
 
-        var subscription = model.stream(
+        var subscription = model(recorder).stream(
                 new Prompt(List.of(new UserMessage("hi")))).subscribe();
         subscription.dispose();
+
+        List<LlmUsageEvent> events = recorder.all();
+        assertEquals(1, events.size(),
+                "cancelling a stream must still record exactly one ledger event");
+        assertEquals(LlmInvocationOutcome.CANCELLED, events.get(0).outcome());
+        assertTrue(events.get(0).streaming());
     }
 
     @Test
@@ -154,12 +170,62 @@ class BudgetedChatModelResidualTest {
 
     @Test
     void summaryPurposeStreamStillRecordsUsage() {
-        BudgetedChatModel summaryModel = new BudgetedChatModel(
-                delegate, budget, 0, 0, 0, 10, estimator, true);
-        when(delegate.stream(any(Prompt.class))).thenReturn(Flux.empty());
+        // Same shape: the name claims usage is recorded, the body only blocked
+        // the Flux and never looked at the ledger.
+        RecordingRecorder recorder = new RecordingRecorder();
+        when(delegate.stream(any(Prompt.class)))
+                .thenReturn(Flux.just(responseWithUsage(7, 5)));
 
-        summaryModel.stream(new Prompt(List.of(new UserMessage("hi"))))
+        new BudgetedChatModel(
+                delegate, budget, 0, 0, 0, 10, estimator,
+                LlmInvocationPurpose.SUMMARY, recorder,
+                null, "CONFIGURED_MODEL_COST", "summary-model")
+                .stream(new Prompt(List.of(new UserMessage("hi"))))
                 .collectList()
                 .block();
+
+        List<LlmUsageEvent> events = recorder.all();
+        assertEquals(1, events.size());
+        LlmUsageEvent event = events.get(0);
+        assertEquals(LlmInvocationPurpose.SUMMARY, event.purpose());
+        assertEquals(LlmInvocationOutcome.SUCCEEDED, event.outcome());
+        assertTrue(event.usage().available(),
+                "a summary-purpose stream must still report usage");
+        assertEquals(7, event.usage().promptTokens());
+        assertEquals(5, event.usage().completionTokens());
+        assertEquals(12, event.usage().totalTokens());
+    }
+
+    private BudgetedChatModel model(LlmUsageRecorder recorder) {
+        return new BudgetedChatModel(
+                delegate, budget, 0, 0, 0, 10, estimator, LlmInvocationPurpose.CHAT,
+                recorder, null, "CONFIGURED_MODEL_COST", "test-model");
+    }
+
+    private static ChatResponse responseWithUsage(int promptTokens, int completionTokens) {
+        return new ChatResponse(
+                List.of(),
+                ChatResponseMetadata.builder()
+                        .usage(new DefaultUsage(promptTokens, completionTokens))
+                        .build());
+    }
+
+    /** Captures both ledger channels so a test can assert what was written. */
+    private static final class RecordingRecorder implements LlmUsageRecorder {
+        private final List<LlmUsageEvent> events = new CopyOnWriteArrayList<>();
+
+        @Override
+        public void record(LlmUsageEvent event) {
+            events.add(event);
+        }
+
+        @Override
+        public void recordAsync(LlmUsageEvent event) {
+            events.add(event);
+        }
+
+        List<LlmUsageEvent> all() {
+            return List.copyOf(events);
+        }
     }
 }
