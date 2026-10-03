@@ -478,6 +478,52 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
+### Batch 832（已交付）
+
+- 分支：`feature/batch-legacy-path-20261006`
+- 内容：执行 Batch 831 量清但没做完的那件事——删掉 `BatchDocumentService`
+  两条只在"没有 `DocumentMutationService` 时"才走的分支。
+  `DocumentMutationService` 是无条件 `@Service`，两条 else 分支在运行的应用里
+  走不到。**主源码 402 → 300 行。**
+- 删了什么：
+  | 删除项 | 规模 | 说明 |
+  |---|---|---|
+  | `createSingleDocument` | 67 行 | 只被 legacy 分支的 2 处调用 |
+  | `transactionTemplate` + 4 参 `@Autowired` 构造器 + 3 参转发构造器 | ~18 行 | 事务模板只服务 legacy 的 ASYNC 分支；3 参那个与 823 批同型 |
+  | `deleteSingleDocument` 的 else 分支 | 5 行 | **它是不带 revision 校验的硬删除，绕过乐观锁** |
+  | `documentEmbedService` 字段与构造参数 | ~8 行 | 删完 legacy 后它变成**只写不读**的死字段 |
+  | 随之未用的 import | 4 个 | |
+  - 保留 `computeSha256`：831 批已查明它有两个生产调用方，且与
+    `DigestUtils.sha256` 在 null 输入上行为不同（NPE vs IllegalArgumentException），
+    并过去是行为变更、不属于删死代码。
+- 测试（删 8 条 / 改 11 条 / 新增夹具 1 个）：
+  - 删的 8 条**只为覆盖已删代码**：`duplicateContentSkipsCreationAndEmbedding`、
+    `asyncWithoutTransactionManagerFailsItemGracefully`、
+    `asyncWithTransactionManagerEnqueuesPerItem`、
+    `syncEmbeddingFailureMarksDocumentAndReportsError`、
+    `syncEmbeddingCachedReturnsCachedAction`、
+    `duplicateWithSyncAndNoForceSkipsEmbedding`、
+    `asyncBatchCreationRunsInsideTransactionTemplate`、
+    门控 IT 的 `batchAsyncEnqueueFailureRollsBackDocumentPersistence`。
+  - `BatchDocumentServiceLegacyTailTest` 删完只剩 2 条删除路径用例，
+    类名里的 "Legacy" 失效，**改名为 `BatchDocumentServiceDeleteTailTest`**。
+  - 改的用例断言对象换了：从"内联代码 `findByContentHash` + `save` 出了什么"
+    换成"服务把什么交给 `createLocal`"。例：
+    `verify(documentRepository).save(...)` →
+    `verify(mutationService).createLocal(any(), isNull(), eq(SYNC), anyBoolean(), eq("BATCH_CREATE"), ...)`。
+  - 新增夹具 `BatchDocumentMutationFixture`：`embeddingAction` 用真实的
+    `EmbeddingAction` 取值（生产侧无派发时就是 `"NONE"`），
+    支持按标题回报不同动作、让指定标题抛异常。
+  - **顺手把乐观锁钉住了**：`batchDeleteDocuments_success` 现在给一条文档设
+    `revision=7`，断言 `hardDeleteLocal(eq(1L), eq(7L))`，另一条未设 revision
+    的缺省传 1L，并断言服务**不再**自己 `deleteByDocumentId` / `deleteById`。
+    旧断言验的正是那条绕过乐观锁的回落。
+- **夹具最容易写错的地方**（这次提前避开了）：`collectionId` 与 `policy` 是
+  `createLocal` 的**独立参数**，不在 `DocumentRequest` 里。从请求读
+  `getCollectionId()` 恒为 null，重建出的文档少字段而**测试照样绿**。
+  830 批的 `PdfToRagMutationFixture` 就在同一处栽过一次，夹具里写明了这个坑。
+- 验收：见下方提交记录。
+
 ### Batch 831（仅勘察，代码改动已回退）
 
 - 分支：`feature/batch-legacy-path-20261005`（已删）

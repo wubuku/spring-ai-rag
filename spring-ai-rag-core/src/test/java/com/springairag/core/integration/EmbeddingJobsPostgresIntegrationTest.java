@@ -1,7 +1,5 @@
 package com.springairag.core.integration;
 
-import com.springairag.api.dto.DocumentRequest;
-import com.springairag.api.enums.EmbeddingPolicy;
 import com.springairag.core.config.EmbeddingProfile;
 import com.springairag.core.config.EmbeddingProfileProvider;
 import com.springairag.core.config.RagProperties;
@@ -13,9 +11,6 @@ import com.springairag.core.embeddingjob.EmbeddingJobWakeupPublisher;
 import com.springairag.core.embeddingjob.EmbeddingJobsAvailableEvent;
 import com.springairag.core.embeddingjob.EmbeddingJobWorker;
 import com.springairag.core.entity.RagDocument;
-import com.springairag.core.repository.RagDocumentRepository;
-import com.springairag.core.repository.RagEmbeddingRepository;
-import com.springairag.core.service.BatchDocumentService;
 import com.springairag.core.service.DocumentEmbedService;
 import com.springairag.core.service.DocumentDerivationDescriptorProvider;
 import com.springairag.core.service.EmbeddingPersistenceService;
@@ -51,8 +46,6 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
@@ -621,55 +614,6 @@ class EmbeddingJobsPostgresIntegrationTest {
                         + readiness.runningDocuments()
                         + readiness.failedDocuments()
                         + readiness.staleOrMissingDocuments());
-    }
-
-    @Test
-    void batchAsyncEnqueueFailureRollsBackDocumentPersistence() {
-        RagDocumentRepository documentRepository =
-                mock(RagDocumentRepository.class);
-        when(documentRepository.findByContentHash(anyString())).thenReturn(List.of());
-        when(documentRepository.save(any(RagDocument.class))).thenAnswer(invocation -> {
-            RagDocument document = invocation.getArgument(0);
-            long id = jdbcTemplate.queryForObject(
-                    "INSERT INTO rag_documents "
-                            + "(title, content, content_hash, processing_status, version) "
-                            + "VALUES (?, ?, ?, 'COMPLETED', 0) RETURNING id",
-                    Long.class,
-                    document.getTitle(),
-                    document.getContent(),
-                    document.getContentHash());
-            document.setId(id);
-            document.setVersion(0L);
-            return document;
-        });
-        EmbeddingDispatchService dispatchService =
-                mock(EmbeddingDispatchService.class);
-        doThrow(new IllegalStateException("job enqueue failed"))
-                .when(dispatchService)
-                .enqueueInCurrentTransaction(
-                        any(RagDocument.class),
-                        anyBoolean(),
-                        anyBoolean(),
-                        anyString());
-        BatchDocumentService service = new BatchDocumentService(
-                documentRepository,
-                mock(RagEmbeddingRepository.class),
-                mock(DocumentEmbedService.class),
-                new DataSourceTransactionManager(dataSource));
-        ReflectionTestUtils.setField(
-                service, "dispatchService", dispatchService);
-        DocumentRequest request = new DocumentRequest(
-                "transactional batch", "rollback me");
-
-        var response = service.batchCreateDocuments(
-                List.of(request), false, null, false, EmbeddingPolicy.ASYNC);
-
-        assertEquals(1, response.failed());
-        assertEquals(0, response.created());
-        assertEquals(0L, jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM rag_documents "
-                        + "WHERE title = 'transactional batch'",
-                Long.class));
     }
 
     private long insertDocument(long collectionId, String hash, boolean enabled) {

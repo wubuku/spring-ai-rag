@@ -51,8 +51,7 @@ class BatchDocumentCoordinatorTest {
 
     @BeforeEach
     void setUp() {
-        service = new BatchDocumentService(
-                documentRepository, embeddingRepository, documentEmbedService);
+        service = new BatchDocumentService(documentRepository, embeddingRepository);
         service.setDocumentMutationService(documentMutationService);
         // ASYNC 策略要求持久化嵌入任务可用。
         service.setDispatchService(mock(EmbeddingDispatchService.class));

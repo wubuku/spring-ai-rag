@@ -34,9 +34,7 @@ class BatchDocumentServiceDeleteErrorTailTest {
                 .thenReturn(List.of(document));
         var service = new BatchDocumentService(
                 documentRepository,
-                mock(com.springairag.core.repository.RagEmbeddingRepository.class),
-                mock(DocumentEmbedService.class),
-                mock(org.springframework.transaction.PlatformTransactionManager.class));
+                mock(com.springairag.core.repository.RagEmbeddingRepository.class));
         service.setDocumentMutationService(mutationService);
 
         var response = service.batchDeleteDocuments(List.of(9L));
@@ -53,9 +51,7 @@ class BatchDocumentServiceDeleteErrorTailTest {
         method.setAccessible(true);
         var service = new BatchDocumentService(
                 mock(com.springairag.core.repository.RagDocumentRepository.class),
-                mock(com.springairag.core.repository.RagEmbeddingRepository.class),
-                mock(DocumentEmbedService.class));
-        service.setDocumentMutationService(null);
+                mock(com.springairag.core.repository.RagEmbeddingRepository.class));
 
         assertEquals("Document creation failed",
                 method.invoke(service, (Object) null));

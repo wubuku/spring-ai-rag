@@ -18,11 +18,8 @@ import com.springairag.core.logging.SensitiveDataMaskingConverter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionTemplate;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -30,7 +27,6 @@ import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
-import java.util.Map;
 
 /**
  * Batch Document Operations Service
@@ -46,28 +42,19 @@ public class BatchDocumentService {
 
     private final RagDocumentRepository documentRepository;
     private final RagEmbeddingRepository embeddingRepository;
-    private final DocumentEmbedService documentEmbedService;
-    private final TransactionTemplate transactionTemplate;
     private EmbeddingDispatchService dispatchService;
-    private DocumentMutationService documentMutationService; // optional-claim: DocumentMutationService 是无条件 @Service，null 臂只在不走 Spring 装配的构造路径可达；守卫真正的职责是切到 legacy 内联批量写入路径——那条路径只在 Spring 装配之外可达
+    private DocumentMutationService documentMutationService;
 
+    /**
+     * 第三个参数 {@code documentEmbedService} 曾属于"没有
+     * {@code DocumentMutationService} 就自己驱动嵌入"那条 legacy 分支，
+     * 已随 Batch 832 删除。嵌入现在由 {@code DocumentMutationService}
+     * 按策略执行——本服务既不调它、也不需要它。
+     */
     public BatchDocumentService(RagDocumentRepository documentRepository,
-                                 RagEmbeddingRepository embeddingRepository,
-                                 DocumentEmbedService documentEmbedService) {
-        this(documentRepository, embeddingRepository, documentEmbedService, null);
-    }
-
-    @Autowired
-    public BatchDocumentService(RagDocumentRepository documentRepository,
-                                 RagEmbeddingRepository embeddingRepository,
-                                 DocumentEmbedService documentEmbedService,
-                                 @Nullable PlatformTransactionManager transactionManager) {
+                                 RagEmbeddingRepository embeddingRepository) {
         this.documentRepository = documentRepository;
         this.embeddingRepository = embeddingRepository;
-        this.documentEmbedService = documentEmbedService;
-        this.transactionTemplate = transactionManager == null
-                ? null
-                : new TransactionTemplate(transactionManager);
     }
 
     @org.springframework.beans.factory.annotation.Autowired(required = false)
@@ -168,24 +155,8 @@ public class BatchDocumentService {
             boolean force,
             String idempotencyKey) {
         try {
-            if (documentMutationService != null) {
-                return createSingleDocumentWithCoordinator(
-                        req, policy, collectionId, force, idempotencyKey);
-            }
-            if (policy == EmbeddingPolicy.ASYNC) {
-                if (transactionTemplate == null) {
-                    throw new IllegalStateException(
-                            "ASYNC batch creation requires a transaction manager");
-                }
-                DocumentResult result = transactionTemplate.execute(status ->
-                        createSingleDocument(req, policy, collectionId, force));
-                if (result == null) {
-                    throw new IllegalStateException(
-                            "ASYNC batch creation returned no transaction result");
-                }
-                return result;
-            }
-            return createSingleDocument(req, policy, collectionId, force);
+            return createSingleDocumentWithCoordinator(
+                    req, policy, collectionId, force, idempotencyKey);
         } catch (Exception e) {
             // 单条失败不能中止整个 batch；异常必须先逃出事务回调以触发回滚。
             String error = safeError(e.getMessage());
@@ -222,74 +193,6 @@ public class BatchDocumentService {
                 created.mutation().embeddingAction(),
                 created.mutation().embeddingJobId(),
                 created.mutation().embeddingBatchId());
-    }
-
-    private DocumentResult createSingleDocument(
-            DocumentRequest req,
-            EmbeddingPolicy policy,
-            Long collectionId,
-            boolean force) {
-        String contentHash = computeSha256(req.getContent());
-        List<RagDocument> existing = documentRepository.findByContentHash(contentHash);
-
-        RagDocument doc;
-        boolean newlyCreated;
-
-        if (!existing.isEmpty()) {
-            doc = existing.get(0);
-            newlyCreated = false;
-            log.info("Duplicate content detected, using existing doc id={}", doc.getId());
-        } else {
-            doc = new RagDocument();
-            doc.setTitle(req.getTitle());
-            doc.setContent(req.getContent());
-            doc.setSource(req.getSource());
-            doc.setDocumentType(req.getDocumentType());
-            doc.setMetadata(req.getMetadata());
-            doc.setContentHash(contentHash);
-            // Prefer per-doc collectionId, fall back to batch-level collectionId
-            if (req.getCollectionId() != null) {
-                doc.setCollectionId(req.getCollectionId());
-            } else {
-                doc.setCollectionId(collectionId);
-            }
-            doc = documentRepository.save(doc);
-            newlyCreated = true;
-            log.info("Document created: id={}", doc.getId());
-        }
-
-        if (policy == EmbeddingPolicy.SKIP) {
-            return new DocumentResult(
-                    doc.getId(), doc.getTitle(), newlyCreated, null,
-                    "SKIPPED", null, null);
-        }
-        if (policy == EmbeddingPolicy.ASYNC) {
-            EmbeddingDispatchService.Result queued =
-                    dispatchService.enqueueInCurrentTransaction(
-                            doc, newlyCreated || force, force, "BATCH_CREATE");
-            return new DocumentResult(
-                    doc.getId(), doc.getTitle(), newlyCreated, null,
-                    queued.action().name(),
-                    queued.embeddingJobId(),
-                    queued.embeddingBatchId());
-        }
-        if (newlyCreated || force) {
-            Map<String, Object> embedResult = documentEmbedService.embedDocument(doc.getId(), force);
-            String status = (String) embedResult.get("status");
-            if (!"COMPLETED".equals(status) && !"CACHED".equals(status)) {
-                String error = (String) embedResult.get("error");
-                doc.setProcessingStatus("EMBEDDING_FAILED");
-                documentRepository.save(doc);
-                return new DocumentResult(doc.getId(), doc.getTitle(), newlyCreated,
-                        "Embedding failed: " + (error != null ? error : status));
-            }
-            return new DocumentResult(
-                    doc.getId(), doc.getTitle(), newlyCreated, null,
-                    "CACHED".equals(status) ? "SYNC_CACHED" : "SYNC_COMPLETED",
-                    null, null);
-        }
-
-        return new DocumentResult(doc.getId(), doc.getTitle(), newlyCreated, null);
     }
 
     /**
@@ -359,14 +262,9 @@ public class BatchDocumentService {
         if (document == null) {
             return new BatchDeleteItem(id, "NOT_FOUND");
         }
-        if (documentMutationService != null) {
-            long revision = document.getDocumentRevision() == null
-                    ? 1L : document.getDocumentRevision();
-            documentMutationService.hardDeleteLocal(id, revision);
-        } else {
-            embeddingRepository.deleteByDocumentId(id);
-            documentRepository.deleteById(id);
-        }
+        long revision = document.getDocumentRevision() == null
+                ? 1L : document.getDocumentRevision();
+        documentMutationService.hardDeleteLocal(id, revision);
         return new BatchDeleteItem(id, "DELETED");
     }
 

@@ -5,6 +5,7 @@ import com.springairag.api.dto.BatchDeleteItem;
 import com.springairag.api.dto.BatchDeleteResponse;
 import com.springairag.api.dto.DocumentDeleteResponse;
 import com.springairag.api.dto.DocumentRequest;
+import com.springairag.api.enums.EmbeddingPolicy;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.repository.RagDocumentRepository;
 import com.springairag.core.repository.RagEmbeddingRepository;
@@ -26,15 +27,17 @@ class BatchDocumentServiceTest {
 
     private RagDocumentRepository documentRepository;
     private RagEmbeddingRepository embeddingRepository;
-    private DocumentEmbedService documentEmbedService;
+    private DocumentMutationService mutationService;
     private BatchDocumentService service;
 
     @BeforeEach
     void setUp() {
         documentRepository = mock(RagDocumentRepository.class);
         embeddingRepository = mock(RagEmbeddingRepository.class);
-        documentEmbedService = mock(DocumentEmbedService.class);
-        service = new BatchDocumentService(documentRepository, embeddingRepository, documentEmbedService);
+        mutationService = mock(DocumentMutationService.class);
+        // Batch 832：单条创建只有 createLocal 一条通道（legacy 内联落库已删）。
+        service = new BatchDocumentService(documentRepository, embeddingRepository);
+        service.setDocumentMutationService(mutationService);
     }
 
     private DocumentRequest createRequest(String title, String content) {
@@ -59,9 +62,7 @@ class BatchDocumentServiceTest {
     @DisplayName("batchCreateDocuments: creates document without embedding")
     void batchCreateDocuments_created() {
         DocumentRequest req = createRequest("标题1", "内容1");
-        RagDocument savedDoc = createSavedDoc(1L, "标题1", null);
-        when(documentRepository.findByContentHash(anyString())).thenReturn(List.of());
-        when(documentRepository.save(any(RagDocument.class))).thenReturn(savedDoc);
+        BatchDocumentMutationFixture.stubCreates(mutationService);
 
         BatchCreateResponse output = service.batchCreateDocuments(List.of(req));
 
@@ -72,26 +73,28 @@ class BatchDocumentServiceTest {
         assertEquals(1L, output.results().getFirst().documentId());
         assertTrue(output.results().getFirst().newlyCreated());
 
-        verify(documentRepository).save(any(RagDocument.class));
+        // 落库由协作者做：服务交出请求，自己不再 save。
+        verify(mutationService).createLocal(
+                any(), isNull(), any(), anyBoolean(), eq("BATCH_CREATE"),
+                isNull(), any(), any(), any());
+        verify(documentRepository, never()).save(any(RagDocument.class));
     }
 
     @Test
     @DisplayName("batchCreateDocuments: detects duplicate content hash")
     void batchCreateDocuments_duplicate() {
-        String content = "重复内容";
-        DocumentRequest req = createRequest("标题", content);
-        RagDocument existing = createSavedDoc(99L, "原标题", BatchDocumentService.computeSha256(content));
-        when(documentRepository.findByContentHash(anyString())).thenReturn(List.of(existing));
+        DocumentRequest req = createRequest("标题", "重复内容");
+        // 去重由协作者判定：它回报 UNCHANGED，服务据此记 skipped。
+        BatchDocumentMutationFixture.stubAction(
+                mutationService, Map.of("标题", "UNCHANGED"));
 
         BatchCreateResponse output = service.batchCreateDocuments(List.of(req));
 
         assertEquals(0, output.created());
         assertEquals(1, output.skipped());
         assertEquals(0, output.failed());
-        assertEquals(99L, output.results().getFirst().documentId());
+        assertEquals(1L, output.results().getFirst().documentId());
         assertFalse(output.results().getFirst().newlyCreated());
-
-        verify(documentRepository, never()).save(any());
     }
 
     @Test
@@ -100,14 +103,8 @@ class BatchDocumentServiceTest {
         DocumentRequest req1 = createRequest("新文档", "新内容");
         DocumentRequest req2 = createRequest("重复文档", "已有内容");
 
-        RagDocument saved = createSavedDoc(1L, "新文档", null);
-        RagDocument existing = createSavedDoc(99L, "重复文档", "hash");
-
-        when(documentRepository.findByContentHash(BatchDocumentService.computeSha256("新内容")))
-                .thenReturn(List.of());
-        when(documentRepository.findByContentHash(BatchDocumentService.computeSha256("已有内容")))
-                .thenReturn(List.of(existing));
-        when(documentRepository.save(any(RagDocument.class))).thenReturn(saved);
+        BatchDocumentMutationFixture.stubAction(
+                mutationService, Map.of("重复文档", "UNCHANGED"));
 
         BatchCreateResponse output = service.batchCreateDocuments(List.of(req1, req2));
 
@@ -130,11 +127,8 @@ class BatchDocumentServiceTest {
         DocumentRequest req1 = createRequest("bad", "内容1");
         DocumentRequest req2 = createRequest("good", "内容2");
 
-        RagDocument saved = createSavedDoc(2L, "good", null);
-        when(documentRepository.findByContentHash(anyString()))
-                .thenThrow(new RuntimeException("DB error"))
-                .thenReturn(List.of());
-        when(documentRepository.save(any(RagDocument.class))).thenReturn(saved);
+        BatchDocumentMutationFixture.stubFailureFor(
+                mutationService, "bad", "DB error");
 
         BatchCreateResponse output = service.batchCreateDocuments(List.of(req1, req2));
 
@@ -147,7 +141,7 @@ class BatchDocumentServiceTest {
         assertNotNull(r1.error());
 
         BatchCreateResponse.DocumentResult r2 = output.results().get(1);
-        assertEquals(2L, r2.documentId());
+        assertEquals(1L, r2.documentId());
         assertNull(r2.error());
     }
 
@@ -157,64 +151,66 @@ class BatchDocumentServiceTest {
     @DisplayName("batchCreateDocuments: auto-embeds after creation when embed=true")
     void batchCreateDocuments_withEmbed_success() {
         DocumentRequest req = createRequest("标题", "内容");
-        RagDocument savedDoc = createSavedDoc(1L, "标题", null);
-        when(documentRepository.findByContentHash(anyString())).thenReturn(List.of());
-        when(documentRepository.save(any(RagDocument.class))).thenReturn(savedDoc);
-        when(documentEmbedService.embedDocument(1L, false))
-                .thenReturn(Map.of("status", "COMPLETED", "chunksCreated", 3));
+        BatchDocumentMutationFixture.stubCreates(mutationService);
 
         BatchCreateResponse output = service.batchCreateDocuments(List.of(req), true, null, false);
 
         assertEquals(1, output.created());
         assertEquals(0, output.failed());
         assertEquals(1L, output.results().getFirst().documentId());
-        verify(documentEmbedService).embedDocument(1L, false);
+        // 嵌入由协作者按 SYNC 策略执行，动作从它的响应里回传。
+        assertEquals("SYNC_COMPLETED",
+                output.results().getFirst().embeddingAction());
+        verify(mutationService).createLocal(
+                any(), isNull(), eq(EmbeddingPolicy.SYNC), anyBoolean(),
+                eq("BATCH_CREATE"), isNull(), any(), any(), any());
     }
 
     @Test
     @DisplayName("batchCreateDocuments: skips embedding when document already exists with embed=true")
     void batchCreateDocuments_withEmbed_existingSkipped() {
-        String content = "已有内容";
-        DocumentRequest req = createRequest("标题", content);
-        RagDocument existing = createSavedDoc(99L, "标题", BatchDocumentService.computeSha256(content));
-        when(documentRepository.findByContentHash(anyString())).thenReturn(List.of(existing));
+        DocumentRequest req = createRequest("标题", "已有内容");
+        BatchDocumentMutationFixture.stubAction(
+                mutationService, Map.of("标题", "UNCHANGED"));
 
-        // embed=true 但文档已存在（newlyCreated=false）→ 跳过嵌入
+        // embed=true 但文档已存在（协作者回报 UNCHANGED）→ 记 skipped
         BatchCreateResponse output = service.batchCreateDocuments(List.of(req), true, null, false);
 
         assertEquals(0, output.created());
         assertEquals(1, output.skipped());
-        verify(documentEmbedService, never()).embedDocument(anyLong(), anyBoolean());
     }
 
     @Test
     @DisplayName("batchCreateDocuments: forces re-embedding when embed=true and force=true")
     void batchCreateDocuments_withEmbedAndForce() {
-        String content = "已有内容";
-        DocumentRequest req = createRequest("标题", content);
-        RagDocument existing = createSavedDoc(99L, "标题", BatchDocumentService.computeSha256(content));
-        when(documentRepository.findByContentHash(anyString())).thenReturn(List.of(existing));
-        when(documentEmbedService.embedDocument(99L, true))
-                .thenReturn(Map.of("status", "COMPLETED", "chunksCreated", 2));
+        DocumentRequest req = createRequest("标题", "已有内容");
+        BatchDocumentMutationFixture.stubAction(
+                mutationService, Map.of("标题", "UNCHANGED"));
 
         BatchCreateResponse output = service.batchCreateDocuments(List.of(req), true, null, true);
 
-        // newlyCreated=false 但 force=true → embed 仍执行，结果算 skipped（已存在但被处理）
+        // 已存在但 force=true → 仍算 skipped（已存在，只是被重新处理）
         assertEquals(0, output.created());
         assertEquals(1, output.skipped());
         assertEquals(0, output.failed());
-        verify(documentEmbedService).embedDocument(99L, true);
+        // force 是交给协作者的第 4 个独立参数。
+        verify(mutationService).createLocal(
+                any(), isNull(), eq(EmbeddingPolicy.SYNC), eq(true),
+                eq("BATCH_CREATE"), isNull(), any(), any(), any());
     }
 
+    /**
+     * Batch 832：嵌入由 {@code DocumentMutationService} 按策略执行，失败时
+     * 它**抛异常**而不是回一个 FAILED 状态——旧版本里嵌入是本服务自己调的，
+     * 才有"读状态字符串、拼 'Embedding failed'"那段代码。异常由
+     * {@code createSingleDocumentSafely} 兜住，记成失败项而不是中止整批。
+     */
     @Test
     @DisplayName("batchCreateDocuments: counts embedding failure as failed when embed=true")
     void batchCreateDocuments_withEmbed_embedFails() {
         DocumentRequest req = createRequest("标题", "内容");
-        RagDocument savedDoc = createSavedDoc(1L, "标题", null);
-        when(documentRepository.findByContentHash(anyString())).thenReturn(List.of());
-        when(documentRepository.save(any(RagDocument.class))).thenReturn(savedDoc);
-        when(documentEmbedService.embedDocument(1L, false))
-                .thenReturn(Map.of("status", "FAILED", "error", "API timeout"));
+        BatchDocumentMutationFixture.stubFailureFor(
+                mutationService, "标题", "Embedding failed: API timeout");
 
         BatchCreateResponse output = service.batchCreateDocuments(List.of(req), true, null, false);
 
@@ -254,10 +250,21 @@ class BatchDocumentServiceTest {
 
     // ==================== batchDeleteDocuments ====================
 
+    /**
+     * Batch 832：删除改由 {@code DocumentMutationService.hardDeleteLocal} 执行。
+     *
+     * <p>旧版本这里有一条"协作者缺席就直接 {@code deleteByDocumentId} +
+     * {@code deleteById}"的回落——它<b>不校验文档 revision</b>，等于绕过了
+     * 乐观锁。该分支在运行的应用里走不到，已删除。
+     *
+     * <p>顺带把乐观锁版本钉住：一条文档带 revision=7，删它时必须把这个版本
+     * 交给协作者，由协作者做并发检查。
+     */
     @Test
-    @DisplayName("batchDeleteDocuments: deletes multiple documents successfully")
+    @DisplayName("batchDeleteDocuments: deletes multiple documents through the mutation service")
     void batchDeleteDocuments_success() {
         RagDocument first = createSavedDoc(1L, "first", "hash-1");
+        first.setDocumentRevision(7L);
         RagDocument second = createSavedDoc(2L, "second", "hash-2");
         when(documentRepository.findAllById(List.of(1L, 2L)))
                 .thenReturn(List.of(first, second));
@@ -270,10 +277,12 @@ class BatchDocumentServiceTest {
         assertEquals(2, output.summary().deleted());
         assertEquals(0, output.summary().notFound());
 
-        verify(embeddingRepository).deleteByDocumentId(1L);
-        verify(embeddingRepository).deleteByDocumentId(2L);
-        verify(documentRepository).deleteById(1L);
-        verify(documentRepository).deleteById(2L);
+        // 带 revision 的按 7 传；未带 revision 的缺省为 1。
+        verify(mutationService).hardDeleteLocal(eq(1L), eq(7L));
+        verify(mutationService).hardDeleteLocal(eq(2L), eq(1L));
+        // 服务不再自己删向量、不再自己 deleteById。
+        verify(embeddingRepository, never()).deleteByDocumentId(anyLong());
+        verify(documentRepository, never()).deleteById(anyLong());
     }
 
     @Test
