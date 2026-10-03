@@ -131,6 +131,7 @@ class RagControllerIntegrationTest {
     @MockBean private JdbcTemplate jdbcTemplate;
     @MockBean private com.springairag.core.service.DocumentEmbedService documentEmbedService;
     @MockBean private com.springairag.core.service.BatchDocumentService batchDocumentService;
+    @MockBean private com.springairag.core.service.DocumentMutationService documentMutationService;
     @MockBean private com.springairag.core.service.DocumentVersionService documentVersionService;
     @MockBean private EmbeddingProfileProvider embeddingProfileProvider;
 
@@ -562,11 +563,25 @@ class RagControllerIntegrationTest {
 
         @Test
         void deleteDocument_notFound_returns404() throws Exception {
-            when(batchDocumentService.deleteDocument(999L))
+            // Batch 847：删除已无条件走变更层的 CAS 路径，revision 是必填参数。
+            when(documentMutationService.hardDeleteLocal(999L, 1L))
                     .thenThrow(new com.springairag.core.exception.DocumentNotFoundException(999L));
 
-            mockMvc.perform(delete("/api/v1/rag/documents/{id}", 999))
+            mockMvc.perform(delete("/api/v1/rag/documents/{id}", 999)
+                            .param("expectedDocumentRevision", "1"))
                     .andExpect(status().isNotFound());
+        }
+
+        @Test
+        void deleteDocument_withoutRevision_returns400() throws Exception {
+            // 硬删除是不可逆操作，缺 CAS 版本号时必须先拒掉。
+            // 400 本身就证明了没有走到删除：若真是"先删后报错"，
+            // 未打桩的 mock 会返回 null，controller 会在构造响应时炸成 500。
+            // 这里不写 verify(never())：这个 @WebMvcTest 类里 mock 的调用
+            // 记录会跨用例残留（deleteDocument_notFound_returns404 先调过
+            // hardDeleteLocal），never() 会读到别人的调用而误报。
+            mockMvc.perform(delete("/api/v1/rag/documents/{id}", 999))
+                    .andExpect(status().isBadRequest());
         }
 
         @Test

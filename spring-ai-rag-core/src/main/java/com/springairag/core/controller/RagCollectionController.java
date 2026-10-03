@@ -35,7 +35,6 @@ import com.springairag.core.service.CollectionProvisioningService;
 import com.springairag.core.service.RagCollectionService;
 import com.springairag.core.service.CollectionIdentityResolver;
 import com.springairag.core.service.CollectionPurgeService;
-import com.springairag.core.service.JsonRecordService;
 import com.springairag.core.service.DocumentMutationService;
 import com.springairag.core.util.DigestUtils;
 import com.springairag.core.versioning.ApiVersion;
@@ -93,18 +92,12 @@ public class RagCollectionController {
     // auditLogService used to claim the collaborator disappears when
     // RagAuditLogRepository is unavailable — a conditionality that no longer exists in
     // the code. See scripts/verify-false-optional-wiring.mjs.
-    private JsonRecordService jsonRecordService; // unconditional @Service; Batch 822 removed the null guard that used to sit on it
     private DocumentMutationService documentMutationService; // optional-claim: unconditional @Service; same
     private AuditLogService auditLogService; // optional-claim: unconditional @Service; the audit helpers tolerate a null rather than failing the business call
     private CollectionProvisioningService collectionProvisioningService; // unconditional @Service; Batch 822 removed the null guard that used to sit on it
     private CollectionPurgeService collectionPurgeService;
     private ProvisioningOwnerResolver provisioningOwnerResolver =
             new ProvisioningOwnerResolver();
-
-    @Autowired(required = false)
-    public void setJsonRecordService(JsonRecordService jsonRecordService) {
-        this.jsonRecordService = jsonRecordService;
-    }
 
     @Autowired(required = false)
     public void setDocumentMutationService(
@@ -637,22 +630,17 @@ public class RagCollectionController {
                         throw new DocumentRevisionConflictException(
                                 "External-managed documents must be synchronized by external identity");
                     }
-                    if (documentMutationService != null) {
-                        if (expectedDocumentRevision == null) {
-                            throw new IllegalArgumentException(
-                                    "expectedDocumentRevision is required");
-                        }
-                        DocumentUpdateRequest update =
-                                new DocumentUpdateRequest();
-                        update.setExpectedDocumentRevision(
-                                expectedDocumentRevision);
-                        update.setCollectionKey(
-                                identityResolver.mapKeys(List.of(id)).get(id));
-                        documentMutationService.updateLocal(documentId, update);
-                    } else {
-                        doc.setCollectionId(id);
-                        documentRepository.save(doc);
+                    if (expectedDocumentRevision == null) {
+                        throw new IllegalArgumentException(
+                                "expectedDocumentRevision is required");
                     }
+                    DocumentUpdateRequest update =
+                            new DocumentUpdateRequest();
+                    update.setExpectedDocumentRevision(
+                            expectedDocumentRevision);
+                    update.setCollectionKey(
+                            identityResolver.mapKeys(List.of(id)).get(id));
+                    documentMutationService.updateLocal(documentId, update);
 
                     log.info("Document {} added to collection {}", documentId, id);
                     audit(AuditLogService.AuditAction.UPDATE, AuditLogService.ENTITY_DOCUMENT,
@@ -828,61 +816,12 @@ public class RagCollectionController {
                             "Duplicate document external identity in import: "
                                     + docData.getExternalId());
                 }
-                if (documentMutationService != null) {
-                    documentMutationService.importDocument(
-                            collectionId, collectionKey, docData);
-                    count++;
-                    continue;
-                }
-                if (RagDocument.JSON_RECORD.equals(docData.getDocumentType())) {
-                    if (docData.getExternalId() == null
-                            || docData.getExternalId().isBlank()
-                            || docData.getJsonbPayload() == null
-                            || docData.getJsonbPayload().isNull()) {
-                        throw new IllegalArgumentException(
-                                "json-record import requires externalId and jsonbPayload");
-                    }
-                    jsonRecordService.importRecord(collectionId, docData);
-                    count++;
-                    continue;
-                }
-
-                RagDocument document = buildDocumentFromImport(docData, collectionId);
-                document = documentRepository.saveAndFlush(document);
+                documentMutationService.importDocument(
+                        collectionId, collectionKey, docData);
                 count++;
             }
         }
         return count;
-    }
-
-    private RagDocument buildDocumentFromImport(
-            CollectionImportRequest.ImportedDocument docData, Long collectionId) {
-        RagDocument doc = new RagDocument();
-        doc.setTitle(docData.getTitle());
-        doc.setSource(docData.getSource());
-        doc.setContent(docData.getContent());
-        doc.setDocumentType(docData.getDocumentType());
-        doc.setMetadata(docData.getMetadata());
-        doc.setSize(docData.getSize() != null
-                ? docData.getSize()
-                : docData.getContent().getBytes(java.nio.charset.StandardCharsets.UTF_8).length * 1L);
-        doc.setContentHash(DigestUtils.sha256(docData.getContent()));
-        doc.setOriginalFilename(docData.getOriginalFilename());
-        doc.setExternalId(normalizeImportedIdentity(
-                docData.getExternalId(), "externalId"));
-        doc.setSourceNamespace(normalizeImportedNamespace(
-                docData.getSourceNamespace()));
-        doc.setSourceRevision(normalizeImportedIdentity(
-                docData.getSourceRevision(), "sourceRevision"));
-        doc.setSourceDeletedAt(docData.getSourceDeletedAt());
-        doc.setJsonbPayload(docData.getJsonbPayload() == null
-                ? null : docData.getJsonbPayload().deepCopy());
-        doc.setCollectionId(collectionId);
-        doc.setEnabled(docData.getEnabled() == null
-                ? docData.getSourceDeletedAt() == null
-                : docData.getEnabled());
-        doc.setProcessingStatus("PENDING");
-        return doc;
     }
 
     private String normalizeImportedNamespace(String value) {

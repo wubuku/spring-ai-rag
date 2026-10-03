@@ -34,6 +34,7 @@ import java.time.LocalDateTime;
 import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
+import com.springairag.core.service.DocumentMutationService;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
@@ -48,6 +49,7 @@ class RagCollectionControllerTest {
     private CollectionProvisioningService collectionProvisioningService;
     private AuditLogService auditLogService;
     private RagCollectionController controller;
+    private DocumentMutationService documentMutationService;
 
     @AfterEach
     void tearDown() {
@@ -69,6 +71,9 @@ class RagCollectionControllerTest {
                 auditLogService);
         controller.setCollectionProvisioningService(
                 collectionProvisioningService, new ProvisioningOwnerResolver());
+        // Batch 847：文档关联与导入都已无条件走变更层。
+        documentMutationService = mock(DocumentMutationService.class);
+        controller.setDocumentMutationService(documentMutationService);
     }
 
     private RagCollection createCollection(Long id, String name) {
@@ -408,14 +413,18 @@ class RagCollectionControllerTest {
         RagDocument doc = new RagDocument();
         doc.setId(10L);
         when(documentRepository.findById(10L)).thenReturn(Optional.of(doc));
-        when(documentRepository.save(any(RagDocument.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        ResponseEntity<DocumentAddedResponse> response = controller.addDocument(1L, Map.of("documentId", 10L));
+        // Batch 847：关联集合走变更层的 CAS 更新，revision 是前置条件；
+        // controller 不再自己 setCollectionId + save。
+        ResponseEntity<DocumentAddedResponse> response = controller.addDocument(
+                1L, Map.of("documentId", 10L, "expectedDocumentRevision", 7L));
 
         assertEquals(200, response.getStatusCode().value());
         assertEquals("Document added to collection", response.getBody().message());
         assertEquals(1L, response.getBody().collectionId());
         assertEquals(10L, response.getBody().documentId());
+        verify(documentMutationService).updateLocal(eq(10L), any());
+        verify(documentRepository, never()).save(any(RagDocument.class));
     }
 
     @Test
@@ -551,7 +560,12 @@ class RagCollectionControllerTest {
         assertEquals("测试导入", request.getDescription());
         assertEquals(1024, request.getDimensions());
         assertEquals(true, request.getEnabled());
-        verify(documentRepository).saveAndFlush(any(RagDocument.class));
+        // Batch 847：文档不再由 controller 直接落库，而是逐份交给变更层。
+        verify(documentMutationService).importDocument(
+                org.mockito.ArgumentMatchers.anyLong(),
+                org.mockito.ArgumentMatchers.any(),
+                any());
+        verify(documentRepository, never()).saveAndFlush(any(RagDocument.class));
     }
 
     @Test
@@ -576,11 +590,17 @@ class RagCollectionControllerTest {
 
         controller.importCollection(importData);
 
-        org.mockito.ArgumentCaptor<RagDocument> documentCaptor =
-                org.mockito.ArgumentCaptor.forClass(RagDocument.class);
-        verify(documentRepository).saveAndFlush(documentCaptor.capture());
-        assertEquals("cms:article:10", documentCaptor.getValue().getExternalId());
-        assertEquals("etag:10", documentCaptor.getValue().getSourceRevision());
+        // Batch 847：identity 的空白归一由 DocumentMutationService 的
+        // normalizeOptional / normalizeNamespace 负责，controller 交出去
+        // 的是调用方的原样请求。
+        org.mockito.ArgumentCaptor<CollectionImportRequest.ImportedDocument> documentCaptor =
+                org.mockito.ArgumentCaptor.forClass(CollectionImportRequest.ImportedDocument.class);
+        verify(documentMutationService).importDocument(
+                org.mockito.ArgumentMatchers.anyLong(),
+                org.mockito.ArgumentMatchers.any(),
+                documentCaptor.capture());
+        assertEquals("  cms:article:10  ", documentCaptor.getValue().getExternalId());
+        assertEquals("  etag:10  ", documentCaptor.getValue().getSourceRevision());
     }
 
     @Test
