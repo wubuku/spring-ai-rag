@@ -497,16 +497,30 @@
   | 缺 bean 时 | 走守卫那条路（降级） | **首次调用处抛裸 NPE** |
   | 什么时候暴露 | 运行时，可能很久 | 容器启动阶段就该失败，却拖到第一次调用 |
   - 第一种是"阅读陷阱"，第二种是**真的启动与运行不一致**。
-- **普查：16 处 / 10 个类，本批清掉 2 处 → 14**。清完的 14 处（按门禁自己的
-  报告列出，`FALSE_OPTIONAL_WIRING_CEILING=0` 就能打印全部）：
+- **普查：16 处 / 10 个类，本批清掉 2 处、证伪 3 处 → 剩 11**（证伪那 3 处见下）。
+  剩下的 11 处（门禁自己会列，`FALSE_OPTIONAL_WIRING_CEILING=0` 打印全部）：
   `ApiKeyController.collectionIdentityResolver`、`PdfImportController.collectionIdentityResolver`、
   `RagCollectionController.collectionProvisioningService`、
-  `RagDocumentController` 的 `externalDocumentService` / `dispatchService` /
-  `derivationDescriptorProvider` / `documentRelocationService`、
-  `EvaluationSuiteService.apiKeyManagementService`、
-  `BatchDocumentService` 的 `dispatchService` / `documentMutationService`、
-  `DocumentEmbedService.chunkingService`、`JsonRecordService.mutationService`、
-  `PdfToRagService` 的 `dispatchService` / `documentMutationService`。
+  `RagDocumentController` 的 `externalDocumentService` / `derivationDescriptorProvider` /
+  `documentRelocationService`、`EvaluationSuiteService.apiKeyManagementService`、
+  `BatchDocumentService.documentMutationService`、`DocumentEmbedService.chunkingService`、
+  `JsonRecordService.mutationService`、`PdfToRagService.documentMutationService`。
+- **新规则自己也有假阳性，而且是普查把它挖出来的（本批第二件要紧事）**：
+  规则的前提是"整个类里没有 null 检查"，而真实情况里还有**第三种守卫形态**：
+  **委托出去的守卫**——把字段当实参传给另一个类的静态方法，由那个方法做 null 检查。
+  三个 `EmbeddingDispatchService` 字段正是这样：
+  `EmbeddingPolicySupport.requireJobsEnabled(dispatchService)` 内部
+  `if (dispatchService == null) throw new RagException(EMBEDDING_JOBS_DISABLED, …)`，
+  抛的是有意义的领域异常，**不是裸 NPE**。也就是说这 3 处**本来就有守卫**，
+  我第一版普查把它们报成"无守卫"，16 里有 3 个是假的。
+  - 处置用的是设计里预留的豁免通道：**在字段上写 `optional-claim:` 说明守卫在哪一行**。
+    让门禁自己跟进跨类调用就得做调用图分析，那既脆又超出这道门禁的射程。
+  - **这件事的分量要说清楚**：一条会误报的门禁比没有门禁更糟，因为它会被当成噪音
+    豁免掉。这 3 处如果不处理，棘轮会把 3 个假阳性**焊死**在"只能降不能升"的位置上，
+    以后每个人都得先花力气解释为什么这 3 条不算数。
+  - `RagDocumentController.dispatchService` 是三处里最值得核的：8 处出现，
+    3 个真实使用点（550 / 649 / 904）**每一个**都紧跟一道 `requireJobsEnabled`——
+    不是"有的路径有守卫、有的没有"。**部分有守卫的字段要逐个使用点看，不能抽查。**
 - **普查探针自己错了两版，如实记录**（和 849 的三次错是同一类病）：
   | 版本 | 怎么取字段名 | 得到的数 | 错在哪 |
   |---|---|---|---|
@@ -517,8 +531,8 @@
     正确做法是让普查 import 门禁的函数——第三版就是这么写的，
     之后普查脚本直接删掉，数字由门禁自己在成功消息里报出来。
 - **棘轮设计里踩的坑，比规则本身更值得记**：
-  第一次接线把 `UNGUARDED_CEILING = 14` 无条件套上去，**4 条"应该通过"的自测
-  夹具全被判红**——因为夹具里只有 0 处，而 14 是**真实树**的属性。
+  第一次接线把 `UNGUARDED_CEILING = 16` 无条件套上去，**4 条"应该通过"的自测
+  夹具全被判红**——因为夹具里只有 0 处，而 16 是**真实树**的属性。
   夹具天生比现实简单（Batch 820 记录过同一个陷阱的另一个版本），
   把仓库的天花板套到两文件的夹具上，等于要求夹具长得和仓库一样大。
   修法：**棘轮只对真实树生效**（`FALSE_OPTIONAL_WIRING_ROOT` 没设时），
@@ -554,21 +568,22 @@
   的单命令模式，两个文件每轮都校验回到原值）：
   | 变异 | 结果 |
   |---|---|
-  | 真实树里新增一处无守卫的 `required = false` | ✓ 红：15 > 14 |
-  | 把天花板调低 1 | ✓ 红：14 > 13 |
+  | 真实树里新增一处无守卫的 `required = false` | ✓ 红（16+1 > 11） |
+  | 把天花板调低 1 | ✓ 红：11 > 10 |
   | 删掉一处 `optional-claim:` 理由 | ✓ 红：老规则仍然生效（1 unrecorded claim） |
   - 第三项是**必要的**：我重构了门禁的判定函数，必须证明老规则没被弄瞎。
   - 第一次跑这一项时得到"实际 green"，追下去发现是**我的锚点字符串没匹配上**、
     文件压根没被改——**"变异脚本失败"和"门禁失灵"是两回事**，
     前者不能记成后者。这和 849 里"等价变异"的教训是同一个。
-- 自测 **23 → 29 条**，新增的 6 条覆盖：新形态被检出、登记理由后放行、
+- 自测 **23 → 30 条**，新增的 7 条覆盖：新形态被检出、登记理由后放行、
   真条件 bean 放行、**夹具根默认不受棘轮约束**、超天花板变红、低于天花板变红。
-  其中"夹具根默认不受棘轮约束"那条是**正向对照**，防止那条规则变成永远绿。
+  其中"夹具根默认不受棘轮约束"那条是**正向对照**，防止那条规则变成永远绿；
+  末位那条把**委托守卫**这个形态连同它的理由写法一起钉住。
 - 验证（全部实测）：core 全量 **7622 条 / 0 失败 / 0 错误 / 153 跳过**（与 848 相同）；
   门控 IT **16/16**；`verify-test-visibility` EXIT=0；三门禁 EXIT=0
-  （`false-optional-wiring` 现在报 *"14 unguarded optional claim(s) remain,
-  exactly at the ratchet ceiling of 14"*）；tests 链 **20/20**；docs 链 **16/16**。
-- **剩余 13 处的迁移代价已量好**（五种调用形态：直接构造 / setter / 框架构造 /
+  （`false-optional-wiring` 现在报 *"11 unguarded optional claim(s) remain,
+  exactly at the ratchet ceiling of 11"*）；tests 链 **20/20**；docs 链 **16/16**。
+- **剩余 11 处的迁移代价已量好**（三处 `dispatchService` 证伪后不在其中）（五种调用形态：直接构造 / setter / 框架构造 /
   显式置 null / 反射），这是下一批的输入，**不重复勘察**：
   | 目标 | 命中测试文件 |
   |---|---|
@@ -579,15 +594,13 @@
   | `PdfToRagService.documentMutationService` | 18 |
   | `EvaluationSuiteService.apiKeyManagementService` | 13 |
   | `RagCollectionController.collectionProvisioningService` | 12 |
-  | `BatchDocumentService.dispatchService` | 12 |
-  | `PdfToRagService.dispatchService` | 11 |
-  | `ApiKeyController.collectionIdentityResolver` | 7 |
+    | `ApiKeyController.collectionIdentityResolver` | 7 |
   | `PdfImportController.collectionIdentityResolver` | 14 |
-  - **合计 136 个测试文件**。这解释了为什么本批只清 2 处而不是全清：
-    一次改完要动 136 个文件，而 Batch 848 改 2 处就已经动了 32 个。
-  - 下一批建议从 **`ApiKeyController`(7) + `PdfToRagService.dispatchService`(11)** 起，
-    18 个文件是可承受的一批；`RagDocumentController` 的 4 个可以并进 848 那批的
-    构造器里一次做完（它们和 848 刚改的参数是同一个构造器）。
+  - **合计约 124 个测试文件**（去掉已证伪的两项）。这解释了为什么本批只清 2 处
+    而不是全清：一次改完要动一百多个文件，而 Batch 848 改 2 处就已经动了 32 个。
+  - 下一批建议从 **`ApiKeyController`(7) + `PdfImportController`(14)** 起，
+    21 个文件是可承受的一批；`RagDocumentController` 剩下的 3 个可以并进 848
+    改过的那个构造器里一次做完（同一个构造器，不必分两次动）。
 
 ### Batch 849（已交付，WebUI：破坏性操作 fail-closed 契约补测）
 

@@ -464,6 +464,24 @@ test('the ratchet fails when the count drops but the ceiling does not', () => {
   assert.match(result.stderr, /Lower the ceiling/);
 });
 
+test('a null check delegated to a helper is recorded as a reason, not as a finding', () => {
+  // The third guard shape, found by the Batch 850 census: the field is handed
+  // to a static helper in another class that does the null check. `guards` only
+  // scans this file, so without a recorded reason these read as unguarded —
+  // and a gate that misreports three real sites gets ignored wholesale.
+  const src = UNGUARDED_SERVICE(
+    '    private SomeService someService;  // optional-claim: 守卫在别的类里——'
+    + 'SomePolicySupport.requireEnabled(someService) 内部做 null 检查并抛领域异常\n',
+  );
+  const unguarded = findFalseOptionalClaims(src, UNCONDITIONAL, { requireGuard: false });
+  assert.equal(unguarded.length, 0, 'the reason must suppress the second form too');
+  // And the reason must not accidentally make the *first* form pass, either.
+  const guardedForm = findFalseOptionalClaims(UNGUARDED_SERVICE(
+    '    private SomeService someService;  // optional-claim: 守卫在别的类里\n',
+  ), UNCONDITIONAL);
+  assert.equal(guardedForm.length, 0);
+});
+
 let failed = 0;
 for (const { title, fn } of cases) {
   try {
