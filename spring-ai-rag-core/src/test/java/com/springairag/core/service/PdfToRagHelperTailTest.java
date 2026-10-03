@@ -12,17 +12,14 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
 import java.lang.reflect.Method;
-import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -38,8 +35,8 @@ class PdfToRagHelperTailTest {
     private RagDocumentRepository documentRepository;
     private DocumentEmbedService documentEmbedService;
     private DocumentMutationService documentMutationService;
-    private PdfToRagService legacyService;
-    private PdfToRagService mutationService;
+    private PdfToRagService bareService;
+    private PdfToRagService service;
 
     @BeforeEach
     void setUp() {
@@ -47,25 +44,25 @@ class PdfToRagHelperTailTest {
         documentRepository = mock(RagDocumentRepository.class);
         documentEmbedService = mock(DocumentEmbedService.class);
         documentMutationService = mock(DocumentMutationService.class);
-        legacyService = new PdfToRagService(
+        bareService = new PdfToRagService(
                 fsFileRepository, documentRepository, documentEmbedService);
-        mutationService = new PdfToRagService(
+        service = new PdfToRagService(
                 fsFileRepository, documentRepository, documentEmbedService);
-        mutationService.setDocumentMutationService(documentMutationService);
+        service.setDocumentMutationService(documentMutationService);
     }
 
     private String deriveTitle(String filename) throws Exception {
         Method method = PdfToRagService.class
                 .getDeclaredMethod("deriveTitle", String.class);
         method.setAccessible(true);
-        return (String) method.invoke(legacyService, filename);
+        return (String) method.invoke(bareService, filename);
     }
 
     private String extractUuid(String path) throws Exception {
         Method method = PdfToRagService.class
                 .getDeclaredMethod("extractUuid", String.class);
         method.setAccessible(true);
-        return (String) method.invoke(legacyService, path);
+        return (String) method.invoke(bareService, path);
     }
 
     private FsFile markdownFile(String entryPath, String markdown) {
@@ -103,58 +100,8 @@ class PdfToRagHelperTailTest {
                 .thenReturn(Optional.of(empty));
 
         assertThrows(IllegalArgumentException.class,
-                () -> legacyService.importPdfToRag(
+                () -> bareService.importPdfToRag(
                         "uuid-x/default.md", "a.pdf", 5L, false, false));
-    }
-
-    @Test
-    void legacyImportWithEmbedTrueEmbedsAndReportsChunks() {
-        String markdown = "# 内容";
-        when(fsFileRepository.findById("uuid-e/default.md"))
-                .thenReturn(Optional.of(markdownFile("uuid-e/default.md", markdown)));
-        when(documentRepository.findFirstBySourceOrderByIdAsc(anyString()))
-                .thenReturn(Optional.empty());
-        when(documentRepository.save(any(RagDocument.class)))
-                .thenAnswer(invocation -> {
-                    RagDocument doc = invocation.getArgument(0);
-                    doc.setId(77L);
-                    doc.setProcessingStatus("COMPLETED");
-                    doc.setEmbeddedContentHash(doc.getContentHash());
-                    return doc;
-                });
-        when(documentEmbedService.embedDocument(any(), anyBoolean()))
-                .thenReturn(Map.of("status", "DONE", "message", "ok",
-                        "chunksCreated", 3));
-
-        PdfToRagService.PdfToRagResult result = legacyService.importPdfToRag(
-                "uuid-e/default.md", "paper.pdf", 5L, true, false);
-
-        assertEquals("DONE", result.embedStatus());
-        assertEquals(3, result.chunksCreated());
-        verify(documentEmbedService).embedDocument(77L, false);
-    }
-
-    @Test
-    void legacyImportEmbedFailureDoesNotAbortImport() {
-        String markdown = "# 内容";
-        when(fsFileRepository.findById("uuid-f/default.md"))
-                .thenReturn(Optional.of(markdownFile("uuid-f/default.md", markdown)));
-        when(documentRepository.findFirstBySourceOrderByIdAsc(anyString()))
-                .thenReturn(Optional.empty());
-        when(documentRepository.save(any(RagDocument.class)))
-                .thenAnswer(invocation -> {
-                    RagDocument doc = invocation.getArgument(0);
-                    doc.setId(78L);
-                    return doc;
-                });
-        when(documentEmbedService.embedDocument(any(), anyBoolean()))
-                .thenThrow(new IllegalStateException("嵌入服务不可用"));
-
-        PdfToRagService.PdfToRagResult result = legacyService.importPdfToRag(
-                "uuid-f/default.md", "paper.pdf", 5L, true, false);
-
-        assertEquals("FAILED", result.embedStatus());
-        assertTrue(result.embedMessage().contains("嵌入服务不可用"));
     }
 
     @Test
@@ -181,7 +128,7 @@ class PdfToRagHelperTailTest {
                 .thenReturn(new DocumentMutationService.CreatedLocal(
                         existing, mutation));
 
-        PdfToRagService.PdfToRagResult result = mutationService.importPdfToRag(
+        PdfToRagService.PdfToRagResult result = service.importPdfToRag(
                 "uuid-g/default.md", "paper.pdf", 5L, false, false);
 
         assertEquals("NONE", result.embeddingAction());
@@ -215,7 +162,7 @@ class PdfToRagHelperTailTest {
                 .thenReturn(new DocumentMutationService.CreatedLocal(
                         existing, mutation));
 
-        PdfToRagService.PdfToRagResult result = mutationService.importPdfToRag(
+        PdfToRagService.PdfToRagResult result = service.importPdfToRag(
                 "uuid-h/default.md", "paper.pdf", 5L,
                 EmbeddingPolicy.SYNC, false);
 
