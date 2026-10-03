@@ -48,12 +48,15 @@ class PdfImportControllerTest {
     private PdfToRagService pdfToRagService;
     private PdfImportController controller;
 
+    private CollectionIdentityResolver collectionIdentityResolver;
+
     @BeforeEach
     void setUp() {
         pdfImportService = mock(PdfImportService.class);
         markdownRendererService = mock(MarkdownRendererService.class);
         pdfToRagService = mock(PdfToRagService.class);
-        controller = new PdfImportController(pdfImportService, markdownRendererService, pdfToRagService, null);
+        collectionIdentityResolver = mock(CollectionIdentityResolver.class);
+        controller = new PdfImportController(pdfImportService, markdownRendererService, pdfToRagService, collectionIdentityResolver);
     }
 
     @AfterEach

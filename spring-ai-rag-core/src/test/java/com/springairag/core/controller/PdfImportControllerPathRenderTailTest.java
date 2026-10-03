@@ -21,6 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import com.springairag.core.service.CollectionIdentityResolver;
 
 /**
  * PdfImportController 路径与渲染工具长尾（Batch 561，JaCoCo 驱
@@ -32,14 +33,17 @@ class PdfImportControllerPathRenderTailTest {
     private PdfImportService pdfImportService;
     private PdfImportController controller;
 
+    private CollectionIdentityResolver collectionIdentityResolver;
+
     @BeforeEach
     void setUp() {
         pdfImportService = mock(PdfImportService.class);
+        collectionIdentityResolver = mock(CollectionIdentityResolver.class);
         controller = new PdfImportController(
                 pdfImportService,
                 mock(MarkdownRendererService.class),
                 mock(PdfToRagService.class),
-                null);
+                collectionIdentityResolver);
     }
 
     private Object invoke(String name, Class<?>[] params, Object... args)

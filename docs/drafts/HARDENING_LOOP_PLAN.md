@@ -478,6 +478,55 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
+### Batch 851（已交付，后端技术债：继续压棘轮 11 → 9）
+
+- 分支：`feature/required-collection-identity-resolver-20261007`
+- 主题：继续清 Batch 850 普查出的"声明可选、代码无条件使用"形态，
+  这批清掉 2 处 —— `ApiKeyController` 与 `PdfImportController` 的
+  `CollectionIdentityResolver`（两处都是 `@Autowired(required = false)` 的
+  **构造器参数**，字段是 `final`，所以 setter 反而赋不了）。
+- **两处的代价差了一个数量级，这个差别本身就是结论**：
+  | | 调用点 | 传 `null` | 切片里有 bean | 测试改动 |
+  |---|---|---|---|---|
+  | `ApiKeyController` | 5 处 | **0** | 2 个切片都有 | **0 个文件** |
+  | `PdfImportController` | 14 处 | **12** | 无切片包含它 | 12 个文件 |
+  - 普查表里两者都记着 7 / 14 个"命中测试文件"，看起来 PdfImport 才是大头；
+  实际 `ApiKeyController` 一个文件都不用动，而 PdfImport 的 14 处里 12 处是 `null`。
+  - **批次的真实代价是"有多少处在说谎"，不是"有多少个文件提到它"。**
+- **必填之后继续传 `null`，等于让测试声称这个协作者可以不存在**。
+  类型系统不再拦（`null` 本来就能传给引用类型），所以只能靠人改——12 处全部换成
+  真的 mock。这样"必填"才在测试里也成立。
+- **编辑事故 1 次（脚本）**：批量脚本第一版算字符偏移时用了 `.strip()` 过的
+  参数文本长度去定位**原文**，空白没算进去，**把 8 个文件改成语法错误**。
+  按纪律先 `git checkout` 回退（"先恢复代码"），第二版改成按**未 strip 的原始片段**
+  切分、索引直接来自原文，并且加了回读自检（`collectionIdentityResolver` 恰好出现
+  3 次 + 花括号配平）才写盘。
+- **变异脚本连续失败 3 次，每次都给出误导性的"门禁仍然绿"**：
+  | 次 | 怎么错的 | 为什么看起来像门禁失灵 |
+  |---|---|---|
+  | 1 | 断言检查的是"改完之后才有"的文本 | 断言失败 → 文件没被改 → 门禁当然绿 |
+  | 2 | 拼脚本时把 `import sys` 削掉了 | 同上，`NameError` → 没改 → 绿 |
+  | 3 | `str.replace(..., 1)` 命中的是**第一处**出现，即 `private final CollectionIdentityResolver collectionIdentityResolver;` 字段声明 | 注解加在字段上不符合门禁 `viaConstructor` 的形状（中间隔着 `private final `），门禁读不到 → 绿 |
+  - 第 3 次最值得记：**变异必须落在规则真正读取的那个位置**。
+    脚本自己 print 了"已加回注解"，但那行 print 对"加在哪"没有任何断言。
+  - 通用教训：**"门禁没红"必须先排除"变异没生效"**，这两件事在输出上长得一模一样。
+    修好之后同一条变异如期变红（11 > 9），并核对两个文件 sha256 都回到原值。
+- 变异实验 1 个（针对本批）：把两处 `required = false` 加回构造器参数 → ✓ 红，
+  *"11 unguarded optional claim(s) exceed the ratchet ceiling of 9"*。
+- 验证（全部实测）：core 全量 **7622 条 / 0 失败 / 0 错误 / 153 跳过**（与 850 相同）；
+  门控 IT **16/16**；`verify-test-visibility` EXIT=0；三门禁 EXIT=0；自测 **30/30**；
+  tests 链 **20/20**；docs 链 **16/16**。
+- **剩余 9 处**（门禁 `FALSE_OPTIONAL_WIRING_CEILING=0` 可列出全部）：
+  `RagCollectionController.collectionProvisioningService`、
+  `RagDocumentController` 的 `externalDocumentService` / `derivationDescriptorProvider` /
+  `documentRelocationService`、`EvaluationSuiteService.apiKeyManagementService`、
+  `BatchDocumentService.documentMutationService`、`DocumentEmbedService.chunkingService`、
+  `JsonRecordService.mutationService`、`PdfToRagService.documentMutationService`。
+  - 下一批建议 **`RagDocumentController` 剩 3 个**（≈23 个测试文件，与 848 刚改的
+    是同一个构造器，分两次动不如一次）**+ `PdfToRagService.documentMutationService`(18)**。
+  - 代价谱系已经很清楚：`DocumentEmbedService`(36) 与 `JsonRecordService`(34)
+    各自都够一整批，适合单独立项。
+
 ### Batch 850（已交付，后端技术债：门禁的**第二种形态** + 棘轮）
 
 - 分支：`feature/unguarded-optional-wiring-ratchet-20261007`

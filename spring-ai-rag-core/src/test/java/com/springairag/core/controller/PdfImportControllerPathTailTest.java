@@ -10,6 +10,7 @@ import java.lang.reflect.Method;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
+import com.springairag.core.service.CollectionIdentityResolver;
 
 /**
  * PdfImportController 路径辅助长尾（Batch 437）：deriveMarkdownPath
@@ -23,13 +24,16 @@ class PdfImportControllerPathTailTest {
     private Method extractUuid;
     private Method replaceLast;
 
+    private CollectionIdentityResolver collectionIdentityResolver;
+
     @BeforeEach
     void setUp() throws Exception {
+        collectionIdentityResolver = mock(CollectionIdentityResolver.class);
         controller = new PdfImportController(
                 mock(PdfImportService.class),
                 mock(MarkdownRendererService.class),
                 mock(PdfToRagService.class),
-                null);
+                collectionIdentityResolver);
         deriveMarkdownPath = PdfImportController.class.getDeclaredMethod(
                 "deriveMarkdownPath", String.class);
         deriveMarkdownPath.setAccessible(true);

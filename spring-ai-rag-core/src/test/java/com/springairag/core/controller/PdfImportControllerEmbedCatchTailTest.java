@@ -14,6 +14,7 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import com.springairag.core.service.CollectionIdentityResolver;
 
 /**
  * PdfImportController 嵌入包装 catch 臂长尾（Batch 694，JaCoCo 驱
@@ -29,13 +30,16 @@ class PdfImportControllerEmbedCatchTailTest {
     private PdfToRagService pdfToRagService;
     private PdfImportController controller;
 
+    private CollectionIdentityResolver collectionIdentityResolver;
+
     @BeforeEach
     void setUp() {
         pdfToRagService = mock(PdfToRagService.class);
+        collectionIdentityResolver = mock(CollectionIdentityResolver.class);
         controller = new PdfImportController(
                 mock(PdfImportService.class),
                 null,
-                pdfToRagService, null);
+                pdfToRagService, collectionIdentityResolver);
     }
 
     @AfterEach

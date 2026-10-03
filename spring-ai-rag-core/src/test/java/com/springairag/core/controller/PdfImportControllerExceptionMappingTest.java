@@ -31,6 +31,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import com.springairag.core.service.CollectionIdentityResolver;
 
 /**
  * PdfImportController 异常映射矩阵、短路分支与委托重载
@@ -44,13 +45,16 @@ class PdfImportControllerExceptionMappingTest {
     private PdfToRagService pdfToRagService;
     private PdfImportController controller;
 
+    private CollectionIdentityResolver collectionIdentityResolver;
+
     @BeforeEach
     void setUp() {
         pdfImportService = mock(PdfImportService.class);
         pdfToRagService = mock(PdfToRagService.class);
+        collectionIdentityResolver = mock(CollectionIdentityResolver.class);
         controller = new PdfImportController(
                 pdfImportService, mock(MarkdownRendererService.class),
-                pdfToRagService, null);
+                pdfToRagService, collectionIdentityResolver);
     }
 
     @AfterEach

@@ -21,6 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import com.springairag.core.service.CollectionIdentityResolver;
 
 /**
  * PdfImportController 目录树长尾（Batch 442）：空路径与子路径的
@@ -35,14 +36,17 @@ class PdfImportControllerTreeTailTest {
     private Method currentImportId;
     private Method toFileEntry;
 
+    private CollectionIdentityResolver collectionIdentityResolver;
+
     @BeforeEach
     void setUp() throws Exception {
         pdfImportService = mock(PdfImportService.class);
+        collectionIdentityResolver = mock(CollectionIdentityResolver.class);
         controller = new PdfImportController(
                 pdfImportService,
                 mock(MarkdownRendererService.class),
                 mock(PdfToRagService.class),
-                null);
+                collectionIdentityResolver);
         buildTreeEntries = PdfImportController.class.getDeclaredMethod(
                 "buildTreeEntries", List.class, String.class, Map.class);
         buildTreeEntries.setAccessible(true);

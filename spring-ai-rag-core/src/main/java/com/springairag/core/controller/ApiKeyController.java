@@ -54,13 +54,12 @@ public class ApiKeyController {
 
     private final ApiKeyManagementService apiKeyService;
     private final EnvironmentRootCredentialResolver rootCredentialResolver;
-    private final CollectionIdentityResolver collectionIdentityResolver;
+    private final CollectionIdentityResolver collectionIdentityResolver;  // Batch 851：`required = false` 已删。Batch 825 移除了那句 `if (x == null) throw`，于是这个参数从一开始就是必填；注解表达的"可能不存在"没有任何代码路径对应，留着只会让读代码的人以为存在一种"解析器缺失"的部署形态
     private final ProvisioningOwnerResolver provisioningOwnerResolver;
 
     @org.springframework.beans.factory.annotation.Autowired
     public ApiKeyController(ApiKeyManagementService apiKeyService,
                             EnvironmentRootCredentialResolver rootCredentialResolver,
-                            @org.springframework.beans.factory.annotation.Autowired(required = false)
                             CollectionIdentityResolver collectionIdentityResolver,
                             ProvisioningOwnerResolver provisioningOwnerResolver) {
         this.apiKeyService = apiKeyService;

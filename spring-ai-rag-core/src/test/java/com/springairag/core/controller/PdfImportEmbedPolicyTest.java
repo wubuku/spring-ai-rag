@@ -23,6 +23,7 @@ import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import com.springairag.core.service.CollectionIdentityResolver;
 
 /**
  * 触发嵌入的策略分派语义：ASYNC 端点拒绝 embed=sse 组合、
@@ -36,13 +37,16 @@ class PdfImportEmbedPolicyTest {
     private PdfToRagService pdfToRagService;
     private PdfImportController controller;
 
+    private CollectionIdentityResolver collectionIdentityResolver;
+
     @BeforeEach
     void setUp() {
         pdfImportService = mock(PdfImportService.class);
         markdownRendererService = mock(MarkdownRendererService.class);
         pdfToRagService = mock(PdfToRagService.class);
+        collectionIdentityResolver = mock(CollectionIdentityResolver.class);
         controller = new PdfImportController(
-                pdfImportService, markdownRendererService, pdfToRagService, null);
+                pdfImportService, markdownRendererService, pdfToRagService, collectionIdentityResolver);
     }
 
     private PdfToRagService.PdfToRagResult fullResult() {
