@@ -478,6 +478,54 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
+### Batch 827（已交付）
+
+- 分支：`feature/service-optional-claims-20261003`
+- 内容：把 825 建立的处理方式（**登记诚实的 `optional-claim:` 理由**）铺到 service 层；
+  并把"这批到底有多少"从模糊的 47/51 变成**两个可分别测量的量**。
+- 勘察（**又一次：我自己的探针先被证伪**）：
+  - 我写了个探针去测"测试有没有真的往这个字段传 null"。它只在
+    **构造器直接注入**的字段上有效（25 个里 2 个），其余 23 个是
+    **setter 注入**——对它们"传没传 null"不是正确问题，正确问题是
+    "测试有没有调那个 setter"。
+    **所以"测试是否传 null"这个判据只适用于构造器注入的字段。**
+  - 同一个探针还把 `RagCollectionService` 的构造器位报成 2（实际是 3），
+    位置映射不可信——**读源码推翻，不采信**。
+  - 两个已量出真实迁移成本的字段：
+    `JsonRecordService.retrievalScopeResolver`（**19 处**测试传 null）、
+    `RagCollectionService.auditLogService`（8 处，**且位号报错，需重测**）。
+- 关键定性（**又一次把两件事分开**）：
+  - `RagCollectionService` 的 3 个被守卫字段**全部**是
+    `@Autowired(required = false)` 注入的，守卫全是"会跳过的容忍"。
+    按 820/822/825 已有定论，这类是**假声明 + 需要诚实理由**，
+    **不是该删的死代码**——我最初准备删它们，读完注入方式后改了处置。
+  - `JsonRecordService.retrievalScopeResolver` 相反：它是**必选构造器参数**
+    （无 `@Nullable`／无 `required=false`），且守卫是 if/else，
+    else 那条比 resolver 那条**更宽松**（resolver 会按 400/403/404 拒绝）。
+    所以删 else 不改变生产行为，但**19 处测试迁移需要逐个改打桩**，
+    风险不低——本批不做，留作下一步。
+- 变更（`RagCollectionService`，3 个字段登记诚实理由）：
+  - `auditLogService`：理由与 825 批 controller 侧同源
+    （bean 无条件 → null 分支只在测试里可达；审计写入失败不应让业务请求失败）。
+  - `documentVersionService`：原注释写的是 `// optional for isolated unit tests`
+    ——**那是实话，只是没用门禁认得的标记**，所以门禁一直报它。升级成
+    `optional-claim:` 标记，保留真实内容。
+  - `documentMutationService`：登记理由的同时**记下一处自相矛盾**——
+    144/263 行按"可能为 null"守卫，**331 行却无条件调用 `createLocal`**。
+    同一字段，30 行内两种假设。**只记录，未改行为**（改动要先定哪一边是对的）。
+  - 处置完成后按**门禁自己的判据**复查该类：剩余 **0** 条。
+- 验证：
+  - `mvn -pl spring-ai-rag-core clean test`、tests 链、docs 链、门控 IT 全绿。
+- 遗留（已量清，可直接开工）：
+  - service 层门禁口径候选 **48 条 / 23 个类**（登记理由前）。
+    集中度：`ChatExecutionService` 10、`JsonRecordService` 7、
+    `ExternalDocumentService` 5、`EmbeddingDispatchService`、
+    `DocumentMutationService`、`DocumentEmbedService` 等。
+  - 门禁扩到 service 层的前提是这 48 条降到 0；**在那之前不打开范围**。
+  - `JsonRecordService.retrievalScopeResolver` 的 19 处测试迁移未做，
+    且 else 分支与 resolver 分支不等价这件事本身值得单独一条记录。
+  - `documentMutationService` 的守卫／无条件使用矛盾未解。
+
 ### Batch 826（已交付）
 
 - 分支：`feature/provisioning-dead-guards-20261003`
