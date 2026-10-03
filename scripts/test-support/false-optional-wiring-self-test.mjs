@@ -98,6 +98,21 @@ class Demo {
   assert.equal(findFalseOptionalClaims(src, UNCONDITIONAL).length, 1);
 });
 
+test('flags a package-private setter', () => {
+  // The fourth miss. Requiring `public void` hid EvaluationController's real
+  // claim: its setter has no access modifier at all, and promises exactly what
+  // a public one does. A gate that constrains the shape of the code it reads
+  // keeps passing while the code it should have caught moves out of reach.
+  const src = `
+class Demo {
+    private SomeService someService;
+    @Autowired(required = false)
+    void setSomeService(SomeService s) { this.someService = s; }
+    void go() { if (someService == null) { return; } }
+}`;
+  assert.equal(findFalseOptionalClaims(src, UNCONDITIONAL).length, 1);
+});
+
 // ── non-findings: the shapes that would make this rule noise ─────────────
 
 test('releases a collaborator whose bean is genuinely conditional', () => {

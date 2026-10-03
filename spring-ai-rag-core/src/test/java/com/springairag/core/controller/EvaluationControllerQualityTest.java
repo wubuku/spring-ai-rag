@@ -101,23 +101,12 @@ class EvaluationControllerQualityTest {
         assertEquals(List.of(expected), response.getBody());
     }
 
-    @Test
-    void semanticFailsClosedWhenServiceIsUnavailable() {
-        IllegalStateException error = assertThrows(IllegalStateException.class,
-                () -> controller.semantic(new SemanticEvaluationRequest(
-                        "FACT_CHECKING", "q", "ctx", "answer", "test/model")));
-        assertEquals("Semantic evaluation is not available", error.getMessage());
-    }
-
-    @Test
-    void semanticBatchFailsClosedWhenServiceIsUnavailable() {
-        assertThrows(IllegalStateException.class,
-                () -> controller.semanticBatch(List.of(
-                        new SemanticEvaluationRequest(
-                                "FACT_CHECKING", "q", "ctx", "answer",
-                                "test/model"))));
-    }
-
+    // Batch 821 deleted semanticFailsClosedWhenServiceIsUnavailable and
+    // semanticBatchFailsClosedWhenServiceIsUnavailable. SemanticEvaluationService
+    // is an unconditional @Service, so a controller without it is a shape the
+    // application never has; those two cases pinned that unreachable state and
+    // existed to move a coverage number. The paths they guarded are now
+    // asserted in EvaluationControllerProductionWiringTest.
     @Test
     void answerQualityResultRoundTripsThroughServiceContract() {
         // 锁定 AnswerQualityResult 的默认构造 + setter 合同。
