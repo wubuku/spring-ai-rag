@@ -2,7 +2,6 @@ package com.springairag.core.service;
 
 import com.springairag.api.dto.DocumentLifecycleResponse;
 import com.springairag.api.dto.DocumentMutationResponse;
-import com.springairag.api.enums.EmbeddingAction;
 import com.springairag.api.enums.EmbeddingPolicy;
 import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.service.PdfToRagService.PdfToRagResult;
@@ -23,7 +22,6 @@ import org.mockito.quality.Strictness;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -100,46 +98,6 @@ class PdfToRagPolicyImportTest {
                         EmbeddingPolicy.ASYNC, false));
 
         assertEquals(ErrorCode.EMBEDDING_JOBS_DISABLED, error.getErrorCodeEnum());
-    }
-
-    @Test
-    void asyncQueuesJobAndMapsDispatchIdentifiers() {
-        // legacy 路径（无 mutation service）：ASYNC 经 dispatch 排队。
-        PdfToRagService legacyService = new PdfToRagService(
-                fsFileRepository, documentRepository, documentEmbedService);
-        legacyService.setDispatchService(dispatchService);
-        stubMarkdown(ENTRY_PATH, "# Test\n\nContent.");
-        when(documentRepository.findFirstBySourceOrderByIdAsc(anyString()))
-                .thenReturn(Optional.empty());
-        when(documentRepository.save(any(RagDocument.class)))
-                .thenAnswer(invocation -> {
-                    RagDocument doc = invocation.getArgument(0);
-                    doc.setId(42L);
-                    return doc;
-                });
-        UUID jobId = UUID.randomUUID();
-        UUID batchId = UUID.randomUUID();
-        when(dispatchService.enqueueInCurrentTransaction(
-                any(RagDocument.class), eq(true), eq(false), eq("PDF_TO_RAG")))
-                .thenReturn(new EmbeddingDispatchService.Result(
-                        EmbeddingAction.ASYNC_QUEUED, "QUEUED", "profile-key",
-                        jobId, batchId, null));
-
-        PdfToRagService.PdfToRagResult result = legacyService.importPdfToRag(
-                        ENTRY_PATH, "test-paper.pdf", 5L,
-                        EmbeddingPolicy.ASYNC, false);
-
-        assertEquals(42L, result.documentId());
-        assertEquals("QUEUED", result.embedStatus());
-        // 生产行为：embedMessage 槽位承载 action 名称。
-        assertEquals("ASYNC_QUEUED", result.embedMessage());
-        assertNull(result.chunksCreated());
-        assertEquals("ASYNC_QUEUED", result.embeddingAction());
-        assertEquals(jobId, result.embeddingJobId());
-        assertEquals(batchId, result.embeddingBatchId());
-        verify(dispatchService).enqueueInCurrentTransaction(
-                any(RagDocument.class), eq(true), eq(false), eq("PDF_TO_RAG"));
-        verify(documentEmbedService, never()).embedDocument(any(), anyBoolean());
     }
 
     @Test

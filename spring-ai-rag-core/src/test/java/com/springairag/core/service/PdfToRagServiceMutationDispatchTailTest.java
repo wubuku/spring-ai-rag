@@ -18,7 +18,6 @@ import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
-import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -32,10 +31,12 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
- * PdfToRagService 迁移服务分派与旧版嵌入链长尾（Batch 728，JaCoCo
- * 驱动）：triggerEmbedding 在注入 DocumentMutationService 时经
- * upsertLocalImport 变更通道（220）、importPdfToRagWithEmbedding
- * 无变更服务时回落旧版嵌入链并透传结果（142/480-481）。
+ * PdfToRagService 迁移服务分派长尾（Batch 728 建，Batch 830 收口）：
+ * triggerEmbedding 与 importPdfToRag 在注入 DocumentMutationService 时
+ * 经 upsertLocalImport 变更通道。
+ *
+ * <p>原职责里的"无变更服务时回落旧版嵌入链并透传结果"是内联落库分支，
+ * 运行中的应用里不可达，已随 Batch 830 删除，对应用例也一并删掉。
  */
 class PdfToRagServiceMutationDispatchTailTest {
 
@@ -122,25 +123,4 @@ class PdfToRagServiceMutationDispatchTailTest {
         return doc;
     }
 
-    @Test
-    void importWithEmbeddingFallsBackToLegacyChainWithoutMutationService() {
-        stubEntryMarkdown("# Legacy Doc\n\nBody.");
-        when(embedService.embedDocumentWithProgress(
-                org.mockito.ArgumentMatchers.anyLong(),
-                org.mockito.ArgumentMatchers.anyBoolean(), any()))
-                .thenReturn(Map.of(
-                        "status", "COMPLETED",
-                        "message", "done",
-                        "chunksCreated", 3));
-        PdfToRagService service = new PdfToRagService(
-                fsFileRepository, documentRepository, embedService);
-        service.setDispatchService(dispatchService);
-
-        var result = service.importPdfToRagWithEmbedding(
-                ENTRY, "legacy.pdf", null, false, null);
-
-        assertEquals(66L, result.documentId());
-        assertEquals("COMPLETED", result.embedStatus());
-        assertEquals(3, result.chunksCreated());
-    }
 }

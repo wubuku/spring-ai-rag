@@ -1,5 +1,7 @@
 package com.springairag.core.service;
 
+import com.springairag.api.dto.DocumentMutationResponse;
+import com.springairag.api.dto.DocumentRequest;
 import com.springairag.api.enums.EmbeddingPolicy;
 import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.embeddingjob.EmbeddingDispatchService;
@@ -14,7 +16,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -27,6 +28,8 @@ import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -41,6 +44,7 @@ class PdfToRagEmbedPolicyTest {
     @Mock RagDocumentRepository documentRepository;
     @Mock com.springairag.core.service.DocumentEmbedService documentEmbedService;
     @Mock EmbeddingDispatchService dispatchService;
+    @Mock DocumentMutationService mutationService;
 
     private PdfToRagService service;
     private String markdown;
@@ -49,6 +53,8 @@ class PdfToRagEmbedPolicyTest {
     void setUp() {
         service = new PdfToRagService(
                 fsFileRepository, documentRepository, documentEmbedService);
+        // Batch 830：DocumentMutationService 是必选协作者，不再有内联落库回落。
+        service.setDocumentMutationService(mutationService);
         String uuid = "policy-uuid";
         markdown = "# Policy Doc\n\nContent.";
         FsFile fsFile = new FsFile(
@@ -57,19 +63,6 @@ class PdfToRagEmbedPolicyTest {
                 .thenReturn(Optional.of(fsFile));
         lenient().when(documentRepository.findFirstBySourceOrderByIdAsc(anyString()))
                 .thenReturn(Optional.empty());
-        lenient().when(documentRepository.save(any(RagDocument.class)))
-                .thenAnswer(invocation -> {
-                    RagDocument doc = invocation.getArgument(0);
-                    doc.setId(66L);
-                    return doc;
-                });
-    }
-
-    private EmbeddingDispatchService.Result queuedResult() {
-        return new EmbeddingDispatchService.Result(
-                com.springairag.api.enums.EmbeddingAction.ASYNC_QUEUED,
-                "QUEUED", "profile-key",
-                UUID.randomUUID(), UUID.randomUUID(), null);
     }
 
     @Test
@@ -90,37 +83,46 @@ class PdfToRagEmbedPolicyTest {
                 error.getErrorCodeEnum());
     }
 
+    /**
+     * Batch 830 取代 {@code syncPolicyFallsBackToTheLegacySyncTrigger}。
+     *
+     * <p>ASYNC 策略现在交给 {@code DocumentMutationService} 执行，任务标识
+     * 从**协作者的响应**里回传——不再由本服务自己去 {@code enqueueInCurrentTransaction}
+     * 并映射 dispatch 结果。{@code dispatchService} 仍被用于
+     * {@code requireJobsEnabled} 那一道 fail-closed 检查。
+     */
     @Test
-    void asyncPolicyEnqueuesThroughDispatchChannel() {
+    void asyncPolicyIsHandedToTheMutationServiceAndItsIdentifiersComeBack() {
         service.setDispatchService(dispatchService);
-        EmbeddingDispatchService.Result queued = queuedResult();
-        when(dispatchService.enqueueInCurrentTransaction(
-                any(RagDocument.class), anyBoolean(), anyBoolean(), anyString()))
-                .thenReturn(queued);
+        UUID jobId = UUID.randomUUID();
+        UUID batchId = UUID.randomUUID();
+        when(mutationService.upsertLocalImport(
+                any(), any(), any(), any(), any(), any(), any(), anyBoolean(), any()))
+                .thenAnswer(inv -> {
+                    DocumentRequest request = inv.getArgument(1);
+                    RagDocument doc = new RagDocument();
+                    doc.setId(66L);
+                    doc.setTitle(request.getTitle());
+                    return new DocumentMutationService.CreatedLocal(doc,
+                            new DocumentMutationResponse(
+                                    66L, "CREATED", 1L, 1, true, true, true,
+                                    "ASYNC_QUEUED", jobId, batchId, null));
+                });
 
         PdfToRagService.PdfToRagResult result = service.triggerEmbedding(
                 "policy-uuid", null, EmbeddingPolicy.ASYNC, false);
 
         assertEquals(66L, result.documentId());
         assertTrue(result.newlyCreated());
-        assertEquals("QUEUED", result.embedStatus());
         assertEquals("ASYNC_QUEUED", result.embeddingAction());
-        assertEquals(queued.embeddingJobId(), result.embeddingJobId());
-        assertEquals(queued.embeddingBatchId(), result.embeddingBatchId());
+        assertEquals(jobId, result.embeddingJobId());
+        assertEquals(batchId, result.embeddingBatchId());
+        verify(mutationService).upsertLocalImport(
+                any(), any(), any(), any(), any(), any(),
+                eq(EmbeddingPolicy.ASYNC), eq(false), eq("PDF_TO_RAG"));
+        // 服务不再自己入队。
+        verify(dispatchService, never()).enqueueInCurrentTransaction(
+                any(), anyBoolean(), anyBoolean(), anyString());
     }
 
-    @Test
-    void syncPolicyFallsBackToTheLegacySyncTrigger() {
-        when(documentEmbedService.embedDocument(eq(66L), eq(false)))
-                .thenReturn(Map.of("status", "COMPLETED",
-                        "chunksCreated", 3, "message", "OK"));
-
-        // SYNC 未被显式分支处理，回落到 3 参同步触发路径。
-        PdfToRagService.PdfToRagResult result = service.triggerEmbedding(
-                "policy-uuid", null, EmbeddingPolicy.SYNC, false);
-
-        assertEquals(66L, result.documentId());
-        assertEquals("COMPLETED", result.embedStatus());
-        assertEquals(3, result.chunksCreated());
-    }
 }

@@ -16,12 +16,10 @@ import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
-import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -29,9 +27,12 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
- * PdfToRagService 策略回落与变更结果映射长尾（Batch 735，JaCoCo
- * 驱动）：无变更服务时 SYNC 策略回落旧版嵌入链（142/480-481）、
- * 注入变更服务时 importPdfToRag 结果携带 mutation 映射（498）。
+ * PdfToRagService 变更结果映射长尾（Batch 735 建，Batch 830 收口）：注入变更
+ * 服务时 importPdfToRag 的结果携带 mutation 映射。
+ *
+ * <p>原类名与职责里的"策略回落 / 无变更服务时 SYNC 回落旧版嵌入链"是
+ * {@code DocumentMutationService} 缺席时才会走的那条内联落库分支。它在运行
+ * 的应用里不可达，已随 Batch 830 删除，对应用例也一并删掉。
  */
 class PdfToRagServicePolicyFallbackTailTest {
 
@@ -70,26 +71,6 @@ class PdfToRagServicePolicyFallbackTailTest {
                     doc.setId(77L);
                     return doc;
                 });
-    }
-
-    @Test
-    void syncPolicyWithoutMutationServiceFallsBackToLegacyEmbedChain() {
-        when(embedService.embedDocument(
-                org.mockito.ArgumentMatchers.anyLong(),
-                org.mockito.ArgumentMatchers.anyBoolean()))
-                .thenReturn(Map.of(
-                        "status", "COMPLETED",
-                        "message", "done",
-                        "chunksCreated", 2));
-        PdfToRagService service = new PdfToRagService(
-                fsFileRepository, documentRepository, embedService);
-
-        var result = service.importPdfToRag(
-                ENTRY, "sync.pdf", null, EmbeddingPolicy.SYNC, false);
-
-        assertEquals(77L, result.documentId());
-        assertEquals("COMPLETED", result.embedStatus());
-        assertEquals(2, result.chunksCreated());
     }
 
     @Test

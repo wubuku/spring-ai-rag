@@ -15,10 +15,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.HexFormat;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
@@ -47,7 +43,7 @@ public class PdfToRagService {
     private final RagDocumentRepository documentRepository;
     private final DocumentEmbedService documentEmbedService;
     private EmbeddingDispatchService dispatchService;
-    private DocumentMutationService documentMutationService; // optional-claim: DocumentMutationService 是无条件 @Service，null 臂只在不走 Spring 装配的构造路径可达；这 4 处守卫同属一条职责——切到 legacy 内联导入路径，而那条路径只在 Spring 装配之外可达
+    private DocumentMutationService documentMutationService;
 
     public PdfToRagService(FsFileRepository fsFileRepository,
                            RagDocumentRepository documentRepository,
@@ -86,28 +82,12 @@ public class PdfToRagService {
                                           Long collectionId,
                                           boolean embed,
                                           boolean forceReembed) {
-        if (documentMutationService != null) {
-            return importPdfToRag(
-                    entryMarkdownPath,
-                    originalFilename,
-                    collectionId,
-                    embed ? EmbeddingPolicy.SYNC : EmbeddingPolicy.SKIP,
-                    forceReembed);
-        }
-        Objects.requireNonNull(entryMarkdownPath, "entryMarkdownPath must not be null");
-        log.info("Importing PDF conversion to RAG: entryMarkdownPath={}, originalFilename={}, "
-                + "collectionId={}, embed={}, forceReembed={}",
-                entryMarkdownPath, originalFilename, collectionId, embed, forceReembed);
-
-        String title = deriveTitle(originalFilename);
-        DocumentBuildResult result = buildDocumentFromMarkdown(entryMarkdownPath, title, originalFilename, collectionId);
-
-        EmbedResult embedResult = null;
-        if (embed) {
-            embedResult = doEmbed(result.doc(), result.newlyCreated(), forceReembed);
-        }
-
-        return toPdfToRagResult(result, embedResult);
+        return importPdfToRag(
+                entryMarkdownPath,
+                originalFilename,
+                collectionId,
+                embed ? EmbeddingPolicy.SYNC : EmbeddingPolicy.SKIP,
+                forceReembed);
     }
 
     public PdfToRagResult importPdfToRag(String entryMarkdownPath,
@@ -119,29 +99,14 @@ public class PdfToRagService {
         if (policy == EmbeddingPolicy.ASYNC) {
             EmbeddingPolicySupport.requireJobsEnabled(dispatchService);
         }
-        if (documentMutationService != null) {
-            String title = deriveTitle(originalFilename);
-            DocumentBuildResult result = buildDocumentFromMarkdown(
-                    entryMarkdownPath, title, originalFilename, collectionId,
-                    policy, forceReembed);
-            return toPdfToRagResult(result);
-        }
-        if (policy == EmbeddingPolicy.ASYNC) {
-            String title = deriveTitle(originalFilename);
-            DocumentBuildResult result = buildDocumentFromMarkdown(
-                    entryMarkdownPath, title, originalFilename, collectionId);
-            EmbeddingDispatchService.Result queued =
-                    dispatchService.enqueueInCurrentTransaction(
-                            result.doc(), result.newlyCreated() || forceReembed,
-                            forceReembed, "PDF_TO_RAG");
-            return new PdfToRagResult(
-                    result.doc().getId(), result.doc().getTitle(), result.newlyCreated(),
-                    queued.embeddingStatus(), queued.action().name(), null,
-                    queued.action().name(), queued.embeddingJobId(), queued.embeddingBatchId());
-        }
-        return importPdfToRag(
-                entryMarkdownPath, originalFilename, collectionId,
-                policy != EmbeddingPolicy.SKIP, forceReembed);
+        log.info("Importing PDF conversion to RAG: entryMarkdownPath={}, originalFilename={}, "
+                + "collectionId={}, policy={}, forceReembed={}",
+                entryMarkdownPath, originalFilename, collectionId, policy, forceReembed);
+        String title = deriveTitle(originalFilename);
+        DocumentBuildResult result = buildDocumentFromMarkdown(
+                entryMarkdownPath, title, originalFilename, collectionId,
+                policy, forceReembed);
+        return toPdfToRagResult(result);
     }
 
     /**
@@ -216,20 +181,9 @@ public class PdfToRagService {
             EmbeddingPolicySupport.requireJobsEnabled(dispatchService);
             String entryPath = uuid + "/default.md";
             String title = deriveTitleFromMetadata(entryPath, uuid);
-            if (documentMutationService != null) {
-                return toPdfToRagResult(buildDocumentFromMarkdown(
-                        entryPath, title, null, collectionId,
-                        EmbeddingPolicy.ASYNC, forceReembed));
-            }
-            DocumentBuildResult result = buildDocumentFromMarkdown(
-                    entryPath, title, null, collectionId);
-            EmbeddingDispatchService.Result queued =
-                    dispatchService.enqueueInCurrentTransaction(
-                            result.doc(), true, forceReembed, "PDF_EMBED");
-            return new PdfToRagResult(
-                    result.doc().getId(), result.doc().getTitle(), result.newlyCreated(),
-                    queued.embeddingStatus(), queued.action().name(), null,
-                    queued.action().name(), queued.embeddingJobId(), queued.embeddingBatchId());
+            return toPdfToRagResult(buildDocumentFromMarkdown(
+                    entryPath, title, null, collectionId,
+                    EmbeddingPolicy.ASYNC, forceReembed));
         }
         return triggerEmbedding(uuid, collectionId, forceReembed);
     }
@@ -302,116 +256,38 @@ public class PdfToRagService {
                     "Entry Markdown file has no text content: " + markdownPath);
         }
 
-        String contentHash = computeSha256(content);
         String uuid = extractUuid(markdownPath);
         String source = "pdf-import:" + markdownPath;
 
         var existing = documentRepository.findFirstBySourceOrderByIdAsc(source);
-        if (documentMutationService != null) {
-            DocumentRequest request = new DocumentRequest(title, content);
-            request.setSource(source);
-            request.setDocumentType("markdown");
-            request.setMetadata(Map.of(
-                    "importedFrom", "pdf",
-                    "fsFilesPath", markdownPath,
-                    "uuid", uuid));
-            request.setDeduplicationScope(DocumentDeduplicationScope.NONE);
-            DocumentMutationService.CreatedLocal changed =
-                    documentMutationService.upsertLocalImport(
-                            existing.map(RagDocument::getId).orElse(null),
-                            request,
-                            collectionId,
-                            originalFilename != null
-                                    ? originalFilename : fsFile.getPath(),
-                            null,
-                            null,
-                            policy,
-                            forceReembed,
-                            "PDF_TO_RAG");
-            boolean newlyCreated =
-                    "CREATED".equals(changed.mutation().action());
-            return new DocumentBuildResult(
-                    changed.document(),
-                    newlyCreated,
-                    changed.mutation().scopeChanged(),
-                    uuid,
-                    changed.mutation());
-        }
-        if (existing.isPresent()) {
-            RagDocument doc = existing.get();
-            boolean updated = updateExistingDocument(
-                    doc, content, contentHash, title, originalFilename,
-                    collectionId, markdownPath, uuid);
-            if (updated) {
-                doc = documentRepository.save(doc);
-            }
-            log.info("Existing PDF source detected, using document id={}", doc.getId());
-            return new DocumentBuildResult(doc, false, updated, uuid, null);
-        }
-
-        RagDocument doc = new RagDocument();
-        doc.setTitle(title);
-        doc.setContent(content);
-        doc.setSource(source);
-        doc.setDocumentType("markdown");
-        doc.setOriginalFilename(originalFilename != null ? originalFilename : fsFile.getPath());
-        doc.setContentHash(contentHash);
-        doc.setCollectionId(collectionId);
-        doc.setSize((long) content.getBytes(StandardCharsets.UTF_8).length);
-        doc.setMetadata(Map.of(
+        DocumentRequest request = new DocumentRequest(title, content);
+        request.setSource(source);
+        request.setDocumentType("markdown");
+        request.setMetadata(Map.of(
                 "importedFrom", "pdf",
                 "fsFilesPath", markdownPath,
                 "uuid", uuid));
-        doc = documentRepository.save(doc);
-        log.info("RAG document created: id={}", doc.getId());
-        return new DocumentBuildResult(doc, true, false, uuid, null);
-    }
-
-    private boolean updateExistingDocument(
-            RagDocument doc,
-            String content,
-            String contentHash,
-            String title,
-            String originalFilename,
-            Long collectionId,
-            String markdownPath,
-            String uuid) {
-        boolean updated = false;
-        updated |= setIfChanged(doc.getContent(), content, doc::setContent);
-        updated |= setIfChanged(doc.getContentHash(), contentHash, doc::setContentHash);
-        updated |= setIfChanged(
-                doc.getSize(),
-                (long) content.getBytes(StandardCharsets.UTF_8).length,
-                doc::setSize);
-        updated |= setIfChanged(doc.getDocumentType(), "markdown", doc::setDocumentType);
-        updated |= setIfChanged(
-                doc.getMetadata(),
-                Map.of(
-                        "importedFrom", "pdf",
-                        "fsFilesPath", markdownPath,
-                        "uuid", uuid),
-                doc::setMetadata);
-        if (originalFilename != null && !originalFilename.isBlank()) {
-            updated |= setIfChanged(doc.getTitle(), title, doc::setTitle);
-            updated |= setIfChanged(
-                    doc.getOriginalFilename(),
-                    originalFilename,
-                    doc::setOriginalFilename);
-        }
-        if (collectionId != null) {
-            updated |= setIfChanged(
-                    doc.getCollectionId(), collectionId, doc::setCollectionId);
-        }
-        return updated;
-    }
-
-    private <T> boolean setIfChanged(
-            T current, T replacement, Consumer<T> setter) {
-        if (Objects.equals(current, replacement)) {
-            return false;
-        }
-        setter.accept(replacement);
-        return true;
+        request.setDeduplicationScope(DocumentDeduplicationScope.NONE);
+        DocumentMutationService.CreatedLocal changed =
+                documentMutationService.upsertLocalImport(
+                        existing.map(RagDocument::getId).orElse(null),
+                        request,
+                        collectionId,
+                        originalFilename != null
+                                ? originalFilename : fsFile.getPath(),
+                        null,
+                        null,
+                        policy,
+                        forceReembed,
+                        "PDF_TO_RAG");
+        boolean newlyCreated =
+                "CREATED".equals(changed.mutation().action());
+        return new DocumentBuildResult(
+                changed.document(),
+                newlyCreated,
+                changed.mutation().scopeChanged(),
+                uuid,
+                changed.mutation());
     }
 
     // ---- Embedding ----
@@ -470,16 +346,6 @@ public class PdfToRagService {
         }
         int slashIdx = path.indexOf('/');
         return slashIdx > 0 ? path.substring(0, slashIdx) : path;
-    }
-
-    private static String computeSha256(String content) {
-        try {
-            byte[] hash = MessageDigest.getInstance("SHA-256")
-                    .digest(content.getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(hash);
-        } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException("SHA-256 not available", e);
-        }
     }
 
     private PdfToRagResult toPdfToRagResult(DocumentBuildResult build, EmbedResult embed) {

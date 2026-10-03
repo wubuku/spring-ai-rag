@@ -478,6 +478,64 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
+### Batch 830（已交付）
+
+- 分支：`feature/pdf-legacy-path-20261004`
+- 内容：删掉 `PdfToRagService` 那条**只在"没有 `DocumentMutationService` 时"
+  才走**的内联落库路径。829 批只是给它登记了理由，理由不等于代码该留。
+- 勘察（先量迁移面，再决定做不做）：
+  | 目标 | 守卫数 | 构造它的测试文件 | 从不设置该协作者 |
+  |---|---|---|---|
+  | `PdfToRagService` | 4 | 6 | **6（全部）** |
+  | `BatchDocumentService` | 2 | 6 | 4 |
+  | `JsonRecordService` | 2 | 22 | 18 |
+  - `JsonRecordService` 的 18 个文件太大，本批不做；
+    `PdfToRagService` 的 6 个文件全部走 legacy 路径，是干净的切入口。
+- 关键发现（下刀前查的，**差点砍错**）：
+  4 参 `buildDocumentFromMarkdown` **不只被 legacy 分支用**——
+  `importPdfToRagWithEmbedding` 和 `triggerEmbedding` 无条件调它。
+  也就是说那两条路径在生产（协作者非空）时走的是**内联实现**，
+  只有 6 参重载里的 `else` 分支是死的。**能删的是 else 分支，不是整个重载。**
+- 处置：主源码 **555 → 421 行（净删 134）**
+  - 4 处守卫只留协作者通道；删 6 参重载里的内联实现
+  - 连带死掉的 `updateExistingDocument` / `setIfChanged` / `computeSha256`
+  - 4 个随之未用的 import；以及 829 批刚登记的 `optional-claim:` 理由
+    （守卫没了，理由就该跟着走——**理由会过期**）
+- 测试（删 8 增 2，其余改断言）：
+  - 删掉的 8 条**名字里就写着 legacy**，它们的存在理由就是覆盖已删代码。
+  - 其中 `importPdfToRag_withEmbedding_triggersEmbed` 断言
+    `documentEmbedService.embedDocument` 被调用——而生产里 `embed=true`
+    一直走的是 `upsertLocalImport(policy = SYNC)`。**这条用例钉的是
+    一条从来不在生产发生过的行为。**
+  - 增 2 条钉真实契约：SYNC 策略交到协作者手上（且服务不再自己调
+    `embedDocument`）；ASYNC 的任务标识从**协作者响应**回传
+    （且服务不再自己 `enqueueInCurrentTransaction`）。
+  - 其余用例的**断言对象换了**：从"内联代码 save 出来的 RagDocument"
+    改成"服务请求协作者写什么"。例：
+    `verify(documentRepository, never()).save(any())` →
+    `verify(mutationService).upsertLocalImport(eq(99L), ...)`。
+  - 新增测试侧夹具 `PdfToRagMutationFixture`。
+- 记下的教训：
+  - **连续 3 次猜 API 被编译器当场抓住**：`DocumentDeduplicationScope`
+    猜成 `api.dto`（实际 `api.enums`）、setter 猜成 `setMutationService`
+    （实际 `setDocumentMutationService`）、`verify`/`never` 静态导入漏加。
+    编译错误比运行时错误便宜，但仍然是自己疏漏。
+  - **夹具读错字段会造出假绿**：`collectionId` 与 `originalFilename` 是
+    `upsertLocalImport` 的**独立参数**、不在 `DocumentRequest` 里。
+    夹具一开始读 `request.getCollectionId()` → 恒为 null → 重建出的文档
+    少两个字段 → **而测试照样绿**。已改正。
+  - 一次 `edit` 把整个用例的断言连同调用一起吞掉（old_string 含断言块而
+    new_string 只有打桩）。`read` 复核后补回。
+  - BSD `sed` 的 `\b` 不生效，改名没发生。改用 Python `re.sub(r'\b…\b')`。
+  - `PdfToRagHelperTailTest` 里有个字段叫 `mutationService` 但它是
+    `PdfToRagService`；另一个叫 `legacyService`。两个名字都在撒谎，
+    一并改名为 `service` / `bareService`。
+- 遗留：
+  - `BatchDocumentService`（2 处守卫 / 4 个文件走 legacy）与
+    `JsonRecordService.mutationService`（2 处 / 18 个文件）同型未做。
+  - `ChatExecutionService` 的 3 个公开构造器（823/825/827 反复记下）仍是
+    44 条"null 臂只在不走 Spring 装配的构造路径可达"的结构性根因。
+
 ### Batch 829（已交付）
 
 - 分支：`feature/service-optional-claims-20261004`
