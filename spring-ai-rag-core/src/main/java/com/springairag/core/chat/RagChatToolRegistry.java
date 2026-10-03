@@ -357,6 +357,26 @@ public final class RagChatToolRegistry {
                             policy.maxCallsPerRequest())) {
                 return "{\"error\":\"tool_call_policy_exhausted\"}";
             }
+            // Batch 826. The deadline was checked *after* the task was submitted, so a
+            // passed deadline still dispatched the tool: `future.cancel(true)` interrupts
+            // a task that may already have started and already done its work. That made
+            // the outcome depend on thread scheduling — `passedDeadlineCancelsExecution
+            // AndReportsTimeout` failed roughly one run in three for exactly that reason.
+            // A passed deadline must mean "never dispatched", not "dispatched then
+            // interrupted", so the decision is made before the submission.
+            long timeoutMillis = Math.max(1, policy.timeout().toMillis());
+            Object requestValue = toolContext.getContext().get(
+                    RagChatToolContextKeys.REQUEST);
+            if (requestValue instanceof RagChatToolRequestContext request
+                    && request.deadline() != null) {
+                long remaining = Duration.between(
+                        java.time.Instant.now(),
+                        request.deadline()).toMillis();
+                if (remaining <= 0) {
+                    return "{\"error\":\"tool_timeout\"}";
+                }
+                timeoutMillis = Math.min(timeoutMillis, remaining);
+            }
             Future<String> future;
             try {
                 future = executor.submit(
@@ -365,20 +385,6 @@ public final class RagChatToolRegistry {
                 return "{\"error\":\"tool_executor_saturated\"}";
             }
             try {
-                long timeoutMillis = Math.max(1, policy.timeout().toMillis());
-                Object requestValue = toolContext.getContext().get(
-                        RagChatToolContextKeys.REQUEST);
-                if (requestValue instanceof RagChatToolRequestContext request
-                        && request.deadline() != null) {
-                    long remaining = Duration.between(
-                            java.time.Instant.now(),
-                            request.deadline()).toMillis();
-                    if (remaining <= 0) {
-                        future.cancel(true);
-                        return "{\"error\":\"tool_timeout\"}";
-                    }
-                    timeoutMillis = Math.min(timeoutMillis, remaining);
-                }
                 String value = future.get(timeoutMillis, TimeUnit.MILLISECONDS);
                 if (value == null || value.length() <= policy.maxResultCharacters()) {
                     return value == null ? "" : value;

@@ -168,6 +168,25 @@ class RagChatToolPolicyCallbackCallTest {
         assertEquals(0, calls.get());
     }
 
+    /**
+     * Pins that a **passed deadline means the tool is never dispatched**, not
+     * "dispatched and then interrupted".
+     *
+     * <p>This assertion used to fail roughly one run in three. The registry
+     * submitted the task first and checked the deadline afterwards, so
+     * {@code future.cancel(true)} raced a task that had already started and
+     * already incremented the counter. Batch 826 moved the check before the
+     * submission; 8 consecutive runs then passed where the old code failed
+     * within three.
+     *
+     * <p>Worth knowing before anyone "strengthens" this: the registry builds its
+     * own {@link java.util.concurrent.ThreadPoolExecutor} with no injection
+     * point, so the submission itself cannot be observed from a test. Adding a
+     * constructor parameter or setter purely to watch it would be a test hook in
+     * production code, which is worse than a slightly indirect assertion.
+     * Practically: a single green run does not prove the ordering — this test
+     * failed intermittently by nature before the fix.
+     */
     @Test
     void passedDeadlineCancelsExecutionAndReportsTimeout() {
         AtomicInteger calls = new AtomicInteger();
