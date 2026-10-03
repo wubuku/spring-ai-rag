@@ -478,6 +478,82 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
+### Batch 824（已交付）
+
+- 分支：`feature/dead-repository-queries-20261003`
+- 内容：清掉 822 遗留里**连测试都不引用**的那 2 个仓储方法；并把
+  "必选依赖上的死 null 守卫"这条线索推进到**结论是"还不能施工"**——
+  以及为什么。
+- 勘察（**这一批的价值主要在方法论，不在删掉的代码**）：
+  - 起点是 823 批顺手发现的一处：`RagSearchController.reRankingService != null`
+    守着一个**必选** `@Autowired` 参数。`verify-false-optional-wiring.mjs`
+    看不见它——那道门禁只认 `@Autowired(required = false)` 的注入。
+    于是这是个真实的、已测得的盲区。
+  - 我写了 4 版普查探针，**每一版都在骗我**，而且是四种不同的骗法：
+    1. **`(Type) null` 强转赋值**没被认成 null 传递
+       （`CollectionProvisioningService.meterRegistry` 实际由
+       `ObjectProvider.getIfAvailable()` 提供，确实可为 null）。
+    2. **委托构造器的参数位置映射**错：字段只在部分构造器里出现时，
+       逐位比对直接跳过，于是漏掉整条 null 传递链。
+    3. **构造器里的兜底默认被当成使用点守卫**：
+       `this.clock = clock != null ? clock : Clock.systemUTC()`
+       里的 `clock != null` 是防御性默认，不是守卫。
+       `LlmUsageQueryService.clock` 因此是假阳性。
+    4. **`@Autowired(required = false)` 写在参数的上一行时漏检**：
+       `AlertNotificationDeliveryController.auditLogService`、
+       `RagChatController.auditLogService` 都是**真守卫**，
+       却出现在"必选注入"的名单里。**差一点就删掉了正确的守卫。**
+  - 另外发现一类**框架上不是死守卫**的：`CacheMetricsService.cacheManager != null
+    ? "available" : "not configured"` 是健康检查在**报告配置状态**，
+    删掉它等于删掉一个功能分支，而不是删掉死代码。
+  - 收窄后的口径与数字（**每一步都是实测，不是推断**）：
+    final 字段被 null 守卫的候选 **105** → 协作者类型 **67** →
+    所在类无任何字面 null 委托 **23** → 排除 `ObjectProvider` 可选注入 **22**。
+  - **结论：22 不可直接施工。** 上面 4 类假阳性里有 2 类（③④）正好落在这 22
+    里面，且第 4 类若不手核就会**删掉本来正确的守卫**。
+    这 22 必须在删除前逐条手核。
+  - 手核还发现 `RagCollectionService.auditLogService` 的字段注释写着
+    `// optional: null when audit log is unavailable`——
+    而 `AuditLogService` 是**无条件 `@Service`**，这句话在生产不成立。
+    这与 822 批"8 处会跳过的守卫保留"的判定**直接冲突**，反转它需要单独取证。
+- 变更：
+  - **删掉 `RagDocumentRepository` 里 2 个零引用的方法**：
+    `findDocumentsWithoutEmbeddingsByCollectionIds`、
+    `countDocumentsWithoutEmbeddingsByCollectionIds`。
+    - 判据是**机器可证**的：声明处之外，主源码 0 处引用、测试 0 处引用。
+      Spring Data 只会为被调用的方法建代理调用，所以零引用即零调用。
+    - 顺带消除一处**潜在失败面**：它们是 native `@Query`，
+      schema 一旦变动，死查询不会被启动期校验捕获，直到有人调用才炸。
+  - **没有新增门禁**，并且这是刻意的：一条"零引用即死"的静态规则在本仓库
+    会有大量假阳性（Spring Data 的方法本来就只经代理调用，
+    规则无法区分"框架会调"与"没人调"）。宁可没有，也不要一条会被豁免成装饰品的门禁。
+  - **没有删任何守卫**——见上面的手核结论。
+- 验证：
+  - `mvn -pl spring-ai-rag-core clean test` 全绿（数字见提交记录）。
+  - 门控 IT 全绿：这一步是**必要**的，不是惯例——删掉的是 `@Query` 仓储方法，
+    门控 IT 会真实启动 Spring 上下文并构造该仓储代理。
+- 遗留（Batch 825 的起点，已量好、已分类）：
+  - **22 个"必选注入却仍被 null 守卫"的候选**，跨 20 个类，
+    已知其中至少 2 个（`AlertNotificationDeliveryController.auditLogService`、
+    `RagChatController.auditLogService`）是**假阳性**，
+    至少 1 个（`CacheMetricsService.cacheManager`）是**功能分支而非死代码**。
+    真正的删除必须逐条手核，并按 822 的分界线区分"会抛"与"会跳过"。
+  - 测试面已量：构造这些类的测试文件数——`RagChatController` **18**、
+    `ApiKeyController` **5**、`RagCollectionService` **4**、
+    `AlertNotificationDeliveryController` **0**。
+    最后一处迁移成本为零，可优先。
+  - `RagCollectionService.auditLogService` 的字段注释与 822 批判定冲突，未决。
+  - 另 2 个版本无关方法（`countDocumentsWithoutEmbeddings` /
+    `findDocumentsWithoutEmbeddings`）仍被门控 IT
+    `EmbeddingProfilePostgresIntegrationTest` 引用，而该 IT 的断言与
+    embedding 状态语义测试交织，改动需要单独取证。
+  - **WebUI 可访问性没有欠账**（本批顺带普查后证伪）：
+    普查报出 134 个可疑点，逐类读代码后**全部是假阳性**——
+    `Button` 组件渲染的就是真 `<button>`；Toast **已有**常驻
+    `aria-live="polite"` 容器且有测试钉住；不存在纯图标按钮；
+    `aria-label` 多写在标签的下一行、input 多被 `<label>` 隐式包裹。
+    **不为凑批次制造一个不存在的 UI 议题。**
+
 ### Batch 823（已交付）
 
 - 分支：`feature/convenience-overload-census-20261006`

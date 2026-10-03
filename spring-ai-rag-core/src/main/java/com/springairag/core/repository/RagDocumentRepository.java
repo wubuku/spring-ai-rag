@@ -207,21 +207,6 @@ public interface RagDocumentRepository extends JpaRepository<RagDocument, Long> 
 
     @org.springframework.data.jpa.repository.Query(
         value = "SELECT d.* FROM rag_documents d " +
-                "WHERE d.collection_id IN (:collectionIds) " +
-                "AND NOT EXISTS (" +
-                "SELECT 1 FROM rag_document_embedding_state s " +
-                "WHERE s.document_id = d.id " +
-                "AND s.embedding_profile_id = :embeddingProfileId " +
-                "AND s.status = 'COMPLETED' " +
-                "AND s.chunk_count > 0 " +
-                "AND s.content_hash = d.content_hash)",
-        nativeQuery = true)
-    List<RagDocument> findDocumentsWithoutEmbeddingsByCollectionIds(
-            @Param("collectionIds") List<Long> collectionIds,
-            @Param("embeddingProfileId") long embeddingProfileId);
-
-    @org.springframework.data.jpa.repository.Query(
-        value = "SELECT d.* FROM rag_documents d " +
                 "WHERE NOT EXISTS (" +
                 "SELECT 1 FROM rag_document_embedding_state s " +
                 "WHERE s.document_id = d.id " +
@@ -272,21 +257,6 @@ public interface RagDocumentRepository extends JpaRepository<RagDocument, Long> 
                 "AND s.content_hash = d.content_hash)",
         nativeQuery = true)
     long countDocumentsWithoutEmbeddings(
-            @Param("embeddingProfileId") long embeddingProfileId);
-
-    @org.springframework.data.jpa.repository.Query(
-        value = "SELECT COUNT(*) FROM rag_documents d " +
-                "WHERE d.collection_id IN (:collectionIds) " +
-                "AND NOT EXISTS (" +
-                "SELECT 1 FROM rag_document_embedding_state s " +
-                "WHERE s.document_id = d.id " +
-                "AND s.embedding_profile_id = :embeddingProfileId " +
-                "AND s.status = 'COMPLETED' " +
-                "AND s.chunk_count > 0 " +
-                "AND s.content_hash = d.content_hash)",
-        nativeQuery = true)
-    long countDocumentsWithoutEmbeddingsByCollectionIds(
-            @Param("collectionIds") List<Long> collectionIds,
             @Param("embeddingProfileId") long embeddingProfileId);
 
     @org.springframework.data.jpa.repository.Query(
