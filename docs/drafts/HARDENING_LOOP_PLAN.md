@@ -480,7 +480,11 @@
 
 ### Batch 825（已交付）
 
-- 分支：`feature/false-optional-wiring-blind-spots-20261003`
+- 分支：**流程偏差，如实记录**——本批我**忘了建专用分支，提交直接落在 main 上**
+  （`8b0ac57a`），因此 `--no-ff` 合并失败，**这一批没有 merge commit**。
+  分支 `feature/false-optional-wiring-blind-spots-20261003` 是事后指向同一提交建的，
+  只为了让这个名字能解析，不代表改动是在它上面做的。
+  与 812–824 每批「走专用分支 + `--no-ff` 合并」的做法不一致。
 - 内容：修 820 批那道门禁的 **3 处盲区**，并处置藏在盲区后面的真实假声明。
 - 勘察（**这一批的结论是"门禁一直在骗我"，不是"代码有多脏"**）：
   - 起点是 823 批顺手发现的一处：`RagSearchController.reRankingService != null`
