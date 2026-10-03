@@ -253,6 +253,64 @@ test('the gate exits zero when the bean is genuinely conditional', () => {
   assert.equal(result.status, 0, `expected a passing exit, got ${result.status}\n${result.stdout}${result.stderr}`);
 });
 
+// ── Batch 825: the three blind spots the real tree was hiding behind ─────
+// Each of these is a case where the gate reported 0 findings on a real tree
+// while a genuine false claim sat in the code. A self-test that only covers
+// the shapes it already handles is what let all three through.
+
+test('sees a private final field — the shape most injected collaborators use', () => {
+  const src = `
+class Demo {
+    private final SomeService someService;
+    @Autowired
+    public Demo(@Autowired(required = false) SomeService someService) { this.someService = someService; }
+    void go() { if (someService == null) { throw new IllegalStateException("x"); } }
+}`;
+  assert.equal(findFalseOptionalClaims(src, UNCONDITIONAL).length, 1);
+});
+
+test('sees the fully-qualified @Autowired(required = false) spelling', () => {
+  // ApiKeyController writes it this way, and the census probe in Batch 823 had
+  // already missed the fully-qualified `@Autowired` once. Same miss, inherited.
+  const src = `
+class Demo {
+    private final SomeService someService;
+    @Autowired
+    public Demo(@org.springframework.beans.factory.annotation.Autowired(required = false)
+                SomeService someService) { this.someService = someService; }
+    void go() { if (someService == null) { throw new IllegalStateException("x"); } }
+}`;
+  assert.equal(findFalseOptionalClaims(src, UNCONDITIONAL).length, 1);
+});
+
+test('a comment quoting the old guard does not make a field look guarded', () => {
+  // Batch 825 deleted a guard and left a note explaining the deletion, quoting
+  // the old code. The gate then reported the field again — writing an honest
+  // comment turned the gate red, which is the worst possible coupling.
+  const src = `
+class Demo {
+    private final SomeService someService;
+    @Autowired
+    public Demo(@Autowired(required = false) SomeService someService) { this.someService = someService; }
+    // this used to be: if (someService == null) throw new IllegalStateException("x")
+    void go() { someService.run(); }
+}`;
+  assert.equal(findFalseOptionalClaims(src, UNCONDITIONAL).length, 0);
+});
+
+test('a reason in a trailing comment still counts, even after neutralization', () => {
+  // The counterpart to the case above: comments are blanked for *code*, but a
+  // recorded reason is deliberately prose, so it has to survive.
+  const src = `
+class Demo {
+    private final SomeService someService;  // optional-claim: audit failures must not fail the request
+    @Autowired
+    public Demo(@Autowired(required = false) SomeService someService) { this.someService = someService; }
+    void go() { if (someService == null) { someService.log("skip"); } }
+}`;
+  assert.equal(findFalseOptionalClaims(src, UNCONDITIONAL).length, 0);
+});
+
 let failed = 0;
 for (const { title, fn } of cases) {
   try {

@@ -478,6 +478,92 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
+### Batch 825（已交付）
+
+- 分支：`feature/false-optional-wiring-blind-spots-20261003`
+- 内容：修 820 批那道门禁的 **3 处盲区**，并处置藏在盲区后面的真实假声明。
+- 勘察（**这一批的结论是"门禁一直在骗我"，不是"代码有多脏"**）：
+  - 起点是 823 批顺手发现的一处：`RagSearchController.reRankingService != null`
+    守着一个**必选** `@Autowired` 参数。而 `verify-false-optional-wiring.mjs`
+    只认 `@Autowired(required = false)` 的注入，**看不见它**。盲区是真的。
+  - 把 822 遗留的候选分类后，4 个"会抛"守卫的字段**全部**是
+    `required = false` 注入、**全部**对应无条件 bean、**全部**没有登记理由——
+    正是 820 批那道门禁要抓的东西，而门禁是绿的。
+  - 于是拿**门禁自己的函数**去喂这 4 个文件：全部 0 命中。逐条定位到 3 处盲区：
+    1. **字段正则匹配不到 `private final`。**
+       原判据是 `private\s+Type\s+name;`，而注入协作者的主流形状恰恰是
+       `private final Type name;`——**这不是边角形状，是多数形状**。
+    2. **看不见全限定名的注解。**
+       `ApiKeyController` 写的是
+       `@org.springframework.beans.factory.annotation.Autowired(required = false)`，
+       而正则只认 `@Autowired(`。
+       **823 批的普查探针已经在这个形状上错过一次，这道门禁继承了同一个错**——
+       同一个坑，同一个仓库，两次。
+    3. **不剥离注释，而且这一次表现为假阳性。**
+       我删掉守卫后留了一句解释删除原因的注释，注释里引用旧代码
+       `if (usageQueryService == null) throw …`，门禁就把这个字段当成
+       "仍被守卫"又报了一次。**写一句诚实的注释反而让门禁变红**，
+       这是最坏的耦合。
+  - 修好前两处后，门禁从 **0 条变成 11 条**（跨 9 个 controller）——
+    这就是真实爆炸半径，之前一条都没报。
+  - 第三个假设**被证伪**：我猜 Spring Data 仓储接口没有 stereotype 注解所以不在
+    bean 表里；实测 `RagRetrievalLogRepository` 上有 `@Repository` 且与接口声明
+    紧邻，门禁能收集到。**又一个"先证伪再采信"。**
+- 变更：
+  - **门禁 3 处修正** + **4 条自测**（15 → 19 例）。
+    - 理由的读取改成**从原始文本按行读**（理由本来就该是注释里的散文，
+      必须能穿过 neutralize），守卫的判定仍从**置空后的代码**读。
+      `neutralize` 保留换行，所以两个视图的行号仍然对齐。
+  - **删掉 2 个"会抛"守卫**（822 判据：会抛 = 关于部署形态的断言，
+    无条件 bean 时为假且该删）：
+    - `ApiKeyController.collectionIdentityResolver`——**两处**：
+      109 行那处删掉后，在 diff 里才发现 **220 行还有第二处**。
+      一处都没发现就会以为只有一处。
+    - `RagMetricsController.usageQueryService`。
+  - **删掉 3 条只为断言已删守卫而存在的测试**（第一次验证时被它们抓出来，
+    这是本批最该记的一点）：
+    - `ApiKeyControllerCreateGuardTailTest.missingResolverSurfacesIllegalState`
+      —— 它构造一个 resolver 为 null 的控制器，然后断言那条
+      `IllegalStateException`，连错误消息都断言。
+    - `ApiKeyControllerGuardMatrixTailTest.updatePolicyWithoutResolverIsRejected`
+      —— 同一个假声明，出现在 updatePolicy 里的第二个调用点。
+    - `RagMetricsControllerUsageTailTest.durableUsageQueryThrowsWhenChannelUnavailable`
+      —— **名字本身就在陈述那个假声明**："通道不可用时抛异常"，
+      而 `LlmUsageQueryService` 是无条件 `@Service`。
+    - 三处都各留了注释说明删的是什么、为什么、替代覆盖在哪，
+      并删掉因此变孤儿的 `controllerWithoutResolver()`。
+  - **821/822 批的"清理会抛守卫"当年被同一批盲区挡住了。**
+    822 账本写"821 批已经把断言那些异常的用例清掉了"——对**它普查到的那 7 处**
+    成立，但被盲区漏掉的 2 处守卫连同 3 条测试一直留到今天。
+    **一道有盲区的门禁，会让"已清理"这个结论也带上盲区。**
+  - **9 处登记诚实的 `optional-claim:` 理由**（4× auditLogService、
+    turnOperationService、diagnosticsService、derivationIntegrityService、
+    slowQueryMetricsService、sloTrackerService）。
+    - 其中 3 处是**替换掉过时且不成立的旧注释**：
+      写的是 `// optional: null when RagAuditLogRepository unavailable`，
+      而 `AuditLogService` 是无条件 `@Service`，那已经不是注入路径了。
+      **第四次"注释在讲一个早就不成立的部署形态"。**
+  - **变异实验**（串行，跑完才读文件）：给 `EvaluationController` 注入一个
+    `private final` + 全限定名 `@Autowired(required = false)` 的假声明 →
+    门禁 **exit 1** 并点名 `someReRanker`；还原后 exit 0。
+  - **自测 fixture 写错过一次**：我把 `@Autowired(required = false)` 放在**构造器
+    声明行**上，而门禁只认**紧贴参数**的注解（真实代码就是这么写的）。
+    改的是 fixture，不是门禁——门禁的行为是对的。
+- 验证：
+  - 门禁在真实树 exit 0（26 controller / 172 bean）；自测 **19/19**。
+  - `mvn -pl spring-ai-rag-core clean test`、tests 链、门控 IT 全绿。
+- 遗留：
+  - **同类假声明在 service 层还有 2 处**，而这道门禁按设计只扫 controller：
+    `EvaluationSuiteService.apiKeyManagementService`、
+    `RetrievalDiagnosticsService.repository`（两者都是 `required = false` 注入
+    无条件 bean + "会抛"守卫）。要处置就得先把门禁的扫描范围扩到 service，
+    扩范围前必须先量出新的假阳性数。
+  - 822 遗留的 18 处"必选注入却仍被 null 守卫"候选里，4 处经手核是
+    **构造器兜底默认**（`clock` / `provider` / `recorder`）而非使用点守卫，
+    探针的假阳性；其余 14 处尚未逐条手核。
+  - `RagCollectionService.auditLogService` 的字段注释已登记诚实的 `optional-claim`
+    理由，但它与 822 批"会跳过即容忍"的定性是否一致，未单独取证。
+
 ### Batch 824（已交付）
 
 - 分支：`feature/dead-repository-queries-20261003`

@@ -65,19 +65,10 @@ class RagMetricsControllerUsageTailTest {
                 response.recentSlowQueries().get(1).sql());
     }
 
-    @Test
-    void durableUsageQueryThrowsWhenChannelUnavailable() {
-        var controllerNoUsage = new RagMetricsController(
-                metricsService, mock(ModelMetricsService.class),
-                mock(ModelRegistry.class), mock(ChatModelRouter.class),
-                slowQueryMetricsService, mock(ApiSloTrackerService.class),
-                null);
-
-        Assertions.assertThrows(IllegalStateException.class,
-                () -> controllerNoUsage.getUsage(
-                        null, null, null,
-                        new MockHttpServletRequest()));
-    }
+    // Batch 825: `durableUsageQueryThrowsWhenChannelUnavailable` used to stand here. Its
+    // name states the false claim outright: LlmUsageQueryService is an unconditional
+    // @Service, so "channel unavailable" is not a deployment this app can be in. The
+    // sibling `durableUsageQueryDelegatesToQueryService` covers the live path.
 
     @Test
     void durableUsageQueryDelegatesToQueryService() {

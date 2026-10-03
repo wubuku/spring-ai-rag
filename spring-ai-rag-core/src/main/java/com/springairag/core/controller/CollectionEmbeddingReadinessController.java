@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class CollectionEmbeddingReadinessController {
 
     private final EmbeddingJobService embeddingJobService;
-    private DerivationIntegrityService derivationIntegrityService;
+    private DerivationIntegrityService derivationIntegrityService;  // optional-claim: DerivationIntegrityService 是无条件 @Service，null 分支只在测试里可达；守卫保留是因为端点在它缺失时要退回 embeddingJobService.readiness()，而不是 500
 
     public CollectionEmbeddingReadinessController(EmbeddingJobService embeddingJobService) {
         this.embeddingJobService = embeddingJobService;

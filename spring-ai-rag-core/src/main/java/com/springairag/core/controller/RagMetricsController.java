@@ -46,8 +46,8 @@ public class RagMetricsController {
     private final ModelMetricsService modelMetricsService;
     private final ModelRegistry modelRegistry;
     private final ChatModelRouter modelRouter;
-    private final SlowQueryMetricsService slowQueryMetricsService;
-    private final ApiSloTrackerService sloTrackerService;
+    private final SlowQueryMetricsService slowQueryMetricsService;  // optional-claim: SlowQueryMetricsService 是无条件 @Service，null 分支只在测试里可达；守卫保留是因为该端点在缺少数据源时要返回全零响应而不是 500
+    private final ApiSloTrackerService sloTrackerService;  // optional-claim: ApiSloTrackerService 是无条件 @Service，null 分支只在测试里可达；守卫保留是因为该端点在跟踪器缺失时要报告"不合规"，而不是 500
     private final LlmUsageQueryService usageQueryService;
 
     @Autowired
@@ -177,9 +177,11 @@ public class RagMetricsController {
             @RequestParam(required = false) String to,
             @RequestParam(required = false) String principalId,
             HttpServletRequest request) {
-        if (usageQueryService == null) {
-            throw new IllegalStateException("Durable usage query is unavailable");
-        }
+        // Batch 825: this used to be
+        //   `if (usageQueryService == null) throw new IllegalStateException(...)`.
+        // `LlmUsageQueryService` is an unconditional @Service, so the branch was a
+        // claim about deployment shape no running application can satisfy. Same rule
+        // Batch 822 applied to the other throwing guards.
         return usageQueryService.query(
                 ChatPrincipal.from(request),
                 from,

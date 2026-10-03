@@ -35,7 +35,7 @@ public class AlertNotificationDeliveryController {
 
     private final AlertNotificationDeliveryService deliveryService;
     private final AlertManagementAuthorization authorization;
-    private final AuditLogService auditLogService;
+    private final AuditLogService auditLogService;  // optional-claim: AuditLogService 是无条件 @Service，所以 null 分支只在测试里可达；守卫保留是因为审计写入失败不应让业务请求失败（Batch 825 替换掉了一句过时且不成立的注释：它说 null 来自 RagAuditLogRepository 不可用，而那已经不是注入路径）
 
     @Autowired
     public AlertNotificationDeliveryController(

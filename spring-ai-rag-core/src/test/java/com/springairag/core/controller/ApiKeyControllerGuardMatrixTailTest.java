@@ -41,14 +41,6 @@ class ApiKeyControllerGuardMatrixTailTest {
                 mock(ProvisioningOwnerResolver.class));
     }
 
-    private ApiKeyController controllerWithoutResolver() {
-        return new ApiKeyController(
-                mock(ApiKeyManagementService.class),
-                rootCredentialResolver,
-                null,
-                mock(ProvisioningOwnerResolver.class));
-    }
-
     private static ApiAccessPolicy policyWithRole(ApiKeyRole role) {
         return new ApiAccessPolicy() {
             @Override public String getPrincipalId() { return "rag_p_1"; }
@@ -89,20 +81,9 @@ class ApiKeyControllerGuardMatrixTailTest {
         assertTrue(String.valueOf(response.getBody()).contains("Only ADMIN keys"));
     }
 
-    @Test
-    void updatePolicyWithoutResolverIsRejected() {
-        request.setAttribute(
-                com.springairag.core.filter.ApiKeyAuthFilter
-                        .AUTHENTICATED_API_PRINCIPAL_ATTRIBUTE,
-                policyWithRole(ApiKeyRole.ADMIN));
-        var controllerWithoutResolver = controllerWithoutResolver();
-        var policy = new ApiPrincipalPolicyUpdateRequest();
-        policy.setAllowedCollectionKeys(java.util.List.of("kb"));
+    // Batch 825: `updatePolicyWithoutResolverIsRejected` used to stand here — the same
+    // "resolver is absent" claim as above, on the second call site inside updatePolicy.
 
-        assertThrows(IllegalStateException.class,
-                () -> controllerWithoutResolver.updatePolicy(
-                        "rag_p_1", policy, request));
-    }
 
     @Test
     void revokeKeyLegacyNonAdminDenied() {

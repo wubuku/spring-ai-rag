@@ -106,9 +106,13 @@ public class ApiKeyController {
         }
         List<Long> requestedIds = request.getAllowedCollectionIds();
         if (request.getAllowedCollectionKeys() != null) {
-            if (collectionIdentityResolver == null) {
-                throw new IllegalStateException("Collection key resolver is unavailable");
-            }
+            // Batch 825: this used to be
+            //   `if (collectionIdentityResolver == null) throw new IllegalStateException(...)`.
+            // `CollectionIdentityResolver` is an unconditional @Component, so that
+            // branch was a claim about deployment shape that no running application
+            // can satisfy — and it pushed a wiring mistake into a 500 with a message
+            // about a "resolver" rather than a startup failure. Same rule Batch 822
+            // applied to the other throwing guards.
             List<Long> keyIds = ApiKeyCollectionAccess.resolveCollectionIds(
                     null,
                     request.getAllowedCollectionKeys(),
@@ -213,9 +217,9 @@ public class ApiKeyController {
         }
         List<Long> allowedIds = null;
         if (requestedKeys != null) {
-            if (collectionIdentityResolver == null) {
-                throw new IllegalStateException("Collection key resolver is unavailable");
-            }
+            // Batch 825: the same throwing guard stood here too; see the note at
+            // the other call site for why a claim about deployment shape that no
+            // running application can satisfy does not belong in the request path.
             allowedIds = ApiKeyCollectionAccess.resolveDelegatedAllowedKeys(
                     requestedKeys, getCaller(request), collectionIdentityResolver);
         }

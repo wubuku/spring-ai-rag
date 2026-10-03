@@ -110,19 +110,77 @@ export function collectBeans(files) {
 }
 
 /**
+ * 把注释与字符串/字符字面量的**内容**替换成空格，保留换行以维持行号。
+ *
+ * 这是第三处盲区，而且表现为**假阳性**而不是漏报：Batch 825 删掉一个守卫后，
+ * 在原地留下了一句解释它为什么被删的注释，注释里写着旧代码
+ * `if (usageQueryService == null) throw …`，于是门禁认为这个字段"仍被守卫"，
+ * 又报了一次。写解释性注释反而让门禁变红，是最不该有的耦合。
+ */
+function neutralize(source) {
+  const out = source.split('');
+  const blank = (from, to) => {
+    for (let k = from; k < to && k < out.length; k += 1) {
+      if (out[k] !== '\n') out[k] = ' ';
+    }
+  };
+  let i = 0;
+  while (i < source.length) {
+    const c = source[i];
+    const next = source[i + 1];
+    if (c === '/' && next === '/') {
+      let j = i;
+      while (j < source.length && source[j] !== '\n') j += 1;
+      blank(i, j);
+      i = j;
+    } else if (c === '/' && next === '*') {
+      let j = i + 2;
+      while (j < source.length && !(source[j] === '*' && source[j + 1] === '/')) j += 1;
+      blank(i, Math.min(j + 2, source.length));
+      i = j + 2;
+    } else if (c === '"' || c === "'") {
+      let j = i + 1;
+      while (j < source.length && source[j] !== c) {
+        if (source[j] === '\\') j += 1;
+        j += 1;
+      }
+      blank(i, Math.min(j + 1, source.length));
+      i = j + 1;
+    } else {
+      i += 1;
+    }
+  }
+  return out.join('');
+}
+
+/**
  * 返回 [{ field, bean, setter, reason }]，reason 为 null 表示没有登记理由。
  */
-export function findFalseOptionalClaims(controllerSource, beans) {
+export function findFalseOptionalClaims(rawControllerSource, beans) {
+  // 注释与字符串里的文本不是代码，先置空再判定。
+  const controllerSource = neutralize(rawControllerSource);
   const findings = [];
   const guards = new Set(
     [...controllerSource.matchAll(/\b(\w+)\s*(?:!=|==)\s*null/g)].map((m) => m[1]),
   );
   if (guards.size === 0) return findings;
 
-  for (const m of controllerSource.matchAll(/private\s+([A-Z]\w*)\s+(\w+)\s*;([^\n]*)/g)) {
-    const [, type, name, tail] = m;
+  // `final` must be tolerated. Batch 825 measured the miss: the field pattern
+  // was `private\s+Type name;`, so every `private final Type name;` was
+  // invisible — and `final` is the *normal* shape for an injected collaborator,
+  // so this was the majority shape, not an edge case. Three real false claims
+  // were sitting behind it.
+  //
+  // The justification, by contrast, is read from the **raw** line. A reason is
+  // deliberately prose in a trailing comment, so it must survive neutralization;
+  // only the *code* around it has to be comment-free. `neutralize` preserves
+  // newlines, so line numbers still line up between the two views.
+  const rawLines = rawControllerSource.split('\n');
+  for (const m of controllerSource.matchAll(/private\s+(?:final\s+)?([A-Z]\w*)\s+(\w+)\s*;([^\n]*)/g)) {
+    const [, type, name] = m;
+    const line = controllerSource.slice(0, m.index).split('\n').length;
     if (!guards.has(name)) continue;
-    if (JUSTIFICATION.test(tail)) continue;
+    if (JUSTIFICATION.test(rawLines[line - 1] ?? '')) continue;
 
     // Match the setter by its *first parameter type*, not by its parameter name,
     // and tolerate additional parameters. Requiring a single parameter was the
@@ -140,12 +198,20 @@ export function findFalseOptionalClaims(controllerSource, beans) {
     // both controllers take `@Autowired(required = false) AuditLogService
     // auditLogService` as their last constructor argument, which is exactly the
     // same unverifiable promise, and a setter-only rule cannot see it.
+    // Both spellings of the annotation must be recognised:
+    // `@Autowired(required = false)` and
+    // `@org.springframework.beans.factory.annotation.Autowired(required = false)`.
+    // Batch 823's census probe already missed the fully-qualified spelling of
+    // `@Autowired`; Batch 825 measured that this gate inherited the same miss,
+    // and a real false claim was sitting behind it. `[\w.]*` before the name
+    // accepts both.
+    const OPTIONAL = '@[\\w.]*Autowired\\(\\s*required\\s*=\\s*false\\s*\\)';
     const viaSetter = new RegExp(
-      `@Autowired\\(\\s*required\\s*=\\s*false\\s*\\)\\s*\\n\\s*(?:public\\s+)?void\\s+set\\w+`
+      `${OPTIONAL}\\s*(?:public\\s+)?void\\s+set\\w+`
       + `\\(\\s*${type}\\s+\\w+\\s*(?:,|\\))`,
     ).test(controllerSource);
     const viaConstructor = new RegExp(
-      `@Autowired\\(\\s*required\\s*=\\s*false\\s*\\)\\s*${type}\\s+${name}\\s*(?:,|\\))`,
+      `${OPTIONAL}\\s*${type}\\s+${name}\\s*(?:,|\\))`,
     ).test(controllerSource);
     if (!viaSetter && !viaConstructor) continue;
 

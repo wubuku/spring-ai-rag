@@ -69,24 +69,13 @@ class ApiKeyControllerCreateGuardTailTest {
                 .getStatusCode().value());
     }
 
-    @Test
-    void missingResolverSurfacesIllegalState() {
-        var controllerNoResolver = new ApiKeyController(
-                apiKeyService,
-                mock(EnvironmentRootCredentialResolver.class),
-                null, new com.springairag.core.security.ProvisioningOwnerResolver());
-        var root = new MockHttpServletRequest();
-        root.setAttribute("authenticatedPrincipalType",
-                "ENVIRONMENT_ROOT");
-        var request = new ApiKeyCreateRequest();
-        request.setName("ops-key");
-        request.setAllowedCollectionKeys(java.util.List.of("kb:v1"));
-
-        var error = assertThrows(IllegalStateException.class,
-                () -> controllerNoResolver.createKey(request, root));
-        assertEquals("Collection key resolver is unavailable",
-                error.getMessage());
-    }
+    // Batch 825: `missingResolverSurfacesIllegalState` used to stand here. It built a
+    // controller with a null CollectionIdentityResolver and asserted the
+    // IllegalStateException that guard threw. The resolver is an unconditional
+    // @Component, so that branch is unreachable in a running application and the test
+    // only ever covered the guard — deleting the guard deleted the test, and the sibling
+    // `emptyResolvedScopeSurfacesIllegalArgument` covers the argument validation that
+    // the same endpoint still has.
 
     @Test
     void emptyResolvedScopeSurfacesIllegalArgument() {

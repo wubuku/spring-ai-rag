@@ -65,8 +65,8 @@ public class OpenAiCompatibilityController {
     private final OpenAiChatRequestMapper requestMapper;
     private final ChatExecutionService executionService;
     private final ObjectMapper objectMapper;
-    private ChatTurnOperationService turnOperationService;
-    private RetrievalDiagnosticsService diagnosticsService;
+    private ChatTurnOperationService turnOperationService;  // optional-claim: ChatTurnOperationService 是无条件 @Service，null 分支只在测试里可达；守卫保留是因为幂等 claim 依赖它，缺失时不该凭空造出一个 claim
+    private RetrievalDiagnosticsService diagnosticsService;  // optional-claim: RetrievalDiagnosticsService 是无条件 @Service，null 分支只在测试里可达；这个守卫真正的职责是 isEnabled() 功能开关，而不是"服务可能不存在"（Batch 822 已论证）
 
     public OpenAiCompatibilityController(
             OpenAiModelAliasRegistry aliasRegistry,
