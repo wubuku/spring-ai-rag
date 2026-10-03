@@ -128,7 +128,7 @@ did not already know they existed.
 | `check-mutation-errors.mjs` | A write action that does not report its failure | `__tests__/mutation-errors.test.mjs` | `npm run lint` |
 | `check-query-errors.mjs` | A read whose failure looks like an empty result | `__tests__/query-errors.test.mjs` | `npm run lint` |
 | `check-double-submit.mjs` | A write left unguarded while its request is in flight | `__tests__/double-submit.test.mjs` | `npm run lint` |
-| `check-i18n-keys.mjs` | Asymmetric key sets between the two locales; a `t()` naming a key that does not exist | `__tests__/i18n-keys.test.mjs` | `npm run lint` |
+| `check-i18n-keys.mjs` | Asymmetric key sets between the two locales; a `t()` naming a key that does not exist; a `t('x') \|\| fallback` guard that can never fire; **a key every locale carries that no source reaches**, where a reference may be a template prefix, a lookup table, a data array, an aliased translator or an i18next plural family | `__tests__/i18n-keys.test.mjs` | `npm run lint` |
 | `check-hardcoded-copy.mjs` | A component that never calls i18n; a hard-coded user string in a file that does — including inside a JSX expression container, while leaving ARIA/machine attribute values and `t()` fallback strings alone | `__tests__/hardcoded-copy.test.mjs` | `npm run lint` |
 | `check-page-shell.mjs` | A protected page that bypasses `PageHeader`, or renders it with no `description` | `__tests__/page-shell.test.mjs` | `npm run lint` |
 
