@@ -92,18 +92,12 @@ public class RagCollectionController {
     // auditLogService used to claim the collaborator disappears when
     // RagAuditLogRepository is unavailable — a conditionality that no longer exists in
     // the code. See scripts/verify-false-optional-wiring.mjs.
-    private DocumentMutationService documentMutationService; // optional-claim: unconditional @Service; same
+    private DocumentMutationService documentMutationService; // Batch 847 removed the null guards; Batch 848 makes it a required constructor dependency
     private AuditLogService auditLogService; // optional-claim: unconditional @Service; the audit helpers tolerate a null rather than failing the business call
     private CollectionProvisioningService collectionProvisioningService; // unconditional @Service; Batch 822 removed the null guard that used to sit on it
     private CollectionPurgeService collectionPurgeService;
     private ProvisioningOwnerResolver provisioningOwnerResolver =
             new ProvisioningOwnerResolver();
-
-    @Autowired(required = false)
-    public void setDocumentMutationService(
-            DocumentMutationService documentMutationService) {
-        this.documentMutationService = documentMutationService;
-    }
 
     @Autowired(required = false)
     public void setCollectionProvisioningService(
@@ -123,12 +117,14 @@ public class RagCollectionController {
                                     RagDocumentRepository documentRepository,
                                     RagCollectionService collectionService,
                                     CollectionIdentityResolver identityResolver,
-                                    @Autowired(required = false) AuditLogService auditLogService) {
+                                    @Autowired(required = false) AuditLogService auditLogService,
+                                    DocumentMutationService documentMutationService) {
         this.collectionRepository = collectionRepository;
         this.documentRepository = documentRepository;
         this.collectionService = collectionService;
         this.identityResolver = identityResolver;
         this.auditLogService = auditLogService;
+        this.documentMutationService = documentMutationService;
     }
 
     @Operation(

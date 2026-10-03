@@ -82,8 +82,8 @@ class RagDocumentControllerProductionWiringTest {
                 mock(DocumentVersionService.class),
                 mock(EmbeddingProfileProvider.class),
                 mock(CollectionIdentityResolver.class),
-                auditLogService);
-        controller.setDocumentMutationService(documentMutationService);
+                auditLogService,
+                documentMutationService);
         controller.setExternalDocumentService(externalDocumentService);
         controller.setDocumentLifecycleService(documentLifecycleService);
         controller.setDerivationDescriptorProvider(derivationDescriptorProvider);

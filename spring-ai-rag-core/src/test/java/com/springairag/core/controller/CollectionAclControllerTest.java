@@ -9,6 +9,7 @@ import com.springairag.core.repository.RagCollectionRepository;
 import com.springairag.core.repository.RagDocumentRepository;
 import com.springairag.core.service.RagCollectionService;
 import com.springairag.core.service.CollectionIdentityResolver;
+import com.springairag.core.service.DocumentMutationService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -37,7 +38,8 @@ class CollectionAclControllerTest {
                 documentRepository,
                 mock(RagCollectionService.class),
                 new CollectionIdentityResolver(collectionRepository),
-                null);
+                null,
+                mock(DocumentMutationService.class));
     }
 
     @AfterEach

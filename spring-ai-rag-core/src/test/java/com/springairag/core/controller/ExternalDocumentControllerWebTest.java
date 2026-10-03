@@ -11,6 +11,7 @@ import com.springairag.core.repository.RagEmbeddingRepository;
 import com.springairag.core.service.BatchDocumentService;
 import com.springairag.core.service.CollectionIdentityResolver;
 import com.springairag.core.service.DocumentEmbedService;
+import com.springairag.core.service.DocumentMutationService;
 import com.springairag.core.service.DocumentVersionService;
 import com.springairag.core.service.ExternalDocumentService;
 import com.springairag.core.service.DocumentRelocationService;
@@ -72,6 +73,10 @@ class ExternalDocumentControllerWebTest {
     private CollectionIdentityResolver collectionIdentityResolver;
     @MockBean
     private com.springairag.core.service.AuditLogService auditLogService;
+
+    /** Batch 848：变更层从可选 setter 变成构造器必填，Web 切片必须提供该 bean。 */
+    @MockBean
+    private DocumentMutationService documentMutationService;
 
     @TestConfiguration
     static class RagPropertiesTestConfig {

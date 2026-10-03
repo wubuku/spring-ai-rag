@@ -11,6 +11,7 @@ import com.springairag.core.repository.RagEmbeddingRepository;
 import com.springairag.core.service.BatchDocumentService;
 import com.springairag.core.service.CollectionIdentityResolver;
 import com.springairag.core.service.DocumentEmbedService;
+import com.springairag.core.service.DocumentMutationService;
 import com.springairag.core.service.DocumentRelocationService;
 import com.springairag.core.service.DocumentVersionService;
 import com.springairag.core.service.ExternalDocumentService;
@@ -44,6 +45,7 @@ class RagDocumentControllerExternalDelegationTest {
     private DocumentRelocationService relocationService;
     private ExternalDocumentService externalDocumentService;
     private DocumentVersionService documentVersionService;
+    private DocumentMutationService mutationService;
     private RagDocumentController controller;
 
     @BeforeEach
@@ -51,6 +53,7 @@ class RagDocumentControllerExternalDelegationTest {
         relocationService = mock(DocumentRelocationService.class);
         externalDocumentService = mock(ExternalDocumentService.class);
         documentVersionService = mock(DocumentVersionService.class);
+        mutationService = mock(DocumentMutationService.class);
         controller = new RagDocumentController(
                 mock(RagDocumentRepository.class),
                 mock(RagEmbeddingRepository.class),
@@ -60,11 +63,10 @@ class RagDocumentControllerExternalDelegationTest {
                 documentVersionService,
                 mock(EmbeddingProfileProvider.class),
                 mock(CollectionIdentityResolver.class),
-                null);
+                null,
+                mutationService);
         controller.setDocumentRelocationService(relocationService);
         controller.setExternalDocumentService(externalDocumentService);
-        controller.setDocumentMutationService(
-                mock(com.springairag.core.service.DocumentMutationService.class));
     }
 
     @Test
@@ -99,9 +101,6 @@ class RagDocumentControllerExternalDelegationTest {
 
     @Test
     void restoreVersionDelegatesToMutationService() {
-        var mutationService = mock(
-                com.springairag.core.service.DocumentMutationService.class);
-        controller.setDocumentMutationService(mutationService);
         var request = new DocumentVersionRestoreRequest(2L, null, null);
         var mutation = new DocumentMutationResponse(
                 9L, "UPDATED", 5L, 3, true, false, false,

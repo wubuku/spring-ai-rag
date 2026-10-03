@@ -75,8 +75,8 @@ class RagDocumentControllerCoordinatorCreateTest {
                 mock(DocumentVersionService.class),
                 profileProvider,
                 new CollectionIdentityResolver(collectionRepository),
-                auditLogService);
-        controller.setDocumentMutationService(documentMutationService);
+                auditLogService,
+                documentMutationService);
     }
 
     private DocumentMutationResponse mutation(long id, String action) {

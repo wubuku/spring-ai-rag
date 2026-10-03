@@ -6,6 +6,7 @@ import com.springairag.core.service.AuditLogService;
 import com.springairag.core.service.CollectionProvisioningService;
 import com.springairag.core.service.RagCollectionService;
 import com.springairag.core.service.CollectionIdentityResolver;
+import com.springairag.core.service.DocumentMutationService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -47,7 +48,8 @@ class RagCollectionControllerListTailTest {
                 documentRepository,
                 mock(RagCollectionService.class),
                 new CollectionIdentityResolver(collectionRepository),
-                mock(AuditLogService.class));
+                mock(AuditLogService.class),
+                mock(DocumentMutationService.class));
         when(collectionRepository.findByIdAndDeletedFalse(1L))
                 .thenReturn(Optional.of(collection(1L)));
         // 无请求上下文时 currentPolicy 为 null → 视为 unrestricted。
@@ -146,7 +148,8 @@ class RagCollectionControllerListTailTest {
                 documentRepository,
                 mock(RagCollectionService.class),
                 new CollectionIdentityResolver(collectionRepository),
-                mock(AuditLogService.class));
+                mock(AuditLogService.class),
+                mock(DocumentMutationService.class));
         org.springframework.test.util.ReflectionTestUtils.setField(
                 controller, "identityResolver", resolver);
         when(resolver.mapKeys(List.of(1L))).thenReturn(java.util.Map.of(1L, "kb"));

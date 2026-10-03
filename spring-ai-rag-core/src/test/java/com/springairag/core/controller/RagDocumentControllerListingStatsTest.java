@@ -14,6 +14,7 @@ import com.springairag.core.service.CollectionIdentityResolver;
 import com.springairag.core.service.DocumentEmbedService;
 import com.springairag.core.service.DocumentVersionService;
 import com.springairag.core.embeddingjob.EmbeddingDispatchService;
+import com.springairag.core.service.DocumentMutationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -71,7 +72,8 @@ class RagDocumentControllerListingStatsTest {
                 mock(DocumentVersionService.class),
                 mock(EmbeddingProfileProvider.class),
                 mock(CollectionIdentityResolver.class),
-                null);
+                null,
+                mock(DocumentMutationService.class));
         controller.setDispatchService(dispatchService);
     }
 

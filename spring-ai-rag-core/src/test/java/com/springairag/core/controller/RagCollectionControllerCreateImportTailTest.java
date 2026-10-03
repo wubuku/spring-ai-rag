@@ -9,6 +9,7 @@ import com.springairag.core.repository.RagDocumentRepository;
 import com.springairag.core.service.AuditLogService;
 import com.springairag.core.service.CollectionIdentityResolver;
 import com.springairag.core.service.RagCollectionService;
+import com.springairag.core.service.DocumentMutationService;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.web.context.request.RequestContextHolder;
@@ -37,7 +38,8 @@ class RagCollectionControllerCreateImportTailTest {
                 mock(RagDocumentRepository.class),
                 mock(RagCollectionService.class),
                 mock(CollectionIdentityResolver.class),
-                null);
+                null,
+                mock(DocumentMutationService.class));
     }
 
     private CollectionRequest createRequest() {

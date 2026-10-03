@@ -99,7 +99,8 @@ class RagDocumentControllerTest {
                 documentVersionService,
                 embeddingProfileProvider,
                 new CollectionIdentityResolver(collectionRepository),
-                auditLogService);
+                auditLogService,
+                documentMutationService);
 
         // Batch 822: the controller reaches the version-aware repository queries
         // unconditionally now that the "no descriptor provider" fallback is gone.
@@ -110,7 +111,6 @@ class RagDocumentControllerTest {
                         new com.springairag.core.config.RagProperties());
         controller.setDerivationDescriptorProvider(derivationDescriptorProvider);
         // Batch 847: 创建路径已无条件走变更层，controller 不再有内联 legacy 分支。
-        controller.setDocumentMutationService(documentMutationService);
 
         // Default mock behavior for documentToMap calls
         when(embeddingRepository.countByDocumentId(anyLong())).thenReturn(0L);

@@ -21,6 +21,7 @@ import com.springairag.core.service.BatchDocumentService;
 import com.springairag.core.service.CollectionIdentityResolver;
 import com.springairag.core.service.DocumentEmbedService;
 import com.springairag.core.service.DocumentVersionService;
+import com.springairag.core.service.DocumentMutationService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -86,7 +87,8 @@ class RagDocumentControllerBatchEmbedTest {
                 mock(DocumentVersionService.class),
                 profileProvider,
                 new CollectionIdentityResolver(collectionRepository),
-                auditLogService);
+                auditLogService,
+                mock(DocumentMutationService.class));
         controller.setDispatchService(dispatchService);
     }
 

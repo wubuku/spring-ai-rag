@@ -478,6 +478,76 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
+### Batch 848（已交付，后端技术债：把可选 setter 变成必填构造器依赖）
+
+- 分支：`feature/controller-required-mutation-wiring-20261007`
+- 主题：执行 Batch 847 结尾登记的"仍未做"——两个 controller 的
+  `documentMutationService` 当时还是 `@Autowired(required = false)` setter。
+  847 删掉全部 null 守卫之后，缺注入会**直接 NPE 而不是静默回落**，
+  语义上它已经是必填依赖，形式上却还写着"可选"。这批让形式追上语义。
+- **生产代码改动**（2 文件，净 **−8 行**）：
+  | 文件 | 改动 |
+  |---|---|
+  | `RagDocumentController` | 删 `setDocumentMutationService`；构造器加第 10 个参数；字段注释换成"Batch 847 删守卫 / 848 转必填" |
+  | `RagCollectionController` | 同上，构造器第 6 个参数 |
+  - 两个字段上的 `// optional-claim: unconditional @Service; same` 理由随之作废。
+    **理由会过期**——它当初为 820/847 的守卫而写，守卫没了，理由就该跟着走。
+- **测试改动**（32 文件，+99 / −52）：31 处构造调用补参。9 个文件传
+  **字段本身**（`documentMutationService`）而不是新 mock，因为这些文件在
+  `when(...)` / `verify(...)` 上断言的正是那个字段 mock；其余 20 个传
+  `mock(DocumentMutationService.class)`。
+- **过程中被抓住的 3 个真问题**（都不是"改完编译不过"那种浅层的）：
+  1. **被删掉的 setter 行是承重接线，不是初始化噪音。**
+     `RagDocumentControllerExternalDelegationTest` 在 `setUp` 里注入 mock A，
+     用例里又 `var mutationService = mock(...)` 造 mock B、**再 setter 换成 B**、
+     然后打桩 B。原脚本只删了 `setUp` 那一行，方法内的 B 与 controller 之间
+     就没有连接了。**如果我图省事给构造器传一个新 mock，这条用例会变成
+     "断言一个从没被调用过的桩"，而且照样是绿的。**
+     发现方式：拿 main 基线 worktree 的同名文件 `diff`，看到少掉的第 104 行。
+     处置：把局部 mock 提成字段、在 `setUp` 构造时传入。
+     ——**教训：删掉一行注入代码之前，先确认那行是不是在承担"换实例"的职责。**
+  2. **赋值顺序 NPE，编译器抓不到。**
+     `RagCollectionControllerTest.setUp` 里 `documentMutationService = mock(...)`
+     原本写在构造器**之后**（因为老代码是"先构造、后 setter 注入"）。
+     机械地把实参挪进构造器，mock 此时还是 null → 3 条 NPE。
+     只有真跑测试才会暴露。
+  3. **两个 `@WebMvcTest` 切片直接起不来**（9 个错误）：
+     `CollectionPurgeControllerWebTest`、`ExternalDocumentControllerWebTest`
+     没有 `DocumentMutationService` bean；setter 没了之后构造器必填，
+     容器找不到 bean → `Failed to load ApplicationContext`。
+     第三个 `DocumentLifecycleControllerWebTest` 恰好有，躲过了。
+- **本批的普查盲区（接在 847 的"四种形态"后面，是第五种）**：
+  847 总结过要搜**端点名 / setter 名 / 显式置 null / 反射**四种形态。
+  本批的普查用的是"搜 `new RagXController(`"，它**系统性地漏掉第五种：
+  由框架替你构造**——`@WebMvcTest` / `@SpringBootTest` 里 controller 是容器
+  建的，源码里根本没有 `new`。判据应该写成：
+  **搜 `new RagXController(`（直接构造）+ 搜 `@WebMvcTest(RagXController.class)`
+  与 `@SpringBootTest`（容器构造）+ 核对每个切片的 bean 表是否覆盖全部构造器参数。**
+  这次是全量测试失败暴露的，不是普查发现的——普查报告里"30 个文件"是对的，
+  但**"全部受影响的测试"是错的**。
+- **我自己写错的两件事**：
+  1. 批量脚本的正则假设最后一个实参后面**带逗号**（`arg,)`），真实形态是
+     `arg);`——逗号在实参之间，不在末尾。35 处一处没匹配上，却仍然"成功"执行
+     了它负责的另一半（加 import、删 setter 行），把 30 个文件推进了半成品状态。
+     **正则不匹配时静默通过，比直接报错更贵。**
+  2. 事后自写的校验脚本（花括号配平 + 实参计数）**同时给了 3 个假阳性和
+     10 个假阴性**：字符串字面量里的括号被当成语法括号，嵌套 `mock(...)`
+     里的逗号被当成实参分隔。**权威判据是编译器，不是自己临时写的检查器。**
+- **更正上一轮摘要把两个门禁的数混了**：`false-optional-wiring` 报
+  **26** controller（62 service / 172 bean），`controller-constructor-count`
+  报 **27** controller。已用 main 基线 worktree 复核：**本批前后
+  `false-optional-wiring` 都是 26**——覆盖面没变，变的是被它审查的
+  optional claim 少了 2 条。
+- 验证（全部实测）：core 全量 **7622 条 / 0 失败 / 0 错误 / 153 跳过**
+  （与 847 逐条相同，无用例增减）；门控 IT **16/16**（Flyway 59 个迁移全过）；
+  `verify-test-visibility` EXIT=0（984 类 / 7614 用例，双向对账无静默消失）；
+  三门禁 EXIT=0；tests 链 **20/20**；docs 链 **16/16**。
+  全仓 **34 文件 +107 / −68**，其中生产代码净 **−8 行**。
+- **仍未做**：`setDocumentMutationService` 在 **service 侧**还剩 3 套
+  （`RagCollectionService`、`BatchDocumentService`、`PdfToRagService`）。
+  它们是否同样是"守卫已删但形式还是可选 setter"，需要单独勘察——**不能假设**，
+  service 侧的 null 守卫可能还在，那是另一回事。
+
 ### Batch 847（已交付，后端技术债：controller 守卫删减）
 
 - 分支：`feature/controller-guard-removal-20261007`
@@ -558,11 +628,11 @@
   400 本身已经证明没走到删除：若是"先删后报错"，未打桩的 mock 返回 null，
   controller 构造响应时就会炸成 500。**注释里写清了这个推理，别让下一个人
   再把 `never()` 加回来。**
-- **仍未做**：`documentMutationService` 的 `@Autowired(required = false)`
-  setter 与字段还在（两个 controller 各一套）。它们现在**确实**是可选注入
+- **仍未做**（~~Batch 847 当时登记~~ → **已由 Batch 848 完成**）：
+  `documentMutationService` 的 `@Autowired(required = false)`
+  setter 与字段当时还在（两个 controller 各一套）。它们那时**确实**是可选注入
   形式，但守卫已删，注入缺失会直接 NPE 而不是静默回落——语义上已经是
-  必填依赖。改成构造器参数要动 20+10 个测试文件的构造调用，
-  与本批的收益不成比例，留作独立一批。
+  必填依赖。Batch 848 把两者都改成了构造器参数，测试侧动了 32 个文件。
 
 ### Batch 846（仅勘察，Batch 839 的续作，**未做**）
 

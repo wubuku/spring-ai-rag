@@ -9,6 +9,7 @@ import com.springairag.core.service.BatchDocumentService;
 import com.springairag.core.service.CollectionIdentityResolver;
 import com.springairag.core.service.DocumentEmbedService;
 import com.springairag.core.service.DocumentVersionService;
+import com.springairag.core.service.DocumentMutationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockMultipartFile;
@@ -47,7 +48,8 @@ class RagDocumentControllerValidateMatrixTailTest {
                 mock(DocumentVersionService.class),
                 mock(EmbeddingProfileProvider.class),
                 mock(CollectionIdentityResolver.class),
-                auditLogService);
+                auditLogService,
+                mock(DocumentMutationService.class));
     }
 
     private Object invoke(String name, Class<?>[] params, Object... args)

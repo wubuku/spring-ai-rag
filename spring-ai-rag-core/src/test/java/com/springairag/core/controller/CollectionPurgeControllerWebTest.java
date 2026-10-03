@@ -10,6 +10,7 @@ import com.springairag.core.repository.RagDocumentRepository;
 import com.springairag.core.service.AuditLogService;
 import com.springairag.core.service.CollectionIdentityResolver;
 import com.springairag.core.service.CollectionPurgeService;
+import com.springairag.core.service.DocumentMutationService;
 import com.springairag.core.service.RagCollectionService;
 import com.springairag.core.versioning.ApiVersionConfig;
 import org.junit.jupiter.api.Test;
@@ -62,6 +63,10 @@ class CollectionPurgeControllerWebTest {
 
     @MockitoBean
     private AuditLogService auditLogService;
+
+    /** Batch 848：变更层从可选 setter 变成构造器必填，Web 切片必须提供该 bean。 */
+    @MockitoBean
+    private DocumentMutationService documentMutationService;
 
     @MockitoBean
     private CollectionPurgeService purgeService;
