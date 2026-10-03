@@ -30,6 +30,7 @@ import com.springairag.core.service.AuditLogService;
 import com.springairag.core.service.BatchDocumentService;
 import com.springairag.core.service.DocumentEmbedService;
 import com.springairag.core.service.DocumentVersionService;
+import com.springairag.core.service.CollectionIdentityResolver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.domain.*;
@@ -85,9 +86,15 @@ class RagDocumentControllerTest {
         auditLogService = mock(AuditLogService.class);
         when(embeddingProfileProvider.getActiveProfile()).thenReturn(PROFILE);
         controller = new RagDocumentController(
-                documentRepository, embeddingRepository, collectionRepository,
-                documentEmbedService, batchDocumentService, documentVersionService,
-                embeddingProfileProvider, auditLogService);
+                documentRepository,
+                embeddingRepository,
+                collectionRepository,
+                documentEmbedService,
+                batchDocumentService,
+                documentVersionService,
+                embeddingProfileProvider,
+                new CollectionIdentityResolver(collectionRepository),
+                auditLogService);
 
         // Batch 822: the controller reaches the version-aware repository queries
         // unconditionally now that the "no descriptor provider" fallback is gone.

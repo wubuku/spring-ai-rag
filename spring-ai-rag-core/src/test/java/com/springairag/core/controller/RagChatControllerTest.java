@@ -62,7 +62,7 @@ class RagChatControllerTest {
         sseProperties = new RagSseProperties();
         auditLogService = mock(AuditLogService.class);
         scopeResolver = mock(CollectionRetrievalScopeResolver.class);
-        controller = new RagChatController(ragChatService, historyRepository, chatExportService, sseProperties, auditLogService);
+        controller = new RagChatController(ragChatService, historyRepository, chatExportService, sseProperties, null, auditLogService);
         productionController = new RagChatController(
                 ragChatService, historyRepository, chatExportService,
                 sseProperties, scopeResolver, auditLogService);

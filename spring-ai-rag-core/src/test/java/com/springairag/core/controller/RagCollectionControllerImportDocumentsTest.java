@@ -9,6 +9,7 @@ import com.springairag.core.service.AuditLogService;
 import com.springairag.core.service.DocumentMutationService;
 import com.springairag.core.service.JsonRecordService;
 import com.springairag.core.service.RagCollectionService;
+import com.springairag.core.service.CollectionIdentityResolver;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -58,8 +59,11 @@ class RagCollectionControllerImportDocumentsTest {
         documentMutationService = mock(DocumentMutationService.class);
         jsonRecordService = mock(JsonRecordService.class);
         controller = new RagCollectionController(
-                collectionRepository, documentRepository,
-                collectionService, auditLogService);
+                collectionRepository,
+                documentRepository,
+                collectionService,
+                new CollectionIdentityResolver(collectionRepository),
+                auditLogService);
         controller.setJsonRecordService(jsonRecordService);
         controller.setDocumentMutationService(documentMutationService);
         when(collectionService.createCollection(any()))

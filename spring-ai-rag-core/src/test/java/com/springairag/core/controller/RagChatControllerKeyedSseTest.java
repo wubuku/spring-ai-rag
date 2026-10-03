@@ -70,9 +70,7 @@ class RagChatControllerKeyedSseTest {
 
     @BeforeEach
     void setUp() {
-        controller = new RagChatController(
-                ragChatService, historyRepository, chatExportService,
-                new RagSseProperties(), auditLogService);
+        controller = new RagChatController(ragChatService, historyRepository, chatExportService, new RagSseProperties(), null, auditLogService);
         controller.configureTurnOperationService(turnOperationService);
         controller.configureModeAwareExecution(commandMapper, chatExecutionService);
     }

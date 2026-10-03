@@ -49,7 +49,7 @@ class SseStreamE2ETest {
         chatExportService = mock(ChatExportService.class);
         sseProperties = new RagSseProperties();
         auditLogService = mock(AuditLogService.class);
-        controller = new RagChatController(ragChatService, historyRepository, chatExportService, sseProperties, auditLogService);
+        controller = new RagChatController(ragChatService, historyRepository, chatExportService, sseProperties, null, auditLogService);
     }
 
     private void stubStream(String message, String sessionId, String domainId,

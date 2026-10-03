@@ -8,6 +8,7 @@ import com.springairag.core.filter.ApiKeyAuthFilter;
 import com.springairag.core.repository.RagCollectionRepository;
 import com.springairag.core.repository.RagDocumentRepository;
 import com.springairag.core.service.RagCollectionService;
+import com.springairag.core.service.CollectionIdentityResolver;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -35,6 +36,7 @@ class CollectionAclControllerTest {
                 collectionRepository,
                 documentRepository,
                 mock(RagCollectionService.class),
+                new CollectionIdentityResolver(collectionRepository),
                 null);
     }
 

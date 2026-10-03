@@ -92,12 +92,6 @@ public class PdfImportController {
         this.collectionIdentityResolver = collectionIdentityResolver;
     }
 
-    public PdfImportController(PdfImportService pdfImportService,
-                               MarkdownRendererService markdownRendererService,
-                               PdfToRagService pdfToRagService) {
-        this(pdfImportService, markdownRendererService, pdfToRagService, null);
-    }
-
     // ==================== PDF Import ====================
 
     @Operation(summary = "Import PDF file",

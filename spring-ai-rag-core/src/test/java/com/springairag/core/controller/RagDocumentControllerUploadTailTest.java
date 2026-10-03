@@ -6,6 +6,7 @@ import com.springairag.core.repository.RagCollectionRepository;
 import com.springairag.core.repository.RagDocumentRepository;
 import com.springairag.core.repository.RagEmbeddingRepository;
 import com.springairag.core.service.BatchDocumentService;
+import com.springairag.core.service.CollectionIdentityResolver;
 import com.springairag.core.service.DocumentEmbedService;
 import com.springairag.core.service.DocumentVersionService;
 import com.springairag.core.service.PdfImportService;
@@ -35,14 +36,17 @@ class RagDocumentControllerUploadTailTest {
                 .thenReturn(new EmbeddingProfile(
                         1L, "test-profile", "test", "test-model", "v1",
                         1024, "COSINE", "PROVIDER_DEFAULT", true));
+        RagCollectionRepository collectionRepository =
+                mock(RagCollectionRepository.class);
         controller = new RagDocumentController(
                 mock(RagDocumentRepository.class),
                 mock(RagEmbeddingRepository.class),
-                mock(RagCollectionRepository.class),
+                collectionRepository,
                 mock(DocumentEmbedService.class),
                 mock(BatchDocumentService.class),
                 mock(DocumentVersionService.class),
                 profileProvider,
+                new CollectionIdentityResolver(collectionRepository),
                 null);
     }
 

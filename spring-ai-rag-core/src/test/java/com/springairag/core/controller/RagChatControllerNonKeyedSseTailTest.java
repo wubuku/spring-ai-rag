@@ -232,12 +232,7 @@ class RagChatControllerNonKeyedSseTailTest {
 
     @Test
     void nonKeyedAskWithoutResolverUsesPlainChatOverload() {
-        RagChatController legacy = new RagChatController(
-                ragChatService,
-                mock(RagChatHistoryRepository.class),
-                mock(ChatExportService.class),
-                new RagSseProperties(),
-                null);
+        RagChatController legacy = new RagChatController(ragChatService, mock(RagChatHistoryRepository.class), mock(ChatExportService.class), new RagSseProperties(), null, null);
         legacy.configureTurnOperationService(turnOperationService);
         when(turnOperationService.prepare(any(), anyList(), any()))
                 .thenReturn(nonKeyedPrepared());
@@ -325,12 +320,7 @@ class RagChatControllerNonKeyedSseTailTest {
 
     @Test
     void clearHistoryWithoutAuditServiceSkipsAuditLogging() {
-        RagChatController legacy = new RagChatController(
-                ragChatService,
-                mock(RagChatHistoryRepository.class),
-                mock(ChatExportService.class),
-                new RagSseProperties(),
-                null);
+        RagChatController legacy = new RagChatController(ragChatService, mock(RagChatHistoryRepository.class), mock(ChatExportService.class), new RagSseProperties(), null, null);
         legacy.configureSessionCoordinator(coordinator);
         when(coordinator.clearSession(any(ChatPrincipal.class), anyString()))
                 .thenReturn(2);

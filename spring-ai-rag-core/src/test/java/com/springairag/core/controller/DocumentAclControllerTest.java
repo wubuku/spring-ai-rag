@@ -13,6 +13,7 @@ import com.springairag.core.repository.RagEmbeddingRepository;
 import com.springairag.core.service.BatchDocumentService;
 import com.springairag.core.service.DocumentEmbedService;
 import com.springairag.core.service.DocumentVersionService;
+import com.springairag.core.service.CollectionIdentityResolver;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -50,6 +51,7 @@ class DocumentAclControllerTest {
                 mock(BatchDocumentService.class),
                 mock(DocumentVersionService.class),
                 profileProvider,
+                new CollectionIdentityResolver(collectionRepository),
                 null);
         authenticateRestrictedKey(2L, 4L);
     }

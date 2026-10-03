@@ -34,7 +34,7 @@ class PdfImportControllerRawAndImportTailTest {
         controller = new PdfImportController(
                 pdfImportService,
                 null,
-                mock(com.springairag.core.service.PdfToRagService.class));
+                mock(com.springairag.core.service.PdfToRagService.class), null);
     }
 
     @Test

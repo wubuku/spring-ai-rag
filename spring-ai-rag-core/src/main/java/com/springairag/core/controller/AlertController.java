@@ -49,13 +49,6 @@ public class AlertController {
     private final AlertManagementAuthorization managementAuthorization;
     private AuditLogService auditLogService;  // optional-claim: unconditional @Service; the audit helpers are null-tolerant on purpose so auditing can never be the reason a request fails
 
-    public AlertController(AlertService alertService, SloConfigRepository sloConfigRepository,
-                           RagSilenceScheduleRepository silenceScheduleRepository,
-                           @Autowired(required = false) AuditLogService auditLogService) {
-        this(alertService, sloConfigRepository, silenceScheduleRepository,
-                auditLogService, null);
-    }
-
     @Autowired
     public AlertController(
             AlertService alertService,

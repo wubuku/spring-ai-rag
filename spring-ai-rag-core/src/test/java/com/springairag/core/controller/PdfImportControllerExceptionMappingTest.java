@@ -50,7 +50,7 @@ class PdfImportControllerExceptionMappingTest {
         pdfToRagService = mock(PdfToRagService.class);
         controller = new PdfImportController(
                 pdfImportService, mock(MarkdownRendererService.class),
-                pdfToRagService);
+                pdfToRagService, null);
     }
 
     @AfterEach

@@ -160,3 +160,18 @@ echo "PASS: False-optional-wiring self-test"
 
 node scripts/verify-false-optional-wiring.mjs
 echo "PASS: False-optional wiring"
+
+# Spring injects a controller through its @Autowired constructor. A second
+# constructor is reachable only from tests, and it chooses on the caller's behalf
+# which collaborators end up null — nine of them did, and two of those selected a
+# legacy retrieval mode the production wiring cannot reach. Visibility is not the
+# test: a package-private constructor is as test-only as a public one.
+node scripts/test-support/controller-constructor-count-self-test.mjs >/dev/null || {
+  echo "Controller-constructor-count self-test failed; the gate may no longer reject anything." >&2
+  node scripts/test-support/controller-constructor-count-self-test.mjs >&2 || true
+  exit 1
+}
+echo "PASS: Controller-constructor-count self-test"
+
+node scripts/verify-controller-constructor-count.mjs
+echo "PASS: Controller constructor count"

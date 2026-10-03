@@ -5,6 +5,7 @@ import com.springairag.core.repository.RagDocumentRepository;
 import com.springairag.core.service.AuditLogService;
 import com.springairag.core.service.CollectionProvisioningService;
 import com.springairag.core.service.RagCollectionService;
+import com.springairag.core.service.CollectionIdentityResolver;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -45,6 +46,7 @@ class RagCollectionControllerListTailTest {
                 collectionRepository,
                 documentRepository,
                 mock(RagCollectionService.class),
+                new CollectionIdentityResolver(collectionRepository),
                 mock(AuditLogService.class));
         when(collectionRepository.findByIdAndDeletedFalse(1L))
                 .thenReturn(Optional.of(collection(1L)));
@@ -143,6 +145,7 @@ class RagCollectionControllerListTailTest {
                 collectionRepository,
                 documentRepository,
                 mock(RagCollectionService.class),
+                new CollectionIdentityResolver(collectionRepository),
                 mock(AuditLogService.class));
         org.springframework.test.util.ReflectionTestUtils.setField(
                 controller, "identityResolver", resolver);

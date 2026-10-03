@@ -193,21 +193,6 @@ public class RagDocumentController {
         this.documentRelocationService = documentRelocationService;
     }
 
-    public RagDocumentController(RagDocumentRepository documentRepository,
-                                 RagEmbeddingRepository embeddingRepository,
-                                 RagCollectionRepository collectionRepository,
-                                 @Lazy DocumentEmbedService documentEmbedService,
-                                 @Lazy BatchDocumentService batchDocumentService,
-                                 DocumentVersionService documentVersionService,
-                                 EmbeddingProfileProvider embeddingProfileProvider,
-                                 AuditLogService auditLogService) {
-        this(documentRepository, embeddingRepository, collectionRepository,
-                documentEmbedService, batchDocumentService, documentVersionService,
-                embeddingProfileProvider,
-                new CollectionIdentityResolver(collectionRepository),
-                auditLogService);
-    }
-
     @Operation(summary = "Upsert an externally managed document",
             description = "Idempotently create or update an ordinary document by collectionKey and externalId.")
     @ApiResponses({
