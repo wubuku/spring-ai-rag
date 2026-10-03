@@ -478,6 +478,80 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
+### Batch 846（仅勘察，Batch 839 的续作，**未做**）
+
+- 分支：无（纯勘察，工作区保持干净）
+- 主题：把 Batch 839 记的"5 处 controller 守卫"逐处查实，并**修正它的一处数字**。
+- **决定性证据（RagDocumentController）**：`documentMutationService` 全类
+  9 个引用点里，**3 处带 null 守卫**（299 `createDocument`、394
+  `deleteDocument`、1154 `uploadAndEmbed`），**5 处无条件调用**
+  （417 / 427 / 437 / 1196 / 1354）。**同一字段两种假设**，而字段自己的
+  注释就写着 `// optional-claim: unconditional @Service; same`。
+  更硬的推论：那 5 处无条件调用**一旦没注入就直接 NPE**，所以生产环境
+  **必然**注入了——`@Autowired(required = false)` 的 setter 是假象。
+  判据与 Batch 838 同型，那批已经这样删过一轮并验证通过。
+- **证据中等（RagCollectionController）**：2 处守卫（640 `addDocument`、
+  831 `importCollection`），类内 **0 处无条件调用**。同 bean、同 `@Service`，
+  靠 RagDocumentController 侧已确立的"required = false 是 legacy 分支造出来
+  的假象"外推。**强度要分开记，不要跟上一条混为一谈。**
+- **必须区分开的同族字段**：`RagCollectionController:98` 的
+  `auditLogService` 也是 `optional-claim:`，但它的理由是
+  *"the audit helpers tolerate a null rather than failing the business call"*
+  ——**这条理由站得住**（审计失败不该阻断业务调用）。
+  而 `documentMutationService` 的理由是"unconditional @Service; same"，
+  指的是**同一个无条件 bean**，理由本身就不成立。
+  **两个字段长得一样，处置相反。** 别按前缀批量处理。
+- **修正 Batch 839 的一处数字**：它写"30 处 `setDocumentMutationService` 调用"。
+  实测是：
+  | 事实 | 数字 |
+  |---|---|
+  | 构造 `RagDocumentController` 的测试文件 | 20 |
+  | 其中**设了** `setDocumentMutationService` 的 | **4** |
+  | 构造 `RagCollectionController` 的测试文件 | 10 |
+  | 其中**设了** setter 的 | **3** |
+  - "30"这个数真实存在，但含义是**调用受影响端点的次数**，不是 setter 次数。
+    分布在 **6 个文件**里：
+    | 文件 | 调用次数 |
+    |---|---|
+    | `RagDocumentControllerTest` | 7 |
+    | `RagDocumentControllerUploadTest` | 4 |
+    | `RagDocumentControllerUploadTailTest` | 2 |
+    | `DocumentAclControllerTest` | 1 |
+    | `RagCollectionControllerTest` | 12 |
+    | `RagCollectionControllerImportPurgeTailTest` | 4 |
+  - 也就是说：**20+10 个文件里绝大多数根本不碰这 5 个端点**，
+    删守卫对它们零影响。Batch 839 说的"为 60 行动 30 个测试文件"把
+    分子分母都算大了——**实际是 6 个文件需要改断言**。
+- **真正的工作量在断言，不在 setter**。这 6 个文件**都没设 setter**，
+  也就是说它们**当前正靠 legacy 分支在跑**，删守卫后必然 NPE。看
+  `RagDocumentControllerTest` 的断言就知道重写量：
+  - `assertEquals("DUPLICATE", status())` + `existingDocumentId()`
+    + `verify(documentRepository, never()).save(any())`
+    —— 这是 **controller 自己做去重**的 legacy 语义；委派路径下去重在
+    `DocumentMutationService.createLocal` 里。
+  - `assertNotNull(contentHash())` —— legacy 是 controller 自己
+    `DigestUtils.sha256(content)` 算的。
+  - 所以**加个 mock 是不够的，断言必须逐条改成委派契约**。
+  这与 Batch 838 的经验一致（`RagCollectionServiceTest` 的 delete 用例
+  测的正是已死的 else 分支，改成打桩 `unlinkLocalDocumentsFromCollection`）。
+- **建议的处置（执行者从这份清单接手）**：
+  1. `RagDocumentController`：删 299 / 394 / 1154 三处守卫的 `if` 包装，
+     留下委派，删掉顺接段（实测 25 + 1 + 9 = **35 行**）。
+  2. `RagCollectionController`：删 640 / 831 两处，约 **23 行**。
+  3. 两个 setter 与两个字段**一并删**（Batch 838 先例：死字段要连
+     setter 一起删，只删字段留参数同样是死代码），依赖改走构造器。
+  4. 6 个测试文件：先加构造参数与 mock，再把 legacy 语义断言逐条改写成
+     委派契约。**断言要钉"服务把什么交给协作者"，不是旧实现的内部结构。**
+  5. 改完跑 `verify-controller-constructor-count.mjs` 与
+     `verify-false-optional-wiring.mjs`（覆盖面 26 controller + 62 service
+     + 172 bean），两个 controller 离开覆盖面统计。
+- **本批为什么只做勘察**：执行时机器负载 `83.03 / 93.61 / 87.75`
+  （VS Code 的 Java 语言服务器占 577% CPU 做索引，另有用户自己在调试的
+  Spring Boot 进程；这两个都不是本轮的进程，没动）。这个负载下 Maven 跑一轮
+  core 全量要 30 分钟以上，门禁拿不到可信结果。按"门禁不绿不算完成"的规矩，
+  **宁可只勘察入账本，也不交一个没验证过的红批次**
+  （与 Batch 831 / 833 / 836 同一处置）。
+
 ### Batch 844（已交付，WebUI UX + 一次重要的度量口径更正）
 
 - 分支：`feature/draft-credential-notice-20261007`
