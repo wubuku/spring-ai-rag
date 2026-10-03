@@ -478,6 +478,92 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
+### Batch 842（已交付，WebUI 测试加固）
+
+- 分支：`feature/workspace-state-tests-20261007`
+- 主题：**`workspaceState` 的安全与降级路径**。顺着 Batch 841 的判据
+  （守卫类代码要双向钉住）去量工具层，量出来的第一名很难看。
+- **先量后写，而且第一次量法是错的**：用 `grep -c "it('"` 数测试条数，
+  把 `pdfProvenance.test.ts` 报成 **1 条**——实际那条是 `it.each` 带 12 个
+  case，展开就是 12 条，真实密度 0.289（13 条 / 45 行），**覆盖良好**。
+  教训与"用 `@Test` 注解计数而不是数方法名"是同一条：**`it.each` 会让
+  grep 口径严重低估**。改用 `vitest --reporter=json` 拿每文件的真实
+  `assertionResults` 条数，再除以源文件行数算密度。
+- 真实排名（`src/utils` + `src/hooks`）：
+  | 密度 | 用例 | 行数 | 文件 |
+  |---|---|---|---|
+  | **0.019** | **3** | **158** | **`workspaceState.ts`** ← 全树最低，比次低低 2.8 倍 |
+  | 0.053 | 29 | 546 | `useSSE.ts` |
+  | 0.061 | 4 | 66 | `useChartTheme.ts` |
+  | 0.103 | 14 | 136 | `useFileUpload.ts` |
+  | 0.169 | 11 | 65 | `useSearchHistory.ts` |
+  | 0.289 | 13 | 45 | `pdfProvenance.ts` |
+- **为什么这个文件要紧**：它管三件事，而 158 行只有 3 条用例撑着——
+  1. **凭据泄漏拦截**：`CREDENTIAL_PATTERN` 拦 `sk-` 裸密钥、
+     `authorization: bearer`、`x-api-key`、`api_key=`。
+  2. **按 UTF-8 字节的容量上限**（`TextEncoder`，8KB / 16KB 两级）。
+  3. **路径白名单**：只记忆合法的顶级路由与两种深路由。
+  而且草稿键（`search-draft`、chat draft）**存的就是用户原样输入的搜索词**，
+  凭据正则一定会真的撞上真实输入——这决定了必须同时钉住误报方向。
+- 三处零覆盖到位的确认（都做过不带 head 的全仓复查）：
+  - `CREDENTIAL_PATTERN` 的 4 支里**只有 `authorization: bearer` 被测过**。
+  - **误报方向完全空白**：没有任何一条用例断言"含 `api key` 但无赋值符的
+    正常问句应当放行"。守卫写宽一点，用户搜"api key 怎么配置"就会丢草稿，
+    而且是静默丢失（`Chat.tsx:288` 没有检查 `writeWorkspaceState` 的返回值）。
+  - `storage()` 的 try/catch 降级零覆盖：隐私模式 / 禁用存储时
+    `clearCredential()` 一定会调 `clearWorkspaceState()`，崩了就是整页崩。
+- **顺带清掉一个死导出**：`isStringRecord` 全仓（含测试、含构建产物外）
+  **只有定义处一处命中**。三个调用方各自定义了精确校验器
+  （`isSearchDraft` / `isFilesCollectionState` / `isFilesLayoutState`），
+  谁都用不上它。已删，`typecheck` 干净证实没有别处引用。
+- 改动：`workspaceState.test.ts` **3 → 29 条**，分 5 组
+  （凭据拦截 / 按字节计的上限 / 损坏数据降级 / 存储不可用时降级 /
+  路由记忆的判定边界）+ 1 条 `removeWorkspaceState`
+  （**该导出此前连 import 都没有**，是全模块唯一完全没被碰过的 API）。
+- **变异实验 12 个，10 个精确抓住、2 个如实登记**（都在接线处）：
+  | 变异 | 结果 |
+  |---|---|
+  | 整个凭据正则关掉 | ✅ 6 红 |
+  | 正则去掉 `sk-` 那一支 | ✅ 2 红 |
+  | 正则去掉 `api_key` 那一支 | ✅ 2 红 |
+  | **`api_key` 不再要求赋值符**（正则写宽） | ✅ **精确 1 红** |
+  | `byteLength` 改成 `.length`（字符数） | ✅ 1 红 |
+  | schema 校验不过时不清理 | ✅ 1 红 |
+  | 写入被拒时不清同键旧值 | ✅ 1 红 |
+  | 顶级路由不再按 `route/` 前缀匹配子路径 | ✅ 4 红 |
+  | 去掉 `search.length > 2048` 上限 | ✅ 1 红 |
+  | `/chat` 深路径守卫放宽 | ✅ 1 红 |
+  | 删掉 `storage()` 的 try/catch | ⚠️ **不可定位**：整个测试文件加载失败 |
+  | 删掉 `topLevelRoute(url.pathname) === route` 检查 | ⚠️ **等价变异** |
+- 两个如实登记的：
+  1. 删 `storage()` 的 try/catch 不是"某条用例变红"，而是**整个测试文件
+     加载失败**——因为 `window.sessionStorage` 的 getter 一抛错就冒泡到
+     每个用例。这仍然说明守卫是承重的（受限浏览器里整个模块会崩），
+     但拿它当"降级路径有用"的证据不如 W1–W10 精确，如实说明。
+  2. `rememberedRoute` 里 `legalPath(...) && topLevelRoute(...) === route`
+     的第二个条件是**纯冗余防御**：`legalPath` 在当前 `TOP_LEVEL_ROUTES`
+     下已经拦住了全部反例，找不到能区分二者的输入，所以删掉它 29 条全绿。
+     不为它硬造用例。
+- **密钥门禁与测试样本撞车**（本批最实用的一条）：`sk-abcdefghijklmnop1234`
+  这个样本让 `verify-project-docs.sh` 的 added-line 密钥扫描判红——
+  门禁是 `sk-[A-Za-z0-9_-]{20,}`，而拦截正则是 `sk-[a-z0-9_-]{12,}`。
+  **12–19 字符的样本两边都照顾得到**：既能验证更严的 12 字符门槛，
+  又不会让新增行被判成真密钥。已换成 `SK_LIKE = 'sk-abcdefghijkl'` 并写上
+  注释"别把它补长回 20 位"，免得下一个读代码的人好心改回去再踩一次。
+- **我自己写错的 2 处**（跑出来是红的，查完才发现自己错，不是代码错）：
+  1. 以为 `JSON.stringify({ value: 'x'.repeat(2000) })` 超过 8KB——实际加
+     JSON 包装才 2012 字节。数字没算就写断言。
+  2. 断言 `rememberedRoute('/search')` 只返回 search 段——实现返回的是
+     `${url.pathname}${url.search}` **完整路径**（第 145 行），第 1 条既有用例
+     早就写对了，我新写的这条反而写错。**新用例要和既有用例的约定对齐，
+     不一致时先怀疑自己。**
+- 验证：WebUI 77 文件 / **872 用例**全绿（846 → 872）；`npm run lint`
+  九条门禁全过（门禁自测 263 未变，本批未动门禁）；`typecheck` 干净；
+  `build` 通过；docs 链 **16/16**。
+- 顺带登记（**未做**，量级小）：
+  - `useChartTheme.ts` 66 行 4 条（0.061），是工具/hooks 里第二低的；
+    属于"深浅色切换"这类用户可见行为，值得单独看，但不是安全关键。
+
 ### Batch 841（已交付，WebUI 测试加固）
 
 - 分支：`feature/ime-guard-tests-20261007`
