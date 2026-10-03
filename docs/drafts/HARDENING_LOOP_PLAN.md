@@ -478,6 +478,84 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
+### Batch 840（已交付，WebUI）
+
+- 分支：`feature/webui-hardcoded-copy-20261007`
+- 主题：**一条"报绿但其实没在管"的门禁**。前五批都在后端，这批按优先级切回
+  WebUI 的 UI/UX 侧，第一眼就看到一个真问题。
+- **发现**：`check-hardcoded-copy` 报"45 个组件、7 条豁免、无其他用户可见
+  文本是字面量"，但 `CreateCollectionModal` 里五条校验文案全是字面量：
+  `errors.name = 'Name is required'`、`showToast('Collection created
+  successfully', …)`。门禁**看不见它们**。
+- 根因：门禁的 `PATTERNS` 只认 4 种形态——JSX 文本、chart 数据、chart 属性、
+  以及 `aria-label/title/placeholder/alt` 属性。**赋值给字段的字符串**与
+  **交给 sink 的 toast 文案**两种形态一个都不认，而校验消息与 toast 恰好
+  只以这两种形态存在。
+- 加了 3 处检测（不是加豁免——用户可见文案必须真的进 locale）：
+  | 新检测 | 形态 |
+  |---|---|
+  | `assigned-copy` | `x.y = 'Prose';`（要求含空格且以 `;` 收尾，机器常量 `STATE = 'ACTIVE'` 不会命中） |
+  | `toast-copy`（单引号） | `showToast('Prose', …)` |
+  | `findToastTemplateCopy()` | `showToast(\`…\`)`，先抠掉 `${…}` 再看残余里有没有大写散文 |
+- **先量后写**：两个候选 pattern 在真树 45 个组件源上跑出 **8 命中 / 0 误报**，
+  这种精度才允许合入。按用户的规矩，不靠"加一批豁免"换绿。
+- **三处我自己写错的 pattern，被真树当场抓住**：
+  1. `assigned-copy` 一条都没命中——`findHardcodedCopy` 只给 regex 补 `g` 标志，
+     我的 `^` 没了 `m` 就只锚整个文件开头。**`m` 是承重的**。
+  2. `toast-copy` 模板变体过宽，把
+     `` `${fileName} ${t('documents.uploaded')}` `` 这种"散文全部来自 locale"
+     的模板也报了。改成抠掉 `${…}` 后再要求残余有大写散文。
+  3. 散文判定又漏掉了 `Re-embedded: 3 success`——词元测试要求大写词后面
+     **紧跟空格**，而那里跟的是冒号。放宽成允许标点分隔。
+- **文案迁移**：`CreateCollectionModal` 5 条校验 + 2 条 toast、
+  `ReembedAllButton` 2 条 toast，共 9 处进 locale；`en.json` 与
+  `zh-CN.json` 各加 10 个键（重嵌入的部分失败用两条键表达，保留原有
+  "失败为 0 就不显示 failed" 的行为）。`check-i18n-keys` 报 705 个键、
+  双语键集一致、全部可达。
+- **测试改写顺带暴露了一个更值得记的问题**：`CreateCollectionModal.test.tsx`
+  断言的是**英文散文**（`getByText(/name is required/i)`），而全局 setup 的
+  i18n mock 是 `t: (key) => key`——**这些用例过去能过，只是因为组件里写的
+  是英文字面量**。也就是说测试在钉住"不翻译"这个行为。已全部改成断言
+  翻译键，与同文件里既有的 `collections.name` 写法一致。
+  `ReembedAllButton.test.tsx` 的本地 mock 进一步改成把插值参数一起返回，
+  于是用例现在**钉住传了什么给 locale**（`documents.reembedSuccess
+  {"success":5}`），而参数传错会让用户看到错的数字，纯键断言抓不到。
+- **变异实验抓出我自己的自测有洞**（本批最值钱的发现）：
+  第一版自测里模板那几条是**直接调导出函数** `findToastTemplateCopy` 测的。
+  做变异实验、只把 `findHardcodedCopy` 里的 `found.push(...)` 接线摘掉时，
+  **这些用例照样全绿**——函数还在，只是门禁不再调用它。也就是说那几条测试
+  **无法因为它存在的那个理由而失败**。补了一条走 `findHardcodedCopy`
+  （门禁真正走的路径）的用例，重跑变异：精确 1 条变红。
+  教训：**测函数不等于测接线**，变异实验要变异在接线处，不是变异在实现处。
+- 验证：WebUI 77 文件 / 835 用例全绿；`npm run lint` 九条门禁全过
+  （其中门禁自测 256 → **263**）；`typecheck` 干净；`build` 通过。
+
+### Batch 839（仅勘察，同族最后 5 处 controller 守卫，**未做**）
+
+- 结论先行：**形态与 838 不同，但判据成立；投入产出比很差，所以没排进本批。**
+- 形态差别：service 侧是 `if (x != null) { 委派 } else { 内联 legacy }`；
+  controller 侧**没有 `else` 关键字**——是 `if (x != null) { …return/continue…; }`
+  之后**顺接**的 legacy 代码。删法一样（拆掉 if 包装、留下委派、删掉顺接段），
+  但"按找 else 来分析"的脚本会全部判错。
+- 5 处的证据强度**不一样**，这点要分开记：
+  | 位置 | 证据 | 强度 |
+  |---|---|---|
+  | `RagDocumentController:299` | 同类内 **5 处无条件**使用（417/427/437/1196/1354）vs 3 处守卫 | **决定性**（同一字段两种假设） |
+  | `RagDocumentController:394` | 同上 | **决定性** |
+  | `RagDocumentController:1154` | 同上 | **决定性** |
+  | `RagCollectionController:640` | 类内 0 处无条件使用 | 中等：同 bean、同 `@Service`，靠 822/824/838 批已确立的"`required = false` setter 是 legacy 分支造出来的假象" |
+  | `RagCollectionController:831` | 同上 | 同上 |
+- 删除量（实测）：`RagDocumentController` 顺接段 25 + 1 + 9 = **35 行**，
+  `RagCollectionController` else 3 行 + 顺接段约 20 行 = **约 23 行**，
+  外加 `buildDocumentFromImport` 等只服务顺接段的方法。主源码合计**约 60 行**。
+- **为什么不排**：测试面 **30 个文件**（20 构造 `RagDocumentController`、
+  10 构造 `RagCollectionController`、30 处 `setDocumentMutationService` 调用），
+  为 60 行主源码动 30 个测试文件，投入产出比失衡。留作独立一批。
+- 现成的起点：`RagDocumentController` 131–132 行的注释已经写着这件事
+  （"Making the wiring unconditional and deleting the guards means migrating
+  every test that relies on the absent branch. Measured, not assumed:
+  recorded as remaining work."）——执行者从那里接手即可。
+
 ### Batch 838（已交付）
 
 - 分支：`feature/collection-legacy-guard-20261007`

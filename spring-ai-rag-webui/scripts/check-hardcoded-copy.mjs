@@ -95,7 +95,66 @@ const PATTERNS = [
     kind: 'attribute',
     re: /\b(?:aria-label|title|placeholder|alt)="([A-Z][A-Za-z0-9 ,.'’!?()\-:]{2,})"/,
   },
+  // A validation message is built by assigning prose to a field, never by
+  // putting it in JSX — `errors.name = 'Name is required'` renders through a
+  // later `{errors.name}`. No earlier pattern could see it, so a whole
+  // component's user-facing text could sit in literals while this gate
+  // reported it clean. Requiring a space and a trailing `;` is what keeps
+  // machine constants (`STATE = 'ACTIVE'`) out; measured over all 45 scanned
+  // component sources this pattern reports 5 hits and zero false positives.
+  //
+  // The `m` flag is load-bearing: `findHardcodedCopy` only appends `g`, so a
+  // bare `^` would anchor to the start of the whole file and match nothing.
+  {
+    kind: 'assigned-copy',
+    re: /^[ \t]*[\w.[\]]+\s*=\s*'([A-Z][A-Za-z0-9 ,.'’!?/&()\-:]{2,}[ ][A-Za-z0-9 ,.'’!?/&()\-:]{2,})'\s*;/m,
+  },
+  // Toast copy is handed to a sink, not rendered inline, so neither JSX nor
+  // the expression-container scan reaches it. The quoted form needs no more
+  // than a non-greedy body; the template form goes through
+  // findToastTemplateCopy below, because deciding whether a template carries
+  // prose of its own is not a shape a single regex can express.
+  {
+    kind: 'toast-copy',
+    re: /showToast\(\s*'([^'\\]*(?:\\.[^'\\]*)*)'/,
+  },
 ];
+
+/**
+ * Prose a template literal carries *itself*, as opposed to what it interpolates.
+ *
+ * ``showToast(`${fileName} ${t('documents.uploaded')}`)`` is already
+ * translated — every word a user reads comes from the locale, and the two
+ * interpolations are a filename and a translated string. Reporting it would
+ * send the next reader hunting for copy that is not there. The tell is
+ * mechanical: blank out every `${…}`, then look for a capitalised word in what
+ * is left. `` `Re-embed failed: ${err.message}` `` leaves "Re-embed failed:"
+ * and is reported; `` `${fileName}: ${errorMsg}` `` leaves ": " and is not.
+ *
+ * Splitting the quoted and template forms into separate patterns matters for a
+ * different reason: a `(?:'…'|`…`)` alternation makes the capture the whole
+ * argument list, so `Collection created successfully', 'success` is what gets
+ * reported.
+ *
+ * The word test allows punctuation between words on purpose. `Re-embedded: 3
+ * success` is prose; a test that demanded a space right after the first word
+ * would read the colon as the end of it and let the string through.
+ */
+export function findToastTemplateCopy(code) {
+  const found = [];
+  const rx = /showToast\(\s*`([^`]*)`/g;
+  let m;
+  while ((m = rx.exec(code)) !== null) {
+    const own = m[1].replace(/\$\{[^}]*\}/g, ' ').trim();
+    if (!/[A-Z][A-Za-z0-9'-]{2,}(?:[ :,.!?—–-]+[a-zA-Z0-9'’-]+)+/.test(own)) continue;
+    found.push({
+      copy: m[1].trim(),
+      kind: 'toast-copy',
+      line: code.slice(0, m.index).split('\n').length,
+    });
+  }
+  return found;
+}
 
 /**
  * Attributes whose value is a machine identifier rather than something a user
@@ -269,6 +328,7 @@ export function findHardcodedCopy(relPath, source) {
     }
   }
   found.push(...findExpressionContainerCopy(code));
+  found.push(...findToastTemplateCopy(code));
   return found.sort((a, b) => a.line - b.line);
 }
 
