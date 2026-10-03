@@ -43,25 +43,21 @@ public class PdfToRagService {
     private final RagDocumentRepository documentRepository;
     private final DocumentEmbedService documentEmbedService;
     private EmbeddingDispatchService dispatchService; // optional-claim: unconditional @Service；守卫在同文件之外——两处使用都紧跟 `EmbeddingPolicySupport.requireJobsEnabled(dispatchService)`，它做 null 检查并抛 EMBEDDING_JOBS_DISABLED 而不是 NPE（Batch 850 普查时才发现这道检查一直在）
-    private DocumentMutationService documentMutationService;
+    private DocumentMutationService documentMutationService; // Batch 852：`required = false` 已删——它在 upsertLocalImport 处无条件使用，缺失时抛裸 NPE
 
     public PdfToRagService(FsFileRepository fsFileRepository,
                            RagDocumentRepository documentRepository,
-                           DocumentEmbedService documentEmbedService) {
+                           DocumentEmbedService documentEmbedService,
+                           DocumentMutationService documentMutationService) {
         this.fsFileRepository = fsFileRepository;
         this.documentRepository = documentRepository;
         this.documentEmbedService = documentEmbedService;
+        this.documentMutationService = documentMutationService;
     }
 
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     void setDispatchService(EmbeddingDispatchService dispatchService) {
         this.dispatchService = dispatchService;
-    }
-
-    @org.springframework.beans.factory.annotation.Autowired(required = false)
-    void setDocumentMutationService(
-            DocumentMutationService documentMutationService) {
-        this.documentMutationService = documentMutationService;
     }
 
     // ---- Public API ----

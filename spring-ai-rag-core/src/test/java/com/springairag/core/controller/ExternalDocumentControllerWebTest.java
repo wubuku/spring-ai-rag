@@ -14,6 +14,7 @@ import com.springairag.core.service.DocumentEmbedService;
 import com.springairag.core.service.DocumentMutationService;
 import com.springairag.core.service.DocumentVersionService;
 import com.springairag.core.service.ExternalDocumentService;
+import com.springairag.core.service.DocumentDerivationDescriptorProvider;
 import com.springairag.core.service.DocumentRelocationService;
 import com.springairag.api.dto.ExternalDocumentRelocateResponse;
 import com.springairag.api.dto.DocumentLifecycleResponse;
@@ -77,6 +78,15 @@ class ExternalDocumentControllerWebTest {
     /** Batch 848：变更层从可选 setter 变成构造器必填，Web 切片必须提供该 bean。 */
     @MockBean
     private DocumentMutationService documentMutationService;
+
+    /**
+     * Batch 852：派生描述提供器同样是 `required = false` setter 转成的必填构造器参数。
+     * 这个切片已经列了 {@code ExternalDocumentService} 与
+     * {@code DocumentRelocationService}，唯独漏了它——因为只有它此前没有 setter 被调用过，
+     * 少一个 bean 不会有人发现。**切片少列一个必填 bean，只有在它变成必填的那一刻才会暴露。**
+     */
+    @MockBean
+    private DocumentDerivationDescriptorProvider derivationDescriptorProvider;
 
     @TestConfiguration
     static class RagPropertiesTestConfig {

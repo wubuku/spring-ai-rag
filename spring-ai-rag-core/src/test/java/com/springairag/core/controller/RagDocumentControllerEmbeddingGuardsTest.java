@@ -38,6 +38,8 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import com.springairag.core.service.ExternalDocumentService;
+import com.springairag.core.service.DocumentRelocationService;
 
 /**
  * RagDocumentController 嵌入守卫（Batch 382）：reembed 结果的
@@ -54,9 +56,12 @@ class RagDocumentControllerEmbeddingGuardsTest {
     private Method buildReembedResult;
     private Method countWithoutEmbedding;
     private Method findWithoutEmbedding;
+    private DocumentDerivationDescriptorProvider derivationDescriptorProvider;
 
     @BeforeEach
     void setUp() throws Exception {
+derivationDescriptorProvider = mock(DocumentDerivationDescriptorProvider.class);
+
         documentRepository = mock(RagDocumentRepository.class);
         documentEmbedService = mock(DocumentEmbedService.class);
         dispatchService = mock(EmbeddingDispatchService.class);
@@ -71,7 +76,16 @@ class RagDocumentControllerEmbeddingGuardsTest {
                 profileProvider,
                 mock(CollectionIdentityResolver.class),
                 null,
-                mock(DocumentMutationService.class));
+                mock(DocumentMutationService.class),
+
+                mock(ExternalDocumentService.class),
+
+
+                derivationDescriptorProvider,
+
+
+
+                mock(DocumentRelocationService.class));
         controller.setDispatchService(dispatchService);
 
         buildReembedResult = RagDocumentController.class
@@ -136,7 +150,7 @@ class RagDocumentControllerEmbeddingGuardsTest {
     // Batch 822 deleted countAndFindWithoutDescriptorProviderHitUnscopedQueries.
     // It stubbed the version-less repository queries that the controller only
     // reached when DocumentDerivationDescriptorProvider was null — a path no
-    // running application takes, since the provider is an unconditional
+    // running application takes, since the derivationDescriptorProvider is an unconditional
     // @Component. Its sibling countAndFindWithDescriptorProviderHitCurrentEmbeddingQueries
     // covers the path the application actually uses, so nothing was lost.
     // The removed branch was not merely dead: it queried without the chunker
@@ -145,15 +159,13 @@ class RagDocumentControllerEmbeddingGuardsTest {
     @Test
     void countAndFindWithDescriptorProviderHitCurrentEmbeddingQueries()
             throws Exception {
-        DocumentDerivationDescriptorProvider provider =
-                mock(DocumentDerivationDescriptorProvider.class);
-        when(provider.textDescriptor()).thenReturn(
+        when(derivationDescriptorProvider.textDescriptor()).thenReturn(
                 new DocumentDerivationDescriptorProvider.Descriptor(
                         "TEXT", "text-v1"));
-        when(provider.jsonRecordDescriptor()).thenReturn(
+        when(derivationDescriptorProvider.jsonRecordDescriptor()).thenReturn(
                 new DocumentDerivationDescriptorProvider.Descriptor(
                         "JSON_RECORD", "json-v1"));
-        controller.setDerivationDescriptorProvider(provider);
+
 
         when(documentRepository.countDocumentsWithoutCurrentEmbeddings(
                 9L, "text-v1", "json-v1")).thenReturn(3L);

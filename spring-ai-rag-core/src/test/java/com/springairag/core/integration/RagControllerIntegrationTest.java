@@ -125,6 +125,13 @@ class RagControllerIntegrationTest {
     // 它现在是必填构造器参数，夹具必须把它列出来。
     @MockBean private com.springairag.core.evaluation.SemanticEvaluationService semanticEvaluationService;
 
+    // ==================== 外部文档 / 派生描述 / 迁移 ====================
+    // Batch 852：这三者同样是 `required = false` setter 转成的必填构造器参数。
+    // 同一个切片、同一种遗漏——所以补在同一个地方，理由也写在同一个地方。
+    @MockBean private com.springairag.core.service.ExternalDocumentService externalDocumentService;
+    @MockBean private com.springairag.core.service.DocumentDerivationDescriptorProvider derivationDescriptorProvider;
+    @MockBean private com.springairag.core.service.DocumentRelocationService documentRelocationService;
+
     // ==================== Search ====================
     @MockBean private HybridRetrieverService hybridRetrieverService;
     @MockBean private CollectionDocumentResolver collectionDocumentResolver;

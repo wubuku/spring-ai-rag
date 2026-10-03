@@ -29,6 +29,9 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
+import com.springairag.core.service.ExternalDocumentService;
+import com.springairag.core.service.DocumentDerivationDescriptorProvider;
+import com.springairag.core.service.DocumentRelocationService;
 
 class DocumentAclControllerTest {
 
@@ -54,7 +57,16 @@ class DocumentAclControllerTest {
                 profileProvider,
                 new CollectionIdentityResolver(collectionRepository),
                 null,
-                mock(DocumentMutationService.class));
+                mock(DocumentMutationService.class),
+
+                mock(ExternalDocumentService.class),
+
+
+                mock(DocumentDerivationDescriptorProvider.class),
+
+
+
+                mock(DocumentRelocationService.class));
         authenticateRestrictedKey(2L, 4L);
     }
 

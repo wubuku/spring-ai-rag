@@ -21,6 +21,7 @@ import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import com.springairag.core.service.DocumentMutationService;
 
 /**
  * PdfToRagService 辅助方法与策略委托长尾（Batch 635，JaCoCo 驱
@@ -45,10 +46,12 @@ class PdfToRagHelperTailTest {
         documentEmbedService = mock(DocumentEmbedService.class);
         documentMutationService = mock(DocumentMutationService.class);
         bareService = new PdfToRagService(
-                fsFileRepository, documentRepository, documentEmbedService);
+                fsFileRepository, documentRepository, documentEmbedService,
+ documentMutationService);
         service = new PdfToRagService(
-                fsFileRepository, documentRepository, documentEmbedService);
-        service.setDocumentMutationService(documentMutationService);
+                fsFileRepository, documentRepository, documentEmbedService,
+                documentMutationService);
+
     }
 
     private String deriveTitle(String filename) throws Exception {

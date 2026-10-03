@@ -26,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
+import com.springairag.core.service.DocumentMutationService;
 
 /**
  * PdfToRagService unit tests.
@@ -49,9 +50,10 @@ class PdfToRagServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new PdfToRagService(fsFileRepository, documentRepository, documentEmbedService);
+        service = new PdfToRagService(fsFileRepository, documentRepository, documentEmbedService,
+ mutationService);
         // Batch 830：legacy 内联落库分支已删除，DocumentMutationService 是必选协作者。
-        service.setDocumentMutationService(mutationService);
+
     }
 
     /** 协作者按请求建好文档并回报"新建"。 */

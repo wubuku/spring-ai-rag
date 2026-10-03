@@ -39,6 +39,9 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
+import com.springairag.core.service.ExternalDocumentService;
+import com.springairag.core.service.DocumentDerivationDescriptorProvider;
+import com.springairag.core.service.DocumentRelocationService;
 
 /**
  * createDocument 协调器分支（Batch 346）：documentMutationService
@@ -76,7 +79,16 @@ class RagDocumentControllerCoordinatorCreateTest {
                 profileProvider,
                 new CollectionIdentityResolver(collectionRepository),
                 auditLogService,
-                documentMutationService);
+                documentMutationService,
+
+                mock(ExternalDocumentService.class),
+
+
+                mock(DocumentDerivationDescriptorProvider.class),
+
+
+
+                mock(DocumentRelocationService.class));
     }
 
     private DocumentMutationResponse mutation(long id, String action) {

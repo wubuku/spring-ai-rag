@@ -31,6 +31,7 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import com.springairag.core.service.DocumentMutationService;
 
 /**
  * 显式触发嵌入的策略分派（4 参 triggerEmbedding）：SKIP 拒绝、
@@ -52,9 +53,10 @@ class PdfToRagEmbedPolicyTest {
     @BeforeEach
     void setUp() {
         service = new PdfToRagService(
-                fsFileRepository, documentRepository, documentEmbedService);
+                fsFileRepository, documentRepository, documentEmbedService,
+ mutationService);
         // Batch 830：DocumentMutationService 是必选协作者，不再有内联落库回落。
-        service.setDocumentMutationService(mutationService);
+
         String uuid = "policy-uuid";
         markdown = "# Policy Doc\n\nContent.";
         FsFile fsFile = new FsFile(

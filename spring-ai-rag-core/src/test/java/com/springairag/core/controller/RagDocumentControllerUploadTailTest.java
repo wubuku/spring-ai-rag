@@ -19,6 +19,9 @@ import org.springframework.mock.web.MockMultipartFile;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
+import com.springairag.core.service.ExternalDocumentService;
+import com.springairag.core.service.DocumentDerivationDescriptorProvider;
+import com.springairag.core.service.DocumentRelocationService;
 
 /**
  * RagDocumentController 上传长尾（Batch 713，JaCoCo 驱动）：4 参
@@ -49,7 +52,16 @@ class RagDocumentControllerUploadTailTest {
                 profileProvider,
                 new CollectionIdentityResolver(collectionRepository),
                 null,
-                mock(DocumentMutationService.class));
+                mock(DocumentMutationService.class),
+
+                mock(ExternalDocumentService.class),
+
+
+                mock(DocumentDerivationDescriptorProvider.class),
+
+
+
+                mock(DocumentRelocationService.class));
     }
 
     @Test

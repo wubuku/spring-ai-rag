@@ -35,6 +35,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import com.springairag.core.service.DocumentMutationService;
 
 /**
  * PDF 导入的策略变体（importPdfToRag 5 参重载）：ASYNC 无作业服
@@ -58,9 +59,10 @@ class PdfToRagPolicyImportTest {
     @BeforeEach
     void setUp() {
         service = new PdfToRagService(
-                fsFileRepository, documentRepository, documentEmbedService);
+                fsFileRepository, documentRepository, documentEmbedService,
+ mutationService);
         service.setDispatchService(dispatchService);
-        service.setDocumentMutationService(mutationService);
+
     }
 
     private void stubMarkdown(String entryPath, String content) {
@@ -104,7 +106,7 @@ class PdfToRagPolicyImportTest {
     void skipPolicyDelegatesToMutationService() {
         // mutation 管道路径：documentMutationService 存在时全部策略
         // （含 ASYNC）都经 upsertLocalImport 委派。
-        service.setDocumentMutationService(mutationService);
+
         stubMarkdown(ENTRY_PATH, "# Test\n\nContent.");
         RagDocument document = document(42L, "test-paper");
         DocumentMutationResponse mutation = mutation("UNCHANGED");

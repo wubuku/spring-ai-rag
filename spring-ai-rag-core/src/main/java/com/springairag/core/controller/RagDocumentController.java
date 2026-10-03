@@ -131,12 +131,12 @@ public class RagDocumentController {
     // Making the wiring unconditional and deleting the guards means migrating every test
     // that relies on the absent branch. Measured, not assumed: recorded as remaining work.
     private AuditLogService auditLogService; // optional-claim: unconditional @Service; the audit helpers tolerate a null rather than failing the business call
-    private ExternalDocumentService externalDocumentService; // unconditional @Service; Batch 822 removed the null guard that used to sit on it
+    private ExternalDocumentService externalDocumentService; // Batch 852：`required = false` 已删。Batch 822 移除了守卫，代码无条件使用它，所以它是必填依赖；留着注解等于宣称存在一种"外部文档服务缺失"的部署形态，而那会在第一次调用处抛裸 NPE，而不是像必填依赖那样在启动阶段就失败
     private EmbeddingDispatchService dispatchService; // optional-claim: unconditional @Service；守卫在同文件之外——三处使用都紧跟 `EmbeddingPolicySupport.requireJobsEnabled(dispatchService)`，它做 null 检查并抛 EMBEDDING_JOBS_DISABLED 而不是 NPE。Batch 822 删掉的是本文件里那处内联 throw，委托出去的那道检查一直都在（Batch 850 普查时才发现）
     private DocumentMutationService documentMutationService; // Batch 847 removed the null guards; Batch 848 makes it a required constructor dependency
     private DocumentLifecycleService documentLifecycleService; // optional-claim: unconditional @Service; same
-    private DocumentDerivationDescriptorProvider derivationDescriptorProvider; // unconditional @Service; Batch 822 removed the null guard that used to sit on it
-    private DocumentRelocationService documentRelocationService; // unconditional @Service; Batch 822 removed the null guard that used to sit on it
+    private DocumentDerivationDescriptorProvider derivationDescriptorProvider; // Batch 852：同上，`required = false` 已删——它没有 null 守卫，缺失时在 687/704 两处派生版本计算时抛裸 NPE
+    private DocumentRelocationService documentRelocationService; // Batch 852：同上，`required = false` 已删——它在 relocate 端点上无条件使用
 
     @Autowired
     public RagDocumentController(RagDocumentRepository documentRepository,
@@ -148,7 +148,10 @@ public class RagDocumentController {
                                   EmbeddingProfileProvider embeddingProfileProvider,
                                   CollectionIdentityResolver collectionIdentityResolver,
                                   @Autowired(required = false) AuditLogService auditLogService,
-                                  DocumentMutationService documentMutationService) {
+                                  DocumentMutationService documentMutationService,
+                                  ExternalDocumentService externalDocumentService,
+                                  DocumentDerivationDescriptorProvider derivationDescriptorProvider,
+                                  DocumentRelocationService documentRelocationService) {
         this.documentRepository = documentRepository;
         this.embeddingRepository = embeddingRepository;
         this.collectionRepository = collectionRepository;
@@ -159,11 +162,9 @@ public class RagDocumentController {
         this.collectionIdentityResolver = collectionIdentityResolver;
         this.auditLogService = auditLogService;
         this.documentMutationService = documentMutationService;
-    }
-
-    @Autowired(required = false)
-    public void setExternalDocumentService(ExternalDocumentService externalDocumentService) {
         this.externalDocumentService = externalDocumentService;
+        this.derivationDescriptorProvider = derivationDescriptorProvider;
+        this.documentRelocationService = documentRelocationService;
     }
 
     @Autowired(required = false)
@@ -175,18 +176,6 @@ public class RagDocumentController {
     public void setDocumentLifecycleService(
             DocumentLifecycleService documentLifecycleService) {
         this.documentLifecycleService = documentLifecycleService;
-    }
-
-    @Autowired(required = false)
-    public void setDerivationDescriptorProvider(
-            DocumentDerivationDescriptorProvider derivationDescriptorProvider) {
-        this.derivationDescriptorProvider = derivationDescriptorProvider;
-    }
-
-    @Autowired(required = false)
-    public void setDocumentRelocationService(
-            DocumentRelocationService documentRelocationService) {
-        this.documentRelocationService = documentRelocationService;
     }
 
     @Operation(summary = "Upsert an externally managed document",

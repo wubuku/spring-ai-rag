@@ -478,6 +478,80 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
+### Batch 852（已交付，后端技术债：棘轮 9 → 5）
+
+- 分支：`feature/required-external-doc-collaborators-20261007`
+- 主题：清 4 处"声明可选、代码无条件使用"——`RagDocumentController` 的
+  `externalDocumentService` / `derivationDescriptorProvider` / `documentRelocationService`
+  （3 处 setter → 构造器必填），以及 `PdfToRagService.documentMutationService`
+  （1 处 setter → 构造器必填）。`RagDocumentController` 的构造器因此是 **13 个参数**。
+- **26 个测试文件**（20 个直接构造 controller + 6 个构造 `PdfToRagService`），
+  受影响清单不是搜出来的而是**编译器给的**——改完生产代码跑 `test-compile`，
+  把报错的文件去重。**编译器的清单比任何普查都权威**，这是 851 之后最省事的一步。
+- **测试侧按"是否已有变量"分三类处理，其中一类又分了四类**：
+  | 形态 | 处理 | 命中 |
+  |---|---|---|
+  | 已有字段 | 传真对象 | `ProductionWiringTest`(3)、`ExternalDelegationTest`(2)、`ReembedEndpointTest`、`RagDocumentControllerTest` 各 1 |
+  | 用例里的**局部** mock | 传真对象（或提成字段） | `PdfToRagEmbedPolicyTest` / `PdfToRagServiceTest` / `PolicyImportTest`（字段名 `mutationService`）、两个 `PdfToRag*TailTest`（局部变量 `mutation`）、`EmbeddingGuardsTest`（局部 `provider` 提成字段） |
+  | 完全无关 | 内联 `mock(...)` | 其余 16 个文件 |
+  - **判据必须是"文件里有没有这个变量"，而不是"变量叫什么名字"**。
+    我第一版按 setter 的参数名去找字段，于是：
+    - `PdfToRagEmbedPolicyTest` / `PdfToRagServiceTest` 的字段叫 `mutationService`，
+      没被认出来，追加了一个全新的内联 mock —— 那个 mock 没有桩，
+      用例却仍然**通过**（它只断言返回的 id，来自另一个桩）；
+    - 两个 `PdfToRag*TailTest` 被打桩的局部变量就叫 `mutation`，
+      追加的内联 mock 让 `upsertLocalImport` 返回 null → `changed is null` NPE。
+    - **这正是 Batch 848 记过的死桩，只是这次由"名字对不上"引入，
+      比"忘了传"更隐蔽——它不报错，只是让桩悄悄失效。**
+- **赋值顺序 NPE 又出现一次（848 已经记过）**：`RagDocumentControllerTest` 与
+  `RagDocumentControllerReembedEndpointTest` 的 `derivationDescriptorProvider = …`
+  原本写在构造调用**之后**，因为老代码是"先构造、后 setter 注入"。
+  机械地把实参挪进构造器就变成 null → 8 + 3 个错误。编译器抓不到，只有真跑暴露。
+- **编辑事故 1 次（脚本）**：为了搬移上面那个赋值块，我用了
+  `(?:.*\n)*?[ \t]*\);\n` 这种跨行正则，它从 `derivationDescriptorProvider =`
+  一路吞到**下一个缩进更浅的 `);`**——把整个 controller 构造调用和 setUp 的一大段
+  都吃掉了，`RagDocumentControllerTest` 一次挂 43 个错误。
+  按纪律先 `git checkout` 恢复那一个文件，再手写精确替换。
+  **教训：跨行正则要锚"完整方法体"或显式边界，绝不能用"到下一个 `);` 为止"。**
+- **切片夹具的遗漏，一个批次里撞见三次**，而且每次都是同一句话：
+  | 切片 | 缺什么 | 后果 |
+  |---|---|---|
+  | `RagControllerIntegrationTest` | 3 个（`ExternalDocumentService` / `DocumentDerivationDescriptorProvider` / `DocumentRelocationService`） | 上下文起不来 |
+  | `ExternalDocumentControllerWebTest` | `DocumentDerivationDescriptorProvider` | 上下文起不来（它的两个兄弟 bean 早就列了，**只有它漏**） |
+  | `DocumentLifecycleControllerWebTest` | 同上 3 个 | 上下文起不来 |
+  - 姊妹切片的 bean 表不一致，只有在某个 bean **变成必填的那一刻**才会暴露。
+    这不是偶然：`required = false` 的隐含效果就是"切片可以不列"，
+    而切片里少列一个必填 bean，在那之前永远是沉默的。
+- **过期的说法改了两处**（理由会过期，断言的解释也会）：
+  1. `RagDocumentControllerProductionWiringTest` 的类注释写着
+     *"19 个测试文件直接 new，其中只有 8 个调用了那些 setter，十一个文件跑在一个
+     应用根本不会产生的装配上"*——848 与 852 之后这些 setter 一个不剩，
+     20 个文件统一传满 13 个协作者。已改写，并说明它保留的理由
+     （它是唯一显式断言每个协作者字段非空的地方）。
+  2. 同一类的反射断言消息仍写着 *"is null … so its guard is reachable"*，
+     而守卫在 822 就删了。已改成"为 null 说明这个构造点漏传了实参"。
+- **棘轮又一次当场抓住我自己的算错**：我按"9 − 4 = 5"改常量，却先写成了 6，
+  门禁立刻报 *"only 5 … remain but the ratchet ceiling is still 6"*。
+  **这条设计在第一次投入使用时就已经在干活了。**
+- 变异实验 1 个：把 4 处 `required = false` 加回构造器形参 → ✓ 红
+  （*"9 unguarded optional claim(s) exceed the ratchet ceiling of 5"*），
+  两个源文件 sha256 都回到原值。
+  - 脚本里特意把锚点收紧成"缩进 20+ 空格且形如 `Type name,`"，
+    因为 **851 的第三次变异就是栽在"命中了字段声明"**——注解加在 `private final` 上
+    不符合门禁 `viaConstructor` 的形状，门禁读不到，脚本却报"仍然绿"。
+- 验证（全部实测）：core 全量 **7622 条 / 0 失败 / 0 错误 / 153 跳过**（与 851 相同）；
+  门控 IT **16/16**；`verify-test-visibility` EXIT=0；三门禁 EXIT=0；自测 **30/30**；
+  tests 链 **20/20**；docs 链 **16/16**。
+- **剩余 5 处**（门禁 `FALSE_OPTIONAL_WIRING_CEILING=0` 可列出全部）：
+  `RagCollectionController.collectionProvisioningService`（该 setter 收**两个**参数）、
+  `EvaluationSuiteService.apiKeyManagementService`（构造器参数）、
+  `BatchDocumentService.documentMutationService`、`DocumentEmbedService.chunkingService`、
+  `JsonRecordService.mutationService`。
+  - 下一批建议 `BatchDocumentService`（12） + `JsonRecordService`（34）不合适合批，
+    更合理的是 **`RagCollectionController.collectionProvisioningService` + `EvaluationSuiteService`**
+    （12 + 13，都是"收两个参数/构造器参数"这两类形态，正好把 851、852 没覆盖的形态补齐），
+    然后 `DocumentEmbedService` 与 `JsonRecordService` 各自单独立项。
+
 ### Batch 851（已交付，后端技术债：继续压棘轮 11 → 9）
 
 - 分支：`feature/required-collection-identity-resolver-20261007`

@@ -35,6 +35,9 @@ import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import com.springairag.core.service.ExternalDocumentService;
+import com.springairag.core.service.DocumentDerivationDescriptorProvider;
+import com.springairag.core.service.DocumentRelocationService;
 
 /**
  * 批量端点守卫与委派（Batch 387）：批量删除空列表守卫与委派、
@@ -64,7 +67,16 @@ class RagDocumentControllerBatchOpsTest {
                 mock(EmbeddingProfileProvider.class),
                 mock(CollectionIdentityResolver.class),
                 null,
-                mock(DocumentMutationService.class));
+                mock(DocumentMutationService.class),
+
+                mock(ExternalDocumentService.class),
+
+
+                mock(DocumentDerivationDescriptorProvider.class),
+
+
+
+                mock(DocumentRelocationService.class));
         controller.setDispatchService(dispatchService);
     }
 

@@ -29,6 +29,8 @@ import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import com.springairag.core.service.ExternalDocumentService;
+import com.springairag.core.service.DocumentRelocationService;
 
 /**
  * reembedMissing 端点层（Batch 387 补充）：无缺失时空响应、有缺
@@ -60,6 +62,13 @@ class RagDocumentControllerReembedEndpointTest {
         var activeProfile = mock(com.springairag.core.config.EmbeddingProfile.class);
         when(activeProfile.id()).thenReturn(9L);
         when(profileProvider.getActiveProfile()).thenReturn(activeProfile);
+        // Batch 822: the controller reaches the version-aware repository queries
+        // unconditionally now that the "no descriptor provider" fallback is gone.
+        // A real provider is used rather than a mock so these tests pin the
+        // version strings the application actually produces.
+        derivationDescriptorProvider =
+                new DocumentDerivationDescriptorProvider(new com.springairag.core.config.RagProperties());
+
         controller = new RagDocumentController(
                 documentRepository,
                 mock(RagEmbeddingRepository.class),
@@ -70,14 +79,17 @@ class RagDocumentControllerReembedEndpointTest {
                 profileProvider,
                 mock(CollectionIdentityResolver.class),
                 null,
-                mock(DocumentMutationService.class));
-        // Batch 822: the controller reaches the version-aware repository queries
-        // unconditionally now that the "no descriptor provider" fallback is gone.
-        // A real provider is used rather than a mock so these tests pin the
-        // version strings the application actually produces.
-        derivationDescriptorProvider =
-                new DocumentDerivationDescriptorProvider(new com.springairag.core.config.RagProperties());
-        controller.setDerivationDescriptorProvider(derivationDescriptorProvider);
+                mock(DocumentMutationService.class),
+
+                mock(ExternalDocumentService.class),
+
+
+                derivationDescriptorProvider,
+
+
+
+                mock(DocumentRelocationService.class));
+
     }
 
     private RagDocument document(Long id) {

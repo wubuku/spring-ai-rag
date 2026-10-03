@@ -34,6 +34,10 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import com.springairag.core.service.ExternalDocumentService;
+import com.springairag.core.service.DocumentDerivationDescriptorProvider;
+import com.springairag.core.service.DocumentRelocationService;
+import com.springairag.core.service.DocumentMutationService;
 
 /**
  * uploadAndEmbed 批量上传语义：空文件 400 占位结果、逐文件成功/
@@ -76,7 +80,16 @@ class RagDocumentControllerUploadTest {
                 embeddingProfileProvider,
                 new CollectionIdentityResolver(collectionRepository),
                 auditLogService,
-                documentMutationService);
+                documentMutationService,
+
+                mock(ExternalDocumentService.class),
+
+
+                mock(DocumentDerivationDescriptorProvider.class),
+
+
+
+                mock(DocumentRelocationService.class));
         // Batch 847：上传已无条件走变更层。
     }
 

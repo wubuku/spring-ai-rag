@@ -30,6 +30,9 @@ import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import com.springairag.core.service.ExternalDocumentService;
+import com.springairag.core.service.DocumentDerivationDescriptorProvider;
+import com.springairag.core.service.DocumentRelocationService;
 
 /**
  * batchCreateDocuments 委派（Batch 383）：单参重载、批次集合解析
@@ -53,7 +56,16 @@ class RagDocumentControllerBatchCreateTest {
                 mock(EmbeddingProfileProvider.class),
                 mock(CollectionIdentityResolver.class),
                 null,
-                mock(DocumentMutationService.class));
+                mock(DocumentMutationService.class),
+
+                mock(ExternalDocumentService.class),
+
+
+                mock(DocumentDerivationDescriptorProvider.class),
+
+
+
+                mock(DocumentRelocationService.class));
     }
 
     @Test

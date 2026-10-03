@@ -38,6 +38,9 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import com.springairag.core.service.ExternalDocumentService;
+import com.springairag.core.service.DocumentDerivationDescriptorProvider;
+import com.springairag.core.service.DocumentRelocationService;
 
 /**
  * RagDocumentController ACL 列举/统计/批量嵌入流长尾（Batch 697，
@@ -72,7 +75,16 @@ class RagDocumentControllerAclListTailTest {
                 profileProvider,
                 new CollectionIdentityResolver(collectionRepository),
                 null,
-                mock(DocumentMutationService.class));
+                mock(DocumentMutationService.class),
+
+                mock(ExternalDocumentService.class),
+
+
+                mock(DocumentDerivationDescriptorProvider.class),
+
+
+
+                mock(DocumentRelocationService.class));
     }
 
     @AfterEach
