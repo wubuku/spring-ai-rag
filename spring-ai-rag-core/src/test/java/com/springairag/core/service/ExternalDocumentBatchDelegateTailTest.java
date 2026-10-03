@@ -1,17 +1,15 @@
 package com.springairag.core.service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.springairag.api.dto.ExternalDocumentBatchUpsertResponse;
 import com.springairag.api.dto.ExternalDocumentDeleteResponse;
 import com.springairag.api.dto.ExternalDocumentUpsertRequest;
-import com.springairag.api.enums.EmbeddingPolicy;
+import com.springairag.api.dto.ExternalDocumentUpsertResponse;
 import com.springairag.core.config.EmbeddingProfile;
 import com.springairag.core.config.EmbeddingProfileProvider;
 import com.springairag.core.entity.RagCollection;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.entity.RagDocumentVersion;
 import com.springairag.core.embeddingjob.EmbeddingDispatchService;
-import com.springairag.core.exception.DocumentRevisionConflictException;
 import com.springairag.core.repository.RagCollectionRepository;
 import com.springairag.core.repository.RagDocumentRepository;
 import com.springairag.core.repository.RagEmbeddingRepository;
@@ -21,31 +19,27 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionStatus;
 
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.contains;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * 外部文档批量与委托长尾（Batch 621，JaCoCo 驱动）：batchUpsert 的
- * 空清单/超限拒绝与成功/失败计数投影；sourceDelete 在 mutation
- * service 在场时的委托；墓碑重放的 UNCHANGED（enabled 但已标记
- * 删除）变体；SYNC 派发错误投影 EMBEDDING_FAILED。
+ * 外部文档批量与委托长尾（Batch 621 建立，Batch 837 改名并收缩）：
+ * {@code upsert} / {@code sourceDelete} 在变更层在场时的委派，
+ * 以及 {@code batchUpsert} 的空清单/超限拒绝与计数聚合。
+ *
+ * <p>Batch 837 删掉 legacy 内联写入路径后，墓碑重放、关键词索引协调、
+ * 嵌入各臂与 SYNC 派发错误投影全部随 {@code finishUpsert} 一起消失。
+ * 剩下的是本服务**自己**的职责：委派边界与批量计数。
  */
 class ExternalDocumentBatchDelegateTailTest {
 
@@ -114,19 +108,35 @@ class ExternalDocumentBatchDelegateTailTest {
                     return saved;
                 });
 
-        service = new ExternalDocumentService(
-                documentRepository,
+        service = new ExternalDocumentService(documentRepository,
                 collectionRepository,
                 embeddingRepository,
-                documentVersionService,
-                documentEmbedService,
                 embeddingProfileProvider,
-                collectionIdentityResolver,
-                jdbcTemplate,
-                transactionManager);
-        service.setKeywordIndexPersistenceService(
-                mock(KeywordIndexPersistenceService.class));
-        service.setDispatchService(dispatchService);
+                collectionIdentityResolver);
+        service.setMutationService(mutationService);
+    }
+
+    private ExternalDocumentUpsertResponse upsertResponse(
+            String externalId, String action) {
+        return new ExternalDocumentUpsertResponse(
+                77L, collection.getCollectionKey(), externalId, "rev-9",
+                action, true, 1, "NOT_REQUESTED", "profile", false,
+                "READY", null, null, null, "NONE", null, null,
+                "default", 3L, null);
+    }
+
+    /** 该 externalId 抛异常、其余交回 CREATED——用来分派批量里的成败两种条目。 */
+    private void stubExternalUpsertFailingOn(String failingExternalId) {
+        lenient().when(mutationService.upsertExternal(any()))
+                .thenAnswer(invocation -> {
+                    ExternalDocumentUpsertRequest request =
+                            invocation.getArgument(0);
+                    if (failingExternalId.equals(request.getExternalId())) {
+                        throw new IllegalArgumentException(
+                                "title must not be blank");
+                    }
+                    return upsertResponse(request.getExternalId(), "CREATED");
+                });
     }
 
     private ExternalDocumentUpsertRequest upsertRequest(
@@ -178,107 +188,37 @@ class ExternalDocumentBatchDelegateTailTest {
 
     @Test
     void batchUpsertCountsCreatedAndPersistenceFailures() {
-        // ok 项走 SKIP 策略避免嵌入派发；broken 项校验失败。
-        ExternalDocumentUpsertRequest ok = upsertRequest("ok-1", "rev-1");
-        ok.setEmbeddingPolicy(EmbeddingPolicy.SKIP);
-        when(documentRepository.findByCollectionIdAndExternalId(10L, "ok-1"))
-                .thenReturn(Optional.empty());
-        // 第二项校验失败（空白标题）→ failedResponse 计入 persistenceFailed。
-        ExternalDocumentUpsertRequest broken = upsertRequest("bad-1", "r");
-        broken.setTitle("  ");
-        when(documentRepository.findByCollectionIdAndExternalId(10L, "bad-1"))
-                .thenReturn(Optional.empty());
+        stubExternalUpsertFailingOn("bad-1");
 
         ExternalDocumentBatchUpsertResponse response =
-                service.batchUpsert(List.of(ok, broken));
+                service.batchUpsert(List.of(
+                        upsertRequest("ok-1", "rev-1"),
+                        upsertRequest("bad-1", "rev-1")));
+
+        // 计数聚合是本服务自己的职责：成功计 created，抛出的计 persistenceFailed。
+        assertEquals(1, response.summary().created());
+        assertEquals(1, response.summary().persistenceFailed());
+        assertEquals(0, response.summary().unchanged());
+        assertEquals(0, response.summary().embeddingFailed());
+        assertEquals("CREATED", response.items().get(0).action());
+        assertEquals("PERSISTENCE_FAILED", response.items().get(1).action());
+    }
+
+    @Test
+    void batchUpsertIsolatesFailuresAndPreservesInputOrder() {
+        stubExternalUpsertFailingOn("doc-invalid");
+
+        ExternalDocumentBatchUpsertResponse response = service.batchUpsert(
+                List.of(upsertRequest("doc-valid", "rev-1"),
+                        upsertRequest("doc-invalid", "rev-1")));
 
         assertEquals(2, response.items().size());
-    }
-
-    @Test
-    void upsertRejectsTombstoneReplayViaSourceDeletedAtOnEnabledDocument() {
-        RagDocument tombstoned = new RagDocument();
-        tombstoned.setId(77L);
-        tombstoned.setCollectionId(10L);
-        tombstoned.setExternalId("doc-1");
-        tombstoned.setSourceNamespace("default");
-        tombstoned.setSourceRevision("rev-1");
-        tombstoned.setTitle("First title");
-        tombstoned.setContent("First content");
-        tombstoned.setDocumentType("text");
-        // enabled=true 但已标记删除 → 仍视为墓碑。
-        tombstoned.setSourceDeletedAt(LocalDateTime.now().minusDays(1));
-        when(documentRepository.findByCollectionIdAndExternalId(10L, "doc-1"))
-                .thenReturn(Optional.of(tombstoned));
-
-        DocumentRevisionConflictException error = assertThrows(
-                DocumentRevisionConflictException.class,
-                () -> service.upsert(upsertRequest("doc-1", "rev-1")));
-        assertTrue(error.getMessage().contains("tombstone"));
-    }
-
-    @Test
-    void sourceDeleteReplayOnDeletedButEnabledDocumentIsUnchanged() {
-        RagDocument marked = new RagDocument();
-        marked.setId(77L);
-        marked.setCollectionId(10L);
-        marked.setExternalId("doc-1");
-        marked.setSourceNamespace("default");
-        marked.setSourceRevision("rev-del");
-        marked.setTitle("T");
-        marked.setContent("C");
-        marked.setDocumentType("text");
-        // enabled=true 但 sourceDeletedAt 已标记 → 墓碑重放 UNCHANGED。
-        marked.setEnabled(Boolean.TRUE);
-        marked.setSourceDeletedAt(LocalDateTime.now().minusDays(1));
-        when(documentRepository.findByCollectionIdAndExternalId(10L, "doc-1"))
-                .thenReturn(Optional.of(marked));
-
-        var response = service.sourceDelete(
-                collection.getCollectionKey(), "doc-1", "rev-del", null);
-
-        assertEquals("UNCHANGED", response.action());
-        verify(documentVersionService, never())
-                .forceRecordVersion(any(), eq("DELETE"), anyString());
-    }
-
-    @Test
-    void syncUpsertSurfacesDispatchErrorAsEmbeddingFailed() {
-        when(documentRepository.findByCollectionIdAndExternalId(10L, "doc-1"))
-                .thenReturn(Optional.empty());
-        when(dispatchService.dispatchAfterCommit(
-                any(RagDocument.class), eq(EmbeddingPolicy.SYNC),
-                anyBoolean(), anyString()))
-                .thenReturn(new EmbeddingDispatchService.Result(
-                        com.springairag.api.enums.EmbeddingAction.SYNC_COMPLETED,
-                        "FAILED", "profile",
-                        null, null, "embedder offline"));
-
-        var response = service.upsert(upsertRequest("sync-err", "rev-e"));
-
-        assertEquals("EMBEDDING_FAILED", response.errorCode());
-        assertTrue(response.error().contains("embedder offline"));
-    }
-
-    @Test
-    void syncDispatchSuccessProjectsSyncCompletedMetadata() {
-        when(documentRepository.findByCollectionIdAndExternalId(10L, "doc-1"))
-                .thenReturn(Optional.empty());
-        when(dispatchService.dispatchAfterCommit(
-                any(RagDocument.class), eq(EmbeddingPolicy.SYNC),
-                anyBoolean(), anyString()))
-                .thenReturn(new EmbeddingDispatchService.Result(
-                        com.springairag.api.enums.EmbeddingAction.SYNC_COMPLETED,
-                        "COMPLETED", "profile",
-                        UUID.randomUUID(), UUID.randomUUID(), null));
-
-        var response = service.upsert(upsertRequest("sync-ok", "rev-e"));
-
-        assertEquals("COMPLETED", response.embeddingStatus());
-        assertNull(response.errorCode());
-    }
-
-    private static void assertNull(Object value) {
-        org.junit.jupiter.api.Assertions.assertNull(value);
+        assertEquals("doc-valid", response.items().get(0).externalId());
+        assertEquals("CREATED", response.items().get(0).action());
+        assertEquals("doc-invalid", response.items().get(1).externalId());
+        assertEquals("PERSISTENCE_FAILED", response.items().get(1).action());
+        assertEquals("BAD_REQUEST", response.items().get(1).errorCode());
+        assertEquals(1, response.summary().created());
+        assertEquals(1, response.summary().persistenceFailed());
     }
 }

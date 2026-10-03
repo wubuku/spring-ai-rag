@@ -1,6 +1,5 @@
 package com.springairag.core.service;
 
-import com.springairag.api.dto.DocumentLifecycleResponse;
 import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.entity.RagCollection;
 import com.springairag.core.config.EmbeddingProfile;
@@ -12,12 +11,8 @@ import com.springairag.core.repository.RagCollectionRepository;
 import com.springairag.core.repository.RagDocumentRepository;
 import com.springairag.core.repository.RagEmbeddingRepository;
 import com.springairag.core.service.CollectionIdentityResolver;
-import com.springairag.core.service.DocumentEmbedService;
-import com.springairag.core.service.DocumentVersionService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.transaction.PlatformTransactionManager;
 
 import java.util.Optional;
 
@@ -25,7 +20,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
-import org.mockito.Mockito;
 import static org.mockito.Mockito.when;
 
 /**
@@ -48,16 +42,11 @@ class ExternalDocumentServiceGetByIdentityTest {
                 9L, "test-profile", "test", "test", "v1",
                 1024, "COSINE", "NONE", true);
         when(profileProvider.getActiveProfile()).thenReturn(profile);
-        service = new ExternalDocumentService(
-                documentRepository,
+        service = new ExternalDocumentService(documentRepository,
                 mock(RagCollectionRepository.class),
                 mock(RagEmbeddingRepository.class),
-                mock(DocumentVersionService.class),
-                mock(DocumentEmbedService.class),
                 profileProvider,
-                collectionIdentityResolver,
-                mock(JdbcTemplate.class),
-                mock(PlatformTransactionManager.class));
+                collectionIdentityResolver);
     }
 
     private RagCollection collection(long id, String key) {
