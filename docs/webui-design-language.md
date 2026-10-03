@@ -281,15 +281,17 @@ that hands a mutation to a child and renders the error there is a shape the
 checker cannot follow, and a rule that cries wolf gets ignored. Exemptions use
 an inline `/* mutation-error-allow: <concrete reason> */`; none are registered.
 
-## 7. Every key you ask for must exist in every language
+## 7. Every key you ask for must exist in every language, and nothing may sit there unused
 
-`npm run check:i18n-keys` is chained into `npm run lint` and enforces three
+`npm run check:i18n-keys` is chained into `npm run lint` and enforces four
 rules:
 
 - `missing-locale-key` — `t('some.key')` is used in a component, but
   `en.json` or `zh-CN.json` does not carry `some.key`.
 - `locale-key-asymmetry` — the two locale files do not carry the same keys.
 - `dead-translation-fallback` — `t('x') || something`.
+- `dead-locale-key` — a key **both** locale files carry that no source
+  reaches. (Batch 818)
 
 i18next does not fail loudly on a missing key. It returns **the key string
 itself**, and that string is truthy:
@@ -312,10 +314,66 @@ read "common.next" on an English screen. `documents.searchPlaceholder`,
 without adding the translation**, which is the kind of regression this gate now
 catches in the batch that follows.
 
-Dynamic calls (`t(\`prefix.${x}\`)`) are not checked: there are 6 of them and a
-prefix is not a key. Keys that no static call references are reported as a
-count, not a failure. Exemptions use an inline
-`/* i18n-allow: <concrete reason> */`; none are registered.
+The first three rules all point one way: code asks for a key. The fourth points
+the other way, and it exists because a gate that only watches the asking
+direction is structurally blind to copy that nothing renders — which still
+costs a line in two locale files and a slot in every future diff of its
+namespace.
+
+### What counts as a reference, for the dead-key rule
+
+The other three rules match `t('literal')` and nothing else, because a prefix
+is not a key and a dynamic call cannot be resolved without running the
+component. The dead-key rule has to be far more generous, or it would report
+live copy as dead. It counts a key as referenced when **any string literal in
+a component source equals it**, which covers the five dynamic shapes this tree
+actually uses:
+
+| Shape | Example |
+|-------|---------|
+| Template prefix | `` t(`theme.${mode}`) `` — every key under `theme.` is reachable |
+| Aliased translator | `translate` is a `t` handed to a helper as a parameter |
+| i18next plural family | `t('search.resultsCount', { count })` reaches `…_one` and `…_other` |
+| Lookup table | `CALLER_VISIBLE: 'collectionScope.callerVisible'` |
+| Data array | `['report', 'evaluation.tabReport']` |
+
+The literal test is deliberately the crudest criterion available: it can only
+**miss** a reference, never invent one, so the gate can never hand you a
+"safe to delete" verdict it did not earn. Modelling each idiom precisely would
+be wrong the moment a sixth one appears — and a wrong answer here argues for
+deleting copy somebody still renders.
+
+That leniency is also the gate's standing instruction to you: **if a key really
+is assembled at runtime, name it as a string literal somewhere in the source.**
+The lookup tables and data arrays in this tree already keep their keys alive
+that way, and it is cheaper than teaching the checker a sixth idiom.
+
+### The count that was not actionable
+
+Before Batch 818 the gate ended with a single number: *176 key(s) are reached
+only through dynamic template calls or are unused*. It sounds like a
+measurement and is not one — it merges two populations that need opposite
+answers. Some of those keys are live and reached through a template; the rest
+are dead. Nobody can act on the sum, so the line was read once and ignored,
+and **50 dead keys survived it** across both languages.
+
+The criterion itself was corrected before it was trusted, and the corrections
+are measurable. The old gate recognised 569 of 745 keys and lumped the other
+**176** into "dynamic or unused". Adding template-prefix and plural handling
+without the literal test recognised 613 and left **132**. Adding the literal
+test left **50** — and those 50 are the ones that were actually dead, deleted
+from both languages. A follow-up mutation (removing the literal test again,
+now against the cleaned tree) shows it is load-bearing for **82** surviving
+keys; without it the gate would once again report live copy as garbage.
+
+Each of the 50 was then confirmed by hand before deletion. As a safety net
+against coincidental matches, the **leaf name** of every candidate was grepped
+across all sources: 11 hits, all of them accidents (`'collection'` as a scope
+value, `'search'` as a route segment). A gate report is a list of suspects to
+check, never a deletion to apply.
+
+Exemptions use an inline `/* i18n-allow: <concrete reason> */`; none are
+registered. The key count is now **695**, and all 695 are reachable from source.
 
 ## 8. A write button must stop accepting clicks while it is in flight
 

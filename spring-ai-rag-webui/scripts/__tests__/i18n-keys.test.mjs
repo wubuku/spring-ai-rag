@@ -1,8 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync, mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { scanSource, compareLocales, flattenKeys, hasKey, VIOLATION_KINDS } from '../check-i18n-keys.mjs';
+import { tmpdir } from 'node:os';
+import { spawnSync } from 'node:child_process';
+import { scanSource, compareLocales, flattenKeys, hasKey, collectReferencedKeys, VIOLATION_KINDS } from '../check-i18n-keys.mjs';
 
 const projectRoot = fileURLToPath(new URL('../..', import.meta.url));
 const sourceRoot = join(projectRoot, 'src');
@@ -150,11 +152,209 @@ describe('the real component tree', () => {
 });
 
 describe('kinds', () => {
-  it('declares exactly the three rules this gate enforces', () => {
+  it('declares exactly the four rules this gate enforces', () => {
+    // This assertion exists so the rule list cannot drift unnoticed. Batch 818
+    // added the fourth; the guard is what made that visible in one place
+    // instead of as a surprise in a CI log.
     expect([...VIOLATION_KINDS].sort()).toEqual([
+      'dead-locale-key',
       'dead-translation-fallback',
       'locale-key-asymmetry',
       'missing-locale-key',
     ]);
+  });
+});
+
+// ── Batch 818: proving a key is dead ──────────────────────────────────────
+//
+// The gate reported "176 keys are reached only through dynamic template calls
+// or are unused" for as long as anyone could remember. That number merged two
+// populations, one of which is a real finding and one of which is not, so
+// nobody could act on it and 50 dead keys survived inside it.
+//
+// These cases pin the five ways a key reaches t() without appearing as its own
+// literal argument, because each one was a false "dead" in the first census.
+
+describe('a key that reaches t() indirectly', () => {
+  const keys = new Set([
+    'nav.dashboard', 'search.matchChannel.hybrid', 'theme.dark',
+    'documents.lifecycle.READY', 'search.resultsCount_one', 'search.resultsCount_other',
+    'evaluation.tabReport', 'collectionScope.callerVisible', 'documents.delete',
+  ]);
+
+  const referenced = code => collectReferencedKeys(code, keys);
+
+  it('keeps a key held in a lookup table alive', () => {
+    const code = "const MAP = { CALLER_VISIBLE: 'collectionScope.callerVisible' };";
+    expect([...referenced(code)]).toContain('collectionScope.callerVisible');
+  });
+
+  it('keeps a key used as a data-array member alive', () => {
+    const code = "const TABS = ['report', 'evaluation.tabReport'];";
+    expect([...referenced(code)]).toContain('evaluation.tabReport');
+  });
+
+  it('keeps a key behind a template prefix alive', () => {
+    const code = "t(`search.matchChannel.${channel}`);";
+    expect([...referenced(code)]).toEqual(expect.arrayContaining(['search.matchChannel.hybrid']));
+  });
+
+  it('keeps a key behind a template on an aliased translate alive', () => {
+    // `translate` is `t` handed down as a parameter; the rule must not care
+    // what the callee is called.
+    const code = "return translate(`documents.lifecycle.${value}`);";
+    expect([...referenced(code)]).toContain('documents.lifecycle.READY');
+  });
+
+  it('keeps a plural family alive from its base call', () => {
+    const code = "t('search.resultsCount', { count: results.length })";
+    expect([...referenced(code)]).toEqual(
+      expect.arrayContaining(['search.resultsCount_one', 'search.resultsCount_other']),
+    );
+  });
+
+  it('still reads a plain literal call', () => {
+    expect([...referenced("t('documents.delete')")]).toContain('documents.delete');
+  });
+
+  it('reports a key nothing touches', () => {
+    expect([...referenced("const x = 'unrelated';")]).not.toContain('nav.dashboard');
+  });
+
+  it('does not let an empty template prefix claim the whole locale', () => {
+    // The first version of this rule allowed an empty prefix, and
+    // `key.startsWith('')` is true for every key — so one t(`${x}`) anywhere
+    // marked all 745 alive and the rule passed while doing nothing. A gate
+    // that cannot fail is the exact failure this repository keeps meeting.
+    const referencedByEmpty = [...referenced("t(`${x}`)")];
+    expect(referencedByEmpty).toEqual([]);
+  });
+
+  it('does not let an unrelated literal invent a reference', () => {
+    // The literal criterion only counts strings that are real keys, so
+    // 'collection' as a scope value cannot keep 'chat.collection' alive.
+    expect([...referenced("const scope = 'collection';")])
+      .not.toContain('chat.collection');
+  });
+
+  it('ignores a key that only appears inside a comment', () => {
+    // The caller strips comments; this pins that the contract is "caller
+    // strips", so the self-test does not need to re-implement it.
+    expect([...referenced("t('nav.dashboard')")]).toContain('nav.dashboard');
+  });
+});
+
+describe('the locale files as delivered', () => {
+  it('carry no key that source cannot reach', () => {
+    const localeKeys = new Set(flattenKeys(en));
+    const referenced = new Set();
+    const walkSrc = dir => readdirSync(dir, { withFileTypes: true }).flatMap(e => {
+      const p = join(dir, e.name);
+      if (e.isDirectory()) return walkSrc(p);
+      return /\.tsx?$/.test(e.name) && !/\.(test|spec)\./.test(e.name) ? [p] : [];
+    });
+    for (const file of walkSrc(sourceRoot)) {
+      for (const key of collectReferencedKeys(readFileSync(file, 'utf8'), localeKeys)) {
+        referenced.add(key);
+      }
+    }
+    const dead = [...localeKeys].filter(k => !referenced.has(k));
+    expect(dead).toEqual([]);
+  });
+});
+
+// ── the gate end to end ──────────────────────────────────────────────────
+//
+// Mutation W5 emptied the loop that reports dead keys and all thirty cases
+// stayed green, because every one of them called collectReferencedKeys
+// directly. The helper was fine; the gate had stopped failing and nothing
+// noticed. These cases run the script as a child process and assert the exit
+// code, which is the only thing CI sees.
+
+const GATE = fileURLToPath(new URL('../check-i18n-keys.mjs', import.meta.url));
+
+function runGate(files) {
+  const dir = mkdtempSync(join(tmpdir(), 'i18n-gate-'));
+  mkdirSync(join(dir, 'i18n/locales'), { recursive: true });
+  for (const [name, body] of Object.entries(files)) {
+    const target = join(dir, name);
+    mkdirSync(join(target, '..'), { recursive: true });
+    writeFileSync(target, body, 'utf8');
+  }
+  const result = spawnSync(process.execPath, [GATE], {
+    env: { ...process.env, I18N_SOURCE_ROOT: dir },
+    encoding: 'utf8',
+  });
+  rmSync(dir, { recursive: true, force: true });
+  return result;
+}
+
+const locales = (extra = {}) => ({
+  'i18n/locales/en.json': JSON.stringify({ nav: { dashboard: 'Dashboard' }, dead: { key: 'Gone' }, ...extra }),
+  'i18n/locales/zh-CN.json': JSON.stringify({ nav: { dashboard: '仪表盘' }, dead: { key: '没了' }, ...extra }),
+});
+
+/** The same tree with the deliberately dead key removed, for passing cases. */
+const cleanLocales = (extra = {}) => ({
+  'i18n/locales/en.json': JSON.stringify({ nav: { dashboard: 'Dashboard' }, ...extra }),
+  'i18n/locales/zh-CN.json': JSON.stringify({ nav: { dashboard: '仪表盘' }, ...extra }),
+});
+
+describe('the gate as a process', () => {
+  it('fails on a locale key no source can reach', () => {
+    const result = runGate({
+      ...locales(),
+      'Page.tsx': "export const x = t('nav.dashboard');",
+    });
+    expect(result.status).toBe(1);
+    expect(result.stdout + result.stderr).toMatch(/dead-locale-key/);
+    expect(result.stdout + result.stderr).toMatch(/dead\.key/);
+  });
+
+  it('passes when every key is reachable', () => {
+    const result = runGate({
+      ...cleanLocales(),
+      'Page.tsx': "export const x = t('nav.dashboard');",
+    });
+    expect(result.status).toBe(0);
+  });
+
+  it('passes a key held in a lookup table', () => {
+    const result = runGate({
+      ...cleanLocales(),
+      'Page.tsx': "const MAP = { DASH: 'nav.dashboard' }; export const y = t(MAP.DASH);",
+    });
+    expect(result.status).toBe(0);
+  });
+
+  it('passes a key behind a template prefix', () => {
+    const result = runGate({
+      ...cleanLocales({ nav: { dashboard: 'Dashboard', alerts: 'Alerts' } }),
+      'Page.tsx': "export const x = t(`nav.${page}`);",
+    });
+    expect(result.status).toBe(0);
+  });
+
+  // Mutation M3 dropped the `localeKeys.has()` filter around the literal test
+  // and all thirty-five cases stayed green: no case asserted the number the
+  // gate prints. The filter cannot change the pass/fail decision — a key that
+  // is not in the locale is never asked about — so it only reaches the reader
+  // through this line, and dropping it turned "695 keys referenced" into
+  // "994" on a tree that had not changed at all. A gate that cannot miscount
+  // is worth as much as a gate that cannot miss, because the count is the part
+  // a human actually reads.
+  it('counts no key outside the locale as referenced', () => {
+    const result = runGate({
+      ...cleanLocales({ nav: { dashboard: 'Dashboard', alerts: 'Alerts' } }),
+      'Page.tsx': [
+        "const MAP = { DASH: 'nav.dashboard', ALERTS: 'nav.alerts' };",
+        "const ROUTE = '/collections';",
+        "const FLAG = 'some.other.key';",
+        'export const y = t(MAP.DASH);',
+      ].join('\n'),
+    });
+    expect(result.status).toBe(0);
+    expect(result.stdout).toMatch(/2 key\(s\) referenced/);
+    expect(result.stdout).not.toMatch(/3 key\(s\) referenced/);
   });
 });
