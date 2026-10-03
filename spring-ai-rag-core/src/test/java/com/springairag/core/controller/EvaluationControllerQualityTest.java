@@ -36,8 +36,10 @@ class EvaluationControllerQualityTest {
         evaluationService = mock(RetrievalEvaluationService.class);
         userFeedbackService = mock(UserFeedbackService.class);
         semanticEvaluationService = mock(SemanticEvaluationService.class);
+        // Batch 850：必填构造器参数，所以每条用例都拿得到同一个 stub，
+        // 不用再在用例里逐次 setSemanticEvaluationService 重新接线。
         controller = new EvaluationController(
-                evaluationService, userFeedbackService, null);
+                evaluationService, userFeedbackService, null, semanticEvaluationService);
     }
 
     @Test
@@ -68,7 +70,6 @@ class EvaluationControllerQualityTest {
 
     @Test
     void semanticDelegatesToSemanticService() {
-        controller.setSemanticEvaluationService(semanticEvaluationService);
         SemanticEvaluationRequest request = new SemanticEvaluationRequest(
                 "FACT_CHECKING", "q", "ctx", "answer", "test/model");
         SemanticEvaluationResponse expected = new SemanticEvaluationResponse(
@@ -85,7 +86,6 @@ class EvaluationControllerQualityTest {
 
     @Test
     void semanticBatchDelegatesToSemanticService() {
-        controller.setSemanticEvaluationService(semanticEvaluationService);
         SemanticEvaluationRequest request = new SemanticEvaluationRequest(
                 "RELEVANCY", "q", "ctx", "answer", "test/model");
         SemanticEvaluationResponse expected = new SemanticEvaluationResponse(

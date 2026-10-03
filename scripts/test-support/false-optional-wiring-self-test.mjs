@@ -215,6 +215,24 @@ function runGate(files) {
   return result;
 }
 
+/** 与 runGate 相同，但把棘轮天花板显式打开——用来测"只能下降"这条性质本身。 */
+function runGateWithCeiling(files, ceiling) {
+  const dir = mkdtempSync(join(tmpdir(), 'false-optional-gate-'));
+  for (const [name, body] of Object.entries(files)) {
+    writeFileSync(join(dir, name), body, 'utf8');
+  }
+  const result = spawnSync(process.execPath, [GATE], {
+    env: {
+      ...process.env,
+      FALSE_OPTIONAL_WIRING_ROOT: dir,
+      FALSE_OPTIONAL_WIRING_CEILING: String(ceiling),
+    },
+    encoding: 'utf8',
+  });
+  rmSync(dir, { recursive: true, force: true });
+  return result;
+}
+
 const CONTROLLER = (fieldLine) => `class DemoController {\n`
   + fieldLine
   + '    @Autowired(required = false)\n'
@@ -368,6 +386,82 @@ test('flags a service-layer skip guard on an unconditional bean', () => {
   );
   assert.equal(hits.length, 1);
   assert.equal(hits[0].field, 'someService');
+});
+
+// ── Batch 850: the second form, and the ratchet ────────────────────────────
+//
+// The first form asks "is there a null guard that a running application cannot
+// take?". The second asks the opposite question: "the injection says this may be
+// absent, the code never checks — who is lying?" That one is strictly more
+// dangerous, because a missing bean fails with a raw NPE at first call instead
+// of at context startup, and the original rule could not see it at all.
+
+const UNGUARDED_SERVICE = (fieldLine) => `class DemoService {\n`
+  + fieldLine
+  + '    @Autowired(required = false)\n'
+  + '    public void setSomeService(SomeService s) { this.someService = s; }\n'
+  + '    void go() { someService.run(); }\n}\n';
+
+test('flags an unguarded collaborator whose injection calls it optional', () => {
+  const src = `
+class Demo {
+    private SomeService someService;
+    @Autowired(required = false)
+    public void setSomeService(SomeService s) { this.someService = s; }
+    void go() { someService.run(); }
+}`;
+  const guardedForm = findFalseOptionalClaims(src, UNCONDITIONAL);
+  assert.equal(guardedForm.length, 0, 'the original rule cannot see this shape at all');
+
+  const hits = findFalseOptionalClaims(src, UNCONDITIONAL, { requireGuard: false });
+  assert.equal(hits.length, 1);
+  assert.equal(hits[0].field, 'someService');
+  assert.equal(hits[0].guarded, false, 'the finding must say the field is unguarded');
+});
+
+test('an unguarded claim that records a reason is not a finding', () => {
+  const src = UNGUARDED_SERVICE(
+    '    private SomeService someService;  // optional-claim: absent means a degraded route, not a crash\n',
+  );
+  assert.equal(findFalseOptionalClaims(src, UNCONDITIONAL, { requireGuard: false }).length, 0);
+});
+
+test('an unguarded claim on a genuinely conditional bean is not a finding', () => {
+  const src = UNGUARDED_SERVICE('    private SomeService someService;\n');
+  assert.equal(findFalseOptionalClaims(src, CONDITIONAL, { requireGuard: false }).length, 0);
+});
+
+test('the ratchet does not apply to a fixture root by default', () => {
+  // Fixtures are smaller than the repository by construction. Batch 820 already
+  // recorded the general shape of this trap; applying the real tree's ceiling
+  // to a two-file fixture makes every "should pass" case red for the wrong
+  // reason, which is how a gate learns to be ignored.
+  const result = runGate({
+    'SomeService.java': '@Service\npublic class SomeService {\n}\n',
+    'DemoService.java': UNGUARDED_SERVICE('    private SomeService someService;\n'),
+  });
+  assert.equal(result.status, 0, `${result.stdout}${result.stderr}`);
+});
+
+test('the ratchet fails when a new unguarded claim appears', () => {
+  const result = runGateWithCeiling({
+    'SomeService.java': '@Service\npublic class SomeService {\n}\n',
+    'DemoService.java': UNGUARDED_SERVICE('    private SomeService someService;\n'),
+  }, 0);
+  assert.equal(result.status, 1, 'one unguarded claim against a ceiling of 0 must fail');
+  assert.match(result.stderr, /unguarded optional claim/);
+  assert.match(result.stdout, /raw NPE at first call/, 'the message must name the real failure');
+});
+
+test('the ratchet fails when the count drops but the ceiling does not', () => {
+  // This is the direction that makes the number a ratchet rather than a
+  // one-time assertion: fixing a site without lowering the constant is an error.
+  const result = runGateWithCeiling({
+    'SomeService.java': '@Service\npublic class SomeService {\n}\n',
+    'DemoService.java': UNGUARDED_SERVICE('    private SomeService someService;\n'),
+  }, 5);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /Lower the ceiling/);
 });
 
 let failed = 0;

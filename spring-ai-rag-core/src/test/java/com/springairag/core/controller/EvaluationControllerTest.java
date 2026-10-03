@@ -4,6 +4,7 @@ import com.springairag.api.dto.EvaluateRequest;
 import com.springairag.api.dto.FeedbackRequest;
 import com.springairag.core.entity.RagRetrievalEvaluation;
 import com.springairag.core.entity.RagUserFeedback;
+import com.springairag.core.evaluation.SemanticEvaluationService;
 import com.springairag.core.service.RetrievalEvaluationService;
 import com.springairag.core.service.UserFeedbackService;
 import org.junit.jupiter.api.BeforeEach;
@@ -25,13 +26,18 @@ class EvaluationControllerTest {
 
     private RetrievalEvaluationService evaluationService;
     private UserFeedbackService userFeedbackService;
+    private SemanticEvaluationService semanticEvaluationService;
     private EvaluationController controller;
 
     @BeforeEach
     void setUp() {
         evaluationService = mock(RetrievalEvaluationService.class);
         userFeedbackService = mock(UserFeedbackService.class);
-        controller = new EvaluationController(evaluationService, userFeedbackService, null);
+        // Batch 850：语义评估服务成为必填构造器参数，所以它有名字、有 mock，
+        // 而不是靠传 null 假装这个协作者可以不存在。
+        semanticEvaluationService = mock(SemanticEvaluationService.class);
+        controller = new EvaluationController(
+                evaluationService, userFeedbackService, null, semanticEvaluationService);
     }
 
     @Test

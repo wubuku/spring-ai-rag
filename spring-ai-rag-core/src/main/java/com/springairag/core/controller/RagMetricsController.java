@@ -48,7 +48,7 @@ public class RagMetricsController {
     private final ChatModelRouter modelRouter;
     private final SlowQueryMetricsService slowQueryMetricsService;  // optional-claim: SlowQueryMetricsService 是无条件 @Service，null 分支只在测试里可达；守卫保留是因为该端点在缺少数据源时要返回全零响应而不是 500
     private final ApiSloTrackerService sloTrackerService;  // optional-claim: ApiSloTrackerService 是无条件 @Service，null 分支只在测试里可达；守卫保留是因为该端点在跟踪器缺失时要报告"不合规"，而不是 500
-    private final LlmUsageQueryService usageQueryService;
+    private final LlmUsageQueryService usageQueryService;  // Batch 850：这个协作者没有 null 守卫，缺它会直接 NPE，所以它是必填依赖；`required = false` 与"必填"互相矛盾，注解已删。同类的两个兄弟字段仍带 required=false，因为它们真的会"跳过"
 
     @Autowired
     public RagMetricsController(RagMetricsService metricsService,
@@ -57,7 +57,7 @@ public class RagMetricsController {
                                 ChatModelRouter modelRouter,
                                 @Autowired(required = false) SlowQueryMetricsService slowQueryMetricsService,
                                 @Autowired(required = false) ApiSloTrackerService sloTrackerService,
-                                @Autowired(required = false) LlmUsageQueryService usageQueryService) {
+                                LlmUsageQueryService usageQueryService) {
         this.metricsService = metricsService;
         this.modelMetricsService = modelMetricsService;
         this.modelRegistry = modelRegistry;
