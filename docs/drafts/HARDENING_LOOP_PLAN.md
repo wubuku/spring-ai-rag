@@ -557,11 +557,17 @@
   - 门禁在真实树 exit 0（26 controller / 172 bean）；自测 **19/19**。
   - `mvn -pl spring-ai-rag-core clean test`、tests 链、门控 IT 全绿。
 - 遗留：
-  - **同类假声明在 service 层还有 2 处**，而这道门禁按设计只扫 controller：
-    `EvaluationSuiteService.apiKeyManagementService`、
-    `RetrievalDiagnosticsService.repository`（两者都是 `required = false` 注入
-    无条件 bean + "会抛"守卫）。要处置就得先把门禁的扫描范围扩到 service，
-    扩范围前必须先量出新的假阳性数。
+  - **扩到 service 层的爆炸半径已量（Batch 826 的起点）**：
+    把同一套判据套到 service / config / 其它类上，会报出 **51 条**
+    （`*Service*` **48** 条、`*Config*`/`*Factory` **1** 条、其它 **2** 条），
+    而 controller 现在是 **0**。
+    集中度很高：`ChatExecutionService` 一家 9 条、`ExternalDocumentService` 5 条、
+    `JsonRecordService` 5 条、`ApiKeyManagementService` 2 条、
+    `RetrievalDiagnosticsService` 2 条、`RagCollectionService` 3 条。
+    - 处置路径和本批同构：先按 822 的分界线分"会抛 / 会跳过"，
+      再逐条手核（探针的 4 类假阳性在 service 层同样成立）。
+    - **扩范围前必须先处置**，否则门禁会立刻变红——但 51 条里假阳性的比例未知，
+      不能在没量清楚之前就把范围打开。
   - 822 遗留的 18 处"必选注入却仍被 null 守卫"候选里，4 处经手核是
     **构造器兜底默认**（`clock` / `provider` / `recorder`）而非使用点守卫，
     探针的假阳性；其余 14 处尚未逐条手核。
