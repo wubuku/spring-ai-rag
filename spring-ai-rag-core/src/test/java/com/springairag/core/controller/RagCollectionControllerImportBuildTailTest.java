@@ -63,8 +63,8 @@ class RagCollectionControllerImportBuildTailTest {
                 documentRepository,
                 collectionService,
                 new CollectionIdentityResolver(collectionRepository),
-                mock(AuditLogService.class));
-        controller.setDocumentMutationService(documentMutationService);
+                mock(AuditLogService.class),
+                documentMutationService);
         when(collectionService.createCollection(any()))
                 .thenReturn(collection(1L, "kb"));
     }

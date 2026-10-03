@@ -82,8 +82,8 @@ class RagDocumentControllerUploadAccessTailTest {
                 mock(DocumentVersionService.class),
                 mock(EmbeddingProfileProvider.class),
                 mock(CollectionIdentityResolver.class),
-                mock(AuditLogService.class));
-        controller.setDocumentMutationService(documentMutationService);
+                mock(AuditLogService.class),
+                documentMutationService);
     }
 
     @AfterEach

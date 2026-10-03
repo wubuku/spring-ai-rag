@@ -60,8 +60,8 @@ class RagCollectionControllerImportDocumentsTest {
                 documentRepository,
                 collectionService,
                 new CollectionIdentityResolver(collectionRepository),
-                auditLogService);
-        controller.setDocumentMutationService(documentMutationService);
+                auditLogService,
+                documentMutationService);
         when(collectionService.createCollection(any()))
                 .thenReturn(collection(1L, "kb"));
     }

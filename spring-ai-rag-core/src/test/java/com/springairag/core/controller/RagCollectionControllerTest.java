@@ -63,17 +63,18 @@ class RagCollectionControllerTest {
         collectionService = mock(RagCollectionService.class);
         collectionProvisioningService = mock(CollectionProvisioningService.class);
         auditLogService = mock(AuditLogService.class);
+        // Batch 847：文档关联与导入都已无条件走变更层。Batch 848 改为构造器注入，
+        // 所以 mock 必须在构造之前就位。
+        documentMutationService = mock(DocumentMutationService.class);
         controller = new RagCollectionController(
                 collectionRepository,
                 documentRepository,
                 collectionService,
                 new CollectionIdentityResolver(collectionRepository),
-                auditLogService);
+                auditLogService,
+                documentMutationService);
         controller.setCollectionProvisioningService(
                 collectionProvisioningService, new ProvisioningOwnerResolver());
-        // Batch 847：文档关联与导入都已无条件走变更层。
-        documentMutationService = mock(DocumentMutationService.class);
-        controller.setDocumentMutationService(documentMutationService);
     }
 
     private RagCollection createCollection(Long id, String name) {

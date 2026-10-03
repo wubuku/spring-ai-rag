@@ -55,14 +55,13 @@ class RagCollectionControllerAddDocumentTailTest {
         identityResolver = mock(CollectionIdentityResolver.class);
         documentMutationService = mock(DocumentMutationService.class);
 
-        RagCollectionController bare = new RagCollectionController(
+        controller = new RagCollectionController(
                 collectionRepository,
                 documentRepository,
                 mock(RagCollectionService.class),
                 identityResolver,
-                mock(AuditLogService.class));
-        controller = bare;
-        bare.setDocumentMutationService(null);
+                mock(AuditLogService.class),
+                documentMutationService);
 
         collection = new RagCollection();
         collection.setId(5L);
@@ -103,7 +102,6 @@ class RagCollectionControllerAddDocumentTailTest {
         stubActiveCollection();
         when(documentRepository.findById(9L))
                 .thenReturn(Optional.of(document));
-        controller.setDocumentMutationService(documentMutationService);
 
         ResponseEntity<DocumentAddedResponse> response =
                 controller.addDocument(5L, request(9L, 3L));
@@ -124,7 +122,6 @@ class RagCollectionControllerAddDocumentTailTest {
         stubActiveCollection();
         when(documentRepository.findById(9L))
                 .thenReturn(Optional.of(document));
-        controller.setDocumentMutationService(documentMutationService);
 
         assertThrows(IllegalArgumentException.class,
                 () -> controller.addDocument(5L, request(9L, null)));
@@ -194,7 +191,6 @@ class RagCollectionControllerAddDocumentTailTest {
                 .thenReturn(collection);
         when(documentRepository.findById(9L))
                 .thenReturn(Optional.of(document));
-        controller.setDocumentMutationService(documentMutationService);
 
         ResponseEntity<DocumentAddedResponse> response =
                 controller.addDocumentByKey(

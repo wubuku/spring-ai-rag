@@ -16,6 +16,7 @@ import com.springairag.core.service.DocumentLifecycleService;
 import com.springairag.core.service.DocumentVersionService;
 import com.springairag.core.entity.ApiKeyRole;
 import com.springairag.core.entity.RagApiKey;
+import com.springairag.core.service.DocumentMutationService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -70,7 +71,8 @@ class RagDocumentControllerAclListTailTest {
                 mock(DocumentVersionService.class),
                 profileProvider,
                 new CollectionIdentityResolver(collectionRepository),
-                null);
+                null,
+                mock(DocumentMutationService.class));
     }
 
     @AfterEach

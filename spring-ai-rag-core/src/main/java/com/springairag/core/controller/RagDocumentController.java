@@ -133,7 +133,7 @@ public class RagDocumentController {
     private AuditLogService auditLogService; // optional-claim: unconditional @Service; the audit helpers tolerate a null rather than failing the business call
     private ExternalDocumentService externalDocumentService; // unconditional @Service; Batch 822 removed the null guard that used to sit on it
     private EmbeddingDispatchService dispatchService; // unconditional @Service; Batch 822 removed the null guard that used to sit on it
-    private DocumentMutationService documentMutationService; // optional-claim: unconditional @Service; same
+    private DocumentMutationService documentMutationService; // Batch 847 removed the null guards; Batch 848 makes it a required constructor dependency
     private DocumentLifecycleService documentLifecycleService; // optional-claim: unconditional @Service; same
     private DocumentDerivationDescriptorProvider derivationDescriptorProvider; // unconditional @Service; Batch 822 removed the null guard that used to sit on it
     private DocumentRelocationService documentRelocationService; // unconditional @Service; Batch 822 removed the null guard that used to sit on it
@@ -147,7 +147,8 @@ public class RagDocumentController {
                                   DocumentVersionService documentVersionService,
                                   EmbeddingProfileProvider embeddingProfileProvider,
                                   CollectionIdentityResolver collectionIdentityResolver,
-                                  @Autowired(required = false) AuditLogService auditLogService) {
+                                  @Autowired(required = false) AuditLogService auditLogService,
+                                  DocumentMutationService documentMutationService) {
         this.documentRepository = documentRepository;
         this.embeddingRepository = embeddingRepository;
         this.collectionRepository = collectionRepository;
@@ -157,6 +158,7 @@ public class RagDocumentController {
         this.embeddingProfileProvider = embeddingProfileProvider;
         this.collectionIdentityResolver = collectionIdentityResolver;
         this.auditLogService = auditLogService;
+        this.documentMutationService = documentMutationService;
     }
 
     @Autowired(required = false)
@@ -167,12 +169,6 @@ public class RagDocumentController {
     @Autowired(required = false)
     public void setDispatchService(EmbeddingDispatchService dispatchService) {
         this.dispatchService = dispatchService;
-    }
-
-    @Autowired(required = false)
-    public void setDocumentMutationService(
-            DocumentMutationService documentMutationService) {
-        this.documentMutationService = documentMutationService;
     }
 
     @Autowired(required = false)

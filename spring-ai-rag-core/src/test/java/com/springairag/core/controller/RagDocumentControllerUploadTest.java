@@ -75,9 +75,9 @@ class RagDocumentControllerUploadTest {
                 documentVersionService,
                 embeddingProfileProvider,
                 new CollectionIdentityResolver(collectionRepository),
-                auditLogService);
+                auditLogService,
+                documentMutationService);
         // Batch 847：上传已无条件走变更层。
-        controller.setDocumentMutationService(documentMutationService);
     }
 
     private MockMultipartFile txtFile(String name, String content) {

@@ -14,6 +14,7 @@ import com.springairag.core.service.DocumentDerivationDescriptorProvider;
 import com.springairag.core.service.DocumentEmbedService;
 import com.springairag.core.service.DocumentVersionService;
 import com.springairag.core.embeddingjob.EmbeddingDispatchService;
+import com.springairag.core.service.DocumentMutationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.model.ChatModel;
@@ -69,7 +70,8 @@ class RagDocumentControllerEmbeddingGuardsTest {
                 mock(DocumentVersionService.class),
                 profileProvider,
                 mock(CollectionIdentityResolver.class),
-                null);
+                null,
+                mock(DocumentMutationService.class));
         controller.setDispatchService(dispatchService);
 
         buildReembedResult = RagDocumentController.class

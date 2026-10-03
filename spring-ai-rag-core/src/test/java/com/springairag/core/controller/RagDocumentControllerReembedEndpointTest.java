@@ -21,6 +21,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import com.springairag.core.service.DocumentDerivationDescriptorProvider;
+import com.springairag.core.service.DocumentMutationService;
 
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.ArgumentMatchers.any;
@@ -68,7 +69,8 @@ class RagDocumentControllerReembedEndpointTest {
                 mock(DocumentVersionService.class),
                 profileProvider,
                 mock(CollectionIdentityResolver.class),
-                null);
+                null,
+                mock(DocumentMutationService.class));
         // Batch 822: the controller reaches the version-aware repository queries
         // unconditionally now that the "no descriptor provider" fallback is gone.
         // A real provider is used rather than a mock so these tests pin the
