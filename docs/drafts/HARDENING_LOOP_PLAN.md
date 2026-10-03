@@ -478,6 +478,86 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
+### Batch 821（已交付）
+
+- 分支：`feature/production-wiring-tests-20261006`
+- 内容：接着 820 的两条遗留——**把"生产装配至今无测试"补上**，
+  并在过程中抓到 820 门禁的**第四处静默盲区**。
+- 勘察：
+  - **820 的"12 处"是不完整的。**本批在删测试时顺手查 `EvaluationController`，
+    发现 `setSemanticEvaluationService` 带着
+    `@Autowired(required = false)` 而 `SemanticEvaluationService` 是无条件 `@Service`
+    ——**第 13 处假可选声明，820 的门禁没看见**。
+    根因和前三处盲区**完全同类**：我的 setter 正则写的是 `public void set\w+`，
+    而这个 setter **没有访问修饰符**。
+    修好之后普查数 **12 → 14**（多出 `EvaluationController.semanticEvaluationService`
+    与 `RagSearchController.diagnosticsService`），横跨 **6 个 controller**。
+  - `RagSearchController.diagnosticsService` 的守卫是**混合型**：
+    `if (diagnosticsService == null || !diagnosticsService.isEnabled() || outcome == null)`。
+    `== null` 那支不可达，但守卫本身还扛着 `isEnabled()` 这个**真的功能开关**。
+    所以它的理由和其余 13 处**不一样**，不能套用同一句话。
+  - 顺手普查了服务层的 "unavailable" 形态：
+    绝大多数是 `SHA-256 is unavailable`（JCA 算法，不是 bean）与日志 warn；
+    **真正可选的有一个**——`HybridSearchAdvisor` 的
+    "retrieval logging service (null when Repository is unavailable)"，
+    而 `RetrievalLoggingService` **正是那 7 个真条件 bean 之一**。
+    **这是 820 门禁放行条件在真实代码里的实例**，对照成立。
+- 变更：
+  - **门禁去掉 setter 可见性限制**（`(?:public\s+)?void`），
+    并补对应的自测用例。**门禁自测 14 → 15 例。**
+  - `EvaluationController.semanticEvaluationService` 与
+    `RagSearchController.diagnosticsService` 补上理由（后者按混合型写）。
+  - **删掉 4 条覆盖率驱动的不可达断言**：
+    `RagDocumentControllerUploadAccessTailTest` 两条
+    （`updateDocumentWithoutMutationServiceIsRejected`、
+    `upsertExternalWithoutServiceIsRejected`）、
+    `EvaluationControllerQualityTest` 两条
+    （`semanticFailsClosedWhenServiceIsUnavailable`、
+    `semanticBatchFailsClosedWhenServiceIsUnavailable`）。
+    删除处**留下注释写明删的是什么、为什么、以及替代物在哪**。
+  - **新增两个生产接线测试类**，补上 820 登记的核心缺口：
+    `RagDocumentControllerProductionWiringTest`（4 例）与
+    `EvaluationControllerProductionWiringTest`（3 例）。
+    它们把协作者全部接上（**这才是 Spring 的接法**），断言
+    **每个被 `if (x == null)` 守卫的字段都非空**，并逐个验证守卫所保护的调用
+    确实走到了协作者手里。
+    反射断言不是循环论证：它编码的正是"**生产接线 = 协作者齐全**"这条
+    从来没人验证过的约定，而 820 门禁已证明这些协作者全是无条件 `@Service`。
+- 变异测试：
+  | 变异 | 结果 |
+  |------|------|
+  | N1 把 setter 可见性收回成 `public` | **1 失败**（正是那条 package-private 用例） |
+- 验证：
+  - core：**994 类 / 7740 用例 / 0 失败 / 154 跳过**
+    （820 批 992 / 7737；删 4 条 + 新增 2 个类 7 例 ⇒ 类 +2、用例净 +3）。
+  - 门控 IT 16 例通过；仓库门禁 tests 17/17、docs 16/16；门禁登记维持 **49**。
+  - 前端未改动，不跑 npm 链。
+- 指标：覆盖率驱动的不可达断言累计 **6 → 2 → 0**（820 删 2、本批删 4）；
+  假可选声明 **12 → 14**（判据修好，数字上升是好事）→ 全部登记理由；
+  门禁自测 14 → **15**；生产接线测试 **0 → 7 例**。
+- **本批最该记的一条（结构性的，比任何单个修复都重要）**：
+  **一道静态门禁的"0 findings"是有歧义的。**
+  理由这道放行阀会**连"结构上根本看不见的声明"一起放掉**——
+  实测：把可见性收回去之后，那 2 处声明不再被检出（普查 14 → 12），
+  **而门禁在真实树上依然 exit 0**。
+  也就是说一次绿色运行证明的是"**规则还能拒绝它该拒绝的**"，
+  **不是"规则看得见全部"**。
+  **自测是这个门禁唯一的防线。**这段话已写进门禁头注释，
+  因为下一个看到绿色的人一定会把绿色理解成后者。
+- 遗留（如实登记，未处理）：
+  - **14 处 null 守卫本身仍在**（理由已写清）。真要删，需要把所有依赖
+    "协作者缺席"分支的测试改成注入协作者；实测 19 个测试文件直接构造
+    `RagDocumentController`、**只有 8 个注入**。这是一次大迁移。
+  - **仍然没有一个 `@SpringBootTest` 覆盖这两个 controller 的真实装配**。
+    本批的"生产接线"是**按 Spring 的接法手工构造**的——
+    它证明了字段齐全时代码走哪条路，**没有证明 Spring 真的这么接**。
+    真正的运行时证明需要起容器（全仓库只有 4 个 `@SpringBootTest`，都在门控 IT 里）。
+  - 假可选声明目前只普查了 **controller 层**；
+    service / filter / advisor 层的同类形态只做了粗看
+    （`HybridSearchAdvisor` 是真可选，其余多为 JCA 或日志）。
+  - 承接 820/819：`dead-locale-key` 判据刻意粗仍有漏报；CSP 全仓库零处。
+  - `/tmp/b806-ci-gates.patch` 仍待人工应用（14 条 standing gap）。
+
 ### Batch 820（已交付）
 
 - 分支：`feature/false-optional-claims-20261006`

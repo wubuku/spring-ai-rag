@@ -45,7 +45,7 @@ public class EvaluationController {
     private final RetrievalEvaluationService evaluationService;
     private final UserFeedbackService userFeedbackService;
     private final AuditLogService auditLogService;  // optional: null when RagAuditLogRepository unavailable
-    private SemanticEvaluationService semanticEvaluationService;
+    private SemanticEvaluationService semanticEvaluationService; // optional-claim: unconditional @Service; the guard turns a hand-constructed instance's NPE into a stated error
 
     public EvaluationController(RetrievalEvaluationService evaluationService,
                                 UserFeedbackService userFeedbackService,

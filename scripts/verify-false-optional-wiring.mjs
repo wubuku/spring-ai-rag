@@ -45,6 +45,21 @@
  * 豁免不是 allowlist 条目，而是**写在字段声明行上的理由**。理由必须和代码在
  * 一起，因为下一个读它的人正要在这里做判断。
  *
+ * ── 一次绿色输出是什么意思（Batch 821 实测，请读）────────────────────
+ * 这道门禁的"0 findings"是**有歧义的**。它真正的意思是
+ * "**在我看得见的声明里，没有未登记理由的那种**"，
+ * 而不是"没有假声明"。
+ *
+ * 原因是理由这道放行阀会**连结构上根本看不见的声明一起放掉**。Batch 821 实测：
+ * 把 setter 可见性收回成 `public`（第四处盲区）之后，真实树上
+ * `EvaluationController.semanticEvaluationService` 与
+ * `RagSearchController.diagnosticsService` 两处声明**不再被检出**，
+ * 普查数 14 → 12——而**门禁在真实树上依然 exit 0**，
+ * 因为那两处都带着理由，而理由在检出之前就放行了。
+ *
+ * 所以：**自测是这个门禁唯一的防线**。一次绿色运行证明的是
+ * "规则还能拒绝它该拒绝的东西"，不是"规则看得见全部"。
+ *
  * Run: node scripts/verify-false-optional-wiring.mjs
  */
 
@@ -94,12 +109,18 @@ export function findFalseOptionalClaims(controllerSource, beans) {
     // s, ProvisioningOwnerResolver r)` never matched, so that one claim went
     // unreported while the gate looked perfectly healthy on the real tree.
     //
+    // The setter's visibility is deliberately not constrained. Requiring
+    // `public void` was the fourth miss, and it hid a real claim:
+    // `EvaluationController.setSemanticEvaluationService` is package-private,
+    // and a package-private `@Autowired(required = false)` setter promises
+    // exactly the same thing a public one does.
+    //
     // A constructor parameter counts as the same claim. The third miss was here:
     // both controllers take `@Autowired(required = false) AuditLogService
     // auditLogService` as their last constructor argument, which is exactly the
     // same unverifiable promise, and a setter-only rule cannot see it.
     const viaSetter = new RegExp(
-      `@Autowired\\(\\s*required\\s*=\\s*false\\s*\\)\\s*\\n\\s*public\\s+void\\s+set\\w+`
+      `@Autowired\\(\\s*required\\s*=\\s*false\\s*\\)\\s*\\n\\s*(?:public\\s+)?void\\s+set\\w+`
       + `\\(\\s*${type}\\s+\\w+\\s*(?:,|\\))`,
     ).test(controllerSource);
     const viaConstructor = new RegExp(

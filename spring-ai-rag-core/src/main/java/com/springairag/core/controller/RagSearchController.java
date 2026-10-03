@@ -66,7 +66,7 @@ public class RagSearchController {
     private final CollectionDocumentResolver legacyCollectionDocumentResolver;
     private final ReRankingService reRankingService;
     private final CollectionRetrievalScopeResolver retrievalScopeResolver;
-    private RetrievalDiagnosticsService diagnosticsService;
+    private RetrievalDiagnosticsService diagnosticsService; // optional-claim: unconditional @Service, so the null arm is unreachable; the guard's real purpose is the isEnabled() feature toggle, which is genuinely optional
     private final RetrievalFilterValidator filterValidator = new RetrievalFilterValidator();
 
     @Autowired

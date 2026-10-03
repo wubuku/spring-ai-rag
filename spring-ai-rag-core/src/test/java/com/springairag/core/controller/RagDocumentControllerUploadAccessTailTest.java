@@ -303,49 +303,12 @@ class RagDocumentControllerUploadAccessTailTest {
         verify(documentRepository, never()).findAllById(anyList());
     }
 
-    // ── 可选依赖缺省守卫 ─────────────────────────────────────────
-
-    @Test
-    void updateDocumentWithoutMutationServiceIsRejected() {
-        RagDocumentController bare = new RagDocumentController(
-                documentRepository,
-                mock(RagEmbeddingRepository.class),
-                mock(RagCollectionRepository.class),
-                mock(DocumentEmbedService.class),
-                batchDocumentService,
-                mock(DocumentVersionService.class),
-                mock(EmbeddingProfileProvider.class),
-                mock(CollectionIdentityResolver.class),
-                mock(AuditLogService.class));
-
-        IllegalStateException error = assertThrows(
-                IllegalStateException.class,
-                () -> bare.updateDocument(
-                        1L, new DocumentUpdateRequest()));
-
-        assertEquals("Document mutation service is not available",
-                error.getMessage());
-    }
-
-    @Test
-    void upsertExternalWithoutServiceIsRejected() {
-        RagDocumentController bare = new RagDocumentController(
-                documentRepository,
-                mock(RagEmbeddingRepository.class),
-                mock(RagCollectionRepository.class),
-                mock(DocumentEmbedService.class),
-                batchDocumentService,
-                mock(DocumentVersionService.class),
-                mock(EmbeddingProfileProvider.class),
-                mock(CollectionIdentityResolver.class),
-                mock(AuditLogService.class));
-
-        IllegalStateException error = assertThrows(
-                IllegalStateException.class,
-                () -> bare.upsertExternalDocument(
-                        new ExternalDocumentUpsertRequest()));
-
-        assertEquals("External document service is not available",
-                error.getMessage());
-    }
+    // Batch 821 deleted the two cases that used to sit here, named
+    // updateDocumentWithoutMutationServiceIsRejected and
+    // upsertExternalWithoutServiceIsRejected. Both constructed a "bare"
+    // controller and asserted IllegalStateException for a collaborator that is
+    // an unconditional @Service, so the state they pinned cannot occur in a
+    // running application. Their purpose was coverage, not a contract.
+    // The non-null paths they stood next to are now asserted in
+    // RagDocumentControllerProductionWiringTest.
 }
