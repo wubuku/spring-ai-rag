@@ -607,22 +607,22 @@ describe('Search guards, history panel, provenance navigation and draft validati
       const input = screen.getByPlaceholderText(/search.placeholder/);
 
       fireEvent.change(input, { target: { value: 'api_key=abc' } });
-      expect(screen.getAllByText('common.draftNotSavedCredential')).toHaveLength(1);
+      expect(screen.queryAllByText('common.draftNotSavedCredential')).toHaveLength(1);
 
       // 草稿每敲一个字符就重写一次；如果不做跃迁去重，
       // 用户每按一次键就会挨一条 toast。
       fireEvent.change(input, { target: { value: 'api_key=abcd' } });
       fireEvent.change(input, { target: { value: 'api_key=abcde' } });
-      expect(screen.getAllByText('common.draftNotSavedCredential')).toHaveLength(1);
+      expect(screen.queryAllByText('common.draftNotSavedCredential')).toHaveLength(1);
 
       // toast 本身有停留时间，不会因为状态恢复就消失；
       // 该断言的是"没有新增第二条"，不是"提示立刻不见了"。
       fireEvent.change(input, { target: { value: '正常查询' } });
-      expect(screen.getAllByText('common.draftNotSavedCredential')).toHaveLength(1);
+      expect(screen.queryAllByText('common.draftNotSavedCredential')).toHaveLength(1);
 
       // 去重是按"一段连续命中"算的：恢复正常后重新命中仍要再提示一次。
       fireEvent.change(input, { target: { value: 'api_key=zzz' } });
-      expect(screen.getAllByText('common.draftNotSavedCredential')).toHaveLength(2);
+      expect(screen.queryAllByText('common.draftNotSavedCredential')).toHaveLength(2);
     });
 
     it('不含凭据形状的查询照常存草稿，不弹提示', () => {
