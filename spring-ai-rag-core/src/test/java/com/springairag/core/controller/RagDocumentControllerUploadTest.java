@@ -66,6 +66,7 @@ class RagDocumentControllerUploadTest {
                 batchDocumentService,
                 documentVersionService,
                 embeddingProfileProvider,
+                new CollectionIdentityResolver(collectionRepository),
                 auditLogService);
     }
 

@@ -69,13 +69,6 @@ public class ApiKeyController {
         this.provisioningOwnerResolver = provisioningOwnerResolver;
     }
 
-    public ApiKeyController(ApiKeyManagementService apiKeyService,
-                            EnvironmentRootCredentialResolver rootCredentialResolver,
-                            CollectionIdentityResolver collectionIdentityResolver) {
-        this(apiKeyService, rootCredentialResolver, collectionIdentityResolver,
-                new ProvisioningOwnerResolver());
-    }
-
     @Operation(
             summary = "Create a new API key",
             description = "Generates a new API key. The raw key is returned only for the first "

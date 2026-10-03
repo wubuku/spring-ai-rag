@@ -35,7 +35,7 @@ class AlertControllerSilenceAuditTailTest {
                 alertService,
                 mock(SloConfigRepository.class),
                 mock(RagSilenceScheduleRepository.class),
-                auditLogService = mock(AuditLogService.class));
+                auditLogService = mock(AuditLogService.class), null);
     }
 
     @Test

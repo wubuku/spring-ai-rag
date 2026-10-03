@@ -35,7 +35,7 @@ class PdfImportControllerEmbedCatchTailTest {
         controller = new PdfImportController(
                 mock(PdfImportService.class),
                 null,
-                pdfToRagService);
+                pdfToRagService, null);
     }
 
     @AfterEach

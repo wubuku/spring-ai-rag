@@ -43,7 +43,7 @@ class PdfImportControllerHtmlShellTest {
         pdfImportService = mock(PdfImportService.class);
         markdownRendererService = mock(MarkdownRendererService.class);
         controller = new PdfImportController(
-                pdfImportService, markdownRendererService, mock(PdfToRagService.class));
+                pdfImportService, markdownRendererService, mock(PdfToRagService.class), null);
     }
 
     /** 让任意路径都能"找到文件"，把控制器的转义行为与文件存在性检查隔离开。 */

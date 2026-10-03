@@ -49,12 +49,7 @@ class RagChatControllerExportTurnTest {
         historyRepository = mock(RagChatHistoryRepository.class);
         chatExportService = mock(ChatExportService.class);
         auditLogService = mock(AuditLogService.class);
-        controller = new RagChatController(
-                ragChatService,
-                historyRepository,
-                chatExportService,
-                new RagSseProperties(),
-                auditLogService);
+        controller = new RagChatController(ragChatService, historyRepository, chatExportService, new RagSseProperties(), null, auditLogService);
     }
 
     private MockHttpServletRequest request() {

@@ -154,15 +154,6 @@ public class RagChatController {
         }
     }
 
-    public RagChatController(RagChatService ragChatService,
-                             RagChatHistoryRepository historyRepository,
-                             ChatExportService chatExportService,
-                             RagSseProperties sseProperties,
-                             AuditLogService auditLogService) {
-        this(ragChatService, historyRepository, chatExportService, sseProperties,
-                null, auditLogService);
-    }
-
     /**
      * RAG Q&A (non-streaming).
      *

@@ -163,6 +163,20 @@ export const GATES = [
     noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
   },
 
+  // Batch 823. Spring injects a controller through its @Autowired constructor,
+  // so a second one is reachable only from tests — and it decides on the
+  // caller's behalf which collaborators end up null. Nine existed: seven public
+  // convenience constructors that filled defaults in, and two package-private
+  // ones on RagSearchController that selected a legacy retrieval mode the
+  // production wiring can never reach. Visibility is not the test: a
+  // package-private constructor is exactly as test-only as a public one.
+  {
+    gate: 'scripts/verify-controller-constructor-count.mjs',
+    kind: 'gate',
+    selfTest: 'scripts/test-support/controller-constructor-count-self-test.mjs',
+    noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
+  },
+
   // Run by scripts/verify-project-docs.sh.
   {
     gate: 'scripts/verify-no-pessimistic-locks.sh',

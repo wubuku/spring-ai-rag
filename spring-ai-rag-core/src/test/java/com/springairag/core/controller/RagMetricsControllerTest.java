@@ -52,7 +52,7 @@ class RagMetricsControllerTest {
     void setUp() {
         controller = new RagMetricsController(
                 metricsService, modelMetricsService, modelRegistry, modelRouter,
-                slowQueryMetricsService, sloTrackerService);
+                slowQueryMetricsService, sloTrackerService, null);
     }
 
     @Test
@@ -170,7 +170,7 @@ class RagMetricsControllerTest {
     void getSlowQueryStats_nullService_returnsDisabledResponse() {
         // Controller constructed with null slowQueryMetricsService
         RagMetricsController controllerNoSlowQuery = new RagMetricsController(
-                metricsService, modelMetricsService, modelRegistry, modelRouter, null, sloTrackerService);
+                metricsService, modelMetricsService, modelRegistry, modelRouter, null, sloTrackerService, null);
 
         SlowQueryStatsResponse result = controllerNoSlowQuery.getSlowQueryStats();
 
@@ -202,7 +202,7 @@ class RagMetricsControllerTest {
     void getSloCompliance_nullService_returnsDisabledResponse() {
         RagMetricsController controllerNoSlo = new RagMetricsController(
                 metricsService, modelMetricsService, modelRegistry, modelRouter,
-                slowQueryMetricsService, null);
+                slowQueryMetricsService, null, null);
 
         ApiSloComplianceResponse result = controllerNoSlo.getSloCompliance();
 
@@ -236,7 +236,7 @@ class RagMetricsControllerTest {
     void clearSlowQueryHistory_nullService_doesNotThrow() {
         RagMetricsController controllerNoSlowQuery = new RagMetricsController(
                 metricsService, modelMetricsService, modelRegistry, modelRouter,
-                null, sloTrackerService);
+                null, sloTrackerService, null);
 
         // Should not throw even when service is null
         controllerNoSlowQuery.clearSlowQueryHistory();
@@ -246,7 +246,7 @@ class RagMetricsControllerTest {
     void clearSlowQueryHistory_servicePresent_callsClearHistory() {
         RagMetricsController controller = new RagMetricsController(
                 metricsService, modelMetricsService, modelRegistry, modelRouter,
-                slowQueryMetricsService, sloTrackerService);
+                slowQueryMetricsService, sloTrackerService, null);
 
         controller.clearSlowQueryHistory();
 

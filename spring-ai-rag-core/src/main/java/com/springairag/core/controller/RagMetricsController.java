@@ -67,19 +67,6 @@ public class RagMetricsController {
         this.usageQueryService = usageQueryService;
     }
 
-    /**
-     * Backward-compatible constructor for existing extensions and unit fixtures.
-     */
-    public RagMetricsController(RagMetricsService metricsService,
-                                ModelMetricsService modelMetricsService,
-                                ModelRegistry modelRegistry,
-                                ChatModelRouter modelRouter,
-                                SlowQueryMetricsService slowQueryMetricsService,
-                                ApiSloTrackerService sloTrackerService) {
-        this(metricsService, modelMetricsService, modelRegistry, modelRouter,
-                slowQueryMetricsService, sloTrackerService, null);
-    }
-
     @Operation(summary = "Get RAG metrics summary",
             description = "Returns key metrics: total requests, success rate, total retrieval results, token consumption, etc.")
     @ApiResponses({

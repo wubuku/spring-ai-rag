@@ -53,7 +53,7 @@ class PdfImportControllerTest {
         pdfImportService = mock(PdfImportService.class);
         markdownRendererService = mock(MarkdownRendererService.class);
         pdfToRagService = mock(PdfToRagService.class);
-        controller = new PdfImportController(pdfImportService, markdownRendererService, pdfToRagService);
+        controller = new PdfImportController(pdfImportService, markdownRendererService, pdfToRagService, null);
     }
 
     @AfterEach

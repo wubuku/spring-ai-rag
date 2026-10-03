@@ -8,6 +8,7 @@ import com.springairag.core.repository.RagDocumentRepository;
 import com.springairag.core.repository.RagEmbeddingRepository;
 import com.springairag.core.service.AuditLogService;
 import com.springairag.core.service.BatchDocumentService;
+import com.springairag.core.service.CollectionIdentityResolver;
 import com.springairag.core.service.DocumentEmbedService;
 import com.springairag.core.service.DocumentVersionService;
 import org.junit.jupiter.api.AfterEach;
@@ -63,14 +64,17 @@ class RagDocumentControllerBatchEmbedStreamTest {
         when(profileProvider.getActiveProfile()).thenReturn(new EmbeddingProfile(
                 7L, "test-profile", "test", "test-model", "v1",
                 1024, "COSINE", "PROVIDER_DEFAULT", true));
+        RagCollectionRepository collectionRepository =
+                mock(RagCollectionRepository.class);
         controller = new RagDocumentController(
                 mock(RagDocumentRepository.class),
                 mock(RagEmbeddingRepository.class),
-                mock(RagCollectionRepository.class),
+                collectionRepository,
                 documentEmbedService,
                 mock(BatchDocumentService.class),
                 mock(DocumentVersionService.class),
                 profileProvider,
+                new CollectionIdentityResolver(collectionRepository),
                 mock(AuditLogService.class));
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .setControllerAdvice(new BadRequestAdvice())

@@ -19,6 +19,7 @@ import com.springairag.core.security.ApiKeyCollectionAccess;
 import com.springairag.core.service.AuditLogService;
 import com.springairag.core.service.CollectionProvisioningService;
 import com.springairag.core.service.RagCollectionService;
+import com.springairag.core.service.CollectionIdentityResolver;
 import com.springairag.core.security.ProvisioningOwnerResolver;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -60,7 +61,12 @@ class RagCollectionControllerTest {
         collectionService = mock(RagCollectionService.class);
         collectionProvisioningService = mock(CollectionProvisioningService.class);
         auditLogService = mock(AuditLogService.class);
-        controller = new RagCollectionController(collectionRepository, documentRepository, collectionService, auditLogService);
+        controller = new RagCollectionController(
+                collectionRepository,
+                documentRepository,
+                collectionService,
+                new CollectionIdentityResolver(collectionRepository),
+                auditLogService);
         controller.setCollectionProvisioningService(
                 collectionProvisioningService, new ProvisioningOwnerResolver());
     }

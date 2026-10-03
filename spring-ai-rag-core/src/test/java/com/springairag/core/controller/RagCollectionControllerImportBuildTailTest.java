@@ -10,6 +10,7 @@ import com.springairag.core.service.AuditLogService;
 import com.springairag.core.service.CollectionProvisioningService;
 import com.springairag.core.service.DocumentMutationService;
 import com.springairag.core.service.RagCollectionService;
+import com.springairag.core.service.CollectionIdentityResolver;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -50,8 +51,11 @@ class RagCollectionControllerImportBuildTailTest {
         documentRepository = mock(RagDocumentRepository.class);
         collectionService = mock(com.springairag.core.service.RagCollectionService.class);
         controller = new RagCollectionController(
-                collectionRepository, documentRepository,
-                collectionService, mock(AuditLogService.class));
+                collectionRepository,
+                documentRepository,
+                collectionService,
+                new CollectionIdentityResolver(collectionRepository),
+                mock(AuditLogService.class));
         when(collectionService.createCollection(any()))
                 .thenReturn(collection(1L, "kb"));
     }

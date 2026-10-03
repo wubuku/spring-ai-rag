@@ -42,7 +42,7 @@ class AlertControllerTest {
         sloConfigRepository = mock(SloConfigRepository.class);
         silenceScheduleRepository = mock(RagSilenceScheduleRepository.class);
         auditLogService = mock(AuditLogService.class);
-        controller = new AlertController(alertService, sloConfigRepository, silenceScheduleRepository, auditLogService);
+        controller = new AlertController(alertService, sloConfigRepository, silenceScheduleRepository, auditLogService, null);
     }
 
     // ==================== getActiveAlerts ====================

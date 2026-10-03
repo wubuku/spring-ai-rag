@@ -43,7 +43,7 @@ class PdfImportControllerTriggerEmbeddingTailTest {
         controller = new PdfImportController(
                 mock(PdfImportService.class),
                 null,
-                pdfToRagService);
+                pdfToRagService, null);
     }
 
     private PdfToRagService.PdfToRagResult result() {

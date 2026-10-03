@@ -40,7 +40,6 @@ class RagSearchControllerTest {
     private ReRankingService reRankingService;
     private CollectionRetrievalScopeResolver scopeResolver;
     private RagSearchController controller;
-    private RagSearchController productionController;
 
     @BeforeEach
     void setUp() {
@@ -48,9 +47,7 @@ class RagSearchControllerTest {
         documentRepository = mock(RagDocumentRepository.class);
         reRankingService = mock(ReRankingService.class);
         scopeResolver = mock(CollectionRetrievalScopeResolver.class);
-        CollectionDocumentResolver resolver = new CollectionDocumentResolver(documentRepository);
-        controller = new RagSearchController(hybridRetriever, resolver, reRankingService);
-        productionController = new RagSearchController(
+        controller = new RagSearchController(
                 hybridRetriever, reRankingService, scopeResolver);
         when(reRankingService.rerank(anyString(), anyList(), anyInt()))
                 .thenAnswer(invocation -> invocation.getArgument(1));
@@ -64,8 +61,7 @@ class RagSearchControllerTest {
         r1.setChunkText("测试内容");
         r1.setScore(0.9);
 
-        when(hybridRetriever.search(eq("测试查询"), isNull(), isNull(), eq(10), any(RetrievalConfig.class)))
-                .thenReturn(List.of(r1));
+        stubScopedSearch("测试查询", 10, List.of(r1));
 
         ResponseEntity<?> response = controller.search("测试查询", 10, true, 0.5, 0.5);
 
@@ -81,8 +77,7 @@ class RagSearchControllerTest {
     @Test
     @DisplayName("GET search empty results returns empty list")
     void search_emptyResults_returnsEmptyList() {
-        when(hybridRetriever.search(anyString(), isNull(), isNull(), anyInt(), any(RetrievalConfig.class)))
-                .thenReturn(List.of());
+        stubScopedSearchAny(List.of());
 
         ResponseEntity<?> response = controller.search("不存在的查询", 5, true, 0.5, 0.5);
 
@@ -96,14 +91,14 @@ class RagSearchControllerTest {
     @Test
     @DisplayName("GET search with hybrid disabled passes correct config")
     void search_withHybridDisabled_passesConfig() {
-        when(hybridRetriever.search(anyString(), isNull(), isNull(), anyInt(), any(RetrievalConfig.class)))
-                .thenReturn(List.of());
+        RetrievalScope scope = stubScopedSearchAny(List.of());
 
         ResponseEntity<?> response = controller.search("查询", 5, false, 0.7, 0.3);
 
         assertEquals(200, response.getStatusCode().value());
-        verify(hybridRetriever).search(eq("查询"), isNull(), isNull(), eq(5),
-                argThat(config -> !config.isUseHybridSearch()));
+        verify(hybridRetriever).searchInScopeDetailed(
+                eq("查询"), same(scope), isNull(), eq(5),
+                argThat(config -> !config.isUseHybridSearch()), any());
     }
 
     @Test
@@ -114,8 +109,7 @@ class RagSearchControllerTest {
         r1.setChunkText("chunk1");
         r1.setScore(0.8);
 
-        when(hybridRetriever.search(eq("query"), eq(List.of(1L, 2L)), isNull(), eq(5), any(RetrievalConfig.class)))
-                .thenReturn(List.of(r1));
+        stubScopedSearch("query", 5, List.of(r1));
 
         SearchRequest req = new SearchRequest();
         req.setQuery("query");
@@ -134,8 +128,7 @@ class RagSearchControllerTest {
     @Test
     @DisplayName("POST search skips rerank when useRerank is false")
     void searchWithConfig_rerankDisabled_skipsRerank() {
-        when(hybridRetriever.search(eq("query"), isNull(), isNull(), eq(5), any(RetrievalConfig.class)))
-                .thenReturn(List.of(createResult("doc1", "chunk", 0.8)));
+        stubScopedSearch("query", 5, List.of(createResult("doc1", "chunk", 0.8)));
 
         SearchRequest req = new SearchRequest("query");
         req.setConfig(RetrievalConfig.builder()
@@ -156,8 +149,7 @@ class RagSearchControllerTest {
                 createResult("doc1", "first", 0.8),
                 createResult("doc2", "second", 0.7));
         List<RetrievalResult> reranked = List.of(original.get(1), original.get(0));
-        when(hybridRetriever.search(eq("query"), isNull(), isNull(), eq(2), any(RetrievalConfig.class)))
-                .thenReturn(original);
+        stubScopedSearch("query", 2, original);
         when(reRankingService.rerank("query", original, 2)).thenReturn(reranked);
 
         SearchRequest req = new SearchRequest("query");
@@ -198,7 +190,7 @@ class RagSearchControllerTest {
                 .build());
 
         ResponseEntity<List<RetrievalResult>> response =
-                productionController.searchWithConfig(request, null);
+                controller.searchWithConfig(request, null);
 
         assertEquals(200, response.getStatusCode().value());
         assertEquals(List.of("doc1", "doc2"), response.getBody().stream()
@@ -215,8 +207,7 @@ class RagSearchControllerTest {
                 createResult("doc3", "chunk3", 0.75)
         );
 
-        when(hybridRetriever.search(anyString(), isNull(), isNull(), anyInt(), any(RetrievalConfig.class)))
-                .thenReturn(results);
+        stubScopedSearchAny(results);
 
         ResponseEntity<?> response = controller.search("multi query", 10, true, 0.5, 0.5);
 
@@ -295,8 +286,7 @@ class RagSearchControllerTest {
     @Test
     @DisplayName("Boundary values 0.0 and 1.0 are valid")
     void search_weightBoundaryValues_valid() {
-        when(hybridRetriever.search(anyString(), isNull(), isNull(), anyInt(), any(RetrievalConfig.class)))
-                .thenReturn(List.of());
+        stubScopedSearchAny(List.of());
 
         // All weight to vector
         ResponseEntity<?> r1 = controller.search("q", 5, true, 1.0, 0.0);
@@ -332,8 +322,7 @@ class RagSearchControllerTest {
     @Test
     @DisplayName("limit of 1000 is accepted")
     void search_limit1000Accepted() {
-        when(hybridRetriever.search(anyString(), isNull(), isNull(), anyInt(), any(RetrievalConfig.class)))
-                .thenReturn(List.of());
+        stubScopedSearchAny(List.of());
         ResponseEntity<?> response = controller.search("query", 1000, true, 0.5, 0.5);
         assertEquals(200, response.getStatusCode().value());
     }
@@ -365,91 +354,6 @@ class RagSearchControllerTest {
     // ========== Multi-collection search ==========
 
     @Test
-    @DisplayName("POST with collectionIds resolves to document IDs")
-    void searchWithConfig_collectionIds_resolvesToDocumentIds() {
-        when(documentRepository.findIdsByCollectionIdIn(List.of(1L, 2L)))
-                .thenReturn(List.of(10L, 11L, 12L));
-        when(hybridRetriever.search(eq("query"), eq(List.of(10L, 11L, 12L)), isNull(), eq(10), any(RetrievalConfig.class)))
-                .thenReturn(List.of(createResult("doc1", "chunk", 0.9)));
-
-        SearchRequest req = new SearchRequest();
-        req.setQuery("query");
-        req.setCollectionIds(List.of(1L, 2L));
-
-        ResponseEntity<List<RetrievalResult>> response = controller.searchWithConfig(req, null);
-
-        assertEquals(200, response.getStatusCode().value());
-        assertEquals(1, response.getBody().size());
-        verify(documentRepository).findIdsByCollectionIdIn(List.of(1L, 2L));
-    }
-
-    @Test
-    @DisplayName("POST with both collectionIds and documentIds returns intersection")
-    void searchWithConfig_bothCollectionIdsAndDocumentIds_returnsIntersection() {
-        when(documentRepository.findIdsByCollectionIdIn(List.of(1L)))
-                .thenReturn(List.of(10L, 11L, 12L));
-        // Intersection: documentIds [11L, 99L] ∩ collectionDocIds [10L, 11L, 12L] = [11L]
-        when(hybridRetriever.search(eq("query"), eq(List.of(11L)), isNull(), eq(10), any(RetrievalConfig.class)))
-                .thenReturn(List.of(createResult("doc2", "chunk", 0.8)));
-
-        SearchRequest req = new SearchRequest();
-        req.setQuery("query");
-        req.setCollectionIds(List.of(1L));
-        req.setDocumentIds(List.of(11L, 99L));
-
-        ResponseEntity<List<RetrievalResult>> response = controller.searchWithConfig(req, null);
-
-        assertEquals(200, response.getStatusCode().value());
-        verify(hybridRetriever).search(eq("query"), eq(List.of(11L)), isNull(), eq(10), any(RetrievalConfig.class));
-    }
-
-    @Test
-    @DisplayName("POST with collectionIds but no match returns empty list")
-    void searchWithConfig_collectionIdsNoMatch_returnsEmpty() {
-        when(documentRepository.findIdsByCollectionIdIn(List.of(999L)))
-                .thenReturn(List.of()); // no documents in this collection
-        when(hybridRetriever.search(eq("query"), eq(List.of()), isNull(), eq(10), any(RetrievalConfig.class)))
-                .thenReturn(List.of());
-
-        SearchRequest req = new SearchRequest();
-        req.setQuery("query");
-        req.setCollectionIds(List.of(999L));
-
-        ResponseEntity<List<RetrievalResult>> response = controller.searchWithConfig(req, null);
-
-        assertEquals(200, response.getStatusCode().value());
-        assertTrue(response.getBody().isEmpty());
-    }
-
-    @Test
-    @DisplayName("restricted key without collection filter is forced to allowed collections")
-    void searchWithConfig_restrictedKeyWithoutFilter_forcesAllowedCollections() {
-        when(documentRepository.findIdsByCollectionIdIn(List.of(2L, 4L)))
-                .thenReturn(List.of(20L, 40L));
-        when(hybridRetriever.search(eq("query"), eq(List.of(20L, 40L)),
-                isNull(), eq(10), any(RetrievalConfig.class)))
-                .thenReturn(List.of());
-        SearchRequest req = new SearchRequest("query");
-
-        controller.searchWithConfig(req, requestForRestrictedKey(2L, 4L));
-
-        assertEquals(List.of(2L, 4L), req.getCollectionIds());
-        verify(documentRepository).findIdsByCollectionIdIn(List.of(2L, 4L));
-    }
-
-    @Test
-    @DisplayName("restricted key cannot search a collection outside its ACL")
-    void searchWithConfig_restrictedKeyOutsideAcl_throwsForbidden() {
-        SearchRequest req = new SearchRequest("query");
-        req.setCollectionIds(List.of(9L));
-
-        assertThrows(SecurityException.class,
-                () -> controller.searchWithConfig(
-                        req, requestForRestrictedKey(2L, 4L)));
-        verifyNoInteractions(hybridRetriever);
-    }
-
-    @Test
     @DisplayName("Production GET path passes ANY_COLLECTION scope directly to retriever")
     void productionGet_passesResolvedScopeWithoutDocumentExpansion() {
         RetrievalScope scope = RetrievalScope.anyAssigned(null, null);
@@ -462,7 +366,7 @@ class RagSearchControllerTest {
                 any(RetrievalConfig.class), any()))
                 .thenReturn(RetrievalOutcome.ofResults(List.of()));
 
-        ResponseEntity<?> response = productionController.search(
+        ResponseEntity<?> response = controller.search(
                 "query", 5, true, 0.5, 0.5,
                 CollectionScopeMode.ANY_COLLECTION,
                 null, null, null);
@@ -500,7 +404,7 @@ class RagSearchControllerTest {
                 .build());
 
         ResponseEntity<List<RetrievalResult>> response =
-                productionController.searchWithConfig(request, null);
+                controller.searchWithConfig(request, null);
 
         assertEquals(200, response.getStatusCode().value());
         verify(hybridRetriever).searchInScopeDetailed(
@@ -525,7 +429,7 @@ class RagSearchControllerTest {
         when(diagnostics.isEnabled()).thenReturn(true);
         when(diagnostics.createSession(any(), any(), nullable(String.class)))
                 .thenThrow(new RuntimeException("diagnostics boom"));
-        productionController.setDiagnosticsService(diagnostics);
+        controller.setDiagnosticsService(diagnostics);
 
         SearchRequest request = new SearchRequest("query");
         request.setConfig(RetrievalConfig.builder()
@@ -534,22 +438,42 @@ class RagSearchControllerTest {
                 .build());
 
         ResponseEntity<List<RetrievalResult>> response =
-                productionController.searchWithConfig(request, new MockHttpServletRequest());
+                controller.searchWithConfig(request, new MockHttpServletRequest());
 
         assertEquals(200, response.getStatusCode().value());
         assertEquals(1, response.getBody().size());
         assertEquals("doc-1", response.getBody().get(0).getDocumentId());
     }
 
-    private MockHttpServletRequest requestForRestrictedKey(Long... ids) {
-        RagApiKey key = new RagApiKey();
-        key.setRole(ApiKeyRole.NORMAL);
-        key.setAllowedCollectionIds(String.join(",",
-                java.util.Arrays.stream(ids).map(String::valueOf).toList()));
-        MockHttpServletRequest request = new MockHttpServletRequest();
-        request.setAttribute(
-                ApiKeyAuthFilter.AUTHENTICATED_API_KEY_ENTITY, key);
-        return request;
+    /**
+     * Batch 823：控制器现在只有一条检索路径——把过滤条件交给
+     * {@link CollectionRetrievalScopeResolver} 解析成作用域，再调
+     * {@code searchInScopeDetailed}。原来"先把集合过滤展开成文档 id"的
+     * legacy 通路连同它的两个包私有构造器一起删掉了，所以打桩也从
+     * {@code search(query, docIds, …)} 换成带作用域的这一支。
+     */
+    private RetrievalScope stubScopedSearch(String query, int limit,
+                                            List<RetrievalResult> results) {
+        RetrievalScope scope = RetrievalScope.unscoped();
+        when(scopeResolver.resolve(any(), any(), any(), any(), any(), any()))
+                .thenReturn(scope);
+        when(hybridRetriever.searchInScopeDetailed(
+                eq(query), same(scope), isNull(), eq(limit),
+                any(RetrievalConfig.class), any()))
+                .thenReturn(RetrievalOutcome.ofResults(results));
+        return scope;
+    }
+
+    /** 同上，但查询词与条数不固定（同一个测试里连调两次）。 */
+    private RetrievalScope stubScopedSearchAny(List<RetrievalResult> results) {
+        RetrievalScope scope = RetrievalScope.unscoped();
+        when(scopeResolver.resolve(any(), any(), any(), any(), any(), any()))
+                .thenReturn(scope);
+        when(hybridRetriever.searchInScopeDetailed(
+                anyString(), same(scope), isNull(), anyInt(),
+                any(RetrievalConfig.class), any()))
+                .thenReturn(RetrievalOutcome.ofResults(results));
+        return scope;
     }
 
     private RetrievalResult createResult(String docId, String text, double score) {

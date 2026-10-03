@@ -172,14 +172,6 @@ public class RagCollectionController {
         return collectionPurgeService.apply(requestBody, request);
     }
 
-    public RagCollectionController(RagCollectionRepository collectionRepository,
-                                   RagDocumentRepository documentRepository,
-                                   RagCollectionService collectionService,
-                                   AuditLogService auditLogService) {
-        this(collectionRepository, documentRepository, collectionService,
-                new CollectionIdentityResolver(collectionRepository), auditLogService);
-    }
-
     /**
      * Create a collection.
      */

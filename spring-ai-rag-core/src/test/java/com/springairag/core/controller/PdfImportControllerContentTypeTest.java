@@ -35,7 +35,7 @@ class PdfImportControllerContentTypeTest {
         controller = new PdfImportController(
                 pdfImportService,
                 mock(com.springairag.core.service.MarkdownRendererService.class),
-                mock(com.springairag.core.service.PdfToRagService.class));
+                mock(com.springairag.core.service.PdfToRagService.class), null);
     }
 
     private void stubFile(String path, String storedMime) {

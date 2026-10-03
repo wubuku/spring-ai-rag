@@ -38,7 +38,7 @@ class ApiKeyControllerCreateGuardTailTest {
         controller = new ApiKeyController(
                 apiKeyService,
                 rootResolver,
-                collectionIdentityResolver);
+                collectionIdentityResolver, new com.springairag.core.security.ProvisioningOwnerResolver());
         MockHttpServletRequest request = new MockHttpServletRequest();
         RequestContextHolder.setRequestAttributes(
                 new ServletRequestAttributes(request));
@@ -74,7 +74,7 @@ class ApiKeyControllerCreateGuardTailTest {
         var controllerNoResolver = new ApiKeyController(
                 apiKeyService,
                 mock(EnvironmentRootCredentialResolver.class),
-                null);
+                null, new com.springairag.core.security.ProvisioningOwnerResolver());
         var root = new MockHttpServletRequest();
         root.setAttribute("authenticatedPrincipalType",
                 "ENVIRONMENT_ROOT");

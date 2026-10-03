@@ -18,6 +18,7 @@ import com.springairag.core.repository.RagDocumentRepository;
 import com.springairag.core.repository.RagEmbeddingRepository;
 import com.springairag.core.service.AuditLogService;
 import com.springairag.core.service.BatchDocumentService;
+import com.springairag.core.service.CollectionIdentityResolver;
 import com.springairag.core.service.DocumentEmbedService;
 import com.springairag.core.service.DocumentVersionService;
 import org.junit.jupiter.api.AfterEach;
@@ -74,14 +75,17 @@ class RagDocumentControllerBatchEmbedTest {
         EmbeddingProfileProvider profileProvider =
                 mock(EmbeddingProfileProvider.class);
         when(profileProvider.getActiveProfile()).thenReturn(PROFILE);
+        RagCollectionRepository collectionRepository =
+                mock(RagCollectionRepository.class);
         controller = new RagDocumentController(
                 documentRepository,
                 mock(RagEmbeddingRepository.class),
-                mock(RagCollectionRepository.class),
+                collectionRepository,
                 documentEmbedService,
                 batchDocumentService,
                 mock(DocumentVersionService.class),
                 profileProvider,
+                new CollectionIdentityResolver(collectionRepository),
                 auditLogService);
         controller.setDispatchService(dispatchService);
     }

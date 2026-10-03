@@ -478,6 +478,98 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
+### Batch 823（已交付）
+
+- 分支：`feature/convenience-overload-census-20261006`
+- 内容：819 判据的边界——**有映射注解的便捷构造器**；以及"只认 `public`"这个判据**本身**的盲区。
+- 勘察（**又一次：先量，再决定**）：
+  - 819 的判据是"public 且没有映射注解的方法"，所以它抓不到
+    `RagDocumentController` 这类**带映射注解**的便捷构造器。
+    普查结果是 **7 个 controller 各有一个第二公开构造器**：
+    Alert / ApiKey / PdfImport / RagChat / RagCollection / RagDocument / RagMetrics。
+  - **探针先证伪再采信**：第一版探针用 `/@Autowired\b/` 找主构造器，
+    漏掉了**全限定名**的 `@org.springframework.beans.factory.annotation.Autowired`
+    （ApiKeyController / PdfImportController 命中）。
+    修正后每类都是"1 个 `@Autowired` 主构造器 + 1 个便捷构造器"，结论才成立。
+  - 可达性实测（不是推断）：7 个便捷构造器**生产零调用**，共 **87 处测试调用**。
+  - `RagMetricsController` 那个便捷构造器的 Javadoc 写着
+    "Backward-compatible constructor for existing extensions and unit fixtures"，
+    而**仓库里没有任何 extension**。**又一次谎称存在调用方**（第三次）。
+  - **又一次推翻自己的普查脚本**：脚本按 `public ` 关键字匹配，得出
+    "0 个 controller 有多个构造器"。而 `RagSearchController` 实际有 **3 个**
+    构造器——1 个 public + **2 个 package-private**。**可见性不是判据**。
+  - 那 2 个包私有构造器选的是**另一种行为模式**：把
+    `retrievalScopeResolver` 置 null，于是控制器走进 `else` 分支，
+    用 `legacyCollectionDocumentResolver` 先把集合过滤展开成文档 id。
+    - 生产装配永远走不到：`CollectionRetrievalScopeResolver` 是**无条件 `@Component`**，
+      零 `@Conditional`。
+    - 而那个 `else` 分支里 `legacyCollectionDocumentResolver` 是**无守卫解引用**——
+      一旦真走到就是 NPE。**生产不可达 + 走到就炸**。
+    - 唯一的调用方是 2 个测试文件。
+    - **继任覆盖已核实**（删安全断言前必须做）：`CollectionRetrievalScopeResolverTest`
+      的 `omittedRestrictedUsesAllowList` / `restrictedUnknownKeyIsForbidden` /
+      `selectedKeysResolveAndKeepDocumentIntersection`，加上控制器侧
+      `productionGet/Post_…` 用 `verifyNoInteractions(documentRepository)`
+      断言"不做文档展开"。**两条断言的正是被删那 5 条的反面**——
+      机制是被取代，不是单纯失效。
+- 变更：
+  - **删掉 7 个便捷构造器**。主源码零编译错误 = 机器证明无生产调用方。
+  - **迁移 39 处测试调用**（32 个文件），新参数**按语义位置插入而非追加**：
+    RagChatController 插 index 4、RagCollectionController 插 index 3、
+    RagDocumentController 插 index 7——正是 819 批"追加"陷阱的同类规避。
+  - **迁移脚本犯了一个编译器抓不到的语义错误**：`args[2]` 在 5 个文件里
+    是表达式 `mock(RagCollectionRepository.class)` 而**不是变量**，
+    脚本把表达式原样复制了一份，于是**仓储被 mock 成了两个不同对象**。
+    今天行为恰好一致（两边都没打桩），但对象身份已经分裂，
+    且下一个打桩的人会静默踩坑。5 处改为提取局部变量、两处共用同一实例。
+  - **删掉 `RagSearchController` 的 2 个包私有构造器** + 随之失效的
+    2 处 `retrievalScopeResolver != null` 模式开关、1 处 `reRankingService != null`
+    死守卫、`legacyCollectionDocumentResolver` 字段与 import。
+    `CollectionDocumentResolver` 本身保留（`RagChatService` 在用）。
+  - **删掉 7 条只测 legacy 展开语义的测试**：
+    `RagSearchControllerTest` 5 条 + `RagSearchControllerLegacyPathTest` 整文件 2 条。
+    文件名本身就写着 LegacyPath。`RagSearchControllerTest` 余下 9 处
+    5 参 `search(...)` 桩改写为 `scopeResolver.resolve(...)` + `searchInScopeDetailed(...)`，
+    **断言意图逐条保留**（没有一条靠放宽断言转绿）。
+  - **新门禁 `scripts/verify-controller-constructor-count.mjs`**：
+    判据是"一个 controller 至多一个构造器，**不区分可见性**"，
+    没有"登记理由"这道放行阀（821 批实测过它会连看不见的声明一起放掉）。
+    自测 **23 例**（12 条负臂 + 3 例子进程端到端断言退出码与报告文本）。
+- **本批最该记（三条，都推翻了我自己的做法）**：
+  1. **"0 findings"撞上了最坏形态：门禁根本数不出任何构造器。**
+     `depthMap` 从 0 起步，而传入的 `body` **已经在类的大括号之内**，
+     于是构造器所在深度是 0 而不是 1，匹配全被丢掉。
+     真实树干净 → 门禁 **exit 0** → 看起来完美，**而它永远无法失败**。
+     这是 821 批那条教训的纯形态：**绿色的门禁只证明"规则还能拒绝它该拒绝的"，
+     不证明"规则看得见"**。自测第一批用例立刻抓到（16/19 挂）。
+  2. **自己写的普查脚本两次漏报**：只认 `public ` 关键字（漏掉 2 个包私有构造器）、
+     按**文件**而不是按 **controller 类型声明**判定（`WebUiConfig` 里嵌了一个
+     `@RestController public static class WebUiController`，按文件判定会拿
+     **外层**类的构造器充数）。两处都已改掉，并各加了一条自测钉住。
+  3. **测试数有三个来源、三个数**：控制台汇总 **7737**、XML `tests` 属性 **7729**、
+     XML `<testcase>` 元素 **7737**（未剔陈旧报告时 7739）。
+     - `tests` 属性在 2 个类上少算 8：`RagCollectionServiceTest` 差 7、
+       `DocumentMapperTest` 差 1。
+     - **已删除的测试类，其 surefire 报告会残留**，`mvn test`（不 clean）
+       之后仍在 `target/surefire-reports` 里，被任何按目录求和的度量算进去。
+       （`verify-test-visibility` 正确地报了出来，提示就是 `mvn clean test`。）
+     - **结论：历批账本里记的 7736 是错的**，权威数是**控制台汇总**
+       （等价于剔除陈旧报告后的 `<testcase>` 计数）。本批起改用这个口径。
+- 验证：
+  - `mvn -pl spring-ai-rag-core clean test`：**993 类 / 7737 用例 /
+    0 失败 / 0 错误 / 154 跳过**，BUILD SUCCESS，0 条 ERROR。
+  - 门禁自测 **23/23**；`scripts/verify-project-tests.sh` **20/20**；
+    `verify-gate-wiring` / `verify-zh-translation` 通过；门禁登记 **50**。
+  - **真实树变异实验**：给 `RagMetricsController` 注入一个 package-private
+    便捷构造器 → 门禁 exit 1 并点名行号与可见性；还原后 exit 0。
+    （变异串行执行，跑完才读文件。）
+- 遗留：
+  - 4 个版本无关的仓储方法仍生产零调用（822 批遗留，未处理）。
+  - 8 处"会跳过"的守卫保留（822 批已论证：删掉会改变行为）。
+  - 必选依赖上的"跳过守卫"这一类还没普查：本批只在 `RagSearchController`
+    上量到 1 处（`reRankingService`）并删掉，其余 controller 未量。
+  - 仍无 `@SpringBootTest` 证明 Spring 的真实接线（全仓库仅 4 个，都在门控 IT）。
+
 ### Batch 822（已交付）
 
 - 分支：`feature/delete-dead-null-guards-20261006`

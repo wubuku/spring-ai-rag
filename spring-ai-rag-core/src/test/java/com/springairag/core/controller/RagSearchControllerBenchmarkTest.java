@@ -2,8 +2,11 @@ package com.springairag.core.controller;
 
 import com.springairag.api.dto.RetrievalConfig;
 import com.springairag.api.dto.RetrievalResult;
-import com.springairag.core.repository.RagDocumentRepository;
 import com.springairag.core.retrieval.HybridRetrieverService;
+import com.springairag.core.retrieval.ReRankingService;
+import com.springairag.core.retrieval.RetrievalOutcome;
+import com.springairag.core.retrieval.RetrievalScope;
+import com.springairag.core.service.CollectionRetrievalScopeResolver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -33,22 +36,28 @@ import static org.mockito.Mockito.*;
 class RagSearchControllerBenchmarkTest {
 
     private HybridRetrieverService hybridRetriever;
-    private RagDocumentRepository documentRepository;
+    private CollectionRetrievalScopeResolver scopeResolver;
     private RagSearchController controller;
 
     @BeforeEach
     void setUp() {
         hybridRetriever = mock(HybridRetrieverService.class);
-        documentRepository = mock(RagDocumentRepository.class);
-        controller = new RagSearchController(hybridRetriever, new com.springairag.core.service.CollectionDocumentResolver(documentRepository));
+        scopeResolver = mock(CollectionRetrievalScopeResolver.class);
+        controller = new RagSearchController(
+                hybridRetriever, mock(ReRankingService.class), scopeResolver);
 
         RetrievalResult mockResult = new RetrievalResult();
         mockResult.setDocumentId("doc-benchmark");
         mockResult.setChunkText("Benchmark test content");
         mockResult.setScore(0.95);
 
-        when(hybridRetriever.search(anyString(), isNull(), isNull(), anyInt(), any(RetrievalConfig.class)))
-                .thenReturn(List.of(mockResult));
+        RetrievalScope scope = RetrievalScope.unscoped();
+        lenient().when(scopeResolver.resolve(
+                any(), any(), any(), any(), any(), any())).thenReturn(scope);
+        when(hybridRetriever.searchInScopeDetailed(
+                anyString(), same(scope), isNull(), anyInt(),
+                any(RetrievalConfig.class), any()))
+                .thenReturn(RetrievalOutcome.ofResults(List.of(mockResult)));
     }
 
     @Test

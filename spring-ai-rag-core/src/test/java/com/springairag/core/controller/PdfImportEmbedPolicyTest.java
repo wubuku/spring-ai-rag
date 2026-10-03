@@ -42,7 +42,7 @@ class PdfImportEmbedPolicyTest {
         markdownRendererService = mock(MarkdownRendererService.class);
         pdfToRagService = mock(PdfToRagService.class);
         controller = new PdfImportController(
-                pdfImportService, markdownRendererService, pdfToRagService);
+                pdfImportService, markdownRendererService, pdfToRagService, null);
     }
 
     private PdfToRagService.PdfToRagResult fullResult() {
