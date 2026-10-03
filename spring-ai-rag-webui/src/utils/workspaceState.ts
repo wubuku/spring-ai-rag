@@ -148,10 +148,3 @@ export function rememberedRoute(route: TopLevelRoute): string {
     return route;
   }
 }
-
-export function isStringRecord(value: unknown): value is Record<string, string> {
-  return Boolean(value)
-    && typeof value === 'object'
-    && Object.values(value as Record<string, unknown>)
-      .every(item => typeof item === 'string');
-}
