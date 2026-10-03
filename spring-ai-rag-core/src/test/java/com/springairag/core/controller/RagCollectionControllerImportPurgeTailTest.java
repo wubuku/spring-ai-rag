@@ -101,24 +101,12 @@ class RagCollectionControllerImportPurgeTailTest {
         assertEquals("kb:manual:v1", captor.getValue().getCollectionKey());
     }
 
-    @Test
-    void purgeEndpointsRejectWhenPurgeServiceMissing() {
-        RagException previewError = assertThrows(RagException.class,
-                () -> controller.previewPurge("kb:manual:v1",
-                        new org.springframework.mock.web.MockHttpServletRequest()));
-        assertEquals(
-                com.springairag.api.enums.ErrorCode.SERVICE_UNAVAILABLE,
-                previewError.getErrorCodeEnum());
-        assertTrue(previewError.getMessage().contains("purge"));
-
-        RagException applyError = assertThrows(RagException.class,
-                () -> controller.applyPurge(
-                        new com.springairag.api.dto.CollectionPurgeApplyRequest(
-                                "kb:manual:v1", java.util.UUID.randomUUID(),
-                                "token", "fp", 1L, 1L),
-                        new org.springframework.mock.web.MockHttpServletRequest()));
-        assertEquals(
-                com.springairag.api.enums.ErrorCode.SERVICE_UNAVAILABLE,
-                applyError.getErrorCodeEnum());
-    }
+    // Batch 822 deleted purgeEndpointsRejectWhenPurgeServiceMissing, the last
+    // test in the repository that pinned an unreachable null guard. It built a
+    // controller with no CollectionPurgeService and asserted RagException
+    // SERVICE_UNAVAILABLE from requirePurgeService(). That service is injected
+    // with a plain @Autowired — required, not optional — and is an
+    // unconditional @Service, so the guard could never fire. The helper is gone
+    // and the endpoints call the service directly, which is what the running
+    // application does.
 }

@@ -45,7 +45,7 @@ public class EvaluationController {
     private final RetrievalEvaluationService evaluationService;
     private final UserFeedbackService userFeedbackService;
     private final AuditLogService auditLogService;  // optional: null when RagAuditLogRepository unavailable
-    private SemanticEvaluationService semanticEvaluationService; // optional-claim: unconditional @Service; the guard turns a hand-constructed instance's NPE into a stated error
+    private SemanticEvaluationService semanticEvaluationService; // unconditional @Service; Batch 822 removed the null guard that used to sit on it
 
     public EvaluationController(RetrievalEvaluationService evaluationService,
                                 UserFeedbackService userFeedbackService,
@@ -143,20 +143,13 @@ public class EvaluationController {
     @PostMapping("/semantic")
     public ResponseEntity<SemanticEvaluationResponse> semantic(
             @Valid @RequestBody SemanticEvaluationRequest request) {
-        return ResponseEntity.ok(requireSemantic().evaluate(request));
+        return ResponseEntity.ok(semanticEvaluationService.evaluate(request));
     }
 
     @PostMapping("/semantic/batch")
     public ResponseEntity<List<SemanticEvaluationResponse>> semanticBatch(
             @Valid @RequestBody List<SemanticEvaluationRequest> requests) {
-        return ResponseEntity.ok(requireSemantic().evaluateBatch(requests));
-    }
-
-    private SemanticEvaluationService requireSemantic() {
-        if (semanticEvaluationService == null) {
-            throw new IllegalStateException("Semantic evaluation is not available");
-        }
-        return semanticEvaluationService;
+        return ResponseEntity.ok(semanticEvaluationService.evaluateBatch(requests));
     }
 
     /**

@@ -93,10 +93,10 @@ public class RagCollectionController {
     // auditLogService used to claim the collaborator disappears when
     // RagAuditLogRepository is unavailable — a conditionality that no longer exists in
     // the code. See scripts/verify-false-optional-wiring.mjs.
-    private JsonRecordService jsonRecordService; // optional-claim: unconditional @Service; the guard turns a hand-constructed instance's NPE into a stated error
+    private JsonRecordService jsonRecordService; // unconditional @Service; Batch 822 removed the null guard that used to sit on it
     private DocumentMutationService documentMutationService; // optional-claim: unconditional @Service; same
     private AuditLogService auditLogService; // optional-claim: unconditional @Service; the audit helpers tolerate a null rather than failing the business call
-    private CollectionProvisioningService collectionProvisioningService; // optional-claim: unconditional @Service; same
+    private CollectionProvisioningService collectionProvisioningService; // unconditional @Service; Batch 822 removed the null guard that used to sit on it
     private CollectionPurgeService collectionPurgeService;
     private ProvisioningOwnerResolver provisioningOwnerResolver =
             new ProvisioningOwnerResolver();
@@ -152,7 +152,7 @@ public class RagCollectionController {
     public CollectionPurgePreviewResponse previewPurge(
             @RequestParam String collectionKey,
             HttpServletRequest request) {
-        return requirePurgeService().preview(collectionKey, request);
+        return collectionPurgeService.preview(collectionKey, request);
     }
 
     @Operation(
@@ -169,16 +169,7 @@ public class RagCollectionController {
     public CollectionPurgeResultResponse applyPurge(
             @Valid @RequestBody CollectionPurgeApplyRequest requestBody,
             HttpServletRequest request) {
-        return requirePurgeService().apply(requestBody, request);
-    }
-
-    private CollectionPurgeService requirePurgeService() {
-        if (collectionPurgeService == null) {
-            throw new RagException(
-                    ErrorCode.SERVICE_UNAVAILABLE,
-                    "Collection purge service is unavailable");
-        }
-        return collectionPurgeService;
+        return collectionPurgeService.apply(requestBody, request);
     }
 
     public RagCollectionController(RagCollectionRepository collectionRepository,
@@ -234,11 +225,6 @@ public class RagCollectionController {
                         : Collections.list(
                                 httpRequest.getHeaders("Idempotency-Key")));
         if (idempotencyKey != null) {
-            if (collectionProvisioningService == null) {
-                throw new RagException(
-                        ErrorCode.SERVICE_UNAVAILABLE,
-                        "Collection provisioning ledger is unavailable");
-            }
             CollectionProvisioningService.ProvisioningResult result =
                     collectionProvisioningService.createOrReplay(
                             request,
@@ -863,10 +849,6 @@ public class RagCollectionController {
                             || docData.getJsonbPayload().isNull()) {
                         throw new IllegalArgumentException(
                                 "json-record import requires externalId and jsonbPayload");
-                    }
-                    if (jsonRecordService == null) {
-                        throw new IllegalStateException(
-                                "JSON record import service is not available");
                     }
                     jsonRecordService.importRecord(collectionId, docData);
                     count++;

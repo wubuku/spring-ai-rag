@@ -20,6 +20,8 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import com.springairag.core.service.DocumentDerivationDescriptorProvider;
+
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
@@ -32,6 +34,17 @@ import static org.mockito.Mockito.when;
  * 失时逐文档结果聚合（COMPLETED/QUEUED 计成功，其余计失败）。
  */
 class RagDocumentControllerReembedEndpointTest {
+    private com.springairag.core.service.DocumentDerivationDescriptorProvider
+            derivationDescriptorProvider;
+
+    private String textVersion() {
+        return derivationDescriptorProvider.textDescriptor().chunkerVersion();
+    }
+
+    private String jsonVersion() {
+        return derivationDescriptorProvider.jsonRecordDescriptor().chunkerVersion();
+    }
+
 
     private RagDocumentRepository documentRepository;
     private DocumentEmbedService documentEmbedService;
@@ -56,6 +69,13 @@ class RagDocumentControllerReembedEndpointTest {
                 profileProvider,
                 mock(CollectionIdentityResolver.class),
                 null);
+        // Batch 822: the controller reaches the version-aware repository queries
+        // unconditionally now that the "no descriptor provider" fallback is gone.
+        // A real provider is used rather than a mock so these tests pin the
+        // version strings the application actually produces.
+        derivationDescriptorProvider =
+                new DocumentDerivationDescriptorProvider(new com.springairag.core.config.RagProperties());
+        controller.setDerivationDescriptorProvider(derivationDescriptorProvider);
     }
 
     private RagDocument document(Long id) {
@@ -67,7 +87,7 @@ class RagDocumentControllerReembedEndpointTest {
 
     @Test
     void reembedMissingReturnsEmptyResponseWithoutCandidates() {
-        when(documentRepository.findDocumentsWithoutEmbeddings(9L))
+        when(documentRepository.findDocumentsWithoutCurrentEmbeddings(9L, textVersion(), jsonVersion()))
                 .thenReturn(List.of());
 
         ResponseEntity<ReembedMissingResponse> response =
@@ -80,7 +100,7 @@ class RagDocumentControllerReembedEndpointTest {
 
     @Test
     void reembedMissingAggregatesSuccessAndFailureCounts() {
-        when(documentRepository.findDocumentsWithoutEmbeddings(9L))
+        when(documentRepository.findDocumentsWithoutCurrentEmbeddings(9L, textVersion(), jsonVersion()))
                 .thenReturn(List.of(document(1L), document(2L), document(3L)));
         when(documentEmbedService.embedDocument(any(Long.class), anyBoolean()))
                 .thenReturn(Map.of("status", "COMPLETED", "chunksCreated", 2))
@@ -99,7 +119,7 @@ class RagDocumentControllerReembedEndpointTest {
 
     @Test
     void reembedMissingForceTrueBypassesCache() {
-        when(documentRepository.findDocumentsWithoutEmbeddings(9L))
+        when(documentRepository.findDocumentsWithoutCurrentEmbeddings(9L, textVersion(), jsonVersion()))
                 .thenReturn(List.of(document(1L)));
         when(documentEmbedService.embedDocument(1L, true))
                 .thenReturn(Map.of("status", "COMPLETED", "chunksCreated", 5));
