@@ -478,6 +478,59 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
+### Batch 836（仅勘察，代码改动已回退）
+
+- 分支：`feature/external-doc-legacy-20261007`（已删）
+- 目标：`ExternalDocumentService`（719 行）是 834/835 做完的 `JsonRecordService`
+  的同构兄弟——`upsert` 与 `sourceDelete` 两处 `mutationService != null` 短路，
+  后面接内联 legacy 写入块。`mutationService` 是 `@Autowired(required = false)`
+  的可选 setter 字段，属 Batch 829 定的"会跳过"那一类。
+- **主源码改动已实测可行并编译通过**（本批只回退，没留下红）：
+  - 两处 legacy 块改成单行委派
+  - 删 `persist` / `persistInTransaction` / `deleteInTransaction` / `finishUpsert` /
+    `coordinateLocalIndex` / `validateRequest` / `executeInTransaction` /
+    `isRetryableConcurrencyFailure` / `beginActiveCollectionWrite` +
+    `confirmActiveCollectionWrite` / `sameManagedFields` / `latestVersionNumber` /
+    `resolveWritableCollection` / `collectionKeyFor` / `normalizeOptional` /
+    `conflict` / `safeError(Object)` 重载 / `Persisted` record / `MAX_TRANSACTION_ATTEMPTS`
+  - 删死字段 `documentVersionService` / `documentEmbedService` / `jdbcTemplate` /
+    `transactionTemplate` / `dispatchService` / `keywordIndexPersistenceService`
+    连同 setter 与构造参数，14 条未用 import
+  - `ExternalDocumentService` **719 → 273 行（净删 446）**
+- **勘察挖到两处"白捡"的既有死代码**（都不是本批造成的）：
+  | 死代码 | 证据 |
+  |---|---|
+  | `persist(2 参)` | 全文件对 `\bpersist\b` 只有 1 处命中，就是它自己的声明行——**早已无任何调用方**（与 835 的 `persist(1 参)` 同型） |
+  | `jdbcTemplate` 字段 | 3 处命中全是"声明 + 构造参数 + 赋值"，**从未被读** |
+- **两个"删字段会连带删掉仍在用的东西"的陷阱**（查证时避开了）：
+  `embeddingRepository` 与 `embeddingProfileProvider` 在 `toDetail` 里还有引用，
+  只有 `finishUpsert` 里的那几处是 legacy 的——**同名符号跨"死区/活区"复用**。
+  照着"引用行号"删会连活代码一起删掉。做法是先把每个符号的引用行映射到所属方法，
+  再逐个判归属。
+- **实测迁移面：84 个用例 / 54 坏**（23 failures + 31 errors）——
+  批次规模比 834 批的 27 大一倍，这就是本批回退的原因。
+  | 类别 | 数量 | 处置 |
+  |---|---|---|
+  | 反射测已删方法（`sameManagedFields` 6 + `executeInTransaction` 2） | 8 | 删（`SameManagedFieldsTailTest` 可整文件删） |
+  | legacy 内联行为（tombstone 冲突/重放、关键词索引协调、嵌入各臂、重试收敛） | ~38 | 删：这些全是 `DocumentMutationService` 的职责，它有约 50 个专属测试文件 |
+  | `mutationService` 为 null 的 NPE | 其余 | 大多随上一类一起删；`batchUpsert` 计数类需改接 mock |
+  | 需迁移的活逻辑 | ~8 | `batchUpsert` 计数聚合（`ExternalDocumentBatchDelegateTailTest` 7 条 + `ExternalDocumentServiceTest.batchIsolatesValidationFailuresAndPreservesInputOrder`）、`getByExternalIdentity` 两重载、`toDetail`、`safeError` 截断 |
+- 12 个文件 / 14 处构造点，构造器由 9 参降到 5 参（去掉
+  `documentVersionService` / `documentEmbedService` / `jdbcTemplate` /
+  `transactionManager`）。**按位置删**第 4/5/8/9 位而不是按内容匹配——
+  这样全 null 形态也不会认错。
+- **脚本翻车记录（第二次）**：重排实参时把逗号丢了——`split` 是在逗号**上**切的，
+  所以每段实参本身不带逗号，而拼回去的 `sep` 没补 `,`。
+  靠"先在副本上跑 + 抽查两种形态"抓到，副本没被污染。
+- **执行者注意的坑**：`ExternalDocumentServiceNormalizeTailTest` 9 条里**只有 2 条是活的**
+  （`externalIdentityNamespaceFallsBackAndRejectsOversize`、
+  `safeErrorOverloadsProvideFallbackAndTruncation`），另外 7 条 `upsert*` 校验类
+  随 `validateRequest` 一起走。别整文件删。
+- **留个坑**：`batchUpsert` 是**活的**——它调 `upsert(request)`，而 `upsert` 改后恒走
+  变更层，所以批量计数聚合逻辑必须保留，只是断言对象要从"旧内联实现 save 出了什么"
+  换成"变更层返回什么、聚出什么数"。与 834 批改 `batchUpsertAggregatesOutcomeCounters`
+  是同一处理。
+
 ### Batch 835（已交付）
 
 - 分支：`feature/json-record-import-20261007`
