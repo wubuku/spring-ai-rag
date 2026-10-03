@@ -110,6 +110,7 @@ skipped；本门禁则保证今后再有类"闭嘴"就会失败。
 | `verify-gate-wiring.mjs` | 未登记、无自测、无人执行、CI 到不了的自动化门禁 | `test-support/gate-wiring-self-test.mjs` | tests 链 |
 | `verify-test-expectations.mjs` | 方法体为空、只有注释的 `@Test`（每次运行都算通过） | `test-support/inert-test-self-test.mjs` | tests 链 |
 | `verify-null-request-forwarding.mjs` | 把 `null` 转发进 `HttpServletRequest` 参数位的重载——**要么是字面量，要么是一个被声明为"可能为 null 的 `HttpServletRequest`"的局部变量**；而 `ChatPrincipal.from(null)` 与 `ApiKeyCollectionAccess.isUnrestricted(null)` **双双 fail-open** | `test-support/null-request-forwarding-self-test.mjs` | tests 链 |
+| `verify-false-optional-wiring.mjs` | 用 `@Autowired(required = false)` 注入、又被 `if (x == null)` 守卫的协作者，而它对应的 bean 是**无条件**的 `@Service`/`@Component`——也就是那条被守卫的分支在运行中的应用里根本走不到——除非字段上写了 `// optional-claim: <理由>` | `test-support/false-optional-wiring-self-test.mjs` | tests 链 |
 | `verify-no-pessimistic-locks.sh` | 生产代码里的悲观锁 / `SKIP LOCKED` / advisory lock | `test-support/pessimistic-locks-self-test.sh` | docs 链 |
 | `verify-zh-translation.mjs` | 中文文档里未翻译的英文段落 | `test-support/zh-translation-self-test.mjs` | docs 链 |
 | `verify-project-tests.sh` / `verify-project-docs.sh` | 上面 8 个的聚合入口 | 由各门禁承担 | 人跑 / 待接入 CI |

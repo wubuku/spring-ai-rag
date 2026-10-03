@@ -87,10 +87,16 @@ public class RagCollectionController {
     private final RagDocumentRepository documentRepository;
     private final RagCollectionService collectionService;
     private final CollectionIdentityResolver identityResolver;
-    private JsonRecordService jsonRecordService;
-    private DocumentMutationService documentMutationService;
-    private AuditLogService auditLogService;  // optional: null when RagAuditLogRepository unavailable
-    private CollectionProvisioningService collectionProvisioningService;
+    // Batch 820. Same finding as RagDocumentController: these four are injected with
+    // `@Autowired(required = false)`, which reads as "may be absent", and all four are
+    // unconditional @Service beans that the container always wires. The comment on
+    // auditLogService used to claim the collaborator disappears when
+    // RagAuditLogRepository is unavailable — a conditionality that no longer exists in
+    // the code. See scripts/verify-false-optional-wiring.mjs.
+    private JsonRecordService jsonRecordService; // optional-claim: unconditional @Service; the guard turns a hand-constructed instance's NPE into a stated error
+    private DocumentMutationService documentMutationService; // optional-claim: unconditional @Service; same
+    private AuditLogService auditLogService; // optional-claim: unconditional @Service; the audit helpers tolerate a null rather than failing the business call
+    private CollectionProvisioningService collectionProvisioningService; // optional-claim: unconditional @Service; same
     private CollectionPurgeService collectionPurgeService;
     private ProvisioningOwnerResolver provisioningOwnerResolver =
             new ProvisioningOwnerResolver();

@@ -34,7 +34,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class CacheMetricsController {
 
     private final CacheMetricsService cacheMetricsService;
-    private AuditLogService auditLogService;  // optional: null when RagAuditLogRepository unavailable
+    private AuditLogService auditLogService;  // optional-claim: unconditional @Service; the audit helpers are null-tolerant on purpose so auditing can never be the reason a request fails
 
     public CacheMetricsController(CacheMetricsService cacheMetricsService,
                                    @Autowired(required = false) AuditLogService auditLogService) {

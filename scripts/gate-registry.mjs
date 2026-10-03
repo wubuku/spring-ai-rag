@@ -151,6 +151,18 @@ export const GATES = [
     noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
   },
 
+  // Batch 820. A collaborator injected with @Autowired(required = false) claims
+  // it may be absent; this rejects that claim when the bean is an unconditional
+  // @Service and the field has no `// optional-claim:` reason. Twelve such
+  // claims existed; seven genuinely conditional beans are what keep the rule
+  // from being a blanket objection to optional injection.
+  {
+    gate: 'scripts/verify-false-optional-wiring.mjs',
+    kind: 'gate',
+    selfTest: 'scripts/test-support/false-optional-wiring-self-test.mjs',
+    noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
+  },
+
   // Run by scripts/verify-project-docs.sh.
   {
     gate: 'scripts/verify-no-pessimistic-locks.sh',
