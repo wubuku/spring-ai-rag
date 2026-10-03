@@ -86,10 +86,8 @@ class JsonRecordSearchImportTailTest {
         service = new JsonRecordService(
                 documentRepository,
                 mock(DocumentVersionService.class),
-                documentEmbedService,
                 hybridRetrieverService,
                 mock(ReRankingService.class),
-                embeddingProfileProvider,
                 resolver,
                 properties,
                 MAPPER,
@@ -266,25 +264,6 @@ class JsonRecordSearchImportTailTest {
             throw new IllegalStateException(e);
         }
         return request;
-    }
-
-    @Test
-    void upsertMetadataOnlyChangeKeepsContentHash() {
-        RagDocument doc = jsonRecordDoc();
-        when(documentRepository.findByCollectionIdAndDocumentTypeAndExternalId(
-                eq(7L), eq(RagDocument.JSON_RECORD), eq("rec-1")))
-                .thenReturn(Optional.of(doc));
-        JsonRecordUpsertRequest request = request();
-        request.setTitle("New Title");
-
-        var response = service.upsert(request);
-
-        assertEquals("UPDATED", response.action());
-        assertFalse(response.contentChanged());
-        assertEquals("New Title", doc.getTitle());
-        assertEquals(
-                com.springairag.core.util.DigestUtils.sha256("text"),
-                doc.getContentHash());
     }
 
     @Test

@@ -28,10 +28,8 @@ class JsonRecordServiceScopeAllowsTailTest {
         service = new JsonRecordService(
                 mock(com.springairag.core.repository.RagDocumentRepository.class),
                 mock(DocumentVersionService.class),
-                mock(DocumentEmbedService.class),
                 mock(com.springairag.core.retrieval.HybridRetrieverService.class),
                 mock(com.springairag.core.retrieval.ReRankingService.class),
-                mock(com.springairag.core.config.EmbeddingProfileProvider.class),
                 mock(CollectionIdentityResolver.class),
                 new RagProperties(),
                 new com.fasterxml.jackson.databind.ObjectMapper(),

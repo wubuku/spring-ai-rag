@@ -55,10 +55,8 @@ class JsonRecordServiceSearchPipelineTest {
         service = new JsonRecordService(
                 documentRepository,
                 mock(DocumentVersionService.class),
-                mock(DocumentEmbedService.class),
                 hybridRetrieverService,
                 reRankingService,
-                mock(EmbeddingProfileProvider.class),
                 resolver,
                 new RagProperties(),
                 new com.fasterxml.jackson.databind.ObjectMapper(),

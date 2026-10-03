@@ -478,6 +478,54 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
+### Batch 834（已交付）
+
+- 分支：`feature/json-legacy-path-20261007`
+- 内容：执行 833 批量清但没做完的那件事——删掉 `JsonRecordService.upsert`
+  的 legacy 内联 upsert 分支。**主源码 1054 → 991 行。**
+- 删了什么：
+  | 删除项 | 规模 | 说明 |
+  |---|---|---|
+  | `upsert` 里的 legacy 块 | 10 行 | `DocumentMutationService` 是无条件 `@Service`，else 分支在运行的应用里走不到 |
+  | `outcomeFromDispatch` | 9 行 | 只被已死的 legacy 块调用 |
+  | `embedIfRequested` | 31 行 | 同上 |
+  | `documentEmbedService` + `embeddingProfileProvider` 字段**及其两个构造参数** | ~15 行 | 833 批留的坑：查实两者**只被 `embedIfRequested` 用**，删完即死字段。只删字段留参数同样是死代码（与 832 的 `documentEmbedService` 同型） |
+  | 随之未用的 import | 3 个 | `EmbeddingProfile` / `EmbeddingProfileProvider` / `EmbeddingPolicyResolver` |
+- **实测迁移面：116 个 JsonRecord 用例 / 27 坏**（5 failures + 22 errors），
+  比 833 批估的 31 略低。**22 个 error 同一个根因**：`mutationService` 为 null。
+- 处置（删 22 / 迁 4）：
+  | 文件 | 处置 | 理由 |
+  |---|---|---|
+  | `JsonRecordServicePersistMatrixTest` | **删整文件（6）** | 类 Javadoc 自述是"`persistInTransaction` 的 UPDATED/UNCHANGED 路径 + `embedIfRequested` 矩阵"，两样都已搬走 |
+  | `JsonRecordServicePersistRetryTest` | **删整文件（3）** | 测的是 legacy `persist` 的重试循环，见下方"待 835 结清" |
+  | `JsonRecordServicePersistTest` | **删整文件（1）** | 同上，且名字承诺的"无事务管理器"分支随 legacy 块一起走 |
+  | `JsonRecordServiceEmbeddingOutcomeTailTest` | **删整文件（4）**，余 2 条并入新文件并改名 | 4 条全用反射测已死的 `embedIfRequested`；剩下 2 条（集合解析守卫 / getDetail 容忍空生命周期）与"EmbeddingOutcome"已无关 → 改名 `JsonRecordServiceResolutionDetailTailTest` |
+  | `JsonRecordServiceTest` | 删 6 / 改写 2 | 删的 6 条断言的是旧内联实现（`saveAndFlush` / `forceRecordVersion` / `embedDocument` 交互 / 就地改 `doc`）；保留改写 2 条**这层活逻辑**：`keyOnlyUpsert`（集合键解析）与 `batchKeepsValidItems`（批量计数） |
+  | `JsonRecordValidationEmbedTailTest` | 删 3 | 三条都是 `coordinateLocalIndex` / 嵌入三臂，跟着 legacy 块走 |
+  | `JsonRecordServiceLegacyUpsertTailTest` | 删 2 / 改写 1 / **改名** | 删的两条是 ASYNC 派发映射（`outcomeFromDispatch` 已死）；`batchUpsertAggregatesOutcomeCounters` 测的是**本服务自己的**计数聚合，改为 mock 变更层；类名里的 "Legacy" 已不成立 → 改名 `JsonRecordServiceBatchImportTailTest`，setUp 里大半 legacy 打桩随之清空 |
+  | `JsonRecordServiceIdentityTest` | 删 setUp 里的种子 | 种子用 `upsert` 建一条记录，但两条用例各自完整打桩了仓储查询方法，**种子从头到尾没人依赖**——不是迁移对象，是本来就多余的 setup |
+  | `JsonRecordSearchImportTailTest` | 删 1 | 断言旧内联实现就地改 `doc` 并保全 `contentHash`（已归 `DocumentMutationService`） |
+- **安全契约没丢**：`embeddingErrorIsMaskedAndBounded` 断言 apiKey 脱敏，删之前查过——
+  真正产出掩码错误的是 `DocumentEmbedServiceTest:102-106`，覆盖仍在。
+  这正是"同类断言不等于同类测试"的又一次：删掉的是已死路径上的断言，留下的是生效路径上的。
+- **顺带清掉的真问题**：`JsonRecordServicePersistMatrixTest` 里 4 条
+  `System.out.println("DEBUG ...")` 调试残留；`JsonRecordServiceIdentityTest`
+  一行重复 import + 一个没人用的 `PlatformTransactionManager` import。
+- 新增夹具 `JsonRecordMutationFixture`（与 830/832 同一套路）。**又一次踩中 833 批留的坑**：
+  `collectionId` / `collectionKey` 是 `upsertJsonRecord` 的独立参数、不在
+  `JsonRecordUpsertRequest` 上，夹具一律从 `thenAnswer` 的**调用实参**取，
+  响应里的 `collectionKey` 则来自 `identityResolver.mapKeys`——两个来源都钉住了。
+- **遗留待 835 结清（如实登记）**：删掉 legacy 块后，`persist` 整条链
+  （`persist` 两个重载 / `persistInTransaction` / 重试循环）、`PersistedRecord`、
+  `EmbeddingOutcome`、`enqueueAsync`、`coordinateLocalIndex`、`changedFields`、
+  `isRetryableConcurrencyFailure`、`transactionTemplate` 及其
+  `PlatformTransactionManager` 构造参数**只剩 `importRecord` 一个活入口**，
+  而 `importRecord` 这条路径现在**只剩拒绝类用例**（空文档、超长文件名），
+  成功路径与重试循环无人覆盖。本批**故意不补**——为下一批就要删掉的代码写测试
+  正是本账本明令避免的反模式。835 的动作已现成：
+  `upsertJsonRecord(..., originalFilename, enabledOverride)` 的后两个参数
+  本就是为 `importRecord` 准备的，把导入也切过去，上面这一整块连同覆盖缺口一并消失。
+
 ### Batch 833（仅勘察，代码改动已回退）
 
 - 分支：`feature/json-legacy-path-20261006`（已删）

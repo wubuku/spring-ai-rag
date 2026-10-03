@@ -101,10 +101,8 @@ class BuildHelpersNonOrderedTailTest {
         Object service = new com.springairag.core.service.JsonRecordService(
                 mock(com.springairag.core.repository.RagDocumentRepository.class),
                 mock(com.springairag.core.service.DocumentVersionService.class),
-                mock(com.springairag.core.service.DocumentEmbedService.class),
                 mock(com.springairag.core.retrieval.HybridRetrieverService.class),
                 mock(com.springairag.core.retrieval.ReRankingService.class),
-                mock(com.springairag.core.config.EmbeddingProfileProvider.class),
                 mock(com.springairag.core.service.CollectionIdentityResolver.class),
                 new com.springairag.core.config.RagProperties(),
                 new ObjectMapper(),

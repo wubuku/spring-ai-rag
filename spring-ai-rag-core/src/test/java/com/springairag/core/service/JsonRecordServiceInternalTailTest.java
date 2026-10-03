@@ -21,7 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class JsonRecordServiceInternalTailTest {
 
     private final JsonRecordService service = new JsonRecordService(
-            null, null, null, null, null, null, null,
+            null, null, null, null, null,
             new com.springairag.core.config.RagProperties(),
             new com.fasterxml.jackson.databind.ObjectMapper(),
             null, null, null);

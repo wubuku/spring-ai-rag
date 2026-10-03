@@ -57,10 +57,8 @@ class JsonRecordServiceSearchGuardTailTest {
         service = new JsonRecordService(
                 mock(RagDocumentRepository.class),
                 mock(DocumentVersionService.class),
-                mock(DocumentEmbedService.class),
                 hybridRetrieverService,
                 mock(ReRankingService.class),
-                mock(com.springairag.core.config.EmbeddingProfileProvider.class),
                 mock(CollectionIdentityResolver.class),
                 properties,
                 new ObjectMapper(),

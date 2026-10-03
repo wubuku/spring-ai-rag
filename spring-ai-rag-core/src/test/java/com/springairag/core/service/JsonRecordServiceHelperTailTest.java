@@ -34,10 +34,8 @@ class JsonRecordServiceHelperTailTest {
         service = new JsonRecordService(
                 mock(RagDocumentRepository.class),
                 mock(DocumentVersionService.class),
-                mock(DocumentEmbedService.class),
                 mock(HybridRetrieverService.class),
                 mock(ReRankingService.class),
-                mock(com.springairag.core.config.EmbeddingProfileProvider.class),
                 mock(CollectionIdentityResolver.class),
                 new RagProperties(),
                 new ObjectMapper(),

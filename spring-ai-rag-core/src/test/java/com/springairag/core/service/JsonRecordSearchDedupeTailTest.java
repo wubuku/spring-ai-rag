@@ -52,10 +52,8 @@ class JsonRecordSearchDedupeTailTest {
         service = new JsonRecordService(
                 documentRepository,
                 mock(DocumentVersionService.class),
-                mock(DocumentEmbedService.class),
                 hybridRetrieverService,
                 mock(ReRankingService.class),
-                mock(com.springairag.core.config.EmbeddingProfileProvider.class),
                 collectionIdentityResolver,
                 new com.springairag.core.config.RagProperties(),
                 new ObjectMapper().findAndRegisterModules(),
