@@ -47,7 +47,8 @@
     "no": "No",
     "you": "You",
     "assistant": "Assistant",
-    "unknownError": "Unknown error"
+    "unknownError": "Unknown error",
+    "draftNotSavedCredential": "Draft not saved: it looks like it contains an API key or token, so it was kept out of this browser's storage."
   },
   "dashboard": {
     "title": "Dashboard",

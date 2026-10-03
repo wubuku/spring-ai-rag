@@ -47,7 +47,8 @@
     "no": "否",
     "you": "你",
     "assistant": "助手",
-    "unknownError": "未知错误"
+    "unknownError": "未知错误",
+    "draftNotSavedCredential": "草稿未保存：内容里像是有 API 密钥或令牌，为安全起见没有存进这个浏览器。"
   },
   "dashboard": {
     "title": "仪表盘",
