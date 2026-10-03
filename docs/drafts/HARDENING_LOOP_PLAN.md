@@ -478,6 +478,96 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
+### Batch 841（已交付，WebUI 测试加固）
+
+- 分支：`feature/ime-guard-tests-20261007`
+- 主题：**中文输入法防线**。按用户的第一优先级（代码加固，特别是测试）回到
+  测试侧；`ImeSafeForm` 守着 11 处表单横跨 9 个文件，而它的测试只有 2 条。
+- **勘察阶段我自己错了两次，都记在这里**：
+  1. 第一次判"`ImeSafeForm` 零调用方"。真实原因是那条命令写成
+     `wc -l a.tsx a.css && grep …`，**目录里没有 `.css` 文件**，通配符匹配不到
+     让 `wc` 返回非 0，`&&` 链中断，**grep 根本没执行**——空输出被我读成了
+     "零匹配"。教训：**`&&` 链里任何一步非 0 都会静默吞掉后面所有步骤**，
+     看到"没有输出"时先确认那一步是否真的跑了。
+  2. 拿 `read` 工具显示的 `name: /documents.openOriginalPdf/,` 当锚点去编辑，
+     改不动。python 逐行 `repr` 显示实际字节是 `name: 'documents.openOriginalPdf',`
+     ——**单引号字符串，不是正则**。教训：锚点冲突时以字节为准。
+- **普查推翻了我的初始假设**：本以为 4 处手写 Enter 守卫都没测试，实测
+  `Chat.test.tsx:207`、`Files.test.tsx:351`、`Embeddings.test.tsx:249`
+  **三条都有 IME 用例**，只有 `Documents` 的 keyword 守卫零覆盖。
+- 三处真实缺口：
+  | 缺口 | 位置 | 危害 |
+  |---|---|---|
+  | 守卫不误拦 | `ImeSafeForm` 两条用例只测"拦得住" | 守卫写反或过度拦截会**静默吞掉正常回车**，而那条路径在原用例里根本不出现 |
+  | 调用方 handler 转发 | `ImeSafeForm` 显式解构 `onCompositionStart/End` 再转发，零断言 | 11 个调用点里 4 个自己挂 `onCompositionEnd` 提交查询，守卫吞掉回调就永远搜不了 |
+  | `Documents` 四道防线 | change 守卫 / 组合结束提交 / URL 竞态不覆盖草稿 / blur 提交 | 组合中的拼音串进查询条件、浏览器后退冲掉正在拼的草稿 |
+- **写用例时我的假设也错过一次**。第一版有一条断言"keydown 被 229 拦下后，
+  随后的 submit 也应被拦"——**跑出来是红的**。查源码才明白两道防线是独立的：
+  `keydown` 守卫拦 keydown 事件，`submit` 守卫只看 `compositionActiveRef`
+  （由 compositionstart/end 维护），**不会继承上一个 keydown 的拦截结果**，
+  而真实浏览器里 submit 事件本来也不携带 229。已改成只测 keydown 侧的 229 路径。
+- **变异实验 11 个，9 个精确抓住、2 个等价变异**（变异都打在**接线处**）：
+  | 变异 | 结果 |
+  |---|---|
+  | `ImeSafeForm` 摘掉 `onCompositionStart` 转发 | ✅ 1 红 |
+  | `ImeSafeForm` 摘掉 `onCompositionEnd` 转发 | ✅ 1 红 |
+  | `ImeSafeForm` keydown 无条件 `preventDefault`（过度拦截） | ✅ 3 红 |
+  | `ImeSafeForm` 守卫写反（`&& false`） | ✅ 3 红 |
+  | `ImeSafeForm` 整块删掉 `{...props}` | ✅ 7 红 |
+  | `ImeSafeForm` 组合结束不复位 | ✅ 2 红 |
+  | `Documents` 拿掉 change 的 `isComposing` 守卫 | ✅ 2 红 |
+  | `Documents` 组合结束不提交 | ✅ 2 红 |
+  | `Documents` URL 竞态守卫失效（总是覆盖草稿） | ✅ 1 红 |
+  | `Documents` `commitKeyword` 去掉 `.trim()` | ✅ 1 红 |
+  | `Documents` blur 守卫失效 | ✅ 1 红 |
+  | `ImeSafeForm` `{...props}` 挪到 handler 之后 | ⚠️ **等价变异** |
+  | `Documents` `commitKeyword` 去掉 `.slice(0, 256)` | ⚠️ **等价变异** |
+- 两个等价变异都查清了原因，如实登记而不是硬凑用例：
+  1. `{...props}` 挪位：`ImeSafeFormProps` 把 `onSubmit`/`onKeyDown` 显式声明、
+     `onCompositionStart`/`onCompositionEnd` 被显式解构，**展开里只剩 className /
+     id / aria-label 这类不与组件 handler 冲突的属性**，位置写反无可观察差异。
+     "透传"用例真正防的是 M5 那种**忘写 spread**。
+  2. `.slice(0, 256)`：`handleKeywordChange:269`、`handleKeywordCompositionEnd:282`、
+     `commitKeyword` 一共截断了**三次**，用例打的是第一道（唯一真正生效的那道），
+     后两道是防御性冗余。而 `.trim()` **只在 `commitKeyword` 一处**，所以它那条
+     用例精确 1 红。
+- **URL 变化的观察点选在调用实参上**：`Documents.tsx:64` 的
+  `queryKey: ['documents', page, keyword, selectedCollection]` 天然携带 keyword，
+  所以用例直接读 `mockUseQuery` 最后一次列表查询的 `queryKey[2]`，**没有另建
+  DOM 探针去镜像状态**；夹具也按 `queryKey[0]` 区分了 `collections-all` 与
+  `documents` 两个查询。规范化契约（去空白 + 截 256）也钉在同一条链路上。
+- 改动：`ime.test.tsx` **2 → 9 条**，`Documents.test.tsx` **11 → 15 条**
+  （新增一个 `中文输入法防线` describe 与 `currentKeyword()` 观察 helper）。
+- 验证：WebUI 77 文件 / **846 用例**全绿（835 → 846）；`npm run lint`
+  九条门禁全过（门禁自测 263 未变，本批未动门禁）；`typecheck` 干净；`build` 通过。
+- 遗留（**已勘察，未做**，量级不足以单开一批）：
+  - `check-hardcoded-copy` 的 `attribute` pattern 只认
+    `aria-label` / `title` / `placeholder` / `alt` 四个 JSX 属性，**认不出
+    `<IconButton label="…">` 这个 React prop**——而 `IconButton.tsx:35` 明确
+    `aria-label={label}`，所以它**就是**无障碍名称。盲区成立，但真树生产侧只有
+    **2 处**：`Toast.tsx:117`（`"Close notification"`）与 `Dialog.tsx:184`
+    （`"Close"`）。要做就是"加 1 个 pattern + 2 处文案进 locale + 门禁自测"，
+    按 Batch 840 的规矩仍需**先在真树量命中率与误报率**。
+  - `check-a11y-forms` **不构成盲区**（已排除）：它的 `CONTROLS` 扫的是
+    `input/select/textarea`，`ImeSafeForm` 里的控件照样被扫到，组件名本身无关。
+  - `check-double-submit` 也不构成盲区（Batch 841 勘察期已排除，见下）。
+
+- **勘察期顺带查清的两件事**（都排除了，没写进代码）：
+  - `check-double-submit` 报"102 个文件、every write action is guarded"，
+    但它靠 `MUTATION_DECL` + `MUTATE_CALL` 文本关联，**只能把 19 个写入点
+    关联到 onClick，21 个经命名 handler 关联不到**——证据只覆盖 40 个写入点的
+    47.5%。不过那 21 个里**实测 0 个真缺守卫**（每个文件都引用了对应 mutation
+    的 `isPending`/`isLoading`）。所以这是**"措辞比证据强"的可验证性问题，
+    不是活 bug**，价值比 Batch 840 低，所以本批没走这条线。
+    真要改，方向是把结论改成"19/40 直接关联 + 21/40 经命名 handler，
+    命名 handler 的守卫已逐文件核对"，而不是继续报一个更弱的措辞。
+  - `Settings.tsx:493` 的 `onClick={handleSave}` 是**同步写 localStorage**，
+    不经 react-query，双提交门禁的适用前提本来就不成立。
+  - `useEffect + fetch` 那类：全树**没有** `<form onSubmit>` 触发写入、
+    也没有自定义 `useQuery`/`useMutation` 包装 hook；`FilePreview.tsx` 与
+    `ApiKeyAuthProvider.unlock` 的错误处理都完整。`Toast.tsx` 的 live region
+    此前某批已修对（常驻容器 + `aria-live="polite"`）。
+
 ### Batch 840（已交付，WebUI）
 
 - 分支：`feature/webui-hardcoded-copy-20261007`

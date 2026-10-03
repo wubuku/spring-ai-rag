@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useSearchParams } from 'react-router-dom';
 import { Documents } from './Documents';
 
 // Mock functions at module level
@@ -54,6 +54,53 @@ describe('Documents', () => {
       <Documents />
     </MemoryRouter>,
   );
+
+  /**
+   * 关键词最终会落到哪个查询条件上？页面用 queryKey 携带 keyword，
+   * 所以直接读最后一次列表查询的实参，而不是另建一个 DOM 探针去镜像状态。
+   */
+  const currentKeyword = (): string | undefined => {
+    const { calls } = mockUseQuery.mock;
+    for (let i = calls.length - 1; i >= 0; i -= 1) {
+      const key = (calls[i][0] as { queryKey?: unknown } | undefined)?.queryKey;
+      if (Array.isArray(key) && key[0] === 'documents') {
+        return key[2] as string;
+      }
+    }
+    return undefined;
+  };
+
+  /** 模拟浏览器前进/后退造成的外部 URL 变化。 */
+  const ExternalUrlChange = () => {
+    const [params, setParams] = useSearchParams();
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          const next = new URLSearchParams(params);
+          next.set('keyword', '外部关键词');
+          setParams(next);
+        }}
+      >
+        external-url-change
+      </button>
+    );
+  };
+
+  const renderDocumentsWithExternalUrlControl = () => render(
+    <MemoryRouter>
+      <ExternalUrlChange />
+      <Documents />
+    </MemoryRouter>,
+  );
+
+  const emptyList = () => {
+    mockUseQuery.mockReturnValue({
+      data: { data: { documents: [], total: 0 } },
+      isPending: false,
+      error: null,
+    });
+  };
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -358,5 +405,81 @@ describe('Documents', () => {
     expect(screen.getByRole('menuitem', {
       name: 'documents.openOriginalPdf',
     })).toBeInTheDocument();
+  });
+
+  describe('中文输入法防线', () => {
+    const searchInput = () => screen.getByLabelText('documents.searchPlaceholder');
+
+    it('组合过程中只更新草稿，组合结束后才写进查询条件', async () => {
+      emptyList();
+      renderDocuments();
+
+      const input = searchInput();
+      fireEvent.compositionStart(input);
+      fireEvent.change(input, { target: { value: '中文' } });
+
+      // 组合中的中间拼音串不能进查询条件，否则每敲一个字母就查一次库。
+      expect(input).toHaveValue('中文');
+      expect(currentKeyword()).toBe('');
+
+      fireEvent.compositionEnd(input, { data: '中文' });
+      await waitFor(() => {
+        expect(currentKeyword()).toBe('中文');
+      });
+    });
+
+    it('组合进行中失焦不会把半成品提交出去', () => {
+      emptyList();
+      renderDocuments();
+
+      const input = searchInput();
+      fireEvent.compositionStart(input);
+      fireEvent.change(input, { target: { value: '中文' } });
+      fireEvent.blur(input);
+
+      // 用户在组合中途切走焦点：草稿留在输入框里，查询条件保持原样。
+      expect(input).toHaveValue('中文');
+      expect(currentKeyword()).toBe('');
+    });
+
+    it('组合进行中外部 URL 变化不覆盖正在输入的草稿', async () => {
+      emptyList();
+      const user = userEvent.setup();
+      renderDocumentsWithExternalUrlControl();
+
+      const input = searchInput();
+      fireEvent.compositionStart(input);
+      fireEvent.change(input, { target: { value: '中文' } });
+
+      // 模拟用户正在拼字时点了浏览器后退：URL 变了，但草稿不能被冲掉。
+      await user.click(screen.getByRole('button', { name: 'external-url-change' }));
+
+      await waitFor(() => {
+        expect(currentKeyword()).toBe('外部关键词');
+      });
+      expect(input).toHaveValue('中文');
+
+      // 组合结束后，草稿重新成为权威值并覆盖掉外部来的 URL。
+      fireEvent.compositionEnd(input, { data: '中文' });
+      await waitFor(() => {
+        expect(currentKeyword()).toBe('中文');
+      });
+    });
+
+    it('规范化关键词：去空白并截断到 256 字符', async () => {
+      emptyList();
+      renderDocuments();
+
+      const input = searchInput();
+      fireEvent.change(input, { target: { value: '  报表  ' } });
+      await waitFor(() => {
+        expect(currentKeyword()).toBe('报表');
+      });
+
+      fireEvent.change(input, { target: { value: 'x'.repeat(300) } });
+      await waitFor(() => {
+        expect(currentKeyword()).toBe('x'.repeat(256));
+      });
+    });
   });
 });
