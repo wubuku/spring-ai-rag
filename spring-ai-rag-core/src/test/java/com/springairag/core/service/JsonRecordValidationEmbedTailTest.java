@@ -2,35 +2,26 @@ package com.springairag.core.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.springairag.api.dto.JsonRecordUpsertRequest;
-import com.springairag.api.dto.JsonRecordUpsertResponse;
-import com.springairag.api.enums.EmbeddingPolicy;
 import com.springairag.core.config.EmbeddingProfileProvider;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.entity.RagDocument;
-import com.springairag.core.embeddingjob.EmbeddingDispatchService;
 import com.springairag.core.retrieval.HybridRetrieverService;
 import com.springairag.core.retrieval.ReRankingService;
 import com.springairag.core.repository.RagDocumentRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.transaction.PlatformTransactionManager;
 
-import java.lang.reflect.Method;
-import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -90,10 +81,7 @@ class JsonRecordValidationEmbedTailTest {
                 properties,
                 MAPPER,
                 mock(JdbcTemplate.class),
-                null,
                 null);
-        service.setKeywordIndexPersistenceService(keywordIndexPersistenceService);
-        service.setDispatchService(mock(EmbeddingDispatchService.class));
 
         existing = existingDocument();
         lenient().when(documentRepository
@@ -149,21 +137,6 @@ class JsonRecordValidationEmbedTailTest {
                 IllegalArgumentException.class, () -> service.upsert(noCollection));
         assertEquals("collectionKey or collectionId must be provided",
                 noId.getMessage());
-    }
-
-    @Test
-    void buildUpdateReasonProjectsChangedFields() throws Exception {
-        Method reason = JsonRecordService.class.getDeclaredMethod(
-                "changedFields", boolean.class, boolean.class,
-                RagDocument.class);
-        reason.setAccessible(true);
-
-        assertEquals("JSON structured record updated: retrievalText",
-                reason.invoke(service, true, false, existing));
-        assertEquals("JSON structured record updated: jsonbPayload",
-                reason.invoke(service, false, true, existing));
-        assertEquals("JSON structured record updated: metadata/title/source",
-                reason.invoke(service, false, false, existing));
     }
 
     private static void assertNull(Object value) {

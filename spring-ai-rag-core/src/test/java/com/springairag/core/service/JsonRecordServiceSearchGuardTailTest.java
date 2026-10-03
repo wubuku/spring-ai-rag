@@ -1,7 +1,6 @@
 package com.springairag.core.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.springairag.api.dto.JsonRecordSearchRequest;
 import com.springairag.api.dto.RetrievalConfig;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.entity.RagDocument;
@@ -23,7 +22,6 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -63,8 +61,7 @@ class JsonRecordServiceSearchGuardTailTest {
                 properties,
                 new ObjectMapper(),
                 mock(JdbcTemplate.class),
-                null,
-                transactionManager);
+                null);
     }
 
     @Test

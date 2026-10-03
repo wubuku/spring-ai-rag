@@ -478,6 +478,58 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
+### Batch 835（已交付）
+
+- 分支：`feature/json-record-import-20261007`
+- 内容：把 `importRecord` 也切到 `DocumentMutationService.upsertJsonRecord`，
+  于是 834 批留下的整条 legacy `persist` 链**失去最后一个活入口**、整体可删。
+  **主源码 991 → 726 行（净删 265）。**
+- 关键在于 `upsertJsonRecord(request, collectionId, collectionKey,
+  originalFilename, enabledOverride)` 的后两个参数**本来就是为 `importRecord`
+  准备的**——`persist(5 参)` 一直在传这两个值，切过去是一比一替换。
+- 删了什么：
+  | 删除项 | 规模 | 说明 |
+  |---|---|---|
+  | `persist(1 参)` | 3 行 | 834 批遗留的**死重载**（无任何调用方，833 批的坑在这儿落地） |
+  | `persist(5 参)` | 41 行 | 只被 `importRecord` 调用 |
+  | `persistInTransaction` | 87 行 | 内联落库实现 |
+  | `beginActiveCollectionWrite` + `confirmActiveCollectionWrite` | 14 行 | **只被 `persistInTransaction` 用**，查证时才发现的一对隐藏死代码 |
+  | `isRetryableConcurrencyFailure` + `changedFields` | 18 行 | |
+  | `enqueueAsync` + `coordinateLocalIndex` | 32 行 | |
+  | `toUpsertResponse(PersistedRecord, EmbeddingOutcome)` | 20 行 | 同一方法里留下 `toUpsertResponse(JsonMutationResult)` 一重载 |
+  | `PersistedRecord` + `EmbeddingOutcome` 两个 record | 20 行 | |
+  | `MAX_TRANSACTION_ATTEMPTS` + `transactionTemplate` + `PlatformTransactionManager` 构造参数 | ~10 行 | 事务模板只服务 legacy 的重试循环 |
+  | `dispatchService` / `keywordIndexPersistenceService` 字段**及其 setter** | ~8 行 | 只被 `enqueueAsync` / `coordinateLocalIndex` 用；setter 上一条 `optional-claim:` 理由随字段一起走 |
+  | 随之未用的 import | 8 条 | `EmbeddingDispatchService` **保留**——`toUpsertResponse` 里的 `Result dispatch = result.dispatch()` 还要用 |
+- **更正 834 账本里写错的一句**：834 记的是"`importRecord` 这条路径现在**只剩拒绝类用例**，成功路径与重试循环无人覆盖"。**这句是错的**——
+  `JsonRecordServiceTest.importRecordPreservesExportFieldsAndCreatesVersion`
+  一直都在、834 全绿时也一直跑着，它就是导入成功路径的覆盖。
+  是我 834 下结论时只看了 `JsonRecordServiceBatchImportTailTest` 一个文件，
+  没把 21 个构造文件里剩下的用例一起点清。教训与 831 那次同型：
+  **"某条路径没人覆盖"这类结论，必须横跨全部相关文件查，不能凭单个文件外推。**
+  本批据此把那条用例改写成"导出字段（`originalFilename` / `enabled`）原样
+  交给变更层"的契约断言——测试名字原本承诺的"PreservesExportFields"
+  正好就是新的实参传递契约。
+- 测试处置（删 3 / 迁 1 / 迁 19 个构造点）：
+  - 删 `legacyOneArgPersistCreatesRecord`、`persistFiveArgDetectsChangedOriginalFilenameAndEnabledOverride`
+    （`JsonRecordServicePersistArmsTailTest`）、`buildUpdateReasonProjectsChangedFields`
+    （`JsonRecordValidationEmbedTailTest`）——三条都用反射测本批删掉的方法。
+  - 19 个文件 / 22 处构造点去掉末位 `PlatformTransactionManager` 实参。
+    这次形态统一（**永远删最后一个实参**），脚本可机械执行；但仍按纪律
+    先在副本上过一遍再上真文件，编译器当场抓出 4 处遗漏的
+    `setDispatchService` / `setKeywordIndexPersistenceService` 调用。
+  - 顺带清掉 **61 条未用 import**（含 `JsonRecordServiceTest` 里两个已无引用的
+    事务 mock 字段与其 import，以及 `BuildHelpersNonOrderedTailTest` 一条既有的）。
+- **脚本翻车记录（第一次）**：删实参的脚本写成 `while True: find(marker)`
+  再改写同一份字符串，于是**反复剥同一个调用**直到没逗号才报错。
+  `sys.exit` 发生在写盘前所以真文件没被碰，但这个写法本身就是错的——
+  改成"先收集所有调用区间、再从后往前处理"才对。
+  （括号深度初值这类坑本会话已栽过至少 3 次，这次换成"从后往前"避开行号漂移。）
+- **行号手术翻车记录**：`PersistedRecord` + `EmbeddingOutcome` 两个 record
+  我按 960–989 删，实际结束在 979，**误切掉了紧随其后的 public record
+  `DetailedSearchResult`**。靠"删完立刻数花括号"抓到（−2）。
+  这条自查现在固化为每批删除后的必做动作。
+
 ### Batch 834（已交付）
 
 - 分支：`feature/json-legacy-path-20261007`

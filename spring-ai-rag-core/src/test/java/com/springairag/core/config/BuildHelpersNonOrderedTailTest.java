@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.springairag.core.advisor.HybridSearchAdvisor;
 import com.springairag.core.advisor.QueryRewriteAdvisor;
 import com.springairag.core.advisor.RerankAdvisor;
-import com.springairag.core.rag.ProjectDocumentRetriever;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
@@ -107,7 +106,6 @@ class BuildHelpersNonOrderedTailTest {
                 new com.springairag.core.config.RagProperties(),
                 new ObjectMapper(),
                 mock(org.springframework.jdbc.core.JdbcTemplate.class),
-                null,
                 null);
         Method method = com.springairag.core.service.JsonRecordService.class
                 .getDeclaredMethod("validatePayloadFilter",

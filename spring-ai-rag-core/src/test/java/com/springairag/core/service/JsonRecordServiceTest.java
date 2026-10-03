@@ -19,7 +19,6 @@ import com.springairag.core.entity.RagDocumentVersion;
 import com.springairag.core.exception.RagException;
 import com.springairag.core.repository.RagDocumentRepository;
 import com.springairag.core.retrieval.HybridRetrieverService;
-import com.springairag.core.retrieval.JsonbContainmentFilter;
 import com.springairag.core.retrieval.ReRankingService;
 import com.springairag.core.retrieval.RetrievalFilters;
 import com.springairag.core.retrieval.RetrievalOutcome;
@@ -32,16 +31,12 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.TransactionStatus;
 
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -85,10 +80,6 @@ class JsonRecordServiceTest {
     @Mock
     private JdbcTemplate jdbcTemplate;
     @Mock
-    private PlatformTransactionManager transactionManager;
-    @Mock
-    private TransactionStatus transactionStatus;
-    @Mock
     private DocumentMutationService mutationService;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -98,7 +89,6 @@ class JsonRecordServiceTest {
     void setUp() {
         RagProperties properties = new RagProperties();
         lenient().when(embeddingProfileProvider.getActiveProfile()).thenReturn(PROFILE);
-        lenient().when(transactionManager.getTransaction(any())).thenReturn(transactionStatus);
         lenient().when(collectionIdentityResolver.beginActiveWrite(any()))
                 .thenAnswer(invocation ->
                         new CollectionIdentityResolver.ActiveCollectionToken(
@@ -127,8 +117,7 @@ class JsonRecordServiceTest {
                 collectionIdentityResolver,
                 properties,
                 objectMapper,
-                jdbcTemplate,
-                transactionManager);
+                jdbcTemplate);
         service.setMutationService(mutationService);
     }
 
@@ -310,8 +299,7 @@ class JsonRecordServiceTest {
                 new RagProperties(),
                 objectMapper,
                 jdbcTemplate,
-                retrievalScopeResolver,
-                transactionManager);
+                retrievalScopeResolver);
         RetrievalScope scope = RetrievalScope.selectedCollections(
                 List.of(10L), null, RagDocument.JSON_RECORD);
         when(retrievalScopeResolver.resolve(
@@ -578,17 +566,21 @@ class JsonRecordServiceTest {
         imported.setJsonbPayload(objectMapper.readTree("{\"value\":42}"));
         imported.setOriginalFilename("source.json");
         imported.setEnabled(false);
-        when(documentRepository.findByCollectionIdAndDocumentTypeAndExternalId(
-                10L, RagDocument.JSON_RECORD, "imported-1"))
-                .thenReturn(Optional.empty());
-        when(documentVersionService.forceRecordVersion(any(), eq("CREATE"), any()))
-                .thenAnswer(invocation -> version(1));
+        when(mutationService.upsertJsonRecord(
+                any(JsonRecordUpsertRequest.class), eq(10L), eq("collection-10"),
+                eq("source.json"), eq(Boolean.FALSE)))
+                .thenReturn(new DocumentMutationService.JsonMutationResult(
+                        JsonRecordMutationFixture.document(41L, "imported-1"),
+                        "CREATED", true, true, 1, null,
+                        JsonRecordMutationFixture.lifecycle("NOT_REQUESTED")));
 
         JsonRecordUpsertResponse result = service.importRecord(10L, imported);
 
         assertEquals("CREATED", result.action());
-        verify(documentRepository).saveAndFlush(any(RagDocument.class));
-        verify(documentVersionService).forceRecordVersion(any(), eq("CREATE"), any());
+        // 导出字段原样交给变更层：原始文件名与 enabled 覆盖不能在中转里丢掉。
+        verify(mutationService).upsertJsonRecord(
+                any(JsonRecordUpsertRequest.class), eq(10L), eq("collection-10"),
+                eq("source.json"), eq(Boolean.FALSE));
     }
 
     private JsonRecordUpsertRequest request(

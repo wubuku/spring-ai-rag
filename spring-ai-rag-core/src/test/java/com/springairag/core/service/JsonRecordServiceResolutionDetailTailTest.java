@@ -52,7 +52,6 @@ class JsonRecordServiceResolutionDetailTailTest {
                 new RagProperties(),
                 new ObjectMapper(),
                 mock(JdbcTemplate.class),
-                null,
                 null);
     }
 
