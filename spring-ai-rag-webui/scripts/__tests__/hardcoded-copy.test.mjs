@@ -5,6 +5,7 @@ import {
   collectSources,
   findExpressionContainerCopy,
   findHardcodedCopy,
+  findToastTemplateCopy,
   maskTranslationCalls,
   stripComments,
   usesI18n,
@@ -223,5 +224,132 @@ await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json'
 
   it('does not mistake a longer identifier ending in t for a translation call', () => {
     expect(maskTranslationCalls("format(v, 'kept')")).toContain("'kept'");
+  });
+});
+
+
+// ---------------------------------------------------------------------------
+// Batch 840: the two shapes an earlier version of this gate could not see.
+//
+// `CreateCollectionModal` shipped with every one of its validation messages as
+// a literal and this gate reported the file clean. The two patterns below are
+// what close that hole, and each test states the shape it is about so a later
+// edit that widens one of them is visibly answering a question.
+// ---------------------------------------------------------------------------
+
+describe('check-hardcoded-copy: assigned copy', () => {
+  const ASSIGNED_PROSE = `
+import { useTranslation } from 'react-i18next';
+export function Form() {
+  const { t } = useTranslation();
+  const validate = () => {
+    const errors = {};
+    if (!name.trim()) {
+      errors.name = 'Name is required';
+    }
+    return errors;
+  };
+  return <form>{errors.name}</form>;
+}
+`;
+
+  it('rejects prose assigned to a field, which renders through a later {errors.name}', () => {
+    expect(kinds('components/Form.tsx', ASSIGNED_PROSE)).toEqual([
+      VIOLATION_KINDS.HARDCODED_COPY,
+    ]);
+  });
+
+  it('still accepts the same field holding a translated key', () => {
+    const translated = ASSIGNED_PROSE.replace(
+      "'Name is required'",
+      "t('collections.nameRequired')",
+    );
+    expect(kinds('components/Form.tsx', translated)).toEqual([]);
+  });
+
+  it('leaves a single-word machine constant alone', () => {
+    // The space requirement is what separates prose from `STATE = 'ACTIVE'`;
+    // without it every enum in the tree would need an allowlist entry.
+    const source = `
+import { useTranslation } from 'react-i18next';
+export function Widget() {
+  const { t } = useTranslation();
+  const STATE = 'ACTIVE';
+  return <p>{t('common.state')}: {STATE}</p>;
+}
+`;
+    expect(kinds('components/Widget.tsx', source)).toEqual([]);
+  });
+});
+
+describe('check-hardcoded-copy: toast copy', () => {
+  it('reports a quoted toast string', () => {
+    const source = `
+import { useTranslation } from 'react-i18next';
+export function Widget() {
+  const { t } = useTranslation();
+  const { showToast } = useToast();
+  showToast('Collection created successfully', 'success');
+  return <p>{t('common.ok')}</p>;
+}
+`;
+    expect(kinds('components/Widget.tsx', source)).toEqual([
+      VIOLATION_KINDS.HARDCODED_COPY,
+    ]);
+  });
+
+  it('reports a template that carries prose of its own', () => {
+    const hits = findToastTemplateCopy(
+      "showToast(`Re-embed failed: ${err.message}`, 'error');",
+    );
+    expect(hits).toHaveLength(1);
+    expect(hits[0].kind).toBe('toast-copy');
+  });
+
+  it('accepts a template whose only prose is already translated', () => {
+    // Every word a reader sees here comes from the locale or from a variable,
+    // so reporting it would point the next reader at copy that is not there.
+    const hits = findToastTemplateCopy(
+      "showToast(`${fileName}: ${errorMsg}`, 'error');",
+    );
+    expect(hits).toEqual([]);
+    expect(
+      findToastTemplateCopy(
+        "showToast(`${fileName} ${t('documents.uploaded')}`, 'success');",
+      ),
+    ).toEqual([]);
+  });
+
+  it('reaches the template form through findHardcodedCopy, the path the gate takes', () => {
+    // Calling findToastTemplateCopy directly proves the matcher works but not
+    // that the gate calls it. A mutation that removed the `found.push(...)`
+    // line from findHardcodedCopy left every direct-call test green while the
+    // gate itself stopped reporting, which is the shape of a test that cannot
+    // fail for the reason it exists.
+    const source = `
+import { useTranslation } from 'react-i18next';
+export function Widget() {
+  const { t } = useTranslation();
+  const { showToast } = useToast();
+  showToast(` + "`Re-embed failed: ${err.message}`" + `, 'error');
+  return <p>{t('common.ok')}</p>;
+}
+`;
+    expect(kinds('components/Widget.tsx', source)).toEqual([
+      VIOLATION_KINDS.HARDCODED_COPY,
+    ]);
+  });
+
+  it('accepts a toast that already goes through t()', () => {
+    const source = `
+import { useTranslation } from 'react-i18next';
+export function Widget() {
+  const { t } = useTranslation();
+  const { showToast } = useToast();
+  showToast(t('collections.createSuccess'), 'success');
+  return <p>{t('common.ok')}</p>;
+}
+`;
+    expect(kinds('components/Widget.tsx', source)).toEqual([]);
   });
 });

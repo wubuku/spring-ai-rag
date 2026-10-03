@@ -31,11 +31,11 @@ export function CreateCollectionModal({
     mutationFn: () => collectionsApi.create({ name, collectionKey, description }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['collections'] });
-      showToast('Collection created successfully', 'success');
+      showToast(t('collections.createSuccess'), 'success');
       handleClose();
     },
     onError: (error: Error) => {
-      showToast(`Failed to create collection: ${error.message}`, 'error');
+      showToast(t('collections.createError', { message: error.message }), 'error');
     },
   });
 
@@ -43,19 +43,19 @@ export function CreateCollectionModal({
     const newErrors: { name?: string; collectionKey?: string; description?: string } = {};
 
     if (!name.trim()) {
-      newErrors.name = 'Name is required';
+      newErrors.name = t('collections.nameRequired');
     } else if (name.trim().length < 3) {
-      newErrors.name = 'Name must be at least 3 characters';
+      newErrors.name = t('collections.nameTooShort');
     } else if (name.trim().length > 100) {
-      newErrors.name = 'Name must be less than 100 characters';
+      newErrors.name = t('collections.nameTooLong');
     }
 
     if (description.length > 500) {
-      newErrors.description = 'Description must be less than 500 characters';
+      newErrors.description = t('collections.descriptionTooLong');
     }
 
     if (!/^[\x21-\x7E]{1,128}$/.test(collectionKey)) {
-      newErrors.collectionKey = 'Collection key must be 1-128 visible ASCII characters';
+      newErrors.collectionKey = t('collections.keyInvalid');
     }
 
     setErrors(newErrors);

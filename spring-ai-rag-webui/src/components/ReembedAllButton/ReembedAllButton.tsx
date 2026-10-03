@@ -33,13 +33,18 @@ export function ReembedAllButton() {
       queryClient.invalidateQueries({ queryKey: ['embeddingStatus'] });
       queryClient.invalidateQueries({ queryKey: ['documents'] });
       showToast(
-        `Re-embedded: ${result.data.success} success${result.data.failed > 0 ? `, ${result.data.failed} failed` : ''}`,
+        result.data.failed > 0
+          ? t('documents.reembedSuccessPartial', {
+              success: result.data.success,
+              failed: result.data.failed,
+            })
+          : t('documents.reembedSuccess', { success: result.data.success }),
         result.data.failed > 0 ? 'warning' : 'success'
       );
       setIsExpanded(false);
     },
     onError: (err: Error) => {
-      showToast(`Re-embed failed: ${err.message}`, 'error');
+      showToast(t('documents.reembedError', { message: err.message }), 'error');
     },
   });
 

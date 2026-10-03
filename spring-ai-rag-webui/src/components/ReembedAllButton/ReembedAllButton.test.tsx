@@ -28,7 +28,11 @@ vi.mock('@tanstack/react-query', () => ({
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     // 刻意与真实 i18next 行为一致：缺失的键返回键名本身（一个真值字符串）。
-    t: (key: string) => key,
+    // 带插值参数时把参数也带出来，这样用例能钉住「传了什么给 locale」，
+    // 而不只是「用了哪个键」——重嵌入的三个 toast 各自带 success / failed /
+    // message，参数传错会让用户看到错的数字，而键断言抓不到。
+    t: (key: string, params?: Record<string, unknown>) =>
+      params ? `${key} ${JSON.stringify(params)}` : key,
   }),
 }));
 
@@ -179,7 +183,10 @@ describe('ReembedAllButton', () => {
 
     expect(mockInvalidate).toHaveBeenCalledWith({ queryKey: ['embeddingStatus'] });
     expect(mockInvalidate).toHaveBeenCalledWith({ queryKey: ['documents'] });
-    expect(toastSpy).toHaveBeenCalledWith('Re-embedded: 3 success, 1 failed', 'warning');
+    expect(toastSpy).toHaveBeenCalledWith(
+      'documents.reembedSuccessPartial {"success":3,"failed":1}',
+      'warning',
+    );
   });
 
   it('reports the error toast when a re-embed rejects', async () => {
@@ -196,7 +203,10 @@ describe('ReembedAllButton', () => {
       options.onError(new Error('network down'));
     });
 
-    expect(toastSpy).toHaveBeenCalledWith('Re-embed failed: network down', 'error');
+    expect(toastSpy).toHaveBeenCalledWith(
+      'documents.reembedError {"message":"network down"}',
+      'error',
+    );
   });
 
   it('routes the mutation function to the re-embed API with the force flag', async () => {
@@ -226,7 +236,10 @@ describe('ReembedAllButton', () => {
       options.onSuccess({ data: { success: 5, failed: 0 } });
     });
 
-    expect(toastSpy).toHaveBeenCalledWith('Re-embedded: 5 success', 'success');
+    expect(toastSpy).toHaveBeenCalledWith(
+      'documents.reembedSuccess {"success":5}',
+      'success',
+    );
   });
 
   it('shows the key itself when a translation is missing, never a hardcoded label', async () => {

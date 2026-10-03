@@ -151,7 +151,10 @@
     "previewContentLoadError": "Could not load the full document content: {{error}}",
     "allCollections": "All Collections",
     "supportedFormats": "Supports: {{formats}}",
-    "subtitle": "Logical documents for retrieval and Chat. Deleting one leaves its imported files in place."
+    "subtitle": "Logical documents for retrieval and Chat. Deleting one leaves its imported files in place.",
+    "reembedSuccess": "Re-embedded: {{success}} success",
+    "reembedSuccessPartial": "Re-embedded: {{success}} success, {{failed}} failed",
+    "reembedError": "Re-embed failed: {{message}}"
   },
   "collections": {
     "title": "Collections",
@@ -207,7 +210,14 @@
     "name": "Name",
     "viewDocuments": "View Documents",
     "collectionKeyPlaceholder": "UUID or business key",
-    "subtitle": "Group documents into collections, then purge or re-embed a whole collection as one operation."
+    "subtitle": "Group documents into collections, then purge or re-embed a whole collection as one operation.",
+    "createSuccess": "Collection created successfully",
+    "createError": "Failed to create collection: {{message}}",
+    "nameRequired": "Name is required",
+    "nameTooShort": "Name must be at least 3 characters",
+    "nameTooLong": "Name must be less than 100 characters",
+    "descriptionTooLong": "Description must be less than 500 characters",
+    "keyInvalid": "Collection key must be 1-128 visible ASCII characters"
   },
   "collectionScope": {
     "label": "Retrieval scope",

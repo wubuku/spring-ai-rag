@@ -151,7 +151,10 @@
     "previewContentLoadError": "无法加载文档完整内容：{{error}}",
     "allCollections": "全部集合",
     "supportedFormats": "支持：{{formats}}",
-    "subtitle": "供检索与 RAG 对话使用的逻辑文档。删除文档不会连带删除已导入的文件。"
+    "subtitle": "供检索与 RAG 对话使用的逻辑文档。删除文档不会连带删除已导入的文件。",
+    "reembedSuccess": "已重新嵌入：成功 {{success}} 条",
+    "reembedSuccessPartial": "已重新嵌入：成功 {{success}} 条，失败 {{failed}} 条",
+    "reembedError": "重新嵌入失败：{{message}}"
   },
   "collections": {
     "title": "知识库管理",
@@ -207,7 +210,14 @@
     "name": "名称",
     "viewDocuments": "查看文档",
     "collectionKeyPlaceholder": "UUID 或业务标识",
-    "subtitle": "把文档组织成知识库，再以整体操作执行 purge 或重新嵌入。"
+    "subtitle": "把文档组织成知识库，再以整体操作执行 purge 或重新嵌入。",
+    "createSuccess": "集合创建成功",
+    "createError": "创建集合失败：{{message}}",
+    "nameRequired": "名称为必填项",
+    "nameTooShort": "名称至少需要 3 个字符",
+    "nameTooLong": "名称不能超过 100 个字符",
+    "descriptionTooLong": "描述不能超过 500 个字符",
+    "keyInvalid": "集合键必须是 1-128 个可见 ASCII 字符"
   },
   "collectionScope": {
     "label": "检索范围",

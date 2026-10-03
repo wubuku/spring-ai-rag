@@ -49,7 +49,7 @@ describe('CreateCollectionModal', () => {
     );
 
     await user.click(screen.getByRole('button', { name: /create/i }));
-    expect(screen.getByText(/name is required/i)).toBeInTheDocument();
+    expect(screen.getByText('collections.nameRequired')).toBeInTheDocument();
   });
 
   it('shows validation error when name is too short', async () => {
@@ -62,7 +62,7 @@ describe('CreateCollectionModal', () => {
 
     await user.type(screen.getByRole('textbox', { name: 'collections.name' }), 'AB');
     await user.click(screen.getByRole('button', { name: /create/i }));
-    expect(screen.getByText(/at least 3 characters/i)).toBeInTheDocument();
+    expect(screen.getByText('collections.nameTooShort')).toBeInTheDocument();
   });
 
   it('shows validation error when name exceeds 100 characters', async () => {
@@ -79,7 +79,7 @@ describe('CreateCollectionModal', () => {
     await user.click(screen.getByRole('textbox', { name: 'collections.name' }));
     await user.paste('N'.repeat(101));
     await user.click(screen.getByRole('button', { name: /create/i }));
-    expect(screen.getByText(/less than 100 characters/i)).toBeInTheDocument();
+    expect(screen.getByText('collections.nameTooLong')).toBeInTheDocument();
   });
 
   it('shows validation error when description exceeds 500 characters', async () => {
@@ -94,7 +94,7 @@ describe('CreateCollectionModal', () => {
     await user.click(screen.getByRole('textbox', { name: 'collections.description' }));
     await user.paste('d'.repeat(501));
     await user.click(screen.getByRole('button', { name: /create/i }));
-    expect(screen.getByText(/less than 500 characters/i)).toBeInTheDocument();
+    expect(screen.getByText('collections.descriptionTooLong')).toBeInTheDocument();
   });
 
   it('shows an error toast and keeps the modal open when creation fails', async () => {
@@ -117,7 +117,7 @@ describe('CreateCollectionModal', () => {
 
     await waitFor(() =>
       expect(toastMock.showToast).toHaveBeenCalledWith(
-        'Failed to create collection: backend down',
+        'collections.createError',
         'error',
       ),
     );
@@ -136,7 +136,7 @@ describe('CreateCollectionModal', () => {
     await user.type(screen.getByRole('textbox', { name: 'collections.name' }), 'ValidName');
     await user.click(screen.getByRole('button', { name: /create/i }));
 
-    expect(screen.getByText(/1-128 visible ASCII characters/i)).toBeInTheDocument();
+    expect(screen.getByText('collections.keyInvalid')).toBeInTheDocument();
   });
 
   it('accepts a collection key at the 128-character limit', async () => {
