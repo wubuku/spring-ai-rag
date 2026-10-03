@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
+import { apiKeysApi } from '../api/apikeys';
 import { ApiKeys } from './ApiKeys';
 
 // Create mock functions at module level
@@ -362,5 +363,383 @@ describe('ApiKeys', () => {
       'apiKeys.createError: Server validation failed',
       'error',
     );
+  });
+
+  describe('吊销与轮换', () => {
+    const rotatingPrincipal = {
+      ...mockPrincipals[0],
+      principalId: 'rag_p_rotate',
+      name: 'Rotating Key',
+      rotationPending: true,
+      pendingRotationId: 'rag_rot_777',
+      retiringCredentialId: 'rag_k_rotate_v1',
+      retiringCredentialVersion: 1,
+      rotationExpiresAt: '2026-05-01T00:00:00',
+    };
+
+    /**
+     * 页面有 7 个 useMutation，靠单一 mockMutateFn 无法区分是谁被调用。
+     * 这里把 mutate 接到 config 自己的 mutationFn 上，断言因此落在
+     * api 层的实参——也就是真正被端到端执行的那份契约。
+     *
+     * 两处都必须在 render 之前装好：
+     * 1. 组件渲染时就调用了全部 useMutation 并捕获返回值，render 之后再换
+     *    实现，捕获到的仍然是旧的。
+     * 2. useMutation 被 mock 掉之后，"mutationFn 落定后自动调 onSuccess /
+     *    onError" 这件事也没了，得由 mutate 自己补上，否则成功路径永远
+     *    走不到（toast 不出、结果页不渲染）。
+     */
+    const routeMutationsToApiLayer = () => {
+      mockUseMutation.mockImplementation((config: {
+        mutationFn: (...args: unknown[]) => unknown;
+        onSuccess?: (value: unknown) => void;
+        onError?: (error: unknown) => void;
+      }) => ({
+        mutate: (...args: unknown[]) => {
+          void Promise.resolve(config.mutationFn(...args))
+            .then(config.onSuccess, config.onError);
+        },
+        isPending: false,
+      }));
+    };
+
+    const mockInvalidate = vi.fn();
+
+    const renderWithPrincipals = (principals: unknown[]) => {
+      routeMutationsToApiLayer();
+      // queryClient 同理：组件渲染时就拿到了它，render 之后再换实现无效。
+      mockUseQueryClient.mockReturnValue({ invalidateQueries: mockInvalidate });
+      // onSuccess 会读 response.data，所以 api 层必须有默认返回值；
+      // 否则"只验证提交参数"的用例会在 promise 链里留下未处理的 rejection。
+      // 关心具体返回值的用例用 mockResolvedValueOnce 覆盖即可。
+      apiKeysApi.revokeKey.mockResolvedValue({ data: {} });
+      apiKeysApi.completeRotation.mockResolvedValue({ data: {} });
+      apiKeysApi.cancelRotation.mockResolvedValue({ data: {} });
+      apiKeysApi.prepareRotation.mockResolvedValue({
+        data: { rotationId: 'rag_rot_default', keyId: 'rag_k_default', rawKey: 'default-secret' },
+      });
+      apiKeysApi.rotateKey.mockResolvedValue({
+        data: { name: 'Default', keyId: 'rag_k_default', rawKey: 'default-secret' },
+      });
+      mockUseQuery.mockImplementation((options: { queryKey: unknown[] }) => {
+        if (options.queryKey[0] === 'api-principals') {
+          return { data: { data: principals }, isPending: false, isError: false };
+        }
+        return { data: { data: { collections: [] } }, isPending: false, isError: false };
+      });
+      render(<BrowserRouter><ApiKeys /></BrowserRouter>);
+    };
+
+    const lastMutationOf = (name: string) => {
+      const call = mockUseMutation.mock.calls
+        .map(([config]) => config as { mutationKey?: string[] })
+        .reverse()
+        .find(config => config.mutationKey?.[0] === name);
+      return call as { mutationKey?: string[]; onSuccess?: (v: unknown) => void; onError?: (e: unknown) => void } | undefined;
+    };
+
+    it('吊销要先过确认对话框，确认前一个请求都不发', () => {
+      renderWithPrincipals([mockPrincipals[0]]);
+
+      fireEvent.click(screen.getByRole('button', { name: 'apiKeys.revoke' }));
+
+      // 确认框已经打开，但密钥还挂在服务端。
+      expect(screen.getByText('apiKeys.revokeConfirm')).toBeInTheDocument();
+      expect(apiKeysApi.revokeKey).not.toHaveBeenCalled();
+
+      // 真正的确认按钮（确认框里的那个，不是卡片上的入口）。
+      fireEvent.click(screen.getAllByRole('button', { name: 'apiKeys.revoke' })[1]);
+
+      expect(apiKeysApi.revokeKey).toHaveBeenCalledWith('rag_k_abc123_v2');
+    });
+
+    it('取消确认对话框不会吊销', () => {
+      renderWithPrincipals([mockPrincipals[0]]);
+
+      fireEvent.click(screen.getByRole('button', { name: 'apiKeys.revoke' }));
+      fireEvent.click(screen.getByRole('button', { name: 'common.cancel' }));
+
+      expect(apiKeysApi.revokeKey).not.toHaveBeenCalled();
+    });
+
+    it('吊销成功后刷新列表并提示', () => {
+      renderWithPrincipals([mockPrincipals[0]]);
+
+      fireEvent.click(screen.getByRole('button', { name: 'apiKeys.revoke' }));
+      fireEvent.click(screen.getAllByRole('button', { name: 'apiKeys.revoke' })[1]);
+
+      return waitFor(() => {
+        expect(mockInvalidate).toHaveBeenCalledWith({ queryKey: ['api-principals'] });
+        expect(mockShowToast).toHaveBeenCalledWith('apiKeys.revoked', 'success');
+      });
+    });
+
+    it('吊销失败时报告错误而不报成功', () => {
+      renderWithPrincipals([mockPrincipals[0]]);
+      apiKeysApi.revokeKey.mockRejectedValueOnce(new Error('nope'));
+
+      fireEvent.click(screen.getByRole('button', { name: 'apiKeys.revoke' }));
+      fireEvent.click(screen.getAllByRole('button', { name: 'apiKeys.revoke' })[1]);
+
+      return waitFor(() => {
+        expect(mockShowToast).toHaveBeenCalledWith('apiKeys.revokeError', 'error');
+      });
+    });
+
+    it('完成轮换针对待完成的那一次轮换，不是当前凭据', () => {
+      renderWithPrincipals([rotatingPrincipal]);
+
+      fireEvent.click(screen.getByRole('button', { name: 'apiKeys.completeRotation' }));
+
+      expect(apiKeysApi.completeRotation).toHaveBeenCalledWith('rag_rot_777');
+      return waitFor(() => {
+        expect(mockShowToast).toHaveBeenCalledWith('apiKeys.rotationCompleted', 'success');
+      });
+    });
+
+    it('取消轮换同样针对待完成的那一次轮换', () => {
+      renderWithPrincipals([rotatingPrincipal]);
+
+      fireEvent.click(screen.getByRole('button', { name: 'apiKeys.cancelRotation' }));
+
+      expect(apiKeysApi.cancelRotation).toHaveBeenCalledWith('rag_rot_777');
+      return waitFor(() => {
+        expect(mockShowToast).toHaveBeenCalledWith('apiKeys.rotationCanceled', 'success');
+      });
+    });
+
+    it('轮换进行中不能再发起新轮换，并显示正在退役的旧凭据', () => {
+      renderWithPrincipals([rotatingPrincipal]);
+
+      expect(screen.getByRole('button', { name: 'apiKeys.rotate' })).toBeDisabled();
+      expect(screen.getByText('apiKeys.retiringCredential')).toBeInTheDocument();
+      expect(screen.getByTitle('rag_k_rotate_v1')).toBeInTheDocument();
+    });
+
+    describe('分阶段轮换', () => {
+      const openDialog = () => {
+        renderWithPrincipals([mockPrincipals[0]]);
+        fireEvent.click(screen.getByRole('button', { name: 'apiKeys.rotate' }));
+      };
+
+      const submit = () => {
+        fireEvent.click(screen.getByRole('button', { name: 'apiKeys.prepareRotation' }));
+      };
+
+      it.each([
+        ['留空', ''],
+        ['零', '0'],
+        ['负数', '-1'],
+        ['非整数', '1.5'],
+        ['超过一天', '86401'],
+      ])('重叠窗口%s时提交按钮不可用', (_label, value) => {
+        openDialog();
+        fireEvent.change(document.querySelector('#rotation-overlap')!, {
+          target: { value },
+        });
+
+        // 禁用发生在按钮上，所以"没提交"要连着断言禁用本身，
+        // 否则用例名说的是守卫、实际钉的是另一道防线。
+        const submitButton = screen.getByRole('button', { name: 'apiKeys.prepareRotation' });
+        expect(submitButton).toBeDisabled();
+
+        fireEvent.click(submitButton);
+
+        expect(apiKeysApi.prepareRotation).not.toHaveBeenCalled();
+      });
+
+      it('提交合法的重叠窗口与幂等键', () => {
+        openDialog();
+        fireEvent.change(document.querySelector('#rotation-overlap')!, {
+          target: { value: '1800' },
+        });
+
+        submit();
+
+        expect(apiKeysApi.prepareRotation).toHaveBeenCalledWith(
+          'rag_k_abc123_v2',
+          1800,
+          expect.any(String),
+        );
+      });
+
+      it('留空重叠窗口等同于不传该参数', () => {
+        openDialog();
+        // 清空后按钮本身就该禁用，所以这里直接验证默认值路径。
+        expect(document.querySelector<HTMLInputElement>('#rotation-overlap')?.value).toBe('900');
+      });
+
+      it('同一次会话内重复提交沿用同一个幂等键', async () => {
+        openDialog();
+        // 请求保持飞行中，界面才停在表单上——真实场景正是"以为没点上又点一次"。
+        apiKeysApi.prepareRotation.mockReturnValue(new Promise(() => {}));
+
+        submit();
+        expect(apiKeysApi.prepareRotation).toHaveBeenCalledTimes(1);
+        fireEvent.click(screen.getByRole('button', { name: 'apiKeys.prepareRotation' }));
+
+        expect(apiKeysApi.prepareRotation).toHaveBeenCalledTimes(2);
+        expect(apiKeysApi.prepareRotation.mock.calls[0][2])
+          .toBe(apiKeysApi.prepareRotation.mock.calls[1][2]);
+        expect(apiKeysApi.prepareRotation.mock.calls[0][2]).toBeTruthy();
+      });
+
+      it('成功后展示一次性密钥、轮换标识与重叠截止', async () => {
+        openDialog();
+        apiKeysApi.prepareRotation.mockResolvedValueOnce({
+          data: {
+            rotationId: 'rag_rot_888',
+            keyId: 'rag_k_abc123_v3',
+            rawKey: 'raw-secret-value',
+            rotationExpiresAt: '2026-05-01T00:00:00',
+          },
+        });
+
+        submit();
+
+        await waitFor(() => {
+          expect(screen.getByText('rag_rot_888')).toBeInTheDocument();
+        });
+        expect(screen.getByText('rag_k_abc123_v3')).toBeInTheDocument();
+        expect(screen.getByText('raw-secret-value')).toBeInTheDocument();
+        expect(screen.getByText('apiKeys.stagedSecretWarning')).toBeInTheDocument();
+      });
+
+      it('重放恢复：后端没有回传一次性密钥时改走恢复提示', async () => {
+        openDialog();
+        apiKeysApi.prepareRotation.mockResolvedValueOnce({
+          data: {
+            rotationId: 'rag_rot_888',
+            keyId: 'rag_k_abc123_v3',
+            rawKey: null,
+          },
+        });
+
+        submit();
+
+        await waitFor(() => {
+          expect(screen.getByText('apiKeys.rotationReplayRecovered')).toBeInTheDocument();
+        });
+        expect(screen.getByText('apiKeys.rotationReplayNoSecret')).toBeInTheDocument();
+        // 一次都没有展示过的密钥不该凭空出现。
+        expect(screen.queryByText('apiKeys.rawKey')).not.toBeInTheDocument();
+      });
+
+      it('复制按钮把一次性密钥写进剪贴板', async () => {
+        const writeText = vi.fn().mockResolvedValue(undefined);
+        Object.defineProperty(navigator, 'clipboard', {
+          value: { writeText },
+          configurable: true,
+        });
+        openDialog();
+        apiKeysApi.prepareRotation.mockResolvedValueOnce({
+          data: {
+            rotationId: 'rag_rot_888',
+            keyId: 'rag_k_abc123_v3',
+            rawKey: 'raw-secret-value',
+          },
+        });
+
+        submit();
+        await waitFor(() => {
+          expect(screen.getByRole('button', { name: 'apiKeys.copy' })).toBeInTheDocument();
+        });
+        fireEvent.click(screen.getByRole('button', { name: 'apiKeys.copy' }));
+
+        expect(writeText).toHaveBeenCalledWith('raw-secret-value');
+      });
+
+      it('关闭后重开不再残留上一次的一次性密钥', async () => {
+        openDialog();
+        apiKeysApi.prepareRotation.mockResolvedValueOnce({
+          data: {
+            rotationId: 'rag_rot_888',
+            keyId: 'rag_k_abc123_v3',
+            rawKey: 'raw-secret-value',
+          },
+        });
+        submit();
+        await waitFor(() => {
+          expect(screen.getByText('raw-secret-value')).toBeInTheDocument();
+        });
+
+        fireEvent.click(screen.getByRole('button', { name: 'common.close' }));
+        expect(screen.queryByText('raw-secret-value')).not.toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: 'apiKeys.rotate' }));
+        expect(screen.queryByText('raw-secret-value')).not.toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'apiKeys.prepareRotation' })).toBeInTheDocument();
+      });
+    });
+
+    describe('立即轮换', () => {
+      const openImmediateDialog = () => {
+        renderWithPrincipals([mockPrincipals[0]]);
+        fireEvent.click(screen.getByRole('button', { name: 'apiKeys.rotate' }));
+        fireEvent.click(screen.getByRole('radio', { name: /apiKeys\.immediateRotation/ }));
+      };
+
+      it('切到立即轮换后不再提交重叠窗口', () => {
+        openImmediateDialog();
+
+        fireEvent.click(screen.getByRole('button', { name: 'apiKeys.rotateImmediately' }));
+
+        expect(apiKeysApi.prepareRotation).not.toHaveBeenCalled();
+        expect(apiKeysApi.rotateKey).toHaveBeenCalledWith('rag_k_abc123_v2');
+      });
+
+      it('立即轮换没有重叠窗口输入框', () => {
+        openImmediateDialog();
+        expect(document.querySelector('#rotation-overlap')).toBeNull();
+      });
+
+      it('成功后展示新名称、密钥标识与一次性密钥', async () => {
+        openImmediateDialog();
+        apiKeysApi.rotateKey.mockResolvedValueOnce({
+          data: {
+            name: 'Rotating Key',
+            keyId: 'rag_k_abc123_v9',
+            rawKey: 'immediate-secret',
+            warning: 'apiKeys.immediateRotationWarning',
+          },
+        });
+
+        fireEvent.click(screen.getByRole('button', { name: 'apiKeys.rotateImmediately' }));
+
+        await waitFor(() => {
+          expect(screen.getByText('rag_k_abc123_v9')).toBeInTheDocument();
+        });
+        expect(screen.getByText('immediate-secret')).toBeInTheDocument();
+        expect(screen.getByText('apiKeys.immediateRotationWarning')).toBeInTheDocument();
+      });
+    });
+
+    it('轮换请求失败时把后端原因带进提示', () => {
+      renderWithPrincipals([mockPrincipals[0]]);
+      apiKeysApi.prepareRotation.mockRejectedValueOnce(new Error('rotation window too short'));
+
+      fireEvent.click(screen.getByRole('button', { name: 'apiKeys.rotate' }));
+      fireEvent.click(screen.getByRole('button', { name: 'apiKeys.prepareRotation' }));
+
+      return waitFor(() => {
+        expect(mockShowToast).toHaveBeenCalledWith(
+          'apiKeys.rotationPrepareError: rotation window too short',
+          'error',
+        );
+      });
+    });
+
+    it('吊销与轮换都挂在 mutation 自己的回调上，不是共用一条', () => {
+      // 七个 useMutation 的 onSuccess/onError 各不相同；共用一条会让
+      // 吊销成功去报"轮换已完成"。
+      renderWithPrincipals([rotatingPrincipal]);
+
+      fireEvent.click(screen.getByRole('button', { name: 'apiKeys.completeRotation' }));
+
+      const revokeConfig = lastMutationOf('cancel-api-key-rotation');
+      expect(revokeConfig).toBeDefined();
+      expect(lastMutationOf('complete-api-key-rotation')?.onSuccess)
+        .not.toBe(lastMutationOf('cancel-api-key-rotation')?.onSuccess);
+    });
   });
 });
