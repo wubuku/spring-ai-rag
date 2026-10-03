@@ -61,10 +61,10 @@ public class ExternalDocumentService {
     private final CollectionIdentityResolver collectionIdentityResolver;
     private final JdbcTemplate jdbcTemplate;
     private final TransactionTemplate transactionTemplate;
-    private EmbeddingDispatchService dispatchService;
-    private DocumentMutationService mutationService;
-    private KeywordIndexPersistenceService keywordIndexPersistenceService;
-    private ExternalAddressRetirementService addressRetirementService;
+    private EmbeddingDispatchService dispatchService; // optional-claim: EmbeddingDispatchService 是无条件 @Service，null 臂只在不走 Spring 装配的构造路径可达；守卫真正的职责是按策略决定是否入队。Batch 829 删掉了同一字段上那条会抛的守卫——生产里"队列不可用"的形态是 embedding-jobs.enabled=false，那由 EmbeddingDispatchService 自己抛 EMBEDDING_JOBS_DISABLED
+    private DocumentMutationService mutationService; // optional-claim: DocumentMutationService 是无条件 @Service，null 臂只在不走 Spring 装配的构造路径可达；守卫真正的职责是切到 legacy 内联写入路径——那条路径只在 Spring 装配之外可达
+    private KeywordIndexPersistenceService keywordIndexPersistenceService; // optional-claim: KeywordIndexPersistenceService 是无条件 @Service，null 臂只在不走 Spring 装配的构造路径可达；守卫真正的职责是本地关键词索引缺席时跳过维护，不让索引旁路拖垮写入
+    private ExternalAddressRetirementService addressRetirementService; // optional-claim: ExternalAddressRetirementService 是无条件 @Service，null 臂只在不走 Spring 装配的构造路径可达；守卫真正的职责是退役校验缺席时放行——它防的是"已退役的外部地址被重新写活"，属于可跳过的旁路而非写入前置条件
 
     public ExternalDocumentService(
             RagDocumentRepository documentRepository,
@@ -118,11 +118,6 @@ public class ExternalDocumentService {
         Long collectionId = resolveWritableCollection(request.getCollectionKey());
         EmbeddingPolicy policy = EmbeddingPolicyResolver.resolve(
                 request.getEmbeddingPolicy(), request.isEmbed());
-        if (policy == EmbeddingPolicy.ASYNC && dispatchService == null) {
-            throw new RagException(
-                    ErrorCode.EMBEDDING_JOBS_DISABLED,
-                    "Persistent embedding jobs are disabled");
-        }
         EmbeddingDispatchService.Result[] queued = new EmbeddingDispatchService.Result[1];
         Persisted persisted = executeInTransaction(() -> {
             queued[0] = null;

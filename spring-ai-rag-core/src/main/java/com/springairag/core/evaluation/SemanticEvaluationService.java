@@ -33,7 +33,7 @@ public class SemanticEvaluationService {
     private static final int MAX_ERROR_LENGTH = 500;
 
     private final ChatClient.Builder chatClientBuilder;
-    private final ChatModelRouter chatModelRouter;
+    private final ChatModelRouter chatModelRouter; // optional-claim: ChatModelRouter 是无条件 @Component，null 臂只在不走 Spring 装配的构造路径可达；守卫真正的职责是不做动态路由时直接返回构建器——这是一条真实的降级路径，不是"路由器可能不存在"
     private final RagProperties ragProperties;
 
     public SemanticEvaluationService(

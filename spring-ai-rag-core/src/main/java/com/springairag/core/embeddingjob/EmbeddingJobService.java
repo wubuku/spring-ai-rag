@@ -49,7 +49,7 @@ public class EmbeddingJobService {
     private final RagEmbeddingJobProperties properties;
     private final DocumentDerivationDescriptorProvider descriptorProvider;
     private final DocumentEmbedService documentEmbedService;
-    private EmbeddingJobWakeupPublisher wakeupPublisher;
+    private EmbeddingJobWakeupPublisher wakeupPublisher; // optional-claim: EmbeddingJobWakeupPublisher 是无条件 @Component，null 臂只在不走 Spring 装配的构造路径可达；守卫真正的职责是"只有真正排入 QUEUED 的作业才需要唤醒 worker"
 
     public EmbeddingJobService(
             EmbeddingJobRepository jobRepository,

@@ -5,6 +5,8 @@ import com.springairag.api.dto.JsonRecordUpsertRequest;
 import com.springairag.api.dto.JsonRecordUpsertResponse;
 import com.springairag.api.enums.EmbeddingAction;
 import com.springairag.api.enums.EmbeddingPolicy;
+import com.springairag.api.enums.ErrorCode;
+import com.springairag.core.exception.RagException;
 import com.springairag.core.config.EmbeddingProfile;
 import com.springairag.core.config.EmbeddingProfileProvider;
 import com.springairag.core.config.RagProperties;
@@ -136,6 +138,28 @@ class JsonRecordServiceLegacyUpsertTailTest {
         assertEquals("ASYNC_QUEUED", response.embeddingAction());
         assertEquals(jobId, response.embeddingJobId());
         assertEquals(batchId, response.embeddingBatchId());
+    }
+
+    /**
+     * 与 {@code ExternalDocumentServiceTest} 里那条同源：作业队列被禁用时，
+     * 分发器会抛 EMBEDDING_JOBS_DISABLED，**本服务必须把它透出去**而不是
+     * 静默不入队。旧用例把分发器置空，断言的是一条不可达的 null 守卫。
+     */
+    @Test
+    void asyncUpsertSurfacesDisabledJobQueueInsteadOfSilentlySkipping() {
+        when(dispatchService.enqueueInCurrentTransaction(
+                any(com.springairag.core.entity.RagDocument.class),
+                anyBoolean(), anyBoolean(), eq("JSON_UPSERT")))
+                .thenThrow(new RagException(
+                        ErrorCode.EMBEDDING_JOBS_DISABLED,
+                        "Persistent embedding jobs are disabled"));
+        JsonRecordUpsertRequest request = validRequest("rec-1");
+        request.setEmbeddingPolicy(EmbeddingPolicy.ASYNC);
+
+        RagException error = assertThrows(
+                RagException.class, () -> service.upsert(request));
+
+        assertEquals(ErrorCode.EMBEDDING_JOBS_DISABLED, error.getErrorCodeEnum());
     }
 
     @Test

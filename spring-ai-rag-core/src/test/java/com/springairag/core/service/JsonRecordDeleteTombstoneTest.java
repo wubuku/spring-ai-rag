@@ -148,26 +148,6 @@ class JsonRecordDeleteTombstoneTest {
     }
 
     @Test
-    void sourceDeleteRejectsWhenMutationServiceMissing() {
-        JsonRecordService bare = new JsonRecordService(
-                documentRepository,
-                versionService,
-                mock(DocumentEmbedService.class),
-                mock(HybridRetrieverService.class),
-                mock(ReRankingService.class),
-                mock(EmbeddingProfileProvider.class),
-                resolver,
-                new RagProperties(),
-                new ObjectMapper(),
-                jdbcTemplate,
-                mock(PlatformTransactionManager.class));
-
-        assertThrows(IllegalStateException.class,
-                () -> bare.sourceDelete(KEY, "default", "ext-1",
-                        "rev-2", "rev-1"));
-    }
-
-    @Test
     void sourceDeleteDelegatesTombstoneWithJsonRecordFlag() {
         ExternalDocumentDeleteResponse canned =
                 new ExternalDocumentDeleteResponse(

@@ -48,7 +48,7 @@ public class ApiPrincipalExpiryAlertService {
     private final ObjectMapper objectMapper;
     private final AlertService alertService;
     private final List<NotificationService> notificationServices;
-    private final AlertNotificationOutboxService notificationOutboxService;
+    private final AlertNotificationOutboxService notificationOutboxService; // optional-claim: AlertNotificationOutboxService 是无条件 @Service，null 臂只在不走 Spring 装配的构造路径可达；守卫真正的职责是 isDurableEnabled() 功能开关——要不要落持久化 outbox 由配置决定，不是"outbox 可能不存在"
     private final ApiPrincipalExpiryAlertMetrics metrics;
     private final ZoneId timeZone;
 

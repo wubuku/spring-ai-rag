@@ -77,8 +77,8 @@ public class DocumentMutationService {
     private final JdbcTemplate jdbcTemplate;
     private final RagDocumentLifecycleProperties properties;
     private final ObjectMapper objectMapper;
-    private KeywordIndexPersistenceService keywordIndexPersistenceService;
-    private ExternalAddressRetirementService addressRetirementService;
+    private KeywordIndexPersistenceService keywordIndexPersistenceService; // optional-claim: KeywordIndexPersistenceService 是无条件 @Service，null 臂只在不走 Spring 装配的构造路径可达；守卫真正的职责是"本次改动不涉及本地索引"（文档禁用或策略为 SKIP）时不做协调
+    private ExternalAddressRetirementService addressRetirementService; // optional-claim: ExternalAddressRetirementService 是无条件 @Service，null 臂只在不走 Spring 装配的构造路径可达；守卫真正的职责是退役校验缺席时放行——它防的是"已退役的外部地址被重新写活"，属于可跳过的旁路而非写入前置条件
 
     public DocumentMutationService(
             RagDocumentRepository documentRepository,

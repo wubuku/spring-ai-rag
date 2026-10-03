@@ -50,7 +50,7 @@ public class ChatTurnOperationService {
                 thread.setDaemon(true);
                 return thread;
             });
-    private ChatSessionCoordinator sessionCoordinator;
+    private ChatSessionCoordinator sessionCoordinator; // optional-claim: ChatSessionCoordinator 是无条件 @Component，null 臂只在不走 Spring 装配的构造路径可达；守卫真正的职责是"这次轮次操作有没有会话租约"——无租约的轮次不参与会话提交/释放/过期失败
 
     public ChatTurnOperationService(
             ChatTurnOperationRepository repository,

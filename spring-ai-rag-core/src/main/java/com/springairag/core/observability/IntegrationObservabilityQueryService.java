@@ -47,7 +47,7 @@ public final class IntegrationObservabilityQueryService {
     private final IntegrationObservationRepository repository;
     private final RagProperties properties;
     private final CollectionIdentityResolver collectionIdentityResolver;
-    private final IntegrationObservationRecorder recorder;
+    private final IntegrationObservationRecorder recorder; // optional-claim: IntegrationObservationRecorder 是无条件 @Component，null 臂只在不走 Spring 装配的构造路径可达；守卫真正的职责是"没有丢弃计数"时该项报 0，而不是让整个查询端点 500
     private final Clock clock;
 
     @Autowired

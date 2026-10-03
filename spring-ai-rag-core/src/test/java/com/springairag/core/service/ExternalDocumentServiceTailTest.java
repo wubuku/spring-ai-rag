@@ -3,14 +3,12 @@ package com.springairag.core.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.springairag.api.dto.ExternalDocumentUpsertRequest;
 import com.springairag.api.enums.EmbeddingPolicy;
-import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.config.EmbeddingProfile;
 import com.springairag.core.config.EmbeddingProfileProvider;
 import com.springairag.core.entity.RagCollection;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.entity.RagDocumentVersion;
 import com.springairag.core.exception.DocumentRevisionConflictException;
-import com.springairag.core.exception.RagException;
 import com.springairag.core.embeddingjob.EmbeddingDispatchService;
 import com.springairag.core.repository.RagCollectionRepository;
 import com.springairag.core.repository.RagDocumentRepository;
@@ -185,18 +183,6 @@ class ExternalDocumentServiceTailTest {
                 ArgumentCaptor.forClass(RagDocument.class);
         verify(documentRepository).saveAndFlush(captor.capture());
         assertEquals("text", captor.getValue().getDocumentType());
-    }
-
-    @Test
-    void upsertRejectsAsyncPolicyWhenDispatchUnavailable() {
-        ExternalDocumentUpsertRequest request = request("doc-1", "rev-1");
-        request.setEmbeddingPolicy(EmbeddingPolicy.ASYNC);
-
-        RagException error = assertThrows(RagException.class,
-                () -> service(transactionManager, null).upsert(request));
-        assertEquals(
-                com.springairag.api.enums.ErrorCode.EMBEDDING_JOBS_DISABLED,
-                error.getErrorCodeEnum());
     }
 
     @Test

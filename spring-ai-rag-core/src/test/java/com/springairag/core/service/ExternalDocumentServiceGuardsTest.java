@@ -3,13 +3,10 @@ package com.springairag.core.service;
 import com.springairag.api.dto.ExternalDocumentBatchUpsertResponse;
 import com.springairag.api.dto.ExternalDocumentUpsertRequest;
 import com.springairag.api.dto.ExternalDocumentUpsertResponse;
-import com.springairag.api.enums.EmbeddingPolicy;
-import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.config.EmbeddingProfile;
 import com.springairag.core.config.EmbeddingProfileProvider;
 import com.springairag.core.entity.RagCollection;
 import com.springairag.core.entity.RagDocument;
-import com.springairag.core.exception.RagException;
 import com.springairag.core.repository.RagCollectionRepository;
 import com.springairag.core.repository.RagDocumentRepository;
 import com.springairag.core.repository.RagEmbeddingRepository;
@@ -169,16 +166,6 @@ class ExternalDocumentServiceGuardsTest {
 
         assertSame(canned, service.upsert(request));
         verify(mutationService).upsertExternal(request);
-    }
-
-    @Test
-    void upsertRejectsAsyncPolicyWhenJobDispatchMissing() {
-        ExternalDocumentUpsertRequest request = request("doc-1", "content");
-        request.setEmbeddingPolicy(EmbeddingPolicy.ASYNC);
-
-        RagException error = assertThrows(RagException.class,
-                () -> service.upsert(request));
-        assertEquals(ErrorCode.EMBEDDING_JOBS_DISABLED, error.getErrorCodeEnum());
     }
 
     @Test

@@ -49,10 +49,10 @@ public class RetrievalDiagnosticsService {
     private static final int MAX_PAGE_SIZE = 100;
     private static final int CLEANUP_BATCH = 500;
 
-    private final RagRetrievalLogRepository repository;
+    private final RagRetrievalLogRepository repository; // optional-claim: RagRetrievalLogRepository 是无条件 @Repository，null 臂只在不走 Spring 装配的构造路径可达；守卫真正的职责是 fail-open——诊断是旁路，写不进去不该让检索失败。Batch 829 删掉了同一字段上那条会抛的 get() 守卫，因为它把"仓储缺失"谎报成"trace 不存在"
     private final RagRetrievalDiagnosticsProperties properties;
     private final ObjectMapper objectMapper;
-    private final CollectionIdentityResolver identityResolver;
+    private final CollectionIdentityResolver identityResolver; // optional-claim: CollectionIdentityResolver 是无条件 @Component，null 臂只在不走 Spring 装配的构造路径可达；守卫真正的职责是解析不出可见集合时返回空列表，而不是放宽成"全可见"
 
     public RetrievalDiagnosticsService(
             @Autowired(required = false) RagRetrievalLogRepository repository,
@@ -174,9 +174,6 @@ public class RetrievalDiagnosticsService {
 
     public RetrievalTraceDetailResponse get(ChatPrincipal principal, UUID traceId) {
         String owner = requirePrincipal(principal);
-        if (repository == null) {
-            throw new RagException(ErrorCode.NOT_FOUND, "Retrieval trace not found");
-        }
         RagRetrievalLog logEntry = repository.findByTraceId(traceId)
                 .filter(item -> owner.equals(item.getOwnerPrincipalId()))
                 .orElseThrow(() -> new RagException(
