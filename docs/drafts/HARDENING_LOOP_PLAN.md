@@ -478,6 +478,96 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
+### Batch 819（已交付）
+
+- 分支：`feature/test-only-controller-overloads-20261006`
+- 内容：承接 815/816 的方向，这次针对的是**置空业务参数**（而不是请求上下文）的
+  那一族"只有测试够得着"的重载。删掉 11 个，并把 816 门禁的一个真实盲区补上。
+- 勘察（判据不是 grep 计数，是"编译器能不能证明"）：
+  - 写了一个普查脚本找**没有 Spring 映射注解的 public 方法**——它们过不了 HTTP，
+    因此只有进程内调用方（即测试）够得着。
+    **第一次判据是错的**：朴素地"往上找一行看有没有注解"会把多行
+    `@GetMapping(...)` 的收尾 `)` 当成方法上一行，于是把 165 个正常方法全报出来。
+    改成**括号深度扫描**（向上走，跨过注解自己的 `(` 之前算同一块注解）后，
+    26 个 controller 里剩下 **21 个**未映射 public 方法。
+  - 再按接收者甄别（同名噪声 + 重载**自转发**）：`.embedDocument(` 那 4 处
+    main 调用其实全在 `documentEmbedService` 上，是个**不同的类**；
+    而"main 里有 1 个调用者"多数是**旁路自己转发给自己**。
+    两层过滤后坐实 **11 个**真的只有测试够得着。
+  - **Javadoc 说谎**：其中 3 个的注释写着"兼容隔离 Java 调用方" /
+    "Java compatibility overload retained for existing isolated callers"。
+    **删掉之后主源码零编译错误**——机器证明那些"调用方"一个都不存在。
+  - 逐个查了置空参数的生产语义，**结论是混的**，这正是这批的价值：
+    | 旁路 | 置空了什么 | 生产语义 |
+    |------|-----------|---------|
+    | `RagCollectionController.create` | `HttpServletRequest`（经三元，可能为 null） | **fail-open**：`currentPolicy(null)` → 不受限 |
+    | `listDocuments(9 参)` | `collectionKey` | **fail-closed**：受限调用方仍走 allow-list |
+    | `deleteDocument(id)` | `expectedDocumentRevision` | **总是抛**（现代 CAS 路径要求非空） |
+    | `cloneCollection(id)` | — | **方法体只有一句 throw** |
+    | `embedDocument` / `reembedMissing` | `embeddingPolicy` | 取默认值 SYNC，无授权含义 |
+    | `batchCreateDocuments` / `batchEmbedDocuments` / `uploadAndEmbed` | `collectionKey` 等 | 同 `listDocuments`，fail-closed |
+- 变更：
+  - **删除 11 个未映射重载**（3 个在 `RagCollectionController`，8 个在 `RagDocumentController`）。
+    主源码编译零错误 = 机器证明无生产调用方。
+  - **迁移 46 处测试调用点**，分四类处理：
+    1. **31 处**机械补 `, null`。迁移脚本**以编译器给的 file:line:col 为锚**，
+       而不是全文正则——816 批的脚本曾把 `Arrays.stream(ids)` 一起改掉。
+    2. **`create` 那处不能传 `null`。** 测试是把策略装进 `RequestContextHolder` 的，
+       而被删的旁路正是从那里取的真实请求；传 `null` 会让这条**安全测试失效**
+       （`currentPolicy(null)` 直接 fail-open）。改成 `authenticateRestrictedKey()`
+       返回那个 `MockHttpServletRequest` 并显式传入。
+    3. **`deleteDocument` 的 null 是诚实的**：测试走的是 legacy 分支
+       （没有 `DocumentMutationService`），那条分支根本不读版本号。
+    4. **`update` 的 DTO 适配器删除后**，两条测试改用 `CollectionUpdateRequest`；
+       `legacyUpdateRejectsCollectionKey` 改测**生产签名**——它原本守的是
+       适配器自己那份影子副本，真实的守卫是 `@JsonSetter` 记下
+       `collectionKey` 出现 + `rejectImmutableCollectionKey()`。
+  - **删掉一条测试而不是迁移它**：`legacyCloneOverloadIsRejected`
+    断言的正是那个**只会抛异常的重载**自己的异常。真实约束
+    （clone 必须指定目标键）由 `CollectionCloneRequest` 的 `@NotNull` 在
+    **Spring 绑定层**执行，直接调方法根本走不到。我一度想写一条直接调用版本来补位，
+    查证后发现那样实际测的是 `requireActiveCollectionByKey(null, …)`，**是条空洞测试**，
+    于是删掉并把理由写进代码注释。**这是 Batch 815 那条纪律的又一次执行。**
+  - **`verify-null-request-forwarding.mjs` 补上 816 门禁的盲区**：
+    816 的判据是 `if (args[idx] !== 'null') continue;`——**只认字面量**。
+    于是我删掉的那个 `create` 旁路**零报告**：
+    `HttpServletRequest currentRequest = … ? … : null;` 把 `null` 藏在变量后面，
+    而这个形状比字面量**更危险**（`: null` 那一支在三行之外，调用点看着只是普通传参）。
+    新增 `collectNullCarryingRequests()`，判据收紧成两种：
+    初始化整体是 `null`，**或**以 `: null` 收尾的三元。
+    `HttpServletRequest r = a == null ? b : c;` 产出非 null，**放行**——
+    判据宁可漏报也不该把正常代码叫成旁路。
+  - 门禁汇报口径同步改为"no overload forwards a literal null **or a possibly-null
+    request local**"，且**报告里点名那个变量**（读者要能自己核）。
+  - 文档：`developer-reference{,-zh-CN}.md` 门禁表；`testing-guide{,-zh-CN}.md`
+    第 8 条补三条（普查入口、**按语义位置插入而不是追加**、永远只会抛的那种怎么办）。
+- 变异测试（4 个，串行，**全部变红**）：
+  | 变异 | 结果 |
+  |------|------|
+  | M1 退回只认字面量（去掉变量支） | **3 失败** |
+  | M2 只接受整体为 `null`，去掉三元支 | **3 失败** |
+  | M3 去掉"变量必须真有出处"的校验（任何标识符都算） | **4 失败**（全是"不该报"的用例） |
+  | M4 把上报循环清空 | **7 失败** |
+  - M3 特别值得记：它变红的 4 条**全是负臂**，说明这批用例里有 4 条在守
+    "不许误报"——而误报正是让门禁被豁免成装饰品的原因。
+- 验证：
+  - **主源码编译零错误**（机器证明 11 个重载无生产调用方）。
+  - core **992 类 / 7739 用例 / 0 失败 / 154 跳过**（818 批是 7740，减掉的正是
+    删掉的那 1 条）。门控 IT **16 例**通过。
+  - 仓库门禁 tests **16/16**（null-request 门禁 431 文件通过，自测 **19 → 25 例**）、
+    docs **16/16**、悲观锁通过。
+  - 前端未改动，不跑 npm 链。
+- 指标：只有测试够得着的端点重载 **11 → 0**；null-request 门禁自测 19 → **25**；
+  core 用例 7740 → **7739**（删 1 条空洞测试）。
+- 遗留（如实登记，未处理）：
+  - **同一普查里还有 10 个 `setXxx` public setter 生产零调用**（`setJsonRecordService`、
+    `setDispatchService`、`setDerivationDescriptorProvider` 等），它们是
+    **生产代码里的测试注入钩子**。本批**没动**：删掉它们要改构造函数元数，
+    那是重构而不是旁路清理，属于下一批的范围。已实测坐实（10/10 无生产调用方）。
+  - **`dead-locale-key` 的判据刻意粗，仍有漏报**（承接 818）。
+  - CSP 全仓库零处——净化与转义仍是有力的**仅有的**防线。
+  - `/tmp/b806-ci-gates.patch` 仍待人工应用（13 条 standing gap）。
+
 ### Batch 818（已交付）
 
 - 分支：`feature/i18n-dead-key-gate-20261006`

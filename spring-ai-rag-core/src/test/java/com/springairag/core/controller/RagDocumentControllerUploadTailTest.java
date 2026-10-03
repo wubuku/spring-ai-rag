@@ -49,7 +49,7 @@ class RagDocumentControllerUploadTailTest {
     @Test
     void uploadAndEmbedOverloadRejectsEmptyFileArray() {
         ResponseEntity<?> response = controller.uploadAndEmbed(
-                new MockMultipartFile[0], 7L, false);
+                new MockMultipartFile[0], 7L, null, false, null, null);
 
         assertEquals(400, response.getStatusCode().value());
     }
@@ -61,7 +61,7 @@ class RagDocumentControllerUploadTailTest {
                 "plain body".getBytes(java.nio.charset.StandardCharsets.UTF_8));
 
         ResponseEntity<?> response = controller.uploadAndEmbed(
-                new MockMultipartFile[]{nameless}, null, false);
+                new MockMultipartFile[]{nameless}, null, null, false, null, null);
 
         assertEquals(200, response.getStatusCode().value());
         var body = (com.springairag.api.dto.FileUploadResponse) response.getBody();

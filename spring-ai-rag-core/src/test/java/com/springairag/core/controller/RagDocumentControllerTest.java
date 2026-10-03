@@ -129,7 +129,7 @@ class RagDocumentControllerTest {
         req.setContent("这是测试内容");
         req.setSource("unit-test");
 
-        ResponseEntity<DocumentCreateResponse> response = controller.createDocument(req);
+        ResponseEntity<DocumentCreateResponse> response = controller.createDocument(req, null);
 
         assertEquals(200, response.getStatusCode().value());
         assertEquals(42L, response.getBody().id());
@@ -149,7 +149,7 @@ class RagDocumentControllerTest {
         req.setTitle("新标题");
         req.setContent("重复内容");
 
-        ResponseEntity<DocumentCreateResponse> response = controller.createDocument(req);
+        ResponseEntity<DocumentCreateResponse> response = controller.createDocument(req, null);
 
         assertEquals(200, response.getStatusCode().value());
         assertEquals(10L, response.getBody().id());
@@ -201,7 +201,9 @@ class RagDocumentControllerTest {
         when(batchDocumentService.deleteDocument(1L)).thenReturn(
                 new DocumentDeleteResponse("Document deleted", 1L, 3L));
 
-        ResponseEntity<DocumentDeleteResponse> response = controller.deleteDocument(1L);
+        // The legacy branch (no DocumentMutationService) never reads the revision;
+        // only the CAS path does. Passing it explicitly says which path is under test.
+        ResponseEntity<DocumentDeleteResponse> response = controller.deleteDocument(1L, null);
 
         assertEquals(200, response.getStatusCode().value());
         assertEquals("Document deleted", response.getBody().message());
@@ -214,7 +216,7 @@ class RagDocumentControllerTest {
         when(batchDocumentService.deleteDocument(999L))
                 .thenThrow(new DocumentNotFoundException(999L));
 
-        assertThrows(DocumentNotFoundException.class, () -> controller.deleteDocument(999L));
+        assertThrows(DocumentNotFoundException.class, () -> controller.deleteDocument(999L, null));
     }
 
     @Test
@@ -227,7 +229,7 @@ class RagDocumentControllerTest {
         when(documentRepository.searchDocuments(isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any(PageRequest.class)))
                 .thenReturn(page);
 
-        ResponseEntity<DocumentListResponse> response = controller.listDocuments(0, 20, null, null, null, null, null, null, null);
+        ResponseEntity<DocumentListResponse> response = controller.listDocuments(0, 20, null, null, null, null, null, null, null, null);
 
         assertEquals(200, response.getStatusCode().value());
         assertEquals(2L, response.getBody().total());
@@ -242,7 +244,7 @@ class RagDocumentControllerTest {
         when(documentRepository.searchDocuments(eq("Spring"), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any(PageRequest.class)))
                 .thenReturn(page);
 
-        ResponseEntity<DocumentListResponse> response = controller.listDocuments(0, 20, "Spring", null, null, null, null, null, null);
+        ResponseEntity<DocumentListResponse> response = controller.listDocuments(0, 20, "Spring", null, null, null, null, null, null, null);
 
         assertEquals(200, response.getStatusCode().value());
         assertEquals(1L, response.getBody().total());
@@ -257,7 +259,7 @@ class RagDocumentControllerTest {
         when(documentRepository.searchDocuments(isNull(), eq("markdown"), isNull(), isNull(), isNull(), isNull(), isNull(), any(PageRequest.class)))
                 .thenReturn(page);
 
-        ResponseEntity<DocumentListResponse> response = controller.listDocuments(0, 20, null, "markdown", null, null, null, null, null);
+        ResponseEntity<DocumentListResponse> response = controller.listDocuments(0, 20, null, "markdown", null, null, null, null, null, null);
 
         assertEquals(200, response.getStatusCode().value());
         assertEquals(1L, response.getBody().total());
@@ -270,7 +272,7 @@ class RagDocumentControllerTest {
         when(documentRepository.searchDocuments(isNull(), isNull(), eq("PENDING"), isNull(), isNull(), isNull(), isNull(), any(PageRequest.class)))
                 .thenReturn(page);
 
-        ResponseEntity<DocumentListResponse> response = controller.listDocuments(0, 20, null, null, "PENDING", null, null, null, null);
+        ResponseEntity<DocumentListResponse> response = controller.listDocuments(0, 20, null, null, "PENDING", null, null, null, null, null);
 
         assertEquals(200, response.getStatusCode().value());
         assertEquals(1L, response.getBody().total());
@@ -283,7 +285,7 @@ class RagDocumentControllerTest {
         when(documentRepository.searchDocuments(eq("Spring"), eq("markdown"), eq("COMPLETED"), isNull(), isNull(), isNull(), isNull(), any(PageRequest.class)))
                 .thenReturn(page);
 
-        ResponseEntity<DocumentListResponse> response = controller.listDocuments(0, 20, "Spring", "markdown", "COMPLETED", null, null, null, null);
+        ResponseEntity<DocumentListResponse> response = controller.listDocuments(0, 20, "Spring", "markdown", "COMPLETED", null, null, null, null, null);
 
         assertEquals(200, response.getStatusCode().value());
         assertEquals(1L, response.getBody().total());
@@ -295,7 +297,7 @@ class RagDocumentControllerTest {
         when(documentRepository.searchDocuments(eq("不存在的标题"), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any(PageRequest.class)))
                 .thenReturn(page);
 
-        ResponseEntity<DocumentListResponse> response = controller.listDocuments(0, 20, "不存在的标题", null, null, null, null, null, null);
+        ResponseEntity<DocumentListResponse> response = controller.listDocuments(0, 20, "不存在的标题", null, null, null, null, null, null, null);
 
         assertEquals(200, response.getStatusCode().value());
         assertEquals(0L, response.getBody().total());
@@ -314,7 +316,7 @@ class RagDocumentControllerTest {
                 .thenReturn(page);
 
         ResponseEntity<DocumentListResponse> response =
-                controller.listDocuments(0, 20, null, null, null, null, null, "2024-01-01T00:00:00", null);
+                controller.listDocuments(0, 20, null, null, null, null, null, null, "2024-01-01T00:00:00", null);
 
         assertEquals(200, response.getStatusCode().value());
         assertEquals(1L, response.getBody().total());
@@ -331,7 +333,7 @@ class RagDocumentControllerTest {
                 .thenReturn(page);
 
         ResponseEntity<DocumentListResponse> response =
-                controller.listDocuments(0, 20, null, null, null, null, null, null, "2024-12-31T23:59:59");
+                controller.listDocuments(0, 20, null, null, null, null, null, null, null, "2024-12-31T23:59:59");
 
         assertEquals(200, response.getStatusCode().value());
         assertEquals(1L, response.getBody().total());
@@ -349,7 +351,7 @@ class RagDocumentControllerTest {
                 .thenReturn(page);
 
         ResponseEntity<DocumentListResponse> response =
-                controller.listDocuments(0, 20, null, null, null, null, null, "2024-01-01T00:00:00", "2024-12-31T23:59:59");
+                controller.listDocuments(0, 20, null, null, null, null, null, null, "2024-01-01T00:00:00", "2024-12-31T23:59:59");
 
         assertEquals(200, response.getStatusCode().value());
         assertEquals(1L, response.getBody().total());
@@ -367,7 +369,7 @@ class RagDocumentControllerTest {
                 .thenReturn(page);
 
         ResponseEntity<DocumentListResponse> response =
-                controller.listDocuments(0, 20, null, null, null, null, null, "not-a-date", null);
+                controller.listDocuments(0, 20, null, null, null, null, null, null, "not-a-date", null);
 
         assertEquals(200, response.getStatusCode().value());
         assertEquals(1L, response.getBody().total());
@@ -412,7 +414,7 @@ class RagDocumentControllerTest {
                 "status", "COMPLETED"
         ));
 
-        ResponseEntity<?> response = controller.embedDocument(1L, false);
+        ResponseEntity<?> response = controller.embedDocument(1L, false, null);
 
         assertEquals(200, response.getStatusCode().value());
         @SuppressWarnings("unchecked")
@@ -425,7 +427,7 @@ class RagDocumentControllerTest {
         when(documentEmbedService.embedDocument(999L, false))
                 .thenThrow(new DocumentNotFoundException(999L));
 
-        assertThrows(DocumentNotFoundException.class, () -> controller.embedDocument(999L, false));
+        assertThrows(DocumentNotFoundException.class, () -> controller.embedDocument(999L, false, null));
     }
 
     @Test
@@ -433,7 +435,7 @@ class RagDocumentControllerTest {
         when(documentEmbedService.embedDocument(1L, false))
                 .thenThrow(new IllegalArgumentException("Content is empty: documentId=1"));
 
-        ResponseEntity<?> response = controller.embedDocument(1L, false);
+        ResponseEntity<?> response = controller.embedDocument(1L, false, null);
 
         assertEquals(400, response.getStatusCode().value());
         assertEquals("Content is empty: documentId=1", ((ErrorResponse) response.getBody()).getDetail());
@@ -456,7 +458,7 @@ class RagDocumentControllerTest {
                 .thenReturn(svcResponse);
 
         var req = new com.springairag.api.dto.BatchDocumentRequest(docs);
-        ResponseEntity<BatchCreateResponse> response = controller.batchCreateDocuments(req);
+        ResponseEntity<BatchCreateResponse> response = controller.batchCreateDocuments(req, null);
 
         assertEquals(200, response.getStatusCode().value());
         assertEquals(2, response.getBody().created());
@@ -479,7 +481,7 @@ class RagDocumentControllerTest {
                 .thenReturn(svcResponse);
 
         var req = new com.springairag.api.dto.BatchDocumentRequest(docs);
-        ResponseEntity<BatchCreateResponse> response = controller.batchCreateDocuments(req);
+        ResponseEntity<BatchCreateResponse> response = controller.batchCreateDocuments(req, null);
 
         assertEquals(200, response.getStatusCode().value());
         assertEquals(1, response.getBody().created());
@@ -498,7 +500,7 @@ class RagDocumentControllerTest {
                 .thenReturn(svcResponse);
 
         var req = new com.springairag.api.dto.BatchDocumentRequest(docs);
-        ResponseEntity<BatchCreateResponse> response = controller.batchCreateDocuments(req);
+        ResponseEntity<BatchCreateResponse> response = controller.batchCreateDocuments(req, null);
 
         assertEquals(200, response.getStatusCode().value());
         assertEquals(1, response.getBody().failed());
@@ -564,7 +566,7 @@ class RagDocumentControllerTest {
         ));
 
         ResponseEntity<BatchEmbedResponse> response = controller.batchEmbedDocuments(
-                Map.of("ids", List.of(1L, 2L)));
+                Map.of("ids", List.of(1L, 2L)), null);
 
         assertEquals(200, response.getStatusCode().value());
         assertEquals(2, response.getBody().summary().total());
@@ -579,7 +581,7 @@ class RagDocumentControllerTest {
         ));
 
         ResponseEntity<BatchEmbedResponse> response = controller.batchEmbedDocuments(
-                Map.of("ids", List.of(999L)));
+                Map.of("ids", List.of(999L)), null);
 
         assertEquals(200, response.getStatusCode().value());
         assertEquals(1, response.getBody().summary().skipped());
@@ -593,7 +595,7 @@ class RagDocumentControllerTest {
         ));
 
         ResponseEntity<BatchEmbedResponse> response = controller.batchEmbedDocuments(
-                Map.of("ids", List.of(1L)));
+                Map.of("ids", List.of(1L)), null);
 
         assertEquals(200, response.getStatusCode().value());
         assertEquals(1, response.getBody().summary().skipped());
@@ -602,7 +604,7 @@ class RagDocumentControllerTest {
     @Test
     void batchEmbedDocuments_emptyIds_returns400() {
         assertThrows(IllegalArgumentException.class,
-                () -> controller.batchEmbedDocuments(Map.of("ids", List.of())));
+                () -> controller.batchEmbedDocuments(Map.of("ids", List.of()), null));
     }
 
     @Test
@@ -612,7 +614,7 @@ class RagDocumentControllerTest {
         for (int i = 0; i < 51; i++) manyIds.add((long) i);
 
         IllegalArgumentException thrown = assertThrows(IllegalArgumentException.class,
-                () -> controller.batchEmbedDocuments(Map.of("ids", manyIds)));
+                () -> controller.batchEmbedDocuments(Map.of("ids", manyIds), null));
 
         assertEquals("Batch embedding limited to 50 documents per request (API rate limit)", thrown.getMessage());
     }
@@ -688,7 +690,7 @@ class RagDocumentControllerTest {
         when(documentRepository.findDocumentsWithoutEmbeddings(PROFILE.id()))
                 .thenReturn(List.of());
 
-        ResponseEntity<ReembedMissingResponse> response = controller.reembedMissing(false);
+        ResponseEntity<ReembedMissingResponse> response = controller.reembedMissing(false, null);
 
         assertEquals(200, response.getStatusCode().value());
         ReembedMissingResponse body = response.getBody();
@@ -710,7 +712,7 @@ class RagDocumentControllerTest {
         when(documentEmbedService.embedDocument(2L, false))
                 .thenReturn(Map.of("status", "COMPLETED", "chunksCreated", 3, "message", "done"));
 
-        ResponseEntity<ReembedMissingResponse> response = controller.reembedMissing(false);
+        ResponseEntity<ReembedMissingResponse> response = controller.reembedMissing(false, null);
 
         assertEquals(200, response.getStatusCode().value());
         ReembedMissingResponse body = response.getBody();
@@ -743,7 +745,7 @@ class RagDocumentControllerTest {
         when(documentEmbedService.embedDocument(2L, false))
                 .thenThrow(new RuntimeException("Embedding service unavailable"));
 
-        ResponseEntity<ReembedMissingResponse> response = controller.reembedMissing(false);
+        ResponseEntity<ReembedMissingResponse> response = controller.reembedMissing(false, null);
 
         assertEquals(200, response.getStatusCode().value());
         ReembedMissingResponse body = response.getBody();
@@ -769,7 +771,7 @@ class RagDocumentControllerTest {
         when(documentEmbedService.embedDocument(1L, true))
                 .thenReturn(Map.of("status", "COMPLETED", "chunksCreated", 5, "message", "force re-embed"));
 
-        ResponseEntity<ReembedMissingResponse> response = controller.reembedMissing(true);
+        ResponseEntity<ReembedMissingResponse> response = controller.reembedMissing(true, null);
 
         assertEquals(200, response.getStatusCode().value());
         verify(documentEmbedService).embedDocument(1L, true);

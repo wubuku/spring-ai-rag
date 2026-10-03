@@ -69,7 +69,7 @@ class RagDocumentControllerBatchCreateTest {
                 isNull(), isNull())).thenReturn(canned);
 
         ResponseEntity<BatchCreateResponse> response =
-                controller.batchCreateDocuments(request);
+                controller.batchCreateDocuments(request, null);
 
         assertEquals(200, response.getStatusCode().value());
         assertSame(canned, response.getBody());

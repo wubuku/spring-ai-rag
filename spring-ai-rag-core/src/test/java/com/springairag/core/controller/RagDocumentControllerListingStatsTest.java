@@ -116,12 +116,12 @@ class RagDocumentControllerListingStatsTest {
         when(documentEmbedService.embedDocument(41L, false))
                 .thenReturn(Map.of("status", "COMPLETED", "chunks", 3));
 
-        assertEquals(200, controller.embedDocument(41L, false)
+        assertEquals(200, controller.embedDocument(41L, false, null)
                 .getStatusCode().value());
 
         when(documentEmbedService.embedDocument(41L, true))
                 .thenThrow(new IllegalArgumentException("document missing"));
-        ResponseEntity<Object> bad = controller.embedDocument(41L, true);
+        ResponseEntity<Object> bad = controller.embedDocument(41L, true, null);
         assertEquals(400, bad.getStatusCode().value());
     }
 

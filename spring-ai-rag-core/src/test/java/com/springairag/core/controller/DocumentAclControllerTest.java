@@ -77,7 +77,7 @@ class DocumentAclControllerTest {
                 .thenReturn(new PageImpl<>(List.of()));
 
         controller.listDocuments(
-                0, 20, null, null, null, null, null, null, null);
+                0, 20, null, null, null, null, null, null, null, null);
 
         verify(documentRepository).searchDocumentsByCollectionIds(
                 eq(List.of(2L, 4L)), isNull(), isNull(), isNull(), isNull(),
@@ -93,7 +93,7 @@ class DocumentAclControllerTest {
         request.setCollectionKey("missing-or-unauthorized");
 
         assertThrows(SecurityException.class,
-                () -> controller.createDocument(request));
+                () -> controller.createDocument(request, null));
         verify(collectionRepository, never())
                 .findByCollectionKeyAndDeletedFalse("missing-or-unauthorized");
         verifyNoInteractions(documentRepository);

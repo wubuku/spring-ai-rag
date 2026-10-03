@@ -95,15 +95,21 @@ class CollectionAclControllerTest {
 
     @Test
     void restrictedKeyCannotCreateCollection() {
-        authenticateRestrictedKey(2L);
-        CollectionRequest request = new CollectionRequest();
-        request.setName("Denied");
+        MockHttpServletRequest request = authenticateRestrictedKey(2L);
+        CollectionRequest body = new CollectionRequest();
+        body.setName("Denied");
 
-        assertThrows(SecurityException.class, () -> controller.create(request));
+        // The request is passed explicitly. Batch 819 deleted a one-argument
+        // `create` that pulled the request out of RequestContextHolder itself and
+        // forwarded whatever it found — including null, which
+        // `ApiKeyCollectionAccess.currentPolicy(null)` turns into "unrestricted".
+        // Handing the request over keeps this test asserting the ACL instead of
+        // asserting that the ambient holder happened to be populated.
+        assertThrows(SecurityException.class, () -> controller.create(body, request));
         verifyNoInteractions(collectionRepository);
     }
 
-    private void authenticateRestrictedKey(Long... ids) {
+    private MockHttpServletRequest authenticateRestrictedKey(Long... ids) {
         RagApiKey key = new RagApiKey();
         key.setRole(ApiKeyRole.NORMAL);
         key.setAllowedCollectionIds(String.join(",",
@@ -113,5 +119,6 @@ class CollectionAclControllerTest {
                 ApiKeyAuthFilter.AUTHENTICATED_API_KEY_ENTITY, key);
         RequestContextHolder.setRequestAttributes(
                 new ServletRequestAttributes(request));
+        return request;
     }
 }
