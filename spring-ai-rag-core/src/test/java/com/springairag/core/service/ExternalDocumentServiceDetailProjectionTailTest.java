@@ -9,8 +9,6 @@ import com.springairag.core.repository.RagDocumentRepository;
 import com.springairag.core.repository.RagEmbeddingRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.transaction.PlatformTransactionManager;
 
 import java.util.Optional;
 
@@ -40,16 +38,11 @@ class ExternalDocumentServiceDetailProjectionTailTest {
                 9L, "test-profile", "test", "test", "v1",
                 1024, "COSINE", "NONE", true);
         lenient().when(profileProvider.getActiveProfile()).thenReturn(profile);
-        service = new ExternalDocumentService(
-                documentRepository,
+        service = new ExternalDocumentService(documentRepository,
                 collectionRepository,
                 mock(RagEmbeddingRepository.class),
-                mock(DocumentVersionService.class),
-                mock(DocumentEmbedService.class),
                 profileProvider,
-                mock(CollectionIdentityResolver.class),
-                mock(JdbcTemplate.class),
-                mock(PlatformTransactionManager.class));
+                mock(CollectionIdentityResolver.class));
     }
 
     private RagDocument document(Long collectionId) {

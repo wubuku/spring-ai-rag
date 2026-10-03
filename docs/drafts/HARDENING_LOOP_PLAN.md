@@ -478,6 +478,58 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
+### Batch 837（已交付）
+
+- 分支：`feature/external-doc-legacy-20261007`
+- 内容：执行 836 批量清但没做完的那件事——`ExternalDocumentService` 的
+  legacy 内联写入块。**主源码 719 → 273 行（净删 446）。**
+- 删了什么：
+  | 删除项 | 说明 |
+  |---|---|
+  | `upsert` / `sourceDelete` 里的 `mutationService != null` 短路 | 改成单行委派，短路本身消失 |
+  | `persist` | 836 查实它**早已无任何调用方**（全文件只有声明行一处命中） |
+  | `persistInTransaction` / `deleteInTransaction` / `finishUpsert` / `coordinateLocalIndex` | 内联写入与嵌入派发 |
+  | `validateRequest` / `executeInTransaction` / `isRetryableConcurrencyFailure` / `conflict` / `normalizeOptional` | 只服务 legacy 的校验与事务重试 |
+  | `beginActiveCollectionWrite` + `confirmActiveCollectionWrite` | 与 835 同型的隐藏死代码，只被 `persistInTransaction` / `deleteInTransaction` 用 |
+  | `sameManagedFields` / `latestVersionNumber` / `resolveWritableCollection` / `collectionKeyFor` | 只服务 legacy |
+  | `safeError(Object)` 重载 | 删掉 `finishUpsert` 后无人调 |
+  | `Persisted` record / `MAX_TRANSACTION_ATTEMPTS` | |
+  | 死字段 `documentVersionService` / `documentEmbedService` / `jdbcTemplate` / `transactionTemplate` / `dispatchService` / `keywordIndexPersistenceService` 连同 setter 与构造参数 | **`jdbcTemplate` 是 836 查实的既有死字段**：只有声明/构造参数/赋值三处命中，从未被读 |
+  | 14 条未用 import | |
+- **测试处置（删 60 / 增 1，净 −59）**：
+  - 整文件删 6 个（**49 条**，删前逐个核过用例名确认 100% legacy，没凭文件名猜）：
+    `ServiceTailTest`(7) / `ServiceTest`(19) / `DeleteDispatchTailTest`(6) /
+    `ServiceDeleteIndexTailTest`(8) / `SameManagedFieldsTailTest`(6) /
+    `ServiceDeleteTailTest`(3)
+  - 逐条删 11 条：`ServiceNormalizeTailTest` 删 7 留 2（照 836 账本的提醒来，
+    没整文件删）、`BatchDelegateTailTest` 删 4
+  - `ServiceTest` 里唯一活着的 `batchIsolatesValidationFailuresAndPreservesInputOrder`
+    **迁进 `ExternalDocumentBatchDelegateTailTest`**（批量覆盖的归属文件）
+    ——它 19 条里另外 18 条都是 legacy 内联行为，一条活用例不值得留 198 行脚手架。
+  - 净变化对账：7686 − 49 − 11 + 1 = **7627**，与 surefire `testcase` 元素数吻合。
+    （头一次记成"删 58 / 迁 1"，是数测试名字时把 `setUp` 也算进去了；
+    **用例数一律用 `@Test` 注解计数，不数方法名。**）
+- **补实一条"名字承诺了但从没断言"的用例**：
+  `batchUpsertCountsCreatedAndPersistenceFailures` 名字写着 Counts，
+  实际只断言了 `assertEquals(2, items().size())`——而删掉 legacy 之后它会
+  因为"两项都失败"这个**错误的原因**继续绿。已改为接上变更层，
+  真正断言 `created` / `persistenceFailed` / `unchanged` / `embeddingFailed`
+  四个计数与两条结果的动作。这与 834 批的 `RetrievalDiagnosticsPersistTailTest`
+  是同一类问题。
+- **一处 Mock 用法踩坑**：`when(mutationService.upsertExternal(argThat(lambda)))`
+  的 lambda 在桩期被以 **`null`** 调用（Mockito 对无显式类型的
+  `argThat` 的已知行为），直接 NPE。改成单个 `any()` 桩 + `thenAnswer`
+  按 `externalId` 分派，既避开这个坑也更直白。
+- **一处自己造成的漏删**：删除区间清单里**漏列了** `sameManagedFields` 与
+  `latestVersionNumber`——勘察时判定了它们是 legacy-only，实际没写进区间表。
+  靠"删完重新 grep 每个字段的剩余引用"抓到（`documentVersionService` 仍有一处
+  引用，定位到残留方法）。这与 835 批 record 区间的教训同型：
+  **判定和执行是两步，判定对了不等于写进清单了**。
+- 构造点按**位置**删第 4/5/8/9 位（不用内容匹配），12 文件 14 处，
+  构造器 9 参 → 5 参。
+- 验证：core 全量 / 门控 IT 16/16 / tests 链 20/20 / docs 链 16/16 /
+  三条门禁 EXIT=0（自测 23 / 23 / 25）。
+
 ### Batch 836（仅勘察，代码改动已回退）
 
 - 分支：`feature/external-doc-legacy-20261007`（已删）

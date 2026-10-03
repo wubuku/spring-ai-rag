@@ -1,6 +1,5 @@
 package com.springairag.core.service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.springairag.core.config.EmbeddingProfile;
 import com.springairag.core.config.EmbeddingProfileProvider;
 import com.springairag.core.entity.RagCollection;
@@ -10,15 +9,11 @@ import com.springairag.core.repository.RagDocumentRepository;
 import com.springairag.core.repository.RagEmbeddingRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.transaction.PlatformTransactionManager;
 
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -45,16 +40,11 @@ class ExternalDocumentServiceIdentityTailTest {
         when(profileProvider.getActiveProfile()).thenReturn(new EmbeddingProfile(
                 9L, "test-profile", "test", "test", "v1",
                 1024, "COSINE", "NONE", true));
-        service = new ExternalDocumentService(
-                documentRepository,
+        service = new ExternalDocumentService(documentRepository,
                 mock(RagCollectionRepository.class),
                 mock(RagEmbeddingRepository.class),
-                mock(DocumentVersionService.class),
-                mock(DocumentEmbedService.class),
                 profileProvider,
-                collectionIdentityResolver,
-                mock(JdbcTemplate.class),
-                mock(PlatformTransactionManager.class));
+                collectionIdentityResolver);
         service.setAddressRetirementService(retirementService);
         var collection = new RagCollection();
         collection.setId(10L);

@@ -12,8 +12,6 @@ import com.springairag.core.repository.RagDocumentRepository;
 import com.springairag.core.repository.RagEmbeddingRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.transaction.PlatformTransactionManager;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -57,16 +55,11 @@ class ExternalDocumentServiceGuardsTest {
                 .thenReturn(new CollectionIdentityResolver.ActiveCollectionToken(10L, 0L));
         lenient().when(collectionRepository.findById(10L))
                 .thenReturn(Optional.of(collection()));
-        service = new ExternalDocumentService(
-                documentRepository,
+        service = new ExternalDocumentService(documentRepository,
                 collectionRepository,
                 mock(RagEmbeddingRepository.class),
-                mock(DocumentVersionService.class),
-                mock(DocumentEmbedService.class),
                 profileProvider,
-                collectionIdentityResolver,
-                mock(JdbcTemplate.class),
-                mock(PlatformTransactionManager.class));
+                collectionIdentityResolver);
     }
 
     private EmbeddingProfile profile() {
@@ -104,16 +97,11 @@ class ExternalDocumentServiceGuardsTest {
 
     /** 事务管理器为 null 也能构造（transactionTemplate 置空）。 */
     private ExternalDocumentService serviceWithoutTransactionManager() {
-        return new ExternalDocumentService(
-                documentRepository,
+        return new ExternalDocumentService(documentRepository,
                 collectionRepository,
                 mock(RagEmbeddingRepository.class),
-                mock(DocumentVersionService.class),
-                mock(DocumentEmbedService.class),
                 profileProvider,
-                collectionIdentityResolver,
-                mock(JdbcTemplate.class),
-                null);
+                collectionIdentityResolver);
     }
 
     @Test
