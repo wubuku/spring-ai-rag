@@ -478,6 +478,51 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
+### Batch 828（仅勘察，未改代码）
+
+- 分支：`main`（本批**没有代码改动**，只提交勘察结论）
+- 内容：把 827 建立的判据铺到集中度最高的两类，并**据此决定哪些能改、哪些不能**。
+- 勘察（`ChatExecutionService` 10 个被守卫字段，逐个测注入方式与守卫形态）：
+  | 字段 | 注入方式 | 守卫形态 |
+  |---|---|---|
+  | `jsonRecordSearchTool` | 构造器 `required=false` | 会跳过 |
+  | `metricsService` | 构造器 `required=false` | 会跳过 |
+  | `retryTemplate` | 构造器 `required=false` | 会跳过 |
+  | `sessionCoordinator` | **生产构造器里必选** | 会跳过 |
+  | `toolRegistry` | 构造器 `required=false` | 会跳过 |
+  | `summaryService` / `diagnosticsService` / `citationValidator` / `chatObservability` / `runtimeSkillCatalog` | setter `required=false` | 会跳过 |
+  - 结构上的根因：它有 **3 个公开构造器**，其中一个**不是 `@Autowired`**，
+    会把 `jsonRecordSearchTool` 与 `sessionCoordinator` 传成 `null`。
+    所以这些守卫的 null 分支服务的是**测试专用构造器**，
+    而不是生产装配——与 823 批那 7 个便捷构造器、825 批那 2 个包私有构造器同源。
+  - 10 个全是"会跳过"，按 822 定论**登记诚实理由即可，不需要删**。
+- 勘察（`ExternalDocumentService` 5 个字段）：
+  - `dispatchService` 是**"会抛" + setter `required=false`**，
+    而 `EmbeddingDispatchService` 是**无条件 `@Service`**（零 `@Conditional`）
+    → 按 822 判据**该删**那处 `EMBEDDING_JOBS_DISABLED` 的抛异常。
+  - **但迁移面比预想大得多，本批不做**：实测
+    **12 个测试文件**构造 `ExternalDocumentService`，
+    其中 **6 个从不调用 `setDispatchService`**，
+    **9 个测试文件**提到 `EMBEDDING_JOBS_DISABLED`。
+    删掉抛异常后，这些测试的 ASYNC 路径会从"抛 EMBEDDING_JOBS_DISABLED"
+    变成"静默不入队"——**那会悄悄削掉一条真实的可观测行为**。
+  - 另外 4 个字段（`mutationService` / `keywordIndexPersistenceService` /
+    `addressRetirementService` / `transactionTemplate`）是"会跳过"，
+    前三个登记理由即可；`transactionTemplate` 由 `transactionManager` 条件派生，
+    **确实可空**，守卫必须留。
+- 结论（**本批最有价值的是"哪些不能改"，而不是"改了什么"**）：
+  - 可安全做：登记理由类（`ChatExecutionService` 10 个、
+    `ExternalDocumentService` 3 个）。零行为变更、零测试迁移。
+  - **不能在证据不足时做**：`dispatchService` 那处"会抛"守卫。
+    它比 825 批删掉的两处**多一层含义**——那两处的 null 分支在测试里
+    只会变成 NPE，而这一处会变成"静默不入队"，
+    **从"响亮的失败"退化成"安静的错误"**。删它需要先决定
+    "作业队列不可用时该不该报错"，那是产品决策，不是重构。
+- 遗留：
+  - `dispatchService` 的处置**需要一次产品决定**，不是技术决定。
+  - `ChatExecutionService` 10 个 + `ExternalDocumentService` 3 个理由未登记。
+  - service 层门禁口径剩余 48 条 / 23 个类（登记理由前）。
+
 ### Batch 827（已交付）
 
 - 分支：`feature/service-optional-claims-20261003`
