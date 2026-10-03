@@ -167,15 +167,23 @@ function neutralize(source) {
 
 /**
  * 返回 [{ field, bean, setter, reason }]，reason 为 null 表示没有登记理由。
+ *
+ * @param {string} rawControllerSource
+ * @param {Map<string, {conditional: boolean}>} beans
+ * @param {{ requireGuard?: boolean }} [options]
+ *   `requireGuard` 默认 true，也就是原规则：**必须有 null 守卫**才报。
+ *   Batch 850 新增的第二种形态把这一条关掉——见下方注释。
  */
-export function findFalseOptionalClaims(rawControllerSource, beans) {
+export function findFalseOptionalClaims(rawControllerSource, beans, options = {}) {
+  const requireGuard = options.requireGuard !== false;
   // 注释与字符串里的文本不是代码，先置空再判定。
   const controllerSource = neutralize(rawControllerSource);
   const findings = [];
   const guards = new Set(
     [...controllerSource.matchAll(/\b(\w+)\s*(?:!=|==)\s*null/g)].map((m) => m[1]),
   );
-  if (guards.size === 0) return findings;
+  // requireGuard 关闭时，守卫不再是必要条件，所以不能用 guards.size === 0 提前返回。
+  if (requireGuard && guards.size === 0) return findings;
 
   // `final` must be tolerated. Batch 825 measured the miss: the field pattern
   // was `private\s+Type name;`, so every `private final Type name;` was
@@ -191,7 +199,7 @@ export function findFalseOptionalClaims(rawControllerSource, beans) {
   for (const m of controllerSource.matchAll(/private\s+(?:final\s+)?([A-Z]\w*)\s+(\w+)\s*;([^\n]*)/g)) {
     const [, type, name] = m;
     const line = controllerSource.slice(0, m.index).split('\n').length;
-    if (!guards.has(name)) continue;
+    if (requireGuard && !guards.has(name)) continue;
     if (JUSTIFICATION.test(rawLines[line - 1] ?? '')) continue;
 
     // Match the setter by its *first parameter type*, not by its parameter name,
@@ -230,7 +238,12 @@ export function findFalseOptionalClaims(rawControllerSource, beans) {
     const bean = beans.get(type);
     if (!bean || bean.conditional) continue;
 
-    findings.push({ field: name, bean: type, setter: 'required = false' });
+    findings.push({
+      field: name,
+      bean: type,
+      setter: 'required = false',
+      guarded: guards.has(name),
+    });
   }
   return findings;
 }
@@ -257,6 +270,43 @@ function walk(dir, acc = []) {
  */
 const SUBJECT_SUFFIXES = ['Controller.java', 'Service.java'];
 
+/**
+ * 第二种形态的天花板（Batch 850）。
+ *
+ * 第一种形态（有 null 守卫 + `required = false`）在 Batch 829 清理完之后是 0。
+ * 第二种形态是**反过来的方向**，也是更危险的一种：
+ * 注入声明"可能不存在"，而代码**无条件使用**它——既不容忍缺失，也不解释。
+ * 后果比第一种更直接：缺 bean 时不会降级，而是在**第一次调用**处抛 NPE，
+ * 而不是像必填依赖那样在容器启动阶段就失败。
+ *
+ * 为什么不立刻把它变成"0 容忍"：真实树上有 16 处，一次改完要动 **136 个测试文件**
+ * （Batch 848 改 2 处注入点就已经动了 32 个）。先按 Batch 829 定的顺序来：
+ * **先把数字降下来，再把门禁变成阻塞**，否则门禁一上来就红，然后被当成噪音豁免。
+ *
+ * 所以这里用**棘轮**而不是 0：`UNGUARDED_CEILING` 必须与实测值相等，
+ * 多了少了都报错——多了是"你没清却想改天花板"，少了是"你清了却忘了降天花板"。
+ * 修好一处就必须把常量减 1，这个数字因此**只能下降**。
+ */
+const UNGUARDED_CEILING = 14;
+
+/**
+ * 棘轮在什么范围内生效。
+ *
+ * 教训来自第一次接线的失败：自测夹具里只有 0 处，而 `UNGUARDED_CEILING = 14`
+ * 是**真实树**的属性，于是 4 条"应该通过"的夹具全部被棘轮判红。
+ * 夹具天生比现实简单——Batch 820 记录过同一个陷阱的另一个版本——
+ * 把真实树的天花板套到夹具上，等于要求夹具长得和仓库一样大。
+ *
+ * 所以：**默认只对真实树生效**（`FALSE_OPTIONAL_WIRING_ROOT` 没设时）。
+ * 指向夹具时棘轮自动关闭，而自测可以用 `FALSE_OPTIONAL_WIRING_CEILING`
+ * 把它显式打开——这样"只能下降"这条性质本身也是被测的，而不是只有真实树在用。
+ */
+function resolveCeiling(rootOverride) {
+  const override = process.env.FALSE_OPTIONAL_WIRING_CEILING;
+  if (override !== undefined && override !== '') return Number(override);
+  return rootOverride ? null : UNGUARDED_CEILING;
+}
+
 function main() {
   const rootOverride = process.env.FALSE_OPTIONAL_WIRING_ROOT;
   const scanRoot = rootOverride ? rootOverride : SRC_ROOT;
@@ -265,6 +315,7 @@ function main() {
   const subjects = all.filter((f) => SUBJECT_SUFFIXES.some((s) => f.path.endsWith(s)));
   const controllers = subjects.filter((f) => f.path.endsWith('Controller.java'));
   const services = subjects.filter((f) => f.path.endsWith('Service.java'));
+  const ceiling = resolveCeiling(rootOverride);
 
   let blocking = 0;
   for (const { path, source } of subjects) {
@@ -289,11 +340,51 @@ function main() {
     );
     process.exit(1);
   }
+
+  // 第二种形态：声明可选、代码无条件使用。
+  const unguarded = [];
+  for (const { path, source } of subjects) {
+    for (const f of findFalseOptionalClaims(source, beans, { requireGuard: false })) {
+      if (!f.guarded) unguarded.push({ ...f, file: relative(scanRoot, path) });
+    }
+  }
+
+  if (ceiling !== null && unguarded.length > ceiling) {
+    for (const f of unguarded) {
+      console.log(
+        `- [false-optional-wiring/unguarded] ${f.file}: ${f.field} is injected with `
+        + `@Autowired(required = false) but ${f.bean} is unconditional and the field is never `
+        + 'null-checked, so the injection promises an absence the code cannot survive: a missing '
+        + 'bean fails with a raw NPE at first call instead of failing at context startup. Make it '
+        + 'a required injection, or record why the optional annotation stays: '
+        + '`private … foo; // optional-claim: <reason>`',
+      );
+    }
+    console.error(
+      `\nFalse-optional-wiring check failed; ${unguarded.length} unguarded optional claim(s) `
+      + `exceed the ratchet ceiling of ${ceiling}.`,
+    );
+    process.exit(1);
+  }
+
+  if (ceiling !== null && unguarded.length < ceiling) {
+    console.error(
+      `\nFalse-optional-wiring check failed; only ${unguarded.length} unguarded optional claim(s) `
+      + `remain but the ratchet ceiling is still ${ceiling}. Lower the ceiling — the number is `
+      + 'only allowed to fall.',
+    );
+    process.exit(1);
+  }
+
+  const ratchetNote = ceiling === null
+    ? 'Unguarded optional claims are not ratcheted for a non-default scan root.'
+    : `${unguarded.length} unguarded optional claim(s) remain, exactly at the ratchet ceiling of `
+      + `${ceiling}.`;
   console.log(
     `False-optional-wiring check passed; ${controllers.length} controller(s), `
     + `${services.length} service(s) and ${beans.size} bean(s) `
     + 'examined, every collaborator that claims to be optional is either genuinely conditional or '
-    + 'records why the guard exists.',
+    + `records why the guard exists. ${ratchetNote}`,
   );
 }
 

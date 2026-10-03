@@ -118,6 +118,13 @@ class RagControllerIntegrationTest {
     @MockBean private com.springairag.core.service.ChatExportService chatExportService;
     @MockBean private com.springairag.core.service.AuditLogService auditLogService;
 
+    // ==================== Evaluation ====================
+    // Batch 850：语义评估服务此前是包私有的 `required = false` setter，
+    // 所以这个切片从来没提供过它也能起来 —— 类注释写着"All Service/Repository
+    // are mocked via @MockBean"，缺的那一条是被可选注解掩盖的夹具遗漏。
+    // 它现在是必填构造器参数，夹具必须把它列出来。
+    @MockBean private com.springairag.core.evaluation.SemanticEvaluationService semanticEvaluationService;
+
     // ==================== Search ====================
     @MockBean private HybridRetrieverService hybridRetrieverService;
     @MockBean private CollectionDocumentResolver collectionDocumentResolver;

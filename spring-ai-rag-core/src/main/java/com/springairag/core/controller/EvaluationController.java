@@ -45,18 +45,15 @@ public class EvaluationController {
     private final RetrievalEvaluationService evaluationService;
     private final UserFeedbackService userFeedbackService;
     private final AuditLogService auditLogService;  // optional-claim: AuditLogService 是无条件 @Service，所以 null 分支只在测试里可达；守卫保留是因为审计写入失败不应让业务请求失败（Batch 825 替换掉了一句过时且不成立的注释：它说 null 来自 RagAuditLogRepository 不可用，而那已经不是注入路径）
-    private SemanticEvaluationService semanticEvaluationService; // unconditional @Service; Batch 822 removed the null guard that used to sit on it
+    private final SemanticEvaluationService semanticEvaluationService;  // Batch 850：守卫早已删除（Batch 822），代码无条件使用它，所以它是必填依赖；包私有的 required=false setter 表达的"可能不存在"已经不成立，构造器参数取代了它
 
     public EvaluationController(RetrievalEvaluationService evaluationService,
                                 UserFeedbackService userFeedbackService,
-                                @Autowired(required = false) AuditLogService auditLogService) {
+                                @Autowired(required = false) AuditLogService auditLogService,
+                                SemanticEvaluationService semanticEvaluationService) {
         this.evaluationService = evaluationService;
         this.userFeedbackService = userFeedbackService;
         this.auditLogService = auditLogService;
-    }
-
-    @Autowired(required = false)
-    void setSemanticEvaluationService(SemanticEvaluationService semanticEvaluationService) {
         this.semanticEvaluationService = semanticEvaluationService;
     }
 

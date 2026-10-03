@@ -38,11 +38,12 @@ class EvaluationControllerProductionWiringTest {
     @BeforeEach
     void setUp() {
         semanticEvaluationService = mock(SemanticEvaluationService.class);
+        // Batch 850：它从包私有的 required=false setter 变成了必填构造器参数。
         controller = new EvaluationController(
                 mock(RetrievalEvaluationService.class),
                 mock(UserFeedbackService.class),
-                mock(AuditLogService.class));
-        controller.setSemanticEvaluationService(semanticEvaluationService);
+                mock(AuditLogService.class),
+                semanticEvaluationService);
     }
 
     @Test
@@ -50,8 +51,13 @@ class EvaluationControllerProductionWiringTest {
         var field = EvaluationController.class.getDeclaredField("semanticEvaluationService");
         field.setAccessible(true);
 
+        // Batch 850 更新了这句话。原文写的是"为 null 就说明守卫可达"，
+        // 而那个守卫在 Batch 822 就删了，**那句话本身已经不成立**。
+        // 现在的形态更硬：它是必填构造器参数，容器要么装配上、要么启动失败，
+        // 所以"为 null"只可能是有人手写了一个漏传参数的构造调用。
         assertNotNull(field.get(controller),
-                "semanticEvaluationService is null under production wiring, so its guard is reachable");
+                "semanticEvaluationService is null although it is a required constructor "
+                        + "dependency, so this construction site is missing an argument");
     }
 
     @Test

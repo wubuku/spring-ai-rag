@@ -7,6 +7,7 @@ import com.springairag.api.dto.SlowQueryStatsResponse;
 import com.springairag.core.config.ChatModelRouter;
 import com.springairag.core.config.ModelRegistry;
 import com.springairag.core.metrics.ApiSloTrackerService;
+import com.springairag.core.usage.LlmUsageQueryService;
 import com.springairag.core.metrics.ModelMetricsService;
 import com.springairag.core.metrics.RagMetricsService;
 import com.springairag.core.metrics.SlowQueryMetricsService;
@@ -46,13 +47,18 @@ class RagMetricsControllerTest {
     @Mock
     private ApiSloTrackerService sloTrackerService;
 
+    /** Batch 850：查询服务从 required=false 变成必填构造器参数，
+     *  所以这里给真的 mock，而不是继续传 null 假装它可以不存在。 */
+    @Mock
+    private LlmUsageQueryService usageQueryService;
+
     private RagMetricsController controller;
 
     @BeforeEach
     void setUp() {
         controller = new RagMetricsController(
                 metricsService, modelMetricsService, modelRegistry, modelRouter,
-                slowQueryMetricsService, sloTrackerService, null);
+                slowQueryMetricsService, sloTrackerService, usageQueryService);
     }
 
     @Test
@@ -170,7 +176,7 @@ class RagMetricsControllerTest {
     void getSlowQueryStats_nullService_returnsDisabledResponse() {
         // Controller constructed with null slowQueryMetricsService
         RagMetricsController controllerNoSlowQuery = new RagMetricsController(
-                metricsService, modelMetricsService, modelRegistry, modelRouter, null, sloTrackerService, null);
+                metricsService, modelMetricsService, modelRegistry, modelRouter, null, sloTrackerService, usageQueryService);
 
         SlowQueryStatsResponse result = controllerNoSlowQuery.getSlowQueryStats();
 
@@ -202,7 +208,7 @@ class RagMetricsControllerTest {
     void getSloCompliance_nullService_returnsDisabledResponse() {
         RagMetricsController controllerNoSlo = new RagMetricsController(
                 metricsService, modelMetricsService, modelRegistry, modelRouter,
-                slowQueryMetricsService, null, null);
+                slowQueryMetricsService, null, usageQueryService);
 
         ApiSloComplianceResponse result = controllerNoSlo.getSloCompliance();
 
@@ -236,7 +242,7 @@ class RagMetricsControllerTest {
     void clearSlowQueryHistory_nullService_doesNotThrow() {
         RagMetricsController controllerNoSlowQuery = new RagMetricsController(
                 metricsService, modelMetricsService, modelRegistry, modelRouter,
-                null, sloTrackerService, null);
+                null, sloTrackerService, usageQueryService);
 
         // Should not throw even when service is null
         controllerNoSlowQuery.clearSlowQueryHistory();
@@ -246,7 +252,7 @@ class RagMetricsControllerTest {
     void clearSlowQueryHistory_servicePresent_callsClearHistory() {
         RagMetricsController controller = new RagMetricsController(
                 metricsService, modelMetricsService, modelRegistry, modelRouter,
-                slowQueryMetricsService, sloTrackerService, null);
+                slowQueryMetricsService, sloTrackerService, usageQueryService);
 
         controller.clearSlowQueryHistory();
 

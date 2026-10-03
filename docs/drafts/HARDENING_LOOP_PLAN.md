@@ -478,6 +478,117 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
+### Batch 850（已交付，后端技术债：门禁的**第二种形态** + 棘轮）
+
+- 分支：`feature/unguarded-optional-wiring-ratchet-20261007`
+- 主题：Batch 848 把 controller 侧的 `required = false` 清掉之后，顺着同一族
+  门禁往下读，发现它**只看一种形态**。这批补上第二种，并按 Batch 829 定的顺序
+  （先降数字、再让门禁阻塞）把普查结果固化成**只能下降的棘轮**。
+- **门禁的真实规则（读准的，不是猜的）**：`verify-false-optional-wiring.mjs`
+  第 178 行 `if (guards.size === 0) return findings;` 与第 194 行
+  `if (requireGuard && !guards.has(name)) continue;`——**只有带 null 守卫的字段
+  才会被检出**。所以"注入声明可能不存在、而代码无条件使用"这种形态，
+  门禁**完全看不见**。
+- **第二种形态比第一种更危险**，理由要写清楚，否则这条规则会被当成补充说明：
+  | | 第一种（原有） | 第二种（本批） |
+  |---|---|---|
+  | 注入怎么声明 | `required = false` | `required = false` |
+  | 代码怎么用 | 有 null 守卫 | **无条件使用** |
+  | 缺 bean 时 | 走守卫那条路（降级） | **首次调用处抛裸 NPE** |
+  | 什么时候暴露 | 运行时，可能很久 | 容器启动阶段就该失败，却拖到第一次调用 |
+  - 第一种是"阅读陷阱"，第二种是**真的启动与运行不一致**。
+- **普查：16 处 / 10 个类，本批清掉 2 处 → 14**。清完的 14 处（按门禁自己的
+  报告列出，`FALSE_OPTIONAL_WIRING_CEILING=0` 就能打印全部）：
+  `ApiKeyController.collectionIdentityResolver`、`PdfImportController.collectionIdentityResolver`、
+  `RagCollectionController.collectionProvisioningService`、
+  `RagDocumentController` 的 `externalDocumentService` / `dispatchService` /
+  `derivationDescriptorProvider` / `documentRelocationService`、
+  `EvaluationSuiteService.apiKeyManagementService`、
+  `BatchDocumentService` 的 `dispatchService` / `documentMutationService`、
+  `DocumentEmbedService.chunkingService`、`JsonRecordService.mutationService`、
+  `PdfToRagService` 的 `dispatchService` / `documentMutationService`。
+- **普查探针自己错了两版，如实记录**（和 849 的三次错是同一类病）：
+  | 版本 | 怎么取字段名 | 得到的数 | 错在哪 |
+  |---|---|---|---|
+  | v1 | `set(\w+)` 捕获**方法名** | 40 | `setExternalDocumentService` 给出的是 `ExternalDocumentService`，而字段叫 `externalDocumentService`；`guarded` 于是恒为 false，把 30 处有守卫的全报成无守卫 |
+  | v2 | setter 的**参数名** | 16（含 2 个假阳性） | `setX(Type service)` 的参数叫 `service`，字段却叫 `derivationIntegrityService`——那两个字段其实带着 `optional-claim:` |
+  | v3 | **直接调用门禁自己的 `findFalseOptionalClaims`** | 16（正确） | — |
+  - **教训：普查与门禁各写一套匹配逻辑，两个数字就永远不可比。**
+    正确做法是让普查 import 门禁的函数——第三版就是这么写的，
+    之后普查脚本直接删掉，数字由门禁自己在成功消息里报出来。
+- **棘轮设计里踩的坑，比规则本身更值得记**：
+  第一次接线把 `UNGUARDED_CEILING = 14` 无条件套上去，**4 条"应该通过"的自测
+  夹具全被判红**——因为夹具里只有 0 处，而 14 是**真实树**的属性。
+  夹具天生比现实简单（Batch 820 记录过同一个陷阱的另一个版本），
+  把仓库的天花板套到两文件的夹具上，等于要求夹具长得和仓库一样大。
+  修法：**棘轮只对真实树生效**（`FALSE_OPTIONAL_WIRING_ROOT` 没设时），
+  指向夹具时自动关闭，而自测用 `FALSE_OPTIONAL_WIRING_CEILING` 把它显式打开——
+  于是"只能下降"这条性质本身也是被测的，而不只是真实树在用。
+- **本批清掉的 2 处**：
+  | 位置 | 原形态 | 改成 |
+  |---|---|---|
+  | `RagMetricsController.usageQueryService` | `@Autowired(required = false)` **构造器参数** | 必填构造器参数 |
+  | `EvaluationController.semanticEvaluationService` | 包私有 `@Autowired(required = false)` setter | 必填构造器参数，字段改 `final` |
+  - `RagMetricsController` 这一处特别能说明问题：同一个类里
+    `slowQueryMetricsService` 与 `apiSloTrackerService` **都带 `optional-claim`**，
+    因为它们真的会"跳过"；而**要求必须存在的第三个既没有守卫也没有理由**。
+    同一个构造器里三种协作者，三种对待方式，而只有一种被登记过。
+- **抓到的最有价值的一条：切片夹具靠 `required = false` 蒙混过关。**
+  `RagControllerIntegrationTest`（`@WebMvcTest` 装 8 个 controller、约 30 个
+  `@MockBean`）的类注释明写 *"All Service/Repository are mocked via @MockBean"*，
+  却**没有** `SemanticEvaluationService`——因为它此前是可选 setter，缺了也能起。
+  它变成必填之后，整个切片 `Failed to load ApplicationContext`，
+  **一次跑挂 14 条用例**。这正是门禁自己的注释里点名的那个隐患
+  （"只有测试看得见的装配成了唯一被测的装配"），只不过这次缺的不是断言、是夹具。
+  补上 `@MockBean` 之后，缺的那一条终于对上了它自己声明的规则。
+- **一条已经过期的断言消息**：`EvaluationControllerProductionWiringTest` 写着
+  *"…is null under production wiring, so its guard is reachable"*——
+  而那个守卫在 **Batch 822** 就删了。断言本身（非 null）仍然成立而且更强
+  （必填构造器参数下为 null 只可能是有人漏传了实参），但那句话已经不成立，
+  已改写。**理由会过期，断言的解释也会。**
+- **`RagMetricsControllerTest` 的 5 处 `null` 也要改**：参数变必填之后继续传
+  `null`，等于让测试声称"这个协作者可以不存在"——而类型系统不再替你拦。
+  已加 `@Mock` 字段真传进去。**包名也踩了一次**
+  （`LlmUsageQueryService` 在 `core.usage` 不在 `core.metrics`），编译器当场抓住。
+- **变异实验 3 个，全部如期变红**（沿用"备份 → 变异 → 跑 → 还原 → sha256 校验"
+  的单命令模式，两个文件每轮都校验回到原值）：
+  | 变异 | 结果 |
+  |---|---|
+  | 真实树里新增一处无守卫的 `required = false` | ✓ 红：15 > 14 |
+  | 把天花板调低 1 | ✓ 红：14 > 13 |
+  | 删掉一处 `optional-claim:` 理由 | ✓ 红：老规则仍然生效（1 unrecorded claim） |
+  - 第三项是**必要的**：我重构了门禁的判定函数，必须证明老规则没被弄瞎。
+  - 第一次跑这一项时得到"实际 green"，追下去发现是**我的锚点字符串没匹配上**、
+    文件压根没被改——**"变异脚本失败"和"门禁失灵"是两回事**，
+    前者不能记成后者。这和 849 里"等价变异"的教训是同一个。
+- 自测 **23 → 29 条**，新增的 6 条覆盖：新形态被检出、登记理由后放行、
+  真条件 bean 放行、**夹具根默认不受棘轮约束**、超天花板变红、低于天花板变红。
+  其中"夹具根默认不受棘轮约束"那条是**正向对照**，防止那条规则变成永远绿。
+- 验证（全部实测）：core 全量 **7622 条 / 0 失败 / 0 错误 / 153 跳过**（与 848 相同）；
+  门控 IT **16/16**；`verify-test-visibility` EXIT=0；三门禁 EXIT=0
+  （`false-optional-wiring` 现在报 *"14 unguarded optional claim(s) remain,
+  exactly at the ratchet ceiling of 14"*）；tests 链 **20/20**；docs 链 **16/16**。
+- **剩余 13 处的迁移代价已量好**（五种调用形态：直接构造 / setter / 框架构造 /
+  显式置 null / 反射），这是下一批的输入，**不重复勘察**：
+  | 目标 | 命中测试文件 |
+  |---|---|
+  | `DocumentEmbedService.chunkingService` | 36 |
+  | `JsonRecordService.mutationService` | 34 |
+  | `RagDocumentController` 的 4 个 | 各 23（重叠，去重后约 23） |
+  | `BatchDocumentService.documentMutationService` | 20 |
+  | `PdfToRagService.documentMutationService` | 18 |
+  | `EvaluationSuiteService.apiKeyManagementService` | 13 |
+  | `RagCollectionController.collectionProvisioningService` | 12 |
+  | `BatchDocumentService.dispatchService` | 12 |
+  | `PdfToRagService.dispatchService` | 11 |
+  | `ApiKeyController.collectionIdentityResolver` | 7 |
+  | `PdfImportController.collectionIdentityResolver` | 14 |
+  - **合计 136 个测试文件**。这解释了为什么本批只清 2 处而不是全清：
+    一次改完要动 136 个文件，而 Batch 848 改 2 处就已经动了 32 个。
+  - 下一批建议从 **`ApiKeyController`(7) + `PdfToRagService.dispatchService`(11)** 起，
+    18 个文件是可承受的一批；`RagDocumentController` 的 4 个可以并进 848 那批的
+    构造器里一次做完（它们和 848 刚改的参数是同一个构造器）。
+
 ### Batch 849（已交付，WebUI：破坏性操作 fail-closed 契约补测）
 
 - 分支：`feature/webui-collections-fail-closed-tests-20261007`
