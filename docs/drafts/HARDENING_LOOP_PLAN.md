@@ -478,6 +478,69 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
+### Batch 826（已交付）
+
+- 分支：`feature/provisioning-dead-guards-20261003`
+- 内容：处置 service 层"必选协作者却仍被 null 守卫"的第一批；
+  **并更正 824 批自己写错的一句话**——那句话直接决定了这批的工作量。
+- 勘察（**又一次：普查数不能直接用**）：
+  - 把 825 修好的门禁判据套到非 controller 层，会报出 **51 条**；
+    我自己写的宽口径普查是 **145 条**。两者不等，因为门禁额外要求
+    "对应的 bean 是无条件的 `@Service`/`@Component`/`@Repository`"。
+  - 145 条里已经能看出假阳性：`String name`、`String credentialEnv`
+    根本不是协作者；而 `JavaMailSender`（邮件未配置时确实没有）与
+    `LlmCircuitBreaker`（熔断可以关）是**真可选**。
+    **"会抛"这个分类本身也不可靠**——它是靠"守卫后 5 行内有没有 throw"判的。
+  - **推翻 824 批自己写的一句话。** 824 账本写：
+    "`CollectionProvisioningService` 的 4 个协作者是必选构造器——
+    **测试也传不了 null**"。**后半句是错的。**
+    - 实测 `CollectionProvisioningTailTest` 里明确写着
+      `new CollectionProvisioningService(null, null, null, collectionService, properties, null)`；
+      `CollectionProvisioningCreateOrReplayTest` 还有一个 `withLedger`
+      开关把 4 个协作者全置 null。
+    - 我当时的推理是"6 参构造器里类型都对得上"——**那只说明编译器抓不到，
+      不说明传不了：`null` 永远能传给任何引用类型。**
+    - 结论方向没错（字段确实必选、守卫确实生产不可达），
+      但**"迁移量为 0"这个估计是错的**，而它直接决定了 826 的工作量不是零。
+  - **因此"守卫必为死"和"迁移量为零"是两件必须分开测的事**：
+    前者由 bean 的无条件性决定，后者由**测试有没有真的往里传 null** 决定。
+    824 批把前者当成了后者。
+- 变更（`CollectionProvisioningService`，作为这一族的第一批标定）：
+  - **删掉 1 处"会抛"守卫**：那行把 4 个必选协作者联合判空然后抛
+    `SERVICE_UNAVAILABLE`。它描述的部署形态容器产生不了。
+  - **摘掉定时清理里的 `|| operationRepository == null`**，
+    保留真正的功能开关 `!properties.isEnabled()`。
+  - **删掉 2 条只为断言已删守卫的测试**：
+    `unavailableLedgerRejected`（靠 `service(false)` 把 4 个协作者置 null）、
+    `missingLedgerDependenciesSurfacesUnavailable`（显式传 3 个 null）。
+    两处都留了注释说明删的是什么、为什么、真正的 unavailable 路径在哪。
+  - **特意保留** `dataAccessFailureMapsToUnavailable`：它虽然也断言
+    "ledger is unavailable"，但走的是**仓储调用真的抛
+    `DataAccessResourceFailureException`** 的路径，不依赖 null 臂——
+    **同类断言不等于同类测试**，判据是"是否依赖已删的分支"，不是断言文本。
+- **验证时撞上一条真缺陷（不是 flaky 测试）**：
+  全量跑出 `RagChatToolPolicyCallbackCallTest.passedDeadlineCancelsExecutionAndReportsTimeout`
+  失败（`expected: <0> but was: <1>`）。隔离复跑 3 次：第 1 次失败、后 2 次通过
+  ——**先按"是不是 flaky"取证，而不是先假设**。读生产代码后确认是**真缺陷**：
+  `RagChatToolRegistry` **先把任务 `executor.submit(...)` 出去、再检查 deadline**，
+  截止时间已过时靠 `future.cancel(true)` 中断——而任务可能已经启动、已经把活干了。
+  **"截止时间已过"的语义是"从未派发"，不是"派发了再中断"。**
+  - 修法：把 deadline 判定移到 `executor.submit` **之前**。
+  - 复跑 **8 次全绿**（修前 3 次里失败 1 次）。
+  - **刻意没有给生产代码加测试钩子**：注册表自建 `ThreadPoolExecutor` 且无注入点，
+    要观测"是否提交过"就得加构造器参数或 setter——那正是我明令禁止的
+    "给生产代码加测试钩子"。改为把这段历史写进测试的 Javadoc，
+    并说明**单次绿不证明顺序正确**（这个断言在修复前天然是间歇的）。
+- 验证：
+  - `mvn -pl spring-ai-rag-core clean test`、tests 链、docs 链、门控 IT 全绿。
+- 遗留：
+  - service 层其余 **47 条**候选待处置。集中度：
+    `ChatExecutionService` 9 条、`ExternalDocumentService` 5 条、
+    `JsonRecordService` 5 条、`RagCollectionService` 3 条。
+  - **每条都要先测"测试有没有真的传 null"**，否则会重蹈 824 批的估计错误。
+  - 门禁扩到 service 层的前提是 service 层 findings 降到 0；
+    在那之前不打开范围，否则门禁立刻变红。
+
 ### Batch 825（已交付）
 
 - 分支：**流程偏差，如实记录**——本批我**忘了建专用分支，提交直接落在 main 上**
@@ -608,6 +671,16 @@
   - **结论：22 不可直接施工。** 上面 4 类假阳性里有 2 类（③④）正好落在这 22
     里面，且第 4 类若不手核就会**删掉本来正确的守卫**。
     这 22 必须在删除前逐条手核。
+  - **更正本批自己的一处错误结论（Batch 826 推翻）**：
+    我在这一批写"`CollectionProvisioningService` 的 4 个协作者是必选构造器——
+    **测试也传不了 null**"。**这句话的后半句是错的。**
+    `CollectionProvisioningTailTest` 里明确写着
+    `new CollectionProvisioningService(null, null, null, collectionService, properties, null)`，
+    另一个类还有一个 `withLedger` 开关把 4 个协作者全置 null。
+    我当时的推理是"6 参构造器里类型都对得上"——**那只说明编译器抓不到，
+    不说明传不了：`null` 永远能传给任何引用类型。**
+    结论方向没错（那 4 个字段确实必选、守卫确实在生产不可达），
+    但**"迁移量为 0"这个估计是错的**，它直接决定了 826 批的工作量不是零。
   - 手核还发现 `RagCollectionService.auditLogService` 的字段注释写着
     `// optional: null when audit log is unavailable`——
     而 `AuditLogService` 是**无条件 `@Service`**，这句话在生产不成立。

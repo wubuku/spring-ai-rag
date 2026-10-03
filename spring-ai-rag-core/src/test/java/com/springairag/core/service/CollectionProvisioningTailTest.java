@@ -110,18 +110,8 @@ class CollectionProvisioningTailTest {
                 .findByOwnerIdAndIdempotencyKeyHash(any(), any());
     }
 
-    @Test
-    void missingLedgerDependenciesSurfacesUnavailable() {
-        var broken = new CollectionProvisioningService(
-                null, null, null, collectionService, properties, null);
-
-        var error = assertThrows(RagException.class,
-                () -> broken.createOrReplay(request(), OWNER, KEY_HASH));
-
-        assertEquals(ErrorCode.SERVICE_UNAVAILABLE,
-                error.getErrorCodeEnum());
-        assertTrue(error.getMessage().contains("ledger is unavailable"));
-    }
+    // Batch 826: `missingLedgerDependenciesSurfacesUnavailable` used to stand here, passing
+    // three null collaborators to reach the guard removed from createOrReplay.
 
     @Test
     void retryExhaustionConvergesToExistingReplay() {

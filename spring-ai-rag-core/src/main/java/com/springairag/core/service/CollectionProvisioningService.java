@@ -101,11 +101,14 @@ public class CollectionProvisioningService {
                     ErrorCode.COLLECTION_PROVISIONING_IDEMPOTENCY_DISABLED,
                     "Collection provisioning idempotency is disabled");
         }
-        if (operationRepository == null || collectionRepository == null
-                || documentRepository == null || collectionService == null) {
-            record("unavailable");
-            throw unavailable("Collection provisioning ledger is unavailable", null);
-        }
+        // Batch 826: this used to be
+        //   `if (operationRepository == null || collectionRepository == null
+        //        || documentRepository == null || collectionService == null) { … throw unavailable(…) }`.
+        // All four arrive as required constructor parameters of unconditional
+        // @Service / @Repository beans, so no running application can satisfy it.
+        // The genuine "the ledger is unavailable" path is the repository call
+        // itself failing, and that one is still mapped to SERVICE_UNAVAILABLE by
+        // dataAccessFailureMapsToUnavailable.
         Objects.requireNonNull(request, "request must not be null");
         if (ownerId == null || ownerId.isBlank()
                 || idempotencyKeyHash == null || idempotencyKeyHash.isBlank()) {
@@ -273,7 +276,9 @@ public class CollectionProvisioningService {
                     "${rag.collection-provisioning.cleanup-interval-ms:3600000}",
             zone = "${spring.task.scheduling.timezone:Asia/Shanghai}")
     public void cleanupProvisioningLedger() {
-        if (!properties.isEnabled() || operationRepository == null) {
+        // `!properties.isEnabled()` is the real switch; the `operationRepository ==
+        // null` arm that used to sit beside it was unreachable (Batch 826).
+        if (!properties.isEnabled()) {
             return;
         }
         try {

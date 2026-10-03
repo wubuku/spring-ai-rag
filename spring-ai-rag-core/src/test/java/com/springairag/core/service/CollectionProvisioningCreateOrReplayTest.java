@@ -97,14 +97,12 @@ class CollectionProvisioningCreateOrReplayTest {
                 error.getErrorCodeEnum());
     }
 
-    @Test
-    void unavailableLedgerRejected() {
-        RagException error = assertThrows(RagException.class,
-                () -> service(false).createOrReplay(request(), OWNER, KEY_HASH));
-
-        assertEquals(ErrorCode.SERVICE_UNAVAILABLE, error.getErrorCodeEnum());
-        assertTrue(error.getMessage().contains("ledger is unavailable"));
-    }
+    // Batch 826: `unavailableLedgerRejected` used to stand here. It built the service with
+    // `service(false)`, which nulls all four ledger collaborators, and asserted the
+    // SERVICE_UNAVAILABLE that guard threw. Those four are required constructor parameters
+    // of unconditional beans, so the fixture described a wiring the container cannot
+    // produce. The real unavailable path — the repository call failing — is still covered by
+    // `dataAccessFailureMapsToUnavailable` right below.
 
     @Test
     void ownerAndHashRequired() {
