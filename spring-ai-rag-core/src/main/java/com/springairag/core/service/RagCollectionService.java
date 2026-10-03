@@ -39,9 +39,10 @@ public class RagCollectionService {
     private final RagCollectionRepository collectionRepository;
     private final RagDocumentRepository documentRepository;
     private final CollectionIdentityResolver identityResolver;
-    private final AuditLogService auditLogService;  // optional: null when audit log is unavailable
-    private DocumentVersionService documentVersionService;  // optional for isolated unit tests
-    private DocumentMutationService documentMutationService;
+
+    private final AuditLogService auditLogService;  // optional-claim: AuditLogService 是无条件 @Service，所以 null 分支只在测试里可达；守卫保留是因为审计写入失败不应让业务请求失败  // optional: null when audit log is unavailable
+    private DocumentVersionService documentVersionService;  // optional-claim: DocumentVersionService 是无条件 @Service，所以 null 分支只在测试里可达；这个注释原本就写着"optional for isolated unit tests"——那是实话，只是没用门禁认得的标记（Batch 827）
+    private DocumentMutationService documentMutationService;  // optional-claim: 无条件 @Service，null 分支只在测试里可达。留个注释是因为这个类自相矛盾：144/263 行按"可能为 null"守卫，331 行却无条件调用 createLocal——同一字段两种假设（Batch 827 记下，未改行为）
 
     @Autowired
     public RagCollectionService(RagCollectionRepository collectionRepository,
