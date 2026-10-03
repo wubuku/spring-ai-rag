@@ -12,6 +12,10 @@ import { Collections } from './Collections';
 
 const showToast = vi.fn();
 
+// 非根主体那条分支需要换一个 principalType，而 mock 工厂被 vitest 提升到
+// import 之前，普通模块级 let 会在工厂求值时撞上 TDZ。vi.hoisted 是官方解法。
+const authState = vi.hoisted(() => ({ principalType: 'ENVIRONMENT_ROOT' }));
+
 vi.mock('../api/collections', async importOriginal => {
   const actual = await importOriginal<typeof import('../api/collections')>();
   return {
@@ -29,7 +33,7 @@ vi.mock('../api/collections', async importOriginal => {
 vi.mock('../auth/ApiKeyAuthContext', () => ({
   useApiKeyAuth: () => ({
     identity: {
-      principalType: 'ENVIRONMENT_ROOT',
+      principalType: authState.principalType,
       principalId: 'environment-root',
       capabilities: ['RAG_READ', 'RAG_WRITE', 'API_KEY_MANAGE'],
     },
@@ -260,11 +264,17 @@ describe('Collections purge flow', () => {
   });
 });
 
+describe('Collections delete flow', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockList(collection);
+    mockCapabilities(true);
+  });
+
   it('shows delete success and error toasts for the collection', async () => {
     const user = userEvent.setup();
     vi.mocked(collectionsApi.deleteByKey).mockResolvedValue({} as never);
-    mockList(collection);
-    mockCapabilities(true);
+
     renderPage();
 
     const deleteButtons = await screen.findAllByRole('button', {
@@ -296,12 +306,8 @@ describe('Collections purge flow', () => {
 
   it('keeps the collection when the delete confirmation is cancelled', async () => {
     const user = userEvent.setup();
-    // This file has top-level `it` blocks outside any describe, so nothing
-    // clears the mocks for us — the delete above already called it twice.
-    vi.clearAllMocks();
     vi.mocked(collectionsApi.deleteByKey).mockResolvedValue({} as never);
-    mockList(collection);
-    mockCapabilities(true);
+
     renderPage();
 
     await user.click(
@@ -314,6 +320,7 @@ describe('Collections purge flow', () => {
 
     expect(collectionsApi.deleteByKey).not.toHaveBeenCalled();
   });
+});
 
 
 describe('Collections navigation, create modal and purge preview failure', () => {
@@ -417,5 +424,204 @@ describe('Collections dialog dismissal', () => {
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
     expect(collectionsApi.applyPurge).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * 破坏性能力门控与"读失败 ≠ 空结果"。
+ *
+ * 页面自己写着两条设计意图，但原来一条都没有用例钉着：
+ * ① capability 读取失败时 `purgeVisible` 保持 false（fail-closed），
+ *    同时必须给出一句解释，否则用户会以为权限被降级；
+ * ② 列表读取失败要显示可重试的错误横幅，而不是滑进"暂无集合"空态。
+ * 这两条都是"看起来有实现、实际无人验证"的类型。
+ */
+describe('Collections fail-closed reads', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    authState.principalType = 'ENVIRONMENT_ROOT';
+    mockList(collection);
+    mockCapabilities(true);
+  });
+
+  it('hides the purge action and explains the vanished button when the capability read fails', async () => {
+    vi.mocked(collectionsApi.integrationCapabilities)
+      .mockRejectedValue(new Error('capability endpoint down'));
+
+    renderPage();
+
+    expect(await screen.findByText('Sample Collection')).toBeInTheDocument();
+    // fail-closed：读不到能力就不给破坏性入口。
+    expect(screen.queryByRole('button', {
+      name: 'collections.purge.action',
+    })).not.toBeInTheDocument();
+
+    // 但"按钮不见了"本身要有解释，否则与"权限被降级"无法区分。
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('collections.capabilityLoadFailed');
+  });
+
+  it('restores the purge action when retrying the capability read succeeds', async () => {
+    const user = userEvent.setup();
+    vi.mocked(collectionsApi.integrationCapabilities)
+      .mockRejectedValueOnce(new Error('capability endpoint down'))
+      .mockResolvedValueOnce(response({
+        principal: { principalType: 'ENVIRONMENT_ROOT' },
+        features: { optional: { collectionPurge: true } },
+      }));
+
+    renderPage();
+
+    const alert = await screen.findByRole('alert');
+    expect(screen.queryByRole('button', {
+      name: 'collections.purge.action',
+    })).not.toBeInTheDocument();
+
+    await user.click(within(alert).getByRole('button', {
+      name: 'common.retry',
+    }));
+
+    expect(await screen.findByRole('button', {
+      name: 'collections.purge.action',
+    })).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('never issues the capability read for a non-root principal and keeps purge hidden', async () => {
+    authState.principalType = 'API_KEY';
+
+    renderPage();
+
+    expect(await screen.findByText('Sample Collection')).toBeInTheDocument();
+    // enabled 门控：非根主体连这个请求都不该发出去。
+    expect(collectionsApi.integrationCapabilities).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', {
+      name: 'collections.purge.action',
+    })).not.toBeInTheDocument();
+  });
+
+  it('shows a retryable error rather than an empty state when the list read fails', async () => {
+    const user = userEvent.setup();
+    vi.mocked(collectionsApi.list).mockRejectedValue(new Error('offline'));
+
+    renderPage();
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('collections.loadFailed');
+    // 关键区分：读失败不是"没有集合"。
+    expect(screen.queryByText('collections.noCollections'))
+      .not.toBeInTheDocument();
+
+    vi.mocked(collectionsApi.list).mockResolvedValue(response({
+      collections: [collection],
+      total: 1,
+      offset: 0,
+      limit: 20,
+    }));
+    await user.click(within(alert).getByRole('button', { name: 'common.retry' }));
+
+    expect(await screen.findByText('Sample Collection')).toBeInTheDocument();
+  });
+
+  it('renders the empty state only for a genuinely empty list', async () => {
+    mockList();
+
+    renderPage();
+
+    expect(await screen.findByText('collections.noCollections'))
+      .toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('does not show the empty state alongside a populated list', async () => {
+    // 上一条只证明了"空列表会显示空态"，没证明"非空列表不会也显示空态"——
+    // 变异实验把 `length === 0` 改成 `!== undefined` 时测试仍然全绿，就是这个缺口。
+    renderPage();
+
+    expect(await screen.findByText('Sample Collection')).toBeInTheDocument();
+    expect(screen.queryByText('collections.noCollections'))
+      .not.toBeInTheDocument();
+  });
+
+  it('shows neither an empty state nor an error while the list is still loading', async () => {
+    vi.mocked(collectionsApi.list).mockReturnValue(new Promise(() => {}));
+
+    const { container } = renderPage();
+
+    // 挂起态：既不能闪"暂无集合"，也不能闪错误横幅，并且要真的画出骨架卡。
+    // 骨架卡没有可访问名，用仓库既有的 `[class*="skeleton"]` 约定定位（见 Dashboard.test.tsx）。
+    await waitFor(() => {
+      expect(
+        container.querySelectorAll('[class*="skeleton"]').length,
+      ).toBe(12); // 3 张卡 × 每张 4 块
+    });
+    expect(screen.queryByText('collections.noCollections'))
+      .not.toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+});
+
+describe('Collections purge in-flight lock', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    authState.principalType = 'ENVIRONMENT_ROOT';
+    mockList(collection);
+    mockCapabilities(true);
+  });
+
+  it('locks the purge dialog shut while apply is in flight and relabels the secondary action afterwards', async () => {
+    const user = userEvent.setup();
+    vi.mocked(collectionsApi.previewPurge).mockResolvedValue(response(preview));
+
+    let releaseApply: (() => void) | undefined;
+    vi.mocked(collectionsApi.applyPurge).mockReturnValue(new Promise(resolve => {
+      releaseApply = () => resolve(response({
+        previewId: preview.previewId,
+        status: 'RETIRED',
+        collectionId: 1,
+        collectionKey: collection.collectionKey,
+        purgedDocumentCount: 5,
+        purgedExternalDocumentCount: 2,
+        purgedLocalDocumentCount: 3,
+        deletedAt: '2026-08-27T12:01:00',
+        purgedAt: '2026-08-27T12:01:00',
+        collectionVersion: 8,
+      }));
+    }));
+
+    renderPage();
+    await user.click(await screen.findByRole('button', {
+      name: 'collections.purge.action',
+    }));
+    const dialog = await screen.findByRole('dialog');
+    await user.type(
+      await within(dialog).findByRole('textbox', {
+        name: /collections\.purge\.confirmLabel/,
+      }),
+      collection.collectionKey,
+    );
+    await user.click(within(dialog).getByRole('button', {
+      name: 'collections.purge.confirmAction',
+    }));
+
+    // 永久清除进行中：不能半途关窗跑掉。
+    const secondary = await within(dialog).findByRole('button', {
+      name: 'collections.purge.applying',
+    });
+    await waitFor(() => {
+      expect(within(dialog).getByRole('button', { name: 'Close' }))
+        .toBeDisabled();
+    });
+    expect(secondary).toBeDisabled();
+
+    releaseApply?.();
+
+    // 成功后二次按钮从"取消"变成"关闭"，确认入口消失。
+    expect(await within(dialog).findByRole('button', {
+      name: 'common.close',
+    })).toBeEnabled();
+    expect(within(dialog).queryByRole('button', {
+      name: 'collections.purge.confirmAction',
+    })).not.toBeInTheDocument();
   });
 });

@@ -478,6 +478,79 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
+### Batch 849（已交付，WebUI：破坏性操作 fail-closed 契约补测）
+
+- 分支：`feature/webui-collections-fail-closed-tests-20261007`
+- 主题：给全应用最薄的页面 `Collections.tsx` 补齐**破坏性操作的 fail-closed 契约**，
+  并修掉它测试文件里的一个结构缺陷。**只改测试，生产代码零改动**（+214 / −8，单文件）。
+- **勘察我错了三次，如实记录**（本批最贵的部分不是代码，是这三下）：
+  | 第几次 | 我怎么查的 | 错在哪 | 结论 |
+  |---|---|---|---|
+  | 1 | shell 里 `b=$(basename $f .tsx); b=$(basename $f .ts)` | 第二次赋值**覆盖**第一次，`Dialog.tsx` 被当成 `Dialog.ts` | "四个组件零测试" |
+  | 2 | `find src -name "${b}*.test.*"` | 沿用了上面那个坏变量 | 再次误报零测试 |
+  | 3 | 正则 `^\s*(it\|test)\(` 数用例 | **`it.each` 不匹配**，且测试文件名 ≠ 源文件名时找不到源 | `pdfProvenance` 报 1 条，实际 13 条 |
+  - **正确口径是 vitest 自己的 json reporter**（`--reporter=json --outputFile`），
+    按 `assertionResults` 数、再按模块聚合，而不是按文件名猜。修正后的真实数据：
+    **77 个测试文件 / 902 条全绿**；按"源行 ÷ 用例"排序，最薄的是
+    `Collections` 409 行 / 10 条 / 仅 1 个测试文件。
+  - **教训：普查工具本身也是被测对象。** 三次错都出在"用名字/正则近似"，
+    一次都没出在真正的数据上。**先用工具自己的输出当权威，再谈结论。**
+- **顺手挖到的结构缺陷**：该文件的 `describe('Collections purge flow')`
+  在第 261 行被一个多余的 `});` 提前关闭，**后面两条 `it` 成了顶层孤儿用例**——
+  没有 `beforeEach` 清 mock，第二条只能自己手写 `vi.clearAllMocks()`，并留了一条
+  注释解释为什么它得这么写（*"This file has top-level `it` blocks outside any
+  describe, so nothing clears the mocks for us"*）。孤儿用例照样会跑、照样会绿，
+  所以它能潜伏这么久。已收进正式的 `describe`，那条将就注释一并删掉。
+- **新增 8 条用例（10 → 18），全部针对"看起来有实现、实际无人验证"的契约**：
+  | 契约 | 生产代码依据 |
+  |---|---|
+  | 能力读取失败 → 隐藏 purge **且**给出解释 | `Collections.tsx:44-46` 注释自述的 fail-closed 设计 |
+  | 能力重试成功 → purge 回来、横幅消失 | 同上 |
+  | 非根主体**连请求都不发**，purge 隐藏 | `enabled: identity?.principalType === 'ENVIRONMENT_ROOT'` |
+  | 列表读取失败 → 可重试横幅，**不是**空态 | `Collections.tsx:110-112` 记录的历史 bug |
+  | 真空列表 → 空态 | — |
+  | 非空列表 → **不出现**空态 | 变异实验挖出来的缺口，见下 |
+  | 挂起态 → 画 12 块骨架、不闪空态也不闪错误 | — |
+  | 永久清除进行中 → 关闭键与二次键都锁住；成功后二次键由"取消"变"关闭"、确认入口消失 | `closeDisabled` + `result ? close : cancel` |
+  - 为此把 auth mock 改成可换 principal（`vi.hoisted`，因为 `vi.mock` 工厂被提升到
+    import 之前，普通模块级 `let` 会撞 TDZ）。
+- **变异实验 8 个（每次都"备份 → 变异 → 跑 → 还原 → sha256 校验还原"，
+  全部串在单条命令里，中断也不会留下变异态）**：
+  | 变异 | 结果 |
+  |---|---|
+  | ① fail-open：能力失败时 `=== true` 改成 `!== false` | ✓ 变红（2 条） |
+  | ② 非根主体也去读能力（`enabled: true`） | ✓ 变红 |
+  | ③ 内层空态条件里加 `isError` | ⚠️ **全绿 —— 但这是等价变异，见下** |
+  | ③' 真回归：删掉 `isError` 分支 | ✓ 变红 |
+  | ④ 执行中不锁窗（`closeDisabled={false}`） | ✓ 变红 |
+  | ⑤ 能力横幅去掉重试入口 | ✓ 变红 |
+  | ⑥ pending 分支被短路 | ✓ 变红（补强后） |
+  | ③''/⑦ 空态判定写成永远为真 | ✓ 变红（补强后） |
+- **两个只有做了变异实验才会知道的事**：
+  1. **"测试没钉住"和"这个变异是等价变异"是两回事。** 第一次的 ③ 把
+     `length === 0` 改成 `!length || isError` 后全绿，我第一反应是"测试太弱"。
+     实际上那个 `isError` **不可达**——外层三元 `{isPending ? … : isError ? … : …}`
+     已经把出错情况分流走了，内层条件里的 `isError` 永远是 false，改它等于没改。
+     换成真正会破坏契约的 ③'（删掉整个 `isError` 分支，也就是注释里记的那个历史
+     bug 的现代复现）后立刻变红。**变异实验自己也会有无效样本，不先证伪就下结论，
+     会把"变异写错了"记成"测试没覆盖"。**
+  2. **③'' 挖出一个真缺口**：原有用例只证明"空列表会显示空态"，**没有一条**
+     证明"非空列表不会也显示空态"。把判定改成 `!== undefined`（非空数组时也成立）
+     测试照样全绿。补了一条反向断言后，③'' 与 ⑦ 都能抓住。
+  - 另外我一度断定 **pending 分支没法断言**，理由是 `Skeleton` 没有可访问名、
+    不该往生产代码加钩子。这个判断是**错的**：仓库里早就有约定——
+    `Dashboard.test.tsx:371` 用 `container.querySelectorAll('div[style*="60px"]')`，
+    `Skeleton.test.tsx` 用 `[class*="skeleton"]`。**"我不熟悉"不等于"不可断言"，
+    先搜仓库既有约定再下结论。**
+- 验证（全部实测）：vitest **910 条 / 0 失败**（原 902）；`npm run lint`
+  九条门禁 EXIT=0、门禁自测 **263/263**；`typecheck` EXIT=0；`build` EXIT=0。
+  收尾时 `git status` 只有那一个测试文件——**8 次变异实验没有留下任何痕迹**
+  （每轮 sha256 都回到 `4d14d137…`）。
+- **仍未做**：服务侧还剩 3 套 `setDocumentMutationService`（见 Batch 848 末尾），
+  需要单独勘察；WebUI 侧 `Documents.tsx`（900 行 / 60 条聚合）、
+  `Files.tsx`（1109 行 / 45 条）密度也偏低，但两者都已有 sibling 测试文件，
+  属于"下一个候选"而不是"缺口"。
+
 ### Batch 848（已交付，后端技术债：把可选 setter 变成必填构造器依赖）
 
 - 分支：`feature/controller-required-mutation-wiring-20261007`
