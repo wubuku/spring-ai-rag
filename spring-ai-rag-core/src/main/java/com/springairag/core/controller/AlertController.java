@@ -47,7 +47,7 @@ public class AlertController {
     private final SloConfigRepository sloConfigRepository;
     private final RagSilenceScheduleRepository silenceScheduleRepository;
     private final AlertManagementAuthorization managementAuthorization;
-    private AuditLogService auditLogService;  // optional: null when RagAuditLogRepository unavailable
+    private AuditLogService auditLogService;  // optional-claim: unconditional @Service; the audit helpers are null-tolerant on purpose so auditing can never be the reason a request fails
 
     public AlertController(AlertService alertService, SloConfigRepository sloConfigRepository,
                            RagSilenceScheduleRepository silenceScheduleRepository,

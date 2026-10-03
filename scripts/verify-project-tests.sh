@@ -145,3 +145,18 @@ echo "PASS: Null-request forwarding self-test"
 
 node scripts/verify-null-request-forwarding.mjs
 echo "PASS: Null-request forwarding"
+
+# A collaborator injected with @Autowired(required = false) claims it may be
+# absent. For all twelve of them the bean is an unconditional @Service, so the
+# null branch is unreachable in a running application — while seven genuinely
+# conditional beans exist, which is what stops this from rejecting every
+# optional injection outright. Each claim must say why the guard exists.
+node scripts/test-support/false-optional-wiring-self-test.mjs >/dev/null || {
+  echo "False-optional-wiring self-test failed; the gate may no longer reject anything." >&2
+  node scripts/test-support/false-optional-wiring-self-test.mjs >&2 || true
+  exit 1
+}
+echo "PASS: False-optional-wiring self-test"
+
+node scripts/verify-false-optional-wiring.mjs
+echo "PASS: False-optional wiring"

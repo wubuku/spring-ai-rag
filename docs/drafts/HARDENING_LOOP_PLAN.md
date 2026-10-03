@@ -478,6 +478,100 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
+### Batch 820（已交付）
+
+- 分支：`feature/false-optional-claims-20261006`
+- 内容：查清 819 批登记的那条债务，**结论是我自己写错了**；顺带查出一个更实的东西——
+  12 处"声称协作者可能不存在、实际无条件"的假可选声明，并加门禁。
+- 勘察（**这一批最大的收获是推翻自己**）：
+  - 819 批我写"那 10 个 `setXxx` 是生产代码里的测试注入钩子"。**错。**
+    判据是"main 源码里没有 Java 调用点"，而这 10 个 setter **全都带
+    `@Autowired(required = false)`——它们是 Spring 的生产装配，由容器在启动时
+    反射调用**，Java 调用点当然为零。
+    逐个查了 bean：`DocumentMutationService`、`ExternalDocumentService`、
+    `EmbeddingDispatchService`、`DocumentLifecycleService`、
+    `CollectionProvisioningService`、`DocumentDerivationDescriptorProvider`、
+    `AuditLogService` **全部是无条件 `@Service`/`@Component`，无任何 `@ConditionalOn*`**。
+    所以它们**不是测试钩子，是"构造器已经 9 个参数、不想再加"的 setter 注入**。
+    **教训与 815 同源**：普查判据是需要被证伪的假设；把"没找到调用点"直接写成
+    "这是测试钩子"并登记成债务，下一个读账本的人会去删掉一段正在工作的生产装配。
+    **账本已就地更正。**
+  - 顺着查下去才是真发现：`required = false` + `if (x == null)` 读起来像一条
+    **降级路径**，而 bean 无条件 ⇒ **那条路径在任何运行中的应用里都走不到**。
+  - **数字随判据变化，而每次变化都是真的**（这点比数字本身更值得记）：
+    | 判据版本 | 命中 |
+    |---------|------|
+    | 最初的普查脚本（只认 setter、要求参数名等于字段名） | 8（多算了 `collectionPurgeService`——它其实是 `@Autowired` required；漏了 `collectionProvisioningService`——它的 setter 有**两个**参数） |
+    | 门禁第一版（按参数类型匹配 setter） | 8（成员名单变了，仍非 7） |
+    | 门禁加上构造函数注入 | **12**，横跨 **4 个 controller** |
+    - 我在第二版时差点写下"真实是 7 处"——**那也是错的**，同样是没查就下结论。
+- 变更：
+  - **新门禁 `scripts/verify-false-optional-wiring.mjs`**：一个被 `if (x == null)` /
+    `if (x != null)` 守卫、经 `@Autowired(required = false)`（setter 或构造函数参数）
+    注入的字段，若其 bean 是**无条件**的 `@Service`/`@Component`，且字段声明处
+    没有 `// optional-claim: <理由>` → 报错。
+    - **豁免不是 allowlist 条目，而是写在字段声明行上的理由**——理由必须和代码在一起，
+      因为下一个读它的人正要在这里做判断。
+    - **这条规则有区分度**：仓库里确实有 **7 个真的条件 bean**
+      （`EmbeddingJobWorker`、`AlertNotificationDeliveryWorker`、
+      `EvaluationSuiteWorker` 等），它们被放行。**没有这个对照组，规则就只是
+      "见到 required=false 就报"的噪音机，而噪音是让门禁被豁免成装饰品的原因。**
+  - **12 处补上真实的 `optional-claim:` 理由**，理由是实话：
+    协作者在生产里一定存在，这些守卫是为了**让手工构造的测试实例得到一句明确的错误
+    而不是 NPE**；`auditLogService` 那一族则是**刻意容忍 null**，
+    以免审计成为请求失败的原因。
+  - **删掉 `RagDocumentControllerOptionalServiceTailTest` 里的两条用例**
+    （`relocateWithoutServiceSurfacesIllegalState`、`getExternalWithoutServiceSurfacesIllegalState`）——
+    它们断言的是产品不可能出现的状态，而**类 Javadoc 里明写"Batch 577，JaCoCo 驱动"**：
+    **这个类的存在原因就是覆盖率。** 保留的三条是真实的委托契约。
+  - **把该类更名为 `RagDocumentControllerExternalDelegationTest`**：
+    "optional" 这个前提本身就是假的，名字应该按它实际测的东西写。
+    类注释里保留了完整的来龙去脉（含"为什么删"），不是只留一句结论。
+  - **四处 controller 里同一句陈旧注释** `// optional: null when RagAuditLogRepository
+    unavailable` 全部更正——那种条件性在代码里早就不存在了。
+  - 自测 **14 例**，其中 6 条是"不该报"的负臂，3 例子进程端到端。
+- 变异测试（4 个，串行，**全部变红**）：
+  | 变异 | 结果 |
+  |------|------|
+  | M1 去掉"已登记理由就放行" | **2 失败**；真实树报出 **12 处**、exit 1 |
+  | M2 去掉"条件 bean 放行" | **2 失败**（两条都是条件 bean 的负臂） |
+  | M3 去掉 `required = false` 判据 | **2 失败**（required 注入与异类型 setter 的负臂） |
+  | M4 清空上报循环 | **5 失败** |
+  - **本批最有价值的一条不是变异结果，是建门禁时踩到的三个静默漏报**：
+    1. 我要求 setter 的**参数名**等于字段名 → 第一个 fixture 就漏；
+    2. 我要求 setter **只有一个参数** → 真实树上的
+       `setCollectionProvisioningService(Service, ProvisioningOwnerResolver)` 漏，
+       **而门禁在真实树上显示"通过"，看上去完全健康**；
+    3. 我只认 setter 注入 → 四个 controller 走**构造函数参数**的同一个声明全漏。
+    前两条都因为**自测 fixture 全比真实代码简单**而没被发现。
+    补了对应 fixture 之后才变红。**一个 fixture 全部比真实代码简单的自测，
+    找不到它本来要抓的那个错。**
+- 验证：
+  - core 全量：992 类 / **7737** 用例 / 0 失败 / 154 跳过（819 批 7739，减掉的正是那 2 条）。
+    **中途踩了一次坑并当场纠正**：改测试类名之后，旧的
+    `TEST-…OptionalServiceTailTest.xml` 报告**残留在 surefire-reports 里**，
+    于是统计变成 993 类 / 7742 例——凭空多出一个类和 5 条用例。
+    `verify-test-visibility` 报了 "vanished class"，**是它抓到的**；
+    清空报告目录重跑才拿到 7737 这个可信数字。
+    **改测试类名必须清 surefire 报告，否则计数会悄悄多算一份。**
+  - 门控 IT 16 例通过；仓库门禁 tests **17/17**（新增 false-optional 链）、
+    docs **16/16**；门禁登记 **48 → 49**。
+  - 前端未改动，不跑 npm 链。
+- 指标：假可选声明 **12 → 0**（每处都带上了经核实的理由，且从此必须带）；
+  为覆盖率而生的不可达断言 **2 → 0**；新门禁 1 条 + 自测 14 例；
+  门禁登记 48 → **49**。
+- 遗留（如实登记，未处理）：
+  - **那 8 处 `if (x == null)` 守卫本身还在**，理由已写清。要真正删掉它们，
+    需要把所有依赖"协作者缺席"分支的测试改成注入协作者——
+    实测 19 个测试文件直接构造 `RagDocumentController`、**只有 8 个注入**这些协作者，
+    这是一次大迁移，**没有在赶进度的这一批里做**。
+  - **生产装配本身没有测试**：那 19 个文件**没有一个是 `@SpringBootTest`**，
+    于是"只有测试看得见的装配"成了唯一被测的装配。
+  - 服务层（`RateLimitFilter`、`CollectionProvisioning` 等）的"unavailable"守卫
+    **未普查**——它们可能真有配置开关支撑，属于另一批。
+  - 承接 819：`dead-locale-key` 判据刻意粗仍有漏报；CSP 全仓库零处。
+  - `/tmp/b806-ci-gates.patch` 仍待人工应用（14 条 standing gap）。
+
 ### Batch 819（已交付）
 
 - 分支：`feature/test-only-controller-overloads-20261006`
@@ -560,10 +654,23 @@
 - 指标：只有测试够得着的端点重载 **11 → 0**；null-request 门禁自测 19 → **25**；
   core 用例 7740 → **7739**（删 1 条空洞测试）。
 - 遗留（如实登记，未处理）：
-  - **同一普查里还有 10 个 `setXxx` public setter 生产零调用**（`setJsonRecordService`、
-    `setDispatchService`、`setDerivationDescriptorProvider` 等），它们是
-    **生产代码里的测试注入钩子**。本批**没动**：删掉它们要改构造函数元数，
-    那是重构而不是旁路清理，属于下一批的范围。已实测坐实（10/10 无生产调用方）。
+  - ~~**同一普查里还有 10 个 `setXxx` public setter 生产零调用**，它们是
+    **生产代码里的测试注入钩子**。~~
+    **本条写错了，Batch 820 勘察时已实测更正。** 我用的判据是"main 源码里没有
+    Java 调用点"，而**这 10 个 setter 全都带 `@Autowired(required = false)`——
+    它们是 Spring 的生产装配，由容器在启动时反射调用，Java 调用点当然为零。**
+    逐个查了对应 bean：`DocumentMutationService`、`ExternalDocumentService`、
+    `EmbeddingDispatchService`、`DocumentLifecycleService`、
+    `DocumentDerivationDescriptorProvider`、`CollectionPurgeService`、
+    `AuditLogService` **全部是无条件 `@Service` / `@Component`，没有任何
+    `@ConditionalOn*`**。
+    所以它们**不是测试钩子，而是"构造器已经 9 个参数、不想再加 6 个"的
+    setter 注入**。**教训与 Batch 815 同源**：普查判据（"没有 Java 调用点"）
+    是一个**需要被证伪的假设**，不是缺陷的证明；把它直接写成结论并登记成债务，
+    下一个读账本的人就会去删掉一段正在工作的生产装配。
+    顺带查出一条真的东西：字段注释写着
+    "optional: null when RagAuditLogRepository unavailable"，
+    **而 `AuditLogService` 现在是无条件 `@Service`，那种条件性在代码里已经不存在了。**
   - **`dead-locale-key` 的判据刻意粗，仍有漏报**（承接 818）。
   - CSP 全仓库零处——净化与转义仍是有力的**仅有的**防线。
   - `/tmp/b806-ci-gates.patch` 仍待人工应用（13 条 standing gap）。

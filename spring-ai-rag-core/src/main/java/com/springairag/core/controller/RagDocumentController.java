@@ -115,13 +115,28 @@ public class RagDocumentController {
     private final DocumentVersionService documentVersionService;
     private final EmbeddingProfileProvider embeddingProfileProvider;
     private final CollectionIdentityResolver collectionIdentityResolver;
-    private AuditLogService auditLogService;  // optional: null when RagAuditLogRepository unavailable
-    private ExternalDocumentService externalDocumentService;
-    private EmbeddingDispatchService dispatchService;
-    private DocumentMutationService documentMutationService;
-    private DocumentLifecycleService documentLifecycleService;
-    private DocumentDerivationDescriptorProvider derivationDescriptorProvider;
-    private DocumentRelocationService documentRelocationService;
+    // Batch 820. The six fields below are injected with `@Autowired(required = false)`,
+    // which reads as "this collaborator may be absent". It cannot: every one of them
+    // is an unconditional @Service / @Component, so the container always wires them.
+    // The `required = false` is therefore not a claim about a deployment mode but a way
+    // of keeping a nine-argument constructor from becoming fifteen.
+    //
+    // That matters because a reader takes the guards below at face value. `if (x == null)`
+    // in eight places implies a degraded path that no running application can take, and
+    // `scripts/verify-false-optional-wiring.mjs` exists to stop the claim from being made
+    // silently again. The beans really are absent in unit tests that construct this
+    // controller by hand — 19 test files do — so the guards convert an NPE into a stated
+    // error. That is the actual reason they exist, and it is a test-only reason.
+    //
+    // Making the wiring unconditional and deleting the guards means migrating every test
+    // that relies on the absent branch. Measured, not assumed: recorded as remaining work.
+    private AuditLogService auditLogService; // optional-claim: unconditional @Service; the audit helpers tolerate a null rather than failing the business call
+    private ExternalDocumentService externalDocumentService; // optional-claim: unconditional @Service; the guard turns a hand-constructed instance's NPE into a stated error
+    private EmbeddingDispatchService dispatchService; // optional-claim: unconditional @Service; same
+    private DocumentMutationService documentMutationService; // optional-claim: unconditional @Service; same
+    private DocumentLifecycleService documentLifecycleService; // optional-claim: unconditional @Service; same
+    private DocumentDerivationDescriptorProvider derivationDescriptorProvider; // optional-claim: unconditional @Component; same
+    private DocumentRelocationService documentRelocationService; // optional-claim: unconditional @Service; same
 
     @Autowired
     public RagDocumentController(RagDocumentRepository documentRepository,

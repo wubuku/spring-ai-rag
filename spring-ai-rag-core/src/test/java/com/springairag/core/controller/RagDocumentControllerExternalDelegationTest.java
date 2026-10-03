@@ -19,17 +19,27 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.ResponseEntity;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
- * RagDocumentController 可选服务委托长尾（Batch 577，JaCoCo 驱
- * 动）：relocateExternalDocument 服务缺失 ISE 与正常委托、get
- * ExternalDocument 服务缺失 ISE 与委托、restoreVersion 委托。
+ * RagDocumentController 的外部文档/版本恢复委托路径。
+ *
+ * <p>Batch 820 更名与瘦身。这个类原本叫 {@code ...OptionalServiceTailTest}，
+ * Javadoc 写着"Batch 577，JaCoCo 驱动"，其中两条用例专门构造一个
+ * **不注入任何协作者**的 controller，然后断言
+ * {@code IllegalStateException("… service is unavailable")}。
+ *
+ * <p>那些状态**产品不可能出现**：`DocumentRelocationService` 与
+ * `ExternalDocumentService` 都是无条件 {@code @Service}，容器在启动时一定会
+ * 装配它们。Batch 820 因此删掉那两条用例——它们钉住的是一个不存在的运行时状态，
+ * 而它们存在的原因（覆盖率）写在类注释里，这本身就是不该出现的那种测试。
+ *
+ * <p>保留下来的三条是**真实的委托契约**：请求确实会到达这些服务。
+ * 名字按实际测的东西改了，"optional" 这个前提本身就是假的。
  */
-class RagDocumentControllerOptionalServiceTailTest {
+class RagDocumentControllerExternalDelegationTest {
 
     private DocumentRelocationService relocationService;
     private ExternalDocumentService externalDocumentService;
@@ -58,28 +68,6 @@ class RagDocumentControllerOptionalServiceTailTest {
     }
 
     @Test
-    void relocateWithoutServiceSurfacesIllegalState() {
-        var bare = new RagDocumentController(
-                mock(RagDocumentRepository.class),
-                mock(RagEmbeddingRepository.class),
-                mock(RagCollectionRepository.class),
-                mock(DocumentEmbedService.class),
-                mock(BatchDocumentService.class),
-                mock(DocumentVersionService.class),
-                mock(EmbeddingProfileProvider.class),
-                mock(CollectionIdentityResolver.class),
-                null);
-
-        var error = assertThrows(IllegalStateException.class,
-                () -> bare.relocateExternalDocument(
-                        new ExternalDocumentRelocateRequest(
-                                "src-col", "dst-col", "crm", "ext-1", "r1"),
-                        "idem-key"));
-        assertEquals("Document relocation service is unavailable",
-                error.getMessage());
-    }
-
-    @Test
     void relocateDelegatesToRelocationService() {
         var request = new ExternalDocumentRelocateRequest(
                 "src-col", "dst-col", "crm", "ext-1", "r1");
@@ -94,23 +82,6 @@ class RagDocumentControllerOptionalServiceTailTest {
 
         assertEquals(200, response.getStatusCode().value());
         assertEquals(expected, response.getBody());
-    }
-
-    @Test
-    void getExternalWithoutServiceSurfacesIllegalState() {
-        var bare = new RagDocumentController(
-                mock(RagDocumentRepository.class),
-                mock(RagEmbeddingRepository.class),
-                mock(RagCollectionRepository.class),
-                mock(DocumentEmbedService.class),
-                mock(BatchDocumentService.class),
-                mock(DocumentVersionService.class),
-                mock(EmbeddingProfileProvider.class),
-                mock(CollectionIdentityResolver.class),
-                null);
-
-        assertThrows(IllegalStateException.class,
-                () -> bare.getExternalDocument("kb", "crm", "ext-1"));
     }
 
     @Test
