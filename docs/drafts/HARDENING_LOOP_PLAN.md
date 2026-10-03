@@ -478,6 +478,94 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
+### Batch 843（已交付，WebUI 测试加固）
+
+- 分支：`feature/api-key-rotation-tests-20261007`
+- 主题：**API Key 的吊销与轮换**。把 Batch 842 的普查口径推到全树，
+  排第一的就是密钥管理页。
+- **全树普查**（69 个有测试的源文件，密度 = 用例数 ÷ 源文件行数）：
+  | 密度 | 用例 | 行数 | 文件 |
+  |---|---|---|---|
+  | **0.012** | **14** | **1187** | **`pages/ApiKeys.tsx`** ← 全树最低 |
+  | 0.017 | 15 | 901 | `pages/Documents.tsx`（842 刚补过，仍低） |
+  | 0.024 | 10 | 410 | `pages/Collections.tsx` |
+  | 0.028 | 5 | 176 | `api/alerts.ts` |
+  | 0.032 | 15 | 473 | `pages/ABTest.tsx` |
+  | 0.034 | 11 | 328 | `DocumentActionsMenu.tsx` |
+  | 0.035 | 39 | 1110 | `pages/Files.tsx` |
+- **量出来的东西比数字更值钱**：`ApiKeys.tsx` 里有 **7 个 `useMutation`**
+  （revoke / completeRotation / cancelRotation / create / update /
+  prepare / immediate），而既有 14 条用例只碰到了 create 与 update。
+  **吊销与轮换——不可逆的凭据操作——一条测试都没有。**
+- 补上的内容：
+  - **吊销**：确认对话框打开前一个请求都不发、取消确认不吊销、成功刷新
+    列表并提示、失败只报错误。
+  - **卡片轮换**：完成/取消都针对 `pendingRotationId`（**不是**当前凭据 id）、
+    轮换进行中禁用再次发起、显示正在退役的旧凭据。
+  - **分阶段轮换**：重叠窗口 5 种非法值的边界、合法值连同幂等键一起提交、
+    同一次会话内重复提交沿用同一幂等键、结果页展示一次性密钥与重叠截止、
+    **重放恢复**（后端没回传 rawKey 时改走恢复提示而不是显示空密钥块）、
+    复制按钮写入剪贴板。
+  - **立即轮换**：切模式后不再提交重叠窗口、没有重叠窗口输入框、成功后展示
+    新名称/密钥标识/一次性密钥/warning。
+  - 失败路径把后端原因带进提示。
+- **夹具改造踩了四个坑，每一个都值得记**（这页的既有夹具是用
+  `mockUseMutation.mockReturnValue` 单一返回值做的，7 个 mutation 共用一个
+  `mockMutateFn`，根本无法区分谁被调用）：
+  1. **mock 实现必须在 `render()` 之前装**。组件渲染时就调用了全部
+     `useMutation` 并把返回值捕获进闭包，render 之后再换实现，捕获到的
+     仍然是旧的。第一版把 `routeMutationsToApiLayer()` 写在 render 之后，
+     症状是"api 层调到了但 toast 不出"。`queryClient` 同理。
+  2. **`useMutation` 被 mock 掉之后，"mutationFn 落定后自动调
+     `onSuccess`/`onError`"这件事也没了**。只把 mutate 接到 mutationFn 上
+     是不够的，成功路径永远走不到（toast 不出、结果页不渲染）。mutate
+     桩必须自己 `Promise.resolve(...).then(config.onSuccess, config.onError)`。
+  3. **`onSuccess` 会读 `response.data`**，所以 api 层 mock 必须有默认返回值。
+     第一版只给"关心返回值"的用例设了 `mockResolvedValueOnce`，结果
+     "只验证提交参数"的两条用例在 promise 链里留下 **unhandled rejection**，
+     全量跑出 `Errors 2`（用例全绿但门禁不干净）。改成在渲染 helper 里给
+     五个 api 统一设默认 `mockResolvedValue`，`Once` 仍然优先。
+  4. 断言要落在 **api 层实参**（`apiKeysApi.prepareRotation` 收到什么），
+     而不是 mutate 的入参——后者只是组件内部的接线约定。
+- **变异实验 11 个，9 个精确抓住、2 个等价变异**：
+  | 变异 | 结果 |
+  |---|---|
+  | **吊销去掉二次确认，一点就执行** | ✅ **4 红**（安全设计被摘掉立刻暴露） |
+  | 完成轮换错用 `currentCredentialId` | ✅ 1 红 |
+  | 取消轮换错用 `currentCredentialId` | ✅ 1 红 |
+  | 不再提交幂等键 | ✅ 2 红 |
+  | `rotationPending` 时不再禁用 rotate | ✅ 1 红 |
+  | `shownOnceSecret` 恒为真 | ✅ 3 红 |
+  | 立即轮换误调 `prepareRotation` | ✅ 2 红 |
+  | 吊销成功后不刷新列表 | ✅ 1 红 |
+  | 复制按钮写 `keyId` 而不是 `rawKey` | ✅ 1 红 |
+  | 去掉 `prepare()` 内侧重叠窗口校验 | ⚠️ **等价变异** |
+  | `handleClose` 不清 `preparedRotation` | ⚠️ **等价变异** |
+- 两个等价变异都查清了：
+  1. 重叠窗口有两道防线——**按钮的 `disabled` 是第一道，`prepare()` 里的
+     `return` 是第二道**，测试打的是第一道。据此把用例名从"不提交"改成
+     **"提交按钮不可用"**并显式断言 `toBeDisabled()`，让名字和实际钉住
+     的东西对上。原来那个名字会让人以为在测 `prepare()` 的守卫。
+  2. `handleClose` 清不清 state 在 UI 上不可见：Dialog 关闭即卸载，重新
+     打开是全新挂载，两种实现渲染结果完全一样。用例改成钉"重开后是干净
+     表单"这个用户可见契约（仍有价值，只是不是我最初以为的那个原因）。
+- **我自己的两个错误**：
+  - **python `str.replace` 静默失败**。一次替换的 pattern 里带着一行已经被
+     上一轮替换删掉的内容，`.replace()` 不匹配时返回原串、不报错，我以为
+     改好了，实际测试文件里还是旧代码，于是排查了半天才发现。
+    改用 Edit 工具（不匹配会明确报错），python 只用于带 `assert old in s`
+    的变异。
+  - **幂等键那条的意图写错了**。我本来断言"关闭对话框再打开，幂等键不变"，
+    但 `useState(() => crypto.randomUUID())` 在**重新挂载**时必然换新 key，
+    而关闭对话框就是卸载重挂。重新想清楚幂等键的语义后改成
+    **"请求飞行中用户又点了一次，两次是同一个 key"**——这才是重放保护
+    要解决的问题（用户以为没点上）。
+- 验证：WebUI 77 文件 / **896 用例**全绿（872 → 896），**`Errors` 从 2 归零**；
+  `npm run lint` 九条门禁全过（门禁自测 263 未变）；`typecheck` 干净；
+  `build` 通过；docs 链 **16/16**。
+- 顺带登记（**未做**）：`Documents.tsx`（0.017）、`Collections.tsx`（0.024）、
+  `api/alerts.ts`（0.028）仍在低密度榜上，按同一口径排队即可。
+
 ### Batch 842（已交付，WebUI 测试加固）
 
 - 分支：`feature/workspace-state-tests-20261007`
