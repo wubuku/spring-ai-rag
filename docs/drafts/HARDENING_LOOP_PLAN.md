@@ -478,6 +478,92 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
+### Batch 847（已交付，后端技术债：controller 守卫删减）
+
+- 分支：`feature/controller-guard-removal-20261007`
+- 主题：执行 Batch 839 / 846 勘察完的 5 处 controller 守卫删减。
+  **勘察结论成立，但工作量的算法被三次修正**（见下）。
+- **生产代码改动**：
+  | 位置 | 处置 | 行数 |
+  |---|---|---|
+  | `RagDocumentController.createDocument` (原 299) | 拆 `if` 包装、删内联建档顺接段 | −26 |
+  | `RagDocumentController.deleteDocument` (原 394) | 拆包装、删 `batchDocumentService.deleteDocument` 回落 | −5 |
+  | `RagDocumentController.uploadAndEmbed` (原 1154) | 拆包装 + 删随之变死的 `createViaBatchService` | −5 −17 |
+  | `RagCollectionController.addDocument` (原 640) | 拆包装、删 `setCollectionId + save` 回落 | −5 |
+  | `RagCollectionController.importDocuments` (原 831) | 拆包装 + 删 json-record 分支 + 删随之变死的 `buildDocumentFromImport` | −20 −30 |
+  | `RagCollectionController.jsonRecordService` | **死字段**，连 `setJsonRecordService` 与 import 一起删 | −7 |
+  - 合计净删约 **115 行**。两个 controller 里 `documentMutationService` 的
+    null 守卫**归零**，字段注释上的 `optional-claim:` 理由随守卫一起消失。
+- **删 json-record 分支之前先查了能力归属**（不能盲删）：
+  `DocumentMutationService.importDocument` 的 1209–1217 行确实完整处理
+  `JSON_RECORD`——识别类型、校验 payload 非空、走 external upsert 路径。
+  这是 Batch 835（`importRecord` 切变更层）的成果，controller 侧那个分支
+  从此只是重复实现。
+- **`jsonRecordService` 死字段的注释已经过期**：它写的是
+  *"Batch 822 removed the null guard that used to sit on it"*——
+  而 Batch 835 切变更层后，最后一个调用点（本次删掉的 json-record 分支）
+  才让它真的变成死字段。**理由会过期，删代码时要顺手核对理由。**
+- **测试迁移：7 个文件，且勘察漏了三类**（这是本批最贵的教训）：
+  | 漏掉的形态 | 命中文件 | 为什么第一次搜不到 |
+  |---|---|---|
+  | 按**端点方法名**搜（`addDocument` / `importCollection`） | 6 个 | 我只搜了这两个名字 |
+  | 按 **setter 名**搜 | `ImportDocumentsTest`、`ImportBuildTailTest` | 调的是 `setJsonRecordService` / `setDocumentMutationService`，不碰端点 |
+  | **反射调用私有方法** | `RagCollectionControllerCreateImportTailTest` | `getDeclaredMethod("buildDocumentFromImport", …)`，端点名字一次都不出现 |
+  - `RagCollectionControllerImportBuildTailTest` 最典型：它有个
+    `disableMutationDelegation()`，注释直言
+    *"关闭 mutation 委托，走直接落库路径以便捕获 RagDocument"*——
+    **整个类都在测已删的 legacy 路径**。
+  - **教训**：判断"哪些测试依赖 legacy 分支"要同时搜
+    **端点名 / setter 名 / 显式置 null / 反射**四种形态。只搜一种必然漏。
+- **断言改写的原则**：不是加个 mock 就行。旧断言钉的是 legacy 内部结构
+  （`"DUPLICATE"` 由 controller 自己判定、`verify(repository, never()).save()`
+  是 controller 自己的去重、`contentHash` 是 controller 自己算的、
+  `RagDocument` 的 `size` / `sourceNamespace` / `jsonbPayload` 字段）。
+  全部改成"**controller 把什么交给变更层**"，例如用 `ArgumentCaptor`
+  断言 `importDocument` 收到的是调用方的**原样** `ImportedDocument`。
+- **归属搬移的三处，如实记录**：
+  | 旧断言（controller 侧） | 现在的归属 | 是否已验证有覆盖 |
+  |---|---|---|
+  | size 按 UTF-8 字节算 | `upsertExternalInTransaction` 的 `byteSize(content)` | ✅ `DocumentMutationServiceGuardsTest.byteSizeUsesUtf8Length` |
+  | namespace 空白归一 default | `importDocument` 的 `normalizeNamespace` | ✅ `DocumentMutationImportExternalTest` |
+  | jsonbPayload 保留 / json-record 需要 payload | `importDocument` 1214–1217 | ✅ `DocumentMutationExternalFinishTailTest` / `DocumentMutationImportTest`（3 条） |
+  | **显式传入的 size 被保留** | **不再保留** | ⚠️ **行为变更**：service 一律 `byteSize(content)` 重算，`ImportedDocument.getSize()` 从此不被读取 |
+  | **identity 超 255 拒绝** | 归属未确认 | ⚠️ 旧用例测的是 `buildDocumentFromImport`，该方法已删；新路径的等价校验**未验证** |
+- **我自己写错的 3 处**：
+  1. `verify(...isNull(), isNull(), ...)` 断言 `requestedPolicy` 为 null，
+     实际是 `EmbeddingPolicy.SKIP`——`DocumentRequest.embeddingPolicy`
+     **有默认值**。代码是对的，断言错了。
+  2. `createDoc(42L, "测试文档", "abc123")` 的第三参是 **content 不是
+     contentHash**，而且 `createDoc` 根本不设 hash。改用新增的
+     `createdWithHash()` 辅助方法。
+  3. 我一度给 `ImportBuildTailTest` 加了一条"重复 identity 被拒"的用例，
+     结果它与既有的 `duplicateExternalIdentityRejected` **重复覆盖**
+     （后者已在委派路径下验证过），跑出来还因为 namespace 归一路径不同而
+     失败。**重复覆盖的用例直接删掉，不要为了对称补一条。**
+- **编辑事故 1 次**：想删 `castToMapAndImportRoundTrip…`，锚点只写了两行
+  （`@Test` + 方法名），结果误删了紧邻的
+  `auditWithoutServiceIsSilentNoOp` 的第一行 `Method method = …`，
+  文件当场编译不过。**教训：锚点要覆盖完整方法体，只锚签名两行会切到邻居。**
+- 验证（全部实测）：core 全量 **7622 条 / 0 失败 / 0 错误 / 153 跳过**；
+  门控 IT **16/16**；tests 链 **20/20**；三门禁 EXIT=0
+  （`false-optional-wiring` 覆盖面含 27 controller）；docs 链 **16/16**。
+  全仓净 **−48 行**（11 文件：+335 / −383），其中生产代码两个 controller
+  合计 **−115 行**。
+- **一条新踩的坑：`@WebMvcTest` 类里 `verify(never())` 不可靠**。
+  `RagControllerIntegrationTest.deleteDocument_notFound_returns404` 先调过
+  `hardDeleteLocal(999, 1)`，紧接着的 `deleteDocument_withoutRevision_returns400`
+  里 `verify(mock, never()).hardDeleteLocal(anyLong(), anyLong())` 会读到
+  **上一条用例的调用记录**而误报（单跑整类也复现，排除了"顺序偶发"）。
+  已去掉那个 `never()`，只保留 `andExpect(status().isBadRequest())`——
+  400 本身已经证明没走到删除：若是"先删后报错"，未打桩的 mock 返回 null，
+  controller 构造响应时就会炸成 500。**注释里写清了这个推理，别让下一个人
+  再把 `never()` 加回来。**
+- **仍未做**：`documentMutationService` 的 `@Autowired(required = false)`
+  setter 与字段还在（两个 controller 各一套）。它们现在**确实**是可选注入
+  形式，但守卫已删，注入缺失会直接 NPE 而不是静默回落——语义上已经是
+  必填依赖。改成构造器参数要动 20+10 个测试文件的构造调用，
+  与本批的收益不成比例，留作独立一批。
+
 ### Batch 846（仅勘察，Batch 839 的续作，**未做**）
 
 - 分支：无（纯勘察，工作区保持干净）

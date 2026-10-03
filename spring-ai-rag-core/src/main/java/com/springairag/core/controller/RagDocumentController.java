@@ -296,53 +296,26 @@ public class RagDocumentController {
         Long collectionId = resolveWritableCollectionId(
                 request.getCollectionId(), request.getCollectionKey(), currentKey);
 
-        if (documentMutationService != null) {
-            DocumentMutationService.CreatedLocal created =
-                    documentMutationService.createLocal(
-                            request,
-                            collectionId,
-                            request.getEmbeddingPolicy(),
-                            false,
-                            "LOCAL_CREATE",
-                            idempotencyKey,
-                            null,
-                            null,
-                            null);
-            RagDocument doc = created.document();
-            auditCreate(AuditLogService.ENTITY_DOCUMENT,
-                    String.valueOf(doc.getId()),
-                    "Document created: " + doc.getTitle());
-            return ResponseEntity.ok(DocumentCreateResponse.mutation(
-                    doc.getId(),
-                    doc.getTitle(),
-                    doc.getContentHash(),
-                    created.mutation()));
-        }
-
-        String content = request.getContent();
-        String contentHash = com.springairag.core.util.DigestUtils.sha256(content);
-        List<RagDocument> existing = documentRepository.findByContentHash(contentHash);
-        if (!existing.isEmpty()) {
-            RagDocument dup = existing.getFirst();
-            return ResponseEntity.ok(DocumentCreateResponse.duplicate(
-                    dup.getId(), dup.getTitle(), dup.getContentHash()));
-        }
-        RagDocument doc = new RagDocument();
-        doc.setTitle(request.getTitle());
-        doc.setContent(content);
-        doc.setSource(request.getSource());
-        doc.setDocumentType(request.getDocumentType());
-        doc.setMetadata(request.getMetadata());
-        doc.setContentHash(contentHash);
-        doc.setCollectionId(collectionId);
-        doc = documentRepository.save(doc);
-
-        log.info("Document created: id={}, hash={}", doc.getId(), contentHash);
+        DocumentMutationService.CreatedLocal created =
+                documentMutationService.createLocal(
+                        request,
+                        collectionId,
+                        request.getEmbeddingPolicy(),
+                        false,
+                        "LOCAL_CREATE",
+                        idempotencyKey,
+                        null,
+                        null,
+                        null);
+        RagDocument doc = created.document();
         auditCreate(AuditLogService.ENTITY_DOCUMENT,
                 String.valueOf(doc.getId()),
                 "Document created: " + doc.getTitle());
-
-        return ResponseEntity.ok(DocumentCreateResponse.created(doc.getId(), doc.getTitle(), contentHash));
+        return ResponseEntity.ok(DocumentCreateResponse.mutation(
+                doc.getId(),
+                doc.getTitle(),
+                doc.getContentHash(),
+                created.mutation()));
     }
 
     @Operation(summary = "Get document details", description = "Query document content, metadata, and embedding vector count.")
@@ -391,21 +364,18 @@ public class RagDocumentController {
             @PathVariable Long id,
             @RequestParam(required = false) Long expectedDocumentRevision) {
         requireDocumentAccess(id);
-        if (documentMutationService != null) {
-            if (expectedDocumentRevision == null) {
-                throw new IllegalArgumentException(
-                        "expectedDocumentRevision is required for permanent deletion");
-            }
-            DocumentMutationService.DeletedLocal deleted =
-                    documentMutationService.hardDeleteLocal(
-                            id, expectedDocumentRevision);
-            return ResponseEntity.ok(new DocumentDeleteResponse(
-                    "Document permanently deleted",
-                    id,
-                    deleted.embeddingsRemoved(),
-                    deleted.documentRevision()));
+        if (expectedDocumentRevision == null) {
+            throw new IllegalArgumentException(
+                    "expectedDocumentRevision is required for permanent deletion");
         }
-        return ResponseEntity.ok(batchDocumentService.deleteDocument(id));
+        DocumentMutationService.DeletedLocal deleted =
+                documentMutationService.hardDeleteLocal(
+                        id, expectedDocumentRevision);
+        return ResponseEntity.ok(new DocumentDeleteResponse(
+                "Document permanently deleted",
+                id,
+                deleted.embeddingsRemoved(),
+                deleted.documentRevision()));
     }
 
     @Operation(summary = "Update a locally managed document with CAS")
@@ -1151,14 +1121,9 @@ public class RagDocumentController {
 
             DocumentRequest docReq =
                     buildUploadDocumentRequest(file, filename, content, collectionId);
-            if (documentMutationService != null) {
-                return createViaMutationService(
-                        docReq, collectionId, embeddingPolicy, force,
-                        idempotencyKey, filename, content.title);
-            }
-            return createViaBatchService(
-                    docReq, collectionId, force, embeddingPolicy,
-                    filename, content.title);
+            return createViaMutationService(
+                    docReq, collectionId, embeddingPolicy, force,
+                    idempotencyKey, filename, content.title);
         } catch (Exception e) { // Best-effort: file processing errors return a failure result without throwing
             log.error("Failed to process uploaded file '{}': {}", filename, e.getMessage());
             return new FileUploadResponse.FileResult(
@@ -1209,26 +1174,6 @@ public class RagDocumentController {
                 !"SKIPPED".equals(mutation.embeddingAction()),
                 0, null, mutation.embeddingAction(),
                 mutation.embeddingJobId());
-    }
-
-    private FileUploadResponse.FileResult createViaBatchService(
-            DocumentRequest docReq,
-            Long collectionId,
-            boolean force,
-            EmbeddingPolicy embeddingPolicy,
-            String filename,
-            String title) {
-        BatchCreateResponse resp = batchDocumentService.batchCreateDocuments(
-                List.of(docReq), true, collectionId, force, embeddingPolicy);
-        BatchCreateResponse.DocumentResult r = resp.results().getFirst();
-        return r.documentId() != null
-                ? new FileUploadResponse.FileResult(
-                        filename, r.documentId(), title,
-                        !"SKIPPED".equals(r.embeddingAction()),
-                        0, null, r.embeddingAction(), r.embeddingJobId())
-                : new FileUploadResponse.FileResult(
-                        filename, null, title, false, 0,
-                        r.error() != null ? r.error() : "Creation failed");
     }
 
     private String itemIdempotencyKey(String idempotencyKey, int index) {

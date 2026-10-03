@@ -25,10 +25,14 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -40,11 +44,13 @@ class RagDocumentControllerUploadTest {
     private static final long COLLECTION_ID = 7L;
 
     private BatchDocumentService batchDocumentService;
+    private com.springairag.core.repository.RagDocumentRepository documentRepository;
+    private com.springairag.core.service.DocumentMutationService documentMutationService;
     private RagDocumentController controller;
 
     @BeforeEach
     void setUp() {
-        com.springairag.core.repository.RagDocumentRepository documentRepository =
+        documentRepository =
                 mock(com.springairag.core.repository.RagDocumentRepository.class);
         RagEmbeddingRepository embeddingRepository =
                 mock(RagEmbeddingRepository.class);
@@ -53,6 +59,8 @@ class RagDocumentControllerUploadTest {
         DocumentEmbedService documentEmbedService =
                 mock(DocumentEmbedService.class);
         batchDocumentService = mock(BatchDocumentService.class);
+        documentMutationService =
+                mock(com.springairag.core.service.DocumentMutationService.class);
         DocumentVersionService documentVersionService =
                 mock(DocumentVersionService.class);
         EmbeddingProfileProvider embeddingProfileProvider =
@@ -68,6 +76,8 @@ class RagDocumentControllerUploadTest {
                 embeddingProfileProvider,
                 new CollectionIdentityResolver(collectionRepository),
                 auditLogService);
+        // Batch 847：上传已无条件走变更层。
+        controller.setDocumentMutationService(documentMutationService);
     }
 
     private MockMultipartFile txtFile(String name, String content) {
@@ -94,16 +104,20 @@ class RagDocumentControllerUploadTest {
     void mixedSuccessAndFailureFilesAreCountedPerResult() {
         UUID jobId = UUID.randomUUID();
         UUID batchId = UUID.randomUUID();
-        BatchCreateResponse ok = new BatchCreateResponse(1, 0, 0, List.of(
-                new BatchCreateResponse.DocumentResult(
-                        41L, "good", true, null,
-                        "ASYNC_QUEUED", jobId, batchId)));
-        BatchCreateResponse fail = new BatchCreateResponse(0, 0, 1, List.of(
-                new BatchCreateResponse.DocumentResult(
-                        null, "bad", false, "boom")));
-        when(batchDocumentService.batchCreateDocuments(
-                anyList(), eq(true), eq(COLLECTION_ID), eq(false), isNull()))
-                .thenReturn(ok, fail);
+        // Batch 847：逐个文件交给变更层，失败是变更层抛出来的，
+        // controller 把它收成该文件的一条失败结果。
+        com.springairag.core.entity.RagDocument created =
+                new com.springairag.core.entity.RagDocument();
+        created.setId(41L);
+        com.springairag.api.dto.DocumentMutationResponse okMutation =
+                new com.springairag.api.dto.DocumentMutationResponse(
+                        41L, "CREATED", 1L, 1, true, false, false,
+                        "ASYNC_QUEUED", jobId, batchId, null);
+        when(documentMutationService.createLocal(
+                any(), any(), any(), anyBoolean(), anyString(), any(), any(), any(), any()))
+                .thenReturn(new com.springairag.core.service.DocumentMutationService.CreatedLocal(
+                        created, okMutation))
+                .thenThrow(new IllegalStateException("boom"));
 
         ResponseEntity<FileUploadResponse> response = controller.uploadAndEmbed(
                 new MultipartFile[]{
@@ -128,7 +142,11 @@ class RagDocumentControllerUploadTest {
         FileUploadResponse.FileResult bad = body.results().get(1);
         assertEquals("bad.txt", bad.filename());
         assertNull(bad.documentId());
-        assertEquals("boom", bad.error());
+        // 失败原因由 uploadAndEmbed 的兜底 catch 统一包装。
+        assertEquals("Processing failed: boom", bad.error());
+        // 变更层失败时不该再落回批量写入那条已删除的路径。
+        verify(batchDocumentService, never()).batchCreateDocuments(
+                anyList(), anyBoolean(), any(), anyBoolean(), any());
     }
 
     @Test

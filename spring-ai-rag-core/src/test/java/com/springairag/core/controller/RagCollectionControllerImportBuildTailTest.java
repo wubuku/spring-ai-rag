@@ -2,14 +2,11 @@ package com.springairag.core.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.springairag.api.dto.CollectionImportRequest;
-import com.springairag.core.entity.RagDocument;
-import com.springairag.core.repository.RagCollectionRepository;
 import com.springairag.core.entity.RagCollection;
+import com.springairag.core.repository.RagCollectionRepository;
 import com.springairag.core.repository.RagDocumentRepository;
 import com.springairag.core.service.AuditLogService;
-import com.springairag.core.service.CollectionProvisioningService;
 import com.springairag.core.service.DocumentMutationService;
-import com.springairag.core.service.RagCollectionService;
 import com.springairag.core.service.CollectionIdentityResolver;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -19,27 +16,37 @@ import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
+import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * RagCollectionController 导入文档构建长尾（Batch 449）：size
- * 缺省按 UTF-8 字节计算、originalFilename/sourceDeletedAt 透传、
- * namespace 空白归一 default、identity 超 255 拒绝、jsonbPayload
- * 深拷贝。
+ * RagCollectionController 导入入口的委派契约。
+ *
+ * <p>Batch 847 之前，导入分派没有 mutation 委托时会走 controller 内联的
+ * legacy 路径：自己拼 {@code RagDocument}、自己按 UTF-8 算 size、自己在
+ * 仓储里 saveAndFlush。本文件原来那五条用例全部依赖那条已删的路径
+ * （通过 {@code disableMutationDelegation()} 把委托置空），断言的是
+ * {@code buildDocumentFromImport} 的产物。
+ *
+ * <p>现在 controller 不再构造文档，只负责把请求原样交给
+ * {@link DocumentMutationService#importDocument}，字段映射（size 按 UTF-8
+ * 字节计算、namespace 归一、jsonbPayload 深拷贝、identity/title 长度校验）
+ * 全部由变更层负责，测试也随之搬到了 service 侧。
  */
 class RagCollectionControllerImportBuildTailTest {
 
     private RagCollectionRepository collectionRepository;
     private RagDocumentRepository documentRepository;
     private com.springairag.core.service.RagCollectionService collectionService;
+    private DocumentMutationService documentMutationService;
     private RagCollectionController controller;
 
     @BeforeEach
@@ -50,12 +57,14 @@ class RagCollectionControllerImportBuildTailTest {
         collectionRepository = mock(RagCollectionRepository.class);
         documentRepository = mock(RagDocumentRepository.class);
         collectionService = mock(com.springairag.core.service.RagCollectionService.class);
+        documentMutationService = mock(DocumentMutationService.class);
         controller = new RagCollectionController(
                 collectionRepository,
                 documentRepository,
                 collectionService,
                 new CollectionIdentityResolver(collectionRepository),
                 mock(AuditLogService.class));
+        controller.setDocumentMutationService(documentMutationService);
         when(collectionService.createCollection(any()))
                 .thenReturn(collection(1L, "kb"));
     }
@@ -72,12 +81,6 @@ class RagCollectionControllerImportBuildTailTest {
         collection.setName("Imported");
         collection.setEnabled(true);
         return collection;
-    }
-
-    /** 关闭 mutation 委托，走直接落库路径以便捕获 RagDocument。 */
-    private void disableMutationDelegation() {
-        controller.setDocumentMutationService(null);
-        controller.setJsonRecordService(null);
     }
 
     private CollectionImportRequest.ImportedDocument textDocument(
@@ -100,80 +103,40 @@ class RagCollectionControllerImportBuildTailTest {
     }
 
     @Test
-    void missingSizeIsComputedFromUtf8Bytes() {
-        disableMutationDelegation();
-        CollectionImportRequest.ImportedDocument doc = textDocument(null);
-        doc.setContent("中文内容"); // 12 UTF-8 字节，非 4 字符。
-
-        controller.importCollection(importRequest(doc));
-
-        ArgumentCaptor<RagDocument> captor =
-                ArgumentCaptor.forClass(RagDocument.class);
-        org.mockito.Mockito.verify(documentRepository)
-                .saveAndFlush(captor.capture());
-        assertEquals(12L, captor.getValue().getSize());
-    }
-
-    @Test
-    void explicitSizeAndOriginalFilenameArePreserved() {
-        disableMutationDelegation();
-        CollectionImportRequest.ImportedDocument doc = textDocument(null);
-        doc.setSize(777L);
-        doc.setOriginalFilename("manual.pdf");
-
-        controller.importCollection(importRequest(doc));
-
-        ArgumentCaptor<RagDocument> captor =
-                ArgumentCaptor.forClass(RagDocument.class);
-        org.mockito.Mockito.verify(documentRepository)
-                .saveAndFlush(captor.capture());
-        assertEquals(777L, captor.getValue().getSize());
-        assertEquals("manual.pdf", captor.getValue().getOriginalFilename());
-    }
-
-    @Test
-    void blankNamespaceNormalizesToDefaultAndIdentityTrims() {
-        disableMutationDelegation();
-        CollectionImportRequest.ImportedDocument doc = textDocument("  ");
-        doc.setSourceNamespace("  ");
-
-        controller.importCollection(importRequest(doc));
-
-        ArgumentCaptor<RagDocument> captor =
-                ArgumentCaptor.forClass(RagDocument.class);
-        org.mockito.Mockito.verify(documentRepository)
-                .saveAndFlush(captor.capture());
-        assertEquals("default", captor.getValue().getSourceNamespace());
-    }
-
-    @Test
-    void identityLongerThan255IsRejected() {
-        disableMutationDelegation();
-        CollectionImportRequest.ImportedDocument doc = textDocument(null);
-        doc.setExternalId("x".repeat(256));
-
-        assertThrows(IllegalArgumentException.class,
-                () -> controller.importCollection(importRequest(doc)));
-    }
-
-    @Test
-    void sourceDeletedAtAndJsonbPayloadDeepCopyAreApplied() throws Exception {
-        disableMutationDelegation();
-        var deletedAt = java.time.LocalDateTime.parse("2026-09-01T00:00:00");
+    void importedDocumentIsHandedToTheMutationLayerWithoutRewritingItsFields() throws Exception {
+        LocalDateTime deletedAt = LocalDateTime.parse("2026-09-01T00:00:00");
         var payload = (com.fasterxml.jackson.databind.JsonNode)
                 new ObjectMapper().readTree("{\"k\":\"v\"}");
-        CollectionImportRequest.ImportedDocument doc = textDocument(null);
+        CollectionImportRequest.ImportedDocument doc = textDocument("ext-1");
+        doc.setSize(777L);
+        doc.setOriginalFilename("manual.pdf");
+        doc.setSourceNamespace("  ");
         doc.setSourceDeletedAt(deletedAt);
         doc.setJsonbPayload(payload);
 
         controller.importCollection(importRequest(doc));
 
-        ArgumentCaptor<RagDocument> captor =
-                ArgumentCaptor.forClass(RagDocument.class);
-        org.mockito.Mockito.verify(documentRepository)
-                .saveAndFlush(captor.capture());
-        assertEquals(deletedAt, captor.getValue().getSourceDeletedAt());
-        assertEquals("{\"k\":\"v\"}",
-                captor.getValue().getJsonbPayload().toString());
+        ArgumentCaptor<CollectionImportRequest.ImportedDocument> captor =
+                ArgumentCaptor.forClass(CollectionImportRequest.ImportedDocument.class);
+        verify(documentMutationService).importDocument(eq(1L), eq("kb"), captor.capture());
+
+        // 归一化、size 计算、payload 深拷贝都是变更层的职责；controller
+        // 交出去的必须是调用方给的原样请求，替它"顺手改好"反而会让
+        // service 侧那些用例失去意义。
+        CollectionImportRequest.ImportedDocument forwarded = captor.getValue();
+        assertEquals("  ", forwarded.getSourceNamespace());
+        assertEquals(777L, forwarded.getSize());
+        assertEquals("manual.pdf", forwarded.getOriginalFilename());
+        assertEquals(deletedAt, forwarded.getSourceDeletedAt());
+        assertEquals("{\"k\":\"v\"}", forwarded.getJsonbPayload().toString());
+    }
+
+    @Test
+    void importNeverFallsBackToBuildingDocumentsInTheController() {
+        controller.importCollection(importRequest(textDocument("ext-1"), textDocument("ext-2")));
+
+        verify(documentMutationService, org.mockito.Mockito.times(2))
+                .importDocument(eq(1L), eq("kb"), any());
+        verify(documentRepository, never()).saveAndFlush(any());
     }
 }

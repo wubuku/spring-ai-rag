@@ -70,32 +70,11 @@ class RagCollectionControllerCreateImportTailTest {
                 () -> controllerWithoutProvisioning().update(5L, request));
     }
 
-    @Test
-    void buildDocumentFromImportDefaultsEnabledBySourceDeletion()
-            throws Exception {
-        Method method = RagCollectionController.class.getDeclaredMethod(
-                "buildDocumentFromImport",
-                CollectionImportRequest.ImportedDocument.class, Long.class);
-        method.setAccessible(true);
-
-        var notDeleted = new CollectionImportRequest.ImportedDocument();
-        notDeleted.setTitle("T");
-        notDeleted.setContent("C");
-        notDeleted.setExternalId("ext-1");
-        RagDocument docNotDeleted = (RagDocument) method.invoke(
-                controllerWithoutProvisioning(), notDeleted, 5L);
-        assertEquals(Boolean.TRUE, docNotDeleted.getEnabled());
-
-        var deleted = new CollectionImportRequest.ImportedDocument();
-        deleted.setTitle("T");
-        deleted.setContent("C");
-        java.time.LocalDateTime now = java.time.LocalDateTime.now();
-        deleted.setSourceDeletedAt(now);
-        RagDocument docDeleted = (RagDocument) method.invoke(
-                controllerWithoutProvisioning(), deleted, 5L);
-        assertEquals(Boolean.FALSE, docDeleted.getEnabled());
-        assertEquals(now, docDeleted.getSourceDeletedAt());
-    }
+    // Batch 847 删除了 buildDocumentFromImport 与 controller 侧的 json-record
+    // 分支。原先通过反射调用该私有方法的两个用例（enabled 缺省、
+    // castToMap/import 往返）随之失效：字段映射现在由
+    // DocumentMutationService.importDocument 负责，覆盖在
+    // DocumentMutationImportTest / DocumentMutationExternalFinishTailTest。
 
     @Test
     void auditWithoutServiceIsSilentNoOp() throws Exception {
@@ -107,25 +86,5 @@ class RagCollectionControllerCreateImportTailTest {
         // auditLogService 为 null（9 参构造未注入）→ 不抛异常。
         method.invoke(controllerWithoutProvisioning(),
                 AuditLogService.AuditAction.CREATE, "Collection", "5", "created");
-    }
-
-    @Test
-    void castToMapAndImportRoundTripPreservesFields() throws Exception {
-        var imported = new CollectionImportRequest.ImportedDocument();
-        imported.setTitle("T");
-        imported.setContent("C");
-        imported.setExternalId("ext-1");
-        imported.setSourceNamespace("crm");
-
-        Method build = RagCollectionController.class.getDeclaredMethod(
-                "buildDocumentFromImport",
-                CollectionImportRequest.ImportedDocument.class, Long.class);
-        build.setAccessible(true);
-        RagDocument doc = (RagDocument) build.invoke(
-                controllerWithoutProvisioning(), imported, 5L);
-
-        assertEquals("ext-1", doc.getExternalId());
-        assertEquals("crm", doc.getSourceNamespace());
-        assertEquals("PENDING", doc.getProcessingStatus());
     }
 }

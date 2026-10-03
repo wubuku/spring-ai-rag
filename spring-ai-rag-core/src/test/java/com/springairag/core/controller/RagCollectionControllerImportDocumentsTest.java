@@ -7,7 +7,6 @@ import com.springairag.core.repository.RagCollectionRepository;
 import com.springairag.core.repository.RagDocumentRepository;
 import com.springairag.core.service.AuditLogService;
 import com.springairag.core.service.DocumentMutationService;
-import com.springairag.core.service.JsonRecordService;
 import com.springairag.core.service.RagCollectionService;
 import com.springairag.core.service.CollectionIdentityResolver;
 import org.junit.jupiter.api.AfterEach;
@@ -44,7 +43,6 @@ class RagCollectionControllerImportDocumentsTest {
     private RagCollectionService collectionService;
     private AuditLogService auditLogService;
     private DocumentMutationService documentMutationService;
-    private JsonRecordService jsonRecordService;
     private RagCollectionController controller;
 
     @BeforeEach
@@ -57,14 +55,12 @@ class RagCollectionControllerImportDocumentsTest {
         collectionService = mock(RagCollectionService.class);
         auditLogService = mock(AuditLogService.class);
         documentMutationService = mock(DocumentMutationService.class);
-        jsonRecordService = mock(JsonRecordService.class);
         controller = new RagCollectionController(
                 collectionRepository,
                 documentRepository,
                 collectionService,
                 new CollectionIdentityResolver(collectionRepository),
                 auditLogService);
-        controller.setJsonRecordService(jsonRecordService);
         controller.setDocumentMutationService(documentMutationService);
         when(collectionService.createCollection(any()))
                 .thenReturn(collection(1L, "kb"));
@@ -144,9 +140,9 @@ class RagCollectionControllerImportDocumentsTest {
     }
 
     @Test
-    void duplicateExternalIdentityAcrossNamespacesAllowed() {
-        // 走直接落库路径才能验证 saveAndFlush 次数。
-        controller.setDocumentMutationService(null);
+    void duplicateExternalIdentityAcrossNamespacesIsForwardedForTheServiceToDecide() {
+        // Batch 847：controller 不再自己按 namespace+identity 去重，
+        // 两份材料都交给变更层，由它按 upsert 的唯一键决定是新建还是重放。
         CollectionImportRequest.ImportedDocument first = textDocument("ext-1");
         first.setSourceNamespace("default");
         CollectionImportRequest.ImportedDocument second = textDocument("ext-1");
@@ -157,7 +153,8 @@ class RagCollectionControllerImportDocumentsTest {
                         importRequest(first, second));
 
         assertEquals(2, response.getBody().get("importedDocuments"));
-        verify(documentRepository, times(2)).saveAndFlush(any());
+        verify(documentMutationService, times(2)).importDocument(eq(1L), eq("kb"), any());
+        verify(documentRepository, never()).saveAndFlush(any());
     }
 
     @Test
@@ -179,53 +176,33 @@ class RagCollectionControllerImportDocumentsTest {
         verify(documentMutationService, times(2)).importDocument(
                 eq(1L), eq("kb"), any());
         verify(documentRepository, never()).saveAndFlush(any());
-        verify(jsonRecordService, never()).importRecord(any(), any());
     }
 
-    @Test
-    void jsonRecordRequiresExternalIdAndPayload() {
-        // json-record 分支仅在突变服务缺位时可达。
-        controller.setDocumentMutationService(null);
-        assertThrows(IllegalArgumentException.class,
-                () -> controller.importCollection(importRequest(
-                        jsonDocument(null, "{\"a\":1}"))));
-        assertThrows(IllegalArgumentException.class,
-                () -> controller.importCollection(importRequest(
-                        jsonDocument("ext-1", null))));
-    }
-
-    // Batch 822 deleted jsonRecordWithoutServiceFails, which set both the
-    // mutation and the JSON-record service to null and asserted
-    // IllegalStateException. Both are unconditional @Service beans, so the
-    // state cannot occur; the guards it asserted are gone, and the import path
-    // stays covered with the services attached.
+    // Batch 847：controller 侧的 json-record 分支已删除（它只在突变服务缺位
+    // 时可达，而那是不存在的状态）。json-record 的 payload / externalId 校验
+    // 由 DocumentMutationService.importDocument 负责，覆盖搬到了
+    // DocumentMutationImportTest 与 DocumentMutationExternalFinishTailTest。
 
     @Test
-    void jsonRecordDelegatesToService() {
-        controller.setDocumentMutationService(null);
+    void jsonRecordAlsoGoesThroughTheMutationLayer() {
         ResponseEntity<Map<String, Object>> response =
                 controller.importCollection(importRequest(
                         jsonDocument("ext-1", "{\"a\":1}")));
 
         assertEquals(1, response.getBody().get("importedDocuments"));
-        verify(jsonRecordService).importRecord(eq(1L), any());
+        verify(documentMutationService).importDocument(eq(1L), eq("kb"), any());
         verify(documentRepository, never()).saveAndFlush(any());
     }
 
     @Test
-    void mixedDocumentKindsAreCountedTogether() {
-        // 文本记录：saveAndFlush；json-record：importRecord。
-        controller.setDocumentMutationService(null);
-        when(documentRepository.saveAndFlush(any()))
-                .thenAnswer(invocation -> invocation.getArgument(0));
-
+    void mixedDocumentKindsAreAllCountedThroughTheMutationLayer() {
         ResponseEntity<Map<String, Object>> response =
                 controller.importCollection(importRequest(
                         textDocument("ext-1"),
                         jsonDocument("ext-2", "{\"a\":1}")));
 
         assertEquals(2, response.getBody().get("importedDocuments"));
-        verify(jsonRecordService).importRecord(eq(1L), any());
-        verify(documentRepository).saveAndFlush(any());
+        verify(documentMutationService, times(2)).importDocument(eq(1L), eq("kb"), any());
+        verify(documentRepository, never()).saveAndFlush(any());
     }
 }

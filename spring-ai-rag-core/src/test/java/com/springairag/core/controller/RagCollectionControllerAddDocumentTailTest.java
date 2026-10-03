@@ -94,22 +94,9 @@ class RagCollectionControllerAddDocumentTailTest {
                 .thenReturn(Map.of(5L, "kb:manual:v1"));
     }
 
-    @Test
-    void legacyPathMovesDocumentDirectly() {
-        stubActiveCollection();
-        when(documentRepository.findById(9L))
-                .thenReturn(Optional.of(document));
-
-        ResponseEntity<DocumentAddedResponse> response =
-                controller.addDocument(5L, request(9L, null));
-
-        assertEquals(HttpStatus.OK, response.getStatusCode());
-        assertEquals(5L, response.getBody().collectionId());
-        assertEquals(5L, document.getCollectionId());
-        verify(documentRepository).save(document);
-        verify(documentMutationService, org.mockito.Mockito.never())
-                .updateLocal(anyLong(), any());
-    }
+    // Batch 847 删除了 addDocument 的 legacy 分支（原本在 mutation 服务
+    // 缺位时直接 setCollectionId + save）。原来那条 legacyPathMovesDocumentDirectly
+    // 随之失效：现在只有一条路径，且它要求 expectedDocumentRevision。
 
     @Test
     void mutationServiceMovesDocumentViaUpdateLocal() {
@@ -207,12 +194,14 @@ class RagCollectionControllerAddDocumentTailTest {
                 .thenReturn(collection);
         when(documentRepository.findById(9L))
                 .thenReturn(Optional.of(document));
+        controller.setDocumentMutationService(documentMutationService);
 
         ResponseEntity<DocumentAddedResponse> response =
                 controller.addDocumentByKey(
-                        "kb:manual:v1", request(9L, null));
+                        "kb:manual:v1", request(9L, 4L));
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertEquals(5L, response.getBody().collectionId());
+        verify(documentMutationService).updateLocal(eq(9L), any());
     }
 }

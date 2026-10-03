@@ -31,6 +31,9 @@ import com.springairag.core.service.BatchDocumentService;
 import com.springairag.core.service.DocumentEmbedService;
 import com.springairag.core.service.DocumentVersionService;
 import com.springairag.core.service.CollectionIdentityResolver;
+import com.springairag.core.service.DocumentMutationService;
+import com.springairag.api.dto.DocumentMutationResponse;
+import com.springairag.api.enums.EmbeddingPolicy;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.domain.*;
@@ -72,6 +75,7 @@ class RagDocumentControllerTest {
     private DocumentVersionService documentVersionService;
     private EmbeddingProfileProvider embeddingProfileProvider;
     private AuditLogService auditLogService;
+    private DocumentMutationService documentMutationService;
     private RagDocumentController controller;
 
     @BeforeEach
@@ -84,6 +88,7 @@ class RagDocumentControllerTest {
         documentVersionService = mock(DocumentVersionService.class);
         embeddingProfileProvider = mock(EmbeddingProfileProvider.class);
         auditLogService = mock(AuditLogService.class);
+        documentMutationService = mock(DocumentMutationService.class);
         when(embeddingProfileProvider.getActiveProfile()).thenReturn(PROFILE);
         controller = new RagDocumentController(
                 documentRepository,
@@ -104,6 +109,8 @@ class RagDocumentControllerTest {
                 new DocumentDerivationDescriptorProvider(
                         new com.springairag.core.config.RagProperties());
         controller.setDerivationDescriptorProvider(derivationDescriptorProvider);
+        // Batch 847: 创建路径已无条件走变更层，controller 不再有内联 legacy 分支。
+        controller.setDocumentMutationService(documentMutationService);
 
         // Default mock behavior for documentToMap calls
         when(embeddingRepository.countByDocumentId(anyLong())).thenReturn(0L);
@@ -143,14 +150,25 @@ class RagDocumentControllerTest {
         return c;
     }
 
+    /** 变更层返回的文档带自己的 contentHash，响应里的就是它。 */
+    private RagDocument createdWithHash(Long id, String title, String hash) {
+        RagDocument doc = createDoc(id, title, "content");
+        doc.setContentHash(hash);
+        return doc;
+    }
+
+    private static DocumentMutationResponse mutation(String action, long revision) {
+        return new DocumentMutationResponse(
+                42L, action, revision, 1, true, false, false,
+                "SKIP", null, null, null);
+    }
+
     @Test
     void createDocument_returnsId() {
-        when(documentRepository.findByContentHash(anyString())).thenReturn(List.of());
-        when(documentRepository.save(any(RagDocument.class))).thenAnswer(inv -> {
-            RagDocument doc = inv.getArgument(0);
-            doc.setId(42L);
-            return doc;
-        });
+        RagDocument created = createdWithHash(42L, "测试文档", "abc123");
+        when(documentMutationService.createLocal(
+                any(), any(), any(), anyBoolean(), anyString(), any(), any(), any(), any()))
+                .thenReturn(new DocumentMutationService.CreatedLocal(created, mutation("CREATED", 1L)));
 
         DocumentRequest req = new DocumentRequest();
         req.setTitle("测试文档");
@@ -162,16 +180,40 @@ class RagDocumentControllerTest {
         assertEquals(200, response.getStatusCode().value());
         assertEquals(42L, response.getBody().id());
         assertEquals("测试文档", response.getBody().title());
+        // 状态不再由 controller 自己判定，而是照搬变更层给出的 action。
         assertEquals("CREATED", response.getBody().status());
-        assertNotNull(response.getBody().contentHash());
+        assertEquals("abc123", response.getBody().contentHash());
     }
 
     @Test
-    void createDocument_duplicateContent_returnsExisting() {
-        RagDocument existing = createDoc(10L, "已有文档", "重复内容");
-        String hash = BatchDocumentService.computeSha256("重复内容");
+    void createDocument_delegatesTheWholeCreateToTheMutationLayer() {
+        // 钉住的是"controller 把什么交给变更层"，不是它自己怎么落库：
+        // 去重、哈希、版本号全在 DocumentMutationService 里。
+        RagDocument created = createdWithHash(42L, "测试文档", "abc123");
+        when(documentMutationService.createLocal(
+                any(), any(), any(), anyBoolean(), anyString(), any(), any(), any(), any()))
+                .thenReturn(new DocumentMutationService.CreatedLocal(created, mutation("CREATED", 1L)));
 
-        when(documentRepository.findByContentHash(hash)).thenReturn(List.of(existing));
+        DocumentRequest req = new DocumentRequest();
+        req.setTitle("测试文档");
+        req.setContent("这是测试内容");
+
+        controller.createDocument(req, "idem-42");
+
+        verify(documentMutationService).createLocal(
+                eq(req), isNull(), eq(EmbeddingPolicy.SKIP), eq(false), eq("LOCAL_CREATE"),
+                eq("idem-42"), isNull(), isNull(), isNull());
+        // 变更层接管之后，controller 不再自己算哈希或直接写仓储。
+        verify(documentRepository, never()).save(any());
+        verify(documentRepository, never()).findByContentHash(anyString());
+    }
+
+    @Test
+    void createDocument_duplicateContent_surfacesTheDuplicateActionFromTheMutationLayer() {
+        RagDocument existing = createdWithHash(10L, "已有文档", "重复内容");
+        when(documentMutationService.createLocal(
+                any(), any(), any(), anyBoolean(), anyString(), any(), any(), any(), any()))
+                .thenReturn(new DocumentMutationService.CreatedLocal(existing, mutation("DUPLICATE", 1L)));
 
         DocumentRequest req = new DocumentRequest();
         req.setTitle("新标题");
@@ -182,6 +224,7 @@ class RagDocumentControllerTest {
         assertEquals(200, response.getStatusCode().value());
         assertEquals(10L, response.getBody().id());
         assertEquals("DUPLICATE", response.getBody().status());
+        // DUPLICATE 时 existingDocumentId 就是命中的那个 id，由 response 组装时决定。
         assertEquals(10L, response.getBody().existingDocumentId());
         verify(documentRepository, never()).save(any());
     }
@@ -226,25 +269,35 @@ class RagDocumentControllerTest {
 
     @Test
     void deleteDocument_found() {
-        when(batchDocumentService.deleteDocument(1L)).thenReturn(
-                new DocumentDeleteResponse("Document deleted", 1L, 3L));
+        // Batch 847：删除已无条件走变更层的 CAS 路径，controller 不再有
+        // 回落到 batchDocumentService 的内联分支。revision 是硬删除的前置条件。
+        when(documentMutationService.hardDeleteLocal(1L, 3L)).thenReturn(
+                new DocumentMutationService.DeletedLocal(1L, 4L, 3L));
 
-        // The legacy branch (no DocumentMutationService) never reads the revision;
-        // only the CAS path does. Passing it explicitly says which path is under test.
-        ResponseEntity<DocumentDeleteResponse> response = controller.deleteDocument(1L, null);
+        ResponseEntity<DocumentDeleteResponse> response = controller.deleteDocument(1L, 3L);
 
         assertEquals(200, response.getStatusCode().value());
-        assertEquals("Document deleted", response.getBody().message());
+        assertEquals("Document permanently deleted", response.getBody().message());
         assertEquals(3L, response.getBody().embeddingsRemoved());
-        verify(batchDocumentService).deleteDocument(1L);
+        assertEquals(4L, response.getBody().documentRevision());
+        verify(documentMutationService).hardDeleteLocal(1L, 3L);
+    }
+
+    @Test
+    void deleteDocument_requiresTheExpectedRevision() {
+        IllegalArgumentException thrown = assertThrows(
+                IllegalArgumentException.class, () -> controller.deleteDocument(1L, null));
+        assertTrue(thrown.getMessage().contains("expectedDocumentRevision"));
+        // 缺 revision 时必须一步都不走，不能先删了再说。
+        verify(documentMutationService, never()).hardDeleteLocal(anyLong(), anyLong());
     }
 
     @Test
     void deleteDocument_notFound() {
-        when(batchDocumentService.deleteDocument(999L))
+        when(documentMutationService.hardDeleteLocal(999L, 1L))
                 .thenThrow(new DocumentNotFoundException(999L));
 
-        assertThrows(DocumentNotFoundException.class, () -> controller.deleteDocument(999L, null));
+        assertThrows(DocumentNotFoundException.class, () -> controller.deleteDocument(999L, 1L));
     }
 
     @Test
