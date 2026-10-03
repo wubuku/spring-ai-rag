@@ -1,21 +1,17 @@
 package com.springairag.core.service;
 
 import com.springairag.api.dto.DocumentRequest;
-import com.springairag.api.enums.EmbeddingPolicy;
-import com.springairag.core.entity.RagDocument;
 import com.springairag.core.repository.RagDocumentRepository;
 import com.springairag.core.repository.RagEmbeddingRepository;
 import com.springairag.core.embeddingjob.EmbeddingDispatchService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.transaction.PlatformTransactionManager;
 
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
@@ -24,25 +20,28 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * BatchDocumentService ASYNC 事务模板长尾（Batch 667，JaCoCo 驱
- * 动）：ASYNC 策略在事务模板内执行遗留创建链并提交事务、per-doc
- * collectionId 优先于批次级 collectionId。
+ * BatchDocumentService 集合归属解析长尾（Batch 667 建，Batch 832 收口）：
+ * per-doc collectionId 优先于批次级 collectionId。
+ *
+ * <p>原职责里的"ASYNC 策略在事务模板内执行遗留创建链并提交事务"是
+ * {@code DocumentMutationService} 缺席时才会走的那条分支——它自带一个
+ * {@code TransactionTemplate}。该分支在运行的应用里不可达，已随 Batch 832
+ * 连同 {@code transactionTemplate} 字段与那个 4 参构造器一起删除，
+ * 对应用例也一并删掉。
  */
 class BatchDocumentServiceTransactionTailTest {
 
     private RagDocumentRepository documentRepository;
     private RagEmbeddingRepository embeddingRepository;
-    private DocumentEmbedService documentEmbedService;
     private EmbeddingDispatchService dispatchService;
-    private PlatformTransactionManager transactionManager;
+    private DocumentMutationService mutationService;
 
     @BeforeEach
     void setUp() {
         documentRepository = mock(RagDocumentRepository.class);
         embeddingRepository = mock(RagEmbeddingRepository.class);
-        documentEmbedService = mock(DocumentEmbedService.class);
         dispatchService = mock(EmbeddingDispatchService.class);
-        transactionManager = mock(PlatformTransactionManager.class);
+        mutationService = mock(DocumentMutationService.class);
         lenient().when(dispatchService.enqueueInCurrentTransaction(
                         any(), anyBoolean(), anyBoolean(), anyString()))
                 .thenAnswer(invocation -> new com.springairag.core.embeddingjob
@@ -62,25 +61,12 @@ class BatchDocumentServiceTransactionTailTest {
         return req;
     }
 
-    private void stubSaveAssignsId() {
-        when(documentRepository.save(any(RagDocument.class)))
-                .thenAnswer(invocation -> {
-                    RagDocument doc = invocation.getArgument(0);
-                    if (doc.getId() == null) {
-                        doc.setId(41L);
-                    }
-                    return doc;
-                });
-        lenient().when(documentRepository.saveAndFlush(any(RagDocument.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
-    }
 
     private BatchDocumentService service(boolean async) {
         var service = new BatchDocumentService(
                 documentRepository,
-                embeddingRepository,
-                documentEmbedService,
-                transactionManager);
+                embeddingRepository);
+        service.setDocumentMutationService(mutationService);
         if (async) {
             service.setDispatchService(dispatchService);
         }
@@ -88,35 +74,16 @@ class BatchDocumentServiceTransactionTailTest {
     }
 
     @Test
-    void asyncBatchCreationRunsInsideTransactionTemplate() {
-        stubSaveAssignsId();
-        when(documentRepository.findFirstBySourceOrderByIdAsc(anyString()))
-                .thenReturn(java.util.Optional.empty());
-        when(documentRepository.findByContentHash(anyString()))
-                .thenReturn(List.of());
-
-        var response = service(true).batchCreateDocuments(
-                List.of(request(7L)),
-                true, 7L, false, EmbeddingPolicy.ASYNC, null);
-
-        assertEquals(1, response.created());
-        verify(transactionManager).commit(any());
-    }
-
-    @Test
     void perDocCollectionIdTakesPrecedenceOverBatchLevel() {
-        stubSaveAssignsId();
-        when(documentRepository.findFirstBySourceOrderByIdAsc(anyString()))
-                .thenReturn(java.util.Optional.empty());
-        when(documentRepository.findByContentHash(anyString()))
-                .thenReturn(List.of());
+        BatchDocumentMutationFixture.stubCreates(mutationService);
 
         service(false).batchCreateDocuments(
                 List.of(request(7L)), false, 99L, false);
 
-        org.mockito.ArgumentCaptor<RagDocument> captor =
-                org.mockito.ArgumentCaptor.forClass(RagDocument.class);
-        verify(documentRepository).save(captor.capture());
-        assertEquals(7L, captor.getValue().getCollectionId());
+        // 归属解析发生在把请求交给协作者之前：collectionId 是 createLocal 的
+        // 独立参数（不在 DocumentRequest 里），断言它比断言落库结果更贴近生产契约。
+        verify(mutationService).createLocal(
+                any(), eq(7L), any(), anyBoolean(), anyString(), any(),
+                any(), any(), any());
     }
 }
