@@ -21,12 +21,32 @@
  * 判据刻意很窄，因为窄判据才不会被 allowlist 化：
  *   1. 只看**同一个类内**按名字转发（`return this.foo(...)`）的调用；
  *   2. 被转发的方法名必须存在一个**参数表里含 HttpServletRequest 的重载**；
- *   3. `null` 必须**按位置**落在那个 HttpServletRequest 参数上。
+ *   3. 传进那个 HttpServletRequest 位置的实参必须是"可能为 null"的：
+ *      要么是字面量 `null`（Batch 816 的判据），要么是**一个被声明为
+ *      HttpServletRequest 且初始化可能产出 null 的局部变量**（Batch 819 补的）。
  *
  * 第 3 条是关键。`uploadAndEmbed(files, collectionId, null, force, null, null)`
  * 也在传 null，但那些位置是 collectionKey / idempotencyKey，**不是**请求上下文——
  * 那是合法的便捷重载，不该被报。第 810/812 批次的经验是：判据一旦被误报淹没，
  * 就会被豁免成装饰品。
+ *
+ * ── 为什么 Batch 819 要加"变量"这一支 ──────────────────────────────────
+ * 816 的判据只认字面量，于是漏掉了本仓库真实存在的一种形状：
+ *
+ *   HttpServletRequest currentRequest =
+ *           RequestContextHolder.getRequestAttributes()
+ *                   instanceof ServletRequestAttributes attributes
+ *                   ? attributes.getRequest()
+ *                   : null;                                   // ← 可能为 null
+ *   return create(request, currentRequest);                    // ← 门禁看不见
+ *
+ * 这个形状比字面量更危险：读代码时 `: null` 那一支藏在三行之外，
+ * 而调用点看上去只是一个普通的变量传递。Batch 819 删掉它时，
+ * 816 的门禁对这份源码是**零报告**的。
+ *
+ * 收紧成"`HttpServletRequest` 声明 + 初始化整体为 null 或以 `: null` 收尾"，
+ * 是为了让误报为零：`HttpServletRequest r = a == null ? b : c;` 会产出非 null，
+ * 因此被放行——判据宁可漏报，也不该把正常代码叫成授权旁路。
  */
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
@@ -81,10 +101,52 @@ export function requestParamIndex(params) {
   return params.findIndex((p) => REQUEST_TYPE.test(p));
 }
 
+/**
+ * Batch 819。收集本文件里"声明为 HttpServletRequest、且初始化可能产出 null"的
+ * 局部变量名。
+ *
+ * 判据收紧到两种形状：初始化整体就是 `null`，或者是一个以 `: null` 收尾的三元。
+ * `HttpServletRequest r = a == null ? b : c;` 产出的是非 null，因此放行。
+ */
+export function collectNullCarryingRequests(src) {
+  const clean = stripComments(src);
+  const names = new Set();
+  const decl = /HttpServletRequest\s+(\w+)\s*=/g;
+  let m;
+  while ((m = decl.exec(clean)) !== null) {
+    // Walk to the terminating `;` at paren depth 0 so a multi-line initializer
+    // is read whole. Stopping at the first `;` would only ever see `? a.getRequest()`
+    // and miss the `: null` that follows three lines down — which is the case
+    // this function exists for.
+    let depth = 0;
+    let end = -1;
+    for (let i = m.index + m[0].length; i < clean.length; i += 1) {
+      const ch = clean[i];
+      if (ch === '(' || ch === '[') depth += 1;
+      else if (ch === ')' || ch === ']') depth -= 1;
+      else if (ch === ';' && depth === 0) { end = i; break; }
+    }
+    if (end < 0) continue;
+    const init = clean.slice(m.index + m[0].length, end).trim();
+    if (init === 'null' || /:\s*null\s*$/.test(init)) names.add(m[1]);
+  }
+  return names;
+}
+
+/** 实参是不是"可能为 null"：字面量 null，或上面收集到的变量名。 */
+function isNullBearing(arg, nullCarriers) {
+  if (arg === 'null') return 'a literal null';
+  if (/^[A-Za-z_$][\w$]*$/.test(arg) && nullCarriers.has(arg)) {
+    return `${arg}, a local declared as possibly-null HttpServletRequest`;
+  }
+  return null;
+}
+
 /** 从源码文本中找出 { line, name, argIndex, args } 形式的违规转发。 */
 export function findNullRequestForwarding(src) {
   const clean = stripComments(src);
   const overloads = collectOverloads(clean);
+  const nullCarriers = collectNullCarryingRequests(src);
   const findings = [];
 
   const callPattern = /\b(\w+)\s*\(/g;
@@ -123,10 +185,12 @@ export function findNullRequestForwarding(src) {
       if (params.length !== args.length) continue;
       const idx = requestParamIndex(params);
       if (idx < 0) continue;
-      if (args[idx] !== 'null') continue;
+      const carrier = isNullBearing(args[idx], nullCarriers);
+      if (!carrier) continue;
       findings.push({
         name,
         argIndex: idx,
+        carrier,
         line: clean.slice(0, open).split('\n').length,
         args: args.join(', ').replace(/\s+/g, ' ').slice(0, 90),
       });
@@ -165,7 +229,7 @@ function main() {
     const exemptions = allowlist.get(f.file) ?? [];
     if (exemptions.includes(f.name)) continue;
     console.log(
-      `- [null-request-forwarding] ${f.file}:${f.line} forwards a literal null into the `
+      `- [null-request-forwarding] ${f.file}:${f.line} forwards ${f.carrier} into the `
       + `HttpServletRequest position of ${f.name}(${f.args}). Both ChatPrincipal.from(null) `
       + 'and ApiKeyCollectionAccess.isUnrestricted(null) fail open, so a caller that reaches '
       + 'this overload gets unscoped data instead of an error. Call the signature that takes '
@@ -186,7 +250,7 @@ function main() {
   }
   console.log(
     `Null-request forwarding check passed; ${scanned} source file(s) scanned, no overload `
-    + `forwards a literal null into an HttpServletRequest position.`,
+    + 'forwards a literal null or a possibly-null request local into an HttpServletRequest position.',
   );
 }
 

@@ -1255,6 +1255,28 @@ Playwright never imply a real model/tool-capable endpoint was validated.
    `MockHttpServletRequest` carrying the principal attributes and exercise the
    signature production actually uses.
 
+   Two things make this census harder than "delete and let the compiler help":
+
+   - **The null is often behind a variable.** Batch 819 found an overload that
+     read `RequestContextHolder` itself and forwarded whatever it found —
+     `HttpServletRequest currentRequest = … instanceof … ? … : null;` — so the
+     literal was three lines from the call and no literal-matching rule saw it.
+     Start the census from *unmapped public methods*, not from `null` literals.
+   - **Deleting the overload is the easy half; migrating the call sites is
+     where you will introduce a silent bug.** Insert the new argument at the
+     parameter's **semantic position**. Appending is correct only when the new
+     parameter is last. `listDocuments` gained `collectionKey` at position 8,
+     *before* two date parameters, so a script that appended `null` shifted both
+     dates one slot left — and **the compiler could not catch it**, because
+     `String` fits both `String collectionKey` and `String createdAfter`. Only
+     the tests did. Diff each migrated call against the version before the
+     batch; do not trust a green compile.
+   - **Some of these overloads always threw.** Two of the eleven Batch 819
+     removed existed only to raise `IllegalArgumentException`, and their tests
+     asserted that throw. Migrating such a test would preserve a behaviour that
+     no longer has a method to live in — delete it and say so, rather than
+     inventing a substitute that tests something else.
+
 9. **Run mutation experiments one at a time, and never read a file while one is
    running.** Batch 815's first round of three mutations were all no-ops — the
    patterns did not match, so nothing changed and the tests were green. Reading

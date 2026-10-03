@@ -21,6 +21,7 @@ import {
   findNullRequestForwarding,
   requestParamIndex,
   splitTopLevelArgs,
+  collectNullCarryingRequests,
 } from '../verify-null-request-forwarding.mjs';
 
 const here = fileURLToPath(import.meta.url);
@@ -102,7 +103,10 @@ test('releases a null in a business-parameter position', () => {
 });
 
 test('releases a null that is not a literal', () => {
-  // A variable is not evidence of an accidental bypass.
+  // A variable is not by itself evidence of an accidental bypass. Batch 819
+  // narrowed this further rather than dropping it: an *undeclared* name has no
+  // provenance, so it stays released. A name that IS declared as a possibly-null
+  // HttpServletRequest is a different matter — see the cases below.
   const src = cls(`
     void send(HttpServletRequest httpRequest) {
         write();
@@ -111,6 +115,85 @@ test('releases a null that is not a literal', () => {
         send(capturedRequest);
     }`);
   assert.deepEqual(findNullRequestForwarding(src), []);
+});
+
+// ── Batch 819: the shape a literal-only rule cannot see ───────────────────
+
+test('flags a request local built by a ternary that can yield null', () => {
+  // This is the exact overload Batch 819 deleted from RagCollectionController.
+  // The literal-only rule reported zero findings on that file, because the `null`
+  // sits three lines below the call and behind a variable name.
+  const src = cls(`
+    public ResponseEntity<?> create(CollectionRequest request, HttpServletRequest httpRequest) {
+        return persist();
+    }
+    public ResponseEntity<?> create(CollectionRequest request) {
+        HttpServletRequest currentRequest =
+                RequestContextHolder.getRequestAttributes()
+                        instanceof ServletRequestAttributes attributes
+                        ? attributes.getRequest()
+                        : null;
+        return create(request, currentRequest);
+    }`);
+  const hits = findNullRequestForwarding(src);
+  assert.equal(hits.length, 1, 'the ternary-carried null must be reported');
+  assert.equal(hits[0].name, 'create');
+  assert.equal(hits[0].argIndex, 1);
+  assert.match(hits[0].carrier, /currentRequest/,
+    'the report must name the variable, or the reader cannot check it');
+});
+
+test('flags a request local assigned plain null', () => {
+  const src = cls(`
+    void send(HttpServletRequest httpRequest) {
+        write();
+    }
+    void send(String body) {
+        HttpServletRequest request = null;
+        send(request);
+    }`);
+  const hits = findNullRequestForwarding(src);
+  assert.equal(hits.length, 1);
+  assert.match(hits[0].carrier, /request/);
+});
+
+test('releases a request local whose ternary yields a real request', () => {
+  // The false branch is not null, so nothing can be lost here. A rule that
+  // flagged this would be a rule crying wolf.
+  const src = cls(`
+    void send(HttpServletRequest httpRequest) {
+        write();
+    }
+    void send(String body) {
+        HttpServletRequest request = other == null ? fallback : other;
+        send(request);
+    }`);
+  assert.deepEqual(findNullRequestForwarding(src), []);
+});
+
+test('releases a possibly-null local that is not a request', () => {
+  const src = cls(`
+    void delete(Long id, String collectionKey) {
+        remove();
+    }
+    void delete(Long id) {
+        String key = keyOf(id) == null ? null : keyOf(id);
+        delete(id, key);
+    }`);
+  assert.deepEqual(findNullRequestForwarding(src), []);
+});
+
+test('collects only the locals that can actually be null', () => {
+  const src = cls(`
+    void a() {
+        HttpServletRequest yes1 = null;
+        HttpServletRequest yes2 = cond ? x.getRequest() : null;
+        HttpServletRequest no1 = x.getRequest();
+        HttpServletRequest no2 = a == null ? b : c;
+        String notARequest = null;
+    }`);
+  const names = collectNullCarryingRequests(src);
+  assert.deepEqual([...names].sort(), ['yes1', 'yes2']);
 });
 
 test('releases a call whose arity matches no overload carrying a request', () => {
@@ -187,9 +270,9 @@ test('reports a file once per offending call, not once per overload', () => {
 
 // ── the detector against the real tree ────────────────────────────────────
 
-test('finds nothing in the controllers as they stand after Batch 816', () => {
+test('finds nothing in the controllers as they stand after Batch 819', () => {
   for (const f of ['RagChatController.java', 'RagSearchController.java',
-    'RagDocumentController.java', 'PdfImportController.java']) {
+    'RagDocumentController.java', 'PdfImportController.java', 'RagCollectionController.java']) {
     const hits = findNullRequestForwarding(readFileSync(join(CORE, f), 'utf8'));
     assert.deepEqual(hits.map((h) => h.name), [], `${f} still forwards a null request`);
   }
@@ -244,6 +327,29 @@ test('the gate exits zero on a tree whose nulls are business parameters', () => 
 test('the gate exits zero on an empty tree', () => {
   const result = runGate({});
   assert.equal(result.status, 0, `expected a passing exit, got ${result.status}`);
+});
+
+test('the gate exits non-zero on the ternary-carried null, not just the literal', () => {
+  // The detector cases above all call findNullRequestForwarding directly. That
+  // is precisely how a gate can be extended while its wiring quietly rots, so
+  // the Batch 819 shape is also asserted through the process boundary.
+  const result = runGate({
+    'Ternary.java': `class Ternary {\n`
+      + '    Object create(Object body, HttpServletRequest httpRequest) { return persist(); }\n'
+      + '    Object create(Object body) {\n'
+      + '        HttpServletRequest currentRequest =\n'
+      + '                holder.getRequestAttributes()\n'
+      + '                        instanceof ServletRequestAttributes attributes\n'
+      + '                        ? attributes.getRequest()\n'
+      + '                        : null;\n'
+      + '        return create(body, currentRequest);\n'
+      + '    }\n'
+      + '    Object persist() { return null; }\n}\n',
+  });
+  assert.equal(result.status, 1,
+    `expected a failing exit, got ${result.status}\n${result.stdout}${result.stderr}`);
+  assert.match(result.stdout + result.stderr, /currentRequest/,
+    'the report must name the variable the reader has to check by hand');
 });
 
 let failed = 0;

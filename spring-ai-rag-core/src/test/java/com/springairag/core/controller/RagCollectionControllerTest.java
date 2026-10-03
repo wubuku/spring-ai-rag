@@ -6,6 +6,7 @@ import com.springairag.api.dto.CollectionImportRequest;
 import com.springairag.api.dto.CollectionRequest;
 import com.springairag.api.dto.CollectionRestoreResponse;
 import com.springairag.api.dto.CollectionCloneRequest;
+import com.springairag.api.dto.CollectionUpdateRequest;
 import com.springairag.api.dto.DocumentAddedResponse;
 import com.springairag.core.entity.ApiKeyRole;
 import com.springairag.core.entity.RagApiKey;
@@ -85,7 +86,7 @@ class RagCollectionControllerTest {
         RagCollection saved = createCollection(1L, "测试知识库");
         when(collectionService.createCollection(any(CollectionRequest.class))).thenReturn(saved);
 
-        ResponseEntity<Map<String, Object>> response = controller.create(req);
+        ResponseEntity<Map<String, Object>> response = controller.create(req, null);
 
         assertEquals(200, response.getStatusCode().value());
         assertEquals(1L, response.getBody().get("id"));
@@ -269,7 +270,7 @@ class RagCollectionControllerTest {
         when(collectionRepository.save(any(RagCollection.class))).thenAnswer(inv -> inv.getArgument(0));
         when(documentRepository.countByCollectionId(1L)).thenReturn(0L);
 
-        CollectionRequest req = new CollectionRequest();
+        CollectionUpdateRequest req = new CollectionUpdateRequest();
         req.setName("新名称");
         req.setDescription("新描述");
 
@@ -284,7 +285,7 @@ class RagCollectionControllerTest {
     void update_nonExisting_returns404() {
         when(collectionRepository.findByIdAndDeletedFalse(999L)).thenReturn(Optional.empty());
 
-        CollectionRequest req = new CollectionRequest();
+        CollectionUpdateRequest req = new CollectionUpdateRequest();
         req.setName("test");
 
         ResponseEntity<Map<String, Object>> response = controller.update(999L, req);

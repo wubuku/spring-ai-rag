@@ -67,8 +67,16 @@ class RagCollectionControllerCreateImportTailTest {
     }
 
     @Test
-    void legacyUpdateRejectsCollectionKey() {
-        CollectionRequest request = createRequest();
+    void updateRejectsSuppliedCollectionKey() {
+        // Batch 819 deleted a compatibility overload that took the old
+        // CollectionRequest purely to police a key the HTTP DTO already refuses to
+        // carry. The real contract is that a client may still POST a collectionKey
+        // field — captureCollectionKey records it — and the production signature
+        // rejects it. Assert that instead of the shim's shadow copy of the rule.
+        com.springairag.api.dto.CollectionUpdateRequest request =
+                new com.springairag.api.dto.CollectionUpdateRequest();
+        request.setName("renamed");
+        request.captureCollectionKey("stolen-key");
 
         assertThrows(IllegalArgumentException.class,
                 () -> controllerWithoutProvisioning().update(5L, request));

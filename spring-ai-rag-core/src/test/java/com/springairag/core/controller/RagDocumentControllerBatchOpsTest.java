@@ -92,9 +92,9 @@ class RagDocumentControllerBatchOpsTest {
     @Test
     void batchEmbedRejectsInvalidOrOversizedIds() {
         assertThrows(IllegalArgumentException.class,
-                () -> controller.batchEmbedDocuments(Map.of()));
+                () -> controller.batchEmbedDocuments(Map.of(), null));
         assertThrows(IllegalArgumentException.class,
-                () -> controller.batchEmbedDocuments(Map.of("ids", List.of())));
+                () -> controller.batchEmbedDocuments(Map.of("ids", List.of()), null));
 
         List<Long> oversized = new ArrayList<>();
         for (long i = 1; i <= 51; i++) {
@@ -102,7 +102,7 @@ class RagDocumentControllerBatchOpsTest {
         }
         IllegalArgumentException error = assertThrows(
                 IllegalArgumentException.class,
-                () -> controller.batchEmbedDocuments(Map.of("ids", oversized)));
+                () -> controller.batchEmbedDocuments(Map.of("ids", oversized), null));
         assertEquals("Batch embedding limited to 50 documents per request (API rate limit)",
                 error.getMessage());
     }
@@ -121,7 +121,7 @@ class RagDocumentControllerBatchOpsTest {
                 .thenReturn(raw);
 
         ResponseEntity<BatchEmbedResponse> response = controller.batchEmbedDocuments(
-                Map.of("ids", List.of(1L, 2L)));
+                Map.of("ids", List.of(1L, 2L)), null);
 
         assertEquals(200, response.getStatusCode().value());
         assertEquals(2, response.getBody().results().size());

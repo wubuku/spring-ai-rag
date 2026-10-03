@@ -348,11 +348,6 @@ public class RagDocumentController {
         return ResponseEntity.ok(DocumentCreateResponse.created(doc.getId(), doc.getTitle(), contentHash));
     }
 
-    public ResponseEntity<DocumentCreateResponse> createDocument(
-            DocumentRequest request) {
-        return createDocument(request, null);
-    }
-
     @Operation(summary = "Get document details", description = "Query document content, metadata, and embedding vector count.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Document details returned"),
@@ -414,10 +409,6 @@ public class RagDocumentController {
                     deleted.documentRevision()));
         }
         return ResponseEntity.ok(batchDocumentService.deleteDocument(id));
-    }
-
-    public ResponseEntity<DocumentDeleteResponse> deleteDocument(Long id) {
-        return deleteDocument(id, null);
     }
 
     @Operation(summary = "Update a locally managed document with CAS")
@@ -554,14 +545,6 @@ public class RagDocumentController {
                 .toList();
     }
 
-    public ResponseEntity<DocumentListResponse> listDocuments(
-            int offset, int limit, String title, String documentType,
-            String processingStatus, Boolean enabled, Long collectionId,
-            String createdAfter, String createdBefore) {
-        return listDocuments(offset, limit, title, documentType, processingStatus,
-                enabled, collectionId, null, createdAfter, createdBefore);
-    }
-
     @Operation(summary = "Document statistics", description = "Get document count statistics by processing status.")
     @GetMapping("/stats")
     @Timed(value = "rag.documents.stats", description = "Get document statistics by processing status", percentiles = {0.5, 0.95, 0.99})
@@ -583,10 +566,6 @@ public class RagDocumentController {
     }
 
     // ==================== Embedding Vectors ====================
-
-    public ResponseEntity<Object> embedDocument(Long id, boolean force) {
-        return embedDocument(id, force, null);
-    }
 
     @Operation(summary = "Generate embedding vectors", description = "Chunk document and generate embedding vectors stored in rag_embeddings. Skips existing embeddings by default; set force=true to re-embed.")
     @ApiResponses({
@@ -651,10 +630,6 @@ public class RagDocumentController {
     /**
      * Batch re-embed documents lacking embedding vectors.
      */
-    public ResponseEntity<ReembedMissingResponse> reembedMissing(boolean force) {
-        return reembedMissing(force, null);
-    }
-
     @Operation(summary = "Batch re-embed", description = "Automatically find all documents lacking embedding vectors and batch generate/store vectors. Used for data migration fixes or forced re-embedding.")
     @PostMapping("/embed-vector-reembed")
     @Timed(value = "rag.documents.reembed-missing", description = "Batch re-embed documents without embedding vectors", percentiles = {0.5, 0.95, 0.99})
@@ -890,11 +865,6 @@ public class RagDocumentController {
         return ResponseEntity.ok(result);
     }
 
-    public ResponseEntity<BatchCreateResponse> batchCreateDocuments(
-            BatchDocumentRequest request) {
-        return batchCreateDocuments(request, null);
-    }
-
     private Long resolveWritableCollectionId(Long collectionId, String collectionKey,
                                              com.springairag.core.security.ApiAccessPolicy currentKey) {
         Long resolved;
@@ -957,11 +927,6 @@ public class RagDocumentController {
                         "notFound", result.summary().notFound()));
 
         return ResponseEntity.ok(result);
-    }
-
-    public ResponseEntity<BatchEmbedResponse> batchEmbedDocuments(
-            Map<String, List<Long>> request) {
-        return batchEmbedDocuments(request, null);
     }
 
     @Operation(summary = "Batch generate embedding vectors", description = "Batch chunk and generate embeddings for multiple documents. Single document failure doesn't affect others.")
@@ -1181,11 +1146,6 @@ public class RagDocumentController {
                         "collectionId", collectionId != null ? collectionId : ""));
 
         return ResponseEntity.ok(new FileUploadResponse(files.length, success, failed, results));
-    }
-
-    public ResponseEntity<FileUploadResponse> uploadAndEmbed(
-            MultipartFile[] files, Long collectionId, boolean force) {
-        return uploadAndEmbed(files, collectionId, null, force, null, null);
     }
 
     private FileUploadResponse.FileResult processUploadedFile(

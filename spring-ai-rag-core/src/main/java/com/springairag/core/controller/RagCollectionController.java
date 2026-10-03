@@ -261,18 +261,6 @@ public class RagCollectionController {
         return ResponseEntity.ok(CollectionMapper.toMap(collection, 0));
     }
 
-    /**
-     * 兼容隔离 Java 调用方；HTTP 路径使用带 servlet request 的 overload。
-     */
-    public ResponseEntity<Map<String, Object>> create(CollectionRequest request) {
-        HttpServletRequest currentRequest =
-                RequestContextHolder.getRequestAttributes()
-                        instanceof ServletRequestAttributes attributes
-                        ? attributes.getRequest()
-                        : null;
-        return create(request, currentRequest);
-    }
-
     private void auditCollectionCreated(RagCollection collection) {
         audit(AuditLogService.AuditAction.CREATE, AuditLogService.ENTITY_COLLECTION,
                 String.valueOf(collection.getId()),
@@ -410,26 +398,6 @@ public class RagCollectionController {
     }
 
     /**
-     * Compatibility overload for isolated Java callers using the old shared DTO.
-     * The HTTP contract uses CollectionUpdateRequest, which has no key field.
-     */
-    public ResponseEntity<Map<String, Object>> update(
-            Long id, CollectionRequest request) {
-        if (request.getCollectionKey() != null) {
-            throw new IllegalArgumentException(
-                    "collectionKey is immutable and must not be supplied when updating");
-        }
-        CollectionUpdateRequest update = new CollectionUpdateRequest();
-        update.setName(request.getName());
-        update.setDescription(request.getDescription());
-        update.setEmbeddingModel(request.getEmbeddingModel());
-        update.setDimensions(request.getDimensions());
-        update.setEnabled(request.getEnabled());
-        update.setMetadata(request.getMetadata());
-        return update(id, update);
-    }
-
-    /**
      * Delete collection (soft delete).
      */
     @Operation(summary = "Delete collection (soft delete)",
@@ -559,15 +527,6 @@ public class RagCollectionController {
                         source.getId(), request.getCollectionKey())
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
-    }
-
-    /**
-     * Java compatibility overload retained for existing isolated callers.
-     * The HTTP endpoint requires an explicit target key.
-     */
-    public ResponseEntity<CollectionCloneResponse> cloneCollection(Long id) {
-        throw new IllegalArgumentException(
-                "collectionKey is required when cloning a collection");
     }
 
     /**

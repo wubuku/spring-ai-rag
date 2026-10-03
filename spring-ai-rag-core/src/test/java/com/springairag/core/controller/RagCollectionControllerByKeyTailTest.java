@@ -149,11 +149,13 @@ class RagCollectionControllerByKeyTailTest {
         assertEquals(404, response.getStatusCode().value());
     }
 
-    @Test
-    void legacyCloneOverloadIsRejected() {
-        assertThrows(IllegalArgumentException.class,
-                () -> controller.cloneCollection(5L));
-    }
+    // `legacyCloneOverloadIsRejected` was removed with `cloneCollection(Long)` in
+    // Batch 819. It asserted the bypass's own IllegalArgumentException, so it was
+    // a test of the deleted method rather than of the contract. The requirement it
+    // stood for — a clone must name its target key — is enforced by @NotNull on
+    // CollectionCloneRequest and therefore only at Spring's binding layer, which a
+    // direct method call never reaches. Writing a direct-call assertion here would
+    // have tested requireActiveCollectionByKey(null, …) instead, i.e. nothing.
 
     @Test
     void castToMapPassesMapsAndNullifiesOthers() throws Exception {
