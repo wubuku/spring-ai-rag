@@ -21,6 +21,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import com.springairag.core.service.CollectionIdentityResolver;
 
 /**
  * PdfImportController 触发嵌入包装长尾（Batch 504，JaCoCo 驱
@@ -33,6 +34,8 @@ class PdfImportControllerTriggerEmbeddingTailTest {
     private EmbeddingProfileProvider profileProvider;
     private PdfImportController controller;
 
+    private CollectionIdentityResolver collectionIdentityResolver;
+
     @BeforeEach
     void setUp() {
         pdfToRagService = mock(PdfToRagService.class);
@@ -40,10 +43,11 @@ class PdfImportControllerTriggerEmbeddingTailTest {
         when(profileProvider.getActiveProfile()).thenReturn(new EmbeddingProfile(
                 9L, "bge-m3", "vendor", "bge-m3", "rev-1",
                 1024, "cosine", "normalize", true));
+        collectionIdentityResolver = mock(CollectionIdentityResolver.class);
         controller = new PdfImportController(
                 mock(PdfImportService.class),
                 null,
-                pdfToRagService, null);
+                pdfToRagService, collectionIdentityResolver);
     }
 
     private PdfToRagService.PdfToRagResult result() {

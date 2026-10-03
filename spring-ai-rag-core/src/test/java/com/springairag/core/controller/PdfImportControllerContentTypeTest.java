@@ -16,6 +16,7 @@ import java.util.function.Function;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import com.springairag.core.service.CollectionIdentityResolver;
 
 /**
  * inferContentType 扩展名映射矩阵（Batch 323）：存储 MIME 优先
@@ -27,15 +28,18 @@ class PdfImportControllerContentTypeTest {
     private com.springairag.core.service.PdfImportService pdfImportService;
     private PdfImportController controller;
 
+    private CollectionIdentityResolver collectionIdentityResolver;
+
     @BeforeEach
     void setUp() {
         RequestContextHolder.setRequestAttributes(
                 new ServletRequestAttributes(new MockHttpServletRequest()));
         pdfImportService = mock(com.springairag.core.service.PdfImportService.class);
+        collectionIdentityResolver = mock(CollectionIdentityResolver.class);
         controller = new PdfImportController(
                 pdfImportService,
                 mock(com.springairag.core.service.MarkdownRendererService.class),
-                mock(com.springairag.core.service.PdfToRagService.class), null);
+                mock(com.springairag.core.service.PdfToRagService.class), collectionIdentityResolver);
     }
 
     private void stubFile(String path, String storedMime) {

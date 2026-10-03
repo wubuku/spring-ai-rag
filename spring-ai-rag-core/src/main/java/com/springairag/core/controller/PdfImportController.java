@@ -78,13 +78,12 @@ public class PdfImportController {
     private final PdfImportService pdfImportService;
     private final MarkdownRendererService markdownRendererService;
     private final PdfToRagService pdfToRagService;
-    private final CollectionIdentityResolver collectionIdentityResolver;
+    private final CollectionIdentityResolver collectionIdentityResolver;  // Batch 851：`required = false` 已删——这个类里没有 null 守卫，解析器缺失时会在第一次使用处抛裸 NPE，而不是像必填依赖那样在启动阶段就失败
 
     @org.springframework.beans.factory.annotation.Autowired
     public PdfImportController(PdfImportService pdfImportService,
                                MarkdownRendererService markdownRendererService,
                                PdfToRagService pdfToRagService,
-                               @org.springframework.beans.factory.annotation.Autowired(required = false)
                                CollectionIdentityResolver collectionIdentityResolver) {
         this.pdfImportService = pdfImportService;
         this.markdownRendererService = markdownRendererService;

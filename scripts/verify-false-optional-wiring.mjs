@@ -304,7 +304,7 @@ const SUBJECT_SUFFIXES = ['Controller.java', 'Service.java'];
  * 噪音豁免掉。这三处如果不处理，棘轮就会把 3 个假阳性焊死在"只能降不能升"的
  * 位置上，以后谁都得先花力气解释为什么这 3 条不算数。
  */
-const UNGUARDED_CEILING = 11;
+const UNGUARDED_CEILING = 9;
 
 /**
  * 棘轮在什么范围内生效。

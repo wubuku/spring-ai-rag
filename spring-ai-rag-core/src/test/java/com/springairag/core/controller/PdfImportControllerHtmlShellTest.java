@@ -19,6 +19,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import com.springairag.core.service.CollectionIdentityResolver;
 
 /**
  * Batch 814。预览页外壳里那个 {@code <base href>} 的转义边界。
@@ -38,12 +39,15 @@ class PdfImportControllerHtmlShellTest {
     private MarkdownRendererService markdownRendererService;
     private PdfImportController controller;
 
+    private CollectionIdentityResolver collectionIdentityResolver;
+
     @BeforeEach
     void setUp() {
         pdfImportService = mock(PdfImportService.class);
         markdownRendererService = mock(MarkdownRendererService.class);
+        collectionIdentityResolver = mock(CollectionIdentityResolver.class);
         controller = new PdfImportController(
-                pdfImportService, markdownRendererService, mock(PdfToRagService.class), null);
+                pdfImportService, markdownRendererService, mock(PdfToRagService.class), collectionIdentityResolver);
     }
 
     /** 让任意路径都能"找到文件"，把控制器的转义行为与文件存在性检查隔离开。 */

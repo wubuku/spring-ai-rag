@@ -18,6 +18,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import com.springairag.core.service.CollectionIdentityResolver;
 
 /**
  * PdfImportController SSE 任务 lambda 长尾（Batch 571，JaCoCo 驱
@@ -29,14 +30,17 @@ class PdfImportControllerSseTaskLambdaTailTest {
     private PdfToRagService pdfToRagService;
     private PdfImportController controller;
 
+    private CollectionIdentityResolver collectionIdentityResolver;
+
     @BeforeEach
     void setUp() {
         pdfToRagService = mock(PdfToRagService.class);
+        collectionIdentityResolver = mock(CollectionIdentityResolver.class);
         controller = new PdfImportController(
                 mock(PdfImportService.class),
                 mock(MarkdownRendererService.class),
                 pdfToRagService,
-                null);
+                collectionIdentityResolver);
     }
 
     private PdfToRagService.PdfToRagResult result() {

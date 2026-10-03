@@ -17,6 +17,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import com.springairag.core.service.CollectionIdentityResolver;
 
 /**
  * PdfImportController 长尾补充（Batch 699，JaCoCo 驱动）：raw 文
@@ -28,13 +29,16 @@ class PdfImportControllerRawAndImportTailTest {
     private PdfImportService pdfImportService;
     private PdfImportController controller;
 
+    private CollectionIdentityResolver collectionIdentityResolver;
+
     @BeforeEach
     void setUp() {
         pdfImportService = mock(PdfImportService.class);
+        collectionIdentityResolver = mock(CollectionIdentityResolver.class);
         controller = new PdfImportController(
                 pdfImportService,
                 null,
-                mock(com.springairag.core.service.PdfToRagService.class), null);
+                mock(com.springairag.core.service.PdfToRagService.class), collectionIdentityResolver);
     }
 
     @Test
