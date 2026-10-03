@@ -40,10 +40,8 @@ class JsonRecordValidateRequestTest {
         service = new JsonRecordService(
                 documentRepository,
                 mock(DocumentVersionService.class),
-                mock(DocumentEmbedService.class),
                 mock(HybridRetrieverService.class),
                 mock(ReRankingService.class),
-                () -> null,
                 mock(CollectionIdentityResolver.class),
                 properties,
                 new ObjectMapper(),

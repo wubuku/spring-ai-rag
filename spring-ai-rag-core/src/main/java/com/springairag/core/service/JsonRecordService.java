@@ -16,8 +16,6 @@ import com.springairag.api.dto.RetrievalConfig;
 import com.springairag.api.dto.RetrievalResult;
 import com.springairag.api.enums.CollectionScopeMode;
 import com.springairag.api.validation.SourceNamespaceValidator;
-import com.springairag.core.config.EmbeddingProfile;
-import com.springairag.core.config.EmbeddingProfileProvider;
 import com.springairag.core.config.RagStructuredRecordProperties;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.entity.RagDocumentVersion;
@@ -27,7 +25,6 @@ import com.springairag.core.logging.SensitiveDataMaskingConverter;
 import com.springairag.core.repository.RagDocumentRepository;
 import com.springairag.api.enums.EmbeddingPolicy;
 import com.springairag.core.embeddingjob.EmbeddingDispatchService;
-import com.springairag.core.embeddingjob.EmbeddingPolicyResolver;
 import com.springairag.core.retrieval.HybridRetrieverService;
 import com.springairag.core.retrieval.JsonbContainmentFilter;
 import com.springairag.core.retrieval.ReRankingService;
@@ -64,10 +61,8 @@ public class JsonRecordService {
 
     private final RagDocumentRepository documentRepository;
     private final DocumentVersionService documentVersionService;
-    private final DocumentEmbedService documentEmbedService;
     private final HybridRetrieverService hybridRetrieverService;
     private final ReRankingService reRankingService;
-    private final EmbeddingProfileProvider embeddingProfileProvider;
     private final CollectionIdentityResolver collectionIdentityResolver;
     private final CollectionRetrievalScopeResolver retrievalScopeResolver;
     private final RagStructuredRecordProperties properties;
@@ -76,7 +71,7 @@ public class JsonRecordService {
     private final TransactionTemplate transactionTemplate;
     private final RetrievalFilterValidator filterValidator = new RetrievalFilterValidator();
     private EmbeddingDispatchService dispatchService; // optional-claim: EmbeddingDispatchService 是无条件 @Service，null 臂只在不走 Spring 装配的构造路径可达；守卫真正的职责是策略不是 ASYNC、或没有输出槽时不入队。Batch 829 删掉了同一字段上会抛的 persist() 守卫，理由与 ExternalDocumentService 相同
-    private DocumentMutationService mutationService; // optional-claim: DocumentMutationService 是无条件 @Service，null 臂只在不走 Spring 装配的构造路径可达；守卫真正的职责是切到 legacy 内联 upsert 路径——那条路径只在 Spring 装配之外可达
+    private DocumentMutationService mutationService;
     private DocumentLifecycleService lifecycleService; // optional-claim: DocumentLifecycleService 是无条件 @Service，null 臂只在不走 Spring 装配的构造路径可达；守卫真正的职责是生命周期读取缺席时该字段留空
     private KeywordIndexPersistenceService keywordIndexPersistenceService; // optional-claim: KeywordIndexPersistenceService 是无条件 @Service，null 臂只在不走 Spring 装配的构造路径可达；守卫真正的职责是本地索引缺席时跳过协调
     private ExternalAddressRetirementService addressRetirementService; // optional-claim: ExternalAddressRetirementService 是无条件 @Service，null 臂只在不走 Spring 装配的构造路径可达；守卫真正的职责是退役校验缺席时放行，属于可跳过的旁路而非写入前置条件
@@ -85,10 +80,8 @@ public class JsonRecordService {
     public JsonRecordService(
             RagDocumentRepository documentRepository,
             DocumentVersionService documentVersionService,
-            DocumentEmbedService documentEmbedService,
             HybridRetrieverService hybridRetrieverService,
             ReRankingService reRankingService,
-            EmbeddingProfileProvider embeddingProfileProvider,
             CollectionIdentityResolver collectionIdentityResolver,
             com.springairag.core.config.RagProperties ragProperties,
             ObjectMapper objectMapper,
@@ -97,10 +90,8 @@ public class JsonRecordService {
             @Nullable PlatformTransactionManager transactionManager) {
         this.documentRepository = documentRepository;
         this.documentVersionService = documentVersionService;
-        this.documentEmbedService = documentEmbedService;
         this.hybridRetrieverService = hybridRetrieverService;
         this.reRankingService = reRankingService;
-        this.embeddingProfileProvider = embeddingProfileProvider;
         this.collectionIdentityResolver = collectionIdentityResolver;
         this.retrievalScopeResolver = retrievalScopeResolver;
         this.properties = ragProperties.getStructuredRecords();
@@ -114,17 +105,15 @@ public class JsonRecordService {
     JsonRecordService(
             RagDocumentRepository documentRepository,
             DocumentVersionService documentVersionService,
-            DocumentEmbedService documentEmbedService,
             HybridRetrieverService hybridRetrieverService,
             ReRankingService reRankingService,
-            EmbeddingProfileProvider embeddingProfileProvider,
             CollectionIdentityResolver collectionIdentityResolver,
             com.springairag.core.config.RagProperties ragProperties,
             ObjectMapper objectMapper,
             JdbcTemplate jdbcTemplate,
             @Nullable PlatformTransactionManager transactionManager) {
-        this(documentRepository, documentVersionService, documentEmbedService,
-                hybridRetrieverService, reRankingService, embeddingProfileProvider,
+        this(documentRepository, documentVersionService,
+                hybridRetrieverService, reRankingService,
                 collectionIdentityResolver, ragProperties, objectMapper, jdbcTemplate,
                 null, transactionManager);
     }
@@ -159,22 +148,12 @@ public class JsonRecordService {
     public JsonRecordUpsertResponse upsert(JsonRecordUpsertRequest request) {
         resolveRequestCollection(request);
         validateRequest(request);
-        if (mutationService != null) {
-            return toUpsertResponse(mutationService.upsertJsonRecord(
-                    request,
-                    request.getCollectionId(),
-                    requestCollectionKey(request),
-                    null,
-                    null));
-        }
-        EmbeddingPolicy policy = EmbeddingPolicyResolver.resolve(
-                request.getEmbeddingPolicy(), request.isEmbed());
-        EmbeddingDispatchService.Result[] queued = new EmbeddingDispatchService.Result[1];
-        PersistedRecord persisted = persist(request, null, null, policy, queued);
-        EmbeddingOutcome embedding = queued[0] != null
-                ? outcomeFromDispatch(queued[0])
-                : embedIfRequested(persisted, policy == EmbeddingPolicy.SYNC);
-        return toUpsertResponse(persisted, embedding);
+        return toUpsertResponse(mutationService.upsertJsonRecord(
+                request,
+                request.getCollectionId(),
+                requestCollectionKey(request),
+                null,
+                null));
     }
 
     public JsonRecordBatchUpsertResponse batchUpsert(List<JsonRecordUpsertRequest> requests) {
@@ -771,48 +750,6 @@ public class JsonRecordService {
         }
         if (Boolean.TRUE.equals(document.getEnabled())) {
             keywordIndexPersistenceService.ensureCurrent(document);
-        }
-    }
-
-    private EmbeddingOutcome outcomeFromDispatch(EmbeddingDispatchService.Result result) {
-        return new EmbeddingOutcome(
-                result.embeddingStatus(),
-                result.embeddingProfileKey(),
-                result.error(),
-                result.action().name(),
-                result.embeddingJobId(),
-                result.embeddingBatchId());
-    }
-
-    private EmbeddingOutcome embedIfRequested(PersistedRecord persisted, boolean embed) {
-        if (!embed) {
-            return new EmbeddingOutcome("NOT_REQUESTED", null, null);
-        }
-        EmbeddingProfile activeProfile = embeddingProfileProvider.getActiveProfile();
-        if (!"CREATED".equals(persisted.action())
-                && !persisted.contentChanged()
-                && documentEmbedService.hasFreshEmbedding(persisted.document())) {
-            return new EmbeddingOutcome("CACHED", activeProfile.profileKey(), null);
-        }
-        try {
-            Map<String, Object> result = documentEmbedService.embedDocument(
-                    persisted.document().getId(), false);
-            String status = String.valueOf(result.getOrDefault("status", "FAILED"));
-            String profileKey = String.valueOf(
-                    result.getOrDefault("embeddingProfileKey",
-                            activeProfile.profileKey()));
-            String error = result.get("error") == null
-                    ? null
-                    : safeError(String.valueOf(result.get("error")));
-            return new EmbeddingOutcome(
-                    "COMPLETED".equals(status) ? "COMPLETED"
-                            : "CACHED".equals(status) ? "CACHED" : "FAILED",
-                    profileKey, error);
-        } catch (RuntimeException e) {
-            return new EmbeddingOutcome(
-                    "FAILED",
-                    activeProfile.profileKey(),
-                    safeError(e));
         }
     }
 

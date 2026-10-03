@@ -91,10 +91,8 @@ class JsonRecordDeleteTombstoneTest {
         jsonRecordService = new JsonRecordService(
                 documentRepository,
                 versionService,
-                mock(DocumentEmbedService.class),
                 mock(HybridRetrieverService.class),
                 mock(ReRankingService.class),
-                mock(EmbeddingProfileProvider.class),
                 resolver,
                 new RagProperties(),
                 new ObjectMapper(),

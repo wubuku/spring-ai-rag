@@ -88,6 +88,8 @@ class JsonRecordServiceTest {
     private PlatformTransactionManager transactionManager;
     @Mock
     private TransactionStatus transactionStatus;
+    @Mock
+    private DocumentMutationService mutationService;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private JsonRecordService service;
@@ -120,15 +122,14 @@ class JsonRecordServiceTest {
         service = new JsonRecordService(
                 documentRepository,
                 documentVersionService,
-                documentEmbedService,
                 hybridRetrieverService,
                 reRankingService,
-                embeddingProfileProvider,
                 collectionIdentityResolver,
                 properties,
                 objectMapper,
                 jdbcTemplate,
                 transactionManager);
+        service.setMutationService(mutationService);
     }
 
     @Test
@@ -199,25 +200,26 @@ class JsonRecordServiceTest {
         when(collectionIdentityResolver.resolveActiveIds(
                 null, List.of("customer-42:records:v1")))
                 .thenReturn(List.of(10L));
-        when(documentRepository.findByCollectionIdAndDocumentTypeAndExternalId(
-                10L, RagDocument.JSON_RECORD, "customer-key"))
-                .thenReturn(Optional.empty());
-        when(documentVersionService.forceRecordVersion(any(), eq("CREATE"), any()))
-                .thenAnswer(invocation -> version(1));
 
         JsonRecordUpsertRequest request = request(
                 null, "customer-key", "Customer record.",
                 objectMapper.readTree("{\"name\":\"one\"}"), false);
         request.setCollectionKey("customer-42:records:v1");
+        when(mutationService.upsertJsonRecord(same(request), eq(10L),
+                eq("customer-42:records:v1"), isNull(), isNull()))
+                .thenReturn(new DocumentMutationService.JsonMutationResult(
+                        JsonRecordMutationFixture.document(41L, "customer-key"),
+                        "CREATED", true, true, 1, null,
+                        JsonRecordMutationFixture.lifecycle("NOT_REQUESTED")));
 
         JsonRecordUpsertResponse response = service.upsert(request);
 
+        // 键解析把内部 id 写回请求；原始键与解析出的 id 一起交给变更层。
+        assertEquals(10L, request.getCollectionId());
         assertEquals(10L, response.collectionId());
         assertEquals("collection-10", response.collectionKey());
-        assertEquals(10L, request.getCollectionId());
-        verify(collectionIdentityResolver).beginActiveWrite(10L);
-        verify(collectionIdentityResolver).confirmActiveWrite(
-                new CollectionIdentityResolver.ActiveCollectionToken(10L, 0L));
+        verify(mutationService).upsertJsonRecord(same(request), eq(10L),
+                eq("customer-42:records:v1"), isNull(), isNull());
     }
 
     @Test
@@ -235,105 +237,19 @@ class JsonRecordServiceTest {
     }
 
     @Test
-    void createPersistsJsonPayloadAndDoesNotEmbedWhenDisabled() throws Exception {
-        when(documentRepository.findByCollectionIdAndDocumentTypeAndExternalId(
-                10L, RagDocument.JSON_RECORD, "customer-1"))
-                .thenReturn(Optional.empty());
-        when(documentVersionService.forceRecordVersion(any(), eq("CREATE"), any()))
-                .thenAnswer(invocation -> version(1));
-
-        JsonRecordUpsertResponse response = service.upsert(
-                request(10L, "customer-1", "Customer one is in Beijing.",
-                        objectMapper.readTree("{\"name\":\"one\"}"), false));
-
-        assertEquals("CREATED", response.action());
-        assertTrue(response.contentChanged());
-        assertTrue(response.payloadChanged());
-        assertEquals(1, response.versionNumber());
-        verify(documentEmbedService, never()).embedDocument(any(Long.class), eq(false));
-    }
-
-    @Test
-    void payloadOnlyUpdateCreatesVersionWithoutCallingEmbedding() throws Exception {
-        RagDocument document = document(41L, 3L, "customer-1",
-                "Customer one is in Beijing.", "{\"name\":\"one\"}");
-        when(documentRepository.findByCollectionIdAndDocumentTypeAndExternalId(
-                10L, RagDocument.JSON_RECORD, "customer-1"))
-                .thenReturn(Optional.of(document));
-        when(documentVersionService.forceRecordVersion(any(), eq("UPDATE"), any()))
-                .thenAnswer(invocation -> version(4));
-        when(documentEmbedService.hasFreshEmbedding(document)).thenReturn(true);
-
-        JsonRecordUpsertResponse response = service.upsert(
-                request(10L, "customer-1", "Customer one is in Beijing.",
-                        objectMapper.readTree("{\"name\":\"updated\"}"), true));
-
-        assertEquals("UPDATED", response.action());
-        assertFalse(response.contentChanged());
-        assertTrue(response.payloadChanged());
-        assertEquals(4, response.versionNumber());
-        verify(documentEmbedService, never()).embedDocument(any(Long.class), eq(false));
-    }
-
-    @Test
-    void exactReplayIsUnchangedAndDoesNotCreateVersion() throws Exception {
-        RagDocument document = document(41L, 3L, "customer-1",
-                "Customer one is in Beijing.", "{\"name\":\"one\"}");
-        when(documentRepository.findByCollectionIdAndDocumentTypeAndExternalId(
-                10L, RagDocument.JSON_RECORD, "customer-1"))
-                .thenReturn(Optional.of(document));
-        when(documentVersionService.getLatestVersion(41L))
-                .thenReturn(Optional.of(version(3)));
-        when(documentEmbedService.hasFreshEmbedding(document)).thenReturn(true);
-
-        JsonRecordUpsertResponse response = service.upsert(
-                request(10L, "customer-1", "Customer one is in Beijing.",
-                        objectMapper.readTree("{\"name\":\"one\"}"), true));
-
-        assertEquals("UNCHANGED", response.action());
-        assertEquals(3, response.versionNumber());
-        verify(documentRepository, never()).saveAndFlush(any());
-        verify(documentVersionService, never()).forceRecordVersion(any(), any(), any());
-        verify(documentEmbedService, never()).embedDocument(any(Long.class), eq(false));
-    }
-
-    @Test
-    void retrievalTextUpdateCallsEmbedding() throws Exception {
-        RagDocument document = document(41L, 3L, "customer-1",
-                "Customer one is in Beijing.", "{\"name\":\"one\"}");
-        when(documentRepository.findByCollectionIdAndDocumentTypeAndExternalId(
-                10L, RagDocument.JSON_RECORD, "customer-1"))
-                .thenReturn(Optional.of(document));
-        when(documentVersionService.forceRecordVersion(any(), eq("UPDATE"), any()))
-                .thenAnswer(invocation -> version(4));
-        when(documentEmbedService.embedDocument(41L, false))
-                .thenReturn(Map.of("status", "COMPLETED",
-                        "embeddingProfileKey", PROFILE.profileKey()));
-
-        JsonRecordUpsertResponse response = service.upsert(
-                request(10L, "customer-1", "Customer one moved to Shanghai.",
-                        objectMapper.readTree("{\"name\":\"one\"}"), true));
-
-        assertEquals("UPDATED", response.action());
-        assertTrue(response.contentChanged());
-        assertEquals("COMPLETED", response.embeddingStatus());
-        verify(documentEmbedService).embedDocument(41L, false);
-    }
-
-    @Test
     void batchKeepsValidItemsWhenOneItemValidationFails() throws Exception {
-        when(documentRepository.findByCollectionIdAndDocumentTypeAndExternalId(
-                10L, RagDocument.JSON_RECORD, "valid-1"))
-                .thenReturn(Optional.empty());
-        when(documentVersionService.forceRecordVersion(any(), eq("CREATE"), any()))
-                .thenAnswer(invocation -> version(1));
-
         JsonRecordUpsertRequest invalid = request(
                 10L, "invalid-1", " ",
                 objectMapper.readTree("{\"value\":1}"), false);
         JsonRecordUpsertRequest valid = request(
                 10L, "valid-1", "A valid retrieval description.",
                 objectMapper.readTree("{\"value\":2}"), false);
+        when(mutationService.upsertJsonRecord(same(valid), eq(10L),
+                eq("collection-10"), isNull(), isNull()))
+                .thenReturn(new DocumentMutationService.JsonMutationResult(
+                        JsonRecordMutationFixture.document(41L, "valid-1"),
+                        "CREATED", true, false, 1, null,
+                        JsonRecordMutationFixture.lifecycle("NOT_REQUESTED")));
 
         var response = service.batchUpsert(List.of(invalid, valid));
 
@@ -342,54 +258,9 @@ class JsonRecordServiceTest {
         assertEquals(1, response.summary().persistenceFailed());
         assertEquals("FAILED", response.results().get(0).action());
         assertEquals("CREATED", response.results().get(1).action());
-        verify(documentRepository).saveAndFlush(any(RagDocument.class));
-    }
-
-    @Test
-    void concurrentCreateRetriesAndConvergesToExistingRecord() throws Exception {
-        RagDocument persisted = document(
-                41L, 1L, "customer-race",
-                "Customer record.", "{\"name\":\"one\"}");
-        when(documentRepository.findByCollectionIdAndDocumentTypeAndExternalId(
-                10L, RagDocument.JSON_RECORD, "customer-race"))
-                .thenReturn(Optional.empty(), Optional.of(persisted));
-        doThrow(new DataIntegrityViolationException("identity race"))
-                .when(documentRepository).saveAndFlush(any(RagDocument.class));
-        when(documentVersionService.getLatestVersion(41L))
-                .thenReturn(Optional.of(version(1)));
-
-        JsonRecordUpsertResponse response = service.upsert(
-                request(10L, "customer-race", "Customer record.",
-                        objectMapper.readTree("{\"name\":\"one\"}"), false));
-
-        assertEquals("UNCHANGED", response.action());
-        verify(documentRepository, times(2))
-                .findByCollectionIdAndDocumentTypeAndExternalId(
-                        10L, RagDocument.JSON_RECORD, "customer-race");
-        verify(transactionManager).rollback(transactionStatus);
-        verify(transactionManager).commit(transactionStatus);
-    }
-
-    @Test
-    void embeddingErrorIsMaskedAndBounded() throws Exception {
-        when(documentRepository.findByCollectionIdAndDocumentTypeAndExternalId(
-                10L, RagDocument.JSON_RECORD, "error-1"))
-                .thenReturn(Optional.empty());
-        when(documentVersionService.forceRecordVersion(any(), eq("CREATE"), any()))
-                .thenAnswer(invocation -> version(1));
-        when(documentEmbedService.embedDocument(41L, false))
-                .thenReturn(Map.of(
-                        "status", "FAILED",
-                        "error", "provider failed apiKey=secret-value"));
-
-        JsonRecordUpsertResponse response = service.upsert(
-                request(10L, "error-1", "A retrieval description.",
-                        objectMapper.readTree("{\"value\":1}"), true));
-
-        assertEquals("FAILED", response.embeddingStatus());
-        assertTrue(response.error().contains("***REDACTED***"));
-        assertFalse(response.error().contains("secret-value"));
-        assertTrue(response.error().length() <= 500);
+        // 校验失败的条目根本进不了变更层。
+        verify(mutationService, times(1)).upsertJsonRecord(
+                any(JsonRecordUpsertRequest.class), any(), any(), any(), any());
     }
 
     @Test
@@ -433,10 +304,8 @@ class JsonRecordServiceTest {
         JsonRecordService productionService = new JsonRecordService(
                 documentRepository,
                 documentVersionService,
-                documentEmbedService,
                 hybridRetrieverService,
                 reRankingService,
-                embeddingProfileProvider,
                 collectionIdentityResolver,
                 new RagProperties(),
                 objectMapper,

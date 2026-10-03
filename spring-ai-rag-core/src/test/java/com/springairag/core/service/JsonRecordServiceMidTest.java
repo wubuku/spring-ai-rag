@@ -57,10 +57,8 @@ class JsonRecordServiceMidTest {
         service = new JsonRecordService(
                 documentRepository,
                 mock(DocumentVersionService.class),
-                mock(DocumentEmbedService.class),
                 hybridRetrieverService,
                 reRankingService,
-                mock(EmbeddingProfileProvider.class),
                 mock(CollectionIdentityResolver.class),
                 new RagProperties(),
                 MAPPER,

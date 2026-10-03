@@ -73,10 +73,8 @@ class JsonRecordUpsertResponseMappingTest {
         service = new JsonRecordService(
                 documentRepository,
                 documentVersionService,
-                documentEmbedService,
                 hybridRetrieverService,
                 reRankingService,
-                embeddingProfileProvider,
                 collectionIdentityResolver,
                 new RagProperties(),
                 new ObjectMapper(),

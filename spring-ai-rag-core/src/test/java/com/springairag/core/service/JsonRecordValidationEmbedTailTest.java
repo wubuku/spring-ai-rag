@@ -84,10 +84,8 @@ class JsonRecordValidationEmbedTailTest {
         service = new JsonRecordService(
                 documentRepository,
                 versionService,
-                documentEmbedService,
                 mock(HybridRetrieverService.class),
                 mock(ReRankingService.class),
-                profileProvider,
                 resolver,
                 properties,
                 MAPPER,
@@ -168,51 +166,8 @@ class JsonRecordValidationEmbedTailTest {
                 reason.invoke(service, false, false, existing));
     }
 
-    @Test
-    void skipUpsertWithContentChangeMarksKeywordIndexNotRequested() {
-        JsonRecordUpsertRequest request = request();
-        request.setRetrievalText("new text");
-        request.setEmbeddingPolicy(EmbeddingPolicy.SKIP);
-        request.setEmbed(false);
-
-        var response = service.upsert(request);
-
-        assertEquals("UPDATED", response.action());
-        verify(keywordIndexPersistenceService).markNotRequested(
-                any(RagDocument.class));
-    }
-
-    @Test
-    void unchangedUpsertWithFreshEmbeddingReportsCached() {
-        request();
-        when(documentEmbedService.hasFreshEmbedding(existing))
-                .thenReturn(true);
-        JsonRecordUpsertRequest request = request();
-        request.setEmbed(true);
-
-        JsonRecordUpsertResponse response = service.upsert(request);
-
-        assertEquals("UNCHANGED", response.action());
-        assertEquals("CACHED", response.embeddingStatus());
-        assertNull(response.error());
-    }
-
     private static void assertNull(Object value) {
         org.junit.jupiter.api.Assertions.assertNull(value);
     }
 
-    @Test
-    void syncUpsertWithEmbedderFailureReportsFailed() {
-        JsonRecordUpsertRequest request = request();
-        request.setRetrievalText("new text");
-        request.setEmbed(true);
-        when(documentEmbedService.embedDocument(any(), anyBoolean()))
-                .thenThrow(new IllegalStateException("embedder down"));
-
-        JsonRecordUpsertResponse response = service.upsert(request);
-
-        assertEquals("FAILED", response.embeddingStatus());
-        assertTrue(response.error() != null
-                && response.error().contains("embedder down"));
-    }
 }

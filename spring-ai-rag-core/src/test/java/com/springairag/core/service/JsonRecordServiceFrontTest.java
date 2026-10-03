@@ -38,10 +38,8 @@ class JsonRecordServiceFrontTest {
         service = new JsonRecordService(
                 mock(RagDocumentRepository.class),
                 mock(DocumentVersionService.class),
-                mock(DocumentEmbedService.class),
                 mock(HybridRetrieverService.class),
                 mock(ReRankingService.class),
-                mock(EmbeddingProfileProvider.class),
                 mock(CollectionIdentityResolver.class),
                 properties,
                 MAPPER,
@@ -101,10 +99,8 @@ class JsonRecordServiceFrontTest {
         JsonRecordService wired = new JsonRecordService(
                 mock(RagDocumentRepository.class),
                 mock(DocumentVersionService.class),
-                mock(DocumentEmbedService.class),
                 mock(HybridRetrieverService.class),
                 mock(ReRankingService.class),
-                mock(EmbeddingProfileProvider.class),
                 mock(CollectionIdentityResolver.class),
                 properties,
                 MAPPER,

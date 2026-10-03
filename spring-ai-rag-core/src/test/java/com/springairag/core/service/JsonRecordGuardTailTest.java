@@ -77,10 +77,8 @@ class JsonRecordGuardTailTest {
         service = new JsonRecordService(
                 documentRepository,
                 versionService,
-                mock(DocumentEmbedService.class),
                 hybridRetrieverService,
                 mock(ReRankingService.class),
-                profileProvider,
                 resolver,
                 properties,
                 MAPPER,

@@ -63,10 +63,8 @@ class JsonRecordServicePersistArmsTailTest {
         JsonRecordService service = new JsonRecordService(
                 documentRepository,
                 versionService,
-                mock(DocumentEmbedService.class),
                 mock(HybridRetrieverService.class),
                 mock(ReRankingService.class),
-                profileProvider,
                 resolver,
                 new RagProperties(),
                 MAPPER,
@@ -231,10 +229,8 @@ class JsonRecordServicePersistArmsTailTest {
         JsonRecordService service = new JsonRecordService(
                 documentRepository,
                 versionService,
-                mock(DocumentEmbedService.class),
                 mock(HybridRetrieverService.class),
                 mock(ReRankingService.class),
-                profileProvider,
                 resolver,
                 new RagProperties(),
                 failingMapper,
