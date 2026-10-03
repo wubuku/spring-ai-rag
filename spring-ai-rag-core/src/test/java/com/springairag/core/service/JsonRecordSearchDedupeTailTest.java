@@ -13,11 +13,9 @@ import com.springairag.core.retrieval.RetrievalScope;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.transaction.PlatformTransactionManager;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -29,7 +27,6 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -58,8 +55,7 @@ class JsonRecordSearchDedupeTailTest {
                 new com.springairag.core.config.RagProperties(),
                 new ObjectMapper().findAndRegisterModules(),
                 mock(JdbcTemplate.class),
-                mock(CollectionRetrievalScopeResolver.class),
-                mock(PlatformTransactionManager.class));
+                mock(CollectionRetrievalScopeResolver.class));
     }
 
     private RetrievalResult result(String documentId) {

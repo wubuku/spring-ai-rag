@@ -2,7 +2,6 @@ package com.springairag.core.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.springairag.api.dto.JsonRecordUpsertRequest;
-import com.springairag.core.config.EmbeddingProfileProvider;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.repository.RagDocumentRepository;
 import com.springairag.core.retrieval.HybridRetrieverService;
@@ -14,7 +13,6 @@ import java.lang.reflect.Method;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 
 /**
@@ -40,7 +38,6 @@ class JsonRecordServiceHelperTailTest {
                 new RagProperties(),
                 new ObjectMapper(),
                 mock(org.springframework.jdbc.core.JdbcTemplate.class),
-                null,
                 null);
         measurePayloadBytes = JsonRecordService.class.getDeclaredMethod(
                 "measurePayloadBytes", JsonRecordUpsertRequest.class);

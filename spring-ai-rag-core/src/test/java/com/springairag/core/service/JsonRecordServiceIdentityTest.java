@@ -52,8 +52,7 @@ class JsonRecordServiceIdentityTest {
                 resolver,
                 new RagProperties(),
                 new ObjectMapper(),
-                mock(JdbcTemplate.class),
-                null);
+                mock(JdbcTemplate.class));
     }
 
     @Test

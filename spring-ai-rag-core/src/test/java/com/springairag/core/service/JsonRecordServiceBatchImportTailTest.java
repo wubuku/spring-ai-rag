@@ -2,13 +2,8 @@ package com.springairag.core.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.springairag.api.dto.JsonRecordUpsertRequest;
-import com.springairag.api.dto.JsonRecordUpsertResponse;
 import com.springairag.api.enums.EmbeddingAction;
 import com.springairag.api.enums.EmbeddingPolicy;
-import com.springairag.api.enums.ErrorCode;
-import com.springairag.core.exception.RagException;
-import com.springairag.core.config.EmbeddingProfile;
-import com.springairag.core.config.EmbeddingProfileProvider;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.retrieval.HybridRetrieverService;
 import com.springairag.core.retrieval.ReRankingService;
@@ -20,15 +15,11 @@ import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyBoolean;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.ArgumentMatchers.same;
@@ -73,8 +64,7 @@ class JsonRecordServiceBatchImportTailTest {
                 resolver,
                 properties,
                 MAPPER,
-                mock(JdbcTemplate.class),
-                null);
+                mock(JdbcTemplate.class));
         service.setMutationService(mutationService);
     }
 

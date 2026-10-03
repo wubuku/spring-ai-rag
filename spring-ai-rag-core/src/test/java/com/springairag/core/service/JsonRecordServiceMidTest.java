@@ -6,7 +6,6 @@ import com.springairag.api.dto.JsonRecordUpsertResponse;
 import com.springairag.api.dto.RetrievalConfig;
 import com.springairag.core.retrieval.RetrievalFilters;
 import com.springairag.api.dto.RetrievalResult;
-import com.springairag.core.config.EmbeddingProfileProvider;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.exception.DocumentNotFoundException;
 import com.springairag.core.retrieval.HybridRetrieverService;
@@ -18,9 +17,7 @@ import com.springairag.core.service.CollectionIdentityResolver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.transaction.PlatformTransactionManager;
 
-import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -62,8 +59,7 @@ class JsonRecordServiceMidTest {
                 mock(CollectionIdentityResolver.class),
                 new RagProperties(),
                 MAPPER,
-                mock(JdbcTemplate.class),
-                null);
+                mock(JdbcTemplate.class));
         service.setMutationService(mutationService);
     }
 

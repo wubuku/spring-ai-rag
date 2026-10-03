@@ -20,10 +20,8 @@ import com.springairag.core.config.RagStructuredRecordProperties;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.entity.RagDocumentVersion;
 import com.springairag.core.exception.DocumentNotFoundException;
-import com.springairag.core.exception.StructuredRecordConflictException;
 import com.springairag.core.logging.SensitiveDataMaskingConverter;
 import com.springairag.core.repository.RagDocumentRepository;
-import com.springairag.api.enums.EmbeddingPolicy;
 import com.springairag.core.embeddingjob.EmbeddingDispatchService;
 import com.springairag.core.retrieval.HybridRetrieverService;
 import com.springairag.core.retrieval.JsonbContainmentFilter;
@@ -34,15 +32,9 @@ import com.springairag.core.retrieval.RetrievalFilters;
 import com.springairag.core.retrieval.RetrievalOutcome;
 import com.springairag.core.retrieval.RetrievalScope;
 import com.springairag.core.security.ApiKeyCollectionAccess;
-import com.springairag.core.util.DigestUtils;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.dao.ConcurrencyFailureException;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.support.TransactionTemplate;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -57,8 +49,6 @@ import java.util.Objects;
 @Service
 public class JsonRecordService {
 
-    private static final int MAX_TRANSACTION_ATTEMPTS = 3;
-
     private final RagDocumentRepository documentRepository;
     private final DocumentVersionService documentVersionService;
     private final HybridRetrieverService hybridRetrieverService;
@@ -68,12 +58,9 @@ public class JsonRecordService {
     private final RagStructuredRecordProperties properties;
     private final ObjectMapper objectMapper;
     private final JdbcTemplate jdbcTemplate;
-    private final TransactionTemplate transactionTemplate;
     private final RetrievalFilterValidator filterValidator = new RetrievalFilterValidator();
-    private EmbeddingDispatchService dispatchService; // optional-claim: EmbeddingDispatchService 是无条件 @Service，null 臂只在不走 Spring 装配的构造路径可达；守卫真正的职责是策略不是 ASYNC、或没有输出槽时不入队。Batch 829 删掉了同一字段上会抛的 persist() 守卫，理由与 ExternalDocumentService 相同
     private DocumentMutationService mutationService;
     private DocumentLifecycleService lifecycleService; // optional-claim: DocumentLifecycleService 是无条件 @Service，null 臂只在不走 Spring 装配的构造路径可达；守卫真正的职责是生命周期读取缺席时该字段留空
-    private KeywordIndexPersistenceService keywordIndexPersistenceService; // optional-claim: KeywordIndexPersistenceService 是无条件 @Service，null 臂只在不走 Spring 装配的构造路径可达；守卫真正的职责是本地索引缺席时跳过协调
     private ExternalAddressRetirementService addressRetirementService; // optional-claim: ExternalAddressRetirementService 是无条件 @Service，null 臂只在不走 Spring 装配的构造路径可达；守卫真正的职责是退役校验缺席时放行，属于可跳过的旁路而非写入前置条件
 
     @Autowired
@@ -86,8 +73,7 @@ public class JsonRecordService {
             com.springairag.core.config.RagProperties ragProperties,
             ObjectMapper objectMapper,
             JdbcTemplate jdbcTemplate,
-            CollectionRetrievalScopeResolver retrievalScopeResolver,
-            @Nullable PlatformTransactionManager transactionManager) {
+            CollectionRetrievalScopeResolver retrievalScopeResolver) {
         this.documentRepository = documentRepository;
         this.documentVersionService = documentVersionService;
         this.hybridRetrieverService = hybridRetrieverService;
@@ -97,9 +83,6 @@ public class JsonRecordService {
         this.properties = ragProperties.getStructuredRecords();
         this.objectMapper = objectMapper;
         this.jdbcTemplate = jdbcTemplate;
-        this.transactionTemplate = transactionManager == null
-                ? null
-                : new TransactionTemplate(transactionManager);
     }
 
     JsonRecordService(
@@ -110,17 +93,11 @@ public class JsonRecordService {
             CollectionIdentityResolver collectionIdentityResolver,
             com.springairag.core.config.RagProperties ragProperties,
             ObjectMapper objectMapper,
-            JdbcTemplate jdbcTemplate,
-            @Nullable PlatformTransactionManager transactionManager) {
+            JdbcTemplate jdbcTemplate) {
         this(documentRepository, documentVersionService,
                 hybridRetrieverService, reRankingService,
                 collectionIdentityResolver, ragProperties, objectMapper, jdbcTemplate,
-                null, transactionManager);
-    }
-
-    @org.springframework.beans.factory.annotation.Autowired(required = false)
-    void setDispatchService(EmbeddingDispatchService dispatchService) {
-        this.dispatchService = dispatchService;
+                null);
     }
 
     @org.springframework.beans.factory.annotation.Autowired(required = false)
@@ -131,12 +108,6 @@ public class JsonRecordService {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     void setLifecycleService(DocumentLifecycleService lifecycleService) {
         this.lifecycleService = lifecycleService;
-    }
-
-    @org.springframework.beans.factory.annotation.Autowired(required = false)
-    void setKeywordIndexPersistenceService(
-            KeywordIndexPersistenceService keywordIndexPersistenceService) {
-        this.keywordIndexPersistenceService = keywordIndexPersistenceService;
     }
 
     @org.springframework.beans.factory.annotation.Autowired(required = false)
@@ -521,9 +492,6 @@ public class JsonRecordService {
                 true);
     }
 
-    private PersistedRecord persist(JsonRecordUpsertRequest request) {
-        return persist(request, null, null, EmbeddingPolicy.SKIP, null);
-    }
 
     /**
      * Imports an exported JSON record through the same validation, identity,
@@ -552,205 +520,12 @@ public class JsonRecordService {
         ApiKeyCollectionAccess.requireCollectionId(
                 collectionId, ApiKeyCollectionAccess.currentPolicy());
 
-        PersistedRecord persisted = persist(
-                request, imported.getOriginalFilename(), imported.getEnabled(),
-                EmbeddingPolicy.SKIP, null);
-        return toUpsertResponse(
-                persisted, new EmbeddingOutcome("NOT_REQUESTED", null, null));
-    }
-
-    private PersistedRecord persist(
-            JsonRecordUpsertRequest request,
-            String originalFilename,
-            Boolean enabledOverride,
-            EmbeddingPolicy policy,
-            EmbeddingDispatchService.Result[] queuedOut) {
-        if (transactionTemplate == null) {
-            PersistedRecord persisted = persistInTransaction(
-                    request, originalFilename, enabledOverride);
-            coordinateLocalIndex(persisted, policy);
-            enqueueAsync(persisted, policy, queuedOut);
-            return persisted;
-        }
-        RuntimeException lastFailure = null;
-        for (int attempt = 1; attempt <= MAX_TRANSACTION_ATTEMPTS; attempt++) {
-            try {
-                if (queuedOut != null) {
-                    queuedOut[0] = null;
-                }
-                PersistedRecord result = transactionTemplate.execute(status -> {
-                    PersistedRecord persisted = persistInTransaction(
-                            request, originalFilename, enabledOverride);
-                    coordinateLocalIndex(persisted, policy);
-                    enqueueAsync(persisted, policy, queuedOut);
-                    return persisted;
-                });
-                return Objects.requireNonNull(
-                        result, "transaction callback returned null");
-            } catch (RuntimeException failure) {
-                if (!isRetryableConcurrencyFailure(failure)) {
-                    throw failure;
-                }
-                lastFailure = failure;
-            }
-        }
-        throw new StructuredRecordConflictException(
-                "Concurrent structured-record write did not converge after "
-                        + MAX_TRANSACTION_ATTEMPTS + " attempts",
-                lastFailure);
-    }
-
-    private PersistedRecord persistInTransaction(
-            JsonRecordUpsertRequest request,
-            String originalFilename,
-            Boolean enabledOverride) {
-        String externalId = request.getExternalId().trim();
-        CollectionIdentityResolver.ActiveCollectionToken collectionToken =
-                beginActiveCollectionWrite(request.getCollectionId());
-        String contentHash = DigestUtils.sha256(request.getRetrievalText());
-        JsonNode payload = request.getJsonbPayload().deepCopy();
-
-        RagDocument doc = documentRepository
-                .findByCollectionIdAndDocumentTypeAndExternalId(
-                        request.getCollectionId(), RagDocument.JSON_RECORD, externalId)
-                .orElse(null);
-        boolean created = doc == null;
-        boolean contentChanged;
-        boolean payloadChanged;
-        boolean changed;
-
-        if (created) {
-            doc = new RagDocument();
-            doc.setCollectionId(request.getCollectionId());
-            doc.setDocumentType(RagDocument.JSON_RECORD);
-            doc.setExternalId(externalId);
-            doc.setContentHash(contentHash);
-            doc.setProcessingStatus("PENDING");
-            contentChanged = true;
-            payloadChanged = true;
-            changed = true;
-        } else {
-            contentChanged = !Objects.equals(doc.getContent(), request.getRetrievalText());
-            payloadChanged = !Objects.equals(doc.getJsonbPayload(), payload);
-            changed = contentChanged
-                    || payloadChanged
-                    || !Objects.equals(doc.getTitle(), request.getTitle())
-                    || !Objects.equals(doc.getSource(), request.getSource())
-                    || !Objects.equals(doc.getMetadata(), request.getMetadata())
-                    || (originalFilename != null
-                            && !Objects.equals(doc.getOriginalFilename(), originalFilename))
-                    || (enabledOverride != null
-                            && !Objects.equals(doc.getEnabled(), enabledOverride));
-        }
-
-        if (changed) {
-            doc.setTitle(request.getTitle());
-            doc.setContent(request.getRetrievalText());
-            doc.setSource(request.getSource());
-            doc.setMetadata(request.getMetadata());
-            doc.setJsonbPayload(payload);
-            doc.setSize(request.getRetrievalText().getBytes(StandardCharsets.UTF_8).length
-                    * 1L);
-            if (originalFilename != null) {
-                doc.setOriginalFilename(originalFilename);
-            }
-            if (enabledOverride != null) {
-                doc.setEnabled(enabledOverride);
-            }
-            if (contentChanged || created) {
-                doc.setContentHash(contentHash);
-                doc.setProcessingStatus("PENDING");
-                doc.setProcessingError(null);
-            }
-            doc = documentRepository.saveAndFlush(doc);
-        }
-
-        RagDocumentVersion version = null;
-        if (created || changed) {
-            version = documentVersionService.forceRecordVersion(
-                    doc,
-                    created ? "CREATE" : "UPDATE",
-                    created ? "JSON structured record created"
-                            : changedFields(contentChanged, payloadChanged, doc));
-        }
-        int versionNumber = version != null
-                ? version.getVersionNumber()
-                : documentVersionService.getLatestVersion(doc.getId())
-                        .map(RagDocumentVersion::getVersionNumber)
-                        .orElse(0);
-        confirmActiveCollectionWrite(collectionToken);
-        return new PersistedRecord(
-                doc,
-                created ? "CREATED" : changed ? "UPDATED" : "UNCHANGED",
-                contentChanged,
-                payloadChanged,
-                versionNumber);
-    }
-
-    private CollectionIdentityResolver.ActiveCollectionToken beginActiveCollectionWrite(
-            Long collectionId) {
-        return transactionTemplate == null
-                ? null
-                : collectionIdentityResolver.beginActiveWrite(collectionId);
-    }
-
-    private void confirmActiveCollectionWrite(
-            CollectionIdentityResolver.ActiveCollectionToken token) {
-        if (token != null) {
-            collectionIdentityResolver.confirmActiveWrite(token);
-        }
-    }
-
-    private boolean isRetryableConcurrencyFailure(RuntimeException failure) {
-        return failure instanceof DataIntegrityViolationException
-                || failure instanceof ConcurrencyFailureException;
-    }
-
-    private String changedFields(
-            boolean contentChanged, boolean payloadChanged, RagDocument doc) {
-        List<String> fields = new ArrayList<>();
-        if (contentChanged) {
-            fields.add("retrievalText");
-        }
-        if (payloadChanged) {
-            fields.add("jsonbPayload");
-        }
-        if (fields.isEmpty()) {
-            fields.add("metadata/title/source");
-        }
-        return "JSON structured record updated: " + String.join(",", fields);
-    }
-
-    private void enqueueAsync(
-            PersistedRecord persisted,
-            EmbeddingPolicy policy,
-            EmbeddingDispatchService.Result[] queuedOut) {
-        if (policy != EmbeddingPolicy.ASYNC || dispatchService == null || queuedOut == null) {
-            return;
-        }
-        queuedOut[0] = dispatchService.enqueueInCurrentTransaction(
-                persisted.document(),
-                persisted.contentChanged(),
-                false,
-                "JSON_UPSERT");
-    }
-
-    private void coordinateLocalIndex(
-            PersistedRecord persisted, EmbeddingPolicy policy) {
-        if (keywordIndexPersistenceService == null) {
-            return;
-        }
-        RagDocument document = persisted.document();
-        if (policy == EmbeddingPolicy.SKIP) {
-            if (persisted.contentChanged()
-                    || !Boolean.TRUE.equals(document.getEnabled())) {
-                keywordIndexPersistenceService.markNotRequested(document);
-            }
-            return;
-        }
-        if (Boolean.TRUE.equals(document.getEnabled())) {
-            keywordIndexPersistenceService.ensureCurrent(document);
-        }
+        return toUpsertResponse(mutationService.upsertJsonRecord(
+                request,
+                collectionId,
+                requestCollectionKey(request),
+                imported.getOriginalFilename(),
+                imported.getEnabled()));
     }
 
     private void validateRequest(JsonRecordUpsertRequest request) {
@@ -829,26 +604,6 @@ public class JsonRecordService {
         }
     }
 
-    private JsonRecordUpsertResponse toUpsertResponse(
-            PersistedRecord persisted, EmbeddingOutcome embedding) {
-        return new JsonRecordUpsertResponse(
-                persisted.document().getId(),
-                persisted.document().getCollectionId(),
-                collectionIdentityResolver.mapKeys(
-                        List.of(persisted.document().getCollectionId()))
-                        .get(persisted.document().getCollectionId()),
-                persisted.document().getExternalId(),
-                persisted.action(),
-                persisted.contentChanged(),
-                persisted.payloadChanged(),
-                persisted.versionNumber(),
-                embedding.status(),
-                embedding.profileKey(),
-                embedding.error(),
-                embedding.action(),
-                embedding.jobId(),
-                embedding.batchId());
-    }
 
     private JsonRecordUpsertResponse toUpsertResponse(
             DocumentMutationService.JsonMutationResult result) {
@@ -953,26 +708,6 @@ public class JsonRecordService {
             return value == null ? null : Long.valueOf(value);
         } catch (NumberFormatException ignored) {
             return null;
-        }
-    }
-
-    private record PersistedRecord(
-            RagDocument document,
-            String action,
-            boolean contentChanged,
-            boolean payloadChanged,
-            int versionNumber) {
-    }
-
-    private record EmbeddingOutcome(
-            String status,
-            String profileKey,
-            String error,
-            String action,
-            java.util.UUID jobId,
-            java.util.UUID batchId) {
-        EmbeddingOutcome(String status, String profileKey, String error) {
-            this(status, profileKey, error, null, null, null);
         }
     }
 

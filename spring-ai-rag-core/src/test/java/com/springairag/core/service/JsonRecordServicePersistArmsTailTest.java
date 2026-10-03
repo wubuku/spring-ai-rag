@@ -1,8 +1,6 @@
 package com.springairag.core.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.springairag.api.dto.DocumentRequest;
-import com.springairag.api.enums.EmbeddingPolicy;
 import com.springairag.api.dto.JsonRecordUpsertRequest;
 import com.springairag.core.config.EmbeddingProfileProvider;
 import com.springairag.core.config.RagProperties;
@@ -24,7 +22,6 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -69,7 +66,6 @@ class JsonRecordServicePersistArmsTailTest {
                 new RagProperties(),
                 MAPPER,
                 mock(JdbcTemplate.class),
-                null,
                 null);
         service.setLifecycleService(lifecycle);
         return service;
@@ -127,73 +123,6 @@ class JsonRecordServicePersistArmsTailTest {
         Assertions.assertEquals("kb-7", detail.collectionKey());
     }
 
-    @Test
-    void legacyOneArgPersistCreatesRecord() throws Exception {
-        when(documentRepository
-                .findByCollectionIdAndDocumentTypeAndExternalId(
-                        7L, RagDocument.JSON_RECORD, "rec-1"))
-                .thenReturn(Optional.empty());
-        when(resolver.beginActiveWrite(7L))
-                .thenReturn(new CollectionIdentityResolver.ActiveCollectionToken(7L, 0L));
-        when(documentRepository.saveAndFlush(any(RagDocument.class)))
-                .thenAnswer(invocation -> {
-                    RagDocument doc = invocation.getArgument(0);
-                    doc.setId(41L);
-                    return doc;
-                });
-        when(versionService.forceRecordVersion(
-                any(RagDocument.class), anyString(), anyString()))
-                .thenAnswer(invocation -> {
-                    var version = new RagDocumentVersion();
-                    version.setVersionNumber(1);
-                    return version;
-                });
-
-        Method persist = JsonRecordService.class.getDeclaredMethod(
-                "persist", JsonRecordUpsertRequest.class);
-        persist.setAccessible(true);
-        Object persisted = persist.invoke(
-                serviceWithLifecycle(null), request());
-
-        Assertions.assertNotNull(persisted);
-    }
-
-    @Test
-    void persistFiveArgDetectsChangedOriginalFilenameAndEnabledOverride()
-            throws Exception {
-        RagDocument existing = requestShapedDoc();
-        existing.setOriginalFilename("old.pdf");
-        existing.setEnabled(Boolean.TRUE);
-        when(documentRepository
-                .findByCollectionIdAndDocumentTypeAndExternalId(
-                        7L, RagDocument.JSON_RECORD, "rec-1"))
-                .thenReturn(Optional.of(existing));
-        when(resolver.beginActiveWrite(7L))
-                .thenReturn(new CollectionIdentityResolver.ActiveCollectionToken(7L, 0L));
-        when(documentRepository.saveAndFlush(any(RagDocument.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
-        when(versionService.forceRecordVersion(
-                any(RagDocument.class), anyString(), anyString()))
-                .thenAnswer(invocation -> {
-                    var version = new RagDocumentVersion();
-                    version.setVersionNumber(2);
-                    return version;
-                });
-
-        Method persist = JsonRecordService.class.getDeclaredMethod(
-                "persist", JsonRecordUpsertRequest.class, String.class,
-                Boolean.class, EmbeddingPolicy.class,
-                com.springairag.core.embeddingjob.EmbeddingDispatchService.Result[].class);
-        persist.setAccessible(true);
-        Object persisted = persist.invoke(
-                serviceWithLifecycle(null), request(), "new-name.pdf",
-                Boolean.FALSE, EmbeddingPolicy.SKIP, (Object) null);
-
-        Assertions.assertNotNull(persisted);
-        Assertions.assertEquals("new-name.pdf", existing.getOriginalFilename());
-        Assertions.assertEquals(Boolean.FALSE, existing.getEnabled());
-    }
-
     private RagDocument requestShapedDoc() {
         RagDocument doc = new RagDocument();
         doc.setId(41L);
@@ -235,7 +164,6 @@ class JsonRecordServicePersistArmsTailTest {
                 new RagProperties(),
                 failingMapper,
                 mock(JdbcTemplate.class),
-                null,
                 null);
         Method method = JsonRecordService.class.getDeclaredMethod(
                 "serializePayload",

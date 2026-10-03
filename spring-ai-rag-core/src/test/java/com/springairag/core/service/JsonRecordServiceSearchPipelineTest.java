@@ -2,12 +2,10 @@ package com.springairag.core.service;
 
 import com.springairag.api.dto.RetrievalConfig;
 import com.springairag.api.dto.RetrievalResult;
-import com.springairag.core.config.EmbeddingProfileProvider;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.retrieval.HybridRetrieverService;
 import com.springairag.core.retrieval.RetrievalFilters;
 import com.springairag.core.retrieval.RetrievalOutcome;
-import com.springairag.api.enums.CollectionScopeMode;
 import com.springairag.core.retrieval.RetrievalScope;
 import com.springairag.core.retrieval.ReRankingService;
 import com.springairag.core.repository.RagDocumentRepository;
@@ -15,21 +13,17 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.transaction.PlatformTransactionManager;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -60,8 +54,7 @@ class JsonRecordServiceSearchPipelineTest {
                 resolver,
                 new RagProperties(),
                 new com.fasterxml.jackson.databind.ObjectMapper(),
-                mock(JdbcTemplate.class),
-                null);
+                mock(JdbcTemplate.class));
     }
 
     private RetrievalResult ranked(String documentId, double score) {

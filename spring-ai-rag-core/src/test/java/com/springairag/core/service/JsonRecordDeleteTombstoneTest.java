@@ -9,7 +9,6 @@ import com.springairag.core.entity.RagDocument;
 import com.springairag.core.exception.DocumentRevisionConflictException;
 import com.springairag.core.repository.RagDocumentRepository;
 import com.springairag.core.repository.RagEmbeddingRepository;
-import com.springairag.core.config.EmbeddingProfileProvider;
 import com.springairag.core.retrieval.HybridRetrieverService;
 import com.springairag.core.embeddingjob.EmbeddingDispatchService;
 import com.springairag.core.retrieval.ReRankingService;
@@ -18,21 +17,15 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.TransactionStatus;
 
 import java.time.LocalDateTime;
-import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
@@ -96,8 +89,7 @@ class JsonRecordDeleteTombstoneTest {
                 resolver,
                 new RagProperties(),
                 new ObjectMapper(),
-                jdbcTemplate,
-                mock(PlatformTransactionManager.class));
+                jdbcTemplate);
         jsonRecordService.setMutationService(mutationService);
 
         mutationServiceForTombstone = new DocumentMutationService(

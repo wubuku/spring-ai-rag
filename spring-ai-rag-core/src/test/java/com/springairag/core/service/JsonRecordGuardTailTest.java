@@ -13,12 +13,10 @@ import com.springairag.core.repository.RagDocumentRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.transaction.PlatformTransactionManager;
 
 import java.util.Map;
 import java.util.Optional;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -83,7 +81,6 @@ class JsonRecordGuardTailTest {
                 properties,
                 MAPPER,
                 mock(JdbcTemplate.class),
-                null,
                 null);
         service.setAddressRetirementService(addressRetirementService);
     }

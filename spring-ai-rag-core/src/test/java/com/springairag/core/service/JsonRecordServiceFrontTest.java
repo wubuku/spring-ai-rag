@@ -2,16 +2,13 @@ package com.springairag.core.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.springairag.api.dto.JsonRecordUpsertRequest;
-import com.springairag.core.config.EmbeddingProfileProvider;
 import com.springairag.core.config.RagProperties;
-import com.springairag.core.embeddingjob.EmbeddingDispatchService;
 import com.springairag.core.retrieval.HybridRetrieverService;
 import com.springairag.core.retrieval.ReRankingService;
 import com.springairag.core.repository.RagDocumentRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.transaction.PlatformTransactionManager;
 
 import java.util.List;
 
@@ -43,8 +40,7 @@ class JsonRecordServiceFrontTest {
                 mock(CollectionIdentityResolver.class),
                 properties,
                 MAPPER,
-                mock(JdbcTemplate.class),
-                null);
+                mock(JdbcTemplate.class));
     }
 
     private JsonRecordUpsertRequest request() {
@@ -104,17 +100,12 @@ class JsonRecordServiceFrontTest {
                 mock(CollectionIdentityResolver.class),
                 properties,
                 MAPPER,
-                mock(JdbcTemplate.class),
-                null);
+                mock(JdbcTemplate.class));
 
         assertDoesNotThrow(() -> {
-            wired.setDispatchService(
-                    mock(EmbeddingDispatchService.class));
             wired.setMutationService(mock(DocumentMutationService.class));
             wired.setLifecycleService(
                     mock(DocumentLifecycleService.class));
-            wired.setKeywordIndexPersistenceService(
-                    mock(KeywordIndexPersistenceService.class));
             wired.setAddressRetirementService(
                     mock(ExternalAddressRetirementService.class));
         });

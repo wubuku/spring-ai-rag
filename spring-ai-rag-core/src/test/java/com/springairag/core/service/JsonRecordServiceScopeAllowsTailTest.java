@@ -34,7 +34,6 @@ class JsonRecordServiceScopeAllowsTailTest {
                 new RagProperties(),
                 new com.fasterxml.jackson.databind.ObjectMapper(),
                 mock(org.springframework.jdbc.core.JdbcTemplate.class),
-                null,
                 null);
     }
 
