@@ -27,7 +27,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -131,31 +130,6 @@ class RagCollectionCloneCoordinatorTest {
                 requests.getAllValues().get(1).getContent());
         // 协调器路径不直接批量保存。
         verify(documentRepository, never()).saveAllAndFlush(anyList());
-    }
-
-    @Test
-    void legacyPathRecordsVersionsPerClonedDocument() {
-        stubSourceCollection();
-        RagDocument doc1 = sourceDocument(10L, "Doc 1");
-        when(documentRepository.findAllByCollectionId(1L))
-                .thenReturn(List.of(doc1));
-        when(documentRepository.saveAllAndFlush(anyList()))
-                .thenAnswer(invocation -> invocation.getArgument(0));
-
-        RagCollectionService service =
-                new RagCollectionService(collectionRepository, documentRepository, null);
-        service.setDocumentVersionService(documentVersionService);
-
-        Optional<CollectionCloneResponse> result =
-                service.cloneCollection(1L, "clone-key");
-
-        assertEquals(1, result.get().documentsCloned());
-        verify(documentVersionService).forceRecordVersion(
-                any(RagDocument.class), eq("CREATE"),
-                eq("Cloned from document 10 in collection 1"));
-        verify(documentMutationService, never()).createLocal(
-                any(), any(), any(), any(Boolean.class), anyString(),
-                any(), any(), any(), any());
     }
 
     @Test

@@ -14,7 +14,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -39,12 +38,15 @@ class RagCollectionServiceTest {
 
     @Mock
     private AuditLogService auditLogService;
+    @Mock
+    private DocumentMutationService documentMutationService;
 
     private RagCollectionService service;
 
     @BeforeEach
     void setUp() {
         service = new RagCollectionService(collectionRepository, documentRepository, auditLogService);
+        service.setDocumentMutationService(documentMutationService);
         lenient().when(collectionRepository.advanceActiveVersion(
                 anyLong(), anyLong())).thenReturn(1);
     }
@@ -172,7 +174,8 @@ class RagCollectionServiceTest {
                     () -> service.deleteCollection(1L));
 
             verify(documentRepository, never()).countByCollectionId(1L);
-            verify(documentRepository, never()).clearCollectionIdByCollectionId(1L);
+            verify(documentMutationService, never())
+                    .unlinkLocalDocumentsFromCollection(anyLong());
             verify(collectionRepository, never()).softDeleteIfVersion(
                     anyLong(), anyLong(), any(LocalDateTime.class));
         }
@@ -186,6 +189,8 @@ class RagCollectionServiceTest {
             when(collectionRepository.softDeleteIfVersion(
                     eq(1L), eq(1L), any(LocalDateTime.class))).thenReturn(1);
             when(documentRepository.countByCollectionId(1L)).thenReturn(5L);
+            when(documentMutationService.unlinkLocalDocumentsFromCollection(1L))
+                    .thenReturn(5);
 
             Optional<RagCollectionService.DeleteResult> result = service.deleteCollection(1L);
 
@@ -193,7 +198,8 @@ class RagCollectionServiceTest {
             assertEquals(1L, result.get().id());
             assertEquals(5L, result.get().documentsUnlinked());
 
-            verify(documentRepository).clearCollectionIdByCollectionId(1L);
+            // 解除归属走变更层（本地文档协调器），不再由本服务直接清列。
+            verify(documentMutationService).unlinkLocalDocumentsFromCollection(1L);
             verify(collectionRepository).softDeleteIfVersion(
                     eq(1L), eq(1L), any(LocalDateTime.class));
             verify(auditLogService).logDelete(eq("Collection"), eq("1"), anyString());
@@ -213,7 +219,8 @@ class RagCollectionServiceTest {
 
             assertTrue(result.isPresent());
             assertEquals(0L, result.get().documentsUnlinked());
-            verify(documentRepository, never()).clearCollectionIdByCollectionId(anyLong());
+            verify(documentMutationService, never())
+                    .unlinkLocalDocumentsFromCollection(anyLong());
             verify(collectionRepository).softDeleteIfVersion(
                     eq(1L), eq(1L), any(LocalDateTime.class));
         }
@@ -407,7 +414,6 @@ class RagCollectionServiceTest {
                 if (c.getId() == null) c.setId(5L);
                 return c;
             });
-            when(documentRepository.saveAllAndFlush(anyList())).thenAnswer(inv -> inv.getArgument(0));
 
             Optional<CollectionCloneResponse> result =
                     service.cloneCollection(1L, "clone-with-documents");
@@ -419,16 +425,9 @@ class RagCollectionServiceTest {
             assertEquals(1L, result.get().sourceCollectionId());
             assertEquals(2, result.get().documentsCloned());
 
-            // Verify documents are saved with PENDING status and new collection id
-            @SuppressWarnings("unchecked")
-            ArgumentCaptor<List<RagDocument>> docsCaptor = ArgumentCaptor.forClass(List.class);
-            verify(documentRepository).saveAllAndFlush(docsCaptor.capture());
-            List<RagDocument> savedDocs = docsCaptor.getValue();
-            assertEquals(2, savedDocs.size());
-            savedDocs.forEach(doc -> {
-                assertEquals("PENDING", doc.getProcessingStatus());
-                assertEquals(5L, doc.getCollectionId());
-            });
+            // 克隆出的文档交给本地创建协调器，本服务不再自己 saveAllAndFlush
+            // （协调器路径的参数级覆盖在 RagCollectionCloneCoordinatorTest）。
+            verify(documentRepository, never()).saveAllAndFlush(anyList());
 
             // Verify audit log
             verify(auditLogService).logCreate(eq("Collection"), eq("5"), anyString(), anyMap());
