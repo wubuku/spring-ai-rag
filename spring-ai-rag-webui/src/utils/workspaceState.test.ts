@@ -73,7 +73,7 @@ describe('workspaceState', () => {
       ['api_key 赋值', { query: 'api_key=abc123' }],
       ['api-key 赋值', { query: 'api-key: abc123' }],
     ])('拒绝落盘：%s', (_label, value) => {
-      expect(writeWorkspaceState('draft', value)).toBe(false);
+      expect(writeWorkspaceState('draft', value)).toBe('looks-like-credential');
       expect(readWorkspaceState('draft', acceptAnything)).toBeNull();
     });
 
@@ -81,20 +81,20 @@ describe('workspaceState', () => {
       // 误报方向：用户在问怎么配 API Key 的时候，草稿必须存得下来。
       // 正则要求赋值符，所以"api key 怎么配置"这种问句不该命中。
       const draft = { query: 'api key 怎么配置' };
-      expect(writeWorkspaceState('draft', draft)).toBe(true);
+      expect(writeWorkspaceState('draft', draft)).toBe('ok');
       expect(readWorkspaceState('draft', acceptAnything)).toEqual(draft);
     });
 
     it('放行中文、表情与长查询这类高频真实输入', () => {
       const draft = { query: '第 3 季度报表 📊 蓝色手机壳' };
-      expect(writeWorkspaceState('draft', draft)).toBe(true);
+      expect(writeWorkspaceState('draft', draft)).toBe('ok');
       expect(readWorkspaceState('draft', acceptAnything)).toEqual(draft);
     });
 
     it('写入被拒时连带清掉同键的旧值', () => {
       // 旧值可能本身就是上一次没拦住的凭据；只拒新值却留着旧值等于没拦。
-      expect(writeWorkspaceState('draft', { query: 'safe' })).toBe(true);
-      expect(writeWorkspaceState('draft', { query: SK_LIKE })).toBe(false);
+      expect(writeWorkspaceState('draft', { query: 'safe' })).toBe('ok');
+      expect(writeWorkspaceState('draft', { query: SK_LIKE })).toBe('looks-like-credential');
       expect(window.sessionStorage.getItem(`${STORAGE_PREFIX}draft`)).toBeNull();
     });
   });
@@ -103,8 +103,8 @@ describe('workspaceState', () => {
     it('用 UTF-8 字节数而不是字符数判断', () => {
       // 一个汉字是 3 字节：3000 个字是 9000 字节，超过 8KB 上限；
       // 若按字符数算，3000 < 8192 就会被放行。
-      expect(writeWorkspaceState('draft', { query: '字'.repeat(3_000) })).toBe(false);
-      expect(writeWorkspaceState('draft', { query: '字'.repeat(2_000) })).toBe(true);
+      expect(writeWorkspaceState('draft', { query: '字'.repeat(3_000) })).toBe('too-large');
+      expect(writeWorkspaceState('draft', { query: '字'.repeat(2_000) })).toBe('ok');
     });
 
     it('读到的值超过上限时清理并当作没有', () => {
@@ -119,8 +119,8 @@ describe('workspaceState', () => {
     it('接受调用方自定义的上限', () => {
       // 默认 8KB 装不下，给 routes 用的 16KB 装得下。
       const large = { value: 'x'.repeat(9 * 1024) };
-      expect(writeWorkspaceState('draft', large)).toBe(false);
-      expect(writeWorkspaceState('draft', large, 16 * 1024)).toBe(true);
+      expect(writeWorkspaceState('draft', large)).toBe('too-large');
+      expect(writeWorkspaceState('draft', large, 16 * 1024)).toBe('ok');
     });
   });
 
@@ -162,10 +162,10 @@ describe('workspaceState', () => {
       });
     };
 
-    it('读返回 null、写返回 false', () => {
+    it('存储不可用时读返回 null、写报告 storage-unavailable', () => {
       denyStorage();
       expect(readWorkspaceState('draft', acceptAnything)).toBeNull();
-      expect(writeWorkspaceState('draft', { value: 'safe' })).toBe(false);
+      expect(writeWorkspaceState('draft', { value: 'safe' })).toBe('storage-unavailable');
     });
 
     it('清理类操作不抛异常', () => {

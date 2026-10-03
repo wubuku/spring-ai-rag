@@ -62,25 +62,40 @@ export function readWorkspaceState<T>(
   }
 }
 
+/**
+ * 一次写入的结果。调用方据此区分"没写进去"的原因——
+ * 凭据形状被拒是安全策略，调用方需要能把它告诉用户，
+ * 否则用户只会看到草稿莫名消失。
+ */
+export type WorkspaceWriteOutcome =
+  | 'ok'
+  | 'too-large'
+  | 'looks-like-credential'
+  | 'storage-unavailable';
+
 export function writeWorkspaceState(
   key: string,
   value: unknown,
   maxBytes = DEFAULT_MAX_BYTES,
-): boolean {
+): WorkspaceWriteOutcome {
   const target = storage();
-  if (!target) return false;
+  if (!target) return 'storage-unavailable';
   const storageKey = `${STORAGE_PREFIX}${key}`;
   try {
     const raw = JSON.stringify(value);
-    if (byteLength(raw) > maxBytes || CREDENTIAL_PATTERN.test(raw)) {
+    if (byteLength(raw) > maxBytes) {
       target.removeItem(storageKey);
-      return false;
+      return 'too-large';
+    }
+    if (CREDENTIAL_PATTERN.test(raw)) {
+      target.removeItem(storageKey);
+      return 'looks-like-credential';
     }
     target.setItem(storageKey, raw);
-    return true;
+    return 'ok';
   } catch {
     target.removeItem(storageKey);
-    return false;
+    return 'storage-unavailable';
   }
 }
 

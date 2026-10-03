@@ -93,6 +93,7 @@ export function Chat() {
   const lastSentMessageRef = useRef<string | undefined>(undefined);
   const skipHistoryLoadForSessionRef = useRef<string | undefined>(undefined);
   const draftKeyRef = useRef(draftKey);
+  const credentialDraftWarnedRef = useRef(false);
   const { addSession } = useChatSessions();
   const addSessionRef = useRef(addSession);
   addSessionRef.current = addSession;
@@ -285,9 +286,23 @@ export function Chat() {
       draftKeyRef.current = draftKey;
       return;
     }
-    if (input) writeWorkspaceState(draftKey, input);
-    else removeWorkspaceState(draftKey);
-  }, [draftKey, input]);
+    if (input) {
+      const outcome = writeWorkspaceState(draftKey, input);
+      // 草稿随每次按键重写，所以只在"能存 → 不能存"的跃迁上提示一次；
+      // 否则用户每敲一个字符就会挨一次 toast。
+      if (outcome === 'looks-like-credential') {
+        if (!credentialDraftWarnedRef.current) {
+          credentialDraftWarnedRef.current = true;
+          showToast(t('common.draftNotSavedCredential'), 'error');
+        }
+      } else {
+        credentialDraftWarnedRef.current = false;
+      }
+    } else {
+      credentialDraftWarnedRef.current = false;
+      removeWorkspaceState(draftKey);
+    }
+  }, [draftKey, input, showToast, t]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });

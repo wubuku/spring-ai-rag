@@ -89,6 +89,7 @@ export function Search() {
     );
   const { history, addQuery, removeItem, clearHistory, showHistory, setShowHistory } = useSearchHistory();
   const historyRef = useRef<HTMLDivElement>(null);
+  const credentialDraftWarnedRef = useRef(false);
 
   useEffect(() => {
     const draft = readWorkspaceState('search-draft', isSearchDraft);
@@ -119,18 +120,30 @@ export function Search() {
       && current.selectedCollectionKeys.join('\0')
         === urlState.selectedCollectionKeys.join('\0');
     if (clean) {
+      credentialDraftWarnedRef.current = false;
       removeWorkspaceState('search-draft');
     } else {
-      writeWorkspaceState('search-draft', {
+      const outcome = writeWorkspaceState('search-draft', {
         ...current,
         baseSubmittedSearch: location.search,
       } satisfies SearchDraft);
+      // 与 Chat 同一个问题：草稿每次改动都重写，只在跃迁上提示一次。
+      if (outcome === 'looks-like-credential') {
+        if (!credentialDraftWarnedRef.current) {
+          credentialDraftWarnedRef.current = true;
+          showToast(t('common.draftNotSavedCredential'), 'error');
+        }
+      } else {
+        credentialDraftWarnedRef.current = false;
+      }
     }
   }, [
     location.search,
     query,
     scopeMode,
     selectedCollectionKeys,
+    showToast,
+    t,
     urlState,
     useHybrid,
   ]);

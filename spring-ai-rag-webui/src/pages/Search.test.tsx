@@ -588,4 +588,52 @@ describe('Search guards, history panel, provenance navigation and draft validati
     fireEvent.click(historyButton);
     expect(screen.getByText('manual')).toBeInTheDocument();
   });
+
+  describe('草稿里的疑似凭据', () => {
+    it('告知用户草稿没有保存，而不是让草稿默默消失', () => {
+      renderSearch();
+      const input = screen.getByPlaceholderText(/search.placeholder/);
+
+      fireEvent.change(input, { target: { value: 'api_key=abc123' } });
+
+      // 不保存是对的（那会把密钥留在浏览器里），但用户必须知道原因，
+      // 否则他只会看到"草稿怎么没了"。
+      expect(screen.getByText('common.draftNotSavedCredential')).toBeInTheDocument();
+      expect(window.sessionStorage.getItem('spring-ai-rag:webui:v1:search-draft')).toBeNull();
+    });
+
+    it('继续输入不重复弹提示，恢复正常后再次命中才再提示一次', () => {
+      renderSearch();
+      const input = screen.getByPlaceholderText(/search.placeholder/);
+
+      fireEvent.change(input, { target: { value: 'api_key=abc' } });
+      expect(screen.getAllByText('common.draftNotSavedCredential')).toHaveLength(1);
+
+      // 草稿每敲一个字符就重写一次；如果不做跃迁去重，
+      // 用户每按一次键就会挨一条 toast。
+      fireEvent.change(input, { target: { value: 'api_key=abcd' } });
+      fireEvent.change(input, { target: { value: 'api_key=abcde' } });
+      expect(screen.getAllByText('common.draftNotSavedCredential')).toHaveLength(1);
+
+      // toast 本身有停留时间，不会因为状态恢复就消失；
+      // 该断言的是"没有新增第二条"，不是"提示立刻不见了"。
+      fireEvent.change(input, { target: { value: '正常查询' } });
+      expect(screen.getAllByText('common.draftNotSavedCredential')).toHaveLength(1);
+
+      // 去重是按"一段连续命中"算的：恢复正常后重新命中仍要再提示一次。
+      fireEvent.change(input, { target: { value: 'api_key=zzz' } });
+      expect(screen.getAllByText('common.draftNotSavedCredential')).toHaveLength(2);
+    });
+
+    it('不含凭据形状的查询照常存草稿，不弹提示', () => {
+      renderSearch();
+      const input = screen.getByPlaceholderText(/search.placeholder/);
+
+      fireEvent.change(input, { target: { value: 'api key 怎么配置' } });
+
+      expect(screen.queryByText('common.draftNotSavedCredential')).not.toBeInTheDocument();
+      expect(window.sessionStorage.getItem('spring-ai-rag:webui:v1:search-draft'))
+        .toContain('api key');
+    });
+  });
 });

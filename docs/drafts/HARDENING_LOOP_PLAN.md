@@ -478,6 +478,105 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
+### Batch 844（已交付，WebUI UX + 一次重要的度量口径更正）
+
+- 分支：`feature/draft-credential-notice-20261007`
+- 主题：先做后端测试覆盖普查，**结论推翻了普查本身**，然后据此转向
+  WebUI 的一个真实 UX 缺陷。
+- **后端普查：按"主类 ↔ 同名 Test"配对的密度口径是错的。**
+  先用它排出 `DocumentMutationService`（1903 行 / 14 条）与
+  `ApiKeyManagementService`（1382 行 / 12 条），看着像全树最低。
+  按纪律去查"这两个方法真的没人调用吗"，结果 **`ApiKeyManagementServiceTest`
+  对 `prepareRotation` / `getRotation` / `completeRotation` /
+  `cancelRotation` / `cleanupCredentialRotations` 的调用全是 0 次**——
+  看起来坐实了缺口。**再横跨全测试树一查**（Batch 835 的老教训）：
+  引用 `prepareRotation` 的有 **14 个测试文件**，其中
+  `ApiKeyRotationLifecycleTest`、`ApiKeyManagementServiceRotationLifecycleTest`、
+  `ApiKeyRotationGuardsTailTest`、`ApiKeyRotationLedgerTailTest` 等都是
+  专门覆盖轮换的。**覆盖根本不缺，是被拆到了十几个文件里，而按主类名配对
+  的口径一个都配不上。**
+- 改用主题聚合口径（取每个主类的公开方法名，反查所有引用它的测试文件的
+  `testcase` 总数）重算，**排序再次反转**：
+  | 密度 | 用例 | 行数 | 主类 | 判断 |
+  |---|---|---|---|---|
+  | 0.029 | 7 | 238 | `OpenApiConfig` | `@Configuration`，不为凑覆盖率写测试 |
+  | 0.036 | 3 | 84 | `AsyncConfig` | 同上 |
+  | 0.067 | 11 | 165 | `RagWebSecurityConfiguration` | 唯一值得看的业务项 |
+  | 0.073 | 45 | 616 | `ApiPrincipalExpiryAlertService`（7 个文件） | 尚可 |
+  - 榜首**几乎全是 Spring 配置类**。而 `ApiKeyManagementService` 与
+    `DocumentMutationService` **双双掉出前 16**。
+  - **结论：后端测试覆盖比"按主类名配对"显示的扎实得多，没有值得动的
+    大块缺口。** 不去给 `@Configuration` 补凑数用例（用户明令禁止）。
+  - **口径教训（写死在这里，以后别再犯）**：后端一个主类的测试会散在
+    十几个文件里（`*Test` / `*TailTest` / `*MatrixTest` / `*LifecycleTest` …），
+    只有 WebUI 才是 1:1 配对。后端要么按主题聚合，要么就别用密度排序。
+- **转向 WebUI 的一个真实 UX 缺陷**（优先级第 2 位）：
+  `Chat.tsx` / `Search.tsx` / `Files.tsx` 共 4 处 `writeWorkspaceState`
+  调用**全部不检查返回值**。用户在搜索框或对话框里输入含凭据形状的内容
+  （比如查文档时粘贴 `api_key=…`）→ 草稿**静默不保存**，界面毫无提示；
+  更糟的是 `writeWorkspaceState` 拒绝时会**主动 `removeItem` 清掉同键旧值**，
+  所以用户从"新草稿没存"变成"**旧草稿也被清空**"，仍然不知道原因。
+- 改动：
+  - `writeWorkspaceState` 返回值从 `boolean` 改成 `WorkspaceWriteOutcome`
+    （`'ok' | 'too-large' | 'looks-like-credential' | 'storage-unavailable'`）。
+    原来 `byteLength > maxBytes || CREDENTIAL_PATTERN.test(raw)` 合并成一个
+    条件，只能给出"失败"；拆成两个 `if` 才能区分原因。
+  - `Chat.tsx` / `Search.tsx` 在命中 `looks-like-credential` 时弹
+    `common.draftNotSavedCredential`；`Files.tsx` 两处写的是集合选择与面板
+    宽度，不可能命中凭据形状，保持忽略返回值。
+  - **关键 UX 细节**：草稿在 `useEffect` 里随每次按键重写，如果命中就弹
+    toast，用户会**每敲一个字符挨一次提示**。所以用一个 ref 只在
+    "能存 → 不能存"的**跃迁**上提示一次，恢复正常内容后重置——去重是按
+    "一段连续命中"算的，不是一次性的。
+  - locale 加 1 键（en + zh-CN），`check-i18n-keys` 报 706 个键、双语一致。
+- 测试：Batch 842 那 29 条的断言从 `toBe(false)` 改成精确的拒绝原因
+  （`toBe('looks-like-credential')` / `toBe('too-large')` /
+  `toBe('storage-unavailable')`）——**断言变精确了，不是倒退**；
+  另加 6 条新用例（Chat 3、Search 3），直接用**真实 `ToastProvider`**
+  断言 toast 文本，并同时断言 sessionStorage 里确实没写进去。
+- **变异实验只做成 1 个（如实登记，没做成的不算数）**：
+  | 变异 | 结果 |
+  |---|---|
+  | 凭据拦截整体失效（放行一切） | ✅ **精确 5 红**，还原后 5 绿 |
+  | Chat 去掉跃迁去重 | ⚠️ **做不成** |
+  | Chat 完全不提示 | 未做 |
+  | Chat 警告后永不重置 | 未做 |
+  | Search 不做跃迁去重 | 未做 |
+  - **做不成的原因是工具层，不是用例不行**：让 `getAllByText(...).toHaveLength(1)`
+    这类断言失败时，Testing Library 会把**整个 Chat 页面 DOM** 打进错误报告，
+    变异跑一条用例**超过 5 分钟仍未结束**（跑了三轮、共浪费约 15 分钟后停手）。
+    同一条用例在未变异时只需 2.45 秒跑完两个文件。
+  - **后果必须说清楚**：那 5 条新用例目前**只有"绿灯"这一个证据**。
+    接手的人应该把这 4 个变异补上，**并且要绕开这个打印问题**——例如先用
+    `document.querySelectorAll(...).length` 这类不触发 DOM dump 的断言，
+    或者把断言挪到不依赖 Testing Library 报错格式的地方。
+  - 顺带查清了一件**可能是真问题**的事：P1 变异下长时间不结束，第一反应是
+    "我把 `showToast` 加进 effect 依赖数组会不会造成死循环"。查了
+    `Toast.tsx:55`——`showToast` 是 `useCallback(..., [])`，**引用稳定**，
+    不构成循环。**排除。**
+- **另一个必须记的事故：变异残留差点污染交付。**
+  中途我 `task_stop` 了一个正在跑变异的任务——**变异已经写进文件，而还原用的
+  `cp` 还没执行**。随后我做的"无残留检查"只 grep 了
+  `credentialDraftWarnedRef` 是否存在，守卫在不在根本没查，于是**把变异态
+  当成了正常态，还 `git add` 暂存了**。是最后核对 `git diff` 时逐行读生产
+  代码改动才发现 `Chat.tsx` 少了 `if (!credentialDraftWarnedRef.current)`。
+  两次都靠 diff 抓回来，没有流到提交里。教训三条：
+  1. **中断变异任务后必须立刻核对源文件内容，不能只查符号存在性。**
+  2. **"grep 到符号"不等于"逻辑完整"**——要核对的是守卫本身，不是它提到的变量。
+  3. 变异前后的备份要**在变异之前**拍，并且还原后要 `grep` 关键行（我这次
+     补了 `grep -q "$GUARD" "$CH" && echo 已还原` 才没出第三次事故）。
+- **我自己写错的 2 处**（都是测试数据/断言，不是生产代码）：
+  1. Chat 的去重用例用了 `sk-abcdefg`（8 个字符）。门槛是
+     `sk-[a-z0-9_-]{12,}`，**根本没到 12 位**，所以压根不会被当成凭据，
+     toast 当然不出现。测试数据必须够长才有意义。
+  2. 我以为"改回正常内容 → toast 会消失"。**toast 有停留时间，不会因为
+     状态恢复而消失**。该断言的是"没有新增第二条"（`getAllByText(...).length`
+     保持 1），不是"提示不见了"。顺带发现最后一步应该是 **2 条**——
+     恢复正常后重新命中**应该**再提示一次，这正是"去重不是永久的"的证明。
+- 验证：WebUI 77 文件 / **902 用例**全绿（896 → 902）；`npm run lint`
+  九条门禁全过（门禁自测 263 未变）；`typecheck` 干净；`build` 通过；
+  docs 链 **16/16**。
+
 ### Batch 843（已交付，WebUI 测试加固）
 
 - 分支：`feature/api-key-rotation-tests-20261007`

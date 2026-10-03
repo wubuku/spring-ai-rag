@@ -1061,4 +1061,45 @@ describe('Chat stop flow, exports, feedback and callback guards', () => {
     })).not.toBeInTheDocument();
     window.localStorage.removeItem('chat_sessions');
   });
+
+  it('tells the user when a chat draft was withheld for looking like a credential', () => {
+    renderChat();
+    const textarea = screen.getByPlaceholderText(/chat.placeholder/);
+
+    fireEvent.change(textarea, { target: { value: 'sk-abcdefghijkl' } });
+
+    expect(screen.getByText('common.draftNotSavedCredential')).toBeInTheDocument();
+    // 密钥不落盘是对的；这条断言守住"确实没写进 sessionStorage"。
+    expect(window.sessionStorage.getItem('spring-ai-rag:webui:v1:chat-draft:new')).toBeNull();
+  });
+
+  it('warns about a withheld draft only once per run of credential-looking input', () => {
+    renderChat();
+    const textarea = screen.getByPlaceholderText(/chat.placeholder/);
+
+    // 门槛是 sk- 加至少 12 个字符；写短了根本不会被当成凭据，
+    // 那条路径已由 workspaceState 的边界用例守住。
+    fireEvent.change(textarea, { target: { value: 'sk-abcdefghijkl' } });
+    fireEvent.change(textarea, { target: { value: 'sk-abcdefghijklm' } });
+    expect(screen.getAllByText('common.draftNotSavedCredential')).toHaveLength(1);
+
+    // toast 有停留时间，状态恢复后它不会立刻消失；该断言的是没有新增第二条。
+    fireEvent.change(textarea, { target: { value: '普通问题' } });
+    expect(screen.getAllByText('common.draftNotSavedCredential')).toHaveLength(1);
+
+    // 去重按"一段连续命中"算，恢复正常后重新命中要再提示一次。
+    fireEvent.change(textarea, { target: { value: 'sk-abcdefghijklmn' } });
+    expect(screen.getAllByText('common.draftNotSavedCredential')).toHaveLength(2);
+  });
+
+  it('keeps an ordinary draft without warning the user', () => {
+    renderChat();
+    const textarea = screen.getByPlaceholderText(/chat.placeholder/);
+
+    fireEvent.change(textarea, { target: { value: '帮我总结这份文档' } });
+
+    expect(screen.queryByText('common.draftNotSavedCredential')).not.toBeInTheDocument();
+    expect(window.sessionStorage.getItem('spring-ai-rag:webui:v1:chat-draft:new'))
+      .toContain('帮我总结这份文档');
+  });
 });
