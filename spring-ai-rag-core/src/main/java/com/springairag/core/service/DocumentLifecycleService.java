@@ -20,7 +20,7 @@ public class DocumentLifecycleService {
     private final JdbcTemplate jdbcTemplate;
     private final EmbeddingProfileProvider profileProvider;
     private final DocumentDerivationDescriptorProvider descriptorProvider;
-    private DerivationIntegrityRepository integrityRepository;
+    private DerivationIntegrityRepository integrityRepository; // optional-claim: DerivationIntegrityRepository 是无条件 @Repository，null 臂只在不走 Spring 装配的构造路径可达；守卫真正的职责是完整性快照缺席时走默认生命周期状态，而不是 NPE
 
     public DocumentLifecycleService(
             JdbcTemplate jdbcTemplate,

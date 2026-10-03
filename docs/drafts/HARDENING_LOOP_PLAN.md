@@ -478,6 +478,86 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
+### Batch 829（已交付）
+
+- 分支：`feature/service-optional-claims-20261004`
+- 内容：把 `false-optional-wiring` 的扫描面从 controller 扩到 service，
+  并在扩面**之前**把 service 层清零。附一条更正：**828 批记的
+  "48 条 / 23 个类"是错的**，实测是 **45 条 / 21 个类**。
+- **为什么 828 的数是错的**（这次连续第 8 次被自己的探针骗到）：
+  828 批的普查是**手工外推**门禁判据，没有过"bean 条件性"那一关。
+  典型漏项是 `ChatExecutionService.retryTemplate`——`RetryTemplate`
+  是 Spring Retry 库里的 bean，仓库内**没有** `@Service` 声明，
+  判据第 3 条无法证明它无条件，于是本就不该报。
+  这次用门禁**自己导出的 `findFalseOptionalClaims`** 重跑，
+  并按 `*Service.java` 过滤，口径与门禁完全一致。
+- **探针先证伪**：`/tmp/b829/probe2.mjs` 往真实 service 文件注入 4 条
+  形状与生产代码一致的假声明（构造器 `required=false`、public setter、
+  包私有 setter、以及一个仓库内无法证明条件性的 `RetryTemplate`）。
+  预期抓 3 不抓 1，实测正是 3 抓 1——**第一版探针自己骗人**：
+  它注入的字段没写 null 守卫，而判据第 1 条要求被守卫，0/3 全漏。
+  这个错误顺带确认了门禁的"必须被守卫"这一条不是摆设。
+- 处置：
+  - **删掉全部 5 处"会抛"的守卫**（会抛 = 关于部署形态的断言，
+    必选 bean 时为假）：`RetrievalDiagnosticsService.get()`、
+    `EvaluationSuiteService.resolveExecutionKey()`、
+    `ExternalDocumentService.upsert()`、`JsonRecordService.persist()`、
+    `JsonRecordService.sourceDelete()`。
+  - 剩下 **44 处"会跳过"逐条登记 `optional-claim:` 理由**。
+    理由的第三句是**这个守卫真正的职责**，这是它区别于批量豁免的地方：
+    大多数不是"协作者可能不存在"，而是**功能开关**
+    （`isEnabled()` / `isDurableEnabled()` / `isCitationValidationEnabled()`）、
+    **fail-open 旁路**（诊断写不进去不该让检索失败）、
+    **legacy 内联路径**（`JsonRecordService.mutationService`、
+    `PdfToRagService.documentMutationService`）或
+    **有租约/无租约之分**（`ChatSessionCoordinator`）。
+- **828 批记的"需要一次产品决定"被证据消解了，不需要产品决定**：
+  828 担心删掉 `dispatchService == null` 那处抛异常后，
+  ASYNC 会从"响亮失败"退化成"静默不入队"。实测**生产里"队列不可用"
+  的形态是 `rag.embedding-jobs.enabled=false`，而那由
+  `EmbeddingDispatchService.enqueueInCurrentTransaction` 自己抛
+  `EMBEDDING_JOBS_DISABLED`**（`EmbeddingDispatchService.java:100-104`）。
+  调用方那几处 null 守卫只是这份保证的冗余副本，且只在 bean 缺失时触发——
+  而 `EmbeddingDispatchService` 是无条件 `@Service`。
+  所以"该不该报错"的答案是**该报，而且本来就在报**，与那处守卫无关。
+- 测试（"同类断言不等于同类测试"）：
+  - 删 3 条断言已删分支的用例。其中 2 条是**同一断言在两个文件里重复**
+    （都测 `ExternalDocumentService`），只保留 1 条。
+  - **新增 2 条**钉住真实形态：分发器**在场**、作业被禁用时，
+    `ExternalDocumentService` / `JsonRecordService` 必须把
+    `EMBEDDING_JOBS_DISABLED` 透出去而不是静默不入队。
+    删掉的是"仓储缺失时报错"，补上的是"队列禁用时报错"——后者才对应生产。
+  - 改写 `RetrievalDiagnosticsPersistTailTest.getWithNullPrincipalFallsBackToLocalIdentity`：
+    旧版把仓储置空、断言 NOT_FOUND，**名字承诺的"回退到 local identity"
+    从来没被断言到**，一直被那条 null 守卫代答。改用真实仓储 + 一行
+    归 local 身份所有的记录，真正钉住 `requirePrincipal` 的回退语义。
+- 门禁扩面（`verify-false-optional-wiring.mjs`）：
+  - 扫描面 `*Controller.java` → `*Controller.java` + `*Service.java`，
+    现在是 **26 controller + 62 service + 172 bean**。
+  - 自测 **19 → 23 例**，新增 4 例钉住新扩的面：service 层未登记声明要**点名文件**、
+    登记理由要放过、真条件 bean 仍要放过、"会跳过"守卫同样算声明。
+  - **扩面的前提是先有普查数据、再把数字降到 0**。顺序反过来只会让门禁立刻
+    变红，然后被当成噪音豁免掉。
+  - 自测的承重性是**变异实验**证出来的，不是跑绿看出来的：
+    把 `SUBJECT_SUFFIXES` 里的 `'Service.java'` 去掉，自测立刻 1 条红。
+    真实树变异（干净注入一条新的假声明）→ 门禁 EXIT=1 并**精确点名该字段**，
+    而同一文件里带理由的字段没被误报。
+  - **变异实验里我又踩了一次前缀锚点的坑**：用 Python 的
+    `str.replace` 以"`;` 为止"的前串做锚点，新字段被插在
+    `;` 和原有 `// optional-claim: …` 之间，**把理由迁移到了新字段上**。
+    于是门禁点名的是被我"意外惩罚"的老字段。同一类错误在 `sed` 版已经犯过一次。
+    教训：**锚点要锚整行，不要锚前缀**。
+- 流程偏差记录：`head -40` 截断过一次 Maven 输出，导致我差点只看到 2 个
+  失败就动手改测试，实际有 5 个。**截断的输出不能当汇总用**。
+- 遗留：
+  - `JsonRecordService.mutationService` / `PdfToRagService.documentMutationService` /
+    `BatchDocumentService.documentMutationService` 的 **legacy 内联路径**还在，
+    守卫只是被登记了理由，并没有删。要删得先迁测试。
+  - 与 823/825/827 同源的结构问题：`ChatExecutionService` 有 3 个公开构造器，
+    其中非 `@Autowired` 那个把 `jsonRecordSearchTool` / `sessionCoordinator`
+    传成 null——44 条理由里"null 臂只在不走 Spring 装配的构造路径可达"
+    这一句，指的就是它。
+
 ### Batch 828（仅勘察，未改代码）
 
 - 分支：`main`（本批**没有代码改动**，只提交勘察结论）
@@ -520,8 +600,16 @@
     "作业队列不可用时该不该报错"，那是产品决策，不是重构。
 - 遗留：
   - `dispatchService` 的处置**需要一次产品决定**，不是技术决定。
+    > **更正（Batch 829）**：这个产品决定**不需要做**。生产里"队列不可用"的
+    > 形态是 `rag.embedding-jobs.enabled=false`，而 `EMBEDDING_JOBS_DISABLED`
+    > 由 `EmbeddingDispatchService` 自己抛。删掉调用方那处 null 守卫不会让
+    > ASYNC 退化成静默不入队——该报错的地方本来就在报。
   - `ChatExecutionService` 10 个 + `ExternalDocumentService` 3 个理由未登记。
   - service 层门禁口径剩余 48 条 / 23 个类（登记理由前）。
+    > **更正（Batch 829）**：这个数是手工外推门禁判据得来的，没过"bean 条件性"
+    > 那一关，实际是 **45 条 / 21 个类**。代表性漏项 `ChatExecutionService.retryTemplate`
+    > ——`RetryTemplate` 是 Spring Retry 的 bean，仓库内没有 `@Service` 声明，
+    > 判据无法证明它无条件，本就不该报。
 
 ### Batch 827（已交付）
 

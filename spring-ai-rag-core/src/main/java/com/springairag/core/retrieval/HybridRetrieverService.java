@@ -52,8 +52,8 @@ public class HybridRetrieverService {
     private final Executor taskExecutor;
     private final RagRetrievalProperties retrieval;
     private final RagRerankProperties rerank;
-    private final FulltextSearchProviderFactory fulltextProviderFactory;
-    private final RetrievalEmptyReasonProbe emptyReasonProbe;
+    private final FulltextSearchProviderFactory fulltextProviderFactory; // optional-claim: FulltextSearchProviderFactory 是无条件 @Component，null 臂只在不走 Spring 装配的构造路径可达；守卫真正的职责是全文检索的降级形态——拿不到 provider 时退回 NoOpFulltextSearchProvider 而不是让检索失败
+    private final RetrievalEmptyReasonProbe emptyReasonProbe; // optional-claim: RetrievalEmptyReasonProbe 是无条件 @Component，null 臂只在不走 Spring 装配的构造路径可达；守卫真正的职责是"融合结果非空就不必探针"——探针只为归因而存在，是额外开销
     private final DocumentDerivationDescriptorProvider descriptorProvider;
     private final int retrievalTimeoutSeconds;
     private final int probeTimeoutMs;

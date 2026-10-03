@@ -12,6 +12,7 @@ import com.springairag.core.entity.RagCollection;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.entity.RagDocumentVersion;
 import com.springairag.core.exception.DocumentRevisionConflictException;
+import com.springairag.core.exception.RagException;
 import com.springairag.core.repository.RagCollectionRepository;
 import com.springairag.core.repository.RagDocumentRepository;
 import com.springairag.core.repository.RagEmbeddingRepository;
@@ -452,6 +453,37 @@ void blankDocumentTypeNormalizesToTextAndPersists() {
         assertNotNull(response.embeddingJobId());
         assertNotNull(response.embeddingBatchId());
         assertNull(response.errorCode());
+    }
+
+    /**
+     * 生产里"队列不可用"的形态是 {@code rag.embedding-jobs.enabled=false}，
+     * 那由 {@code EmbeddingDispatchService.enqueueInCurrentTransaction} 自己抛
+     * EMBEDDING_JOBS_DISABLED。本用例钉的是**调用方不吞掉**这个错误。
+     *
+     * <p>过去这里靠一条 {@code dispatchService == null} 守卫给出"响亮失败"，
+     * 而 EmbeddingDispatchService 是无条件 {@code @Service}——那条分支在任何
+     * 运行中的应用里都不可达，删掉它不会让 ASYNC 退化成静默不入队
+     * （Batch 829）。真正需要被守住的是这一条。
+     */
+    @Test
+    void asyncPolicySurfacesDisabledJobQueueInsteadOfSilentlySkipping() {
+        EmbeddingDispatchService dispatch = mock(EmbeddingDispatchService.class);
+        service.setDispatchService(dispatch);
+        ExternalDocumentUpsertRequest request =
+                request("doc-async-disabled", "rev-1", "Title", "Content");
+        request.setEmbeddingPolicy(com.springairag.api.enums.EmbeddingPolicy.ASYNC);
+        when(documentRepository.findByCollectionIdAndExternalId(10L, "doc-async-disabled"))
+                .thenReturn(Optional.empty());
+        when(dispatch.enqueueInCurrentTransaction(
+                any(RagDocument.class), eq(true), eq(false), eq("EXTERNAL_UPSERT")))
+                .thenThrow(new RagException(
+                        ErrorCode.EMBEDDING_JOBS_DISABLED,
+                        "Persistent embedding jobs are disabled"));
+
+        RagException error = assertThrows(
+                RagException.class, () -> service.upsert(request));
+
+        assertEquals(ErrorCode.EMBEDDING_JOBS_DISABLED, error.getErrorCodeEnum());
     }
 
     @Test

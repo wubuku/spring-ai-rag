@@ -161,21 +161,34 @@ class RetrievalDiagnosticsPersistTailTest {
     }
 
     @Test
-    void getThrowsNotFoundWhenRepositoryMissing() {
-        var exception = assertThrows(
-                RagException.class,
-                () -> bareService().get(principal(), UUID.randomUUID()));
+    void getThrowsNotFoundWhenTheTraceIsNotThere() {
+        UUID missing = UUID.randomUUID();
+        when(repository.findByTraceId(missing)).thenReturn(Optional.empty());
+
+        RagException exception = assertThrows(
+                RagException.class, () -> service().get(principal(), missing));
 
         assertEquals(ErrorCode.NOT_FOUND, exception.getErrorCodeEnum());
     }
 
+    /**
+     * 真正的行为是 {@code requirePrincipal} 把 null principal 换成
+     * {@link ChatPrincipal#local()}，于是**归 local 身份所有的**那行可见。
+     * 旧版本这条用例把仓储置空，断言的是 {@code repository == null} 时抛的
+     * NOT_FOUND——也就是说它的名字承诺的行为从来没被断言到，断言一直由那条
+     * 不可达的 null 守卫代答（Batch 829 删掉该守卫后暴露）。
+     */
     @Test
     void getWithNullPrincipalFallsBackToLocalIdentity() {
-        var exception = assertThrows(
-                RagException.class,
-                () -> bareService().get(null, UUID.randomUUID()));
+        RagRetrievalLog localLog = new RagRetrievalLog();
+        localLog.setTraceId(UUID.randomUUID());
+        localLog.setOwnerPrincipalId(ChatPrincipal.local().id());
+        when(repository.findByTraceId(localLog.getTraceId()))
+                .thenReturn(Optional.of(localLog));
 
-        assertEquals(ErrorCode.NOT_FOUND, exception.getErrorCodeEnum());
+        var detail = service().get(null, localLog.getTraceId());
+
+        assertEquals(localLog.getTraceId(), detail.traceId());
     }
 
     @Test

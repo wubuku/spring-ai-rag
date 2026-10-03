@@ -71,7 +71,7 @@ public class ApiKeyManagementService {
 
     private final RagApiKeyRepository apiKeyRepository;
     private final RagApiPrincipalRepository principalRepository;
-    private final CollectionIdentityResolver collectionIdentityResolver;
+    private final CollectionIdentityResolver collectionIdentityResolver; // optional-claim: CollectionIdentityResolver 是无条件 @Component，null 臂只在不走 Spring 装配的构造路径可达；守卫真正的职责是解析不出归属集合时返回 null（未归属），而不是让 key 查询失败
     private final JdbcTemplate jdbcTemplate;
     private final ApiKeyProvisioningOperationRepository provisioningOperationRepository;
     private final ApiKeyRotationOperationRepository rotationOperationRepository;
@@ -79,7 +79,7 @@ public class ApiKeyManagementService {
     private final RagApiKeyRotationProperties rotationProperties;
     private final TransactionTemplate provisioningTransaction;
     private final TransactionTemplate rotationTransaction;
-    private final ApiPrincipalLifecycleEventPublisher lifecycleEventPublisher;
+    private final ApiPrincipalLifecycleEventPublisher lifecycleEventPublisher; // optional-claim: ApiPrincipalLifecycleEventPublisher 是无条件 @Component，null 臂只在不走 Spring 装配的构造路径可达；守卫让生命周期事件缺席时不拖垮 key 写路径——事件是旁路，不该是写入失败的原因
 
     public ApiKeyManagementService(
             RagApiKeyRepository apiKeyRepository,

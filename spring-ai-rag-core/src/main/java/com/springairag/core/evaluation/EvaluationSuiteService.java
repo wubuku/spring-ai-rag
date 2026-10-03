@@ -410,7 +410,7 @@ public class EvaluationSuiteService {
     ApiAccessPolicy resolveExecutionKey(String ownerPrincipalId) {
         if (ownerPrincipalId != null && ownerPrincipalId.startsWith("db:")) {
             String principalId = ownerPrincipalId.substring(3).trim();
-            if (principalId.isEmpty() || apiKeyManagementService == null) {
+            if (principalId.isEmpty()) {
                 throw new SecurityException("Owner API key is no longer authorized");
             }
             ApiAccessPolicy ownerKey = apiKeyManagementService

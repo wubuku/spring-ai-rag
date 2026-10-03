@@ -73,23 +73,23 @@ public class ChatExecutionService {
     private final ChatModelRouter modelRouter;
     private final ModeAwareChatClientFactory clientFactory;
     private final KnowledgeSearchTool knowledgeSearchTool;
-    private final JsonRecordSearchTool jsonRecordSearchTool;
+    private final JsonRecordSearchTool jsonRecordSearchTool; // optional-claim: JsonRecordSearchTool 是无条件 @Component，null 臂只在不走 Spring 装配的构造路径可达；守卫真正的职责是 isEnabled() 功能开关——结构化记录检索可以被配置关掉，不是"工具可能不存在"
     private final RagChatHistoryRepository historyRepository;
     private final DomainExtensionRegistry domainExtensions;
     private final PromptCustomizerChain promptCustomizers;
     private final RetrievalDocumentMapper documentMapper;
     private final ObjectMapper objectMapper;
     private final RagProperties ragProperties;
-    private final RagMetricsService metricsService;
+    private final RagMetricsService metricsService; // optional-claim: RagMetricsService 是无条件 @Service，null 臂只在不走 Spring 装配的构造路径可达；守卫让指标缺席时不拖垮主调用——指标是旁路，不该是调用失败的原因
     private final RetryTemplate retryTemplate;
-    private final ChatSessionCoordinator sessionCoordinator;
-    private final RagChatToolRegistry toolRegistry;
+    private final ChatSessionCoordinator sessionCoordinator; // optional-claim: ChatSessionCoordinator 是无条件 @Component，null 臂只在不走 Spring 装配的构造路径可达；守卫真正的职责是"这次调用要不要会话租约"——无租约的单次执行/流式路径必须能跑
+    private final RagChatToolRegistry toolRegistry; // optional-claim: RagChatToolRegistry 是无条件 @Component，null 臂只在不走 Spring 装配的构造路径可达；守卫真正的职责是"这次请求要不要挂服务端工具"，无工具时退化为纯知识检索
     private final ConversationPromptPlanner promptPlanner;
-    private ConversationSummaryService summaryService;
-    private RetrievalDiagnosticsService diagnosticsService;
-    private CitationValidator citationValidator;
-    private ChatObservabilityService chatObservability;
-    private RuntimeSkillCatalog runtimeSkillCatalog;
+    private ConversationSummaryService summaryService; // optional-claim: ConversationSummaryService 是无条件 @Service，null 臂只在不走 Spring 装配的构造路径可达；守卫真正的职责是产出可观测的 summary 状态（summary_service_unavailable），而不是把缺失悄悄压成空串
+    private RetrievalDiagnosticsService diagnosticsService; // optional-claim: RetrievalDiagnosticsService 是无条件 @Service，null 臂只在不走 Spring 装配的构造路径可达；守卫真正的职责是 traceSession 为空的早退——没开检索追踪时诊断写入就该是 no-op
+    private CitationValidator citationValidator; // optional-claim: CitationValidator 是无条件 @Component，null 臂只在不走 Spring 装配的构造路径可达；守卫真正的职责是 isCitationValidationEnabled() 功能开关
+    private ChatObservabilityService chatObservability; // optional-claim: ChatObservabilityService 是无条件 @Component，null 臂只在不走 Spring 装配的构造路径可达；守卫让观测计数缺席时不影响主流程——观测是旁路，不该是调用失败的原因
+    private RuntimeSkillCatalog runtimeSkillCatalog; // optional-claim: RuntimeSkillCatalog 是无条件 @Component，null 臂只在不走 Spring 装配的构造路径可达；守卫真正的职责是 enabled() 功能开关
 
     public ChatExecutionService(
             ChatModelRouter modelRouter,

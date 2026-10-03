@@ -97,15 +97,15 @@ public class RagChatService {
     private final ChatClient chatClient;
     private final ChatClient.Builder chatClientBuilder; // for dynamic model routing
     private final List<Advisor> sortedAdvisors; // for rebuilding ChatClient during dynamic model routing
-    private final ChatModelRouter chatModelRouter; // optional, null when not configured
+    private final ChatModelRouter chatModelRouter; // optional-claim: ChatModelRouter 是无条件 @Component，null 臂只在不走 Spring 装配的构造路径可达；守卫真正的职责是"这次请求没有可用候选模型"时返回空列表，而不是硬失败（旧注释"null when not configured"把配置说成了装配形态）
     private final RagChatHistoryRepository historyRepository;
     private final DomainExtensionRegistry domainExtensionRegistry;
     private final PromptCustomizerChain promptCustomizerChain;
-    private final RagMetricsService metricsService; // optional, null when actuator is not present
+    private final RagMetricsService metricsService; // optional-claim: RagMetricsService 是无条件 @Service（它自己的构造器就要 MeterRegistry，而 actuator 在本仓库是 compile 期依赖），null 臂只在不走 Spring 装配的构造路径可达；守卫让指标缺席时不拖垮主调用——指标是旁路，不该是调用失败的原因。旧注释"null when actuator is not present"把一个传递依赖的可用性说成了这个协作者本身可选
     private final LlmCircuitBreaker circuitBreaker; // optional, null when not enabled
     private final RetryTemplate retryTemplate; // LLM call retry template, optional
-    private final CollectionDocumentResolver collectionDocumentResolver; // optional for unit tests
-    private final ModeAwareChatClientFactory usageClientFactory;
+    private final CollectionDocumentResolver collectionDocumentResolver; // optional-claim: CollectionDocumentResolver 是无条件 @Component，null 臂只在不走 Spring 装配的构造路径可达；守卫真正的职责是"这次请求有没有集合/文档过滤"——无过滤时根本不需要解析（旧注释"optional for unit tests"是真的，但没用门禁认得的标记）
+    private final ModeAwareChatClientFactory usageClientFactory; // optional-claim: ModeAwareChatClientFactory 是无条件 @Component，null 臂只在不走 Spring 装配的构造路径可达；守卫真正的职责是用不到 usage 统计的路径直接返回候选模型名，不必造一个统计客户端
     private final RagProperties ragProperties;
     private ChatExecutionService modeAwareExecutionService;
     private ChatCommandMapper chatCommandMapper;

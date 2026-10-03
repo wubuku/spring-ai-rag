@@ -81,6 +81,18 @@
  * 1 处 documentLifecycleService、1 处 diagnosticsService（它还扛着真的
  * `isEnabled()` 功能开关）。
  *
+ * ── 扫描面为什么是 Controller + Service（Batch 829 的结论）────────────
+ * 825 批之后这道门禁只扫 `*Controller.java`，报 0 条。**那个 0 只说明
+ * 控制器干净**，不说明别处干净——因为 service 根本没进扫描面。
+ *
+ * 用**同一判据**普查 `*Service.java`，真实树上有 **45 处 / 21 个类**：
+ * 其中 5 处是"会抛"的假声明（`RetrievalDiagnosticsService.get()` 那一处
+ * 还把"仓储缺失"谎报成"trace 不存在"），其余是"会跳过"。
+ * 处置完这 45 处之后，扫描面才扩到 service。
+ *
+ * 扩面的**前提**是先有普查数据、再把数字降到 0。顺序反过来——
+ * 先扩大扫描面再慢慢清——只会让门禁立刻变红，然后被当成噪音豁免掉。
+ *
  * Run: node scripts/verify-false-optional-wiring.mjs
  */
 
@@ -232,15 +244,30 @@ function walk(dir, acc = []) {
   return acc;
 }
 
+/**
+ * 被检查的类族：控制器与 service。
+ *
+ * Batch 829 把 service 纳入了扫描面。理由不是"service 也可能有这个问题"，
+ * 而是**已经量过**：用同一判据普查 `*Service.java`，真实树上有 45 处，
+ * 分布在 21 个类里，其中 5 处是会抛的假声明。控制器那 0 条是 825 批
+ * 清干净的，service 这 45 条是同一类东西，只是没人扫。
+ *
+ * 范围**只**扩到这两族，没有扩到"所有 bean"：再往外扩需要先有普查数据，
+ * 否则就是在没有证据的情况下扩大门禁的射程——那只会让它变成噪音机。
+ */
+const SUBJECT_SUFFIXES = ['Controller.java', 'Service.java'];
+
 function main() {
   const rootOverride = process.env.FALSE_OPTIONAL_WIRING_ROOT;
   const scanRoot = rootOverride ? rootOverride : SRC_ROOT;
   const all = walk(scanRoot).map((path) => ({ path, source: readFileSync(path, 'utf8') }));
   const beans = collectBeans(all);
-  const controllers = all.filter((f) => f.path.endsWith('Controller.java'));
+  const subjects = all.filter((f) => SUBJECT_SUFFIXES.some((s) => f.path.endsWith(s)));
+  const controllers = subjects.filter((f) => f.path.endsWith('Controller.java'));
+  const services = subjects.filter((f) => f.path.endsWith('Service.java'));
 
   let blocking = 0;
-  for (const { path, source } of controllers) {
+  for (const { path, source } of subjects) {
     const rel = relative(scanRoot, path);
     for (const f of findFalseOptionalClaims(source, beans)) {
       blocking += 1;
@@ -258,12 +285,13 @@ function main() {
   if (blocking > 0) {
     console.error(
       `\nFalse-optional-wiring check failed; ${blocking} unrecorded claim(s) in `
-      + `${controllers.length} controller(s).`,
+      + `${controllers.length} controller(s) and ${services.length} service(s).`,
     );
     process.exit(1);
   }
   console.log(
-    `False-optional-wiring check passed; ${controllers.length} controller(s) and ${beans.size} bean(s) `
+    `False-optional-wiring check passed; ${controllers.length} controller(s), `
+    + `${services.length} service(s) and ${beans.size} bean(s) `
     + 'examined, every collaborator that claims to be optional is either genuinely conditional or '
     + 'records why the guard exists.',
   );

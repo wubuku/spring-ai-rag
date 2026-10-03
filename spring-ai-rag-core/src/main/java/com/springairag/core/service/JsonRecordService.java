@@ -75,11 +75,11 @@ public class JsonRecordService {
     private final JdbcTemplate jdbcTemplate;
     private final TransactionTemplate transactionTemplate;
     private final RetrievalFilterValidator filterValidator = new RetrievalFilterValidator();
-    private EmbeddingDispatchService dispatchService;
-    private DocumentMutationService mutationService;
-    private DocumentLifecycleService lifecycleService;
-    private KeywordIndexPersistenceService keywordIndexPersistenceService;
-    private ExternalAddressRetirementService addressRetirementService;
+    private EmbeddingDispatchService dispatchService; // optional-claim: EmbeddingDispatchService 是无条件 @Service，null 臂只在不走 Spring 装配的构造路径可达；守卫真正的职责是策略不是 ASYNC、或没有输出槽时不入队。Batch 829 删掉了同一字段上会抛的 persist() 守卫，理由与 ExternalDocumentService 相同
+    private DocumentMutationService mutationService; // optional-claim: DocumentMutationService 是无条件 @Service，null 臂只在不走 Spring 装配的构造路径可达；守卫真正的职责是切到 legacy 内联 upsert 路径——那条路径只在 Spring 装配之外可达
+    private DocumentLifecycleService lifecycleService; // optional-claim: DocumentLifecycleService 是无条件 @Service，null 臂只在不走 Spring 装配的构造路径可达；守卫真正的职责是生命周期读取缺席时该字段留空
+    private KeywordIndexPersistenceService keywordIndexPersistenceService; // optional-claim: KeywordIndexPersistenceService 是无条件 @Service，null 臂只在不走 Spring 装配的构造路径可达；守卫真正的职责是本地索引缺席时跳过协调
+    private ExternalAddressRetirementService addressRetirementService; // optional-claim: ExternalAddressRetirementService 是无条件 @Service，null 臂只在不走 Spring 装配的构造路径可达；守卫真正的职责是退役校验缺席时放行，属于可跳过的旁路而非写入前置条件
 
     @Autowired
     public JsonRecordService(
@@ -533,10 +533,6 @@ public class JsonRecordService {
             String externalId,
             String sourceRevision,
             String expectedSourceRevision) {
-        if (mutationService == null) {
-            throw new IllegalStateException(
-                    "Document mutation service is not available");
-        }
         return mutationService.tombstoneExternal(
                 collectionKey,
                 sourceNamespace,
@@ -590,11 +586,6 @@ public class JsonRecordService {
             Boolean enabledOverride,
             EmbeddingPolicy policy,
             EmbeddingDispatchService.Result[] queuedOut) {
-        if (policy == EmbeddingPolicy.ASYNC && dispatchService == null) {
-            throw new com.springairag.core.exception.RagException(
-                    com.springairag.api.enums.ErrorCode.EMBEDDING_JOBS_DISABLED,
-                    "Persistent embedding jobs are disabled");
-        }
         if (transactionTemplate == null) {
             PersistedRecord persisted = persistInTransaction(
                     request, originalFilename, enabledOverride);

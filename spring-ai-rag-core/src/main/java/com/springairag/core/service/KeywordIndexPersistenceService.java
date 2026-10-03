@@ -28,7 +28,7 @@ public class KeywordIndexPersistenceService {
     private final JdbcTemplate jdbcTemplate;
     private final DocumentChunkingService chunkingService;
     private final DocumentDerivationDescriptorProvider descriptorProvider;
-    private DerivationIntegrityRepository integrityRepository;
+    private DerivationIntegrityRepository integrityRepository; // optional-claim: DerivationIntegrityRepository 是无条件 @Repository，null 臂只在不走 Spring 装配的构造路径可达；守卫真正的职责是完整性快照缺席时把本地索引判为"需要重建"，宁可多重建一次也不谎报新鲜
 
     public KeywordIndexPersistenceService(
             JdbcTemplate jdbcTemplate,

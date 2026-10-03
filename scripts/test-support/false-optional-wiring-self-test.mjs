@@ -221,6 +221,12 @@ const CONTROLLER = (fieldLine) => `class DemoController {\n`
   + '    public void setSomeService(SomeService s) { this.someService = s; }\n'
   + '    void go() { if (someService == null) { throw new IllegalStateException("x"); } }\n}\n';
 
+const SERVICE = (fieldLine) => `class DemoService {\n`
+  + fieldLine
+  + '    @Autowired(required = false)\n'
+  + '    public void setSomeService(SomeService s) { this.someService = s; }\n'
+  + '    void go() { if (someService != null) { someService.log("skipped"); } }\n}\n';
+
 test('the gate exits non-zero on an unrecorded false claim', () => {
   const result = runGate({
     'SomeService.java': '@Service\npublic class SomeService {\n}\n',
@@ -309,6 +315,59 @@ class Demo {
     void go() { if (someService == null) { someService.log("skip"); } }
 }`;
   assert.equal(findFalseOptionalClaims(src, UNCONDITIONAL).length, 0);
+});
+
+// ── Batch 829: the service layer is inside the gate now ────────────────────
+// These are the load-bearing cases for the widened scope. Without them the
+// suffix list could silently lose `Service.java`, the gate would keep
+// reporting "passed; 26 controllers", and nobody would notice — which is
+// exactly the failure mode Batch 821 and Batch 825 each hit in turn.
+
+test('a service-layer false claim is reported, not just a controller one', () => {
+  const result = runGate({
+    'SomeService.java': '@Service\npublic class SomeService {\n}\n',
+    'DemoController.java': CONTROLLER(
+      '    private SomeService someService; // optional-claim: recorded, so this one passes',
+    ),
+    'DemoService.java': SERVICE('    private SomeService someService;'),
+  });
+  assert.equal(result.status, 1,
+    `expected a failing exit, got ${result.status}\n${result.stdout}${result.stderr}`);
+  assert.match(result.stdout + result.stderr, /DemoService\.java/,
+    'the report must name the service file, or the widened scope is not really widened');
+  assert.doesNotMatch(result.stdout + result.stderr, /DemoController\.java/,
+    'a recorded reason must still exempt the controller it is recorded on');
+});
+
+test('a service-layer claim with a recorded reason passes', () => {
+  const result = runGate({
+    'SomeService.java': '@Service\npublic class SomeService {\n}\n',
+    'DemoService.java': SERVICE(
+      '    private SomeService someService; // optional-claim: unconditional @Service; the guard skips a side channel',
+    ),
+  });
+  assert.equal(result.status, 0, `expected a passing exit, got ${result.status}\n${result.stdout}${result.stderr}`);
+  assert.match(result.stdout, /service\(s\)/, 'the passing report must say it looked at services');
+});
+
+test('a genuine @ConditionalOn bean in a service still passes', () => {
+  // The widened scope must not turn the gate into a noise machine: the
+  // distinction that made it useful has to survive the widening.
+  const result = runGate({
+    'SomeService.java': '@Service\n@ConditionalOnProperty(name = "x")\npublic class SomeService {\n}\n',
+    'DemoService.java': SERVICE('    private SomeService someService;'),
+  });
+  assert.equal(result.status, 0, `expected a passing exit, got ${result.status}\n${result.stdout}${result.stderr}`);
+});
+
+test('flags a service-layer skip guard on an unconditional bean', () => {
+  // "会跳过" and "会抛" are both claims; Batch 822 only split how to *treat*
+  // them, not whether the rule applies. The rule applies to both.
+  const hits = findFalseOptionalClaims(
+    SERVICE('    private SomeService someService;'), UNCONDITIONAL,
+  );
+  assert.equal(hits.length, 1);
+  assert.equal(hits[0].field, 'someService');
 });
 
 let failed = 0;

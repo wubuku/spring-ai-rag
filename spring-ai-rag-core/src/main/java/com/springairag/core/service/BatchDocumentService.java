@@ -49,7 +49,7 @@ public class BatchDocumentService {
     private final DocumentEmbedService documentEmbedService;
     private final TransactionTemplate transactionTemplate;
     private EmbeddingDispatchService dispatchService;
-    private DocumentMutationService documentMutationService;
+    private DocumentMutationService documentMutationService; // optional-claim: DocumentMutationService 是无条件 @Service，null 臂只在不走 Spring 装配的构造路径可达；守卫真正的职责是切到 legacy 内联批量写入路径——那条路径只在 Spring 装配之外可达
 
     public BatchDocumentService(RagDocumentRepository documentRepository,
                                  RagEmbeddingRepository embeddingRepository,

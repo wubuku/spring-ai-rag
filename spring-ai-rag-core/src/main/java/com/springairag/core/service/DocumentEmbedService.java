@@ -40,8 +40,8 @@ public class DocumentEmbedService {
     private final EmbeddingPersistenceService persistenceService;
     private final EmbeddingProfileProvider profileProvider;
     private DocumentChunkingService chunkingService;
-    private KeywordIndexPersistenceService keywordIndexPersistenceService;
-    private DerivationIntegrityRepository integrityRepository;
+    private KeywordIndexPersistenceService keywordIndexPersistenceService; // optional-claim: KeywordIndexPersistenceService 是无条件 @Service，null 臂只在不走 Spring 装配的构造路径可达；守卫真正的职责是"本地索引不新鲜"时拒绝并要求重建，索引缺席时则整体跳过维护
+    private DerivationIntegrityRepository integrityRepository; // optional-claim: DerivationIntegrityRepository 是无条件 @Repository，null 臂只在不走 Spring 装配的构造路径可达；守卫真正的职责是拿不到派生完整性快照时由调用方按默认值继续，而不是 NPE
 
     public DocumentEmbedService(RagDocumentRepository documentRepository,
                                  EmbeddingBatchService embeddingBatchService,

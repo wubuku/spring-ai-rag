@@ -3,13 +3,10 @@ package com.springairag.core.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.springairag.api.dto.JsonRecordUpsertRequest;
 import com.springairag.api.dto.JsonRecordUpsertResponse;
-import com.springairag.api.enums.EmbeddingPolicy;
-import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.config.EmbeddingProfileProvider;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.retrieval.HybridRetrieverService;
 import com.springairag.core.retrieval.ReRankingService;
-import com.springairag.core.exception.RagException;
 import com.springairag.core.repository.RagDocumentRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -19,7 +16,6 @@ import org.springframework.transaction.PlatformTransactionManager;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -103,17 +99,6 @@ class JsonRecordServicePersistTest {
             throw new IllegalStateException(e);
         }
         return request;
-    }
-
-    @Test
-    void upsertRejectsAsyncPolicyWhenDispatchMissing() {
-        JsonRecordUpsertRequest request = validRequest();
-        request.setEmbeddingPolicy(EmbeddingPolicy.ASYNC);
-
-        RagException error = assertThrows(RagException.class,
-                () -> service.upsert(request));
-        assertEquals(ErrorCode.EMBEDDING_JOBS_DISABLED,
-                error.getErrorCodeEnum());
     }
 
     @Test

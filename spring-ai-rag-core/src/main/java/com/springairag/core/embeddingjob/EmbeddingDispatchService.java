@@ -32,8 +32,8 @@ public class EmbeddingDispatchService {
     private final RagEmbeddingJobProperties jobProperties;
     private final DocumentDerivationDescriptorProvider descriptorProvider;
     private final EmbeddingJobExecutor jobExecutor;
-    private KeywordIndexPersistenceService keywordIndexPersistenceService;
-    private EmbeddingJobWakeupPublisher wakeupPublisher;
+    private KeywordIndexPersistenceService keywordIndexPersistenceService; // optional-claim: KeywordIndexPersistenceService 是无条件 @Service，null 臂只在不走 Spring 装配的构造路径可达；守卫真正的职责是本地关键词索引缺席时跳过维护，不让索引旁路拖垮入队
+    private EmbeddingJobWakeupPublisher wakeupPublisher; // optional-claim: EmbeddingJobWakeupPublisher 是无条件 @Component，null 臂只在不走 Spring 装配的构造路径可达；守卫真正的职责是"只有真正排入 QUEUED 的作业才需要唤醒 worker"，合流与终态都不该唤醒
 
     @Autowired
     public EmbeddingDispatchService(

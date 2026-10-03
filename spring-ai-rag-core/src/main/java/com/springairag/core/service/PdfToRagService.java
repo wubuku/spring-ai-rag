@@ -47,7 +47,7 @@ public class PdfToRagService {
     private final RagDocumentRepository documentRepository;
     private final DocumentEmbedService documentEmbedService;
     private EmbeddingDispatchService dispatchService;
-    private DocumentMutationService documentMutationService;
+    private DocumentMutationService documentMutationService; // optional-claim: DocumentMutationService 是无条件 @Service，null 臂只在不走 Spring 装配的构造路径可达；这 4 处守卫同属一条职责——切到 legacy 内联导入路径，而那条路径只在 Spring 装配之外可达
 
     public PdfToRagService(FsFileRepository fsFileRepository,
                            RagDocumentRepository documentRepository,
