@@ -46,6 +46,8 @@ import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
+import com.springairag.core.service.ExternalDocumentService;
+import com.springairag.core.service.DocumentRelocationService;
 
 /**
  * RagDocumentController Unit Tests
@@ -90,6 +92,16 @@ class RagDocumentControllerTest {
         auditLogService = mock(AuditLogService.class);
         documentMutationService = mock(DocumentMutationService.class);
         when(embeddingProfileProvider.getActiveProfile()).thenReturn(PROFILE);
+        // Batch 822: the controller reaches the version-aware repository queries
+        // unconditionally now that the "no descriptor provider" fallback is gone.
+        // A real provider is used rather than a mock so these tests pin the
+        // version strings the application actually produces.
+        // Batch 852: it became a required constructor argument, so it must be
+        // assigned **before** the controller is built — the setter used to be
+        // the only reason the order did not matter.
+        derivationDescriptorProvider =
+                new DocumentDerivationDescriptorProvider(
+                        new com.springairag.core.config.RagProperties());
         controller = new RagDocumentController(
                 documentRepository,
                 embeddingRepository,
@@ -100,16 +112,11 @@ class RagDocumentControllerTest {
                 embeddingProfileProvider,
                 new CollectionIdentityResolver(collectionRepository),
                 auditLogService,
-                documentMutationService);
+                documentMutationService,
+                mock(ExternalDocumentService.class),
+                derivationDescriptorProvider,
+                mock(DocumentRelocationService.class));
 
-        // Batch 822: the controller reaches the version-aware repository queries
-        // unconditionally now that the "no descriptor provider" fallback is gone.
-        // A real provider is used rather than a mock so these tests pin the
-        // version strings the application actually produces.
-        derivationDescriptorProvider =
-                new DocumentDerivationDescriptorProvider(
-                        new com.springairag.core.config.RagProperties());
-        controller.setDerivationDescriptorProvider(derivationDescriptorProvider);
         // Batch 847: 创建路径已无条件走变更层，controller 不再有内联 legacy 分支。
 
         // Default mock behavior for documentToMap calls

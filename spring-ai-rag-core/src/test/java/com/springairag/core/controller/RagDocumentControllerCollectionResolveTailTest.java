@@ -22,6 +22,9 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import com.springairag.core.service.ExternalDocumentService;
+import com.springairag.core.service.DocumentDerivationDescriptorProvider;
+import com.springairag.core.service.DocumentRelocationService;
 
 /**
  * RagDocumentController 集合解析长尾（Batch 564，JaCoCo 驱动）：
@@ -47,7 +50,16 @@ class RagDocumentControllerCollectionResolveTailTest {
                 mock(EmbeddingProfileProvider.class),
                 identityResolver,
                 null,
-                mock(DocumentMutationService.class));
+                mock(DocumentMutationService.class),
+
+                mock(ExternalDocumentService.class),
+
+
+                mock(DocumentDerivationDescriptorProvider.class),
+
+
+
+                mock(DocumentRelocationService.class));
     }
 
     private Long invokeResolve(Long collectionId, String collectionKey)

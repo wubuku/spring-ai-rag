@@ -37,17 +37,23 @@ import static org.mockito.Mockito.when;
 /**
  * RagDocumentController 按**生产接线**构造的用例。
  *
- * <p>Batch 821。背景：19 个测试文件直接 {@code new RagDocumentController(...)}，
+ * <p>Batch 821。背景：当时 19 个测试文件直接 {@code new RagDocumentController(...)}，
  * 而其中只有 8 个调用了那些 setter——也就是说**十一个文件跑在一个应用根本不会
  * 产生的装配上**，而**没有一个是 {@code @SpringBootTest}**，于是生产接线
  * （协作者齐全）至今没有任何用例走过。
  *
- * <p>这个类补的正是那一半：把协作者全部接上，然后断言
- * <strong>每个被 {@code if (x == null)} 守卫的字段都非空</strong>，
- * 并且守卫所保护的调用确实走到了协作者手里。
- * 反射断言不是循环论证——它编码的正是"生产接线 = 协作者齐全"这条没人验证过的约定；
- * 而 {@code scripts/verify-false-optional-wiring.mjs} 证明这些协作者全是无条件
- * {@code @Service}，所以 null 那一支在任何运行的应用里都走不到。
+ * <p><b>Batch 848 与 852 把这段历史改写了</b>：这些 setter 已经一个不剩，
+ * 20 个直接构造的测试文件现在**统一**传满全部 13 个协作者。
+ * 也就是说本类当初要补的"另一半"不再稀缺——但它仍然是唯一一处
+ * **显式断言每个协作者字段非空**的地方，所以保留；下面的断言文本也已更新，
+ * 因为"为 null 意味着守卫可达"这句话在守卫被删干净之后就不再成立。
+ *
+ * <p>这个类断言的是
+ * <strong>每个协作者字段都非空</strong>，
+ * 并且协作者所服务的调用确实走到了它们手里。
+ * 反射断言不是循环论证——它编码的正是"生产接线 = 协作者齐全"这条约定；
+ * 而 {@code scripts/verify-false-optional-wiring.mjs} 证明这些 bean 全是无条件
+ * {@code @Service}，所以为 null 只可能是有人漏传了构造实参。
  *
  * <p>本类取代了两个已删除的用例：它们构造一个"裸" controller 再断言
  * {@code IllegalStateException}——那是在给覆盖率记账，不是在验证契约。
@@ -83,11 +89,20 @@ class RagDocumentControllerProductionWiringTest {
                 mock(EmbeddingProfileProvider.class),
                 mock(CollectionIdentityResolver.class),
                 auditLogService,
-                documentMutationService);
-        controller.setExternalDocumentService(externalDocumentService);
+                documentMutationService,
+
+                externalDocumentService,
+
+
+                derivationDescriptorProvider,
+
+
+
+                documentRelocationService);
+
         controller.setDocumentLifecycleService(documentLifecycleService);
-        controller.setDerivationDescriptorProvider(derivationDescriptorProvider);
-        controller.setDocumentRelocationService(documentRelocationService);
+
+
         controller.setDispatchService(dispatchService);
     }
 
@@ -102,7 +117,8 @@ class RagDocumentControllerProductionWiringTest {
             Field f = RagDocumentController.class.getDeclaredField(field);
             f.setAccessible(true);
             assertNotNull(f.get(controller),
-                    field + " is null under production wiring, so its guard is reachable");
+                    field + " is null although production wiring always provides it, "
+                        + "so this construction site is missing an argument");
         }
     }
 

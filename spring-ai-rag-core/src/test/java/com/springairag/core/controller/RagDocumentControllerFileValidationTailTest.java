@@ -25,6 +25,9 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import com.springairag.core.service.ExternalDocumentService;
+import com.springairag.core.service.DocumentDerivationDescriptorProvider;
+import com.springairag.core.service.DocumentRelocationService;
 
 /**
  * RagDocumentController 文件校验与集合解析长尾（Batch 538，JaCoCo
@@ -51,7 +54,16 @@ class RagDocumentControllerFileValidationTailTest {
                 mock(EmbeddingProfileProvider.class),
                 mock(CollectionIdentityResolver.class),
                 auditLogService,
-                mock(DocumentMutationService.class));
+                mock(DocumentMutationService.class),
+
+                mock(ExternalDocumentService.class),
+
+
+                mock(DocumentDerivationDescriptorProvider.class),
+
+
+
+                mock(DocumentRelocationService.class));
     }
 
     /** 私有 record 的访问器统一反射读取。 */

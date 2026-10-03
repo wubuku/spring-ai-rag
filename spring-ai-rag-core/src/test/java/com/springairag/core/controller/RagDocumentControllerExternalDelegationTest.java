@@ -23,6 +23,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import com.springairag.core.service.DocumentDerivationDescriptorProvider;
 
 /**
  * RagDocumentController 的外部文档/版本恢复委托路径。
@@ -64,9 +65,18 @@ class RagDocumentControllerExternalDelegationTest {
                 mock(EmbeddingProfileProvider.class),
                 mock(CollectionIdentityResolver.class),
                 null,
-                mutationService);
-        controller.setDocumentRelocationService(relocationService);
-        controller.setExternalDocumentService(externalDocumentService);
+                mutationService,
+
+                externalDocumentService,
+
+
+                mock(DocumentDerivationDescriptorProvider.class),
+
+
+
+                relocationService);
+
+
     }
 
     @Test

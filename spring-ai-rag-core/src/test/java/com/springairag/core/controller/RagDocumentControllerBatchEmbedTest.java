@@ -44,6 +44,9 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import com.springairag.core.service.ExternalDocumentService;
+import com.springairag.core.service.DocumentDerivationDescriptorProvider;
+import com.springairag.core.service.DocumentRelocationService;
 
 /**
  * batchEmbedDocuments 的 ASYNC/SYNC 双路与废弃
@@ -88,7 +91,16 @@ class RagDocumentControllerBatchEmbedTest {
                 profileProvider,
                 new CollectionIdentityResolver(collectionRepository),
                 auditLogService,
-                mock(DocumentMutationService.class));
+                mock(DocumentMutationService.class),
+
+                mock(ExternalDocumentService.class),
+
+
+                mock(DocumentDerivationDescriptorProvider.class),
+
+
+
+                mock(DocumentRelocationService.class));
         controller.setDispatchService(dispatchService);
     }
 

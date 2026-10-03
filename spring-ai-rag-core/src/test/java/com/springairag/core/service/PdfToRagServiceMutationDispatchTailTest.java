@@ -29,6 +29,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import com.springairag.core.service.DocumentMutationService;
 
 /**
  * PdfToRagService 迁移服务分派长尾（Batch 728 建，Batch 830 收口）：
@@ -101,8 +102,9 @@ class PdfToRagServiceMutationDispatchTailTest {
                 anyString()))
                 .thenReturn(created);
         PdfToRagService service = new PdfToRagService(
-                fsFileRepository, documentRepository, embedService);
-        service.setDocumentMutationService(mutation);
+                fsFileRepository, documentRepository, embedService,
+                mutation);;
+
         service.setDispatchService(dispatchService);
         when(dispatchService.enqueueInCurrentTransaction(
                 any(RagDocument.class), anyBoolean(), anyBoolean(),

@@ -25,6 +25,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import com.springairag.core.service.DocumentMutationService;
 
 /**
  * PdfToRagService 变更结果映射长尾（Batch 735 建，Batch 830 收口）：注入变更
@@ -94,8 +95,9 @@ class PdfToRagServicePolicyFallbackTailTest {
                 .thenReturn(new DocumentMutationService.CreatedLocal(
                         saved, response));
         PdfToRagService service = new PdfToRagService(
-                fsFileRepository, documentRepository, embedService);
-        service.setDocumentMutationService(mutation);
+                fsFileRepository, documentRepository, embedService,
+                mutation);;
+
 
         var result = service.importPdfToRag(
                 ENTRY, "mut.pdf", null, EmbeddingPolicy.SYNC, false);

@@ -35,6 +35,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import com.springairag.core.service.ExternalDocumentService;
+import com.springairag.core.service.DocumentDerivationDescriptorProvider;
+import com.springairag.core.service.DocumentRelocationService;
 
 @WebMvcTest(RagDocumentController.class)
 @Import({
@@ -49,6 +52,18 @@ class DocumentLifecycleControllerWebTest {
 
     @MockBean
     private DocumentMutationService documentMutationService;
+    /**
+     * Batch 852：外部文档服务此前是 `required = false` setter，所以这个切片没列它也能起；
+     * 它现在是必填构造器参数。同一个切片的姊妹类
+     * {@code ExternalDocumentControllerWebTest} 早就列了它——**同一族 controller 的两个
+     * 切片，bean 表不一致，只有在变成必填的那一刻才会暴露。**
+     */
+    @MockBean
+    private ExternalDocumentService externalDocumentService;
+    @MockBean
+    private DocumentDerivationDescriptorProvider derivationDescriptorProvider;
+    @MockBean
+    private DocumentRelocationService documentRelocationService;
     @MockBean
     private RagDocumentRepository documentRepository;
     @MockBean
