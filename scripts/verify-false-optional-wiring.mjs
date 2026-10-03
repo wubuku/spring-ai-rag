@@ -286,8 +286,25 @@ const SUBJECT_SUFFIXES = ['Controller.java', 'Service.java'];
  * 所以这里用**棘轮**而不是 0：`UNGUARDED_CEILING` 必须与实测值相等，
  * 多了少了都报错——多了是"你没清却想改天花板"，少了是"你清了却忘了降天花板"。
  * 修好一处就必须把常量减 1，这个数字因此**只能下降**。
+ *
+ * ── 这条规则自己也有假阳性，登记在案（Batch 850）─────────────────────
+ * 规则的前提是"整个类里没有 null 检查"。真实情况里还有第三种守卫形态：
+ * **委托出去的守卫**——把字段作为实参传给另一个类的静态方法，由那个方法
+ * 做 null 检查。仓库里有三处 `EmbeddingDispatchService` 就是这样：
+ * `EmbeddingPolicySupport.requireJobsEnabled(dispatchService)` 内部
+ * `if (dispatchService == null) throw new RagException(EMBEDDING_JOBS_DISABLED, …)`，
+ * 抛的是有意义的领域异常，不是裸 NPE。
+ *
+ * 这三处最初被普查报成"无守卫"，也就是 16 里有 3 个是假的。要让门禁自己
+ * 跟进跨类调用就得做调用图分析，那既脆又超出这道门禁该有的射程。
+ * 处置用的是设计里预留的豁免通道——**在字段上写 `optional-claim:` 说明
+ * 守卫在哪一行**，因为下一个读它的人正要在这里做判断。
+ *
+ * 顺带说清这件事的分量：**一条会误报的门禁比没有门禁更糟**，它会被当成
+ * 噪音豁免掉。这三处如果不处理，棘轮就会把 3 个假阳性焊死在"只能降不能升"的
+ * 位置上，以后谁都得先花力气解释为什么这 3 条不算数。
  */
-const UNGUARDED_CEILING = 14;
+const UNGUARDED_CEILING = 11;
 
 /**
  * 棘轮在什么范围内生效。

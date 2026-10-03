@@ -42,7 +42,7 @@ public class PdfToRagService {
     private final FsFileRepository fsFileRepository;
     private final RagDocumentRepository documentRepository;
     private final DocumentEmbedService documentEmbedService;
-    private EmbeddingDispatchService dispatchService;
+    private EmbeddingDispatchService dispatchService; // optional-claim: unconditional @Service；守卫在同文件之外——两处使用都紧跟 `EmbeddingPolicySupport.requireJobsEnabled(dispatchService)`，它做 null 检查并抛 EMBEDDING_JOBS_DISABLED 而不是 NPE（Batch 850 普查时才发现这道检查一直在）
     private DocumentMutationService documentMutationService;
 
     public PdfToRagService(FsFileRepository fsFileRepository,

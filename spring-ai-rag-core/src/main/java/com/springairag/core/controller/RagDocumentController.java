@@ -132,7 +132,7 @@ public class RagDocumentController {
     // that relies on the absent branch. Measured, not assumed: recorded as remaining work.
     private AuditLogService auditLogService; // optional-claim: unconditional @Service; the audit helpers tolerate a null rather than failing the business call
     private ExternalDocumentService externalDocumentService; // unconditional @Service; Batch 822 removed the null guard that used to sit on it
-    private EmbeddingDispatchService dispatchService; // unconditional @Service; Batch 822 removed the null guard that used to sit on it
+    private EmbeddingDispatchService dispatchService; // optional-claim: unconditional @Service；守卫在同文件之外——三处使用都紧跟 `EmbeddingPolicySupport.requireJobsEnabled(dispatchService)`，它做 null 检查并抛 EMBEDDING_JOBS_DISABLED 而不是 NPE。Batch 822 删掉的是本文件里那处内联 throw，委托出去的那道检查一直都在（Batch 850 普查时才发现）
     private DocumentMutationService documentMutationService; // Batch 847 removed the null guards; Batch 848 makes it a required constructor dependency
     private DocumentLifecycleService documentLifecycleService; // optional-claim: unconditional @Service; same
     private DocumentDerivationDescriptorProvider derivationDescriptorProvider; // unconditional @Service; Batch 822 removed the null guard that used to sit on it
