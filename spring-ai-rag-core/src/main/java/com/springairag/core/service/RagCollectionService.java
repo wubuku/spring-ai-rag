@@ -41,8 +41,7 @@ public class RagCollectionService {
     private final CollectionIdentityResolver identityResolver;
 
     private final AuditLogService auditLogService;  // optional-claim: AuditLogService 是无条件 @Service，所以 null 分支只在测试里可达；守卫保留是因为审计写入失败不应让业务请求失败  // optional: null when audit log is unavailable
-    private DocumentVersionService documentVersionService;  // optional-claim: DocumentVersionService 是无条件 @Service，所以 null 分支只在测试里可达；这个注释原本就写着"optional for isolated unit tests"——那是实话，只是没用门禁认得的标记（Batch 827）
-    private DocumentMutationService documentMutationService;  // optional-claim: 无条件 @Service，null 分支只在测试里可达。留个注释是因为这个类自相矛盾：144/263 行按"可能为 null"守卫，331 行却无条件调用 createLocal——同一字段两种假设（Batch 827 记下，未改行为）
+    private DocumentMutationService documentMutationService;  // optional-claim: 无条件 @Service，所以按"可能为 null"守卫的那两条 else 分支在运行的应用里走不到。Batch 837 记下的"同一字段两种假设"已在 Batch 838 消解：守卫随 else 分支一起删掉，现在全类统一按无条件处理
 
     @Autowired
     public RagCollectionService(RagCollectionRepository collectionRepository,
@@ -53,11 +52,6 @@ public class RagCollectionService {
         this.documentRepository = documentRepository;
         this.identityResolver = identityResolver;
         this.auditLogService = auditLogService;
-    }
-
-    @Autowired(required = false)
-    public void setDocumentVersionService(DocumentVersionService documentVersionService) {
-        this.documentVersionService = documentVersionService;
     }
 
     @Autowired(required = false)
@@ -142,12 +136,8 @@ public class RagCollectionService {
                     }
                     long count = documentRepository.countByCollectionId(id);
                     if (count > 0) {
-                        if (documentMutationService != null) {
-                            count = documentMutationService
-                                    .unlinkLocalDocumentsFromCollection(id);
-                        } else {
-                            documentRepository.clearCollectionIdByCollectionId(id);
-                        }
+                        count = documentMutationService
+                                .unlinkLocalDocumentsFromCollection(id);
                         log.info("Unlinked {} documents from collection {}", count, id);
                     }
 
@@ -260,30 +250,11 @@ public class RagCollectionService {
                     }
 
                     List<RagDocument> sourceDocs = documentRepository.findAllByCollectionId(id);
-                    int clonedCount;
-                    if (documentMutationService != null) {
-                        for (RagDocument sourceDocument : sourceDocs) {
-                            cloneDocumentThroughCoordinator(
-                                    sourceDocument, saved.getId());
-                        }
-                        clonedCount = sourceDocs.size();
-                    } else {
-                        List<RagDocument> clonedDocs = sourceDocs.stream()
-                                .map(doc -> cloneDocument(doc, saved.getId()))
-                                .toList();
-                        documentRepository.saveAllAndFlush(clonedDocs);
-                        if (documentVersionService != null) {
-                            for (int i = 0; i < clonedDocs.size(); i++) {
-                                RagDocument clonedDoc = clonedDocs.get(i);
-                                documentVersionService.forceRecordVersion(
-                                        clonedDoc,
-                                        "CREATE",
-                                        "Cloned from document " + sourceDocs.get(i).getId()
-                                                + " in collection " + id);
-                            }
-                        }
-                        clonedCount = clonedDocs.size();
+                    for (RagDocument sourceDocument : sourceDocs) {
+                        cloneDocumentThroughCoordinator(
+                                sourceDocument, saved.getId());
                     }
+                    int clonedCount = sourceDocs.size();
 
                     log.info("Collection cloned: sourceId={}, newId={}, documents={}",
                             id, saved.getId(), clonedCount);
@@ -375,29 +346,6 @@ public class RagCollectionService {
             current = current.getCause();
         }
         return false;
-    }
-
-    private RagDocument cloneDocument(RagDocument source, Long newCollectionId) {
-        RagDocument doc = new RagDocument();
-        doc.setTitle(source.getTitle());
-        doc.setSource(source.getSource());
-        doc.setContent(source.getContent());
-        doc.setDocumentType(source.getDocumentType());
-        doc.setMetadata(source.getMetadata());
-        doc.setSize(source.getSize());
-        doc.setContentHash(source.getContentHash());
-        doc.setSourceNamespace("default");
-        doc.setExternalId(null);
-        doc.setSourceRevision(null);
-        doc.setSourceDeletedAt(null);
-        doc.setJsonbPayload(source.getJsonbPayload() == null
-                ? null : source.getJsonbPayload().deepCopy());
-        doc.setOriginalFilename(source.getOriginalFilename());
-        doc.setSource(source.getSource());
-        doc.setCollectionId(newCollectionId);
-        doc.setEnabled(source.getEnabled());
-        doc.setProcessingStatus("PENDING");  // Must re-embed; embeddings not copied
-        return doc;
     }
 
     // --- Result records ---

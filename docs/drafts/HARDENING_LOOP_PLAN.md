@@ -478,6 +478,58 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
+### Batch 838（已交付）
+
+- 分支：`feature/collection-legacy-guard-20261007`
+- 内容：清掉同族最后一批 service 侧的 `documentMutationService != null` 守卫——
+  `RagCollectionService` 的两处。**这是 Batch 827 记下、一直"未改行为"的那条。**
+- **判定依据不是"我觉得它是可选的"，而是同一个类里 331 行无条件调用
+  `documentMutationService.createLocal(...)`**——同一字段两种假设，
+  无条件那一处就是"生产中非空"的铁证，与 `false-optional-wiring` 门禁
+  用的判据同型。本批把两种假设统一到"无条件"一侧。
+- 删了什么：
+  | 删除项 | 说明 |
+  |---|---|
+  | `deleteCollection` 里的 `!= null` 守卫 + else | else 走 `clearCollectionIdByCollectionId` |
+  | `cloneCollection` 里的 `!= null` 守卫 + else | else 走 `saveAllAndFlush` + 逐条 `forceRecordVersion` |
+  | `cloneDocument(RagDocument, Long)` | 22 行，**只被已死的 else 分支调用** |
+  | `documentVersionService` 字段 + `setDocumentVersionService` | 只服务 else 分支（与 834/835 批"死字段连构造/设置器一起删"同型） |
+  | `RagDocumentRepository.clearCollectionIdByCollectionId` | 随之**全仓无人调用**，整条 `@Modifying` 批量 UPDATE 一起删（与 824 批同型） |
+  | 字段上的 `optional-claim:` 理由改写 | 守卫没了，理由要跟着改成"两条 else 分支已删，现在全类统一按无条件处理" |
+- 测试处置（删 1 / 改写 4）：
+  - 删 `RagCollectionCloneCoordinatorTest.legacyPathRecordsVersionsPerClonedDocument`
+    ——名字就写着 legacy，测的是已删的克隆 else 分支。
+  - **`RagCollectionServiceTest` 整段 delete 用例此前根本没接 `documentMutationService` mock**，
+    所以 `documentMutationService` 恒为 null，它们测的**就是已死的 else 分支**。
+    现已接上 mock 并改写成活路径断言：
+    - `existingCollection_unlinksDocumentsAndSoftDeletes`：`documentsUnlinked()==5`
+      原先来自 else 分支（`clearCollectionIdByCollectionId` 返回 void，count 保持
+      `countByCollectionId` 的值）；现在打桩 `unlinkLocalDocumentsFromCollection` → 5，
+      并 verify 走协调器。
+    - `externalManagedDocumentsRejectLegacySoftDelete` 与
+      `emptyCollection_deletesWithZeroDocuments` 的两条 `never()` 原本 verify 已删方法，
+      换成 `never().unlinkLocalDocumentsFromCollection(...)`——**这才是"拒绝/空集合"
+      真正该断言的东西**，比原来的 `never()` 更有意义。
+    - `clonesWithDocuments` 原本用 `ArgumentCaptor` 抓 `saveAllAndFlush` 的入参
+      （legacy 路径），改为 `never().saveAllAndFlush(anyList())`，
+      并保留全部**响应字段**断言（clonedCollectionId / key / name /
+      sourceCollectionId / documentsCloned）——那是 `cloneCollection` 自己的活逻辑。
+      协调器路径的参数级覆盖已在 `RagCollectionCloneCoordinatorTest` 里，
+      不重复。
+- **两处我自己的多余动作**（都是编译器/门禁当场抓住的）：
+  - 先在 `clonesWithDocuments` 里加 `verify(...).createLocal(any())`，
+    但 `createLocal` 有 **9 个参数**，`any()` 只匹配 1 个 → 编译失败；
+    而且这条覆盖本来就在 `RagCollectionCloneCoordinatorTest` 里，属于重复。
+  - `unlinkLocalDocumentsFromCollection` 返回 **`int`** 不是 `long`，
+    `thenReturn(5L)` 编译失败。返回类型必须先查签名，不能按名字猜。
+  - 删掉 else 分支后 `saveAllAndFlush` 的桩没人用了 →
+    Mockito `UnnecessaryStubbing` 把用例判红，顺手删桩。
+- 验证：core 全量 / 门控 IT 16/16 / tests 链 20/20 / docs 链 16/16 /
+  三条门禁 EXIT=0（自测 23 / 23 / 25）。
+- **同族还剩 5 处，全在 controller 里**，形态与本批不同：不是委派短路，
+  而是控制器自己判空决定做不做某件事。得逐个单独判，不能照搬本批的结论——
+  `RagCollectionController`(640/831)、`RagDocumentController`(299/394/1154)。
+
 ### Batch 837（已交付）
 
 - 分支：`feature/external-doc-legacy-20261007`

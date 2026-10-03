@@ -183,13 +183,6 @@ public interface RagDocumentRepository extends JpaRepository<RagDocument, Long> 
     List<Long> findIdsByCollectionIdIn(@Param("collectionIds") List<Long> collectionIds);
 
     /**
-     * Clear collection ID for all documents in a collection (batch operation, avoids loading one by one).
-     */
-    @org.springframework.data.jpa.repository.Modifying
-    @Query("UPDATE RagDocument d SET d.collectionId = NULL WHERE d.collectionId = :collectionId")
-    void clearCollectionIdByCollectionId(@Param("collectionId") Long collectionId);
-
-    /**
      * Find documents without a fresh COMPLETED state for one Embedding Profile.
      */
     @org.springframework.data.jpa.repository.Query(
