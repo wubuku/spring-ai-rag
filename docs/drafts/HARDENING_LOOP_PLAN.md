@@ -478,6 +478,61 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
+### Batch 831（仅勘察，代码改动已回退）
+
+- 分支：`feature/batch-legacy-path-20261005`（已删）
+- **本批做完了勘察与实施尝试，最后把代码改动全部回退了**。
+  原因是剩余上下文预算不足以把 8 个用例的迁移做到完整且全绿——
+  **留一个半迁移的红批次比不交付更糟**。下面是量清的全部结论，
+  下一批可以照单执行。
+- 目标：`BatchDocumentService` 的 2 处 `documentMutationService != null` 守卫。
+  同样地，`DocumentMutationService` 是无条件 `@Service`，两条 else 分支在
+  运行中的应用里不可达。
+- **能删什么**（全部已实测过一遍）：
+  | 删除项 | 规模 | 连带 |
+  |---|---|---|
+  | `createSingleDocument` | 68 行 | 只被 legacy 分支的 2 处调用，删干净 |
+  | `transactionTemplate` 字段 + `@Nullable PlatformTransactionManager` 构造参数 + 4 参 `@Autowired` 构造器 | ~15 行 | `TransactionTemplate` 只在 legacy 的 ASYNC 分支用过 |
+  | 3 参便捷构造器（`this(..., null)` 转发到 4 参那个） | 3 行 | 与 823 批同型的"测试专用构造器" |
+  | `deleteSingleDocument` 的 else 分支 | 5 行 | **它是"不带 revision 校验的硬删除"**，绕过了乐观锁 |
+  | 随之未用的 import | 8 个 | |
+  - 合计主源码 **402 → 约 305 行**。已实测编译通过。
+- **必须推翻的一个判断（我自己写错的）**：我一度认定
+  `BatchDocumentService.computeSha256` "生产侧没有调用方，只是测试在用"，
+  想把它并进 `com.springairag.core.util.DigestUtils.sha256` 再删掉。
+  **那是 grep 输出被 `head` 截断后的错觉**——不截断重查，
+  `DocumentEmbedService:461` 与 `LegacyEmbeddingMigrationService:112` 都在调。
+  而且两者并不等价：`LegacyEmbeddingMigrationService` 那处的 `content`
+  来自数据库、可能为 null，本方法抛 NPE 而 `DigestUtils.sha256` 抛
+  `IllegalArgumentException`。**这是行为变更，不属于删死代码的范围。**
+  - **这是本会话第 3 次栽在"截断的输出不能当汇总"上**
+    （829 批 `head -40` Maven 汇总、830 批前缀锚点、这次 grep 截断）。
+    凡是"某个东西没有引用方"这类结论，都必须**不带 `head`** 重查一遍。
+- **测试迁移面（实测）**：
+  | 文件 | 用例 | 从不设置该协作者 |
+  |---|---|---|
+  | `BatchDocumentServiceTest` | 20 | **20（全部）** |
+  | `BatchDocumentServiceLegacyTailTest` | 8 | **8（全部）** |
+  | `BatchDocumentServiceTransactionTailTest` | 2 | 2（且都用了已删的 4 参构造器） |
+  | `BatchDocumentServiceDeleteErrorTailTest` | 3 | 1（`hardDeleteFallsBackToRevisionOneWhenMissing`） |
+  | `BatchDocumentCoordinatorTest` | 4 | 3 |
+  | `EmbeddingJobsPostgresIntegrationTest`（门控 IT） | — | `batchAsyncEnqueueFailureRollsBackDocumentPersistence` 用了 4 参构造器 |
+  - 共 **约 34 条**需要迁移，其中 `BatchDocumentServiceTest` 的 8 条
+    `batchCreateDocuments_*` 与 `LegacyTailTest` 的 6 条是纯 legacy 模型
+    （自己按内容哈希查重 + `documentRepository.save` + 自己驱动嵌入）。
+  - 断言对象要换：改为钉"服务把什么交给 `createLocal`"
+    （`createLocal(request, collectionId, policy, force, "BATCH_CREATE", idempotencyKey, null, null, null)`）。
+  - 有一个坑要留给执行者：`collectionId` 与 `policy` 是 `createLocal` 的
+    **独立参数**、不在 `DocumentRequest` 里。测试夹具若从请求里读
+    `getCollectionId()`，恒为 null，**重建出的文档会少字段而测试照样绿**
+    （830 批的 `PdfToRagMutationFixture` 已经栽过一次）。
+  - `BatchDocumentServiceLegacyTailTest` 删完 6 条后只剩 2 条删除路径用例，
+    类名里的 "Legacy" 就不再成立了，应改名
+    （我试过改成 `BatchDocumentServiceDeleteTailTest`）。
+- 建议的下一批切法：先做 `BatchDocumentService`（34 条里最集中的一处），
+  `JsonRecordService.mutationService` 的 **18 个文件**单独再开一批——
+  那个规模是本条的 5 倍，硬塞进来只会做出第二个半成品。
+
 ### Batch 830（已交付）
 
 - 分支：`feature/pdf-legacy-path-20261004`
