@@ -131,12 +131,12 @@ public class RagDocumentController {
     // Making the wiring unconditional and deleting the guards means migrating every test
     // that relies on the absent branch. Measured, not assumed: recorded as remaining work.
     private AuditLogService auditLogService; // optional-claim: unconditional @Service; the audit helpers tolerate a null rather than failing the business call
-    private ExternalDocumentService externalDocumentService; // optional-claim: unconditional @Service; the guard turns a hand-constructed instance's NPE into a stated error
-    private EmbeddingDispatchService dispatchService; // optional-claim: unconditional @Service; same
+    private ExternalDocumentService externalDocumentService; // unconditional @Service; Batch 822 removed the null guard that used to sit on it
+    private EmbeddingDispatchService dispatchService; // unconditional @Service; Batch 822 removed the null guard that used to sit on it
     private DocumentMutationService documentMutationService; // optional-claim: unconditional @Service; same
     private DocumentLifecycleService documentLifecycleService; // optional-claim: unconditional @Service; same
-    private DocumentDerivationDescriptorProvider derivationDescriptorProvider; // optional-claim: unconditional @Component; same
-    private DocumentRelocationService documentRelocationService; // optional-claim: unconditional @Service; same
+    private DocumentDerivationDescriptorProvider derivationDescriptorProvider; // unconditional @Service; Batch 822 removed the null guard that used to sit on it
+    private DocumentRelocationService documentRelocationService; // unconditional @Service; Batch 822 removed the null guard that used to sit on it
 
     @Autowired
     public RagDocumentController(RagDocumentRepository documentRepository,
@@ -220,7 +220,7 @@ public class RagDocumentController {
     @Timed(value = "rag.documents.external-upsert", description = "Upsert external document")
     public ResponseEntity<ExternalDocumentUpsertResponse> upsertExternalDocument(
             @Valid @RequestBody ExternalDocumentUpsertRequest request) {
-        return ResponseEntity.ok(requireExternalDocumentService().upsert(request));
+        return ResponseEntity.ok(externalDocumentService.upsert(request));
     }
 
     @Operation(summary = "Relocate an externally managed document",
@@ -232,9 +232,6 @@ public class RagDocumentController {
             @Valid @RequestBody ExternalDocumentRelocateRequest request,
             @RequestHeader("Idempotency-Key") @NotBlank @Size(max = 255)
             String idempotencyKey) {
-        if (documentRelocationService == null) {
-            throw new IllegalStateException("Document relocation service is unavailable");
-        }
         return ResponseEntity.ok(documentRelocationService.relocate(request, idempotencyKey));
     }
 
@@ -250,7 +247,7 @@ public class RagDocumentController {
             description = "Batch upsert external documents")
     public ResponseEntity<ExternalDocumentBatchUpsertResponse> batchUpsertExternalDocuments(
             @Valid @RequestBody ExternalDocumentBatchUpsertRequest request) {
-        return ResponseEntity.ok(requireExternalDocumentService().batchUpsert(request.getItems()));
+        return ResponseEntity.ok(externalDocumentService.batchUpsert(request.getItems()));
     }
 
     @Operation(summary = "Get an externally managed document by source identity",
@@ -268,7 +265,7 @@ public class RagDocumentController {
             @RequestParam(defaultValue = "default") @Size(max = 128)
             String sourceNamespace,
             @RequestParam @NotBlank @Size(max = 255) String externalId) {
-        return ResponseEntity.ok(requireExternalDocumentService()
+        return ResponseEntity.ok(externalDocumentService
                 .getByExternalIdentity(
                         collectionKey, sourceNamespace, externalId));
     }
@@ -291,7 +288,7 @@ public class RagDocumentController {
             @RequestParam @NotBlank @Size(max = 255) String externalId,
             @RequestParam @NotBlank @Size(max = 255) String sourceRevision,
             @RequestParam(required = false) @Size(max = 255) String expectedSourceRevision) {
-        return ResponseEntity.ok(requireExternalDocumentService().sourceDelete(
+        return ResponseEntity.ok(externalDocumentService.sourceDelete(
                 collectionKey, sourceNamespace, externalId,
                 sourceRevision, expectedSourceRevision));
     }
@@ -432,7 +429,7 @@ public class RagDocumentController {
     public ResponseEntity<DocumentMutationResponse> updateDocument(
             @PathVariable Long id,
             @Valid @RequestBody DocumentUpdateRequest request) {
-        return ResponseEntity.ok(requireDocumentMutationService()
+        return ResponseEntity.ok(documentMutationService
                 .updateLocal(id, request));
     }
 
@@ -442,7 +439,7 @@ public class RagDocumentController {
     public ResponseEntity<DocumentMutationResponse> disableDocument(
             @PathVariable Long id,
             @Valid @RequestBody DocumentDisableRequest request) {
-        return ResponseEntity.ok(requireDocumentMutationService()
+        return ResponseEntity.ok(documentMutationService
                 .disableLocal(id, request));
     }
 
@@ -452,7 +449,7 @@ public class RagDocumentController {
     public ResponseEntity<DocumentMutationResponse> restoreDocument(
             @PathVariable Long id,
             @Valid @RequestBody DocumentRestoreRequest request) {
-        return ResponseEntity.ok(requireDocumentMutationService()
+        return ResponseEntity.ok(documentMutationService
                 .restoreLocal(id, request));
     }
 
@@ -736,15 +733,6 @@ public class RagDocumentController {
     private long countDocumentsWithoutCurrentEmbedding(
             java.util.Optional<java.util.Set<Long>> restrictedIds,
             long embeddingProfileId) {
-        if (derivationDescriptorProvider == null) {
-            return restrictedIds
-                    .map(ids -> documentRepository
-                            .countDocumentsWithoutEmbeddingsByCollectionIds(
-                                    List.copyOf(ids), embeddingProfileId))
-                    .orElseGet(() -> documentRepository
-                            .countDocumentsWithoutEmbeddings(
-                                    embeddingProfileId));
-        }
         String textVersion = derivationDescriptorProvider
                 .textDescriptor().chunkerVersion();
         String jsonVersion = derivationDescriptorProvider
@@ -762,15 +750,6 @@ public class RagDocumentController {
     private List<RagDocument> findDocumentsWithoutCurrentEmbedding(
             java.util.Optional<java.util.Set<Long>> restrictedIds,
             long embeddingProfileId) {
-        if (derivationDescriptorProvider == null) {
-            return restrictedIds
-                    .map(ids -> documentRepository
-                            .findDocumentsWithoutEmbeddingsByCollectionIds(
-                                    List.copyOf(ids), embeddingProfileId))
-                    .orElseGet(() -> documentRepository
-                            .findDocumentsWithoutEmbeddings(
-                                    embeddingProfileId));
-        }
         String textVersion = derivationDescriptorProvider
                 .textDescriptor().chunkerVersion();
         String jsonVersion = derivationDescriptorProvider
@@ -1387,7 +1366,7 @@ public class RagDocumentController {
             @Parameter(description = "Document ID") @PathVariable Long id,
             @Parameter(description = "Version number") @PathVariable int versionNumber,
             @Valid @RequestBody DocumentVersionRestoreRequest request) {
-        return ResponseEntity.ok(requireDocumentMutationService()
+        return ResponseEntity.ok(documentMutationService
                 .restoreLocalFromVersion(id, versionNumber, request));
     }
 
@@ -1441,20 +1420,17 @@ public class RagDocumentController {
         return result;
     }
 
-    private ExternalDocumentService requireExternalDocumentService() {
-        if (externalDocumentService == null) {
-            throw new IllegalStateException("External document service is not available");
-        }
-        return externalDocumentService;
-    }
-
-    private DocumentMutationService requireDocumentMutationService() {
-        if (documentMutationService == null) {
-            throw new IllegalStateException(
-                    "Document mutation service is not available");
-        }
-        return documentMutationService;
-    }
+    // Batch 822 deleted the two require*() helpers that used to stand here.
+    // Each threw IllegalStateException when its collaborator was null, and both
+    // collaborators are unconditional @Service, so neither arm could fire.
+    // The other half of the argument is measured rather than assumed: after
+    // Batch 821 removed the two cases that asserted those throws, every test
+    // that calls upsertExternalDocument / getExternalDocument / updateDocument
+    // attaches the collaborator. The null branch was unreachable in production
+    // and untested — dead in both directions at once.
+    //
+    // An unreachable guard is not merely redundant. It tells the next reader that
+    // a "service missing" deployment mode exists, and they will reason from it.
 
     // ==================== Date Parsing Helper ====================
 

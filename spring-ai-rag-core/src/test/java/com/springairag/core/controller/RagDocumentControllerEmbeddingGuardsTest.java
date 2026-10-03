@@ -131,27 +131,14 @@ class RagDocumentControllerEmbeddingGuardsTest {
         assertTrue(failed.toString().contains("error"));
     }
 
-    @Test
-    void countAndFindWithoutDescriptorProviderHitUnscopedQueries()
-            throws Exception {
-        when(documentRepository.countDocumentsWithoutEmbeddings(9L))
-                .thenReturn(5L);
-        when(documentRepository.countDocumentsWithoutEmbeddingsByCollectionIds(
-                anyList(), eq(9L))).thenReturn(2L);
-        when(documentRepository.findDocumentsWithoutEmbeddings(9L))
-                .thenReturn(List.of(document()));
-        when(documentRepository.findDocumentsWithoutEmbeddingsByCollectionIds(
-                anyList(), eq(9L))).thenReturn(List.of(document()));
-
-        assertEquals(5L, countWithoutEmbedding.invoke(controller,
-                Optional.empty(), 9L));
-        assertEquals(2L, countWithoutEmbedding.invoke(controller,
-                Optional.of(Set.of(1L)), 9L));
-        assertEquals(1, ((List<?>) findWithoutEmbedding.invoke(controller,
-                Optional.empty(), 9L)).size());
-        assertEquals(1, ((List<?>) findWithoutEmbedding.invoke(controller,
-                Optional.of(Set.of(1L)), 9L)).size());
-    }
+    // Batch 822 deleted countAndFindWithoutDescriptorProviderHitUnscopedQueries.
+    // It stubbed the version-less repository queries that the controller only
+    // reached when DocumentDerivationDescriptorProvider was null — a path no
+    // running application takes, since the provider is an unconditional
+    // @Component. Its sibling countAndFindWithDescriptorProviderHitCurrentEmbeddingQueries
+    // covers the path the application actually uses, so nothing was lost.
+    // The removed branch was not merely dead: it queried without the chunker
+    // version predicate, so it would have answered a different question.
 
     @Test
     void countAndFindWithDescriptorProviderHitCurrentEmbeddingQueries()

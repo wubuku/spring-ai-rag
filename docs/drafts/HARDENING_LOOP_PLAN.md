@@ -478,6 +478,95 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
+### Batch 822（已交付）
+
+- 分支：`feature/delete-dead-null-guards-20261006`
+- 内容：把 820/821 两次推迟的"守卫处置"做完——**而推迟的理由本身是错的**。
+- 勘察（**又一次：先量，再决定**）：
+  - 我在 820、821 两个批次的账本里都写了"删掉守卫需要一次大迁移"，
+    并且写明"实测 19 个测试文件直接构造 `RagDocumentController`、只有 8 个注入"。
+    **这个数字是真的，但我从它推出的结论是错的。**
+    正确的问题是"**哪些测试走了被守卫的路径、却没注入协作者**"，
+    而不是"哪些测试没注入协作者"。量出来是 **0**。
+  - 原因很直接：821 批已经删掉了断言那些异常的用例，
+    于是**每一条"会抛的守卫"的 null 分支，既在生产不可达、也在测试不被覆盖**——
+    两个方向同时是死代码。
+  - 顺带发现一处**比死代码更糟的东西**：
+    `derivationDescriptorProvider` 的 null 分支不是抛异常，而是退回到
+    **不带 chunker 版本谓词**的查询
+    （`countDocumentsWithoutEmbeddings(profileId)` vs
+    `countDocumentsWithoutCurrentEmbeddings(profileId, textVersion, jsonVersion)`）。
+    它要是真跑起来，会**回答另一个问题**——把已有 embedding 但版本不同的文档
+    也算成"缺 embedding"。死代码只是误导，**会给出不同答案的死代码是陷阱**。
+- 变更：
+  - **删掉仓库里全部 7 处"会抛的 null 守卫"**：
+    `RagDocumentController.requireExternalDocumentService()`、
+    `requireDocumentMutationService()`、relocate 的行内守卫；
+    `RagCollectionController.requirePurgeService()`、
+    provisioning ledger 守卫、jsonRecord 守卫；
+    `EvaluationController.requireSemantic()`。
+    10 个调用点改为直接用字段。
+    - **`requirePurgeService()` 那一处连 `required = false` 都不是**，
+      是普通 `@Autowired`——也就是说它的协作者**一定存在**，
+      而代码仍在为它写一条"可能不存在"的错误路径。**比 14 处假可选声明更赤裸。**
+  - **删掉 2 处版本无关的 fallback 分支**（`derivationDescriptorProvider`），
+    理由如上：它不是冗余，是**另一个答案**。
+  - **删掉 4 条只为覆盖已删分支而存在的测试**：
+    `countAndFindWithoutDescriptorProviderHitUnscopedQueries`、
+    `purgeEndpointsRejectWhenPurgeServiceMissing`、
+    `createWithIdempotencyKeyWithoutLedgerSurfaces503`、
+    `jsonRecordWithoutServiceFails`。
+    前者有姊妹用例覆盖生产路径，其余三个的名字就直接说明了它们是什么。
+    每处删除都留下"删的是什么、为什么、替代覆盖在哪"的注释。
+  - **迁移 3 个测试文件 / 9 条测试**：接上**真实的**
+    `DocumentDerivationDescriptorProvider(new RagProperties())` 而不是 mock，
+    并把桩改指版本感知的仓储方法。
+    **用真实 provider 是有意的**：这样测试钉住的是应用真实产生的版本串，
+    而不是一个随手编的 `"text-v1"`。
+  - **7 处失效的 `optional-claim:` 理由改写**成陈述当前事实
+    （"无条件 `@Service`；822 批删掉了它上面的 null 守卫"）——
+    理由写在已经没有守卫的字段上是纯噪声。
+  - 门禁头注释新增一节，写清**判据的分界线**。
+- 变异测试：本批未改门禁逻辑（只改了理由与注释），
+  门禁自测 15 例仍全绿，真实树 exit 0。
+- 验证：
+  - core：**994 类 / 7736 用例 / 0 失败 / 154 跳过**
+    （821 批 994 / 7740，减掉的正是那 4 条）。
+  - 门控 IT 16 例通过；仓库门禁 tests 17/17、docs 16/16；门禁登记维持 49。
+  - 前端未改动，不跑 npm 链。
+- 指标：**会抛的 null 守卫 7 → 0**；只为覆盖死分支的测试累计 **11 → 0**；
+  门禁普查出的假可选声明 **14 → 8**（因为 6 个字段的守卫已删），
+  剩下 8 处**全部是"会跳过"的容忍型守卫**。
+- **本批的结论值得单独记：判据里"抛"和"跳过"是两种东西。**
+  - **会抛的守卫是一句关于部署形态的断言**。bean 无条件时它是**假的**，
+    而且会骗读代码的人去推出一套不存在的降级模式。全部该删。
+  - **会跳过的守卫不是断言，是容忍**。null 时什么都不发生，而这正是它要的语义
+    （审计失败不该让请求失败）。删掉反而改变行为。该留，但要写清理由。
+  - 我前两个批次之所以把整件事推迟，是因为我把这两类混在一起数，
+    然后用其中一类的规模去估算另一类的成本。
+- 遗留（如实登记，未处理）：
+  - **4 个版本无关的仓储方法现在生产零调用**：
+    `countDocumentsWithoutEmbeddings`、`findDocumentsWithoutEmbeddings`
+    （仅集成测试直接引用）、以及
+    `countDocumentsWithoutEmbeddingsByCollectionIds`、
+    `findDocumentsWithoutEmbeddingsByCollectionIds`（**连测试都不引用**）。
+    删它们要动仓储接口、SQL 与那段集成测试，属于下一批的范围。
+  - **8 处"会跳过"的守卫保留**：4 处 `auditLogService`（审计失败不得影响请求）、
+    2 处 `documentMutationService` 的 legacy 分派（真的要走旧路径时该走）、
+    1 处 `documentLifecycleService`、1 处 `diagnosticsService`（扛着真的
+    `isEnabled()` 开关）。
+  - **主代码还有一个 8 参便捷构造器** `RagDocumentController(...)`
+    （不带 `auditLogService`，内部自己 `new CollectionIdentityResolver(...)`）。
+    **实测：生产零调用；测试侧 8 处调用、分布在 8 个文件**（9 参那个是 12 处）。
+    它是又一组"只有测试够得着"的重载，819 批的普查没抓到它——
+    **因为那次只找 public 且无映射注解的方法，而它是一个有映射注解的重载**。
+    这说明 819 的判据也有边界：它抓的是"旁路"，抓不到"便捷构造"。
+    已测量、未处理，登记为下一批的勘察入口。
+  - 承接 821：静态门禁的"0 findings"歧义（自测是唯一防线）；
+    仍无 `@SpringBootTest` 证明 Spring 的真实接线；
+    `dead-locale-key` 判据刻意粗仍有漏报；CSP 全仓库零处。
+  - `/tmp/b806-ci-gates.patch` 仍待人工应用（14 条 standing gap）。
+
 ### Batch 821（已交付）
 
 - 分支：`feature/production-wiring-tests-20261006`

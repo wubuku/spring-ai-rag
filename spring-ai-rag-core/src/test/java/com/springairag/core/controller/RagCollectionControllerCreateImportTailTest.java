@@ -47,24 +47,12 @@ class RagCollectionControllerCreateImportTailTest {
         return request;
     }
 
-    @Test
-    void createWithIdempotencyKeyWithoutLedgerSurfaces503() {
-        MockHttpServletRequest httpRequest = new MockHttpServletRequest();
-        httpRequest.addHeader("Idempotency-Key",
-                "11111111-1111-1111-1111-111111111111");
-        RequestContextHolder.setRequestAttributes(
-                new ServletRequestAttributes(httpRequest));
-        try {
-            RagException error = assertThrows(RagException.class,
-                    () -> controllerWithoutProvisioning().create(
-                            createRequest(), httpRequest));
-            assertEquals(
-                    com.springairag.api.enums.ErrorCode.SERVICE_UNAVAILABLE,
-                    error.getErrorCodeEnum());
-        } finally {
-            RequestContextHolder.resetRequestAttributes();
-        }
-    }
+    // Batch 822 deleted createWithIdempotencyKeyWithoutLedgerSurfaces503. It
+    // built a controller with no CollectionProvisioningService and asserted
+    // SERVICE_UNAVAILABLE from the guard that preceded the create-or-replay
+    // call. That service is an unconditional @Service, so the guard could never
+    // fire; the endpoint now calls the ledger directly, as the running
+    // application does. The idempotent-replay path itself is still covered.
 
     @Test
     void updateRejectsSuppliedCollectionKey() {

@@ -190,15 +190,11 @@ class RagCollectionControllerImportDocumentsTest {
                         jsonDocument("ext-1", null))));
     }
 
-    @Test
-    void jsonRecordWithoutServiceFails() {
-        controller.setDocumentMutationService(null);
-        controller.setJsonRecordService(null);
-
-        assertThrows(IllegalStateException.class,
-                () -> controller.importCollection(importRequest(
-                        jsonDocument("ext-1", "{\"a\":1}"))));
-    }
+    // Batch 822 deleted jsonRecordWithoutServiceFails, which set both the
+    // mutation and the JSON-record service to null and asserted
+    // IllegalStateException. Both are unconditional @Service beans, so the
+    // state cannot occur; the guards it asserted are gone, and the import path
+    // stays covered with the services attached.
 
     @Test
     void jsonRecordDelegatesToService() {

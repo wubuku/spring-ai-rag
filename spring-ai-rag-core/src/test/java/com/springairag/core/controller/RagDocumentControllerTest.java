@@ -23,6 +23,7 @@ import com.springairag.core.entity.RagCollection;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.exception.DocumentNotFoundException;
 import com.springairag.core.repository.RagCollectionRepository;
+import com.springairag.core.service.DocumentDerivationDescriptorProvider;
 import com.springairag.core.repository.RagDocumentRepository;
 import com.springairag.core.repository.RagEmbeddingRepository;
 import com.springairag.core.service.AuditLogService;
@@ -46,6 +47,17 @@ import static org.mockito.Mockito.*;
  * RagDocumentController Unit Tests
  */
 class RagDocumentControllerTest {
+    private com.springairag.core.service.DocumentDerivationDescriptorProvider
+            derivationDescriptorProvider;
+
+    private String textVersion() {
+        return derivationDescriptorProvider.textDescriptor().chunkerVersion();
+    }
+
+    private String jsonVersion() {
+        return derivationDescriptorProvider.jsonRecordDescriptor().chunkerVersion();
+    }
+
 
     private static final EmbeddingProfile PROFILE = new EmbeddingProfile(
             7L, "test-profile", "test", "test-model", "v1",
@@ -76,6 +88,15 @@ class RagDocumentControllerTest {
                 documentRepository, embeddingRepository, collectionRepository,
                 documentEmbedService, batchDocumentService, documentVersionService,
                 embeddingProfileProvider, auditLogService);
+
+        // Batch 822: the controller reaches the version-aware repository queries
+        // unconditionally now that the "no descriptor provider" fallback is gone.
+        // A real provider is used rather than a mock so these tests pin the
+        // version strings the application actually produces.
+        derivationDescriptorProvider =
+                new DocumentDerivationDescriptorProvider(
+                        new com.springairag.core.config.RagProperties());
+        controller.setDerivationDescriptorProvider(derivationDescriptorProvider);
 
         // Default mock behavior for documentToMap calls
         when(embeddingRepository.countByDocumentId(anyLong())).thenReturn(0L);
@@ -687,7 +708,7 @@ class RagDocumentControllerTest {
 
     @Test
     void reembedMissing_noDocuments_returnsEmptyResults() {
-        when(documentRepository.findDocumentsWithoutEmbeddings(PROFILE.id()))
+        when(documentRepository.findDocumentsWithoutCurrentEmbeddings(PROFILE.id(), textVersion(), jsonVersion()))
                 .thenReturn(List.of());
 
         ResponseEntity<ReembedMissingResponse> response = controller.reembedMissing(false, null);
@@ -705,7 +726,7 @@ class RagDocumentControllerTest {
     void reembedMissing_allSucceed_returnsCorrectCounts() {
         RagDocument doc1 = createDoc(1L, "Doc One", "content one");
         RagDocument doc2 = createDoc(2L, "Doc Two", "content two");
-        when(documentRepository.findDocumentsWithoutEmbeddings(PROFILE.id()))
+        when(documentRepository.findDocumentsWithoutCurrentEmbeddings(PROFILE.id(), textVersion(), jsonVersion()))
                 .thenReturn(List.of(doc1, doc2));
         when(documentEmbedService.embedDocument(1L, false))
                 .thenReturn(Map.of("status", "COMPLETED", "chunksCreated", 5, "message", "done"));
@@ -738,7 +759,7 @@ class RagDocumentControllerTest {
     void reembedMissing_oneSucceedsOneFails_returnsMixedCounts() {
         RagDocument doc1 = createDoc(1L, "Good Doc", "content");
         RagDocument doc2 = createDoc(2L, "Bad Doc", "content");
-        when(documentRepository.findDocumentsWithoutEmbeddings(PROFILE.id()))
+        when(documentRepository.findDocumentsWithoutCurrentEmbeddings(PROFILE.id(), textVersion(), jsonVersion()))
                 .thenReturn(List.of(doc1, doc2));
         when(documentEmbedService.embedDocument(1L, false))
                 .thenReturn(Map.of("status", "COMPLETED", "chunksCreated", 5, "message", "done"));
@@ -766,7 +787,7 @@ class RagDocumentControllerTest {
     @Test
     void reembedMissing_forceFlag_passesThroughToService() {
         RagDocument doc = createDoc(1L, "Force Doc", "content");
-        when(documentRepository.findDocumentsWithoutEmbeddings(PROFILE.id()))
+        when(documentRepository.findDocumentsWithoutCurrentEmbeddings(PROFILE.id(), textVersion(), jsonVersion()))
                 .thenReturn(List.of(doc));
         when(documentEmbedService.embedDocument(1L, true))
                 .thenReturn(Map.of("status", "COMPLETED", "chunksCreated", 5, "message", "force re-embed"));
@@ -781,7 +802,7 @@ class RagDocumentControllerTest {
     @Test
     void embeddingStatus_usesActiveProfileFreshState() {
         when(documentRepository.count()).thenReturn(4L);
-        when(documentRepository.countDocumentsWithoutEmbeddings(PROFILE.id()))
+        when(documentRepository.countDocumentsWithoutCurrentEmbeddings(PROFILE.id(), textVersion(), jsonVersion()))
                 .thenReturn(1L);
 
         ResponseEntity<EmbeddingStatusResponse> response = controller.embeddingStatus();
@@ -790,6 +811,6 @@ class RagDocumentControllerTest {
         assertEquals(3L, response.getBody().withEmbeddings());
         assertEquals(1L, response.getBody().withoutEmbeddings());
         assertTrue(response.getBody().hasMissing());
-        verify(documentRepository).countDocumentsWithoutEmbeddings(PROFILE.id());
+        verify(documentRepository).countDocumentsWithoutCurrentEmbeddings(PROFILE.id(), textVersion(), jsonVersion());
     }
 }

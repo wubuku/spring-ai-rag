@@ -60,6 +60,27 @@
  * 所以：**自测是这个门禁唯一的防线**。一次绿色运行证明的是
  * "规则还能拒绝它该拒绝的东西"，不是"规则看得见全部"。
  *
+ * ── 哪种 null 守卫需要理由，哪种不需要（Batch 822 的结论）─────────────
+ * 判据里"被 `if (x == null)` 守卫"这一条，涵盖两种**性质完全不同**的写法：
+ *
+ *   A. **会抛的守卫**：`if (x == null) throw ...`。
+ *      它是一句**关于部署形态的断言**——"这个协作者可能不存在"。
+ *      bean 无条件时这句话是假的，而且它会骗读代码的人去推出一套不存在的降级模式。
+ *      Batch 822 把仓库里**全部 7 处**都删掉了：其中 6 处的协作者是无条件
+ *      `@Service`，第 7 处（`CollectionPurgeService`）连 `required = false` 都不是，
+ *      是普通 `@Autowired`。删完之后**迁移量是 0 个测试文件**——因为 821 批
+ *      已经把断言这些异常的用例清掉了，null 分支在生产不可达、在测试也不被覆盖。
+ *
+ *   B. **会跳过的守卫**：`if (x != null) x.log(...)`。
+ *      它不是断言，是**容忍**。null 时什么都不发生，而这正是它想要的语义
+ *      （审计失败不该让请求失败）。删掉它反而会改变行为。
+ *
+ * 所以这道门禁仍然要求 B 类写理由，但判据的分界线是**"抛"还是"跳过"**，
+ * 不是"有没有守卫"。Batch 822 之后剩下的 8 处全是 B 类：
+ * 4 处 auditLogService、2 处 documentMutationService 的 legacy 分派、
+ * 1 处 documentLifecycleService、1 处 diagnosticsService（它还扛着真的
+ * `isEnabled()` 功能开关）。
+ *
  * Run: node scripts/verify-false-optional-wiring.mjs
  */
 
