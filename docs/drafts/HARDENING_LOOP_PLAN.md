@@ -478,6 +478,41 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
+### Batch 833（仅勘察，代码改动已回退）
+
+- 分支：`feature/json-legacy-path-20261006`（已删）
+- 目标：同族最后一条——`JsonRecordService.upsert` 的 legacy 内联 upsert 分支。
+  `DocumentMutationService` 是无条件 `@Service`，那条 else 分支在运行的应用里走不到。
+- **主源码改动已实测可行并编译通过**（本批只回退，没留下红）：
+  - 删 `upsert` 里的 legacy 块（L168–177，10 行）
+  - 连带死掉的 `outcomeFromDispatch`（9 行）与 `embedIfRequested`（31 行）
+  - 撤掉字段上的 `optional-claim:` 理由（守卫没了，理由就该跟着走）
+  - `JsonRecordService` **1054 → 1013 行**
+- **实测迁移面：31 个失败用例 / 9 个文件**（不是先前估的 18 个文件——
+  22 个文件里只有 **11 个**真的调 `upsert(...)`）：
+  | 文件 | run | 失败 | 错误 | 初判 |
+  |---|---|---|---|---|
+  | `JsonRecordServiceEmbeddingOutcomeTailTest` | 6 | 0 | 4 | **删**：用反射测 `embedIfRequested`，方法已死 |
+  | `JsonRecordServicePersistMatrixTest` | 6 | 0 | 6 | **删**：Javadoc 自述是"`embedIfRequested` 的 NOT_REQUESTED/CACHED/FAILED 矩阵" |
+  | `JsonRecordServicePersistRetryTest` | 3 | 2 | 1 | 大概率**删**：测的是 legacy `persist` 的重试循环 |
+  | `JsonRecordServiceLegacyUpsertTailTest` | 6 | 2 | 1 | 待判：类名里的 "Legacy" 需逐条核 |
+  | `JsonRecordServiceTest` | 23 | 1 | 7 | 迁：接上 `upsertJsonRecord` 协作者 |
+  | `JsonRecordValidationEmbedTailTest` | 5 | 0 | 3 | 待判 |
+  | `JsonRecordServiceIdentityTest` | 2 | 0 | 2 | 迁 |
+  | `JsonRecordSearchImportTailTest` | 10 | 0 | 1 | 迁 |
+  | `JsonRecordServicePersistTest` | 1 | 0 | 1 | 迁 |
+- **形状是有利的**：`upsertJsonRecord(request, collectionId, collectionKey,
+  originalFilename, enabledOverride)` 返回 `JsonMutationResult`，
+  `toUpsertResponse(JsonMutationResult)` 再映射成 `JsonRecordUpsertResponse`。
+  所以夹具可以"按请求造一个 JsonMutationResult"，让多数**响应形状**断言原样存活。
+  与 832 的 `BatchDocumentMutationFixture` 同一套路。
+- **留个坑给执行者**：`collectionId` / `collectionKey` 同样是
+  `upsertJsonRecord` 的独立参数，不在 `JsonRecordUpsertRequest` 里；
+  夹具从请求里读会恒为 null，而**测试照样绿**。这是 830/832 批连续两次栽过的同一处。
+- 仍需留意：`documentEmbedService` / `embeddingProfileProvider` 在
+  `embedIfRequested` 死后是否也变成只写不读——本次没来得及量，
+  执行时要先查（832 批就是这么发现 `documentEmbedService` 死字段的）。
+
 ### Batch 832（已交付）
 
 - 分支：`feature/batch-legacy-path-20261006`
