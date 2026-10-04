@@ -272,7 +272,7 @@ public class ChatExportService {
             records = historyRepository.findVisibleTopNNewestFirst(
                     principal.id(),
                     sessionId,
-                    canReadLegacy(principal),
+                    principal.canReadLegacyRows(),
                     limit);
             records = new java.util.ArrayList<>(records);
             Collections.reverse(records);
@@ -280,7 +280,7 @@ public class ChatExportService {
             records = historyRepository.findVisibleByOwnerAndSessionNewestFirst(
                     principal.id(),
                     sessionId,
-                    canReadLegacy(principal),
+                    principal.canReadLegacyRows(),
                     org.springframework.data.domain.Pageable.unpaged());
             records = new java.util.ArrayList<>(records);
             Collections.reverse(records);
@@ -291,12 +291,6 @@ public class ChatExportService {
                     "Chat session was not found");
         }
         return records;
-    }
-
-    private boolean canReadLegacy(ChatPrincipal principal) {
-        return principal.id().equals("root:environment-root")
-                || principal.id().equals("legacy:static")
-                || principal.id().equals("local:auth-disabled");
     }
 
     private void appendJsonSources(

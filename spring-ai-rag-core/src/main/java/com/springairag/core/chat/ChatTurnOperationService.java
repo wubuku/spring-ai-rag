@@ -1042,17 +1042,7 @@ public class ChatTurnOperationService {
     }
 
     private ChatPrincipal principalFor(ChatTurnOperation operation) {
-        String owner = operation.ownerPrincipalId();
-        if (owner != null && owner.startsWith("db:")) {
-            return new ChatPrincipal(owner, "DATABASE_API_KEY", false);
-        }
-        if ("root:environment-root".equals(owner)) {
-            return new ChatPrincipal(owner, "ENVIRONMENT_ROOT", true);
-        }
-        if ("legacy:static".equals(owner)) {
-            return new ChatPrincipal(owner, "LEGACY_STATIC", false);
-        }
-        return ChatPrincipal.local();
+        return ChatPrincipal.fromOwnerId(operation.ownerPrincipalId());
     }
 
     private ChatTurnInProgressException inProgress(ChatTurnOperation operation) {
