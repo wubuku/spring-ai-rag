@@ -197,7 +197,7 @@ Batch 776 在写下这条规则之前先量了基线：`Alerts`、`ApiKeys`、`S
 ## 6. 写操作必须报告失败
 
 `npm run check:mutation-errors` 串在 `npm run lint` 里，扫描 `src/` 下每个 `.tsx`，
-拦截四类违规：
+拦截五类违规：
 
 - `silent-mutation` —— 既没有传 `onError`（通常是 `showToast`），
   也没有在同一个文件里渲染它自己的 `.isError` 的 `useMutation`。
@@ -206,6 +206,9 @@ Batch 776 在写下这条规则之前先量了基线：`Alerts`、`ApiKeys`、`S
 - `unreasoned-failure` —— `onError` 用一句固定的文案报告失败，
   而那句话里没有任何来自失败本身的内容。
   **"失败了"不等于"为什么失败"。**
+- `interpolated-reason` —— 失败消息被手工拼装、或被塞进翻译句子里，
+  也就是**未经任何过滤**就到达用户。
+  **"到达用户"不等于"在途中被过滤过"。**
 - `swallowed-rejection` —— `catch` 块丢掉了失败，却没说清为什么丢掉是正当的。
 
 Batch 791 把 `src/` 里全部 **37 个** mutation 过了一遍，查出 **6 个失败不可见**：
@@ -256,6 +259,26 @@ Batch 791 把 `src/` 里全部 **37 个** mutation 过了一遍，查出 **6 个
 规则一样，紧贴在决策的正上方。它**跟不进本地 helper**：`Documents.tsx` 曾有
 五个 mutation 共用一个 `handleMutationError`，原因死在 helper 内部，
 任何规则都看不见；Batch 859 修的是那个 helper，而不是教门禁去追进函数里。
+
+**Batch 861 追问的是：在"原因确实到达了用户"的那些路径上，会发生什么。**
+其中九处把消息拼成 `t('files.importError', { error: msg })` 或者
+`` `${t('k')}: ${message}` ``，原因就是 `catch` 块碰巧产出的那个东西。
+`api/client.ts:54` 在网络失败时 reject `new Error('Failed to fetch')`，
+于是用户读到的是"Import failed: Failed to fetch"——一句讲连接而非讲写入的话，
+没有长度上限，也无法与服务器的回答区分开。
+`utils/failureReason.ts` 提供的每一个过滤器（传输层哨兵表、200 字上限、
+丢弃堆栈）在那条路径上**根本不存在**。Batch 860 把这九处搬到了
+`failureMessage` 上；这条规则就是防止它们长回来的东西。
+
+**作用域是这条规则的要害。** `files.embedFailed` 同样在插值——
+`t('files.embedFailed', { message: result.embedMessage })`——而它是对的，
+因为那个消息来自 **200 响应**、说明嵌入为何没完成，并且位于 `try` 块里。
+一次成功请求的状态说明不是失败原因，把它送进哨兵表才是错误。
+所以规则只看 `onError` 函数体与 `catch` 块：当前 103 个组件文件里 0 违规，
+而 Batch 860 之前是 9 个。**误报数为零是实测，不是愿望**——那个数字是把规则
+跑在 Batch 860 之前的那棵树上量出来的。
+
+和上面那条规则一样，它跟不进本地 helper。
 
 修复里有两处细节必须做对，两处都有测试钉住：
 

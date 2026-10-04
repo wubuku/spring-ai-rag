@@ -33,6 +33,19 @@
  * body (`no-op-error-handler`), and a second rule (`swallowed-rejection`) asks
  * a bare `catch` to say why discarding the reason is acceptable.
  *
+ * Batches 859 and 861 finished the sentence this gate's own output line claims.
+ * "Every write action reports its failure" was false in two further ways that
+ * the first three rules both pass:
+ *
+ *   - `unreasoned-failure` — a handler that reports a fixed sentence and
+ *     nothing else. Eleven mutations read `onError: () => showToast(t('alerts.
+ *     deleteError'), 'error')`: the reason was discarded at the signature,
+ *     before the body ever ran.
+ *   - `interpolated-reason` — a handler that *does* carry the reason, but
+ *     splices it into a translated sentence, where the transport-sentinel list
+ *     and the length cap do not exist. "Import failed: Failed to fetch" is a
+ *     sentence about the connection, indistinguishable from a server answer.
+ * *
  * It is deliberately file-scoped, like the accessibility gate: a component that
  * hands a mutation down and renders the error in a child is a shape this
  * checker cannot follow, and a rule that cries wolf gets ignored. The measured
@@ -49,7 +62,7 @@ import { stripComments } from './check-design-system.mjs';
 const projectRoot = fileURLToPath(new URL('..', import.meta.url));
 const sourceRoot = join(projectRoot, 'src');
 
-export const VIOLATION_KINDS = Object.freeze(['silent-mutation', 'no-op-error-handler', 'unreasoned-failure', 'swallowed-rejection']);
+export const VIOLATION_KINDS = Object.freeze(['silent-mutation', 'no-op-error-handler', 'unreasoned-failure', 'interpolated-reason', 'swallowed-rejection']);
 
 /** `const name = useMutation(` — the declaration is what gets a name to track. */
 const MUTATION_DECL = /const\s+([A-Za-z_$][\w$]*)\s*=\s*useMutation\s*\(/g;
@@ -269,6 +282,96 @@ function findUnreasonedFailures(options) {
   return found;
 }
 
+const TRANSLATION_CALL = /(?<![A-Za-z_$][\w$])t\s*\(/g;
+
+const TEMPLATE_LITERAL = /`/g;
+
+/**
+ * The failure messages that are assembled by hand or routed through i18n
+ * interpolation, and so skip every reason filter this repository has.
+ *
+ * `unreasoned-failure` above asks whether the reason reaches the user at all.
+ * This asks what happens on the paths where it does: the message is built as
+ * `t('files.importError', { error: msg })` or as `` `${t('k')}: ${msg}` ``, and
+ * in both forms the reason is whatever the catch block happened to produce.
+ * `api/client.ts:54` rejects a network failure with `new Error('Failed to
+ * fetch')`, so the user read *"Import failed: Failed to fetch"* — a sentence
+ * that describes the connection rather than the write, with no length bound and
+ * no way to tell it apart from a server answer. The filters in
+ * `utils/failureReason.ts` (transport sentinels, the 200-character cap, the
+ * stack-trace guard) do not exist on this path at all; nine sites were using it
+ * until Batch 860 moved them onto `failureMessage`.
+ *
+ * The scope is the load-bearing part of the rule, and it is why the check is
+ * about *failure paths* rather than about interpolation. `files.embedFailed`
+ * also interpolates — `t('files.embedFailed', { message: result.embedMessage })`
+ * — and it is correct, because that message is a field of a **200 response**
+ * saying why the embedding did not complete, sitting in a `try` block. A status
+ * note about a request that succeeded is not a failure reason, and the syntax
+ * agrees: the rule looks only inside `onError` bodies and `catch` blocks, where
+ * 0 of the 103 component files carry a violation today and 9 did before.
+ *
+ * **Known limit**, the same one `unreasoned-failure` has: this reads the
+ * failure path and cannot follow a call into a helper, so
+ * `onError: e => toast(t('k', { error: e.message }))` written one function away
+ * is not seen.
+ */
+function findInterpolatedReasons(code, from, to) {
+  const found = [];
+  const region = code.slice(from, to);
+  TRANSLATION_CALL.lastIndex = 0;
+  let match;
+  while ((match = TRANSLATION_CALL.exec(region)) !== null) {
+    const args = balancedContentsOf(region, match.index + match[0].length - 1);
+    if (args === null) continue;
+    const options = secondArgumentOf(args);
+    if (options === null) continue;
+    found.push({ at: match.index, shape: 'interpolated' });
+  }
+  TEMPLATE_LITERAL.lastIndex = 0;
+  while ((match = TEMPLATE_LITERAL.exec(region)) !== null) {
+    const body = balancedContentsOf(region, match.index);
+    if (body === null || !body.includes('${')) continue;
+    if (!TRANSLATION_CALL.test(body)) continue;
+    // A `t()` call inside this template is already reported on its own.
+    if (found.some(hit => hit.at > match.index && hit.at < match.index + 2)) continue;
+    found.push({ at: match.index, shape: 'hand-assembled' });
+  }
+  for (const hit of found) {
+    // `from` is an offset into `code`, not into a slice of it — the caller
+    // that scans a mutation's options object has to translate first. Getting
+    // this wrong reports the line of the `useMutation(` declaration, which is
+    // the one line the author is not looking at.
+    hit.at += from;
+    hit.line = code.slice(0, hit.at).split('\n').length;
+  }
+  return found;
+}
+
+/** The second argument of a call, but only when it is an object literal. */
+function secondArgumentOf(argumentList) {
+  let depth = 0;
+  let quote = null;
+  for (let i = 0; i < argumentList.length; i += 1) {
+    const ch = argumentList[i];
+    if (quote) {
+      if (ch === quote) quote = null;
+      continue;
+    }
+    if (ch === "'" || ch === '"' || ch === '`') quote = ch;
+    else if (ch === '(' || ch === '{' || ch === '[') depth += 1;
+    else if (ch === ')' || ch === '}' || ch === ']') depth -= 1;
+    else if (ch === ',' && depth === 0) {
+      return argumentList.slice(i + 1).trim().startsWith('{')
+        ? argumentList.slice(i + 1).trim()
+        : null;
+    }
+  }
+  return null;
+}
+
+const CATCH_BLOCK = /\bcatch\s*(?:\([^)]*\))?\s*\{/g;
+
 export function scanSource(relativePath, source) {
   const violations = [];
   const code = stripComments(source);
@@ -276,6 +379,27 @@ export function scanSource(relativePath, source) {
   const allowAt = line =>
     ALLOW_COMMENT.exec(lines[line - 2] ?? '') ?? ALLOW_COMMENT.exec(lines[line - 1] ?? '');
 
+  // A `catch` that builds its message by hand. Scanned on the stripped source,
+  // which preserves line count, so the reported line is the real one.
+  CATCH_BLOCK.lastIndex = 0;
+  let catchMatch;
+  while ((catchMatch = CATCH_BLOCK.exec(code)) !== null) {
+    const brace = code.indexOf('{', catchMatch.index);
+    const body = balancedContentsOf(code, brace);
+    if (body === null) continue;
+    for (const hit of findInterpolatedReasons(code, brace + 1, brace + 1 + body.length)) {
+      const allow = allowAt(hit.line);
+      violations.push({
+        kind: 'interpolated-reason',
+        file: relativePath,
+        line: hit.line,
+        message: hit.shape === 'interpolated'
+          ? 'a `catch` interpolates the failure into a translated sentence, which skips the reason filter'
+          : 'a `catch` assembles the failure sentence by hand, which skips the reason filter',
+        detail: allow ? allow[1] : undefined,
+      });
+    }
+  }
   MUTATION_DECL.lastIndex = 0;
   let match;
   while ((match = MUTATION_DECL.exec(code)) !== null) {
@@ -303,6 +427,29 @@ export function scanSource(relativePath, source) {
             message: `${name} reports the failure as the fixed sentence "${key}" and never says what the server objected to`,
             detail: allow ? allow[1] : undefined,
           });
+        }
+        // The reason may well reach the user — but if it is spliced into a
+        // translated sentence, it arrives unfiltered.
+        ON_ERROR_PROPERTY.lastIndex = 0;
+        let handler;
+        while ((handler = ON_ERROR_PROPERTY.exec(options)) !== null) {
+          const body = arrowBodyAt(options, handler.index + handler[0].length);
+          if (body === null) continue;
+          // `options` is a slice of `code` beginning at `openParen`, so the
+          // handler's own index has to be translated before it can be used.
+          const from = openParen + handler.index;
+          for (const hit of findInterpolatedReasons(code, from, from + handler[0].length + body.text.length)) {
+            const allow = allowAt(hit.line);
+            violations.push({
+              kind: 'interpolated-reason',
+              file: relativePath,
+              line: hit.line,
+              message: hit.shape === 'interpolated'
+                ? `${name} interpolates the failure into a translated sentence, which skips the reason filter`
+                : `${name} assembles the failure sentence by hand, which skips the reason filter`,
+              detail: allow ? allow[1] : undefined,
+            });
+          }
         }
         continue;
       }

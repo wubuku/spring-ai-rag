@@ -200,9 +200,19 @@ describe('unreasoned-failure', () => {
       .toEqual([]);
   });
 
-  it('accepts an interpolated sentence', () => {
-    expect(kinds(mutation("(msg) => showToast(t('files.importError', { error: msg }), 'error')")))
-      .toEqual([]);
+  it('accepts an interpolated sentence, for a different reason', () => {
+    // `unreasoned-failure` is satisfied here — the sentence does carry the
+    // reason — and this test used to assert a clean result. Batch 861 added
+    // `interpolated-reason`, which objects on entirely different grounds: the
+    // reason arrives unfiltered. The kind list is now two entries deep, and
+    // both are visible rather than one silently hiding the other.
+    const source = `
+      const importM = useMutation({
+        mutationFn: () => filesApi.import(file),
+        onError: (msg) => showToast(t('files.importError', { error: msg }), 'error'),
+      });
+    `;
+    expect(kinds(source)).toEqual(['interpolated-reason']);
   });
 
   it('accepts a key the failure itself supplies', () => {
@@ -293,6 +303,119 @@ describe('unreasoned-failure', () => {
 
   it('is listed among the kinds this gate can emit', () => {
     expect(VIOLATION_KINDS).toContain('unreasoned-failure');
+  });
+});
+
+describe('interpolated-reason', () => {
+  // Batch 861. `unreasoned-failure` asks whether the reason reaches the user.
+  // This asks what happens on the paths where it does — and the answer was that
+  // the message got built as `t('files.importError', { error: msg })`, which
+  // arrives unfiltered. `api/client.ts:54` rejects a network failure with
+  // `new Error('Failed to fetch')`, so the user read "Import failed: Failed to
+  // fetch": a sentence about the connection, with no length bound, impossible
+  // to tell apart from a server answer. Nine sites were written that way until
+  // Batch 860 moved them onto `failureMessage`.
+  it('rejects a catch that interpolates the reason into a translated sentence', () => {
+    const source = `
+      const open = async () => {
+        try {
+          const blob = await filesApi.getRawFile(path);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          showToast(t('files.previewError', { error: msg }), 'error');
+        }
+      };
+    `;
+    expect(kinds(source)).toEqual(['interpolated-reason']);
+  });
+
+  it('rejects a failure sentence assembled by hand', () => {
+    // The Collections purge dialog: `${t('collections.purge.applyError')}: ${message}`.
+    // A template literal is a different shape from an options object and was
+    // missed by the first version of this rule, which found 8 of the 9 sites.
+    const source = `
+      const applyM = useMutation({
+        mutationFn: () => collectionsApi.applyPurge(payload),
+        onError: (error) => {
+          const message = errorMessage(error);
+          showToast(\`\${t('collections.purge.applyError')}: \${message}\`, 'error');
+        },
+      });
+    `;
+    expect(kinds(source)).toEqual(['interpolated-reason']);
+  });
+
+  it('accepts the same interpolation outside a failure path', () => {
+    // The load-bearing case, and the reason the rule is scoped to failure paths
+    // rather than to interpolation. `files.embedFailed` interpolates
+    // `result.embedMessage` — a field of a **200 response** saying why the
+    // embedding did not complete. A status note about a request that succeeded
+    // is not a failure reason, and running it through the transport-sentinel
+    // list would be the mistake.
+    const source = `
+      const embedM = useMutation({
+        mutationFn: () => filesApi.embed(id, force),
+        onSuccess: () => {
+          showToast(t('files.embedFailed', { message: result.embedMessage }), 'error');
+        },
+        onError: (error) => showToast(failureMessage(t, 'files.embedError', error), 'error'),
+      });
+    `;
+    expect(kinds(source)).toEqual([]);
+  });
+
+  it('accepts the shared helper, where `t` is passed as a value', () => {
+    expect(kinds(`
+      const deleteM = useMutation({
+        mutationFn: () => api.delete(id),
+        onError: (error) => showToast(failureMessage(t, 'collections.deleteError', error), 'error'),
+      });
+    `)).toEqual([]);
+  });
+
+  it('reports the line of the interpolation, not of the mutation', () => {
+    // A real bug in the first version: the handler's index is relative to the
+    // options slice, not to the file, so adding only the slice's own offset
+    // pointed the report at `useMutation(` — the one line the author is not
+    // looking at. Caught by comparing the reported line against the known
+    // position of the toast, not by any assertion about the message.
+    const source = `const createM = useMutation({
+      mutationFn: () => collectionsApi.create(form),
+      onError: (error) => {
+        showToast(t('collections.createError', { message: error.message }), 'error');
+      },
+    });`;
+    const [violation] = scanSource('src/components/CreateCollectionModal.tsx', source);
+    expect(violation.line).toBe(4);
+    expect(violation.message).toContain('createM');
+  });
+
+  it('names the shape it rejected', () => {
+    const interpolated = scanSource('src/pages/Sample.tsx', `
+      try { await load(); } catch (err) { showToast(t('k', { error: msg }), 'error'); }
+    `)[0];
+    expect(interpolated.message).toContain('interpolates');
+
+    const assembled = scanSource('src/pages/Sample.tsx', `
+      const m = useMutation({
+        mutationFn: () => api.go(),
+        onError: (e) => showToast(\`\${t('k')}: \${e.message}\`, 'error'),
+      });
+    `)[0];
+    expect(assembled.message).toContain('assembles');
+  });
+
+  it('accepts a recorded, justified exemption', () => {
+    const source = `
+      // mutation-error-allow: the server answers 200 with a partial-failure count
+      try { await load(); } catch (err) { showToast(t('k', { error: err.message }), 'error'); }
+    `;
+    const [violation] = scanSource('src/pages/Sample.tsx', source);
+    expect(violation.detail).toContain('partial-failure count');
+  });
+
+  it('is listed among the kinds this gate can emit', () => {
+    expect(VIOLATION_KINDS).toContain('interpolated-reason');
   });
 });
 
