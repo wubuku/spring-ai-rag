@@ -297,10 +297,21 @@ export function findExpressionContainerCopy(source) {
   return found;
 }
 
-/** Strips comments so a string inside prose cannot be read as rendered copy. */
+/**
+ * Strips comments so a string inside prose cannot be read as rendered copy.
+ *
+ * Newlines inside a block comment are preserved. Replacing a multi-line comment
+ * with a single space also collapses its line breaks, and every line number in
+ * this file is computed by counting `\n` in the stripped text — so a file with
+ * a block comment above the offending line reported a line that was 20 lines
+ * off. That is the failure mode a reader hits first: the gate says
+ * `Dialog.tsx:164` and line 164 is an unrelated `role="dialog"`. The offender
+ * was line 184. Masking with spaces of equal length keeps offsets and line
+ * numbers addressing the same character as the original file.
+ */
 export function stripComments(source) {
   return source
-    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/\/\*[\s\S]*?\*\//g, (block) => block.replace(/[^\n]/g, ' '))
     .replace(/\/\/[^\n]*/g, ' ');
 }
 
@@ -311,9 +322,12 @@ export function usesI18n(source) {
 }
 
 /**
+ * @param {string} relPath
+ * @param {string} source
+ * @param {Map<string, Set<string>>} [proseProps] component → prose prop names
  * @returns {{copy: string, kind: string, line: number}[]}
  */
-export function findHardcodedCopy(relPath, source) {
+export function findHardcodedCopy(relPath, source, proseProps) {
   const code = stripComments(source);
   const found = [];
   for (const { kind, re } of PATTERNS) {
@@ -329,11 +343,12 @@ export function findHardcodedCopy(relPath, source) {
   }
   found.push(...findExpressionContainerCopy(code));
   found.push(...findToastTemplateCopy(code));
+  found.push(...findProsePropCopy(code, proseProps));
   return found.sort((a, b) => a.line - b.line);
 }
 
-export function checkFile(relPath, source, allowed = ALLOWED) {
-  const hits = findHardcodedCopy(relPath, source);
+export function checkFile(relPath, source, allowed = ALLOWED, proseProps) {
+  const hits = findHardcodedCopy(relPath, source, proseProps);
   if (hits.length === 0) return [];
   const hasI18n = usesI18n(source);
   const violations = [];
@@ -372,11 +387,114 @@ export function collectSources(root = SOURCE_ROOT) {
     }));
 }
 
+// ── Custom components that mint their own accessible name ────────────────
+//
+// The `attribute` pattern above sees `aria-label="Notifications"`. It cannot see
+// `<IconButton label="Notifications" />`, which reaches the user through exactly
+// the same `aria-label` (IconButton.tsx renders `aria-label={label}` and
+// `title={tooltip ?? label}`). Same string, same screen, one of them invisible to
+// the gate — so the check was narrower than the comment above it promised.
+//
+// The fix is to *discover* the shape rather than hard-code a component list: any
+// component whose props declare `p?: string` and whose body forwards `p` into
+// `aria-label` / `title` has a prose prop. A list would rot silently; a new
+// wrapper added next quarter is picked up with no edit here.
+//
+// `string` is the load-bearing qualifier, and it is what keeps this from
+// becoming a false-positive machine. The first survey found six components
+// forwarding a prop into aria-label/title, and only three declare theirs as
+// `string` (IconButton.label, Dialog.ariaLabel, Tabs.ariaLabel). The other
+// three take a `ReactNode` — a JSX element or a count — where a literal is not
+// even a type error, so including them would report shapes that cannot occur.
+// A gate that misreports gets allowlisted, and then it protects nothing.
+
+/** Prop names a component body forwards into an accessible-name attribute. */
+function forwardedProseProps(source) {
+  const out = new Set();
+  for (const m of source.matchAll(
+    /\baria-label=\{(\w+)\}|\btitle=\{(\w+)\}|\btitle=\{[^}]*\?\?\s*(\w+)\}/g,
+  )) {
+    const name = m[1] || m[2] || m[3];
+    if (name) out.add(name);
+  }
+  return out;
+}
+
+/** Component names declared in a file, so `Dialog/ConfirmDialog.tsx` yields ConfirmDialog. */
+function componentNames(source) {
+  const names = new Set();
+  for (const m of source.matchAll(/(?:export\s+)?(?:default\s+)?function\s+([A-Z]\w+)/g)) {
+    names.add(m[1]);
+  }
+  for (const m of source.matchAll(
+    /(?:export\s+)?(?:const|let)\s+([A-Z]\w+)\s*(?::[^=]+)?=\s*(?:\([^)]*\)|\w+)\s*=>/g,
+  )) {
+    names.add(m[1]);
+  }
+  return names;
+}
+
+/**
+ * @param {{relPath: string, source: string}[]} sources
+ * @returns {Map<string, Set<string>>} component name → its prose prop names
+ */
+export function collectProseProps(sources) {
+  const proseProps = new Map();
+  for (const { relPath, source } of sources) {
+    if (!/^(components|design-system)\//.test(relPath)) continue;
+    const declared = [...forwardedProseProps(source)].filter(
+      (name) => new RegExp(`\\b${name}\\??\\s*:\\s*string\\b`).test(source),
+    );
+    if (declared.length === 0) continue;
+    for (const component of componentNames(source)) {
+      if (!proseProps.has(component)) proseProps.set(component, new Set());
+      for (const name of declared) proseProps.get(component).add(name);
+    }
+  }
+  return proseProps;
+}
+
+/**
+ * Literal copy handed to a discovered prose prop.
+ *
+ * Same shape rule as the `attribute` pattern (capitalised, at least three
+ * characters) so a component's own enum-ish label behaves identically whether it
+ * arrives through `aria-label` or through a wrapper.
+ *
+ * The reported line points at the **attribute**, not at the opening tag. A tag
+ * can carry half a dozen props before the one that is wrong, and `Dialog.tsx`
+ * puts `label` on the fourth line of its `IconButton`; pointing at the tag would
+ * send a reader to the wrong line three rows up.
+ *
+ * @returns {{copy: string, kind: string, line: number}[]}
+ */
+export function findProsePropCopy(source, proseProps) {
+  if (!proseProps || proseProps.size === 0) return [];
+  const code = stripComments(source);
+  const found = [];
+  for (const [component, props] of proseProps) {
+    for (const prop of props) {
+      const re = new RegExp(`<${component}\\b[^>]*?\\b${prop}="([^"]*)"`, 'g');
+      let m;
+      while ((m = re.exec(code)) !== null) {
+        const attrOffset = m[0].lastIndexOf(`${prop}="`);
+        const at = m.index + (attrOffset >= 0 ? attrOffset : 0);
+        found.push({ copy: m[1].trim(), kind: 'prose-prop', line: code.slice(0, at).split('\n').length });
+      }
+    }
+  }
+  return found.filter((hit) => /^[A-Z][A-Za-z0-9 ,.'’!?()\-:]{2,}$/.test(hit.copy)).sort((a, b) => a.line - b.line);
+}
+
 function main() {
   const files = collectSources();
-  const violations = files.flatMap((f) => checkFile(f.relPath, f.source));
+  // Discovered before checking, because "is this prop prose?" is a question about
+  // the whole tree: IconButton's `label` is prose because IconButton forwards it
+  // to aria-label, which no single page can tell on its own.
+  const proseProps = collectProseProps(files);
+  const violations = files.flatMap((f) => checkFile(f.relPath, f.source, ALLOWED, proseProps));
   const allowed = files.reduce(
-    (n, f) => n + findHardcodedCopy(f.relPath, f.source)
+    (n, f) => n + findHardcodedCopy(f.relPath, f.source, proseProps)
       .filter((h) => Object.prototype.hasOwnProperty.call(
         ALLOWED, `${f.relPath}:${h.copy}`,
       )).length,
@@ -395,10 +513,17 @@ function main() {
     return;
   }
 
+  const discovered = [...proseProps.entries()]
+    .map(([component, props]) => `${component}.${[...props].join('/')}`)
+    .join(', ');
   console.log(
     `Hardcoded-copy check passed; ${files.length} component source(s) scanned, ` +
       `${allowed} intentional technical string(s) allowlisted, no other user-visible ` +
       'text is a literal.',
+  );
+  console.log(
+    `Custom components whose accessible name comes from a prop: ${discovered || '(none)'}. ` +
+      'Literal copy passed to one of those props is reported just like aria-label="…".',
   );
 }
 

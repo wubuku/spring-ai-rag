@@ -1278,7 +1278,7 @@ describe('Documents upload zone, filter clearing and dialog dismissal', () => {
     );
     expect(await screen.findByText('preview body')).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'Close' }));
+    await user.click(screen.getByTestId('dialog-close'));
     expect(screen.queryByText('preview body')).not.toBeInTheDocument();
   });
 
@@ -1308,7 +1308,7 @@ describe('Documents upload zone, filter clearing and dialog dismissal', () => {
 
     const dialog = await screen.findByRole('dialog');
     expect(dialog.textContent).toContain('versions.title');
-    await user.click(screen.getByRole('button', { name: 'Close' }));
+    await user.click(screen.getByTestId('dialog-close'));
 
     await waitFor(() => {
       expect(

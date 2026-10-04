@@ -7,6 +7,7 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { IconButton } from '../ui';
 import styles from './Dialog.module.css';
 
@@ -81,6 +82,12 @@ export function Dialog({
   returnFocusRef,
   ariaLabel,
 }: DialogProps) {
+  // Batch 856: the close button's accessible name was the literal "Close", and
+  // this component had no i18n at all — a screen-reader user on zh-CN heard
+  // English for the control that dismisses the dialog. The gate missed it
+  // because `label` reaches aria-label through IconButton, not through a literal
+  // `aria-label=` attribute; see check-hardcoded-copy.mjs.
+  const { t } = useTranslation();
   const titleId = useId();
   const descriptionId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
@@ -179,9 +186,15 @@ export function Dialog({
             )}
           </div>
           <IconButton
+            // Same stable-hook convention as dialog-backdrop above: the close
+            // button is identified by what it does, not by the words on it.
+            // Batch 856 moved that label to t('common.close'), and 12 queries
+            // across 6 files were matching the English text as if it were an
+            // identity. A translated label must not be what a test depends on.
+            data-testid="dialog-close"
             onClick={onClose}
             disabled={closeDisabled}
-            label="Close"
+            label={t('common.close')}
             size={32}
           >
             <X size={16} aria-hidden="true" />
