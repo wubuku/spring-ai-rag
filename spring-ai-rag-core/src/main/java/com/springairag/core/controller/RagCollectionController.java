@@ -94,18 +94,9 @@ public class RagCollectionController {
     // the code. See scripts/verify-false-optional-wiring.mjs.
     private DocumentMutationService documentMutationService; // Batch 847 removed the null guards; Batch 848 makes it a required constructor dependency
     private AuditLogService auditLogService; // optional-claim: unconditional @Service; the audit helpers tolerate a null rather than failing the business call
-    private CollectionProvisioningService collectionProvisioningService; // unconditional @Service; Batch 822 removed the null guard that used to sit on it
+    private CollectionProvisioningService collectionProvisioningService; // Batch 853：`required = false` 已删。Batch 822 移除了守卫，210 行无条件使用它，缺失时抛裸 NPE
     private CollectionPurgeService collectionPurgeService;
-    private ProvisioningOwnerResolver provisioningOwnerResolver =
-            new ProvisioningOwnerResolver();
-
-    @Autowired(required = false)
-    public void setCollectionProvisioningService(
-            CollectionProvisioningService collectionProvisioningService,
-            ProvisioningOwnerResolver provisioningOwnerResolver) {
-        this.collectionProvisioningService = collectionProvisioningService;
-        this.provisioningOwnerResolver = provisioningOwnerResolver;
-    }
+    private ProvisioningOwnerResolver provisioningOwnerResolver;
 
     @Autowired
     public void setCollectionPurgeService(CollectionPurgeService service) {
@@ -118,13 +109,17 @@ public class RagCollectionController {
                                     RagCollectionService collectionService,
                                     CollectionIdentityResolver identityResolver,
                                     @Autowired(required = false) AuditLogService auditLogService,
-                                    DocumentMutationService documentMutationService) {
+                                    DocumentMutationService documentMutationService,
+                                    CollectionProvisioningService collectionProvisioningService,
+                                    ProvisioningOwnerResolver provisioningOwnerResolver) {
         this.collectionRepository = collectionRepository;
         this.documentRepository = documentRepository;
         this.collectionService = collectionService;
         this.identityResolver = identityResolver;
         this.auditLogService = auditLogService;
         this.documentMutationService = documentMutationService;
+        this.collectionProvisioningService = collectionProvisioningService;
+        this.provisioningOwnerResolver = provisioningOwnerResolver;
     }
 
     @Operation(

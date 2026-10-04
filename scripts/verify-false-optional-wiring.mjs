@@ -303,8 +303,18 @@ const SUBJECT_SUFFIXES = ['Controller.java', 'Service.java'];
  * 顺带说清这件事的分量：**一条会误报的门禁比没有门禁更糟**，它会被当成
  * 噪音豁免掉。这三处如果不处理，棘轮就会把 3 个假阳性焊死在"只能降不能升"的
  * 位置上，以后谁都得先花力气解释为什么这 3 条不算数。
+ *
+ * ── 棘轮走到 3（Batch 853）─────────────────────────────────────────────
+ * 剩下这 3 处是同一形态的尾巴，全部在 service 层且全部是"声明可选、代码
+ * 无条件使用"：`BatchDocumentService.documentMutationService`、
+ * `DocumentEmbedService.chunkingService`、`JsonRecordService.mutationService`。
+ *
+ * 按 852 的教训，这三处**逐处立项**而不是合批：`DocumentEmbedService` 和
+ * `JsonRecordService` 各自牵动 36 / 34 个测试文件，合批会让回归面大到
+ * 无法在一次验收里说清"是谁弄坏的"。`BatchDocumentService` 约 20 个文件，
+ * 规模上可以与其中一个合批，留到下一批。
  */
-const UNGUARDED_CEILING = 5;
+const UNGUARDED_CEILING = 3;
 
 /**
  * 棘轮在什么范围内生效。

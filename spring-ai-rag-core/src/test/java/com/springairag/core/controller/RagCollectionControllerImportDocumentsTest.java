@@ -30,6 +30,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import com.springairag.core.security.ProvisioningOwnerResolver;
+import com.springairag.core.service.CollectionProvisioningService;
 
 /**
  * importCollection → importDocuments 分支（Batch 315）：空文档列
@@ -61,7 +63,9 @@ class RagCollectionControllerImportDocumentsTest {
                 collectionService,
                 new CollectionIdentityResolver(collectionRepository),
                 auditLogService,
-                documentMutationService);
+                documentMutationService,
+                mock(CollectionProvisioningService.class),
+                new ProvisioningOwnerResolver());
         when(collectionService.createCollection(any()))
                 .thenReturn(collection(1L, "kb"));
     }

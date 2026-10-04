@@ -72,9 +72,9 @@ class RagCollectionControllerTest {
                 collectionService,
                 new CollectionIdentityResolver(collectionRepository),
                 auditLogService,
-                documentMutationService);
-        controller.setCollectionProvisioningService(
-                collectionProvisioningService, new ProvisioningOwnerResolver());
+                documentMutationService,
+                collectionProvisioningService,
+                new ProvisioningOwnerResolver());
     }
 
     private RagCollection createCollection(Long id, String name) {

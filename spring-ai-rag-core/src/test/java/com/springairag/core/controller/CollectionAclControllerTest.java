@@ -23,6 +23,8 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
+import com.springairag.core.security.ProvisioningOwnerResolver;
+import com.springairag.core.service.CollectionProvisioningService;
 
 class CollectionAclControllerTest {
 
@@ -39,7 +41,9 @@ class CollectionAclControllerTest {
                 mock(RagCollectionService.class),
                 new CollectionIdentityResolver(collectionRepository),
                 null,
-                mock(DocumentMutationService.class));
+                mock(DocumentMutationService.class),
+                mock(CollectionProvisioningService.class),
+                new ProvisioningOwnerResolver());
     }
 
     @AfterEach

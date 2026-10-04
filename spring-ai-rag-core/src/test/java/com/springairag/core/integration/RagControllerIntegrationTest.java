@@ -169,6 +169,13 @@ class RagControllerIntegrationTest {
     @MockBean private com.springairag.core.service.RagCollectionService ragCollectionService;
     @MockBean private com.springairag.core.service.CollectionIdentityResolver collectionIdentityResolver;
     @MockBean private CollectionPurgeService collectionPurgeService;
+    // Batch 853：同一个洞在这个类里犯了第二次。集合开通服务与归属解析器此前是
+    // 同一个包私有 `required = false` setter 的两个参数，切片同样没列它们也能起来。
+    // 两次都发生在同一个类，说明"类注释声称全 mock"这句话本身从来没有被检查过
+    // ——它只是被可选注解掩护着。真正把这类遗漏逼出来的是把注解改成必填，
+    // 而不是补一条断言。
+    @MockBean private com.springairag.core.service.CollectionProvisioningService collectionProvisioningService;
+    @MockBean private com.springairag.core.security.ProvisioningOwnerResolver provisioningOwnerResolver;
 
     // ==================== AB Test ====================
     @MockBean private AbTestService abTestService;

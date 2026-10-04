@@ -36,6 +36,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import com.springairag.core.security.ProvisioningOwnerResolver;
+import com.springairag.core.service.CollectionProvisioningService;
 
 /**
  * RagCollectionController by-key 路由长尾（Batch 549，JaCoCo 驱
@@ -66,7 +68,9 @@ class RagCollectionControllerByKeyTailTest {
                 collectionService,
                 identityResolver,
                 auditLogService,
-                mock(DocumentMutationService.class));
+                mock(DocumentMutationService.class),
+                mock(CollectionProvisioningService.class),
+                new ProvisioningOwnerResolver());
 
         collection = new RagCollection();
         collection.setId(5L);

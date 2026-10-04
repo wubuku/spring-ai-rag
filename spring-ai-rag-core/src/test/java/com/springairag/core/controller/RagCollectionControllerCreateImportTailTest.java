@@ -23,6 +23,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
+import com.springairag.core.security.ProvisioningOwnerResolver;
+import com.springairag.core.service.CollectionProvisioningService;
 
 /**
  * RagCollectionController 创建守卫与导入构建长尾（Batch 559，JaCoCo
@@ -39,7 +41,9 @@ class RagCollectionControllerCreateImportTailTest {
                 mock(RagCollectionService.class),
                 mock(CollectionIdentityResolver.class),
                 null,
-                mock(DocumentMutationService.class));
+                mock(DocumentMutationService.class),
+                mock(CollectionProvisioningService.class),
+                new ProvisioningOwnerResolver());
     }
 
     private CollectionRequest createRequest() {
