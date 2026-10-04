@@ -4,6 +4,12 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+# Batch 894: one reader for the surefire report, so the `tests` count comes from
+# the <testcase> elements rather than the attribute. Five gates had their own copy
+# of the same sed pipeline and none of them had a self-test; see
+# scripts/lib/surefire-report.sh for the measurement behind the rule.
+source scripts/lib/surefire-report.sh
+
 RUN_ID="${COLLECTION_PROVISIONING_VERIFY_RUN_ID:-$(date +%Y%m%d-%H%M%S)-$$}"
 LOG_DIR="${COLLECTION_PROVISIONING_VERIFY_LOG_DIR:-.verification/collection-provisioning/${RUN_ID}}"
 VERIFY_PHASE="${COLLECTION_PROVISIONING_VERIFY_PHASE:-all}"
@@ -185,10 +191,10 @@ postgres_tests() {
       -Dsurefire.failIfNoSpecifiedTests=false test
   local report="spring-ai-rag-core/target/surefire-reports/TEST-com.springairag.core.integration.CollectionProvisioningPostgresIntegrationTest.xml"
   [[ -f "$report" ]] || return 1
-  rg -q 'tests="9"' "$report" || return 1
-  rg -q 'failures="0"' "$report" || return 1
-  rg -q 'errors="0"' "$report" || return 1
-  rg -q 'skipped="0"' "$report"
+  # Was four `rg -q 'tests="9"'`-style substring matches, which never counted
+  # anything: they only asked whether the number appeared somewhere in the file.
+  IFS=, read -r tests failures errors skipped < <(surefire_counts "$report")
+  [[ "$tests" == "9" && "$failures" == "0" && "$errors" == "0" && "$skipped" == "0" ]]
 }
 
 prepare_runtime() {

@@ -4,6 +4,12 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+# Batch 894: one reader for the surefire report, so the `tests` count comes from
+# the <testcase> elements rather than the attribute. Five gates had their own copy
+# of the same sed pipeline and none of them had a self-test; see
+# scripts/lib/surefire-report.sh for the measurement behind the rule.
+source scripts/lib/surefire-report.sh
+
 FEATURE="${1:-}"
 case "$FEATURE" in
   relocation)
@@ -73,11 +79,7 @@ postgres_tests() {
     echo "Missing PostgreSQL acceptance report: $report" >&2
     return 1
   }
-  local tests failures errors skipped
-  tests=$(sed -n 's/.* tests="\([0-9][0-9]*\)".*/\1/p' "$report" | head -1)
-  failures=$(sed -n 's/.* failures="\([0-9][0-9]*\)".*/\1/p' "$report" | head -1)
-  errors=$(sed -n 's/.* errors="\([0-9][0-9]*\)".*/\1/p' "$report" | head -1)
-  skipped=$(sed -n 's/.* skipped="\([0-9][0-9]*\)".*/\1/p' "$report" | head -1)
+  IFS=, read -r tests failures errors skipped < <(surefire_counts "$report")
   if [[ "$tests" != "$POSTGRES_EXPECTED" || "$failures" != 0 \
       || "$errors" != 0 || "$skipped" != 0 ]]; then
     echo "PostgreSQL acceptance must run ${POSTGRES_EXPECTED} tests without failure/error/skip; got tests=${tests:-missing}, failures=${failures:-missing}, errors=${errors:-missing}, skipped=${skipped:-missing}" >&2

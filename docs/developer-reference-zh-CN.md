@@ -129,6 +129,30 @@ skipped；本门禁则保证今后再有类"闭嘴"就会失败。
 | `check-hardcoded-copy.mjs` | 从未接入 i18n 的组件；已接入文件里的硬编码用户文案——含 JSX 表达式容器内的那部分，同时放行 ARIA/机器属性值与 `t()` 兜底文案。它那七条 `ALLOWED` 名单按 `path:copy` 索引，没人再用的条目会判失败（Batch 880） | `__tests__/hardcoded-copy.test.mjs` | `npm run lint` |
 | `check-page-shell.mjs` | 受保护页面绕过 `PageHeader`、渲染它时不给 `description`、或给的 `description` 可判定为空——遍历是递归的，子目录下的页面同样算页面 | `__tests__/page-shell.test.mjs` | `npm run lint` |
 
+### 读 Surefire 报告
+
+五道验收门禁——`verify-collection-purge.sh`、`verify-api-key-expiry-alerts.sh`、
+`verify-next-high-value-feature.sh`、`verify-collection-provisioning.sh` 与
+`verify-document-lifecycle.sh`——都靠读 `TEST-*.xml` 上的四个计数来断言某个受开关
+门控的 PostgreSQL 套件跑完了。Batch 894 之前它们**各自带一份同样的 `sed` 管道**，
+而且**一道自测都没有**——也就是说被验的只是"读出来的东西"，**读法本身从没被验过**。
+
+现在它们共用 `scripts/lib/surefire-report.sh`，其自测**跑的是真的 shell 函数**，
+而不是用 JavaScript 把同一条规则重写一遍。改动它之前有两件事必须知道：
+
+- **`tests` 是数 `<testcase>` 元素得来的，不是读 `tests=` 属性。**
+  surefire 写这个属性时，`@Nested` 内部类贡献的用例还没并进去，所以它可能比自己
+  汇总的子元素还小：四个模块 1006 份报告里有 3 份不一致、共差 9 条，属性求和 8320
+  而真实跑了 8329 条。而这几道门禁的期望数是**写死的**——所以第一个给受门控套件
+  加上嵌套类的人，会撞上一个"报的数字不是真正跑的数字"的失败。
+- **`skipped` / `failures` / `errors` 仍读属性**，因为那 1006 份报告里没有一份在这
+  三项上不一致。**没有实测支撑就改计数器，本身就是另一类缺陷。**
+
+四个计数用**逗号**分隔返回而不是空格。**连续三个空计数对任何空白切分来说只是一个
+分隔符**——所以空格版本分不清"报告没有 `failures` 属性"和"属性是 `failures=""`"，
+它的每一个消费者（shell 和测试都一样）都会静默收到 2 个字段而不是 4 个。
+消费方式是 `IFS=, read -r tests failures errors skipped < <(surefire_counts "$report")`。
+
 普查的门禁有五条硬规则：每个门禁脚本必须在册；自动化门禁必须带自测或写明为什么
 不能带；自动化门禁必须有东西执行它；**CI 到不了的自动化门禁必须写明理由**；门禁必须
 在文档里被提到。新增门禁而不登记，下一次跑 `verify-project-tests.sh` 就会失败。

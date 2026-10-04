@@ -136,9 +136,39 @@ did not already know they existed.
 | `check-hardcoded-copy.mjs` | A component that never calls i18n; a hard-coded user string in a file that does — including inside a JSX expression container, while leaving ARIA/machine attribute values and `t()` fallback strings alone. Its seven-entry `ALLOWED` list is keyed `path:copy` and an entry nothing uses any more is a failure (Batch 880) | `__tests__/hardcoded-copy.test.mjs` | `npm run lint` |
 | `check-page-shell.mjs` | A protected page that bypasses `PageHeader`, renders it with no `description`, or passes a `description` that is provably empty — the walk is recursive, so a page in a subdirectory is a page like any other | `__tests__/page-shell.test.mjs` | `npm run lint` |
 
+### Reading a Surefire report
+
+Five acceptance gates — `verify-collection-purge.sh`, `verify-api-key-expiry-alerts.sh`,
+`verify-next-high-value-feature.sh`, `verify-collection-provisioning.sh` and
+`verify-document-lifecycle.sh` — assert that a gated PostgreSQL suite ran to
+completion, and all of them do it by reading four counters off a `TEST-*.xml`.
+Before Batch 894 each carried its own copy of the same `sed` pipeline and none had
+a self-test, so the reading itself was never checked, only the thing being read.
+
+They now share `scripts/lib/surefire-report.sh`, whose self-test runs the real shell
+function rather than a JavaScript restatement of it. Two things about it are worth
+knowing before changing it:
+
+- **`tests` is counted from the `<testcase>` elements, not read off the `tests=`
+  attribute.** Surefire writes that attribute before the cases an `@Nested` inner
+  class contributes, so it can be smaller than the children it summarises: across
+  the four modules' 1006 reports, three disagreed, by 9 cases in total, and the
+  attribute total came to 8320 where 8329 ran. The expected counts in those gates
+  are hard-coded, so the first person to add a nested class to a gated suite would
+  have met a failure naming a number that is not the number of tests that ran.
+- **`skipped`, `failures` and `errors` are still read off the attribute**, because
+  none of those 1006 reports disagrees on them. Changing a counter without a
+  measurement behind it is its own kind of defect.
+
+The four counters come back comma-separated rather than space-separated. Three
+empty counters in a row are one separator to any whitespace split, so a
+space-separated version cannot distinguish a report carrying no `failures`
+attribute from one carrying `failures=""` — every consumer of it, shell and test
+alike, silently received two fields instead of four. Consumers read it as
+`IFS=, read -r tests failures errors skipped < <(surefire_counts "$report")`.
+
 The census has five hard rules: every gate script is registered; an automated gate
-carries a self-test or says why it cannot; an automated gate is executed by
-something; **an automated gate CI cannot reach carries a written reason**; and every
+carries a self-test or says why it cannot; an automated gate is executed bysomething; **an automated gate CI cannot reach carries a written reason**; and every
 gate is mentioned in a document. Adding a gate without registering it fails the
 next run of `verify-project-tests.sh`.
 
