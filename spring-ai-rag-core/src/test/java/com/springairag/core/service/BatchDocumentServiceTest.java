@@ -36,8 +36,8 @@ class BatchDocumentServiceTest {
         embeddingRepository = mock(RagEmbeddingRepository.class);
         mutationService = mock(DocumentMutationService.class);
         // Batch 832：单条创建只有 createLocal 一条通道（legacy 内联落库已删）。
-        service = new BatchDocumentService(documentRepository, embeddingRepository);
-        service.setDocumentMutationService(mutationService);
+        service = new BatchDocumentService(documentRepository, embeddingRepository,
+        mutationService);
     }
 
     private DocumentRequest createRequest(String title, String content) {

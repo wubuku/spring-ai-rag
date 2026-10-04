@@ -24,7 +24,8 @@ class JsonRecordServiceInternalTailTest {
             null, null, null, null, null,
             new com.springairag.core.config.RagProperties(),
             new com.fasterxml.jackson.databind.ObjectMapper(),
-            null, null);
+            null, null,
+            mock(DocumentMutationService.class));
 
     @Test
     void requestCollectionKeyReturnsNullForNullRequest() throws Exception {

@@ -478,6 +478,57 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
+### Batch 855（已交付，后端技术债：棘轮归零，门禁从"棘轮"转为**阻塞**）
+
+- 分支：`feature/required-json-record-mutation-20261007`
+- 主题：清掉最后两处"声明可选、代码无条件使用"——
+  `JsonRecordService.mutationService` 与 `BatchDocumentService.documentMutationService`，
+  各自从 `required = false` setter 改成必填构造器参数，字段同时改 `final`。
+  **实测归零，`UNGUARDED_CEILING = 0`。**
+- **25 个测试文件**（不是账本预估的 34 + 20 = 54，grep 粗普查严重高估；
+  实际 `new JsonRecordService(` 23 个构造点 + `new BatchDocumentService(` 6 个），
+  清单来自 `mvn test-compile` 的报错文件去重——**编译器清单又一次比普查权威**。
+- **本批顺带清掉一个"给必填参数传 null"的委托构造器**：
+  `JsonRecordService` 原来有一个 8 参包私有构造器，委托给 9 参主构造器时
+  把 `retrievalScopeResolver` **传成 `null`**。它没有生产调用方，只有测试在用，
+  作用是让 9 个测试文件少写一个参数。已删除——**它是本批正在清理的同源问题**，
+  留着就等于"合法地"承认可以给必填依赖传 null。
+- **两次返工，都是"我按类型找变量，但没考虑作用域与语义"**：
+  | 事故 | 现象 | 根因 |
+  |---|---|---|
+  | 1 | 28 个用例红（`result is null` / `retrievalScope is null`） | 补参一律用内联 `mock(...)`，把字段上已有的桩顶掉了 |
+  | 2 | 5 个用例仍红 | `retrievalScopeResolver` 是 `@Mock` 字段，**传 mock 改变了行为**——原来走委托构造器时它是 null，代码走的是不需要 scope 的分支 |
+  - 修法最终是**按位置**而不是按类型：`args=8` 的构造点补 `null`（保持原语义）+
+    复用 `mutationService` 字段（原来就是 setter 注入它）。
+  - 顺带修一处作用域错误：`BatchDocumentServiceDeleteErrorTailTest` 第二个构造点
+    复用了**另一个方法的局部变量** `mutationService`，编译期被抓住。
+    `findVar` 找的是"文件里有没有这个类型的变量"，**不保证它在那个位置可见**——
+    这是 852 那条"测试夹具必须从调用实参取"的同一个洞。
+- **脚本不变量救了两条命**（沿用 854 刚立的规矩）：
+  1. 括号平衡检查抓到 `replace(/,?\);?$/, "")` **把实参自己的收尾括号也吃掉**。
+     收尾行形如 `mock(X.class));` 时有两个右括号，第一个属于实参。
+     854 之所以没暴露，是因为那里的模板末尾多写了一个右括号**恰好抵消**了它——
+     参数从 2 个变成 1 个时就露馅了。**上一批的"正确"其实是两个 bug 互相抵消。**
+  2. `setter 调用已消失` 检查确保 11 处失效调用没被漏删。
+- **变异实验 2 个，都验证的是"归零之后门禁还管不管用"**：
+  | # | 变异 | 结果 |
+  |---|---|---|
+  | H | 把 `JsonRecordService` 新参数改回 `@Autowired(required = false)` | ✓ 门禁红（*"1 … exceed the ratchet ceiling of 0"*） |
+  | I | **一行代码都不改**，只把天花板从 0 放松到 1 | ✓ 门禁红（*"only 0 … remain but the ratchet ceiling is still 1. Lower the ceiling — the number is only allowed to fall."*） |
+  - **变异 I 是本批最有价值的一条**：它证明归零不是"把数字改成 0 就完事"，
+    而是**"放松也过不去"**。852 记过我"把 5 写成 6"被棘轮当场抓住；
+    归零之后，连"改常量"这个后门都关上了。
+  - 顺带确认：门禁认得**构造器形参**上的 `required = false`（`viaConstructor` 形态）。
+    852 记过"851 的第三次变异栽在只改字段声明"——这次改的是形参，门禁读到了。
+- 验证（全部实测）：core 全量 **7622 条 / 0 失败 / 0 错误 / 153 跳过**；
+  受影响的 25 个文件 **123 条全绿**；门控 IT **16/16**；`verify-test-visibility` EXIT=0；
+  `verify-false-optional-wiring` EXIT=0（实测 0 = 天花板 0）；自测 **30/30**；
+  tests 链 **20/20**；docs 链 **16/16**。
+- **这条线到此为止**：850 → 851 → 852 → 853 → 854 → 855，棘轮
+  16 → 14 → 11 → 9 → 5 → 3 → 2 → 0。
+  门禁覆盖面现在是 26 controller / 62 service / 172 bean。
+  后续任何一处新的"声明可选、代码无条件使用"都会直接让 CI 红。
+
 ### Batch 854（已交付，后端技术债：棘轮 3 → 2，且清掉一处"两套实例来源"）
 
 - 分支：`feature/required-document-chunking-20261007`

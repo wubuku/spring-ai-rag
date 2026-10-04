@@ -86,7 +86,8 @@ class JsonRecordSearchImportTailTest {
                 properties,
                 MAPPER,
                 mock(JdbcTemplate.class),
-                null);
+                null,
+                mock(DocumentMutationService.class));
         service.setAddressRetirementService(addressRetirementService);
     }
 

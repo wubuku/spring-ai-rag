@@ -117,8 +117,9 @@ class JsonRecordServiceTest {
                 collectionIdentityResolver,
                 properties,
                 objectMapper,
-                jdbcTemplate);
-        service.setMutationService(mutationService);
+                jdbcTemplate,
+                null,
+                mutationService);
     }
 
     @Test
@@ -299,7 +300,8 @@ class JsonRecordServiceTest {
                 new RagProperties(),
                 objectMapper,
                 jdbcTemplate,
-                retrievalScopeResolver);
+                retrievalScopeResolver,
+                mutationService);
         RetrievalScope scope = RetrievalScope.selectedCollections(
                 List.of(10L), null, RagDocument.JSON_RECORD);
         when(retrievalScopeResolver.resolve(

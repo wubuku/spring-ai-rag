@@ -338,8 +338,20 @@ const SUBJECT_SUFFIXES = ['Controller.java', 'Service.java'];
  * 现场 `new` 一个**容器里本来就有**的协作者才是这个问题。两者形态相同、
  * 性质相反，所以这道门禁只管"声明可选"那一半，兜底那一半在本仓库是孤例，
  * 没有为它单独造门禁——一个只会命中 0 处的门禁会给人"已经管住了"的错觉。
+ *
+ * ── 棘轮归零，门禁转为阻塞（Batch 855）────────────────────────────────
+ * 清掉最后两处：`JsonRecordService.mutationService` 与
+ * `BatchDocumentService.documentMutationService`。实测 0，于是
+ * `UNGUARDED_CEILING = 0`——**这才是 850 设棘轮时就写下的目标状态**：
+ * 棘轮存在的意义不是一直记着"还剩几处"，而是让"清完"这一刻成为
+ * 一个可以被门禁强制的事实。现在任何一处新的"声明可选、代码无条件使用"
+ * 都会直接让 CI 红。
+ *
+ * 代价是这道门禁从此**不能再靠改常量过关**——而这正是重点：
+ * Batch 852 记过一次"先把 6 写成 5"的算错被棘轮当场抓住，
+ * 归零之后连"改常量"这个后门都没有了。
  */
-const UNGUARDED_CEILING = 2;
+const UNGUARDED_CEILING = 0;
 
 /**
  * 棘轮在什么范围内生效。

@@ -61,7 +61,8 @@ class JsonRecordServiceSearchGuardTailTest {
                 properties,
                 new ObjectMapper(),
                 mock(JdbcTemplate.class),
-                null);
+                null,
+                mock(DocumentMutationService.class));
     }
 
     @Test

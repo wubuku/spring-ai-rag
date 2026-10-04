@@ -89,8 +89,9 @@ class JsonRecordDeleteTombstoneTest {
                 resolver,
                 new RagProperties(),
                 new ObjectMapper(),
-                jdbcTemplate);
-        jsonRecordService.setMutationService(mutationService);
+                jdbcTemplate,
+                null,
+                mutationService);
 
         mutationServiceForTombstone = new DocumentMutationService(
                 documentRepository,

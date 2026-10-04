@@ -64,8 +64,9 @@ class JsonRecordServiceBatchImportTailTest {
                 resolver,
                 properties,
                 MAPPER,
-                mock(JdbcTemplate.class));
-        service.setMutationService(mutationService);
+                mock(JdbcTemplate.class),
+                null,
+                mutationService);
     }
 
     private JsonRecordUpsertRequest validRequest(String externalId) {

@@ -40,7 +40,9 @@ class JsonRecordServiceFrontTest {
                 mock(CollectionIdentityResolver.class),
                 properties,
                 MAPPER,
-                mock(JdbcTemplate.class));
+                mock(JdbcTemplate.class),
+                null,
+                mock(DocumentMutationService.class));
     }
 
     private JsonRecordUpsertRequest request() {
@@ -100,10 +102,11 @@ class JsonRecordServiceFrontTest {
                 mock(CollectionIdentityResolver.class),
                 properties,
                 MAPPER,
-                mock(JdbcTemplate.class));
+                mock(JdbcTemplate.class),
+                null,
+                mock(DocumentMutationService.class));
 
         assertDoesNotThrow(() -> {
-            wired.setMutationService(mock(DocumentMutationService.class));
             wired.setLifecycleService(
                     mock(DocumentLifecycleService.class));
             wired.setAddressRetirementService(

@@ -43,7 +43,7 @@ public class BatchDocumentService {
     private final RagDocumentRepository documentRepository;
     private final RagEmbeddingRepository embeddingRepository;
     private EmbeddingDispatchService dispatchService; // optional-claim: unconditional @Service；守卫在同文件之外——使用点紧跟 `EmbeddingPolicySupport.requireJobsEnabled(dispatchService)`，它做 null 检查并抛 EMBEDDING_JOBS_DISABLED 而不是 NPE（Batch 850 普查时才发现这道检查一直在）
-    private DocumentMutationService documentMutationService;
+    private final DocumentMutationService documentMutationService; // Batch 855：`required = false` 的 setter 已删，改成第 3 个必填构造器参数。createLocal 与 hardDeleteLocal 两处都无条件调用它，缺 bean 时抛裸 NPE 而不是在启动时失败
 
     /**
      * 第三个参数 {@code documentEmbedService} 曾属于"没有
@@ -52,20 +52,16 @@ public class BatchDocumentService {
      * 按策略执行——本服务既不调它、也不需要它。
      */
     public BatchDocumentService(RagDocumentRepository documentRepository,
-                                 RagEmbeddingRepository embeddingRepository) {
+                                 RagEmbeddingRepository embeddingRepository,
+                                 DocumentMutationService documentMutationService) {
         this.documentRepository = documentRepository;
         this.embeddingRepository = embeddingRepository;
+        this.documentMutationService = documentMutationService;
     }
 
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     void setDispatchService(EmbeddingDispatchService dispatchService) {
         this.dispatchService = dispatchService;
-    }
-
-    @org.springframework.beans.factory.annotation.Autowired(required = false)
-    void setDocumentMutationService(
-            DocumentMutationService documentMutationService) {
-        this.documentMutationService = documentMutationService;
     }
 
     /**

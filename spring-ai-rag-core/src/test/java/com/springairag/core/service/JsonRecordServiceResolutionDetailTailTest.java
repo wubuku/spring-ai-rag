@@ -52,7 +52,8 @@ class JsonRecordServiceResolutionDetailTailTest {
                 new RagProperties(),
                 new ObjectMapper(),
                 mock(JdbcTemplate.class),
-                null);
+                null,
+                mock(DocumentMutationService.class));
     }
 
     private JsonRecordUpsertRequest request(Long collectionId,
