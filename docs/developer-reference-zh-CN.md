@@ -112,9 +112,10 @@ skipped；本门禁则保证今后再有类"闭嘴"就会失败。
 | `verify-null-request-forwarding.mjs` | 把 `null` 转发进 `HttpServletRequest` 参数位的重载——**要么是字面量，要么是一个被声明为"可能为 null 的 `HttpServletRequest`"的局部变量**；而 `ChatPrincipal.from(null)` 与 `ApiKeyCollectionAccess.isUnrestricted(null)` **双双 fail-open** | `test-support/null-request-forwarding-self-test.mjs` | tests 链 |
 | `verify-false-optional-wiring.mjs` | 用 `@Autowired(required = false)` 注入、又被 `if (x == null)` 守卫的协作者，而它对应的 bean 是**无条件**的 `@Service`/`@Component`——也就是那条被守卫的分支在运行中的应用里根本走不到——除非字段上写了 `// optional-claim: <理由>`。扫描面是 `*Controller.java` + `*Service.java`（Batch 829 起）；"会抛"与"会跳过"都算声明，区别只在处置：会抛的删，会跳过的登记理由 | `test-support/false-optional-wiring-self-test.mjs` | tests 链 |
 | `verify-controller-constructor-count.mjs` | controller 声明了多于一个构造器（不区分可见性）——Spring 只从 `@Autowired` 那个注入，其余构造器只有测试够得着，并且替调用方决定哪些协作者被置空 | `test-support/controller-constructor-count-self-test.mjs` | tests 链 |
+| `verify-error-code-catalog.mjs` | 错误响应里出现的码没登记在 `ErrorCode`（自称 single source of truth，实测 6 个码缺失）；码旁边的 HTTP status 与目录声明的不一致；手工拼的 `ErrorResponse` 不是 problem detail | `test-support/error-code-catalog-self-test.mjs` | tests 链 |
 | `verify-no-pessimistic-locks.sh` | 生产代码里的悲观锁 / `SKIP LOCKED` / advisory lock | `test-support/pessimistic-locks-self-test.sh` | docs 链 |
 | `verify-zh-translation.mjs` | 中文文档里未翻译的英文段落 | `test-support/zh-translation-self-test.mjs` | docs 链 |
-| `verify-project-tests.sh` / `verify-project-docs.sh` | 上面 8 个的聚合入口 | 由各门禁承担 | 人跑 / 待接入 CI |
+| `verify-project-tests.sh` / `verify-project-docs.sh` | 上面 9 个的聚合入口 | 由各门禁承担 | 人跑 / 待接入 CI |
 | `verify-gated-it.sh` | 154 个纯 DB 型集成套件 | 由开关对账承担 | **CI 已接** |
 | `verify-webui-e2e-mock.sh` | 15 spec / 93 用例的前端 mock 回归 | 套件自身即自测 | 单独跑（2.6 分钟） |
 | `check-alignment-policy.mjs` | 物理 `text-align`、内联 `textAlign`、全局样式表契约 | `__tests__/alignment-policy.test.mjs` | `npm run lint` |
@@ -123,6 +124,7 @@ skipped；本门禁则保证今后再有类"闭嘴"就会失败。
 | `check-mutation-errors.mjs` | 写操作不报告失败 | `__tests__/mutation-errors.test.mjs` | `npm run lint` |
 | `check-query-errors.mjs` | 读操作失败时看起来像"空结果" | `__tests__/query-errors.test.mjs` | `npm run lint` |
 | `check-double-submit.mjs` | 请求在途时未加锁的写操作 | `__tests__/double-submit.test.mjs` | `npm run lint` |
+| `check-destructive-confirm.mjs` | 破坏性操作没有确认——清单从 `src/api/*.ts` 里真正发出 DELETE 的方法推导，POST 一律不算 | `__tests__/destructive-confirm.test.mjs` | `npm run lint` |
 | `check-i18n-keys.mjs` | 两个 locale 键集不对称；`t()` 引用不存在的键；`t('x') \|\| 兜底` 这种永远不会触发的守卫；**某个键两种语言都有、却没有任何源码能到达**——其中"引用"可以是模板前缀、查找表、数据数组、别名翻译函数或 i18next 复数族 | `__tests__/i18n-keys.test.mjs` | `npm run lint` |
 | `check-hardcoded-copy.mjs` | 从未接入 i18n 的组件；已接入文件里的硬编码用户文案——含 JSX 表达式容器内的那部分，同时放行 ARIA/机器属性值与 `t()` 兜底文案 | `__tests__/hardcoded-copy.test.mjs` | `npm run lint` |
 | `check-page-shell.mjs` | 受保护页面绕过 `PageHeader`，或渲染它时不给 `description` | `__tests__/page-shell.test.mjs` | `npm run lint` |

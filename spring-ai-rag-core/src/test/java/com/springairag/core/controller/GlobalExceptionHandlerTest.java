@@ -53,7 +53,12 @@ class GlobalExceptionHandlerTest {
         ErrorResponse body = response.getBody();
         assertNotNull(body);
         assertEquals("https://springairag.dev/problems/internal-error", body.getType());
-        assertEquals("INTERNAL_ERROR", body.getTitle());
+        assertEquals("INTERNAL_ERROR", body.getError());
+        // Batch 873: `title` is RFC 7807's "short, human-readable summary";
+        // the code belongs in `type` and `error`. The RagException path has
+        // always read the title off the enum, and these six assertions pinned
+        // the *other* shape, i.e. the two construction sites disagreeing.
+        assertEquals("Internal Server Error", body.getTitle());
         assertEquals(500, body.getStatus());
         assertEquals("/api/v1/rag/test", body.getInstance());
     }
@@ -64,7 +69,12 @@ class GlobalExceptionHandlerTest {
         ErrorResponse body = response.getBody();
         assertNotNull(body);
         assertEquals("https://springairag.dev/problems/bad-request", body.getType());
-        assertEquals("BAD_REQUEST", body.getTitle());
+        assertEquals("BAD_REQUEST", body.getError());
+        // Batch 873: `title` is RFC 7807's "short, human-readable summary";
+        // the code belongs in `type` and `error`. The RagException path has
+        // always read the title off the enum, and these six assertions pinned
+        // the *other* shape, i.e. the two construction sites disagreeing.
+        assertEquals("Bad Request", body.getTitle());
     }
 
     // ==================== 核心处理器测试 ====================
@@ -115,8 +125,7 @@ class GlobalExceptionHandlerTest {
 
     @Test
     void handleMissingParam_returns400() {
-        MissingServletRequestParameterException e = new MissingServletRequestParameterException("sessionId", "String");
-        ResponseEntity<ErrorResponse> response = handler.handleMissingParam(e, request);
+        ResponseEntity<ErrorResponse> response = handler.handleMissingParam(missingParameter(), request);
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
         assertTrue(response.getBody().getMessage().contains("sessionId"));
     }
@@ -244,6 +253,74 @@ class GlobalExceptionHandlerTest {
         assertTrue(response.getBody().getMessage().contains("Spring Boot"));
     }
 
+    private MissingServletRequestParameterException missingParameter() {
+        return new MissingServletRequestParameterException("sessionId", "String");
+    }
+
+    private MethodArgumentNotValidException invalidBody() {
+        BeanPropertyBindingResult bindingResult =
+                new BeanPropertyBindingResult(new Object(), "request");
+        bindingResult.addError(new FieldError("request", "message", "must not be blank"));
+        return new MethodArgumentNotValidException(null, bindingResult);
+    }
+
+    // ==================== Batch 873：两条构造路径必须同形 ====================
+
+    /**
+     * The handler used to have three construction sites producing two shapes.
+     * Sixteen handlers went through {@code buildResponse}, which emitted no
+     * {@code type}, {@code title}, {@code detail} or {@code instance} while
+     * declaring {@code application/problem+json}; the other two set all four
+     * but left {@code message} and {@code path} empty. A client following RFC
+     * 7807 — reading {@code detail} — found nothing on the majority of
+     * failures.
+     *
+     * <p>This asserts the convergence, one handler from each site, so the two
+     * cannot drift apart again. {@code message} and {@code path} are still
+     * asserted on the {@code buildResponse} side: the WebUI falls back to
+     * {@code message}, and removing them would break a published contract.
+     */
+    @Test
+    void everyConstructionSite_producesTheSameRfc7807Shape() {
+        // buildResponse site
+        ErrorResponse missingParam = handler
+                .handleMissingParam(missingParameter(), request).getBody();
+        // RagException site
+        ErrorResponse notFound = handler
+                .handleRagException(new DocumentNotFoundException("gone"), request).getBody();
+        // inlined-builder site, now delegating to buildResponse
+        ErrorResponse validation = handler
+                .handleValidation(invalidBody(), request).getBody();
+
+        for (ErrorResponse body : new ErrorResponse[] {missingParam, notFound, validation}) {
+            assertNotNull(body);
+            assertNotNull(body.getType(), "type must be present on every path");
+            assertNotNull(body.getTitle(), "title must be present on every path");
+            assertNotNull(body.getDetail(), "detail must be present on every path");
+            assertNotNull(body.getInstance(), "instance must be present on every path");
+            assertNotNull(body.getStatus(), "status must be present on every path");
+            // RFC 7807: title is a human-readable summary, not the code. The
+            // code travels in `type` and in `error`.
+            assertNotEquals(body.getError(), body.getTitle(),
+                    "title must not simply repeat the error code");
+            assertTrue(body.getTitle().matches("[\\p{Lu}][\\p{L} ]+"),
+                    "title should read as a sentence, was: " + body.getTitle());
+        }
+    }
+
+    @Test
+    void buildResponseSite_stillCarriesMessageAndPathForTheWebUi() {
+        ErrorResponse body = handler.handleMissingParam(missingParameter(), request).getBody();
+
+        assertNotNull(body);
+        assertEquals("MISSING_PARAMETER", body.getError());
+        assertEquals("Missing Required Parameter", body.getTitle());
+        assertEquals("https://springairag.dev/problems/missing-parameter", body.getType());
+        assertNotNull(body.getMessage(), "the WebUI reads message when detail is absent");
+        assertEquals("/api/v1/rag/test", body.getPath());
+        assertEquals("/api/v1/rag/test", body.getInstance());
+    }
+
     // ==================== ErrorResponse DTO 测试 ====================
 
     @Test
@@ -255,7 +332,13 @@ class GlobalExceptionHandlerTest {
                 .build();
 
         assertEquals("VALIDATION_FAILED", response.getError());
-        assertEquals("VALIDATION_FAILED", response.getTitle());
+        // Batch 873. This used to assert the code again. RFC 7807 §3.1 defines
+        // `title` as "a short, human-readable summary of the problem type", and
+        // this same class already asserted "Bad Request" for the handler path a
+        // few dozen lines up — so the repository held both expectations, and the
+        // two writers disagreed. The catalog is the only place a summary can come
+        // from, so the phrase is the expectation that can survive a new code.
+        assertEquals("Validation Failed", response.getTitle());
         assertEquals("参数错误", response.getMessage());
         assertEquals("参数错误", response.getDetail());
         assertEquals("/api/v1/rag/test", response.getPath());

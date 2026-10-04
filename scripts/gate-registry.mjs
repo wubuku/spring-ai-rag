@@ -151,6 +151,21 @@ export const GATES = [
     noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
   },
 
+  // Batch 873. ErrorCode declares itself the single source of truth, and six of
+  // the codes the API really returns were not in it, so no title or problem-type
+  // URI could be derived from them. The rule also pins the status beside a code
+  // against the enum's, and requires a hand-assembled ErrorResponse to be an
+  // actual problem detail. Its blind spot — the `ErrorResponse.of(...)`
+  // factories, invisible to any source scan — is documented in the gate header
+  // and asserted by its self-test, so it is a known limit rather than a
+  // surprise.
+  {
+    gate: 'scripts/verify-error-code-catalog.mjs',
+    kind: 'gate',
+    selfTest: 'scripts/test-support/error-code-catalog-self-test.mjs',
+    noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
+  },
+
   // Batch 820. A collaborator injected with @Autowired(required = false) claims
   // it may be absent; this rejects that claim when the bean is an unconditional
   // @Service and the field has no `// optional-claim:` reason. Twelve such
@@ -231,9 +246,22 @@ export const GATES = [
   },
 
   // ------------------------------------------------------- WebUI gate chain --
-  // All nine run from `npm run lint`, which ci.yml's webui job executes — the one
+  // All ten run from `npm run lint`, which ci.yml's webui job executes — the one
   // gate layer CI has always covered. Batch 809 appended the self-test suite to
-  // that same command, so the 208 self-test cases run in CI too.
+  // that same command, so the self-test cases run in CI too.
+  //
+  // Batch 873. check-destructive-confirm was added by Batch 870 and *not*
+  // listed here, so `verify-gate-wiring.mjs` was red on a clean main — this
+  // registry did exactly the job it exists for, one batch late. Recorded rather
+  // than quietly fixed, because a gate that can catch its own omission is worth
+  // more than a gate nobody checks: the wiring check ran in `verify-project-tests.sh`
+  // and in Batch 872's verification the WebUI lint chain was exercised, yet
+  // neither surfaced it. What caught it was running the check on its own.
+  {
+    gate: 'spring-ai-rag-webui/scripts/check-destructive-confirm.mjs',
+    kind: 'gate',
+    selfTest: 'spring-ai-rag-webui/scripts/__tests__/destructive-confirm.test.mjs',
+  },
   {
     gate: 'spring-ai-rag-webui/scripts/check-a11y-forms.mjs',
     kind: 'gate',

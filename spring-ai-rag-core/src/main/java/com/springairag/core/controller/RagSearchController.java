@@ -6,6 +6,7 @@ import com.springairag.api.dto.RetrievalResult;
 import com.springairag.api.dto.SearchRequest;
 import com.springairag.api.dto.SearchResponse;
 import com.springairag.api.enums.CollectionScopeMode;
+import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.chat.ChatPrincipal;
 import com.springairag.core.diagnostics.RetrievalDiagnosticsService;
 import com.springairag.core.diagnostics.RetrievalTraceSession;
@@ -115,22 +116,21 @@ public class RagSearchController {
         log.info("Direct search: query={}, limit={}, useHybrid={}", query, limit, useHybrid);
 
         if (query == null || query.isBlank()) {
-            return ResponseEntity.badRequest().body(
-                    ErrorResponse.builder().detail("Query must not be blank").build());
+            return badRequest("Query must not be blank", httpRequest);
         }
         if (!Double.isFinite(vectorWeight)
                 || vectorWeight < 0.0 || vectorWeight > 1.0) {
-            return ResponseEntity.badRequest().body(
-                    ErrorResponse.builder().detail("vectorWeight must be between 0.0 and 1.0, got " + vectorWeight).build());
+            return badRequest("vectorWeight must be between 0.0 and 1.0, got " + vectorWeight,
+                    httpRequest);
         }
         if (!Double.isFinite(fulltextWeight)
                 || fulltextWeight < 0.0 || fulltextWeight > 1.0) {
-            return ResponseEntity.badRequest().body(
-                    ErrorResponse.builder().detail("fulltextWeight must be between 0.0 and 1.0, got " + fulltextWeight).build());
+            return badRequest("fulltextWeight must be between 0.0 and 1.0, got " + fulltextWeight,
+                    httpRequest);
         }
         if (limit < 1 || limit > MAX_SEARCH_LIMIT) {
-            return ResponseEntity.badRequest().body(
-                    ErrorResponse.builder().detail("limit must be between 1 and " + MAX_SEARCH_LIMIT + ", got " + limit).build());
+            return badRequest("limit must be between 1 and " + MAX_SEARCH_LIMIT + ", got " + limit,
+                    httpRequest);
         }
 
         RetrievalConfig config = RetrievalConfig.builder()
@@ -274,6 +274,30 @@ public class RagSearchController {
                 scope,
                 outcome,
                 resolveFilters(request.getFilters()));
+    }
+
+    /**
+     * Batch 873. The four argument rejections in {@code search} each built their
+     * own body, and each one built it out of {@code detail} alone — so a 400 from
+     * this endpoint carried no {@code type}, no {@code title}, no {@code status}
+     * and no {@code instance}, while the very same endpoint's error responses
+     * were documented as RFC 7807 problem details. A client that reads
+     * {@code detail} got the sentence; a client that switches on {@code type} or
+     * {@code error} got nothing at all, and had no way to tell that apart from a
+     * body that was simply not a problem detail.
+     *
+     * <p>One helper, so the fifth rejection added here cannot be the one that
+     * forgets. {@link ErrorCode#BAD_REQUEST} is the code
+     * {@code GlobalExceptionHandler.handleBadRequest} already uses for the same
+     * condition, so a 400 from an argument and a 400 from a thrown
+     * IllegalArgumentException finally agree.
+     */
+    private ResponseEntity<ErrorResponse> badRequest(String detail, HttpServletRequest request) {
+        return ResponseEntity.badRequest()
+                .body(ErrorResponse.of(
+                        ErrorCode.BAD_REQUEST,
+                        detail,
+                        request == null ? null : request.getRequestURI()));
     }
 
     private RetrievalFilters resolveFilters(

@@ -478,6 +478,91 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
+### Batch 873（已交付，后端：一份自称 single source of truth、却漏了 6 个码的错误码目录）
+
+- 分支：`batch-873`
+- 主题：`ErrorCode` 的类注释自称 single source of truth。本批把它当 census 对象，
+  结论是：API 真正发出的 18 个不同错误码里，**6 个不在目录里**；31 个
+  `ErrorResponse` 构造点里，**11 处**产出的 body 缺字段。两条都是量出来的，不是读出来的。
+- **开批第一件事就撞见一道 standing red**：`verify-gate-wiring.mjs` 在干净 main 上
+  **EXIT=1**——Batch 870 加了 `check-destructive-confirm.mjs` 却既没登记进
+  `gate-registry.mjs`，也没写进中英文档表。这道门禁的存在意义就是抓住这种事，
+  它做到了，只是晚了一批。值得注意的是它**没有被上一批的验收发现**：872 的验收跑了
+  WebUI lint 链（`check:destructive` 就在里面），也跑了 docs 链，但
+  `verify-gate-wiring` 属于 tests 链，没人单独跑它。**教训不是"要记得跑"，
+  而是"被谁跑"这件事本身要进验收清单**。
+- **量到的违反**（全部有对应修复）：
+
+  | 判据 | 违反 | 证据 |
+  |------|------|------|
+  | 码没登记 | 6 处 | `MISSING_HEADER` / `MISSING_PART` / `UNSUPPORTED_MEDIA_TYPE`（GEH）、`POLICY_SERVICE_UNAVAILABLE`（GEH + ApiKeyAuthFilter）、`CREDENTIAL_SERVICE_UNAVAILABLE`（ApiKeyAuthFilter）、`TOO_MANY_REQUESTS`（RateLimitFilter） |
+  | status 与目录不符 | 2 处 | `TOO_MANY_REQUESTS` 缺 status；`CREDENTIAL_SERVICE_UNAVAILABLE` 连码都没有 |
+  | 构造点形状不全 | 11 处 | RagSearchController ×4（只填 detail）、ApiKeyAuthFilter ×2、RateLimitFilter ×1、ApiKeyController ×1、ApiKeyIdentityController ×3 |
+
+- **429 那个不是"缺一个码"，是同一件事两个名字**（量出来的，不是我猜的）：
+  目录里本来就有 `RATE_LIMIT_EXCEEDED(429)`，而 `RateLimitFilter` 一直往线上写
+  `TOO_MANY_REQUESTS`，且 **3 个测试文件**把后者钉死为 `body.get("error")` 的值。
+  全仓搜 `RATE_LIMIT_EXCEEDED` 只有两处命中：它自己的声明，和一条断言它 429 的测试——
+  **零生产引用**。所以处置是**改名**而不是再加一个 429：线上值不能改（会破客户端），
+  而保留两个名字就等于在一份"唯一事实来源"里为同一件事准备两个词。
+  `ErrorCodeTest` 里那条测试的 `@DisplayName` 也会跟着说谎，一并改掉。
+- **普查给出自信的错误答案——这是本批最贵的一条**（第 5 次）：
+  第一遍普查只认 `ErrorResponse.builder()`，报出"**13 个构造点，0 个缺字段**"。
+  真实数字是 **31 个**——另外 18 个走 `ErrorResponse.of(String)`，而那个工厂当时
+  把 `title("Bad Request")` 塞进 `error`（`Builder.title()` 有写 `error` 的副作用），
+  于是 **18 个端点的 `error` 字段装的是一句人话**，其余站点写的是 `SNAKE_CASE` 码。
+  一道只认一种语法的扫描器对另一种语法报零，零在那里不是证据，是没看。
+  这条已经钉进新门禁的自测（`KNOWN BLIND SPOT: a file that only uses the of()
+  factories is invisible`），写明"这道门禁看不见工厂路径，今天保护那 18 个调用点的是
+  工厂本身委托给目录，不是这道门禁"。
+- **我以为修好了，其实没修好——是测试抓到的**：
+  第一版修法是让 `ErrorResponse.of(String)` 委托给 `of(ErrorCode.BAD_REQUEST, detail)`，
+  跑出来 9 条测试全红，`error` 还是 `"Bad Request"`。根因是 `of(ErrorCode, …)` 里
+  `.error(code.getCode())` 在前、`.title(code.getTitle())` 在后，而
+  `Builder.title()` **会连带写 `error`**，把刚写好的码覆盖成短语。
+  `GlobalExceptionHandler` 早就知道这个坑——它用的是 `setTitle` 而不是 builder，
+  注释里写着"without triggering the builder's title() side effect"。
+  真正的修法在原语上：`title()` 和 `error()` 都不再互写，`title` 统一在 `build()`
+  里从目录解析。**一个共享原语内部修一处，胜过 N 个调用点各修一遍**——这一次原语修对了，
+  18 个端点一起归位，而且不需要改任何调用点。
+- **测试还抓到第二个我没想到的**：`title` 字段一直是**大写码本身**。
+  `build()` 原来直接 `title = error`，所以 13 个手工拼装的站点里有 9 个
+  （只写 `.error(...)` 不写 title 的那些）把 `"UNAUTHORIZED"` 放进了 RFC 7807
+  明确定义为"一句人类可读摘要"的字段。现在 `build()` 通过 `byCodeOrNull` 从目录取
+  摘要；**码不在目录时回落到旧行为**，不替它编一个标题。
+  这条门禁看不见（门禁读源码，不读构造后的对象），所以只有 Java 测试能钉住它。
+- **`instance` 为什么不统一要求**（量过的决定，不是省事）：`of(...)` 那 18 个调用点里，
+  **0 个**所在方法有 `HttpServletRequest` 在作用域（PdfImportController 4 个公开端点
+  + 2 个私有 helper、ModelController、RagDocumentController）。要统一就得给这些签名
+  加 servlet 参数，换一个 RFC 7807 里明确可选的字段。所以门禁只对**手工拼装的 builder
+  站点**强制 `instance`，并把这个例外和理由原样写进门禁头部——例外是往宽松方向开的
+  （得特意去选不带 instance 的工厂），把边界写清楚比假装规则统一有用。
+- **新门禁 `scripts/verify-error-code-catalog.mjs`**：三条判据（码已登记 /
+  status 与目录一致 / builder 站点是完整 problem detail），619 个源文件。
+  门禁的**已知盲区**（工厂路径）写在头部并由自测钉住，而不是留给下一个人去发现。
+  自测 23 例，变异证明 **10/10**（M1–M6 应该变红 + R1–R4 反向对照全部保持绿：
+  改 javadoc 里的示例字面量、改日志措辞、改 `log.error` 消息、改 ErrorCode 的 title 文案
+  都不该让门禁变红）。"门禁变红"只说明它对任何改动都敏感，反向对照才说明它挑对了。
+- **顺手修掉的两处记账错误**：中英文档表里 `verify-project-tests.sh` 写着"上面 8 个的
+  聚合入口"，实际是 9 个；`check-destructive-confirm.mjs` 整行缺失。
+- **又一次 stale jar**（本会话第二次）：改了 `spring-ai-rag-api` 之后只跑了 core 的测试，
+  core 链到本地仓库里 9 月 21 日那份旧 jar，报出来的是"我的改动把所有测试搞坏了"，
+  实际只有 9 条断言红，且错的是"旧行为"那一边。**改了 api 模块，`install` 必须排在
+  core 测试之前**，带 `-am` 也不够。
+- **两处既有测试钉的是旧行为，我改了断言而不是把实现退回去**（记录理由，以便复核）：
+  | 测试 | 原断言 | 现断言 | 为什么不改实现 |
+  |------|--------|--------|----------------|
+  | `GlobalExceptionHandlerTest.errorResponse_builder_syncsRfc7807Fields` | `title == "VALIDATION_FAILED"` | `title == "Validation Failed"` | RFC 7807 §3.1 定义 `title` 为"一句人类可读摘要"；**同一个类**里另一条测试早就断言 handler 路径的 `title == "Bad Request"`（短语）。仓库本来就持有两种期望、两个写入者互相矛盾 |
+  | `IntegrationObservabilityControllerWebTest.mapsBadRequestToRfc7807Problem` | `$.title == "BAD_REQUEST"` | `$.title == "Bad Request"`，并**新增** `$.error == "BAD_REQUEST"` | 同上。而且 `docs/rest-api.md` / `docs/rest-api-zh-CN.md` 的错误响应示例**一直**写着 `"title": "Bad Request"`——是发布出去的文档对、实现错，改实现才是对齐文档 |
+
+- **登记一条本批发现但没有顺手改的**（量过、明确不修，避免半修）：
+  `docs/rest-api.md:387` 与 `docs/rest-api-zh-CN.md:345` 的错误响应示例把 `type`
+  写成 RFC 的占位值 `"about:blank"`，而 `ErrorResponse` 实际总是发出
+  `https://springairag.dev/problems/{kebab}`——`about:blank` 在本仓库**从不出现**。
+  这是本批之前就存在的不符，且**不受本批改动影响**；要对齐得先知道那个端点
+  （`/api/v1/rag/chat/ask` 参数为空）真实返回哪个码，那需要起服务联调，
+  属于下一批的事。与其猜一个值写进文档，不如把它记成一条有出处的待办。
+
 ### Batch 872（已交付，WebUI：把 871 登记的 6 处"直接渲染 error.message"逐类归位）
 
 - 分支：`batch-872`

@@ -20,11 +20,18 @@ import java.util.Objects;
  *
  * <p>Also preserves backward-compatible fields:
  * <ul>
- *   <li>{@code error} — Error code (same as title, backward-compatible alias)</li>
+ *   <li>{@code error} — Machine code for the problem, e.g. "VALIDATION_FAILED"</li>
  *   <li>{@code message} — Human-readable message (same as detail, backward-compatible alias)</li>
  *   <li>{@code timestamp} — Error occurrence time</li>
  *   <li>{@code path} — Request path (same as instance, backward-compatible alias)</li>
  * </ul>
+ *
+ * <p>Note on {@code error} vs {@code title}. An earlier version of this Javadoc
+ * described {@code error} as "same as title". It is not, and treating it that way
+ * is what put a human phrase into a machine field for eighteen endpoints — see
+ * {@link Builder#title(String)}. {@code error} carries the code; {@code title}
+ * carries the summary, taken from {@link ErrorCode} when the code is one the
+ * catalog knows.
  */
 @Schema(description = "RFC 7807 Problem Detail error response — all API errors use this format")
 public class ErrorResponse {
@@ -49,7 +56,7 @@ public class ErrorResponse {
     @Schema(description = "Request path where the problem occurred", example = "/api/v1/rag/chat/ask")
     private String instance;
 
-    /** Error code (same as title, backward-compatible) */
+    /** Machine code for the problem (e.g. "VALIDATION_FAILED") */
     @Schema(description = "Error code identifier", example = "VALIDATION_FAILED")
     private String error;
 
@@ -92,14 +99,23 @@ public class ErrorResponse {
 
     // ==================== Builder ====================
 
-    /** Simple error message factory method */
+    /**
+     * Simple error message factory method.
+     *
+     * <p>Batch 873. This used to set {@code .title("Bad Request")}, and because
+     * {@link Builder#title(String)} also writes {@code error}, the eighteen
+     * endpoints that call this one shipped {@code "Bad Request"} in the
+     * {@code error} field — a human phrase where the rest of the API puts a
+     * machine code. A client that switches on {@code body.error} therefore met
+     * two vocabularies: {@code UNAUTHORIZED} from the filters, {@code Bad
+     * Request} here. The field's own Javadoc calls it an "Error code
+     * identifier" and gives {@code VALIDATION_FAILED} as the example, and
+     * {@code GlobalExceptionHandlerTest} already asserts {@code error ==
+     * "BAD_REQUEST"} alongside {@code title == "Bad Request"}. So this delegates
+     * instead of hand-assembling, and the shape is now defined once.
+     */
     public static ErrorResponse of(String detail) {
-        return builder()
-                .detail(detail)
-                .title("Bad Request")
-                .status(400)
-                .type(PROBLEM_TYPE_PREFIX + "bad-request")
-                .build();
+        return of(ErrorCode.BAD_REQUEST, detail);
     }
 
     /**
@@ -118,6 +134,27 @@ public class ErrorResponse {
                 .build();
     }
 
+    /**
+     * Creates an ErrorResponse that also names the request it is about.
+     *
+     * <p>Batch 873. The two-argument {@link #of(ErrorCode, String)} leaves
+     * {@code instance} (and its {@code path} alias) null, and that is fine for
+     * callers with no request in scope. It is not fine for a controller: a
+     * problem+json body that says nothing about <em>which</em> request failed is
+     * harder to triage than one that does, and the one caller that had the URI
+     * in hand was reaching past the factory to do it.
+     */
+    public static ErrorResponse of(ErrorCode code, String detail, String instance) {
+        return builder()
+                .error(code.getCode())
+                .title(code.getTitle())
+                .status(code.getHttpStatus())
+                .type(code.getProblemTypeUri())
+                .detail(detail)
+                .instance(instance)
+                .build();
+    }
+
     public static Builder builder() {
         return new Builder();
     }
@@ -130,9 +167,23 @@ public class ErrorResponse {
             return this;
         }
 
+        /**
+         * Sets the human-readable summary.
+         *
+         * <p>Batch 873. This used to write {@code error} as well, on the theory
+         * that the two fields were aliases — which the class Javadoc still
+         * claimed. They are not: every body in this repository puts a
+         * {@code SNAKE_CASE} code in {@code error} and a phrase in
+         * {@code title}, and {@code GlobalExceptionHandler} had already worked
+         * around the clobber by calling {@code setTitle} after {@code build()}.
+         * Because {@link #of(ErrorCode, String)} lists {@code .error(...)} before
+         * {@code .title(...)}, the side effect silently replaced the code it had
+         * just written, so a body built through the factory shipped
+         * {@code "Bad Request"} in its {@code error} field. Eighteen endpoints
+         * reach these factories.
+         */
         public Builder title(String title) {
             response.title = title;
-            response.error = title;
             return this;
         }
 
@@ -153,10 +204,16 @@ public class ErrorResponse {
             return this;
         }
 
-        /** Sets the error code and auto-generates the type URI */
+        /**
+         * Sets the machine code and auto-generates the type URI.
+         *
+         * <p>Batch 873. This used to write {@code title} as well, which is why
+         * {@code build()} had nothing left to derive and every code-only body
+         * ended up with its code echoed into the summary field. The title is now
+         * resolved once, in {@link #build()}, from the catalog.
+         */
         public Builder error(String error) {
             response.error = error;
-            response.title = error;
             response.type = PROBLEM_TYPE_PREFIX + error.toLowerCase().replace('_', '-');
             return this;
         }
@@ -180,7 +237,15 @@ public class ErrorResponse {
             }
             // Ensure title/detail are in sync
             if (response.title == null && response.error != null) {
-                response.title = response.error;
+                // Batch 873. This used to copy the code verbatim, so every body
+                // that named its code and nothing else — which is nine of the
+                // thirteen hand-assembled sites — shipped "UNAUTHORIZED" in the
+                // field RFC 7807 defines as a short human-readable summary. The
+                // catalog already holds that summary, and the enum's own lookup
+                // is the only honest way to get it: an unknown code keeps the
+                // old behaviour rather than being invented a title for.
+                ErrorCode code = ErrorCode.byCodeOrNull(response.error);
+                response.title = code != null ? code.getTitle() : response.error;
             }
             if (response.detail == null && response.message != null) {
                 response.detail = response.message;

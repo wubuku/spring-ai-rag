@@ -94,18 +94,11 @@ public class GlobalExceptionHandler {
                 .toList();
         String detail = String.join("; ", violations);
 
-        ErrorResponse body = ErrorResponse.builder()
-                .error("VALIDATION_FAILED")
-                .status(400)
-                .message(detail)
-                .path(request.getRequestURI())
-                .build();
-
-        return ApiKeyRotationHttpPolicy.apply(
-                        ResponseEntity.status(HttpStatus.BAD_REQUEST),
-                        request)
-                .contentType(PROBLEM_JSON)
-                .body(body);
+        // Batch 873: this built its own body — a third construction site, with
+        // the same non-RFC-7807 shape `buildResponse` had. The handler below
+        // already reported this exact code through `buildResponse`, so the two
+        // were doing one job twice and could disagree.
+        return buildResponse(HttpStatus.BAD_REQUEST, "VALIDATION_FAILED", detail, request);
     }
 
     @ExceptionHandler(ConstraintViolationException.class)
@@ -263,6 +256,25 @@ public class GlobalExceptionHandler {
                 .message(detail)
                 .path(request.getRequestURI())
                 .build();
+
+        // Batch 873. This method declared `application/problem+json` while
+        // emitting a body that was not RFC 7807: no type, no title, no detail,
+        // no instance. Sixteen handlers reached it, so the same exception class
+        // produced two different shapes depending on which branch caught it —
+        // and a client reading `detail`, as RFC 7807 says to, found nothing.
+        //
+        // Titles and problem-type URIs are now read from `ErrorCode` rather than
+        // written here, which is what stops the two shapes drifting apart again.
+        // `message` and `path` deliberately stay: they are what the WebUI falls
+        // back to when `detail` is missing, and removing them would break a
+        // published contract for no gain.
+        body.setDetail(detail);
+        body.setInstance(request.getRequestURI());
+        ErrorCode code = ErrorCode.byCodeOrNull(error);
+        if (code != null) {
+            body.setType(code.getProblemTypeUri());
+            body.setTitle(code.getTitle());
+        }
 
         return ApiKeyRotationHttpPolicy.apply(
                         ResponseEntity.status(status),
