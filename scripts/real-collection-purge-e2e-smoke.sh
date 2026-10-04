@@ -480,9 +480,18 @@ default_search_body="$(
   }'
 )"
 request POST "$API/search" 200 "$default_search_body"
+# Batch 896. Both halves of this assertion used to be satisfiable by a field the
+# reader cannot see: an absent `documentId` is null, and null is not the purged
+# document; an absent `chunkText` becomes "" under the `// ""` guard, and the
+# empty string contains nothing. So a search response whose results stopped
+# naming a document or carrying text — which is exactly what a renamed field
+# looks like — was reported as "the tombstone is gone and nothing leaks". Both
+# fields are now required inside the same conjunction as the comparison.
 printf '%s' "$HTTP_BODY" | jq -e --arg docId "$DOC_ID" --arg token "$TOKEN" '
-  all(.[]; .documentId != $docId)
-  and all(.[]; ((.chunkText // "") | contains($token) | not))
+  all(.[]; .documentId != null and .documentId != $docId)
+  and all(.[];
+    .chunkText != null
+    and ((.chunkText | contains($token)) | not))
 ' >/dev/null
 pass "all explicit client paths reject the tombstone and default scope excludes it"
 

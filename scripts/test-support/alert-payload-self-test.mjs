@@ -141,15 +141,35 @@ test('the absent poll is satisfied by an empty list — that is the real answer'
   assert.notEqual(on(EXPIRY(), 'alerts_lack_expiry', 'P1'), 0);
 });
 
-test('the absent predicate alone still fails open, which is why the gate guards first', () => {
-  // Pinned deliberately: this asserts the *hazard* still exists at the predicate
-  // level, so the guard in the poll loop stays load-bearing. If a future jq or a
-  // future payload shape ever made this return non-zero, the guard would have
-  // become redundant and this case would be the thing that says so.
-  const renamed = JSON.stringify([{
+test('the absent predicate refuses an alert it cannot attribute, on its own', () => {
+  // Batch 896 inverted this case. It used to assert that alerts_lack_expiry
+  // *still* returned 0 here, pinning the fail-open at the predicate level so the
+  // guard in the poll loop stayed load-bearing. The predicate now requires the
+  // fields it compares, so it fails closed by itself — and the guard is only
+  // there to say so in the first second. Asserting the old behaviour would pin
+  // a defect back in place.
+  const renamedPrincipal = JSON.stringify([{
     alertType: 'API_PRINCIPAL_EXPIRY', conditionState: 'ACTIVE', metrics: { principal_id: 'P1' },
   }]);
-  assert.equal(on(renamed, 'alerts_lack_expiry', 'P1'), 0);
+  const renamedType = JSON.stringify([{
+    alertType_: 'API_PRINCIPAL_EXPIRY', conditionState: 'ACTIVE', metrics: { principalId: 'P1' },
+  }]);
+  assert.notEqual(on(renamedPrincipal, 'alerts_lack_expiry', 'P1'), 0,
+    'an expiry alert whose principal cannot be read is not "absent"');
+  assert.notEqual(on(renamedType, 'alerts_lack_expiry', 'P1'), 0,
+    'an alert whose type cannot be read is not "absent" either');
+  // The guard still refuses it, and still names the reader: that is the part the
+  // predicate cannot do for itself.
+  assert.equal(judge(renamedPrincipal).status, 1);
+});
+
+test('requiring the fields does not start demanding a principal of other kinds', () => {
+  // The positive control for the fix above. Requiring `.metrics.principalId`
+  // inside the quantifier without scoping it to expiry alerts would fail on
+  // correct data — this alert is well-formed and legitimately has no principal.
+  const other = '[{"alertType":"DOCUMENT_LIFECYCLE","conditionState":"ACTIVE"}]';
+  assert.equal(on(other, 'alerts_lack_expiry', 'P1'), 0);
+  assert.equal(judge(other).status, 0);
 });
 
 /** Return the body of a shell function, from `name() {` to its closing `}` in column 0. */

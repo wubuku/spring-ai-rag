@@ -226,3 +226,19 @@ node scripts/test-support/alert-payload-self-test.mjs >/dev/null || {
   exit 1
 }
 echo "PASS: Alert-payload self-test"
+
+# A jq predicate that says "nothing here is wrong" must be able to tell the
+# difference between "nothing is wrong" and "I cannot see". Batch 895 found one
+# such predicate by reading two of them by hand; Batch 896 found two more and
+# closed all three, so the shape is a finding rather than something to be found
+# by reading. No allowlist: an allowlist would be a list of predicates this gate
+# does not check.
+node scripts/test-support/json-assertions-self-test.mjs >/dev/null || {
+  echo "JSON-assertions self-test failed; the gate may no longer reject anything." >&2
+  node scripts/test-support/json-assertions-self-test.mjs >&2 || true
+  exit 1
+}
+echo "PASS: JSON-assertions self-test"
+
+node scripts/verify-json-assertions.mjs
+echo "PASS: JSON negative assertions"
