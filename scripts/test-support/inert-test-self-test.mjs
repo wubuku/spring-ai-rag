@@ -410,6 +410,106 @@ class Fixture {
   assert.deepEqual(findUnrunnableTests(source), []);
 });
 
+// ── Batch 890: a control-flow statement is not a method declaration ────────
+//
+// `DECLARATION_HEAD` is anchored at a line and matches "modifiers, annotations,
+// a type, a name and an open paren", none of which a statement is required to
+// have. `if (x) {` therefore matched with an empty type, and the block after it
+// was read as a method body. Measured on the real tree, 579 of 12150 reported
+// "declarations" were statements or anonymous classes.
+
+test('an if block is not a method declaration', () => {
+  const source = `
+class Fixture {
+    @Test
+    void sample() {
+        if (flag) {
+            assertEquals(1, 1);
+        }
+    }
+}
+`;
+  assert.deepEqual(collectMethods(source).map((m) => m.name), ['sample']);
+});
+
+test('a for loop and a while loop are not method declarations', () => {
+  const source = `
+class Fixture {
+    @Test
+    void sample() {
+        for (int i = 0; i < 3; i++) {
+            use(i);
+        }
+        while (flag) {
+            use(1);
+        }
+    }
+}
+`;
+  assert.deepEqual(collectMethods(source).map((m) => m.name), ['sample']);
+});
+
+test('an anonymous class body is not a method declaration', () => {
+  // The one statement shape that carries a `{` and so survives every other
+  // check. The name the pattern captures is the class being instantiated, so
+  // the keyword test cannot see it; what betrays it is the word sitting where a
+  // return type goes. Before the fix this source reported `Advisor` — the
+  // anonymous class body read as a method named after the class. The override
+  // inside it is a real declaration and is still found, which is why the
+  // expectation is two names and not one.
+  const source = `
+class Fixture {
+    @Test
+    void sample() {
+        return new Advisor() {
+            @Override
+            public String name() {
+                return "x";
+            }
+        };
+    }
+}
+`;
+  assert.deepEqual(collectMethods(source).map((m) => m.name), ['sample', 'name']);
+});
+
+test('a method whose name merely starts with a keyword is still a method', () => {
+  // The over-rejection check, and the one that matters most: a keyword filter
+  // that matched prefixes would drop `format`, `variable`, `newborn` and
+  // `record` — real methods, dropped silently, with nothing reporting the
+  // absence. A filter that works leaves them alone.
+  const source = `
+class Fixture {
+    void format() { }
+    void variable() { }
+    void newborn() { }
+    void record() { }
+    void forEach() { }
+    void ifPresent() { }
+    void switchOn() { }
+}
+`;
+  assert.deepEqual(
+    collectMethods(source).map((m) => m.name),
+    ['format', 'variable', 'newborn', 'record', 'forEach', 'ifPresent', 'switchOn'],
+  );
+});
+
+test('a constructor and a private @Test are still found', () => {
+  // The two shapes whose head is unusual — a constructor has no return type at
+  // all, and a test the gate has to report has modifiers. Both must survive.
+  const source = `
+class Fixture {
+    private Fixture() { }
+
+    @Test
+    private void sample() { }
+}
+`;
+  assert.deepEqual(collectMethods(source).map((m) => m.name), ['Fixture', 'sample']);
+  assert.deepEqual(findUnrunnableTests(source), ['sample']);
+});
+
 test('the real tree count includes the methods the apostrophe used to hide', () => {
   // Pinned against the tree rather than against a number, so it cannot rot. The
   // eighteen recovered methods are not listed: the point is that the census

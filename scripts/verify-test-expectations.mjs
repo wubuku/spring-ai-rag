@@ -109,6 +109,47 @@ function bodyFrom(source, braceIndex) {
 
 const DECLARATION_HEAD = /^[\t ]*((?:(?:public|protected|private|static|final|synchronized|abstract|default|native|strictfp)[\t ]+)*)((?:@[\w.]+(?:\([^)]*\))?[\t ]+)*)((?:[\w.<>\[\], ?]+[\t ]+)?)([A-Za-z_]\w*)[\t ]*\(/gm;
 
+/**
+ * Words that can only be the "name" of a match that is really a statement.
+ *
+ * A declaration has a return type or a modifier in front of its name, which is
+ * what the head pattern consumes first; a control-flow statement has neither, so
+ * whatever lands in the name group is a Java keyword. Measured on the real tree,
+ * 542 of 12150 reported "declarations" were statements — 266 `for`, 229 `if`,
+ * 33 `return`, 22 `while`, 4 `new`, one `switch` and the rest — and each one
+ * reported a block as if it were a method body.
+ *
+ * Rejecting them is deliberately surgical. The match still begins where it
+ * began, so the gap window `findInertTests` builds between one declaration and
+ * the next is unchanged for the methods that survive; what stops is the false
+ * declarations advancing `previousEnd` past the real ones. The alternative —
+ * tightening the pattern so a statement cannot match at all — would move
+ * `match.index` and quietly shift every window, which is how Batch 887 broke
+ * the empty-body rule once already.
+ *
+ * `var` is here because a local `var x = ...` has no return type to consume.
+ * The contextual keywords that *can* legally name a method — `record`,
+ * `sealed`, `permits` — are deliberately absent: a false rejection is the one
+ * failure this list cannot show you, because the method it dropped simply stops
+ * being scanned and nothing anywhere reports the absence.
+ */
+const STATEMENT_KEYWORDS = new Set([
+  'assert', 'await', 'break', 'case', 'catch', 'continue', 'delete', 'do', 'else',
+  'finally', 'for', 'if', 'instanceof', 'new', 'return', 'super', 'switch',
+  'this', 'throw', 'try', 'var', 'while', 'yield',
+]);
+
+/**
+ * The same distinction one step to the left, for the one statement shape that
+ * carries a `{` and so survives the body check: an anonymous class, written
+ * `return new Advisor() {` or `new Advisor() {`. There the name the pattern
+ * captures is the class being instantiated, which is why the keyword test above
+ * does not see it — the word sitting where a return type goes is `return` or
+ * `new`, and no method has one of those. 37 of these were left on the real tree
+ * after the keyword filter went in.
+ */
+const ANONYMOUS_CLASS_HEAD = /^(?:return|new)\b/;
+
 function matchParameterList(source, openIndex) {
   let depth = 0;
   for (let i = openIndex; i < source.length; i += 1) {
@@ -132,6 +173,8 @@ export function collectMethods(source) {
   const methods = [];
   for (const match of source.matchAll(DECLARATION_HEAD)) {
     const name = match[4];
+    if (STATEMENT_KEYWORDS.has(name)) continue;
+    if (ANONYMOUS_CLASS_HEAD.test(match[3] ?? '')) continue;
     // Positions are recovered by scanning from the match rather than by
     // reconstructing them from the match text: an earlier version computed the
     // parameter list's offset as `match.index + head.length - 1` and read the
