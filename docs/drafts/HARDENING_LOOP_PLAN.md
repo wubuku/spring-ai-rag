@@ -478,6 +478,78 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
+### Batch 870（已交付，WebUI UI/UX：两个**被量化的 0 缺陷**，一个新门禁，和两次被拦住的错误动作）
+
+- 分支：`batch-870`
+- 主题：六条 WebUI 门禁在 862/868/869 已全部审过，而用户优先级里排第二的
+  "WebUI UI/UX 增强与重构"已经很多批没被真正碰过（859–862 门禁、863–865 测试
+  替身、866–867 后端、868–869 门禁）。本批回到 UI/UX。
+  开题选的是 `check-double-submit` 自己登记的盲区：**按钮显示 pending 文案、
+  却仍然可点**。它说"真正的防线只能靠行为测试"——那就去看行为测试在不在。
+- **负结果 1（被量化）：这一类缺陷 0 个。**
+  普查 103 个组件文件里所有 `button` / `Button` / `IconButton` / `a`：
+  **18 处渲染 pending 文案，17 处已正确 disabled，1 处没有。**
+  唯一那 1 处是 `Collections.tsx:313` 的 purge 确认按钮。
+- **然后我差点去"修"一个不存在的缺陷。**
+  普查问的是"开标签里有没有 `X.isPending`"，而那 1 处的开标签只有
+  `disabled={!canApply}`。读文件才发现 `canApply` 的定义里**本来就含**
+  `&& !applyMutation.isPending`——**守卫是有的，只是绕经中间布尔量**。
+  于是普查给出的是**一个自信的错误答案**。这是我这次会话里第三次差点动手改坏东西
+  （869 差点推翻一条有据的政策，870 先差点改正确代码，再差点加重复测试）。
+  → 已把这个陷阱**钉进门禁自测**（`double-submit.test.mjs` 的
+  "cannot tell a correctly disabled control from one guarded indirectly"），
+  写明两件事：这样的扫描会误判；而且**这里的绿灯根本不是关于这个按钮的证据**
+  （门禁是文件级，同一文件里 Cancel 按钮读了 `isPending` 才让门禁绿）。
+  因此**明确不新增"检查开标签"的规则**——它会在这段正确代码上哭嚎，
+  而那正是门禁自己文档里说的最坏结局。
+- **负结果 2（被量化）：破坏性操作无确认，也是 0 个。**
+  5 个 DELETE 调用点全部有确认：`Collections`（`deleteTarget` + 确认对话框）、
+  `ApiKeys`（`confirmingRevoke`）、`Documents`（`confirmation`）、
+  `Alerts`（`pendingSloDelete` / `pendingSilenceDelete`）。
+  `Alerts.tsx:394` 的注释写明这一类是 Batch 812 **事后**补齐的
+  （"these two lists had never been brought in line"），
+  Batch 770 补过 Documents 与 ReembedAll。**两次都是事后修的**——
+  这才是值得动手的地方。
+- **实施：新增 `check-destructive-confirm.mjs`（第十条门禁）**，
+  把"破坏性操作必须先问"从事后返工变成新代码的准入条件。
+  - **破坏性清单是推导出来的，不是手维护的**：`src/api/*.ts` 里方法体发出
+    `apiClient.delete(` 即为破坏性。HTTP DELETE 是服务端自己声明的不可逆，
+    所以推导不需要一张会过期的清单——**新加破坏性端点自动纳入覆盖**。
+    实测推导出 8 个：`clearHistory` / `delete` / `deleteByKey` / `deleteExperiment` /
+    `deleteSilenceSchedule` / `deleteSloConfig` / `removeDocuments` / `revokeKey`。
+  - **POST 一律不算**：purge apply、batch embed、alert resolve 都是 POST 且不可逆，
+    但"哪些 POST 需要提示"是产品判断，猜就会哭嚎。自测里用这三个名字钉住这条边界。
+  - 豁免是 `// destructive-allow -- <理由>`，**必须写理由**（裸关键字不算）。
+- **探针（放真文件进 `src/`，跑真 CLI，再删掉核对还原）**：
+
+  | 探针 | 结果 |
+  |------|------|
+  | 真的无确认删除 | **红** ✓ 规则会触发 |
+  | 同一段代码加确认状态 | 绿 ✓ 不误报 |
+  | `destructive-allow -- 理由` 在调用行正上方 / 本行 | 绿 ✓ |
+  | 裸 `destructive-allow` 无理由 | **红** ✓ |
+
+  每轮 `src/` 逐文件列表核对一致、无残留、清理后门禁 exit=0。
+  第一次跑豁免探针时它红了——查下来是**我把注释放了两行远**，
+  而窗口是"本行或上一行"，按规格本来就该红。探针错了，不是门禁错了。
+- **实测局限，登记而不掩盖**：确认判定是**文件级的词表**，所以一个确认词会为
+  文件里**所有**破坏性调用背书。`Collections.tsx` 是活例子——purge 流程自己的
+  `confirmation` 会替 collection 删除的确认挡下门禁。
+  我专门量过：把四个真实文件的确认变量改名，门禁**全部仍绿**（0/4）——
+  改名并没有移除对话框，词表也被同文件的其它词命中。
+  要收紧需要作用域分析，而猜错的作用域分析器会把正确代码报成缺陷，
+  那是门禁唯一不能有的结局。→ **保留这个漏检，并写进门禁头部与一条自测**，
+  让下一个人看得见而不是自己踩。
+- **又一次被拦住的错误动作**：我先写了一条行为测试，断言 purge 按钮在
+  apply 进行中被禁用。变异证明它是承重的（两个变异都抓到），但汇总里冒出一条
+  我之前没看到的已有测试——`Collections.test.tsx:645`
+  "locks the purge dialog shut while apply is in flight"，**第 688 行就是**
+  `expect(secondary).toBeDisabled()`。最后一道防线本来就存在，我那条是重复的；
+  它唯一"多"的 `toHaveBeenCalledTimes(1)` 也没意义（只点了一次，从不尝试第二次）。
+  → **删掉那 73 行**，回到 18 个用例。
+- 门禁自测 322 -> 335（新增 13 条），lint 十条门禁全绿。
+- 账本：本条。
+
 ### Batch 869（已交付，WebUI 门禁：审到最后一条没审过的门禁，并**撤回**自己的一次越权修改）
 
 - 分支：`batch-869`
