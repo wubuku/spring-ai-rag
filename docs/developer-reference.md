@@ -167,6 +167,49 @@ attribute from one carrying `failures=""` — every consumer of it, shell and te
 alike, silently received two fields instead of four. Consumers read it as
 `IFS=, read -r tests failures errors skipped < <(surefire_counts "$report")`.
 
+### Reading the active-alert list
+
+`verify-managed-api-principals.sh` is a manual gate — it starts two backends and
+four containers — so it is one of the sixteen gates in the standing CI gap and
+none of its readers ran anywhere. It holds sixty `jq -e` predicates over API
+responses. Two of them read the active-alert list, and both were written as
+`any(...)` / `all(...)` one-liners inside a poll loop that treated every non-zero
+exit as "not yet". That is the right reading for a poll and the wrong one for a
+reader:
+
+- `all(.[]; .alertType != "API_PRINCIPAL_EXPIRY" or .metrics.principalId != $p)`
+  returns **true** when `principalId` is renamed, because the missing field is
+  `null` and `null != $p`. This predicate exists to prove an alert is *not*
+  firing, so it is the one direction that must never fail open: measured, an
+  alert that was present, firing and attributed to the principal under test was
+  reported as correctly absent.
+- A body that is no longer an array makes `jq` exit 5, not 1, and the loop could
+  not tell the two apart. It burned the whole 30-second budget and then reported
+  "the alert did not reach ACTIVE" — naming the alert instead of the reader.
+
+The predicates now live in `scripts/lib/alert-payload.sh`, and each poll calls
+`alerts_response_judgable` **before** it reads: a payload that is not an array,
+or an `API_PRINCIPAL_EXPIRY` alert with no readable `metrics.principalId`, is
+refused on the first poll with a reason that names the reader. The guard is scoped
+to that one alert type on purpose — other kinds legitimately carry no principal,
+and demanding one of everything would fail on correct data. An empty list is
+still legitimately "no alert"; what changed is that a payload the reader cannot
+interpret is no longer silently agreed with.
+
+The other three expiry readers in that gate were left alone, and the self-test
+pins why: all three demand `($alerts | length) == 1`, so a renamed field yields
+zero matches and they fail. The shape that fails open is the one that asks
+"is anything here" rather than "is this exactly one thing".
+
+`scripts/test-support/alert-payload-self-test.mjs` runs the real shell functions,
+because the thing under test is a shell function — a JavaScript restatement would
+pass while the shell one rotted. One of its cases asserts that
+`alerts_lack_expiry` **still** returns 0 for an alert it cannot attribute. That
+looks backwards and is deliberate: it pins the hazard at the predicate level so
+that the guard in the poll loop is known to be load-bearing. If a future `jq`
+ever made that predicate fail closed, this case is what says the guard has become
+redundant.
+
 The census has five hard rules: every gate script is registered; an automated gate
 carries a self-test or says why it cannot; an automated gate is executed bysomething; **an automated gate CI cannot reach carries a written reason**; and every
 gate is mentioned in a document. Adding a gate without registering it fails the

@@ -210,3 +210,19 @@ node scripts/test-support/surefire-report-self-test.mjs >/dev/null || {
   exit 1
 }
 echo "PASS: Surefire-report self-test"
+
+# Batch 895. `verify-managed-api-principals.sh` is a manual gate — it starts two
+# backends and four containers, so it is in the standing CI gap and nothing ever
+# ran its readers. Two of its sixty `jq -e` predicates read the active-alert list
+# and both treated every non-zero exit as "not yet", which is right for a poll and
+# wrong for a reader: on a renamed `metrics.principalId` the "no alert is firing"
+# predicate returns true and the gate reports a firing alert as correctly absent.
+# The two predicates now live in scripts/lib/ so that they can be run directly,
+# and this self-test is what actually executes them — the gate itself still runs
+# nowhere on its own.
+node scripts/test-support/alert-payload-self-test.mjs >/dev/null || {
+  echo "Alert-payload self-test failed; the gate may no longer reject anything." >&2
+  node scripts/test-support/alert-payload-self-test.mjs >&2 || true
+  exit 1
+}
+echo "PASS: Alert-payload self-test"
