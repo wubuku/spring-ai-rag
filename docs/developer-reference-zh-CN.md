@@ -118,7 +118,7 @@ skipped；本门禁则保证今后再有类"闭嘴"就会失败。
 | `verify-project-tests.sh` / `verify-project-docs.sh` | 上面 9 个的聚合入口 | 由各门禁承担 | 人跑 / 待接入 CI |
 | `verify-gated-it.sh` | 154 个纯 DB 型集成套件 | 由开关对账承担 | **CI 已接** |
 | `verify-webui-e2e-mock.sh` | 15 spec / 93 用例的前端 mock 回归 | 套件自身即自测 | 单独跑（2.6 分钟） |
-| `check-alignment-policy.mjs` | 物理 `text-align`、内联 `textAlign`、全局样式表契约 | `__tests__/alignment-policy.test.mjs` | `npm run lint` |
+| `check-alignment-policy.mjs` | 物理 `text-align`、内联 `textAlign`、全局样式表契约；测试文件被跳过，`--text-align` 是 token 而不是声明，没有中心声明认领的 `allow-center` 注释判失败（Batch 881） | `__tests__/alignment-policy.test.mjs` | `npm run lint` |
 | `check-design-system.mjs` | 越过设计 token 的硬编码值 | `__tests__/design-tokens.test.mjs` | `npm run lint` |
 | `check-a11y-forms.mjs` | 没有可访问名的控件、没绑定的 label | `__tests__/a11y-forms.test.mjs` | `npm run lint` |
 | `check-mutation-errors.mjs` | 写操作不报告失败 | `__tests__/mutation-errors.test.mjs` | `npm run lint` |
