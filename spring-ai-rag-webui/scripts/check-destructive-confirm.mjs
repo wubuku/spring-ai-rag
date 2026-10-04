@@ -81,13 +81,157 @@ const ALLOW_COMMENT = /^\s*(?:\/\/|\/\*)\s*destructive-allow\s+--\s+(\S.*?)\s*(?
 /**
  * The vocabulary of "ask first" in this codebase.
  *
- * Measured against the five call sites that exist today — Collections
- * (`deleteTarget`), ApiKeys (`confirmingRevoke`), Documents (`confirmation`),
- * Alerts (`pendingSloDelete`, `pendingSilenceDelete`). Every one of them trips
- * at least one of these, so the list is calibrated against real code rather
- * than against an imagined one.
+ * Batch 875: **no longer used to decide anything.** It is kept as the shape the
+ * dialog attribute is matched on, and its file-scoped use is the bug this batch
+ * closes — see `destructiveInvocations` for what replaced it. The five call
+ * sites that calibrated it are listed here because the calibration is still
+ * what tells you a *name* is not evidence: Collections (`deleteTarget`),
+ * ApiKeys (`confirmingRevoke`), Documents (`confirmation`), Alerts
+ * (`pendingSloDelete`, `pendingSilenceDelete`).
  */
 const CONFIRMATION = /\b(confirm\w*|pending[A-Z]\w*(?:Delete|Remove|Purge)|\w*(?:Delete|Remove|Purge)Target)\b/;
+
+/** Index of the closer matching the opener at `open`, or -1. */
+function matchPair(src, open, openChar, closeChar) {
+  let depth = 0;
+  for (let i = open; i < src.length; i += 1) {
+    if (src[i] === openChar) depth += 1;
+    else if (src[i] === closeChar) {
+      depth -= 1;
+      if (depth === 0) return i;
+    }
+  }
+  return -1;
+}
+
+/** The JSX tag name that owns the attribute starting at `at`, or null. */
+function enclosingTagName(code, at) {
+  const head = code.slice(0, at);
+  const lt = head.lastIndexOf('<');
+  if (lt < 0) return null;
+  const tag = /^<([A-Za-z][\w.]*)/.exec(code.slice(lt));
+  return tag ? tag[1] : null;
+}
+
+/**
+ * Batch 875. Every point at which a destructive action actually *fires*.
+ *
+ * Two shapes, and both have to be handled — a rule that only understands one of
+ * them trades a known blind spot for an unknown one.
+ *
+ *   Routed: `const removeM = useMutation({ mutationFn: () => api.delete(id) })`
+ *     The dangerous line is the declaration; the user's decision is made at
+ *     `removeM.mutate()`, somewhere else entirely. All seven invocations in the
+ *     tree today sit inside an `onConfirm` handler of a dialog, so this is where
+ *     the check belongs.
+ *
+ *   Direct: `onClick={() => collectionsApi.deleteByKey(key)}`
+ *     Nothing to follow — the call *is* the firing point. Skipping this shape
+ *     would be a new blind spot in exchange for closing an old one, which is
+ *     not a trade worth making.
+ */
+export function destructiveInvocations(code, destructive) {
+  const covered = new Set();
+  const mutations = [];
+
+  // Pass 1: which `useMutation` declarations carry a destructive call.
+  const decl = /const\s+([A-Za-z_$][\w$]*)\s*=\s*useMutation\s*\(/g;
+  let m;
+  while ((m = decl.exec(code)) !== null) {
+    const varName = m[1];
+    const open = code.indexOf('(', m.index + m[0].length - 1);
+    const close = matchPair(code, open, '(', ')');
+    if (close < 0) continue;
+    const body = code.slice(open + 1, close);
+    const call = /\b([A-Za-z_$][\w$]*(?:Api|Client))\s*\.\s*([A-Za-z_$][\w$]*)\s*\(/.exec(body);
+    // Absolute, because it is compared against CALL_SITE matches below, which
+    // are absolute. A body-relative index here silently fails to suppress the
+    // duplicate, and the duplicate is reported as an unconfirmed direct call
+    // sitting inside a mutationFn — a violation in code that asks first.
+    if (call && destructive.has(call[2])) {
+      covered.add(open + 1 + call.index);
+      mutations.push({ varName, method: call[2], declaredAt: close });
+    }
+    decl.lastIndex = close;
+  }
+
+  // Pass 2: bind each `.mutate()` to the nearest declaration *above* it.
+  //
+  // Not "the declaration in this file": `Alerts.tsx` has two components that
+  // each declare their own `const deleteMutation`, and a whole-file search let
+  // each one claim all four call sites. One component's dialog would then vouch
+  // for the other's delete — the exact cross-component leak the scoped check
+  // exists to close, reintroduced one level up. Nearest-preceding is sound for
+  // React: a hook is declared above every use of it in the same component.
+  const found = [];
+  for (const names of new Set(mutations.map(x => x.varName))) {
+    const decls = mutations.filter(x => x.varName === names).sort((a, b) => a.declaredAt - b.declaredAt);
+    const uses = new RegExp(`\\b${names}\\s*\\.\\s*mutate\\s*\\(`, 'g');
+    let u;
+    while ((u = uses.exec(code)) !== null) {
+      const owner = [...decls].reverse().find(d => d.declaredAt < u.index);
+      if (!owner) continue;
+      found.push({
+        varName: names,
+        method: owner.method,
+        index: u.index,
+        line: code.slice(0, u.index).split('\n').length,
+        shape: 'routed',
+      });
+    }
+  }
+
+  CALL_SITE.lastIndex = 0;
+  let direct;
+  while ((direct = CALL_SITE.exec(code)) !== null) {
+    const method = direct[2];
+    if (!destructive.has(method)) continue;
+    // CALL_SITE's match starts at the non-word character *before* the call, so
+    // `direct.index` is not the call's position. Comparing it against the
+    // absolute index recorded for a routed mutation silently fails to suppress
+    // the duplicate.
+    const at = direct.index + direct[0].indexOf(direct[1]);
+    if (covered.has(at)) continue;
+    found.push({
+      varName: null,
+      method,
+      index: at,
+      line: code.slice(0, at).split('\n').length,
+      shape: 'direct',
+    });
+  }
+  return found.sort((a, b) => a.index - b.index);
+}
+
+/**
+ * Whether `index` sits inside the `onConfirm` handler of a dialog element.
+ *
+ * Requires both halves: the attribute is an `onConfirm…` handler, *and* the
+ * element carrying it is a dialog. A component that takes an `onConfirm` prop
+ * and fires the delete from a plain `onClick` — which is what the ApiKeys
+ * fixture in this gate's self-test used to claim — is not asking the user
+ * anything, and the tag name is what distinguishes the two.
+ *
+ * **What this still cannot do**, and is recorded rather than papered over: it
+ * reads prop *names*. It cannot tell a real `<ConfirmDialog>` from a component
+ * that happens to be called `SomethingDialog` and ignores its `onConfirm`.
+ * That last mile is a behavioural question and belongs to the Playwright suite;
+ * a gate that claimed to answer it would be asserting something it cannot see.
+ */
+function inConfirmationContext(code, index) {
+  const attr = /onConfirm[A-Za-z]*\s*=\s*\{/g;
+  let m;
+  while ((m = attr.exec(code)) !== null) {
+    if (m.index >= index) break;
+    const open = code.indexOf('{', m.index);
+    const close = matchPair(code, open, '{', '}');
+    if (close < 0) continue;
+    if (index <= open || index >= close) continue;
+    const tag = enclosingTagName(code, m.index);
+    if (tag && /Dialog$/.test(tag)) return tag;
+  }
+  return null;
+}
 
 export function walk(dir, filter = () => true, acc = []) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -121,33 +265,25 @@ export function scanSource(relativePath, source, destructive) {
   const code = stripComments(source);
   const rawLines = source.split('\n');
 
-  const sites = [];
-  CALL_SITE.lastIndex = 0;
-  let match;
-  while ((match = CALL_SITE.exec(code)) !== null) {
-    const method = match[2];
-    if (!destructive.has(method)) continue;
-    sites.push({ method, line: code.slice(0, match.index).split('\n').length });
-  }
-  if (sites.length === 0) return violations;
+  const invocations = destructiveInvocations(code, destructive);
+  if (invocations.length === 0) return violations;
 
-  // File-scoped, like every other gate here. A component that hands the delete
-  // to a child cannot be followed; that is a miss, and a miss is the acceptable
-  // failure mode. What must never happen is reporting a file that *does* ask.
-  if (CONFIRMATION.test(code)) return violations;
+  for (const { method, line, index } of invocations) {
+    if (inConfirmationContext(code, index)) continue;
 
-  for (const { method, line } of sites) {
     const allow = ALLOW_COMMENT.exec(rawLines[line - 2] ?? '')
       ?? ALLOW_COMMENT.exec(rawLines[line - 1] ?? '');
     if (allow) continue;
 
-    // One finding per call site, but not per invocation of a loop body: a
+    // One finding per invocation, but not per call of a shared handler: a
     // component that deletes in a map is the same defect, not twenty.
     violations.push({
       kind: 'unconfirmed-destructive',
       file: relativePath,
       line,
-      message: `${method}() issues a DELETE and this file never asks for confirmation`,
+      message:
+        `${method}() issues a DELETE, and this invocation is not inside the onConfirm `
+        + 'handler of a dialog — nothing asks the user before the delete fires',
     });
   }
   return violations;
