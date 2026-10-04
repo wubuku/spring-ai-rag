@@ -46,6 +46,33 @@
  *      `new Foo(` 和 `@Foo(` 同理。
  *   3. **不扫嵌套/匿名类**。深度过滤天然做到这件事，不需要额外判断。
  *
+ * ── 这道门禁**不**判什么（Batch 884）────────────────────────────────────
+ *
+ * 原来的成功信息写的是：
+ *
+ *   "each declares exactly one constructor, so every dependency a test injects
+ *    is one the production wiring has too."
+ *
+ * 这句话的后半句是**假的**，而且真实树就违反它。判据数的是**构造器**，而
+ * Spring 的注入路径不止构造器一条：还有 setter。实测 27 个 controller 类型里
+ * 有 **6 个**用 `@Autowired` 方法注入，共 **12 处 / 13 个**协作者，**没有一个**
+ * 是构造器参数——构造器计数对它们完全隐形。
+ *
+ * 后果不是理论的。`RagCollectionController.setCollectionPurgeService` 是一个
+ * **不带** `required = false` 的必填 setter，它的字段在 139/156 两行
+ * **无守卫解引用**。生产装配一定会调它（它是必填的），所以这不是活的生产缺陷；
+ * 但一个测试只要 `new RagCollectionController(...)` 而不调那个 setter，
+ * 就在 139 行撞上 NPE——恰好是"恰好一个构造器"这句话声称不可能发生的事。
+ *
+ * 那 13 个协作者里 12 个走 `@Autowired(required = false)`，由
+ * `verify-false-optional-wiring` 判（它 882 那批已经把 setter 这条路收进去了），
+ * 真实树 EXIT=0。这里**不重复执法**：再立一道只会让同一个放行阀有两个出口。
+ * 剩下 1 个必填 setter 哪道门禁都不判，如实记下来。
+ *
+ * 所以本批改的是**输出**，不是判据：成功信息改成只声明它真正检查过的那件事，
+ * 并把没检查的那块面积**算出来**印在上面。数字是算的不是抄的——抄来的数字会烂
+ * （Batch 881/882 的教训）。
+ *
  * Run: node scripts/verify-controller-constructor-count.mjs
  */
 
@@ -155,7 +182,7 @@ export function findControllerTypes(source) {
 export function findConstructorDeclarations(source, type) {
   const flat = neutralize(source);
   const cls = type ? type.name : flat.match(/\b(?:class|record|enum)\s+(\w+)/)?.[1];
-  if (!cls) return null;
+  if (!cls) return [];
   const range = type ?? bodyRange(flat, flat.search(/\b(?:class|record|enum)\s+/));
   if (!range) return [];
 
@@ -190,9 +217,99 @@ export function findConstructorDeclarations(source, type) {
   return found;
 }
 
-/** 文件里是否声明了 controller（含嵌套的）。 */
-export function isController(source) {
-  return findControllerTypes(source).length > 0;
+/**
+ * 数出某个类型体第一层的 `@Autowired` **方法**（setter 注入）。
+ *
+ * 这不是新判据。它存在的唯一理由是头注释里那段：成功信息原来声称"恰好一个
+ * 构造器"能推出"测试注入的每个依赖生产装配也有"，而 setter 注入让这个推论
+ * 不成立。`@Autowired(required = false)` 归 `verify-false-optional-wiring` 判，
+ * 两道门禁不重复执法；这里只把**没被检查的面积算出来**，让"通过"两个字不说谎。
+ *
+ * 返回 `{ sites, collaborators, optionalCollaborators, requiredCollaborators }`：
+ * `sites` 是方法个数，`collaborators` 是它们注入的协作者个数——两者不等，
+ * `configureModeAwareExecution(ChatCommandMapper, ChatExecutionService)` 一处
+ * 就是两个。只报其中一个都会让读的人以为另一个不存在。
+ */
+export function countAutowiredMethods(source, type) {
+  const flat = neutralize(source);
+  const body = flat.slice(type.start + 1, type.end);
+  const depth = depthMap(body);
+  // The leading `\s*` is load-bearing. Without it a package-private setter —
+  // `    void configureSessionCoordinator(...)` — fails to match, because the
+  // declaration starts with the newline after the annotation and the modifier
+  // group has nothing to absorb. A public setter happened to survive that,
+  // which is how the first run of this reported 1 of 12 and looked plausible.
+  const modifiers = '\\s*(?:(?:public|protected|private|final|static|abstract)\\s+)*';
+  const totals = { sites: 0, collaborators: 0, optionalCollaborators: 0, requiredCollaborators: 0 };
+
+  for (const m of body.matchAll(/@(?:[\w$]+\.)*Autowired\b/g)) {
+    if (depth[m.index] !== 1) continue;
+    // The annotation may carry an argument list, and further annotations may
+    // follow it. Both have to be stepped over before the declaration can be
+    // read. An earlier version of this measurement looked 200 characters ahead
+    // instead, which reached the constructor sitting five lines below a setter
+    // and counted the setter as the constructor.
+    const annEnd = annotationEnd(body, m.index);
+    const decl = body.slice(skipAnnotations(body, annEnd));
+    // A constructor carries no return type, so requiring `void` is what tells a
+    // setter apart from the constructor next to it. There used to be an explicit
+    // `isConstructor` guard here as well, and a mutation that removed it turned
+    // nothing red — it could never fire, because the `void` pattern below had
+    // already excluded every constructor. A test asserting the pair "in either
+    // direction" was passing because the guard was unreachable, not because
+    // anything was being discriminated. Dead defences read as live ones.
+    const method = new RegExp(`^${modifiers}void\\s+(\\w+)\\s*\\(([^)]*)\\)`).exec(decl);
+    if (!method) continue;
+    const arity = method[2].trim() ? splitTopLevelArgs(method[2]).length : 0;
+    totals.sites += 1;
+    totals.collaborators += arity;
+    if (/required\s*=\s*false/.test(body.slice(m.index, annEnd))) {
+      totals.optionalCollaborators += arity;
+    } else {
+      totals.requiredCollaborators += arity;
+    }
+  }
+  return totals;
+}
+
+/** 注解起点 i 之后的位置：含参数列表。全限定名也算。 */
+function annotationEnd(flat, i) {
+  let j = i + 1;
+  while (j < flat.length && /[\w$.]/.test(flat[j])) j += 1;
+  let k = j;
+  while (k < flat.length && /\s/.test(flat[k])) k += 1;
+  if (flat[k] === '(') {
+    let d = 0;
+    for (; k < flat.length; k += 1) {
+      if (flat[k] === '(') d += 1;
+      else if (flat[k] === ')') { d -= 1; if (d === 0) return k + 1; }
+    }
+  }
+  return k;
+}
+
+/** 跳过紧跟其后的若干个注解，返回声明文本的起点。 */
+function skipAnnotations(flat, from) {
+  let p = from;
+  for (;;) {
+    const m = /^\s*@(?:[\w$]+\.)*\w+/.exec(flat.slice(p));
+    if (!m) return p;
+    p = annotationEnd(flat, p + m[0].indexOf('@'));
+  }
+}
+
+/** 按顶层逗号切分实参，忽略泛型与嵌套调用里的逗号。 */
+function splitTopLevelArgs(text) {
+  const out = [];
+  let depth = 0;
+  let current = '';
+  for (const ch of text) {
+    if ('<(['.includes(ch)) depth += 1;
+    else if ('>)]'.includes(ch)) depth -= 1;
+    if (ch === ',' && depth === 0) { out.push(current.trim()); current = ''; } else current += ch;
+  }
+  if (current.trim()) out.push(current.trim());
+  return out;
 }
 
 function walk(dir, acc = []) {
@@ -211,11 +328,19 @@ function main() {
 
   let blocking = 0;
   let controllers = 0;
+  // Batch 884. The unjudged surface is counted here rather than described in
+  // prose, so the sentence cannot drift away from the tree the way a
+  // hand-written count would. See the header for why the count matters.
+  const injected = { sites: 0, collaborators: 0, optionalCollaborators: 0, requiredCollaborators: 0 };
+  let injectedControllers = 0;
   for (const path of files) {
     const source = readFileSync(path, 'utf8');
     for (const type of findControllerTypes(source)) {
       controllers += 1;
       const ctors = findConstructorDeclarations(source, type) ?? [];
+      const methods = countAutowiredMethods(source, type);
+      if (methods.sites > 0) injectedControllers += 1;
+      for (const k of Object.keys(injected)) injected[k] += methods[k];
       if (ctors.length <= 1) continue;
       const rel = relative(scanRoot, path);
       const detail = ctors
@@ -241,8 +366,13 @@ function main() {
     process.exit(1);
   }
   console.log(
-    `Controller-constructor-count check passed; ${controllers} controller(s) examined, each declares `
-    + 'exactly one constructor, so every dependency a test injects is one the production wiring has too.',
+    `Controller-constructor-count check passed; ${controllers} controller(s) examined, none declares `
+    + 'more than one constructor, so no convenience constructor can fill in a default and decide on the '
+    + "caller's behalf which collaborators a test omits. This gate counts constructors only: "
+    + `${injected.collaborators} collaborator(s) across ${injectedControllers} controller(s) reach theirs `
+    + `through an @Autowired method instead, which a test can leave unset — ${injected.optionalCollaborators} `
+    + 'of them through @Autowired(required = false), which verify-false-optional-wiring judges, and '
+    + `${injected.requiredCollaborators} through a required setter, which no gate judges.`,
   );
 }
 
