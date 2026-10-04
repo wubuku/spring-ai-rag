@@ -478,6 +478,62 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
+### Batch 856（勘察完成，实施待排：WebUI 门禁的自我审查）
+
+- **为什么换方向**：850–855 连做 6 批后端（其中 855 是 false-optional-wiring
+  这条线的收尾，棘轮 16 → 0）。按 Batch 840 定的纪律，连续同模式后主动切换。
+- **先否掉一个"看起来最该做"的目标**。当前 WebUI 密度榜（vitest json reporter，
+  按页面聚合「源行 ÷ 用例」，测试文件按 `X.*.test.tsx → X` 归组）：
+  | 页面 | 源行 | 用例 | 密度 |
+  |---|---|---|---|
+  | `Files` | 1110 | 39 | 28.5 |
+  | `Alerts` | 753 | 29 | 26.0 |
+  | `Settings` | 510 | 20 | 25.5 |
+  | `Evaluation` | 495 | 21 | 23.6 |
+  | `Collections` | 410 | 18 | 22.8 |
+  | `ApiKeys` | 1187 | 60 | 19.8 |
+  | `Chat` | 711 | 48 | 14.8 |
+  - `Files` 密度最高，看着最该补。但读完它 39 个用例的名字之后否掉了：
+    IME 组合期不导航、splitter 键盘与指针拖拽、深链安全（反斜杠 / 控制字符 /
+    前导斜杠 / 空目录）、排序五种形态、上传前的类型拒绝、拖放导入、复制
+    importId 的成功与失败、toast 错误、blob 原始文件打开……**覆盖面已经很广**，
+    密度高更像是"这个组件本来就复杂但测得不错"，而不是缺口。
+    **追密度数字在这里性价比可疑**，而 849 做 `Collections` 时正是靠"找契约缺口"
+    而不是"补数量"才有价值。
+- **真正值得做的是一个门禁盲区**，勘察已完成：
+  - `check-hardcoded-copy` 的 `attribute` 模式只认四个**原生**属性
+    （`aria-label` / `title` / `placeholder` / `alt`），
+    **认不出自定义组件的文案 prop**。
+  - 只读普查：仓库里把某个 prop 透传成 `aria-label` / `title` 的组件共 6 个，
+    其中**声明为 `string` 的只有 3 个**——
+    `IconButton.label`（`IconButton.tsx:35` `aria-label={label}`、
+    `:36` `title={tooltip ?? label}`）、`Dialog.ariaLabel`、`Tabs.ariaLabel`。
+  - 另 3 个（`ConfirmDialog.title`、`SearchResults.indicatorTitle`、
+    `ThemeToggle.label`）的 prop **没有声明为 `string`**，
+    可能是 JSX 或计数——**所以只查那 3 个**，这就是"一条会误报的门禁比没有门禁更糟"
+    的直接应用。
+  - **当前生产侧 0 违规**：849 记下的那 2 处（`Toast.tsx:117`、`Dialog.tsx:184`）
+    早已改掉，所以这次修的是**漏检路径**而不是既有违规。
+  - **为什么它不属于"为 0 命中造门禁"**（853 刚否决过那种做法）：
+    这道门禁的注释**已经声称** *"a string a user can read must come from the
+    locale files"*，并把 *accessible names* 列为检查项。
+    `<IconButton label="Delete file" />` 产生的 `aria-label` 与
+    `aria-label="Delete file"` **在用户面前完全等价**，
+    门禁看得见后者、看不见前者。**这是兑现已有承诺，不是扩大范围。**
+- **实验方法已经现成**（不用重新发明）：
+  - 9 条 WebUI 门禁全部用 `readdirSync` **遍历**目录，是"发现"而不是
+    Batch 768 记过的那种"写死列表"——新文件自动受检，这一条已经没问题。
+  - 自测统一**直接 import 门禁导出的 `scanSource`** 并用字符串片段做夹具
+    （`scripts/__tests__/mutation-errors.test.mjs` 第 5 行），
+    与后端 Batch 850 确立的"普查应直接 import 门禁函数"是同一条纪律。
+- **待排的实施内容**（下一轮开工）：
+  1. `check-hardcoded-copy` 增加"从组件定义发现 `string` 文案 prop"的步骤，
+     再据此检查 pages 里的 `<Comp proseProp="大写文案" />`；
+  2. 自测补正向用例 + **假阳性对照**（`variant="primary"` 这类机器值不得报）；
+  3. 变异实验：真文件里植入一处 `<IconButton label="…">` 确认门禁抓得住，
+     跑完立即恢复并核对 `git diff`；
+  4. 同步双语文档里关于这道门禁的描述。
+
 ### Batch 855（已交付，后端技术债：棘轮归零，门禁从"棘轮"转为**阻塞**）
 
 - 分支：`feature/required-json-record-mutation-20261007`
