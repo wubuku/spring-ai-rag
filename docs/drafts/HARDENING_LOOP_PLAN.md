@@ -478,6 +478,69 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
+### Batch 883（已交付，后端：`verify-null-request-forwarding` 的行注释里一个 glob，把整个 controller 方法对门禁藏了起来）
+
+- 分支：`batch-883`
+- 方向：882 之后继续审从未单独审过的仓库级门禁。
+  `scripts/verify-null-request-forwarding.mjs`（259 行 / 扫描 431 个 Java 文件 /
+  19 条自测）在账本里只被当作"816/819 的产物"提到过。
+- **主缺陷（live on main）**：注释剥离器是两条正则
+  `replace(块注释正则, '').replace(行注释正则, '')`。真正的破坏**不在"字符串里的 `//`"**，
+  而在**块注释那条规则会从一条行注释内部起跳**：
+  `WebUiConfig.java:26` 是 `// Serve /webui/assets/** from classpath:/static/webui/assets/`，
+  里面有 `/*`（glob 的 `/**`）。块注释正则从那里开始找结束符，一路找到下面某个真实
+  javadoc 的 `*/`，把中间**整段真实代码**当成注释删掉。该文件 4 个"块注释"里 2 个是假的：
+  - `26..35` 行：吞掉 `registry.addResourceHandler(...)`、`.addResourceLocations(...)`、`}`
+  - `57..71` 行：吞掉**整个 `webuiCatchAll` controller 方法**——`@GetMapping`、签名、
+    `if (path.startsWith(...))`、两处 `return`、两个右花括号
+  也就是说这道门禁在 main 上是对这个方法**完全失明**的，而门禁的全部价值就在于"不许漏"。
+- **第二个缺陷**：`collectOverloads` 的模式看不见整整一层方法。旧模式要求
+  `换行 + \s{4} + [A-Za-z]… + \) + \s*\{`。431 个文件里共 **101** 个带 `HttpServletRequest`
+  参数的声明，旧模式只认得 **96**。
+  - 归因是**量出来的**：只放宽 `throws` 恢复 5 处，只放宽缩进恢复 **0** 处。
+    5 处全部因 `throws` 不可见：`doFilterInternal`（ApiKeyAuthFilter:110、
+    RateLimitFilter:160）、`preHandle`（ApiSloHandlerInterceptor:56）、
+    `afterCompletion`（:70）、`applyPostgresLimit`（RateLimitFilter:203）——**全在最外层
+    授权边界层**，而 816 立这条规则正是因为 `ChatPrincipal.from(null)` 会 fail-open。
+  - 缩进盲区今天 **0 命中**（101 个声明缩进全是 4），但触发条件是结构性的：把方法挪进
+    内部类就永久失明，没有任何行为变化能解释门禁为什么变安静。
+  - 放宽后仍必须拒绝非声明：`if (x) {`、`for (...) {`、`catch (...) {`、`} else {`、
+    带接收者的调用 `client.send(Type) {` 五种形状实测都不匹配。
+- **第三个缺陷**：`const allowlist = new Map()` 从未被填过任何东西，而 `allowlist.get(...)`
+  被读了四处——读起来像存在豁免通道，实际**无法登记任何豁免**。门禁本就不可豁免（报错信息
+  也没给豁免写法），行为一直是对的，错的是代码在暗示一个不存在的能力。连带删掉删完之后
+  剩下的 `const blocking = findings` 空壳别名。
+- **为什么不复用前端那份 `stripComments`**：`scripts/` 下十三道门禁的 import 图只有
+  `node:*` 内置和同目录兄弟脚本（可量）；而 `check-design-system.mjs` 顶层
+  `import postcss` 且 `import { buildOutputs } from './build-design-tokens.mjs'`。
+  引它等于把 WebUI 的 CSS 工具链拖进 Java 门禁的启动路径，没跑过 `npm ci` 的检出直接起不来。
+  **宁可各树自洽，也不让后端门禁依赖前端依赖树。** 这是本批唯一一个"明知有重复仍然不统一"的决定，
+  理由记在这里以免下一个读代码的人以为漏了。
+- **自测 25 → 33**（`grep -c '^test('` 对 HEAD 与工作区各数一次，不靠记忆）。
+  双版本对照 + 四个定点变异（`old` 7 红 / `m-throws` 2 / `m-indent` 2 /
+  `m-strip` 4 / `m-escape` 1），红集合各不相同 → 每条测试都咬住自己的修复点。
+  变异目标串找不到时脚本**中止**，不让"没生效"和"生效但没打红"混成同一个摘要。
+- **我在这一批犯的错，逐条记**：
+  1. doc 注释里写了字面块注释结束符，提前终止 → `SyntaxError`（**同一种错当天犯第二次**）。
+  2. 普查脚本把两版 `stripComments` **按行文本**比对，报出 64516 行差异、3051 条声明丢失——
+     全是假象：旧实现用空串替换，多行块注释**塌行**，之后所有行号整体错位。
+     **这正是 877 在 `check-page-shell.mjs` 上已经栽过一次的坑，我又栽了一次。**
+     改按**扫描结果**比对后真值是 **1 个文件**，方向纯漏报、无凭空造出。
+     已把这条写进自测文件头的注释，让下一个人不必重新踩。
+  3. 第一版归因写成"缩进"，是**逐行看签名首行**看不到 `throws`（这 5 处签名都跨多行，
+     `throws` 在末行）。归因必须做受控测量，不能读一行就下结论。
+  4. 变异 `m-throws` 第一版多写了一对外层括号，把 `[ \t]*` 空格容忍一起撤掉，
+     15 条全红——**没有隔离任何东西**。
+  5. 变异 `m-escape` 只改了 `out += src.slice(i, i+2)` 而漏掉下一行 `i += 2`，
+     总共跳过 3 个字符、恰好跨过 `//`，字符串状态一直没关，**根本没进过注释分支** →
+     报 0 红。"变异写错"和"变异没生效"摘要长得一模一样。
+  6. glob 夹具第一版把目标声明放在 javadoc **之后**（幸存），第二版又留了**第二对**转发
+     调用在删除区间**之外**（照样被抓到）→ 两次都白测。夹具必须能被它要抓的版本抓住。
+  7. `throws` 那条夹具第一次把转发调用写成 2 实参、去配 3 参数的声明，arity 对不上；
+     行号那条把模板首行漏算，`send(null)` 在第 9 行不是第 8 行。**两条红都是夹具错，不是实现错。**
+  8. 勘察阶段记下的"103 个声明 / 7 处盲区 / 4 处 `doFilterInternal`"是**错的**，
+     实测是 **101 / 5 / 2 处**。写进注释前必须重新量。
+
 ### Batch 882（已交付，后端：`optional-claim` 是全仓库最危险的放行阀，而它没有理由质量下限）
 
 - 分支：`batch-882`
