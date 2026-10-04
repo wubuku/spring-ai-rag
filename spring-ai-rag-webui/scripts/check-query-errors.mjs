@@ -74,13 +74,33 @@
  *                            `onError` option nor surfaced in the render
  *   2. empty-panel-on-error  a `{q.data && <section>}` guard with no error
  *                            branch — the specific shape that turned a failed
- *                            request into "there is nothing here"
+ *                            request into "there is nothing here". Batch 869
+ *                            widened the guard recognition to `q?.data && …`
+ *                            and `q.data ? … : …`, which are the same defect.
+ *                            They were already reported by rule 1, so only the
+ *                            kind changed, not the count.
  *
  * The named form is checked file-scoped, like the mutation gate: a component
  * that hands a query to a child is a shape this checker cannot follow, and a
  * rule that cries wolf gets ignored. The destructured form is checked
  * per-binding, which is strictly more precise, because the binding is the only
  * thing that can legally hold the error.
+ *
+ * ## `query-error-allow` is a note, not a switch — on purpose
+ *
+ * This gate and `check-mutation-errors` record the comment and still fail;
+ * `check-alignment-policy` and `check-double-submit` let it exempt. Batch 868
+ * fixed the double-submit one because its self-test *claimed* to accept an
+ * exemption while never checking for one. This gate's self-test makes no such
+ * claim — it is named "carries a recorded exemption as context without granting
+ * a pass" and says why: "a comment that silences a check is a comment anyone
+ * can write".
+ *
+ * So Batch 869 left the behaviour alone and only corrected the error message,
+ * which had been selling the comment as one of three remedies. Changing this
+ * gate to exempt would be overriding a documented decision, not fixing a bug —
+ * which makes it a policy call for a human, not a line to quietly edit. The
+ * repo holds both positions deliberately; see the ledger entry.
  *
  * Run: node scripts/check-query-errors.mjs
  */
@@ -106,12 +126,42 @@ const ERROR_BINDINGS = new Set(['isError', 'error']);
 
 const ALLOW_COMMENT = /query-error-allow:\s*(.+?)\s*(?:\*\/)?$/;
 
-/** Walks forward from the `(` of the options object to its matching `)`. */
+/**
+ * The options text of a `useQuery(` call: from its `(` to the matching `)`.
+ *
+ * Quote-aware, and it has to be. The first version counted parentheses blindly,
+ * so a `)` inside a string literal in the options — a composite key like
+ * `['r)']`, a URL, a filter expression — ended the slice early and every
+ * `onError` written after it became invisible. The result was a **false
+ * positive on correct code**: a component that passes `onError` was reported as
+ * `empty-panel-on-error`. A probe isolated it — the same component, with and
+ * without a paren in one string, differing only in whether `onError` sat after
+ * that string, went green and red respectively.
+ *
+ * `stripComments` already tracks quote state for exactly this reason; this does
+ * the same, including the backslash escape. Template literals are skipped whole,
+ * which is fine here: a paren inside `${…}` must not move the boundary either.
+ */
 function optionsOf(code, openParenIndex) {
   let depth = 1;
   let i = openParenIndex + 1;
+  let quote = null;
   while (i < code.length && depth > 0) {
     const ch = code[i];
+    if (quote !== null) {
+      if (ch === '\\') {
+        i += 2;
+        continue;
+      }
+      if (ch === quote) quote = null;
+      i += 1;
+      continue;
+    }
+    if (ch === '"' || ch === "'" || ch === '`') {
+      quote = ch;
+      i += 1;
+      continue;
+    }
     if (ch === '(') depth += 1;
     else if (ch === ')') depth -= 1;
     i += 1;
@@ -150,7 +200,14 @@ export function scanSource(relativePath, source) {
   // Rule 2 first. It is matched independently of rule 1 so that a component
   // cannot be excused for having an error banner somewhere else in the file.
   for (const { name, line, hasOnError } of named) {
-    const guarded = new RegExp(`\\{\\s*${name}\\s*\\.\\s*data\\s*&&`).test(code);
+    // `q.data && …`, `q?.data && …` and `q.data ? … : …` are one shape: the
+    // section disappears when the request fails. Batch 869 added the latter two.
+    // They were already reported — by rule 1, as `silent-query` — so this only
+    // corrects the kind a developer files the issue under. The number of
+    // reported components does not change.
+    const guarded = new RegExp(
+      `\\{\\s*${name}\\s*(?:\\?\\s*)?\\.\\s*data\\s*(?:&&|\\?)`,
+    ).test(code);
     if (!guarded || hasOnError) continue;
     if (new RegExp(`\\b${name}\\s*\\.\\s*isError\\b`).test(code)) continue;
 
@@ -282,8 +339,18 @@ function main() {
       '\nA failed read that is never surfaced does not look empty — it often looks\n' +
         'like data, and on an alerting or not-found surface it looks like a fact.\n' +
         'Render `<name>.isError` or bind `isError`/`error` from the hook (an alert\n' +
-        'is enough), pass an `onError`, or record an inline\n' +
-        '`/* query-error-allow: <reason> */`.',
+        'is enough), or pass an `onError`.\n' +
+        '\n' +
+        'A `query-error-allow` comment is NOT a pass here. It records your reason\n' +
+        'and prints it after the finding for the human who reviews it; the\n' +
+        'finding still fails the gate. A comment that silences a check is a\n' +
+        'comment anyone can write, so this gate takes the other half of that\n' +
+        'trade: the reason is evidence, not a switch.\n' +
+        '\n' +
+        '(`check-alignment-policy` and `check-double-submit` do let a comment\n' +
+        'exempt, and both require a written reason after a `--` separator. The\n' +
+        'repo holds both positions on purpose; changing this one is a policy\n' +
+        'call, not a bug fix.)',
     );
     process.exitCode = 1;
     return;
