@@ -25,6 +25,20 @@
  *   /* design-token-allow: <reason> *\/
  * comment on the same or the previous line. A reason is mandatory.
  *
+ * **Batch 878 found the exemption had never worked.** `scanFile` recorded the
+ * reason on every violation it found, and the one consumer of that field was
+ * the line deciding whether to print a hint — the counts this gate fails on
+ * were built from *all* violations, waived or not. A line carrying a perfectly
+ * justified exemption still failed, and the error message told the reader to go
+ * and write one. The tree has never used the escape hatch, which is the only
+ * reason this survived; the success line also reported a number labelled
+ * "grandfathered debt fingerprint(s) at baseline" that was in fact the count of
+ * distinct violations found, a coincidence that only holds at zero.
+ *
+ * The debt contract — "counts may only decrease", "a stale entry fails", "an
+ * unreadable baseline is a failed gate, not an empty one" — is now extracted
+ * into `compareToBaseline` and `readBaseline` and covered by tests. It had none.
+ *
  * Run with --write-baseline to (re)record the current debt intentionally.
  */
 
@@ -305,10 +319,18 @@ export function scanSource(relativePath, source, context) {
   codeLines.forEach((line, index) => {
     const lineNumber = index + 1;
     const previousLine = index > 0 ? rawLines[index - 1] : '';
-    const inlineAllow = ALLOW_COMMENT.exec(rawLines[index]) ?? ALLOW_COMMENT.exec(previousLine);
+    const allowHere = ALLOW_COMMENT.exec(rawLines[index]);
+    const inlineAllow = allowHere ?? ALLOW_COMMENT.exec(previousLine);
     const allowed = inlineAllow ? inlineAllow[1].trim() : null;
 
-    if (allowed !== null && allowed.length < 8) {
+    // Batch 878. Whether a justification is a real reason is a property of the
+    // comment, not of each line it governs. Reading the previous line as well
+    // meant a thin reason written *above* a declaration was reported twice —
+    // once on the comment and once on the line below it — and the two records
+    // had different `value` fields, so they were two baseline fingerprints for
+    // one bad sentence. A comment on the same line as its code was reported
+    // once, which is why the existing case never saw it.
+    if (allowHere && allowed.length < 8) {
       violations.push({
         file: relativePath,
         kind: 'weak-allow-reason',
@@ -447,6 +469,73 @@ export function fingerprint(violation) {
 }
 
 /**
+ * Count unresolved violations per fingerprint.
+ *
+ * Batch 878. This counted *every* violation, and the inline
+ * `design-token-allow:` exemption therefore did nothing at all: the record
+ * carried its `allowed` reason, and the only thing that ever read that field
+ * was the line deciding whether to print a hint. A line with a perfectly
+ * justified exemption still failed the gate — and the gate's own error message
+ * told the reader to go and write one. The exemption was a no-op that the gate
+ * was actively recommending.
+ *
+ * `css-syntax` is unaffected by this because it is recorded with
+ * `allowed: null` unconditionally: a stylesheet the browser cannot load has no
+ * legitimate exemption, only a reason to fix it.
+ *
+ * @param {{file: string, kind: string, value: string, line: number, allowed: string|null}[]} violations
+ * @returns {Map<string, number>}
+ */
+export function countUnresolved(violations) {
+  const counts = new Map();
+  for (const violation of violations) {
+    if (violation.allowed !== null) continue;
+    const key = fingerprint(violation);
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return counts;
+}
+
+/**
+ * The whole debt contract, as a pure function: what the code has, what the
+ * baseline allows, and every way the two can disagree.
+ *
+ * Batch 878. This was inline in `main()` and had no test at all — around seventy
+ * lines of gate logic, including two promises the surrounding comments make
+ * loudly ("counts may only decrease", "a stale over-sized entry fails"), and
+ * nothing in the suite touched any of it. A gate nobody exercises is the exact
+ * failure shape this repository has produced before.
+ *
+ * @param {Map<string, number>} counts fingerprints actually present in the code
+ * @param {Record<string, number>} entries what the baseline allows
+ * @param {{file: string, line: number}[]} violations for locating the first hit
+ * @returns {string[]} one message per disagreement, empty when the gate passes
+ */
+export function compareToBaseline(counts, entries, violations) {
+  const errors = [];
+  for (const [key, count] of counts) {
+    const allowed = entries[key] ?? 0;
+    if (count > allowed) {
+      const sample = violations.find(violation => fingerprint(violation) === key);
+      errors.push(
+        `${key}: ${count} occurrence(s), baseline allows ${allowed}` +
+          (sample ? ` (first at ${sample.file}:${sample.line})` : ''),
+      );
+    }
+  }
+  for (const [key, allowed] of Object.entries(entries)) {
+    const actual = counts.get(key) ?? 0;
+    if (actual < allowed) {
+      errors.push(
+        `${key}: baseline is stale (allows ${allowed}, found ${actual}). ` +
+          'Lower the entry or drop it at zero so the debt cannot silently regrow.',
+      );
+    }
+  }
+  return errors;
+}
+
+/**
  * Read the debt baseline, distinguishing "absent" from "corrupt".
  *
  * The previous version collapsed both into an empty baseline. A corrupt file
@@ -455,15 +544,20 @@ export function fingerprint(violation) {
  * debt that was already paid off. A gate that cannot tell the difference
  * between "nothing to check" and "could not read what to check" is a gate that
  * can go quiet.
+ *
+ * Batch 878 takes the path as an argument. It accepted a parameter before and
+ * then read the module constant anyway, so the parameter was a lie and the only
+ * way to exercise "absent" and "corrupt" against real files was to damage the
+ * checked-in one.
  */
-function readBaseline() {
+export function readBaseline(path = baselinePath) {
   let text;
   try {
-    text = readFileSync(baselinePath, 'utf8');
+    text = readFileSync(path, 'utf8');
   } catch (error) {
     if (error.code === 'ENOENT') return { version: 1, entries: {} };
     throw new Error(
-      `Cannot read ${relative(projectRoot, baselinePath)}: ${error.message}. ` +
+      `Cannot read ${relative(projectRoot, path)}: ${error.message}. ` +
         'An unreadable baseline is a failed gate, not an empty one.',
     );
   }
@@ -489,11 +583,8 @@ function main() {
   const context = { definedVars };
 
   const violations = paths.flatMap(path => scanFile(path, context));
-  const counts = new Map();
-  for (const violation of violations) {
-    const key = fingerprint(violation);
-    counts.set(key, (counts.get(key) ?? 0) + 1);
-  }
+  const counts = countUnresolved(violations);
+  const waived = violations.length - [...counts.values()].reduce((a, b) => a + b, 0);
 
   if (writeBaseline) {
     const entries = Object.fromEntries([...counts.entries()].sort(([a], [b]) => a.localeCompare(b)));
@@ -518,29 +609,7 @@ function main() {
   }
 
   const baseline = readBaseline();
-  const baselineEntries = baseline.entries ?? {};
-  const errors = [];
-
-  for (const [key, count] of counts) {
-    const allowed = baselineEntries[key] ?? 0;
-    if (count > allowed) {
-      const sample = violations.find(violation => fingerprint(violation) === key);
-      errors.push(
-        `${key}: ${count} occurrence(s), baseline allows ${allowed}` +
-          (sample ? ` (first at ${sample.file}:${sample.line})` : ''),
-      );
-    }
-  }
-
-  for (const [key, allowed] of Object.entries(baselineEntries)) {
-    const actual = counts.get(key) ?? 0;
-    if (actual < allowed) {
-      errors.push(
-        `${key}: baseline is stale (allows ${allowed}, found ${actual}). ` +
-          'Lower the entry or drop it at zero so the debt cannot silently regrow.',
-      );
-    }
-  }
+  const errors = compareToBaseline(counts, baseline.entries ?? {}, violations);
 
   // The retired colour baseline must not come back to life. An absent file is
   // fine; an unreadable or unparsable one is not, because that is exactly how
@@ -591,9 +660,17 @@ function main() {
     return;
   }
 
+  // Batch 878. This used to read "N grandfathered debt fingerprint(s) at
+  // baseline", where N was `counts.size` — the number of distinct *violations
+  // found in the code*, which has nothing to do with what the baseline records.
+  // At zero they coincide, which is why it read plausibly for so long; the
+  // first person to waive one violation would have seen a number that meant
+  // neither of the two things its sentence claimed.
+  const waivedNote = waived > 0 ? `, ${waived} occurrence(s) waived inline` : '';
   console.log(
-    `Design system policy passed; ${definedVars.size} token/var names defined, ` +
-      `${counts.size} grandfathered debt fingerprint(s) at baseline.`,
+    `Design system policy passed; ${definedVars.size} token/var names defined, `
+      + `${counts.size} unresolved debt fingerprint(s)${waivedNote}, `
+      + `${Object.keys(baseline.entries ?? {}).length} baselined.`,
   );
 }
 
