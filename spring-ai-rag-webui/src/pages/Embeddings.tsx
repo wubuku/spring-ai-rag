@@ -13,6 +13,7 @@ import type { DerivationRepairPreview } from '../api/embeddings';
 import { Dialog } from '../components/Dialog';
 import { Card } from '../components/Card';
 import { useImeComposition } from '../utils/ime';
+import { failureMessage } from '../utils/failureReason';
 import styles from './Embeddings.module.css';
 import { PageHeader } from '../components/ui';
 
@@ -227,7 +228,7 @@ export function Embeddings() {
           </div>
           {previewRepairM.isError && (
             <div className={styles.error} role="alert">
-              {t('embeddings.repairFailed')}
+              {failureMessage(t, 'embeddings.repairFailed', previewRepairM.error)}
             </div>
           )}
         </section>
@@ -266,7 +267,7 @@ export function Embeddings() {
                 写在页面上的提示会被模态遮住，用户根本看不到。 */}
             {applyRepairM.isError && (
               <div className={styles.error} role="alert">
-                {t('embeddings.applyRepairFailed')}
+                {failureMessage(t, 'embeddings.applyRepairFailed', applyRepairM.error)}
               </div>
             )}
             <p className={styles.muted}>
@@ -301,7 +302,9 @@ export function Embeddings() {
             两者共用一个提示会让用户以为是另一个操作出错。 */}
         {(cancelM.isError || retryM.isError) && (
           <div className={styles.error} role="alert">
-            {cancelM.isError ? t('embeddings.cancelFailed') : t('embeddings.retryFailed')}
+            {cancelM.isError
+              ? failureMessage(t, 'embeddings.cancelFailed', cancelM.error)
+              : failureMessage(t, 'embeddings.retryFailed', retryM.error)}
           </div>
         )}
         {jobsQ.isPending ? (

@@ -6,6 +6,7 @@ import { evaluationApi } from '../api/evaluation';
 import { Card } from '../components/Card';
 import styles from './Evaluation.module.css';
 import { PageHeader, Tabs, tabDomIds } from '../components/ui';
+import { failureMessage } from '../utils/failureReason';
 
 type Tab = 'report' | 'history' | 'feedback' | 'judge' | 'suites' | 'runs' | 'citations';
 
@@ -187,7 +188,9 @@ export function Evaluation() {
                   <pre className={styles.pre}>{JSON.stringify(evaluateM.data?.data, null, 2)}</pre>
                 )}
                 {evaluateM.isError && (
-                  <div className={styles.error}>{t('evaluation.evaluateFailed')}</div>
+                  <div className={styles.error}>
+                    {failureMessage(t, 'evaluation.evaluateFailed', evaluateM.error)}
+                  </div>
                 )}
               </div>
             </div>
@@ -315,7 +318,11 @@ export function Evaluation() {
               {judgeM.isSuccess && (
                 <pre className={styles.pre}>{JSON.stringify(judgeM.data?.data, null, 2)}</pre>
               )}
-              {judgeM.isError && <div className={styles.error}>{t('evaluation.judgeFailed')}</div>}
+              {judgeM.isError && (
+                <div className={styles.error}>
+                  {failureMessage(t, 'evaluation.judgeFailed', judgeM.error)}
+                </div>
+              )}
             </div>
           </section>
         )}
@@ -377,7 +384,7 @@ function SuitesPanel() {
         </button>
         {createM.isError && (
           <div className={styles.error} role="alert">
-            {t('evaluation.createSuiteFailed')}
+            {failureMessage(t, 'evaluation.createSuiteFailed', createM.error)}
           </div>
         )}
         <label>
@@ -394,7 +401,7 @@ function SuitesPanel() {
         </button>
         {versionM.isError && (
           <div className={styles.error} role="alert">
-            {t('evaluation.importVersionFailed')}
+            {failureMessage(t, 'evaluation.importVersionFailed', versionM.error)}
           </div>
         )}
       </div>
@@ -431,7 +438,7 @@ function RunsPanel() {
         </button>
         {startM.isError && (
           <div className={styles.error} role="alert">
-            {t('evaluation.startRunFailed')}
+            {failureMessage(t, 'evaluation.startRunFailed', startM.error)}
           </div>
         )}
         {startM.data?.data?.id && (

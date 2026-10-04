@@ -195,7 +195,10 @@ describe('Embeddings interactions', () => {
     await user.click(await screen.findByRole('button', { name: 'embeddings.cancel' }));
 
     const alert = await screen.findByRole('alert');
-    expect(alert).toHaveTextContent('embeddings.cancelFailed');
+    // Batch 858: `toHaveTextContent` is a substring match, so the key alone used
+    // to satisfy this and the appended server reason went unnoticed. Assert the
+    // full sentence — the shape a user actually reads.
+    expect(alert).toHaveTextContent(/^embeddings\.cancelFailed \(boom\)$/);
     // The retry banner is the sibling branch of the same element; only the
     // action that actually failed may be named.
     expect(alert).not.toHaveTextContent('embeddings.retryFailed');
@@ -209,7 +212,7 @@ describe('Embeddings interactions', () => {
     await user.click(await screen.findByRole('button', { name: 'embeddings.retry' }));
 
     const alert = await screen.findByRole('alert');
-    expect(alert).toHaveTextContent('embeddings.retryFailed');
+    expect(alert).toHaveTextContent(/^embeddings\.retryFailed \(boom\)$/);
     expect(alert).not.toHaveTextContent('embeddings.cancelFailed');
   });
 });
@@ -341,9 +344,11 @@ describe('Embeddings derivation repair flow', () => {
     );
 
     await waitFor(() => {
+      // Batch 858: full sentence, so the appended server reason is part of what
+      // this test proves rather than an unasserted side effect.
       expect(
         within(dialog).getByRole('alert'),
-      ).toHaveTextContent('embeddings.applyRepairFailed');
+      ).toHaveTextContent(/^embeddings\.applyRepairFailed \(boom\)$/);
     });
     // Still open, so the user can retry or cancel without losing the preview.
     expect(
