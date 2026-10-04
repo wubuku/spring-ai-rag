@@ -6,13 +6,6 @@ import { MemoryRouter, useLocation } from 'react-router-dom';
 import { Evaluation } from './Evaluation';
 import { evaluationApi } from '../api/evaluation';
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (k: string) => k,
-    i18n: { language: 'en' },
-  }),
-}));
-
 vi.mock('../api/evaluation', () => ({
   evaluationApi: {
     getReport: vi.fn().mockResolvedValue({

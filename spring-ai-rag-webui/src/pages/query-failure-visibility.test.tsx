@@ -32,11 +32,6 @@ import { collectionsApi } from '../api/collections';
 import { evaluationApi } from '../api/evaluation';
 import { documentsApi } from '../api/documents';
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (k: string) => k, i18n: { language: 'en' } }),
-  initReactI18next: { type: '3rdParty', init: () => {} },
-}));
-
 vi.mock('../api/alerts', () => ({
   alertsApi: {
     listActive: vi.fn(),

@@ -44,10 +44,6 @@ vi.mock('../components/Toast', () => ({
   useToast: () => ({ showToast: mocks.showToast }),
 }));
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (k: string) => k }),
-}));
-
 function makePrincipal(
   overrides: Partial<ApiPrincipalResponse> = {},
 ): ApiPrincipalResponse {

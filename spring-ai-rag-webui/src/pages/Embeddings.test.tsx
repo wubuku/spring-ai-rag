@@ -19,13 +19,6 @@ function renderEmbeddings(initialEntry = '/embeddings?collectionKey=wiki') {
   );
 }
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (k: string) => k,
-    i18n: { language: 'en' },
-  }),
-}));
-
 vi.mock('../api/embeddings', () => ({
   embeddingsApi: {
     listJobs: vi.fn().mockResolvedValue({

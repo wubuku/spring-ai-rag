@@ -25,15 +25,24 @@ vi.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({ invalidateQueries: mockInvalidate }),
 }));
 
+/**
+ * 这个文件确实需要一个**不同于全局**的 `t`（要把插值参数也渲染出来），
+ * 所以替身得留在本地；但它必须是**引用稳定**的，理由和 `setup.ts` 里那一份
+ * 完全一样：`t` 每次渲染都换新函数，会让把 `t` 写进依赖数组的 effect
+ * 在测试里反复重跑而生产不会（Batch 863 记录了这条怎么变成永不结束的测试）。
+ * `vi.hoisted` 是唯一能在这个位置拿到模块级绑定的办法。
+ */
+const { stableT } = vi.hoisted(() => ({
+  // 刻意与真实 i18next 行为一致：缺失的键返回键名本身（一个真值字符串）。
+  // 带插值参数时把参数也带出来，这样用例能钉住「传了什么给 locale」，
+  // 而不只是「用了哪个键」——重嵌入的三个 toast 各自带 success / failed /
+  // message，参数传错会让用户看到错的数字，而键断言抓不到。
+  stableT: (key: string, params?: Record<string, unknown>) =>
+    params ? `${key} ${JSON.stringify(params)}` : key,
+}));
+
 vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    // 刻意与真实 i18next 行为一致：缺失的键返回键名本身（一个真值字符串）。
-    // 带插值参数时把参数也带出来，这样用例能钉住「传了什么给 locale」，
-    // 而不只是「用了哪个键」——重嵌入的三个 toast 各自带 success / failed /
-    // message，参数传错会让用户看到错的数字，而键断言抓不到。
-    t: (key: string, params?: Record<string, unknown>) =>
-      params ? `${key} ${JSON.stringify(params)}` : key,
-  }),
+  useTranslation: () => ({ t: stableT }),
 }));
 
 vi.mock('../Toast', () => ({
