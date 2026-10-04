@@ -54,6 +54,64 @@ describe('silent-query, named form', () => {
     expect(kinds(source)).toEqual([]);
   });
 
+  // Batch 869. The options slice used to end at the first unmatched `)` seen
+  // anywhere, including one inside a string literal, so an `onError` written
+  // after such a string became invisible and a *correct* component was reported.
+  //
+  // Which of the three below actually carries the fix was measured, not
+  // assumed: reverting `optionsOf` to blind counting fails **one** test, the
+  // unbalanced one. A *balanced* `(` and `)` inside a string cancel out, so the
+  // first case passes either way — it is here to show a paren in a key is not
+  // itself the problem, not to hold the fix up. The third is the control that
+  // stops the first two from also passing if the scanner had simply stopped
+  // looking.
+  it('sees an onError written after a string literal that contains a paren', () => {
+    const source = `
+      const reportQ = useQuery({
+        queryKey: ['report(archived)'],
+        queryFn: fetchReport,
+        onError: (e: Error) => showToast(e.message, 'error'),
+      });
+    `;
+    expect(kinds(source)).toEqual([]);
+  });
+
+  it('sees an onError after a string containing an unbalanced closing paren', () => {
+    // The minimal form of the same bug, and the one case that fails when the
+    // fix is reverted: one `)` in one string, with the `onError` after it.
+    const source = `
+      const reportQ = useQuery({ queryKey: ['r)'], queryFn: fetchReport, onError: log });
+    `;
+    expect(kinds(source)).toEqual([]);
+  });
+
+  it('still reports when no onError is present after such a string', () => {
+    // The control. Without it the two cases above would also pass if the
+    // scanner simply stopped looking, which is the other way to make them green.
+    const source = `
+      const reportQ = useQuery({ queryKey: ['r)'], queryFn: fetchReport });
+      return <div>{reportQ.data && <Cards />}</div>;
+    `;
+    expect(kinds(source)).toEqual(['empty-panel-on-error']);
+  });
+
+  it('recognises the ternary and optional-chain forms of the same defect', () => {
+    // Both were already reported before Batch 869 — as `silent-query`, by the
+    // catch-all rule. They are the same "failed request renders nothing" defect
+    // as `{q.data && …}`, so the kind now says so. The count of reported
+    // components is unchanged; only the label a developer files under is.
+    const ternary = `
+      const reportQ = useQuery({ queryKey: ['r'], queryFn: fetchReport });
+      return <div>{reportQ.data ? <Cards /> : null}</div>;
+    `;
+    const optionalChain = `
+      const reportQ = useQuery({ queryKey: ['r'], queryFn: fetchReport });
+      return <div>{reportQ?.data && <Cards />}</div>;
+    `;
+    expect(kinds(ternary)).toEqual(['empty-panel-on-error']);
+    expect(kinds(optionalChain)).toEqual(['empty-panel-on-error']);
+  });
+
   it('does not accept a render that only checks a different query', () => {
     // Two queries in one file, one banner. The query that actually failed is
     // still unnamed, which is the same silent misreport in a subtler dress.
