@@ -14,12 +14,18 @@ vi.mock('../ErrorBoundary', () => ({
   ErrorBoundary: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
+// `vi.mock` is hoisted above the imports, so the factory cannot close over a
+// binding declared here — `vi.hoisted` is the only way to hold on to a
+// module-level mock from inside it. Without this, `logout` is a fresh vi.fn()
+// on every call and the test below has nothing to assert against.
+const { logoutMock } = vi.hoisted(() => ({ logoutMock: vi.fn() }));
+
 vi.mock('../../auth/ApiKeyAuthContext', () => ({
   useApiKeyAuth: () => ({
     identity: null,
     isUnlocked: true,
     unlock: vi.fn(),
-    logout: vi.fn(),
+    logout: logoutMock,
   }),
 }));
 
@@ -295,9 +301,33 @@ describe('Layout responsive sidebar and logout', () => {
   it('invokes logout from the sidebar action', async () => {
     const user = userEvent.setup();
     renderLayout();
+    logoutMock.mockClear();
 
     await user.click(screen.getByRole('button', { name: 'unlock.logout' }));
-    // logout 来自 mocked context，这里仅验证按钮可点击且不抛错。
+
+    // The button is wired straight to `logout` in Layout.tsx, so a click that
+    // does not reach it is a sidebar action that looks present and does
+    // nothing. This used to assert nothing at all — the name promised the
+    // invocation, the body only established that clicking did not throw, and a
+    // comment said so. Breaking `onClick={logout}` left it green.
+    expect(logoutMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not invoke logout merely by rendering the layout', () => {
+    // The negative that keeps the assertion above honest. A Layout that called
+    // logout on every render would satisfy "toHaveBeenCalledTimes(1)" the
+    // moment a click landed, with the button wired to nothing at all. Asserting
+    // on the render alone isolates that: nothing has been clicked yet, so the
+    // only thing that can have called it is the component itself.
+    //
+    // The clear comes before the render, not after. Clearing afterwards clears
+    // the very call this case exists to catch, and the case passes against a
+    // Layout that logs the user out on mount — which is the first version of
+    // it that was written here.
+    logoutMock.mockClear();
+    renderLayout();
+
+    expect(logoutMock).not.toHaveBeenCalled();
   });
 
   it('resets to desktop layout when resizing back above the breakpoint', async () => {
