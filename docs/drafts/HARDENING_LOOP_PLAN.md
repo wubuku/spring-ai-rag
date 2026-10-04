@@ -478,6 +478,73 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
+### Batch 867（已交付，技术债：同一张「身份 → 权限」映射被写成了三份）
+
+- 分支：`batch-867`
+- 主题：接着 866 往下。866 量的是**一条** fail-open 分支有没有人声明过；本批量的是
+  **映射表本身有几份实现**。结论：同一个「id / 类型 -> 身份 / 权限」的问题，
+  仓库里有三份互不知情的写法。
+  1. `ChatPrincipal.from()` —— 请求 -> 身份（正典）
+  2. `ChatTurnOperationService.principalFor()` —— 落库 `owner_principal_id` -> 身份（重建）
+  3. `RagChatHistoryRepository.canReadLegacy()` 与 `ChatExportService.canReadLegacy()`
+     —— 两份**逐字节相同**的私有方法（用脚本比对确认，不是"看着像"）
+- **勘察变异（全量 7629 个用例，每个 190–265 秒）**：
+
+  | 变异 | 问的问题 | 结果 |
+  |------|----------|------|
+  | N1 | 只把重建出的环境根降级成非管理员 | **0 红** |
+  | N2 | 只从仓库那一份 `canReadLegacy` 删掉环境根 | **0 红** |
+  | N3 | 把凭空编造的 `"PURGE"` 换成别的字符串 | **0 红** |
+
+- **N3 的 0 命中是证据，不是缺口**——这与 859/860 遇到的"0 命中长得和门禁失效
+  一模一样"正好是镜像，这次要能分辨。`ChatPrincipal.memoryConversationId` 只用
+  `id` 拼接哈希（`ChatPrincipal.java:66`），`type` 分量对结果毫无影响；而
+  `CollectionPurgeService:897` 与 `ChatHistoryCleanupService:198` 为了算这一个哈希，
+  各自**凭空编了一个 principal 类型**（`"PURGE"` / `"TTL_CLEANUP"`）。改掉它 7629
+  个用例一个都不红，正好证明这两个字符串是 fiction、没有任何读者。
+  同一条路径上 `CollectionPurgeService:770-780` 显式处理了 `owner == null`
+  （归属字段上线前的 legacy 行），所以构造器的非空校验不是空转。
+- **勘察时我把一个结论说错了，当场更正**：先写进 todo 的"ENVIRONMENT_ROOT_OWNER
+  是零引用常量"是**错的**。`ProvisioningOwnerResolver` 其实声明了**三个**常量
+  （`ENVIRONMENT_ROOT_OWNER` / `LEGACY_STATIC_OWNER` / `AUTH_DISABLED_OWNER`），
+  而且被两个测试类引用着。准确的说法是：**生产侧零引用**——两个控制器只注入这个
+  bean 调 `resolve(request)`，从不碰常量。而生产代码有 **5 处**重新硬写这同一批
+  字符串（`ChatPrincipal` 两处、`principalFor` 三处、两份 `canReadLegacy` 各三处）。
+  一个只 grep 一次就下结论的普查，会把"三个"报成"一个"。
+- **实施**（3 处生产改动，全部行为保持；全量套件 7629 -> 7637 绿是证据）：
+  - `ChatPrincipal` 新增三个 id 常量与 `DATABASE_KEY_ID_PREFIX`；
+    新增 `fromOwnerId(String)`（`from` 的反向映射）与 `canReadLegacyRows()`
+    （唯一一份 legacy 可见性判定）；`local()` 与 `from()` 改用常量。
+  - `ChatTurnOperationService.principalFor` 缩成一行委托。
+  - 两份 `canReadLegacy` **删除**，调用点改调 `principal.canReadLegacyRows()`。
+- **新增 `ChatPrincipalOwnerIdTest`（8 个用例）**，钉住往返不变量与跨类一致性。
+  7 个变异全部被捕获，**0 个盲区**，归属精确：
+
+  | 变异 | 抓住它的用例 |
+  |------|--------------|
+  | 重建出的环境根降级（**原 N1**） | `environmentRootSurvivesOwnerIdRoundTrip` |
+  | `canReadLegacyRows` 漏掉环境根（**原 N2**） | `canReadLegacyRowsAcceptsTheThreeNonDatabaseIdentities` |
+  | `canReadLegacyRows` 漏掉本地身份 | 同上 |
+  | `from()` 里环境根 id 常量被改 | 4 条，含两条跨类一致性 + 866 的两条 dispatch |
+  | 重建的静态 key 带上管理员 | `legacyStaticSurvivesOwnerIdRoundTrip` |
+  | `from()` 里 `db:` 前缀被改 | 4 条，含 866 的 dispatch 三条 |
+  | 认不出的 owner 不再回落 `local()` | `authDisabledSurvivesOwnerIdRoundTrip` |
+
+  两个值得记的点：
+  - **往返对数据库 key 是有损的，而且这是刻意的**。落库的 id 只有 `db:<keyId>`，
+    不带角色，所以重建一律 `admin=false`——拿不回角色时按最低权限解释。
+    用例 `databaseKeyRoundTripDeliberatelyLosesRole` 把这条**写进断言消息**
+    （"不要把它'修'成从别处猜回角色，那会把一条重建路径变成提权路径"），
+    免得下一个人出于好意把它改成提权。
+  - P4 被 **4** 条抓住，横跨两个测试类：Batch 866 的 dispatch 用例和本批的跨类
+    一致性用例同时变红。上一批的断言在这一批真的接上了力。
+- **一条我没有下结论、留给下一批的问题**：`fromOwnerId` 认不出的 id 会回落到
+  `local()`，而 `local()` **能读 legacy 行**——这是一条 fail-open。P7 只钉住了
+  "回落机制"（改掉回落会红），没有钉住"认不出的 id 就该有 legacy 可见性"这个
+  **政策**判断。我拒绝写一条断言把现状盖章：那是给一个未定的决策背书。
+  要不要收紧需要单独想清楚（收紧会不会让归属字段上线前写的那批行永远读不到）。
+- 账本：本条。
+
 ### Batch 866（已交付，测试加固：把"覆盖存在"和"有人声明过"拆开算账）
 
 - 分支：`batch-866`

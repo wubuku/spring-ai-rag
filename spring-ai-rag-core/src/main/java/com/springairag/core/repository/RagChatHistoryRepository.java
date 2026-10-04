@@ -258,7 +258,7 @@ public class RagChatHistoryRepository {
         return jpaRepository.findVisibleByOwnerAndSessionNewestFirst(
                         principal.id(),
                         sessionId,
-                        canReadLegacy(principal),
+                        principal.canReadLegacyRows(),
                         PageRequest.of(0, safeLimit))
                 .stream()
                 .map(this::toDto)
@@ -389,12 +389,6 @@ public class RagChatHistoryRepository {
                 stringValue(entity.getMetadata(), "resolvedModel"),
                 entity.getCreatedAt()
         );
-    }
-
-    private boolean canReadLegacy(ChatPrincipal principal) {
-        return principal.id().equals("root:environment-root")
-                || principal.id().equals("legacy:static")
-                || principal.id().equals("local:auth-disabled");
     }
 
     private RagChatHistory saveAndIndex(
