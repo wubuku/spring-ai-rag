@@ -1,9 +1,17 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, rmSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { buildOutputs, parseSource, renderCss, renderTs } from '../build-design-tokens.mjs';
-import { fingerprint, scanFile, scanSource } from '../check-design-system.mjs';
+import {
+  compareToBaseline,
+  countUnresolved,
+  fingerprint,
+  readBaseline,
+  scanFile,
+  scanSource,
+} from '../check-design-system.mjs';
 
 const projectRoot = fileURLToPath(new URL('../..', import.meta.url));
 const sourceText = readFileSync(join(projectRoot, 'design-tokens/tokens.json'), 'utf8');
@@ -670,5 +678,163 @@ describe('design-language document tracks the gate', () => {
     const enforced = enforcedKinds();
     expect(documentedKinds('docs/webui-design-language.md')).toEqual(enforced);
     expect(documentedKinds('docs/webui-design-language-zh-CN.md')).toEqual(enforced);
+  });
+});
+
+describe('Batch 878: the exemption that was a no-op', () => {
+  // `scanFile` recorded an inline `design-token-allow:` reason on every
+  // violation it found and nothing ever read that field except the line
+  // deciding whether to print a hint — the counts the gate fails on were built
+  // from *all* violations. So the documented escape hatch did not escape, and
+  // the gate's own error message told the reader to go and write one. The real
+  // tree has never used it, which is the only reason this survived.
+  const found = scanSource('src/a.module.css', '.a { z-index: 3; }', { definedVars: new Set() });
+  const waived = scanSource(
+    'src/a.module.css',
+    '/* design-token-allow: stacking order belongs to the z-index scale */\n.a { z-index: 3; }',
+    { definedVars: new Set() },
+  );
+
+  it('records the reason it was given', () => {
+    // The positive control: the gate did parse the comment, so "the exemption
+    // does not work" cannot be explained by the comment being missed.
+    expect(found.filter(v => v.kind === 'numeric-z-index')[0].allowed).toBe(null);
+    expect(waived.filter(v => v.kind === 'numeric-z-index')[0].allowed)
+      .toBe('stacking order belongs to the z-index scale');
+  });
+
+  it('leaves an unwaived violation in the counts', () => {
+    expect([...countUnresolved(found).values()]).toEqual([1]);
+  });
+
+  it('takes a waived violation out of the counts', () => {
+    expect(countUnresolved(waived).size).toBe(0);
+  });
+
+  it('keeps a weak reason as a violation in its own right', () => {
+    // `weak-allow-reason` is recorded with `allowed: null` precisely so that a
+    // two-word justification cannot quietly buy the line it was attached to.
+    const weak = scanSource(
+      'src/a.module.css',
+      '/* design-token-allow: ok */\n.a { z-index: 3; }',
+      { definedVars: new Set() },
+    );
+    expect(countUnresolved(weak).size).toBe(1);
+    expect(weak.map(v => v.kind)).toContain('weak-allow-reason');
+  });
+
+  it('reports a thin reason once, not once per line it governs', () => {
+    // A comment written *above* its declaration used to be read on both lines,
+    // producing two `weak-allow-reason` records with different `value` fields —
+    // two baseline fingerprints for one bad sentence. The same-line form never
+    // showed it, which is why the existing case had never caught it.
+    const above = scanSource(
+      'src/a.module.css',
+      '/* design-token-allow: ok */\n.a { z-index: 3; }',
+      { definedVars: new Set() },
+    );
+    expect(above.filter(v => v.kind === 'weak-allow-reason')).toHaveLength(1);
+    const inline = scanSource(
+      'src/a.module.css',
+      '.a { z-index: 3; } /* design-token-allow: ok */',
+      { definedVars: new Set() },
+    );
+    expect(inline.filter(v => v.kind === 'weak-allow-reason')).toHaveLength(1);
+  });
+
+  it('still waives a line whose comment sits on the line above it', () => {
+    // The other half of the same change: a *good* reason above the declaration
+    // has to keep working, or the fix would have cost more than it bought.
+    const good = scanSource(
+      'src/a.module.css',
+      '/* design-token-allow: stacking order belongs to the z-index scale */\n.a { z-index: 3; }',
+      { definedVars: new Set() },
+    );
+    expect(good.map(v => v.kind)).not.toContain('weak-allow-reason');
+    expect(countUnresolved(good).size).toBe(0);
+  });
+});
+
+describe('Batch 878: the debt contract, which had no test at all', () => {
+  // Around seventy lines of gate logic — "counts may only decrease", "a stale
+  // over-sized entry fails", "an unreadable baseline is a failed gate, not an
+  // empty one" — with three promises made loudly in comments and not one
+  // assertion anywhere. The repo has a documented habit of shipping a gate that
+  // cannot fail, so these are the cases that would have caught it.
+  const key = 'src/a.module.css|numeric-z-index|.a { z-index: 3; }';
+  const sample = { file: 'src/a.module.css', kind: 'numeric-z-index', value: '.a { z-index: 3; }', line: 7, allowed: null };
+
+  it('fingerprints by file, kind and value', () => {
+    expect(fingerprint(sample)).toBe(key);
+    expect(fingerprint({ ...sample, value: 'other' })).not.toBe(key);
+  });
+
+  it('passes when the code has exactly what the baseline allows', () => {
+    expect(compareToBaseline(new Map([[key, 2]]), { [key]: 2 }, [sample])).toEqual([]);
+  });
+
+  it('fails when the code has grown past the baseline', () => {
+    const errors = compareToBaseline(new Map([[key, 3]]), { [key]: 2 }, [sample]);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain('3 occurrence(s), baseline allows 2');
+    expect(errors[0]).toContain('first at src/a.module.css:7');
+  });
+
+  it('fails on a fingerprint the baseline has never heard of', () => {
+    expect(compareToBaseline(new Map([[key, 1]]), {}, [sample])).toHaveLength(1);
+  });
+
+  it('fails when the baseline is stale, so paid-off debt cannot hide', () => {
+    // The half of the contract that was the whole reason readBaseline refuses
+    // to collapse "corrupt" into "empty": an entry left at 2 after the code
+    // dropped to 1 would otherwise let a new violation back in under cover.
+    const errors = compareToBaseline(new Map([[key, 1]]), { [key]: 2 }, [sample]);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain('baseline is stale (allows 2, found 1)');
+  });
+
+  it('treats an absent baseline file as no debt, and reads the path it was given', () => {
+    // The path assertion is the point. The checked-in baseline happens to be
+    // `{ version: 1, entries: {} }`, so asserting only the absent-file result
+    // passed on the old implementation *by coincidence* — it was returning the
+    // real file and the expectation matched it. Sitting a populated file beside
+    // the missing one is what separates "read what I asked for" from "read the
+    // constant regardless".
+    const dir = join(tmpdir(), `b878-absent-${process.pid}`);
+    rmSync(dir, { recursive: true, force: true });
+    mkdirSync(dir, { recursive: true });
+    try {
+      const populated = join(dir, 'populated.json');
+      writeFileSync(populated, JSON.stringify({ version: 1, entries: { [key]: 7 } }));
+      expect(readBaseline(join(dir, 'missing.json'))).toEqual({ version: 1, entries: {} });
+      expect(readBaseline(populated).entries).toEqual({ [key]: 7 });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('refuses to treat a corrupt baseline as no debt', () => {
+    // This is the distinction the whole function exists for. Reading it as
+    // "nothing to check" would disable the staleness check above, which is how
+    // debt comes back quietly.
+    const corrupt = join(tmpdir(), `b878-corrupt-${process.pid}.json`);
+    try {
+      writeFileSync(corrupt, '{ not json');
+      expect(() => readBaseline(corrupt)).toThrow(/not valid JSON/);
+      writeFileSync(corrupt, JSON.stringify({ version: 1, entries: { [key]: 4 } }));
+      expect(readBaseline(corrupt).entries).toEqual({ [key]: 4 });
+    } finally {
+      rmSync(corrupt, { force: true });
+    }
+  });
+
+  it('reads the checked-in baseline, which records no debt at all', () => {
+    // Anchors the real file rather than a fixture: the point of Batch 795 was
+    // driving design debt to zero, and a baseline that quietly grew again would
+    // be invisible unless something reads the real one.
+    const real = JSON.parse(
+      readFileSync(join(projectRoot, 'design-tokens', 'design-debt-baseline.json'), 'utf8'),
+    );
+    expect(real.entries).toEqual({});
   });
 });

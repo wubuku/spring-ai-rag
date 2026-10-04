@@ -127,6 +127,22 @@ Every other class accepts an inline
 `/* design-token-allow: <concrete reason> */` on the same or the previous line,
 and a too-thin reason is separately rejected as `weak-allow-reason`.
 
+**That exemption did not work until Batch 878.** The reason was recorded on every
+violation and then read by exactly one thing: the line deciding whether to print
+a hint. The counts the gate fails on were built from every violation, waived or
+not, so a line carrying a perfectly justified exemption still failed — while the
+gate's own error message told the reader to go and write one. The tree had never
+taken the escape hatch, which is the only reason it survived an end-to-end probe
+that put a real violation in a real file, added the comment, and watched the exit
+code stay at 1. The success line had the same shape of problem: it reported
+"N grandfathered debt fingerprint(s) at baseline" where N was the count of
+distinct violations *found*, a coincidence that only holds while that count is
+zero. Both now say what they mean, and the debt contract around the baseline —
+"counts may only decrease", "a stale entry fails", "an unreadable baseline is a
+failed gate, not an empty one" — is extracted into tested functions. Around
+seventy lines of gate logic had made those three promises in comments with no
+assertion anywhere behind them.
+
 `css-syntax` accepts no exemption. A stylesheet that does not parse is not a
 style preference; it is a file the browser cannot load. Until this rule existed,
 `npm run build` was the only thing that noticed — Vitest stubs CSS modules, and

@@ -378,7 +378,10 @@ npm run test:design-system    # 生成器与门禁的 focused 测试
   Vitest 会 stub 掉 CSS module，所以一个多余的 `}` 过去能同时通过 typecheck、lint
   和全部测试。
 - 确有必要的窄例外用同行或上一行注释 `/* design-token-allow: <具体理由> */`；
-  理由过短会被单独判为 `weak-allow-reason` 失败。不要用批量豁免换绿。
+  理由过短会被单独判为 `weak-allow-reason` 失败，且**按注释报一次**而不是按它管辖的
+  每一行报一次。不要用批量豁免换绿。（Batch 878：这个豁免一直存在但完全不起作用——
+  门禁据以判红的计数是从所有违规建起来的，豁免与否一视同仁，
+  于是站得住脚的理由照样红，而报错信息正是在教读者去写它。）
 - `check:design-tokens` 保留为 `check:design-system` 的兼容入口。
 - `check:a11y-forms` 扫描 `src/` 下每个 `.tsx`，拦截三类违规：没有可访问名称的表单
   控件、什么都不标的 `<label>`、以及键盘够不到的 `onClick`。placeholder 不是名称；

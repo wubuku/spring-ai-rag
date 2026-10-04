@@ -417,8 +417,12 @@ npm run test:design-system    # focused tests for the generator and the gates
   the entire test suite.
 - A genuinely necessary exception uses an inline
   `/* design-token-allow: <concrete reason> */` on the same or the previous line; a
-  too-thin reason is separately rejected as `weak-allow-reason`. Do not buy a green
-  gate with blanket exemptions.
+  too-thin reason is separately rejected as `weak-allow-reason`, and reported once
+  per comment rather than once per line it governs. Do not buy a green gate with
+  blanket exemptions. (Batch 878: this exemption existed but did nothing — the
+  counts the gate fails on were built from every violation, waived or not, so a
+  justified exemption still failed while the error message told the reader to
+  write one.)
 - `check:design-tokens` is kept as a compatibility entry point for
   `check:design-system`.
 - `check:a11y-forms` scans every `.tsx` under `src/` and rejects a form control
