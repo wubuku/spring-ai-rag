@@ -267,6 +267,160 @@ test('the real test tree has no @Test that JUnit would skip — and the scan is 
   assert.ok(tests > 5000, `expected the scan to recognise @Test methods, saw ${tests}`);
 });
 
+// ── Batch 888: a quote in a comment used to swallow the method ────────────
+//
+// `bodyFrom` counted braces from a method's opening brace and stepped over
+// string literals. It did not step over comments, so a `//` note containing a
+// quote — the apostrophe in "the caller's assertEquals" — was read as a string
+// delimiter, the scan ran off looking for a partner quote, and the method came
+// back with no body at all. Both rules skip a method with no body, so the method
+// was invisible. Eighteen real @Test methods across fourteen files were in that
+// state, and the gate was reporting 8047 test methods when the tree holds 8065.
+
+test('an empty @Test behind a quoted comment is still reported', () => {
+  // The decisive case. Before the fix this returned []: the method was not
+  // found to be empty, it was not found at all, which is the worse answer
+  // because it looks like a clean tree.
+  const source = `
+class Fixture {
+    @Test
+    void sample() {
+        // a note about the caller's own call
+    }
+}
+`;
+  assert.deepEqual(findInertTests(source), ['sample']);
+});
+
+test('an empty @Test behind a quoted block comment is still reported', () => {
+  // The block-comment skip earns its place only when the comment holds a quote
+  // with no partner. A comment quoting "9" and "59" is balanced, so skipping
+  // string literals alone already reads it correctly — an earlier version of
+  // this case used exactly that shape and stayed green when the block-comment
+  // skip was deleted, which is how a fixture shows it is decoration.
+  const source = `
+class Fixture {
+    @Test
+    void sample() {
+        /* the caller's own copy */
+    }
+}
+`;
+  assert.deepEqual(findInertTests(source), ['sample']);
+});
+
+test('a non-empty @Test behind a quoted comment is not reported', () => {
+  // The negative for the same fix, and the one that would catch an over-correction
+  // that reported every method whose neighbourhood contained an apostrophe.
+  const source = `
+class Fixture {
+    @Test
+    void sample() {
+        // the caller's own call
+        assertEquals(1, 1);
+    }
+}
+`;
+  assert.deepEqual(findInertTests(source), []);
+});
+
+test('a brace inside a comment does not end the body early', () => {
+  // If the closing brace were counted from inside a comment, this body would be
+  // read as ending at the note and `assertEquals` would fall outside it.
+  const source = `
+class Fixture {
+    @Test
+    void sample() {
+        // a stray } brace in prose
+        assertEquals(1, 1);
+    }
+}
+`;
+  assert.deepEqual(findInertTests(source), []);
+  assert.deepEqual(findUnrunnableTests(source), []);
+});
+
+test('a closing brace inside a string literal does not end the body', () => {
+  // The same question for the string skip, asked so that deleting it turns this
+  // red. A URL cannot answer it — it holds no brace, so the body is read the
+  // same way with or without the skip, and a fixture built on one proves
+  // nothing. A `}` inside the literal decrements the depth to zero and the body
+  // stops one line early, which is observable.
+  const source = `
+class Fixture {
+    void sample() {
+        String template = "}";
+        int after = 1;
+    }
+}
+`;
+  const body = collectMethods(source)[0].body;
+  assert.ok(body.includes('int after'), `body ended early: ${JSON.stringify(body)}`);
+});
+
+test('a // comment containing */ does not start a block comment', () => {
+  // A line comment and a block comment are told apart by the character after the
+  // slash, so the two branches cannot shadow each other and their order is not a
+  // decision worth a mutation. What is worth keeping is that the line-comment
+  // branch runs to the newline rather than to the `*/` the note mentions.
+  const source = `
+class Fixture {
+    @Test
+    void sample() {
+        // the terminator is */
+        assertEquals(1, 1);
+    }
+}
+`;
+  assert.deepEqual(findInertTests(source), []);
+});
+
+test('a // inside a string literal is still code, not a comment', () => {
+  // The mirror: the quote is what protects the slashes, and the comment is what
+  // protects the quotes. Both have to be honoured, comment first, or the two
+  // quoted-comment cases above go red.
+  const source = `
+class Fixture {
+    @Test
+    void sample() {
+        String url = "https://example.test/a";
+        assertEquals(1, 1);
+    }
+}
+`;
+  assert.deepEqual(findInertTests(source), []);
+});
+
+test('a declaration whose body never closes is not reported as a method', () => {
+  // The contract behind the `return null` at the end of the scan. Nothing in the
+  // real tree reaches it, which is the point: a declaration the parser cannot
+  // close is dropped rather than reported with a partial body, so a truncated
+  // or malformed file costs coverage silently instead of producing a finding
+  // that names a method whose contents were never read. Asserting the method is
+  // absent, rather than absent from the findings, is what makes the difference
+  // between dropping it and truncating it observable.
+  const source = `
+class Fixture {
+    @Test
+    void sample() {
+        assertEquals(1, 1);
+`;
+  assert.deepEqual(collectMethods(source), []);
+  assert.deepEqual(findInertTests(source), []);
+  assert.deepEqual(findUnrunnableTests(source), []);
+});
+
+test('the real tree count includes the methods the apostrophe used to hide', () => {
+  // Pinned against the tree rather than against a number, so it cannot rot. The
+  // eighteen recovered methods are not listed: the point is that the census
+  // recognises every @Test in the tree, and the census is what counts them.
+  const root = fileURLToPath(new URL('../..', import.meta.url));
+  const { findings, files, tests } = collectFindings(root);
+  assert.deepEqual(findings, [], 'the real tree has no inert or unrunnable @Test');
+  assert.ok(files > 900, `expected the real tree to be scanned, only saw ${files} file(s)`);
+  assert.ok(tests > 8000, `expected the scan to recognise @Test methods, saw ${tests}`);
+});
+
 let failed = 0;
 for (const { title, fn } of cases) {
   try {
