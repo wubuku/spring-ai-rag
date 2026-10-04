@@ -102,7 +102,7 @@ skipped；本门禁则保证今后再有类"闭嘴"就会失败。
 
 | 门禁 | 拒绝什么 | 自测 | 跑在哪 |
 |------|----------|------|--------|
-| `verify-test-visibility.mjs` | 既没执行也没声明跳过的测试类（`tests="0" skipped="0"`） | `test-support/test-visibility-self-test.mjs` | tests 链 |
+| `verify-test-visibility.mjs` | 既没执行也没声明跳过的测试类（`tests="0" skipped="0"`）。判据是**双向**的：每个匹配 surefire 四种默认 include（`Test*` / `*Test` / `*Tests` / `*TestCase`——Batch 885 补上了缺失的 `Test*`）的非抽象测试源都必须产出报告，每份报告也必须能对回某个源文件，所以"源码已删、`TEST-*.xml` 还在"的类无法虚增总数。**没有声明任何 JUnit 测试方法的源不进入清单**，因为 surefire 根本不给它出报告。**一次运行只覆盖一个模块**：源码根目录是从报告目录反推的，聚合入口把门禁指向 `spring-ai-rag-core`；成功信息会点明本次覆盖的是哪个模块 | `test-support/test-visibility-self-test.mjs` | tests 链 |
 | `verify-integration-test-switches.mjs` | 门控开关与运行路径的双向缺口 | `test-support/integration-switch-self-test.mjs` | tests 链 |
 | `verify-external-db-safety.mjs` | 接受调用方指定库名却直接 `flyway.clean()` 的套件 | `test-support/external-db-safety-self-test.mjs` | tests 链 |
 | `verify-e2e-run-paths.mjs` | 没有任何脚本能运行的 Playwright spec | `test-support/e2e-reachability-self-test.mjs` | tests 链 |
