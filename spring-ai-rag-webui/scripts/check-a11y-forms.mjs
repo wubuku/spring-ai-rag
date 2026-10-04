@@ -7,7 +7,8 @@
  * green — nobody notices because no rule is looking. This gate covers the
  * category that cost Batch 776 its findings:
  *
- *   1. control-no-name          a form control with no accessible name
+ *   1. control-no-name          a control with no accessible name — a form
+ *                               field, and since Batch 876 a <button> too
  *   2. orphan-label             a <label> that labels nothing
  *   3. click-non-interactive    a click handler on an element the keyboard
  *                               cannot reach, with no interactive role
@@ -21,7 +22,9 @@
  * on a <div> with no role is invisible to the tab order, so the feature simply
  * does not exist for keyboard and screen-reader users. A modal whose own title
  * element is empty is the same class of defect one layer up: the control is
- * there, and it announces nothing.
+ * there, and it announces nothing. A button whose entire content sits under
+ * `aria-hidden` is that same defect once more: the control is there, it is
+ * even visible on screen, and it announces nothing.
  *
  * There is deliberately no debt baseline. Every violation that existed when
  * this gate was written was fixable, so the baseline would have been a list of
@@ -47,6 +50,108 @@ const SKIP_DIRECTORIES = new Set(['node_modules', 'dist', 'coverage', 'playwrigh
 const isTestFile = path => /\.(test|spec)\.[cm]?[jt]sx?$/i.test(path);
 
 const CONTROLS = ['input', 'select', 'textarea'];
+
+/**
+ * Elements whose accessible name this repository has to supply.
+ *
+ * Batch 876. `button` joined the form fields, and the reason is that the
+ * emptiness rule this gate already applies to dialog titles applies here for
+ * exactly the same reason: a button whose only content is whitespace, or whose
+ * `aria-label` is the empty string, announces nothing, and the control is
+ * still there. `aria-label=""` is the shape that fools a naive check — the
+ * attribute is present, so a `length > 0` test on the attribute's *presence*
+ * would pass it, and the measurement below is the reason it does not.
+ *
+ * A button's name is its **text content**, not an attribute, so it is judged
+ * differently from a form field: see `hasButtonName`.
+ *
+ * `CONTROLS` stays the narrower list because rule 2 asks a different question
+ * of it — whether a `<label>` is wrapping something it can actually label.
+ */
+const NAMEABLE = [...CONTROLS, 'button'];
+
+/**
+ * Remove the subtrees the accessibility tree never sees.
+ *
+ * Batch 876. `<span aria-hidden="true">…</span>` renders the three dots a user
+ * sees, and a naive "strip the tags and look at what's left" counts them as the
+ * button's name. They are not: the accessible-name computation skips
+ * `aria-hidden` nodes, so a button whose entire content is one of these
+ * announces nothing at all. DocumentActionsMenu's trigger is exactly that
+ * shape — its only content is a hidden ellipsis and its name comes wholly from
+ * `aria-label` — so the mistake was one attribute away from a real finding.
+ *
+ * Nesting of the same tag name is counted rather than assumed, and an
+ * unbalanced match gives up and returns the input unchanged: an unresolvable
+ * subtree leaves text in place, which can only make this rule miss, never cry
+ * wolf. The loop bound is the same guard.
+ */
+function stripHiddenFromAT(html) {
+  let out = html;
+  for (let guard = 0; guard < 50; guard += 1) {
+    const open = /<([A-Za-z][\w.-]*)\b[^>]*?\baria-hidden\s*=\s*(?:"true"|'true'|\{true\})[^>]*>/.exec(out);
+    if (!open) return out;
+    if (open[0].trimEnd().endsWith('/>')) {
+      out = out.slice(0, open.index) + out.slice(open.index + open[0].length);
+      continue;
+    }
+    const tag = open[1];
+    const step = new RegExp(`<\\/?${tag}\\b[^>]*>`, 'g');
+    step.lastIndex = open.index;
+    let depth = 0;
+    let closeEnd = -1;
+    let token = step.exec(out);
+    while (token !== null) {
+      if (token[0].startsWith('</')) {
+        depth -= 1;
+        if (depth === 0) { closeEnd = token.index + token[0].length; break; }
+      } else if (!token[0].trimEnd().endsWith('/>')) {
+        depth += 1;
+      }
+      token = step.exec(out);
+    }
+    if (closeEnd === -1) return out;
+    out = out.slice(0, open.index) + out.slice(closeEnd);
+  }
+  return out;
+}
+
+/**
+ * Whether a `<button>` has a name, given its attributes and its text content.
+ *
+ * An expression counts as a name: `{t('x')}` cannot be evaluated statically, and
+ * reporting it would be reporting a shape that may well be fine. An *empty
+ * string literal* does not, because that is the defect — the author wrote
+ * something that is provably nameless rather than something merely unknown.
+ */
+function hasButtonName(foundBody, code, foundEnd) {
+  // A spread makes the element pass-through: `Button.tsx` renders
+  // `<button ref={ref} type={type} {...rest} />`, so its children and its label
+  // arrive from the caller and this element is genuinely named — it just is not
+  // knowable from here. Two sites in the tree have this shape, and both are
+  // shared primitives, so without the carve-out the rule reports the very
+  // component every other button in the codebase is built on. A rule that does
+  // that gets exempted, and an exempted rule protects nothing. The call sites
+  // are where this is checkable, and they are.
+  if (/\{\.\.\./.test(foundBody)) return true;
+
+  const ariaLabel = attr(foundBody, 'aria-label')?.value ?? '';
+  if (ariaLabel.length > 0) return true;
+  const title = attr(foundBody, 'title')?.value ?? '';
+  if (title.length > 0) return true;
+  if (attr(foundBody, 'aria-labelledby')?.value) return true;
+  if (/\/>$/.test(foundBody.trim())) return false;
+
+  const inner = code.slice(foundEnd, foundEnd + 4000);
+  const close = inner.indexOf('</button>');
+  const contents = close === -1 ? inner : inner.slice(0, close);
+  // A JSX expression is text a screen reader announces: `{t('x')}` and
+  // `{cond ? a : b}` cannot be evaluated statically, and reporting them would
+  // be reporting correct code. Nested markup is not emptiness either.
+  if (/\{/.test(contents)) return true;
+  const text = stripHiddenFromAT(contents).replace(/<[^>]*>/g, ' ').trim();
+  return text.length > 0;
+}
 
 /** Elements a browser already makes focusable and operable. */
 const NATIVE_INTERACTIVE = new Set(['a', 'button', 'input', 'select', 'textarea', 'summary']);
@@ -221,13 +326,40 @@ function openTags(source, tag, spans = []) {
   return found;
 }
 
+/**
+ * Read one attribute off a tag body.
+ *
+ * Batch 876. The name used to be anchored on `\b`, which a `data-*` mirror walks
+ * straight past: `data-aria-hidden="true"` satisfied the `aria-hidden` lookup,
+ * so `hiddenFromAT` believed the element had left the accessibility tree and
+ * rule 1 and rule 3 both skipped it. That is the fail-open direction — a real
+ * unnamed control would have gone unreported because an unrelated attribute
+ * shared its suffix. The same reasoning as `hasAttr` below; they are kept
+ * separate only because one tests for presence and the other for a value.
+ */
 function attr(tagBody, name) {
-  const match = tagBody.match(new RegExp(`\\b${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|\\{([^}]*)\\})`));
+  const match = tagBody.match(
+    new RegExp(`(?:^|[\\s{])${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|\\{([^}]*)\\})`),
+  );
   if (!match) return null;
   return { present: true, value: (match[1] ?? match[2] ?? match[3] ?? '').trim() };
 }
 
-const hasAttr = (tagBody, name) => new RegExp(`\\b${name}(?=[\\s=/>])`).test(tagBody);
+/**
+ * Whether an attribute is present, as opposed to merely sharing a suffix with
+ * one.
+ *
+ * Batch 876. This used to anchor on a word boundary, which is not the same
+ * thing: `-` is a non-word character, so `data-href` contains a boundary right
+ * before `href` and `<a data-href={url} onClick={go}>` was treated as a real
+ * link. Mutation testing found it by accident — a probe that removed `href`
+ * and left `data-href` behind passed when it should have been reported. The same
+ * applied to `data-onClick`, `data-tabindex` and every other `data-*` mirror a
+ * developer might write. An attribute name is preceded by whitespace or the
+ * start of the tag body, so that is what is required.
+ */
+const hasAttr = (tagBody, name) =>
+  new RegExp(`(?:^|[\\s{])${name}(?=[\\s=/>])`).test(tagBody);
 
 /** Normalise `id="x"`, `id={'x'}` and `id={VARIABLE}` to a comparable token. */
 function identifier(raw) {
@@ -327,7 +459,7 @@ export function scanSource(relativePath, source, accessibleNameProps = null) {
   }
 
   // ── Rule 1: a control with no accessible name ────────────────────────────
-  for (const tag of CONTROLS) {
+  for (const tag of NAMEABLE) {
     for (const found of openTags(code, tag, spans)) {
       if (hiddenFromAT(found.body)) continue;
       const line = lineAt(found.start);
@@ -337,6 +469,15 @@ export function scanSource(relativePath, source, accessibleNameProps = null) {
       const labelledBy = attr(found.body, 'aria-labelledby')?.value ?? '';
       const title = attr(found.body, 'title')?.value ?? '';
       const id = identifier(attr(found.body, 'id')?.value ?? null);
+
+      if (tag === 'button') {
+        // Judged on its text content, because that is what a button announces.
+        if (!hasButtonName(found.body, code, found.end)) {
+          report(CONTROL_NO_NAME, tag, line, allowed);
+        }
+        continue;
+      }
+
       const labelled =
         ariaLabel.length > 0
         || labelledBy.split(/\s+/).filter(Boolean).some(token => ids.has(token))
@@ -368,10 +509,20 @@ export function scanSource(relativePath, source, accessibleNameProps = null) {
   }
 
   // ── Rule 3: a click handler the keyboard cannot reach ───────────────────
-  for (const tag of [...CONTROLS, 'div', 'span', 'li', 'tr', 'td', 'section', 'p', 'h1', 'h2', 'h3', 'img', 'svg', 'label']) {
+  //
+  // `a` joined this list in Batch 876. It was absent, which meant an anchor
+  // with a click handler had never once been examined for keyboard reachability
+  // — while `NATIVE_INTERACTIVE` listed `a`, so the set carried an entry the
+  // loop could never reach. An `<a>` is only a link, and only focusable, when it
+  // has an `href`; without one it is a `div` with worse markup, and the feature
+  // is invisible to the tab order. That is the defect this rule exists for.
+  for (const tag of [...NAMEABLE, 'div', 'span', 'li', 'tr', 'td', 'section', 'p', 'h1', 'h2', 'h3', 'img', 'svg', 'label', 'a']) {
     for (const found of openTags(code, tag, spans)) {
       if (!hasAttr(found.body, 'onClick')) continue;
-      if (NATIVE_INTERACTIVE.has(tag)) continue;
+      if (NATIVE_INTERACTIVE.has(tag)) {
+        // …except an anchor, which is only natively focusable as a link.
+        if (tag !== 'a' || hasAttr(found.body, 'href')) continue;
+      }
       const line = lineAt(found.start);
       const allowed = allowFor(line);
       // aria-hidden takes the element out of the accessibility tree entirely;

@@ -65,6 +65,155 @@ describe('control-no-name', () => {
   });
 });
 
+describe('Batch 876: the two elements the rule never reached', () => {
+  // A survey of all five rules found two coverage gaps rather than two bugs:
+  // `button` was absent from the accessible-name rule, and `a` was absent from
+  // the keyboard-reachability rule. The real tree has zero violations of
+  // either, so nothing was wrong *today* — which is exactly why they had to be
+  // closed. A gap is silent until the change that fills it lands, and by then
+  // the defect ships with a gate that says the code is fine.
+
+  it('reports a button whose only content is an empty string', () => {
+    // The shape the gate already had a rule for, one element over:
+    // `dialog-title-can-be-empty` exists because a control that announces
+    // nothing is the defect. `aria-label=""` is that same defect, and an
+    // attribute-presence test would wave it through.
+    expect(kinds(`<button aria-label=""></button>;`)).toEqual(['control-no-name']);
+  });
+
+  it('reports a button with no content at all', () => {
+    expect(kinds(`<button type="button"></button>;`)).toEqual(['control-no-name']);
+    expect(kinds(`<button type="button">   </button>;`)).toEqual(['control-no-name']);
+  });
+
+  it('accepts a button named by its text, its label, or its title', () => {
+    expect(kinds(`<button type="button">Delete</button>;`)).toEqual([]);
+    expect(kinds(`<button type="button" aria-label="Delete"></button>;`)).toEqual([]);
+    expect(kinds(`<button type="button" title="Delete"></button>;`)).toEqual([]);
+  });
+
+  it('accepts a button named by an expression it cannot evaluate', () => {
+    // `{t('x')}` is text a screen reader announces. Reporting it would be
+    // reporting correct code, and the first version of this rule did exactly
+    // that — it stripped `{…}` as if it were emptiness and reported ten real
+    // buttons across three pages, all of them translated labels.
+    expect(kinds(`<button type="button">{t('common.delete')}</button>;`)).toEqual([]);
+    expect(kinds(`<button type="button">{busy ? t('a') : t('b')}</button>;`)).toEqual([]);
+    expect(kinds(`<button type="button"><TrashIcon />{t('common.delete')}</button>;`))
+      .toEqual([]);
+  });
+
+  it('accepts a shared primitive that passes its props through', () => {
+    // `Button.tsx` renders `<button ref={ref} type={type} {...rest} />`, so its
+    // name arrives from the caller. Reporting it would mean reporting the
+    // component every other button in the tree is built on — and a rule that
+    // does that gets exempted.
+    const source = `
+      export const Button = forwardRef(function Button({ variant, ...rest }, ref) {
+        return <button ref={ref} type="button" className={styles[variant]} {...rest} />;
+      });
+    `;
+    expect(kinds(source)).toEqual([]);
+  });
+
+  it('reports an anchor with a click handler and no href', () => {
+    // An `<a>` is a link, and only focusable, when it has an href. Without one
+    // it is a div with worse markup: the action is invisible to the tab order,
+    // which is the defect rule 3 exists for. `a` was not in the tag list at all,
+    // while `NATIVE_INTERACTIVE` listed it — an entry the loop could not reach.
+    expect(kinds(`<a onClick={go}>Delete</a>;`)).toEqual(['click-non-interactive']);
+  });
+
+  it('accepts an anchor that is a real link', () => {
+    expect(kinds(`<a href="/docs" onClick={track}>Docs</a>;`)).toEqual([]);
+    expect(kinds(`<a href="/docs">Docs</a>;`)).toEqual([]);
+  });
+
+  it('an anchor with role and tabIndex is still operable', () => {
+    const source = `<a onClick={go} role="button" tabIndex={0} onKeyDown={k}>Delete</a>;`;
+    expect(kinds(source)).toEqual([]);
+  });
+});
+
+describe('Batch 876: text the accessibility tree never sees', () => {
+  // The button rule shipped in the first half of this batch judged a name by
+  // "strip the tags and look at what is left". That is wrong for a subtree under
+  // `aria-hidden`, and the real tree sits on exactly that shape:
+  // DocumentActionsMenu's trigger is `<button aria-label="…"><span
+  // aria-hidden="true">...</span></button>`, so its three dots are not a name —
+  // the name is the label and nothing else. Counting them meant that deleting
+  // that one `aria-label` would have produced a button that announces nothing
+  // and a gate that said it was fine.
+  it('reports a button whose only content is hidden from assistive tech', () => {
+    expect(kinds(`<button type="button"><span aria-hidden="true">…</span></button>;`))
+      .toEqual(['control-no-name']);
+  });
+
+  it('accepts the same button when the text is visible', () => {
+    // The positive control for the case above. Without it, "no violation" would
+    // be indistinguishable from "the rule stopped running".
+    expect(kinds(`<button type="button"><span>…</span></button>;`)).toEqual([]);
+    expect(kinds(`<button type="button"><span aria-hidden="true">×</span>Save</button>;`))
+      .toEqual([]);
+  });
+
+  it('matches nested hidden subtrees to their own close tag', () => {
+    // Counting nesting rather than stopping at the first `</span>` is what
+    // separates these two: truncating at the first close would leave the inner
+    // text behind and call the second button named.
+    expect(kinds(`<button type="button"><span aria-hidden="true"><i>Save</i></span></button>;`))
+      .toEqual(['control-no-name']);
+    expect(kinds(`<button type="button"><span aria-hidden="true"><i>Save</i></span>Done</button>;`))
+      .toEqual([]);
+  });
+
+  it('gives up on unbalanced markup rather than guessing', () => {
+    // An unterminated hidden subtree is left in place, so its text still counts
+    // as a name. That is a miss, and a miss is this gate's honest failure mode:
+    // the alternative is reporting markup the parser only half understood.
+    expect(kinds(`<button type="button"><span aria-hidden="true">Save</button>;`)).toEqual([]);
+  });
+});
+
+describe('Batch 876: a data-* attribute is not the attribute it shadows', () => {
+  // Both `attr` and `hasAttr` used to anchor the name on a word boundary, which
+  // `-` walks straight past. `<a data-href={url} onClick={go}>` read as a real
+  // link and `<div data-aria-hidden="true">` read as removed from the
+  // accessibility tree, so both rules skipped it. Mutation testing found the
+  // first; the second is the same mistake in the function next door, and
+  // fail-open is the direction that lets a defect through.
+  it('does not mistake data-href for an href', () => {
+    expect(kinds(`<a data-href="/docs" onClick={go}>Delete</a>;`))
+      .toEqual(['click-non-interactive']);
+    expect(kinds(`<a href="/docs" onClick={go}>Delete</a>;`)).toEqual([]);
+  });
+
+  it('does not mistake data-aria-hidden for aria-hidden', () => {
+    expect(kinds(`<button type="button" data-aria-hidden="true"></button>;`))
+      .toEqual(['control-no-name']);
+    expect(kinds(`<button type="button" aria-hidden="true"></button>;`)).toEqual([]);
+  });
+
+  it('does not mistake data-onClick for a click handler', () => {
+    expect(kinds(`<div data-onClick={go}>Open</div>;`)).toEqual([]);
+    expect(kinds(`<div onClick={go}>Open</div>;`)).toEqual(['click-non-interactive']);
+  });
+
+  it('does not mistake a data- tabindex or key handler for the real one', () => {
+    // Both spellings are covered, and for opposite reasons. React props are
+    // camelCase so `data-onKeyDown` is the mirror a developer actually writes;
+    // the lowercase form is what the old anchor let through on the tabindex
+    // side even though the key-handler side still caught it, which is why the
+    // first version of this assertion could not tell the two versions apart.
+    expect(kinds(`<div role="button" data-tabIndex={0} data-onKeyDown={k} onClick={go}>Open</div>;`))
+      .toEqual(['click-non-interactive']);
+    expect(kinds(`<div role="button" data-tabindex={0} data-onkeydown={k} onClick={go}>Open</div>;`))
+      .toEqual(['click-non-interactive']);
+    expect(kinds(`<div role="button" tabIndex={0} onKeyDown={k} onClick={go}>Open</div>;`))
+      .toEqual([]);
+  });
+});
+
 describe('orphan-label', () => {
   it('reports a label that targets nothing and wraps nothing', () => {
     // This is the Alerts.tsx defect: a visible <label> that labels no control,
