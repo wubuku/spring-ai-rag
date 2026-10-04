@@ -478,6 +478,74 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
+### Batch 858（已交付，WebUI UX：让失败的**原因**到达用户）
+
+- 分支：`feature/server-reason-in-failures-20261007`
+- 主题：沿 857 的门禁审查往下走时，撞见一个**不是门禁问题的真缺陷**，
+  于是本批从门禁转向 UX。
+- **缺陷**：`Alerts` / `Embeddings` / `Evaluation` 三个页面共 **10 个 mutation**
+  的失败提示是一句固定文案——"无法取消任务"——**到此为止**。
+  服务器说的原因从来没离开过浏览器：`api/client.ts:50-54` 早就把
+  `response.data.message`（或 `detail`）提到 `new Error(message)` 里抛出来了，
+  信息一直在 `mutation.error` 里**没人读**。
+  - 用户报障说"重试失败"，运维无法判断是配额超限、密钥被吊销，还是任务早已完成。
+  - 这不是门禁漏检：`check-mutation-errors` 的职责是"失败必须**可见**"，
+    而它做到了。可见 ≠ 可诊断，这是另一个维度。
+- **普查方法**：写了个只读探针，对每个 `const name = useMutation(` 判定
+  「有 `onError`」还是「靠 `name.isError` 渲染」，再筛出**只读 `isError`、
+  从不读 `.error`** 的那些。结果是 **10 处**（Alerts 1、Embeddings 4、Evaluation 5）。
+  门禁对它们是绿的——它只要求 `isError` 出现，不要求错误**内容**被读。
+- **方案的关键取舍：什么时候**不**显示原因**。
+  最顺手的写法是 `t(key, { message: error.message })`，但它在服务器没说什么有用的话时
+  **比原来更糟**：网络失败在浏览器里是 `TypeError: Failed to fetch`，
+  渲染成"无法取消任务 (Failed to fetch)"既无信息量又吓人。
+  所以 `src/utils/failureReason.ts` 维护一份**哨兵表**：
+  - 传输层消息（`Failed to fetch` / `NetworkError` / `AbortError` / `Load failed` …）
+    一律丢弃——它们描述的是连接，不是这次写入；
+  - 超过 200 字符的、或超过 3 行的（堆栈）丢弃；
+  - 服务器真说了什么才保留。
+  - **哨兵表是显式清单而不是启发式**（"看起来像堆栈"是猜测），
+    规则 4 要求的"证据优先于措辞"在这里就是这句话。
+- **第二个取舍：为什么在 helper 里拼接，而不是走 i18n 插值**。
+  先试的是 `t(key, { reason })` + 给 10 个 locale 键加 `{{reason}}`。它有两个问题：
+  1. **`src/test/setup.ts` 的 `t` mock 是 `(key) => key`，不处理 options**——
+     于是整个改动在测试里**完全不可见**（第一次变异实验只让 helper 自己的
+     4 个测试红，**三个页面的 70 个用例全绿**）。
+  2. 让 mock 支持插值后，**88 个测试红、15 个文件**——既有测试用 `getByText` 精确匹配。
+     为让这一个改动而扭曲 88 个既有断言是错的。
+  - 改回拼接：`${t(key)}${reason}`。原因有三个：
+    服务器原文本**本就不该被翻译**，走 i18n 插值会让人误以为它来自 locale；
+    不需要动 10 个 locale 键；**而且它恰好可测**——拼接结果直接出现在文本里，
+    那个忽略 options 的 `t` mock 反而成了便利。
+- **变异实验（同一个 P 跑两次，结果相反，这是本批最重要的一条记录）**：
+  | 时机 | `failureReason` 恒返回 `''` | 结果 |
+  |---|---|---|
+  | 改完页面、未加测试时 | helper 单测 4 红 | **页面 70 个全绿** —— 接线是死桩 |
+  | 补完页面断言后 | helper 4 红 + **页面 9 红** | ✓ 13 个测试钉住 |
+  - **"helper 有测试"不等于"改动被测到了"**。第一轮的绿是最危险的一种绿：
+  它看起来像"改动不影响行为"，实际是"改动完全没被观察"。
+  - 这正是 849 记的「测函数不等于测接线」，本批**自己又犯了一次**，
+    而且是在写完变异实验、看到 4 红就以为收工的时候。
+- **补的页面断言（把 5 处"侥幸没红"的也算上）**：
+  - `Evaluation` 5 处：原 `findByText('evaluation.xxxFailed')` 是精确匹配，改成
+    `/^evaluation\.xxxFailed \(boom\)$/`（其中一处 reject 的是 `judge down`，单独修）。
+  - `Embeddings` 3 处：原 `toHaveTextContent('embeddings.xxxFailed')` 是**子串匹配**，
+    key 本身就能满足断言，所以第一次变异下它们侥幸没红。改成全句正则。
+  - `Alerts` 的投递重试**失败路径原本根本没有测试**，补了一个（第 163 行那个用例
+    只断言 `retryNotificationDelivery` 被调用过，从没走过失败分支）。
+  - 新增的 Alerts 用例第一次写成 `findByRole('alert', { name: … })`，
+    失败——`role="alert"` 元素**带文本但没有无障碍名**，role 查询的 name 选项匹配不到；
+    改成"取元素 + 断言全文"。
+- 验证（全部实测）：应用测试 **78 文件 / 923 用例全绿**（原 77 / 910）；
+  `npm run lint` 九条门禁 EXIT=0 + 门禁自测 **280/280**；
+  `typecheck` EXIT=0；`build` EXIT=0。
+  - 编译器当场抓住 helper 缺类型标注（4 个 TS 错误）：项目没开 `checkJs`，
+    **JSDoc 标注不生效**，必须用 TS 语法标注。这是"猜 API 会被编译器抓住"的又一次。
+- **剩余同类**：另外 **20+ 处** mutation 走的是
+  `onError: () => showToast(t('…Error'), 'error')`，同样是固定文案、不带原因。
+  它们与本批 10 处的差别只是"失败以 toast 而非页面内区块呈现"，
+  **可诊断性缺口完全一样**。下一批可以用同一个 helper 改掉。
+
 ### Batch 857（已交付，WebUI 门禁：可访问名的两条漏检路径 + 抽共享模块）
 
 - 分支：`feature/a11y-accessible-name-props-20261007`

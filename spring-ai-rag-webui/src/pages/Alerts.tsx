@@ -16,6 +16,7 @@ import { useToast } from '../components/Toast';
 import styles from './Alerts.module.css';
 import { EmptyState, PageHeader, QueryErrorBanner, Tabs } from '../components/ui';
 import { ConfirmDialog } from '../components/Dialog/ConfirmDialog';
+import { failureMessage } from '../utils/failureReason';
 
 type Tab =
   | 'alerts'
@@ -285,7 +286,7 @@ function NotificationDeliveriesTab() {
 
       {retryMutation.isError && (
         <div className={styles.errorState} role="alert">
-          {t('alerts.deliveryRetryFailed')}
+          {failureMessage(t, 'alerts.deliveryRetryFailed', retryMutation.error)}
         </div>
       )}
 

@@ -321,7 +321,10 @@ describe('Evaluation runs and version import panels', () => {
     );
 
     expect(
-      await screen.findByText('evaluation.createSuiteFailed'),
+      // Batch 858: the sentence stays, and the server's reason now rides along.
+      // Anchored so a bare key can no longer satisfy the assertion —
+      // that was exactly what hid this change behind a passing suite.
+      await screen.findByText(/^evaluation\.createSuiteFailed \(boom\)$/),
     ).toBeInTheDocument();
   });
 
@@ -339,7 +342,10 @@ describe('Evaluation runs and version import panels', () => {
     );
 
     expect(
-      await screen.findByText('evaluation.importVersionFailed'),
+      // Batch 858: the sentence stays, and the server's reason now rides along.
+      // Anchored so a bare key can no longer satisfy the assertion —
+      // that was exactly what hid this change behind a passing suite.
+      await screen.findByText(/^evaluation\.importVersionFailed \(boom\)$/),
     ).toBeInTheDocument();
   });
 
@@ -357,7 +363,10 @@ describe('Evaluation runs and version import panels', () => {
     );
 
     expect(
-      await screen.findByText('evaluation.startRunFailed'),
+      // Batch 858: the sentence stays, and the server's reason now rides along.
+      // Anchored so a bare key can no longer satisfy the assertion —
+      // that was exactly what hid this change behind a passing suite.
+      await screen.findByText(/^evaluation\.startRunFailed \(boom\)$/),
     ).toBeInTheDocument();
     // A failed start must not leave a stale success line behind.
     expect(screen.queryByText(/evaluation\.runStatus/)).not.toBeInTheDocument();
@@ -450,7 +459,10 @@ describe('Evaluation history, feedback and mutation failure paths', () => {
     );
 
     expect(
-      await screen.findByText('evaluation.evaluateFailed'),
+      // Batch 858: the sentence stays, and the server's reason now rides along.
+      // Anchored so a bare key can no longer satisfy the assertion —
+      // that was exactly what hid this change behind a passing suite.
+      await screen.findByText(/^evaluation\.evaluateFailed \(boom\)$/),
     ).toBeInTheDocument();
   });
 
@@ -467,7 +479,10 @@ describe('Evaluation history, feedback and mutation failure paths', () => {
     await user.click(screen.getByRole('button', { name: 'evaluation.runJudge' }));
 
     expect(
-      await screen.findByText('evaluation.judgeFailed'),
+      // Batch 858: the sentence stays, and the server's reason now rides along.
+      // Anchored so a bare key can no longer satisfy the assertion —
+      // that was exactly what hid this change behind a passing suite.
+      await screen.findByText(/^evaluation\.judgeFailed \(judge down\)$/),
     ).toBeInTheDocument();
   });
 

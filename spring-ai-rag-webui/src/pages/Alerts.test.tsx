@@ -164,6 +164,26 @@ describe('Alerts', () => {
     expect(screen.queryByText(/payload/i)).not.toBeInTheDocument();
   });
 
+  it('names why a delivery retry failed, not just that it did', async () => {
+    // Batch 858: this path had no failure test at all, so the change from a
+    // fixed sentence to "sentence + the server's reason" could not have been
+    // caught here even if it had been wrong.
+    const user = userEvent.setup();
+    vi.mocked(alertsApi.retryNotificationDelivery).mockRejectedValueOnce(
+      new Error('Provider rejected the payload: signature mismatch'),
+    );
+    renderAlerts('/alerts?tab=notification-deliveries');
+    await user.click(
+      await screen.findByRole('button', { name: 'alerts.retryDelivery' }),
+    );
+
+    // The banner carries its text, not an accessible name, so the role query
+    // has to stand on its own and the sentence is asserted on the element.
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      /^alerts\.deliveryRetryFailed \(Provider rejected the payload: signature mismatch\)$/,
+    );
+  });
+
   it('distinguishes direct compatibility mode from an empty durable ledger', async () => {
     vi.mocked(alertsApi.listNotificationDeliveries).mockResolvedValue({
       data: {
