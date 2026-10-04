@@ -35,7 +35,40 @@ const projectRoot = fileURLToPath(new URL('../..', import.meta.url));
 const suite = (name, rest) =>
   `<?xml version="1.0" encoding="UTF-8"?>\n<testsuite version="3.0.2" name="${name}" ${rest}></testsuite>\n`;
 
-const report = (name, rest) => ({ file: `TEST-${name}.xml`, xml: suite(name, rest) });
+/**
+ * A report whose children are derived from the attributes it is given.
+ *
+ * This used to emit an empty `<testsuite>` carrying nothing but attributes,
+ * which was fine while `parseReport` read `tests=` and stopped being true the
+ * moment it counted `<testcase>` elements: every case in this file would then
+ * have described a report with no test cases in it. Deriving the children means
+ * the fixture cannot disagree with itself, and it means a case that says
+ * `tests="21" skipped="21"` really contains twenty-one skipped cases rather than
+ * asserting that a number in an attribute is believed.
+ */
+const report = (name, rest) => {
+  const number = (key) => {
+    const found = new RegExp(`\\b${key}="(\\d+)"`).exec(rest);
+    return found ? Number.parseInt(found[1], 10) : 0;
+  };
+  const total = number('tests');
+  const skipped = number('skipped');
+  const failures = number('failures');
+  const errors = number('errors');
+  const children = [];
+  for (let i = 0; i < total; i += 1) {
+    let inner = '';
+    if (i < errors) inner = '<error message="e" />';
+    else if (i < errors + failures) inner = '<failure message="f" />';
+    else if (i < errors + failures + skipped) inner = '<skipped />';
+    children.push(`<testcase name="case${i}" classname="${name}">${inner}</testcase>`);
+  }
+  return {
+    file: `TEST-${name}.xml`,
+    xml: `<?xml version="1.0" encoding="UTF-8"?>\n<testsuite version="3.0.2" name="${name}" ${rest}>\n`
+      + `${children.join('\n')}\n</testsuite>\n`,
+  };
+};
 
 const cases = [];
 const test = (title, fn) => cases.push({ title, fn });
@@ -496,6 +529,72 @@ test('the real surefire output contains no vanished class', () => {
     [],
     'test classes in the source tree that produced no report',
   );
+});
+
+test('the tests count comes from the elements, not from the attribute', () => {
+  // The regression this gate had inside itself. Surefire writes `tests=` before
+  // the cases an `@Nested` class contributes, so on the real tree the attribute
+  // said 17 where 24 cases ran — and this gate is what prints the number to
+  // whoever is deciding whether coverage moved. Measured over all four modules:
+  // 3 of 1006 reports disagreed, 8320 declared against 8329 real.
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<testsuite version="3.0.2" name="com.example.Nested" tests="2" failures="0" errors="0" skipped="0">
+<testcase name="outer" classname="com.example.Nested" />
+<testcase name="inner" classname="com.example.Nested$Inner" />
+<testcase name="inner2" classname="com.example.Nested$Inner" />
+<testcase name="inner3" classname="com.example.Nested$Inner" />
+</testsuite>
+`;
+  assert.equal(parseReport(xml).tests, 4);
+});
+
+test('the attribute is never consulted, even when it claims tests the report does not hold', () => {
+  // The direction the first case cannot see, and the only one where a fallback
+  // shows: a report whose attribute claims nine cases and whose body contains
+  // none. Surefire under-reports `tests` for an `@Nested` class, so the
+  // realistic disagreement runs the other way once a report is truncated or
+  // rewritten — and either way the answer has to come from the children.
+  // A parser that falls back to the attribute when it finds none is the
+  // pre-893 defect wearing a safety net, and that net turns "ran nothing" into
+  // "ran nine tests fine", which is precisely the class of accident this gate
+  // was written to name.
+  const overstated = `<?xml version="1.0" encoding="UTF-8"?>
+<testsuite version="3.0.2" name="com.example.Overstated" tests="9" failures="0" errors="0" skipped="0">
+</testsuite>
+`;
+  assert.equal(parseReport(overstated).tests, 0);
+  // Nothing ran and nothing said it was skipping, so this is a class that
+  // vanished — the same verdict the honest empty report below gets.
+  assert.deepEqual(
+    audit([{ file: 'TEST-com.example.Overstated.xml', xml: overstated }]).invisible.map(r => r.name),
+    ['com.example.Overstated'],
+  );
+
+  // The honest zero, which must keep the verdict it has always had.
+  const empty = '<?xml version="1.0" encoding="UTF-8"?>\n<testsuite version="3.0.2" name="com.example.Ghost" tests="0" skipped="0"></testsuite>\n';
+  assert.deepEqual(parseReport(empty), {
+    name: 'com.example.Ghost', tests: 0, skipped: 0, failures: 0, errors: 0,
+  });
+  assert.deepEqual(
+    audit([{ file: 'TEST-com.example.Ghost.xml', xml: empty }]).invisible.map(r => r.name),
+    ['com.example.Ghost'],
+  );
+});
+
+test('a tag inside a logged message cannot inflate the count', () => {
+  // The count is a string split, so the one thing that could fake it is a test
+  // whose captured output contains the literal text. Surefire escapes `<`
+  // inside system-out, which is what makes this safe; the case pins that rather
+  // than assuming it, because a surefire upgrade that stopped escaping would
+  // turn every logged stack trace into phantom test cases.
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<testsuite version="3.0.2" name="com.example.Logged" tests="1" failures="0" errors="0" skipped="0">
+<testcase name="logs" classname="com.example.Logged">
+<system-out>&lt;testcase name="fake" /&gt;</system-out>
+</testcase>
+</testsuite>
+`;
+  assert.equal(parseReport(xml).tests, 1);
 });
 
 let failures = 0;
