@@ -69,6 +69,7 @@ export function stripComments(source) {
 export const VIOLATION_KINDS = Object.freeze({
   MISSING_PAGE_HEADER: 'missing-page-header',
   HAND_ROLLED_PAGE_TITLE: 'hand-rolled-page-title',
+  DUPLICATE_PAGE_HEADING: 'duplicate-page-heading',
   MISSING_PAGE_DESCRIPTION: 'missing-page-description',
 });
 
@@ -123,6 +124,27 @@ export function checkPage(fileName, source, { exempt = EXEMPT_PAGES } = {}) {
       detail:
         `${fileName} still references the removed global page-title class.`
         + ' Use <PageHeader title={…} /> from components/ui.',
+    });
+  }
+
+  // Batch 862. The rule above is keyed on a **class name**, so it only ever
+  // caught a duplicate heading that happened to carry the removed class — which
+  // is the shape Batch 805 found nine of, and none since. The same duplicate
+  // written with a CSS Module class, or with no class at all, sailed past: the
+  // page rendered `<PageHeader>` for the gate to find and a hand-rolled `<h1>`
+  // right underneath it. `PageHeader` renders the page's h1 itself, so that page
+  // had two top-level headings and the accessibility tree announced the same
+  // title twice — the exact duplication this gate exists to prevent, restored
+  // through the one spelling the gate did not look for.
+  if (!exempt.has(fileName) && /<h1[\s/>]/.test(code) && code.includes('<PageHeader')) {
+    violations.push({
+      kind: VIOLATION_KINDS.DUPLICATE_PAGE_HEADING,
+      detail:
+        `${fileName} renders <PageHeader>, which already emits the page h1, and`
+        + ' also writes its own <h1>. Two top-level headings mean the same title'
+        + ' is announced twice. Put the wording in the PageHeader title prop;'
+        + ' if this page genuinely is not a shell page, register it in'
+        + ' EXEMPT_PAGES with a reason.',
     });
   }
 
