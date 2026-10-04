@@ -5,7 +5,7 @@ import { useSearchParams } from 'react-router-dom';
 import { evaluationApi } from '../api/evaluation';
 import { Card } from '../components/Card';
 import styles from './Evaluation.module.css';
-import { PageHeader, Tabs, tabDomIds } from '../components/ui';
+import { EmptyState, PageHeader, Tabs, tabDomIds } from '../components/ui';
 import { failureMessage } from '../utils/failureReason';
 
 type Tab = 'report' | 'history' | 'feedback' | 'judge' | 'suites' | 'runs' | 'citations';
@@ -233,7 +233,7 @@ export function Evaluation() {
                   </tbody>
                 </table>
                 {(historyQ.data ?? []).length === 0 && (
-                  <div className={styles.muted}>{t('evaluation.emptyHistory')}</div>
+                  <EmptyState>{t('evaluation.emptyHistory')}</EmptyState>
                 )}
               </div>
             )}

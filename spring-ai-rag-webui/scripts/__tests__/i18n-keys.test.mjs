@@ -76,13 +76,18 @@ describe('dead-translation-fallback', () => {
   });
 
   it('reports a guard that falls back to another translation', () => {
-    expect(kinds(`<h1>{t('documents.loadError') || t('common.error')}</h1>;`)).toEqual([
+    expect(kinds(`<h1>{t('documents.loadError') || t('common.unknownError')}</h1>;`)).toEqual([
       'dead-translation-fallback',
     ]);
   });
 
+  // Batch 874: this fixture used `common.error`, which stopped existing when the
+  // only line that rendered it — a failed key listing printed as an empty state —
+  // was fixed. The key set is data these cases read, so deleting a key can
+  // invalidate them; `common.unknownError` carries the same meaning for the
+  // rule and cannot be deleted by an unrelated fix.
   it('accepts a plain translation', () => {
-    expect(kinds(`<h1>{t('common.error')}</h1>;`)).toEqual([]);
+    expect(kinds(`<h1>{t('common.unknownError')}</h1>;`)).toEqual([]);
   });
 
   it('accepts a recorded, justified guard', () => {

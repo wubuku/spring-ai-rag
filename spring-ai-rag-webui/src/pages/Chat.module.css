@@ -90,12 +90,10 @@
   gap: 1rem;
 }
 
-.emptyState {
-  /* alignment-policy: allow-center -- complete chat empty state */
-  text-align: center;
-  color: var(--color-text-muted);
-  padding: 2rem;
-}
+/* Batch 874: the chat empty state moved to the shared EmptyState primitive with
+   align="center", so this class and its alignment-policy exemption went with it.
+   The primitive declares the same three declarations (muted, 2rem via
+   --space-32, centered) and carries its own recorded exemption. */
 
 .hint {
   font-size: 0.875rem;

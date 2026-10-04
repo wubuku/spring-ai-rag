@@ -493,7 +493,7 @@ are registered.
 
 ## 9. A read must report its failure
 
-`npm run check:query-errors` is chained into `npm run lint` and enforces two
+`npm run check:query-errors` is chained into `npm run lint` and enforces three
 rules over every `useQuery` in `src/`:
 
 - `silent-query` — a read whose failure is neither handled by an `onError`
@@ -501,6 +501,12 @@ rules over every `useQuery` in `src/`:
 - `empty-panel-on-error` — a `{q.data && <section>}` guard with no error
   branch, the specific shape that turns a failed request into "there is nothing
   here"
+- `empty-state-on-error` — an error branch that *does* render, but renders an
+  `EmptyState`. The first two rules ask whether a failure is addressed and both
+  accept "something reads `isError`" as the answer; this one asks what the
+  branch actually puts on screen. `ApiKeys.tsx` satisfied the first two for
+  years while printing a failed credential lookup in the same primitive, the
+  same box and the same weight as "you have no keys yet", three lines apart.
 
 A write that fails silently produces a button that does nothing. A read that
 fails silently is worse, because it usually does not look broken at all — it

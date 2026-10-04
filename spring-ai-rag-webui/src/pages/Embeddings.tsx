@@ -15,7 +15,7 @@ import { Card } from '../components/Card';
 import { useImeComposition } from '../utils/ime';
 import { failureMessage } from '../utils/failureReason';
 import styles from './Embeddings.module.css';
-import { PageHeader } from '../components/ui';
+import { EmptyState, PageHeader } from '../components/ui';
 
 function ImeSafeFilterInput({
   label,
@@ -312,7 +312,7 @@ export function Embeddings() {
         ) : jobsQ.isError ? (
           <div className={styles.error} role="alert">{t('embeddings.loadFailed')}</div>
         ) : !jobsQ.data?.items?.length ? (
-          <div className={styles.muted}>{t('embeddings.empty')}</div>
+          <EmptyState>{t('embeddings.empty')}</EmptyState>
         ) : (
           <div className={styles.tableWrap}>
             <table className={styles.table}>

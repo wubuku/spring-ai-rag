@@ -17,7 +17,7 @@ import { Dialog } from '../components/Dialog';
 import { ImeSafeForm } from '../components/ImeSafeForm';
 import { Button } from '../components/Button';
 import { failureMessage } from '../utils/failureReason';
-import { EmptyState, StatusBadge } from '../components/ui';
+import { EmptyState, QueryErrorBanner, StatusBadge } from '../components/ui';
 import styles from './ApiKeys.module.css';
 
 const DEFAULT_EXPIRY_DAYS = 365;
@@ -108,7 +108,10 @@ function KeyList() {
   const [showCreate, setShowCreate] = useState(false);
   const [showRotate, setShowRotate] = useState<ApiPrincipalResponse | null>(null);
   const [showEdit, setShowEdit] = useState<ApiPrincipalResponse | null>(null);
-  const { data, isPending, isError } = useQuery({
+  // Batch 874. `refetch` was not destructured because the only failure display
+  // was a word with no action attached to it; a read that failed could not be
+  // repeated without a full page reload.
+  const { data, isPending, isError, error, refetch } = useQuery({
     queryKey: API_PRINCIPALS_QUERY_KEY,
     queryFn: () => apiKeysApi.listPrincipals(),
   });
@@ -124,7 +127,20 @@ function KeyList() {
       {isPending ? (
         <div className={styles.loading}>{t('common.loading')}</div>
       ) : isError ? (
-        <EmptyState>{t('common.error')}</EmptyState>
+        // Batch 874. This rendered <EmptyState>{t('common.error')}</EmptyState>,
+        // which is the same primitive, the same box and the same weight as the
+        // "no keys yet" branch immediately below it. A user whose credential
+        // store was down could not tell that from a user who has not created a
+        // key yet, and had no way to try again. Metrics.tsx carried a comment
+        // recording the identical bug being fixed there; this file never got
+        // the same treatment, which is what the new gate now prevents.
+        <QueryErrorBanner
+          onRetry={() => void refetch()}
+          retryLabel={t('common.retry')}
+          detail={error instanceof Error ? error.message : undefined}
+        >
+          {t('apiKeys.loadFailed')}
+        </QueryErrorBanner>
       ) : !data?.data?.length ? (
         <EmptyState>
           <span>{t('apiKeys.noKeys')}</span>
@@ -579,7 +595,21 @@ function CreateKeyModal({ onClose }: { onClose: () => void }) {
                   {collectionsQuery.isPending ? (
                     <div className={styles.hint}>{t('common.loading')}</div>
                   ) : collectionsQuery.isError ? (
-                    <div className={styles.scopeError}>{t('apiKeys.collectionsLoadError')}</div>
+                    // Batch 874. This one at least said so, so it was not the
+                    // "failure looks like emptiness" bug — but it was a
+                    // hand-rolled panel with no way to try again, on a read that
+                    // is transient by nature.
+                    <QueryErrorBanner
+                      onRetry={() => void collectionsQuery.refetch()}
+                      retryLabel={t('common.retry')}
+                      detail={
+                        collectionsQuery.error instanceof Error
+                          ? collectionsQuery.error.message
+                          : undefined
+                      }
+                    >
+                      {t('apiKeys.collectionsLoadError')}
+                    </QueryErrorBanner>
                   ) : !collectionsQuery.data?.data?.collections?.length ? (
                     <div className={styles.hint}>{t('collections.noCollections')}</div>
                   ) : (

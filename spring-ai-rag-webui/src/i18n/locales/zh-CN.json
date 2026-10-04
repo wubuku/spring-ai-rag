@@ -27,7 +27,6 @@
   },
   "common": {
     "loading": "加载中…",
-    "error": "错误",
     "cancel": "取消",
     "save": "保存",
     "delete": "删除",
@@ -533,6 +532,7 @@
     "expiresAtHint": "必填且必须在未来；默认建议一年。",
     "create": "创建",
     "createError": "创建 API 密钥失败",
+    "loadFailed": "加载 API 密钥失败",
     "keyCreated": "API 密钥创建成功",
     "revoke": "撤销",
     "revoked": "已撤销",
