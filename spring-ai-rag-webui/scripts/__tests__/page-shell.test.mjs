@@ -161,12 +161,18 @@ describe('a hand-rolled page title', () => {
 
   it('is rejected even when PageHeader is still imported and used', () => {
     // This is the state the gate exists to stop: a page adopts the component
-    // and forgets to delete its old heading. Both signals must fire.
+    // and forgets to delete its old heading. Both signals must fire — the
+    // removed class *and*, since Batch 862, the duplicate top-level heading
+    // itself. The second signal is what survives a rewrite that drops the
+    // class but forgets the heading.
     const source = good.replace(
       '<Tabs idPrefix="settings-tabs" items={tabs} />',
       '<h1 className="page-title">{t(\'settings.title\')}</h1>',
     );
-    expect(kinds(source)).toEqual([VIOLATION_KINDS.HAND_ROLLED_PAGE_TITLE]);
+    expect(kinds(source)).toEqual([
+      VIOLATION_KINDS.HAND_ROLLED_PAGE_TITLE,
+      VIOLATION_KINDS.DUPLICATE_PAGE_HEADING,
+    ]);
   });
 
   it('is caught even when it sits next to a block comment', () => {
@@ -192,6 +198,57 @@ describe('comments', () => {
       "{/* Replaced the old h1.page-title here in Batch 805. */}\n      <p>body</p>",
     );
     expect(kinds(source)).toEqual([]);
+  });
+});
+
+describe('a second top-level heading', () => {
+  // Batch 862. `hand-rolled-page-title` is keyed on the removed `page-title`
+  // class, so it only ever caught a duplicate heading that happened to carry
+  // that class — the exact spelling Batch 805 found nine of, and none since.
+  // The same duplicate with a CSS Module class, or with no class, was invisible.
+  const withExtraHeading = (heading) => good.replace(
+    '<Tabs idPrefix="settings-tabs" items={tabs} />',
+    heading,
+  );
+
+  it('rejects a duplicate h1 carrying a module class', () => {
+    expect(kinds(withExtraHeading('<h1 className={styles.title}>{t(\'settings.title\')}</h1>')))
+      .toEqual([VIOLATION_KINDS.DUPLICATE_PAGE_HEADING]);
+  });
+
+  it('rejects a duplicate h1 carrying no class at all', () => {
+    expect(kinds(withExtraHeading('<h1>Settings</h1>')))
+      .toEqual([VIOLATION_KINDS.DUPLICATE_PAGE_HEADING]);
+  });
+
+  it('rejects a duplicate h1 written across two lines', () => {
+    expect(kinds(withExtraHeading('<h1\n  className={styles.title}\n>Settings</h1>')))
+      .toEqual([VIOLATION_KINDS.DUPLICATE_PAGE_HEADING]);
+  });
+
+  it('leaves lower headings alone', () => {
+    // The defect is a second *top-level* heading. An h2 under the page h1 is
+    // ordinary structure, and a rule that reported it would be crying wolf.
+    expect(kinds(withExtraHeading('<h2>Advanced</h2>'))).toEqual([]);
+  });
+
+  it('leaves a heading quoted inside a comment alone', () => {
+    expect(kinds(withExtraHeading("{/* the old <h1 className=\"page-title\"> */}\n      <p>body</p>")))
+      .toEqual([]);
+  });
+
+  it('leaves an exempt page alone', () => {
+    // The unlock screen is a full-bleed credential prompt outside ProtectedRoute
+    // and is the one page whose h1 is its own.
+    const source = `export function Unlock() {
+  return <h1 id="unlock-title">{t('unlock.title')}</h1>;
+}`;
+    expect(kinds(source, 'Unlock.tsx')).toEqual([]);
+    expect(kinds(source, 'NewPage.tsx')).toEqual([VIOLATION_KINDS.MISSING_PAGE_HEADER]);
+  });
+
+  it('does not fire on the compliant page it is derived from', () => {
+    expect(kinds(good)).toEqual([]);
   });
 });
 

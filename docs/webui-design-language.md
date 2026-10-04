@@ -643,6 +643,18 @@ Nothing was broken. Every page rendered, every test passed, the build was clean.
 That is what makes it worth a rule: a convention adopted halfway looks adopted
 from a distance, and the half that was dropped was the half that told a user
 where they were. The same failure shape as the title convention before it,
+
+**Batch 862 found that the title rule itself had the same blind spot.** It is
+keyed on the removed `page-title` class, so it only ever caught a duplicate
+heading that happened to carry that class — the exact spelling Batch 805 found
+nine of, and none since. The same duplicate written with a CSS Module class, or
+with no class at all, was invisible, because `<PageHeader>` was right there for
+the gate to find while the stray `<h1>` sat underneath it unremarked.
+`PageHeader` renders the page's own h1, so that page had two top-level headings
+and announced the same title twice. The rule is now the structural one:
+**a page that renders `<PageHeader>` may not also write an `<h1>`.** An h2 under
+the page heading is ordinary structure and is left alone, and the exemption list
+still covers the unlock screen, whose h1 is its own.
 which is why both now live in the same gate.
 
 The scan is brace-aware, because a naive "up to the first `>`" reads the `>` of

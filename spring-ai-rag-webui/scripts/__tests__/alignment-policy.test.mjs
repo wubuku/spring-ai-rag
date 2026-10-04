@@ -147,6 +147,123 @@ describe('text alignment', () => {
   });
 });
 
+/**
+ * Batch 862. Every case below is the *same violation written differently*, or
+ * prose about a violation reported as one. The scan used to be line-by-line
+ * with two literal regexes, so the shape of the declaration decided whether
+ * the policy applied at all.
+ */
+describe('a violation the old scan could not see', () => {
+  it('rejects a centre written in upper case', () => {
+    // CSS keywords are ASCII case-insensitive. A pattern without the `i` flag
+    // is a policy that can be left by typing one more letter.
+    const { status, stderr } = run({
+      'src/components/Badge.module.css': `.badge {
+  text-align: CENTER;
+}
+`,
+    });
+    expect(status).toBe(1);
+    expect(stderr).toContain('allow-center comment');
+  });
+
+  it('rejects physical left written in upper case', () => {
+    const { status, stderr } = run({
+      'src/components/Badge.module.css': `.badge {
+  text-align: LEFT;
+}
+`,
+    });
+    expect(status).toBe(1);
+    expect(stderr).toContain('use logical start/end');
+  });
+
+  it('rejects a centre whose value sits on the next line', () => {
+    // The old scan matched one line at a time, so the value being one line down
+    // made it not a value. The report is anchored on the *property* line, which
+    // is where an `allow-center` comment would have to sit.
+    const { status, stderr } = run({
+      'src/components/Badge.module.css': `.badge {
+  text-align:
+    center;
+}
+`,
+    });
+    expect(status).toBe(1);
+    expect(stderr).toContain('src/components/Badge.module.css:2');
+  });
+
+  it('still honours an allow-center comment above a split declaration', () => {
+    // The exemption is read from the raw source. An earlier version of this fix
+    // ran the scan on `stripComments` output, which erases the very comment the
+    // rule is asking for — that turned all eleven intentional centres in the
+    // real tree into violations, and is why the rule reads raw text and skips
+    // matches that fall *inside* a comment instead.
+    const { status, stdout } = run({
+      'src/components/Badge.module.css': `.badge {
+  /* alignment-policy: allow-center -- numeric labels read better centred */
+  text-align:
+    center;
+}
+`,
+    });
+    expect(status).toBe(0);
+    expect(stdout).toContain('intentional text centers: 1');
+  });
+
+  it('rejects an inline textAlign written in upper case', () => {
+    const { status, stderr } = run({
+      'src/components/Legacy.tsx': `export function Legacy() {
+  return <span style={{ textAlign: 'Center' }}>x</span>;
+}
+`,
+    });
+    expect(status).toBe(1);
+    expect(stderr).toContain('inline textAlign:center is not allowed');
+  });
+});
+
+describe('prose that is not a violation', () => {
+  it('does not report a text-align mentioned inside a CSS comment', () => {
+    // The old scan reported this at the line of the comment. A stylesheet that
+    // explains its own history is not a stylesheet that breaks the policy.
+    const { status } = run({
+      'src/components/Badge.module.css': `/* this used to say text-align: center */
+.badge {
+  color: red;
+}
+`,
+    });
+    expect(status).toBe(0);
+  });
+
+  it('does not report a declaration written across a multi-line comment', () => {
+    const { status } = run({
+      'src/components/Badge.module.css': `/* historic
+  text-align: left;
+*/
+.badge {
+  color: red;
+}
+`,
+    });
+    expect(status).toBe(0);
+  });
+
+  it('does not report an inline style quoted inside a JSDoc block', () => {
+    const { status } = run({
+      'src/components/Legacy.tsx': `/**
+ * Previously: <span style={{ textAlign: 'center' }}>x</span>
+ */
+export function Legacy() {
+  return null;
+}
+`,
+    });
+    expect(status).toBe(0);
+  });
+});
+
 describe('the global stylesheet contract', () => {
   it('rejects a main.tsx that stops importing global.css', () => {
     const { status, stderr } = run({
