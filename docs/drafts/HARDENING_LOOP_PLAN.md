@@ -478,6 +478,69 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
+### Batch 884（已交付，后端：成功信息说"测试注入的每个依赖生产装配也有"，而真实树有 13 个协作者不走构造器）
+
+- 分支：`batch-884`
+- 方向：三个从未单独审过的仓库级门禁之二。
+  `scripts/verify-controller-constructor-count.mjs`（251 行 / 27 条自测 / 扫 27 个 controller 类型）。
+- **主缺陷（live on main）**：成功信息写的是
+  `"each declares exactly one constructor, so every dependency a test injects is one the
+  production wiring has too."`
+  **这句话是假的，真实树就违反它。** 判据数的是构造器，而 Spring 的注入路径不止构造器。
+  实测：27 个 controller 类型里 **6 个**用 `@Autowired` 方法注入，**12 处 / 13 个**协作者，
+  **没有一个**是构造器参数。直接在 main 的版本上跑一个带 setter 的 controller 夹具，
+  它照旧打印那句断言——对照就摆在这里。
+  - 后果不是理论的：`RagCollectionController.setCollectionPurgeService` 是一个**不带**
+    `required = false` 的**必填** setter，其字段在 139/156 两行**无守卫解引用**。
+    生产装配一定会调它（必填），所以**不是活的生产缺陷**；但测试只要
+    `new RagCollectionController(...)` 而不调那个 setter，就在 139 行撞 NPE——
+    恰好是"恰好一个构造器"声称不可能发生的事。
+  - 那 13 个里 12 个走 `required = false`，由 `verify-false-optional-wiring` 判（882 已收进去），
+    真实树 EXIT=0。剩下 1 个必填 setter **哪道门禁都不判**（882 的判据要求 `required = false`），
+    如实记下来。**不在这里加第二道执法点**：同一个放行阀开两个出口就是它开始腐烂的方式。
+- **顺带修掉的**：成功信息里 "each declares **exactly one** constructor" 也不成立——
+  `WebUiConfig.WebUiController` 有 **0** 个构造器（隐式默认构造器），实测 27 个类型里
+  26 个恰好 1 个、1 个 0 个。改成 "none declares more than one constructor"。
+- **死代码两处**：
+  1. `isController` 被导出、有 8 条自测断言，但**生产代码零读者**（`main()` 直接走
+     `findControllerTypes`）。一个只被自己测试消费的导出，删掉，连自测一起。
+  2. `countAutowiredMethods` 里的 `isConstructor` 守卫**永远不会触发**——构造器没有返回类型，
+     早就被下面的 `void` 模式排除光了。我那条"两个方向都不算错"的测试因此是
+     **因为错误的原因而通过**（882 夹具缺陷那一课的翻版）。删掉守卫并把注释改成
+     "判别靠 `void`，构造器没有返回类型"。删掉之后 `m-voidreq` 这个变异才写得出来。
+  3. `findConstructorDeclarations` 一条路径返回 `null`、另一条返回 `[]`，逼得唯一的生产调用点
+     写 `?? []`。统一成 `[]`。
+- **自测 27 → 30**。对照不能靠换整个模块做：新自测 import 了 main 上不存在的
+  `countAutowiredMethods`，换过去会整个 import 失败、所有用例因为同一个无关原因变红——
+  **报"全红"的对照什么也证明不了**。所以拆成两半：
+  - 直接跑 main 的版本，打印它在一��带 setter 的 controller 上输出的那句话（争议点本身）；
+  - 对新代码做定点变异，每个都退回我这一批真犯过的某个错：
+    `m-sentence` 1 红 / `m-voidreq` 6 红 / `m-indent` 5 红 / `m-window` 2 红 / `m-null` 1 红。
+- **我在这一批犯的错，逐条记**：
+  1. **量测错了三次，每次错法不同**：先按 60 字符窗口找 `required = false`，把 4 处全限定名
+     注解误判成必填；改成"读整个注解"时 `annotationAt` 忘了跳过 `@`，返回空串，全判成必填；
+     修好后 `isCtor` 用 200 字符窗口，扫到了 setter 下面 5 行的构造器，把 setter 吞掉、
+     构造器计数虚高。**三次都是用固定宽度窗口或关键字去推断结构，而每次窗口都太宽。**
+     最后一次干脆不做分类，只把每处 `@Autowired` 连同其后 58 个字符列出来人工核对。
+  2. 实现里 `modifiers` 正则漏了前导 `\s*`，于是**无修饰符**的包私有 setter
+     （`    void configureX(...)`）全部匹配失败，只有带 `public` 的那个侥幸通过——
+     门禁报出 13 个里的 1 个，而那个数字看起来还挺合理。
+  3. `skipAnnotations` 我第一版写成了一坨自己都看不懂的表达式（`p + m[0].length - ...`），
+     读不下去就重写了。
+  4. 两条对照变异本身是坏的：`m-isctor` 改写后的条件对构造器仍然为真，**0 红**；
+     `m-sentence` 把整段 `console.log` 换掉，另外 3 条端到端用例因为预期子串消失而变红，
+     跟被测行为无关。两条都重做成只动争议的那一句。**"变异写错"和"变异没生效"摘要一模一样。**
+  5. 我把 setter 注入的 controller 数说成 7，实测 6。
+- **查过、没发现的两处**（如实记为查过，不记成确认无误）：
+  - Spring 把**只有**类级 `@RequestMapping`（无 `@Controller`/`@RestController`）的类型也当 handler，
+    这是本判据的另一个入口。四个模块 624 个 main Java 文件里 **0 处**。
+  - 四个模块里 core 之外 **0 个** controller 类型。
+  - Java 文本块（`"""`）会让 `neutralize` 失步：41 个文件含文本块，但换成一个文本块感知的
+    版本重跑提取，**431 个文件里 0 个判定不一致**，方向纯漏报。所以**不实现**文本块支持——
+    那是为不存在的危害写代码。
+- **真实树 EXIT=0（27 controller）；自测 30/30；verify-gate-wiring / verify-zh-translation /
+  verify-project-docs 全绿。**
+
 ### Batch 883（已交付，后端：`verify-null-request-forwarding` 的行注释里一个 glob，把整个 controller 方法对门禁藏了起来）
 
 - 分支：`batch-883`

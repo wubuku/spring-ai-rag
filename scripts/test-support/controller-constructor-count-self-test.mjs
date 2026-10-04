@@ -20,7 +20,7 @@
 // gates in this repo that could not fail have had to be deleted.
 
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -29,11 +29,12 @@ import {
   neutralize,
   findControllerTypes,
   findConstructorDeclarations,
-  isController,
+  countAutowiredMethods,
 } from '../verify-controller-constructor-count.mjs';
 
 const here = fileURLToPath(import.meta.url);
 const GATE = join(here, '..', '..', 'verify-controller-constructor-count.mjs');
+const CORE = join(here, '..', '..', '..', 'spring-ai-rag-core/src/main/java/com/springairag/core');
 
 const cases = [];
 const test = (title, fn) => cases.push({ title, fn });
@@ -282,17 +283,12 @@ public class Demo {
 });
 
 // ── controller detection ─────────────────────────────────────────────────
-
-test('recognises both controller stereotypes and rejects everything else', () => {
-  assert.equal(isController('@RestController\nclass Demo { }'), true);
-  assert.equal(isController('@org.springframework.web.bind.annotation.RestController\nclass Demo { }'), true);
-  assert.equal(isController('@Controller\nclass Demo { }'), true);
-  assert.equal(isController('@Service\nclass DemoService { }'), false);
-  assert.equal(isController('@Repository\nclass DemoRepository { }'), false);
-  // The stereotype inside a comment must not count.
-  assert.equal(isController('// @RestController\nclass Demo { }'), false);
-  assert.equal(isController('class DemoController { }'), false);
-});
+//
+// `isController` used to be exported here and asserted by eight cases below.
+// It had no production reader: `main()` walks `findControllerTypes` directly,
+// so the predicate existed only to be tested. Batch 884 removed it rather than
+// leaving an export whose sole consumer is its own test — the shape where a
+// self-test grows to cover something that was never wired to anything.
 
 test('reports the line each constructor sits on', () => {
   const src = [
@@ -305,6 +301,141 @@ test('reports the line each constructor sits on', () => {
   ].join('\n');
   const ctors = findConstructorDeclarations(src);
   assert.deepEqual(ctors.map((c) => c.line), [4, 5]);
+});
+
+// ── Batch 884: what the gate does NOT count ──────────────────────────────
+//
+// The success line used to claim that exactly one constructor means every
+// dependency a test injects is one the production wiring has too. That is false
+// on this tree: six controllers inject thirteen collaborators through an
+// `@Autowired` method, and a constructor count cannot see any of them.
+//
+// These cases pin the boundary rather than trying to close it. Closing it here
+// would mean a second enforcement point for a debt `verify-false-optional-wiring`
+// already owns, and two valves for one exemption is how an exemption rots.
+
+test('an @Autowired setter is not a constructor, in either direction', () => {
+  // The two mistakes are symmetric and both were made while measuring this:
+  // counting a setter as a constructor, and counting a constructor as a setter.
+  const src = `@RestController
+class Demo {
+    @Autowired
+    public Demo(A a) { }
+    @Autowired(required = false)
+    void configureB(B b) { }
+}`;
+  const type = findControllerTypes(src)[0];
+  assert.equal(findConstructorDeclarations(src, type).length, 1,
+    'the constructor must be counted once and the setter not at all');
+  assert.deepEqual(countAutowiredMethods(src, type),
+    { sites: 1, collaborators: 1, optionalCollaborators: 1, requiredCollaborators: 0 });
+});
+
+test('a package-private setter counts, and a fully-qualified annotation too', () => {
+  // Both halves of one real controller. The first run of this measurement read
+  // `required = false` from a 60-character window, which a fully-qualified
+  // annotation overflows, and reported four optional sites as required. The
+  // window has to be the whole annotation, argument list included.
+  const src = `@RestController
+class Demo {
+    @Autowired
+    public Demo(A a) { }
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void configureB(B b) { }
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void configureC(C c) { }
+}`;
+  const type = findControllerTypes(src)[0];
+  assert.deepEqual(countAutowiredMethods(src, type),
+    { sites: 2, collaborators: 2, optionalCollaborators: 2, requiredCollaborators: 0 });
+});
+
+test('a required setter is counted separately from an optional one', () => {
+  // RagCollectionController.setCollectionPurgeService is a plain `@Autowired`:
+  // production always injects it, and its field is dereferenced unguarded at two
+  // call sites. No gate judges it — verify-false-optional-wiring only reads
+  // `required = false` — so the success line has to name it.
+  const src = `@RestController
+class Demo {
+    @Autowired
+    public Demo(A a) { }
+    @Autowired
+    public void setPurge(PurgeService p) { }
+}`;
+  const type = findControllerTypes(src)[0];
+  assert.deepEqual(countAutowiredMethods(src, type),
+    { sites: 1, collaborators: 1, optionalCollaborators: 0, requiredCollaborators: 1 });
+});
+
+test('one setter carrying two parameters injects two collaborators', () => {
+  // RagChatController.configureModeAwareExecution takes both a command mapper
+  // and an execution service. Counting methods instead of collaborators would
+  // understate the surface by one and make the number disagree with the field
+  // count a reader can verify by hand.
+  const src = `@RestController
+class Demo {
+    @Autowired(required = false)
+    void configureBoth(ChatCommandMapper mapper,
+                       ChatExecutionService execution) { }
+}`;
+  const type = findControllerTypes(src)[0];
+  assert.deepEqual(countAutowiredMethods(src, type),
+    { sites: 1, collaborators: 2, optionalCollaborators: 2, requiredCollaborators: 0 });
+});
+
+test('a constructor parameter annotation is not a setter', () => {
+  // `@Autowired(required = false) AuditLogService auditLogService` appears on a
+  // parameter inside a constructor's own parameter list. It sits at depth 1 in
+  // the flattened text, so a rule that only looked for the annotation would
+  // count it.
+  const src = `@RestController
+class Demo {
+    @Autowired
+    public Demo(A a,
+                @Autowired(required = false) AuditLogService log) { }
+}`;
+  const type = findControllerTypes(src)[0];
+  assert.deepEqual(countAutowiredMethods(src, type),
+    { sites: 0, collaborators: 0, optionalCollaborators: 0, requiredCollaborators: 0 });
+  assert.equal(findConstructorDeclarations(src, type).length, 1);
+});
+
+test('reports no constructors rather than null when there is no type to read', () => {
+  // It used to return null on one path and [] on another, which forced a `?? []`
+  // at the one production call site. A function that answers a question about a
+  // list should answer it with a list.
+  assert.deepEqual(findConstructorDeclarations('class { not a type }'), []);
+});
+
+// The measured surface, pinned as a ratchet.
+//
+// This is a number a reader can check by hand: twelve `@Autowired` methods on
+// six controllers, injecting thirteen collaborators, twelve of them optional.
+// If it moves, the tree changed — re-read the gate's header before updating it,
+// because the header is where the reasoning about the gap lives.
+test('the real tree still has the injection surface the header describes', () => {
+  const files = [
+    'controller/RagChatController.java',
+    'controller/RagDocumentController.java',
+    'controller/RagSearchController.java',
+    'controller/RagCollectionController.java',
+    'controller/OpenAiCompatibilityController.java',
+    'controller/CollectionEmbeddingReadinessController.java',
+  ];
+  const totals = { sites: 0, collaborators: 0, optionalCollaborators: 0, requiredCollaborators: 0 };
+  let controllers = 0;
+  for (const rel of files) {
+    const source = readFileSync(join(CORE, rel), 'utf8');
+    const found = findControllerTypes(source);
+    assert.equal(found.length, 1, `${rel} should declare one controller type`);
+    controllers += 1;
+    const counts = countAutowiredMethods(source, found[0]);
+    for (const k of Object.keys(totals)) totals[k] += counts[k];
+  }
+  assert.equal(controllers, 6, 'the header says six controllers use setter injection');
+  assert.deepEqual(totals, {
+    sites: 12, collaborators: 13, optionalCollaborators: 12, requiredCollaborators: 1,
+  });
 });
 
 // ── end to end: the exit code is the only thing CI sees ──────────────────
@@ -345,6 +476,33 @@ test('end to end: exits 0 when every controller declares one constructor', () =>
   });
   assert.equal(res.status, 0);
   assert.match(res.stdout, /1 controller\(s\) examined/);
+});
+
+test('end to end: a passing run says what it did not check', () => {
+  // The regression guard for the sentence itself. The old success line read
+  // "each declares exactly one constructor, so every dependency a test injects
+  // is one the production wiring has too" — a claim this tree violates, on the
+  // fixture below and on the real one. A reader who sees "passed" has to be
+  // able to find out what passing did not cover, without reading the source.
+  const res = runGate({
+    'SetterController.java': '@RestController\nclass SetterController {\n'
+      + '    private B b;\n'
+      + '    @Autowired\n'
+      + '    public SetterController(A a) { }\n'
+      + '    @Autowired(required = false)\n'
+      + '    void configureB(B b) { this.b = b; }\n}',
+  });
+  assert.equal(res.status, 0);
+  assert.match(res.stdout, /none declares more than one constructor/,
+    'the run must state the invariant it actually checked');
+  assert.match(res.stdout, /counts constructors only/,
+    'and must say out loud that constructors are all it counts');
+  assert.match(res.stdout, /1 collaborator\(s\) across 1 controller\(s\)/,
+    'the uncovered surface must be measured, not described in prose');
+  assert.match(res.stdout, /1 of them through @Autowired\(required = false\)/,
+    'and the optional share must be attributed to the gate that judges it');
+  assert.doesNotMatch(res.stdout, /every dependency a test injects/,
+    'the old sentence overstated what a constructor count can establish');
 });
 
 test('end to end: a non-controller with two constructors is not reported', () => {
