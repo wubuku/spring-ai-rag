@@ -127,7 +127,7 @@ skipped；本门禁则保证今后再有类"闭嘴"就会失败。
 | `check-destructive-confirm.mjs` | 破坏性操作没有确认——清单从 `src/api/*.ts` 里真正发出 DELETE 的方法推导，POST 一律不算 | `__tests__/destructive-confirm.test.mjs` | `npm run lint` |
 | `check-i18n-keys.mjs` | 两个 locale 键集不对称；`t()` 引用不存在的键；`t('x') \|\| 兜底` 这种永远不会触发的守卫；**某个键两种语言都有、却没有任何源码能到达**——其中"引用"可以是模板前缀、查找表、数据数组、别名翻译函数或 i18next 复数族 | `__tests__/i18n-keys.test.mjs` | `npm run lint` |
 | `check-hardcoded-copy.mjs` | 从未接入 i18n 的组件；已接入文件里的硬编码用户文案——含 JSX 表达式容器内的那部分，同时放行 ARIA/机器属性值与 `t()` 兜底文案 | `__tests__/hardcoded-copy.test.mjs` | `npm run lint` |
-| `check-page-shell.mjs` | 受保护页面绕过 `PageHeader`，或渲染它时不给 `description` | `__tests__/page-shell.test.mjs` | `npm run lint` |
+| `check-page-shell.mjs` | 受保护页面绕过 `PageHeader`、渲染它时不给 `description`、或给的 `description` 可判定为空——遍历是递归的，子目录下的页面同样算页面 | `__tests__/page-shell.test.mjs` | `npm run lint` |
 
 普查的门禁有五条硬规则：每个门禁脚本必须在册；自动化门禁必须带自测或写明为什么
 不能带；自动化门禁必须有东西执行它；**CI 到不了的自动化门禁必须写明理由**；门禁必须

@@ -666,7 +666,7 @@ Nothing was broken. Every page rendered, every test passed, the build was clean.
 That is what makes it worth a rule: a convention adopted halfway looks adopted
 from a distance, and the half that was dropped was the half that told a user
 where they were. The same failure shape as the title convention before it,
-
+which is why both now live in the same gate.
 **Batch 862 found that the title rule itself had the same blind spot.** It is
 keyed on the removed `page-title` class, so it only ever caught a duplicate
 heading that happened to carry that class — the exact spelling Batch 805 found
@@ -678,7 +678,27 @@ and announced the same title twice. The rule is now the structural one:
 **a page that renders `<PageHeader>` may not also write an `<h1>`.** An h2 under
 the page heading is ordinary structure and is left alone, and the exemption list
 still covers the unlock screen, whose h1 is its own.
-which is why both now live in the same gate.
+
+**Batch 877 found the description rule had the mirror-image blind spot.**
+Mandatory is not the same as present. `description=""` and
+`description={undefined}` both satisfy a presence test, and both are the defect:
+`PageHeader` guards with `description !== undefined && description !== null`,
+so an empty string takes the *rendering* branch with nothing to render — an empty
+`<p>` that the `h1` still points at through `aria-describedby` — while `undefined`
+makes the slot disappear, which is the exact rot Batch 817 wrote the rule to stop.
+The rule now separates **absent** (`missing-page-description`) from **provably
+empty** (`page-description-empty`). An expression is still not reported:
+`{t('x')}` cannot be evaluated statically, and all thirteen real pages pass one.
+
+The same batch closed two more holes in this gate. It was the last of the seven
+frontend gates carrying its own copy of `stripComments`, and that copy was a
+regex one which mistook a `//` inside a string literal for a comment and blanked
+the rest of the line — so a page could carry a duplicate heading on the same line
+as a documentation link and the gate would not see it. And the page walk was one
+directory deep, so a page added under `src/pages/admin/` reached the router, the
+tests, and no rule in here at all. Exemptions are keyed by path for the same
+reason: keyed by bare file name, `admin/Unlock.tsx` would have inherited the
+unlock screen's exemption and walked straight out of the gate.
 
 The scan is brace-aware, because a naive "up to the first `>`" reads the `>` of
 a nested `<IconButton … />` in `leading` as the end of the opening tag and then
