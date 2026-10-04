@@ -667,8 +667,23 @@ rule**: an irreversible action needs a `ConfirmDialog` and both arms.
 ## 11. Alignment and layout
 
 `npm run check:alignment` is chained into `npm run lint`. Centred text is
-allowed only with a stated reason, and there are currently 11 such exemptions —
-each is a deliberate decision, recorded in the checker.
+allowed only with a stated reason, and there are currently 10 such exemptions —
+each is a deliberate decision, recorded in the checker. The number in this
+sentence is checked against the gate's own output by the self-test, because a
+hand-maintained copy of a machine-maintained number is exactly the shape that
+rots: it read 11 for several batches after the eleventh centre was converted to
+`start`.
+
+**Batch 881 also tightened what counts as a centre at all.** The rule is about a
+declaration, and three things that merely resembled one were answering for it: a
+test file's fixture was walked (the only one of the six frontend gates that did,
+so a single template literal in a test failed the gate and pointed at a file
+nobody ships); `--text-align: center` was read as a declaration when it is a
+custom property, which in a project built around a token layer is the obvious
+next name to use; and an `allow-center` comment could outlive the centre it
+justified, so the next centre written beneath it inherited a reason written for
+a declaration that no longer exists. That last one is the same rot the
+`check-hardcoded-copy` allowlist had, and it is now a failure in both places.
 
 The reason this is a machine rule: a centred block of body text is the single
 most common way a layout drifts from readable to not, and it is invisible in

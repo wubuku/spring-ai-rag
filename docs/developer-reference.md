@@ -125,7 +125,7 @@ did not already know they existed.
 | `verify-project-tests.sh` / `verify-project-docs.sh` | Aggregate entry points for the nine above | borne by each gate | by hand / not yet in CI |
 | `verify-gated-it.sh` | The 154 database-only integration suites | borne by switch reconciliation | **wired into CI** |
 | `verify-webui-e2e-mock.sh` | The 15 spec / 93 case WebUI mock regression | the suite is its own self-test | standalone (2.6 min) |
-| `check-alignment-policy.mjs` | Physical `text-align`, inline `textAlign`, the global-stylesheet contract | `__tests__/alignment-policy.test.mjs` | `npm run lint` |
+| `check-alignment-policy.mjs` | Physical `text-align`, inline `textAlign`, the global-stylesheet contract; test files are skipped, `--text-align` is a token rather than a declaration, and an `allow-center` comment no centre claims is a failure (Batch 881) | `__tests__/alignment-policy.test.mjs` | `npm run lint` |
 | `check-design-system.mjs` | Hard-coded values that bypass a design token | `__tests__/design-tokens.test.mjs` | `npm run lint` |
 | `check-a11y-forms.mjs` | A control with no accessible name, a label bound to nothing | `__tests__/a11y-forms.test.mjs` | `npm run lint` |
 | `check-mutation-errors.mjs` | A write action that does not report its failure | `__tests__/mutation-errors.test.mjs` | `npm run lint` |
