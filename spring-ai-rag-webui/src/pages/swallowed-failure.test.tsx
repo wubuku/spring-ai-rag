@@ -208,7 +208,7 @@ describe('Documents: a preview that could not load is not an empty document', ()
 
     await waitFor(() =>
       expect(showToast).toHaveBeenCalledWith(
-        'documents.previewContentLoadError',
+        'documents.previewContentLoadError (502 Bad Gateway)',
         'error',
       ),
     );

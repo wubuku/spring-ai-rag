@@ -117,7 +117,7 @@ describe('CreateCollectionModal', () => {
 
     await waitFor(() =>
       expect(toastMock.showToast).toHaveBeenCalledWith(
-        'collections.createError',
+        'collections.createError (backend down)',
         'error',
       ),
     );

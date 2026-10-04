@@ -317,8 +317,7 @@ export function Documents() {
       // 列表接口通常不带正文，所以预览是先打开弹窗、再异步补全内容的。
       // 补全失败时只写 console 的话，用户看到的就是一个**永远补不上、
       // 也不解释为什么**的弹窗——他会以为文档本来就是空的。
-      const message = err instanceof Error ? err.message : String(err);
-      showToast(t('documents.previewContentLoadError', { error: message }), 'error');
+      showToast(failureMessage(t, 'documents.previewContentLoadError', err), 'error');
     }
   };
 
@@ -369,8 +368,7 @@ export function Documents() {
             const objectUrl = URL.createObjectURL(blob);
       openBlobUrl(objectUrl);
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      showToast(t('documents.openOriginalPdfError', { error: message }), 'error');
+      showToast(failureMessage(t, 'documents.openOriginalPdfError', err), 'error');
     }
   }, [openBlobUrl, showToast, t]);
 

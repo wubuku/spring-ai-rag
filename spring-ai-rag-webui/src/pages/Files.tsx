@@ -20,6 +20,7 @@ import {
   writeWorkspaceState,
 } from '../utils/workspaceState';
 import { useImeComposition } from '../utils/ime';
+import { failureMessage } from '../utils/failureReason';
 import styles from './Files.module.css';
 import { IconButton, PageHeader, QueryErrorBanner } from '../components/ui';
 import {
@@ -227,7 +228,7 @@ export function Files() {
   const [previewKey, setPreviewKey] = useState(0); // force preview reload
   const [dragOver, setDragOver] = useState(false);
   const [uploadState, setUploadState] = useState<'idle' | 'uploading' | 'done' | 'error'>('idle');
-  const [uploadError, setUploadError] = useState('');
+  const [uploadError, setUploadError] = useState<unknown>(null);
   const [selectedCollectionKey, setSelectedCollectionKey] = useState(
     () => readWorkspaceState(FILES_COLLECTION_STATE_KEY, isFilesCollectionState)
       ?.collectionKey ?? '',
@@ -469,10 +470,12 @@ export function Files() {
       });
       navigateTo(result.uuid + '/');
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setUploadError(msg);
+      // The error is kept, not flattened to its message: `err.message` cannot
+      // tell a server answer from "Failed to fetch", and the toast used to
+      // render that difference as two kinds of text in the same sentence.
+      setUploadError(err);
       setUploadState('error');
-      showToast(t('files.importError', { error: msg }), 'error');
+      showToast(failureMessage(t, 'files.importError', err), 'error');
     }
   }, [navigateTo, queryClient, showToast, t]);
 
@@ -509,8 +512,7 @@ export function Files() {
               const objectUrl = URL.createObjectURL(blob);
       openBlobUrl(objectUrl);
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        showToast(t('files.previewError', { error: message }), 'error');
+        showToast(failureMessage(t, 'files.previewError', err), 'error');
       }
     }
   }, [openBlobUrl, selectedEntry, showToast, t]);
@@ -539,10 +541,9 @@ export function Files() {
       }
       setEmbeddingMessage(result.embedMessage || '');
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
       setEmbeddingState('error');
-      setEmbeddingMessage(msg);
-      showToast(t('files.embedError', { error: msg }), 'error');
+      setEmbeddingMessage(err instanceof Error ? err.message : String(err));
+      showToast(failureMessage(t, 'files.embedError', err), 'error');
     }
   }, [canAddToRag, ragImportId, selectedCollectionKey, t, showToast]);
 
@@ -636,7 +637,7 @@ export function Files() {
       {/* Upload error */}
       {uploadState === 'error' && (
         <div className={styles.errorBox}>
-          {t('files.importError', { error: uploadError })}
+          {failureMessage(t, 'files.importError', uploadError)}
         </div>
       )}
 

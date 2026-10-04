@@ -59,7 +59,7 @@ describe('FilePreview', () => {
 
     render(<FilePreview entry={makeEntry()} reloadKey={0} />);
 
-    expect(await screen.findByText('files.previewError')).toBeInTheDocument();
+    expect(await screen.findByText('files.previewError (backend down)')).toBeInTheDocument();
   });
 
   it('renders a pdf entry as an embedded object', async () => {
@@ -92,7 +92,7 @@ describe('FilePreview', () => {
       />
     );
 
-    expect(await screen.findByText('files.previewError')).toBeInTheDocument();
+    expect(await screen.findByText('files.previewError (pdf gone)')).toBeInTheDocument();
     expect(screen.queryByRole('heading')).not.toBeInTheDocument();
   });
 
@@ -138,7 +138,7 @@ describe('FilePreview', () => {
       />,
     );
 
-    expect(await screen.findByText('files.previewError')).toBeInTheDocument();
+    expect(await screen.findByText('files.previewError (missing preview)')).toBeInTheDocument();
   });
 
   it('revokes the object URL when the preview unmounts', async () => {
@@ -189,7 +189,7 @@ describe('FilePreview', () => {
     expect(container.querySelector('div')).not.toBeNull();
   });
 
-  it('shows the unavailable fallback for images when the object URL is empty', async () => {
+  it('renders the plain sentence for an image whose object URL came back empty', async () => {
     mockCreateObjectURL.mockReturnValueOnce('');
     mockGetRawFile.mockResolvedValueOnce(new Blob(['png-bytes']));
 
@@ -198,7 +198,7 @@ describe('FilePreview', () => {
     expect(await screen.findByText('files.previewError')).toBeInTheDocument();
   });
 
-  it('shows the unavailable fallback for pdfs when the object URL is empty', async () => {
+  it('renders the plain sentence for a pdf whose object URL came back empty', async () => {
     mockCreateObjectURL.mockReturnValueOnce('');
     mockGetRawFile.mockResolvedValueOnce(new Blob(['pdf-bytes']));
 
