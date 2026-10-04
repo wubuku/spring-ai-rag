@@ -53,6 +53,8 @@ import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { join, relative, sep, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { collectAccessibleNameProps } from './lib/accessible-name-props.mjs';
+
 const projectRoot = fileURLToPath(new URL('..', import.meta.url));
 const SOURCE_ROOT = join(projectRoot, 'src');
 
@@ -408,52 +410,6 @@ export function collectSources(root = SOURCE_ROOT) {
 // even a type error, so including them would report shapes that cannot occur.
 // A gate that misreports gets allowlisted, and then it protects nothing.
 
-/** Prop names a component body forwards into an accessible-name attribute. */
-function forwardedProseProps(source) {
-  const out = new Set();
-  for (const m of source.matchAll(
-    /\baria-label=\{(\w+)\}|\btitle=\{(\w+)\}|\btitle=\{[^}]*\?\?\s*(\w+)\}/g,
-  )) {
-    const name = m[1] || m[2] || m[3];
-    if (name) out.add(name);
-  }
-  return out;
-}
-
-/** Component names declared in a file, so `Dialog/ConfirmDialog.tsx` yields ConfirmDialog. */
-function componentNames(source) {
-  const names = new Set();
-  for (const m of source.matchAll(/(?:export\s+)?(?:default\s+)?function\s+([A-Z]\w+)/g)) {
-    names.add(m[1]);
-  }
-  for (const m of source.matchAll(
-    /(?:export\s+)?(?:const|let)\s+([A-Z]\w+)\s*(?::[^=]+)?=\s*(?:\([^)]*\)|\w+)\s*=>/g,
-  )) {
-    names.add(m[1]);
-  }
-  return names;
-}
-
-/**
- * @param {{relPath: string, source: string}[]} sources
- * @returns {Map<string, Set<string>>} component name → its prose prop names
- */
-export function collectProseProps(sources) {
-  const proseProps = new Map();
-  for (const { relPath, source } of sources) {
-    if (!/^(components|design-system)\//.test(relPath)) continue;
-    const declared = [...forwardedProseProps(source)].filter(
-      (name) => new RegExp(`\\b${name}\\??\\s*:\\s*string\\b`).test(source),
-    );
-    if (declared.length === 0) continue;
-    for (const component of componentNames(source)) {
-      if (!proseProps.has(component)) proseProps.set(component, new Set());
-      for (const name of declared) proseProps.get(component).add(name);
-    }
-  }
-  return proseProps;
-}
-
 /**
  * Literal copy handed to a discovered prose prop.
  *
@@ -468,6 +424,13 @@ export function collectProseProps(sources) {
  *
  * @returns {{copy: string, kind: string, line: number}[]}
  */
+/**
+ * Re-exported so this gate's own tests keep a single import site, while the
+ * knowledge itself is shared with check-a11y-forms.mjs — the same prop that
+ * carries untranslated copy is the one that can leave a control unnamed.
+ */
+export const collectProseProps = (sources) => collectAccessibleNameProps(sources);
+
 export function findProsePropCopy(source, proseProps) {
   if (!proseProps || proseProps.size === 0) return [];
   const code = stripComments(source);
