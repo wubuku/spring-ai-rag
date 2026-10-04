@@ -17,11 +17,13 @@
 
 import assert from 'node:assert/strict';
 import {
+  collectFindings,
   collectMethods,
   executableStatements,
   findInertTests,
+  findUnrunnableTests,
 } from '../verify-test-expectations.mjs';
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -124,6 +126,145 @@ test('the real test tree has no inert @Test method', () => {
   // reported against the file it happened in.
   assert.deepEqual(findInertTests(readFileSync(target, 'utf8')), []);
   assert.ok(readdirSync(dir).includes('PgTrgmFulltextProviderTest.java'));
+});
+
+// ── Batch 887: `@Test` methods JUnit 5 never runs ────────────────────────
+//
+// The rule added here answers a different question from the one above, so it is
+// pinned separately. An empty body is a test that runs and proves nothing; a
+// `private` or `static` `@Test` is a test that does not run at all and does not
+// even appear in the report. The second is strictly worse — a green build and a
+// shrinking test count — and it is also the one a person cannot see by reading
+// the report, because there is no report row to read.
+
+const unrunnable = (modifiers) => `
+class Fixture {
+    @Test
+    ${modifiers}void sample() { assertEquals(1, 1); }
+}
+`;
+
+test('a private @Test is reported — JUnit 5 will not discover it', () => {
+  assert.deepEqual(findUnrunnableTests(unrunnable('private ')), ['sample']);
+});
+
+test('a static @Test is reported for the same reason', () => {
+  assert.deepEqual(findUnrunnableTests(unrunnable('static ')), ['sample']);
+});
+
+test('a private static @Test is reported once, not twice', () => {
+  assert.deepEqual(findUnrunnableTests(unrunnable('private static ')), ['sample']);
+});
+
+test('a private helper is not a test, however many tests sit above it', () => {
+  // The negative that matters, and the one that decides the whole implementation.
+  // The empty-body rule decides "is this a test" from the text between one
+  // declaration and the next, and that window is bounded by the previous
+  // declaration's *parameter list*, not its body. So a private helper sitting
+  // after a test inherits that test's `@Test` and looks like a skipped test.
+  // Reading from the whole file prefix instead of the contiguous block above
+  // reported 743 such helpers on the real tree. Reading the lines directly above
+  // the declaration is what makes this empty.
+  const source = `
+class Sample {
+    @Test
+    void sample() { assertEquals(1, 1); }
+
+    private String helper() { return "x"; }
+}
+`;
+  assert.deepEqual(findUnrunnableTests(source), []);
+});
+
+test('a private helper above the first test is not a test either', () => {
+  // The same mistake reached from the other end: for the first declaration in a
+  // file the gap starts at byte 0, so a helper under the class header inherits
+  // whatever `@Test` text the file's preamble contains.
+  const source = `
+import org.junit.jupiter.api.Test;
+
+class Sample {
+    private String helper() { return "x"; }
+
+    @Test
+    void sample() { assertEquals(1, 1); }
+}
+`;
+  assert.deepEqual(findUnrunnableTests(source), []);
+});
+
+test('a @Test named in the file header comment is not an annotation', () => {
+  // The negative control on where the upward walk stops. A header comment that
+  // talks about `@Test` is exactly the text a whole-prefix scan would pick up,
+  // and the first private member of the class is exactly what it would then
+  // report as a skipped test.
+  const source = `
+/*
+ * Every @Test method in this class is package-private by design.
+ */
+class Sample {
+    private String helper() { return "x"; }
+}
+`;
+  assert.deepEqual(findUnrunnableTests(source), []);
+});
+
+test('a comment between the annotation and the declaration does not break the walk', () => {
+  // The walk must skip comments, not just blank lines, or an annotation
+  // separated from its method by a one-line note is silently missed.
+  const source = `
+class Sample {
+    @Test
+    // a note somebody left between the annotation and the method
+    private void sample() { }
+}
+`;
+  assert.deepEqual(findUnrunnableTests(source), ['sample']);
+});
+
+test('an empty @BeforeEach is not an unrunnable test', () => {
+  // It is not a test at all, and the rule under test is about tests JUnit skips.
+  // The empty-body rule has its own opinion about it and stays out of this one.
+  assert.deepEqual(findUnrunnableTests(wrap('', '@BeforeEach')), []);
+});
+
+test('an ordinary package-private @Test is not reported', () => {
+  assert.deepEqual(findUnrunnableTests(wrap('assertEquals(1, 1);')), []);
+});
+
+test('a wrapped @ParameterizedTest above a private method is still found', () => {
+  // The upward scan walks lines, so an annotation whose arguments span several
+  // lines puts a `})` between the annotation and the declaration. The
+  // paren-balance carry is what keeps this a hit instead of a silent miss.
+  const source = `
+class Sample {
+    @ParameterizedTest
+    @CsvSource({
+        "1, 1",
+        "2, 2"
+    })
+    private void sample() { }
+}
+`;
+  assert.deepEqual(findUnrunnableTests(source), ['sample']);
+});
+
+test('the real test tree has no @Test that JUnit would skip — and the scan is not vacuous', () => {
+  // Two claims in one test, because the first alone passes for the wrong reason.
+  // An earlier version of this case asserted only "no findings", and it passed
+  // while the rule matched *zero* test methods in the entire repository: the
+  // annotation was being read off a capture group that could never fire, since
+  // its separator class `[\\t ]+` does not match the newline between `@Test` and
+  // `void`. A census that reports nothing because it recognised nothing is
+  // indistinguishable from a clean tree, so the population is asserted too.
+  const root = fileURLToPath(new URL('../..', import.meta.url));
+  const { findings, files, tests } = collectFindings(root);
+  assert.deepEqual(
+    findings.filter((f) => f.kind === 'unrunnable'),
+    [],
+  );
+  assert.ok(files > 900, `expected the real tree to be scanned, only saw ${files} file(s)`);
+  assert.ok(tests > 5000, `expected the scan to recognise @Test methods, saw ${tests}`);
 });
 
 let failed = 0;
