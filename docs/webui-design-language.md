@@ -478,8 +478,23 @@ across all sources: 11 hits, all of them accidents (`'collection'` as a scope
 value, `'search'` as a route segment). A gate report is a list of suspects to
 check, never a deletion to apply.
 
-Exemptions use an inline `/* i18n-allow: <concrete reason> */`; none are
-registered. The key count is now **695**, and all 695 are reachable from source.
+An inline `/* i18n-allow: <concrete reason> */` is a **note, not an
+exemption**; none are registered. Until Batch 879 this document, the gate's own
+error message and the gate's behaviour all disagreed: the error message offered
+the comment as one of three remedies, and the gate failed anyway, having printed
+the reason back as `[allowed: …]`. An end-to-end probe on a real tree settled it.
+
+Annotation is the right call *here* for a reason worth stating once, because this
+repository has both kinds of gate and they are not interchangeable: a missing
+translation key is not invisible debt. i18next returns the key string, so the
+user reads `documents.loadError` on the screen. There is no reviewer judgement to
+defer — the copy is either there or it is not. The two gates where an
+`*-allow:` comment genuinely *should* pass — `check-design-system` and
+`check-double-submit` — police debts a user cannot see, which is the line
+between the two stances. `check-query-errors` and `check-mutation-errors` sit on
+this side of it for the same reason, and each says so in its own output.
+
+The key count is now **695**, and all 695 are reachable from source.
 
 ## 8. A write button must stop accepting clicks while it is in flight
 

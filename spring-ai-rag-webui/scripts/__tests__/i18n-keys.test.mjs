@@ -363,3 +363,68 @@ describe('the gate as a process', () => {
     expect(result.stdout).not.toMatch(/3 key\(s\) referenced/);
   });
 });
+
+describe('Batch 879: what an i18n-allow comment is, pinned', () => {
+  // The stance was the defect. `i18n-allow` was recorded and printed beside the
+  // finding, and the error message listed it as one of three remedies — while
+  // the gate went on failing, because the finding was still counted. An
+  // end-to-end probe on a real tree showed exactly that: the comment read back
+  // as `[allowed: …]` and the exit code stayed at 1.
+  //
+  // These cases assert the decision in both directions. The first stops anyone
+  // "fixing" the note into a pass. The second stops the note rotting into dead
+  // code by making it look like it does nothing at all — it is recorded and
+  // shown to a reviewer, and that is the whole of its job.
+  const missing = {
+    ...cleanLocales(),
+    'Page.tsx': "export const y = t('nav.absent');",
+  };
+  const annotated = {
+    ...missing,
+    'Page.tsx':
+      '/* i18n-allow: registered at runtime by the tenant bootstrap */\n'
+      + "export const y = t('nav.absent');",
+  };
+
+  it('does not let a note turn a missing key into a pass', () => {
+    expect(runGate(annotated).status).toBe(1);
+  });
+
+  it('fails the same tree without the note, so the two are comparable', () => {
+    // Without this, "status 1" above could just mean the fixture is broken.
+    expect(runGate(missing).status).toBe(1);
+  });
+
+  it('shows the reason to the reviewer, so the note is not dead code', () => {
+    const result = runGate(annotated);
+    expect(result.stderr).toMatch(/\[allowed: registered at runtime by the tenant bootstrap\]/);
+    expect(result.stderr).not.toMatch(/\[allowed: \]/);
+  });
+
+  it('stops offering the note as a remedy', () => {
+    // The sentence that made the bug: "Add the key to every locale, drop the
+    // guard, or record an inline /* i18n-allow: … */".
+    const result = runGate(missing);
+    expect(result.stderr).not.toMatch(/or record an inline/);
+    expect(result.stderr).toMatch(/is NOT a remedy/);
+  });
+
+  it('passes once the key is actually added', () => {
+    // The positive control for the whole family: the gate is not refusing to
+    // pass, it is refusing to pass *this*.
+    expect(runGate({ ...cleanLocales(), 'Page.tsx': "export const y = t('nav.dashboard');" }).status)
+      .toBe(0);
+  });
+
+  it('can carry a note on a dead fallback, which is the same kind of defect', () => {
+    const fallbacks = {
+      ...cleanLocales(),
+      'Page.tsx':
+        '/* i18n-allow: the guard is for a future runtime that can return empty */\n'
+        + "export const y = t('nav.dashboard') || 'Dashboard';",
+    };
+    const result = runGate(fallbacks);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toMatch(/\[allowed: the guard is for a future runtime/);
+  });
+});

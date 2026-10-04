@@ -42,6 +42,29 @@
  * therefore has to be generous about what counts as a reference, or it would
  * report live copy as dead. See `collectReferencedKeys`.
  *
+ * ## `i18n-allow` is a note, not a switch — Batch 879
+ *
+ * An inline `/* i18n-allow: <reason> *\/` is recorded and printed after the
+ * finding so a reviewer can weigh it. It does not make the gate pass, and until
+ * this batch the error message said the opposite: it offered the comment as one
+ * of three remedies, in a sentence ending "or record an inline
+ * `/* i18n-allow: <reason> *\/`", while the gate went on failing. An end-to-end
+ * probe put a real missing key in a real file, added the comment, and watched the
+ * exit code stay at 1 — with `[allowed: …]` printed right beside it, so the
+ * comment was demonstrably read and demonstrably ignored.
+ *
+ * Annotation rather than exemption is the right call *here*, and the reason is
+ * what the defect is. A missing key is not invisible debt: i18next returns the
+ * key string, so the user reads `documents.loadError` on the screen. There is
+ * no reviewer-facing judgement to defer — the copy is either there or it is not,
+ * and only adding it makes it so. `check-query-errors` and `check-mutation-errors`
+ * reached the same conclusion for the same reason and say so in their own output.
+ * The two gates where an exemption *is* the right answer (`check-design-system`,
+ * `check-double-submit`) police debts a user cannot see.
+ *
+ * Rules 1 and 3 are the two that can carry a note. Rules 2 and 4 compare two
+ * locale files and have no source line to anchor a comment to.
+ *
  * Run: node scripts/check-i18n-keys.mjs
  */
 
@@ -282,9 +305,15 @@ function main() {
     }
     console.error(
       '\nA missing key renders as the key itself, and that string is truthy, so a\n'
-      + '`t(...) || fallback` guard never fires. Add the key to every locale, drop\n'
-      + 'the guard, or record an inline `/* i18n-allow: <reason> *\\/`.\n'
-      + '\nA dead key is the opposite problem: nothing renders it, so delete it from\n'
+      + '`t(...) || fallback` guard never fires. Add the key to every locale, or\n'
+      + 'drop the guard.\n'
+      + '\n'
+      + 'An `i18n-allow` comment is NOT a remedy — it records your reason next to\n'
+      + 'the finding so a reviewer can weigh it, and the finding still fails. That\n'
+      + 'is deliberate: a missing key is not invisible debt, it is copy the user\n'
+      + 'reads off the screen, so the only fix is the key itself. Add it.\n'
+      + '\n'
+      + 'A dead key is the opposite problem: nothing renders it, so delete it from\n'
       + 'every locale. If it really is assembled at runtime, name it as a string\n'
       + 'literal somewhere so this rule can see it — that is how the lookup tables\n'
       + 'and data arrays in this tree already keep their keys alive.',
