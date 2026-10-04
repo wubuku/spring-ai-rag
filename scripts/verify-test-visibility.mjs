@@ -103,6 +103,11 @@ export const TEST_FILE_PATTERN = /(?:^Test.*|(?:Test|Tests|TestCase))\.java$/;
 const TEST_METHOD_ANNOTATION =
   /@(?:[\w$]+\.)*(?:Test|ParameterizedTest|RepeatedTest|TestFactory|TestTemplate|Parameterized|Suite)\b/;
 
+/** Count the opening tags of a child element. */
+function countElements(xml, tag) {
+  return xml.split(`<${tag}`).length - 1;
+}
+
 export function parseReport(xml) {
   const open = /<testsuite\b[^>]*>/.exec(xml);
   if (!open) return null;
@@ -114,7 +119,22 @@ export function parseReport(xml) {
   const name = /name="([^"]+)"/.exec(tag);
   return {
     name: name ? name[1] : '(unnamed)',
-    tests: read('tests'),
+    // Counted, not read. Surefire writes `tests=` before the cases an `@Nested`
+    // inner class contributes, so the attribute can be smaller than the
+    // children it is supposed to summarise. Measured across all four modules'
+    // 1006 reports, three disagree: `RagCollectionServiceTest` by 7 (17
+    // declared against 24 real cases, every one of them from a nested class),
+    // `DocumentMapperTest` by 1 and `GeneralRagAutoConfigurationBeanTest` by 1.
+    // The attribute total came to 8320 where 8329 cases ran — and this gate is
+    // the thing that prints that number to whoever is deciding whether coverage
+    // moved, so it was under-reporting its own tree by nine.
+    //
+    // The other three counters are still read from the attribute, because none
+    // of the 1006 reports disagrees on them. Changing a counter without a
+    // measurement behind it is a mistake this repository has a documented
+    // history of making; the known miss is a nested class whose cases are all
+    // skipped, which no report in the tree currently exercises.
+    tests: countElements(xml, 'testcase'),
     skipped: read('skipped'),
     failures: read('failures'),
     errors: read('errors'),
