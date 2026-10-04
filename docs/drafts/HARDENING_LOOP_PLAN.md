@@ -478,6 +478,85 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
+### Batch 866（已交付，测试加固：把"覆盖存在"和"有人声明过"拆开算账）
+
+- 分支：`batch-866`
+- 主题：仓库里最要命的一条线是 **fail-open 授权链**——`ChatPrincipal.from(null)`
+  回落成本地身份、`isUnrestricted(null)` 返回 `true`、集合作用域为空时抛
+  `IllegalArgumentException`。它们都是"关于部署形态的断言"，不是疏漏（auth 关闭的
+  本地部署需要它们）。但正因为不报错，**危险全部落在调用方**，所以必须问：
+  真把其中一条改坏，现有测试会不会红？
+- **方法**：不新增覆盖，而是**变异**。只绿不算数；每个变异都必须证明某条断言承重。
+  对照组 = 4 个类 / 25 个 `<testcase>` / 14.9 秒 / EXIT=0。
+
+  | 变异 | 内容 | 结果 |
+  |------|------|------|
+  | M-A 提权 | `from(null)` 回落成 environment-root 管理员 | 捕获，`ChatPrincipalNullRequestTest` 红 2 |
+  | M-B 收紧 | `isUnrestricted(null)` 由 `true` 改 `false` | 捕获，`ApiKeyCollectionAccessTest` 红 6 |
+  | M-C 守卫 | 删掉"集合作用域不能为空"的 `IllegalArgumentException` | 捕获，红 1 |
+  | M-D 降级 | environment-root 身份不再带 `admin` | **定向 0 红** |
+
+- **M-D 差点被误判成"测试缺口"**。定向 4 个类 0 红，很像 866 勘察时设想的那样。
+  但 860 已经吃过一次"定向绿 ≠ 全量绿"的亏，所以先做全量判据：
+  **7622 个 `<testcase>`、153 跳过、186 秒 → 捕获，全套件只有 1 处红**，
+  在 `RagChatControllerTest`。差一步就把一个"覆盖存在但没人声明过"的问题，
+  写成"测试缺口"发出去。定向名单只跑了 4 个类，而抓它的类根本不在名单里。
+- **真正的发现：覆盖存在，但没有任何一条断言声明过它**。`RagChatControllerTest`
+  的 `productionHistory_allowsRootToReadVisibleLegacyRows` 手工
+  `new ChatPrincipal("root:environment-root", ENVIRONMENT_ROOT, true)` 塞进
+  Mockito 的 **when 与 verify**，靠 record 的 `equals`（含 `admin` 分量）匹配上。
+  没人想钉 `admin`，它是匹配器的副产品。
+  两侧盘点：`admin()` 有 **5 个生产读者**（`LlmUsageQueryService` 4 处、
+  `RagChatToolRegistry` 1 处），全仓**唯一**的 `admin()` 断言是
+  `ChatPrincipalNullRequestTest:36` 对 local() 落回的 `assertFalse`——**只覆盖 false 一侧**。
+  测试侧 `ChatPrincipal.from(` 真实调用点只有 4 处（另 3 个 helper 只喂
+  `PRINCIPAL_DATABASE_API_KEY`），**没有一处喂 `PRINCIPAL_ENVIRONMENT_ROOT`**。
+- **把自己的脆弱性假说证伪了两次，这是本批最实的部分**。假说：把那道防线换成
+  同一文件相邻测试**正在使用**的 `any(ChatPrincipal.class)` 惯用法，M-D 就会漏网。
+  - v1 只拆 when-stub：仍红 1 —— **假说被自己的实验推翻**，因为结尾的 `verify(...)`
+    也用等值 `rootPrincipal`，是第二道独立机制。
+  - v2 把 when + verify 都拆掉：**0 红，完全漏网**。
+  弱化用的不是人为刁难的写法，是这个文件自己的既有惯用法（`:331-333` 就在用）。
+  结论才成立：**这条分支的最后一个意图性断言不存在**，覆盖纯靠两道 record 等值匹配。
+- **实施**：新增 `ChatPrincipalDispatchTest`（7 个用例），把"哪种 principal 类型
+  带不带管理员"从 Mockito 匹配器的副产品变成显式声明。生产代码**零改动**。
+  与 `ChatPrincipalNullRequestTest` 职责不重叠：后者只管 null 回落。
+  8 个变异全部被捕获，**0 个盲区**，且归属精确（每条断言都被单独点名）：
+
+  | 变异 | 抓住它的用例 |
+  |------|--------------|
+  | 环境根不再带 admin | `environmentRootIsAlwaysAdmin` + `environmentRootIgnoresKeyAndPolicyAttributes` |
+  | 环境根 id 改名 | 同上两条 |
+  | **善意重构**：环境根改为按挂上来的 key 角色判管理员 | 同上两条 |
+  | 数据库 key 管理员判定写反 | `databaseKeyCarriesAdminRole` + `normalDatabaseKeyIsNotAdmin` |
+  | 数据库 key 恒为管理员 | 仅 `normalDatabaseKeyIsNotAdmin` |
+  | `db:unknown` 占位改掉 | `databaseKeyWithoutKeyIdFallsBackToUnknown` |
+  | 静态 key 变成管理员 | `legacyStaticKeyIsNeverAdmin` |
+  | 认不出的类型不再整体回落 `local()` | `unknownPrincipalTypeFallsBackToLocal` |
+
+  第三个变异不是笔误变异，是**一次善意重构就会写出来的代码**——把环境根的判定
+  和数据库 key 的判定统一成"按角色判"。原来没人拦得住它。
+  M4/M5 那对说明成对断言不可省：判定写反时两条都红，而"恒为管理员"只有 negative
+  那条能拦——只写 positive 断言的测试会在这里全绿。
+- **勘察阶段的两个负结果（"查了、没发现"必须和"没查"能区分开）**：
+  - Java 侧"只读不写字段"普查：2664 处声明 → 5 处命中 → **全部正当**
+    （4 处 JPA `@Version` 由 Hibernate 写，1 处嵌套类 `ProviderJson` 的公开可变字段
+    由 Jackson 反射填充）。第一版普查**混用了原文与剥注释文本两套坐标系**，
+    行号全错——861 的行号漂移教训第二次生效，最终重写为"一个文本、一套坐标系 +
+    注释替换成等量空格保行数"。
+  - 另一形态（`@Autowired(required=false)` + 永远 null + 读起来像能力可用的守卫）：
+    `QueryRewritingService.retryTemplate` 看着可疑，但 `RetryConfig.java:55` 确实
+    定义了 `@Bean RetryTemplate` → **会被注入，不是死代码**。
+    这正是"必选 bean 时为假且该删"那条判据里"会抛"与"会跳过"的区分。
+- **两个脚本 bug，都是断言当场抓住的，不是事后复盘发现的**：
+  1. `open(p,'w').write(patch(p, ...))` —— Python 先求值 `open(p,'w')` **把文件截断**，
+     `patch` 才去读，读到空串，锚点数 0。**这个断言挡住了把生产文件写成空文件。**
+     改成先算出内容再写。
+  2. 抽失败用例名的正则 `[^>]*name="` 贪婪匹配，抓到的是 `classname="显示名"`
+     里的那个 `name`，8 个变异的归属全打印成同一个显示名。surefire 实际属性顺序是
+     `name="方法" classname="显示名"`，必须锚定 `name` 紧跟 `<testcase`。
+  两条都属于"当场响比事后查便宜"。
+
 ### Batch 865（已交付，技术债：读起来像防护、实际恒空转的那三处）
 
 - 分支：`batch-865`
