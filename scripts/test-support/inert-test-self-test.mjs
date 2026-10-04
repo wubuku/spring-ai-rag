@@ -510,6 +510,125 @@ class Fixture {
   assert.deepEqual(findUnrunnableTests(source), ['sample']);
 });
 
+// ── Batch 891: a text block is data, and its braces are not code ────────────
+//
+// Batch 886 concluded that Java text blocks were harmless here, and the
+// reasoning was right — the body only feeds an emptiness check, and a body read
+// too long reads as non-empty. The data was still wrong. Three quotes in a row
+// are a delimiter the ordinary string scan consumes two at a time, so the
+// payload came back as code: nine method bodies in MultiModelConfigLoaderTest
+// ran past their own closing brace and swallowed the methods underneath. A
+// conclusion about what a wrong value is used for is not a reason to leave it
+// wrong.
+
+// A six-line reduction of a text block that occurs verbatim in
+// MultiModelConfigLoaderTest — the first six payload lines of its JSON sample.
+// The reduction is not cosmetic and it is not guessed: an earlier fixture put
+// the opening brace before the payload's first quote, and three quotes resolve
+// as an empty string plus a string that runs to that quote, so the brace rode
+// along inside it and the two versions of the parser returned the identical body.
+// Whether a brace is exposed depends on the quote parity of everything above it,
+// so the shape has to come from a file that really has the problem, and it has
+// to be the right number of lines — a five-line version of this same payload
+// does not separate them, and neither does the sixth line written any other way.
+const JSON_BLOCK = `"""
+            {
+              "models": {
+                "providers": {
+                  "siliconflow": {
+                    "displayName": "SiliconFlow",
+                    "baseUrl": "https://api.siliconflow.cn",
+            """`;
+
+test('braces inside a text block are data, so the body reaches the end of the method', () => {
+  // The decisive case. Counted as code, the payload's braces move the scan off
+  // the method's own closing brace: the body comes back truncated inside the
+  // JSON, or the method is not found at all. Either way the statements after the
+  // block are missing, which is what this asks about.
+  const source = `
+class Fixture {
+    @Test
+    void withBlock() {
+        String json = ${JSON_BLOCK}
+        Files.writeString(path, json);
+        assertEquals(1, 1);
+    }
+}
+`;
+  const body = collectMethods(source)[0].body;
+  assert.ok(body.includes('Files.writeString(path, json)'), `body ended early: ${JSON.stringify(body.slice(-60))}`);
+  assert.ok(body.includes('assertEquals(1, 1)'));
+});
+
+test('an escaped delimiter does not end a text block early', () => {
+  // `\"""` is an escaped delimiter. Ending the block there would put the rest of
+  // the payload back into the code stream, brace balance included.
+  const source = `
+class Fixture {
+    @Test
+    void withBlock() {
+        String s = """
+                \\""" { still inside the block
+                """;
+        assertEquals(1, 1);
+    }
+}
+`;
+  const body = collectMethods(source)[0].body;
+  assert.ok(body.includes('assertEquals(1, 1)'), 'the block ended at the escaped delimiter');
+});
+
+test('an empty string literal is not a text block', () => {
+  // The over-detection guard. If `""` opened a block, the scan would run off
+  // looking for a closing `"""` and the empty test below would be lost rather
+  // than reported.
+  const source = `
+class Fixture {
+    void helper() {
+        String a = "";
+    }
+
+    @Test
+    void empty() {
+    }
+}
+`;
+  assert.deepEqual(findInertTests(source), ['empty']);
+});
+
+test('a method whose whole body is a text block is not inert', () => {
+  const source = `
+class Fixture {
+    @Test
+    void sample() {
+        String json = """
+            {"a": 1}
+            """;
+    }
+}
+`;
+  assert.deepEqual(findInertTests(source), []);
+});
+
+test('the method the real text block used to truncate is read whole', () => {
+  // Pinned against the file, by name, so a re-introduction is reported against
+  // the file it happened in rather than against a shape that no longer exists.
+  const root = fileURLToPath(new URL('../..', import.meta.url));
+  const target = join(
+    root,
+    'spring-ai-rag-core/src/test/java/com/springairag/core/config/MultiModelConfigLoaderTest.java',
+  );
+  const methods = collectMethods(readFileSync(target, 'utf8'));
+  const method = methods.find((m) => m.name === 'loadExternalJsonIfPresent_kebabCaseKey_failsClosed');
+  assert.ok(method, 'the pinned method is gone; this case is no longer testing anything');
+  // The statement that follows the JSON sample in that method. Before the fix
+  // the body stopped inside the sample and this was absent.
+  assert.ok(
+    method.body.includes('Files.writeString(jsonFile, json)'),
+    `body ended early: ${JSON.stringify(method.body.slice(-60))}`,
+  );
+});
+
 test('the real tree count includes the methods the apostrophe used to hide', () => {
   // Pinned against the tree rather than against a number, so it cannot rot. The
   // eighteen recovered methods are not listed: the point is that the census

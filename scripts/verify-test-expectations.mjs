@@ -89,6 +89,37 @@ function bodyFrom(source, braceIndex) {
       i = close === -1 ? source.length : close + 1;
       continue;
     }
+    // A text block has to be recognised before the ordinary string case, since
+    // three quotes in a row are a string delimiter the quote scan would consume
+    // two at a time and then read the payload as code. The braces inside are
+    // data. Batch 886 reasoned that this was harmless because the body only
+    // feeds an emptiness check and an over-long body reads as non-empty; that
+    // reasoning was sound and the data was still wrong — nine method bodies in
+    // `MultiModelConfigLoaderTest` ran past their own closing brace and swallowed
+    // the methods below them, and two text blocks in
+    // `EvaluationSuiteDefinitionCaseValidationTest` do not even balance. A
+    // conclusion about what a wrong value happens to be used for is not a reason
+    // to leave it wrong.
+    if (ch === '"' && source[i + 1] === '"' && source[i + 2] === '"') {
+      let from = i + 3;
+      for (;;) {
+        const close = source.indexOf('"""', from);
+        if (close === -1) {
+          from = source.length;
+          break;
+        }
+        // `\"""` is an escaped delimiter, not the end of the block.
+        let backslashes = 0;
+        for (let k = close - 1; k >= 0 && source[k] === '\\'; k -= 1) backslashes += 1;
+        if (backslashes % 2 === 0) {
+          from = close;
+          break;
+        }
+        from = close + 1;
+      }
+      i = from;
+      continue;
+    }
     if (ch === '"' || ch === "'") {
       const quote = ch;
       i += 1;
