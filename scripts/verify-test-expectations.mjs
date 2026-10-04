@@ -59,10 +59,36 @@ export function executableStatements(body) {
     .trim();
 }
 
+/**
+ * The text between a method's opening brace and its matching close, or `null`
+ * when there is no match.
+ *
+ * Comments are stepped over before quotes are considered, and the order is the
+ * whole fix. Batch 888 found eighteen real `@Test` methods that this function
+ * had been swallowing whole: a `//` comment containing a quote character — the
+ * apostrophe in "the caller's assertEquals", the `"9"` in a note about
+ * lexicographic ordering — was read as a string delimiter, the scan ran forward
+ * looking for a partner quote that the file did not contain, and it never came
+ * back. The method body came back `null`, and both rules skip a method with no
+ * body, so eighteen tests spread over fourteen files were invisible to the gate
+ * and an empty-bodied one among them would have passed unnoticed. It is the
+ * wrong direction for a gate to fail in: the scan has to be able to lose the
+ * method, and losing it to an apostrophe in prose is not a trade anybody wants.
+ */
 function bodyFrom(source, braceIndex) {
   let depth = 0;
   for (let i = braceIndex; i < source.length; i += 1) {
     const ch = source[i];
+    if (ch === '/' && source[i + 1] === '/') {
+      const newline = source.indexOf('\n', i);
+      i = newline === -1 ? source.length : newline;
+      continue;
+    }
+    if (ch === '/' && source[i + 1] === '*') {
+      const close = source.indexOf('*/', i + 2);
+      i = close === -1 ? source.length : close + 1;
+      continue;
+    }
     if (ch === '"' || ch === "'") {
       const quote = ch;
       i += 1;
