@@ -113,13 +113,20 @@ import { stripComments } from './check-design-system.mjs';
 const projectRoot = fileURLToPath(new URL('..', import.meta.url));
 const sourceRoot = join(projectRoot, 'src');
 
-export const VIOLATION_KINDS = Object.freeze(['silent-query', 'empty-panel-on-error']);
+export const VIOLATION_KINDS = Object.freeze([
+  'silent-query',
+  'empty-panel-on-error',
+  'empty-state-on-error',
+]);
 
 /** `const reportQ = useQuery(` */
 const QUERY_DECL = /const\s+([A-Za-z_$][\w$]*)\s*=\s*useQuery\s*\(/g;
 
 /** `const { data, isPending } = useQuery(` */
 const DESTRUCTURED_DECL = /const\s*\{([^}]*)\}\s*=\s*useQuery\s*\(/g;
+
+/** `something.isError ?` — the start of a branch that claims to report a failure. */
+const ERROR_BRANCH = /\.?\s*isError\s*\?\s*/g;
 
 /** The two bindings react-query exposes for a failure, by source name. */
 const ERROR_BINDINGS = new Set(['isError', 'error']);
@@ -173,6 +180,50 @@ function lineOf(code, index) {
   return code.slice(0, index).split('\n').length;
 }
 
+/**
+ * The source a `cond ? … : …` branch actually renders, starting at its `?`.
+ *
+ * Two shapes, because that is what the codebase writes:
+ *
+ *   isError ? (
+ *     <QueryErrorBanner … />
+ *   ) : …
+ *
+ *   isError ? <EmptyState … /> : …
+ *
+ * The parenthesised form is read by balanced parens, which is exact. The
+ * unparenthesised form stops at the first `:` at nesting depth zero, which is
+ * **not** exact for a nested ternary (`isError ? a ? b : c : d` yields `a ? b`).
+ * That imprecision is in the safe direction and deliberate: a truncated body
+ * can only hide an `EmptyState`, so it costs a detection and never invents one.
+ * A parser that guessed the other way — reaching past the branch into the
+ * `else` — would report the empty state that legitimately follows every error
+ * branch, which is the false alarm that turns a rule into an exemption.
+ */
+function errorBranchBody(code, questionIndex) {
+  let start = questionIndex + 1;
+  while (start < code.length && /\s/.test(code[start])) start += 1;
+  if (code[start] === '(') {
+    let depth = 0;
+    for (let i = start; i < code.length; i += 1) {
+      if (code[i] === '(') depth += 1;
+      else if (code[i] === ')') {
+        depth -= 1;
+        if (depth === 0) return code.slice(start + 1, i);
+      }
+    }
+    return code.slice(start + 1);
+  }
+  let depth = 0;
+  for (let i = start; i < code.length; i += 1) {
+    const ch = code[i];
+    if ('([{'.includes(ch)) depth += 1;
+    else if (')]}'.includes(ch)) depth -= 1;
+    else if (ch === ':' && depth === 0) return code.slice(start, i);
+  }
+  return code.slice(start);
+}
+
 export function scanSource(relativePath, source) {
   const violations = [];
   const code = stripComments(source);
@@ -182,6 +233,49 @@ export function scanSource(relativePath, source) {
     const here = ALLOW_COMMENT.exec(rawLines[line - 1] ?? '');
     return (above ?? here)?.[1];
   };
+
+  // ── Rule 3: the failure branch must not be an empty state ────────────────
+  //
+  // Batch 874. Rules 1 and 2 both ask whether a query's failure is *addressed*,
+  // and both accept "something reads isError" as the answer. That is the hole
+  // `ApiKeys.tsx` sat in for years:
+  //
+  //   ) : isError ? (
+  //     <EmptyState>{t('common.error')}</EmptyState>
+  //   ) : !data?.data?.length ? (
+  //     <EmptyState>…no keys yet…</EmptyState>
+  //
+  // Same primitive, same box, same weight, adjacent lines. `isError` was read,
+  // so the gate was satisfied, and it never asked what the branch rendered. A
+  // user whose credential store was down could not tell that from a user who
+  // had not created a key yet, and had no way to try again.
+  //
+  // This rule is deliberately about the *rendered element*, not about wording.
+  // A developer can dodge any check that reads copy, and the copy here is
+  // already correct in both locales — "Error" is a perfectly good word. What is
+  // wrong is the box it is printed in.
+  //
+  // The scan runs on comment-stripped source, which is load-bearing here:
+  // `Metrics.tsx` carries a comment explaining that this exact bug was fixed on
+  // that spot, and it names `EmptyState` while doing so. A rule that read
+  // comments would report the fix as the defect.
+  ERROR_BRANCH.lastIndex = 0;
+  let errorBranch;
+  while ((errorBranch = ERROR_BRANCH.exec(code)) !== null) {
+    const body = errorBranchBody(code, errorBranch.index + errorBranch[0].length - 1);
+    if (!/<EmptyState\b/.test(body)) continue;
+    const line = lineOf(code, errorBranch.index);
+    violations.push({
+      kind: 'empty-state-on-error',
+      file: relativePath,
+      line,
+      message:
+        'a failure branch renders an empty state, so a request that failed is '
+        + 'presented as the absence of data. Use QueryErrorBanner: it announces '
+        + 'with role="alert" and offers the refetch that useQuery already hands back.',
+      detail: allowFor(line),
+    });
+  }
 
   // ── Named form ────────────────────────────────────────────────────────────
   QUERY_DECL.lastIndex = 0;

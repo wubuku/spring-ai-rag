@@ -268,6 +268,99 @@ const reportQ = useQuery({ queryKey: ['r'], queryFn: fetchReport });
   it('is listed among the kinds this gate can emit', () => {
     expect(VIOLATION_KINDS).toContain('silent-query');
     expect(VIOLATION_KINDS).toContain('empty-panel-on-error');
+    expect(VIOLATION_KINDS).toContain('empty-state-on-error');
+  });
+});
+
+describe('empty-state-on-error: the failure branch must not be an empty state', () => {
+  // Batch 874. Rules 1 and 2 both ask whether a read's failure is *addressed*,
+  // and both accept "something reads isError" as the answer. `ApiKeys.tsx`
+  // satisfied both while printing a failed credential lookup in the same
+  // primitive, the same box and the same weight as "you have no keys yet".
+
+  it('flags an error branch that renders an empty state', () => {
+    const source = `
+      const { data, isPending, isError, refetch } = useQuery({ queryKey: ['k'], queryFn: fetchK });
+      return isPending ? <Loading />
+        : isError ? (
+          <EmptyState>{t('common.error')}</EmptyState>
+        ) : !data?.data?.length ? (
+          <EmptyState>{t('apiKeys.noKeys')}</EmptyState>
+        ) : <List data={data} />;
+    `;
+    const [violation] = scanSource('src/pages/Sample.tsx', source)
+      .filter(v => v.kind === 'empty-state-on-error');
+    expect(violation).toBeDefined();
+    expect(violation.message).toMatch(/absence of data/);
+    expect(violation.message).toMatch(/QueryErrorBanner/);
+  });
+
+  it('flags the unparenthesised one-liner too', () => {
+    const source = `
+      const q = useQuery({ queryKey: ['k'], queryFn: fetchK });
+      return q.isError ? <EmptyState>failed</EmptyState> : <List />;
+    `;
+    expect(kinds(source)).toContain('empty-state-on-error');
+  });
+
+  it('flags it when the empty state is wrapped in a div', () => {
+    const source = `
+      const q = useQuery({ queryKey: ['k'], queryFn: fetchK });
+      return q.isError ? (
+        <div className={styles.wrap}><EmptyState>nope</EmptyState></div>
+      ) : <List />;
+    `;
+    expect(kinds(source)).toContain('empty-state-on-error');
+  });
+
+  it('does not flag a banner in the error branch when the else holds the empty state', () => {
+    // The dangerous direction for a window-based scan is reaching past the
+    // branch into the `else`: every honest error branch is followed by a
+    // legitimate empty state, and flagging that would make the rule cry wolf
+    // on correct code — which is how rules end up exempted.
+    const source = `
+      const { data, isPending, isError, refetch } = useQuery({ queryKey: ['k'], queryFn: fetchK });
+      return isPending ? <Loading />
+        : isError ? (
+          <QueryErrorBanner onRetry={() => void refetch()}>load failed</QueryErrorBanner>
+        ) : !data?.data?.length ? (
+          <EmptyState>{t('apiKeys.noKeys')}</EmptyState>
+        ) : <List data={data} />;
+    `;
+    expect(kinds(source)).toEqual([]);
+  });
+
+  it('does not read a mention out of a comment', () => {
+    // `Metrics.tsx` carries a comment recording that this exact bug was fixed on
+    // that spot, and it names EmptyState while doing so. A rule that read
+    // comments would report the fix as the defect.
+    const source = `
+      const { data, isPending, isError } = useQuery({ queryKey: ['m'], queryFn: fetchM });
+      return isError ? (
+        // 之前这里会落进 EmptyState 告诉用户"暂无数据"——把请求失败说成了没有指标。
+        <div className={styles.error} role="alert">{t('metrics.loadFailed')}</div>
+      ) : <Metrics />;
+    `;
+    expect(kinds(source)).toEqual([]);
+  });
+
+  it('does not flag a differently-named failure component', () => {
+    const source = `
+      const q = useQuery({ queryKey: ['k'], queryFn: fetchK });
+      return q.isError ? <ErrorPanel>failed</ErrorPanel> : <List />;
+    `;
+    expect(kinds(source)).toEqual([]);
+  });
+
+  it('does not flag a read that has no error branch at all', () => {
+    const source = `
+      const { data, isPending } = useQuery({ queryKey: ['k'], queryFn: fetchK });
+      return isPending ? <Loading /> : !data?.data?.length ? <EmptyState>none</EmptyState> : <List />;
+    `;
+    // This read has no failure surface at all, so rule 1 is right to report it.
+    // What is under test here is only that rule 3 stays quiet: with no
+    // `isError` branch there is nothing for it to misjudge.
+    expect(kinds(source)).toEqual(['silent-query']);
   });
 });
 
@@ -355,5 +448,16 @@ describe('the real component tree', () => {
     const destructured = (sources.match(/const\s*\{[^}]*\}\s*=\s*useQuery\s*\(/g) ?? []).length;
     expect(named).toBeGreaterThanOrEqual(17);
     expect(destructured).toBeGreaterThanOrEqual(20);
+  });
+
+  it('rule 3 has branches to judge, rather than passing on zero matches', () => {
+    // The reason this rule exists is `ApiKeys.tsx`, and the reason it needs this
+    // guard is that a green rule which matches nothing is indistinguishable
+    // from a green rule which is working. Batch 873 lost a whole morning to a
+    // census that reported zero because it was looking at the wrong syntax.
+    const sources = files.map(path => readFileSync(path, 'utf8')).join('\n');
+    const errorBranches = (sources.match(/\bisError\s*\?/g) ?? []).length;
+    expect(errorBranches).toBeGreaterThanOrEqual(10);
+    expect(violations.filter(v => v.kind === 'empty-state-on-error')).toEqual([]);
   });
 });

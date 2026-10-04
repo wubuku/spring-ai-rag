@@ -23,7 +23,7 @@ import {
 import { useImeComposition } from '../utils/ime';
 import styles from './Chat.module.css';
 import { ChevronDown, PanelLeft, ThumbsUp, ThumbsDown } from 'lucide-react';
-import { IconButton, PageHeader, QueryErrorBanner } from '../components/ui';
+import { EmptyState, IconButton, PageHeader, QueryErrorBanner } from '../components/ui';
 import { useToast } from '../components/Toast';
 
 interface Message {
@@ -510,12 +510,12 @@ export function Chat() {
 
         <div className={styles.messages}>
           {messages.length === 0 && (
-            <div className={styles.emptyState}>
+            <EmptyState align="center">
               <p>{t('chat.noMessages')}</p>
               <p className={styles.hint}>
                 {t('chat.hint')}
               </p>
-            </div>
+            </EmptyState>
           )}
 
           {messages.map(msg => (

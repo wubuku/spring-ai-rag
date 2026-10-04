@@ -27,7 +27,6 @@
   },
   "common": {
     "loading": "Loading…",
-    "error": "Error",
     "cancel": "Cancel",
     "save": "Save",
     "delete": "Delete",
@@ -533,6 +532,7 @@
     "expiresAtHint": "Required and must be in the future. The suggested default is one year.",
     "create": "Create",
     "createError": "Failed to create API key",
+    "loadFailed": "Failed to load API keys",
     "keyCreated": "API key created successfully",
     "revoke": "Revoke",
     "revoked": "Revoked",

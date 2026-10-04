@@ -478,6 +478,79 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
+### Batch 874（已交付，WebUI：把"取不到"和"没有"印在同一个盒子里，以及一道门禁自己的盲区）
+
+- 分支：`batch-874`
+- 主题：接 873 之后连碰三批后端，按"连续同模式后切换"转回 WebUI UI/UX。开题选的是
+  Batch 871/872 那条"失败要可诊断"的收尾——**它没收尾完**。
+- **真缺陷（1 处，已验证）**：`ApiKeys.tsx:126` 在密钥列表查询失败时渲染
+  ```jsx
+  ) : isError ? (
+    <EmptyState>{t('common.error')}</EmptyState>
+  ) : !data?.data?.length ? (
+    <EmptyState>…还没有密钥…</EmptyState>
+  ```
+  同一个原语、同一个盒子、同样的分量，**相隔三行**。用户分不清"取不到凭据"和
+  "你还没建过密钥"；不报原因；`refetch` 当时连解构都没有，失败的读**无法重试**，
+  只能整页刷新。而且该页根本没 import `QueryErrorBanner`。
+- **普查工具自己三处假阳性**（本会话第 6–8 次，全部在动手前被核实挡住）：
+  | 我以为 | 实际 |
+  |--------|------|
+  | `Chat.tsx` 无加载态 | 加载概念是 `isStreaming` + 光标，我的模式没覆盖 |
+  | `Settings.tsx` 无加载态、无错误态 | 手写 promise 的 `modelsLoading` / `modelsError`，模式不匹配 |
+  | `Metrics.tsx` 用 EmptyState 装错误 | 那个词**只存在于一条解释历史修复的注释里** |
+
+  第三条尤其要记：它和 873 那条"普查只认一种语法、对另一种语法报零"是同一个错误，
+  而且**如果我直接照普查结果动手，就会把一处已经修好的代码改回缺陷态**。
+- **门禁的盲区（本批的第二个发现）**：`check-query-errors.mjs` 已经存在，
+  而且已经有 `empty-panel-on-error` 这个判据——但它的两条规则问的都是
+  "这次读的失败**有没有被处理**"，而两者都接受"**有地方读了 `isError`**"作为答案。
+  `ApiKeys.tsx` 一直满足这个条件（`isError` 确实被读了，只是不是在报告失败）。
+  门禁从不问那个分支**到底渲染了什么**。
+  所以本批**没有新写门禁**，而是给既有门禁加了第三条规则 `empty-state-on-error`：
+  错误分支不得渲染 `EmptyState`。判据落在**渲染的元素**上而不是文案上——
+  任何读文案的规则都能被改措辞绕开，而这里的措辞本来就是对的（"错误"是个好词），
+  错的是它被印在哪个盒子里。
+- **分支体提取器为什么故意不精确**：括号包裹的形态用配对括号精确读取；无括号形态
+  读到深度 0 的第一个 `:` 就不精确（嵌套三元会被截短）。**这个不精确是刻意选的方向**：
+  截短只会藏起一个 `EmptyState`，代价是漏检；反过来若越过分支去够 `else`，就会把
+  每一条诚实的错误分支**后面**那个合法的空状态也报出来——那是对正确代码 cry wolf，
+  而 cry wolf 正是规则最后变成装饰品的路径。自测里 R1 就是这条反向对照。
+- **注释剥离在这里是承重的**：`Metrics.tsx` 带着一条注释，记录这个 bug 曾在那个位置
+  被修掉，而注释里就写着 `EmptyState` 这个词。读注释的规则会把修复报成缺陷。
+  门禁本来就 `stripComments`，这条是白捡的——但如果当初没剥，今晚就会误报。
+- **空状态的收敛（3 处改，1 处有据排除）**：
+  | 位置 | 原写法 | 处置 |
+  |------|--------|------|
+  | `Chat.tsx` | `styles.emptyState`（居中 + 2rem） | 改用 `<EmptyState align="center">`，并删掉那条 CSS 与它的 alignment-policy 豁免。`--space-32: 32px` = 2rem，视觉等价 |
+  | `Embeddings.tsx` | `styles.muted` | 改用共享原语 |
+  | `Evaluation.tsx` | `styles.muted` | 改用共享原语 |
+  | `Files.tsx` | `styles.treeEmpty`（`font-size: 0.8rem` + `padding: 1rem`） | **不改**。它是给密集树形列表调过密度的，不是普通空列表；迁移会是我看不到的视觉变化。记成有出处的排除项，不是遗漏 |
+
+  那个原语的 Javadoc 写着"Nine files rendered this by hand and seven page
+  stylesheets redefined the same three declarations"——**这次整合漏了 3 个页面**。
+- **i18n 门禁逮到一条真后果**：`common.error` 变成死键，因为**它唯一的消费者就是
+  那行缺陷代码**。它的值字面上就是"Error"——一条没有任何信息量的用户可见文案。
+  两个 locale 各删一处。删完 `i18n-keys` 自测有两条用例红了，因为它们的夹具拿
+  `common.error` 当例子；改成 `common.unknownError` 并把原因写进注释。
+  **门禁自测的夹具读的是真实键集，所以删一个键能让它失效**——这是设计使然，不是缺陷。
+- **新门禁自测里两条防自己失效的用例**：
+  - `rule 3 has branches to judge, rather than passing on zero matches`：真实树上有
+    **13 个** `isError` 分支。门禁在真实代码上零匹配时是绿的，而绿的零匹配和
+    干活的零匹配长得一模一样。
+  - 行为测试里的 `findsTheEmptyStateWhenThereIsOne` 是那条"不渲染空状态"断言的
+    **阳性对照**。我第一版用 CSS module 类名做选择器，测试**通过了**——因为那个
+    选择器一个元素都匹配不到。断言"不存在"的选择器一旦失效，会永远通过。
+    改用原语稳定设置的 `data-align` 属性。
+- **变异证明**：
+  - 合成夹具 7/7（M1–M3 括号/单行/包一层 div 都命中；R1 错误分支用横幅而 `else`
+    才有空状态不命中；R2 注释提到 EmptyState 不命中；R3 同名组件 `ErrorPanel` 不命中；
+    R4 没有 isError 分支不命中）
+  - **真实文件** 5/5（在真实 `ApiKeys.tsx` 上把两处改回 `EmptyState` 都变红；
+    R1 改正常文案、R2 把 EmptyState 挪进注释都不红；已修复的当前文件本身无违规）
+- **验收**：lint 11 条门禁 + 门禁自测 **343/343**；应用测试 **79 文件 / 945 用例**
+  0 红（较 872 的 937 增 8）；typecheck EXIT=0。
+
 ### Batch 873（已交付，后端：一份自称 single source of truth、却漏了 6 个码的错误码目录）
 
 - 分支：`batch-873`
