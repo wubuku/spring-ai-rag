@@ -478,7 +478,74 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
-### Batch 856（勘察完成，实施待排：WebUI 门禁的自我审查）
+### Batch 856（已交付，WebUI 门禁：兑现"可读文案"这条已有承诺）
+
+- 分支：`feature/hardcoded-copy-prose-props-20261007`
+- 主题：补上 `check-hardcoded-copy` 的漏检路径——自定义组件把文案 prop
+  透传成 `aria-label` / `title` 时，字面量此前完全不可见。
+- **勘察先否掉了一个"看起来最该做"的目标**（见上一条"勘察完成"的记录）：
+  `Files` 密度最高（1110 行 / 39 用例 = 28.5），但读完 39 个用例名之后发现
+  覆盖面已经很广，追数字性价比可疑。改做门禁盲区。
+- **门禁改造：自己"发现"文案 prop，而不是硬编码组件名**。
+  任何组件满足「props 里声明 `p?: string`」且「函数体把 `p` 透传进
+  `aria-label` / `title`」，它的 `p` 就是文案 prop。写死组件清单会静默腐烂，
+  下个季度新加一个包装组件就得记得回来登记。
+  - 实测发现 3 个：`IconButton.label`、`Dialog.ariaLabel`、`Tabs.ariaLabel`。
+  - 另有 3 个组件也透传 prop，但**没有声明为 `string`**
+    （`ConfirmDialog.title`、`SearchResults.indicatorTitle`、`ThemeToggle.label`）——
+    它们取的是 `ReactNode`，字面量在那儿连类型错误都不是，所以**不查**。
+    这就是「一条会误报的门禁比没有门禁更糟」的直接应用。
+- **门禁一上线就抓到一处真实违规**（勘察结论"当前 0 违规"因此被修正）：
+  `Dialog.tsx` 的关闭按钮写的是 `<IconButton label="Close">`，而**这个组件
+  从来没有 import 过任何 i18n**——中文用户读屏听到的是英文。
+  849 记下的那 2 处（`Toast.tsx:117`、`Dialog.tsx:184`）里，
+  `Dialog.tsx:184` 正是这一处，当时被记成"已修"，其实是**记错了位置**。
+- **顺带修掉一个既有的报告缺陷：行号漂移**。
+  `stripComments` 把多行块注释替换成**一个空格**，注释里的换行因此消失，
+  而所有行号都是数 `\n` 得来的——于是门禁报 `Dialog.tsx:164`，
+  那一行是无关的 `role="dialog"`，真正的违规在 184 行，**偏了 20 行**。
+  - 改成按等长掩码（保留换行），修完报 181（标签起始行），
+    再把 `findProsePropCopy` 的行号锚到**属性本身**而不是标签开头，
+    最终精确报 184。**读者点进去第一眼就该看到出问题的那一行。**
+- **测试跟着改，但改的是"查询身份"不是"期望文案"**：
+  `label` 变成 `t('common.close')` 之后，**14 个用例红**（7 个文件），
+  因为它们用 `getByRole('button', { name: 'Close' })`——
+  **把英文文案当成了控件的身份**。给关闭按钮加
+  `data-testid="dialog-close"`（与该文件既有的 `data-testid="dialog-backdrop"`
+  同一约定），11 处查询改成 `getByTestId('dialog-close')`。
+  - 另有 3 处在 `ApiKeys` 两个文件里，用的是 `name: 'common.close'`
+    （跟着 mock 走的 key），且页面上有多个 Dialog 导致 "Found multiple elements"，
+    改成 `getAllByTestId('dialog-close')[0]`。
+  - **这 14 个红不是回归，是它们本来就没钉住任何东西**：
+    文案一改就全塌，说明断言对象是实现的副产品而不是契约。
+- **变异实验 3 个**：
+  | # | 变异 | 结果 |
+  |---|---|---|
+  | J | 把 `Dialog` 的 `label={t('common.close')}` 改回 `label="Close"` | ✓ 门禁红，行号精确 191 |
+  | K | 在 `Alerts.tsx` 的 `<Tabs>` 上植入 `ariaLabel="Alert history tabs"` | ✓ 门禁红，行号精确 50 |
+  | K′ | 修正 K 的锚点（第一次插到了**块注释内**） | ✓ 门禁红 |
+  - **K 的第一次失败值得单独记**：变异没被抓到，但**原因不是门禁坏了**——
+    我插的位置落在一段块注释里（`their content. <Tabs>` 那行），
+    而 `findProsePropCopy` 跑在 `stripComments` 后的代码上，所以正确地忽略了它。
+    **这其实是门禁没被注释文本骗到的证据，却长得像"门禁没生效"**——
+    与后端 Batch 记的「门禁没红必须先排除变异没生效」是同一条纪律，
+    只不过这次排除之后发现的是"变异插错地方了"。
+  - 每次变异后都立即核对源文件；`Alerts.tsx` 的恢复脚本第一次把注释的换行
+    改错了（插进去的 `\n` 位置不对），直接 `git checkout` 整个文件恢复，
+    确认工作区只剩 `Dialog.tsx` 的预期改动。
+- 自测 **263 → 272**（9 文件全绿），新增 9 例：发现逻辑、非 `string` prop 不算、
+  正向报告、`t()` 放行、同一组件的非文案 prop 不得报、**行号指向属性而非标签**、
+  **注释后行号仍对齐**、**必须能从 `findHardcodedCopy` 走到**（否则"只测新 helper"
+  会留下"门禁根本没在用这条规则"的缺口）、仓库里没有文案 prop 时也要有对照。
+- 验证（全部实测）：应用测试 **77 文件 / 910 用例全绿**；`npm run lint` 九条门禁
+  EXIT=0 + 门禁自测 **272/272**；`typecheck` EXIT=0；`build` EXIT=0。
+- **顺带的元结论**：9 条 WebUI 门禁全部用 `readdirSync` **遍历**目录，
+  是"发现"而不是 Batch 768 记过的那种"写死列表"——新文件自动受检。
+  门禁自测统一 import 门禁导出的扫描函数、用字符串片段做夹具，
+  与后端 Batch 850 确立的"普查应直接 import 门禁函数"是同一条纪律。
+  下一批可以沿这条线审其余 8 条门禁的**漏检形态**（本批已经证明这类盲区真实存在）。
+
+### Batch 856 勘察（已交付：WebUI 门禁的自我审查）
 
 - **为什么换方向**：850–855 连做 6 批后端（其中 855 是 false-optional-wiring
   这条线的收尾，棘轮 16 → 0）。按 Batch 840 定的纪律，连续同模式后主动切换。

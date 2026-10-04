@@ -400,7 +400,7 @@ describe('Collections dialog dismissal', () => {
       await screen.findByRole('button', { name: '+ collections.create' }),
     );
     const dialog = await screen.findByRole('dialog');
-    await user.click(within(dialog).getByRole('button', { name: 'Close' }));
+    await user.click(within(dialog).getByTestId('dialog-close'));
 
     await waitFor(() => {
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
@@ -609,7 +609,7 @@ describe('Collections purge in-flight lock', () => {
       name: 'collections.purge.applying',
     });
     await waitFor(() => {
-      expect(within(dialog).getByRole('button', { name: 'Close' }))
+      expect(within(dialog).getByTestId('dialog-close'))
         .toBeDisabled();
     });
     expect(secondary).toBeDisabled();

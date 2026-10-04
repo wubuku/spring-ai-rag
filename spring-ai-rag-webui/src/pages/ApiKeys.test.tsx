@@ -663,7 +663,7 @@ describe('ApiKeys', () => {
           expect(screen.getByText('raw-secret-value')).toBeInTheDocument();
         });
 
-        fireEvent.click(screen.getByRole('button', { name: 'common.close' }));
+        fireEvent.click(screen.getAllByTestId('dialog-close')[0]);
         expect(screen.queryByText('raw-secret-value')).not.toBeInTheDocument();
 
         fireEvent.click(screen.getByRole('button', { name: 'apiKeys.rotate' }));

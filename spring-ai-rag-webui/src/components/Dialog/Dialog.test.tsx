@@ -98,7 +98,7 @@ describe('Dialog', () => {
     await user.tab();
     expect(screen.getByRole('button', { name: 'Save' })).toHaveFocus();
     await user.tab();
-    expect(screen.getByRole('button', { name: 'Close' })).toHaveFocus();
+    expect(screen.getByTestId('dialog-close')).toHaveFocus();
     await user.tab();
     expect(screen.getByLabelText('Name')).toHaveFocus();
 
@@ -123,7 +123,7 @@ describe('Dialog', () => {
 
     await user.keyboard('{Escape}');
     expect(screen.getByRole('dialog', { name: 'Pending mutation' })).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Close' })).toBeDisabled();
+    expect(screen.getByTestId('dialog-close')).toBeDisabled();
   });
 });
 
@@ -138,7 +138,7 @@ describe('Dialog focus trap wrap-around', () => {
 
     // Shift+Tab 从首个元素环绕到最后一个（Close 按钮）。
     await user.keyboard('{Shift>}{Tab}{/Shift}');
-    expect(screen.getByRole('button', { name: 'Close' })).toHaveFocus();
+    expect(screen.getByTestId('dialog-close')).toHaveFocus();
   });
 
   it('wraps focus from the last focusable back to the first on Tab', async () => {
@@ -148,7 +148,7 @@ describe('Dialog focus trap wrap-around', () => {
 
     // 先把焦点移到最后一个（Close），再正向 Tab 环绕回首元素。
     await user.keyboard('{Shift>}{Tab}{/Shift}');
-    expect(screen.getByRole('button', { name: 'Close' })).toHaveFocus();
+    expect(screen.getByTestId('dialog-close')).toHaveFocus();
 
     await user.tab();
     expect(screen.getByLabelText('Name')).toHaveFocus();
@@ -160,7 +160,7 @@ describe('Dialog focus trap wrap-around', () => {
     await user.click(screen.getByRole('button', { name: 'Open settings' }));
 
     // DOM 顺序中 header 内的 Close 按钮是面板第一个可聚焦元素。
-    screen.getByRole('button', { name: 'Close' }).focus();
+    screen.getByTestId('dialog-close').focus();
 
     // 处理器 preventDefault 原生环绕并把焦点送到最后一个（Save）。
     await user.keyboard('{Shift>}{Tab}{/Shift}');

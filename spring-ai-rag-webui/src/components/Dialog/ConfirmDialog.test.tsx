@@ -67,7 +67,7 @@ describe('ConfirmDialog', () => {
 
     expect(screen.getByRole('button', { name: 'Confirm' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Close' })).toBeDisabled();
+    expect(screen.getByTestId('dialog-close')).toBeDisabled();
 
     await user.keyboard('{Escape}');
     expect(screen.getByRole('dialog', { name: 'Working' })).toBeInTheDocument();

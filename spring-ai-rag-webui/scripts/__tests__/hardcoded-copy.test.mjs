@@ -2,9 +2,11 @@ import { describe, it, expect } from 'vitest';
 import {
   ALLOWED,
   checkFile,
+  collectProseProps,
   collectSources,
   findExpressionContainerCopy,
   findHardcodedCopy,
+  findProsePropCopy,
   findToastTemplateCopy,
   maskTranslationCalls,
   stripComments,
@@ -12,7 +14,8 @@ import {
   VIOLATION_KINDS,
 } from '../check-hardcoded-copy.mjs';
 
-const kinds = (relPath, source) => checkFile(relPath, source).map(v => v.kind);
+const kinds = (relPath, source, proseProps) =>
+  checkFile(relPath, source, ALLOWED, proseProps).map(v => v.kind);
 
 const WITH_I18N = `
 import { useTranslation } from 'react-i18next';
@@ -351,5 +354,178 @@ export function Widget() {
 }
 `;
     expect(kinds('components/Widget.tsx', source)).toEqual([]);
+  });
+});
+
+// ── Batch 856: props that mint their own accessible name ──────────────────
+//
+// `check-hardcoded-copy` already claimed to cover "a string a user can read".
+// It could not see `<IconButton label="Close" />`, which reaches the screen as
+// the same `aria-label` — because the literal sits behind a prop that only
+// becomes a name inside another component. These cases pin the discovery rule
+// (string props forwarded into aria-label/title), the reporting path, and the
+// two ways the new rule could misfire.
+
+describe('check-hardcoded-copy: prose props on custom components', () => {
+  const ICON_BUTTON = {
+    relPath: 'components/ui/IconButton/IconButton.tsx',
+    source: `
+interface IconButtonProps {
+  label: string;
+  tooltip?: string;
+  children?: ReactNode;
+}
+export function IconButton({ label, tooltip, children }: IconButtonProps) {
+  return (
+    <button aria-label={label} title={tooltip ?? label}>
+      {children}
+    </button>
+  );
+}
+`,
+  };
+
+  it('discovers a string prop that the component forwards into aria-label', () => {
+    const props = collectProseProps([ICON_BUTTON]);
+    expect([...props.keys()]).toContain('IconButton');
+    expect([...props.get('IconButton')]).toContain('label');
+  });
+
+  it('does not treat a non-string prop as prose', () => {
+    // ConfirmDialog takes a `title` that may be a JSX element, so a literal on
+    // it is not even a type error. Reporting it would be a false positive on a
+    // shape that cannot occur — and a false-positive gate gets allowlisted.
+    const nodeTyped = {
+      relPath: 'components/Dialog/ConfirmDialog.tsx',
+      source: `
+interface ConfirmDialogProps {
+  title: ReactNode;
+}
+export function ConfirmDialog({ title }: ConfirmDialogProps) {
+  return <div role="dialog" aria-label={title} />;
+}
+`,
+    };
+    const props = collectProseProps([nodeTyped]);
+    expect(props.has('ConfirmDialog')).toBe(false);
+  });
+
+  it('reports literal copy passed to a discovered prose prop', () => {
+    const props = collectProseProps([ICON_BUTTON]);
+    const source = `
+import { useTranslation } from 'react-i18next';
+export function Panel() {
+  const { t } = useTranslation();
+  return (
+    <IconButton
+      onClick={close}
+      label="Close panel"
+      size={32}
+    >
+      <X aria-hidden="true" />
+    </IconButton>
+  );
+}
+`;
+    expect(kinds('components/Panel.tsx', source, props)).toEqual([
+      VIOLATION_KINDS.HARDCODED_COPY,
+    ]);
+  });
+
+  it('accepts a prose prop that already goes through t()', () => {
+    const props = collectProseProps([ICON_BUTTON]);
+    const source = `
+import { useTranslation } from 'react-i18next';
+export function Panel() {
+  const { t } = useTranslation();
+  return <IconButton onClick={close} label={t('common.close')} />;
+}
+`;
+    expect(kinds('components/Panel.tsx', source, props)).toEqual([]);
+  });
+
+  it('leaves a non-prose prop on the same component alone', () => {
+    // `variant` is a machine value; the same component and the same element
+    // must stay clean, or every wrapper would need an exemption.
+    const props = collectProseProps([ICON_BUTTON]);
+    const source = `
+import { useTranslation } from 'react-i18next';
+export function Panel() {
+  const { t } = useTranslation();
+  return <IconButton variant="primary" onClick={close} label={t('common.close')} />;
+}
+`;
+    expect(kinds('components/Panel.tsx', source, props)).toEqual([]);
+  });
+
+  it('reports the line the attribute sits on, not the line the tag opens', () => {
+    // Dialog.tsx puts `label` on the fourth line of its IconButton. Pointing at
+    // the tag sends a reader three rows up, to an unrelated `onClick`.
+    const props = collectProseProps([ICON_BUTTON]);
+    const source = [
+      'export function Panel() {',
+      '  return (',
+      '    <IconButton',
+      '      onClick={close}',
+      '      label="Close panel"',
+      '      size={32}',
+      '    />',
+      '  );',
+      '}',
+    ].join('\n');
+    const hits = findProsePropCopy(source, props);
+    expect(hits).toHaveLength(1);
+    expect(hits[0].line).toBe(5);
+  });
+
+  it('keeps line numbers aligned when a block comment precedes the offender', () => {
+    // stripComments used to collapse a multi-line comment into one space, which
+    // dropped its newlines and shifted every later line number. The gate
+    // reported Dialog.tsx:164 for an offender on line 184.
+    const withComment = [
+      '/**',
+      ' * A long doc comment.',
+      ' *',
+      ' * Second paragraph.',
+      ' */',
+      'export function Panel() {',
+      '  return <IconButton label="Close panel" />;',
+      '}',
+    ].join('\n');
+    const withoutComment = [
+      'export function Panel() {',
+      '  return <IconButton label="Close panel" />;',
+      '}',
+    ].join('\n');
+    expect(stripComments(withComment).split('\n').length)
+      .toBe(withoutComment.split('\n').length + 5);
+    const props = collectProseProps([ICON_BUTTON]);
+    expect(findProsePropCopy(withComment, props)[0].line).toBe(7);
+  });
+
+  it('reaches the prose-prop rule through findHardcodedCopy, the path the gate takes', () => {
+    // A test that only calls the new helper proves nothing if the gate does not
+    // use it — that exact gap is what let the original blind spot stand.
+    const props = collectProseProps([ICON_BUTTON]);
+    const source = `
+import { useTranslation } from 'react-i18next';
+export function Panel() {
+  const { t } = useTranslation();
+  return <IconButton onClick={close} label="Close panel" />;
+}
+`;
+    const hits = findHardcodedCopy('components/Panel.tsx', source, props);
+    expect(hits.map(h => h.kind)).toContain('prose-prop');
+  });
+
+  it('reports nothing for a repository whose components forward no prose prop', () => {
+    // Without this, "0 violations" would be indistinguishable from "the rule
+    // silently stopped matching anything".
+    const proseProps = collectProseProps([ICON_BUTTON]);
+    expect(proseProps.size).toBeGreaterThan(0);
+    const unrelated = collectProseProps([
+      { relPath: 'components/Button.tsx', source: 'export function Button() { return <button />; }' },
+    ]);
+    expect(unrelated.size).toBe(0);
   });
 });

@@ -149,7 +149,7 @@ describe('ApiKeys staged credential rotation', () => {
     fireEvent.click(screen.getByRole('button', { name: 'apiKeys.create' }));
 
     expect(await screen.findByText(rawKey)).toBeVisible();
-    fireEvent.click(screen.getByRole('button', { name: 'common.close' }));
+    fireEvent.click(screen.getAllByTestId('dialog-close')[0]);
     expect(screen.queryByText(rawKey)).not.toBeInTheDocument();
 
     const row = within((await screen.findByText('Created Principal')).closest(
@@ -194,7 +194,7 @@ describe('ApiKeys staged credential rotation', () => {
     expect(screen.getByText('11111111-1111-4111-8111-111111111111'))
       .toBeVisible();
 
-    fireEvent.click(screen.getByRole('button', { name: 'common.close' }));
+    fireEvent.click(screen.getAllByTestId('dialog-close')[0]);
     expect(screen.queryByText('rag_sk_staged_shown_once')).not.toBeInTheDocument();
   });
 

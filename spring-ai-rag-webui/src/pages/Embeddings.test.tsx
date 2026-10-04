@@ -289,7 +289,7 @@ describe('Embeddings filter toggling and preview close', () => {
     expect(dialog).toBeInTheDocument();
 
     await user.click(
-      within(dialog).getByRole('button', { name: 'Close' }),
+      within(dialog).getByTestId('dialog-close'),
     );
     await waitFor(() =>
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
