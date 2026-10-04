@@ -33,12 +33,14 @@
  */
 
 import { readFileSync, readdirSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { stripComments } from './check-design-system.mjs';
 
 const projectRoot = fileURLToPath(new URL('..', import.meta.url));
 const sourceRoot = join(projectRoot, 'src');
+
+import { collectAccessibleNameProps, describeAccessibleNameProps } from './lib/accessible-name-props.mjs';
 
 const SCAN_EXTENSIONS = ['.tsx', '.jsx'];
 const SKIP_DIRECTORIES = new Set(['node_modules', 'dist', 'coverage', 'playwright-report', 'test-results']);
@@ -86,12 +88,14 @@ const [
   CLICK_NON_INTERACTIVE,
   WEAK_ALLOW_REASON,
   DIALOG_EMPTY_TITLE,
+  COMPONENT_NAME_EMPTY,
 ] = Object.freeze([
   'control-no-name',
   'orphan-label',
   'click-non-interactive',
   'weak-allow-reason',
   'dialog-title-can-be-empty',
+  'component-accessible-name-empty',
 ]);
 
 export const VIOLATION_KINDS = Object.freeze([
@@ -100,6 +104,7 @@ export const VIOLATION_KINDS = Object.freeze([
   CLICK_NON_INTERACTIVE,
   WEAK_ALLOW_REASON,
   DIALOG_EMPTY_TITLE,
+  COMPONENT_NAME_EMPTY,
 ]);
 
 function walk(directory) {
@@ -259,8 +264,8 @@ function wrappedByLabel(source, tagStart) {
  * Scan one file into violation records.
  * @returns {{file: string, kind: string, value: string, line: number, allowed: string|null}[]}
  */
-export function scanFile(path) {
-  return scanSource(relative(projectRoot, path), readFileSync(path, 'utf8'));
+export function scanFile(path, accessibleNameProps = null) {
+  return scanSource(relative(projectRoot, path), readFileSync(path, 'utf8'), accessibleNameProps);
 }
 
 /**
@@ -269,7 +274,7 @@ export function scanFile(path) {
  * @param {string} relativePath project-relative path, used for reporting and exemptions
  * @param {string} source file contents
  */
-export function scanSource(relativePath, source) {
+export function scanSource(relativePath, source, accessibleNameProps = null) {
   if (isTestFile(relativePath)) return [];
 
   // Debt rules read the comment-free source; the allow-reason lookup still sees
@@ -404,12 +409,55 @@ export function scanSource(relativePath, source) {
   for (const found of openTags(code, 'Dialog', spans)) {
     const line = lineAt(found.start);
     const title = attr(found.body, 'title');
-    if (!title || title.value === '') continue;
+    if (!title) continue;
     const expression = title.value;
+    const literallyEmpty = expression === '' || expression === "''" || expression === '""';
     const coalescesToEmpty = /^\s*\(?\s*[\w$.?\[\]]+\s*\)?\s*\?\?\s*(''|"")\s*$/.test(expression);
     const bareOptionalRead = /^\s*[\w$]+\s*\?\.\s*[\w$]+\s*$/.test(expression);
-    if (coalescesToEmpty || bareOptionalRead) {
+    if (literallyEmpty) {
+      // Batch 857: this used to `continue` on an empty title, which is the most
+      // direct way to produce the defect the rule exists for. `aria-labelledby`
+      // still points at the now-empty <h2>, so the dialog announces as an
+      // unnamed "dialog" and the header bar on screen is blank. The exempting
+      // line read as if empty meant "not a title", but here it means "no name".
+      report(DIALOG_EMPTY_TITLE, 'title=""', line, allowFor(line));
+    } else if (coalescesToEmpty || bareOptionalRead) {
       report(DIALOG_EMPTY_TITLE, `title={${expression}}`, line, allowFor(line));
+    }
+  }
+
+  // ── Rule 6: a custom component whose accessible name can be empty ────────
+  //
+  // Rule 1 reads the accessible name off the element, so it only sees a control
+  // written out in full. `<IconButton label="" />` names a <button> the same way
+  // IconButton names it, and neither gate could see it: check-hardcoded-copy was
+  // looking for untranslated copy, this gate for controls with no name, and a
+  // literal that is empty satisfies neither description.
+  //
+  // The prop names come from the shared accessible-name-props module, so this
+  // covers whatever the tree actually contains rather than a list that rots:
+  // IconButton.label, Dialog.ariaLabel, Tabs.ariaLabel and the page-local
+  // components that forward a label the same way.
+  if (accessibleNameProps && accessibleNameProps.size > 0) {
+    for (const [component, propNames] of accessibleNameProps) {
+      for (const found of openTags(code, component, spans)) {
+        const line = lineAt(found.start);
+        for (const prop of propNames) {
+          const value = attr(found.body, prop);
+          if (!value) continue;
+          const literallyEmpty = value.value === '' || value.value === "''" || value.value === '""';
+          const coalescesToEmpty = /^\s*\(?\s*[\w$.?\[\]]+\s*\)?\s*\?\?\s*(''|"")\s*$/.test(value.value);
+          const bareOptionalRead = /^\s*[\w$]+\s*\?\.\s*[\w$]+\s*$/.test(value.value);
+          if (literallyEmpty || coalescesToEmpty || bareOptionalRead) {
+            report(
+              COMPONENT_NAME_EMPTY,
+              `<${component} ${prop}=${literallyEmpty ? '""' : `{${value.value}}`}`,
+              line,
+              allowFor(line),
+            );
+          }
+        }
+      }
     }
   }
 
@@ -436,7 +484,15 @@ export function fingerprint(violation) {
 
 function main() {
   const paths = walk(sourceRoot);
-  const violations = paths.flatMap(path => scanFile(path));
+  // Two passes, because rule 6 is a question about the tree rather than about
+  // one file: "is this prop the component's accessible name?" is answered by
+  // reading the component, while the defect lives in the page that passes "".
+  const sources = paths.map(path => ({
+    relPath: relative(sourceRoot, path).split(sep).join('/'),
+    source: readFileSync(path, 'utf8'),
+  }));
+  const accessibleNameProps = collectAccessibleNameProps(sources);
+  const violations = paths.flatMap(path => scanFile(path, accessibleNameProps));
   const errors = [];
 
   for (const violation of violations) {

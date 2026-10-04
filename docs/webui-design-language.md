@@ -198,13 +198,28 @@ under `src/` for four violations plus the exemption rule:
   empty string. The dialog names itself with `aria-labelledby` pointing at its
   own `<h2>`, so an empty title leaves the modal announced with no name at all,
   and its header bar blank on screen. A title built as
-  `` `${prefix} — ${userValue}` `` can never be empty and is not flagged.
+  `` `${prefix} — ${userValue}` `` can never be empty and is not flagged. A
+  literal `title=""` is reported too: `aria-labelledby` still points at the
+  empty `<h2>`, so the modal announces with no name and the header bar on
+  screen is blank. (Batch 857: an empty title used to `continue` past the
+  rule, which is the most direct way to produce the defect it exists for.)
+- `component-accessible-name-empty` — a custom component whose accessible name
+  arrives through a prop and can be empty: `<IconButton label="" />` names a
+  `<button>` exactly the way IconButton names it, and the empty literal
+  satisfied neither rule 1 (which reads the name off the element) nor
+  `check-hardcoded-copy` (which looks for untranslated copy, not for emptiness).
+  The prop names are **discovered**, not listed — see
+  `scripts/lib/accessible-name-props.mjs`. A component qualifies when it
+  declares `p?: string` and forwards `p` into `aria-label` / `title`; a prop
+  typed `ReactNode` is excluded, because a literal there is not even a type
+  error and reporting it would be a false positive that gets allowlisted away.
+  (Batch 857.)
 
 This gate has **no debt baseline**, deliberately. Every violation that existed
 when it was written was fixable, so a baseline would have been a list of bugs a
 machine had agreed to stop reporting. Exemptions use an inline
 `/* a11y-allow: <concrete reason> */` on the same or the previous line, and the
-`npm run test:design-system` suite asserts that the five kinds above are still
+`npm run test:design-system` suite asserts that the six kinds above are still
 enforced and still documented in both languages — the same drift check the design
 gate has, so a rule cannot quietly stop existing.
 

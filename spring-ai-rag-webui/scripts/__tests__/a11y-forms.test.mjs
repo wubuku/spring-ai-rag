@@ -3,13 +3,14 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { scanSource, VIOLATION_KINDS } from '../check-a11y-forms.mjs';
+import { collectAccessibleNameProps } from '../lib/accessible-name-props.mjs';
 
 const projectRoot = fileURLToPath(new URL('../..', import.meta.url));
 const sourceRoot = join(projectRoot, 'src');
 
 /** Collect the kinds reported for a source snippet, for terse assertions. */
-const kinds = (source, relativePath = 'src/pages/Sample.tsx') =>
-  scanSource(relativePath, source).map(violation => violation.kind);
+const kinds = (source, relativePath = 'src/pages/Sample.tsx', accessibleNameProps = null) =>
+  scanSource(relativePath, source, accessibleNameProps).map(violation => violation.kind);
 
 function walk(directory) {
   const entries = [];
@@ -255,13 +256,19 @@ describe('dialog-title-can-be-empty', () => {
 
 describe('the real component tree', () => {
   const files = walk(sourceRoot).filter(path => !/\.(test|spec)\.[jt]sx?$/.test(path));
-  const violations = files.flatMap(path => {
-    const relativePath = path.slice(projectRoot.length + 1);
-    return scanSource(relativePath, readFileSync(path, 'utf8')).map(violation => ({
+  // Rule 6 needs the whole tree: "is this prop the component's accessible name"
+  // is answered by reading the component, so a meta-test that scanned files one
+  // at a time would report a clean tree without ever exercising the rule.
+  const sources = files.map(path => ({
+    relPath: path.slice(sourceRoot.length + 1),
+    source: readFileSync(path, 'utf8'),
+  }));
+  const accessibleNameProps = collectAccessibleNameProps(sources);
+  const violations = sources.flatMap(({ relPath, source }) =>
+    scanSource(relPath, source, accessibleNameProps).map(violation => ({
       ...violation,
       line: violation.line,
-    }));
-  });
+    })));
 
   it('scans a non-trivial number of component files', () => {
     // Guards the suite itself: an empty walk would make every other test here
@@ -271,5 +278,114 @@ describe('the real component tree', () => {
 
   it('has no unresolved form-accessibility violations', () => {
     expect(violations).toEqual([]);
+  });
+});
+
+// ── Batch 857: the accessible name behind a prop ───────────────────────────
+//
+// Rule 1 reads a control's name off the element, so it only sees controls
+// written out in full. `<IconButton label="" />` names a <button> exactly the
+// way IconButton names it, and slipped through: the literal is empty, which
+// satisfies neither "untranslated copy" (the other gate's description) nor
+// "control with no name" as rule 1 reads it.
+
+describe('component-accessible-name-empty', () => {
+  const ICON_BUTTON = {
+    relPath: 'components/ui/IconButton/IconButton.tsx',
+    source: `
+interface IconButtonProps {
+  label: string;
+  tooltip?: string;
+}
+export function IconButton({ label, tooltip }: IconButtonProps) {
+  return <button aria-label={label} title={tooltip ?? label} />;
+}
+`,
+  };
+  const props = () => collectAccessibleNameProps([ICON_BUTTON]);
+
+  it('reports a literal empty accessible-name prop', () => {
+    const source = `
+export function Panel() {
+  return <IconButton onClick={close} label="" />;
+}
+`;
+    expect(kinds(source, 'src/pages/Panel.tsx', props())).toContain(
+      'component-accessible-name-empty',
+    );
+  });
+
+  it('reports a prop that can coalesce to empty', () => {
+    const source = `
+export function Panel({ title }) {
+  return <IconButton onClick={close} label={title ?? ''} />;
+}
+`;
+    expect(kinds(source, 'src/pages/Panel.tsx', props())).toContain(
+      'component-accessible-name-empty',
+    );
+  });
+
+  it('accepts a prop carrying a real name', () => {
+    const source = `
+import { useTranslation } from 'react-i18next';
+export function Panel() {
+  const { t } = useTranslation();
+  return <IconButton onClick={close} label={t('common.close')} />;
+}
+`;
+    expect(kinds(source, 'src/pages/Panel.tsx', props())).toEqual([]);
+  });
+
+  it('leaves a non-name prop on the same component alone', () => {
+    // Without this, every wrapper would need an exemption and the rule would
+    // be allowlisted away on its first real sighting.
+    const source = `
+export function Panel() {
+  return <IconButton variant="primary" onClick={close} label="Close panel" />;
+}
+`;
+    expect(kinds(source, 'src/pages/Panel.tsx', props())).toEqual([]);
+  });
+
+  it('does not fire when no accessible-name prop is supplied at all', () => {
+    // The component would have no name either, but that is rule 1's job at the
+    // element level; this rule is only about the prop that carries the name.
+    const source = `
+export function Panel() {
+  return <IconButton onClick={close} />;
+}
+`;
+    expect(kinds(source, 'src/pages/Panel.tsx', props())).toEqual([]);
+  });
+
+  it('is silent when the tree has no accessible-name props at all', () => {
+    // Otherwise "0 violations" and "the rule stopped matching" look identical.
+    const none = collectAccessibleNameProps([
+      { relPath: 'components/Button.tsx', source: 'export function Button() { return <button />; }' },
+    ]);
+    expect(none.size).toBe(0);
+    const source = 'export function Panel() { return <IconButton label="" />; }';
+    expect(kinds(source, 'src/pages/Panel.tsx', none)).toEqual([]);
+  });
+
+  it('reaches the rule through the exported path the gate itself uses', () => {
+    const reported = scanSource('src/pages/Panel.tsx', 'export function P() { return <IconButton label="" />; }', props());
+    expect(reported.map(v => v.kind)).toContain('component-accessible-name-empty');
+    expect(reported[0].line).toBe(1);
+  });
+});
+
+describe('dialog title that is empty outright', () => {
+  it('reports title="" rather than treating it as "no title"', () => {
+    // Rule 5 exists for a dialog that announces as an unnamed "dialog", and it
+    // used to `continue` on exactly this input — while aria-labelledby still
+    // pointed at the now-empty <h2>, so the header bar on screen was blank too.
+    const source = `
+export function Panel() {
+  return <Dialog open title="" onClose={close}>body</Dialog>;
+}
+`;
+    expect(kinds(source, 'src/pages/Panel.tsx')).toContain('dialog-title-can-be-empty');
   });
 });

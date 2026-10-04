@@ -163,11 +163,22 @@ typecheck、lint 和全部 765 个测试。
   指向自身 `<h2>` 的 `aria-labelledby` 给自己命名，标题一空，读屏就只播报一个
   无名的 "dialog"，视觉上标题栏也是空的，明眼用户同样不知道自己打开了什么。
   而 `` `${前缀} — ${用户数据}` `` 这种形状永远不可能为空，因此不拦——
-  `VersionHistoryModal` 的标题正是这一类。
+  `VersionHistoryModal` 的标题正是这一类。字面量 `title=""` 同样会上报：
+  `aria-labelledby` 仍指向那个空的 `<h2>`，读屏播报无名对话框，标题栏视觉上
+  也是空的。（Batch 857：空标题原本被 `continue` 跳过，而那恰恰是这条规则
+  要防的缺陷最直接的制造方式。）
+- `component-accessible-name-empty` —— 可访问名经由 prop 传入、且可能为空的自定义
+  组件：`<IconButton label="" />` 给 `<button>` 命名的方式与 IconButton 内部完全
+  一样，而这个空字面量既不满足规则 1（它从元素上读可访问名），也不满足
+  `check-hardcoded-copy`（它找的是未翻译的文案，不是空值）。prop 名字是**发现**的，
+  不是列出来的——见 `scripts/lib/accessible-name-props.mjs`：组件声明 `p?: string`
+  且把 `p` 透传进 `aria-label` / `title` 才算；`ReactNode` 类型的 prop 被排除，
+  因为在那儿写字面量连类型错误都不是，报了就是误报，而误报会被 allowlist 掉。
+  （Batch 857）
 
 这个门禁**刻意没有债务基线**。写它的时候存在的每一条违规都能修，基线只会变成一份
 "机器同意不再上报的 bug 清单"。豁免用同一行或前一行的
-`/* a11y-allow: <具体理由> */`；`npm run test:design-system` 会断言上面五类仍然被
+`/* a11y-allow: <具体理由> */`；`npm run test:design-system` 会断言上面六类仍然被
 强制执行、并且在两种语言里都有文档——与设计门禁同一套漂移检查，规则不可能悄悄消失。
 
 ### 5.1 它查出了什么

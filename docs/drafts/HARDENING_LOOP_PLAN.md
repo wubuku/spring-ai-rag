@@ -478,6 +478,69 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
+### Batch 857（已交付，WebUI 门禁：可访问名的两条漏检路径 + 抽共享模块）
+
+- 分支：`feature/a11y-accessible-name-props-20261007`
+- 主题：856 证明"门禁盲区真实存在"之后，沿同一条线审 `check-a11y-forms`，
+  找到**两处漏检**，并把 856 刚写的发现逻辑抽成两个门禁共用的模块。
+- **漏检 1：`<IconButton label="" />` 完全不可见**。
+  变异 M 证实：植入后门禁仍绿。`IconButton` 把 `label` 渲染成 `aria-label`，
+  空字面量意味着**按钮没有可访问名**，读屏用户只听到"按钮"；
+  而空的字面量既不满足 `check-hardcoded-copy` 的描述（找未翻译的文案），
+  也不满足 `control-no-name` 的读法（它从元素上读名字）。
+- **漏检 2：`<Dialog title="">` 被规则 5 显式放过**。
+  变异 N 证实。规则 5 专门检查"对话框的可访问名可能为空"，却写着
+  `if (!title || title.value === '') continue;`——**"确实为空"恰恰是这条规则
+  要防的缺陷最直接的制造方式**，而那行 exempting 的代码读起来像是
+  "空 = 不是标题"，实际含义是"空 = 没有名字"。
+  `aria-labelledby` 仍指向那个空的 `<h2>`，无名模态框，标题栏视觉上也是空的。
+- **抽共享模块 `scripts/lib/accessible-name-props.mjs`**（WebUI 第一个 `scripts/lib`）：
+  856 把"哪些 prop 是可访问名"写死在 `check-hardcoded-copy` 里；
+  857 证明**同一条知识有两个消费者**——一个关心"值是不是未翻译的文案"，
+  一个关心"值是不是空的"，而这两个问题此前谁都看不见。知识只写一次。
+- **顺带扩大了覆盖面**：旧版硬编码 `components/` 与 `design-system/` 前缀，
+  共享模块默认扫全树，于是多发现了 5 个：
+  `ImeSafeFilterInput.label`（`pages/Embeddings.tsx` 内的局部组件）、
+  `Embeddings.label`、`UsageTable.label`、`DurableUsage.label`（`pages/Metrics.tsx`）
+  与原有的 `Dialog.ariaLabel` / `IconButton.label` / `Tabs.ariaLabel`。
+  逐个抽查确认**都是真阳性**（确实把 `label` 透传成 `aria-label`），
+  而且它们的**使用处也在同一文件里**，所以门禁真的会检查到。
+- **a11y 门禁改成两阶段**：`main()` 先收全树算 prop 集合，再逐文件检查。
+  规则 6 是**关于树的问题**——"这个 prop 是不是组件的可访问名"要读组件才知道，
+  而缺陷在传空值的那个页面里。`scanSource` / `scanFile` 的第二参可选，
+  既有自测的单参调用不受影响。
+- **变异实验 2 个，修复前先证伪、修复后再确认**：
+  | # | 变异 | 修复前 | 修复后 |
+  |---|---|---|---|
+  | M | `Files.tsx` 植入 `<IconButton label="">` | ✗ 门禁绿 | ✓ 红，`Files.tsx:646 [component-accessible-name-empty]` |
+  | N | `Documents.tsx` 植入 `<Dialog title="">` | ✗ 门禁绿 | ✓ 红，`Documents.tsx:603 [dialog-title-can-be-empty]` |
+  - 顺序是"先证伪漏检、再修、再确认抓住"——**没有先修再补变异**，
+    否则无法区分"门禁一直能抓"与"门禁刚被我改到能抓"。
+- **自测 272 → 280**，新增 8 例。除了正向，还钉住三件容易退化的事：
+  同一组件的**非名字 prop**（`variant="primary"`）不得报；
+  **完全没传该 prop** 时规则 6 不该插手（那是规则 1 在元素层的职责）；
+  树里**一个可访问名 prop 都没有**时要有对照，否则"0 违规"与"规则已经失配"
+    在输出上长得一模一样。
+  - `the real component tree` 那个元测试原本 `scanSource(path, source)` 只传两参，
+    **新规则在它那里根本不生效**——已改成先收全树 prop 再传。
+    这正是 856 强调的"必须能从门禁实际走的路径到达"，只不过这次差点
+    由我自己制造出来。
+- **文档元测试抓住了我**：`documents exactly the enforced kinds`（双语）
+  报 `expected […(5)] to deeply equal […(6)]`——新 kind 没登记进
+  `docs/webui-design-language{,-zh-CN}.md`。已补规则说明，
+  并把两处"五类 / five kinds"同步改成六类。**这是那条元测试存在的意义。**
+- 验证（全部实测）：应用测试 **77 文件 / 910 用例全绿**；`npm run lint`
+  九条门禁 EXIT=0 + 门禁自测 **280/280**；`typecheck` EXIT=0；`build` EXIT=0。
+- **元结论（写给下一批）**：这批的收获不是"补了两条规则"，而是
+  **"门禁声称的覆盖面比它能兑现的窄"这件事是可以系统审查的**——
+  方法是逐条问"它声称检查什么"，再构造"等价但不可见的形态"喂进去。
+  剩下的 6 条门禁还没审：`check-mutation-errors` / `check-query-errors`
+  （声称覆盖每个 `useMutation` / `useQuery`，但 mutation 藏在自定义 hook 里、
+  或用 `mutateAsync` 而非 `mutate` 时的形态还没验过）、
+  `check-double-submit`（856 勘察已记"措辞比证据强"、实测 0 真缺守卫，价值低）、
+  `check-i18n-keys`、`check-page-shell`、`check-design-system`、
+  `check-alignment-policy`。
+
 ### Batch 856（已交付，WebUI 门禁：兑现"可读文案"这条已有承诺）
 
 - 分支：`feature/hardcoded-copy-prose-props-20261007`
