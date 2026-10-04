@@ -128,6 +128,72 @@ test('stripComments leaves the call intact', () => {
   assert.equal(out.includes('a();'), true);
 });
 
+// ── Batch 889: a stripped comment took its newlines with it ────────────────
+//
+// The gate told a reader where to look. `lineOf` counts lines in the text that
+// `stripComments` produced, and that function replaced every comment with `''`,
+// so a javadoc block lost the newlines inside it and every finding below one
+// came back too low — 32 of them on the real tree, by up to 54 lines.
+
+test('stripComments keeps the line count, so line numbers survive', () => {
+  const src = 'a();\n/* one\n   two\n   three */\nb();\n';
+  assert.equal(stripComments(src).split('\n').length, src.split('\n').length);
+});
+
+test('a finding below a multi-line comment is reported at its own line', () => {
+  // Written as a lookup rather than a number, so it states the contract instead
+  // of the arithmetic: whatever line the gate names, that line of the source as
+  // written has to be the line holding the call. Before the fix it named a line
+  // inside the javadoc, and this is the fixture that said so.
+  const src = cls(`
+    /**
+     * A note that runs to more than one line.
+     * More of it.
+     */
+    void handle() {
+        return buildResponse(HttpStatus.FORBIDDEN, "SERVICE_UNAVAILABLE", "x", request);
+    }`);
+  const found = findEmittedCodes(src);
+  assert.equal(found.length, 1);
+  const named = src.split('\n')[found[0].line - 1];
+  assert.ok(
+    named.includes('buildResponse'),
+    `reported line ${found[0].line} holds: ${named.trim()}`,
+  );
+});
+
+test('a comment above a call does not change which codes are found', () => {
+  // The safety half. Keeping the newlines must not also keep the prose: if the
+  // comment were still readable, the javadoc example above would come back as a
+  // second site, which is the defect the stripping exists to prevent.
+  const commented = cls(`
+    /**
+     * Example: buildResponse(HttpStatus.BAD_REQUEST, "MADE_UP_CODE", "x", request);
+     */
+    void handle() {
+        return buildResponse(HttpStatus.FORBIDDEN, "SERVICE_UNAVAILABLE", "x", request);
+    }`);
+  const bare = cls(`
+    void handle() {
+        return buildResponse(HttpStatus.FORBIDDEN, "SERVICE_UNAVAILABLE", "x", request);
+    }`);
+  assert.deepEqual(
+    findEmittedCodes(commented).map((h) => h.code),
+    findEmittedCodes(bare).map((h) => h.code),
+  );
+});
+
+test('a line comment shifts nothing, because it holds no line of its own', () => {
+  const src = cls(`
+    void handle() {
+        // the environment root may manage keys
+        return buildResponse(HttpStatus.FORBIDDEN, "SERVICE_UNAVAILABLE", "x", request);
+    }`);
+  const found = findEmittedCodes(src);
+  assert.equal(found.length, 1);
+  assert.ok(src.split('\n')[found[0].line - 1].includes('buildResponse'));
+});
+
 // ── rule 1: the code must be registered ───────────────────────────────────
 
 test('flags a code the enum does not declare', () => {
