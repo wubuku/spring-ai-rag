@@ -519,8 +519,19 @@ function main() {
     }
     console.error(
       '\nA write action whose failure shows nothing is a button the user cannot\n' +
-        'trust. Add an `onError` (showToast) or render `<name>.isError`, or record\n' +
-        'an inline `/* mutation-error-allow: <reason> *\/` on the preceding line.',
+        'trust. Add an `onError` (showToast) or render `<name>.isError`.\n' +
+        '\n' +
+        'A `mutation-error-allow` comment is NOT an exemption here — it only\n' +
+        'annotates the finding with your reason, which is printed after it so a\n' +
+        'reviewer can weigh it. The finding still fails the gate on purpose:\n' +
+        '`unreasoned-failure` and `interpolated-reason` are *about* whether a\n' +
+        'reason exists, so "a reason was written" cannot mean "nothing to say".\n' +
+        'The only way past a finding is to change the code, or to convince a\n' +
+        'reviewer the rule itself should not apply here.\n' +
+        '\n' +
+        '(`check-double-submit` treats its own `double-submit-allow` comment as a\n' +
+        'real exemption, because "is this guarded" and "did you write a reason"\n' +
+        'are independent questions. The two gates deliberately differ.)',
     );
     process.exitCode = 1;
     return;

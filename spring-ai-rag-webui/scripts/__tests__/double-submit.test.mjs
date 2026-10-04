@@ -121,14 +121,53 @@ return <button onClick={() => publishM.mutate()}>Publish</button>;
     expect(violation.message).toContain('publishM');
   });
 
-  it('accepts a recorded, justified exemption', () => {
+  // Batch 868. This case used to be named "accepts a recorded, justified
+  // exemption" while asserting only `violation.detail` — it never checked that
+  // the finding disappeared, because the hatch did not work. It reported the
+  // violation anyway and pasted the reason into the message. The gate's own
+  // error message told people to write this comment, so following the
+  // documented remedy could never turn the gate green. The identical
+  // misnamed case was copy-pasted into mutation-errors.test.mjs, where
+  // annotating *is* the intended behaviour.
+  //
+  // These four cases pin the fixed semantics: a reason written after `--`
+  // silences the finding; a bare keyword does not.
+  it('drops the finding when the line above carries a justified exemption', () => {
     const source = `
-      // double-submit-allow: fire-and-forget audit ping, harmless if sent twice
-      const auditM = useMutation({ mutationFn: () => api.ping() });
-      return <button onClick={() => auditM.mutate()}>Ping</button>;
-    `;
-    const [violation] = scanSource('src/pages/Sample.tsx', source);
-    expect(violation.detail).toContain('harmless if sent twice');
+// double-submit-allow -- fire-and-forget audit ping, harmless if sent twice
+const auditM = useMutation({ mutationFn: () => api.ping() });
+return <button onClick={() => auditM.mutate()}>Ping</button>;
+`;
+    expect(kinds(source)).toEqual([]);
+  });
+
+  it('accepts the block-comment form of the exemption too', () => {
+    const source = `
+/* double-submit-allow -- metrics beacon, duplicate calls are idempotent */
+const beaconM = useMutation({ mutationFn: () => api.beacon() });
+return <button onClick={() => beaconM.mutate()}>Beacon</button>;
+`;
+    expect(kinds(source)).toEqual([]);
+  });
+
+  it('still reports when the comment is a bare keyword with no reason', () => {
+    const source = `
+// double-submit-allow
+const auditM = useMutation({ mutationFn: () => api.ping() });
+return <button onClick={() => auditM.mutate()}>Ping</button>;
+`;
+    expect(kinds(source)).toEqual(['unguarded-write']);
+  });
+
+  it('still reports when the reason is only a colon and no separator', () => {
+    // The old `double-submit-allow: <reason>` spelling. Accepting it would
+    // reopen the one-keyword hole the `--` separator exists to close.
+    const source = `
+// double-submit-allow: harmless
+const auditM = useMutation({ mutationFn: () => api.ping() });
+return <button onClick={() => auditM.mutate()}>Ping</button>;
+`;
+    expect(kinds(source)).toEqual(['unguarded-write']);
   });
 
   it('is listed among the kinds this gate can emit', () => {
