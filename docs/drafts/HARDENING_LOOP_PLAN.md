@@ -478,6 +478,72 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
+### Batch 872（已交付，WebUI：把 871 登记的 6 处"直接渲染 error.message"逐类归位）
+
+- 分支：`batch-872`
+- 主题：871 修好了 mutation toast，却把 6 处直接渲染 `error.message` 的地方登记成
+  后续项。本批把它们逐个看清楚，然后发现**它们不是一个问题，是四类**——
+  归类错了就会用错药。
+- **先分类，再动手**：
+
+  | 类别 | 位置 | 结论 |
+  |------|------|------|
+  | 共享原语的 `detail` | `QueryErrorBanner`（**15 个调用点**） | 修在原语内部，一处覆盖全部 |
+  | "标签 + 原始串"内联 | `Documents`、`VersionHistoryModal`、`Collections`（2 处 state） | 各接同一判定，各自定后备 |
+  | 客户端崩溃上报 | `ErrorBoundary`（payload + fallback） | **不动**，见下 |
+  | 同上（已由原语覆盖） | `Search`、`ReembedAllButton` | 随 `QueryErrorBanner` 一并修好 |
+
+  `ErrorBoundary` 抓的是**渲染期崩溃**、写的是 bug 上报 payload（errorType /
+  errorMessage / stackTrace）。那里显示原始 message 是**对的**——上报就要原文。
+  拿传输层过滤去套它，等于把有用的诊断信息删掉。**"同样写着 error.message"
+  不等于"同一类问题"。**
+- **实施**：把 `failureReason.ts` 里私有的 `isUsable` 提升为导出的 `usableReason`，
+  并让它**同时接受 `Error`、裸字符串和任意值**——否则每个调用点都要重复
+  `error instanceof Error ? error.message : …` 那段，而六处各写一遍正是分歧的来源。
+  `failureReason` 变成"`usableReason` + 一对括号"，两者不可能再漂移。
+  - `QueryErrorBanner`：`const shownDetail = usableReason(detail)`。
+    **一个原语、十五个调用点**，这正是它自己文档里"a shared primitive is the fix"。
+  - `Documents`：`usableReason(error) || t('common.unknownError')`（沿用它原有的后备）。
+  - `VersionHistoryModal`：新增 `loadErrorLabel`，**有理由才带冒号**——
+    没有理由时标签本身已经说完了，冒号会变成一句小谎。
+  - `Collections`：`errorMessage(error, fallback)`。面板本身是"这步失败了"的信号，
+    所以值**不能塌成空串**（否则面板消失 = 隐藏失败），必须显式给后备。
+- **变异在接线处，4/4 捕获，0 盲区**：
+
+  | 变异 | 抓住它的用例 |
+  |------|--------------|
+  | N1 横幅退回直接渲染 `detail` | `drops a transport-level detail…` |
+  | N2 `Collections.errorMessage` 退回旧写法 | `falls back to a generic error when the purge failure has no reason in it` |
+  | N3 `Documents` 退回 `instanceof` 写法 | `does not print a transport message as the load-failure reason` |
+  | N4 `VersionHistoryModal` 退回内联渲染 | `does not print a transport message as the reason` |
+
+- **顺带挖出两个既有的失效条目**（不是这批引入的，是这批的测试撞出来的）：
+  - `SENTINEL_MESSAGES` 里有 `'networkerror'`，而 **axios 实际发的是
+    `"Network Error"`（带空格）**。那条本该拦住"连接死了"的清单项**自己从来没生效过**。
+  - `'timeout'` 也匹配不到 axios 的 `"timeout of 30000ms exceeded"`。
+    新增锚定模式 `/^timeout of \d+ms exceeded$/i`（毫秒数随配置变，清单项盖不住）。
+  两者都由 `QueryErrorBanner` 那条新用例撞出来——**它的夹具里就有一个
+  `Network Error`**，第一次跑就红了。
+- **一个必须说清的冲突**：`QueryErrorBanner` 有一条**既有测试**
+  `keeps the thrown message in a secondary line…`，断言横幅**要显示**
+  `"Request failed with status code 503"`——正是 871 判定为噪声的那一句。
+  它的**本意**是测"理由放次行而非紧邻标题"（与"这句算不算理由"正交），
+  只是夹具选得不好，**在声称测位置的同时断言了噪声应当显示**。
+  → 保留原目的、换成真理由，另加一条测丢弃。**没有删除任何测试。**
+- **又一次自己的坑**：我最初写的断言是
+  `expect(banner).not.toHaveTextContent(noise.trim() === '' ? ' ' : noise)`，
+  而那个 `' '` 落盘时变成了**一个 NUL 字节**（Batch 768 记过的坑：
+  git 会把文件判成二进制，diff/blame/grep 全被静默关闭）。发现后：
+  - 字节级修掉，并**扫了本批全部 6 个改动文件确认 0 个 NUL**；
+  - 顺便把那条无意义的"不包含空格"断言换成**等值断言**（`textContent` 必须**等于**
+    标题），顺带保证空 detail 不会留下空元素。
+- **又一次断言写法错了（不是代码错）**：Documents 那两条新用例一开始用
+  `getByText('精确串')`，而 `{label}: {reason}` 是同一节点里的三个子节点，
+  精确匹配永远不成立。改用 `toHaveTextContent` / 正则——这也是仓库既有的惯用法
+  （`Collections.test.tsx:374` 早就在用）。
+- 应用测试 78 文件 / 923 -> 937 用例（新增 14）；lint 十条全绿；typecheck、build EXIT=0。
+- 账本：本条。
+
 ### Batch 871（已交付，前后端接缝：把 858–860 的"失败要可诊断"补到最后一块）
 
 - 分支：`batch-871`

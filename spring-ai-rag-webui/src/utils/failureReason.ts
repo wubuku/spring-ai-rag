@@ -55,6 +55,11 @@
 const SENTINEL_MESSAGES: ReadonlySet<string> = new Set<string>([
   'failed to fetch',
   'networkerror',
+  // Batch 872: `networkerror` above never matched anything axios produces.
+  // Axios writes "Network Error", with a space -- so the one entry meant to
+  // catch a dead connection was itself dead, and a query that failed at the
+  // transport layer printed it under an otherwise good sentence.
+  'network error',
   'network request failed',
   'load failed',
   'aborterror',
@@ -74,6 +79,16 @@ const SENTINEL_MESSAGES: ReadonlySet<string> = new Set<string>([
  */
 const SYNTHESIZED_STATUS = /^request failed with status code \d{3}$/;
 
+/**
+ * Axios's timeout text, which is likewise not in the set: it reads
+ * "timeout of 30000ms exceeded", and neither `timeout` nor `request timed out`
+ * matches it. Same reasoning as the status string above -- this recognises one
+ * known generator's exact output rather than guessing at what a reason looks
+ * like. The millisecond count varies with the configured timeout, so an
+ * exact-match entry could not cover it.
+ */
+const SYNTHESIZED_TIMEOUT = /^timeout of \d+ms exceeded$/i;
+
 /** Browsers cap `Error.message`; a longer one is a stack dump, not a reason. */
 const MAX_REASON_LENGTH = 200;
 
@@ -83,9 +98,35 @@ function isUsable(message: unknown): boolean {
   if (trimmed.length === 0) return false;
   if (SENTINEL_MESSAGES.has(trimmed.toLowerCase())) return false;
   if (SYNTHESIZED_STATUS.test(trimmed.toLowerCase())) return false;
+  if (SYNTHESIZED_TIMEOUT.test(trimmed)) return false;
   // A stack trace is not something to put in front of a user.
   if (trimmed.includes('\n') && trimmed.split('\n').length > 3) return false;
   return trimmed.length <= MAX_REASON_LENGTH;
+}
+
+/**
+ * The reason, trimmed — or `''` when the value carries none.
+ *
+ * Batch 872. This is the predicate every "label + reason" surface needs, and it
+ * was private until then, which is why six call sites had each reinvented the
+ * decision — and four of them got it wrong by trusting `error.message`
+ * unconditionally. `failureReason` is this plus the parentheses, so the two
+ * cannot drift apart.
+ *
+ * Accepts what callers actually have: an `Error`, a bare message string (the
+ * `QueryErrorBanner` `detail` prop is one), or anything else, which is treated
+ * as having no reason. That way no call site has to repeat the
+ * `error instanceof Error ? error.message : …` dance, and none of them can get
+ * that dance subtly different from its neighbours.
+ *
+ * @returns the trimmed message when it is something a user can act on, else `''`
+ */
+export function usableReason(error: unknown): string {
+  const message = error instanceof Error
+    ? error.message
+    : typeof error === 'string' ? error : undefined;
+  if (!isUsable(message)) return '';
+  return String(message).trim();
 }
 
 /**
@@ -94,9 +135,12 @@ function isUsable(message: unknown): boolean {
  */
 export function failureReason(error: unknown): string {
   if (!error) return '';
-  const message = error instanceof Error ? error.message : undefined;
-  if (!isUsable(message)) return '';
-  return ` (${String(message).trim()})`;
+  // Deliberately Error-only, even though `usableReason` also accepts a bare
+  // string. A value thrown by application code is not something the server said,
+  // and this function's contract is "a reason the server gave". The string form
+  // exists for the `QueryErrorBanner` `detail` prop, which *is* a string.
+  const reason = usableReason(error instanceof Error ? error.message : undefined);
+  return reason === '' ? '' : ` (${reason})`;
 }
 
 /**

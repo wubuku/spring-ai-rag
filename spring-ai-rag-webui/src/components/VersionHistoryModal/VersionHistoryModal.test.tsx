@@ -115,6 +115,39 @@ describe('VersionHistoryModal', () => {
     });
   });
 
+  // Batch 872. The case above has always been about "an error state appears";
+  // this one is about what it says. `Error('Network error')` is a transport
+  // message — it describes the connection, not the read — and it used to be
+  // printed after a colon that had promised a reason. Now the label stands
+  // alone, and a message the server actually chose is still shown after it.
+  it('does not print a transport message as the reason', async () => {
+    vi.mocked(documentsApi.getVersions).mockRejectedValueOnce(new Error('Network error'));
+
+    render(
+      <VersionHistoryModal documentId={42} documentTitle="Test Doc" onClose={vi.fn()} />,
+      { wrapper: Wrapper }
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/versions\.loadError/i)).toBeTruthy();
+    });
+    expect(screen.queryByText(/Network error/i)).toBeNull();
+  });
+
+  it('still prints a reason the server actually gave', async () => {
+    vi.mocked(documentsApi.getVersions)
+      .mockRejectedValueOnce(new Error('Document 42 is not in this workspace'));
+
+    render(
+      <VersionHistoryModal documentId={42} documentTitle="Test Doc" onClose={vi.fn()} />,
+      { wrapper: Wrapper }
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/Document 42 is not in this workspace/)).toBeTruthy();
+    });
+  });
+
   it('renders empty state when no versions', async () => {
     vi.mocked(documentsApi.getVersions).mockResolvedValueOnce({
       data: { documentId: 42, totalVersions: 0, page: 0, size: 20, versions: [] },

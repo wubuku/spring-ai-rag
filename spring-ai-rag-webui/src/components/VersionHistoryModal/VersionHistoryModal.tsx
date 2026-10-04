@@ -5,8 +5,24 @@ import { documentsApi } from '../../api/documents';
 import type { DocumentVersion } from '../../api/documents';
 import { computeLineDiff, truncateForPreview } from './diffUtils';
 import { Dialog } from '../Dialog';
+import { usableReason } from '../../utils/failureReason';
 import styles from './VersionHistoryModal.module.css';
 import { EmptyState } from '../ui';
+
+/**
+ * `"<label>: <reason>"` — with the reason only when there is one.
+ *
+ * Batch 872. This used to print `error.message` unconditionally behind a
+ * colon that had promised a reason, so a transport-level string appeared after
+ * it ("Failed to load version history: Request failed with status code 404"),
+ * and a non-`Error` value went through `String(error)` and could print
+ * "[object Object]". When there is no usable reason the label alone already
+ * says everything the user can act on, so the colon would be a small lie too.
+ */
+function loadErrorLabel(error: unknown, label: string): string {
+  const reason = usableReason(error);
+  return reason === '' ? label : `${label}: ${reason}`;
+}
 
 interface VersionHistoryModalProps {
   documentId: number;
@@ -126,11 +142,9 @@ export function VersionHistoryModal({
               {isPending && <div className={styles.loading}>{t('common.loading')}</div>}
               {error && (
                 <div className={styles.error}>
-                  {t('versions.loadError', 'Failed to load version history')}:{' '}
-                  {error instanceof Error ? error.message : String(error)}
+                  {loadErrorLabel(error, t('versions.loadError', 'Failed to load version history'))}
                 </div>
               )}
-
               {data && (
                 <>
                   {/* Compare bar */}

@@ -1,5 +1,6 @@
 import type { HTMLAttributes, ReactNode } from 'react';
 import { Button } from '../../Button';
+import { usableReason } from '../../../utils/failureReason';
 import styles from './QueryErrorBanner.module.css';
 
 export interface QueryErrorBannerProps extends HTMLAttributes<HTMLDivElement> {
@@ -20,6 +21,15 @@ export interface QueryErrorBannerProps extends HTMLAttributes<HTMLDivElement> {
    * Optional secondary line, typically the thrown error's `message`. Kept out
    * of `children` so the primary sentence stays the only thing a screen reader
    * announces first.
+   *
+   * Batch 872: filtered through `usableReason` rather than trusted. This
+   * primitive has fifteen call sites and every one of them hands it whatever
+   * `error.message` happens to be — including the transport-level strings that
+   * reach the browser when a response carried no reason ("Request failed with
+   * status code 404", "Failed to fetch"). Printing those under a perfectly good
+   * sentence is the noise `src/utils/failureReason.ts` was written to remove,
+   * and filtering it here fixes all fifteen sites at once instead of asking
+   * fifteen call sites to remember.
    */
   detail?: string;
 }
@@ -45,6 +55,9 @@ export function QueryErrorBanner({
   className,
   ...rest
 }: QueryErrorBannerProps) {
+  // See the prop's doc: a transport-level string is not a reason, and this
+  // primitive is the one place all fifteen call sites pass through.
+  const shownDetail = usableReason(detail);
   return (
     <div
       role="alert"
@@ -57,7 +70,7 @@ export function QueryErrorBanner({
           {retryLabel}
         </Button>
       )}
-      {detail && <span className={styles.detail}>{detail}</span>}
+      {shownDetail && <span className={styles.detail}>{shownDetail}</span>}
     </div>
   );
 }

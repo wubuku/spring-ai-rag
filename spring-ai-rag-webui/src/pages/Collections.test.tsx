@@ -359,6 +359,28 @@ describe('Collections navigation, create modal and purge preview failure', () =>
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
   });
 
+  // Batch 872. The case below this one is the positive half: `new Error('boom')`
+  // is a real reason and is still printed. This is the negative half, and it is
+  // the one that was missing: a response that carried no reason reaches the
+  // browser as "Request failed with status code 500", and the panel used to
+  // print that as though the server had said it. The panel itself is the signal
+  // that the step failed, so the value must fall back rather than go empty.
+  it('falls back to a generic error when the purge failure has no reason in it', async () => {
+    const user = userEvent.setup();
+    vi.mocked(collectionsApi.previewPurge)
+      .mockRejectedValueOnce(new Error('Request failed with status code 500'));
+
+    renderPage();
+    await user.click(
+      await screen.findByRole('button', { name: 'collections.purge.action' }),
+    );
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('collections.purge.previewError');
+    expect(alert).toHaveTextContent('common.unknownError');
+    expect(alert).not.toHaveTextContent('Request failed with status code');
+  });
+
   it('shows the purge preview error panel and recovers via retry', async () => {
     const user = userEvent.setup();
     vi.mocked(collectionsApi.previewPurge)

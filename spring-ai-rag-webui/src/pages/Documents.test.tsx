@@ -125,6 +125,42 @@ describe('Documents', () => {
     expect(h1).toHaveTextContent('documents.title');
   });
 
+  // Batch 872. `Documents` printed `error.message` unconditionally, so a
+  // transport-level string appeared after the label as though the server had
+  // said it. The fallback it already used for a non-Error value
+  // (`common.unknownError`) is now what a message with no reason in it gets too.
+  it('does not print a transport message as the load-failure reason', () => {
+    mockUseQuery.mockReturnValue({
+      data: undefined,
+      isPending: false,
+      error: new Error('Request failed with status code 500'),
+    });
+
+    renderDocuments();
+
+    // The label and the reason are siblings inside one node, so a matcher has to
+    // be a substring one — `getByText('exact')` would never match here.
+    expect(screen.getByText(/documents\.loadError/)).toHaveTextContent(
+      'common.unknownError',
+    );
+    expect(screen.queryByText(/Request failed with status code/)).toBeNull();
+  });
+
+  it('still prints a reason the server actually gave', () => {
+    mockUseQuery.mockReturnValue({
+      data: undefined,
+      isPending: false,
+      error: new Error('Storage backend refused the listing request'),
+    });
+
+    renderDocuments();
+
+    expect(screen.getByText(/documents\.loadError/)).toHaveTextContent(
+      'Storage backend refused the listing request',
+    );
+    expect(screen.queryByText(/common\.unknownError/)).toBeNull();
+  });
+
   it('shows upload zone', () => {
     mockUseQuery.mockReturnValue({
       data: { data: { documents: [], total: 0 } },

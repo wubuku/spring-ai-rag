@@ -19,7 +19,7 @@ import { useBlobUrlOpener } from '../hooks/useBlobUrlOpener';
 import { useImeComposition } from '../utils/ime';
 import styles from './Documents.module.css';
 import { EmptyState, IconButton, QueryErrorBanner } from '../components/ui';
-import { failureMessage } from '../utils/failureReason';
+import { failureMessage, usableReason } from '../utils/failureReason';
 import { Upload, X } from 'lucide-react';
 
 type DocumentConfirmation =
@@ -480,7 +480,7 @@ export function Documents() {
       ) : error ? (
         <div className={styles.error}>
           {t('documents.loadError')}:{' '}
-          {error instanceof Error ? error.message : t('common.unknownError')}
+          {usableReason(error) || t('common.unknownError')}
         </div>
       ) : (
         <>
