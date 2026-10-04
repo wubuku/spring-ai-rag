@@ -16,6 +16,7 @@ import { useToast } from '../components/Toast';
 import { Dialog } from '../components/Dialog';
 import { ImeSafeForm } from '../components/ImeSafeForm';
 import { Button } from '../components/Button';
+import { failureMessage } from '../utils/failureReason';
 import { EmptyState, StatusBadge } from '../components/ui';
 import styles from './ApiKeys.module.css';
 
@@ -57,13 +58,6 @@ function createExpiryDefaults() {
     minimum: toLocalDateTimeInput(minimum),
     suggested: toLocalDateTimeInput(suggested),
   };
-}
-
-function formatMutationError(fallback: string, error: unknown): string {
-  if (!(error instanceof Error) || !error.message.trim()) {
-    return fallback;
-  }
-  return `${fallback}: ${error.message}`;
 }
 
 function formatDateTime(dateStr?: string): string {
@@ -206,8 +200,8 @@ function PrincipalRow({
       queryClient.invalidateQueries({ queryKey: ['api-principals'] });
       showToast(t('apiKeys.revoked'), 'success');
     },
-    onError: () => {
-      showToast(t('apiKeys.revokeError'), 'error');
+    onError: (error) => {
+      showToast(failureMessage(t, 'apiKeys.revokeError', error), 'error');
     },
   });
 
@@ -220,7 +214,7 @@ function PrincipalRow({
     },
     onError: (error) => {
       showToast(
-        formatMutationError(t('apiKeys.rotationCompleteError'), error),
+        failureMessage(t, 'apiKeys.rotationCompleteError', error),
         'error',
       );
     },
@@ -235,7 +229,7 @@ function PrincipalRow({
     },
     onError: (error) => {
       showToast(
-        formatMutationError(t('apiKeys.rotationCancelError'), error),
+        failureMessage(t, 'apiKeys.rotationCancelError', error),
         'error',
       );
     },
@@ -444,7 +438,7 @@ function CreateKeyModal({ onClose }: { onClose: () => void }) {
       void queryClient.invalidateQueries({
         queryKey: API_PRINCIPALS_QUERY_KEY,
       });
-      showToast(formatMutationError(t('apiKeys.createError'), error), 'error');
+      showToast(failureMessage(t, 'apiKeys.createError', error), 'error');
     },
   });
 
@@ -712,7 +706,7 @@ function EditPolicyModal({
       onClose();
     },
     onError: (error) => {
-      showToast(formatMutationError(t('apiKeys.policyUpdateError'), error), 'error');
+      showToast(failureMessage(t, 'apiKeys.policyUpdateError', error), 'error');
     },
   });
 
@@ -911,7 +905,7 @@ function RotateKeyModal({
     },
     onError: (error) => {
       showToast(
-        formatMutationError(t('apiKeys.rotationPrepareError'), error),
+        failureMessage(t, 'apiKeys.rotationPrepareError', error),
         'error',
       );
     },
@@ -925,7 +919,7 @@ function RotateKeyModal({
       queryClient.invalidateQueries({ queryKey: ['api-principals'] });
     },
     onError: (error) => {
-      showToast(formatMutationError(t('apiKeys.rotateError'), error), 'error');
+      showToast(failureMessage(t, 'apiKeys.rotateError', error), 'error');
     },
   });
 

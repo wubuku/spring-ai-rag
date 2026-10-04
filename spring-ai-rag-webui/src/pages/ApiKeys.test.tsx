@@ -360,7 +360,7 @@ describe('ApiKeys', () => {
     mutationOptions.onError?.(new Error('Server validation failed'));
 
     expect(mockShowToast).toHaveBeenCalledWith(
-      'apiKeys.createError: Server validation failed',
+      'apiKeys.createError (Server validation failed)',
       'error',
     );
   });
@@ -482,7 +482,7 @@ describe('ApiKeys', () => {
       fireEvent.click(screen.getAllByRole('button', { name: 'apiKeys.revoke' })[1]);
 
       return waitFor(() => {
-        expect(mockShowToast).toHaveBeenCalledWith('apiKeys.revokeError', 'error');
+        expect(mockShowToast).toHaveBeenCalledWith('apiKeys.revokeError (nope)', 'error');
       });
     });
 
@@ -723,7 +723,7 @@ describe('ApiKeys', () => {
 
       return waitFor(() => {
         expect(mockShowToast).toHaveBeenCalledWith(
-          'apiKeys.rotationPrepareError: rotation window too short',
+          'apiKeys.rotationPrepareError (rotation window too short)',
           'error',
         );
       });

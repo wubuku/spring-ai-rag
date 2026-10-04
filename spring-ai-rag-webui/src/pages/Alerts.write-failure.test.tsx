@@ -80,7 +80,7 @@ describe('Alerts: a rejected write must not look like a successful one', () => {
     await userEvent.click(screen.getByRole('button', { name: 'common.create' }));
 
     await waitFor(() =>
-      expect(showToast).toHaveBeenCalledWith('alerts.sloConfigCreateError', 'error'),
+      expect(showToast).toHaveBeenCalledWith('alerts.sloConfigCreateError (409 Conflict)', 'error'),
     );
   });
 
@@ -93,7 +93,7 @@ describe('Alerts: a rejected write must not look like a successful one', () => {
     await userEvent.click(screen.getByRole('button', { name: 'common.delete' }));
 
     await waitFor(() =>
-      expect(showToast).toHaveBeenCalledWith('alerts.sloConfigDeleteError', 'error'),
+      expect(showToast).toHaveBeenCalledWith('alerts.sloConfigDeleteError (500)', 'error'),
     );
   });
 
@@ -110,7 +110,7 @@ describe('Alerts: a rejected write must not look like a successful one', () => {
 
     // These two strings had been sitting in both locale files since they were
     // written, referenced by nothing, waiting for the handler that was empty.
-    await waitFor(() => expect(showToast).toHaveBeenCalledWith('alerts.createError', 'error'));
+    await waitFor(() => expect(showToast).toHaveBeenCalledWith('alerts.createError (400)', 'error'));
   });
 
   it('reports a rejected silence-plan deletion', async () => {
@@ -121,7 +121,7 @@ describe('Alerts: a rejected write must not look like a successful one', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'alerts.delete' }));
     await userEvent.click(screen.getByRole('button', { name: 'common.delete' }));
 
-    await waitFor(() => expect(showToast).toHaveBeenCalledWith('alerts.deleteError', 'error'));
+    await waitFor(() => expect(showToast).toHaveBeenCalledWith('alerts.deleteError (500)', 'error'));
   });
 
   it('stays quiet when the write succeeds, so the toast means something', async () => {

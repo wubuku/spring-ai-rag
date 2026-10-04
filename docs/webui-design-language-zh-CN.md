@@ -197,12 +197,15 @@ Batch 776 在写下这条规则之前先量了基线：`Alerts`、`ApiKeys`、`S
 ## 6. 写操作必须报告失败
 
 `npm run check:mutation-errors` 串在 `npm run lint` 里，扫描 `src/` 下每个 `.tsx`，
-拦截三类违规：
+拦截四类违规：
 
 - `silent-mutation` —— 既没有传 `onError`（通常是 `showToast`），
   也没有在同一个文件里渲染它自己的 `.isError` 的 `useMutation`。
 - `no-op-error-handler` —— `onError` 存在但函数体是空的。
   **吞掉错误的处理器不是处理器。**
+- `unreasoned-failure` —— `onError` 用一句固定的文案报告失败，
+  而那句话里没有任何来自失败本身的内容。
+  **"失败了"不等于"为什么失败"。**
 - `swallowed-rejection` —— `catch` 块丢掉了失败，却没说清为什么丢掉是正当的。
 
 Batch 791 把 `src/` 里全部 **37 个** mutation 过了一遍，查出 **6 个失败不可见**：
@@ -229,6 +232,30 @@ Batch 791 把 `src/` 里全部 **37 个** mutation 过了一遍，查出 **6 个
 "主题在这个标签页里仍然生效"。要求这句话，只是在做决定的那一刻多花一行。
 **写 console 不属于这条规则**：console 轨迹是一个有可见痕迹的决定，
 而其中哪些该给用户看、哪些不该，是产品判断。
+
+**Batch 859 发现上面三条规则在一种处理器上全都会放行：它存在、它不是空函数、
+而它什么也没回答。** 十一个 mutation 写着
+`onError: () => showToast(t('alerts.deleteError'), 'error')`——固定文案、
+没有参数，服务器的原因在**签名处**就被丢掉了，而不是在函数体里。
+`api/client.ts` 早就把 `response.data.message` 提到了 `Error.message` 里，
+信息一直就在浏览器里。而门禁自己的总结句写的是
+"every write action reports its failure"，对这十一个而言那是假的：
+用户报一句"删除失败了"，运维无法判断是集合仍被引用、密钥已被吊销，
+还是网络断了。
+
+`unreasoned-failure` 只问一个很窄的问题：**toast 的第一个实参本身**是不是裸的
+`t('字面量')`？凡是带原因的写法都放行——共享的
+`failureMessage(t, key, error)` 把 `t` 当值传而不是当调用传；本地格式化函数
+`formatMutationError(t('k'), error)` 里它是调用的实参；插值写法
+`t('k', { error: msg })` 有第二个实参；而由失败本身拼出来的 key
+（`t(\`documents.relocationErrors.${code}\`)`）**就是**具体原因，不是耸肩。
+这个规则的第一版写得更粗，实测在全部十四个带名参数的处理器上**命中 0 处**，
+于是没有上线：一条永远不触发的规则，会让人一直以为它管住了。
+
+规则报在 `onError` 那一行，这样 `mutation-error-allow` 豁免注释就能像另外两条
+规则一样，紧贴在决策的正上方。它**跟不进本地 helper**：`Documents.tsx` 曾有
+五个 mutation 共用一个 `handleMutationError`，原因死在 helper 内部，
+任何规则都看不见；Batch 859 修的是那个 helper，而不是教门禁去追进函数里。
 
 修复里有两处细节必须做对，两处都有测试钉住：
 

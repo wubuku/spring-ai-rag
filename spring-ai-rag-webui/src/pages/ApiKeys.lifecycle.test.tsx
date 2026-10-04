@@ -162,7 +162,7 @@ describe('ApiKeys principal lifecycle rows', () => {
 
     await waitFor(() => {
       expect(mocks.showToast).toHaveBeenCalledWith(
-        'apiKeys.revokeError',
+        'apiKeys.revokeError (still in use)',
         'error',
       );
     });
@@ -262,7 +262,7 @@ describe('ApiKeys principal lifecycle rows', () => {
     await user.click(
       screen.getByRole('button', { name: 'apiKeys.cancelRotation' }),
     );
-    // 非 Error 抛出物走 formatMutationError 的回退分支。
+    // 非 Error 抛出物走 failureMessage 的回退分支：没有可用原因就只报那句固定文案。
     await waitFor(() => {
       expect(mocks.cancelRotation).toHaveBeenCalledWith('rot-row-1');
       expect(mocks.showToast).toHaveBeenCalledWith(
@@ -470,7 +470,7 @@ describe('ApiKeys rotate and edit modal internals', () => {
     });
   });
 
-  it('surfaces an immediate rotation failure through formatMutationError', async () => {
+  it('surfaces an immediate rotation failure with the server reason appended', async () => {
     const user = userEvent.setup();
     mocks.rotateKey.mockRejectedValue(new Error('credential active'));
 
@@ -482,7 +482,7 @@ describe('ApiKeys rotate and edit modal internals', () => {
 
     await waitFor(() => {
       expect(mocks.showToast).toHaveBeenCalledWith(
-        'apiKeys.rotateError: credential active',
+        'apiKeys.rotateError (credential active)',
         'error',
       );
     });
@@ -520,7 +520,7 @@ describe('ApiKeys rotate and edit modal internals', () => {
 
     await waitFor(() => {
       expect(mocks.showToast).toHaveBeenCalledWith(
-        'apiKeys.policyUpdateError: version conflict',
+        'apiKeys.policyUpdateError (version conflict)',
         'error',
       );
     });
@@ -554,7 +554,7 @@ describe('ApiKeys rotate and edit modal internals', () => {
     });
   });
 
-  it('surfaces the complete rotation error through formatMutationError', async () => {
+  it('surfaces the complete rotation error with the server reason appended', async () => {
     const user = userEvent.setup();
     mocks.listPrincipals.mockResolvedValue({
       data: [
@@ -576,7 +576,7 @@ describe('ApiKeys rotate and edit modal internals', () => {
 
     await waitFor(() => {
       expect(mocks.showToast).toHaveBeenCalledWith(
-        'apiKeys.rotationCompleteError: lease lost',
+        'apiKeys.rotationCompleteError (lease lost)',
         'error',
       );
     });

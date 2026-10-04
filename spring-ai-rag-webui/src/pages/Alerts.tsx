@@ -409,7 +409,7 @@ function SloConfigsTab({ showForm, onShowForm, onHideForm }: { showForm: boolean
     // 这四处曾经是 `onError: () => {}`。而 onSuccess 会 onHideForm()、清空表单——
     // 也就是说创建失败时表单自己关掉了、字段自己清空了，看起来就像保存成功了，
     // 用户唯一能观察到的现象只是"新 SLO 不在列表里"。
-    onError: () => showToast(t('alerts.sloConfigDeleteError'), 'error'),
+    onError: (error) => showToast(failureMessage(t, 'alerts.sloConfigDeleteError', error), 'error'),
   });
   const [form, setForm] = useState<SloFormData>({
     sloName: '', sloType: 'LATENCY', targetValue: '', unit: 'ms', description: '', enabled: true,
@@ -422,7 +422,7 @@ function SloConfigsTab({ showForm, onShowForm, onHideForm }: { showForm: boolean
       setForm({ sloName: '', sloType: 'LATENCY', targetValue: '', unit: 'ms', description: '', enabled: true });
       onHideForm();
     },
-    onError: () => showToast(t('alerts.sloConfigCreateError'), 'error'),
+    onError: (error) => showToast(failureMessage(t, 'alerts.sloConfigCreateError', error), 'error'),
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -590,7 +590,7 @@ function SilenceSchedulesTab({ showForm, onShowForm, onHideForm }: { showForm: b
     },
     // `alerts.deleteError` 的文案一直躺在 en.json / zh-CN.json 里，从未被任何一处
     // 引用过——正是为这个 onError 写的，只是没接上。
-    onError: () => showToast(t('alerts.deleteError'), 'error'),
+    onError: (error) => showToast(failureMessage(t, 'alerts.deleteError', error), 'error'),
   });
   const [form, setForm] = useState<SilenceFormData>({
     name: '', alertKey: '', silenceType: 'ONE_TIME', startTime: '', endTime: '', description: '', enabled: true,
@@ -603,7 +603,7 @@ function SilenceSchedulesTab({ showForm, onShowForm, onHideForm }: { showForm: b
       setForm({ name: '', alertKey: '', silenceType: 'ONE_TIME', startTime: '', endTime: '', description: '', enabled: true });
       onHideForm();
     },
-    onError: () => showToast(t('alerts.createError'), 'error'),
+    onError: (error) => showToast(failureMessage(t, 'alerts.createError', error), 'error'),
   });
 
   const handleSubmit = (e: React.FormEvent) => {

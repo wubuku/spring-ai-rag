@@ -49,7 +49,7 @@ import { stripComments } from './check-design-system.mjs';
 const projectRoot = fileURLToPath(new URL('..', import.meta.url));
 const sourceRoot = join(projectRoot, 'src');
 
-export const VIOLATION_KINDS = Object.freeze(['silent-mutation', 'no-op-error-handler', 'swallowed-rejection']);
+export const VIOLATION_KINDS = Object.freeze(['silent-mutation', 'no-op-error-handler', 'unreasoned-failure', 'swallowed-rejection']);
 
 /** `const name = useMutation(` — the declaration is what gets a name to track. */
 const MUTATION_DECL = /const\s+([A-Za-z_$][\w$]*)\s*=\s*useMutation\s*\(/g;
@@ -116,6 +116,159 @@ function optionsOf(code, openParenIndex) {
   return code.slice(openParenIndex, i);
 }
 
+/**
+ * Reads the balanced contents starting at the `(`/`{`/`[` at `openIndex`.
+ *
+ * Used instead of a regex because a toast's message argument can contain
+ * parentheses of its own — `showToast(t('x'), 'error')` — and a regex that
+ * stops at the first `)` reports the severity as the message.
+ */
+function balancedContentsOf(code, openIndex) {
+  let depth = 0;
+  for (let i = openIndex; i < code.length; i += 1) {
+    const ch = code[i];
+    if (ch === '(' || ch === '{' || ch === '[') depth += 1;
+    else if (ch === ')' || ch === '}' || ch === ']') {
+      depth -= 1;
+      if (depth === 0) return code.slice(openIndex + 1, i);
+    }
+  }
+  return null;
+}
+
+/** The text before the first top-level comma — i.e. the first argument. */
+function firstArgument(argumentList) {
+  let depth = 0;
+  let quote = null;
+  for (let i = 0; i < argumentList.length; i += 1) {
+    const ch = argumentList[i];
+    if (quote) {
+      if (ch === quote) quote = null;
+      continue;
+    }
+    if (ch === "'" || ch === '"' || ch === '`') quote = ch;
+    else if (ch === '(' || ch === '{' || ch === '[') depth += 1;
+    else if (ch === ')' || ch === '}' || ch === ']') depth -= 1;
+    else if (ch === ',' && depth === 0) return argumentList.slice(0, i);
+  }
+  return argumentList;
+}
+
+/**
+ * The body of the arrow at `start`, and the offset of that body within `code`.
+ *
+ * A block body is read to its matching brace. An expression body is read to the
+ * first top-level `,` or `;` — **not** to the next `;`, which is the trap this
+ * function exists to avoid. `onError: () => showToast(t('x'), 'error'),` carries
+ * no semicolon at all, so "scan to the next one" runs past the end of the
+ * handler and swallows the *following* mutation's toast as well, reporting one
+ * defect twice and putting it on the wrong line.
+ */
+function arrowBodyAt(code, start) {
+  if (code[start] === '{') {
+    const text = balancedContentsOf(code, start);
+    return text === null ? null : { text, offset: start + 1 };
+  }
+  let depth = 0;
+  let quote = null;
+  for (let i = start; i < code.length; i += 1) {
+    const ch = code[i];
+    if (quote) {
+      if (ch === quote) quote = null;
+      continue;
+    }
+    if (ch === "'" || ch === '"' || ch === '`') quote = ch;
+    else if (ch === '(' || ch === '{' || ch === '[') depth += 1;
+    else if (ch === ')' || ch === '}' || ch === ']') {
+      depth -= 1;
+      // The closing paren of the enclosing options object: the body ended above.
+      if (depth < 0) return null;
+    } else if (depth === 0 && (ch === ',' || ch === ';')) {
+      return { text: code.slice(start, i), offset: start };
+    }
+  }
+  return { text: code.slice(start, start + 500), offset: start };
+}
+
+const ON_ERROR_PROPERTY = /\bonError\s*:\s*(?:\(\s*[^)]*\)\s*=>|[A-Za-z_$][\w$]*\s*=>)/g;
+
+const SHOW_TOAST_CALL = /\bshowToast\s*\(/g;
+
+/**
+ * `t('some.key')` with nothing from the failure spliced in.
+ *
+ * Only a plain quoted key counts. A template literal is excluded on purpose:
+ * `t(\`documents.relocationErrors.${code || 'DEFAULT'}\`)` looks like a literal
+ * at a glance but builds its key *from* the failure, so the message it produces
+ * is the specific reason. Judging the surface syntax would flag it as the
+ * defect it is the opposite of.
+ */
+const BARE_TRANSLATION_CALL = /^t\(\s*(['"])([^'"$]*)\1\s*\)$/;
+
+/**
+ * The failure sentences that announce nothing about why the write was rejected,
+ * each reported on the line of the `onError` it belongs to.
+ *
+ * The line matters: every other rule in this gate reports the `useMutation(`
+ * declaration, and so does the `mutation-error-allow` escape hatch — it reads
+ * the comment on the line *above* the reported one. Reporting the line of the
+ * `showToast` call instead puts the anchor several lines below the decision the
+ * author is about to make, and the exemption then has nowhere to go. The `onError`
+ * property is both the stable anchor and the line the author is looking at.
+ *
+ * This is the rule that had to exist because the three above all pass on a
+ * mutation whose `onError` is `() => showToast(t('alerts.deleteError'), 'error')`
+ * — a handler that is present, is not a no-op, and tells the user that the
+ * delete failed and nothing more. The gate's own summary line claimed "every
+ * write action reports its failure", and for these it did not: `api/client.ts`
+ * had already lifted the server's reason into `Error.message`, and the handler
+ * threw it away at the signature by taking no parameter at all.
+ *
+ * The shape checked is deliberately narrow — the toast's **message argument is
+ * itself a bare `t('literal')`**. Everything that carries a reason passes:
+ *   - `showToast(failureMessage(t, 'k', error), 'error')` — `t` is a bare
+ *     identifier there, not a call;
+ *   - `showToast(formatMutationError(t('k'), error), 'error')` — the message
+ *     argument is the call, not `t('k')`;
+ *   - `showToast(t('files.importError', { error: msg }), 'error')` — an
+ *     interpolation is present.
+ *
+ * A coarser rule ("the body mentions no identifier matching the parameter")
+ * was written first and measured at **zero** hits across all fourteen handlers
+ * that take a named parameter, so it was dropped rather than shipped: a rule
+ * that never fires reports "nothing to fix" forever and is worse than no rule,
+ * because it reads as coverage.
+ *
+ * **Known limit.** This reads the `onError` body and cannot follow a call into
+ * a local helper, so a handler of the form `onError: e => reportFailure(e, 'k')`
+ * where `reportFailure` drops `e` is not detected. `Documents.tsx` had exactly
+ * that shape: five mutations called a shared `handleMutationError(error, key)`
+ * whose body ended in `showToast(t(fallbackKey), 'error')`, and the reason died
+ * inside the helper where no rule could see it. Batch 859 fixed the helper
+ * rather than teaching this gate to chase through it, and that is the honest
+ * boundary: the gate keeps the sites where the message is written out in full
+ * at the call site, and the helper shape stays a review question.
+ */
+function findUnreasonedFailures(options) {
+  const found = [];
+  ON_ERROR_PROPERTY.lastIndex = 0;
+  let match;
+  while ((match = ON_ERROR_PROPERTY.exec(options)) !== null) {
+    const body = arrowBodyAt(options, match.index + match[0].length);
+    if (body === null) continue;
+    SHOW_TOAST_CALL.lastIndex = 0;
+    let call;
+    while ((call = SHOW_TOAST_CALL.exec(body.text)) !== null) {
+      const argumentList = balancedContentsOf(body.text, call.index + call[0].length - 1);
+      if (argumentList === null) continue;
+      const key = firstArgument(argumentList).trim().match(BARE_TRANSLATION_CALL);
+      if (key === null) continue;
+      found.push({ key: key[2], offset: match.index });
+    }
+  }
+  return found;
+}
+
 export function scanSource(relativePath, source) {
   const violations = [];
   const code = stripComments(source);
@@ -136,7 +289,23 @@ export function scanSource(relativePath, source) {
     // check that had to change in Batch 798: `onError: () => {}` satisfied the
     // line above for as long as the rule existed.
     if (/\bonError\s*:/.test(options)) {
-      if (!NOOP_HANDLER.test(options)) continue;
+      if (!NOOP_HANDLER.test(options)) {
+        // Present and doing something is not the same as telling the user why.
+        // `options` is a slice of `code` starting at `openParen`, so an offset
+        // inside it maps back by adding that same index.
+        for (const { key, offset } of findUnreasonedFailures(options)) {
+          const line = code.slice(0, openParen + offset).split('\n').length;
+          const allow = allowAt(line);
+          violations.push({
+            kind: 'unreasoned-failure',
+            file: relativePath,
+            line,
+            message: `${name} reports the failure as the fixed sentence "${key}" and never says what the server objected to`,
+            detail: allow ? allow[1] : undefined,
+          });
+        }
+        continue;
+      }
       const line = code.slice(0, match.index).split('\n').length;
       const allow = allowAt(line);
       violations.push({

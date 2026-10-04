@@ -171,7 +171,7 @@ describe('ABTest with real query/mutation wiring', () => {
     await user.click(await screen.findByRole('button', { name: 'abtest.start' }));
 
     await waitFor(() => {
-      expect(mocks.showToast).toHaveBeenCalledWith('abtest.startError', 'error');
+      expect(mocks.showToast).toHaveBeenCalledWith('abtest.startError (conflict)', 'error');
     });
   });
 
@@ -212,12 +212,12 @@ describe('ABTest with real query/mutation wiring', () => {
     renderAbTest('/abtest/5');
     await user.click(await screen.findByRole('button', { name: 'abtest.pause' }));
     await waitFor(() => {
-      expect(mocks.showToast).toHaveBeenCalledWith('abtest.pauseError', 'error');
+      expect(mocks.showToast).toHaveBeenCalledWith('abtest.pauseError (pause failed)', 'error');
     });
 
     await user.click(screen.getByRole('button', { name: 'abtest.stop' }));
     await waitFor(() => {
-      expect(mocks.showToast).toHaveBeenCalledWith('abtest.stopError', 'error');
+      expect(mocks.showToast).toHaveBeenCalledWith('abtest.stopError (stop failed)', 'error');
     });
   });
 
@@ -318,7 +318,7 @@ describe('ABTest create modal with real create mutation', () => {
     fireEvent.submit(screen.getByRole('dialog', { name: 'abtest.createExperiment' }).querySelector('form')!);
 
     await waitFor(() => {
-      expect(mocks.showToast).toHaveBeenCalledWith('abtest.createError', 'error');
+      expect(mocks.showToast).toHaveBeenCalledWith('abtest.createError (dup)', 'error');
     });
     expect(
       screen.getByRole('dialog', { name: 'abtest.createExperiment' }),

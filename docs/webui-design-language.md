@@ -243,12 +243,15 @@ toggle, which is why the row is a toggle button and deliberately **not**
 ## 6. A write action must report its failure
 
 `npm run check:mutation-errors` is chained into `npm run lint` and scans every
-`.tsx` under `src/` for three violations:
+`.tsx` under `src/` for four violations:
 
 - `silent-mutation` — a `useMutation` that neither passes an `onError` (usually
   `showToast`) nor has its `.isError` rendered anywhere in the same file.
 - `no-op-error-handler` — an `onError` whose body is empty. **A handler that
   swallows is not a handler.**
+- `unreasoned-failure` — an `onError` that announces the failure as a fixed
+  sentence carrying nothing from the failure. **Reporting that it failed is not
+  the same as saying why.**
 - `swallowed-rejection` — a `catch` block that discards the failure without
   saying why that is acceptable.
 
@@ -282,6 +285,34 @@ must never break the UI", "the visual theme still applies for this tab". Asking
 for that sentence costs one line at the moment the decision is made. Writing to
 the console is **not** this rule; a console trace is a decision with a visible
 trail, and which of those deserve a user-facing message is a product call.
+
+**Batch 859 found that the three rules above all pass on a handler that is
+present, is not a no-op, and answers nothing.** Eleven mutations read
+`onError: () => showToast(t('alerts.deleteError'), 'error')`: a fixed sentence,
+no parameter, and the server's reason discarded at the signature rather than in
+the body. `api/client.ts` had already lifted `response.data.message` into
+`Error.message`, so the information was in the browser the whole time. The gate's
+own summary line read "every write action reports its failure", and for these
+eleven it did not — a user reporting "the delete failed" tells an operator
+nothing about whether the collection was still referenced, the key was already
+revoked, or the network was down.
+
+`unreasoned-failure` asks one narrow question: is the toast's **message argument
+itself** a bare `t('literal')`? Everything that carries a reason passes — the
+shared `failureMessage(t, key, error)` helper passes it as a value rather than a
+call, a local formatter like `formatMutationError(t('k'), error)` passes it as
+the call's argument, an interpolated `t('k', { error: msg })` has a second
+argument, and a key built from the failure (`t(\`documents.relocationErrors.${code}\`)`)
+is the specific reason rather than a shrug. A coarser version of this rule was
+written first, measured at **zero** hits across all fourteen handlers that take a
+named parameter, and dropped rather than shipped: a rule that never fires reads
+as coverage forever.
+
+The rule is reported on the `onError` line so the `mutation-error-allow`
+exemption sits directly above the decision, like the other two rules. It cannot
+follow a call into a local helper — `Documents.tsx` had five mutations sharing a
+`handleMutationError` that dropped the reason inside, where no rule could see it;
+Batch 859 fixed that helper rather than teaching the gate to chase through it.
 
 Two details the fixes had to get right, both pinned by tests:
 
