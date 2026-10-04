@@ -201,6 +201,40 @@ describe('the known blind spot of this gate', () => {
     // come from a behavioural test rather than from this gate.
     expect(source).not.toContain('disabled=');
   });
+
+  it('cannot tell a correctly disabled control from one guarded indirectly', () => {
+    // Batch 870. This is the shape a naive census gets wrong, and it cost this
+    // batch a false positive before it was caught: a scan that asks "does the
+    // opening tag mention `X.isPending`?" flags this button, because the tag
+    // says only `disabled={!canApply}`. Reading the file shows `canApply` is
+    // defined *with* `&& !applyMutation.isPending`, so the button really is
+    // disabled while the apply is in flight. The code was correct and the scan
+    // was wrong.
+    //
+    // What matters for this gate is subtler than "the scan was wrong". The gate
+    // is green here for an unrelated reason: the same file mentions
+    // `startMut.isPending` elsewhere, which is the file-scoped exemption. So the
+    // green is **not evidence about this button at all** — a correctly disabled
+    // control and an unprotected one look identical from here.
+    //
+    // Therefore: do not add a rule that checks the opening tag for `isPending`.
+    // It would cry wolf on exactly this code, which is the one failure mode
+    // this gate's own header calls the worst.
+    const source = `
+      const canApply = preview !== null && !startMut.isPending;
+      return (
+        <button onClick={() => startMut.mutate()} disabled={!canApply}>
+          {startMut.isPending ? 'Applying…' : 'Confirm'}
+        </button>
+      );
+    `;
+    expect(kinds(source)).toEqual([]);
+
+    // The real defence, and the only thing that actually settles it: the
+    // component must be exercised with a pending mutation and the control
+    // asserted disabled.
+    expect(source).toContain('&& !startMut.isPending');
+  });
 });
 
 describe('the real component tree', () => {
