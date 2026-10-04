@@ -43,7 +43,17 @@
  *
  * The allowlist below is not an amnesty — it is the seven strings that should
  * stay in English, each with the reason it is correct rather than merely
- * tolerated. An entry that is no longer needed is removed, not left to rot.
+ * tolerated.
+ *
+ * **Batch 880 made that last sentence enforceable.** "An entry that is no longer
+ * needed is removed, not left to rot" was a promise about a discipline rather
+ * than a check, and nothing enforced it. A rotted entry is not inert: the key is
+ * `path:copy`, so once the string is gone the entry goes on silently allowing
+ * the *next* occurrence of the same text in the same file, justified by a reason
+ * written months ago for a string that no longer exists. An entry nobody uses is
+ * now a failure. The success line also stopped conflating two numbers: it
+ * counted hits and printed them as an entry count, so one entry matching twice
+ * and another matching nothing still read "7".
  *
  * Run:
  *   node scripts/check-hardcoded-copy.mjs
@@ -369,6 +379,41 @@ export function checkFile(relPath, source, allowed = ALLOWED, proseProps) {
   return violations;
 }
 
+/**
+ * How many times each allowlist entry is actually used, and which entries are
+ * not used at all.
+ *
+ * Batch 880. The header has always said "an entry that is no longer needed is
+ * removed, not left to rot", which is a promise about a discipline rather than a
+ * check — and nothing enforced it. A rotted entry is not inert: the key is
+ * `path:copy`, so once the string is gone from the file the entry keeps
+ * silently allowing the *next* occurrence of the same text in the same file,
+ * justified by a reason written months earlier for a string that no longer
+ * exists. That is the same staleness contract the design-debt baseline
+ * enforces and this list did not.
+ *
+ * Pure, so the check itself can be tested. The real tree currently has no
+ * rotted entry; the point is that the next one cannot appear quietly.
+ *
+ * @param {{relPath: string, source: string}[]} files
+ * @param {Record<string, string>} allowed
+ * @returns {{used: Map<string, number>, stale: string[]}}
+ */
+export function auditAllowlist(files, allowed = ALLOWED) {
+  const proseProps = collectProseProps(files);
+  const used = new Map();
+  for (const file of files) {
+    for (const hit of findHardcodedCopy(file.relPath, file.source, proseProps)) {
+      const key = `${file.relPath}:${hit.copy}`;
+      if (Object.prototype.hasOwnProperty.call(allowed, key)) {
+        used.set(key, (used.get(key) ?? 0) + 1);
+      }
+    }
+  }
+  const stale = Object.keys(allowed).filter(key => !used.has(key));
+  return { used, stale };
+}
+
 function tsxFiles(dir) {
   const out = [];
   for (const entry of readdirSync(dir)) {
@@ -456,13 +501,32 @@ function main() {
   // to aria-label, which no single page can tell on its own.
   const proseProps = collectProseProps(files);
   const violations = files.flatMap((f) => checkFile(f.relPath, f.source, ALLOWED, proseProps));
-  const allowed = files.reduce(
-    (n, f) => n + findHardcodedCopy(f.relPath, f.source, proseProps)
-      .filter((h) => Object.prototype.hasOwnProperty.call(
-        ALLOWED, `${f.relPath}:${h.copy}`,
-      )).length,
-    0,
-  );
+  // Batch 880. Two numbers used to be conflated into one, and neither was the
+  // number the sentence claimed. The old line counted *hits* and printed
+  // "N intentional technical string(s) allowlisted"; with one entry matching
+  // twice and another matching nothing it would still have printed 7. An
+  // entry nobody uses is now a failure, so the two numbers can only disagree
+  // the other way round, and both are printed.
+  const { used, stale } = auditAllowlist(files, ALLOWED);
+
+  if (stale.length > 0) {
+    console.error('Allowlist entries that no longer allow anything:');
+    for (const key of stale) {
+      console.error(
+        `- [stale-allowlist-entry] ${key} is in ALLOWED but ${key.split(':')[0]} no longer`
+          + ` contains "${key.slice(key.lastIndexOf(':') + 1)}". Delete the entry, or restore`
+          + ' the string. A stale entry keeps silently allowing the next occurrence of'
+          + ' the same text, justified by a reason written for a string that is gone.',
+      );
+    }
+    console.error(
+      '\nThe allowlist is not an amnesty. An entry earns its place by naming a string\n'
+        + 'that is really there; keeping it after the string moves on is how a list of\n'
+        + 'seven honest exceptions becomes a list of whatever happens to match.',
+    );
+    process.exitCode = 1;
+    return;
+  }
 
   if (violations.length > 0) {
     console.error('Hardcoded user-visible copy:');
@@ -480,9 +544,10 @@ function main() {
     .map(([component, props]) => `${component}.${[...props].join('/')}`)
     .join(', ');
   console.log(
-    `Hardcoded-copy check passed; ${files.length} component source(s) scanned, ` +
-      `${allowed} intentional technical string(s) allowlisted, no other user-visible ` +
-      'text is a literal.',
+    `Hardcoded-copy check passed; ${files.length} component source(s) scanned, `
+      + `${Object.keys(ALLOWED).length} allowlist entr(y|ies), every one in use across `
+      + `${[...used.values()].reduce((a, b) => a + b, 0)} occurrence(s), no other `
+      + 'user-visible text is a literal.',
   );
   console.log(
     `Custom components whose accessible name comes from a prop: ${discovered || '(none)'}. ` +

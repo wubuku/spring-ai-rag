@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
+import { spawnSync } from 'node:child_process';
 import {
   ALLOWED,
+  auditAllowlist,
   checkFile,
   collectProseProps,
   collectSources,
@@ -527,5 +529,111 @@ export function Panel() {
       { relPath: 'components/Button.tsx', source: 'export function Button() { return <button />; }' },
     ]);
     expect(unrelated.size).toBe(0);
+  });
+});
+
+describe('Batch 880: an allowlist entry that no longer allows anything', () => {
+  // The header has said "an entry that is no longer needed is removed, not left
+  // to rot" since the gate was written. Nothing enforced it. A rotted entry is
+  // not inert: the key is `path:copy`, so once the string is gone the entry
+  // keeps silently allowing the *next* occurrence of the same text in the same
+  // file, justified by a reason written months ago for a string that no longer
+  // exists.
+  // The module-level WITH_I18N is used on purpose: a second copy here would let
+  // these cases pass against a fixture the rest of the suite never sees.
+
+  it('reports an entry whose string is no longer in the file', () => {
+    const files = [{ relPath: 'pages/Widget.tsx', source: `${WITH_I18N}\n<p>Nothing here</p>\n` }];
+    const allowed = { 'pages/Widget.tsx:MRR': 'a metric abbreviation' };
+    expect(auditAllowlist(files, allowed).stale).toEqual(['pages/Widget.tsx:MRR']);
+  });
+
+  it('reports nothing when the entry is still doing its job', () => {
+    const files = [{
+      relPath: 'pages/Widget.tsx',
+      source: `${WITH_I18N}\n<option value="MRR">MRR</option>\n`,
+    }];
+    const allowed = { 'pages/Widget.tsx:MRR': 'a metric abbreviation' };
+    const audit = auditAllowlist(files, allowed);
+    expect(audit.stale).toEqual([]);
+    expect(audit.used.get('pages/Widget.tsx:MRR')).toBeGreaterThan(0);
+  });
+
+  it('counts occurrences separately from entries, so the two cannot be conflated', () => {
+    // The old success line counted hits and printed them as an entry count, so
+    // one entry matching twice and another matching nothing still read "7".
+    const files = [{
+      relPath: 'pages/Widget.tsx',
+      source: `${WITH_I18N}\n<th>MRR</th>\n<th>MRR</th>\n`,
+    }];
+    const allowed = { 'pages/Widget.tsx:MRR': 'a metric abbreviation' };
+    const audit = auditAllowlist(files, allowed);
+    expect(audit.used.size).toBe(1);
+    expect([...audit.used.values()].reduce((a, b) => a + b, 0)).toBeGreaterThan(1);
+  });
+
+  it('sees bare JSX text, not just quoted literals', () => {
+    // The measurement that nearly produced a false finding: an allowlist entry
+    // is matched against what the gate reports, and two of the seven real
+    // entries are bare JSX text (`<th>MRR</th>`, a bare `English` on its own
+    // line) rather than quoted strings. A probe that searched only for quoted
+    // literals called them dead while the gate was passing.
+    const files = [{ relPath: 'pages/Widget.tsx', source: `${WITH_I18N}\n<th>MRR</th>\n` }];
+    expect(auditAllowlist(files, { 'pages/Widget.tsx:MRR': 'x' }).stale).toEqual([]);
+  });
+
+  it('leaves no stale entry in the real tree', () => {
+    // The invariant, asserted against the real sources rather than a fixture.
+    // Today it is clean; the value is that the next rot cannot arrive quietly.
+    const audit = auditAllowlist(collectSources(), ALLOWED);
+    expect(audit.stale).toEqual([]);
+    expect(Object.keys(ALLOWED).length).toBeGreaterThan(0);
+    expect(audit.used.size).toBe(Object.keys(ALLOWED).length);
+  });
+
+  it('still fails an untranslated string that is not allowlisted', () => {
+    // Without this, "the tree is clean" could just mean the audit stopped the
+    // gate from ever looking at copy again.
+    const files = [{
+      relPath: 'pages/Widget.tsx',
+      source: `${WITH_I18N}\n<th>Mean Reciprocal Rank</th>\n`,
+    }];
+    expect(auditAllowlist(files, {}).stale).toEqual([]);
+    expect(checkFile('pages/Widget.tsx', files[0].source, ALLOWED))
+      .not.toEqual([]);
+  });
+});
+
+describe('Batch 880: the gate itself, not just the helper', () => {
+  // The cases above test a pure function. That cannot catch the wiring rotting —
+  // `main()` could stop consulting the audit and every one of them would stay
+  // green, which is the shape this repository has shipped before. So the gate is
+  // run as a subprocess against the real tree and its exit code and success
+  // line are read, the same way Batch 818 added for check-i18n-keys.
+  //
+  // What this cannot cover is the staleness *failure* path, because doing that
+  // would mean editing a source file or adding a production test hook. That
+  // half is proved by the end-to-end probe instead — a real violation of the
+  // real tree's most distinctive allowlist entry, gate exit 0 → 1.
+  it('passes on the real tree and reports entries and occurrences separately', () => {
+    const result = spawnSync(
+      process.execPath,
+      [new URL('../check-hardcoded-copy.mjs', import.meta.url).pathname],
+      { encoding: 'utf8' },
+    );
+    expect(result.status).toBe(0);
+    const audit = auditAllowlist(collectSources(), ALLOWED);
+    const occurrences = [...audit.used.values()].reduce((a, b) => a + b, 0);
+    expect(result.stdout).toContain(`${audit.used.size} allowlist entr(y|ies)`);
+    expect(result.stdout).toContain(`in use across ${occurrences} occurrence(s)`);
+  });
+
+  it('does not report a stale entry on the real tree', () => {
+    const result = spawnSync(
+      process.execPath,
+      [new URL('../check-hardcoded-copy.mjs', import.meta.url).pathname],
+      { encoding: 'utf8' },
+    );
+    expect(result.stderr).not.toContain('stale-allowlist-entry');
   });
 });
