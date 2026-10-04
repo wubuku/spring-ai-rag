@@ -113,6 +113,7 @@ skipped；本门禁则保证今后再有类"闭嘴"就会失败。
 | `verify-false-optional-wiring.mjs` | 用 `@Autowired(required = false)` 注入、又被 `if (x == null)` 守卫的协作者，而它对应的 bean 是**无条件**的 `@Service`/`@Component`——也就是那条被守卫的分支在运行中的应用里根本走不到——除非字段上写了 `// optional-claim: <理由>`。扫描面是 `*Controller.java` + `*Service.java`（Batch 829 起）；"会抛"与"会跳过"都算声明，区别只在处置：会抛的删，会跳过的登记理由。理由不足八个字符的**自己就是一条发现**（`weak-optional-claim`，Batch 882）——与前端两个门禁的 `weak-allow-reason` 同一套房规，因为这个放行阀豁免的是一句关于部署形态的断言，不是一个样式选择 | `test-support/false-optional-wiring-self-test.mjs` | tests 链 |
 | `verify-controller-constructor-count.mjs` | controller 声明了多于一个构造器（不区分可见性）——Spring 只从 `@Autowired` 那个注入，其余构造器只有测试够得着，并且替调用方决定哪些协作者被置空。**判据边界（Batch 884 修正了旧成功信息的吹大）**：这道门禁**只数构造器**。真实树上有 **6 个 controller 用 12 处 `@Autowired` 方法注入 13 个协作者**，构造器计数一个也看不见，测试可以不调它们就让字段为空——其中 12 个走 `@Autowired(required = false)`，由 `verify-false-optional-wiring` 判；剩下 1 个走必填 setter，**哪道门禁都不判**。这块没被覆盖的面积每次运行都会**算出来印在输出上** | `test-support/controller-constructor-count-self-test.mjs` | tests 链 |
 | `verify-error-code-catalog.mjs` | 错误响应里出现的码没登记在 `ErrorCode`（自称 single source of truth，实测 6 个码缺失）；码旁边的 HTTP status 与目录声明的不一致；手工拼的 `ErrorResponse` 不是 problem detail。全仓库**只有这一道门禁既丢弃注释的换行、又报行号**，所以这两件事必须对上：原来的 `stripComments` 把整段注释替换成空串，而 `lineOf` 在缩短后的文本上数行号，于是真实树上**有 32 条发现被报在错误的行上，最大偏 54 行**——一道门禁的价值有一半在于告诉人去哪一行看，这件事它必须做对。现在注释保留换行，匹配行为逐字符不变（**0 个文件**的发现集合发生变化） | `test-support/error-code-catalog-self-test.mjs` | tests 链 |
+| `verify-json-assertions.mjs` | 在 `all(...)` / `any(...)` 里面，否定式断言——字段与 `!=` 比较，或 `// ""` 守卫过的包含判断再取 `\| not`——会被"读不到"的字段满足，于是谓词对它看不见的东西报"没事"。895 靠手读两个谓词找到一处，只能从外面加守卫；随后的普查又找到两处，都在 CI 从不运行的脚本里。**没有 allowlist**：fail-open 的谓词没法被豁免而不引入 allowlist，而 allowlist 就是"这道门禁不检查的东西"的清单 | `test-support/json-assertions-self-test.mjs` | tests 链 |
 | `verify-no-pessimistic-locks.sh` | 生产代码里的悲观锁 / `SKIP LOCKED` / advisory lock | `test-support/pessimistic-locks-self-test.sh` | docs 链 |
 | `verify-zh-translation.mjs` | 中文文档里未翻译的英文段落 | `test-support/zh-translation-self-test.mjs` | docs 链 |
 | `verify-project-tests.sh` / `verify-project-docs.sh` | 上面 9 个的聚合入口 | 由各门禁承担 | 人跑 / 待接入 CI |
@@ -184,7 +185,23 @@ principal 会在正确数据上判红。空数组仍然合法地等于"没有告
 因为被测对象就是一个 shell 函数——用 JavaScript 重写一遍会在 shell 那份烂掉时依然
 全绿。其中有一条用例断言 `alerts_lack_expiry` 对一条**无法归属**的告警**仍然**返回 0。
 这看起来是反的，是故意的：它把危害钉在谓词这一层，从而证明轮询循环里的守卫是承重的。
-万一将来某个 `jq` 让这条谓词变成了 fail-closed，这条用例就是宣布守卫已经多余的那一声。
+
+**Batch 896 把这条用例翻转了，因为 896 把谓词本身关上了。** 在同一个合取里要求字段存在，
+断言就从"我看不见"变成了"这个字段读得出来，而且它说的是别的东西"：
+
+```jq
+all(.[];
+  (.alertType != null)
+  and ((.alertType != "API_PRINCIPAL_EXPIRY")
+    or ((.metrics.principalId != null)
+      and (.metrics.principalId != $principal))))
+```
+
+对 principal 的要求**刻意**限定在 expiry 分支内——别的种类合法地不带 principal，
+对所有告警都要求一个会在正确数据上判红。`alerts_response_judgable` 保留，但身份变了：
+它现在是**消息**而不是安全网——第一秒就说清"是读法不行"，
+而不是让一次轮询为一个永远不会有答案的问题空转到超时。
+> **一条钉住缺陷的用例就是一根钉子；缺陷修好之后，钉子必须拔掉，否则它会把缺陷钉回去。**
 
 普查的门禁有五条硬规则：每个门禁脚本必须在册；自动化门禁必须带自测或写明为什么
 不能带；自动化门禁必须有东西执行它；**CI 到不了的自动化门禁必须写明理由**；门禁必须

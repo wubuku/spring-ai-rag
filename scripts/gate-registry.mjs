@@ -166,6 +166,24 @@ export const GATES = [
     noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
   },
 
+  // Batch 896. Inside `all(...)` or `any(...)`, a negative assertion — a field
+  // compared with `!=`, or a `// ""`-guarded containment test negated with
+  // `| not` — is satisfied by a field that reads as absent, so the predicate
+  // reports "nothing is wrong" about something it cannot see. Batch 895 found
+  // one by reading two predicates by hand and had to guard it from the outside;
+  // the census that followed found two more in scripts nobody runs in CI.
+  //
+  // There is no allowlist here, and that is the point rather than a preference:
+  // a fail-open predicate cannot be exempted without one, and an allowlist is a
+  // list of things the gate does not check. The predicate Batch 895 guarded is
+  // closed from inside instead, which is what keeps the finding count at zero.
+  {
+    gate: 'scripts/verify-json-assertions.mjs',
+    kind: 'gate',
+    selfTest: 'scripts/test-support/json-assertions-self-test.mjs',
+    noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
+  },
+
   // Batch 820. A collaborator injected with @Autowired(required = false) claims
   // it may be absent; this rejects that claim when the bean is an unconditional
   // @Service and the field has no `// optional-claim:` reason. Twelve such

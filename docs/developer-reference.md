@@ -120,6 +120,7 @@ did not already know they existed.
 | `verify-false-optional-wiring.mjs` | A collaborator injected with `@Autowired(required = false)` and guarded by a null check, whose bean is an unconditional `@Service`/`@Component` — so the guarded branch is unreachable in a running application — unless the field records `// optional-claim: <reason>`. The scanned surface is `*Controller.java` plus `*Service.java` (Batch 829); both throwing and skipping guards are claims, and they differ only in disposition: delete a throwing one, record a reason for a skipping one. A reason under eight characters is itself a finding (`weak-optional-claim`, Batch 882) — the same house rule as `weak-allow-reason` in the two frontend gates, because this valve waives a claim about the deployment shape rather than a style choice | `test-support/false-optional-wiring-self-test.mjs` | tests chain |
 | `verify-controller-constructor-count.mjs` | A controller declaring more than one constructor, of any visibility — Spring injects through the `@Autowired` one, so the rest are reachable only from tests and decide on the caller's behalf which collaborators end up null. **Scope, stated because the old success line overstated it (Batch 884)**: this counts constructors only. Twelve `@Autowired` methods on six controllers inject thirteen collaborators a constructor count cannot see, and a test can leave those unset — twelve through `@Autowired(required = false)`, which `verify-false-optional-wiring` judges, and one through a required setter, which no gate judges. The uncovered surface is measured and printed on every run | `test-support/controller-constructor-count-self-test.mjs` | tests chain |
 | `verify-error-code-catalog.mjs` | A code that reaches an error response without being declared in `ErrorCode` (which calls itself the single source of truth; six were missing); an HTTP status beside a code that contradicts the one the enum declares; a hand-assembled `ErrorResponse` that is not a problem detail. This is the one gate in the repository that both discards a comment's newlines and reports line numbers, so the two had to be reconciled: `stripComments` used to replace each comment with nothing at all, and `lineOf` counted lines in the shortened text, which put **32 findings on the real tree at the wrong line — up to 54 lines off**, and a gate whose job includes saying where to look has to be able to say it correctly. Comments now keep their newlines, which leaves the matching byte-for-byte unchanged (**0 files** changed their finding set) | `test-support/error-code-catalog-self-test.mjs` | tests chain |
+| `verify-json-assertions.mjs` | Inside `all(...)` / `any(...)`, a negative assertion — a field compared with `!=`, or a `// ""`-guarded containment test negated with `\| not` — is satisfied by a field that reads as absent, so the predicate reports "nothing is wrong" about something it cannot see. Batch 895 found one such predicate by reading two of them by hand and had to guard it from outside; the census that followed found two more, in scripts that run nowhere in CI. **No allowlist**: a fail-open predicate cannot be exempted without one, and an allowlist is a list of things the gate does not check | `test-support/json-assertions-self-test.mjs` | tests chain |
 | `verify-no-pessimistic-locks.sh` | Pessimistic locks, `SKIP LOCKED` and advisory locks in production code | `test-support/pessimistic-locks-self-test.sh` | docs chain |
 | `verify-zh-translation.mjs` | An untranslated English passage in a Chinese document | `test-support/zh-translation-self-test.mjs` | docs chain |
 | `verify-project-tests.sh` / `verify-project-docs.sh` | Aggregate entry points for the nine above | borne by each gate | by hand / not yet in CI |
@@ -203,12 +204,29 @@ zero matches and they fail. The shape that fails open is the one that asks
 
 `scripts/test-support/alert-payload-self-test.mjs` runs the real shell functions,
 because the thing under test is a shell function — a JavaScript restatement would
-pass while the shell one rotted. One of its cases asserts that
-`alerts_lack_expiry` **still** returns 0 for an alert it cannot attribute. That
-looks backwards and is deliberate: it pins the hazard at the predicate level so
-that the guard in the poll loop is known to be load-bearing. If a future `jq`
-ever made that predicate fail closed, this case is what says the guard has become
-redundant.
+pass while the shell one rotted. One of its cases asserted that
+`alerts_lack_expiry` **still** returned 0 for an alert it cannot attribute, pinning
+the hazard at the predicate level so the guard in the poll loop was known to be
+load-bearing.
+
+**Batch 896 inverted that case, because Batch 896 closed the predicate.** Requiring
+the fields inside the same conjunction makes the assertion range over "the field is
+readable and says something else" instead of over "I cannot look":
+
+```jq
+all(.[];
+  (.alertType != null)
+  and ((.alertType != "API_PRINCIPAL_EXPIRY")
+    or ((.metrics.principalId != null)
+      and (.metrics.principalId != $principal))))
+```
+
+The principal requirement is scoped to expiry alerts on purpose — other kinds
+legitimately carry no principal, and demanding one of everything would fail on
+correct data. `alerts_response_judgable` stays, but as a **message** rather than a
+safety net: it names the reader in the first second instead of leaving a poll to
+time out on a question it can never answer. A case that pins a defect is a nail,
+and once the defect is gone the nail has to come out or it puts the defect back.
 
 The census has five hard rules: every gate script is registered; an automated gate
 carries a self-test or says why it cannot; an automated gate is executed bysomething; **an automated gate CI cannot reach carries a written reason**; and every

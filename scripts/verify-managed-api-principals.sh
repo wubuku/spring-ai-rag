@@ -649,9 +649,19 @@ poll_managed_delivery() {
             .notificationVersion == $version
             and .provider == "DINGTALK"
             and .status == $expected
-            and (. | has("payload") | not)
-            and (. | has("leaseToken") | not)
-            and (. | has("leaseUntil") | not))
+            # Batch 896. These three used to be `has("payload") | not` and its
+            # siblings, which asks whether three names are absent and says
+            # nothing about anything else: rename `payload` and the receipt
+            # still answers "no payload here". The receipt DTO declares exactly
+            # these fields, so the assertion now names all of them — an
+            # unexpected key fails, and so does a missing one, which is the
+            # point. A leak assertion that cannot notice a rename is not one.
+            and (. | keys | sort) == [
+              "alertId", "attemptBudget", "attemptCount", "createdAt",
+              "deliveredAt", "id", "lastAttemptAt", "lastErrorCode",
+              "lastHttpStatus", "manualRetryCount", "nextAttemptAt",
+              "notificationVersion", "provider", "status", "updatedAt"
+            ])
         ' "$output" >/dev/null; then
       return 0
     fi
