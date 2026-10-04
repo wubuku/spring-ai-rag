@@ -478,6 +478,92 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
+### Batch 886（已交付，测试加固：`verify-test-expectations` 头注释里那句"留在账本里等逐个判断"，逐个判断的结果是 27 → 2）
+
+- 分支：`batch-886`
+- 方向：885 把三个从未单独审过的仓库级 `.mjs` 门禁审完之后，转回用户优先级第一项
+  里的**测试本身**。起点是 `verify-test-expectations.mjs` 头注释里那句
+  "The companion question — a test whose *name* promises more than its body
+  verifies — needs per-file judgement rather than a rule, and is tracked in the
+  ledger instead of pretended at here."
+  那一批留下的正是这件事，本批去做它。
+- **普查（8049 个 `@Test`/`@ParameterizedTest`/`@RepeatedTest` 方法）**：
+  - 名字承诺某种结果（fall/return/reject/throw/skip/cache/dedup/…）而 body 里
+    找不到任何"观察动作"的：**27 条**。
+  - body 里既无断言也无 Mockito 验证也无 MockMvc 期望的：**35 条**。
+  两个口径都要读，不是 62 个缺陷。
+- **判据自己错了三次，每次都要记**：
+  1. `OBSERVES` 只写了 `verify\s*\(`，匹配不到 `verifyNoInteractions(`，
+     于是 6 条**带验证**的用例被当成候选。**这正是 `verify-test-expectations`
+     头注释记的"第一版没识别 verifyNoInteractions"——同一个坑，隔了几百批又踩一次。**
+     修完 27 → 14。
+  2. 剩下的 `recoveryRefusedWhenDeletionOriginIsNull` 是**误报**：断言在私有
+     helper `syncItemConflict()` 里，它 `return assertThrows(...)`。
+     **头注释点名的"没跟进私有 helper 里的断言"，又踩一次。**
+  3. 把 `loadExternalJsonIfPresent_kebabCaseKey_failsClosed` 报成"无断言"，
+     而它有 `assertThrows` + 三个 `assertTrue`。**错的是我的探针**（见下）。
+- **一条可推广的结论（来自第 3 次误报，值得单独记）**：
+  > **抹掉字面量再数括号 ≠ 跳过字面量同时数括号。**
+  > 前者会把字面量里的结构字符放行进计数——那个夹具用 Java 文本块
+  > `"""{"a": {"b": 1}}"""`，JSON 的 `{`/`}` 漏进括号计数，提取出的
+  > "body" 在载荷中间就截断了，`assertThrows` 整个不见。
+  > 门禁自己的 `bodyFrom` 安全，是因为它在**原始文本上跳过**引号区域，载荷的
+  > 括号根本不进计数，而且它**从被检查方法自己的 `{` 起走**。
+  > 实测八种形状（文本块在别的方法里 / 在自己方法里 / 载荷含大括号 / 引号数为奇 /
+  > 载荷里有落单的引号）全部判定正确，`verify-test-expectations` EXIT=0 不受影响。
+- **本批查完 Batch 885 留下的那条"未查"**：Java 文本块对类名清单与断言提取的影响。
+  **答案是"对门禁无害、对临时探针有害"**，机制就是上面那句话。885 记为未查是对的——
+  当时手上只有一个无效探针，**没有把无效探针的输出写成结论**。
+- **真正的缺陷只有两处，都改了**：
+  1. **`PdfImportControllerSseTaskLambdaTailTest` 三条 `sseTaskSendsXxx`**：
+     body 只调 `startTask(...)`，而 `startTask` 唯一的断言是"emitter 已 complete"。
+     **发到流上的事件名和载荷一个字都没验**——把 `sendDone` 换成 `sendProgress`
+     这样的改动能让三条全绿。现在每条断言事件名**和**载荷内容
+     （成功路径 `event:done` + `PdfToRagResponse(documentId=41)`；两条错误路径
+     `event:error` + `{error, uuid}`；并各自断言对方的事件名**没有**出现）。
+  2. **`RagChatControllerNonKeyedSseTailTest.configureObjectMapperIgnoresNullInstance`**：
+     原来是 `configure(null); configure(new ObjectMapper());`——**什么都不验**。
+     名字承诺 null 被忽略，而一个**两个参数都忽略**的 setter 同样能让它通过。
+     null 臂就是全部意义：这是 884 实测的 12 个 `@Autowired(required = false)`
+     setter 之一，mapper 变 null 会在
+     `ChatRequestFingerprint.nativeRequest(request, objectMapper)` 处 NPE。
+     改成先设真值、再传 null、断言字段**仍是**那个真值。
+- **删掉一条自我描述错误的测试**：`sseTaskCompletesEvenWhenSendFails` 与
+  `sseTaskSendsDoneOnSuccess` 的 body 只差一个 uuid，**根本没有制造 send 失败**，
+  而名字承诺的是韧性路径。那个契约是真的、也已经被
+  `SseEmittersTest.sendDone_disconnectedClient`（先 complete 再 send，失败是真的）
+  覆盖。一个重复别人又描述失真的测试，只会在读者判断"这块覆盖了吗"的时候骗人。
+- **查过、没发现的 12 条**（如实记为查过，不记成缺陷）：
+  - 7 条是 **JUnit 自己强制的"不得抛异常"契约**（`releaseOfNullClaimIsNoOp`、
+    `putAll_nullMap`、`nullCallbackIsSkipped`、`persistFailureDoesNotThrow` 等）。
+    头注释早就说过这一档是合法的，门禁若把它们叫成缺陷就会催生一份 allowlist。
+  - 4 条是 `validate()` 的正向用例，而**同一个类里有 6 条 `rejects*` 反向用例**
+    （`RagCollectionPurgePropertiesTest`）。契约是"拒绝坏输入"，那条已被验证；
+    正向"不抛异常"是配套而不是空洞。
+  - 1 条 `normalizeDocumentCollectionScopesToleratesNullList`：我以为它丢掉了返回值，
+    读了生产代码才发现**该方法返回 `void`**——"tolerates null" 的契约就是"不抛异常"。
+    **是判据错了，不是代码错了。**
+- **变异对照（变异在生产代码的接线处，三处一次跑）**：
+  - `SseEmitters.sendDone` 事件名 `done` → `finished` ⇒ `sseTaskSendsDoneOnSuccess` 红
+  - `buildErrorData` 丢掉 `extra` ⇒ `sseTaskSendsErrorOnIllegalArgument` 红（uuid 变 null）
+  - `configureObjectMapper` 去掉 null 守卫 ⇒ `configureObjectMapperIgnoresNullInstance` 红
+  - `sseTaskSendsErrorOnUnexpectedException` **保持绿**——它只断言错误消息不断言 uuid。
+    **这说明断言是具体的，不是一刀切。**
+- **我在这一批犯的错，逐条记**：
+  1. 读 Spring 内部结构连错两次：先读 builder 上名为 `sb` 的 `StringBuilder` 字段
+     （`NoSuchFieldException`），再"按类型找唯一的 StringBuilder 字段"（对象其实是
+     `java.lang.String`），第三次才在失败信息里看到真实形状是**混合的**：
+     事件名是 String、载荷是对象，`earlySendAttempts` 里一次 send 排了 3 条。
+     **运行时的形状只能去看，不能推**——三次各花掉一次两分钟的 Maven。
+  2. 第一次 `javap` 挑到了本地仓库里的 `spring-webmvc-5.3.8`，而项目用的是 **6.2.19**。
+     差点照着错误版本的成员表写测试。
+  3. 手写普查脚本时把正则字面量跨行写了（JS 不允许），又在一个数组推导里写下
+     `local Set` 这种自己都看不懂的东西。
+  4. 普查脚本本身把 FQCN 拿去后缀匹配，1006 个全部报 "no source file"。
+- **验收**：定点变异 3 红 1 绿（见上）；`mvn clean test` 全 reactor EXIT=0，
+  数 `<testcase>` 元素 api 557 / core **7654**（少 1 = 删掉的那条自我描述错误的用例）/
+  starter 44 / documents 74；四道后端门禁 + 三份自测 + 接线/中文/docs 全绿。
+
 ### Batch 885（已交付，后端：`verify-test-visibility` 的判据比它自己文档里写的窄一条，而三个"已删类"其实一个都没删）
 
 - 分支：`batch-885`

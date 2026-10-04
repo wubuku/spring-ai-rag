@@ -32,6 +32,7 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -39,6 +40,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -333,8 +335,35 @@ class RagChatControllerNonKeyedSseTailTest {
     }
 
     @Test
-    void configureObjectMapperIgnoresNullInstance() {
+    void configureObjectMapperIgnoresNullInstance() throws Exception {
+        // Batch 886. This used to be:
+        //
+        //     controller.configureObjectMapper(null);
+        //     controller.configureObjectMapper(new ObjectMapper());
+        //
+        // which asserts nothing. The name promises the null is *ignored*, and a
+        // setter that ignored both arguments — null and real — would have passed
+        // it. The null arm is the whole point: this is one of the twelve
+        // `@Autowired(required = false)` setters Batch 884 measured, and a
+        // controller whose mapper went null would NPE at
+        // `ChatRequestFingerprint.nativeRequest(request, objectMapper)`.
+        ObjectMapper replacement = new ObjectMapper();
+        controller.configureObjectMapper(replacement);
+
         controller.configureObjectMapper(null);
-        controller.configureObjectMapper(new ObjectMapper());
+
+        assertSame(replacement, currentObjectMapper(),
+                "a null instance must leave the already-configured mapper in place");
+    }
+
+    /**
+     * The mapper the controller will actually use. Read reflectively because the
+     * only production consumer is a fingerprint helper several layers down, and
+     * driving that path to observe a null would test far more than this rule.
+     */
+    private ObjectMapper currentObjectMapper() throws Exception {
+        Field field = RagChatController.class.getDeclaredField("objectMapper");
+        field.setAccessible(true);
+        return (ObjectMapper) field.get(controller);
     }
 }
