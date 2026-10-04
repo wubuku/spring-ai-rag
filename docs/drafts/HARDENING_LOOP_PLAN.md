@@ -478,6 +478,76 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
+### Batch 854（已交付，后端技术债：棘轮 3 → 2，且清掉一处"两套实例来源"）
+
+- 分支：`feature/required-document-chunking-20261007`
+- 主题：`DocumentEmbedService.chunkingService` 的
+  `@Autowired(required = false)` setter → 必填构造器参数（第 6 个），字段同时改成 `final`。
+- **15 个测试文件**（不是 852 账本里预估的 36——那个数字来自粗普查，
+  实测直接构造 `DocumentEmbedService` 的只有 15 个，其中只有 1 个调过那个 setter）。
+- **本批真正的收获：同一份代码里存在两套 `DocumentChunkingService` 实例来源。**
+  改之前，构造器里有这么一行：
+  ```java
+  this.chunkingService = new DocumentChunkingService(
+          ragProperties,
+          new DocumentDerivationDescriptorProvider(ragProperties));
+  ```
+  而 `DocumentChunkingService` 是 `@Service`、`DocumentDerivationDescriptorProvider` 是
+  `@Component`——**两个都已经是容器里的 bean**。于是：
+  | 场景 | 实际生效的实例 |
+  |---|---|
+  | Spring 装配（生产） | 容器注入的；setter 每次都覆盖那行兜底，**它是死代码** |
+  | 15 个直接构造 service 的测试 | **兜底现场 new 出来的那个** |
+  - 也就是说**测试与生产第一次跑的不是同一个对象来源**，而且这件事
+    在改动之前没有任何测试、注释或门禁能看出来。
+  - 这比"棘轮减一"值钱得多：改完之后 15 个文件的对象来源从隐式兜底
+    变成显式实参，其中 7 个文件 / 16 个用例立刻从假绿变红。
+- **量化（变异 E，施工前做的）**：把构造器里的兜底改成 `null`、setter 不动，
+  15 个文件 54 个用例里 **16 个红**（5 failures + 11 errors），分布在 7 个文件；
+  另 8 个文件 30 个用例仍然全绿——它们根本不碰 `chunkingService` 这条路径。
+  - 这个数字是本批的**验收基准**：改造后同样 54 个用例必须全绿，
+    否则说明"传真对象"没有等价于原来的兜底。
+- **变异 F（编译期钉住）**：删掉 `this.chunkingService = chunkingService;`，
+  编译器直接报 *"可能尚未初始化变量chunkingService"*。
+  - 把字段一起改成 `final`，让"接了参数但忘赋值"从**运行期裸 NPE 升格为编译期错误**。
+    853 的变异 A/B 都是运行期红（NPE），这次是编译期红——**这是把字段声明
+    写成 `final` 的真实收益，不只是风格问题**，而它跟本批的"必填化"是同一件事的两面。
+- **变异 G（证明"不能传 mock"）**：把 `DocumentEmbedServiceTest` 的真对象换成
+  `mock(DocumentChunkingService.class)` → 8 个用例红 6 个。
+  - 这解释了为什么 15 个文件里有 14 个要**传真对象**而不是 mock：
+    它们断言的正是"分块服务交回来几个 chunk、什么版本号"，
+    mock 掉之后这些断言全部落空。
+  - 唯一的例外是 `DocumentEmbedServicePrepareTailTest`：它本来就有一个
+    `chunkingService` mock 字段，断言的是"分块服务**被调用成什么样**"，
+    所以传字段并删掉 setter 调用。
+- **脚本事故 3 次（本批最狼狈的部分，如实记录）**：
+  | # | 事故 | 为什么没在副本上抓住 |
+  |---|---|---|
+  | 1 | 模板末尾多一个右括号（`)));` 写成 `));`），13 个文件语法错 | **只做了 dry-run + diff，没做括号平衡检查** |
+  | 2 | 把 `new com.springairag.core.config.RagProperties()` 规范成短名，2 个文件缺 import | 853 刚踩过同源的坑，还是踩了 |
+  | 3 | 把原收尾行 `);` 改成 `),` 让它**提前闭合**了构造调用 | diff 看起来"对"（那一版确实自洽），但语法是错的 |
+  - 处置：先 `git checkout` 恢复这 15 个测试文件（生产侧改动保留），
+    再在脚本里加**括号平衡不变量检查**（逐文件比对 patched 与原文件的
+    `(` − `)` 差值都必须为 0），重新 dry-run → apply → 编译，三轮才过。
+  - **教训要改写 853 那条**：「在副本上证伪」不等于「在副本上证伪」。
+    diff 能挡住**结构**错误（吞行、重复行、漏改），挡不住**语法**错误
+    （括号多一个少一个、早闭合）。脚本类改动在上真文件之前，
+    至少要再加一道"不变量检查"——本批用的就是括号平衡。
+  - 顺带：`DocumentEmbedServicePrepareTailTest` 那次还漏删了 `return service;`，
+    改成 `return new …` 之后它变成不可达代码。同样是被不变量检查抓到的。
+- 验证（全部实测）：core 全量 **7622 条 / 0 失败 / 0 错误 / 153 跳过**（与 853 相同）；
+  受影响的 15 个文件 **54 条全绿**（与变异 E 量化出的 54 条一致）；
+  门控 IT **16/16**；`verify-test-visibility` EXIT=0；
+  `verify-false-optional-wiring` EXIT=0（实测 2 = 棘轮 2）；自测 **30/30**；
+  tests 链 **20/20**；docs 链 **16/16**。
+- **剩余 2 处**（`FALSE_OPTIONAL_WIRING_CEILING=0` 可列出全部）：
+  `BatchDocumentService.documentMutationService`（约 20 个测试文件）、
+  `JsonRecordService.mutationService`（约 34 个）。
+  - 两处都**没有**本批这种"构造器兜底"，是纯单参形态，
+    走 851/852/853 验证过的那条路即可。
+  - 清完之后 `UNGUARDED_CEILING` 就可以设成 0，这道门禁从"棘轮"变成
+    **真正阻塞**的形态——那才是这条线的终点。
+
 ### Batch 853（已交付，后端技术债：棘轮 5 → 3）
 
 - 分支：`feature/required-collection-provisioning-20261007`

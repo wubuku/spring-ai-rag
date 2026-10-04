@@ -47,7 +47,9 @@ class DocumentEmbedServiceProgressTailTest {
                 embeddingBatchService,
                 persistenceService,
                 () -> PROFILE,
-                new RagProperties());
+                new RagProperties(),
+                new DocumentChunkingService(
+                        new RagProperties(), new DocumentDerivationDescriptorProvider(new RagProperties())));
     }
 
     @Test

@@ -44,7 +44,9 @@ class DocumentEmbedServiceIntegrityTailTest {
                 mock(com.springairag.core.retrieval.EmbeddingBatchService.class),
                 persistenceService,
                 () -> PROFILE,
-                new RagProperties());
+                new RagProperties(),
+                new DocumentChunkingService(
+                        new RagProperties(), new DocumentDerivationDescriptorProvider(new RagProperties())));
         service.setIntegrityRepository(integrityRepository);
 
         document = new RagDocument();

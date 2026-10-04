@@ -38,7 +38,9 @@ class DocumentEmbedServiceValidateTailTest {
                 mock(EmbeddingBatchService.class),
                 mock(EmbeddingPersistenceService.class),
                 () -> PROFILE,
-                new RagProperties());
+                new RagProperties(),
+                new DocumentChunkingService(
+                        new RagProperties(), new DocumentDerivationDescriptorProvider(new RagProperties())));
         validate = DocumentEmbedService.class.getDeclaredMethod(
                 "validateEmbeddingResults",
                 List.class, List.class, EmbeddingProfile.class);

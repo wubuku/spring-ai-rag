@@ -29,7 +29,9 @@ class DocumentEmbedServiceSendProgressTailTest {
                 mock(EmbeddingBatchService.class),
                 mock(EmbeddingPersistenceService.class),
                 mock(com.springairag.core.config.EmbeddingProfileProvider.class),
-                new RagProperties());
+                new RagProperties(),
+                new DocumentChunkingService(
+                        new RagProperties(), new DocumentDerivationDescriptorProvider(new RagProperties())));
         sendProgress = DocumentEmbedService.class.getDeclaredMethod(
                 "sendProgress",
                 java.util.function.Consumer.class,
