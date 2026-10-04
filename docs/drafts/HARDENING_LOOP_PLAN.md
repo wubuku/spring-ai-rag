@@ -478,6 +478,53 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
+### Batch 861（已交付，WebUI 门禁：到达用户 ≠ 途中被过滤过）
+
+- 分支：`feature/no-interpolated-reason-20261007`
+- 主题：860 修的 9 处是**修好的**，但没有任何东西阻止它长回来。
+- **判据先普查，再写规则**（沿 859 的做法）。当前 main 上命中 **0**——
+  0 命中既可能是"没问题"也可能是"规则根本没写对"，两者长得一模一样，
+  所以**必须靠回退代码证明它会响**。
+- **第一版判据漏了 1/9**：`catch` / `onError` 体内的 `t(key, {…})` 插值，
+  在 860 之前只捞到 **8** 处。漏掉的是 `Collections` 的 purge toast——
+  它是**模板字符串** `` `${t('k')}: ${message}` ``，不是 options 对象。
+  加上"模板字面量里同时含 `t(` 与 `${…}`"这一形态后命中 **9/9**。
+  **"普查数字与最终规则不符"这件事必须当场发现，不能留到验收。**
+- **作用域是这条规则的要害**：`files.embedFailed` 同样在插值
+  （`t('files.embedFailed', { message: result.embedMessage })`）而它**是对的**——
+  那个消息来自 **200 响应**、说明嵌入为何没完成，且位于 `try` 块内。
+  一次成功请求的**状态说明不是失败原因**，拿哨兵表去过滤它才是错误。
+  于是判据落在"**失败路径**"（`onError` 体 + `catch` 块）而不是"插值"本身。
+  **这是作用域判据，不是碰巧躲过了假阳性。**
+- **证伪（两层）**：
+  1. 规则写完后跑当前 main → **0** 命中；
+  2. 把同一批文件换成 `git show 9c3269dc:`（860 之前）的内容 → **精确复现 9 条**，
+     行号与 860 动手前的实测位置逐一吻合（`CreateCollectionModal:38`、
+     `ReembedAllButton:47`、`Collections:249`、`Documents:321/373`、
+     `Files:475/513/545`、`Search:240`）。
+     磁盘上的真文件**一个字节都没动**（脚本只读 git 对象）。
+- **当场抓到的行号 bug（差点蒙混过关）**：第一版证伪输出里
+  `onError` 侧报的是 31/31/228——那是 `useMutation(` 声明行，
+  而 `catch` 侧 321/373/475 全对。原因是 handler 的下标相对 **options 切片**，
+  我只加了切片自身的偏移、漏加了 handler 在切片内的偏移。
+  **是"行号对不对"这件事本身暴露了它**，不是任何一条断言。
+  856 那条"行号漂移"的教训在这里第二次生效。
+- **一条既有断言被本批掀翻（如实记录）**：859 写的
+  `accepts an interpolated sentence` 断言 `t('files.importError', { error: msg })`
+  **干净通过**。它当时是对的——`unreasoned-failure` 确实被满足了，
+  因为句子确实带原因。但本批的新规则从**完全不同的角度**反对它。
+  现在这条用例的期望是 `['interpolated-reason']`，
+  名字也改成 `accepts an interpolated sentence, for a different reason`——
+  **两个 kind 同时可见，而不是一个悄悄盖住另一个。**
+- 测试：门禁元测试 **+8 例**，含一条把上面那个行号 bug 钉死的
+  （用**已知位置**断言行号 4，而不是断言消息文本）。
+  门禁自测 292 → **300**。
+- 指标：`npm run lint` 九条门禁 EXIT=0 + 自测 **300/300**；
+  应用测试 **78 文件 / 923 用例全绿**；`typecheck`、`build` EXIT=0；
+  `verify-project-docs` **16/16**。后端零改动未重跑。
+- **门禁自陈的边界**：`interpolated-reason` 与 `unreasoned-failure`
+  **都跟不进本地 helper**——两者写在同一个文件的 doc 里，不是假装没有。
+
 ### Batch 860（已交付，WebUI UX：别把 Error 拍平成字符串）
 
 - 分支：`feature/failure-reason-from-string-20261007`

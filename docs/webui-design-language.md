@@ -243,7 +243,7 @@ toggle, which is why the row is a toggle button and deliberately **not**
 ## 6. A write action must report its failure
 
 `npm run check:mutation-errors` is chained into `npm run lint` and scans every
-`.tsx` under `src/` for four violations:
+`.tsx` under `src/` for five violations:
 
 - `silent-mutation` — a `useMutation` that neither passes an `onError` (usually
   `showToast`) nor has its `.isError` rendered anywhere in the same file.
@@ -252,6 +252,9 @@ toggle, which is why the row is a toggle button and deliberately **not**
 - `unreasoned-failure` — an `onError` that announces the failure as a fixed
   sentence carrying nothing from the failure. **Reporting that it failed is not
   the same as saying why.**
+- `interpolated-reason` — a failure message assembled by hand or spliced into
+  a translated sentence, which arrives **unfiltered**. **Reaching the user is
+  not the same as being filtered on the way.**
 - `swallowed-rejection` — a `catch` block that discards the failure without
   saying why that is acceptable.
 
@@ -313,6 +316,30 @@ exemption sits directly above the decision, like the other two rules. It cannot
 follow a call into a local helper — `Documents.tsx` had five mutations sharing a
 `handleMutationError` that dropped the reason inside, where no rule could see it;
 Batch 859 fixed that helper rather than teaching the gate to chase through it.
+
+**Batch 861 asked what happens on the paths where the reason does arrive.**
+Nine of them built the message as `t('files.importError', { error: msg })` or as
+`` `${t('k')}: ${message}` ``, and the reason was whatever the catch block
+happened to produce. `api/client.ts:54` rejects a network failure with
+`new Error('Failed to fetch')`, so the user read *"Import failed: Failed to
+fetch"* — a sentence about the connection rather than the write, with no length
+bound and no way to tell it from a server answer. Every filter
+`utils/failureReason.ts` provides (transport sentinels, the 200-character cap,
+the stack-trace guard) does not exist on that path. Batch 860 moved the nine
+sites onto `failureMessage`; this rule is what stops them coming back.
+
+The scope is the load-bearing part. `files.embedFailed` also interpolates —
+`t('files.embedFailed', { message: result.embedMessage })` — and it is correct,
+because that message is a field of a **200 response** saying why the embedding
+did not complete, and it sits in a `try` block. A status note about a request
+that succeeded is not a failure reason, and routing it through the sentinel list
+would be the mistake. The rule therefore looks only inside `onError` bodies and
+`catch` blocks, where 0 of 103 component files carry a violation today and 9
+did before. Its measured false-positive count is zero, and that is an
+observation rather than a hope: the count was taken by running the rule over
+the tree as it stood before Batch 860.
+
+Like the rule above it, it cannot follow a call into a helper.
 
 Two details the fixes had to get right, both pinned by tests:
 
