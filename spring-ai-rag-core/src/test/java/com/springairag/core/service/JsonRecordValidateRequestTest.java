@@ -45,7 +45,9 @@ class JsonRecordValidateRequestTest {
                 mock(CollectionIdentityResolver.class),
                 properties,
                 new ObjectMapper(),
-                mock(org.springframework.jdbc.core.JdbcTemplate.class));
+                mock(org.springframework.jdbc.core.JdbcTemplate.class),
+                null,
+                mock(DocumentMutationService.class));
     }
 
     private com.springairag.api.dto.JsonRecordUpsertRequest validRequest() {

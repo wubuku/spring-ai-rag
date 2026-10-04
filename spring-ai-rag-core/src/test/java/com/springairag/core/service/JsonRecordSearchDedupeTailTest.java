@@ -55,7 +55,8 @@ class JsonRecordSearchDedupeTailTest {
                 new com.springairag.core.config.RagProperties(),
                 new ObjectMapper().findAndRegisterModules(),
                 mock(JdbcTemplate.class),
-                mock(CollectionRetrievalScopeResolver.class));
+                mock(CollectionRetrievalScopeResolver.class),
+                mock(DocumentMutationService.class));
     }
 
     private RetrievalResult result(String documentId) {

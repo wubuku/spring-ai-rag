@@ -59,7 +59,7 @@ public class JsonRecordService {
     private final ObjectMapper objectMapper;
     private final JdbcTemplate jdbcTemplate;
     private final RetrievalFilterValidator filterValidator = new RetrievalFilterValidator();
-    private DocumentMutationService mutationService;
+    private final DocumentMutationService mutationService; // Batch 855：`required = false` 的 setter 已删，改成第 10 个必填构造器参数。三个使用点（upsert、tombstoneExternal、批量 upsert）全都无条件调用它，缺 bean 时抛的是裸 NPE 而不是在启动时失败
     private DocumentLifecycleService lifecycleService; // optional-claim: DocumentLifecycleService 是无条件 @Service，null 臂只在不走 Spring 装配的构造路径可达；守卫真正的职责是生命周期读取缺席时该字段留空
     private ExternalAddressRetirementService addressRetirementService; // optional-claim: ExternalAddressRetirementService 是无条件 @Service，null 臂只在不走 Spring 装配的构造路径可达；守卫真正的职责是退役校验缺席时放行，属于可跳过的旁路而非写入前置条件
 
@@ -73,7 +73,8 @@ public class JsonRecordService {
             com.springairag.core.config.RagProperties ragProperties,
             ObjectMapper objectMapper,
             JdbcTemplate jdbcTemplate,
-            CollectionRetrievalScopeResolver retrievalScopeResolver) {
+            CollectionRetrievalScopeResolver retrievalScopeResolver,
+            DocumentMutationService mutationService) {
         this.documentRepository = documentRepository;
         this.documentVersionService = documentVersionService;
         this.hybridRetrieverService = hybridRetrieverService;
@@ -83,25 +84,6 @@ public class JsonRecordService {
         this.properties = ragProperties.getStructuredRecords();
         this.objectMapper = objectMapper;
         this.jdbcTemplate = jdbcTemplate;
-    }
-
-    JsonRecordService(
-            RagDocumentRepository documentRepository,
-            DocumentVersionService documentVersionService,
-            HybridRetrieverService hybridRetrieverService,
-            ReRankingService reRankingService,
-            CollectionIdentityResolver collectionIdentityResolver,
-            com.springairag.core.config.RagProperties ragProperties,
-            ObjectMapper objectMapper,
-            JdbcTemplate jdbcTemplate) {
-        this(documentRepository, documentVersionService,
-                hybridRetrieverService, reRankingService,
-                collectionIdentityResolver, ragProperties, objectMapper, jdbcTemplate,
-                null);
-    }
-
-    @org.springframework.beans.factory.annotation.Autowired(required = false)
-    void setMutationService(DocumentMutationService mutationService) {
         this.mutationService = mutationService;
     }
 

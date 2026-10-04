@@ -38,7 +38,8 @@ class JsonRecordServiceHelperTailTest {
                 new RagProperties(),
                 new ObjectMapper(),
                 mock(org.springframework.jdbc.core.JdbcTemplate.class),
-                null);
+                null,
+                mock(DocumentMutationService.class));
         measurePayloadBytes = JsonRecordService.class.getDeclaredMethod(
                 "measurePayloadBytes", JsonRecordUpsertRequest.class);
         measurePayloadBytes.setAccessible(true);

@@ -65,8 +65,8 @@ class BatchDocumentServiceTransactionTailTest {
     private BatchDocumentService service(boolean async) {
         var service = new BatchDocumentService(
                 documentRepository,
-                embeddingRepository);
-        service.setDocumentMutationService(mutationService);
+                embeddingRepository,
+                mutationService);
         if (async) {
             service.setDispatchService(dispatchService);
         }

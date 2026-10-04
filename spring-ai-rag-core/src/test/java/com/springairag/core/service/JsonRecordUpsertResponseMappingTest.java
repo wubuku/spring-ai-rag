@@ -33,6 +33,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
@@ -76,8 +77,9 @@ class JsonRecordUpsertResponseMappingTest {
                 collectionIdentityResolver,
                 new RagProperties(),
                 new ObjectMapper(),
-                jdbcTemplate);
-        service.setMutationService(mutationService);
+                jdbcTemplate,
+                null,
+                mutationService);
     }
 
     private JsonRecordUpsertRequest request() {

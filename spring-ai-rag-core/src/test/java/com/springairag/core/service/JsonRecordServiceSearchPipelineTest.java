@@ -54,7 +54,9 @@ class JsonRecordServiceSearchPipelineTest {
                 resolver,
                 new RagProperties(),
                 new com.fasterxml.jackson.databind.ObjectMapper(),
-                mock(JdbcTemplate.class));
+                mock(JdbcTemplate.class),
+                null,
+                mock(DocumentMutationService.class));
     }
 
     private RetrievalResult ranked(String documentId, double score) {

@@ -34,8 +34,8 @@ class BatchDocumentServiceDeleteErrorTailTest {
                 .thenReturn(List.of(document));
         var service = new BatchDocumentService(
                 documentRepository,
-                mock(com.springairag.core.repository.RagEmbeddingRepository.class));
-        service.setDocumentMutationService(mutationService);
+                mock(com.springairag.core.repository.RagEmbeddingRepository.class),
+                mutationService);
 
         var response = service.batchDeleteDocuments(List.of(9L));
 
@@ -49,9 +49,11 @@ class BatchDocumentServiceDeleteErrorTailTest {
         var method = BatchDocumentService.class
                 .getDeclaredMethod("safeError", String.class);
         method.setAccessible(true);
+        // mutationService 是上一个方法的局部变量，这里不可见
         var service = new BatchDocumentService(
                 mock(com.springairag.core.repository.RagDocumentRepository.class),
-                mock(com.springairag.core.repository.RagEmbeddingRepository.class));
+                mock(com.springairag.core.repository.RagEmbeddingRepository.class),
+                mock(DocumentMutationService.class));
 
         assertEquals("Document creation failed",
                 method.invoke(service, (Object) null));

@@ -43,8 +43,8 @@ class BatchDocumentServiceDeleteTailTest {
 
     private BatchDocumentService service() {
         BatchDocumentService service = new BatchDocumentService(
-                documentRepository, embeddingRepository);
-        service.setDocumentMutationService(mutationService);
+                documentRepository, embeddingRepository,
+                mutationService);
         return service;
     }
 

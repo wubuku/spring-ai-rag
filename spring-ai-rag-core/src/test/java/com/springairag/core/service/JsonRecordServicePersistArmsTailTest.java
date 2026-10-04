@@ -66,7 +66,8 @@ class JsonRecordServicePersistArmsTailTest {
                 new RagProperties(),
                 MAPPER,
                 mock(JdbcTemplate.class),
-                null);
+                null,
+                mock(DocumentMutationService.class));
         service.setLifecycleService(lifecycle);
         return service;
     }
@@ -164,7 +165,8 @@ class JsonRecordServicePersistArmsTailTest {
                 new RagProperties(),
                 failingMapper,
                 mock(JdbcTemplate.class),
-                null);
+                null,
+                mock(DocumentMutationService.class));
         Method method = JsonRecordService.class.getDeclaredMethod(
                 "serializePayload",
                 com.fasterxml.jackson.databind.JsonNode.class);

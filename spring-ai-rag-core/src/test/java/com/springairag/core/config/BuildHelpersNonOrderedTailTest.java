@@ -106,7 +106,8 @@ class BuildHelpersNonOrderedTailTest {
                 new com.springairag.core.config.RagProperties(),
                 new ObjectMapper(),
                 mock(org.springframework.jdbc.core.JdbcTemplate.class),
-                null);
+                null,
+                mock(com.springairag.core.service.DocumentMutationService.class));
         Method method = com.springairag.core.service.JsonRecordService.class
                 .getDeclaredMethod("validatePayloadFilter",
                         com.fasterxml.jackson.databind.JsonNode.class);

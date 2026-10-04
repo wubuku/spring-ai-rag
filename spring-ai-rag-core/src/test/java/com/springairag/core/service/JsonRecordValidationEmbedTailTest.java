@@ -81,7 +81,8 @@ class JsonRecordValidationEmbedTailTest {
                 properties,
                 MAPPER,
                 mock(JdbcTemplate.class),
-                null);
+                null,
+                mock(DocumentMutationService.class));
 
         existing = existingDocument();
         lenient().when(documentRepository
