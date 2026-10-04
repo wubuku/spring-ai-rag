@@ -74,18 +74,134 @@ export function splitTopLevelArgs(text) {
   return out;
 }
 
-/** 去掉块注释与行注释，避免 javadoc 里的示例代码被当成真实调用。 */
+/**
+ * 去掉注释，**保留每一行**。判据要落在代码上而不是散文上：javadoc 里写一个
+ * `search(request, null)` 的示例，不等于源码里有这次调用；而报错的行号必须
+ * 还能对回真实文件。
+ *
+ * ── Batch 883：原来的实现是两条正则，它在真实树上吃掉了代码 ──────────────
+ *
+ * 旧实现是 `src.replace(块注释正则, '').replace(行注释正则, '')`。真正的破坏
+ * 不在"字符串里的 `//`"，而在**块注释那条规则会从一条 `//` 注释内部起跳**：
+ *
+ *     // Serve /webui/assets/** from classpath:/static/webui/assets/
+ *
+ * 这行里有斜杠加星号（glob 的 `assets/**`）。块注释正则于是从那里开始找它的
+ * 结束符，一路找到下面某个真实的 javadoc 结尾，把中间**整段真实代码**当成注释
+ * 删掉。
+ * `WebUiConfig.java` 里量到的四个"块注释"有两个是假的：
+ *
+ *     26..35 行  吞掉 registry.addResourceHandler(...) / .addResourceLocations(...)
+ *     57..71 行  吞掉整个 webuiCatchAll controller 方法（@GetMapping、签名、
+ *                if (path.startsWith(...))、两处 return、两个右花括号）
+ *
+ * 也就是说这道门禁在 main 上是对这个 controller 方法**完全失明**的，而门禁的
+ * 全部价值就在于"不许漏"。方向是纯漏报——实测没有凭空造出任何一条发现——但
+ * 漏掉的是一整个方法。
+ *
+ * 顺带：旧实现用空串替换，于是多行块注释会塌行，之后所有行号整体错位。改判据
+ * 时若按行比对两版输出，会得到几千条"差异"，那全是这个塌行造成的假象（Batch 877
+ * 已经在 `check-page-shell.mjs` 上栽过一次）。所以下面用空格替换，并且本批所有
+ * 对账都按**扫描结果**比，不按行文本比。
+ *
+ * ── 为什么是本地实现，而不是复用前端那份 ────────────────────────────────
+ *
+ * `spring-ai-rag-webui/scripts/check-design-system.mjs` 导出的同名函数更完善，
+ * 而且六个前端门禁都在用它，看起来应该统一。实测下来不能：`scripts/` 下十三道
+ * 门禁的 import 图只有 `node:*` 内置和同目录兄弟脚本，而那份模块顶层
+ * `import postcss from 'postcss'` 并 `import { buildOutputs } from
+ * './build-design-tokens.mjs'`。引它等于把 WebUI 的 CSS 工具链拖进一道 Java
+ * 门禁的启动路径——没在 `spring-ai-rag-webui` 跑过 `npm ci` 的检出连启动都做不到。
+ * 宁可留一份各树自洽的实现，也不让后端门禁依赖前端依赖树。
+ *
+ * 已知局限：Java 文本块（三个双引号）内部按普通字符串处理，不做单独建模。方向
+ * 仍然是只漏不误报（最多把载荷当注释抹掉，不会造出发现）。真实树里只有
+ * `RetrievalEvaluationServiceImpl.java` 一个文本块含类注释序列，实测对本门禁
+ * 无影响；真要收紧应该先在文本块里出现真实的声明。
+ */
 function stripComments(src) {
-  return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+  let out = '';
+  let i = 0;
+  let quote = null;
+  while (i < src.length) {
+    const c = src[i];
+    if (quote !== null) {
+      // Java 的 `\"` 与 `\\`：跳过一个转义序列，否则引号状态会被 `\"` 骗到。
+      if (c === '\\') {
+        out += src.slice(i, i + 2);
+        i += 2;
+        continue;
+      }
+      if (c === quote) quote = null;
+      out += c;
+      i += 1;
+      continue;
+    }
+    if (c === '"' || c === "'") {
+      quote = c;
+      out += c;
+      i += 1;
+      continue;
+    }
+    if (c === '/' && src[i + 1] === '/') {
+      while (i < src.length && src[i] !== '\n') { out += ' '; i += 1; }
+      continue;
+    }
+    if (c === '/' && src[i + 1] === '*') {
+      while (i < src.length && !(src[i] === '*' && src[i + 1] === '/')) {
+        out += src[i] === '\n' ? '\n' : ' ';
+        i += 1;
+      }
+      out += '  ';
+      i += 2;
+      continue;
+    }
+    out += c;
+    i += 1;
+  }
+  return out;
 }
 
 /**
  * 收集一个类里所有方法名 -> 参数类型列表的重载。
  * 只做粗粒度类型判定：是否含 HttpServletRequest，不试图解析完整签名。
+ *
+ * ── Batch 883：这个模式曾经看不见整整一层方法 ────────────────────────────
+ * 旧模式要求 `换行 + \s{4} + [A-Za-z]… + \) + \s*\{`。两处收紧各自吞掉一类
+ * **真实存在**的声明：
+ *
+ *   - `\)` 之后必须紧跟 `\{`，所以任何带 `throws` 子句的方法不可见。这一条在真实
+ *     树上是有代价的：431 个 Java 文件里共 **101** 个带 `HttpServletRequest` 参数的
+ *     声明，旧模式只认得 **96**。看不见的 5 处全部因 `throws` 而不可见——
+ *     `doFilterInternal`（ApiKeyAuthFilter:110、RateLimitFilter:160）、
+ *     `preHandle`（ApiSloHandlerInterceptor:56）、
+ *     `afterCompletion`（:70）、`applyPostgresLimit`（RateLimitFilter:203）。
+ *
+ *     归因是量出来的，不是推的：只放宽 `throws` 恢复 5 处，只放宽缩进恢复 0 处。
+ *     （第一版归因写成"缩进"是错的——逐行看签名首行看不到 `throws`，因为这 5 处
+ *     的签名都跨了多行，`throws` 在末行。）
+ *
+ *     命中的恰好是最外层的授权边界层。`Batch 816` 立这条规则就是因为
+ *     `ChatPrincipal.from(null)` 会 fail-open；而过滤器/拦截器层恰恰是最不该
+ *     有一个"请求上下文可以缺失"的重载的地方。
+ *
+ *   - `\s{4}` 是**恰好四个**空白字符（定量化后没有更短的备选），所以缩进 8 空格
+ *     起步的声明——内部类、匿名类——整条不可见。这一条今天在真实树上**命中 0 次**：
+ *     101 个声明的缩进全部是 4。但它是"只要有人把方法写进内部类就永久失明"，
+ *     触发条件与代码内容无关。
+ *
+ * 今天这 5 处都没有被同类转发过 null，所以它是**覆盖漏洞**而不是活跃缺陷——
+ * 但漏检的方向是 fail-open，而触发条件只是"有人写一个 `throws`"。
+ *
+ * 判据放宽到"行首缩进 + 可选的 throws"，而不是把 4 换成别的数字：缩进宽度不是
+ * 这条规则关心的东西，写死它等于把"Java 代码怎么排版"当成了契约。
+ * 放宽后必须仍然拒绝非声明：实测 `if (x) {`、`for (...) {`、`catch (...) {`、
+ * `} else {`、以及带接收者的调用 `client.send(Type) {` 五种形状都不匹配。
  */
 export function collectOverloads(src) {
   const byName = new Map();
-  const pattern = /\n\s{4}[A-Za-z][\w.<>\[\], ?]*\s+(\w+)\s*\(([^)]*)\)\s*\{/g;
+  const pattern =
+    /^[ \t]+[A-Za-z][\w.<>\[\], ?]*?[ \t]+(\w+)[ \t]*\(([^)]*)\)[ \t]*(?:throws[ \t]+[\w., ]+)?\{/gm;
   let m;
   while ((m = pattern.exec(src)) !== null) {
     const name = m[1];
@@ -216,18 +332,25 @@ function main() {
   // gate that cannot fail, and this repository has produced four of those.
   const rootOverride = process.env.NULL_REQUEST_FORWARDING_ROOT;
   const scanRoot = rootOverride ? rootOverride : SRC_ROOT;
-  const allowlist = new Map();
+  const files = walk(scanRoot);
   const findings = [];
-  for (const file of walk(scanRoot)) {
+  for (const file of files) {
     const rel = relative(scanRoot, file);
     for (const hit of findNullRequestForwarding(readFileSync(file, 'utf8'))) {
       findings.push({ file: rel, ...hit });
     }
   }
 
+  // Batch 883: 原来的 `const allowlist = new Map()` 从来没有被填过任何东西，
+  // 而 `allowlist.get(...)` 被读了四处——读起来像是"存在一条豁免通道"，
+  // 实际上**没有任何途径**登记豁免。这道门禁本来就是不可豁免的（它的报错信息
+  // 也确实没给出任何豁免写法），所以行为一直是对的，错的是代码在暗示一个不存在的能力。
+  // 死代码比没有代码更糟：下一个读它的人会以为有一条路可以走。删掉。
+  //
+  // 连带删掉的还有紧随其后的 `const blocking = findings`——过滤 allowlist 之后它
+  // 曾经有意义，现在它是一个指向另一个名字的常量，读代码的人得跳回去才知道两者
+  // 是不是同一个东西。
   for (const f of findings) {
-    const exemptions = allowlist.get(f.file) ?? [];
-    if (exemptions.includes(f.name)) continue;
     console.log(
       `- [null-request-forwarding] ${f.file}:${f.line} forwards ${f.carrier} into the `
       + `HttpServletRequest position of ${f.name}(${f.args}). Both ChatPrincipal.from(null) `
@@ -237,19 +360,15 @@ function main() {
     );
   }
 
-  const blocking = findings.filter(
-    (f) => !(allowlist.get(f.file) ?? []).includes(f.name),
-  );
-  const scanned = walk(scanRoot).length;
-  if (blocking.length > 0) {
+  if (findings.length > 0) {
     console.error(
-      `\nNull-request forwarding check failed; ${blocking.length} blocking finding(s) across `
-      + `${scanned} source file(s).`,
+      `\nNull-request forwarding check failed; ${findings.length} blocking finding(s) across `
+      + `${files.length} source file(s).`,
     );
     process.exit(1);
   }
   console.log(
-    `Null-request forwarding check passed; ${scanned} source file(s) scanned, no overload `
+    `Null-request forwarding check passed; ${files.length} source file(s) scanned, no overload `
     + 'forwards a literal null or a possibly-null request local into an HttpServletRequest position.',
   );
 }
