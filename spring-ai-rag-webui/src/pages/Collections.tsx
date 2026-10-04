@@ -17,10 +17,19 @@ import { Dialog } from '../components/Dialog';
 import { Card } from '../components/Card';
 import styles from './Collections.module.css';
 import { EmptyState, PageHeader, QueryErrorBanner } from '../components/ui';
-import { failureMessage } from '../utils/failureReason';
+import { failureMessage, usableReason } from '../utils/failureReason';
 
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+/**
+ * The text to store alongside a failed purge step.
+ *
+ * Batch 872. It used to be `error.message`, or `String(error)` for anything
+ * else, so a transport-level string or "[object Object]" could reach the panel
+ * verbatim. The panel itself is the signal that the step failed — the state
+ * being non-empty is what renders it — so the value must never collapse to `''`
+ * even when there is no usable reason, hence the explicit fallback.
+ */
+function errorMessage(error: unknown, fallback: string): string {
+  return usableReason(error) || fallback;
 }
 
 export function Collections() {
@@ -218,7 +227,7 @@ function CollectionPurgeDialog({
       setConfirmation('');
     },
     onError: (error) => {
-      setPreviewError(errorMessage(error));
+      setPreviewError(errorMessage(error, t('common.unknownError')));
     },
   });
 
@@ -247,7 +256,7 @@ function CollectionPurgeDialog({
       // The block below keeps the bare reason under a bold label, which is the
       // right shape for a reason standing on its own. The toast is the other
       // question — "did applying it work?" — and gets the shared phrasing.
-      setApplyError(errorMessage(error));
+      setApplyError(errorMessage(error, t('common.unknownError')));
       showToast(failureMessage(t, 'collections.purge.applyError', error), 'error');
     },
   });

@@ -73,6 +73,25 @@ describe('failureReason', () => {
     expect(failureReason(new Error('404'))).toBe(' (404)');
   });
 
+  // Batch 872. Both of these were found by a test in `QueryErrorBanner` rather
+  // than by reading the list: the transport entries did not match what axios
+  // actually produces, so the one line meant to catch a dead connection or a
+  // slow link never fired.
+  it('drops the transport messages axios really emits', () => {
+    expect(failureReason(new Error('Network Error'))).toBe('');
+    expect(failureReason(new Error('timeout of 30000ms exceeded'))).toBe('');
+    expect(failureReason(new Error('timeout of 5000ms exceeded'))).toBe('');
+  });
+
+  it('keeps a real reason that mentions the network or a timeout', () => {
+    // The control for the two above. "Network Error" is noise; a sentence about
+    // the network is an answer.
+    const dns = 'Upstream host unreachable: DNS lookup failed for api.example.com';
+    const slow = 'Embedding queue saturated: timeout of 60000ms exceeded by the worker';
+    expect(failureReason(new Error(dns))).toBe(` (${dns})`);
+    expect(failureReason(new Error(slow))).toBe(` (${slow})`);
+  });
+
   it('returns nothing for a blank or placeholder message', () => {
     expect(failureReason(new Error(''))).toBe('');
     expect(failureReason(new Error('   '))).toBe('');
