@@ -93,6 +93,22 @@
  * 扩面的**前提**是先有普查数据、再把数字降到 0。顺序反过来——
  * 先扩大扫描面再慢慢清——只会让门禁立刻变红，然后被当成噪音豁免掉。
  *
+ * ── Batch 882：这道放行阀原本没有理由质量下限 ────────────────────────────
+ * 上面那段话最后一句是关键，而这个放行阀是全仓库最危险的一个：`optional-claim:`
+ * 豁免的不是样式选择，是一句关于**部署形态的断言**。而它的正则是 `(.+)$`——
+ * **写一个字符 `x` 就够了**。实测：带 `// optional-claim: x` 的字段，门禁 exit 0。
+ *
+ * 真实树上有 57 条理由，**全部在承载放行作用**（逐条把标记名改掉，57 条都会让
+ * 门禁重新报出来），最短 28 字符，0 条陈旧。也就是说纪律一直都在，只是没人强制。
+ * 现在短理由**自己成为一条发现**（`weak-optional-claim`），阈值 8 字符，
+ * 与 `check-a11y-forms` / `check-design-system` 的 `weak-allow-reason` 同一套房规。
+ *
+ * 顺带修掉一处**夹具缺陷**：自测的 `CONTROLLER` / `SERVICE` / `UNGUARDED_SERVICE`
+ * 三个夹具把字段行直接粘到下一行，23 个调用点里有 15 个没写结尾换行，于是
+ * `optional-claim:` 的"理由"把 `@Autowired(required = false)` 也吞了进去——
+ * 长到足以通过任何地板，而完全不是测试所写的那句话。那些用例是**因为错误的原因
+ * 而通过**的。补换行放在夹具 helper 里，一处改动修好全部调用点。
+ *
  * Run: node scripts/verify-false-optional-wiring.mjs
  */
 
@@ -104,6 +120,23 @@ const SRC_ROOT = join(ROOT, 'spring-ai-rag-core/src/main/java');
 const STEREOTYPE = /@(Service|Component|Repository)\b/;
 const CONDITIONAL = /@Conditional/;
 const JUSTIFICATION = /\/\/\s*optional-claim:\s*(.+)$/;
+
+/**
+ * 理由短到这个程度就不可能是理由。
+ *
+ * Batch 882。这道门禁的头注释自己写着："理由这道放行阀会连结构上根本看不见的声明
+ * 一起放掉"——它是本仓库里**最危险的一个放行阀**，因为它豁免的不是样式选择，
+ * 而是一句关于**部署形态的断言**。而 `JUSTIFICATION` 的正则是 `(.+)$`：
+ * **一个字符就够**。实测写 `// optional-claim: x` 门禁照样 exit 0。
+ *
+ * 真实树上有 57 条理由，最短 28 字符——纪律是有的，只是没人强制。
+ * 阈值取 8 是为了和仓库已有的房规一致（`check-a11y-forms` 与
+ * `check-design-system` 的 `weak-allow-reason` 都是 8），而不是因为 8 够用：
+ * 按 879 交付的判据（豁免的分界线是"缺陷对用户是否可见"），`optional-claim`
+ * 豁免的是**看不见**的阅读陷阱，属于那一侧，用样式级阈值即可；
+ * 真正的地板在 28，今天不构成约束。下一个阈值该定多少，是下一个读它的人的判断。
+ */
+const MIN_REASON_LENGTH = 8;
 
 /** 收集整个源码树里的 bean：简单类名 -> { conditional }。 */
 export function collectBeans(files) {
@@ -200,7 +233,23 @@ export function findFalseOptionalClaims(rawControllerSource, beans, options = {}
     const [, type, name] = m;
     const line = controllerSource.slice(0, m.index).split('\n').length;
     if (requireGuard && !guards.has(name)) continue;
-    if (JUSTIFICATION.test(rawLines[line - 1] ?? '')) continue;
+
+    // Batch 882. 理由要么是真理由，要么根本不是理由——不存在"有个东西填在那里
+    // 就算登记过"这种中间状态。短理由不再放行，而是**自己成为一条发现**，
+    // 与 `weak-allow-reason` 在另外两个门禁里的处理一致。
+    const justification = JUSTIFICATION.exec(rawLines[line - 1] ?? '');
+    if (justification) {
+      if (justification[1].trim().length < MIN_REASON_LENGTH) {
+        findings.push({
+          field: name,
+          bean: type,
+          setter: 'required = false',
+          guarded: guards.has(name),
+          weakReason: justification[1].trim(),
+        });
+      }
+      continue;
+    }
 
     // Match the setter by its *first parameter type*, not by its parameter name,
     // and tolerate additional parameters. Requiring a single parameter was the
@@ -382,9 +431,22 @@ function main() {
   const ceiling = resolveCeiling(rootOverride);
 
   let blocking = 0;
+  let weakReasons = 0;
   for (const { path, source } of subjects) {
     const rel = relative(scanRoot, path);
     for (const f of findFalseOptionalClaims(source, beans)) {
+      if (f.weakReason !== undefined) {
+        weakReasons += 1;
+        console.log(
+          `- [false-optional-wiring/weak-optional-claim] ${rel}: the optional-claim reason on `
+          + `${f.field} is "${f.weakReason}" (${f.weakReason.length} character(s)). A reason this `
+          + 'short cannot be one: this exemption waives a claim about the deployment shape, not a '
+          + 'style preference, so the next person to decide whether the guard should exist gets no '
+          + 'help from it. Write what the guard is actually for, and where it is checked if it is '
+          + 'not checked here.',
+        );
+        continue;
+      }
       blocking += 1;
       console.log(
         `- [false-optional-wiring] ${rel}: ${f.field} is guarded with a null check and injected `
@@ -406,10 +468,27 @@ function main() {
   }
 
   // 第二种形态：声明可选、代码无条件使用。
+  //
+  // 短理由在这里也会出现：第一趟只在**有** null 守卫时判理由，所以一个
+  // 既无守卫又理由过短的字段只会被这一趟看见。Batch 882 之前它会被当成
+  // 一条"unguarded optional claim"报出来——把"理由不是理由"说成"注入不诚实"，
+  // 指错了地方。两条消息必须分开，因为要做的两件事完全不同。
   const unguarded = [];
   for (const { path, source } of subjects) {
+    const rel = relative(scanRoot, path);
     for (const f of findFalseOptionalClaims(source, beans, { requireGuard: false })) {
-      if (!f.guarded) unguarded.push({ ...f, file: relative(scanRoot, path) });
+      if (f.weakReason !== undefined) {
+        if (f.guarded) continue; // 第一趟已经报过，两趟在"有没有守卫"上互斥
+        weakReasons += 1;
+        console.log(
+          `- [false-optional-wiring/weak-optional-claim] ${rel}: the optional-claim reason on `
+          + `${f.field} is "${f.weakReason}" (${f.weakReason.length} character(s)), on a field the `
+          + 'class never null-checks. A reason this short cannot be one — and on this shape the '
+          + 'question is not only why the guard exists but why there is no guard at all.',
+        );
+        continue;
+      }
+      if (!f.guarded) unguarded.push({ ...f, file: rel });
     }
   }
 
@@ -440,15 +519,30 @@ function main() {
     process.exit(1);
   }
 
+  // 棘轮的两条判定之后才轮到短理由：一条短理由不是"债务多了或少了"，
+  // 它是这条豁免本身不成立，所以不能混进棘轮算术里，也不能被棘轮的
+  // 通过分支悄悄带过。Batch 882 之前这个检查根本不存在。
+  if (weakReasons > 0) {
+    console.error(
+      `\nFalse-optional-wiring check failed; ${weakReasons} optional-claim reason(s) are too thin `
+      + 'to be a reason. The threshold is the same eight characters `check-a11y-forms` and '
+      + '`check-design-system` use, so one house rule covers all three gates.',
+    );
+    process.exit(1);
+  }
+
   const ratchetNote = ceiling === null
     ? 'Unguarded optional claims are not ratcheted for a non-default scan root.'
     : `${unguarded.length} unguarded optional claim(s) remain, exactly at the ratchet ceiling of `
       + `${ceiling}.`;
+  const reasonNote = weakReasons === 0
+    ? ''
+    : ` ${weakReasons} reason(s) too thin to be a reason.`;
   console.log(
     `False-optional-wiring check passed; ${controllers.length} controller(s), `
     + `${services.length} service(s) and ${beans.size} bean(s) `
     + 'examined, every collaborator that claims to be optional is either genuinely conditional or '
-    + `records why the guard exists. ${ratchetNote}`,
+    + `records why the guard exists.${reasonNote} ${ratchetNote}`,
   );
 }
 

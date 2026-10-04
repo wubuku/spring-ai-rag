@@ -233,14 +233,25 @@ function runGateWithCeiling(files, ceiling) {
   return result;
 }
 
+// Batch 882: the three fixtures below take a field line and glue it to the
+// method that follows. Fifteen of the twenty-three call sites pass a line with
+// no trailing newline, so the field line ran straight into
+// `@Autowired(required = false)` on the next line. Because `optional-claim:`
+// is read to end-of-line, the "reason" in those fixtures was really
+// `…the guard turns an NPE into a stated error    @Autowired(required = false)`
+// — long enough to clear any floor, and nothing like what the test names. The
+// cases passed for the wrong reason. The newline is added here rather than at
+// fifteen call sites so the fixture cannot drift back.
+const field = fieldLine => (fieldLine.endsWith('\n') ? fieldLine : `${fieldLine}\n`);
+
 const CONTROLLER = (fieldLine) => `class DemoController {\n`
-  + fieldLine
+  + field(fieldLine)
   + '    @Autowired(required = false)\n'
   + '    public void setSomeService(SomeService s) { this.someService = s; }\n'
   + '    void go() { if (someService == null) { throw new IllegalStateException("x"); } }\n}\n';
 
 const SERVICE = (fieldLine) => `class DemoService {\n`
-  + fieldLine
+  + field(fieldLine)
   + '    @Autowired(required = false)\n'
   + '    public void setSomeService(SomeService s) { this.someService = s; }\n'
   + '    void go() { if (someService != null) { someService.log("skipped"); } }\n}\n';
@@ -397,7 +408,7 @@ test('flags a service-layer skip guard on an unconditional bean', () => {
 // of at context startup, and the original rule could not see it at all.
 
 const UNGUARDED_SERVICE = (fieldLine) => `class DemoService {\n`
-  + fieldLine
+  + field(fieldLine)
   + '    @Autowired(required = false)\n'
   + '    public void setSomeService(SomeService s) { this.someService = s; }\n'
   + '    void go() { someService.run(); }\n}\n';
@@ -476,10 +487,117 @@ test('a null check delegated to a helper is recorded as a reason, not as a findi
   const unguarded = findFalseOptionalClaims(src, UNCONDITIONAL, { requireGuard: false });
   assert.equal(unguarded.length, 0, 'the reason must suppress the second form too');
   // And the reason must not accidentally make the *first* form pass, either.
+  //
+  // Batch 882: the reason here used to be seven characters long — below the new
+  // floor. The assertion still passed, but for the wrong reason: `UNGUARDED_SERVICE`
+  // has no null check, so the first form returns before the justification is ever
+  // read. A fixture that violates the rule it is testing is the version of this
+  // bug that only shows up the day someone adds a guard to it.
   const guardedForm = findFalseOptionalClaims(UNGUARDED_SERVICE(
-    '    private SomeService someService;  // optional-claim: 守卫在别的类里\n',
+    '    private SomeService someService;  // optional-claim: 守卫在别的类里，SomePolicySupport 抛领域异常\n',
   ), UNCONDITIONAL);
   assert.equal(guardedForm.length, 0);
+});
+
+// ── Batch 882: a reason has to be a reason ─────────────────────────────────
+
+test('a one-character reason is a finding, not an exemption', () => {
+  // The exemption valve in this gate is the most dangerous one in the repo: it
+  // waives a claim about the *deployment shape*, not a style choice, and the
+  // header says so itself. Its regex was `(.+)$`, so a single character bought
+  // the whole thing.
+  const hits = findFalseOptionalClaims(
+    CONTROLLER('    private SomeService someService; // optional-claim: x'),
+    UNCONDITIONAL,
+  );
+  assert.equal(hits.length, 1);
+  assert.equal(hits[0].weakReason, 'x');
+  assert.equal(hits[0].field, 'someService');
+});
+
+test('a reason one character under the floor is still reported', () => {
+  // `sevench` is seven characters; the floor is eight. The first version of this
+  // case used `sevenchr`, which is eight, and therefore sat exactly on the floor
+  // and was correctly honoured — the test caught my own arithmetic rather than
+  // the gate, which is the only reason it is worth recording.
+  assert.equal('sevench'.length, 7);
+  const hits = findFalseOptionalClaims(
+    CONTROLLER('    private SomeService someService; // optional-claim: sevench'),
+    UNCONDITIONAL,
+  );
+  assert.equal(hits.length, 1);
+  assert.equal(hits[0].weakReason, 'sevench');
+});
+
+test('a reason exactly at the floor is honoured', () => {
+  // Eight characters exactly. The boundary has to be pinned from both sides or
+  // nobody can tell an off-by-one in the rule from an off-by-one in a test.
+  // The positive control. Without it, "always a finding" would satisfy the
+  // cases above for the wrong reason.
+  assert.deepEqual(
+    findFalseOptionalClaims(
+      CONTROLLER('    private SomeService someService; // optional-claim: 12345678'),
+      UNCONDITIONAL,
+    ),
+    [],
+  );
+});
+
+test('the weak reason is reported for the unguarded shape too', () => {
+  // The first form only judges a field that has a null check, so a field that
+  // is unguarded *and* carries a thin reason is invisible to it. Before this
+  // rule the second form swallowed it as an ordinary unguarded claim, which
+  // names the wrong problem: the injection is not the issue, the exemption is.
+  const src = UNGUARDED_SERVICE('    private SomeService someService; // optional-claim: x\n');
+  const hits = findFalseOptionalClaims(src, UNCONDITIONAL, { requireGuard: false });
+  assert.equal(hits.length, 1);
+  assert.equal(hits[0].weakReason, 'x');
+  assert.equal(hits[0].guarded, false);
+});
+
+test('a guarded field is reported once, not once per pass', () => {
+  // The two passes are disjoint on "has a null check", so a guarded field with a
+  // thin reason must produce exactly one finding overall. A duplicate here would
+  // read as two problems where there is one.
+  const src = CONTROLLER('    private SomeService someService; // optional-claim: x');
+  const guarded = findFalseOptionalClaims(src, UNCONDITIONAL);
+  const alsoUnguarded = findFalseOptionalClaims(src, UNCONDITIONAL, { requireGuard: false });
+  assert.equal(guarded.length, 1);
+  assert.equal(alsoUnguarded.length, 1);
+  assert.equal(alsoUnguarded[0].weakReason, 'x');
+});
+
+test('the gate exits non-zero on a thin reason and says which kind it is', () => {
+  const result = runGate({
+    'SomeService.java': '@Service\npublic class SomeService {\n}\n',
+    'DemoController.java': CONTROLLER('    private SomeService someService; // optional-claim: x'),
+  });
+  assert.equal(result.status, 1, `expected a failing exit, got ${result.status}`);
+  assert.match(result.stdout + result.stderr, /weak-optional-claim/);
+  // It must not be reported as an unrecorded claim: that names a different fix.
+  assert.doesNotMatch(result.stdout + result.stderr, /false-optional-wiring\] /);
+});
+
+test('the gate still passes on a recorded reason', () => {
+  const result = runGate({
+    'SomeService.java': '@Service\npublic class SomeService {\n}\n',
+    'DemoController.java': CONTROLLER(
+      '    private SomeService someService; // optional-claim: unconditional @Service; the guard states the error',
+    ),
+  });
+  assert.equal(result.status, 0, `expected a passing exit, got ${result.status}`);
+});
+
+test('a thin reason does not perturb the ratchet arithmetic', () => {
+  // A weak reason is not debt, so it must not be counted as an unguarded claim
+  // and must not move the ceiling check in either direction.
+  const result = runGateWithCeiling({
+    'SomeService.java': '@Service\npublic class SomeService {\n}\n',
+    'DemoService.java': UNGUARDED_SERVICE('    private SomeService someService; // optional-claim: x\n'),
+  }, 0);
+  assert.equal(result.status, 1);
+  assert.match(result.stdout + result.stderr, /weak-optional-claim/);
+  assert.doesNotMatch(result.stdout + result.stderr, /ratchet ceiling/);
 });
 
 let failed = 0;
