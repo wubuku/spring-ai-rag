@@ -478,6 +478,95 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
+### Batch 853（已交付，后端技术债：棘轮 5 → 3）
+
+- 分支：`feature/required-collection-provisioning-20261007`
+- 主题：清 2 处"声明可选、代码无条件使用"——
+  `RagCollectionController.collectionProvisioningService`（该 setter 收**两个**参数）
+  与 `EvaluationSuiteService.apiKeyManagementService`（构造器参数）。
+  `RagCollectionController` 的构造器因此是 **8 个参数**。
+- **10 个测试文件**（全部是 `RagCollectionController` 的直接构造者），
+  其中 `RagCollectionControllerTest` 传的是**字段** `collectionProvisioningService`
+  （它原本就在调那个 setter），其余 9 个追加全新内联 mock。
+- **本批真正的收获不是那 2 处，而是下面这条"三件事"清单**——
+  把一个字段从"可选 setter"提升为"必填构造器参数"时，
+  **被删掉的 setter 收几个参数，切片就得补几个 bean**：
+  | # | 必须连带做的事 | 不做会怎样 |
+  |---|---|---|
+  | 1 | 所有直接构造点补实参 | 编译不过（这条编译器会抓） |
+  | 2 | 所有 Web/集成切片的 bean 表补 bean | **上下文起不来**（本批撞见） |
+  | 3 | **删掉字段上的默认初始化** | **测试照样全绿，接线根本没被钉住**（本批证实） |
+- **第 3 条是本批最重要的发现，用变异实验证实的**：
+  `provisioningOwnerResolver` 原本是
+  `private ProvisioningOwnerResolver provisioningOwnerResolver = new ProvisioningOwnerResolver();`
+  ——一个**静默兜底**。变异 D：把默认初始化加回去、同时删掉构造器里的
+  `this.provisioningOwnerResolver = provisioningOwnerResolver;`，
+  `RagCollectionControllerTest` **39 个用例照样全绿**。
+  字段初始化器在对象构造时补上了真对象，于是"漏传实参"这件事对测试**完全不可见**。
+  - 去掉默认初始化之后，同样的变异立刻 2 个用例红（`keyedCreate…` 与
+    `keyedReplay…`，报 `because "this.provisioningOwnerResolver" is null`）。
+    **所以去掉那行默认值不是清理，它是让第 1 步有牙齿的前提。**
+  - 这跟 852 记的"死桩"同源，但形态更新：**不是桩失效，而是字段自带兜底
+    让整条接线失效**。死桩至少还会在 NPE 上露头，这个连露头的机会都没有。
+- **切片夹具：本批又一次撞见，而且踩了 852 记过的同一个坑的升级版**。
+  852 的记录是"缺什么补什么"，本批证明**这个做法本身就是错的**：
+  | 切片 | 我补的 | 报错的 | 真相 |
+  |---|---|---|---|
+  | `CollectionPurgeControllerWebTest` | `CollectionProvisioningService` | 第 7 参数 `ProvisioningOwnerResolver` | 被删的 setter 收**两个**参数 → 缺**两个** bean |
+  | `RagControllerIntegrationTest` | 同上 | 同上 | 同上 |
+  - 我是**照着报错补**的，所以补了第一个、又跑一遍、再补第二个。
+    正确做法是从 **setter 签名**推出缺几个，一次补齐——报错的顺序
+    （parameter 6 → parameter 7）已经明明白白写着答案，我多花了一轮。
+  - `RagControllerIntegrationTest` 这个类在 850 更正时已经因为
+    "类注释声称全 mock、实际少列了 `SemanticEvaluationService`"记过一次。
+    **同一个类、同一种成因、第二次。**说明那句话从来没被检查过，
+    它只是被可选注解掩护着。已把两次的成因写进字段旁的注释。
+- **普查：形态在本仓库里是孤例，因此没有造门禁**。
+  按上面第 3 条的形态跑了一遍只读普查（字段 `= new …` 兜底 **且** 构造器又
+  `this.x = x;`），命中 19 处，逐条看过：
+  - 18 处是 `@ConfigurationProperties` 的标准写法（`RagChatProperties`、
+    `ApiSloProperties`、`RagRateLimitProperties` 等给嵌套配置对象默认值再允许覆盖），
+    **不是这回事**；
+  - 1 处 `RagChatController.objectMapper` **带守卫**（`if (objectMapper != null)`），
+    默认值合法。
+  - **不造门禁的理由**：真实命中数是 0。一个只会命中 0 处的门禁既不能挡住
+    下一次引入，只能给人"这一类已经管住了"的错觉——
+    这与 850 记的"一条会误报的门禁比没有门禁更糟"是同一条判据的另一半。
+    登记在案，作为上面那张三件事清单的第 3 行。
+  - 顺带记一次自打脸：普查脚本跑出 19 条时，**我自己把 `RagChatController`
+    那条当成了真阳性**，而它是带守卫的。**我批评过的"普查靠正则猜形态、
+    跟行正则吞并不可预测"，在写下这个脚本五分钟后就自己踩了**——
+    脚本不检查守卫，正是它和 850 那道门禁的本质差别。
+- 变异实验 4 个，全部被钉住：
+  | # | 变异 | 结果 |
+  |---|---|---|
+  | A | 删 `this.collectionProvisioningService = …` | ✓ 2 个用例红（`createOrReplay` NPE） |
+  | B | 删 `this.provisioningOwnerResolver = …` | ✓ 2 个用例红（`resolve` NPE） |
+  | C | 把 `@Autowired(required = false)` 加回 `EvaluationSuiteService` | ✓ 门禁红（*"4 … exceed the ratchet ceiling of 3"*） |
+  | D | 默认初始化加回 + 删构造器赋值 | **✗ 仍绿** —— 这不是失手，是**用来证明默认值在掩盖接线**的对照实验 |
+  - 每次变异后都用 `python … assert old in s` 反向恢复并逐行核对；
+    最终 `git diff` 确认两个生产文件只剩本批预期的三处改动。
+  - C 的意义：它是**唯一能给纯注解删除做证伪的变异**。
+    `EvaluationSuiteService` 这一处零测试改动（同 851 的 `ApiKeyController`），
+    它的"行为改了"只能由门禁证明——而门禁正是靠这行注解识别的。
+    按 850 更正的判据，**"缺 bean 会启动失败"是关于部署形态的断言，
+    必选 bean 时为假且不该写测试**；能钉住它的就是门禁本身。
+- **顺带清理**：`EvaluationSuiteService` 删掉 `@Autowired(required = false)` 后
+  该类已无任何 `@Autowired`，一并删掉 `import …annotation.Autowired;`。
+  这是本批唯一的 import 改动，属于编译器不会提醒的那类。
+- 验证（全部实测）：core 全量 **7622 条 / 0 失败 / 0 错误 / 153 跳过**（与 852 相同，
+  本批只加夹具不加用例）；门控 IT **16/16**；`verify-test-visibility` EXIT=0
+  （984 类 / 7614 用例）；`verify-false-optional-wiring` EXIT=0（实测 3 = 棘轮 3）；
+  自测 **30/30**；tests 链 **20/20**；docs 链 **16/16**。
+- **剩余 3 处**（`FALSE_OPTIONAL_WIRING_CEILING=0` 可列出全部）：
+  `BatchDocumentService.documentMutationService`（约 20 个测试文件）、
+  `DocumentEmbedService.chunkingService`（36 个）、
+  `JsonRecordService.mutationService`（34 个）。
+  - 这三处都是 service 层的单参形态，与 853 展示的"收两参的 setter"不同，
+    走的是 851/852 验证过的那条路。
+  - 逐处立项而不是合批：后两个各自 34–36 个测试文件，合批会让回归面大到
+    无法在一次验收里说清"是谁弄坏的"。
+
 ### Batch 852（已交付，后端技术债：棘轮 9 → 5）
 
 - 分支：`feature/required-external-doc-collaborators-20261007`

@@ -32,6 +32,8 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import com.springairag.core.security.ProvisioningOwnerResolver;
+import com.springairag.core.service.CollectionProvisioningService;
 
 /**
  * by-key 路由语义：以 collectionKey 解析活跃集合后委托数字路由，
@@ -59,7 +61,9 @@ class RagCollectionByKeyTest {
                 collectionService,
                 identityResolver,
                 auditLogService,
-                mock(DocumentMutationService.class));
+                mock(DocumentMutationService.class),
+                mock(CollectionProvisioningService.class),
+                new ProvisioningOwnerResolver());
         collection = new RagCollection();
         collection.setId(7L);
         collection.setCollectionKey(KEY);

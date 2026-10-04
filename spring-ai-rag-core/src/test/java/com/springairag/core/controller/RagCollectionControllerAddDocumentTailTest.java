@@ -31,6 +31,8 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import com.springairag.core.security.ProvisioningOwnerResolver;
+import com.springairag.core.service.CollectionProvisioningService;
 
 /**
  * RagCollectionController 关联文档长尾（Batch 483，JaCoCo 驱动）：
@@ -61,7 +63,9 @@ class RagCollectionControllerAddDocumentTailTest {
                 mock(RagCollectionService.class),
                 identityResolver,
                 mock(AuditLogService.class),
-                documentMutationService);
+                documentMutationService,
+                mock(CollectionProvisioningService.class),
+                new ProvisioningOwnerResolver());
 
         collection = new RagCollection();
         collection.setId(5L);

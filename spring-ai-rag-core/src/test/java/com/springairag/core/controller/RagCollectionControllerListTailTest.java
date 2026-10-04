@@ -3,6 +3,7 @@ package com.springairag.core.controller;
 import com.springairag.core.repository.RagCollectionRepository;
 import com.springairag.core.repository.RagDocumentRepository;
 import com.springairag.core.service.AuditLogService;
+import com.springairag.core.security.ProvisioningOwnerResolver;
 import com.springairag.core.service.CollectionProvisioningService;
 import com.springairag.core.service.RagCollectionService;
 import com.springairag.core.service.CollectionIdentityResolver;
@@ -49,7 +50,9 @@ class RagCollectionControllerListTailTest {
                 mock(RagCollectionService.class),
                 new CollectionIdentityResolver(collectionRepository),
                 mock(AuditLogService.class),
-                mock(DocumentMutationService.class));
+                mock(DocumentMutationService.class),
+                mock(CollectionProvisioningService.class),
+                new ProvisioningOwnerResolver());
         when(collectionRepository.findByIdAndDeletedFalse(1L))
                 .thenReturn(Optional.of(collection(1L)));
         // 无请求上下文时 currentPolicy 为 null → 视为 unrestricted。
@@ -149,7 +152,9 @@ class RagCollectionControllerListTailTest {
                 mock(RagCollectionService.class),
                 new CollectionIdentityResolver(collectionRepository),
                 mock(AuditLogService.class),
-                mock(DocumentMutationService.class));
+                mock(DocumentMutationService.class),
+                mock(CollectionProvisioningService.class),
+                new ProvisioningOwnerResolver());
         org.springframework.test.util.ReflectionTestUtils.setField(
                 controller, "identityResolver", resolver);
         when(resolver.mapKeys(List.of(1L))).thenReturn(java.util.Map.of(1L, "kb"));

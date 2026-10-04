@@ -26,6 +26,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import com.springairag.core.security.ProvisioningOwnerResolver;
+import com.springairag.core.service.CollectionProvisioningService;
 
 /**
  * RagCollectionController 导入入口的委派契约。
@@ -64,7 +66,9 @@ class RagCollectionControllerImportBuildTailTest {
                 collectionService,
                 new CollectionIdentityResolver(collectionRepository),
                 mock(AuditLogService.class),
-                documentMutationService);
+                documentMutationService,
+                mock(CollectionProvisioningService.class),
+                new ProvisioningOwnerResolver());
         when(collectionService.createCollection(any()))
                 .thenReturn(collection(1L, "kb"));
     }

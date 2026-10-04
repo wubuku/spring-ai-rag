@@ -23,7 +23,6 @@ import com.springairag.core.security.ApiKeyCollectionAccess;
 import com.springairag.core.service.ApiKeyManagementService;
 import com.springairag.core.service.CollectionRetrievalScopeResolver;
 import com.springairag.core.service.RetrievalEvaluationService;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -52,7 +51,7 @@ public class EvaluationSuiteService {
     private final EmbeddingProfileProvider profileProvider;
     private final ObjectMapper objectMapper;
     private final RagEvaluationProperties properties;
-    private final ApiKeyManagementService apiKeyManagementService;
+    private final ApiKeyManagementService apiKeyManagementService;  // Batch 853：`required = false` 已删——这个类里没有 null 守卫，它缺失时在鉴权取 principal 处抛裸 NPE
 
     public EvaluationSuiteService(
             EvaluationSuiteRepository repository,
@@ -63,7 +62,7 @@ public class EvaluationSuiteService {
             EmbeddingProfileProvider profileProvider,
             ObjectMapper objectMapper,
             RagProperties ragProperties,
-            @Autowired(required = false) ApiKeyManagementService apiKeyManagementService) {
+            ApiKeyManagementService apiKeyManagementService) {
         this.repository = repository;
         this.validator = validator;
         this.scopeResolver = scopeResolver;

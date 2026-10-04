@@ -7,8 +7,10 @@ import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.exception.RagException;
 import com.springairag.core.repository.RagCollectionRepository;
 import com.springairag.core.repository.RagDocumentRepository;
+import com.springairag.core.security.ProvisioningOwnerResolver;
 import com.springairag.core.service.AuditLogService;
 import com.springairag.core.service.CollectionIdentityResolver;
+import com.springairag.core.service.CollectionProvisioningService;
 import com.springairag.core.service.CollectionPurgeService;
 import com.springairag.core.service.DocumentMutationService;
 import com.springairag.core.service.RagCollectionService;
@@ -67,6 +69,18 @@ class CollectionPurgeControllerWebTest {
     /** Batch 848：变更层从可选 setter 变成构造器必填，Web 切片必须提供该 bean。 */
     @MockitoBean
     private DocumentMutationService documentMutationService;
+
+    /**
+     * Batch 853：集合开通服务与归属解析器一起从同一个可选 setter 变成两个必填构造器
+     * 参数，所以这个切片缺的是**两个** bean，不是一个。
+     * 这是本切片第二次补 bean，两次的成因完全一样——被删掉的 setter 允许
+     * 容器注入 null，于是夹具一直没机会知道自己少列了一个依赖。
+     */
+    @MockitoBean
+    private CollectionProvisioningService collectionProvisioningService;
+
+    @MockitoBean
+    private ProvisioningOwnerResolver provisioningOwnerResolver;
 
     @MockitoBean
     private CollectionPurgeService purgeService;
