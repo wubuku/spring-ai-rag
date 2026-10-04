@@ -256,6 +256,21 @@ machine had agreed to stop reporting. Exemptions use an inline
 enforced and still documented in both languages — the same drift check the design
 gate has, so a rule cannot quietly stop existing.
 
+`check-hardcoded-copy` carries a different kind of list: seven strings that stay in
+English on purpose, keyed `path:copy`, each with the reason it is correct rather
+than merely tolerated. It is the one allowlist in the tree that is a plain
+`Object.freeze({...})` in the gate's own source, which makes rot the obvious risk.
+**Batch 880 made rot a failure.** The header had said "an entry that is no longer
+needed is removed, not left to rot" — a promise about a discipline rather than a
+check, and nothing enforced it. A rotted entry is not inert: because the key is
+`path:copy`, once the string is gone the entry goes on silently allowing the
+*next* occurrence of the same text in the same file, justified by a reason written
+months ago for a string that no longer exists. The success line had the same
+shape of problem, printing a count of *hits* as though it were a count of
+*entries*, so one entry matching twice and another matching nothing still read
+"7". Both numbers are now printed, and they can only disagree in the direction
+that fails.
+
 ### 5.1 What it found
 
 Batch 776 measured the baseline before writing the rule: **15 controls with no
