@@ -478,6 +478,47 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
+### Batch 865（已交付，技术债：读起来像防护、实际恒空转的那三处）
+
+- 分支：`batch-865`
+- 主题：接着 864 的判据往下——**替身要描述代码真实运行的环境**。反向也成立：
+  有一段**不描述任何东西**的替身，本身就是代码在撒谎的证据。
+- **怎么找到的**：`setup.ts` 里有一个 80 行手搓的 `MockEventSource`
+  （`CONNECTING` / `OPEN` / `CLOSED`、`addEventListener`、`simulateMessage` /
+  `simulateDone` / `simulateError`）。先问"生产代码谁在用 `EventSource`"——
+  只有 `useFileUpload`。再问"谁在用这个替身"——**零个测试**。
+  替身为零引用，说明它服务的那条路径不可达。
+- **不可达的证据（不是推断）**：全仓 `new EventSource` **一处都没有**。
+  `useFileUpload.ts` 里的 `eventSourceRef` 初始化为 `null` 之后
+  **从未被赋值**，于是三处触点恒空转：
+  | 位置 | 读起来像 | 实际上 |
+  |------|---------|-------|
+  | 上传前 `if (ref) ref.close()` | "关掉上一个 SSE 连接" | 守卫**恒为 false** |
+  | 卸载时 `const es = ref.current; es?.close()` | "清理 SSE" | `es` **恒为 null** |
+  | ref 声明本身 | 进度走 SSE | 从未打开过连接 |
+
+  而同一个卸载 effect 里的 `uploadAbortRef.current?.abort()` **是真的**——
+  那个 ref 在第 82 行被赋值。所以是这个 hook 里**一半接线一半没接**。
+- **一般化成普查（不是只报一个）**：扫全仓 `useRef<X | null>(null)`，
+  逐个检查该 ref 名在同文件里**有没有被写入**。结果：
+  **6 处声明，恰好 1 处从未被赋值**，就是上面那个。其余 5 处都真在用。
+  **所以这不是模式问题，是单点**——这个"恰好 1"是有意义的度量，
+  不是"我找到了一处就收工"。
+- **改动**：删掉那 3 处恒空转的触点（**保留** `uploadAbortRef` 那半边，
+  以及把它和被删部分区分开的注释），删掉 `setup.ts` 里 84 行零引用的替身，
+  两处都留下说明"为什么删、以后要真做流式进度该怎么做"的注释。
+  净删 **96 行**。
+- **一个差点犯的错（如实记录）**：删除脚本里的断言写成了检查 `simulateEvent`，
+  而类里的方法叫 `simulateMessage` / `simulateDone` / `simulateError`。
+  断言**当场失败**（而不是静默通过），改用真实存在的方法名才继续。
+  这正是纪律 #13 的反面教材被抓住的样子：**断言写错时它会响**。
+  另一次：剥注释查残留的那个脚本被注释里的反引号干扰误报，
+  改用 `grep -n` 核实——**只有注释里那一处**。
+- 指标：`npm run lint` 九条门禁 EXIT=0 + 自测 **315/315**；
+  应用测试 **78 文件 / 923 用例全绿**（`useFileUpload.test.ts` 14 条单独也绿）；
+  `typecheck`、`build` EXIT=0；`verify-project-docs` **16/16**。
+  后端零改动未重跑。
+
 ### Batch 864（已交付，测试加固：把 863 的发现一般化到全部替身）
 
 - 分支：`batch-864`
