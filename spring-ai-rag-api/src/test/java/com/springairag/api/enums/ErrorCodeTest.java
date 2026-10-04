@@ -3,6 +3,11 @@ package com.springairag.api.enums;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
@@ -86,8 +91,77 @@ class ErrorCodeTest {
     }
 
     @Test
-    @DisplayName("RATE_LIMIT_EXCEEDED HTTP status is 429")
-    void rateLimitExceededIs429() {
-        assertEquals(429, ErrorCode.RATE_LIMIT_EXCEEDED.getHttpStatus());
+    @DisplayName("TOO_MANY_REQUESTS HTTP status is 429")
+    void tooManyRequestsIs429() {
+        assertEquals(429, ErrorCode.TOO_MANY_REQUESTS.getHttpStatus());
+    }
+
+    @Test
+    @DisplayName("TOO_MANY_REQUESTS is the only 429, and it is the name the rate limit filter writes")
+    void tooManyRequestsIsTheOnlyRateLimitCode() {
+        List<ErrorCode> rateLimits = Arrays.stream(ErrorCode.values())
+                .filter(code -> code.getHttpStatus() == 429)
+                .toList();
+        assertEquals(List.of(ErrorCode.TOO_MANY_REQUESTS), rateLimits);
+        // RateLimitFilter's literal, and the value three test classes read back
+        // out of `body.get("error")`.
+        assertEquals("TOO_MANY_REQUESTS", ErrorCode.TOO_MANY_REQUESTS.getCode());
+    }
+
+    // ---- byCodeOrNull -------------------------------------------------------
+    //
+    // Batch 873 added this for GlobalExceptionHandler, and until this batch
+    // nothing tested it directly. Its two interesting branches — a null name,
+    // and a name the enum has never heard of — are unreachable from that caller,
+    // because every code the handler passes is one the enum does know. A method
+    // that "works" only on the path its single caller happens to take is
+    // untested, not tested.
+
+    @Test
+    @DisplayName("byCodeOrNull resolves every code in the enum")
+    void byCodeOrNullResolvesEveryCode() {
+        for (ErrorCode code : ErrorCode.values()) {
+            assertEquals(code, ErrorCode.byCodeOrNull(code.name()),
+                    () -> "round trip failed for " + code);
+            assertEquals(code, ErrorCode.byCodeOrNull(code.getCode()),
+                    () -> "getCode() name did not resolve for " + code);
+        }
+    }
+
+    @Test
+    @DisplayName("byCodeOrNull returns null for a name the enum does not declare")
+    void byCodeOrNullReturnsNullForUnknownName() {
+        assertNull(ErrorCode.byCodeOrNull("RATE_LIMIT_EXCEEDED"),
+                "the 429 was renamed in Batch 873; the old name must no longer resolve");
+        assertNull(ErrorCode.byCodeOrNull("NOT_A_REAL_CODE"));
+        assertNull(ErrorCode.byCodeOrNull(""));
+    }
+
+    @Test
+    @DisplayName("byCodeOrNull returns null for null rather than throwing")
+    void byCodeOrNullReturnsNullForNull() {
+        assertNull(ErrorCode.byCodeOrNull(null));
+    }
+
+    @Test
+    @DisplayName("byCodeOrNull is case sensitive, matching valueOf rather than forgiving")
+    void byCodeOrNullIsCaseSensitive() {
+        // Deliberate: this is a lookup for a wire value the server itself wrote,
+        // not user input. Being lenient here would let a typo pass silently in
+        // the one place that must not be lenient.
+        assertNull(ErrorCode.byCodeOrNull("unauthorized"));
+        assertNull(ErrorCode.byCodeOrNull("Unauthorized"));
+        assertEquals(ErrorCode.UNAUTHORIZED, ErrorCode.byCodeOrNull("UNAUTHORIZED"));
+    }
+
+    @Test
+    @DisplayName("every code in the catalog is unique and non-blank")
+    void everyCodeIsUniqueAndNonBlank() {
+        Set<String> names = new HashSet<>();
+        for (ErrorCode code : ErrorCode.values()) {
+            assertTrue(names.add(code.name()), () -> "duplicate code: " + code.name());
+            assertFalse(code.getCode().isBlank());
+        }
+        assertEquals(ErrorCode.values().length, names.size());
     }
 }

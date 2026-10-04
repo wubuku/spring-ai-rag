@@ -281,9 +281,15 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
                             "invalid_api_key")));
             return;
         }
+        // Batch 873. This body carried the code and the sentence but no status,
+        // so the three sibling writers in this class disagreed: sendPolicy
+        // Unavailable below sets .status(...).path(...), and this one set
+        // neither. `path` has been a parameter of this method all along.
         ErrorResponse errorResponse = ErrorResponse.builder()
                 .error("UNAUTHORIZED")
+                .status(HttpStatus.UNAUTHORIZED.value())
                 .message(message)
+                .path(path)
                 .build();
         response.getWriter().write(objectMapper.writeValueAsString(errorResponse));
     }
@@ -302,10 +308,13 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
                             "credential_service_unavailable")));
             return;
         }
+        // Batch 873: see sendUnauthorized above — `path` is in scope here too and
+        // sendPolicyUnavailable, its third sibling, already used it.
         ErrorResponse errorResponse = ErrorResponse.builder()
                 .error("CREDENTIAL_SERVICE_UNAVAILABLE")
                 .status(HttpStatus.SERVICE_UNAVAILABLE.value())
                 .message("API credential service is unavailable.")
+                .path(path)
                 .build();
         response.getWriter().write(objectMapper.writeValueAsString(errorResponse));
     }

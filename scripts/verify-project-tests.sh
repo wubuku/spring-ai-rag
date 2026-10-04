@@ -175,3 +175,22 @@ echo "PASS: Controller-constructor-count self-test"
 
 node scripts/verify-controller-constructor-count.mjs
 echo "PASS: Controller constructor count"
+
+# Batch 873. ErrorCode calls itself the single source of truth, and six of the
+# codes the API actually returns were never declared in it — so no title or
+# problem-type URI could be derived, and the same exception grew two different
+# body shapes depending on which branch caught it. The rule also pins that the
+# status beside a code matches the one the enum declares, and that a hand-built
+# ErrorResponse is actually a problem detail. Its known blind spot — the
+# `ErrorResponse.of(...)` factories, which no source scan can see — is written
+# into the gate's own header and pinned by a self-test, not left for the next
+# reader to discover.
+node scripts/test-support/error-code-catalog-self-test.mjs >/dev/null || {
+  echo "Error-code-catalog self-test failed; the gate may no longer reject anything." >&2
+  node scripts/test-support/error-code-catalog-self-test.mjs >&2 || true
+  exit 1
+}
+echo "PASS: Error-code-catalog self-test"
+
+node scripts/verify-error-code-catalog.mjs
+echo "PASS: Error code catalog"

@@ -19,6 +19,12 @@ public enum ErrorCode {
 
     BAD_REQUEST(400, "Bad Request"),
     MISSING_PARAMETER(400, "Missing Required Parameter"),
+    // Batch 873: the three below were emitted by GlobalExceptionHandler but were
+    // never declared here, so the enum this file calls "a single source of truth"
+    // was missing codes the API really returns.
+    MISSING_HEADER(400, "Missing Required Header"),
+    MISSING_PART(400, "Missing Required Part"),
+    UNSUPPORTED_MEDIA_TYPE(400, "Unsupported Media Type"),
     INVALID_REQUEST_BODY(400, "Invalid Request Body"),
     VALIDATION_FAILED(400, "Validation Failed"),
     TYPE_MISMATCH(400, "Type Mismatch"),
@@ -107,7 +113,14 @@ public enum ErrorCode {
 
     // ==================== 429 Too Many Requests ====================
 
-    RATE_LIMIT_EXCEEDED(429, "Rate Limit Exceeded"),
+    // Batch 873. This used to be RATE_LIMIT_EXCEEDED, which nothing in the
+    // repository ever emitted — RateLimitFilter has always written
+    // "TOO_MANY_REQUESTS" to the wire, and three test classes assert that exact
+    // string as the value of `error`. So the catalog held one name for the 429
+    // and the API spoke another. Renaming the constant is cheaper than adding a
+    // second 429 under a name no client has ever seen, and it cannot break a
+    // caller: the wire value never changes.
+    TOO_MANY_REQUESTS(429, "Too Many Requests"),
 
     // ==================== 500 Internal Server Error ====================
 
@@ -119,6 +132,12 @@ public enum ErrorCode {
     // ==================== 503 Service Unavailable ====================
 
     SERVICE_UNAVAILABLE(503, "Service Unavailable"),
+    // Batch 873: see MISSING_HEADER above — emitted by the handler, absent here.
+    POLICY_SERVICE_UNAVAILABLE(503, "API Principal Policy Service Unavailable"),
+    // The third leg of the same family: a dependency the request needs is down,
+    // so the API answers 503 naming *which* one. This is what
+    // ApiKeyAuthFilter.sendServiceUnavailable has always written to the wire.
+    CREDENTIAL_SERVICE_UNAVAILABLE(503, "API Credential Service Unavailable"),
     LLM_CIRCUIT_OPEN(503, "LLM Circuit Breaker Open"),
     LLM_UNAVAILABLE(503, "LLM Service Unavailable"),
     CHAT_HISTORY_PERSIST_FAILED(503, "Chat History Persistence Failed"),
@@ -147,6 +166,9 @@ public enum ErrorCode {
 
     private final int httpStatus;
     private final String title;
+
+    /** Cached for {@link #byCodeOrNull(String)}; the enum is fixed at runtime. */
+    private static final ErrorCode[] VALUES = values();
 
     ErrorCode(int httpStatus, String title) {
         this.httpStatus = httpStatus;
@@ -180,5 +202,28 @@ public enum ErrorCode {
      */
     public String getCode() {
         return this.name();
+    }
+
+    /**
+     * Looks a code up by its wire name, or {@code null} when there is none.
+     *
+     * <p>Batch 873. {@code GlobalExceptionHandler} builds bodies from string
+     * literals, so it needs a name-to-code lookup to stop hardcoding titles and
+     * problem-type URIs. It deliberately does <b>not</b> throw: this is called
+     * from inside exception handling, where a thrown
+     * {@link IllegalArgumentException} would replace a 400 with a 500 and lose
+     * the reason the caller was about to be told. A code the enum does not know
+     * is a gap to be reported, not an error to be raised here.
+     */
+    public static ErrorCode byCodeOrNull(String code) {
+        if (code == null) {
+            return null;
+        }
+        for (ErrorCode candidate : VALUES) {
+            if (candidate.name().equals(code)) {
+                return candidate;
+            }
+        }
+        return null;
     }
 }

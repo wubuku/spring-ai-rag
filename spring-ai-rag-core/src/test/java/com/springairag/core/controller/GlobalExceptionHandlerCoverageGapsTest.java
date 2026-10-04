@@ -43,7 +43,12 @@ class GlobalExceptionHandlerCoverageGapsTest {
                 new HttpMediaTypeNotSupportedException("application/xml"), request);
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
-        assertEquals("UNSUPPORTED_MEDIA_TYPE", response.getBody().getTitle());
+        assertEquals("UNSUPPORTED_MEDIA_TYPE", response.getBody().getError());
+        // Batch 873: `title` is RFC 7807's "short, human-readable summary";
+        // the code belongs in `type` and `error`. The RagException path has
+        // always read the title off the enum, and these six assertions pinned
+        // the *other* shape, i.e. the two construction sites disagreeing.
+        assertEquals("Unsupported Media Type", response.getBody().getTitle());
         assertTrue(response.getBody().getDetail().contains("application/xml"));
     }
 
@@ -53,7 +58,12 @@ class GlobalExceptionHandlerCoverageGapsTest {
                 new MissingServletRequestPartException("file"), request);
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
-        assertEquals("MISSING_PART", response.getBody().getTitle());
+        assertEquals("MISSING_PART", response.getBody().getError());
+        // Batch 873: `title` is RFC 7807's "short, human-readable summary";
+        // the code belongs in `type` and `error`. The RagException path has
+        // always read the title off the enum, and these six assertions pinned
+        // the *other* shape, i.e. the two construction sites disagreeing.
+        assertEquals("Missing Required Part", response.getBody().getTitle());
         assertTrue(response.getBody().getDetail().contains("file"));
     }
 
@@ -65,7 +75,13 @@ class GlobalExceptionHandlerCoverageGapsTest {
                                 "{\"broken\""), request);
 
         assertEquals(HttpStatus.SERVICE_UNAVAILABLE, response.getStatusCode());
-        assertEquals("POLICY_SERVICE_UNAVAILABLE", response.getBody().getTitle());
+        assertEquals("POLICY_SERVICE_UNAVAILABLE", response.getBody().getError());
+        // Batch 873: `title` is RFC 7807's "short, human-readable summary";
+        // the code belongs in `type` and `error`. The RagException path has
+        // always read the title off the enum, and these six assertions pinned
+        // the *other* shape, i.e. the two construction sites disagreeing.
+        assertEquals("API Principal Policy Service Unavailable",
+                response.getBody().getTitle());
     }
 
     @Test
@@ -93,7 +109,12 @@ class GlobalExceptionHandlerCoverageGapsTest {
                 new SecurityException(), request);
 
         assertEquals(HttpStatus.FORBIDDEN, response.getStatusCode());
-        assertEquals("FORBIDDEN", response.getBody().getTitle());
+        assertEquals("FORBIDDEN", response.getBody().getError());
+        // Batch 873: `title` is RFC 7807's "short, human-readable summary";
+        // the code belongs in `type` and `error`. The RagException path has
+        // always read the title off the enum, and these six assertions pinned
+        // the *other* shape, i.e. the two construction sites disagreeing.
+        assertEquals("Forbidden", response.getBody().getTitle());
         assertEquals("Access denied", response.getBody().getDetail());
     }
 }

@@ -319,8 +319,12 @@ public class RateLimitFilter extends OncePerRequestFilter {
                             "rate_limit_exceeded")));
             return;
         }
+        // Batch 873: writeStoreUnavailable, the sibling method below, sets
+        // .status(...); this one set only .path(...). The HTTP status was on the
+        // response object, never in the body.
         ErrorResponse errorResponse = ErrorResponse.builder()
                 .error("TOO_MANY_REQUESTS")
+                .status(HttpStatus.TOO_MANY_REQUESTS.value())
                 .message("Rate limit exceeded. Max " + limit + " requests per minute.")
                 .path(path)
                 .build();

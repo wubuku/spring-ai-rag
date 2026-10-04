@@ -77,6 +77,7 @@ public class ApiKeyIdentityController {
                     .error("UNAUTHORIZED")
                     .status(HttpStatus.UNAUTHORIZED.value())
                     .message("A valid API credential is required")
+                    .path(request == null ? null : request.getRequestURI())
                     .build();
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .cacheControl(CacheControl.noStore())
@@ -97,10 +98,10 @@ public class ApiKeyIdentityController {
             if (!(authenticated instanceof AuthenticatedApiPrincipal principal)
                     || !id.equals(principal.getPrincipalId())
                     || !type.equals(principal.principalType())) {
-                return unauthorized();
+                return unauthorized(request);
             }
             ResponseEntity<ErrorResponse> policyError =
-                    populateDatabasePolicy(response, principal);
+                    populateDatabasePolicy(response, principal, request);
             if (policyError != null) {
                 return policyError;
             }
@@ -110,7 +111,7 @@ public class ApiKeyIdentityController {
             response.setCollectionAccessMode(CollectionAccessMode.UNRESTRICTED);
             response.setAllowedCollectionKeys(null);
         } else {
-            return unauthorized();
+            return unauthorized(request);
         }
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.noStore())
@@ -119,7 +120,8 @@ public class ApiKeyIdentityController {
 
     private ResponseEntity<ErrorResponse> populateDatabasePolicy(
             ApiKeyIdentityResponse response,
-            AuthenticatedApiPrincipal principal) {
+            AuthenticatedApiPrincipal principal,
+            HttpServletRequest request) {
         response.setCredentialId(principal.getCredentialId());
         response.setCredentialVersion(principal.getCredentialVersion());
         response.setPolicyVersion(principal.getPolicyVersion());
@@ -137,34 +139,39 @@ public class ApiKeyIdentityController {
                     principal.getAllowedCollectionIds());
             Map<Long, String> keysById = collectionIdentityResolver.mapKeys(allowedIds);
             if (keysById.size() != allowedIds.size()) {
-                return policyUnavailable();
+                return policyUnavailable(request);
             }
             response.setCollectionAccessMode(CollectionAccessMode.RESTRICTED);
             response.setAllowedCollectionKeys(
                     allowedIds.stream().map(keysById::get).toList());
             return null;
         } catch (IllegalStateException | DataAccessException error) {
-            return policyUnavailable();
+            return policyUnavailable(request);
         }
     }
 
-    private ResponseEntity<ErrorResponse> unauthorized() {
+    // Batch 873: the request is threaded down from currentIdentity so the body
+    // can name the path it is about, matching ApiKeyController.forbidden and the
+    // two filter writers that already do.
+    private ResponseEntity<ErrorResponse> unauthorized(HttpServletRequest request) {
         ErrorResponse error = ErrorResponse.builder()
                 .error("UNAUTHORIZED")
                 .status(HttpStatus.UNAUTHORIZED.value())
                 .message("A valid API credential is required")
+                .path(request == null ? null : request.getRequestURI())
                 .build();
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .cacheControl(CacheControl.noStore())
                 .body(error);
     }
 
-    private ResponseEntity<ErrorResponse> policyUnavailable() {
+    private ResponseEntity<ErrorResponse> policyUnavailable(HttpServletRequest request) {
         ErrorCode code = ErrorCode.SERVICE_UNAVAILABLE;
         ErrorResponse error = ErrorResponse.builder()
                 .error(code.getCode())
                 .status(code.getHttpStatus())
                 .detail("The current API principal policy cannot be resolved completely")
+                .path(request == null ? null : request.getRequestURI())
                 .build();
         error.setTitle(code.getTitle());
         return ResponseEntity.status(code.getHttpStatus())

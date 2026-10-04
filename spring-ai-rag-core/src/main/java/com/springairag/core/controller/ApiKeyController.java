@@ -176,7 +176,7 @@ public class ApiKeyController {
         if (!rootCredentialResolver.isConfigured()
                 && getCallerRole(request) != ApiKeyRole.ADMIN) {
             return ResponseEntity.status(403)
-                    .body(forbidden("Only ADMIN keys can list all API keys"));
+                    .body(forbidden("Only ADMIN keys can list all API keys", request));
         }
         return ResponseEntity.ok(apiKeyService.listKeys());
     }
@@ -190,7 +190,7 @@ public class ApiKeyController {
         if (!rootCredentialResolver.isConfigured()
                 && getCallerRole(request) != ApiKeyRole.ADMIN) {
             return ResponseEntity.status(403)
-                    .body(forbidden("Only ADMIN keys can list API principals"));
+                    .body(forbidden("Only ADMIN keys can list API principals", request));
         }
         return ResponseEntity.ok(apiKeyService.listPrincipals());
     }
@@ -207,7 +207,7 @@ public class ApiKeyController {
         if (!rootCredentialResolver.isConfigured()
                 && getCallerRole(request) != ApiKeyRole.ADMIN) {
             return ResponseEntity.status(403)
-                    .body(forbidden("Only ADMIN keys can update API principal policy"));
+                    .body(forbidden("Only ADMIN keys can update API principal policy", request));
         }
         List<String> requestedKeys = policy.getAllowedCollectionKeys();
         if (requestedKeys != null && requestedKeys.isEmpty()) {
@@ -251,7 +251,7 @@ public class ApiKeyController {
         if (!rootCredentialResolver.isConfigured()
                 && getCallerRole(request) != ApiKeyRole.ADMIN) {
             return ResponseEntity.status(403)
-                    .body(forbidden("Only ADMIN keys can revoke API keys"));
+                    .body(forbidden("Only ADMIN keys can revoke API keys", request));
         }
         boolean found = rootCredentialResolver.isConfigured()
                 ? apiKeyService.revokeManagedKey(keyId)
@@ -282,7 +282,7 @@ public class ApiKeyController {
                 && !keyId.equals(caller.getCredentialId())) {
             return ResponseEntity.status(403)
                     .body(forbidden(
-                            "NORMAL keys can only rotate themselves"));
+                            "NORMAL keys can only rotate themselves", request));
         }
         ApiKeyCreatedResponse response = rootCredentialResolver.isConfigured()
                 ? apiKeyService.rotateManagedKey(keyId)
@@ -403,7 +403,7 @@ public class ApiKeyController {
             builder.cacheControl(CacheControl.noStore());
         }
         return builder
-                .body(forbidden("Only the environment root can manage API keys"));
+                .body(forbidden("Only the environment root can manage API keys", request));
     }
 
     private void requireStagedAccess(HttpServletRequest request) {
@@ -418,11 +418,19 @@ public class ApiKeyController {
         }
     }
 
-    private ErrorResponse forbidden(String detail) {
+    /**
+     * Batch 873. The `instance` field is the request path; RFC 7807 calls it
+     * optional, but {@code ErrorResponse} documents all five standard fields and
+     * calls itself the format "all API errors" use. All six call sites already
+     * held the request, so this closes the last gap in the contract instead of
+     * leaving a sixth shape for a client to discover.
+     */
+    private ErrorResponse forbidden(String detail, HttpServletRequest request) {
         return ErrorResponse.builder()
                 .error("FORBIDDEN")
                 .status(HttpStatus.FORBIDDEN.value())
                 .message(detail)
+                .path(request == null ? null : request.getRequestURI())
                 .build();
     }
 }
