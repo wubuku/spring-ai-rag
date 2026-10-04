@@ -12,6 +12,7 @@ import { PageHeader } from '../components/ui';
 import { Dialog } from '../components/Dialog';
 import { ImeSafeForm } from '../components/ImeSafeForm';
 import { useToast } from '../components/Toast';
+import { failureMessage } from '../utils/failureReason';
 import { Button } from '../components/Button';
 import { EmptyState, QueryErrorBanner, StatusBadge } from '../components/ui';
 import type { StatusTone } from '../components/ui';
@@ -149,19 +150,19 @@ function ExperimentDetail({ experimentId, onBack }: { experimentId: number; onBa
   const startMut = useMutation({
     mutationFn: () => abtestApi.startExperiment(experimentId),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['abtest'] }); showToast(t('abtest.started'), 'success'); },
-    onError: () => showToast(t('abtest.startError'), 'error'),
+    onError: (error) => showToast(failureMessage(t, 'abtest.startError', error), 'error'),
   });
 
   const pauseMut = useMutation({
     mutationFn: () => abtestApi.pauseExperiment(experimentId),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['abtest'] }); showToast(t('abtest.paused'), 'success'); },
-    onError: () => showToast(t('abtest.pauseError'), 'error'),
+    onError: (error) => showToast(failureMessage(t, 'abtest.pauseError', error), 'error'),
   });
 
   const stopMut = useMutation({
     mutationFn: () => abtestApi.stopExperiment(experimentId),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['abtest'] }); showToast(t('abtest.stopped'), 'success'); },
-    onError: () => showToast(t('abtest.stopError'), 'error'),
+    onError: (error) => showToast(failureMessage(t, 'abtest.stopError', error), 'error'),
   });
 
   if (expPending) return <div className={styles.loading}>{t('common.loading')}</div>;
@@ -350,7 +351,7 @@ function CreateExperimentModal({ onClose }: { onClose: () => void }) {
       showToast(t('abtest.created'), 'success');
       onClose();
     },
-    onError: () => showToast(t('abtest.createError'), 'error'),
+    onError: (error) => showToast(failureMessage(t, 'abtest.createError', error), 'error'),
   });
 
   const handleSubmit = (e: React.FormEvent) => {

@@ -17,6 +17,7 @@ import { Dialog } from '../components/Dialog';
 import { Card } from '../components/Card';
 import styles from './Collections.module.css';
 import { EmptyState, PageHeader, QueryErrorBanner } from '../components/ui';
+import { failureMessage } from '../utils/failureReason';
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -69,8 +70,8 @@ export function Collections() {
       queryClient.invalidateQueries({ queryKey: ['collections'] });
       showToast(t('collections.deleteSuccess'), 'success');
     },
-    onError: () => {
-      showToast(t('collections.deleteError'), 'error');
+    onError: (error) => {
+      showToast(failureMessage(t, 'collections.deleteError', error), 'error');
     },
   });
 

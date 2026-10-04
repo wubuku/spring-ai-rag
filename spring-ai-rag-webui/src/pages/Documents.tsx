@@ -19,6 +19,7 @@ import { useBlobUrlOpener } from '../hooks/useBlobUrlOpener';
 import { useImeComposition } from '../utils/ime';
 import styles from './Documents.module.css';
 import { EmptyState, IconButton, QueryErrorBanner } from '../components/ui';
+import { failureMessage } from '../utils/failureReason';
 import { Upload, X } from 'lucide-react';
 
 type DocumentConfirmation =
@@ -72,6 +73,11 @@ export function Documents() {
     staleTime: 10000,
   });
 
+  // A rejected write used to be announced as `t(fallbackKey)` and nothing else,
+  // so the server's reason — which `api/client.ts` had already lifted into
+  // `Error.message` — was dropped here, on the path five mutations share. The
+  // 409 branch is the one case where a *specific* sentence beats the raw reason,
+  // so it keeps winning; everything else appends what the server said.
   const handleMutationError = (error: unknown, fallbackKey: string) => {
     const status = (error as { response?: { status?: number } })?.response?.status;
     if (status === 409) {
@@ -79,7 +85,7 @@ export function Documents() {
       showToast(t('documents.revisionConflict'), 'error');
       return;
     }
-    showToast(t(fallbackKey), 'error');
+    showToast(failureMessage(t, fallbackKey, error), 'error');
   };
 
   const updateMutation = useMutation({
@@ -181,8 +187,8 @@ export function Documents() {
       queryClient.invalidateQueries({ queryKey: ['documents'] });
       showToast(t('documents.embeddingRetried'), 'success');
     },
-    onError: () => {
-      showToast(t('documents.embeddingRetryError'), 'error');
+    onError: (error) => {
+      showToast(failureMessage(t, 'documents.embeddingRetryError', error), 'error');
     },
   });
 

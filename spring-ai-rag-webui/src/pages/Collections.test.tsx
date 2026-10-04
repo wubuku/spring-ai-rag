@@ -299,7 +299,7 @@ describe('Collections delete flow', () => {
     await user.click(screen.getByRole('button', { name: 'common.delete' }));
     await waitFor(() => {
       expect(showToast).toHaveBeenCalledWith(
-        'collections.deleteError', 'error',
+        'collections.deleteError (in use)', 'error',
       );
     });
   });

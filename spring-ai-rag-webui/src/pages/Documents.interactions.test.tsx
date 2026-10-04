@@ -1001,7 +1001,7 @@ describe('Documents error fallbacks, revision guard and dialog dismissal', () =>
 
     await waitFor(() => {
       expect(mockShowToast).toHaveBeenCalledWith(
-        'documents.updateError',
+        'documents.updateError (storage unavailable)',
         'error',
       );
     });
@@ -1023,7 +1023,7 @@ describe('Documents error fallbacks, revision guard and dialog dismissal', () =>
 
     await waitFor(() => {
       expect(mockShowToast).toHaveBeenCalledWith(
-        'documents.updateError',
+        'documents.updateError (Missing document revision)',
         'error',
       );
     });
@@ -1044,7 +1044,7 @@ describe('Documents error fallbacks, revision guard and dialog dismissal', () =>
 
     await waitFor(() => {
       expect(mockShowToast).toHaveBeenCalledWith(
-        'documents.restoreError',
+        'documents.restoreError (busy)',
         'error',
       );
     });
@@ -1071,7 +1071,7 @@ describe('Documents error fallbacks, revision guard and dialog dismissal', () =>
 
     await waitFor(() => {
       expect(mockShowToast).toHaveBeenCalledWith(
-        'documents.deleteError',
+        'documents.deleteError (referenced)',
         'error',
       );
     });
@@ -1096,7 +1096,7 @@ describe('Documents error fallbacks, revision guard and dialog dismissal', () =>
 
     await waitFor(() => {
       expect(mockShowToast).toHaveBeenCalledWith(
-        'documents.embeddingRetryError',
+        'documents.embeddingRetryError (queue down)',
         'error',
       );
     });
@@ -1115,7 +1115,7 @@ describe('Documents error fallbacks, revision guard and dialog dismissal', () =>
 
     await waitFor(() => {
       expect(mockShowToast).toHaveBeenCalledWith(
-        'documents.loadDetailError',
+        'documents.loadDetailError (gone)',
         'error',
       );
     });
@@ -1405,7 +1405,7 @@ describe('Documents upload zone, filter clearing and dialog dismissal', () => {
 
     await waitFor(() => {
       expect(mockShowToast).toHaveBeenCalledWith(
-        'documents.loadDetailError',
+        'documents.loadDetailError (gone)',
         'error',
       );
     });
@@ -1465,7 +1465,7 @@ describe('Documents revision guard and version restore failure', () => {
 
     await waitFor(() => {
       expect(mockShowToast).toHaveBeenCalledWith(
-        'versions.restoreError',
+        'versions.restoreError (restore conflict)',
         'error',
       );
     });
@@ -1497,7 +1497,7 @@ describe('Documents revision guard and version restore failure', () => {
 
     await waitFor(() => {
       expect(mockShowToast).toHaveBeenCalledWith(
-        'documents.deleteError',
+        'documents.deleteError (Missing document revision)',
         'error',
       );
     });

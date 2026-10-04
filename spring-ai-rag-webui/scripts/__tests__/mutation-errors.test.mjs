@@ -134,11 +134,16 @@ describe('no-op-error-handler', () => {
   });
 
   it('accepts the same mutation once the handler reports the failure', () => {
+    // Batch 859 changed what this test means. It used to assert that
+    // `showToast(t('alerts.sloConfigCreateError'), 'error')` is a satisfactory
+    // answer, and for seven batches that *was* the house standard — the gate
+    // only ever asked whether a handler existed and did something. It is
+    // `unreasoned-failure` now, below.
     const source = `
       const createM = useMutation({
         mutationFn: () => alertsApi.createSloConfig(form),
         onSuccess: () => { resetForm(); onHideForm(); },
-        onError: () => showToast(t('alerts.sloConfigCreateError'), 'error'),
+        onError: (error) => showToast(failureMessage(t, 'alerts.sloConfigCreateError', error), 'error'),
       });
     `;
     expect(kinds(source)).toEqual([]);
@@ -150,6 +155,144 @@ describe('no-op-error-handler', () => {
       const createM = useMutation({ mutationFn: () => api.create(b), onError: () => showToast('x') });
     `;
     expect(kinds(source)).toEqual(['no-op-error-handler']);
+  });
+});
+
+describe('unreasoned-failure', () => {
+  // Batch 859. The three rules above all pass on
+  //   onError: () => showToast(t('alerts.deleteError'), 'error')
+  // which is a handler, is not a no-op, and tells the user a delete failed and
+  // stops there. Eleven of them shipped in that shape while the gate's own
+  // summary line read "every write action reports its failure".
+  const mutation = (onError, extra = '') => `
+    const deleteM = useMutation({
+      mutationFn: () => collectionsApi.deleteByKey(key),
+      onError: ${onError},
+      ${extra}
+    });
+  `;
+
+  it('rejects a failure announced as a fixed sentence and nothing else', () => {
+    expect(kinds(mutation("() => showToast(t('collections.deleteError'), 'error')")))
+      .toEqual(['unreasoned-failure']);
+  });
+
+  it('names the sentence the user is shown', () => {
+    const [violation] = scanSource(
+      'src/pages/Sample.tsx',
+      mutation("() => showToast(t('collections.deleteError'), 'error')"),
+    );
+    expect(violation.message).toContain('collections.deleteError');
+  });
+
+  it('accepts the shared helper, where `t` is passed as a value', () => {
+    // The reason is inside `failureMessage`; the component never calls `t()`
+    // itself, which is exactly why the message argument is not a bare literal.
+    expect(kinds(mutation("(error) => showToast(failureMessage(t, 'collections.deleteError', error), 'error')")))
+      .toEqual([]);
+  });
+
+  it('accepts a local formatter that receives the error', () => {
+    // The message argument is the *call*, not `t('...')`. Measured before the
+    // rule was written: a cruder "the body mentions no `t('...')`" test flagged
+    // these six ApiKeys sites and reported them as defects they are not.
+    expect(kinds(mutation("(error) => showToast(formatMutationError(t('collections.deleteError'), error), 'error')")))
+      .toEqual([]);
+  });
+
+  it('accepts an interpolated sentence', () => {
+    expect(kinds(mutation("(msg) => showToast(t('files.importError', { error: msg }), 'error')")))
+      .toEqual([]);
+  });
+
+  it('accepts a key the failure itself supplies', () => {
+    // `Documents.tsx` relocation: the key is built from the server's error code,
+    // so the sentence the user reads *is* the specific reason. A rule that
+    // judged the surface syntax would flag it as the opposite of the defect.
+    expect(kinds(mutation("(error) => showToast(t(`documents.relocationErrors.${code || 'DEFAULT'}`), 'error')")))
+      .toEqual([]);
+  });
+
+  it('does not judge the success toast in the same options object', () => {
+    // Scanning the whole options object — the shape the older rules use — reads
+    // `onSuccess: () => showToast(t('collections.deleteSuccess'), 'success')`
+    // as an unreasoned failure. The rule walks to the `onError` body only.
+    const [violation] = scanSource('src/pages/Sample.tsx', `
+      const deleteM = useMutation({
+        mutationFn: () => collectionsApi.deleteByKey(key),
+        onSuccess: () => showToast(t('collections.deleteSuccess'), 'success'),
+        onError: (error) => showToast(failureMessage(t, 'collections.deleteError', error), 'error'),
+      });
+    `);
+    expect(violation).toBeUndefined();
+  });
+
+  it('reports each handler once, not once per neighbouring onError', () => {
+    // `onError: () => showToast(...),` carries no semicolon. Reading the body as
+    // "everything up to the next `;`" runs past the end of the handler and
+    // swallows the *next* mutation's toast, so one defect is counted twice and
+    // reported on the wrong line. This is the bug the census hit first.
+    const source = `
+      const deleteM = useMutation({
+        mutationFn: () => api.delete(a),
+        onError: () => showToast(t('a.deleteError'), 'error'),
+      });
+      const createM = useMutation({
+        mutationFn: () => api.create(b),
+        onError: () => showToast(t('a.createError'), 'error'),
+      });
+    `;
+    const violations = scanSource('src/pages/Sample.tsx', source);
+    expect(violations.map(v => v.kind)).toEqual(['unreasoned-failure', 'unreasoned-failure']);
+    expect(violations.map(v => v.message)).toEqual([
+      expect.stringContaining('a.deleteError'),
+      expect.stringContaining('a.createError'),
+    ]);
+  });
+
+  it('does not read a handler quoted inside a comment', () => {
+    // `Alerts.tsx` documents its own history in a comment containing the
+    // literal text `onError: () => {}`. A raw-source scan matches the prose and
+    // then keeps reading, because the backticks make the body start outside any
+    // brace — which is how one site was counted twice before comments were
+    // stripped.
+    const source = `
+      const deleteM = useMutation({
+        mutationFn: () => api.delete(a),
+        // 这四处曾经是 \`onError: () => {}\`。
+        onError: () => showToast(t('a.deleteError'), 'error'),
+      });
+    `;
+    const violations = scanSource('src/pages/Sample.tsx', source);
+    expect(violations).toHaveLength(1);
+  });
+
+  it('accepts a recorded, justified exemption', () => {
+    // The exemption goes on the line above the reported one, and the reported
+    // line is the `onError` property. Anchoring at the `showToast` call instead
+    // would have put the comment several lines below the decision being made,
+    // and the hatch would have been unreachable — which is how the first
+    // version of this rule failed its own exemption test.
+    const source = `
+      const deleteM = useMutation({
+        mutationFn: () => localStore.drop(key),
+        // mutation-error-allow: the server always answers 204, there is no reason to show
+        onError: () => showToast(t('a.deleteError'), 'error'),
+      });
+    `;
+    const [violation] = scanSource('src/pages/Sample.tsx', source);
+    expect(violation.kind).toBe('unreasoned-failure');
+    expect(violation.detail).toContain('no reason to show');
+  });
+
+  it('still calls a swallowing handler a no-op, not merely unreasoned', () => {
+    // The empty handler is the more serious defect and keeps its own kind; a
+    // handler that shows nothing has nothing to add a reason to.
+    expect(kinds(mutation('() => {}'))).toEqual(['no-op-error-handler']);
+  });
+
+  it('is listed among the kinds this gate can emit', () => {
+    expect(VIOLATION_KINDS).toContain('unreasoned-failure');
   });
 });
 
