@@ -14,6 +14,7 @@ import {
   reconcile,
   collectSourceTestClasses,
   sourceRootFor,
+  TEST_FILE_PATTERN,
 } from '../verify-test-visibility.mjs';
 import {
   mkdirSync,
@@ -27,6 +28,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { spawnSync } from 'node:child_process';
 
 const projectRoot = fileURLToPath(new URL('../..', import.meta.url));
 
@@ -210,6 +212,11 @@ test('a nested class that does get its own report is not a ghost', () => {
 });
 
 test('collectSourceTestClasses finds nested and sibling classes, not prose', () => {
+  // Batch 885. A source that declares no test method cannot produce a report, so
+  // it is no longer collected at all — which means these fixtures had to grow a
+  // `@Test`. That is worth recording rather than just fixing: a fixture that
+  // stops exercising the rule because the rule gained a precondition is a
+  // fixture that has quietly stopped testing anything.
   const dir = mkdtempSync(join(tmpdir(), 'visibility-src-'));
   try {
     mkdirSync(join(dir, 'com', 'example'), { recursive: true });
@@ -222,6 +229,8 @@ test('collectSourceTestClasses finds nested and sibling classes, not prose', () 
         '    private record Fixture(String s) {}',
         '    static class PackagePrivateSibling {}',
         '    void helper() { class DeclaredInsideAMethod {} }',
+        '    @Test',
+        '    void ok() { }',
         '    @Nested',
         '    class FoldedIntoParent {}',
         '}',
@@ -233,6 +242,8 @@ test('collectSourceTestClasses finds nested and sibling classes, not prose', () 
       [
         'package com.example;',
         'class QuotedTest {',
+        '    @Test',
+        '    void ok() { }',
         '    String s = "class InAString";',
         "    char c = ';';",
         '    /* class InABlockComment */',
@@ -260,22 +271,24 @@ test('collectSourceTestClasses finds nested and sibling classes, not prose', () 
 test('collectSourceTestClasses skips abstract bases and non-test sources', () => {
   // `AbstractIntegrationTest` is compiled but never instantiated, so surefire
   // writes no report for it; counting it as unreported would make the
-  // reconciliation permanently red.
+  // reconciliation permanently red. The two real classes below need a `@Test`
+  // for the same reason as of Batch 885 — a source with no test method produces
+  // no report either, and requiring one would be asking for the impossible.
   const dir = mkdtempSync(join(tmpdir(), 'visibility-src-'));
   try {
     mkdirSync(join(dir, 'com', 'example'), { recursive: true });
     writeFileSync(
       join(dir, 'com', 'example', 'AbstractBaseTest.java'),
-      'package com.example;\nabstract class AbstractBaseTest {}\n',
+      'package com.example;\nabstract class AbstractBaseTest { @Test void ok() { } }\n',
     );
     writeFileSync(
       join(dir, 'com', 'example', 'RealTest.java'),
-      'package com.example;\nclass RealTest {}\n',
+      'package com.example;\nclass RealTest { @Test void ok() { } }\n',
     );
     writeFileSync(join(dir, 'com', 'example', 'Helper.java'), 'class Helper {}\n');
     writeFileSync(
       join(dir, 'com', 'example', 'SuiteTests.java'),
-      'package com.example;\nclass SuiteTests {}\n',
+      'package com.example;\nclass SuiteTests { @Test void ok() { } }\n',
     );
 
     const found = collectSourceTestClasses(dir).map(f => f.primary).sort();
@@ -283,6 +296,154 @@ test('collectSourceTestClasses skips abstract bases and non-test sources', () =>
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+// ── Batch 885: the include set, and what a source must look like to be in it ──
+
+test('TEST_FILE_PATTERN covers all four of surefire\'s default includes', () => {
+  // The doc comment has always listed four patterns. The regex implemented
+  // three: `Test*` was missing, so a test class named `TestFoo.java` would be
+  // run by surefire and invisible here — and if it stopped running, this gate
+  // could not say so.
+  for (const name of ['TestFoo.java', 'FooTest.java', 'FooTests.java', 'FooTestCase.java']) {
+    assert.equal(TEST_FILE_PATTERN.test(name), true, `${name} is a surefire test source`);
+  }
+  // `TestSupport.java` and `Tester.java` are deliberately in the *positive* set
+  // even though both read like helpers: surefire's `Test*` include really does
+  // match anything beginning with "Test". That breadth is exactly why the
+  // "declares no test method" exclusion below is load-bearing rather than
+  // defensive — without it, every helper named `Test*` would be reported as a
+  // test class that produced no report.
+  for (const name of ['TestSupport.java', 'Tester.java']) {
+    assert.equal(TEST_FILE_PATTERN.test(name), true,
+      'surefire includes Test*; being broad here is faithful, not sloppy');
+  }
+  for (const name of ['Helper.java', 'Foo.java', 'TestFoo.kt', 'FooSpec.java']) {
+    assert.equal(TEST_FILE_PATTERN.test(name), false, `${name} is not a surefire test source`);
+  }
+});
+
+test('a Test* source with a test method is collected and held to a report', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'visibility-src-'));
+  try {
+    mkdirSync(join(dir, 'com', 'example'), { recursive: true });
+    writeFileSync(
+      join(dir, 'com', 'example', 'TestPrefix.java'),
+      'package com.example;\nclass TestPrefix { @Test void ok() { } }\n',
+    );
+    const found = collectSourceTestClasses(dir);
+    assert.equal(found.length, 1);
+    assert.equal(found[0].primary, 'TestPrefix');
+    // Collected means held: with no report, it is unreported.
+    const { unreported } = reconcile(found, []);
+    assert.deepEqual(unreported, ['com.example.TestPrefix']);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a Test* source with no test method is not collected at all', () => {
+  // surefire reports nothing for a class with no test method — measured across
+  // all four modules, 0 of 1006 reports carry `tests="0"` — so requiring a report
+  // would be asking for something impossible. The real file in this shape today
+  // is `logging/TestMaskDebug.java`, a `main()` scratchpad.
+  const dir = mkdtempSync(join(tmpdir(), 'visibility-src-'));
+  try {
+    mkdirSync(join(dir, 'com', 'example'), { recursive: true });
+    writeFileSync(
+      join(dir, 'com', 'example', 'TestScratch.java'),
+      'package com.example;\npublic class TestScratch { public static void main(String[] a) { } }\n',
+    );
+    assert.deepEqual(collectSourceTestClasses(dir), []);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a test class that nests an abstract helper is still collected', () => {
+  // The abstract exclusion used to read `abstract class` **anywhere** in the
+  // file and drop the whole file. Surefire never instantiates an abstract class,
+  // so excluding one is right — but a real test with an abstract base nested
+  // inside it was dropped too, and a test class that then vanished could not be
+  // reported, because it was never in the inventory to begin with.
+  const dir = mkdtempSync(join(tmpdir(), 'visibility-src-'));
+  try {
+    mkdirSync(join(dir, 'com', 'example'), { recursive: true });
+    writeFileSync(
+      join(dir, 'com', 'example', 'WithAbstractBaseTest.java'),
+      [
+        'package com.example;',
+        'class WithAbstractBaseTest {',
+        '    abstract static class Base { abstract void run(); }',
+        '    @Test',
+        '    void ok() { }',
+        '}',
+      ].join('\n'),
+    );
+    writeFileSync(
+      join(dir, 'com', 'example', 'AbstractTopLevelTest.java'),
+      'package com.example;\nabstract class AbstractTopLevelTest { @Test void ok() { } }\n',
+    );
+    const found = collectSourceTestClasses(dir).map(f => f.primary);
+    assert.deepEqual(found, ['WithAbstractBaseTest'],
+      'only the genuinely abstract top-level class is excluded');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a nested class reported under its own simple name is not a ghost', () => {
+  // This is why the three classes the gate header calls "deleted from source"
+  // are not ghosts. They are not deleted: `AsyncTimeoutFallbackTests` and
+  // `FulltextStrategyConfigTests` are `@Nested` classes inside
+  // `HybridRetrieverServiceTest`, and `NoOpFulltextSearchProviderTest` is a
+  // package-private sibling in `FulltextSearchProviderFactoryTest`. Surefire
+  // names a nested report `<package>.<NestedSimpleName>` with no outer prefix,
+  // so those report files are legitimate and the declared superset has to
+  // accept them. Checking the source was worth the detour — the alternative
+  // reading was that ghost detection itself was broken.
+  const dir = mkdtempSync(join(tmpdir(), 'visibility-src-'));
+  try {
+    mkdirSync(join(dir, 'com', 'example'), { recursive: true });
+    writeFileSync(
+      join(dir, 'com', 'example', 'HybridRetrieverServiceTest.java'),
+      [
+        'package com.example;',
+        'class HybridRetrieverServiceTest {',
+        '    @Test void ok() { }',
+        '    @Nested',
+        '    class AsyncTimeoutFallbackTests { @Test void ok() { } }',
+        '}',
+      ].join('\n'),
+    );
+    const found = collectSourceTestClasses(dir);
+    const { ghosts, unreported } = reconcile(found, [
+      { name: 'com.example.AsyncTimeoutFallbackTests', file: 'TEST-x.xml' },
+    ]);
+    assert.deepEqual(ghosts, [], 'a nested report is not a ghost');
+    // The host class is a separate question and is genuinely unreported here:
+    // ghost detection and non-execution detection are independent, and
+    // collapsing them would hide one behind the other.
+    assert.deepEqual(unreported, ['com.example.HybridRetrieverServiceTest']);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ── the sentence a green run prints ───────────────────────────────────────
+
+test('a passing run names the module it covered and says the rest are outside it', () => {
+  // The gate derives its source root from the reports directory it is handed,
+  // so one run reconciles one module — and the aggregate entry point hands it
+  // core. The old success line read "Source tree reconciled both ways against
+  // N declared test class(es)", which reads as a repository-wide conclusion.
+  const res = spawnSync(process.execPath, [join(projectRoot, 'scripts/verify-test-visibility.mjs')], {
+    encoding: 'utf8',
+  });
+  assert.equal(res.status, 0, res.stdout + res.stderr);
+  assert.match(res.stdout, /passed for spring-ai-rag-core/,
+    'the module has to be named, or "passed" reads as repo-wide');
+  assert.match(res.stdout, /Other modules are outside this run/);
 });
 
 test('sourceRootFor maps a surefire directory back to its module source tree', () => {

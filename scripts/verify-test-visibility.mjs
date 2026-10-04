@@ -41,6 +41,21 @@
  *
  * Run after `mvn test` (the full suite for the module, not a `-Dtest=` subset):
  *   node scripts/verify-test-visibility.mjs [surefire-reports-dir]
+ *
+ * ── 一次运行只覆盖一个模块（Batch 885 实测）────────────────────────────────
+ *
+ * 门禁从报告目录**反推**源码根目录，所以它只看得到自己被指向的那一个模块。
+ * `scripts/verify-project-tests.sh:39` 不带参数调用，因此对账的永远是
+ * `spring-ai-rag-core`；另外三个模块（api / starter / documents）的测试类
+ * 从不进入任何一次对账。实测把它们逐个指过去，三个都是干净的——所以这是
+ * **有实测支撑的限制**，不是活缺陷；但一次绿色运行原本印的是
+ * "Source tree reconciled both ways"，读起来像仓库级���论。现在成功信息点明
+ * 是哪个模块，并说明其余模块不在本次范围内。
+ *
+ * 为什么不把聚合入口改成四模块循环：一个只跑了 `-pl spring-ai-rag-core test`
+ * 的开发者会因此看到另外三个模块"No surefire reports"而**门禁变红**——
+ * 那是同一族的假指控（把"没跑"说成"消失了"）。要按模块对账，前提是先跑整个
+ * reactor；这属于聚合入口的契约变更，不该由一道门禁的审查顺带决定。
  */
 
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
@@ -52,8 +67,41 @@ const projectRoot = fileURLToPath(new URL('..', import.meta.url));
 /**
  * Surefire's default `includes` for test sources: a class whose simple name is
  * `Test*`, `*Test`, `*Tests` or `*TestCase`.
+ *
+ * Batch 885. This comment listed all four from the beginning; the pattern
+ * implemented three. `Test*` was simply absent, so a test class named
+ * `TestFoo.java` would be run by surefire and invisible here — and if it ever
+ * stopped running, this gate could not say so, which is the one thing it is
+ * for. The gap is narrow but not empty: `logging/TestMaskDebug.java` sits in it
+ * today. It happens to be a `main()` scratchpad with no test method, so nothing
+ * breaks yet; the criterion was simply narrower than the contract it documents.
+ *
+ * Adding the pattern is not sufficient on its own. `unreported` requires every
+ * collected source's primary class to have produced a report, and surefire
+ * reports nothing at all for a class with no test method — measured across all
+ * four modules: 0 of 1006 reports carry `tests="0"`. So a file in the include
+ * set that contains no tests would be reported as "a test class that produced
+ * no report", which is the wrong accusation. `collectSourceTestClasses`
+ * therefore also skips sources that declare no test method.
  */
-export const TEST_FILE_PATTERN = /(?:Test|Tests|TestCase)\.java$/;
+export const TEST_FILE_PATTERN = /(?:^Test.*|(?:Test|Tests|TestCase))\.java$/;
+
+/**
+ * A source that declares none of these cannot produce a report, so requiring one
+ * would be asking for something impossible.
+ *
+ * The direction of a mistake here is not symmetric, so it is worth being precise
+ * about which way is safe. Classifying a real test class as "contains no tests"
+ * means a vanished one goes unreported — the gate goes quiet, which is the
+ * failure it exists to prevent. So the pattern is deliberately broad, and it was
+ * cross-checked against the real tree rather than trusted: of the 1006 classes
+ * surefire reported across the four modules, 1003 carry one of these annotations
+ * in their source. The three that do not are the three ghosts the header already
+ * documents — sources deleted from the tree whose reports survived — which is
+ * exactly the case where "declares no test method" is the right answer.
+ */
+const TEST_METHOD_ANNOTATION =
+  /@(?:[\w$]+\.)*(?:Test|ParameterizedTest|RepeatedTest|TestFactory|TestTemplate|Parameterized|Suite)\b/;
 
 export function parseReport(xml) {
   const open = /<testsuite\b[^>]*>/.exec(xml);
@@ -138,6 +186,22 @@ function stripNonCode(text) {
 }
 
 /**
+ * Is the type this file is named after an abstract class or record?
+ *
+ * Scoped to the top-level declaration on purpose — see the call site. A package
+ * declaration before it cannot contain braces, so walking the stripped text up
+ * to the first top-level `class`/`record` keyword is enough; anything nested
+ * inside a method body is at brace depth 1 or deeper and is not reached.
+ */
+function isTopLevelAbstract(code) {
+  const head = code.replace(/^\s*package\b[^;]*;/, '');
+  const typeStart = /\b(?:class|record|enum|interface)\s+/.exec(head);
+  if (!typeStart) return false;
+  const modifiers = head.slice(0, typeStart.index);
+  return /\babstract\b/.test(modifiers);
+}
+
+/**
  * Lists the test sources under a `src/test/java` root together with the class
  * names each file can actually produce a surefire report for.
  *
@@ -180,8 +244,17 @@ export function collectSourceTestClasses(sourceRoot) {
         continue;
       }
       if (!TEST_FILE_PATTERN.test(entry.name)) continue;
-      const code = stripNonCode(readFileSync(path, 'utf8'));
-      if (/\babstract\s+(?:class|record)\b/.test(code)) continue;
+      const raw = readFileSync(path, 'utf8');
+      if (!TEST_METHOD_ANNOTATION.test(raw)) continue;
+      const code = stripNonCode(raw);
+      // Batch 885. This used to read `abstract class` **anywhere** in the file
+      // and drop the whole file. Surefire never instantiates an abstract class,
+      // so excluding one is right — but a real test class with an abstract
+      // helper nested inside it was being dropped too, and then a test class
+      // that vanished could not be reported, because it was not in the inventory
+      // to begin with. The check belongs on the top-level type, which is the one
+      // whose report the gate requires.
+      if (isTopLevelAbstract(code)) continue;
 
       const rel = relative(sourceRoot, path).split(sep);
       const primary = rel.pop().replace(/\.java$/, '');
@@ -329,10 +402,14 @@ function main() {
     return;
   }
 
+  const module = relative(projectRoot, reportsDir).split(sep)[0] || '(repo root)';
   console.log(
-    `Test visibility passed; ${totals.classes} class(es), ${totals.tests} test(s), ` +
-      `${totals.skipped} reported skip(s), and no class vanished silently. ` +
-      `Source tree reconciled both ways against ${sourceClasses.length} declared test class(es).`,
+    `Test visibility passed for ${module}; ${totals.classes} class(es), ${totals.tests} test(s), `
+      + `${totals.skipped} reported skip(s), and no class vanished silently. `
+      + `The source tree of that one module was reconciled both ways against `
+      + `${sourceClasses.length} declared test class(es). Other modules are outside this run — the `
+      + 'aggregate entry point points the gate at spring-ai-rag-core, and pointing it at a sibling '
+      + 'module needs a full-reactor run first, or the missing reports read as vanished tests.',
   );
 }
 

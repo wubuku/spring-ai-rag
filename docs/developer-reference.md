@@ -109,7 +109,7 @@ did not already know they existed.
 
 | Gate | Rejects | Self-test | Runs in |
 |------|---------|-----------|----------|
-| `verify-test-visibility.mjs` | A test class that neither ran nor reported a skip (`tests="0" skipped="0"`) | `test-support/test-visibility-self-test.mjs` | tests chain |
+| `verify-test-visibility.mjs` | A test class that neither ran nor reported a skip (`tests="0" skipped="0"`). The check is **bidirectional**: every non-abstract test source matching surefire's four default includes (`Test*`, `*Test`, `*Tests`, `*TestCase` — Batch 885 added the missing `Test*`) must have produced a report, and every report must map back to a source, so a class deleted from source while its `TEST-*.xml` survived cannot inflate the totals. A source that declares no JUnit test method is not collected, because surefire reports nothing for one. **One module per run**: the source root is derived from the reports directory, and the aggregate entry point points the gate at `spring-ai-rag-core`; the success line names the module it covered | `test-support/test-visibility-self-test.mjs` | tests chain |
 | `verify-integration-test-switches.mjs` | A gated switch missing a run path, in either direction | `test-support/integration-switch-self-test.mjs` | tests chain |
 | `verify-external-db-safety.mjs` | A suite that takes a caller-named database and runs `flyway.clean()` on it | `test-support/external-db-safety-self-test.mjs` | tests chain |
 | `verify-e2e-run-paths.mjs` | A Playwright spec no script can run | `test-support/e2e-reachability-self-test.mjs` | tests chain |

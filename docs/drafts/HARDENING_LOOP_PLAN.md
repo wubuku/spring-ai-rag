@@ -478,6 +478,75 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
+### Batch 885（已交付，后端：`verify-test-visibility` 的判据比它自己文档里写的窄一条，而三个"已删类"其实一个都没删）
+
+- 分支：`batch-885`
+- 方向：三个从未单独审过的仓库级门禁之三，收尾。
+  `scripts/verify-test-visibility.mjs`（341 行 / 17 条自测 / 账本里被提到 15 次，
+  但每次都是"`verify-test-visibility` EXIT=0"这样的一行，从没审过规则本身）。
+  这道门禁顺序敏感：必须在全量 `mvn test` 之后、门控 IT 之前跑。
+- **主缺陷**：`TEST_FILE_PATTERN` 的**文档注释从一开始就列了 surefire 的四种默认
+  include**（`Test*` / `*Test` / `*Tests` / `*TestCase`），**正则只实现了三种**——
+  `Test*` 压根没写。于是 `TestFoo.java` 会被 surefire 执行而这道门禁完全看不见它；
+  它一旦不再运行，门禁**无法上报**，而这正是这道门禁唯一的职责。
+  - 缺口不是空的：`logging/TestMaskDebug.java` 就在里面。它恰好是个带 `main()` 的
+    调试草稿、没有测试方法，所以今天没有任何东西坏掉——**判据比它声明的契约窄**。
+  - **不能只补模式**：`unreported` 要求每个入册源的 primary 类都有报告，而 surefire
+    **不给没有测试方法的类出报告**（实测四个模块 1006 份报告里 `tests="0"` 的有 **0** 份）。
+    所以补了 `Test*` 之后还必须排除"没有声明任何 JUnit 测试方法"的源，否则
+    `TestMaskDebug` 会被报成"消失的测试类"——方向正好搞反。
+  - **这个检测的失准方向不对称**，所以专门做了阳性对照：把真实的 1006 份报告逐个回溯到
+    源码，**1003 份**能检出测试注解；剩下 3 份是下面那条"查过没发现"里的嵌套类。
+    把一个真测试类判成"没有测试"= 门禁变安静 = 它要防的那种失败，所以模式故意放宽。
+- **第二个缺陷**：`abstract class` 的排除规则是"**文件里任何位置**出现就整份丢掉"。
+  surefire 确实不实例化抽象类，所以排除抽象类是对的——但一个**内嵌了抽象基类的
+  真测试类**也被整份丢掉了，于是它一旦消失就无法上报，因为它根本不在清单里。
+  改成只判断**顶层类型**。今天真实树 0 命中（唯一的 `AbstractIntegrationTest` 顶层
+  本身就是 abstract），是潜伏漏洞。
+- **查过、没发现的一处（差点当成重大发现）**：门禁头注释说那 3 个类"已从源码删除但
+  仍在每次构建里跑 18 个方法"。我在陈旧 `target/` 里看到它们的 `TEST-*.xml` 确实存在，
+  而门禁报 **0 ghost**——看起来正是 ghost 检测坏了。**实际不是**：三个名字的源码都还在，
+  `AsyncTimeoutFallbackTests` / `FulltextStrategyConfigTests` 是 `HybridRetrieverServiceTest`
+  里的 `@Nested` 类，`NoOpFulltextSearchProviderTest` 是 `FulltextSearchProviderFactoryTest`
+  里的包私有兄弟类；surefire 正是按 `<包名>.<NestedSimpleName>` 给嵌套类出报告的，
+  所以 `classNames` 那个刻意的**超集**正确地认下了它们。**超集不是缺陷，是设计。**
+  顺手用合成夹具独立验了一遍 ghost 检测：正常。
+- **第三个缺陷（输出层）**：一次运行只对账**一个**模块——源码根目录从报告目录反推，
+  而 `scripts/verify-project-tests.sh:39` 不带参数调用，所以永远是 `spring-ai-rag-core`。
+  另外三个模块（api / starter / documents）的测试类从不进入任何一次对账。
+  实测逐个指过去，三个都是干净的（api 11 类/557 例、starter 4/43、documents 3/74），
+  所以这是**有实测支撑的限制**而不是活缺陷。但成功信息原本印的是
+  "Source tree reconciled both ways against N declared test class(es)"，读起来像仓库级结论。
+  **不改成四模块循环**：只跑了 `-pl spring-ai-rag-core test` 的开发者会因此看到另外三个
+  模块"No surefire reports"而门禁变红——那是同一族的假指控（把"没跑"说成"消失"）。
+  改为成功信息点明模块并声明其余模块不在范围内。
+- **文档行本身是过时的**：两处 developer-reference 只写了最初那条判据
+  （`tests="0" skipped="0"`），完全没提双向对账——而门禁头注释里写得很详细。一并补上。
+- **自测 17 → 23**。定点变异，每个都退回本批真犯过的某个错：
+  `m-pattern` 2 红 / `m-notest` 3 红 / `m-abstract` 2 红 / `m-sentence` 1 红。
+  其中 `m-notest` 把**真实树**那条打红——这就是"没有测试方法即排除"承重的证明：
+  没有它，光补 `Test*` 就会让门禁在真实树上变红。
+- **我在这一批犯的错，逐条记**：
+  1. **两次把反例写错，方向相反**：先断言 `TestSupport.java` 不是 surefire 测试源，
+     再断言 `Tester.java` 不是。两者**都是**——surefire 的 `Test*` 匹配任何以 Test 开头的
+     文件。是我对 surefice 默认值的理解不够，凭感觉写的反例。
+  2. 嵌套类那条用例我把 `unreported` 断言成 `[]`，可宿主类本来就没报告——**期望写反**。
+  3. ESM 文件里写了 `require('node:child_process')` → `require is not defined`。
+  4. 探测 Java 文本块对类名清单的影响时，我拿**自己的两个剥离器**互相比，而其中"当前版"
+     根本不是门禁用的那个（门禁的 `stripNonCode` 没有导出）。探针无效，**这条没查成**，
+     如实记为未查，列为下一批候选，**不写成"查过、没发现"**。
+  5. 探测报告表时把 `parsed.name`（本身已是全限定名）拿去后缀匹配，1006 个全部报
+     "no source file"。改回直接查表后得到 1003/1006。
+  6. 读的是**陈旧** `target/`（surefire 不清旧 XML），一度据此怀疑 ghost 检测坏了。
+     `mvn clean test` 之后才是权威口径。
+- **既有夹具被新前置条件作废**：`collectSourceTestClasses` 那两条用例的夹具写的是
+  `class RealTest {}`——**没有 `@Test` 方法**，在新前置条件下直接不入册，用例红。
+  补上 `@Test`，并在用例里写明"夹具因为规则多了前置条件而必须长大；不再检验规则的夹具
+  是悄悄停止检验任何东西的夹具"。
+- **验收（权威口径）**：`mvn clean test` 全 reactor **EXIT=0**；数 `<testcase>` 元素
+  api 557 / core 7655 / starter 44 / documents 74（**不数 `tests=` 属性**）；
+  门禁 EXIT=0（988 类 / 7647 例 / 153 跳过，双向对账 985 声明类）；自测 23/23。
+
 ### Batch 884（已交付，后端：成功信息说"测试注入的每个依赖生产装配也有"，而真实树有 13 个协作者不走构造器）
 
 - 分支：`batch-884`
