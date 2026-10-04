@@ -28,6 +28,51 @@ describe('failureReason', () => {
     expect(failureReason(new Error('TIMEOUT'))).toBe('');
   });
 
+  // Batch 871. The cases above are all "no response arrived". This one is the
+  // other half: a response arrived, and it said nothing, so `api/client.ts`
+  // fell through to axios's synthesized status string. Before this, the user's
+  // toast read "collections.deleteError (Request failed with status code 404)".
+  it('returns nothing for a status string axios synthesized from a silent response', () => {
+    for (const code of [400, 401, 404, 500, 503]) {
+      expect(failureReason(new Error(`Request failed with status code ${code}`))).toBe('');
+    }
+  });
+
+  it('matches that status string case-insensitively and after trimming', () => {
+    expect(failureReason(new Error('  REQUEST FAILED WITH STATUS CODE 404  '))).toBe('');
+  });
+
+  it('keeps a real reason that mentions a status code', () => {
+    // The negative control, and the reason the rule is an anchored pattern
+    // rather than a substring search. A server that says *why* the code appeared
+    // is saying something worth showing; only the bare, generated form is noise.
+    expect(failureReason(new Error(
+      'Embedding job failed with status code 429: quota exhausted for this key',
+    ))).toBe(' (Embedding job failed with status code 429: quota exhausted for this key)');
+    expect(failureReason(new Error('Server returned status code 404 for the collection'))).toBe(
+      ' (Server returned status code 404 for the collection)',
+    );
+  });
+
+  it('keeps a real reason that embeds the generated phrase', () => {
+    // This is the case that actually pins the anchors. Both sentences below
+    // contain "request failed with status code", so a substring match would
+    // swallow them; the `^…$` anchors are what keep them. Batch 870's warning
+    // applies here: a control that cannot tell the two versions apart is not a
+    // control, and the first draft of this case missed the phrase entirely.
+    const quota = 'Upstream request failed with status code 429 after 3 retries';
+    const stream = 'Request failed with status code 404 while streaming the response';
+
+    expect(failureReason(new Error(quota))).toBe(` (${quota})`);
+    expect(failureReason(new Error(stream))).toBe(` (${stream})`);
+  });
+
+  it('does not treat a bare number as a status string', () => {
+    // Guards the three-digit boundary: a message that is only digits is a value,
+    // not a synthesized status, and there is no reason to silently drop it.
+    expect(failureReason(new Error('404'))).toBe(' (404)');
+  });
+
   it('returns nothing for a blank or placeholder message', () => {
     expect(failureReason(new Error(''))).toBe('');
     expect(failureReason(new Error('   '))).toBe('');

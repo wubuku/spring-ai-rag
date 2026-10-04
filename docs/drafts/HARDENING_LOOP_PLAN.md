@@ -478,6 +478,76 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
+### Batch 871（已交付，前后端接缝：把 858–860 的"失败要可诊断"补到最后一块）
+
+- 分支：`batch-871`
+- 主题：接上 858–860「失败必须可见**且可诊断**」那条线，但往**前后端接缝**上看。
+  连续三批 WebUI（868–870）之后按"连续同模式后主动切换"回后端，而问题落在接缝上。
+- **先量后端**：`ErrorCode` 共 **94** 个；`GlobalExceptionHandler` 对 `RagException`
+  一律设 `detail`（取自 `e.getMessage()`），`buildResponse` 一律设 `message`。
+  `RagException` 构造器对 message **零校验**（`super(message)`），
+  而全仓有 **225** 处 `new RagException(`。
+  → 抽查 7 处"传变量"的调用点，全是接收 message 的辅助方法，
+  再查这些辅助方法的调用方，**全部传字面量**。**今天没有可达的空 detail。**
+- **但真正的问题在响应体的形状上。**
+  `api/client.ts:50-54` 取 `data?.detail ?? data?.message ?? error.message`。
+  **Spring 自己的错误响应体是 `{timestamp, status, error, path}`——两者都没有。**
+  于是最后落到 axios 兜底的 `"Request failed with status code 404"`。
+  而 `failureReason.ts` 的 `SENTINEL_MESSAGES` 只挡了"没有响应"那一半，
+  **没挡"有响应但没说话"这一半**——后者其实更常见（404/405/415/网关 503）。
+- **实证（跑真函数，不是推理）**：
+
+  | 输入 | 修复前 | 修复后 |
+  |------|--------|--------|
+  | `Request failed with status code 404` | `(Request failed with status code 404)` | **空** ✓ |
+  | 500 / 401 / 503 同形 | 同样被追加 | **空** ✓ |
+  | `Document 42 not found`（服务端真话） | 保留 | 保留 ✓ |
+  | `Failed to fetch`（传输层） | 空 | 空 ✓ |
+
+  用户实际看到的文案从
+  `collections.deleteError (Request failed with status code 404)`
+  变成干净的 `collections.deleteError`。
+  这正是 `failureReason.ts` 头部自己写的目标——"noise that is both unhelpful
+  and slightly alarming, in place of a sentence"。状态码不是服务端给的理由，
+  **它是传输层穿着服务端的衣服**。
+- **实施**：`isUsable` 增加一条判定
+  `/^request failed with status code \d{3}$/i`。
+  **用锚定模式而不是往黑名单加词**——因为状态码每次都不同。
+  但这不是"猜测理由长什么样"的启发式（那正是该文件拒绝的：
+  "a heuristic guesses"），而是**识别某一个已知生成器的确切输出**，
+  窄到只有"整条消息 + 三位数字 + 没有别的"。
+- **变异在接线处**：
+
+  | 变异 | 结果 |
+  |------|------|
+  | M1 删掉整条判定（修复前形态） | 捕获，红 2 |
+  | M2 把模式放宽成子串匹配（去掉首尾锚） | 捕获，红 1 |
+
+  0 盲区。**M2 第一次跑是 0 红**——原因是我那条"反向对照"写错了措辞：
+  两句话都不含 `request failed with status code` 这个短语，
+  所以放宽成子串也照样通过。**对照没测到它声称测的东西。**
+  改成两句真正内嵌该短语的真理由
+  （`Upstream request failed with status code 429 after 3 retries`、
+  `Request failed with status code 404 while streaming the response`）后，
+  M2 被抓住。这是本次会话里第四次"先有结论再找证据"被测量纠正
+  （869 差点推翻有据政策、870 差点改正确代码 + 差点加重复测试、871 这次）。
+- **顺带查清、必须说准的两件事**：
+  - `OpenAiCompatibilityExceptionHandler` 用的是 `OpenAiErrorResponse(Error error)`，
+    JSON 形状是 `{"error":{"message":…}}`，**顶层没有 detail/message**，
+    同样会退化。但 **grep 证实 WebUI 不使用 OpenAI 兼容端点**，
+    所以那条路径打不到这个 UI——影响的是 OpenAI 兼容的调用方，不是这里。
+  - `GlobalExceptionHandler.buildResponse` 设的是 `.message(detail)` 而非 `.detail`，
+    靠 `??` 的第二级取到，**没问题**。
+- **为什么不改 `api/client.ts` 让它别再伪造状态串**：
+  因为有 **6 个组件直接渲染 `error.message`**
+  （`ErrorBoundary`、`Search`、`VersionHistoryModal`、`Documents`、`Collections`、
+  `ReembedAllButton`），若让拦截器抛空消息，这 6 处会显示空白——比现在更糟。
+  → 本批只修可证的那一处（mutation toast 的文案），
+  **并把这 6 处登记为后续项**：它们有同样的暴露面，且各自的后备文案还不一样。
+- 门禁自测未变（335）；应用测试 78 文件 / 923 用例（本批只动 `src/utils`，
+  其中 `failureReason.test.ts` 12 -> 17）；lint 十条全绿；typecheck、build EXIT=0。
+- 账本：本条。
+
 ### Batch 870（已交付，WebUI UI/UX：两个**被量化的 0 缺陷**，一个新门禁，和两次被拦住的错误动作）
 
 - 分支：`batch-870`
