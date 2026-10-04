@@ -194,3 +194,19 @@ echo "PASS: Error-code-catalog self-test"
 
 node scripts/verify-error-code-catalog.mjs
 echo "PASS: Error code catalog"
+
+# An eighth question, and the smallest surface of the lot: five acceptance gates
+# read the same four counters off a surefire report, each with its own copy of
+# the same `sed` pipeline, and none of them had a self-test — so the reading was
+# never checked, only the thing being read. Surefire writes `tests=` before the
+# cases an `@Nested` inner class contributes, so that pipeline could under-report
+# a gated suite the moment somebody added a nested class to it, and the failure
+# would name a number that is not the number of tests that ran. One reader in
+# `scripts/lib/`, counted from the elements, with a self-test that runs the real
+# shell function rather than a JavaScript restatement of it.
+node scripts/test-support/surefire-report-self-test.mjs >/dev/null || {
+  echo "Surefire-report self-test failed; the gate may no longer reject anything." >&2
+  node scripts/test-support/surefire-report-self-test.mjs >&2 || true
+  exit 1
+}
+echo "PASS: Surefire-report self-test"

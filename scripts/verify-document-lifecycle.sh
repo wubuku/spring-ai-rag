@@ -4,6 +4,12 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+# Batch 894: one reader for the surefire report, so the `tests` count comes from
+# the <testcase> elements rather than the attribute. Five gates had their own copy
+# of the same sed pipeline and none of them had a self-test; see
+# scripts/lib/surefire-report.sh for the measurement behind the rule.
+source scripts/lib/surefire-report.sh
+
 RUN_ID="${DOCUMENT_LIFECYCLE_VERIFY_RUN_ID:-$(date +%Y%m%d-%H%M%S)}"
 LOG_DIR="${DOCUMENT_LIFECYCLE_VERIFY_LOG_DIR:-.verification/document-data-plane/${RUN_ID}}"
 PLAYWRIGHT_PORT="${DOCUMENT_LIFECYCLE_PLAYWRIGHT_PORT:-4176}"
@@ -259,7 +265,11 @@ report = Path(
 if not report.is_file():
     raise SystemExit(f"Missing Surefire report: {report}")
 root = ET.parse(report).getroot()
-tests = int(root.attrib.get("tests", "0"))
+# Counted, not read: surefire writes `tests=` before the cases an `@Nested`
+# inner class contributes, so the attribute can be smaller than the children it
+# summarises — 3 of 1006 reports on the real tree, by 9 cases in total. See
+# scripts/lib/surefire-report.sh; this is the same rule in Python.
+tests = sum(1 for _ in root.iter("testcase"))
 failures = int(root.attrib.get("failures", "0"))
 errors = int(root.attrib.get("errors", "0"))
 skipped = int(root.attrib.get("skipped", "0"))

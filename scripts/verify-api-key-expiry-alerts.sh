@@ -4,6 +4,12 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+# Batch 894: one reader for the surefire report, so the `tests` count comes from
+# the <testcase> elements rather than the attribute. Five gates had their own copy
+# of the same sed pipeline and none of them had a self-test; see
+# scripts/lib/surefire-report.sh for the measurement behind the rule.
+source scripts/lib/surefire-report.sh
+
 RUN_ID="${API_KEY_EXPIRY_ALERT_VERIFY_RUN_ID:-$(date +%Y%m%d-%H%M%S)}"
 LOG_DIR="${API_KEY_EXPIRY_ALERT_VERIFY_LOG_DIR:-.verification/api-key-expiry-alerts/${RUN_ID}}"
 PHASE="${API_KEY_EXPIRY_ALERT_VERIFY_PHASE:-all}"
@@ -105,11 +111,7 @@ postgres_tests() {
     echo "Missing PostgreSQL acceptance report: ${report}" >&2
     return 1
   }
-  local tests failures errors skipped
-  tests="$(sed -n 's/.* tests="\([0-9][0-9]*\)".*/\1/p' "$report" | head -1)"
-  failures="$(sed -n 's/.* failures="\([0-9][0-9]*\)".*/\1/p' "$report" | head -1)"
-  errors="$(sed -n 's/.* errors="\([0-9][0-9]*\)".*/\1/p' "$report" | head -1)"
-  skipped="$(sed -n 's/.* skipped="\([0-9][0-9]*\)".*/\1/p' "$report" | head -1)"
+  IFS=, read -r tests failures errors skipped < <(surefire_counts "$report")
   if [[ "$tests" != "6" || "$failures" != "0" \
       || "$errors" != "0" || "$skipped" != "0" ]]; then
     echo "V57 PostgreSQL acceptance requires 6 tests with no "

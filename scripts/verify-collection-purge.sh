@@ -4,6 +4,12 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+# Batch 894: one reader for the surefire report, so the `tests` count comes from
+# the <testcase> elements rather than the attribute. Five gates had their own copy
+# of the same sed pipeline and none of them had a self-test; see
+# scripts/lib/surefire-report.sh for the measurement behind the rule.
+source scripts/lib/surefire-report.sh
+
 RUN_ID="${COLLECTION_PURGE_VERIFY_RUN_ID:-$(date +%Y%m%d-%H%M%S)}"
 LOG_DIR="${COLLECTION_PURGE_VERIFY_LOG_DIR:-.verification/collection-purge/${RUN_ID}}"
 PLAYWRIGHT_PORT="${COLLECTION_PURGE_PLAYWRIGHT_PORT:-4178}"
@@ -114,11 +120,7 @@ assert_test_report() {
     return 1
   }
 
-  local tests failures errors skipped
-  tests="$(sed -n 's/.* tests="\([0-9][0-9]*\)".*/\1/p' "$report" | head -1)"
-  failures="$(sed -n 's/.* failures="\([0-9][0-9]*\)".*/\1/p' "$report" | head -1)"
-  errors="$(sed -n 's/.* errors="\([0-9][0-9]*\)".*/\1/p' "$report" | head -1)"
-  skipped="$(sed -n 's/.* skipped="\([0-9][0-9]*\)".*/\1/p' "$report" | head -1)"
+  IFS=, read -r tests failures errors skipped < <(surefire_counts "$report")
   if [[ "$tests" != "$expected_tests" || "$failures" != "0" \
       || "$errors" != "0" || "$skipped" != "0" ]]; then
     echo "${label} requires ${expected_tests} tests with no failure/error/skip; got tests=${tests:-missing}, failures=${failures:-missing}, errors=${errors:-missing}, skipped=${skipped:-missing}." >&2
