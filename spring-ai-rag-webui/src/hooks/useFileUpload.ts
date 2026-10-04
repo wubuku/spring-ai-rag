@@ -26,7 +26,6 @@ export function useFileUpload(options: UseFileUploadOptions): UseFileUploadRetur
   const { onProgress, onComplete, onError } = options;
   const [uploads, setUploads] = useState<UploadProgress[]>([]);
   const [isUploading, setIsUploading] = useState(false);
-  const eventSourceRef = useRef<EventSource | null>(null);
   const uploadAbortRef = useRef<AbortController | null>(null);
 
   const clearUploads = useCallback(() => {
@@ -48,11 +47,6 @@ export function useFileUpload(options: UseFileUploadOptions): UseFileUploadRetur
     async (files: FileList) => {
       if (!files.length) return;
 
-      // Close any existing SSE connection
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
-      }
-
       // Initialize upload states
       const newUploads: UploadProgress[] = Array.from(files).map(file => ({
         fileName: file.name,
@@ -62,9 +56,12 @@ export function useFileUpload(options: UseFileUploadOptions): UseFileUploadRetur
       setUploads(newUploads);
       setIsUploading(true);
 
-      // Create SSE connection for progress updates
-      // Note: This requires a backend SSE endpoint for upload progress
-      // For now, we'll use the non-streaming upload with simulated progress
+      // 上传进度是**本地模拟**的，不是服务端流式推送回来的。
+      // 这里曾经有一段 SSE 分支：一个 `eventSourceRef`、上传前"关掉上一个连接"
+      // 的守卫、以及卸载时的 `es?.close()`。三处都**读起来像防护、实际永远不会
+      // 生效**——全仓 `new EventSource` 一处都没有，那个 ref 从声明到文件结束
+      // 从未被赋值，所以守卫恒为 false、`es` 恒为 null。Batch 865 把它删了。
+      // 要真的做流式进度，先写测试再接线，别把半条路径留在生产代码里。
       const formData = new FormData();
       for (const file of Array.from(files)) {
         formData.append('files', file);
@@ -118,11 +115,10 @@ export function useFileUpload(options: UseFileUploadOptions): UseFileUploadRetur
     [updateUpload, onComplete, onError]
   );
 
-  // Cleanup SSE on unmount and abort any in-flight upload
+  // Abort any in-flight upload on unmount. The real thing; unlike the SSE
+  // branch Batch 865 removed, `uploadAbortRef` is actually assigned above.
   useEffect(() => {
-    const es = eventSourceRef.current;
     return () => {
-      es?.close();
       uploadAbortRef.current?.abort();
     };
   }, []);
