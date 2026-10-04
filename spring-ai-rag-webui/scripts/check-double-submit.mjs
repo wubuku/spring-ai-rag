@@ -31,6 +31,22 @@
  * component that passes the mutation to a child, or derives `isPending` into a
  * differently-named variable, will not be flagged. That is the right way round.
  *
+ * ## The escape hatch is real, and it is deliberately narrow
+ *
+ * A `double-submit-allow` comment **exempts** the declaration it precedes —
+ * `scanSource` returns no violation for it. Batch 868 found that the previous
+ * version only *annotated* the violation with the comment's text while still
+ * reporting it, so the remedy this file's own error message recommended could
+ * never make the gate pass. A probe confirmed it: same unguarded mutation,
+ * comment added, `exit=1`, output carrying `[allowed: …]`. `src/` contained zero
+ * uses of the comment, so nothing had ever exercised the path.
+ *
+ * The hatch now matches `check-alignment-policy`, which has honoured its own
+ * `alignment-policy: allow-center` comment since Batch 862 (11 real uses). That
+ * convention is stricter on purpose: a bare keyword is not enough, the reason
+ * has to be written out after a `--` separator, so the exemption cannot be added
+ * without a justification sitting next to it in review.
+ *
  * Run: node scripts/check-double-submit.mjs
  */
 
@@ -50,7 +66,14 @@ const MUTATION_DECL = /const\s+([A-Za-z_$][\w$]*)\s*=\s*useMutation\s*\(/g;
 /** `onClick={() => saveM.mutate(`, `void saveM.mutateAsync()`, `saveM.mutate()`. */
 const MUTATE_CALL = /(?<![A-Za-z0-9_$.])([A-Za-z_$][\w$]*)\s*\.\s*mutate(?:Async)?\s*\(/g;
 
-const ALLOW_COMMENT = /double-submit-allow:\s*(.+?)\s*(?:\*\/)?$/;
+/**
+ * `// double-submit-allow -- <reason>` on the declaration line or the one above.
+ *
+ * The `--` separator and the non-empty reason are load-bearing, not decoration:
+ * they are what keeps the hatch from being a bare keyword anyone can type to
+ * silence the gate. Same shape as `check-alignment-policy`'s `allow-center`.
+ */
+const ALLOW_COMMENT = /^\s*(?:\/\/|\/\*)\s*double-submit-allow\s+--\s+(\S.*?)\s*(?:\*\/)?\s*$/;
 
 export function scanSource(relativePath, source) {
   const violations = [];
@@ -77,15 +100,19 @@ export function scanSource(relativePath, source) {
     // The whole-file question: does anyone in this file look at isPending?
     if (new RegExp(`\\b${name}\\s*\\.\\s*isPending\\b`).test(code)) continue;
 
-    // An exemption comment may sit on the declaration line or the line above.
+    // A justified exemption on the declaration line or the line above silences
+    // this finding. See the file header: the previous version still reported it
+    // and merely pasted the reason into the message, which made the remedy this
+    // gate recommends impossible to apply.
     const allow = ALLOW_COMMENT.exec(rawLines[declaredLine - 1] ?? '')
       ?? ALLOW_COMMENT.exec(rawLines[declaredLine - 2] ?? '');
+    if (allow) continue;
+
     violations.push({
       kind: 'unguarded-write',
       file: relativePath,
       line: declaredLine,
       message: `${name} is fired but nothing in this file reads ${name}.isPending`,
-      detail: allow?.[1],
     });
   }
   return violations;
@@ -109,13 +136,14 @@ function main() {
   if (violations.length > 0) {
     console.error('Write actions that can be fired twice:');
     for (const v of violations) {
-      console.error(`- ${v.file}:${v.line} [${v.kind}] ${v.message}${v.detail ? ` [allowed: ${v.detail}]` : ''}`);
+      console.error(`- ${v.file}:${v.line} [${v.kind}] ${v.message}`);
     }
     console.error(
       '\nReact Query does not deduplicate `mutate()` calls: a second click sends a\n' +
         'second request. Disable the control while the mutation is pending\n' +
         '(`disabled={saveM.isPending}`), or record an inline\n' +
-        '`/* double-submit-allow: <reason> */` on the line above the declaration.',
+        '`// double-submit-allow -- <reason>` on the line above the declaration.\n' +
+        'The reason is required, and the comment must sit next to the declaration.',
     );
     process.exitCode = 1;
     return;

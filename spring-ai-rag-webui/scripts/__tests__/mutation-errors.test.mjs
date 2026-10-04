@@ -85,7 +85,13 @@ const saveM = useMutation({ mutationFn: () => api.save() });
     expect(violation.message).toContain('saveM');
   });
 
-  it('accepts a recorded, justified exemption', () => {
+  // Batch 868. This case carried the name "accepts a recorded, justified
+  // exemption" — the same name used in double-submit.test.mjs, where it was
+  // also wrong. Here annotating really is the intended behaviour (see the
+  // renamed `unreasoned-failure` case below), but the name still claimed an
+  // acceptance the assertions never made. The name is the defect; the
+  // behaviour is not.
+  it('annotates a silent mutation with the reason recorded next to it', () => {
     const source = `
       // mutation-error-allow: this mutation only ever writes to a local draft store
       const draftM = useMutation({ mutationFn: () => localStore.save() });
@@ -277,12 +283,24 @@ describe('unreasoned-failure', () => {
     expect(violations).toHaveLength(1);
   });
 
-  it('accepts a recorded, justified exemption', () => {
+  it('annotates rather than exempts, and says so in the test name', () => {
     // The exemption goes on the line above the reported one, and the reported
     // line is the `onError` property. Anchoring at the `showToast` call instead
     // would have put the comment several lines below the decision being made,
-    // and the hatch would have been unreachable — which is how the first
-    // version of this rule failed its own exemption test.
+    // and the reason would have been unreachable — which is how the first
+    // version of this rule failed its own annotation test.
+    //
+    // Batch 868 pinned down *why* this gate annotates instead of exempting,
+    // which the previous version of this case never said. `unreasoned-failure`
+    // asks whether a failure is explained; if "a reason was written" meant
+    // "nothing to report", the rule would be vacuous and the gate would be
+    // unable to fail anything. The reason is printed after the finding so a
+    // reviewer weighs it; the finding still stands.
+    //
+    // This is the deliberate opposite of `check-double-submit`, where the
+    // equivalent comment *does* exempt, because "is this guarded" and "did you
+    // explain it" are independent questions. Do not "fix" the two to match
+    // without re-reading this comment.
     const source = `
       const deleteM = useMutation({
         mutationFn: () => localStore.drop(key),
@@ -290,9 +308,10 @@ describe('unreasoned-failure', () => {
         onError: () => showToast(t('a.deleteError'), 'error'),
       });
     `;
-    const [violation] = scanSource('src/pages/Sample.tsx', source);
-    expect(violation.kind).toBe('unreasoned-failure');
-    expect(violation.detail).toContain('no reason to show');
+    const violations = scanSource('src/pages/Sample.tsx', source);
+    expect(violations).toHaveLength(1);
+    expect(violations[0].kind).toBe('unreasoned-failure');
+    expect(violations[0].detail).toContain('no reason to show');
   });
 
   it('still calls a swallowing handler a no-op, not merely unreasoned', () => {
