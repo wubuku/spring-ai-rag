@@ -148,16 +148,29 @@ typecheck、lint 和全部 765 个测试。
 ## 5. 表单可访问性
 
 `npm run check:a11y-forms` 串在 `npm run lint` 里，扫描 `src/` 下每个 `.tsx`，
-拦截四类违规，外加一条豁免规则：
+拦截五类违规，外加一条豁免规则：
 
 - `control-no-name` —— 控件没有可访问名称。**placeholder 不是名称**：字段一旦有内容
   它就消失，控件随即退化成什么都不播报。`aria-label`、用 `htmlFor`/`id` 绑定的
   `label`、包裹式 `label`、或 `aria-labelledby` 都算数。
+  `<button>` 同样在覆盖范围内（Batch 876），判据是它的**文本内容**而不是属性——
+  因为按钮播报的就是文本。`aria-label=""` 会上报：属性存在不等于属性可用。
+  `aria-hidden="true"` 子树里的文字**不算**名称——可访问名的计算会跳过它——
+  因此 `<button><span aria-hidden="true">…</span></button>` 是一个无名按钮，
+  `DocumentActionsMenu` 的触发器正是这个形状。`{t('x')}` 表达式和 `{...rest}`
+  透传展开都算有名：两者静态都不可判定，报了就是在报正确的代码。
 - `orphan-label` —— 既不指向控件也不包裹控件的 `<label>`。它看起来就是个标签，
   用户会去点，然后什么也不会发生。
 - `click-non-interactive` —— 键盘够不到的 `onClick`。光有 `role` 并不够：该元素还必须
   声明 `tabIndex` 并处理按键，否则 role 只是给一个死元素贴了张标签。真正装饰性的
   点击目标应当声明 `aria-hidden="true"`，明确表示不指望键盘能到达它。
+  `<a>` 也在覆盖范围内（Batch 876），并且是唯一**不**豁免的原生交互元素：
+  它只有在带 `href` 时才算链接、才算可聚焦。没有 `href` 的 `<a onClick={go}>`
+  只是一个更差劲的 div，这个操作对 Tab 顺序完全不可见。
+
+  属性名按属性匹配，不按后缀匹配。`data-href` 不是 `href`，`data-aria-hidden`
+  也不会把元素移出可访问性树；两者此前都被当真了，而两个方向都是 fail-open——
+  规则恰好跳过了本该上报的那个元素。
 - `weak-allow-reason` —— 理由不足八个字符的 `a11y-allow` 注释。
 - `dialog-title-can-be-empty` —— `title` 可能求值为空串的 `<Dialog>`。对话框用
   指向自身 `<h2>` 的 `aria-labelledby` 给自己命名，标题一空，读屏就只播报一个

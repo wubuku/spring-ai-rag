@@ -179,12 +179,20 @@ rule *rejects* bad input, and the suite was mutation-tested — restoring the ol
 ## 5. Form accessibility
 
 `npm run check:a11y-forms` is chained into `npm run lint` and scans every `.tsx`
-under `src/` for four violations plus the exemption rule:
+under `src/` for five violations plus the exemption rule:
 
-- `control-no-name` — a form control with no accessible name. A **placeholder is
+- `control-no-name` — a control with no accessible name. A **placeholder is
   not a name**: it disappears the moment the field holds a value, so the control
   falls back to announcing nothing. `aria-label`, a `label` bound by
   `htmlFor`/`id`, a wrapping `label`, or `aria-labelledby` all satisfy this.
+  `<button>` is covered too (Batch 876), judged on its **text content** rather
+  than an attribute, because that is what a button announces. `aria-label=""`
+  is reported: the attribute being present is not the attribute being usable.
+  Text under `aria-hidden="true"` is *not* a name — the accessible-name
+  computation skips it — so `<button><span aria-hidden="true">…</span></button>`
+  is a nameless button, which is the shape `DocumentActionsMenu`'s trigger has.
+  A `{t('x')}` expression or a `{...rest}` spread counts as named: neither is
+  knowable statically, and reporting them would be reporting correct code.
 - `orphan-label` — a `<label>` that targets no control and wraps none. It looks
   like a label, so users click it, and nothing happens.
 - `click-non-interactive` — an `onClick` on an element the keyboard cannot
@@ -192,6 +200,15 @@ under `src/` for four violations plus the exemption rule:
   `tabIndex` and handle a key, otherwise the role is a label on a dead element.
   A genuinely decorative click target declares `aria-hidden="true"` instead,
   which says plainly that the keyboard is not expected to reach it.
+  An `<a>` is covered (Batch 876) and is the one native-interactive element
+  that is *not* exempt: it is a link, and only focusable, when it has an `href`.
+  `<a onClick={go}>` with no `href` is a div with worse markup, and the action
+  is invisible to the tab order.
+
+  Attribute names are matched as attributes, not as suffixes. `data-href` is not
+  an `href` and `data-aria-hidden` does not take an element out of the
+  accessibility tree; both used to be believed, and both are fail-open — the
+  rule skipped the element it should have reported.
 - `weak-allow-reason` — an `a11y-allow` comment whose reason is under eight
   characters.
 - `dialog-title-can-be-empty` — a `<Dialog>` whose `title` can evaluate to an
