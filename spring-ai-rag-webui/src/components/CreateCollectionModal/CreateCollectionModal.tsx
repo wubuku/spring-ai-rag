@@ -5,6 +5,7 @@ import { collectionsApi } from '../../api/collections';
 import { useToast } from '../Toast';
 import { Dialog } from '../Dialog';
 import { ImeSafeForm } from '../ImeSafeForm';
+import { failureMessage } from '../../utils/failureReason';
 import styles from './CreateCollectionModal.module.css';
 
 interface CreateCollectionModalProps {
@@ -35,7 +36,7 @@ export function CreateCollectionModal({
       handleClose();
     },
     onError: (error: Error) => {
-      showToast(t('collections.createError', { message: error.message }), 'error');
+      showToast(failureMessage(t, 'collections.createError', error), 'error');
     },
   });
 

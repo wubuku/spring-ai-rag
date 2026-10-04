@@ -244,9 +244,11 @@ function CollectionPurgeDialog({
       showToast(t('collections.purge.success'), 'success');
     },
     onError: (error) => {
-      const message = errorMessage(error);
-      setApplyError(message);
-      showToast(`${t('collections.purge.applyError')}: ${message}`, 'error');
+      // The block below keeps the bare reason under a bold label, which is the
+      // right shape for a reason standing on its own. The toast is the other
+      // question — "did applying it work?" — and gets the shared phrasing.
+      setApplyError(errorMessage(error));
+      showToast(failureMessage(t, 'collections.purge.applyError', error), 'error');
     },
   });
 

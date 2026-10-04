@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { filesApi, type TreeEntry } from '../../api/files';
 import { useTranslation } from 'react-i18next';
 import { Skeleton } from '../Skeleton';
+import { failureMessage } from '../../utils/failureReason';
 import styles from './FilePreview.module.css';
 import { FileText, TriangleAlert } from 'lucide-react';
 
@@ -19,7 +20,10 @@ export function FilePreview({ entry, reloadKey }: FilePreviewProps) {
   const [htmlContent, setHtmlContent] = useState<string>('');
   const [objectUrl, setObjectUrl] = useState<string>('');
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // The failure is kept whole. Storing `err.message` is what made this
+  // component unable to tell "the server said no" from "the network is
+  // down": by the time the render reads it, both are the same string.
+  const [error, setError] = useState<unknown>(null);
 
   const mimeType = entry.mimeType ?? '';
 
@@ -49,7 +53,8 @@ export function FilePreview({ entry, reloadKey }: FilePreviewProps) {
           if (active) setHtmlContent(bodyMatch ? bodyMatch[1] : html);
         }
       } catch (err) {
-        if (active) setError(err instanceof Error ? err.message : String(err));
+        // An Error is always truthy, so a thrown `null` still renders the box.
+        if (active) setError(err instanceof Error ? err : new Error(String(err)));
       } finally {
         if (active) setLoading(false);
       }
@@ -68,7 +73,7 @@ export function FilePreview({ entry, reloadKey }: FilePreviewProps) {
       return <div className={styles.contentPreview}><Skeleton width="100%" height="240px" /></div>;
     }
     if (error || !objectUrl) {
-      return <div className={styles.errorBox}>{t('files.previewError', { error: error ?? 'Unavailable' })}</div>;
+      return <div className={styles.errorBox}>{failureMessage(t, 'files.previewError', error)}</div>;
     }
     return (
       <div className={styles.imageContainer}>
@@ -87,7 +92,7 @@ export function FilePreview({ entry, reloadKey }: FilePreviewProps) {
       return <div className={styles.contentPreview}><Skeleton width="100%" height="320px" /></div>;
     }
     if (error || !objectUrl) {
-      return <div className={styles.errorBox}>{t('files.previewError', { error: error ?? 'Unavailable' })}</div>;
+      return <div className={styles.errorBox}>{failureMessage(t, 'files.previewError', error)}</div>;
     }
     return (
       <div className={styles.pdfContainer}>
@@ -132,7 +137,7 @@ export function FilePreview({ entry, reloadKey }: FilePreviewProps) {
     return (
       <div className={styles.errorBox}>
         <TriangleAlert size={32} aria-hidden="true" />
-        <span>{t('files.previewError', { error })}</span>
+        <span>{failureMessage(t, 'files.previewError', error)}</span>
       </div>
     );
   }

@@ -56,6 +56,15 @@ describe('failureReason', () => {
   });
 
   it('tolerates a non-Error thrown value', () => {
+    // Batch 860 re-examined this rather than assuming it, because two
+    // components used to hand this function a bare string — `FilePreview` and
+    // `Files` both stored `err.message` in state and interpolated it — and the
+    // obvious fix was to teach `failureReason` to accept strings. The survey
+    // says otherwise: there is no bare `throw '…'` anywhere in `src/`, and
+    // `api/client.ts:54` is the single reject point and always rejects with
+    // `new Error(message)`. A string reaching here is a message that was
+    // detached from its error, and the fix is to stop detaching it — which is
+    // what that batch did — not to make the helper trust fragments.
     expect(failureReason('plain string reason')).toBe('');
     expect(failureReason({ message: 'nested' })).toBe('');
   });

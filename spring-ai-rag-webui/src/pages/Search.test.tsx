@@ -403,7 +403,7 @@ describe('Search history and original file actions', () => {
     // i18n mock 直通返回 key；错误 toast 以 key 文本出现。
     await waitFor(() => {
       expect(
-        screen.getAllByText('search.openOriginalPdfError').length,
+        screen.getAllByText('search.openOriginalPdfError (binary gone)').length,
       ).toBeGreaterThan(0);
     });
     openSpy.mockRestore();
@@ -574,7 +574,7 @@ describe('Search guards, history panel, provenance navigation and draft validati
       name: 'search.openOriginalPdf',
     }));
     expect(await screen.findByText(
-      'search.openOriginalPdfError',
+      'search.openOriginalPdfError (s3 down)',
     )).toBeInTheDocument();
   });
 

@@ -19,6 +19,7 @@ import {
   removeWorkspaceState,
   writeWorkspaceState,
 } from '../utils/workspaceState';
+import { failureMessage } from '../utils/failureReason';
 import styles from './Search.module.css';
 
 interface SearchUrlState {
@@ -236,8 +237,7 @@ export function Search() {
       const objectUrl = URL.createObjectURL(blob);
       openBlobUrl(objectUrl);
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      showToast(t('search.openOriginalPdfError', { error: message }), 'error');
+      showToast(failureMessage(t, 'search.openOriginalPdfError', error), 'error');
     }
   }, [openBlobUrl, showToast, t]);
 

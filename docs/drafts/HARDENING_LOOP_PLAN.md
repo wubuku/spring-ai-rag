@@ -478,6 +478,55 @@
   - ~~`Chat.tsx` 的 `modelsError` 横幅插在模型下拉框之前~~ —— 已由 Batch 800 处理，
     移到 `contextRow` 之外，让它独占一行。
 
+### Batch 860（已交付，WebUI UX：别把 Error 拍平成字符串）
+
+- 分支：`feature/failure-reason-from-string-20261007`
+- 主题：接着 859 留下的"i18n 插值族"往下。
+- **先取证再决策（否掉了自己上一批的假设）**：`FilePreview` 与 `Files` 把失败
+  存成 `string` 再插值，直觉是"`failureReason` 该接受字符串"。**先量了一下**：
+  全仓 **没有一处** `throw '…'`，`api/client.ts:54` 是唯一 reject 点且永远
+  `reject(new Error(message))`。所以 858 钉住的"`failureReason` 不认字符串"
+  **是对的**，而 `failureReason.test.ts` 里那条用例正是承重墙。
+  **决定：不放宽 helper，改掉把 Error 拍平的调用方。**
+- **真正的根因**：`error instanceof Error ? error.message : String(error)`
+  这个写法在 **6 个文件里出现 9 次**。它把 Error 压成字符串，于是渲染时
+  再也分不清"服务器说了什么"和"网络断了"——
+  `Failed to fetch` 被原样拼在 "Import failed: " 后面，且**没有长度上限**。
+  859 建立的过滤（哨兵表 / 200 字上限 / 丢弃堆栈）在这条路径上完全没生效。
+- **改动 9 处**（`ReembedAllButton` / `CreateCollectionModal` / `Search` /
+  `Files`×3 / `Documents`×2 / `Collections` purge toast）改走 `failureMessage`；
+  **两处停止拍平**：`Files.uploadError` 与 `FilePreview.error` 的 state 从
+  `string` 改为 `unknown`，直接存 Error。
+- **有意不动的三处（如实记录理由）**：
+  - `files.embedFailed` 保留 `{{message}}` 插值——它来自 **200 响应**里的
+    `embedMessage`，是"嵌入为何没完成"的**状态说明**，不是错误原因，
+    拿哨兵表去过滤它反而是错的。
+  - `Collections` 的 `previewError` / `applyError` **错误块**保留"加粗标签 +
+    原因"的形态：原因独立成行时这是好形态，不是"句子 + 噪声"。
+  - `VersionHistoryModal:130` 是**读侧**（query）失败，归 `check-query-errors`
+    territory，本批不越界。
+- **locale**：两种语言各 8 个键去掉 `{{error}}` / `{{message}}` 占位符
+  （**文本级替换，不重新序列化整个 JSON**，避免全文件格式漂移）；
+  不变量校验：两语言 **730 键完全一致**，`files.embedFailed` 的占位符仍在。
+  `check-i18n-keys` 复跑仍报 706 键全部可达——**证明没有键因此变成死键**。
+- **测试**：10 处既有断言加强为"句子 + 原因"（含一个此前漏掉的
+  `swallowed-failure.test.tsx`——**定向跑 7 个文件时没包含它，
+  全量跑才暴露**，这正是"定向绿 ≠ 全量绿"）。
+- **一处测试名在说谎（顺手修）**：`FilePreview` 有两个用例叫
+  "shows the unavailable fallback…"，断言的是 `?? 'Unavailable'` 那个兜底。
+  改法**没让它们红**（`t` mock 忽略 options，两种写法都渲染成键名），
+  也就是说**它们是靠错误的原因通过的**。断言本身仍能区分
+  （有原因会变成 `key (reason)`），但**名字已经不对**——那个兜底不存在了。
+  改名为"renders the plain sentence…"。**这是 858 那条教训的又一次复现：
+  断言没红，不等于它还在测它声称的东西。**
+- 指标：`npm run lint` 九条门禁 EXIT=0 + 自测 **292/292**；应用测试
+  **78 文件 / 923 用例全绿**；`typecheck`、`build` EXIT=0；
+  `verify-project-docs` **16/16**。后端零改动未重跑。
+- **留给 Batch 861**：这 9 处是**修好的**，但没有任何东西阻止它长回来。
+  可行的门禁形态是"`catch` / `onError` 体内把错误插值进 `t()`"，
+  判据必须**先普查**（860 修完当前是 0 命中，**只能靠回退代码证明它会响**），
+  并且要小心 `files.embedFailed` 这个真阳性豁免。
+
 ### Batch 859（已交付，WebUI 门禁："报告了失败"不等于"说了为什么"）
 
 - 分支：`feature/unreasoned-failure-20261007`

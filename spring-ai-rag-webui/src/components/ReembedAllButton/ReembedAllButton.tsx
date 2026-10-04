@@ -7,6 +7,7 @@ import { ConfirmDialog } from '../Dialog';
 import { QueryErrorBanner } from '../ui';
 import styles from './ReembedAllButton.module.css';
 import { ChevronUp, ChevronDown, TriangleAlert } from 'lucide-react';
+import { failureMessage } from '../../utils/failureReason';
 
 export function ReembedAllButton() {
   const { t } = useTranslation();
@@ -44,7 +45,7 @@ export function ReembedAllButton() {
       setIsExpanded(false);
     },
     onError: (err: Error) => {
-      showToast(t('documents.reembedError', { message: err.message }), 'error');
+      showToast(failureMessage(t, 'documents.reembedError', err), 'error');
     },
   });
 

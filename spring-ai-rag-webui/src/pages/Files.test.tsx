@@ -477,7 +477,7 @@ describe('Files embedding outcomes and raw opening', () => {
 
     await waitFor(() => {
       expect(mockShowToast).toHaveBeenCalledWith(
-        'files.embedError',
+        'files.embedError (network gone)',
         'error',
       );
     });
@@ -515,7 +515,7 @@ describe('Files embedding outcomes and raw opening', () => {
 
     await waitFor(() => {
       expect(mockShowToast).toHaveBeenCalledWith(
-        'files.previewError',
+        'files.previewError (binary missing)',
         'error',
       );
     });
@@ -724,9 +724,9 @@ describe('Files tree rendering: icons, sizes and unsafe paths', () => {
     await userEvent.setup().upload(input, new File(['pdf'], 'doc.pdf'));
 
     await waitFor(() => {
-      expect(mockShowToast).toHaveBeenCalledWith('files.importError', 'error');
+      expect(mockShowToast).toHaveBeenCalledWith('files.importError (boom)', 'error');
     });
-    expect(screen.getByText('files.importError')).toBeInTheDocument();
+    expect(screen.getByText('files.importError (boom)')).toBeInTheDocument();
   });
 
   it('imports a pdf dropped onto the upload area', async () => {

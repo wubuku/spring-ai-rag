@@ -204,7 +204,7 @@ describe('ReembedAllButton', () => {
     });
 
     expect(toastSpy).toHaveBeenCalledWith(
-      'documents.reembedError {"message":"network down"}',
+      'documents.reembedError (network down)',
       'error',
     );
   });
