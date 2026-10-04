@@ -4,6 +4,11 @@ set -uo pipefail
 
 cd "$(dirname "$0")/.."
 
+# Batch 895: the two expiry-alert predicates live in scripts/lib so that their
+# self-test can run them without starting two backends and four containers. What
+# they guard, and the measured failure each one prevents, is written there.
+source scripts/lib/alert-payload.sh
+
 RUN_ID="${MANAGED_API_VERIFY_RUN_ID:-$(date +%Y%m%d-%H%M%S)}"
 LOG_DIR="${MANAGED_API_VERIFY_LOG_DIR:-.verification/managed-api-principals/${RUN_ID}}"
 ENV_FILE="${MANAGED_API_REAL_ENV_FILE:-.env}"
@@ -558,19 +563,22 @@ poll_active_expiry_alert() {
   local base="$1" principal="$2" phase="$3" output="$4"
   local timeout_seconds="${5:-30}"
   local deadline=$(( $(date +%s) + timeout_seconds ))
-  local code
+  local code reason
   while (( $(date +%s) <= deadline )); do
     code="$(root_curl -o "$output" -w '%{http_code}' \
       "${base}/api/v1/rag/alerts/active")" || return 1
-    if [[ "$code" == "200" ]] && jq -e \
-        --arg principal "$principal" \
-        --arg phase "$phase" '
-          any(.[];
-            .alertType == "API_PRINCIPAL_EXPIRY"
-            and .conditionState == $phase
-            and .metrics.principalId == $principal)
-        ' "$output" >/dev/null; then
-      return 0
+    if [[ "$code" == "200" ]]; then
+      # A response this reader cannot interpret is reported as such, on the
+      # first poll. It used to be indistinguishable from "the alert has not
+      # arrived yet", so a renamed field or a wrapper object cost the whole
+      # 30-second budget and then named the alert instead of the reader.
+      if ! reason="$(alerts_response_judgable "$output")"; then
+        echo "Cannot judge the active-alert response for principal ${principal}: ${reason}" >&2
+        return 1
+      fi
+      if alerts_match_expiry "$output" "$principal" "$phase"; then
+        return 0
+      fi
     fi
     sleep 1
   done
@@ -582,17 +590,22 @@ poll_absent_expiry_alert() {
   local base="$1" principal="$2" output="$3"
   local timeout_seconds="${4:-30}"
   local deadline=$(( $(date +%s) + timeout_seconds ))
-  local code
+  local code reason
   while (( $(date +%s) <= deadline )); do
     code="$(root_curl -o "$output" -w '%{http_code}' \
       "${base}/api/v1/rag/alerts/active")" || return 1
-    if [[ "$code" == "200" ]] && jq -e \
-        --arg principal "$principal" '
-          all(.[];
-            .alertType != "API_PRINCIPAL_EXPIRY"
-            or .metrics.principalId != $principal)
-        ' "$output" >/dev/null; then
-      return 0
+    if [[ "$code" == "200" ]]; then
+      # Without this guard the predicate below is true for an alert it cannot
+      # attribute: a missing `metrics.principalId` reads as `null`, `null` is
+      # not the principal under test, and the gate reports an alert that is
+      # plainly firing as correctly absent.
+      if ! reason="$(alerts_response_judgable "$output")"; then
+        echo "Cannot judge the active-alert response for principal ${principal}: ${reason}" >&2
+        return 1
+      fi
+      if alerts_lack_expiry "$output" "$principal"; then
+        return 0
+      fi
     fi
     sleep 1
   done
