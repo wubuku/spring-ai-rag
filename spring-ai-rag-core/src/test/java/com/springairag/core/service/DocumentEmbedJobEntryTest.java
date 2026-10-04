@@ -62,7 +62,9 @@ class DocumentEmbedJobEntryTest {
                 embeddingBatchService,
                 persistenceService,
                 profileProvider,
-                new RagProperties());
+                new RagProperties(),
+                new DocumentChunkingService(
+                        new RagProperties(), new DocumentDerivationDescriptorProvider(new RagProperties())));
         when(persistenceService.findCacheState(any(Long.class), any(), eq(PROFILE), any(String.class)))
                 .thenReturn(EmbeddingPersistenceService.CacheState.miss());
         when(documentRepository.saveAndFlush(any(RagDocument.class)))

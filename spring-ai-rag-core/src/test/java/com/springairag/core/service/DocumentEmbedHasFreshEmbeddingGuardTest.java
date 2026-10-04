@@ -28,7 +28,9 @@ class DocumentEmbedHasFreshEmbeddingGuardTest {
         return new DocumentEmbedService(
                 documentRepository, batchService,
                 mock(com.springairag.core.service.EmbeddingPersistenceService.class),
-                profileProvider, properties);
+                profileProvider, properties,
+                new DocumentChunkingService(
+                        properties, new DocumentDerivationDescriptorProvider(properties)));
     }
 
     private RagDocument document(Long id, String contentHash) {

@@ -48,7 +48,9 @@ class DocumentEmbedServiceBatchTailTest {
                 embeddingBatchService,
                 persistenceService,
                 () -> PROFILE,
-                new RagProperties());
+                new RagProperties(),
+                new DocumentChunkingService(
+                        new RagProperties(), new DocumentDerivationDescriptorProvider(new RagProperties())));
     }
 
     private void stubDocument(long id) {

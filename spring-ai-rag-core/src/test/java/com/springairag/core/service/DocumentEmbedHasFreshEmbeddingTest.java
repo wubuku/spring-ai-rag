@@ -30,7 +30,9 @@ class DocumentEmbedHasFreshEmbeddingTest {
     private DocumentEmbedService service() {
         return new DocumentEmbedService(
                 documentRepository, batchService, persistenceService,
-                profileProvider, properties);
+                profileProvider, properties,
+                new DocumentChunkingService(
+                        properties, new DocumentDerivationDescriptorProvider(properties)));
     }
 
     private RagDocument document(Long id, String contentHash) {

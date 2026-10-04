@@ -43,7 +43,9 @@ class DocumentEmbedBatchCachedTailTest {
                 mock(com.springairag.core.retrieval.EmbeddingBatchService.class),
                 persistenceService,
                 profileProvider,
-                new com.springairag.core.config.RagProperties());
+                new com.springairag.core.config.RagProperties(),
+                new DocumentChunkingService(
+                        new com.springairag.core.config.RagProperties(), new DocumentDerivationDescriptorProvider(new com.springairag.core.config.RagProperties())));
         org.mockito.Mockito.when(documentRepository.findById(2L))
                 .thenReturn(Optional.of(document(2L, "cached body", "hash-c")));
         // 先注册宽匹配 miss，再注册特定命中：Mockito 以最后匹配的桩为准。

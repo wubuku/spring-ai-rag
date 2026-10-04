@@ -35,7 +35,9 @@ class DocumentEmbedServiceEmitProgressTailTest {
                 embeddingBatchService,
                 persistenceService,
                 profileProvider,
-                new com.springairag.core.config.RagProperties());
+                new com.springairag.core.config.RagProperties(),
+                new DocumentChunkingService(
+                        new com.springairag.core.config.RagProperties(), new DocumentDerivationDescriptorProvider(new com.springairag.core.config.RagProperties())));
         emitMethod = DocumentEmbedService.class.getDeclaredMethod(
                 "emitEmbeddingProgress",
                 java.util.function.Consumer.class, Long.class, int.class);

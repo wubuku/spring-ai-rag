@@ -48,14 +48,13 @@ class DocumentEmbedServicePrepareTailTest {
     }
 
     private DocumentEmbedService service() {
-        var service = new DocumentEmbedService(
+        return new DocumentEmbedService(
                 documentRepository,
                 embeddingBatchService,
                 persistenceService,
                 profileProvider,
-                new RagProperties());
-        service.setChunkingService(chunkingService);
-        return service;
+                new RagProperties(),
+                chunkingService);
     }
 
     private RagDocument document() {

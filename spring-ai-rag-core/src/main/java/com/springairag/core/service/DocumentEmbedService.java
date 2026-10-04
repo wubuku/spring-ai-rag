@@ -39,7 +39,7 @@ public class DocumentEmbedService {
     private final EmbeddingBatchService embeddingBatchService;
     private final EmbeddingPersistenceService persistenceService;
     private final EmbeddingProfileProvider profileProvider;
-    private DocumentChunkingService chunkingService;
+    private final DocumentChunkingService chunkingService; // Batch 854：`required = false` 的 setter 已删。它原本在构造器里兜底 `new DocumentChunkingService(...)`，而这两个类（`DocumentChunkingService` 是 @Service、`DocumentDerivationDescriptorProvider` 是 @Component）**都已经是容器里的 bean** ——所以在 Spring 装配下那行兜底每次都会被 setter 覆盖，是一段死代码；而在不走 Spring 的构造路径上，它却让对象图看起来是完整的。改成必填构造器参数之后，测试与生产第一次跑在同一个实例来源上。
     private KeywordIndexPersistenceService keywordIndexPersistenceService; // optional-claim: KeywordIndexPersistenceService 是无条件 @Service，null 臂只在不走 Spring 装配的构造路径可达；守卫真正的职责是"本地索引不新鲜"时拒绝并要求重建，索引缺席时则整体跳过维护
     private DerivationIntegrityRepository integrityRepository; // optional-claim: DerivationIntegrityRepository 是无条件 @Repository，null 臂只在不走 Spring 装配的构造路径可达；守卫真正的职责是拿不到派生完整性快照时由调用方按默认值继续，而不是 NPE
 
@@ -47,19 +47,13 @@ public class DocumentEmbedService {
                                  EmbeddingBatchService embeddingBatchService,
                                  EmbeddingPersistenceService persistenceService,
                                  EmbeddingProfileProvider profileProvider,
-                                 RagProperties ragProperties) {
+                                 RagProperties ragProperties,
+                                 DocumentChunkingService chunkingService) {
         this.documentRepository = documentRepository;
         this.embeddingBatchService = embeddingBatchService;
         this.persistenceService = persistenceService;
         this.profileProvider = profileProvider;
         this.ragProperties = ragProperties;
-        this.chunkingService = new DocumentChunkingService(
-                ragProperties,
-                new DocumentDerivationDescriptorProvider(ragProperties));
-    }
-
-    @org.springframework.beans.factory.annotation.Autowired(required = false)
-    void setChunkingService(DocumentChunkingService chunkingService) {
         this.chunkingService = chunkingService;
     }
 

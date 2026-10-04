@@ -313,8 +313,33 @@ const SUBJECT_SUFFIXES = ['Controller.java', 'Service.java'];
  * `JsonRecordService` 各自牵动 36 / 34 个测试文件，合批会让回归面大到
  * 无法在一次验收里说清"是谁弄坏的"。`BatchDocumentService` 约 20 个文件，
  * 规模上可以与其中一个合批，留到下一批。
+ *
+ * ── 棘轮走到 2（Batch 854）─────────────────────────────────────────────
+ * `DocumentEmbedService.chunkingService` 清掉了，实测从 3 变 2。
+ *
+ * 顺带记一件 853 才发现、但值得写在这里的事：**853 清掉的
+ * `RagCollectionController.provisioningOwnerResolver` 不只是"声明可选"，
+ * 它还在字段上带着 `= new ProvisioningOwnerResolver()` 的静默兜底**——
+ * 变异 D 证实：把兜底留着再删掉构造器赋值，39 个用例照样全绿。
+ *
+ * 854 的 `DocumentEmbedService.chunkingService` 是这个形态的**加强版**：
+ * 兜底不是 `new` 一个简单对象，而是
+ * `new DocumentChunkingService(ragProperties, new DocumentDerivationDescriptorProvider(ragProperties))`，
+ * 而这两个类**都已经是容器里的 bean**。于是同一份代码里存在两套实例来源：
+ * Spring 装配下 setter 每次都覆盖它（那段兜底是死代码），而 15 个直接
+ * 构造 service 的测试跑的是兜底那个。**测试与生产第一次跑的不是同一个对象。**
+ *
+ * 所以这处清掉的收益大于"棘轮减一"：它让 15 个测试文件的对象来源
+ * 从"隐式兜底"变成"显式实参"，其中 7 个文件 / 16 个用例会立刻从
+ * 假绿变红（变异 E 实测）。
+ *
+ * **判据上要留一条**：`@ConfigurationProperties` 纯配置类给嵌套配置对象
+ * 默认值再允许覆盖（`RagChatProperties` 等 18 处）是**正常写法**，
+ * 现场 `new` 一个**容器里本来就有**的协作者才是这个问题。两者形态相同、
+ * 性质相反，所以这道门禁只管"声明可选"那一半，兜底那一半在本仓库是孤例，
+ * 没有为它单独造门禁——一个只会命中 0 处的门禁会给人"已经管住了"的错觉。
  */
-const UNGUARDED_CEILING = 3;
+const UNGUARDED_CEILING = 2;
 
 /**
  * 棘轮在什么范围内生效。
