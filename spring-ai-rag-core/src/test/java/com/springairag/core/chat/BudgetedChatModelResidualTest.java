@@ -27,6 +27,7 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -66,22 +67,42 @@ class BudgetedChatModelResidualTest {
     }
 
     @Test
-    void constructorOverloadsApplyDefaultsForNullOptionalArguments() {
-        assertNotNull(new BudgetedChatModel(delegate, budget));
-        assertNotNull(new BudgetedChatModel(
-                delegate, budget, 0, 0, 0, 10, estimator));
-        assertNotNull(new BudgetedChatModel(
-                delegate, budget, 0, 0, 0, 10, estimator, true));
-        assertNotNull(new BudgetedChatModel(
-                delegate, budget, 0, 0, 0, 10, estimator, false));
+    void nullOptionalArgumentsStillProduceAUsableLedgerEvent() {
+        // Batch 902. This test was `constructorOverloadsApplyDefaultsForNullOptionalArguments`
+        // and consisted of six `assertNotNull(new BudgetedChatModel(...))` lines.
+        // The name promised the defaults; the assertions checked only that a
+        // constructor returned, which a constructor cannot decline to do.
+        //
+        // The defaults turned out to be unobservable from here, and the reason
+        // is worth stating: `BudgetedChatModel` defaults purpose and costUnit,
+        // and `LlmUsageEvent` defaults them again in its compact constructor.
+        // Each masks the other, so removing either one alone changes nothing
+        // that any test can see. Measured, both ways — the single-mutant runs
+        // stayed green, the double-mutant run went red with
+        // "expected: <CHAT> but was: <null>".
+        //
+        // So this asserts the contract that is real and reachable: whatever the
+        // optional arguments are, the event the model writes is usable. It is
+        // named for that, and it fails if the defaulting stops happening
+        // anywhere along the way.
+        RecordingRecorder recorder = new RecordingRecorder();
+        BudgetedChatModel model = new BudgetedChatModel(
+                delegate, budget, 0, 0, 0, 10, estimator,
+                null, recorder, null, null, null);
 
-        // 11/12 参重载的可空参数回退默认值。
-        assertNotNull(new BudgetedChatModel(
-                delegate, budget, 0, 0, 0, 10, estimator,
-                null, null, null, null));
-        assertNotNull(new BudgetedChatModel(
-                delegate, budget, 0, 0, 0, 10, estimator,
-                null, null, null, null, "  "));
+        model.call(new Prompt(List.of(new UserMessage("hi"))));
+
+        List<LlmUsageEvent> events = recorder.all();
+        assertEquals(1, events.size(),
+                "a call built on defaulted arguments must still reach the ledger");
+        LlmUsageEvent event = events.get(0);
+        assertEquals(LlmInvocationPurpose.CHAT, event.purpose(),
+                "a null purpose must end up usable, wherever it is defaulted");
+        assertEquals("CONFIGURED_MODEL_COST", event.costUnit(),
+                "a null cost unit must end up usable, wherever it is defaulted");
+        assertNotNull(event.modelRef(), "a null model ref must be resolved, not left null");
+        assertFalse(event.modelRef().isBlank(),
+                "the fallback model ref must not be blank");
     }
 
     @Test
@@ -102,13 +123,43 @@ class BudgetedChatModelResidualTest {
         when(options.getModel()).thenReturn("configured-model");
         when(delegate.getDefaultOptions()).thenReturn(options);
 
+        // Batch 902. The name said "prefers" and the body asserted the response
+        // text, so a fallback that never consulted the delegate passed it. The
+        // chosen ref reaches the ledger, which is where it can be read.
+        RecordingRecorder recorder = new RecordingRecorder();
         BudgetedChatModel model = new BudgetedChatModel(
                 delegate, budget, 0, 0, 0, 10, estimator,
-                null, null, null, null, null);
+                LlmInvocationPurpose.CHAT, recorder, null, null, null);
 
         ChatResponse response = model.call(
                 new Prompt(List.of(new UserMessage("hi"))));
         assertEquals("ok", response.getResult().getOutput().getText());
+
+        List<LlmUsageEvent> events = recorder.all();
+        assertEquals(1, events.size());
+        assertEquals("configured-model", events.get(0).modelRef(),
+                "the delegate's configured model must win over the fallback");
+    }
+
+    @Test
+    void defaultModelRefIgnoresBlankDelegateModelAndFallsBack() {
+        // The other half of "prefers": blank is not a model, and a blank ref
+        // reaching the ledger would be a worse outcome than a derived one.
+        ChatOptions options = mock(ChatOptions.class);
+        when(options.getModel()).thenReturn("   ");
+        when(delegate.getDefaultOptions()).thenReturn(options);
+
+        RecordingRecorder recorder = new RecordingRecorder();
+        BudgetedChatModel model = new BudgetedChatModel(
+                delegate, budget, 0, 0, 0, 10, estimator,
+                LlmInvocationPurpose.CHAT, recorder, null, null, null);
+
+        model.call(new Prompt(List.of(new UserMessage("hi"))));
+
+        List<LlmUsageEvent> events = recorder.all();
+        assertEquals(1, events.size());
+        assertFalse(events.get(0).modelRef().isBlank(),
+                "a blank delegate model must not become the recorded ref");
     }
 
     @Test
