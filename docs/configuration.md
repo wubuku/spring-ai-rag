@@ -119,6 +119,37 @@ the configured primary/fallback chain. An external JSON file fully replaces
 the YAML model registry; see
 [multi-model-external-config.md](multi-model-external-config.md).
 
+#### Legacy providers and `legacyCapabilities`
+
+A `ChatModel` **bean** that no entry under `providers` covers still reaches
+`GET /api/v1/rag/models`, with `"source": "legacy"` and the bare provider name
+as its `ref`. These entries have no declaration of their own, so their
+capabilities come from `app.models.legacyCapabilities`, keyed by provider name:
+
+```yaml
+app:
+  models:
+    legacyCapabilities:
+      openai:
+        streaming: true
+        tool-calling: true
+```
+
+**Anything you do not declare defaults to `toolCalling: false`**, and that has a
+visible consequence: the WebUI disables its `Agent retrieval` chat mode unless
+at least one *available* model reports `toolCalling: true`, so a perfectly
+working provider can leave AGENT mode greyed out with no explanation on screen.
+`e2e/chat-real.spec.ts` fails the same way, with
+`No available tool-calling model is exposed by /models`.
+
+Two properties of legacy entries differ from configured ones and are worth
+knowing before relying on them: their `available` is reported `true`
+unconditionally — `ChatModelRouter` performs **no** check of its own on a bean
+it did not construct — and, unlike a configured provider, an unresolved
+`${PLACEHOLDER}` credential is not detected for them. Declare capabilities here
+when the provider genuinely supports the feature; the declaration is what the
+rest of the product reads.
+
 ### Durable Model-Invocation Usage Ledger
 
 The usage ledger records one bounded terminal fact for each model invocation

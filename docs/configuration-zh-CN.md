@@ -117,6 +117,34 @@ app:
 YAML 模型注册表，见
 [multi-model-external-config-zh-CN.md](multi-model-external-config-zh-CN.md)。
 
+#### legacy provider 与 `legacyCapabilities`
+
+没有被 `providers` 里任何条目覆盖的 `ChatModel` **bean**，同样会出现在
+`GET /api/v1/rag/models` 里，带 `"source": "legacy"`，`ref` 就是 provider 名。
+这些条目自身没有任何声明，它们的能力来自 `app.models.legacyCapabilities`，
+按 provider 名索引：
+
+```yaml
+app:
+  models:
+    legacyCapabilities:
+      openai:
+        streaming: true
+        tool-calling: true
+```
+
+**没有声明的一律默认 `toolCalling: false`**，而这有一个看得见的后果：
+WebUI 只有在**至少有一个可用模型**报告 `toolCalling: true` 时才放开
+"Agent retrieval" 聊天模式，所以一个完全能用的 provider 也可能让 AGENT 模式
+灰掉，屏幕上不给任何说明。`e2e/chat-real.spec.ts` 会以同样的方式失败：
+`No available tool-calling model is exposed by /models`。
+
+legacy 条目有两点与 configured 条目不同，依赖它们之前值得知道：它的 `available`
+是**无条件**报 `true` 的——`ChatModelRouter` 对一个不是自己构造的 bean **不做
+任何检查**；而且与 configured provider 不同，**没解析掉的 `${PLACEHOLDER}` 凭据
+不会被识别**。provider 确实支持该能力时就在这里声明——产品其余部分读的就是
+这份声明。
+
 ### 持久化模型调用用量账本
 
 用量账本为属于 Chat execution 的每次模型调用记录一个有界终态事实。
