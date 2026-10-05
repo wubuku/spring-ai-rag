@@ -78,6 +78,7 @@
 
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
+import { isMainModule } from './lib/is-main-module.mjs';
 
 const ROOT = new URL('..', import.meta.url).pathname;
 const SRC_ROOT = join(ROOT, 'spring-ai-rag-core/src/main/java');
@@ -376,6 +377,6 @@ function main() {
   );
 }
 
-if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop())) {
+if (isMainModule(import.meta.url)) {
   main();
 }

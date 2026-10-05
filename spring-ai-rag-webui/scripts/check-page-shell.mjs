@@ -55,6 +55,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, basename, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { stripComments } from './check-design-system.mjs';
+import { isMainModule } from './lib/is-main-module.mjs';
 
 const projectRoot = fileURLToPath(new URL('..', import.meta.url));
 const PAGES_DIR = join(projectRoot, 'src', 'pages');
@@ -346,6 +347,6 @@ function main() {
   );
 }
 
-if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
+if (isMainModule(import.meta.url)) {
   main();
 }

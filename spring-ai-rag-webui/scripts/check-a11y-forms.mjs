@@ -44,6 +44,7 @@ const projectRoot = fileURLToPath(new URL('..', import.meta.url));
 const sourceRoot = join(projectRoot, 'src');
 
 import { collectAccessibleNameProps, describeAccessibleNameProps } from './lib/accessible-name-props.mjs';
+import { isMainModule } from './lib/is-main-module.mjs';
 
 const SCAN_EXTENSIONS = ['.tsx', '.jsx'];
 const SKIP_DIRECTORIES = new Set(['node_modules', 'dist', 'coverage', 'playwright-report', 'test-results']);
@@ -671,6 +672,6 @@ function main() {
   );
 }
 
-if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
+if (isMainModule(import.meta.url)) {
   main();
 }

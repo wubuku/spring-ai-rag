@@ -26,8 +26,9 @@
  */
 
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
-import { join, relative, resolve } from 'node:path';
+import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isMainModule } from './lib/is-main-module.mjs';
 
 const projectRoot = fileURLToPath(new URL('..', import.meta.url));
 
@@ -191,6 +192,6 @@ export function chineseDocuments(dir, acc = []) {
   return acc;
 }
 
-if (process.argv[1] && import.meta.url === `file://${resolve(process.argv[1])}`) {
+if (isMainModule(import.meta.url)) {
   main();
 }

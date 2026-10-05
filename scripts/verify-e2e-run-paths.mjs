@@ -32,8 +32,9 @@
  */
 
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
-import { join, basename, resolve } from 'node:path';
+import { join, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isMainModule } from './lib/is-main-module.mjs';
 
 const projectRoot = fileURLToPath(new URL('..', import.meta.url));
 const E2E_DIR = join(projectRoot, 'spring-ai-rag-webui', 'e2e');
@@ -261,6 +262,6 @@ function main() {
   );
 }
 
-if (process.argv[1] && import.meta.url === `file://${resolve(process.argv[1])}`) {
+if (isMainModule(import.meta.url)) {
   main();
 }
