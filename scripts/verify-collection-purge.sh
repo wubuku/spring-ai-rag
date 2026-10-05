@@ -7,6 +7,10 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+# Batch 926: the bind-based probe answered a different question than the server
+# it was probing for. See scripts/lib/port-probe.sh.
+source scripts/lib/port-probe.sh
+
 # Batch 894: one reader for the surefire report, so the `tests` count comes from
 # the <testcase> elements rather than the attribute. Five gates had their own copy
 # of the same sed pipeline and none of them had a self-test; see
@@ -44,31 +48,6 @@ run_step() {
     printf '%s\tFAIL\t%s\n' "$name" "$log_path" >>"$LOG_DIR/summary.tsv"
     return 1
   fi
-}
-
-find_available_port() {
-  node - "$1" <<'NODE'
-const net = require('node:net');
-const preferred = Number(process.argv[2]);
-
-function probe(port) {
-  return new Promise((resolve) => {
-    const server = net.createServer();
-    server.once('error', () => resolve(null));
-    server.listen({ host: '127.0.0.1', port, exclusive: true }, () => {
-      const address = server.address();
-      const selected = typeof address === 'object' && address ? address.port : null;
-      server.close(() => resolve(selected));
-    });
-  });
-}
-
-(async () => {
-  const selected = await probe(preferred) ?? await probe(0);
-  if (selected === null) process.exit(1);
-  process.stdout.write(String(selected));
-})();
-NODE
 }
 
 focused_backend_tests() {

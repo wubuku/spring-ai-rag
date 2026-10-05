@@ -7,6 +7,10 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+# Batch 926: the bind-based probe answered a different question than the server
+# it was probing for. See scripts/lib/port-probe.sh.
+source scripts/lib/port-probe.sh
+
 RUN_ID="${LLM_USAGE_LEDGER_VERIFY_RUN_ID:-$(date +%Y%m%d-%H%M%S)}"
 LOG_DIR="${LLM_USAGE_LEDGER_VERIFY_LOG_DIR:-.verification/llm-usage-ledger/${RUN_ID}}"
 PHASE="${LLM_USAGE_LEDGER_VERIFY_PHASE:-all}"
@@ -165,31 +169,6 @@ webui_checks() {
     npm run build
     npm run check:alignment
   )
-}
-
-find_available_port() {
-  node - "$1" <<'NODE'
-const net = require('node:net');
-const preferred = Number(process.argv[2]);
-
-function probe(port) {
-  return new Promise(resolve => {
-    const server = net.createServer();
-    server.once('error', () => resolve(null));
-    server.listen({host: '127.0.0.1', port, exclusive: true}, () => {
-      const address = server.address();
-      const selected = typeof address === 'object' && address ? address.port : null;
-      server.close(() => resolve(selected));
-    });
-  });
-}
-
-(async () => {
-  const selected = await probe(preferred) ?? await probe(0);
-  if (selected === null) process.exit(1);
-  process.stdout.write(String(selected));
-})();
-NODE
 }
 
 cleanup_preview() {
