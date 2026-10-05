@@ -90,8 +90,15 @@ class CollectionIdentityResolverGuardTailTest {
         when(repository.findByCollectionKey("kb-retired"))
                 .thenReturn(Optional.of(retired));
 
-        assertThrows(Exception.class,
+        // Batch 906. These four said `Exception.class` and nothing else, so any
+        // failure at all satisfied them — including a NullPointerException three
+        // lines above the call. Nine sibling cases in this same file already
+        // name the exact type, and the first one even asserts the error code, so
+        // the loose spelling here reads as an oversight rather than a decision.
+        RagException retiredError = assertThrows(RagException.class,
                 () -> resolver.resolveActiveIds(null, List.of("kb-retired")));
+        assertEquals(com.springairag.api.enums.ErrorCode.COLLECTION_ALREADY_RETIRED,
+                retiredError.getErrorCodeEnum());
     }
 
     @Test
@@ -100,8 +107,10 @@ class CollectionIdentityResolverGuardTailTest {
                 any())).thenReturn(List.of());
         when(repository.findByCollectionKey("kb-ghost")).thenReturn(Optional.empty());
 
-        assertThrows(Exception.class,
+        RagException ghostError = assertThrows(RagException.class,
                 () -> resolver.resolveActiveIds(null, List.of("kb-ghost")));
+        assertEquals(com.springairag.api.enums.ErrorCode.COLLECTION_NOT_FOUND,
+                ghostError.getErrorCodeEnum());
     }
 
     @Test
@@ -140,7 +149,10 @@ class CollectionIdentityResolverGuardTailTest {
         when(repository.findByIdAndDeletedFalse(7L)).thenReturn(Optional.empty());
         when(repository.findById(7L)).thenReturn(Optional.of(retired));
 
-        assertThrows(Exception.class, () -> resolver.requireActive(7L, null));
+        RagException retiredActive = assertThrows(RagException.class,
+                () -> resolver.requireActive(7L, null));
+        assertEquals(com.springairag.api.enums.ErrorCode.COLLECTION_ALREADY_RETIRED,
+                retiredActive.getErrorCodeEnum());
     }
 
     @Test
@@ -169,6 +181,11 @@ class CollectionIdentityResolverGuardTailTest {
         when(repository.findByIdAndDeletedFalse(5L)).thenReturn(Optional.empty());
         when(repository.findById(5L)).thenReturn(Optional.empty());
 
-        assertThrows(Exception.class, () -> resolver.requireIncludingDeleted(5L, null));
+        RagException missing = assertThrows(RagException.class,
+                () -> resolver.requireIncludingDeleted(5L, null));
+        assertEquals(com.springairag.api.enums.ErrorCode.COLLECTION_NOT_FOUND,
+                missing.getErrorCodeEnum());
+        assertTrue(missing.getMessage().contains("id=5"),
+                "the message must name the id that was not found");
     }
 }
