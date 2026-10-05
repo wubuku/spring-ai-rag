@@ -796,7 +796,10 @@ JPA flush 已经写下去的文件一并回滚。
 所以一个只装着 23 个门控类报告的目录，会让它报出几百个"既没跑也没跳过"的源。
 `scripts/verify-*.sh` 里有 **12 个**验收脚本是弄丢这些报告的第三条路——
 它们各自以 `mvn clean compile test-compile` 这样的编译门禁开头，
-而 `clean` 会把整个 `target/` 目录一起带走。可行的顺序是：
+而 `clean` 会把整个 `target/` 目录一起带走。这 12 个里有 5 个会补一次不限范围的
+`mvn test` 把报告放回来，另外 7 个在**自己的头注释里**写明了这一点，
+`verify-gate-wiring.mjs` 以 `unannounced-report-destruction` 这条规则盯着：
+再出现第十三条路，那道门禁会变红，而不是给你一个意外。可行的顺序是：
 
 ```bash
 mvn test                                  # 全量

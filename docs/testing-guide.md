@@ -892,7 +892,10 @@ against those reports in both directions, so a reports directory holding only
 skipped". Twelve of the `scripts/verify-*.sh` acceptance scripts are a third
 way to lose them — each starts with a compilation gate like
 `mvn clean compile test-compile`, and `clean` takes the whole `target/`
-directory with it. The order that works is
+directory with it. Five of the twelve put the reports back by re-running an
+unscoped `mvn test`; the other seven say so in their own header, which
+`verify-gate-wiring.mjs` enforces as `unannounced-report-destruction`, so a
+thirteenth way in would turn that gate red rather than surprise you. The order that works is
 
 ```bash
 mvn test                                  # full suite
