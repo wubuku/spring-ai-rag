@@ -112,6 +112,22 @@ export function Chat() {
     availableModels.find(model => model.ref === modelsData?.defaultModel)?.ref ??
     availableModels[0]?.ref ??
     '';
+  // Batch 919. The chain above has three steps and only the first one is the
+  // user's own choice. When it misses, `send()` below dispatches the message to
+  // a model nobody picked — the select visibly moves, but "the control changed"
+  // is not "here is why this prompt is going to another provider". Batch 917
+  // turned the first step into a path the product actually walks (an unresolved
+  // `${PLACEHOLDER}` credential flips `available` to false), so this is a real
+  // route rather than a theoretical one.
+  //
+  // Reported as `null` — rather than as a boolean plus a separate ref — so the
+  // value cannot drift out of step with the condition that produced it.
+  const substitutedModel =
+    selectedModel.length > 0 &&
+    !availableModels.some(model => model.ref === selectedModel) &&
+    effectiveSelectedModel.length > 0
+      ? effectiveSelectedModel
+      : null;
 
   const { send, isConnected, stop } = useChatSSE({
     onChunk: (content: string) => {
@@ -609,6 +625,19 @@ export function Chat() {
               retryLabel={t('common.retry')}
             >
               {t('chat.modelsLoadFailed')}
+            </QueryErrorBanner>
+          )}
+          {/* Batch 919，和上面那条同族：控件还能用，但它正在替用户做一个用户
+              没做的决定。区别是这一条**没有重试可给**——模型列表加载得好好的，
+              缺的是那个模型本身，所以不给按钮，只说清楚换成了谁。
+              放在 contextRow 之外的理由与上面同一条：它描述的是"这一整排控件
+              正在替你做选择"，不是"某一个下拉框坏了"。 */}
+          {substitutedModel && (
+            <QueryErrorBanner>
+              {t('chat.modelSubstituted', {
+                previous: selectedModel,
+                model: substitutedModel,
+              })}
             </QueryErrorBanner>
           )}
           <div className={styles.contextRow}>

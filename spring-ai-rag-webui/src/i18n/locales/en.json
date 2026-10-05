@@ -265,6 +265,7 @@
     "timeMinutesAgo": "{{count}}m ago",
     "timeHoursAgo": "{{count}}h ago",
     "modelsLoadFailed": "Could not load the model list",
+    "modelSubstituted": "Your saved model {{previous}} is no longer available, so this message will be sent to {{model}} instead.",
     "feedbackError": "Could not submit your feedback. Please try again.",
     "exportError": "Could not export the conversation",
     "subtitle": "Ask the corpus inside a session. History is scoped to your credential, so another key sees none of it."

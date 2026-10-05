@@ -265,6 +265,7 @@
     "timeMinutesAgo": "{{count}}分钟前",
     "timeHoursAgo": "{{count}}小时前",
     "modelsLoadFailed": "无法加载模型列表",
+    "modelSubstituted": "你保存的模型 {{previous}} 已不可用，这条消息将改由 {{model}} 回答。",
     "feedbackError": "反馈提交失败，请重试。",
     "exportError": "导出对话失败",
     "subtitle": "在会话中向语料提问。历史按你的凭据隔离，换一个密钥一条都看不到。"
