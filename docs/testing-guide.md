@@ -889,13 +889,20 @@ false until Batch 912:
 newer of the two: `verify-test-visibility.mjs` reconciles the test source tree
 against those reports in both directions, so a reports directory holding only
 23 gated classes makes it report hundreds of sources that "neither ran nor
-skipped". The order that works is
+skipped". Twelve of the `scripts/verify-*.sh` acceptance scripts are a third
+way to lose them — each starts with a compilation gate like
+`mvn clean compile test-compile`, and `clean` takes the whole `target/`
+directory with it. The order that works is
 
 ```bash
 mvn test                                  # full suite
 ./scripts/verify-gate-entry-points.mjs    # any gate reading surefire reports
 ./scripts/verify-gated-it.sh              # gated inventory — reports now stale
 ```
+
+If a reports-reading gate reports *no surefire reports at all* rather than a
+count mismatch, something ran `clean` since your `mvn test` — that is a
+different failure from a stale report set, and the self-test now says so.
 
 ### Path Traversal Probe (no gate — runs in the default test run)
 

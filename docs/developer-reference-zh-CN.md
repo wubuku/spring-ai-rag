@@ -82,7 +82,7 @@ skipped；本门禁则保证今后再有类"闭嘴"就会失败。
 脚本和文档对账：
 
 ```bash
-./scripts/verify-project-tests.sh   # 六项检查连同各自的自测一起跑
+./scripts/verify-project-tests.sh   # 跑完整的测试侧门禁链；它会打印实际跑了多少条
 ```
 
 给套件加门控是一份"总有人能把它打开"的承诺。`PdfImportPostgresIntegrationTest`
@@ -125,7 +125,7 @@ skipped；本门禁则保证今后再有类"闭嘴"就会失败。
 | `verify-tautological-assertions.mjs` | 一条不可能失败的测试断言读起来像覆盖率，但它不是。两条规则，都没有正确实例，所以都不需要 allowlist：自满足的字面量（`assertTrue(true)` / `assertFalse(false)` / `assertNull(null)` / `assertNotNull(<非 null 字面量>)`），以及**顶层**连接符为 `\|\| true` 或 `&& false` 的第一个实参。**顶层**两个字就是整条规则——`a == false \|\| true` 是恒定的，尽管你读到的第一个运算符不是那个 `\|\|`；而 `x == false` 是一条普通断言。908 删掉 5 处，其中最响的一处挂着一条中文失败信息，声称 MiniMax 归一化后 assistant 角色不该残留，而同一个文件的 javadoc 与生产代码声明的都是 `system → user`。**故意不作为规则**的是 `assertEquals(x, x)`——普查找到 8 处。JUnit 会走 `equals()` 解析它们，所以写坏的 `equals()` 或不稳定的 `hashCode()` 都能让它们变红：它们是契约检查，而把它们报出来恰恰是会逼出 allowlist 的那件事 | `test-support/tautological-assertions-self-test.mjs` | tests 链 |
 | `verify-no-pessimistic-locks.sh` | 生产代码里的悲观锁 / `SKIP LOCKED` / advisory lock | `test-support/pessimistic-locks-self-test.sh` | docs 链 |
 | `verify-zh-translation.mjs` | 中文文档里未翻译的英文段落 | `test-support/zh-translation-self-test.mjs` | docs 链 |
-| `verify-project-tests.sh` / `verify-project-docs.sh` | 上面 9 个的聚合入口 | 由各门禁承担 | 人跑 / 待接入 CI |
+| `verify-project-tests.sh` / `verify-project-docs.sh` | 两个聚合入口：一个跑 registry 里登记为 `kind: "gate"` 的全部门禁（每条前面先跑它自己的自测），另一个跑文档链。**两者都会打印实际跑了多少条**，所以链条变长时不需要改这两个文件——这一行以前写的是"上面 9 个的聚合入口"，而那个数字没有任何东西会重算 | 由各门禁承担 | 人跑 / 待接入 CI |
 | `verify-gated-it.sh` | 门控 PostgreSQL 全量清单——23 个类 / 153 个测试方法，Batch 912 起全部核实为"纯 Testcontainers + Flyway"，此前只登记了 3 个，而脚本自己那句"跑全部纯 DB 型套件"已经对 20 个套件说了假话。本地约 9 分钟。CI 不带参数调用它，全量清单就是在这一步跑的 | 由开关对账承担 | **CI 已接** |
 | `verify-webui-e2e-mock.sh` | 15 spec / 93 用例的前端 mock 回归。Batch 913 第一次在当前工作副本跑它，**93 条全过、2 分 22 秒**——这是"要不要接进 CI"这个未决问题的成本那一半的实测依据：成本只有墙上时间，没有失败。Batch 913 还发现它**提交时没有可执行位**，于是这张表里写的调用方式会以 `Permission denied` 和退出码 126 失败 | 套件自身即自测 | 单独跑（实测 2.4 分钟） |
 | `check-alignment-policy.mjs` | 物理 `text-align`、内联 `textAlign`、全局样式表契约；测试文件被跳过，`--text-align` 是 token 而不是声明，没有中心声明认领的 `allow-center` 注释判失败（Batch 881） | `__tests__/alignment-policy.test.mjs` | `npm run lint` |

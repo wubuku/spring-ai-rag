@@ -1726,6 +1726,55 @@
   四道门禁 EXIT=0、两个被改指向的自测 12/12 与 27/27、
   WebUI `lint` 全链 EXIT=0 / **946** 用例 / `hardcoded-copy` **50** 用例、
   聚合门禁 **29 → 30** 项、docs **16** 项。**本批未改动任何 Java 源码。**
+### Batch 914（已交付，活系统类：从没在聚合下跑过的那批验证——一次跑通了，而它顺手把"谁说自己是谁"的腐烂也一起翻了出来）
+
+- 分支：`batch-914`
+- 方向：912 把门控 IT 拉起来、913 把 e2e mock 拉起来之后，剩下没被聚合跑过的是
+  **活系统类**验证。两条轴：① 真跑一遍全栈验收；② 回头看聚合脚本和文档对**自身范围**的描述。
+- **负结果也要写清楚：5 个 `*-real.spec.ts` 全部有真实运行路径。**
+  我一度以为 `files-real` 和 `rerank-document-diversity-real` 没有——因为我的
+  `grep 'playwright.*spec'` 是**单行**的，而这两处调用是**多行续行**的。
+  门禁本身做对了：它用 `commandTextAt` 只认 `playwright test` 之后的续行，
+  注释里的提及不算数（Batch 804 专门为此写的）。
+  > **这一条我今天犯了两次**（912 一次、914 一次）：
+  > 范围太窄的扫描会把"我没在某处找到"输出成"它不存在"。
+  > 而门禁比我的 grep 严谨——**先信门禁，再信自己的手指。**
+- **① 全栈真跑：`verify-rerank-document-diversity.sh` 22 通过 / 0 失败 / 0 跳过（15m06s）。**
+  包含两个 real spec（`files-real` 真实 PDF 导入走真实 Vite 代理 2.0 分钟、
+  `rerank-document-diversity-real` 875ms）、检索 goldenset、版本化质量回归、
+  真实 LLM KNOWLEDGE 模式（713 字答案 / 5 个来源 / 4 篇唯一文档 / 5 处引用）、
+  以及 cap=0 vs cap=2 的运行时对比。**而且实测数据说明功能本身有效**：
+  唯一文档数 p50 与 min 都从 **3 → 4**。
+- **第一次跑是失败的，而失败原因不在仓库。** 本地 `.env` 用的是**已退役的变量名**
+  `RAG_EMBEDDING_URL`（现行名 `RAG_EMBEDDING_BASE_URL`），dev stack 拒绝启动。
+  仓库的行为**完全正确**：大声报错、点名是退役名、给出正确的新名字，
+  而这件事在 4 份文档里都写着。改本地 `.env` 后第二次跑通。
+  > 一次"失败"如果只是我的本地配置过期，那它测的是仓库的**报错质量**，
+  > 而那部分是对的。**如实记账，别把它算成缺陷。**
+- **② 聚合脚本与文档对自身范围的描述，5 处全部腐烂**：
+  | 位置 | 声称 | 实际 |
+  |---|---|---|
+  | `verify-project-tests.sh` 头 | "Test-visibility and integration-switch gates"（两道） | 32 条 |
+  | 同上 | "21 classes / ~145 methods" | 23 / 153（912 实测） |
+  | `developer-reference.md` | "runs all six checks" | 32 |
+  | `developer-reference-zh-CN.md` | "六项检查" | 32 |
+  | 两份文档门禁表 | "the nine above" / "上面 9 个" | 48（32 + 16） |
+  > 912 已经为同类腐烂定过规矩：**散文里的计数是会腐烂的事实，机制不会。**
+  > 这次不只改对，而是**让"改对"不再必要**。
+- **结构性修法：让 tests 链像 docs 链一样打印算出来的总数。**
+  32 条 `echo "PASS: X"` 统一改走 `pass()` 包装器（`PASS_COUNT` 由**打印每条 PASS 的
+  同一个机制**累加），收尾打印 `Repository gate chain: N checks passed.`。
+  这样"链条变长了要改文件"这件事从根上消失——**数是算出来的，不是写下来的**。
+  头注释改成机制描述（跑 registry 里 `kind: "gate"` 的全部门禁 + 各自自测），
+  文档里那两处数字改成"它会打印实际跑了多少条"。
+- **顺带把 912 记下的顺序耦合补全**：破坏 surefire 报告的**不止** `verify-gated-it.sh`——
+  `scripts/verify-*.sh` 里有 **12 个**以 `mvn clean compile test-compile` 开头的验收脚本，
+  `clean` 会把整个 `target/` 带走。我在 914 跑全栈时正好撞上：门禁报的是
+  **"根本没有 surefire 报告"**而不是计数对不上，这是两种不同的失败。
+  测试指南（双语）现在把三种情况和正确顺序都写清楚了。
+- **验收**：全栈 **22/0/0**；tests 链汇总行实测打印 `Repository gate chain: 32 checks passed.`；
+  双语文档 + 账本同步。**本批未改动任何生产 Java 源码，也未改动任何 WebUI 源码或 spec。**
+
 ### Batch 913（已交付，门控 IT 之后的下一个"没跑过的套件"——套件是绿的，坏的是运行它的那条命令）
 
 - 分支：`batch-913`
