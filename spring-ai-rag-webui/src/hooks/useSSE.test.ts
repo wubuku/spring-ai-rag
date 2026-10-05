@@ -408,6 +408,36 @@ describe('useChatSSE', () => {
     ));
   });
 
+  // Batch 922. Added because the unit suite was blind to what broke in the
+  // browser: every mock here returned a response object with **no `json()`
+  // method**, so the branch Batch 921 introduced was exercised only through its
+  // `catch` — every unit test passed while the e2e mock, which really does
+  // carry `application/problem+json`, started rendering the server's reason and
+  // broke an assertion. The 409 shape is now mirrored exactly as the server
+  // sends it: `message` and no `detail`.
+  it('surfaces a 409 that carries its reason in message rather than detail', async () => {
+    mockFetch.mockResolvedValue({
+      ok: false,
+      status: 409,
+      headers: new Headers({ 'Retry-After': '0' }),
+      json: async () => ({
+        code: 'IDEMPOTENCY_OPERATION_IN_PROGRESS',
+        message: 'Chat turn is still running',
+      }),
+    });
+    const onError = vi.fn();
+    const { result } = renderHook(() => useChatSSE({ onError }));
+
+    await act(async () => {
+      result.current.send({ message: 'Conflict this turn' });
+    });
+
+    await waitFor(() => expect(onError).toHaveBeenCalledWith(
+      'Chat turn is still running',
+      expect.objectContaining({ status: 409 }),
+    ));
+  });
+
   it('exposes the final HTTP status after a bounded idempotency conflict', async () => {
     mockFetch.mockResolvedValue({
       ok: false,
