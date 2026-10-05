@@ -12,19 +12,22 @@ cd "$(dirname "$0")/.."
 # of the same sed pipeline and none of them had a self-test; see
 # scripts/lib/surefire-report.sh for the measurement behind the rule.
 source scripts/lib/surefire-report.sh
+# Batch 925: this is the one script in the repository that selects surefire tests
+# by *method name* rather than by class, which is the shape surefire answers
+# with silence when a name has gone stale. See
+# scripts/lib/surefire-method-selection.sh.
+source scripts/lib/surefire-method-selection.sh
 
 FEATURE="${1:-}"
 case "$FEATURE" in
   relocation)
     HTTP_TESTS="ExternalDocumentControllerWebTest"
-    POSTGRES_METHODS="migrationsCreateDurableControlPlanesFromEmptyDatabase+relocationPreservesIdentityAndDerivationsAndReplaysExactly+relocationRejectsActiveSyncRunWithoutLeavingPartialState+externalUpsertRechecksRetiredAddressAfterNamespaceSequenceWait"
-    POSTGRES_EXPECTED=4
+    POSTGRES_METHODS="latestMigrationsCreateDurableControlPlanesFromEmptyDatabase+relocationPreservesIdentityAndDerivationsAndReplaysExactly+relocationRejectsActiveSyncRunWithoutLeavingPartialState+externalUpsertRechecksRetiredAddressAfterNamespaceSequenceWait"
     PLAYWRIGHT_SPEC="e2e/documents.spec.ts"
     ;;
   derivation-integrity)
     HTTP_TESTS="DerivationRepairControllerWebTest,EmbeddingJobControllerWebTest"
-    POSTGRES_METHODS="migrationsCreateDurableControlPlanesFromEmptyDatabase+strictIntegrityRejectsSameCountButMismatchedVectorContent+repairPreviewAndApplyPersistStableLedgerAndOnlyQueueVectorWork+repairSelectionExcludesAlreadyConvergingDocuments+repairApplyTakesOverExpiredLeasesAndRetainsResultForFullDay+repairTakeoverContinuesFromCommittedLocalLedgerState+repairRejectsActiveProfileChangeWithoutQueueingWork"
-    POSTGRES_EXPECTED=7
+    POSTGRES_METHODS="latestMigrationsCreateDurableControlPlanesFromEmptyDatabase+strictIntegrityRejectsSameCountButMismatchedVectorContent+repairPreviewAndApplyPersistStableLedgerAndOnlyQueueVectorWork+repairSelectionExcludesAlreadyConvergingDocuments+repairApplyTakesOverExpiredLeasesAndRetainsResultForFullDay+repairTakeoverContinuesFromCommittedLocalLedgerState+repairRejectsActiveProfileChangeWithoutQueueingWork"
     PLAYWRIGHT_SPEC="e2e/embeddings.spec.ts"
     ;;
   *)
@@ -67,7 +70,13 @@ find_port() {
 
 postgres_tests() {
   local selector="NextHighValueFeaturesPostgresIntegrationTest#${POSTGRES_METHODS}"
+  local source_file="spring-ai-rag-core/src/test/java/com/springairag/core/integration/NextHighValueFeaturesPostgresIntegrationTest.java"
   local report="spring-ai-rag-core/target/surefire-reports/TEST-com.springairag.core.integration.NextHighValueFeaturesPostgresIntegrationTest.xml"
+  assert_surefire_methods_exist "$source_file" "$POSTGRES_METHODS" || return 1
+  # Batch 925. Derived from the list rather than carried beside it: the two were
+  # separate numbers that had to agree, and `POSTGRES_EXPECTED=7` no longer did.
+  local expected
+  expected="$(surefire_method_count "$POSTGRES_METHODS")"
   if [[ -n "${NEXT_HIGH_VALUE_IT_JDBC_URL:-}" ]]; then
     [[ "${NEXT_HIGH_VALUE_IT_CLEAN_CONFIRM:-}" == "YES" ]] || {
       echo "NEXT_HIGH_VALUE_IT_CLEAN_CONFIRM=YES is required for a caller-provided disposable database." >&2
@@ -83,9 +92,9 @@ postgres_tests() {
     return 1
   }
   IFS=, read -r tests failures errors skipped < <(surefire_counts "$report")
-  if [[ "$tests" != "$POSTGRES_EXPECTED" || "$failures" != 0 \
+  if [[ "$tests" != "$expected" || "$failures" != 0 \
       || "$errors" != 0 || "$skipped" != 0 ]]; then
-    echo "PostgreSQL acceptance must run ${POSTGRES_EXPECTED} tests without failure/error/skip; got tests=${tests:-missing}, failures=${failures:-missing}, errors=${errors:-missing}, skipped=${skipped:-missing}" >&2
+    echo "PostgreSQL acceptance must run all ${expected} named methods without failure/error/skip; got tests=${tests:-missing}, failures=${failures:-missing}, errors=${errors:-missing}, skipped=${skipped:-missing}" >&2
     return 1
   fi
 }
