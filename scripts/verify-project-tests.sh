@@ -243,6 +243,23 @@ echo "PASS: JSON-assertions self-test"
 node scripts/verify-json-assertions.mjs
 echo "PASS: JSON negative assertions"
 
+# Batch 908. A test assertion that cannot fail reads as coverage and is not.
+# Five were removed, and the loudest one was hiding a wrong sentence: the test
+# claimed the assistant role must not survive MiniMax normalisation, while the
+# same file's javadoc and the production code both say the transformation is
+# system → user. The rule stops at `assertEquals(x, x)` on purpose — JUnit
+# resolves that through equals(), so it is a contract check rather than a
+# tautology, and flagging it would have required an allowlist.
+node scripts/test-support/tautological-assertions-self-test.mjs >/dev/null || {
+  echo "Tautological-assertions self-test failed; the gate may no longer reject anything." >&2
+  node scripts/test-support/tautological-assertions-self-test.mjs >&2 || true
+  exit 1
+}
+echo "PASS: Tautological-assertions self-test"
+
+node scripts/verify-tautological-assertions.mjs
+echo "PASS: Tautological Java test assertions"
+
 # Batch 905. Four gates read Java source and each had its own comment stripper,
 # in three behaviours. Two of them were a naive regex with no notion of a string
 # literal, so a URL in a string was read as a comment: 316 string literals in

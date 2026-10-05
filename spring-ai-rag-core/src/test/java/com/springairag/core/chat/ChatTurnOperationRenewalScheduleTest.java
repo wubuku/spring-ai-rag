@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import java.time.Instant;
 import java.util.UUID;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -143,8 +144,10 @@ class ChatTurnOperationRenewalScheduleTest {
 
     @Test
     void stopRenewalToleratesNullClaims() {
-        service.release(null);
-        // release(null) 为显式 no-op：不抛异常即通过。
-        assertTrue(true);
+        // release(null) 是显式 no-op。原来这里写的是 assertTrue(true)：
+        // 它什么都不验，而「调用没抛」本身已经是这条用例的全部内容。
+        // 写成 assertDoesNotThrow 是为了把这个意图显式钉住——
+        // 将来 release(null) 开始抛异常时，这里会给出指名道姓的失败信息。
+        assertDoesNotThrow(() -> service.release(null));
     }
 }

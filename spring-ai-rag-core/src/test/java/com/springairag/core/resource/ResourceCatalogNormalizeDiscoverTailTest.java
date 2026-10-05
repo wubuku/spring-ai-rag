@@ -125,8 +125,8 @@ class ResourceCatalogNormalizeDiscoverTailTest {
         allowed.setAccessible(true);
 
         // 无点号（dot=0 与无点均不合法）、扩展不匹配 → 拒绝。
-        assertTrue((boolean) allowed.invoke(catalog, "readme", Set.of("md"))
-                == false || true);
+        // 这里原本写的是 `== false || true`：顶层 || true 会把左边整个丢掉，
+        // 断言永远为真。它想断的东西下面两行 assertFalse 已经断了，删掉。
         boolean noDot = (boolean) allowed.invoke(catalog, "readme", Set.of("md"));
         boolean hiddenDot = (boolean) allowed.invoke(catalog, ".md", Set.of("md"));
         boolean matched = (boolean) allowed.invoke(catalog, "a/b.md", Set.of("md"));
