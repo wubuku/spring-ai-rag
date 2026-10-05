@@ -7,6 +7,13 @@ import { fileURLToPath } from 'node:url';
 
 const projectRoot = fileURLToPath(new URL('../..', import.meta.url));
 const gateSource = join(projectRoot, 'scripts', 'check-alignment-policy.mjs');
+// Batch 904. The gate imports the entry-point helper, so a fixture that copies
+// only the gate is no longer a self-contained tree: the import resolves outside
+// the temporary root, to wherever the parent of the temp directory happens to
+// hold. The first version of this change failed 26 of 29 cases that way, and
+// the failure named a module resolver rather than anything about alignment.
+// Copying the helper keeps the fixture runnable on its own.
+const helperSource = join(projectRoot, 'scripts', 'lib', 'is-main-module.mjs');
 
 const MAIN_TSX = `import './styles/global.css';
 import App from './App';
@@ -38,6 +45,8 @@ function withTree(files, fn) {
   try {
     mkdirSync(join(root, 'scripts'), { recursive: true });
     cpSync(gateSource, join(root, 'scripts', 'check-alignment-policy.mjs'));
+    mkdirSync(join(root, 'scripts', 'lib'), { recursive: true });
+    cpSync(helperSource, join(root, 'scripts', 'lib', 'is-main-module.mjs'));
     mkdirSync(join(root, 'src', 'styles'), { recursive: true });
     writeFileSync(join(root, 'src', 'main.tsx'), MAIN_TSX);
     writeFileSync(join(root, 'src', 'App.tsx'), APP_TSX);
