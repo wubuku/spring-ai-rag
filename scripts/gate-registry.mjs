@@ -213,6 +213,26 @@ export const GATES = [
     noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
   },
 
+  // Batch 925. Surefire reads `-Dtest=Class#a+b` as "run whichever of a and b
+  // exist", and twenty scripts here pass
+  // `-Dsurefire.failIfNoSpecifiedTests=false` — correctly, because they select
+  // whole classes, where a missing class leaves no report each of them already
+  // checks for. Method names are the exception and produce silence instead.
+  // `verify-next-high-value-feature.sh` named a method in both of its branches
+  // that had been renamed; the run executed six of seven, and the only thing in
+  // the repository that noticed was a hardcoded count, which reported a run in
+  // which all six tests passed as a broken one without naming the method.
+  // The check lives in a shared library for the reason Batch 894 moved the
+  // report reader there, and the rule is the wiring — "does this script verify
+  // the names" is not decidable by reading the script, but "does it source the
+  // library" is.
+  {
+    gate: 'scripts/verify-surefire-method-selection.mjs',
+    kind: 'gate',
+    selfTest: 'scripts/test-support/surefire-method-selection-self-test.mjs',
+    noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
+  },
+
   // Batch 873. ErrorCode declares itself the single source of truth, and six of
   // the codes the API really returns were not in it, so no title or problem-type
   // URI could be derived from them. The rule also pins the status beside a code

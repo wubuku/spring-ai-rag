@@ -347,6 +347,23 @@ node scripts/verify-capability-protocol-pinning.mjs || {
 }
 pass "Capability protocol pinning"
 
+# Batch 925. A surefire selector that names a method runs whichever names it
+# finds, so a renamed test stops being verified in silence. The self-test feeds
+# the rule the pre-fix text of the one script that does this, and also the six
+# shell parameter expansions on the real tree that look like the same shape and
+# are not.
+node scripts/test-support/surefire-method-selection-self-test.mjs || {
+  echo "Surefire method-selection self-test failed; the gate may be missing the shape it exists for." >&2
+  exit 1
+}
+pass "Surefire method-selection self-test"
+
+node scripts/verify-surefire-method-selection.mjs || {
+  echo "Surefire method-selection check failed." >&2
+  exit 1
+}
+pass "Surefire method selection"
+
 # Batch 901. Every automated gate in this repository is required to carry a
 # self-test, and that requirement is discharged by importing the module and
 # calling its functions — which means it cannot see a gate that never runs.
