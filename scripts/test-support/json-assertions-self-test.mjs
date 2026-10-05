@@ -29,6 +29,10 @@ import {
   stripJqComments,
   stripShellComments,
 } from '../lib/json-assertion-check.mjs';
+import {
+  scanPython,
+  sourceFindings,
+} from '../lib/python-assertion-check.mjs';
 
 const repoRoot = fileURLToPath(new URL('../..', import.meta.url));
 const scriptsDir = path.join(repoRoot, 'scripts');
@@ -230,6 +234,70 @@ test('the receipt key list matches the DTO record it is copied from', () => {
   for (const secret of ['payload', 'leaseToken', 'leaseUntil']) {
     assert.ok(!declared.includes(secret), `${secret} is back in the receipt DTO`);
   }
+});
+
+test('a Python comparison the absent value satisfies is a finding', () => {
+  // Batch 899. Batch 896's rule read only shell, and Batch 898 found the same
+  // defect in Python — so a rule that looks at one language is a rule about that
+  // language. This is the other language, and this is the shape it must catch:
+  // a falsy default on one side of a comparison whose other side is falsy too.
+  const found = sourceFindings({
+    file: 'planted.py',
+    firstLine: 1,
+    text: 'if aggregate.get("ndcg", 0.0) == 0:\n    failures.append("clean")\n',
+  });
+  assert.equal(found.length, 1, 'the planted Python fail-open was not found');
+  assert.match(found[0].reason, /could not obtain it/);
+});
+
+test('a containment check on an unreadable field is NOT a finding', () => {
+  // The direction that decides this rule. `if token not in (item.get("f") or "")`
+  // fails closed: an unreadable field becomes "", the token is not in it, and the
+  // gate fails. The first draft of the rule counted it, and reported two gates
+  // as broken when both were correct — one of them not about a metric at all,
+  // but about filtering environment-variable lines.
+  const found = sourceFindings({
+    file: 'benign.py',
+    firstLine: 1,
+    text: 'if token not in (item.get("retrievalText") or ""):\n    sys.exit(1)\n',
+  });
+  assert.deepEqual(found, [], 'a fail-closed containment check was reported');
+});
+
+test('a plain zero default outside a comparison is not a finding', () => {
+  const found = sourceFindings({
+    file: 'benign.py',
+    firstLine: 1,
+    text: 'limit = int(os.environ.get("LIMIT", 0))\nif limit > 0:\n    pass\n',
+  });
+  assert.deepEqual(found, []);
+});
+
+test('the rule is line-local, and that is stated rather than assumed', () => {
+  // The honest limit. Batch 898's real defect assigns the default on one line
+  // and compares on the next, which no line-local rule can see. Asserting the
+  // blind spot here means a reader meets it as a property of the rule rather than
+  // discovering it the day it matters.
+  const found = sourceFindings({
+    file: 'two-line.py',
+    firstLine: 1,
+    text: 'previous = float(baseline_metrics.get(name, 0.0))\n'
+      + 'if actual + tolerance < previous:\n    pass\n',
+  });
+  assert.deepEqual(found, [], 'the rule changed shape; re-read what it can and cannot see');
+});
+
+test('this repository\'s Python readers are clean, and there are enough of them to mean it', () => {
+  // The real tree. `sources` is the number that keeps this from passing on an
+  // empty walk: 97 Python sources, several thousand lines.
+  const { findings, sources, lines } = scanPython(scriptsDir);
+  assert.ok(sources >= 90, `only ${sources} python source(s) scanned; the walk stopped early`);
+  assert.ok(lines >= 4000, `only ${lines} python line(s); the walk stopped early`);
+  assert.deepEqual(
+    findings.map((f) => `${f.file}:${f.line}`),
+    [],
+    'a Python comparison is still satisfied by a value its reader never obtained',
+  );
 });
 
 let failed = 0;
