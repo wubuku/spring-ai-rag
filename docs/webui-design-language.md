@@ -710,6 +710,45 @@ code review because the CSS is one line.
 6. Write the test in the same batch. A change that makes the gate red is not
    finished.
 
+## 13. Motion that never ends has to be stoppable
+
+`npm run check:reduced-motion`
+
+An `infinite` animation is continuous motion: a sweeping background, a blinking
+cursor, a spinning wheel. Continuous motion is what people with vestibular
+disorders turn animations off for, and the preference they set in the operating
+system is a request the interface is supposed to honour. So any rule declaring
+an `infinite` animation must have its selector neutralized under
+`@media (prefers-reduced-motion: reduce)`:
+
+```css
+.spinner {
+  animation: spin 0.6s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner { animation: none; }
+}
+```
+
+This is the shape `Tooltip` and `Dialog` already carried, so the gate enforces
+a convention rather than inventing one.
+
+**Only `infinite` is reported, and that distinction is the whole gate.** A
+one-shot animation ends on its own and is short by construction — the 140ms
+dialog fade is not what a reduced-motion reader is asking you to remove, and
+WCAG's own guidance tolerates opacity transitions for that reason. Requiring a
+guard for those would mean reporting correct code.
+
+Stopping the animation must not remove the information it carried. A spinner
+that stops spinning is still a spinner, and the streaming cursor stays at its
+`opacity: 1` keyframe, so it remains visible while it stops blinking.
+
+Five stylesheets were doing continuous motion with no guard: the skeleton
+shimmer shown by every page that loads, the same shimmer inside
+`ReembedAllButton`, the streaming cursor, and two indeterminate spinners in
+`Files`.
+
 ## 14. A heading that says only its own name
 
 `npm run check:page-shell` also requires every protected page to pass a

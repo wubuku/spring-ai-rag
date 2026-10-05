@@ -376,4 +376,24 @@ export const GATES = [
     kind: 'gate',
     selfTest: 'spring-ai-rag-webui/scripts/__tests__/query-errors.test.mjs',
   },
+
+  // Batch 910. Continuous motion is what people with vestibular disorders turn
+  // animations off for, and five stylesheets were running it with no way to stop
+  // it: the skeleton shimmer on every page that loads, the streaming cursor's
+  // blink, and two indeterminate spinners. Two other stylesheets already
+  // carried the guard, so this enforces a shape the codebase had chosen rather
+  // than inventing one.
+  //
+  // The rule is `infinite` animations only. A one-shot animation ends on its own
+  // and is short by construction — flagging the dialog's 140ms fade would be
+  // reporting a correct shape, and this repository does not build gates that
+  // need an allowlist to go green.
+  //
+  // No `noCiReason`: `npm run lint` runs in ci.yml's webui job, so this one is
+  // covered by the gate layer CI has always reached.
+  {
+    gate: 'spring-ai-rag-webui/scripts/check-reduced-motion.mjs',
+    kind: 'gate',
+    selfTest: 'spring-ai-rag-webui/scripts/__tests__/reduced-motion.test.mjs',
+  },
 ];

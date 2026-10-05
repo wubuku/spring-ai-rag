@@ -86,3 +86,12 @@
 .info .icon {
   color: var(--color-primary);
 }
+
+/* Batch 910: a toast that slides in from the edge is the classic vestibular
+   trigger, and toasts appear in response to the user's own action rather than
+   to anything they need to watch move. */
+@media (prefers-reduced-motion: reduce) {
+  .toast {
+    animation: none;
+  }
+}

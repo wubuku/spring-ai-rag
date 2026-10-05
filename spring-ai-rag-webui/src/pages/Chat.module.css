@@ -295,3 +295,13 @@
 
 .feedbackRow { display:flex; gap:0.35rem; margin-top:0.35rem; }
 .feedbackBtn { border:1px solid var(--color-border); background:transparent; border-radius:6px; cursor:pointer; padding:0.15rem 0.4rem; }
+
+/* Batch 910: `animation: none` leaves the cursor at the 0% keyframe, which is
+   `opacity: 1` — so the streaming indicator stays visible, it just stops
+   blinking. A blinking cursor is motion, and blinking is also a documented
+   seizure trigger at high contrast ratios. */
+@media (prefers-reduced-motion: reduce) {
+  .cursor {
+    animation: none;
+  }
+}
