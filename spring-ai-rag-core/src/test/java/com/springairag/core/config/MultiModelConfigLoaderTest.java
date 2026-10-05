@@ -163,6 +163,131 @@ class MultiModelConfigLoaderTest {
         }
     }
 
+    // ─── Provider ids are data, not schema keys (Batch 927) ───
+
+    @Test
+    @DisplayName("A provider id is not reported as an unknown key, and the entry is loaded")
+    void loadExternalJsonIfPresent_providerId_warnsOnlyAboutRealSchemaKeys() throws IOException {
+        Path jsonFile = tempDir.resolve("models.json");
+        String json = """
+                {
+                  "models": {
+                    "providers": {
+                      "siliconflow": {
+                        "displayName": "SiliconFlow",
+                        "baseUrl": "https://api.siliconflow.cn",
+                        "apiKey": "k",
+                        "apiType": "openai-completions",
+                        "enabled": true,
+                        "priority": 1,
+                        "models": [
+                          { "id": "Qwen/Qwen3.5-27B", "name": "Qwen", "type": "chat",
+                            "inputModalities": ["text"] }
+                        ]
+                      }
+                    }
+                  }
+                }
+                """;
+        Files.writeString(jsonFile, json);
+
+        ch.qos.logback.classic.Logger loaderLogger =
+                (ch.qos.logback.classic.Logger)
+                        org.slf4j.LoggerFactory.getLogger(MultiModelConfigLoader.class);
+        ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent> appender =
+                new ch.qos.logback.core.read.ListAppender<>();
+        appender.start();
+        loaderLogger.addAppender(appender);
+        try {
+            MultiModelProperties props = createProperties(jsonFile.toString());
+            new MultiModelConfigLoader(props).loadExternalJsonIfPresent();
+
+            // The provider is loaded…
+            assertTrue(props.getProviders().containsKey("siliconflow"),
+                    "the provider entry must be loaded");
+
+            // …and the warning must not claim it was ignored. Before Batch 927 it
+            // named `models.providers.siliconflow` as an unknown key, which sent the
+            // reader looking for a configuration problem that did not exist.
+            for (ch.qos.logback.classic.spi.ILoggingEvent event : appender.list) {
+                String message = event.getFormattedMessage();
+                assertFalse(message.contains("models.providers.siliconflow"),
+                        "a provider id must not be reported as a schema key: " + message);
+            }
+        } finally {
+            loaderLogger.detachAppender(appender);
+        }
+    }
+
+    @Test
+    @DisplayName("A provider id containing a hyphen loads instead of refusing to start")
+    void loadExternalJsonIfPresent_hyphenatedProviderId_doesNotBlockStartup() throws IOException {
+        Path jsonFile = tempDir.resolve("models.json");
+        String json = """
+                {
+                  "models": {
+                    "providers": {
+                      "my-provider": {
+                        "baseUrl": "https://example.invalid",
+                        "apiKey": "k",
+                        "apiType": "openai-completions",
+                        "enabled": true
+                      }
+                    }
+                  }
+                }
+                """;
+        Files.writeString(jsonFile, json);
+
+        // The kebab-case rule exists because a *schema* key like `chat-model` is
+        // silently ignored. `my-provider` is a name the author chose, and treating
+        // it as a kebab-cased schema key made a legal provider name throw on
+        // startup — an error message about key casing for a key that is not one.
+        MultiModelProperties props = createProperties(jsonFile.toString());
+        assertDoesNotThrow(() -> new MultiModelConfigLoader(props).loadExternalJsonIfPresent());
+        assertTrue(props.getProviders().containsKey("my-provider"),
+                "a hyphenated provider id must still be loaded");
+    }
+
+    @Test
+    @DisplayName("A real unknown schema key inside a provider is still reported")
+    void loadExternalJsonIfPresent_unknownSchemaKeyInsideProvider_stillWarns() throws IOException {
+        Path jsonFile = tempDir.resolve("models.json");
+        String json = """
+                {
+                  "models": {
+                    "providers": {
+                      "openai": {
+                        "baseUrl": "https://example.invalid",
+                        "typoedField": true
+                      }
+                    }
+                  }
+                }
+                """;
+        Files.writeString(jsonFile, json);
+
+        ch.qos.logback.classic.Logger loaderLogger =
+                (ch.qos.logback.classic.Logger)
+                        org.slf4j.LoggerFactory.getLogger(MultiModelConfigLoader.class);
+        ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent> appender =
+                new ch.qos.logback.core.read.ListAppender<>();
+        appender.start();
+        loaderLogger.addAppender(appender);
+        try {
+            new MultiModelConfigLoader(createProperties(jsonFile.toString()))
+                    .loadExternalJsonIfPresent();
+            boolean warned = appender.list.stream()
+                    .filter(event -> event.getLevel()
+                            == ch.qos.logback.classic.Level.WARN)
+                    .anyMatch(event -> event.getFormattedMessage().contains("typoedField"));
+            assertTrue(warned,
+                    "skipping the provider's own id must not stop its fields being checked");
+        } finally {
+            loaderLogger.detachAppender(appender);
+        }
+    }
+
     // ─── Full load test ───────────────────────────────────────────
 
     @Test
