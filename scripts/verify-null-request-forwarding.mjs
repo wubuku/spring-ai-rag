@@ -50,6 +50,7 @@
  */
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
+import { stripJavaComments } from './lib/java-source.mjs';
 import { isMainModule } from './lib/is-main-module.mjs';
 
 const ROOT = new URL('..', import.meta.url).pathname;
@@ -120,48 +121,7 @@ export function splitTopLevelArgs(text) {
  * `RetrievalEvaluationServiceImpl.java` 一个文本块含类注释序列，实测对本门禁
  * 无影响；真要收紧应该先在文本块里出现真实的声明。
  */
-function stripComments(src) {
-  let out = '';
-  let i = 0;
-  let quote = null;
-  while (i < src.length) {
-    const c = src[i];
-    if (quote !== null) {
-      // Java 的 `\"` 与 `\\`：跳过一个转义序列，否则引号状态会被 `\"` 骗到。
-      if (c === '\\') {
-        out += src.slice(i, i + 2);
-        i += 2;
-        continue;
-      }
-      if (c === quote) quote = null;
-      out += c;
-      i += 1;
-      continue;
-    }
-    if (c === '"' || c === "'") {
-      quote = c;
-      out += c;
-      i += 1;
-      continue;
-    }
-    if (c === '/' && src[i + 1] === '/') {
-      while (i < src.length && src[i] !== '\n') { out += ' '; i += 1; }
-      continue;
-    }
-    if (c === '/' && src[i + 1] === '*') {
-      while (i < src.length && !(src[i] === '*' && src[i + 1] === '/')) {
-        out += src[i] === '\n' ? '\n' : ' ';
-        i += 1;
-      }
-      out += '  ';
-      i += 2;
-      continue;
-    }
-    out += c;
-    i += 1;
-  }
-  return out;
-}
+
 
 /**
  * 收集一个类里所有方法名 -> 参数类型列表的重载。
@@ -226,7 +186,7 @@ export function requestParamIndex(params) {
  * `HttpServletRequest r = a == null ? b : c;` 产出的是非 null，因此放行。
  */
 export function collectNullCarryingRequests(src) {
-  const clean = stripComments(src);
+  const clean = stripJavaComments(src);
   const names = new Set();
   const decl = /HttpServletRequest\s+(\w+)\s*=/g;
   let m;
@@ -261,7 +221,7 @@ function isNullBearing(arg, nullCarriers) {
 
 /** 从源码文本中找出 { line, name, argIndex, args } 形式的违规转发。 */
 export function findNullRequestForwarding(src) {
-  const clean = stripComments(src);
+  const clean = stripJavaComments(src);
   const overloads = collectOverloads(clean);
   const nullCarriers = collectNullCarryingRequests(src);
   const findings = [];

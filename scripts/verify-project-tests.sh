@@ -243,6 +243,19 @@ echo "PASS: JSON-assertions self-test"
 node scripts/verify-json-assertions.mjs
 echo "PASS: JSON negative assertions"
 
+# Batch 905. Four gates read Java source and each had its own comment stripper,
+# in three behaviours. Two of them were a naive regex with no notion of a string
+# literal, so a URL in a string was read as a comment: 316 string literals in
+# this tree are destroyed by that shape, and in nine files a `/*` inside a
+# string ran the match to the next `*/` — one of them losing 118 lines. The
+# stripper now lives in one place, and this self-test is the enforcement: its
+# last case fails if a gate starts rolling its own again.
+node scripts/test-support/java-source-self-test.mjs || {
+  echo "Java-source self-test failed; the gates may be reading a mangled file." >&2
+  exit 1
+}
+echo "PASS: Java-source self-test"
+
 # Batch 901. Every automated gate in this repository is required to carry a
 # self-test, and that requirement is discharged by importing the module and
 # calling its functions — which means it cannot see a gate that never runs.

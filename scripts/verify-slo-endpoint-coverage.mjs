@@ -50,6 +50,7 @@
 
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
+import { stripJavaComments } from './lib/java-source.mjs';
 import { fileURLToPath } from 'node:url';
 import { isMainModule } from './lib/is-main-module.mjs';
 
@@ -66,15 +67,11 @@ export const VIOLATION_KINDS = Object.freeze({
 });
 
 /** Strips comments so prose cannot register an endpoint or a threshold. */
-export function stripComments(source) {
-  return source
-    .replace(/\/\*[\s\S]*?\*\//g, ' ')
-    .replace(/\/\/[^\n]*/g, ' ');
-}
+
 
 /** Every `@Timed(value = "...")` in the source, in order. */
 export function collectTimedValues(source) {
-  const code = stripComments(source);
+  const code = stripJavaComments(source);
   const out = [];
   const re = /@Timed\s*\(\s*(?:value\s*=\s*)?"([^"]+)"/g;
   let m;
@@ -84,7 +81,7 @@ export function collectTimedValues(source) {
 
 /** The `thresholds.put("...", N)` calls that build the default table. */
 export function collectDefaultThresholds(source) {
-  const code = stripComments(source);
+  const code = stripJavaComments(source);
   const out = [];
   const re = /thresholds\.put\(\s*"([^"]+)"\s*,/g;
   let m;

@@ -60,6 +60,13 @@
  */
 
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
+// Batch 905: this file had its own copy of the comment stripper, and it was
+// the regex shape — a `//` inside a string is a comment to it. The correct one
+// already existed here, exported by check-design-system and imported by seven
+// sibling checks, which is exactly the duplication that let the bad copy live.
+// No current source in this package is damaged by it (measured: 0 literals), so
+// this removes a trap rather than fixing a live false negative.
+import { stripComments } from './check-design-system.mjs';
 import { join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -322,12 +329,6 @@ export function findExpressionContainerCopy(source) {
  * was line 184. Masking with spaces of equal length keeps offsets and line
  * numbers addressing the same character as the original file.
  */
-export function stripComments(source) {
-  return source
-    .replace(/\/\*[\s\S]*?\*\//g, (block) => block.replace(/[^\n]/g, ' '))
-    .replace(/\/\/[^\n]*/g, ' ');
-}
-
 export function usesI18n(source) {
   return /useTranslation\b/.test(source)
     || /withTranslation\b/.test(source)

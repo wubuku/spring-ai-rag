@@ -19,9 +19,12 @@ import {
   collectControllers,
   collectDefaultThresholds,
   collectTimedValues,
-  stripComments,
   VIOLATION_KINDS,
 } from '../verify-slo-endpoint-coverage.mjs';
+// Batch 905: the stripper moved to one place, so the thing under test is the
+// shared one. Importing it from the gate would only prove the gate re-exports
+// what it imports.
+import { stripJavaComments as stripComments } from '../lib/java-source.mjs';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -129,8 +132,15 @@ test('collects only the default threshold table, not Javadoc prose', () => {
 });
 
 test('stripComments removes block and line comments', () => {
-  assert.equal(stripComments('a/* x */b'), 'a b');
+  // Batch 905 asserted `'a/* x */b'` became exactly `'a b'`, which pinned the
+  // old collapse-to-one-space behaviour. The shared stripper keeps the width
+  // instead, so a finding's column and line still point at the right place.
+  // What matters is that the comment is gone and the code around it is not.
+  assert.equal(stripComments('a/* x */b').replace(/ +/g, ' '), 'a b');
   assert.ok(!stripComments('a // x\nb').includes('x'));
+  // A `//` inside a string is not a comment — the reason the collapse was
+  // replaced rather than kept.
+  assert.equal(stripComments('a = "http://x"; b = 1;'), 'a = "http://x"; b = 1;');
 });
 
 // ── collector, against a real directory on disk ──────────────────────────────
