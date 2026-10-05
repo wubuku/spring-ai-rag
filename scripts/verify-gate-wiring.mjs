@@ -15,7 +15,7 @@
 // is read off runner text, so it catches "wired to nothing" but not "wired to a
 // lie". Self-test: scripts/test-support/gate-wiring-self-test.mjs.
 
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join, relative } from 'node:path';
 import { deadReasonPointers } from './lib/reason-pointer-check.mjs';
@@ -46,6 +46,7 @@ export const VIOLATION_KINDS = {
   STALE_CI_REASON: 'stale-ci-reason',
   DEAD_REASON_POINTER: 'dead-reason-pointer',
   UNDOCUMENTED_GATE: 'undocumented-gate',
+  NON_EXECUTABLE_ENTRYPOINT: 'non-executable-entrypoint',
 };
 
 /**
@@ -173,7 +174,7 @@ export function resolveCiReachability(gateScripts, runnerTexts) {
  * The pure half. Everything it needs arrives as data so the self-test can drive
  * it with fixtures instead of a real repository.
  */
-export function checkWiring({ gateScripts, registry, fileExists, executedBy, ciReached, docText = '' }) {
+export function checkWiring({ gateScripts, registry, fileExists, isExecutable, executedBy, ciReached, docText = '' }) {
   const violations = [];
   const add = (kind, gate, detail) => violations.push({ kind, gate, detail });
 
@@ -205,6 +206,31 @@ export function checkWiring({ gateScripts, registry, fileExists, executedBy, ciR
     // by name — a runner cannot execute them, so the orphan rule would be a
     // category error — but they still owe a self-test and a CI decision.
     if (entry.kind === 'manual') continue;
+
+    // Batch 913. An entry point is invoked by path, by a person, from a
+    // terminal: `./scripts/verify-webui-e2e-mock.sh`. A file without the
+    // executable bit answers that with `Permission denied` and exit 126 —
+    // which is the most confusing possible answer to "run the gate", and it
+    // stays invisible precisely because the gate is a *manual* one that CI
+    // does not reach. That is how one of the four entry points in this
+    // repository shipped as 100644 while its three siblings shipped as
+    // 100755: everything this file checks about it was correct.
+    //
+    // `kind: 'gate'` is deliberately exempt. Those are run as
+    // `node scripts/verify-*.mjs`, where the kernel's exec bit is never
+    // consulted, and all 29 of them are 100644 on purpose. So is `manual`:
+    // those are run through `bash <path>` against a live system. The
+    // distinction the rule draws is not "has a shebang" — two sourced
+    // libraries in `scripts/lib/` have shebangs and are 100644 correctly —
+    // it is "is this the thing a person types".
+    if (entry.kind === 'entrypoint' && !isExecutable(gate)) {
+      add(
+        VIOLATION_KINDS.NON_EXECUTABLE_ENTRYPOINT,
+        gate,
+        'an entry point is run as ./' + gate + ', which needs the executable bit; '
+          + 'it is committed without one, so the documented invocation fails with exit 126',
+      );
+    }
 
     // Manual verification scripts are exempt: they are domain procedures rather
     // than part of the automated safety net, and each is documented in whichever
@@ -309,6 +335,17 @@ function main() {
     // are written repo-relative, but the resolver should not punish the other
     // spelling with a false report.
     fileExists: (path) => existsSync(path.startsWith('/') ? path : join(root, path)),
+    // The kernel's view, not git's index: a mode that was never staged shows up
+    // here and not in `git ls-files -s`, and the failure a person hits is the
+    // working tree's. Any execute bit counts, so a mode of 744 is as runnable
+    // as 755 and is not this gate's business.
+    isExecutable: (path) => {
+      try {
+        return (statSync(path.startsWith('/') ? path : join(root, path)).mode & 0o111) !== 0;
+      } catch {
+        return false;
+      }
+    },
     executedBy,
     ciReached,
     docText: collectDocText(root),

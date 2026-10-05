@@ -506,9 +506,19 @@ test('the real surefire output contains no vanished class', () => {
     'test classes that neither ran nor reported a skip',
   );
   // The opt-in integration classes must now be counted, not merely tolerated.
+  // Skipped is the shape a *default* `mvn test` gives them; it is also the only
+  // thing here that distinguishes a default run from a gated one, because
+  // `./scripts/verify-gated-it.sh` rewrites these same 23 report files with
+  // `skipped=0` and leaves the other ~1000 alone. Batch 912 documented that
+  // order matters and Batch 913 ran into it: the case failed with "saw 0" and
+  // no hint, in a file that has nothing to do with what the reader was running.
+  // A failure that cannot say what to do next is half a failure.
   assert.ok(
     totals.skipped >= 100,
-    `expected the opt-in integration classes to report a skip, saw ${totals.skipped}`,
+    `expected the opt-in integration classes to report a skip, saw ${totals.skipped}. `
+      + 'A gated integration run rewrites exactly those 23 reports with skipped=0, '
+      + 'so this is almost always the reports directory rather than the tests: '
+      + 'run `mvn test` before this self-test, and run ./scripts/verify-gated-it.sh after it.',
   );
 
   // The live tree must also reconcile both ways. A `mvn test` that was not
