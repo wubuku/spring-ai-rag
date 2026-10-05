@@ -312,6 +312,23 @@ node scripts/test-support/report-destruction-self-test.mjs || {
 }
 pass "Report-destruction self-test"
 
+# Batch 923. A script that asserts Flyway's latest version by writing the number
+# down stops being true the moment someone adds a migration. One did exactly
+# that for a month, and the run that caught it was the first since. The self-test
+# feeds the rule the pre-fix text of that script, so the rule is never validated
+# only against a clean tree.
+node scripts/test-support/flyway-version-pinning-self-test.mjs || {
+  echo "Flyway version-pinning self-test failed; the gate may be missing the shape it exists for." >&2
+  exit 1
+}
+pass "Flyway version-pinning self-test"
+
+node scripts/verify-flyway-version-pinning.mjs || {
+  echo "Flyway version-pinning check failed." >&2
+  exit 1
+}
+pass "Flyway version pinning"
+
 # Batch 901. Every automated gate in this repository is required to carry a
 # self-test, and that requirement is discharged by importing the module and
 # calling its functions — which means it cannot see a gate that never runs.

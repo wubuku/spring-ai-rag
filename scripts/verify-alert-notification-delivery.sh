@@ -12,6 +12,25 @@ FRONTEND_PORT="${ALERT_NOTIFICATION_FRONTEND_PORT:-15281}"
 STUB_PORT="${ALERT_NOTIFICATION_STUB_PORT:-4281}"
 PG_IMAGE="${TESTCONTAINERS_PG_IMAGE:-pgvector/pgvector:pg16}"
 
+# Batch 923. This script asserted the schema version by writing `58` into the
+# expected-facts string, and V59 shipped while it read 58 — so the acceptance
+# run failed on a fact that had been true for a month, naming nothing the
+# reader could act on. Two sibling scripts already compute the number from the
+# migration directory instead (`verify-collection-provisioning.sh`,
+# `verify-managed-api-principals.sh`); this one simply never adopted it.
+#
+# A hardcoded migration version is the same failure as a hardcoded count in
+# prose: it is true right up until someone adds a migration, and then it is a
+# lie that reports itself as a broken product. The assertion's actual intent is
+# "Flyway applied everything in this tree", which this states directly.
+LATEST_FLYWAY_MIGRATION="$(
+  find spring-ai-rag-core/src/main/resources/db/migration \
+    -maxdepth 1 -type f -name 'V*__*.sql' -exec basename {} \; \
+    | sed -nE 's/^V([0-9]+)__.*[.]sql$/\1/p' \
+    | sort -n \
+    | tail -1
+)"
+
 PG_CONTAINER=""
 BACKEND_A_PID=""
 BACKEND_B_PID=""
@@ -433,11 +452,11 @@ database_facts() {
         )
       FROM rag_alert_notification_delivery;
     ")"
-  [[ "$facts" == "58|2|2|0|0" ]] || {
+  [[ "$facts" == "${LATEST_FLYWAY_MIGRATION}|2|2|0|0" ]] || {
     echo "Unexpected database facts: ${facts}" >&2
     return 1
   }
-  echo "database_facts migration=58 deliveries=2 delivered=2 leases=0 secrets=0"
+  echo "database_facts migration=${LATEST_FLYWAY_MIGRATION} deliveries=2 delivered=2 leases=0 secrets=0"
 }
 
 run_step "Prerequisites" prerequisites

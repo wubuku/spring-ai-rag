@@ -178,6 +178,21 @@ export const GATES = [
     noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
   },
 
+  // Batch 923. A script that selects Flyway's latest version and compares it
+  // against a literal stops being true the moment someone adds a migration,
+  // and then fails as if the product were broken.
+  // `verify-alert-notification-delivery.sh` had been asserting `58` for a
+  // month after V59 shipped, and the run that caught it was the first one since.
+  // Two sibling scripts already compute the number from the migration
+  // directory, so the correct shape existed and this one had not adopted it —
+  // which is what lets the rule be zero-tolerance with no allowlist.
+  {
+    gate: 'scripts/verify-flyway-version-pinning.mjs',
+    kind: 'gate',
+    selfTest: 'scripts/test-support/flyway-version-pinning-self-test.mjs',
+    noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
+  },
+
   // Batch 873. ErrorCode declares itself the single source of truth, and six of
   // the codes the API really returns were not in it, so no title or problem-type
   // URI could be derived from them. The rule also pins the status beside a code

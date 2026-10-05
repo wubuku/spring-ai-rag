@@ -58,9 +58,22 @@ test('renders a real durable notification receipt from the backend contract', as
     name: `DINGTALK ${EXPECTED_STATUS} ${EXPECTED_ALERT_ID}`,
   });
   await expect(row).toBeVisible();
-  await expect(row.getByRole('cell').filter({
-    hasText: EXPECTED_ALERT_ID,
-  })).toBeVisible();
+  // Batch 923. This used to be
+  //   row.getByRole('cell').filter({ hasText: EXPECTED_ALERT_ID })
+  // and `hasText` matches on **substring**, so on 2026-10-06 it resolved to three
+  // cells instead of one: the alert id "1", and the two timestamps rendered
+  // that minute — `10/6/2026, 2:29:14 AM` and `…2:29:18 AM` — both of which
+  // contain the digit. Playwright then refused the whole locator in strict mode
+  // and the run failed.
+  //
+  // It passed on 2026-08-28 because that day's stamps read `8/28/2026`, which
+  // happens to contain no "1". **The assertion was never wrong about the
+  // product — it was wrong about `hasText`, and the calendar decided which.**
+  // An exact cell name is what "this cell holds the alert id" actually means,
+  // and it cannot be satisfied by a timestamp.
+  await expect(
+    row.getByRole('cell', { name: EXPECTED_ALERT_ID, exact: true }),
+  ).toBeVisible();
   await expect(row.getByText('DINGTALK', { exact: true })).toBeVisible();
   await expect(row.getByText(EXPECTED_STATUS, { exact: true })).toBeVisible();
 
