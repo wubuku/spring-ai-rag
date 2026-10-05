@@ -9,6 +9,7 @@ import { useChatSSE } from '../hooks/useSSE';
 import { modelsApi } from '../api/models';
 import { collectionsApi } from '../api/collections';
 import { chatApi } from '../api/chat';
+import { getSelectedModel } from '../utils/modelPreference';
 
 // Mock useChatSSE at module level
 const mockSend = vi.fn();
@@ -314,6 +315,115 @@ describe('Chat', () => {
       collectionScopeMode: 'CALLER_VISIBLE',
       collectionKeys: undefined,
     });
+  });
+
+  // Batch 919. `effectiveSelectedModel` is a three-step fallback: the saved
+  // model, then `defaultModel`, then whatever is first in the list. Every step
+  // but the first silently answers with a *different* model than the one the
+  // user chose. Batch 917 made the first step reachable on purpose (an
+  // unresolved `${PLACEHOLDER}` credential now flips `available` to false), so
+  // this is a path the product now walks rather than a hypothetical one.
+  //
+  // These cases pin the *decision and its announcement*, not the sentence: the
+  // shared i18n double in `src/test/setup.ts` is `t = (key) => key` and drops
+  // the interpolation options, so nothing rendered under test can carry the
+  // model name. Asserting on that text would have meant asserting something
+  // this harness cannot produce. What the wording has to contain is a property
+  // of the two locale files, and it is checked there instead.
+  it('announces the substitution and sends to the model that will answer', async () => {
+    (getSelectedModel as ReturnType<typeof vi.fn>).mockReturnValue(
+      'openrouter/removed-model',
+    );
+    (modelsApi.list as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: {
+        multiModelEnabled: true,
+        defaultProvider: 'minimax',
+        defaultModel: 'minimax/MiniMax-M2.7',
+        availableProviders: ['minimax', 'openrouter'],
+        fallbackChain: [],
+        models: [
+          {
+            ref: 'minimax/MiniMax-M2.7',
+            provider: 'minimax',
+            providerName: 'minimax',
+            modelId: 'MiniMax-M2.7',
+            name: 'MiniMax M2.7',
+            apiType: 'anthropic-messages',
+            available: true,
+          },
+          {
+            ref: 'openrouter/xiaomi/mimo-v2-pro',
+            provider: 'openrouter',
+            providerName: 'openrouter',
+            modelId: 'xiaomi/mimo-v2-pro',
+            name: 'MiMo V2 Pro',
+            apiType: 'openai-completions',
+            available: true,
+          },
+        ],
+      },
+    });
+
+    renderChat();
+
+    // 公告在先：用户看到它的时候，消息还没有发出去。
+    expect(await screen.findByRole('alert')).toHaveTextContent('chat.modelSubstituted');
+
+    const textarea = screen.getByPlaceholderText(/chat.placeholder/);
+    fireEvent.change(textarea, { target: { value: 'Who answers this?' } });
+    fireEvent.click(screen.getByRole('button', { name: /chat.send/ }));
+
+    // 公告说的那个模型，就是真正收到消息的那个——两条断言必须指向同一个 ref，
+    // 否则"说了 A、发给 B"仍然能一起绿。
+    expect(mockSend).toHaveBeenCalledWith(
+      expect.objectContaining({ model: 'minimax/MiniMax-M2.7' }),
+    );
+  });
+
+  // 阴性对照：选择**还在**的时候不该出现这条提示。一条只在坏情况下出现的
+  // 横幅，和一条一直出现的横幅一样吵——不钉住这一点，修法很容易顺手扩大。
+  it('stays quiet when the saved model is still available', async () => {
+    (getSelectedModel as ReturnType<typeof vi.fn>).mockReturnValue(
+      'openrouter/xiaomi/mimo-v2-pro',
+    );
+    (modelsApi.list as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: {
+        multiModelEnabled: true,
+        defaultProvider: 'minimax',
+        defaultModel: 'minimax/MiniMax-M2.7',
+        availableProviders: ['minimax', 'openrouter'],
+        fallbackChain: [],
+        models: [
+          {
+            ref: 'minimax/MiniMax-M2.7',
+            provider: 'minimax',
+            providerName: 'minimax',
+            modelId: 'MiniMax-M2.7',
+            name: 'MiniMax M2.7',
+            apiType: 'anthropic-messages',
+            available: true,
+          },
+          {
+            ref: 'openrouter/xiaomi/mimo-v2-pro',
+            provider: 'openrouter',
+            providerName: 'openrouter',
+            modelId: 'xiaomi/mimo-v2-pro',
+            name: 'MiMo V2 Pro',
+            apiType: 'openai-completions',
+            available: true,
+          },
+        ],
+      },
+    });
+
+    renderChat();
+
+    // 等模型**真的加载完**，而不是等 select 出现：`chat-model-select` 这个
+    // 元素在列表还是空的时候就已经渲染了，在它身上等会在 `availableModels`
+    // 长度为 0 的那一刻就返回——那时横幅当然不渲染，于是"永远显示"的变异也能
+    // 一起绿。第一版就是这么写的，对照因此是空的。
+    await screen.findByRole('option', { name: /minimax/ });
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 
   it('passes multiple selected collection keys to SSE', async () => {
