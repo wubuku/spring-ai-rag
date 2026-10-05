@@ -48,14 +48,30 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { scan } from './lib/json-assertion-check.mjs';
+import { scanPython } from './lib/python-assertion-check.mjs';
 
 const root = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const { findings, quantifierPrograms, files } = scan(path.join(root, 'scripts'));
 
+const python = scanPython(path.join(root, 'scripts'));
+
 console.log(`JSON negative assertions: ${files} shell file(s), ${quantifierPrograms} jq program(s) with a quantifier.`);
-if (findings.length === 0) {
-  console.log('Every negative assertion inside a quantifier also requires the field to be present.');
+console.log(`Python falsy defaults in assertions: ${python.sources} source(s), ${python.lines} line(s).`);
+if (findings.length === 0 && python.findings.length === 0) {
+  console.log('Every negative assertion inside a quantifier also requires the field to be present,');
+  console.log('and no Python comparison is satisfied by a value its reader never obtained.');
   process.exit(0);
+}
+
+if (findings.length === 0) {
+  for (const f of python.findings) {
+    console.error(`  ${f.file}:${f.line}  ${f.reason}`);
+    console.error(`      ${f.text}`);
+    console.error('');
+  }
+  console.error('Fix it by keeping the absence distinguishable — return None or raise, and');
+  console.error('report the metric by name instead of substituting a falsy default.');
+  process.exit(1);
 }
 
 console.error(`\n${findings.length} negative assertion(s) an absent field would satisfy:\n`);

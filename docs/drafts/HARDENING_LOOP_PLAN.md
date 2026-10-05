@@ -1275,43 +1275,70 @@
   聚合门禁 **27** 项 PASS、docs 16 项；两段 heredoc Python 均编译通过。
   **本批未改动任何 Java 源码**；WebUI 未改动。
 
-### Batch 899 侦察（已定案：那 16 条 standing gap 的阻塞是真的，但交接件已经补齐并验过）
+### Batch 899（已交付，测试加固：把 896 那道门禁从一种语言扩到两种，并把 806 的"理由"从假设变成实测）
 
-- 本批第一件事不是写代码，是**去试那条挂了一百多批的假设**。
-- **假设**（806 写在 `gate-registry.mjs` 里）：改 `.github/workflows/` 需要带
-  `workflow` scope 的 OAuth token，`gh` 不可用，所以摘出补丁等人工。
-- **实测**：远端是 HTTPS（`https://github.com/wubuku/spring-ai-rag.git`），
-  `gh` **已安装**（`/usr/local/bin/gh`）但**未登录**。提交 CI 改动后推送，原样得到：
-  ```
-  ! [remote rejected] batch-899 (refusing to allow an OAuth App to create or
-    update workflow `.github/workflows/ci.yml` without `workflow` scope)
-  ```
-  > **一条被引用了一百多批的"理由"，原来是假设；本批把它变成了带原话证据的实测。**
-- **`/tmp/b806-ci-gates.patch` 已经不存在了**——`/tmp` 被清过，
-  那条待办**按原样已无法执行**。所以"重新生成"本身就是必须做的一步。
-- **第一版交接件是**不完整**的，这是本批最有用的一条发现**：
-  只把 CI 步骤加进 `ci.yml`，`verify-gate-wiring.mjs` 立刻报 **16 条
-  `stale-ci-reason`**——CI 一旦真的跑到这些门禁，那 16 行豁免就过期了，
-  而门禁正是**设计成**要报这个的（"a stale exemption is how a debt baseline rots"）。
-  > **交接一件"让状态变好"的改动，必须把随之失效的豁免一起交出去**，
-  > 否则对方一应用就撞红，还要自己查出原因。
-- **完整交接件**：`/tmp/b899-ci-gates.patch`（219 行 / 只碰 2 个文件），
-  同一改动也留在本地分支 **`batch-899`** 上（`/tmp` 会丢，分支不会）。
-  - `.github/workflows/ci.yml`：在 `mvn test` **之后**、门控 IT **之前**插入
-    `verify-project-tests.sh` 与 `verify-project-docs.sh`——
-    `verify-test-visibility` 读的就是这条 `mvn test` 刚产出的 surefire 报告，
-    而门控 IT 会覆盖同一批报告；**放错位置它印出来的数字描述的是另一轮运行**。
-  - `scripts/gate-registry.mjs`：删掉那 16 行 `noCiReason`，并把
-    `AWAITING_CI_WORKFLOW_SCOPE` 的注释改成上面那段**实测**原话。
-- **端到端验过（实测）**：`git apply --check` 干净应用 →
-  `verify-gate-wiring` **"53 gate script(s) registered, 27 reached by CI,
-  Standing CI gaps (1)"** EXIT=0；聚合门禁 **27** 项 EXIT=0；docs **16** 项 EXIT=0；
-  验证完 `git checkout -- .` 复原，**main 保持干净**。
-- **剩下的 1 条 standing gap** 是 `verify-webui-e2e-mock.sh`，
-  理由是 `E2E_MOCK_NOT_IN_CI`——**成本取舍，不是权限问题**，所以补丁不碰它。
-- **仍然是待你处理的一件事**：需要你用带 `workflow` scope 的凭据推送（或手工应用那个补丁）。
-  在那之前，仓库级门禁在 CI 里仍然一条都没跑。
-
+- 分支：`batch-899`
+- 方向：896 留下一句"只扫 shell"的已知限制，898 又证明了它不是学术问题——
+  **只看一种语言的规则，就是关于那种语言的规则**。本批把规则扩到 Python。
+- **顺带把一个挂了一百多批的假设验掉了**：
+  - 806 在 `gate-registry.mjs` 里写下的**理由**是"改 `.github/workflows/` 需要带
+    `workflow` scope 的 OAuth token，`gh` 不可用"，摘出补丁等人工。**那是假设。**
+  - 实测：远端是 HTTPS，`gh` **已安装但未登录**；提交 CI 改动推送后原样返回
+    ```
+    ! [remote rejected] batch-899 (refusing to allow an OAuth App to create or
+      update workflow `.github/workflows/ci.yml` without `workflow` scope)
+    ```
+    阻塞是真的。而 `/tmp/b806-ci-gates.patch` **已经不存在**——`/tmp` 被清过，
+    那条待办**按原样已无法执行**，所以"重新生成"本身就是必须做的一步。
+  - **最有价值的一条发现不在代码里**：第一版交接件**只加了 CI 步骤**，
+    一应用 `verify-gate-wiring` 就报 **16 条 `stale-ci-reason`**——
+    CI 一旦真跑到那些门禁，那 16 行豁免就过期了，而门禁正是**设计成**要报这个的。
+    > **交接一件"让状态变好"的改动，必须把随之失效的豁免一起交出去**，
+    > 否则对方一应用就撞红，还得自己查出原因。
+  - 完整交接件 **`/tmp/b899-ci-gates.patch`**（219 行 / 只碰 2 个文件：
+    `ci.yml` 与 `gate-registry.mjs`），同一改动留在本地分支 **`batch-899`**
+    ——`/tmp` 会丢，分支不会。
+  - **端到端验过（实测）**：`git apply --check` 干净应用 →
+    `verify-gate-wiring` **"53 gate script(s) registered, 27 reached by CI,
+    Standing CI gaps (1)"** EXIT=0；聚合门禁 **27** 项 EXIT=0；docs **16** 项 EXIT=0；
+    验完复原，**main 保持干净**。
+  - 剩下的 1 条 standing gap 是 `verify-webui-e2e-mock.sh`，
+    理由是成本取舍而非权限，补丁不碰它。
+- **Python 普查（实测）**：97 个 Python 源（独立 `.py` + shell 里 `<<'PY'` 的嵌入）、
+  4147 行、**88 处 falsy 兜底**，而真正会 fail-open 的**窄形状 0 处**。
+  - **绝大多数兜底是正确的**：`os.environ.get(name, "")`、`(x or [])` 都是地道写法；
+    `os.environ.get("LIMIT", 0)` 后面接的是 `if limit > 0`——
+    **"读不到"和"它是正确的"在这里不是同一个答案**。
+  - **0 处危险形状，正是这道规则能做成"门禁"而不是"基线"的原因**：
+    没有需要豁免的东西，规则就可以直接说"不许"（同 896 的结论）。
+- **规则方向又一次搞反了，是普查和自测一起抓住的**：
+  第一版把 `X not in (field or "")` 算成 fail-open，报了两条——
+  其中一条根本不是指标，是**过滤环境变量行**。而它在真实方向上是 **fail-closed**：
+  字段读不到 → `''` → 找不到 → 门禁失败。
+  > **决定方向的是断言的正负号**（和 jq 里那条一模一样）：
+  > `any(...)` 取不到字段判"没找到"→ 失败；`all(...)` 取不到字段判"这里没有"→ 放行。
+- **一条必须钉住而不是藏起来的限制**：规则是**逐行**的，
+  而 898 真正的缺陷是"上一行取默认值、下一行做比较"——**逐行规则看不见这种耦合**。
+  自测里有一条用例**专门断言它看不见**，
+  这样下一个读者遇到它时读到的是规则的性质，而不是自己踩一遍。
+- **反向对照 8 条**，其中一条观察的是"绿但不再说话"：
+  | 对照 | 结果 |
+  |---|---|
+  | P1 把 898 实测过的形状种进**真实扫描的文件** | 红 |
+  | P2 规则不再找 falsy 兜底 | 红 |
+  | P3 规则不再看比较对象（**过度拒绝方向**） | 红 |
+  | P4 把 `not in` 放回规则 | 红 |
+  | P5 遍历不再收 shell 里的 heredoc | 红 |
+  | P6 门禁不再打印 Python 普查 | **仍绿，但已经不提 Python** |
+  - P6 不是"必须变红"的对照，它说明的是：**green 不等于"说出了它检查了什么"**。
+  - 探针文件用可恢复删除清理，并**断言清理后文件确实不在了**——
+    否则它会被下一次真实扫描算进去（897 立的规矩）。
+  - 对照脚本自身也修了两次：期望正则的**大小写**导致两条正确变红被判成
+    "红得不对"（898 的 R9 同族），以及一条变异目标里嵌着 Python 需要的 `''`、
+    被 bash 吃掉。
+- **自测新增 5 条**（14 → 19），门禁输出里多两行 Python 普查。
+- **验收**：反向对照 8/8、还原逐字节一致、自测 19/19、门禁 EXIT=0、
+  聚合门禁 **27** 项、docs **16** 项。**本批未改动任何 Java 源码**；WebUI 未改动。
 ### Batch 894（已交付，测试加固：五道验收门禁的读法从没被验过，本批给它一个被验的读法）
 
 - 分支：`batch-894`
