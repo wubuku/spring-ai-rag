@@ -344,6 +344,70 @@ describe('useChatSSE', () => {
     expect(onTurnClaimed).toHaveBeenCalledWith(TEST_TURN_ID);
   });
 
+  // Batch 921. `useSSE` reads `HTTP ${status}` off a failed response and throws
+  // away everything else, but the server had already said what went wrong: on
+  // the keyed path the body carries `detail`, and Batch 920 traced exactly this
+  // shape — a provider that rejects its credential produces
+  // `INTERNAL_ERROR` with `detail: "401 - {\"code\":30014…}"`. Everything
+  // actionable was in the body; the user got five characters.
+  //
+  // `usableReason` already exists for this judgement, and its own header names
+  // the failure precisely: "the status code is not the server's reason; it is
+  // the transport, wearing a server's clothes."
+  it('surfaces the reason the server gave instead of a bare status', async () => {
+    mockFetch.mockResolvedValue({
+      ok: false,
+      status: 500,
+      headers: new Headers(),
+      json: async () => ({
+        error: 'INTERNAL_ERROR',
+        status: 500,
+        detail: '401 - {"code":30014,"message":"Token is invalid."}',
+      }),
+    });
+    const onError = vi.fn();
+    const { result } = renderHook(() => useChatSSE({ onError }));
+
+    await act(async () => {
+      result.current.send({ message: 'Why did this fail?' });
+    });
+
+    await waitFor(() => expect(onError).toHaveBeenCalledWith(
+      '401 - {"code":30014,"message":"Token is invalid."}',
+      expect.objectContaining({ status: 500 }),
+    ));
+  });
+
+  // The other direction, and the one that keeps this honest: a response whose
+  // body carries no reason must still fall back to the status. Spring's own
+  // error bodies are `{timestamp, status, error, path}` — neither `detail` nor
+  // `message` — and printing an empty reason where the status used to be would
+  // be strictly worse than what it replaced.
+  it('falls back to the status when the body carries no reason', async () => {
+    mockFetch.mockResolvedValue({
+      ok: false,
+      status: 500,
+      headers: new Headers(),
+      json: async () => ({
+        timestamp: '2026-10-05T21:42:33.223Z',
+        status: 500,
+        error: 'Internal Server Error',
+        path: '/api/v1/rag/chat/stream',
+      }),
+    });
+    const onError = vi.fn();
+    const { result } = renderHook(() => useChatSSE({ onError }));
+
+    await act(async () => {
+      result.current.send({ message: 'No reason in this one' });
+    });
+
+    await waitFor(() => expect(onError).toHaveBeenCalledWith(
+      'HTTP 500',
+      expect.objectContaining({ status: 500 }),
+    ));
+  });
+
   it('exposes the final HTTP status after a bounded idempotency conflict', async () => {
     mockFetch.mockResolvedValue({
       ok: false,

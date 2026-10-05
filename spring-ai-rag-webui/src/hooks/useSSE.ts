@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getCredentialHeaders } from '../auth/credentialStore';
+import { usableReason } from '../utils/failureReason';
 import type {
   ChatMode,
   ChatSource,
@@ -208,7 +209,7 @@ export function useChatSSE(options: UseChatSSEOptions): UseChatSSEReturn {
             if (!response.ok) {
               const retryAfter = retryAfterMs(response);
               throw new RetryableChatError(
-                `HTTP ${response.status}`,
+                await streamFailureMessage(response),
                 response.status === 409 || response.status === 429,
                 retryAfter,
                 response.status,
@@ -419,6 +420,43 @@ function retryAfterMs(response: Response): number {
   return Number.isFinite(seconds) && seconds > 0
     ? Math.ceil(seconds * 1_000)
     : 0;
+}
+
+/**
+ * What the failure is called, in the user's terms.
+ *
+ * Batch 921. The keyed stream path answers a provider failure with a real HTTP
+ * status and a body that already says what went wrong — Batch 920 traced
+ * exactly this: `INTERNAL_ERROR` with `detail: "401 - {…Token is invalid…}"`.
+ * The hook was reading `HTTP 500` off the status and discarding the rest, so
+ * the only thing a user saw for a rejected provider credential was five
+ * characters and no cause. `usableReason` is the same judgement
+ * `QueryErrorBanner` already makes, and its header names the failure exactly:
+ * "the status code is not the server's reason; it is the transport, wearing a
+ * server's clothes."
+ *
+ * Falls back to `HTTP <status>` whenever the body carries nothing usable, which
+ * is the common case for Spring's own `{timestamp, status, error, path}` bodies.
+ * A parse failure is caught rather than propagated for the same reason: a dead
+ * connection rejects, and a half-written body rejects, and neither is a reason
+ * worth replacing the status with.
+ *
+ * `detail ?? message` mirrors `api/client.ts`, so the two places that read this
+ * problem document cannot drift apart about which field carries the reason.
+ */
+async function streamFailureMessage(response: Response): Promise<string> {
+  const fallback = `HTTP ${response.status}`;
+  let payload: { detail?: unknown; message?: unknown } | null = null;
+  try {
+    payload = await response.json();
+  } catch {
+    return fallback;
+  }
+  const carried =
+    typeof payload?.detail === 'string' ? payload.detail
+      : typeof payload?.message === 'string' ? payload.message
+      : undefined;
+  return usableReason(carried) || fallback;
 }
 
 function asUuid(value: string | null | undefined): string | undefined {
