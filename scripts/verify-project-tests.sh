@@ -329,6 +329,24 @@ node scripts/verify-flyway-version-pinning.mjs || {
 }
 pass "Flyway version pinning"
 
+# Batch 924. The capability protocol version had seven copies in shell scripts
+# and two of them had already drifted to a value the server does not publish —
+# in the worst case an assertion that no report could satisfy, which is why
+# `verify-business-client-readiness.sh` had never completed in this work tree.
+# The self-test feeds the rule the pre-fix text of all four scripts, because a
+# rule that has only ever seen a clean tree is not evidence of anything.
+node scripts/test-support/capability-protocol-pinning-self-test.mjs || {
+  echo "Capability protocol-pinning self-test failed; the gate may be missing the shape it exists for." >&2
+  exit 1
+}
+pass "Capability protocol-pinning self-test"
+
+node scripts/verify-capability-protocol-pinning.mjs || {
+  echo "Capability protocol-pinning check failed." >&2
+  exit 1
+}
+pass "Capability protocol pinning"
+
 # Batch 901. Every automated gate in this repository is required to carry a
 # self-test, and that requirement is discharged by importing the module and
 # calling its functions — which means it cannot see a gate that never runs.

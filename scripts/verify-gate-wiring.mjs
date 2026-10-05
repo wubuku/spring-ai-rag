@@ -220,7 +220,10 @@ export function checkWiring({ gateScripts, registry, fileExists, isExecutable, e
     //
     // `kind: 'gate'` is deliberately exempt. Those are run as
     // `node scripts/verify-*.mjs`, where the kernel's exec bit is never
-    // consulted, and all 29 of them are 100644 on purpose. So is `manual`:
+    // consulted, and every one of them is 100644 on purpose — deliberately,
+    // which is why the number is not written down here: it was stale by one
+    // before Batch 924 added a gate, and a count in prose is the one shape
+    // nothing here recomputes. So is `manual`:
     // those are run through `bash <path>` against a live system. The
     // distinction the rule draws is not "has a shebang" — two sourced
     // libraries in `scripts/lib/` have shebangs and are 100644 correctly —

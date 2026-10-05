@@ -4,6 +4,28 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+# Batch 924: the capability contract's identity is defined once, in one place.
+# This script required `"1.0"` from the same endpoint whose live value the
+# server-side catalog defines as the contract version, and its last run was
+# 2026-08-20.
+source scripts/lib/business-client-capability.sh
+
+# Batch 924. The phase label and the summary this script writes both said
+# "flyway-v51" / "V1–V51" while the tree was at V59 — the summary is the artifact
+# somebody reads after a run, so a stale number there is a claim about the world,
+# not a label. Computed the way three sibling scripts already compute it.
+LATEST_FLYWAY_MIGRATION="$(
+  find spring-ai-rag-core/src/main/resources/db/migration \
+    -maxdepth 1 -type f -name 'V*__*.sql' -exec basename {} \; \
+    | sed -nE 's/^V([0-9]+)__.*[.]sql$/\1/p' \
+    | sort -n \
+    | tail -1
+)"
+[[ -n "$LATEST_FLYWAY_MIGRATION" ]] || {
+  echo "no Flyway migrations found; refusing to label the run" >&2
+  exit 1
+}
+
 RUN_ID="${DOCUMENT_SYNC_RUNS_VERIFY_RUN_ID:-$(date +%Y%m%d-%H%M%S)}"
 LOG_DIR="${DOCUMENT_SYNC_RUNS_VERIFY_LOG_DIR:-.verification/document-sync-runs/${RUN_ID}}"
 BACKEND_PORT="${DOCUMENT_SYNC_RUNS_VERIFY_BACKEND_PORT:-4187}"
@@ -208,7 +230,8 @@ start_backend() {
 
 run_http_acceptance() {
   DOCUMENT_SYNC_RUNS_VERIFY_ROOT_KEY="$ROOT_KEY" \
-    python3 - "$BACKEND_PORT" "$RUN_ID" "$LOG_DIR/http-acceptance.json" <<'PY'
+    python3 - "$BACKEND_PORT" "$RUN_ID" "$LOG_DIR/http-acceptance.json" \
+      "$INTEGRATION_CAPABILITY_CONTRACT_VERSION" <<'PY'
 import json
 import os
 import secrets
@@ -217,7 +240,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-port, run_id, evidence_path = sys.argv[1:]
+port, run_id, evidence_path, contract_protocol_version = sys.argv[1:]
 base = f"http://127.0.0.1:{port}/api/v1/rag"
 root_key = os.environ["DOCUMENT_SYNC_RUNS_VERIFY_ROOT_KEY"]
 
@@ -310,7 +333,10 @@ capabilities, capability_headers = request(
     "/integration-capabilities",
     api_key=reader_key,
     capture_headers=True)
-assert capabilities["protocol"]["version"] == "1.0"
+assert capabilities["protocol"]["version"] == contract_protocol_version, (
+    "capability protocol drifted from the shared contract: %r != %r"
+    % (capabilities["protocol"]["version"], contract_protocol_version)
+)
 assert capabilities["features"]["optional"]["documentSyncRuns"] is True
 assert capabilities["features"]["optional"][
     "documentSyncRunItemReceipts"] is True
@@ -728,7 +754,7 @@ load_local_env
 prepare_database
 log_step "disposable-postgresql"
 start_backend
-log_step "spring-boot-with-flyway-v51"
+log_step "spring-boot-with-flyway-v${LATEST_FLYWAY_MIGRATION}"
 run_http_acceptance
 log_step "sync-run-http-contract"
 ./scripts/verify-no-pessimistic-locks.sh >"$LOG_DIR/no-locks.log"
@@ -742,7 +768,7 @@ cat > "$LOG_DIR/summary.md" <<EOF
 - Run: \`$RUN_ID\`
 - Backend port: \`$BACKEND_PORT\`
 - Evidence: \`$LOG_DIR/http-acceptance.json\`
-- Flyway: V1–V51
+- Flyway: V1–V${LATEST_FLYWAY_MIGRATION}
 - Result: PASS
 EOF
 echo "Document Sync Run verification passed: $LOG_DIR/summary.md"
