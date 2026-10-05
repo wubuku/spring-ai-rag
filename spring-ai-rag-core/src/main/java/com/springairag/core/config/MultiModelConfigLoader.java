@@ -130,21 +130,52 @@ public class MultiModelConfigLoader {
             Path path,
             List<String> kebabErrors,
             Set<String> unknownKeys) {
+        collectKeyIssues(node, prefix, path, kebabErrors, unknownKeys, false);
+    }
+
+    /**
+     * @param dataKeys whether this node's own keys are <em>data</em> — a provider id
+     *     or a capability name — rather than schema keys. Such a key is chosen by
+     *     whoever writes the file, so it is not in {@link #KNOWN_KEYS} and checking
+     *     it there was wrong twice over. Batch 927 measured both consequences with a
+     *     real {@code .dev/models.json}: {@code models.providers.siliconflow} was
+     *     reported as an "unknown key (they are ignored)" while {@code /models} was
+     *     serving {@code siliconflow/Qwen/Qwen3.5-27B} from that very entry, and a
+     *     provider id containing a hyphen was collected into {@code kebabErrors},
+     *     which throws and refuses to start — a legal name, refused over a rule
+     *     about kebab-case <em>schema</em> keys.
+     */
+    private void collectKeyIssues(
+            JsonNode node,
+            String prefix,
+            Path path,
+            List<String> kebabErrors,
+            Set<String> unknownKeys,
+            boolean dataKeys) {
         if (node.isObject()) {
             node.fields().forEachRemaining(entry -> {
                 String key = entry.getKey();
                 String childPath = prefix.isEmpty() ? key : prefix + "." + key;
-                if (key.contains("-")) {
-                    kebabErrors.add(childPath + " (did you mean '"
-                            + kebabToCamel(key) + "'?)");
-                } else if (!KNOWN_KEYS.contains(key)) {
-                    unknownKeys.add(childPath);
+                if (!dataKeys) {
+                    if (key.contains("-")) {
+                        kebabErrors.add(childPath + " (did you mean '"
+                                + kebabToCamel(key) + "'?)");
+                    } else if (!KNOWN_KEYS.contains(key)) {
+                        unknownKeys.add(childPath);
+                    }
                 }
-                collectKeyIssues(entry.getValue(), childPath, path, kebabErrors, unknownKeys);
+                // `providers` and `legacyCapabilities` are keyed by whatever the
+                // author called the provider or the capability, so *their* keys are
+                // data. Their values are ordinary schema objects again.
+                boolean childKeysAreData = "providers".equals(key)
+                        || "legacyCapabilities".equals(key);
+                collectKeyIssues(
+                        entry.getValue(), childPath, path, kebabErrors, unknownKeys,
+                        childKeysAreData);
             });
         } else if (node.isArray()) {
             for (JsonNode item : node) {
-                collectKeyIssues(item, prefix + "[]", path, kebabErrors, unknownKeys);
+                collectKeyIssues(item, prefix + "[]", path, kebabErrors, unknownKeys, false);
             }
         }
     }
