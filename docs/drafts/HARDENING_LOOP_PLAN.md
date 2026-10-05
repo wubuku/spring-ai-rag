@@ -1726,7 +1726,53 @@
   四道门禁 EXIT=0、两个被改指向的自测 12/12 与 27/27、
   WebUI `lint` 全链 EXIT=0 / **946** 用例 / `hardcoded-copy` **50** 用例、
   聚合门禁 **29 → 30** 项、docs **16** 项。**本批未改动任何 Java 源码。**
-### Batch 916（进行中，一个 25 分钟的验收跑出了一个"什么都没说"的失败——而追这个失败的时候我错了两次）
+### Batch 917（进行中，一个忘设的环境变量是怎么被静默翻译成"模型可用"的——以及 916 留下的那个 500 被缩小到了 controller 之外）
+
+- 分支：`batch-917`
+- 起点：916 把 `available` 的语义钉住了，但**没有解释为什么那个模型是坏的**。
+  本批去解释它。
+- **根因（实测链，逐环都有证据）**：
+  | 环 | 证据 |
+  |---|---|
+  | `.dev/models.json` 里 `apiKey: "${SILICONFLOW_API_KEY}"`，`chatModel.primary` 正是它，`toolCalling: true` | 直接读文件 |
+  | `.env` 里**没有** `SILICONFLOW_API_KEY` | `grep -c SILICONFLOW .env` = **0** |
+  | `.dev/models.json` 由 `MultiModelConfigLoader` 直接读 JSON，**不经过 Spring binder** | 查配置来源 |
+  | `ConfiguredChatModelFactory.resolveApiKey` 用的是 `environment.resolvePlaceholders`（**非** `resolveRequiredPlaceholders`），对解析不到的占位符**原样保留** | `ConfiguredChatModelFactory.java:265` |
+  | 于是字面量非空 → `unavailableReason` 的 `isBlank()` 放行 → `available: true` → WebUI 列出 → 脚本选中 → 第一次调用带着 `${SILICONFLOW_API_KEY}` 当凭据 → 401 | 反向对照直接证明（见下） |
+- **这是一个产品缺陷，不只是配置事故**：操作者忘设一个环境变量，
+  系统回给他的是"模型可用"，而不是"变量没解析出来"。**一次疏忽被静默翻译成了可用性**。
+  修法不是探活（那意味着每次列模型真打一次 provider），是把"没解析出来的占位符"
+  认成**没配置**，并且**说出是哪个变量**：
+  `unavailableReason` 增加 `provider API key placeholder ${X} was not resolved`。
+  回显的是变量**名**，永远不是值。
+- **反向对照给了本批最干净的一条证据**：把修复还原，`resolve()` **真的构造并交出了
+  一个 `OpenAiChatModel`**（不是返回一个壳），10 条用例跑、**只有新增那条红**，
+  另外 9 条保持绿——包括 916 那条"key 非空即可用"，两者不打架。
+  > **判据必须是 `${...}` 而不是"含 `$`"。** 所以配了一条反向形状的用例：
+  > `sk-live-$ecret` 仍然是密钥、仍然可用。把精确的修复写成过度拦截是同一种错。
+- **我自己踩了两个坑，都记下来**：
+  1. 第一次做反向对照时用 `if (false) { … }` 包住整块，**编译不过**。
+     > **编译错误不是测量结果。** 第二次直接还原到修复前的备份再跑，才算数。
+  2. 跑完对照我用了 `git checkout <file>` 想"撤销变异"，**那恢复的是索引里的版本，
+     也就是修复之前的版本——等于把修复本身也一起撤销了**。
+     这不是 revert，是丢改动。改完发现 diff 少了一块才察觉，重做了三处编辑。
+     （没有用 stash、没有 reset --hard，符合 AGENTS.md；但这条纪律要补：
+     **在一条正在被验证的改动上，`git checkout <file>` 的语义要先想清楚。**）
+- **916 留下的那个 500：缩小了，没有解释完，但不写成结论**。
+  916 实测出流内失败是 200 + error 帧；本批又实测了另一种写法——
+  **服务在订阅之前同步抛出**（理论上能一路冒到 `GlobalExceptionHandler` 并改写状态码）。
+  结果是**两种写法的状态码与响应体逐字相同**，都是 200 + error 帧。
+  > 于是 controller 可以从嫌疑里划掉：**它对 provider 失败不可能产出非 2xx**，
+  > 无论失败以哪种写法到达。剩下没解释的 500 只可能在 controller 之外——
+  > Vite 开发代理，或 controller 之前的过滤器链。
+  这条以 `aSynchronousThrowTakesTheSameSurfaceAsAnErroredFlux` 钉住。
+  **下一步是一次开着栈的复现**（本地 Postgres 在跑），不是继续读代码。
+- **文档**：两份 `rest-api` 各补一段——`available` 之外，
+  明确"**没解析掉的占位符**会被认成没配置并说出变量名"，以及"带 `$` 的密钥不受影响"。
+- **仍未处理（记录，不在本批范围）**：`ChatModelRouter.java:289` 把 **legacy** provider 的
+  `available` 硬编码成 `true`，**一个检查都没有**。本批这条是 configured 路径上的，
+  legacy 那条形状不同、修法也不同，留着。
+
 
 - 分支：`batch-916`
 - 起点：915 结束时唯一没解释的现象是 `chat-real.spec.ts` 的失败。本批只做一件事——

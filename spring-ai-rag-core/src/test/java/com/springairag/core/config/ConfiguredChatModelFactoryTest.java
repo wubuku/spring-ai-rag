@@ -113,6 +113,60 @@ class ConfiguredChatModelFactoryTest {
         assertFalse(descriptor.toMap().containsKey("unavailableReason"));
     }
 
+    /**
+     * Batch 917：没被解析掉的 {@code ${VAR}} 占位符不是密钥。
+     *
+     * <p>这条复现的是 2026-10-05 一次真实 provider 验收的根因。
+     * {@code .dev/models.json} 由 {@code MultiModelConfigLoader} 直接读 JSON，
+     * <strong>不经过 Spring 的 binder</strong>，所以 {@code apiKey: "${SILICONFLOW_API_KEY}"}
+     * 原样进到工厂里；而 {@code Environment.resolvePlaceholders} 对解析不到的
+     * 占位符是<strong>原样保留</strong>的，它非空，于是
+     * {@code unavailableReason} 里那句 {@code isBlank()} 放它过关，模型被报成
+     * {@code available: true}，WebUI 把它列进下拉框，验收脚本选了它——
+     * 而该变量当时根本没在 {@code .env} 里设过。第一次调用带着字面量
+     * {@code ${SILICONFLOW_API_KEY}} 当凭据发出去，provider 回 401。
+     *
+     * <p>修法不是探活（那意味着每次列模型都真打一次 provider），是把
+     * "没解析出来的占位符"认成<strong>没配置</strong>，并且把变量名说出来。
+     */
+    @Test
+    void unresolvedPlaceholderApiKey_isNotAvailableAndTheReasonNamesTheVariable() {
+        MultiModelProperties properties = properties(
+                "siliconflow",
+                provider("https://api.siliconflow.cn", "${SILICONFLOW_API_KEY}",
+                        "openai-chat", true,
+                        model("Qwen/Qwen3.5-27B", false, 8192)));
+        // 变量刻意不存在：这正是"没过 binder 的配置文件" arriving 的形状。
+        ConfiguredChatModelFactory factory =
+                new ConfiguredChatModelFactory(properties, new MockEnvironment());
+
+        assertNull(factory.resolve("siliconflow/Qwen/Qwen3.5-27B"));
+        assertEquals(
+                "provider API key placeholder ${SILICONFLOW_API_KEY} was not resolved",
+                factory.getUnavailableReason("siliconflow/Qwen/Qwen3.5-27B"));
+        assertFalse(factory.listChatModels().getFirst().available());
+    }
+
+    /**
+     * 反向形状：带 {@code $} 的密钥仍然是密钥。
+     *
+     * <p>判据必须是 {@code ${...}} 而不是"含美元符号"——后者会把一批合法密钥
+     * 误判成没配置，把一次精确的修复变成一次过度拦截。
+     */
+    @Test
+    void aKeyThatMerelyContainsADollarSign_isStillReportedAvailable() {
+        MultiModelProperties properties = properties(
+                "openrouter",
+                provider("https://openrouter.ai/api", "sk-live-$ecret",
+                        "openai-chat", true,
+                        model("model-a", false, 1024)));
+        ConfiguredChatModelFactory factory =
+                new ConfiguredChatModelFactory(properties, new MockEnvironment());
+
+        assertTrue(factory.listChatModels().getFirst().available());
+        assertNull(factory.getUnavailableReason("openrouter/model-a"));
+    }
+
     @Test
     void unsupportedApiType_isNotAvailable() {
         MultiModelProperties properties = properties(

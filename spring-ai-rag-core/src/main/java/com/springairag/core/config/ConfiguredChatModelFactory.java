@@ -20,6 +20,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Creates and caches one ChatModel instance per configured provider/model reference.
@@ -29,6 +31,14 @@ public class ConfiguredChatModelFactory {
 
     private static final Logger log = LoggerFactory.getLogger(ConfiguredChatModelFactory.class);
     private static final double DEFAULT_TEMPERATURE = 0.7;
+
+    /**
+     * 一个没能被解析掉的占位符。
+     *
+     * <p>写成 {@code ${...}} 而不是 {@code $VAR}：Spring 的占位符语法就是
+     * 花括号形式，而 {@code $VAR} 是一个合法的密钥字符串，不该被当成缺配置。
+     */
+    private static final Pattern UNRESOLVED_PLACEHOLDER = Pattern.compile("\\$\\{[^}]*}");
 
     private final MultiModelProperties properties;
     private final Environment environment;
@@ -244,8 +254,27 @@ public class ConfiguredChatModelFactory {
                 && selection.model().maxTokens() <= 0) {
             return "invalid model maxTokens";
         }
-        if (resolveApiKey(provider.apiKey()).isBlank()) {
+        String apiKey = resolveApiKey(provider.apiKey());
+        if (apiKey.isBlank()) {
             return "provider API key is not configured";
+        }
+        Matcher unresolved = UNRESOLVED_PLACEHOLDER.matcher(apiKey);
+        if (unresolved.find()) {
+            // Batch 917. A config file that did not come through Spring's binder
+            // — `.dev/models.json` and anything else MultiModelConfigLoader
+            // reads — can carry `${NAME}` straight into this factory, and
+            // `Environment.resolvePlaceholders` leaves a placeholder it cannot
+            // resolve **as written**. It is non-blank, so the check above waves
+            // it through, the model is advertised as `available`, the WebUI
+            // lists it, and the first call goes out with the literal text
+            // `${SOME_KEY}` as the credential — which the provider answers with
+            // 401. One forgotten environment variable therefore became
+            // "available", and the operator only finds out by reading an
+            // authentication error from a provider they did not know was being
+            // used. Naming the placeholder turns that into a list-time reason.
+            // The text echoed is the variable *name*, never a value.
+            return "provider API key placeholder " + unresolved.group()
+                    + " was not resolved";
         }
         return null;
     }
