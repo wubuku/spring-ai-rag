@@ -3189,7 +3189,19 @@ context limits are positive, and its API key resolves to a non-blank string.
 or revoked credential is indistinguishable here from a working one. Probing
 liveness would mean a real provider call per model on every list request, so
 this is deliberate; treat `available` as "configured" and let the first real
-request be the thing that finds out. Pinned by
+request be the thing that finds out.
+
+One case *is* detected at list time: a **placeholder that was never
+resolved**. A provider config file that does not come through Spring's binder
+(for example `.dev/models.json`, read by `MultiModelConfigLoader`) can carry
+`"apiKey": "${SOME_KEY}"` verbatim, and `Environment.resolvePlaceholders` leaves
+a placeholder it cannot resolve as written — non-blank, so a blank check waves
+it through. Such a provider is reported `available: false` with
+`unavailableReason: "provider API key placeholder ${SOME_KEY} was not
+resolved"`, naming the variable rather than sending the literal text to the
+provider as a credential. Pinned by
+`ConfiguredChatModelFactoryTest#unresolvedPlaceholderApiKey_isNotAvailableAndTheReasonNamesTheVariable`.
+A key that merely contains `$` is still a key and is not affected. Pinned by
 `ConfiguredChatModelFactoryTest#presentApiKey_isReportedAvailableWithoutContactingTheProvider`.
 
 `capabilities.streaming` defaults to `true` when omitted for backward

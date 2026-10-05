@@ -2844,8 +2844,21 @@ provider 已启用、`baseUrl` 非空、`apiType` 受支持、声明的上下文
 且 API key 解析成非空字符串。**被 provider 用 401 拒绝掉的密钥同样报 `available: true`**
 ——在这里，一个写错的或已吊销的凭据和一个能用的凭据没有区别。探活意味着每列一次
 模型就要真打一次 provider，所以这是有意为之：把 `available` 当成"已配置"，
-让第一次真实请求去发现真相。该语义由
-`ConfiguredChatModelFactoryTest#presentApiKey_isReportedAvailableWithoutContactingTheProvider` 钉住。
+让第一次真实请求去发现真相。
+
+有一种情况在**列模型时就能认出来**：**没被解析掉的占位符**。一个不走 Spring binder
+的 provider 配置文件（例如 `MultiModelConfigLoader` 直接读的 `.dev/models.json`）可以把
+`"apiKey": "${SOME_KEY}"` 原样带进来，而 `Environment.resolvePlaceholders` 对解析不到的
+占位符是**原样保留**的——它非空，所以"是否为空"的检查会放它过关。这种 provider 会被报成
+`available: false`，并带上
+`unavailableReason: "provider API key placeholder ${SOME_KEY} was not resolved"`，
+**说出是哪个变量**，而不是把字面文本当凭据发给 provider。
+
+只是**含有** `$` 的密钥仍然是密钥，不受影响。
+
+该行为由
+`ConfiguredChatModelFactoryTest#unresolvedPlaceholderApiKey_isNotAvailableAndTheReasonNamesTheVariable`
+与 `#presentApiKey_isReportedAvailableWithoutContactingTheProvider` 钉住。
 
 省略 `capabilities.streaming` 时为兼容旧配置默认按 `true` 处理。
 `capabilities.toolCalling` 默认 `false`，只有在具体上游模型/端点验证支持后才应显式

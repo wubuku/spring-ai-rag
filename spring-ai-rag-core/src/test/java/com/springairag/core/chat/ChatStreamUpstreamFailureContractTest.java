@@ -135,4 +135,40 @@ class ChatStreamUpstreamFailureContractTest {
         assertTrue(body.contains("event:error"),
                 () -> "no error event in:\n" + body);
     }
+
+    /**
+     * 同步抛出与"返回一个报错的 Flux"是<strong>同一个</strong>表面。
+     *
+     * <p>这一条是 2026-10-05 那个悬案的收窄。浏览器当时拿到的是一个 HTTP 500，
+     * 而上面两条说明流内失败一律是 200 + error 帧。剩下的可能是"服务在
+     * <strong>被订阅之前</strong>就抛了"，那种情况下异常会一路冒到
+     * {@code GlobalExceptionHandler}，理论上能改写状态码——实测不是：
+     * 两种写法的 {@code startStatus}、{@code finalStatus} 和响应体**逐字相同**。
+     *
+     * <p>所以这条断言的作用是把 controller 从嫌疑里划掉：它对 provider 失败
+     * 不可能产出非 2xx，<strong>无论失败以哪种写法到达</strong>。剩下没解释的
+     * 那个 500 只可能在 controller 之外（代理，或 controller 之前的过滤器）。
+     */
+    @Test
+    void aSynchronousThrowTakesTheSameSurfaceAsAnErroredFlux() throws Exception {
+        RagException failure =
+                new RagException(ErrorCode.UNAUTHORIZED, "provider rejected the key");
+        when(ragChatService.chatEvents(any(ChatRequest.class), any(), isNull()))
+                .thenThrow(failure);
+        MvcResult started = mockMvc.perform(post("/rag/chat/stream")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"message": "问题", "sessionId": "session-1"}
+                                """))
+                .andReturn();
+        MvcResult result = mockMvc.perform(asyncDispatch(started)).andReturn();
+        String body = body(result);
+
+        assertEquals(200, result.getResponse().getStatus(),
+                () -> "a synchronous throw must not bypass the error frame:\n" + body);
+        assertTrue(body.contains("event:error"),
+                () -> "no error event in:\n" + body);
+        assertTrue(body.contains("\"code\":\"UNAUTHORIZED\""),
+                () -> "error event does not carry a machine-readable code:\n" + body);
+    }
 }
