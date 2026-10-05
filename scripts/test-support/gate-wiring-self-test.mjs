@@ -34,7 +34,7 @@ import {
   VIOLATION_KINDS,
 } from '../verify-gate-wiring.mjs';
 import { GATES } from '../gate-registry.mjs';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, existsSync, chmodSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -43,8 +43,12 @@ const cases = [];
 const test = (title, fn) => cases.push({ title, fn });
 
 /** Minimal repository: the two script directories, the CI workflow, the
- *  runners, and whatever files a case supplies. */
-function withTree(files, fn) {
+ *  runners, and whatever files a case supplies.
+ *
+ *  `modes` overrides the file mode per path; the default is 0o755 for every
+ *  fixture script, so only a case that is specifically about the executable
+ *  bit has to think about it. */
+function withTree(files, fn, { modes = {} } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'gate-wiring-'));
   try {
     mkdirSync(join(root, 'scripts'), { recursive: true });
@@ -68,6 +72,12 @@ function withTree(files, fn) {
       const full = join(root, path);
       mkdirSync(dirname(full), { recursive: true });
       writeFileSync(full, content);
+      // chmod, not writeFileSync's `mode`, because the latter is filtered by the
+      // process umask and this file needs the bit it asks for. Every fixture
+      // script is executable by default so that a case testing an unrelated rule
+      // does not also trip the executable-bit rule; a case that wants the bit
+      // missing passes `modes`.
+      chmodSync(full, modes[path] ?? 0o755);
     }
     return fn(root);
   } finally {
@@ -116,6 +126,15 @@ function audit(root, registry) {
     // gate does not have. Both spellings of an absolute path now behave the
     // same way they do in `main()`.
     fileExists: (path) => existsSync(path.startsWith('/') ? path : join(root, path)),
+    // The same stat the production gate does, over the same fixture tree, so
+    // the cases below exercise the mode rather than a stubbed answer to it.
+    isExecutable: (path) => {
+      try {
+        return (statSync(path.startsWith('/') ? path : join(root, path)).mode & 0o111) !== 0;
+      } catch {
+        return false;
+      }
+    },
     executedBy,
     ciReached: resolveCiReachability(gateScripts, runnerTexts),
     docText: collectDocText(root),
@@ -454,6 +473,92 @@ test('a manual script owes nothing beyond being registered', () => {
     const violations = audit(root, [{ gate: 'scripts/verify-chat-capability.sh', kind: 'manual' }]);
     assert.deepEqual(violations, []);
   });
+});
+
+test('reports an entry point committed without the executable bit', () => {
+  // The Batch 913 finding, verbatim: `verify-webui-e2e-mock.sh` shipped as
+  // 100644 while its three sibling entry points shipped as 100755, and every
+  // other property this file checks about it was correct. The documented
+  // invocation is `./scripts/verify-webui-e2e-mock.sh`, and that answers
+  // `Permission denied` and exit 126.
+  const files = { 'scripts/verify-project-docs.sh': '' };
+  withTree(
+    files,
+    (root) => {
+      const violations = audit(root, [
+        {
+          gate: 'scripts/verify-project-docs.sh',
+          kind: 'entrypoint',
+          noSelfTestReason: 'x',
+          noCiReason: 'not yet wired',
+        },
+      ]);
+      assert.deepEqual(kinds(violations), [VIOLATION_KINDS.NON_EXECUTABLE_ENTRYPOINT]);
+      assert.match(violations[0].detail, /needs the executable bit/);
+      assert.match(violations[0].detail, /exit 126/);
+    },
+    { modes: { 'scripts/verify-project-docs.sh': 0o644 } },
+  );
+});
+
+test('any execute bit satisfies the rule, and the default fixture shape is clean', () => {
+  // 744 is as runnable as 755 for its owner and is not this gate's business, so
+  // the rule asks "can the kernel exec this" rather than "is it 755".
+  const files = { 'scripts/verify-project-docs.sh': '' };
+  withTree(
+    files,
+    (root) => {
+      const violations = audit(root, [
+        {
+          gate: 'scripts/verify-project-docs.sh',
+          kind: 'entrypoint',
+          noSelfTestReason: 'x',
+          noCiReason: 'not yet wired',
+        },
+      ]);
+      assert.deepEqual(violations, []);
+    },
+    { modes: { 'scripts/verify-project-docs.sh': 0o744 } },
+  );
+});
+
+test('an automated gate and a manual script are not asked for the executable bit', () => {
+  // Both kinds are 100644 in this repository on purpose: automated gates are
+  // run as `node scripts/verify-*.mjs`, where the kernel's exec bit is never
+  // consulted, and manual scripts are run as `bash <path>` against a live
+  // system. Two sourced libraries under scripts/lib/ also carry shebangs at
+  // 100644, so "has a shebang" would have been the wrong test.
+  const files = {
+    'scripts/verify-alpha.mjs': '',
+    'scripts/verify-chat-capability.sh': '',
+  };
+  withTree(
+    files,
+    (root) => {
+      const violations = audit(root, [
+        {
+          gate: 'scripts/verify-alpha.mjs',
+          kind: 'gate',
+          selfTest: 'scripts/verify-alpha.mjs',
+          noCiReason: 'x',
+        },
+        { gate: 'scripts/verify-chat-capability.sh', kind: 'manual' },
+      ]);
+      // `verify-alpha.mjs` is orphan as well — nothing in this fixture's CI file
+      // runs it — and that belongs to a different rule. This case is about the
+      // bit, so it asks only about the bit.
+      assert.equal(
+        kinds(violations).includes(VIOLATION_KINDS.NON_EXECUTABLE_ENTRYPOINT),
+        false,
+      );
+    },
+    {
+      modes: {
+        'scripts/verify-alpha.mjs': 0o644,
+        'scripts/verify-chat-capability.sh': 0o644,
+      },
+    },
+  );
 });
 
 test('an entrypoint is exempt from the orphan rule but not from the CI decision', () => {

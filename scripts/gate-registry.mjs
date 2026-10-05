@@ -81,7 +81,8 @@ export const AWAITING_CI_WORKFLOW_SCOPE =
   '应用后跑 verify-gate-wiring.mjs 并删掉它列出的过期 noCiReason。';
 
 export const E2E_MOCK_NOT_IN_CI =
-  '前端 e2e mock 套件（15 spec / 93 用例）单次约 2.6 分钟，刻意不挂在秒级门禁链上；' +
+  '前端 e2e mock 套件（15 spec / 93 用例）单次约 2.4 分钟' +
+  '（Batch 913 实测 93/93 全过，2 分 22 秒），刻意不挂在秒级门禁链上；' +
   '是否进 CI 属于尚未拍板的成本取舍。';
 
 /**
@@ -314,7 +315,7 @@ export const GATES = [
     kind: 'entrypoint',
     noSelfTestReason:
       '它跑的是 Playwright 套件本身（15 spec / 93 用例即其自测），' +
-      '再套一层自测只会把 2.6 分钟变 5.2 分钟。',
+      '再套一层自测只会把 2.4 分钟变成 4.8 分钟。',
     noCiReason: E2E_MOCK_NOT_IN_CI,
   },
 
