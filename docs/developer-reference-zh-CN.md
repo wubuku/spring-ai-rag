@@ -107,7 +107,9 @@ skipped；本门禁则保证今后再有类"闭嘴"就会失败。
 | `verify-external-db-safety.mjs` | 接受调用方指定库名却直接 `flyway.clean()` 的套件 | `test-support/external-db-safety-self-test.mjs` | tests 链 |
 | `verify-e2e-run-paths.mjs` | 没有任何脚本能运行的 Playwright spec | `test-support/e2e-reachability-self-test.mjs` | tests 链 |
 | `verify-slo-endpoint-coverage.mjs` | 配了阈值却已不存在的端点；跨 controller 重名的 timer | `test-support/slo-endpoint-coverage-self-test.mjs` | tests 链 |
-| `verify-gate-wiring.mjs` | 未登记、无自测、无人执行、CI 到不了的自动化门禁 | `test-support/gate-wiring-self-test.mjs` | tests 链 |
+| `verify-gate-wiring.mjs` | 未登记、无自测、无人执行、CI 到不了的自动化门禁；Batch 900 起还包括**理由里指向不存在路径**的 standing gap。这一条是别处都抓不到的形状：registry 本来就校验它那些机器可读的路径字段，而 standing gap 是这个仓库里**只有一个人能填的洞**，所以死指针不会报错，它只是意味着永远没人能填。当时 16 条理由全都指向 `/tmp/b806-ci-gates.patch`，而那个文件已经没了。token 必须含斜杠才算路径，所以裸脚本名不会被拿去跟猜出来的目录比；还必须含点或以斜杠结尾，所以 `text/plain` 和 `2026/10/05` 是散文。两条限制都由自测钉住，本仓库自己的理由可解析也钉住了 | `test-support/gate-wiring-self-test.mjs` | tests 链 |
+| `scripts/lib/python-assertion-check.mjs` | `verify-json-assertions.mjs` 的 Python 那一半——在 Batch 899 之前这条规则只读 shell。Batch 898 早已在 Python 里找到同一个缺陷，而且是在唯一职责就是抓回归的那道门禁里；它被发现只是因为有人读了一遍那个脚本，这正是"只读一种语言"的实际含义。报出这样一行：falsy 兜底喂给了一个另一边同样 falsy 的比较——这是"读不到"和"本来就对"给出同一个答案的唯一形状。加门禁之前先普查：97 个源 / 4147 行 / 88 处 falsy 兜底，**危险窄形状 0 处**——所以它是门禁而不是基线。`not in (field or "")` 故意不算：它是 fail closed | `test-support/json-assertions-self-test.mjs` | tests 链 |
+| `scripts/lib/reason-pointer-check.mjs` | 从 `noCiReason` 里提出路径形状的 token，好让 `verify-gate-wiring.mjs` 逐个拿去磁盘上核对。单独拆出来是因为"什么算路径"本身是一个判断——第一版把 registry 里每个路径形状的 token 都解析了一遍，报出 6 个不存在的，其中 4 个是正则常量、1 个是 Batch 809 故意删掉的脚本——而这个判断值得自己拥有用例，而不是塞在一个 350 行的检查器里 | `test-support/gate-wiring-self-test.mjs` | tests 链 |
 | `verify-test-expectations.mjs` | 断言为空的 `@Test`，覆盖测试变成空转的所有形态。**方法体为空**（或只有注释）每次运行都记为**通过**，虚增通过数却不证明任何东西。**`private` 或 `static`** 则 JUnit 5 根本不运行，而且这是更安静的一种：它在报告里既不记通过也不记跳过，**就是不出现**，构建照常变绿而用例数悄悄变少（Batch 887）。第二条判据从声明**正上方逐行**取注解，而不是从"两个声明之间的窗口"取——那个窗口以上一个声明的**参数表**为界，于是私有 helper 会继承它前面那条测试的 `@Test`（真实树实测 743 个这样的 helper）。两条判据的可靠性都取决于底下的解析器，而它错过两次。一是 body 提取会跳过字符串字面量、**却不跳过注释**：注释里 `caller's` 的撇号被当成字符串定界符，扫描一路找不着的配对引号就跑了出去，于是**跨 14 个文件的 18 个真实 `@Test` 方法连 body 都没取到**——两条判据都看不见它们，里面要是有空 body 的就会一路绿灯（Batch 888）。二是它把 `new ClientFixture(...)`、以及**每一条控制流语句**都当成方法声明——`if` 块没有返回类型可吃，落在名字位置上的就是 Java 关键字，**12150 个"声明"里有 579 个是语句或匿名类**（Batch 890），每一个都贡献了一段被当成方法体的块。现在先跳注释再谈引号；名字是语句关键字、或者返回类型槽写着 `return`/`new`（匿名类的写法）的，都不算声明。**拒绝是刻意做窄的**：匹配起点不动，因为一动就会漂移空 body 判据依赖的 gap 窗口——887 已经在那条路上弄坏过一次。还有文本块：三个连续引号既是文本块、也是普通扫描会一次吃两个的字符串定界符，于是载荷被当成代码，**`MultiModelConfigLoaderTest` 里有 9 个方法体在自己的 JSON 样例中间就被截断**，`EvaluationSuiteDefinitionCaseValidationTest` 里另有 2 个文本块括号根本不配平。886 当初判定"无害"，那个推理本身没错——body 只喂给"是否为空"，而读长的 body 只会更容易判成非空——**但数据是错的，关于一个错值被拿去做什么的结论，不构成把它留着的理由**。现在文本块是一个整体，而且识别排在普通字符串之前，块里的括号留在数据侧。已知漏报：折行的注解若闭合行之前括号数未配平则认不出，方向是只漏不误报 | `test-support/inert-test-self-test.mjs` | tests 链 |
 | `verify-null-request-forwarding.mjs` | 把 `null` 转发进 `HttpServletRequest` 参数位的重载——**要么是字面量，要么是一个被声明为"可能为 null 的 `HttpServletRequest`"的局部变量**；而 `ChatPrincipal.from(null)` 与 `ApiKeyCollectionAccess.isUnrestricted(null)` **双双 fail-open**。Batch 883 修了扫描器三处漏检：带 `throws` 的签名、缩进深于四空格的声明（内部类）、以及**行注释里的 glob 把块注释规则带进真实代码**（`// … assets/**` 曾让 `WebUiConfig` 的整个 `webuiCatchAll` 方法对门禁隐身）。**已知抓不到**：Java 文本块（`"""`）内部不单独建模，方向是只漏不误报 | `test-support/null-request-forwarding-self-test.mjs` | tests 链 |
 | `verify-false-optional-wiring.mjs` | 用 `@Autowired(required = false)` 注入、又被 `if (x == null)` 守卫的协作者，而它对应的 bean 是**无条件**的 `@Service`/`@Component`——也就是那条被守卫的分支在运行中的应用里根本走不到——除非字段上写了 `// optional-claim: <理由>`。扫描面是 `*Controller.java` + `*Service.java`（Batch 829 起）；"会抛"与"会跳过"都算声明，区别只在处置：会抛的删，会跳过的登记理由。理由不足八个字符的**自己就是一条发现**（`weak-optional-claim`，Batch 882）——与前端两个门禁的 `weak-allow-reason` 同一套房规，因为这个放行阀豁免的是一句关于部署形态的断言，不是一个样式选择 | `test-support/false-optional-wiring-self-test.mjs` | tests 链 |
@@ -217,8 +219,10 @@ all(.[];
 一个 `psql` + `grep` 的门禁对它是隐形的。
 
 CI 现状：仓库级的那两个入口（`verify-project-docs.sh` / `verify-project-tests.sh`）
-**尚未接入 CI**——Batch 806 因 OAuth `workflow` scope 限制摘出，待人工应用
-`/tmp/b806-ci-gates.patch`。WebUI 的 9 个检查连同它们的自测已经在 CI 里跑（`ci.yml` 的
+**尚未接入 CI**——编辑 `.github/workflows/` 需要带 `workflow` scope 的凭据
+（Batch 899 推送实测被远端拒绝），交接件在仓库内 `.github/pending/ci-repo-gates.patch`
+待人工应用。理由里点名的每个路径都会被 `verify-gate-wiring.mjs` 在磁盘上核对，
+所以这个指针不会像它在 `/tmp` 的前身那样腐烂。WebUI 的 9 个检查连同它们的自测已经在 CI 里跑（`ci.yml` 的
 webui job 执行 `npm run lint`）。普查门禁每次运行都会把这份缺口连同理由打印出来，
 补丁落地后对应行会变成 "stale" 而报错，提示删掉过期理由——**这是有意的**：
 过期的豁免正是债务基线腐烂的方式。

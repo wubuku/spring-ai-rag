@@ -34,7 +34,7 @@ import {
   VIOLATION_KINDS,
 } from '../verify-gate-wiring.mjs';
 import { GATES } from '../gate-registry.mjs';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -108,7 +108,14 @@ function audit(root, registry) {
   return checkWiring({
     gateScripts,
     registry,
-    fileExists: (path) => read(path) !== undefined,
+    // This was `read(path) !== undefined`, which answers "is this a readable
+    // file" rather than the "does this path exist" the production gate asks
+    // with existsSync. A reason that names a directory — `.github/workflows/`,
+    // which is exactly what the CI reason does — came back dead in the fixture
+    // and alive in production, so the self-test was exercising a contract the
+    // gate does not have. Both spellings of an absolute path now behave the
+    // same way they do in `main()`.
+    fileExists: (path) => existsSync(path.startsWith('/') ? path : join(root, path)),
     executedBy,
     ciReached: resolveCiReachability(gateScripts, runnerTexts),
     docText: collectDocText(root),
@@ -333,6 +340,108 @@ test('a noCiReason that outlived its blocker is reported as stale', () => {
       },
     ]);
     assert.deepEqual(kinds(violations), [VIOLATION_KINDS.STALE_CI_REASON]);
+  });
+});
+
+// Batch 900. The aggregate is on disk and reachable, so these fixtures register
+// both entries: leaving the entrypoint unregistered would add an
+// `unregistered-gate` and bury the rule actually under test.
+const REACHED_TREE = {
+  'scripts/verify-alpha.mjs': '',
+  'scripts/verify-project-tests.sh': 'node scripts/verify-alpha.mjs\n',
+};
+const registryWithReason = (reason) => [
+  { gate: 'scripts/verify-alpha.mjs', kind: 'gate', noSelfTestReason: 'x', noCiReason: reason },
+  {
+    gate: 'scripts/verify-project-tests.sh',
+    kind: 'entrypoint',
+    noSelfTestReason: 'x',
+    noCiReason: '由人按需在本地运行。',
+  },
+];
+
+test('a reason that hands over a path nobody can open is reported', () => {
+  // All sixteen standing gaps pointed at /tmp/b806-ci-gates.patch, which is
+  // gone. Nothing failed: the gate passed, printed the reason on every run, and
+  // the reason led nowhere. This is the only hole in the repository with exactly
+  // one person who can close it, so a dead pointer in it does not announce
+  // itself — it just means nobody ever can.
+  withTree(REACHED_TREE, (root) => {
+    const violations = audit(
+      root,
+      registryWithReason('待人工应用 .github/pending/ci-repo-gates.patch'),
+    );
+    assert.deepEqual(kinds(violations), [VIOLATION_KINDS.DEAD_REASON_POINTER]);
+    assert.match(violations[0].detail, /ci-repo-gates\.patch/, violations[0].detail);
+  });
+});
+
+test('a reason whose path resolves is not reported', () => {
+  withTree(
+    { ...REACHED_TREE, '.github/pending/ci-repo-gates.patch': 'a patch\n' },
+    (root) => {
+      const violations = audit(
+        root,
+        registryWithReason('待人工应用 .github/pending/ci-repo-gates.patch'),
+      );
+      assert.deepEqual(violations, [], JSON.stringify(violations, null, 2));
+    },
+  );
+});
+
+test('a reason that names no path is not reported', () => {
+  // The cost decision that remains after the CI wiring lands, and the shape of
+  // most reasons: there is no artifact to hand over, so there is nothing to
+  // check. Requiring one would be inventing a requirement nobody has.
+  withTree(REACHED_TREE, (root) => {
+    const violations = audit(
+      root,
+      registryWithReason('单次约 2.6 分钟，刻意不挂在秒级门禁链上。'),
+    );
+    assert.deepEqual(violations, [], JSON.stringify(violations, null, 2));
+  });
+});
+
+test('a bare script name in a reason is not treated as a path', () => {
+  // The limit, pinned. `verify-gate-winding.mjs` names a real script and lives
+  // in no directory as far as this rule is concerned: resolving it would mean
+  // guessing `scripts/`, and a rule that guesses is a rule that misreports. A
+  // reader meets this as a property of the rule instead of filing the bug the
+  // day a reason points at a directory the rule cannot see.
+  withTree(REACHED_TREE, (root) => {
+    const violations = audit(
+      root,
+      registryWithReason('应用后跑 verify-gate-wiring.mjs 并删掉它列出的过期项。'),
+    );
+    assert.deepEqual(violations, [], JSON.stringify(violations, null, 2));
+  });
+});
+
+test('prose that merely looks path-shaped is not a path', () => {
+  // `text/plain` and `2026/10/05` both match a naive path pattern, and neither
+  // is a file. The census that chose this rule's shape hit exactly that: a
+  // first draft resolved every path-shaped token and reported sixty-one
+  // "missing" ones, of which four were regex constants and one was a script
+  // Batch 809 deleted on purpose.
+  withTree(REACHED_TREE, (root) => {
+    const violations = audit(
+      root,
+      registryWithReason('MIME 类型是 text/plain，见 2026/10/05 的记录。'),
+    );
+    assert.deepEqual(violations, [], JSON.stringify(violations, null, 2));
+  });
+});
+
+test('an absolute path in a reason is resolved as absolute', () => {
+  // `join(root, '/tmp/x.patch')` yields `root/tmp/x.patch`, so resolving an
+  // absolute token against the repository root would report a file that is
+  // sitting right there as dead. The other spelling must not be punished with a
+  // false report.
+  withTree(REACHED_TREE, (root) => {
+    const real = join(root, 'handoff.patch');
+    writeFileSync(real, 'a patch\n');
+    const violations = audit(root, registryWithReason(`待人工应用 ${real}`));
+    assert.deepEqual(violations, [], JSON.stringify(violations, null, 2));
   });
 });
 

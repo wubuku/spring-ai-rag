@@ -1,0 +1,66 @@
+PENDING CI HANDOFF — apply this, then delete this file.
+
+Why this file exists
+--------------------
+Sixteen repository-level gates carry a written reason for not running in CI.
+That reason used to point at `/tmp/b806-ci-gates.patch`, which no longer exists:
+the handoff was stored in a directory the operating system is free to empty, and
+it was emptied. Batch 899 measured that failure rather than assuming it, and
+Batch 900 moved the handoff here, where the repository keeps it until a human
+applies it.
+
+What is in it, and what is deliberately not
+------------------------------------------
+Only the `.github/workflows/ci.yml` steps. The other half of the change — the
+sixteen `noCiReason` lines that go stale the moment CI reaches those gates — is
+**not** in here on purpose, because the repository already knows how to find
+them. `scripts/verify-gate-wiring.mjs` reports each one as
+`[stale-ci-reason]`, naming the gate, precisely so that hand-maintained list
+does not have to exist.
+
+How to apply
+------------
+    git apply .github/pending/ci-repo-gates.patch
+    ./scripts/verify-gate-wiring.mjs          # names the stale exemptions
+    # delete the noCiReason line for each gate it lists, in scripts/gate-registry.mjs
+    rm .github/pending/ci-repo-gates.patch    # this file has served its purpose
+
+After the `noCiReason` lines are gone, one standing gap remains by decision
+rather than by permission: `scripts/verify-webui-e2e-mock.sh`, whose cost is
+recorded in `E2E_MOCK_NOT_IN_CI`.
+
+Why not just push this
+----------------------
+Editing `.github/workflows/` needs a token with the `workflow` scope. Batch 899
+pushed it and the remote answered, verbatim:
+
+    refusing to allow an OAuth App to create or update workflow
+    .github/workflows/ci.yml without workflow scope
+
+`gh` is installed here (2.78.0, at /usr/local/bin/gh) and simply not logged in,
+so a human with credentials can do this in one command — the older claim that
+the CLI was unavailable was false, and has been removed from the registry.
+
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -77,6 +77,20 @@ jobs:
+       - name: Build & Test with JaCoCo
+         run: mvn test -B
+
++      # Batch 899. Between Batch 768 and 806 not one `scripts/verify-*.sh` ran in
++      # CI, and every repository-level gate has carried a written reason for it
++      # ever since. This step is the one that retires those reasons.
++      #
++      # It sits here and not later: verify-test-visibility reconciles the surefire
++      # reports this job's `mvn test` just produced, and the gated integration
++      # suites below overwrite those same reports. Anywhere after that and the
++      # numbers it prints describe a different run.
++      - name: Repository gate chain (test expectations, visibility, wiring, inert tests)
++        run: ./scripts/verify-project-tests.sh
++
++      - name: Documentation and i18n integrity
++        run: ./scripts/verify-project-docs.sh
++
+       - name: Gated PostgreSQL integration tests (database-only suites)
+         env:
+           TESTCONTAINERS_RYUK_DISABLED: 'true'
