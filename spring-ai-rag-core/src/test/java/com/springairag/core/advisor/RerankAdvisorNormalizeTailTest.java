@@ -9,14 +9,18 @@ import com.springairag.core.retrieval.ReRankingService;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.MessageType;
+import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
 
 import java.util.Arrays;
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
@@ -28,6 +32,12 @@ import static org.mockito.Mockito.when;
  * setSystemContextPrefix 自定义前缀注入、setMaxResults 生效、
  * MiniMax 适配器（不支持 system 角色）下系统消息归一为 user、
  * 空指令短路。
+ *
+ * <p>Batch 908：本文件原有两处恒真断言（{@code assertTrue(true)} 与
+ * {@code !hasAssistantRole || true}）。第二处特别值得记：它把「assistant 角色
+ * 不应残留」这句话挂在一个永远为真的表达式上，而本文件与 RerankAdvisor 的注释
+ * 声明的都是 system → user。**恒真断言不只是没验东西——它会让旁边那句
+ * 写错的说明文字一直看不出来。**
  */
 class RerankAdvisorNormalizeTailTest {
 
@@ -79,7 +89,7 @@ class RerankAdvisorNormalizeTailTest {
     }
 
     @Test
-    void miniMaxAdapterConvertsSystemToUserMessages() {
+    void miniMaxAdapterConvertsSystemToUserAndKeepsAssistant() {
         ReRankingService reranking = mock(ReRankingService.class);
         when(reranking.rerank(eq("什么是 Spring"), anyList(), eq(5)))
                 .thenReturn(List.of(result("doc-1", "Spring Boot 框架", 0.9)));
@@ -96,6 +106,7 @@ class RerankAdvisorNormalizeTailTest {
                 "https://api.example.com");
 
         Prompt multiRolePrompt = new Prompt(
+                new SystemMessage("你是 RAG 助手"),
                 new UserMessage("什么是 Spring"),
                 new AssistantMessage("之前的回答"));
         ChatClientRequest request = ChatClientRequest.builder()
@@ -105,11 +116,28 @@ class RerankAdvisorNormalizeTailTest {
                 .build();
 
         ChatClientRequest result = advisor.before(request, null);
+        List<Message> instructions = result.prompt().getInstructions();
 
-        boolean hasAssistantRole = result.prompt().getInstructions().stream()
-                .anyMatch(m -> m.getMessageType() == MessageType.ASSISTANT);
-        assertTrue(!hasAssistantRole || true,
-                "MiniMax 归一化后 assistant 角色不应残留");
+        // 契约一：MiniMax 不接受 role=system，归一化后不得残留 system 角色。
+        assertFalse(
+                instructions.stream()
+                        .anyMatch(m -> m.getMessageType() == MessageType.SYSTEM),
+                "MiniMax 归一化后不得残留 system 角色");
+        // 契约二：system 内容降级成 user，并带上适配器约定的 [System] 前缀。
+        assertTrue(
+                instructions.stream()
+                        .anyMatch(m -> m.getMessageType() == MessageType.USER
+                                && m.getText().contains("[System] 你是 RAG 助手")),
+                "system 内容应降级为带 [System] 前缀的 user 消息");
+        // 契约三：assistant 角色不在降级范围内，必须原样保留。
+        // 原来的断言写成 `!hasAssistantRole || true`，顶层 || true 让它永远为真，
+        // 于是这条契约从来没有被验过；而那句说明文字本身也是错的——
+        // 本文件与 RerankAdvisor 的注释声明的都是 system → user，不是去掉 assistant。
+        assertTrue(
+                instructions.stream()
+                        .anyMatch(m -> m.getMessageType() == MessageType.ASSISTANT
+                                && m.getText().contains("之前的回答")),
+                "assistant 角色不在降级范围内，应原样保留");
     }
 
     @Test
@@ -156,8 +184,11 @@ class RerankAdvisorNormalizeTailTest {
     @Test
     void setSystemContextPrefixAndMaxResultsDoNotThrow() {
         var advisor = advisor(openAiAdapter(), null, 5);
-        advisor.setSystemContextPrefix("新前缀");
-        advisor.setMaxResults(8);
-        assertTrue(true);
+        // 用例名字承诺的是「设置这两个属性不抛异常」，那就把它写成断言；
+        // 原来的 assertTrue(true) 什么都不验，删掉它等于删掉一条零信息量的断言。
+        assertDoesNotThrow(() -> {
+            advisor.setSystemContextPrefix("新前缀");
+            advisor.setMaxResults(8);
+        });
     }
 }

@@ -216,6 +216,25 @@ export const GATES = [
     noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
   },
 
+  // Batch 908. A test assertion that cannot fail is worse than no assertion,
+  // because it reads as coverage. Five existed; one of them carried a Chinese
+  // failure message claiming the assistant role must not survive MiniMax
+  // normalisation, while the file's own javadoc and the production code both
+  // declare that the transformation is system → user. The tautology is what
+  // kept the wrong sentence from being noticed.
+  //
+  // The rule deliberately stops short of `assertEquals(x, x)`, which the census
+  // found eight times. JUnit resolves those through `equals`, so a broken
+  // equals() or an unstable hashCode() fails them. Including them would have
+  // meant an allowlist for a shape that is not the defect — and an allowlist is
+  // a list of things the checker does not look at.
+  {
+    gate: 'scripts/verify-tautological-assertions.mjs',
+    kind: 'gate',
+    selfTest: 'scripts/test-support/tautological-assertions-self-test.mjs',
+    noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
+  },
+
   // Batch 820. A collaborator injected with @Autowired(required = false) claims
   // it may be absent; this rejects that claim when the bean is an unconditional
   // @Service and the field has no `// optional-claim:` reason. Twelve such

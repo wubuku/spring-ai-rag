@@ -16,7 +16,6 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.Mockito.mock;
@@ -135,6 +134,7 @@ class PdfImportControllerTreeTailTest {
         assertEquals(200, response.getStatusCode().value());
         var body = (org.springframework.http.ResponseEntity<?>) response;
         assertTrue(body.getStatusCode().is2xxSuccessful());
-        assertNull(null);
+        // 这里原本还有一条 assertNull(null)：无论被测代码怎么写它都会过，
+        // 不含任何信息量，已删除。上面两条已经断住这条用例真正要断的东西。
     }
 }

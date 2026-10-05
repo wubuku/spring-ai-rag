@@ -1726,6 +1726,65 @@
   四道门禁 EXIT=0、两个被改指向的自测 12/12 与 27/27、
   WebUI `lint` 全链 EXIT=0 / **946** 用例 / `hardcoded-copy` **50** 用例、
   聚合门禁 **29 → 30** 项、docs **16** 项。**本批未改动任何 Java 源码。**
+### Batch 908（已交付，测试加固：一条恒真断言不只什么都没验——它还把旁边那句写错的说明文字藏住了）
+
+- 分支：`batch-908`
+- 方向：继续 Java 测试本身（用户优先级 #1）。挑的问题是**不需要理解 Java 语义就能问**的：
+  有没有断言无论被测代码怎么写都会通过。
+- **侦察走了两轮，两轮的普查标签都先错了一次**：
+  | 普查 | 命中 | 真缺陷 | 为什么误报 |
+  |---|---|---|---|
+  | 字面量自反（`assertTrue(true)` 等） | 8 | **3** | 其中 5 处是 `assertEquals(x, x)`：JUnit 走 `equals()` 解析，手写 `equals` 或不稳定的 `hashCode` 都能让它变红，**它是契约检查不是恒真** |
+  | 断言实参里的恒真/恒假算子 | 5 | **2** | `x == false` 是普通断言；`a == false \|\| b.isEmpty()` 是合法析取 |
+
+  > **一个模式的名字不是它的语义。** 这和 907 的
+  > `completeOpenAiRejectsNullSourceElement` 是同一个错：断言看起来在断一件事，
+  > 实际断的是另一件。**普查的名字必须晚于它的判读，不能早于。**
+- **真正的规则是「顶层」两个字，这一步是靠逐条读判出来的**：
+  - `assertTrue(!hasAssistantRole || true)` —— 真恒真
+  - `assertTrue((boolean) allowed.invoke(x) == false || true)` —— **也是**真恒真，
+    尽管你读到的第一个运算符是 `==` 而不是 `||`
+  - 所以判据是：**第一个实参里未被括号包住的 `\|\|` 右侧是 `true`、或 `&&` 右侧是 `false`**。
+    顺带补了「剥掉包裹整式的括号」，否则 `assertTrue((!x || true))` 差一个括号就漏。
+- **最响的一处，挖出来的不是"没断言"，是"旁边那句说明是错的"**：
+  `RerankAdvisorNormalizeTailTest` 原本写着
+
+      assertTrue(!hasAssistantRole || true, "MiniMax 归一化后 assistant 角色不应残留");
+
+  而**同一个文件的类 javadoc** 与 **`RerankAdvisor` 的方法注释**声明的都是
+  `system → user`（MiniMax 不支持 `role=system`），assistant 根本不在降级范围内，
+  代码里 `case "assistant" -> new AssistantMessage(...)` 是刻意保留的。
+  把 `|| true` 去掉换成 `assertFalse` 之后**当场变红**——恒真一直在替那句错话挡枪。
+  现在这条用例断的是代码真正声明的三条契约：无 system 残留、
+  system 内容降级成带 `[System] ` 前缀的 user、assistant 原样保留。
+  > **恒真断言不只是没验东西——它是让旁边的错误保持不可见的那个东西。**
+- **实修 5 处**：2 条 `assertTrue(true)` → `assertDoesNotThrow`（用例名字承诺的就是"不抛"）、
+  1 条 `assertNull(null)` 删除（同一用例上面两条真断言已经断住它要断的东西）、
+  2 条顶层 `|| true`（1 条改成真断言，1 条下面两行已有等价 `assertFalse`，纯冗余故删）。
+- **变异 3/3 变红**：改 `MiniMaxAdapter.supportsSystemMessage`（新契约一失败）、
+  让 `ChatTurnOperationService.release(null)` 抛（新 no-op 断言失败）、
+  让 `RerankAdvisor.setMaxResults` 抛（`assertDoesNotThrow` 失败）。三条各自归属清晰。
+- **门禁 `verify-tautological-assertions`**（30 → **32** 项）：两条规则**都没有正确实例**，
+  所以**不需要 allowlist**。作用域刻意只到 `*/src/test/java/**`——
+  本仓库门禁自测在 `scripts/test-support/` 里**故意**含有坏形状，
+  扫到那里要么满屏误报、要么就得开目录豁免，而目录豁免正是这条规则不需要的 allowlist。
+- **自测是自包含的**（904 的教训）：夹具写到临时树、只 import 扫描器，不复制门禁。
+  首跑就抓到**我自己写错的期望值**（漏了 `assertTrue(true)`、断言数写成 21 实际 20）。
+  > 自测抓到的是我的算术，不是规则的 bug——但**它照样是有用的**：
+  > 一个把期望值写错却照样通过的自测，比没有自测更坏。
+- **反向对照 4/4**，其中一条是**必须保持绿**的：
+  把 `assertTrue("|| true".equals(label))` 注入真实测试文件，门禁必须 EXIT=0。
+  > 只测"会红"的门禁，和只测"能拒绝"的函数，是同一种半成品。
+- **另外两条侦察线，如实记账，都不进本批**：
+  - **宽 catch 重包装 RagException**：生产代码 187 处宽捕获，其中 **15 处**块内抛 RagException。
+    逐条读下来 **14 处**都有 `catch (RagException e) { throw e; }` 前置守卫且语义自洽，
+    只有 `ChatTurnOperationService.stableSnapshot` 一处把内部不变量
+    （"响应不能为 null"）报成 `IDEMPOTENCY_RESPONSE_TOO_LARGE`。**改它要选错误码，是契约决定**，
+    已列入待拍板；为此做门禁就必须开 allowlist，所以不做。
+  - **"静默吞掉异常"**：第一版谓词报出 **75 处**，但这个标签是错的——
+    绝大多数都**做了事**（返回失败结果、抛领域异常、记诊断）。真正值得读的只有
+    **4 个空 catch 块**，逐个读完**全部带注释说明为何可以吞掉，0 个真缺陷**。
+    > **量出 75 的数字不该被当成 75 个问题**（903 的教训，本批第二次撞上）。
 ### Batch 907（已交付，测试加固：把 906 剩下的 22 处逐个跑出真实异常类型——结果推翻了我自己写进账本的一条分类）
 
 - 分支：`batch-907`
