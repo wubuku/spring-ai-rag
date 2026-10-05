@@ -29,6 +29,22 @@
 // Known limitation, measured by `scripts/test-support/json-assertions-self-test.mjs`:
 // shell only. A .mjs file embedding a jq program in a template literal would be
 // invisible here.
+//
+// Batch 898 found out why that limitation is not academic. The same defect — a
+// comparison satisfied by a value the reader could not obtain — was sitting in
+// `scripts/run-retrieval-regression.sh`, in Python, in the one gate whose whole
+// job is catching a quality regression:
+//
+//     previous = float(baseline_metrics.get(name, 0.0))
+//
+// A metric the committed baseline happened not to carry was judged against zero
+// and so could never regress: measured, an ndcg drop from 1.0 to 0.70 was
+// reported with a complete baseline and silently passed with one that had lost
+// the key. Those three readers now live in scripts/lib/retrieval_baseline.py and
+// are run by scripts/test-support/retrieval-baseline-self-test.mjs — but they
+// are covered by a self-test, not by this gate. **A rule that looks at one
+// language is a rule about that language**, and teaching this scanner another
+// one is still open work.
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { scan } from './lib/json-assertion-check.mjs';

@@ -98,6 +98,7 @@ fi
 
 mkdir -p "$OUTPUT_DIR"
 
+RAG_RETRIEVAL_LIB="$(cd "$(dirname "$0")" && pwd)/lib" \
 python3 - \
   "$BASE_URL" \
   "$DATASET_FILE" \
@@ -110,12 +111,25 @@ python3 - \
 import datetime
 import json
 import math
+import os
 import pathlib
 import sys
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
+
+# Batch 898: the readers moved into scripts/lib so that a self-test can run
+# them without a backend, an API key and a dataset. See the module docstring for
+# the measured failure each one had.
+sys.path.insert(0, os.environ["RAG_RETRIEVAL_LIB"])
+from retrieval_baseline import (  # noqa: E402
+    check_minimum,
+    compare_aggregate,
+    format_metric,
+    metric_at_k,
+    metrics_unreadable,
+)
 
 (
     base_url,
@@ -172,23 +186,6 @@ def request(method, path, body=None, timeout=180):
 
 def identity(value):
     return f"{value['collectionKey']}::{value['externalId']}"
-
-
-def metric_at_k(value, k):
-    if isinstance(value, dict):
-        return float(value.get(str(k), value.get(k, 0.0)) or 0.0)
-    return float(value or 0.0)
-
-
-def check_minimum(case_id, metrics, minimum):
-    failures = []
-    for name, expected in (minimum or {}).items():
-        actual = float(metrics.get(name, 0.0))
-        if actual + 1e-9 < float(expected):
-            failures.append(
-                f"{case_id}: {name}={actual:.6f} < {float(expected):.6f}"
-            )
-    return failures
 
 
 def embedding_is_ready(response):
@@ -359,16 +356,19 @@ for case in dataset["cases"]:
             },
         )
         metrics = {
-            "precisionAtK": metric_at_k(
-                evaluation.get("precisionAtK"), k
-            ),
-            "recallAtK": metric_at_k(
-                evaluation.get("recallAtK"), k
-            ),
-            "mrr": float(evaluation.get("mrr") or 0.0),
-            "ndcg": float(evaluation.get("ndcg") or 0.0),
-            "hitRate": float(evaluation.get("hitRate") or 0.0),
+            name: metric_at_k(evaluation.get(name), k)
+            for name in ("precisionAtK", "recallAtK", "mrr", "ndcg", "hitRate")
         }
+        unreadable = metrics_unreadable(metrics)
+        if unreadable:
+            # A metric the run did not supply is not a metric of zero. Excluded
+            # from the aggregate as well, so a fabricated 0.0 cannot drag the
+            # mean down and then be compared against the baseline as if it had
+            # been measured.
+            failures.append(
+                f"{case['id']}: the run supplied no value for "
+                f"{', '.join(unreadable)}, so this case cannot be judged"
+            )
         failures.extend(
             check_minimum(case["id"], metrics, case.get("minimum"))
         )
@@ -392,21 +392,31 @@ for case in dataset["cases"]:
         "retrievedIdentities": retrieved_identities,
         "latencyMs": latency_ms,
         "metrics": metrics,
+        "metricsReadable": not unreadable,
         "expectedEmpty": expected_empty,
     })
     print(
         f"CASE {case['id']}: hits={len(retrieved_ids)} "
-        f"mrr={metrics['mrr']:.4f} recall@{k}={metrics['recallAtK']:.4f} "
-        f"ndcg={metrics['ndcg']:.4f} latencyMs={latency_ms:.1f}"
+        f"mrr={format_metric(metrics['mrr'])} "
+        f"recall@{k}={format_metric(metrics['recallAtK'])} "
+        f"ndcg={format_metric(metrics['ndcg'])} latencyMs={latency_ms:.1f}"
     )
 
 metric_cases = [
-    item for item in case_results if not item["expectedEmpty"]
+    item for item in case_results
+    if not item["expectedEmpty"] and item["metricsReadable"]
 ]
+if not metric_cases:
+    failures.append(
+        "no case produced a complete set of metrics, so there is nothing to "
+        "compare against the baseline"
+    )
 aggregate = {
     name: sum(item["metrics"][name] for item in metric_cases)
     / len(metric_cases)
     for name in ("precisionAtK", "recallAtK", "mrr", "ndcg", "hitRate")
+} if metric_cases else {
+    name: None for name in ("precisionAtK", "recallAtK", "mrr", "ndcg", "hitRate")
 }
 failures.extend(
     check_minimum(
@@ -420,16 +430,9 @@ if baseline is not None:
         or int(baseline.get("version", -1)) != int(dataset["version"])
     ):
         failures.append("baseline dataset/version does not match")
-    baseline_metrics = baseline.get("aggregate", {})
-    tolerances = dataset.get("maximumRegression", {})
-    for name, tolerance in tolerances.items():
-        previous = float(baseline_metrics.get(name, 0.0))
-        actual = float(aggregate.get(name, 0.0))
-        if actual + float(tolerance) + 1e-9 < previous:
-            failures.append(
-                f"aggregate regression: {name}={actual:.6f}, "
-                f"baseline={previous:.6f}, tolerance={float(tolerance):.6f}"
-            )
+    failures.extend(compare_aggregate(
+        baseline.get("aggregate"), aggregate, dataset.get("maximumRegression", {})
+    ))
 
 artifact = {
     "dataset": dataset["dataset"],
