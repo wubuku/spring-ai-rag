@@ -122,7 +122,3 @@
 .muted {
   color: var(--color-text-muted);
 }
-
-.error {
-  color: var(--color-error-text);
-}

@@ -451,12 +451,17 @@ describe('Evaluation history, feedback and mutation failure paths', () => {
       screen.getByRole('button', { name: 'evaluation.runEvaluate' }),
     );
 
-    expect(
-      // Batch 858: the sentence stays, and the server's reason now rides along.
-      // Anchored so a bare key can no longer satisfy the assertion —
-      // that was exactly what hid this change behind a passing suite.
-      await screen.findByText(/^evaluation\.evaluateFailed \(boom\)$/),
-    ).toBeInTheDocument();
+    // Batch 858 的锚定写法（不能用裸 key 顶替）在 Batch 909 又补了一层：
+    // 这两条用例原先只断「文案出现在文档里」，而 evaluate/judge 这两处提示
+    // 当初是裸 <div className={styles.error}>、**连 role="alert" 都没有**——
+    // 屏幕阅读器不会念出来，而 findByText 照样绿。迁移到 QueryErrorBanner
+    // 之后角色由组件提供，这里断言的是「文案落在会被朗读的区域内」。
+    await waitFor(() => {
+      expect(
+        screen.getByText(/^evaluation\.evaluateFailed \(boom\)$/)
+          .closest('[role="alert"]'),
+      ).not.toBeNull();
+    });
   });
 
   it('shows the judge failure message when answer quality rejects', async () => {
@@ -471,12 +476,13 @@ describe('Evaluation history, feedback and mutation failure paths', () => {
     await user.type(screen.getByLabelText('evaluation.query'), 'q');
     await user.click(screen.getByRole('button', { name: 'evaluation.runJudge' }));
 
-    expect(
-      // Batch 858: the sentence stays, and the server's reason now rides along.
-      // Anchored so a bare key can no longer satisfy the assertion —
-      // that was exactly what hid this change behind a passing suite.
-      await screen.findByText(/^evaluation\.judgeFailed \(judge down\)$/),
-    ).toBeInTheDocument();
+    // 同上：judge 这条提示原先也没有 role="alert"，findByText 断不出来。
+    await waitFor(() => {
+      expect(
+        screen.getByText(/^evaluation\.judgeFailed \(judge down\)$/)
+          .closest('[role="alert"]'),
+      ).not.toBeNull();
+    });
   });
 
   it('renders citation trace placeholders for null status and outcome', async () => {

@@ -5,7 +5,7 @@ import { useSearchParams } from 'react-router-dom';
 import { evaluationApi } from '../api/evaluation';
 import { Card } from '../components/Card';
 import styles from './Evaluation.module.css';
-import { EmptyState, PageHeader, Tabs, tabDomIds } from '../components/ui';
+import { EmptyState, PageHeader, QueryErrorBanner, Tabs, tabDomIds } from '../components/ui';
 import { failureMessage } from '../utils/failureReason';
 
 type Tab = 'report' | 'history' | 'feedback' | 'judge' | 'suites' | 'runs' | 'citations';
@@ -124,9 +124,7 @@ export function Evaluation() {
             ) : reportQ.isError ? (
               // 之前这里直接落进 else：用 data ?? {} 渲染出一张全是 — 的
               // "正常"报告，看起来像真数据。失败必须自己说出来。
-              <div className={styles.error} role="alert">
-                {t('evaluation.reportLoadFailed')}
-              </div>
+              <QueryErrorBanner>{t('evaluation.reportLoadFailed')}</QueryErrorBanner>
             ) : (
               <div className={styles.cards}>
                 {cards.map(c => (
@@ -139,9 +137,7 @@ export function Evaluation() {
             )}
 
             {feedbackStatsQ.isError && (
-              <div className={styles.error} role="alert">
-                {t('evaluation.feedbackStatsLoadFailed')}
-              </div>
+              <QueryErrorBanner>{t('evaluation.feedbackStatsLoadFailed')}</QueryErrorBanner>
             )}
             {feedbackStatsQ.data && (
               <div className={styles.subSection}>
@@ -188,9 +184,9 @@ export function Evaluation() {
                   <pre className={styles.pre}>{JSON.stringify(evaluateM.data?.data, null, 2)}</pre>
                 )}
                 {evaluateM.isError && (
-                  <div className={styles.error}>
+                  <QueryErrorBanner>
                     {failureMessage(t, 'evaluation.evaluateFailed', evaluateM.error)}
-                  </div>
+                  </QueryErrorBanner>
                 )}
               </div>
             </div>
@@ -203,9 +199,7 @@ export function Evaluation() {
               <div className={styles.muted}>{t('common.loading')}</div>
             ) : historyQ.isError ? (
               // 失败时原来会显示"暂无历史记录"，把请求失败说成了没有数据。
-              <div className={styles.error} role="alert">
-                {t('evaluation.historyLoadFailed')}
-              </div>
+              <QueryErrorBanner>{t('evaluation.historyLoadFailed')}</QueryErrorBanner>
             ) : (
               <div className={styles.tableWrap}>
                 <table className={styles.table}>
@@ -243,17 +237,13 @@ export function Evaluation() {
         {tab === 'feedback' && (
           <section className={styles.section}>
             {feedbackStatsQ.isError && (
-              <div className={styles.error} role="alert">
-                {t('evaluation.feedbackStatsLoadFailed')}
-              </div>
+              <QueryErrorBanner>{t('evaluation.feedbackStatsLoadFailed')}</QueryErrorBanner>
             )}
             {feedbackStatsQ.data && (
               <pre className={styles.pre}>{JSON.stringify(feedbackStatsQ.data, null, 2)}</pre>
             )}
             {feedbackHistoryQ.isError && (
-              <div className={styles.error} role="alert">
-                {t('evaluation.feedbackHistoryLoadFailed')}
-              </div>
+              <QueryErrorBanner>{t('evaluation.feedbackHistoryLoadFailed')}</QueryErrorBanner>
             )}
             <div className={styles.tableWrap}>
               <table className={styles.table}>
@@ -319,9 +309,9 @@ export function Evaluation() {
                 <pre className={styles.pre}>{JSON.stringify(judgeM.data?.data, null, 2)}</pre>
               )}
               {judgeM.isError && (
-                <div className={styles.error}>
+                <QueryErrorBanner>
                   {failureMessage(t, 'evaluation.judgeFailed', judgeM.error)}
-                </div>
+                </QueryErrorBanner>
               )}
             </div>
           </section>
@@ -353,9 +343,7 @@ function SuitesPanel() {
   return (
     <section className={styles.section} aria-label={t('evaluation.tabSuites')}>
       {suitesQ.isError && (
-        <div className={styles.error} role="alert">
-          {t('evaluation.suitesFailed')}
-        </div>
+        <QueryErrorBanner>{t('evaluation.suitesFailed')}</QueryErrorBanner>
       )}
       <div className={styles.muted}>{t('evaluation.suitesHint')}</div>
       <ul>
@@ -383,9 +371,9 @@ function SuitesPanel() {
           {t('evaluation.createSuite')}
         </button>
         {createM.isError && (
-          <div className={styles.error} role="alert">
+          <QueryErrorBanner>
             {failureMessage(t, 'evaluation.createSuiteFailed', createM.error)}
-          </div>
+          </QueryErrorBanner>
         )}
         <label>
           {t('evaluation.definition')}
@@ -400,9 +388,9 @@ function SuitesPanel() {
           {t('evaluation.importVersion')}
         </button>
         {versionM.isError && (
-          <div className={styles.error} role="alert">
+          <QueryErrorBanner>
             {failureMessage(t, 'evaluation.importVersionFailed', versionM.error)}
-          </div>
+          </QueryErrorBanner>
         )}
       </div>
     </section>
@@ -437,9 +425,9 @@ function RunsPanel() {
           {t('evaluation.startRun')}
         </button>
         {startM.isError && (
-          <div className={styles.error} role="alert">
+          <QueryErrorBanner>
             {failureMessage(t, 'evaluation.startRunFailed', startM.error)}
-          </div>
+          </QueryErrorBanner>
         )}
         {startM.data?.data?.id && (
           <div>
@@ -451,9 +439,7 @@ function RunsPanel() {
           <input value={runId} onChange={e => setRunId(e.target.value)} />
         </label>
         {runQ.isError && (
-          <div className={styles.error} role="alert">
-            {t('evaluation.runLoadFailed')}
-          </div>
+          <QueryErrorBanner>{t('evaluation.runLoadFailed')}</QueryErrorBanner>
         )}
         {runQ.data && <pre className={styles.pre}>{JSON.stringify(runQ.data, null, 2)}</pre>}
       </div>
@@ -472,9 +458,7 @@ function CitationsPanel() {
       <p className={styles.muted}>{t('evaluation.citationsHint')}</p>
       {tracesQ.isPending && <div className={styles.muted}>{t('common.loading')}</div>}
       {tracesQ.isError && (
-        <div className={styles.error} role="alert">
-          {t('evaluation.citationsFailed')}
-        </div>
+        <QueryErrorBanner>{t('evaluation.citationsFailed')}</QueryErrorBanner>
       )}
       <div className={styles.tableWrap}>
         <table className={styles.table}>

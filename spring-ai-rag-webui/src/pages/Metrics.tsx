@@ -8,7 +8,7 @@ import type {
   UsageNumericValue,
 } from '../types/api';
 import styles from './Metrics.module.css';
-import { EmptyState, PageHeader } from '../components/ui';
+import { EmptyState, PageHeader, QueryErrorBanner } from '../components/ui';
 
 function formatInteger(value: UsageNumericValue | undefined): string {
   if (value === undefined || value === null) return '0';
@@ -216,9 +216,7 @@ export function Metrics() {
       ) : metricsQuery.isError ? (
         // 之前这里会落进 EmptyState 告诉用户"暂无数据"——把请求失败
         // 说成了没有指标。紧邻的 usageQuery 本来就处理对了，页面自相矛盾。
-        <div className={styles.error} role="alert">
-          {t('metrics.loadFailed')}
-        </div>
+        <QueryErrorBanner>{t('metrics.loadFailed')}</QueryErrorBanner>
       ) : metricsQuery.data?.data ? (
         <>
           <MetricsCharts data={metricsQuery.data.data} />
@@ -238,9 +236,7 @@ export function Metrics() {
           {t('metrics.loadingDurableUsage')}
         </div>
       ) : usageQuery.isError ? (
-        <div className={styles.error} role="alert">
-          {t('metrics.usageLoadFailed')}
-        </div>
+        <QueryErrorBanner>{t('metrics.usageLoadFailed')}</QueryErrorBanner>
       ) : usageQuery.data?.data ? (
         <DurableUsage usage={usageQuery.data.data} />
       ) : null}
