@@ -794,13 +794,19 @@ JPA flush 已经写下去的文件一并回滚。
 `spring-ai-rag-core/target/surefire-reports`，而这个脚本的产物是两者中较新的：
 `verify-test-visibility.mjs` 拿这些报告和测试源码树做**双向**对账，
 所以一个只装着 23 个门控类报告的目录，会让它报出几百个"既没跑也没跳过"的源。
-可行的顺序是：
+`scripts/verify-*.sh` 里有 **12 个**验收脚本是弄丢这些报告的第三条路——
+它们各自以 `mvn clean compile test-compile` 这样的编译门禁开头，
+而 `clean` 会把整个 `target/` 目录一起带走。可行的顺序是：
 
 ```bash
 mvn test                                  # 全量
 ./scripts/verify-gate-entry-points.mjs    # 任何读 surefire 报告的门禁
 ./scripts/verify-gated-it.sh              # 门控清单——此后报告已过期
 ```
+
+如果一个读报告的门禁报的是**根本没有 surefire 报告**，而不是计数对不上，
+那说明你的 `mvn test` 之后有东西跑过 `clean`——这和报告过期是两种不同的失败，
+自测现在会把这一点说出来。
 
 ### 路径穿越探测（不设门控 — 随默认测试跑）
 

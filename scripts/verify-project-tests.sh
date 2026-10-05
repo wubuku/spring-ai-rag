@@ -1,25 +1,52 @@
 #!/usr/bin/env bash
-# Test-visibility and integration-switch gates.
+# The repository's test-side gate chain.
 #
-# Runs after the backend suite and fails when a test class neither executed
-# nor reported itself as skipped. A class gated by `assumeTrue` inside
+# What it runs is every gate registered with `kind: "gate"` in
+# `scripts/gate-registry.mjs`, each preceded by its own self-test, and the
+# count it prints at the end is the number of checks that actually ran. This
+# header used to name two of them — "Test-visibility and integration-switch
+# gates" — and the documentation beside it said six, and the gate table said
+# the two aggregate entry points covered "the nine above". None of those
+# numbers was recomputed by anything, so all three rotted while the chain grew
+# to thirty-two. The roster now lives in the registry, and the number lives in
+# the run.
+#
+# Two of the checks are worth knowing about before you read a red one.
+#
+# `verify-test-visibility` fails when a test class neither executed nor
+# reported itself as skipped. A class gated by `assumeTrue` inside
 # `@BeforeAll` is aborted rather than skipped, so it produces
 # `tests="0" skipped="0"` — the same pair of numbers an empty class produces,
 # and therefore invisible in the run summary.
 #
-# Before this gate, 21 PostgreSQL/Testcontainers integration classes
-# (~145 test methods, including the only coverage of the API-key rotation
-# security guards) were invisible: the run reported "Skipped: 9" and read as
-# though everything were accounted for.
+# `verify-integration-test-switches` reconciles the `*.it.enabled` switches the
+# Testcontainers suites hide behind against the scripts and documents that are
+# supposed to turn them on, in both directions: a switch nothing turns on, a
+# run path no test class consumes, an empty gated suite, a runner entry that
+# has drifted, and — since Batch 912 — a gated suite that only one feature's
+# own script can run.
 #
-# The second check reconciles the `*.it.enabled` switches those classes hide
-# behind against the scripts and documents that are supposed to turn them on.
-# Gating a suite is a promise that somebody can ungate it, and Batch 790 found
-# `PdfImportPostgresIntegrationTest` — 2 test methods — whose switch appeared in
-# no script and in no document outside an archived progress note.
+# Order matters, and the reason is the reports directory. Run this directly
+# after a full `mvn test`: every check here reads
+# `spring-ai-rag-core/target/surefire-reports`, and `scripts/verify-gated-it.sh`
+# overwrites the same files. `docs/testing-guide.md` states the order.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
+
+PASS_COUNT=0
+
+# Every green line goes through here, so the count at the end cannot disagree
+# with the lines above it. Batch 914 added this after finding that this chain
+# printed thirty-two `PASS:` lines and no total, while the docs chain beside it
+# printed `16 checks passed` — and that the descriptions of this chain's own
+# scope had rotted in five places, in this file and in both languages of
+# `docs/developer-reference*.md`, because each of them named a number that
+# nothing recomputed. A printed count is derived; a commented one is a promise.
+pass() {
+  PASS_COUNT=$((PASS_COUNT + 1))
+  echo "PASS: $1"
+}
 
 if ! command -v node >/dev/null 2>&1; then
   echo "Missing required command: node" >&2
@@ -34,20 +61,20 @@ node scripts/test-support/test-visibility-self-test.mjs >/dev/null || {
   node scripts/test-support/test-visibility-self-test.mjs >&2 || true
   exit 1
 }
-echo "PASS: Test visibility self-test"
+pass "Test visibility self-test"
 
 node scripts/verify-test-visibility.mjs
-echo "PASS: Test visibility"
+pass "Test visibility"
 
 node scripts/test-support/integration-switch-self-test.mjs >/dev/null || {
   echo "Integration-switch self-test failed; the gate may no longer reject anything." >&2
   node scripts/test-support/integration-switch-self-test.mjs >&2 || true
   exit 1
 }
-echo "PASS: Integration-switch self-test"
+pass "Integration-switch self-test"
 
 node scripts/verify-integration-test-switches.mjs
-echo "PASS: Integration-test switches"
+pass "Integration-test switches"
 
 # A third question the switch reconciler cannot answer: it checks that a gated
 # suite has a run path, but not what happens to the database that run path
@@ -59,10 +86,10 @@ node scripts/test-support/external-db-safety-self-test.mjs >/dev/null || {
   node scripts/test-support/external-db-safety-self-test.mjs >&2 || true
   exit 1
 }
-echo "PASS: External-database safety self-test"
+pass "External-database safety self-test"
 
 node scripts/verify-external-db-safety.mjs
-echo "PASS: External-database safety"
+pass "External-database safety"
 
 # A fourth question: can a Playwright spec be run at all? The switch reconciler
 # says nothing about the frontend e2e suite, and Batch 804 found six of twenty
@@ -73,10 +100,10 @@ node scripts/test-support/e2e-reachability-self-test.mjs >/dev/null || {
   node scripts/test-support/e2e-reachability-self-test.mjs >&2 || true
   exit 1
 }
-echo "PASS: E2E reachability self-test"
+pass "E2E reachability self-test"
 
 node scripts/verify-e2e-run-paths.mjs
-echo "PASS: E2E reachability"
+pass "E2E reachability"
 
 # A fifth question, about observability rather than tests: a configured SLO
 # threshold whose endpoint no longer exists reports 100% compliance forever, and
@@ -87,10 +114,10 @@ node scripts/test-support/slo-endpoint-coverage-self-test.mjs >/dev/null || {
   node scripts/test-support/slo-endpoint-coverage-self-test.mjs >&2 || true
   exit 1
 }
-echo "PASS: SLO endpoint coverage self-test"
+pass "SLO endpoint coverage self-test"
 
 node scripts/verify-slo-endpoint-coverage.mjs
-echo "PASS: SLO endpoint coverage"
+pass "SLO endpoint coverage"
 
 # A sixth question, and the one that keeps the other five honest: are these
 # questions being asked at all? Batch 809 deleted `check-entity-migration-sync.sh`
@@ -106,10 +133,10 @@ node scripts/test-support/gate-wiring-self-test.mjs >/dev/null || {
   node scripts/test-support/gate-wiring-self-test.mjs >&2 || true
   exit 1
 }
-echo "PASS: Gate wiring self-test"
+pass "Gate wiring self-test"
 
 node scripts/verify-gate-wiring.mjs
-echo "PASS: Gate wiring"
+pass "Gate wiring"
 
 # A seventh question, and the one closest to the point of this whole script: of
 # the tests that ran, how many would have failed had the code under test been
@@ -123,10 +150,10 @@ node scripts/test-support/inert-test-self-test.mjs >/dev/null || {
   node scripts/test-support/inert-test-self-test.mjs >&2 || true
   exit 1
 }
-echo "PASS: Inert-test self-test"
+pass "Inert-test self-test"
 
 node scripts/verify-test-expectations.mjs
-echo "PASS: Inert-test census"
+pass "Inert-test census"
 
 # Batch 816. Every controller was surveyed for overloads that forward a literal
 # null into an HttpServletRequest position. Seventeen overloads forward a null
@@ -141,10 +168,10 @@ node scripts/test-support/null-request-forwarding-self-test.mjs >/dev/null || {
   node scripts/test-support/null-request-forwarding-self-test.mjs >&2 || true
   exit 1
 }
-echo "PASS: Null-request forwarding self-test"
+pass "Null-request forwarding self-test"
 
 node scripts/verify-null-request-forwarding.mjs
-echo "PASS: Null-request forwarding"
+pass "Null-request forwarding"
 
 # A collaborator injected with @Autowired(required = false) claims it may be
 # absent. For all twelve of them the bean is an unconditional @Service, so the
@@ -156,10 +183,10 @@ node scripts/test-support/false-optional-wiring-self-test.mjs >/dev/null || {
   node scripts/test-support/false-optional-wiring-self-test.mjs >&2 || true
   exit 1
 }
-echo "PASS: False-optional-wiring self-test"
+pass "False-optional-wiring self-test"
 
 node scripts/verify-false-optional-wiring.mjs
-echo "PASS: False-optional wiring"
+pass "False-optional wiring"
 
 # Spring injects a controller through its @Autowired constructor. A second
 # constructor is reachable only from tests, and it chooses on the caller's behalf
@@ -171,10 +198,10 @@ node scripts/test-support/controller-constructor-count-self-test.mjs >/dev/null 
   node scripts/test-support/controller-constructor-count-self-test.mjs >&2 || true
   exit 1
 }
-echo "PASS: Controller-constructor-count self-test"
+pass "Controller-constructor-count self-test"
 
 node scripts/verify-controller-constructor-count.mjs
-echo "PASS: Controller constructor count"
+pass "Controller constructor count"
 
 # Batch 873. ErrorCode calls itself the single source of truth, and six of the
 # codes the API actually returns were never declared in it — so no title or
@@ -190,10 +217,10 @@ node scripts/test-support/error-code-catalog-self-test.mjs >/dev/null || {
   node scripts/test-support/error-code-catalog-self-test.mjs >&2 || true
   exit 1
 }
-echo "PASS: Error-code-catalog self-test"
+pass "Error-code-catalog self-test"
 
 node scripts/verify-error-code-catalog.mjs
-echo "PASS: Error code catalog"
+pass "Error code catalog"
 
 # An eighth question, and the smallest surface of the lot: five acceptance gates
 # read the same four counters off a surefire report, each with its own copy of
@@ -209,7 +236,7 @@ node scripts/test-support/surefire-report-self-test.mjs >/dev/null || {
   node scripts/test-support/surefire-report-self-test.mjs >&2 || true
   exit 1
 }
-echo "PASS: Surefire-report self-test"
+pass "Surefire-report self-test"
 
 # Batch 895. `verify-managed-api-principals.sh` is a manual gate — it starts two
 # backends and four containers, so it is in the standing CI gap and nothing ever
@@ -225,7 +252,7 @@ node scripts/test-support/alert-payload-self-test.mjs >/dev/null || {
   node scripts/test-support/alert-payload-self-test.mjs >&2 || true
   exit 1
 }
-echo "PASS: Alert-payload self-test"
+pass "Alert-payload self-test"
 
 # A jq predicate that says "nothing here is wrong" must be able to tell the
 # difference between "nothing is wrong" and "I cannot see". Batch 895 found one
@@ -238,10 +265,10 @@ node scripts/test-support/json-assertions-self-test.mjs >/dev/null || {
   node scripts/test-support/json-assertions-self-test.mjs >&2 || true
   exit 1
 }
-echo "PASS: JSON-assertions self-test"
+pass "JSON-assertions self-test"
 
 node scripts/verify-json-assertions.mjs
-echo "PASS: JSON negative assertions"
+pass "JSON negative assertions"
 
 # Batch 908. A test assertion that cannot fail reads as coverage and is not.
 # Five were removed, and the loudest one was hiding a wrong sentence: the test
@@ -255,10 +282,10 @@ node scripts/test-support/tautological-assertions-self-test.mjs >/dev/null || {
   node scripts/test-support/tautological-assertions-self-test.mjs >&2 || true
   exit 1
 }
-echo "PASS: Tautological-assertions self-test"
+pass "Tautological-assertions self-test"
 
 node scripts/verify-tautological-assertions.mjs
-echo "PASS: Tautological Java test assertions"
+pass "Tautological Java test assertions"
 
 # Batch 905. Four gates read Java source and each had its own comment stripper,
 # in three behaviours. Two of them were a naive regex with no notion of a string
@@ -271,7 +298,7 @@ node scripts/test-support/java-source-self-test.mjs || {
   echo "Java-source self-test failed; the gates may be reading a mangled file." >&2
   exit 1
 }
-echo "PASS: Java-source self-test"
+pass "Java-source self-test"
 
 # Batch 901. Every automated gate in this repository is required to carry a
 # self-test, and that requirement is discharged by importing the module and
@@ -285,10 +312,10 @@ node scripts/test-support/gate-entry-points-self-test.mjs >/dev/null || {
   node scripts/test-support/gate-entry-points-self-test.mjs >&2 || true
   exit 1
 }
-echo "PASS: Gate-entry-points self-test"
+pass "Gate-entry-points self-test"
 
 node scripts/verify-gate-entry-points.mjs
-echo "PASS: Gate entry points"
+pass "Gate entry points"
 
 # Batch 898. Batch 896 made "a negative assertion must not be satisfied by a
 # value it cannot read" a gate over `scripts/**/*.sh`. This is the same defect
@@ -302,4 +329,6 @@ node scripts/test-support/retrieval-baseline-self-test.mjs >/dev/null || {
   node scripts/test-support/retrieval-baseline-self-test.mjs >&2 || true
   exit 1
 }
-echo "PASS: Retrieval-baseline self-test"
+pass "Retrieval-baseline self-test"
+
+echo "Repository gate chain: $PASS_COUNT checks passed."
