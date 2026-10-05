@@ -364,6 +364,39 @@ node scripts/verify-surefire-method-selection.mjs || {
 }
 pass "Surefire method selection"
 
+# Batch 926. A bare `npx playwright test` uses the default config, which does
+# not exclude `*-real.spec.ts`, so a preview-server run also runs the specs that
+# need a live backend. The self-test feeds the rule the pre-fix text of both
+# scripts that had it, and the variable-scoped invocation that this rule reported
+# before it learned what a variable is.
+node scripts/test-support/playwright-suite-selection-self-test.mjs || {
+  echo "Playwright suite-selection self-test failed; the gate may be missing the shape it exists for." >&2
+  exit 1
+}
+pass "Playwright suite-selection self-test"
+
+node scripts/verify-playwright-suite-selection.mjs || {
+  echo "Playwright suite-selection check failed." >&2
+  exit 1
+}
+pass "Playwright suite selection"
+
+# Batch 927. A port probe that binds a socket answers a different question than
+# the server it is probing for, and the two disagreed on this machine in a way
+# that killed `verify-release.sh`. The self-test feeds the rule the pre-fix probe
+# and the node-is-fine-for-everything-else cases a looser rule would have taken.
+node scripts/test-support/port-probe-authority-self-test.mjs || {
+  echo "Port-probe authority self-test failed; the gate may be missing the shape it exists for." >&2
+  exit 1
+}
+pass "Port-probe authority self-test"
+
+node scripts/verify-port-probe-authority.mjs || {
+  echo "Port-probe authority check failed." >&2
+  exit 1
+}
+pass "Port probe authority"
+
 # Batch 901. Every automated gate in this repository is required to carry a
 # self-test, and that requirement is discharged by importing the module and
 # calling its functions — which means it cannot see a gate that never runs.

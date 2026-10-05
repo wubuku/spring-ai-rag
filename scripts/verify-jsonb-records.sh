@@ -15,6 +15,10 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+# Batch 926: the bind-based probe answered a different question than the server
+# it was probing for. See scripts/lib/port-probe.sh.
+source scripts/lib/port-probe.sh
+
 RUN_ID="${JSONB_VERIFY_RUN_ID:-$(date +%Y%m%d-%H%M%S)}"
 # Keep logs outside Maven's target/ because the compile gate runs `mvn clean`.
 LOG_DIR="${JSONB_VERIFY_LOG_DIR:-.verification/jsonb-verification/${RUN_ID}}"
@@ -109,34 +113,6 @@ check_commands() {
       return 1
     }
   done
-}
-
-find_available_port() {
-  node - "$1" <<'NODE'
-const net = require('node:net');
-const preferred = Number(process.argv[2]);
-
-function probe(port) {
-  return new Promise((resolve) => {
-    const server = net.createServer();
-    server.once('error', () => resolve(null));
-    server.listen({ host: '127.0.0.1', port, exclusive: true }, () => {
-      const address = server.address();
-      const selected = typeof address === 'object' && address ? address.port : null;
-      server.close(() => resolve(selected));
-    });
-  });
-}
-
-(async () => {
-  const preferredPort = await probe(preferred);
-  const selected = preferredPort ?? await probe(0);
-  if (selected === null) {
-    process.exit(1);
-  }
-  process.stdout.write(String(selected));
-})();
-NODE
 }
 
 check_docker() {
@@ -273,7 +249,12 @@ webui_playwright() {
   local rc=0
   (
     cd spring-ai-rag-webui
-    BASE_URL="http://127.0.0.1:${PLAYWRIGHT_PORT}" npx playwright test
+    # Batch 926. Without this the default config has no `testIgnore`, so a
+    # `vite preview` run also ran the five `*-real.spec.ts` specs, which need a
+    # live backend and credentials: 93 passed and 5 failed on every run, for a
+    # reason nobody can act on. See spring-ai-rag-webui/playwright.hosted-preview.config.ts.
+    BASE_URL="http://127.0.0.1:${PLAYWRIGHT_PORT}" \
+      npx playwright test --config playwright.hosted-preview.config.ts
   ) || rc=$?
   cleanup_playwright_preview
   return "$rc"

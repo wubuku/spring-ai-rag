@@ -213,6 +213,38 @@ export const GATES = [
     noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
   },
 
+  // Batch 926. Seven scripts decided a port was free by *binding* a throwaway
+  // `node:net` server, which answers a different question than the server they
+  // are probing for: a Node bind to `127.0.0.1` succeeds against an IPv6
+  // wildcard listener that `vite preview` then refuses to bind. Measured on this
+  // machine — `lsof` sees `python3` on `*:4173`, the Node bind succeeds, and
+  // `verify-release.sh` passed that verdict straight to `vite preview`, which
+  // died on the port the probe had just certified free. Seven other scripts here
+  // already ask with `lsof`, which is the shape the library now holds.
+  {
+    gate: 'scripts/verify-port-probe-authority.mjs',
+    kind: 'gate',
+    selfTest: 'scripts/test-support/port-probe-authority-self-test.mjs',
+    noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
+  },
+
+  // Batch 926. `playwright.config.ts` has no `testIgnore`; the two preview
+  // configs declare `testIgnore: ['**/*-real.spec.ts']`. So the shape of the
+  // command decides whether a run swallows the five specs that need a live
+  // backend and real credentials. `verify-jsonb-records.sh` and
+  // `verify-release.sh` each start their own `vite preview` — a static server
+  // with no backend behind it — and ran a bare `npx playwright test`: 93 passed
+  // and 5 failed on every run, neither script having ever completed in this
+  // work tree. Seventeen of the nineteen invocations name their specs and are
+  // not this rule's business; naming `alerts-real.spec.ts` on purpose is the
+  // entire point of the alert acceptance run.
+  {
+    gate: 'scripts/verify-playwright-suite-selection.mjs',
+    kind: 'gate',
+    selfTest: 'scripts/test-support/playwright-suite-selection-self-test.mjs',
+    noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
+  },
+
   // Batch 925. Surefire reads `-Dtest=Class#a+b` as "run whichever of a and b
   // exist", and twenty scripts here pass
   // `-Dsurefire.failIfNoSpecifiedTests=false` — correctly, because they select
