@@ -42,6 +42,8 @@
 16. **大块特性交付**：使用专用分支并持续合并已推送的 `origin/main`；默认在当前工作区开发，只有用户明确安排多人或多任务并行时才创建隔离 worktree。合并后按固定顺序完整复验，最终把特性分支合回并推送 `main`。见 [delivery-workflow-zh-CN.md](docs/delivery-workflow-zh-CN.md) §8。
 17. **复杂功能交付**：修改代码前完成自包含规划和规划 `3/3`；实现后先过基本集成硬门槛，再做实现 `3/3`。测试证据不能由 review 或用户首次手测替代。见 [规划、实施与验收工作流](docs/delivery-workflow-zh-CN.md)。
 18. **外部 Client 边界**：把外部项目需求改写为本仓自包含的通用能力、契约和测试；跟踪代码与文档不得依赖外部项目名称、私有协议或背景知识。见 [delivery-workflow-zh-CN.md](docs/delivery-workflow-zh-CN.md) §2。
+19. **不要用破坏性 git 操作**：本仓库可能有他人的未提交 WIP。`git reset --hard` 会**删掉已暂存但未提交的文件**（Batch 900 实测踩过，`git add` 过也照样丢）；**不要 `git stash`**。要切分支重做，就 `git checkout -b` 先把当前改动提交在分支上。
+20. **删除符号链接用 `unlink`，不要 `rm`**：`rm` 会跟随链接，指向仓库根的链接会**把整个仓库删掉**。可恢复删除的保护会拦下并报错，但这属于险情不是方案（Batch 901）。同理，任何"指向仓库自身"的链接都不能留在工作区里。
 
 更全的陷阱列表：[docs/index-zh-CN.md](docs/index-zh-CN.md) §4、[docs/troubleshooting-zh-CN.md](docs/troubleshooting-zh-CN.md)。
 
