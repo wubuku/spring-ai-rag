@@ -6,7 +6,7 @@
 // batch (Batch 768's design-language document claiming "ten classes" while the
 // checker enforced eleven; Batch 790's own first draft, which used
 // `['.md', '.sh'].includes(entry.name)` and therefore walked zero files and
-// reported all 22 switches undiscoverable). Every case below therefore asserts
+// reported every switch undiscoverable). Every case below therefore asserts
 // that the checker *rejects* the shape it claims to reject, and one case
 // re-derives the `-D` anchoring bug that would otherwise pass silently.
 
@@ -56,6 +56,21 @@ ${Array.from({ length: tests }, (_, i) => `  @Test void t${i}() {}`).join('\n')}
 }
 `;
 
+/**
+ * A coherent little world: the fixture's gated class really is aggregated.
+ *
+ * Every rule-1-to-3 fixture below supplies a gated class and a run path but no
+ * aggregate runner — which, since Batch 912, is itself a violation, because a
+ * per-feature run path answers "can I run this one suite" and nothing else
+ * answers "can I run the gated inventory". Those fixtures now register the
+ * class, so each case asserts the one rule it is about and the aggregate
+ * question does not leak into it.
+ */
+const aggregated = (className, property) => ({
+  runnerSuites: [{ flag: property.replace(/\.it\.enabled$/, ''), className }],
+  gatedSuitesByClass: new Map([[className, property]]),
+});
+
 // ── 1. undiscoverable-switch ────────────────────────────────────────────────
 
 test('reports a gated suite that no run path switches on', () => {
@@ -67,7 +82,11 @@ test('reports a gated suite that no run path switches on', () => {
     dir => {
       const gated = collectGatedSuites(join(dir, 'core/src/test/java'));
       const paths = collectRunPaths(dir);
-      const violations = checkSwitches({ gatedSuites: gated, runPaths: paths });
+      const violations = checkSwitches({
+        gatedSuites: gated,
+        runPaths: paths,
+        ...aggregated('ChatIt', 'chat.it.enabled'),
+      });
       assert.equal(violations.length, 1);
       assert.equal(violations[0].kind, 'undiscoverable-switch');
       assert.match(violations[0].detail, /ChatIt \(18 test\(s\)\)/);
@@ -85,6 +104,7 @@ test('accepts the switch once a run path turns it on', () => {
       const violations = checkSwitches({
         gatedSuites: collectGatedSuites(join(dir, 'core/src/test/java')),
         runPaths: collectRunPaths(dir),
+        ...aggregated('ChatIt', 'chat.it.enabled'),
       });
       assert.deepEqual(violations, []);
     },
@@ -103,6 +123,7 @@ test('a prose mention is not a run path', () => {
       const violations = checkSwitches({
         gatedSuites: collectGatedSuites(join(dir, 'core/src/test/java')),
         runPaths: collectRunPaths(dir),
+        ...aggregated('PdfIt', 'pdf-import.it.enabled'),
       });
       assert.deepEqual(violations.map(v => v.kind), ['undiscoverable-switch']);
     },
@@ -122,6 +143,7 @@ test('an archived progress note does not count as a run path', () => {
       const violations = checkSwitches({
         gatedSuites: collectGatedSuites(join(dir, 'core/src/test/java')),
         runPaths: collectRunPaths(dir),
+        ...aggregated('PdfIt', 'pdf-import.it.enabled'),
       });
       assert.deepEqual(violations.map(v => v.kind), ['undiscoverable-switch']);
     },
@@ -160,6 +182,7 @@ test('a differently-named property does not satisfy a gated switch', () => {
       const violations = checkSwitches({
         gatedSuites: collectGatedSuites(join(dir, 'core/src/test/java')),
         runPaths: paths,
+        ...aggregated('ChatIt', 'chat.it.enabled'),
       });
       assert.deepEqual(violations.map(v => v.kind), ['undiscoverable-switch']);
     },
@@ -206,6 +229,7 @@ test('a properties-file switch counts as turned on', () => {
       const violations = checkSwitches({
         gatedSuites: collectGatedSuites(join(dir, 'core/src/test/java')),
         runPaths: collectRunPaths(dir),
+        ...aggregated('ChatIt', 'chat.it.enabled'),
       });
       assert.deepEqual(violations, []);
     },
@@ -224,6 +248,7 @@ test('reports a gated class that declares no test', () => {
       const violations = checkSwitches({
         gatedSuites: collectGatedSuites(join(dir, 'core/src/test/java')),
         runPaths: collectRunPaths(dir),
+        ...aggregated('EmptyIt', 'chat.it.enabled'),
       });
       assert.deepEqual(violations.map(v => v.kind), ['empty-gated-suite']);
     },
@@ -263,7 +288,14 @@ test('reports a runner entry whose class no longer exists', () => {
         runnerSuites: [{ flag: 'retired', className: 'DeletedPostgresIntegrationTest' }],
         gatedSuitesByClass: new Map([['ChatIt', 'chat.it.enabled']]),
       });
-      assert.deepEqual(violations.map(v => v.kind), ['gated-runner-drift']);
+      // Two kinds, and both are true. A runner entry pointing at a deleted class
+      // is how the class that *does* exist silently loses its aggregate slot, so
+      // `unaggregated-gated-suite` is the same drift seen from the other end
+      // rather than a second, independent complaint.
+      assert.deepEqual(violations.map(v => v.kind), [
+        'gated-runner-drift',
+        'unaggregated-gated-suite',
+      ]);
       assert.match(violations[0].detail, /DeletedPostgresIntegrationTest/);
     },
   );
@@ -311,7 +343,106 @@ test('reports the same class registered twice', () => {
   );
 });
 
-// ── 5. the gate against the real repository ─────────────────────────────────
+// ── 5. unaggregated-gated-suite ─────────────────────────────────────────────
+
+test('reports a gated suite the aggregate runner does not run', () => {
+  // The Batch 912 finding. Both switches here have a legitimate run path, so
+  // every pre-existing rule was satisfied; what was missing was a single
+  // command that runs the gated inventory as a whole.
+  withRepo(
+    dir => {
+      write(dir, 'core/src/test/java/p/ChatIt.java', gatedClass('chat.it.enabled', { tests: 18 }));
+      write(dir, 'core/src/test/java/p/PdfIt.java', gatedClass('pdf-import.it.enabled', { tests: 2 }));
+      write(dir, 'scripts/verify-chat.sh', 'mvn test -Dchat.it.enabled=true -Dtest=ChatIt\n');
+      write(dir, 'scripts/verify-pdf.sh', 'mvn test -Dpdf-import.it.enabled=true -Dtest=PdfIt\n');
+    },
+    dir => {
+      const violations = checkSwitches({
+        gatedSuites: collectGatedSuites(join(dir, 'core/src/test/java')),
+        runPaths: collectRunPaths(dir),
+        runnerSuites: [],
+        gatedSuitesByClass: new Map(),
+      });
+      assert.deepEqual(violations.map(v => v.kind), [
+        'unaggregated-gated-suite',
+        'unaggregated-gated-suite',
+      ]);
+      assert.match(violations[0].detail, /ChatIt is gated on chat\.it\.enabled and holds 18 test\(s\)/);
+      assert.match(violations[0].detail, /verify-gated-it\.sh does not run it/);
+    },
+  );
+});
+
+test('accepts a gated suite the aggregate runner runs', () => {
+  withRepo(
+    dir => {
+      write(dir, 'core/src/test/java/p/ChatIt.java', gatedClass('chat.it.enabled', { tests: 18 }));
+      write(dir, 'scripts/verify-chat.sh', 'mvn test -Dchat.it.enabled=true -Dtest=ChatIt\n');
+    },
+    dir => {
+      const violations = checkSwitches({
+        gatedSuites: collectGatedSuites(join(dir, 'core/src/test/java')),
+        runPaths: collectRunPaths(dir),
+        ...aggregated('ChatIt', 'chat.it.enabled'),
+      });
+      assert.deepEqual(violations, []);
+    },
+  );
+});
+
+test('an unaggregated-suite exemption annotates the failure, it does not silence it', () => {
+  // The contract `KNOWN_UNDISCOVERABLE` already uses, and the one that keeps the
+  // registry from becoming a suppression list. A registry that turned the gate
+  // green would be a baseline wearing a registry's clothes — and the reason
+  // would be filed next to the red instead of beside the green.
+  withRepo(
+    dir => {
+      write(dir, 'core/src/test/java/p/PdfIt.java', gatedClass('pdf-import.it.enabled', { tests: 2 }));
+      write(dir, 'scripts/verify-pdf.sh', 'mvn test -Dpdf-import.it.enabled=true -Dtest=PdfIt\n');
+    },
+    dir => {
+      const violations = checkSwitches({
+        gatedSuites: collectGatedSuites(join(dir, 'core/src/test/java')),
+        runPaths: collectRunPaths(dir),
+        runnerSuites: [],
+        gatedSuitesByClass: new Map(),
+        knownUnaggregated: new Map([['PdfIt', 'needs a pdf toolchain on PATH']]),
+      });
+      assert.equal(violations.length, 1);
+      assert.equal(violations[0].kind, 'unaggregated-gated-suite');
+      assert.match(violations[0].detail, /\[exempt: needs a pdf toolchain on PATH\]$/);
+    },
+  );
+});
+
+test('an abstract base is not asked to be aggregated either', () => {
+  // `collectGatedSuites` drops abstract classes, and this rule reads that
+  // parser's output rather than a caller-supplied class map — so a map that
+  // still names an abstract base cannot make the gate report a suite that
+  // nothing can run. The concrete class is in the runner here, so the abstract
+  // one is the only thing left that could be wrong.
+  withRepo(
+    dir => {
+      write(dir, 'core/src/test/java/p/BaseIt.java', gatedClass('chat.it.enabled', { abstractClass: true }));
+      write(dir, 'core/src/test/java/p/ChatIt.java', gatedClass('chat.it.enabled', { tests: 1 }));
+      write(dir, 'scripts/verify-chat.sh', 'mvn test -Dchat.it.enabled=true -Dtest=ChatIt\n');
+    },
+    dir => {
+      const violations = checkSwitches({
+        gatedSuites: collectGatedSuites(join(dir, 'core/src/test/java')),
+        runPaths: collectRunPaths(dir),
+        runnerSuites: [{ flag: 'chat', className: 'ChatIt' }],
+        gatedSuitesByClass: new Map([
+          ['BaseIt', 'chat.it.enabled'],
+          ['ChatIt', 'chat.it.enabled'],
+        ]),
+      });
+      assert.deepEqual(violations, []);
+    },
+  );
+});
+
+// ── 6. the gate against the real repository ─────────────────────────────────
 
 test('the real repository reconciles clean', () => {
   // Guards against a self-test that only ever exercises synthetic fixtures: if
@@ -335,7 +466,7 @@ test('the real repository reconciles clean', () => {
 
 test('every kind this gate can emit is declared', () => {
   for (const kind of VIOLATION_KINDS) assert.match(kind, /^[a-z-]+$/);
-  assert.equal(VIOLATION_KINDS.length, 4);
+  assert.equal(VIOLATION_KINDS.length, 5);
 });
 
 let failures = 0;

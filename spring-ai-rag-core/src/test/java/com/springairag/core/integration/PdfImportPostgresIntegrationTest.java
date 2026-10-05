@@ -6,8 +6,11 @@ import com.springairag.core.config.RagPdfProperties;
 import com.springairag.core.controller.PdfImportController;
 import com.springairag.core.entity.FsFile;
 import com.springairag.core.entity.FsImportBatch;
+import com.springairag.core.entity.RagCollection;
 import com.springairag.core.repository.FsFileRepository;
 import com.springairag.core.repository.FsImportBatchRepository;
+import com.springairag.core.repository.RagCollectionRepository;
+import com.springairag.core.service.CollectionIdentityResolver;
 import com.springairag.core.service.MarkdownRendererService;
 import com.springairag.core.service.PdfImportService;
 import com.springairag.core.service.PdfToRagService;
@@ -242,10 +245,15 @@ class PdfImportPostgresIntegrationTest {
             "org.springframework.ai.model.minimax.autoconfigure.MiniMaxEmbeddingAutoConfiguration",
             "org.springframework.ai.model.minimax.autoconfigure.MiniMaxChatAutoConfiguration"
     })
-    @EntityScan(basePackageClasses = {FsFile.class, FsImportBatch.class})
+    @EntityScan(basePackageClasses = {
+            FsFile.class,
+            FsImportBatch.class,
+            RagCollection.class
+    })
     @EnableJpaRepositories(basePackageClasses = {
             FsFileRepository.class,
-            FsImportBatchRepository.class
+            FsImportBatchRepository.class,
+            RagCollectionRepository.class
     })
     @EnableTransactionManagement
     @EnableConfigurationProperties(RagPdfProperties.class)
@@ -254,7 +262,14 @@ class PdfImportPostgresIntegrationTest {
             PdfImportController.class,
             PdfImportService.class,
             PdfBoxConverter.class,
-            MarkdownRendererService.class
+            MarkdownRendererService.class,
+            // Batch 912：控制器自 Batch 851 起把 CollectionIdentityResolver 变成必填
+            // 构造依赖（`required = false` 已删，因为这个类里没有 null 守卫）。这里手搓的
+            // @Import 清单没有跟上，Spring 在加载上下文阶段就失败——而整个套件被开关
+            // 挡在默认 mvn test 之外，从没有人看见过它红。导入真实的 resolver 而不是
+            // 一个 mock：SSE 导入那条路径真的会解析 collection，mock 掉就等于让这个
+            // 验收测试对它声称覆盖的那段逻辑失明。
+            CollectionIdentityResolver.class
     })
     static class TestApplication {
 

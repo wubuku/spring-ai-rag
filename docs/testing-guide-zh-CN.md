@@ -765,6 +765,43 @@ JPA flush 已经写下去的文件一并回滚。
 `scripts/verify-integration-test-switches.mjs` 现在会在受门控的套件缺少运行路径时失败，
 两个方向都查。
 
+### 跑完整个门控清单
+
+```bash
+./scripts/verify-gated-it.sh                                     # 全部套件
+./scripts/verify-gated-it.sh ChatSessionPostgresIntegrationTest  # 单个套件
+```
+
+23 个类 / 153 个测试方法，每个都在自己的 `<x>.it.enabled` 开关后面，所以普通
+`mvn test` 永远不需要 Docker 守护进程。`verify-gated-it.sh` 是唯一一条把它们
+全部打开的命令，本地约 9 分钟，`ci.yml` 的 "Gated PostgreSQL integration tests"
+这一步跑的就是它。
+
+关于这份清单，有两件事值得直说，因为它们在 Batch 912 之前**都是假的**：
+
+- **Batch 912 起它才是完整的**。在此之前，脚本自己那句注释——"跑全部纯 DB 型套件"
+  ——描述的是其中 3 个。另外 20 个只能由各自 feature 的脚本单独跑，没有别的命令
+  能跑它们，而 `verify-integration-test-switches.mjs` 全程是绿的：
+  "有运行路径点亮这个开关"和"有一条命令能跑完整个清单"是两个不同的问题。
+  这道门禁现在也问第二个问题，它叫 `unaggregated-gated-suite`。
+- **其中有 2 个测试方法当时是红的**。`PdfImportPostgresIntegrationTest` 的
+  Spring 上下文加载失败：自 Batch 851 起控制器把 `CollectionIdentityResolver`
+  作为必填构造依赖，而这套件手写的 `@Import` 清单一直没加上它。这个套件被开关
+  挡着，而门禁只检查开关**能不能被打开**，所以从来没有人跑过它。
+  把套件加进 `ALL_SUITES` 的时候，请预期你会找出点东西。
+
+**要跑在 `verify-test-visibility` 之前，不是之后。** 两者都写
+`spring-ai-rag-core/target/surefire-reports`，而这个脚本的产物是两者中较新的：
+`verify-test-visibility.mjs` 拿这些报告和测试源码树做**双向**对账，
+所以一个只装着 23 个门控类报告的目录，会让它报出几百个"既没跑也没跳过"的源。
+可行的顺序是：
+
+```bash
+mvn test                                  # 全量
+./scripts/verify-gate-entry-points.mjs    # 任何读 surefire 报告的门禁
+./scripts/verify-gated-it.sh              # 门控清单——此后报告已过期
+```
+
 ### 路径穿越探测（不设门控 — 随默认测试跑）
 
 ```bash

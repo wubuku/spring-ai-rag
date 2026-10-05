@@ -2,26 +2,34 @@
 /**
  * Integration-test switch reconciliation.
  *
- * Twenty-two PostgreSQL/Testcontainers integration classes in this repository
- * are gated behind `@EnabledIfSystemProperty(named = "<x>.it.enabled")`, which
- * is what keeps 145+ test methods from demanding a Docker daemon on every
+ * Every PostgreSQL/Testcontainers integration class in this repository is
+ * gated behind `@EnabledIfSystemProperty(named = "<x>.it.enabled")`, which is
+ * what keeps the gated test inventory from demanding a Docker daemon on every
  * `mvn test`. That gating is invisible by design — and Batch 790's survey found
- * that one of the twenty-two, `PdfImportPostgresIntegrationTest`, had no way to
- * be switched on that anybody could find: its property appeared in no script
- * and in no non-draft document, only in an archived progress note. Two tests
- * nobody could run, sitting in a suite that read as complete.
+ * that `PdfImportPostgresIntegrationTest` had no way to be switched on that
+ * anybody could find: its property appeared in no script and in no non-draft
+ * document, only in an archived progress note. Two tests nobody could run,
+ * sitting in a suite that read as complete.
+ *
+ * The inventory is not written down here. A count in prose is a fact that
+ * rots; the count this gate prints is derived from the tree on every run, and
+ * the two are reconciled by `test('the real repository reconciles clean')` in
+ * the self-test rather than by a human remembering to edit a number.
  *
  * The same silence is available to the next class that is added, so this gate
  * reconciles the switches in both directions, the way
  * `scripts/verify-test-visibility.mjs` reconciles the source tree against the
  * Surefire reports:
  *
- *   1. undiscoverable-switch  a gated class whose switch no run path turns on
- *   2. ghost-switch           a switch a script or document turns on that no
- *                             gated class consumes
- *   3. empty-gated-suite      a gated class with no `@Test` in it
- *   4. gated-runner-drift     a `verify-gated-it.sh` suite entry whose class is
- *                             gone, or whose flag no longer matches that class
+ *   1. undiscoverable-switch    a gated class whose switch no run path turns on
+ *   2. ghost-switch             a switch a script or document turns on that no
+ *                               gated class consumes
+ *   3. empty-gated-suite        a gated class with no `@Test` in it
+ *   4. gated-runner-drift       a `verify-gated-it.sh` suite entry whose class
+ *                               is gone, or whose flag no longer matches
+ *   5. unaggregated-gated-suite a gated class that only an individual feature's
+ *                               own script runs, so no single command runs the
+ *                               whole gated inventory
  *
  * Run:
  *   node scripts/verify-integration-test-switches.mjs
@@ -76,6 +84,7 @@ export const VIOLATION_KINDS = Object.freeze([
   'ghost-switch',
   'empty-gated-suite',
   'gated-runner-drift',
+  'unaggregated-gated-suite',
 ]);
 
 function walkFiles(dir, acc = []) {
@@ -192,7 +201,8 @@ export function parseGatedRunner(scriptText) {
  * @param {Map} [input.runPaths]     property -> run paths that turn it on
  * @param {string[]} [input.runnerSuites] entries of verify-gated-it.sh
  * @param {Map<string, string>} [input.gatedSuitesByClass] class name -> property
- * @param {Set<string>} [input.knownUnd iscoverable] registered exemptions
+ * @param {Map<string, string>} [input.knownUndiscoverable] property -> reason
+ * @param {Map<string, string>} [input.knownUnaggregated] class name -> reason
  * @returns {{kind: string, detail: string}[]}
  */
 export function checkSwitches({
@@ -201,6 +211,7 @@ export function checkSwitches({
   runnerSuites = [],
   gatedSuitesByClass = new Map(),
   knownUndiscoverable = new Map(),
+  knownUnaggregated = new Map(),
 }) {
   const violations = [];
 
@@ -260,6 +271,35 @@ export function checkSwitches({
     }
   }
 
+  // The fifth direction. `undiscoverable-switch` above is satisfied by *any*
+  // run path, including the per-feature script that a single feature's own
+  // `verify-*.sh` happens to ship — which is why this repository could hold
+  // twenty of twenty-three gated suites with no single command that runs them
+  // all, while every one of those switches was legitimately discoverable and
+  // this gate stayed green. A per-feature run path answers "can I run this one
+  // suite"; nothing in the tree answered "can I run the gated inventory".
+  //
+  // Iterated over `gatedSuites` rather than `gatedSuitesByClass` on purpose.
+  // The class map is a second source for a fact the parser already decided —
+  // it drops abstract classes, which carry no test and which Surefire never
+  // instantiates — so a caller that hands in a map still naming an abstract
+  // base would make this rule report a suite that nothing can run. Reading the
+  // parser's own output makes "an abstract base is not a suite" structural
+  // instead of a convention every caller has to remember.
+  for (const [property, classes] of [...gatedSuites].sort()) {
+    for (const { className, testCount } of classes) {
+      if (seenClasses.has(className)) continue;
+      const exemption = knownUnaggregated.get(className);
+      violations.push({
+        kind: 'unaggregated-gated-suite',
+        detail:
+          `${className} is gated on ${property} and holds ${testCount} test(s) ` +
+          'but verify-gated-it.sh does not run it' +
+          (exemption ? ` [exempt: ${exemption}]` : ''),
+      });
+    }
+  }
+
   return violations;
 }
 
@@ -280,6 +320,7 @@ function main() {
     runnerSuites,
     gatedSuitesByClass,
     knownUndiscoverable: KNOWN_UNDISCOVERABLE,
+    knownUnaggregated: KNOWN_UNAGGREGATED,
   });
 
   if (violations.length > 0) {
@@ -288,7 +329,11 @@ function main() {
     console.error(
       '\nA gated integration suite that no run path can switch on is a suite that\n' +
         'never runs. Add the switch to a script or to docs/testing-guide*.md, or\n' +
-        'register it in KNOWN_UNDISCOVERABLE with a reason.',
+        'register it in KNOWN_UNDISCOVERABLE with a reason.\n' +
+        '\nA gated suite that no aggregate runner runs is a suite that only runs when\n' +
+        'somebody remembers its feature. Add it to ALL_SUITES in verify-gated-it.sh.\n' +
+        'An exemption does not make it green: it annotates the failure, so the reason\n' +
+        'is on the record in the same place as the red.',
     );
     process.exitCode = 1;
     return;
@@ -297,8 +342,9 @@ function main() {
   const gatedTestCount = [...gatedSuites.values()].reduce((sum, cs) => sum + cs.reduce((s, c) => s + c.testCount, 0), 0);
   console.log(
     `Integration-test switch reconciliation passed; ${gatedSuites.size} gated switch(es) ` +
-      `covering ${gatedTestCount} test(s) all have a run path, and no run path names a switch ` +
-      `without a test class (${runnerSuites.length} suite(s) in verify-gated-it.sh).`,
+      `covering ${gatedTestCount} test(s) all have a run path and all ${gatedSuitesByClass.size} ` +
+      `gated class(es) run under verify-gated-it.sh, and no run path names a switch ` +
+      `without a test class.`,
   );
 }
 
@@ -310,6 +356,22 @@ function main() {
  * `scripts/lib/docs-integrity-check.mjs`.
  */
 const KNOWN_UNDISCOVERABLE = new Map();
+
+/**
+ * Same contract as `KNOWN_UNDISCOVERABLE`, for the aggregate runner: an entry
+ * annotates the violation instead of suppressing it. Also deliberately empty.
+ *
+ * Batch 912 measured the gated inventory before writing this rule: all
+ * twenty-three classes build nothing but a Testcontainers PostgreSQL and a
+ * Flyway schema, so every one of them belongs in the aggregate runner. The
+ * first version of the rule needed a classifier to decide "is this suite pure
+ * DB?" — a classifier whose first draft reported eight suites as needing a
+ * model provider, because `ApiKeyRole`, `RagApiKey` and `DATABASE_API_KEY` all
+ * contain the substring `apiKey` and are this product's own key-management
+ * domain. Requiring every gated class to be registered needs no classifier,
+ * and cannot be satisfied by a misreading of a name.
+ */
+const KNOWN_UNAGGREGATED = new Map();
 
 if (isMainModule(import.meta.url)) {
   main();

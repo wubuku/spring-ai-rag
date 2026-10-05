@@ -33,6 +33,7 @@ import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.jpa.repository.support.JpaRepositoryFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.orm.jpa.JpaTransactionManager;
@@ -158,19 +159,22 @@ class ChatSessionPostgresIntegrationTest {
                         + "WHERE table_name = 'rag_chat_memory_summary'",
                 Long.class));
 
-        assertThrows(RuntimeException.class, () -> jdbcTemplate.update(
+        assertViolates(assertThrows(DataIntegrityViolationException.class, () -> jdbcTemplate.update(
                 "INSERT INTO rag_chat_history "
                         + "(session_id, owner_principal_id, user_message, turn_status) "
-                        + "VALUES ('bad/session', 'db:key-a', 'question', 'COMPLETE')"));
-        assertThrows(RuntimeException.class, () -> jdbcTemplate.update(
+                        + "VALUES ('bad/session', 'db:key-a', 'question', 'COMPLETE')")),
+                "ck_rag_chat_history_session_id");
+        assertViolates(assertThrows(DataIntegrityViolationException.class, () -> jdbcTemplate.update(
                 "INSERT INTO rag_chat_history "
                         + "(session_id, owner_principal_id, user_message, turn_status) "
-                        + "VALUES ('valid-session', 'db:key-a', 'question', 'FAILED')"));
-        assertThrows(RuntimeException.class, () -> jdbcTemplate.update(
+                        + "VALUES ('valid-session', 'db:key-a', 'question', 'FAILED')")),
+                "ck_rag_chat_history_turn_status");
+        assertViolates(assertThrows(DataIntegrityViolationException.class, () -> jdbcTemplate.update(
                 "INSERT INTO rag_chat_session_lease "
                         + "(owner_principal_id, session_id, owner_token, acquired_at, expires_at) "
                         + "VALUES ('db:key-a', 'valid-session', ?, now(), now())",
-                UUID.randomUUID().toString()));
+                UUID.randomUUID().toString())),
+                "ck_rag_chat_session_lease_expiry");
     }
 
     @Test
@@ -205,30 +209,32 @@ class ChatSessionPostgresIntegrationTest {
 
     @Test
     void memorySummaryConstraintsRejectInvalidRows() {
-        assertThrows(RuntimeException.class, () -> jdbcTemplate.update("""
+        // 四条 CHECK 各挡一种坏行：session 格式、游标不得为 0、摘要不得为空、
+        // 估算 token 不得为负。逐条点名，否则一次迁移只保住三条约束时这里照样绿。
+        assertViolates(assertThrows(DataIntegrityViolationException.class, () -> jdbcTemplate.update("""
                 INSERT INTO rag_chat_memory_summary (
                     owner_principal_id, session_id, summary_text,
                     summarized_through_history_id, estimated_tokens
                 ) VALUES ('db:constraint', 'bad/session', 'summary', 1, 1)
-                """));
-        assertThrows(RuntimeException.class, () -> jdbcTemplate.update("""
+                """)), "ck_rag_chat_memory_summary_session");
+        assertViolates(assertThrows(DataIntegrityViolationException.class, () -> jdbcTemplate.update("""
                 INSERT INTO rag_chat_memory_summary (
                     owner_principal_id, session_id, summary_text,
                     summarized_through_history_id, estimated_tokens
                 ) VALUES ('db:constraint', 'valid-session', 'summary', 0, 1)
-                """));
-        assertThrows(RuntimeException.class, () -> jdbcTemplate.update("""
+                """)), "ck_rag_chat_memory_summary_cursor");
+        assertViolates(assertThrows(DataIntegrityViolationException.class, () -> jdbcTemplate.update("""
                 INSERT INTO rag_chat_memory_summary (
                     owner_principal_id, session_id, summary_text,
                     summarized_through_history_id, estimated_tokens
                 ) VALUES ('db:constraint', 'valid-session', '', 1, 1)
-                """));
-        assertThrows(RuntimeException.class, () -> jdbcTemplate.update("""
+                """)), "ck_rag_chat_memory_summary_text");
+        assertViolates(assertThrows(DataIntegrityViolationException.class, () -> jdbcTemplate.update("""
                 INSERT INTO rag_chat_memory_summary (
                     owner_principal_id, session_id, summary_text,
                     summarized_through_history_id, estimated_tokens
                 ) VALUES ('db:constraint', 'valid-session', 'summary', 1, -1)
-                """));
+                """)), "ck_rag_chat_memory_summary_tokens");
     }
 
     @Test
@@ -983,5 +989,23 @@ class ChatSessionPostgresIntegrationTest {
         dataSource.setUser(username);
         dataSource.setPassword(password);
         return dataSource;
+    }
+
+    /**
+     * 把约束违例钉在具名约束上，而不只是异常类型。
+     *
+     * <p>Spring 把 PostgreSQL 的 SQLSTATE 翻译成异常类型，于是只断类型的话，
+     * 任何一条 CHECK 消失或改名，这个用例都照样绿——而这些约束正是租约与
+     * 摘要契约的载体。驱动消息里的具名约束把用例钉回建它的那条迁移。
+     */
+    private static void assertViolates(
+            DataIntegrityViolationException thrown,
+            String constraint) {
+        Throwable cause = thrown.getCause();
+        assertNotNull(cause,
+                "expected the driver exception to name the violated constraint");
+        assertTrue(cause.getMessage().contains("\"" + constraint + "\""),
+                "expected constraint " + constraint + " but PostgreSQL said: "
+                        + cause.getMessage());
     }
 }

@@ -92,11 +92,15 @@ Gating a suite is a promise that somebody can ungate it. `PdfImportPostgresInteg
 — 2 test methods — had a switch that appeared in no script and in no document
 outside an archived progress note, so nothing could run it. The gate fails when
 a gated switch has no run path in either direction, when a run path names a
-switch no test class consumes, when a gated class declares no `@Test`, and when
+switch no test class consumes, when a gated class declares no `@Test`, when
 a `verify-gated-it.sh` suite entry points at a class that is gone or no longer
-gated by the flag the runner passes. Adding a gated suite means adding its run
-path; `scripts/test-support/integration-switch-self-test.mjs` proves each of
-those four checks can still reject.
+gated by the flag the runner passes, and when a gated class that no aggregate
+runner runs is reachable only through one feature's own script. That last one
+answered a question the first four could not: every gated switch in this
+repository had a run path, and twenty of the twenty-three suites still had no
+single command that ran them. Adding a gated suite means adding its run path
+*and* its `ALL_SUITES` line; `scripts/test-support/integration-switch-self-test.mjs`
+proves each of those five checks can still reject.
 
 ### Gate Inventory and the Gate Census
 
@@ -110,7 +114,7 @@ did not already know they existed.
 | Gate | Rejects | Self-test | Runs in |
 |------|---------|-----------|----------|
 | `verify-test-visibility.mjs` | A test class that neither ran nor reported a skip (`tests="0" skipped="0"`). The check is **bidirectional**: every non-abstract test source matching surefire's four default includes (`Test*`, `*Test`, `*Tests`, `*TestCase` — Batch 885 added the missing `Test*`) must have produced a report, and every report must map back to a source, so a class deleted from source while its `TEST-*.xml` survived cannot inflate the totals. A source that declares no JUnit test method is not collected, because surefire reports nothing for one. **One module per run**: the source root is derived from the reports directory, and the aggregate entry point points the gate at `spring-ai-rag-core`; the success line names the module it covered. The test count itself is **counted from the `<testcase>` elements, not read off the `tests=` attribute** (Batch 893). Surefire writes that attribute before the cases an `@Nested` inner class contributes, so it can be smaller than the children it summarises: measured over all four modules' 1006 reports, three disagreed — `RagCollectionServiceTest` by 7 (17 declared against 24 real cases, every one of them from a nested class), `DocumentMapperTest` by 1, `GeneralRagAutoConfigurationBeanTest` by 1 — and the attribute total came to 8320 where 8329 cases ran. This gate is the thing that prints that number, so it was under-reporting its own tree by nine. `skipped`, `failures` and `errors` are still read from the attribute because none of the 1006 reports disagrees on them; a counter changed without a measurement behind it is its own kind of defect | `test-support/test-visibility-self-test.mjs` | tests chain |
-| `verify-integration-test-switches.mjs` | A gated switch missing a run path, in either direction | `test-support/integration-switch-self-test.mjs` | tests chain |
+| `verify-integration-test-switches.mjs` | A gated switch missing a run path, in either direction; and — since Batch 912 — a gated suite that only one feature's own script can run. That second direction is the one the first four could not express: every gated switch in this repository had a run path, and twenty of twenty-three suites still had no single command that runs them, while the gate stayed green | `test-support/integration-switch-self-test.mjs` | tests chain |
 | `verify-external-db-safety.mjs` | A suite that takes a caller-named database and runs `flyway.clean()` on it | `test-support/external-db-safety-self-test.mjs` | tests chain |
 | `verify-e2e-run-paths.mjs` | A Playwright spec no script can run | `test-support/e2e-reachability-self-test.mjs` | tests chain |
 | `verify-slo-endpoint-coverage.mjs` | A threshold whose endpoint is gone; a timer name shared across controllers | `test-support/slo-endpoint-coverage-self-test.mjs` | tests chain |
@@ -131,7 +135,7 @@ did not already know they existed.
 | `verify-no-pessimistic-locks.sh` | Pessimistic locks, `SKIP LOCKED` and advisory locks in production code | `test-support/pessimistic-locks-self-test.sh` | docs chain |
 | `verify-zh-translation.mjs` | An untranslated English passage in a Chinese document | `test-support/zh-translation-self-test.mjs` | docs chain |
 | `verify-project-tests.sh` / `verify-project-docs.sh` | Aggregate entry points for the nine above | borne by each gate | by hand / not yet in CI |
-| `verify-gated-it.sh` | The 154 database-only integration suites | borne by switch reconciliation | **wired into CI** |
+| `verify-gated-it.sh` | The gated PostgreSQL inventory — 23 classes / 153 test methods, all of them pure Testcontainers-plus-Flyway as of Batch 912, when the last twenty were registered and the suite's own "runs every database-only suite" comment stopped being a claim about three of them. Takes about 9 minutes locally. CI calls it with no arguments, so this is where the whole inventory runs | borne by switch reconciliation | **wired into CI** |
 | `verify-webui-e2e-mock.sh` | The 15 spec / 93 case WebUI mock regression | the suite is its own self-test | standalone (2.6 min) |
 | `check-alignment-policy.mjs` | Physical `text-align`, inline `textAlign`, the global-stylesheet contract; test files are skipped, `--text-align` is a token rather than a declaration, and an `allow-center` comment no centre claims is a failure (Batch 881) | `__tests__/alignment-policy.test.mjs` | `npm run lint` |
 | `check-design-system.mjs` | Hard-coded values that bypass a design token | `__tests__/design-tokens.test.mjs` | `npm run lint` |
