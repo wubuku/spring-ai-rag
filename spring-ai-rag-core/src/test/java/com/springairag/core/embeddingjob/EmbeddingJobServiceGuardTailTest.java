@@ -11,11 +11,13 @@ import com.springairag.core.service.CollectionRetrievalScopeResolver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.InvocationTargetException;
 import java.util.List;
 import java.util.UUID;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -91,10 +93,22 @@ class EmbeddingJobServiceGuardTailTest {
                 "resolveMaxAttempts", Integer.class);
         method.setAccessible(true);
 
-        assertThrows(Exception.class,
+        // 反射必定包一层 InvocationTargetException，只断外层等于什么都没断；
+        // 解包之后才断言到真正的守卫 IllegalArgumentException。
+        InvocationTargetException tooLow = assertThrows(
+                InvocationTargetException.class,
                 () -> method.invoke(service, 0));
-        assertThrows(Exception.class,
+        InvocationTargetException tooHigh = assertThrows(
+                InvocationTargetException.class,
                 () -> method.invoke(service, 99));
+        assertInstanceOf(IllegalArgumentException.class,
+                tooLow.getCause());
+        assertInstanceOf(IllegalArgumentException.class,
+                tooHigh.getCause());
+        assertTrue(tooLow.getCause().getMessage()
+                .startsWith("maxAttempts must be between 1 and "));
+        assertTrue(tooHigh.getCause().getMessage()
+                .startsWith("maxAttempts must be between 1 and "));
     }
 
     @Test

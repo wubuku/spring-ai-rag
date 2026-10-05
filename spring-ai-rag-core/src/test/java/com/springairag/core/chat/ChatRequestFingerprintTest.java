@@ -1,11 +1,14 @@
 package com.springairag.core.chat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.springairag.api.enums.ErrorCode;
 import com.springairag.api.openai.OpenAiChatCompletionRequest;
+import com.springairag.core.exception.RagException;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -49,13 +52,18 @@ class ChatRequestFingerprintTest {
                 }
                 """, OpenAiChatCompletionRequest.class);
 
-        assertThrows(
-                RuntimeException.class,
+        RagException merged = assertThrows(
+                RagException.class,
                 () -> ChatRequestFingerprint.openAiRequest(
                         request, objectMapper, List.of("support,billing")));
-        assertThrows(
-                RuntimeException.class,
+        RagException blank = assertThrows(
+                RagException.class,
                 () -> ChatRequestFingerprint.openAiRequest(
                         request, objectMapper, List.of(" ")));
+        // 合并成一个键与整串空白是同一个契约：请求元数据里的 header 值非法。
+        assertEquals(ErrorCode.IDEMPOTENCY_REQUEST_METADATA_INVALID,
+                merged.getErrorCodeEnum());
+        assertEquals(ErrorCode.IDEMPOTENCY_REQUEST_METADATA_INVALID,
+                blank.getErrorCodeEnum());
     }
 }

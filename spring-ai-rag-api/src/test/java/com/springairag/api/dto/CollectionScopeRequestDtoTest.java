@@ -1,6 +1,7 @@
 package com.springairag.api.dto;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.exc.InvalidFormatException;
 import com.springairag.api.enums.CollectionScopeMode;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
@@ -69,7 +70,7 @@ class CollectionScopeRequestDtoTest {
     void invalidScopeModeJsonIsRejected() {
         ObjectMapper mapper = new ObjectMapper();
 
-        assertThrows(Exception.class, () -> mapper.readValue(
+        assertThrows(InvalidFormatException.class, () -> mapper.readValue(
                 "{\"query\":\"q\",\"collectionScopeMode\":\"UNKNOWN\"}",
                 SearchRequest.class));
         assertDoesNotThrow(() -> mapper.readValue(

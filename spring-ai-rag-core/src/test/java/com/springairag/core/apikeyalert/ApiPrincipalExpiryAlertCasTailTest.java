@@ -9,6 +9,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -150,8 +151,11 @@ class ApiPrincipalExpiryAlertCasTailTest {
         stubNoActiveAlert();
         stubInsertReturningRows(0);
 
-        assertThrows(RuntimeException.class,
+        DataAccessException conflict = assertThrows(
+                DataAccessException.class,
                 () -> service.reconcilePrincipalExpiry("p-1"));
+        assertEquals("Concurrent expiry alert reconciliation",
+                conflict.getMessage());
         verify(metrics).recordReconcile("FAILURE", "NONE");
     }
 
@@ -162,8 +166,11 @@ class ApiPrincipalExpiryAlertCasTailTest {
         when(jdbcTemplate.update(contains("condition_state = ?"),
                 any(Object[].class))).thenReturn(0);
 
-        assertThrows(RuntimeException.class,
+        DataAccessException conflict = assertThrows(
+                DataAccessException.class,
                 () -> service.reconcilePrincipalExpiry("p-1"));
+        assertEquals("Concurrent expiry alert reconciliation",
+                conflict.getMessage());
         verify(metrics).recordReconcile("FAILURE", "NONE");
     }
 
@@ -179,8 +186,11 @@ class ApiPrincipalExpiryAlertCasTailTest {
                 any(RowMapper.class), any(Object[].class)))
                 .thenReturn(List.of());
 
-        assertThrows(RuntimeException.class,
+        DataAccessException conflict = assertThrows(
+                DataAccessException.class,
                 () -> service.reconcilePrincipalExpiry("p-1"));
+        assertEquals("Concurrent expiry alert reconciliation",
+                conflict.getMessage());
         verify(metrics).recordReconcile("FAILURE", "NONE");
     }
 

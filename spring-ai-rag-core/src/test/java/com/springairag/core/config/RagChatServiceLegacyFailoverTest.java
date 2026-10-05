@@ -27,7 +27,6 @@ import org.springframework.ai.chat.prompt.Prompt;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -236,11 +235,12 @@ class RagChatServiceLegacyFailoverTest {
         RagChatService service = createService14Args(ragProperties);
 
         // 第 1 次：唯一候选失败 → invokeChatClient 记账熔断 → OPEN。
+        // 异常是本用例自己 stub 的 failingModel 抛的，测的是「失败被熔断记账」，
+        // 不是异常类型；这里保持 RuntimeException 是有意的。
         assertThrows(RuntimeException.class, () -> service.chat(chatRequest()));
         // 第 2 次：熔断已打开，进入候选循环前即拒绝（不再触达模型）。
-        assertInstanceOf(LlmCircuitOpenException.class,
-                assertThrows(RuntimeException.class,
-                        () -> service.chat(chatRequest())));
+        assertThrows(LlmCircuitOpenException.class,
+                () -> service.chat(chatRequest()));
         verify(failing, times(1)).call(any(Prompt.class));
     }
 }

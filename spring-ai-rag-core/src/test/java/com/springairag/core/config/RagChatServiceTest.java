@@ -388,6 +388,8 @@ class RagChatServiceTest {
         when(promptSpec.call()).thenReturn(callResponse);
         when(callResponse.chatClientResponse()).thenThrow(new RuntimeException("LLM 超时"));
 
+        // 异常由本用例 stub 的 mock 抛出，测的是失败被记账且不写历史；
+        // 收窄类型只会让这条用例断言一件它并不在测的事。
         assertThrows(RuntimeException.class, () -> service.chat("问题", "session-err"));
         // Should not save history
         verify(historyRepository, never()).save(anyString(), anyString(), anyString(), any(), any());

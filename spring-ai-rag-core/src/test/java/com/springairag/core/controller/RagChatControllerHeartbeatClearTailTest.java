@@ -3,6 +3,7 @@ package com.springairag.core.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.springairag.api.dto.ChatResponse;
 import com.springairag.api.dto.ClearHistoryResponse;
+import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.chat.ChatExecutionService;
 import com.springairag.core.chat.ChatSessionCoordinator;
 import com.springairag.core.chat.ChatTurnOperation;
@@ -11,6 +12,7 @@ import com.springairag.core.config.RagChatService;
 import com.springairag.core.chat.ChatCommandMapper;
 import com.springairag.core.config.RagSseProperties;
 import com.springairag.core.diagnostics.RetrievalTraceSession;
+import com.springairag.core.exception.RagException;
 import com.springairag.core.repository.RagChatHistoryRepository;
 import com.springairag.core.service.AuditLogService;
 import com.springairag.core.service.CollectionRetrievalScopeResolver;
@@ -122,9 +124,10 @@ class RagChatControllerHeartbeatClearTailTest {
     void clearHistoryWithUnknownSessionSurfacesConflict() {
         when(coordinator.clearSession(any(), anyString())).thenReturn(0);
 
-        assertThrows(RuntimeException.class,
+        RagException error = assertThrows(RagException.class,
                 () -> controller.clearHistory(
                         "session-404", new MockHttpServletRequest()));
+        assertEquals(ErrorCode.SESSION_NOT_FOUND, error.getErrorCodeEnum());
     }
 
     @Test
