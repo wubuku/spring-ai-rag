@@ -242,3 +242,17 @@ echo "PASS: JSON-assertions self-test"
 
 node scripts/verify-json-assertions.mjs
 echo "PASS: JSON negative assertions"
+
+# Batch 898. Batch 896 made "a negative assertion must not be satisfied by a
+# value it cannot read" a gate over `scripts/**/*.sh`. This is the same defect
+# in Python, in the one gate whose whole job is catching a regression:
+# `run-retrieval-regression.sh` read `baseline_metrics.get(name, 0.0)`, so a
+# metric the committed baseline happened not to carry was judged against zero
+# and could never regress. A rule that looks at one language is a rule about one
+# language — the three readers now live in scripts/lib and are run here.
+node scripts/test-support/retrieval-baseline-self-test.mjs >/dev/null || {
+  echo "Retrieval-baseline self-test failed; the readers may no longer reject anything." >&2
+  node scripts/test-support/retrieval-baseline-self-test.mjs >&2 || true
+  exit 1
+}
+echo "PASS: Retrieval-baseline self-test"
