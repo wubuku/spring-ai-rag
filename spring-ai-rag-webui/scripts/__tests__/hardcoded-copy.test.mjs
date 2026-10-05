@@ -11,10 +11,12 @@ import {
   findProsePropCopy,
   findToastTemplateCopy,
   maskTranslationCalls,
-  stripComments,
   usesI18n,
   VIOLATION_KINDS,
 } from '../check-hardcoded-copy.mjs';
+// Batch 905: check-hardcoded-copy no longer defines its own stripper; the one
+// under test is the shared one, so the test imports it from its owner.
+import { stripComments } from '../check-design-system.mjs';
 
 const kinds = (relPath, source, proseProps) =>
   checkFile(relPath, source, ALLOWED, proseProps).map(v => v.kind);

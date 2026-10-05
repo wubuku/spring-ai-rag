@@ -25,9 +25,10 @@ import {
   findBuilderChains,
   checkCodes,
   checkBodyShape,
-  stripComments,
   HTTP_STATUS,
 } from '../verify-error-code-catalog.mjs';
+// Batch 905: see the note in slo-endpoint-coverage-self-test.mjs.
+import { stripJavaComments as stripComments } from '../lib/java-source.mjs';
 
 const here = fileURLToPath(import.meta.url);
 const GATE = join(here, '..', '..', 'verify-error-code-catalog.mjs');

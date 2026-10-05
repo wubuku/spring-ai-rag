@@ -46,6 +46,7 @@
  */
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
+import { stripJavaComments } from './lib/java-source.mjs';
 import { isMainModule } from './lib/is-main-module.mjs';
 
 const ROOT = new URL('..', import.meta.url).pathname;
@@ -89,11 +90,7 @@ export const HTTP_STATUS = {
  * 改成填空格则会让"注释插在 `HttpStatus.X` 和 `.value()` 之间"这类写法
  * 从"能匹配"变成"不能匹配"，没必要冒这个险。
  */
-export function stripComments(src) {
-  return src
-    .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ''))
-    .replace(/\/\/[^\n]*/g, '');
-}
+
 
 /** 从 ErrorCode.java 解析出 code -> httpStatus 的映射。 */
 export function parseCatalog(enumSrc) {
@@ -128,7 +125,7 @@ function matchParen(src, open) {
  * 全部误判成残缺。
  */
 export function findBuilderChains(src) {
-  const clean = stripComments(src);
+  const clean = stripJavaComments(src);
   const chains = [];
   const pattern = /ErrorResponse\.builder\(\)/g;
   let m;
@@ -167,7 +164,7 @@ export function findBuilderChains(src) {
  *   - `.error("UNAUTHORIZED").status(HttpStatus.UNAUTHORIZED.value())`
  */
 export function findEmittedCodes(src) {
-  const clean = stripComments(src);
+  const clean = stripJavaComments(src);
   const found = [];
 
   const callPattern = /buildResponse\s*\(/g;

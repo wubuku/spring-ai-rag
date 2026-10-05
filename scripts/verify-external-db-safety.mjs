@@ -35,6 +35,7 @@
 
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
+import { stripJavaComments } from './lib/java-source.mjs';
 import { fileURLToPath } from 'node:url';
 import { isMainModule } from './lib/is-main-module.mjs';
 
@@ -75,17 +76,13 @@ export const VIOLATION_KINDS = Object.freeze({
 });
 
 /** Strips comments so a name in prose cannot satisfy, or trip, a rule. */
-export function stripComments(source) {
-  return source
-    .replace(/\/\*[\s\S]*?\*\//g, ' ')
-    .replace(/\/\/[^\n]*/g, ' ');
-}
+
 
 /**
  * @returns {{kind: string, detail: string}[]} empty when the suite is safe.
  */
 export function checkSuite(className, source) {
-  const code = stripComments(source);
+  const code = stripJavaComments(source);
   const violations = [];
 
   const namesDatabase = EXTERNAL_DATASOURCE.some((re) => re.test(code));
