@@ -300,6 +300,18 @@ node scripts/test-support/java-source-self-test.mjs || {
 }
 pass "Java-source self-test"
 
+# Batch 915. The rule that a script running `mvn clean` must either put the
+# surefire reports back or say it took them. Five scripts re-run an unscoped
+# `mvn test` and need no declaration; seven declare it in their own header, so
+# the reason travels with the command instead of living in a registry of known
+# offenders. The self-test pins the second exit as hard as the first — most of
+# its cases are scripts that must NOT be reported.
+node scripts/test-support/report-destruction-self-test.mjs || {
+  echo "Report-destruction self-test failed; the gate may be excusing the wrong scripts." >&2
+  exit 1
+}
+pass "Report-destruction self-test"
+
 # Batch 901. Every automated gate in this repository is required to carry a
 # self-test, and that requirement is discharged by importing the module and
 # calling its functions — which means it cannot see a gate that never runs.

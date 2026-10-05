@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 # One-click acceptance for rerank document-level evidence diversification.
+# 注意：本脚本的编译门禁是 `mvn clean compile test-compile`，它会连同
+# target/surefire-reports 一起删掉。verify-test-visibility.mjs 正是拿那份报告
+# 和测试源码树双向对账的，所以跑完本脚本后要跑门禁链，请先补一次 `mvn test`。
 set -uo pipefail
 
 cd "$(dirname "$0")/.."

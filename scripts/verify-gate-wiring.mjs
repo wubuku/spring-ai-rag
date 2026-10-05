@@ -16,6 +16,7 @@
 // lie". Self-test: scripts/test-support/gate-wiring-self-test.mjs.
 
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { unannouncedReportDestructions, collectReportDestruction } from './lib/report-destruction-check.mjs';
 import { fileURLToPath } from 'node:url';
 import { join, relative } from 'node:path';
 import { deadReasonPointers } from './lib/reason-pointer-check.mjs';
@@ -47,6 +48,7 @@ export const VIOLATION_KINDS = {
   DEAD_REASON_POINTER: 'dead-reason-pointer',
   UNDOCUMENTED_GATE: 'undocumented-gate',
   NON_EXECUTABLE_ENTRYPOINT: 'non-executable-entrypoint',
+  UNANNOUNCED_REPORT_DESTRUCTION: 'unannounced-report-destruction',
 };
 
 /**
@@ -174,7 +176,7 @@ export function resolveCiReachability(gateScripts, runnerTexts) {
  * The pure half. Everything it needs arrives as data so the self-test can drive
  * it with fixtures instead of a real repository.
  */
-export function checkWiring({ gateScripts, registry, fileExists, isExecutable, executedBy, ciReached, docText = '' }) {
+export function checkWiring({ gateScripts, registry, fileExists, isExecutable, executedBy, ciReached, docText = '', reportDestroyers = [] }) {
   const violations = [];
   const add = (kind, gate, detail) => violations.push({ kind, gate, detail });
 
@@ -300,6 +302,28 @@ export function checkWiring({ gateScripts, registry, fileExists, isExecutable, e
     }
   }
 
+  // Batch 915. The last direction, and the only one about what a script *does*
+  // rather than what it is. `verify-test-visibility.mjs` reads
+  // `spring-ai-rag-core/target/surefire-reports` in both directions, so the
+  // chain's correctness depends on what the last thing to touch `target/` left
+  // there. A script that runs `mvn clean` and never puts a report back is not
+  // wrong on its own terms — it is a one-click acceptance run — but the reader
+  // who runs it and then runs the chain gets `No surefire reports at …`, and
+  // that reads like their own mistake. Restoring the reports is the honest fix
+  // and five scripts already do it, so this rule accepts either that or a line
+  // in the script's own header saying the reports go away. The analysis lives
+  // in scripts/lib/report-destruction-check.mjs because "what counts as a
+  // Maven clean" is a judgement worth owning cases for rather than inlining.
+  for (const entry of reportDestroyers) {
+    add(
+      VIOLATION_KINDS.UNANNOUNCED_REPORT_DESTRUCTION,
+      `scripts/${entry.script}`,
+      `it runs mvn clean (${entry.cleanCount}×) and never restores the surefire reports that `
+        + 'verify-test-visibility.mjs reconciles the test source tree against. Either run an '
+        + 'unscoped `mvn test` afterwards, or say in this script\'s header that it leaves them gone',
+    );
+  }
+
   return violations;
 }
 
@@ -349,6 +373,7 @@ function main() {
     executedBy,
     ciReached,
     docText: collectDocText(root),
+    reportDestroyers: unannouncedReportDestructions(collectReportDestruction(join(root, 'scripts'))),
   });
 
   const automated = GATES.filter((entry) => entry.kind === 'gate');

@@ -1726,6 +1726,106 @@
   四道门禁 EXIT=0、两个被改指向的自测 12/12 与 27/27、
   WebUI `lint` 全链 EXIT=0 / **946** 用例 / `hardcoded-copy` **50** 用例、
   聚合门禁 **29 → 30** 项、docs **16** 项。**本批未改动任何 Java 源码。**
+### Batch 915（已交付，门控链的正确性取决于"上一个碰过 target/ 的东西留下了什么"——而 12 个脚本里有 7 个把证据拿走了还不说）
+
+- 分支：`batch-915`
+- 方向：912/913/914 把三类"从没被聚合跑过"的东西都拉起来之后，本批转向
+  **门禁链自己依赖什么**。起点是 914 记下的那条顺序耦合：当时我只知道
+  `verify-gated-it.sh` 会覆盖 surefire 报告。
+- **① 跑 `verify-chat-capability.sh`（拥有 `chat-real.spec.ts`）：17 通过 / 0 失败 / 1 跳过（13m26s）。**
+  跳过的那一步是需要 `--with-real-llm` 的真实 provider 端到端，随后单独跑（见下）。
+- **② 普查 `mvn clean` 的破坏面，得到一个比"12 个脚本会 clean"更有用的二分**：
+  | 类别 | 数量 | 含义 |
+  |---|---|---|
+  | 自愈 | **5** | clean 之后补一次**不限 `-Dtest=` 的** `mvn test`，报告回到原样 |
+  | 静默破坏 | **7** | clean 之后不补，也不说 |
+  跑完后去跑门禁链的人会看到 `No surefire reports at …`，
+  **而那句话读起来像是他自己弄坏了什么**。这不是猜测——914 我就被它坑过一次。
+- **新规则 `unannounced-report-destruction`（加在 `verify-gate-wiring.mjs`，
+  分析抽成共享库 `scripts/lib/report-destruction-check.mjs`）。**
+  规则有**两条合法出路**：补回报告（5 个已经这么做了，这是诚实的修法，
+  门禁无权要求谁选它），或在**自己的头注释里**说清报告没了——
+  后者让理由跟着命令走，而不是养在 registry 的已知违规名单里。
+  7 个脚本各加了一行。**门禁先立**：加完规则第一次跑，它自己报出正好那 7 个。
+- **判据写成两段式是被真实情况逼的**：三个脚本文件中部有一句
+  `scripts/lib/surefire-report.sh`，讲的是共享一个报告**读取器**。
+  如果"提到 surefire 就算声明"，它们当中任何一个只要把那句挪进头注释就能蒙混过关，
+  而什么也没改。**提到 reader 路径不算声明**，必须提到报告**数据**并带一个删除词。
+- **goal token 的形状改了三遍才对**（910 那条规矩今天第三次应验）：
+  1. 注释里列出 `mvn clean` **不是调用**——而 `verify-chat-capability.sh`
+     自己的 usage 段就写着这一行，把它算成调用等于让"文档自己步骤"的脚本变成违规。
+  2. `mvn clean test` 是**一条既删又补**的命令，两个判断写成 `else if`
+     会丢掉它的补报告那一侧，而那正是 `verify-release.sh`。
+  3. shell 里写的是 `mvn test;` 和 `{ mvn test; }`，只认空白结尾的 goal
+     会**正好漏掉"让脚本自愈"的那一种形状**。
+  另外探测器第一版我把一个布尔条件写反了（`!x === false`），只认出 1 个脚本；
+  修好之后与手工逐个核对**完全一致**（5 + 7 = 12），互为交叉验证。
+- **我犯了一个真实的错误，值得单独记**：做反向对照变异 2 时，
+  我去改 `verify-chat-capability.sh` 的 `mvn test` 那一行，
+  **而那个脚本此刻正在后台运行**。bash 是按文件偏移量增量读取脚本的，
+  改一个正在执行的脚本会让它读到错位内容。
+  处理：立刻复原文件、停掉那次运行、清理残留进程、**重跑一遍**。
+  > **证据不可信就丢弃，不要因为"跑都跑了"就留下它。**
+  > 这是 907"红的原因不对就不算变异成功"的同一条纪律，方向是"跑完了但过程不可信"。
+  > 变异 2 换到一个**没有在运行**的脚本（`verify-document-lifecycle.sh`）重做，才算数。
+- **反向对照 2/2**：
+  - 抽掉 7 个声明中的任意一个 → 门禁红。
+  - 让一个自愈脚本的 `mvn test` 退化成 `-Dtest=单个类` → 门禁红并点名
+    `verify-document-lifecycle.sh`。两个文件都**逐字节复原**。
+- **自测 12 条，首次全绿**，其中 6 条专门钉"不该被报的形状"：
+  自愈脚本、`mvn clean test` 单命令、注释里列出 clean、提到 reader 路径、
+  英文声明写法、引号里的 `#`。最后一条钉真实仓库必须零违规，
+  并把"5 个自愈"这个实测数也钉住。
+- **跑 `verify-chat-capability.sh --with-real-llm` 找出了两个"验证脚本自己比它声称的更严"的缺陷。
+  其中一个我一开始诊断错了，被自己的实验推翻——先记正确的那个**：
+  | 失败 | 表面现象 | 实际 |
+  |---|---|---|
+  | 真实 provider 冒烟 | `expected one provider call for JSON first/replay: 1.0 -> 3.0` | **脚本缺陷**：它的断言是"整对恰好 1 次 provider 调用"，而它自己的注释写的是"replay did not call provider"。**第一次请求在慢 provider 下重试了一次就是 2 次**，于是断言在产品重试逻辑**恰好应该生效**的时候失效。 |
+- **`chat-real.spec.ts` 我诊断错过一次，这件事本身比结论更值得记。**
+  第一次（180s）报 `Test timeout of 180000ms exceeded`，等待点是 `page.waitForResponse`。
+  当时手里有 914 实测的 p95 **57.6 秒**，就判成"整体预算低于自身下限"，
+  把 `REQUEST_TIMEOUT` 拆成 `TEST_TIMEOUT` + `REQUEST_TIMEOUT` 两个主张并把整体调到 600s。
+  **600s 那次同样超时**——于是假设被自己的实验推翻，改动整体撤销
+  （`git diff -- spring-ai-rag-webui/e2e/chat-real.spec.ts` 为空）。
+  > 被实验推翻的假设只留在账本里，不留在代码里。
+  真因是从**产物**里读出来的，不在任何一条日志的显眼处：
+  | 证据 | 内容 |
+  |---|---|
+  | `18-real-llm-…log` | `Test timeout of 600000ms exceeded`，仍是 `page.waitForResponse` 悬着——**"一直没匹配上"** |
+  | Playwright `error-context.md` 页面快照 | 助手气泡写着 `Error: HTTP 500`；模型下拉框 `SiliconFlow: Qwen3.5 27B [selected]` |
+  | `.dev/backend.log` | `WARN Durable Chat candidate 1/1 failed (siliconflow/Qwen/Qwen3.5-27B): 401 Token is invalid.` |
+  连起来是：spec 第 74 行 `selectOption(agentModel.ref)` **之后没有任何断言**，
+  选框悄悄回到了默认那项；后端于是拿 SiliconFlow 那个**密钥无效**的模型去打 provider，
+  401 在流中途发生；客户端只看到"不是 200"。
+  紧邻的第 76 行对 mode **有** `toHaveValue('AGENT')`——**这个不对称就是要命的地方**。
+- **第二个诊断缺陷比第一个更贵**：等待谓词是 `status() === 200`。
+  > **"一直没有 200" 和 "秒回一个 500" 在同一个等待里长得一模一样。**
+  谓词一旦不匹配就永远不 resolve，于是为了知道一件 UI 快照第一秒就写着的事，
+  白等了 600 秒。**范围太窄的判据会把"我没匹配上"输出成"它没有发生"**——
+  账本 913 那条"负结果要如实验收"在生产测试上的同一形状。
+  正确形状是**先按状态码无关地捕获响应，再断言状态码**，让失败报出真正的状态与响应体。
+- **幂等修复已端到端验证**（就在作废那次超时重跑的同一次运行里，`REAL_CHAT_IDEMPOTENCY_SMOKE` 半段独立跑完）：
+  `provider_counter_after_json=3.0 (replay did not call provider)`、
+  `provider_counter_after_sse=5.0 (replay did not call provider)`、`REAL_CHAT_IDEMPOTENCY_SMOKE_OK`、
+  `Real provider smoke: PASS`。**判定逻辑反过来看**：修前那次正是 `1.0 -> 3.0` 报错，
+  修后同一组数通过——不是放宽，是把断言对齐到它注释里真正声称的那件事。
+- **第二个失败查下来幂等本身是对的**，证据全齐：
+  - `counter.json` 累计 **3.0**；
+  - `cmp` 两次答案**逐字节相同**；
+  - 重放响应头 `X-RAG-Idempotent-Replay: true` + 同一个 `X-RAG-Turn-Id`。
+  > **"多调了 provider" 和 "重放没走存储" 是两回事。** 前者可以来自第一次请求的重试，
+  > 后者才是缺陷。断言把这两件事混成了一件事，于是报了一个不存在的缺陷。
+  - 修法：把计数快照移到**第一次请求之后**，断言**重放新增 0 次**——
+  > **一条断言必须只声称它真正验证过的那一件事。** 注释声称的是"重放没调"，那就只断这个。
+  - 判定逻辑反向对照 **3/3**：重放没调时通过（旧语义在这组数上失败）、重放真调了仍被抓
+    （`3.0 -> 4.0` 报 `the JSON replay called the provider`）、旧 `+1` 语义在实测数上必失败。
+  - SSE 那一半有同一个毛病，一并修了（它的基线原来取的是 JSON 那一对之前的计数）。
+- **验收**：chat 能力默认档 17/0/1（13m26s）；`--with-real-llm` 档 17/1/0（24m51s），
+  其中真实 provider 冒烟 **PASS**、唯一失败是 `chat-real.spec.ts`（根因已定位到
+  "spec 没断言自己选的模型"，修复留给下一批）；自测 **12/12**；反向 **2/2** + **3/3**；
+  双语文档门禁表 + tests 链登记；WebUI typecheck EXIT=0。
+  **未改动任何生产 Java 源码；未保留任何超时改动。**
+
 ### Batch 914（已交付，活系统类：从没在聚合下跑过的那批验证——一次跑通了，而它顺手把"谁说自己是谁"的腐烂也一起翻了出来）
 
 - 分支：`batch-914`

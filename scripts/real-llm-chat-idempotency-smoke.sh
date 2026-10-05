@@ -264,6 +264,18 @@ JSON_TURN_ID="$(assert_uuid_header "$WORK_DIR/json-first.headers")"
 assert_json_response "$WORK_DIR/json-first.json" "$JSON_TURN_ID" >"$WORK_DIR/json-first.answer"
 echo "native_json_first=PASS turn_id=${JSON_TURN_ID}"
 
+# Snapshot the provider counter *here*, between the first request and its
+# replay. The assertion below used to compare the counter across the whole pair
+# against `before + 1`, which is stricter than what this script is claiming and
+# breaks under the exact condition the retry logic exists for: against the
+# provider Batch 914 measured at a 57.6s p95 per call, Batch 915's run had the
+# first request retry once, the counter went 1 -> 3, and the script failed —
+# while the replay itself was perfect, serving a byte-identical answer with
+# `X-RAG-Idempotent-Replay: true`. A first request that retries costs more than
+# one provider call; a replay that re-invokes the provider costs one. Only the
+# second is a defect.
+counter_after_json_first="$(get_counter)"
+
 curl -sS -D "$WORK_DIR/json-replay.headers" \
   "${AUTH_ARGS[@]}" -X POST "${API}/chat/ask" \
   -H 'Content-Type: application/json' \
@@ -289,11 +301,11 @@ cmp -s "$WORK_DIR/json-first.answer" "$WORK_DIR/json-replay.answer" || {
 echo "native_json_replay=PASS"
 
 counter_after_json="$(get_counter)"
-python3 - "$counter_before" "$counter_after_json" <<'PY'
+python3 - "$counter_after_json_first" "$counter_after_json" <<'PY'
 import sys
 before, after = map(float, sys.argv[1:])
-if after != before + 1:
-    raise SystemExit(f"expected one provider call for JSON first/replay: {before} -> {after}")
+if after != before:
+    raise SystemExit(f"the JSON replay called the provider: {before} -> {after}")
 PY
 echo "provider_counter_after_json=${counter_after_json} (replay did not call provider)"
 
@@ -337,6 +349,10 @@ SSE_TURN_ID="$(assert_uuid_header "$WORK_DIR/sse-first.headers")"
 assert_sse_response "$WORK_DIR/sse-first.txt" "$SSE_TURN_ID" >"$WORK_DIR/sse-first.answer"
 echo "native_sse_first=PASS turn_id=${SSE_TURN_ID}"
 
+# Same reason as the JSON half above: the baseline is the counter after the SSE
+# first request, not the one from before the JSON pair.
+counter_after_sse_first="$(get_counter)"
+
 curl -sS -N -D "$WORK_DIR/sse-replay.headers" \
   "${AUTH_ARGS[@]}" -X POST "${API}/chat/stream" \
   -H 'Content-Type: application/json' \
@@ -363,11 +379,11 @@ cmp -s "$WORK_DIR/sse-first.answer" "$WORK_DIR/sse-replay.answer" || {
 echo "native_sse_replay=PASS"
 
 counter_after_sse="$(get_counter)"
-python3 - "$counter_after_json" "$counter_after_sse" <<'PY'
+python3 - "$counter_after_sse_first" "$counter_after_sse" <<'PY'
 import sys
 before, after = map(float, sys.argv[1:])
-if after != before + 1:
-    raise SystemExit(f"expected one provider call for SSE first/replay: {before} -> {after}")
+if after != before:
+    raise SystemExit(f"the SSE replay called the provider: {before} -> {after}")
 PY
 echo "provider_counter_after_sse=${counter_after_sse} (replay did not call provider)"
 
