@@ -193,6 +193,26 @@ export const GATES = [
     noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
   },
 
+  // Batch 924. The same failure as the rule above, one layer up: the server
+  // defines the integration capability protocol in exactly one place, six
+  // scripts carried their own copy of its version, and two copies had already
+  // drifted to a value the server does not publish. The worst one asserted
+  // `1.0` on a report whose own producer refuses to write a success at anything
+  // else — an assertion no report could satisfy, which is why
+  // `verify-business-client-readiness.sh` had never completed in this work
+  // tree. The value now lives in `scripts/lib/business-client-capability.sh`,
+  // and because the correct shape already existed in that one place the rule
+  // needs no allowlist: not for the shared library that defines it, not for the
+  // envelope protocol that shares the field name, not for the self-test
+  // fixtures that manufacture a mismatch, and not for this repository's habit
+  // of quoting a broken line in a comment explaining it.
+  {
+    gate: 'scripts/verify-capability-protocol-pinning.mjs',
+    kind: 'gate',
+    selfTest: 'scripts/test-support/capability-protocol-pinning-self-test.mjs',
+    noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
+  },
+
   // Batch 873. ErrorCode declares itself the single source of truth, and six of
   // the codes the API really returns were not in it, so no title or problem-type
   // URI could be derived from them. The rule also pins the status beside a code

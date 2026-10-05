@@ -4,6 +4,9 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+# Batch 924: the capability contract's identity is defined once, in one place.
+source scripts/lib/business-client-capability.sh
+
 # Batch 894: one reader for the surefire report, so the `tests` count comes from
 # the <testcase> elements rather than the attribute. Five gates had their own copy
 # of the same sed pipeline and none of them had a self-test; see
@@ -346,8 +349,9 @@ http_contract() {
     --write-out '%{http_code}' \
     "${a}/api/v1/rag/integration-capabilities")"
   assert_code "$code" 200 "capability discovery" || return 1
-  jq -e '
-    .protocol.version == "1.1"
+  jq -e \
+    --arg contractVersion "$INTEGRATION_CAPABILITY_CONTRACT_VERSION" '
+    .protocol.version == $contractVersion
     and .features.provisioning.collectionCreateIdempotencyKey == true
   ' "$PRIVATE_DIR/capabilities.json" >/dev/null || return 1
 

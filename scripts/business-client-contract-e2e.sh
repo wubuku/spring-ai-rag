@@ -4,6 +4,13 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+# Batch 924: the capability contract's identity is defined once, in one place.
+# This script used to require `protocolVersion == "1.0"` while the producer of
+# the report it inspects refuses to emit a success unless the value is the
+# contract version — an assertion no report could satisfy, which is why
+# `verify-business-client-readiness.sh` had never completed here.
+source scripts/lib/business-client-capability.sh
+
 # The security assertions below are written in the fail-on-match shape:
 #
 #   if rg -F -f "$secret_file" "$target"; then fail; fi; pass
@@ -383,13 +390,14 @@ assert_binding_report() {
     --arg canaryState "$expected_canary_state" \
     --arg expectedProfile "$expected_profile" \
     --arg verifiedProfile "$verified_profile" \
+    --arg contractVersion "$INTEGRATION_CAPABILITY_CONTRACT_VERSION" \
     '
       .schemaVersion == 1
       and .result == $result
       and .expectedCapabilityProfile == $expectedProfile
       and .principal.capabilityProfile
         == (if $verifiedProfile == "" then null else $verifiedProfile end)
-      and .capability.protocolVersion == "1.0"
+      and .capability.protocolVersion == $contractVersion
       and .capability.jsonBatchItems == 3
       and .capability.jsonBatchPayloadBytes == 2048
       and .capability.operationObservability == true

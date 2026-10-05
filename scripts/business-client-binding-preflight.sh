@@ -4,6 +4,9 @@ set -uo pipefail
 
 cd "$(dirname "$0")/.."
 
+# Batch 924: the capability contract's identity is defined once, in one place.
+source scripts/lib/business-client-capability.sh
+
 GENERATED_RUN_ID="$(date +%Y%m%d-%H%M%S)-$$-$(openssl rand -hex 4 2>/dev/null || printf 'local')"
 RAW_RUN_ID="${RAG_BINDING_PREFLIGHT_RUN_ID:-$GENERATED_RUN_ID}"
 RUN_ID="$RAW_RUN_ID"
@@ -152,6 +155,7 @@ write_report() {
   REPORT_TARGET_LABEL="$TARGET_LABEL" \
   REPORT_API_VERSION="$API_VERSION" \
   REPORT_CAPABILITY_PROTOCOL_VERSION="$CAPABILITY_PROTOCOL_VERSION" \
+  REPORT_CONTRACT_PROTOCOL_VERSION="$INTEGRATION_CAPABILITY_CONTRACT_VERSION" \
   REPORT_VERIFIED_JSON_BATCH_ITEMS="$VERIFIED_JSON_BATCH_ITEMS" \
   REPORT_VERIFIED_JSON_BATCH_PAYLOAD_BYTES="$VERIFIED_JSON_BATCH_PAYLOAD_BYTES" \
   REPORT_VERIFIED_OPERATION_OBSERVABILITY="$VERIFIED_OPERATION_OBSERVABILITY" \
@@ -245,8 +249,13 @@ if payload["result"] == "PASS":
     actual = payload["principal"]["capabilityProfile"]
     if expected is None or actual != expected:
         raise SystemExit("successful report requires a verified capability profile")
-    if payload["capability"]["protocolVersion"] != "1.1":
-        raise SystemExit("successful report requires capability protocol 1.1")
+    if payload["capability"]["protocolVersion"] != os.environ[
+        "REPORT_CONTRACT_PROTOCOL_VERSION"
+    ]:
+        raise SystemExit(
+            "successful report requires capability protocol "
+            + os.environ["REPORT_CONTRACT_PROTOCOL_VERSION"]
+        )
     if not isinstance(payload["capability"]["jsonBatchItems"], int):
         raise SystemExit("successful report requires a verified JSON batch limit")
     if not isinstance(payload["capability"]["jsonBatchPayloadBytes"], int):
@@ -690,9 +699,11 @@ capability_preflight() {
     fail_step "integration_capabilities" "NO_STORE_REQUIRED" "$HTTP_CODE"
     return 1
   fi
-  if ! jq -e '
-      .protocol.name == "spring-ai-rag-integration"
-      and .protocol.version == "1.1"
+  if ! jq -e \
+      --arg contractName "$INTEGRATION_CAPABILITY_CONTRACT_NAME" \
+      --arg contractVersion "$INTEGRATION_CAPABILITY_CONTRACT_VERSION" '
+      .protocol.name == $contractName
+      and .protocol.version == $contractVersion
       and (.limits.structuredRecords.maxBatchItems | type == "number")
       and (.limits.structuredRecords.maxBatchItems >= 1)
       and (.limits.structuredRecords.maxBatchPayloadBytes | type == "number")

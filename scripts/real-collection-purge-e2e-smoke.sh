@@ -4,6 +4,9 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+# Batch 924: the capability contract's identity is defined once, in one place.
+source scripts/lib/business-client-capability.sh
+
 BASE_URL="${BASE_URL:-http://127.0.0.1:18085}"
 API="${BASE_URL}/api/v1/rag"
 ENV_FILE="${REAL_LLM_ENV_FILE:-.env}"
@@ -149,8 +152,9 @@ step "Health and caller-aware capability"
 request GET "$BASE_URL/actuator/health" 200
 printf '%s' "$HTTP_BODY" | jq -e '.status == "UP"' >/dev/null
 request GET "$API/integration-capabilities" 200
-printf '%s' "$HTTP_BODY" | jq -e '
-  .protocol.version == "1.1"
+printf '%s' "$HTTP_BODY" | jq -e \
+  --arg contractVersion "$INTEGRATION_CAPABILITY_CONTRACT_VERSION" '
+  .protocol.version == $contractVersion
   and .principal.principalType == "ENVIRONMENT_ROOT"
   and .features.dataPlane.embedding.asyncPolicy == true
   and .features.optional.collectionPurge == true

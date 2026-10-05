@@ -8,6 +8,8 @@ cd "$(dirname "$0")/.."
 # self-test can run them without starting two backends and four containers. What
 # they guard, and the measured failure each one prevents, is written there.
 source scripts/lib/alert-payload.sh
+# Batch 924: the capability contract's identity is defined once, in one place.
+source scripts/lib/business-client-capability.sh
 
 RUN_ID="${MANAGED_API_VERIFY_RUN_ID:-$(date +%Y%m%d-%H%M%S)}"
 LOG_DIR="${MANAGED_API_VERIFY_LOG_DIR:-.verification/managed-api-principals/${RUN_ID}}"
@@ -757,9 +759,11 @@ run_two_instance_contract() {
   code="$(root_curl -o "$private/capabilities-root.json" -w '%{http_code}' \
     "${a}/api/v1/rag/integration-capabilities")"
   assert_code "$code" 200 "root capability discovery" || return 1
-  jq -e '
-    .protocol.name == "spring-ai-rag-integration"
-    and .protocol.version == "1.1"
+  jq -e \
+    --arg contractName "$INTEGRATION_CAPABILITY_CONTRACT_NAME" \
+    --arg contractVersion "$INTEGRATION_CAPABILITY_CONTRACT_VERSION" '
+    .protocol.name == $contractName
+    and .protocol.version == $contractVersion
     and .protocol.apiVersion == "1.0.0"
     and .principal.principalType == "ENVIRONMENT_ROOT"
     and .principal.collectionAccessMode == "UNRESTRICTED"

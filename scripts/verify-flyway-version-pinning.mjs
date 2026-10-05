@@ -29,6 +29,27 @@
 //   - Scripts that compute it. Those are the correct shape and are what this
 //     rule exists to push toward.
 //
+// ## Considered in Batch 924 and deliberately not added
+//
+// `verify-document-sync-runs.sh` labelled its own run `flyway-v51` and wrote
+// `- Flyway: V1–V51` into the `summary.md` a reader opens afterwards, while the
+// tree was at V59. Both were fixed by computing the number, but no rule was
+// added, and the reason is worth recording so the omission reads as a decision.
+//
+// The defect is real; the shape is not machine-decidable. Telling "an evidence
+// artifact making a claim about the current schema" apart from "a message naming
+// a migration" is a judgement about intent, and this repository does not build
+// gates that need a judgement call to separate — an allowlist of the mentions
+// would be a list of things the checker does not read, which is the trade this
+// gate was written to refuse. One instance, found by reading one script, with
+// the correct shape already present in three siblings, is a fix rather than a
+// rule.
+//
+// It is also the weaker failure. This rule catches a script that *decides*
+// wrongly — a false PASS or a false FAIL. A stale label in a report produces a
+// wrong sentence, which a reader can catch and which the artifact itself no
+// longer claims.
+//
 // ## The rule is drawn around a whole-file read, never line by line
 //
 // The shape spans lines — the query, then the comparison several lines below —
