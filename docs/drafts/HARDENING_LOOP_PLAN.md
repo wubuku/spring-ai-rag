@@ -1581,11 +1581,16 @@
   > 一个只按断言形状执法、且存在正确实例的门禁，只会变成噪声——**所以不加门禁**。
 - **关掉 901 留下的那条**：`verify-json-assertions.mjs` 原来在 **import 时就跑**
   （全部是顶层语句）。已包进 `main()` 并用同一个守卫；
-  实测"当程序跑输出 4 行、当 import 跑输出 0 行"。
-  - **但另一条不加门禁**：`check-alignment-policy.mjs` **没有守卫而且是对的**——
-    它是**被别的检查 import 的模块**（还有单测）。
-    > **"没有守卫"有时正是正确的形状**，报它就会报到一个正确的文件上。
-    > 这是一条需要判断的清单，按 892 定的规矩写进账本、不做执法点。
+  - 实测"当程序跑输出 4 行、当 import 跑输出 0 行"。
+  - ~~**但另一条不加门禁**：`check-alignment-policy.mjs` **没有守卫而且是对的**——
+    它是**被别的检查 import 的模块**（还有单测）。~~
+    > **上面划掉的那条是错的，Batch 904 实测更正。**
+    > 我当时说它"被别的检查 import"，那两处命中**全是注释里的提及**，
+    > 不是 import。**没有任何东西 import 它**——它是独立脚本，
+    > 由 `npm run check:alignment` 当程序跑，自测也是 `spawnSync` 它。
+    > 所以它和 `verify-json-assertions.mjs` 是**同一个缺陷**，
+    > 而我给"不改它"找的理由是一次 grep 到了注释。
+    > 这是本次会话**第三次**栽在"文本扫描不剥注释"上。
 - **验收**：变异 3 红 / 变异 1、2 绿（都实测）、
   `BudgetedChatModelResidualTest` **8** 个 `<testcase>` EXIT=0、
   `verify-json-assertions` EXIT=0（守卫前后行为一致）、
@@ -1620,6 +1625,51 @@
   1. **不让下一个人重跑这个普查并相信它**——它的 29 是个误导性的数字；
   2. **把"为什么这个形状机械测不出来"写清楚**，而不是留一个看起来能跑的工具。
 - **未交付**：本批没有实现内容。**工作区在 main 上保持干净。**
+### Batch 904（已交付：更正 902 的一处错误记载，并把最后一个跑在 import 上的门禁收进守卫）
+
+- 分支：`batch-904`
+- 起点：**WebUI 已近 20 批没动**，而它是用户明确排第二的优先级。先侦察，再决定要不要动。
+- **WebUI 侦察：四条轴全部干净（实测，这是个非发现，也是结果）**：
+  | 轴 | 结论 |
+  |---|---|
+  | 弹层是否绕过共享 `Dialog` | **没有**。全仓只有 `Dialog.tsx` 渲染 `role="dialog"`，两个 Modal 和 `ReembedAllButton` 都走它；`DocumentActionsMenu` 用 `role="menu"`（菜单的正确写法） |
+  | 异步结果有没有播报 | **有**。`Toast` 用常驻容器 `aria-live="polite"`，注释还解释了"单条 `role="alert"` 会把 polite 覆盖成 assertive"这个坑 |
+  | IME 合成态 | **有测**。`ime.test.tsx` 里有 `describe('ImeSafeForm')` 共 7 条 |
+  | 没有同级测试文件的源码比例 | **7%**，且最大的几个是 `types/api.ts`、`tokens.generated.ts`、`test/setup.ts`——不是逻辑 |
+  - 现有 **11 道静态检查**（alignment / design-system / design-tokens / destructive /
+    double-submit / hardcoded-copy / i18n-keys / mutation-errors / page-shell /
+    query-errors / a11y-forms）+ **946** 条用例。
+  > **量了四条轴、条条干净，就不要为了"做点什么"去改它。**
+- **侦察里我的普查又错了一次，而且是同一类错**：
+  按"有没有同名 `.test.tsx`"判未测，把 `ImeSafeForm.tsx` 报成未测——
+  它的测试在 `src/utils/ime.test.tsx` 里。
+  > **按文件名分组，就会把"测试写在别处"报成"没有测试"**——
+  > 和 903 那条是同一个教训：**分组方式决定了你能看见什么**。
+- **真正的产出是更正一处错误记载**：
+  902 账本里写"`check-alignment-policy.mjs` 没有守卫而且是对的，它是被别的检查 import 的模块"。
+  **实测：那两处命中全是注释里的提及，没有任何东西 import 它。**
+  它是独立脚本（`npm run check:alignment` 跑，自测用 `spawnSync` 跑），
+  **和 902 刚修好的 `verify-json-assertions.mjs` 是同一个缺陷**，
+  而我给"不改它"找的理由是一次 grep 到了注释。
+  > **本次会话第三次栽在"文本扫描不剥注释"**：
+  > 901 的门禁把自己源码里那行 `text.includes('import.meta.url')` 报了出来（已修）；
+  > 903 的普查按 (字段名, 默认值) 全局分组（已记）；
+  > 904 的普查匹配到了注释。**同一类错在一个会话里出现三次，
+  > 说明它不是偶然手滑，是默认写法。**
+- **实施**：该文件包进 `main()` 并用共享守卫。实测"当程序跑输出正常、当 import 跑输出 0 行"。
+- **改这一处时踩了 897 定的那条规矩**（要退就退到修复前的形态）：
+  第一版把 import 写成 `../../scripts/lib/is-main-module.mjs`，
+  **绕过了 webui 自己的镜像**（那个镜像存在的原因就是这个包要自包含），
+  于是自测里 29 条挂了 26 条，错误信息指向**模块解析器**而不是任何和对齐有关的东西。
+  原因是该自测用 `cpSync` 把门禁复制到临时树再 `spawnSync`——
+  **夹具必须自包含**，而我加了一条指向树外的 import。
+  - 改成 `'./lib/is-main-module.mjs'`（和另外 9 个 webui 门禁一致），
+    并让自测**把 helper 也复制进临时树**。
+  > **一个只复制被测文件、不复制它的依赖的夹具，在被测文件有了依赖之后就不再是夹具。**
+  - 修好后 **29/29**，门禁 EXIT=0，程序行为不变。
+- **验收**：`alignment-policy` 自测 **29/29**、门禁 EXIT=0、
+  WebUI `lint` EXIT=0 / **946** 用例全过、聚合门禁 **29** 项、docs **16** 项。
+  **本批未改动任何 Java 源码。**
 ### Batch 894（已交付，测试加固：五道验收门禁的读法从没被验过，本批给它一个被验的读法）
 
 - 分支：`batch-894`
