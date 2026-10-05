@@ -270,7 +270,13 @@ test.describe('Chat', () => {
 
     await expect(page.getByRole('button', { name: 'Send' })).toBeVisible();
     await expect(page.locator('textarea')).toHaveValue('Keep this prompt');
-    await expect(page.getByText('Error: HTTP 409')).toBeVisible();
+    // Batch 922. This read `Error: HTTP 409` and the hook only ever produced
+    // that, because it took the status off the response and dropped the body.
+    // The mock above has been carrying `message: "Chat turn is still running"`
+    // the whole time — the reason the client never showed. Batch 921 taught the
+    // hook to read it, so the bubble now says what the server actually said,
+    // which is the only part of this a user can act on.
+    await expect(page.getByText('Error: Chat turn is still running')).toBeVisible();
     await expect.poll(() => requests.length).toBe(2);
     expect(requests[0].key).toBeTruthy();
     expect(requests[1].key).toBe(requests[0].key);

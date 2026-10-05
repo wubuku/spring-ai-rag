@@ -1726,6 +1726,55 @@
   四道门禁 EXIT=0、两个被改指向的自测 12/12 与 27/27、
   WebUI `lint` 全链 EXIT=0 / **946** 用例 / `hardcoded-copy` **50** 用例、
   聚合门禁 **29 → 30** 项、docs **16** 项。**本批未改动任何 Java 源码。**
+### Batch 922（已交付，`chat-real.spec.ts` 第一次真的绿了——而这一批同时抓到 921 自己的一个真实回归）
+
+- 分支：`batch-922`
+- 起点：918 实测出"这个环境从来没有一个能用的工具调用模型"，并把
+  `legacyCapabilities` 这个开关补进了双语配置文档。本批就是**照着自己刚写的文档做一遍**。
+- **先验文档，再信文档**：按 `configuration*.md` 新增的小节，在本地
+  `.dev/models.json` 里给 legacy provider 声明能力（外部 JSON 的字段是 camelCase
+  的 `toolCalling`，不是 YAML 里的 kebab-case——两个地方两种写法，值得记）：
+  ```json
+  "legacyCapabilities": { "openai": { "streaming": true, "toolCalling": true } }
+  ```
+  起后端实测 `/models`：
+  ```
+  siliconflow/Qwen/Qwen3.5-27B  avail=False toolCalling=True  source=configured
+  openai                        avail=True  toolCalling=True  source=legacy
+  ```
+  正好一个可用且支持工具调用的模型。**文档是可执行的，不是装饰。**
+- **`chat-real.spec.ts` 通过了（44.5s）——这是它第一次通过**：
+  ```
+  ✓ e2e/chat-real.spec.ts:20 › uses the real WebUI proxy for bounded Agent SSE
+    and history recovery (44.5s)
+  ```
+  915 那次它 25 分钟跑出一个零信息的失败，920/921/922 三层叠起来之后，
+  916 那两处诊断修复在真实 provider 上被证明达到了目的。
+  幂等冒烟同一次里也干净：`before=2.0 → json=3.0 → sse=4.0`，每次首请求恰好 +1。
+- **但这一批同时抓到 921 自己的一个真实回归**，而且是 e2e 抓到的：
+  `chat.spec.ts:250` 断言气泡是 `Error: HTTP 409`，现在不是了。
+  那个 mock 从头到尾就带着
+  `{"code":"IDEMPOTENCY_OPERATION_IN_PROGRESS","message":"Chat turn is still running"}`
+  ——**服务端早就说了原因，921 之前只是没人读**。现在读了，气泡变成
+  `Error: Chat turn is still running`，断言随之失效。
+  > **921 改的是行为，e2e 钉的是被取代的旧行为**，所以要改的是断言而不是实现：
+  > `HTTP 409` 恰恰是仓库自己说的"穿着服务端衣服的传输层"，
+  > 而"Chat turn is still running"是用户唯一能据以行动的那半句。
+- **单测为什么一个都没红——这是本批最值得记的一条**：
+  > `useSSE.test.ts` 里**每一个** mock 响应对象都**没有 `json()` 方法**。
+  > 于是 921 新加的那条分支在单测里**只被 `catch` 走过**——
+  > 950 条全绿，而浏览器坏了。
+  > **一个缺少被调用方法的 mock 不只是"少覆盖了一个 case"，
+  > 它把每一个 case 都路由进了回退分支。**
+  > 我当时写的两条新用例是有 `json()` 的，所以它们绿；
+  > 而**其余**用例全部绕开了新代码，看起来像"全都测过了"。
+  - 修法两条：e2e 断言改成服务端真话；**再补一条单测，按服务端真实的 409 形状**
+    （`message`、没有 `detail`）写，让单测不再对这条路径免疫。
+- **验收**：mock Playwright **93 通过 / 2.4m**；`useSSE.test.ts` **32/32**；
+  真实端到端那档 17 通过 / 1 失败（那一档的 mock Playwright 步即上面这条回归，
+  单独重跑已绿）。**`.dev/models.json` 是本地配置，已被 .gitignore 忽略，
+  不进仓库——但它是这一批能跑起来的前提，步骤记在这里。**
+
 ### Batch 921（已交付，920 修的是服务端那一半——这一半在客户端：服务端已经把话说全了，前端只读了状态码就把它扔了）
 
 - 分支：`batch-921`
