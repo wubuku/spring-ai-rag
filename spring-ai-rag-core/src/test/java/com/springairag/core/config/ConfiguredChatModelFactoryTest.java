@@ -72,6 +72,47 @@ class ConfiguredChatModelFactoryTest {
         assertFalse(factory.listChatModels().getFirst().available());
     }
 
+    /**
+     * 钉住 available 的语义：它是**配置事实**，不是可用性事实。
+     *
+     * <p>上面 {@code missingApiKey_marksModelUnavailable} 证明了"key 为空"会
+     * 让 available 变成 false；这一条钉住它的另一侧：只要 key 非空、baseUrl
+     * 非空、apiType 受支持、模型限额合法，available 就是 true，**一次都不联
+     * 系过 provider**。key 写的是什么完全不影响判定——它甚至可以是一个任何
+     * 真实网关都会用 401 拒掉的字符串。
+     *
+     * <p>为什么值得单独钉：2026-10-05 一次真实 provider 验收里，
+     * {@code /models} 把一个密钥会被 401 拒绝的模型报成 available=true，
+     * WebUI 照常把它列进下拉框，验收脚本选了它，于是整轮跑出一个"什么都没说"
+     * 的失败。当时的诊断是"下拉框悄悄回落到了默认模型"——错的。真实的因果是
+     * 脚本选的本来就是它，而 available 这个名字让人以为它还意味着别的。
+     * 语义本身是有意的（探活意味着每次列模型都要真打一次 provider），缺的是
+     * 把它钉住，让下一个人不必重新推一遍。
+     *
+     * <p>这条断言只声称它验证过的那一件事：available 由配置算出。它不声称这个
+     * 模型可用——恰恰相反，它声称的是"不可用与否，它看不出来"。
+     */
+    @Test
+    void presentApiKey_isReportedAvailableWithoutContactingTheProvider() {
+        MultiModelProperties properties = properties(
+                "siliconflow",
+                provider("https://api.siliconflow.cn", "not-a-real-key",
+                        "openai-chat", true,
+                        model("Qwen/Qwen3.5-27B", false, 8192)));
+        ConfiguredChatModelFactory factory =
+                new ConfiguredChatModelFactory(properties, new MockEnvironment());
+
+        ConfiguredChatModelFactory.ModelDescriptor descriptor =
+                factory.listChatModels().getFirst();
+
+        assertTrue(descriptor.available());
+        assertNull(descriptor.unavailableReason());
+        // 响应里不给 unavailableReason 字段，而不是给一个 null：调用方读
+        // toMap().get("unavailableReason") 时，缺字段与 null 是同一件事，
+        // 但"这个键存在"会让人以为有话要说。
+        assertFalse(descriptor.toMap().containsKey("unavailableReason"));
+    }
+
     @Test
     void unsupportedApiType_isNotAvailable() {
         MultiModelProperties properties = properties(

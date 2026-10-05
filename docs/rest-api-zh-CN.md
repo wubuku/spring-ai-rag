@@ -2839,6 +2839,14 @@ mode 值为 `PLAIN`、`KNOWLEDGE`、`AGENT`。
 已配置但缺少凭据的模型仍会返回，并带有 `available: false` 和
 `unavailableReason`。
 
+`available` 是**配置事实**，不是可用性事实。它在**不联系 provider** 的情况下算出：
+provider 已启用、`baseUrl` 非空、`apiType` 受支持、声明的上下文限额为正、
+且 API key 解析成非空字符串。**被 provider 用 401 拒绝掉的密钥同样报 `available: true`**
+——在这里，一个写错的或已吊销的凭据和一个能用的凭据没有区别。探活意味着每列一次
+模型就要真打一次 provider，所以这是有意为之：把 `available` 当成"已配置"，
+让第一次真实请求去发现真相。该语义由
+`ConfiguredChatModelFactoryTest#presentApiKey_isReportedAvailableWithoutContactingTheProvider` 钉住。
+
 省略 `capabilities.streaming` 时为兼容旧配置默认按 `true` 处理。
 `capabilities.toolCalling` 默认 `false`，只有在具体上游模型/端点验证支持后才应显式
 开启。`AGENT` 模式要求 Tool Calling；WebUI 也使用该字段禁用不兼容选择。

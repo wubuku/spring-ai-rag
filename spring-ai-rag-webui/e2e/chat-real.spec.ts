@@ -72,6 +72,14 @@ test('uses the real WebUI proxy for bounded Agent SSE and history recovery', asy
 
     await expect(page.getByTestId('chat-model-select')).toBeVisible();
     await page.getByTestId('chat-model-select').selectOption(agentModel.ref);
+    // Assert the select actually holds what we just chose. The mode select two
+    // lines up has always carried this assertion and the model select never
+    // did — and on 2026-10-05 that asymmetry was the whole failure: the run
+    // picked a model, drove the UI, and never learned that the value in the
+    // control was not the one the rest of the test was reasoning about. The
+    // request body assertion below already pins `model`, so this covers the
+    // gap between "asked the UI to change" and "the UI shows the change".
+    await expect(page.getByTestId('chat-model-select')).toHaveValue(agentModel.ref);
     await page.getByTestId('chat-mode-select').selectOption('AGENT');
     await expect(page.getByTestId('chat-mode-select')).toHaveValue('AGENT');
 
@@ -88,9 +96,18 @@ test('uses the real WebUI proxy for bounded Agent SSE and history recovery', asy
     const streamRequestPromise = page.waitForRequest(
       request => request.url().includes(`${API_PREFIX}/chat/stream`),
     );
-    const streamResponsePromise = page.waitForResponse(
-      response =>
-        response.url().includes(`${API_PREFIX}/chat/stream`) && response.status() === 200,
+    // Match the response by URL only, then assert the status separately.
+    // Filtering inside the predicate (`&& response.status() === 200`) makes a
+    // prompt 500 and a hang indistinguishable: the wait simply never resolves,
+    // so the run reports "Test timeout of 180000ms exceeded" after three
+    // minutes and never says what the server actually answered. On 2026-10-05
+    // this cost a 25-minute acceptance run and a 600-second follow-up to learn
+    // something the UI showed in its first second — `Error: HTTP 500`, in a
+    // bubble, next to a 401 the backend had already logged. `expectApiSuccess`
+    // below has had this shape for every non-streaming call in this file; the
+    // stream path is the one that did not.
+    const streamResponsePromise = page.waitForResponse(response =>
+      response.url().includes(`${API_PREFIX}/chat/stream`),
     );
     await page.locator('textarea').fill(message);
     await page.getByRole('button', { name: 'Send' }).click();
@@ -104,7 +121,14 @@ test('uses the real WebUI proxy for bounded Agent SSE and history recovery', asy
       collectionScopeMode: 'SELECTED_COLLECTIONS',
       collectionKeys: [probe.collectionKey],
     });
-    await streamResponsePromise;
+    await streamResponsePromise.then(async response => {
+      if (!response.ok()) {
+        throw new Error(
+          `POST ${API_PREFIX}/chat/stream failed with HTTP ${response.status()}: `
+            + `${await response.text()}`,
+        );
+      }
+    });
 
     // Keyed SSE completes the durable operation before projecting the bounded
     // snapshot. The stable acceptance evidence is the answer, sources, and
