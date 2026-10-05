@@ -1726,6 +1726,50 @@
   四道门禁 EXIT=0、两个被改指向的自测 12/12 与 27/27、
   WebUI `lint` 全链 EXIT=0 / **946** 用例 / `hardcoded-copy` **50** 用例、
   聚合门禁 **29 → 30** 项、docs **16** 项。**本批未改动任何 Java 源码。**
+### Batch 921（已交付，920 修的是服务端那一半——这一半在客户端：服务端已经把话说全了，前端只读了状态码就把它扔了）
+
+- 分支：`batch-921`
+- 起点：920 把 keyed SSE 的失败面测了出来——provider 失败会被原样重抛，
+  由 `GlobalExceptionHandler` 答一个真实状态码。本批原计划是**把 emitter 之前的
+  同步失败点逐个分类**。
+- **负结果，先记下来，免得下一个人再普查一遍**：那一圈其实**已经齐了**。
+  `claim()` 抛的是 `RagException`；`LlmCircuitOpenException extends RagException`
+  → 503；`OptimisticLockingFailureException` 与 `DataAccessException` 各有 handler；
+  剩下落进兜底 500 的，是 provider 自己抛的 `NonTransientAiException`——
+  **而那正是 920 已经处理的**。
+  > **"逐个分类"这种计划最容易产出一张没人需要的清单。**
+  > 真正的问题不在清单上，在信息流的下一段。
+- **信息是在客户端被丢掉的**。`useSSE.ts` 在 `!response.ok` 时只取
+  `response.status` 拼成 `HTTP 500`，**从不读 body**。而服务端这一侧
+  （920 实测的形状）已经把话说全了：
+  ```
+  { "error": "INTERNAL_ERROR", "status": 500,
+    "detail": "401 - {\"code\":30014,\"message\":\"Token is invalid.\"}" }
+  ```
+  > 于是用户看到的是五个字符，而可操作的原因就躺在他看不见的地方。
+  > **920 修的是同一个问题的服务端那一半：日志不再伪装成状态码。**
+- **修法不是发明新判断**——仓库里早有一个想清楚了的过滤器，
+  `utils/failureReason.ts` 的头注释原话是：
+  > "状态码不是服务端给的理由，它是穿着服务端衣服的传输层。"
+  `QueryErrorBanner` 已经在用它。所以 `useSSE` 也用它：
+  读 body → `detail ?? message`（**与 `api/client.ts` 同字段顺序**，两处读同一个
+  problem 文档的地方不会对"理由在哪个字段"各说各话）→ 过 `usableReason` →
+  有就用，没有就回退 `HTTP <status>`。
+- **回退是主体，不是附注**：Spring 自己的错误 body 是
+  `{timestamp, status, error, path}`，既没有 `detail` 也没有 `message`。
+  把空理由顶替掉状态码会比原来更糟，所以这条方向单独用一条用例钉住。
+  解析失败也 catch 掉：死连接会 reject、半截 body 会 reject，
+  **两者都不是能拿来替换状态码的理由**。
+- **两条测试，方向相反，先立后修**：
+  | | 修前 | 修后 |
+  |---|---|---|
+  | 阳性（body 带 `detail`） | 红（得到 `HTTP 500`） | 绿（得到 provider 的原话） |
+  | 阴性（body 没有理由） | 绿（`HTTP 500`） | 绿（仍是 `HTTP 500`） |
+  **反向对照**：把 helper 改成永远回退 → **1 failed / 30 passed**，
+  红的正是阳性那条，阴性那条保持绿。
+- **验收**：WebUI `npm run lint` EXIT=0 / **464**；应用测试
+  **79 文件 / 950 用例 / 0 失败**（+2）。**未改动任何 Java 源码。**
+
 ### Batch 920（已交付，915 那个 500 追到了底——而答案是"后端从头到尾就没决定过它是 401"）
 
 - 分支：`batch-920`
