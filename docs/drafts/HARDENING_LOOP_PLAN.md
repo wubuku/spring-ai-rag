@@ -1726,6 +1726,64 @@
   四道门禁 EXIT=0、两个被改指向的自测 12/12 与 27/27、
   WebUI `lint` 全链 EXIT=0 / **946** 用例 / `hardcoded-copy` **50** 用例、
   聚合门禁 **29 → 30** 项、docs **16** 项。**本批未改动任何 Java 源码。**
+### Batch 920（已交付，915 那个 500 追到了底——而答案是"后端从头到尾就没决定过它是 401"）
+
+- 分支：`batch-920`
+- 起点：916/917 把范围缩到"controller 之外，剩代理或 controller 之前的过滤器"。
+  本批去把最后一段走完。
+- **先更正我自己**：916/917 那两条结论**都只对非 keyed 分支成立**，
+  而我写它们的时候没有说这个范围。
+  > **又一次：用一条分支的测量去否定了一整类。** 915 那次是"选框静默回落"，
+  > 这次是"controller 不可能产出非 2xx"。两次都是**过度概括**，
+  > 而且第二次我还把它当成了排除性证据。测量一个分支之前，
+  > 先问自己这条分支是不是产品实际走的那条。
+- **我测错了分支**：916/917 的探针里 `turnOperationService == null`，
+  于是 `stream()` 落到**非 keyed** 分支。而真实 WebUI 带 `Idempotency-Key`
+  （`useSSE.ts:202`），走的是 `executeKeyedSse` —— **完全不同的形状**：
+  | | 非 keyed | keyed（产品实际用的） |
+  |---|---|---|
+  | provider 调用时机 | emitter 创建**之后**，异步 Flux | emitter 创建**之前**，同步 |
+  | 失败怎么走 | `onError` → `event:error` 帧，状态码 200 | `catch → turnOperationService.fail(claim, e) → throw e`，**原样重抛** |
+  | 客户端看到 | 200 + error 帧 | **由 GlobalExceptionHandler 定的真实状态码** |
+  keyed 的重抛早已被 `RagChatControllerKeyedSseTest#streamFailsOperationWhenPreparedChainFails`
+  钉住——但那是一条 `assertThrows`，它只证明异常离开了 controller，
+  **没有经过异常处理器**，所以客户端拿到什么一直没人钉。
+- **真答案（实测，不是推的）**：`GlobalExceptionHandler` 的兜底分支
+  `@ExceptionHandler(Exception.class)` **无条件**返回 `500 INTERNAL_ERROR`。
+  Spring AI 抛的 `NonTransientAiException` 不是 `RagException`，
+  于是正落在这个分支里——**后端从头到尾没有"决定"过它是 401。**
+- **而真正误导人的是那行日志本身**。原来写的是
+  `log.error("Request failed: {}", safeMessage, e)`，**只有一个占位符**，
+  而 provider 401 的异常消息**恰好以 `401 - {…}` 开头**（那正是 provider 的原话）。
+  于是渲染出来是：
+  ```
+  Request failed: 401 - {"code":30014,"data":null,"message":"Token is invalid."}
+  ```
+  > 这行读起来和"handler 知道状态是 401、答了 500"**完全无法区分**。
+  > 我就是照着这个读法追了整整一批——**日志格式本身是一个会误导人的缺陷**，
+  > 而不是一个无害的写法。
+- **修法：让状态码自己说话**，不再依赖读者去推断：
+  `Request failed: status=500, detail=401 - {…}`。
+  状态维持 500 是**有意的**：被拒的是 **provider 的**凭据，不是调用方的，
+  回 401 等于告诉一个 API 客户端"你的 key 坏了"——而它没坏。
+- **新测试 `UpstreamProviderFailureStatusTest`（2 条）**：
+  一条钉"provider 401 → 500 `INTERNAL_ERROR`，且那个 401 是 detail 不是 status"；
+  一条钉"日志必须自己点名状态码"。日志断言沿用仓库里已有的
+  Logback `ListAppender` 模式（`MultiModelConfigLoaderTest` 已经在用）。
+  **反向对照的失败信息逐字复现了那行误导人的日志**：
+  ```
+  the log does not name the status: Request failed: 401 - {"code":30014",…}
+  ```
+  > 缺陷被写进测试的失败信息里，下一个撞上它的人不必再查一遍历史。
+- **915 那个 500 至此闭环**：浏览器拿到 500，是因为后端**本来就答 500**；
+  日志里那个"401"是一个数字开头的消息，恰好落在了状态码该在的位置上。
+  Vite 代理与过滤器链两条嫌疑**都不成立**——不需要再开着栈复现了。
+- **验收**：全量 `mvn -o clean test` **8339** 用例 / 0 失败
+  （api 557 / core 7664 / starter 44 / documents 74，core 里 153 跳过正是门控 IT）；
+  gate-entry-points EXIT=0；聚合门禁 33 项；docs 16 项。
+- **新增拍板项 (g)**：上游 provider 认证/可用性失败该回 500 还是 502/503。
+  本批按现状钉住 500 并写进注释；改状态码是对外 REST 契约，要人决定。
+
 ### Batch 919（已交付，一句提示都没有的模型替换——而且我写的那条"阴性对照"一开始是空的）
 
 - 分支：`batch-919`

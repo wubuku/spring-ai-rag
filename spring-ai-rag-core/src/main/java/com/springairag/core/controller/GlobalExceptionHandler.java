@@ -239,7 +239,23 @@ public class GlobalExceptionHandler {
         // Exception messages may contain internal paths, SQL errors, etc.; desensitize before returning to user
         String rawMessage = e.getMessage() != null ? e.getMessage() : "Unknown error";
         String safeMessage = SensitiveDataMaskingConverter.maskSensitiveData(rawMessage);
-        log.error("Request failed: {}", safeMessage, e);
+        // Batch 920. The status is named in the line rather than left implicit.
+        // It used to read `Request failed: {message}` and nothing else — and for
+        // a provider that answers 401, the *message* begins with `401 - {…}`,
+        // because that is what Spring AI puts in it. The line therefore read
+        // `Request failed: 401 - {"code":30014…}`, which is indistinguishable
+        // from a handler that knew the status was 401 and answered 500
+        // afterwards. It did not know: this branch always answers 500, and the
+        // number in front was never the status. Chasing that reading cost a full
+        // batch of misdiagnosis before it was pinned by a test.
+        //
+        // The status stays 500, and that is deliberate: a rejected *provider*
+        // credential is this deployment's problem, not the caller's, so 401
+        // would tell an API client its own key is bad when it is not. Whether
+        // upstream failures deserve 502/503 instead is a contract question
+        // tracked in the ledger rather than decided here.
+        log.error("Request failed: status={}, detail={}",
+                HttpStatus.INTERNAL_SERVER_ERROR.value(), safeMessage, e);
         return buildResponse(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", safeMessage, request);
     }
 
