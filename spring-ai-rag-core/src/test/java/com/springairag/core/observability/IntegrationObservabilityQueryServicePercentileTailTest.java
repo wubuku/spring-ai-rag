@@ -1,6 +1,8 @@
 package com.springairag.core.observability;
 
+import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.config.RagProperties;
+import com.springairag.core.exception.RagException;
 import com.springairag.core.observability.IntegrationObservationRepository.Aggregate;
 import com.springairag.core.observability.IntegrationObservationRepository.DimensionAggregate;
 import com.springairag.core.service.CollectionIdentityResolver;
@@ -104,15 +106,18 @@ class IntegrationObservabilityQueryServicePercentileTailTest {
 
     @Test
     void statusBreakdownRejectsNonNumericDimension() {
-        assertThrows(RuntimeException.class,
+        RagException error = assertThrows(RagException.class,
                 () -> statusBreakdown("abc"));
+        assertEquals(ErrorCode.SERVICE_UNAVAILABLE, error.getErrorCodeEnum());
     }
 
     @Test
     void statusBreakdownRejectsOutOfRangeStatus() {
-        assertThrows(RuntimeException.class,
+        RagException low = assertThrows(RagException.class,
                 () -> statusBreakdown("42"));
-        assertThrows(RuntimeException.class,
+        RagException high = assertThrows(RagException.class,
                 () -> statusBreakdown("999"));
+        assertEquals(ErrorCode.SERVICE_UNAVAILABLE, low.getErrorCodeEnum());
+        assertEquals(ErrorCode.SERVICE_UNAVAILABLE, high.getErrorCodeEnum());
     }
 }

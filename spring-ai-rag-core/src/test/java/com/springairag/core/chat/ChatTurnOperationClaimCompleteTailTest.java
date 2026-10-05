@@ -22,6 +22,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -428,22 +429,28 @@ class ChatTurnOperationClaimCompleteTailTest {
         ChatTurnOperationService.Claim claim =
                 new ChatTurnOperationService.Claim(op, false);
 
-        assertThrows(RuntimeException.class,
+        RagException error = assertThrows(RagException.class,
                 () -> service.completeOpenAi(claim, null,
                         "PLAIN", "SERVER", "model-x", null));
+        // 只断言到类型为止是半截断言：真正说明问题的是 cause。
+        assertInstanceOf(IllegalArgumentException.class, error.getCause());
+        assertEquals("Chat response must not be null",
+                error.getCause().getMessage());
     }
 
+    /**
+     * 这条用例原先叫 completeOpenAiRejectsNullSourceElement，但它断言的 NPE
+     * 来自夹具里的 ChatResponse.setSources（List.copyOf 不接受 null 元素），
+     * 根本没进 ChatTurnOperationService——名字与实际测的东西对不上。
+     *
+     * <p>顺带说明：{@code stableSource} 里的 null 守卫属于纵深防御，公开 API
+     * 走不到（构造响应时就被 List.copyOf 挡下了）。这里如实断言真正可达的契约。
+     */
     @Test
-    void completeOpenAiRejectsNullSourceElement() {
-        ChatTurnOperation op = operation(ChatTurnOperation.Status.SUCCEEDED);
-        ChatTurnOperationService.Claim claim =
-                new ChatTurnOperationService.Claim(op, false);
-
-        assertThrows(RuntimeException.class,
-                () -> service.completeOpenAi(claim,
-                        chatResponse("final", Map.of(),
-                                Arrays.asList((com.springairag.api.dto.ChatSource) null)),
-                        "PLAIN", "SERVER", "model-x", null));
+    void chatResponseDtoRejectsNullSourceElementsUpFront() {
+        assertThrows(NullPointerException.class,
+                () -> chatResponse("final", Map.of(),
+                        Arrays.asList((com.springairag.api.dto.ChatSource) null)));
     }
 
     @Test

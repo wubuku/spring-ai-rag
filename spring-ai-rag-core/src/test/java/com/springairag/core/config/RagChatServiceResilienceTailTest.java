@@ -180,6 +180,8 @@ class RagChatServiceResilienceTailTest {
                 .thenReturn(List.of(candidate("m-a", failing)));
         RagChatService service = createService(new RagProperties(), null);
 
+        // 异常由本用例 stub 的 mock 抛出，测的是失败被 metricsService 记账；
+        // 收窄类型只会让这条用例断言一件它并不在测的事。
         assertThrows(RuntimeException.class,
                 () -> service.chat(chatRequest()));
 

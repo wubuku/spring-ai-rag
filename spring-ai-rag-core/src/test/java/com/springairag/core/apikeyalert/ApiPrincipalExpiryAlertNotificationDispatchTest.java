@@ -8,6 +8,7 @@ import com.springairag.core.service.NotificationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -165,8 +166,11 @@ class ApiPrincipalExpiryAlertNotificationDispatchTest {
                 contains("SET message = ?"), any(Object[].class)))
                 .thenReturn(0);
 
-        assertThrows(RuntimeException.class,
+        DataAccessException conflict = assertThrows(
+                DataAccessException.class,
                 () -> service(List.of()).reconcilePrincipalExpiry("p-1"));
+        assertEquals("Concurrent expiry alert reconciliation",
+                conflict.getMessage());
 
         // 重试预算耗尽后按失败记账（外层兜底相位为 NONE）。
         verify(metrics).recordReconcile(eq("FAILURE"), anyString());

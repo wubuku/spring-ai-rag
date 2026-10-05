@@ -472,6 +472,7 @@ class AdvisorChainIntegrationTest {
         ChatClientRequest request = buildRequest("test query");
 
         // QueryRewriteAdvisor should throw exception
+        // 异常由本用例 stub 的 advisor 抛出，测的是失败沿 advisor 链向上传播。
         assertThrows(RuntimeException.class, () ->
                 queryRewriteAdvisor.before(request, advisorChain));
     }
@@ -489,6 +490,7 @@ class AdvisorChainIntegrationTest {
 
         ChatClientRequest request = buildRequest("test query");
 
+        // 异常由本用例 stub 的 advisor 抛出，测的是失败沿 advisor 链向上传播。
         assertThrows(RuntimeException.class, () ->
                 hybridSearchAdvisor.before(request, advisorChain));
     }
@@ -506,6 +508,7 @@ class AdvisorChainIntegrationTest {
                         List.of(createResult("doc-1", "test", 0.9))))
                 .build();
 
+        // 异常由本用例 stub 的 advisor 抛出，测的是失败沿 advisor 链向上传播。
         assertThrows(RuntimeException.class, () ->
                 rerankAdvisor.before(request, advisorChain));
     }

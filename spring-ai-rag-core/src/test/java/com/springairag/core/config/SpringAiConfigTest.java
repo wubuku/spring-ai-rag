@@ -109,7 +109,9 @@ class SpringAiConfigTest {
     @DisplayName("chatClientBuilder throws exception for empty list")
     void chatClientBuilder_emptyList_throwsException() {
         List<ChatModel> models = List.of();
-        assertThrows(Exception.class, () -> config.chatClientBuilder(models));
+        IllegalStateException error = assertThrows(IllegalStateException.class,
+                () -> config.chatClientBuilder(models));
+        assertEquals("No ChatModel available", error.getMessage());
     }
 
     @Test

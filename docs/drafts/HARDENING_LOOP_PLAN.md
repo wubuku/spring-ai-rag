@@ -1726,6 +1726,79 @@
   四道门禁 EXIT=0、两个被改指向的自测 12/12 与 27/27、
   WebUI `lint` 全链 EXIT=0 / **946** 用例 / `hardcoded-copy` **50** 用例、
   聚合门禁 **29 → 30** 项、docs **16** 项。**本批未改动任何 Java 源码。**
+### Batch 907（已交付，测试加固：把 906 剩下的 22 处逐个跑出真实异常类型——结果推翻了我自己写进账本的一条分类）
+
+- 分支：`batch-907`
+- 方向：906 结尾记下的那 22 处（17 个文件）。方法已经跑通：
+  **读生产代码的 throw 点 → 改成精确类型 → 断言错误码 → 变异验证**。
+- **一次注入探针 + 一次 Maven 跑完 24 处的真实类型**：
+  在 16 个文件里把 `assertThrows(X.class,` 临时换成打印 `e.getClass().getName()` 的 lambda，
+  跑 14 个可运行的测试类，一次拿到全部 24 个实测类型
+  （完整清单留在 `/private/tmp/m907-probe.log`，未进仓库）。
+  > **问 24 个问题的成本，远低于逐个跑 24 次。**
+- **实测推翻了 906 写进账本的三条分类中的两条**：
+
+  | 906 的判定 | 实测 | 结论 |
+  |---|---|---|
+  | 反射会包一层 `InvocationTargetException`，所以本来就该宽 | 外层类型可指名，**且解包后能断言真正的 `IllegalArgumentException` 与消息** | **906 判错了。收窄后比原来更强。** |
+  | 具体类型是 private 嵌套类，测试无法指名 | 它的直接父类 `DataAccessException` **是 public 的**，可以指名 | **906 判错了。5 处全部收窄。** |
+  | 测试自己抛异常验传播，保留宽类型 | 这一条成立 | 保留 6 处，理由写进源码 |
+
+  > **"这条理由成立过"不等于"它现在还成立"——906 那三条一行都没跑过。**
+  > 这和 900 的 gh「不可用」、902 的「被 import 的模块」是同一类：
+  > **被引用了很久的"理由"本身也是假设，要去试。**
+- **906 那条表格必须更正**（已在下方 906 条目上标注）。
+- **顺手挖出一条"名字与所测之物对不上"的用例**：
+  `ChatTurnOperationClaimCompleteTailTest.completeOpenAiRejectsNullSourceElement`
+  名字承诺"服务拒绝 null source 元素"，实测堆栈显示 NPE 来自**夹具里**
+  `ChatResponse.setSources` → `List.copyOf`，**根本没进 `ChatTurnOperationService`**。
+  推论：`stableSource` 里的 null 守卫是**公开 API 走不到的纵深防御**
+  （构造响应时就被 `List.copyOf` 挡下）。改名为 `chatResponseDtoRejectsNullSourceElementsUpFront`，
+  如实断言真正可达的契约，并在 Javadoc 里写明来龙去脉。
+  > **一条断言钉的东西和它的名字说的不是一回事时，先打印堆栈，别读代码。**
+- **分类的最终结果（24 处实测）**：
+  - **18 处收窄**，且不只是收窄：
+    `DataAccessException` ×5（并发协调，附带消息断言）、
+    `InvocationTargetException` + 解包断言 cause ×2、
+    `RagException` + 错误码断言 ×7、`InvalidFormatException` ×1、
+    `IllegalStateException` + 消息断言 ×1、`LlmCircuitOpenException` ×1
+    （顺手删掉外面那层冗余的 `assertInstanceOf`——`assertThrows` 已经断过类型了）。
+  - **6 处保留宽类型**，写明中文理由：异常由本用例 stub 的 mock 抛出，
+    测的是失败被记账 / 沿 advisor 链传播，不是异常类型。
+- **第一版 apply 脚本三处实质错误，全部回退重做**：
+  1. **把 `RuntimeException.class` 写成了 `Exception.class`**——这是**把断言改弱**，
+     5 个文件 5 处。改测试时"统一写法"的冲动比不改危险。
+  2. 注释缩进错位、`assertThrows` 被顶到第 0 列、每个文件尾部多一个空行。
+  3. 按上一条的误判给 5 处写了"无法指名所以保留宽类型"的注释。
+  > **一次 apply 脚本里同时改 14 个文件，出错时最难的是"改动看起来合理"。**
+- **替换脚本自带出现次数断言，这是它唯一救了我的一次地方**：
+  `AdvisorChainIntegrationTest` 三处 `assertThrows(RuntimeException.class, () ->`
+  完全相同，第一条的替换文本里**也含同样那一行**，裸串计数不会下降。
+  脚本发现"期望 2 处、实际 3 处"并**拒绝落盘**；改成连参数行一起匹配才通过。
+  > 和 906 那次一样：**守卫的价值在于它拒绝的那一次没被误读。**
+- **变异验证分两轮，因为一轮分不清是谁在咬**：
+  - **错误码/消息轮**（类型不变）：5 个生产文件各一处，
+    **5/5 变红**。其中第 5 条一开始**打错了抛点**——
+    我去改 `ChatSessionCoordinator` 的 `SESSION_NOT_FOUND`，
+    而那条用例 mock 掉了 coordinator，异常其实来自 `RagChatController.clearHistory`，
+    于是**没红**。差点读成"这条断言不咬"，实际是我改错了地方。
+    > **"没红"的第一解释永远是"变异没打中"，不是"断言没用"。**
+  - **类型轮**（错误码与消息不变）：4 个生产文件，
+    `IllegalStateException` 没有 `(ErrorCode, String)` 构造器，第一次变异**编译不过**；
+    去掉错误码参数后 **4/4 变红，共 10 条失败**。
+- **未测到的 5 处，如实记账**：`ChatSessionPostgresIntegrationTest` 4 处、
+  `ChatTurnOperationPostgresIntegrationTest` 1 处，在 Testcontainers 门控的 IT 里，
+  本环境起不了数据库，**保持原状不动**。
+- **一处留给人拍板的实现问题（不改生产代码，记在这里）**：
+  `ChatTurnOperationService.stableSnapshot` 用一个 `catch (Exception e)`
+  把 `IllegalArgumentException("Chat response must not be null")`
+  重新包成 `RagException(ErrorCode.IDEMPOTENCY_RESPONSE_TOO_LARGE, "…cannot be serialized for replay")`——
+  **"响应为空"被报成"响应太大"**。本批的测试只断到 `RagException` + cause，
+  **刻意不去钉那个可疑的错误码**：
+  > **一条断言钉住了错误的错误码，它就在保护那个错误**（905 的教训）。
+  改错误码是 REST 契约变更，需要人决定用哪个码，列入待拍板。
+- **验收**：14 个测试类一次运行 **120 条 `<testcase>`** EXIT=0
+  （core 115 + api 5）、变异红 9/9 全部按预期、生产代码零改动零残留。
 ### Batch 906（已交付，测试加固：一条只验"抛了东西"的断言，验不出异常里少了个错误码）
 
 - 分支：`batch-906`
@@ -1750,6 +1823,14 @@
   | `assertThrows` 是唯一断言、什么都不再断言 | **真缺陷** |
   > **所以这一类不能直接做门禁**：它有正确实例，
   > 按 896 的结论——**需要 allowlist 才能变绿的门禁，基线就不是检查**。
+  >
+  > ⚠️ **907 更正：上表第 2 行判错了。** 当时这三行**一行都没跑过**。
+  > 907 实测：反射的外层 `InvocationTargetException` 可指名，
+  > **解包后还能断言真正的 `IllegalArgumentException` 与消息**，
+  > 收窄比原来**更强**。同批还发现"具体类型是 private 嵌套类所以无法指名"也判错了——
+  > 它的直接父类 `DataAccessException` **是 public 的**。
+  > **上表只有第 1、3 行经实测站得住；第 2 行应作废。**
+  > 教训：**"这条理由成立过"不等于"它现在还成立"。**
 - **实修：最密的那个文件，4 处全部改掉**。
   `CollectionIdentityResolverGuardTailTest` 这个文件**自己就是最好的论据**：
   12 处 `assertThrows` 里 **8 处是精确类型**，第一处甚至断言了错误码——
