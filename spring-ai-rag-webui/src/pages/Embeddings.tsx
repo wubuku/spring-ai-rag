@@ -15,7 +15,7 @@ import { Card } from '../components/Card';
 import { useImeComposition } from '../utils/ime';
 import { failureMessage } from '../utils/failureReason';
 import styles from './Embeddings.module.css';
-import { EmptyState, PageHeader } from '../components/ui';
+import { EmptyState, PageHeader, QueryErrorBanner } from '../components/ui';
 
 function ImeSafeFilterInput({
   label,
@@ -167,9 +167,7 @@ export function Embeddings() {
       {/* 三个面板过去都是 `{q.data && …}`：请求失败时整段直接不渲染，
           页面看起来就像"没有需要嵌入的文档"。失败与"确实没有"必须分开。 */}
       {readinessQ.isError && (
-        <div className={styles.error} role="alert">
-          {t('embeddings.readinessLoadFailed')}
-        </div>
+        <QueryErrorBanner>{t('embeddings.readinessLoadFailed')}</QueryErrorBanner>
       )}
       {readinessQ.data && (
         <section className={styles.section} aria-label={t('embeddings.readiness')}>
@@ -193,9 +191,7 @@ export function Embeddings() {
       )}
 
       {derivationQ.isError && (
-        <div className={styles.error} role="alert">
-          {t('embeddings.derivationLoadFailed')}
-        </div>
+        <QueryErrorBanner>{t('embeddings.derivationLoadFailed')}</QueryErrorBanner>
       )}
       {derivationQ.data && (
         <section className={styles.section} aria-label={t('embeddings.derivationIntegrity')}>
@@ -227,9 +223,9 @@ export function Embeddings() {
             ))}
           </div>
           {previewRepairM.isError && (
-            <div className={styles.error} role="alert">
+            <QueryErrorBanner>
               {failureMessage(t, 'embeddings.repairFailed', previewRepairM.error)}
-            </div>
+            </QueryErrorBanner>
           )}
         </section>
       )}
@@ -266,9 +262,9 @@ export function Embeddings() {
             {/* 失败提示必须放在对话框内部：失败后对话框还开着，
                 写在页面上的提示会被模态遮住，用户根本看不到。 */}
             {applyRepairM.isError && (
-              <div className={styles.error} role="alert">
+              <QueryErrorBanner>
                 {failureMessage(t, 'embeddings.applyRepairFailed', applyRepairM.error)}
-              </div>
+              </QueryErrorBanner>
             )}
             <p className={styles.muted}>
               {t('embeddings.repairDocuments', { count: repairPreview.items.length })}
@@ -301,16 +297,16 @@ export function Embeddings() {
         {/* 取消/重试都是逐行的按钮，失败时必须指名是哪一个动作失败了：
             两者共用一个提示会让用户以为是另一个操作出错。 */}
         {(cancelM.isError || retryM.isError) && (
-          <div className={styles.error} role="alert">
+          <QueryErrorBanner>
             {cancelM.isError
               ? failureMessage(t, 'embeddings.cancelFailed', cancelM.error)
               : failureMessage(t, 'embeddings.retryFailed', retryM.error)}
-          </div>
+          </QueryErrorBanner>
         )}
         {jobsQ.isPending ? (
           <div className={styles.muted}>{t('common.loading')}</div>
         ) : jobsQ.isError ? (
-          <div className={styles.error} role="alert">{t('embeddings.loadFailed')}</div>
+          <QueryErrorBanner>{t('embeddings.loadFailed')}</QueryErrorBanner>
         ) : !jobsQ.data?.items?.length ? (
           <EmptyState>{t('embeddings.empty')}</EmptyState>
         ) : (
@@ -371,9 +367,7 @@ export function Embeddings() {
       </section>
 
       {detailQ.isError && (
-        <div className={styles.error} role="alert">
-          {t('embeddings.detailLoadFailed')}
-        </div>
+        <QueryErrorBanner>{t('embeddings.detailLoadFailed')}</QueryErrorBanner>
       )}
       {detailQ.data && (
         <section className={styles.section} aria-label={t('embeddings.detail')}>

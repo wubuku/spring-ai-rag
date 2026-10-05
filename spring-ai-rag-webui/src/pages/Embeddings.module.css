@@ -28,11 +28,6 @@
 }
 
 
-.error {
-  color: var(--color-error-text);
-}
-
-
 .form {
   display: flex;
   flex-direction: column;
