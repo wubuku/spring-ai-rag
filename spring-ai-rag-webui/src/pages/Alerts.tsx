@@ -445,7 +445,7 @@ function SloConfigsTab({ showForm, onShowForm, onHideForm }: { showForm: boolean
 
       {showForm && (
         <div className={styles.formCard}>
-          <h3>{t('alerts.sloConfig')}</h3>
+          <h2>{t('alerts.sloConfig')}</h2>
           <ImeSafeForm onSubmit={handleSubmit} className={styles.form}>
             <div className={styles.formRow}>
               <label className={styles.label} htmlFor="alerts-sloname">{t('alerts.sloConfig')}</label>
@@ -627,7 +627,7 @@ function SilenceSchedulesTab({ showForm, onShowForm, onHideForm }: { showForm: b
 
       {showForm && (
         <div className={styles.formCard}>
-          <h3>{t('alerts.createSilence')}</h3>
+          <h2>{t('alerts.createSilence')}</h2>
           <ImeSafeForm onSubmit={handleSubmit} className={styles.form}>
             <div className={styles.formRow}>
               <label className={styles.label} htmlFor="alerts-name">{t('alerts.silencePlans')}</label>

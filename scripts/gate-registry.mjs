@@ -396,4 +396,37 @@ export const GATES = [
     kind: 'gate',
     selfTest: 'spring-ai-rag-webui/scripts/__tests__/reduced-motion.test.mjs',
   },
+
+  // Batch 911. A reader navigating by heading is told where they are by the
+  // level, so `h1 → h3` claims a section that does not exist. Thirteen of
+  // fourteen screens were already well-formed; Alerts was the only one that
+  // jumped, twice, for the two form cards on a page with no h2 at all.
+  //
+  // The check is per page file, counting the h1 `PageHeader` renders, so a
+  // heading a child component writes is not counted. That is a miss and never a
+  // false alarm, which is the right way round — `check-page-shell`'s recursive
+  // walk has the mirror limitation and documents it the same way. `Unlock.tsx`
+  // is the one screen without `PageHeader` and carries its own h1, so the rule
+  // needs no exception for it.
+  {
+    gate: 'spring-ai-rag-webui/scripts/check-heading-levels.mjs',
+    kind: 'gate',
+    selfTest: 'spring-ai-rag-webui/scripts/__tests__/heading-levels.test.mjs',
+  },
+
+  // Batch 911. An SVG with no role and no accessible name is telling a screen
+  // reader nothing, and assistive technology still walks it. The whole tree
+  // holds one inline <svg> — the clock glyph in Search's history toggle, whose
+  // button already carried an aria-label, so the glyph was pure decoration and
+  // was being announced anyway.
+  //
+  // Attributes are parsed by name rather than grepped, because a text search
+  // cannot tell an attribute from a string that looks like one: reading
+  // `data-note="aria-hidden='true'"` as a declaration would make the gate
+  // report the opposite error from the one it exists to catch.
+  {
+    gate: 'spring-ai-rag-webui/scripts/check-decorative-graphics.mjs',
+    kind: 'gate',
+    selfTest: 'spring-ai-rag-webui/scripts/__tests__/decorative-graphics.test.mjs',
+  },
 ];
