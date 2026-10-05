@@ -56,3 +56,13 @@
 .tableRow:last-child {
   border-bottom: none;
 }
+
+/* Batch 910: the shimmer runs forever on every page that shows a skeleton, and
+   a sweeping background is motion a `prefers-reduced-motion` user asked not to
+   see. Disabling it leaves a static gradient, which still reads as "not loaded
+   yet". Same shape as the guard Tooltip and Dialog already carry. */
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+}

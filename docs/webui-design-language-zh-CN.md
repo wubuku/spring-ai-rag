@@ -577,6 +577,38 @@ Batch 812 普查了 `src/` 里所有会毁掉东西的操作，找出**四个一
    确认调用一次（见第 10 节）。
 6. 测试在同一个 batch 里写。把门禁弄红的事情没有做完。
 
+## 13. 停不下来的运动必须停得下来
+
+`npm run check:reduced-motion`
+
+`infinite` 动画就是**持续运动**：扫过的背景、闪烁的光标、转起来的轮子。
+持续运动正是前庭障碍用户要关掉动画的原因，而他们在操作系统里设下的偏好
+本就该被界面照做。所以任何声明了 `infinite` 动画的规则，
+都必须在 `@media (prefers-reduced-motion: reduce)` 下把该选择器中和掉：
+
+```css
+.spinner {
+  animation: spin 0.6s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner { animation: none; }
+}
+```
+
+这正是 `Tooltip` 与 `Dialog` 早就有的写法，所以这道门禁执行的是一个既有约定，
+而不是新发明一条规矩。
+
+**只报 `infinite`，而这个区分就是整道门禁。** 一次性动画自己会结束，
+且天然很短——对话框那个 140ms 的淡入并不是要求减少动效的人想让你拿掉的东西，
+WCAG 自己的指引也容忍透明度过渡。把那些也要求加守卫，等于去报正确的代码。
+
+停掉动画不能连带停掉它承载的信息。停止旋转的 spinner 仍然是 spinner；
+流式光标停在 `opacity: 1` 那一帧，所以它保持可见，只是不再闪。
+
+本批量到 5 个样式表在跑没有守卫的持续运动：每个会加载的页面都显示的骨架屏微光、
+`ReembedAllButton` 里同样的微光、流式光标，以及 `Files` 里两个不确定进度轮。
+
 ## 14. 只说自己名字的标题
 
 `npm run check:page-shell` 还要求每个受保护页面给 `PageHeader` 传一个

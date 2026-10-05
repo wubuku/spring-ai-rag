@@ -136,6 +136,7 @@ skipped；本门禁则保证今后再有类"闭嘴"就会失败。
 | `check-i18n-keys.mjs` | 两个 locale 键集不对称；`t()` 引用不存在的键；`t('x') \|\| 兜底` 这种永远不会触发的守卫；**某个键两种语言都有、却没有任何源码能到达**——其中"引用"可以是模板前缀、查找表、数据数组、别名翻译函数或 i18next 复数族。`i18n-allow` 注释是标注而非豁免，发现照样判红（Batch 879） | `__tests__/i18n-keys.test.mjs` | `npm run lint` |
 | `check-hardcoded-copy.mjs` | 从未接入 i18n 的组件；已接入文件里的硬编码用户文案——含 JSX 表达式容器内的那部分，同时放行 ARIA/机器属性值与 `t()` 兜底文案。它那七条 `ALLOWED` 名单按 `path:copy` 索引，没人再用的条目会判失败（Batch 880） | `__tests__/hardcoded-copy.test.mjs` | `npm run lint` |
 | `check-page-shell.mjs` | 受保护页面绕过 `PageHeader`、渲染它时不给 `description`、或给的 `description` 可判定为空——遍历是递归的，子目录下的页面同样算页面 | `__tests__/page-shell.test.mjs` | `npm run lint` |
+| `check-reduced-motion.mjs` | 声明了 **`infinite`** 动画、且该选择器从未在 `@media (prefers-reduced-motion: reduce)` 下被中和（`animation: none`）的 CSS 规则。持续运动正是前庭障碍用户要关掉动画的原因，而 910 量到 **5 个**样式表在跑它且无从停止：每个会加载的页面都显示的骨架屏微光、`ReembedAllButton` 里同样的微光、流式光标的闪烁，以及 `Files` 里两个不确定进度轮。**只报 `infinite`**——一次性动画自己会结束且天然很短，为对话框那个 140ms 淡入要求守卫等于去报正确的代码。规则按**选择器**匹配而不是按位置，因为既有写法是默认声明动画、媒体查询里覆盖；第一版按「这条声明在不在 reduced-motion 块外」问，结果把 6 个文件全报了出来，其中 5 个刚被正确修好。先剥注释，这不是形式：910 新加的每条守卫注释都在正文里写出了这个媒体查询，于是按文本计数的版本会把自己的说明当成守卫 | `__tests__/reduced-motion.test.mjs` | `npm run lint` |
 
 ### 读 Surefire 报告
 

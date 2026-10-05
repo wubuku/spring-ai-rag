@@ -1031,3 +1031,15 @@
     flex-direction: column;
   }
 }
+
+/* Batch 910: two indeterminate spinners, each `0.6s linear infinite`. A
+   continuous rotation is the motion most likely to bother a
+   `prefers-reduced-motion` user, and both of these run for as long as the
+   upload or preview takes. Stopping the animation leaves the indicator in
+   place, so "still working" is still conveyed. */
+@media (prefers-reduced-motion: reduce) {
+  .uploadSpinner,
+  .spinner {
+    animation: none;
+  }
+}

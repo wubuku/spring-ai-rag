@@ -115,3 +115,12 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* Batch 910: an infinite shimmer is continuous motion, not a one-shot
+   transition, so it has to be stopped rather than shortened. Same shape as the
+   guard Tooltip and Dialog already carry. */
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+}
