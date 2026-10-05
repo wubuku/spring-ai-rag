@@ -1275,6 +1275,43 @@
   聚合门禁 **27** 项 PASS、docs 16 项；两段 heredoc Python 均编译通过。
   **本批未改动任何 Java 源码**；WebUI 未改动。
 
+### Batch 899 侦察（已定案：那 16 条 standing gap 的阻塞是真的，但交接件已经补齐并验过）
+
+- 本批第一件事不是写代码，是**去试那条挂了一百多批的假设**。
+- **假设**（806 写在 `gate-registry.mjs` 里）：改 `.github/workflows/` 需要带
+  `workflow` scope 的 OAuth token，`gh` 不可用，所以摘出补丁等人工。
+- **实测**：远端是 HTTPS（`https://github.com/wubuku/spring-ai-rag.git`），
+  `gh` **已安装**（`/usr/local/bin/gh`）但**未登录**。提交 CI 改动后推送，原样得到：
+  ```
+  ! [remote rejected] batch-899 (refusing to allow an OAuth App to create or
+    update workflow `.github/workflows/ci.yml` without `workflow` scope)
+  ```
+  > **一条被引用了一百多批的"理由"，原来是假设；本批把它变成了带原话证据的实测。**
+- **`/tmp/b806-ci-gates.patch` 已经不存在了**——`/tmp` 被清过，
+  那条待办**按原样已无法执行**。所以"重新生成"本身就是必须做的一步。
+- **第一版交接件是**不完整**的，这是本批最有用的一条发现**：
+  只把 CI 步骤加进 `ci.yml`，`verify-gate-wiring.mjs` 立刻报 **16 条
+  `stale-ci-reason`**——CI 一旦真的跑到这些门禁，那 16 行豁免就过期了，
+  而门禁正是**设计成**要报这个的（"a stale exemption is how a debt baseline rots"）。
+  > **交接一件"让状态变好"的改动，必须把随之失效的豁免一起交出去**，
+  > 否则对方一应用就撞红，还要自己查出原因。
+- **完整交接件**：`/tmp/b899-ci-gates.patch`（219 行 / 只碰 2 个文件），
+  同一改动也留在本地分支 **`batch-899`** 上（`/tmp` 会丢，分支不会）。
+  - `.github/workflows/ci.yml`：在 `mvn test` **之后**、门控 IT **之前**插入
+    `verify-project-tests.sh` 与 `verify-project-docs.sh`——
+    `verify-test-visibility` 读的就是这条 `mvn test` 刚产出的 surefire 报告，
+    而门控 IT 会覆盖同一批报告；**放错位置它印出来的数字描述的是另一轮运行**。
+  - `scripts/gate-registry.mjs`：删掉那 16 行 `noCiReason`，并把
+    `AWAITING_CI_WORKFLOW_SCOPE` 的注释改成上面那段**实测**原话。
+- **端到端验过（实测）**：`git apply --check` 干净应用 →
+  `verify-gate-wiring` **"53 gate script(s) registered, 27 reached by CI,
+  Standing CI gaps (1)"** EXIT=0；聚合门禁 **27** 项 EXIT=0；docs **16** 项 EXIT=0；
+  验证完 `git checkout -- .` 复原，**main 保持干净**。
+- **剩下的 1 条 standing gap** 是 `verify-webui-e2e-mock.sh`，
+  理由是 `E2E_MOCK_NOT_IN_CI`——**成本取舍，不是权限问题**，所以补丁不碰它。
+- **仍然是待你处理的一件事**：需要你用带 `workflow` scope 的凭据推送（或手工应用那个补丁）。
+  在那之前，仓库级门禁在 CI 里仍然一条都没跑。
+
 ### Batch 894（已交付，测试加固：五道验收门禁的读法从没被验过，本批给它一个被验的读法）
 
 - 分支：`batch-894`
