@@ -3181,6 +3181,17 @@ Get provider/model references that can be sent in `ChatRequest.model`.
 Models that are configured but missing credentials remain in the list with
 `available: false` and an `unavailableReason`.
 
+`available` is a **configuration** fact, not a liveness fact. It is computed
+without contacting the provider: a model is available when its provider is
+enabled, its `baseUrl` is non-blank, its `apiType` is supported, its declared
+context limits are positive, and its API key resolves to a non-blank string.
+**A key that the provider rejects still reports `available: true`** — a wrong
+or revoked credential is indistinguishable here from a working one. Probing
+liveness would mean a real provider call per model on every list request, so
+this is deliberate; treat `available` as "configured" and let the first real
+request be the thing that finds out. Pinned by
+`ConfiguredChatModelFactoryTest#presentApiKey_isReportedAvailableWithoutContactingTheProvider`.
+
 `capabilities.streaming` defaults to `true` when omitted for backward
 compatibility. `capabilities.toolCalling` defaults to `false` and must be
 explicitly enabled only after the concrete upstream model/endpoint has been
