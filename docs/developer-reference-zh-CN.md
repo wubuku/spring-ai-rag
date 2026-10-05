@@ -89,9 +89,11 @@ skipped；本门禁则保证今后再有类"闭嘴"就会失败。
 ——2 个测试方法——的开关在任何脚本、任何文档里都没出现过，只在一份已归档的进度记录里，
 于是没有任何东西能跑它。门禁在以下情况失败：受门控的开关在任一方向上缺少运行路径；
 运行路径引用了没有测试类消费的开关；受门控的类不声明任何 `@Test`；
-`verify-gated-it.sh` 清单条目指向已删除的类，或它传的开关与该类实际受控的开关对不上。
-新增受门控的套件就要同时给出它的运行路径；
-`scripts/test-support/integration-switch-self-test.mjs` 证明这四条检查都还能拒绝。
+`verify-gated-it.sh` 清单条目指向已删除的类，或它传的开关与该类实际受控的开关对不上；
+以及**没有任何聚合 runner 会跑的门控套件**。最后一条是前四条表达不了的问题：
+本仓库每个门控开关都有运行路径，而 23 个套件里仍有 20 个没有一条能跑完它们的命令，
+门禁却是绿的。新增受门控的套件就要同时给出它的运行路径**和**它的 `ALL_SUITES` 条目；
+`scripts/test-support/integration-switch-self-test.mjs` 证明这五条检查都还能拒绝。
 
 ### 门禁清单与门禁普查
 
@@ -103,7 +105,7 @@ skipped；本门禁则保证今后再有类"闭嘴"就会失败。
 | 门禁 | 拒绝什么 | 自测 | 跑在哪 |
 |------|----------|------|--------|
 | `verify-test-visibility.mjs` | 既没执行也没声明跳过的测试类（`tests="0" skipped="0"`）。判据是**双向**的：每个匹配 surefire 四种默认 include（`Test*` / `*Test` / `*Tests` / `*TestCase`——Batch 885 补上了缺失的 `Test*`）的非抽象测试源都必须产出报告，每份报告也必须能对回某个源文件，所以"源码已删、`TEST-*.xml` 还在"的类无法虚增总数。**没有声明任何 JUnit 测试方法的源不进入清单**，因为 surefire 根本不给它出报告。**一次运行只覆盖一个模块**：源码根目录是从报告目录反推的，聚合入口把门禁指向 `spring-ai-rag-core`；成功信息会点明本次覆盖的是哪个模块。用例数本身是**数 `<testcase>` 元素得来的，不是读 `tests=` 属性**（Batch 893）。surefire 写这个属性时，`@Nested` 内部类贡献的用例还没并进去，所以它可能比自己汇总的子元素还小：四个模块 1006 份报告实测有 3 份不一致——`RagCollectionServiceTest` 差 7（声明 17、实际 24 条，**全部来自嵌套类**），`DocumentMapperTest` 差 1，`GeneralRagAutoConfigurationBeanTest` 差 1——属性求和 8320，而真实跑了 8329 条。**打印这个数的正是这道门禁**，所以它把自己这棵树少报了 9 条。`skipped` / `failures` / `errors` 仍读属性，因为 1006 份报告里没有一份在这三项上不一致；**没有实测支撑就改计数器，本身就是另一类缺陷** | `test-support/test-visibility-self-test.mjs` | tests 链 |
-| `verify-integration-test-switches.mjs` | 门控开关与运行路径的双向缺口 | `test-support/integration-switch-self-test.mjs` | tests 链 |
+| `verify-integration-test-switches.mjs` | 门控开关与运行路径的双向缺口；Batch 912 起还包括**只有单个 feature 自己的脚本能跑**的门控套件——这是前四条表达不了的方向：本仓库每个门控开关都有运行路径，23 个套件里仍有 20 个没有一条能跑完它们的命令，而门禁是绿的 | `test-support/integration-switch-self-test.mjs` | tests 链 |
 | `verify-external-db-safety.mjs` | 接受调用方指定库名却直接 `flyway.clean()` 的套件 | `test-support/external-db-safety-self-test.mjs` | tests 链 |
 | `verify-e2e-run-paths.mjs` | 没有任何脚本能运行的 Playwright spec | `test-support/e2e-reachability-self-test.mjs` | tests 链 |
 | `verify-slo-endpoint-coverage.mjs` | 配了阈值却已不存在的端点；跨 controller 重名的 timer | `test-support/slo-endpoint-coverage-self-test.mjs` | tests 链 |
@@ -124,7 +126,7 @@ skipped；本门禁则保证今后再有类"闭嘴"就会失败。
 | `verify-no-pessimistic-locks.sh` | 生产代码里的悲观锁 / `SKIP LOCKED` / advisory lock | `test-support/pessimistic-locks-self-test.sh` | docs 链 |
 | `verify-zh-translation.mjs` | 中文文档里未翻译的英文段落 | `test-support/zh-translation-self-test.mjs` | docs 链 |
 | `verify-project-tests.sh` / `verify-project-docs.sh` | 上面 9 个的聚合入口 | 由各门禁承担 | 人跑 / 待接入 CI |
-| `verify-gated-it.sh` | 154 个纯 DB 型集成套件 | 由开关对账承担 | **CI 已接** |
+| `verify-gated-it.sh` | 门控 PostgreSQL 全量清单——23 个类 / 153 个测试方法，Batch 912 起全部核实为"纯 Testcontainers + Flyway"，此前只登记了 3 个，而脚本自己那句"跑全部纯 DB 型套件"已经对 20 个套件说了假话。本地约 9 分钟。CI 不带参数调用它，全量清单就是在这一步跑的 | 由开关对账承担 | **CI 已接** |
 | `verify-webui-e2e-mock.sh` | 15 spec / 93 用例的前端 mock 回归 | 套件自身即自测 | 单独跑（2.6 分钟） |
 | `check-alignment-policy.mjs` | 物理 `text-align`、内联 `textAlign`、全局样式表契约；测试文件被跳过，`--text-align` 是 token 而不是声明，没有中心声明认领的 `allow-center` 注释判失败（Batch 881） | `__tests__/alignment-policy.test.mjs` | `npm run lint` |
 | `check-design-system.mjs` | 越过设计 token 的硬编码值 | `__tests__/design-tokens.test.mjs` | `npm run lint` |

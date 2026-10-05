@@ -1726,6 +1726,98 @@
   四道门禁 EXIT=0、两个被改指向的自测 12/12 与 27/27、
   WebUI `lint` 全链 EXIT=0 / **946** 用例 / `hardcoded-copy` **50** 用例、
   聚合门禁 **29 → 30** 项、docs **16** 项。**本批未改动任何 Java 源码。**
+### Batch 912（已交付，门控 IT：一条自称"跑全部"的脚本只登记了 3/23，而它今天第一次真跑就红了）
+
+- 分支：`batch-912`
+- 方向：907 记下"5 处 Testcontainers 门控 IT 未测（当时 Docker 不可用）"。本批 Docker 恢复可用，
+  于是把整份门控清单拉起来跑了一遍——**结果发现清单本身就是坏的**。
+- **侦察：23 个门控类 / 153 个 `@Test`，全是纯 Testcontainers + Flyway 型。**
+  判据来自第一版分类正则，**而第一版全错**：它把 8 个类报成"需要模型 provider"。
+  逐条打开看命中行才知道，命中的是 `ApiKeyRole` / `RagApiKey` / `DATABASE_API_KEY`
+  ——**那是本产品自己的密钥管理领域名词**，以及夹具里的假字符串
+  （`"provider rejected apiKey=sk-historical-secret"`）和一行
+  `"spring.ai.openai.chat.enabled=false"`。
+  > **一个模式的名字不是它的语义。** 这条我记过，本批还是先信了名字再去看命中行。
+  > 补一句更硬的：**既然 23 个全是纯 DB，规则就不需要"这是不是纯 DB 型"这个判断**——
+  > 需要分类器的规则，才能被读错名字满足掉。
+- **真缺陷：`scripts/verify-gated-it.sh` 的用法注释写着"跑全部纯 DB 型套件"，
+  而 `ALL_SUITES` 只登记了 3 个。** 20 个套件 / 137 个用例只能由各自 feature 的
+  脚本单独跑，没有一条命令能跑完整个清单。**而 CI 一直无参数调用它**（ci.yml:86），
+  所以 CI 一直在只跑 3/23。
+  `verify-integration-test-switches.mjs` 全程是绿的，因为它只问
+  "有没有任一 run path 点亮这个开关"——那 20 个各自都有 feature 脚本，
+  于是这个问法**结构上就看不见**"没有聚合入口"这件事。
+- **新规则 `unaggregated-gated-suite`，门禁先立、修复后至**：加完规则第一次跑，
+  它自己报出 **20 个**类（带类名、开关、用例数）。这才叫"知道门禁在抓什么"；
+  先修脚本再补一道天生绿的门禁，什么也证明不了。
+  规则问的是**每个门控类是否都被 `verify-gated-it.sh` 登记**，
+  豁免表 `KNOWN_UNAGGREGATED` **刻意为空**（一道需要 allowlist 才能变绿的门禁，
+  基线就不是检查）。
+- **豁免的语义是"标注"而不是"消音"**，与 `KNOWN_UNDISCOVERABLE` 一致：
+  登记了理由**照样变红**，理由被写在红的那一行旁边。自测专门钉这一条。
+- **自测 16 → 20 条，抓到 4 件事，其中 1 件是我的门禁设计错了**：
+  1. 我自己新写的用例编码了**错的契约**（`ChatIt` 根本没进 runner，被报是应该的）。
+  2. 既有用例撞出新规则后行为变了，而且**新行为更对**：runner 条目指向已删除的类时，
+     真实类同时失去了聚合位，所以现在报两种违规——**同一件事从两头各讲一遍**。
+  3. **门禁设计错，不是测试错**：规则当时遍历的是调用方手搓的 class map，
+     于是能把一个 abstract 基类凭空造化成违规。`collectGatedSuites` 明明已经判掉
+     abstract 了，不该再信第二个来源。改成遍历**解析器自己的输出**之后，
+     "abstract 基类不是套件"从**约定**变成**结构保证**。
+  4. 改完第 3 条，**7 个既有 fixture 全红**——因为它们描述的世界（有门控类、无聚合
+     runner）在新规则下**确实**是违规。诚实的修法是给它们补上聚合登记，
+     让每个用例只断言它自己那条规则，而不是放宽断言。
+- **两处散文计数已经烂掉，删掉而不是改对**：
+  门禁 docstring 写 "Twenty-two" / "145+"，而它自己打印 **23**；
+  双语文档写"154 个纯 DB 型套件"，实测 **153**。
+  > **散文里的计数是会腐烂的事实，机制不会。** 改成"每个受门控的类"这类
+  > 不含数字的表述，数字由门禁每次运行时算出来。
+- **最大的收获：第一次真跑，2 个测试方法就是红的，而且是从来没红过的红。**
+  `PdfImportPostgresIntegrationTest`（2 个用例）**Spring 上下文加载失败**：
+  自 Batch 851 起控制器把 `CollectionIdentityResolver` 变成**必填构造依赖**
+  （`required = false` 已删，因为该类里没有 null 守卫），
+  而这个 IT 手写的 `@Import` 清单一直没加上它。
+  修法是导入**真实的** resolver（连带 `RagCollection` 实体与 `RagCollectionRepository`
+  仓库扫描），**不是 mock**——SSE 导入那条路径真的会解析 collection，
+  mock 掉就等于让这个验收测试对它声称覆盖的那段逻辑失明。
+  > 门禁只检查开关**能不能被打开**，不检查打开之后**是不是红的**。
+  > 这两件事之间的缝隙，就是 137 个用例藏了多久的地方。
+- **8 处宽类型 `assertThrows` 全部收窄（907 留下的尾巴，探针一次跑出真实类型）**：
+  | 位置 | 收窄到 | 附加断言 |
+  |---|---|---|
+  | `ChatSession` 3 处（history/lease） | `DataIntegrityViolationException` | `ck_rag_chat_history_session_id` / `ck_rag_chat_history_turn_status` / `ck_rag_chat_session_lease_expiry` |
+  | `ChatSession` 4 处（memory summary） | `DataIntegrityViolationException` | `..._session` / `..._cursor` / `..._text` / `..._tokens` 四条 CHECK 逐条点名 |
+  | `ChatTurnOperation` 1 处 | **`DuplicateKeyException`**（父类之外的具体子类） | `uk_rag_chat_history_turn_id` |
+  > 只断异常类型的话，**任何一条约束被改名或换成别的约束，这个用例都照样绿**——
+  > 而这些约束正是 V58/V59 迁移建出来的东西。**具名约束把用例钉回建它的那条迁移。**
+- **变异对照 3/3 变红，分两个维度**：
+  - 约束名换成**同库里真实存在但属于别处**的约束 → 红
+    （`expected ck_..._cursor but PostgreSQL said: ck_..._text`）。
+    这条是关键：**换成不存在的名字只能证明拼写检查，换成真名字才能证明绑定关系。**
+  - 异常类型换成同级错误类型（CHECK 违例处断 `DuplicateKeyException`）→ 红。
+  - `ChatTurnOperation` 的具名断言换成 `uk_rag_chat_turn_operation_lifecycle`（真实存在）→ 红。
+  - **第一次变异 `EXIT=1` 但不算数**：红的原因是**编译错误**（用了
+    `DuplicateKeyException` 却没加 import），不是断言在咬。
+    > **红的原因不对，就不叫变异成功。** 这是"没红的第一解释是变异没打中"的镜像：
+    > 这次是"红了，但红的是别的东西"。
+- **我自己的脚本把一个 357 行的文件写成了 12396 行**（64 份重复），
+  因为手写的重构脚本里 `indexOf` 返回了 `-1`，而 **`-1` 是合法的 `slice` 参数**——
+  "没找到"于是变成"几乎整段字符串"，脚本安静地把文件复制了 64 遍。
+  从 git 恢复后改用 `edit` 工具重做（精确匹配、失败会响）。
+  > **`indexOf` 的 `-1` 喂给 `slice` 不是边界情况，是静默的正确性灾难。**
+  > 而且这正是 909 定的规矩的反面：**自己写的批量重构脚本没有不变式、没有回滚，
+  > 就不该拿它去改一个门禁的自测**——那种活该交给会失败的工具。
+- **验收**：全量 23 套件 / 153 用例 **一次 Maven 跑通**（8m20s，本地一次性 JVM 扛住
+  23 个容器，不需要分批，所以没有加分批这个复杂度）；自测 **20/20**；
+  变异 **3/3**；docs 双语同步；`verify-gate-wiring` 零未登记门禁。
+  **本批未改动任何生产 Java 源码。**
+- **顺带写进测试指南的一条操作顺序**：`verify-gated-it.sh` 和
+  `verify-test-visibility.mjs` 都写 `target/surefire-reports`，而前者产物更新。
+  门控 IT 跑完之后报告目录里只剩那 23 个类，`verify-test-visibility` 的双向对账
+  会报出几百个"既没跑也没跳过"的源。这个耦合本来就存在，但**在此之前
+  `verify-gated-it.sh` 只跑 3 个套件，很少有人去跑它**；现在它成了推荐命令，
+  就必须写下来：**全量 `mvn test` → 读报告的门禁 → 门控 IT**。
+  > **一条命令被推广之前，先把它会弄坏什么写下来。**
+
 ### Batch 911（已交付，WebUI：910 列下的另外三条无人看守项——一条有货、一条干净、一条逼出了共享 helper）
 
 - 分支：`batch-911`

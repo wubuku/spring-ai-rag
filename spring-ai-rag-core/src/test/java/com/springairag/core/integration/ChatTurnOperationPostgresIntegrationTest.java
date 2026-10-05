@@ -9,6 +9,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.postgresql.ds.PGSimpleDataSource;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.testcontainers.DockerClientFactory;
 import org.testcontainers.containers.PostgreSQLContainer;
@@ -368,11 +369,19 @@ class ChatTurnOperationPostgresIntegrationTest {
                     (session_id, user_message, ai_response, turn_id)
                 VALUES ('session-7', 'question', 'answer', ?)
                 """, turnId);
-        assertThrows(RuntimeException.class, () -> jdbc.update("""
+        // DuplicateKeyException 而非它的父类 DataIntegrityViolationException：
+        // 探针跑出来的真实类型。前者是"唯一键重复"，后者还包含外键与 CHECK，
+        // 断父类的话把唯一索引换成别的唯一约束这里也不会红。
+        DuplicateKeyException duplicate = assertThrows(DuplicateKeyException.class, () -> jdbc.update("""
                 INSERT INTO rag_chat_history
                     (session_id, user_message, ai_response, turn_id)
                 VALUES ('session-7', 'duplicate', 'answer', ?)
                 """, turnId));
+        assertNotNull(duplicate.getCause(),
+                "expected the driver exception to name the violated constraint");
+        assertTrue(duplicate.getCause().getMessage().contains("\"uk_rag_chat_history_turn_id\""),
+                "expected uk_rag_chat_history_turn_id but PostgreSQL said: "
+                        + duplicate.getCause().getMessage());
     }
 
     private void expireOperation() {

@@ -296,13 +296,17 @@ export const GATES = [
   },
 
   // The only gate CI does reach today, at ci.yml's "Gated PostgreSQL integration
-  // tests" step.
+  // tests" step. Batch 912 made the claim below true: until then this script
+  // registered three of twenty-three gated suites while its own comment claimed
+  // to run all of them, and the switch reconciliation stayed green, because
+  // "some run path turns this switch on" and "one command runs the inventory"
+  // were different questions and only the first was being asked.
   {
     gate: 'scripts/verify-gated-it.sh',
     kind: 'entrypoint',
     noSelfTestReason:
       '它的可失败性由 verify-integration-test-switches.mjs 对账保证：' +
-      '若这里新增套件而开关没被登记，那道门禁会变红。',
+      '若这里新增套件而开关没被登记，那道门禁的 unaggregated-gated-suite 规则会变红。',
   },
 
   {

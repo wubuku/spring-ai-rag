@@ -854,6 +854,49 @@ archived progress note, so both test methods had no documented way to run.
 `scripts/verify-integration-test-switches.mjs` now fails when a gated suite has
 no run path, in either direction.
 
+### Running the Whole Gated Inventory
+
+```bash
+./scripts/verify-gated-it.sh                                     # every suite
+./scripts/verify-gated-it.sh ChatSessionPostgresIntegrationTest  # one suite
+```
+
+Twenty-three classes / 153 test methods, each behind its own
+`<x>.it.enabled` switch so a plain `mvn test` never needs a Docker daemon.
+`verify-gated-it.sh` is the one command that turns all of them on, takes about
+nine minutes locally, and is what `ci.yml`'s "Gated PostgreSQL integration
+tests" step runs.
+
+Two things about that inventory are worth stating plainly, because both were
+false until Batch 912:
+
+- **It is complete as of Batch 912.** Until then the script's own comment —
+  "runs all database-only suites" — described three of them. The other twenty
+  could be run one at a time by their feature's script and by nothing else, and
+  `verify-integration-test-switches.mjs` was green throughout, because
+  "some run path turns this switch on" and "one command runs the inventory" are
+  different questions. The gate now asks the second one too, and
+  `unaggregated-gated-suite` is its name.
+- **Two of its test methods were red.** `PdfImportPostgresIntegrationTest`
+  fails to load its Spring context: since Batch 851 the controller takes
+  `CollectionIdentityResolver` as a required constructor dependency, and the
+  suite's hand-written `@Import` list never added it. The suite is gated, and
+  the gate only checked that the switch was *switchable*, so nothing had run
+  it. If you add a suite to `ALL_SUITES`, expect to find something.
+
+**Run it before `verify-test-visibility`, not after.** Both write
+`spring-ai-rag-core/target/surefire-reports`, and this script's output is the
+newer of the two: `verify-test-visibility.mjs` reconciles the test source tree
+against those reports in both directions, so a reports directory holding only
+23 gated classes makes it report hundreds of sources that "neither ran nor
+skipped". The order that works is
+
+```bash
+mvn test                                  # full suite
+./scripts/verify-gate-entry-points.mjs    # any gate reading surefire reports
+./scripts/verify-gated-it.sh              # gated inventory — reports now stale
+```
+
 ### Path Traversal Probe (no gate — runs in the default test run)
 
 ```bash
