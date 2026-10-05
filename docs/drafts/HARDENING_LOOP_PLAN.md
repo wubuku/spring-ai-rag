@@ -1726,6 +1726,61 @@
   四道门禁 EXIT=0、两个被改指向的自测 12/12 与 27/27、
   WebUI `lint` 全链 EXIT=0 / **946** 用例 / `hardcoded-copy` **50** 用例、
   聚合门禁 **29 → 30** 项、docs **16** 项。**本批未改动任何 Java 源码。**
+### Batch 923（已交付，一个月没跑过的真实验收第一次重跑就红了两处——一处被日历引爆，一处被一次迁移引爆）
+
+- 分支：`batch-923`
+- **先更正我上一条的说法**：我说"另外 4 个 `*-real` spec 从没跑过"，错了。
+  914 已经把 `verify-rerank-document-diversity.sh` 整条跑绿（22/0/0，15m06s），
+  `files-real` 与 `rerank-document-diversity-real` 在其中。
+  **从没在修好的环境里跑过的是 `alerts-real` 与 `api-key-real` 两个**。
+- **① `verify-alert-notification-delivery.sh`：9 步只过 6 步。它上一次跑是 2026-08-28（9/9 全过）。**
+  - **失败一（被日历引爆）**：`alerts-real.spec.ts:63` 写着
+    `row.getByRole('cell').filter({ hasText: EXPECTED_ALERT_ID })`。
+    `hasText` 是**子串匹配**，而当天渲染出来的时间戳是
+    `10/6/2026, 2:29:14 AM` 和 `…2:29:18 AM`——**两个都含数字 1**，
+    于是这个 locator 解析出 3 个 cell，Playwright 直接按严格模式拒绝：
+    ```
+    strict mode violation: … .filter({ hasText: '1' }) resolved to 3 elements
+    ```
+    8-28 那天的戳是 `8/28/2026`，**恰好不含 1**，所以过了。
+    > **这条断言从来没有对产品说错过什么，它是关于 `hasText` 说错了，
+    > 而日历替它做了决定。**
+    改成 `row.getByRole('cell', { name: EXPECTED_ALERT_ID, exact: true })`——
+    这才是"这一格装的是 alert id"本来的意思，时间戳再也满足不了它。
+  - **失败二（被一次迁移引爆）**：最后一步断言 `facts == "58|2|2|0|0"`，
+    实际 `59|2|2|0|0`——**只有 Flyway 版本不同**。V59 早就发布了，
+    这个脚本把 `58` 写死，于是**一条正确了一个月的验收开始失败，
+    而失败信息里没有任何读者能据以行动的事实**。
+    更糟的是它那行 `database_facts migration=58`，**把过期数字当成数据库说的报了出来**。
+    修法不是把 58 改成 59，而是**从 `db/migration` 算**——
+    `verify-collection-provisioning.sh` 与 `verify-managed-api-principals.sh`
+    **早就是这么做的**，正确写法一直存在，这一个脚本只是没采用。
+- **② 我自己那个普查器骗了我两次，而两次都是同一个道理：报 0 之前必须先验它认不认识那个已知阳性。**
+  | 次 | 普查器的形状 | 为什么报 0 |
+  |---|---|---|
+  | 第一次 | **逐行**扫描 | `.filter({` 与 `hasText:` **分处两行**，逐行看不到 |
+  | 第二次 | 改成整段文本 | `\bID\b` 在 `EXPECTED_ALERT_ID` 上不成立——**`_` 是单词字符，`_` 与 `I` 之间没有词边界** |
+  > 913 我已经因为"逐行 grep"差点得出"两个 real spec 没有运行路径"的错误结论；
+  > 今天又差点得出"同类缺陷已清零"的错误结论。**同一个陷阱，一个多月里踩了两次。**
+  - 修好之后的真实普查结果：**3 处命中，只 1 处是真的**（就是我刚修的那处），另外 3 处是
+    我自己注释里复述旧写法、`getByText(/…/i)` 正则、以及 `'Keyword …'` 里
+    **"Key"word 含有 "Key"**。
+    → **不立门禁**：3 处里 2 处是合法写法，规则要么放行全部（等于没有），
+    要么就得养一份豁免表。**而一份需要豁免才能变绿的基线不是检查。**
+- **③ 新门禁 `verify-flyway-version-pinning.mjs` + 自测 10 条（含已知阳性）**。
+  自测喂给规则的**正是它为之而写的那份脚本修复前的文本**——
+  > 一个从没被展示过自己要抓的实例的扫描器，什么也不能证明。
+  规则判据两段：脚本**选了** `version` **且**拿它和字面整数比对，才算。
+  注释里或文件名里提到版本号不算——**只有拿它做断言才算**。
+  因为正确写法仓库里已有两个实例，所以这条规则**零容忍、不需要豁免表**。
+  登记后 `verify-gate-wiring.mjs` 如实报出 `undocumented-gate` 与 `orphan-gate` 两条
+  （**门禁在登记之前先做对了它该做的事**），补进 registry、tests 链与双语门禁表后全绿：
+  **59 门禁 / 30 automated**。
+- **验收**：`verify-alert-notification-delivery.sh` 重跑 **9 步全过**（`alerts-real.spec.ts` 绿）；
+  自测 10/10；门禁 0 违规；gate-wiring EXIT=0。
+- **未跑**：`api-key-real.spec.ts` 的两个宿主脚本（`verify-business-client-readiness.sh`、
+  `verify-managed-api-principals.sh`）还没重跑——本批只做完了 alerts 那一条，下一批接着做。
+
 ### Batch 922（已交付，`chat-real.spec.ts` 第一次真的绿了——而这一批同时抓到 921 自己的一个真实回归）
 
 - 分支：`batch-922`
