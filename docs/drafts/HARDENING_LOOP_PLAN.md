@@ -1772,8 +1772,18 @@
   `clean` 会把整个 `target/` 带走。我在 914 跑全栈时正好撞上：门禁报的是
   **"根本没有 surefire 报告"**而不是计数对不上，这是两种不同的失败。
   测试指南（双语）现在把三种情况和正确顺序都写清楚了。
+- **反向对照 2/2，其中第一次也不算数**：
+  - 我先删掉 `verify-zh-translation.mjs` 的调用，`verify-gate-wiring` **没红**。
+    原因是它**同时也在 docs 链里跑**，删掉一份并没有让它变成孤儿——
+    **不红也不叫变异成功**，这是"红的原因不对"的镜像。
+  - 换成只属于 tests 链的 `verify-external-db-safety.mjs` → `orphan-gate` 变红，恢复后绿。
+  - 由此确认一件值得写下来的事：**名册是结构性守住的，与打印的那个数字无关**。
+    删掉链里一项，`verify-gate-wiring` 的 ORPHAN_GATE 会从**另一个**方向报出来；
+    所以 `PASS_COUNT` 只是让读者一眼看到规模，**它不是名册的守卫**。
 - **验收**：全栈 **22/0/0**；tests 链汇总行实测打印 `Repository gate chain: 32 checks passed.`；
-  双语文档 + 账本同步。**本批未改动任何生产 Java 源码，也未改动任何 WebUI 源码或 spec。**
+  全量 mvn test **8331** BUILD SUCCESS；聚合门禁 32 PASS；docs **16** 项；
+  WebUI lint EXIT=0（**464** 用例）；门禁自测 32/32 + 20/20。
+  **本批未改动任何生产 Java 源码，也未改动任何 WebUI 源码或 spec。**
 
 ### Batch 913（已交付，门控 IT 之后的下一个"没跑过的套件"——套件是绿的，坏的是运行它的那条命令）
 
