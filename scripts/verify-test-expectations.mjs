@@ -34,6 +34,32 @@
 // verifies ("fallsBackToCancelledOutcome" that never inspects the outcome) —
 // needs per-file judgement rather than a rule, and is tracked in the ledger
 // instead of pretended at here.
+//
+// Batch 897 tried to build that rule anyway, because the sentence above reads
+// like an invitation, and it measured three ways of failing. The numbers are
+// here so the next person does not spend a batch rediscovering them:
+//
+//   * every camelCase word of the name must appear in the body: 7993 of 8009
+//     methods. A name names the subject (`chatRequest_constructor`) and a body
+//     refers to the subject through the variable it declared, so this compares a
+//     label to a variable name and the words that can never match — "request",
+//     "constructor", "setter" — are structural vocabulary, not claims.
+//   * only verb-like claim words count: 3100, and 3068 after following same-file
+//     private helper calls. Reading the top of the list is enough: the first
+//     entry is `chatRequest_defaultValues`, whose body asserts three defaults.
+//   * the narrowest version — "returns empty" in the name with no emptiness
+//     assertion: 23, of which 3 were real (`search_limitZero_returnsEmpty` and
+//     two siblings, all `assertNotNull`) and 7 of the remaining 20 were checked
+//     by hand and 7 were false positives, because the *detector* did not
+//     recognise `assertEquals(List.of(), …)`, `assertEquals("", …)` or
+//     `assertEquals("[]", …)` as emptiness assertions.
+//
+// The last one is the general lesson, and it is why this is not a rule: every
+// version failed at the same place. Asking "does this test check emptiness?" is
+// harder than the thing being asked, so the scanner's answer was less reliable
+// than the tests it was judging. Three real defects were found on the way and
+// fixed by hand; the rule itself would have reported them alongside twenty
+// false alarms, which is a baseline, not a check.
 
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';

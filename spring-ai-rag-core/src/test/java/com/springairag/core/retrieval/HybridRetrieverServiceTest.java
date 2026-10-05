@@ -251,8 +251,13 @@ class HybridRetrieverServiceTest {
 
         List<RetrievalResult> results = service.search("问题", null, null, 5);
 
-        // 向量检索返回空，全文检索返回空 → 融合结果为空
-        assertNotNull(results);
+        // 向量检索返回空，全文检索返回空 → 融合结果为空。
+        // Batch 897：这一句原来是 assertNotNull(results)。名字写着
+        // "returnsEmpty"、@DisplayName 也写着 "returns empty when embedding
+        // fails"，而唯一一条断言只能证明"返回了一个对象"——融合逻辑哪天
+        // 开始把 embedding 失败时的残留结果漏出去，这个用例照样绿。
+        assertTrue(results.isEmpty(),
+                () -> "embedding 失败后应返回空结果，实际返回 " + results.size() + " 条：" + results);
     }
 
     @Test
@@ -329,10 +334,12 @@ class HybridRetrieverServiceTest {
         when(jdbcTemplate.queryForList(contains("similarity"), any(Object[].class)))
                 .thenThrow(new RuntimeException("DB connection failed"));
 
-        // 不应抛异常
+        // 不应抛异常，且降级后应返回空结果。
+        // Batch 897：原来这里只 assertNotNull，"returnsEmpty" 这个名字没有被验证。
         assertDoesNotThrow(() -> {
             List<RetrievalResult> results = service.search("q", null, null, 5);
-            assertNotNull(results);
+            assertTrue(results.isEmpty(),
+                    () -> "全文检索失败后应返回空结果，实际返回 " + results.size() + " 条：" + results);
         });
     }
 
@@ -495,7 +502,10 @@ class HybridRetrieverServiceTest {
 
         List<RetrievalResult> results = service.search("q", null, null, 0);
 
-        assertNotNull(results);
+        // Batch 897：名字与 @DisplayName 都写着 "returns empty"，原来只有
+        // assertNotNull——limit=0 如果哪天开始返回内容，这条用例不会知道。
+        assertTrue(results.isEmpty(),
+                () -> "limit=0 应返回空结果，实际返回 " + results.size() + " 条：" + results);
     }
 
     // ========== RetrievalResult DTO 测试 ==========
