@@ -41,18 +41,44 @@
 //     against `.github/workflows/ci.yml` on every run. When the wiring lands, the
 //     reason becomes stale and the gate fails with the list of lines to delete.
 //     That is intentional: a stale exemption is how a debt baseline rots.
+//   * Every path a `noCiReason` names must exist on disk. Batch 900 added this
+//     because the registry already checked its machine-readable path fields —
+//     `selfTest` at rule 2's neighbour — while exempting the one field whose
+//     entire job is to tell a human where the artifact is. A standing gap is the
+//     only hole in this repository with exactly one possible remover, so a dead
+//     pointer in it does not fail loudly; it just quietly never gets fixed.
 
 /**
- * Batch 806 could not add a CI step itself: editing `.github/workflows/` needs an
- * OAuth token with the `workflow` scope, and the `gh` CLI is unavailable here, so
- * the patch at `/tmp/b806-ci-gates.patch` is waiting on a human. Everything
- * reachable only through `verify-project-docs.sh` / `verify-project-tests.sh`
- * inherits that single blocker. Delete the `noCiReason` lines below once the
- * patch is applied — the checker will tell you which ones went stale.
+ * Why the repository-level gate chain is not in CI, in the form a human can act
+ * on. Everything reachable only through `verify-project-docs.sh` /
+ * `verify-project-tests.sh` inherits this one blocker.
+ *
+ * Two things about this constant are load-bearing, and Batch 900 exists because
+ * they were not.
+ *
+ * The blocker is a *tested* result, not an inherited assumption. Batch 806
+ * recorded that editing `.github/workflows/` needs a token with the `workflow`
+ * scope; Batch 899 pushed the change and the remote answered, verbatim,
+ * "refusing to allow an OAuth App to create or update workflow
+ * .github/workflows/ci.yml without workflow scope". The same batch measured
+ * that `gh` is installed here (2.78.0) and merely not logged in — an earlier
+ * version of this comment called the CLI unavailable, which was simply false,
+ * and would have told the one person who could clear this to give up.
+ *
+ * The artifact this points at lives in the repository. It used to be
+ * `/tmp/b806-ci-gates.patch`, and it no longer exists: a handoff parked in a
+ * directory the operating system may empty is not a handoff. Every path a
+ * `noCiReason` names is checked on disk by `verify-gate-wiring.mjs`, so a
+ * pointer here cannot rot the way that one did.
+ *
+ * This block is the only place the claim is written down. It used to be
+ * duplicated in the comment above, which is precisely how the two drifted into
+ * disagreeing with the world.
  */
 export const AWAITING_CI_WORKFLOW_SCOPE =
-  '仓库级门禁链尚未接入 CI：Batch 806 因 OAuth workflow scope 限制摘出，' +
-  '补丁 /tmp/b806-ci-gates.patch 待人工应用到 .github/workflows/ci.yml。';
+  '仓库级门禁链尚未接入 CI：编辑 .github/workflows/ 需要带 workflow scope 的凭据，' +
+  '实测推送被远端拒绝；待人工应用 .github/pending/ci-repo-gates.patch，' +
+  '应用后跑 verify-gate-wiring.mjs 并删掉它列出的过期 noCiReason。';
 
 export const E2E_MOCK_NOT_IN_CI =
   '前端 e2e mock 套件（15 spec / 93 用例）单次约 2.6 分钟，刻意不挂在秒级门禁链上；' +

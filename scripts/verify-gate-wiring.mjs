@@ -18,6 +18,7 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join, relative } from 'node:path';
+import { deadReasonPointers } from './lib/reason-pointer-check.mjs';
 import { GATES } from './gate-registry.mjs';
 
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
@@ -42,6 +43,7 @@ export const VIOLATION_KINDS = {
   ORPHAN_GATE: 'orphan-gate',
   MISSING_CI_REASON: 'missing-ci-reason',
   STALE_CI_REASON: 'stale-ci-reason',
+  DEAD_REASON_POINTER: 'dead-reason-pointer',
   UNDOCUMENTED_GATE: 'undocumented-gate',
 };
 
@@ -246,6 +248,18 @@ export function checkWiring({ gateScripts, registry, fileExists, executedBy, ciR
         'CI reaches it now, so its noCiReason is obsolete; delete that line from the registry',
       );
     }
+    // Batch 900. A reason that hands a person a path nobody can open is the one
+    // failure this file cannot otherwise see: the gate still passes, the reason
+    // still prints, and the hole it describes stays exactly as blocked as it
+    // was before anybody read it.
+    for (const dead of deadReasonPointers(entry.noCiReason, fileExists)) {
+      add(
+        VIOLATION_KINDS.DEAD_REASON_POINTER,
+        gate,
+        `its noCiReason sends the reader to ${dead}, which does not exist. `
+          + 'Commit the artifact, or write a path that resolves from the repository root',
+      );
+    }
   }
 
   for (const entry of registry) {
@@ -289,7 +303,11 @@ function main() {
   const violations = checkWiring({
     gateScripts,
     registry: GATES,
-    fileExists: (path) => existsSync(join(root, path)),
+    // `join` drops the leading slash, so an absolute token would be resolved
+    // against the root and reported dead even when it is right there. Reasons
+    // are written repo-relative, but the resolver should not punish the other
+    // spelling with a false report.
+    fileExists: (path) => existsSync(path.startsWith('/') ? path : join(root, path)),
     executedBy,
     ciReached,
     docText: collectDocText(root),
