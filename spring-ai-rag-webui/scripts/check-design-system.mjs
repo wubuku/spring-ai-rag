@@ -47,6 +47,7 @@ import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import postcss from 'postcss';
 import { buildOutputs } from './build-design-tokens.mjs';
+import { isMainModule } from './lib/is-main-module.mjs';
 
 const projectRoot = fileURLToPath(new URL('..', import.meta.url));
 const sourceRoot = join(projectRoot, 'src');
@@ -674,6 +675,6 @@ function main() {
   );
 }
 
-if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
+if (isMainModule(import.meta.url)) {
   main();
 }

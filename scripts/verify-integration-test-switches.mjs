@@ -28,8 +28,9 @@
  */
 
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
-import { join, relative, resolve, sep } from 'node:path';
+import { join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isMainModule } from './lib/is-main-module.mjs';
 
 const projectRoot = fileURLToPath(new URL('..', import.meta.url));
 const TEST_ROOT = join(projectRoot, 'spring-ai-rag-core', 'src', 'test', 'java');
@@ -310,6 +311,6 @@ function main() {
  */
 const KNOWN_UNDISCOVERABLE = new Map();
 
-if (process.argv[1] && import.meta.url === `file://${resolve(process.argv[1])}`) {
+if (isMainModule(import.meta.url)) {
   main();
 }

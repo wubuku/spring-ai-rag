@@ -72,6 +72,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { stripComments } from './check-design-system.mjs';
+import { isMainModule } from './lib/is-main-module.mjs';
 
 const projectRoot = fileURLToPath(new URL('..', import.meta.url));
 // The self-test points this at a fixture tree so it can assert the gate's exit
@@ -329,6 +330,6 @@ function main() {
   );
 }
 
-if (process.argv[1] && import.meta.url === `file://${resolve(process.argv[1])}`) {
+if (isMainModule(import.meta.url)) {
   main();
 }

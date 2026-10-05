@@ -49,8 +49,9 @@
  */
 
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
-import { join, relative, sep, resolve } from 'node:path';
+import { join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isMainModule } from './lib/is-main-module.mjs';
 
 const projectRoot = fileURLToPath(new URL('..', import.meta.url));
 const MAIN_ROOT = join(projectRoot, 'spring-ai-rag-core', 'src', 'main', 'java');
@@ -180,6 +181,6 @@ function main() {
   );
 }
 
-if (process.argv[1] && import.meta.url === `file://${resolve(process.argv[1])}`) {
+if (isMainModule(import.meta.url)) {
   main();
 }

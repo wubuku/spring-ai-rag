@@ -20,6 +20,7 @@ import { fileURLToPath } from 'node:url';
 import { join, relative } from 'node:path';
 import { deadReasonPointers } from './lib/reason-pointer-check.mjs';
 import { GATES } from './gate-registry.mjs';
+import { isMainModule } from './lib/is-main-module.mjs';
 
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 
@@ -351,4 +352,4 @@ function main() {
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) main();
+if (isMainModule(import.meta.url)) main();

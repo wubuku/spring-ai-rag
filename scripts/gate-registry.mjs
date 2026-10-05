@@ -204,6 +204,12 @@ export const GATES = [
   // list of things the gate does not check. The predicate Batch 895 guarded is
   // closed from inside instead, which is what keeps the finding count at zero.
   {
+    gate: 'scripts/verify-gate-entry-points.mjs',
+    kind: 'gate',
+    selfTest: 'scripts/test-support/gate-entry-points-self-test.mjs',
+    noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
+  },
+  {
     gate: 'scripts/verify-json-assertions.mjs',
     kind: 'gate',
     selfTest: 'scripts/test-support/json-assertions-self-test.mjs',
