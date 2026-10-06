@@ -32,6 +32,25 @@ public interface AbTestService {
     /** Get all running experiments */
     List<Experiment> getRunningExperiments();
 
+    /**
+     * One page of experiments, newest first.
+     *
+     * <p>Batch 932: the WebUI's experiment list asked for {@code GET /experiments}
+     * and this method is what now answers it. It is a page rather than a bare
+     * list because the list has to be able to say how many experiments exist
+     * beyond the ones it returned — a list that silently stops at the page size
+     * reads as "that is all of them".
+     */
+    ExperimentPage listExperiments(int page, int size);
+
+    /**
+     * One experiment by id.
+     *
+     * <p>Batch 932: the WebUI's detail view asked for {@code GET /experiments/&#123;id&#125;}
+     * with no handler behind it, so the detail page could not load either.
+     */
+    Experiment getExperiment(Long id);
+
     /** Get the variant assigned to a session by sessionId */
     String getVariantForSession(String sessionId, Long experimentId);
 
@@ -48,6 +67,21 @@ public interface AbTestService {
 
     // ==================== Inner DTOs ====================
 
+    /**
+     * The experiment list envelope.
+     *
+     * <p>Batch 932. Same shape as {@code EmbeddingJobPageResponse} — the other
+     * list endpoint the WebUI pages over — so a client that already reads one
+     * reads this one.
+     */
+    record ExperimentPage(
+            java.util.List<Experiment> items,
+            int page,
+            int size,
+            long totalElements,
+            int totalPages) {
+    }
+
     /** Experiment */
     class Experiment {
         private Long id;
@@ -57,6 +91,17 @@ public interface AbTestService {
         private Map<String, Double> trafficSplit;
         private String targetMetric;
         private Integer minSampleSize;
+        /**
+         * Results recorded for this experiment.
+         *
+         * <p>Batch 932: the WebUI read a field by this name and rendered
+         * {@code sampleCount ?? 0}, so every experiment showed zero samples. The
+         * server had no such field at all — what it stores is
+         * {@code minSampleSize}, the <i>configured minimum</i>, which is a
+         * different number with a different meaning. This field is the observed
+         * count, which is what the column label always claimed to be.
+         */
+        private long sampleCount;
         private ZonedDateTime startTime;
         private ZonedDateTime endTime;
         private ZonedDateTime createdAt;
@@ -75,6 +120,8 @@ public interface AbTestService {
         public void setTargetMetric(String targetMetric) { this.targetMetric = targetMetric; }
         public Integer getMinSampleSize() { return minSampleSize; }
         public void setMinSampleSize(Integer minSampleSize) { this.minSampleSize = minSampleSize; }
+        public long getSampleCount() { return sampleCount; }
+        public void setSampleCount(long sampleCount) { this.sampleCount = sampleCount; }
         public ZonedDateTime getStartTime() { return startTime; }
         public void setStartTime(ZonedDateTime startTime) { this.startTime = startTime; }
         public ZonedDateTime getEndTime() { return endTime; }
@@ -94,6 +141,7 @@ public interface AbTestService {
                     && Objects.equals(trafficSplit, that.trafficSplit)
                     && Objects.equals(targetMetric, that.targetMetric)
                     && Objects.equals(minSampleSize, that.minSampleSize)
+                    && sampleCount == that.sampleCount
                     && Objects.equals(startTime, that.startTime)
                     && Objects.equals(endTime, that.endTime)
                     && Objects.equals(createdAt, that.createdAt);
@@ -102,7 +150,7 @@ public interface AbTestService {
         @Override
         public int hashCode() {
             return Objects.hash(id, experimentName, description, status, trafficSplit,
-                    targetMetric, minSampleSize, startTime, endTime, createdAt);
+                    targetMetric, minSampleSize, sampleCount, startTime, endTime, createdAt);
         }
 
         @Override
@@ -115,6 +163,7 @@ public interface AbTestService {
                     ", trafficSplit=" + trafficSplit +
                     ", targetMetric='" + targetMetric + '\'' +
                     ", minSampleSize=" + minSampleSize +
+                    ", sampleCount=" + sampleCount +
                     ", startTime=" + startTime +
                     ", endTime=" + endTime +
                     ", createdAt=" + createdAt +

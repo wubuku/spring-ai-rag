@@ -188,17 +188,18 @@ describe('collectionsApi query variants and purge flow', () => {
 
   it('manages collection documents and import/export payloads', async () => {
     vi.mocked(apiClient.post).mockResolvedValue({ data: {} } as never);
-    vi.mocked(apiClient.delete).mockResolvedValue({ data: {} } as never);
 
     collectionsApi.addDocuments(4, [1, 2]);
     expect(apiClient.post).toHaveBeenCalledWith('/collections/4/documents', {
       documentIds: [1, 2],
     });
 
-    collectionsApi.removeDocuments(4, [1, 2]);
-    expect(apiClient.delete).toHaveBeenCalledWith('/collections/4/documents', {
-      data: { documentIds: [1, 2] },
-    });
+    // Batch 932: the `removeDocuments` half of this test is deleted, not
+    // loosened. It asserted that the client issued
+    // `DELETE /collections/4/documents` — a route no handler has ever served —
+    // so it passed while the capability did not exist. Asserting the shape of a
+    // request is not asserting that the server serves it, and the route
+    // contract test in OpenApiContractTest is the check that does the latter.
 
     await collectionsApi.importCollection({ name: 'copy', items: [] });
     expect(apiClient.post).toHaveBeenCalledWith('/collections/import', {

@@ -664,14 +664,14 @@ primitive.
 really can leave it out:
 
 - The five metrics in `MetricsCharts` (fixed).
-- `sampleCount ?? 0` in `ABTest.tsx`, once in the table row and once in the
-  `StatCard`. In the same row, `targetMetric` and `winner` use `?? '—'` — **the
-  component is honest about two of its three neighbours and fabricates the
-  third.** And the field it fabricates **does not exist on the server at all**:
-  `AbTestService.Experiment` stores `minSampleSize`, and `sampleCount` appears
-  nowhere on the Java side. So that column does not just say 0 when the value is
-  unreported — it says 0 for every experiment, because there is no such concept
-  server-side.
+- `sampleCount ?? 0` in `ABTest.tsx` (fixed). It was worse than "says 0 when
+  unreported": the server had **no such field at all** — `AbTestService.Experiment`
+  stores `minSampleSize`, and `sampleCount` appears nowhere on the Java side — so
+  the column did not say 0 when a value was missing, it said 0 for *every*
+  experiment. It is now the real count of recorded results and a required field,
+  so the next regression is a type error rather than a plausible zero. In the
+  same row, `targetMetric` and `winner` use `?? '—'` — **the component has always
+  been honest about two of its three neighbours and fabricated the third.**
 
 **Falling back** — the server guarantees the field is there, so its absence
 would be a broken contract rather than a normal state:
@@ -696,6 +696,58 @@ leave it out**, and that is not on the frontend side of the wire. It is also why
 there is no gate here: not an oversight, because the only version that could be
 written either false-alarms or needs an allowlist, and a gate that needs an
 allowlist to go green has a baseline that is not a check.
+
+### 9.2 The route the UI calls is not always one the server mounts
+
+Both forms above are about a single **field**. There is a third at the level of a
+whole **request**, large enough to deserve its own section.
+
+All ten API calls on the `ABTest` page went to `/api/v1/rag/experiments`, while
+`AbTestController` sits at `/rag/ab` — `@ApiVersion("v1")` plus
+`@RequestMapping("/rag/ab")`, composed by
+`ApiVersionRequestMappingHandlerMapping` into `/api/v1/rag/ab`. **One missing
+`ab`, and the entire page was 404s against a real server.** The same sweep turned
+up `removeDocuments` in `collections.ts` calling
+`DELETE /collections/{id}/documents`, a path where `RagCollectionController`
+serves only GET and POST.
+
+**It survived this long because nothing in the repository looked at it from the
+other end.** Every existing assertion in `OpenApiContractTest` runs in the
+producer direction: does this schema exist, is this required path documented. But
+the spec is generated **by the server**, so a frontend whose entire page calls
+endpoints that were never mounted is perfectly ordinary to those assertions. What
+was missing is the consumer direction: **every route the WebUI calls has to be a
+route the server actually mounts.**
+
+That check is now `WebUiRouteContract`, a nested class in `OpenApiContractTest`.
+It reads `spring-ai-rag-webui/src/api/*.ts`, extracts every (verb, path), and
+compares them against the **runtime spec**. The route table comes from the running
+application rather than from parsing Java sources, deliberately: a regex over
+annotations produces a table that looks authoritative and is quietly wrong in
+whatever shapes it does not cover — which is exactly how Batch 932's survey
+reported fourteen good routes as missing.
+
+**Its own probe broke first, and that is worth keeping.** The first version of the
+call-site pattern offered double quotes and backticks but **not the single quotes
+the api modules actually use** — the same mistake as the missing `%` in
+`check-hardcoded-copy` two batches earlier, failing the same way: silently. It
+found 47 of 105 call sites and reported a clean sweep over the half it could see.
+It was the **floor assertion** that turned that into a red test
+(`MIN_CALL_SITES = 90`) rather than a green one — so that assertion is not
+defensive programming, it is the only thing that proves this gate is still
+looking at anything.
+
+Its known limit is written into the test header: a call written as
+`apiClient.request({ url })` is invisible to the scan, and a module migrating
+wholesale to that shape would drop out of the count without turning anything red
+on its own.
+
+**Its self-tests are three, and all three are needed**: the floor assertion (red
+below 90 call sites), the coverage assertion (both string styles must be
+recognised, and every api module must be reached), and a reverse control — put one
+path back on the wrong mount and the gate reports **exactly that one** and names
+the line in `abtest.ts`. One direction alone cannot tell "the gate is working"
+from "there was nothing to find".
 
 ## 10. An irreversible action must be confirmed
 

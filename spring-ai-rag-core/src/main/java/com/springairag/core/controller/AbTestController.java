@@ -123,6 +123,45 @@ public class AbTestController {
         return ResponseEntity.ok(abTestService.getRunningExperiments());
     }
 
+    /**
+     * One page of experiments, every status.
+     *
+     * <p>Batch 932. The WebUI's experiment list called {@code GET /experiments}
+     * with no handler behind it, so the page could not load. It is deliberately
+     * not an alias for {@link #getRunningExperiments()}: the list shows DRAFT,
+     * PAUSED and STOPPED badges, so answering it with the running subset would
+     * have made the page quietly omit experiments the user just created.
+     */
+    @Operation(summary = "List experiments", description = "One page of experiments, newest first, across every status")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Returns a page of experiments")
+    })
+    @Timed(value = "rag.ab.list", description = "A/B experiment list", percentiles = {0.5, 0.95, 0.99})
+    @GetMapping("/experiments")
+    public ResponseEntity<AbTestService.ExperimentPage> listExperiments(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(abTestService.listExperiments(page, size));
+    }
+
+    /**
+     * One experiment by id.
+     *
+     * <p>Batch 932. Same reason as {@link #listExperiments(int, int)}: the detail
+     * view asked for this and there was no handler for it, so opening an
+     * experiment from the list could not have worked.
+     */
+    @Operation(summary = "Get an experiment")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Returns the experiment"),
+            @ApiResponse(responseCode = "404", description = "Experiment not found")
+    })
+    @Timed(value = "rag.ab.get", description = "A/B experiment lookup", percentiles = {0.5, 0.95, 0.99})
+    @GetMapping("/experiments/{id}")
+    public ResponseEntity<AbTestService.Experiment> getExperiment(@PathVariable Long id) {
+        return ResponseEntity.ok(abTestService.getExperiment(id));
+    }
+
     @Operation(summary = "Get variant assignment", description = "Calculate which variant this user should be assigned to based on sessionId")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "Returns variant assignment result"),

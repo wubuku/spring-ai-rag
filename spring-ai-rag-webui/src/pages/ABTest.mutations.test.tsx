@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ABTest } from './ABTest';
-import type { Experiment } from '../api/abtest';
+import type { Experiment, ExperimentPage } from '../api/abtest';
 
 const mocks = vi.hoisted(() => ({
   listExperiments: vi.fn(),
@@ -87,8 +87,15 @@ function renderAbTest(initialPath = '/abtest') {
   return { invalidateSpy };
 }
 
+// Batch 932: the list endpoint answers with a paged envelope, so every stubbed
+// list has to carry one. `totalElements` defaults to the item count, which makes
+// "there is more than this page" a deliberate choice per test.
+function page(items: Experiment[], overrides: Partial<ExperimentPage> = {}): ExperimentPage {
+  return { items, page: 0, size: 100, totalElements: items.length, totalPages: 1, ...overrides };
+}
+
 function experimentRoute(id: number, overrides: Partial<Experiment> = {}) {
-  mocks.listExperiments.mockResolvedValue({ data: [makeExperiment(overrides)] });
+  mocks.listExperiments.mockResolvedValue({ data: page([makeExperiment(overrides)]) });
   mocks.getExperiment.mockResolvedValue({ data: makeExperiment({ id, ...overrides }) });
 }
 
@@ -98,7 +105,7 @@ beforeEach(() => {
 
 describe('ABTest with real query/mutation wiring', () => {
   it('fetches the experiment list through the real query with size 100', async () => {
-    mocks.listExperiments.mockResolvedValue({ data: [makeExperiment()] });
+    mocks.listExperiments.mockResolvedValue({ data: page([makeExperiment()]) });
 
     renderAbTest();
 
@@ -272,7 +279,7 @@ describe('ABTest with real query/mutation wiring', () => {
 describe('ABTest create modal with real create mutation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.listExperiments.mockResolvedValue({ data: [] });
+    mocks.listExperiments.mockResolvedValue({ data: page([]) });
   });
 
   it('creates an experiment, closes the modal and toasts success', async () => {

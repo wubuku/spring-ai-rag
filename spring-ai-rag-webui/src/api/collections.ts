@@ -149,8 +149,14 @@ export const collectionsApi = {
   addDocuments: (id: number, documentIds: number[]) =>
     apiClient.post(`/collections/${id}/documents`, { documentIds }),
 
-  removeDocuments: (id: number, documentIds: number[]) =>
-    apiClient.delete(`/collections/${id}/documents`, { data: { documentIds } }),
+  // Batch 932: `removeDocuments` is gone rather than repointed. It called
+  // `DELETE /collections/{id}/documents`, and RagCollectionController serves
+  // GET and POST on that path but never had a DELETE — so the method could only
+  // ever have returned a 404. Nothing in the UI called it. Whether documents
+  // should be removable from a collection in bulk is a product question, and
+  // its test asserted only that the client issued the request, which read like
+  // contract coverage while verifying nothing about the server. The route
+  // contract test in OpenApiContractTest is what caught it.
 
   export: (id: number) => apiClient.get(`/collections/${id}/export`),
 

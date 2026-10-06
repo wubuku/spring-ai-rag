@@ -3,7 +3,7 @@ import { render, screen, within, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { ABTest } from './ABTest';
-import type { Experiment, ExperimentAnalysis } from '../api/abtest';
+import type { Experiment, ExperimentPage, ExperimentAnalysis } from '../api/abtest';
 
 const mockUseQuery = vi.fn();
 const mockUseMutation = vi.fn();
@@ -39,6 +39,21 @@ const mutationSpies: Array<{ mutate: ReturnType<typeof vi.fn>; isPending: boolea
 
 function storeQuery(key: readonly unknown[], axiosData: unknown) {
   queryStore.set(JSON.stringify(key), { data: axiosData });
+}
+
+// Batch 932: the list endpoint answers with an envelope, so every stored list
+// has to carry one. `totalElements` defaults to the item count, which is what
+// makes "there is more than this page" a deliberate choice per test rather than
+// an accident of the fixture.
+function experimentPage(items: Experiment[], overrides: Partial<ExperimentPage> = {}): ExperimentPage {
+  return {
+    items,
+    page: 0,
+    size: 100,
+    totalElements: items.length,
+    totalPages: 1,
+    ...overrides,
+  };
 }
 
 function makeExperiment(overrides: Partial<Experiment> = {}): Experiment {
@@ -100,16 +115,51 @@ describe('ABTest', () => {
   });
 
   it('shows the empty state when no experiments exist', () => {
-    storeQuery(['abtest', 'experiments'], []);
+    storeQuery(['abtest', 'experiments'], experimentPage([]));
     renderAbTest();
     expect(screen.getByText('abtest.noExperiments')).toBeInTheDocument();
   });
 
+  it('says how many experiments exist beyond the ones on screen', () => {
+    // Batch 932. The list used to be a bare array, so it could not distinguish
+    // "these five are all of them" from "these five are the first hundred of
+    // three hundred" — and a list that stops at the page size reads as complete.
+    // The envelope carries the real total, and this pins that it is used.
+    storeQuery(
+      ['abtest', 'experiments'],
+      experimentPage([makeExperiment()], { totalElements: 312, totalPages: 4 }),
+    );
+    renderAbTest();
+    expect(screen.getByText('abtest.showingCount')).toBeInTheDocument();
+  });
+
+  it('says nothing about a larger total when the page holds everything', () => {
+    storeQuery(['abtest', 'experiments'], experimentPage([makeExperiment()]));
+    renderAbTest();
+    expect(screen.queryByText('abtest.showingCount')).not.toBeInTheDocument();
+  });
+
+  it('shows the recorded sample count rather than a stand-in zero', () => {
+    // Batch 932. This column read `sampleCount ?? 0` against a field the server
+    // never had, so it showed 0 for every experiment — a zero is a claim, and it
+    // was claiming something nobody had measured. The number is now required
+    // and real; this pins that the row renders it as given. The row is found by
+    // its name cell rather than by a test id, because adding markup for a test
+    // to hang off is a cost the production page should not carry.
+    storeQuery(['abtest', 'experiments'], experimentPage([makeExperiment({ sampleCount: 420 })]));
+    const { container } = renderAbTest();
+
+    const nameCell = [...container.querySelectorAll('span')]
+      .find(node => node.textContent === 'rerank-a-b');
+    expect(nameCell).toBeDefined();
+    expect(nameCell?.parentElement?.textContent).toContain('420');
+  });
+
   it('maps experiment status to a semantic badge tone instead of an inline colour', () => {
-    storeQuery(['abtest', 'experiments'], [
+    storeQuery(['abtest', 'experiments'], experimentPage([
       makeExperiment({ status: 'RUNNING' }),
       makeExperiment({ status: 'DRAFT' }),
-    ]);
+    ]));
     storeQuery(['abtest', 'experiment', 5], makeExperiment());
 
     const { container } = renderAbTest();
@@ -127,7 +177,7 @@ describe('ABTest', () => {
 
   it('lists experiments and opens the detail view from the row action', async () => {
     const user = userEvent.setup();
-    storeQuery(['abtest', 'experiments'], [makeExperiment()]);
+    storeQuery(['abtest', 'experiments'], experimentPage([makeExperiment()]));
     storeQuery(['abtest', 'experiment', 5], makeExperiment());
 
     renderAbTest();
@@ -146,7 +196,7 @@ describe('ABTest', () => {
 
   it('routes status to the matching lifecycle actions', async () => {
     const user = userEvent.setup();
-    storeQuery(['abtest', 'experiments'], [makeExperiment()]);
+    storeQuery(['abtest', 'experiments'], experimentPage([makeExperiment()]));
     storeQuery(
       ['abtest', 'experiment', 5],
       makeExperiment({ status: 'DRAFT' }),
@@ -162,7 +212,7 @@ describe('ABTest', () => {
 
   it('pauses a running experiment through its mutation', async () => {
     const user = userEvent.setup();
-    storeQuery(['abtest', 'experiments'], [makeExperiment()]);
+    storeQuery(['abtest', 'experiments'], experimentPage([makeExperiment()]));
     storeQuery(['abtest', 'experiment', 5], makeExperiment({ status: 'RUNNING' }));
 
     renderAbTest('/abtest/5');
@@ -216,7 +266,7 @@ describe('ABTest', () => {
 
   it('creates an experiment with normalized traffic split from the modal form', async () => {
     const user = userEvent.setup();
-    storeQuery(['abtest', 'experiments'], []);
+    storeQuery(['abtest', 'experiments'], experimentPage([]));
 
     renderAbTest();
     await user.click(
@@ -242,7 +292,7 @@ describe('ABTest', () => {
 
   it('associates every create-form control with its label', async () => {
     const user = userEvent.setup();
-    storeQuery(['abtest', 'experiments'], []);
+    storeQuery(['abtest', 'experiments'], experimentPage([]));
 
     renderAbTest();
     await user.click(
@@ -265,7 +315,7 @@ describe('ABTest', () => {
 
   it('does not submit the create form when the name is blank', async () => {
     const user = userEvent.setup();
-    storeQuery(['abtest', 'experiments'], []);
+    storeQuery(['abtest', 'experiments'], experimentPage([]));
 
     renderAbTest();
     await user.click(
@@ -280,7 +330,7 @@ describe('ABTest', () => {
 
   it('sends the full create payload with metric, description and custom variants', async () => {
     const user = userEvent.setup();
-    storeQuery(['abtest', 'experiments'], []);
+    storeQuery(['abtest', 'experiments'], experimentPage([]));
 
     renderAbTest();
     await user.click(
@@ -380,7 +430,7 @@ describe('ABTest detail lifecycle and edge states', () => {
   it('returns to the list from the detail back button', async () => {
     const user = userEvent.setup();
     storeQuery(['abtest', 'experiment', 5], makeExperiment());
-    storeQuery(['abtest', 'experiments'], [makeExperiment()]);
+    storeQuery(['abtest', 'experiments'], experimentPage([makeExperiment()]));
 
     renderAbTest('/abtest/5');
     await user.click(screen.getByRole('button', { name: /abtest\.back/ }));

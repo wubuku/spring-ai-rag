@@ -2293,6 +2293,29 @@ citation 校验只检查 `[S1]` token。compare 在 embedding profile、代码�
 
 ## A/B Tests — 实验管理
 
+### `GET /api/v1/rag/ab/experiments`
+
+分页列出**全部状态**的实验，按创建时间倒序。查询参数 `page`（默认 0）与 `size`
+（默认 20，上限 200）。返回分页信封
+`{ items, page, size, totalElements, totalPages }`。
+
+Batch 932 新增。此前 WebUI 的实验列表页调的就是这条路径，而**服务端没有任何处理器**，
+于是整页对真实服务器全是 404。信封而不是裸数组，是因为数组说不出"这一页之外还有
+多少个实验"——而停在页大小上的列表读起来就像"就这些"。
+
+刻意**不是** `GET /experiments/running` 的别名：列表页要显示 DRAFT / PAUSED / STOPPED
+的徽标，用运行中子集回答等于把用户刚建的实验悄悄藏起来。
+
+每个 item 含 `sampleCount`：该实验**已记录**的结果条数。`minSampleSize` 是配置的目标
+下限，两个数含义不同，不要互换。列表用一次分组查询取回整页计数，不是每行一次。
+
+### `GET /api/v1/rag/ab/experiments/{id}`
+
+按 id 获取单个实验。实验不存在时返回 404（服务层抛
+`IllegalArgumentException("Experiment not found: {id}")`）。
+
+Batch 932 新增，理由同上：详情页调的是这条路径，此前也没有处理器。
+
 ### `POST /api/v1/rag/ab/experiments`
 
 创建 A/B 实验。

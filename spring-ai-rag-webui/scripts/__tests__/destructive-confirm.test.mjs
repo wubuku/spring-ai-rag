@@ -19,10 +19,34 @@ const kinds = (source) =>
 describe('the destructive set is derived, not maintained', () => {
   it('reads DELETE out of the API layer instead of trusting a hand-written list', () => {
     // Every name here comes from a method whose body issues `apiClient.delete(`.
+    // Batch 932 removed two of them — `deleteExperiment` and `removeDocuments` —
+    // because the controller had never mounted a DELETE on either path and
+    // nothing in the UI called them. The list shrank with the code, which is the
+    // whole point of deriving it.
     for (const name of ['delete', 'deleteByKey', 'revokeKey', 'clearHistory',
-      'deleteExperiment', 'deleteSloConfig', 'deleteSilenceSchedule', 'removeDocuments']) {
+      'deleteSloConfig', 'deleteSilenceSchedule']) {
       expect(destructive.has(name)).toBe(true);
     }
+  });
+
+  it('keeps covering a DELETE that carries a request body', () => {
+    // `removeDocuments` was the only real method shaped like this
+    // (`apiClient.delete(path, { data })`), so removing it would have dropped
+    // that shape from the fixtures. It is pinned here instead, on a synthetic
+    // source, because losing coverage silently is the thing this file exists to
+    // prevent.
+    const derived = destructiveActions([
+      { source: 'export const thing = { drop: (id: string, ids: number[]) => apiClient.delete(`/x/${id}/y`, { data: { ids } }) };' },
+    ]);
+    expect([...derived]).toEqual(['drop']);
+  });
+
+  it('does not report a method that was removed along with its endpoint', () => {
+    // The other half of that removal: a client can keep a method aimed at a
+    // route the server never had, and the destructive-confirm gate has nothing
+    // to say about it. Only the route contract test can catch that one.
+    expect(destructive.has('deleteExperiment')).toBe(false);
+    expect(destructive.has('removeDocuments')).toBe(false);
   });
 
   it('does not treat a POST as destructive even when the name sounds scary', () => {
