@@ -13,6 +13,7 @@ import { collectionsApi } from '../api/collections';
 import { useToast } from '../components/Toast';
 import { Skeleton } from '../components/Skeleton';
 import { useBlobUrlOpener } from '../hooks/useBlobUrlOpener';
+import { useClipboardCopy } from '../hooks/useClipboardCopy';
 import { FilePreview } from '../components/FilePreview/FilePreview';
 import {
   readWorkspaceState,
@@ -20,6 +21,8 @@ import {
   writeWorkspaceState,
 } from '../utils/workspaceState';
 import { useImeComposition } from '../utils/ime';
+import { capLength } from '../utils/text';
+import { useDebouncedCommit } from '../utils/debounce';
 import { failureMessage } from '../utils/failureReason';
 import styles from './Files.module.css';
 import { IconButton, PageHeader, QueryErrorBanner } from '../components/ui';
@@ -143,7 +146,7 @@ function readDeepLink(search: string): FileDeepLink {
       directoryPath: '',
       filePath: null,
       sortDirection,
-      query: params.get('q')?.trim().slice(0, 256) ?? '',
+      query: capLength(params.get('q')?.trim() ?? ''),
     };
   }
   const directoryPath = normalizedDirectory ?? '';
@@ -155,7 +158,7 @@ function readDeepLink(search: string): FileDeepLink {
     directoryPath,
     filePath: filePath && expectedParent === directoryPath ? filePath : null,
     sortDirection,
-    query: params.get('q')?.trim().slice(0, 256) ?? '',
+    query: capLength(params.get('q')?.trim() ?? ''),
   };
 }
 
@@ -217,6 +220,7 @@ export function Files() {
   const { t } = useTranslation();
   const { showToast } = useToast();
   const openBlobUrl = useBlobUrlOpener();
+  const copyToClipboard = useClipboardCopy();
   const location = useLocation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -336,7 +340,7 @@ export function Files() {
       currentPath,
       deepLink.filePath ?? undefined,
       importTimeSortDirection,
-      query.trim().slice(0, 256),
+      capLength(query.trim()),
       true,
     );
   }, [currentPath, deepLink.filePath, importTimeSortDirection, navigateTo]);
@@ -349,14 +353,27 @@ export function Files() {
     }
   }, [deepLink.query, queryIme.compositionActiveRef]);
 
+  // `commitQuery` writes the URL, and `rememberRoute` runs on every write — a
+  // `localStorage` read, merge and write per character typed. The search used to commit
+  // from onChange, so a six-letter query moved the address bar six times and asked the
+  // server six times. Same 250 ms pause `CollectionScopeSelector` already used.
+  const { flush: flushQuery } = useDebouncedCommit(
+    queryDraft.trim(),
+    deepLink.query,
+    commitQuery,
+    { isBlocked: () => queryIme.compositionActiveRef.current },
+  );
+
   const handleQueryCompositionEnd = useCallback((
     event: React.CompositionEvent<HTMLInputElement>,
   ) => {
     queryIme.handleCompositionEnd();
-    const value = event.currentTarget.value.slice(0, 256);
+    const value = capLength(event.currentTarget.value);
     setQueryDraft(value);
-    commitQuery(value);
-  }, [commitQuery, queryIme]);
+    // The finished text, not whatever the debounce last scheduled: engines disagree on
+    // whether the final `input` event lands before or after `compositionend`.
+    flushQuery(value.trim());
+  }, [queryIme, flushQuery]);
 
   const availableTreePanelMaximum = useCallback(() => {
     const measuredWidth = bodyRef.current?.getBoundingClientRect().width ?? 0;
@@ -566,13 +583,11 @@ export function Files() {
     importId: string,
   ) => {
     event.stopPropagation();
-    try {
-      await navigator.clipboard.writeText(importId);
-      showToast(t('files.importIdCopied'), 'success');
-    } catch {
-      showToast(t('files.importIdCopyFailed'), 'error');
-    }
-  }, [showToast, t]);
+    await copyToClipboard(importId, {
+      success: 'files.importIdCopied',
+      failure: 'files.importIdCopyFailed',
+    });
+  }, [copyToClipboard]);
 
   return (
     <div className={styles.container}>
@@ -706,20 +721,11 @@ export function Files() {
               value={queryDraft}
               placeholder={t('files.searchPlaceholder')}
               onChange={event => {
-                const value = event.target.value.slice(0, 256);
-                setQueryDraft(value);
-                if (!queryIme.isComposing(event)) {
-                  commitQuery(value);
-                }
+                setQueryDraft(capLength(event.target.value));
               }}
               onCompositionStart={queryIme.handleCompositionStart}
               onCompositionEnd={handleQueryCompositionEnd}
-              onBlur={() => {
-                if (!queryIme.compositionActiveRef.current
-                    && queryDraft.trim() !== deepLink.query) {
-                  commitQuery(queryDraft);
-                }
-              }}
+              onBlur={() => { flushQuery(); }}
             />
           </label>
           <IconButton

@@ -410,7 +410,9 @@ describe('Embeddings states and filters', () => {
 
     renderEmbeddings();
 
-    await user.click(await screen.findByRole('button', { name: '11111111' }));
+    // 按钮上显示的是截断后的 id 加上一个省略号（Batch 939 起 `Embeddings` 与
+    // `Documents` / `VersionHistoryModal` 共用 `truncate`，不再有一种写法没有标记）。
+    await user.click(await screen.findByRole('button', { name: '11111111…' }));
 
     // 点击行内 id 按钮会把 jobId 写回 URL 并触发详情查询。
     await waitFor(() => {

@@ -8,7 +8,8 @@ import { Dialog } from '../Dialog';
 import { usableReason } from '../../utils/failureReason';
 import styles from './VersionHistoryModal.module.css';
 import { EmptyState } from '../ui';
-import { formatAbsolute } from '../../utils/time';
+import { formatAbsolute, UNREADABLE } from '../../utils/time';
+import { SHORT_ID_LENGTH, truncate } from '../../utils/text';
 
 /**
  * `"<label>: <reason>"` — with the reason only when there is one.
@@ -225,7 +226,9 @@ export function VersionHistoryModal({
                                 {formatAbsolute(v.createdAt, i18n.language)}
                               </div>
                             </div>
-                            <span className={styles.versionHash}>{v.contentHash?.slice(0, 8)}…</span>
+                            <span className={styles.versionHash}>
+                              {truncate(v.contentHash ?? UNREADABLE, SHORT_ID_LENGTH)}
+                            </span>
                             {onRestoreVersion && (
                               <button
                                 type="button"

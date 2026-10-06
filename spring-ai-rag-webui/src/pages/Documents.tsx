@@ -21,7 +21,9 @@ import styles from './Documents.module.css';
 import { EmptyState, IconButton, QueryErrorBanner } from '../components/ui';
 import { failureMessage, usableReason } from '../utils/failureReason';
 import { Upload, X } from 'lucide-react';
-import { formatDate } from '../utils/time';
+import { formatDate, UNREADABLE } from '../utils/time';
+import { capLength, SHORT_ID_LENGTH, truncate } from '../utils/text';
+import { useDebouncedCommit } from '../utils/debounce';
 
 type DocumentConfirmation =
   | { kind: 'disable'; document: Document }
@@ -266,28 +268,37 @@ export function Documents() {
 
   const commitKeyword = (value: string) => {
     const next = new URLSearchParams(searchParams);
-    const normalizedValue = value.trim().slice(0, 256);
+    const normalizedValue = capLength(value.trim());
     if (normalizedValue) next.set('keyword', normalizedValue);
     else next.delete('keyword');
     next.delete('page');
     setSearchParams(next, { replace: true });
   };
 
+  // `keyword` is part of the query key above, so committing from onChange fired one
+  // server request per character typed and discarded all but the last — six letters, six
+  // round trips. The IME guard below already showed the intent was "commit at a
+  // meaningful moment", so the pause is what was missing, not the guard.
+  const { flush: flushKeyword } = useDebouncedCommit(
+    keywordDraft.trim(),
+    keyword,
+    commitKeyword,
+    { isBlocked: () => keywordIme.compositionActiveRef.current },
+  );
+
   const handleKeywordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value.slice(0, 256);
-    setKeywordDraft(value);
-    if (!keywordIme.isComposing(e)) {
-      commitKeyword(value);
-    }
+    setKeywordDraft(capLength(e.target.value));
   };
 
   const handleKeywordCompositionEnd = (
     e: React.CompositionEvent<HTMLInputElement>,
   ) => {
     keywordIme.handleCompositionEnd();
-    const value = e.currentTarget.value.slice(0, 256);
+    const value = capLength(e.currentTarget.value);
     setKeywordDraft(value);
-    commitKeyword(value);
+    // The finished text, not whatever the debounce last scheduled: engines disagree on
+    // whether the final `input` event lands before or after `compositionend`.
+    flushKeyword(value.trim());
   };
 
   const handleCollectionChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -438,12 +449,9 @@ export function Documents() {
           onChange={handleKeywordChange}
           onCompositionStart={keywordIme.handleCompositionStart}
           onCompositionEnd={handleKeywordCompositionEnd}
-          onBlur={() => {
-            if (!keywordIme.compositionActiveRef.current
-                && keywordDraft.trim() !== keyword) {
-              commitKeyword(keywordDraft);
-            }
-          }}
+          // Not `onBlur={flushKeyword}`: flush takes an optional override string, and a
+          // blur event would be handed to it as if it were text to search for.
+          onBlur={() => { flushKeyword(); }}
           className={styles.searchInput}
         />
         {keyword && (
@@ -536,7 +544,9 @@ export function Documents() {
                       )}
                     </td>
                     <td>{formatDate(doc.createdAt, i18n.language)}</td>
-                    <td className={styles.hash}>{doc.contentHash?.slice(0, 8)}...</td>
+                    <td className={styles.hash}>
+                      {truncate(doc.contentHash ?? UNREADABLE, SHORT_ID_LENGTH)}
+                    </td>
                     <td className={styles.actionCell}>
                       <DocumentActionsMenu
                         ragDocument={doc}
