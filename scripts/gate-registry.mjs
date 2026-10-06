@@ -448,6 +448,29 @@ export const GATES = [
     noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
   },
 
+  // Batch 936. `k8s/templates/secret.yaml` feeds the container through
+  // `envFrom: secretRef`, so every key in `stringData` becomes an environment
+  // variable — and two of the eighteen had no reader. `DEEPSEEK_API_KEY` came from
+  // `docker-compose.yml`, where it is a **host-side** fallback that compose resolves
+  // before the container exists; a substitution with no meaning inside a container.
+  // `MINIMAX_API_KEY_ID` was read by nothing at all — Spring AI's own metadata
+  // declares no `api-key-id` — and it was also the condition guarding the whole
+  // MiniMax block, so an operator who configured MiniMax by the application's own
+  // vocabulary silently received nothing. That one is worse than dead: it is a
+  // correct configuration that silently does nothing.
+  //
+  // The corpus is the deployed application, stated positively: the main modules and
+  // the chart's own ConfigMap. `demos/**` is another artifact and `docker/**` is
+  // another deployment path, and each of them is why one of the two looked alive
+  // during the census. `SPRING_*` is accepted as a **namespace**, because Spring Boot
+  // binds the whole prefix — a mechanism rather than a list of names to remember.
+  {
+    gate: 'scripts/verify-helm-env-consumers.mjs',
+    kind: 'gate',
+    selfTest: 'scripts/test-support/helm-env-consumers-self-test.mjs',
+    noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
+  },
+
   // Run by scripts/verify-project-docs.sh.
   {
     gate: 'scripts/verify-no-pessimistic-locks.sh',

@@ -83,8 +83,16 @@ export function isLocalEnvFile(path) {
 /** 文档提到一个变量，不构成有代码在读它。 */
 export function isDocumentation(path) {
   return /^(docs|drafts)\//u.test(path)
-    || /^(README|CLAUDE|AGENTS)(\.[a-z]+)?\.md$/u.test(path)
-    || /\/README\.md$/u.test(path);
+    // Any markdown at all. The first version of this rule named the files it had
+    // seen (`README.md`, `CLAUDE.md`, …) and measured ten it had not:
+    // `README-zh-CN.md`, `CONTRIBUTING.md`, `CHANGELOG-zh-CN.md` and six
+    // `README-zh-CN.md` under `demos/` and `spring-ai-rag-webui/`. Every one of
+    // them was being counted as code, which makes prose a consumer — the exact
+    // error this rule exists to prevent, reintroduced through an enumeration.
+    // The lesson is Batch 931's again: a list of names is a list that gets
+    // forgotten, and "an enumeration of documentation" enumerates what exists today.
+    || /\.md$/u.test(path)
+    || /\.(adoc|rst|txt)$/u.test(path);
 }
 
 /**

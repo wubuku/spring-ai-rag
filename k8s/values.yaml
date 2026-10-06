@@ -203,8 +203,11 @@ secrets:
   anthropicApiKey: ""
 
   # MiniMax (optional)
+  # `minimaxApiKeyId` was removed in Batch 936: nothing reads it — Spring AI declares
+  # no `api-key-id` — and requiring it here silently withheld the whole MiniMax
+  # environment from operators who had configured MiniMax correctly. See
+  # templates/secret.yaml.
   minimaxApiKey: ""
-  minimaxApiKeyId: ""
   minimaxBaseUrl: "https://api.minimaxi.com"
 
   # Optional: External pgvector host (leave empty to use the postgres subchart / sidecar)

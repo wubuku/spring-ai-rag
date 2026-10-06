@@ -59,18 +59,18 @@ spring:
       connection-timeout: 30000
   ai:
     openai:
-      base-url: https://api.deepseek.com
-      api-key: ${DEEPSEEK_API_KEY}
+      base-url: ${SPRING_AI_OPENAI_BASE_URL:-${OPENAI_BASE_URL:-https://api.deepseek.com}}
+      api-key: ${SPRING_AI_OPENAI_API_KEY:-${OPENAI_API_KEY:dummy}}
       chat:
         enabled: false
         options:
-          model: deepseek-chat
+          model: ${SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL:-${OPENAI_MODEL:-deepseek-chat}}
     anthropic:
-      api-key: ${ANTHROPIC_API_KEY}
+      api-key: ${ANTHROPIC_API_KEY:dummy}
       chat:
         enabled: false
         options:
-          model: claude-sonnet-4-20250514
+          model: ${ANTHROPIC_MODEL:-claude-sonnet-4-20250514}
 
 # LLM 配置（选择一个 provider）
 app:
