@@ -749,6 +749,42 @@ path back on the wrong mount and the gate reports **exactly that one** and names
 the line in `abtest.ts`. One direction alone cannot tell "the gate is working"
 from "there was nothing to find".
 
+### 9.3 A gate has ways of writing that it cannot see
+
+The route contract written in Batch 932 was **missing a way of writing things**,
+and there is exactly one way to find that out: count the ways this frontend names
+a route on the server.
+
+There are three:
+
+| How it is written | How many | Does the gate see it |
+|---|---|---|
+| `apiClient.<verb>('/path')` in `src/api/*.ts` | 103 | yes |
+| `fetch('/api/v1/rag/…', { method })` elsewhere in `src/` | 3 | **no** |
+| an object URL from a `Blob` | — | not a route |
+
+It knew one of the three. And those three `fetch` sites each spelled
+`/api/v1/rag` **out in full**, so the base path lived in four places — a version
+bump would mean four edits, and nothing would point at three of them. The sharpest
+is the one in `ErrorBoundary`: its `fetch` sits inside a `catch` that swallows
+everything on purpose, so a wrong base there does not fail, it just stops
+reporting.
+
+**A rule that covers most of the ways is not that rule.** Both forms are inside
+the check now (106 call sites), and a new gate, `check-single-api-base`, holds the
+base path to one place.
+
+**And the fix then taught that scanner the same lesson a second time.** With the
+three sites rewritten as `fetch(BASE_URL + '/chat/stream', …)`, a fetch pattern
+that accepted only the full literal would have found **zero** call sites and
+reported a clean sweep over the empty set — the same silence as the missing quote
+style in its first version. So the pattern has to match the shape the code is
+actually written in, not the shape it was written in the day the rule was made.
+
+The division of labour is deliberate: the route contract asks whether the server
+mounts the route, the base gate asks how many times the prefix is written down.
+One checks existence, the other checks uniqueness.
+
 ## 10. An irreversible action must be confirmed
 
 Batch 812 surveyed every action in `src/` that destroys something and found four
