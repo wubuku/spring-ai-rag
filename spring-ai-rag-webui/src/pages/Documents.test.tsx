@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, useSearchParams } from 'react-router-dom';
 import { Documents } from './Documents';
@@ -570,6 +570,26 @@ describe('Documents', () => {
   describe('中文输入法防线', () => {
     const searchInput = () => screen.getByLabelText('documents.searchPlaceholder');
 
+    // Batch 940. These cases were deterministic before the search box was debounced:
+    // committing from `onChange` was synchronous, so a test could assert straight after
+    // `fireEvent`. A 250 ms pause made every one of them depend on the wall clock
+    // instead, and on a loaded machine one stopped passing — the assertion was never
+    // wrong, only late. The fix is to drive the clock, not to widen the `waitFor`
+    // timeout: a longer timeout only makes the same flake rarer.
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    /** Let the search box's pause elapse, then assert synchronously. */
+    const settle = async (assertion: () => void) => {
+      await act(async () => { await vi.advanceTimersByTimeAsync(300); });
+      assertion();
+    };
+
     it('组合过程中只更新草稿，组合结束后才写进查询条件', async () => {
       emptyList();
       renderDocuments();
@@ -583,12 +603,12 @@ describe('Documents', () => {
       expect(currentKeyword()).toBe('');
 
       fireEvent.compositionEnd(input, { data: '中文' });
-      await waitFor(() => {
+      await settle(() => {
         expect(currentKeyword()).toBe('中文');
       });
     });
 
-    it('组合进行中失焦不会把半成品提交出去', () => {
+    it('组合进行中失焦不会把半成品提交出去', async () => {
       emptyList();
       renderDocuments();
 
@@ -598,13 +618,16 @@ describe('Documents', () => {
       fireEvent.blur(input);
 
       // 用户在组合中途切走焦点：草稿留在输入框里，查询条件保持原样。
-      expect(input).toHaveValue('中文');
-      expect(currentKeyword()).toBe('');
+      // 时钟要照走一遍再断言：blur 的冲刷在组合中会被 `isBlocked` 拦下并把待提交值
+      // 留在原地，所以"没有提交"不是"还没到时间"，必须真的等过了才能这么说。
+      await settle(() => {
+        expect(input).toHaveValue('中文');
+        expect(currentKeyword()).toBe('');
+      });
     });
 
     it('组合进行中外部 URL 变化不覆盖正在输入的草稿', async () => {
       emptyList();
-      const user = userEvent.setup();
       renderDocumentsWithExternalUrlControl();
 
       const input = searchInput();
@@ -612,16 +635,18 @@ describe('Documents', () => {
       fireEvent.change(input, { target: { value: '中文' } });
 
       // 模拟用户正在拼字时点了浏览器后退：URL 变了，但草稿不能被冲掉。
-      await user.click(screen.getByRole('button', { name: 'external-url-change' }));
+      // `fireEvent` 而不是 `userEvent`：这一条关心的是"URL 从外部变了"，不是指针
+      // 事件序列，而 `userEvent` 的内部等待与假定时器互相等待，整条会 5 秒超时。
+      fireEvent.click(screen.getByRole('button', { name: 'external-url-change' }));
 
-      await waitFor(() => {
+      await settle(() => {
         expect(currentKeyword()).toBe('外部关键词');
       });
       expect(input).toHaveValue('中文');
 
       // 组合结束后，草稿重新成为权威值并覆盖掉外部来的 URL。
       fireEvent.compositionEnd(input, { data: '中文' });
-      await waitFor(() => {
+      await settle(() => {
         expect(currentKeyword()).toBe('中文');
       });
     });
@@ -632,13 +657,31 @@ describe('Documents', () => {
 
       const input = searchInput();
       fireEvent.change(input, { target: { value: '  报表  ' } });
-      await waitFor(() => {
+      await settle(() => {
         expect(currentKeyword()).toBe('报表');
       });
 
       fireEvent.change(input, { target: { value: 'x'.repeat(300) } });
-      await waitFor(() => {
+      await settle(() => {
         expect(currentKeyword()).toBe('x'.repeat(256));
+      });
+    });
+
+    it('减回空查询时把 keyword 从 URL 上拿掉', async () => {
+      // 清空和填非空走的是同一段代码，所以也一起钉住：URL 上留一个空的 `keyword=`，
+      // 下次点进来草稿初值就多出一个无意义的查询条件。
+      emptyList();
+      renderDocuments();
+
+      const input = searchInput();
+      fireEvent.change(input, { target: { value: '报表' } });
+      await settle(() => {
+        expect(currentKeyword()).toBe('报表');
+      });
+
+      fireEvent.change(input, { target: { value: '' } });
+      await settle(() => {
+        expect(currentKeyword()).toBe('');
       });
     });
   });
