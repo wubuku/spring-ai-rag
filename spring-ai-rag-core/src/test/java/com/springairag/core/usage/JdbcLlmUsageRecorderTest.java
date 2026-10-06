@@ -69,7 +69,10 @@ class JdbcLlmUsageRecorderTest {
             Thread.currentThread().interrupt();
             throw new AssertionError("repository task did not start", interrupted);
         }
-        assertTrue(elapsedMs < 800, "record must remain bounded");
+        // 把实测值写进失败信息：这是一条墙钟断言，而它本来测的就是"够快"，
+        // 少了这个数字，红了也只知道超了、不知道超了多少——Batch 944 在另一条同类
+        // 断言上正是靠这个数字才看出"负载"和"回归"的区别。
+        assertTrue(elapsedMs < 800, "record must remain bounded; took " + elapsedMs + "ms");
         assertTrue(awaitLost(recorder));
         recorder.shutdown();
     }
