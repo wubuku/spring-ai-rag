@@ -7,8 +7,29 @@ import { Card } from '../components/Card';
 import styles from './Evaluation.module.css';
 import { EmptyState, PageHeader, QueryErrorBanner, Tabs, tabDomIds } from '../components/ui';
 import { failureMessage } from '../utils/failureReason';
+import { resolveTabParam, tabSearchParams, toTabItems } from '../utils/urlParams';
 
-type Tab = 'report' | 'history' | 'feedback' | 'judge' | 'suites' | 'runs' | 'citations';
+/**
+ * The tab vocabulary, declared once.
+ *
+ * `Tab` is `keyof typeof EVALUATION_TABS`, so a tab exists exactly when it has a label.
+ * That is the whole point of the shape: the previous code carried a `type Tab` union, a
+ * label table and a hand-written validation chain as three separate lists, and editing
+ * only the union compiled clean while leaving the new tab unreachable.
+ */
+const EVALUATION_TABS = {
+  report: 'evaluation.tabReport',
+  history: 'evaluation.tabHistory',
+  feedback: 'evaluation.tabFeedback',
+  judge: 'evaluation.tabJudge',
+  suites: 'evaluation.tabSuites',
+  runs: 'evaluation.tabRuns',
+  citations: 'evaluation.tabCitations',
+} as const;
+
+type Tab = keyof typeof EVALUATION_TABS;
+
+const EVALUATION_DEFAULT_TAB: Tab = 'report';
 
 function fmt(n: unknown): string {
   if (typeof n === 'number' && Number.isFinite(n)) {
@@ -17,30 +38,12 @@ function fmt(n: unknown): string {
   return '—';
 }
 
-const EVALUATION_TABS = [
-  ['report', 'evaluation.tabReport'],
-  ['history', 'evaluation.tabHistory'],
-  ['feedback', 'evaluation.tabFeedback'],
-  ['judge', 'evaluation.tabJudge'],
-  ['suites', 'evaluation.tabSuites'],
-  ['runs', 'evaluation.tabRuns'],
-  ['citations', 'evaluation.tabCitations'],
-] as const;
-
 export function Evaluation() {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get('tab');
-  const tab: Tab =
-    tabParam === 'history' ||
-    tabParam === 'feedback' ||
-    tabParam === 'judge' ||
-    tabParam === 'suites' ||
-    tabParam === 'runs' ||
-    tabParam === 'citations'
-      ? tabParam
-      : 'report';
+  const tab = resolveTabParam(tabParam, EVALUATION_TABS, EVALUATION_DEFAULT_TAB);
 
   const reportQ = useQuery({
     queryKey: ['evaluation-report'],
@@ -106,9 +109,11 @@ export function Evaluation() {
       <Tabs
         idPrefix="evaluation-tabs"
         ariaLabel={t('evaluation.title')}
-        items={EVALUATION_TABS.map(([id, labelKey]) => ({ id, label: t(labelKey) }))}
+        items={toTabItems(EVALUATION_TABS, t)}
         activeId={tab}
-        onChange={next => setSearchParams(next === 'report' ? {} : { tab: next })}
+        onChange={next => setSearchParams(
+          tabSearchParams(next as Tab, EVALUATION_DEFAULT_TAB),
+        )}
       />
 
       <div

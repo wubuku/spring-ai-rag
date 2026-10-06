@@ -354,7 +354,7 @@ export function Search() {
         <SearchResults
           results={data.data.results.map((r: SearchResult) => ({
             documentId: r.documentId ?? 'unknown',
-            title: String(r.title || `Document ${r.documentId}`),
+            title: String(r.title || t('search.untitledResult', { id: r.documentId })),
             content: String(r.content || r.chunkText || ''),
             score: r.score,
             fulltextScore: r.fulltextScore,

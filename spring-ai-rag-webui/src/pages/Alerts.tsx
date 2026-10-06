@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
@@ -19,25 +19,75 @@ import { formatAbsolute, parseTimestamp } from '../utils/time';
 import { ConfirmDialog } from '../components/Dialog/ConfirmDialog';
 import { failureMessage } from '../utils/failureReason';
 import { POLL_INTERVAL_MS } from '../utils/timing';
+import { resolveTabParam, tabSearchParams } from '../utils/urlParams';
 
-type Tab =
-  | 'alerts'
-  | 'slo-configs'
-  | 'silence-schedules'
-  | 'notification-deliveries';
+/**
+ * The tab vocabulary, declared once. See the same shape in `Evaluation.tsx` for why the
+ * type is derived rather than written out beside it.
+ */
+const ALERTS_TABS = {
+  alerts: 'alerts.active',
+  'slo-configs': 'alerts.sloConfig',
+  'silence-schedules': 'alerts.silencePlans',
+  'notification-deliveries': 'alerts.deliveries',
+} as const;
+
+type Tab = keyof typeof ALERTS_TABS;
+
+const ALERTS_DEFAULT_TAB: Tab = 'alerts';
 
 export function Alerts() {
   const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get('tab');
-  const tab: Tab =
-    tabParam === 'slo-configs'
-      || tabParam === 'silence-schedules'
-      || tabParam === 'notification-deliveries'
-      ? tabParam
-      : 'alerts';
+  const tab = resolveTabParam(tabParam, ALERTS_TABS, ALERTS_DEFAULT_TAB);
   const [showSloForm, setShowSloForm] = useState(false);
   const [showSilenceForm, setShowSilenceForm] = useState(false);
+
+  /**
+   * The tab strip's render callbacks close over this component's own form state, so
+   * these items cannot be hoisted to module scope the way `Settings`' and `Evaluation`'s
+   * label tables are. What they can still borrow is the discipline: `id` is annotated
+   * `Tab`, so an id `ALERTS_TABS` does not declare is a compile error rather than a tab
+   * that no validation chain would ever accept, and every label is read out of the same
+   * table instead of being spelled a second time.
+   *
+   * What it still cannot do — and no annotation can — is prove the array is
+   * *complete*. An array carries no completeness check, so a tab present in
+   * `ALERTS_TABS` with no entry here would render an empty panel when selected. That is
+   * the honest limit of the shape, and it is written down here rather than papered over
+   * with a gate that could not see it either.
+   */
+  const items: Array<{ id: Tab; label: string; render: () => ReactNode }> = [
+    { id: 'alerts', label: t(ALERTS_TABS.alerts), render: () => <AlertsTab /> },
+    {
+      id: 'slo-configs',
+      label: t(ALERTS_TABS['slo-configs']),
+      render: () => (
+        <SloConfigsTab
+          showForm={showSloForm}
+          onShowForm={() => setShowSloForm(true)}
+          onHideForm={() => setShowSloForm(false)}
+        />
+      ),
+    },
+    {
+      id: 'silence-schedules',
+      label: t(ALERTS_TABS['silence-schedules']),
+      render: () => (
+        <SilenceSchedulesTab
+          showForm={showSilenceForm}
+          onShowForm={() => setShowSilenceForm(true)}
+          onHideForm={() => setShowSilenceForm(false)}
+        />
+      ),
+    },
+    {
+      id: 'notification-deliveries',
+      label: t(ALERTS_TABS['notification-deliveries']),
+      render: () => <NotificationDeliveriesTab />,
+    },
+  ];
 
   return (
     <div>
@@ -51,37 +101,10 @@ export function Alerts() {
         idPrefix="alerts-tabs"
         ariaLabel={t('alerts.title')}
         activeId={tab}
-        onChange={next => setSearchParams(next === 'alerts' ? {} : { tab: next })}
-        items={[
-          { id: 'alerts', label: t('alerts.active'), render: () => <AlertsTab /> },
-          {
-            id: 'slo-configs',
-            label: t('alerts.sloConfig'),
-            render: () => (
-              <SloConfigsTab
-                showForm={showSloForm}
-                onShowForm={() => setShowSloForm(true)}
-                onHideForm={() => setShowSloForm(false)}
-              />
-            ),
-          },
-          {
-            id: 'silence-schedules',
-            label: t('alerts.silencePlans'),
-            render: () => (
-              <SilenceSchedulesTab
-                showForm={showSilenceForm}
-                onShowForm={() => setShowSilenceForm(true)}
-                onHideForm={() => setShowSilenceForm(false)}
-              />
-            ),
-          },
-          {
-            id: 'notification-deliveries',
-            label: t('alerts.deliveries'),
-            render: () => <NotificationDeliveriesTab />,
-          },
-        ]}
+        onChange={next => setSearchParams(
+          tabSearchParams(next as Tab, ALERTS_DEFAULT_TAB),
+        )}
+        items={items}
       />
     </div>
   );
