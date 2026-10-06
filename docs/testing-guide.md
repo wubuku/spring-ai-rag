@@ -800,8 +800,23 @@ tests separately verify that English FTS, pg_jieba, and pg_trgm use the same
 
 WebUI acceptance covers all three modes, multi-selection, server-side
 Collection search and pagination, selected-empty blocking, and the Chat SSE
-object request. Run `npm run test:run`, `npx tsc -b --pretty false`,
-`npm run build`, and the core Mock Playwright suite.
+object request. Run `npm run test:run`, `npm run typecheck` (or
+`npx tsc -b --pretty false`), `npm run build`, and the core Mock Playwright suite.
+
+**Do not run `npx tsc --noEmit` here.** The WebUI's `tsconfig.json` is a solution
+file: it carries `references` and no `files` or `include`, so a bare `tsc --noEmit`
+compiles **nothing** and exits 0 — verified on 2026-10-06 by appending
+`const __probe: number = "definitely not a number";` to `src/pages/Collections.tsx`,
+after which it still reported success. The same run passed a real error it had been
+hiding: `Collections.tsx` had come to use `i18n` in a component that never destructured
+it, and six other components destructured `i18n` without using it. `npm run typecheck`
+(`tsc -b`) reported all seven; `tsc --noEmit` reported none. `HEARTBEAT.md` records a
+2026-04-25 entry claiming `tsc --noEmit ✅`, which is that empty green — the log is
+append-only, so it stands as a record of what was run rather than of what passed.
+
+`npm run typecheck` is now part of `npm run lint`, which `ci.yml`'s webui job runs, so
+a type error cannot reach `main` unremarked even though `npm run build` would also have
+caught it.
 
 ### JSONB Structured-Record Acceptance Gate
 

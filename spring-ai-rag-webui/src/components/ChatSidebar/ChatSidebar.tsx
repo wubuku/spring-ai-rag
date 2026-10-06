@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { X } from 'lucide-react';
 import styles from './ChatSidebar.module.css';
 import { EmptyState, IconButton } from '../ui';
+import { formatRelative } from '../../utils/time';
 
 interface ChatSession {
   id: string;
@@ -63,19 +64,10 @@ export function useChatSessions() {
 }
 
 export function ChatSidebar({ currentSessionId, onSelectSession, onNewChat }: ChatSidebarProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { sessions, deleteSession } = useChatSessions();
 
-  const formatTime = (timestamp: number) => {
-    const date = new Date(timestamp);
-    const now = new Date();
-    const diff = now.getTime() - date.getTime();
-
-    if (diff < 60000) return t('chat.timeJustNow');
-    if (diff < 3600000) return t('chat.timeMinutesAgo', { count: Math.floor(diff / 60000) });
-    if (diff < 86400000) return t('chat.timeHoursAgo', { count: Math.floor(diff / 3600000) });
-    return date.toLocaleDateString();
-  };
+  const formatTime = (timestamp: number) => formatRelative(timestamp, t, i18n.language);
 
   return (
     <div className={styles.sidebar}>

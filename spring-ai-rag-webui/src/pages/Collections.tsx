@@ -18,6 +18,7 @@ import { Card } from '../components/Card';
 import styles from './Collections.module.css';
 import { EmptyState, PageHeader, QueryErrorBanner } from '../components/ui';
 import { failureMessage, usableReason } from '../utils/failureReason';
+import { formatAbsolute } from '../utils/time';
 
 /**
  * The text to store alongside a failed purge step.
@@ -208,7 +209,7 @@ function CollectionPurgeDialog({
   collection: Collection;
   onClose: () => void;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
   const { showToast } = useToast();
   const [preview, setPreview] = useState<CollectionPurgePreview | null>(null);
@@ -388,7 +389,7 @@ function CollectionPurgeDialog({
 
               <div className={styles.expiry}>
                 {t('collections.purge.expiresAt', {
-                  time: new Date(preview.previewExpiresAt).toLocaleString(),
+                  time: formatAbsolute(preview.previewExpiresAt, i18n.language),
                 })}
               </div>
 

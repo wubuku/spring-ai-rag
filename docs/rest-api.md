@@ -2667,6 +2667,33 @@ Get experiment results list.
 
 ---
 
+## Timestamps — four shapes for one question
+
+Every field here that answers "when did this happen" is typed `string` by the
+WebUI, and the API sends **four** different wire shapes for it. Measured across
+`spring-ai-rag-api` on 2026-10-06 (Batch 938), counting Java time-typed fields:
+
+| Java type | Fields | JSON shape | Offset? |
+|---|---|---|---|
+| `LocalDateTime` | 73 | `2026-10-06T19:34:31` | **no** |
+| `OffsetDateTime` | 31 | `2026-10-06T19:34:31+08:00` | yes |
+| `ZonedDateTime` | 15 | `2026-10-06T19:34:31+08:00` | yes |
+| `Instant` | 8 | `2026-10-06T11:34:31Z` | yes (UTC) |
+
+`ApiPrincipalResponse.createdAt`, `ApiKeyResponse.createdAt`,
+`DocumentVersionResponse.createdAt` and their siblings are `LocalDateTime`, so they
+arrive with **no zone at all**. ECMAScript reads such a value in the *browser's*
+timezone, which means the same field renders differently for a reader in Shanghai
+and a reader in Berlin, and its meaning depends on which zone the server's JVM
+was in.
+
+The WebUI handles this as well as it can without guessing: `src/utils/time.ts`
+parses all four shapes and renders a value it cannot read as `—` rather than as
+the string `Invalid Date`. **It cannot recover an offset that was never sent.**
+Making the offset travel is an API change with external business clients attached
+(`docs/business-client-integration.md`), so it is recorded here as a decision for a
+person rather than changed in a WebUI batch.
+
 ## Alerts — Monitoring & Alerting
 
 Every route in this section belongs to the operator control plane. Environment

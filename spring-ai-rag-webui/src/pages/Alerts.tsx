@@ -15,6 +15,7 @@ import { ImeSafeForm } from '../components/ImeSafeForm';
 import { useToast } from '../components/Toast';
 import styles from './Alerts.module.css';
 import { EmptyState, PageHeader, QueryErrorBanner, Tabs } from '../components/ui';
+import { formatAbsolute, parseTimestamp } from '../utils/time';
 import { ConfirmDialog } from '../components/Dialog/ConfirmDialog';
 import { failureMessage } from '../utils/failureReason';
 
@@ -88,7 +89,7 @@ export function Alerts() {
 // ==================== Active Alerts Tab ====================
 
 function AlertsTab() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { data, isPending, isError, refetch } = useQuery({
     queryKey: ['alerts'],
     queryFn: () => alertsApi.listActive(),
@@ -139,7 +140,7 @@ function AlertsTab() {
             </div>
           )}
           <div className={styles.time}>
-            {t('alerts.triggeredAt')}: {formatAlertTime(alert.firedAt, t('alerts.timeUnavailable'))}
+            {t('alerts.triggeredAt')}: {formatAlertTime(alert.firedAt, t('alerts.timeUnavailable'), i18n.language)}
           </div>
         </article>
       ))}
@@ -154,11 +155,12 @@ function metricText(alert: Alert, key: string): string {
     : '-';
 }
 
-function formatAlertTime(value: string, fallback: string): string {
-  const timestamp = Date.parse(value);
-  return Number.isFinite(timestamp)
-    ? new Date(timestamp).toLocaleString()
-    : fallback;
+// Batch 938. Was: `Date.parse` in a hand-rolled wrapper that had no idea whether the
+// value carried a zone, and eight other call sites each deciding for themselves. The
+// fallback is the caller's, so an alert whose timestamp cannot be read still says
+// "Unavailable" rather than "Invalid Date".
+function formatAlertTime(value: string, fallback: string, locale?: string): string {
+  return parseTimestamp(value) === null ? fallback : formatAbsolute(value, locale);
 }
 
 // ==================== Notification Deliveries Tab ====================
@@ -330,7 +332,7 @@ function NotificationDeliveryRow({
   retrying: boolean;
   onRetry: () => void;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   return (
     <div
       className={styles.deliveryRow}
@@ -348,10 +350,10 @@ function NotificationDeliveryRow({
         {delivery.attemptCount}/{delivery.attemptBudget}
       </span>
       <span role="cell">
-        {formatOptionalTime(delivery.nextAttemptAt)}
+        {formatOptionalTime(delivery.nextAttemptAt, i18n.language)}
       </span>
       <span role="cell">{delivery.lastErrorCode ?? '-'}</span>
-      <span role="cell">{formatOptionalTime(delivery.updatedAt)}</span>
+      <span role="cell">{formatOptionalTime(delivery.updatedAt, i18n.language)}</span>
       <span role="cell">
         {delivery.status === 'FAILED' ? (
           <button
@@ -369,12 +371,12 @@ function NotificationDeliveryRow({
   );
 }
 
-function formatOptionalTime(value?: string): string {
-  if (!value) return '-';
-  const timestamp = Date.parse(value);
-  return Number.isFinite(timestamp)
-    ? new Date(timestamp).toLocaleString()
-    : '-';
+// Batch 938. Same shape as `formatAlertTime` above, and it existed because the first
+// one did: two wrappers, written separately, each re-deciding whether the value had a
+// zone. The caller's own placeholder is kept so the page still reads as before.
+function formatOptionalTime(value?: string, locale?: string): string {
+  if (!value || parseTimestamp(value) === null) return '-';
+  return formatAbsolute(value, locale);
 }
 
 // ==================== SLO Configs Tab ====================

@@ -495,6 +495,33 @@ export const GATES = [
     noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
   },
 
+  // Batch 938. Nine places in the WebUI each called `toLocaleString()` /
+  // `toLocaleDateString()` / `toLocaleTimeString()` on a value they had just made a
+  // `Date` out of, with no shared formatter in `src/` at all. `ApiKeys.tsx` wrapped its
+  // call in a `try/catch` that reads as though it handles a value it cannot read — and
+  // cannot, because `new Date('garbage')` returns an Invalid Date and
+  // `toLocaleString()` on one returns the **string** "Invalid Date". The catch was
+  // unreachable and the user read eleven characters of English on a Chinese page.
+  //
+  // The rule is "one formatter, imported", and it needs no allowlist because the one
+  // legitimate owner is named by path. It does not judge what the formatter renders: a
+  // date column and a time column must differ, and `ChatSidebar`'s relative ladder is
+  // deliberate — what the gate stops is the second copy of it.
+  //
+  // It does not look at the Java side, where the four-way split starts
+  // (`LocalDateTime` 73 / `OffsetDateTime` 31 / `ZonedDateTime` 15 / `Instant` 8 for
+  // the same question). Making an offset travel on the wire is an API change with
+  // external business clients, so it is a decision for a person; `docs/rest-api.md`
+  // records the measurement and `src/utils/time.ts` states what it can and cannot
+  // decide about a zoneless value.
+  // No `noCiReason`: `npm run lint` runs in ci.yml's webui job, so this one is covered
+  // by the gate layer CI has always reached.
+  {
+    gate: 'spring-ai-rag-webui/scripts/check-time-formatting.mjs',
+    kind: 'gate',
+    selfTest: 'spring-ai-rag-webui/scripts/__tests__/time-formatting.test.mjs',
+  },
+
   // Run by scripts/verify-project-docs.sh.
   {
     gate: 'scripts/verify-no-pessimistic-locks.sh',

@@ -19,6 +19,7 @@ import { Button } from '../components/Button';
 import { failureMessage } from '../utils/failureReason';
 import { EmptyState, QueryErrorBanner, StatusBadge } from '../components/ui';
 import styles from './ApiKeys.module.css';
+import { formatAbsolute } from '../utils/time';
 
 const DEFAULT_EXPIRY_DAYS = 365;
 const READ_ONLY_CAPABILITIES = ['RAG_READ'];
@@ -60,13 +61,12 @@ function createExpiryDefaults() {
   };
 }
 
-function formatDateTime(dateStr?: string): string {
-  if (!dateStr) return '—';
-  try {
-    return new Date(dateStr).toLocaleString();
-  } catch {
-    return dateStr;
-  }
+// Batch 938. The `try/catch` this replaced could never fire: `new Date('garbage')`
+// does not throw — it returns an Invalid Date, and `toLocaleString()` on one returns
+// the *string* "Invalid Date", which is what a user saw in the key table. It also
+// returned `dateStr` on failure, printing the raw wire value.
+function formatDateTime(dateStr?: string, locale?: string): string {
+  return formatAbsolute(dateStr, locale);
 }
 
 function principalFromCreatedKey(
@@ -202,7 +202,7 @@ function PrincipalRow({
   onEdit: () => void;
   onRotate: () => void;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
   const { showToast } = useToast();
   // Revoking is the one action on this card with no way back: the credential
@@ -292,7 +292,7 @@ function PrincipalRow({
           : t('apiKeys.allCollections')}
       </span>
       <span>{principal.requestsPerMinute ?? t('apiKeys.defaultQuota')}</span>
-      <span className={styles.date}>{formatDateTime(principal.lastUsedAt)}</span>
+      <span className={styles.date}>{formatDateTime(principal.lastUsedAt, i18n.language)}</span>
       <span className={styles.statusStack}>
         {statusBadge}
         {rotationPending && (
@@ -302,13 +302,13 @@ function PrincipalRow({
             </StatusBadge>
             <small>
               {t('apiKeys.rotationDeadline', {
-                deadline: formatDateTime(principal.rotationExpiresAt),
+                deadline: formatDateTime(principal.rotationExpiresAt, i18n.language),
               })}
             </small>
           </>
         )}
       </span>
-      <span className={styles.date}>{formatDateTime(principal.expiresAt)}</span>
+      <span className={styles.date}>{formatDateTime(principal.expiresAt, i18n.language)}</span>
       <span className={styles.rowActions}>
         <Button
           variant="link"
@@ -905,7 +905,7 @@ function RotateKeyModal({
   principal: ApiPrincipalResponse;
   onClose: () => void;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [mode, setMode] = useState<RotationMode>('staged');
   const [overlapSeconds, setOverlapSeconds] = useState('900');
   const [idempotencyKey] = useState(() => crypto.randomUUID());
@@ -1126,7 +1126,7 @@ function RotateKeyModal({
                   <div className={styles.rawKeyLabel} style={{ marginTop: '0.75rem' }}>
                     {t('apiKeys.overlapDeadline')}
                   </div>
-                  <div>{formatDateTime(preparedRotation.rotationExpiresAt)}</div>
+                  <div>{formatDateTime(preparedRotation.rotationExpiresAt, i18n.language)}</div>
                 </>
               )}
               {shownOnceSecret ? (
