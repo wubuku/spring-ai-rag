@@ -38,6 +38,16 @@ class RagChatToolRegistryExecutorTailTest {
 
     private ToolCallback blockingCallback(String name,
                                           CountDownLatch latch) {
+        return blockingCallback(name, latch, new CountDownLatch(0));
+    }
+
+    /**
+     * @param started 在回调体**真正开始执行**时倒数，用来证明"这个调用已经占住了
+     *                执行线程"，而不是靠睡一会儿去希望它已经跑起来了。
+     */
+    private ToolCallback blockingCallback(String name,
+                                          CountDownLatch latch,
+                                          CountDownLatch started) {
         ToolCallback callback = mock(ToolCallback.class);
         ToolDefinition definition = mock(ToolDefinition.class);
         when(definition.name()).thenReturn(name);
@@ -47,6 +57,7 @@ class RagChatToolRegistryExecutorTailTest {
                 ToolMetadata.builder().returnDirect(false).build());
         when(callback.call(anyString(), any(ToolContext.class)))
                 .thenAnswer(invocation -> {
+                    started.countDown();
                     latch.await(3, TimeUnit.SECONDS);
                     return "ok";
                 });
@@ -235,7 +246,8 @@ class RagChatToolRegistryExecutorTailTest {
         properties.getAgent().setToolExecutorThreads(1);
         properties.getAgent().setToolExecutorQueueCapacity(1);
         CountDownLatch latch = new CountDownLatch(1);
-        ToolCallback callback = blockingCallback("lookupInventory", latch);
+        CountDownLatch firstStarted = new CountDownLatch(1);
+        ToolCallback callback = blockingCallback("lookupInventory", latch, firstStarted);
         RagChatToolRegistry registry = registry(
                 properties, policy(1_024, Duration.ofSeconds(5)),
                 List.of(callback), null);
@@ -247,8 +259,14 @@ class RagChatToolRegistryExecutorTailTest {
         Thread second = new Thread(() -> registered.call(
                 "{}", context(Instant.now().plusSeconds(30))));
         first.start();
-        Thread.sleep(150);
+        // 原来是 Thread.sleep(150) 去"希望"第一个调用已经跑起来了。等回调体真正开始
+        // 执行才有这个保证——睡够 150ms 并不保证调度发生过。
+        assertTrue(firstStarted.await(3, TimeUnit.SECONDS),
+                "第一个调用没有拿到执行线程，饱和场景根本没被建立起来");
         second.start();
+        // 这一段**仍然是睡**：它在等第二个调用被**提交进**执行器（队列容量 1）。
+        // 测试拿不到执行器本身，看不到队列，所以没有可等待的信号——这是已知的
+        // 150ms 窗口，不是因为"这里需要时间"。
         Thread.sleep(150);
         String saturated = registered.call(
                 "{}", context(Instant.now().plusSeconds(30)));
