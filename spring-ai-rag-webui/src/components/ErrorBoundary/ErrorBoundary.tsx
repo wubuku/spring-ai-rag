@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { getCredentialHeaders } from '../../auth/credentialStore';
 import styles from './ErrorBoundary.module.css';
 import { TriangleAlert } from 'lucide-react';
+import { BASE_URL } from '../../api/client';
 
 interface Props {
   children: ReactNode;
@@ -35,7 +36,7 @@ function getCurrentPathname(): string {
  */
 async function reportErrorToServer(payload: ClientErrorPayload): Promise<void> {
   try {
-    await fetch('/api/v1/rag/client-errors', {
+    await fetch(BASE_URL + '/client-errors', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

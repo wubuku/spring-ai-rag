@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { getCredentialHeaders } from '../auth/credentialStore';
+import { BASE_URL } from '../api/client';
 
 interface UploadProgress {
   fileName: string;
@@ -78,7 +79,7 @@ export function useFileUpload(options: UseFileUploadOptions): UseFileUploadRetur
         const abortController = new AbortController();
         uploadAbortRef.current = abortController;
         // Make the upload request
-        const response = await fetch('/api/v1/rag/documents/upload', {
+        const response = await fetch(BASE_URL + '/documents/upload', {
           method: 'POST',
           headers: {
             ...getCredentialHeaders(),

@@ -507,6 +507,21 @@ export const GATES = [
     kind: 'gate',
     selfTest: 'spring-ai-rag-webui/scripts/__tests__/page-shell.test.mjs',
   },
+  // Batch 933. The WebUI names a server route in more than one way, and the
+  // three call sites that use `fetch` instead of `apiClient` — the SSE chat
+  // stream, the multipart upload, the client-error report — each spelled
+  // `/api/v1/rag` out in full, so the base path lived in four places. The
+  // error-boundary one is the sharpest: its fetch is wrapped in a catch that
+  // swallows everything on purpose, so a wrong base there does not announce
+  // itself, it just stops reporting. The gate reads the base out of
+  // `src/api/client.ts` rather than carrying its own copy, because a gate that
+  // holds a second copy of the string it enforces is a machine number nothing
+  // recomputes.
+  {
+    gate: 'spring-ai-rag-webui/scripts/check-single-api-base.mjs',
+    kind: 'gate',
+    selfTest: 'spring-ai-rag-webui/scripts/__tests__/single-api-base.test.mjs',
+  },
   {
     gate: 'spring-ai-rag-webui/scripts/check-query-errors.mjs',
     kind: 'gate',

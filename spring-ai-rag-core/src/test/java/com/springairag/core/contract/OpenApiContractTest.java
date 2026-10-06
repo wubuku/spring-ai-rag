@@ -1323,6 +1323,44 @@ class OpenApiContractTest {
          */
         private static final int MIN_CALL_SITES = 90;
 
+        /**
+         * Batch 933: the floor for the {@code fetch} scan, which is a different
+         * and much smaller set.
+         *
+         * <p>Three call sites name a server route without going through
+         * {@code apiClient} — the SSE chat stream, the multipart upload, and the
+         * client-error report — and the first version of this test saw none of
+         * them, because it only looked inside {@code src/api}. The census behind
+         * this number is in {@link #scan_coversTheApiModules()}: this frontend
+         * names routes in exactly two ways, and a third would have to be added
+         * there too.
+         */
+        private static final int MIN_FETCH_SITES = 3;
+
+        /**
+         * A {@code fetch(} that names a route, in either of the shapes this
+         * codebase uses.
+         *
+         * <p>Batch 933 added the {@code BASE_URL +} alternative, and it is not
+         * an accommodation — it is the shape all three call sites moved to once
+         * the base path stopped being spelled out four times. A scanner that only
+         * accepted the full literal would have found **zero** fetch call sites
+         * after that change and reported a clean sweep, which is the same silent
+         * blindness as the missing quote style in the first version of this
+         * pattern. A rule has to match the shape the code is actually written in,
+         * not the one it was written in when the rule was made.
+         *
+         * <p>The negative lookbehind is load-bearing rather than defensive:
+         * {@code void refetch()} appears throughout this codebase, and a pattern
+         * that matched any {@code fetch(} would report every one of them as a
+         * route call. A rule that cries wolf on the codebase's most common word
+         * is a rule that gets switched off.
+         */
+        private static final java.util.regex.Pattern FETCH_SITE =
+                java.util.regex.Pattern.compile(
+                        "(?<![A-Za-z0-9_$])fetch\\s*\\(\\s*(?:BASE_URL\\s*\\+\\s*)?"
+                                + "([\"'][^\"']*[\"'])");
+
         private record CallSite(String file, int line, String verb, String path) {
             @Override
             public String toString() {
@@ -1335,12 +1373,13 @@ class OpenApiContractTest {
         void everyWebUiRoute_isServed() throws Exception {
             Path apiDir = locateWebUiApiDirectory();
             String baseUrl = readBaseUrl(apiDir);
-            List<CallSite> calls = scanCallSites(apiDir, baseUrl);
+            List<CallSite> calls = new ArrayList<>(scanCallSites(apiDir, baseUrl));
+            calls.addAll(scanFetchCallSites(apiDir, baseUrl));
 
             assertThat(calls)
                     .as("the scan found suspiciously few call sites — a scanner that "
                             + "matches nothing would pass this test vacuously")
-                    .hasSizeGreaterThanOrEqualTo(MIN_CALL_SITES);
+                    .hasSizeGreaterThanOrEqualTo(MIN_CALL_SITES + MIN_FETCH_SITES);
 
             Set<String> served = servedRoutes();
 
@@ -1354,6 +1393,42 @@ class OpenApiContractTest {
                             + "%d of %d call sites matched. Mount path: %s",
                             calls.size() - unrouted.size(), calls.size(), baseUrl)
                     .isEmpty();
+        }
+
+        @Test
+        @DisplayName("The fetch scan reaches the call sites that bypass the api client")
+        void scan_coversFetchCallSites() throws Exception {
+            Path apiDir = locateWebUiApiDirectory();
+            List<CallSite> fetches = scanFetchCallSites(apiDir, readBaseUrl(apiDir));
+
+            // Batch 933. These three are the routes this frontend names without
+            // `apiClient`, and the first version of this contract did not see a
+            // single one of them — it only looked inside `src/api`, so a whole
+            // way of naming a server route was outside the check. A rule that
+            // covers most of the ways is not the same rule.
+            assertThat(fetches)
+                    .as("the fetch scan must reach the call sites outside src/api")
+                    .hasSizeGreaterThanOrEqualTo(MIN_FETCH_SITES);
+
+            assertThat(fetches)
+                    .as("all three fetch call sites are POSTs; if that changes, this "
+                            + "assertion is what should notice before the route check "
+                            + "silently compares the wrong verb")
+                    .allMatch(call -> "POST".equals(call.verb()));
+
+            assertThat(fetches)
+                    .as("the lookbehind must keep `refetch()` out — it is the most "
+                            + "common word next to `fetch` in this codebase, and "
+                            + "matching it would report ordinary code as a route")
+                    .noneMatch(call -> call.path().contains("refetch"));
+
+            assertThat(fetches.stream().map(CallSite::file).distinct())
+                    .as("the three sites live in three different files, so a scan that "
+                            + "reached only one of them would still pass a count check")
+                    .containsExactlyInAnyOrder(
+                            "components/ErrorBoundary/ErrorBoundary.tsx",
+                            "hooks/useFileUpload.ts",
+                            "hooks/useSSE.ts");
         }
 
         @Test
@@ -1450,6 +1525,75 @@ class OpenApiContractTest {
                 }
             }
             return calls;
+        }
+
+        /**
+         * Every route named by a {@code fetch(} call, wherever it lives.
+         *
+         * <p>Batch 933. {@link #scanCallSites} only walks {@code src/api}, which
+         * is where the {@code apiClient} calls are — so the three call sites that
+         * reach the server some other way were outside the route contract
+         * entirely. The error-boundary one is the one that matters most: its
+         * {@code fetch} sits inside a {@code catch} that swallows everything on
+         * purpose, so a route that stopped existing there would not fail a test,
+         * it would quietly stop reporting.
+         *
+         * <p>The path is accepted either already carrying the base or as a suffix
+         * next to it, because that is the form {@code check-single-api-base}
+         * pushes call sites into. A literal base spelled out again would also be
+         * accepted here — and reported by the other gate, which is the division
+         * of labour: this one asks whether the route is served, that one asks
+         * whether the base is stated once.
+         */
+        private List<CallSite> scanFetchCallSites(Path apiDir, String baseUrl) throws IOException {
+            Path srcDir = apiDir.getParent();
+            List<CallSite> calls = new ArrayList<>();
+            try (Stream<Path> files = Files.walk(srcDir)) {
+                for (Path file : files
+                        .filter(p -> p.getFileName().toString().endsWith(".ts")
+                                || p.getFileName().toString().endsWith(".tsx"))
+                        .filter(p -> !p.getFileName().toString().endsWith(".test.ts"))
+                        .filter(p -> !p.getFileName().toString().endsWith(".test.tsx"))
+                        .filter(p -> !p.getFileName().toString().endsWith(".spec.ts"))
+                        .filter(p -> !p.getFileName().toString().endsWith(".spec.tsx"))
+                        .sorted()
+                        .toList()) {
+                    String source = Files.readString(file);
+                    java.util.regex.Matcher matcher = FETCH_SITE.matcher(source);
+                    while (matcher.find()) {
+                        String literal = matcher.group(1);
+                        String path = literal.substring(1, literal.length() - 1);
+                        if (!path.startsWith("/")) {
+                            continue;
+                        }
+                        String method = methodOf(source, matcher.end());
+                        int line = (int) source.substring(0, matcher.start()).lines().count();
+                        calls.add(new CallSite(
+                                srcDir.relativize(file).toString().replace('\\', '/'),
+                                line,
+                                method,
+                                path.startsWith(baseUrl) ? path : baseUrl + path));
+                    }
+                }
+            }
+            return calls;
+        }
+
+        /**
+         * Reads {@code method: 'POST'} from the options object that follows the
+         * URL. Defaults to {@code GET}, which is what {@code fetch} does when the
+         * caller says nothing — so an unreadable call is compared as the request
+         * it would actually make.
+         */
+        private static String methodOf(String source, int from) {
+            int close = source.indexOf(')', from);
+            if (close < 0) {
+                return "GET";
+            }
+            java.util.regex.Matcher method = java.util.regex.Pattern
+                    .compile("method\\s*:\\s*[\"']([A-Za-z]+)[\"']")
+                    .matcher(source.substring(from, close));
+            return method.find() ? method.group(1).toUpperCase(java.util.Locale.ROOT) : "GET";
         }
 
         /**

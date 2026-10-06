@@ -6,6 +6,7 @@ import type {
   ChatSource,
   CollectionScopeMode,
 } from '../types/api';
+import { BASE_URL } from '../api/client';
 
 export interface ChatToolStartEvent {
   tool: string;
@@ -196,7 +197,7 @@ export function useChatSSE(options: UseChatSSEOptions): UseChatSSEReturn {
           const attemptController = new AbortController();
           abortControllerRef.current = attemptController;
           try {
-            const response = await fetch('/api/v1/rag/chat/stream', {
+            const response = await fetch(BASE_URL + '/chat/stream', {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',

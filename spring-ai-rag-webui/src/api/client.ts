@@ -2,7 +2,17 @@ import axios from 'axios';
 import axiosRetry from 'axios-retry';
 import { clearCredential, getCredential } from '../auth/credentialStore';
 
-const BASE_URL = '/api/v1/rag';
+/**
+ * Where the WebUI's requests go.
+ *
+ * Batch 933: exported because three call sites outside `src/api` talk to the
+ * server with `fetch` rather than through `apiClient` — the SSE chat stream, the
+ * multipart upload, and the client-error report from the error boundary. Each of
+ * them used to spell this string out, so the base path existed in four places and
+ * a version bump would have needed four edits, none of which a type checker would
+ * have pointed at. `check-single-api-base` fails if a second copy reappears.
+ */
+export const BASE_URL = '/api/v1/rag';
 
 export const apiClient = axios.create({
   baseURL: BASE_URL,
