@@ -547,7 +547,12 @@ describe('Search guards, history panel, provenance navigation and draft validati
     await submit('manual');
 
     expect(await screen.findByText('Full body')).toBeInTheDocument();
-    expect(screen.getByText('Document 42')).toBeInTheDocument();
+    // Batch 942. This used to assert `Document 42` — the literal the component wrote when
+    // a result carried no title, which is English text on a page that has Chinese. It is
+    // now `t('search.untitledResult', { id })`. The id is not visible here because the
+    // suite's translator double returns the key and ignores the interpolation options.
+    expect(screen.getByText('search.untitledResult')).toBeInTheDocument();
+    expect(screen.queryByText('Document 42')).not.toBeInTheDocument();
     expect(screen.getByText('Only chunk text')).toBeInTheDocument();
   });
 

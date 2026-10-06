@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router-dom';
 import { modelsApi, type ModelInfo } from '../api/models';
 import { getSelectedModel, saveSelectedModel } from '../utils/modelPreference';
 import { SAVED_FEEDBACK_MS } from '../utils/timing';
+import { resolveTabParam, tabSearchParams, toTabItems } from '../utils/urlParams';
 import styles from './Settings.module.css';
 import { PageHeader } from '../components/ui';
 import { Tabs, tabDomIds } from '../components/ui';
@@ -27,16 +28,33 @@ interface LlmConfig {
   model: string;
 }
 
+/**
+ * The tab vocabulary, declared once. See the same shape in `Evaluation.tsx` for why the
+ * type is derived rather than written out beside it.
+ *
+ * `settings.tabLanguage` exists because the label used to be picked by sniffing the
+ * translated page title for the characters 设置 — a runtime language test that produced
+ * "Language" on the Chinese page too, since `settings.title` is 系统设置 and its first
+ * space-separated token is not 设置.
+ */
+const SETTINGS_TABS = {
+  llm: 'settings.llmProvider',
+  retrieval: 'settings.retrieval',
+  cache: 'settings.cache',
+  language: 'settings.tabLanguage',
+} as const;
+
+type Tab = keyof typeof SETTINGS_TABS;
+
+const SETTINGS_DEFAULT_TAB: Tab = 'llm';
+
 const SETTINGS_KEY = 'user_settings';
 
 export function Settings() {
   const { t, i18n } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get('tab');
-  const activeTab: 'llm' | 'retrieval' | 'cache' | 'language' =
-    tabParam === 'retrieval' || tabParam === 'cache' || tabParam === 'language'
-      ? tabParam
-      : 'llm';
+  const activeTab = resolveTabParam(tabParam, SETTINGS_TABS, SETTINGS_DEFAULT_TAB);
   const [saved, setSaved] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
   const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -182,12 +200,7 @@ export function Settings() {
     localStorage.setItem('language', lang);
   };
 
-  const tabs = [
-    { id: 'llm' as const, label: t('settings.llmProvider') },
-    { id: 'retrieval' as const, label: t('settings.retrieval') },
-    { id: 'cache' as const, label: t('settings.cache') },
-    { id: 'language' as const, label: t('settings.title').split(' ')[0] === '设置' ? '语言' : 'Language' },
-  ];
+  const tabs = toTabItems(SETTINGS_TABS, t);
 
   const availableModels = models.filter(model => model.available);
   const providers = Array.from(
@@ -216,7 +229,9 @@ export function Settings() {
         ariaLabel={t('settings.title')}
         items={tabs}
         activeId={activeTab}
-        onChange={next => setSearchParams(next === 'llm' ? {} : { tab: next })}
+        onChange={next => setSearchParams(
+          tabSearchParams(next as Tab, SETTINGS_DEFAULT_TAB),
+        )}
       />
 
       <div

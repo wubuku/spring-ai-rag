@@ -451,7 +451,12 @@ describe('Settings model loading, tabs and numeric fallbacks', () => {
     const user = userEvent.setup();
     renderSettings();
 
-    await user.click(screen.getByRole('tab', { name: 'Language' }));
+    // Batch 942. This used to look for the literal `Language`, and that was the tell:
+    // every other case in this file reaches for an i18n key, because the language tab's
+    // label was the one that bypassed i18n — `t('settings.title').split(' ')[0] === '设置'
+    // ? '语言' : 'Language'`, which on the Chinese page (`系统设置`) matched neither branch
+    // and showed the English word. The component now uses `settings.tabLanguage`.
+    await user.click(screen.getByRole('tab', { name: /settings\.tabLanguage/i }));
     await user.click(screen.getByRole('button', { name: /中文/ }));
 
     expect(localStorageMock.setItem).toHaveBeenCalledWith('language', 'zh-CN');
