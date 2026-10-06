@@ -497,4 +497,19 @@ pass "Env-example-consumers self-test"
 node scripts/verify-env-example-consumers.mjs
 pass "Env example consumers"
 
+# Batch 936. The same consumer-direction question, asked of the Helm chart instead of
+# the template: `envFrom: secretRef` puts every `stringData` key into the container
+# environment. Two of eighteen had no reader, and one of them — MINIMAX_API_KEY_ID —
+# was the condition guarding the whole MiniMax block, so a correct MiniMax
+# configuration silently produced nothing.
+node scripts/test-support/helm-env-consumers-self-test.mjs >/dev/null || {
+  echo "Helm-env-consumers self-test failed; the gate may no longer reject anything." >&2
+  node scripts/test-support/helm-env-consumers-self-test.mjs >&2 || true
+  exit 1
+}
+pass "Helm-env-consumers self-test"
+
+node scripts/verify-helm-env-consumers.mjs
+pass "Helm env consumers"
+
 echo "Repository gate chain: $PASS_COUNT checks passed."

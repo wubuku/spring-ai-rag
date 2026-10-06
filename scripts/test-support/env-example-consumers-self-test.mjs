@@ -16,7 +16,7 @@
 //     a Spring Boot built-in. That variable has to survive the gate.
 
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
@@ -194,7 +194,49 @@ test("this gate's own self-test is not a consumer of anything", () => {
     'a runnable script that reads a key is a consumer, even though it lives in scripts/');
 });
 
-test('the gate runs and reports the real repository clean', () => {
+test('every markdown file is documentation, not code', () => {
+  // Found by the Batch 936 census, one batch after this gate shipped. The rule named
+  // the documents it had seen, and ten it had not were being counted as code:
+  // `README-zh-CN.md`, `CONTRIBUTING.md`, `CHANGELOG-zh-CN.md`, and six more
+  // `README-zh-CN.md` under `demos/` and `spring-ai-rag-webui/`. Prose was a
+  // consumer — the exact error the rule exists to prevent, back in through an
+  // enumeration. Measured at the time: none of the 38 declared variables depended on
+  // it, so nothing was passing for the wrong reason yet.
+  for (const path of [
+    'README.md', 'README-zh-CN.md', 'README-en.md',
+    'CONTRIBUTING.md', 'CONTRIBUTING-zh-CN.md',
+    'CHANGELOG.md', 'CHANGELOG-zh-CN.md',
+    'demos/demo-multi-model/README-zh-CN.md',
+    'spring-ai-rag-webui/README-zh-CN.md',
+    'docs/configuration.md', 'docs/drafts/plan.md',
+  ]) {
+    assert.equal(isDocumentation(path), true, `must be documentation: ${path}`);
+  }
+
+  // The other half, because `*.md` is broad and breadth is how a rule starts
+  // hiding things: a YAML, a Java source and a shell script are still code.
+  for (const path of [
+    'k8s/templates/secret.yaml',
+    'spring-ai-rag-core/src/main/resources/application.yml',
+    'spring-ai-rag-core/src/main/java/com/springairag/core/App.java',
+    'scripts/start-real-e2e-server.sh',
+    'spring-ai-rag-webui/src/api/client.ts',
+  ]) {
+    assert.equal(isDocumentation(path), false, `must be code: ${path}`);
+  }
+
+  // And the census that found it, kept as an assertion: the classification has to
+  // agree with the tree, not only with a hand-written list of names.
+  const tracked = execFileSync('git', ['ls-files', '-z'], {
+    cwd: REPO, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024,
+  }).split('\0').filter(Boolean);
+  const markdown = tracked.filter((p) => p.endsWith('.md'));
+  assert.ok(markdown.length > 40, `only ${markdown.length} markdown file(s) tracked; the census stopped early`);
+  const misfiled = markdown.filter((p) => !isDocumentation(p));
+  assert.deepEqual(misfiled, [], `markdown counted as code: ${misfiled.join(', ')}`);
+});
+
+test('this gate runs and reports the real repository clean', () => {
   const run = spawnSync(process.execPath, [GATE], { cwd: REPO, encoding: 'utf8' });
   assert.equal(run.status, 0, `gate exited ${run.status}:\n${run.stdout}${run.stderr}`);
   assert.match(run.stdout, /Env-example consumer check passed/);
