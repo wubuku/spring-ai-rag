@@ -51,7 +51,7 @@ class EvaluationSuiteWorkerProcessShutdownTailTest {
     }
 
     @Test
-    void pollProcessesClaimedRunAndReleasesSlot() {
+    void pollProcessesClaimedRunAndReleasesSlot() throws InterruptedException {
         UUID runId = runRow().id();
         EvaluationSuiteRepository.RunRow row = runRow();
         when(repository.claim(anyString(), anyInt(), anyInt()))
@@ -62,11 +62,39 @@ class EvaluationSuiteWorkerProcessShutdownTailTest {
 
         verify(service, timeout(5_000)).executeRun(
                 any(EvaluationSuiteRepository.RunRow.class), anyString());
+
         // 槽位已释放：再次 poll 仍会尝试领取。
-        worker.poll();
-        verify(repository, Mockito.times(2)).claim(
-                anyString(), eq(1), eq(120));
-        assertTrue(runId != null);
+        //
+        // 这里原来直接 `worker.poll()` 然后 `verify(times(2))`。问题是
+        // poll() 把执行丢给 workers 线程，槽位要等 process() 的 finally 才归还；
+        // 而上面那个 verify(service, timeout) 只等 executeRun **被调用**，
+        // 不等它**跑完**——机器一忙，第二次 poll 就扑空，整条用例红
+        // （实测在本分支的某次全量跑里 0.025s 就失败）。
+        // 改成有界轮询：等"槽位真的回来了"这个**事实**发生，等不到就大声失败，
+        // 而不是假定它已经发生。
+        assertTrue(awaitSecondClaim(),
+                "槽位在 5 秒内没有归还：第二次 poll 一直扑空。"
+                        + "claim 调用次数=" + claimCount());
+    }
+
+    private long claimCount() {
+        return Mockito.mockingDetails(repository).getInvocations().stream()
+                .filter(invocation -> invocation.getMethod().getName().equals("claim"))
+                .count();
+    }
+
+    /** 有界轮询 poll()，直到真的发生第二次 claim。 */
+    private boolean awaitSecondClaim() throws InterruptedException {
+        long deadline = System.nanoTime()
+                + java.util.concurrent.TimeUnit.SECONDS.toNanos(5);
+        while (System.nanoTime() < deadline) {
+            worker.poll();
+            if (claimCount() >= 2) {
+                return true;
+            }
+            Thread.sleep(10);
+        }
+        return claimCount() >= 2;
     }
 
     @Test
