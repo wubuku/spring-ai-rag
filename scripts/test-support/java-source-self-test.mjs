@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
-import { stripJavaComments } from '../lib/java-source.mjs';
+import { stripConfigComments, stripJavaComments } from '../lib/java-source.mjs';
 
 const cases = [];
 const test = (title, fn) => cases.push({ title, fn });
@@ -135,6 +135,69 @@ test('the correct stripper drops nothing but comments, and the naive one does', 
     `the naive shape only lost ${lostByNaive} literal(s); this case is not measuring the bug it claims to`,
   );
   console.log(`      (the naive shape destroyed ${lostByNaive} string literal(s) in this tree)`);
+});
+
+test('the config stripper adds `#`, keeps URLs, and is the same walk', () => {
+  // Batch 935. `verify-env-example-consumers.mjs` reads a *mixed* corpus, and it
+  // was caught rolling its own stripper — by the case at the bottom of this file.
+  // Its corpus holds `spring.datasource.url=jdbc:postgresql://localhost:5432/db`,
+  // and a `//` that opens a comment unconditionally eats the rest of that line:
+  // a real consumer disappears and the gate reports a violation that is not there.
+  // `#` is the other half — a sentence in an `application.yml` comment would
+  // otherwise be a consumer of whatever variable it names.
+
+  // `#` is a comment here, unlike in Java.
+  assert.equal(stripConfigComments('# DEAD_KNOB\nLIVE_KNOB=1').includes('DEAD_KNOB'), false);
+  assert.ok(stripConfigComments('# DEAD_KNOB\nLIVE_KNOB=1').includes('LIVE_KNOB=1'));
+  assert.equal(stripJavaComments('# DEAD_KNOB\nLIVE_KNOB=1').includes('DEAD_KNOB'), true,
+    'the Java stripper has no `#`, which is exactly why there are two');
+
+  // Unquoted URLs keep their second half — the case that decides the `//` rule.
+  // Asserted as a contrast, not as a property: `stripJavaComments` really does eat
+  // the tail, which is why the two exist. Writing this as "the Java one keeps it"
+  // is how the case would have passed without ever measuring the difference.
+  for (const [line, tail] of [
+    ['url=jdbc:postgresql://localhost:5432/db', 'localhost:5432/db'],
+    ['spring.datasource.url=https://example.com/db', 'example.com/db'],
+  ]) {
+    const kept = stripConfigComments(`${line}\nLIVE_KNOB=1\n`);
+    assert.ok(kept.includes(tail), `URL kept: ${line}`);
+    assert.ok(kept.includes('LIVE_KNOB=1'), `following line survived: ${line}`);
+    assert.equal(
+      stripJavaComments(`${line}\nLIVE_KNOB=1\n`).includes(tail), false,
+      'the Java stripper treats every `//` as a comment, which is correct for Java'
+        + ' and destroys this line; that is the whole reason for the second walk',
+    );
+  }
+
+  // But a real comment marker still is one.
+  for (const commented of [
+    '//DEAD_KNOB\nLIVE_KNOB=1',
+    '  // DEAD_KNOB\nLIVE_KNOB=1',
+    'x = 1; // DEAD_KNOB\nLIVE_KNOB=1',
+    'f(a, // DEAD_KNOB\nLIVE_KNOB=1',
+  ]) {
+    assert.equal(stripConfigComments(commented).includes('DEAD_KNOB'), false, `stripped: ${commented}`);
+    assert.ok(stripConfigComments(commented).includes('LIVE_KNOB=1'));
+  }
+
+  // Block comments, and the contract: length and every newline preserved, so a
+  // finding still maps to the line it is on.
+  assert.equal(stripConfigComments('/* DEAD_KNOB */\nLIVE_KNOB=1').includes('DEAD_KNOB'), false);
+  const source = 'a\n# gone\nb\n/* x\ny */\nc\n';
+  assert.equal(stripConfigComments(source).length, source.length);
+  assert.equal(stripConfigComments(source).split('\n').length, source.split('\n').length);
+
+  // String literals survive in both dialects.
+  assert.ok(stripConfigComments('System.getenv("DEAD_KNOB");').includes('DEAD_KNOB'));
+  assert.ok(stripConfigComments("url: 'https://DEAD_KNOB'").includes('DEAD_KNOB'));
+  assert.ok(stripConfigComments('x = "a\\" // b" // DEAD_KNOB\nLIVE_KNOB=1').includes('LIVE_KNOB=1'));
+
+  // Backticks are tracked, so a JS template literal cannot swallow the file.
+  const templated = 'const u = `https://x/${DEAD_KNOB}`;\nLIVE_KNOB=1\n';
+  assert.ok(stripConfigComments(templated).includes('DEAD_KNOB'));
+  assert.ok(stripConfigComments(templated).includes('LIVE_KNOB=1'));
+  assert.equal(stripConfigComments('`a /* b`\nLIVE_KNOB=1').includes('LIVE_KNOB=1'), true);
 });
 
 test('no gate defines its own comment stripper, in either module', () => {

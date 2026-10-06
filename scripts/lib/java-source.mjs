@@ -92,6 +92,100 @@ export function stripJavaComments(source) {
 }
 
 /**
+ * Replace comments with spaces in a file that is not Java: `.yml`, `.properties`,
+ * `.sh`, `.env` and JavaScript/TypeScript.
+ *
+ * Why a second walk when `stripJavaComments` exists
+ * --------------------------------------------------
+ * A gate reading a **mixed** corpus hits two things Java does not have, and both
+ * fail in the direction that makes a gate cry wolf rather than pass quietly:
+ *
+ *   1. `#` is a line comment in shell, YAML and properties. Left in place, a
+ *      sentence in an `application.yml` comment becomes a consumer of whatever
+ *      variable it names.
+ *   2. `//` is **not** always a comment marker. `.env` and YAML carry unquoted
+ *      URLs — `spring.datasource.url=jdbc:postgresql://localhost:5432/db` is in
+ *      this repository — and `stripJavaComments` treats the `//` as a comment and
+ *      deletes the rest of the line, which deletes a *real* consumer and makes the
+ *      gate report a violation that does not exist. So here `//` opens a comment
+ *      only after whitespace or one of `([{,;`; in Java and JavaScript a real line
+ *      comment never touches an identifier, and the price of this rule is that a
+ *      comment marker glued to one is read as code.
+ *
+ * It also tracks backticks, so a JS template literal cannot swallow the rest of
+ * the file. The contract is the same as `stripJavaComments`: comments become
+ * spaces, length and every newline survive, string literals keep their `//`,
+ * `/*` and `#`.
+ */
+export function stripConfigComments(source) {
+  let out = '';
+  let i = 0;
+  let quote = null;
+
+  while (i < source.length) {
+    const c = source[i];
+
+    if (quote !== null) {
+      if (c === '\\') {
+        out += source.slice(i, i + 2);
+        i += 2;
+        continue;
+      }
+      if (c === quote) quote = null;
+      out += c;
+      i += 1;
+      continue;
+    }
+
+    if (c === '"' || c === "'" || c === '`') {
+      quote = c;
+      out += c;
+      i += 1;
+      continue;
+    }
+
+    if (c === '/' && source[i + 1] === '/') {
+      const prev = i > 0 ? source[i - 1] : '\n';
+      if (!/[\s([{,;]/u.test(prev)) {
+        out += c + source[i + 1];
+        i += 2;
+        continue;
+      }
+      while (i < source.length && source[i] !== '\n') {
+        out += ' ';
+        i += 1;
+      }
+      continue;
+    }
+
+    if (c === '/' && source[i + 1] === '*') {
+      while (i < source.length && !(source[i] === '*' && source[i + 1] === '/')) {
+        out += source[i] === '\n' ? '\n' : ' ';
+        i += 1;
+      }
+      out += '  ';
+      i += 2;
+      continue;
+    }
+
+    if (c === '#') {
+      // In code this is the shebang or nothing; in `.yml` / `.sh` / `.properties`
+      // it is a line comment. Either way the rest of the line is not code.
+      while (i < source.length && source[i] !== '\n') {
+        out += ' ';
+        i += 1;
+      }
+      continue;
+    }
+
+    out += c;
+    i += 1;
+  }
+
+  return out;
+}
+
+/**
  * The shape this file replaces, kept so a reader can see what was wrong and so
  * the self-test can prove the difference rather than assert it. Not exported
  * for production use — a gate that reaches for this has reintroduced the bug.

@@ -464,4 +464,37 @@ node scripts/test-support/retrieval-baseline-self-test.mjs >/dev/null || {
 }
 pass "Retrieval-baseline self-test"
 
+# Batch 935. `.env.deepspeed` carried real provider keys and reached the `main` of a
+# public repository, because `.gitignore` named `.env` and `.env.local` and nothing
+# else. This gate makes "only the template is tracked" a checked statement instead of
+# a convention; the self-test before it is what proves the gate can still reject.
+# It says nothing about history — untracking is not removing, and removing is not
+# rotating — and that limit is pinned by the self-test, not merely documented.
+node scripts/test-support/tracked-env-files-self-test.mjs >/dev/null || {
+  echo "Tracked-env-files self-test failed; the gate may no longer reject anything." >&2
+  node scripts/test-support/tracked-env-files-self-test.mjs >&2 || true
+  exit 1
+}
+pass "Tracked-env-files self-test"
+
+node scripts/verify-tracked-env-files.mjs
+pass "Tracked env files"
+
+# Batch 935. `.env.example` is the file a contributor copies, so a variable it
+# declares is a promise that setting it changes something. Six were born dead,
+# with block headers promising audio transcription and multimodal chat that this
+# project has never had. Only *declared* variables are checked, and that boundary
+# is load-bearing: `SPRING_DATASOURCE_DRIVER_CLASS_NAME` is a commented line, is
+# correct, and is invisible to any name search because Spring binds it to
+# `spring.datasource.driver-class-name`.
+node scripts/test-support/env-example-consumers-self-test.mjs >/dev/null || {
+  echo "Env-example-consumers self-test failed; the gate may no longer reject anything." >&2
+  node scripts/test-support/env-example-consumers-self-test.mjs >&2 || true
+  exit 1
+}
+pass "Env-example-consumers self-test"
+
+node scripts/verify-env-example-consumers.mjs
+pass "Env example consumers"
+
 echo "Repository gate chain: $PASS_COUNT checks passed."
