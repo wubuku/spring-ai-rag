@@ -7,6 +7,7 @@ import { ApiKeyAuthProvider } from './auth/ApiKeyAuthProvider';
 import { ProtectedRoute } from './auth/ProtectedRoute';
 import { ThemeProvider } from './design-system/ThemeProvider';
 import { Unlock } from './pages/Unlock';
+import { STALE_TIME_MS } from './utils/timing';
 
 // Route-level code splitting: each page becomes a separate chunk.
 // Lazy-loaded pages are split into their own JS files by Vite,
@@ -28,7 +29,7 @@ const Embeddings = lazy(() => import('./pages/Embeddings').then(m => ({ default:
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 30_000,
+      staleTime: STALE_TIME_MS,
       retry: 1,
     },
   },

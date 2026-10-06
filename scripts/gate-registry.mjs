@@ -595,6 +595,45 @@ export const GATES = [
     selfTest: 'spring-ai-rag-webui/scripts/__tests__/number-formatting.test.mjs',
   },
 
+  // Batch 941. A census of `src/` for a duration written as a bare number found
+  // **thirteen, across four unrelated decisions**: one HTTP request timeout, six
+  // react-query poll intervals, five staleness windows, one "saved" confirmation that
+  // fades. Eleven were `30_000` and one `10_000`, so the four decisions were
+  // indistinguishable in the source, and two sites spelled it `30000` — a text search
+  // found only half of them.
+  //
+  // The fix is deliberately **four named constants in one module, not one shared
+  // constant**: `api/client`'s `timeout: 30_000` is how long a request may hang and
+  // `refetchInterval: 30_000` is how stale a dashboard may look, and nothing connects
+  // them. A shared name would have hidden that rather than revealed it. Each carries the
+  // reasoning for its own value in `src/utils/timing.ts`.
+  //
+  // Three of the durations in this codebase were already named — `TOAST_AUTO_DISMISS_MS`,
+  // `revokeDelayMs`, `MAX_RETRY_WAIT_MS` — so the house style is "a duration somebody
+  // chose is named"; four of the thirteen just never got the treatment.
+  //
+  // `DOCUMENT_LIST_STALE_TIME_MS` (10 000, Documents only) is **kept and flagged, not
+  // corrected**: it was written in the same first WebUI commit as the 30 s default, so
+  // there is no earlier value it was a deliberate departure from, and no test depends on
+  // it. What is measurable is that every write on that page calls
+  // `invalidateQueries({ queryKey: ['documents'] })` — twelve of them — so staleness
+  // never governs the write-then-read path; it only governs picking up server-side
+  // lifecycle progress. Nobody has written down why it is a third of the default, which
+  // is a question for whoever owns the page.
+  //
+  // The gate's `setTimeout` half counts parentheses rather than matching characters, and
+  // the header records **both** forms of that story: the census regex's `[^,)]` could not
+  // cross the `)` in `setSaved(false)` and reported zero, while the "obvious repair"
+  // `/setTimeout\([^,]+,\s*\d+/` would in fact have caught that line. Only the
+  // comma-inside-the-first-argument case needs the scan. The self-test asserts which form
+  // does what, so the claim cannot rot into folklore.
+  // No `noCiReason`: `npm run lint` runs in ci.yml's webui job.
+  {
+    gate: 'spring-ai-rag-webui/scripts/check-timing-constants.mjs',
+    kind: 'gate',
+    selfTest: 'spring-ai-rag-webui/scripts/__tests__/timing-constants.test.mjs',
+  },
+
   // Run by scripts/verify-project-docs.sh.
   {
     gate: 'scripts/verify-no-pessimistic-locks.sh',

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 import { modelsApi, type ModelInfo } from '../api/models';
 import { getSelectedModel, saveSelectedModel } from '../utils/modelPreference';
+import { SAVED_FEEDBACK_MS } from '../utils/timing';
 import styles from './Settings.module.css';
 import { PageHeader } from '../components/ui';
 import { Tabs, tabDomIds } from '../components/ui';
@@ -173,7 +174,7 @@ export function Settings() {
     if (savedTimerRef.current) {
       clearTimeout(savedTimerRef.current);
     }
-    savedTimerRef.current = setTimeout(() => setSaved(false), 2000);
+    savedTimerRef.current = setTimeout(() => setSaved(false), SAVED_FEEDBACK_MS);
   };
 
   const handleLanguageChange = (lang: string) => {

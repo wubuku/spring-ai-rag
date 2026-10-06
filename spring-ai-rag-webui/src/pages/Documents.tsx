@@ -24,6 +24,7 @@ import { Upload, X } from 'lucide-react';
 import { formatDate, UNREADABLE } from '../utils/time';
 import { capLength, SHORT_ID_LENGTH, truncate } from '../utils/text';
 import { useDebouncedCommit } from '../utils/debounce';
+import { DOCUMENT_LIST_STALE_TIME_MS } from '../utils/timing';
 
 type DocumentConfirmation =
   | { kind: 'disable'; document: Document }
@@ -73,7 +74,7 @@ export function Documents() {
         title: keyword || undefined,
         collectionKey: selectedCollection,
       }),
-    staleTime: 10000,
+    staleTime: DOCUMENT_LIST_STALE_TIME_MS,
   });
 
   // A rejected write used to be announced as `t(fallbackKey)` and nothing else,

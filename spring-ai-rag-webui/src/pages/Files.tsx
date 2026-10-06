@@ -23,6 +23,7 @@ import {
 import { useImeComposition } from '../utils/ime';
 import { capLength } from '../utils/text';
 import { useDebouncedCommit } from '../utils/debounce';
+import { STALE_TIME_MS } from '../utils/timing';
 import { failureMessage } from '../utils/failureReason';
 import styles from './Files.module.css';
 import { IconButton, PageHeader, QueryErrorBanner } from '../components/ui';
@@ -269,7 +270,7 @@ export function Files() {
   const { data: treeData, isPending, error } = useQuery({
     queryKey: ['files-tree', currentPath],
     queryFn: () => filesApi.listTree(currentPath || undefined),
-    staleTime: 30_000,
+    staleTime: STALE_TIME_MS,
   });
   const { data: collectionsData, isError: collectionsError, refetch: refetchCollections } = useQuery({
     queryKey: ['files-collections'],

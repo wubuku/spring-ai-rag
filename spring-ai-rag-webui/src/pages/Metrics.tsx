@@ -10,6 +10,7 @@ import type {
 import styles from './Metrics.module.css';
 import { EmptyState, PageHeader, QueryErrorBanner } from '../components/ui';
 import { formatCount, formatDecimal } from '../utils/number';
+import { POLL_INTERVAL_MS } from '../utils/timing';
 
 function UsageTable({
   label,
@@ -178,12 +179,12 @@ export function Metrics() {
   const metricsQuery = useQuery({
     queryKey: ['metrics'],
     queryFn: () => metricsApi.get(),
-    refetchInterval: 30_000,
+    refetchInterval: POLL_INTERVAL_MS,
   });
   const usageQuery = useQuery({
     queryKey: ['llm-usage'],
     queryFn: () => metricsApi.usage(),
-    refetchInterval: 30_000,
+    refetchInterval: POLL_INTERVAL_MS,
   });
 
   return (

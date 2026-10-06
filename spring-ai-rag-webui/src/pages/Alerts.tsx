@@ -18,6 +18,7 @@ import { EmptyState, PageHeader, QueryErrorBanner, Tabs } from '../components/ui
 import { formatAbsolute, parseTimestamp } from '../utils/time';
 import { ConfirmDialog } from '../components/Dialog/ConfirmDialog';
 import { failureMessage } from '../utils/failureReason';
+import { POLL_INTERVAL_MS } from '../utils/timing';
 
 type Tab =
   | 'alerts'
@@ -93,7 +94,7 @@ function AlertsTab() {
   const { data, isPending, isError, refetch } = useQuery({
     queryKey: ['alerts'],
     queryFn: () => alertsApi.listActive(),
-    refetchInterval: 30_000,
+    refetchInterval: POLL_INTERVAL_MS,
   });
 
   if (isPending) return <div className={styles.loading}>{t('common.loading')}</div>;
@@ -196,7 +197,7 @@ function NotificationDeliveriesTab() {
       provider,
       limit: 50,
     }),
-    refetchInterval: 30_000,
+    refetchInterval: POLL_INTERVAL_MS,
   });
   const retryMutation = useMutation({
     mutationFn: (deliveryId: string) =>
