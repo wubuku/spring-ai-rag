@@ -79,6 +79,8 @@
     "embeddingRetried": "Embedding retry started",
     "embeddingRetryError": "Embedding retry failed",
     "keywordOnlyHint": "Keyword search is available; semantic search is waiting for embedding recovery.",
+    "failedWithoutReasonHint": "Search is not usable for this document and the server reported no reason. A provider failure and an incomplete derivation look identical here: retry the embedding, or check this collection's derivation readiness.",
+    "unknownStateHint": "Searchability was not reported for this document; the state shown is the older embedding-freshness field alone.",
     "edit": "Edit document",
     "editDocument": "Edit document",
     "source": "Source",
@@ -120,6 +122,7 @@
       "INDEXING": "Indexing",
       "FAILED": "Index failed",
       "NOT_REQUESTED": "Index not requested",
+      "UNKNOWN": "State not reported",
       "DISABLED": "Disabled",
       "KEYWORD_ONLY": "Keyword searchable"
     },

@@ -79,6 +79,8 @@
     "embeddingRetried": "已开始重试嵌入",
     "embeddingRetryError": "嵌入重试失败",
     "keywordOnlyHint": "关键词检索可用；语义检索正在等待嵌入恢复。",
+    "failedWithoutReasonHint": "该文档当前不可检索，而服务端没有给出原因。provider 失败与派生不完整在这里表现相同：可以重试嵌入，或查看该 Collection 的 derivation readiness。",
+    "unknownStateHint": "服务端没有报告这份文档的可检索状态；这里显示的只是旧版「嵌入是否新鲜」字段。",
     "edit": "编辑文档",
     "editDocument": "编辑文档",
     "source": "来源",
@@ -120,6 +122,7 @@
       "INDEXING": "索引中",
       "FAILED": "索引失败",
       "NOT_REQUESTED": "未请求索引",
+      "UNKNOWN": "状态未知",
       "DISABLED": "已停用",
       "KEYWORD_ONLY": "仅关键词可检索"
     },
