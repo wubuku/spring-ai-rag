@@ -389,6 +389,31 @@ enqueue commit separately, and HTTP never loops over provider calls. Read-only
 diagnostics are available by default; side-effecting repair defaults off behind
 a feature flag.
 
+**"Fresh" is not one predicate in this repository, and the three are not
+interchangeable** (measured in Batch 929):
+
+| Predicate | Who uses it | What it checks |
+|-----------|--------------|----------------|
+| Trustworthy derivation | `DerivationIntegrityRepository` — the only wired path | The full physical invariants of both branches: positive generation, contiguous indexes, dimensions, and one-to-one text/offset correspondence with the local chunks |
+| Retrieval candidate | `EmbeddingProfileSqlScope`, via `HybridRetrieverService` | `status = 'COMPLETED'`, content hash, chunker version, `enabled`, and a non-null vector column |
+| Degraded fallback | The null arms of `DocumentLifecycleService` and `CollectionEmbeddingReadinessController` | **Looser** than the trustworthy derivation: state, hash, chunker and chunk count only |
+
+The first two differ on purpose. One asks whether a derivation can be believed;
+the other asks whether a document should be a candidate at all. So a document can
+be retrievable and reported `FAILED` at the same time — which is precisely the
+gap Batch 928's symptom lived in, and the reason that diagnosis took a full
+batch. The third never runs in production, because both collaborators are
+unconditional beans — but **tests do reach it**.
+`DocumentLifecyclePostgresIntegrationTest` asserted the lifecycle contract
+through the three-argument constructor, and it is the only place in the
+repository that does so against a real database, so it was checking the
+definition production does not use. That suite now attaches the truth source,
+and `verify-lifecycle-truth-source-wiring.mjs` reports a suite that plants
+derivation rows, constructs the service with three arguments, and never mentions
+an attachment at all. It cannot see whether the attachment sits in a helper
+nothing calls — that limit is in the gate header, pinned by the self-test, and
+it was the reverse control that found it.
+
 ## 5. Multi-Model Runtime
 
 - Legacy provider beans remain for default-model compatibility.

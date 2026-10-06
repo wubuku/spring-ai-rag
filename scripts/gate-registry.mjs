@@ -285,6 +285,30 @@ export const GATES = [
     noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
   },
 
+  // Batch 929. `DocumentLifecycleService` answers from
+  // `DerivationIntegrityRepository` when it has one and falls back to a
+  // hand-rolled SQL block otherwise, and the two are not equally strict: the
+  // fallback compares status, hash, chunker and chunk count, while the
+  // repository also wants a positive generation, contiguous indexes, matching
+  // dimensions and one vector per local chunk. The only suite asserting the
+  // lifecycle contract against a real database built both of its assertions
+  // through the three-argument constructor, so it was checking the definition
+  // production does not use — and a regression in the real one could not have
+  // failed it. Both verdicts turned out identical once the repository was
+  // attached, which is why nothing had noticed. The rule needs all three
+  // conditions: construct the service, plant derivation rows, and never mention
+  // `setIntegrityRepository`. A mocked unit test of the fallback satisfies
+  // neither the second nor the third, and is left alone. The limit is stated in
+  // the header and pinned by the self-test: the attachment is recognised by
+  // name wherever it is aimed, so a file pointing it at a different collaborator
+  // is not reported.
+  {
+    gate: 'scripts/verify-lifecycle-truth-source-wiring.mjs',
+    kind: 'gate',
+    selfTest: 'scripts/test-support/lifecycle-truth-source-wiring-self-test.mjs',
+    noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
+  },
+
   // Batch 873. ErrorCode declares itself the single source of truth, and six of
   // the codes the API really returns were not in it, so no title or problem-type
   // URI could be derived from them. The rule also pins the status beside a code
