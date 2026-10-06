@@ -567,6 +567,34 @@ export const GATES = [
     selfTest: 'spring-ai-rag-webui/scripts/__tests__/text-truncation.test.mjs',
   },
 
+  // Batch 940. The rule is "`Intl` lives in `src/utils/number.ts`", and the cost it
+  // protects is the kind nobody sees in review: `Metrics.tsx` had two
+  // `Intl.NumberFormat` constructions, one called from inside a `.map()` over table
+  // rows, so every cell of the usage table built a formatter on every render. Measured
+  // on the census machine, 20 000 calls with identical output: 348.7 ms building per
+  // call against 4.9 ms reusing one — 71x. Construction, not `format`, is the expensive
+  // half of `Intl`.
+  //
+  // It also settles what a number looks like when the server did not send one, which
+  // the rest of the app already answers as `—` and `Metrics` answered as `0` in one
+  // direction and as the raw wire text in the other. The `0` branch was measured
+  // unreachable: every `SUM(` in `LlmUsageQueryRepository` is wrapped in
+  // `COALESCE(..., 0)`, so it was deleted rather than tested.
+  //
+  // The 71x figure is pinned by counting constructions in `number.test.ts`, not here —
+  // a behaviour test cannot see it, because the output is byte-identical with and
+  // without the cache. That distinction is recorded because an earlier version of that
+  // test asserted only the output and stayed green when the cache was deleted.
+  //
+  // Declared limit: only `Intl.NumberFormat` is matched. `Number.prototype
+  // .toLocaleString()` would do the same job and is not covered.
+  // No `noCiReason`: `npm run lint` runs in ci.yml's webui job.
+  {
+    gate: 'spring-ai-rag-webui/scripts/check-number-formatting.mjs',
+    kind: 'gate',
+    selfTest: 'spring-ai-rag-webui/scripts/__tests__/number-formatting.test.mjs',
+  },
+
   // Run by scripts/verify-project-docs.sh.
   {
     gate: 'scripts/verify-no-pessimistic-locks.sh',
