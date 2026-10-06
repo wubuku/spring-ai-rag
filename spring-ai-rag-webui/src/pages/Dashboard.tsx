@@ -9,6 +9,7 @@ import { Card } from '../components/Card';
 import { QueryErrorBanner } from '../components/ui';
 import styles from './Dashboard.module.css';
 import { formatAbsolute } from '../utils/time';
+import { POLL_INTERVAL_MS } from '../utils/timing';
 
 export function Dashboard() {
   const { t, i18n } = useTranslation();
@@ -16,7 +17,7 @@ export function Dashboard() {
   const { data: health, isPending: healthPending, isError: healthError, refetch: refetchHealth } = useQuery({
     queryKey: ['health'],
     queryFn: () => healthApi.get(),
-    refetchInterval: 30_000,
+    refetchInterval: POLL_INTERVAL_MS,
   });
 
   const { data: docs, isPending: docsPending, isError: docsError, refetch: refetchDocs } = useQuery({

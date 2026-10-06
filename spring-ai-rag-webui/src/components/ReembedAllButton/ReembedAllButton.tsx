@@ -8,6 +8,7 @@ import { QueryErrorBanner } from '../ui';
 import styles from './ReembedAllButton.module.css';
 import { ChevronUp, ChevronDown, TriangleAlert } from 'lucide-react';
 import { failureMessage } from '../../utils/failureReason';
+import { POLL_INTERVAL_MS } from '../../utils/timing';
 
 export function ReembedAllButton() {
   const { t } = useTranslation();
@@ -25,7 +26,7 @@ export function ReembedAllButton() {
   } = useQuery({
     queryKey: ['embeddingStatus'],
     queryFn: () => documentsApi.getEmbeddingStatus(),
-    refetchInterval: 30000, // Refresh every 30s
+    refetchInterval: POLL_INTERVAL_MS,
   });
 
   const reembedMutation = useMutation({

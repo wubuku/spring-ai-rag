@@ -19,6 +19,7 @@ import styles from './Collections.module.css';
 import { EmptyState, PageHeader, QueryErrorBanner } from '../components/ui';
 import { failureMessage, usableReason } from '../utils/failureReason';
 import { formatAbsolute } from '../utils/time';
+import { STALE_TIME_MS } from '../utils/timing';
 
 /**
  * The text to store alongside a failed purge step.
@@ -63,7 +64,7 @@ export function Collections() {
     queryKey: ['integration-capabilities'],
     queryFn: collectionsApi.integrationCapabilities,
     enabled: identity?.principalType === 'ENVIRONMENT_ROOT',
-    staleTime: 30_000,
+    staleTime: STALE_TIME_MS,
   });
 
   // Every step is optional: the leading `?.` alone guards `capabilityData`, and

@@ -1,6 +1,7 @@
 import axios from 'axios';
 import axiosRetry from 'axios-retry';
 import { clearCredential, getCredential } from '../auth/credentialStore';
+import { HTTP_TIMEOUT_MS } from '../utils/timing';
 
 /**
  * Where the WebUI's requests go.
@@ -17,7 +18,7 @@ export const BASE_URL = '/api/v1/rag';
 export const apiClient = axios.create({
   baseURL: BASE_URL,
   headers: { 'Content-Type': 'application/json' },
-  timeout: 30_000, // 30 second default timeout
+  timeout: HTTP_TIMEOUT_MS,
 });
 
 apiClient.interceptors.request.use(config => {

@@ -10,6 +10,7 @@ import styles from './VersionHistoryModal.module.css';
 import { EmptyState } from '../ui';
 import { formatAbsolute, UNREADABLE } from '../../utils/time';
 import { SHORT_ID_LENGTH, truncate } from '../../utils/text';
+import { STALE_TIME_MS } from '../../utils/timing';
 
 /**
  * `"<label>: <reason>"` — with the reason only when there is one.
@@ -71,7 +72,7 @@ export function VersionHistoryModal({
   const { data, isPending, error } = useQuery({
     queryKey: ['document-versions', documentId, page],
     queryFn: () => documentsApi.getVersions(documentId, page, PAGE_SIZE),
-    staleTime: 30000,
+    staleTime: STALE_TIME_MS,
   });
 
   const handleCompare = async () => {
