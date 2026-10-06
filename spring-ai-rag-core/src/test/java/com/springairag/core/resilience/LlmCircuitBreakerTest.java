@@ -1,6 +1,7 @@
 package com.springairag.core.resilience;
 
 import com.springairag.core.config.RagCircuitBreakerProperties;
+import com.springairag.core.testsupport.MutableClock;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -14,6 +15,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class LlmCircuitBreakerTest {
 
     private LlmCircuitBreaker breaker;
+    private MutableClock clock;
 
     private static RagCircuitBreakerProperties buildConfig(
             int failureRate, int minCalls, int waitSeconds, int windowSize) {
@@ -27,7 +29,9 @@ class LlmCircuitBreakerTest {
 
     @BeforeEach
     void setUp() {
-        breaker = new LlmCircuitBreaker(buildConfig(50, 10, 1, 20));
+        // 冷却期由注入的时钟决定，所以"等够 1 秒"是拨出来的而不是睡出来的。
+        clock = MutableClock.startingAtEpochMilli(1_000_000L);
+        breaker = new LlmCircuitBreaker(buildConfig(50, 10, 1, 20), clock);
     }
 
     // ==================== CLOSED state ====================
@@ -124,9 +128,14 @@ class LlmCircuitBreakerTest {
 
         @Test
         @DisplayName("Transitions to HALF_OPEN after wait duration")
-        void transitionToHalfOpenAfterWait() throws InterruptedException {
-            // Wait for the 1 second wait duration
-            Thread.sleep(1100);
+        void transitionToHalfOpenAfterWait() {
+            // 冷却期是 1 秒：拨 999ms 还没到，拨满 1000ms 才到。
+            // 以前这里是 Thread.sleep(1100)——多睡的 100ms 是为了盖住真实时钟的误差，
+            // 于是"没睡够"这个失败会以 assertEquals(HALF_OPEN) 的面貌出现，
+            // 报错指向断路器而不是指向时间。
+            clock.advanceMillis(999);
+            assertFalse(breaker.allowCall(), "冷却期未满不得放行");
+            clock.advanceMillis(1);
             assertTrue(breaker.allowCall());
             assertEquals(LlmCircuitBreaker.State.HALF_OPEN, breaker.getState());
         }
@@ -139,14 +148,14 @@ class LlmCircuitBreakerTest {
     class HalfOpenState {
 
         @BeforeEach
-        void enterHalfOpen() throws InterruptedException {
+        void enterHalfOpen() {
             // Trip the circuit
             for (int i = 0; i < 10; i++) {
                 breaker.recordFailure();
             }
             assertEquals(LlmCircuitBreaker.State.OPEN, breaker.getState());
-            // Wait and trigger transition
-            Thread.sleep(1100);
+            // 拨过冷却期，然后触发迁移
+            clock.advanceMillis(1_000);
             assertTrue(breaker.allowCall());
             assertEquals(LlmCircuitBreaker.State.HALF_OPEN, breaker.getState());
         }

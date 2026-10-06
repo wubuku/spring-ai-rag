@@ -5,27 +5,33 @@ import com.springairag.api.enums.ChatMode;
 import com.springairag.core.chat.ChatEvent;
 import com.springairag.core.config.RagChatService;
 import com.springairag.core.config.RagSseProperties;
+import com.springairag.core.retrieval.RetrievalScope;
 import com.springairag.core.repository.RagChatHistoryRepository;
 import com.springairag.core.service.AuditLogService;
 import com.springairag.core.service.ChatExportService;
+import com.springairag.core.service.CollectionRetrievalScopeResolver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import reactor.core.publisher.Flux;
 
 import java.io.IOException;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.List;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
 
 /**
  * SSE 流式响应 E2E 测试
@@ -40,7 +46,9 @@ class SseStreamE2ETest {
     private ChatExportService chatExportService;
     private RagSseProperties sseProperties;
     private AuditLogService auditLogService;
+    private CollectionRetrievalScopeResolver scopeResolver;
     private RagChatController controller;
+    private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
@@ -49,7 +57,83 @@ class SseStreamE2ETest {
         chatExportService = mock(ChatExportService.class);
         sseProperties = new RagSseProperties();
         auditLogService = mock(AuditLogService.class);
-        controller = new RagChatController(ragChatService, historyRepository, chatExportService, sseProperties, null, auditLogService);
+        scopeResolver = mock(CollectionRetrievalScopeResolver.class);
+        when(scopeResolver.resolve(any(), any(), any(), any(), any(), any()))
+                .thenReturn(RetrievalScope.unscoped());
+        controller = new RagChatController(ragChatService, historyRepository, chatExportService, sseProperties, scopeResolver, auditLogService);
+        mockMvc = org.springframework.test.web.servlet.setup.MockMvcBuilders
+                .standaloneSetup(controller)
+                .build();
+    }
+
+    /**
+     * Batch 945：跑一次真实的 HTTP 流式请求，把发出去的 SSE 帧读回来。
+     *
+     * <p>直接调 {@code controller.stream(request, null, null)} 时 {@code SseEmitter} 没有
+     * handler，{@code send} 只是暂存——所以这个文件里原来有三条用例（唯一断言是
+     * {@code assertNotNull(emitter)}）无论控制器怎么坏都绿。套路与
+     * {@code RagChatControllerStreamEventTypesTest}（Batch 897）一致。
+     */
+    private String streamBody(String message, String sessionId, String domainId) throws Exception {
+        StringBuilder json = new StringBuilder("{\"message\":")
+                .append(jsonString(message)).append(",\"sessionId\":")
+                .append(jsonString(sessionId));
+        if (domainId != null) {
+            json.append(",\"domainId\":").append(jsonString(domainId));
+        }
+        json.append('}');
+
+        MvcResult started = mockMvc.perform(post("/rag/chat/stream")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.toString()))
+                .andExpect(request().asyncStarted())
+                .andReturn();
+        started.getAsyncResult(10_000);
+        MvcResult completed = mockMvc.perform(asyncDispatch(started)).andReturn();
+        return new String(
+                completed.getResponse().getContentAsByteArray(),
+                StandardCharsets.UTF_8);
+    }
+
+    /** 极简 JSON 字符串转义：只处理引号、反斜杠与控制字符。 */
+    private static String jsonString(String raw) {
+        StringBuilder out = new StringBuilder("\"");
+        for (int i = 0; i < raw.length(); i++) {
+            char c = raw.charAt(i);
+            switch (c) {
+                case '"' -> out.append("\\\"");
+                case '\\' -> out.append("\\\\");
+                case '\n' -> out.append("\\n");
+                case '\r' -> out.append("\\r");
+                case '\t' -> out.append("\\t");
+                default -> {
+                    if (c < 0x20) {
+                        out.append(String.format("\\u%04x", (int) c));
+                    } else {
+                        out.append(c);
+                    }
+                }
+            }
+        }
+        return out.append('"').toString();
+    }
+
+    private static void assertContains(String body, String fragment) {
+        assertTrue(body.contains(fragment),
+                () -> "SSE body does not carry " + fragment + ":\n" + body);
+    }
+
+    private static void assertEmitted(String body, String eventName) {
+        List<String> names = java.util.Arrays.stream(body.split("\n\n"))
+                .map(frame -> frame.lines()
+                        .filter(line -> line.startsWith("event:"))
+                        .map(line -> line.substring("event:".length()).trim())
+                        .findFirst()
+                        .orElse(null))
+                .filter(java.util.Objects::nonNull)
+                .toList();
+        assertTrue(names.contains(eventName),
+                () -> "SSE body carries no " + eventName + " event, only " + names + ":\n" + body);
     }
 
     private void stubStream(String message, String sessionId, String domainId,
@@ -65,14 +149,17 @@ class SseStreamE2ETest {
                         Map.of(),
                         null,
                         List.of())));
+        // 第二、三个参数用 any() 而不是 isNull()：MockMvc 通道里 scope 已经被解析成
+        // RetrievalScope.unscoped()，用 isNull() 会让桩**打不中**——而桩打不中的表现是
+        // chatEvents 返回 null，于是"断言 body 里有什么"变成"断言 body 里有个 NPE"。
         when(ragChatService.chatEvents(argThat(request ->
-                matches(request, message, sessionId, domainId)), isNull(), isNull()))
+                matches(request, message, sessionId, domainId)), any(), any()))
                 .thenReturn(events);
     }
 
     private void verifyStream(String message, String sessionId, String domainId) {
         verify(ragChatService).chatEvents(argThat(request ->
-                matches(request, message, sessionId, domainId)), isNull(), isNull());
+                matches(request, message, sessionId, domainId)), any(), any());
     }
 
     private boolean matches(ChatRequest request, String message,
@@ -81,47 +168,6 @@ class SseStreamE2ETest {
                 && java.util.Objects.equals(message, request.getMessage())
                 && java.util.Objects.equals(sessionId, request.getSessionId())
                 && java.util.Objects.equals(domainId, request.getDomainId());
-    }
-
-    /**
-     * 拦截 SseEmitter.send() 调用，捕获实际发送的 SSE 事件
-     */
-    private static class SseEventCapture {
-        final List<Object> events = new ArrayList<>();
-        final CountDownLatch doneLatch = new CountDownLatch(1);
-        final AtomicReference<Throwable> error = new AtomicReference<>();
-        volatile boolean completed = false;
-
-        SseEmitter wrap(SseEmitter emitter) {
-            SseEmitter captured = new SseEmitter(0L) {
-                @Override
-                public void send(SseEventBuilder eventBuilder) throws IOException {
-                    events.add(eventBuilder);
-                    super.send(eventBuilder);
-                }
-
-                @Override
-                public void send(Object object) throws IOException {
-                    events.add(object);
-                    super.send(object);
-                }
-
-                @Override
-                public void complete() {
-                    completed = true;
-                    doneLatch.countDown();
-                    super.complete();
-                }
-
-                @Override
-                public void completeWithError(Throwable ex) {
-                    error.set(ex);
-                    doneLatch.countDown();
-                    super.completeWithError(ex);
-                }
-            };
-            return captured;
-        }
     }
 
     // ==================== Basic Streaming ====================
@@ -142,36 +188,35 @@ class SseStreamE2ETest {
 
     @Test
     @DisplayName("SSE: single complete sentence arrives as one chunk")
-    void stream_singleChunk() {
+    void stream_singleChunk() throws Exception {
         stubStream("简单问题", "session-s2", null, Flux.just("这是一个回答。"));
 
-        ChatRequest request = new ChatRequest("简单问题", "session-s2");
-        SseEmitter emitter = controller.stream(request, null, null);
+        // 原来只有 assertNotNull(emitter)：emitter 由 SseEmitters.create() 无条件造出，
+        // 把 content 事件的名字或载荷改错，用例照样绿。
+        String body = streamBody("简单问题", "session-s2", null);
 
-        assertNotNull(emitter);
+        assertEmitted(body, "content");
+        assertContains(body, "这是一个回答。");
         verifyStream("简单问题", "session-s2", null);
     }
 
     @Test
     @DisplayName("SSE: done event and complete triggered when Flux finishes")
     void stream_fluxCompletes_sendsDoneEvent() throws Exception {
-        CountDownLatch latch = new CountDownLatch(1);
-        List<String> receivedChunks = new ArrayList<>();
+        stubStream("测试", "session-s3", null, Flux.just("Hello", " World"));
 
-        // 用 Flux 模拟：先发几个 chunk，然后完成
-        stubStream("测试", "session-s3", null,
-                Flux.just("Hello", " World").doOnNext(receivedChunks::add));
+        // 第一版这里断言的是 `receivedChunks`——那是**mock 自己**发出去的东西，
+        // 控制器有没有把它转成 SSE 帧、用例一个字都没说。
+        String body = streamBody("测试", "session-s3", null);
 
-        ChatRequest request = new ChatRequest("测试", "session-s3");
-        SseEmitter emitter = controller.stream(request, null, null);
-
-        // 等待异步处理
-        Thread.sleep(500);
-
-        // 验证 chunks 被接收到
-        assertEquals(2, receivedChunks.size());
-        assertEquals("Hello", receivedChunks.get(0));
-        assertEquals(" World", receivedChunks.get(1));
+        assertEmitted(body, "content");
+        assertEmitted(body, "done");
+        assertContains(body, "Hello");
+        assertContains(body, " World");
+        // 顺序：两个 content 帧都在 done 之前。
+        assertTrue(body.indexOf("Hello") < body.indexOf(" World")
+                        && body.indexOf(" World") < body.indexOf("event:done"),
+                () -> "两个 chunk 应按序出现在 done 之前:\n" + body);
     }
 
     // ==================== domainId Propagation ====================
@@ -247,7 +292,7 @@ class SseStreamE2ETest {
 
     @Test
     @DisplayName("SSE: error propagates to emitter when send throws IOException")
-    void stream_sendIOException_propagatesError() {
+    void stream_sendIOException_propagatesError() throws Exception {
         // 模拟 LLM 输出一个 chunk 后 Flux 出错
         Flux<String> errorFlux = Flux.concat(
                 Flux.just("正常"),
@@ -255,10 +300,12 @@ class SseStreamE2ETest {
         );
         stubStream("问题", "session-io", null, errorFlux);
 
-        ChatRequest request = new ChatRequest("问题", "session-io");
-        SseEmitter emitter = controller.stream(request, null, null);
+        // 原来只有 assertNotNull(emitter)，而名字说的是"错误传播到 emitter"。
+        String body = streamBody("问题", "session-io", null);
 
-        assertNotNull(emitter);
+        assertContains(body, "正常");
+        assertEmitted(body, "error");
+        assertContains(body, "连接断开");
     }
 
     // ==================== Large Chunk Handling ====================
@@ -323,14 +370,23 @@ class SseStreamE2ETest {
 
     @Test
     @DisplayName("SSE: emitter timeout set to 0 (no timeout limit)")
-    void stream_emitterNoTimeout() {
+    void stream_emitterNoTimeout() throws Exception {
         stubStream("测试", "session-timeout", null, Flux.just("test"));
 
-        ChatRequest request = new ChatRequest("测试", "session-timeout");
-        SseEmitter emitter = controller.stream(request, null, null);
-
-        // SseEmitter(0L) 表示无超时，无法直接访问 timeout 字段，
-        // 但构造参数为 0L 是正确的行为（长连接不被中断）
+        // 原来这里是 assertNotNull(emitter) 加一句注释"无法直接访问 timeout 字段"。
+        // 注释承认测不到，用例于是就只测了"emitter 不是 null"。现在直接读那个字段：
+        // 反射拿不到就抛，测试会响，而不是安静地什么都不验证。
+        SseEmitter emitter = controller.stream(
+                new ChatRequest("测试", "session-timeout"), null, null);
         assertNotNull(emitter);
+
+        java.lang.reflect.Field timeout =
+                org.springframework.web.servlet.mvc.method.annotation.ResponseBodyEmitter.class
+                        .getDeclaredField("timeout");
+        timeout.setAccessible(true);
+        Object value = timeout.get(emitter);
+        assertNotNull(value, "SseEmitter(0L) 应当把 timeout 记成 0（无超时）");
+        assertEquals(0L, ((Number) value).longValue(),
+                "长连接的 SSE emitter 不应带超时");
     }
 }

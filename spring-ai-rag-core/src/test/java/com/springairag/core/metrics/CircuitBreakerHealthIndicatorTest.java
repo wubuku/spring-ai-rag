@@ -3,6 +3,7 @@ package com.springairag.core.metrics;
 import com.springairag.core.config.RagChatService;
 import com.springairag.core.config.RagCircuitBreakerProperties;
 import com.springairag.core.resilience.LlmCircuitBreaker;
+import com.springairag.core.testsupport.MutableClock;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.actuate.health.Health;
 import org.springframework.boot.actuate.health.Status;
@@ -84,7 +85,7 @@ class CircuitBreakerHealthIndicatorTest {
     }
 
     @Test
-    void health_whenCircuitHalfOpen_returnsUnknown() throws InterruptedException {
+    void health_whenCircuitHalfOpen_returnsUnknown() {
         RagCircuitBreakerProperties config = new RagCircuitBreakerProperties();
         config.setEnabled(true);
         config.setFailureRateThreshold(50);
@@ -92,20 +93,26 @@ class CircuitBreakerHealthIndicatorTest {
         config.setWaitDurationInOpenStateSeconds(1);  // Wait 1 second to enter HALF_OPEN
         config.setSlidingWindowSize(10);
 
-        LlmCircuitBreaker circuitBreaker = new LlmCircuitBreaker(config);
+        MutableClock clock = MutableClock.startingAtEpochMilli(1_000_000L);
+        LlmCircuitBreaker circuitBreaker = new LlmCircuitBreaker(config, clock);
         // Trigger circuit breaker opening
         for (int i = 0; i < 6; i++) {
             circuitBreaker.recordFailure();
         }
         assertEquals(LlmCircuitBreaker.State.OPEN, circuitBreaker.getState());
 
-        // Wait for cooldown then attempt reset.
-        // 这里必须让 InterruptedException 直接冒出去，不能吞：sleep 一旦被中断，
-        // 1100ms 的冷却期就没走完，断路器仍是 OPEN，后面的 assertEquals(HALF_OPEN)
-        // 会以「断路器状态不对」的面貌失败，把真正的病因（线程被取消）藏起来；
-        // 而 Thread.sleep 会清掉中断标志，吞掉之后本线程后续所有阻塞调用
-        // 都再也看不到这个中断，测试可能越过本该中止它的取消信号继续跑完。
-        Thread.sleep(1100);
+        // 这里**不要**把冷却期换回 Thread.sleep——那是这段代码的历史，值得记下来：
+        //
+        //   Batch 943 时这里是 `try { Thread.sleep(1100); } catch (InterruptedException ignored) {}`。
+        //   吞掉中断有两笔代价：sleep 没睡完 → 断路器仍是 OPEN → 下面的
+        //   assertEquals(HALF_OPEN) 以「断路器状态不对」的面貌红掉，病因被藏起来；
+        //   而 Thread.sleep 会清掉中断标志，吞掉之后本线程后续所有阻塞调用都看不到
+        //   这个已经发出的取消信号。所以当时改成了 `throws InterruptedException`。
+        //
+        //   Batch 945 把冷却期改成由注入的 Clock 决定，等待整个消失，上面那一整类
+        //   失败（连同它的注释和 throws）也随之消失。留着这段说明是为了让下一个
+        //   看到「怎么不用 sleep」的人知道答案，而不是把 sleep 加回来。
+        clock.advanceMillis(1_000);
         circuitBreaker.allowCall();  // Trigger OPEN -> HALF_OPEN
 
         assertEquals(LlmCircuitBreaker.State.HALF_OPEN, circuitBreaker.getState());
