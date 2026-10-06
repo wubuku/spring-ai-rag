@@ -263,7 +263,13 @@ describe('Documents', () => {
 
     expect(screen.getByText('cms:article:1')).toBeInTheDocument();
     expect(screen.getByText('etag:2')).toBeInTheDocument();
-    expect(screen.getByText('documents.lifecycle.NOT_REQUESTED')).toBeInTheDocument();
+    // Batch 930. This fixture carries no `lifecycle` object, and the assertion
+    // used to read NOT_REQUESTED off that absence. "Nothing was requested" is a
+    // claim about the server's work, and the server said nothing at all here, so
+    // the badge now says the state was not reported. Everything this test is
+    // actually named for — external identity, the retry action, the absence of
+    // edit, the externally-managed badge — is unchanged.
+    expect(screen.getByText('documents.lifecycle.UNKNOWN')).toBeInTheDocument();
     expect(screen.getByText('provider unavailable')).toBeInTheDocument();
     await user.click(screen.getByRole('button', {
       name: 'documents.openActions',
@@ -360,6 +366,124 @@ describe('Documents', () => {
     }));
     expect(screen.getByRole('menuitem', { name: 'documents.retryEmbedding' }))
       .toBeInTheDocument();
+  });
+
+  it('explains a failed document even when the server reported no reason', async () => {
+    mockUseQuery.mockReturnValue({
+      data: {
+        data: {
+          documents: [{
+            id: 9,
+            title: 'Corrupt Derivation Doc',
+            content: 'Content whose vectors disagree with its state row',
+            contentHash: 'corrupt123',
+            documentType: 'JSON_RECORD',
+            documentRevision: 1,
+            createdAt: '2024-01-01T00:00:00Z',
+            updatedAt: '2024-01-01T00:00:00Z',
+            embeddingFresh: false,
+            enabled: true,
+            // This is the shape the server produces for a derivation the
+            // integrity repository calls CORRUPT: the state row says COMPLETED
+            // and the vectors are present, so nothing failed and there is no
+            // error to relay. Measured, not invented — see Batch 928.
+            lifecycle: {
+              documentState: 'ACTIVE',
+              searchability: 'FAILED',
+              localIndexStatus: 'READY',
+              embeddingStatus: 'FAILED',
+              lastError: null,
+              retryable: true,
+            },
+          }],
+          total: 1,
+        },
+      },
+      isPending: false,
+      error: null,
+    });
+
+    renderDocuments();
+
+    const status = screen.getByText('documents.lifecycle.FAILED');
+    // A red badge that says nothing is the defect: before this, `title` was
+    // absent entirely, because the tooltip and the inline error block are both
+    // gated on the two error fields this document leaves null.
+    expect(status).toHaveAttribute('title', 'documents.failedWithoutReasonHint');
+    // It must not invent a cause. The hint names both possibilities instead.
+    expect(screen.queryByText('provider unavailable')).not.toBeInTheDocument();
+  });
+
+  it('prefers a real error over the no-reason hint when the server sends one', async () => {
+    mockUseQuery.mockReturnValue({
+      data: {
+        data: {
+          documents: [{
+            id: 10,
+            title: 'Provider Failure Doc',
+            content: 'Content whose provider call failed',
+            contentHash: 'provider123',
+            documentType: 'TEXT',
+            documentRevision: 1,
+            createdAt: '2024-01-01T00:00:00Z',
+            updatedAt: '2024-01-01T00:00:00Z',
+            embeddingFresh: false,
+            enabled: true,
+            lifecycle: {
+              documentState: 'ACTIVE',
+              searchability: 'FAILED',
+              localIndexStatus: 'READY',
+              embeddingStatus: 'FAILED',
+              lastError: 'provider unavailable',
+              retryable: true,
+            },
+          }],
+          total: 1,
+        },
+      },
+      isPending: false,
+      error: null,
+    });
+
+    renderDocuments();
+
+    const status = screen.getByText('documents.lifecycle.FAILED');
+    expect(status).toHaveAttribute('title', 'provider unavailable');
+    expect(screen.getByText('provider unavailable')).toBeInTheDocument();
+  });
+
+  it('does not claim a document was not indexed when the server reported nothing', async () => {
+    mockUseQuery.mockReturnValue({
+      data: {
+        data: {
+          documents: [{
+            id: 11,
+            title: 'No Lifecycle Doc',
+            content: 'Content from a response without a lifecycle object',
+            contentHash: 'unknown123',
+            documentType: 'TEXT',
+            documentRevision: 1,
+            createdAt: '2024-01-01T00:00:00Z',
+            updatedAt: '2024-01-01T00:00:00Z',
+            embeddingFresh: false,
+            enabled: true,
+            // No `lifecycle` key at all. Claiming NOT_REQUESTED here asserts
+            // something nobody reported; the badge has to say it does not know.
+            lifecycle: undefined,
+          }],
+          total: 1,
+        },
+      },
+      isPending: false,
+      error: null,
+    });
+
+    renderDocuments();
+
+    const status = screen.getByText('documents.lifecycle.UNKNOWN');
+    expect(status).toHaveAttribute('title', 'documents.unknownStateHint');
+    expect(screen.queryByText('documents.lifecycle.NOT_REQUESTED'))
+      .not.toBeInTheDocument();
   });
 
   it('offers restore instead of edit disable for a disabled local document', async () => {

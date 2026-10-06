@@ -523,11 +523,7 @@ export function Documents() {
                     <td>{doc.documentType ?? '—'}</td>
                     <td>
                       <span
-                        className={`${styles.lifecycle} ${lifecycleClass(
-                          doc.lifecycle?.searchability,
-                          doc.embeddingFresh,
-                          doc.enabled,
-                        )}`}
+                        className={`${styles.lifecycle} ${lifecycleClass(doc)}`}
                         title={lifecycleTitle(doc, t)}
                       >
                         {lifecycleLabel(doc, t)}
@@ -867,14 +863,28 @@ function requireDocumentRevision(document: Document): number {
   return document.documentRevision;
 }
 
-function lifecycleClass(
-  searchability: string | undefined,
-  embeddingFresh: boolean | undefined,
-  enabled: boolean | undefined,
-): string {
-  const value = enabled === false
-    ? 'DISABLED'
-    : searchability || (embeddingFresh ? 'READY' : 'NOT_REQUESTED');
+/**
+ * The one place that decides what state to show, so the badge, its tooltip and
+ * its colour cannot disagree about it.
+ *
+ * <p>Batch 930. All three used to derive the value separately and each fell back
+ * to `embeddingFresh ? 'READY' : 'NOT_REQUESTED'` when the server sent no
+ * lifecycle object. `NOT_REQUESTED` is a claim — "nothing was asked for" — and
+ * making it for a response that simply did not include the field is asserting
+ * something nobody reported. `UNKNOWN` is what the absence actually means, and
+ * it is the state a caller reaches when the backend grows a status this build
+ * has never heard of, which is also why the colour falls back to the neutral
+ * `NOT_REQUESTED` styling: unrecognised is not a failure, and it is not a
+ * success either.
+ */
+function lifecycleValue(document: Document): string {
+  if (document.enabled === false) return 'DISABLED';
+  return document.lifecycle?.searchability
+    || (document.embeddingFresh ? 'READY' : 'UNKNOWN');
+}
+
+function lifecycleClass(document: Document): string {
+  const value = lifecycleValue(document);
   return styles[`lifecycle${value}`] || styles.lifecycleNOT_REQUESTED;
 }
 
@@ -882,23 +892,39 @@ function lifecycleLabel(
   document: Document,
   translate: (key: string) => string,
 ): string {
-  const value = document.enabled === false
-    ? 'DISABLED'
-    : document.lifecycle?.searchability
-      || (document.embeddingFresh ? 'READY' : 'NOT_REQUESTED');
-  return translate(`documents.lifecycle.${value}`);
+  return translate(`documents.lifecycle.${lifecycleValue(document)}`);
 }
 
+/**
+ * The tooltip on the lifecycle badge.
+ *
+ * <p>Batch 930. This used to end at
+ * `lastError ?? processingError ?? undefined`, so a document whose derivation
+ * is not trustworthy — a state the server reports as `searchability=FAILED`
+ * with a null error, because `DerivationIntegrityRepository` classifies an
+ * inconsistent derivation as `CORRUPT` and no provider call ever failed — got
+ * a red badge and no explanation at all. Not a short tooltip: no `title`
+ * attribute, and the inline error block below the badge is gated on the same
+ * two fields, so nothing on the row said anything.
+ *
+ * <p>The hint deliberately does not guess which case this is. From the document
+ * alone the two are indistinguishable, so it names both and points at the one
+ * place that can tell them apart.
+ */
 function lifecycleTitle(
   document: Document,
   translate: (key: string) => string,
 ): string | undefined {
-  const value = document.enabled === false
-    ? 'DISABLED'
-    : document.lifecycle?.searchability
-      || (document.embeddingFresh ? 'READY' : 'NOT_REQUESTED');
+  const value = lifecycleValue(document);
   if (value === 'KEYWORD_ONLY') {
     return translate('documents.keywordOnlyHint');
   }
-  return document.lifecycle?.lastError ?? document.processingError ?? undefined;
+  if (value === 'UNKNOWN') {
+    return translate('documents.unknownStateHint');
+  }
+  const error = document.lifecycle?.lastError ?? document.processingError ?? undefined;
+  if (value === 'FAILED' && !error) {
+    return translate('documents.failedWithoutReasonHint');
+  }
+  return error;
 }
