@@ -821,4 +821,23 @@ export const GATES = [
     kind: 'gate',
     selfTest: 'spring-ai-rag-webui/scripts/__tests__/decorative-graphics.test.mjs',
   },
+
+  // Batch 943. A `catch` that names InterruptedException has two lawful endings —
+  // rethrow, or restore the flag — and swallowing it costs twice over: the
+  // blocking call never finished while the caller carries on as if it had, and
+  // the flag the interrupted call cleared stays clear, so this thread never sees
+  // the cancellation that was already issued.
+  //
+  // The corpus is thirty clauses and it carries no allowlist, because every one
+  // of them is already one of the two. The reason the rule reads a *multi*-catch
+  // is written into the gate's header with the measurement that forced it: the
+  // first probe matched only single-type catches, reported "main: 0 violations",
+  // and a real production defect was sitting in
+  // `catch (IOException | InterruptedException e)` at the time.
+  {
+    gate: 'scripts/verify-interrupt-handling.mjs',
+    kind: 'gate',
+    selfTest: 'scripts/test-support/interrupt-handling-self-test.mjs',
+    noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
+  },
 ];

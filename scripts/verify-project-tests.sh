@@ -527,4 +527,23 @@ pass "Helm-helper-liveness self-test"
 node scripts/verify-helm-helper-liveness.mjs
 pass "Helm helper liveness"
 
+# Batch 943. Swallowing InterruptedException is not a style choice: every blocking
+# call that raises it clears the interrupt flag on the way out, so a swallowed one
+# both hides the fact that the operation never finished and leaves the thread blind
+# to a cancellation that has already been issued. The JDK allows exactly two
+# reactions — rethrow, or restore the flag — and this repository already used both.
+# The rule needs no allowlist because the corpus is small and every clause is one
+# of the two; it also has to read multi-catch, since the first probe matched only
+# single-type catches and reported "main: 0 violations" while a real production
+# defect was sitting in `catch (IOException | InterruptedException e)`.
+node scripts/test-support/interrupt-handling-self-test.mjs >/dev/null || {
+  echo "Interrupt-handling self-test failed; the gate may no longer reject anything." >&2
+  node scripts/test-support/interrupt-handling-self-test.mjs >&2 || true
+  exit 1
+}
+pass "Interrupt-handling self-test"
+
+node scripts/verify-interrupt-handling.mjs
+pass "Interrupt handling"
+
 echo "Repository gate chain: $PASS_COUNT checks passed."
