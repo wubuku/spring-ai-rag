@@ -13,6 +13,7 @@ import type { DerivationRepairPreview } from '../api/embeddings';
 import { Dialog } from '../components/Dialog';
 import { Card } from '../components/Card';
 import { useImeComposition } from '../utils/ime';
+import { SHORT_ID_LENGTH, truncate } from '../utils/text';
 import { failureMessage } from '../utils/failureReason';
 import styles from './Embeddings.module.css';
 import { EmptyState, PageHeader, QueryErrorBanner } from '../components/ui';
@@ -333,7 +334,7 @@ export function Embeddings() {
                         className={styles.primaryBtn}
                         onClick={() => setFilter('jobId', job.id)}
                       >
-                        {job.id.slice(0, 8)}
+                        {truncate(job.id, SHORT_ID_LENGTH)}
                       </button>
                     </td>
                     <td>{job.status}</td>

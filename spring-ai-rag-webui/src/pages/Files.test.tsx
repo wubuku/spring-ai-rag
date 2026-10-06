@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import userEvent from '@testing-library/user-event';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { Files } from './Files';
 import { filesApi } from '../api/files';
@@ -346,6 +346,67 @@ describe('Files', () => {
 
     expect(screen.getByTestId('files-parent-entry')).toBeVisible();
     expect(screen.getByText('files.noMatches')).toBeVisible();
+  });
+
+  it('commits one navigation for a burst of typing, not one per character', () => {
+    // Batch 939. `onChange` used to call `commitQuery` directly, so six letters meant six
+    // `navigateTo` calls: six history replacements and six `rememberRoute` writes, each a
+    // synchronous `sessionStorage` read-merge-write on the main thread — and six
+    // react-query keys, because the query is part of the one above.
+    //
+    // Fake timers, and a real gap between the keys, are load-bearing here. The first
+    // draft fired all six `change` events in one synchronous loop, which React batches
+    // into a single render: the debounce delay could be set to zero and the test still
+    // passed, because one render means one commit either way. A probe that stays green
+    // under the mutation it exists to catch is a test that measures nothing.
+    vi.useFakeTimers();
+    const setItem = vi.spyOn(Storage.prototype, 'setItem');
+    // Scoped to the route-memory key: mounting already writes the panel width and the
+    // selected collection, and counting those would make the assertion meaningless.
+    const ROUTES_KEY = 'spring-ai-rag:webui:v1:routes';
+    const routeWrites = () => setItem.mock.calls.filter(([key]) => key === ROUTES_KEY);
+
+    try {
+      renderFiles();
+      const input = screen.getByLabelText('files.searchLabel');
+
+      for (const value of ['s', 'sp', 'spr', 'spri', 'sprin', 'spring']) {
+        fireEvent.change(input, { target: { value } });
+        // 50 ms between keys: longer than nothing, shorter than the 250 ms pause.
+        act(() => { vi.advanceTimersByTime(50); });
+      }
+
+      // 300 ms of typing, but never 250 ms of silence, so nothing has been committed.
+      expect(screen.getByTestId('location-search')).toHaveTextContent(/^$/);
+      expect(routeWrites()).toHaveLength(0);
+
+      act(() => { vi.advanceTimersByTime(250); });
+
+      expect(screen.getByTestId('location-search')).toHaveTextContent('?q=spring');
+      expect(routeWrites()).toHaveLength(1);
+    } finally {
+      setItem.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
+  it('applies the query on blur without waiting out the debounce', () => {
+    // The reason the debounce exposes a flush: type and immediately click a row, and the
+    // list on screen has to be the list for the box above it. Asserted with the clock
+    // stopped — waiting 250 ms of real time would let the debounce satisfy the
+    // expectation on its own, which is the other way this test could pass for free.
+    vi.useFakeTimers();
+    try {
+      renderFiles();
+      const input = screen.getByLabelText('files.searchLabel');
+
+      fireEvent.change(input, { target: { value: 'sample' } });
+      fireEvent.blur(input);
+
+      expect(screen.getByTestId('location-search')).toHaveTextContent('?q=sample');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('does not navigate during Chinese IME composition and commits after it ends', async () => {

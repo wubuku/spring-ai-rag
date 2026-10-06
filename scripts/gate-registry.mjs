@@ -522,6 +522,51 @@ export const GATES = [
     selfTest: 'spring-ai-rag-webui/scripts/__tests__/time-formatting.test.mjs',
   },
 
+  // Batch 939. The rule is "`navigator.clipboard` is reached through one function", and
+  // the one legitimate owner is named by path, so there is no allowlist to keep true.
+  //
+  // What it stops is a failure that review cannot see. `await
+  // navigator.clipboard.writeText(rawKey); showToast(...copied)` reads correctly, and yet
+  // on the two `ApiKeys` buttons — the ones that hand over a raw API key shown exactly
+  // once — a denied write produced no toast at all, because the promise rejects and
+  // nobody awaits it. `navigator.clipboard` is also `undefined` outside a secure context
+  // (a self-hosted UI over plain HTTP on a LAN address), which throws a `TypeError`
+  // rather than a rejection. Both failures looked identical to success.
+  //
+  // It says nothing about whether a successful copy is *reported*; that is
+  // `ApiKeys.clipboard.test.tsx`, a rendering test on purpose.
+  // No `noCiReason`: `npm run lint` runs in ci.yml's webui job.
+  {
+    gate: 'spring-ai-rag-webui/scripts/check-clipboard-calls.mjs',
+    kind: 'gate',
+    selfTest: 'spring-ai-rag-webui/scripts/__tests__/clipboard-calls.test.mjs',
+  },
+
+  // Batch 939. A census of `src/` for a hard-coded two-number substring found fifteen call
+  // sites and four numbers behind them: 256 (query cap, 9×), 8 (short id, 3×), 50 (chat
+  // title preview, 1×), 16 (`datetime-local` shape, 1×). The three display ones reached
+  // the screen three different ways — a real U+2026 in one component, three ASCII dots in
+  // another, three ASCII dots hand-written inside a ternary in a third, and nothing at
+  // all in a fourth.
+  //
+  // It has **no allowlist**, which is the part worth reading twice. An earlier draft
+  // exempted `utils/time.ts` because its `16` was a literal; naming the constant
+  // `DATE_TIME_LOCAL_LENGTH` made the exemption unnecessary, and an exemption that exists
+  // only because nobody finished the job is one more thing to keep true. `truncate` and
+  // `capLength` cut at identifiers for the same reason.
+  //
+  // It decides by the shape of the arguments, not by intent: a display cut and a typed-in
+  // cap are different decisions — an ellipsis in a search box becomes part of `q=` — but
+  // no regex separates them. What it does guarantee is that any fixed cut is a named
+  // decision somewhere. A computed bound is not caught; that limit is in the header and
+  // pinned by the self-test.
+  // No `noCiReason`: `npm run lint` runs in ci.yml's webui job.
+  {
+    gate: 'spring-ai-rag-webui/scripts/check-text-truncation.mjs',
+    kind: 'gate',
+    selfTest: 'spring-ai-rag-webui/scripts/__tests__/text-truncation.test.mjs',
+  },
+
   // Run by scripts/verify-project-docs.sh.
   {
     gate: 'scripts/verify-no-pessimistic-locks.sh',

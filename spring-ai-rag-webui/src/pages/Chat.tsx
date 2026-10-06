@@ -21,6 +21,7 @@ import {
   writeWorkspaceState,
 } from '../utils/workspaceState';
 import { useImeComposition } from '../utils/ime';
+import { CHAT_TITLE_PREVIEW_LENGTH, truncate } from '../utils/text';
 import styles from './Chat.module.css';
 import { ChevronDown, PanelLeft, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { EmptyState, IconButton, PageHeader, QueryErrorBanner } from '../components/ui';
@@ -328,8 +329,10 @@ export function Chat() {
     if (conversationId && messages.length > 0) {
       const userMsg = messages.find(m => m.role === 'user');
       if (userMsg) {
-        const title = userMsg.content.slice(0, 50) + (userMsg.content.length > 50 ? '...' : '');
-        addSessionRef.current(conversationId, title);
+        addSessionRef.current(conversationId, truncate(
+          userMsg.content,
+          CHAT_TITLE_PREVIEW_LENGTH,
+        ));
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

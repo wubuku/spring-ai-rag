@@ -1,7 +1,5 @@
 import {
-  useEffect,
   useMemo,
-  useRef,
   useState,
   type ChangeEvent,
   type CompositionEvent,
@@ -11,6 +9,8 @@ import { useTranslation } from 'react-i18next';
 import { collectionsApi } from '../../api/collections';
 import type { CollectionScopeMode } from '../../types/api';
 import { useImeComposition } from '../../utils/ime';
+import { capLength } from '../../utils/text';
+import { useDebouncedCommit } from '../../utils/debounce';
 import styles from './CollectionScopeSelector.module.css';
 
 const PAGE_SIZE = 50;
@@ -50,31 +50,33 @@ export function CollectionScopeSelector({
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [page, setPage] = useState(0);
   const queryIme = useImeComposition();
-  const previousQueryRef = useRef(query);
 
-  useEffect(() => {
-    if (previousQueryRef.current === query) return;
-    previousQueryRef.current = query;
-    const timer = window.setTimeout(() => {
-      if (queryIme.compositionActiveRef.current) return;
-      setDebouncedQuery(query.trim());
+  // This component is where the 250 ms debounce was written first, by hand. It is now
+  // the shared hook so `Documents` and `Files` can stop committing on every keystroke.
+  const { flush } = useDebouncedCommit(
+    query.trim(),
+    debouncedQuery,
+    (next) => {
+      setDebouncedQuery(next);
       setPage(0);
-    }, 250);
-    return () => window.clearTimeout(timer);
-  }, [query, queryIme.compositionActiveRef, previousQueryRef]);
+    },
+    { isBlocked: () => queryIme.compositionActiveRef.current },
+  );
 
   const handleQueryChange = (event: ChangeEvent<HTMLInputElement>) => {
-    setQuery(event.target.value.slice(0, 256));
+    setQuery(capLength(event.target.value));
   };
 
   const handleQueryCompositionEnd = (
     event: CompositionEvent<HTMLInputElement>,
   ) => {
     queryIme.handleCompositionEnd();
-    const value = event.currentTarget.value.slice(0, 256);
+    const value = capLength(event.currentTarget.value);
     setQuery(value);
-    setDebouncedQuery(value.trim());
-    setPage(0);
+    // Commit the composed text itself, not the value the debounce last saw: browsers
+    // fire the final `input` event before or after `compositionend` depending on the
+    // engine, so the pending value may still be missing the last characters.
+    flush(value.trim());
   };
 
   const collectionsQuery = useQuery({

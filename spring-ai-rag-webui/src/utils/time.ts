@@ -38,6 +38,10 @@
  *
  * `scripts/check-time-formatting.mjs` keeps every call site going through here, so
  * this file is the one place that has to be right.
+ *
+ * It is also the one file allowed to cut a string at a fixed offset
+ * (`scripts/check-text-truncation.mjs`): `toDateTimeLocalValue` is a conversion into the
+ * shape an HTML input demands, not a display truncation.
  */
 
 /** Shown instead of a time that cannot be read. Kept a constant so it can be matched. */
@@ -153,4 +157,33 @@ export function formatRelative(
   if (diff < HOUR) return t('chat.timeMinutesAgo', { count: Math.floor(diff / MINUTE) });
   if (diff < DAY) return t('chat.timeHoursAgo', { count: Math.floor(diff / HOUR) });
   return date.toLocaleDateString(locale);
+}
+
+/** The `YYYY-MM-DDTHH:mm` prefix every shape the API sends begins with. */
+const DATE_TIME_LOCAL_PREFIX = /^\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2})?/u;
+
+/** How many characters of an ISO value `<input type="datetime-local">` keeps. */
+const DATE_TIME_LOCAL_LENGTH = 16;
+
+/**
+ * The value a `<input type="datetime-local">` needs, or `''`.
+ *
+ * This is a **format conversion, not a truncation**, and it lives here rather than in
+ * `src/utils/text.ts` for exactly that reason. An HTML date-time-local input accepts
+ * `YYYY-MM-DDTHH:mm` and silently discards anything after it, so the seconds a
+ * `LocalDateTime` carries must be taken off before the value is handed to the browser.
+ * It worked as a bare `slice(0, 16)` because ISO-8601 puts the offset **last**: all four
+ * wire shapes — `2026-10-06T19:34:31`, `…:31.123`, `…:31+08:00`, `…:31Z` — begin with the
+ * same sixteen characters.
+ *
+ * Unlike the old slice, a value that does not start with a date yields `''` rather than
+ * being copied into the field. Note what it does **not** do: it keeps the wall clock
+ * exactly as it arrived. For a `LocalDateTime` that is the same {@link ZONELESS_NOTE}
+ * caveat as everywhere else in this file — the field is prefilled with the server's
+ * wall-clock reading, not a converted instant.
+ */
+export function toDateTimeLocalValue(value: TimestampInput): string {
+  const text = typeof value === 'string' ? value.trim() : '';
+  if (!DATE_TIME_LOCAL_PREFIX.test(text)) return '';
+  return text.slice(0, DATE_TIME_LOCAL_LENGTH);
 }

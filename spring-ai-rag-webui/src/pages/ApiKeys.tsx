@@ -13,13 +13,14 @@ import {
 import { collectionsApi } from '../api/collections';
 import { PageHeader } from '../components/ui';
 import { useToast } from '../components/Toast';
+import { useClipboardCopy } from '../hooks/useClipboardCopy';
 import { Dialog } from '../components/Dialog';
 import { ImeSafeForm } from '../components/ImeSafeForm';
 import { Button } from '../components/Button';
 import { failureMessage } from '../utils/failureReason';
 import { EmptyState, QueryErrorBanner, StatusBadge } from '../components/ui';
 import styles from './ApiKeys.module.css';
-import { formatAbsolute } from '../utils/time';
+import { formatAbsolute, toDateTimeLocalValue } from '../utils/time';
 
 const DEFAULT_EXPIRY_DAYS = 365;
 const READ_ONLY_CAPABILITIES = ['RAG_READ'];
@@ -419,6 +420,7 @@ function CreateKeyModal({ onClose }: { onClose: () => void }) {
   const [selectedCollectionKeys, setSelectedCollectionKeys] = useState<string[]>([]);
   const [createdKey, setCreatedKey] = useState<ApiKeyCreatedResponse | null>(null);
   const { showToast } = useToast();
+  const copyToClipboard = useClipboardCopy();
   const queryClient = useQueryClient();
   const collectionsQuery = useQuery({
     queryKey: ['collections', 'api-key-scope'],
@@ -498,8 +500,10 @@ function CreateKeyModal({ onClose }: { onClose: () => void }) {
 
   const copyRawKey = async () => {
     if (!createdKey) return;
-    await navigator.clipboard.writeText(createdKey.rawKey);
-    showToast(t('apiKeys.copied'), 'success');
+    await copyToClipboard(createdKey.rawKey, {
+      success: 'apiKeys.copied',
+      failure: 'apiKeys.copyFailed',
+    });
   };
 
   return (
@@ -707,7 +711,7 @@ function EditPolicyModal({
   const { t } = useTranslation();
   const [name, setName] = useState(principal.name);
   const [expiryDefaults] = useState(createExpiryDefaults);
-  const [expiresAt, setExpiresAt] = useState(principal.expiresAt?.slice(0, 16) ?? '');
+  const [expiresAt, setExpiresAt] = useState(toDateTimeLocalValue(principal.expiresAt));
   const [restrictCollections, setRestrictCollections] = useState(
     Boolean(principal.allowedCollectionKeys?.length),
   );
@@ -914,6 +918,7 @@ function RotateKeyModal({
   const [immediateKey, setImmediateKey] =
     useState<ApiKeyCreatedResponse | null>(null);
   const { showToast } = useToast();
+  const copyToClipboard = useClipboardCopy();
   const queryClient = useQueryClient();
 
   const prepareMutation = useMutation({
@@ -962,8 +967,10 @@ function RotateKeyModal({
   const copyRawKey = async () => {
     const rawKey = preparedRotation?.rawKey ?? immediateKey?.rawKey;
     if (!rawKey) return;
-    await navigator.clipboard.writeText(rawKey);
-    showToast(t('apiKeys.copied'), 'success');
+    await copyToClipboard(rawKey, {
+      success: 'apiKeys.copied',
+      failure: 'apiKeys.copyFailed',
+    });
   };
 
   const prepare = () => {
