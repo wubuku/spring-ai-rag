@@ -709,8 +709,20 @@ disabled、stale 或错误 Profile 的文档仍被排除。English FTS、pg_jieb
 是否使用相同 `RetrievalScopeSql` predicate，由各 provider 的聚焦测试单独验证。
 
 WebUI 验收覆盖三种模式、多选、服务端 Collection 搜索和分页、selected 空范围禁止提交，
-以及 Chat SSE object request。执行 `npm run test:run`、`npx tsc -b --pretty false`、
-`npm run build` 和核心 Mock Playwright。
+以及 Chat SSE object request。执行 `npm run test:run`、`npm run typecheck`
+（或 `npx tsc -b --pretty false`）、`npm run build` 和核心 Mock Playwright。
+
+**不要在这里跑 `npx tsc --noEmit`。** WebUI 的 `tsconfig.json` 是 solution 文件：
+只有 `references`，没有 `files` / `include`，所以裸的 `tsc --noEmit` **什么都不编译**
+并且退出 0。2026-10-06 实测：往 `src/pages/Collections.tsx` 末尾追加
+`const __probe: number = "definitely not a number";` 之后，它照样报成功。同一次运行
+还暴露了它一直在掩盖的一个真错误——那个组件用到了从未解构出来的 `i18n`，另有六个
+组件解构了 `i18n` 却没用。`npm run typecheck`（`tsc -b`）七个全报，`tsc --noEmit`
+一个不报。`HEARTBEAT.md` 里 2026-04-25 那条 `tsc --noEmit ✅` 正是这个空绿——那份日志
+是只追加的，所以它保留为"当时跑了什么"的记录，而不是"当时通过了什么"的记录。
+
+`npm run typecheck` 现在是 `npm run lint` 的一环，而 `ci.yml` 的 webui job 会跑 lint，
+所以即便 `npm run build` 本来也能抓到，类型错误也不可能无声地进到 `main`。
 
 ### JSONB 结构化记录验收门禁
 

@@ -2368,6 +2368,29 @@ Batch 932 新增，理由同上：详情页调的是这条路径，此前也没�
 
 ---
 
+## 时间戳 — 同一个问题，四种线上形状
+
+这里每一个回答"什么时候发生"的字段，WebUI 一律声明成 `string`，而 API 为它发出
+**四种**不同的线上形状。2026-10-06（Batch 938）在 `spring-ai-rag-api` 上量过，
+按 Java 时间类型字段计数：
+
+| Java 类型 | 字段数 | JSON 形状 | 带偏移量？ |
+|---|---|---|---|
+| `LocalDateTime` | 73 | `2026-10-06T19:34:31` | **不带** |
+| `OffsetDateTime` | 31 | `2026-10-06T19:34:31+08:00` | 带 |
+| `ZonedDateTime` | 15 | `2026-10-06T19:34:31+08:00` | 带 |
+| `Instant` | 8 | `2026-10-06T11:34:31Z` | 带（UTC） |
+
+`ApiPrincipalResponse.createdAt`、`ApiKeyResponse.createdAt`、
+`DocumentVersionResponse.createdAt` 及其同类都是 `LocalDateTime`，到达前端时**完全没有
+时区**。ECMAScript 把这种值按**浏览器所在**时区解析，于是同一个字段在上海的读者和在
+柏林的读者那里渲染成不同的结果，而它本来的含义取决于服务器 JVM 当时在哪个时区。
+
+WebUI 在不猜测的前提下把它处理到最好：`src/utils/time.ts` 解析四种形状，读不出来的值
+渲染成 `—` 而不是字符串 `Invalid Date`。**但它无法凭空恢复一个从未被发送过的偏移量。**
+让偏移量上线是一次牵动外部业务客户端（`docs/business-client-integration.md`）的 API
+变更，所以这里把它记为需要人来拍板的事，而不是在一个 WebUI 批次里顺手改掉。
+
 ## Alerts — 监控与告警
 
 本节全部路由属于 operator 管理面。允许 environment root、数据库 `ADMIN`、legacy static，

@@ -8,9 +8,10 @@ import { Skeleton } from '../components/Skeleton';
 import { Card } from '../components/Card';
 import { QueryErrorBanner } from '../components/ui';
 import styles from './Dashboard.module.css';
+import { formatAbsolute } from '../utils/time';
 
 export function Dashboard() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
 
   const { data: health, isPending: healthPending, isError: healthError, refetch: refetchHealth } = useQuery({
     queryKey: ['health'],
@@ -95,7 +96,7 @@ export function Dashboard() {
           failed={healthError}
           pending={healthPending}
           onRetry={() => void refetchHealth()}
-          value={health?.data?.timestamp ? new Date(health.data.timestamp).toLocaleString() : undefined}
+          value={health?.data?.timestamp ? formatAbsolute(health.data.timestamp, i18n.language) : undefined}
         />
       </div>
     </div>

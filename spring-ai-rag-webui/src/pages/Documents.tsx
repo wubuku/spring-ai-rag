@@ -21,6 +21,7 @@ import styles from './Documents.module.css';
 import { EmptyState, IconButton, QueryErrorBanner } from '../components/ui';
 import { failureMessage, usableReason } from '../utils/failureReason';
 import { Upload, X } from 'lucide-react';
+import { formatDate } from '../utils/time';
 
 type DocumentConfirmation =
   | { kind: 'disable'; document: Document }
@@ -29,7 +30,7 @@ type DocumentConfirmation =
   | null;
 
 export function Documents() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const rawPage = Number(searchParams.get('page') ?? 0);
@@ -534,7 +535,7 @@ export function Documents() {
                         </div>
                       )}
                     </td>
-                    <td>{new Date(doc.createdAt).toLocaleDateString()}</td>
+                    <td>{formatDate(doc.createdAt, i18n.language)}</td>
                     <td className={styles.hash}>{doc.contentHash?.slice(0, 8)}...</td>
                     <td className={styles.actionCell}>
                       <DocumentActionsMenu

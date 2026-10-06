@@ -21,6 +21,7 @@ import {
 } from '../utils/workspaceState';
 import { failureMessage } from '../utils/failureReason';
 import styles from './Search.module.css';
+import { formatTime } from '../utils/time';
 
 interface SearchUrlState {
   query: string;
@@ -61,7 +62,7 @@ function readSearchUrlState(search: string): SearchUrlState {
 }
 
 export function Search() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
   const { showToast } = useToast();
@@ -289,7 +290,7 @@ export function Search() {
                           <span className={styles.historyQuery}>{item.query}</span>
                           <span className={styles.historyMeta}>
                             {item.useHybrid ? t('search.hybrid') : t('search.vector')} ·{' '}
-                            {new Date(item.timestamp).toLocaleTimeString()}
+                            {formatTime(item.timestamp, i18n.language)}
                           </span>
                         </button>
                         <IconButton

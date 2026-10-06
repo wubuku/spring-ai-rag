@@ -8,6 +8,7 @@ import { Dialog } from '../Dialog';
 import { usableReason } from '../../utils/failureReason';
 import styles from './VersionHistoryModal.module.css';
 import { EmptyState } from '../ui';
+import { formatAbsolute } from '../../utils/time';
 
 /**
  * `"<label>: <reason>"` — with the reason only when there is one.
@@ -57,7 +58,7 @@ export function VersionHistoryModal({
   onRestoreVersion,
   onClose,
 }: VersionHistoryModalProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [tab, setTab] = useState<'list' | 'diff'>('list');
   const [page, setPage] = useState(0);
   const PAGE_SIZE = 20;
@@ -221,7 +222,7 @@ export function VersionHistoryModal({
                                 <div className={styles.changeDesc}>{v.changeDescription}</div>
                               )}
                               <div className={styles.versionDate}>
-                                {new Date(v.createdAt).toLocaleString()}
+                                {formatAbsolute(v.createdAt, i18n.language)}
                               </div>
                             </div>
                             <span className={styles.versionHash}>{v.contentHash?.slice(0, 8)}…</span>
