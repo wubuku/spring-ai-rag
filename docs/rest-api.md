@@ -7,6 +7,20 @@
 > Main base path: `/api/v1/rag`. The disabled-by-default OpenAI compatibility
 > preview uses `/v1`.
 
+**What this document is.** A reference with editorial judgement in it, not an
+exhaustive index — `/swagger-ui.html` is the complete list, generated from the
+running application. Batch 934 measured the gap: roughly 177 mounted routes
+against 112 endpoints named in headings here. Those 65 are a choice, not debt,
+and no allowlist of them exists.
+
+**What is enforced.** The direction that *is* checked is the one that can lie to
+somebody: **every endpoint named in a heading below is served by the application.**
+`DocumentedRouteContract` in `OpenApiContractTest` reads these headings and
+compares them against the runtime spec, in both languages, and a documented
+endpoint that 404s fails the build — a caller who read it will have built against
+it. The reference can stay selective about what it covers; it cannot promise
+something that does not exist.
+
 ---
 
 ## General

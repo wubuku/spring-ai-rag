@@ -1310,9 +1310,6 @@ class OpenApiContractTest {
                         "apiClient\\.(get|post|put|delete|patch)(?:<.*?>)?\\s*\\(\\s*"
                                 + "(\"[^\"]*\"|'[^']*'|`[^`]*`)");
 
-        /** A path variable, on either side: {@code ${id}} from TS, {@code {id}} from the spec. */
-        private static final java.util.regex.Pattern PATH_VARIABLE =
-                java.util.regex.Pattern.compile("\\$\\{[^}]*\\}|\\{[^}]*\\}");
 
         /**
          * A floor on how many call sites the scan must find. Without it, a
@@ -1601,39 +1598,202 @@ class OpenApiContractTest {
          * sides reduced to the same shape so that {@code /a/${id}/b} and
          * {@code /a/{id}/b} compare equal.
          */
-        private Set<String> servedRoutes() throws Exception {
-            MvcResult result = mockMvc.perform(get(OPENAPI_SPEC_PATH))
-                    .andExpect(status().isOk())
-                    .andReturn();
-            JsonNode paths = objectMapper.readTree(result.getResponse().getContentAsString())
-                    .path("paths");
+    }
 
-            Set<String> served = new HashSet<>();
-            Iterator<String> pathIt = paths.fieldNames();
-            while (pathIt.hasNext()) {
-                String path = pathIt.next();
-                JsonNode item = paths.path(path);
-                Iterator<String> verbIt = item.fieldNames();
-                while (verbIt.hasNext()) {
-                    String field = verbIt.next();
-                    if (HTTP_METHODS.contains(field)) {
-                        served.add(field.toUpperCase(java.util.Locale.ROOT) + " " + shape(path));
-                    }
+    /**
+     * Every {@code VERB /path/pattern} this application serves, with both
+     * sides reduced to the same shape so that {@code /a/{id}/b} and
+     * {@code /a/${id}/b} compare equal.
+     *
+     * <p>Lives on the outer class from Batch 934 because a second consumer of
+     * this table arrived: the REST reference document. The WebUI and the docs
+     * ask the same question of the server — does this route exist — and
+     * answering it from one place is the difference between a table and two
+     * tables that drift.
+     */
+    /**
+     * A path variable, on either side: {@code ${id}} as TypeScript writes it,
+     * {@code {id}} as Spring and the spec write it.
+     *
+     * <p>On the outer class since Batch 934, because both consumer contracts
+     * reduce paths to the same shape before comparing and must reduce them
+     * identically — two copies of "what counts as the same route" is one more
+     * thing to drift.
+     */
+    private static final java.util.regex.Pattern PATH_VARIABLE =
+            java.util.regex.Pattern.compile("\\$\\{[^}]*\\}|\\{[^}]*\\}");
+
+    /** Both sides to one comparable form: path variables become {@code *}. */
+    /**
+     * The operation keys an OpenAPI path item can carry. Anything else in a path
+     * item — {@code parameters}, {@code summary}, {@code servers} — is not a
+     * verb, and counting one as a route would invent matches.
+     */
+    private static final java.util.Set<String> HTTP_METHODS = java.util.Set.of(
+            "get", "post", "put", "delete", "patch", "head", "options");
+
+    private static String shape(String path) {
+        String shaped = PATH_VARIABLE.matcher(path).replaceAll("*");
+        // A trailing slash is not a different route.
+        return shaped.endsWith("/") && shaped.length() > 1
+                ? shaped.substring(0, shaped.length() - 1)
+                : shaped;
+    }
+
+    private Set<String> servedRoutes() throws Exception {
+        MvcResult result = mockMvc.perform(get(OPENAPI_SPEC_PATH))
+                .andExpect(status().isOk())
+                .andReturn();
+        JsonNode paths = objectMapper.readTree(result.getResponse().getContentAsString())
+                .path("paths");
+
+        Set<String> served = new HashSet<>();
+        Iterator<String> pathIt = paths.fieldNames();
+        while (pathIt.hasNext()) {
+            String path = pathIt.next();
+            JsonNode item = paths.path(path);
+            Iterator<String> verbIt = item.fieldNames();
+            while (verbIt.hasNext()) {
+                String field = verbIt.next();
+                if (HTTP_METHODS.contains(field)) {
+                    served.add(field.toUpperCase(java.util.Locale.ROOT) + " " + shape(path));
                 }
             }
-            return served;
+        }
+        return served;
+    }
+
+    @Nested
+    @DisplayName("Documented Route Contract")
+    class DocumentedRouteContract {
+
+        /**
+         * A heading that names an endpoint, at either depth the reference uses.
+         *
+         * <p>Batch 934. Three of the 112 endpoints are documented at {@code ####}
+         * rather than {@code ###}, and a first pass that read only {@code ###}
+         * reported them as undocumented — the same shape of blindness as every
+         * other scanner in this repository's history, and the reason the depth is
+         * written as a range instead of a literal.
+         */
+        private static final java.util.regex.Pattern DOCUMENTED_ENDPOINT =
+                java.util.regex.Pattern.compile(
+                        "^#{3,4} `(GET|POST|PUT|DELETE|PATCH) (/[^`]*)`",
+                        java.util.regex.Pattern.MULTILINE);
+
+        /**
+         * A floor on how many endpoints the scan must find.
+         *
+         * <p>Same reason as the WebUI scan's floor: a pattern that stops matching
+         * reports a clean sweep over an empty set, and that is indistinguishable
+         * from a reference document that promises nothing false.
+         */
+        private static final int MIN_DOCUMENTED = 100;
+
+        private record Documented(String file, int line, String verb, String path) {
+            @Override
+            public String toString() {
+                return verb + " " + path + "  (" + file + ":" + line + ")";
+            }
         }
 
-        private static final java.util.Set<String> HTTP_METHODS = java.util.Set.of(
-                "get", "post", "put", "delete", "patch", "head", "options");
+        @Test
+        @DisplayName("Every endpoint the REST reference names is one this application serves")
+        void everyDocumentedRoute_isServed() throws Exception {
+            List<Documented> documented = scanDocumentedRoutes();
+            Set<String> served = servedRoutes();
 
-        /** Both sides to one comparable form: path variables become {@code *}. */
-        private static String shape(String path) {
-            String shaped = PATH_VARIABLE.matcher(path).replaceAll("*");
-            // A trailing slash is not a different route.
-            return shaped.endsWith("/") && shaped.length() > 1
-                    ? shaped.substring(0, shaped.length() - 1)
-                    : shaped;
+            assertThat(documented)
+                    .as("the scan found suspiciously few documented endpoints — a scanner "
+                            + "that matches nothing would pass this test vacuously")
+                    .hasSizeGreaterThanOrEqualTo(MIN_DOCUMENTED);
+
+            List<String> phantom = documented.stream()
+                    .filter(doc -> !served.contains(doc.verb() + " " + shape(doc.path())))
+                    .map(Documented::toString)
+                    .toList();
+
+            assertThat(phantom)
+                    .as("the reference document promises these endpoints and no handler "
+                            + "serves them. A documented endpoint that 404s is worse than an "
+                            + "undocumented one: a caller who read it will build against it. "
+                            + "%d of %d documented endpoints are served.",
+                            documented.size() - phantom.size(), documented.size())
+                    .isEmpty();
+        }
+
+        @Test
+        @DisplayName("Both languages of the reference name the same endpoints")
+        void bothLanguagesNameTheSameEndpoints() throws Exception {
+            // Set comparison rather than a stream filter that reaches back into
+            // its own `map` lambda: the nested reference makes the element type
+            // unresolvable, and "the two lists differ" is a worse failure
+            // message than "these two sets differ" anyway.
+            Set<String> english = shapedRoutes(
+                    documentedIn(locateRepoRoot().resolve("docs/rest-api.md")));
+            Set<String> chinese = shapedRoutes(
+                    documentedIn(locateRepoRoot().resolve("docs/rest-api-zh-CN.md")));
+
+            Set<String> onlyEnglish = new java.util.TreeSet<>(english);
+            onlyEnglish.removeAll(chinese);
+            Set<String> onlyChinese = new java.util.TreeSet<>(chinese);
+            onlyChinese.removeAll(english);
+
+            assertThat(onlyEnglish)
+                    .as("the English reference names endpoints the Chinese one does not")
+                    .isEmpty();
+            assertThat(onlyChinese)
+                    .as("the Chinese reference names endpoints the English one does not")
+                    .isEmpty();
+            assertThat(english)
+                    .as("the scan found suspiciously few documented endpoints in English")
+                    .hasSizeGreaterThanOrEqualTo(MIN_DOCUMENTED);
+        }
+
+        private static Set<String> shapedRoutes(List<Documented> documented) {
+            Set<String> routes = new java.util.TreeSet<>();
+            for (Documented doc : documented) {
+                routes.add(doc.verb() + " " + shape(doc.path()));
+            }
+            return routes;
+        }
+
+        // ==================== support ====================
+
+        private List<Documented> scanDocumentedRoutes() throws IOException {
+            Path docs = locateRepoRoot().resolve("docs");
+            List<Documented> all = new ArrayList<>();
+            all.addAll(documentedIn(docs.resolve("rest-api.md")));
+            all.addAll(documentedIn(docs.resolve("rest-api-zh-CN.md")));
+            return all;
+        }
+
+        private List<Documented> documentedIn(Path file) throws IOException {
+            String source = Files.readString(file);
+            List<Documented> found = new ArrayList<>();
+            java.util.regex.Matcher matcher = DOCUMENTED_ENDPOINT.matcher(source);
+            while (matcher.find()) {
+                int line = (int) source.substring(0, matcher.start()).lines().count();
+                found.add(new Documented(
+                        file.getFileName().toString(), line + 1,
+                        matcher.group(1), matcher.group(2)));
+            }
+            return found;
+        }
+
+        /** Walks up to the repository root; fails loudly rather than scanning nothing. */
+        private Path locateRepoRoot() {
+            Path dir = Path.of("").toAbsolutePath();
+            while (dir != null) {
+                if (Files.isDirectory(dir.resolve("docs"))
+                        && Files.isDirectory(dir.resolve("spring-ai-rag-core"))) {
+                    return dir;
+                }
+                dir = dir.getParent();
+            }
+            throw new IllegalStateException(
+                    "could not find the repository root above " + Path.of("").toAbsolutePath()
+                            + " — the documented route contract cannot verify anything without it");
         }
     }
 }

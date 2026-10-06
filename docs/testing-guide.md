@@ -238,6 +238,36 @@ class RagDocumentControllerTest {
 - Service layer can use `@Mock` + `@ExtendWith(MockitoExtension.class)` for pure unit tests
 - Use `@DataJpaTest` for database-related slice tests
 
+### The consumer direction of the route contract
+
+Alongside its long-standing **producer-direction** assertions (does this schema
+exist, is this required path documented), `OpenApiContractTest` carries two
+**consumer-direction** nested classes: each reads the routes a consumer wrote down
+and reconciles them against the **runtime spec**. There are two consumers, the
+direction is the same, and both ask about existence:
+
+- `WebUiRouteContract` — every route the WebUI calls has to be one the server
+  mounts. Established in Batch 932 (it found eleven unrouted calls), extended in
+  Batch 933 to the `fetch` form (three call sites it had been unable to see at
+  all), now covering 106 call sites.
+- `DocumentedRouteContract` — every endpoint `docs/rest-api{,-zh-CN}.md` names in
+  a **heading** has to be one the server mounts, plus the two languages naming
+  the same set. Established in Batch 934.
+
+**Why only that one direction.** The reverse — whether every endpoint the server
+mounts is written down in the docs — is deliberately **not** checked, and the
+reason is that `rest-api.md` never promised to be exhaustive: it points at
+`/swagger-ui.html` for the full list and is a reference with editorial judgement
+in it. Measured, the server has roughly 177 mappings and the document names 112
+in headings. An allowlist of the 65 in between would be a baseline that is not a
+check, which this repository has already declined to build twice since Batch 924.
+The other side is the worse one: an endpoint the document promises and the server
+404s will be built against by somebody who read it.
+
+Both checks carry a **floor assertion** (90 WebUI call sites, 100 documented
+endpoints), because a scanner that has stopped matching anything reports a clean
+sweep over an empty set. Their **known limits** are written into the test headers.
+
 ### Integration Tests (@SpringBootTest)
 
 **Goal**: Verify component collaboration with real Spring context.
