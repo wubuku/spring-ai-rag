@@ -393,6 +393,61 @@ export const GATES = [
     noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
   },
 
+  // Batch 935. `.env.deepspeed` sat in the index with real provider keys, a
+  // database password and two absolute paths into a developer's home directory,
+  // and it had reached the `main` of a **public** repository. `.gitignore` listed
+  // `.env` and `.env.local` and nothing else, so it was a hole rather than an
+  // accident. The repository's own added-line secret scan stayed green because the
+  // file was older than any diff — not a flaw in that gate, a boundary it was
+  // never meant to cover.
+  //
+  // The first version of this gate looked for credential-shaped values anywhere in
+  // a tracked file and reported over a hundred findings, almost all normal code:
+  // SQL columns named `lease_token`, a React state variable named
+  // `confirmationToken`, a testcontainer password, fake keys in the tests that
+  // exist to prove masking works. A gate that cries wolf gets switched off, which
+  // is worse than never writing it. So the rule is the one shape that has no
+  // false alarms and no allowlist: only `.env.example` is a dot-env file meant to
+  // be tracked.
+  //
+  // It cannot speak for history — untracking is not removing, and removing is not
+  // rotating. That limit is declared in the script's header and pinned by its
+  // self-test, so nobody later believes the gate covers it.
+  {
+    gate: 'scripts/verify-tracked-env-files.mjs',
+    kind: 'gate',
+    selfTest: 'scripts/test-support/tracked-env-files-self-test.mjs',
+    noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
+  },
+
+  // Batch 935, second half. `.env.example` is what a new contributor copies to
+  // `.env`, so a variable it declares is a promise that setting it does something.
+  // `ad026765` broke that promise six times under the message "update
+  // .env.example with all current configuration variables": `TRANSCRIPTION_*` and
+  // `VISION_*`, whose own block headers promised audio transcription and multimodal
+  // chat. No code has ever read them, the Spring AI dependency tree carries no
+  // transcription or vision autoconfigure module, and
+  // `docs/openai-compatibility-readiness.md` states that multimodal input is
+  // unsupported. `TEST_IMAGE_PATH` and `TEST_AUDIO_PATH` were the same shape.
+  //
+  // The rule checks declared variables only, and that is measured rather than
+  // assumed: after the six were removed, all 38 declared variables have a consumer
+  // and the rule needs no allowlist. It cannot be extended to commented lines,
+  // because `SPRING_DATASOURCE_DRIVER_CLASS_NAME` is one and is correct — nothing
+  // here spells that name, while `spring.datasource.driver-class-name` is set in
+  // four YAML files. "I did not find the name" is not "nothing reads it".
+  //
+  // The opposite direction is not checked, for the reason
+  // `DocumentedRouteContract` gives: a template with forty commented-out switches
+  // has already conceded it is not exhaustive, and completeness would mean nothing
+  // but an allowlist.
+  {
+    gate: 'scripts/verify-env-example-consumers.mjs',
+    kind: 'gate',
+    selfTest: 'scripts/test-support/env-example-consumers-self-test.mjs',
+    noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
+  },
+
   // Run by scripts/verify-project-docs.sh.
   {
     gate: 'scripts/verify-no-pessimistic-locks.sh',
