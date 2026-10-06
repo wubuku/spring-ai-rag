@@ -5,6 +5,8 @@ import com.springairag.core.config.RagCircuitBreakerProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Clock;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
@@ -41,12 +43,29 @@ public class LlmCircuitBreaker {
     private final AtomicLong lastFailureTime = new AtomicLong(0);
     private final AtomicInteger halfOpenAttempts = new AtomicInteger(0);
 
+    /**
+     * 冷却期的时间来源。
+     *
+     * <p>它以前是三处写死的 {@code System.currentTimeMillis()}，于是"OPEN 等够冷却期
+     * 转入 HALF_OPEN"这条状态迁移**只能用真实时间去测**：本仓库三处测试为此各睡
+     * 1100ms，合计 3.3 秒墙上时间，而且睡不够时失败会以"断路器状态不对"的面貌出现，
+     * 不指向时间。时钟作为构造参数注入之后，这条迁移可以被精确驱动，
+     * {@code Clock.systemUTC().millis()} 与 {@code System.currentTimeMillis()} 同义，
+     * 所以既有构造器的行为不变。
+     */
+    private final Clock clock;
+
     private int failureRateThreshold;
     private int minimumNumberOfCalls;
     private long waitDurationInOpenStateMillis;
     private int windowSize;
 
     public LlmCircuitBreaker(RagCircuitBreakerProperties config) {
+        this(config, Clock.systemUTC());
+    }
+
+    public LlmCircuitBreaker(RagCircuitBreakerProperties config, Clock clock) {
+        this.clock = Objects.requireNonNull(clock, "clock must not be null");
         initFromConfig(config.getSlidingWindowSize(), config.getFailureRateThreshold(),
                 config.getMinimumNumberOfCalls(), config.getWaitDurationInOpenStateSeconds());
     }
@@ -56,6 +75,11 @@ public class LlmCircuitBreaker {
      * Both property types have identical structure, so the logic is identical.
      */
     public LlmCircuitBreaker(EmbeddingCircuitBreakerProperties config) {
+        this(config, Clock.systemUTC());
+    }
+
+    public LlmCircuitBreaker(EmbeddingCircuitBreakerProperties config, Clock clock) {
+        this.clock = Objects.requireNonNull(clock, "clock must not be null");
         initFromConfig(config.getSlidingWindowSize(), config.getFailureRateThreshold(),
                 config.getMinimumNumberOfCalls(), config.getWaitDurationInOpenStateSeconds());
     }
@@ -94,7 +118,7 @@ public class LlmCircuitBreaker {
     }
 
     private boolean shouldAttemptReset() {
-        return System.currentTimeMillis() - lastFailureTime.get() >= waitDurationInOpenStateMillis;
+        return clock.millis() - lastFailureTime.get() >= waitDurationInOpenStateMillis;
     }
 
     /** Record success */
@@ -112,7 +136,7 @@ public class LlmCircuitBreaker {
 
     /** Record failure */
     public void recordFailure() {
-        lastFailureTime.set(System.currentTimeMillis());
+        lastFailureTime.set(clock.millis());
         State current = state.get();
         if (current == State.HALF_OPEN) {
             if (state.compareAndSet(State.HALF_OPEN, State.OPEN)) {
@@ -194,7 +218,7 @@ public class LlmCircuitBreaker {
     public String getStats() {
         return String.format("state=%s successes=%d failures=%d filled=%d lastFailureAgeMs=%d",
                 state.get(), successes.get(), failures.get(), filledSlots.get(),
-                state.get() == State.CLOSED ? 0 : System.currentTimeMillis() - lastFailureTime.get());
+                state.get() == State.CLOSED ? 0 : clock.millis() - lastFailureTime.get());
     }
 
     /**
