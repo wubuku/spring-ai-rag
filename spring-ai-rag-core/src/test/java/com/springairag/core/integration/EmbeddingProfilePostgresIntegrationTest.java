@@ -10,6 +10,7 @@ import com.springairag.core.repository.RagEmbeddingRepository;
 import com.springairag.core.retrieval.EmbeddingBatchService;
 import com.springairag.core.retrieval.HybridRetrieverService;
 import com.springairag.core.retrieval.fulltext.PgEnglishFtsProvider;
+import com.springairag.core.retrieval.EmbeddingProfileSqlScope;
 import com.springairag.core.service.EmbeddingPersistenceService;
 import com.springairag.core.service.DerivationIntegrityRepository;
 import com.springairag.core.service.LegacyEmbeddingMigrationService;
@@ -356,25 +357,46 @@ class EmbeddingProfilePostgresIntegrationTest {
 
     /** Publishes a document to the local keyword index the way V43 expects. */
     private void indexLocalKeywords(long documentId, String hash, String text) {
-        jdbcTemplate.update(
-                "INSERT INTO rag_document_chunks ("
-                        + "document_id, local_index_generation, content_hash, "
-                        + "chunker_version, chunk_text, chunk_index, "
-                        + "chunk_start_pos, chunk_end_pos) "
-                        + "VALUES (?, 1, ?, ?, ?, 0, 0, ?)",
-                documentId,
-                hash,
-                chunkerVersion(),
-                text,
-                text.length());
+        indexLocalChunks(documentId, hash, List.of(new TextChunk(text, 0, text.length())));
+    }
+
+    /**
+     * The multi-chunk form, because a document whose vector branch declares two
+     * chunks needs two local chunks beside it. A one-chunk local index next to a
+     * two-chunk vector state would be caught by
+     * {@code DerivationIntegrityRepository}'s {@code local_mismatches} and
+     * {@code vector_actual = vector_expected}, which is the point of the test
+     * that uses this — but it would be caught for the wrong reason.
+     */
+    private void indexLocalChunks(
+            long documentId, String hash, List<TextChunk> chunks) {
+        // TextChunk carries no index of its own — the chunker assigns positions —
+        // so the list order is the index, which is how every caller here builds it.
+        for (int index = 0; index < chunks.size(); index++) {
+            TextChunk chunk = chunks.get(index);
+            jdbcTemplate.update(
+                    "INSERT INTO rag_document_chunks ("
+                            + "document_id, local_index_generation, content_hash, "
+                            + "chunker_version, chunk_text, chunk_index, "
+                            + "chunk_start_pos, chunk_end_pos) "
+                            + "VALUES (?, 1, ?, ?, ?, ?, ?, ?)",
+                    documentId,
+                    hash,
+                    chunkerVersion(),
+                    chunk.text(),
+                    index,
+                    chunk.startPos(),
+                    chunk.endPos());
+        }
         jdbcTemplate.update(
                 "INSERT INTO rag_document_local_index_state ("
                         + "document_id, local_index_status, content_hash, "
                         + "chunker_version, local_index_generation, chunk_count) "
-                        + "VALUES (?, 'READY', ?, ?, 1, 1)",
+                        + "VALUES (?, 'READY', ?, ?, 1, ?)",
                 documentId,
                 hash,
-                chunkerVersion());
+                chunkerVersion(),
+                chunks.size());
     }
 
     @Test
@@ -580,6 +602,108 @@ class EmbeddingProfilePostgresIntegrationTest {
                     + " generation=" + snapshot.vectorGeneration()
                     + " condition=" + snapshot.vectorCondition());
         assertEquals("READY", snapshot.bucket());
+    }
+
+    /**
+     * Two definitions of "fresh", answering differently about the same rows.
+     *
+     * <p>Batch 929. The retriever's scope — {@link EmbeddingProfileSqlScope} —
+     * admits a document on status, content hash, chunker version and the enabled
+     * flag. {@link DerivationIntegrityRepository} additionally requires a positive
+     * generation, contiguous indexes from zero, matching dimensions, and one
+     * vector per local chunk at the same text and offsets. They are not the same
+     * question, and the gap is not an oversight: the first asks "should this
+     * document be a candidate", the second asks "can this derivation be
+     * trusted". Batch 928 lived in that gap — a document the retriever would
+     * happily return was simultaneously reported {@code FAILED} with no error,
+     * because its generation was 0.
+     *
+     * <p>What this test pins is the shape of the gap, not a verdict about it. It
+     * fails if either side tightens or loosens without the other, which is the
+     * failure that would otherwise show up much later as a document that
+     * searches and reports {@code FAILED} at the same time — the exact shape
+     * that cost Batch 928 its diagnosis.
+     */
+    @Test
+    void retrievalScopeAndTheTrustworthyDerivationAnswerDifferentlyOnPurpose() {
+        EmbeddingProfile profile = registry().initialize();
+        EmbeddingPersistenceService persistence =
+                new EmbeddingPersistenceService(jdbcTemplate);
+        DerivationIntegrityRepository integrity = new DerivationIntegrityRepository(
+                jdbcTemplate,
+                () -> profile,
+                new DocumentDerivationDescriptorProvider(new RagProperties()));
+        String first = "alpha chunk";
+        String second = "beta chunk";
+        List<TextChunk> both = List.of(
+                new TextChunk(first, 0, first.length()),
+                new TextChunk(second, first.length() + 1,
+                        first.length() + 1 + second.length()));
+        List<EmbeddingBatchService.EmbeddingResult> bothVectors = List.of(
+                result(first, vector(1024, 1.0f)),
+                result(second, vector(1024, 1.0f)));
+
+        // 1. Both branches current and in step: one answer, and it agrees.
+        long fresh = insertDocument("agreement", first + " " + second, HASH_A);
+        transactionTemplate.executeWithoutResult(status -> persistence.replace(
+                fresh, 0L, HASH_A, profile, both, bothVectors));
+        indexLocalChunks(fresh, HASH_A, both);
+        assertEquals("READY", integrity.inspect(fresh).bucket());
+        assertTrue(retrievalScopeCovers(fresh, profile.id()));
+
+        // 2. One of the two vectors is gone. The state row still declares two
+        //    chunks, so the derivation is not trustworthy — but a candidate is
+        //    still a candidate, and partial results beat none.
+        long partial = insertDocument("partial", first + " " + second, HASH_B);
+        transactionTemplate.executeWithoutResult(status -> persistence.replace(
+                partial, 0L, HASH_B, profile, both, bothVectors));
+        indexLocalChunks(partial, HASH_B, both);
+        jdbcTemplate.update(
+                "DELETE FROM rag_embeddings WHERE document_id = ? AND chunk_index = 1",
+                partial);
+        DerivationIntegrityRepository.Snapshot partialSnapshot =
+                integrity.inspect(partial);
+        assertFalse(partialSnapshot.vectorFresh(),
+                "the state row declares two chunks and only one vector is stored");
+        assertEquals("CORRUPT", partialSnapshot.bucket());
+        assertTrue(retrievalScopeCovers(partial, profile.id()));
+
+        // 3. A good vector with no keyword index beside it. The repository only
+        //    calls a vector fresh when the local branch is fresh too, because
+        //    one-to-one correspondence with the chunks is how it knows the
+        //    vector's text and offsets mean anything.
+        long unindexed = insertDocument("unindexed", first, CHANGED_HASH);
+        transactionTemplate.executeWithoutResult(status -> persistence.replace(
+                unindexed, 0L, CHANGED_HASH, profile,
+                List.of(new TextChunk(first, 0, first.length())),
+                List.of(result(first, vector(1024, 1.0f)))));
+        assertFalse(integrity.inspect(unindexed).vectorFresh(),
+                "without local chunks there is nothing to match the vector against");
+        assertTrue(retrievalScopeCovers(unindexed, profile.id()));
+    }
+
+    /**
+     * What the retriever's own scope says, measured with the SQL it ships.
+     *
+     * <p>The three-argument form, with the descriptor's own chunker versions,
+     * because that is the only form production calls —
+     * {@code HybridRetrieverService} passes both, while the one-argument
+     * convenience overload hardcodes {@code "legacy-compatible"} for text and is
+     * used by tests alone. Answering with the overload would have measured a
+     * scope nothing ships, and every document would have come back unmatched.
+     */
+    private boolean retrievalScopeCovers(long documentId, long profileId) {
+        Integer rows = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*)"
+                        + EmbeddingProfileSqlScope.fromAndFreshness(
+                                profileId,
+                                chunkerVersion(),
+                                new DocumentDerivationDescriptorProvider(new RagProperties())
+                                        .jsonRecordDescriptor()
+                                        .chunkerVersion())
+                        + "AND e.document_id = ?",
+                Integer.class, documentId);
+        return rows != null && rows > 0;
     }
 
     /**

@@ -306,6 +306,24 @@ readiness 和新的 Collection derivation readiness 都核对同一组物理不�
 job enqueue 分开提交，HTTP 不同步循环调用 provider。只读诊断默认开启，有副作用的 repair
 默认由 feature flag 关闭。
 
+**「fresh」在仓库里不止一套判据，别把它们当同一件事**（Batch 929 实测）：
+
+| 判据 | 谁在用 | 核对什么 |
+|------|--------|----------|
+| 派生可信 | `DerivationIntegrityRepository`（Spring 装配后的唯一路径） | local 与 vector 两条分支的完整物理不变量：正数 generation、连续索引、维度、与本地 chunk 的文本/位置一一对应 |
+| 检索候选 | `EmbeddingProfileSqlScope`（`HybridRetrieverService`） | `status=COMPLETED`、hash、chunker、`enabled`；外加向量列非空 |
+| 降级回退 | `DocumentLifecycleService` / `CollectionEmbeddingReadinessController` 里的 null 分支 | 比派生可信**更松**：只看 state、hash、chunker、chunk 数 |
+
+前两套**故意不同**：一个问「这份派生能不能信」，一个问「这份文档该不该进候选」，
+所以一份文档可以一边被检索到、一边被报 `FAILED`——Batch 928 的现象正是这条缝。
+第三套在生产里走不到（两个协作者都是无条件 bean），但**测试会走到**：
+`DocumentLifecyclePostgresIntegrationTest` 曾经用三参构造器断言 lifecycle 契约，
+而那是全仓唯一在真实库上做这件事的地方，于是它验的是生产不用的那套定义。
+现在该套件接上真相源；`verify-lifecycle-truth-source-wiring.mjs` 会把
+「既自己插派生表行、又用三参构造、且文件里根本没提过真相源」的套件报红。
+它看不出附件是不是挂在没人调的死 helper 里——这一点写在门禁头部并由自测钉住，
+两次反向对照都是靠它才发现的。
+
 ## 5. 多模型
 
 - 旧 provider Bean 路径仍用于兼容默认模型。

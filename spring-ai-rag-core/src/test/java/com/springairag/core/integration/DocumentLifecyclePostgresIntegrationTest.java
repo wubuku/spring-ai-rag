@@ -10,6 +10,7 @@ import com.springairag.core.retrieval.RetrievalFilters;
 import com.springairag.core.retrieval.RetrievalScope;
 import com.springairag.core.retrieval.fulltext.PgEnglishFtsProvider;
 import com.springairag.core.retrieval.fulltext.PgTrgmFulltextProvider;
+import com.springairag.core.service.DerivationIntegrityRepository;
 import com.springairag.core.service.DocumentChunkingService;
 import com.springairag.core.service.DocumentDerivationDescriptorProvider;
 import com.springairag.core.service.DocumentLifecycleService;
@@ -330,8 +331,8 @@ class DocumentLifecyclePostgresIntegrationTest {
         EmbeddingProfileProvider profileProvider = mock(
                 EmbeddingProfileProvider.class);
         when(profileProvider.getActiveProfile()).thenReturn(profile);
-        DocumentLifecycleService lifecycle = new DocumentLifecycleService(
-                jdbcTemplate, profileProvider, descriptorProvider);
+        DocumentLifecycleService lifecycle = lifecycleWithProductionTruthSource(
+                profileProvider);
 
         var status = lifecycle.read(document);
         assertEquals("KEYWORD_ONLY", status.searchability());
@@ -389,8 +390,8 @@ class DocumentLifecyclePostgresIntegrationTest {
         EmbeddingProfileProvider profileProvider = mock(
                 EmbeddingProfileProvider.class);
         when(profileProvider.getActiveProfile()).thenReturn(profile);
-        DocumentLifecycleService lifecycle = new DocumentLifecycleService(
-                jdbcTemplate, profileProvider, descriptorProvider);
+        DocumentLifecycleService lifecycle = lifecycleWithProductionTruthSource(
+                profileProvider);
 
         var status = lifecycle.read(documentEntity(
                 documentId, "missing local chunks", HASH_A));
@@ -985,6 +986,40 @@ class DocumentLifecyclePostgresIntegrationTest {
                 type,
                 documentId,
                 profileId);
+    }
+
+    /**
+     * The lifecycle service wired the way Spring wires it.
+     *
+     * <p>Batch 929. {@code DocumentLifecycleService} answers from
+     * {@code DerivationIntegrityRepository} when it has one, and otherwise falls
+     * back to a hand-rolled SQL block in this class. Those are two different
+     * definitions of "fresh", and they are not equally strict: the fallback
+     * compares status, hash, chunker and chunk count, while the repository also
+     * requires a positive generation, contiguous indexes, matching dimensions,
+     * and one-to-one correspondence with the local chunks.
+     *
+     * <p>Both of the assertions that this suite makes about the lifecycle
+     * contract — the keyword-only document, and the document whose local chunks
+     * are missing — were built through the three-argument constructor, so they
+     * ran against the fallback. This file is the only place in the repository
+     * where the lifecycle contract is asserted against a real PostgreSQL
+     * instance, and it was asserting the definition production does not use.
+     * A family-B regression could not have failed it.
+     *
+     * <p>Both verdicts came back identical once the repository was attached, so
+     * nothing about the contract changed — the tests had simply been silent
+     * about which definition they were checking. That is the whole point of the
+     * helper: it makes the answer production's, and it fails the next time the
+     * two definitions drift apart.
+     */
+    private DocumentLifecycleService lifecycleWithProductionTruthSource(
+            EmbeddingProfileProvider profileProvider) {
+        DocumentLifecycleService lifecycle = new DocumentLifecycleService(
+                jdbcTemplate, profileProvider, descriptorProvider);
+        lifecycle.setIntegrityRepository(new DerivationIntegrityRepository(
+                jdbcTemplate, profileProvider, descriptorProvider));
+        return lifecycle;
     }
 
     private long insertCollection(String suffix) {

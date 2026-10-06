@@ -416,6 +416,23 @@ node scripts/verify-embedding-state-generation.mjs || {
 }
 pass "Embedding state generation"
 
+# Batch 929. `DocumentLifecycleService` has two definitions of freshness: the
+# shared `DerivationIntegrityRepository` and a narrower fallback in the same
+# class. The only suite asserting the lifecycle contract against a real
+# PostgreSQL instance was using the fallback, so it could not have failed on a
+# regression in the definition production uses.
+node scripts/test-support/lifecycle-truth-source-wiring-self-test.mjs || {
+  echo "Lifecycle truth-source wiring self-test failed; the gate may be missing the shape it exists for." >&2
+  exit 1
+}
+pass "Lifecycle truth-source wiring self-test"
+
+node scripts/verify-lifecycle-truth-source-wiring.mjs || {
+  echo "Lifecycle truth-source wiring check failed." >&2
+  exit 1
+}
+pass "Lifecycle truth source wiring"
+
 # Batch 901. Every automated gate in this repository is required to carry a
 # self-test, and that requirement is discharged by importing the module and
 # calling its functions — which means it cannot see a gate that never runs.
