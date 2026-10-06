@@ -108,7 +108,22 @@ export const ALLOWED = Object.freeze({
 });
 
 const PATTERNS = [
-  { kind: 'jsx-text', re: />\s*([A-Z][A-Za-z0-9 ,.'’!?/&()\-:]{2,})\s*</ },
+  // `%` joined this class in Batch 931, and the reason is worth keeping: the
+  // only literal user-visible string left in the WebUI was
+  // `<h3>Cache Hit Rate (%)</h3>` in MetricsCharts, and this pattern could not
+  // see it. The character class has to match every character up to the closing
+  // tag, so one absent character made the whole string invisible — and a rule
+  // that cannot see a real violation is indistinguishable from a clean file.
+  //
+  // `%` is the only addition, and it is the only one with a proven instance. The
+  // first attempt here also added `<`, `>` and a dozen other characters, which
+  // was wrong in a way only the real tree showed: the class describes what can
+  // appear *inside* a text node, so letting it match `<` let the greedy match
+  // run past the closing tag and produce the copy `RECURRING</option>` instead
+  // of `RECURRING`. `auditAllowlist` keys on the exact copy, so five honest
+  // allowlist entries were reported stale on the spot. Every other character
+  // needs its own instance before it earns a place here.
+  { kind: 'jsx-text', re: />\s*([A-Z][A-Za-z0-9 ,.'’!?/&()%\-:]{2,})\s*</ },
   { kind: 'chart-data', re: /\bname:\s*'([A-Z][A-Za-z0-9 ()]{2,})'/ },
   { kind: 'chart-prop', re: /\bname="([A-Z][A-Za-z0-9 ()]{2,})"/ },
   {

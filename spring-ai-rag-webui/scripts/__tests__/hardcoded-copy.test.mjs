@@ -45,6 +45,60 @@ export function Widget() {
     ]);
   });
 
+  // Batch 931. The character class has to match every character up to the
+  // closing tag, so a single absent character made a whole string invisible.
+  // `<h3>Cache Hit Rate (%)</h3>` was the only literal user-visible string left
+  // in the WebUI, and the rule could not see it. These two cases are the
+  // positive control and its still-passing neighbour: if the class loses `%`
+  // again, the first case goes quiet and the second stays green, which is the
+  // shape of a rule that has stopped looking.
+  it('sees a literal containing a percent sign', () => {
+    const source = `
+import { useTranslation } from 'react-i18next';
+export function Widget() {
+  const { t } = useTranslation();
+  return <h3>Cache Hit Rate (%)</h3>;
+}
+`;
+    expect(kinds('components/Widget.tsx', source)).toEqual([
+      VIOLATION_KINDS.HARDCODED_COPY,
+    ]);
+  });
+
+  it('still reports the copy without a percent sign, so the case above is not the only one', () => {
+    const source = `
+import { useTranslation } from 'react-i18next';
+export function Widget() {
+  const { t } = useTranslation();
+  return <h3>Cache Hit Rate</h3>;
+}
+`;
+    expect(kinds('components/Widget.tsx', source)).toEqual([
+      VIOLATION_KINDS.HARDCODED_COPY,
+    ]);
+  });
+
+  // The mistake this rule invites: widening the class to characters that are
+  // not prose. `<` in the class let the greedy match run past the closing tag
+  // and yield the copy `ASYNC</option>` instead of `ASYNC`, and since
+  // `auditAllowlist` keys on the exact copy, five honest allowlist entries were
+  // reported stale on the spot. A finding carries the copy inside its `detail`,
+  // so that is where the boundary has to be asserted.
+  it('stops the copy at the closing tag', () => {
+    const source = `
+import { useTranslation } from 'react-i18next';
+export function Widget() {
+  const { t } = useTranslation();
+  return <option value="sync">SYNC</option>;
+}
+`;
+    const findings = checkFile('components/Widget.tsx', source, {}, []);
+    expect(findings).toHaveLength(1);
+    expect(findings[0].kind).toBe(VIOLATION_KINDS.HARDCODED_COPY);
+    expect(findings[0].detail).toContain('renders "SYNC" (jsx-text)');
+    expect(findings[0].detail).not.toContain('</option>');
+  });
+
   it('rejects a literal in a component that does use i18n, as a different kind', () => {
     const source = `${WITH_I18N}
 export function Other() { return <h3>Call Volume</h3>; }

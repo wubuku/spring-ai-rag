@@ -61,7 +61,7 @@ describe('MetricsCharts', () => {
     // Section titles
     expect(screen.getByText('metrics.callVolume')).toBeInTheDocument();
     expect(screen.getByText('metrics.avgRetrievalLatency')).toBeInTheDocument();
-    expect(screen.getByText('Cache Hit Rate (%)')).toBeInTheDocument();
+    expect(screen.getByText('metrics.cacheHitRatePercent')).toBeInTheDocument();
     expect(screen.getByText('metrics.modelComparison')).toBeInTheDocument();
 
     // Responsive containers (one per chart section)
@@ -84,16 +84,37 @@ describe('MetricsCharts', () => {
     expect(screen.queryAllByTestId('line-chart').length).toBe(0);
   });
 
-  it('renders with default/zero values when data fields are missing', () => {
-    const minimalData = {};
+  it('does not draw a zero for a metric the server never reported', () => {
+    // Batch 931. This test used to be called "renders with default/zero values
+    // when data fields are missing" and asserted three charts full of zeros. A
+    // zero on the 0–100 cache axis reads as "0% hit rate", which is a claim
+    // about cache behaviour rather than a missing measurement, and the two call
+    // for opposite responses from whoever is reading the dashboard.
+    render(<MetricsCharts data={{}} />);
 
-    render(<MetricsCharts data={minimalData} />);
-
-    // Still renders chart sections with zero values
+    // Section headings stay: the reader should see what exists and does not.
     expect(screen.getByText('metrics.callVolume')).toBeInTheDocument();
     expect(screen.getByText('metrics.avgRetrievalLatency')).toBeInTheDocument();
-    expect(screen.getByText('Cache Hit Rate (%)')).toBeInTheDocument();
-    expect(screen.getAllByTestId('responsive-container').length).toBe(3);
+    expect(screen.getByText('metrics.cacheHitRatePercent')).toBeInTheDocument();
+
+    // No chart at all, because every value is absent.
+    expect(screen.queryAllByTestId('responsive-container').length).toBe(0);
+    expect(screen.queryAllByTestId('bar-chart').length).toBe(0);
+
+    // And it says so, once per section plus the count.
+    expect(screen.getAllByText('metrics.notReported').length).toBe(3);
+    expect(screen.getByText('metrics.omittedCount')).toBeInTheDocument();
+  });
+
+  it('draws only the metrics the server did report', () => {
+    render(<MetricsCharts data={{ totalRetrievals: 12, cacheHitRate: 0.5 }} />);
+
+    const containers = screen.getAllByTestId('responsive-container');
+    // Call volume and cache hit rate are drawn; latency is absent, so it is not.
+    expect(containers.length).toBe(2);
+    // Three omitted in total: llm calls, tokens and the average latency.
+    expect(screen.getByText('metrics.omittedCount')).toBeInTheDocument();
+    expect(screen.getAllByText('metrics.notReported').length).toBe(1);
   });
 
   it('hides Model Comparison section when modelMetrics is empty', () => {
@@ -103,7 +124,7 @@ describe('MetricsCharts', () => {
 
     expect(screen.getByText('metrics.callVolume')).toBeInTheDocument();
     expect(screen.getByText('metrics.avgRetrievalLatency')).toBeInTheDocument();
-    expect(screen.getByText('Cache Hit Rate (%)')).toBeInTheDocument();
+    expect(screen.getByText('metrics.cacheHitRatePercent')).toBeInTheDocument();
     expect(screen.queryByText('metrics.modelComparison')).not.toBeInTheDocument();
 
     const containers = screen.getAllByTestId('responsive-container');
@@ -123,7 +144,12 @@ describe('MetricsCharts', () => {
     expect(containers.length).toBe(4);
   });
 
-  it('renders with missing optional fields using nullish coalescing', () => {
+  it('treats a key present with an undefined value the same as an absent one', () => {
+    // Batch 931. This used to be "renders with missing optional fields using
+    // nullish coalescing" and expected three charts of zeros. The input is kept
+    // because it is a different shape from an absent key — a response can carry
+    // `"totalRetrievals": null` — and both have to read as "not reported"
+    // rather than "zero".
     const partialData = {
       totalRetrievals: undefined,
       totalLlmCalls: undefined,
@@ -136,7 +162,10 @@ describe('MetricsCharts', () => {
     render(<MetricsCharts data={partialData} />);
 
     expect(screen.getByText('metrics.callVolume')).toBeInTheDocument();
-    expect(screen.getAllByTestId('responsive-container').length).toBe(3);
+    // queryAllBy, not getAllBy: getAllBy throws when nothing matches, so it
+    // cannot be used to assert that nothing is there.
+    expect(screen.queryAllByTestId('responsive-container').length).toBe(0);
+    expect(screen.getAllByText('metrics.notReported').length).toBe(3);
   });
   it('toggles between line and bar charts from the type buttons', async () => {
     const user = userEvent.setup();

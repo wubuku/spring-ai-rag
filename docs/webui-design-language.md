@@ -630,6 +630,73 @@ genuinely silent query can hide behind a sibling's `isError`. It fails as a
 miss, never as a false alarm. The self-test pins that case so the gap stays
 visible.
 
+### 9.1 The read succeeded, and the field simply was not there
+
+Both forms above are "the read failed". There is a third, and it slips past
+`check:query-errors`, because **this read succeeded** — the response simply did
+not carry that field. `?? 0` here is not standing for "no value"; it is
+**answering, on the server's behalf, a question the server was never asked**.
+
+On a 0–100 axis a bar at zero reads as "0% hit rate". On a count, a 0 reads as
+"it never happened". Both sentences demand the opposite response to "the
+endpoint did not say": the first sends you to the cache and the model, the
+second sends you to check whether the endpoint is alive at all.
+
+**That is what Batch 931 fixed**, in `MetricsCharts`: call volume, LLM calls,
+tokens, average latency and hit rate all read `?? 0`, so a metrics endpoint
+that returned not one of those fields still produced three complete-looking
+charts whose every number was 0. The shape is the same one `Evaluation.tsx`
+gives in §9, only more expensive — **a chart looks more like a measurement than
+a dash does.** Unreported metrics are now left undrawn, the count of them is
+stated at the top, and the heading `Cache Hit Rate (%)` became an i18n key on
+the way through.
+
+A dash is not the same thing, so none of the `?? '—'` sites were touched: a dash
+says "there is no value here", a 0 says "the value is zero". Those are two
+different sentences.
+
+**And the survey did not come back with "three more to fix".** The same `?? 0`
+splits into two kinds in this repository, and only one of them is fabricating.
+Telling them apart means crossing into Java to see whether the field is a
+primitive.
+
+**Fabricating** — the frontend declares the field optional, and the server
+really can leave it out:
+
+- The five metrics in `MetricsCharts` (fixed).
+- `sampleCount ?? 0` in `ABTest.tsx`, once in the table row and once in the
+  `StatCard`. In the same row, `targetMetric` and `winner` use `?? '—'` — **the
+  component is honest about two of its three neighbours and fabricates the
+  third.** And the field it fabricates **does not exist on the server at all**:
+  `AbTestService.Experiment` stores `minSampleSize`, and `sampleCount` appears
+  nowhere on the Java side. So that column does not just say 0 when the value is
+  unreported — it says 0 for every experiment, because there is no such concept
+  server-side.
+
+**Falling back** — the server guarantees the field is there, so its absence
+would be a broken contract rather than a normal state:
+
+- `formatInteger` in `Metrics.tsx` falls back to `'0'`, while every field of
+  `LlmUsageResponse.Totals` is a primitive `long`, `nonNegativeLong` throws on a
+  negative, and the record carries no `@JsonInclude(NON_NULL)`. The frontend type
+  declares them required too.
+- `asToolResult` in `useSSE.ts` falls back to 0. The evidence is inside the same
+  method: `RagChatController` puts `resultCount` and `elapsedMs`
+  **unconditionally**, while `toolCallId` and `query` on the adjacent lines go
+  through `putIfPresent` — **the author knew how to write an optional field, and
+  did not write one here.**
+- `documentCount ?? 0` in `CollectionScopeSelector.tsx`, while
+  `CollectionMapper.toMap` always puts a primitive `long` in it.
+
+**Which is why "flag every `?? 0`" is the wrong rule.** It would report the whole
+second kind as false alarms on its first run — the exact inverse of the mistake
+of generalising from one branch's measurement to a whole class. The one thing
+that actually separates the two is **who sends the field and whether they can
+leave it out**, and that is not on the frontend side of the wire. It is also why
+there is no gate here: not an oversight, because the only version that could be
+written either false-alarms or needs an allowlist, and a gate that needs an
+allowlist to go green has a baseline that is not a check.
+
 ## 10. An irreversible action must be confirmed
 
 Batch 812 surveyed every action in `src/` that destroys something and found four
