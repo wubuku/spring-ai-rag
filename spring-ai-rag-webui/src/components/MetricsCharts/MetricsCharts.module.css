@@ -54,3 +54,11 @@
   padding: 2rem;
   color: var(--color-text-muted);
 }
+
+/* Batch 931. Says a metric is missing, so it must not read as a value or as
+   chrome. Muted text, no border, no background: the same voice as .loading. */
+.unreported {
+  margin: 0 0 1rem;
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+}

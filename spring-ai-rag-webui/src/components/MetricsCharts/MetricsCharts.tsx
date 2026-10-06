@@ -21,7 +21,6 @@ interface MetricsChartsProps {
     totalLlmTokens?: number;
     avgRetrievalLatencyMs?: number;
     cacheHitRate?: number;
-    activeConversations?: number;
     modelMetrics?: Array<{
       provider: string;
       totalCalls: number;
@@ -42,22 +41,38 @@ export function MetricsCharts({ data }: MetricsChartsProps) {
     return <div className={styles.loading}>{t('common.loading')}</div>;
   }
 
-  // Prepare chart data for main metrics
-  const mainMetricsData = [
-    { name: t('metrics.retrievals'), value: data.totalRetrievals ?? 0 },
-    { name: t('metrics.llmCalls'), value: data.totalLlmCalls ?? 0 },
-    { name: t('metrics.tokens'), value: data.totalLlmTokens ?? 0 },
+  // Batch 931. Every metric used to read `?? 0`, so a response that simply did
+  // not carry a field drew a bar at zero — and on the 0–100 cache axis that is
+  // a green "0% hit rate", which is an operational claim rather than a missing
+  // measurement. A dashboard is read by someone deciding whether to act, and
+  // "no traffic" and "the metrics endpoint did not say" call for opposite
+  // responses. Unreported metrics are left out and counted instead.
+  const volumeMetrics = [
+    { label: t('metrics.retrievals'), value: data.totalRetrievals },
+    { label: t('metrics.llmCalls'), value: data.totalLlmCalls },
+    { label: t('metrics.tokens'), value: data.totalLlmTokens },
   ];
+  const reportedVolume = volumeMetrics.filter(
+    (metric): metric is { label: string; value: number } =>
+      typeof metric.value === 'number',
+  );
+  const omitted = volumeMetrics.length - reportedVolume.length
+    + (typeof data.avgRetrievalLatencyMs === 'number' ? 0 : 1)
+    + (typeof data.cacheHitRate === 'number' ? 0 : 1);
+  const mainMetricsData = reportedVolume.map(metric => ({
+    name: metric.label,
+    value: metric.value,
+  }));
 
   // Latency data
-  const latencyData = [
-    { name: t('metrics.avgLatency'), value: data.avgRetrievalLatencyMs ?? 0 },
-  ];
+  const latencyData = typeof data.avgRetrievalLatencyMs === 'number'
+    ? [{ name: t('metrics.avgLatency'), value: data.avgRetrievalLatencyMs }]
+    : [];
 
   // Cache hit rate (as percentage)
-  const cacheData = [
-    { name: t('metrics.cacheHitRate'), value: Math.round((data.cacheHitRate ?? 0) * 100) },
-  ];
+  const cacheData = typeof data.cacheHitRate === 'number'
+    ? [{ name: t('metrics.cacheHitRate'), value: Math.round(data.cacheHitRate * 100) }]
+    : [];
 
   // Model metrics comparison
   const modelData =
@@ -85,6 +100,11 @@ export function MetricsCharts({ data }: MetricsChartsProps) {
 
   return (
     <div className={styles.container}>
+      {omitted > 0 && (
+        <p className={styles.unreported}>
+          {t('metrics.omittedCount', { count: omitted })}
+        </p>
+      )}
       {/* Chart Type Toggle */}
       <div className={styles.toggle}>
         <button
@@ -104,62 +124,74 @@ export function MetricsCharts({ data }: MetricsChartsProps) {
       {/* Main Metrics Chart */}
       <div className={styles.chartSection}>
         <h3 className={styles.chartTitle}>{t('metrics.callVolume')}</h3>
-        <ResponsiveContainer width="100%" height={250}>
-          {chartType === 'bar' ? (
-            <BarChart data={mainMetricsData}>
-              <CartesianGrid {...gridStyle} />
-              <XAxis dataKey="name" {...axisStyle} />
-              <YAxis {...axisStyle} />
-              <Tooltip
-                contentStyle={tooltipStyle}
-              />
-              <Bar dataKey="value" fill={palette.primary} radius={[4, 4, 0, 0]} />
-            </BarChart>
-          ) : (
-            <LineChart data={mainMetricsData}>
-              <CartesianGrid {...gridStyle} />
-              <XAxis dataKey="name" {...axisStyle} />
-              <YAxis {...axisStyle} />
-              <Tooltip
-                contentStyle={tooltipStyle}
-              />
-              <Line type="monotone" dataKey="value" stroke={palette.primary} strokeWidth={2} dot={{ r: 4 }} />
-            </LineChart>
-          )}
-        </ResponsiveContainer>
+        {mainMetricsData.length > 0 ? (
+          <ResponsiveContainer width="100%" height={250}>
+            {chartType === 'bar' ? (
+              <BarChart data={mainMetricsData}>
+                <CartesianGrid {...gridStyle} />
+                <XAxis dataKey="name" {...axisStyle} />
+                <YAxis {...axisStyle} />
+                <Tooltip
+                  contentStyle={tooltipStyle}
+                />
+                <Bar dataKey="value" fill={palette.primary} radius={[4, 4, 0, 0]} />
+              </BarChart>
+            ) : (
+              <LineChart data={mainMetricsData}>
+                <CartesianGrid {...gridStyle} />
+                <XAxis dataKey="name" {...axisStyle} />
+                <YAxis {...axisStyle} />
+                <Tooltip
+                  contentStyle={tooltipStyle}
+                />
+                <Line type="monotone" dataKey="value" stroke={palette.primary} strokeWidth={2} dot={{ r: 4 }} />
+              </LineChart>
+            )}
+          </ResponsiveContainer>
+        ) : (
+          <p className={styles.unreported}>{t('metrics.notReported')}</p>
+        )}
       </div>
 
       {/* Latency Chart */}
       <div className={styles.chartSection}>
         <h3 className={styles.chartTitle}>{t('metrics.avgRetrievalLatency')}</h3>
-        <ResponsiveContainer width="100%" height={200}>
-          <BarChart data={latencyData}>
-            <CartesianGrid {...gridStyle} />
-            <XAxis dataKey="name" {...axisStyle} />
-            <YAxis {...axisStyle} />
-            <Tooltip
-              contentStyle={tooltipStyle}
-            />
-            <Bar dataKey="value" fill={palette.warning} radius={[4, 4, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
+        {latencyData.length > 0 ? (
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={latencyData}>
+              <CartesianGrid {...gridStyle} />
+              <XAxis dataKey="name" {...axisStyle} />
+              <YAxis {...axisStyle} />
+              <Tooltip
+                contentStyle={tooltipStyle}
+              />
+              <Bar dataKey="value" fill={palette.warning} radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        ) : (
+          <p className={styles.unreported}>{t('metrics.notReported')}</p>
+        )}
       </div>
 
       {/* Cache Hit Rate */}
       <div className={styles.chartSection}>
-        <h3 className={styles.chartTitle}>Cache Hit Rate (%)</h3>
-        <ResponsiveContainer width="100%" height={200}>
-          <BarChart data={cacheData}>
-            <CartesianGrid {...gridStyle} />
-            <XAxis dataKey="name" {...axisStyle} />
-            <YAxis domain={[0, 100]} {...axisStyle} />
-            <Tooltip
-              contentStyle={tooltipStyle}
-              formatter={(value) => [`${value}%`, 'Cache Hit Rate']}
-            />
-            <Bar dataKey="value" fill={palette.success} radius={[4, 4, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
+        <h3 className={styles.chartTitle}>{t('metrics.cacheHitRatePercent')}</h3>
+        {cacheData.length > 0 ? (
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={cacheData}>
+              <CartesianGrid {...gridStyle} />
+              <XAxis dataKey="name" {...axisStyle} />
+              <YAxis domain={[0, 100]} {...axisStyle} />
+              <Tooltip
+                contentStyle={tooltipStyle}
+                formatter={(value) => [`${value}%`, t('metrics.cacheHitRate')]}
+              />
+              <Bar dataKey="value" fill={palette.success} radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        ) : (
+          <p className={styles.unreported}>{t('metrics.notReported')}</p>
+        )}
       </div>
 
       {/* Model Comparison */}
