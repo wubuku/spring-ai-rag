@@ -225,7 +225,8 @@ describe('Metrics', () => {
     ).length).toBeGreaterThan(0);
   });
 
-  it('renders non-numeric token values as raw text', () => {
+  it('renders an unreadable token count as unavailable, not as the raw text', () => {
+    // Batch 940 — see the cost case below for why "raw text" was the wrong contract.
     mockQueries(
       { data: { data: { status: 'UP', components: {} } }, isPending: false },
       { data: { data: {
@@ -242,7 +243,8 @@ describe('Metrics', () => {
 
     render(<Metrics />);
 
-    expect(screen.getByText('not-a-number')).toBeInTheDocument();
+    expect(screen.queryByText('not-a-number')).not.toBeInTheDocument();
+    expect(screen.getAllByText('—').length).toBeGreaterThan(0);
   });
 
   it('renders purpose, mode and day breakdown tables when rows exist', () => {
@@ -300,21 +302,6 @@ describe('Metrics', () => {
 });
 
 describe('Metrics query wiring and numeric format fallbacks', () => {
-  const emptyTotals = {
-    logicalExecutionCount: undefined,
-    invocationCount: null,
-    succeededCount: undefined,
-    failedCount: undefined,
-    cancelledCount: undefined,
-    promptTokens: undefined,
-    completionTokens: undefined,
-    totalTokens: undefined,
-    usageAvailableCount: undefined,
-    usageUnavailableCount: undefined,
-    pricingUnavailableCount: undefined,
-    costUnavailableCount: undefined,
-  };
-
   function mockUsage(usage: unknown) {
     mockUseQuery
       .mockReturnValueOnce({ data: { data: {} }, isPending: false })
@@ -341,35 +328,28 @@ describe('Metrics query wiring and numeric format fallbacks', () => {
     });
   });
 
-  it('renders zero for undefined and null numeric values', () => {
-    mockUsage({
-      data: {
-        data: {
-          recordingEnabled: true,
-          localLostEventsSinceStart: 0,
-          scope: { type: 'SELF', principalId: 'db:test' },
-          from: '2026-08-01',
-          to: '2026-08-27',
-          totals: emptyTotals,
-          costs: [],
-          byModel: [],
-          byPurpose: [],
-          byMode: [],
-          byDay: [],
-        },
-      },
-      isPending: false,
-      isError: false,
-    });
+  // Batch 940 deleted a test here that read "renders zero for undefined and null
+  // numeric values" and asserted four zeros in the summary cards. It existed only to
+  // reach `formatInteger`'s `?? '0'`, and `0` is a claim — it says the count *was* zero
+  // rather than that nobody reported it. It was also unreachable from the real API:
+  // `LlmUsageResponse.Totals` carries nullable `BigDecimal` fields, so null looked
+  // possible, but every `SUM(` in `LlmUsageQueryRepository` is wrapped in
+  // `COALESCE(..., 0)` and `LlmUsageQueryService.totals()` forwards only that. The
+  // frontend type had already said so: `UsageNumericValue = number | string`.
+  //
+  // A test that has to fabricate a state the server cannot produce asserts that the
+  // branch exists, not that it is right. The replacement contract — an absent value
+  // renders `—` — is pinned in `utils/number.test.ts`, where it is reachable.
 
-    render(<Metrics />);
-
-    // 摘要卡 4 个 undefined/null 值全部渲染为 0。
-    const zeros = screen.getAllByText('0');
-    expect(zeros.length).toBe(4);
-  });
-
-  it('renders a non-numeric configured cost as raw text', () => {
+  it('renders a non-numeric configured cost as unavailable, not as the raw text', () => {
+    // Batch 940. This used to read "renders a non-numeric configured cost as raw
+    // text" and asserted `screen.getByText('not-a-price')` — that is, it pinned the
+    // behaviour of showing a person whatever the server sent. It is the same defect
+    // Batch 938 found in `ApiKeys.formatDateTime`, where `toLocaleString()` on an
+    // Invalid Date put the string "Invalid Date" on a Chinese page: the formatter
+    // reported the failure by passing it through. The page already has somewhere to
+    // record a figure it could not obtain (`usageUnavailableCount` and friends), so
+    // nothing is lost by declining to render one.
     mockUsage({
       data: {
         data: {
@@ -410,7 +390,7 @@ describe('Metrics query wiring and numeric format fallbacks', () => {
 
     render(<Metrics />);
 
-    // formatCost 对无法转数字的值原样输出。
-    expect(screen.getByText('not-a-number')).toBeInTheDocument();
+    expect(screen.queryByText('not-a-number')).not.toBeInTheDocument();
+    expect(screen.getAllByText('—').length).toBeGreaterThan(0);
   });
 });

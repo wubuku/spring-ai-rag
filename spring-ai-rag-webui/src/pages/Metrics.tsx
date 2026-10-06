@@ -9,29 +9,7 @@ import type {
 } from '../types/api';
 import styles from './Metrics.module.css';
 import { EmptyState, PageHeader, QueryErrorBanner } from '../components/ui';
-
-function formatInteger(value: UsageNumericValue | undefined): string {
-  if (value === undefined || value === null) return '0';
-  const text = String(value);
-  if (/^\d+$/.test(text)) {
-    try {
-      return new Intl.NumberFormat().format(BigInt(text));
-    } catch {
-      return text;
-    }
-  }
-  const numeric = Number(value);
-  return Number.isFinite(numeric) ? new Intl.NumberFormat().format(numeric) : text;
-}
-
-function formatCost(value: UsageNumericValue): string {
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric)) return String(value);
-  return new Intl.NumberFormat(undefined, {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 8,
-  }).format(numeric);
-}
+import { formatCount, formatDecimal } from '../utils/number';
 
 function UsageTable({
   label,
@@ -60,11 +38,11 @@ function UsageTable({
           {rows.map(row => (
             <tr key={row.key}>
               <th scope="row">{row.key}</th>
-              <td>{formatInteger(row.totals.invocationCount)}</td>
-              <td>{formatInteger(row.totals.totalTokens)}</td>
-              <td>{formatInteger(row.totals.succeededCount)}</td>
-              <td>{formatInteger(row.totals.failedCount)}</td>
-              <td>{formatInteger(row.totals.cancelledCount)}</td>
+              <td>{formatCount(row.totals.invocationCount)}</td>
+              <td>{formatCount(row.totals.totalTokens)}</td>
+              <td>{formatCount(row.totals.succeededCount)}</td>
+              <td>{formatCount(row.totals.failedCount)}</td>
+              <td>{formatCount(row.totals.cancelledCount)}</td>
             </tr>
           ))}
         </tbody>
@@ -117,20 +95,20 @@ function DurableUsage({ usage }: { usage: LlmUsageResponse }) {
             ].map(([key, value]) => (
               <div key={String(key)} className={styles.summaryItem}>
                 <span>{t(`metrics.${key}`)}</span>
-                <strong>{formatInteger(value as UsageNumericValue)}</strong>
+                <strong>{formatCount(value as UsageNumericValue)}</strong>
               </div>
             ))}
           </div>
 
           <div className={styles.availability}>
             <span>
-              {t('metrics.usageMissing')}: {formatInteger(usage.totals.usageUnavailableCount)}
+              {t('metrics.usageMissing')}: {formatCount(usage.totals.usageUnavailableCount)}
             </span>
             <span>
-              {t('metrics.pricingMissing')}: {formatInteger(usage.totals.pricingUnavailableCount)}
+              {t('metrics.pricingMissing')}: {formatCount(usage.totals.pricingUnavailableCount)}
             </span>
             <span>
-              {t('metrics.costMissing')}: {formatInteger(usage.totals.costUnavailableCount)}
+              {t('metrics.costMissing')}: {formatCount(usage.totals.costUnavailableCount)}
             </span>
           </div>
 
@@ -142,7 +120,7 @@ function DurableUsage({ usage }: { usage: LlmUsageResponse }) {
               <ul>
                 {usage.costs.map(cost => (
                   <li key={cost.unit}>
-                    <strong>{formatCost(cost.configuredCost)}</strong>
+                    <strong>{formatDecimal(cost.configuredCost)}</strong>
                     <span>{cost.unit}</span>
                     <small>
                       {t('metrics.costCoverage', {
