@@ -22,22 +22,31 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
 import com.springairag.core.service.ExternalDocumentService;
 import com.springairag.core.service.DocumentDerivationDescriptorProvider;
 import com.springairag.core.service.DocumentRelocationService;
@@ -52,6 +61,7 @@ class RagDocumentControllerAclListTailTest {
     private RagDocumentRepository documentRepository;
     private DocumentEmbedService documentEmbedService;
     private RagDocumentController controller;
+    private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
@@ -85,6 +95,46 @@ class RagDocumentControllerAclListTailTest {
 
 
                 mock(DocumentRelocationService.class));
+        mockMvc = org.springframework.test.web.servlet.setup.MockMvcBuilders
+                .standaloneSetup(controller)
+                .build();
+    }
+
+    /**
+     * Batch 946：跑一次真实的批量嵌入流请求，读回完整 SSE 响应体。
+     *
+     * <p>这两条用例原来都以 {@code assertNotNull(emitter)} 收尾，而 emitter 由
+     * {@code SseEmitters.create()} 无条件造出——把 {@code progress} 事件名改错、把
+     * {@code sendDone} 删掉、把 IAE 分支换成 {@code completeWithError}，用例全绿。
+     * {@code SseEmitter} 没有 handler 时 {@code send} 只是暂存、{@code complete()} 只是
+     * 置标志位，而 {@code initialize} 包级私有、测试拿不到，所以只能走 MockMvc 的
+     * async 通道。套路与 {@code RagDocumentControllerEmbedStreamTest}（Batch 946）一致。
+     */
+    private String batchStreamBody(List<Long> ids) throws Exception {
+        MvcResult started = mockMvc.perform(post("/rag/documents/batch/embed/stream")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"ids\":" + ids + "}"))
+                .andExpect(request().asyncStarted())
+                .andReturn();
+        // 先等异步结果就绪再 dispatch，否则会撞 MockMvc 的 timeToWait=0。
+        started.getAsyncResult(10_000);
+        MvcResult completed = mockMvc.perform(asyncDispatch(started)).andReturn();
+        return new String(
+                completed.getResponse().getContentAsByteArray(),
+                StandardCharsets.UTF_8);
+    }
+
+    private static void assertEmitted(String body, String eventName) {
+        List<String> names = java.util.Arrays.stream(body.split("\n\n"))
+                .map(frame -> frame.lines()
+                        .filter(line -> line.startsWith("event:"))
+                        .map(line -> line.substring("event:".length()).trim())
+                        .findFirst()
+                        .orElse(null))
+                .filter(java.util.Objects::nonNull)
+                .toList();
+        assertTrue(names.contains(eventName),
+                () -> "SSE body carries no " + eventName + " event, only " + names + ":\n" + body);
     }
 
     @AfterEach
@@ -150,7 +200,7 @@ class RagDocumentControllerAclListTailTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    void batchEmbedStreamPublishesProgressAndDone() {
+    void batchEmbedStreamPublishesProgressAndDone() throws Exception {
         authenticateRestrictedKey(2L, 4L);
         RagDocument document = new RagDocument();
         document.setId(1L);
@@ -158,21 +208,37 @@ class RagDocumentControllerAclListTailTest {
         when(documentRepository.findAllById(anyList()))
                 .thenReturn(List.of(document));
         doAnswer(invocation -> {
-            Consumer<Object> callback = invocation.getArgument(1);
-            callback.accept(Map.of("percent", 50));
+            // 这里是 Batch 946 的断言直接抓出来的夹具错误：原来塞的是
+            // `Map.of("percent", 50)`，而回调的真实类型是
+            // Consumer<BatchEmbedProgressEvent>——泛型擦除让它编译通过，
+            // 运行时在桥接方法里抛 ClassCastException，又被控制器的
+            // `catch (Exception) { emitter.completeWithError(e); }` 吞掉。
+            // 而旧用例只断言 emitter 非 null，所以**它一直绿着跑的是"意外异常"
+            // 分支**，名字却写着"进度 + 完成"。
+            Consumer<com.springairag.api.dto.BatchEmbedProgressEvent> callback =
+                    invocation.getArgument(1);
+            callback.accept(new com.springairag.api.dto.BatchEmbedProgressEvent(
+                    0, 1, 1L, "EMBEDDING", 5, 10, "第 1 个文档的第 5 块",
+                    1, 0, 0));
             return Map.of("succeeded", 1, "failed", 0);
         }).when(documentEmbedService)
                 .batchEmbedDocumentsWithProgress(anyList(), any());
 
-        var emitter = controller.batchEmbedDocumentsStream(
-                Map.of("ids", List.of(1L)));
+        String body = batchStreamBody(List.of(1L));
 
-        assertNotNull(emitter);
+        assertEmitted(body, "progress");
+        assertEmitted(body, "done");
+        assertTrue(body.contains("EMBEDDING"),
+                () -> "progress 帧没带上阶段名:\n" + body);
+        assertTrue(body.contains("第 1 个文档的第 5 块"),
+                () -> "progress 帧没带上阶段消息:\n" + body);
+        assertTrue(body.contains("\"total\":1"),
+                () -> "done 帧没带上本批文档数:\n" + body);
     }
 
     @Test
     @SuppressWarnings("unchecked")
-    void batchEmbedStreamMapsIllegalArgumentToSseError() {
+    void batchEmbedStreamMapsIllegalArgumentToSseError() throws Exception {
         authenticateRestrictedKey(2L, 4L);
         RagDocument document = new RagDocument();
         document.setId(1L);
@@ -183,9 +249,14 @@ class RagDocumentControllerAclListTailTest {
                 anyList(), any()))
                 .thenThrow(new IllegalArgumentException("profile missing"));
 
-        var emitter = controller.batchEmbedDocumentsStream(
-                Map.of("ids", List.of(1L)));
+        String body = batchStreamBody(List.of(1L));
 
-        assertNotNull(emitter);
+        // IAE 走 sendError：发一个 error 帧再正常 complete，所以 done 帧不该出现。
+        // 名字说的是"映射成 SSE error"，而映射的目标就是这一个帧。
+        assertEmitted(body, "error");
+        assertTrue(body.contains("profile missing"),
+                () -> "error 帧没带上原始消息:\n" + body);
+        assertFalse(body.contains("event:done"),
+                () -> "出错时不该再发 done 帧:\n" + body);
     }
 }
