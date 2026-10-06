@@ -18,11 +18,16 @@ import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import {
   DECLARER,
+  ENTRY_DECLARER,
+  findUnreadEntryVariables,
   findUnreadHelmVariables,
   isDeployedApplication,
   isFrameworkNamespace,
   MIN_DECLARED,
+  MIN_ENTRY_VARIABLES,
+  parseDeploymentEnvEntries,
   parseHelmSecretEnv,
+  RUNTIME_VARIABLES,
 } from '../verify-helm-env-consumers.mjs';
 
 // `import.meta.url` is a file: `join(here, '..', '..')` lands in `scripts/`.
@@ -102,6 +107,7 @@ test('the deployed application is named positively', () => {
     'spring-ai-rag-starter/src/main/resources/application.yml',
     'spring-ai-rag-webui/src/api/client.ts',
     'k8s/templates/configmap.yaml',
+    'docker/Dockerfile',
   ]) {
     assert.equal(isDeployedApplication(path), true, `deployed: ${path}`);
   }
@@ -115,6 +121,55 @@ test('the deployed application is named positively', () => {
   ]) {
     assert.equal(isDeployedApplication(path), false, `not deployed: ${path}`);
   }
+
+  // The pair that produced a false alarm. The Dockerfile defines the image the chart
+  // deploys, and its `ENV JAVA_TOOL_OPTIONS=…` is a real reader; `docker-compose.yml`
+  // is another deployment path whose `${VAR:-default}` are host-side substitutions.
+  // The first version excluded `docker/**` for the second reason and thereby lost the
+  // first, and the gate reported a violation that did not exist.
+  assert.equal(isDeployedApplication('docker/Dockerfile'), true);
+  assert.equal(isDeployedApplication('docker/docker-compose.yml'), false);
+});
+
+test('`deployment.yaml` per-entry env is checked too, and the runtime list says it is a list', () => {
+  // The first version's header claimed `deployment.yaml` was "not checked" with a
+  // reason that read like an excuse. There were three `- name:` entries in it, so the
+  // limit was hiding real declarations; it is now checked.
+  const entries = parseDeploymentEnvEntries([
+    '          env:',
+    '            - name: JAVA_TOOL_OPTIONS',
+    '              value: {{ printf "-Xmx%s" … }}',
+    '            - name: SERVER_PORT',
+    '              value: "8081"',
+    '            - name: SPRING_CONFIG_ADDITIONAL_LOCATION',
+    '              value: "optional:file:/config/"',
+    '',
+  ].join('\n'));
+  assert.deepEqual(entries.map((v) => v.name), [
+    'JAVA_TOOL_OPTIONS', 'SERVER_PORT', 'SPRING_CONFIG_ADDITIONAL_LOCATION',
+  ]);
+
+  // `imagePullSecrets` shares the `- name:` shape and is not an environment variable;
+  // its value is a Helm expression, so it cannot match anyway — pinned so that stays
+  // true if the pattern is ever loosened.
+  assert.deepEqual(
+    parseDeploymentEnvEntries('          imagePullSecrets:\n            - name: {{ .Values.imagePullSecret }}\n'),
+    [],
+  );
+
+  // The three on the real chart are all accounted for, each by a different mechanism:
+  // the Dockerfile reads one, the namespace rule covers one, and the list holds one.
+  assert.equal(RUNTIME_VARIABLES.length, 1, 'a list that has to be maintained stays short or gets replaced by a rule');
+  assert.ok(RUNTIME_VARIABLES.includes('SERVER_PORT'));
+  assert.ok(!RUNTIME_VARIABLES.includes('MINIMAX_API_KEY_ID'), 'the name that gated a block is not runtime-standard');
+
+  // And the list really is load-bearing: drop it and the chart goes red.
+  const deployment = '          env:\n            - name: SERVER_PORT\n              value: "8081"\n';
+  assert.deepEqual(findUnreadEntryVariables(deployment, []), []);
+  assert.deepEqual(
+    findUnreadEntryVariables('          env:\n            - name: TYPOED_PORT\n              value: "8081"\n', []),
+    [{ name: 'TYPOED_PORT', line: 2 }],
+  );
 });
 
 test('`SPRING_*` is consumed by the framework, as a namespace and not as a list', () => {

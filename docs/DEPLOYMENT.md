@@ -123,7 +123,7 @@ export RAG_ROOT_API_KEY="$(openssl rand -base64 48 | tr -d '\n')"
 
 ```bash
 curl http://localhost:8081/api/v1/rag/search?query=example \
-  -H "Authorization: Bearer ${RAG_BUSINESS_API_KEY}"
+  -H "Authorization: Bearer ${RAG_ROOT_API_KEY}"
 ```
 
 部署边界：

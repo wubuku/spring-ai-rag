@@ -512,4 +512,19 @@ pass "Helm-env-consumers self-test"
 node scripts/verify-helm-env-consumers.mjs
 pass "Helm env consumers"
 
+# Batch 937. `_helpers.tpl` carried three helpers nothing ever included, describing a
+# strategy that is not the one in force — and one of them read a value (`jvm.heapPercent`)
+# that no values file declares, so an operator could set it and nothing would happen.
+# "A mention is a use" needed three exclusions elsewhere; a helper's visibility does not,
+# which is why this rule carries no allowlist.
+node scripts/test-support/helm-helper-liveness-self-test.mjs >/dev/null || {
+  echo "Helm-helper-liveness self-test failed; the gate may no longer reject anything." >&2
+  node scripts/test-support/helm-helper-liveness-self-test.mjs >&2 || true
+  exit 1
+}
+pass "Helm-helper-liveness self-test"
+
+node scripts/verify-helm-helper-liveness.mjs
+pass "Helm helper liveness"
+
 echo "Repository gate chain: $PASS_COUNT checks passed."

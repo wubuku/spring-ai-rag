@@ -471,6 +471,30 @@ export const GATES = [
     noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
   },
 
+  // Batch 937. `_helpers.tpl` defined three helpers that no template ever included,
+// and they described a strategy that is **not the one in force**: `jvm-heap`
+  // computed the heap from `jvm.heapPercent` while `deployment.yaml` reads
+  // `jvm.maxHeap` directly, and `spring-profile` read a top-level
+  // `.Values.springProfile` that `values.yaml` never declares while the profile
+  // actually travels as `SPRING_PROFILES_ACTIVE` from `secret.yaml`.
+  //
+  // The cost of leaving them is not only dead code: `jvm.heapPercent` was a knob an
+  // operator could `--set` and nothing would happen.
+  //
+  // This rule has no allowlist, which is the point worth recording. "A mention is a
+  // use" needed three exclusions in Batch 935 because those are different things; a
+  // Helm helper's visibility is decided by the template language itself, with nothing
+  // in between. It deliberately does **not** check whether `.Values.*` paths exist:
+  // measured, ten template references resolve nowhere, eight of them optional keys
+  // under a `with` / `if` guard plus Helm's reserved `global` and the `postgresql`
+  // subchart block. Checking it would cry wolf eight times, so it does not.
+  {
+    gate: 'scripts/verify-helm-helper-liveness.mjs',
+    kind: 'gate',
+    selfTest: 'scripts/test-support/helm-helper-liveness-self-test.mjs',
+    noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
+  },
+
   // Run by scripts/verify-project-docs.sh.
   {
     gate: 'scripts/verify-no-pessimistic-locks.sh',
