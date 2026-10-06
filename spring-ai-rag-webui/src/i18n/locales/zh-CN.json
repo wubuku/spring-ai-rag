@@ -513,6 +513,7 @@
     "experimentsLoadFailed": "无法加载实验列表",
     "experimentLoadFailed": "无法加载该实验",
     "analysisLoadFailed": "无法加载该实验的分析结果",
+    "showingCount": "显示 {{shown}} / {{total}} 个实验。",
     "subtitle": "在同一批标注问题上对比检索配置，看哪个变体真的更好。"
   },
   "apiKeys": {

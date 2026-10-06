@@ -54,6 +54,15 @@
   background: var(--color-surface);
 }
 
+/* Batch 932. Says the list is a page of something larger, which is the whole
+   reason the list endpoint answers with an envelope. Muted, not an error: the
+   page did its job. */
+.tableFoot {
+  margin: 0.75rem 0 0;
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+}
+
 .name {
   font-weight: 500;
   overflow: hidden;

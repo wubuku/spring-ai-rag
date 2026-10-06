@@ -26,7 +26,15 @@ import org.springframework.transaction.PlatformTransactionManager;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -1237,5 +1245,251 @@ class OpenApiContractTest {
         assertThat(schema.path("maxLength").asInt())
                 .as("Parameter '%s' maxLength", name)
                 .isEqualTo(maxLength);
+    }
+
+    /**
+     * The consumer direction of the same contract: every route the WebUI asks
+     * for has to be a route this application actually serves.
+     *
+     * <p>Batch 932. Everything else in this class asks whether the server keeps
+     * its own promises — that a documented schema exists, that a required path is
+     * present. Those checks pass just as happily when a whole page calls
+     * endpoints that were never mounted, because the spec is generated from the
+     * server and says nothing about who is calling it. So the A/B test page
+     * could ask for {@code /api/v1/rag/experiments} for its whole life while the
+     * controller sat at {@code /api/v1/rag/ab} — ten calls, every one a 404,
+     * and not one assertion anywhere noticed.
+     *
+     * <p>The route table is read from the running spec rather than parsed out of
+     * the Java sources on purpose. A regex over annotations produces a table that
+     * looks authoritative and is quietly wrong in whatever shapes it does not
+     * cover — the survey that found this missed fourteen good routes before
+     * anyone looked — and a table that is wrong in the direction of "missing"
+     * produces false alarms, which is how a gate like this dies.
+     *
+     * <p>It lives as a nested class rather than a second top-level test so it
+     * joins the same cached Spring context: the property block and the 33
+     * {@code @MockBean} declarations below are what Spring keys the context
+     * cache on, and redeclaring them in a second class would buy a second
+     * context boot for no gain.
+     *
+     * <p><b>Known limit, registered here rather than left for someone to
+     * rediscover:</b> the scan reads {@code apiClient.<verb>('…')}. A call made
+     * as {@code apiClient.request({ url: '…' })} would not be seen, and a module
+     * that moved wholesale to that shape would drop out of the count without
+     * turning anything red on its own — only the floor below would notice, and
+     * only if enough other call sites remained. {@code request} appears nowhere
+     * in {@code src/api} today, which is why it is not handled speculatively.
+     */
+    @Nested
+    @DisplayName("WebUI Route Contract")
+    class WebUiRouteContract {
+
+        /** apiClient's baseURL, read from source so the test cannot drift from it. */
+        private static final java.util.regex.Pattern BASE_URL_PATTERN =
+                java.util.regex.Pattern.compile(
+                        "const\\s+BASE_URL\\s*=\\s*['\"]([^'\"]+)['\"]");
+
+        /**
+         * A call site: {@code apiClient.<verb><Type>('/path')}. The generic
+         * parameter is matched reluctantly so a nested type argument
+         * ({@code get<Array<Foo>>}) does not terminate the match at the first
+         * {@code >}.
+         *
+         * <p>All three string styles have to be listed, and the single-quoted
+         * one is the one the api modules actually use. The first version of this
+         * pattern offered only double quotes and backticks — the same mistake as
+         * the missing {@code %} in {@code check-hardcoded-copy} two batches ago,
+         * and it failed the same way: silently. It found 47 of the 105 call sites
+         * and reported a clean sweep over the half it could see. The floor
+         * assertion below is what turned that into a red test instead of a green
+         * one, which is the whole reason it is here.
+         */
+        private static final java.util.regex.Pattern CALL_SITE =
+                java.util.regex.Pattern.compile(
+                        "apiClient\\.(get|post|put|delete|patch)(?:<.*?>)?\\s*\\(\\s*"
+                                + "(\"[^\"]*\"|'[^']*'|`[^`]*`)");
+
+        /** A path variable, on either side: {@code ${id}} from TS, {@code {id}} from the spec. */
+        private static final java.util.regex.Pattern PATH_VARIABLE =
+                java.util.regex.Pattern.compile("\\$\\{[^}]*\\}|\\{[^}]*\\}");
+
+        /**
+         * A floor on how many call sites the scan must find. Without it, a
+         * scanner that silently stopped matching anything would report "every
+         * route the WebUI asks for exists" over an empty set, and a survey that
+         * finds zero has to be checked against a known positive before it is
+         * believed — here, that check is built into the test.
+         */
+        private static final int MIN_CALL_SITES = 90;
+
+        private record CallSite(String file, int line, String verb, String path) {
+            @Override
+            public String toString() {
+                return verb + " " + path + "  (" + file + ":" + line + ")";
+            }
+        }
+
+        @Test
+        @DisplayName("Every route the WebUI calls is a route this application serves")
+        void everyWebUiRoute_isServed() throws Exception {
+            Path apiDir = locateWebUiApiDirectory();
+            String baseUrl = readBaseUrl(apiDir);
+            List<CallSite> calls = scanCallSites(apiDir, baseUrl);
+
+            assertThat(calls)
+                    .as("the scan found suspiciously few call sites — a scanner that "
+                            + "matches nothing would pass this test vacuously")
+                    .hasSizeGreaterThanOrEqualTo(MIN_CALL_SITES);
+
+            Set<String> served = servedRoutes();
+
+            List<String> unrouted = calls.stream()
+                    .filter(call -> !served.contains(call.verb() + " " + shape(call.path())))
+                    .map(CallSite::toString)
+                    .toList();
+
+            assertThat(unrouted)
+                    .as("the WebUI calls these routes, but no handler serves them. "
+                            + "%d of %d call sites matched. Mount path: %s",
+                            calls.size() - unrouted.size(), calls.size(), baseUrl)
+                    .isEmpty();
+        }
+
+        @Test
+        @DisplayName("The scan is pointed at the real API modules, not an empty directory")
+        void scan_coversTheApiModules() throws Exception {
+            Path apiDir = locateWebUiApiDirectory();
+            List<CallSite> calls = scanCallSites(apiDir, readBaseUrl(apiDir));
+
+            // Known positives, by module. If the scanner's shape ever stops
+            // matching how the api modules are actually written, this fails with
+            // a name instead of the suite going quietly hollow.
+            assertThat(calls.stream().map(CallSite::file).distinct())
+                    .as("the scan must reach the single-quoted and backtick call styles "
+                            + "across every api module, not just some of them")
+                    .contains("documents.ts", "collections.ts", "chat.ts", "files.ts",
+                            "abtest.ts", "alerts.ts", "apikeys.ts");
+
+            // One of each call style, so a regression in either regex is named.
+            assertThat(calls)
+                    .as("backtick call sites (template literals) must be found")
+                    .anyMatch(call -> call.path().contains("{"));
+            assertThat(calls)
+                    .as("single-quoted call sites must be found")
+                    .anyMatch(call -> call.path().endsWith("/health"));
+        }
+
+        // ==================== support ====================
+
+        /**
+         * Locates {@code spring-ai-rag-webui/src/api} by walking up from the
+         * working directory, so it does not depend on Maven's module layout.
+         * Fails loudly rather than returning null: a test that quietly scanned
+         * nothing is the exact failure mode this class exists to prevent.
+         */
+        private Path locateWebUiApiDirectory() {
+            Path dir = Path.of("").toAbsolutePath();
+            while (dir != null) {
+                Path candidate = dir.resolve("spring-ai-rag-webui/src/api");
+                if (Files.isDirectory(candidate)) {
+                    return candidate;
+                }
+                dir = dir.getParent();
+            }
+            throw new IllegalStateException(
+                    "could not find spring-ai-rag-webui/src/api above "
+                            + Path.of("").toAbsolutePath()
+                            + " — the route contract test cannot verify anything without it");
+        }
+
+        private String readBaseUrl(Path apiDir) throws IOException {
+            String client = Files.readString(apiDir.resolve("client.ts"));
+            java.util.regex.Matcher matcher =
+                    BASE_URL_PATTERN.matcher(client);
+            assertThat(matcher.find())
+                    .as("client.ts must declare BASE_URL; the scan composes paths from it "
+                            + "rather than hardcoding a prefix that could drift")
+                    .isTrue();
+            return matcher.group(1);
+        }
+
+        private List<CallSite> scanCallSites(Path apiDir, String baseUrl) throws IOException {
+            List<CallSite> calls = new ArrayList<>();
+            try (Stream<Path> files = Files.list(apiDir)) {
+                for (Path file : files
+                        .filter(p -> p.getFileName().toString().endsWith(".ts"))
+                        .filter(p -> !p.getFileName().toString().endsWith(".test.ts"))
+                        .filter(p -> !p.getFileName().toString().endsWith(".d.ts"))
+                        .sorted()
+                        .toList()) {
+                    String source = Files.readString(file);
+                    java.util.regex.Matcher matcher = CALL_SITE.matcher(source);
+                    while (matcher.find()) {
+                        String literal = matcher.group(2);
+                        String path = literal.startsWith("`")
+                                ? literal.substring(1, literal.length() - 1)
+                                : literal.substring(1, literal.length() - 1);
+                        // Query strings are not part of a route: the spec keys on
+                        // the path alone. Strip before comparing, or every call
+                        // carrying params would look unrouted.
+                        int query = path.indexOf('?');
+                        if (query >= 0) {
+                            path = path.substring(0, query);
+                        }
+                        if (!path.startsWith("/")) {
+                            continue;
+                        }
+                        int line = (int) source.substring(0, matcher.start()).lines().count();
+                        calls.add(new CallSite(
+                                file.getFileName().toString(),
+                                line,
+                                matcher.group(1).toUpperCase(java.util.Locale.ROOT),
+                                baseUrl + path));
+                    }
+                }
+            }
+            return calls;
+        }
+
+        /**
+         * Every {@code VERB /path/pattern} this application serves, with both
+         * sides reduced to the same shape so that {@code /a/${id}/b} and
+         * {@code /a/{id}/b} compare equal.
+         */
+        private Set<String> servedRoutes() throws Exception {
+            MvcResult result = mockMvc.perform(get(OPENAPI_SPEC_PATH))
+                    .andExpect(status().isOk())
+                    .andReturn();
+            JsonNode paths = objectMapper.readTree(result.getResponse().getContentAsString())
+                    .path("paths");
+
+            Set<String> served = new HashSet<>();
+            Iterator<String> pathIt = paths.fieldNames();
+            while (pathIt.hasNext()) {
+                String path = pathIt.next();
+                JsonNode item = paths.path(path);
+                Iterator<String> verbIt = item.fieldNames();
+                while (verbIt.hasNext()) {
+                    String field = verbIt.next();
+                    if (HTTP_METHODS.contains(field)) {
+                        served.add(field.toUpperCase(java.util.Locale.ROOT) + " " + shape(path));
+                    }
+                }
+            }
+            return served;
+        }
+
+        private static final java.util.Set<String> HTTP_METHODS = java.util.Set.of(
+                "get", "post", "put", "delete", "patch", "head", "options");
+
+        /** Both sides to one comparable form: path variables become {@code *}. */
+        private static String shape(String path) {
+            String shaped = PATH_VARIABLE.matcher(path).replaceAll("*");
+            // A trailing slash is not a different route.
+            return shaped.endsWith("/") && shaped.length() > 1
+                    ? shaped.substring(0, shaped.length() - 1)
+                    : shaped;
+        }
     }
 }

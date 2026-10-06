@@ -80,7 +80,7 @@ function ExperimentList({ onSelect }: { onSelect: (id: number) => void }) {
         <QueryErrorBanner onRetry={() => void refetch()} retryLabel={t('common.retry')}>
           {t('abtest.experimentsLoadFailed')}
         </QueryErrorBanner>
-      ) : !data?.data?.length ? (
+      ) : !data?.data?.items?.length ? (
         <EmptyState>{t('abtest.noExperiments')}</EmptyState>
       ) : (
         <div className={styles.table}>
@@ -92,7 +92,7 @@ function ExperimentList({ onSelect }: { onSelect: (id: number) => void }) {
             <span>{t('abtest.winner')}</span>
             <span>{t('abtest.actions')}</span>
           </div>
-          {data.data.map(exp => (
+          {data.data.items.map(exp => (
             <div key={exp.id} className={styles.tableRow}>
               <span className={styles.name}>{exp.experimentName}</span>
               <span>
@@ -101,7 +101,11 @@ function ExperimentList({ onSelect }: { onSelect: (id: number) => void }) {
                 </StatusBadge>
               </span>
               <span>{exp.targetMetric ?? '—'}</span>
-              <span>{exp.sampleCount ?? 0}</span>
+              {/* Batch 932: this used to be `sampleCount ?? 0`, against a field
+                  the server never had. It is a required number now, and a
+                  regression shows up as a type error rather than a plausible
+                  zero. */}
+              <span>{exp.sampleCount}</span>
               <span>{exp.winner ?? '—'}</span>
               <span>
                 <Button
@@ -113,6 +117,17 @@ function ExperimentList({ onSelect }: { onSelect: (id: number) => void }) {
               </span>
             </div>
           ))}
+          {/* The envelope knows how many experiments exist beyond this page.
+              A bare array could not say so, and a list that quietly stops at
+              the page size reads as "that is all of them". */}
+          {data.data.totalElements > data.data.items.length && (
+            <p className={styles.tableFoot}>
+              {t('abtest.showingCount', {
+                shown: data.data.items.length,
+                total: data.data.totalElements,
+              })}
+            </p>
+          )}
         </div>
       )}
 
@@ -238,7 +253,7 @@ function ExperimentDetail({ experimentId, onBack }: { experimentId: number; onBa
       {/* Stats Summary */}
       <div className={styles.statsGrid}>
         <StatCard label={t('abtest.targetMetric')} value={exp.data.targetMetric ?? '—'} />
-        <StatCard label={t('abtest.samples')} value={String(exp.data.sampleCount ?? 0)} />
+        <StatCard label={t('abtest.samples')} value={String(exp.data.sampleCount)} />
         <StatCard label={t('abtest.winner')} value={exp.data.winner ?? t('abtest.noWinner')} />
         <StatCard label={t('abtest.confidence')} value={analysis ? `${(analysis.data.confidenceLevel * 100).toFixed(1)}%` : '—'} />
       </div>

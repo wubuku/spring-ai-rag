@@ -343,4 +343,67 @@ class AbTestControllerTest {
         assertTrue(str.contains("retrievedDocIds"));
         assertTrue(str.contains("metrics"));
     }
+
+    // ==================== listExperiments / getExperiment (Batch 932) ====================
+
+    @Test
+    void listExperiments_returnsTheEnvelopeWithItsTotal() {
+        // Batch 932: the envelope is the point. A bare list could not say how
+        // many experiments exist past the page, so a truncated page read as a
+        // complete one.
+        AbTestService.Experiment exp = new AbTestService.Experiment();
+        exp.setId(1L);
+        exp.setExperimentName("rerank-a-b");
+        exp.setStatus("DRAFT");
+        exp.setSampleCount(420);
+        when(abTestService.listExperiments(0, 100))
+                .thenReturn(new AbTestService.ExperimentPage(List.of(exp), 0, 100, 312, 4));
+
+        ResponseEntity<AbTestService.ExperimentPage> response =
+                controller.listExperiments(0, 100);
+
+        assertEquals(200, response.getStatusCode().value());
+        assertEquals(312, response.getBody().totalElements());
+        assertEquals(4, response.getBody().totalPages());
+        assertEquals(420, response.getBody().items().get(0).getSampleCount());
+    }
+
+    @Test
+    void listExperiments_passesTheRequestedWindowThrough() {
+        when(abTestService.listExperiments(anyInt(), anyInt()))
+                .thenReturn(new AbTestService.ExperimentPage(List.of(), 2, 25, 0, 0));
+
+        controller.listExperiments(2, 25);
+
+        // A controller that ignored the window and returned page 0 would still
+        // answer 200 with a plausible body, and the UI would show the wrong
+        // experiments with no error anywhere.
+        verify(abTestService).listExperiments(2, 25);
+    }
+
+    @Test
+    void getExperiment_returnsTheRequestedExperiment() {
+        AbTestService.Experiment exp = new AbTestService.Experiment();
+        exp.setId(5L);
+        exp.setExperimentName("rerank-a-b");
+        exp.setSampleCount(42);
+        when(abTestService.getExperiment(5L)).thenReturn(exp);
+
+        ResponseEntity<AbTestService.Experiment> response = controller.getExperiment(5L);
+
+        assertEquals(200, response.getStatusCode().value());
+        assertEquals("rerank-a-b", response.getBody().getExperimentName());
+        assertEquals(42, response.getBody().getSampleCount());
+    }
+
+    @Test
+    void getExperiment_unknownId_propagatesSoTheClientCanSayNotFound() {
+        when(abTestService.getExperiment(404L))
+                .thenThrow(new IllegalArgumentException("Experiment not found: 404"));
+
+        // The controller does not swallow this into a 200 with a null body: an
+        // empty body would render as an experiment that exists and has nothing
+        // in it.
+        assertThrows(IllegalArgumentException.class, () -> controller.getExperiment(404L));
+    }
 }

@@ -2582,6 +2582,35 @@ not reported as a quality improvement.
 
 ## A/B Tests — Experiment Management
 
+### `GET /api/v1/rag/ab/experiments`
+
+One page of experiments across **every status**, newest first. Query parameters
+`page` (default 0) and `size` (default 20, capped at 200). Returns the paging
+envelope `{ items, page, size, totalElements, totalPages }`.
+
+Added in Batch 932. The WebUI's experiment list called exactly this path and
+**no handler served it**, so the whole page was a set of 404s against a real
+server. The envelope rather than a bare array is the point: an array cannot say
+how many experiments exist past the page, and a list that stops at the page size
+reads as "that is all of them".
+
+This is deliberately not an alias for `GET /experiments/running`. The list shows
+DRAFT, PAUSED and STOPPED badges, so answering it with the running subset would
+have quietly hidden an experiment the user had just created.
+
+Each item carries `sampleCount`: how many results have actually been **recorded**
+for that experiment. `minSampleSize` is the configured minimum and is a different
+number with a different meaning — do not substitute one for the other. The list
+reads the whole page's counts with one grouped query, not one count per row.
+
+### `GET /api/v1/rag/ab/experiments/{id}`
+
+One experiment by id. 404 when it does not exist (the service throws
+`IllegalArgumentException("Experiment not found: {id}")`).
+
+Added in Batch 932, for the same reason: the detail view called this path and
+there was no handler behind it.
+
 ### `POST /api/v1/rag/ab/experiments`
 
 Create an A/B experiment.

@@ -9,7 +9,9 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,6 +27,13 @@ import java.util.stream.Collectors;
 public class AbTestServiceImpl implements AbTestService {
 
     private static final Logger log = LoggerFactory.getLogger(AbTestServiceImpl.class);
+
+    /**
+     * Upper bound on one page of experiments. Batch 932: the WebUI asks for 100,
+     * and a list endpoint with no ceiling is an endpoint someone eventually asks
+     * for a million rows from.
+     */
+    private static final int MAX_PAGE_SIZE = 200;
 
     private final RagAbExperimentRepository experimentRepository;
     private final RagAbResultRepository resultRepository;
@@ -55,7 +64,11 @@ public class AbTestServiceImpl implements AbTestService {
 
         RagAbExperiment saved = experimentRepository.save(entity);
         log.info("Created experiment: {}", saved.getExperimentName());
-        return toExperiment(saved);
+        // A just-created experiment has no results, and that is a measurement
+        // rather than a stand-in: nothing could have been recorded against an id
+        // that did not exist a moment ago. So the count is known to be zero
+        // without asking.
+        return toExperiment(saved, 0L);
     }
 
     @Override
@@ -142,9 +155,75 @@ public class AbTestServiceImpl implements AbTestService {
     @Override
     @Transactional(readOnly = true)
     public List<Experiment> getRunningExperiments() {
-        return experimentRepository.findRunningExperiments().stream()
-                .map(this::toExperiment)
-                .toList();
+        return toExperiments(experimentRepository.findRunningExperiments());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ExperimentPage listExperiments(int page, int size) {
+        int safePage = Math.max(page, 0);
+        int safeSize = Math.min(Math.max(size, 1), MAX_PAGE_SIZE);
+        Page<RagAbExperiment> found = experimentRepository
+                .findAll(PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.DESC, "createdAt")));
+
+        return new ExperimentPage(
+                toExperiments(found.getContent()),
+                safePage,
+                safeSize,
+                found.getTotalElements(),
+                found.getTotalPages());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Experiment getExperiment(Long id) {
+        if (id == null) {
+            throw new IllegalArgumentException("Experiment id must not be null");
+        }
+        RagAbExperiment entity = experimentRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Experiment not found: " + id));
+        // Routed through the batch mapper so the count is fetched the same way
+        // it is for a page of them, rather than by a second code path that
+        // could report a zero nobody measured.
+        return toExperiments(List.of(entity)).get(0);
+    }
+
+    /**
+     * Maps a batch of experiments and fills in the sample counts with one
+     * grouped query.
+     *
+     * <p>Batch 932. Every path that returns an experiment goes through here,
+     * including the single-experiment lookup — a second mapping method would be
+     * one more place where the count could quietly become a zero, and a zero in
+     * this column is a measurement the UI will show.
+     *
+     * <p>An experiment with no recorded results is <i>absent</i> from the grouped
+     * count rather than present with a zero, so the {@code 0L} below is the
+     * default and not a lookup that missed. That direction matters: a sample is
+     * a result row, so no rows means no samples, and treating the absence as
+     * unknown would report every fresh experiment as having samples.
+     */
+    private List<Experiment> toExperiments(List<RagAbExperiment> entities) {
+        if (entities.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, Long> counts = sampleCounts(
+                entities.stream().map(RagAbExperiment::getId).toList());
+
+        List<Experiment> experiments = new ArrayList<>(entities.size());
+        for (RagAbExperiment entity : entities) {
+            experiments.add(toExperiment(entity, counts.getOrDefault(entity.getId(), 0L)));
+        }
+        return experiments;
+    }
+
+    private Map<Long, Long> sampleCounts(List<Long> experimentIds) {
+        Map<Long, Long> counts = new HashMap<>();
+        for (RagAbResultRepository.ExperimentResultCount row
+                : resultRepository.countResultsByExperimentIds(experimentIds)) {
+            counts.put(row.getExperimentId(), row.getTotal());
+        }
+        return counts;
     }
 
     @Override
@@ -320,7 +399,10 @@ public class AbTestServiceImpl implements AbTestService {
         return pooledSE > 0 ? meanDiff / pooledSE : 0.0;
     }
 
-    private Experiment toExperiment(RagAbExperiment entity) {
+    /**
+     * @param sampleCount results recorded for this experiment.
+     */
+    private Experiment toExperiment(RagAbExperiment entity, long sampleCount) {
         Experiment dto = new Experiment();
         dto.setId(entity.getId());
         dto.setExperimentName(entity.getExperimentName());
@@ -329,6 +411,7 @@ public class AbTestServiceImpl implements AbTestService {
         dto.setTrafficSplit(entity.getTrafficSplit());
         dto.setTargetMetric(entity.getTargetMetric());
         dto.setMinSampleSize(entity.getMinSampleSize());
+        dto.setSampleCount(sampleCount);
         dto.setStartTime(entity.getStartTime());
         dto.setEndTime(entity.getEndTime());
         dto.setCreatedAt(entity.getCreatedAt());

@@ -513,6 +513,7 @@
     "experimentsLoadFailed": "Could not load experiments",
     "experimentLoadFailed": "Could not load this experiment",
     "analysisLoadFailed": "Could not load the analysis for this experiment",
+    "showingCount": "Showing {{shown}} of {{total}} experiments.",
     "subtitle": "Compare retrieval configurations against labelled queries and see which variant actually wins."
   },
   "apiKeys": {
