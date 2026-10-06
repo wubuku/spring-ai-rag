@@ -133,8 +133,9 @@ public class LegacyEmbeddingMigrationService {
         jdbcTemplate.update(
                 "INSERT INTO rag_document_embedding_state "
                         + "(document_id, embedding_profile_id, content_hash, chunker_version, "
-                        + "status, chunk_count, completed_at, updated_at) "
-                        + "VALUES (?, ?, ?, 'legacy-adopted-unknown', 'COMPLETED', ?, NOW(), NOW()) "
+                        + "status, chunk_count, request_generation, "
+                        + "completed_at, updated_at) "
+                        + "VALUES (?, ?, ?, 'legacy-adopted-unknown', 'COMPLETED', ?, 1, NOW(), NOW()) "
                         + "ON CONFLICT (document_id, embedding_profile_id) DO UPDATE SET "
                         + "content_hash = EXCLUDED.content_hash, "
                         + "chunker_version = EXCLUDED.chunker_version, "

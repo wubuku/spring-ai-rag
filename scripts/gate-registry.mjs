@@ -265,6 +265,26 @@ export const GATES = [
     noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
   },
 
+  // Batch 928. `DerivationIntegrityRepository` requires `vector_generation > 0`
+  // before it will call a vector fresh, and three production writers wrote
+  // `rag_document_embedding_state` without naming `request_generation`, so a new
+  // row took the column default — 0 until V60. A document whose vectors had just
+  // been committed, with a matching hash, a matching chunker and no error
+  // anywhere, was classified CORRUPT and surfaced as `embeddingStatus=FAILED`
+  // with a null error: 69 of 82 rows on a live instance, and
+  // `run-retrieval-regression.sh` aborting on its third fixture. The rule covers
+  // the writers and the schema separately, because a correct writer and a schema
+  // that cannot object are two different failures and only the second is
+  // permanent. The test tree is out of scope on purpose: two fixtures there omit
+  // the column to seed a pre-V42 shape and to assert the new default, and since
+  // V60 the default is a value the integrity repository can read.
+  {
+    gate: 'scripts/verify-embedding-state-generation.mjs',
+    kind: 'gate',
+    selfTest: 'scripts/test-support/embedding-state-generation-self-test.mjs',
+    noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
+  },
+
   // Batch 873. ErrorCode declares itself the single source of truth, and six of
   // the codes the API really returns were not in it, so no title or problem-type
   // URI could be derived from them. The rule also pins the status beside a code

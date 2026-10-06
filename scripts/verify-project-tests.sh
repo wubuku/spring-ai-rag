@@ -397,6 +397,25 @@ node scripts/verify-port-probe-authority.mjs || {
 }
 pass "Port probe authority"
 
+# Batch 928. `DerivationIntegrityRepository` requires a positive
+# `request_generation` before it calls a vector fresh, and three production
+# writers left the column out of their INSERT, so a new state row took the
+# default of 0 and a correctly embedded document was reported
+# `embeddingStatus=FAILED` with a null error. The self-test feeds the rule the
+# pre-fix text of all three writers, copied with the `+ "..."` concatenation the
+# first version of the pattern did not survive.
+node scripts/test-support/embedding-state-generation-self-test.mjs || {
+  echo "Embedding state-generation self-test failed; the gate may be missing the shape it exists for." >&2
+  exit 1
+}
+pass "Embedding state-generation self-test"
+
+node scripts/verify-embedding-state-generation.mjs || {
+  echo "Embedding state-generation check failed." >&2
+  exit 1
+}
+pass "Embedding state generation"
+
 # Batch 901. Every automated gate in this repository is required to carry a
 # self-test, and that requirement is discharged by importing the module and
 # calling its functions — which means it cannot see a gate that never runs.
