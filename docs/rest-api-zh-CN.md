@@ -417,7 +417,7 @@ model ID 是服务端配置的 RAG alias，例如 `rag-default`，表示 Chat mo
 ```bash
 curl http://localhost:8081/v1/chat/completions \
   -H 'Content-Type: application/json' \
-  -H "Authorization: Bearer ${RAG_BUSINESS_API_KEY}" \
+  -H "Authorization: Bearer ${RAG_ROOT_API_KEY}" \
   -H 'X-RAG-Collection-Key: brand:guides' \
   -H 'X-RAG-Collection-Key: brand:faq' \
   -d '{"model":"rag-default","messages":[{"role":"user","content":"查找风格基调"}]}'
@@ -950,7 +950,7 @@ WebUI 管理台入口为 `/webui/unlock`。root credential 只保存在页面内
 
 ```bash
 curl "http://localhost:8081/api/v1/rag/search?query=Spring%20AI" \
-  -H "Authorization: Bearer ${RAG_BUSINESS_API_KEY}"
+  -H "Authorization: Bearer ${RAG_ROOT_API_KEY}"
 ```
 
 

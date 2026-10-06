@@ -465,7 +465,7 @@ Collection headers are repeated and are never comma-joined:
 ```bash
 curl http://localhost:8081/v1/chat/completions \
   -H 'Content-Type: application/json' \
-  -H "Authorization: Bearer ${RAG_BUSINESS_API_KEY}" \
+  -H "Authorization: Bearer ${RAG_ROOT_API_KEY}" \
   -H 'X-RAG-Collection-Key: brand:guides' \
   -H 'X-RAG-Collection-Key: brand:faq' \
   -d '{"model":"rag-default","messages":[{"role":"user","content":"Find the visual tone guidelines"}]}'
@@ -1093,7 +1093,7 @@ key:
 
 ```bash
 curl "http://localhost:8081/api/v1/rag/search?query=Spring%20AI" \
-  -H "Authorization: Bearer ${RAG_BUSINESS_API_KEY}"
+  -H "Authorization: Bearer ${RAG_ROOT_API_KEY}"
 ```
 
 ---

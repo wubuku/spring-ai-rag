@@ -60,31 +60,21 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
 {{/*
-JVM max heap in MB. Converts container memory limit (e.g. "2Gi") to heap MB
-at jvm.heapPercent (default 75%).
-Returns e.g. "1536m".
-*/}}
-{{- define "spring-ai-rag.jvm-heap" -}}
-{{- $raw := include "spring-ai-rag.jvm-raw" . }}
-{{- $mb  := div (mul (int $raw) (int (default 75 .Values.jvm.heapPercent))) 100 }}
-{{- printf "%dm" $mb }}
-{{- end }}
+Batch 937 删除了三个这里定义、但没有任何模板 `include` 过的 helper：
 
-{{- define "spring-ai-rag.jvm-raw" -}}
-{{- $v := toString .Values.resources.limits.memory }}
-{{- if hasSuffix "Gi" $v }}{{ trimSuffix "Gi" $v | int | mul 1024 }}{{- end }}
-{{- if hasSuffix "gi" $v }}{{ trimSuffix "gi" $v | int | mul 1024 }}{{- end }}
-{{- if hasSuffix "Mi" $v }}{{ trimSuffix "Mi" $v | int }}{{- end }}
-{{- if hasSuffix "mi" $v }}{{ trimSuffix "mi" $v | int }}{{- end }}
-{{- end }}
+  spring-ai-rag.jvm-heap      按 jvm.heapPercent 把容器内存换算成堆上限
+  spring-ai-rag.jvm-raw       只被 jvm-heap 调用
+  spring-ai-rag.spring-profile  读 .Values.springProfile，生成 --spring.profiles.active
 
-{{/*
-Build the Spring profile argument, if any.
+它们描述的是一套**与实际生效的机制不同**的策略：真正设置堆上限的是
+`deployment.yaml` 里直接读 `.Values.jvm.maxHeap` 的那一行，而 profile 是通过
+`secret.yaml` 注入的 `SPRING_PROFILES_ACTIVE` 环境变量设置的——values.yaml 里只有
+`secrets.springProfile`，根本没有顶层的 `springProfile`。
+
+留着它们的代价不止于死代码：`jvm.heapPercent` 是一个**没有任何 values 声明、只被死
+代码读取**的旋钮，运维可以 `--set jvm.heapPercent=50` 而它什么都不会发生；`values.yaml`
+里 `jvm.maxHeap` 的注释"Production profile sets this to 3072m (75% of 4Gi limit)"也
+因此读起来像是那套换算逻辑在起作用。
+
+`node scripts/verify-helm-helper-liveness.mjs` 现在强制"每个 define 都必须被 include"。
 */}}
-{{- define "spring-ai-rag.spring-profile" -}}
-{{- if .Values.springProfile }}
-{{- printf "--spring.profiles.active=%s" .Values.springProfile }}
-{{- else }}
-{{- "" }}
-{{- end }}
-{{- end }}

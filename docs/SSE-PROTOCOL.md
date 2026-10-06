@@ -183,7 +183,7 @@ comment 只用于避免代理关闭空闲连接，客户端不得把它显示为
 curl --no-buffer -X POST \
   http://localhost:8081/api/v1/rag/chat/stream \
   -H 'Content-Type: application/json' \
-  -H "Authorization: Bearer ${RAG_BUSINESS_API_KEY}" \
+  -H "Authorization: Bearer ${RAG_ROOT_API_KEY}" \
   -d '{
     "message":"查找风格基调相关资料",
     "mode":"AGENT",
