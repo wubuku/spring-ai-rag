@@ -136,6 +136,13 @@ public class MarkerPdfConverter implements PdfConverter {
 
             return process.exitValue() == 0;
         } catch (IOException | InterruptedException e) {
+            // 中断不能和 IOException 一样当成"CLI 不可用"处理：Process.waitFor 会
+            // 清掉中断标志，吞掉之后本线程后续每一次阻塞调用都看不到这个取消信号，
+            // isAvailable() 返回 false 之后调用方还会照常往下走。上面 convert() 的
+            // catch 是本文件里同一件事的另一种写法——先恢复标志，再按自己的语义收场。
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
             log.debug("Marker CLI not available: {}", e.getMessage());
             return false;
         }

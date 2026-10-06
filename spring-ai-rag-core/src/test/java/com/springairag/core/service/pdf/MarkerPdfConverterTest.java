@@ -5,6 +5,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
@@ -94,6 +95,35 @@ class MarkerPdfConverterTest {
         pdfProperties.setMarkerCli(ECHO_CLI);
 
         assertTrue(converter.isAvailable());
+    }
+
+    @Test
+    @DisplayName("isAvailable 被中断时保留中断标志，不把它当成「CLI 不可用」吞掉")
+    void isAvailable_keepsInterruptStatusWhenWaitIsInterrupted(@TempDir Path tempDir)
+            throws IOException {
+        // 必须用一个**真的会阻塞**的 CLI，否则这条断言是空的：实测 /bin/echo、
+        // /bin/cat、/bin/sh、/bin/sleep 在 waitFor 进去之前就已退出，
+        // waitFor 走的是"已退出"分支、从不进 Object.wait()，中断标志因此原封不动
+        // 地留着——那时 assertTrue(isInterrupted()) 会**空过**，与"代码恢复了标志"
+        // 无法区分。同一个命令在不被中断时退出 0，于是 available == false 只能来自
+        // waitFor 抛出的 InterruptedException，两个方向都钉死，且不依赖计时。
+        Path cli = Files.createFile(tempDir.resolve("blocking-cli.sh"));
+        Files.writeString(cli, "#!/bin/sh\nsleep 1\nexit 0\n");
+        assertTrue(cli.toFile().setExecutable(true), "the fixture CLI must be executable");
+        pdfProperties.setMarkerCli(cli.toString());
+
+        Thread.currentThread().interrupt();
+        boolean available;
+        try {
+            available = converter.isAvailable();
+            assertTrue(Thread.currentThread().isInterrupted(),
+                    "Process.waitFor 会清掉中断标志；isAvailable 必须把它恢复回去，"
+                            + "否则本线程后续每一次阻塞调用都看不到这个取消信号");
+        } finally {
+            // JUnit 在线程池里跑，别把中断留给同线程后面的用例。
+            Thread.interrupted();
+        }
+        assertFalse(available);
     }
 
     @Test
