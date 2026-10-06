@@ -24,6 +24,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.postgresql.ds.PGSimpleDataSource;
 import org.springframework.dao.DataAccessException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -229,6 +230,75 @@ class DocumentLifecyclePostgresIntegrationTest {
         assertEquals(0L, localChunkCount(documentId));
     }
 
+    /**
+     * The schema itself refuses a state row that records no derivation.
+     *
+     * <p>Batch 928. {@code DerivationIntegrityRepository} treats
+     * {@code vector_generation > 0} as a precondition for calling a vector
+     * fresh, and until V60 the database happily stored 0 — so a row could be
+     * complete in every other respect and still be reported as
+     * {@code embeddingStatus=FAILED} with a null error. V40 is where the
+     * {@code DEFAULT 0} came from; the three writers that kept producing it are
+     * fixed alongside, and this test is the part that makes the shape
+     * unreachable rather than merely unlikely.
+     *
+     * <p>The three cases below each state a different contract, and the order
+     * matters: the accepted insert has to come first, or the refusal below would
+     * pass for a reason that has nothing to do with the constraint.
+     */
+    @Test
+    void schemaRefusesAnEmbeddingStateRowWithNoDerivationGeneration() {
+        long collectionId = insertCollection("generation-guard");
+        long profileId = insertProfile("generation-guard");
+
+        long accepted = insertDocument(
+                collectionId, "default", "generation-guard-accepted", HASH_A);
+        jdbcTemplate.update("""
+                INSERT INTO rag_document_embedding_state (
+                    document_id, embedding_profile_id, content_hash,
+                    chunker_version, status, chunk_count, request_generation
+                ) VALUES (?, ?, ?, ?, 'COMPLETED', 1, 1)
+                """,
+                accepted, profileId, HASH_A, TEXT_CHUNKER);
+        assertEquals(1L, jdbcTemplate.queryForObject(
+                "SELECT request_generation FROM rag_document_embedding_state "
+                        + "WHERE document_id = ?",
+                Long.class, accepted));
+
+        long refused = insertDocument(
+                collectionId, "default", "generation-guard-refused", HASH_A);
+        assertThrows(DataIntegrityViolationException.class, () -> jdbcTemplate.update("""
+                INSERT INTO rag_document_embedding_state (
+                    document_id, embedding_profile_id, content_hash,
+                    chunker_version, status, chunk_count, request_generation
+                ) VALUES (?, ?, ?, ?, 'COMPLETED', 1, 0)
+                """,
+                refused, profileId, HASH_A, TEXT_CHUNKER));
+        assertEquals(0L, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM rag_document_embedding_state "
+                        + "WHERE document_id = ?",
+                Long.class, refused));
+
+        // Omitting the column is no longer a trap. The default moved from 0 to 1
+        // with the constraint, precisely so that a writer which forgets the
+        // column produces a row the integrity repository can read instead of one
+        // it will call corrupt forever. This is the shape the three fixed writers
+        // used to have, so it is the case worth naming.
+        long defaulted = insertDocument(
+                collectionId, "default", "generation-guard-defaulted", HASH_A);
+        jdbcTemplate.update("""
+                INSERT INTO rag_document_embedding_state (
+                    document_id, embedding_profile_id, content_hash,
+                    chunker_version, status, chunk_count
+                ) VALUES (?, ?, ?, ?, 'COMPLETED', 1)
+                """,
+                defaulted, profileId, HASH_A, TEXT_CHUNKER);
+        assertEquals(1L, jdbcTemplate.queryForObject(
+                "SELECT request_generation FROM rag_document_embedding_state "
+                        + "WHERE document_id = ?",
+                Long.class, defaulted));
+    }
+
     @Test
     void keywordOnlyLifecycleAndRealFulltextUseLocalChunksWithoutVectors() {
         long collectionId = insertCollection("keyword-only");
@@ -241,8 +311,9 @@ class DocumentLifecyclePostgresIntegrationTest {
         jdbcTemplate.update("""
                 INSERT INTO rag_document_embedding_state (
                     document_id, embedding_profile_id, content_hash,
-                    chunker_version, status, chunk_count, processing_error
-                ) VALUES (?, ?, ?, ?, 'FAILED', 1, 'provider unavailable')
+                    chunker_version, status, chunk_count, request_generation,
+                    processing_error
+                ) VALUES (?, ?, ?, ?, 'FAILED', 1, 1, 'provider unavailable')
                 """,
                 documentId, profileId, HASH_A, TEXT_CHUNKER);
 
@@ -299,8 +370,9 @@ class DocumentLifecyclePostgresIntegrationTest {
         jdbcTemplate.update("""
                 INSERT INTO rag_document_embedding_state (
                     document_id, embedding_profile_id, content_hash,
-                    chunker_version, status, chunk_count, processing_error
-                ) VALUES (?, ?, ?, ?, 'FAILED', 1, 'provider unavailable')
+                    chunker_version, status, chunk_count, request_generation,
+                    processing_error
+                ) VALUES (?, ?, ?, ?, 'FAILED', 1, 1, 'provider unavailable')
                 """,
                 documentId, profileId, HASH_A, TEXT_CHUNKER);
 

@@ -682,7 +682,7 @@ UUID. No screenshot is used as acceptance evidence.
 
 This nine-stage gate runs the no-pessimistic-lock check, focused
 purge/Collection/feedback/audit/OpenAI-scope tests, the real PostgreSQL
-V1-V59 purge matrix, `mvn clean compile test-compile`, full WebUI
+V1-V60 purge matrix, `mvn clean compile test-compile`, full WebUI
 typecheck/Vitest/lint/production build, Collection Mock Playwright, bilingual
 documentation validation, shell syntax, and whitespace checks. Each run writes
 step evidence to
@@ -1051,7 +1051,7 @@ API_KEY_EXPIRY_ALERT_VERIFY_PHASE=focused \
 ./scripts/verify-api-key-expiry-alerts.sh
 ```
 
-The focused phase runs the affected backend tests, an empty-database V1-V59
+The focused phase runs the affected backend tests, an empty-database V1-V60
 PostgreSQL lifecycle matrix, WebUI typecheck/Vitest/alignment/production build,
 and Alerts Mock Playwright in one pass. PostgreSQL scenarios cover eight-way
 concurrency producing one active condition/notification claim, same-row

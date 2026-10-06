@@ -192,6 +192,57 @@ WHERE table_name = 'rag_embeddings' AND column_name = 'embedding';
 BGE-M3 is 1024 dimensions. Also verify that the real provider returns that dimension;
 readiness `UP` does not prove that the external embedding provider is usable.
 
+### `embeddingStatus=FAILED` with no error message anywhere
+
+**Symptom**: `/api/v1/rag/json-records/upsert` or a lifecycle read returns
+`embeddingStatus: "FAILED"`, while the same response has `error: null` and
+`lifecycle.lastError: null`. The vector exists,
+`rag_documents.processing_status` is `COMPLETED`, and `processing_error` is empty.
+
+**Cause**: `FAILED` does not only mean "the provider call failed".
+`DerivationIntegrityRepository` puts a row whose status is `COMPLETED` but whose
+derivation is not fresh into the `CORRUPT` bucket, and the public lifecycle maps
+`CORRUPT` onto `FAILED` — **with a null `lastError`, because nothing failed**.
+Only a derivation request that never happened can produce that combination, so
+tell the two apart before treating it as a provider outage.
+
+**Troubleshooting**:
+
+```sql
+-- 1. Separate "really failed" from "needs repair"
+SELECT d.external_id, s.status, s.chunk_count, s.request_generation,
+       s.processing_error
+FROM rag_document_embedding_state s
+JOIN rag_documents d ON d.id = s.document_id
+WHERE s.status = 'COMPLETED'
+ORDER BY s.document_id;
+```
+
+A `request_generation` of `0` is a needs-repair signal:
+`DerivationIntegrityRepository` requires `vector_generation > 0` before it will
+call a vector fresh, and `0` means the row records no derivation request at all.
+V60 backfilled the existing rows to `1` and added
+`CHECK (request_generation > 0)`, so **a `0` seen after upgrading to V60 means a
+writer left the column out**, not that the data predates the migration.
+
+```bash
+# 2. Ask the collection-level read model, which counts the bucket directly
+curl -H "X-API-Key: $RAG_ROOT_API_KEY" \
+  "http://localhost:8081/api/v1/rag/collections/derivation-readiness?collectionKey=<key>"
+```
+
+`corruptDocuments` / `vectorRepairNeededDocuments` above zero with
+`failedDocuments` at zero means the derivations need repair, not the provider.
+
+**Solution**: Drive the derivation repair
+(`POST /api/v1/rag/collections/derivation-repair/preview` and `apply`) when
+`corruptDocuments` is non-zero. Do not just replay the same upsert — **an upsert
+whose content did not change does not dispatch a new derivation**, so the line in
+the API docs that "replaying the same request is safe and recovers
+`searchability=READY`" holds only when the body actually changed. Reserve replays
+and the embedding retry operation for a real provider failure, which is the case
+with `failedDocuments > 0` and a non-empty `lastError`.
+
 ---
 
 ## Retrieval Issues

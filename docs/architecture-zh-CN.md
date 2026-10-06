@@ -716,7 +716,7 @@ rag_audit_log           # 审计日志（集合操作）
 | `rag_documents` | title, content, content_hash, collection_id, source_namespace, external_id, source_revision, document_revision, source_deleted_at, jsonb_payload | 文档真相源、业务 CAS、外部身份与结构化 payload |
 | `rag_document_versions` | document_id, version_number, 完整快照字段, snapshot_completeness | 文档 mutation 的完整审计快照 |
 | `rag_embedding_profiles` | profile_key, provider, model_name, dimensions, distance_metric | 不可变向量空间身份 |
-| `rag_document_embedding_state` | document_id, embedding_profile_id, content_hash, chunker_version, request_generation, active_job_id, status, chunk_count | Profile 级 freshness、活动 generation 与完成状态 |
+| `rag_document_embedding_state` | document_id, embedding_profile_id, content_hash, chunker_version, request_generation, active_job_id, status, chunk_count | Profile 级 freshness、活动 generation 与完成状态。`request_generation` 必须 ≥ 1：它是 job 路径的围栏（`state.request_generation = job.request_generation`），也是 `DerivationIntegrityRepository` 承认向量新鲜的前置条件。V60 回填了 V40 遗留的 0 并加了 `CHECK`，所以「忘了写这一列」会当场失败而不是变成一个永远读成 `FAILED` 的行 |
 | `rag_embeddings` | document_id, chunk_index, embedding_profile_id, embedding_1024 VECTOR(1024), content | Profile 级文本块与向量 |
 | `rag_embedding_jobs` | document_id, embedding_profile_id, content_hash, request_generation, document_kind, chunker_version, status, lease_expires_at, origin | generation-aware 持久化 embedding/reindex 状态机 |
 | `rag_document_chunks` | document_id, local_index_generation, content_hash, chunker_version, chunk_text, chunk_index | 与 Profile 无关的本地关键词 chunk |

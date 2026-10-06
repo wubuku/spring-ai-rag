@@ -155,6 +155,20 @@ public class EmbeddingPersistenceService {
      * 测试却以"检索器把文档弄丢了"的面貌失败。现在这个值由服务自己按
      * {@code document_type} 推导，<b>写错的可能性在结构上被消除了</b>——
      * 不再存在一个"可以传错"的参数。
+     *
+     * <p>下面写状态行时<b>必须</b>显式给出 {@code request_generation}。Batch 928：
+     * 这一列曾经不在 INSERT 列表里，于是新建行吃列默认值 {@code 0}；
+     * 而 {@code DerivationIntegrityRepository} 把
+     * {@code vector_generation > 0} 当作向量新鲜的前置条件之一，
+     * 那些行于是被归成 {@code CORRUPT}，对外表现为
+     * {@code embeddingStatus=FAILED} 且 {@code error=null}——
+     * 向量有效、hash 对得上、却"失败"得没有理由。实测本地库 82 行里有 69 行如此。
+     *
+     * <p>ON CONFLICT 分支<b>不</b>递增这一列。代数是 job 路径的栅栏
+     * （{@code state.request_generation = job.request_generation}），
+     * 提交时递增会让刚跑完的 job 认不出自己的状态行，随后每一次带该等值守卫的
+     * 状态更新都会静默影响 0 行。这里写 {@code 1} 只针对"此前没有状态行"的新建分支，
+     * 冲突分支保留既有代数，与 {@code allocateGeneration} 不矛盾。
      */
     @Transactional
     public void replace(
@@ -206,8 +220,9 @@ public class EmbeddingPersistenceService {
         jdbcTemplate.update(
                 "INSERT INTO rag_document_embedding_state "
                         + "(document_id, embedding_profile_id, content_hash, chunker_version, "
-                        + "status, chunk_count, processing_error, completed_at, updated_at) "
-                        + "VALUES (?, ?, ?, ?, 'COMPLETED', ?, NULL, NOW(), NOW()) "
+                        + "status, chunk_count, request_generation, processing_error, "
+                        + "completed_at, updated_at) "
+                        + "VALUES (?, ?, ?, ?, 'COMPLETED', ?, 1, NULL, NOW(), NOW()) "
                         + "ON CONFLICT (document_id, embedding_profile_id) DO UPDATE SET "
                         + "content_hash = EXCLUDED.content_hash, "
                         + "chunker_version = EXCLUDED.chunker_version, "
@@ -262,8 +277,9 @@ public class EmbeddingPersistenceService {
         jdbcTemplate.update(
                 "INSERT INTO rag_document_embedding_state "
                         + "(document_id, embedding_profile_id, content_hash, chunker_version, "
-                        + "status, chunk_count, processing_error, updated_at) "
-                        + "VALUES (?, ?, ?, ?, 'FAILED', 0, ?, NOW()) "
+                        + "status, chunk_count, request_generation, "
+                        + "processing_error, updated_at) "
+                        + "VALUES (?, ?, ?, ?, 'FAILED', 0, 1, ?, NOW()) "
                         + "ON CONFLICT (document_id, embedding_profile_id) DO UPDATE SET "
                         + "content_hash = EXCLUDED.content_hash, "
                         + "chunker_version = EXCLUDED.chunker_version, status = 'FAILED', "

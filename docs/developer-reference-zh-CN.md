@@ -19,7 +19,7 @@
 | 真实 LLM E2E 端口 | `18081` |
 | Embedding | SiliconFlow `BAAI/bge-m3` |
 | 向量维度 | `1024` |
-| Flyway | V1–V59 |
+| Flyway | V1–V60 |
 
 OpenAI / Embedding 的 `base-url` **不要带 `/v1`**。Spring AI 会自行追加 `/v1/chat/completions` 或 `/v1/embeddings`。
 
@@ -109,6 +109,7 @@ skipped；本门禁则保证今后再有类"闭嘴"就会失败。
 | `verify-port-probe-authority.mjs` | 用**绑定一个临时套接字**来判断端口是否空闲、且没有 source `scripts/lib/port-probe.sh` 的脚本。这和它要探的那个服务问的**不是同一个问题**，而且在这台机器上两个答案直接打架：`lsof` 看到 `python3` 监听在 `*:4173`（IPv6 通配），`node` 往 `127.0.0.1:4173` bind **却成功**，于是 `verify-release.sh` 把「4173 是空的」这个结论直接交给 `vite preview --strictPort`，服务死在**它刚刚认证为空闲的那个端口**上——而这个脚本在本工作树从未跑完过。另有 6 个脚本带着同一个探针、同一个潜在的洞。本仓库里**已经有 7 个脚本**在用权威问法 `lsof -nP -iTCP:<port> -sTCP:LISTEN`，那就是这个库现在持有的形状。规则找的是**被 bind 的套接字**，不是 `node` 这个词，所以那些用 node 解析 JSON、写证据文件的脚本不受影响 | `test-support/port-probe-authority-self-test.mjs` | tests 链 |
 | `verify-playwright-suite-selection.mjs` | 既不点 spec 也不给 `--config` 的裸 `npx playwright test`。`playwright.config.ts` **没有** `testIgnore`，两个 preview 配置才有 `testIgnore: ['**/*-real.spec.ts']`——所以**命令的形状**决定这次跑会不会吃进那 5 个需要真实后端和凭据的 spec。`verify-jsonb-records.sh` 和 `verify-release.sh` 各自起一个 `vite preview`（背后没有后端的静态服务），然后跑了裸调用：**93 passed、5 failed**，而且两个脚本在本工作树**从未跑完过**，所以「这一步红在一个没人能据以行动的点上」这件事一直没人记录。19 处调用里 17 处点了 spec，不归这道门禁管——**故意**点名 `alerts-real.spec.ts` 正是 alerts 验收的全部意义 | `test-support/playwright-suite-selection-self-test.mjs` | tests 链 |
 | `verify-surefire-method-selection.mjs` | 按**方法名**选择 surefire 测试、却不先确认这些方法还存在的脚本。surefire 把 `-Dtest=Class#a+b` 读作「`a` 和 `b` 里有的都跑」，而本仓库有 20 个脚本传 `-Dsurefire.failIfNoSpecifiedTests=false`——对**整类**选择来说这是对的（类不存在就不会有报告，而每个脚本都已经在查报告），但方法名不一样，**它是静默的**。`verify-next-high-value-feature.sh` 的**两个分支**都点名了一个已被改名的方法（`migrationsCreate…` → `latestMigrationsCreate…`）：自 2026-08-21 起的第一次运行只跑了 7 个里的 6 个，而全仓库唯一察觉到这件事的是那个写死在名单旁边的计数，它把**6 条全过、0 失败 0 错误 0 跳过**的一次运行报成「must run 7 tests」，既没点名缺哪个方法，也没提改名这件事。检查放在 `scripts/lib/surefire-method-selection.sh`（理由同 894 把报告读取搬进去），门禁管的是**接线**——「这个脚本有没有校验方法名」读脚本读不出来，「它有没有 source 那个库」读得出来。规则要求引号开头（或 `-Dtest=` 之后）紧跟`标识符#`，于是真实树上的 6 处 shell 参数展开（`${version#1.}`、`${suite##*:}` 等）**因为 `#` 在那里是运算符而不是分隔符**被排除，而不是因为它们在别的文件里 | `test-support/surefire-method-selection-self-test.mjs` | tests 链 |
+| `verify-embedding-state-generation.mjs` | 生产代码里 INSERT `rag_document_embedding_state` 时**漏掉** `request_generation`、或把这一列赋成裸字面量的写法。`DerivationIntegrityRepository` 要求 `vector_generation > 0` 才承认向量新鲜，所以不写这一列的行会吃列默认值 0，于是一个嵌入正确的文档——状态 `COMPLETED`、hash 对得上、chunker 对得上、向量在场——被归成 `CORRUPT`，对外是 `embeddingStatus=FAILED` 且 `error=null`。实测本地库 82 行里有 69 行如此，`run-retrieval-regression.sh` 在第 3 个夹具上以 `status=FAILED error=None` 中止。规则读 Java 时剥注释但保留字符串字面量，因为 SQL 是用 `+` 跨行拼的：表名与列清单之间隔着闭引号、换行、加号和开引号，只允许空白的写法在本仓库**一条都匹配不上**，而那和「树是干净的」长得一模一样。迁移那一半要求必须有迁移声明 `CHECK (request_generation > 0)`——写入方正确和 schema 无法反对是两件不同的事，只有后者是永久的。测试树**刻意不在范围内**：那里有 2 个夹具故意省略（一个用来复现 V42 之前的数据形状，一个用来断言新默认值），而 V60 之后默认值已经是完整性仓库读得懂的 1 | `test-support/embedding-state-generation-self-test.mjs` | tests 链 |
 | `verify-test-visibility.mjs` | 既没执行也没声明跳过的测试类（`tests="0" skipped="0"`）。判据是**双向**的：每个匹配 surefire 四种默认 include（`Test*` / `*Test` / `*Tests` / `*TestCase`——Batch 885 补上了缺失的 `Test*`）的非抽象测试源都必须产出报告，每份报告也必须能对回某个源文件，所以"源码已删、`TEST-*.xml` 还在"的类无法虚增总数。**没有声明任何 JUnit 测试方法的源不进入清单**，因为 surefire 根本不给它出报告。**一次运行只覆盖一个模块**：源码根目录是从报告目录反推的，聚合入口把门禁指向 `spring-ai-rag-core`；成功信息会点明本次覆盖的是哪个模块。用例数本身是**数 `<testcase>` 元素得来的，不是读 `tests=` 属性**（Batch 893）。surefire 写这个属性时，`@Nested` 内部类贡献的用例还没并进去，所以它可能比自己汇总的子元素还小：四个模块 1006 份报告实测有 3 份不一致——`RagCollectionServiceTest` 差 7（声明 17、实际 24 条，**全部来自嵌套类**），`DocumentMapperTest` 差 1，`GeneralRagAutoConfigurationBeanTest` 差 1——属性求和 8320，而真实跑了 8329 条。**打印这个数的正是这道门禁**，所以它把自己这棵树少报了 9 条。`skipped` / `failures` / `errors` 仍读属性，因为 1006 份报告里没有一份在这三项上不一致；**没有实测支撑就改计数器，本身就是另一类缺陷** | `test-support/test-visibility-self-test.mjs` | tests 链 |
 | `verify-integration-test-switches.mjs` | 门控开关与运行路径的双向缺口；Batch 912 起还包括**只有单个 feature 自己的脚本能跑**的门控套件——这是前四条表达不了的方向：本仓库每个门控开关都有运行路径，23 个套件里仍有 20 个没有一条能跑完它们的命令，而门禁是绿的 | `test-support/integration-switch-self-test.mjs` | tests 链 |
 | `verify-external-db-safety.mjs` | 接受调用方指定库名却直接 `flyway.clean()` 的套件 | `test-support/external-db-safety-self-test.mjs` | tests 链 |
@@ -718,7 +719,7 @@ provider counter。端口冲突时可
 ### 受管 API Principal 到期告警一键验证
 
 ```bash
-# 聚焦后端、V1-V59 PostgreSQL 与前端 Mock 门槛
+# 聚焦后端、V1-V60 PostgreSQL 与前端 Mock 门槛
 API_KEY_EXPIRY_ALERT_VERIFY_PHASE=focused \
 ./scripts/verify-api-key-expiry-alerts.sh
 

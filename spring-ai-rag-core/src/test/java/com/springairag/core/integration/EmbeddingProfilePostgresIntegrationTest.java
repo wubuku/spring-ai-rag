@@ -11,6 +11,7 @@ import com.springairag.core.retrieval.EmbeddingBatchService;
 import com.springairag.core.retrieval.HybridRetrieverService;
 import com.springairag.core.retrieval.fulltext.PgEnglishFtsProvider;
 import com.springairag.core.service.EmbeddingPersistenceService;
+import com.springairag.core.service.DerivationIntegrityRepository;
 import com.springairag.core.service.LegacyEmbeddingMigrationService;
 import com.springairag.core.service.DocumentDerivationDescriptorProvider;
 import com.springairag.documents.chunk.TextChunk;
@@ -507,6 +508,121 @@ class EmbeddingProfilePostgresIntegrationTest {
                     embeddings.countFreshChunksByDocumentIdAndProfileId(
                             documentA, profileA.id()));
         }
+    }
+
+    /**
+     * A document whose vectors were just committed is fresh.
+     *
+     * <p>Batch 928. This is the assertion that was missing for a defect nobody had
+     * to be looking for. {@code DerivationIntegrityRepository} requires
+     * {@code vector_generation > 0} before it will call a vector fresh — the
+     * generation is the fence that ties a state row to the job that produced it,
+     * and every job-side update is guarded by
+     * {@code state.request_generation = job.request_generation}.
+     *
+     * <p>{@code EmbeddingPersistenceService.replace} writes that state row without
+     * naming {@code request_generation}, so when it inserts rather than updates it
+     * takes the column default of {@code 0}. The row is then complete and correct
+     * in every other respect — status COMPLETED, hash matching, chunker matching,
+     * one chunk declared and one vector present — and is still classified
+     * {@code CORRUPT}, which the public lifecycle surfaces as
+     * {@code embeddingStatus=FAILED} with a null error.
+     *
+     * <p>Measured on a live PostgreSQL instance before the fix: 69 of 82
+     * {@code rag_document_embedding_state} rows sat at generation 0, and
+     * {@code run-retrieval-regression.sh} aborted on its third fixture with
+     * {@code status=FAILED error=None} — a document with a valid 1024-dimension
+     * vector, a matching content hash and no error anywhere. Backfilling those 69
+     * rows to generation 1, with no code change and no provider call, moved one
+     * collection from {@code readyDocuments=2, corruptDocuments=3} to
+     * {@code readyDocuments=5, corruptDocuments=0} and turned the same script green.
+     *
+     * <p>The generation is preserved rather than incremented on the update branch:
+     * incrementing it would break the fence the job path depends on, because the
+     * job that just completed would no longer match its own state row and every
+     * state update guarded by that equality would silently affect zero rows.
+     *
+     * <p>The chunk's end offset is {@code "committed content".length()} and not a
+     * round number. {@code indexLocalKeywords} derives the local chunk's
+     * {@code chunk_end_pos} from the text length, so a chunk that disagrees with
+     * it makes {@code local_mismatches} non-zero — and the first run of this test
+     * failed on exactly that, with {@code vectorStatus=COMPLETED generation=1
+     * condition=CORRUPT} still reported after the generation fix. An integrity
+     * check that cannot object to a wrong fixture is not checking anything.
+     */
+    @Test
+    void committedEmbeddingsProduceAFreshDerivationWithoutAJobFence() {
+        EmbeddingProfile profile = registry().initialize();
+        long documentId = insertDocument(
+                "committed-fresh", "committed content", HASH_A);
+        EmbeddingPersistenceService persistence =
+                new EmbeddingPersistenceService(jdbcTemplate);
+        String text = "committed content";
+
+        transactionTemplate.executeWithoutResult(status -> persistence.replace(
+                documentId, 0L, HASH_A, profile,
+                List.of(new TextChunk(text, 0, text.length())),
+                List.of(result(text, vector(1024, 1.0f)))));
+        indexLocalKeywords(documentId, HASH_A, text);
+
+        DerivationIntegrityRepository integrity = new DerivationIntegrityRepository(
+                jdbcTemplate,
+                () -> profile,
+                new DocumentDerivationDescriptorProvider(new RagProperties()));
+        DerivationIntegrityRepository.Snapshot snapshot = integrity.inspect(documentId);
+
+        assertTrue(snapshot.localFresh(),
+                "the keyword branch was published to the local index, so it is fresh");
+        assertTrue(snapshot.vectorFresh(),
+                () -> "vectors were just committed with a matching hash, chunker and "
+                    + "chunk count, so the derivation is fresh; the snapshot says "
+                    + "vectorStatus=" + snapshot.vectorStatus()
+                    + " generation=" + snapshot.vectorGeneration()
+                    + " condition=" + snapshot.vectorCondition());
+        assertEquals("READY", snapshot.bucket());
+    }
+
+    /**
+     * The legacy adoption path writes the same state row and owed the same
+     * generation.
+     *
+     * <p>Separate from the commit path because it is a separate statement: a
+     * future fix that repairs one writer and not the other leaves the same
+     * document reported as failed, from a different service.
+     */
+    @Test
+    void legacyAdoptionRecordsAPositiveDerivationGeneration() {
+        EmbeddingProfile profile = registry().initialize();
+        long documentId = insertDocument("legacy-generation", "legacy content", null);
+        jdbcTemplate.update(
+                "INSERT INTO rag_embeddings "
+                        + "(document_id, chunk_text, chunk_index, embedding) "
+                        + "VALUES (?, 'legacy chunk', 0, ?::vector)",
+                documentId,
+                vectorText(vector(1024, 0.25f)));
+        LegacyEmbeddingMigrationService migration = new LegacyEmbeddingMigrationService(
+                jdbcTemplate,
+                new DataSourceTransactionManager(dataSource),
+                registry());
+
+        assertEquals(1, migration.adoptLegacy(
+                profile.profileKey(),
+                LegacyEmbeddingMigrationService.ADOPT_CONFIRMATION));
+
+        assertTrue(stateGeneration(documentId, profile.id()) > 0,
+                "an adopted derivation still happened, so its state row records a"
+                    + " generation; generation 0 is the value the schema now"
+                    + " refuses, and the value that made every adopted row read as"
+                    + " CORRUPT");
+    }
+
+    private long stateGeneration(long documentId, long profileId) {
+        Long generation = jdbcTemplate.queryForObject(
+                "SELECT request_generation FROM rag_document_embedding_state "
+                        + "WHERE document_id = ? AND embedding_profile_id = ?",
+                Long.class, documentId, profileId);
+        assertNotNull(generation);
+        return generation;
     }
 
     private EmbeddingProfileRegistry registry() {

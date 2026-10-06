@@ -199,6 +199,51 @@ WHERE table_name = 'rag_embeddings' AND column_name = 'embedding';
 同时确认真实 provider 能返回该维度；服务 readiness 为 `UP` 并不代表外部
 embedding provider 已验证可用。
 
+### 文档报 `embeddingStatus=FAILED`，但没有任何错误信息
+
+**症状**：`/api/v1/rag/json-records/upsert` 或 lifecycle 读回
+`embeddingStatus: "FAILED"`，而同一响应里 `error` 和 `lifecycle.lastError` 都是
+`null`。向量明明存在，`rag_documents.processing_status` 是 `COMPLETED`，
+`processing_error` 也是空的。
+
+**原因**：`FAILED` 在这套读模型里不只表示「provider 调用失败」。
+`DerivationIntegrityRepository` 把「状态是 `COMPLETED` 但派生不新鲜」归成
+`CORRUPT` 桶，公开 lifecycle 再把 `CORRUPT` 映射成 `FAILED`——**而这类行的
+`lastError` 本来就是空的**，因为确实没有失败发生过，只是派生不满足新鲜条件。
+先分清是哪一种，再谈修复。
+
+**排查**：
+
+```sql
+-- 1. 先看是"真失败"还是"待修"
+SELECT d.external_id, s.status, s.chunk_count, s.request_generation,
+       s.processing_error
+FROM rag_document_embedding_state s
+JOIN rag_documents d ON d.id = s.document_id
+WHERE s.status = 'COMPLETED'
+ORDER BY s.document_id;
+```
+
+`request_generation = 0` 就是一个待修信号：`DerivationIntegrityRepository` 要求
+`vector_generation > 0` 才承认向量新鲜，而 `0` 表示这一行没有记录过任何一次派生
+请求。V60 已把存量行回填为 `1` 并加了 `CHECK (request_generation > 0)`，
+所以**升级到 V60 之后再出现 `0`，说明是有写入方漏了这一列**，而不是历史数据。
+
+```bash
+# 2. 用集合级读模型确认口径（它会直接给出 corruptDocuments 计数）
+curl -H "X-API-Key: $RAG_ROOT_API_KEY" \
+  "http://localhost:8081/api/v1/rag/collections/derivation-readiness?collectionKey=<key>"
+```
+
+`corruptDocuments` / `vectorRepairNeededDocuments` 大于 0，而
+`failedDocuments` 是 0，就说明是派生待修，不是 provider 失败。
+
+**解决**：`corruptDocuments` 大于 0 时走派生修复（`POST /api/v1/rag/collections/derivation-repair/preview`
+与 `apply`），不要反复重放同一次 upsert——**内容没变时 upsert 不会触发重新派生**，
+而文档里"重放相同请求可以恢复为 `searchability=READY`"那句话只在正文确实变化时成立。
+真正的 provider 失败（`failedDocuments > 0`、`lastError` 非空）才用重放或
+embedding 重试操作恢复。
+
 ---
 
 ## 检索问题

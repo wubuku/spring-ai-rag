@@ -308,17 +308,29 @@ check_project_invariants() {
       | tail -1
   )"
 
-  [[ "$latest_migration" == "59" ]] || {
-    echo "Expected latest Flyway migration V59, found V${latest_migration:-unknown}." >&2
-    return 1
-  }
+  # Batch 928. This used to assert `latest_migration == 59` and to grep the docs
+  # for a hardcoded `V1.?V59` — the exact shape `verify-flyway-version-pinning.mjs`
+  # exists to prevent, in a file that already computes the number three lines
+  # above. Both halves now compare the two moving parts instead: the range the
+  # repository actually ships, and the range the documentation states. Adding V60
+  # failed here with "Expected latest Flyway migration V59, found V60", a message
+  # naming neither which file was stale nor what it should have said.
+  local range_en="V1–V${latest_migration:-unknown}"
+  local range_ascii="V1-V${latest_migration:-unknown}"
+  local doc stated
+  for doc in AGENTS.md docs/developer-reference.md docs/developer-reference-zh-CN.md; do
+    if ! rg -q -- "${range_en}|${range_ascii}" "$doc"; then
+      stated="$(rg -o 'V1.?V[0-9]+' "$doc" 2>/dev/null | sort -u | tr '\n' ' ')"
+      echo "$doc does not state the current Flyway range ${range_en}; it says: ${stated:-nothing}" >&2
+      return 1
+    fi
+  done
 
   rg -q '8081' AGENTS.md docs/developer-reference.md docs/developer-reference-zh-CN.md
   rg -q '18082' AGENTS.md docs/developer-reference.md docs/developer-reference-zh-CN.md
   rg -q '18081' AGENTS.md docs/developer-reference.md docs/developer-reference-zh-CN.md
   rg -q 'postgresql' AGENTS.md docs/developer-reference.md docs/developer-reference-zh-CN.md
   rg -q '1024' AGENTS.md docs/developer-reference.md docs/developer-reference-zh-CN.md
-  rg -q 'V1.?V59' AGENTS.md docs/developer-reference.md docs/developer-reference-zh-CN.md
 
   if rg -n -i 'base-url:[[:space:]]*https?://[^[:space:]`]+/v1([/[:space:]`]|$)' \
       AGENTS.md CLAUDE.md README.md README-zh-CN.md docs \
