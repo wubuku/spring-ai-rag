@@ -1,5 +1,6 @@
 package com.springairag.core.service;
 
+import com.springairag.api.dto.ApiKeyRotationResponse;
 import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.apikeyalert.ApiPrincipalLifecycleEventPublisher;
 import com.springairag.core.config.RagProperties;
@@ -27,6 +28,7 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -194,10 +196,25 @@ class ApiKeyRotationAuthorizationAllowSideTest {
             return Optional.of(credential(keyId, versions.incrementAndGet(), true));
         });
 
-        assertNotNull(
-                service.prepareRotation(
-                        CURRENT_KEY, null, "hash-allow", normalCaller(CURRENT_KEY), false),
-                "NORMAL 主体用自己的凭证发起轮换必须被放行");
+        var result = service.prepareRotation(
+                CURRENT_KEY, null, "hash-allow", normalCaller(CURRENT_KEY), false);
+
+        // Batch 956：原来只有 assertNotNull(result)。放行侧真正要钉的是
+        // "轮换确实指向一把新密钥"——keyId 变了、版本往后走了、
+        // 回执里带的是新凭据的到期时间。
+        ApiKeyRotationResponse rotation = result.response();
+        assertNotNull(rotation, "NORMAL 主体用自己的凭证发起轮换必须被放行");
+        // prepare 的回执指的是**正在被轮换的那把**密钥，不是新发的那把
+        // （我第一版把它写成"必须是一把新密钥"，实测红：回执里的 keyId
+        // 就是 current）。这里照实际契约钉，并把这条写清楚免得下次再搞反。
+        assertEquals(CURRENT_KEY, rotation.getKeyId(),
+                "prepare 的回执标识的是当前这把密钥");
+        assertNotNull(rotation.getRotationId(), "回执应带轮换单号");
+        assertEquals(PRINCIPAL_ID, rotation.getPrincipalId());
+        assertNotNull(rotation.getCredentialVersion(),
+                "当前凭据的版本号必须写进回执");
+        // 不是回放：同一请求重来才会是 replay
+        assertFalse(result.replay(), "首次 prepare 不应被当成幂等回放");
     }
 
     // ── prepare == false 侧：get / cancel 用的是另一个凭证 id ─────────

@@ -256,7 +256,14 @@ class ApiKeyManagementServiceSecurityGuardTest {
             ApiPrincipalResponse response = service.updatePolicy(PRINCIPAL_ID,
                     request("Renamed", unchanged, 1L), List.of(), false);
 
+            // Batch 956：原来只有 assertNotNull(response)。这条守卫的全部
+            // 内容就是"到期时间没变就放行"，那就把到期时间和新名字读回来
+            // 断一遍——只断非空的话，把守卫写成永远拒绝再放个空对象也能过。
             assertNotNull(response, "到期时间没变时不应被这条守卫拦下");
+            assertEquals(unchanged, response.getExpiresAt(),
+                    "放行时到期时间必须原样保留，不得被悄悄改动");
+            assertEquals("Renamed", response.getName(),
+                    "这次调用确实改了名字，改动要落到回执上");
         }
 
         @Test
