@@ -22277,3 +22277,216 @@ VersionHistoryModal 相关 100% 项等。
   杂度高暂缓。
 - 下一批候选：PdfImportService 上传链路、ChatExecutionService 流
   式内部、DocumentMutationService 残余 sync 内部。
+
+> **本节是 2026-10-07 收尾时的进度留档。**
+>
+> **先说一个缺口（如实记录，不补写）**：本账本的正文章节停在
+> `### Batch 923`，而代码已经走到 Batch 960。也就是说 **Batch 924–960
+> 这 37 个批次当时没有往这里记账**。本轮不去追补——追补要靠回忆重建，
+> 而本会话只掌握 953–961 的经过。追补出来的条目会是一份"看起来齐、
+> 实际不可核"的账，正是这份账本一直反对的东西。下面这份快照覆盖
+> **Batch 959–961**，更早的进展请看 `git log` 与各批次的 commit message。
+
+## 进度留档快照（Batch 961 · 用户指令收尾）
+
+- 留档时点：2026-10-07 · main @ `558247df`（Merge batch-960）
+- 工作区：干净；`batch-959` / `batch-960` 已 `--no-ff` 合并进 main 并
+  push；`batch-961` 无提交（等于 main），收尾时删除。
+- 本轮（959 + 960）改了 20 个文件，其中**生产代码只有 1 处**。
+
+### 主线：把"唯一断言是 assertNotNull"的空转用例清干净
+
+普查工具 `/tmp/notnull-vacuous.mjs`（修正过探测范围，见下）扫全部
+`@Test` 方法，找出"方法体内除 `assertNotNull` 外没有任何其他断言"的方法：
+
+| 时点 | 唯一断言为 assertNotNull 的方法数 |
+|------|------|
+| Batch 952 收尾 | 55（**分母虚高**，见下） |
+| Batch 958 收尾 | 38（已更正） |
+| Batch 959 收尾 | 25 |
+| Batch 960 收尾 | **13** |
+
+剩余 13 条逐条看过，**全部正当**，不再是空转：entity 默认值用例
+（`createdAt_IsNotNull` 就是该用例的全部声明）、bean 存在性用例、
+`demoApplication_classExists`（注解在不在是真判别，只是恰好只用了
+assertNotNull）。另两条是独立的活，见"未完成"一节。
+
+### 更正一次普查方法论错误（Batch 958 的发现，值得单独记）
+
+我那个普查脚本的断言方法清单里**从来没有 `assertInstanceOf`**，
+于是"只断实例类型"的用例完全不可见，报出的数量偏大。补上
+`assertInstanceOf` / `assertThrowsExactly` / `assertTimeout` 后：
+55 → **38**。
+
+也就是说 Batch 954–958 各次 commit message 与汇报里写的
+「89 → 76 → 69 → 65 → 58 → 55」，**每一步的分母都偏大**，已在
+Batch 958 的 commit 里明确更正。改掉的那几条是真的空转，只是总量虚高。
+
+**教训沿用**：探测器的扫描范围必须覆盖真实类别；报 0 的普查必须先对着
+已知阳性验证探测器本身。
+
+### Batch 959：13 条改真断言 + 修掉一处生产缺陷
+
+**生产缺陷（唯一的生产改动）**：`RagDocumentController.collectionMetadata`
+为了组 names / keys 两个 map，把完全相同的
+`collectionRepository.findAllById(collectionIds)` **调了两遍**——每次文档
+列表请求白多一个数据库往返，而方法上的 Javadoc 承诺的正是
+"批量取回……避免逐文档 N+1 查询"。改为取一次、分别投影，并用
+`verify(times(1))` 把"批量"钉进用例（夹具只放一个集合，发一遍还是
+发两遍只有这条能分）。
+
+**最典型的一条**：`PdfImportEmbedPolicyTest.sseDefaultVariantDelegatesWithCollectionId`
+的桩**打错了方法**——SSE 这条路实际走 `triggerEmbeddingWithProgress(...)`，
+旧桩打的是 `triggerEmbedding`，压根没匹配上，mock 返回 null；而原断言
+`assertNotNull(response.getBody())` 只断 emitter 存在，照样绿。控制器还把
+随后的 NPE 吞成了一条 SSE 错误事件，旧断言连这都看不见。
+
+反向探针把 collectionId 传成 null：新用例红在 `expected: <10> but was:
+<null>`；**把测试退回 HEAD 版本再跑同一个变异，全绿**——证明旧断言确实
+看不见。
+
+**本批自己引入并修掉的一个缺陷（记下来是因为它和前面几批同型）**：给
+SSE 那条加 `verify` 之后，**单独跑绿、全量跑红**
+（`Actually, there were zero interactions with this mock`）。根因是
+`PdfImportController.streamEmbeddingWithProgress` 把真正的 service 调用
+丢进 `Thread.ofVirtual().start(task)`（694 行）异步执行，紧跟着的 `verify`
+是一次竞态；单独跑靠运气绿，全量跑线程池更挤就露馅。改用
+`verify(mock, timeout(10_000))`——轮询到满足为止，不是 sleep。
+**证据不可信就丢弃**：那条"7/7 绿"当时不算数。
+
+### Batch 960：12 条改真断言，一次变异打中 7 条
+
+**最大的一处收获**：六个嵌套属性字段都在**声明处**就 `= new X()` 初始化，
+所以 `setX(null); assertNotNull(getX())` 在**两种实现下都绿**——
+
+1. setter 真换上 `new X()`（当前实现）
+2. setter 的 null 臂退化成"什么都不做、保留声明期那个实例"
+
+用例名字承诺的是 `FallsBackTo**Fresh**Instance`，而"新鲜"这个词一次都
+没被验证过。改为先抓住原实例、置 null 后断它**没有被原样留下**
+（`assertNotSame`）。反向探针把 9 个 setter 的 null 臂全改成
+`if (x != null) { this.x = x; }` → **7 条全红**，红在
+`expected: not same but was: <...$KnowledgeProperties@...>`；
+同一个变异下旧的 assertNotNull **全部照绿**。
+
+其余：`GeneralRagAutoConfigurationBeanTest` 两条 DisplayName 说
+CacheMetricsService "can be null / can be provided"，断言却写的是
+`assertNotNull(componentHealthService)`——而后者由 `new` 造出来，任何
+分支下都非空；改为断 `checkCache()` 真正产生的 details（null 臂
+`{enabled:false}` vs 统计字段），并补上 catch 臂
+（"健康探针绝不抛"，此前一次都没被执行过）。
+`ChatSessionCoordinatorBeanRegistrationTest` 改为**行为化**验证：往
+`sharedMemory()` 写一条消息，容器里那个 mock 必须收到 `saveAll`。
+`DemoConfigurationTest` 两条改为读 pom 断坐标（版本属性解析出来必须和
+仓库根 pom 一致）与断类级映射路径。
+
+### Batch 961：一条试过、退回、并如实记下的改动
+
+`RetryConfigTest.retryTemplateIsCreatedWithCorrectDefaults` 原来只有
+`assertNotNull(template)`，而名字承诺的是 "CorrectDefaults"——退避三个
+参数与 maxAttempts 一个都没验。
+
+**历史阻塞**：Batch 954 之前试过用 `template.execute` 驱动一次耗尽重试
+来数 maxAttempts，**把 surefire fork 挂住了**（线程栈停在
+`ExponentialBackOffPolicy.backOff`）；把退避调到 1ms/2ms 去迁就测试又
+等于放弃"配置生效"这件事本身。当时的结论是"机制没查清"，已退回。
+
+**本轮换的路子（结论：不成立，已退回）**：
+
+1. 读回策略——本仓库用的是 **spring-retry 2.0.13**（不是一开始以为的
+   1.3.1），它的 `RetryTemplate` **没有** `getRetryPolicy()` /
+   `getBackOffPolicy()`（3.x 才加）。
+2. 手驱动 `ExceptionClassifierRetryPolicy`——`canRetry` 会把 context 的
+   属性强转成 `RetryPolicy`，自己 `new RetryContextSupport(null)` 喂不进去，
+   实测 `ClassCastException`。
+3. 探针模板（同一个分类策略 + `NoBackOffPolicy`）——逻辑上不睡一次，
+   但**两次运行都让 fork 出来的 JVM 崩掉**：
+   `*** java.lang.instrument ASSERTION FAILED ***: "!errorOutstanding" …
+   JPLISAgent.c line: 838`，surefire 报
+   `The forked VM terminated without properly saying goodbye`，且
+   `Tests run: 0`——崩溃发生在跑测试之前，对新断言没有任何证据价值。
+
+**决定性对照**：把该文件 `git checkout --` 回 HEAD 版本，跑**同一条命令**
+→ `Tests run: 7, Failures: 0`、BUILD SUCCESS（22:39:53 的报告）。
+所以崩溃与那份探针代码相关，不是随机负载（同期负载确实高，load average
+67 → 24，但对照在负载回落后仍然复现）。
+
+**因此本批交付为零改动**，只留这份记录。下一位接手的人要先把机制查清，
+再决定这条路走不走得通——**不要**在没有对照实验的情况下重试同一种写法。
+
+### 未完成 / 待办（按优先级）
+
+**唯一剩下的普查项，两条都需要独立理顺**：
+
+- `RetryConfigTest`——见 Batch 961 一节。已确认探针模板会打崩 fork JVM，
+  机制未查清。
+- `ChatExecutionStreamBudgetTest.emptyCandidateStreamFallsBackToNextCandidate`
+  ——补上"回退到第二个候选并吐出 fallback 内容"的断言后是红的：实际输出
+  `Completed[resolvedModel=primary, ... candidateAttempts=1]`，一条
+  `ContentDelta` 都没有。生产侧回退确实存在（`ChatExecutionService.java:591`
+  起）。根因在夹具：`streamAttempt()` 对两个候选复用同一批
+  `client/spec/stream` mock，后一次 `when(spec.stream())` 覆盖前一次。
+
+**待用户拍板（均已问过多轮，未答复）**：
+
+- `SseEmitters.sendRaw` 有和 Batch 948 修掉的缺陷一模一样的 ISO-8859-1
+  隐患（同样以 String 载荷喂 `SseEmitter.event().data(...)`），但
+  **没有任何生产调用点**，只有 3 条 `assertDoesNotThrow` 测试——改掉
+  还是删掉这个死 helper？
+- 三处已确认在响应体层面不可观测/不可达的分支：
+  `OpenAiCompatibilityController#streamResponse` 末尾的
+  `if (terminated.get()) active.dispose();`、`RagChatController` 订阅者开头的
+  `if (terminal.get()) return;`、`nativeSnapshotEmitter` 的 `claim == null`
+  分支。三者均已写进类注释声明不覆盖，**是否删除需拍板**。
+- `providerReturningNullAdvisorIsIgnored` 对应的生产侧 null 守卫：反向探针
+  删掉它之后这条照样绿——"跳过"与"包一层"在这道缝上不可观测。
+- `LocalDateTime` 73 个字段是否换成带偏移量的类型（API 契约变更）；
+  `/demo/**` 控制器是否跟着生产镜像发布（`docker/Dockerfile:59`）；
+  lifecycle 公开词表要不要加"待修"一档；provider id 该由配置命名还是继续
+  由 Java 类 simple name 推导；实验与集合文档到底该不该可删；
+  `DOCUMENT_LIST_STALE_TIME_MS` 的 10 秒要不要改成 30 秒；
+  要不要放宽 `check-hardcoded-copy` 以覆盖对象字面量属性位。
+- 另六项政策：(a) owner id 是否回落到 `local()`；(b) 三种 `*-allow` 立场
+  是否统一；(c) 债务归零后 `--write-baseline` 是否保留；(d) e2e mock 套件
+  （93/93，2.4 分钟）是否进 CI；(e) `ChatTurnOperationService.stableSnapshot`
+  空响应用哪个错误码；(f) `available` 要不要区分"配置齐全"与"已验证"；
+  (g) 上游 provider 认证/可用性失败该回 500 还是 502/503。
+
+**必须由用户处理（我做不了）**：
+
+- **公开仓库凭据泄露**：GitHub API 确认 `wubuku/spring-ai-rag` 为
+  **public**。`.env.deepspeed` 曾被跟踪并推送到 `main`，含真实形态凭据
+  （DeepSeek / Anthropic / MiniMax / Postgres password / Vision key）。
+  已按用户选择从当前树取消跟踪 + 加 `.gitignore` + 加门禁，但
+  **历史未清、密钥未轮换——轮换只能由用户做**。
+- 用带 `workflow` scope 的凭据应用 `.github/pending/ci-repo-gates.patch`
+  （贴完删掉）。在此之前 76 个门禁里 31 个在 CI 里一条都没跑。
+
+### 构建与门禁状态（收尾时实测，main @ `558247df`）
+
+- 全量 `mvn clean test`：BUILD SUCCESS（21:47:04）——
+  api 557 / core 7693 / documents 74 / starter 44 = **8368** 个 testcase，
+  1009 个测试类，零 `@Disabled`/`@Ignore`。
+- `node scripts/verify-test-visibility.mjs`：passed（991 类 / 7693 用例）
+- `bash scripts/verify-project-tests.sh`：**57 checks passed**
+- `bash scripts/verify-project-docs.sh`：**16 checks passed**
+- `node scripts/verify-gate-wiring.mjs`：passed；76 个门禁脚本已登记
+  （47 automated / 4 entrypoint / 25 manual），48/51 带自测，20 个被 CI 触达。
+
+### 环境备忘（下一个人会踩）
+
+- Node/npm 须先 `export PATH="/opt/homebrew/bin:$HOME/.nvm/versions/node/v24.6.0/bin:$PATH"`；
+  Maven 须先 `export PATH="/opt/homebrew/bin:$PATH"`。
+- 全量测试用 `TESTCONTAINERS_RYUK_DISABLED=true TESTCONTAINERS_PG_IMAGE=postgres:16-pgvector`
+  跑（`testcontainers/ryuk:0.11.0` 本机拉不下来，只有 0.12.0）。
+- **`-pl <单模块>` 跑时，其余模块走的是 `~/.m2` 里的 jar**——跨模块验证
+  改动必须把两个模块一起放进 reactor。
+- **`-DfailIfNoSpecifiedTests=false` 是错的属性名**，正确的是
+  `-Dsurefire.failIfNoSpecifiedTests=false`。写错时构建在前一个模块就停，
+  而 `mvn -q` 会把这个失败完全吞掉；本轮因此差点把一份**上一轮的旧
+  surefire 报告**当成新绿。凡"跑完了"都要先比对报告时间戳。
+- **Surefire `-Dtest=` 匹配不到 `@Nested` 子类**，连 `-Dtest='Outer*'` 这种
+  带通配的写法也够不到。凡改到 `@Nested` 里的用例，定向跑的绿色不算
+  证据，只有全量跑算。用例数一律数 `<testcase>` 元素。
+- 同一模块不要并发跑两次 Maven；不要把 Playwright 与 Maven 并行；
+  全量 `mvn clean test` 必须独占。Maven 完整跑约 3:35–6:45。
