@@ -22546,6 +22546,20 @@ thenAnswer 抛受检异常绕开 `thenThrow` 的泛型检查）。
 
 全量 core 门禁 EXIT=0（04:33 报告）。
 
+### Batch 966：ComponentHealthService 慢响应/降级臂 + EmbeddingJob 便捷构造器
+
+**`ComponentHealthService`（22 mi → 预期归零）**：新开
+`ComponentHealthServiceLatencyTailTest`（3 测）——数据库探针超过
+1s 阈值的 SLOW 臂（68/73 行：mock 探针真实睡 1.1s，断言
+status=SLOW 且 latencyMs>1000）、缓存统计抛异常时 checkCache 的
+fail-open（138-139 行：仍判 UP、details.enabled=false）、
+overallStatus 对 SLOW 组件的 DEGRADED 判定（159 行）。
+
+**`EmbeddingJob`（27 mi → 预期归零）**：新开
+`EmbeddingJobConvenienceCtorTailTest`（1 测）——21 参便捷构造器对
+24 参规范构造器的委托（84-89 行）：透传字段逐项断言 +
+requestGeneration=0、documentKind/chunkerVersion=null 三个补齐默认。
+
 ### 未完成 / 待办（按优先级）
 
 **唯一剩下的普查项**：
