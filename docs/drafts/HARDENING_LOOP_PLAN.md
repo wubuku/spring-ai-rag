@@ -22414,6 +22414,61 @@ CacheMetricsService "can be null / can be provided"，断言却写的是
 **因此本批交付为零改动**，只留这份记录。下一位接手的人要先把机制查清，
 再决定这条路走不走得通——**不要**在没有对照实验的情况下重试同一种写法。
 
+### Batch 962：IntegrationObservationRecorder 生命周期三臂补齐（新增 3 测）
+
+主仓在 Batch 961 收尾后留有一个未跟踪的
+`IntegrationObservationRecorderLifecycleTailTest`（当时 Batch 745 的遗留，
+6 测、编译失败）。本批把它重写为**只补既有
+`IntegrationObservationRecorderTest` 没盖到的三处**，其余三测与既有测试
+重复、删除：
+
+1. `scheduledCleanupSkipsWhenDisabled`——禁用短路面（既有测试只盖了
+   cleanup 的失败臂）。
+2. `scheduledCleanupRecordsSuccessMeterWhenDeleteExpiredReturns`——成功臂
+   + `cleanup{result=success}` 指标断言（既有只有 failure 指标）。
+3. `shutdownBreaksDrainAndDropsRemainingWhenFlushCannotShrinkQueue`——
+   覆盖 `shutdown()` 排空循环里"队列未缩小即 break"的守卫分支（jacoco
+   145 行）。**触发条件是入队后停用**（正向 drain timeout 下
+   `flush()` 因禁用直接返回 0、队列不缩）；既有测试的
+   `shutdownDrainTimeout=ZERO` 臂是直接跳过 while 循环，盖不到这行。
+   顺带修正：早期写法用"upsert 持续失败"去打这行是打不中的——
+   `flush()` 失败路径也**先排空再丢弃**，队列照样缩小。
+
+全量 core 门禁 EXIT=0（02:29 报告，992 测试类）。该类收尾后
+`IntegrationObservationRecorder.java` 只剩 156 行未覆盖。
+
+**两条新登记的"防御性不可达"（勿再投入）**：
+
+- `IntegrationObservationRecorder.dropped` 的 `if (count <= 0) return;`
+  （155-156 行）：三个调用点各自保证 count ≥ 1——`record()` 传字面量 1、
+  `flush()` 传 `batch.size()`（87 行已挡空批次）、`shutdown()` 传
+  `queue.size()`（148 行已挡空队列）。数学上不可达。
+- `ChatExecutionService.streamCandidates` 的
+  `!hasEvent && signal.isOnComplete()` 回退分支（592-596 行）：sink 的
+  第一个信号只可能是"值→complete"或"error"——`completeStreamAttempt`
+  要么返回 `Flux.error`，要么至少发 `SourcesAvailable`+`Completed`。
+  无值 onComplete 经这条管线产生不出来。
+
+**更正 Batch 961 留档里对 `ChatExecutionStreamBudgetTest` 的错误根因**：
+"`streamAttempt()` 复用同一批 mock、后一次覆盖前一次"**不成立**——
+helper 每次新建整套 client/spec/stream，且按 `same(candidate)` 匹配，
+两个桩共存无冲突。真实机制是：**空流不算错误也不触发回退**——聚合器对
+空上游仍会吐一个聚合（空内容）响应，`completeStreamAttempt` 正常走完发
+`Completed`，`switchOnFirst` 看到的第一个信号**有值**，两个回退分支
+（onError 无值 / onComplete 无值）都进不去（与
+`allEmptyCandidateStreamsCompleteWithoutContentOrError` 的断言一致）。
+因此该测试名承诺的"空流回退"与生产行为相反；真正能打到回退路径的
+触发器是**第一个事件之前 onError**。Batch 963 的做法：把
+`emptyCandidateStreamFallsBackToNextCandidate` 重写为
+"primary 流在首事件前报错 → 回退候选吐出 fallback 内容"，断言
+ContentDelta 文本 + `clientFactory.create(same(fallback))` 被调 +
+Completed 的 resolvedModel=fallback。
+
+**环境备忘新增一条**：定向 `-Dtest=` 跑完后 `target/site/jacoco/jacoco.xml`
+会被**只含该类的报告**覆盖——拿它做全局未覆盖扫描会把"只剩 2 行没盖"
+这类假象当真相。全局结论必须出自全量跑后的报告（本批两句"只剩 156 行"
+均以 02:29 全量报告为准）。
+
 ### 未完成 / 待办（按优先级）
 
 **唯一剩下的普查项，两条都需要独立理顺**：
@@ -22421,11 +22476,12 @@ CacheMetricsService "can be null / can be provided"，断言却写的是
 - `RetryConfigTest`——见 Batch 961 一节。已确认探针模板会打崩 fork JVM，
   机制未查清。
 - `ChatExecutionStreamBudgetTest.emptyCandidateStreamFallsBackToNextCandidate`
-  ——补上"回退到第二个候选并吐出 fallback 内容"的断言后是红的：实际输出
-  `Completed[resolvedModel=primary, ... candidateAttempts=1]`，一条
-  `ContentDelta` 都没有。生产侧回退确实存在（`ChatExecutionService.java:591`
-  起）。根因在夹具：`streamAttempt()` 对两个候选复用同一批
-  `client/spec/stream` mock，后一次 `when(spec.stream())` 覆盖前一次。
+  ——测试名承诺的"空流回退"与生产行为相反（空流发 `Completed`、不回退，
+  见 `allEmptyCandidateStreamsCompleteWithoutContentOrError` 与 Batch 962
+  的机制更正）。Batch 963 做法：重写为"primary 首事件前 onError → 回退
+  候选吐 fallback 内容"，断言 ContentDelta 文本 +
+  `create(same(fallback))` + Completed.resolvedModel=fallback。
+  生产侧回退在 `ChatExecutionService.java:581` 起（onError 无值分支）。
 
 **待用户拍板（均已问过多轮，未答复）**：
 
