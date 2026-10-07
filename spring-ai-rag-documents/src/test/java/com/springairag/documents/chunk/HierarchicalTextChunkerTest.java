@@ -32,7 +32,11 @@ class HierarchicalTextChunkerTest {
     @Test
     void split_whitespaceOnly() {
         List<TextChunk> chunks = chunker.split("   \n\n  ");
+        // split() 开头就是 `content == null || content.isBlank()` 早退，
+        // 所以纯空白与空串同一条路。原先这里只有 assertNotNull，
+        // 一个把整段丢进一个块的实现也能过。
         assertNotNull(chunks);
+        assertTrue(chunks.isEmpty(), "纯空白输入不应产出任何块：" + chunks);
     }
 
     @Test
