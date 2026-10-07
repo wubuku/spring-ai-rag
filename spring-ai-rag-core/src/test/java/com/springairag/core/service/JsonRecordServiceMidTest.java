@@ -25,6 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -101,8 +102,17 @@ class JsonRecordServiceMidTest {
 
     @Test
     void searchDetailedDegradesGracefullyWhenRerankFails() {
-        List<RetrievalResult> results = List.of(
-                new RetrievalResult(), new RetrievalResult());
+        // 夹具原先给的是两个 new RetrievalResult()——documentId 为 null。
+        // 而 searchAuthorizedDetailed 在 rerank 之后要按 documentId 去重，
+        // parseDocumentId(null) 返回 null，两条都被丢进"无唯一结果"分支，
+        // 于是结果恒为空。降级逻辑明明跑了（catch 分支把 beforeRerank 原样
+        // 留了下来），这条用例却什么都看不见。
+        // 补上 documentId，降级保留才真的可观测。
+        RetrievalResult first = new RetrievalResult();
+        first.setDocumentId("41");
+        RetrievalResult second = new RetrievalResult();
+        second.setDocumentId("42");
+        List<RetrievalResult> results = List.of(first, second);
         RetrievalOutcome outcome = RetrievalOutcome.ofResults(results);
         when(hybridRetrieverService.searchInScopeDetailed(
                 anyString(), any(), any(), anyInt(),
@@ -110,6 +120,15 @@ class JsonRecordServiceMidTest {
                 .thenReturn(outcome);
         when(reRankingService.rerank(anyString(), any(List.class), anyInt()))
                 .thenThrow(new IllegalStateException("rerank down"));
+        // 夹具还缺最后一环：结果要能落到"JSON 记录文档"上才会出现在响应里。
+        // searchAuthorizedDetailed 先按 documentId 去重，再拿这些 id 去
+        // findByIdInAndDocumentTypeAndEnabledTrue 捞文档；这步没打桩时
+        // Mockito 默认返回空表，于是每一条都被丢掉——降级保没保住，
+        // 从外面看都是一样的空结果。
+        when(documentRepository.findByIdInAndDocumentTypeAndEnabledTrue(
+                anyList(), eq(com.springairag.core.entity.RagDocument.JSON_RECORD)))
+                .thenReturn(List.of(jsonRecordDocument(41L, 7L),
+                        jsonRecordDocument(42L, 7L)));
 
         var detail = service.searchAuthorizedDetailed(
                 "query", RetrievalFilters.none(), null,
@@ -120,6 +139,14 @@ class JsonRecordServiceMidTest {
         // rerank 降级后走 limitResults 保留原有结果集。
         assertNotNull(detail);
         assertNotNull(detail.response());
+        // Batch 958：原来只断到 response 非空。"DegradesGracefully" 的全部
+        // 内容是"rerank 炸了但结果集还在"——那就数一遍结果还在不在。
+        // rerank 抛异常时若被吞成空结果集，这两条 assertNotNull 照样绿。
+        assertEquals(2, detail.traceResults().size(),
+                "rerank 失败后原始结果集必须原样保留：" + detail.traceResults());
+        // 响应里映出来的那份也得是同一批
+        assertEquals(detail.traceResults().size(),
+                detail.response().results().size());
     }
 
     @Test
@@ -182,5 +209,20 @@ class JsonRecordServiceMidTest {
         assertEquals(1, batch.summary().unchanged());
         assertEquals(1, batch.summary().persistenceFailed());
         assertEquals(0, batch.summary().embeddingFailed());
+    }
+
+    /** 一条可用的 JSON 记录文档：id / collectionId / 类型 / 启用都要齐。 */
+    private com.springairag.core.entity.RagDocument jsonRecordDocument(
+            Long id, Long collectionId) {
+        com.springairag.core.entity.RagDocument doc =
+                new com.springairag.core.entity.RagDocument();
+        doc.setId(id);
+        doc.setCollectionId(collectionId);
+        doc.setDocumentType(com.springairag.core.entity.RagDocument.JSON_RECORD);
+        doc.setEnabled(Boolean.TRUE);
+        doc.setTitle("record-" + id);
+        doc.setContent("{}");
+        doc.setSource("upload");
+        return doc;
     }
 }

@@ -112,14 +112,18 @@ class ApiKeyManagementServiceRevokeTest {
 
     @Test
     void constructorOverloadsSmoke() {
-        assertNotNull(new ApiKeyManagementService(
-                apiKeyRepository, principalRepository, null, jdbcTemplate));
-        assertNotNull(new ApiKeyManagementService(
+        // Batch 958：原来三条都是 assertNotNull(new ApiKeyManagementService(...))。
+        // new 出来的东西不可能为 null，这三条断言是纯噪声，删掉之后覆盖一点没减：
+        // 构造器要是抛异常，测试照样红。这个用例真正在验的就是"三个重载都
+        // 构造得出来"，那把构造本身留着就够了。
+        new ApiKeyManagementService(
+                apiKeyRepository, principalRepository, null, jdbcTemplate);
+        new ApiKeyManagementService(
                 apiKeyRepository, principalRepository, null, jdbcTemplate,
-                null, new RagProperties(), null));
-        assertNotNull(new ApiKeyManagementService(
+                null, new RagProperties(), null);
+        new ApiKeyManagementService(
                 apiKeyRepository, principalRepository, null, jdbcTemplate,
-                null, null, new RagProperties(), null));
+                null, null, new RagProperties(), null);
     }
 
     @Test

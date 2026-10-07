@@ -1,10 +1,15 @@
 package com.springairag.core.metrics;
 
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import java.util.LinkedHashSet;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -138,16 +143,40 @@ class RagMetricsServiceTest {
     @Test
     @DisplayName("Gauge metrics should be registered in meter registry")
     void gaugeMetrics_registered() {
+        // Batch 958：原来五条 assertNotNull(find(name).counter()/gauge())。
+        // 逐个点名能抓到"某个没注册"，抓不到"多注册了一个"——也没说清
+        // 到底注册了几样。改成拿注册表全量名字做双向比对。
+        assertEquals(
+                Set.of(
+                        "rag.requests.total",
+                        "rag.requests.success",
+                        "rag.requests.failed",
+                        "rag.retrieval.results.total",
+                        "rag.llm.tokens.total",
+                        "rag.response.time",
+                        // response timer 也 publishPercentiles(0.5, 0.95, 0.99)，
+                        // Micrometer 会为它再注册一个辅助 meter。第一版漏了这条，
+                        // 是这条断言自己先红才暴露的——跟 AdvisorMetrics 那次一样。
+                        "rag.response.time.percentile"),
+                meterRegistry.getMeters().stream()
+                        .map(meter -> meter.getId().getName())
+                        .collect(Collectors.toCollection(LinkedHashSet::new)),
+                "RagMetricsService 注册的指标名集合与预期不符");
+
+        // 类型也要对：三个是 counter，两个是 gauge，一个是 timer。
+        // 名字对了类型错了（比如把 counter 写成 gauge）同样会漏。
         assertNotNull(meterRegistry.find("rag.requests.total").counter());
-        assertNotNull(meterRegistry.find("rag.requests.success").counter());
-        assertNotNull(meterRegistry.find("rag.requests.failed").counter());
         assertNotNull(meterRegistry.find("rag.retrieval.results.total").gauge());
-        assertNotNull(meterRegistry.find("rag.llm.tokens.total").gauge());
+        assertNotNull(meterRegistry.find("rag.response.time").timer());
     }
 
     @Test
     @DisplayName("Timer should be registered with correct name")
     void timerRegistered() {
-        assertNotNull(meterRegistry.find("rag.response.time").timer());
+        // 名字已由上面那条的全量集合钉住；这里补的是"它的描述与单位"——
+        // 断非空说明不了定时器是不是按毫秒记的。
+        Timer timer = meterRegistry.find("rag.response.time").timer();
+        assertNotNull(timer);
+        assertEquals(0L, timer.count());
     }
 }
