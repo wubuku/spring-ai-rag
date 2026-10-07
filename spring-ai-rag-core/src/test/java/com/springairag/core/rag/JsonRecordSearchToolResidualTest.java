@@ -16,6 +16,7 @@ import com.springairag.core.service.JsonRecordService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.model.ToolContext;
+import org.springframework.ai.tool.definition.ToolDefinition;
 
 import java.util.List;
 import java.util.Map;
@@ -93,8 +94,22 @@ class JsonRecordSearchToolResidualTest {
 
     @Test
     void toolMetadataIsProvided() {
+        // Batch 955：原来两条 assertNotNull。名字说"提供了元数据"，
+        // 可名字错了、schema 错了、描述空了，两条照样绿。
         assertNotNull(tool.getToolMetadata());
-        assertNotNull(tool.getToolDefinition());
+        assertFalse(tool.getToolMetadata().returnDirect(),
+                "该工具要经过服务端继续处理，不能直接回给模型");
+
+        ToolDefinition definition = tool.getToolDefinition();
+        assertNotNull(definition);
+        assertEquals(JsonRecordSearchTool.NAME, definition.name());
+        assertFalse(definition.description().isBlank(), "工具描述不得为空");
+        // schema 是模型唯一能看到的入参契约：缺 required 就等于没约束
+        assertNotNull(definition.inputSchema());
+        assertTrue(definition.inputSchema().contains("\"required\":[\"query\"]"),
+                "入参 schema 必须把 query 列为必填：" + definition.inputSchema());
+        assertTrue(definition.inputSchema().contains("payloadContains"),
+                "schema 应包含可选的 payloadContains 过滤项");
     }
 
     @Test
