@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.client.ChatClient;
 
 import java.lang.reflect.Method;
+import java.util.concurrent.CountDownLatch;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -55,8 +56,12 @@ class RetrievalEvaluationInterruptSerializationTailTest {
         when(chatClient.prompt()).thenReturn(spec);
         when(spec.user(anyString())).thenReturn(spec);
         when(spec.call()).thenReturn(call);
+        // Batch 950：原来是 Thread.sleep(10_000)。这条用例验的是"等待评审期间
+        // 线程被中断 → 降级"，阻塞要多久与被验的那件事无关；10 秒只是凭空多
+        // 出来的等待，还会留下一条睡满 10 秒的线程。改成测试持有的 latch。
+        CountDownLatch release = new CountDownLatch(1);
         when(call.content()).thenAnswer(invocation -> {
-            Thread.sleep(10_000);
+            release.await();
             return "{}";
         });
 
@@ -71,6 +76,7 @@ class RetrievalEvaluationInterruptSerializationTailTest {
             assertEquals("REVISION", result.getRecommendation());
             assertTrue(Thread.interrupted(), "中断标志应保留");
         } finally {
+            release.countDown();
             executor.shutdownNow();
         }
     }
