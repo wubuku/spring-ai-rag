@@ -14,6 +14,8 @@ import org.springframework.transaction.support.SimpleTransactionStatus;
 
 import java.time.Duration;
 import java.time.Instant;
+
+import com.springairag.core.testsupport.MutableClock;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -81,6 +83,7 @@ class ChatSessionCoordinatorLeaseTest {
     private RagChatHistoryRepository historyRepository;
     private RagProperties properties;
     private ChatSessionCoordinator coordinator;
+    private MutableClock clock;
 
     private static final ChatPrincipal PRINCIPAL =
             new ChatPrincipal("local:test", "AUTH_DISABLED", false);
@@ -97,12 +100,15 @@ class ChatSessionCoordinatorLeaseTest {
         when(transactionManager.getTransaction(any()))
                 .thenReturn(new SimpleTransactionStatus());
         properties = new RagProperties();
+        // Batch 952：注入可拨的时钟，于是"截止期过去"不用真的睡过去。
+        clock = MutableClock.startingAt(Instant.parse("2026-01-01T00:00:00Z"));
         coordinator = new ChatSessionCoordinator(
                 jdbc,
                 historyRepository,
                 mock(org.springframework.ai.chat.memory.repository.jdbc.JdbcChatMemoryRepository.class),
                 transactionManager,
-                properties);
+                properties,
+                clock);
     }
 
     private ChatCommand command(String sessionId, MemoryMode memoryMode) {
@@ -140,7 +146,10 @@ class ChatSessionCoordinatorLeaseTest {
         ChatSessionCoordinator.LeaseHandle handle =
                 coordinator.acquire(command("session-1", MemoryMode.STATELESS), false);
 
-        assertTrue(handle.deadline().isAfter(Instant.now()));
+        // Batch 952：拿注入的时钟比，而不是真实墙钟——协调器的截止期现在是按
+        // 这个时钟算出来的，拿 Instant.now() 去比等于在比两个不同的“现在”。
+        assertTrue(handle.deadline().isAfter(clock.instant()),
+                () -> "截止期 " + handle.deadline() + " 应晚于获取时刻 " + clock.instant());
         assertEquals(false, jdbc.seenSql.contains("acquire"));
         // stateless 租约释放也不触库。
         coordinator.release(handle);
@@ -194,7 +203,14 @@ class ChatSessionCoordinatorLeaseTest {
         properties.getTimeout().setChatAskMs(1_000);
         ChatSessionCoordinator.LeaseHandle handle =
                 coordinator.acquire(command("session-1", MemoryMode.SERVER), false);
-        Thread.sleep(1_100);
+
+        // 截止期之前：同一条调用路径不该超时。
+        assertEquals("on-time",
+                coordinator.invokeWithinDeadline(handle, () -> "on-time"));
+
+        // 拨过截止期。原来的写法是 Thread.sleep(1_100)：那是一条"等墙钟流逝"的
+        // 单样本时序依赖——机器一慢就假失败，而它验的其实是"睡够了吗"。
+        clock.advance(Duration.ofMillis(1_100));
 
         RagException error = assertThrows(RagException.class,
                 () -> coordinator.invokeWithinDeadline(handle, () -> "late"));
@@ -252,7 +268,10 @@ class ChatSessionCoordinatorLeaseTest {
 
         coordinator.failOperation(handle, null, "ERR", "{}");
 
-        assertTrue(handle.deadline().isAfter(Instant.now().minus(Duration.ofSeconds(5))));
+        assertTrue(handle.deadline().isAfter(
+                        clock.instant().minus(Duration.ofSeconds(5))),
+                () -> "截止期 " + handle.deadline() + " 不该早于获取时刻 "
+                        + clock.instant());
     }
 
     @Test
