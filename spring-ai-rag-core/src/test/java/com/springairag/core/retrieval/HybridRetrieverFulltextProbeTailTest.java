@@ -13,6 +13,7 @@ import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -133,13 +134,22 @@ class HybridRetrieverFulltextProbeTailTest {
                 .thenReturn(fulltextProvider);
         when(fulltextProvider.isAvailable()).thenReturn(true);
         when(fulltextProvider.getName()).thenReturn("fts");
-        // 全文详细检索阻塞 1.5s > 1s 超时 → orTimeout 触发 handle
-        // 错误臂（timeoutOrError）归一为 TIMEOUT。
+        // 全文详细检索阻塞到超过 1s 超时 → orTimeout 触发 handle 错误臂
+        // （timeoutOrError）归一为 TIMEOUT。
+        //
+        // Batch 951：原来是 Thread.sleep(1500)。这里要表达的只是"比 1s 预算更久"，
+        // 1500 里除了"够久"没有别的信息量，还留下一条睡满 1.5 秒的线程。阻塞改由
+        // 测试持有的 latch 控制，finally 里放行。
+        CountDownLatch blocked = new CountDownLatch(1);
         when(fulltextProvider.searchInScopeDetailed(
                 anyString(), any(), any(), anyInt(), any(double.class),
                 any(long.class), any()))
                 .thenAnswer(invocation -> {
-                    Thread.sleep(1500);
+                    try {
+                        blocked.await();
+                    } catch (InterruptedException interrupted) {
+                        Thread.currentThread().interrupt();
+                    }
                     return FulltextSearchProvider.SearchResult.success(
                             List.of());
                 });
@@ -157,6 +167,7 @@ class HybridRetrieverFulltextProbeTailTest {
         var outcome = service.searchInScopeDetailed(
                 QUERY, null, List.of(), 5, null, null);
         pool.shutdown();
+        blocked.countDown();
 
         assertEquals(RetrievalBranchStage.FULLTEXT,
                 outcome.branchStages().get(1).branch());

@@ -10,6 +10,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -38,13 +39,16 @@ class JdbcLlmUsageRecorderTest {
     void synchronousTimeoutIsFailOpenAndDoesNotBlockBeyondBudget() {
         LlmUsageRepository repository = mock(LlmUsageRepository.class);
         CountDownLatch started = new CountDownLatch(1);
+        // Batch 951：原来是 Thread.sleep(1_000)。预算只有 100ms，1000 里除了
+        // "比预算久"没有别的信息量。阻塞改由测试持有的 latch 控制。
+        CountDownLatch release = new CountDownLatch(1);
         when(repository.insert(
                 org.mockito.ArgumentMatchers.any(),
                 org.mockito.ArgumentMatchers.anyInt()))
                 .thenAnswer(invocation -> {
                     started.countDown();
                     try {
-                        Thread.sleep(1_000);
+                        release.await();
                     } catch (InterruptedException interrupted) {
                         Thread.currentThread().interrupt();
                     }
@@ -58,23 +62,29 @@ class JdbcLlmUsageRecorderTest {
                 properties,
                 provider(registry));
 
-        long start = System.nanoTime();
-        assertDoesNotThrow(() -> recorder.record(event()));
-        long elapsedMs = TimeUnit.NANOSECONDS.toMillis(
-                System.nanoTime() - start);
-
         try {
-            assertTrue(started.await(1, TimeUnit.SECONDS));
-        } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
-            throw new AssertionError("repository task did not start", interrupted);
+            assertDoesNotThrow(() -> recorder.record(event()));
+
+            try {
+                assertTrue(started.await(1, TimeUnit.SECONDS));
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                throw new AssertionError("repository task did not start", interrupted);
+            }
+            // 机制钉，取代原来的 assertTrue(elapsedMs < 800, …took N ms)。
+            //
+            // 那条是单样本墙钟阈值：机器一忙就假失败，而它证明的是"跑得够快"，
+            // 不是"没有等这次插入"。这里说的是后者——insert 仍卡在 latch 上，
+            // 而 release 直到 finally 才放，所以 record() 能返回，就说明它没有
+            // 等这次插入做完。如果它真的等了，会一直卡在 release.await() 上，
+            // 表现为整条用例卡死而不是一条阈值断言变红。
+            assertEquals(1L, release.getCount(),
+                    "insert 已经结束，record 也就没有超时可言");
+            assertTrue(awaitLost(recorder));
+        } finally {
+            release.countDown();
+            recorder.shutdown();
         }
-        // 把实测值写进失败信息：这是一条墙钟断言，而它本来测的就是"够快"，
-        // 少了这个数字，红了也只知道超了、不知道超了多少——Batch 944 在另一条同类
-        // 断言上正是靠这个数字才看出"负载"和"回归"的区别。
-        assertTrue(elapsedMs < 800, "record must remain bounded; took " + elapsedMs + "ms");
-        assertTrue(awaitLost(recorder));
-        recorder.shutdown();
     }
 
     @Test
