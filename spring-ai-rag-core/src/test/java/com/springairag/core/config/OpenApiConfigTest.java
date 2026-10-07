@@ -45,15 +45,6 @@ class OpenApiConfigTest {
     }
 
     @Test
-    void globalResponseCustomizer_shouldReturnNonNullCustomizer() {
-        // Act
-        OpenApiCustomizer customizer = config.globalResponseCustomizer();
-
-        // Assert
-        assertNotNull(customizer);
-    }
-
-    @Test
     void globalResponseCustomizer_shouldAdd400And500Responses() {
         // Arrange
         OpenAPI openAPI = new OpenAPI();
@@ -73,5 +64,22 @@ class OpenApiConfigTest {
         assertNotNull(openAPI.getPaths().get("/api/v1/test").getGet().getResponses());
         assertTrue(openAPI.getPaths().get("/api/v1/test").getGet().getResponses().containsKey("400"));
         assertTrue(openAPI.getPaths().get("/api/v1/test").getGet().getResponses().containsKey("500"));
+    }
+
+    @Test
+    void globalResponseCustomizer_toleratesAnOpenApiWithoutPaths() {
+        // Batch 957：删掉了紧挨着的 globalResponseCustomizer_shouldReturnNonNullCustomizer。
+        // 它只断 customizer 非空，而下面那条 shouldAdd400And500Responses
+        // 既取了同一个 customizer、又真的跑了一遍并断言输出里多了 400/500
+        // ——前者一条都没多证明，纯重复。
+        // 换上的这条断的是另一件事：没有 paths 的 OpenAPI（启动早期、
+        // 或者全部路径被过滤掉）不能把定制器本身搞炸。
+        OpenAPI empty = new OpenAPI();
+
+        OpenApiCustomizer customizer = config.globalResponseCustomizer();
+
+        assertDoesNotThrow(() -> customizer.customise(empty));
+        assertTrue(empty.getPaths() == null || empty.getPaths().isEmpty(),
+                "没有路径时不应凭空造出路径");
     }
 }

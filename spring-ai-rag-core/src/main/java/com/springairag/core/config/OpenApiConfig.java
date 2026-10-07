@@ -26,6 +26,9 @@ import java.util.Map;
 @Configuration
 public class OpenApiConfig {
 
+    private static final org.slf4j.Logger log =
+            org.slf4j.LoggerFactory.getLogger(OpenApiConfig.class);
+
     @Value("${server.port:8081}")
     private int serverPort;
 
@@ -80,6 +83,16 @@ public class OpenApiConfig {
                 openApi.getComponents().setSchemas(schemas);
             }
             schemas.put("ErrorResponse", createErrorResponseSchema());
+
+            // paths 可能是 null：new OpenAPI() 的默认就是 null，而这份定制器
+            // 是在 springdoc 组装完之后才跑的——只要那一刻还没填进任何路径
+            // （全部端点被条件关掉、或装配顺序变动），下面这行就会 NPE，
+            // 整个 /v3/api-docs 直接 500。没有路径时没有 operation 可加响应，
+            // 什么都不做就是正确行为。
+            if (openApi.getPaths() == null) {
+                log.debug("OpenAPI 尚无任何路径，跳过统一错误响应注入");
+                return;
+            }
 
             openApi.getPaths().values().forEach(pathItem ->
                 pathItem.readOperations().forEach(operation -> {

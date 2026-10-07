@@ -124,6 +124,13 @@ class RagApiKeyRepositoryTest {
 
             assertNotNull(result.getId());
             assertNotNull(result.getKeyId());
+            // Batch 957：上面两条非空是在绕着弯说"返回的是桩给的那个对象"。
+            // 直接说那句话——存进去什么、返回什么、是同一个。
+            assertSame(saved, result, "save 必须原样返回仓储层给的对象");
+            assertEquals(1L, result.getId());
+            assertEquals("rag_k_xyz789", result.getKeyId());
+            // 反向对照：存进去的那个对象不该被 save 就地改掉 id
+            assertNull(key.getId(), "入参不该被 save 就地改写");
         }
 
         @Test
