@@ -113,7 +113,22 @@ class ModelMetricsServiceTest {
         modelMetricsService.recordSuccess("deepseek", 100);
         modelMetricsService.recordSuccess("anthropic", 200);
 
-        assertNotNull(meterRegistry.find("rag.model.latency").timer());
+        // Batch 954：原来只有一条 assertNotNull(find("rag.model.latency").timer())。
+        // 用例名写着 per provider，可那条不带 tag 的查找**不带 tag 条件**，
+        // 于是只要有一个 provider 注册过就算数——另一个压根没注册也照样绿。
+        // 生产侧 getOrCreateLatencyTimer 是按 provider 打 tag 的，
+        // 这里就按 provider 逐个查，并把次数也钉住。
+        Timer deepseek = meterRegistry.find("rag.model.latency")
+                .tag("provider", "deepseek").timer();
+        assertNotNull(deepseek, "deepseek 应有独立的 latency timer");
+        assertEquals(1, deepseek.count());
+        assertEquals(100, deepseek.totalTime(java.util.concurrent.TimeUnit.MILLISECONDS));
+
+        Timer anthropic = meterRegistry.find("rag.model.latency")
+                .tag("provider", "anthropic").timer();
+        assertNotNull(anthropic, "anthropic 应有独立的 latency timer");
+        assertEquals(1, anthropic.count());
+        assertEquals(200, anthropic.totalTime(java.util.concurrent.TimeUnit.MILLISECONDS));
     }
 
     @Test

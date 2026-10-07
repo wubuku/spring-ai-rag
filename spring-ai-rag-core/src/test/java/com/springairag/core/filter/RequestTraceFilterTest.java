@@ -12,6 +12,8 @@ import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 
 import java.io.IOException;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -36,6 +38,44 @@ class RequestTraceFilterTest {
         MDC.clear();
     }
 
+    /**
+     * 在<strong>链执行的那一刻</strong>把 MDC 整份截下来。
+     *
+     * <p>{@code RequestTraceFilter#doFilter} 在 finally 里把 TRACE_ID_KEY /
+     * SPAN_ID_KEY 都 {@code MDC.remove} 掉了，所以 doFilter 返回之后再去看
+     * MDC，拿到的一定是 null——MDC 里的声明只有链执行期间才可观测。
+     * 过去那条用例的注释写着"can be verified during filter execution"，
+     * 然后就没验，退化成了一句恒真的 assertNotNull。
+     *
+     * <p>这里覆写 {@code MockFilterChain#doFilter} 而不是塞一个 Filter 进去：
+     * 它那几个构造器要的是 {@code Servlet}，而 {@code Servlet} 不是函数式接口，
+     * 硬凑一个出来比覆写难读。
+     */
+    private static final class MdcCapturingChain extends MockFilterChain {
+        private final AtomicReference<Map<String, String>> captured =
+                new AtomicReference<>();
+
+        @Override
+        public void doFilter(jakarta.servlet.ServletRequest req,
+                             jakarta.servlet.ServletResponse res)
+                throws IOException, ServletException {
+            Map<String, String> current = MDC.getCopyOfContextMap();
+            captured.set(current == null ? Map.of() : Map.copyOf(current));
+            super.doFilter(req, res);
+        }
+
+        Map<String, String> captured() {
+            return captured.get();
+        }
+    }
+
+    /** 装好一条会抓 MDC 的链；抓的是整张表，所以多次取用不会互相冲掉。 */
+    private MdcCapturingChain captureMdc() {
+        MdcCapturingChain capturing = new MdcCapturingChain();
+        chain = capturing;
+        return capturing;
+    }
+
     // ==================== Basic Functionality ====================
 
     @Nested
@@ -55,9 +95,16 @@ class RequestTraceFilterTest {
         @Test
         @DisplayName("Response header contains X-Trace-Id")
         void doFilter_setsResponseHeader() throws ServletException, IOException {
+            MdcCapturingChain capturing = captureMdc();
             filter.doFilter(request, response, chain);
 
-            assertNotNull(response.getHeader(RequestTraceFilter.TRACE_ID_HEADER));
+            // 长度由 doFilter_generatesTraceId 负责；这里验的是另一件事——
+            // 响应头里的 id 与链内 MDC 里的 id 必须是同一个值。
+            // 原来只有 assertNotNull(header)，两边对不上也照样绿。
+            String header = response.getHeader(RequestTraceFilter.TRACE_ID_HEADER);
+            assertNotNull(header);
+            assertFalse(header.isBlank(), "traceId 不应为空串");
+            assertEquals(header, capturing.captured().get(RequestTraceFilter.TRACE_ID_KEY));
         }
 
         @Test
@@ -152,8 +199,14 @@ class RequestTraceFilterTest {
             for (int i = 0; i < 10; i++) {
                 request = new MockHttpServletRequest();
                 response = new MockHttpServletResponse();
-                chain = new MockFilterChain();
+                MdcCapturingChain capturing = captureMdc();
                 filter.doFilter(request, response, chain);
+                // 名字写着 always injects MDC，原先却只查了响应头。
+                // 采样率 1.0 的真正承诺是每一次都进 MDC —— 响应头在
+                // 未采样时也可能来自外部传入，两者不是一回事。
+                assertNotNull(capturing.captured().get(RequestTraceFilter.TRACE_ID_KEY),
+                        "request " + (i + 1)
+                            + " should inject traceId into MDC with sampling rate 1.0");
                 assertNotNull(response.getHeader(RequestTraceFilter.TRACE_ID_HEADER),
                         "request " + (i + 1) + " should generate traceId with sampling rate 1.0");
             }
@@ -236,8 +289,15 @@ class RequestTraceFilterTest {
             filter.configure(true, 1.0, true, false);
             filter.doFilter(request, response, chain);
 
-            assertNotNull(response.getHeader("X-Trace-Id"));
-            assertNotNull(response.getHeader("traceparent"));
+            // "also outputs" 的意思是两个头指向同一次追踪，不是"两个都非空"。
+            // 原来正是后者：traceparent 里写的是别的 traceId 也照样绿。
+            String xTraceId = response.getHeader("X-Trace-Id");
+            String traceparent = response.getHeader("traceparent");
+            assertNotNull(xTraceId);
+            assertNotNull(traceparent);
+            assertTrue(traceparent.startsWith("00-" + xTraceId + "-"),
+                    "traceparent 应复用同一个 traceId：" + traceparent);
+            assertEquals(4, traceparent.split("-").length, traceparent);
         }
 
         @Test
@@ -260,13 +320,28 @@ class RequestTraceFilterTest {
         @DisplayName("MDC contains spanId when spanId is enabled")
         void spanIdEnabledAddsToMdc() throws ServletException, IOException {
             filter.configure(true, 1.0, false, true);
+            MdcCapturingChain capturing = captureMdc();
+
             filter.doFilter(request, response, chain);
 
-            String spanId = MDC.get(RequestTraceFilter.SPAN_ID_KEY);
-            // spanId is cleared in finally, but can be verified during filter execution
-            // Here we verify that traceId was at least set
-            assertNotNull(MDC.get(RequestTraceFilter.TRACE_ID_KEY) == null ?
-                    response.getHeader(RequestTraceFilter.TRACE_ID_HEADER) : "ok");
+            // Batch 954：原来的断言是
+            //   assertNotNull(MDC.get(TRACE_ID_KEY) == null
+            //           ? response.getHeader(TRACE_ID_HEADER) : "ok");
+            // 两个分支只要过滤器跑过就都非 null，而上面那句
+            //   String spanId = MDC.get(SPAN_ID_KEY);
+            // 读出来的值压根没用。这条断言在数学上恒成立。
+            // 现在在链内取值：spanId 必须真的进了 MDC，且是 16 位十六进制。
+            Map<String, String> mdc = capturing.captured();
+            assertNotNull(mdc, "链必须真的跑起来");
+            String spanId = mdc.get(RequestTraceFilter.SPAN_ID_KEY);
+            assertNotNull(spanId, "开启 spanId 后 MDC 里必须有 spanId");
+            assertTrue(spanId.matches("[0-9a-f]{16}"), spanId);
+            // traceId 也必须同时在 MDC 里，且与响应头一致
+            assertEquals(response.getHeader(RequestTraceFilter.TRACE_ID_HEADER),
+                    mdc.get(RequestTraceFilter.TRACE_ID_KEY));
+            // finally 必须把两者清干净，不能漏到下一个请求
+            assertNull(MDC.get(RequestTraceFilter.SPAN_ID_KEY));
+            assertNull(MDC.get(RequestTraceFilter.TRACE_ID_KEY));
         }
 
         @Test
