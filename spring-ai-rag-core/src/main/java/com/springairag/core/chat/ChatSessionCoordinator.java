@@ -17,6 +17,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -80,6 +81,8 @@ public class ChatSessionCoordinator {
             RETURNING owner_token
             """;
 
+    /** 租约截止期与超时判定用的时钟；测试可注入以拨动时间（Batch 952）。 */
+    private final Clock clock;
     private final JdbcTemplate jdbcTemplate;
     private final RagChatHistoryRepository historyRepository;
     private final ChatMemory sharedMemory;
@@ -90,12 +93,33 @@ public class ChatSessionCoordinator {
     private ChatTurnOperationRepository operationRepository;
     private ConversationSummaryService summaryService;
 
+    @org.springframework.beans.factory.annotation.Autowired
     public ChatSessionCoordinator(
             JdbcTemplate jdbcTemplate,
             RagChatHistoryRepository historyRepository,
             JdbcChatMemoryRepository memoryRepository,
             PlatformTransactionManager transactionManager,
             RagProperties properties) {
+        this(jdbcTemplate, historyRepository, memoryRepository,
+                transactionManager, properties, Clock.systemUTC());
+    }
+
+    /**
+     * Batch 952：带 {@link Clock} 的构造器，供测试拨动时间。
+     *
+     * <p>租约截止期原本直接取 {@code Instant.now()}，于是唯一能验"截止期过去
+     * 之后抛 CHAT_TIMEOUT"的测试只能真的睡过去（1,100ms）。把时钟变成注入项
+     * 之后，那条用例拨一下即可，而"等待墙钟流逝"这个单样本时序依赖也就没了。
+     * 形态与 {@code LlmCircuitBreaker}（Batch 945）一致。
+     */
+    public ChatSessionCoordinator(
+            JdbcTemplate jdbcTemplate,
+            RagChatHistoryRepository historyRepository,
+            JdbcChatMemoryRepository memoryRepository,
+            PlatformTransactionManager transactionManager,
+            RagProperties properties,
+            Clock clock) {
+        this.clock = clock;
         this.jdbcTemplate = jdbcTemplate;
         this.historyRepository = historyRepository;
         this.properties = properties;
@@ -158,7 +182,7 @@ public class ChatSessionCoordinator {
             Supplier<T> invocation) {
         assertActive(handle);
         long remaining = Duration.between(
-                Instant.now(), handle.deadline).toMillis();
+                clock.instant(), handle.deadline).toMillis();
         if (remaining <= 0) {
             throw timeout();
         }
@@ -539,7 +563,7 @@ public class ChatSessionCoordinator {
         if (handle == null) {
             throw new IllegalArgumentException("lease handle must not be null");
         }
-        if (Instant.now().isAfter(handle.deadline)) {
+        if (clock.instant().isAfter(handle.deadline)) {
             throw timeout();
         }
         if (handle.lost.get()) {
@@ -551,7 +575,7 @@ public class ChatSessionCoordinator {
         int timeoutMs = streaming
                 ? properties.getTimeout().getChatStreamMs()
                 : properties.getTimeout().getChatAskMs();
-        return Instant.now().plusMillis(Math.max(1_000, timeoutMs));
+        return clock.instant().plusMillis(Math.max(1_000, timeoutMs));
     }
 
     private int leaseTtlMs() {
