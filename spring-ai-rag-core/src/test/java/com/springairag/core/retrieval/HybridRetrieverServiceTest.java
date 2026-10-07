@@ -488,7 +488,10 @@ class HybridRetrieverServiceTest {
 
         assertDoesNotThrow(() -> {
             List<RetrievalResult> results = service.search("", null, null, 5);
+            // 空查询这一条 JDBC 全返回空，原先只有"非 null"。
+            // 把实际返回的东西钉住：不该凭空造出一行。
             assertNotNull(results);
+            assertTrue(results.isEmpty(), "空查询不应返回任何结果：" + results);
         });
     }
 
@@ -834,25 +837,41 @@ class HybridRetrieverServiceTest {
         void vectorThrowsException_fallsBackToEmpty_fulltextResultsReturned() {
             embeddingModel = mock(EmbeddingModel.class);
             JdbcTemplate jdbc = mock(JdbcTemplate.class);
-            when(jdbc.queryForObject(eq("SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm'"), eq(Integer.class)))
-                    .thenReturn(1);
+            // 桩的顺序是有讲究的：Mockito 里后注册的通用桩会盖掉先注册的
+            // 具体桩。原先这条把 eq(pg_trgm) 放在前面、anyString() 抛异常
+            // 放在后面，于是连 pg_trgm 探测本身都抛，全文 provider 静悄悄
+            // 落到 NoOp —— 夹具自相矛盾，跟用例名字说的"全文接管"不是
+            // 一回事。所以原来那句"取决于 minScore"的犹疑也是假的：不是
+            // minScore，是压根没有全文 provider。
             when(jdbc.queryForObject(anyString(), eq(Integer.class)))
                     .thenThrow(new DataAccessResourceFailureException("jieba not found"));
+            when(jdbc.queryForObject(eq("SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm'"), eq(Integer.class)))
+                    .thenReturn(1);
+            when(jdbc.queryForObject(contains("gin_trgm_ops"), eq(Boolean.class)))
+                    .thenReturn(true);
             when(embeddingModel.embed(anyString()))
                     .thenThrow(new RuntimeException("embedding API timeout"));
             when(jdbc.queryForList(contains("similarity"), any(Object[].class)))
                     .thenReturn(List.of(fulltextRow(2L, "fulltext result", 0.8)));
 
+            SearchCapabilities capabilities = new SearchCapabilities(jdbc, false);
+            capabilities.setHasPgTrgm(true);
+            capabilities.setHasTrgmIndex(true);
             RagProperties props = new RagProperties();
             props.getAsync().setRetrievalTimeoutSeconds(1);
+            props.getRetrieval().setMinScore(0.0f);
 
-            FulltextSearchProviderFactory factory = new FulltextSearchProviderFactory(jdbc, props);
+            FulltextSearchProviderFactory factory =
+                    new FulltextSearchProviderFactory(jdbc, "auto", capabilities);
             HybridRetrieverService svc = new HybridRetrieverService(
                     embeddingModel, jdbc, props, factory, null);
 
             List<RetrievalResult> results = svc.search("test", null, null, 5);
-            // 向量降级为空，融合结果来自全文（可能为空或含全文结果，取决于 minScore）
-            assertNotNull(results);
+            // Batch 953：原来只有 assertNotNull(results)，连有没有结果都不看，
+            // 紧跟的注释还留着"可能为空或含全文结果，取决于 minScore"。
+            // 夹具修好之后这句话可以兑现：向量侧抛异常，结果里只剩全文那一路。
+            assertEquals(1, results.size(), "只有全文一路有结果：" + results);
+            assertEquals("fulltext result", results.get(0).getChunkText());
         }
 
         @Test
@@ -878,7 +897,10 @@ class HybridRetrieverServiceTest {
 
             assertDoesNotThrow(() -> {
                 List<RetrievalResult> results = svc.search("test", null, null, 5);
+                // 名字写着 returnsEmptyGracefully，原先只断言"不抛 + 非 null"。
+                // 两路都炸时到底返回了什么，没人看着。
                 assertNotNull(results);
+                assertTrue(results.isEmpty(), "两路都失败时应返回空列表：" + results);
             });
         }
 

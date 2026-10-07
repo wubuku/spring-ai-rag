@@ -175,10 +175,51 @@ class SlowQueryMetricsServiceTest {
     }
 
     @Test
-    void recordSlowQuery_nullSql_masksGracefully() {
-        // maskSensitiveSql handles null SQL without throwing
-        var summary = service.getStatsSummary();
-        assertNotNull(summary);
+    void recordSlowQuery_sensitiveSqlIsMaskedInTheLogOnly() {
+        // Batch 953：这条用例原先叫 recordSlowQuery_nullSql_masksGracefully，
+        // 注释写着"maskSensitiveSql 能容忍 null SQL"——可它压根没调
+        // recordSlowQuery，只断言 getStatsSummary() 非 null。而
+        // recordSlowQuery 早就在 Objects.requireNonNull(sql) 处把 null 挡掉了，
+        // 那句注释描述的路径从那时起就不存在了。
+        //
+        // 真正有价值、且当时完全没被覆盖的是另一件事：脱敏只发生在
+        // 日志这一侧（log.warn 收 maskSensitiveSql 的结果），
+        // 留存记录里存的仍是原文。这里把两件事分别钉住。
+        properties.getSlowQuery().setMaxRetained(10);
+        ch.qos.logback.classic.Logger serviceLogger =
+                (ch.qos.logback.classic.Logger)
+                        org.slf4j.LoggerFactory.getLogger(SlowQueryMetricsService.class);
+        ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>
+                appender = new ch.qos.logback.core.read.ListAppender<>();
+        appender.start();
+        serviceLogger.addAppender(appender);
+        try {
+            service.recordSlowQuery(
+                    "SELECT * FROM users WHERE api_key = 'sk-live-supersecret'", 2000);
+
+            String logged = appender.list.stream()
+                    .map(ch.qos.logback.classic.spi.ILoggingEvent::getFormattedMessage)
+                    .filter(message -> message.contains("Slow query detected"))
+                    .findFirst()
+                    .orElseThrow(() -> new AssertionError(
+                            "慢查询日志没产生；实际日志：" + appender.list));
+
+            // 日志侧：密钥被替换掉，原文不出现
+            assertFalse(logged.contains("sk-live-supersecret"),
+                    "原始密钥不得进日志：" + logged);
+            assertTrue(logged.contains("api_key='***'"),
+                    "密钥应被替换为掩码：" + logged);
+
+            // 留存侧：记录的仍是原文（供排障用），且只留一条
+            var recent = service.getRecentSlowQueries();
+            assertEquals(1, recent.size());
+            assertTrue(recent.get(0).sql().contains("sk-live-supersecret"),
+                    "留存记录存的是原文，不该被脱敏");
+            assertEquals(1, service.getTotalSlowQueries());
+        } finally {
+            serviceLogger.detachAppender(appender);
+            appender.stop();
+        }
     }
 
     @Test

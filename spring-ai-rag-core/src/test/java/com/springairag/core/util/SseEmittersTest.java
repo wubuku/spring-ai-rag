@@ -17,10 +17,15 @@ import static org.junit.jupiter.api.Assertions.*;
 class SseEmittersTest {
 
     @Test
-    @DisplayName("create() returns a non-null SseEmitter")
+    @DisplayName("create() returns a no-timeout SseEmitter")
     void create_returnsEmitter() {
         SseEmitter emitter = SseEmitters.create();
+        // 原先只有 assertNotNull(emitter)：create() 是 new SseEmitter(0L)，
+        // 断言一个当场 new 出来的东西非 null，在数学上恒成立。
+        // 真正的声明是「无超时」——0 就是 Spring 的"永不过期"。
         assertNotNull(emitter);
+        assertEquals(0L, emitter.getTimeout(),
+                "SseEmitters.create() 承诺的是无超时 emitter");
     }
 
     @Test
