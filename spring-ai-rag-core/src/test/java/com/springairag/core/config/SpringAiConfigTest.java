@@ -5,6 +5,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.anthropic.AnthropicChatModel;
+import org.springframework.ai.anthropic.AnthropicChatOptions;
 import org.springframework.ai.minimax.MiniMaxChatModel;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.NoSuchBeanDefinitionException;
@@ -71,7 +73,23 @@ class SpringAiConfigTest {
         org.springframework.test.util.ReflectionTestUtils.setField(config, "anthropicMaxTokens", 4096);
 
         ChatModel model = config.anthropicChatModel();
-        assertNotNull(model);
+        // Batch 959：原来只有 assertNotNull(model)。这条用例的全部内容是
+        // "provider 选了 anthropic 时确实建出了 Anthropic 模型"——返回
+        // 任何别的 ChatModel（比如复制粘贴错行、串到 openai 那段去了）
+        // 照样绿。断具体类型才是这句话。
+        assertInstanceOf(AnthropicChatModel.class, model);
+        // 默认参数也要真的落进去，而不是退化成库默认
+        AnthropicChatOptions options =
+                (AnthropicChatOptions) model.getDefaultOptions();
+        assertNotNull(options, "Anthropic 模型必须带上默认参数");
+        assertEquals("claude-3-5-sonnet-20241022", options.getModel());
+        assertEquals(0.7, options.getTemperature(), 1e-6);
+        assertEquals(4096, options.getMaxTokens());
+
+        // 反向对照：provider 不是 anthropic 时必须是 null（这才是 @Bean
+        // 的开关），两条放在一起才分得清"按 provider 选"和"永远建"。
+        setProvider("openai");
+        assertNull(config.anthropicChatModel());
     }
 
     @Test

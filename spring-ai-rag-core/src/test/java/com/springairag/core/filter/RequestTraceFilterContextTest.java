@@ -109,10 +109,30 @@ class RequestTraceFilterContextTest {
             throws ServletException, IOException {
         filter.configure(true, 0.5, false, false);
 
-        filter.doFilter(request, response, chain);
+        // 原来只断 ((MockFilterChain) chain).getRequest() 非空——那是我们
+        // 自己刚传进去的请求对象，任何分支下都在，断言等于没写。
+        // 用例名字承诺的是"ExercisesRandomDecision"，那就断决策本身：
+        // 过滤器把每一次的采样结果写进 SAMPLED_ATTRIBUTE，0.5 的采样率
+        // 必须两种结果都出现过。
+        //
+        // 这是概率断言，但失败概率是 2^-200（ThreadLocalRandom 无固定种子），
+        // 且它断的是"两个分支都可达"，不是"某一次恰好是 true"。
+        int sampled = 0;
+        int rounds = 200;
+        for (int i = 0; i < rounds; i++) {
+            MockHttpServletRequest each = new MockHttpServletRequest();
+            filter.doFilter(each, new MockHttpServletResponse(),
+                    new MockFilterChain());
+            if (Boolean.TRUE.equals(
+                    each.getAttribute(RequestTraceFilter.SAMPLED_ATTRIBUTE))) {
+                sampled++;
+            }
+        }
 
-        // 采样决策随机分支可采可不采：只断言请求正常通过过滤器链。
-        assertNotNull(((MockFilterChain) chain).getRequest());
+        assertTrue(sampled > 0,
+                "0.5 采样率下必须至少采到过一次，实际 " + sampled + "/" + rounds);
+        assertTrue(sampled < rounds,
+                "0.5 采样率下必须至少漏掉过一次，实际 " + sampled + "/" + rounds);
     }
 
     @Test

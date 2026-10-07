@@ -13,7 +13,7 @@ import org.springframework.http.ResponseEntity;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -29,6 +29,12 @@ import static org.mockito.Mockito.when;
  * <p>本类取代两个已删除的用例：它们断言
  * {@code IllegalStateException("Semantic evaluation is not available")}，
  * 而那个状态在运行的应用里不会出现——它们的作用是挪动覆盖率数字。
+ *
+ * <p><b>Batch 959 更正</b>：上面说的 {@code @Autowired(required = false)}
+ * setter 已经在 Batch 850 变成必填构造器参数，那个假可选声明不复存在；
+ * 保留这段历史是因为它说明了本类为什么建，但<b>当前</b>的状态以
+ * {@link #semanticEvaluationServiceIsWiredUnderProductionWiring} 的
+ * 注释为准（断字段身份，而不是断非空）。
  */
 class EvaluationControllerProductionWiringTest {
 
@@ -55,9 +61,13 @@ class EvaluationControllerProductionWiringTest {
         // 而那个守卫在 Batch 822 就删了，**那句话本身已经不成立**。
         // 现在的形态更硬：它是必填构造器参数，容器要么装配上、要么启动失败，
         // 所以"为 null"只可能是有人手写了一个漏传参数的构造调用。
-        assertNotNull(field.get(controller),
-                "semanticEvaluationService is null although it is a required constructor "
-                        + "dependency, so this construction site is missing an argument");
+        //
+        // Batch 959 把断法从 assertNotNull 换成 assertSame：非空挡不住
+        // "构造器把收到的协作对象丢掉了、自己 new 了一个替身"这种改法，
+        // 身份相同才说明字段里就是调用方传进来的那一个。
+        assertSame(semanticEvaluationService, field.get(controller),
+                "semanticEvaluationService must be the very collaborator handed to the "
+                        + "constructor, not a substitute instance");
     }
 
     @Test

@@ -24,10 +24,11 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.ResponseEntity;
 
 import java.lang.reflect.Field;
-import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -109,16 +110,24 @@ class RagDocumentControllerProductionWiringTest {
     /** The claim the whole class exists to make: production wiring has no null. */
     @Test
     void everyNullGuardedCollaboratorIsWired() throws Exception {
-        for (String field : List.of(
-                "documentMutationService", "externalDocumentService",
-                "documentLifecycleService", "derivationDescriptorProvider",
-                "documentRelocationService", "dispatchService",
-                "auditLogService")) {
-            Field f = RagDocumentController.class.getDeclaredField(field);
+        // Batch 959：原来是逐个 assertNotNull。构造器或 setter 接了参数却把
+        // 字段指向别处（自己 new 一个替身、接错相邻参数）时，字段照样非空，
+        // 断不出来。这里按"字段名 -> 传进去的那一个"逐个断身份。
+        Map<String, Object> expected = new LinkedHashMap<>();
+        expected.put("documentMutationService", documentMutationService);
+        expected.put("externalDocumentService", externalDocumentService);
+        expected.put("documentLifecycleService", documentLifecycleService);
+        expected.put("derivationDescriptorProvider", derivationDescriptorProvider);
+        expected.put("documentRelocationService", documentRelocationService);
+        expected.put("dispatchService", dispatchService);
+        expected.put("auditLogService", auditLogService);
+
+        for (Map.Entry<String, Object> entry : expected.entrySet()) {
+            Field f = RagDocumentController.class.getDeclaredField(entry.getKey());
             f.setAccessible(true);
-            assertNotNull(f.get(controller),
-                    field + " is null although production wiring always provides it, "
-                        + "so this construction site is missing an argument");
+            assertSame(entry.getValue(), f.get(controller),
+                    entry.getKey() + " must hold the very collaborator production wiring "
+                        + "passes in, not a substitute instance");
         }
     }
 

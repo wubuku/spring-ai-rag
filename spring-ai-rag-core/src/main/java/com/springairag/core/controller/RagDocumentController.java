@@ -478,9 +478,11 @@ public class RagDocumentController {
         if (collectionIds.isEmpty()) {
             return new CollectionMetadata(Map.of(), Map.of());
         }
-        Map<Long, String> names = collectionRepository.findAllById(collectionIds).stream()
+        List<RagCollection> collections =
+                collectionRepository.findAllById(collectionIds);
+        Map<Long, String> names = collections.stream()
                 .collect(Collectors.toMap(RagCollection::getId, RagCollection::getName));
-        Map<Long, String> keys = collectionRepository.findAllById(collectionIds).stream()
+        Map<Long, String> keys = collections.stream()
                 .collect(Collectors.toMap(RagCollection::getId, RagCollection::getCollectionKey));
         return new CollectionMetadata(names, keys);
     }

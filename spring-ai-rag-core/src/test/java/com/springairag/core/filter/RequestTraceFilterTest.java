@@ -196,6 +196,7 @@ class RequestTraceFilterTest {
         void fullRateAlwaysInjects() throws ServletException, IOException {
             filter.configure(true, 1.0, false, false);
 
+            java.util.Set<String> seenTraceIds = new java.util.LinkedHashSet<>();
             for (int i = 0; i < 10; i++) {
                 request = new MockHttpServletRequest();
                 response = new MockHttpServletResponse();
@@ -209,7 +210,19 @@ class RequestTraceFilterTest {
                             + " should inject traceId into MDC with sampling rate 1.0");
                 assertNotNull(response.getHeader(RequestTraceFilter.TRACE_ID_HEADER),
                         "request " + (i + 1) + " should generate traceId with sampling rate 1.0");
+                // 两条非空断法彼此独立：MDC 里一个 id、响应头另一个 id，
+                // 两条照样都绿，可链路追踪就此对不上（下游按头关联、
+                // 日志按 MDC 关联，两边落在两个 id 上）。
+                // 这条交叉比对才是"同一个 traceId 落到两处"的真正承诺。
+                assertEquals(response.getHeader(RequestTraceFilter.TRACE_ID_HEADER),
+                        capturing.captured().get(RequestTraceFilter.TRACE_ID_KEY),
+                        "request " + (i + 1)
+                            + ": response header and MDC must carry the same traceId");
+                // 10 次循环还顺带钉住"每次都生成"：10 个互不相同的 id。
+                seenTraceIds.add(response.getHeader(RequestTraceFilter.TRACE_ID_HEADER));
             }
+            assertEquals(10, seenTraceIds.size(),
+                    "10 requests at sampling rate 1.0 must produce 10 distinct traceIds");
         }
 
         @Test

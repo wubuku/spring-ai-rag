@@ -126,8 +126,16 @@ class DomainExtensionPipelineIntegrationTest {
         TestMedicalDomainExtension medical = new TestMedicalDomainExtension();
         DomainExtensionRegistry registry = new DomainExtensionRegistry(List.of(medical));
 
-        assertNotNull(registry.getExtension("  "));
-        assertNotNull(registry.getExtension(""));
+        // 原来只断非空：getExtension("  ") 返回随便哪个扩展都算过。
+        // 紧挨着的 nullDomain 用例断的是 getDomainId，这里断的是
+        // "空白串和 null 走同一条默认分支"，所以断默认扩展的身份才对得上
+        // 这条用例自己的承诺。用 assertSame 而不是先断非空：空白串解析成
+        // null 时，assertSame 的失败信息直接说"期望 medical，实得 null"，
+        // 而先 assertNotNull 会把真正的原因挡在后面。
+        assertSame(medical, registry.getExtension("  "),
+                "空白串必须与 null 走同一条默认分支");
+        assertSame(medical, registry.getExtension(""),
+                "空串必须同样落到默认扩展");
     }
 
     @Test

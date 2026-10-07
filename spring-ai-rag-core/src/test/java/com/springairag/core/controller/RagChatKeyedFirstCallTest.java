@@ -31,7 +31,9 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -238,11 +240,42 @@ class RagChatKeyedFirstCallTest {
         when(ragChatService.chatEvents(any(ChatRequest.class), any(), any()))
                 .thenReturn(reactor.core.publisher.Flux.empty());
 
-        SseEmitter emitter = assertDoesNotThrow(
-                () -> controller.stream(request, new MockHttpServletRequest(),
-                        new org.springframework.mock.web.MockHttpServletResponse()),
-                "超长消息不得触发 substring 越界");
+        ch.qos.logback.classic.Logger controllerLogger =
+                (ch.qos.logback.classic.Logger)
+                        org.slf4j.LoggerFactory.getLogger(RagChatController.class);
+        ch.qos.logback.core.read.ListAppender<
+                ch.qos.logback.classic.spi.ILoggingEvent> appender =
+                new ch.qos.logback.core.read.ListAppender<>();
+        appender.start();
+        controllerLogger.addAppender(appender);
+        try {
+            SseEmitter emitter = assertDoesNotThrow(
+                    () -> controller.stream(request, new MockHttpServletRequest(),
+                            new org.springframework.mock.web.MockHttpServletResponse()),
+                    "超长消息不得触发 substring 越界");
 
-        assertNotNull(emitter);
+            assertNotNull(emitter);
+
+            // 原来只有 assertNotNull(emitter)，emitter 在任何分支下都建得起来，
+            // 于是"截断"这件事一次都没被看见 —— 把 100 字写死成别的数、
+            // 或者干脆把整个截断三元删掉改成直接打原文，这里照样绿。
+            //
+            // 现在断的是截断结果本身：150 字进，日志里必须只剩前 100 字加省略号，
+            // 后 50 字一个字都不能漏进日志。
+            String logged = appender.list.stream()
+                    .map(ch.qos.logback.classic.spi.ILoggingEvent::getFormattedMessage)
+                    .filter(m -> m.startsWith("RAG stream:"))
+                    .findFirst()
+                    .orElseThrow(() -> new AssertionError(
+                            "SSE 入口日志没产生；实际日志：" + appender.list));
+            String expectedPreview = "问".repeat(100) + "...";
+            assertTrue(logged.contains(expectedPreview),
+                    "日志预览必须是前 100 字加省略号；实际：" + logged);
+            assertFalse(logged.contains("问".repeat(101)),
+                    "第 101 字起不得进入日志预览；实际：" + logged);
+        } finally {
+            controllerLogger.detachAppender(appender);
+            appender.stop();
+        }
     }
 }
