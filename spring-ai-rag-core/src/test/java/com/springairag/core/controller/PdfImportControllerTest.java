@@ -363,8 +363,25 @@ class PdfImportControllerTest {
 
         Object response = controller.importPdfToRag(pdfFile, null, true);
 
-        // embed=true returns SseEmitter (streamed response)
-        assertNotNull(response);
+        // Batch 948：原来这里是 `assertNotNull(response)` 加一句
+        // "embed=true returns SseEmitter (streamed response)"。SseEmitter 是
+        // streamEmbeddingWithProgress 无条件 new 出来的，所以哪怕
+        // pdfImportService 一次都没被调用，这条用例也是绿的——而它恰恰是这条
+        // 用例唯一该证明的事：embed=true 真的会走导入并落到 SSE 上。
+        assertTrue(response instanceof ResponseEntity, "SSE 分支也包在 ResponseEntity 里");
+        ResponseEntity<?> entity = (ResponseEntity<?>) response;
+        assertEquals(200, entity.getStatusCode().value());
+        assertTrue(entity.getBody() instanceof org.springframework.web.servlet.mvc.method.annotation.SseEmitter,
+                () -> "body 不是 SseEmitter：" + entity.getBody());
+        assertEquals(org.springframework.http.MediaType.TEXT_EVENT_STREAM,
+                entity.getHeaders().getContentType());
+        assertEquals("no-cache", entity.getHeaders().getFirst("Cache-Control"));
+        assertEquals("no", entity.getHeaders().getFirst("X-Accel-Buffering"));
+
+        // 真正把 embed=false 与 embed=true 区分开的，是导入这一步有没有发生。
+        verify(pdfImportService).importPdf(eq(pdfFile), isNull());
+        verify(pdfToRagService, never()).importPdfToRag(
+                anyString(), anyString(), any(), anyBoolean(), anyBoolean());
     }
 
     @Test
@@ -454,15 +471,6 @@ class PdfImportControllerTest {
         assertEquals("COMPLETED", body.embedStatus());
         assertEquals(5, body.chunksCreated());
         assertEquals("uuid-123", body.uuid());
-    }
-
-    @Test
-    void triggerEmbedding_sseMode_returnsSseEmitter() {
-        // SSE mode returns an SseEmitter
-        Object response = controller.triggerEmbedding("uuid-456", null, "sse", false);
-
-        assertNotNull(response);
-        // The actual SSE thread runs async; we just verify it returns non-null
     }
 
     @Test

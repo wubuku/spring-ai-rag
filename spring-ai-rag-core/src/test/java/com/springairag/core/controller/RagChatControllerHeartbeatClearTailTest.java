@@ -36,10 +36,20 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * RagChatController 心跳/清史/幂等响应长尾（Batch 540，JaCoCo 驱
- * 动）：startHeartbeat 关闭与启用两分支、clearHistory 经协调器与
- * 空删除拒绝、prepareTurn 无幂等键走 null 指纹、idempotentResponse
- * 按 keyed claim 与 trace 会话选择性写响应头。
+ * RagChatController 清史/幂等响应长尾（Batch 540，JaCoCo 驱动）：
+ * clearHistory 经协调器与空删除拒绝、prepareTurn 无幂等键走 null 指纹、
+ * idempotentResponse 按 keyed claim 与 trace 会话选择性写响应头。
+ *
+ * <h2>Batch 948：删掉两条 {@code startHeartbeat*} 用例</h2>
+ *
+ * 两条用例都用反射调私有 {@code startHeartbeat}，断言 {@code assertNotNull
+ * (handles)} 再反射调一次 {@code stop()}。{@code startHeartbeat} 无条件返回
+ * 一个 {@code HeartbeatHandles}，断言恒成立；而"启用时调度器真的建了、
+ * 每秒真的把 {@code : heartbeat} 写到了线上"早在 Batch 945 就由
+ * {@code RagChatControllerSseLifecycleTailTest#heartbeatTaskFiresWhenEnabled}
+ * 走 HTTP 通道钉住了，关闭一侧则由 Batch 948 新增的
+ * {@code #heartbeatDisabledEmitsNoCommentFrame} 钉住。留着它们只会让
+ * "心跳两分支有覆盖"这句话看起来成立。
  */
 class RagChatControllerHeartbeatClearTailTest {
 
@@ -77,36 +87,6 @@ class RagChatControllerHeartbeatClearTailTest {
                 .getDeclaredMethod(name, params);
         method.setAccessible(true);
         return method.invoke(controller, args);
-    }
-
-    @Test
-    void startHeartbeatWithoutConfigurationReturnsInactiveHandles()
-            throws Exception {
-        // sseProperties 已注入但心跳未启用 → 空句柄。
-        var handles = invoke("startHeartbeat",
-                new Class<?>[]{org.springframework.web.servlet.mvc.method.annotation.SseEmitter.class},
-                new org.springframework.web.servlet.mvc.method.annotation.SseEmitter());
-
-        assertNotNull(handles);
-        // stop() 对空句柄必须是安全的（包级私有，反射调用）。
-        var stop = handles.getClass().getDeclaredMethod("stop");
-        stop.setAccessible(true);
-        stop.invoke(handles);
-    }
-
-    @Test
-    void startHeartbeatWithEnabledConfigStartsAndStopsScheduler()
-            throws Exception {
-        sseProperties.setHeartbeatIntervalSeconds(1);
-
-        var handles = invoke("startHeartbeat",
-                new Class<?>[]{org.springframework.web.servlet.mvc.method.annotation.SseEmitter.class},
-                new org.springframework.web.servlet.mvc.method.annotation.SseEmitter());
-        assertNotNull(handles);
-
-        var stop = handles.getClass().getDeclaredMethod("stop");
-        stop.setAccessible(true);
-        stop.invoke(handles);
     }
 
     @Test

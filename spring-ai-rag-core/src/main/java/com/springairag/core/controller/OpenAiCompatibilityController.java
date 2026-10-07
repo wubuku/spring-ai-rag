@@ -402,10 +402,10 @@ public class OpenAiCompatibilityController {
                         normalizeFinishReason(response.getFinishReason())))));
         SseEmitter emitter = new SseEmitter(0L);
         try {
-            emitter.send(SseEmitter.event().data(role));
-            emitter.send(SseEmitter.event().data(content));
-            emitter.send(SseEmitter.event().data(finish));
-            emitter.send(SseEmitter.event().data("[DONE]"));
+            emitter.send(SseEmitter.event().data(utf8Frame(role)));
+            emitter.send(SseEmitter.event().data(utf8Frame(content)));
+            emitter.send(SseEmitter.event().data(utf8Frame(finish)));
+            emitter.send(SseEmitter.event().data(utf8Frame("[DONE]")));
             emitter.complete();
         } catch (java.io.IOException error) {
             emitter.completeWithError(error);
@@ -661,9 +661,37 @@ public class OpenAiCompatibilityController {
         }
     }
 
+    /**
+     * 把一帧载荷包成 SSE data 的 UTF-8 字节。
+     *
+     * <p><b>不能直接送 String</b>：Spring 把 {@code SseEmitter.event()
+     * .data(String)} 的载荷交给 {@code StringHttpMessageConverter}，而它的
+     * 默认字符集是 ISO-8859-1（{@code text/event-stream} 不带 charset）。
+     * 实测后果是 /v1/chat/completions 的流式响应里<b>所有非 ASCII 字符都被
+     * 写成 {@code ?}</b>——中文答案、模型别名、上游错误消息一律如此；响应体
+     * 里连一个 &gt;0x7F 的字节都没有，客户端拿到的是 {@code ????}。
+     *
+     * <p>为什么 {@code RagChatController} 的 SSE 不中招：它送的是 Map 对象
+     * 而不是预序列化的字符串，走 Jackson 转换器，UTF-8 正常。只有这个兼容
+     * 入口送的是字符串。
+     *
+     * <p>给 {@code data()} 补 {@code MediaType.APPLICATION_JSON} 没用：
+     * {@code StringHttpMessageConverter} 排在 Jackson 前面且接受任意媒体
+     * 类型，仍然按 ISO-8859-1 写出（实测同样全部变 {@code ?}）。传
+     * {@code byte[]} 才会落到 {@code ByteArrayHttpMessageConverter} 原样
+     * 写出。
+     *
+     * <p>{@code data(byte[])} 不走 SseEmitter 对 String 做的换行拆分
+     * （把换行改写成 {@code data:} 前缀）。本类送出的载荷是 Jackson 紧凑
+     * 输出与 {@code [DONE]}，均为单行，没有行为差异。
+     */
+    private static Object utf8Frame(String value) {
+        return value.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+    }
+
     private void send(SseEmitter emitter, String value) {
         try {
-            emitter.send(SseEmitter.event().data(value));
+            emitter.send(SseEmitter.event().data(utf8Frame(value)));
         } catch (java.io.IOException error) {
             throw Exceptions.propagate(error);
         }
