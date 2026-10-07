@@ -21,8 +21,11 @@ import com.springairag.core.service.ChatExportService;
 import com.springairag.core.service.CollectionRetrievalScopeResolver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter.SseEventBuilder;
 
@@ -30,6 +33,7 @@ import reactor.core.publisher.Flux;
 
 import java.io.IOException;
 import java.lang.reflect.Method;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
@@ -127,53 +131,136 @@ class RagChatControllerTest {
 
     // ==================== stream ====================
 
-    @Test
-    void stream_returnsSseEmitter() {
-        ChatRequest request = new ChatRequest("流式问题", "session-stream");
+    /**
+     * Batch 950：跑一次真实的 HTTP 流式请求，把发出去的 SSE 帧读回来。
+     *
+     * <p>这个类里原来三条 stream 用例的唯一断言是 {@code assertNotNull(emitter)}，
+     * 而 {@code stream} 无条件 {@code SseEmitters.create()} 就把 emitter return 了。
+     * 用 {@code productionController}（带 scopeResolver 的那个）而不是裸
+     * {@code controller}——后者 scopeResolver 为 null，走不了真实请求。
+     *
+     * <p>流可能在 {@code perform} 返回之前就同步收尾，这时 MockMvc 已经把请求
+     * 结算掉、{@code isAsyncStarted()} 为 false，再 {@code asyncDispatch} 会报
+     * "Async not started"。两种形态读同一个响应体，只判断一次。
+     */
+    private String streamBody(String json) throws Exception {
+        when(scopeResolver.resolve(any(), any(), any(), any(), any(), any()))
+                .thenReturn(RetrievalScope.unscoped());
+        MockMvc mockMvc = org.springframework.test.web.servlet.setup.MockMvcBuilders
+                .standaloneSetup(productionController).build();
+        MvcResult started = mockMvc.perform(
+                        org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                                .post("/rag/chat/stream")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json))
+                .andReturn();
+        MvcResult completed = started;
+        if (started.getRequest().isAsyncStarted()) {
+            started.getAsyncResult(10_000);
+            completed = mockMvc.perform(
+                    org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                            .asyncDispatch(started)).andReturn();
+        }
+        return new String(
+                completed.getResponse().getContentAsByteArray(),
+                StandardCharsets.UTF_8);
+    }
 
-        when(ragChatService.chatEvents(any(ChatRequest.class), isNull(), isNull()))
+    /** 按帧解析出的事件名序列。 */
+    private static List<String> eventNames(String body) {
+        return java.util.Arrays.stream(body.split("\n\n"))
+                .map(frame -> frame.lines()
+                        .filter(line -> line.startsWith("event:"))
+                        .map(line -> line.substring("event:".length()).trim())
+                        .findFirst()
+                        .orElse(null))
+                .filter(java.util.Objects::nonNull)
+                .toList();
+    }
+
+    /** 取出所有 content 事件的增量文本，保持出现顺序。 */
+    private static List<String> contentChunks(String body) {
+        List<String> chunks = new java.util.ArrayList<>();
+        for (String frame : body.split("\n\n")) {
+            String name = null;
+            String data = null;
+            for (String line : frame.lines().toList()) {
+                if (line.startsWith("event:")) {
+                    name = line.substring("event:".length()).trim();
+                } else if (line.startsWith("data:")) {
+                    data = line.substring("data:".length()).trim();
+                }
+            }
+            if (!"content".equals(name) || data == null) {
+                continue;
+            }
+            try {
+                chunks.add(new com.fasterxml.jackson.databind.ObjectMapper()
+                        .readTree(data).at("/choices/0/delta/content").asText());
+            } catch (Exception error) {
+                throw new AssertionError("content 帧不是合法 JSON：" + data, error);
+            }
+        }
+        return chunks;
+    }
+
+    @Test
+    void stream_returnsSseEmitter() throws Exception {
+        // 第二、三个参数从 isNull() 换成 any()：MockMvc 通道里 scope 已经被解析成
+        // 真对象，用 isNull() 会让桩**打不中**，而桩打不中的表现是 chatEvents 返回
+        // null，于是"断言 body 里有什么"变成"断言 body 里有个 NPE"。
+        when(ragChatService.chatEvents(any(ChatRequest.class), any(), any()))
                 .thenReturn(Flux.just(
                         new ChatEvent.ContentDelta("Hello"),
                         new ChatEvent.ContentDelta(" World")));
 
-        SseEmitter emitter = controller.stream(request, null, null);
+        String body = streamBody(
+                "{\"message\":\"流式问题\",\"sessionId\":\"session-stream\"}");
 
-        assertNotNull(emitter);
+        // 原来只有 assertNotNull(emitter) 加一句 verify。
+        assertEquals(List.of("Hello", " World"), contentChunks(body),
+                () -> "content 增量不对：\n" + body);
+        // 这条桩只发两个 ContentDelta，没有 Completed 事件——所以响应体里**不该**
+        // 有 done 帧。第一版这里断言"必须有 done"，直接红：流的收尾方式是订阅
+        // 完成（走 onComplete），不是 Completed 事件（走 sendChatEvent）。两者的
+        // 可观测区别就在这一条。
+        assertFalse(eventNames(body).contains("done"),
+                () -> "没有 Completed 事件却发了 done 帧：\n" + body);
         verify(ragChatService).chatEvents(argThat(r ->
                 "流式问题".equals(r.getMessage()) &&
-                "session-stream".equals(r.getSessionId())), isNull(), isNull());
+                "session-stream".equals(r.getSessionId())), any(), any());
     }
 
     @Test
-    void stream_withDomainId_passesToService() {
-        ChatRequest request = new ChatRequest("流式问题", "session-stream");
-        request.setDomainId("medical");
-
-        when(ragChatService.chatEvents(any(ChatRequest.class), isNull(), isNull()))
+    void stream_withDomainId_passesToService() throws Exception {
+        when(ragChatService.chatEvents(any(ChatRequest.class), any(), any()))
                 .thenReturn(Flux.just(new ChatEvent.ContentDelta("回答")));
 
-        SseEmitter emitter = controller.stream(request, null, null);
+        String body = streamBody(
+                "{\"message\":\"流式问题\",\"sessionId\":\"session-stream\","
+                        + "\"domainId\":\"medical\"}");
 
-        assertNotNull(emitter);
+        assertEquals(List.of("回答"), contentChunks(body),
+                () -> "content 增量不对：\n" + body);
         verify(ragChatService).chatEvents(
-                argThat(r -> "medical".equals(r.getDomainId())), isNull(), isNull());
+                argThat(r -> "medical".equals(r.getDomainId())), any(), any());
     }
 
     @Test
-    void stream_withCollectionIds_passesToService() {
-        ChatRequest request = new ChatRequest("流式问题", "session-stream");
-        request.setCollectionIds(List.of(1L, 2L));
-
-        when(ragChatService.chatEvents(any(ChatRequest.class), isNull(), isNull()))
+    void stream_withCollectionIds_passesToService() throws Exception {
+        when(ragChatService.chatEvents(any(ChatRequest.class), any(), any()))
                 .thenReturn(Flux.just(new ChatEvent.ContentDelta("回答")));
 
-        SseEmitter emitter = controller.stream(request, null, null);
+        String body = streamBody(
+                "{\"message\":\"流式问题\",\"sessionId\":\"session-stream\","
+                        + "\"collectionIds\":[1,2]}");
 
-        assertNotNull(emitter);
+        assertEquals(List.of("回答"), contentChunks(body),
+                () -> "content 增量不对：\n" + body);
         verify(ragChatService).chatEvents(argThat(r ->
                 r.getCollectionIds() != null
                         && r.getCollectionIds().equals(List.of(1L, 2L))),
-                isNull(), isNull());
+                any(), any());
     }
 
     @Test

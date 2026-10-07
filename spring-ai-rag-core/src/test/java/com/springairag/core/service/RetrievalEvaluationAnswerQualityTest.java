@@ -13,6 +13,7 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.ai.chat.client.ChatClient;
 
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -54,22 +55,6 @@ class RetrievalEvaluationAnswerQualityTest {
         when(spec.user(anyString())).thenReturn(spec);
         when(spec.call()).thenReturn(call);
         when(call.content()).thenReturn(content);
-    }
-
-    private ChatClient.ChatClientRequestSpec specBlockingForever() {
-        ChatClient chatClient = mock(ChatClient.class);
-        ChatClient.ChatClientRequestSpec spec =
-                mock(ChatClient.ChatClientRequestSpec.class);
-        ChatClient.CallResponseSpec call =
-                mock(ChatClient.CallResponseSpec.class);
-        when(chatClient.prompt()).thenReturn(spec);
-        when(spec.user(anyString())).thenReturn(spec);
-        when(spec.call()).thenReturn(call);
-        when(call.content()).thenAnswer(invocation -> {
-            Thread.sleep(10_000);
-            return "{}";
-        });
-        return spec;
     }
 
     private RetrievalEvaluationServiceImpl serviceWith(ExecutorService executor) {
@@ -118,7 +103,7 @@ class RetrievalEvaluationAnswerQualityTest {
     }
 
     @Test
-    void judgeTimeoutDegradesToNeutralRevision() {
+    void judgeTimeoutDegradesToNeutralRevision() throws InterruptedException {
         ragProperties.getRetrieval().setAnswerQualityTimeoutSeconds(1);
         executorService = Executors.newSingleThreadExecutor();
         ChatClient chatClient = mock(ChatClient.class);
@@ -130,19 +115,27 @@ class RetrievalEvaluationAnswerQualityTest {
         when(chatClient.prompt()).thenReturn(spec);
         when(spec.user(anyString())).thenReturn(spec);
         when(spec.call()).thenReturn(call);
+        // Batch 950：原来是 Thread.sleep(10_000)。这里要表达的只是"评审比 1 秒
+        // 预算更久"，10 秒除了"够久"没有别的信息量，还留下一条睡满 10 秒的
+        // 线程。阻塞改由测试持有的 latch 控制，收尾时放掉。
+        CountDownLatch release = new CountDownLatch(1);
         when(call.content()).thenAnswer(invocation -> {
-            Thread.sleep(10_000);
+            release.await();
             return "{}";
         });
 
-        var result = serviceWith(executorService).evaluateAnswerQuality(
-                "query", "context", "answer");
+        try {
+            var result = serviceWith(executorService).evaluateAnswerQuality(
+                    "query", "context", "answer");
 
-        assertEquals(3, result.getGroundedness());
-        assertEquals("Evaluation timed out, service unavailable",
-                result.getReasoning());
-        assertEquals("REVISION", result.getRecommendation());
-        executorService.shutdownNow();
+            assertEquals(3, result.getGroundedness());
+            assertEquals("Evaluation timed out, service unavailable",
+                    result.getReasoning());
+            assertEquals("REVISION", result.getRecommendation());
+        } finally {
+            release.countDown();
+            executorService.shutdownNow();
+        }
     }
 
     @Test
