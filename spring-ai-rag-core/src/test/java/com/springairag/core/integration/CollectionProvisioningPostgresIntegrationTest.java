@@ -378,8 +378,22 @@ class CollectionProvisioningPostgresIntegrationTest {
         LocalContainerEntityManagerFactoryBean factory =
                 entityManagerFactory(dataSource, "validate");
         try {
+            // 这里真正在断"validate"的是 afterPropertiesSet() 本身：
+            // Hibernate 的 validate 模式遇到映射与迁移结果对不上会直接抛，
+            // 所以能走到下一行本身就说明 schema 被接受。assertNotNull
+            // 几乎不额外贡献什么——BeanFactory 的产物为 null 时
+            // getObject() 走的是懒初始化，多半先抛别的异常。
             factory.afterPropertiesSet();
-            assertNotNull(factory.getObject());
+
+            // 但"建出来"不等于"能用"，这一段补上后半截：真的开一次
+            // session 再关掉。元数据已经加载、连接也已经建立过。
+            jakarta.persistence.EntityManagerFactory emf = factory.getObject();
+            assertNotNull(emf);
+            assertNotNull(emf.getMetamodel().getEntities(),
+                    "元数据里应当有已映射的实体");
+            jakarta.persistence.EntityManager session = emf.createEntityManager();
+            assertNotNull(session);
+            session.close();
         } finally {
             factory.destroy();
         }
