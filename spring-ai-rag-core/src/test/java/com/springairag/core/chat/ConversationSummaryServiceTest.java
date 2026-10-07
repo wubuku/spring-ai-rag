@@ -27,6 +27,8 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -171,21 +173,41 @@ class ConversationSummaryServiceTest {
     }
 
     @Test
-    void timeoutDegradesAndDoesNotBlockMainTurn() {
+    void timeoutDegradesAndDoesNotBlockMainTurn() throws InterruptedException {
         seedSource();
+        // 预算是 20ms。Batch 951：原来是 Thread.sleep(1_000)，1000 里除了"比预算久"
+        // 没有别的信息量，还留下一条睡满 1 秒的线程。阻塞改由测试持有的 latch 控制。
+        CountDownLatch modelBlocked = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
         when(model.call(any(Prompt.class))).thenAnswer(invocation -> {
-            Thread.sleep(1_000);
+            modelBlocked.countDown();
+            try {
+                release.await();
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            }
             return response("late");
         });
         ragProperties.getChat().getContext().setCompactionTimeoutMs(20);
 
-        ConversationSummaryService.CompactionResult result =
-                service.compactIfNeeded(command(budget()), candidate, List.of());
+        ConversationSummaryService.CompactionResult result;
+        try {
+            result = service.compactIfNeeded(
+                    command(budget()), candidate, List.of());
 
-        assertTrue(result.degraded());
-        assertEquals("summary_timeout", result.reason());
-        verify(summaryRepository, never()).saveCas(
-                any(), any(), anyLong(), anyLong(), any(), anyInt(), any());
+            assertTrue(result.degraded());
+            assertEquals("summary_timeout", result.reason());
+            assertTrue(modelBlocked.await(3, TimeUnit.SECONDS),
+                    "模型调用根本没有开始，超时降级就没有被建立起来");
+            // 机制钉：模型调用此刻仍卡在 latch 上，而 release 只在 finally 放——
+            // 所以 compactIfNeeded 能返回，就说明它没有等这次调用做完。
+            assertEquals(1L, release.getCount(),
+                    "模型调用已经结束，降级不是因为等不到它");
+            verify(summaryRepository, never()).saveCas(
+                    any(), any(), anyLong(), anyLong(), any(), anyInt(), any());
+        } finally {
+            release.countDown();
+        }
     }
 
     @Test
