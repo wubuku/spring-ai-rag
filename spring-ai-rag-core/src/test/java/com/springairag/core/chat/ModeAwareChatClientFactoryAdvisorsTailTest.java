@@ -29,6 +29,8 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -164,15 +166,43 @@ class ModeAwareChatClientFactoryAdvisorsTailTest {
 
     @Test
     void providerReturningNullAdvisorIsIgnored() {
-        ModeAwareChatClientFactory configured = factory(List.of(
-                provider("p1", Set.of(ChatMode.KNOWLEDGE),
-                        AdvisorScope.ATTEMPT, null)));
+        // 计数器证明 provider 真的被问过，而不是压根没进这条分支。
+        // 原来的两条 assertNotNull(attempt/client) 只说明 create() 正常返回。
+        //
+        // 说清楚这条**验到**什么、**没验**什么（Batch 955 反向探针实测）：
+        // 验到的是"provider 被调用恰好一次，且返回 null 之后 create() 仍然成功"。
+        // 没验到的是"null 被显式跳过了"——把生产侧那段 `if (advisor == null) continue;`
+        // 整个删掉，这条**照样绿**：OrderedAdvisorAdapter 包一层 null 之后
+        // ChatClient 依然建得起来。也就是说"跳过"与"包一层"在 Attempt 这道
+        // 缝上输出相同，这部分不可观测，不假装覆盖。
+        java.util.concurrent.atomic.AtomicInteger consulted =
+                new java.util.concurrent.atomic.AtomicInteger();
+        RagAdvisorProvider nullAdvisorProvider = new RagAdvisorProvider() {
+            @Override public String getName() { return "p1"; }
+            @Override public int getOrder() { return 0; }
+            @Override public BaseAdvisor createAdvisor() {
+                consulted.incrementAndGet();
+                return null;
+            }
+            @Override public Set<ChatMode> supportedModes() {
+                return Set.of(ChatMode.KNOWLEDGE);
+            }
+            @Override public AdvisorScope advisorScope() { return AdvisorScope.ATTEMPT; }
+        };
+        ModeAwareChatClientFactory configured = factory(List.of(nullAdvisorProvider));
 
         var attempt = configured.create(command(ChatMode.KNOWLEDGE),
                 candidate(), List.of());
 
-        assertNotNull(attempt);
+        assertEquals(1, consulted.get(), "provider 必须被问过一次");
         assertNotNull(attempt.client());
+
+        // 反向对照：换成返回真 advisor 的 provider，同一条链照样建得起来。
+        // 没有这条，"provider 压根没被接进链"也会绿。
+        var withReal = factory(List.of(provider("p2", Set.of(ChatMode.KNOWLEDGE),
+                AdvisorScope.ATTEMPT, passthroughAdvisor())))
+                .create(command(ChatMode.KNOWLEDGE), candidate(), List.of());
+        assertNotNull(withReal.client());
     }
 
     @Test
@@ -232,6 +262,18 @@ class ModeAwareChatClientFactoryAdvisorsTailTest {
                 commandWithBudget, candidate(), List.of());
 
         assertNotNull(attempt.client());
+        // Batch 955：名字写着 WrapsChatModel，可包装后的模型在 Attempt 这道
+        // 缝上看不见（Attempt 只暴露 client / candidate / retrievalContext /
+        // memory），原来那条 assertNotNull 等于什么都没验。
+        // 真正能从这道缝观测到的是：预算被带进了授权上下文。
+        assertSame(commandWithBudget.executionBudget(),
+                attempt.retrievalContext().executionBudget(),
+                "预算必须原样传到 AuthorizedRetrievalContext");
+
+        // 反向对照：不带预算时就是 null，否则上面那条对谁都能过。
+        var withoutBudget = configured.create(
+                command(ChatMode.KNOWLEDGE), candidate(), List.of());
+        assertNull(withoutBudget.retrievalContext().executionBudget());
     }
 
     @Test
@@ -246,6 +288,10 @@ class ModeAwareChatClientFactoryAdvisorsTailTest {
                 commandWithBudget, candidate(), List.of());
 
         assertNotNull(attempt.client());
+        // 同上：queryTransformer / queryExpander 建出来的对象在 Attempt 上
+        // 看不见，可预算进上下文是看得见的，顺带把它钉住。
+        assertSame(commandWithBudget.executionBudget(),
+                attempt.retrievalContext().executionBudget());
     }
 
     /** 仅测试可见的预算注入助手（同包静态反射到 ChatCommand 拷贝）。 */
