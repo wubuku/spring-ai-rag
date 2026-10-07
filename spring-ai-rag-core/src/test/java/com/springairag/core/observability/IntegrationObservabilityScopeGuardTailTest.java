@@ -14,6 +14,7 @@ import java.lang.reflect.Method;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 
@@ -136,6 +137,20 @@ class IntegrationObservabilityScopeGuardTailTest {
 
         Object resolution = invokeResolveScope(request, null, null);
 
-        org.junit.jupiter.api.Assertions.assertNotNull(resolution);
+        // 原来只有 assertNotNull：无论解析出的是"本地免鉴权 ⇒ 完全不加限定"
+        // 还是"回落到某个默认 principal"，这条都绿。名字承诺的是
+        // "Allows local, auth disabled, **without principal id**"，
+        // 那就得断四个字段确实都是 null —— 本地模式下不做任何 principal 限定。
+        assertNull(accessor(resolution, "queryPrincipalType"));
+        assertNull(accessor(resolution, "queryPrincipalRef"));
+        assertNull(accessor(resolution, "responsePrincipalId"));
+        assertNull(accessor(resolution, "collectionIds"));
+    }
+
+    private static Object accessor(Object target, String name) throws Exception {
+        java.lang.reflect.Method method = target.getClass()
+                .getDeclaredMethod(name);
+        method.setAccessible(true);
+        return method.invoke(target);
     }
 }

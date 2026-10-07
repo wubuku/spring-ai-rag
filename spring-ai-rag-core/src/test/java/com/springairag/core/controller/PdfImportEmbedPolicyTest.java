@@ -13,15 +13,18 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import java.util.Optional;
 import java.util.UUID;
 
+import org.mockito.ArgumentCaptor;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import com.springairag.core.service.CollectionIdentityResolver;
 
@@ -109,16 +112,38 @@ class PdfImportEmbedPolicyTest {
 
     @Test
     void sseDefaultVariantDelegatesWithCollectionId() {
-        when(pdfToRagService.triggerEmbedding(
-                any(), any(), anyBoolean()))
+        // 夹具原先打桩的是 pdfToRagService.triggerEmbedding(...)，可 SSE 这条路
+        // 实际走的是 triggerEmbeddingWithProgress(...，progressCallback)——
+        // 桩压根没打中，mock 返回的是 null。原来的 assertNotNull(response
+        // .getBody()) 照样绿，因为它只断 ResponseEntity 和 emitter 存在。
+        //
+        // 顺带一提：这条用例传了 "uuid-4"，却从来没有任何断言检查它到没到
+        // service。一起钉上。
+        //
+        // 另外：控制器把真正的调用丢进虚拟线程异步执行，所以下面那次
+        // verify 必须带 timeout()，否则就是一次竞态（见调用处注释）。
+        when(pdfToRagService.triggerEmbeddingWithProgress(
+                any(), any(), anyBoolean(), any()))
                 .thenReturn(fullResult());
 
-        ResponseEntity<SseEmitter> response =
-                controller.triggerEmbeddingSseDefault(
-                        "uuid-4", 10L, false);
+        controller.triggerEmbeddingSseDefault("uuid-4", 10L, false);
 
-        assertNotNull(response);
-        assertNotNull(response.getBody());
+        ArgumentCaptor<String> uuid = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<Long> collectionId = ArgumentCaptor.forClass(Long.class);
+        ArgumentCaptor<Boolean> force = ArgumentCaptor.forClass(Boolean.class);
+        // 必须带 timeout()：控制器把真正的调用丢进 Thread.ofVirtual()
+        // 异步跑（PdfImportController:694），紧跟着的 verify 是一次竞态。
+        // 单独跑这条用例时它靠运气绿，全量跑（线程池更挤）就红成
+        // "zero interactions with this mock" —— 证据不可信就丢弃。
+        // Mockito 的 timeout() 是轮询到满足为止，不是 sleep。
+        verify(pdfToRagService, org.mockito.Mockito.timeout(10_000))
+                .triggerEmbeddingWithProgress(
+                        uuid.capture(), collectionId.capture(),
+                        force.capture(), any());
+        assertEquals("uuid-4", uuid.getValue(), "uuid 必须原样透传");
+        assertEquals(10L, collectionId.getValue(),
+                "默认变体必须把 collectionId 原样透传给 service");
+        assertFalse(force.getValue(), "forceReembed 应保持调用方传入的 false");
     }
 
     @Test

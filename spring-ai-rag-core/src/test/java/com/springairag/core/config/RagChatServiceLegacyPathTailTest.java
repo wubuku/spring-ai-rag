@@ -34,13 +34,13 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -326,7 +326,6 @@ class RagChatServiceLegacyPathTailTest {
         threeArg.setAccessible(true);
         Object consumer3 =
                 threeArg.invoke(service, "session-1", null, Map.of());
-        assertNotNull(consumer3);
 
         Method fiveArg = com.springairag.core.config.RagChatService.class
                 .getDeclaredMethod("buildAdvisorParams",
@@ -336,6 +335,37 @@ class RagChatServiceLegacyPathTailTest {
         Object consumer5 = fiveArg.invoke(
                 service, "session-1", null, Map.of(),
                 RetrievalScope.unscoped(), 5);
-        assertNotNull(consumer5);
+
+        // 原来只断两个 Consumer 非空。6 参重载的行为紧挨着在
+        // RagChatServiceBuildHelpersTailTest 里断得很细，所以本条真正
+        // 独有的内容是"两个委派重载各自往下一层替换了什么值"：
+        //   3 参 → (unscoped(), 0)；5 参 → executionModel = null
+        // 3 参那次最关键：6 参里 scope 为 null 会被兜底成 unscoped，
+        // 所以"没传 scope"和"传了 unscoped"在结果上分不开；
+        // 真正能分开的是 maxResults —— 3 参必须传 0，
+        // 因为 0 会被 maxResults > 0 的判断挡掉、不出现在 advisor 上。
+        ChatClient.AdvisorSpec spec3 = mock(ChatClient.AdvisorSpec.class);
+        ((java.util.function.Consumer<ChatClient.AdvisorSpec>) consumer3)
+                .accept(spec3);
+        verify(spec3).param(
+                org.springframework.ai.chat.memory.ChatMemory.CONVERSATION_ID,
+                "session-1");
+        verify(spec3).param(
+                com.springairag.core.advisor.HybridSearchAdvisor.RETRIEVAL_SCOPE_KEY,
+                RetrievalScope.unscoped());
+        verify(spec3, org.mockito.Mockito.never())
+                .param(eq("maxResults"), org.mockito.ArgumentMatchers.any());
+
+        // 5 参那次：maxResults=5 必须真的落到 advisor 上，
+        // 且 executionModel 为 null 时不得塞 CTX_EXECUTION_MODEL。
+        ChatClient.AdvisorSpec spec5 = mock(ChatClient.AdvisorSpec.class);
+        ((java.util.function.Consumer<ChatClient.AdvisorSpec>) consumer5)
+                .accept(spec5);
+        verify(spec5).param(
+                com.springairag.core.advisor.HybridSearchAdvisor.MAX_RESULTS_KEY,
+                5);
+        verify(spec5, org.mockito.Mockito.never()).param(
+                eq(com.springairag.core.advisor.QueryRewriteAdvisor.CTX_EXECUTION_MODEL),
+                org.mockito.ArgumentMatchers.any());
     }
 }

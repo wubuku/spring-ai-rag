@@ -16,14 +16,17 @@ import java.sql.ResultSet;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import org.mockito.ArgumentCaptor;
+
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -114,14 +117,18 @@ class ApiPrincipalExpiryAlertLedgerTailTest {
         stubExpiringPrincipalRow();
         // insert 的 RETURNING 行 → ManagedWrite(0 < 1) → 进入
         // claimNotification 的 RETURNING version CAS 写。
+        //
+        // 每列都取互不相同的值（Batch 959）：原来 version 与 state_version
+        // 都是 1，行映射读错成哪一列断言都不会红 —— 那时这条用例只断非空，
+        // 恰恰又是因为读错列它也照样绿。
         when(jdbcTemplate.query(contains("INSERT INTO rag_alerts"),
                 any(RowMapper.class), any(Object[].class)))
                 .thenAnswer(invocation -> {
                     RowMapper<?> mapper = invocation.getArgument(1);
                     ResultSet rs = mock(ResultSet.class);
                     when(rs.getLong("id")).thenReturn(5L);
-                    when(rs.getLong("version")).thenReturn(1L);
-                    when(rs.getInt("state_version")).thenReturn(1);
+                    when(rs.getLong("version")).thenReturn(7L);
+                    when(rs.getInt("state_version")).thenReturn(3);
                     when(rs.getInt("notified_version")).thenReturn(0);
                     return List.of(mapper.mapRow(rs, 0));
                 });
@@ -137,7 +144,26 @@ class ApiPrincipalExpiryAlertLedgerTailTest {
         var result = service(new ObjectMapper())
                 .reconcilePrincipalExpiry("p-1");
 
-        assertNotNull(result);
+        // 夹具里 expires_at = database_now + 5 天：不在 30 天 warning 窗口外，
+        // 又落在 7 天 criticalWindow 内 —— 断具体 phase，而不是断非空。
+        assertEquals(ApiPrincipalExpiryAlertService.Outcome.CREATED,
+                result.outcome(), "无活跃告警行时应走 insert 分支");
+        assertEquals(ApiPrincipalExpiryAlertService.Phase.CRITICAL,
+                result.phase());
+
+        // 这条用例名字承诺的是"托管写 CAS 的行映射读回了 version"，
+        // 而夹具把 INSERT ... RETURNING 行的 version 设成 7、state_version 设成 3。
+        // 断言就落在这儿：CAS 的 WHERE version = ? 谓词必须拿到 version 列
+        // 读出的那个 7，而不是 state_version 的 3、也不是别的列。行映射读错列
+        // / 读成默认值，这里立刻红。
+        ArgumentCaptor<Object[]> casArgs =
+                ArgumentCaptor.forClass(Object[].class);
+        verify(jdbcTemplate).query(
+                contains("RETURNING version"),
+                any(RowMapper.class),
+                casArgs.capture());
+        assertArrayEquals(new Object[]{5L, 7L}, casArgs.getValue(),
+                "CAS 谓词必须用 INSERT RETURNING 行映射读出的 (id, version)");
     }
 
     @Test
