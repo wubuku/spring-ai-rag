@@ -66,13 +66,21 @@ class SseStreamE2ETest {
                 .build();
     }
 
+    private static final com.fasterxml.jackson.databind.ObjectMapper MAPPER =
+            new com.fasterxml.jackson.databind.ObjectMapper();
+
     /**
-     * Batch 945：跑一次真实的 HTTP 流式请求，把发出去的 SSE 帧读回来。
+     * 跑一次真实的 HTTP 流式请求，把发出去的 SSE 帧读回来。
      *
      * <p>直接调 {@code controller.stream(request, null, null)} 时 {@code SseEmitter} 没有
      * handler，{@code send} 只是暂存——所以这个文件里原来有三条用例（唯一断言是
      * {@code assertNotNull(emitter)}）无论控制器怎么坏都绿。套路与
      * {@code RagChatControllerStreamEventTypesTest}（Batch 897）一致。
+     *
+     * <p>Batch 949 补一条：流可能在 {@code perform} 返回之前就同步收尾（源是
+     * {@code Flux.empty()} 之类），MockMvc 这时已经把请求结算掉，
+     * {@code isAsyncStarted()} 为 false，再去 {@code asyncDispatch} 就会失败。
+     * 两种形态都读同一个响应体，所以这里只做一次判断。
      */
     private String streamBody(String message, String sessionId, String domainId) throws Exception {
         StringBuilder json = new StringBuilder("{\"message\":")
@@ -86,10 +94,12 @@ class SseStreamE2ETest {
         MvcResult started = mockMvc.perform(post("/rag/chat/stream")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json.toString()))
-                .andExpect(request().asyncStarted())
                 .andReturn();
-        started.getAsyncResult(10_000);
-        MvcResult completed = mockMvc.perform(asyncDispatch(started)).andReturn();
+        MvcResult completed = started;
+        if (started.getRequest().isAsyncStarted()) {
+            started.getAsyncResult(10_000);
+            completed = mockMvc.perform(asyncDispatch(started)).andReturn();
+        }
         return new String(
                 completed.getResponse().getContentAsByteArray(),
                 StandardCharsets.UTF_8);
@@ -118,13 +128,15 @@ class SseStreamE2ETest {
         return out.append('"').toString();
     }
 
-    private static void assertContains(String body, String fragment) {
-        assertTrue(body.contains(fragment),
-                () -> "SSE body does not carry " + fragment + ":\n" + body);
-    }
-
-    private static void assertEmitted(String body, String eventName) {
-        List<String> names = java.util.Arrays.stream(body.split("\n\n"))
+    /**
+     * Batch 949：按帧解析出的事件名序列。
+     *
+     * <p>不按子串找——Batch 897 抓过一次：{@code "event:tool_startX".contains
+     * ("event:tool_start")} 成立，事件名改错了用例照样绿。{@code event:} 那一行
+     * 不带收尾标记，必须解析。
+     */
+    private static List<String> eventNames(String body) {
+        return java.util.Arrays.stream(body.split("\n\n"))
                 .map(frame -> frame.lines()
                         .filter(line -> line.startsWith("event:"))
                         .map(line -> line.substring("event:".length()).trim())
@@ -132,8 +144,75 @@ class SseStreamE2ETest {
                         .orElse(null))
                 .filter(java.util.Objects::nonNull)
                 .toList();
+    }
+
+    private static void assertContains(String body, String fragment) {
+        assertTrue(body.contains(fragment),
+                () -> "SSE body does not carry " + fragment + ":\n" + body);
+    }
+
+    private static void assertNoContains(String body, String fragment) {
+        assertFalse(body.contains(fragment),
+                () -> "SSE body must not carry " + fragment + ":\n" + body);
+    }
+
+    private static void assertEmitted(String body, String eventName) {
+        List<String> names = eventNames(body);
         assertTrue(names.contains(eventName),
                 () -> "SSE body carries no " + eventName + " event, only " + names + ":\n" + body);
+    }
+
+    private static void assertNoEvent(String body, String eventName) {
+        List<String> names = eventNames(body);
+        assertFalse(names.contains(eventName),
+                () -> "SSE body must not carry a " + eventName + " event, but has " + names + ":\n" + body);
+    }
+
+    /**
+     * 按帧解析出所有 {@code content} 事件的增量文本，保持出现顺序。
+     *
+     * <p>Batch 949：**不能**拿原文子串去匹配。第一版就是这么写的，结果被两件事
+     * 同时打脸：
+     * <ul>
+     *   <li>Jackson 把非 BMP 字符（🚀）写成两个 U+XXXX 的代理对转义。
+     *       那仍然是合法 JSON、客户端解码后还是 🚀，但原文子串永远匹配不上——
+     *       用例红了，而线上其实没坏。（这里刻意不写反斜杠加 u 的转义字面量：
+     *       Java 的 Unicode 转义在词法分析之前生效，注释里写那种形式会让整个
+     *       文件编译失败。）</li>
+     *   <li>反过来，只验"某个子串出现过"也钉不住顺序，更钉不住"不多发"。</li>
+     * </ul>
+     *
+     * <p>所以这里把每帧的 {@code data:} 当 JSON 解析，沿
+     * {@code choices[0].delta.content} 取值。调用方直接拿它和期望列表做
+     * {@code assertEquals} —— 顺序、条数、内容一次全钉住，而且对转义免疫。
+     */
+    private static List<String> contentChunks(String body) {
+        List<String> chunks = new ArrayList<>();
+        for (String frame : body.split("\n\n")) {
+            String name = null;
+            String data = null;
+            for (String line : frame.lines().toList()) {
+                if (line.startsWith("event:")) {
+                    name = line.substring("event:".length()).trim();
+                } else if (line.startsWith("data:")) {
+                    data = line.substring("data:".length()).trim();
+                }
+            }
+            if (!"content".equals(name) || data == null) {
+                continue;
+            }
+            try {
+                chunks.add(MAPPER.readTree(data)
+                        .at("/choices/0/delta/content").asText());
+            } catch (Exception error) {
+                throw new AssertionError("content 帧不是合法 JSON：" + data, error);
+            }
+        }
+        return chunks;
+    }
+
+    private static long countEvents(String body, String eventName) {
+        return eventNames(body).stream().filter(eventName::equals).count();
     }
 
     private void stubStream(String message, String sessionId, String domainId,
@@ -179,10 +258,17 @@ class SseStreamE2ETest {
         stubStream("你好", "session-s1", null,
                 Flux.just("你", "好", "，", "世", "界", "！"));
 
-        ChatRequest request = new ChatRequest("你好", "session-s1");
-        SseEmitter emitter = controller.stream(request, null, null);
+        // Batch 949：原来是直调 controller.stream(...) 再 assertNotNull(emitter)。
+        // 用例名和 @DisplayName 都说的是"多块**按序**到达并以 done 收尾"，而顺序
+        // 与收尾一个字都没验：把事件映射改错、把 concatMap 换成会乱序的算子，它
+        // 照样绿。改走 HTTP 通道逐帧读回来。
+        String body = streamBody("你好", "session-s1", null);
 
-        assertNotNull(emitter);
+        // 顺序、条数、内容一次全钉住：把 concatMap 换成会乱序的算子、或者多发/
+        // 少发一块，用例都会红。子串匹配做不到这一点。
+        assertEquals(List.of("你", "好", "，", "世", "界", "！"),
+                contentChunks(body), () -> "content 增量不对：\n" + body);
+        assertEmitted(body, "done");
         verifyStream("你好", "session-s1", null);
     }
 
@@ -223,15 +309,18 @@ class SseStreamE2ETest {
 
     @Test
     @DisplayName("SSE: domainId is correctly passed to service")
-    void stream_withDomainId_passesCorrectly() {
+    void stream_withDomainId_passesCorrectly() throws Exception {
         stubStream("皮肤问题", "session-d1", "dermatology", Flux.just("皮肤科回答"));
 
-        ChatRequest request = new ChatRequest("皮肤问题", "session-d1");
-        request.setDomainId("dermatology");
+        // Batch 949：原来直调 controller.stream(...) 再 assertNotNull(emitter)。
+        // 改走 HTTP 之后 domainId 不只"到了 service"（那是 verifyStream 一直在做的），
+        // 还得真的能驱动一次完整的 scope 解析与出帧。
+        String body = streamBody("皮肤问题", "session-d1", "dermatology");
 
-        SseEmitter emitter = controller.stream(request, null, null);
-
-        assertNotNull(emitter);
+        assertEquals(List.of("皮肤科回答"), contentChunks(body),
+                () -> "content 增量不对：\n" + body);
+        assertEmitted(body, "done");
+        assertContains(body, "\"sessionId\":\"session-d1\"");
         verifyStream("皮肤问题", "session-d1", "dermatology");
     }
 
@@ -265,28 +354,41 @@ class SseStreamE2ETest {
 
     @Test
     @DisplayName("SSE: completes normally when Flux is empty")
-    void stream_emptyFlux_completesNormally() {
-        stubStream("", "session-empty", null, Flux.empty());
+    void stream_emptyFlux_completesNormally() throws Exception {
+        // 第一版这里给的是空消息 ""，把"零增量"和"用户消息为空白"混成了一个
+        // 维度：后者会在参数校验那一层就短路掉，压根走不到流式分支，响应体是
+        // 空的，"completes normally" 无从谈起。消息必须非空，隔离出来的才是
+        // 真正要验的东西——源不发任何增量时，流仍要正常收尾。
+        stubStream("问题", "session-empty", null, Flux.empty());
 
-        ChatRequest request = new ChatRequest("", "session-empty");
-        SseEmitter emitter = controller.stream(request, null, null);
+        // 没有 content 帧、没有 error 帧，但**必须有** done 帧：少了 done
+        // 就是流没正常收尾，而原来这条用例只有 assertNotNull(emitter)。
+        String body = streamBody("问题", "session-empty", null);
 
-        assertNotNull(emitter);
-        verifyStream("", "session-empty", null);
+        assertEquals(List.of(), contentChunks(body),
+                () -> "空流不该有 content 增量：\n" + body);
+        assertNoEvent(body, "content");
+        assertNoEvent(body, "error");
+        assertEmitted(body, "done");
+        verifyStream("问题", "session-empty", null);
     }
 
     // ==================== Error Handling ====================
 
     @Test
-    @DisplayName("SSE: completeWithError called when Flux emits error")
-    void stream_fluxError_triggersCompleteWithError() {
+    @DisplayName("SSE: error event emitted when Flux errors")
+    void stream_fluxError_triggersCompleteWithError() throws Exception {
         stubStream("出错", "session-err", null,
                 Flux.error(new RuntimeException("LLM 超时")));
 
-        ChatRequest request = new ChatRequest("出错", "session-err");
-        SseEmitter emitter = controller.stream(request, null, null);
+        // Batch 949：原来只有 assertNotNull(emitter)，而用例名说的是
+        // "completeWithError 被调用"。Flux.error 之后 concatWith 的 Completed
+        // 不会到达，所以这里既该有 error 帧、也**不该**有 done 帧。
+        String body = streamBody("出错", "session-err", null);
 
-        assertNotNull(emitter);
+        assertEmitted(body, "error");
+        assertContains(body, "LLM 超时");
+        assertNoEvent(body, "done");
         verifyStream("出错", "session-err", null);
     }
 
@@ -312,7 +414,7 @@ class SseStreamE2ETest {
 
     @Test
     @DisplayName("SSE: 100 tokens streamed without loss")
-    void stream_manyChunks_allDelivered() {
+    void stream_manyChunks_allDelivered() throws Exception {
         // 模拟 100 个 token 的输出
         List<String> tokens = new ArrayList<>();
         for (int i = 0; i < 100; i++) {
@@ -321,10 +423,14 @@ class SseStreamE2ETest {
 
         stubStream("长回答", "session-long", null, Flux.fromIterable(tokens));
 
-        ChatRequest request = new ChatRequest("长回答", "session-long");
-        SseEmitter emitter = controller.stream(request, null, null);
+        // Batch 949：@DisplayName 写的是 "100 tokens streamed without loss"，
+        // 原来只有 assertNotNull(emitter) —— "无损"完全没验。现在同时钉住
+        // 三件事：每块都在、次序没乱、content 帧数恰好 100（不多不少）。
+        String body = streamBody("长回答", "session-long", null);
 
-        assertNotNull(emitter);
+        assertEquals(tokens, contentChunks(body),
+                () -> "100 块增量与发出的不一致；body 长度 " + body.length());
+        assertEmitted(body, "done");
         verifyStream("长回答", "session-long", null);
     }
 
@@ -332,37 +438,71 @@ class SseStreamE2ETest {
 
     @Test
     @DisplayName("SSE: multiple sessions stream independently")
-    void stream_multipleSessions_independentStreams() {
+    void stream_multipleSessions_independentStreams() throws Exception {
         stubStream("问题A", "session-A", null, Flux.just("A的回答"));
         stubStream("问题B", "session-B", null, Flux.just("B的回答"));
         stubStream("问题C", "session-C", null, Flux.just("C的回答"));
 
-        SseEmitter emitterA = controller.stream(new ChatRequest("问题A", "session-A"), null, null);
-        SseEmitter emitterB = controller.stream(new ChatRequest("问题B", "session-B"), null, null);
-        SseEmitter emitterC = controller.stream(new ChatRequest("问题C", "session-C"), null, null);
+        // Batch 949：原来是三句 assertNotNull(emitterX)。"独立"要靠内容来证：
+        // 每个响应体里只该出现自己那一份答案与 sessionId。
+        String a = streamBody("问题A", "session-A", null);
+        String b = streamBody("问题B", "session-B", null);
+        String c = streamBody("问题C", "session-C", null);
 
-        assertNotNull(emitterA);
-        assertNotNull(emitterB);
-        assertNotNull(emitterC);
+        assertContains(a, "A的回答");
+        assertNoContains(a, "B的回答");
+        assertNoContains(a, "C的回答");
+        assertContains(b, "B的回答");
+        assertNoContains(b, "A的回答");
+        assertNoContains(b, "C的回答");
+        assertContains(c, "C的回答");
+        assertNoContains(c, "A的回答");
+        assertNoContains(c, "B的回答");
 
-        verifyStream("问题A", "session-A", null);
-        verifyStream("问题B", "session-B", null);
-        verifyStream("问题C", "session-C", null);
+        // done 帧各自带自己的 sessionId。
+        assertContains(a, "\"sessionId\":\"session-A\"");
+        assertContains(b, "\"sessionId\":\"session-B\"");
+        assertContains(c, "\"sessionId\":\"session-C\"");
     }
 
     // ==================== Chinese and Special Character Handling ====================
 
     @Test
-    @DisplayName("SSE: Chinese and special characters handled correctly")
-    void stream_chineseAndSpecialChars() {
+    @DisplayName("SSE: Chinese and special characters survive the wire as UTF-8")
+    void stream_chineseAndSpecialChars() throws Exception {
         String complexMessage = "请问：如何在 Spring AI 中使用 pgvector？🚀";
         stubStream(complexMessage, "session-cn", null,
-                Flux.just("在 Spring AI 中使用 pgvector 需要...", "（省略）"));
+                Flux.just("在 Spring AI 中使用 pgvector 需要...", "（省略）🚀"));
 
-        ChatRequest request = new ChatRequest(complexMessage, "session-cn");
-        SseEmitter emitter = controller.stream(request, null, null);
+        // Batch 949：@DisplayName 说 "handled correctly"，原来只有
+        // assertNotNull(emitter)。现在这条同时守住**出站**编码：全角括号、中文、
+        // 以及 4 字节的补充平面 emoji 都必须原样落到响应体里。
+        //
+        // 先自检字面量：码点比对。否则响应体与断言同时被编码问题改坏时 contains
+        // 会成立，用例变绿——这正是 Batch 948 在 /v1/chat/completions 上踩过的坑。
+        assertEquals("🚀", new String(Character.toChars(0x1F680)),
+                "本用例的 emoji 字面量被改动了");
+        assertEquals("（省略）", new String(new char[] {0xFF08, 0x7701, 0x7565, 0xFF09}),
+                "本用例的全角括号字面量被改动了");
 
-        assertNotNull(emitter);
+        String body = streamBody(complexMessage, "session-cn", null);
+
+        assertEquals(List.of("在 Spring AI 中使用 pgvector 需要...", "（省略）🚀"),
+                contentChunks(body),
+                () -> "非 ASCII / 补充平面字符没能原样往返：\n" + body);
+        // 上一条是"解码之后"的对不对；这一条钉的是"线上真的是 UTF-8 字节"。
+        // 全角括号在响应体里以原字符出现，说明编码链没把它写成 `?`（Batch 948
+        // 在 /v1/chat/completions 上实测到的就是那种形态），也没被 Jackson 全量
+        // 转义成 U+XXXX 形式。emoji 则相反：Jackson 会把非 BMP 字符写成两个
+        // U+XXXX 的代理对序列，那是合法 JSON、解码后仍是 🚀，所以由上一条负责。
+        // （这里刻意不写反斜杠加 u 的转义字面量：Java 的 Unicode 转义在词法分析
+        // 之前就生效，注释里写那种形式会让整个文件编译失败。）
+        assertContains(body, "（省略）");
+        assertContains(body, "\"sessionId\":\"session-cn\"");
+        // U+FFFD 是编码链路走错时的典型产物，这里不该出现。
+        assertNoContains(body, "\uFFFD");
+        // 入站方向：带 emoji 的请求消息必须原样到达 service（桩按消息匹配，打不中
+        // 就意味着 chatEvents 返回 null，后面的帧断言会变成断言一个 NPE）。
         verifyStream(complexMessage, "session-cn", null);
     }
 
