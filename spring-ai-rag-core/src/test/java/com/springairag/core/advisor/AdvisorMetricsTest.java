@@ -6,6 +6,10 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.LinkedHashSet;
+import java.util.Set;
+import java.util.stream.Collectors;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
@@ -25,14 +29,35 @@ class AdvisorMetricsTest {
 
     @Test
     void init_createsAllTimersAndCounters() {
-        assertNotNull(advisorMetrics.getQueryRewriteTimer());
-        assertNotNull(advisorMetrics.getHybridSearchTimer());
-        assertNotNull(advisorMetrics.getRerankTimer());
-        assertNotNull(advisorMetrics.getQueryRewriteCount());
-        assertNotNull(advisorMetrics.getHybridSearchCount());
-        assertNotNull(advisorMetrics.getHybridSearchResultsCount());
-        assertNotNull(advisorMetrics.getRerankCount());
-        assertNotNull(advisorMetrics.getRerankSkippedCount());
+        // Batch 954：原来这里是 8 条 assertNotNull(getXxx())。名字写着
+        // "creates ALL"，可逐个非空既抓不到"多注册了一个"也抓不到
+        // "某个注册到了别的名字上"——getter 非空并不说明名字对。
+        // 改成拿注册表的全量名字集合做双向比对。
+        assertEquals(
+                Set.of(
+                        "rag.advisor.query_rewrite.duration",
+                        "rag.advisor.hybrid_search.duration",
+                        "rag.advisor.rerank.duration",
+                        // 三个 timer 都 publishPercentiles(0.5, 0.95, 0.99)，
+                        // Micrometer 会为每个再注册一个辅助 meter。
+                        // 这三条第一版漏了，是这条断言自己先红才暴露的。
+                        "rag.advisor.query_rewrite.duration.percentile",
+                        "rag.advisor.hybrid_search.duration.percentile",
+                        "rag.advisor.rerank.duration.percentile",
+                        "rag.advisor.query_rewrite.count",
+                        "rag.advisor.hybrid_search.count",
+                        "rag.advisor.hybrid_search.results",
+                        "rag.advisor.rerank.count",
+                        "rag.advisor.rerank.skipped"),
+                registeredMeterNames(),
+                "init() 注册的指标名集合与预期不符");
+    }
+
+    /** 初始化后注册表里应当只有这 8 个 meter，一个不多一个不少。 */
+    private Set<String> registeredMeterNames() {
+        return meterRegistry.getMeters().stream()
+                .map(meter -> meter.getId().getName())
+                .collect(Collectors.toCollection(LinkedHashSet::new));
     }
 
     @Test

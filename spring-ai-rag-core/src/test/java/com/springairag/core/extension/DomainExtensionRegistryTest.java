@@ -108,8 +108,14 @@ class DomainExtensionRegistryTest {
         TestDomainExtension ext = new TestDomainExtension("skin", "Skin Detection");
         DomainExtensionRegistry registry = new DomainExtensionRegistry(List.of(ext));
 
-        assertNotNull(registry.getExtension("  "));
-        assertNotNull(registry.getExtension(""));
+        // Batch 954：原来只有两条 assertNotNull(getExtension("  "))。
+        // 名字写着 returnsDefault，可"返回的是哪个默认扩展"没验——
+        // 哪怕它随便返回列表里任何一个扩展，这两条也照样绿。
+        assertEquals("skin", registry.getExtension("  ").getDomainId());
+        assertEquals("skin", registry.getExtension("").getDomainId());
+        // 空白键必须落到默认扩展，而不是 extensions 里的同键查找结果
+        assertSame(registry.getExtension(null),
+                registry.getExtension("  "));
     }
 
     @Test
