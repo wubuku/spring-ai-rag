@@ -22493,6 +22493,31 @@ resolvedModel 此前从未被验证），不在新行。587 行三元
 error" 半边：Reactor 的 onError 信号必然携带 throwable，该半边同为
 防御性不可达，随本批登记。
 
+### Batch 964：RetrievalScopeSql 七臂补齐 + 指纹终局序列化包装契约
+
+**`RetrievalScopeSql`（25 mi → 预期归零）**：既有测试只有 1 条，新开
+`RetrievalScopeSqlArmsTailTest`（6 测）盖掉全部七个散臂——一参重载
+（等价无过滤器，SqlArrayValue 未实现 equals，参数只比长度与非数组
+元素）、payload 单过滤器重载、null scope/null filters 双回退
+（含 buildDocumentOnly 路径）、SELECTED+空集构造器即置 matchNone 的
+`AND 1 = 0` 短路、ANY_ASSIGNED 的 `collection_id IS NOT NULL` 臂、
+Fragment 规范构造器的 null 归一。纯逻辑、零 mock。
+
+**`ChatRequestFingerprint`（26 mi → 剩 60/340 两处防御性，登记）**：
+
+- 新开 `ChatRequestFingerprintCanonicalizeWrapTailTest`（2 测）验证两处
+  终局序列化 catch（原生 100-101 / OpenAI 192-193）的包装契约：错误码
+  IDEMPOTENCY_REQUEST_METADATA_INVALID + 专属消息。原生路径的自然失败
+  实际进不来——validateMetadata 用同一个 mapper 对 clientMetadata 做
+  过预序列化（266 行），同一棵子树第二次写不可能单独失败，root 其余
+  部分全是 primitive put——所以用"第 1 次真跑、第 2 次抛"的顺序桩
+  （doAnswer(...).doThrow(...)，do 系不触真方法，when 系会）。
+- **登记三处勿再投入**：60 行 `getMode()==null` 半边——`ChatRequest`
+  的 getter/setter 都会把 null 归一成 KNOWLEDGE（121-126 行），DTO
+  边界外造不出 null；340-341 行 SHA-256 的 NoSuchAlgorithmException
+  ——JVM 必备算法；100-101/192-193 本体自然不可达（如上，属 mock
+  可达的包装契约，契约已测）。
+
 ### 未完成 / 待办（按优先级）
 
 **唯一剩下的普查项**：
