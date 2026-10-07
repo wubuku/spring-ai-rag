@@ -198,6 +198,10 @@ class RagClientErrorRepositoryTest {
             RagClientError result = repository.save(e);
 
             assertNotNull(result.getId());
+            // Batch 957：同上——非空是在绕着弯说"就是桩返回的那个"。
+            assertSame(saved, result, "save 必须原样返回仓储层给的对象");
+            assertEquals(1L, result.getId());
+            assertNull(e.getId(), "入参不该被 save 就地改写");
         }
 
         @Test
