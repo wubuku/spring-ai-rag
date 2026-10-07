@@ -372,4 +372,41 @@ class RagChatControllerSseLifecycleTailTest {
                 () -> "1 秒间隔的心跳没有出现在 SSE body 里:\n" + body);
         assertContains(body, "慢内容");
     }
+
+    /**
+     * Batch 948：心跳关闭的<b>负面对照</b>。
+     *
+     * <p>上面那条只证明"启用时会发"。反过来"关掉 {@code
+     * RagSseProperties#isHeartbeatEnabled()} 之后不应该再有心跳帧"一直没有
+     * 被钉住——而 {@code startHeartbeat} 里那个 {@code !isHeartbeatEnabled()}
+     * 短路正是靠它才有意义。把它拿掉，上面那条照样绿。
+     *
+     * <p>这里必须让内容<b>晚于</b>一个心跳周期才到：只有这样，一旦调度器
+     * 被误启动，1 秒处就会出现 {@code : heartbeat}，断言才会红。内容提前
+     * 到达的话，流已经结束，负面对照恒成立。
+     */
+    @Test
+    void heartbeatDisabledEmitsNoCommentFrame() throws Exception {
+        RagSseProperties off = new RagSseProperties();
+        off.setHeartbeatIntervalSeconds(0);
+        RagChatController noHeartbeat = new RagChatController(
+                ragChatService,
+                mock(RagChatHistoryRepository.class),
+                mock(ChatExportService.class),
+                off,
+                scopeResolver,
+                mock(AuditLogService.class));
+        noHeartbeat.configureTurnOperationService(turnOperationService);
+        noHeartbeat.configureSessionCoordinator(coordinator);
+        mockMvc = org.springframework.test.web.servlet.setup.MockMvcBuilders
+                .standaloneSetup(noHeartbeat).build();
+        stubNonKeyedStream(Flux.just(delta("慢内容"), completed())
+                .delaySubscription(Duration.ofMillis(1500)));
+
+        String body = streamBody();
+
+        assertFalse(body.contains(": heartbeat"),
+                () -> "心跳已关闭，响应体里却出现了心跳帧:\n" + body);
+        assertContains(body, "慢内容");
+    }
 }

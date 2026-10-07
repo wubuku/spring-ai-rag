@@ -25,6 +25,13 @@ OpenAI-like `choices[].delta.content` 结构，但本端点不是标准
 | `done` | 成功终态 |
 | `error` | 失败终态 |
 
+所有 SSE 响应体以 **UTF-8** 编码；`text/event-stream` 响应头不携带 `charset`
+参数，编码由写入端固定。这一点对 `/v1/chat/completions` 尤其要紧：它发送的是
+预序列化的 JSON 字符串而非对象，若按 Spring `StringHttpMessageConverter` 的
+默认字符集（ISO-8859-1）写出，答案里的中文、模型别名和上游错误消息都会变成
+`?`。实现侧见 `OpenAiCompatibilityController#utf8Frame`；回归测试见
+`OpenAiCompatibilitySseLifecycleTailTest#nonAsciiAnswerAndModelAliasSurviveAsUtf8`。
+
 `done` 与 `error` 互斥。成功流中 `sources` 在 `done` 前发送。心跳使用 SSE
 comment，不是业务事件。
 

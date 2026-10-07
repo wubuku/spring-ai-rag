@@ -34,10 +34,22 @@ import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verify;
 
 /**
- * OpenAI 兼容控制器流式与映射长尾（Batch 548，JaCoCo 驱动）：json
- * Response 发送后完成、mapEvent 的增量/完成/未知事件三分支、
- * toResponse 双重载（执行结果 usage/finishReason 与原生响应 null
- * 归一）、send 的 IO 异常传播、prepareTurn 携带集合头 OpenAI 指纹。
+ * OpenAI 兼容控制器流式与映射长尾（Batch 548，JaCoCo 驱动）：mapEvent
+ * 的增量/完成/未知事件三分支、toResponse 双重载（执行结果
+ * usage/finishReason 与原生响应 null 归一）、send 的 IO 异常传播、
+ * prepareTurn 携带集合头 OpenAI 指纹。
+ *
+ * <h2>Batch 948：删掉 {@code jsonResponseEmitsAndCompletes}</h2>
+ *
+ * 原来这里有一条 {@code jsonResponseEmitsAndCompletes}，反射调私有
+ * {@code jsonResponse(Map.of("ok", true))}，断言 {@code assertNotNull(emitter)}。
+ * {@code jsonResponse} 无条件 {@code new ResponseBodyEmitter(0L)}，
+ * 所以断言恒成立；而它真正做的事（把对象发出去并 complete）已经被
+ * {@code OpenAiCompatibilityControllerWebTest
+ * #nonStreamingCompletionUsesOpenAiEnvelope} 通过 HTTP 端到端断言
+ * （{@code jsonPath("$.object").value("chat.completion")} 等），幂等键
+ * 路径另有 {@code OpenAiCompatibilityKeyedTurnTest}。留着的唯一效果是
+ * 让"非流式分支有覆盖"这句话看起来成立，所以删掉而不是改写。
  */
 class OpenAiCompatibilityEventMappingTailTest {
 
@@ -73,16 +85,6 @@ class OpenAiCompatibilityEventMappingTailTest {
                 Map.of("promptTokens", 3, "completionTokens", 5,
                         "totalTokens", 8),
                 "STOP", List.of(), Map.of());
-    }
-
-    @Test
-    void jsonResponseEmitsAndCompletes() throws Exception {
-        var emitter = (org.springframework.web.servlet.mvc.method.annotation
-                .ResponseBodyEmitter)
-                invoke("jsonResponse",
-                        new Class<?>[]{Object.class}, Map.of("ok", true));
-
-        assertNotNull(emitter);
     }
 
     @Test

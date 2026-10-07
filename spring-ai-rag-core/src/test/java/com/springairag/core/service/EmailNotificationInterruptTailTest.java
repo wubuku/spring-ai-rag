@@ -2,6 +2,7 @@ package com.springairag.core.service;
 
 import com.springairag.core.config.NotificationConfig;
 import jakarta.mail.MessagingException;
+import jakarta.mail.Session;
 import jakarta.mail.internet.MimeMessage;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -10,14 +11,21 @@ import org.springframework.mail.javamail.JavaMailSender;
 import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 /**
  * EmailNotificationService 中断与转义长尾（Batch 701，JaCoCo 驱
@@ -39,8 +47,6 @@ class EmailNotificationInterruptTailTest {
         email.setTo(List.of("ops@rag.local"));
         email.setAlertTypes(List.of("AVAILABILITY"));
         mailSender = mock(JavaMailSender.class);
-        doThrow(new IllegalStateException("smtp down"))
-                .when(mailSender).send(any(MimeMessage.class));
     }
 
     private EmailNotificationService service() {
@@ -50,18 +56,46 @@ class EmailNotificationInterruptTailTest {
     @Test
     void interruptDuringRetryBackoffStopsRetries() throws Exception {
         EmailNotificationService service = service();
+        AtomicReference<Thread> workerRef = new AtomicReference<>();
+        AtomicBoolean interruptFlagPreserved = new AtomicBoolean();
         CompletableFuture<Boolean> future = new CompletableFuture<>();
-        Thread worker = new Thread(() -> future.complete(
-                service.sendAlert("AVAILABILITY", "DB", "CRITICAL",
-                        "unreachable", Map.of()).join()));
+
+        // 夹具修正：sendEmail 第一步就是 mailSender.createMimeMessage()，mock 默认
+        // 返回 null，紧接着的 new MimeMessageHelper(null, true, "UTF-8") 会在
+        // 走到 mailSender.send() 之前就抛 NPE（实测：
+        // "Cannot invoke MimeMessage.setContent because mimeMessage is null"）。
+        // 也就是说原来 setUp 里那句 doThrow("smtp down").send(...) 从来没被打中，
+        // 三次重试全都死在同一个 NPE 上，注释里说的"首次发送失败"从来不是
+        // smtp 失败。给 createMimeMessage 一封真信，桩才打得到真正的发送。
+        when(mailSender.createMimeMessage()).thenAnswer(invocation ->
+                new MimeMessage(Session.getInstance(new Properties())));
+        doAnswer(invocation -> {
+            // 精确地把中断打在"首次发送失败、下一次退避 Thread.sleep 之前"，
+            // 不再用 sleep(150) 去赌时序。
+            workerRef.get().interrupt();
+            throw new IllegalStateException("smtp down");
+        }).when(mailSender).send(any(MimeMessage.class));
+
+        Thread worker = new Thread(() -> {
+            workerRef.set(Thread.currentThread());
+            Boolean result = service.sendAlert("AVAILABILITY", "DB", "CRITICAL",
+                    "unreachable", Map.of()).join();
+            interruptFlagPreserved.set(Thread.currentThread().isInterrupted());
+            future.complete(result);
+        });
         worker.start();
-        // 等待首次发送失败进入 500ms 退避睡眠，然后中断。
-        Thread.sleep(150);
-        worker.interrupt();
         worker.join(TimeUnit.SECONDS.toMillis(5));
 
-        assertTrue(!worker.isAlive());
+        assertFalse(worker.isAlive(), "工作线程没有在 5 秒内退出");
         assertEquals(Boolean.FALSE, future.get(2, TimeUnit.SECONDS));
+
+        // 这两条才是"中断真的起作用了"的证据。原来的断言只看返回值 false，
+        // 而跑满 3 次重试（500ms + 1000ms 退避）后返回值**也是** false——
+        // 也就是说即使中断完全失效，这条用例照样是绿的。
+        verify(mailSender, times(1)).send(any(MimeMessage.class));
+        assertTrue(interruptFlagPreserved.get(),
+                "中断位没有被复原：生产代码在 InterruptedException 分支里"
+                        + "调了 Thread.currentThread().interrupt()");
     }
 
     private String invokeString(String name, Class<?> type, Object arg)
