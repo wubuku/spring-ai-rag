@@ -19,6 +19,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 
+import java.util.Map;
+
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
@@ -104,7 +106,17 @@ class GeneralRagAutoConfigurationBeanTest {
         void cacheMetricsServiceCanBeNull() {
             JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
             ComponentHealthService service = config.componentHealthService(jdbcTemplate, null);
-            assertNotNull(service);
+
+            // 原来只断 ComponentHealthService 非空 —— 而它由
+            // `new ComponentHealthService(...)` 造出来，任何分支下都非空，
+            // 断不出"null 参数有没有被正确处理"。
+            // DisplayName 说的是 CacheMetricsService **can be null**，
+            // 那就断这条路径真正产生的东西：checkCache() 走 else 臂，
+            // details 是 {enabled: false}，而不是统计字段。
+            ComponentHealthService.ComponentStatus status = service.checkCache();
+
+            assertEquals("UP", status.status());
+            assertEquals(Map.of("enabled", false), status.details());
         }
 
         @Test
@@ -112,8 +124,37 @@ class GeneralRagAutoConfigurationBeanTest {
         void cacheMetricsServiceCanBeProvided() {
             JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
             CacheMetricsService cacheMetrics = mock(CacheMetricsService.class);
+            org.mockito.Mockito.when(cacheMetrics.getStats())
+                    .thenReturn(Map.of("hitRate", 0.75, "hitCount", 30L, "missCount", 10L));
             ComponentHealthService service = config.componentHealthService(jdbcTemplate, cacheMetrics);
-            assertNotNull(service);
+
+            // 这条与上面那条的输入只差一个参数，断言却原来一模一样，
+            // 于是"传进去的 cacheMetrics 到底有没有被用上"根本没人管。
+            // 断 details 里出现统计字段，就分得清了。
+            ComponentHealthService.ComponentStatus status = service.checkCache();
+
+            assertEquals("UP", status.status());
+            assertEquals(Map.of("hitRate", 0.75, "hitCount", 30L, "missCount", 10L),
+                    status.details());
+            org.mockito.Mockito.verify(cacheMetrics).getStats();
+        }
+
+        @Test
+        @DisplayName("CacheMetricsService failure degrades to disabled, never throws")
+        void cacheMetricsServiceFailureDegradesGracefully() {
+            JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
+            CacheMetricsService cacheMetrics = mock(CacheMetricsService.class);
+            org.mockito.Mockito.when(cacheMetrics.getStats())
+                    .thenThrow(new IllegalStateException("cache backend down"));
+            ComponentHealthService service = config.componentHealthService(jdbcTemplate, cacheMetrics);
+
+            // checkCache() 的契约是"健康探针绝不抛"，第三臂（catch）此前
+            // 一次都没被执行过：两条既有用例分别走 null 臂与成功臂。
+            ComponentHealthService.ComponentStatus status =
+                    org.junit.jupiter.api.Assertions.assertDoesNotThrow(service::checkCache);
+
+            assertEquals("UP", status.status());
+            assertEquals(Map.of("enabled", false), status.details());
         }
     }
 

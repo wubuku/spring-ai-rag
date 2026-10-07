@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -27,12 +28,30 @@ class RagChatPropertiesSetterTailTest {
     void nullNestedPropertiesFallBackToFreshInstances() {
         RagChatProperties properties = new RagChatProperties();
 
+        // 这六个（连同 RagChatPropertiesNullArmsTailTest 的同类用例）
+        // 字段都在声明处就 `= new X()` 初始化过。原来只断非空，而
+        // "非空"在两处都会成立：setter 真回退成新实例，或者 setter 的
+        // null 臂退化成"什么都不做、保留声明期那个实例"——后者照样绿。
+        //
+        // 用例名字承诺的是 Falls Back To **Fresh** Instances，
+        // 所以先把声明期那个实例抓在手里，置 null 后断它**没有**被原样留下。
+        var beforeStaticKnowledge = properties.getStaticKnowledge();
+        var beforeSkills = properties.getSkills();
+        var beforeHttpTools = properties.getHttpTools();
+
         properties.setStaticKnowledge(null);
-        assertNotNull(properties.getStaticKnowledge());
         properties.setSkills(null);
-        assertNotNull(properties.getSkills());
         properties.setHttpTools(null);
+
+        assertNotNull(properties.getStaticKnowledge());
+        assertNotNull(properties.getSkills());
         assertNotNull(properties.getHttpTools());
+        assertNotSame(beforeStaticKnowledge, properties.getStaticKnowledge(),
+                "setStaticKnowledge(null) 必须换上一个新实例，而不是留下原来那个");
+        assertNotSame(beforeSkills, properties.getSkills(),
+                "setSkills(null) 必须换上一个新实例");
+        assertNotSame(beforeHttpTools, properties.getHttpTools(),
+                "setHttpTools(null) 必须换上一个新实例");
     }
 
     @Test
