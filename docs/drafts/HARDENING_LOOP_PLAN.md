@@ -22469,19 +22469,39 @@ Completed 的 resolvedModel=fallback。
 这类假象当真相。全局结论必须出自全量跑后的报告（本批两句"只剩 156 行"
 均以 02:29 全量报告为准）。
 
+### Batch 963：候选流回退测试按真实触发器重写并补真断言
+
+`ChatExecutionStreamBudgetTest.emptyCandidateStreamFallsBackToNextCandidate`
+按 Batch 962 更正的机制重写为
+`primaryStreamErrorBeforeFirstEventFallsBackToNextCandidate`：
+
+- primary 候选的流在**首个事件之前 onError**——这是 `switchOnFirst`
+  "无值错误"分支（`ChatExecutionService.java:581-591`）的唯一触发器；
+- 断言从 `assertNotNull(events)` 升级为三条真断言：回退候选的内容
+  确实以 `ContentDelta("fallback content")` 送达、
+  `clientFactory.create(same(fallback))` 被调（回退真实发生而非空流
+  直通）、`Completed.resolvedModel == "fallback"`；
+- 顺带清掉同文件两组重复的 static import。
+
+定向跑 3/3 绿；日志可见
+`candidate 1/2 failed before first event (primary), trying fallback`，
+与机制推演一致。**行覆盖注记**：581-591 分支此前已由
+`candidateBudgetExhaustionRejectsThirdCandidate`（同样用首事件前报错的
+第一个候选）盖到——本批的增量价值在**行为断言**（回退内容与
+resolvedModel 此前从未被验证），不在新行。587 行三元
+`getThrowable() != null ? getMessage() : "unknown error"` 的 "unknown
+error" 半边：Reactor 的 onError 信号必然携带 throwable，该半边同为
+防御性不可达，随本批登记。
+
 ### 未完成 / 待办（按优先级）
 
-**唯一剩下的普查项，两条都需要独立理顺**：
+**唯一剩下的普查项**：
 
 - `RetryConfigTest`——见 Batch 961 一节。已确认探针模板会打崩 fork JVM，
   机制未查清。
-- `ChatExecutionStreamBudgetTest.emptyCandidateStreamFallsBackToNextCandidate`
-  ——测试名承诺的"空流回退"与生产行为相反（空流发 `Completed`、不回退，
-  见 `allEmptyCandidateStreamsCompleteWithoutContentOrError` 与 Batch 962
-  的机制更正）。Batch 963 做法：重写为"primary 首事件前 onError → 回退
-  候选吐 fallback 内容"，断言 ContentDelta 文本 +
-  `create(same(fallback))` + Completed.resolvedModel=fallback。
-  生产侧回退在 `ChatExecutionService.java:581` 起（onError 无值分支）。
+
+（`ChatExecutionStreamBudgetTest.emptyCandidateStreamFallsBackToNextCandidate`
+已由 Batch 963 按真实触发器重写并补真断言，销项。）
 
 **待用户拍板（均已问过多轮，未答复）**：
 

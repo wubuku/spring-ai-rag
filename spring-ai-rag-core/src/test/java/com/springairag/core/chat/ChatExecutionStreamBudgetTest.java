@@ -44,8 +44,6 @@ import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.when;
 
 class ChatExecutionStreamBudgetTest {
@@ -139,15 +137,17 @@ class ChatExecutionStreamBudgetTest {
     }
 
     @Test
-    void emptyCandidateStreamFallsBackToNextCandidate() {
+    void primaryStreamErrorBeforeFirstEventFallsBackToNextCandidate() {
         ChatModelRouter.ChatModelCandidate primary =
                 candidate("primary");
         ChatModelRouter.ChatModelCandidate fallback =
                 candidate("fallback");
         when(modelRouter.orderedCandidateDescriptors(isNull()))
                 .thenReturn(List.of(primary, fallback));
-        streamAttempt(primary, Flux.empty());
-        ChatClient fallbackClient = null;
+        // 首个事件之前就 onError，switchOnFirst 的"无值错误"分支才触发回退；
+        // 空流会发 Completed（有值信号），不回退——见下方全空流测试。
+        streamAttempt(primary,
+                Flux.error(new IllegalStateException("primary down")));
         ChatClientResponse fallbackResponse = new ChatClientResponse(
                 new org.springframework.ai.chat.model.ChatResponse(
                         List.of(new Generation(new AssistantMessage("fallback content"))),
@@ -161,8 +161,21 @@ class ChatExecutionStreamBudgetTest {
                                 4, 8, 2, 4, 2, 20_000)))
                 .collectList()
                 .block();
-        // 空完成的候选流触发回退后正常完成。
+
         assertNotNull(events);
+        assertTrue(events.stream().anyMatch(event ->
+                event instanceof ChatEvent.ContentDelta
+                        && "fallback content"
+                                .equals(((ChatEvent.ContentDelta) event).content())));
+        // 第二个候选确实被创建——回退真实发生，不是空流直通完成。
+        verify(clientFactory).create(any(), same(fallback), anyList());
+        assertEquals("fallback",
+                events.stream()
+                        .filter(ChatEvent.Completed.class::isInstance)
+                        .map(ChatEvent.Completed.class::cast)
+                        .findFirst()
+                        .orElseThrow()
+                        .resolvedModel());
     }
 
     @Test
