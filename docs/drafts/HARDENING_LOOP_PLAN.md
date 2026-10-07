@@ -22518,6 +22518,34 @@ Fragment 规范构造器的 null 归一。纯逻辑、零 mock。
   ——JVM 必备算法；100-101/192-193 本体自然不可达（如上，属 mock
   可达的包装契约，契约已测）。
 
+### Batch 965：ReRankingService 与 QueryRewritingService 长尾补齐（9 测）
+
+**`ReRankingService`（24 mi → 只剩 93 行，登记）**：新开
+`ReRankingServiceArmsTailTest`（4 测）——测试构造器 null 容错
+（双二参构造器下 `(null, null)` 有歧义，需显式 cast）、
+`maxResults=0` 回落配置 `topN`（透传 provider 无视 rankingDepth
+返回 4 条、82-86 行截回 2 条，证明取的是 topN 不是候选数）、
+topN<=0 时回落候选数本身（61 行的 `: results.size()` 半边）、
+diversification 判定的 provider 名 null 归一（null → ""，不在
+no-op 词表 → 选择器生效）。**93 行
+`else if (out.size() > finalLimit)` 登记为数学不可达**：selector
+不活跃时 `rankingDepth = finalLimit`（65 行），82-86 行已把输出截到
+rankingDepth，92 行的条件恒假。
+
+**`QueryRewritingService`（25 mi → 只剩 97 行，登记）**：新开
+`QueryRewritingServiceArmsTailTest`（5 测）——init 对"配置对象存在但
+词表 null"的空表降级：字段默认值是 emptyMap/emptyList（getter 不会
+自然为 null），但 **setter 允许注入 null**（运行时覆盖的合法入口），
+显式 `set(null)` 后 init 的 100/102 回退分支真实可达，已测；
+`RagProperties.queryRewrite` 是 `private final = new ...`，getter
+永不返回 null，**97 行登记为不可达**；mock RetryTemplate 手动执行
+回调体盖掉 lambda 成功路径（226，连 222 的 lambda 行表归因 shadow
+一并翻绿），既有测试只打到了重试耗尽；带 cause 的耗尽异常（229 取因
+分支）与受检异常的 `new RuntimeException(cause)` 包装分支（231；
+thenAnswer 抛受检异常绕开 `thenThrow` 的泛型检查）。
+
+全量 core 门禁 EXIT=0（04:33 报告）。
+
 ### 未完成 / 待办（按优先级）
 
 **唯一剩下的普查项**：
