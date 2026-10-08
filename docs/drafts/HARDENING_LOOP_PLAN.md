@@ -22560,6 +22560,60 @@ overallStatus 对 SLOW 组件的 DEGRADED 判定（159 行）。
 24 参规范构造器的委托（84-89 行）：透传字段逐项断言 +
 requestGeneration=0、documentKind/chunkerVersion=null 三个补齐默认。
 
+## 进度留档快照（Batch 962–966 · 用户指令收尾）
+
+本会话（接手时 main @ `8a744fee`，即 Batch 961 收尾点）共交付五个
+批次，收尾时 main @ `7291f39f`，工作区干净，全部走
+分支 → `--no-ff` 合并 → push 的完整流程：
+
+| Batch | 交付 | 收尾 commit |
+|-------|------|-------------|
+| 962 | IntegrationObservationRecorder 生命周期三臂（3 测；修掉 Batch 745 遗留的 `when(void)` 编译错；更正 961 对 ChatExecutionStreamBudgetTest 的错误根因） | `525ad2e5` |
+| 963 | 候选流回退测试按真实触发器（首事件前 onError）重写 + 三条真断言 | `03e7c120` |
+| 964 | RetrievalScopeSql 七臂（25 mi 归零）+ 指纹终局序列化包装契约（2 测） | `d04ba365` |
+| 965 | ReRankingService（剩 93 行数学不可达）+ QueryRewritingService（剩 97 行 getter 归一不可达），9 测 | `04f50260` |
+| 966 | ComponentHealthService 22 mi 归零（含 1.1s 真睡的 SLOW 臂）+ EmbeddingJob 21 参便捷构造器 27 mi 归零 | `7291f39f` |
+
+每批均有全量 core 门禁 EXIT=0（最后一份 04:40 报告，994 测试类）。
+本会话新增登记的"防御性/数学不可达"共 **9 处**（详见各 Batch 节）：
+`IntegrationObservationRecorder.dropped` 的 count<=0、
+`ChatExecutionService.streamCandidates` 的 onComplete-无值回退分支与
+587 行 unknown-error 半边、`ChatRequestFingerprint` 的 getMode null 半边
+与 SHA-256 算法、`ReRankingService` 93 行、
+`QueryRewritingService` 97 行、`ChatRequestFingerprint` 100-101/192-193
+（mock 可达，包装契约已测）。
+
+### Batch 967 已勘察待实施（下一位直接做）
+
+**`MultiModelConfigLoader`（36 mi）**：未覆盖行全部是嵌套 JSON DTO 的
+`equals`/`hashCode`（`ModelsJsonRoot` 284、`ModelsJson` 308、
+`ProviderJson` 341、`ModelJson` 381、`CostJson` 419、
+`CapabilitiesJson` 450-456、`RoutingJson` 472）+ legacyCapabilities
+映射臂（219，`properties.setLegacyCapabilities` 的非 null 半边）。
+既有测试类三份（`MultiModelConfigLoaderTest` / `TailTest` /
+`CoverageTailTest`，其中 CoverageTailTest 已在 639-675 行手搓过
+RoutingJson/CostJson 的相等断言）。建议做法：一份带 legacyCapabilities
++ capabilities + cost + routing 的 models.json 解析两次做全树
+equals/hashCode 往返 + 不等例（null、异类、字段差异），一次性盖掉
+大部分 equals/hashCode 行；219 行单独用 legacy 形状 JSON 打。
+
+### 构建与门禁状态（收尾时实测）
+
+- 全量 core `mvn test`：BUILD SUCCESS（04:40 报告）。
+- WebUI 本会话零改动（最后一批 WebUI 提交来自并行会话）。
+
+### 环境备忘（沿用 + 本会话补充）
+
+- 定向 `-Dtest=` 跑完后 `target/site/jacoco/jacoco.xml` 会被只含该类
+  的报告覆盖——全局未覆盖结论必须出自全量跑后的报告（962 节已记）。
+- `RerankProvider` 在 `com.springairag.core.retrieval.rerank` 包，
+  不在 `retrieval` 本包（965 踩过）。
+- Mockito 顺序桩要用 `doAnswer(...).doThrow(...)`（do 系不触真方法，
+  `when(spy.method(...))` 会先真跑一次；`writeValueAsBytes` 还声明
+  受检异常，测试方法要 `throws`）。
+- 双二参构造器（如 `ReRankingService`）传 `(null, null)` 有歧义，
+  需显式 cast 选目标构造器。
+
 ### 未完成 / 待办（按优先级）
 
 **唯一剩下的普查项**：
