@@ -19,7 +19,7 @@ Documentation hub: [index.md](index.md). Stable project context: [project-contex
 | Real-LLM E2E port | `18081` |
 | Embedding | SiliconFlow `BAAI/bge-m3` |
 | Vector dimension | `1024` |
-| Flyway | V1–V60 |
+| Flyway | V1–V61 |
 
 Do **not** append `/v1` to an OpenAI or Embedding `base-url`. Spring AI appends `/v1/chat/completions` or `/v1/embeddings`.
 
@@ -759,6 +759,36 @@ database with `EMBEDDING_JOBS_IT_JDBC_URL`, `EMBEDDING_JOBS_IT_USERNAME`, and
 `EMBEDDING_JOBS_IT_PASSWORD`. Evidence is written under
 `.verification/embedding-jobs/<run-id>/`.
 
+### Document Processing Run/Stage PostgreSQL Acceptance
+
+Processing Run is a stage ledger above the existing durable Embedding Job; it
+does not replace the Job's lease, retry, or generation fencing. The real
+PostgreSQL suite migrates an empty database through V1–V61 and verifies five
+fixed-stage initialization, worker-claim mirroring, stage CAS/progress, Job
+terminal mirroring, and the constraints used by Run/Stage queries:
+
+```bash
+TESTCONTAINERS_RYUK_DISABLED=true \
+mvn -pl spring-ai-rag-core -am \
+  -Ddocument-processing.it.enabled=true \
+  -Dtest=DocumentProcessingRunPostgresIntegrationTest \
+  -Dsurefire.failIfNoSpecifiedTests=false \
+  test
+```
+
+An explicitly disposable PostgreSQL database can be supplied with
+`document-processing.it.jdbc-url`, `document-processing.it.username`, and
+`document-processing.it.password`. The suite is registered in
+`scripts/verify-gated-it.sh`; run only it with:
+
+```bash
+./scripts/verify-gated-it.sh DocumentProcessingRunPostgresIntegrationTest
+```
+
+The Run/Stage HTTP, ACL, cancel/retry, and configuration contracts are
+documented in [REST API](rest-api.md#document-processing-run-ledger) and
+[configuration](configuration.md#document-processing-run-ledger).
+
 <a id="document-lifecycle-verification"></a>
 
 ### Document Lifecycle Verification
@@ -827,7 +857,7 @@ provider. Evidence is written under
 ### Managed API Principal Expiry Alert Verification
 
 ```bash
-# Focused backend, V1-V60 PostgreSQL, and frontend Mock gates
+# Focused backend, V1-V61 PostgreSQL, and frontend Mock gates
 API_KEY_EXPIRY_ALERT_VERIFY_PHASE=focused \
 ./scripts/verify-api-key-expiry-alerts.sh
 

@@ -712,7 +712,7 @@ UUID. No screenshot is used as acceptance evidence.
 
 This nine-stage gate runs the no-pessimistic-lock check, focused
 purge/Collection/feedback/audit/OpenAI-scope tests, the real PostgreSQL
-V1-V60 purge matrix, `mvn clean compile test-compile`, full WebUI
+V1-V61 purge matrix, `mvn clean compile test-compile`, full WebUI
 typecheck/Vitest/lint/production build, Collection Mock Playwright, bilingual
 documentation validation, shell syntax, and whitespace checks. Each run writes
 step evidence to
@@ -872,6 +872,29 @@ isolated PostgreSQL, migrates an empty database through V1–V52, verifies V33
 active-job coalescing, atomic force upgrades, and concurrent-worker atomic
 conditional claims, then runs `test-compile`, shell syntax, and whitespace
 checks. Set `EMBEDDING_JOBS_IT_JDBC_URL` to reuse an existing isolated database.
+
+### Document Processing Run/Stage PostgreSQL Acceptance Gate
+
+Processing Run is a stage ledger above the existing durable Embedding Job. The
+focused suite migrates an empty database through V1–V61 and verifies five fixed
+stage initialization, worker-claim mirroring, stage CAS/progress, Job terminal
+mirroring, and the base constraints, without replacing the Job's lease, retry,
+or generation fencing:
+
+```bash
+TESTCONTAINERS_RYUK_DISABLED=true \
+mvn -pl spring-ai-rag-core -am \
+  -Ddocument-processing.it.enabled=true \
+  -Dtest=DocumentProcessingRunPostgresIntegrationTest \
+  -Dsurefire.failIfNoSpecifiedTests=false \
+  test
+```
+
+The suite is gated by `document-processing.it.enabled` and is registered in
+`scripts/verify-gated-it.sh`. Run only it with
+`./scripts/verify-gated-it.sh DocumentProcessingRunPostgresIntegrationTest`;
+the `document-processing.it.*` system properties can point at an explicitly
+disposable PostgreSQL database.
 
 ### PDF Import PostgreSQL Acceptance Gate
 
@@ -1096,7 +1119,7 @@ API_KEY_EXPIRY_ALERT_VERIFY_PHASE=focused \
 ./scripts/verify-api-key-expiry-alerts.sh
 ```
 
-The focused phase runs the affected backend tests, an empty-database V1-V60
+The focused phase runs the affected backend tests, an empty-database V1-V61
 PostgreSQL lifecycle matrix, WebUI typecheck/Vitest/alignment/production build,
 and Alerts Mock Playwright in one pass. PostgreSQL scenarios cover eight-way
 concurrency producing one active condition/notification claim, same-row

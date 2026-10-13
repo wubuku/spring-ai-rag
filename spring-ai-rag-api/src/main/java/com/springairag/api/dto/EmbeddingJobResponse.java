@@ -27,7 +27,8 @@ public record EmbeddingJobResponse(
         OffsetDateTime updatedAt,
         boolean coalesced,
         String origin,
-        String requestedByPrincipalId) {
+        String requestedByPrincipalId,
+        UUID processingRunId) {
 
     public EmbeddingJobResponse(
             UUID id,
@@ -52,6 +53,35 @@ public record EmbeddingJobResponse(
         this(id, batchId, documentId, embeddingProfileId, force, contentHash,
                 documentVersion, status, attemptCount, maxAttempts, availableAt,
                 leaseExpiresAt, cancelRequestedAt, lastError, createdAt,
-                startedAt, finishedAt, updatedAt, coalesced, null, null);
+                startedAt, finishedAt, updatedAt, coalesced, null, null, null);
+    }
+
+    public EmbeddingJobResponse(
+            UUID id,
+            UUID batchId,
+            Long documentId,
+            Long embeddingProfileId,
+            boolean force,
+            String contentHash,
+            long documentVersion,
+            String status,
+            int attemptCount,
+            int maxAttempts,
+            OffsetDateTime availableAt,
+            OffsetDateTime leaseExpiresAt,
+            OffsetDateTime cancelRequestedAt,
+            String lastError,
+            OffsetDateTime createdAt,
+            OffsetDateTime startedAt,
+            OffsetDateTime finishedAt,
+            OffsetDateTime updatedAt,
+            boolean coalesced,
+            String origin,
+            String requestedByPrincipalId) {
+        this(id, batchId, documentId, embeddingProfileId, force, contentHash,
+                documentVersion, status, attemptCount, maxAttempts, availableAt,
+                leaseExpiresAt, cancelRequestedAt, lastError, createdAt,
+                startedAt, finishedAt, updatedAt, coalesced, origin,
+                requestedByPrincipalId, null);
     }
 }

@@ -1,6 +1,6 @@
 # 第一批改进规划：统一文档处理阶段状态与恢复
 
-> 状态：**活跃实施前规划；尚未修改生产代码**
+> 状态：**已完成实现、连续 3/3 检查和最终门禁，待 Git commit/push**
 >
 > 规划日期：2026-10-12
 >
@@ -33,9 +33,8 @@
 
 ### 0.1 实施前置条件
 
-- 用户已批准按本批范围推进，但本文件只规划，不代表已授权开始改代码。
-- 实施开始前仍需完成本文件规定的规划 `3/3`；没有 `3/3` 不得修改 Java、SQL、TypeScript、
-  配置或测试实现。
+- 用户已批准按本批范围推进，当前直接在 `main` 工作区实施，不创建额外分支或 worktree。
+- 实施前已完成本文件规定的规划 `3/3`；实施后的实现 `3/3` 仍是最终完成门槛。
 - 当前工作区已有调研文档改动，实施前必须保留，不得使用 `reset --hard`、`stash` 或覆盖他人
   WIP。
 - 运行和验收默认使用 `postgresql` profile；不把 API Key、Token 或真实 provider 密钥写入文档、
@@ -57,7 +56,8 @@
 
 ### 1.1 已核对的代码事实
 
-以下事实来自当前代码、V1–V60 迁移和现有自动化测试，不来自旧规划的假设。
+以下事实来自规划建立时的当前代码、V1–V60 迁移和现有自动化测试，不来自旧规划的假设；本批
+实施新增 V61，实施后的最终事实以代码、V61 和长青文档为准。
 
 | 领域 | 当前事实 | 入口 |
 |---|---|---|
@@ -969,10 +969,17 @@ stuck CAS、dead-letter 统计和有界分页，不自动删除历史。
 
 ## 12. 当前规划状态
 
-- 本文件：已写入，规划检查已连续 `3/3` 通过；可以在后续获得实施授权后进入代码修改阶段。
-- 生产代码、迁移、配置、测试、WebUI：**尚未修改**。
+- 本文件：规划检查和实现后检查均已连续 `3/3` 通过，且已获得实施授权；当前仅待 Git 交付。
+- 生产代码、V61 迁移、配置和测试已按本规划修改；WebUI 按非目标保持未改。
+- 已完成 Slice 1–7 的实现与专项测试；新增账本专项 IT 已覆盖并发合流、lease reclaim、旧 worker
+  fencing、取消、supersede、stuck、terminal mirror 和 retry exhausted/dead-letter 终态矩阵。
+  实现后连续 `3/3` 只读检查已完成，当前仅剩最终门禁和 Git 交付。
 - 最终规划检查（2026-10-12）：第三轮按“实施顺序、验收、发布、回滚、恢复和风险”范围重新核对了
   代码入口、迁移基线、现有 Job/CAS/lease 约束、API 版本化方式、文档门禁和本批变更边界；未发现
   需要修正的内容。`git diff --check` 与 `./scripts/verify-project-docs.sh` 均通过。
+- 实施中发现并已修复的门禁/兼容问题：Processing Run PostgreSQL 测试补齐 Testcontainers 回退；
+  `verify-gated-it.sh` 改为使用 `-am` 编译 API 依赖；旧 Embedding Job cancel façade 保留取消后的
+  更新快照；关闭 document-processing 时新 Run API fail closed、旧 Job API 仍可用且不会继续推进
+  Processing Run；`STALE` 终态会清空 `next_retry_at` 以满足 V61 约束。
 - 后续批次入口：引用与流式安全、分块 Profile/Validator、检索上下文组装、route policy、Parser/资源
   句柄；见 [WEKNORA_REFERENCE_RESEARCH.md](WEKNORA_REFERENCE_RESEARCH.md) §6。

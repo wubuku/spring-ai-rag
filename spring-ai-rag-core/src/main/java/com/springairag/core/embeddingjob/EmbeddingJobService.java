@@ -5,6 +5,7 @@ import com.springairag.api.dto.EmbeddingJobBatchResponse;
 import com.springairag.api.dto.EmbeddingJobCreateRequest;
 import com.springairag.api.dto.EmbeddingJobPageResponse;
 import com.springairag.api.dto.EmbeddingJobResponse;
+import com.springairag.api.dto.DocumentProcessingRunResponse;
 import com.springairag.api.enums.CollectionScopeMode;
 import com.springairag.core.chat.ChatPrincipal;
 import com.springairag.api.enums.ErrorCode;
@@ -12,6 +13,8 @@ import com.springairag.core.config.EmbeddingProfile;
 import com.springairag.core.config.EmbeddingProfileProvider;
 import com.springairag.core.config.RagEmbeddingJobProperties;
 import com.springairag.core.config.RagProperties;
+import com.springairag.core.documentprocessing.DocumentProcessingRun;
+import com.springairag.core.documentprocessing.DocumentProcessingRunService;
 import com.springairag.core.security.ApiAccessPolicy;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.exception.DocumentNotFoundException;
@@ -49,6 +52,7 @@ public class EmbeddingJobService {
     private final RagEmbeddingJobProperties properties;
     private final DocumentDerivationDescriptorProvider descriptorProvider;
     private final DocumentEmbedService documentEmbedService;
+    private DocumentProcessingRunService processingRunService; // optional-claim: 允许不装配文档处理账本的旧测试构造路径
     private EmbeddingJobWakeupPublisher wakeupPublisher; // optional-claim: EmbeddingJobWakeupPublisher 是无条件 @Component，null 臂只在不走 Spring 装配的构造路径可达；守卫真正的职责是"只有真正排入 QUEUED 的作业才需要唤醒 worker"
 
     public EmbeddingJobService(
@@ -72,6 +76,11 @@ public class EmbeddingJobService {
     void setWakeupPublisher(
             EmbeddingJobWakeupPublisher wakeupPublisher) {
         this.wakeupPublisher = wakeupPublisher;
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setProcessingRunService(DocumentProcessingRunService processingRunService) {
+        this.processingRunService = processingRunService;
     }
 
     @Transactional
@@ -107,6 +116,7 @@ public class EmbeddingJobService {
                     descriptor.documentKind(),
                     descriptor.chunkerVersion());
             EmbeddingJobRepository.CreateResult result;
+            DocumentProcessingRun processingRun = null;
             if (active.isPresent()) {
                 EmbeddingJob current = active.get();
                 result = jobRepository.createOrCoalesce(
@@ -123,6 +133,8 @@ public class EmbeddingJobService {
                         current.requestGeneration(),
                         descriptor.documentKind(),
                         descriptor.chunkerVersion());
+                processingRun = ensureProcessingRun(
+                        result.job(), result.coalesced());
             } else {
                 long generation = jobRepository.allocateGeneration(
                         document.getId(),
@@ -132,6 +144,10 @@ public class EmbeddingJobService {
                         fresh);
                 jobRepository.cancelSuperseded(
                         document.getId(), profile.id(), generation);
+                if (processingRunService != null) {
+                    processingRunService.markSuperseded(
+                            document.getId(), profile.id(), generation);
+                }
                 result = jobRepository.createOrCoalesce(
                         requestedBatch,
                         document.getId(),
@@ -146,6 +162,8 @@ public class EmbeddingJobService {
                         generation,
                         descriptor.documentKind(),
                         descriptor.chunkerVersion());
+                processingRun = ensureProcessingRun(
+                        result.job(), result.coalesced());
                 jobRepository.activateJob(
                         document.getId(),
                         profile.id(),
@@ -161,7 +179,8 @@ public class EmbeddingJobService {
             }
             queued |= result.job().status() == EmbeddingJobStatus.QUEUED;
             responses.add(toResponse(
-                    result.job(), result.coalesced()));
+                    result.job(), result.coalesced(),
+                    processingRun == null ? null : processingRun.id()));
         }
         if (queued && wakeupPublisher != null) {
             wakeupPublisher.publishAfterCommit();
@@ -176,7 +195,7 @@ public class EmbeddingJobService {
 
     public EmbeddingJobResponse get(UUID id) {
         EmbeddingJob job = requireAuthorized(id);
-        return toResponse(job, false);
+        return toResponse(job, false, processingRunId(job));
     }
 
     public List<EmbeddingJobResponse> list(
@@ -211,9 +230,14 @@ public class EmbeddingJobService {
         int totalPages = result.totalElements() == 0
                 ? 0
                 : (int) Math.ceil(result.totalElements() / (double) pageSize);
+        java.util.Map<UUID, UUID> runIds = processingRunService == null
+                ? java.util.Map.of()
+                : processingRunService.findRunIdsByJobIds(
+                        result.items().stream().map(EmbeddingJob::id).toList());
         return new EmbeddingJobPageResponse(
                 result.items().stream()
-                        .map(job -> toResponse(job, false))
+                        .map(job -> toResponse(job, false,
+                                runIds.get(job.id())))
                         .toList(),
                 pageIndex,
                 pageSize,
@@ -255,15 +279,34 @@ public class EmbeddingJobService {
 
     public EmbeddingJobResponse cancel(UUID id) {
         EmbeddingJob current = requireAuthorized(id);
-        EmbeddingJob updated = jobRepository.cancel(id)
-                .orElse(current);
-        return toResponse(updated, false);
+        UUID runId = processingRunId(current);
+        EmbeddingJob updated;
+        if (runId != null && processingRunService != null) {
+            processingRunService.cancel(runId);
+            updated = jobRepository.find(id).orElse(current);
+        } else {
+            updated = jobRepository.cancel(id)
+                    .orElseGet(() -> jobRepository.find(id).orElse(current));
+        }
+        return toResponse(updated, false, processingRunId(updated));
     }
 
     @Transactional
     public EmbeddingJobResponse retry(UUID id, Integer requestedMaxAttempts) {
         requireEnabled();
         EmbeddingJob current = requireAuthorized(id);
+        UUID sourceRunId = processingRunId(current);
+        if (sourceRunId != null && processingRunService != null) {
+            DocumentProcessingRunResponse retried = processingRunService.retry(
+                    sourceRunId, requestedMaxAttempts);
+            EmbeddingJob target = jobRepository.find(retried.embeddingJobId())
+                    .orElseThrow(() -> new RagException(
+                            ErrorCode.NOT_FOUND,
+                            "Retried embedding job not found"));
+            publishWakeupIfQueued(target);
+            return toResponse(target,
+                    Boolean.TRUE.equals(retried.coalesced()), retried.runId());
+        }
         int maxAttempts = requestedMaxAttempts != null
                 ? resolveMaxAttempts(requestedMaxAttempts)
                 : current.maxAttempts();
@@ -276,12 +319,15 @@ public class EmbeddingJobService {
                                             + "without another active job can be retried")));
             boolean coalesced = !target.id().equals(id);
             publishWakeupIfQueued(target);
-            return toResponse(target, coalesced);
+            DocumentProcessingRun run = ensureProcessingRun(target, coalesced);
+            return toResponse(target, coalesced,
+                    run == null ? null : run.id());
         } catch (DataIntegrityViolationException race) {
             EmbeddingJob target = activeRetryTarget(current)
                     .orElseThrow(() -> race);
             publishWakeupIfQueued(target);
-            return toResponse(target, true);
+            DocumentProcessingRun run = ensureProcessingRun(target, true);
+            return toResponse(target, true, run == null ? null : run.id());
         }
     }
 
@@ -433,6 +479,11 @@ public class EmbeddingJobService {
 
     private EmbeddingJobResponse toResponse(
             EmbeddingJob job, boolean coalesced) {
+        return toResponse(job, coalesced, processingRunId(job));
+    }
+
+    private EmbeddingJobResponse toResponse(
+            EmbeddingJob job, boolean coalesced, UUID processingRunId) {
         return new EmbeddingJobResponse(
                 job.id(),
                 job.batchId(),
@@ -454,6 +505,21 @@ public class EmbeddingJobService {
                 job.updatedAt(),
                 coalesced,
                 job.origin(),
-                job.requestedByPrincipalId());
+                job.requestedByPrincipalId(),
+                processingRunId);
+    }
+
+    private DocumentProcessingRun ensureProcessingRun(
+            EmbeddingJob job, boolean legacyBridge) {
+        if (processingRunService == null) {
+            return null;
+        }
+        return processingRunService.ensureForJob(
+                job, "API", null, legacyBridge);
+    }
+
+    private UUID processingRunId(EmbeddingJob job) {
+        return processingRunService == null
+                ? null : processingRunService.findRunIdByJobId(job.id());
     }
 }

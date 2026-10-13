@@ -25,7 +25,7 @@ public class EmbeddingJobRepository {
             available_at, lease_owner, lease_expires_at, cancel_requested_at,
             last_error, created_at, started_at, finished_at, updated_at,
             origin, requested_by_principal_id, request_generation,
-            document_kind, chunker_version
+            document_kind, chunker_version, terminal_reason
             """;
 
     private final JdbcTemplate jdbcTemplate;
@@ -111,6 +111,7 @@ public class EmbeddingJobRepository {
                     cancel_requested_at, last_error, created_at, started_at,
                     finished_at, updated_at, origin, requested_by_principal_id,
                     request_generation, document_kind, chunker_version,
+                    terminal_reason,
                     (xmax <> 0) AS coalesced
                 """,
                 (rs, rowNum) -> new CreateResult(
@@ -352,6 +353,7 @@ public class EmbeddingJobRepository {
                     finished_at = CURRENT_TIMESTAMP,
                     lease_owner = NULL,
                     lease_expires_at = NULL,
+                    terminal_reason = NULL,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE status IN ('QUEUED', 'RUNNING')
                   AND cancel_requested_at IS NOT NULL
@@ -370,6 +372,7 @@ public class EmbeddingJobRepository {
                     lease_owner = NULL,
                     lease_expires_at = NULL,
                     last_error = 'Worker lease expired after maximum attempts',
+                    terminal_reason = 'RETRY_EXHAUSTED',
                     updated_at = CURRENT_TIMESTAMP
                 WHERE status = 'RUNNING'
                   AND cancel_requested_at IS NULL
@@ -402,6 +405,7 @@ public class EmbeddingJobRepository {
                     lease_expires_at = CURRENT_TIMESTAMP
                         + (? * INTERVAL '1 second'),
                     started_at = COALESCE(started_at, CURRENT_TIMESTAMP),
+                    terminal_reason = NULL,
                     updated_at = CURRENT_TIMESTAMP
                 FROM candidates
                 WHERE job.id = candidates.id
@@ -437,6 +441,7 @@ public class EmbeddingJobRepository {
                     lease_expires_at = CURRENT_TIMESTAMP
                         + (? * INTERVAL '1 second'),
                     started_at = COALESCE(started_at, CURRENT_TIMESTAMP),
+                    terminal_reason = NULL,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE job.id = ?
                   AND job.status = 'QUEUED'
@@ -559,6 +564,18 @@ public class EmbeddingJobRepository {
         return Boolean.TRUE.equals(value);
     }
 
+    public boolean isCurrentActiveJob(UUID jobId) {
+        return jdbcTemplate.query("""
+                SELECT state.active_job_id = job.id
+                FROM rag_embedding_jobs job
+                JOIN rag_document_embedding_state state
+                  ON state.document_id = job.document_id
+                 AND state.embedding_profile_id = job.embedding_profile_id
+                 AND state.request_generation = job.request_generation
+                WHERE job.id = ?
+                """, rs -> rs.next() && rs.getBoolean(1), jobId);
+    }
+
     public int markSucceeded(UUID id, String workerId) {
         return markSucceeded(id, workerId, true);
     }
@@ -571,6 +588,7 @@ public class EmbeddingJobRepository {
                 UPDATE rag_embedding_jobs
                 SET status = 'SUCCEEDED',
                     last_error = NULL,
+                    terminal_reason = NULL,
                     finished_at = CURRENT_TIMESTAMP,
                     lease_owner = NULL,
                     lease_expires_at = NULL,
@@ -615,6 +633,11 @@ public class EmbeddingJobRepository {
                             + (? * INTERVAL '1 second')
                     END,
                     last_error = ?,
+                    terminal_reason = CASE
+                        WHEN attempt_count >= max_attempts
+                            THEN 'RETRY_EXHAUSTED'
+                        ELSE NULL
+                    END,
                     finished_at = CASE
                         WHEN attempt_count >= max_attempts
                             THEN CURRENT_TIMESTAMP
@@ -632,6 +655,28 @@ public class EmbeddingJobRepository {
                 error,
                 id,
                 workerId);
+    }
+
+    public int markNonRetryableFailure(
+            UUID id,
+            String workerId,
+            String error) {
+        return jdbcTemplate.update("""
+                UPDATE rag_embedding_jobs
+                SET status = 'FAILED',
+                    last_error = ?,
+                    terminal_reason = 'NON_RETRYABLE',
+                    finished_at = CURRENT_TIMESTAMP,
+                    lease_owner = NULL,
+                    lease_expires_at = NULL,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+                  AND status = 'RUNNING'
+                  AND lease_owner = ?
+                  AND lease_expires_at >= CURRENT_TIMESTAMP
+                  AND cancel_requested_at IS NULL
+                """,
+                error, id, workerId);
     }
 
     @Transactional
@@ -714,6 +759,7 @@ public class EmbeddingJobRepository {
                     lease_expires_at = NULL,
                     cancel_requested_at = NULL,
                     last_error = NULL,
+                    terminal_reason = NULL,
                     started_at = NULL,
                     finished_at = NULL,
                     updated_at = CURRENT_TIMESTAMP
@@ -780,6 +826,17 @@ public class EmbeddingJobRepository {
                 contentHash,
                 documentKind,
                 chunkerVersion).stream().findFirst();
+    }
+
+    public long findCurrentGeneration(long documentId, long profileId) {
+        List<Long> generations = jdbcTemplate.query("""
+                SELECT request_generation
+                FROM rag_document_embedding_state
+                WHERE document_id = ?
+                  AND embedding_profile_id = ?
+                """, (rs, rowNum) -> rs.getLong("request_generation"),
+                documentId, profileId);
+        return generations.isEmpty() ? 0L : generations.getFirst();
     }
 
     @Transactional
@@ -991,6 +1048,7 @@ public class EmbeddingJobRepository {
                 UPDATE rag_embedding_jobs
                 SET status = ?,
                     last_error = ?,
+                    terminal_reason = NULL,
                     finished_at = CURRENT_TIMESTAMP,
                     lease_owner = NULL,
                     lease_expires_at = NULL,
@@ -1031,7 +1089,8 @@ public class EmbeddingJobRepository {
                 columnOrNull(rs, "requested_by_principal_id"),
                 longColumnOrZero(rs, "request_generation"),
                 columnOrNull(rs, "document_kind"),
-                columnOrNull(rs, "chunker_version"));
+                columnOrNull(rs, "chunker_version"),
+                columnOrNull(rs, "terminal_reason"));
     }
 
     private static String columnOrNull(ResultSet rs, String column) {

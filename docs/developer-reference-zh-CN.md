@@ -19,7 +19,7 @@
 | 真实 LLM E2E 端口 | `18081` |
 | Embedding | SiliconFlow `BAAI/bge-m3` |
 | 向量维度 | `1024` |
-| Flyway | V1–V60 |
+| Flyway | V1–V61 |
 
 OpenAI / Embedding 的 `base-url` **不要带 `/v1`**。Spring AI 会自行追加 `/v1/chat/completions` 或 `/v1/embeddings`。
 
@@ -674,6 +674,33 @@ CHAT_PLAYWRIGHT_PORT=4199 ./scripts/verify-chat-capability.sh
 `EMBEDDING_JOBS_IT_PASSWORD` 覆盖。验证日志位于
 `.verification/embedding-jobs/<run-id>/`。
 
+### 文档处理 Run/Stage PostgreSQL 验收
+
+Processing Run 是现有持久化 Embedding Job 之上的阶段账本，不替换 Job 的租约、重试和
+generation fencing。真实 PostgreSQL 套件从空库执行 V1–V61，验证五个固定 stage 的初始化、
+worker claim 镜像、stage CAS/进度、Job 终态镜像和 Run/Stage 查询依赖的约束：
+
+```bash
+TESTCONTAINERS_RYUK_DISABLED=true \
+mvn -pl spring-ai-rag-core -am \
+  -Ddocument-processing.it.enabled=true \
+  -Dtest=DocumentProcessingRunPostgresIntegrationTest \
+  -Dsurefire.failIfNoSpecifiedTests=false \
+  test
+```
+
+也可以通过 `document-processing.it.jdbc-url`、`document-processing.it.username` 和
+`document-processing.it.password` 指向明确允许清空的一次性 PostgreSQL。该套件已登记在
+`scripts/verify-gated-it.sh`；只跑它时使用：
+
+```bash
+./scripts/verify-gated-it.sh DocumentProcessingRunPostgresIntegrationTest
+```
+
+Run/Stage 的 HTTP、ACL、取消/重试和配置契约见
+[REST API](rest-api-zh-CN.md#文档处理运行账本) 与
+[配置](configuration-zh-CN.md#文档处理运行账本)。
+
 <a id="document-lifecycle-verification"></a>
 
 ### 文档生命周期一键验证
@@ -734,7 +761,7 @@ provider counter。端口冲突时可
 ### 受管 API Principal 到期告警一键验证
 
 ```bash
-# 聚焦后端、V1-V60 PostgreSQL 与前端 Mock 门槛
+# 聚焦后端、V1-V61 PostgreSQL 与前端 Mock 门槛
 API_KEY_EXPIRY_ALERT_VERIFY_PHASE=focused \
 ./scripts/verify-api-key-expiry-alerts.sh
 

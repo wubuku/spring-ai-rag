@@ -570,6 +570,32 @@ coalesce to one event, and the worker coalesces concurrent wake-ups. A scheduled
 scan runs every `30s` by default only to recover lost events, restarted
 instances, or worker failures.
 
+### 4.3.1 Unified Document Processing Run/Stage (V61)
+
+V61 adds `rag_document_processing_runs` and `rag_document_processing_stages` above the existing
+`rag_embedding_jobs`. A Run is the user/operator-facing history of one document derivation; Job
+remains the sole source of truth for leases, attempts, generations, and commit fencing. Every new
+Run initializes five fixed stages: `PARSING`, `CHUNKING`, `EMBEDDING`, `INDEXING`, and `FINALIZING`.
+
+```text
+EmbeddingJobWorker claim/lease
+  | conditional UPDATE succeeds; mirror Run=RUNNING
+  v
+PARSING -> CHUNKING -> EMBEDDING -> INDEXING -> FINALIZING
+  | stage CAS + bounded progress/heartbeat
+  v
+Job terminal mirror -> Run COMPLETED / FAILED / CANCELLED / STALE / DEAD_LETTERED
+  |
+  +-- housekeeping: closes the Job/Run crash window and boundedly converges stuck Runs
+```
+
+Automatic provider retries reuse the same Run/Job; the next claim resets failed or lease-abandoned
+incomplete stages to `PENDING`. Manual retry creates a new Run/Job and preserves history through
+`supersedesRunId`. Every stage update carries document/profile/generation/hash/chunker/lease
+conditions and continues to use CAS, leases, and bounded retry; it does not use `FOR UPDATE`,
+`SKIP LOCKED`, or advisory locks. Run/Stage stores only snapshot hashes, counters, machine codes,
+and masked short errors—not content, chunks, vectors, or provider secrets.
+
 ### 4.4 JSON Structured-Record Flow
 
 ```text
@@ -818,6 +844,8 @@ rag_audit_log           # Audit logs (collection operations)
 | `rag_document_embedding_state` | document_id, embedding_profile_id, content_hash, chunker_version, request_generation, active_job_id, status, chunk_count | Profile-scoped freshness, active generation, and completion state. `request_generation` must be ≥ 1: it is the fence the job path relies on (`state.request_generation = job.request_generation`) and a precondition for `DerivationIntegrityRepository` to call a vector fresh. V60 backfilled the 0s V40 stranded and added the `CHECK`, so a writer that forgets the column now fails outright instead of producing a row that reads as `FAILED` forever |
 | `rag_embeddings` | document_id, chunk_index, embedding_profile_id, embedding_1024 VECTOR(1024), content | Profile-scoped text chunks + vectors |
 | `rag_embedding_jobs` | document_id, embedding_profile_id, content_hash, request_generation, document_kind, chunker_version, status, lease_expires_at, origin | Generation-aware durable embedding/reindex state machine |
+| `rag_document_processing_runs` | document_id, embedding_profile_id, embedding_job_id, request_generation, attempt_no, status, active_stage, origin, dead_lettered_at | V61 user/operator-facing processing history, recovery, and dead-letter summary |
+| `rag_document_processing_stages` | run_id, stage_name, stage_order, status, execution_attempt, progress counters, short error | V61 fixed five-stage timeline; no chunks or payloads |
 | `rag_document_chunks` | document_id, local_index_generation, content_hash, chunker_version, chunk_text, chunk_index | Profile-neutral local keyword chunks |
 | `rag_chat_history_source_document` / `rag_user_feedback_document` | history_id/feedback_id, document_id | V56 normalized content references for safe purge attribution |
 | `rag_collection_purge_preview` | owner_key, collection_id, token_hash, fingerprint, status, result_payload | Body-free preview/apply lease and result replay without plaintext tokens |
@@ -849,6 +877,8 @@ rag_audit_log           # Audit logs (collection operations)
 - `rag_documents.jsonb_payload`: V34 partial GIN `jsonb_path_ops` for enabled JSON-record `@>` containment
 - `rag_documents.metadata`: V36 GIN for `metadataContains` `@>` pushdown
 - `rag_embedding_jobs`: active-job partial unique, claim, batch, document, and status/created indexes
+- `rag_document_processing_runs`: Job link, active-Run partial unique, document/status/dead-letter, and stable pagination indexes
+- `rag_document_processing_stages`: run/stage primary key and status/updated index
 - `rag_api_provisioning_operation`: unique owner/key-hash identity and a
   completed-at cleanup index
 - `rag_api_key`: partial unique indexes for one enabled current

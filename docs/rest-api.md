@@ -1934,6 +1934,34 @@ Statuses are `QUEUED`, `RUNNING`, `SUCCEEDED`, `FAILED`, `CANCELLED`, and
 `STALE`. The job table never copies document content; it stores only
 document/Profile/content hash/version, lease, retry, and terminal-state data.
 
+## Document Processing Run Ledger
+
+A Processing Run is the authorized, historical record for one document-derivation request. It
+contains the fixed stage sequence `PARSING → CHUNKING → EMBEDDING → INDEXING → FINALIZING`.
+It is an interpretation layer above Embedding Job and does not replace the Job lease, generation,
+automatic retry, or commit-fencing source of truth. Existing embedding/job, document-mutation,
+PDF-to-RAG, and external-sync paths remain the creation entry points; this batch adds no duplicate
+public create endpoint and does not force a Run onto direct synchronous/SSE calls.
+
+| Endpoint | Semantics |
+|----------|-----------|
+| `GET /api/v1/rag/document-processing-runs/{runId}` | Returns the full Run and five-stage timeline; invisible resources use not-found semantics |
+| `GET /api/v1/rag/document-processing-runs?documentId=&collectionKey=&status=&deadLettered=&page=0&size=50` | Filters by document, Collection ACL, status, and dead-letter flag; `size` is bounded to 1–200 and ordering is stable by `createdAt DESC, runId DESC` |
+| `POST /api/v1/rag/document-processing-runs/{runId}/cancel` | Cancels queued work immediately; running work records a request and finishes at a worker safety boundary; repeated calls are idempotent |
+| `POST /api/v1/rag/document-processing-runs/{runId}/retry?maxAttempts=4` | Creates a new Run/Job for `FAILED`, `DEAD_LETTERED`, `CANCELLED`, or retryable `STALE`; an existing active target returns `coalesced=true` |
+
+Run statuses are `QUEUED`, `RUNNING`, `COMPLETED`, `FAILED`, `CANCELLED`, `STALE`, and
+`DEAD_LETTERED`; stage statuses are `PENDING`, `RUNNING`, `SUCCEEDED`, `FAILED`, `SKIPPED`,
+`CANCELLED`, and `STALE`. Manual retry never reopens the old Run; `supersedesRunId` preserves the
+history. `DocumentLifecycleResponse.processing` exposes a compact current-document summary with
+`runId`, status, active stage, execution count, retryability, dead-letter flag, and short errors;
+disabled documents return `processing=null`.
+
+The ledger is controlled by `rag.document-processing.enabled`. When disabled, these new endpoints
+return `503 EMBEDDING_JOBS_DISABLED` while the legacy Embedding Job API remains available. Responses
+contain only hashes, counters, machine codes, and masked errors capped at 500 characters; they never
+return document content, chunks, vectors, lease owner/tokens, or provider secrets.
+
 ## Collection Derivation Integrity and Controlled Repair
 
 `GET /api/v1/rag/collections/derivation-readiness?collectionKey=` returns

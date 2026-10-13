@@ -372,6 +372,37 @@ boolean; when omitted, `embed=true` stays `SYNC` and `embed=false` stays
 `SKIP`. Explicit embed/re-embed rejects `SKIP`. `ASYNC` requires
 `rag.embedding-jobs.enabled=true` or returns `503 EMBEDDING_JOBS_DISABLED`.
 
+### Document Processing Run Ledger
+
+Processing Run/Stage is a queryable five-stage ledger above Embedding Job. It records parsing,
+chunking, embedding, indexing, and finalization without replacing the Job lease, generation,
+retry, or commit-fencing source of truth. Disabling this switch stops creation and advancement
+of the new ledger while the legacy Job and lifecycle paths remain available.
+
+```yaml
+rag:
+  document-processing:
+    enabled: ${RAG_DOCUMENT_PROCESSING_ENABLED:true}
+    housekeeping-enabled: ${RAG_DOCUMENT_PROCESSING_HOUSEKEEPING_ENABLED:true}
+    housekeeping-interval-ms: ${RAG_DOCUMENT_PROCESSING_HOUSEKEEPING_INTERVAL_MS:60000}
+    stuck-threshold-seconds: ${RAG_DOCUMENT_PROCESSING_STUCK_THRESHOLD_SECONDS:300}
+    max-housekeeping-runs-per-scan: ${RAG_DOCUMENT_PROCESSING_MAX_HOUSEKEEPING_RUNS_PER_SCAN:100}
+    stage-progress-write-interval-ms: ${RAG_DOCUMENT_PROCESSING_STAGE_PROGRESS_WRITE_INTERVAL_MS:1000}
+```
+
+| Property | Default | Description |
+|----------|---------|-------------|
+| `rag.document-processing.enabled` | `true` | Creates/advances Processing Runs; when disabled, new ledger APIs return `503 EMBEDDING_JOBS_DISABLED` |
+| `rag.document-processing.housekeeping-enabled` | `true` | Enables bounded terminal mirroring and stuck-run reconciliation |
+| `rag.document-processing.housekeeping-interval-ms` | `60000` | Fixed-delay housekeeping interval, minimum 10 seconds |
+| `rag.document-processing.stuck-threshold-seconds` | `300` | Marks a run stuck only without an active Job and fresh heartbeat; clamped to 60–3600 seconds |
+| `rag.document-processing.max-housekeeping-runs-per-scan` | `100` | Active Runs processed per scan, clamped to 1–1000 |
+| `rag.document-processing.stage-progress-write-interval-ms` | `1000` | Progress coalescing window; stage boundaries are not delayed, minimum 1 second |
+
+See [REST API](rest-api.md#document-processing-run-ledger) for the new endpoints and lifecycle summary.
+V61 stores only short errors, counters, and snapshot hashes; it never stores document content,
+chunks, vectors, lease owner/tokens, or provider secrets.
+
 ### Document Lifecycle And External Source Synchronization
 
 ```yaml

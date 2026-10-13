@@ -67,6 +67,8 @@ public class RagProperties {
     private final RagEvaluationProperties evaluation = new RagEvaluationProperties();
     private final RagDocumentLifecycleProperties documentLifecycle =
             new RagDocumentLifecycleProperties();
+    private final RagDocumentProcessingProperties documentProcessing =
+            new RagDocumentProcessingProperties();
     private final RagApiKeyProvisioningProperties apiKeyProvisioning =
             new RagApiKeyProvisioningProperties();
     private final RagApiKeyRotationProperties apiKeyRotation =
@@ -179,6 +181,10 @@ public class RagProperties {
 
     public RagDocumentLifecycleProperties getDocumentLifecycle() {
         return documentLifecycle;
+    }
+
+    public RagDocumentProcessingProperties getDocumentProcessing() {
+        return documentProcessing;
     }
 
     public RagApiKeyProvisioningProperties getApiKeyProvisioning() {

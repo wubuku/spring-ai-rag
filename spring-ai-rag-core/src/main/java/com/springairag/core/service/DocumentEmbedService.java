@@ -135,10 +135,22 @@ public class DocumentEmbedService {
             Long documentId,
             boolean force,
             EmbeddingCommitGuard commitGuard) {
+        return embedDocumentForJob(documentId, force, commitGuard, null);
+    }
+
+    /**
+     * 持久化 worker 的受控进度入口。回调只接收低敏阶段和有界计数，
+     * 不改变直接同步/SSE 调用的行为。
+     */
+    public Map<String, Object> embedDocumentForJob(
+            Long documentId,
+            boolean force,
+            EmbeddingCommitGuard commitGuard,
+            Consumer<EmbedProgressEvent> progressCallback) {
         return embedDocumentInternal(
                 documentId,
                 force,
-                null,
+                progressCallback,
                 Objects.requireNonNull(commitGuard),
                 false);
     }

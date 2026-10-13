@@ -1689,6 +1689,31 @@ Collection scope 最多展开 1000 个 enabled 文档；也可改为
 状态为 `QUEUED`、`RUNNING`、`SUCCEEDED`、`FAILED`、`CANCELLED`、`STALE`。任务表不复制
 文档正文，只记录 document/Profile/content hash/version、lease、重试和终态信息。
 
+## 文档处理运行账本
+
+Processing Run 是一次文档派生请求的可授权历史记录，固定包含
+`PARSING → CHUNKING → EMBEDDING → INDEXING → FINALIZING` 五个 stage。它是
+Embedding Job 的解释层，不替换 Job 的 lease、generation、自动重试或提交 fencing。
+创建和重试入口仍是既有 embedding/job、文档 mutation、PDF-to-RAG 和外部同步调用；本批不新增
+重复的公开 create API，也不为直接同步/SSE 调用强制创建 Run。
+
+| 端点 | 语义 |
+|------|------|
+| `GET /api/v1/rag/document-processing-runs/{runId}` | 获取完整 Run 与五阶段时间线；不可见资源统一按 not found 处理 |
+| `GET /api/v1/rag/document-processing-runs?documentId=&collectionKey=&status=&deadLettered=&page=0&size=50` | 按文档、Collection ACL、状态和死信筛选；`size` 限制 1–200，按 `createdAt DESC, runId DESC` 稳定分页 |
+| `POST /api/v1/rag/document-processing-runs/{runId}/cancel` | queued 任务立即取消；running 任务记录取消请求，由 worker 在安全边界收尾；重复调用幂等 |
+| `POST /api/v1/rag/document-processing-runs/{runId}/retry?maxAttempts=4` | 对 `FAILED`、`DEAD_LETTERED`、`CANCELLED`、可重试 `STALE` 创建新 Run/Job；合流时返回 `coalesced=true` |
+
+Run 状态为 `QUEUED`、`RUNNING`、`COMPLETED`、`FAILED`、`CANCELLED`、`STALE`、
+`DEAD_LETTERED`；stage 状态为 `PENDING`、`RUNNING`、`SUCCEEDED`、`FAILED`、
+`SKIPPED`、`CANCELLED`、`STALE`。手动 retry 不复活旧 Run，而是用 `supersedesRunId` 保留历史。
+`DocumentLifecycleResponse.processing` 提供当前文档的轻量摘要，包括 `runId`、状态、活动 stage、
+执行次数、retryable、死信标记和短错误；禁用文档返回 `processing=null`。
+
+新账本受 `rag.document-processing.enabled` 控制，关闭时这些新接口返回
+`503 EMBEDDING_JOBS_DISABLED`，旧 Embedding Job API 仍可用。接口只返回 hash、计数、机器码和
+最多 500 字符的脱敏错误，不返回正文、chunk、向量、lease owner/token 或 provider secret。
+
 ## Collection 派生完整性与受控修复
 
 `GET /api/v1/rag/collections/derivation-readiness?collectionKey=` 返回活动 Profile 下的集合级

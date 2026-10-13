@@ -5,7 +5,7 @@
 # 境内网络友好：默认禁用 Ryuk 并复用本地 postgres:16-pgvector 镜像，
 # 两者都可通过环境变量覆盖。
 #
-# 这个清单现在是**全部**：Batch 912 逐个核实了 23 个 `*.it.enabled` 门控类，
+# 这个清单现在是**全部**：逐个核实所有 `*.it.enabled` 门控类，
 # 每一个都只起一个 Testcontainers PostgreSQL 加一份 Flyway schema，没有一个
 # 需要模型 provider 或外部进程。在那之前这里只登记了 3 个，而上面那句"跑全部"
 # 已经写了不知道多久——20 个套件、137 个用例只能靠各自 feature 的脚本单独跑，
@@ -39,6 +39,7 @@ ALL_SUITES=(
   "collection-purge:CollectionPurgePostgresIntegrationTest"
   "document-lifecycle:DocumentLifecyclePostgresIntegrationTest"
   "document-sync-runs:DocumentSyncRunsPostgresIntegrationTest"
+  "document-processing:DocumentProcessingRunPostgresIntegrationTest"
   "embedding-jobs:EmbeddingJobsPostgresIntegrationTest"
   "embedding-profile:EmbeddingProfilePostgresIntegrationTest"
   "evaluation-suites:EvaluationSuitePostgresIntegrationTest"
@@ -82,4 +83,4 @@ echo "Suites: ${CLASSES[*]}"
 exec mvn test "${TEST_FLAGS[@]}" \
   -Dtest="$(IFS=,; echo "${CLASSES[*]}")" \
   -Dsurefire.failIfNoSpecifiedTests=false \
-  -pl spring-ai-rag-core
+  -pl spring-ai-rag-core -am

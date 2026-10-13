@@ -500,6 +500,31 @@ Collection 返回互斥计数。提交后 Spring Event 只提供低延迟本地�
 继续承担可靠性、多实例互斥和恢复；同一事务的多个入队会合并成一次事件，worker 也会合并
 并发唤醒。Scheduled 默认每 `30s` 扫描一次，只兜底事件丢失、实例重启或处理器异常。
 
+### 4.3.1 统一文档处理 Run/Stage（V61）
+
+V61 在现有 `rag_embedding_jobs` 之上增加 `rag_document_processing_runs` 和
+`rag_document_processing_stages`。Run 是面向用户和运维的文档派生历史；Job 仍是唯一的
+lease、attempt、generation 和 commit-fencing 协调对象。每个新 Run 初始化五个固定 stage：
+`PARSING`、`CHUNKING`、`EMBEDDING`、`INDEXING`、`FINALIZING`。
+
+```text
+EmbeddingJobWorker claim/lease
+  │ 条件 UPDATE 成功后镜像 Run=RUNNING
+  ▼
+PARSING → CHUNKING → EMBEDDING → INDEXING → FINALIZING
+  │ stage CAS + 有界 progress/heartbeat
+  ▼
+Job terminal mirror → Run COMPLETED / FAILED / CANCELLED / STALE / DEAD_LETTERED
+  │
+  └── housekeeping：补写 Job/Run 间的崩溃窗口，有限收敛 stuck Run
+```
+
+自动 provider 重试复用同一个 Run/Job，下一次 claim 会把失败或租约遗留的未完成 stage 重置为
+`PENDING`；手动 retry 创建新 Run/Job，并以 `supersedesRunId` 保留历史。所有阶段更新带有
+document/profile/generation/hash/chunker/lease 条件，继续使用 CAS、lease 和有界重试，不使用
+`FOR UPDATE`、`SKIP LOCKED` 或 advisory lock。Run/Stage 只保存快照 hash、计数、机器码和脱敏短错误，
+不保存正文、chunk、向量或 provider secret。
+
 ### 4.4 JSON 结构化记录流程
 
 ```text
@@ -719,6 +744,8 @@ rag_audit_log           # 审计日志（集合操作）
 | `rag_document_embedding_state` | document_id, embedding_profile_id, content_hash, chunker_version, request_generation, active_job_id, status, chunk_count | Profile 级 freshness、活动 generation 与完成状态。`request_generation` 必须 ≥ 1：它是 job 路径的围栏（`state.request_generation = job.request_generation`），也是 `DerivationIntegrityRepository` 承认向量新鲜的前置条件。V60 回填了 V40 遗留的 0 并加了 `CHECK`，所以「忘了写这一列」会当场失败而不是变成一个永远读成 `FAILED` 的行 |
 | `rag_embeddings` | document_id, chunk_index, embedding_profile_id, embedding_1024 VECTOR(1024), content | Profile 级文本块与向量 |
 | `rag_embedding_jobs` | document_id, embedding_profile_id, content_hash, request_generation, document_kind, chunker_version, status, lease_expires_at, origin | generation-aware 持久化 embedding/reindex 状态机 |
+| `rag_document_processing_runs` | document_id, embedding_profile_id, embedding_job_id, request_generation, attempt_no, status, active_stage, origin, dead_lettered_at | V61 面向用户/运维的文档处理运行历史、恢复和死信摘要 |
+| `rag_document_processing_stages` | run_id, stage_name, stage_order, status, execution_attempt, progress counters, short error | V61 固定五阶段时间线；不保存 chunk/payload |
 | `rag_document_chunks` | document_id, local_index_generation, content_hash, chunker_version, chunk_text, chunk_index | 与 Profile 无关的本地关键词 chunk |
 | `rag_chat_history_source_document` / `rag_user_feedback_document` | history_id/feedback_id, document_id | V56 规范化内容引用，用于安全 purge 归因 |
 | `rag_collection_purge_preview` | owner_key, collection_id, token_hash, fingerprint, status, result_payload | 不保存正文或明文 token 的 preview/apply lease 与结果 replay |
@@ -749,6 +776,8 @@ rag_audit_log           # 审计日志（集合操作）
 - `rag_documents.jsonb_payload`：V34 partial GIN `jsonb_path_ops`（enabled JSON record 的 `@>` 包含过滤）
 - `rag_documents.metadata`：V36 GIN（`metadataContains` `@>` 下推）
 - `rag_embedding_jobs`：活动任务 partial unique、claim、batch、document 与 status/created 索引
+- `rag_document_processing_runs`：Job 关联、活动 Run partial unique、document/status/dead-letter 与稳定分页索引
+- `rag_document_processing_stages`：run/stage 主键和 status/updated 索引
 - `rag_api_provisioning_operation`：owner/key-hash 唯一身份与 completed-at 清理索引
 - `rag_api_key`：分别约束一个 enabled current（`retire_at IS NULL`）与一个 enabled
   retiring（`retire_at IS NOT NULL`）credential 的 partial unique index，以及 active

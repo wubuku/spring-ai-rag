@@ -356,6 +356,14 @@ rag:
     retry-backoff-seconds: ${RAG_EMBEDDING_JOBS_RETRY_BACKOFF_SECONDS:10}
     worker-concurrency: ${RAG_EMBEDDING_JOBS_WORKER_CONCURRENCY:4}
 
+  document-processing:
+    enabled: ${RAG_DOCUMENT_PROCESSING_ENABLED:true}
+    housekeeping-enabled: ${RAG_DOCUMENT_PROCESSING_HOUSEKEEPING_ENABLED:true}
+    housekeeping-interval-ms: ${RAG_DOCUMENT_PROCESSING_HOUSEKEEPING_INTERVAL_MS:60000}
+    stuck-threshold-seconds: ${RAG_DOCUMENT_PROCESSING_STUCK_THRESHOLD_SECONDS:300}
+    max-housekeeping-runs-per-scan: ${RAG_DOCUMENT_PROCESSING_MAX_HOUSEKEEPING_RUNS_PER_SCAN:100}
+    stage-progress-write-interval-ms: ${RAG_DOCUMENT_PROCESSING_STAGE_PROGRESS_WRITE_INTERVAL_MS:1000}
+
   document-lifecycle:
     strict-external-cas: ${RAG_DOCUMENT_STRICT_EXTERNAL_CAS:true}
     allow-non-default-namespace: ${RAG_DOCUMENT_ALLOW_NON_DEFAULT_NAMESPACE:true}

@@ -636,7 +636,7 @@ WebUI 通过请求拦截断言同一次用户提交在 Axios retry 中复用一�
 ```
 
 该 9 阶段门禁依次执行禁悲观锁检查、purge/Collection/feedback/audit/OpenAI scope
-聚焦测试、真实 PostgreSQL V1–V60 清理矩阵、`mvn clean compile test-compile`、完整
+聚焦测试、真实 PostgreSQL V1–V61 清理矩阵、`mvn clean compile test-compile`、完整
 WebUI typecheck/Vitest/lint/生产构建、Collection Mock Playwright、双语文档门禁、脚本
 语法和空白检查。每次运行在
 `.verification/collection-purge/<run-id>/summary.md` 记录逐步证据。
@@ -774,6 +774,25 @@ text-only messages、未知 alias 错误、非流式 JSON、SSE role/content/fin
 执行 V1–V52，验证 V33 active-job coalesce、force 原子升级和并发 worker 原子条件
 claim，再执行 `test-compile`、Shell 语法和空白检查。已有隔离数据库时可用
 `EMBEDDING_JOBS_IT_JDBC_URL` 覆盖。
+
+### 文档处理 Run/Stage PostgreSQL 验收门禁
+
+Processing Run 是现有持久化 Embedding Job 之上的阶段账本。该专项测试从空库执行 V1–V61，
+验证五个固定 stage 初始化、worker claim 镜像、stage CAS/进度、Job 终态镜像和基础约束，
+不替换旧 Job 的 lease、重试或 generation fencing：
+
+```bash
+TESTCONTAINERS_RYUK_DISABLED=true \
+mvn -pl spring-ai-rag-core -am \
+  -Ddocument-processing.it.enabled=true \
+  -Dtest=DocumentProcessingRunPostgresIntegrationTest \
+  -Dsurefire.failIfNoSpecifiedTests=false \
+  test
+```
+
+套件受 `document-processing.it.enabled` 门控，已纳入 `scripts/verify-gated-it.sh`。只跑该
+套件时执行 `./scripts/verify-gated-it.sh DocumentProcessingRunPostgresIntegrationTest`；
+连接一次性 PostgreSQL 时可用对应的 `document-processing.it.*` 系统属性覆盖默认连接。
 
 ### PDF 导入 PostgreSQL 验收门禁
 
@@ -971,7 +990,7 @@ API_KEY_EXPIRY_ALERT_VERIFY_PHASE=focused \
 ./scripts/verify-api-key-expiry-alerts.sh
 ```
 
-focused 阶段一次性执行受影响后端测试、空库 V1-V60 PostgreSQL 生命周期矩阵、WebUI
+focused 阶段一次性执行受影响后端测试、空库 V1-V61 PostgreSQL 生命周期矩阵、WebUI
 typecheck/Vitest/alignment/production build 和 Alerts Mock Playwright。PostgreSQL 场景覆盖
 8 路并发只产生一个 active condition/通知 claim、`WARNING → CRITICAL → EXPIRED` 原行
 升级、同阶段刷新、延期/吊销解决、重新进入窗口的新历史、漏事件恢复、超过单批上限的公平

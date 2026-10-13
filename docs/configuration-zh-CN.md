@@ -338,6 +338,35 @@ document kind、chunker version 与 content hash。相同 generation 的活动�
 `embed=false→SKIP`。显式 embed/re-embed 拒绝 `SKIP`。`ASYNC` 要求
 `rag.embedding-jobs.enabled=true`，否则返回 `503 EMBEDDING_JOBS_DISABLED`。
 
+### 文档处理运行账本
+
+Processing Run/Stage 是 Embedding Job 之上的可查询阶段账本，记录解析、分块、嵌入、索引和收尾
+五个固定阶段。它不替换 Job 的 lease、generation、重试和提交 fencing；关闭本开关只停用新账本，
+旧 Job/lifecycle 路径仍可用。
+
+```yaml
+rag:
+  document-processing:
+    enabled: ${RAG_DOCUMENT_PROCESSING_ENABLED:true}
+    housekeeping-enabled: ${RAG_DOCUMENT_PROCESSING_HOUSEKEEPING_ENABLED:true}
+    housekeeping-interval-ms: ${RAG_DOCUMENT_PROCESSING_HOUSEKEEPING_INTERVAL_MS:60000}
+    stuck-threshold-seconds: ${RAG_DOCUMENT_PROCESSING_STUCK_THRESHOLD_SECONDS:300}
+    max-housekeeping-runs-per-scan: ${RAG_DOCUMENT_PROCESSING_MAX_HOUSEKEEPING_RUNS_PER_SCAN:100}
+    stage-progress-write-interval-ms: ${RAG_DOCUMENT_PROCESSING_STAGE_PROGRESS_WRITE_INTERVAL_MS:1000}
+```
+
+| 属性 | 默认值 | 说明 |
+|------|--------|------|
+| `rag.document-processing.enabled` | `true` | 创建/推进 Processing Run；关闭时新账本 API 返回 `503 EMBEDDING_JOBS_DISABLED` |
+| `rag.document-processing.housekeeping-enabled` | `true` | 开启有界 terminal mirror 和 stuck 收尾扫描 |
+| `rag.document-processing.housekeeping-interval-ms` | `60000` | housekeeping 固定延迟，最小 10 秒 |
+| `rag.document-processing.stuck-threshold-seconds` | `300` | 无 active Job 且无新 heartbeat 时判定 stuck，限制 60–3600 秒 |
+| `rag.document-processing.max-housekeeping-runs-per-scan` | `100` | 每轮最多处理的 active Run，限制 1–1000 |
+| `rag.document-processing.stage-progress-write-interval-ms` | `1000` | 进度写入合并窗口；阶段边界不受此窗口影响，最小 1 秒 |
+
+新 API 和生命周期摘要见 [REST API](rest-api-zh-CN.md#文档处理运行账本)；V61 迁移只保存短错误摘要、
+计数和快照 hash，不保存正文、chunk、向量、lease owner/token 或 provider secret。
+
 ### 文档生命周期与外部来源同步
 
 ```yaml

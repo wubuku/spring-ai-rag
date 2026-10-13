@@ -8,6 +8,8 @@ import com.springairag.core.config.EmbeddingProfile;
 import com.springairag.core.config.EmbeddingProfileProvider;
 import com.springairag.core.config.RagEmbeddingJobProperties;
 import com.springairag.core.config.RagProperties;
+import com.springairag.core.documentprocessing.DocumentProcessingRun;
+import com.springairag.core.documentprocessing.DocumentProcessingRunService;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.exception.RagException;
 import com.springairag.core.service.DocumentEmbedService;
@@ -34,6 +36,7 @@ public class EmbeddingDispatchService {
     private final EmbeddingJobExecutor jobExecutor;
     private KeywordIndexPersistenceService keywordIndexPersistenceService; // optional-claim: KeywordIndexPersistenceService 是无条件 @Service，null 臂只在不走 Spring 装配的构造路径可达；守卫真正的职责是本地关键词索引缺席时跳过维护，不让索引旁路拖垮入队
     private EmbeddingJobWakeupPublisher wakeupPublisher; // optional-claim: EmbeddingJobWakeupPublisher 是无条件 @Component，null 臂只在不走 Spring 装配的构造路径可达；守卫真正的职责是"只有真正排入 QUEUED 的作业才需要唤醒 worker"，合流与终态都不该唤醒
+    private DocumentProcessingRunService processingRunService; // optional-claim: 兼容不装配新账本的旧单测构造路径
 
     @Autowired
     public EmbeddingDispatchService(
@@ -61,6 +64,12 @@ public class EmbeddingDispatchService {
     void setWakeupPublisher(
             EmbeddingJobWakeupPublisher wakeupPublisher) {
         this.wakeupPublisher = wakeupPublisher;
+    }
+
+    @Autowired(required = false)
+    void setProcessingRunService(
+            DocumentProcessingRunService processingRunService) {
+        this.processingRunService = processingRunService;
     }
 
     public EmbeddingDispatchService(
@@ -132,6 +141,7 @@ public class EmbeddingDispatchService {
                 jobRepository.updateDocumentProcessing(
                         document.getId(), "PENDING", null);
             }
+            ensureProcessingRun(updated.job(), true);
             publishWakeupIfQueued(updated.job());
             return new Result(
                     EmbeddingAction.ASYNC_COALESCED,
@@ -153,6 +163,10 @@ public class EmbeddingDispatchService {
                 force && fresh);
         jobRepository.cancelSuperseded(
                 document.getId(), profile.id(), generation);
+        if (processingRunService != null) {
+            processingRunService.markSuperseded(
+                    document.getId(), profile.id(), generation);
+        }
         EmbeddingJobRepository.CreateResult created =
                 jobRepository.createOrCoalesce(
                         UUID.randomUUID(),
@@ -167,6 +181,7 @@ public class EmbeddingDispatchService {
                         generation,
                         descriptor.documentKind(),
                         descriptor.chunkerVersion());
+        ensureProcessingRun(created.job(), created.coalesced());
         jobRepository.activateJob(
                 document.getId(), profile.id(), generation, created.job().id());
         jobRepository.updateDocumentProcessing(
@@ -251,6 +266,15 @@ public class EmbeddingDispatchService {
                 && job.status() == EmbeddingJobStatus.QUEUED) {
             wakeupPublisher.publishAfterCommit();
         }
+    }
+
+    private DocumentProcessingRun ensureProcessingRun(
+            EmbeddingJob job, boolean legacyBridge) {
+        if (processingRunService == null) {
+            return null;
+        }
+        return processingRunService.ensureForJob(
+                job, job.origin(), null, legacyBridge);
     }
 
     public record Result(

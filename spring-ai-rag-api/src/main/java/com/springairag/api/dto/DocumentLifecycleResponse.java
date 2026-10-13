@@ -17,7 +17,22 @@ public record DocumentLifecycleResponse(
         UUID activeJobId,
         String lastErrorCode,
         String lastError,
-        boolean retryable
+        boolean retryable,
+        DocumentProcessingSummary processing
 ) {
-}
 
+    public DocumentLifecycleResponse(
+            String documentState,
+            String searchability,
+            String localIndexStatus,
+            String embeddingStatus,
+            String activeEmbeddingProfileKey,
+            UUID activeJobId,
+            String lastErrorCode,
+            String lastError,
+            boolean retryable) {
+        this(documentState, searchability, localIndexStatus, embeddingStatus,
+                activeEmbeddingProfileKey, activeJobId, lastErrorCode, lastError,
+                retryable, null);
+    }
+}

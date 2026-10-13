@@ -3,6 +3,7 @@ package com.springairag.core.service;
 import com.springairag.api.dto.DocumentLifecycleResponse;
 import com.springairag.core.config.EmbeddingProfile;
 import com.springairag.core.config.EmbeddingProfileProvider;
+import com.springairag.core.documentprocessing.DocumentProcessingRunService;
 import com.springairag.core.entity.RagDocument;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -21,6 +22,7 @@ public class DocumentLifecycleService {
     private final EmbeddingProfileProvider profileProvider;
     private final DocumentDerivationDescriptorProvider descriptorProvider;
     private DerivationIntegrityRepository integrityRepository; // optional-claim: DerivationIntegrityRepository 是无条件 @Repository，null 臂只在不走 Spring 装配的构造路径可达；守卫真正的职责是完整性快照缺席时走默认生命周期状态，而不是 NPE
+    private DocumentProcessingRunService processingRunService; // optional-claim: 兼容不装配 V61 账本的旧测试构造路径
 
     public DocumentLifecycleService(
             JdbcTemplate jdbcTemplate,
@@ -34,6 +36,12 @@ public class DocumentLifecycleService {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     public void setIntegrityRepository(DerivationIntegrityRepository integrityRepository) {
         this.integrityRepository = integrityRepository;
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setProcessingRunService(
+            DocumentProcessingRunService processingRunService) {
+        this.processingRunService = processingRunService;
     }
 
     public DocumentLifecycleResponse read(RagDocument document) {
@@ -52,7 +60,9 @@ public class DocumentLifecycleService {
         }
 
         if (integrityRepository != null) {
-            return fromIntegrity(integrityRepository.inspect(document));
+            return fromIntegrity(
+                    integrityRepository.inspect(document),
+                    processingSummary(document));
         }
 
         EmbeddingProfile profile = profileProvider.getActiveProfile();
@@ -112,7 +122,8 @@ public class DocumentLifecycleService {
                 uuid(row.get("active_job_id")),
                 derived.errorCode(),
                 derived.error(),
-                !"READY".equals(derived.searchability()));
+                !"READY".equals(derived.searchability()),
+                processingSummary(document));
     }
 
     private record DerivedLifecycle(
@@ -254,7 +265,8 @@ public class DocumentLifecycleService {
     }
 
     private DocumentLifecycleResponse fromIntegrity(
-            DerivationIntegrityRepository.Snapshot snapshot) {
+            DerivationIntegrityRepository.Snapshot snapshot,
+            com.springairag.api.dto.DocumentProcessingSummary processing) {
         String searchability = switch (snapshot.bucket()) {
             case "READY" -> "READY";
             case "KEYWORD_ONLY" -> "KEYWORD_ONLY";
@@ -275,7 +287,7 @@ public class DocumentLifecycleService {
                 "ACTIVE", searchability, localStatus, embeddingStatus,
                 activeProfileKey(), snapshot.activeJobId(),
                 "READY".equals(searchability) ? null : snapshot.reasonCode(),
-                error, !"READY".equals(searchability));
+                error, !"READY".equals(searchability), processing);
     }
 
     private DocumentLifecycleResponse notRequested(
@@ -298,6 +310,12 @@ public class DocumentLifecycleService {
         } catch (RuntimeException ignored) {
             return null;
         }
+    }
+
+    private com.springairag.api.dto.DocumentProcessingSummary processingSummary(
+            RagDocument document) {
+        return processingRunService == null
+                ? null : processingRunService.summaryForDocument(document);
     }
 
     private static boolean positive(Object value) {
