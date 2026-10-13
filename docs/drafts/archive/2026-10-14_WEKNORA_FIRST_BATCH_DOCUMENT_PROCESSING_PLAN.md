@@ -991,8 +991,9 @@ stuck CAS、dead-letter 统计和有界分页，不自动删除历史。
 - 2026-10-14 实现后第 3 轮检查发现新 Run 创建后 active gauge 未立即刷新；已在创建成功路径补齐
   `refreshActiveMetric()`，修复后专项 53/53、生命周期门禁 14/14、全量 gated IT 24 套件/170 测试、
   文档门禁 16 项和禁锁门禁均通过。随后重新执行实现后连续三轮只读检查，计数达到 `3/3`。
-- Git 交付已完成：2026-10-14 创建提交 `5378364f feat: add document processing lifecycle recovery`，
-  已推送至 `origin/main`；最终核对 `main...origin/main = 0 0`，工作区干净。
+- Git 交付已完成：2026-10-14 创建功能提交 `5378364f feat: add document processing lifecycle recovery`，
+  随后创建文档归档提交 `df259df7 docs: archive completed WeKnora processing plan`，均已推送至
+  `origin/main`；最终核对 `main...origin/main = 0 0`，工作区干净。
 - 实施落点与原始候选文件清单的差异已在 Slice 3 记录：生产包名采用
   `documentprocessing`，bridge/state mapper 保持为服务与 repository 内部行为，以减少新增抽象和兼容风险。
 - 本 plan/progress 已按草稿生命周期归档；当前代码事实以代码、V61 迁移、自动化测试和双语长青文档为准。

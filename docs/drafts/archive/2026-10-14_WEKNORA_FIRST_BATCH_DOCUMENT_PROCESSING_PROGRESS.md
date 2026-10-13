@@ -10,8 +10,9 @@
 - 分支：`main`
 - 工作区：开始实施前干净；直接在当前 `main` 工作区实施。
 - 规划状态：规划检查连续 `3/3`、实现后检查连续 `3/3`、最终门禁和 Git 交付均已完成。
-- Git 交付：提交 `5378364f feat: add document processing lifecycle recovery` 已推送到
-  `origin/main`；最终 `main...origin/main = 0 0`，工作区干净。
+- Git 交付：功能提交 `5378364f feat: add document processing lifecycle recovery` 和文档归档提交
+  `df259df7 docs: archive completed WeKnora processing plan` 均已推送到 `origin/main`；最终
+  `main...origin/main = 0 0`，工作区干净。
 - 本批范围：Processing Run/Stage、Job 镜像、CAS/lease 恢复、HTTP actions、housekeeping、V61。
 - 明确不做：Citation Registry、SSE Decoder、Chunking Profile/Validator、Retrieval Context Assembly、
   Route Policy Self-check、Parser SPI、Resource Handle、CLI/MCP、WebUI 任务时间线。
@@ -154,6 +155,10 @@
 | 2026-10-14 | `./scripts/verify-gated-it.sh`（active gauge 修复后） | 24 个套件、170 个测试，0 failures、0 errors、0 skipped；所有空库迁移至 V61 |
 | 2026-10-14 | `./scripts/verify-project-docs.sh`、`./scripts/verify-no-pessimistic-locks.sh`、`git diff --check` | 文档 16 项通过；禁锁门禁通过；无 whitespace 错误 |
 | 2026-10-14 | `git fetch origin`、`git commit`、`git push origin main`、最终 `git status`/`git rev-list` | 提交 `5378364f` 已推送；工作区干净；本地/远端 `0 0` |
+| 2026-10-14 | 最终归档修正后的 `./scripts/verify-document-lifecycle.sh` | 14/14 通过；全量后端 7,738 tests，0 failures、0 errors、170 skipped；生命周期 PostgreSQL 13/13；HTTP E2E、WebUI Mock 13/13、文档和 whitespace 全绿 |
+| 2026-10-14 | 最终归档修正后的 `./scripts/verify-gated-it.sh` | 24 个 PostgreSQL 套件、170 个测试，0 failures、0 errors、0 skipped；各套件空库迁移至 V61 |
+| 2026-10-14 | 归档后的 `./scripts/verify-project-docs.sh` | 首次发现 progress 归档链接未随 `git mv` 改名；修正相对链接后 16 项全部通过 |
+| 2026-10-14 | 文档归档后的最终 `git fetch origin`、`git push origin main`、`git status`/`git rev-list` | 功能提交 `5378364f` 与归档提交 `df259df7` 均已推送；工作区干净；本地/远端 `0 0` |
 
 ## 实现后检查计数
 
