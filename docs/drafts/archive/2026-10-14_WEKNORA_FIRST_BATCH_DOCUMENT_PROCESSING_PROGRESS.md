@@ -1,6 +1,6 @@
 # 第一批改进实施进度：统一文档处理阶段状态与恢复
 
-> 对应规划：[第一批改进规划](WEKNORA_FIRST_BATCH_DOCUMENT_PROCESSING_PLAN.md)
+> 对应规划：[第一批改进规划](2026-10-14_WEKNORA_FIRST_BATCH_DOCUMENT_PROCESSING_PLAN.md)
 >
 > 本账本只记录实施状态、验证证据和恢复入口；实现完成后，随规划一并按 `docs/drafts/README-zh-CN.md`
 > 的生命周期归档。
@@ -9,8 +9,9 @@
 
 - 分支：`main`
 - 工作区：开始实施前干净；直接在当前 `main` 工作区实施。
-- 规划状态：规划检查连续 `3/3`、实现后检查连续 `3/3` 均已通过；最终门禁已通过，等待 Git
-  交付。
+- 规划状态：规划检查连续 `3/3`、实现后检查连续 `3/3`、最终门禁和 Git 交付均已完成。
+- Git 交付：提交 `5378364f feat: add document processing lifecycle recovery` 已推送到
+  `origin/main`；最终 `main...origin/main = 0 0`，工作区干净。
 - 本批范围：Processing Run/Stage、Job 镜像、CAS/lease 恢复、HTTP actions、housekeeping、V61。
 - 明确不做：Citation Registry、SSE Decoder、Chunking Profile/Validator、Retrieval Context Assembly、
   Route Policy Self-check、Parser SPI、Resource Handle、CLI/MCP、WebUI 任务时间线。
@@ -152,16 +153,18 @@
 | 2026-10-14 | `./scripts/verify-document-lifecycle.sh`（active gauge 修复后） | 14/14 通过；后端、生命周期、外部同步/版本恢复 HTTP E2E、WebUI、文档和 whitespace 全绿 |
 | 2026-10-14 | `./scripts/verify-gated-it.sh`（active gauge 修复后） | 24 个套件、170 个测试，0 failures、0 errors、0 skipped；所有空库迁移至 V61 |
 | 2026-10-14 | `./scripts/verify-project-docs.sh`、`./scripts/verify-no-pessimistic-locks.sh`、`git diff --check` | 文档 16 项通过；禁锁门禁通过；无 whitespace 错误 |
+| 2026-10-14 | `git fetch origin`、`git commit`、`git push origin main`、最终 `git status`/`git rev-list` | 提交 `5378364f` 已推送；工作区干净；本地/远端 `0 0` |
 
 ## 实现后检查计数
 
 - 当前连续计数：`3/3`。
 - 检查要求：只读复核事务/CAS/lease/迁移、API/ACL/兼容/开关、测试/文档/发布/回滚；无问题才递增，
   发现实质问题必须修复并重置为 `0/3`。
-- 当前结果：2026-10-14 active gauge 修复后的专项回归、生命周期门禁和全量 gated IT 均已通过；三轮
-  实现检查已连续无修改完成。下一步仅剩最终 `git diff` 回看、commit、fetch/merge、push 和工作区清洁确认。
+- 当前结果：2026-10-14 active gauge 修复后的专项回归、生命周期门禁、全量 gated IT、文档门禁和禁锁
+  检查均已通过；三轮实现检查已连续无修改完成，随后已完成 Git 交付并确认工作区干净。
 
 ## 恢复入口
 
-中断后先读本文件和对应规划的 Slice 进度，再检查 `git status`。不要使用 `git reset --hard`、`git stash`、
-`git clean` 或覆盖已有 WIP；从最后一个已通过退出条件的切片继续。
+本批已完成并归档；如需审计，先读本文件和同目录的 plan，再以当前代码、迁移、长青文档和自动化测试
+为准。不要把本归档账本当作新的实施入口，也不要使用 `git reset --hard`、`git stash`、`git clean`
+或覆盖已有 WIP。

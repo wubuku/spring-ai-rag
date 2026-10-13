@@ -792,5 +792,5 @@ WeKnora 前端把“异步处理可见性”做成了工作区能力，而不是
   按生命周期移动到 `docs/drafts/archive/`。
 - 本轮最终只新增/修改文档，未修改生产代码、迁移、配置、测试或 WebUI：
   `docs/drafts/WEKNORA_REFERENCE_RESEARCH.md`、
-  `docs/drafts/WEKNORA_FIRST_BATCH_DOCUMENT_PROCESSING_PLAN.md`、
+  `docs/drafts/archive/2026-10-14_WEKNORA_FIRST_BATCH_DOCUMENT_PROCESSING_PLAN.md`、
   `docs/drafts/README-zh-CN.md`、`docs/drafts/README.md`。

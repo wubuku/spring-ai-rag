@@ -1,12 +1,12 @@
 # 第一批改进规划：统一文档处理阶段状态与恢复
 
-> 状态：**已完成实现、连续 3/3 检查和最终门禁，待 Git commit/push**
+> 状态：**已完成实现、连续 3/3 检查、最终门禁和 Git 交付**
 >
 > 规划日期：2026-10-12
 >
-> 参考调研：[WeKnora 参考项目调研与借鉴规划](WEKNORA_REFERENCE_RESEARCH.md)
+> 参考调研：[WeKnora 参考项目调研与借鉴规划](../WEKNORA_REFERENCE_RESEARCH.md)
 >
-> 规划标准：[规划、实施与验收工作流](../delivery-workflow-zh-CN.md)
+> 规划标准：[规划、实施与验收工作流](../../delivery-workflow-zh-CN.md)
 
 ## 0. 恢复入口与本批结论
 
@@ -113,7 +113,7 @@ WeKnora 值得借鉴的是：每次处理有独立 attempt、阶段/span、取�
 失败进入 dead-letter，并由 housekeeping 根据心跳、队列存在性和状态收尾。不能照搬其
 `FOR UPDATE SKIP LOCKED` 队列实现，因为本项目明确禁止悲观锁；本项目必须继续使用现有的
 CAS/lease/generation/fencing 方式。完整调研证据见
-[WEKNORA_REFERENCE_RESEARCH.md](WEKNORA_REFERENCE_RESEARCH.md) §4.1、§10.5。
+[WEKNORA_REFERENCE_RESEARCH.md](../WEKNORA_REFERENCE_RESEARCH.md) §4.1、§10.5。
 
 ## 2. 目标、非目标与受影响边界
 
@@ -773,23 +773,22 @@ worker concurrency 仍是单一事实源，不在新配置中复制。
 
 ### Slice 3：Processing domain、repository、bridge
 
-新增固定目录及文件：
+实际落地目录及文件：
 
 ```text
-spring-ai-rag-core/src/main/java/com/springairag/core/processing/
+spring-ai-rag-core/src/main/java/com/springairag/core/documentprocessing/
   DocumentProcessingRun.java
   DocumentProcessingStage.java
   DocumentProcessingRunRepository.java
   DocumentProcessingRunService.java
-  DocumentProcessingRunBridge.java
-  DocumentProcessingStateMapper.java
 ```
 
 重点实现：创建五阶段、active unique 竞争、stage CAS、heartbeat、terminal reconcile、legacy bridge、
 分页查询和 ACL 需要的 document scope。Repository 不得引入悲观锁。依赖方向固定为：processing service
-可以依赖现有 document/profile/descriptor/job repository 和 ACL，但不得依赖 `DocumentLifecycleService`；
-`DocumentLifecycleService` 只依赖 processing repository 的只读查询/`DocumentProcessingStateMapper`，
-避免 lifecycle ↔ processing service 循环依赖。
+可以依赖现有 document/profile/descriptor/job repository 和 ACL；最终 bridge 和 summary/state mapping
+行为由 `DocumentProcessingRunService`、`DocumentProcessingRunRepository` 与生命周期服务的兼容读路径
+共同承担，没有额外的 `DocumentProcessingRunBridge` 或 `DocumentProcessingStateMapper` 类。生命周期服务
+通过可选注入使用 Run 服务；旧的直接构造测试在未装配账本时仍保留 fallback，未形成循环依赖。
 
 ### Slice 4：接入现有 Job 创建和执行链
 
@@ -992,8 +991,10 @@ stuck CAS、dead-letter 统计和有界分页，不自动删除历史。
 - 2026-10-14 实现后第 3 轮检查发现新 Run 创建后 active gauge 未立即刷新；已在创建成功路径补齐
   `refreshActiveMetric()`，修复后专项 53/53、生命周期门禁 14/14、全量 gated IT 24 套件/170 测试、
   文档门禁 16 项和禁锁门禁均通过。随后重新执行实现后连续三轮只读检查，计数达到 `3/3`。
-- 当前 Git 交付前事实：代码、测试、V61、配置/双语长青文档和规划账本均为有意修改；WebUI 未修改；
-  尚未 commit/push，最后必须按交付工作流 fetch 后以 merge 方式确认 `origin/main`，再 push `main` 并
-  核对工作区干净和本地/远端提交一致。
+- Git 交付已完成：2026-10-14 创建提交 `5378364f feat: add document processing lifecycle recovery`，
+  已推送至 `origin/main`；最终核对 `main...origin/main = 0 0`，工作区干净。
+- 实施落点与原始候选文件清单的差异已在 Slice 3 记录：生产包名采用
+  `documentprocessing`，bridge/state mapper 保持为服务与 repository 内部行为，以减少新增抽象和兼容风险。
+- 本 plan/progress 已按草稿生命周期归档；当前代码事实以代码、V61 迁移、自动化测试和双语长青文档为准。
 - 后续批次入口：引用与流式安全、分块 Profile/Validator、检索上下文组装、route policy、Parser/资源
-  句柄；见 [WEKNORA_REFERENCE_RESEARCH.md](WEKNORA_REFERENCE_RESEARCH.md) §6。
+  句柄；见 [WEKNORA_REFERENCE_RESEARCH.md](../WEKNORA_REFERENCE_RESEARCH.md) §6。

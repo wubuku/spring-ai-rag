@@ -38,8 +38,6 @@ Active plans are listed here and in `docs/index*`.
 
 ## Current Active Plans
 
-- [First-batch improvement: unified document-processing stages and recovery](WEKNORA_FIRST_BATCH_DOCUMENT_PROCESSING_PLAN.md)
-  (Chinese; implementation has not started)
 - [WeKnora reference-project research and borrowing plan](WEKNORA_REFERENCE_RESEARCH.md)
   (Chinese; research draft, not an implementation commitment)
 - [WebUI unified design language research and implementation plan](WEBUI_UNIFIED_DESIGN_LANGUAGE_PLAN.md)
@@ -48,6 +46,9 @@ Active plans are listed here and in `docs/index*`.
   plan/implementation/acceptance loop focused on test hardening, WebUI UI/UX
   refactoring, and technical-debt cleanup; new features are out of scope for
   this stage.
+
+The completed first-batch document-processing stages and recovery improvement
+is archived in the [historical archive](archive/README.md).
 
 Completed, stopped, and superseded materials remain available in the
 [historical archive](archive/README.md).

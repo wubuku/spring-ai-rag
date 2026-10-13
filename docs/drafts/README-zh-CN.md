@@ -32,12 +32,13 @@
 
 ## 当前活跃规划
 
-- [第一批改进：统一文档处理阶段状态与恢复](WEKNORA_FIRST_BATCH_DOCUMENT_PROCESSING_PLAN.md)：在现有
-  `EmbeddingJob` 之上规划 Processing Run/Stage、进度、取消、重试、死信和 stuck-task 恢复；尚未开始改代码。
 - [WeKnora 参考项目调研与借鉴规划](WEKNORA_REFERENCE_RESEARCH.md)：记录对参考项目的代码级调研、
   与当前能力的差距判断和候选实施路线；仅为活跃调研草案，不代表已承诺实施。
 - [WebUI 统一设计语言调研与实施规划](WEBUI_UNIFIED_DESIGN_LANGUAGE_PLAN.md)
 - [加固循环批次规划](HARDENING_LOOP_PLAN.md)：持续循环执行测试加固、WebUI UI/UX
   重构与技术债务处理；本阶段不把新功能作为重点。
+
+已完成的第一批文档处理阶段与恢复改进已归档至
+[历史规划归档](archive/README-zh-CN.md)。
 
 已完成、已停止和被替代的材料可从[历史归档](archive/README-zh-CN.md)追溯。
