@@ -349,11 +349,36 @@ public class EmbeddingJobRepository {
             int leaseSeconds) {
         List<UUID> cancelled = jdbcTemplate.query("""
                 UPDATE rag_embedding_jobs
-                SET status = 'CANCELLED',
+                SET status = CASE
+                        WHEN EXISTS (
+                            SELECT 1
+                            FROM rag_document_embedding_state state
+                            WHERE state.document_id = rag_embedding_jobs.document_id
+                              AND state.embedding_profile_id = rag_embedding_jobs.embedding_profile_id
+                              AND (
+                                  state.request_generation <> rag_embedding_jobs.request_generation
+                                  OR state.active_job_id IS DISTINCT FROM rag_embedding_jobs.id
+                              )
+                        ) THEN 'STALE'
+                        ELSE 'CANCELLED'
+                    END,
                     finished_at = CURRENT_TIMESTAMP,
                     lease_owner = NULL,
                     lease_expires_at = NULL,
                     terminal_reason = NULL,
+                    last_error = CASE
+                        WHEN EXISTS (
+                            SELECT 1
+                            FROM rag_document_embedding_state state
+                            WHERE state.document_id = rag_embedding_jobs.document_id
+                              AND state.embedding_profile_id = rag_embedding_jobs.embedding_profile_id
+                              AND (
+                                  state.request_generation <> rag_embedding_jobs.request_generation
+                                  OR state.active_job_id IS DISTINCT FROM rag_embedding_jobs.id
+                              )
+                        ) THEN 'Superseded by a newer document derivation generation'
+                        ELSE last_error
+                    END,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE status IN ('QUEUED', 'RUNNING')
                   AND cancel_requested_at IS NOT NULL
@@ -576,6 +601,20 @@ public class EmbeddingJobRepository {
                 """, rs -> rs.next() && rs.getBoolean(1), jobId);
     }
 
+    public boolean isLeaseOwnedAndLive(UUID jobId, String workerId) {
+        Boolean live = jdbcTemplate.queryForObject("""
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM rag_embedding_jobs
+                    WHERE id = ?
+                      AND status = 'RUNNING'
+                      AND lease_owner = ?
+                      AND lease_expires_at >= CURRENT_TIMESTAMP
+                )
+                """, Boolean.class, jobId, workerId);
+        return Boolean.TRUE.equals(live);
+    }
+
     public int markSucceeded(UUID id, String workerId) {
         return markSucceeded(id, workerId, true);
     }
@@ -599,6 +638,22 @@ public class EmbeddingJobRepository {
                   AND lease_expires_at >= CURRENT_TIMESTAMP
                   AND cancel_requested_at IS NULL
                   AND (force = false OR ?)
+                  AND (
+                      NOT EXISTS (
+                          SELECT 1
+                          FROM rag_document_embedding_state state
+                          WHERE state.document_id = rag_embedding_jobs.document_id
+                            AND state.embedding_profile_id = rag_embedding_jobs.embedding_profile_id
+                      )
+                      OR EXISTS (
+                          SELECT 1
+                          FROM rag_document_embedding_state state
+                          WHERE state.document_id = rag_embedding_jobs.document_id
+                            AND state.embedding_profile_id = rag_embedding_jobs.embedding_profile_id
+                            AND state.request_generation = rag_embedding_jobs.request_generation
+                            AND state.active_job_id = rag_embedding_jobs.id
+                      )
+                  )
                 """,
                 id,
                 workerId,
@@ -606,12 +661,53 @@ public class EmbeddingJobRepository {
     }
 
     public int markStale(UUID id, String workerId, String reason) {
-        return terminalUpdate(id, workerId, EmbeddingJobStatus.STALE, reason);
+        return terminalUpdate(
+                id,
+                workerId,
+                EmbeddingJobStatus.STALE,
+                reason,
+                """
+                        AND (
+                            job.cancel_requested_at IS NULL
+                            OR EXISTS (
+                                SELECT 1
+                                FROM rag_document_embedding_state state
+                                WHERE state.document_id = job.document_id
+                                  AND state.embedding_profile_id = job.embedding_profile_id
+                                  AND (
+                                      state.request_generation <> job.request_generation
+                                      OR state.active_job_id IS DISTINCT FROM job.id
+                                  )
+                            )
+                        )
+                        """);
     }
 
     public int markCancelled(UUID id, String workerId) {
         return terminalUpdate(
-                id, workerId, EmbeddingJobStatus.CANCELLED, null);
+                id,
+                workerId,
+                EmbeddingJobStatus.CANCELLED,
+                null,
+                """
+                        AND job.cancel_requested_at IS NOT NULL
+                        AND (
+                            NOT EXISTS (
+                                SELECT 1
+                                FROM rag_document_embedding_state state
+                                WHERE state.document_id = job.document_id
+                                  AND state.embedding_profile_id = job.embedding_profile_id
+                            )
+                            OR EXISTS (
+                                SELECT 1
+                                FROM rag_document_embedding_state state
+                                WHERE state.document_id = job.document_id
+                                  AND state.embedding_profile_id = job.embedding_profile_id
+                                  AND state.request_generation = job.request_generation
+                                  AND state.active_job_id = job.id
+                            )
+                        )
+                        """);
     }
 
     public int markFailure(
@@ -650,6 +746,23 @@ public class EmbeddingJobRepository {
                   AND status = 'RUNNING'
                   AND lease_owner = ?
                   AND lease_expires_at >= CURRENT_TIMESTAMP
+                  AND cancel_requested_at IS NULL
+                  AND (
+                      NOT EXISTS (
+                          SELECT 1
+                          FROM rag_document_embedding_state state
+                          WHERE state.document_id = rag_embedding_jobs.document_id
+                            AND state.embedding_profile_id = rag_embedding_jobs.embedding_profile_id
+                      )
+                      OR EXISTS (
+                          SELECT 1
+                          FROM rag_document_embedding_state state
+                          WHERE state.document_id = rag_embedding_jobs.document_id
+                            AND state.embedding_profile_id = rag_embedding_jobs.embedding_profile_id
+                            AND state.request_generation = rag_embedding_jobs.request_generation
+                            AND state.active_job_id = rag_embedding_jobs.id
+                      )
+                  )
                 """,
                 Math.max(1, backoffSeconds),
                 error,
@@ -675,8 +788,47 @@ public class EmbeddingJobRepository {
                   AND lease_owner = ?
                   AND lease_expires_at >= CURRENT_TIMESTAMP
                   AND cancel_requested_at IS NULL
+                  AND (
+                      NOT EXISTS (
+                          SELECT 1
+                          FROM rag_document_embedding_state state
+                          WHERE state.document_id = rag_embedding_jobs.document_id
+                            AND state.embedding_profile_id = rag_embedding_jobs.embedding_profile_id
+                      )
+                      OR EXISTS (
+                          SELECT 1
+                          FROM rag_document_embedding_state state
+                          WHERE state.document_id = rag_embedding_jobs.document_id
+                            AND state.embedding_profile_id = rag_embedding_jobs.embedding_profile_id
+                            AND state.request_generation = rag_embedding_jobs.request_generation
+                            AND state.active_job_id = rag_embedding_jobs.id
+                      )
+                  )
                 """,
                 error, id, workerId);
+    }
+
+    private int terminalUpdate(
+            UUID id,
+            String workerId,
+            EmbeddingJobStatus status,
+            String error,
+            String coordinationPredicate) {
+        return jdbcTemplate.update("""
+                UPDATE rag_embedding_jobs job
+                SET status = ?,
+                    last_error = ?,
+                    terminal_reason = NULL,
+                    finished_at = CURRENT_TIMESTAMP,
+                    lease_owner = NULL,
+                    lease_expires_at = NULL,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE job.id = ?
+                  AND job.status = 'RUNNING'
+                  AND job.lease_owner = ?
+                  AND job.lease_expires_at >= CURRENT_TIMESTAMP
+                """ + coordinationPredicate,
+                status.name(), error, id, workerId);
     }
 
     @Transactional
@@ -1037,31 +1189,6 @@ public class EmbeddingJobRepository {
                 status,
                 error,
                 documentId);
-    }
-
-    private int terminalUpdate(
-            UUID id,
-            String workerId,
-            EmbeddingJobStatus status,
-            String error) {
-        return jdbcTemplate.update("""
-                UPDATE rag_embedding_jobs
-                SET status = ?,
-                    last_error = ?,
-                    terminal_reason = NULL,
-                    finished_at = CURRENT_TIMESTAMP,
-                    lease_owner = NULL,
-                    lease_expires_at = NULL,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE id = ?
-                  AND status = 'RUNNING'
-                  AND lease_owner = ?
-                  AND lease_expires_at >= CURRENT_TIMESTAMP
-                """,
-                status.name(),
-                error,
-                id,
-                workerId);
     }
 
     private EmbeddingJob mapJob(ResultSet rs) throws SQLException {

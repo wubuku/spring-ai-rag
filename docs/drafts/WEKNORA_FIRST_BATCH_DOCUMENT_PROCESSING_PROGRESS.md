@@ -9,8 +9,8 @@
 
 - 分支：`main`
 - 工作区：开始实施前干净；直接在当前 `main` 工作区实施。
-- 规划状态：规划检查和实现后检查均连续 `3/3` 已通过；专项状态矩阵已补齐，当前仅待最终门禁和
-  Git 交付。
+- 规划状态：规划检查连续 `3/3`、实现后检查连续 `3/3` 均已通过；最终门禁已通过，等待 Git
+  交付。
 - 本批范围：Processing Run/Stage、Job 镜像、CAS/lease 恢复、HTTP actions、housekeeping、V61。
 - 明确不做：Citation Registry、SSE Decoder、Chunking Profile/Validator、Retrieval Context Assembly、
   Route Policy Self-check、Parser SPI、Resource Handle、CLI/MCP、WebUI 任务时间线。
@@ -21,11 +21,11 @@
 |---|---|---|
 | Slice 1：API 状态和读模型骨架 | 完成 | DTO、状态枚举、稳定分页和错误摘要契约已编译；API 来源映射测试通过 |
 | Slice 2：V61 schema 与属性 | 完成 | 真实 PostgreSQL 从空库迁移至 V61；V61 表/约束/索引完成 |
-| Slice 3：Processing domain、repository、bridge | 完成 | 五阶段初始化、Run/Stage CAS、legacy bridge 和终态镜像已实现并通过专项 IT |
+| Slice 3：Processing domain、repository、bridge | 完成 | 五阶段初始化、Run/Stage CAS、活跃/STALE legacy bridge 规则和终态镜像已实现；普通历史 terminal Job 不再强制补 bridge |
 | Slice 4：接入现有 Job 创建和执行链 | 完成 | 新建、合流、worker claim、heartbeat、成功/失败/取消/stale/dead-letter 镜像已接入 |
 | Slice 5：统一 lifecycle 与 HTTP actions | 完成 | lifecycle summary、ACL SQL 过滤、分页、cancel/retry 与旧 Job façade 已接入 |
-| Slice 6：housekeeping、死信和恢复 | 完成 | stuck CAS、lease reclaim stage reset、generation supersede 和 bounded housekeeping 已实现 |
-| Slice 7：测试、文档、发布门禁 | 完成 | 生命周期门禁 14/14、全量 gated PostgreSQL 24 套件/158 测试、账本专项 PostgreSQL 5/5、文档/锁/差异门禁均通过 |
+| Slice 6：housekeeping、死信和恢复 | 完成 | stuck CAS、lease reclaim stage reset、generation supersede、终态镜像和 bounded housekeeping 已实现并通过真实 PostgreSQL 测试 |
+| Slice 7：测试、文档、发布门禁 | 完成 | 专项回归 53/53、生命周期门禁 14/14、全量 gated IT 24 套件/170 测试、项目文档 16 项均通过；实现后检查 3/3 |
 
 ## 实施记录
 
@@ -85,6 +85,46 @@
   `EmbeddingJobServiceTest` 一起验证：9 个测试，0 failures、0 errors、0 skipped。
 - 按严格流程，发现并修复问题后实现后检查计数重置为 `0/3`，从第 1 轮重新开始。
 
+### 2026-10-14：补齐终态 bridge、失败分类与 housekeeping 并发证据
+
+- 实现后重新检查发现：`EmbeddingJobService.processingRunId()` 通过 `ensureBridgeForJob()` 读取普通
+  历史 `SUCCEEDED/FAILED/CANCELLED` Job 时，会无必要地创建历史 Run；这违反“历史 terminal Job 不强制
+  批量补历史”的兼容默认。已修复为：已有 Run 直接返回；`QUEUED/RUNNING` 创建 active bridge；
+  `STALE` 允许创建历史 bridge；普通 terminal Job 无 Run 时返回 `null`。
+- 新增 `DocumentProcessingRunServiceTest` 的 2 个 bridge 边界测试，以及执行器不可重试/可重试错误分类
+  测试 3 个；相关单测共 9 个通过。
+- 扩展 `DocumentProcessingRunPostgresIntegrationTest` 至 13 个通过用例，新增 `NON_RETRYABLE → FAILED`
+  镜像、housekeeping terminal mirror 重复扫描幂等、fresh queued/running 保护、housekeeping 与 lease
+  recovery 并发不产生第二 Run 等证据。
+- 由于发现并修复了实质问题，按严格流程实现后检查计数重置为 `0/3`；后续检查期间不得修改本账本或规划正文。
+
+### 2026-10-14：全量门禁发现并修复旧仓储单测契约回归
+
+- `./scripts/verify-document-lifecycle.sh` 的前置完整后端测试首次执行通过 7,738 个测试中的
+  7,737 个，但 `EmbeddingJobRepositoryTest.markStaleAndMarkCancelledDelegateToTerminalUpdate` 仍按
+  旧的 `terminalUpdate` SQL 形态断言，导致 1 个失败；失败属于生产代码与既有测试契约不一致，不是
+  PostgreSQL CAS 语义失败。
+- 已恢复 `markStale/markCancelled` 对共享 `terminalUpdate` 的调用形态，并把 generation/active-state
+  fencing 作为同一 SQL 的附加条件保留；修复后的 `EmbeddingJobRepositoryTest`、bridge service 和执行器
+  相关测试共 38/38 通过。
+- 按严格流程，本轮实现后检查计数仍为 `0/3`；必须在后续不修改规划/进度正文的情况下重新完成三轮。
+
+### 2026-10-14：修复 active Run 指标初始化并完成最终收敛
+
+- 第 3 轮只读复核发现新 Run 创建后未立即刷新 `rag.document-processing.active`，可能导致刚进入
+  `QUEUED/RUNNING` 的 Run 在下一次状态变化前不计入 gauge；已在 Run 创建成功路径补齐刷新，未改变
+  状态转换或数据库契约。
+- 修复后专项回归通过 53/53：真实 PostgreSQL 账本 13/13，`DocumentProcessingRunServiceTest`、
+  `EmbeddingJobRepositoryTest`、执行器错误分类和 metrics 单测全部通过。
+- `./scripts/verify-document-lifecycle.sh` 通过 14/14；包含后端、V61 生命周期 PostgreSQL 13/13、
+  外部同步 HTTP E2E、本地版本恢复 HTTP E2E、WebUI 测试/构建/对齐/Mock Playwright、项目文档和
+  whitespace 门禁。
+- `./scripts/verify-gated-it.sh` 再次通过全部 24 个 PostgreSQL 套件，共 170 个测试，
+  `failures=0/errors=0/skipped=0`；所有测试库均从 V1 迁移至 V61。
+- 实现后连续三轮只读检查已完成 `3/3`：第 1 轮核对事务/CAS/lease/迁移/禁锁，第 2 轮核对
+  API/ACL/兼容/开关/脱敏，第 3 轮核对测试证据、metrics、文档、发布/回滚/恢复和 Git 交付；期间
+  除上述 active gauge 修复外未发现问题，修复后已重新从 `0/3` 完成三轮。
+
 ## 验证记录
 
 | 时间 | 命令/范围 | 结果 |
@@ -103,14 +143,23 @@
 | 2026-10-13 | `./scripts/verify-document-lifecycle.sh`（最新修复后） | 14/14 通过；后端 7718 运行、0 failures、0 errors、158 skipped；生命周期 PostgreSQL 已迁移至 V61 |
 | 2026-10-13 | `./scripts/verify-gated-it.sh`（全量） | 24 个套件、158 个测试，0 failures、0 errors、0 skipped；所有空库迁移至 V61 |
 | 2026-10-13 | `DocumentProcessingRunPostgresIntegrationTest`（补齐状态矩阵后） | 5 个测试，0 failures、0 errors、0 skipped；真实 PostgreSQL，空库迁移至 V61 |
-| 2026-10-13 | 实现后连续三轮只读检查 | 3/3 连续无修改通过：事务/CAS/lease/迁移、API/ACL/兼容/开关、测试/文档/发布/回滚/交付范围均通过 |
+| 2026-10-14 | `mvn -pl spring-ai-rag-core -am -DskipTests -Dcheckstyle.skip=true compile test-compile` | 通过 |
+| 2026-10-14 | `DocumentProcessingRunServiceTest,EmbeddingJobExecutorErrorTextTest` | 9 个测试，0 failures、0 errors、0 skipped |
+| 2026-10-14 | `TESTCONTAINERS_RYUK_DISABLED=true mvn -pl spring-ai-rag-core -am -Ddocument-processing.it.enabled=true -Dtest=DocumentProcessingRunPostgresIntegrationTest -Dsurefire.failIfNoSpecifiedTests=false -Dcheckstyle.skip=true test` | 13 个测试，0 failures、0 errors、0 skipped；真实 PostgreSQL，空库迁移至 V61 |
+| 2026-10-14 | `mvn -pl spring-ai-rag-core -am -Dtest=EmbeddingJobRepositoryTest,DocumentProcessingRunServiceTest,EmbeddingJobExecutorErrorTextTest -Dsurefire.failIfNoSpecifiedTests=false -Dcheckstyle.skip=true test` | 38 个测试，0 failures、0 errors、0 skipped |
+| 2026-10-14 | `./scripts/verify-document-lifecycle.sh`（全量首次重跑） | 生命周期、文档和前置测试均通过；完整后端在 7,738 个测试中发现 1 个旧仓储单测 SQL 形态回归，已修复；该次不作为最终全绿证据 |
+| 2026-10-14 | `TESTCONTAINERS_RYUK_DISABLED=true mvn -pl spring-ai-rag-core -am -Ddocument-processing.it.enabled=true -Dtest=DocumentProcessingRunPostgresIntegrationTest,DocumentProcessingRunServiceTest,EmbeddingJobRepositoryTest,EmbeddingJobExecutorErrorTextTest,DocumentProcessingMetricsTest -Dsurefire.failIfNoSpecifiedTests=false -Dcheckstyle.skip=true test` | 53 个测试，0 failures、0 errors、0 skipped；真实 PostgreSQL 账本 13/13 |
+| 2026-10-14 | `./scripts/verify-document-lifecycle.sh`（active gauge 修复后） | 14/14 通过；后端、生命周期、外部同步/版本恢复 HTTP E2E、WebUI、文档和 whitespace 全绿 |
+| 2026-10-14 | `./scripts/verify-gated-it.sh`（active gauge 修复后） | 24 个套件、170 个测试，0 failures、0 errors、0 skipped；所有空库迁移至 V61 |
+| 2026-10-14 | `./scripts/verify-project-docs.sh`、`./scripts/verify-no-pessimistic-locks.sh`、`git diff --check` | 文档 16 项通过；禁锁门禁通过；无 whitespace 错误 |
 
 ## 实现后检查计数
 
 - 当前连续计数：`3/3`。
 - 检查要求：只读复核事务/CAS/lease/迁移、API/ACL/兼容/开关、测试/文档/发布/回滚；无问题才递增，
   发现实质问题必须修复并重置为 `0/3`。
-- 当前结果：专项证据缺口已关闭，实现后 `3/3` 已完成；最终门禁通过后执行 Git 交付。
+- 当前结果：2026-10-14 active gauge 修复后的专项回归、生命周期门禁和全量 gated IT 均已通过；三轮
+  实现检查已连续无修改完成。下一步仅剩最终 `git diff` 回看、commit、fetch/merge、push 和工作区清洁确认。
 
 ## 恢复入口
 

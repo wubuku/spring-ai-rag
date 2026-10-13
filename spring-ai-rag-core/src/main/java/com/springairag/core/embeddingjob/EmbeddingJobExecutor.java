@@ -224,13 +224,30 @@ public class EmbeddingJobExecutor {
             String staleReason) {
         boolean processingLedgerEnabled = processingRepository != null
                 || processingRunService != null;
-        if (processingLedgerEnabled && !repository.isCurrentActiveJob(job.id())) {
+        if (!processingLedgerEnabled) {
+            if (repository.isCancellationRequested(job.id())) {
+                repository.markCancelled(job.id(), leaseOwner);
+            } else {
+                repository.markStale(
+                        job.id(), leaseOwner, safeError(staleReason));
+            }
+            repository.refreshStateFromJob(job.id());
+            mirrorCurrentJob(job.id());
+            return;
+        }
+
+        if (!repository.isLeaseOwnedAndLive(job.id(), leaseOwner)) {
+            // 仅丢失 lease/owner 不属于 stale；让既有 reclaim 路径接管。
+            return;
+        }
+        if (!repository.isCurrentActiveJob(job.id())) {
             repository.markStale(
                     job.id(), leaseOwner, safeError(staleReason));
         } else if (repository.isCancellationRequested(job.id())) {
             repository.markCancelled(job.id(), leaseOwner);
         } else {
-                repository.markStale(
+            // 当前 generation 仍 active，但快照/profile/chunker 已不再可提交。
+            repository.markStale(
                     job.id(), leaseOwner, safeError(staleReason));
         }
         repository.refreshStateFromJob(job.id());

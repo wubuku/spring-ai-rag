@@ -232,8 +232,7 @@ public class EmbeddingJobService {
                 : (int) Math.ceil(result.totalElements() / (double) pageSize);
         java.util.Map<UUID, UUID> runIds = processingRunService == null
                 ? java.util.Map.of()
-                : processingRunService.findRunIdsByJobIds(
-                        result.items().stream().map(EmbeddingJob::id).toList());
+                : processingRunService.ensureBridgesForJobs(result.items());
         return new EmbeddingJobPageResponse(
                 result.items().stream()
                         .map(job -> toResponse(job, false,
@@ -520,6 +519,9 @@ public class EmbeddingJobService {
 
     private UUID processingRunId(EmbeddingJob job) {
         return processingRunService == null
-                ? null : processingRunService.findRunIdByJobId(job.id());
+                ? null : java.util.Optional.ofNullable(
+                        processingRunService.ensureBridgeForJob(job))
+                .map(DocumentProcessingRun::id)
+                .orElse(null);
     }
 }

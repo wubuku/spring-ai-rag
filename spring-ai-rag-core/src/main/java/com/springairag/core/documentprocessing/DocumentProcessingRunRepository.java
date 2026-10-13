@@ -7,6 +7,7 @@ import com.springairag.api.enums.DocumentProcessingStageStatus;
 import com.springairag.core.embeddingjob.EmbeddingJob;
 import com.springairag.core.embeddingjob.EmbeddingJobStatus;
 import com.springairag.core.logging.SensitiveDataMaskingConverter;
+import com.springairag.core.observability.DocumentProcessingMetrics;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
@@ -16,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.OffsetDateTime;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -39,6 +41,7 @@ public class DocumentProcessingRunRepository {
             """;
 
     private final JdbcTemplate jdbcTemplate;
+    private DocumentProcessingMetrics metrics;
     private final RowMapper<DocumentProcessingRun> runMapper =
             (rs, rowNum) -> mapRun(rs);
     private final RowMapper<DocumentProcessingStage> stageMapper =
@@ -46,6 +49,14 @@ public class DocumentProcessingRunRepository {
 
     public DocumentProcessingRunRepository(JdbcTemplate jdbcTemplate) {
         this.jdbcTemplate = jdbcTemplate;
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setMetrics(DocumentProcessingMetrics metrics) {
+        this.metrics = metrics;
+        if (metrics != null) {
+            metrics.setActiveRuns(countActiveRuns());
+        }
     }
 
     @Transactional
@@ -61,7 +72,10 @@ public class DocumentProcessingRunRepository {
         }
         DocumentProcessingRunOrigin normalizedOrigin =
                 DocumentProcessingRunOrigin.fromRaw(origin);
-        DocumentProcessingRunStatus status = runStatusStatic(job);
+        DocumentProcessingRunStatus status = legacyBridge
+                && !isCurrentBridgeTarget(job)
+                ? DocumentProcessingRunStatus.STALE
+                : runStatusStatic(job);
         for (int attempt = 0; attempt < 3; attempt++) {
             int attemptNo = nextAttemptNo(job.documentId(), job.embeddingProfileId());
             UUID runId = UUID.randomUUID();
@@ -108,6 +122,21 @@ public class DocumentProcessingRunRepository {
                         supersedesRunId,
                         legacyBridge);
                 insertStages(runId);
+                if (legacyBridge) {
+                    if (status != DocumentProcessingRunStatus.QUEUED
+                            && status != DocumentProcessingRunStatus.RUNNING) {
+                        mirrorTerminalStages(job, status,
+                                status == DocumentProcessingRunStatus.STALE
+                                        ? "SUPERSEDED" : failureCode(job),
+                                status == DocumentProcessingRunStatus.STALE
+                                        ? "Superseded by a newer document derivation generation"
+                                        : safeError(job.lastError()));
+                    } else {
+                        projectLegacyStages(runId, legacyProgressStage(job.id()),
+                                status);
+                    }
+                }
+                refreshActiveMetric();
                 return find(runId).orElseThrow();
             } catch (DataIntegrityViolationException conflict) {
                 Optional<DocumentProcessingRun> byJob = findByJobId(job.id());
@@ -137,6 +166,66 @@ public class DocumentProcessingRunRepository {
                         + "WHERE embedding_job_id = ?",
                 runMapper,
                 jobId).stream().findFirst();
+    }
+
+    private boolean isCurrentBridgeTarget(EmbeddingJob job) {
+        return jdbcTemplate.query("""
+                SELECT state.active_job_id = job.id
+                FROM rag_document_embedding_state state
+                JOIN rag_embedding_jobs job
+                  ON job.document_id = state.document_id
+                 AND job.embedding_profile_id = state.embedding_profile_id
+                 AND job.request_generation = state.request_generation
+                WHERE job.id = ?
+                """, rs -> !rs.next() || rs.getBoolean(1), job.id());
+    }
+
+    private String legacyProgressStage(UUID jobId) {
+        return jdbcTemplate.query("""
+                SELECT progress ->> 'stage'
+                FROM rag_embedding_jobs
+                WHERE id = ?
+                """, rs -> rs.next() ? rs.getString(1) : null, jobId);
+    }
+
+    private void projectLegacyStages(UUID runId, String progressStage,
+            DocumentProcessingRunStatus runStatus) {
+        String stage = switch (progressStage == null ? "" : progressStage) {
+            case "CHUNKING" -> "CHUNKING";
+            case "EMBEDDING", "COMMITTING" -> "EMBEDDING";
+            case "STORING" -> "INDEXING";
+            case "COMPLETED" -> "FINALIZING";
+            default -> "PARSING";
+        };
+        int stageOrder = DocumentProcessingStageName.valueOf(stage).ordinal() + 1;
+        boolean running = runStatus == DocumentProcessingRunStatus.RUNNING;
+        jdbcTemplate.update("""
+                UPDATE rag_document_processing_stages
+                SET status = CASE
+                        WHEN ? AND stage_order < ? THEN 'SUCCEEDED'
+                        WHEN ? AND stage_order = ? THEN 'RUNNING'
+                        ELSE 'PENDING'
+                    END,
+                    started_at = CASE
+                        WHEN ? AND stage_order <= ?
+                            THEN COALESCE(started_at, CURRENT_TIMESTAMP)
+                        ELSE started_at
+                    END,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE run_id = ?
+                """, running, stageOrder, running, stageOrder,
+                running, stageOrder, runId);
+        jdbcTemplate.update("""
+                UPDATE rag_document_processing_runs
+                SET active_stage = CASE WHEN ? THEN ? ELSE NULL END,
+                    started_at = CASE WHEN ?
+                        THEN COALESCE(started_at, CURRENT_TIMESTAMP)
+                        ELSE started_at END,
+                    last_heartbeat_at = CURRENT_TIMESTAMP,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+                  AND status IN ('QUEUED', 'RUNNING')
+                """, running, stage, running, runId);
     }
 
     public Map<UUID, UUID> findRunIdsByJobIds(List<UUID> jobIds) {
@@ -358,6 +447,7 @@ public class DocumentProcessingRunRepository {
             String errorCode,
             String error) {
         boolean running = nextStatus == DocumentProcessingStageStatus.RUNNING;
+        OffsetDateTime startedAt = stageStartedAt(job, stage);
         int updated = jdbcTemplate.update("""
                 UPDATE rag_document_processing_stages stage
                 SET status = ?,
@@ -387,6 +477,11 @@ public class DocumentProcessingRunRepository {
                         ON run.embedding_job_id = job.id
                        AND run.request_generation = job.request_generation
                        AND run.content_hash = job.content_hash
+                      JOIN rag_document_embedding_state state
+                        ON state.document_id = job.document_id
+                       AND state.embedding_profile_id = job.embedding_profile_id
+                       AND state.request_generation = job.request_generation
+                       AND state.active_job_id = job.id
                       WHERE job.id = ?
                         AND job.status = 'RUNNING'
                         AND job.lease_owner = ?
@@ -426,6 +521,12 @@ public class DocumentProcessingRunRepository {
                     running, running, stage.name(), stage.name(),
                     isTerminal(nextStatus), job.id(), job.requestGeneration(),
                     stage.name());
+            if (isTerminal(nextStatus) && startedAt != null && metrics != null) {
+                metrics.recordStageDuration(
+                        stage.name(), nextStatus.name(),
+                        Duration.between(startedAt, OffsetDateTime.now()));
+            }
+            refreshActiveMetric();
         }
         return updated;
     }
@@ -513,6 +614,11 @@ public class DocumentProcessingRunRepository {
                       FROM rag_embedding_jobs job
                       JOIN rag_document_processing_runs run
                         ON run.embedding_job_id = job.id
+                      JOIN rag_document_embedding_state state
+                        ON state.document_id = job.document_id
+                       AND state.embedding_profile_id = job.embedding_profile_id
+                       AND state.request_generation = job.request_generation
+                       AND state.active_job_id = job.id
                       WHERE run.id = stage.run_id
                         AND job.id = ?
                         AND job.status = 'RUNNING'
@@ -539,6 +645,11 @@ public class DocumentProcessingRunRepository {
                   AND run.status IN ('QUEUED', 'RUNNING')
                   AND EXISTS (
                       SELECT 1 FROM rag_embedding_jobs job
+                      JOIN rag_document_embedding_state state
+                        ON state.document_id = job.document_id
+                       AND state.embedding_profile_id = job.embedding_profile_id
+                       AND state.request_generation = job.request_generation
+                       AND state.active_job_id = job.id
                       WHERE job.id = run.embedding_job_id
                         AND job.status = 'RUNNING'
                         AND job.lease_owner = ?
@@ -585,6 +696,17 @@ public class DocumentProcessingRunRepository {
                   AND run.content_hash = ?
                   AND run.chunker_version = ?
                   AND run.status IN ('QUEUED', 'RUNNING')
+                  AND EXISTS (
+                      SELECT 1
+                      FROM rag_embedding_jobs current_job
+                      WHERE current_job.id = run.embedding_job_id
+                        AND current_job.id = ?
+                        AND current_job.status = ?
+                        AND current_job.attempt_count = ?
+                        AND current_job.request_generation = run.request_generation
+                        AND current_job.content_hash = run.content_hash
+                        AND current_job.chunker_version = run.chunker_version
+                  )
                 """,
                 status.name(), status == DocumentProcessingRunStatus.RUNNING,
                 status == DocumentProcessingRunStatus.QUEUED,
@@ -596,11 +718,18 @@ public class DocumentProcessingRunRepository {
                         && status != DocumentProcessingRunStatus.RUNNING,
                 job.id(), job.documentId(), job.embeddingProfileId(),
                 job.requestGeneration(), job.contentHash(),
-                nonBlank(job.chunkerVersion(), "legacy-compatible"));
+                nonBlank(job.chunkerVersion(), "legacy-compatible"),
+                job.id(), job.status().name(), job.attemptCount());
         if (updated > 0 && status != DocumentProcessingRunStatus.QUEUED
                 && status != DocumentProcessingRunStatus.RUNNING) {
             mirrorTerminalStages(job, status, errorCode, error);
+            if (metrics != null) {
+                metrics.recordRunTerminal(status.name(), job.origin(),
+                        job.terminalReason());
+                metrics.recordHousekeeping("terminal_sync");
+            }
         }
+        refreshActiveMetric();
         return updated;
     }
 
@@ -652,6 +781,11 @@ public class DocumentProcessingRunRepository {
     }
 
     public int markStuck(UUID runId, long generation, int thresholdSeconds) {
+        String activeStage = jdbcTemplate.query("""
+                SELECT active_stage
+                FROM rag_document_processing_runs
+                WHERE id = ?
+                """, rs -> rs.next() ? rs.getString(1) : null, runId);
         int updated = jdbcTemplate.update("""
                 UPDATE rag_document_processing_runs
                 SET status = 'STALE', active_stage = NULL,
@@ -663,7 +797,7 @@ public class DocumentProcessingRunRepository {
                 WHERE id = ?
                   AND request_generation = ?
                   AND status IN ('QUEUED', 'RUNNING')
-                  AND COALESCE(last_heartbeat_at, updated_at)
+                  AND COALESCE(last_heartbeat_at, updated_at, created_at)
                       < CURRENT_TIMESTAMP - (? * INTERVAL '1 second')
                   AND NOT EXISTS (
                       SELECT 1 FROM rag_embedding_jobs job
@@ -684,8 +818,44 @@ public class DocumentProcessingRunRepository {
                         updated_at = CURRENT_TIMESTAMP
                     WHERE run_id = ?
                     """, runId);
+            if (metrics != null) {
+                metrics.recordStuck(activeStage);
+                metrics.recordHousekeeping("stale");
+                metrics.recordRunTerminal(DocumentProcessingRunStatus.STALE.name(),
+                        "UNKNOWN", "PROCESSING_RUN_STUCK");
+            }
+            refreshActiveMetric();
         }
         return updated;
+    }
+
+    private OffsetDateTime stageStartedAt(
+            EmbeddingJob job, DocumentProcessingStageName stage) {
+        return jdbcTemplate.query("""
+                SELECT stage.started_at
+                FROM rag_document_processing_stages stage
+                JOIN rag_document_processing_runs run ON run.id = stage.run_id
+                WHERE run.embedding_job_id = ?
+                  AND run.request_generation = ?
+                  AND stage.stage_name = ?
+                """, rs -> rs.next()
+                        ? rs.getObject(1, OffsetDateTime.class) : null,
+                job.id(), job.requestGeneration(), stage.name());
+    }
+
+    private int countActiveRuns() {
+        Integer count = jdbcTemplate.queryForObject("""
+                SELECT COUNT(*)
+                FROM rag_document_processing_runs
+                WHERE status IN ('QUEUED', 'RUNNING')
+                """, Integer.class);
+        return count == null ? 0 : count;
+    }
+
+    private void refreshActiveMetric() {
+        if (metrics != null) {
+            metrics.setActiveRuns(countActiveRuns());
+        }
     }
 
     private void mirrorTerminalStages(

@@ -830,7 +830,7 @@ Job fencing 的条件。
 
 新增：
 
-- `spring-ai-rag-core/src/main/java/com/springairag/core/processing/DocumentProcessingHousekeeping.java`
+- `spring-ai-rag-core/src/main/java/com/springairag/core/documentprocessing/DocumentProcessingHousekeeping.java`
 
 接入 Spring scheduled；与现有 EmbeddingJobWorker 的低频扫描并行但职责分开。实现 terminal mirror、
 stuck CAS、dead-letter 统计和有界分页，不自动删除历史。
@@ -969,17 +969,31 @@ stuck CAS、dead-letter 统计和有界分页，不自动删除历史。
 
 ## 12. 当前规划状态
 
-- 本文件：规划检查和实现后检查均已连续 `3/3` 通过，且已获得实施授权；当前仅待 Git 交付。
+- 本文件：规划检查连续 `3/3` 已通过并获得实施授权；实现后检查在修复 legacy bridge 终态范围
+  与 active Run gauge 初始化问题后，已连续 `3/3` 通过。
 - 生产代码、V61 迁移、配置和测试已按本规划修改；WebUI 按非目标保持未改。
 - 已完成 Slice 1–7 的实现与专项测试；新增账本专项 IT 已覆盖并发合流、lease reclaim、旧 worker
-  fencing、取消、supersede、stuck、terminal mirror 和 retry exhausted/dead-letter 终态矩阵。
-  实现后连续 `3/3` 只读检查已完成，当前仅剩最终门禁和 Git 交付。
+  fencing、取消、supersede、stuck、terminal mirror、不可重试失败和 retry exhausted/dead-letter
+  终态矩阵。专项 PostgreSQL 测试为 13/13，修复后相关专项回归为 53/53。
 - 最终规划检查（2026-10-12）：第三轮按“实施顺序、验收、发布、回滚、恢复和风险”范围重新核对了
   代码入口、迁移基线、现有 Job/CAS/lease 约束、API 版本化方式、文档门禁和本批变更边界；未发现
   需要修正的内容。`git diff --check` 与 `./scripts/verify-project-docs.sh` 均通过。
 - 实施中发现并已修复的门禁/兼容问题：Processing Run PostgreSQL 测试补齐 Testcontainers 回退；
   `verify-gated-it.sh` 改为使用 `-am` 编译 API 依赖；旧 Embedding Job cancel façade 保留取消后的
   更新快照；关闭 document-processing 时新 Run API fail closed、旧 Job API 仍可用且不会继续推进
-  Processing Run；`STALE` 终态会清空 `next_retry_at` 以满足 V61 约束。
+  Processing Run；`STALE` 终态会清空 `next_retry_at` 以满足 V61 约束；普通历史 terminal Job
+  不再被 `processingRunId()` 惰性创建 bridge，只有活跃 Job 或明确 `STALE` Job 才补 bridge。
+- 2026-10-14 新增执行器错误分类测试：文档不存在、embedding 维度校验失败进入 `NON_RETRYABLE`；
+  provider timeout 仍进入可重试路径。新增 housekeeping 真实 PostgreSQL 测试证明终态镜像、重复扫描
+  幂等、fresh queued/running 不误判，以及 lease recovery 与 housekeeping 并发不产生第二条 Run。
+- 2026-10-14 全量后端门禁发现一个旧 `EmbeddingJobRepositoryTest` 对 `markStale/markCancelled` 的
+  SQL 调用形态断言回归；已恢复共享 `terminalUpdate` 的参数/契约形态，同时保留新增的
+  generation/active-state CAS 条件。修复后仓储、bridge、执行器相关 38 个测试全部通过。
+- 2026-10-14 实现后第 3 轮检查发现新 Run 创建后 active gauge 未立即刷新；已在创建成功路径补齐
+  `refreshActiveMetric()`，修复后专项 53/53、生命周期门禁 14/14、全量 gated IT 24 套件/170 测试、
+  文档门禁 16 项和禁锁门禁均通过。随后重新执行实现后连续三轮只读检查，计数达到 `3/3`。
+- 当前 Git 交付前事实：代码、测试、V61、配置/双语长青文档和规划账本均为有意修改；WebUI 未修改；
+  尚未 commit/push，最后必须按交付工作流 fetch 后以 merge 方式确认 `origin/main`，再 push `main` 并
+  核对工作区干净和本地/远端提交一致。
 - 后续批次入口：引用与流式安全、分块 Profile/Validator、检索上下文组装、route policy、Parser/资源
   句柄；见 [WEKNORA_REFERENCE_RESEARCH.md](WEKNORA_REFERENCE_RESEARCH.md) §6。

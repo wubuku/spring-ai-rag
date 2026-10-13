@@ -3,6 +3,7 @@ package com.springairag.core.embeddingjob;
 import com.springairag.core.config.EmbeddingProfile;
 import com.springairag.core.config.EmbeddingProfileProvider;
 import com.springairag.core.config.RagProperties;
+import com.springairag.core.exception.DocumentNotFoundException;
 import com.springairag.core.service.DocumentEmbedService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -23,6 +24,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -135,5 +137,55 @@ class EmbeddingJobExecutorErrorTextTest {
 
         assertThrows(IllegalArgumentException.class,
                 () -> executor.executeNow(JOB_ID));
+    }
+
+    @Test
+    void missingDocumentIsPersistedAsNonRetryableFailure() {
+        EmbeddingJob job = job(9L, false);
+        stubClaimed(job);
+        when(embedService.embedDocumentForJob(
+                eq(42L), eq(false), any()))
+                .thenThrow(new DocumentNotFoundException(42L));
+
+        executor.executeNow(JOB_ID);
+
+        verify(repository).markNonRetryableFailure(
+                eq(JOB_ID), anyString(), anyString());
+        verify(repository, never()).markFailure(
+                eq(JOB_ID), anyString(), anyString(), anyInt());
+    }
+
+    @Test
+    void embeddingValidationFailureIsPersistedAsNonRetryableFailure() {
+        EmbeddingJob job = job(9L, false);
+        stubClaimed(job);
+        when(embedService.embedDocumentForJob(
+                eq(42L), eq(false), any())).thenReturn(
+                Map.of("status", "FAILED", "error",
+                        "Embedding dimension mismatch at chunk 0"));
+
+        executor.executeNow(JOB_ID);
+
+        verify(repository).markNonRetryableFailure(
+                eq(JOB_ID), anyString(),
+                eq("Embedding dimension mismatch at chunk 0"));
+        verify(repository, never()).markFailure(
+                eq(JOB_ID), anyString(), anyString(), anyInt());
+    }
+
+    @Test
+    void providerTimeoutRemainsRetryable() {
+        EmbeddingJob job = job(9L, false);
+        stubClaimed(job);
+        when(embedService.embedDocumentForJob(
+                eq(42L), eq(false), any())).thenReturn(
+                Map.of("status", "FAILED", "error", "provider timeout"));
+
+        executor.executeNow(JOB_ID);
+
+        verify(repository).markFailure(
+                eq(JOB_ID), anyString(), eq("provider timeout"), anyInt());
+        verify(repository, never()).markNonRetryableFailure(
+                eq(JOB_ID), anyString(), anyString());
     }
 }

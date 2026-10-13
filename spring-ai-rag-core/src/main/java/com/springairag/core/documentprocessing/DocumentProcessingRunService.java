@@ -15,6 +15,7 @@ import com.springairag.core.config.RagDocumentProcessingProperties;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.embeddingjob.EmbeddingJob;
 import com.springairag.core.embeddingjob.EmbeddingJobRepository;
+import com.springairag.core.embeddingjob.EmbeddingJobStatus;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.exception.DocumentNotFoundException;
 import com.springairag.core.exception.RagException;
@@ -84,6 +85,44 @@ public class DocumentProcessingRunService {
                 legacyBridge);
     }
 
+    @Transactional
+    public DocumentProcessingRun ensureBridgeForJob(EmbeddingJob job) {
+        if (!enabled() || job == null) {
+            return null;
+        }
+        var existing = repository.findByJobId(job.id());
+        if (existing.isPresent()) {
+            return existing.get();
+        }
+        if (!bridgeEligible(job)) {
+            return null;
+        }
+        return ensureForJob(job, job.origin(), null, true);
+    }
+
+    public Map<UUID, UUID> ensureBridgesForJobs(List<EmbeddingJob> jobs) {
+        if (!enabled() || jobs == null || jobs.isEmpty()) {
+            return Map.of();
+        }
+        java.util.LinkedHashMap<UUID, UUID> result = new java.util.LinkedHashMap<>(
+                findRunIdsByJobIds(jobs.stream().map(EmbeddingJob::id).toList()));
+        for (EmbeddingJob job : jobs) {
+            if (!result.containsKey(job.id()) && bridgeEligible(job)) {
+                DocumentProcessingRun bridge = ensureBridgeForJob(job);
+                if (bridge != null) {
+                    result.put(job.id(), bridge.id());
+                }
+            }
+        }
+        return result;
+    }
+
+    private boolean bridgeEligible(EmbeddingJob job) {
+        return job.status() == EmbeddingJobStatus.QUEUED
+                || job.status() == EmbeddingJobStatus.RUNNING
+                || job.status() == EmbeddingJobStatus.STALE;
+    }
+
     public DocumentProcessingRunResponse get(UUID runId) {
         requireEnabled();
         return toResponse(requireAuthorized(runId), null);
@@ -136,7 +175,13 @@ public class DocumentProcessingRunService {
                         document.getId(), profile.id()).map(OptionalRun::new)
                         .orElse(null));
         if (current == null) {
-            return null;
+            var activeJob = jobRepository.findCurrentActive(
+                    document.getId(), profile.id(), document.getContentHash(),
+                    descriptor.documentKind(), descriptor.chunkerVersion());
+            if (activeJob.isEmpty()) {
+                return null;
+            }
+            current = new OptionalRun(ensureBridgeForJob(activeJob.get()));
         }
         DocumentProcessingRun run = current.run();
         return new DocumentProcessingSummary(
