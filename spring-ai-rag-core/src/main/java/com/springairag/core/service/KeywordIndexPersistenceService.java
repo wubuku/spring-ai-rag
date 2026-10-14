@@ -52,14 +52,23 @@ public class KeywordIndexPersistenceService {
         if (document == null || document.getId() == null) {
             throw new IllegalArgumentException("Document identity is required");
         }
+        ensureCurrent(document, chunkingService.prepare(document));
+    }
+
+    @Transactional
+    public void ensureCurrent(RagDocument document, DocumentChunkingService.PreparedChunks prepared) {
+        if (document == null || document.getId() == null) {
+            throw new IllegalArgumentException("Document identity is required");
+        }
         if (!Boolean.TRUE.equals(document.getEnabled())) {
             throw new IllegalStateException(
                     "Disabled document cannot prepare a local keyword index: "
                             + document.getId());
         }
         String contentHash = ensureContentHash(document);
-        DocumentChunkingService.PreparedChunks prepared =
-                chunkingService.prepare(document);
+        if (!descriptorProvider.describe(document).equals(prepared.descriptor())) {
+            throw new IllegalArgumentException("Chunk derivation identity mismatch");
+        }
         if (hasFreshLocalIndex(document)) {
             return;
         }

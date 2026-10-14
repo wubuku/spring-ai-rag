@@ -33,7 +33,7 @@ class DocumentLifecycleServiceDeriveTailTest {
 
     private static final long DOC_ID = 42L;
     private static final String HASH = "hash-1";
-    private static final String CHUNKER = "hierarchical-v2:1000:100:100";
+    private static final String CHUNKER = "bounded-v3:1000:100:100:1000000:20000";
 
     private JdbcTemplate jdbcTemplate;
     private EmbeddingProfileProvider profileProvider;

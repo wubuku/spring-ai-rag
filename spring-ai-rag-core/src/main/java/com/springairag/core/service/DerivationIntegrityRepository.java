@@ -238,7 +238,7 @@ public class DerivationIntegrityRepository {
                            document.source_deleted_at IS NOT NULL AS tombstoned,
                            document.content_hash,
                            CASE WHEN document.document_type = 'json-record'
-                                THEN ? ELSE ? END AS expected_chunker,
+                                THEN ? ELSE COALESCE(document.derivation_chunker_version, ?) END AS expected_chunker,
                            local.local_index_status AS local_status,
                            local.content_hash AS local_hash,
                            local.chunker_version AS local_chunker,
@@ -423,7 +423,7 @@ public class DerivationIntegrityRepository {
                        COALESCE(vector_rows.invalid_vectors, 0) AS invalid_vectors,
                        COALESCE(vector_rows.local_mismatches, 0) AS local_mismatches,
                        CASE WHEN document.document_type = 'json-record'
-                            THEN ? ELSE ? END AS expected_chunker
+                            THEN ? ELSE COALESCE(document.derivation_chunker_version, ?) END AS expected_chunker
                 FROM rag_documents document
                 LEFT JOIN rag_document_local_index_state local
                   ON local.document_id = document.id

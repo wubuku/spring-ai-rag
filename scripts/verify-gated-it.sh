@@ -34,6 +34,7 @@ ALL_SUITES=(
   "api-principal-expiry-alert:ApiPrincipalExpiryAlertPostgresIntegrationTest"
   "chat:ChatSessionPostgresIntegrationTest"
   "chat.idempotency:ChatTurnOperationPostgresIntegrationTest"
+  "chunking-upgrade:ChunkingUpgradePostgresIntegrationTest"
   "collection-key:CollectionKeyPostgresIntegrationTest"
   "collection-provisioning:CollectionProvisioningPostgresIntegrationTest"
   "collection-purge:CollectionPurgePostgresIntegrationTest"

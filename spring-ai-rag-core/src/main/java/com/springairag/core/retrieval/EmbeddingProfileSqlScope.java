@@ -31,7 +31,7 @@ public final class EmbeddingProfileSqlScope {
                 + "AND s.chunker_version = CASE "
                 + "WHEN d.document_type = 'json-record' THEN "
                 + sqlLiteral(jsonChunkerVersion)
-                + " ELSE " + sqlLiteral(textChunkerVersion) + " END "
+                + " ELSE COALESCE(d.derivation_chunker_version, " + sqlLiteral(textChunkerVersion) + ") END "
                 + "AND d.enabled = true ";
     }
 

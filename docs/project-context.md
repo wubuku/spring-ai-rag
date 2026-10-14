@@ -280,11 +280,13 @@ Ordinary non-blank short documents are retained as at least one chunk.
 `minChunkSize` is a best-effort chunk-quality target, not a document-loss
 filter. JSON records use one record-level chunk.
 
-The default `legacy-v2` profile preserves compatibility. Opt-in `bounded-v3`
+The default `bounded-v3` profile
 validates content coverage, final payload size, source positions, heading scope,
 and protected structures. `DocumentChunkingService` unifies keyword/Embedding/
-preview; changing Profile requires explicit reindexing, not automatic migration
-of old derivatives. Read-only diagnostics call no model. See
+preview. V62 and background tasks automatically migrate existing derivatives,
+retaining actual old identities and usable results until success, without manual
+reindexing. Diagnostics call no model; upgrades re-embed existing vectors only,
+without new costs for keyword-only/SKIP documents. See
 [chunking configuration](configuration.md#document-chunking-configuration).
 
 <a id="external-document-synchronization"></a>
@@ -441,7 +443,7 @@ See [multi-model-external-config.md](multi-model-external-config.md).
 ### Database
 
 - PostgreSQL with pgvector.
-- Flyway is currently V1–V60.
+- Flyway is currently V1–V62.
 - V27/V28 add, backfill, validate, uniquely constrain, and make immutable the
   Collection business key; V29 adds JSONB structured records; V30 adds the
   external-document synchronization schema; V31 normalizes stored external

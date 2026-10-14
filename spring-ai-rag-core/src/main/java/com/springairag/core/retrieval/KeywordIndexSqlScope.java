@@ -32,7 +32,7 @@ public final class KeywordIndexSqlScope {
                 + "AND vs.chunker_version = CASE "
                 + "WHEN d.document_type = 'json-record' THEN "
                 + sqlLiteral(jsonChunkerVersion)
-                + " ELSE " + sqlLiteral(textChunkerVersion) + " END "
+                + " ELSE COALESCE(d.derivation_chunker_version, " + sqlLiteral(textChunkerVersion) + ") END "
                 + "LEFT JOIN rag_embeddings v "
                 + "ON v.document_id = e.document_id "
                 + "AND v.embedding_profile_id = " + embeddingProfileId + " "
@@ -43,12 +43,12 @@ public final class KeywordIndexSqlScope {
                 + "AND s.chunker_version = CASE "
                 + "WHEN d.document_type = 'json-record' THEN "
                 + sqlLiteral(jsonChunkerVersion)
-                + " ELSE " + sqlLiteral(textChunkerVersion) + " END "
+                + " ELSE COALESCE(d.derivation_chunker_version, " + sqlLiteral(textChunkerVersion) + ") END "
                 + "AND e.content_hash = d.content_hash "
                 + "AND e.chunker_version = CASE "
                 + "WHEN d.document_type = 'json-record' THEN "
                 + sqlLiteral(jsonChunkerVersion)
-                + " ELSE " + sqlLiteral(textChunkerVersion) + " END "
+                + " ELSE COALESCE(d.derivation_chunker_version, " + sqlLiteral(textChunkerVersion) + ") END "
                 + "AND d.enabled = true ";
     }
 

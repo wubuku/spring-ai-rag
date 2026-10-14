@@ -52,6 +52,10 @@ relevant evergreen guide/reference, `docs/TODO*`, and the
   [plan](2026-10-14_CHUNKING_QUALITY_IMPLEMENTATION_PLAN.md) and
   [implementation/acceptance](2026-10-14_CHUNKING_QUALITY_IMPLEMENTATION_PROGRESS.md)
   (Chinese)
+- Default features and automatic upgrades across the first three batches:
+  [plan](2026-10-14_DEFAULT_FEATURES_AUTO_UPGRADE_PLAN.md) and
+  [regression, migration, dev.sh, and real-model acceptance](2026-10-14_DEFAULT_FEATURES_AUTO_UPGRADE_PROGRESS.md)
+  (Chinese)
 - Local keyword/vector derivation decoupling:
   `2026-08-19_KEYWORD_VECTOR_DECOUPLING_*`
 - External-document relocation and derivation-integrity repair:

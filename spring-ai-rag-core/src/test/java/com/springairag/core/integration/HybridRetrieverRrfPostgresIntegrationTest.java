@@ -838,7 +838,7 @@ class HybridRetrieverRrfPostgresIntegrationTest {
                 INSERT INTO rag_document_embedding_state (
                     document_id, embedding_profile_id, content_hash,
                     chunker_version, status, chunk_count, request_generation
-                ) VALUES (?, ?, ?, 'hierarchical-v2:1000:100:100',
+                ) VALUES (?, ?, ?, 'bounded-v3:1000:100:100:1000000:20000',
                     'COMPLETED', ?, 1)
                 """,
                 documentId,

@@ -248,7 +248,7 @@ public class EmbeddingJobRepository {
                         d.content_hash,
                         CASE
                             WHEN d.document_type = 'json-record' THEN ?
-                            ELSE ?
+                            ELSE COALESCE(d.derivation_chunker_version, ?)
                         END AS chunker_version,
                         CASE
                             WHEN d.document_type = 'json-record'

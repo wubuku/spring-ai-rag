@@ -425,7 +425,8 @@ rag:
 
   # Document chunking configuration
   chunk:
-    profile: ${RAG_CHUNK_PROFILE:legacy-v2}
+    profile: ${RAG_CHUNK_PROFILE:bounded-v3}
+    auto-upgrade-enabled: ${RAG_CHUNK_AUTO_UPGRADE_ENABLED:true}
     max-input-chars: ${RAG_CHUNK_MAX_INPUT_CHARS:1000000}
     max-chunks: ${RAG_CHUNK_MAX_CHUNKS:20000}
     preview-max-chars: ${RAG_CHUNK_PREVIEW_MAX_CHARS:100000}

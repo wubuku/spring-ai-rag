@@ -226,9 +226,10 @@ Collection、SQL 或 JSONPath。
 普通非空短文档至少保留一个 chunk；`minChunkSize` 是尽力而为的分块质量目标，不是
 静默丢弃文档的准入过滤器。JSON record 固定使用一个 record-level chunk。
 
-分块默认 `legacy-v2` 保持兼容；显式启用 `bounded-v3` 后才获得正文覆盖、最终payload上限、
+分块默认 `bounded-v3`，提供正文覆盖、最终payload上限、
 原文位置、标题归属和保护区的校验保证。`DocumentChunkingService` 统一关键词/Embedding/
-preview，Profile变更需要显式重索引，不自动迁移旧派生物。只读诊断不调用模型。
+preview；V62及后台任务自动迁移已有派生物，成功前保留真实旧身份和可用结果，无需手工
+重索引。只读诊断不调用模型；自动升级只为已有向量调用Embedding，关键词-only/SKIP不新增费用。
 见[分块配置](configuration-zh-CN.md#文档分块配置)。
 
 <a id="external-document-synchronization"></a>
@@ -348,7 +349,7 @@ job enqueue 分开提交，HTTP 不同步循环调用 provider。只读诊断默
 ### 数据库
 
 - PostgreSQL + pgvector。
-- Flyway 当前为 V1–V60。
+- Flyway 当前为 V1–V62。
 - V27/V28 负责新增、回填、校验、唯一约束及不可变 Collection 业务 key；V29 增加 JSONB
   结构化记录；V30 增加外部文档同步 schema；V31 在不改写已发布 V30 的前提下规范化
   已存储的外部文档身份；V32 增加按 principal 归属的 Chat history、来源快照、turn

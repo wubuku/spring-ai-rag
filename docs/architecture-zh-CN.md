@@ -451,9 +451,10 @@ key 按原值、区分大小写地一次批量解析。不受限调用方的未�
 ### 4.3 文档嵌入流
 
 `DocumentChunkingService` 是关键词、Embedding 和只读 preview 的统一分块入口。
-兼容默认 `legacy-v2` 保留原算法；显式启用 `bounded-v3` 使用原文 span、标题层级、结构保护
+默认 `bounded-v3` 使用原文 span、标题层级、结构保护
 及 coverage/尺寸 Validator，错误在 provider 调用前暴露。v3 以独立派生身份参与已有
-freshness/CAS/lease 提交门，不增迁移、不修改 JSON_RECORD 单块契约。
+freshness/CAS/lease 提交门，不修改 JSON_RECORD 单块契约。V62保存旧文档真实身份，
+`ChunkingUpgradeService` 默认后台重建已有派生物并原子切换；失败保留旧结果，无需手工重索引。
 详情见[分块配置](configuration-zh-CN.md#文档分块配置)和
 [预览 API](rest-api-zh-CN.md#get-apiv1ragdocumentsidchunkspreview)。
 
@@ -751,7 +752,7 @@ rag_audit_log           # 审计日志（集合操作）
 | 表 | 关键列 | 说明 |
 |---|--------|------|
 | `rag_collection` | id, collection_key, name, description, embedding_model, purged_at, chat_commit_fence_version | 内部数字身份、稳定外部 key、退役 tombstone 与 Chat 提交围栏 |
-| `rag_documents` | title, content, content_hash, collection_id, source_namespace, external_id, source_revision, document_revision, source_deleted_at, jsonb_payload | 文档真相源、业务 CAS、外部身份与结构化 payload |
+| `rag_documents` | title, content, content_hash, collection_id, source_namespace, external_id, source_revision, document_revision, source_deleted_at, jsonb_payload, derivation_chunker_version | 文档真相源、业务 CAS、外部身份、结构化 payload 与服务端私有过渡分块身份 |
 | `rag_document_versions` | document_id, version_number, 完整快照字段, snapshot_completeness | 文档 mutation 的完整审计快照 |
 | `rag_embedding_profiles` | profile_key, provider, model_name, dimensions, distance_metric | 不可变向量空间身份 |
 | `rag_document_embedding_state` | document_id, embedding_profile_id, content_hash, chunker_version, request_generation, active_job_id, status, chunk_count | Profile 级 freshness、活动 generation 与完成状态。`request_generation` 必须 ≥ 1：它是 job 路径的围栏（`state.request_generation = job.request_generation`），也是 `DerivationIntegrityRepository` 承认向量新鲜的前置条件。V60 回填了 V40 遗留的 0 并加了 `CHECK`，所以「忘了写这一列」会当场失败而不是变成一个永远读成 `FAILED` 的行 |
@@ -759,6 +760,7 @@ rag_audit_log           # 审计日志（集合操作）
 | `rag_embedding_jobs` | document_id, embedding_profile_id, content_hash, request_generation, document_kind, chunker_version, status, lease_expires_at, origin | generation-aware 持久化 embedding/reindex 状态机 |
 | `rag_document_processing_runs` | document_id, embedding_profile_id, embedding_job_id, request_generation, attempt_no, status, active_stage, origin, dead_lettered_at | V61 面向用户/运维的文档处理运行历史、恢复和死信摘要 |
 | `rag_document_processing_stages` | run_id, stage_name, stage_order, status, execution_attempt, progress counters, short error | V61 固定五阶段时间线；不保存 chunk/payload |
+| `rag_chunking_upgrade_tasks` | document_id, embedding_profile_id, target_version, source_hash, status, attempt_count, lease_owner, lease_expires_at, available_at, last_error_code | V62 有界自动分块升级；失败保留旧结果，重启凭 lease 恢复，不保存正文/凭据 |
 | `rag_document_chunks` | document_id, local_index_generation, content_hash, chunker_version, chunk_text, chunk_index | 与 Profile 无关的本地关键词 chunk |
 | `rag_chat_history_source_document` / `rag_user_feedback_document` | history_id/feedback_id, document_id | V56 规范化内容引用，用于安全 purge 归因 |
 | `rag_collection_purge_preview` | owner_key, collection_id, token_hash, fingerprint, status, result_payload | 不保存正文或明文 token 的 preview/apply lease 与结果 replay |

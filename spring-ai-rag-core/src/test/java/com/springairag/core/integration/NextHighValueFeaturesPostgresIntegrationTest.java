@@ -86,7 +86,7 @@ class NextHighValueFeaturesPostgresIntegrationTest {
     private static final String OTHER_HASH = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
             + "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
         /** The chunker version {@code text} documents derive under. */
-    private static final String CHUNKER = "hierarchical-v2:1000:100:100";
+    private static final String CHUNKER = "bounded-v3:1000:100:100:1000000:20000";
     /** Any type other than {@code json-record} derives the text descriptor. */
     private static final String TEXT_DOCUMENT_TYPE = "text";
 

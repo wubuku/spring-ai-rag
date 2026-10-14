@@ -659,17 +659,28 @@ top-N selection.
 
 ## Document Chunking Configuration
 
-`legacy-v2` is the compatibility default, preserving the old algorithm and
-`hierarchical-v2` identity; it does not guarantee strict size, source coverage,
-or offsets. Set `RAG_CHUNK_PROFILE=bounded-v3` and restart to use validated
-chunking. Switching makes old-profile indexes stale and requires explicit
-reindexing; no automatic bulk re-embedding occurs. Rolling back also requires
-rebuilding v2 indexes for documents already derived under v3.
+`bounded-v3` is enabled by default, without operator opt-in or manual reindexing.
+V62 registers existing documents' actual serving identities. Background upgrades
+atomically switch keyword indexes and active-Profile vectors after successful
+rebuilding; old results remain searchable beforehand. Provider calls run outside
+Flyway transactions and do not block readiness. Each instance handles at most
+two documents every 30 seconds with one concurrent upgrade and three attempts
+per document/Profile. Only existing COMPLETED vectors incur re-embedding costs;
+keyword-only and SKIP/NOT_REQUESTED documents do not trigger new model calls,
+and the latter do not gain indexes. Permanent budget/atomic-line failures retain
+old data and actual identities; safe codes are in `rag_chunking_upgrade_tasks`.
+Content or target changes reset attempts. `legacy-v2` is an explicit emergency
+override; rollback rebuilding is also automatic, never a version relabeling.
+Normal deployment requires no environment changes; disabling upgrades is an
+explicit emergency measure only.
+Flyway upgrades the schema before application startup; mixed old/new binaries
+sharing the same database are not a supported rolling-deployment guarantee.
 
 ```yaml
 rag:
   chunk:
-    profile: legacy-v2
+    profile: bounded-v3
+    auto-upgrade-enabled: true
     max-input-chars: 1000000
     max-chunks: 20000
     preview-max-chars: 100000
@@ -680,7 +691,8 @@ rag:
 
 | Property | Default | Description |
 |----------|---------|-------------|
-| `rag.chunk.profile` | `legacy-v2` | `legacy-v2` / `bounded-v3`; environment `RAG_CHUNK_PROFILE` |
+| `rag.chunk.profile` | `bounded-v3` | `legacy-v2` / `bounded-v3`; environment `RAG_CHUNK_PROFILE` |
+| `rag.chunk.auto-upgrade-enabled` | `true` | Automatic upgrades; emergency override `RAG_CHUNK_AUTO_UPGRADE_ENABLED` |
 | `rag.chunk.max-input-chars` | `1000000` | v3 text input limit; `RAG_CHUNK_MAX_INPUT_CHARS` |
 | `rag.chunk.max-chunks` | `20000` | v3 output chunk limit; `RAG_CHUNK_MAX_CHUNKS` |
 | `rag.chunk.preview-max-chars` | `100000` | Read-only preview input limit for all profiles; `RAG_CHUNK_PREVIEW_MAX_CHARS` |

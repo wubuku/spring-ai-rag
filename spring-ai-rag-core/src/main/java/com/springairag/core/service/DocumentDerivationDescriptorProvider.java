@@ -18,7 +18,8 @@ public class DocumentDerivationDescriptorProvider {
 
     public Descriptor describe(RagDocument document) {
         return RagDocument.JSON_RECORD.equals(document.getDocumentType())
-                ? jsonRecordDescriptor() : textDescriptor();
+                ? jsonRecordDescriptor() : document.getDerivationChunkerVersion() != null
+                ? new Descriptor("TEXT", document.getDerivationChunkerVersion()) : textDescriptor();
     }
 
     public Descriptor textDescriptor() {

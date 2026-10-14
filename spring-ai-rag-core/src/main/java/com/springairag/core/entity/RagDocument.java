@@ -43,6 +43,13 @@ public class RagDocument {
     @Column(name = "document_revision", nullable = false)
     private Long documentRevision = 1L;
 
+    @Column(name = "derivation_chunker_version")
+    private String derivationChunkerVersion;
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public String getDerivationChunkerVersion() { return derivationChunkerVersion; }
+    public void setDerivationChunkerVersion(String value) { derivationChunkerVersion = value; }
+
     /**
      * Next complete snapshot number, allocated atomically by SQL.
      */

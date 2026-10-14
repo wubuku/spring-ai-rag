@@ -9,7 +9,8 @@ public class RagChunkProperties {
         LEGACY_V2, BOUNDED_V3
     }
 
-    private Profile profile = Profile.LEGACY_V2;
+    private Profile profile = Profile.BOUNDED_V3;
+    private boolean autoUpgradeEnabled = true;
     private int maxInputChars = 1000000;
     private int maxChunks = 20000;
     private int previewMaxChars = 100000;
@@ -19,6 +20,8 @@ public class RagChunkProperties {
 
     public Profile getProfile() { return profile; }
     public void setProfile(Profile profile) { this.profile = profile; }
+    public boolean isAutoUpgradeEnabled() { return autoUpgradeEnabled; }
+    public void setAutoUpgradeEnabled(boolean value) { autoUpgradeEnabled = value; }
     public int getMaxInputChars() { return maxInputChars; }
     public void setMaxInputChars(int maxInputChars) { this.maxInputChars = maxInputChars; }
     public int getMaxChunks() { return maxChunks; }

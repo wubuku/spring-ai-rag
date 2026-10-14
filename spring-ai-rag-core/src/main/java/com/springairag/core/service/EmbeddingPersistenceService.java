@@ -68,7 +68,7 @@ public class EmbeddingPersistenceService {
             String documentType,
             EmbeddingProfile profile,
             String contentHash) {
-        String chunkerVersion = chunkerVersionFor(documentType);
+        String chunkerVersion = effectiveChunkerVersion(documentId, documentType);
         if (integrityRepository != null) {
             DerivationIntegrityRepository.Snapshot snapshot =
                     integrityRepository.inspect(documentId);
@@ -192,7 +192,7 @@ public class EmbeddingPersistenceService {
             throw new IllegalStateException(
                     "Document changed while embeddings were generated: " + documentId);
         }
-        String chunkerVersion = chunkerVersionFor((String) document.get("document_type"));
+        String chunkerVersion = effectiveChunkerVersion(document);
         String column = EmbeddingVectorColumns.columnFor(profile.dimensions());
         jdbcTemplate.update(
                 "DELETE FROM rag_embeddings WHERE document_id = ? AND embedding_profile_id = ?",
@@ -266,7 +266,7 @@ public class EmbeddingPersistenceService {
             EmbeddingProfile profile,
             String documentType,
             String error) {
-        String chunkerVersion = chunkerVersionFor(documentType);
+        String chunkerVersion = effectiveChunkerVersion(documentId, documentType);
         String safeError = sanitizeError(error);
         Map<String, Object> document = readDocumentSnapshot(documentId);
         long actualVersion = ((Number) document.get("version")).longValue();
@@ -313,7 +313,7 @@ public class EmbeddingPersistenceService {
 
     private Map<String, Object> readDocumentSnapshot(long documentId) {
         List<Map<String, Object>> rows = jdbcTemplate.queryForList(
-                "SELECT version, content_hash, enabled, document_type FROM rag_documents "
+                "SELECT version, content_hash, enabled, document_type, derivation_chunker_version FROM rag_documents "
                         + "WHERE id = ?",
                 documentId);
         if (rows.isEmpty()) {
@@ -335,6 +335,24 @@ public class EmbeddingPersistenceService {
         return RagDocument.JSON_RECORD.equals(documentType)
                 ? descriptors.jsonRecordDescriptor().chunkerVersion()
                 : descriptors.textDescriptor().chunkerVersion();
+    }
+
+    private String effectiveChunkerVersion(long documentId, String documentType) {
+        if (RagDocument.JSON_RECORD.equals(documentType)) {
+            return chunkerVersionFor(documentType);
+        }
+        List<String> versions = jdbcTemplate.query(
+                "SELECT derivation_chunker_version FROM rag_documents WHERE id = ?",
+                (row, index) -> row.getString(1), documentId);
+        return versions.isEmpty() || versions.getFirst() == null
+                ? chunkerVersionFor(documentType) : versions.getFirst();
+    }
+
+    private String effectiveChunkerVersion(Map<String, Object> document) {
+        String type = (String) document.get("document_type");
+        String version = (String) document.get("derivation_chunker_version");
+        return RagDocument.JSON_RECORD.equals(type) || version == null
+                ? chunkerVersionFor(type) : version;
     }
 
     public record CacheState(boolean hit, int chunkCount) {

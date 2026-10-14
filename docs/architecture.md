@@ -517,11 +517,13 @@ Regression-test anchors:
 ### 4.3 Document Embedding Flow
 
 `DocumentChunkingService` is the shared entry for keyword indexes, Embedding,
-and read-only preview. Compatibility-default `legacy-v2` preserves the old
-algorithm; opt-in `bounded-v3` uses source spans, heading hierarchy, protected
+and read-only preview. Default `bounded-v3` uses source spans, heading hierarchy, protected
 structures, and coverage/size validation. Failures occur before provider calls.
 Its distinct derivation identity uses existing freshness/CAS/lease commit gates,
-without a migration or changes to single-chunk JSON_RECORD behavior. See
+without changing single-chunk JSON_RECORD behavior. V62 preserves actual old
+serving identities; default `ChunkingUpgradeService` rebuilds existing derivatives
+in the background and atomically switches them, retaining old results on failure
+without manual reindexing. See
 [chunking configuration](configuration.md#document-chunking-configuration) and
 [preview API](rest-api.md#get-apiv1ragdocumentsidchunkspreview).
 
@@ -856,7 +858,7 @@ rag_audit_log           # Audit logs (collection operations)
 | Table | Key Columns | Description |
 |-------|-------------|-------------|
 | `rag_collection` | id, collection_key, name, description, embedding_model, purged_at, chat_commit_fence_version | Internal numeric identity, stable external key, retired tombstone, and Chat commit fence |
-| `rag_documents` | title, content, content_hash, collection_id, source_namespace, external_id, source_revision, document_revision, source_deleted_at, jsonb_payload | Document source of truth, business CAS, external identity, and structured payload |
+| `rag_documents` | title, content, content_hash, collection_id, source_namespace, external_id, source_revision, document_revision, source_deleted_at, jsonb_payload, derivation_chunker_version | Document source of truth, business CAS, external identity, structured payload, and server-owned transitional chunking identity |
 | `rag_document_versions` | document_id, version_number, complete snapshot fields, snapshot_completeness | Complete audit snapshots for document mutations |
 | `rag_embedding_profiles` | profile_key, provider, model_name, dimensions, distance_metric | Immutable vector-space identity |
 | `rag_document_embedding_state` | document_id, embedding_profile_id, content_hash, chunker_version, request_generation, active_job_id, status, chunk_count | Profile-scoped freshness, active generation, and completion state. `request_generation` must be ≥ 1: it is the fence the job path relies on (`state.request_generation = job.request_generation`) and a precondition for `DerivationIntegrityRepository` to call a vector fresh. V60 backfilled the 0s V40 stranded and added the `CHECK`, so a writer that forgets the column now fails outright instead of producing a row that reads as `FAILED` forever |
@@ -864,6 +866,7 @@ rag_audit_log           # Audit logs (collection operations)
 | `rag_embedding_jobs` | document_id, embedding_profile_id, content_hash, request_generation, document_kind, chunker_version, status, lease_expires_at, origin | Generation-aware durable embedding/reindex state machine |
 | `rag_document_processing_runs` | document_id, embedding_profile_id, embedding_job_id, request_generation, attempt_no, status, active_stage, origin, dead_lettered_at | V61 user/operator-facing processing history, recovery, and dead-letter summary |
 | `rag_document_processing_stages` | run_id, stage_name, stage_order, status, execution_attempt, progress counters, short error | V61 fixed five-stage timeline; no chunks or payloads |
+| `rag_chunking_upgrade_tasks` | document_id, embedding_profile_id, target_version, source_hash, status, attempt_count, lease_owner, lease_expires_at, available_at, last_error_code | V62 bounded automatic chunking upgrades; retain old results on failure and recover via leases after restart, without bodies or credentials |
 | `rag_document_chunks` | document_id, local_index_generation, content_hash, chunker_version, chunk_text, chunk_index | Profile-neutral local keyword chunks |
 | `rag_chat_history_source_document` / `rag_user_feedback_document` | history_id/feedback_id, document_id | V56 normalized content references for safe purge attribution |
 | `rag_collection_purge_preview` | owner_key, collection_id, token_hash, fingerprint, status, result_payload | Body-free preview/apply lease and result replay without plaintext tokens |

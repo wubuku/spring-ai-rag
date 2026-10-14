@@ -19,7 +19,7 @@
 | 真实 LLM E2E 端口 | `18081` |
 | Embedding | SiliconFlow `BAAI/bge-m3` |
 | 向量维度 | `1024` |
-| Flyway | V1–V61 |
+| Flyway | V1–V62 |
 
 OpenAI / Embedding 的 `base-url` **不要带 `/v1`**。Spring AI 会自行追加 `/v1/chat/completions` 或 `/v1/embeddings`。
 
@@ -798,6 +798,10 @@ delivery。证据分别位于 `.verification/alert-notification-delivery/<run-id
 <a id="业务服务接入就绪一键验证"></a>
 
 ### 分块正确性与真实样本验证
+
+默认v3及自动升级，无需运维开关/重索引；V62登记真实旧身份，后台有界重建并原子切换。
+`./scripts/verify-gated-it.sh ChunkingUpgradePostgresIntegrationTest`验证旧库、失败保留与并发恢复。
+升级状态在`rag_chunking_upgrade_tasks`，仅包含ID/版本/hash/安全code；不含正文或凭据。
 
 分块正确性专项：`./scripts/verify-chunking-quality.sh`；真实固定样本验收用
 `python3 scripts/real-llm-chunking-smoke.py`，要求已有隔离服务、`BASE_URL`、

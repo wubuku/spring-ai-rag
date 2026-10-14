@@ -10,9 +10,10 @@ import static org.junit.jupiter.api.Assertions.*;
 class RagChunkPropertiesTest {
 
     @Test
-    void profileBudgetsValidateAndKeepLegacyDefault() {
+    void profileBudgetsValidateAndEnableBoundedDefault() {
         RagChunkProperties properties = new RagChunkProperties();
-        assertEquals(RagChunkProperties.Profile.LEGACY_V2, properties.getProfile());
+        assertEquals(RagChunkProperties.Profile.BOUNDED_V3, properties.getProfile());
+        assertTrue(properties.isAutoUpgradeEnabled());
         properties.validate();
         properties.setProfile(RagChunkProperties.Profile.BOUNDED_V3);
         properties.validate();

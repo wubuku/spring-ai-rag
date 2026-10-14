@@ -1622,6 +1622,7 @@ diagnostics 提供 `valid/originalChars/coveredNonWhitespaceChars/minPayloadChar
 `generatedChars/overlapChars/warnings/violations`；覆盖排除生成上下文和 overlap 的重复。
 legacy 仅报告问题，不提供 v3 的严格保证；JSON_RECORD 的 `single-record` 不套用文本尺寸上限。
 预览标识当前正文 revision，不代表已持久化索引；修改正文或 Profile 后须重新获取预览。
+默认v3；自动迁移期间旧文档显示实际仍服务的Profile/version，成功切换后显示新版本。
 
 错误：404不存在、403无权限；400的稳定code包括 `CHUNK_PREVIEW_INVALID_PAGE`、
 `CHUNK_PREVIEW_INPUT_LIMIT`、`CHUNK_INPUT_LIMIT`、`CHUNK_COUNT_LIMIT`、

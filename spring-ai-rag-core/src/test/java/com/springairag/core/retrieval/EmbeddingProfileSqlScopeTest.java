@@ -39,7 +39,7 @@ class EmbeddingProfileSqlScopeTest {
         assertTrue(sql.contains("s.status = 'COMPLETED'"));
         assertTrue(sql.contains("s.content_hash = d.content_hash"));
         assertTrue(sql.contains("WHEN d.document_type = 'json-record' THEN 'jv1'"));
-        assertTrue(sql.contains("ELSE 'v1'"));
+        assertTrue(sql.contains("ELSE COALESCE(d.derivation_chunker_version, 'v1')"));
         assertTrue(sql.contains("d.enabled = true"));
     }
 
@@ -55,6 +55,6 @@ class EmbeddingProfileSqlScopeTest {
     void twoArgOverloadDefaultsToLegacyCompatibleTextChunker() {
         String sql = EmbeddingProfileSqlScope.fromAndFreshness(7L);
 
-        assertTrue(sql.contains("ELSE 'legacy-compatible'"));
+        assertTrue(sql.contains("ELSE COALESCE(d.derivation_chunker_version, 'legacy-compatible')"));
     }
 }

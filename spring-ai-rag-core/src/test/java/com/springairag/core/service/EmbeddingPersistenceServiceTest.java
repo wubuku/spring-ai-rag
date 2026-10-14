@@ -37,7 +37,7 @@ class EmbeddingPersistenceServiceTest {
             "cosine", "normalized", true);
 
     /** What {@code DocumentDerivationDescriptorProvider} derives for text. */
-    private static final String TEXT_CHUNKER_VERSION = "hierarchical-v2:1000:100:100";
+    private static final String TEXT_CHUNKER_VERSION = "bounded-v3:1000:100:100:1000000:20000";
     /** Any type other than {@code json-record} derives the text descriptor. */
     private static final String TEXT_DOCUMENT_TYPE = "text";
     /** ...and for a JSON record, which takes a different branch entirely. */
@@ -251,7 +251,7 @@ class EmbeddingPersistenceServiceTest {
         String expected = new DocumentDerivationDescriptorProvider(tuned)
                 .textDescriptor()
                 .chunkerVersion();
-        assertEquals("hierarchical-v2:512:64:32", expected);
+        assertEquals("bounded-v3:512:64:32:1000000:20000", expected);
         verify(jdbc).update(contains("rag_document_embedding_state"),
                 eq(1L), eq(7L), eq("h3"), eq(expected), eq(1));
     }

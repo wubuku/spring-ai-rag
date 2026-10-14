@@ -33,6 +33,20 @@ Automated tests and repeatable program validation are correctness evidence.
 Code review finds residual risk; it does not replace testing. Initial manual
 acceptance must not be the mechanism that discovers primary-path defects.
 
+### New Features On By Default And Automatic Upgrades
+
+Enable new capabilities and correctness improvements by default when existing API
+contracts, security boundaries, and bounded costs are preserved. Do not make legacy
+behavior the normal default or require operators to opt in. Ship versioned Flyway
+migrations for data changes; perform model-dependent rebuilding through resumable,
+bounded, idempotent background tasks, never inside schema-migration transactions.
+Preserve usable old derivatives until an atomic successful switch. Relabeling old
+data is not rebuilding, and manual reindexing, environment changes, or repair SQL
+must not be normal deployment steps. Exceptions for security, additional external
+dependencies, or incompatible behavior require explicit rationale and automation
+boundaries in the plan. Emergency overrides may remain, but must not substitute
+for enabled defaults. Test defaults, upgrades, failure preservation, and restart recovery.
+
 ## 2. Produce An Executable Plan Before Editing
 
 Before changing production code, read the affected modules, neighboring

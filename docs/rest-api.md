@@ -1875,7 +1875,8 @@ Errors: 404 missing, 403 unauthorized; stable 400 codes include
 `CHUNK_COUNT_LIMIT`, `CHUNK_ATOMIC_BLOCK_TOO_LARGE`, and `CHUNK_VALIDATION_FAILED`.
 Error summaries contain no document text. See
 [chunking configuration](configuration.md#document-chunking-configuration)
-for enablement, explicit reindexing, and rollback.
+for enabled defaults, automatic upgrades, and rollback. During migration the
+preview reports the document's actual serving Profile/version, not the future target.
 
 ---
 

@@ -209,7 +209,7 @@ public interface RagDocumentRepository extends JpaRepository<RagDocument, Long> 
                 "AND s.content_hash = d.content_hash " +
                 "AND s.chunker_version = CASE " +
                 "WHEN d.document_type = 'json-record' " +
-                "THEN :jsonChunkerVersion ELSE :textChunkerVersion END)",
+                "THEN :jsonChunkerVersion ELSE COALESCE(d.derivation_chunker_version, :textChunkerVersion) END)",
         nativeQuery = true)
     List<RagDocument> findDocumentsWithoutCurrentEmbeddings(
             @Param("embeddingProfileId") long embeddingProfileId,
@@ -228,7 +228,7 @@ public interface RagDocumentRepository extends JpaRepository<RagDocument, Long> 
                 "AND s.content_hash = d.content_hash " +
                 "AND s.chunker_version = CASE " +
                 "WHEN d.document_type = 'json-record' " +
-                "THEN :jsonChunkerVersion ELSE :textChunkerVersion END)",
+                "THEN :jsonChunkerVersion ELSE COALESCE(d.derivation_chunker_version, :textChunkerVersion) END)",
         nativeQuery = true)
     List<RagDocument> findDocumentsWithoutCurrentEmbeddingsByCollectionIds(
             @Param("collectionIds") List<Long> collectionIds,
@@ -263,7 +263,7 @@ public interface RagDocumentRepository extends JpaRepository<RagDocument, Long> 
                 "AND s.content_hash = d.content_hash " +
                 "AND s.chunker_version = CASE " +
                 "WHEN d.document_type = 'json-record' " +
-                "THEN :jsonChunkerVersion ELSE :textChunkerVersion END)",
+                "THEN :jsonChunkerVersion ELSE COALESCE(d.derivation_chunker_version, :textChunkerVersion) END)",
         nativeQuery = true)
     long countDocumentsWithoutCurrentEmbeddings(
             @Param("embeddingProfileId") long embeddingProfileId,
@@ -282,7 +282,7 @@ public interface RagDocumentRepository extends JpaRepository<RagDocument, Long> 
                 "AND s.content_hash = d.content_hash " +
                 "AND s.chunker_version = CASE " +
                 "WHEN d.document_type = 'json-record' " +
-                "THEN :jsonChunkerVersion ELSE :textChunkerVersion END)",
+                "THEN :jsonChunkerVersion ELSE COALESCE(d.derivation_chunker_version, :textChunkerVersion) END)",
         nativeQuery = true)
     long countDocumentsWithoutCurrentEmbeddingsByCollectionIds(
             @Param("collectionIds") List<Long> collectionIds,

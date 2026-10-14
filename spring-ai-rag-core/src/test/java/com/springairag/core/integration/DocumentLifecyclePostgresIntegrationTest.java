@@ -61,7 +61,7 @@ class DocumentLifecyclePostgresIntegrationTest {
             "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
                     + "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
     private static final String TEXT_CHUNKER =
-            "hierarchical-v2:1000:100:100";
+            "bounded-v3:1000:100:100:1000000:20000";
 
     private static PostgreSQLContainer<?> postgres;
     private static DataSource dataSource;

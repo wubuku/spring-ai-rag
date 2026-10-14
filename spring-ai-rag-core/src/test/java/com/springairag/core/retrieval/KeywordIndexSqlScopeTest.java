@@ -41,7 +41,7 @@ class KeywordIndexSqlScopeTest {
         assertTrue(sql.contains("s.local_index_status = 'READY'"));
         assertTrue(sql.contains("d.enabled = true"));
         assertTrue(sql.contains("WHEN d.document_type = 'json-record' THEN 'jv1'"));
-        assertTrue(sql.contains("ELSE 'v1'"));
+        assertTrue(sql.contains("ELSE COALESCE(d.derivation_chunker_version, 'v1')"));
     }
 
     @Test

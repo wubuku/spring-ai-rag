@@ -53,20 +53,23 @@ public class DocumentChunkingService {
                     List.of(new ChunkingResult.ChunkMetadata("JSON_RECORD", List.of(), 0)),
                     ChunkValidator.analyze(content, chunks, Integer.MAX_VALUE, 1, List.of("SINGLE_RECORD")));
         }
-        if (settings.getProfile() == RagChunkProperties.Profile.BOUNDED_V3) {
-            return new BoundedTextChunker(settings.getDefaultChunkSize(), settings.getMinChunkSize(),
-                    settings.getDefaultChunkOverlap(), settings.getMaxInputChars(), settings.getMaxChunks())
-                    .split(content);
+        String version = descriptorProvider.describe(document).chunkerVersion();
+        String[] identity = version.split(":");
+        int size = Integer.parseInt(identity[1]);
+        int minimum = Integer.parseInt(identity[2]);
+        int overlap = Integer.parseInt(identity[3]);
+        if (identity[0].equals("bounded-v3")) {
+            return new BoundedTextChunker(size, minimum, overlap,
+                    Integer.parseInt(identity[4]), Integer.parseInt(identity[5])).split(content);
         }
-        List<TextChunk> chunks = new HierarchicalTextChunker(settings.getDefaultChunkSize(),
-                settings.getMinChunkSize(), settings.getDefaultChunkOverlap()).split(content);
+        List<TextChunk> chunks = new HierarchicalTextChunker(size, minimum, overlap).split(content);
         if (chunks.isEmpty()) {
             throw new IllegalArgumentException(
                     "Non-blank document produced no chunks: documentId=" + document.getId());
         }
         return new ChunkingResult(chunks, chunks.stream()
                 .map(chunk -> new ChunkingResult.ChunkMetadata("LEGACY", List.of(), 0)).toList(),
-                ChunkValidator.analyze(content, chunks, Math.max(1, settings.getDefaultChunkSize()),
+                ChunkValidator.analyze(content, chunks, Math.max(1, size),
                         Integer.MAX_VALUE, List.of("LEGACY_NOT_STRICT")));
     }
 
@@ -81,7 +84,8 @@ public class DocumentChunkingService {
 
     public String profileFor(RagDocument document) {
         return RagDocument.JSON_RECORD.equals(document.getDocumentType()) ? "single-record"
-                : properties.getChunk().getProfile().name().toLowerCase(java.util.Locale.ROOT).replace('_', '-');
+                : descriptorProvider.describe(document).chunkerVersion().startsWith("bounded-v3:")
+                ? "bounded-v3" : "legacy-v2";
     }
 
     /**

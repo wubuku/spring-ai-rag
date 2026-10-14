@@ -47,9 +47,21 @@ class DocumentChunkingServiceTest {
 
     @Test
     void legacyDiagnosticsDoNotChangeCompatibilityOutput() {
+        properties.getChunk().setProfile(com.springairag.core.config.RagChunkProperties.Profile.LEGACY_V2);
         RagDocument text = document("text", "x".repeat(3000));
         assertEquals(service.prepare(text).chunks(), service.preview(text).chunks());
         assertTrue(service.preview(text).diagnostics().violations().contains("PAYLOAD_LIMIT"));
+    }
+
+    @Test
+    void pinnedLegacyUsesPersistedParametersAndDefaultRemainsBounded() {
+        RagDocument text = document("text", "x".repeat(500));
+        assertEquals("bounded-v3", service.profileFor(text));
+        text.setDerivationChunkerVersion("hierarchical-v2:120:10:10");
+        assertEquals("legacy-v2", service.profileFor(text));
+        assertEquals(text.getDerivationChunkerVersion(), service.chunkerVersionFor(text));
+        assertEquals(new com.springairag.documents.chunk.HierarchicalTextChunker(120, 10, 10)
+                .split(text.getContent()), service.prepare(text).chunks());
     }
 
     private RagProperties properties;
@@ -139,7 +151,7 @@ class DocumentChunkingServiceTest {
         assertTrue(joined.contains("Alpha") && joined.contains("Beta"));
         assertEquals("TEXT", prepared.descriptor().documentKind());
         assertTrue(prepared.descriptor().chunkerVersion()
-                .startsWith("hierarchical-v2:40:10:5"));
+                .startsWith("bounded-v3:40:10:5:"));
     }
 
     @Test
@@ -209,13 +221,13 @@ class DocumentChunkingServiceTest {
     @Test
     void chunkerVersionForReadsLiveConfigurationRatherThanACachedConstant() {
         RagDocument doc = document("TEXT", "body");
-        assertTrue(service.chunkerVersionFor(doc).startsWith("hierarchical-v2:1000:100:100"));
+        assertTrue(service.chunkerVersionFor(doc).startsWith("bounded-v3:1000:100:100:"));
 
         properties.getChunk().setDefaultChunkSize(40);
         properties.getChunk().setMinChunkSize(10);
         properties.getChunk().setDefaultChunkOverlap(5);
 
-        assertEquals("hierarchical-v2:40:10:5", service.chunkerVersionFor(doc));
+        assertEquals("bounded-v3:40:10:5:1000000:20000", service.chunkerVersionFor(doc));
     }
 
     @Test

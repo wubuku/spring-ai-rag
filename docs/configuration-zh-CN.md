@@ -600,15 +600,21 @@ provider 已返回结果的基础上减少数量。null 或 blank 文档 ID 按�
 
 ## 文档分块配置
 
-`legacy-v2` 是兼容默认，保持旧算法与 `hierarchical-v2` 派生身份；它不提供严格的尺寸、
-原文覆盖和定位保证。显式设置 `RAG_CHUNK_PROFILE=bounded-v3` 并重启，才能使用受校验策略。
-切换会使旧策略的索引不再 fresh，需要显式重索引；不会自动全库重嵌入。回滚恢复旧配置后，
-已经生成 v3 派生物的文档也必须重新构建 v2 索引，不能直接把新结果视为旧结果有效。
+默认使用 `bounded-v3`，无需运维开启或手工重索引。V62自动登记旧文档的真实分块身份，
+后台自动升级已有关键词和活动Profile的向量，成功后原子切换；迁移完成前旧结果仍可检索。
+模型调用不在Flyway事务内，不阻塞服务就绪；每实例并发1、每30秒最多2篇、每篇/Profile
+最多3次尝试。只为已有COMPLETED向量重新调用Embedding；关键词-only、SKIP/NOT_REQUESTED
+不会产生新模型费用，后者也不擅自生成索引。超限/原子行等永久错误保留旧数据和真实身份，
+任务安全code可在 `rag_chunking_upgrade_tasks` 查询；正文或目标变更后自动恢复尝试。
+`legacy-v2` 仅是显式应急回退，恢复旧配置后的派生物同样由后台自动重建，不伪造版本标签。
+正常发布不要求改环境变量；关闭自动升级只用于明确的应急控制。
+Flyway在应用启动前完成schema升级；不保证旧/新二进制共用数据库的混合版本滚动发布。
 
 ```yaml
 rag:
   chunk:
-    profile: legacy-v2
+    profile: bounded-v3
+    auto-upgrade-enabled: true
     max-input-chars: 1000000
     max-chunks: 20000
     preview-max-chars: 100000
@@ -619,7 +625,8 @@ rag:
 
 | 属性 | 默认值 | 说明 |
 |------|--------|------|
-| `rag.chunk.profile` | `legacy-v2` | `legacy-v2` / `bounded-v3`；环境变量 `RAG_CHUNK_PROFILE` |
+| `rag.chunk.profile` | `bounded-v3` | `legacy-v2` / `bounded-v3`；环境变量 `RAG_CHUNK_PROFILE` |
+| `rag.chunk.auto-upgrade-enabled` | `true` | 自动升级；应急覆盖 `RAG_CHUNK_AUTO_UPGRADE_ENABLED` |
 | `rag.chunk.max-input-chars` | `1000000` | v3 文本输入限额；`RAG_CHUNK_MAX_INPUT_CHARS` |
 | `rag.chunk.max-chunks` | `20000` | v3 输出块数上限；`RAG_CHUNK_MAX_CHUNKS` |
 | `rag.chunk.preview-max-chars` | `100000` | 所有策略的只读 preview 输入限额；`RAG_CHUNK_PREVIEW_MAX_CHARS` |

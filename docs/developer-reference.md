@@ -19,7 +19,7 @@ Documentation hub: [index.md](index.md). Stable project context: [project-contex
 | Real-LLM E2E port | `18081` |
 | Embedding | SiliconFlow `BAAI/bge-m3` |
 | Vector dimension | `1024` |
-| Flyway | V1–V61 |
+| Flyway | V1–V62 |
 
 Do **not** append `/v1` to an OpenAI or Embedding `base-url`. Spring AI appends `/v1/chat/completions` or `/v1/embeddings`.
 
@@ -900,6 +900,12 @@ CRITICAL alerts through V58 durable delivery. Evidence is written under
 <a id="business-service-integration-readiness-verification"></a>
 
 ### Chunking Correctness And Real-Fixture Verification
+
+v3 and automatic upgrades are enabled by default, without operator flags or manual
+reindexing. V62 registers actual old identities; bounded background rebuilding
+switches atomically. `./scripts/verify-gated-it.sh ChunkingUpgradePostgresIntegrationTest`
+verifies migration, failure preservation and concurrent recovery. Upgrade status
+is in `rag_chunking_upgrade_tasks`, with IDs/versions/hashes/safe codes only.
 
 Chunking-specific gate: `./scripts/verify-chunking-quality.sh`; real fixed-fixture
 acceptance: `python3 scripts/real-llm-chunking-smoke.py`. Requires a running isolated
