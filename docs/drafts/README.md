@@ -47,7 +47,7 @@ Active plans are listed here and in `docs/index*`.
   refactoring, and technical-debt cleanup; new features are out of scope for
   this stage.
 
-The processing/recovery, citation/streaming, chunking-correctness, and default-feature/automatic-upgrade batches,
+The processing/recovery, citation/streaming, chunking-correctness, and default-feature/automatic-upgrade/recovery batches,
 including supplemental real-LLM acceptance, are in the
 [historical archive](archive/README.md).
 

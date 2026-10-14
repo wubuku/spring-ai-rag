@@ -664,12 +664,31 @@ V62 registers existing documents' actual serving identities. Background upgrades
 atomically switch keyword indexes and active-Profile vectors after successful
 rebuilding; old results remain searchable beforehand. Provider calls run outside
 Flyway transactions and do not block readiness. Each instance handles at most
-two documents every 30 seconds with one concurrent upgrade and three attempts
+two documents every 30 seconds with one concurrent upgrade and three attempts per cycle
 per document/Profile. Only existing COMPLETED vectors incur re-embedding costs;
 keyword-only and SKIP/NOT_REQUESTED documents do not trigger new model calls,
 and the latter do not gain indexes. Permanent budget/atomic-line failures retain
 old data and actual identities; safe codes are in `rag_chunking_upgrade_tasks`.
-Content or target changes reset attempts. `legacy-v2` is an explicit emergency
+Content or target changes re-evaluate permanent failures. V63 enables unattended
+recovery by default: transient provider failures and commit conflicts receive up
+to three short-term attempts 60 seconds apart, then enter durable `COOLDOWN`.
+The initial delay is one hour, doubling with recovery cycles up to 24 hours.
+Expired cooldown starts a new cycle; restarts preserve recovery state. Provider
+rejections and unknown failures use the maximum cooldown directly, allowing
+recovery after configuration/service repair without changing content or resetting
+tasks. Deterministic chunk/vector-shape failures stay `FAILED/PERMANENT` and
+preserve old indexes without repeated model calls. Migration re-arms historical
+generic failures/retries and exhausted leases, not deterministic failures.
+
+Retry document batches share a PostgreSQL quota of 12 per UTC hour per active
+Profile across instances. Exhausted quota defers work to the next hour; quota DB
+failure prevents model calls. Initial upgrades keep existing throughput and
+keyword-only work consumes no model quota. This is a **retry batch-entry limit,
+not a token, currency, or provider HTTP-call hard limit**: batch/fallback and
+model-internal retries may make multiple calls. No new environment variables are
+required. See [upgrade recovery diagnostics](troubleshooting.md#chunking-upgrade-recovery).
+
+`legacy-v2` is an explicit emergency
 override; rollback rebuilding is also automatic, never a version relabeling.
 Normal deployment requires no environment changes; disabling upgrades is an
 explicit emergency measure only.
@@ -681,6 +700,10 @@ rag:
   chunk:
     profile: bounded-v3
     auto-upgrade-enabled: true
+    upgrade-recovery:
+      cooldown: PT1H
+      max-cooldown: PT24H
+      retry-documents-per-hour: 12
     max-input-chars: 1000000
     max-chunks: 20000
     preview-max-chars: 100000
@@ -693,6 +716,9 @@ rag:
 |----------|---------|-------------|
 | `rag.chunk.profile` | `bounded-v3` | `legacy-v2` / `bounded-v3`; environment `RAG_CHUNK_PROFILE` |
 | `rag.chunk.auto-upgrade-enabled` | `true` | Automatic upgrades; emergency override `RAG_CHUNK_AUTO_UPGRADE_ENABLED` |
+| `rag.chunk.upgrade-recovery.cooldown` | `PT1H` | Initial exhausted-transient cooldown, 1 minute–24 hours; `RAG_CHUNK_UPGRADE_COOLDOWN` |
+| `rag.chunk.upgrade-recovery.max-cooldown` | `PT24H` | At least initial cooldown, at most 7 days; `RAG_CHUNK_UPGRADE_MAX_COOLDOWN` |
+| `rag.chunk.upgrade-recovery.retry-documents-per-hour` | `12` | Cross-instance UTC-hour retry-batch quota per Profile, 1–1000; `RAG_CHUNK_UPGRADE_RETRY_DOCUMENTS_PER_HOUR` |
 | `rag.chunk.max-input-chars` | `1000000` | v3 text input limit; `RAG_CHUNK_MAX_INPUT_CHARS` |
 | `rag.chunk.max-chunks` | `20000` | v3 output chunk limit; `RAG_CHUNK_MAX_CHUNKS` |
 | `rag.chunk.preview-max-chars` | `100000` | Read-only preview input limit for all profiles; `RAG_CHUNK_PREVIEW_MAX_CHARS` |

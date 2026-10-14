@@ -603,9 +603,20 @@ provider 已返回结果的基础上减少数量。null 或 blank 文档 ID 按�
 默认使用 `bounded-v3`，无需运维开启或手工重索引。V62自动登记旧文档的真实分块身份，
 后台自动升级已有关键词和活动Profile的向量，成功后原子切换；迁移完成前旧结果仍可检索。
 模型调用不在Flyway事务内，不阻塞服务就绪；每实例并发1、每30秒最多2篇、每篇/Profile
-最多3次尝试。只为已有COMPLETED向量重新调用Embedding；关键词-only、SKIP/NOT_REQUESTED
+每轮最多3次尝试。只为已有COMPLETED向量重新调用Embedding；关键词-only、SKIP/NOT_REQUESTED
 不会产生新模型费用，后者也不擅自生成索引。超限/原子行等永久错误保留旧数据和真实身份，
-任务安全code可在 `rag_chunking_upgrade_tasks` 查询；正文或目标变更后自动恢复尝试。
+任务安全code可在 `rag_chunking_upgrade_tasks` 查询；正文或目标变更后重新评估永久失败。
+V63 默认补齐无人值守恢复：临时服务故障或提交冲突先做最多三次短期尝试（间隔60秒），再进入
+`COOLDOWN`，首次1小时、恢复轮次倍增至最多24小时；冷却到期自动开始新轮次，应用重启不丢
+恢复进度。供应商拒绝或未知异常直接进入最长冷却，配置/服务恢复后无需改正文或手工重置任务。
+确定性分块/向量形状错误仍为 `FAILED/PERMANENT`，保留旧索引而不反复调用模型。
+历史通用失败/重试自动迁为未知冷却，历史租约耗尽迁为临时冷却；确定性失败不重新排队。
+
+同一活动Profile的重试批处理跨实例共享每UTC小时12次配额；缺额持久延期至下一小时，数据库
+配额故障不调用模型。首次升级维持原吞吐，关键词-only不占模型配额。此配额限制重试文档的
+批处理入口数，**不是token、金额或供应商HTTP次数硬限额**：batch/fallback和模型内部重试
+仍可能产生多次调用。默认不要求新增环境变量；低基数指标和安全SQL见
+[自动升级恢复排障](troubleshooting-zh-CN.md#分块自动升级恢复)。
 `legacy-v2` 仅是显式应急回退，恢复旧配置后的派生物同样由后台自动重建，不伪造版本标签。
 正常发布不要求改环境变量；关闭自动升级只用于明确的应急控制。
 Flyway在应用启动前完成schema升级；不保证旧/新二进制共用数据库的混合版本滚动发布。
@@ -615,6 +626,10 @@ rag:
   chunk:
     profile: bounded-v3
     auto-upgrade-enabled: true
+    upgrade-recovery:
+      cooldown: PT1H
+      max-cooldown: PT24H
+      retry-documents-per-hour: 12
     max-input-chars: 1000000
     max-chunks: 20000
     preview-max-chars: 100000
@@ -627,6 +642,9 @@ rag:
 |------|--------|------|
 | `rag.chunk.profile` | `bounded-v3` | `legacy-v2` / `bounded-v3`；环境变量 `RAG_CHUNK_PROFILE` |
 | `rag.chunk.auto-upgrade-enabled` | `true` | 自动升级；应急覆盖 `RAG_CHUNK_AUTO_UPGRADE_ENABLED` |
+| `rag.chunk.upgrade-recovery.cooldown` | `PT1H` | 临时故障耗尽后的初始冷却，1分钟–24小时；`RAG_CHUNK_UPGRADE_COOLDOWN` |
+| `rag.chunk.upgrade-recovery.max-cooldown` | `PT24H` | 不小于初始冷却、最多7天；`RAG_CHUNK_UPGRADE_MAX_COOLDOWN` |
+| `rag.chunk.upgrade-recovery.retry-documents-per-hour` | `12` | Profile跨实例UTC小时重试批处理配额，1–1000；`RAG_CHUNK_UPGRADE_RETRY_DOCUMENTS_PER_HOUR` |
 | `rag.chunk.max-input-chars` | `1000000` | v3 文本输入限额；`RAG_CHUNK_MAX_INPUT_CHARS` |
 | `rag.chunk.max-chunks` | `20000` | v3 输出块数上限；`RAG_CHUNK_MAX_CHUNKS` |
 | `rag.chunk.preview-max-chars` | `100000` | 所有策略的只读 preview 输入限额；`RAG_CHUNK_PREVIEW_MAX_CHARS` |

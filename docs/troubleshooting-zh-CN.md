@@ -248,6 +248,39 @@ embedding 重试操作恢复。
 
 ## 检索问题
 
+### 分块自动升级恢复
+
+V63默认启用持久化冷却恢复，不需要运维重置失败任务。`RETRY`是60秒短期重试；`COOLDOWN`
+表示等待退避或下一UTC小时配额；`FAILED/PERMANENT`表示确定性内容/分块/向量校验错误。
+临时故障每轮最多三次，耗尽后1小时起倍增至24小时；provider拒绝/未知错误直接最长冷却。
+服务恢复不会立即唤醒仍在冷却中的任务，到期后后台自行执行；重启不会清空冷却或配额。
+
+Micrometer 指标 `rag.chunking.upgrade.tasks` 按有限status统计运行/重试/冷却/永久失败；
+`rag.chunking.upgrade.transitions` 只使用status和failure_kind；
+`rag.chunking.upgrade.scan.age.seconds` 表示最后成功读取状态距今秒数（尚未成功为NaN）。
+扫描/观测暂不可用时保留旧统计，用age识别陈旧，不把旧统计误认为实时零积压。
+已有指标访问权限不变，不通过公共接口公开文档ID或provider异常。
+
+以下只读SQL适用于有数据库诊断权限的操作员；正常发布或故障恢复不要求执行SQL：
+
+```sql
+SELECT status, failure_kind, count(*) AS tasks, min(available_at) AS next_available_at
+FROM rag_chunking_upgrade_tasks
+GROUP BY status, failure_kind
+ORDER BY status, failure_kind;
+
+SELECT embedding_profile_id, bucket_start, reserved_count
+FROM rag_chunking_upgrade_retry_buckets
+ORDER BY bucket_start DESC
+LIMIT 24;
+```
+
+`CHUNK_UPGRADE_RETRY_BUDGET_EXHAUSTED`会延期至下一UTC小时，不是永久失败；配额限制重试
+文档批处理入口，不是模型HTTP次数或金额硬限额。永久错误先解决正文/分块预算/向量契约；
+正文或目标版本变化会自动重新评估。不要把旧向量直接重标签为v3，不要删除任务绕开预算。
+应急暂停使用既有 `RAG_CHUNK_AUTO_UPGRADE_ENABLED=false`，恢复后沿用持久进度。
+完整配置见[文档分块配置](configuration-zh-CN.md#文档分块配置)。
+
 ### 检索结果为空
 
 **症状**：查询返回空列表，但文档已导入

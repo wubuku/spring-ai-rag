@@ -40,6 +40,9 @@
 - 前三批默认启用与自动升级：
   [规划](2026-10-14_DEFAULT_FEATURES_AUTO_UPGRADE_PLAN.md)、
   [回归、迁移、dev.sh与真实模型验收](2026-10-14_DEFAULT_FEATURES_AUTO_UPGRADE_PROGRESS.md)
+- 分块自动升级故障后的无人值守恢复：
+  [规划](2026-10-14_CHUNKING_UPGRADE_RECOVERY_PLAN.md)、
+  [恢复/共享配额/迁移/真实模型验收](2026-10-14_CHUNKING_UPGRADE_RECOVERY_PROGRESS.md)
 - 本地关键词/向量派生解耦：`2026-08-19_KEYWORD_VECTOR_DECOUPLING_*`
 - 外部文档迁移与派生完整性修复：`2026-08-21_NEXT_HIGH_VALUE_FEATURES_*`
 - 外部 Client 接入边界历史规划：

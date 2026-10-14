@@ -103,6 +103,7 @@ export const GATES = [
   manual('scripts/verify-api-key-expiry-alerts.sh'),
   manual('scripts/verify-business-client-readiness.sh'),
   manual('scripts/verify-chat-capability.sh'),
+  manual('scripts/verify-chunking-quality.sh'),
   manual('scripts/verify-collection-provisioning.sh'),
   manual('scripts/verify-collection-purge.sh'),
   manual('scripts/verify-derivation-integrity.sh'),

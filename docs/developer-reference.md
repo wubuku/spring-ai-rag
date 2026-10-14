@@ -19,7 +19,7 @@ Documentation hub: [index.md](index.md). Stable project context: [project-contex
 | Real-LLM E2E port | `18081` |
 | Embedding | SiliconFlow `BAAI/bge-m3` |
 | Vector dimension | `1024` |
-| Flyway | V1–V62 |
+| Flyway | V1–V63 |
 
 Do **not** append `/v1` to an OpenAI or Embedding `base-url`. Spring AI appends `/v1/chat/completions` or `/v1/embeddings`.
 

@@ -427,6 +427,10 @@ rag:
   chunk:
     profile: ${RAG_CHUNK_PROFILE:bounded-v3}
     auto-upgrade-enabled: ${RAG_CHUNK_AUTO_UPGRADE_ENABLED:true}
+    upgrade-recovery:
+      cooldown: ${RAG_CHUNK_UPGRADE_COOLDOWN:PT1H}
+      max-cooldown: ${RAG_CHUNK_UPGRADE_MAX_COOLDOWN:PT24H}
+      retry-documents-per-hour: ${RAG_CHUNK_UPGRADE_RETRY_DOCUMENTS_PER_HOUR:12}
     max-input-chars: ${RAG_CHUNK_MAX_INPUT_CHARS:1000000}
     max-chunks: ${RAG_CHUNK_MAX_CHUNKS:20000}
     preview-max-chars: ${RAG_CHUNK_PREVIEW_MAX_CHARS:100000}

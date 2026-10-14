@@ -286,7 +286,12 @@ and protected structures. `DocumentChunkingService` unifies keyword/Embedding/
 preview. V62 and background tasks automatically migrate existing derivatives,
 retaining actual old identities and usable results until success, without manual
 reindexing. Diagnostics call no model; upgrades re-embed existing vectors only,
-without new costs for keyword-only/SKIP documents. See
+without new costs for keyword-only/SKIP documents.
+V63 provides durable cooldown and automatic recovery after exhausted transient
+failures, with low-frequency retries for provider rejections/unknown errors.
+Permanent content/vector validation failures remain terminal and retain old
+results. Recovery quotas are shared per Profile across instances, with fair
+scheduling and no manual task reset. See
 [chunking configuration](configuration.md#document-chunking-configuration).
 
 <a id="external-document-synchronization"></a>
@@ -443,7 +448,7 @@ See [multi-model-external-config.md](multi-model-external-config.md).
 ### Database
 
 - PostgreSQL with pgvector.
-- Flyway is currently V1–V62.
+- Flyway is currently V1–V63.
 - V27/V28 add, backfill, validate, uniquely constrain, and make immutable the
   Collection business key; V29 adds JSONB structured records; V30 adds the
   external-document synchronization schema; V31 normalizes stored external

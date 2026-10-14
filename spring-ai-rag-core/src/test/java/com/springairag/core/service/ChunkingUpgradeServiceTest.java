@@ -3,6 +3,7 @@ package com.springairag.core.service;
 import com.springairag.core.config.EmbeddingProfile;
 import com.springairag.core.config.EmbeddingProfileProvider;
 import com.springairag.core.config.RagProperties;
+import com.springairag.core.observability.ChunkingUpgradeMetrics;
 import com.springairag.core.repository.RagDocumentRepository;
 import com.springairag.core.retrieval.EmbeddingBatchService;
 import org.junit.jupiter.api.Test;
@@ -27,7 +28,8 @@ class ChunkingUpgradeServiceTest {
         var upgrade = new ChunkingUpgradeService(jdbc, mock(RagDocumentRepository.class), profiles,
                 properties, new DocumentDerivationDescriptorProvider(properties),
                 mock(DocumentChunkingService.class), mock(KeywordIndexPersistenceService.class),
-                mock(EmbeddingPersistenceService.class), embeddings, mock(PlatformTransactionManager.class));
+                mock(EmbeddingPersistenceService.class), embeddings, mock(PlatformTransactionManager.class),
+                mock(ChunkingUpgradeMetrics.class));
         try {
             assertDoesNotThrow(() -> upgrade.run(null));
             doReturn(new EmbeddingProfile(1, "test", "test", "test", "v1", 1024,

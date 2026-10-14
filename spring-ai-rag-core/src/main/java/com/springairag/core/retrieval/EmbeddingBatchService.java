@@ -1,5 +1,6 @@
 package com.springairag.core.retrieval;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.resilience.LlmCircuitBreaker;
 import org.slf4j.Logger;
@@ -116,7 +117,8 @@ public class EmbeddingBatchService {
             log.warn("Embedding circuit breaker is OPEN, rejecting batch of {} items", batch.size());
             for (String text : batch) {
                 results.add(new EmbeddingResult(text, null,
-                        "Embedding service unavailable (circuit breaker open)"));
+                        "Embedding service unavailable (circuit breaker open)",
+                        EmbeddingFailureClassifier.Kind.TRANSIENT));
             }
             return;
         }
@@ -134,7 +136,8 @@ public class EmbeddingBatchService {
                 if (embedding != null) {
                     results.add(new EmbeddingResult(batch.get(j), embedding, null));
                 } else {
-                    results.add(new EmbeddingResult(batch.get(j), null, "Batch response missing embedding at index " + j));
+                    results.add(new EmbeddingResult(batch.get(j), null, "Batch response missing embedding at index " + j,
+                            EmbeddingFailureClassifier.Kind.NONE));
                 }
             }
             if (circuitBreaker != null) {
@@ -144,9 +147,9 @@ public class EmbeddingBatchService {
             if (circuitBreaker != null) {
                 circuitBreaker.recordFailure();
             }
-            log.warn("Batch embedding failed (cb={}), falling back to sequential: {}",
+            log.warn("Batch embedding failed (cb={}), falling back to sequential code={}",
                     circuitBreaker != null ? circuitBreaker.getState() : "disabled",
-                    batchError.getMessage());
+                    EmbeddingFailureClassifier.classify(batchError));
             for (String text : batch) {
                 try {
                     float[] embedding = embeddingModel.embed(text);
@@ -155,8 +158,9 @@ public class EmbeddingBatchService {
                         circuitBreaker.recordSuccess();
                     }
                 } catch (Exception e) { // Individual item failure, continue batch
-                    log.error("Failed to generate embedding: {}", e.getMessage());
-                    results.add(new EmbeddingResult(text, null, e.getMessage()));
+                    var failureKind = EmbeddingFailureClassifier.classify(e);
+                    log.error("Failed to generate embedding code={}", failureKind);
+                    results.add(new EmbeddingResult(text, null, e.getMessage(), failureKind));
                     if (circuitBreaker != null) {
                         circuitBreaker.recordFailure();
                     }
@@ -172,11 +176,20 @@ public class EmbeddingBatchService {
         private final String text;
         private final float[] embedding;
         private final String error;
+        @JsonIgnore
+        private final EmbeddingFailureClassifier.Kind failureKind;
 
         public EmbeddingResult(String text, float[] embedding, String error) {
+            this(text, embedding, error, error == null
+                    ? EmbeddingFailureClassifier.Kind.NONE : EmbeddingFailureClassifier.Kind.UNKNOWN);
+        }
+
+        public EmbeddingResult(String text, float[] embedding, String error,
+                EmbeddingFailureClassifier.Kind failureKind) {
             this.text = text;
             this.embedding = embedding;
             this.error = error;
+            this.failureKind = failureKind == null ? EmbeddingFailureClassifier.Kind.UNKNOWN : failureKind;
         }
 
         public String getText() { return text; }
@@ -184,6 +197,8 @@ public class EmbeddingBatchService {
         public float[] getEmbedding() { return embedding; }
 
         public String getError() { return error; }
+        @JsonIgnore
+        public EmbeddingFailureClassifier.Kind getFailureKind() { return failureKind; }
 
         public boolean isSuccess() { return error == null && embedding != null; }
 

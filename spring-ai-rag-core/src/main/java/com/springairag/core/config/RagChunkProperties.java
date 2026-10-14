@@ -11,6 +11,7 @@ public class RagChunkProperties {
 
     private Profile profile = Profile.BOUNDED_V3;
     private boolean autoUpgradeEnabled = true;
+    private RagChunkUpgradeRecoveryProperties upgradeRecovery = new RagChunkUpgradeRecoveryProperties();
     private int maxInputChars = 1000000;
     private int maxChunks = 20000;
     private int previewMaxChars = 100000;
@@ -22,6 +23,8 @@ public class RagChunkProperties {
     public void setProfile(Profile profile) { this.profile = profile; }
     public boolean isAutoUpgradeEnabled() { return autoUpgradeEnabled; }
     public void setAutoUpgradeEnabled(boolean value) { autoUpgradeEnabled = value; }
+    public RagChunkUpgradeRecoveryProperties getUpgradeRecovery() { return upgradeRecovery; }
+    public void setUpgradeRecovery(RagChunkUpgradeRecoveryProperties value) { upgradeRecovery = value; }
     public int getMaxInputChars() { return maxInputChars; }
     public void setMaxInputChars(int maxInputChars) { this.maxInputChars = maxInputChars; }
     public int getMaxChunks() { return maxChunks; }
@@ -30,6 +33,10 @@ public class RagChunkProperties {
     public void setPreviewMaxChars(int previewMaxChars) { this.previewMaxChars = previewMaxChars; }
 
     public void validate() {
+        if (upgradeRecovery == null) {
+            throw new IllegalArgumentException("Missing chunking upgrade recovery configuration");
+        }
+        upgradeRecovery.validate();
         if (profile == null || previewMaxChars <= 0) {
             throw new IllegalArgumentException("Invalid chunking profile or preview limit");
         }

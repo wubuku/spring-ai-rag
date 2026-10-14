@@ -204,6 +204,16 @@ tool arguments/results, credentials, or exception bodies in evidence.
 ./scripts/verify-chunking-quality.sh
 ```
 
+Run the recovery suite with `./scripts/verify-gated-it.sh ChunkingUpgradePostgresIntegrationTest`.
+This equivalent direct command explicitly enables its gate for test discovery
+and a verifiable developer entry point:
+
+```bash
+TESTCONTAINERS_RYUK_DISABLED=true TESTCONTAINERS_PG_IMAGE=pgvector/pgvector:pg16 \
+mvn test -pl spring-ai-rag-core -am -Dchunking-upgrade.it.enabled=true \
+  -Dtest=ChunkingUpgradePostgresIntegrationTest -Dsurefire.failIfNoSpecifiedTests=false
+```
+
 Covers source conservation, payload caps, offsets/Unicode, sibling headings,
 invalid tables, long-table headers, code/formula protection, fixed-seed tests,
 Profile/version, JSON_RECORD compatibility, preview pagination/400/403/404,
@@ -212,6 +222,14 @@ Release also requires full `mvn test` and `verify-gated-it.sh`. The new profile 
 enabled by default, including automatic upgrades. Run
 `verify-gated-it.sh ChunkingUpgradePostgresIntegrationTest` for old-data migration,
 search continuity, failure preservation, lease/CAS concurrency and automatic rollback.
+V63 coverage adds historical failure migration, durable cooldown after three
+transient attempts, same-source/target recovery after restart, low-frequency
+rejection/unknown retries, permanent vector-validation termination, cross-instance
+hour quotas, budget deferral, and fair scanning. Tests advance time fields only
+in disposable databases; production cooldown defaults are unchanged and manual
+SQL is not a normal recovery requirement. Focused unit tests include
+`EmbeddingFailureClassifierTest`, `RagChunkUpgradeRecoveryPropertiesTest`, and
+`ChunkingUpgradeMetricsTest`.
 Use an isolated database/port for real
 Embedding/Chat retrieval and citation checks, comparing preview/index chunks.
 Subjective answer quality does not replace deterministic coverage assertions or

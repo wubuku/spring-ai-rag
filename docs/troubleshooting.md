@@ -247,6 +247,47 @@ with `failedDocuments > 0` and a non-empty `lastError`.
 
 ## Retrieval Issues
 
+### Chunking upgrade recovery
+
+V63 enables durable recovery by default, without operator task resets. `RETRY`
+is a 60-second short-term retry; `COOLDOWN` waits for backoff or the next UTC-hour
+quota; `FAILED/PERMANENT` indicates deterministic content/chunk/vector-validation
+failure. Transient attempts are limited to three per cycle, then cool down from
+one hour exponentially up to 24 hours. Provider rejections/unknown failures use
+the maximum cooldown directly. Service recovery does not wake unexpired cooldown;
+the worker resumes automatically when due. Restarts retain cooldown and quotas.
+
+Micrometer `rag.chunking.upgrade.tasks` uses finite status tags for running,
+retrying, cooling, and permanently failed tasks. `rag.chunking.upgrade.transitions`
+uses only status/failure_kind. `rag.chunking.upgrade.scan.age.seconds` reports age
+since the last successful state snapshot (NaN before the first). Failed scans or
+observations preserve previous gauges; age exposes stale values, not fake zero
+backlog. Existing metrics permissions remain unchanged; no public endpoint exposes
+document IDs or raw provider failures.
+
+These read-only queries are for authorized DB diagnostics, not required deployment
+or recovery steps:
+
+```sql
+SELECT status, failure_kind, count(*) AS tasks, min(available_at) AS next_available_at
+FROM rag_chunking_upgrade_tasks
+GROUP BY status, failure_kind
+ORDER BY status, failure_kind;
+
+SELECT embedding_profile_id, bucket_start, reserved_count
+FROM rag_chunking_upgrade_retry_buckets
+ORDER BY bucket_start DESC
+LIMIT 24;
+```
+
+`CHUNK_UPGRADE_RETRY_BUDGET_EXHAUSTED` defers work to the next UTC hour; it is not
+permanent failure. Quotas bound retry document-batch entries, not provider HTTP
+calls or currency. Fix deterministic content/budget/vector contracts first;
+content or target changes automatically re-evaluate permanent failures. Never
+relabel old vectors as v3 or delete tasks to bypass quotas. The existing
+`RAG_CHUNK_AUTO_UPGRADE_ENABLED=false` emergency pause preserves progress for later
+resumption. See [chunking configuration](configuration.md#document-chunking-configuration).
+
 ### Retrieval Results Empty
 
 **Symptom**: Query returns empty list, but documents were imported
