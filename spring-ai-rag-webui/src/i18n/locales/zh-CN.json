@@ -699,7 +699,7 @@
     "startRun": "启动运行",
     "runStatus": "运行状态",
     "runId": "运行 ID",
-    "citationsHint": "引用校验是协议级 [S1] 检查，不是覆盖率分数。",
+    "citationsHint": "引用校验检查请求级 [c1] 以及兼容的 [S1] 别名，不是覆盖率分数。",
     "citationsFailed": "无法加载引用校验",
     "traceId": "Trace ID",
     "citationStatus": "引用状态",

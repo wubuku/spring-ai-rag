@@ -11,11 +11,12 @@ import java.util.Objects;
  *
  * <p>{@code score} 是当前查询与检索配置下的排序信号，不是概率或百分比。
  */
-@Schema(description = "Chat citation source. Scores are ranking signals, not probabilities.")
+@Schema(description = "Chat citation source. sourceHandle is request-local; scores are ranking signals, not probabilities.")
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class ChatSource {
 
     private String citationId;
+    private String sourceHandle;
     private String documentId;
     private Integer chunkIndex;
     private String title;
@@ -31,6 +32,9 @@ public class ChatSource {
 
     public String getCitationId() { return citationId; }
     public void setCitationId(String citationId) { this.citationId = citationId; }
+
+    public String getSourceHandle() { return sourceHandle; }
+    public void setSourceHandle(String sourceHandle) { this.sourceHandle = sourceHandle; }
 
     public String getDocumentId() { return documentId; }
     public void setDocumentId(String documentId) { this.documentId = documentId; }
@@ -76,6 +80,7 @@ public class ChatSource {
         if (o == null || getClass() != o.getClass()) return false;
         ChatSource that = (ChatSource) o;
         return Objects.equals(citationId, that.citationId)
+                && Objects.equals(sourceHandle, that.sourceHandle)
                 && Objects.equals(documentId, that.documentId)
                 && Objects.equals(chunkIndex, that.chunkIndex)
                 && Objects.equals(title, that.title)
@@ -92,14 +97,15 @@ public class ChatSource {
 
     @Override
     public int hashCode() {
-        return Objects.hash(citationId, documentId, chunkIndex, title, chunkText,
+        return Objects.hash(citationId, sourceHandle, documentId, chunkIndex, title, chunkText,
                 score, vectorScore, fulltextScore, originalFilename, documentType,
                 collectionKey, sourceType, metadata);
     }
 
     @Override
     public String toString() {
-        return "ChatSource{citationId='" + citationId + "', documentId='" + documentId
+        return "ChatSource{citationId='" + citationId + "', sourceHandle='"
+                + sourceHandle + "', documentId='" + documentId
                 + "', chunkIndex=" + chunkIndex + ", title='" + title
                 + "', score=" + score + "}";
     }

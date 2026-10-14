@@ -29,7 +29,8 @@ public final class StaticKnowledgeSearchTool implements ToolCallback {
     private static final ToolDefinition DEFINITION = ToolDefinition.builder()
             .name(NAME)
             .description("Search deployment-provided static knowledge without using embeddings. "
-                    + "Results are bounded and marked as STATIC_KNOWLEDGE.")
+                    + "Results are bounded and marked as STATIC_KNOWLEDGE. Cite returned "
+                    + "sources with their sourceHandle (preferred) or citationId.")
             .inputSchema("""
                     {"type":"object","properties":{"query":{"type":"string","description":"Concise search query"},"maxResults":{"type":"integer","minimum":1}},"required":["query"],"additionalProperties":false}
                     """)
@@ -106,9 +107,11 @@ public final class StaticKnowledgeSearchTool implements ToolCallback {
             if (citationId == null) {
                 continue;
             }
-            ChatSource source = mapper.toChatSource(result, citationId);
+            ChatSource source = mapper.toChatSource(
+                    result, citationId, trace.sourceHandle(result));
             Map<String, Object> item = new LinkedHashMap<>();
             item.put("citationId", citationId);
+            item.put("sourceHandle", source.getSourceHandle());
             item.put("sourceType", "STATIC_KNOWLEDGE");
             item.put("documentId", source.getDocumentId());
             item.put("title", source.getTitle());
@@ -118,11 +121,42 @@ public final class StaticKnowledgeSearchTool implements ToolCallback {
             sources.add(item);
             exposed.add(result);
         }
+        Map<String, Object> output = new LinkedHashMap<>();
+        output.put("query", query);
+        output.put("resultCount", sources.size());
+        output.put("sources", sources);
+        int maxCharacters = context.maxToolResultCharacters();
+        if (json(output).length() > maxCharacters) {
+            output.put("truncated", true);
+            while (sources.size() > 1 && json(output).length() > maxCharacters) {
+                sources.remove(sources.size() - 1);
+                exposed.remove(exposed.size() - 1);
+                output.put("resultCount", sources.size());
+            }
+            if (!sources.isEmpty()) {
+                Map<String, Object> first = sources.getFirst();
+                String snippet = String.valueOf(first.getOrDefault("snippet", ""));
+                while (!snippet.isEmpty() && json(output).length() > maxCharacters) {
+                    int overflow = json(output).length() - maxCharacters;
+                    snippet = snippet.substring(
+                            0, Math.max(0, snippet.length() - Math.max(overflow, 128)));
+                    first.put("snippet", snippet);
+                }
+            }
+        }
+        String serialized = json(output);
+        if (serialized.length() > maxCharacters) {
+            sources.clear();
+            exposed.clear();
+            output.clear();
+            output.put("resultCount", 0);
+            output.put("sources", List.of());
+            output.put("truncated", true);
+            output.put("error", "tool result exceeded the configured character budget");
+            serialized = json(output);
+        }
         trace.markExposed(exposed);
-        return json(Map.of(
-                "query", query,
-                "resultCount", sources.size(),
-                "sources", sources));
+        return serialized;
     }
 
     private RetrievalResult toResult(Document document) {
@@ -130,7 +164,10 @@ public final class StaticKnowledgeSearchTool implements ToolCallback {
         RetrievalResult result = new RetrievalResult();
         result.setDocumentId(String.valueOf(
                 metadata.getOrDefault("documentId", document.getId())));
-        result.setChunkIndex(number(metadata.get("chunkIndex")));
+        Integer chunkIndex = nullableNumber(metadata.get("chunkIndex"));
+        if (chunkIndex != null) {
+            result.setChunkIndex(chunkIndex);
+        }
         result.setTitle(String.valueOf(
                 metadata.getOrDefault("title", result.getDocumentId())));
         result.setChunkText(document.getText());
@@ -174,5 +211,19 @@ public final class StaticKnowledgeSearchTool implements ToolCallback {
 
     private int number(Object value) {
         return value instanceof Number number ? number.intValue() : 0;
+    }
+
+    private Integer nullableNumber(Object value) {
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        if (value != null) {
+            try {
+                return Integer.valueOf(String.valueOf(value));
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
+        }
+        return null;
     }
 }

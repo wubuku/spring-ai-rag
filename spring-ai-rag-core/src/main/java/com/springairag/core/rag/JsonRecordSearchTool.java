@@ -34,7 +34,8 @@ public class JsonRecordSearchTool implements ToolCallback {
     private static final ToolDefinition DEFINITION = ToolDefinition.builder()
             .name(NAME)
             .description("Search authorized JSON records by natural-language evidence "
-                    + "and an optional exact JSON object containment filter.")
+                    + "and an optional exact JSON object containment filter. Cite returned "
+                    + "records with their sourceHandle (preferred) or citationId.")
             .inputSchema("""
                     {"type":"object","properties":{"query":{"type":"string","description":"Concise standalone natural-language query"},"payloadContains":{"type":"object","description":"Optional exact JSON subtree that each payload must contain"},"maxResults":{"type":"integer","description":"Optional result count, capped by server policy","minimum":1}},"required":["query"],"additionalProperties":false}
                     """)
@@ -135,7 +136,8 @@ public class JsonRecordSearchTool implements ToolCallback {
                 if (citationId == null) {
                     continue;
                 }
-                records.add(record(result, citationId));
+                records.add(record(
+                        result, citationId, trace.sourceHandle(traceResult)));
                 exposed.add(traceResult);
             }
             Map<String, Object> output = new LinkedHashMap<>();
@@ -176,9 +178,12 @@ public class JsonRecordSearchTool implements ToolCallback {
     }
 
     private Map<String, Object> record(
-            JsonRecordSearchResult result, String citationId) {
+            JsonRecordSearchResult result,
+            String citationId,
+            String sourceHandle) {
         Map<String, Object> item = new LinkedHashMap<>();
         item.put("citationId", citationId);
+        item.put("sourceHandle", sourceHandle);
         item.put("documentId", result.documentId());
         item.put("collectionKey", result.collectionKey());
         item.put("externalId", result.externalId());

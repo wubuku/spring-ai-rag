@@ -1,6 +1,6 @@
 # SSE 流式协议
 
-> 状态：**已实现** | 最近复核：2026-08-17
+> 状态：**已实现** | 最近复核：2026-10-14
 >
 > Chat HTTP 请求与非流式响应见
 > [REST API](rest-api.md#chat--rag-qa) /
@@ -34,6 +34,11 @@ OpenAI-like `choices[].delta.content` 结构，但本端点不是标准
 
 `done` 与 `error` 互斥。成功流中 `sources` 在 `done` 前发送。心跳使用 SSE
 comment，不是业务事件。
+
+原生 Chat 业务事件（`content`、`tool_start`、`tool_result`、`sources`、`done`、`error`）
+携带从 `1` 开始的正整数 `sequence`，同一响应内严格递增；心跳不编号。旧服务缺少该字段时，
+客户端仍按旧协议处理。带 `Idempotency-Key` 的 keyed snapshot 重试会重复发送确定性快照，
+WebUI 在同一 turn 内按 `sequence` 忽略重复或倒退事件。
 
 ## 2. 事件格式
 
@@ -82,8 +87,10 @@ chunk 时复用原 ID，并与最终 `sources` 快照保持一致。超出唯一
 event:sources
 data:{
   "sessionId":"session-001",
+  "citationRegistry":{"version":1,"handlePrefix":"c","sourceCount":1,"handles":["c1"]},
   "sources":[{
     "citationId":"S1",
+    "sourceHandle":"c1",
     "documentId":"42",
     "chunkIndex":0,
     "title":"Brand Guide",
@@ -99,7 +106,9 @@ data:{
 }
 ```
 
-`score`、`vectorScore` 和 `fulltextScore` 是当前检索配置下的排序信号，不是概率或
+`sourceHandle` 是本次请求内的短期引用别名，不是数据库主键、下载 URL 或跨请求凭据；
+`citationId` 保留用于历史客户端兼容。`citationRegistry.handles` 只列出最终 sources
+快照中的句柄，顺序与 sources 一致。`score`、`vectorScore` 和 `fulltextScore` 是当前检索配置下的排序信号，不是概率或
 百分比。客户端不应显示为“73% 相关”。
 
 ### 2.5 `done`
@@ -114,6 +123,7 @@ data:{
   "mode":"KNOWLEDGE",
   "usage":{"promptTokens":120,"completionTokens":36,"totalTokens":156},
   "finishReason":"STOP",
+  "sequence":3,
   "stepMetrics":[],
   "status":"complete"
 }
@@ -161,6 +171,8 @@ tool_start -> tool_result -> content* -> sources -> done
 3. 任一终态后忽略后续事件。
 4. 每个事件可使用 LF 或 CRLF；多个 `data:` 行按 SSE 规则拼接。
 5. EOF 前没有空行的最后一个完整事件仍应被处理。
+6. 客户端收到 `sequence <= lastSequence` 的事件时忽略；非法序号事件不视为合法终态，
+   若流没有后续合法 `done`，继续既有 retry/error 处理。
 
 ## 4. 取消、超时与 fallback
 

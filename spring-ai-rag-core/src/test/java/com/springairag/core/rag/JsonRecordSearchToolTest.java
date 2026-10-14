@@ -106,6 +106,8 @@ class JsonRecordSearchToolTest {
         assertEquals(1, output.path("resultCount").asInt());
         assertEquals("S1", output.path("records").get(0)
                 .path("citationId").asText());
+        assertEquals("c1", output.path("records").get(0)
+                .path("sourceHandle").asText());
         assertEquals("active", output.path("records").get(0)
                 .path("jsonbPayload").path("status").asText());
         assertEquals(1, trace.sources().size());

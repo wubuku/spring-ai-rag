@@ -754,7 +754,11 @@ public class ChatExecutionService {
         List<ChatEvent> events = new ArrayList<>(
                 attempt.retrievalContext().trace().drainToolEvents());
         events.add(new ChatEvent.SourcesAvailable(
-                result.sessionId(), result.sources()));
+                result.sessionId(),
+                result.sources(),
+                result.metadata().get("citationRegistry")
+                        instanceof Map<?, ?> registry
+                        ? castMetadata(registry) : Map.of()));
         events.add(new ChatEvent.Completed(
                 result.traceId(),
                 result.sessionId(),
@@ -766,6 +770,16 @@ public class ChatExecutionService {
                 result.stepMetrics(),
                 result.metadata()));
         return Flux.fromIterable(events);
+    }
+
+    private Map<String, Object> castMetadata(Map<?, ?> input) {
+        Map<String, Object> output = new LinkedHashMap<>();
+        input.forEach((key, value) -> {
+            if (key != null) {
+                output.put(String.valueOf(key), value);
+            }
+        });
+        return output;
     }
 
     private void markAttempt(
@@ -1099,6 +1113,9 @@ public class ChatExecutionService {
                         citationMap(validation));
             }
         }
+        metadata.put(
+                "citationRegistry",
+                attempt.retrievalContext().trace().citationRegistryMetadata(sources));
         return new ChatExecutionResult(
                 answer,
                 command.sessionId(),
@@ -1130,9 +1147,30 @@ public class ChatExecutionService {
                         .map(Document.class::cast)
                         .toList();
                 List<ChatSource> sources = new ArrayList<>();
-                for (int index = 0; index < documents.size(); index++) {
-                    sources.add(documentMapper.toChatSource(
-                            documents.get(index), index + 1));
+                for (Document document : documents) {
+                    RetrievalResult result = documentMapper.toRetrievalResult(document);
+                    if (result == null) {
+                        ChatSource legacy = documentMapper.toChatSource(
+                                document, sources.size() + 1);
+                        if (legacy != null) {
+                            sources.add(legacy);
+                        }
+                        continue;
+                    }
+                    String citationId = attempt.retrievalContext().trace()
+                            .citationId(result);
+                    if (citationId != null) {
+                        ChatSource source = documentMapper.toChatSource(
+                                result,
+                                citationId,
+                                attempt.retrievalContext().trace().sourceHandle(result));
+                        if (source == null) {
+                            source = documentMapper.toChatSource(result, citationId);
+                        }
+                        if (source != null) {
+                            sources.add(source);
+                        }
+                    }
                 }
                 return List.copyOf(sources);
             }
@@ -1144,7 +1182,16 @@ public class ChatExecutionService {
             String citationId =
                     attempt.retrievalContext().trace().citationId(result);
             if (citationId != null) {
-                sources.add(documentMapper.toChatSource(result, citationId));
+                ChatSource source = documentMapper.toChatSource(
+                        result,
+                        citationId,
+                        attempt.retrievalContext().trace().sourceHandle(result));
+                if (source == null) {
+                    source = documentMapper.toChatSource(result, citationId);
+                }
+                if (source != null) {
+                    sources.add(source);
+                }
             }
         }
         return List.copyOf(sources);
@@ -1391,9 +1438,11 @@ public class ChatExecutionService {
     private String buildSystemPrompt(ChatCommand command) {
         String modePrompt = switch (command.mode()) {
             case KNOWLEDGE -> "你是知识库问答助手。只依据检索到的资料回答，"
-                    + "资料不足时明确说明，并使用 [S1] 形式标注来源。";
+                    + "资料不足时明确说明，并优先使用资料给出的 [cN] 形式标注来源；"
+                    + "为兼容旧资料也可使用 [S1] 等 [SN]，不得编造引用编号。";
             case AGENT -> "你是知识探索助手。需要知识库证据时调用 "
-                    + "searchKnowledge；不得声称访问了工具未返回的资料。";
+                    + "内置检索工具；优先使用工具实际返回的 [cN]，也可使用兼容的 [SN]；"
+                    + "不得编造引用编号或声称访问了工具未返回的资料。";
             case PLAIN -> "你是通用 AI 助手。";
         };
         String domainPrompt = null;

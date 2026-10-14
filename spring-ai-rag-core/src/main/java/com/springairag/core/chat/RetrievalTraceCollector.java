@@ -40,6 +40,7 @@ public class RetrievalTraceCollector {
     private final int maxRetrievalCalls;
     private final int maxToolRounds;
     private final int maxUniqueSources;
+    private final CitationRegistry citationRegistry;
     private final RetrievalTraceSession parentSession;
     private final String attemptKey;
     private volatile boolean lastBudgetExhausted;
@@ -61,6 +62,7 @@ public class RetrievalTraceCollector {
         this.maxRetrievalCalls = Math.max(1, maxRetrievalCalls);
         this.maxToolRounds = Math.max(1, maxToolRounds);
         this.maxUniqueSources = Math.max(1, maxUniqueSources);
+        this.citationRegistry = new CitationRegistry(this.maxUniqueSources);
         this.parentSession = parentSession;
         this.attemptKey = attemptKey;
     }
@@ -285,6 +287,11 @@ public class RetrievalTraceCollector {
         }
         for (RetrievalResult result : results) {
             String key = sourceKey(result);
+            CitationRegistry.Registration registration =
+                    citationRegistry.register(result);
+            if (key == null || registration == null) {
+                continue;
+            }
             RetrievalResult existing = sources.get(key);
             if (existing != null) {
                 if (result.getScore() > existing.getScore()) {
@@ -350,11 +357,20 @@ public class RetrievalTraceCollector {
      * not be exposed to the model as citable evidence.</p>
      */
     public synchronized String citationId(RetrievalResult result) {
-        if (result == null) {
-            return null;
-        }
-        Integer position = sourcePositions.get(sourceKey(result));
-        return position != null ? "S" + position : null;
+        return citationRegistry.citationId(result);
+    }
+
+    public synchronized String sourceHandle(RetrievalResult result) {
+        return citationRegistry.sourceHandle(result);
+    }
+
+    public synchronized String sourceHandle(String sourceKey) {
+        return citationRegistry.sourceHandle(sourceKey);
+    }
+
+    public synchronized Map<String, Object> citationRegistryMetadata(
+            List<com.springairag.api.dto.ChatSource> sources) {
+        return citationRegistry.metadataFor(sources);
     }
 
     public synchronized void markExposed(List<RetrievalResult> results) {
@@ -426,7 +442,7 @@ public class RetrievalTraceCollector {
     }
 
     private String sourceKey(RetrievalResult result) {
-        return result.getDocumentId() + ":" + result.getChunkIndex();
+        return CitationRegistry.sourceKey(result);
     }
 
     private record CachedResults(

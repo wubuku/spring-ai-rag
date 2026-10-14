@@ -75,6 +75,7 @@ import java.util.Map;
 import java.util.Collections;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -379,6 +380,7 @@ public class RagChatController {
         String traceId = MDC.get(RequestTraceFilter.TRACE_ID_KEY);
         HeartbeatHandles heartbeat = startHeartbeat(emitter);
         AtomicBoolean terminal = new AtomicBoolean();
+        EventSequence sequence = new EventSequence();
         AtomicReference<Disposable> subscription = new AtomicReference<>();
         Runnable cancelSubscription = () -> {
             Disposable disposable = subscription.getAndSet(null);
@@ -402,7 +404,8 @@ public class RagChatController {
                         if (terminal.get()) {
                             return;
                         }
-                        sendChatEvent(emitter, event, traceId, sessionId);
+                        sendChatEvent(
+                                emitter, event, traceId, sessionId, sequence);
                         if (event instanceof ChatEvent.Completed) {
                             if (terminal.compareAndSet(false, true)) {
                                 heartbeat.stop();
@@ -417,7 +420,8 @@ public class RagChatController {
                                 if (terminal.compareAndSet(false, true)) {
                                     heartbeat.stop();
                                     sendChatError(
-                                            emitter, error, traceId, sessionId);
+                                            emitter, error, traceId, sessionId,
+                                            sequence);
                                 }
                             },
                             () -> {
@@ -433,7 +437,7 @@ public class RagChatController {
         } catch (RuntimeException error) {
             if (terminal.compareAndSet(false, true)) {
                 heartbeat.stop();
-                sendChatError(emitter, error, traceId, sessionId);
+                sendChatError(emitter, error, traceId, sessionId, sequence);
             }
         }
 
@@ -507,27 +511,31 @@ public class RagChatController {
                     traceSession.traceId().toString());
         }
         SseEmitter emitter = SseEmitters.create();
+        EventSequence sequence = new EventSequence();
         try {
             if (response.getAnswer() != null
                     && !response.getAnswer().isEmpty()) {
+                Map<String, Object> content = new LinkedHashMap<>();
+                content.put("choices", List.of(Map.of(
+                        "delta", Map.of("content", response.getAnswer()))));
+                putSequence(content, sequence);
                 SseEmitters.sendProgress(
                         emitter,
                         "content",
-                        Map.of(
-                                "choices",
-                                List.of(Map.of(
-                                        "delta",
-                                        Map.of("content", response.getAnswer())))),
+                        content,
                         "chat content");
             }
             if (response.getSources() != null
                     && !response.getSources().isEmpty()) {
+                Map<String, Object> sources = new LinkedHashMap<>();
+                sources.put("sessionId", response.getSessionId());
+                sources.put("sources", response.getSources());
+                putCitationRegistry(sources, response.getMetadata());
+                putSequence(sources, sequence);
                 SseEmitters.sendProgress(
                         emitter,
                         "sources",
-                        Map.of(
-                                "sessionId", response.getSessionId(),
-                                "sources", response.getSources()),
+                        sources,
                         "chat sources");
             }
             Map<String, Object> done = new LinkedHashMap<>();
@@ -546,6 +554,7 @@ public class RagChatController {
                             : response.getTurnId());
             done.put("idempotentReplay", replay);
             done.put("status", "complete");
+            putSequence(done, sequence);
             SseEmitters.sendProgress(emitter, "done", done, "chat done");
             emitter.complete();
         } catch (RuntimeException error) {
@@ -559,16 +568,27 @@ public class RagChatController {
             ChatEvent event,
             String traceId,
             String sessionId) {
+        sendChatEvent(emitter, event, traceId, sessionId, null);
+    }
+
+    private void sendChatEvent(
+            SseEmitter emitter,
+            ChatEvent event,
+            String traceId,
+            String sessionId,
+            EventSequence sequence) {
         if (event instanceof ChatEvent.ContentDelta delta) {
             Map<String, Object> payload = new LinkedHashMap<>();
             payload.put("choices", List.of(Map.of(
                     "delta", Map.of("content", delta.content()))));
+            putSequence(payload, sequence);
             SseEmitters.sendProgress(emitter, "content", payload, "chat content");
         } else if (event instanceof ChatEvent.ToolStarted started) {
             Map<String, Object> payload = new LinkedHashMap<>();
             payload.put("tool", started.tool());
             putIfPresent(payload, "toolCallId", started.toolCallId());
             putIfPresent(payload, "query", started.query());
+            putSequence(payload, sequence);
             SseEmitters.sendProgress(
                     emitter, "tool_start", payload, "chat tool start");
         } else if (event instanceof ChatEvent.ToolFinished finished) {
@@ -577,16 +597,18 @@ public class RagChatController {
             payload.put("resultCount", finished.resultCount());
             payload.put("elapsedMs", finished.elapsedMs());
             putIfPresent(payload, "toolCallId", finished.toolCallId());
+            putSequence(payload, sequence);
             SseEmitters.sendProgress(
                     emitter, "tool_result", payload, "chat tool result");
         } else if (event instanceof ChatEvent.SourcesAvailable sources) {
-            SseEmitters.sendProgress(
-                    emitter,
-                    "sources",
-                    Map.of(
-                            "sessionId", sources.sessionId(),
-                            "sources", sources.sources()),
-                    "chat sources");
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("sessionId", sources.sessionId());
+            payload.put("sources", sources.sources());
+            if (!sources.citationRegistry().isEmpty()) {
+                payload.put("citationRegistry", sources.citationRegistry());
+            }
+            putSequence(payload, sequence);
+            SseEmitters.sendProgress(emitter, "sources", payload, "chat sources");
         } else if (event instanceof ChatEvent.Completed completed) {
             Map<String, Object> payload = new LinkedHashMap<>();
             payload.put("traceId", firstNonBlank(
@@ -605,6 +627,7 @@ public class RagChatController {
                 payload.put("retrievalTraceId",
                         completed.metadata().get("retrievalTraceId"));
             }
+            putSequence(payload, sequence);
             SseEmitters.sendProgress(emitter, "done", payload, "chat done");
         } else if (event instanceof ChatEvent.Failed failed) {
             sendChatError(
@@ -612,7 +635,8 @@ public class RagChatController {
                     new ChatStreamFailure(
                             failed.code(), failed.message()),
                     firstNonBlank(failed.traceId(), traceId),
-                    firstNonBlank(failed.sessionId(), sessionId));
+                    firstNonBlank(failed.sessionId(), sessionId),
+                    sequence);
         }
     }
 
@@ -621,6 +645,15 @@ public class RagChatController {
             Throwable error,
             String traceId,
             String sessionId) {
+        sendChatError(emitter, error, traceId, sessionId, null);
+    }
+
+    private void sendChatError(
+            SseEmitter emitter,
+            Throwable error,
+            String traceId,
+            String sessionId,
+            EventSequence sequence) {
         Map<String, Object> errorPayload = new LinkedHashMap<>();
         errorPayload.put("message", error.getMessage() != null
                 ? error.getMessage() : "Chat stream failed");
@@ -634,8 +667,33 @@ public class RagChatController {
         payload.put("error", errorPayload);
         putIfPresent(payload, "traceId", traceId);
         putIfPresent(payload, "sessionId", sessionId);
+        putSequence(payload, sequence);
         SseEmitters.sendProgress(emitter, "error", payload, "chat error");
         emitter.complete();
+    }
+
+    private void putSequence(
+            Map<String, Object> payload,
+            EventSequence sequence) {
+        if (sequence != null) {
+            payload.put("sequence", sequence.next());
+        }
+    }
+
+    private void putCitationRegistry(
+            Map<String, Object> payload,
+            Map<String, Object> metadata) {
+        if (metadata != null && metadata.get("citationRegistry") != null) {
+            payload.put("citationRegistry", metadata.get("citationRegistry"));
+        }
+    }
+
+    private static final class EventSequence {
+        private final AtomicInteger next = new AtomicInteger();
+
+        private int next() {
+            return next.incrementAndGet();
+        }
     }
 
     private void putIfPresent(

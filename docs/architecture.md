@@ -361,6 +361,15 @@ ChatSessionCoordinator
 ChatResponse or structured SSE events
 ```
 
+Retrieval sources use two complementary identifiers. The legacy `citationId`
+(`S1`, `S2`, ...) remains compatible with stored history and existing clients;
+the request-local `sourceHandle` (`c1`, `c2`, ...) is the preferred model-facing
+alias and is valid only within the current attempt. `citationRegistry` metadata
+lists only handles present in the final source snapshot. Native Chat SSE business
+events carry a per-response monotonic `sequence`; keyed snapshot retries preserve
+the frame order so WebUI can de-duplicate replayed events. The OpenAI-compatible
+stream intentionally does not expose these native extensions.
+
 ### 4.2 Collection-Scoped Retrieval
 
 Collection is an active retrieval boundary, not only a document category in

@@ -472,6 +472,24 @@ class RetrievalUtilsTest {
     }
 
     @Test
+    void fuseResults_missingChunkIndexDoesNotMergeAcrossChannels() {
+        RetrievalResult vector = new RetrievalResult();
+        vector.setDocumentId("doc-1");
+        vector.setChunkText("vector");
+        vector.setScore(0.9);
+        RetrievalResult fulltext = new RetrievalResult();
+        fulltext.setDocumentId("doc-1");
+        fulltext.setChunkText("fulltext");
+        fulltext.setScore(0.8);
+
+        List<RetrievalResult> fused = RetrievalUtils.fuseResults(
+                List.of(vector), List.of(fulltext), 10, 0.5f, 0.5f);
+
+        assertEquals(2, fused.size());
+        assertTrue(fused.stream().noneMatch(RetrievalResult::hasChunkIndex));
+    }
+
+    @Test
     void fuseResults_higherVectorWeight_biasesTowardVector() {
         RetrievalResult v1 = RetrievalUtils.createResult("doc-1", "vec", 0, 0.8);
         RetrievalResult f1 = RetrievalUtils.createResult("doc-2", "ft", 0, 0.8);

@@ -25,7 +25,11 @@ public class RetrievalDocumentMapper {
             });
         }
         metadata.put("documentId", String.valueOf(result.getDocumentId()));
-        metadata.put("chunkIndex", result.getChunkIndex());
+        if (result.hasChunkIndex()) {
+            metadata.put("chunkIndex", result.getChunkIndex());
+        } else {
+            metadata.remove("chunkIndex");
+        }
         metadata.put("title", result.getTitle() != null
                 ? result.getTitle()
                 : String.valueOf(result.getDocumentId()));
@@ -42,7 +46,9 @@ public class RetrievalDocumentMapper {
             metadata.put("documentType", "TEXT");
         }
         return Document.builder()
-                .id(result.getDocumentId() + ":" + result.getChunkIndex())
+                .id(result.hasChunkIndex()
+                        ? result.getDocumentId() + ":" + result.getChunkIndex()
+                        : String.valueOf(result.getDocumentId()))
                 .text(result.getChunkText() != null ? result.getChunkText() : "")
                 .metadata(metadata)
                 .score(result.getScore())
@@ -76,6 +82,15 @@ public class RetrievalDocumentMapper {
         return source;
     }
 
+    public ChatSource toChatSource(
+            RetrievalResult result,
+            String citationId,
+            String sourceHandle) {
+        ChatSource source = toChatSource(result, citationId);
+        source.setSourceHandle(sourceHandle);
+        return source;
+    }
+
     public ChatSource toChatSource(Document document, int position) {
         return toChatSource(document, "S" + position);
     }
@@ -88,7 +103,10 @@ public class RetrievalDocumentMapper {
         Map<String, Object> metadata = document.getMetadata();
         RetrievalResult result = new RetrievalResult();
         result.setDocumentId(stringValue(metadata, "documentId", document.getId()));
-        result.setChunkIndex(intValue(metadata, "chunkIndex"));
+        Integer chunkIndex = nullableIntValue(metadata, "chunkIndex");
+        if (chunkIndex != null) {
+            result.setChunkIndex(chunkIndex);
+        }
         result.setTitle(stringValue(metadata, "title", result.getDocumentId()));
         result.setChunkText(document.getText());
         result.setScore(numberValue(metadata, "score"));
@@ -134,9 +152,19 @@ public class RetrievalDocumentMapper {
         return value != null ? value : fallback;
     }
 
-    private int intValue(Map<String, Object> values, String key) {
+    private Integer nullableIntValue(Map<String, Object> values, String key) {
         Object value = values != null ? values.get(key) : null;
-        return value instanceof Number number ? number.intValue() : 0;
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        if (value != null) {
+            try {
+                return Integer.valueOf(String.valueOf(value));
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
+        }
+        return null;
     }
 
     private double numberValue(Map<String, Object> values, String key) {

@@ -164,6 +164,8 @@ class KnowledgeSearchToolTest {
 
         assertEquals("S1", firstOutput.path("sources").get(0)
                 .path("citationId").asText());
+        assertEquals("c1", firstOutput.path("sources").get(0)
+                .path("sourceHandle").asText());
         assertEquals("S2", firstOutput.path("sources").get(1)
                 .path("citationId").asText());
         assertEquals(1, secondOutput.path("resultCount").asInt());
@@ -171,6 +173,8 @@ class KnowledgeSearchToolTest {
                 .path("documentId").asText());
         assertEquals("S2", secondOutput.path("sources").get(0)
                 .path("citationId").asText());
+        assertEquals("c2", secondOutput.path("sources").get(0)
+                .path("sourceHandle").asText());
         assertEquals(
                 List.of("11", "12"),
                 trace.sources().stream()

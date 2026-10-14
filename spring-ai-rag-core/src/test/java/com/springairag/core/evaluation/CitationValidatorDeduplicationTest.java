@@ -218,4 +218,33 @@ class CitationValidatorDeduplicationTest {
 
         assertEquals(CitationValidation.VALID, result.status());
     }
+
+    @Test
+    @DisplayName("新旧引用别名指向同一来源时只计一次")
+    void newAndLegacyAliasesAreCountedOnce() {
+        ChatSource source = source("S1");
+        source.setSourceHandle("c1");
+
+        CitationValidation result = validate(
+                ChatMode.KNOWLEDGE,
+                "先用 [c1]，再用旧格式 [S1]",
+                List.of(source));
+
+        assertEquals(CitationValidation.VALID, result.status());
+        assertEquals(List.of("S1"), result.citedIds());
+        assertEquals(1, result.citedSourceCount());
+        assertEquals(1, result.sourceCount());
+    }
+
+    @Test
+    @DisplayName("未注册的新引用被拒绝")
+    void unknownNewAliasIsInvalid() {
+        CitationValidation result = validate(
+                ChatMode.KNOWLEDGE,
+                "引用 [c9]",
+                List.of(source("S1")));
+
+        assertEquals(CitationValidation.INVALID_CITATION, result.status());
+        assertEquals(List.of("c9"), result.invalidIds());
+    }
 }

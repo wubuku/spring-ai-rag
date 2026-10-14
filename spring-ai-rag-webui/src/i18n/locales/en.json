@@ -699,7 +699,7 @@
     "startRun": "Start run",
     "runStatus": "Run status",
     "runId": "Run ID",
-    "citationsHint": "Citation validation only checks [S1] tokens. It is not a coverage score.",
+    "citationsHint": "Citation validation checks request-local [c1] tokens and legacy [S1] aliases. It is not a coverage score.",
     "citationsFailed": "Unable to load citation traces",
     "traceId": "Trace ID",
     "citationStatus": "Citation status",

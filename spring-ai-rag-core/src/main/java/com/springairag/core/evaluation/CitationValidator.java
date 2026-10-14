@@ -6,19 +6,21 @@ import com.springairag.api.enums.ChatMode;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * 只解析约定的 [S1] 形式，不做自然语言 claim coverage。
+ * 解析请求级 [c1] 和兼容 [S1] 形式，不做自然语言 claim coverage。
  */
 @Component
 public class CitationValidator {
 
-    private static final Pattern TOKEN = Pattern.compile("\\[S(\\d+)\\]");
+    private static final Pattern TOKEN = Pattern.compile("\\[((?:S|c)(\\d+))\\]");
 
     public CitationValidation validate(
             ChatMode mode,
@@ -27,12 +29,25 @@ public class CitationValidator {
         // A set, not a list: dirty data can let two sources share one citation id.
         // Keeping the duplicate would inflate sourceCount, so the UI would report
         // "2/2 sources cited" for an answer that actually cites one source.
+        Map<String, String> aliases = new HashMap<>();
         Set<String> available = new LinkedHashSet<>();
         if (sources != null) {
             for (ChatSource source : sources) {
-                if (source != null && source.getCitationId() != null
-                        && !source.getCitationId().isBlank()) {
-                    available.add(source.getCitationId());
+                if (source == null) {
+                    continue;
+                }
+                String canonical = usable(source.getCitationId())
+                        ? source.getCitationId()
+                        : source.getSourceHandle();
+                if (!usable(canonical)) {
+                    continue;
+                }
+                available.add(canonical);
+                if (usable(source.getCitationId())) {
+                    aliases.put(source.getCitationId(), canonical);
+                }
+                if (usable(source.getSourceHandle())) {
+                    aliases.put(source.getSourceHandle(), canonical);
                 }
             }
         }
@@ -42,12 +57,14 @@ public class CitationValidator {
             Matcher matcher = TOKEN.matcher(answer);
             Set<String> seen = new LinkedHashSet<>();
             while (matcher.find()) {
-                String id = "S" + matcher.group(1);
-                if (!seen.add(id)) {
+                String id = matcher.group(1);
+                String canonical = aliases.get(id);
+                String reported = canonical != null ? canonical : id;
+                if (!seen.add(reported)) {
                     continue;
                 }
-                if (available.contains(id)) {
-                    cited.add(id);
+                if (canonical != null) {
+                    cited.add(canonical);
                 } else {
                     invalid.add(id);
                 }
@@ -90,5 +107,9 @@ public class CitationValidator {
                 CitationValidation.VALID,
                 List.copyOf(available), List.copyOf(cited), List.of(),
                 cited.size(), available.size());
+    }
+
+    private boolean usable(String value) {
+        return value != null && !value.isBlank();
     }
 }

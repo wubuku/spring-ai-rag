@@ -163,6 +163,87 @@ describe('useChatSSE', () => {
     });
   });
 
+  it('ignores duplicate and regressive sequence events', async () => {
+    setupStream([
+      'event: content\ndata: {"sequence":1,"choices":[{"delta":{"content":"Hello"}}]}\n\n',
+      'event: content\ndata: {"sequence":1,"choices":[{"delta":{"content":"duplicate"}}]}\n\n',
+      'event: sources\ndata: {"sequence":0,"sessionId":"session-1","sources":[]}\n\n',
+      'event: sources\ndata: {"sequence":2,"sessionId":"session-1","sources":[{"citationId":"S1","sourceHandle":"c1","documentId":"doc-1"}]}\n\n',
+      'event: done\ndata: {"sequence":3,"sessionId":"session-1","status":"complete"}\n\n',
+    ]);
+    const onChunk = vi.fn();
+    const onSources = vi.fn();
+    const onDone = vi.fn();
+    const { result } = renderHook(() => useChatSSE({
+      onChunk,
+      onSources,
+      onDone,
+    }));
+
+    await act(async () => {
+      result.current.send('Find evidence');
+    });
+
+    expect(onChunk).toHaveBeenCalledTimes(1);
+    expect(onChunk).toHaveBeenCalledWith('Hello');
+    expect(onSources).toHaveBeenCalledTimes(1);
+    expect(onSources).toHaveBeenCalledWith([
+      expect.objectContaining({ citationId: 'S1', sourceHandle: 'c1' }),
+    ], 'session-1');
+    expect(onDone).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries a done frame with an invalid sequence and deduplicates replayed content', async () => {
+    const response = (chunks: string[]) => {
+      const normalized = chunks.map(addTurnId);
+      let index = 0;
+      return {
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'X-RAG-Turn-Id': TEST_TURN_ID }),
+        body: new ReadableStream({
+          pull(controller) {
+            if (index < normalized.length) {
+              controller.enqueue(new TextEncoder().encode(normalized[index++]));
+            } else {
+              controller.close();
+            }
+          },
+        }),
+      };
+    };
+    mockFetch
+      .mockResolvedValueOnce(response([
+        'event: content\ndata: {"sequence":1,"choices":[{"delta":{"content":"Hello"}}]}\n\n',
+        'event: done\ndata: {"sequence":0,"status":"complete"}\n\n',
+      ]))
+      .mockResolvedValueOnce(response([
+        'event: content\ndata: {"sequence":1,"choices":[{"delta":{"content":"Hello"}}]}\n\n',
+        'event: sources\ndata: {"sequence":2,"sessionId":"session-1","sources":[]}\n\n',
+        'event: done\ndata: {"sequence":3,"sessionId":"session-1","status":"complete"}\n\n',
+      ]));
+    const onChunk = vi.fn();
+    const onSources = vi.fn();
+    const onDone = vi.fn();
+    const onRetry = vi.fn();
+    const { result } = renderHook(() => useChatSSE({
+      onChunk,
+      onSources,
+      onDone,
+      onRetry,
+    }));
+
+    await act(async () => {
+      result.current.send('Find evidence');
+    });
+
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(onRetry).toHaveBeenCalledTimes(1);
+    expect(onChunk).toHaveBeenCalledTimes(1);
+    expect(onSources).toHaveBeenCalledTimes(1);
+    expect(onDone).toHaveBeenCalledTimes(1);
+  });
+
   it('accepts only the first terminal event', async () => {
     setupStream([
       'event: done\ndata: {"sessionId":"session-1","status":"complete"}\n\n',

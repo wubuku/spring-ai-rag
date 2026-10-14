@@ -560,7 +560,7 @@ three explicit execution modes:
 | `filters` | object | | Optional JSONB containment; `PLAIN` rejects it with `400` |
 | `metadata` | object | | Extended metadata. When enabled, includes protocol-level `citationValidation` |
 
-`citationValidation` only parses the agreed `[S1]` tokens. It is not a coverage
+`citationValidation` parses request-local `[cN]` tokens and legacy `[SN]` tokens. It is not a coverage
 score.
 
 `maxResults`, `useHybridSearch`, and `useRerank` are effective execution
@@ -598,6 +598,7 @@ mode.
   "sources": [
     {
       "citationId": "S1",
+      "sourceHandle": "c1",
       "documentId": "1",
       "chunkIndex": 0,
       "title": "Introduction to Spring AI",
@@ -609,6 +610,12 @@ mode.
   ],
   "metadata": {
     "sessionId": "session-001",
+    "citationRegistry": {
+      "version": 1,
+      "handlePrefix": "c",
+      "sourceCount": 1,
+      "handles": ["c1"]
+    },
     "retrievalExecuted": true,
     "retrieval": {
       "retrievalCalls": 3,
@@ -653,6 +660,13 @@ The same 36-character `sessionId` limit applies. Longer values return `400 VALID
 `sources`, `done`, and `error` events. `done` and `error` are mutually
 exclusive. See [SSE-PROTOCOL.md](SSE-PROTOCOL.md) for payloads, ordering,
 heartbeat, cancellation, and fallback semantics.
+
+Native Chat business-event payloads include a per-response positive `sequence`
+starting at `1`. A keyed snapshot replay keeps the same `content`/`sources`/
+`done` frame order and sequence values; the WebUI ignores duplicate or regressive
+frames during the same turn retry. `sources` keeps the legacy `citationId` and
+may include the request-local `sourceHandle`; `metadata.citationRegistry` is a
+diagnostic snapshot of the handles present in the final sources list.
 
 **curl example:**
 
@@ -740,6 +754,7 @@ Query chat history for the authenticated principal's session, newest first.
     "metadata": {},
     "sources": [{
       "citationId": "S1",
+      "sourceHandle": "c1",
       "documentId": "1",
       "title": "RAG Guide",
       "chunkText": "RAG combines retrieval and generation."
@@ -2616,7 +2631,7 @@ identity.
 | `POST /api/v1/rag/evaluation/semantic` | Optional Spring AI FactChecking/Relevancy adapter; returns `DISABLED` when unavailable |
 | `POST /api/v1/rag/evaluation/semantic/batch` | Same adapter for a bounded batch of items |
 
-Citation validation only checks `[S1]` tokens. Compare marks `environmentDrift`
+Citation validation checks request-local `[cN]` and legacy `[SN]` tokens. Compare marks `environmentDrift`
 when the embedding profile, code revision, or corpus snapshot differs; drift is
 not reported as a quality improvement.
 

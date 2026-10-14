@@ -7,6 +7,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -146,6 +147,33 @@ class RetrievalDocumentMapperTest {
         assertEquals(0.5, result.getScore());
         assertEquals(0.0, result.getVectorScore());
         assertEquals("round trip", result.getChunkText());
+        assertTrue(result.hasChunkIndex());
+    }
+
+    @Test
+    void missingChunkIndexRemainsMissingAcrossDocumentMapping() {
+        RetrievalResult result = new RetrievalResult();
+        result.setDocumentId("doc-without-index");
+        result.setMetadata(Map.of("chunkIndex", 0));
+
+        var document = mapper.toDocument(result);
+        RetrievalResult roundTrip = mapper.toRetrievalResult(document);
+
+        assertFalse(document.getMetadata().containsKey("chunkIndex"));
+        assertFalse(roundTrip.hasChunkIndex());
+        assertEquals(0, roundTrip.getChunkIndex());
+    }
+
+    @Test
+    void explicitZeroChunkIndexSurvivesDocumentMapping() {
+        RetrievalResult result = new RetrievalResult();
+        result.setDocumentId("doc-with-zero-index");
+        result.setChunkIndex(0);
+
+        RetrievalResult roundTrip = mapper.toRetrievalResult(mapper.toDocument(result));
+
+        assertTrue(roundTrip.hasChunkIndex());
+        assertEquals(0, roundTrip.getChunkIndex());
     }
 
     @Test

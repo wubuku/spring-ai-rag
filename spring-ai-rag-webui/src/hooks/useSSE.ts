@@ -186,6 +186,7 @@ export function useChatSSE(options: UseChatSSEOptions): UseChatSSEReturn {
       let retryAfterDeadline = Date.now() + MAX_RETRY_WAIT_MS;
       let terminalEvent = false;
       let completed = false;
+      let lastSequence = 0;
       let lastError: unknown = new Error('Chat connection failed');
 
       try {
@@ -253,8 +254,8 @@ export function useChatSSE(options: UseChatSSEOptions): UseChatSSEReturn {
                 buffer += decoder.decode();
                 const tail = parseSseBlock(buffer);
                 if (tail) {
-                  handleEvent(tail, responseTurnId);
-                  doneEvent = tail.type === 'done';
+                  const handled = handleEvent(tail, responseTurnId);
+                  if (tail.type === 'done' && handled) doneEvent = true;
                 }
                 break;
               }
@@ -262,8 +263,8 @@ export function useChatSSE(options: UseChatSSEOptions): UseChatSSEReturn {
               const parsed = drainSseBlocks(buffer);
               buffer = parsed.rest;
               parsed.events.forEach(event => {
-                if (event.type === 'done') doneEvent = true;
-                handleEvent(event, responseTurnId);
+                const handled = handleEvent(event, responseTurnId);
+                if (event.type === 'done' && handled) doneEvent = true;
               });
             }
             if (terminalEvent) {
@@ -276,8 +277,8 @@ export function useChatSSE(options: UseChatSSEOptions): UseChatSSEReturn {
             if (!doneEvent) {
               const tail = parseSseBlock(buffer);
               if (tail) {
-                handleEvent(tail, responseTurnId);
-                doneEvent = tail.type === 'done';
+                const handled = handleEvent(tail, responseTurnId);
+                if (tail.type === 'done' && handled) doneEvent = true;
               }
             }
             if (!doneEvent) {
@@ -311,6 +312,9 @@ export function useChatSSE(options: UseChatSSEOptions): UseChatSSEReturn {
               await sleep(bounded);
             }
           } finally {
+            try {
+              readerRef.current?.releaseLock();
+            } catch {}
             readerRef.current = null;
             if (abortControllerRef.current === attemptController) {
               abortControllerRef.current = null;
@@ -340,34 +344,45 @@ export function useChatSSE(options: UseChatSSEOptions): UseChatSSEReturn {
         }
       }
 
-      function handleEvent(event: ParsedSseEvent, responseTurnId?: string) {
+      function handleEvent(
+        event: ParsedSseEvent,
+        responseTurnId?: string,
+      ): boolean {
         if (generation !== generationRef.current || terminalRef.current) {
-          return;
+          return false;
         }
         const payload = parseJson(event.data);
+        const sequenceState = readSequence(payload);
+        if (sequenceState.present) {
+          if (sequenceState.value === undefined
+            || sequenceState.value <= lastSequence) {
+            return false;
+          }
+          lastSequence = sequenceState.value;
+        }
         if (event.type === 'content' || event.type === 'chunk') {
           const content = extractContent(payload);
           if (content) {
             onChunkRef.current?.(content);
           }
-          return;
+          return true;
         }
         if (event.type === 'tool_start') {
           const tool = asToolStart(payload);
           if (tool) onToolStartRef.current?.(tool);
-          return;
+          return true;
         }
         if (event.type === 'tool_result') {
           const tool = asToolResult(payload);
           if (tool) onToolResultRef.current?.(tool);
-          return;
+          return true;
         }
         if (event.type === 'sources') {
           const sources = asSources(payload);
           if (sources) {
             onSourcesRef.current?.(sources, asString(payload?.sessionId));
           }
-          return;
+          return true;
         }
         if (event.type === 'done') {
           const done = asDone(payload);
@@ -379,15 +394,18 @@ export function useChatSSE(options: UseChatSSEOptions): UseChatSSEReturn {
             }
             terminalRef.current = true;
             onDoneRef.current?.(done);
+            return true;
           }
-          return;
+          return done !== null;
         }
         if (event.type === 'error') {
           const failure = asError(payload);
           terminalEvent = true;
           terminalRef.current = true;
           onErrorRef.current?.(failure.message, failure);
+          return true;
         }
+        return true;
       }
     },
     [close],
@@ -523,6 +541,20 @@ function parseJson(value: string): any {
   } catch {
     return undefined;
   }
+}
+
+function readSequence(payload: any): {
+  present: boolean;
+  value?: number;
+} {
+  if (payload === null || typeof payload !== 'object'
+    || !Object.prototype.hasOwnProperty.call(payload, 'sequence')) {
+    return { present: false };
+  }
+  const value = payload.sequence;
+  return Number.isInteger(value) && value > 0
+    ? { present: true, value }
+    : { present: true };
 }
 
 function extractContent(payload: any): string | null {

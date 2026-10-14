@@ -202,9 +202,13 @@ public class KnowledgeSearchTool implements ToolCallback {
         List<RetrievalResult> includedResults = new java.util.ArrayList<>();
         for (RetrievalResult result : results) {
             String citationId = trace.citationId(result);
-            ChatSource source = mapper.toChatSource(result, citationId);
+            ChatSource source = mapper.toChatSource(
+                    result,
+                    citationId,
+                    trace.sourceHandle(result));
             Map<String, Object> item = new LinkedHashMap<>();
             item.put("citationId", source.getCitationId());
+            item.put("sourceHandle", source.getSourceHandle());
             item.put("documentId", source.getDocumentId());
             item.put("title", source.getTitle());
             item.put("snippet", source.getChunkText());

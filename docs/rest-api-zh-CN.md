@@ -503,7 +503,7 @@ body 与 Header 同时出现时必须表示相同的 Collection key 集合。省
 | `filters` | object | | 可选 JSONB containment；`PLAIN` 传入时返回 `400` |
 | `metadata` | object | | 扩展元数据。启用时包含协议级 `citationValidation` |
 
-`citationValidation` 只解析约定的 `[S1]` token，不是覆盖率评分。
+`citationValidation` 同时解析请求级 `[cN]` 与兼容的 `[SN]` token，不是覆盖率评分。
 
 `maxResults`、`useHybridSearch` 与 `useRerank` 会真实覆盖 `KNOWLEDGE` 和
 `AGENT` 的执行参数。`PLAIN` 显式传入这些字段或任何 Collection/document 检索范围时
@@ -537,6 +537,7 @@ body 与 Header 同时出现时必须表示相同的 Collection key 集合。省
   "sources": [
     {
       "citationId": "S1",
+      "sourceHandle": "c1",
       "documentId": "1",
       "chunkIndex": 0,
       "title": "Spring AI 介绍",
@@ -587,7 +588,11 @@ SSE 流式问答，逐块返回答案。
 
 **响应：** `text/event-stream`，包含 `content`、`tool_start`、`tool_result`、
 `sources`、`done` 与 `error`。`done` 和 `error` 是互斥终态。事件 payload、顺序、
-heartbeat、取消和 fallback 语义见 [SSE-PROTOCOL.md](SSE-PROTOCOL.md)。
+heartbeat、取消和 fallback 语义见 [SSE-PROTOCOL.md](SSE-PROTOCOL.md)。原生 Chat 业务事件
+带有从 `1` 开始的本响应正整数 `sequence`；带幂等 key 的快照重放保持
+`content`/`sources`/`done` 的顺序和序号，WebUI 在同一 turn 重试中忽略重复或倒退帧。
+`sources` 保留 `citationId`，并可返回请求级短期 `sourceHandle`；
+`metadata.citationRegistry` 是最终 sources 中实际句柄的诊断快照。
 
 **curl 示例：**
 
@@ -667,6 +672,7 @@ cleanup 删除后，原 key 才允许重新使用。
     "metadata": {},
     "sources": [{
       "citationId": "S1",
+      "sourceHandle": "c1",
       "documentId": "1",
       "title": "RAG 指南",
       "chunkText": "RAG 结合检索与生成。"
@@ -2321,7 +2327,7 @@ GET /api/v1/rag/collections/by-key/export?collectionKey=customer-42%3Amanual%3Av
 | `POST /api/v1/rag/evaluation/semantic` | 可选 Spring AI FactChecking/Relevancy 适配；不可用时 `DISABLED` |
 | `POST /api/v1/rag/evaluation/semantic/batch` | 同一适配器的有界批量接口 |
 
-citation 校验只检查 `[S1]` token。compare 在 embedding profile、代码修订或语料快照
+citation 校验检查请求级 `[cN]` 与兼容 `[SN]` token。compare 在 embedding profile、代码修订或语料快照
 不同时标记 `environmentDrift`，不把漂移报告成质量提升。
 
 ---

@@ -1,6 +1,7 @@
 package com.springairag.core.chat;
 
 import com.springairag.api.enums.ChatMode;
+import com.springairag.api.dto.RetrievalResult;
 import com.springairag.api.service.AdvisorScope;
 import com.springairag.api.service.RagAdvisorProvider;
 import com.springairag.core.config.ChatModelRouter;
@@ -94,6 +95,11 @@ class ModeAwareChatClientFactoryTest {
                 command,
                 candidate("knowledge", model),
                 List.of());
+        RetrievalResult retrieval = new RetrievalResult();
+        retrieval.setDocumentId("20");
+        retrieval.setChunkIndex(1);
+        retrieval.setChunkText(document.getText());
+        attempt.retrievalContext().trace().record(List.of(retrieval));
 
         ChatClientResponse response = attempt.client().prompt()
                 .user(command.message())

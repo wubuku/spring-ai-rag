@@ -11,7 +11,8 @@
 #   5) embed (real Embedding API)
 #   6) search (real vector/fulltext)
 #   7) chat/ask (real Chat LLM) — answer must contain the code
-#   8) chat/stream (optional) — stream must contain the code
+#   8) chat/ask mode=AGENT (real tool-calling LLM) — tool/source handles must align
+#   9) chat/stream (optional) — stream must contain the code
 #
 # Prerequisites:
 #   - PostgreSQL + pgvector
@@ -322,8 +323,69 @@ ask_rc=$?
 set -e
 if [[ $ask_rc -eq 0 ]]; then ok "chat answer contains verification code"; else bad "chat answer missing verification code"; fi
 
+step "5) Agent chat with citation registry (REAL LLM, bounded)"
+set +e
+curl -s "${API_AUTH_ARGS[@]}" -X POST "$API/chat/ask" \
+  -H 'Content-Type: application/json' \
+  -d "{\"mode\":\"AGENT\",\"message\":\"Use the knowledge retrieval tool for the selected release-verification document. Return the release verification code exactly and cite the retrieved evidence with the provided citation handle. The code begins with REAL_E2E_.\",\"maxResults\":5,\"useHybridSearch\":true,\"useRerank\":true,\"collectionKeys\":[\"${COLLECTION_KEY}\"],\"documentIds\":[$DOC_ID]}" \
+  --max-time 180 \
+  -o /tmp/rag-e2e-agent.json
+agent_curl_rc=$?
+agent_rc=$agent_curl_rc
+if [[ $agent_curl_rc -eq 0 ]]; then
+  python3 - <<'PY'
+import json
+import os
+import sys
+
+try:
+    data = json.load(open('/tmp/rag-e2e-agent.json'))
+except Exception as exc:
+    print('agent response is not valid JSON:', exc)
+    sys.exit(1)
+
+token = os.environ['PROBE_TOKEN']
+answer = data.get('answer') or ''
+sources = data.get('sources') or []
+metadata = data.get('metadata') or {}
+registry = metadata.get('citationRegistry') or {}
+handles = registry.get('handles') or []
+transcript = metadata.get('toolTranscript') or []
+source_handles = [source.get('sourceHandle') for source in sources]
+source_citations = [source.get('citationId') for source in sources]
+transcript_text = json.dumps(transcript, ensure_ascii=False)
+
+print('agent_answer_len', len(answer))
+print('agent_sources', len(sources))
+print('agent_tool_calls', len(transcript))
+print('agent_registry_handles', handles)
+if not sources:
+    print('agent response has no sources')
+    sys.exit(1)
+if any(not value for value in source_handles + source_citations):
+    print('agent sources must contain both sourceHandle and citationId', sources)
+    sys.exit(1)
+if set(source_handles) != set(handles):
+    print('registry handles do not match source handles', handles, source_handles)
+    sys.exit(1)
+if not transcript or 'sourceHandle' not in transcript_text or 'citationId' not in transcript_text:
+    print('toolTranscript does not prove a bounded tool result with both citation identifiers')
+    sys.exit(1)
+if any(handle not in transcript_text for handle in source_handles):
+    print('toolTranscript does not contain every exposed source handle')
+    sys.exit(1)
+if token not in answer:
+    print('agent answer missing verification code')
+    sys.exit(1)
+print('agent answer and tool/source citation registry validated')
+PY
+  agent_rc=$?
+fi
+set -e
+if [[ $agent_rc -eq 0 ]]; then ok "agent tool result and citation registry are aligned"; else bad "agent tool/result citation validation failed"; fi
+
 if [[ "$SKIP_STREAM" != "1" ]]; then
-  step "5) Chat stream (REAL LLM, sample)"
+  step "6) Chat stream (REAL LLM, sample)"
   set +e
   curl -s -N "${API_AUTH_ARGS[@]}" -X POST "$API/chat/stream" \
     -H 'Content-Type: application/json' \

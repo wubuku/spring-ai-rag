@@ -1,5 +1,7 @@
 package com.springairag.api.dto;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -413,6 +415,28 @@ class DtoTest {
         assertEquals(0.7, result.getFulltextScore());
         assertEquals(2, result.getChunkIndex());
         assertEquals("file.txt", result.getMetadata().get("source"));
+        assertTrue(result.hasChunkIndex());
+    }
+
+    @Test
+    void retrievalResult_chunkIndexPresence_preservesLegacyJsonAndJvmAccessors()
+            throws Exception {
+        ObjectMapper mapper = new ObjectMapper();
+        RetrievalResult missing = mapper.readValue("{}", RetrievalResult.class);
+        RetrievalResult explicitZero = mapper.readValue(
+                "{\"chunkIndex\":0}", RetrievalResult.class);
+
+        assertFalse(missing.hasChunkIndex());
+        assertTrue(explicitZero.hasChunkIndex());
+        assertEquals(0, missing.getChunkIndex());
+        assertEquals(0, explicitZero.getChunkIndex());
+        JsonNode serialized = mapper.readTree(mapper.writeValueAsString(missing));
+        assertEquals(0, serialized.path("chunkIndex").asInt());
+        assertFalse(serialized.has("chunkIndexPresent"));
+        assertEquals(int.class,
+                RetrievalResult.class.getMethod("getChunkIndex").getReturnType());
+        assertEquals(void.class,
+                RetrievalResult.class.getMethod("setChunkIndex", int.class).getReturnType());
     }
 
     // ========== RetrievalResult equals/hashCode/toString ==========

@@ -718,6 +718,7 @@ public class ChatTurnOperationService {
         com.springairag.api.dto.ChatSource copy =
                 new com.springairag.api.dto.ChatSource();
         copy.setCitationId(source.getCitationId());
+        copy.setSourceHandle(source.getSourceHandle());
         copy.setDocumentId(source.getDocumentId());
         copy.setChunkIndex(source.getChunkIndex());
         copy.setTitle(source.getTitle());
@@ -765,6 +766,7 @@ public class ChatTurnOperationService {
                     "retrievalExecuted",
                     "retrievalTraceId",
                     "citationValidation",
+                    "citationRegistry",
                     "mode",
                     "memoryMode",
                     "requestedModel",

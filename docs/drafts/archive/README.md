@@ -43,6 +43,8 @@ relevant evergreen guide/reference, `docs/TODO*`, and the
   `2026-08-19_DOCUMENT_LIFECYCLE_IMPLEMENTATION_PROGRESS.md`
 - WeKnora first-batch document-processing stages and recovery:
   `2026-10-14_WEKNORA_FIRST_BATCH_DOCUMENT_PROCESSING_*`
+- WeKnora second-batch citation protocol and streaming safety:
+  `2026-10-14_WEKNORA_SECOND_BATCH_CITATION_STREAMING_*`
 - Local keyword/vector derivation decoupling:
   `2026-08-19_KEYWORD_VECTOR_DECOUPLING_*`
 - External-document relocation and derivation-integrity repair:

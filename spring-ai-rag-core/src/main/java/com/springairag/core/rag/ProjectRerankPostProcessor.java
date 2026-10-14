@@ -92,7 +92,10 @@ public class ProjectRerankPostProcessor implements DocumentPostProcessor {
         RetrievalResult result = new RetrievalResult();
         Map<String, Object> metadata = document.getMetadata();
         result.setDocumentId(stringValue(metadata, "documentId", document.getId()));
-        result.setChunkIndex(intValue(metadata, "chunkIndex"));
+        Integer chunkIndex = nullableIntValue(metadata, "chunkIndex");
+        if (chunkIndex != null) {
+            result.setChunkIndex(chunkIndex);
+        }
         result.setTitle(stringValue(metadata, "title", result.getDocumentId()));
         result.setChunkText(document.getText());
         result.setScore(numberValue(metadata, "score"));
@@ -115,9 +118,19 @@ public class ProjectRerankPostProcessor implements DocumentPostProcessor {
         return value != null ? String.valueOf(value) : fallback;
     }
 
-    private int intValue(Map<String, Object> values, String key) {
+    private Integer nullableIntValue(Map<String, Object> values, String key) {
         Object value = values != null ? values.get(key) : null;
-        return value instanceof Number number ? number.intValue() : 0;
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        if (value != null) {
+            try {
+                return Integer.valueOf(String.valueOf(value));
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
+        }
+        return null;
     }
 
     private double numberValue(Map<String, Object> values, String key) {

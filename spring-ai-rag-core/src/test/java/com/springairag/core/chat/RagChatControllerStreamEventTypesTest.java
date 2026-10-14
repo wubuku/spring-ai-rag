@@ -19,8 +19,11 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import reactor.core.publisher.Flux;
 
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -129,6 +132,16 @@ class RagChatControllerStreamEventTypesTest {
                 .toList();
     }
 
+    private static List<Integer> sequences(String body) {
+        Matcher matcher = Pattern.compile("\\\"sequence\\\":(\\d+)")
+                .matcher(body);
+        List<Integer> values = new ArrayList<>();
+        while (matcher.find()) {
+            values.add(Integer.parseInt(matcher.group(1)));
+        }
+        return values;
+    }
+
     private static void assertEmitted(String body, String eventName) {
         List<String> names = eventNames(body);
         assertTrue(
@@ -185,13 +198,16 @@ class RagChatControllerStreamEventTypesTest {
     void sourcesAvailableEventIsMappedToSourcesPayload() throws Exception {
         com.springairag.api.dto.ChatSource source =
                 new com.springairag.api.dto.ChatSource();
+        source.setCitationId("S1");
+        source.setSourceHandle("c1");
         source.setDocumentId("41");
         source.setTitle("膝盖训练指南");
         when(ragChatService.chatEvents(
                 any(ChatRequest.class), any(), isNull()))
                 .thenReturn(Flux.just(
                         new ChatEvent.SourcesAvailable(
-                                "session-1", List.of(source)),
+                                "session-1", List.of(source),
+                                Map.of("version", 1, "handles", List.of("c1"))),
                         new ChatEvent.Completed(
                                 "trace-1", "session-1", null, null,
                                 ChatMode.PLAIN, Map.of(), "STOP",
@@ -211,6 +227,8 @@ class RagChatControllerStreamEventTypesTest {
         // 没有这一条，三个用例可能因为共享同一个错误的名字而一起绿。
         com.springairag.api.dto.ChatSource source =
                 new com.springairag.api.dto.ChatSource();
+        source.setCitationId("S1");
+        source.setSourceHandle("c1");
         source.setDocumentId("41");
         when(ragChatService.chatEvents(
                 any(ChatRequest.class), any(), isNull()))
@@ -219,7 +237,8 @@ class RagChatControllerStreamEventTypesTest {
                         new ChatEvent.ToolStarted("call-1", "knowledge", "膝盖"),
                         new ChatEvent.ToolFinished("call-1", "knowledge", 1, 12),
                         new ChatEvent.SourcesAvailable(
-                                "session-1", List.of(source)),
+                                "session-1", List.of(source),
+                                Map.of("version", 1, "handles", List.of("c1"))),
                         new ChatEvent.Completed(
                                 "trace-1", "session-1", "m", "m",
                                 ChatMode.AGENT, Map.of(), "STOP", List.of(),
@@ -231,6 +250,12 @@ class RagChatControllerStreamEventTypesTest {
                 List.of("content", "tool_start", "tool_result", "sources", "done"),
                 eventNames(body),
                 () -> "unexpected event sequence in:\n" + body);
+        assertEquals(List.of(1, 2, 3, 4, 5), sequences(body),
+                () -> "unexpected payload sequence in:\n" + body);
+        assertContains(body, "\"sourceHandle\":\"c1\"");
+        assertContains(body, "\"citationRegistry\":");
+        assertContains(body, "\"version\":1");
+        assertContains(body, "\"handles\":[\"c1\"]");
         assertNotNull(controller);
     }
 }

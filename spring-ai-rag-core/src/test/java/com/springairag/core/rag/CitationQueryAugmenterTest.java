@@ -1,6 +1,12 @@
 package com.springairag.core.rag;
 
 import com.springairag.core.config.RagProperties;
+import com.springairag.core.chat.AuthorizedRetrievalContext;
+import com.springairag.core.chat.ChatPrincipal;
+import com.springairag.core.chat.RetrievalOptions;
+import com.springairag.core.chat.RetrievalTraceCollector;
+import com.springairag.core.retrieval.RetrievalScope;
+import com.springairag.api.dto.RetrievalResult;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.document.Document;
@@ -64,5 +70,35 @@ class CitationQueryAugmenterTest {
         assertTrue(result.text().contains("[S2] second source"));
         assertTrue(result.text().contains("用户问题：\nwhat is rag?"));
         assertTrue(result.text().contains("请仅依据以下参考资料回答用户问题"));
+    }
+
+    @Test
+    void usesRegistryHandleWhenAuthorizedContextIsPresent() {
+        RetrievalTraceCollector trace = new RetrievalTraceCollector(3, 3, 3);
+        RetrievalResult retrieval = new RetrievalResult();
+        retrieval.setDocumentId("doc-1");
+        retrieval.setChunkIndex(2);
+        retrieval.setChunkText("first source");
+        trace.record(List.of(retrieval));
+        Query query = Query.builder()
+                .text("question")
+                .context(java.util.Map.of(
+                        com.springairag.core.rag.ProjectDocumentRetriever.CONTEXT_KEY,
+                        new AuthorizedRetrievalContext(
+                                RetrievalScope.unscoped(),
+                                new RetrievalOptions(3, 0.2, true, false, 0.5, 0.5),
+                                trace,
+                                "session",
+                                ChatPrincipal.local())))
+                .build();
+        Document document = Document.builder()
+                .text("first source")
+                .metadata(java.util.Map.of("documentId", "doc-1", "chunkIndex", 2))
+                .build();
+
+        Query result = augmenter.augment(query, List.of(document));
+
+        assertTrue(result.text().contains("[c1] first source"));
+        assertTrue(!result.text().contains("[S1] first source"));
     }
 }

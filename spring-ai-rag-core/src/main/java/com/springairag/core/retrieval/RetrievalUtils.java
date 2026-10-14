@@ -197,6 +197,10 @@ public final class RetrievalUtils {
         for (int index = 0; index < ranked.size(); index++) {
             RetrievalResult result = ranked.get(index);
             String key = identityKey(result);
+            if (key == null) {
+                key = "unidentified:" + (vectorChannel ? "vector:" : "fulltext:")
+                        + index;
+            }
             MergedEntry entry = merged.computeIfAbsent(
                     key, ignored -> new MergedEntry(result));
             if (vectorChannel) {
@@ -250,7 +254,12 @@ public final class RetrievalUtils {
     }
 
     private static String identityKey(RetrievalResult result) {
-        return result.getDocumentId() + ":" + result.getChunkIndex();
+        if (result.getDocumentId() == null || result.getDocumentId().isBlank()
+                || !result.hasChunkIndex()) {
+            return null;
+        }
+        return "source:" + result.getDocumentId().trim() + ":"
+                + result.getChunkIndex();
     }
 
     /**
@@ -278,7 +287,9 @@ public final class RetrievalUtils {
         out.setScore(e.fusedScore);
         out.setVectorScore(e.vectorScore);
         out.setFulltextScore(e.fulltextScore);
-        out.setChunkIndex(r.getChunkIndex());
+        if (r.hasChunkIndex()) {
+            out.setChunkIndex(r.getChunkIndex());
+        }
         out.setMetadata(r.getMetadata());
         RetrievalResultProvenance.copy(r, out);
         return out;

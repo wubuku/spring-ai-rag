@@ -151,6 +151,7 @@ export interface CollectionListResponse {
 export interface ChatSource {
   documentId: string | number;
   citationId?: string;
+  sourceHandle?: string;
   chunkIndex?: number;
   title?: string;
   chunkText?: string;

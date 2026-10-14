@@ -61,6 +61,8 @@ class StaticKnowledgeSearchToolTest {
                 json.path("sources").get(0).path("sourceType").asText());
         assertTrue(json.path("sources").get(0).path("citationId")
                 .asText().startsWith("S"));
+        assertTrue(json.path("sources").get(0).path("sourceHandle")
+                .asText().startsWith("c"));
         assertEquals(1, trace.sources().size());
         assertEquals("STATIC_KNOWLEDGE",
                 trace.sources().getFirst().getMetadata().get("sourceType"));

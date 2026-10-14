@@ -472,6 +472,34 @@ class ChatTurnOperationClaimCompleteTailTest {
         assertTrue(stable.getMetadata().containsKey("mode"));
     }
 
+    @Test
+    void stableResponsePreservesCitationHandlesAndRegistryMetadata() {
+        ChatTurnOperation op = operation(ChatTurnOperation.Status.SUCCEEDED);
+        ChatTurnOperationService.Claim claim =
+                new ChatTurnOperationService.Claim(op, false);
+        when(repository.completeSuccess(same(op), anyString(), anyString()))
+                .thenReturn(true);
+        com.springairag.api.dto.ChatSource source =
+                new com.springairag.api.dto.ChatSource();
+        source.setCitationId("S1");
+        source.setSourceHandle("c1");
+        source.setDocumentId("doc-1");
+        Map<String, Object> metadata = Map.of(
+                "citationRegistry",
+                Map.of("version", 1, "handles", List.of("c1")),
+                "untrustedExtra", "must-not-persist");
+
+        var stable = service.completeOpenAi(claim,
+                chatResponse("final", metadata, List.of(source)),
+                "KNOWLEDGE", "SERVER", "model-x", null);
+
+        assertEquals("c1", stable.getSources().getFirst().getSourceHandle());
+        assertEquals("S1", stable.getSources().getFirst().getCitationId());
+        assertEquals(Map.of("version", 1, "handles", List.of("c1")),
+                stable.getMetadata().get("citationRegistry"));
+        assertFalse(stable.getMetadata().containsKey("untrustedExtra"));
+    }
+
     // ── commandForClaim 坏快照 ────────────────────────────────────
 
     @Test

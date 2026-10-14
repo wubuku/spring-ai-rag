@@ -11,6 +11,13 @@
 > - After WebUI changes, run Playwright (`scripts/webui-e2e-test.js` / `npm run test:e2e`)  
 > - After meaningful improvements: restart the service → confirm `http://localhost:8081` is up → run regression  
 
+For native Chat citation/streaming changes, the regression also covers
+request-local `sourceHandle`/legacy `citationId` aliases, deterministic SSE
+`sequence` ordering, keyed replay de-duplication, and OpenAI-compatible stream
+isolation. Focused evidence includes `CitationRegistryTest`,
+`RagChatControllerStreamEventTypesTest`, `RagChatControllerNativeSnapshotTest`,
+and `spring-ai-rag-webui/src/hooks/useSSE.test.ts`.
+
 Doc hub: [index.md](index.md) · Commands: [developer-reference.md](developer-reference.md) · Plan-to-delivery workflow: [delivery-workflow.md](delivery-workflow.md)
 
 ## Testing Pyramid

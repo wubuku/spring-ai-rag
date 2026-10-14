@@ -320,6 +320,12 @@ ChatSessionCoordinator
 ChatResponse 或结构化 SSE 事件
 ```
 
+检索来源同时保留两种标识：旧的 `citationId`（`S1`、`S2`……）继续兼容已存 history 和已有
+客户端；请求级 `sourceHandle`（`c1`、`c2`……）是模型优先使用的短期别名，只在当前 attempt
+内有效。`citationRegistry` metadata 只列出最终来源快照中的句柄。原生 Chat SSE 业务事件带有
+本响应单调递增的 `sequence`；幂等快照重试保持帧顺序，WebUI 可据此去重。OpenAI 兼容流刻意
+不暴露这些原生扩展。
+
 ### 4.2 Collection 范围检索
 
 Collection 已经是实际检索边界，不只是管理页面中的文档分类。

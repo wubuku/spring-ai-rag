@@ -29,10 +29,21 @@ public sealed interface ChatEvent
             long elapsedMs) implements ChatEvent {
     }
 
-    record SourcesAvailable(String sessionId, List<com.springairag.api.dto.ChatSource> sources)
+    record SourcesAvailable(
+            String sessionId,
+            List<com.springairag.api.dto.ChatSource> sources,
+            Map<String, Object> citationRegistry)
             implements ChatEvent {
         public SourcesAvailable {
             sources = sources == null ? List.of() : List.copyOf(sources);
+            citationRegistry = citationRegistry == null
+                    ? Map.of() : Map.copyOf(citationRegistry);
+        }
+
+        public SourcesAvailable(
+                String sessionId,
+                List<com.springairag.api.dto.ChatSource> sources) {
+            this(sessionId, sources, Map.of());
         }
     }
 

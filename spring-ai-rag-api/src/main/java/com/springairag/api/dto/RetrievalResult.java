@@ -1,5 +1,6 @@
 package com.springairag.api.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.util.Map;
@@ -31,6 +32,9 @@ public class RetrievalResult {
 
     @Schema(description = "Text chunk index within document", example = "2")
     private int chunkIndex;
+
+    @JsonIgnore
+    private boolean chunkIndexPresent;
 
     @Schema(description = "Source document title", example = "Spring AI Reference")
     private String title;
@@ -76,7 +80,13 @@ public class RetrievalResult {
     public void setFulltextScore(double fulltextScore) { this.fulltextScore = fulltextScore; }
 
     public int getChunkIndex() { return chunkIndex; }
-    public void setChunkIndex(int chunkIndex) { this.chunkIndex = chunkIndex; }
+    public void setChunkIndex(int chunkIndex) {
+        this.chunkIndex = chunkIndex;
+        this.chunkIndexPresent = true;
+    }
+
+    @JsonIgnore
+    public boolean hasChunkIndex() { return chunkIndexPresent; }
 
     public String getTitle() { return title; }
     public void setTitle(String title) { this.title = title; }
