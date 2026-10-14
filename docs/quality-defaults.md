@@ -107,6 +107,29 @@ and score-replacement counts. Continue using the retrieval goldenset,
 versioned regression, Chat source/citation checks, and p95 observation for
 end-to-end quality and latency conclusions.
 
+### KNOWLEDGE Post-Retrieval Evidence Assembly
+
+By default, `KNOWLEDGE` now performs bounded post-rerank assembly before prompt
+budgeting. It reads previous/next chunks from the same local-index generation
+for registered, locatable text hits. Defaults are radius `1`, at most `20` seed
+hits, and `4000` characters per assembled window. It does not change Search
+ordering/counts, add model calls, or apply to `AGENT`, `PLAIN`, JSON records, or
+static knowledge. Java UTF-16 ranges remove repeated payload overlap while
+synthetic headings/table headers remain distinct; a hash/chunker/generation or
+anchor-text mismatch safely keeps the original hit.
+
+The assembled source keeps the anchor citation handle. `metadata.contextAssembly`
+describes only the authorized range mapping and does not create new citations for
+neighbors. If the prompt budget is insufficient, the anchor is restored before
+the existing truncation policy runs. `metadata.retrieval.contextAssembly` exposes
+bounded, low-cardinality seed/neighbor/merge/dedup/budget/degradation diagnostics.
+Disabling the switch is an emergency rollback and requires no data migration.
+
+Quality acceptance must verify necessary facts in the final model input, citation
+alignment with displayed evidence, bounded token/latency cost, and no regression
+in the retrieval goldenset/versioned regression. A non-empty answer or a single
+LLM-judge score is not sufficient evidence.
+
 ### Heuristic CJK Lexical Defaults
 
 The production-default heuristic reranker keeps whitespace-token relevance

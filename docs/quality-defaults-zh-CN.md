@@ -94,6 +94,24 @@ join 只对已经检索出的有界候选执行本地处理，不增加数据库
 重复数和按分数替换数；端到端质量与延迟结论仍需结合 retrieval goldenset、版本化回归、
 Chat source/citation 检查和 p95 观测。
 
+### KNOWLEDGE 检索后证据组装
+
+`KNOWLEDGE` 默认在重排后、prompt token 预算前，对已注册且可定位的文本 chunk 读取同一
+本地索引 generation 的有限前后邻居。默认半径为 `1`、最多20个 seed、单窗口最多4000字符。
+它只补全附近定义、表头和步骤，不改变 Search 排序/数量，不新增模型调用，也不扩展
+`AGENT`、`PLAIN`、JSON record 或静态知识路径。正文 overlap 按 Java UTF-16 区间去重，
+合成标题/表头前缀单独保留；不能证明当前 hash/chunker/generation 或 seed 原文一致时，
+安全退回原命中块。
+
+组装后的 source 仍以原 anchor 的 citation handle 表示；`metadata.contextAssembly` 只描述
+已授权的范围映射，不把邻居伪装成新的 citation。token 预算不足时先恢复 anchor，再按旧规则
+裁剪；`metadata.retrieval.contextAssembly` 记录 seed、邻居、合并、去重、预算回退/截断和
+降级 code 等低基数诊断。关闭开关是应急回退，无需数据迁移。
+
+质量判断必须同时看：最终模型输入是否包含必要事实、引用是否对应最终展示证据、token/延迟
+是否有界，以及现有 retrieval goldenset/版本化回归是否没有退化；不能只看非空答案或单一
+LLM judge 分数。
+
 ### heuristic 的 CJK 词法默认
 
 生产默认 heuristic reranker 对普通无 CJK 文本继续按空白 token 计算 relevance 和

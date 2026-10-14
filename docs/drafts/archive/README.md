@@ -60,6 +60,10 @@ relevant evergreen guide/reference, `docs/TODO*`, and the
   [plan](2026-10-14_CHUNKING_UPGRADE_RECOVERY_PLAN.md) and
   [recovery, shared quotas, migrations, and real-model acceptance](2026-10-14_CHUNKING_UPGRADE_RECOVERY_PROGRESS.md)
   (Chinese)
+- KNOWLEDGE Chat post-retrieval evidence assembly and completeness regression:
+  [plan](2026-10-14_RETRIEVAL_CONTEXT_ASSEMBLY_PLAN.md) and
+  [implementation, regression, and real-model acceptance](2026-10-14_RETRIEVAL_CONTEXT_ASSEMBLY_PROGRESS.md)
+  (Chinese)
 - Local keyword/vector derivation decoupling:
   `2026-08-19_KEYWORD_VECTOR_DECOUPLING_*`
 - External-document relocation and derivation-integrity repair:

@@ -1096,6 +1096,32 @@ minimums, baseline regression, Collection-decoy leakage, and an explicit-empty
 JSONB result. Provider, database, or embedding failures return nonzero and are
 never reported as quality passes.
 
+### KNOWLEDGE Post-Retrieval Evidence Assembly Focused Regression
+
+```bash
+mvn -pl spring-ai-rag-core -am \
+  -Dtest=RetrievalContextAssemblyPostProcessorTest,PromptBudgetDocumentPostProcessorTest,\
+RetrievalDocumentMapperTest,ModeAwareChatClientFactoryTest \
+  -Dsurefire.failIfNoSpecifiedTests=false test
+./scripts/verify-gated-it.sh MultiCollectionRetrievalPostgresIntegrationTest
+```
+
+`testdata/regression/context-assembly-v1.json` is the versioned quality fixture. It covers
+cross-chunk definitions, table headers/units, multi-step procedures, overlap removal,
+Chinese/emoji text, synthetic headings, and anchor restoration under a tight budget. Unit
+tests must inspect the final text sent by the advisor to the model, not only the
+post-processor return value. Sources must continue to use the original anchor citation
+handle; `contextAssembly` is additive metadata only. The PostgreSQL suite also verifies
+Collection/document/metadata scope, keyword-only retrieval, freshness, deleted/disabled
+documents, hash/chunker/generation/seed-text mismatches, and JSON-record isolation.
+
+Real Chat acceptance uses an isolated database and port through `scripts/dev.sh`, with a
+self-owned fixture where retrieval hits the middle chunk only. It verifies that required
+facts reach the final model input and answer, sources still retain the anchor, and diagnostics
+exist without high-cardinality body/ID/hash data. A real call proves only this fixture's
+contract; it does not replace deterministic tests and cannot pass solely because the answer is
+non-empty or one LLM judge score is positive.
+
 ### Managed API Principal PostgreSQL Matrix
 
 Run the V48-to-V55 migration, credential lifecycle, operation-capability,

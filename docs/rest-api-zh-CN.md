@@ -576,6 +576,12 @@ additive、低基数摘要，四个字段均为非负整数。它不包含 query
 文档正文、metadata 值或模型输出。AGENT、PLAIN、直接 Search、Evaluation 和旧
 Advisor 执行不会出现该字段。
 
+当 `KNOWLEDGE` 启用默认的检索后证据组装时，最终 `sources[].metadata.contextAssembly`
+是可选的加法诊断，描述当前 source（原 anchor）展示文本对应的已授权 chunk 范围、
+去重后的 UTF-16 区间和 local-index 身份。邻居不会创建新的 `citationId` 或
+`sourceHandle`；预算裁剪后不会保留未展示范围。该字段不改变现有 source 字段或引用
+协议，`AGENT`、`PLAIN`、JSON record 和静态知识不会因为此能力新增它。
+
 ---
 
 ### `POST /api/v1/rag/chat/stream`

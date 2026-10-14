@@ -14,6 +14,21 @@ class RagChatPropertiesValidationTest {
     }
 
     @Test
+    void rejectsInvalidContextAssemblyLimits() {
+        RagChatProperties properties = new RagChatProperties();
+        properties.getContextAssembly().setNeighborRadius(3);
+        assertThrows(IllegalArgumentException.class, properties::validate);
+
+        properties = new RagChatProperties();
+        properties.getContextAssembly().setMaxSeeds(41);
+        assertThrows(IllegalArgumentException.class, properties::validate);
+
+        properties = new RagChatProperties();
+        properties.getContextAssembly().setMaxWindowCharacters(255);
+        assertThrows(IllegalArgumentException.class, properties::validate);
+    }
+
+    @Test
     void knowledgeQueryBudgetKeepsDefaultAndClampsEffectiveVariants() {
         RagChatProperties.KnowledgeProperties knowledge =
                 new RagChatProperties().getKnowledge();

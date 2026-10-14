@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "cases": [
+    {"id":"cross-block-definition","source":"定义：折羽必须校验签名。\n执行：折羽归档请求。\n解除码：K47。","chunks":[{"payload":"定义：折羽必须校验签名。"},{"payload":"执行：折羽归档请求。"},{"payload":"解除码：K47。"}],"seeds":[1],"requiredFacts":["校验签名","K47"]},
+    {"id":"table-header-and-unit","source":"单位：毫秒。\n| 名称 | 上限 |\n| --- | --- |\n| 折羽 | 73 |\n超限：返回E73。","chunks":[{"payload":"单位：毫秒。"},{"payload":"| 折羽 | 73 |","prefix":"| 名称 | 上限 |\n| --- | --- |\n"},{"payload":"超限：返回E73。"}],"seeds":[1],"requiredFacts":["毫秒","名称","E73"]},
+    {"id":"ordered-workflow","source":"前置：冻结写入。\n执行：切换索引。\n校验：恢复后检查R61。","chunks":[{"payload":"前置：冻结写入。"},{"payload":"执行：切换索引。"},{"payload":"校验：恢复后检查R61。"}],"seeds":[1],"requiredFacts":["冻结写入","R61"]},
+    {"id":"overlap-and-merged-seeds","source":"执行顺序：验证签名→归档→回执。","chunks":[{"payload":"执行顺序：验证签名→归档"},{"payload":"验证签名→归档→回执。"}],"seeds":[0,1],"requiredFacts":["执行顺序","回执"],"uniqueFact":"验证签名"},
+    {"id":"utf16-and-synthetic-heading","source":"定义🧭：仅校验一次。\n执行：收集证据。\n结束🚀：返回U16。","chunks":[{"payload":"定义🧭：仅校验一次。","prefix":"# 规则\n"},{"payload":"执行：收集证据。","prefix":"# 规则\n"},{"payload":"结束🚀：返回U16。","prefix":"# 规则\n"}],"seeds":[1],"requiredFacts":["🧭","U16","🚀"],"uniqueFact":"# 规则"}
+  ]
+}

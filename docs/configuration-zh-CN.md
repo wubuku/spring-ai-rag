@@ -735,6 +735,11 @@ Micrometer 只使用固定低基数标签：`operation`、`status_class`、`prin
 rag:
   chat:
     default-mode: KNOWLEDGE
+    context-assembly:
+      enabled: true
+      neighbor-radius: 1
+      max-seeds: 20
+      max-window-characters: 4000
     knowledge:
       query-transformer: none
       query-transform-timeout-seconds: 30
@@ -794,6 +799,10 @@ rag:
 | 属性 | 默认值 | 说明 |
 |---|---|---|
 | `rag.chat.default-mode` | `KNOWLEDGE` | `ChatRequest.mode` 省略时使用的模式 |
+| `rag.chat.context-assembly.enabled` | `true` | `KNOWLEDGE` 检索后是否按有界邻居补全证据；应急覆盖 `RAG_CHAT_CONTEXT_ASSEMBLY_ENABLED` |
+| `rag.chat.context-assembly.neighbor-radius` | `1` | 每个已命中 chunk 的前后邻居范围，`0..2`；覆盖 `RAG_CHAT_CONTEXT_ASSEMBLY_NEIGHBOR_RADIUS` |
+| `rag.chat.context-assembly.max-seeds` | `20` | 一次组装最多处理的已注册命中 seed 数，`1..40`；覆盖 `RAG_CHAT_CONTEXT_ASSEMBLY_MAX_SEEDS` |
+| `rag.chat.context-assembly.max-window-characters` | `4000` | 单个组装窗口字符上限，`256..16000`；覆盖 `RAG_CHAT_CONTEXT_ASSEMBLY_MAX_WINDOW_CHARACTERS` |
 | `rag.chat.knowledge.query-transformer` | `none` | `none` 或 `spring-ai`；`postgresql`、`local`、`prod` profile 使用 `spring-ai` |
 | `rag.chat.knowledge.query-transform-timeout-seconds` | `30` | Spring AI 历史压缩调用超时；可用 `RAG_CHAT_QUERY_TRANSFORM_TIMEOUT_SECONDS` 覆盖 |
 | `rag.chat.knowledge.query-expander-variants` | `2` | 启用 `spring-ai` 策略时由 LLM 生成的检索变体数量；可用 `RAG_CHAT_QUERY_EXPANDER_VARIANTS` 覆盖 |

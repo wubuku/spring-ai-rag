@@ -85,6 +85,7 @@ public class ModeAwareChatClientFactory {
     private final ProjectDocumentRetriever documentRetriever;
     private final CompositeChatDocumentRetriever compositeDocumentRetriever;
     private final ProjectRerankPostProcessor rerankPostProcessor;
+    private com.springairag.core.rag.RetrievalContextAssemblyPostProcessor contextAssemblyPostProcessor;
     private final CitationQueryAugmenter queryAugmenter;
     private final RagProperties ragProperties;
     private final List<RagAdvisorProvider> customAdvisorProviders;
@@ -283,9 +284,9 @@ public class ModeAwareChatClientFactory {
                         ? compositeDocumentRetriever
                         : documentRetriever)
                         .documentJoiner(documentJoiner)
-                        .documentPostProcessors(
-                                rerankPostProcessor,
-                                promptBudgetDocumentPostProcessor)
+                        .documentPostProcessors(contextAssemblyPostProcessor != null
+                                ? List.of(rerankPostProcessor, contextAssemblyPostProcessor, promptBudgetDocumentPostProcessor)
+                                : List.of(rerankPostProcessor, promptBudgetDocumentPostProcessor))
                         .queryAugmenter(queryAugmenter)
                         .order(MODE_ORDER);
         QueryTransformer transformer = buildQueryTransformer(candidate, budget);
@@ -326,6 +327,12 @@ public class ModeAwareChatClientFactory {
                 compression,
                 Duration.ofSeconds(
                         Math.max(1, knowledge.getQueryTransformTimeoutSeconds())));
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setContextAssemblyPostProcessor(
+            com.springairag.core.rag.RetrievalContextAssemblyPostProcessor processor) {
+        this.contextAssemblyPostProcessor = processor;
     }
 
     private QueryExpander buildQueryExpander(

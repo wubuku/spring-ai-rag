@@ -966,6 +966,28 @@ identity，检查 Hit Rate、MRR、Recall@K、nDCG、每 case minimum、相对 b
 Collection decoy 泄漏和 JSONB 明确空结果。外部 provider、数据库或 embedding 失败必须
 返回非零，不能伪装为质量通过。
 
+### KNOWLEDGE 检索后证据组装聚焦回归
+
+```bash
+mvn -pl spring-ai-rag-core -am \
+  -Dtest=RetrievalContextAssemblyPostProcessorTest,PromptBudgetDocumentPostProcessorTest,\
+RetrievalDocumentMapperTest,ModeAwareChatClientFactoryTest \
+  -Dsurefire.failIfNoSpecifiedTests=false test
+./scripts/verify-gated-it.sh MultiCollectionRetrievalPostgresIntegrationTest
+```
+
+`testdata/regression/context-assembly-v1.json` 是版本化质量夹具，覆盖跨块定义、表头/单位、
+多步骤流程、重叠去重、中文/emoji、合成标题和预算不足时恢复 anchor。单测必须检查最终
+advisor 送入模型的文本，而不是只检查 post-processor 的返回值；来源仍只能使用原 anchor
+的 citation handle，`contextAssembly` 只能作为加法 metadata。PostgreSQL 套件还验证
+Collection/document/metadata scope、关键词-only、freshness、删除/禁用、hash/chunker/
+generation/seed-text 失配和 JSON record 隔离。
+
+真实 Chat 验收应使用隔离数据库和端口运行 `scripts/dev.sh`，用只命中中间 chunk 的自有
+fixture 验证必要事实出现在最终模型输入和答案中、sources 仍保留 anchor、诊断存在且不含
+正文/ID/hash 等高基数数据。真实调用只证明该 fixture 的契约，不替代确定性单测，也不能
+只以答案非空或单一 LLM judge 分数判定通过。
+
 ### 受管 API Principal PostgreSQL 矩阵
 
 在真实 PostgreSQL 上执行 V48→V55 迁移、credential lifecycle、operation capability、

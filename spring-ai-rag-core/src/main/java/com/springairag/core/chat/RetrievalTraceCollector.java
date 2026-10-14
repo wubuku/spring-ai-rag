@@ -37,6 +37,7 @@ public class RetrievalTraceCollector {
             new AtomicReference<>();
     private final AtomicReference<Map<String, Object>> documentJoin =
             new AtomicReference<>();
+    private final AtomicReference<Map<String, Object>> contextAssembly = new AtomicReference<>();
     private final int maxRetrievalCalls;
     private final int maxToolRounds;
     private final int maxUniqueSources;
@@ -148,6 +149,20 @@ public class RetrievalTraceCollector {
     public Map<String, Object> queryExpansion() {
         return queryExpansion.get();
     }
+
+    public void recordContextAssembly(Map<String, Object> summary) {
+        Map<String, Object> combined = new LinkedHashMap<>();
+        if (contextAssembly.get() != null) {
+            combined.putAll(contextAssembly.get());
+        }
+        combined.putAll(summary);
+        contextAssembly.set(Map.copyOf(combined));
+        if (parentSession != null) {
+            parentSession.recordContextAssembly(attemptKey, contextAssembly.get());
+        }
+    }
+
+    public Map<String, Object> contextAssembly() { return contextAssembly.get(); }
 
     public void recordDocumentJoin(
             int inputDocuments,
@@ -437,6 +452,9 @@ public class RetrievalTraceCollector {
         }
         if (documentJoin.get() != null) {
             result.put("documentJoin", documentJoin.get());
+        }
+        if (contextAssembly.get() != null) {
+            result.put("contextAssembly", contextAssembly.get());
         }
         return result;
     }

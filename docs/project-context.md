@@ -50,6 +50,8 @@ RagChatController
           + ProjectDocumentRetriever
           + optional StaticKnowledgeDocumentRetriever
         + ProjectRerankPostProcessor
+        + RetrievalContextAssemblyPostProcessor (bounded neighbors, overlap removal, diagnostics)
+        + PromptBudgetDocumentPostProcessor
         + CitationQueryAugmenter
      -> AGENT: Spring AI ToolCallAdvisor
         + KnowledgeSearchTool
@@ -81,6 +83,19 @@ Key rules:
   policy, the Skill capability gate, and endpoint allowlists.
 - The old `QueryRewriteAdvisor`, `HybridSearchAdvisor`, and `RerankAdvisor`
   remain component-level/compatibility APIs, not the production Chat path.
+- `KNOWLEDGE` rerank output now passes through
+  `RetrievalContextAssemblyPostProcessor` by default. It expands only registered,
+  locatable project-document hits with neighbors from the same local-index
+  generation and removes repeated payload text using Java UTF-16 ranges while
+  preserving synthetic headings/table headers. It never merges across document,
+  hash, chunker, or generation identity and never creates citation handles for
+  neighbors; unsafe expansion keeps the original anchor.
+- `PromptBudgetDocumentPostProcessor` remains the final context boundary. When
+  the budget is insufficient it restores the original anchor before truncation,
+  and truncated evidence no longer exposes ranges for text that is not shown.
+  `metadata.contextAssembly` is additive source metadata and
+  `metadata.retrieval.contextAssembly` is a bounded request diagnostic. Disabling
+  the switch stops expansion without a data migration.
 - `RagAdvisorProvider` defaults to `KNOWLEDGE + ATTEMPT`. ATTEMPT providers
   run outside Memory and the mode advisor; explicitly opted-in `MODEL_CALL`
   providers run inside the mode advisor and therefore execute for each AGENT

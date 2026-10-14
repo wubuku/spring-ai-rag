@@ -646,6 +646,15 @@ fields are nonnegative integers. It does not contain query text, document IDs,
 document content, metadata values, or model output. The field is absent from
 AGENT, PLAIN, direct Search, Evaluation, and legacy-advisor execution.
 
+When the default `KNOWLEDGE` post-retrieval evidence assembly is enabled,
+`sources[].metadata.contextAssembly` is optional additive diagnostics. It
+describes the authorized chunk ranges shown for the source's original anchor,
+deduplicated in Java UTF-16 coordinates, together with the local-index identity.
+Neighbors do not create new `citationId` or `sourceHandle` values; after budget
+truncation, ranges for text that is no longer shown are removed. This does not
+change existing source fields or the citation protocol. `AGENT`, `PLAIN`, JSON
+records, and static knowledge do not gain this field from the feature.
+
 ---
 
 ### `POST /api/v1/rag/chat/stream`

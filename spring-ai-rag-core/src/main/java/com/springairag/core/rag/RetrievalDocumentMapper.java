@@ -19,7 +19,7 @@ public class RetrievalDocumentMapper {
         if (result.getMetadata() != null) {
             result.getMetadata().forEach((key, value) -> {
                 // Document 拒绝 null 值，白名单放行的 entry 也要跳过 null。
-                if (isAllowedMetadata(key) && value != null) {
+                if (isAllowedMetadata(key) && !"contextAssembly".equals(key) && value != null) {
                     metadata.put(key, value);
                 }
             });
@@ -135,7 +135,7 @@ public class RetrievalDocumentMapper {
             case "documentType", "collectionKey", "collectionId", "sourceType",
                     "language", "title", "originalFilename", "source",
                     "rootKey", "sourceLabel", "relativePath", "contentDigest",
-                    "titlePath", "chunkIndex", "documentId", "score" -> true;
+                    "titlePath", "chunkIndex", "documentId", "score", "contextAssembly" -> true;
             default -> false;
         };
     }

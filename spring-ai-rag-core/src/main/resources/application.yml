@@ -451,6 +451,11 @@ rag:
 
   chat:
     default-mode: KNOWLEDGE
+    context-assembly:
+      enabled: ${RAG_CHAT_CONTEXT_ASSEMBLY_ENABLED:true}
+      neighbor-radius: ${RAG_CHAT_CONTEXT_ASSEMBLY_NEIGHBOR_RADIUS:1}
+      max-seeds: ${RAG_CHAT_CONTEXT_ASSEMBLY_MAX_SEEDS:20}
+      max-window-characters: ${RAG_CHAT_CONTEXT_ASSEMBLY_MAX_WINDOW_CHARACTERS:4000}
     knowledge:
       query-transformer: none
       query-transform-timeout-seconds: ${RAG_CHAT_QUERY_TRANSFORM_TIMEOUT_SECONDS:30}

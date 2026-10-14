@@ -50,6 +50,8 @@ RagChatController
           + ProjectDocumentRetriever
           + 可选 StaticKnowledgeDocumentRetriever
         + ProjectRerankPostProcessor
+        + RetrievalContextAssemblyPostProcessor（有界邻居、重叠去除、范围诊断）
+        + PromptBudgetDocumentPostProcessor
         + CitationQueryAugmenter
      -> AGENT: Spring AI ToolCallAdvisor
         + KnowledgeSearchTool
@@ -76,6 +78,14 @@ RagChatController
   server-owned Tool policy、Skill capability gate 和 endpoint allowlist 决定。
 - 旧 `QueryRewriteAdvisor`、`HybridSearchAdvisor` 与 `RerankAdvisor` 仍是组件级/
   兼容 API，不是生产 Chat 路径。
+- `KNOWLEDGE` 的 rerank 结果默认经过 `RetrievalContextAssemblyPostProcessor`：它只对
+  已注册且可定位的项目文档命中，在同一 local-index generation 内补前后邻居，并按 Java
+  UTF-16 范围去掉重叠正文；合成标题/表头保留。它不跨文档、hash、chunker 或 generation
+  合并，也不为邻居创建新的 citation handle。扩展窗口不能安全验证时保留原 anchor。
+- 随后的 `PromptBudgetDocumentPostProcessor` 仍是最终预算边界；预算不足时先恢复原
+  anchor，截断后不再暴露未展示窗口的范围 metadata。`metadata.contextAssembly` 是来源级
+  加法诊断，`metadata.retrieval.contextAssembly` 是低基数的请求级诊断；关闭开关只停止
+  扩展，不需要数据迁移。
 - `RagAdvisorProvider` 默认只支持 `KNOWLEDGE + ATTEMPT`。框架把 ATTEMPT provider
   放在 Memory/模式 Advisor 外层；显式 `MODEL_CALL` provider 放在模式 Advisor 内层，
   因此会在 AGENT 每个工具调用轮次执行。provider 的任意原始 order 会映射到不重叠的

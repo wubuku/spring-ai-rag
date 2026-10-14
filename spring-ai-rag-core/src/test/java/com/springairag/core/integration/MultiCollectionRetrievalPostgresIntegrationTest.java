@@ -8,6 +8,19 @@ import com.springairag.core.entity.RagDocument;
 import com.springairag.core.retrieval.HybridRetrieverService;
 import com.springairag.core.retrieval.RetrievalScope;
 import com.springairag.core.service.DocumentDerivationDescriptorProvider;
+import com.springairag.core.chat.AuthorizedRetrievalContext;
+import com.springairag.core.chat.RetrievalTraceCollector;
+import com.springairag.core.rag.ProjectDocumentRetriever;
+import com.springairag.core.rag.RetrievalContextAssemblyPostProcessor;
+import com.springairag.core.rag.RetrievalContextRepository;
+import com.springairag.core.rag.RetrievalDocumentMapper;
+import com.springairag.core.retrieval.RetrievalFilters;
+import com.springairag.core.retrieval.JsonbContainmentFilter;
+import com.springairag.core.util.DigestUtils;
+import org.springframework.ai.document.Document;
+import org.springframework.ai.rag.Query;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.junit.jupiter.api.AfterAll;
@@ -25,6 +38,7 @@ import org.testcontainers.utility.DockerImageName;
 import javax.sql.DataSource;
 import java.util.List;
 import java.util.Set;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -311,6 +325,89 @@ class MultiCollectionRetrievalPostgresIntegrationTest {
         vector[0] = firstValue;
         return vector;
     }
+
+    @Test
+    void contextAssemblyUsesFreshKeywordOnlyUtf16RangesAndPreservesOriginalData() {
+        long collection = insertCollection("assembly-allowed");
+        AssemblyFixture fixture = assemblyFixture(collection);
+        var before = jdbcTemplate.queryForMap("SELECT content, content_hash, version, document_revision FROM rag_documents WHERE id = ?", fixture.documentId());
+        List<Document> result = assemble(fixture, RetrievalScope.selectedCollections(List.of(collection), null, null), RetrievalFilters.none());
+        assertEquals(1, result.size());
+        assertTrue(result.getFirst().getText().contains("定义🧭"));
+        assertTrue(result.getFirst().getText().contains("K47"));
+        assertEquals(fixture.anchor().getId(), result.getFirst().getId());
+        assertEquals(before, jdbcTemplate.queryForMap("SELECT content, content_hash, version, document_revision FROM rag_documents WHERE id = ?", fixture.documentId()));
+        assertEquals(0, jdbcTemplate.queryForObject("SELECT count(*) FROM rag_embeddings WHERE document_id = ?", Integer.class, fixture.documentId()));
+    }
+
+    @Test
+    void contextAssemblyRespectsCollectionDocumentAndMetadataScopes() {
+        long allowed = insertCollection("assembly-allowed");
+        long denied = insertCollection("assembly-denied");
+        AssemblyFixture fixture = assemblyFixture(allowed);
+        assertEquals(List.of(fixture.anchor()), assemble(fixture,
+                RetrievalScope.selectedCollections(List.of(denied), null, null), RetrievalFilters.none()));
+        assertEquals(List.of(fixture.anchor()), assemble(fixture,
+                RetrievalScope.selectedCollections(List.of(allowed), List.of(fixture.documentId() + 100), null), RetrievalFilters.none()));
+        var filter = new RetrievalFilters(new JsonbContainmentFilter("{\"contextFixture\":\"no-match\"}"), List.of());
+        assertEquals(List.of(fixture.anchor()), assemble(fixture, RetrievalScope.unscoped(), filter));
+        filter = new RetrievalFilters(new JsonbContainmentFilter("{\"contextFixture\":\"yes\"}"), List.of());
+        assertTrue(assemble(fixture, RetrievalScope.unscoped(), filter).getFirst().getText().contains("K47"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"disabled", "deleted", "hash", "chunker", "generation", "seed-text", "json-record"})
+    void contextAssemblyNeverExpandsStaleMismatchedOrUnavailableAnchors(String mutation) {
+        AssemblyFixture fixture = assemblyFixture(insertCollection("assembly-test"));
+        switch (mutation) {
+            case "disabled" -> jdbcTemplate.update("UPDATE rag_documents SET enabled = false WHERE id = ?", fixture.documentId());
+            case "deleted" -> jdbcTemplate.update("UPDATE rag_documents SET source_deleted_at = NOW(), enabled = false WHERE id = ?", fixture.documentId());
+            case "hash" -> jdbcTemplate.update("UPDATE rag_documents SET content_hash = ? WHERE id = ?", "b".repeat(64), fixture.documentId());
+            case "chunker" -> jdbcTemplate.update("UPDATE rag_document_local_index_state SET chunker_version = 'other' WHERE document_id = ?", fixture.documentId());
+            case "generation" -> jdbcTemplate.update("UPDATE rag_document_local_index_state SET local_index_generation = 2 WHERE document_id = ?", fixture.documentId());
+            case "seed-text" -> jdbcTemplate.update("UPDATE rag_document_chunks SET chunk_text = 'changed' WHERE document_id = ? AND chunk_index = 1", fixture.documentId());
+            case "json-record" -> jdbcTemplate.update("UPDATE rag_documents SET document_type = 'json-record' WHERE id = ?", fixture.documentId());
+            default -> throw new IllegalArgumentException(mutation);
+        }
+        assertEquals(List.of(fixture.anchor()), assemble(fixture, RetrievalScope.unscoped(), RetrievalFilters.none()));
+    }
+
+    @Test
+    void contextAssemblyDoesNotJoinNeighborsFromAnotherGeneration() {
+        AssemblyFixture fixture = assemblyFixture(insertCollection("assembly-test"));
+        jdbcTemplate.update("UPDATE rag_document_chunks SET local_index_generation = 2 WHERE document_id = ? AND chunk_index <> 1", fixture.documentId());
+        assertEquals(List.of(fixture.anchor()), assemble(fixture, RetrievalScope.unscoped(), RetrievalFilters.none()));
+    }
+
+    private AssemblyFixture assemblyFixture(long collection) {
+        String[] payloads = {"定义🧭：必须校验签名。", "执行：折羽归档请求。", "解除码：K47。"};
+        String content = String.join("\n", payloads);
+        String hash = DigestUtils.sha256(content);
+        long id = insertDocument(collection, "context fixture", "document", true, hash);
+        jdbcTemplate.update("UPDATE rag_documents SET content = ?, metadata = '{\"contextFixture\":\"yes\"}'::jsonb WHERE id = ?", content, id);
+        String chunker = descriptors.textDescriptor().chunkerVersion();
+        jdbcTemplate.update("INSERT INTO rag_document_local_index_state (document_id,local_index_status,content_hash,chunker_version,local_index_generation,chunk_count) VALUES (?,'READY',?,?,1,3)", id, hash, chunker);
+        for (int index = 0; index < payloads.length; index++) {
+            int start = content.indexOf(payloads[index]);
+            jdbcTemplate.update("INSERT INTO rag_document_chunks (document_id,local_index_generation,content_hash,chunker_version,chunk_index,chunk_start_pos,chunk_end_pos,chunk_text) VALUES (?,1,?,?,?,?,?,?)",
+                    id, hash, chunker, index, start, start + payloads[index].length(), "# 规则\n" + payloads[index]);
+        }
+        Document anchor = Document.builder().id(id + ":1").text("# 规则\n" + payloads[1])
+                .metadata(Map.of("documentId", String.valueOf(id), "chunkIndex", 1)).build();
+        return new AssemblyFixture(id, anchor);
+    }
+
+    private List<Document> assemble(AssemblyFixture fixture, RetrievalScope scope, RetrievalFilters filters) {
+        RagProperties properties = new RagProperties();
+        RetrievalTraceCollector trace = new RetrievalTraceCollector();
+        trace.record(List.of(new RetrievalDocumentMapper().toRetrievalResult(fixture.anchor())));
+        AuthorizedRetrievalContext context = new AuthorizedRetrievalContext(scope, null, trace, "assembly-pg", null, 24000, filters);
+        var repository = new RetrievalContextRepository(jdbcTemplate, () -> activeProfile, descriptors);
+        var processor = new RetrievalContextAssemblyPostProcessor(repository, properties);
+        return processor.process(new Query("query", List.of(), Map.of(ProjectDocumentRetriever.CONTEXT_KEY, context)), List.of(fixture.anchor()));
+    }
+
+    private record AssemblyFixture(long documentId, Document anchor) { }
 
     private String vectorText(float[] vector) {
         StringBuilder value = new StringBuilder("[");

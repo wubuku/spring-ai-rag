@@ -19,6 +19,7 @@ public class RagChatProperties {
     private HistoryProperties history = new HistoryProperties();
     private ExecutionProperties execution = new ExecutionProperties();
     private ContextProperties context = new ContextProperties();
+    private RagContextAssemblyProperties contextAssembly = new RagContextAssemblyProperties();
     private IdempotencyProperties idempotency = new IdempotencyProperties();
     private StaticKnowledgeProperties staticKnowledge =
             new StaticKnowledgeProperties();
@@ -71,6 +72,11 @@ public class RagChatProperties {
         return context;
     }
 
+    public RagContextAssemblyProperties getContextAssembly() { return contextAssembly; }
+    public void setContextAssembly(RagContextAssemblyProperties value) {
+        contextAssembly = value != null ? value : new RagContextAssemblyProperties();
+    }
+
     public void setContext(ContextProperties context) {
         this.context = context != null ? context : new ContextProperties();
     }
@@ -117,6 +123,7 @@ public class RagChatProperties {
      * Validates cross-field chat limits after Spring Boot has bound all values.
      */
     public void validate() {
+        contextAssembly.validate();
         requirePositive("rag.chat.execution.max-candidate-attempts",
                 execution.getMaxCandidateAttempts());
         requirePositive("rag.chat.execution.max-model-calls",

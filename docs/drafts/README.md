@@ -51,5 +51,8 @@ The processing/recovery, citation/streaming, chunking-correctness, and default-f
 including supplemental real-LLM acceptance, are in the
 [historical archive](archive/README.md).
 
+The Knowledge Chat post-retrieval evidence assembly and completeness regression
+plan is also in the [historical archive](archive/README.md).
+
 Completed, stopped, and superseded materials remain available in the
 [historical archive](archive/README.md).

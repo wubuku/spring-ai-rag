@@ -207,6 +207,13 @@ public final class RetrievalTraceSession {
         citationValidation.set(validation == null ? null : Map.copyOf(validation));
     }
 
+    public void recordContextAssembly(String attemptKey, Map<String, Object> summary) {
+        AttemptRecord attempt = findAttempt(attemptKey);
+        if (attempt != null && summary != null) {
+            attempt.contextAssembly = Map.copyOf(summary);
+        }
+    }
+
     public Map<String, Object> citationValidation() {
         return citationValidation.get();
     }
@@ -298,6 +305,7 @@ public final class RetrievalTraceSession {
         private volatile int lastBudgetQueryChars;
         private volatile Map<String, Object> queryExpansion;
         private volatile Map<String, Object> documentJoin;
+        private volatile Map<String, Object> contextAssembly;
         private final List<RetrievalOutcome> retrievals = new CopyOnWriteArrayList<>();
         private final List<Map<String, Object>> toolCalls = new CopyOnWriteArrayList<>();
 
@@ -331,6 +339,9 @@ public final class RetrievalTraceSession {
             }
             if (documentJoin != null) {
                 map.put("documentJoin", documentJoin);
+            }
+            if (contextAssembly != null) {
+                map.put("contextAssembly", contextAssembly);
             }
             if (budgetExhausted) {
                 map.put("budgetExhausted", true);

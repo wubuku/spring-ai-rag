@@ -11,6 +11,8 @@ import com.springairag.core.rag.CitationQueryAugmenter;
 import com.springairag.core.rag.CompositeChatDocumentRetriever;
 import com.springairag.core.rag.ProjectDocumentRetriever;
 import com.springairag.core.rag.ProjectRerankPostProcessor;
+import com.springairag.core.rag.RetrievalContextAssemblyPostProcessor;
+import com.springairag.core.rag.RetrievalContextRepository;
 import com.springairag.core.rag.StaticKnowledgeDocumentRetriever;
 import com.springairag.core.retrieval.RetrievalScope;
 import org.junit.jupiter.api.BeforeEach;
@@ -49,6 +51,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -121,6 +124,42 @@ class ModeAwareChatClientFactoryTest {
                                 .DOCUMENT_CONTEXT));
         verify(documentRetriever).retrieve(any(Query.class));
         verify(rerankPostProcessor).process(any(Query.class), anyList());
+    }
+
+    @Test
+    void knowledgeModeAddsBoundedNeighborBeforePromptBudgetAndCitation() {
+        RagProperties properties = new RagProperties();
+        properties.getChat().getKnowledge().setQueryTransformer("none");
+        ProjectDocumentRetriever project = mock(ProjectDocumentRetriever.class);
+        ProjectRerankPostProcessor rerank = mock(ProjectRerankPostProcessor.class);
+        when(rerank.process(any(Query.class), anyList())).thenAnswer(invocation -> invocation.getArgument(1));
+        RetrievalContextRepository repository = mock(RetrievalContextRepository.class);
+        Document anchor = Document.builder().id("20:1").text("执行：折羽归档请求。")
+                .metadata(Map.of("documentId", "20", "chunkIndex", 1, "score", 0.91)).build();
+        when(project.retrieve(any(Query.class))).thenReturn(List.of(anchor));
+        String before = "定义：必须校验签名。";
+        String after = "解除码：K47。";
+        int anchorStart = before.length();
+        int anchorEnd = anchorStart + anchor.getText().length();
+        when(repository.load(anyList(), any(), eq(1), eq(4000))).thenReturn(List.of(
+                new RetrievalContextRepository.Chunk(0, 20, 1, "hash", "v3", 0, 0, before.length(), before),
+                new RetrievalContextRepository.Chunk(0, 20, 1, "hash", "v3", 1, anchorStart, anchorEnd, anchor.getText()),
+                new RetrievalContextRepository.Chunk(0, 20, 1, "hash", "v3", 2, anchorEnd, anchorEnd + after.length(), after)));
+        ModeAwareChatClientFactory configuredFactory = new ModeAwareChatClientFactory(
+                project, rerank, new CitationQueryAugmenter(properties), properties, List.of(), mock(ToolCallingManager.class));
+        configuredFactory.setContextAssemblyPostProcessor(
+                new RetrievalContextAssemblyPostProcessor(repository, properties));
+        ChatModel chatModel = model("answer");
+        ModeAwareChatClientFactory.Attempt attempt = configuredFactory.create(
+                command(ChatMode.KNOWLEDGE), candidate("knowledge", chatModel), List.of());
+        RetrievalResult retrieval = new RetrievalResult();
+        retrieval.setDocumentId("20"); retrieval.setChunkIndex(1); retrieval.setChunkText(anchor.getText());
+        attempt.retrievalContext().trace().record(List.of(retrieval));
+        attempt.client().prompt().user("找出解除码").advisors(advisor -> advisor.param(
+                ProjectDocumentRetriever.CONTEXT_KEY, attempt.retrievalContext())).call().chatClientResponse();
+        ArgumentCaptor<Prompt> prompt = ArgumentCaptor.forClass(Prompt.class);
+        verify(chatModel, atLeastOnce()).call(prompt.capture());
+        assertTrue(prompt.getAllValues().stream().anyMatch(value -> value.getContents().contains("K47")));
     }
 
     @Test

@@ -821,6 +821,11 @@ aggregate rows.
 rag:
   chat:
     default-mode: KNOWLEDGE
+    context-assembly:
+      enabled: true
+      neighbor-radius: 1
+      max-seeds: 20
+      max-window-characters: 4000
     knowledge:
       query-transformer: none
       query-transform-timeout-seconds: 30
@@ -880,6 +885,10 @@ rag:
 | Property | Default | Description |
 |---|---|---|
 | `rag.chat.default-mode` | `KNOWLEDGE` | Mode used when `ChatRequest.mode` is omitted |
+| `rag.chat.context-assembly.enabled` | `true` | Whether `KNOWLEDGE` post-retrieval evidence assembly is enabled; emergency override `RAG_CHAT_CONTEXT_ASSEMBLY_ENABLED` |
+| `rag.chat.context-assembly.neighbor-radius` | `1` | Previous/next chunk radius for registered hits, `0..2`; override `RAG_CHAT_CONTEXT_ASSEMBLY_NEIGHBOR_RADIUS` |
+| `rag.chat.context-assembly.max-seeds` | `20` | Maximum registered hit seeds assembled per attempt, `1..40`; override `RAG_CHAT_CONTEXT_ASSEMBLY_MAX_SEEDS` |
+| `rag.chat.context-assembly.max-window-characters` | `4000` | Maximum characters in one assembled window, `256..16000`; override `RAG_CHAT_CONTEXT_ASSEMBLY_MAX_WINDOW_CHARACTERS` |
 | `rag.chat.knowledge.query-transformer` | `none` | `none` or `spring-ai`; `postgresql`, `local`, and `prod` profiles use `spring-ai` |
 | `rag.chat.knowledge.query-transform-timeout-seconds` | `30` | Timeout for the Spring AI history compression call; override with `RAG_CHAT_QUERY_TRANSFORM_TIMEOUT_SECONDS` |
 | `rag.chat.knowledge.query-expander-variants` | `2` | Number of LLM-generated search variants when the `spring-ai` strategy is enabled; override with `RAG_CHAT_QUERY_EXPANDER_VARIANTS` |
