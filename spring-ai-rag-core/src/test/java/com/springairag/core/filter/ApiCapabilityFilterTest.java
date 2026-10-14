@@ -1,5 +1,7 @@
 package com.springairag.core.filter;
 
+import com.springairag.core.security.ApiCapabilitySupport;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.springairag.api.dto.ErrorResponse;
 import com.springairag.api.openai.OpenAiErrorResponse;
@@ -15,6 +17,12 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class ApiCapabilityFilterTest {
+
+    @Test
+    void chunkPreviewRequiresReadCapability() {
+        assertEquals(ApiCapabilitySupport.RAG_READ,
+                ApiCapabilityFilter.requiredCapability("GET", "/api/v1/rag/documents/41/chunks/preview"));
+    }
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 

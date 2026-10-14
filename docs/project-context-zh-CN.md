@@ -226,6 +226,11 @@ Collection、SQL 或 JSONPath。
 普通非空短文档至少保留一个 chunk；`minChunkSize` 是尽力而为的分块质量目标，不是
 静默丢弃文档的准入过滤器。JSON record 固定使用一个 record-level chunk。
 
+分块默认 `legacy-v2` 保持兼容；显式启用 `bounded-v3` 后才获得正文覆盖、最终payload上限、
+原文位置、标题归属和保护区的校验保证。`DocumentChunkingService` 统一关键词/Embedding/
+preview，Profile变更需要显式重索引，不自动迁移旧派生物。只读诊断不调用模型。
+见[分块配置](configuration-zh-CN.md#文档分块配置)。
+
 <a id="external-document-synchronization"></a>
 
 ### 外部文档同步

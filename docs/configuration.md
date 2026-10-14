@@ -659,9 +659,20 @@ top-N selection.
 
 ## Document Chunking Configuration
 
+`legacy-v2` is the compatibility default, preserving the old algorithm and
+`hierarchical-v2` identity; it does not guarantee strict size, source coverage,
+or offsets. Set `RAG_CHUNK_PROFILE=bounded-v3` and restart to use validated
+chunking. Switching makes old-profile indexes stale and requires explicit
+reindexing; no automatic bulk re-embedding occurs. Rolling back also requires
+rebuilding v2 indexes for documents already derived under v3.
+
 ```yaml
 rag:
   chunk:
+    profile: legacy-v2
+    max-input-chars: 1000000
+    max-chunks: 20000
+    preview-max-chars: 100000
     default-chunk-size: 1000
     default-chunk-overlap: 100
     min-chunk-size: 100
@@ -669,9 +680,33 @@ rag:
 
 | Property | Default | Description |
 |----------|---------|-------------|
+| `rag.chunk.profile` | `legacy-v2` | `legacy-v2` / `bounded-v3`; environment `RAG_CHUNK_PROFILE` |
+| `rag.chunk.max-input-chars` | `1000000` | v3 text input limit; `RAG_CHUNK_MAX_INPUT_CHARS` |
+| `rag.chunk.max-chunks` | `20000` | v3 output chunk limit; `RAG_CHUNK_MAX_CHUNKS` |
+| `rag.chunk.preview-max-chars` | `100000` | Read-only preview input limit for all profiles; `RAG_CHUNK_PREVIEW_MAX_CHARS` |
 | `rag.chunk.default-chunk-size` | `1000` | Default chunk size (characters) |
 | `rag.chunk.default-chunk-overlap` | `100` | Chunk overlap size (characters) |
-| `rag.chunk.min-chunk-size` | `100` | Best-effort target for generated chunks; non-blank documents are not discarded |
+| `rag.chunk.min-chunk-size` | `100` | Best-effort target, not an admission gate that discards short documents |
+
+v3 requires size>=32, 0<=overlap<size, 0<=min<=size, and positive input/chunk
+limits. Size means Java UTF-16 characters, not tokens; title prefixes and repeated
+table headers count toward the final payload budget. Plain-text overlap is a
+maximum, capped at half the remaining body capacity to guarantee forward
+progress and bounded duplication. Protected blocks split on whole lines
+without extra body overlap. Source ranges are
+`[startPos,endPos)` and never split surrogate pairs. Sibling headings replace the
+current level; fences, standalone `$$` formula blocks, and valid pipe tables are
+protected. Oversized protected blocks split on original lines, and table
+continuations repeat headers. Unsplittable oversized lines fail explicitly
+rather than truncate or bypass the budget.
+Code/formula continuations preserve original lines and indentation without
+automatically adding balanced fences or formula delimiters. Diagnostics report
+line splitting; consumers must not assume each continuation is independently
+well-formed Markdown.
+
+v3 identity is `bounded-v3:size:min:overlap:maxInputChars:maxChunks`. JSON_RECORD
+retains `json-record-v1:single` without ordinary text splitting. See the
+[chunk preview API](rest-api.md#get-apiv1ragdocumentsidchunkspreview).
 
 ## JSON Structured-Record Configuration
 

@@ -198,6 +198,22 @@ tool arguments/results, credentials, or exception bodies in evidence.
 
 ## Test Categories
 
+### Chunking Correctness And Read-Only Preview Gate
+
+```bash
+./scripts/verify-chunking-quality.sh
+```
+
+Covers source conservation, payload caps, offsets/Unicode, sibling headings,
+invalid tables, long-table headers, code/formula protection, fixed-seed tests,
+Profile/version, JSON_RECORD compatibility, preview pagination/400/403/404,
+RAG_READ, and PostgreSQL chunk persistence/profile switches/explicit rebuilding.
+Release also requires full `mvn test` and `verify-gated-it.sh`. The new profile is
+opt-in: set `RAG_CHUNK_PROFILE=bounded-v3` on an isolated database/port for real
+Embedding/Chat retrieval and citation checks, comparing preview/index chunks.
+Subjective answer quality does not replace deterministic coverage assertions or
+fixed-fixture retrieval results.
+
 ### IME interaction regression
 
 WebUI tests for action-triggering inputs must cover the IME boundary as a

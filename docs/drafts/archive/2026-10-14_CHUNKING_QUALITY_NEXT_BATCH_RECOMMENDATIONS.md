@@ -3,7 +3,7 @@
 > 日期：2026-10-14。代码核对基线：`3b227ff0`，`main`。
 >
 > 状态：候选建议，**不是冻结的实施规划，未开始实施第三批**。
-> 若启动本批，须按[交付工作流](../delivery-workflow-zh-CN.md)补齐自包含规划、验收矩阵及
+> 若启动本批，须按[交付工作流](../../delivery-workflow-zh-CN.md)补齐自包含规划、验收矩阵及
 > 连续三轮无修改检查，再修改代码；本文不将候选能力表述为已实现。
 
 ## 1. 推荐结论与优先级
@@ -26,16 +26,16 @@
 
 | 入口 | 现状及本批边界 |
 |---|---|
-| [DocumentChunkingService](../../spring-ai-rag-core/src/main/java/com/springairag/core/service/DocumentChunkingService.java) `prepare` | 本地关键词与 Embedding 共用的唯一协调入口；JSON_RECORD 保持 single chunk；没有 provider 调用 |
-| [HierarchicalTextChunker](../../spring-ai-rag-documents/src/main/java/com/springairag/documents/chunk/HierarchicalTextChunker.java) `split` | 已有标题、表格、句子、固定长度分支和 overlap；应增强它，不平行再造一条处理链 |
-| [TextChunk](../../spring-ai-rag-documents/src/main/java/com/springairag/documents/chunk/TextChunk.java) | 当前记录 text/startPos/endPos，位置契约为原文字符区间，endPos exclusive |
-| [RagChunkProperties](../../spring-ai-rag-core/src/main/java/com/springairag/core/config/RagChunkProperties.java) | 默认 size=1000、min=100、overlap=100；目前不是完整的策略 Profile |
-| [DocumentDerivationDescriptorProvider](../../spring-ai-rag-core/src/main/java/com/springairag/core/service/DocumentDerivationDescriptorProvider.java) | 当前文本派生版本 `hierarchical-v2:size:min:overlap`；JSON_RECORD 为 `json-record-v1:single` |
-| [现有 chunker 测试](../../spring-ai-rag-documents/src/test/java/com/springairag/documents/chunk/HierarchicalTextChunkerTest.java) | 已覆盖基础场景，但“长句回退”只验证非空与局部位置范围，没有证明尺寸上限及完整覆盖 |
+| [DocumentChunkingService](../../../spring-ai-rag-core/src/main/java/com/springairag/core/service/DocumentChunkingService.java) `prepare` | 本地关键词与 Embedding 共用的唯一协调入口；JSON_RECORD 保持 single chunk；没有 provider 调用 |
+| [HierarchicalTextChunker](../../../spring-ai-rag-documents/src/main/java/com/springairag/documents/chunk/HierarchicalTextChunker.java) `split` | 已有标题、表格、句子、固定长度分支和 overlap；应增强它，不平行再造一条处理链 |
+| [TextChunk](../../../spring-ai-rag-documents/src/main/java/com/springairag/documents/chunk/TextChunk.java) | 当前记录 text/startPos/endPos，位置契约为原文字符区间，endPos exclusive |
+| [RagChunkProperties](../../../spring-ai-rag-core/src/main/java/com/springairag/core/config/RagChunkProperties.java) | 默认 size=1000、min=100、overlap=100；目前不是完整的策略 Profile |
+| [DocumentDerivationDescriptorProvider](../../../spring-ai-rag-core/src/main/java/com/springairag/core/service/DocumentDerivationDescriptorProvider.java) | 当前文本派生版本 `hierarchical-v2:size:min:overlap`；JSON_RECORD 为 `json-record-v1:single` |
+| [现有 chunker 测试](../../../spring-ai-rag-documents/src/test/java/com/springairag/documents/chunk/HierarchicalTextChunkerTest.java) | 已覆盖基础场景，但“长句回退”只验证非空与局部位置范围，没有证明尺寸上限及完整覆盖 |
 
 借鉴的通用方法是“保护区识别 → 分块 → 结果校验 → 有界降级”，不照搬参考项目的语言、
 配置或模块。来源细节可选读
-[原始调研 §4.3](WEKNORA_REFERENCE_RESEARCH.md#43-p0自适应分块结果校验与分块诊断)；
+[原始调研 §4.3](../WEKNORA_REFERENCE_RESEARCH.md#43-p0自适应分块结果校验与分块诊断)；
 以下问题及目标均可直接依据本仓源码理解，不依赖外部项目背景。
 
 ## 3. 当前源码的可重复缺陷证据
@@ -129,7 +129,7 @@ new HierarchicalTextChunker(500, 10, 10).split(original);
 
 完成定义还需包含相关模块测试、Maven、适用 PostgreSQL 集成门禁、文档与禁锁门禁；
 如果改 WebUI，再加入其单测、Mock E2E、构建与设计门禁。具体命令复用
-[测试指南](../testing-guide-zh-CN.md)，正式规划给出本批固定命令而不是“实施时再决定”。
+[测试指南](../../testing-guide-zh-CN.md)，正式规划给出本批固定命令而不是“实施时再决定”。
 
 ## 6. 暂不列为第三批 P0 的方向
 

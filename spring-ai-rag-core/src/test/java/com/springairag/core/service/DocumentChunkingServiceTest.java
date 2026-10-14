@@ -25,6 +25,33 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class DocumentChunkingServiceTest {
 
+    @Test
+    void boundedProfileSharesPreparePreviewIdentityAndPreservesJsonRecord() {
+        RagProperties bounded = new RagProperties();
+        bounded.getChunk().setProfile(com.springairag.core.config.RagChunkProperties.Profile.BOUNDED_V3);
+        bounded.getChunk().setDefaultChunkSize(100);
+        bounded.getChunk().setMinChunkSize(10);
+        bounded.getChunk().setDefaultChunkOverlap(10);
+        DocumentChunkingService chunking = new DocumentChunkingService(bounded,
+                new DocumentDerivationDescriptorProvider(bounded));
+        RagDocument text = document("text", "x".repeat(500));
+        assertEquals(chunking.prepare(text).chunks(), chunking.preview(text).chunks());
+        assertEquals("bounded-v3:100:10:10:1000000:20000", chunking.chunkerVersionFor(text));
+        assertTrue(chunking.preview(text).diagnostics().valid());
+        assertEquals(1, chunking.prepare(document(RagDocument.JSON_RECORD, "x".repeat(500))).chunks().size());
+        assertEquals("json-record-v1:single", chunking.chunkerVersionFor(document(RagDocument.JSON_RECORD, "{}")));
+        bounded.getChunk().setPreviewMaxChars(100);
+        assertThrows(com.springairag.documents.chunk.ChunkingException.class, () -> chunking.preview(text));
+        assertTrue(chunking.prepare(text).chunks().size() > 1);
+    }
+
+    @Test
+    void legacyDiagnosticsDoNotChangeCompatibilityOutput() {
+        RagDocument text = document("text", "x".repeat(3000));
+        assertEquals(service.prepare(text).chunks(), service.preview(text).chunks());
+        assertTrue(service.preview(text).diagnostics().violations().contains("PAYLOAD_LIMIT"));
+    }
+
     private RagProperties properties;
     private DocumentChunkingService service;
 

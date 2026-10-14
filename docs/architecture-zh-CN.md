@@ -450,6 +450,13 @@ key 按原值、区分大小写地一次批量解析。不受限调用方的未�
 
 ### 4.3 文档嵌入流
 
+`DocumentChunkingService` 是关键词、Embedding 和只读 preview 的统一分块入口。
+兼容默认 `legacy-v2` 保留原算法；显式启用 `bounded-v3` 使用原文 span、标题层级、结构保护
+及 coverage/尺寸 Validator，错误在 provider 调用前暴露。v3 以独立派生身份参与已有
+freshness/CAS/lease 提交门，不增迁移、不修改 JSON_RECORD 单块契约。
+详情见[分块配置](configuration-zh-CN.md#文档分块配置)和
+[预览 API](rest-api-zh-CN.md#get-apiv1ragdocumentsidchunkspreview)。
+
 ```
 POST /api/v1/rag/documents/{id}/embed
   │
@@ -457,7 +464,7 @@ POST /api/v1/rag/documents/{id}/embed
 DocumentEmbedService
   │ 1. 读取 RagDocument.content
   ▼
-HierarchicalTextChunker
+DocumentChunkingService（legacy-v2 / bounded-v3）
   │ 2. 按 Markdown 结构分块
   ▼
 TextCleaner

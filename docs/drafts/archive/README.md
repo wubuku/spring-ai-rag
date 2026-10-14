@@ -48,6 +48,10 @@ relevant evergreen guide/reference, `docs/TODO*`, and the
 - Second-batch supplemental real-LLM acceptance:
   [M3/BGE-M3, SSE, and idempotent replay evidence](2026-10-14_CITATION_STREAMING_REAL_LLM_ACCEPTANCE.md)
   (Chinese)
+- Third-batch chunking correctness, Profile, and read-only diagnostics:
+  [plan](2026-10-14_CHUNKING_QUALITY_IMPLEMENTATION_PLAN.md) and
+  [implementation/acceptance](2026-10-14_CHUNKING_QUALITY_IMPLEMENTATION_PROGRESS.md)
+  (Chinese)
 - Local keyword/vector derivation decoupling:
   `2026-08-19_KEYWORD_VECTOR_DECOUPLING_*`
 - External-document relocation and derivation-integrity repair:

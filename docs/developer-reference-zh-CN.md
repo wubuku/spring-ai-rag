@@ -797,6 +797,14 @@ delivery。证据分别位于 `.verification/alert-notification-delivery/<run-id
 
 <a id="业务服务接入就绪一键验证"></a>
 
+### 分块正确性与真实样本验证
+
+分块正确性专项：`./scripts/verify-chunking-quality.sh`；真实固定样本验收用
+`python3 scripts/real-llm-chunking-smoke.py`，要求已有隔离服务、`BASE_URL`、
+`POSTGRES_DATABASE=rag_chunk_real_*` 和从 `.env` 载入的连接/模型凭据。
+它会创建合成文档并调用真实 Embedding/Chat，不负责启动和删库；调用者结束后须停止自建
+服务并删除该一次性数据库。策略启用见[分块配置](configuration-zh-CN.md#文档分块配置)。
+
 ### 业务服务接入就绪一键验证
 
 ```bash

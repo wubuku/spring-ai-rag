@@ -516,6 +516,15 @@ Regression-test anchors:
 
 ### 4.3 Document Embedding Flow
 
+`DocumentChunkingService` is the shared entry for keyword indexes, Embedding,
+and read-only preview. Compatibility-default `legacy-v2` preserves the old
+algorithm; opt-in `bounded-v3` uses source spans, heading hierarchy, protected
+structures, and coverage/size validation. Failures occur before provider calls.
+Its distinct derivation identity uses existing freshness/CAS/lease commit gates,
+without a migration or changes to single-chunk JSON_RECORD behavior. See
+[chunking configuration](configuration.md#document-chunking-configuration) and
+[preview API](rest-api.md#get-apiv1ragdocumentsidchunkspreview).
+
 ```
 POST /api/v1/rag/documents/{id}/embed
   │
@@ -523,7 +532,7 @@ POST /api/v1/rag/documents/{id}/embed
 DocumentEmbedService
   │ 1. Read RagDocument.content
   ▼
-HierarchicalTextChunker
+DocumentChunkingService (legacy-v2 / bounded-v3)
   │ 2. Chunk by Markdown structure
   ▼
 TextCleaner

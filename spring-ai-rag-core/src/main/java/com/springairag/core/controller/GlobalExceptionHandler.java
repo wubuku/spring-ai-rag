@@ -137,6 +137,12 @@ public class GlobalExceptionHandler {
                 e.getMessage() != null ? e.getMessage() : "Invalid argument", request);
     }
 
+    @ExceptionHandler(com.springairag.documents.chunk.ChunkingException.class)
+    public ResponseEntity<ErrorResponse> handleChunking(
+            com.springairag.documents.chunk.ChunkingException error, HttpServletRequest request) {
+        return buildResponse(HttpStatus.BAD_REQUEST, error.getCode(), error.getCode(), request);
+    }
+
     // ==================== 404 Not Found ====================
 
     @ExceptionHandler(NoHandlerFoundException.class)

@@ -180,6 +180,19 @@ provider 调用次数、purpose/mode 归因、终态结果、replay 不重复调
 
 ## 测试分类
 
+### 分块正确性与只读预览门禁
+
+```bash
+./scripts/verify-chunking-quality.sh
+```
+
+覆盖内容守恒、尺寸上限、offset/Unicode、同级标题、无效表格、长表表头、代码/公式保护、
+固定种子回归、Profile/version、JSON_RECORD兼容、preview分页/400/403/404、RAG_READ及
+真实PostgreSQL的块落库/版本切换/显式重建。发布仍需全量 `mvn test` 与 `verify-gated-it.sh`。
+新策略默认不启用；真实依赖验收在隔离库与端口设置 `RAG_CHUNK_PROFILE=bounded-v3`，
+核对preview和索引的chunk序列，再用真实Embedding/Chat测试检索与引用。不能只凭
+模型答复主观判定内容完整；离线守恒断言与固定样本检索结果是独立门槛。
+
 ### 输入法交互回归
 
 所有会触发动作的 WebUI 输入框，都必须把 IME 边界作为行为契约测试：

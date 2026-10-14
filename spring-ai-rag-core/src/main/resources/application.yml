@@ -425,6 +425,10 @@ rag:
 
   # Document chunking configuration
   chunk:
+    profile: ${RAG_CHUNK_PROFILE:legacy-v2}
+    max-input-chars: ${RAG_CHUNK_MAX_INPUT_CHARS:1000000}
+    max-chunks: ${RAG_CHUNK_MAX_CHUNKS:20000}
+    preview-max-chars: ${RAG_CHUNK_PREVIEW_MAX_CHARS:100000}
     default-chunk-size: 1000
     default-chunk-overlap: 100
 

@@ -1848,6 +1848,37 @@ does not imply that keyword retrieval is unavailable.
 
 ---
 
+### `GET /api/v1/rag/documents/{id}/chunks/preview`
+
+Read-only preview of the current document snapshot using production chunking.
+It writes no index and calls neither Embedding nor LLM. Requires `RAG_READ`
+and access to the owning Collection. `offset` defaults to 0 and must be
+non-negative; `limit` defaults to 20 and ranges from 1 to 100. Inputs exceeding
+`rag.chunk.preview-max-chars` return 400.
+
+The response contains `documentId`, `documentRevision`, `documentKind`, `profile`,
+`chunkerVersion`, `totalChunks`, `offset`, `limit`, `hasMore`, `diagnostics`, and
+the current page of `chunks`. Each chunk contains
+`index/text/startPos/endPos/kind/titlePath/generatedChars`. Source ranges use
+UTF-16 `[startPos,endPos)`; generated titles/headers are not part of those ranges.
+Kinds are TEXT/CODE/FORMULA/TABLE, LEGACY for compatibility, or JSON_RECORD.
+
+Diagnostics provide `valid/originalChars/coveredNonWhitespaceChars/minPayloadChars/maxPayloadChars/`
+`generatedChars/overlapChars/warnings/violations`. Coverage excludes generated
+context and repeated overlap. Legacy reports problems without v3 guarantees;
+JSON_RECORD uses `single-record` without the ordinary text size cap. The preview
+revision describes current content, not a persisted index; refetch after content
+or Profile changes.
+
+Errors: 404 missing, 403 unauthorized; stable 400 codes include
+`CHUNK_PREVIEW_INVALID_PAGE`, `CHUNK_PREVIEW_INPUT_LIMIT`, `CHUNK_INPUT_LIMIT`,
+`CHUNK_COUNT_LIMIT`, `CHUNK_ATOMIC_BLOCK_TOO_LARGE`, and `CHUNK_VALIDATION_FAILED`.
+Error summaries contain no document text. See
+[chunking configuration](configuration.md#document-chunking-configuration)
+for enablement, explicit reindexing, and rollback.
+
+---
+
 ### `PATCH /api/v1/rag/documents/{id}`
 
 Presence-aware merge patch for locally managed documents. It requires

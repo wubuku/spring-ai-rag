@@ -141,6 +141,44 @@ class DocumentLifecyclePostgresIntegrationTest {
     }
 
     @Test
+    void boundedProfilePersistsExactChunksAndProfileSwitchRequiresRebuild() {
+        long collectionId = insertCollection("bounded-chunk-test");
+        long documentId = insertDocument(collectionId, "default", null, HASH_A);
+        String content = "# Alpha\nalpha body\n# Beta\n| A | B |\n| --- | --- |\n"
+                + "| 1 | 2 |\n".repeat(30) + "\nTAIL_MARKER";
+        jdbcTemplate.update("UPDATE rag_documents SET content = ? WHERE id = ?", content, documentId);
+        RagDocument document = new RagDocument();
+        document.setId(documentId);
+        document.setCollectionId(collectionId);
+        document.setContent(content);
+        document.setContentHash(HASH_A);
+        document.setEnabled(true);
+        RagProperties properties = new RagProperties();
+        properties.getChunk().setProfile(com.springairag.core.config.RagChunkProperties.Profile.BOUNDED_V3);
+        properties.getChunk().setDefaultChunkSize(100);
+        properties.getChunk().setMinChunkSize(10);
+        properties.getChunk().setDefaultChunkOverlap(10);
+        DocumentDerivationDescriptorProvider descriptor = new DocumentDerivationDescriptorProvider(properties);
+        DocumentChunkingService chunking = new DocumentChunkingService(properties, descriptor);
+        KeywordIndexPersistenceService boundedIndex = new KeywordIndexPersistenceService(jdbcTemplate, chunking, descriptor);
+        new TransactionTemplate(new DataSourceTransactionManager(dataSource)).executeWithoutResult(
+                status -> boundedIndex.ensureCurrent(document));
+        assertTrue(boundedIndex.hasFreshLocalIndex(document));
+        java.util.List<com.springairag.documents.chunk.TextChunk> expected = chunking.preview(document).chunks();
+        java.util.List<com.springairag.documents.chunk.TextChunk> actual = jdbcTemplate.query(
+                "SELECT chunk_text, chunk_start_pos, chunk_end_pos FROM rag_document_chunks "
+                        + "WHERE document_id = ? ORDER BY chunk_index",
+                (row, index) -> new com.springairag.documents.chunk.TextChunk(row.getString(1), row.getInt(2), row.getInt(3)),
+                documentId);
+        assertEquals(expected, actual);
+        assertFalse(keywordIndexService.hasFreshLocalIndex(document));
+        new TransactionTemplate(new DataSourceTransactionManager(dataSource)).executeWithoutResult(
+                status -> keywordIndexService.ensureCurrent(document));
+        assertTrue(keywordIndexService.hasFreshLocalIndex(document));
+        assertFalse(boundedIndex.hasFreshLocalIndex(document));
+    }
+
+    @Test
     void v42CurrentEmbeddingGroupBackfillsIntoProfileNeutralLocalChunks() {
         flyway(null).clean();
         flyway(MigrationVersion.fromVersion("42")).migrate();

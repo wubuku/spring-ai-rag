@@ -899,6 +899,15 @@ CRITICAL alerts through V58 durable delivery. Evidence is written under
 
 <a id="business-service-integration-readiness-verification"></a>
 
+### Chunking Correctness And Real-Fixture Verification
+
+Chunking-specific gate: `./scripts/verify-chunking-quality.sh`; real fixed-fixture
+acceptance: `python3 scripts/real-llm-chunking-smoke.py`. Requires a running isolated
+server, `BASE_URL`, `POSTGRES_DATABASE=rag_chunk_real_*`, and connection/model
+credentials loaded from `.env`. It creates synthetic documents and calls real
+Embedding/Chat; the caller must stop its own server and drop the disposable
+database afterwards. See [chunking configuration](configuration.md#document-chunking-configuration).
+
 ### Business Service Integration Readiness Verification
 
 ```bash

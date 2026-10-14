@@ -3,6 +3,11 @@ package com.springairag.core.service;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.documents.chunk.HierarchicalTextChunker;
 import com.springairag.documents.chunk.TextChunk;
+import com.springairag.documents.chunk.BoundedTextChunker;
+import com.springairag.documents.chunk.ChunkingException;
+import com.springairag.documents.chunk.ChunkingResult;
+import com.springairag.documents.chunk.ChunkValidator;
+import com.springairag.core.config.RagChunkProperties;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -17,37 +22,66 @@ import java.util.Objects;
 @Service
 public class DocumentChunkingService {
 
-    private final HierarchicalTextChunker textChunker;
+    private final com.springairag.core.config.RagProperties properties;
     private final DocumentDerivationDescriptorProvider descriptorProvider;
 
     public DocumentChunkingService(
             com.springairag.core.config.RagProperties properties,
             DocumentDerivationDescriptorProvider descriptorProvider) {
-        this.textChunker = new HierarchicalTextChunker(
-                properties.getChunk().getDefaultChunkSize(),
-                properties.getChunk().getMinChunkSize(),
-                properties.getChunk().getDefaultChunkOverlap());
+        properties.getChunk().validate();
+        this.properties = properties;
         this.descriptorProvider = descriptorProvider;
     }
 
     public PreparedChunks prepare(RagDocument document) {
+        ChunkingResult result = prepareDetailed(document);
+        return new PreparedChunks(descriptorProvider.describe(document), result.chunks());
+    }
+
+    public ChunkingResult prepareDetailed(RagDocument document) {
         Objects.requireNonNull(document, "document");
         String content = document.getContent();
         if (content == null || content.isBlank()) {
             throw new IllegalArgumentException(
                     "Document content is empty: documentId=" + document.getId());
         }
-        DocumentDerivationDescriptorProvider.Descriptor descriptor =
-                descriptorProvider.describe(document);
-        List<TextChunk> chunks = RagDocument.JSON_RECORD.equals(
-                document.getDocumentType())
-                ? List.of(new TextChunk(content, 0, content.length()))
-                : textChunker.split(content);
+        RagChunkProperties settings = properties.getChunk();
+        settings.validate();
+        if (RagDocument.JSON_RECORD.equals(document.getDocumentType())) {
+            List<TextChunk> chunks = List.of(new TextChunk(content, 0, content.length()));
+            return new ChunkingResult(chunks,
+                    List.of(new ChunkingResult.ChunkMetadata("JSON_RECORD", List.of(), 0)),
+                    ChunkValidator.analyze(content, chunks, Integer.MAX_VALUE, 1, List.of("SINGLE_RECORD")));
+        }
+        if (settings.getProfile() == RagChunkProperties.Profile.BOUNDED_V3) {
+            return new BoundedTextChunker(settings.getDefaultChunkSize(), settings.getMinChunkSize(),
+                    settings.getDefaultChunkOverlap(), settings.getMaxInputChars(), settings.getMaxChunks())
+                    .split(content);
+        }
+        List<TextChunk> chunks = new HierarchicalTextChunker(settings.getDefaultChunkSize(),
+                settings.getMinChunkSize(), settings.getDefaultChunkOverlap()).split(content);
         if (chunks.isEmpty()) {
             throw new IllegalArgumentException(
                     "Non-blank document produced no chunks: documentId=" + document.getId());
         }
-        return new PreparedChunks(descriptor, chunks);
+        return new ChunkingResult(chunks, chunks.stream()
+                .map(chunk -> new ChunkingResult.ChunkMetadata("LEGACY", List.of(), 0)).toList(),
+                ChunkValidator.analyze(content, chunks, Math.max(1, settings.getDefaultChunkSize()),
+                        Integer.MAX_VALUE, List.of("LEGACY_NOT_STRICT")));
+    }
+
+    public ChunkingResult preview(RagDocument document) {
+        Objects.requireNonNull(document, "document");
+        if (document.getContent() != null
+                && document.getContent().length() > properties.getChunk().getPreviewMaxChars()) {
+            throw new ChunkingException("CHUNK_PREVIEW_INPUT_LIMIT");
+        }
+        return prepareDetailed(document);
+    }
+
+    public String profileFor(RagDocument document) {
+        return RagDocument.JSON_RECORD.equals(document.getDocumentType()) ? "single-record"
+                : properties.getChunk().getProfile().name().toLowerCase(java.util.Locale.ROOT).replace('_', '-');
     }
 
     /**

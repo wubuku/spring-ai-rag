@@ -1606,6 +1606,30 @@ Collection 身份的位置增加 `collectionKey`。
 
 ---
 
+### `GET /api/v1/rag/documents/{id}/chunks/preview`
+
+当前文档快照的只读分块预览，复用生产分块入口；不会写索引、调用 Embedding 或 LLM。
+需要 `RAG_READ` 和该文档所在 Collection 的访问权限。参数 `offset` 默认0且非负，
+`limit` 默认20，范围1–100。输入超过 `rag.chunk.preview-max-chars` 返回400。
+
+响应含 `documentId`、`documentRevision`、`documentKind`、`profile`、`chunkerVersion`、
+`totalChunks`、`offset`、`limit`、`hasMore`、`diagnostics` 与当前页 `chunks`。
+每块含 `index/text/startPos/endPos/kind/titlePath/generatedChars`；原文范围采用 UTF-16
+`[startPos,endPos)`，生成的标题/表头不属于原文区间。kind 为 TEXT/CODE/FORMULA/TABLE，
+兼容策略为 LEGACY，结构化记录为 JSON_RECORD。
+
+diagnostics 提供 `valid/originalChars/coveredNonWhitespaceChars/minPayloadChars/maxPayloadChars/`
+`generatedChars/overlapChars/warnings/violations`；覆盖排除生成上下文和 overlap 的重复。
+legacy 仅报告问题，不提供 v3 的严格保证；JSON_RECORD 的 `single-record` 不套用文本尺寸上限。
+预览标识当前正文 revision，不代表已持久化索引；修改正文或 Profile 后须重新获取预览。
+
+错误：404不存在、403无权限；400的稳定code包括 `CHUNK_PREVIEW_INVALID_PAGE`、
+`CHUNK_PREVIEW_INPUT_LIMIT`、`CHUNK_INPUT_LIMIT`、`CHUNK_COUNT_LIMIT`、
+`CHUNK_ATOMIC_BLOCK_TOO_LARGE`、`CHUNK_VALIDATION_FAILED`。错误摘要不包含文档正文。
+Profile启用与重索引/回滚边界见[分块配置](configuration-zh-CN.md#文档分块配置)。
+
+---
+
 ### `PATCH /api/v1/rag/documents/{id}`
 
 只用于本地管理文档的 presence-aware merge patch。必须发送

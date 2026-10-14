@@ -280,6 +280,13 @@ Ordinary non-blank short documents are retained as at least one chunk.
 `minChunkSize` is a best-effort chunk-quality target, not a document-loss
 filter. JSON records use one record-level chunk.
 
+The default `legacy-v2` profile preserves compatibility. Opt-in `bounded-v3`
+validates content coverage, final payload size, source positions, heading scope,
+and protected structures. `DocumentChunkingService` unifies keyword/Embedding/
+preview; changing Profile requires explicit reindexing, not automatic migration
+of old derivatives. Read-only diagnostics call no model. See
+[chunking configuration](configuration.md#document-chunking-configuration).
+
 <a id="external-document-synchronization"></a>
 
 ### External Document Synchronization

@@ -600,9 +600,18 @@ provider 已返回结果的基础上减少数量。null 或 blank 文档 ID 按�
 
 ## 文档分块配置
 
+`legacy-v2` 是兼容默认，保持旧算法与 `hierarchical-v2` 派生身份；它不提供严格的尺寸、
+原文覆盖和定位保证。显式设置 `RAG_CHUNK_PROFILE=bounded-v3` 并重启，才能使用受校验策略。
+切换会使旧策略的索引不再 fresh，需要显式重索引；不会自动全库重嵌入。回滚恢复旧配置后，
+已经生成 v3 派生物的文档也必须重新构建 v2 索引，不能直接把新结果视为旧结果有效。
+
 ```yaml
 rag:
   chunk:
+    profile: legacy-v2
+    max-input-chars: 1000000
+    max-chunks: 20000
+    preview-max-chars: 100000
     default-chunk-size: 1000
     default-chunk-overlap: 100
     min-chunk-size: 100
@@ -610,9 +619,27 @@ rag:
 
 | 属性 | 默认值 | 说明 |
 |------|--------|------|
+| `rag.chunk.profile` | `legacy-v2` | `legacy-v2` / `bounded-v3`；环境变量 `RAG_CHUNK_PROFILE` |
+| `rag.chunk.max-input-chars` | `1000000` | v3 文本输入限额；`RAG_CHUNK_MAX_INPUT_CHARS` |
+| `rag.chunk.max-chunks` | `20000` | v3 输出块数上限；`RAG_CHUNK_MAX_CHUNKS` |
+| `rag.chunk.preview-max-chars` | `100000` | 所有策略的只读 preview 输入限额；`RAG_CHUNK_PREVIEW_MAX_CHARS` |
 | `rag.chunk.default-chunk-size` | `1000` | 默认分块大小（字符） |
 | `rag.chunk.default-chunk-overlap` | `100` | 分块重叠大小（字符） |
-| `rag.chunk.min-chunk-size` | `100` | 生成分块的尽力而为目标；非空文档不会被丢弃 |
+| `rag.chunk.min-chunk-size` | `100` | 生成分块的尽力而为目标，不是丢弃短文档的准入门槛 |
+
+v3 要求 size>=32、0<=overlap<size、0<=min<=size，输入/块数限额为正。尺寸使用 Java
+UTF-16 字符数而不是 token；最终 payload 的标题前缀、重复表头也占用预算。
+普通文本 overlap 是上限，实际最多为扣除标题后正文容量的一半，保证前进和有界重复；
+保护块按整行拆分，不额外注入正文 overlap。
+原文位置为 `[startPos,endPos)`，不切断 emoji surrogate pair；同级标题替换当前层，
+代码围栏、独占行 `$$` 公式和合法 pipe table 受保护。超长保护块按原文行拆分，长表续块
+复制表头；不可安全拆分的超长单行显式报错，不截断、不允许无限长特例。
+代码/公式续块保留原行及缩进，不自动补闭合围栏或公式定界符；诊断会标记按行拆分，
+调用方不要将每个续块误当作独立、语法闭合的 Markdown 片段。
+
+v3 identity 为 `bounded-v3:size:min:overlap:maxInputChars:maxChunks`。JSON_RECORD 保留
+`json-record-v1:single` 单块契约，不套用普通文本尺寸拆分。只读诊断见
+[分块预览 API](rest-api-zh-CN.md#get-apiv1ragdocumentsidchunkspreview)。
 
 ## JSON 结构化记录配置
 

@@ -35,6 +35,24 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class EmbeddingJobExecutorErrorTextTest {
 
+    @Test
+    void boundedChunkingErrorIsNonRetryableAndAttributedToChunkingStage() {
+        EmbeddingJob job = job(9L, false);
+        stubClaimed(job);
+        com.springairag.core.documentprocessing.DocumentProcessingRunRepository processing =
+                mock(com.springairag.core.documentprocessing.DocumentProcessingRunRepository.class);
+        executor.setProcessingRepository(processing);
+        when(embedService.embedDocumentForJob(eq(42L), eq(false), any(), any()))
+                .thenThrow(new com.springairag.documents.chunk.ChunkingException("CHUNK_ATOMIC_BLOCK_TOO_LARGE"));
+        executor.executeNow(JOB_ID);
+        verify(processing).markStage(eq(job), anyString(),
+                eq(com.springairag.api.enums.DocumentProcessingStageName.CHUNKING),
+                eq(com.springairag.api.enums.DocumentProcessingStageStatus.FAILED),
+                eq("CHUNK_ATOMIC_BLOCK_TOO_LARGE"), eq("CHUNK_ATOMIC_BLOCK_TOO_LARGE"));
+        verify(repository).markNonRetryableFailure(eq(JOB_ID), anyString(), eq("CHUNK_ATOMIC_BLOCK_TOO_LARGE"));
+        verify(repository, never()).markFailure(any(), anyString(), anyString(), anyInt());
+    }
+
     private static final UUID JOB_ID = UUID.randomUUID();
 
     @Mock EmbeddingJobRepository repository;

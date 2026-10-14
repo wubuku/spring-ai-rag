@@ -122,8 +122,15 @@ public class EmbeddingJobExecutor {
         } catch (RuntimeException e) {
             String error = safeError(e.getMessage());
             boolean nonRetryable = isNonRetryableException(e);
-            markCurrentStageFailed(job, leaseOwner,
-                    nonRetryable ? "NON_RETRYABLE" : "EMBEDDING_FAILED", error);
+            if (e instanceof com.springairag.documents.chunk.ChunkingException chunkingError) {
+                markStage(job, leaseOwner, DocumentProcessingStageName.PARSING,
+                        DocumentProcessingStageStatus.SUCCEEDED, null, null);
+                markStage(job, leaseOwner, DocumentProcessingStageName.CHUNKING,
+                        DocumentProcessingStageStatus.FAILED, chunkingError.getCode(), error);
+            } else {
+                markCurrentStageFailed(job, leaseOwner,
+                        nonRetryable ? "NON_RETRYABLE" : "EMBEDDING_FAILED", error);
+            }
             if (nonRetryable) {
                 repository.markNonRetryableFailure(job.id(), leaseOwner, error);
             } else {

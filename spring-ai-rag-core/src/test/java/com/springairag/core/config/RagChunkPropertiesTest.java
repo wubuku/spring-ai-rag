@@ -10,6 +10,23 @@ import static org.junit.jupiter.api.Assertions.*;
 class RagChunkPropertiesTest {
 
     @Test
+    void profileBudgetsValidateAndKeepLegacyDefault() {
+        RagChunkProperties properties = new RagChunkProperties();
+        assertEquals(RagChunkProperties.Profile.LEGACY_V2, properties.getProfile());
+        properties.validate();
+        properties.setProfile(RagChunkProperties.Profile.BOUNDED_V3);
+        properties.validate();
+        properties.setDefaultChunkOverlap(properties.getDefaultChunkSize());
+        assertThrows(IllegalArgumentException.class, properties::validate);
+        properties.setDefaultChunkOverlap(10);
+        properties.setMaxInputChars(0);
+        assertThrows(IllegalArgumentException.class, properties::validate);
+        properties.setMaxInputChars(1000);
+        properties.setPreviewMaxChars(0);
+        assertThrows(IllegalArgumentException.class, properties::validate);
+    }
+
+    @Test
     void defaults_defaultChunkSizeIs1000() {
         RagChunkProperties props = new RagChunkProperties();
         assertEquals(1000, props.getDefaultChunkSize());
