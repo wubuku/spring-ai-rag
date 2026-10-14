@@ -12,6 +12,7 @@ import com.springairag.api.dto.DocumentSyncRunStatusResponse;
 import com.springairag.api.enums.DocumentSyncItemStatus;
 import com.springairag.core.service.DocumentSyncRunService;
 import com.springairag.core.versioning.ApiVersion;
+import com.springairag.core.security.ApiRoutePolicy;
 import io.micrometer.core.annotation.Timed;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -43,6 +44,7 @@ import java.util.UUID;
  */
 @RestController
 @ApiVersion("v1")
+@ApiRoutePolicy
 @RequestMapping("/rag/document-sync-runs")
 @Tag(name = "Document Sync Runs",
         description = "Authoritative external document snapshot reconciliation")

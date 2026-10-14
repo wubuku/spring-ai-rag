@@ -30,6 +30,7 @@ import java.util.Objects;
  */
 @RestController
 @ApiVersion("v1")
+@com.springairag.core.security.ApiRoutePolicy
 @RequestMapping("/rag/models")
 @Tag(name = "Models", description = "Multi-model management")
 public class ModelController {
@@ -80,6 +81,7 @@ public class ModelController {
                 true, modelRouter.getProviderInfo(provider)));
     }
 
+    @com.springairag.core.security.ApiRoutePolicy(access = com.springairag.core.security.ApiRoutePolicy.Access.READ)
     @PostMapping("/compare")
     @Operation(summary = "Compare responses from multiple models in parallel",
             description = "Sends the same query to multiple models and collects response content and latency data in parallel. Used for model effect comparison.")

@@ -38,6 +38,7 @@ import java.util.List;
  */
 @RestController
 @ApiVersion("v1")
+@com.springairag.core.security.ApiRoutePolicy
 @RequestMapping("/rag")
 @Tag(name = "RAG Metrics", description = "RAG service metrics monitoring")
 public class RagMetricsController {

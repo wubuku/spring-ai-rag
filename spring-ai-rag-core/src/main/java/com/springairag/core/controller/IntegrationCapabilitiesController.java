@@ -21,6 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
  * Runtime integration capability discovery endpoint.
  */
 @RestController
+@com.springairag.core.security.ApiRoutePolicy(access = com.springairag.core.security.ApiRoutePolicy.Access.MANAGEMENT)
 @RequestMapping("/api/v1/rag/integration-capabilities")
 @Tag(name = "Integration", description = "Runtime integration contracts")
 public class IntegrationCapabilitiesController {

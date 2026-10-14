@@ -6,6 +6,8 @@ import com.springairag.api.openai.OpenAiErrorResponse;
 import com.springairag.core.entity.ApiKeyRole;
 import com.springairag.core.security.ApiCapabilitySupport;
 import com.springairag.core.security.AuthenticatedApiPrincipal;
+import com.springairag.core.security.ApiRoutePolicyDecision;
+import com.springairag.core.security.ApiRoutePolicyRegistry;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -35,6 +37,16 @@ public class ApiCapabilityFilter extends OncePerRequestFilter {
             "/api/v1/rag/evaluation/semantic/batch",
             "/v1/chat/completions");
 
+    private final ApiRoutePolicyRegistry routePolicyRegistry;
+
+    public ApiCapabilityFilter() {
+        this(null);
+    }
+
+    public ApiCapabilityFilter(ApiRoutePolicyRegistry routePolicyRegistry) {
+        this.routePolicyRegistry = routePolicyRegistry;
+    }
+
     @Override
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
@@ -51,9 +63,26 @@ public class ApiCapabilityFilter extends OncePerRequestFilter {
             return;
         }
 
-        String required = requiredCapability(request.getMethod(), request.getRequestURI());
-        if (required == null
-                || (ApiCapabilitySupport.RAG_READ.equals(required)
+        ApiRoutePolicyDecision decision = routePolicyRegistry == null
+                ? legacyDecision(request)
+                : routePolicyRegistry.decision(
+                        request.getMethod(), request.getRequestURI());
+        if (decision == ApiRoutePolicyDecision.UNDECLARED
+                && isManagementOrIdentityPath(normalizePath(request.getRequestURI()))) {
+            decision = ApiRoutePolicyDecision.MANAGEMENT;
+        }
+        if (decision == ApiRoutePolicyDecision.MANAGEMENT) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+        if (decision == ApiRoutePolicyDecision.UNDECLARED) {
+            sendRouteNotDeclared(response, request.getRequestURI());
+            return;
+        }
+        String required = decision == ApiRoutePolicyDecision.READ
+                ? ApiCapabilitySupport.RAG_READ
+                : ApiCapabilitySupport.RAG_WRITE;
+        if ((ApiCapabilitySupport.RAG_READ.equals(required)
                 && ApiCapabilitySupport.hasRead(principal))
                 || (ApiCapabilitySupport.RAG_WRITE.equals(required)
                 && ApiCapabilitySupport.hasWrite(principal))) {
@@ -62,6 +91,18 @@ public class ApiCapabilityFilter extends OncePerRequestFilter {
         }
 
         sendForbidden(response, request.getRequestURI(), required);
+    }
+
+    private ApiRoutePolicyDecision legacyDecision(HttpServletRequest request) {
+        String required = requiredCapability(request.getMethod(), request.getRequestURI());
+        if (required == null) {
+            return isManagementOrIdentityPath(normalizePath(request.getRequestURI()))
+                    ? ApiRoutePolicyDecision.MANAGEMENT
+                    : ApiRoutePolicyDecision.UNDECLARED;
+        }
+        return ApiCapabilitySupport.RAG_READ.equals(required)
+                ? ApiRoutePolicyDecision.READ
+                : ApiRoutePolicyDecision.WRITE;
     }
 
     /**
@@ -101,7 +142,7 @@ public class ApiCapabilityFilter extends OncePerRequestFilter {
         };
     }
 
-    private static boolean isManagementOrIdentityPath(String path) {
+    static boolean isManagementOrIdentityPath(String path) {
         // 分段感知：/api/v1/rag/api-keysfoo 不该被当作身份管理路径。
         return path.equals("/api/v1/rag/auth")
                 || SecurityPathExclusions.matchesPrefix(path, "/api/v1/rag/auth")
@@ -141,6 +182,29 @@ public class ApiCapabilityFilter extends OncePerRequestFilter {
         }
         ErrorResponse error = ErrorResponse.builder()
                 .error("FORBIDDEN")
+                .status(HttpStatus.FORBIDDEN.value())
+                .message(message)
+                .path(path)
+                .build();
+        response.getWriter().write(OBJECT_MAPPER.writeValueAsString(error));
+    }
+
+    private void sendRouteNotDeclared(HttpServletResponse response, String path)
+            throws IOException {
+        response.setStatus(HttpStatus.FORBIDDEN.value());
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        String message = "API route is not declared in the route policy registry";
+        if (path != null && path.startsWith("/v1/")) {
+            response.getWriter().write(OBJECT_MAPPER.writeValueAsString(
+                    OpenAiErrorResponse.of(
+                            message,
+                            "permission_error",
+                            null,
+                            "ROUTE_NOT_DECLARED")));
+            return;
+        }
+        ErrorResponse error = ErrorResponse.builder()
+                .error("ROUTE_NOT_DECLARED")
                 .status(HttpStatus.FORBIDDEN.value())
                 .message(message)
                 .path(path)

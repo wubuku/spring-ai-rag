@@ -7,6 +7,7 @@ import com.springairag.api.dto.EmbeddingJobResponse;
 import com.springairag.core.embeddingjob.EmbeddingJobService;
 import com.springairag.core.embeddingjob.EmbeddingJobStatus;
 import com.springairag.core.versioning.ApiVersion;
+import com.springairag.core.security.ApiRoutePolicy;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -23,6 +24,7 @@ import java.util.UUID;
  */
 @RestController
 @ApiVersion("v1")
+@ApiRoutePolicy
 @RequestMapping("/rag/embedding-jobs")
 public class EmbeddingJobController {
 

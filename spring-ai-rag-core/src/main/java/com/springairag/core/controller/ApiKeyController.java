@@ -15,6 +15,7 @@ import com.springairag.core.filter.ApiKeyAuthFilter;
 import com.springairag.core.security.ApiAccessPolicy;
 import com.springairag.core.security.EnvironmentRootCredentialResolver;
 import com.springairag.core.security.ApiKeyCollectionAccess;
+import com.springairag.core.security.ApiRoutePolicy;
 import com.springairag.core.security.ProvisioningOwnerResolver;
 import com.springairag.core.service.ApiKeyManagementService;
 import com.springairag.core.service.CollectionIdentityResolver;
@@ -48,6 +49,7 @@ import java.util.UUID;
  * RAG 数据面。未配置 root 时保留 legacy 管理语义。
  */
 @RestController
+@ApiRoutePolicy(access = ApiRoutePolicy.Access.MANAGEMENT)
 @RequestMapping("/api/v1/rag/api-keys")
 @Tag(name = "API Key Management", description = "Create, list, revoke, and rotate API keys")
 public class ApiKeyController {

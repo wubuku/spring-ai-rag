@@ -1124,6 +1124,22 @@ durable outbox:
   tool-exchange projection for querying, summarization, and analytics
 - Two tables with separated responsibilities, no interference
 
+### Why Derive API Route Policy from Real Spring MVC Mappings?
+
+**Chosen**: build a startup route-policy registry from `RequestMappingHandlerMapping` and
+declare capability semantics with `@ApiRoutePolicy`.
+
+**Rationale**:
+- Spring MVC generates the final shape of versioned and combined mappings. Reading the real
+  mappings avoids maintaining a second path list that can drift;
+- a Controller-level declaration covers ordinary methods, while method-level `READ` expresses
+  read-only POST routes precisely and `MANAGEMENT` preserves existing management boundaries;
+- startup rejects protected routes without a declaration or with conflicting policies, and a
+  database NORMAL key receives `ROUTE_NOT_DECLARED` for an unregistered `/api/*` or `/v1/*`
+  route, making omissions fail closed and diagnosable;
+- the registry only changes the capability gate. It does not change root, ADMIN, legacy static
+  key, authentication-disabled, Collection ACL, success-response, or database-schema semantics.
+
 ### Why Separate Embedding Model from Chat Model Configuration?
 
 **Chosen**: `siliconflow.*` independent embedding model configuration

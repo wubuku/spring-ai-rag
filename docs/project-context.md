@@ -615,6 +615,13 @@ Managed database callers consist of a stable `rag_api_principal` and versioned
   `403` responses occur before quota accounting. Rotation inherits
   capabilities, while policy CAS may update them. ADMIN, root, legacy-static,
   and auth-disabled paths remain unrestricted.
+- The same capability gate uses a startup-built `ApiRoutePolicyRegistry` that
+  reads real Spring MVC mappings. Protected Controllers must declare
+  `@ApiRoutePolicy`; class defaults and method-level `READ`/`MANAGEMENT`
+  exceptions are checked together. A missing declaration or policy conflict
+  fails before readiness, while a database NORMAL principal reaching an
+  unregistered `/api/*` or `/v1/*` route receives `ROUTE_NOT_DECLARED`, with no
+  new configuration property or migration.
 - Root-managed principal creation accepts an optional `Idempotency-Key`.
   The first successful request returns `201` and shows the raw credential once;
   an exact replay returns `200`, current credential metadata, and an explicit

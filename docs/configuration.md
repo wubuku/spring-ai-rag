@@ -1208,6 +1208,16 @@ rag:
 | `rag.security.enabled` | `false` | Enable API Key authentication |
 | `rag.security.api-key` | `""` | Legacy static unrestricted key; ignored for authentication in root mode |
 
+API route policy adds no configuration property. A Servlet application builds the registry from
+the real `RequestMappingHandlerMapping` by default and checks protected handlers for
+`@ApiRoutePolicy` during startup, so each route needs no separate path configuration and no
+database migration. A database NORMAL key receives `403 ROUTE_NOT_DECLARED` for an unregistered
+`/api/*` or `/v1/*` route; root, ADMIN, legacy static keys, authentication-disabled paths, and
+management routes retain their existing authorization semantics. When adding or changing a
+route, prefer a Controller-level declaration and use a method-level declaration only for
+exceptions such as read-only POST routes; a missing declaration fails the application before
+readiness.
+
 | Property | Default | Description |
 |----------|---------|-------------|
 | `rag.api-key-provisioning.enabled` | `true` | Enables keyed API-principal provisioning; when disabled, requests carrying `Idempotency-Key` fail closed with `503` |

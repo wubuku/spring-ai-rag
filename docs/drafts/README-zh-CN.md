@@ -43,4 +43,6 @@
 
 知识库 Chat 检索后证据组装与依据完整性回归已归档至[历史规划归档](archive/README-zh-CN.md)。
 
+API Route Policy 自检与未声明 route 默认拒绝已归档至[历史规划归档](archive/README-zh-CN.md)。
+
 已完成、已停止和被替代的材料可从[历史归档](archive/README-zh-CN.md)追溯。

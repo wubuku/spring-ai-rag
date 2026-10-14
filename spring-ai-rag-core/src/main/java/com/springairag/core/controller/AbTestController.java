@@ -4,6 +4,7 @@ import com.springairag.api.dto.VariantResponse;
 import com.springairag.api.service.AbTestService;
 import com.springairag.core.service.AuditLogService;
 import com.springairag.core.versioning.ApiVersion;
+import com.springairag.core.security.ApiRoutePolicy;
 import io.micrometer.core.annotation.Timed;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -25,6 +26,7 @@ import java.util.Objects;
  */
 @RestController
 @ApiVersion("v1")
+@ApiRoutePolicy
 @RequestMapping("/rag/ab")
 @Tag(name = "A/B Testing", description = "A/B testing: retrieval strategy comparison experiment")
 public class AbTestController {

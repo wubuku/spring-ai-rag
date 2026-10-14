@@ -53,6 +53,7 @@ import java.util.List;
  */
 @RestController
 @ApiVersion("v1")
+@com.springairag.core.security.ApiRoutePolicy
 @RequestMapping("/rag/search")
 @Tag(name = "RAG Search", description = "Direct retrieval endpoint (no LLM, for debugging and preview)")
 public class RagSearchController {
@@ -188,6 +189,7 @@ public class RagSearchController {
             @ApiResponse(responseCode = "200", description = "Returns retrieval results list"),
             @ApiResponse(responseCode = "400", description = "Request parameter validation failed")
     })
+    @com.springairag.core.security.ApiRoutePolicy(access = com.springairag.core.security.ApiRoutePolicy.Access.READ)
     @PostMapping
     @Timed(value = "rag.search.post", description = "RAG direct search (POST)", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<List<RetrievalResult>> searchWithConfig(

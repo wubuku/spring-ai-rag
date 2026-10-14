@@ -1103,6 +1103,14 @@ rag:
 | `rag.security.enabled` | `false`（本地）/ `true`（`prod`） | 启用 API Key 认证 |
 | `rag.security.api-key` | `""` | Legacy 静态全库 Key；root 模式下不参与认证 |
 
+API route policy 不增加配置项：Servlet 应用默认从真实
+`RequestMappingHandlerMapping` 构建 registry，并在启动期检查受保护 handler 的
+`@ApiRoutePolicy`。因此不需要为每个 route 维护路径配置，也不需要迁移数据库。数据库
+NORMAL 业务 Key 对未注册的 `/api/*` 或 `/v1/*` route 默认收到 `403 ROUTE_NOT_DECLARED`；
+root、ADMIN、legacy static key、认证关闭和管理 route 继续使用既有授权语义。route policy
+切换或新增 route 时，优先通过 Controller 类级声明，只有只读 POST 等例外才使用方法级
+声明；实现缺失会让应用在 readiness 之前失败。
+
 | 属性 | 默认值 | 说明 |
 |------|--------|------|
 | `rag.api-key-provisioning.enabled` | `true` | 启用 keyed API principal provisioning；关闭后携带 `Idempotency-Key` 的请求 fail closed 返回 `503` |

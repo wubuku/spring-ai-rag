@@ -46,6 +46,9 @@
 - KNOWLEDGE Chat 检索后证据组装与依据完整性回归：
   [规划](2026-10-14_RETRIEVAL_CONTEXT_ASSEMBLY_PLAN.md)、
   [实施/回归/真实模型验收](2026-10-14_RETRIEVAL_CONTEXT_ASSEMBLY_PROGRESS.md)
+- API Route Policy 声明、真实 Spring MVC 映射自检与未声明 route 默认拒绝：
+  [规划](2026-10-15_ROUTE_POLICY_SELF_CHECK_PLAN.md)、
+  [实施/回归/启动验收](2026-10-15_ROUTE_POLICY_SELF_CHECK_PROGRESS.md)
 - 本地关键词/向量派生解耦：`2026-08-19_KEYWORD_VECTOR_DECOUPLING_*`
 - 外部文档迁移与派生完整性修复：`2026-08-21_NEXT_HIGH_VALUE_FEATURES_*`
 - 外部 Client 接入边界历史规划：

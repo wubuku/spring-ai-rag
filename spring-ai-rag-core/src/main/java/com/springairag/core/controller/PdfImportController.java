@@ -69,6 +69,7 @@ import java.util.UUID;
  */
 @ApiVersion("v1")
 @RestController
+@com.springairag.core.security.ApiRoutePolicy
 @RequestMapping("/rag/files")
 @Tag(name = "File System Import", description = "PDF import, directory tree management, and file preview")
 public class PdfImportController {

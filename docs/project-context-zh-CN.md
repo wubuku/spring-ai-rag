@@ -480,6 +480,11 @@ job enqueue 分开提交，HTTP 不同步循环调用 provider。只读诊断默
   `RAG_WRITE`；读取和显式只读 POST 需要 read，其他 mutation 默认需要 write。能力
   `403` 在 quota 计数前返回；rotation 继承能力，policy CAS 可更新能力。ADMIN、root、
   legacy static 与 auth-disabled 路径保持 unrestricted。
+- 同一 capability gate 还使用启动期构建的 `ApiRoutePolicyRegistry`：它直接读取真实
+  Spring MVC mapping，要求受保护 Controller 声明 `@ApiRoutePolicy`，并把类级默认与方法级
+  `READ`/`MANAGEMENT` 例外统一纳入检查。缺少声明或 policy 冲突会在 readiness 前失败；
+  数据库 NORMAL principal 命中未注册的 `/api/*` 或 `/v1/*` route 时返回
+  `ROUTE_NOT_DECLARED`，不新增配置项或迁移。
 - root 管理的 principal 创建支持可选 `Idempotency-Key`。首次成功返回 `201` 并仅展示
   一次 raw credential；精确重放返回 `200`、当前 credential metadata 与显式
   `rawKey: null`。同一 owner/key 被用于不同有效语义时返回 `409`。后续 rotation 或

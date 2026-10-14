@@ -4,6 +4,7 @@ import com.springairag.api.dto.ClientErrorCountResponse;
 import com.springairag.api.dto.ClientErrorRequest;
 import com.springairag.core.service.ClientErrorService;
 import com.springairag.core.versioning.ApiVersion;
+import com.springairag.core.security.ApiRoutePolicy;
 import io.micrometer.core.annotation.Timed;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.*;
 
 @RestController
 @ApiVersion("v1")
+@ApiRoutePolicy
 @RequestMapping("/rag/client-errors")
 @Tag(name = "Client Errors", description = "Client-side error reporting from WebUI")
 public class ClientErrorController {

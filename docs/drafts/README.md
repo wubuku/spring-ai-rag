@@ -46,13 +46,15 @@ Active plans are listed here and in `docs/index*`.
   plan/implementation/acceptance loop focused on test hardening, WebUI UI/UX
   refactoring, and technical-debt cleanup; new features are out of scope for
   this stage.
-
 The processing/recovery, citation/streaming, chunking-correctness, and default-feature/automatic-upgrade/recovery batches,
 including supplemental real-LLM acceptance, are in the
 [historical archive](archive/README.md).
 
 The Knowledge Chat post-retrieval evidence assembly and completeness regression
 plan is also in the [historical archive](archive/README.md).
+
+The API Route Policy self-check and default denial plan is now in the
+[historical archive](archive/README.md).
 
 Completed, stopped, and superseded materials remain available in the
 [historical archive](archive/README.md).

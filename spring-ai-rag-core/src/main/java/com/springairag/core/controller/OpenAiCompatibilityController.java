@@ -54,6 +54,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * OpenAI Chat Completions 的受控兼容入口。
  */
 @RestController
+@com.springairag.core.security.ApiRoutePolicy
 @RequestMapping("/v1")
 @ConditionalOnProperty(
         prefix = "rag.openai-compatibility",
@@ -102,6 +103,7 @@ public class OpenAiCompatibilityController {
         return toModel(aliasRegistry.require(id).alias());
     }
 
+    @com.springairag.core.security.ApiRoutePolicy(access = com.springairag.core.security.ApiRoutePolicy.Access.READ)
     @PostMapping(
             value = "/chat/completions",
             consumes = MediaType.APPLICATION_JSON_VALUE)

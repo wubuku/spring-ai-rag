@@ -90,6 +90,7 @@ import java.util.concurrent.TimeUnit;
  */
 @RestController
 @ApiVersion("v1")
+@com.springairag.core.security.ApiRoutePolicy
 @RequestMapping("/rag/chat")
 @Tag(name = "RAG Chat", description = "RAG Q&A interface (non-streaming + SSE streaming)")
 public class RagChatController {
@@ -165,6 +166,7 @@ public class RagChatController {
             @ApiResponse(responseCode = "200", description = "Q&A succeeded, returns complete answer"),
             @ApiResponse(responseCode = "400", description = "Request parameter validation failed")
     })
+    @com.springairag.core.security.ApiRoutePolicy(access = com.springairag.core.security.ApiRoutePolicy.Access.READ)
     @PostMapping("/ask")
     @Timed(value = "rag.chat.ask", description = "RAG non-streaming chat", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<ChatResponse> ask(@Valid @RequestBody ChatRequest request,
@@ -193,6 +195,7 @@ public class RagChatController {
             @ApiResponse(responseCode = "200", description = "Q&A succeeded, returns complete answer"),
             @ApiResponse(responseCode = "400", description = "Request parameter validation failed")
     })
+    @com.springairag.core.security.ApiRoutePolicy(access = com.springairag.core.security.ApiRoutePolicy.Access.READ)
     @PostMapping
     @Timed(value = "rag.chat.ask", description = "RAG non-streaming chat", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<ChatResponse> chat(@Valid @RequestBody ChatRequest request,
@@ -307,6 +310,7 @@ public class RagChatController {
             @ApiResponse(responseCode = "200", description = "SSE streaming response, pushing answer chunks"),
             @ApiResponse(responseCode = "400", description = "Request parameter validation failed")
     })
+    @com.springairag.core.security.ApiRoutePolicy(access = com.springairag.core.security.ApiRoutePolicy.Access.READ)
     @PostMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @Timed(value = "rag.chat.stream", description = "RAG streaming chat", percentiles = {0.5, 0.95, 0.99})
     public SseEmitter stream(@Valid @RequestBody ChatRequest request,

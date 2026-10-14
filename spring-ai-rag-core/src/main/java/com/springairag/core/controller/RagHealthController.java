@@ -30,6 +30,7 @@ import java.util.Map;
  */
 @RestController
 @ApiVersion("v1")
+@com.springairag.core.security.ApiRoutePolicy
 @RequestMapping("/rag")
 @Tag(name = "RAG Health", description = "Health check and status monitoring")
 public class RagHealthController {

@@ -9,6 +9,7 @@ import com.springairag.core.security.AuthenticatedApiPrincipal;
 import com.springairag.core.security.ApiKeyCollectionAccess;
 import com.springairag.core.security.ApiCapabilitySupport;
 import com.springairag.core.security.EnvironmentRootCredentialResolver;
+import com.springairag.core.security.ApiRoutePolicy;
 import com.springairag.core.service.CollectionIdentityResolver;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -31,6 +32,7 @@ import java.util.Map;
  * WebUI 解锁时使用的当前 API principal 探测端点。
  */
 @RestController
+@ApiRoutePolicy(access = ApiRoutePolicy.Access.MANAGEMENT)
 @RequestMapping("/api/v1/rag/auth")
 public class ApiKeyIdentityController {
 

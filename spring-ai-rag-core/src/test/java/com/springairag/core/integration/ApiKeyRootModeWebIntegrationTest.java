@@ -9,6 +9,7 @@ import com.springairag.core.controller.ApiKeyIdentityController;
 import com.springairag.core.controller.GlobalExceptionHandler;
 import com.springairag.core.entity.ApiKeyRole;
 import com.springairag.core.security.AuthenticatedApiPrincipal;
+import com.springairag.core.security.ApiRoutePolicy;
 import com.springairag.core.security.ProvisioningOwnerResolver;
 import com.springairag.core.service.ApiKeyManagementService;
 import com.springairag.core.service.CollectionIdentityResolver;
@@ -227,6 +228,7 @@ class ApiKeyRootModeWebIntegrationTest {
     }
 
     @RestController
+    @ApiRoutePolicy
     static class CapabilityProbeController {
 
         @GetMapping("/api/v1/rag/capability-probe")

@@ -5,6 +5,7 @@ import com.springairag.api.dto.DocumentProcessingRunResponse;
 import com.springairag.api.enums.DocumentProcessingRunStatus;
 import com.springairag.core.documentprocessing.DocumentProcessingRunService;
 import com.springairag.core.versioning.ApiVersion;
+import com.springairag.core.security.ApiRoutePolicy;
 import io.micrometer.core.annotation.Timed;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -21,6 +22,7 @@ import java.util.UUID;
 /** 文档处理 Run 的查询、取消和重试 API。 */
 @RestController
 @ApiVersion("v1")
+@ApiRoutePolicy
 @RequestMapping("/rag/document-processing-runs")
 @Tag(name = "Document Processing Runs",
         description = "Auditable document derivation processing runs")

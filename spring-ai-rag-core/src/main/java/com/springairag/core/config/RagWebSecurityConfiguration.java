@@ -4,6 +4,7 @@ import com.springairag.core.filter.ApiKeyAuthFilter;
 import com.springairag.core.filter.ApiCapabilityFilter;
 import com.springairag.core.filter.RateLimitFilter;
 import com.springairag.core.filter.TrustedProxyResolver;
+import com.springairag.core.security.ApiRoutePolicyRegistry;
 import com.springairag.core.ratelimit.PostgresRateLimitStore;
 import com.springairag.core.ratelimit.RateLimitObservability;
 import com.springairag.core.ratelimit.SharedRateLimitMaintenance;
@@ -16,17 +17,39 @@ import jakarta.servlet.Filter;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 
 /**
  * standalone core 与 starter 共用的 API 认证装配。
  */
 @Configuration(proxyBeanMethods = false)
 public class RagWebSecurityConfiguration {
+
+    @Autowired(required = false)
+    private ObjectProvider<ApiRoutePolicyRegistry> routePolicyRegistries;
+
+    @Bean
+    @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
+    @ConditionalOnMissingBean
+    public ApiRoutePolicyRegistry apiRoutePolicyRegistry(
+            @Qualifier("requestMappingHandlerMapping")
+            ObjectProvider<RequestMappingHandlerMapping> mappingProviders) {
+        return new ApiRoutePolicyRegistry(() -> {
+            RequestMappingHandlerMapping mapping = mappingProviders.getIfAvailable();
+            if (mapping == null) {
+                throw new IllegalStateException(
+                        "Servlet route policy requires requestMappingHandlerMapping");
+            }
+            return mapping.getHandlerMethods();
+        });
+    }
 
     @Bean
     @ConditionalOnMissingBean
@@ -95,8 +118,11 @@ public class RagWebSecurityConfiguration {
     @Bean
     @ConditionalOnMissingBean(name = "apiCapabilityFilterRegistration")
     public FilterRegistrationBean<ApiCapabilityFilter> apiCapabilityFilterRegistration() {
+        ApiRoutePolicyRegistry routePolicyRegistry = routePolicyRegistries == null
+                ? null
+                : routePolicyRegistries.getIfAvailable();
         FilterRegistrationBean<ApiCapabilityFilter> registration =
-                new FilterRegistrationBean<>(new ApiCapabilityFilter());
+                new FilterRegistrationBean<>(new ApiCapabilityFilter(routePolicyRegistry));
         registration.addUrlPatterns("/api/*", "/v1/*");
         // capability gate must see the authenticated snapshot and run before quota accounting.
         registration.setOrder(-5);

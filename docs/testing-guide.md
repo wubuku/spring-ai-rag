@@ -288,6 +288,33 @@ class RagDocumentControllerTest {
 - Service layer can use `@Mock` + `@ExtendWith(MockitoExtension.class)` for pure unit tests
 - Use `@DataJpaTest` for database-related slice tests
 
+### API Route Policy Self-Check Regression
+
+The route-policy focused regression has two layers:
+
+- `ApiRoutePolicyRegistryTest` verifies class-level defaults, method-level `READ`
+  overrides, `MANAGEMENT`, missing declarations, and conflicting-policy startup
+  failures;
+- `ApiCapabilityFilterRoutePolicyTest` verifies `403 ROUTE_NOT_DECLARED` for an
+  unregistered route reached by a database NORMAL key, the OpenAI-compatible error
+  body, `RAG_READ` for read-only POST routes, and the existing management-route
+  capability bypass.
+
+Run:
+
+```bash
+mvn -pl spring-ai-rag-core -am \
+  -Dtest=ApiRoutePolicyRegistryTest,ApiCapabilityFilterRoutePolicyTest,ApiCapabilityFilterTest,ApiCapabilityFilterCapabilityClassificationTest,ApiCapabilityFilterClassifierTailTest,RagWebSecurityConfigurationTest \
+  -Dsurefire.failIfNoSpecifiedTests=false test
+```
+
+Servlet startup reads the real `RequestMappingHandlerMapping`, so a complete
+startup is also part of the self-check: a missing protected-route declaration or
+policy conflict must fail before readiness. `./scripts/dev.sh` must at least
+prove PostgreSQL-profile backend readiness, WebUI startup output, and cleanup on
+stop. This capability adds no Flyway migration and does not replace focused
+tests or startup evidence with a first manual request.
+
 ### The consumer direction of the route contract
 
 Alongside its long-standing **producer-direction** assertions (does this schema

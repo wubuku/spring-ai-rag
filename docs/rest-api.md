@@ -52,6 +52,29 @@ Without a root credential, legacy behavior remains. Setting
 `rag.security.enabled=true` accepts the headers above and continues to support
 `?apiKey=` with the existing database ADMIN/NORMAL and static-key semantics.
 
+### API route policy and default denial
+
+Protected `/api/*` and `/v1/*` routes build a route-policy registry from the real Spring MVC
+`RequestMappingHandlerMapping` during Servlet application startup. A Controller class can
+declare a default `METHOD_DEFAULT`, `READ`, `WRITE`, or `MANAGEMENT` policy, and a method-level
+declaration can override the class default. New or versioned routes therefore do not require a
+second copied path list in the security filter.
+
+- Startup self-check rejects a protected handler without `@ApiRoutePolicy` and rejects
+  conflicting policies for the same method/path. The application fails before readiness rather
+  than exposing an omission to live traffic.
+- For a registered data-plane route, a database NORMAL key receives the capability required by
+  the registry: `RAG_READ` or `RAG_WRITE`. Read-only POST routes such as Search, Chat, model
+  comparison, and read-only evaluation are explicitly declared as `READ`.
+- If a database NORMAL key reaches `/api/*` or `/v1/*` without a registered route, the service
+  returns `403` with `ROUTE_NOT_DECLARED`. Existing authorization semantics remain unchanged for
+  root, ADMIN, legacy static keys, authentication-disabled paths, and management routes.
+- This adds no configuration property, HTTP request/success-response field, or database
+  migration. It is enabled by default as a startup and request-security contract. See
+  [`ApiRoutePolicyRegistry`](../spring-ai-rag-core/src/main/java/com/springairag/core/security/ApiRoutePolicyRegistry.java)
+  and [`ApiCapabilityFilterRoutePolicyTest`](../spring-ai-rag-core/src/test/java/com/springairag/core/filter/ApiCapabilityFilterRoutePolicyTest.java)
+  for the implementation and focused regression coverage.
+
 #### `GET /api/v1/rag/auth/me`
 
 Returns the current principal and capabilities. The WebUI uses this endpoint to

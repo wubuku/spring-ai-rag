@@ -19,6 +19,7 @@ import java.util.UUID;
  */
 @RestController
 @ApiVersion("v1")
+@com.springairag.core.security.ApiRoutePolicy
 @RequestMapping("/rag/retrieval-traces")
 public class RetrievalTraceController {
 

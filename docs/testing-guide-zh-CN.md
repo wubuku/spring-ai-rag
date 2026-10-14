@@ -259,6 +259,29 @@ class RagDocumentControllerTest {
 - Service 层可以 `@Mock` + `@ExtendWith(MockitoExtension.class)` 纯单元测试
 - 涉及数据库的用 `@DataJpaTest` 切片测试
 
+### API Route Policy 自检回归
+
+本批 route policy 的 focused 回归由两层组成：
+
+- `ApiRoutePolicyRegistryTest` 验证类级默认、方法级 `READ` 覆盖、`MANAGEMENT`、缺少声明
+  和冲突 policy 的启动失败语义；
+- `ApiCapabilityFilterRoutePolicyTest` 验证数据库 NORMAL Key 对未声明 route 返回
+  `403 ROUTE_NOT_DECLARED`、OpenAI 兼容错误体、只读 POST 的 `RAG_READ`，以及管理 route
+  继续绕过 capability gate。
+
+运行命令：
+
+```bash
+mvn -pl spring-ai-rag-core -am \
+  -Dtest=ApiRoutePolicyRegistryTest,ApiCapabilityFilterRoutePolicyTest,ApiCapabilityFilterTest,ApiCapabilityFilterCapabilityClassificationTest,ApiCapabilityFilterClassifierTailTest,RagWebSecurityConfigurationTest \
+  -Dsurefire.failIfNoSpecifiedTests=false test
+```
+
+Servlet 应用启动时会读取真实 `RequestMappingHandlerMapping`，所以完整启动也是自检的一部分；
+缺少受保护 route 声明或发生 policy 冲突时，应用应在 readiness 前失败。`./scripts/dev.sh`
+至少要验证 PostgreSQL profile 的 backend readiness、WebUI 启动输出和停止清理；本能力不新增
+Flyway migration，也不以人工首次请求替代 focused 测试和启动证据。
+
 ### 消费者方向的路由契约
 
 `OpenApiContractTest` 里除了一贯的**生产者方向**断言（schema 在不在、要求的路径

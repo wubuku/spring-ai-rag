@@ -6,6 +6,7 @@ import com.springairag.core.alertdelivery.AlertNotificationDeliveryService;
 import com.springairag.core.service.AlertManagementAuthorization;
 import com.springairag.core.service.AuditLogService;
 import com.springairag.core.versioning.ApiVersion;
+import com.springairag.core.security.ApiRoutePolicy;
 import io.swagger.v3.oas.annotations.Operation;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.constraints.Max;
@@ -29,6 +30,7 @@ import java.util.UUID;
 /** Alert operator 管理面的 durable provider delivery receipt API。 */
 @RestController
 @ApiVersion("v1")
+@ApiRoutePolicy(access = ApiRoutePolicy.Access.MANAGEMENT)
 @RequestMapping("/rag/alerts/notification-deliveries")
 @Validated
 public class AlertNotificationDeliveryController {

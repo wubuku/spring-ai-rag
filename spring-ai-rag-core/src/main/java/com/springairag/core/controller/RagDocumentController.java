@@ -100,6 +100,7 @@ import java.util.stream.Collectors;
  */
 @RestController
 @ApiVersion("v1")
+@com.springairag.core.security.ApiRoutePolicy
 @RequestMapping("/rag/documents")
 @Validated
 @Tag(name = "RAG Documents", description = "Document management (CRUD + embedding vector generation)")

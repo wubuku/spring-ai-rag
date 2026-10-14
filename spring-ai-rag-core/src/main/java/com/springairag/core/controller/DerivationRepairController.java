@@ -6,6 +6,7 @@ import com.springairag.api.dto.DerivationRepairPreviewResponse;
 import com.springairag.api.dto.DerivationRepairStatusResponse;
 import com.springairag.core.service.DerivationRepairService;
 import com.springairag.core.versioning.ApiVersion;
+import com.springairag.core.security.ApiRoutePolicy;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -19,6 +20,7 @@ import java.util.UUID;
 /** 派生完整性修复控制面。 */
 @RestController
 @ApiVersion("v1")
+@ApiRoutePolicy
 @RequestMapping("/rag/collections/derivation-repairs")
 public class DerivationRepairController {
 

@@ -983,6 +983,21 @@ V58 把外部 Email/DingTalk 投递从进程内 best-effort 升级为 durable ou
 - 业务审计表保留完整历史、来源和有界工具交换投影，支持查询、摘要和分析
 - 两个表职责分离，互不干扰
 
+### 为什么从真实 Spring MVC 映射派生 API route policy？
+
+**选择**：由 `RequestMappingHandlerMapping` 构建启动期 route policy registry，并用
+`@ApiRoutePolicy` 声明 capability 语义。
+
+**理由**：
+- 版本化路径和组合 mapping 的最终形态由 Spring MVC 生成，registry 直接读取真实映射，
+  不再维护第二份容易漂移的路径清单；
+- Controller 类级声明覆盖普通方法，方法级 `READ` 可准确表达只读 POST，
+  `MANAGEMENT` 保留现有管理授权边界；
+- 启动期拒绝缺少声明或 policy 冲突的受保护 route，数据库 NORMAL 业务 Key 对未注册的
+  `/api/*`、`/v1/*` route 默认返回 `ROUTE_NOT_DECLARED`，把遗漏变成 fail-closed 诊断；
+- registry 只影响 capability gate，不改变 root、ADMIN、legacy static key、认证关闭、
+  Collection ACL、成功响应或数据库 schema。
+
 ### 为什么嵌入模型与 Chat Model 配置分离？
 
 **选择**：`siliconflow.*` 独立配置嵌入模型

@@ -47,6 +47,26 @@ X-API-Key: your-api-key
 未配置 root 时保持 legacy 模式：`rag.security.enabled=true` 后接受上述 Header，并继续
 兼容 `?apiKey=`；数据库 ADMIN/NORMAL 与静态 Key 语义保持不变。
 
+### API route policy 与未声明默认拒绝
+
+受保护的 `/api/*` 与 `/v1/*` route 会在 Servlet 应用启动时从真实 Spring MVC
+`RequestMappingHandlerMapping` 构建 route policy registry。Controller 类可以声明默认
+`METHOD_DEFAULT`、`READ`、`WRITE` 或 `MANAGEMENT` policy，方法级声明可以覆盖类级默认；
+因此新增或版本化 route 不需要再复制一份路径字符串到安全过滤器。
+
+- 启动自检会拒绝缺少 `@ApiRoutePolicy` 的受保护 handler，也会拒绝同一 method/path
+  产生冲突的 policy；应用会在 ready 之前失败，而不是把遗漏暴露给线上请求。
+- 数据库 NORMAL 业务 Key 访问已注册数据面 route 时，按 registry 决定需要
+  `RAG_READ` 或 `RAG_WRITE`；只读 POST（例如 Search、Chat、模型比较和只读评估）由
+  `READ` policy 明确声明。
+- 数据库 NORMAL 业务 Key 命中 `/api/*` 或 `/v1/*` 但没有已注册 route 时，返回 `403`
+  和错误码 `ROUTE_NOT_DECLARED`。root、ADMIN、legacy static key、关闭认证路径和管理
+  route 的既有授权语义保持不变。
+- 该能力无新增配置项、HTTP 请求/成功响应字段或数据库迁移；它是默认启用的启动与请求
+  安全契约。实现与 focused 回归测试见
+  [`ApiRoutePolicyRegistry`](../spring-ai-rag-core/src/main/java/com/springairag/core/security/ApiRoutePolicyRegistry.java)
+  和 [`ApiCapabilityFilterRoutePolicyTest`](../spring-ai-rag-core/src/test/java/com/springairag/core/filter/ApiCapabilityFilterRoutePolicyTest.java)。
+
 #### `GET /api/v1/rag/auth/me`
 
 返回当前 principal 和能力。WebUI 使用该端点确认输入的是 environment root：

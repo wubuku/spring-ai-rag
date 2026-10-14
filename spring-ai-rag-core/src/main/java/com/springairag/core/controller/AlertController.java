@@ -15,6 +15,7 @@ import com.springairag.core.service.AlertService;
 import com.springairag.core.service.AlertManagementAuthorization;
 import com.springairag.core.service.AuditLogService;
 import com.springairag.core.versioning.ApiVersion;
+import com.springairag.core.security.ApiRoutePolicy;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -38,6 +39,7 @@ import org.springframework.beans.factory.annotation.Autowired;
  */
 @RestController
 @ApiVersion("v1")
+@ApiRoutePolicy(access = ApiRoutePolicy.Access.MANAGEMENT)
 @RequestMapping("/rag/alerts")
 @Tag(name = "RAG Alerts", description = "Alert management (threshold alerts + SLO monitoring)")
 @Validated

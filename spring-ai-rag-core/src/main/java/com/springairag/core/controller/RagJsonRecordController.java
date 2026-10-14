@@ -38,6 +38,7 @@ import org.springframework.web.bind.annotation.RequestParam;
  */
 @RestController
 @ApiVersion("v1")
+@com.springairag.core.security.ApiRoutePolicy
 @RequestMapping("/rag/json-records")
 @Validated
 @Tag(name = "RAG JSON Records", description = "Structured JSONB records with caller-supplied retrieval text")
@@ -80,6 +81,7 @@ public class RagJsonRecordController {
             @ApiResponse(responseCode = "400", description = "Invalid search request"),
             @ApiResponse(responseCode = "403", description = "Collection access denied")
     })
+    @com.springairag.core.security.ApiRoutePolicy(access = com.springairag.core.security.ApiRoutePolicy.Access.READ)
     @PostMapping("/search")
     @Timed(value = "rag.json-records.search", description = "Search JSON structured records")
     public ResponseEntity<JsonRecordSearchResponse> search(

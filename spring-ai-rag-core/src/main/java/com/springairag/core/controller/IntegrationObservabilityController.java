@@ -23,6 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
  * Bounded, principal-scoped operation rollup query for integration operators.
  */
 @RestController
+@com.springairag.core.security.ApiRoutePolicy
 @RequestMapping("/api/v1/rag/integration-observability")
 @Tag(name = "Integration", description = "Runtime integration contracts")
 public class IntegrationObservabilityController {

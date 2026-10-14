@@ -8,6 +8,7 @@ import com.springairag.core.security.ApiKeyCollectionAccess;
 import com.springairag.core.service.DocumentChunkingService;
 import com.springairag.core.service.DocumentDerivationDescriptorProvider;
 import com.springairag.core.versioning.ApiVersion;
+import com.springairag.core.security.ApiRoutePolicy;
 import com.springairag.documents.chunk.ChunkDiagnostics;
 import com.springairag.documents.chunk.ChunkingException;
 import com.springairag.documents.chunk.ChunkingResult;
@@ -25,6 +26,7 @@ import java.util.List;
 /** 沿用文档读取授权的只读分块诊断。 */
 @RestController
 @ApiVersion("v1")
+@ApiRoutePolicy
 @RequestMapping("/rag/documents")
 public class DocumentChunkPreviewController {
     private final RagDocumentRepository repository;

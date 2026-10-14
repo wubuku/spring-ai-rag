@@ -76,6 +76,7 @@ import java.util.Map;
  */
 @RestController
 @ApiVersion("v1")
+@com.springairag.core.security.ApiRoutePolicy
 @RequestMapping("/rag/collections")
 @Tag(name = "RAG Collections", description = "Document collection (knowledge base) management")
 public class RagCollectionController {

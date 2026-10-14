@@ -6,6 +6,7 @@ import com.springairag.api.dto.ErrorResponse;
 import com.springairag.core.metrics.CacheMetricsService;
 import com.springairag.core.service.AuditLogService;
 import com.springairag.core.versioning.ApiVersion;
+import com.springairag.core.security.ApiRoutePolicy;
 import org.springframework.beans.factory.annotation.Autowired;
 import io.micrometer.core.annotation.Timed;
 import io.swagger.v3.oas.annotations.Operation;
@@ -29,6 +30,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @ApiVersion("v1")
+@ApiRoutePolicy
 @RequestMapping("/rag/cache")
 @Tag(name = "Cache Metrics", description = "Embedding cache metrics monitoring")
 public class CacheMetricsController {

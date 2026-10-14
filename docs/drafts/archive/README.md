@@ -64,6 +64,11 @@ relevant evergreen guide/reference, `docs/TODO*`, and the
   [plan](2026-10-14_RETRIEVAL_CONTEXT_ASSEMBLY_PLAN.md) and
   [implementation, regression, and real-model acceptance](2026-10-14_RETRIEVAL_CONTEXT_ASSEMBLY_PROGRESS.md)
   (Chinese)
+- API Route Policy declarations, real Spring MVC mapping self-check, and
+  default denial for undeclared routes:
+  [plan](2026-10-15_ROUTE_POLICY_SELF_CHECK_PLAN.md) and
+  [implementation, regression, and startup acceptance](2026-10-15_ROUTE_POLICY_SELF_CHECK_PROGRESS.md)
+  (Chinese)
 - Local keyword/vector derivation decoupling:
   `2026-08-19_KEYWORD_VECTOR_DECOUPLING_*`
 - External-document relocation and derivation-integrity repair:

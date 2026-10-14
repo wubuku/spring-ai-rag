@@ -36,6 +36,7 @@ import java.util.Map;
  */
 @RestController
 @ApiVersion("v1")
+@com.springairag.core.security.ApiRoutePolicy
 @RequestMapping("/rag/evaluation")
 @Tag(name = "RAG Evaluation", description = "Retrieval quality evaluation (Precision@K, Recall@K, MRR, NDCG)")
 public class EvaluationController {
@@ -114,6 +115,7 @@ public class EvaluationController {
         @ApiResponse(responseCode = "500", description = "LLM judge unavailable or evaluation failed")
     })
     @Timed(value = "rag.evaluation.answer-quality", description = "Answer quality evaluation (LLM-as-judge)", percentiles = {0.5, 0.95, 0.99})
+    @com.springairag.core.security.ApiRoutePolicy(access = com.springairag.core.security.ApiRoutePolicy.Access.READ)
     @PostMapping("/answer-quality")
     public ResponseEntity<AnswerQualityResponse> evaluateAnswerQuality(
             @Valid @RequestBody AnswerQualityRequest request) {
@@ -137,12 +139,14 @@ public class EvaluationController {
     @Operation(summary = "Spring AI semantic evaluation",
             description = "Optional FactCheckingEvaluator or RelevancyEvaluator adapter. "
                     + "Does not replace /answer-quality.")
+    @com.springairag.core.security.ApiRoutePolicy(access = com.springairag.core.security.ApiRoutePolicy.Access.READ)
     @PostMapping("/semantic")
     public ResponseEntity<SemanticEvaluationResponse> semantic(
             @Valid @RequestBody SemanticEvaluationRequest request) {
         return ResponseEntity.ok(semanticEvaluationService.evaluate(request));
     }
 
+    @com.springairag.core.security.ApiRoutePolicy(access = com.springairag.core.security.ApiRoutePolicy.Access.READ)
     @PostMapping("/semantic/batch")
     public ResponseEntity<List<SemanticEvaluationResponse>> semanticBatch(
             @Valid @RequestBody List<SemanticEvaluationRequest> requests) {
