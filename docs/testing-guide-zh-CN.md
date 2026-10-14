@@ -143,13 +143,17 @@ npm run test:e2e:mock   # build + vite preview（15174）+ 全部非 -real 用�
 [加固循环账本](drafts/HARDENING_LOOP_PLAN.md) Batch 23/25。
 为 `chat-real` 配置 tool-calling 模型时推荐使用外部 `models.json`
 （`MODELS_CONFIG_FILE` 指向，gitignore 路径），示例骨架见
-[多模型外部配置](multi-model-external-config-zh-CN.md)。两个已踩过的坑：
+[多模型外部配置](multi-model-external-config-zh-CN.md)。三个已踩过的坑：
 
 1. JSON 字段名是 **camelCase**（`chatModel` / `toolCalling`）；
    误写 `chat-model` 会静默不生效并回退 legacy 默认模型。
 2. 修改后必须重启 dev 栈（`./scripts/dev.sh --stop && ./scripts/dev.sh start`），
    并用 `GET /api/v1/rag/models` 确认目标模型 `available: true` 且
    `capabilities.toolCalling: true`。
+3. `LLM_PROVIDER` / `SPRING_AI_*_CHAT_OPTIONS_MODEL` 不等于最终路由模型；外部 registry
+   完整覆盖 YAML，而禁用它又可能回到另一个默认模型。真实验收须同时核对 `/models` 与
+   响应的 `resolvedModel`。`MODEL_CAPABILITY_UNSUPPORTED` 可能在 provider 调用前就拒绝
+   AGENT；此时不能把能力预检拒绝当成 provider 故障，也不能记为真实 AGENT 验证成功。
 
 
 

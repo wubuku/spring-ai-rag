@@ -151,7 +151,7 @@ cause investigation lives in the hardening loop ledger, Batches 23/25
 To configure a tool-calling model for `chat-real`, prefer the external
 `models.json` mechanism (`MODELS_CONFIG_FILE`, keep the path gitignored);
 see [multi-model external config](multi-model-external-config.md) for the
-skeleton. Two verified pitfalls:
+skeleton. Three verified pitfalls:
 
 1. JSON field names are **camelCase** (`chatModel` / `toolCalling`); writing
    `chat-model` silently no-ops and falls back to the legacy default model.
@@ -159,6 +159,12 @@ skeleton. Two verified pitfalls:
    ./scripts/dev.sh start`) and confirm via `GET /api/v1/rag/models` that the
    target model reports `available: true` with
    `capabilities.toolCalling: true`.
+3. `LLM_PROVIDER` / `SPRING_AI_*_CHAT_OPTIONS_MODEL` do not identify the final
+   routed model: the external registry replaces YAML, while disabling it may
+   restore a different default. Real acceptance must check both `/models` and
+   response `resolvedModel`. `MODEL_CAPABILITY_UNSUPPORTED` can reject AGENT
+   before any provider call; that rejection is neither a provider failure nor
+   successful real-AGENT verification.
 
 
 

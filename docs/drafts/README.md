@@ -40,6 +40,9 @@ Active plans are listed here and in `docs/index*`.
 
 - [WeKnora reference-project research and borrowing plan](WEKNORA_REFERENCE_RESEARCH.md)
   (Chinese; research draft, not an implementation commitment)
+- [Third-batch candidate: chunking correctness, validation, and diagnostics](CHUNKING_QUALITY_NEXT_BATCH_RECOMMENDATIONS.md)
+  (Chinese; P0 recommendations grounded in reproduced defects, not a frozen
+  implementation plan; implementation has not started)
 - [WebUI unified design language research and implementation plan](WEBUI_UNIFIED_DESIGN_LANGUAGE_PLAN.md)
   (Chinese)
 - [Hardening batch loop plan](HARDENING_LOOP_PLAN.md) (Chinese): a recurring
@@ -47,8 +50,9 @@ Active plans are listed here and in `docs/index*`.
   refactoring, and technical-debt cleanup; new features are out of scope for
   this stage.
 
-The completed first-batch document-processing stages and recovery improvement
-is archived in the [historical archive](archive/README.md).
+The completed first-batch processing/recovery work, second-batch citation/streaming
+work, and supplemental real-LLM acceptance are in the
+[historical archive](archive/README.md).
 
 Completed, stopped, and superseded materials remain available in the
 [historical archive](archive/README.md).

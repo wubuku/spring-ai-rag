@@ -34,11 +34,13 @@
 
 - [WeKnora 参考项目调研与借鉴规划](WEKNORA_REFERENCE_RESEARCH.md)：记录对参考项目的代码级调研、
   与当前能力的差距判断和候选实施路线；仅为活跃调研草案，不代表已承诺实施。
+- [第三批候选：分块正确性、质量校验与诊断](CHUNKING_QUALITY_NEXT_BATCH_RECOMMENDATIONS.md)：
+  基于当前代码的缺陷复现给出 P0 建议；尚非冻结实施规划，也未开始实施。
 - [WebUI 统一设计语言调研与实施规划](WEBUI_UNIFIED_DESIGN_LANGUAGE_PLAN.md)
 - [加固循环批次规划](HARDENING_LOOP_PLAN.md)：持续循环执行测试加固、WebUI UI/UX
   重构与技术债务处理；本阶段不把新功能作为重点。
 
-已完成的第一批文档处理阶段与恢复改进已归档至
+已完成的第一批文档处理阶段与恢复、第二批引用与流式安全，以及第二批补充真实 LLM 验收已归档至
 [历史规划归档](archive/README-zh-CN.md)。
 
 已完成、已停止和被替代的材料可从[历史归档](archive/README-zh-CN.md)追溯。
