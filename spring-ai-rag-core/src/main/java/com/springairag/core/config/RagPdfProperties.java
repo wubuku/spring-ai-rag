@@ -2,6 +2,8 @@ package com.springairag.core.config;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+import java.time.Duration;
+
 /**
  * PDF Import Configuration
  *
@@ -50,6 +52,13 @@ public class RagPdfProperties {
      */
     private String extraArgs = "";
 
+    private long maxUploadBytes = 20L * 1024 * 1024;
+    private int maxPages = 500;
+    private int maxOutputFiles = 256;
+    private long maxOutputBytes = 200L * 1024 * 1024;
+    private Duration conversionTimeout = Duration.ofMinutes(5);
+    private long maxInMemoryBytes = 32L * 1024 * 1024;
+
     public boolean isEnabled() { return enabled; }
     public void setEnabled(boolean enabled) { this.enabled = enabled; }
 
@@ -64,4 +73,44 @@ public class RagPdfProperties {
 
     public String getExtraArgs() { return extraArgs; }
     public void setExtraArgs(String extraArgs) { this.extraArgs = extraArgs; }
+
+    public long getMaxUploadBytes() { return maxUploadBytes; }
+    public void setMaxUploadBytes(long maxUploadBytes) {
+        this.maxUploadBytes = requirePositive(maxUploadBytes, "maxUploadBytes");
+    }
+
+    public int getMaxPages() { return maxPages; }
+    public void setMaxPages(int maxPages) {
+        this.maxPages = (int) requirePositive(maxPages, "maxPages");
+    }
+
+    public int getMaxOutputFiles() { return maxOutputFiles; }
+    public void setMaxOutputFiles(int maxOutputFiles) {
+        this.maxOutputFiles = (int) requirePositive(maxOutputFiles, "maxOutputFiles");
+    }
+
+    public long getMaxOutputBytes() { return maxOutputBytes; }
+    public void setMaxOutputBytes(long maxOutputBytes) {
+        this.maxOutputBytes = requirePositive(maxOutputBytes, "maxOutputBytes");
+    }
+
+    public Duration getConversionTimeout() { return conversionTimeout; }
+    public void setConversionTimeout(Duration conversionTimeout) {
+        if (conversionTimeout == null || conversionTimeout.isZero() || conversionTimeout.isNegative()) {
+            throw new IllegalArgumentException("conversionTimeout must be positive");
+        }
+        this.conversionTimeout = conversionTimeout;
+    }
+
+    public long getMaxInMemoryBytes() { return maxInMemoryBytes; }
+    public void setMaxInMemoryBytes(long maxInMemoryBytes) {
+        this.maxInMemoryBytes = requirePositive(maxInMemoryBytes, "maxInMemoryBytes");
+    }
+
+    private long requirePositive(long value, String name) {
+        if (value <= 0) {
+            throw new IllegalArgumentException(name + " must be positive");
+        }
+        return value;
+    }
 }

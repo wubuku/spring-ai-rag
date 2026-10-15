@@ -1,0 +1,1 @@
+import{p as e}from"./ui-CY8cZc8u.js";var t={list:()=>e.get(`/models`)},n=`rag-selected-model`;function r(){return localStorage.getItem(n)??``}function i(e){e?localStorage.setItem(n,e):localStorage.removeItem(n)}export{i as n,t as r,r as t};

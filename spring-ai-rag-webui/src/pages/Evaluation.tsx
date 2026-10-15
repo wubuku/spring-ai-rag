@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
-import { evaluationApi } from '../api/evaluation';
+import { evaluationApi, type EvaluationRunSnapshot } from '../api/evaluation';
 import { Card } from '../components/Card';
 import styles from './Evaluation.module.css';
 import { EmptyState, PageHeader, QueryErrorBanner, Tabs, tabDomIds } from '../components/ui';
@@ -36,6 +36,54 @@ function fmt(n: unknown): string {
     return n.toFixed(3);
   }
   return '—';
+}
+
+type EvaluationCaseSnapshot = NonNullable<EvaluationRunSnapshot['cases']>[number];
+
+function isKnowledgeQaCase(item: EvaluationCaseSnapshot): boolean {
+  return item.metrics?.task === 'KNOWLEDGE_QA';
+}
+
+function QaRunSummary({ run }: { run: EvaluationRunSnapshot }) {
+  const { t } = useTranslation();
+  const qaCases = (run.cases ?? []).filter(isKnowledgeQaCase);
+  if (qaCases.length === 0) return null;
+
+  const aggregate = run.aggregateMetrics ?? {};
+  const judgeCount = qaCases.filter(item => item.metrics?.judge).length;
+  const judgePassed = qaCases.filter(item => {
+    const judge = item.metrics?.judge;
+    return judge && typeof judge === 'object' && (judge as { pass?: unknown }).pass === true;
+  }).length;
+
+  return (
+    <div className={styles.qaSummary} aria-label={t('evaluation.qaSummary')}>
+      <strong>{t('evaluation.qaSummary')}</strong>
+      <dl className={styles.qaMetrics}>
+        <div>
+          <dt>{t('evaluation.qaHardGate')}</dt>
+          <dd>{fmt(aggregate.qaPassRate)}</dd>
+        </div>
+        <div>
+          <dt>{t('evaluation.qaCases')}</dt>
+          <dd>{qaCases.length}</dd>
+        </div>
+        <div>
+          <dt>{t('evaluation.qaLatency')}</dt>
+          <dd>{fmt(aggregate.avgLatencyMs)} ms</dd>
+        </div>
+        <div>
+          <dt>{t('evaluation.qaTokens')}</dt>
+          <dd>{typeof aggregate.totalTokens === 'number' ? aggregate.totalTokens : '—'}</dd>
+        </div>
+        <div>
+          <dt>{t('evaluation.qaJudge')}</dt>
+          <dd>{judgeCount === 0 ? '—' : `${judgePassed}/${judgeCount}`}</dd>
+        </div>
+      </dl>
+      <p className={styles.muted}>{t('evaluation.qaHardGateHint')}</p>
+    </div>
+  );
 }
 
 export function Evaluation() {
@@ -413,6 +461,10 @@ function RunsPanel() {
     queryKey: ['evaluation-run', runId],
     queryFn: async () => (await evaluationApi.getRun(runId)).data,
     enabled: runId.length > 0,
+    refetchInterval: query => {
+      const status = query.state.data?.status;
+      return status === 'QUEUED' || status === 'RUNNING' ? 2000 : false;
+    },
   });
   return (
     <section className={styles.section} aria-label={t('evaluation.tabRuns')}>
@@ -446,7 +498,12 @@ function RunsPanel() {
         {runQ.isError && (
           <QueryErrorBanner>{t('evaluation.runLoadFailed')}</QueryErrorBanner>
         )}
-        {runQ.data && <pre className={styles.pre}>{JSON.stringify(runQ.data, null, 2)}</pre>}
+        {runQ.data && (
+          <>
+            <QaRunSummary run={runQ.data} />
+            <pre className={styles.pre}>{JSON.stringify(runQ.data, null, 2)}</pre>
+          </>
+        )}
       </div>
     </section>
   );

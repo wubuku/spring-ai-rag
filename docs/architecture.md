@@ -804,7 +804,7 @@ standard SSE mapping without native RAG
 
 When enabled, Chat writes protocol-level `citationValidation` into metadata.
 It only parses the agreed `[S1]` tokens and is not a coverage score. Managed
-suites (V38) are disabled by default: a version is immutable after creation,
+suites (V38) are enabled by default (an explicit environment override can disable them): a version is immutable after creation,
 and relevant documents must use
 `collectionKey + sourceNamespace + externalId`. Compare is
 limited to the same version and marks environment drift separately. The suite
@@ -846,7 +846,7 @@ rag_user_feedback       # User feedback
 rag_alerts              # Alert records
 rag_slo_config          # SLO configuration
 rag_retrieval_evaluations  # Retrieval quality evaluations
-rag_evaluation_suites      # Managed quality suites (V38, disabled by default)
+rag_evaluation_suites      # Managed quality suites (V38, enabled by default)
 rag_evaluation_suite_versions
 rag_evaluation_runs
 rag_evaluation_case_results

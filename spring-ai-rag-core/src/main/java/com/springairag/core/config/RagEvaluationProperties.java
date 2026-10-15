@@ -5,7 +5,7 @@ package com.springairag.core.config;
  */
 public class RagEvaluationProperties {
 
-    private boolean managedSuitesEnabled;
+    private boolean managedSuitesEnabled = true;
     private boolean citationValidationEnabled = true;
     private int maxConcurrentRuns = 1;
     private int runConcurrency = 4;

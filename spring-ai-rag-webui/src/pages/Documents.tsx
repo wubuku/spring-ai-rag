@@ -13,6 +13,7 @@ import { useToast } from '../components/Toast';
 import { Skeleton } from '../components/Skeleton';
 import { DocumentActionsMenu } from '../components/DocumentActionsMenu/DocumentActionsMenu';
 import { VersionHistoryModal } from '../components/VersionHistoryModal/VersionHistoryModal';
+import { DocumentProcessingRunsModal } from '../components/DocumentProcessingRunsModal/DocumentProcessingRunsModal';
 import { ConfirmDialog, Dialog } from '../components/Dialog';
 import { ImeSafeForm } from '../components/ImeSafeForm';
 import { useBlobUrlOpener } from '../hooks/useBlobUrlOpener';
@@ -45,6 +46,7 @@ export function Documents() {
   const previousUrlKeywordRef = useRef(keyword);
   const [previewDoc, setPreviewDoc] = useState<{ id: number; title: string; content: string } | null>(null);
   const [versionsDoc, setVersionsDoc] = useState<Document | null>(null);
+  const [processingDoc, setProcessingDoc] = useState<Document | null>(null);
   const [editDoc, setEditDoc] = useState<Document | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const [editContent, setEditContent] = useState('');
@@ -555,6 +557,7 @@ export function Documents() {
                         mutationPending={mutationPending}
                         onPreview={() => handlePreview(doc)}
                         onVersions={() => setVersionsDoc(doc)}
+                        onProcessingRuns={() => setProcessingDoc(doc)}
                         onEdit={() => handleEdit(doc)}
                         onRetryEmbedding={() => embedMutation.mutate({
                           id: doc.id,
@@ -817,6 +820,14 @@ export function Documents() {
             versionNumber,
           })}
           onClose={() => setVersionsDoc(null)}
+        />
+      )}
+
+      {processingDoc && (
+        <DocumentProcessingRunsModal
+          documentId={processingDoc.id}
+          documentTitle={processingDoc.title}
+          onClose={() => setProcessingDoc(null)}
         />
       )}
 

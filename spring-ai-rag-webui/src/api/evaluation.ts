@@ -14,6 +14,22 @@ export interface AggregatedMetrics {
   [key: string]: unknown;
 }
 
+export interface EvaluationRunSnapshot {
+  id?: string;
+  status?: string;
+  suiteKey?: string;
+  aggregateMetrics?: Record<string, unknown> | null;
+  cases?: Array<{
+    variantKey?: string;
+    caseId?: string;
+    status?: string;
+    metrics?: Record<string, unknown> | null;
+    latencyMs?: number | null;
+    errorCode?: string | null;
+  }>;
+  [key: string]: unknown;
+}
+
 export interface EvaluationHistoryItem {
   id?: number;
   query?: string;
@@ -132,7 +148,7 @@ export const evaluationApi = {
     apiClient.post<{ id: string; status: string }>('/evaluation/runs', data),
 
   getRun: (runId: string) =>
-    apiClient.get(`/evaluation/runs/${encodeURIComponent(runId)}`),
+    apiClient.get<EvaluationRunSnapshot>(`/evaluation/runs/${encodeURIComponent(runId)}`),
 
   compareRuns: (leftRunId: string, rightRunId: string) =>
     apiClient.get('/evaluation/runs/compare', { params: { leftRunId, rightRunId } }),

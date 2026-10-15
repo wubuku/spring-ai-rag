@@ -701,7 +701,7 @@ ChatExecutionService
 ### 4.8 受管质量套件与 Citation
 
 Chat 在启用时把协议级 `citationValidation` 写入 metadata；只解析约定的 `[S1]` token，
-不是覆盖率评分。受管套件（V38）默认关闭：version 一经创建不可变，相关文档必须使用
+不是覆盖率评分。受管套件（V38）默认启用（可通过显式环境变量关闭）：version 一经创建不可变，相关文档必须使用
 `collectionKey + sourceNamespace + externalId`。compare 只允许同一 version，环境漂移单独标记。suite
 worker 会按 owner 的 `db:{principalId}` 重新加载当前数据库 principal 及当前
 credential/policy，并在检索前再次授权定义中的 Collection；principal 缺失、吊销、过期
@@ -740,7 +740,7 @@ rag_user_feedback       # 用户反馈
 rag_alerts              # 告警记录
 rag_slo_config          # SLO 配置
 rag_retrieval_evaluations  # 检索质量评估
-rag_evaluation_suites      # 受管质量套件（V38，默认关闭）
+rag_evaluation_suites      # 受管质量套件（V38，默认启用）
 rag_evaluation_suite_versions
 rag_evaluation_runs
 rag_evaluation_case_results

@@ -62,9 +62,28 @@ public class SemanticEvaluationService {
         if (request.model() == null || request.model().isBlank()) {
             throw new IllegalArgumentException("model must not be blank");
         }
-        ChatClient.Builder evaluatorBuilder = resolveBuilder(request.model());
+        return evaluateInternal(request, request.model());
+    }
+
+    /** 使用当前默认 ChatClient，供主动发起的受管 QA 评测使用。 */
+    public SemanticEvaluationResponse evaluateDefault(SemanticEvaluationRequest request) {
+        String evaluator = request.evaluator() == null
+                ? "" : request.evaluator().trim().toUpperCase();
+        if (!"FACT_CHECKING".equals(evaluator) && !"RELEVANCY".equals(evaluator)) {
+            throw new IllegalArgumentException(
+                    "evaluator must be FACT_CHECKING or RELEVANCY");
+        }
+        return evaluateInternal(request, null);
+    }
+
+    private SemanticEvaluationResponse evaluateInternal(
+            SemanticEvaluationRequest request,
+            String modelRef) {
+        String evaluator = request.evaluator().trim().toUpperCase();
+        ChatClient.Builder evaluatorBuilder = resolveBuilder(modelRef);
+        String reportedModel = modelRef == null ? "default" : modelRef;
         if (evaluatorBuilder == null) {
-            return disabled(evaluator, request.model(), "ChatClient is not configured");
+            return disabled(evaluator, reportedModel, "ChatClient is not configured");
         }
         String className = "FACT_CHECKING".equals(evaluator)
                 ? "org.springframework.ai.chat.evaluation.FactCheckingEvaluator"
@@ -90,18 +109,18 @@ public class SemanticEvaluationService {
             return new SemanticEvaluationResponse(
                     evaluator, "COMPLETED", isPass,
                     rawScore == null ? null : rawScore.doubleValue(),
-                    text, request.model(), null);
+                    text, reportedModel, null);
         } catch (ClassNotFoundException e) {
-            return disabled(evaluator, request.model(),
+            return disabled(evaluator, reportedModel,
                     "Spring AI evaluator classes are not on the classpath");
         } catch (java.util.concurrent.TimeoutException e) {
             return new SemanticEvaluationResponse(
-                    evaluator, "TIMEOUT", null, null, null, request.model(),
+                    evaluator, "TIMEOUT", null, null, null, reportedModel,
                     "Semantic evaluator timed out");
         } catch (Exception e) {
             log.warn("Semantic evaluator failed: {}", e.getMessage());
             return new SemanticEvaluationResponse(
-                    evaluator, "FAILED", null, null, null, request.model(),
+                    evaluator, "FAILED", null, null, null, reportedModel,
                     safeError(e.getMessage()));
         }
     }
@@ -173,7 +192,7 @@ public class SemanticEvaluationService {
     }
 
     ChatClient.Builder resolveBuilder(String modelRef) {
-        if (chatModelRouter == null) {
+        if (modelRef == null || modelRef.isBlank() || chatModelRouter == null) {
             return chatClientBuilder;
         }
         ChatModel model = chatModelRouter.resolveRequired(modelRef);

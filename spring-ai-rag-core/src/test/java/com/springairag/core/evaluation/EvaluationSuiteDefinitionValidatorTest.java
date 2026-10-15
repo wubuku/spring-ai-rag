@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class EvaluationSuiteDefinitionValidatorTest {
 
@@ -91,6 +92,40 @@ class EvaluationSuiteDefinitionValidatorTest {
         assertThrows(
                 IllegalArgumentException.class,
                 () -> validator.parse(oversized));
+    }
+
+    @Test
+    void parsesKnowledgeQaAssertionsAndAllowsEmptyInsufficientEvidence() throws Exception {
+        ObjectNode definition = mapper.readValue("""
+                {
+                  "cases": [{
+                    "id": "no-evidence",
+                    "task": "KNOWLEDGE_QA",
+                    "query": "q",
+                    "scope": {"mode": "SELECTED_COLLECTIONS", "collectionKeys": ["kb"]},
+                    "relevant": [],
+                    "evidenceExpectation": "INSUFFICIENT",
+                    "forbiddenFacts": ["invented answer"],
+                    "judge": {"enabled": true, "evaluator": "RELEVANCY"}
+                  }]
+                }
+                """, ObjectNode.class);
+
+        EvaluationSuiteDefinition.CaseDef parsed = validator.parse(definition).cases().getFirst();
+
+        assertEquals("KNOWLEDGE_QA", parsed.task());
+        assertEquals("INSUFFICIENT", parsed.evidenceExpectation());
+        assertTrue(parsed.relevant().isEmpty());
+        assertTrue(parsed.judge().enabled());
+        assertEquals("RELEVANCY", parsed.judge().evaluator());
+    }
+
+    @Test
+    void rejectsAnswerAssertionsOnLegacyRetrievalCase() throws Exception {
+        ObjectNode invalid = validDefinition();
+        ((ObjectNode) invalid.path("cases").get(0)).putArray("requiredFacts").add("fact");
+
+        assertThrows(IllegalArgumentException.class, () -> validator.parse(invalid));
     }
 
     private ObjectNode validDefinition() throws Exception {

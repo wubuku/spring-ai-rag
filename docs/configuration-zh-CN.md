@@ -518,7 +518,7 @@ rag:
 ```yaml
 rag:
   evaluation:
-    managed-suites-enabled: ${RAG_EVALUATION_MANAGED_SUITES_ENABLED:false}
+    managed-suites-enabled: ${RAG_EVALUATION_MANAGED_SUITES_ENABLED:true}
     citation-validation-enabled: ${RAG_EVALUATION_CITATION_VALIDATION_ENABLED:true}
     max-concurrent-runs: ${RAG_EVALUATION_MAX_CONCURRENT_RUNS:1}
     run-concurrency: ${RAG_EVALUATION_RUN_CONCURRENCY:4}
@@ -530,6 +530,30 @@ rag:
 citation 校验只解析约定的 `[S1]` token，不是覆盖率分数。受管 suite worker 默认关闭。
 `max-concurrent-runs` 限制同时执行的 run；`run-concurrency` 限制单个 run 内并行执行的
 检索 case 数，取值上限为 8。
+
+受管 suite 与本批次的 `KNOWLEDGE_QA` 评测默认可用；只有显式创建 Evaluation Run 才会调用
+真实 Chat，普通 Chat 不会额外付出评测费用。旧 case 省略 `task` 时继续保持
+`RETRIEVAL` 语义，这是为了保持已有 suite 定义和 API 行为兼容，而不是把旧逻辑作为新能力的
+默认实现。`KNOWLEDGE_QA` case 可声明 `requiredFacts`、`forbiddenFacts`、
+`evidenceExpectation`（`SUFFICIENT`/`INSUFFICIENT`）和可选 `judge`。确定性断言是 hard gate，
+judge 只写入辅助 metrics。
+
+### PDF 导入资源预算
+
+```yaml
+rag:
+  pdf:
+    max-upload-bytes: ${RAG_PDF_MAX_UPLOAD_BYTES:20971520}
+    max-pages: ${RAG_PDF_MAX_PAGES:500}
+    max-output-files: ${RAG_PDF_MAX_OUTPUT_FILES:256}
+    max-output-bytes: ${RAG_PDF_MAX_OUTPUT_BYTES:209715200}
+    conversion-timeout: ${RAG_PDF_CONVERSION_TIMEOUT:5m}
+    max-in-memory-bytes: ${RAG_PDF_MAX_IN_MEMORY_BYTES:33554432}
+```
+
+以上预算默认启用，上传通过流复制到临时文件；转换、产物数量/大小和内存读取均有界。
+Marker 超时会强制结束子进程并限制日志；任何超限或失败都会清理临时目录并回滚本次导入，
+不留下部分 `fs_files` 记录。没有 schema 变化，不需要运维手工迁移。
 
 ## 查询改写配置
 

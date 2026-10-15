@@ -1,11 +1,13 @@
 package com.springairag.core.service.pdf;
 
+import com.springairag.core.config.RagPdfProperties;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -24,6 +26,16 @@ import java.nio.file.Path;
 public class PdfBoxConverter implements PdfConverter {
 
     private static final Logger log = LoggerFactory.getLogger(PdfBoxConverter.class);
+    private final RagPdfProperties pdfProperties;
+
+    public PdfBoxConverter() {
+        this(new RagPdfProperties());
+    }
+
+    @Autowired
+    public PdfBoxConverter(RagPdfProperties pdfProperties) {
+        this.pdfProperties = pdfProperties;
+    }
 
     @Override
     public boolean convert(Path pdfPath, Path outputDir) {
@@ -49,15 +61,23 @@ public class PdfBoxConverter implements PdfConverter {
             Files.createDirectories(outputSubDir);
 
             // Read PDF
-            byte[] pdfBytes = Files.readAllBytes(pdfPath);
-
-            try (PDDocument document = Loader.loadPDF(pdfBytes)) {
+            try (PDDocument document = Loader.loadPDF(pdfPath.toFile())) {
+                if (document.getNumberOfPages() > pdfProperties.getMaxPages()) {
+                    log.warn("PDF exceeds max pages: {} > {}", document.getNumberOfPages(),
+                            pdfProperties.getMaxPages());
+                    return false;
+                }
                 PDFTextStripper stripper = new PDFTextStripper();
                 stripper.setSortByPosition(true);
                 String text = stripper.getText(document);
 
                 // Build Markdown
                 String markdown = buildMarkdown(pdfName, text);
+                if (markdown.getBytes(StandardCharsets.UTF_8).length
+                        > pdfProperties.getMaxInMemoryBytes()) {
+                    log.warn("PDFBox output exceeds max in-memory bytes");
+                    return false;
+                }
 
                 // Write Markdown file
                 Files.writeString(outputMdFile, markdown, StandardCharsets.UTF_8);

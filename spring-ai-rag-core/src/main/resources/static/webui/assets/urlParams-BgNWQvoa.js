@@ -1,0 +1,1 @@
+function e(e,t,n){return e!=null&&Object.hasOwn(t,e)?e:n}function t(e,t){return Object.keys(e).map(n=>({id:n,label:t(e[n])}))}function n(e,t){return e===t?{}:{tab:e}}export{n,t as r,e as t};

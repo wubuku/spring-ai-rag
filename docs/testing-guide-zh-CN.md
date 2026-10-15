@@ -88,6 +88,23 @@ BASE_URL=http://127.0.0.1:18081 \
 
 `--with-local-runtime` 需要 PostgreSQL/pgvector 已运行，且 `.env` 中存在可用的数据库、Embedding 与 Chat LLM 配置；默认独占端口 `18081`，端口被占用时会失败，避免复用或误杀非本脚本启动的服务。可用 `RUNTIME_SERVER_PORT` 改端口。无论成功、失败或中断，脚本都会归档日志并清理自己启动的服务。
 
+本批次服务端优先的聚焦门禁：
+
+```bash
+./scripts/verify-next-high-value-features.sh
+```
+
+它覆盖 `KNOWLEDGE_QA` 确定性 hard gate、旧 suite 定义兼容、owner ACL、PDF 资源预算、
+文档处理相关编译、WebUI 类型/i18n/设计门禁、Vitest、生产构建、文档门禁和并发锁规则。
+它不会自动调用真实模型；真实 `KNOWLEDGE` 评测只在显式创建 Evaluation Run 时执行，
+需要 provider 的验收应使用 `scripts/start-real-e2e-server.sh` 后再运行对应 smoke。
+
+发布脚本可追加同一门禁：
+
+```bash
+./scripts/verify-release.sh --with-next-high-value
+```
+
 Docker 默认先用中国境内镜像并自动回退官方源；详见 [中国境内开发网络避坑指南](china-network-guide-zh-CN.md)。外部服务失败必须保留为失败或明确跳过，不能伪造发布通过。
 
 用户允许真实 LLM 验收时，先完成相关 Mock 单元/集成测试和 Mock Playwright，再运行真实

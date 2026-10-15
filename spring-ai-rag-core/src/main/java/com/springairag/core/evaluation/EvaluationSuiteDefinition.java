@@ -18,7 +18,49 @@ public record EvaluationSuiteDefinition(
             List<String> collectionKeys,
             List<Identity> relevant,
             Double minHitRate,
-            Double minMrr) {
+            Double minMrr,
+            String task,
+            List<String> requiredFacts,
+            List<String> forbiddenFacts,
+            String evidenceExpectation,
+            JudgeDef judge) {
+
+        public CaseDef {
+            task = task == null || task.isBlank() ? "RETRIEVAL" : task;
+            requiredFacts = requiredFacts == null ? List.of() : List.copyOf(requiredFacts);
+            forbiddenFacts = forbiddenFacts == null ? List.of() : List.copyOf(forbiddenFacts);
+            evidenceExpectation = evidenceExpectation == null || evidenceExpectation.isBlank()
+                    ? "SUFFICIENT" : evidenceExpectation;
+            judge = judge == null ? JudgeDef.disabled() : judge;
+        }
+
+        /** 保留旧版 Java 调用方和检索套件测试的构造签名。 */
+        public CaseDef(
+                String id,
+                String query,
+                List<String> collectionKeys,
+                List<Identity> relevant,
+                Double minHitRate,
+                Double minMrr) {
+            this(id, query, collectionKeys, relevant, minHitRate, minMrr,
+                    "RETRIEVAL", List.of(), List.of(), "SUFFICIENT", JudgeDef.disabled());
+        }
+
+        public boolean isKnowledgeQa() {
+            return "KNOWLEDGE_QA".equals(task);
+        }
+    }
+
+    public record JudgeDef(boolean enabled, String evaluator, String model) {
+        public JudgeDef {
+            evaluator = evaluator == null || evaluator.isBlank()
+                    ? "FACT_CHECKING" : evaluator;
+            model = model == null || model.isBlank() ? null : model;
+        }
+
+        public static JudgeDef disabled() {
+            return new JudgeDef(false, "FACT_CHECKING", null);
+        }
     }
 
     public record Identity(

@@ -6,12 +6,13 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.UncheckedIOException;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * PDF to Markdown converter using the marker CLI.
@@ -78,25 +79,20 @@ public class MarkerPdfConverter implements PdfConverter {
         try {
             Process process = pb.start();
 
-            // Read output
-            StringBuilder output = new StringBuilder();
-            try (var reader = new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8)) {
-                int ch;
-                while ((ch = reader.read()) != -1) {
-                    output.append((char) ch);
-                }
-            }
-
-            // Wait for process to complete, up to 5 minutes
-            boolean finished = process.waitFor(5, TimeUnit.MINUTES);
+            CompletableFuture<CapturedOutput> outputFuture = CompletableFuture.supplyAsync(
+                    () -> captureOutput(process.getInputStream(), 32_000));
+            boolean finished = process.waitFor(
+                    pdfProperties.getConversionTimeout().toMillis(), TimeUnit.MILLISECONDS);
 
             if (!finished) {
-                log.error("Marker CLI timed out after 5 minutes");
+                log.error("Marker CLI timed out after {}", pdfProperties.getConversionTimeout());
                 process.destroyForcibly();
+                outputFuture.cancel(true);
                 return false;
             }
 
             int exitCode = process.exitValue();
+            String output = outputFuture.get(5, TimeUnit.SECONDS).text();
             if (exitCode != 0) {
                 log.error("Marker CLI failed with exit code {}: {}", exitCode, output);
                 return false;
@@ -112,7 +108,36 @@ public class MarkerPdfConverter implements PdfConverter {
             Thread.currentThread().interrupt();
             log.error("Marker CLI was interrupted: {}", e.getMessage());
             return false;
+        } catch (java.util.concurrent.ExecutionException
+                 | java.util.concurrent.TimeoutException e) {
+            log.error("Failed to collect Marker CLI output: {}", e.getMessage());
+            return false;
         }
+    }
+
+    private CapturedOutput captureOutput(InputStream input, int limit) {
+        ByteArrayOutputStream captured = new ByteArrayOutputStream(Math.min(limit, 4096));
+        byte[] buffer = new byte[8192];
+        boolean truncated = false;
+        try (input) {
+            int read;
+            while ((read = input.read(buffer)) != -1) {
+                int remaining = limit - captured.size();
+                if (remaining > 0) {
+                    captured.write(buffer, 0, Math.min(read, remaining));
+                }
+                if (read > Math.max(remaining, 0)) {
+                    truncated = true;
+                }
+            }
+        } catch (IOException e) {
+            truncated = true;
+        }
+        return new CapturedOutput(
+                new String(captured.toByteArray(), StandardCharsets.UTF_8), truncated);
+    }
+
+    private record CapturedOutput(String text, boolean truncated) {
     }
 
     @Override

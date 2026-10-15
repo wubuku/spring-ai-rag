@@ -229,7 +229,7 @@ case "${LLM_PROVIDER}" in
 esac
 
 echo "Compiling..."
-mvn -pl spring-ai-rag-core -am -q -DskipTests compile
+mvn -pl spring-ai-rag-starter -am -q clean compile -DskipTests
 mvn -pl spring-ai-rag-core -am -q dependency:build-classpath -Dmdep.outputFile=/tmp/rag-cp.txt -DincludeScope=runtime
 CP="spring-ai-rag-core/target/classes:spring-ai-rag-api/target/classes:spring-ai-rag-documents/target/classes:spring-ai-rag-starter/target/classes:$(cat /tmp/rag-cp.txt)"
 

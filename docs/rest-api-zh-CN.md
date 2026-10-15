@@ -2361,7 +2361,7 @@ GET /api/v1/rag/collections/by-key/export?collectionKey=customer-42%3Amanual%3Av
 
 ## 受管质量套件
 
-设置 `RAG_EVALUATION_MANAGED_SUITES_ENABLED=true` 后可用。关闭时返回
+默认可用；设置 `RAG_EVALUATION_MANAGED_SUITES_ENABLED=false` 可关闭。关闭时返回
 `503 EVALUATION_SUITES_DISABLED`。suite version 一经创建不可变；相关文档必须使用
 `collectionKey + sourceNamespace + externalId`，不得使用内部文档 ID 作为长期基准。
 省略 `sourceNamespace` 时兼容为 `default`。
@@ -2380,6 +2380,17 @@ GET /api/v1/rag/collections/by-key/export?collectionKey=customer-42%3Amanual%3Av
 
 citation 校验检查请求级 `[cN]` 与兼容 `[SN]` token。compare 在 embedding profile、代码修订或语料快照
 不同时标记 `environmentDrift`，不把漂移报告成质量提升。
+
+用例定义按 version 不可变保存。旧用例省略 `task` 时保持 `RETRIEVAL`，因此已有请求和 suite
+定义无需迁移；答案级用例可以增量添加 `task: "KNOWLEDGE_QA"`、`requiredFacts`、
+`forbiddenFacts`、`evidenceExpectation` 和可选 `judge` 字段，`scope` 与外部身份字段不变。
+其中 `evidenceExpectation` 支持 `SUFFICIENT` 与 `INSUFFICIENT`，后者允许 `relevant` 为空。
+
+`KNOWLEDGE_QA` 只在主动创建 Evaluation Run 时调用真实 `KNOWLEDGE` Chat。来源覆盖、必要/禁止
+事实、证据不足声明和 citation 合法性组成确定性 hard gate；judge 的状态、模型、分数和错误
+只作为辅助 metrics，不能单独宣布通过。case metrics 还记录 `retrievalExecuted`、延迟、usage
+和失败原因；compare 对同一 version 的两次 run 返回数字指标 delta。返回结构采用增量扩展，
+不删除或改名既有字段。
 
 ---
 

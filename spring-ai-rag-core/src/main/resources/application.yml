@@ -395,7 +395,7 @@ rag:
     max-detail-bytes: ${RAG_RETRIEVAL_DIAGNOSTICS_MAX_DETAIL_BYTES:32768}
 
   evaluation:
-    managed-suites-enabled: ${RAG_EVALUATION_MANAGED_SUITES_ENABLED:false}
+    managed-suites-enabled: ${RAG_EVALUATION_MANAGED_SUITES_ENABLED:true}
     citation-validation-enabled: ${RAG_EVALUATION_CITATION_VALIDATION_ENABLED:true}
     max-concurrent-runs: ${RAG_EVALUATION_MAX_CONCURRENT_RUNS:1}
     run-concurrency: ${RAG_EVALUATION_RUN_CONCURRENCY:4}
@@ -548,6 +548,12 @@ rag:
     langs: ${RAG_PDF_LANGS:zh}                       # Language hint for PDF OCR (comma-separated, e.g., "zh,en")
     output-base-dir: ${RAG_PDF_OUTPUT_DIR:/tmp/spring-ai-rag/pdf-imports}  # Temp working directory
     extra-args: ${RAG_PDF_EXTRA_ARGS:}               # Additional CLI args (e.g., "--no-markdown-template")
+    max-upload-bytes: ${RAG_PDF_MAX_UPLOAD_BYTES:20971520}
+    max-pages: ${RAG_PDF_MAX_PAGES:500}
+    max-output-files: ${RAG_PDF_MAX_OUTPUT_FILES:256}
+    max-output-bytes: ${RAG_PDF_MAX_OUTPUT_BYTES:209715200}
+    conversion-timeout: ${RAG_PDF_CONVERSION_TIMEOUT:5m}
+    max-in-memory-bytes: ${RAG_PDF_MAX_IN_MEMORY_BYTES:33554432}
 
   # HTTP proxy configuration for LLM API calls
   # By default, proxy is disabled (enabled: false) to avoid dev environment interference

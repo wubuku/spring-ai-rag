@@ -18,6 +18,7 @@ interface DocumentActionsMenuProps {
   mutationPending: boolean;
   onPreview: () => void;
   onVersions: () => void;
+  onProcessingRuns: () => void;
   onEdit: () => void;
   onRetryEmbedding: () => void;
   onDisable: () => void;
@@ -43,6 +44,7 @@ export function DocumentActionsMenu({
   mutationPending,
   onPreview,
   onVersions,
+  onProcessingRuns,
   onEdit,
   onRetryEmbedding,
   onDisable,
@@ -176,6 +178,14 @@ export function DocumentActionsMenu({
             onClick={() => runAndClose(onVersions)}
           >
             {t('versions.button', 'Versions')}
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className={styles.menuItem}
+            onClick={() => runAndClose(onProcessingRuns)}
+          >
+            {t('documents.processingRuns')}
           </button>
           {!externallyManaged && (
             <button

@@ -44,7 +44,7 @@ class ConfigurationDefaultsTest {
     void evaluationDefaultsMatchTheDocumentedBaseline() {
         RagEvaluationProperties properties = new RagEvaluationProperties();
 
-        assertFalse(properties.isManagedSuitesEnabled());
+        assertTrue(properties.isManagedSuitesEnabled());
         assertTrue(properties.isCitationValidationEnabled());
         assertEquals(1, properties.getMaxConcurrentRuns());
         assertEquals(4, properties.getRunConcurrency());

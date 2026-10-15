@@ -566,7 +566,7 @@ text. Persist failures are fail-open and do not break Search or Chat.
 ```yaml
 rag:
   evaluation:
-    managed-suites-enabled: ${RAG_EVALUATION_MANAGED_SUITES_ENABLED:false}
+    managed-suites-enabled: ${RAG_EVALUATION_MANAGED_SUITES_ENABLED:true}
     citation-validation-enabled: ${RAG_EVALUATION_CITATION_VALIDATION_ENABLED:true}
     max-concurrent-runs: ${RAG_EVALUATION_MAX_CONCURRENT_RUNS:1}
     run-concurrency: ${RAG_EVALUATION_RUN_CONCURRENCY:4}
@@ -576,10 +576,37 @@ rag:
 ```
 
 Citation validation only parses the agreed `[S1]` tokens. It is not a coverage
-score. The managed-suite worker is disabled by default.
+score. Managed suites and the new `KNOWLEDGE_QA` evaluation are available by
+default; only an explicitly started Evaluation Run invokes real Chat, so normal
+Chat does not pay an evaluation cost. Omitting `task` from an old case preserves
+its `RETRIEVAL` behavior for API and suite-definition compatibility; this is a
+compatibility boundary, not the default implementation of the new capability.
+`KNOWLEDGE_QA` cases may declare `requiredFacts`, `forbiddenFacts`,
+`evidenceExpectation` (`SUFFICIENT` or `INSUFFICIENT`), and an optional `judge`.
+Deterministic assertions are the hard gate; the judge is supporting metrics only.
 `max-concurrent-runs` bounds concurrently executing runs, while
 `run-concurrency` bounds parallel retrieval cases inside one run and is capped
 at 8.
+
+### PDF Import Resource Budgets
+
+```yaml
+rag:
+  pdf:
+    max-upload-bytes: ${RAG_PDF_MAX_UPLOAD_BYTES:20971520}
+    max-pages: ${RAG_PDF_MAX_PAGES:500}
+    max-output-files: ${RAG_PDF_MAX_OUTPUT_FILES:256}
+    max-output-bytes: ${RAG_PDF_MAX_OUTPUT_BYTES:209715200}
+    conversion-timeout: ${RAG_PDF_CONVERSION_TIMEOUT:5m}
+    max-in-memory-bytes: ${RAG_PDF_MAX_IN_MEMORY_BYTES:33554432}
+```
+
+These budgets are enabled by default. Uploads stream to a temporary file, and
+conversion, artifact count/size, and in-memory reads are bounded. Marker
+timeouts forcibly terminate the child process and bound captured logs. Any
+limit or conversion failure cleans the temporary directory and rolls back the
+import, leaving no partial `fs_files` rows. No schema changed, so operations
+needs no manual migration.
 
 ## Query Rewrite Configuration
 

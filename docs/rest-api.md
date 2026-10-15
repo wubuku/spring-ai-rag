@@ -2676,8 +2676,8 @@ Query feedback by type.
 
 ## Managed Quality Suites
 
-Available when `RAG_EVALUATION_MANAGED_SUITES_ENABLED=true`. Disabled servers
-return `503 EVALUATION_SUITES_DISABLED`. A suite version is immutable after
+Available by default; set `RAG_EVALUATION_MANAGED_SUITES_ENABLED=false` to
+disable it. Disabled servers return `503 EVALUATION_SUITES_DISABLED`. A suite version is immutable after
 creation. Relevant documents must use
 `collectionKey + sourceNamespace + externalId`; omitted `sourceNamespace`
 defaults to `default`. Internal document IDs are not a durable goldenset
@@ -2698,6 +2698,19 @@ identity.
 Citation validation checks request-local `[cN]` and legacy `[SN]` tokens. Compare marks `environmentDrift`
 when the embedding profile, code revision, or corpus snapshot differs; drift is
 not reported as a quality improvement.
+
+Definitions remain immutable per version. Omitting `task` preserves `RETRIEVAL`, so existing
+requests and suite definitions need no migration. Answer-level cases may add
+`task: "KNOWLEDGE_QA"`, `requiredFacts`, `forbiddenFacts`, `evidenceExpectation`, and an optional
+`judge` block; the `scope` and external-identity fields remain unchanged. `evidenceExpectation`
+supports `SUFFICIENT` and `INSUFFICIENT`, with the latter allowing an empty `relevant` list.
+
+`KNOWLEDGE_QA` invokes the real `KNOWLEDGE` Chat path only when an Evaluation Run is explicitly
+started. Source coverage, required/forbidden facts, insufficient-evidence declaration, and citation
+validity form the deterministic hard gate; judge status, model, score, and error are supporting
+metrics only. Case metrics also record `retrievalExecuted`, latency, usage, and failure reasons;
+compare returns numeric metric deltas for two runs of the same version. The response shape is
+additive: existing fields are not removed or renamed.
 
 ---
 

@@ -101,8 +101,29 @@ public class EvaluationSuiteDefinitionValidator {
             }
             keys.add(item.asText());
         }
+        String task = text(node, "task", false);
+        if (task == null) {
+            task = "RETRIEVAL";
+        }
+        task = task.trim().toUpperCase(java.util.Locale.ROOT);
+        if (!"RETRIEVAL".equals(task) && !"KNOWLEDGE_QA".equals(task)) {
+            throw new IllegalArgumentException("case " + id + " task must be RETRIEVAL or KNOWLEDGE_QA");
+        }
+        String evidenceExpectation = text(node, "evidenceExpectation", false);
+        if (evidenceExpectation == null) {
+            evidenceExpectation = "SUFFICIENT";
+        }
+        evidenceExpectation = evidenceExpectation.trim().toUpperCase(java.util.Locale.ROOT);
+        if (!"SUFFICIENT".equals(evidenceExpectation)
+                && !"INSUFFICIENT".equals(evidenceExpectation)) {
+            throw new IllegalArgumentException(
+                    "case " + id + " evidenceExpectation must be SUFFICIENT or INSUFFICIENT");
+        }
         JsonNode relevantNode = node.get("relevant");
-        if (relevantNode == null || !relevantNode.isArray() || relevantNode.isEmpty()) {
+        boolean allowEmptyRelevant = "KNOWLEDGE_QA".equals(task)
+                && "INSUFFICIENT".equals(evidenceExpectation);
+        if (relevantNode == null || !relevantNode.isArray()
+                || (!allowEmptyRelevant && relevantNode.isEmpty())) {
             throw new IllegalArgumentException("case " + id + " requires relevant identities");
         }
         List<EvaluationSuiteDefinition.Identity> relevant = new ArrayList<>();
@@ -149,8 +170,67 @@ public class EvaluationSuiteDefinitionValidator {
             throw new IllegalArgumentException(
                     "case " + id + " minimum must be a JSON object");
         }
+        List<String> requiredFacts = facts(node, id, "requiredFacts");
+        List<String> forbiddenFacts = facts(node, id, "forbiddenFacts");
+        EvaluationSuiteDefinition.JudgeDef judge = parseJudge(node, id);
+        if ("RETRIEVAL".equals(task)
+                && (!requiredFacts.isEmpty() || !forbiddenFacts.isEmpty()
+                || !"SUFFICIENT".equals(evidenceExpectation) || judge.enabled())) {
+            throw new IllegalArgumentException(
+                    "case " + id + " answer assertions require task KNOWLEDGE_QA");
+        }
         return new EvaluationSuiteDefinition.CaseDef(
-                id, query, List.copyOf(keys), List.copyOf(relevant), minHitRate, minMrr);
+                id, query, List.copyOf(keys), List.copyOf(relevant), minHitRate, minMrr,
+                task, requiredFacts, forbiddenFacts, evidenceExpectation, judge);
+    }
+
+    private List<String> facts(JsonNode node, String id, String field) {
+        JsonNode values = node.get(field);
+        if (values == null || values.isNull()) {
+            return List.of();
+        }
+        if (!values.isArray() || values.size() > 32) {
+            throw new IllegalArgumentException(
+                    "case " + id + " " + field + " must be an array of at most 32 items");
+        }
+        List<String> result = new ArrayList<>();
+        LinkedHashSet<String> unique = new LinkedHashSet<>();
+        for (JsonNode value : values) {
+            if (!value.isTextual() || value.asText().isBlank()
+                    || value.asText().length() > 512) {
+                throw new IllegalArgumentException(
+                        "case " + id + " " + field + " items must contain 1-512 characters");
+            }
+            String normalized = value.asText().trim();
+            if (!unique.add(normalized)) {
+                throw new IllegalArgumentException(
+                        "case " + id + " " + field + " contains duplicates");
+            }
+            result.add(normalized);
+        }
+        return List.copyOf(result);
+    }
+
+    private EvaluationSuiteDefinition.JudgeDef parseJudge(JsonNode node, String id) {
+        JsonNode judge = node.get("judge");
+        if (judge == null || judge.isNull()) {
+            return EvaluationSuiteDefinition.JudgeDef.disabled();
+        }
+        if (!judge.isObject()) {
+            throw new IllegalArgumentException("case " + id + " judge must be an object");
+        }
+        boolean enabled = judge.path("enabled").asBoolean(false);
+        String evaluator = text(judge, "evaluator", false);
+        if (evaluator == null) {
+            evaluator = "FACT_CHECKING";
+        }
+        evaluator = evaluator.trim().toUpperCase(java.util.Locale.ROOT);
+        if (!"FACT_CHECKING".equals(evaluator) && !"RELEVANCY".equals(evaluator)) {
+            throw new IllegalArgumentException(
+                    "case " + id + " judge.evaluator must be FACT_CHECKING or RELEVANCY");
+        }
+        String model = text(judge, "model", false);
+        return new EvaluationSuiteDefinition.JudgeDef(enabled, evaluator, model);
     }
 
     private List<EvaluationSuiteDefinition.VariantDef> parseVariants(JsonNode variantsNode) {

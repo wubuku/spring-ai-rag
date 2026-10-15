@@ -2,6 +2,7 @@ package com.springairag.core.evaluation;
 
 import com.springairag.api.dto.RetrievalConfig;
 import com.springairag.api.dto.RetrievalResult;
+import com.springairag.api.dto.ChatSource;
 import com.springairag.core.retrieval.RetrievalFilters;
 import com.springairag.core.retrieval.RetrievalOutcome;
 import com.springairag.core.retrieval.ReRankingService;
@@ -79,13 +80,36 @@ public class EvaluationCaseExecutor {
     public List<EvaluationSuiteDefinition.Identity> lookup(
             List<RetrievalResult> results) {
         List<Long> ids = new ArrayList<>();
-        for (RetrievalResult result : results) {
+        for (RetrievalResult result : results == null ? List.<RetrievalResult>of() : results) {
             try {
                 ids.add(Long.parseLong(result.getDocumentId()));
             } catch (NumberFormatException ignored) {
                 // 非数字 documentId 不能映射到受管身份
             }
         }
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        return lookupIds(ids);
+    }
+
+    public List<EvaluationSuiteDefinition.Identity> lookupSources(
+            List<ChatSource> sources) {
+        List<Long> ids = new ArrayList<>();
+        for (ChatSource source : sources == null ? List.<ChatSource>of() : sources) {
+            if (source == null || source.getDocumentId() == null) {
+                continue;
+            }
+            try {
+                ids.add(Long.parseLong(source.getDocumentId()));
+            } catch (NumberFormatException ignored) {
+                // 非数字 documentId 不能映射到受管身份
+            }
+        }
+        return lookupIds(ids);
+    }
+
+    private List<EvaluationSuiteDefinition.Identity> lookupIds(List<Long> ids) {
         if (ids.isEmpty()) {
             return List.of();
         }

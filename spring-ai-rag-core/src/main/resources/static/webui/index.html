@@ -5,10 +5,36 @@
     <link rel="icon" type="image/svg+xml" href="/webui/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>spring-ai-rag WebUI</title>
-    <script type="module" crossorigin src="/webui/assets/index-CVaq_hZb.js"></script>
-    <link rel="modulepreload" crossorigin href="/webui/assets/client-DxswfA0f.js">
-    <link rel="modulepreload" crossorigin href="/webui/assets/QueryClientProvider-BsuNqc5O.js">
-    <link rel="stylesheet" crossorigin href="/webui/assets/index-CCgK8lbI.css">
+    <script>
+      // Pre-paint theme bootstrap.
+      // Runs before first paint so a dark-theme user never sees a white flash.
+      // It resolves the same preference the React ThemeProvider will, and writes
+      // only the resolved `data-theme`; the logic itself lives in
+      // src/design-system/theme.ts so both sides stay in contract.
+      (function () {
+        try {
+          var stored = window.localStorage.getItem('theme');
+          var preference =
+            stored === 'light' || stored === 'dark' || stored === 'system' ? stored : 'system';
+          var prefersDark =
+            typeof window.matchMedia === 'function' &&
+            window.matchMedia('(prefers-color-scheme: dark)').matches;
+          var resolved =
+            preference === 'system' ? (prefersDark ? 'dark' : 'light') : preference;
+          document.documentElement.setAttribute('data-theme', resolved);
+        } catch (error) {
+          // Blocked storage or an unavailable matchMedia must not block the app.
+          document.documentElement.setAttribute('data-theme', 'light');
+        }
+      })();
+    </script>
+    <script type="module" crossorigin src="/webui/assets/index-9vvj1xfQ.js"></script>
+    <link rel="modulepreload" crossorigin href="/webui/assets/ui-CY8cZc8u.js">
+    <link rel="modulepreload" crossorigin href="/webui/assets/QueryClientProvider-31puSr8f.js">
+    <link rel="modulepreload" crossorigin href="/webui/assets/createLucideIcon-CSFcmrkz.js">
+    <link rel="modulepreload" crossorigin href="/webui/assets/ime-2rb-82j1.js">
+    <link rel="stylesheet" crossorigin href="/webui/assets/ui-Db1XMW8s.css">
+    <link rel="stylesheet" crossorigin href="/webui/assets/index-BYeIQdg4.css">
   </head>
   <body>
     <div id="root"></div>

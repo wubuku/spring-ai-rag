@@ -90,6 +90,25 @@ BASE_URL=http://127.0.0.1:18081 \
 
 `--with-local-runtime` requires PostgreSQL/pgvector plus working database, embedding, and chat-LLM settings in `.env`. It exclusively owns port `18081` by default and fails when the port is occupied, so it never reuses or kills an unrelated service. Override the port with `RUNTIME_SERVER_PORT`. On success, failure, or interruption, the script archives its logs and stops the service it started.
 
+The service-first focused gate for this batch is:
+
+```bash
+./scripts/verify-next-high-value-features.sh
+```
+
+It covers the `KNOWLEDGE_QA` deterministic hard gate, legacy suite-definition compatibility,
+owner ACL, PDF resource budgets, document-processing compilation, WebUI type/i18n/design checks,
+Vitest, production build, documentation checks, and concurrency-lock rules. It does not call a
+real model automatically. Real `KNOWLEDGE` evaluation runs only when an Evaluation Run is
+explicitly started; provider-backed acceptance should start the server with
+`scripts/start-real-e2e-server.sh` and then run the relevant smoke.
+
+The release script can include the same gate:
+
+```bash
+./scripts/verify-release.sh --with-next-high-value
+```
+
 Docker uses a mainland-China mirror first and falls back to official sources. See the [mainland China network guide](china-network-guide.md). External-service failures must remain failed or explicitly skipped; they must not be reported as a release pass.
 
 When the user permits real LLM acceptance, first pass the related Mock unit and

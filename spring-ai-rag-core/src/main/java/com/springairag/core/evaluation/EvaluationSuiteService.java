@@ -11,9 +11,17 @@ import com.springairag.api.dto.EvaluationSuiteCreateRequest;
 import com.springairag.api.dto.EvaluationSuiteResponse;
 import com.springairag.api.dto.EvaluationSuiteVersionCreateRequest;
 import com.springairag.api.dto.EvaluationSuiteVersionResponse;
+import com.springairag.api.dto.SemanticEvaluationRequest;
+import com.springairag.api.dto.SemanticEvaluationResponse;
 import com.springairag.api.enums.CollectionScopeMode;
 import com.springairag.api.enums.ErrorCode;
+import com.springairag.api.enums.ChatMode;
+import com.springairag.core.chat.ChatCommand;
+import com.springairag.core.chat.ChatExecutionResult;
+import com.springairag.core.chat.ChatExecutionService;
 import com.springairag.core.chat.ChatPrincipal;
+import com.springairag.core.chat.MemoryMode;
+import com.springairag.core.chat.RetrievalOptions;
 import com.springairag.core.config.EmbeddingProfileProvider;
 import com.springairag.core.config.RagEvaluationProperties;
 import com.springairag.core.config.RagProperties;
@@ -24,6 +32,7 @@ import com.springairag.core.service.ApiKeyManagementService;
 import com.springairag.core.service.CollectionRetrievalScopeResolver;
 import com.springairag.core.service.RetrievalEvaluationService;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -52,7 +61,39 @@ public class EvaluationSuiteService {
     private final ObjectMapper objectMapper;
     private final RagEvaluationProperties properties;
     private final ApiKeyManagementService apiKeyManagementService;  // Batch 853：`required = false` 已删——这个类里没有 null 守卫，它缺失时在鉴权取 principal 处抛裸 NPE
+    private final ChatExecutionService chatExecutionService;
+    private final SemanticEvaluationService semanticEvaluationService;
+    private final KnowledgeQaEvaluator knowledgeQaEvaluator;
 
+    @Autowired
+    public EvaluationSuiteService(
+            EvaluationSuiteRepository repository,
+            EvaluationSuiteDefinitionValidator validator,
+            CollectionRetrievalScopeResolver scopeResolver,
+            EvaluationCaseExecutor caseExecutor,
+            RetrievalEvaluationService metricsService,
+            EmbeddingProfileProvider profileProvider,
+            ObjectMapper objectMapper,
+            RagProperties ragProperties,
+            ApiKeyManagementService apiKeyManagementService,
+            ChatExecutionService chatExecutionService,
+            SemanticEvaluationService semanticEvaluationService,
+            CitationValidator citationValidator) {
+        this.repository = repository;
+        this.validator = validator;
+        this.scopeResolver = scopeResolver;
+        this.caseExecutor = caseExecutor;
+        this.metricsService = metricsService;
+        this.profileProvider = profileProvider;
+        this.objectMapper = objectMapper;
+        this.properties = ragProperties.getEvaluation();
+        this.apiKeyManagementService = apiKeyManagementService;
+        this.chatExecutionService = chatExecutionService;
+        this.semanticEvaluationService = semanticEvaluationService;
+        this.knowledgeQaEvaluator = new KnowledgeQaEvaluator(citationValidator);
+    }
+
+    /** 保留不需要 Chat 依赖的旧单测/Java 调用方构造签名。 */
     public EvaluationSuiteService(
             EvaluationSuiteRepository repository,
             EvaluationSuiteDefinitionValidator validator,
@@ -63,15 +104,9 @@ public class EvaluationSuiteService {
             ObjectMapper objectMapper,
             RagProperties ragProperties,
             ApiKeyManagementService apiKeyManagementService) {
-        this.repository = repository;
-        this.validator = validator;
-        this.scopeResolver = scopeResolver;
-        this.caseExecutor = caseExecutor;
-        this.metricsService = metricsService;
-        this.profileProvider = profileProvider;
-        this.objectMapper = objectMapper;
-        this.properties = ragProperties.getEvaluation();
-        this.apiKeyManagementService = apiKeyManagementService;
+        this(repository, validator, scopeResolver, caseExecutor, metricsService,
+                profileProvider, objectMapper, ragProperties, apiKeyManagementService,
+                null, null, new CitationValidator());
     }
 
     public void requireEnabled() {
@@ -200,6 +235,7 @@ public class EvaluationSuiteService {
         boolean drift = !sameProfile || !sameRevision || !sameCorpus;
         ObjectNode delta = objectMapper.createObjectNode();
         delta.put("environmentDrift", drift);
+        addMetricDeltas(delta, left.aggregateMetrics(), right.aggregateMetrics());
         return new EvaluationCompareResponse(
                 left.id(), right.id(), true, drift, sameProfile, sameRevision, sameCorpus,
                 left.aggregateMetrics(), right.aggregateMetrics(), delta);
@@ -241,7 +277,11 @@ public class EvaluationSuiteService {
                 pendingCases.add(new PendingCase(caseDef, variant));
             }
         }
-        for (CompletedCase completed : executeCases(pendingCases, executionKey)) {
+        List<Double> qaPasses = new ArrayList<>();
+        List<Double> latencies = new ArrayList<>();
+        long totalTokens = 0;
+        for (CompletedCase completed : executeCases(
+                pendingCases, executionKey, run.ownerPrincipalId())) {
             CaseOutcome outcome = completed.outcome();
             if (repository.insertCaseResult(
                         runId, workerId, completed.variantKey(), completed.caseId(), outcome.status(),
@@ -257,6 +297,19 @@ public class EvaluationSuiteService {
                 hitRates.add(((Number) outcome.metrics().get("hitRate")).doubleValue());
                 mrrs.add(((Number) outcome.metrics().get("mrr")).doubleValue());
             }
+            if (outcome.metrics() != null
+                    && outcome.metrics().get("deterministicPass") instanceof Boolean pass) {
+                qaPasses.add(pass ? 1.0 : 0.0);
+            }
+            if (outcome.latencyMs() > 0) {
+                latencies.add((double) outcome.latencyMs());
+            }
+            if (outcome.metrics() != null && outcome.metrics().get("usage") instanceof Map<?, ?> usage) {
+                Object value = usage.get("totalTokens");
+                if (value instanceof Number number) {
+                    totalTokens += Math.max(0, number.longValue());
+                }
+            }
         }
         JsonNode after = objectMapper.valueToTree(
                 caseExecutor.collectionSnapshot(allCollectionKeys(definition)));
@@ -267,6 +320,11 @@ public class EvaluationSuiteService {
         aggregate.put("avgHitRate", average(hitRates));
         aggregate.put("avgMrr", average(mrrs));
         aggregate.put("caseCount", definition.cases().size() * variantKeys.size());
+        if (!qaPasses.isEmpty()) {
+            aggregate.put("qaPassRate", average(qaPasses));
+            aggregate.put("avgLatencyMs", average(latencies));
+            aggregate.put("totalTokens", totalTokens);
+        }
         String status = corpusChanged ? "CORPUS_CHANGED"
                 : failed ? "FAILED"
                 : skipped ? "SKIPPED"
@@ -277,7 +335,8 @@ public class EvaluationSuiteService {
 
     private List<CompletedCase> executeCases(
             List<PendingCase> pendingCases,
-            ApiAccessPolicy executionKey) {
+            ApiAccessPolicy executionKey,
+            String ownerPrincipalId) {
         if (pendingCases.isEmpty()) {
             return List.of();
         }
@@ -288,7 +347,7 @@ public class EvaluationSuiteService {
                     .map(item -> new CompletedCase(
                             item.variant().key(),
                             item.caseDef().id(),
-                            executeCase(item.caseDef(), item.variant(), executionKey)))
+                            executeCase(item.caseDef(), item.variant(), executionKey, ownerPrincipalId)))
                     .toList();
         }
         ExecutorService executor = Executors.newFixedThreadPool(concurrency, runnable -> {
@@ -300,7 +359,7 @@ public class EvaluationSuiteService {
             List<Future<CaseOutcome>> futures = new ArrayList<>(pendingCases.size());
             for (PendingCase item : pendingCases) {
                 futures.add(executor.submit(
-                        () -> executeCase(item.caseDef(), item.variant(), executionKey)));
+                        () -> executeCase(item.caseDef(), item.variant(), executionKey, ownerPrincipalId)));
             }
             List<CompletedCase> completed = new ArrayList<>(pendingCases.size());
             for (int i = 0; i < pendingCases.size(); i++) {
@@ -324,7 +383,8 @@ public class EvaluationSuiteService {
     private CaseOutcome executeCase(
             EvaluationSuiteDefinition.CaseDef caseDef,
             EvaluationSuiteDefinition.VariantDef variant,
-            ApiAccessPolicy executionKey) {
+            ApiAccessPolicy executionKey,
+            String ownerPrincipalId) {
         for (EvaluationSuiteDefinition.Identity identity : caseDef.relevant()) {
             if (!caseExecutor.identityExists(
                     identity.collectionKey(),
@@ -341,6 +401,9 @@ public class EvaluationSuiteService {
                     null,
                     null,
                     executionKey);
+            if (caseDef.isKnowledgeQa()) {
+                return executeKnowledgeQa(caseDef, variant, scope, ownerPrincipalId);
+            }
             EvaluationCaseExecutor.Executed executed = caseExecutor.search(
                     caseDef.query(), scope, variant.config(), variant.filters());
             List<Long> retrievedRanks = new ArrayList<>();
@@ -382,6 +445,107 @@ public class EvaluationSuiteService {
         } catch (RuntimeException e) {
             return new CaseOutcome("FAILED", List.of(), Map.of(), 0, null, "PROVIDER_OR_DATABASE");
         }
+    }
+
+    private CaseOutcome executeKnowledgeQa(
+            EvaluationSuiteDefinition.CaseDef caseDef,
+            EvaluationSuiteDefinition.VariantDef variant,
+            com.springairag.core.retrieval.RetrievalScope scope,
+            String ownerPrincipalId) {
+        if (chatExecutionService == null || semanticEvaluationService == null) {
+            return new CaseOutcome("FAILED", List.of(), Map.of(), 0, null,
+                    "QA_EXECUTOR_UNAVAILABLE");
+        }
+        ChatPrincipal principal = ChatPrincipal.fromOwnerId(ownerPrincipalId);
+        String sessionId = "evaluation-" + UUID.randomUUID();
+        ChatCommand command = new ChatCommand(
+                caseDef.query(),
+                sessionId,
+                principal,
+                principal.memoryConversationId(sessionId),
+                ChatMode.KNOWLEDGE,
+                MemoryMode.STATELESS,
+                null,
+                null,
+                scope,
+                new RetrievalOptions(
+                        variant.config().getMaxResults(),
+                        variant.config().getMinScore(),
+                        variant.config().isUseHybridSearch(),
+                        variant.config().isUseRerank(),
+                        variant.config().getVectorWeight(),
+                        variant.config().getFulltextWeight()),
+                Map.of("evaluation", "managed-knowledge-qa"))
+                .withFilters(variant.filters());
+        long started = System.nanoTime();
+        try {
+            ChatExecutionService.PreparedExecution prepared =
+                    chatExecutionService.prepareForOperation(command, null, false);
+            ChatExecutionResult result = prepared.result();
+            List<EvaluationSuiteDefinition.Identity> sources = caseExecutor.lookupSources(result.sources());
+            KnowledgeQaEvaluator.Result deterministic = knowledgeQaEvaluator.evaluate(
+                    caseDef, result, sources);
+            Map<String, Object> metrics = new LinkedHashMap<>(deterministic.metrics());
+            if (caseDef.judge().enabled()) {
+                String context = result.sources().stream()
+                        .map(source -> "[" + source.getCitationId() + "] "
+                                + (source.getChunkText() == null ? "" : source.getChunkText()))
+                        .limit(16)
+                        .collect(java.util.stream.Collectors.joining("\n\n"));
+                SemanticEvaluationRequest request = new SemanticEvaluationRequest(
+                        caseDef.judge().evaluator(), caseDef.query(),
+                        context.length() > 32_000 ? context.substring(0, 32_000) : context,
+                        result.answer() == null ? "" : result.answer(),
+                        caseDef.judge().model() == null ? "default" : caseDef.judge().model());
+                SemanticEvaluationResponse judge = caseDef.judge().model() == null
+                        ? semanticEvaluationService.evaluateDefault(request)
+                        : semanticEvaluationService.evaluate(request);
+                Map<String, Object> judgeMetrics = new LinkedHashMap<>();
+                judgeMetrics.put("status", judge.status());
+                judgeMetrics.put("pass", judge.passed());
+                judgeMetrics.put("score", judge.score());
+                judgeMetrics.put("model", judge.model());
+                judgeMetrics.put("error", judge.error());
+                metrics.put("judge", judgeMetrics);
+            }
+            int latency = (int) Math.min(Integer.MAX_VALUE,
+                    (System.nanoTime() - started) / 1_000_000L);
+            return new CaseOutcome(
+                    deterministic.deterministicPass() ? "PASSED" : "FAILED",
+                    sources,
+                    metrics,
+                    latency,
+                    parseTraceId(result.traceId()),
+                    deterministic.deterministicPass() ? null : "QA_HARD_GATE");
+        } catch (SecurityException e) {
+            return new CaseOutcome("FAILED", List.of(), Map.of(), 0, null,
+                    "AUTHORIZATION_CHANGED");
+        } catch (RuntimeException e) {
+            return new CaseOutcome("FAILED", List.of(), Map.of(), 0, null,
+                    "QA_PROVIDER_OR_DATABASE");
+        }
+    }
+
+    private UUID parseTraceId(String value) {
+        try {
+            return value == null ? null : UUID.fromString(value);
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
+    }
+
+    private void addMetricDeltas(ObjectNode delta, JsonNode left, JsonNode right) {
+        if (left == null || right == null || !left.isObject() || !right.isObject()) {
+            return;
+        }
+        ObjectNode metrics = delta.putObject("metrics");
+        left.fieldNames().forEachRemaining(name -> {
+            JsonNode l = left.get(name);
+            JsonNode r = right.get(name);
+            if (l != null && r != null && l.isNumber() && r.isNumber()) {
+                metrics.put(name, r.asDouble() - l.asDouble());
+            }
+        });
     }
 
     private void authorizeDefinition(

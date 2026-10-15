@@ -314,7 +314,11 @@ export function useChatSSE(options: UseChatSSEOptions): UseChatSSEReturn {
           } finally {
             try {
               readerRef.current?.releaseLock();
-            } catch {}
+            } catch (error) {
+              if (import.meta.env.DEV) {
+                console.debug('SSE reader cleanup skipped because the reader was already released', error);
+              }
+            }
             readerRef.current = null;
             if (abortControllerRef.current === attemptController) {
               abortControllerRef.current = null;

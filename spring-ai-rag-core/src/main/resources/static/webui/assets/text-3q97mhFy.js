@@ -1,0 +1,1 @@
+function e(e,t){return t<=0?``:e.length<=t?e:`${e.slice(0,t)}…`}function t(e,t=256){return e.length<=t?e:e.slice(0,t)}export{e as n,t};

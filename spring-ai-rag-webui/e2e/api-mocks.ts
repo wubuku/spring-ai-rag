@@ -981,7 +981,7 @@ export async function mockAllApiCalls(page: Page) {
   });
 
   // Mock A/B experiment endpoints
-  page.route(/\/api\/v1\/rag\/experiments(?:\/.*)?(?:\?.*)?$/, route => {
+  page.route(/\/api\/v1\/rag\/ab\/experiments(?:\/.*)?(?:\?.*)?$/, route => {
     const pathname = new URL(route.request().url()).pathname;
     const experiment = {
       id: 1,
@@ -996,7 +996,9 @@ export async function mockAllApiCalls(page: Page) {
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify(
-        pathname.endsWith('/experiments') ? [experiment] : experiment,
+        pathname.endsWith('/experiments')
+          ? { items: [experiment], page: 0, size: 100, totalElements: 1, totalPages: 1 }
+          : experiment,
       ),
     });
   });

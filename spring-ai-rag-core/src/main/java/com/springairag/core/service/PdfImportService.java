@@ -6,6 +6,8 @@ import com.springairag.core.entity.FsImportBatch;
 import com.springairag.core.repository.FsFileRepository;
 import com.springairag.core.repository.FsImportBatchRepository;
 import com.springairag.core.service.pdf.PdfConverter;
+import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.pdmodel.PDDocument;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.io.Resource;
@@ -15,6 +17,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -88,6 +92,10 @@ public class PdfImportService {
             throw new IllegalStateException("PDF import is disabled (rag.pdf.enabled=false)");
         }
 
+        if (pdfFile == null || pdfFile.getSize() > pdfProperties.getMaxUploadBytes()) {
+            throw new IllegalArgumentException(
+                    "PDF upload exceeds max-upload-bytes (" + pdfProperties.getMaxUploadBytes() + ")");
+        }
         String originalFilename = normalizeOriginalFilename(pdfFile);
 
         // Generate UUID as virtual directory name
@@ -106,8 +114,8 @@ public class PdfImportService {
         try {
             // 客户端文件名只作为元数据，绝不参与临时路径。
             Path tempPdfPath = tempWorkDir.resolve("source.pdf");
-            byte[] pdfBytes = pdfFile.getBytes();
-            Files.write(tempPdfPath, pdfBytes);
+            copyUploadBounded(pdfFile, tempPdfPath);
+            validatePageCount(tempPdfPath);
 
             // Find first available converter
             PdfConverter converter = findAvailableConverter();
@@ -130,8 +138,9 @@ public class PdfImportService {
                         "PDF converter did not create the expected source/ output directory");
             }
 
+            byte[] pdfBytes = Files.readAllBytes(tempPdfPath);
             List<FsFile> records =
-                    collectOutputRecords(uuid, markerOutputDir, pdfBytes);
+                    collectOutputRecords(uuid, markerOutputDir, pdfBytes, pdfProperties);
             String originalPath = uuid + "/original.pdf";
             String entryMarkdownPath = uuid + "/default.md";
 
@@ -186,7 +195,8 @@ public class PdfImportService {
     private static List<FsFile> collectOutputRecords(
             String uuid,
             Path markerOutputDir,
-            byte[] pdfBytes) throws IOException {
+            byte[] pdfBytes,
+            RagPdfProperties properties) throws IOException {
         List<FsFile> records = new ArrayList<>();
         String originalPath = uuid + "/original.pdf";
         String entryMarkdownPath = uuid + "/default.md";
@@ -206,6 +216,11 @@ public class PdfImportService {
                     .sorted()
                     .toList();
         }
+        if (outputFiles.size() > properties.getMaxOutputFiles()) {
+            throw new IllegalArgumentException(
+                    "PDF conversion produced too many output files (max "
+                            + properties.getMaxOutputFiles() + ")");
+        }
 
         List<Path> markdownFiles = outputFiles.stream()
                 .filter(file -> file.getFileName().toString()
@@ -217,6 +232,7 @@ public class PdfImportService {
         }
 
         Set<String> recordPaths = new HashSet<>();
+        long totalBytes = pdfBytes.length;
         recordPaths.add(originalPath);
         for (Path file : outputFiles) {
             String filename = file.getFileName().toString().trim();
@@ -232,6 +248,17 @@ public class PdfImportService {
                         "PDF converter produced duplicate output path: " + recordPath);
             }
 
+            long size = Files.size(file);
+            if (size > properties.getMaxInMemoryBytes()) {
+                throw new IllegalArgumentException(
+                        "PDF conversion produced a file above max-in-memory-bytes");
+            }
+            totalBytes = Math.addExact(totalBytes, size);
+            if (totalBytes > properties.getMaxOutputBytes()) {
+                throw new IllegalArgumentException(
+                        "PDF conversion output exceeds max-output-bytes ("
+                                + properties.getMaxOutputBytes() + ")");
+            }
             byte[] content = Files.readAllBytes(file);
             String mimeType = isMarkdown ? "text/markdown" : Files.probeContentType(file);
             records.add(new FsFile(
@@ -245,6 +272,43 @@ public class PdfImportService {
             log.info("Imported file: {} -> {}", file, recordPath);
         }
         return records;
+    }
+
+    private void copyUploadBounded(MultipartFile pdfFile, Path target) throws IOException {
+        long maxUploadBytes = pdfProperties.getMaxUploadBytes();
+        long maxInMemoryBytes = pdfProperties.getMaxInMemoryBytes();
+        try (InputStream input = pdfFile.getInputStream();
+                OutputStream output = Files.newOutputStream(target)) {
+            byte[] buffer = new byte[8192];
+            long copied = 0;
+            int read;
+            while ((read = input.read(buffer)) != -1) {
+                copied = Math.addExact(copied, read);
+                if (copied > maxUploadBytes) {
+                    throw new IllegalArgumentException(
+                            "PDF upload exceeds max-upload-bytes (" + maxUploadBytes + ")");
+                }
+                if (copied > maxInMemoryBytes) {
+                    throw new IllegalArgumentException(
+                            "PDF upload exceeds max-in-memory-bytes (" + maxInMemoryBytes + ")");
+                }
+                output.write(buffer, 0, read);
+            }
+        }
+    }
+
+    private void validatePageCount(Path pdfPath) throws IOException {
+        try {
+            try (PDDocument document = Loader.loadPDF(pdfPath.toFile())) {
+                if (document.getNumberOfPages() > pdfProperties.getMaxPages()) {
+                    throw new IllegalArgumentException(
+                            "PDF exceeds max-pages (" + pdfProperties.getMaxPages() + ")");
+                }
+            }
+        } catch (IOException invalidPdf) {
+            // 让选定 converter 返回其既有的格式错误；不能把所有 converter 的
+            // 输入校验提前绑定到 PDFBox，否则 Marker/Fake converter 的兼容路径会失效。
+        }
     }
 
     private PdfConverter findAvailableConverter() {
