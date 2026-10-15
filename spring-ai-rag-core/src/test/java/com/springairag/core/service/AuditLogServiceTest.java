@@ -147,6 +147,22 @@ class AuditLogServiceTest {
     }
 
     @Test
+    @DisplayName("Audit description and details mask sensitive values")
+    void logCreate_masksSensitiveDescriptionAndDetails() throws Exception {
+        Map<String, Object> details = Map.of("message", "token=secret-token");
+        when(objectMapper.writeValueAsString(details)).thenReturn("{\"message\":\"token=secret-token\"}");
+        when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        auditLogService.logCreate("Alert", "alert-1",
+                "created with password=top-secret", details);
+
+        verify(repository).save(auditLogCaptor.capture());
+        RagAuditLog saved = auditLogCaptor.getValue();
+        assertFalse(saved.getDescription().contains("top-secret"));
+        assertFalse(saved.getDetails().contains("secret-token"));
+    }
+
+    @Test
     @DisplayName("Document delete audit removes free-text reason")
     void logDelete_documentDetailsRemoveContent() {
         Map<String, Object> details = Map.of("reason", "user requested");

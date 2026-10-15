@@ -1,6 +1,24 @@
 {
   "version": 1,
   "description": "最低可兼容的外部 Client API 基线；新增字段不需要在这里登记，删除或改类型才会失败。",
+  "contractPolicy": {
+    "changeMode": "ADDITIVE_ONLY",
+    "requiredErrorProperties": ["error", "message", "status", "failureClass"],
+    "nullableErrorProperties": ["traceId"],
+    "responseTraceHeader": "X-Trace-Id"
+  },
+  "reliability": {
+    "failureClassProperty": "failureClass",
+    "failureClassHeader": "X-RAG-Failure-Class",
+    "retryAfterStatuses": [429],
+    "conditionalRetryAfterSignals": ["CHAT_TURN_IN_PROGRESS"],
+    "idempotentReplayHeader": "X-RAG-Idempotent-Replay"
+  },
+  "governance": {
+    "policyPath": "/rag/data-governance/policy",
+    "auditPath": "/rag/audit-logs",
+    "auditRequiresManagementAccess": true
+  },
   "paths": [
     {
       "suffix": "/rag/chat/ask",
@@ -24,7 +42,7 @@
           "content": ["choices"],
           "sources": ["sources"],
           "done": ["status"],
-          "error": ["error"]
+          "error": ["error", "failureClass"]
         }
       }
     },
@@ -62,20 +80,20 @@
     {
       "suffix": "/v1/models",
       "method": "get",
-      "responseSchema": "OpenAiModelResponse.ListEnvelope",
+      "responseSchema": "ListEnvelope",
       "conditional": "openai-compatibility"
     },
     {
       "suffix": "/v1/models/{id}",
       "method": "get",
-      "responseSchema": "OpenAiModelResponse.Model",
+      "responseSchema": "Model",
       "conditional": "openai-compatibility"
     },
     {
       "suffix": "/v1/chat/completions",
       "method": "post",
       "requestBodySchema": "OpenAiChatCompletionRequest",
-      "responseSchema": "OpenAiChatCompletionResponse",
+      "responseSchema": "ResponseBodyEmitter",
       "conditional": "openai-compatibility"
     }
   ],
@@ -176,7 +194,8 @@
         "message": "string",
         "timestamp": "string",
         "path": "string",
-        "traceId": "string"
+        "traceId": "string",
+        "failureClass": "string"
       }
     },
     "RetrievalTracePageResponse": {

@@ -3,6 +3,7 @@ package com.springairag.core.repository;
 import com.springairag.core.entity.RagRetrievalEvaluation;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -59,4 +60,18 @@ public interface RagRetrievalEvaluationRepository extends JpaRepository<RagRetri
     Double findAvgHitRate(
             @Param("startDate") ZonedDateTime startDate,
             @Param("endDate") ZonedDateTime endDate);
+
+    @Modifying
+    @Query(value = """
+            DELETE FROM rag_retrieval_evaluations
+            WHERE id IN (
+                SELECT id FROM rag_retrieval_evaluations
+                WHERE created_at < :cutoff
+                ORDER BY created_at ASC, id ASC
+                LIMIT :batchSize
+            )
+            """, nativeQuery = true)
+    int deleteExpiredBatch(
+            @Param("cutoff") ZonedDateTime cutoff,
+            @Param("batchSize") int batchSize);
 }

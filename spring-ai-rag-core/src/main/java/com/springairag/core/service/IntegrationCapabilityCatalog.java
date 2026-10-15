@@ -3,13 +3,16 @@ package com.springairag.core.service;
 import com.springairag.api.contract.DocumentSyncRunLimits;
 import com.springairag.api.dto.IntegrationCapabilitiesResponse;
 import com.springairag.api.enums.CollectionAccessMode;
+import com.springairag.api.enums.FailureClass;
 import com.springairag.core.config.RagProperties;
+import com.springairag.core.config.RagRetryProperties;
 import com.springairag.core.filter.ApiKeyAuthFilter;
 import com.springairag.core.security.ApiCapabilitySupport;
 import com.springairag.core.security.ApiKeyCollectionAccess;
 import com.springairag.core.security.AuthenticatedApiPrincipal;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.dao.DataAccessException;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -27,12 +30,23 @@ public class IntegrationCapabilityCatalog {
 
     private final RagProperties properties;
     private final CollectionIdentityResolver collectionIdentityResolver;
+    private final RagRetryProperties retryProperties;
 
+    @Autowired
+    public IntegrationCapabilityCatalog(
+            RagProperties properties,
+            CollectionIdentityResolver collectionIdentityResolver,
+            RagRetryProperties retryProperties) {
+        this.properties = properties;
+        this.collectionIdentityResolver = collectionIdentityResolver;
+        this.retryProperties = retryProperties;
+    }
+
+    /** Backward-compatible constructor for extensions and focused unit tests. */
     public IntegrationCapabilityCatalog(
             RagProperties properties,
             CollectionIdentityResolver collectionIdentityResolver) {
-        this.properties = properties;
-        this.collectionIdentityResolver = collectionIdentityResolver;
+        this(properties, collectionIdentityResolver, new RagRetryProperties());
     }
 
     public IntegrationCapabilitiesResponse describe(HttpServletRequest request) {
@@ -107,7 +121,57 @@ public class IntegrationCapabilityCatalog {
                                 properties.getCollectionPurge().getMaxDerivedRows(),
                                 properties.getCollectionPurge()
                                         .getMaxAffectedChatSessions(),
-                                properties.getCollectionPurge().getMaxChatRows())));
+                                properties.getCollectionPurge().getMaxChatRows())),
+                new IntegrationCapabilitiesResponse.Reliability(
+                        List.of(FailureClass.CLIENT_REQUEST.name(),
+                                FailureClass.AUTHENTICATION.name(),
+                                FailureClass.AUTHORIZATION.name(),
+                                FailureClass.NOT_FOUND.name(),
+                                FailureClass.CONFLICT.name(),
+                                FailureClass.RATE_LIMITED.name(),
+                                FailureClass.DEPENDENCY_UNAVAILABLE.name(),
+                                FailureClass.TIMEOUT.name(),
+                                FailureClass.INTERNAL.name()),
+                        "X-Trace-Id",
+                        "X-RAG-Failure-Class",
+                        List.of(429),
+                        List.of("CHAT_TURN_IN_PROGRESS"),
+                        true,
+                        false,
+                        properties.getCircuitBreaker().isEnabled(),
+                        properties.getTimeout().getChatAskMs() > 0,
+                        retryProperties.isEnabled(),
+                        retryProperties.getMaxAttempts(),
+                        properties.getTimeout().getChatAskMs()),
+                new IntegrationCapabilitiesResponse.Governance(
+                        "/api/v1/rag/data-governance/policy",
+                        "/api/v1/rag/audit-logs",
+                        "sensitive-data-masking-v1",
+                        properties.getDataGovernance().isEnabled()
+                                && properties.getDataGovernance().isCleanupEnabled(),
+                        isManagementPrincipal(request),
+                        properties.getDataGovernance().getAuditLogRetentionDays(),
+                        properties.getDataGovernance().getClientErrorRetentionDays(),
+                        properties.getDataGovernance().getEvaluationRetentionDays(),
+                        properties.getDataGovernance().getCleanupBatchSize(),
+                        properties.getDataGovernance().getCleanupMaxBatches()));
+    }
+
+    private boolean isManagementPrincipal(HttpServletRequest request) {
+        if (request == null) {
+            return false;
+        }
+        Object type = request.getAttribute(ApiKeyAuthFilter.AUTHENTICATED_PRINCIPAL_TYPE);
+        if (ApiKeyAuthFilter.PRINCIPAL_ENVIRONMENT_ROOT.equals(type)
+                || Boolean.TRUE.equals(request.getAttribute(
+                ApiKeyAuthFilter.ROOT_AUTHENTICATED_ATTRIBUTE))) {
+            return true;
+        }
+        return ApiKeyAuthFilter.PRINCIPAL_DATABASE_API_KEY.equals(type)
+                && request.getAttribute(
+                ApiKeyAuthFilter.AUTHENTICATED_API_PRINCIPAL_ATTRIBUTE)
+                instanceof AuthenticatedApiPrincipal principal
+                && principal.getRole() == com.springairag.core.entity.ApiKeyRole.ADMIN;
     }
 
     private boolean collectionPurgeVisible(HttpServletRequest request) {

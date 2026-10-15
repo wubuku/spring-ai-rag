@@ -1,8 +1,10 @@
 package com.springairag.core.controller;
 
 import com.springairag.api.openai.OpenAiErrorResponse;
+import com.springairag.api.enums.FailureClass;
 import com.springairag.core.exception.RagException;
 import com.springairag.core.exception.ChatTurnInProgressException;
+import com.springairag.core.filter.FailureClassHttpSupport;
 import com.springairag.core.openai.OpenAiProtocolException;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
@@ -22,7 +24,7 @@ public class OpenAiCompatibilityExceptionHandler {
     @ExceptionHandler(OpenAiProtocolException.class)
     public ResponseEntity<OpenAiErrorResponse> handleProtocol(
             OpenAiProtocolException error) {
-        return ResponseEntity.status(error.getStatus())
+        return errorResponse(error.getStatus(), error.getCode())
                 .body(OpenAiErrorResponse.of(
                         error.getMessage(),
                         error.getType(),
@@ -33,7 +35,7 @@ public class OpenAiCompatibilityExceptionHandler {
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<OpenAiErrorResponse> handleUnreadable(
             HttpMessageNotReadableException error) {
-        return ResponseEntity.badRequest()
+        return errorResponse(HttpStatus.BAD_REQUEST.value(), "invalid_request_body")
                 .body(OpenAiErrorResponse.of(
                         "Invalid JSON request body",
                         "invalid_request_error",
@@ -44,7 +46,8 @@ public class OpenAiCompatibilityExceptionHandler {
     @ExceptionHandler(RagException.class)
     public ResponseEntity<OpenAiErrorResponse> handleRag(RagException error) {
         int status = error.getErrorCodeEnum().getHttpStatus();
-        ResponseEntity.BodyBuilder builder = ResponseEntity.status(status);
+        ResponseEntity.BodyBuilder builder = errorResponse(
+                status, error.getErrorCodeEnum().getCode());
         if (error instanceof ChatTurnInProgressException inProgress) {
             builder.header("Retry-After",
                     Integer.toString(inProgress.retryAfterSeconds()));
@@ -61,7 +64,7 @@ public class OpenAiCompatibilityExceptionHandler {
     @ExceptionHandler(SecurityException.class)
     public ResponseEntity<OpenAiErrorResponse> handleSecurity(
             SecurityException error) {
-        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+        return errorResponse(HttpStatus.FORBIDDEN.value(), "permission_denied")
                 .body(OpenAiErrorResponse.of(
                         "The current API key is not allowed to access "
                                 + "the requested resource",
@@ -73,7 +76,7 @@ public class OpenAiCompatibilityExceptionHandler {
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<OpenAiErrorResponse> handleArgument(
             IllegalArgumentException error) {
-        return ResponseEntity.badRequest()
+        return errorResponse(HttpStatus.BAD_REQUEST.value(), "invalid_request")
                 .body(OpenAiErrorResponse.of(
                         error.getMessage(),
                         "invalid_request_error",
@@ -84,11 +87,17 @@ public class OpenAiCompatibilityExceptionHandler {
     @ExceptionHandler(Exception.class)
     public ResponseEntity<OpenAiErrorResponse> handleUnexpected(
             Exception error) {
-        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+        return errorResponse(HttpStatus.SERVICE_UNAVAILABLE.value(), "service_unavailable")
                 .body(OpenAiErrorResponse.of(
                         "The RAG service is temporarily unavailable",
                         "server_error",
                         null,
                         "service_unavailable"));
+    }
+
+    private ResponseEntity.BodyBuilder errorResponse(int status, String errorCode) {
+        return ResponseEntity.status(status)
+                .header(FailureClassHttpSupport.HEADER,
+                        FailureClass.from(status, errorCode).name());
     }
 }

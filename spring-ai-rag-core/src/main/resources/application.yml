@@ -258,6 +258,15 @@ app:
 # Embedding Model Configuration (independent of Chat provider, always active)
 # ============================================
 rag:
+  data-governance:
+    enabled: ${RAG_DATA_GOVERNANCE_ENABLED:true}
+    audit-log-retention-days: ${RAG_DATA_GOVERNANCE_AUDIT_LOG_RETENTION_DAYS:400}
+    client-error-retention-days: ${RAG_DATA_GOVERNANCE_CLIENT_ERROR_RETENTION_DAYS:30}
+    evaluation-retention-days: ${RAG_DATA_GOVERNANCE_EVALUATION_RETENTION_DAYS:400}
+    cleanup-enabled: ${RAG_DATA_GOVERNANCE_CLEANUP_ENABLED:true}
+    cleanup-batch-size: ${RAG_DATA_GOVERNANCE_CLEANUP_BATCH_SIZE:500}
+    cleanup-max-batches: ${RAG_DATA_GOVERNANCE_CLEANUP_MAX_BATCHES:10}
+    cleanup-cron: "${RAG_DATA_GOVERNANCE_CLEANUP_CRON:0 40 * * * *}"
   collection-purge:
     enabled: ${RAG_COLLECTION_PURGE_ENABLED:false}
     allow-auth-disabled: ${RAG_COLLECTION_PURGE_ALLOW_AUTH_DISABLED:false}

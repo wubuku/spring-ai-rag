@@ -1562,6 +1562,28 @@ logging:
 
 建议生产环境将 `com.springairag` 设为 `INFO`，调试时改 `DEBUG` 可查看完整 RAG Pipeline 日志（查询改写 → 混合检索 → 重排 → Prompt 组装）。
 
+## 数据治理配置
+
+默认启用数据治理策略，并自动清理过期的审计日志、客户端错误和检索评估记录；不需要新增
+schema 迁移：
+
+```yaml
+rag:
+  data-governance:
+    enabled: true
+    audit-log-retention-days: 400
+    client-error-retention-days: 30
+    evaluation-retention-days: 400
+    cleanup-enabled: true
+    cleanup-batch-size: 500
+    cleanup-max-batches: 10
+    cleanup-cron: "0 40 * * * *"
+```
+
+对应环境变量使用 `RAG_DATA_GOVERNANCE_*` 前缀。清理任务有界、可重入，并为每个批次使用独立
+事务；某个类别失败时只记录脱敏日志，并在下一次调度重试，不阻塞 Chat 或 Search。已有的
+chat、retrieval-diagnostics、usage 和 integration-observability 清理任务仍分别负责自己的表。
+
 ## 配置继承
 
 Starter 模块使用者只需配置：

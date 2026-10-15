@@ -66,6 +66,13 @@ class IntegrationCapabilityCatalogTest {
                 localPrincipal.getCollectionAccessMode());
         assertEquals(ApiCapabilitySupport.fullCapabilities(),
                 localPrincipal.getCapabilities());
+
+        assertEquals("X-RAG-Failure-Class",
+                catalog.describe(root).getReliability().failureClassHeader());
+        assertEquals("/api/v1/rag/data-governance/policy",
+                catalog.describe(root).getGovernance().policyPath());
+        assertEquals(400,
+                catalog.describe(root).getGovernance().auditLogRetentionDays());
     }
 
     @Test

@@ -82,6 +82,8 @@ public class RagProperties {
             new RagCollectionPurgeProperties();
     private final RagApiKeyExpiryAlertProperties apiKeyExpiryAlerts =
             new RagApiKeyExpiryAlertProperties();
+    private final RagDataGovernanceProperties dataGovernance =
+            new RagDataGovernanceProperties();
 
     public RagEmbeddingProperties getEmbedding() {
         return embedding;
@@ -213,5 +215,9 @@ public class RagProperties {
 
     public RagApiKeyExpiryAlertProperties getApiKeyExpiryAlerts() {
         return apiKeyExpiryAlerts;
+    }
+
+    public RagDataGovernanceProperties getDataGovernance() {
+        return dataGovernance;
     }
 }

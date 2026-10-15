@@ -973,6 +973,17 @@ V58 把外部 Email/DingTalk 投递从进程内 best-effort 升级为 durable ou
 3. 收集结果（延迟、准确率、用户评分）
 4. 统计分析效果差异
 
+### 7.4 面向 Client 的可靠性与数据治理
+
+服务把外部 HTTP Client 视为主要集成边界。原生错误保留历史 envelope，并增量增加机器可读的
+`failureClass` 字段和 `X-RAG-Failure-Class` 响应头；流式响应可能已经提交 `200`，因此原生
+SSE 的 error event 也携带同一分类。OpenAI-compatible 响应 body 不增加非标准字段。
+
+`/api/v1/rag/data-governance/policy` 发布低敏的保留与脱敏元数据；`/api/v1/rag/audit-logs`
+只对 management caller 开放，并且只返回无正文的审计视图。审计、客户端错误和检索评估的
+清理使用有界主键删除和独立事务，不使用 `FOR UPDATE`、`SKIP LOCKED` 或 PostgreSQL advisory
+lock。聊天历史、检索诊断、用量和集成观测数据仍由各自已有清理任务负责。
+
 ---
 
 ## 8. 关键设计决策

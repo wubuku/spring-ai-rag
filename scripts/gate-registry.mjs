@@ -102,6 +102,7 @@ export const GATES = [
   manual('scripts/verify-alert-notification-delivery.sh'),
   manual('scripts/verify-api-key-expiry-alerts.sh'),
   manual('scripts/verify-business-client-readiness.sh'),
+  manual('scripts/verify-client-contract-governance.sh'),
   manual('scripts/verify-chat-capability.sh'),
   manual('scripts/verify-chunking-quality.sh'),
   manual('scripts/verify-collection-provisioning.sh'),

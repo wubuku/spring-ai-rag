@@ -3,6 +3,7 @@ package com.springairag.core.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.springairag.core.entity.RagAuditLog;
+import com.springairag.core.logging.SensitiveDataMaskingConverter;
 import com.springairag.core.repository.RagAuditLogRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -10,6 +11,7 @@ import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.time.ZonedDateTime;
@@ -137,6 +139,10 @@ public class AuditLogService {
             entry.setDetails(toJson(contentFree
                     ? contentFreeDetails(details)
                     : details));
+            entry.setDescription(SensitiveDataMaskingConverter.maskSensitiveData(
+                    entry.getDescription()));
+            entry.setDetails(SensitiveDataMaskingConverter.maskSensitiveData(
+                    entry.getDetails()));
 
             repository.save(entry);
 
@@ -195,6 +201,17 @@ public class AuditLogService {
      */
     public List<RagAuditLog> getRecentAuditLogs(int limit) {
         return repository.findTop20ByOrderByCreatedAtDesc();
+    }
+
+    /** Query the bounded management audit view with optional filters. */
+    public Page<RagAuditLog> search(
+            String operation,
+            String entityType,
+            String entityId,
+            ZonedDateTime fromTime,
+            ZonedDateTime toTime,
+            Pageable pageable) {
+        return repository.search(operation, entityType, entityId, fromTime, toTime, pageable);
     }
 
     /**

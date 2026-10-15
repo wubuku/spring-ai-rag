@@ -309,6 +309,8 @@ public class RateLimitFilter extends OncePerRequestFilter {
         response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setHeader(RETRY_AFTER_HEADER, String.valueOf(retryAfter));
+        FailureClassHttpSupport.apply(
+                response, HttpStatus.TOO_MANY_REQUESTS.value(), "TOO_MANY_REQUESTS");
         if (path != null && path.startsWith("/v1/")) {
             response.getWriter().write(objectMapper.writeValueAsString(
                     OpenAiErrorResponse.of(
@@ -336,6 +338,8 @@ public class RateLimitFilter extends OncePerRequestFilter {
             String path) throws IOException {
         response.setStatus(HttpStatus.SERVICE_UNAVAILABLE.value());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        FailureClassHttpSupport.apply(
+                response, HttpStatus.SERVICE_UNAVAILABLE.value(), "RATE_LIMIT_STORE_UNAVAILABLE");
         if (path != null && path.startsWith("/v1/")) {
             response.getWriter().write(objectMapper.writeValueAsString(
                     OpenAiErrorResponse.of(

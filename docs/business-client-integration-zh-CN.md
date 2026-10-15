@@ -472,6 +472,17 @@ item/payload 上限和 operation-observability 状态；未到达的运行时事
 embedding stub 验证真实 Spring AI
 embedding HTTP 路径及 503 失败保留合同，但本能力不改变 Chat，因此该门禁不调用 Chat LLM。
 
+## 8.1 Client 错误与治理合同
+
+业务 Client 应基于 `failureClass` 分支，而不要依赖 provider 错误文本。原生错误保留历史 JSON
+字段，并增加 `X-RAG-Failure-Class`；应将 `X-Trace-Id` 与 Client request ID 一起记录。原生
+SSE 的 `error` event 在事件内部携带 `failureClass`，因为响应头可能已经提交。OpenAI-compatible
+body shape 保持不变。
+
+可使用 `GET /api/v1/rag/data-governance/policy` 发现保留和脱敏元数据。management-only 的
+`GET /api/v1/rag/audit-logs` 只面向 root/`ADMIN` operator，并返回无正文视图；它不替代业务
+Client 自己的数据导出或删除 API。
+
 ## 9. 当前限制
 
 - 当前身份体系是 environment root + 数据库业务 principal，不提供 OAuth/OIDC federation

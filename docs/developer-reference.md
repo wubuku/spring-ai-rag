@@ -1073,6 +1073,27 @@ skipped rather than claiming a completed vector path. Logs are written under
 ignored `.verification/external-documents-e2e/` and the script never prints API
 keys or complete document content.
 
+### Client API Contract Governance
+
+Run the static contract and governance checks without a running server:
+
+```bash
+./scripts/verify-client-contract-governance.sh
+node scripts/lib/api-contract-check.mjs --self-test
+```
+
+For a running service, add the external-client black-box check:
+
+```bash
+API_CONTRACT_BASE_URL=http://127.0.0.1:18081 \
+API_CONTRACT_API_KEY="$RAG_ROOT_API_KEY" \
+./scripts/verify-api-compatibility.sh
+```
+
+The gate is intentionally independent of WebUI tests. It verifies additive error fields,
+`X-Trace-Id`, `X-RAG-Failure-Class`, the governance policy endpoint, and management-only redacted
+audit responses. Set `API_CONTRACT_RUN_LIVE=1` only when the live Search/OpenAI smoke is wanted.
+
 ## 8. Goldenset And Release Gates
 
 Retrieval goldenset:

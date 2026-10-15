@@ -1,6 +1,7 @@
 package com.springairag.api.dto;
 
 import com.springairag.api.enums.ErrorCode;
+import com.springairag.api.enums.FailureClass;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -60,6 +61,19 @@ class ErrorResponseTest {
         assertEquals("INTERNAL_ERROR", response.getError());
         assertEquals("服务器内部错误", response.getMessage());
         assertNull(response.getPath());
+    }
+
+    @Test
+    void builderDerivesFailureClassWithoutChangingLegacyFields() {
+        ErrorResponse response = ErrorResponse.builder()
+                .error("SERVICE_UNAVAILABLE")
+                .status(503)
+                .message("dependency unavailable")
+                .build();
+
+        assertEquals(FailureClass.DEPENDENCY_UNAVAILABLE, response.getFailureClass());
+        assertEquals("SERVICE_UNAVAILABLE", response.getError());
+        assertEquals("dependency unavailable", response.getMessage());
     }
 
     @Test

@@ -1509,6 +1509,34 @@ environment, and database. Override the ports with
 this option, the real LLM gate is recorded as `SKIP`; local tests and Mock
 Playwright never imply a real model/tool-capable endpoint was validated.
 
+## Client Contract Governance Acceptance
+
+The external Client API is the primary acceptance boundary; WebUI success alone is insufficient.
+Run the static governance gate in every release verification:
+
+```bash
+./scripts/verify-client-contract-governance.sh
+node scripts/lib/api-contract-check.mjs --self-test
+```
+
+Against a running PostgreSQL-profile service, run the HTTP compatibility gate as well:
+
+```bash
+API_CONTRACT_BASE_URL=http://127.0.0.1:18081 \
+API_CONTRACT_API_KEY="$RAG_ROOT_API_KEY" \
+./scripts/verify-api-compatibility.sh
+```
+
+The black-box gate checks native Chat/Search validation, Retrieval Trace, the governance policy and
+audit routes, `X-Trace-Id`, `X-RAG-Failure-Class`, additive error fields, and the rule that a
+successful audit response has no persisted `details` field. It accepts the deployment's valid
+`200/401/403` authentication outcome for governance routes, but never accepts a server-side `5xx`.
+With `API_CONTRACT_RUN_LIVE=1` it additionally exercises live Search and OpenAI-compatible Chat.
+For a transport-only OpenAI-compatible probe on a deployment where the default RAG mode cannot
+complete the live request safely, set `API_CONTRACT_RAG_MODE=PLAIN`. The gate then adds the
+optional `rag.mode=PLAIN` and `rag.memory=STATELESS` request fields; the default remains unchanged,
+and this option does not claim that KNOWLEDGE evidence safety was validated.
+
 ## Rules for Writing New Tests
 
 1. **Write tests before implementation** (TDD-friendly)

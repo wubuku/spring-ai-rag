@@ -3609,3 +3609,45 @@ Get the total number of recorded client-side errors.
 | Field | Type | Description |
 |-------|------|-------------|
 | `count` | integer | Total number of recorded client errors |
+
+## Data Governance — Retention And Redacted Audit
+
+### `GET /api/v1/rag/data-governance/policy`
+
+Returns a low-sensitivity policy for the current caller. The response reports the redaction rule
+version, retention days, bounded cleanup limits, and caller-visible capabilities. It never includes
+provider credentials, database details, prompts, document content, or another principal's data.
+
+The default policy is enabled. The first-party cleanup categories retain audit logs for 400 days,
+client errors for 30 days, and retrieval evaluations for 400 days. Automatic cleanup runs hourly,
+deletes at most 500 rows per batch and at most 10 batches per category per run.
+
+### `GET /api/v1/rag/audit-logs`
+
+Returns a redacted, paginated audit view for the environment root or a database-backed `ADMIN`
+principal. Existing audit details are deliberately omitted from the response; this endpoint does not
+return prompt text, provider payloads, secrets, hashes, or document content.
+
+Supported query parameters:
+
+| Parameter | Type | Default | Constraint |
+|-----------|------|---------|------------|
+| `page` | integer | `0` | `0`–`1000000` |
+| `size` | integer | `50` | `1`–`200` |
+| `operation` | string | — | maximum 128 characters |
+| `entityType` | string | — | maximum 128 characters |
+| `entityId` | string | — | maximum 128 characters |
+| `from` / `to` | ISO-8601 instant | — | range maximum 31 days |
+
+### Error reliability fields
+
+Native JSON errors retain every historical field and may additionally include `failureClass`.
+Before an uncommitted native error response is sent, the server also adds
+`X-RAG-Failure-Class`. The stable values are `CLIENT_REQUEST`, `AUTHENTICATION`,
+`AUTHORIZATION`, `NOT_FOUND`, `CONFLICT`, `RATE_LIMITED`, `DEPENDENCY_UNAVAILABLE`, `TIMEOUT`,
+and `INTERNAL`.
+
+The existing `X-Trace-Id` correlation header remains the HTTP-level guarantee; the body `traceId`
+field remains nullable for compatibility. Native SSE `error` events carry `failureClass` because
+headers cannot be changed after a `200` streaming response is committed. OpenAI-compatible error
+JSON is unchanged.

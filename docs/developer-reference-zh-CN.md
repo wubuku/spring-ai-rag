@@ -944,6 +944,27 @@ embedding。只有 embedding provider 确实不可用时才设置
 伪报 embedding 完成。日志写入被忽略的 `.verification/external-documents-e2e/`，脚本不会
 输出 API Key 或完整文档内容。
 
+### Client API 契约治理
+
+无需启动服务即可运行静态契约与治理检查：
+
+```bash
+./scripts/verify-client-contract-governance.sh
+node scripts/lib/api-contract-check.mjs --self-test
+```
+
+针对正在运行的服务，再执行外部 Client 黑盒检查：
+
+```bash
+API_CONTRACT_BASE_URL=http://127.0.0.1:18081 \
+API_CONTRACT_API_KEY="$RAG_ROOT_API_KEY" \
+./scripts/verify-api-compatibility.sh
+```
+
+该门禁刻意独立于 WebUI 测试，检查增量错误字段、`X-Trace-Id`、`X-RAG-Failure-Class`、
+治理 policy endpoint，以及 management-only 脱敏审计响应。只有需要真实 Search/OpenAI
+smoke 时才设置 `API_CONTRACT_RUN_LIVE=1`。
+
 ## 8. Goldenset 与发布门禁
 
 检索 goldenset：

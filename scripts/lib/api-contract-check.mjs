@@ -149,11 +149,51 @@ function checkOperation(spec, baseline, errors) {
   }
 }
 
+function checkContractPolicy(spec, manifest, errors) {
+  const policy = manifest.contractPolicy;
+  if (!policy) return;
+  if (policy.changeMode !== 'ADDITIVE_ONLY') {
+    addError(errors, `unsupported contract change mode: ${policy.changeMode}`);
+  }
+  const errorSchema = spec.components?.schemas?.ErrorResponse;
+  if (!errorSchema) {
+    addError(errors, 'missing schema: ErrorResponse for contract policy');
+  } else {
+    const properties = errorSchema.properties || {};
+    for (const field of policy.requiredErrorProperties || []) {
+      if (!Object.prototype.hasOwnProperty.call(properties, field)) {
+        addError(errors, `ErrorResponse: required contract field is missing: ${field}`);
+      }
+    }
+    for (const field of policy.nullableErrorProperties || []) {
+      if (!Object.prototype.hasOwnProperty.call(properties, field)) {
+        addError(errors, `ErrorResponse: nullable contract field is missing: ${field}`);
+      }
+    }
+  }
+  const reliability = manifest.reliability || {};
+  if (reliability.failureClassProperty
+      && !Object.prototype.hasOwnProperty.call(
+        errorSchema?.properties || {}, reliability.failureClassProperty)) {
+    addError(errors,
+      `ErrorResponse: reliability field is missing: ${reliability.failureClassProperty}`);
+  }
+  const governance = manifest.governance || {};
+  for (const suffix of [governance.policyPath, governance.auditPath]) {
+    if (!suffix) continue;
+    const path = findPath(spec.paths, suffix);
+    if (!path || !spec.paths[path]?.get) {
+      addError(errors, `missing governance GET path: ${suffix}`);
+    }
+  }
+}
+
 function run(spec, manifest) {
   const errors = [];
   if (manifest.version !== 1) {
     addError(errors, `unsupported manifest version: ${manifest.version}`);
   }
+  checkContractPolicy(spec, manifest, errors);
   for (const [name, baseline] of Object.entries(manifest.schemas || {})) {
     checkSchema(spec, name, baseline, errors);
   }
@@ -185,13 +225,44 @@ function selfTest() {
     },
     components: {
       schemas: {
-        ChatRequest: { required: ['message'], properties: { message: { type: 'string' }, mode: { type: 'string' } } },
-        ChatResponse: { properties: { answer: { type: 'string' } } }
+        ErrorResponse: {
+          required: ['error', 'message', 'status', 'failureClass'],
+          properties: {
+            error: { type: 'string' },
+            message: { type: 'string' },
+            status: { type: 'integer' },
+            failureClass: { type: 'string' },
+            traceId: { type: 'string', nullable: true }
+          },
+        },
+        ChatRequest: {
+          required: ['message'],
+          properties: { message: { type: 'string' }, mode: { type: 'string' } }
+        },
+        ChatResponse: {
+          properties: { answer: { type: 'string' } }
+        }
       }
-    }
+    },
+    contractPolicy: {
+      changeMode: 'ADDITIVE_ONLY',
+      requiredErrorProperties: ['error', 'message', 'status', 'failureClass'],
+      nullableErrorProperties: ['traceId']
+    },
+    reliability: { failureClassProperty: 'failureClass' },
+    governance: { policyPath: '/rag/data-governance/policy', auditPath: '/rag/audit-logs' }
   };
+  fixture.paths['/api/v1/rag/data-governance/policy'] = { get: { responses: { '200': {} } } };
+  fixture.paths['/api/v1/rag/audit-logs'] = { get: { responses: { '200': {} } } };
   const manifest = {
     version: 1,
+    contractPolicy: {
+      changeMode: 'ADDITIVE_ONLY',
+      requiredErrorProperties: ['error', 'message', 'status', 'failureClass'],
+      nullableErrorProperties: ['traceId']
+    },
+    reliability: { failureClassProperty: 'failureClass' },
+    governance: { policyPath: '/rag/data-governance/policy', auditPath: '/rag/audit-logs' },
     paths: [{ suffix: '/rag/chat/ask', method: 'post', requestBodySchema: 'ChatRequest', responseSchema: 'ChatResponse' }],
     schemas: {
       ChatRequest: { required: ['message'], optional: ['mode'], types: { message: 'string', mode: 'string' } },

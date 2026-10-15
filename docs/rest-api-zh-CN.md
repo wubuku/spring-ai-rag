@@ -3218,3 +3218,39 @@ provider 已启用、`baseUrl` 非空、`apiType` 受支持、声明的上下文
 | 字段 | 类型 | 说明 |
 |-------|------|-------------|
 | `count` | integer | 已记录的客户端错误总数 |
+
+## 数据治理——保留策略与脱敏审计
+
+### `GET /api/v1/rag/data-governance/policy`
+
+返回当前调用方可见的低敏数据治理策略，包括脱敏规则版本、保留天数、有界清理上限和能力。
+响应不会包含 provider 凭据、数据库细节、Prompt、文档正文或其他 principal 的数据。
+
+该策略默认启用。首批治理清理类别默认保留：审计日志 400 天、客户端错误 30 天、检索评估
+400 天。自动清理每小时运行一次；每个批次最多删除 500 行，每个类别每次最多执行 10 批。
+
+### `GET /api/v1/rag/audit-logs`
+
+返回 environment root 或数据库 `ADMIN` principal 可访问的脱敏分页审计视图。响应刻意省略已存储
+的 `details`，不会返回 Prompt、provider payload、secret、hash 或文档正文。
+
+支持的查询参数：
+
+| 参数 | 类型 | 默认值 | 约束 |
+|------|------|--------|------|
+| `page` | integer | `0` | `0`–`1000000` |
+| `size` | integer | `50` | `1`–`200` |
+| `operation` | string | — | 最长 128 字符 |
+| `entityType` | string | — | 最长 128 字符 |
+| `entityId` | string | — | 最长 128 字符 |
+| `from` / `to` | ISO-8601 instant | — | 时间范围最多 31 天 |
+
+### 错误可靠性字段
+
+原生 JSON 错误保留所有历史字段，并可增量包含 `failureClass`。尚未提交的原生错误响应还会
+增加 `X-RAG-Failure-Class`。稳定值包括 `CLIENT_REQUEST`、`AUTHENTICATION`、`AUTHORIZATION`、
+`NOT_FOUND`、`CONFLICT`、`RATE_LIMITED`、`DEPENDENCY_UNAVAILABLE`、`TIMEOUT` 和 `INTERNAL`。
+
+已有 `X-Trace-Id` 仍是 HTTP 层的关联保证；body 中的 `traceId` 为兼容性继续允许为空。原生
+SSE 的 `error` event 增加 `failureClass`，因为 `200` 流式响应提交后不能再修改响应头。
+OpenAI-compatible 错误 JSON 不增加非标准字段。

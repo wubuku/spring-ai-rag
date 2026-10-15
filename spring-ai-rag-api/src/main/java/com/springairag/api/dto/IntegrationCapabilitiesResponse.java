@@ -16,16 +16,35 @@ public class IntegrationCapabilitiesResponse {
     private Principal principal;
     private Features features;
     private Limits limits;
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private Reliability reliability;
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private Governance governance;
 
     public IntegrationCapabilitiesResponse() {
     }
 
     public IntegrationCapabilitiesResponse(Protocol protocol, Principal principal,
                                             Features features, Limits limits) {
+        this(protocol, principal, features, limits, null);
+    }
+
+    public IntegrationCapabilitiesResponse(Protocol protocol, Principal principal,
+                                            Features features, Limits limits,
+                                            Reliability reliability) {
+        this(protocol, principal, features, limits, reliability, null);
+    }
+
+    public IntegrationCapabilitiesResponse(Protocol protocol, Principal principal,
+                                            Features features, Limits limits,
+                                            Reliability reliability,
+                                            Governance governance) {
         this.protocol = protocol;
         this.principal = principal;
         this.features = features;
         this.limits = limits;
+        this.reliability = reliability;
+        this.governance = governance;
     }
 
     public Protocol getProtocol() { return protocol; }
@@ -36,11 +55,60 @@ public class IntegrationCapabilitiesResponse {
     public void setFeatures(Features features) { this.features = features; }
     public Limits getLimits() { return limits; }
     public void setLimits(Limits limits) { this.limits = limits; }
+    public Reliability getReliability() { return reliability; }
+    public void setReliability(Reliability reliability) { this.reliability = reliability; }
+    public Governance getGovernance() { return governance; }
+    public void setGovernance(Governance governance) { this.governance = governance; }
 
     public record Protocol(
             String name,
             String version,
             String apiVersion) {
+    }
+
+    @Schema(description = "Stable client-facing reliability contract")
+    public record Reliability(
+            List<String> failureClasses,
+            String responseTraceHeader,
+            String failureClassHeader,
+            List<Integer> retryAfterStatuses,
+            List<String> conditionalRetryAfterSignals,
+            boolean nonStreamingRetrySupported,
+            boolean streamingRetrySupported,
+            boolean circuitBreakerSupported,
+            boolean timeoutEnabled,
+            boolean retryEnabled,
+            int retryMaxAttempts,
+            int chatTimeoutMs) {
+
+        public Reliability(
+                List<String> failureClasses,
+                String responseTraceHeader,
+                String failureClassHeader,
+                List<Integer> retryAfterStatuses,
+                List<String> conditionalRetryAfterSignals,
+                boolean nonStreamingRetrySupported,
+                boolean streamingRetrySupported,
+                boolean circuitBreakerSupported) {
+            this(failureClasses, responseTraceHeader, failureClassHeader,
+                    retryAfterStatuses, conditionalRetryAfterSignals,
+                    nonStreamingRetrySupported, streamingRetrySupported,
+                    circuitBreakerSupported, false, false, 0, 0);
+        }
+    }
+
+    @Schema(description = "Client-visible data governance capability projection")
+    public record Governance(
+            String policyPath,
+            String auditPath,
+            String redactionVersion,
+            boolean automaticCleanup,
+            boolean auditRead,
+            int auditLogRetentionDays,
+            int clientErrorRetentionDays,
+            int evaluationRetentionDays,
+            int cleanupBatchSize,
+            int cleanupMaxBatches) {
     }
 
     @Schema(description = "Effective identity projection for this request")

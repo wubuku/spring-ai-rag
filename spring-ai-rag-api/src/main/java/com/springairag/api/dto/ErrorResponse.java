@@ -1,6 +1,7 @@
 package com.springairag.api.dto;
 
 import com.springairag.api.enums.ErrorCode;
+import com.springairag.api.enums.FailureClass;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.Instant;
@@ -74,6 +75,10 @@ public class ErrorResponse {
 
     @Schema(description = "Request-level trace identifier for client-side correlation", example = "a1b2c3d4e5f6")
     private String traceId;
+
+    /** Stable coarse-grained classification for retry and client handling. */
+    @Schema(description = "Stable client-facing failure classification", example = "CLIENT_REQUEST")
+    private FailureClass failureClass;
 
     /** Default problem type URI prefix */
     private static final String PROBLEM_TYPE_PREFIX = "https://springairag.dev/problems/";
@@ -238,6 +243,11 @@ public class ErrorResponse {
             return this;
         }
 
+        public Builder failureClass(FailureClass failureClass) {
+            response.failureClass = failureClass;
+            return this;
+        }
+
         public ErrorResponse build() {
             // Ensure type is not null
             if (response.type == null && response.error != null) {
@@ -261,6 +271,9 @@ public class ErrorResponse {
             if (response.instance == null && response.path != null) {
                 response.instance = response.path;
             }
+            if (response.failureClass == null) {
+                response.failureClass = FailureClass.from(response.status, response.error);
+            }
             return response;
         }
     }
@@ -277,6 +290,7 @@ public class ErrorResponse {
     public String getTimestamp() { return timestamp; }
     public String getPath() { return path; }
     public String getTraceId() { return traceId; }
+    public FailureClass getFailureClass() { return failureClass; }
 
     public void setType(String type) { this.type = type; }
     public void setTitle(String title) { this.title = title; }
@@ -288,6 +302,7 @@ public class ErrorResponse {
     public void setTimestamp(String timestamp) { this.timestamp = timestamp; }
     public void setPath(String path) { this.path = path; }
     public void setTraceId(String traceId) { this.traceId = traceId; }
+    public void setFailureClass(FailureClass failureClass) { this.failureClass = failureClass; }
 
     @Override
     public boolean equals(Object o) {
@@ -303,13 +318,15 @@ public class ErrorResponse {
                 Objects.equals(error, that.error) &&
                 Objects.equals(message, that.message) &&
                 Objects.equals(path, that.path) &&
-                Objects.equals(traceId, that.traceId);
+                Objects.equals(traceId, that.traceId) &&
+                Objects.equals(failureClass, that.failureClass);
     }
 
     @Override
     public int hashCode() {
         // timestamp intentionally excluded
-        return Objects.hash(type, title, status, detail, instance, error, message, path, traceId);
+        return Objects.hash(type, title, status, detail, instance, error, message, path,
+                traceId, failureClass);
     }
 
     @Override
@@ -324,6 +341,7 @@ public class ErrorResponse {
                 ", message='" + message + '\'' +
                 ", path='" + path + '\'' +
                 ", traceId='" + traceId + '\'' +
+                ", failureClass=" + failureClass +
                 ", timestamp='" + timestamp + '\'' +
                 '}';
     }

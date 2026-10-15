@@ -597,6 +597,18 @@ embedding stub verifies the real Spring AI embedding HTTP path and the 503
 failure-preservation contract. This capability does not change Chat, so the
 gate does not call a Chat LLM.
 
+## 8.1 Client Error And Governance Contract
+
+Client integrations should branch on `failureClass` rather than provider-specific error text.
+Native errors preserve the historical JSON fields and add `X-RAG-Failure-Class`; `X-Trace-Id`
+should be logged with the client request ID. A native SSE `error` event carries `failureClass`
+inside the event because response headers may already be committed. The OpenAI-compatible body
+shape remains unchanged.
+
+Use `GET /api/v1/rag/data-governance/policy` to discover retention and redaction metadata. The
+management-only `GET /api/v1/rag/audit-logs` endpoint is for root/`ADMIN` operators and returns a
+content-free view, not a substitute for client business data export or deletion APIs.
+
 ## 9. Current Limitations
 
 - The identity system is environment root plus database business principals;

@@ -29,6 +29,7 @@ import com.springairag.core.retrieval.RetrievalTraceHeaders;
 import com.springairag.core.chat.SessionIdValidator;
 import com.springairag.core.security.ApiAccessPolicy;
 import com.springairag.api.enums.ErrorCode;
+import com.springairag.api.enums.FailureClass;
 import com.springairag.core.exception.RagException;
 import com.springairag.core.repository.RagChatHistoryRepository;
 import com.springairag.core.retrieval.RetrievalScope;
@@ -667,12 +668,16 @@ public class RagChatController {
         Map<String, Object> errorPayload = new LinkedHashMap<>();
         errorPayload.put("message", error.getMessage() != null
                 ? error.getMessage() : "Chat stream failed");
+        String errorCode = null;
         if (error instanceof ChatStreamFailure failure
                 && failure.code != null) {
-            errorPayload.put("code", failure.code);
+            errorCode = failure.code;
+            errorPayload.put("code", errorCode);
         } else if (error instanceof RagException ragException) {
-            errorPayload.put("code", ragException.getErrorCode());
+            errorCode = ragException.getErrorCode();
+            errorPayload.put("code", errorCode);
         }
+        errorPayload.put("failureClass", failureClassForCode(errorCode).name());
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("error", errorPayload);
         putIfPresent(payload, "traceId", traceId);
@@ -680,6 +685,13 @@ public class RagChatController {
         putSequence(payload, sequence);
         SseEmitters.sendProgress(emitter, "error", payload, "chat error");
         emitter.complete();
+    }
+
+    private FailureClass failureClassForCode(String errorCode) {
+        ErrorCode code = ErrorCode.byCodeOrNull(errorCode);
+        return code == null
+                ? FailureClass.fromErrorCode(errorCode)
+                : FailureClass.from(code.getHttpStatus(), code.getCode());
     }
 
     private void putSequence(

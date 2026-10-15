@@ -765,6 +765,9 @@ class OpenApiContractTest {
             assertThat(props.has("status"))
                     .as("ErrorResponse must have 'status' field (RFC 7807)")
                     .isTrue();
+            assertThat(props.has("failureClass"))
+                    .as("ErrorResponse must have additive 'failureClass' field")
+                    .isTrue();
         }
 
         @Test

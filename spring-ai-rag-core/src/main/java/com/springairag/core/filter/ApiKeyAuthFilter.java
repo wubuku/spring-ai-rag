@@ -272,6 +272,7 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
             String message) throws IOException {
         response.setStatus(HttpStatus.UNAUTHORIZED.value());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        FailureClassHttpSupport.apply(response, HttpStatus.UNAUTHORIZED.value(), "UNAUTHORIZED");
         if (path != null && path.startsWith("/v1/")) {
             response.getWriter().write(objectMapper.writeValueAsString(
                     OpenAiErrorResponse.of(
@@ -299,6 +300,8 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
             String path) throws IOException {
         response.setStatus(HttpStatus.SERVICE_UNAVAILABLE.value());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        FailureClassHttpSupport.apply(
+                response, HttpStatus.SERVICE_UNAVAILABLE.value(), "CREDENTIAL_SERVICE_UNAVAILABLE");
         if (path != null && path.startsWith("/v1/")) {
             response.getWriter().write(objectMapper.writeValueAsString(
                     OpenAiErrorResponse.of(
@@ -324,6 +327,8 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
             String path) throws IOException {
         response.setStatus(HttpStatus.SERVICE_UNAVAILABLE.value());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        FailureClassHttpSupport.apply(
+                response, HttpStatus.SERVICE_UNAVAILABLE.value(), "POLICY_SERVICE_UNAVAILABLE");
         if (path != null && path.startsWith("/v1/")) {
             response.getWriter().write(objectMapper.writeValueAsString(
                     OpenAiErrorResponse.of(

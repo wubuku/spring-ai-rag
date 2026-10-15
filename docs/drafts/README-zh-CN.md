@@ -37,6 +37,8 @@
 - [WebUI 统一设计语言调研与实施规划](WEBUI_UNIFIED_DESIGN_LANGUAGE_PLAN.md)
 - [加固循环批次规划](HARDENING_LOOP_PLAN.md)：持续循环执行测试加固、WebUI UI/UX
   重构与技术债务处理；本阶段不把新功能作为重点。
+- [Client 契约治理、数据生命周期与可靠性边界](NEXT_BATCH_CLIENT_GOVERNANCE_RELIABILITY_PLAN.md)：
+  面向外部 Client 的 API 契约、数据治理和可靠性增量改进；规划已通过 `3/3`，正在实施。
 
 前三批文档处理恢复、引用/流式安全、分块正确性与诊断、默认启用与自动升级、故障后无人值守恢复，以及补充真实 LLM 验收已归档至
 [历史规划归档](archive/README-zh-CN.md)。

@@ -1718,6 +1718,30 @@ logging:
 
 Production recommends `INFO` for `com.springairag`; switch to `DEBUG` for full RAG Pipeline logs (query rewrite → hybrid search → rerank → prompt assembly).
 
+## Data Governance Configuration
+
+The default data-governance policy is enabled and cleans expired audit logs, client errors, and
+retrieval evaluation records without a schema migration:
+
+```yaml
+rag:
+  data-governance:
+    enabled: true
+    audit-log-retention-days: 400
+    client-error-retention-days: 30
+    evaluation-retention-days: 400
+    cleanup-enabled: true
+    cleanup-batch-size: 500
+    cleanup-max-batches: 10
+    cleanup-cron: "0 40 * * * *"
+```
+
+The equivalent environment variables use the `RAG_DATA_GOVERNANCE_*` prefix. Cleanup is bounded,
+re-entrant, and uses independent transactions per batch. A failed category is logged in masked form
+and retried during the next scheduled run; it does not block Chat or Search. The existing chat,
+retrieval-diagnostics, usage, and integration-observability retention workers remain the owners of
+their respective tables.
+
 ## Configuration Inheritance
 
 Starter module users only need to configure:

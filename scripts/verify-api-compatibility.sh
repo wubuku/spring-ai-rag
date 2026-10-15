@@ -10,6 +10,7 @@ SPEC_FILE="${API_CONTRACT_SPEC_FILE:-}"
 API_KEY="${API_CONTRACT_API_KEY:-}"
 RUN_LIVE="${API_CONTRACT_RUN_LIVE:-0}"
 QUERY="${API_CONTRACT_QUERY:-}"
+RAG_MODE="${API_CONTRACT_RAG_MODE:-}"
 RUN_ID="${API_CONTRACT_RUN_ID:-$(date +%Y%m%d-%H%M%S)}"
 LOG_DIR="${API_CONTRACT_LOG_DIR:-.verification/api-contract/${RUN_ID}}"
 
@@ -87,6 +88,14 @@ check_trace_header() {
   fi
 }
 
+check_failure_class_header() {
+  local header_file="$1"
+  if ! rg -i '^x-rag-failure-class:[[:space:]]*[^[:space:]]+' "$header_file" >/dev/null; then
+    echo "Missing X-RAG-Failure-Class response header" >&2
+    return 1
+  fi
+}
+
 allowed_error_probe() {
   local label="$1" method="$2" url="$3" body_file="$4"
   local header_file="$LOG_DIR/${label}.headers"
@@ -102,6 +111,7 @@ allowed_error_probe() {
   esac
   check_error_shape "$response_file"
   check_trace_header "$header_file"
+  check_failure_class_header "$header_file"
   echo "${label}: ${status}"
 }
 
@@ -132,6 +142,50 @@ fi
 check_trace_header "$trace_headers"
 echo "retrieval-traces: ${trace_status}"
 
+policy_headers="$LOG_DIR/data-governance-policy.headers"
+policy_body="$LOG_DIR/data-governance-policy.body"
+policy_status="$(request GET "${BASE_URL%/}/api/v1/rag/data-governance/policy" '' "$policy_headers" "$policy_body")"
+case "$policy_status" in
+  200|401|403) ;;
+  *) echo "data-governance-policy: unexpected status ${policy_status}" >&2; exit 1 ;;
+esac
+if [[ "$policy_status" == "200" ]]; then
+  node - "$policy_body" <<'NODE'
+const fs = require('node:fs');
+const value = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+if (!value || typeof value.policyVersion !== 'string'
+    || typeof value.redactionVersion !== 'string'
+    || !Array.isArray(value.retention)
+    || !value.capabilities || !value.cleanup) {
+  throw new Error('data governance policy response shape is invalid');
+}
+NODE
+fi
+check_trace_header "$policy_headers"
+echo "data-governance-policy: ${policy_status}"
+
+audit_headers="$LOG_DIR/audit-logs.headers"
+audit_body="$LOG_DIR/audit-logs.body"
+audit_status="$(request GET "${BASE_URL%/}/api/v1/rag/audit-logs?page=0&size=1" '' "$audit_headers" "$audit_body")"
+case "$audit_status" in
+  200|401|403) ;;
+  *) echo "audit-logs: unexpected status ${audit_status}" >&2; exit 1 ;;
+esac
+if [[ "$audit_status" == "200" ]]; then
+  node - "$audit_body" <<'NODE'
+const fs = require('node:fs');
+const value = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+if (!value || !Array.isArray(value.items)) throw new Error('audit page missing items');
+for (const item of value.items) {
+  if (Object.prototype.hasOwnProperty.call(item, 'details')) {
+    throw new Error('audit response exposed persisted details');
+  }
+}
+NODE
+fi
+check_trace_header "$audit_headers"
+echo "audit-logs: ${audit_status}"
+
 if [[ "$RUN_LIVE" == "1" ]]; then
   [[ -n "$API_KEY" ]] || { echo 'API_CONTRACT_API_KEY is required for live mode' >&2; exit 2; }
   [[ -n "$QUERY" ]] || { echo 'API_CONTRACT_QUERY is required for live mode' >&2; exit 2; }
@@ -151,9 +205,19 @@ NODE
   check_trace_header "$live_search_headers"
 
   live_chat="$LOG_DIR/live-chat.json"
-  printf '{"model":"%s","messages":[{"role":"user","content":%s}]}' \
-    "${API_CONTRACT_MODEL:-default}" \
-    "$(node -e 'console.log(JSON.stringify(process.argv[1]))' "$QUERY")" >"$live_chat"
+  node - "${API_CONTRACT_MODEL:-default}" "$QUERY" "$RAG_MODE" >"$live_chat" <<'NODE'
+const model = process.argv[2];
+const query = process.argv[3];
+const ragMode = process.argv[4];
+const request = {
+  model,
+  messages: [{ role: 'user', content: query }]
+};
+if (ragMode) {
+  request.rag = { mode: ragMode, memory: 'STATELESS' };
+}
+process.stdout.write(JSON.stringify(request));
+NODE
   live_chat_headers="$LOG_DIR/live-chat.headers"
   live_chat_body="$LOG_DIR/live-chat.body"
   live_chat_status="$(request POST "${BASE_URL%/}/v1/chat/completions" "$live_chat" "$live_chat_headers" "$live_chat_body")"

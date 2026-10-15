@@ -42,6 +42,8 @@ class OpenAiCompatibilityExceptionHandlerTailTest {
         assertEquals("Invalid JSON request body", error.message());
         assertEquals("invalid_request_error", error.type());
         assertEquals("invalid_request_body", error.code());
+        assertEquals("CLIENT_REQUEST",
+                response.getHeaders().getFirst("X-RAG-Failure-Class"));
     }
 
     @Test
@@ -72,6 +74,8 @@ class OpenAiCompatibilityExceptionHandlerTailTest {
         assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
         assertEquals("17",
                 response.getHeaders().getFirst("Retry-After"));
+        assertEquals("CONFLICT",
+                response.getHeaders().getFirst("X-RAG-Failure-Class"));
         assertTrue(response.getBody().error().message()
                 .contains("progress"));
     }

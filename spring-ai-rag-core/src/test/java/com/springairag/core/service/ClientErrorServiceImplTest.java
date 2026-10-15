@@ -115,6 +115,32 @@ class ClientErrorServiceImplTest {
     }
 
     @Test
+    void recordError_masksSensitiveValuesBeforePersistence() {
+        ClientErrorRequest request = new ClientErrorRequest();
+        request.setErrorType("Error");
+        request.setErrorMessage("token=secret-token password=top-secret");
+        request.setStackTrace("Authorization: Bearer abc.def.ghi");
+        request.setComponentStack("phone=13800138000");
+        request.setPageUrl("/chat?apiKey=secret-key");
+        request.setUserAgent("token=browser-token");
+
+        service.recordError(request);
+
+        ArgumentCaptor<RagClientError> captor = ArgumentCaptor.forClass(RagClientError.class);
+        verify(clientErrorRepository).save(captor.capture());
+        RagClientError saved = captor.getValue();
+        String combined = String.join(" ",
+                saved.getErrorMessage(), saved.getStackTrace(),
+                saved.getComponentStack(), saved.getPageUrl(), saved.getUserAgent());
+        assertFalse(combined.contains("secret-token"));
+        assertFalse(combined.contains("top-secret"));
+        assertFalse(combined.contains("abc.def.ghi"));
+        assertFalse(combined.contains("13800138000"));
+        assertFalse(combined.contains("secret-key"));
+        assertFalse(combined.contains("browser-token"));
+    }
+
+    @Test
     void recordError_repositoryThrowsException_propagatesAsRuntimeException() {
         ClientErrorRequest request = new ClientErrorRequest();
         request.setErrorType("Error");

@@ -2,6 +2,7 @@ package com.springairag.core.service;
 
 import com.springairag.api.dto.ClientErrorRequest;
 import com.springairag.core.entity.RagClientError;
+import com.springairag.core.logging.SensitiveDataMaskingConverter;
 import com.springairag.core.repository.RagClientErrorRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,22 +40,26 @@ public class ClientErrorServiceImpl implements ClientErrorService {
             throw new IllegalArgumentException("ClientErrorRequest must not be null");
         }
         RagClientError error = new RagClientError();
-        error.setErrorType(request.getErrorType());
-        error.setErrorMessage(request.getErrorMessage());
-        error.setStackTrace(request.getStackTrace());
-        error.setComponentStack(request.getComponentStack());
-        error.setPageUrl(request.getPageUrl());
+        error.setErrorType(mask(request.getErrorType()));
+        error.setErrorMessage(mask(request.getErrorMessage()));
+        error.setStackTrace(mask(request.getStackTrace()));
+        error.setComponentStack(mask(request.getComponentStack()));
+        error.setPageUrl(mask(request.getPageUrl()));
         error.setSessionId(request.getSessionId());
         error.setUserId(request.getUserId());
-        error.setUserAgent(request.getUserAgent());
+        error.setUserAgent(mask(request.getUserAgent()));
 
         clientErrorRepository.save(error);
 
         log.warn("Client error recorded: type={}, message={}, page={}, session={}",
-                request.getErrorType(),
-                request.getErrorMessage(),
-                request.getPageUrl(),
+                error.getErrorType(),
+                error.getErrorMessage(),
+                error.getPageUrl(),
                 request.getSessionId());
+    }
+
+    private String mask(String value) {
+        return SensitiveDataMaskingConverter.maskSensitiveData(value);
     }
 
     /**

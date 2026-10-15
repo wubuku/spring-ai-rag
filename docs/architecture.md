@@ -1118,6 +1118,21 @@ durable outbox:
 3. Collect results (latency, accuracy, user ratings)
 4. Statistically analyze effect differences
 
+### 7.4 Client-Facing Reliability And Data Governance
+
+The service treats external HTTP clients as the primary integration boundary. Native errors retain
+the historical envelope and add the machine-readable `failureClass` field plus the
+`X-RAG-Failure-Class` header; native SSE error events carry the same classification because a
+streaming response may already have committed status `200`. The OpenAI-compatible response body is
+not expanded with non-standard fields.
+
+The `/api/v1/rag/data-governance/policy` endpoint publishes low-sensitivity retention and redaction
+metadata. `/api/v1/rag/audit-logs` is a management-only, content-free view. Audit, client-error,
+and retrieval-evaluation cleanup uses bounded primary-key deletion with independent transactions;
+it does not use `FOR UPDATE`, `SKIP LOCKED`, or PostgreSQL advisory locks. Existing table-specific
+cleanup workers remain responsible for chat history, retrieval diagnostics, usage, and observation
+data.
+
 ---
 
 ## 8. Key Design Decisions

@@ -46,6 +46,9 @@ Active plans are listed here and in `docs/index*`.
   plan/implementation/acceptance loop focused on test hardening, WebUI UI/UX
   refactoring, and technical-debt cleanup; new features are out of scope for
   this stage.
+- [Client contract governance, data lifecycle, and reliability](NEXT_BATCH_CLIENT_GOVERNANCE_RELIABILITY_PLAN.md):
+  additive improvements for external-client API contracts, data governance, and reliability;
+  planning passed `3/3` and implementation is in progress.
 The processing/recovery, citation/streaming, chunking-correctness, and default-feature/automatic-upgrade/recovery batches,
 including supplemental real-LLM acceptance, are in the
 [historical archive](archive/README.md).

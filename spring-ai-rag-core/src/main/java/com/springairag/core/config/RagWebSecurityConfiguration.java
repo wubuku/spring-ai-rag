@@ -2,6 +2,7 @@ package com.springairag.core.config;
 
 import com.springairag.core.filter.ApiKeyAuthFilter;
 import com.springairag.core.filter.ApiCapabilityFilter;
+import com.springairag.core.filter.FailureClassResponseHeaderFilter;
 import com.springairag.core.filter.RateLimitFilter;
 import com.springairag.core.filter.TrustedProxyResolver;
 import com.springairag.core.security.ApiRoutePolicyRegistry;
@@ -185,6 +186,17 @@ public class RagWebSecurityConfiguration {
                 new FilterRegistrationBean<>(filter);
         registration.addUrlPatterns("/api/*", "/v1/*");
         registration.setOrder(0);
+        return registration;
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(name = "failureClassResponseHeaderFilterRegistration")
+    public FilterRegistrationBean<FailureClassResponseHeaderFilter>
+    failureClassResponseHeaderFilterRegistration() {
+        FilterRegistrationBean<FailureClassResponseHeaderFilter> registration =
+                new FilterRegistrationBean<>(new FailureClassResponseHeaderFilter());
+        registration.addUrlPatterns("/api/*", "/v1/*");
+        registration.setOrder(1000);
         return registration;
     }
 }

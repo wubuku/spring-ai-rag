@@ -253,6 +253,19 @@ public class OpenApiConfig {
         schema.addProperty("timestamp", new StringSchema().format("date-time").description("Error timestamp"));
         schema.addProperty("path", new StringSchema().description("Request path"));
         schema.addProperty("traceId", new StringSchema().description("Request-level trace identifier"));
+        schema.addProperty("failureClass", new StringSchema()
+                .description("Stable client-facing failure classification")
+                .example("CLIENT_REQUEST")
+                ._enum(List.of(
+                        "CLIENT_REQUEST",
+                        "AUTHENTICATION",
+                        "AUTHORIZATION",
+                        "NOT_FOUND",
+                        "CONFLICT",
+                        "RATE_LIMITED",
+                        "DEPENDENCY_UNAVAILABLE",
+                        "TIMEOUT",
+                        "INTERNAL")));
         return schema;
     }
 }

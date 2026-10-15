@@ -1308,6 +1308,33 @@ heuristic；它们还覆盖拒绝更长标识符内嵌的 Latin/数字 term、�
 `RAG` / `AI` / `9042` title term。该整类测试必须 `failures=0`、`errors=0`、
 `skipped=0`。
 
+## Client 契约治理验收
+
+外部 Client API 是主要验收边界；WebUI 可用不能替代服务端 API 的验收。每次发布验证都运行
+静态治理门禁：
+
+```bash
+./scripts/verify-client-contract-governance.sh
+node scripts/lib/api-contract-check.mjs --self-test
+```
+
+针对正在运行的 PostgreSQL profile 服务，还要执行 HTTP 兼容性门禁：
+
+```bash
+API_CONTRACT_BASE_URL=http://127.0.0.1:18081 \
+API_CONTRACT_API_KEY="$RAG_ROOT_API_KEY" \
+./scripts/verify-api-compatibility.sh
+```
+
+黑盒门禁检查原生 Chat/Search 参数校验、Retrieval Trace、治理 policy/audit 路由、
+`X-Trace-Id`、`X-RAG-Failure-Class`、增量错误字段，以及成功审计响应不包含已持久化的
+`details`。治理路由会接受符合部署认证模式的 `200/401/403`，但不会接受服务端 `5xx`。
+设置 `API_CONTRACT_RUN_LIVE=1` 后，还会执行真实 Search 和 OpenAI-compatible Chat。
+如果部署的默认 RAG 模式无法安全完成该实时请求、但仍需单独验证 OpenAI-compatible 传输，
+可设置 `API_CONTRACT_RAG_MODE=PLAIN`。门禁会为请求增量加入可选的
+`rag.mode=PLAIN` 和 `rag.memory=STATELESS` 字段；默认行为不变，且该选项不能宣称已经
+完成 KNOWLEDGE 证据安全验收。
+
 ## 编写新测试的规则
 
 1. **先写测试再写实现**（TDD 友好）
