@@ -1,0 +1,15 @@
+{
+  "status": 429,
+  "headers": {
+    "X-Trace-Id": "consumer-fixture-rate-limit-trace",
+    "X-RAG-Failure-Class": "RATE_LIMITED",
+    "Retry-After": "17"
+  },
+  "body": {
+    "error": "RATE_LIMITED",
+    "message": "Too many requests",
+    "status": 429,
+    "failureClass": "RATE_LIMITED",
+    "traceId": "consumer-fixture-rate-limit-trace"
+  }
+}

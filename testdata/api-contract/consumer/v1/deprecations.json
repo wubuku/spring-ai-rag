@@ -1,0 +1,55 @@
+{
+  "contractVersion": 1,
+  "entries": [
+    {
+      "kind": "request-field",
+      "location": "ChatRequest.collectionId",
+      "replacement": "ChatRequest.collectionKey",
+      "replacementDoc": "docs/rest-api.md",
+      "status": "COMPATIBLE_DEPRECATED",
+      "introducedAt": "1.0.0",
+      "removalPolicy": "No removal without a new major contract version and migration notice",
+      "consumerRule": "Old clients may continue sending it; new clients must use collectionKey"
+    },
+    {
+      "kind": "request-field",
+      "location": "ChatRequest.collectionIds",
+      "replacement": "ChatRequest.collectionKeys",
+      "replacementDoc": "docs/rest-api.md",
+      "status": "COMPATIBLE_DEPRECATED",
+      "introducedAt": "1.0.0",
+      "removalPolicy": "No removal without a new major contract version and migration notice",
+      "consumerRule": "Old clients may continue sending it; new clients must use collectionKeys"
+    },
+    {
+      "kind": "request-field",
+      "location": "allowedCollectionIds",
+      "replacement": "allowedCollectionKeys",
+      "replacementDoc": "docs/rest-api.md",
+      "status": "COMPATIBLE_DEPRECATED",
+      "introducedAt": "1.0.0",
+      "removalPolicy": "No removal without a new major contract version and migration notice",
+      "consumerRule": "Do not add this field to new client requests"
+    },
+    {
+      "kind": "route",
+      "location": "POST /api/v1/rag/documents/batch/create-and-embed",
+      "replacement": "POST /api/v1/rag/documents/batch/embed",
+      "replacementDoc": "docs/rest-api.md",
+      "status": "COMPATIBLE_DEPRECATED",
+      "introducedAt": "1.0.0",
+      "removalPolicy": "No removal without a new major contract version and migration notice",
+      "consumerRule": "Existing clients may keep the route; new integrations must use the replacement"
+    },
+    {
+      "kind": "route",
+      "location": "numeric Collection routes",
+      "replacement": "collectionKey-based routes",
+      "replacementDoc": "docs/rest-api.md",
+      "status": "COMPATIBLE_DEPRECATED",
+      "introducedAt": "1.0.0",
+      "removalPolicy": "No removal without a new major contract version and migration notice",
+      "consumerRule": "Persist and transmit collectionKey rather than database numeric IDs"
+    }
+  ]
+}

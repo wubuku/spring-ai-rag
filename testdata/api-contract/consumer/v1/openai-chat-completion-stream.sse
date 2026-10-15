@@ -1,0 +1,7 @@
+data:{"id":"chatcmpl-consumer-fixture","object":"chat.completion.chunk","created":1760000000,"model":"fixture-model","choices":[{"index":0,"delta":{"content":"The "},"finish_reason":null}]}
+
+data:{"id":"chatcmpl-consumer-fixture","object":"chat.completion.chunk","created":1760000000,"model":"fixture-model","choices":[{"index":0,"delta":{"content":"service scope"},"finish_reason":null}]}
+
+data:{"id":"chatcmpl-consumer-fixture","object":"chat.completion.chunk","created":1760000000,"model":"fixture-model","choices":[{"index":0,"delta":{"content":null},"finish_reason":"stop"}]}
+
+data: [DONE]

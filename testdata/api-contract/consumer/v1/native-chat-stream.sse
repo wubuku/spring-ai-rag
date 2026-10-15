@@ -1,0 +1,14 @@
+: heartbeat
+
+event:content
+data:{"choices":[{"delta":
+data:{"content":"The "}}],"sequence":1}
+
+event:content
+data:{"choices":[{"delta":{"content":"service scope"}}],"sequence":2}
+
+event:sources
+data:{"sessionId":"consumer-fixture-session","sources":[{"citationId":"S1","sourceHandle":"c1","title":"Service Guide"}],"sequence":3}
+
+event:done
+data:{"traceId":"consumer-fixture-trace","sessionId":"consumer-fixture-session","mode":"KNOWLEDGE","evidenceAssessment":{"status":"SUPPORTED","retrievalExecuted":true,"sourceCount":1,"citedSourceCount":1,"invalidCitationIds":[],"contextLimited":false,"safeAnswerApplied":false,"reasonCode":"citation_supported"},"sequence":4,"status":"complete"}

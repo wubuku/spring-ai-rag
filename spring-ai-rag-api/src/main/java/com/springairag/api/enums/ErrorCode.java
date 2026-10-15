@@ -47,6 +47,7 @@ public enum ErrorCode {
     // ==================== 403 Forbidden ====================
 
     FORBIDDEN(403, "Forbidden"),
+    ROUTE_NOT_DECLARED(403, "API Route Not Declared"),
     COLLECTION_PURGE_FORBIDDEN(403, "Collection Purge Forbidden"),
 
     // ==================== 404 Not Found ====================

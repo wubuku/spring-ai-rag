@@ -54,6 +54,16 @@ if ! command -v node >/dev/null 2>&1; then
   exit 1
 fi
 
+node scripts/lib/client-consumer-contract.mjs --self-test >/dev/null || {
+  echo "Client consumer contract self-test failed; the gate may no longer reject anything." >&2
+  node scripts/lib/client-consumer-contract.mjs --self-test >&2 || true
+  exit 1
+}
+pass "Client consumer contract self-test"
+
+./scripts/verify-client-consumer-contract.sh
+pass "Client consumer contract"
+
 # Proves the checker can still reject. A gate that cannot fail is worse than
 # no gate, and this repository has a documented history of producing one.
 node scripts/test-support/test-visibility-self-test.mjs >/dev/null || {

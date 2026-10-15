@@ -1,0 +1,163 @@
+{
+  "contractName": "spring-ai-rag-client-consumer",
+  "contractVersion": 1,
+  "fixtureVersion": "1.0.0",
+  "compatibilityMode": "ADDITIVE_ONLY",
+  "producerManifest": "../../v1-compatibility.json",
+  "openapiSurface": "openapi-surface.json",
+  "fixtures": {
+    "legacyRequest": "legacy-client-request.json",
+    "nativeJson": "native-chat-response.json",
+    "nativeError": "native-error-response.json",
+    "nativeSse": "native-chat-stream.sse",
+    "openaiJson": "openai-chat-completion-response.json",
+    "openaiSse": "openai-chat-completion-stream.sse",
+    "deprecations": "deprecations.json"
+  },
+  "transports": {
+    "nativeJson": {
+      "endpoint": "/api/v1/rag/chat",
+      "method": "POST",
+      "contentType": "application/json",
+      "responseContentType": "application/json",
+      "requiredRequestFields": ["message"],
+      "requiredResponseFields": ["answer"],
+      "optionalResponseFields": [
+        "traceId",
+        "sources",
+        "sessionId",
+        "turnId",
+        "mode",
+        "requestedModel",
+        "resolvedModel",
+        "usage",
+        "finishReason",
+        "metadata",
+        "stepMetrics",
+        "evidenceAssessment"
+      ],
+      "unknownResponseFields": "IGNORE"
+    },
+    "nativeSse": {
+      "endpoint": "/api/v1/rag/chat/stream",
+      "method": "POST",
+      "contentType": "application/json",
+      "responseContentType": "text/event-stream",
+      "events": {
+        "allowed": ["content", "tool_start", "tool_result", "sources", "done", "error"],
+        "successTerminal": "done",
+        "errorTerminal": "error",
+        "sourcesBeforeDone": true,
+        "sequence": "MONOTONIC_IGNORE_DUPLICATES",
+        "heartbeatComments": true,
+        "eofTailBlock": true,
+        "multiLineData": true,
+        "lineEndings": ["LF", "CRLF"]
+      }
+    },
+    "openaiJson": {
+      "endpoint": "/v1/chat/completions",
+      "method": "POST",
+      "contentType": "application/json",
+      "responseContentType": "application/json",
+      "requiredRequestFields": ["model", "messages"],
+      "requiredResponseFields": ["id", "object", "created", "model", "choices"],
+      "privateResponseFields": [
+        "answer",
+        "sources",
+        "evidenceAssessment",
+        "traceId",
+        "failureClass",
+        "metadata",
+        "rag"
+      ]
+    },
+    "openaiSse": {
+      "endpoint": "/v1/chat/completions",
+      "method": "POST",
+      "contentType": "application/json",
+      "responseContentType": "text/event-stream",
+      "requiredRequestFields": ["model", "messages", "stream"],
+      "terminalMarker": "[DONE]",
+      "privateResponseFields": [
+        "answer",
+        "sources",
+        "evidenceAssessment",
+        "traceId",
+        "failureClass",
+        "metadata",
+        "rag"
+      ]
+    }
+  },
+  "legacyClient": {
+    "requestFixture": "legacy-client-request.json",
+    "requiredRequestFields": ["message"],
+    "responseFieldsClientMayIgnore": [
+      "traceId",
+      "sources",
+      "sessionId",
+      "turnId",
+      "mode",
+      "requestedModel",
+      "resolvedModel",
+      "usage",
+      "finishReason",
+      "metadata",
+      "stepMetrics",
+      "evidenceAssessment"
+    ],
+    "unknownAdditiveFields": "IGNORE"
+  },
+  "headers": {
+    "trace": "X-Trace-Id",
+    "failureClass": "X-RAG-Failure-Class",
+    "retryAfter": "Retry-After",
+    "idempotentReplay": "X-RAG-Idempotent-Replay"
+  },
+  "failureActions": [
+    {
+      "signal": "failureClass=RATE_LIMITED",
+      "action": "BOUNDED_RETRY_AFTER"
+    },
+    {
+      "signal": "failureClass=CONFLICT;error=CHAT_TURN_IN_PROGRESS",
+      "action": "QUERY_OR_SAFE_REPLAY"
+    },
+    {
+      "signal": "failureClass=DEPENDENCY_UNAVAILABLE",
+      "action": "BOUNDED_RETRY_OR_DEGRADE"
+    },
+    {
+      "signal": "failureClass=TIMEOUT",
+      "action": "RETRY_ONLY_IF_SAFE_TO_REPLAY"
+    },
+    {
+      "signal": "failureClass=CLIENT_REQUEST|AUTHENTICATION|AUTHORIZATION",
+      "action": "DO_NOT_RETRY"
+    },
+    {
+      "signal": "evidenceAssessment.status=NO_EVIDENCE|MISSING_CITATION|INVALID_CITATION|PARTIAL_CITATION|CONTEXT_LIMITED",
+      "action": "SHOW_SAFE_ANSWER_AND_REQUEST_SCOPE"
+    },
+    {
+      "signal": "error=MODEL_CAPABILITY_UNSUPPORTED",
+      "action": "SELECT_COMPATIBLE_MODEL"
+    },
+    {
+      "signal": "failureClass=NOT_FOUND|INTERNAL",
+      "action": "DO_NOT_AUTORETRY_BY_DEFAULT"
+    }
+  ],
+  "liveProbe": {
+    "enabledBy": "CLIENT_CONTRACT_LIVE=1",
+    "baseUrlEnv": "CLIENT_CONTRACT_BASE_URL",
+    "apiKeyEnv": "CLIENT_CONTRACT_API_KEY",
+    "queryEnv": "CLIENT_CONTRACT_QUERY",
+    "modelEnv": "CLIENT_CONTRACT_MODEL",
+    "nativeMode": "PLAIN",
+    "knowledgeEvidenceRequired": false,
+    "openaiDisabledIsConditionalSkip": true,
+    "defaultGateCallsModel": false
+  }
+}

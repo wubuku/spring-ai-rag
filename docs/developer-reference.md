@@ -1094,6 +1094,22 @@ The gate is intentionally independent of WebUI tests. It verifies additive error
 `X-Trace-Id`, `X-RAG-Failure-Class`, the governance policy endpoint, and management-only redacted
 audit responses. Set `API_CONTRACT_RUN_LIVE=1` only when the live Search/OpenAI smoke is wanted.
 
+### Client Consumer Contract Kit
+
+For external clients that do not depend on the WebUI, run the versioned fixture,
+native JSON/SSE, OpenAI JSON/SSE, legacy-request, and deprecated-registry acceptance gate:
+
+```bash
+./scripts/verify-client-consumer-contract.sh
+```
+
+The default is offline and does not call a model. Set `CLIENT_CONTRACT_LIVE=1`
+and provide `CLIENT_CONTRACT_BASE_URL`, `CLIENT_CONTRACT_API_KEY`, and
+`CLIENT_CONTRACT_QUERY` to probe a running service. The native probe uses
+`mode=PLAIN` and proves transport only; it does not replace KNOWLEDGE evidence
+acceptance. See the [Client Consumer Contract Kit](client-contract-kit.md) for
+fixtures, TypeScript/Java examples, and failure actions.
+
 ## 8. Goldenset And Release Gates
 
 Retrieval goldenset:

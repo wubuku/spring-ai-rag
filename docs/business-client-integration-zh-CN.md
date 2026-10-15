@@ -483,6 +483,11 @@ body shape 保持不变。
 `GET /api/v1/rag/audit-logs` 只面向 root/`ADMIN` operator，并返回无正文视图；它不替代业务
 Client 自己的数据导出或删除 API。
 
+外部 Client 的消费方契约验收另见 [Client Consumer Contract Kit](client-contract-kit-zh-CN.md)。
+该 Kit 默认离线验证旧请求兼容、Native/OpenAI JSON/SSE 解析和失败动作映射；只有显式设置
+`CLIENT_CONTRACT_LIVE=1` 才探测运行中的服务，且 PLAIN transport probe 不等于 KNOWLEDGE
+证据质量验收。
+
 ## 9. 当前限制
 
 - 当前身份体系是 environment root + 数据库业务 principal，不提供 OAuth/OIDC federation

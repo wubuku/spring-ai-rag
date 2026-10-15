@@ -609,6 +609,11 @@ Use `GET /api/v1/rag/data-governance/policy` to discover retention and redaction
 management-only `GET /api/v1/rag/audit-logs` endpoint is for root/`ADMIN` operators and returns a
 content-free view, not a substitute for client business data export or deletion APIs.
 
+For consumer-side acceptance by an external client, see the [Client Consumer Contract Kit](client-contract-kit.md).
+It verifies legacy-request compatibility, Native/OpenAI JSON/SSE parsing, and failure actions offline
+by default. Only `CLIENT_CONTRACT_LIVE=1` probes a running service, and the PLAIN transport probe is
+not KNOWLEDGE evidence-quality acceptance.
+
 ## 9. Current Limitations
 
 - The identity system is environment root plus database business principals;

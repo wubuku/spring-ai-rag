@@ -68,6 +68,11 @@ relevant evergreen guide/reference, `docs/TODO*`, and the
   default denial for undeclared routes:
   [plan](2026-10-15_ROUTE_POLICY_SELF_CHECK_PLAN.md) and
   [implementation, regression, and startup acceptance](2026-10-15_ROUTE_POLICY_SELF_CHECK_PROGRESS.md)
+- Client Consumer Contract Kit versioned external-client contracts, JSON/SSE
+  consumer regression, OpenAPI additive-only validation, and real HTTP black-box
+  acceptance:
+  [plan](2026-10-16_CLIENT_CONSUMER_CONTRACT_KIT_PLAN.md) and
+  [implementation, regression, and release acceptance](2026-10-16_CLIENT_CONSUMER_CONTRACT_KIT_PROGRESS.md)
   (Chinese)
 - Local keyword/vector derivation decoupling:
   `2026-08-19_KEYWORD_VECTOR_DECOUPLING_*`

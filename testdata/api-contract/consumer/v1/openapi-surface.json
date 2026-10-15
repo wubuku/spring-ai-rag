@@ -1,0 +1,65 @@
+{
+  "contractVersion": 1,
+  "fixtureVersion": "1.0.0",
+  "compatibilityMode": "ADDITIVE_ONLY",
+  "paths": {
+    "/api/v1/rag/chat": {
+      "post": {
+        "requestRequired": ["message"],
+        "requestTypes": {
+          "message": "string"
+        },
+        "responseRequired": ["answer"],
+        "responseTypes": {
+          "answer": "string"
+        }
+      }
+    },
+    "/api/v1/rag/chat/ask": {
+      "post": {
+        "requestRequired": ["message"],
+        "requestTypes": {
+          "message": "string"
+        },
+        "responseRequired": ["answer"],
+        "responseTypes": {
+          "answer": "string"
+        }
+      }
+    },
+    "/api/v1/rag/chat/stream": {
+      "post": {
+        "requestRequired": ["message"],
+        "requestTypes": {
+          "message": "string"
+        },
+        "responseContentTypes": ["text/event-stream"]
+      }
+    },
+    "/api/v1/rag/search": {
+      "get": {
+        "responseContentTypes": ["application/json"]
+      },
+      "post": {
+        "responseContentTypes": ["application/json"]
+      }
+    },
+    "/v1/models": {
+      "get": {
+        "conditional": "openai-compatibility",
+        "responseRequired": ["object", "data"]
+      }
+    },
+    "/v1/chat/completions": {
+      "post": {
+        "conditional": "openai-compatibility",
+        "requestRequired": ["model", "messages"],
+        "requestTypes": {
+          "model": "string",
+          "messages": "array"
+        },
+        "responseContentTypes": ["*/*"]
+      }
+    }
+  }
+}

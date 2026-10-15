@@ -463,6 +463,7 @@ run_gate "No explicit pessimistic locks" ./scripts/verify-no-pessimistic-locks.s
 run_gate "Shell syntax" check_shell_syntax
 run_gate "API contract helper" node scripts/lib/api-contract-check.mjs --self-test
 run_gate "Client contract governance" ./scripts/verify-client-contract-governance.sh
+run_gate "Client consumer contract" ./scripts/verify-client-consumer-contract.sh
 run_gate "Git diff check" git diff --check
 run_gate "Release versions" check_release_versions
 run_gate "Secret scan" check_secrets

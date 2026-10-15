@@ -103,6 +103,13 @@ export const GATES = [
   manual('scripts/verify-api-key-expiry-alerts.sh'),
   manual('scripts/verify-business-client-readiness.sh'),
   manual('scripts/verify-client-contract-governance.sh'),
+  manual('scripts/verify-api-compatibility.sh'),
+  {
+    gate: 'scripts/verify-client-consumer-contract.sh',
+    kind: 'gate',
+    selfTest: 'scripts/lib/client-consumer-contract.mjs',
+    noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
+  },
   manual('scripts/verify-chat-capability.sh'),
   manual('scripts/verify-chunking-quality.sh'),
   manual('scripts/verify-collection-provisioning.sh'),

@@ -1537,6 +1537,23 @@ complete the live request safely, set `API_CONTRACT_RAG_MODE=PLAIN`. The gate th
 optional `rag.mode=PLAIN` and `rag.memory=STATELESS` request fields; the default remains unchanged,
 and this option does not claim that KNOWLEDGE evidence safety was validated.
 
+## Client Consumer Contract Kit
+
+This is the consumer-side acceptance package for external clients; WebUI success
+does not replace it. The offline gate is enabled by default:
+
+```bash
+node scripts/lib/client-consumer-contract.mjs --self-test
+./scripts/verify-client-consumer-contract.sh
+```
+
+It verifies legacy requests, additive native JSON/SSE fields and terminal rules,
+standard-field isolation for OpenAI JSON/SSE, `FailureClass`/
+`EvidenceAssessment` mappings, trace/retry headers, and the deprecated registry.
+Only `CLIENT_CONTRACT_LIVE=1` probes a running service. Missing live variables are
+recorded as a conditional skip, not an invented pass. See the [Client Consumer
+Contract Kit](client-contract-kit.md) for complete examples.
+
 ## Rules for Writing New Tests
 
 1. **Write tests before implementation** (TDD-friendly)

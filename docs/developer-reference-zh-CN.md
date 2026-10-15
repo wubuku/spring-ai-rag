@@ -965,6 +965,20 @@ API_CONTRACT_API_KEY="$RAG_ROOT_API_KEY" \
 治理 policy endpoint，以及 management-only 脱敏审计响应。只有需要真实 Search/OpenAI
 smoke 时才设置 `API_CONTRACT_RUN_LIVE=1`。
 
+### Client Consumer Contract Kit
+
+面向不依赖 WebUI 的外部 Client，运行版本化 fixture、native JSON/SSE、OpenAI JSON/SSE、旧请求
+兼容和 deprecated registry 验收：
+
+```bash
+./scripts/verify-client-consumer-contract.sh
+```
+
+默认离线且不调用模型。显式设置 `CLIENT_CONTRACT_LIVE=1` 并提供
+`CLIENT_CONTRACT_BASE_URL`、`CLIENT_CONTRACT_API_KEY`、`CLIENT_CONTRACT_QUERY` 后，才会对运行中
+服务执行 transport live probe；`mode=PLAIN` 只证明传输协议，不替代 KNOWLEDGE 证据验收。详细
+fixture、TypeScript/Java 示例和错误动作映射见 [Client Consumer Contract Kit](client-contract-kit-zh-CN.md)。
+
 ## 8. Goldenset 与发布门禁
 
 检索 goldenset：

@@ -20,6 +20,7 @@
 | Change configuration | [configuration.md](configuration.md) | `spring-ai-rag-core/src/main/resources/application.yml` |
 | Integrate / debug HTTP APIs | [rest-api.md](rest-api.md) | Swagger: `/swagger-ui.html` |
 | Connect a backend business service to the RAG data plane and complete production acceptance | [Business Service Integration Guide](business-client-integration.md) | [REST API: Authentication](rest-api.md#authentication), [one-command acceptance](developer-reference.md#business-service-integration-readiness-verification) |
+| Run versioned consumer contract acceptance and JSON/SSE client regression | [Client Consumer Contract Kit](client-contract-kit.md) | [Testing Guide: Client API](testing-guide.md#client-consumer-contract-kit) |
 | Understand Files, PDF import, and Add to RAG | [File management and PDF-to-RAG workflow](file-management-and-pdf-rag.md) | [REST API: PDF and file artifacts](rest-api.md#pdf-and-file-artifact-apis) |
 | Choose Collection retrieval scope for an external client | [REST API: External-client best practices](rest-api.md#external-client-best-practices) | [Deferred coverage-mode TODO](TODO.md#each_collection-retrieval-coverage-mode) |
 | Synchronize external documents / content sources | [External Document Sync Client Guide](external-document-sync-client-guide.md) | [REST API contract](rest-api.md#external-documents-idempotent-synchronization), [one-command lifecycle verification](developer-reference.md#document-lifecycle-verification) |

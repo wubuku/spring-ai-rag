@@ -28,6 +28,9 @@
 #
 # Stop:
 #   lsof -ti :18081 | xargs kill -9
+#
+# This script runs `mvn clean` and leaves Surefire report data deleted. Run the
+# full Maven test suite before invoking report-based project gates afterwards.
 # =============================================================================
 set -euo pipefail
 cd "$(dirname "$0")/.."

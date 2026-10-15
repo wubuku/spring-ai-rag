@@ -14,6 +14,13 @@
     "conditionalRetryAfterSignals": ["CHAT_TURN_IN_PROGRESS"],
     "idempotentReplayHeader": "X-RAG-Idempotent-Replay"
   },
+  "consumerKit": {
+    "manifest": "consumer/v1/consumer-manifest.json",
+    "contractVersion": 1,
+    "validator": "scripts/lib/client-consumer-contract.mjs",
+    "gate": "scripts/verify-client-consumer-contract.sh",
+    "changeMode": "ADDITIVE_ONLY"
+  },
   "governance": {
     "policyPath": "/rag/data-governance/policy",
     "auditPath": "/rag/audit-logs",

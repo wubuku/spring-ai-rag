@@ -1335,6 +1335,20 @@ API_CONTRACT_API_KEY="$RAG_ROOT_API_KEY" \
 `rag.mode=PLAIN` 和 `rag.memory=STATELESS` 字段；默认行为不变，且该选项不能宣称已经
 完成 KNOWLEDGE 证据安全验收。
 
+## Client Consumer Contract Kit
+
+这是面向外部 Client 的独立消费方验收包，WebUI 通过不能替代它。离线检查默认启用：
+
+```bash
+node scripts/lib/client-consumer-contract.mjs --self-test
+./scripts/verify-client-consumer-contract.sh
+```
+
+它固定验证旧请求仍可接受、Native JSON/SSE 的增量字段与终态、OpenAI JSON/SSE 的标准字段
+隔离、`FailureClass`/`EvidenceAssessment` 映射、trace/retry header 和 deprecated registry。
+显式设置 `CLIENT_CONTRACT_LIVE=1` 后才会调用运行中的服务；缺少 live 环境变量时记录
+conditional skip，不伪造通过。完整示例见 [Client Consumer Contract Kit](client-contract-kit-zh-CN.md)。
+
 ## 编写新测试的规则
 
 1. **先写测试再写实现**（TDD 友好）

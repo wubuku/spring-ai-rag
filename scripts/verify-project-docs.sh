@@ -367,6 +367,7 @@ check_scripts_and_commands() {
       scripts/verify-collection-provisioning.sh \
       scripts/verify-business-client-readiness.sh \
       scripts/verify-client-contract-governance.sh \
+      scripts/verify-client-consumer-contract.sh \
       scripts/verify-llm-usage-ledger.sh \
       scripts/verify-api-key-expiry-alerts.sh \
       scripts/verify-alert-notification-delivery.sh \

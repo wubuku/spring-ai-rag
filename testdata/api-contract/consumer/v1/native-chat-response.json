@@ -1,0 +1,51 @@
+{
+  "answer": "The documented service scope is available in the referenced guide.",
+  "traceId": "consumer-fixture-trace",
+  "sources": [
+    {
+      "citationId": "S1",
+      "sourceHandle": "c1",
+      "documentId": "fixture-document-1",
+      "chunkIndex": 0,
+      "title": "Service Guide",
+      "chunkText": "The documented service scope is available in the guide.",
+      "score": 0.73,
+      "vectorScore": 0.81,
+      "fulltextScore": 0.12,
+      "originalFilename": "service-guide.pdf",
+      "documentType": "PDF",
+      "collectionKey": "fixture:docs",
+      "sourceType": "DOCUMENT"
+    }
+  ],
+  "sessionId": "consumer-fixture-session",
+  "turnId": "consumer-fixture-turn",
+  "mode": "KNOWLEDGE",
+  "requestedModel": "fixture-model",
+  "resolvedModel": "fixture-model",
+  "usage": {
+    "promptTokens": 120,
+    "completionTokens": 18,
+    "totalTokens": 138
+  },
+  "finishReason": "STOP",
+  "metadata": {
+    "citationRegistry": {
+      "version": 1,
+      "handlePrefix": "c",
+      "sourceCount": 1,
+      "handles": ["c1"]
+    }
+  },
+  "stepMetrics": [],
+  "evidenceAssessment": {
+    "status": "SUPPORTED",
+    "retrievalExecuted": true,
+    "sourceCount": 1,
+    "citedSourceCount": 1,
+    "invalidCitationIds": [],
+    "contextLimited": false,
+    "safeAnswerApplied": false,
+    "reasonCode": "citation_supported"
+  }
+}
