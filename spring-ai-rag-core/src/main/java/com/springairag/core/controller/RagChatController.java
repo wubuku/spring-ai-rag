@@ -550,6 +550,7 @@ public class RagChatController {
             putIfPresent(done, "mode", response.getMode());
             putIfPresent(done, "usage", response.getUsage());
             putIfPresent(done, "finishReason", response.getFinishReason());
+            putIfPresent(done, "evidenceAssessment", response.getEvidenceAssessment());
             putIfPresent(done, "stepMetrics", response.getStepMetrics());
             putIfPresent(done, "metadata", response.getMetadata());
             putIfPresent(done, "turnId",
@@ -623,6 +624,11 @@ public class RagChatController {
             payload.put("mode", completed.mode());
             payload.put("usage", completed.usage());
             payload.put("finishReason", completed.finishReason());
+            if (completed.metadata() != null
+                    && completed.metadata().get("evidenceAssessment") != null) {
+                payload.put("evidenceAssessment",
+                        completed.metadata().get("evidenceAssessment"));
+            }
             payload.put("stepMetrics", completed.stepMetrics());
             payload.put("metadata", completed.metadata());
             payload.put("status", "complete");

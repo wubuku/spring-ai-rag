@@ -860,6 +860,9 @@ rag:
       query-expander-include-original: true
       max-retrieval-queries: 3
       allow-empty-context: false
+      evidence-safety-enabled: true
+      safe-answer-text: "根据当前授权范围内可检索到的资料，无法确认该问题的答案。请补充更具体的信息，或提供相关资料后再试。"
+      max-buffered-answer-chars: 64000
     agent:
       enabled: true
       max-tool-rounds: 3
@@ -922,6 +925,9 @@ rag:
 | `rag.chat.knowledge.query-expander-include-original` | `true` | Keep the original request as an additional retrieval query; override with `RAG_CHAT_QUERY_EXPANDER_INCLUDE_ORIGINAL` |
 | `rag.chat.knowledge.max-retrieval-queries` | `3` | Maximum planned retrieval queries per `KNOWLEDGE` attempt, bounded to `1..5`; override with `RAG_CHAT_KNOWLEDGE_MAX_RETRIEVAL_QUERIES` |
 | `rag.chat.knowledge.allow-empty-context` | `false` | When false, an empty retrieval result produces an explicit no-evidence instruction |
+| `rag.chat.knowledge.evidence-safety-enabled` | `true` | Enables the deterministic evidence safety gate for `KNOWLEDGE`; emergency override `RAG_CHAT_KNOWLEDGE_EVIDENCE_SAFETY_ENABLED` |
+| `rag.chat.knowledge.safe-answer-text` | Fixed Chinese safe answer | Controlled answer returned when evidence is insufficient or evaluation is unavailable; non-blank; override `RAG_CHAT_KNOWLEDGE_SAFE_ANSWER_TEXT` |
+| `rag.chat.knowledge.max-buffered-answer-chars` | `64000` | Maximum answer characters buffered before `KNOWLEDGE` stream evidence assessment, `1024..262144`; override `RAG_CHAT_KNOWLEDGE_MAX_BUFFERED_ANSWER_CHARS` |
 | `rag.chat.agent.enabled` | `true` | Enable `AGENT` mode |
 | `rag.chat.agent.max-tool-rounds` | `3` | Maximum Spring AI tool-call rounds per attempt |
 | `rag.chat.agent.max-retrieval-calls` | `3` | Maximum uncached knowledge retrieval calls per attempt |
@@ -993,6 +999,13 @@ Mode behavior:
   `capabilities.toolCalling=true`; Collection/document/credential scope remains
   server-owned.
 - `PLAIN` does not retrieve and rejects retrieval-specific request overrides.
+- `KNOWLEDGE` enables the deterministic evidence safety gate by default. It is
+  independent of the legacy `rag.evaluation.citation-validation-enabled` output
+  switch: that switch only controls whether compatible `metadata.citationValidation`
+  is emitted and cannot bypass the safety decision.
+- `evidenceAssessment` is additive in JSON and native SSE `done`. The
+  OpenAI-compatible `/v1` path keeps its existing response shape rather than
+  forcing internal diagnostics into the standard OpenAI body.
 - Client-cancelled partial turns are not persisted.
 
 ### Non-Embedding Static Knowledge

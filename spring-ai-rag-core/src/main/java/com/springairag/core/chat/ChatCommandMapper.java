@@ -8,6 +8,7 @@ import com.springairag.api.enums.ChatMode;
 import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.exception.RagException;
+import com.springairag.core.filter.RequestTraceFilter;
 import com.springairag.core.extension.DomainExtensionRegistry;
 import com.springairag.core.retrieval.RetrievalFilterValidator;
 import com.springairag.core.retrieval.RetrievalFilters;
@@ -94,6 +95,7 @@ public class ChatCommandMapper {
                 scope,
                 options,
                 request.getMetadata() != null ? request.getMetadata() : Map.of())
+                .withRequestTraceId(RequestTraceFilter.currentRequestTraceId())
                 .withFilters(filters);
     }
 
@@ -154,6 +156,7 @@ public class ChatCommandMapper {
                             ChatInputMessage.Role.USER,
                             request.getMessage())),
                     candidates)
+                    .withRequestTraceId(RequestTraceFilter.currentRequestTraceId())
                     .withFilters(filters);
         } catch (RagException e) {
             throw e;
@@ -246,4 +249,5 @@ public class ChatCommandMapper {
                 || request.getDocumentIds() != null
                 || request.getFilters() != null;
     }
+
 }

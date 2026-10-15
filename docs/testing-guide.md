@@ -48,6 +48,40 @@ mvn test -pl spring-ai-rag-core -Dtest=RagDocumentControllerTest
 mvn clean package -DskipTests
 ```
 
+## Client API, Evidence Safety, And Trace Acceptance
+
+This batch is accepted primarily through the external Client API; a passing
+WebUI suite cannot replace these checks. Start with the static contract helper
+and deterministic evidence-safety regression:
+
+```bash
+node scripts/lib/api-contract-check.mjs --self-test
+mvn -pl spring-ai-rag-core -am \
+  -Dtest=com.springairag.core.chat.ChatExecutionServiceEvidenceSafetyIntegrationTest,com.springairag.core.evaluation.EvidenceAssessmentEvaluatorTest \
+  -Dsurefire.failIfNoSpecifiedTests=false test
+```
+
+After the service is running, execute the versioned OpenAPI/black-box contract
+gate. It checks paths/methods, request/response fields, error envelopes,
+`X-Trace-Id`, and retrieval-trace query correlation. Set `API_CONTRACT_RUN_LIVE=1`
+with a query and key to add real Search/Chat smoke:
+
+```bash
+API_CONTRACT_BASE_URL=http://127.0.0.1:8081 \
+  ./scripts/verify-api-compatibility.sh
+API_CONTRACT_RUN_LIVE=1 \
+API_CONTRACT_API_KEY="$RAG_ROOT_API_KEY" \
+API_CONTRACT_QUERY='RAG' \
+  ./scripts/verify-api-compatibility.sh
+```
+
+The regression must cover Native Chat JSON/SSE, OpenAI-compatible JSON/SSE,
+Search, error responses, ACL isolation, idempotent replay,
+`evidenceAssessment`, safe-answer non-leakage, and the distinct semantics of
+`X-Trace-Id` versus `X-RAG-Retrieval-Trace-Id`. Successful `scripts/dev.sh`
+startup plus external-client black-box checks are stronger completion evidence
+than a working WebUI page.
+
 ## One-command Documentation Verification
 
 `scripts/verify-project-docs.sh` codifies the project-documentation checklist: OpenClaw local-state isolation, `.agents/skills/` trackability, relative links, EN/ZH heading structure, entry size limits, fixed project conventions, documented commands, shell syntax, whitespace, and added-line secret scanning.

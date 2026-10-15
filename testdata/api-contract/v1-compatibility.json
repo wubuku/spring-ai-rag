@@ -1,0 +1,230 @@
+{
+  "version": 1,
+  "description": "最低可兼容的外部 Client API 基线；新增字段不需要在这里登记，删除或改类型才会失败。",
+  "paths": [
+    {
+      "suffix": "/rag/chat/ask",
+      "method": "post",
+      "requestBodySchema": "ChatRequest",
+      "responseSchema": "ChatResponse"
+    },
+    {
+      "suffix": "/rag/chat",
+      "method": "post",
+      "requestBodySchema": "ChatRequest",
+      "responseSchema": "ChatResponse"
+    },
+    {
+      "suffix": "/rag/chat/stream",
+      "method": "post",
+      "requestBodySchema": "ChatRequest",
+      "eventStream": {
+        "contentType": "text/event-stream",
+        "events": {
+          "content": ["choices"],
+          "sources": ["sources"],
+          "done": ["status"],
+          "error": ["error"]
+        }
+      }
+    },
+    {
+      "suffix": "/rag/search",
+      "method": "get",
+      "responseSchema": "SearchResponse"
+    },
+    {
+      "suffix": "/rag/search",
+      "method": "post",
+      "requestBodySchema": "SearchRequest",
+      "responseSchema": "array"
+    },
+    {
+      "suffix": "/rag/retrieval-traces",
+      "method": "get",
+      "queryParameters": [
+        "page",
+        "size",
+        "operation",
+        "outcomeCode",
+        "emptyReasonCode",
+        "sessionId",
+        "citationStatus",
+        "requestTraceId"
+      ],
+      "responseSchema": "RetrievalTracePageResponse"
+    },
+    {
+      "suffix": "/rag/retrieval-traces/{traceId}",
+      "method": "get",
+      "responseSchema": "RetrievalTraceDetailResponse"
+    },
+    {
+      "suffix": "/v1/models",
+      "method": "get",
+      "responseSchema": "OpenAiModelResponse.ListEnvelope",
+      "conditional": "openai-compatibility"
+    },
+    {
+      "suffix": "/v1/models/{id}",
+      "method": "get",
+      "responseSchema": "OpenAiModelResponse.Model",
+      "conditional": "openai-compatibility"
+    },
+    {
+      "suffix": "/v1/chat/completions",
+      "method": "post",
+      "requestBodySchema": "OpenAiChatCompletionRequest",
+      "responseSchema": "OpenAiChatCompletionResponse",
+      "conditional": "openai-compatibility"
+    }
+  ],
+  "schemas": {
+    "ChatRequest": {
+      "required": ["message"],
+      "optional": [
+        "sessionId",
+        "maxResults",
+        "useHybridSearch",
+        "useRerank",
+        "mode",
+        "domainId",
+        "model",
+        "collectionScopeMode",
+        "collectionIds",
+        "collectionKeys",
+        "documentIds",
+        "metadata",
+        "filters"
+      ],
+      "types": {
+        "message": "string",
+        "sessionId": "string",
+        "maxResults": "integer",
+        "useHybridSearch": "boolean",
+        "useRerank": "boolean",
+        "mode": "string",
+        "domainId": "string",
+        "model": "string",
+        "collectionScopeMode": "CollectionScopeMode",
+        "collectionIds": "array",
+        "collectionKeys": "array",
+        "documentIds": "array",
+        "metadata": "object",
+        "filters": "RetrievalFilterRequest"
+      }
+    },
+    "OpenAiChatCompletionRequest": {
+      "conditional": "openai-compatibility",
+      "required": ["model", "messages"],
+      "optional": [
+        "stream",
+        "n",
+        "rag",
+        "temperature",
+        "top_p",
+        "max_tokens",
+        "max_completion_tokens",
+        "tools",
+        "tool_choice",
+        "functions",
+        "function_call",
+        "logprobs",
+        "response_format",
+        "stream_options"
+      ],
+      "types": {
+        "model": "string",
+        "messages": "array",
+        "stream": "boolean",
+        "n": "integer",
+        "rag": "object"
+      }
+    },
+    "ChatResponse": {
+      "properties": {
+        "answer": "string",
+        "traceId": "string",
+        "sources": "array",
+        "sessionId": "string",
+        "turnId": "string",
+        "mode": "string",
+        "requestedModel": "string",
+        "resolvedModel": "string",
+        "usage": "object",
+        "finishReason": "string",
+        "metadata": "object",
+        "stepMetrics": "array",
+        "evidenceAssessment": "EvidenceAssessment"
+      }
+    },
+    "SearchResponse": {
+      "properties": {
+        "results": "array",
+        "total": "integer",
+        "query": "string"
+      }
+    },
+    "ErrorResponse": {
+      "properties": {
+        "type": "string",
+        "title": "string",
+        "status": "integer",
+        "detail": "string",
+        "instance": "string",
+        "error": "string",
+        "message": "string",
+        "timestamp": "string",
+        "path": "string",
+        "traceId": "string"
+      }
+    },
+    "RetrievalTracePageResponse": {
+      "properties": {
+        "items": "array",
+        "page": "integer",
+        "size": "integer",
+        "totalElements": "integer",
+        "totalPages": "integer"
+      }
+    },
+    "RetrievalTraceDetailResponse": {
+      "properties": {
+        "traceId": "string",
+        "operation": "string",
+        "outcomeCode": "string",
+        "emptyReasonCode": "string",
+        "sessionId": "string",
+        "createdAt": "string",
+        "resultCount": "integer",
+        "totalTimeMs": "integer",
+        "resultScores": "object",
+        "metadata": "object",
+        "requestTraceId": "string"
+      }
+    },
+    "EvidenceAssessment": {
+      "properties": {
+        "status": "string",
+        "retrievalExecuted": "boolean",
+        "sourceCount": "integer",
+        "citedSourceCount": "integer",
+        "invalidCitationIds": "array",
+        "contextLimited": "boolean",
+        "safeAnswerApplied": "boolean",
+        "reasonCode": "string"
+      }
+    },
+    "OpenAiChatCompletionResponse": {
+      "conditional": "openai-compatibility",
+      "properties": {
+        "id": "string",
+        "object": "string",
+        "created": "integer",
+        "model": "string",
+        "choices": "array",
+        "usage": "object"
+      }
+    }
+  }
+}

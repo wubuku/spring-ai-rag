@@ -6,6 +6,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.springairag.api.enums.ChatMode;
 import com.springairag.api.enums.CollectionScopeMode;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -19,7 +20,9 @@ import java.util.Map;
  */
 public class OpenAiChatCompletionRequest {
 
+    @Schema(description = "Model alias", requiredMode = Schema.RequiredMode.REQUIRED)
     private String model;
+    @Schema(description = "Conversation messages", requiredMode = Schema.RequiredMode.REQUIRED)
     private List<Message> messages;
     private Boolean stream;
     private Integer n;

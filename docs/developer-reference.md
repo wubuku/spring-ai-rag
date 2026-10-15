@@ -644,7 +644,12 @@ Playwright is not a substitute for real-LLM validation. The four
 `RAG_EMBEDDING_*` variables are required; retired `RAG_EMBEDDING_URL` and
 `SILICONFLOW_*` names are rejected rather than mapped. If `.env` sets
 `MODELS_CONFIG_FILE`, remember that the external file fully overrides the YAML
-model registry. For a direct provider smoke, point it to a nonexistent file:
+model registry. A Knowledge answer that lacks a verifiable citation is expected to
+be replaced by the default safe answer and still counts as a successful safety
+assertion; an `AGENT` capability rejection (`MODEL_CAPABILITY_UNSUPPORTED`) is
+reported as a capability-gated skip, not as provider success. The provider preflight
+timeout can be bounded with `REAL_LLM_PREFLIGHT_TIMEOUT_SECONDS`. For a direct provider
+smoke, point it to a nonexistent file:
 
 ```bash
 MODELS_CONFIG_FILE=/tmp/spring-ai-rag-no-external-models.json \

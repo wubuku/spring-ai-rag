@@ -14,6 +14,7 @@ import com.springairag.core.diagnostics.RetrievalTraceSession;
 import com.springairag.core.exception.RagException;
 import com.springairag.core.extension.DomainExtensionRegistry;
 import com.springairag.core.extension.PromptCustomizerChain;
+import com.springairag.core.evaluation.CitationValidator;
 import com.springairag.core.http.HttpToolExecutionState;
 import com.springairag.core.rag.KnowledgeSearchTool;
 import com.springairag.core.rag.ProjectDocumentRetriever;
@@ -101,6 +102,7 @@ class ChatExecutionServiceTest {
                 new RagProperties(),
                 null,
                 null);
+        service.setCitationValidator(new CitationValidator());
     }
 
     @Test
@@ -123,7 +125,7 @@ class ChatExecutionServiceTest {
         ChatModelRouter.ChatModelCandidate candidate =
                 candidate("knowledge-model", true, false, false);
         AuthorizedRetrievalContext context = context();
-        ClientFixture client = clientFixture("基于资料的回答", Map.of(
+        ClientFixture client = clientFixture("[S1] 基于资料的回答", Map.of(
                 RetrievalAugmentationAdvisor.DOCUMENT_CONTEXT,
                 List.of(Document.builder()
                         .id("10:2")
@@ -153,7 +155,7 @@ class ChatExecutionServiceTest {
         ChatExecutionResult result = service.execute(
                 command(ChatMode.KNOWLEDGE, null));
 
-        assertEquals("基于资料的回答", result.answer());
+        assertEquals("[S1] 基于资料的回答", result.answer());
         assertEquals("knowledge-model", result.resolvedModel());
         assertEquals(1, result.sources().size());
         assertEquals("S1", result.sources().getFirst().getCitationId());
@@ -170,7 +172,7 @@ class ChatExecutionServiceTest {
         verify(historyRepository).save(
                 eq("session-1"),
                 eq("问题"),
-                eq("基于资料的回答"),
+                eq("[S1] 基于资料的回答"),
                 eq("[10]"),
                 any());
         verify(client.spec(), never()).toolCallbacks(any(KnowledgeSearchTool.class));

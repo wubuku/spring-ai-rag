@@ -688,6 +688,7 @@ public class ChatTurnOperationService {
                     .resolvedModel(response.getResolvedModel())
                     .usage(stableMap(response.getUsage()))
                     .finishReason(response.getFinishReason())
+                    .evidenceAssessment(response.getEvidenceAssessment())
                     .metadata(stableMetadata(response.getMetadata(), turnId))
                     .stepMetrics(stableStepMetrics(response.getStepMetrics()))
                     .build();
@@ -991,6 +992,7 @@ public class ChatTurnOperationService {
                 .sources(result.sources())
                 .usage(result.usage())
                 .finishReason(result.finishReason())
+                .evidenceAssessment(result.evidenceAssessment())
                 .metadata(result.metadata())
                 .stepMetrics(result.stepMetrics())
                 .build();

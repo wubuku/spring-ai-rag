@@ -37,17 +37,44 @@ public class RetrievalTraceController {
             @RequestParam(required = false) String outcomeCode,
             @RequestParam(required = false) String emptyReasonCode,
             @RequestParam(required = false) String sessionId,
+            @RequestParam(required = false) String requestTraceId,
             @RequestParam(required = false) String citationStatus,
             HttpServletRequest request) {
+        if (requestTraceId == null || requestTraceId.isBlank()) {
+            return diagnosticsService.list(
+                    ChatPrincipal.from(request),
+                    operation,
+                    outcomeCode,
+                    emptyReasonCode,
+                    sessionId,
+                    citationStatus,
+                    page,
+                    size);
+        }
         return diagnosticsService.list(
                 ChatPrincipal.from(request),
                 operation,
                 outcomeCode,
                 emptyReasonCode,
                 sessionId,
+                requestTraceId,
                 citationStatus,
                 page,
                 size);
+    }
+
+    /** 保留已有 Java 调用方的 8 参数控制器方法签名。 */
+    public RetrievalTracePageResponse list(
+            int page,
+            int size,
+            String operation,
+            String outcomeCode,
+            String emptyReasonCode,
+            String sessionId,
+            String citationStatus,
+            HttpServletRequest request) {
+        return list(page, size, operation, outcomeCode, emptyReasonCode,
+                sessionId, null, citationStatus, request);
     }
 
     @GetMapping("/{traceId}")

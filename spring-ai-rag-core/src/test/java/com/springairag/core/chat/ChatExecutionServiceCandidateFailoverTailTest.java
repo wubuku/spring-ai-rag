@@ -167,7 +167,7 @@ class ChatExecutionServiceCandidateFailoverTailTest {
         stubFactory(fallback, successClient("fallback answer"));
 
         ChatExecutionResult result = service.execute(
-                command(ChatMode.KNOWLEDGE));
+                command(ChatMode.PLAIN));
 
         assertEquals("fallback answer", result.answer());
         assertEquals("provider/fallback", result.resolvedModel());
@@ -199,7 +199,7 @@ class ChatExecutionServiceCandidateFailoverTailTest {
 
         ChatExecutionService.PreparedExecution prepared =
                 service.prepareForOperation(
-                        command(ChatMode.KNOWLEDGE),
+                        command(ChatMode.PLAIN),
                         null,
                         false);
 

@@ -8,6 +8,7 @@ import com.springairag.core.config.RagProperties;
 import com.springairag.core.diagnostics.RetrievalTraceSession;
 import com.springairag.core.extension.DomainExtensionRegistry;
 import com.springairag.core.extension.PromptCustomizerChain;
+import com.springairag.core.evaluation.CitationValidator;
 import com.springairag.core.rag.KnowledgeSearchTool;
 import com.springairag.core.rag.RetrievalDocumentMapper;
 import com.springairag.core.repository.RagChatHistoryRepository;
@@ -58,6 +59,7 @@ class ChatExecutionServiceToResultTailTest {
                     source.setDocumentId(String.valueOf(
                             document.getMetadata().getOrDefault(
                                     "documentId", "unknown")));
+                    source.setCitationId("S1");
                     source.setTitle(String.valueOf(
                             document.getMetadata().getOrDefault("title", "")));
                     return source;
@@ -74,6 +76,7 @@ class ChatExecutionServiceToResultTailTest {
                 new RagProperties(),
                 null,
                 null);
+        service.setCitationValidator(new CitationValidator());
     }
 
     private ChatCommand command(ChatMode mode,
@@ -149,17 +152,18 @@ class ChatExecutionServiceToResultTailTest {
                 RetrievalAugmentationAdvisor.DOCUMENT_CONTEXT,
                 List.of(document));
 
+        AuthorizedRetrievalContext retrievalContext = context();
+        retrievalContext.trace().tryBeginRetrieval("问题");
         ChatExecutionResult result = invokeToResult(
                 command(ChatMode.KNOWLEDGE, session),
-                attempt(context(), null),
-                response("基于资料的回答", context));
+                attempt(retrievalContext, null),
+                response("[S1] 基于资料的回答", context));
 
-        assertEquals("基于资料的回答", result.answer());
+        assertEquals("[S1] 基于资料的回答", result.answer());
         assertEquals(1, result.sources().size());
         assertEquals("10", result.sources().getFirst().getDocumentId());
-        // KNOWLEDGE 模式 DOCUMENT_CONTEXT 优先，不经 trace.record() →
-        // retrievalExecuted=false（0 次检索调用）。
-        assertEquals(Boolean.FALSE,
+        // 该 fixture 明确模拟了一次授权检索，再由 DOCUMENT_CONTEXT 组装来源。
+        assertEquals(Boolean.TRUE,
                 result.metadata().get("retrievalExecuted"));
     }
 

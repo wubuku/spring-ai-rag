@@ -126,6 +126,12 @@ RagChatController
        -> 原子提交 history + source snapshot + JDBC-compatible Memory 投影
 ```
 
+Chat 完成阶段还会经过 `EvidenceAssessmentEvaluator`：它把授权检索是否执行、最终来源、
+Citation Registry 校验和上下文预算结果汇聚为 `evidenceAssessment`。`KNOWLEDGE` 默认只在
+`SUPPORTED` 时返回模型原回答；其他状态使用受控安全回答。流式 `KNOWLEDGE` 会先有界缓存
+答案再评估，避免在证据安全门完成前向外部 Client 泄漏内容；`PLAIN` 与 `AGENT` 保持各自
+既有语义。该评估不调用 LLM judge，不增加普通 Chat 的额外模型成本。
+
 `ProjectDocumentRetriever` 将项目更强的检索栈适配到 Spring AI Modular RAG
 契约。向量检索、中英文全文检索、RRF 融合、有界 rerank 候选池、rerank、Embedding Profile 过滤、
 Collection/API Key ACL、document type 和 document ID 范围因此由 Search、
@@ -153,6 +159,12 @@ identity 排序，避免 Spring AI 内部 `HashMap` 遍历顺序决定同分结�
 Chat 响应会在 `metadata.retrieval.documentJoin` 输出四个整数：输入文档数、唯一文档数、
 删除重复数和按更高 score 替换次数；同一低基数摘要也会写入对应 retrieval trace
 attempt。该摘要不包含 query 文本、Document ID、正文、metadata 值或模型输出。
+
+每个 HTTP 请求由 `RequestTraceFilter` 生成或接收 `X-Trace-Id`，并在响应头、错误 body、
+Chat metadata 和 retrieval-trace metadata 中保持请求级关联。检索端点继续使用独立的
+`X-RAG-Retrieval-Trace-Id`；诊断列表可以按可选 `requestTraceId` 过滤。诊断落库复用已有
+`rag_retrieval_logs.metadata` JSONB，不新增 schema migration，也不持久化 prompt、secret
+或未授权 chunk。
 
 会话窗口、查询压缩与长期摘要的区别，以及工具循环预算和非文档工具扩展边界，见
 [Chat 记忆、RAG 与工具调用](chat-memory-rag-tool-calling-zh-CN.md)。

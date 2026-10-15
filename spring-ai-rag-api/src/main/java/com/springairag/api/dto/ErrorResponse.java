@@ -72,6 +72,9 @@ public class ErrorResponse {
     @Schema(description = "Request path where the error occurred", example = "/api/v1/rag/chat/ask")
     private String path;
 
+    @Schema(description = "Request-level trace identifier for client-side correlation", example = "a1b2c3d4e5f6")
+    private String traceId;
+
     /** Default problem type URI prefix */
     private static final String PROBLEM_TYPE_PREFIX = "https://springairag.dev/problems/";
 
@@ -230,6 +233,11 @@ public class ErrorResponse {
             return this;
         }
 
+        public Builder traceId(String traceId) {
+            response.traceId = traceId;
+            return this;
+        }
+
         public ErrorResponse build() {
             // Ensure type is not null
             if (response.type == null && response.error != null) {
@@ -268,6 +276,7 @@ public class ErrorResponse {
     public String getMessage() { return message; }
     public String getTimestamp() { return timestamp; }
     public String getPath() { return path; }
+    public String getTraceId() { return traceId; }
 
     public void setType(String type) { this.type = type; }
     public void setTitle(String title) { this.title = title; }
@@ -278,6 +287,7 @@ public class ErrorResponse {
     public void setMessage(String message) { this.message = message; }
     public void setTimestamp(String timestamp) { this.timestamp = timestamp; }
     public void setPath(String path) { this.path = path; }
+    public void setTraceId(String traceId) { this.traceId = traceId; }
 
     @Override
     public boolean equals(Object o) {
@@ -292,13 +302,14 @@ public class ErrorResponse {
                 Objects.equals(instance, that.instance) &&
                 Objects.equals(error, that.error) &&
                 Objects.equals(message, that.message) &&
-                Objects.equals(path, that.path);
+                Objects.equals(path, that.path) &&
+                Objects.equals(traceId, that.traceId);
     }
 
     @Override
     public int hashCode() {
         // timestamp intentionally excluded
-        return Objects.hash(type, title, status, detail, instance, error, message, path);
+        return Objects.hash(type, title, status, detail, instance, error, message, path, traceId);
     }
 
     @Override
@@ -312,6 +323,7 @@ public class ErrorResponse {
                 ", error='" + error + '\'' +
                 ", message='" + message + '\'' +
                 ", path='" + path + '\'' +
+                ", traceId='" + traceId + '\'' +
                 ", timestamp='" + timestamp + '\'' +
                 '}';
     }

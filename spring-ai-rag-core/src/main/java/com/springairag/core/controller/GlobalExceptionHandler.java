@@ -4,6 +4,7 @@ import com.springairag.api.dto.ErrorResponse;
 import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.exception.RagException;
 import com.springairag.core.exception.ChatTurnInProgressException;
+import com.springairag.core.filter.RequestTraceFilter;
 import com.springairag.core.logging.SensitiveDataMaskingConverter;
 import com.springairag.core.security.ApiCapabilitySupport;
 import com.springairag.core.web.ApiKeyRotationHttpPolicy;
@@ -184,6 +185,7 @@ public class GlobalExceptionHandler {
                 .instance(request.getRequestURI())
                 .build();
         body.setTitle(code.getTitle());
+        body.setTraceId(requestTraceId(request));
         ResponseEntity.BodyBuilder builder = ApiKeyRotationHttpPolicy.apply(
                         ResponseEntity.status(code.getHttpStatus()),
                         request)
@@ -227,6 +229,7 @@ public class GlobalExceptionHandler {
                 .build();
         // Set human-readable title without triggering the builder's title() side effect
         body.setTitle(code.getTitle());
+        body.setTraceId(requestTraceId(request));
         ResponseEntity.BodyBuilder builder = ApiKeyRotationHttpPolicy.apply(
                         ResponseEntity.status(code.getHttpStatus()),
                         request)
@@ -292,6 +295,7 @@ public class GlobalExceptionHandler {
         // published contract for no gain.
         body.setDetail(detail);
         body.setInstance(request.getRequestURI());
+        body.setTraceId(requestTraceId(request));
         ErrorCode code = ErrorCode.byCodeOrNull(error);
         if (code != null) {
             body.setType(code.getProblemTypeUri());
@@ -303,6 +307,12 @@ public class GlobalExceptionHandler {
                         request)
                 .contentType(PROBLEM_JSON)
                 .body(body);
+    }
+
+    private String requestTraceId(HttpServletRequest request) {
+        Object value = request == null ? null
+                : request.getAttribute(RequestTraceFilter.REQUEST_TRACE_ID_ATTRIBUTE);
+        return value == null ? null : String.valueOf(value);
     }
 
     @ExceptionHandler(SecurityException.class)

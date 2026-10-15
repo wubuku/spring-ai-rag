@@ -29,6 +29,9 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -95,7 +98,9 @@ public class RagSearchController {
      */
     @Operation(summary = "Direct retrieval (GET)", description = "Hybrid search, no LLM generation. Supports vector/fulltext weight adjustment.")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Returns retrieval results list"),
+            @ApiResponse(responseCode = "200", description = "Returns retrieval results list",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = SearchResponse.class))),
             @ApiResponse(responseCode = "400", description = "vectorWeight or fulltextWeight out of range [0.0, 1.0], limit out of range [1, 1000], or query is blank")
     })
     @GetMapping
@@ -186,7 +191,9 @@ public class RagSearchController {
      */
     @Operation(summary = "Direct retrieval (POST)", description = "Submit retrieval config via request body. Supports filtering by document IDs, or by collection IDs (multi-collection search).")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Returns retrieval results list"),
+            @ApiResponse(responseCode = "200", description = "Returns retrieval results list",
+                    content = @Content(mediaType = "application/json",
+                            array = @ArraySchema(schema = @Schema(implementation = RetrievalResult.class)))),
             @ApiResponse(responseCode = "400", description = "Request parameter validation failed")
     })
     @com.springairag.core.security.ApiRoutePolicy(access = com.springairag.core.security.ApiRoutePolicy.Access.READ)

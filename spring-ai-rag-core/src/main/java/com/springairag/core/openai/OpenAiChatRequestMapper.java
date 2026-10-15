@@ -12,6 +12,7 @@ import com.springairag.core.chat.RetrievalOptions;
 import com.springairag.core.config.RagProperties;
 import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.exception.RagException;
+import com.springairag.core.filter.RequestTraceFilter;
 import com.springairag.core.retrieval.RetrievalFilterValidator;
 import com.springairag.core.retrieval.RetrievalFilters;
 import com.springairag.core.retrieval.RetrievalScope;
@@ -110,6 +111,7 @@ public class OpenAiChatRequestMapper {
                 Map.of(),
                 declaration.inputMessages(),
                 alias.candidates())
+                .withRequestTraceId(RequestTraceFilter.currentRequestTraceId())
                 .withFilters(declaration.filters());
         return new MappedRequest(
                 alias.alias(),
@@ -253,6 +255,7 @@ public class OpenAiChatRequestMapper {
                     Map.of(),
                     declaration.inputMessages(),
                     candidates)
+                    .withRequestTraceId(RequestTraceFilter.currentRequestTraceId())
                     .withFilters(declaration.filters());
             return new MappedRequest(
                     declaredModel,

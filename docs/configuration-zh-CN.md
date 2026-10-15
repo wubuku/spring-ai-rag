@@ -771,6 +771,9 @@ rag:
       query-expander-include-original: true
       max-retrieval-queries: 3
       allow-empty-context: false
+      evidence-safety-enabled: true
+      safe-answer-text: 根据当前授权范围内可检索到的资料，无法确认该问题的答案。请补充更具体的信息，或提供相关资料后再试。
+      max-buffered-answer-chars: 64000
     agent:
       enabled: true
       max-tool-rounds: 3
@@ -833,6 +836,9 @@ rag:
 | `rag.chat.knowledge.query-expander-include-original` | `true` | 是否保留原始请求作为额外检索查询；可用 `RAG_CHAT_QUERY_EXPANDER_INCLUDE_ORIGINAL` 覆盖 |
 | `rag.chat.knowledge.max-retrieval-queries` | `3` | 每个 `KNOWLEDGE` attempt 最多计划的检索 query 数，范围 `1..5`；可用 `RAG_CHAT_KNOWLEDGE_MAX_RETRIEVAL_QUERIES` 覆盖 |
 | `rag.chat.knowledge.allow-empty-context` | `false` | false 时，零召回会向模型注入明确的“无证据”指令 |
+| `rag.chat.knowledge.evidence-safety-enabled` | `true` | `KNOWLEDGE` 是否启用确定性证据安全门；仅建议作为应急开关，覆盖 `RAG_CHAT_KNOWLEDGE_EVIDENCE_SAFETY_ENABLED` |
+| `rag.chat.knowledge.safe-answer-text` | 固定中文安全回答 | 证据不足或评估不可用时返回的受控回答；不能为空，覆盖 `RAG_CHAT_KNOWLEDGE_SAFE_ANSWER_TEXT` |
+| `rag.chat.knowledge.max-buffered-answer-chars` | `64000` | 流式 `KNOWLEDGE` 在证据评估前允许缓存的答案字符上限，范围 `1024..262144`；覆盖 `RAG_CHAT_KNOWLEDGE_MAX_BUFFERED_ANSWER_CHARS` |
 | `rag.chat.agent.enabled` | `true` | 是否启用 `AGENT` 模式 |
 | `rag.chat.agent.max-tool-rounds` | `3` | 单次 attempt 的 Spring AI 工具调用轮数上限 |
 | `rag.chat.agent.max-retrieval-calls` | `3` | 单次 attempt 未命中缓存的知识检索调用上限 |
@@ -897,6 +903,11 @@ rag:
 - `AGENT` 使用 Spring AI Tool Calling；模型必须声明
   `capabilities.toolCalling=true`，Collection/document/credential 范围仍由服务端持有。
 - `PLAIN` 不检索，并拒绝检索专用的请求覆盖项。
+- `KNOWLEDGE` 默认执行确定性证据安全门；新能力不依赖旧的
+  `rag.evaluation.citation-validation-enabled` 输出开关。该旧开关只控制兼容的
+  `metadata.citationValidation` 是否返回，不能关闭证据安全判定。
+- `evidenceAssessment` 会在 JSON 响应和原生 SSE `done` 中增量返回；OpenAI-compatible
+  `/v1` 继续保持原有 response shape，不把内部诊断字段强行加入标准 OpenAI body。
 - 客户端取消的 partial turn 不会持久化。
 
 ### 非 embedding 静态知识

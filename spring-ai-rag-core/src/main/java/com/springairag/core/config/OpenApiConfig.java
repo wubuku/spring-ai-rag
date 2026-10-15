@@ -5,8 +5,10 @@ import io.swagger.v3.oas.models.info.Contact;
 import io.swagger.v3.oas.models.info.Info;
 import io.swagger.v3.oas.models.info.License;
 import io.swagger.v3.oas.models.media.Content;
+import io.swagger.v3.oas.models.media.IntegerSchema;
 import io.swagger.v3.oas.models.media.MediaType;
 import io.swagger.v3.oas.models.media.Schema;
+import io.swagger.v3.oas.models.media.StringSchema;
 import io.swagger.v3.oas.models.responses.ApiResponse;
 import io.swagger.v3.oas.models.responses.ApiResponses;
 import io.swagger.v3.oas.models.servers.Server;
@@ -216,16 +218,21 @@ public class OpenApiConfig {
             content = new Content();
             resp.setContent(content);
         }
-        MediaType media = new MediaType();
-        Schema<?> schema = new Schema<>();
-        schema.setType("object");
-        schema.setDescription("Example " + code + " response");
-        media.setSchema(schema);
+        MediaType media = content.get(mediaType);
+        if (media == null) {
+            media = new MediaType();
+            content.addMediaType(mediaType, media);
+        }
+        if (media.getSchema() == null) {
+            Schema<?> schema = new Schema<>();
+            schema.setType("object");
+            schema.setDescription("Example " + code + " response");
+            media.setSchema(schema);
+        }
         io.swagger.v3.oas.models.examples.Example ex = new io.swagger.v3.oas.models.examples.Example();
         ex.setValue(example);
         ex.setSummary("Example " + code + " response");
         media.setExamples(Map.of("default", ex));
-        content.addMediaType(mediaType, media);
     }
 
     /**
@@ -236,15 +243,16 @@ public class OpenApiConfig {
         Schema<?> schema = new Schema<>();
         schema.setType("object");
         schema.setDescription("RFC 7807 Problem Details error response");
-        schema.addProperty("type", new Schema<>().type("string").description("Error type URI"));
-        schema.addProperty("title", new Schema<>().type("string").description("Error title"));
-        schema.addProperty("status", new Schema<>().type("integer").format("int32").description("HTTP status code"));
-        schema.addProperty("detail", new Schema<>().type("string").description("Error detail"));
-        schema.addProperty("instance", new Schema<>().type("string").description("Error instance URI"));
-        schema.addProperty("error", new Schema<>().type("string").description("Error code"));
-        schema.addProperty("message", new Schema<>().type("string").description("Error message"));
-        schema.addProperty("timestamp", new Schema<>().type("string").format("date-time").description("Error timestamp"));
-        schema.addProperty("path", new Schema<>().type("string").description("Request path"));
+        schema.addProperty("type", new StringSchema().description("Error type URI"));
+        schema.addProperty("title", new StringSchema().description("Error title"));
+        schema.addProperty("status", new IntegerSchema().format("int32").description("HTTP status code"));
+        schema.addProperty("detail", new StringSchema().description("Error detail"));
+        schema.addProperty("instance", new StringSchema().description("Error instance URI"));
+        schema.addProperty("error", new StringSchema().description("Error code"));
+        schema.addProperty("message", new StringSchema().description("Error message"));
+        schema.addProperty("timestamp", new StringSchema().format("date-time").description("Error timestamp"));
+        schema.addProperty("path", new StringSchema().description("Request path"));
+        schema.addProperty("traceId", new StringSchema().description("Request-level trace identifier"));
         return schema;
     }
 }

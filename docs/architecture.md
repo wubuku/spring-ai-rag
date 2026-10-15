@@ -127,6 +127,16 @@ RagChatController
        -> atomic history + source snapshot + JDBC-compatible Memory projection
 ```
 
+The completion stage also passes through `EvidenceAssessmentEvaluator`. It
+combines authorized retrieval execution, final sources, Citation Registry
+validation, and context-budget outcomes into `evidenceAssessment`.
+`KNOWLEDGE` keeps the model answer only when the result is `SUPPORTED`; other
+statuses use the controlled safe answer. A KNOWLEDGE stream buffers the answer
+within a bound before assessment, preventing unsupported content from reaching
+an external client first. `PLAIN` and `AGENT` retain their existing semantics.
+The evaluator is deterministic and does not call an LLM judge, so normal Chat
+does not incur another model call.
+
 `ProjectDocumentRetriever` adapts the project's stronger retrieval stack to
 Spring AI's Modular RAG contract. Vector search, Chinese/English full text,
 RRF fusion, a bounded rerank candidate pool, reranking, Embedding Profile filtering,
@@ -166,6 +176,14 @@ The Chat response exposes four integer diagnostics under
 duplicates, and score-driven replacements. The same low-cardinality summary is
 stored on the corresponding retrieval-trace attempt. Query text, document IDs,
 content, metadata values, and model output are not included in that summary.
+
+Each HTTP request receives or normalizes an `X-Trace-Id`. The request-level ID
+is returned in response headers and error bodies and is copied into Chat and
+retrieval-trace metadata. Retrieval still uses the separate
+`X-RAG-Retrieval-Trace-Id`; the diagnostics list accepts an additive optional
+`requestTraceId` filter. Persistence reuses the existing
+`rag_retrieval_logs.metadata` JSONB, so this change needs no schema migration
+and never stores prompts, secrets, or unauthorized chunks.
 
 For the distinction between message windows, query compression, and durable
 summaries, plus tool-loop budgets and non-document tool extension boundaries,

@@ -572,7 +572,9 @@ RAG_API_KEY="$RAG_ROOT_API_KEY" \
 数据面请求；脚本也会自动从 `.env` 读取 root key。四个 `RAG_EMBEDDING_*` 配置项
 均为必需项；退役的 `RAG_EMBEDDING_URL` 和 `SILICONFLOW_*` 不会被自动映射。
 如果 `.env` 设置了 `MODELS_CONFIG_FILE`，要注意外部文件会完整覆盖 YAML 模型注册表。
-若要执行不使用外部注册表的直接 provider smoke，可显式指定不存在的文件：
+Knowledge 模式如果模型没有输出可验证引用，预期会被默认安全回答替换，这仍算证据安全断言成功；
+如果 `AGENT` 被 `MODEL_CAPABILITY_UNSUPPORTED` 拒绝，则记录为能力门控跳过，不能冒充真实 Agent 成功。
+provider preflight 超时可用 `REAL_LLM_PREFLIGHT_TIMEOUT_SECONDS` 限制。若要执行不使用外部注册表的直接 provider smoke，可显式指定不存在的文件：
 
 ```bash
 MODELS_CONFIG_FILE=/tmp/spring-ai-rag-no-external-models.json \

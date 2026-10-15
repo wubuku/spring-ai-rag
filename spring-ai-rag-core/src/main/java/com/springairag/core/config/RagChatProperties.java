@@ -124,6 +124,15 @@ public class RagChatProperties {
      */
     public void validate() {
         contextAssembly.validate();
+        KnowledgeProperties knowledgeProperties = knowledge;
+        if (knowledgeProperties.getSafeAnswerText() == null
+                || knowledgeProperties.getSafeAnswerText().isBlank()) {
+            throw invalid("rag.chat.knowledge.safe-answer-text must not be blank");
+        }
+        if (knowledgeProperties.getMaxBufferedAnswerChars() < 1_024
+                || knowledgeProperties.getMaxBufferedAnswerChars() > 262_144) {
+            throw invalid("rag.chat.knowledge.max-buffered-answer-chars must be between 1024 and 262144");
+        }
         requirePositive("rag.chat.execution.max-candidate-attempts",
                 execution.getMaxCandidateAttempts());
         requirePositive("rag.chat.execution.max-model-calls",
@@ -663,6 +672,9 @@ public class RagChatProperties {
         private boolean queryExpanderIncludeOriginal = true;
         private int maxRetrievalQueries = 3;
         private boolean allowEmptyContext = false;
+        private boolean evidenceSafetyEnabled = true;
+        private String safeAnswerText = "根据当前授权范围内可检索到的资料，无法确认该问题的答案。请补充更具体的信息，或提供相关资料后再试。";
+        private int maxBufferedAnswerChars = 64_000;
 
         public String getQueryTransformer() {
             return queryTransformer;
@@ -726,6 +738,30 @@ public class RagChatProperties {
 
         public void setAllowEmptyContext(boolean allowEmptyContext) {
             this.allowEmptyContext = allowEmptyContext;
+        }
+
+        public boolean isEvidenceSafetyEnabled() {
+            return evidenceSafetyEnabled;
+        }
+
+        public void setEvidenceSafetyEnabled(boolean evidenceSafetyEnabled) {
+            this.evidenceSafetyEnabled = evidenceSafetyEnabled;
+        }
+
+        public String getSafeAnswerText() {
+            return safeAnswerText;
+        }
+
+        public void setSafeAnswerText(String safeAnswerText) {
+            this.safeAnswerText = safeAnswerText;
+        }
+
+        public int getMaxBufferedAnswerChars() {
+            return maxBufferedAnswerChars;
+        }
+
+        public void setMaxBufferedAnswerChars(int maxBufferedAnswerChars) {
+            this.maxBufferedAnswerChars = maxBufferedAnswerChars;
         }
     }
 

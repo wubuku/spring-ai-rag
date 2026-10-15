@@ -463,6 +463,9 @@ rag:
       query-expander-include-original: ${RAG_CHAT_QUERY_EXPANDER_INCLUDE_ORIGINAL:true}
       max-retrieval-queries: ${RAG_CHAT_KNOWLEDGE_MAX_RETRIEVAL_QUERIES:3}
       allow-empty-context: false
+      evidence-safety-enabled: ${RAG_CHAT_KNOWLEDGE_EVIDENCE_SAFETY_ENABLED:true}
+      safe-answer-text: ${RAG_CHAT_KNOWLEDGE_SAFE_ANSWER_TEXT:根据当前授权范围内可检索到的资料，无法确认该问题的答案。请补充更具体的信息，或提供相关资料后再试。}
+      max-buffered-answer-chars: ${RAG_CHAT_KNOWLEDGE_MAX_BUFFERED_ANSWER_CHARS:64000}
     agent:
       enabled: true
       max-tool-rounds: 3

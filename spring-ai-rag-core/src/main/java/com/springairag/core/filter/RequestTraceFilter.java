@@ -11,6 +11,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.core.annotation.Order;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -67,6 +69,9 @@ public class RequestTraceFilter implements Filter {
     /** Request attribute: whether this request is sampled */
     public static final String SAMPLED_ATTRIBUTE = "traceSampled";
 
+    /** Request attribute: stable request-level correlation id */
+    public static final String REQUEST_TRACE_ID_ATTRIBUTE = "requestTraceId";
+
     private volatile boolean enabled = true;
     private volatile double samplingRate = 1.0;
     private volatile boolean w3cFormat = false;
@@ -96,6 +101,7 @@ public class RequestTraceFilter implements Filter {
 
         // Prioritize getting traceId from upstream (cross-service propagation)
         TraceContext ctx = resolveTraceContext(httpRequest);
+        request.setAttribute(REQUEST_TRACE_ID_ATTRIBUTE, ctx.traceId);
 
         boolean sampled = ctx.external || shouldSample();
         request.setAttribute(SAMPLED_ATTRIBUTE, sampled);
@@ -197,6 +203,17 @@ public class RequestTraceFilter implements Filter {
         ThreadLocalRandom.current().nextBytes(bytes);
         String hex = HexFormat.of().formatHex(bytes);
         return hex.substring(0, length);
+    }
+
+    /** Returns the current servlet request trace id when called on a request thread. */
+    public static String currentRequestTraceId() {
+        if (RequestContextHolder.getRequestAttributes()
+                instanceof ServletRequestAttributes attributes) {
+            Object value = attributes.getRequest()
+                    .getAttribute(REQUEST_TRACE_ID_ATTRIBUTE);
+            return value == null ? null : String.valueOf(value);
+        }
+        return null;
     }
 
     // ==================== Inner class ====================

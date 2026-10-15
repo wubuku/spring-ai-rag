@@ -193,6 +193,7 @@ fi
 if [[ "$PROVIDER" == "anthropic" ]]; then
   CODE=$(curl -s -o /tmp/rag-chat-probe.json -w "%{http_code}" \
     -X POST "$CHAT_URL" \
+    --max-time "${REAL_LLM_PREFLIGHT_TIMEOUT_SECONDS:-60}" \
     -H "x-api-key: ${CHAT_KEY}" \
     -H "anthropic-version: 2023-06-01" \
     -H "Content-Type: application/json" \
@@ -200,6 +201,7 @@ if [[ "$PROVIDER" == "anthropic" ]]; then
 else
   CODE=$(curl -s -o /tmp/rag-chat-probe.json -w "%{http_code}" \
     -X POST "$CHAT_URL" \
+    --max-time "${REAL_LLM_PREFLIGHT_TIMEOUT_SECONDS:-60}" \
     -H "Authorization: Bearer ${CHAT_KEY}" \
     -H "Content-Type: application/json" \
     -d "$CHAT_BODY" || true)
@@ -317,11 +319,31 @@ print(a[:500])
 print('sources', len(d.get('sources') or []))
 print('trace', d.get('traceId'))
 print('TOKEN_IN_ANSWER', token in a)
+assessment=d.get('evidenceAssessment') or {}
+status=assessment.get('status')
+safe_applied=assessment.get('safeAnswerApplied') is True
+if safe_applied:
+    print('EVIDENCE_SAFETY_STATUS', status)
+    print('SAFE_ANSWER_APPLIED', safe_applied)
+    sys.exit(0 if status != 'SUPPORTED' and a and d.get('sources') else 1)
 sys.exit(0 if token in a else 1)
 PY
 ask_rc=$?
 set -e
-if [[ $ask_rc -eq 0 ]]; then ok "chat answer contains verification code"; else bad "chat answer missing verification code"; fi
+if [[ $ask_rc -eq 0 ]]; then
+  if [[ "$(python3 - <<'PY'
+import json
+d=json.load(open('/tmp/rag-e2e-ask.json'))
+print('safe' if (d.get('evidenceAssessment') or {}).get('safeAnswerApplied') is True else 'answer')
+PY
+)" == "safe" ]]; then
+    ok "chat evidence safety gate applied a controlled answer"
+  else
+    ok "chat answer contains verification code"
+  fi
+else
+  bad "chat answer missing verification code or invalid evidence assessment"
+fi
 
 step "5) Agent chat with citation registry (REAL LLM, bounded)"
 set +e
@@ -343,6 +365,10 @@ try:
 except Exception as exc:
     print('agent response is not valid JSON:', exc)
     sys.exit(1)
+
+if data.get('error') == 'MODEL_CAPABILITY_UNSUPPORTED':
+    print('agent capability is not configured for the selected provider')
+    sys.exit(2)
 
 token = os.environ['PROBE_TOKEN']
 answer = data.get('answer') or ''
@@ -382,7 +408,15 @@ PY
   agent_rc=$?
 fi
 set -e
-if [[ $agent_rc -eq 0 ]]; then ok "agent tool result and citation registry are aligned"; else bad "agent tool/result citation validation failed"; fi
+if [[ $agent_rc -eq 2 ]]; then
+  echo "SKIP: agent tool/result citation validation (selected provider has no AGENT capability)"
+  agent_rc=0
+fi
+if [[ $agent_rc -eq 0 ]]; then
+  ok "agent tool result and citation registry are aligned or capability-gated"
+else
+  bad "agent tool/result citation validation failed"
+fi
 
 if [[ "$SKIP_STREAM" != "1" ]]; then
   step "6) Chat stream (REAL LLM, sample)"
@@ -400,6 +434,7 @@ token=os.environ['PROBE_TOKEN']
 t=open('/tmp/rag-e2e-stream.txt', errors='replace').read()
 chunks=[]
 data_events=0
+done_assessment={}
 for line in t.splitlines():
     if not line.startswith('data:'):
         continue
@@ -411,6 +446,8 @@ for line in t.splitlines():
         event=json.loads(payload)
     except json.JSONDecodeError:
         continue
+    if isinstance(event.get('evidenceAssessment'), dict):
+        done_assessment=event['evidenceAssessment']
     for choice in event.get('choices') or []:
         delta=choice.get('delta') or {}
         content=delta.get('content')
@@ -424,8 +461,13 @@ print('data_events', data_events)
 print('delta_chunks', len(chunks))
 print('stream_content', stream_content[:400])
 print('TOKEN_IN_STREAM', token in stream_content)
+print('EVIDENCE_SAFETY_STATUS', done_assessment.get('status'))
+print('SAFE_ANSWER_APPLIED', done_assessment.get('safeAnswerApplied'))
 looks_sse = data_events > 0 and len(chunks) > 0
-raise SystemExit(0 if looks_sse and token in stream_content else 1)
+safe_answer = done_assessment.get('safeAnswerApplied') is True
+answer_verified = token in stream_content or (
+    safe_answer and done_assessment.get('status') != 'SUPPORTED')
+raise SystemExit(0 if looks_sse and answer_verified else 1)
 PY
 stream_rc=$?
 set -e

@@ -32,6 +32,9 @@ public class ChatResponse {
     private Map<String, Object> usage;
     private String finishReason;
 
+    @Schema(description = "Deterministic runtime evidence sufficiency assessment")
+    private EvidenceAssessment evidenceAssessment;
+
     @Schema(description = "Response metadata (contains sessionId, etc.)")
     private Map<String, Object> metadata;
 
@@ -76,6 +79,11 @@ public class ChatResponse {
     public String getFinishReason() { return finishReason; }
     public void setFinishReason(String finishReason) { this.finishReason = finishReason; }
 
+    public EvidenceAssessment getEvidenceAssessment() { return evidenceAssessment; }
+    public void setEvidenceAssessment(EvidenceAssessment evidenceAssessment) {
+        this.evidenceAssessment = evidenceAssessment;
+    }
+
     public Map<String, Object> getMetadata() { return metadata; }
     public void setMetadata(Map<String, Object> metadata) { this.metadata = metadata; }
 
@@ -97,6 +105,7 @@ public class ChatResponse {
                 && Objects.equals(resolvedModel, that.resolvedModel)
                 && Objects.equals(usage, that.usage)
                 && Objects.equals(finishReason, that.finishReason)
+                && Objects.equals(evidenceAssessment, that.evidenceAssessment)
                 && Objects.equals(metadata, that.metadata)
                 && Objects.equals(stepMetrics, that.stepMetrics);
     }
@@ -104,7 +113,7 @@ public class ChatResponse {
     @Override
     public int hashCode() {
         return Objects.hash(answer, traceId, sources, sessionId, turnId, mode, requestedModel,
-                resolvedModel, usage, finishReason, metadata, stepMetrics);
+                resolvedModel, usage, finishReason, evidenceAssessment, metadata, stepMetrics);
     }
 
     @Override
@@ -130,6 +139,10 @@ public class ChatResponse {
         public ChatResponseBuilder resolvedModel(String value) { response.setResolvedModel(value); return this; }
         public ChatResponseBuilder usage(Map<String, Object> value) { response.setUsage(value); return this; }
         public ChatResponseBuilder finishReason(String value) { response.setFinishReason(value); return this; }
+        public ChatResponseBuilder evidenceAssessment(EvidenceAssessment value) {
+            response.setEvidenceAssessment(value);
+            return this;
+        }
         public ChatResponseBuilder metadata(Map<String, Object> metadata) { response.setMetadata(metadata); return this; }
         public ChatResponseBuilder stepMetrics(List<StepMetricRecord> stepMetrics) { response.setStepMetrics(stepMetrics); return this; }
         public ChatResponse build() { return response; }

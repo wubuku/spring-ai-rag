@@ -46,6 +46,36 @@ mvn test -pl spring-ai-rag-core -Dtest=RagDocumentControllerTest
 mvn clean package -DskipTests
 ```
 
+## Client API、证据安全与 Trace 验收
+
+本批以外部 Client API 为主验收面，WebUI 测试不能替代这些检查。先运行静态契约 helper
+和核心证据安全回归：
+
+```bash
+node scripts/lib/api-contract-check.mjs --self-test
+mvn -pl spring-ai-rag-core -am \
+  -Dtest=com.springairag.core.chat.ChatExecutionServiceEvidenceSafetyIntegrationTest,com.springairag.core.evaluation.EvidenceAssessmentEvaluatorTest \
+  -Dsurefire.failIfNoSpecifiedTests=false test
+```
+
+服务启动后执行版本化 OpenAPI/黑盒契约门禁；它检查端点/方法、请求/响应字段、错误 envelope、
+`X-Trace-Id` 和 retrieval trace 查询参数。`API_CONTRACT_RUN_LIVE=1` 且提供 query/key 时，
+再追加真实 Search/Chat smoke：
+
+```bash
+API_CONTRACT_BASE_URL=http://127.0.0.1:8081 \
+  ./scripts/verify-api-compatibility.sh
+API_CONTRACT_RUN_LIVE=1 \
+API_CONTRACT_API_KEY="$RAG_ROOT_API_KEY" \
+API_CONTRACT_QUERY='RAG' \
+  ./scripts/verify-api-compatibility.sh
+```
+
+回归必须至少覆盖 Native Chat JSON/SSE、OpenAI-compatible JSON/SSE、Search、错误响应、ACL
+隔离、幂等重放、`evidenceAssessment`、安全回答不泄漏原答案，以及 `X-Trace-Id` 与
+`X-RAG-Retrieval-Trace-Id` 的不同语义。`scripts/dev.sh` 启动成功和外部 Client 黑盒通过，
+比 WebUI 页面可用更能证明本批完成。
+
 ## 一键文档验证
 
 `scripts/verify-project-docs.sh` 固化项目文档检查清单：OpenClaw 本地状态隔离、`.agents/skills/` 可跟踪性、相对链接、中英文标题结构、入口行数、项目固定约定、文档命令、Shell 语法、空白和新增行敏感信息扫描。

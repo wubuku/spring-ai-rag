@@ -437,6 +437,11 @@ All error responses follow [RFC 7807](https://datatracker.ietf.org/doc/html/rfc7
 | `detail` | Specific error description |
 | `instance` | Request path where the error occurred |
 
+Every request returns an `X-Trace-Id` response header for client correlation.
+Callers may also send the same header as their correlation ID. Error bodies add
+an optional `traceId` field with the same value. This request-level ID is
+distinct from the retrieval diagnostic `X-RAG-Retrieval-Trace-Id`.
+
 **Parameter validation errors** (400) merge multiple field errors:
 
 ```json
@@ -618,6 +623,16 @@ mode.
     "totalTokens": 156
   },
   "finishReason": "STOP",
+  "evidenceAssessment": {
+    "status": "SUPPORTED",
+    "retrievalExecuted": true,
+    "sourceCount": 1,
+    "citedSourceCount": 1,
+    "invalidCitationIds": [],
+    "contextLimited": false,
+    "safeAnswerApplied": false,
+    "reasonCode": "citation_supported"
+  },
   "sources": [
     {
       "citationId": "S1",
@@ -663,6 +678,15 @@ always `false` for `PLAIN`, always `true` for a completed `KNOWLEDGE` pipeline,
 and may be `false` for `AGENT` when the model answers without calling
 `searchKnowledge`.
 
+`evidenceAssessment` is an additive, optional machine-readable evidence result;
+it does not remove or rename `answer`, `sources`, `metadata`, `traceId`, `usage`,
+or other existing fields. `KNOWLEDGE` enables the deterministic evidence safety
+gate by default: only `SUPPORTED` keeps the model answer. Missing evidence,
+missing/invalid/partial citations, context-budget truncation, or evaluator
+failure returns the configured safe answer and sets `safeAnswerApplied` to
+`true`. `PLAIN` returns `NOT_APPLICABLE` and keeps its answer; `AGENT` only
+reports diagnostics in this batch and keeps its existing tool conclusion.
+
 For `KNOWLEDGE`, `metadata.retrieval.documentJoin` is an additive,
 low-cardinality summary of the project join step before reranking. Its four
 fields are nonnegative integers. It does not contain query text, document IDs,
@@ -699,6 +723,9 @@ starting at `1`. A keyed snapshot replay keeps the same `content`/`sources`/
 frames during the same turn retry. `sources` keeps the legacy `citationId` and
 may include the request-local `sourceHandle`; `metadata.citationRegistry` is a
 diagnostic snapshot of the handles present in the final sources list.
+The `done` event adds optional `evidenceAssessment`. For `KNOWLEDGE`, content is
+held until the evidence assessment completes, so unsupported model content is
+not leaked before the safety gate runs.
 
 **curl example:**
 
@@ -1266,6 +1293,12 @@ diagnostic.
 | `GET /api/v1/rag/retrieval-traces/{traceId}` | One diagnostic detail |
 
 Query text is omitted by default. Persist failures are fail-open.
+The list endpoint accepts the additive optional `requestTraceId` query
+parameter. Chat retrieval diagnostics store that request-level ID in the
+existing JSONB metadata and return it on summary/detail records, allowing a
+client to filter all retrieval records for one `X-Trace-Id`. The
+`X-RAG-Retrieval-Trace-Id` header remains a retrieval-level UUID with different
+semantics.
 
 ---
 

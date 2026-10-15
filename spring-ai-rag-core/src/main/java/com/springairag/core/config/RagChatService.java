@@ -437,6 +437,7 @@ public class RagChatService {
                 .sources(result.sources())
                 .usage(result.usage())
                 .finishReason(result.finishReason())
+                .evidenceAssessment(result.evidenceAssessment())
                 .metadata(result.metadata())
                 .stepMetrics(result.stepMetrics())
                 .build();

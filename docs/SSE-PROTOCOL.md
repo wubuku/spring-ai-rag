@@ -1,6 +1,6 @@
 # SSE 流式协议
 
-> 状态：**已实现** | 最近复核：2026-10-14
+> 状态：**已实现** | 最近复核：2026-10-15
 >
 > Chat HTTP 请求与非流式响应见
 > [REST API](rest-api.md#chat--rag-qa) /
@@ -123,13 +123,25 @@ data:{
   "mode":"KNOWLEDGE",
   "usage":{"promptTokens":120,"completionTokens":36,"totalTokens":156},
   "finishReason":"STOP",
+  "evidenceAssessment":{
+    "status":"SUPPORTED",
+    "retrievalExecuted":true,
+    "sourceCount":1,
+    "citedSourceCount":1,
+    "invalidCitationIds":[],
+    "contextLimited":false,
+    "safeAnswerApplied":false,
+    "reasonCode":"citation_supported"
+  },
   "sequence":3,
   "stepMetrics":[],
   "status":"complete"
 }
 ```
 
-字段可能因 provider 元数据能力而为空，但 key 保持稳定。收到 `done` 后客户端应停止
+字段可能因 provider 元数据能力而为空，但 key 保持稳定。`evidenceAssessment` 是新增
+可选字段；旧客户端可忽略。对于 `KNOWLEDGE`，服务端在该评估完成前不会发送模型正文，
+若安全门未通过，唯一的 `content` 终态正文是受控安全回答。收到 `done` 后客户端应停止
 loading 状态；重复终态必须忽略。
 
 ### 2.6 `error`

@@ -113,6 +113,8 @@ public interface RagRetrievalLogRepository extends JpaRepository<RagRetrievalLog
               AND (:outcomeCode IS NULL OR outcome_code = :outcomeCode)
               AND (:emptyReasonCode IS NULL OR empty_reason_code = :emptyReasonCode)
               AND (:sessionId IS NULL OR session_id = :sessionId)
+              AND (:requestTraceId IS NULL
+                   OR metadata #>> '{requestTraceId}' = :requestTraceId)
               AND (:citationStatus IS NULL
                    OR metadata #>> '{citationValidation,status}' = :citationStatus)
             ORDER BY created_at DESC
@@ -125,6 +127,8 @@ public interface RagRetrievalLogRepository extends JpaRepository<RagRetrievalLog
               AND (:outcomeCode IS NULL OR outcome_code = :outcomeCode)
               AND (:emptyReasonCode IS NULL OR empty_reason_code = :emptyReasonCode)
               AND (:sessionId IS NULL OR session_id = :sessionId)
+              AND (:requestTraceId IS NULL
+                   OR metadata #>> '{requestTraceId}' = :requestTraceId)
               AND (:citationStatus IS NULL
                    OR metadata #>> '{citationValidation,status}' = :citationStatus)
             """,
@@ -135,8 +139,22 @@ public interface RagRetrievalLogRepository extends JpaRepository<RagRetrievalLog
             @Param("outcomeCode") String outcomeCode,
             @Param("emptyReasonCode") String emptyReasonCode,
             @Param("sessionId") String sessionId,
+            @Param("requestTraceId") String requestTraceId,
             @Param("citationStatus") String citationStatus,
             Pageable pageable);
+
+    /** 保留旧 Java 调用方；未指定 request trace 时使用同一新查询。 */
+    default Page<RagRetrievalLog> searchTraces(
+            String owner,
+            String operation,
+            String outcomeCode,
+            String emptyReasonCode,
+            String sessionId,
+            String citationStatus,
+            Pageable pageable) {
+        return searchTraces(owner, operation, outcomeCode, emptyReasonCode,
+                sessionId, null, citationStatus, pageable);
+    }
 
     @Modifying
     @Query(value = """

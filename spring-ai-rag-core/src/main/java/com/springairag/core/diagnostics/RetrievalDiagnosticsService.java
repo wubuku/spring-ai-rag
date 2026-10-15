@@ -12,6 +12,7 @@ import com.springairag.core.security.ApiAccessPolicy;
 import com.springairag.core.entity.RagCollection;
 import com.springairag.core.entity.RagRetrievalLog;
 import com.springairag.core.exception.RagException;
+import com.springairag.core.filter.RequestTraceFilter;
 import com.springairag.core.repository.RagRetrievalLogRepository;
 import com.springairag.core.retrieval.RetrievalFilters;
 import com.springairag.core.retrieval.RetrievalOutcome;
@@ -73,7 +74,11 @@ public class RetrievalDiagnosticsService {
             ChatPrincipal principal,
             String operation,
             String sessionId) {
-        return new RetrievalTraceSession(principal, operation, sessionId);
+        return new RetrievalTraceSession(
+                principal,
+                operation,
+                sessionId,
+                RequestTraceFilter.currentRequestTraceId());
     }
 
     public void persistSearch(
@@ -144,6 +149,7 @@ public class RetrievalDiagnosticsService {
             String outcomeCode,
             String emptyReasonCode,
             String sessionId,
+            String requestTraceId,
             String citationStatus,
             int page,
             int size) {
@@ -153,14 +159,25 @@ public class RetrievalDiagnosticsService {
         if (repository == null) {
             return new RetrievalTracePageResponse(List.of(), safePage, safeSize, 0, 0);
         }
-        Page<RagRetrievalLog> result = repository.searchTraces(
-                owner,
-                blankToNull(operation),
-                blankToNull(outcomeCode),
-                blankToNull(emptyReasonCode),
-                blankToNull(sessionId),
-                blankToNull(citationStatus),
-                PageRequest.of(safePage, safeSize));
+        String safeRequestTraceId = blankToNull(requestTraceId);
+        Page<RagRetrievalLog> result = safeRequestTraceId == null
+                ? repository.searchTraces(
+                        owner,
+                        blankToNull(operation),
+                        blankToNull(outcomeCode),
+                        blankToNull(emptyReasonCode),
+                        blankToNull(sessionId),
+                        blankToNull(citationStatus),
+                        PageRequest.of(safePage, safeSize))
+                : repository.searchTraces(
+                        owner,
+                        blankToNull(operation),
+                        blankToNull(outcomeCode),
+                        blankToNull(emptyReasonCode),
+                        blankToNull(sessionId),
+                        safeRequestTraceId,
+                        blankToNull(citationStatus),
+                        PageRequest.of(safePage, safeSize));
         List<RetrievalTraceSummaryResponse> items = result.getContent().stream()
                 .map(this::toSummary)
                 .toList();
@@ -170,6 +187,20 @@ public class RetrievalDiagnosticsService {
                 safeSize,
                 result.getTotalElements(),
                 result.getTotalPages());
+    }
+
+    /** 保留已有 Java 调用方的 8 参数查询签名。 */
+    public RetrievalTracePageResponse list(
+            ChatPrincipal principal,
+            String operation,
+            String outcomeCode,
+            String emptyReasonCode,
+            String sessionId,
+            String citationStatus,
+            int page,
+            int size) {
+        return list(principal, operation, outcomeCode, emptyReasonCode, sessionId,
+                null, citationStatus, page, size);
     }
 
     public RetrievalTraceDetailResponse get(ChatPrincipal principal, UUID traceId) {
@@ -212,7 +243,8 @@ public class RetrievalDiagnosticsService {
                 toOffset(logEntry.getCreatedAt()),
                 logEntry.getResultCount(),
                 logEntry.getTotalTimeMs(),
-                citationStatus);
+                citationStatus,
+                metadataString(logEntry.getMetadata(), "requestTraceId"));
     }
 
     private RetrievalTraceDetailResponse toDetail(RagRetrievalLog logEntry, ApiAccessPolicy caller) {
@@ -228,7 +260,16 @@ public class RetrievalDiagnosticsService {
                 logEntry.getResultCount(),
                 logEntry.getTotalTimeMs(),
                 scores,
-                metadata);
+                metadata,
+                metadataString(logEntry.getMetadata(), "requestTraceId"));
+    }
+
+    private String metadataString(Map<String, Object> metadata, String key) {
+        if (metadata == null || metadata.get(key) == null) {
+            return null;
+        }
+        String value = String.valueOf(metadata.get(key));
+        return value.isBlank() ? null : value;
     }
 
     @SuppressWarnings("unchecked")

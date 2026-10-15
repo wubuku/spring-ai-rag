@@ -29,6 +29,7 @@ public final class RetrievalTraceSession {
     private final String ownerPrincipalId;
     private final String operation;
     private final String sessionId;
+    private final String requestTraceId;
     private final Instant createdAt = Instant.now();
     private final AtomicReference<Map<String, Object>> scopeSummary =
             new AtomicReference<>(Map.of());
@@ -44,6 +45,14 @@ public final class RetrievalTraceSession {
             ChatPrincipal principal,
             String operation,
             String sessionId) {
+        this(principal, operation, sessionId, null);
+    }
+
+    public RetrievalTraceSession(
+            ChatPrincipal principal,
+            String operation,
+            String sessionId,
+            String requestTraceId) {
         this.traceId = UUID.randomUUID();
         this.ownerPrincipalId = principal != null
                 ? principal.id()
@@ -52,6 +61,7 @@ public final class RetrievalTraceSession {
                 ? operation
                 : RetrievalTraceHeaders.OPERATION_SEARCH;
         this.sessionId = sessionId;
+        this.requestTraceId = requestTraceId;
     }
 
     public UUID traceId() {
@@ -68,6 +78,10 @@ public final class RetrievalTraceSession {
 
     public String sessionId() {
         return sessionId;
+    }
+
+    public String requestTraceId() {
+        return requestTraceId;
     }
 
     public Instant createdAt() {
@@ -233,6 +247,9 @@ public final class RetrievalTraceSession {
     public Map<String, Object> toMetadata(boolean storeQueryText) {
         Map<String, Object> metadata = new LinkedHashMap<>();
         metadata.put("schemaVersion", 1);
+        if (requestTraceId != null && !requestTraceId.isBlank()) {
+            metadata.put("requestTraceId", requestTraceId);
+        }
         metadata.put("scope", scopeSummary.get());
         metadata.put("filter", RetrievalScopeSummary.filterSummary(filters.get()));
         List<Map<String, Object>> attemptMaps = new ArrayList<>();

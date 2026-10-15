@@ -388,6 +388,10 @@ X-RateLimit-Remaining: 0
 | `detail` | 具体错误描述 |
 | `instance` | 发生错误的请求路径 |
 
+所有请求都会返回可用于客户端关联的 `X-Trace-Id` 响应头；调用方也可以通过同名请求头
+传入自己的 correlation ID。错误 body 额外包含可选的 `traceId` 字段，值与该响应头一致。
+该字段是请求级关联 ID，不等同于检索诊断的 `X-RAG-Retrieval-Trace-Id`。
+
 **参数校验错误** (400) merge multiple field errors:
 
 ```json
@@ -554,6 +558,16 @@ body 与 Header 同时出现时必须表示相同的 Collection key 集合。省
     "totalTokens": 156
   },
   "finishReason": "STOP",
+  "evidenceAssessment": {
+    "status": "SUPPORTED",
+    "retrievalExecuted": true,
+    "sourceCount": 1,
+    "citedSourceCount": 1,
+    "invalidCitationIds": [],
+    "contextLimited": false,
+    "safeAnswerApplied": false,
+    "reasonCode": "citation_supported"
+  },
   "sources": [
     {
       "citationId": "S1",
@@ -591,6 +605,12 @@ body 与 Header 同时出现时必须表示相同的 Collection key 集合。省
 完成 `KNOWLEDGE` pipeline 后始终为 `true`；`AGENT` 若模型未调用
 `searchKnowledge`，则可以为 `false`。
 
+`evidenceAssessment` 是新增的、可选的机器可读证据结论，不改变已有 `answer`、`sources`、
+`metadata`、`traceId`、`usage` 等字段。`KNOWLEDGE` 默认启用确定性证据安全门：只有
+`SUPPORTED` 才保留模型原回答；无证据、缺失/非法/部分引用、上下文预算裁剪或评估不可用时，
+服务返回配置的安全回答，并将 `safeAnswerApplied` 置为 `true`。`PLAIN` 返回
+`NOT_APPLICABLE` 且保留原回答；`AGENT` 本批只输出诊断，不改变既有工具结论。
+
 对 `KNOWLEDGE`，`metadata.retrieval.documentJoin` 是 rerank 前项目 join 步骤的
 additive、低基数摘要，四个字段均为非负整数。它不包含 query 文本、Document ID、
 文档正文、metadata 值或模型输出。AGENT、PLAIN、直接 Search、Evaluation 和旧
@@ -619,6 +639,8 @@ heartbeat、取消和 fallback 语义见 [SSE-PROTOCOL.md](SSE-PROTOCOL.md)。�
 `content`/`sources`/`done` 的顺序和序号，WebUI 在同一 turn 重试中忽略重复或倒退帧。
 `sources` 保留 `citationId`，并可返回请求级短期 `sourceHandle`；
 `metadata.citationRegistry` 是最终 sources 中实际句柄的诊断快照。
+`done` 事件新增可选的 `evidenceAssessment`；`KNOWLEDGE` 内容会先完成证据评估，
+再发送最终 `content`，避免在安全门完成前泄漏未受支持的模型回答。
 
 **curl 示例：**
 
@@ -1096,6 +1118,10 @@ PostgreSQL `@>` 下推到全部候选 SQL。非法对象、超限或未知字段
 | `GET /api/v1/rag/retrieval-traces/{traceId}` | 单条诊断详情 |
 
 默认不返回 query 明文。写入失败 fail-open。
+列表端点支持新增可选 `requestTraceId` 查询参数；Chat 产生的检索诊断会在已有
+`metadata` JSONB 中记录该请求级 ID，列表项和详情也会增量返回 `requestTraceId`。
+客户端可以先保存 `X-Trace-Id`，再按该值过滤同一次请求的检索记录；
+`X-RAG-Retrieval-Trace-Id` 仍表示检索级 UUID，二者保持不同语义。
 
 ---
 

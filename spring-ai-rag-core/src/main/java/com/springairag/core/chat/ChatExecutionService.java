@@ -12,8 +12,10 @@ import com.springairag.core.config.ChatModelRouter;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.config.RagChatProperties;
 import com.springairag.api.dto.CitationValidation;
+import com.springairag.api.dto.EvidenceAssessment;
 import com.springairag.core.diagnostics.RetrievalDiagnosticsService;
 import com.springairag.core.evaluation.CitationValidator;
+import com.springairag.core.evaluation.EvidenceAssessmentEvaluator;
 import com.springairag.core.diagnostics.RetrievalTraceSession;
 import com.springairag.core.exception.RagException;
 import com.springairag.core.extension.DomainExtensionRegistry;
@@ -88,6 +90,7 @@ public class ChatExecutionService {
     private ConversationSummaryService summaryService; // optional-claim: ConversationSummaryService 是无条件 @Service，null 臂只在不走 Spring 装配的构造路径可达；守卫真正的职责是产出可观测的 summary 状态（summary_service_unavailable），而不是把缺失悄悄压成空串
     private RetrievalDiagnosticsService diagnosticsService; // optional-claim: RetrievalDiagnosticsService 是无条件 @Service，null 臂只在不走 Spring 装配的构造路径可达；守卫真正的职责是 traceSession 为空的早退——没开检索追踪时诊断写入就该是 no-op
     private CitationValidator citationValidator; // optional-claim: CitationValidator 是无条件 @Component，null 臂只在不走 Spring 装配的构造路径可达；守卫真正的职责是 isCitationValidationEnabled() 功能开关
+    private EvidenceAssessmentEvaluator evidenceAssessmentEvaluator; // optional-claim: 证据评估是旁路；测试构造路径缺失时由本类安全降级
     private ChatObservabilityService chatObservability; // optional-claim: ChatObservabilityService 是无条件 @Component，null 臂只在不走 Spring 装配的构造路径可达；守卫让观测计数缺席时不影响主流程——观测是旁路，不该是调用失败的原因
     private RuntimeSkillCatalog runtimeSkillCatalog; // optional-claim: RuntimeSkillCatalog 是无条件 @Component，null 臂只在不走 Spring 装配的构造路径可达；守卫真正的职责是 enabled() 功能开关
 
@@ -182,6 +185,12 @@ public class ChatExecutionService {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     void setCitationValidator(CitationValidator citationValidator) {
         this.citationValidator = citationValidator;
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setEvidenceAssessmentEvaluator(
+            EvidenceAssessmentEvaluator evidenceAssessmentEvaluator) {
+        this.evidenceAssessmentEvaluator = evidenceAssessmentEvaluator;
     }
 
     @org.springframework.beans.factory.annotation.Autowired(required = false)
@@ -620,6 +629,8 @@ public class ChatExecutionService {
         AtomicReference<ChatClientResponse> lastResponse =
                 new AtomicReference<>();
         AtomicBoolean attemptFinished = new AtomicBoolean();
+        boolean deferKnowledgeContent = command.mode() == ChatMode.KNOWLEDGE;
+        AtomicBoolean streamBufferExceeded = new AtomicBoolean();
         Flux<ChatClientResponse> streamResponses = invokeStream(attempt, command);
         if (lease != null) {
             Duration remaining = Duration.between(
@@ -632,6 +643,7 @@ public class ChatExecutionService {
         return Flux.defer(() -> {
             Sinks.Many<ChatEvent> sink =
                     Sinks.many().unicast().onBackpressureBuffer();
+            StringBuilder knowledgeAnswer = new StringBuilder();
             Flux<ChatClientResponse> aggregatedFlux =
                     new ChatClientMessageAggregator()
                             .aggregateChatClientResponse(
@@ -641,8 +653,17 @@ public class ChatExecutionService {
                                                 responseEvents(
                                                         attempt.retrievalContext(),
                                                         response)
-                                                        .forEach(event ->
-                                                                sink.tryEmitNext(event));
+                                                        .forEach(event -> {
+                                                            if (deferKnowledgeContent
+                                                                    && event instanceof ChatEvent.ContentDelta delta) {
+                                                                appendBoundedStreamAnswer(
+                                                                        knowledgeAnswer,
+                                                                        delta.content(),
+                                                                        streamBufferExceeded);
+                                                            } else {
+                                                                sink.tryEmitNext(event);
+                                                            }
+                                                        });
                                             }),
                                     aggregated::set);
             Disposable subscription = aggregatedFlux
@@ -652,7 +673,10 @@ public class ChatExecutionService {
                             lease,
                             aggregated.get() != null
                                     ? aggregated.get()
-                                    : lastResponse.get())
+                                    : lastResponse.get(),
+                            deferKnowledgeContent && !streamBufferExceeded.get()
+                                    ? knowledgeAnswer.toString() : null,
+                            streamBufferExceeded.get())
                             .doOnNext(event -> sink.tryEmitNext(event))
                             .then()))
                     .subscribe(
@@ -721,7 +745,9 @@ public class ChatExecutionService {
             ChatCommand command,
             ModeAwareChatClientFactory.Attempt attempt,
             ChatSessionCoordinator.LeaseHandle lease,
-            ChatClientResponse response) {
+            ChatClientResponse response,
+            String bufferedAnswer,
+            boolean streamBufferExceeded) {
         if (response == null
                 || response.chatResponse() == null
                 || response.chatResponse().getResult() == null
@@ -730,7 +756,10 @@ public class ChatExecutionService {
                     "LLM returned no usable streaming response"));
         }
         ChatExecutionResult result =
-                withPersistenceMetadata(command, toResult(command, attempt, response));
+                withPersistenceMetadata(
+                        command,
+                        toResult(command, attempt, response, bufferedAnswer,
+                                streamBufferExceeded));
         if (sessionCoordinator != null) {
             List<Message> committedMessages = attempt.memory() != null
                     ? committedMemoryMessages(
@@ -753,6 +782,11 @@ public class ChatExecutionService {
         result = withExecutionBudgetMetadata(result, command.executionBudget());
         List<ChatEvent> events = new ArrayList<>(
                 attempt.retrievalContext().trace().drainToolEvents());
+        if (command.mode() == ChatMode.KNOWLEDGE
+                && result.answer() != null
+                && !result.answer().isEmpty()) {
+            events.add(new ChatEvent.ContentDelta(result.answer()));
+        }
         events.add(new ChatEvent.SourcesAvailable(
                 result.sessionId(),
                 result.sources(),
@@ -770,6 +804,22 @@ public class ChatExecutionService {
                 result.stepMetrics(),
                 result.metadata()));
         return Flux.fromIterable(events);
+    }
+
+    private void appendBoundedStreamAnswer(
+            StringBuilder buffer,
+            String content,
+            AtomicBoolean exceeded) {
+        if (content == null || content.isEmpty() || exceeded.get()) {
+            return;
+        }
+        int limit = ragProperties.getChat().getKnowledge()
+                .getMaxBufferedAnswerChars();
+        if (buffer.length() + content.length() > limit) {
+            exceeded.set(true);
+            return;
+        }
+        buffer.append(content);
     }
 
     private Map<String, Object> castMetadata(Map<?, ?> input) {
@@ -1035,7 +1085,7 @@ public class ChatExecutionService {
                 result.answer(), result.sessionId(), result.traceId(),
                 result.requestedModel(), result.resolvedModel(), result.mode(),
                 result.sources(), result.usage(), result.finishReason(),
-                result.stepMetrics(), metadata);
+                result.stepMetrics(), metadata, result.evidenceAssessment());
     }
 
     private ChatExecutionResult withExecutionBudgetMetadata(
@@ -1050,7 +1100,7 @@ public class ChatExecutionService {
                 result.answer(), result.sessionId(), result.traceId(),
                 result.requestedModel(), result.resolvedModel(), result.mode(),
                 result.sources(), result.usage(), result.finishReason(),
-                result.stepMetrics(), metadata);
+                result.stepMetrics(), metadata, result.evidenceAssessment());
     }
 
     private List<ToolCallback> toolCallbacks(ChatCommand command) {
@@ -1070,8 +1120,18 @@ public class ChatExecutionService {
             ChatCommand command,
             ModeAwareChatClientFactory.Attempt attempt,
             ChatClientResponse response) {
+        return toResult(command, attempt, response, null, false);
+    }
+
+    private ChatExecutionResult toResult(
+            ChatCommand command,
+            ModeAwareChatClientFactory.Attempt attempt,
+            ChatClientResponse response,
+            String bufferedAnswer,
+            boolean streamBufferExceeded) {
         var springResponse = response.chatResponse();
-        String answer = springResponse.getResult().getOutput().getText();
+        String modelAnswer = springResponse.getResult().getOutput().getText();
+        String answer = bufferedAnswer != null ? bufferedAnswer : modelAnswer;
         List<ChatSource> sources = extractSources(command.mode(), attempt, response);
         Map<String, Object> usage = usage(springResponse.getMetadata().getUsage());
         String finishReason = springResponse.getResult().getMetadata() != null
@@ -1079,9 +1139,16 @@ public class ChatExecutionService {
                 : null;
         Map<String, Object> metadata = new LinkedHashMap<>();
         metadata.put("sessionId", command.sessionId());
-        metadata.put("retrieval", attempt.retrievalContext().trace().summary());
-        metadata.put("retrievalExecuted",
-                attempt.retrievalContext().trace().retrievalCalls() > 0);
+        String requestTraceId = command.requestTraceId() != null
+                ? command.requestTraceId()
+                : MDC.get(RequestTraceFilter.TRACE_ID_KEY);
+        if (requestTraceId != null && !requestTraceId.isBlank()) {
+            metadata.put("requestTraceId", requestTraceId);
+        }
+        Map<String, Object> retrievalSummary = attempt.retrievalContext().trace().summary();
+        boolean retrievalExecuted = attempt.retrievalContext().trace().retrievalCalls() > 0;
+        metadata.put("retrieval", retrievalSummary);
+        metadata.put("retrievalExecuted", retrievalExecuted);
         List<Map<String, Object>> toolTranscript =
                 ToolTranscriptCollector.transcript(
                         response,
@@ -1103,23 +1170,55 @@ public class ChatExecutionService {
                     "retrievalTraceId",
                     command.retrievalTraceSession().traceId().toString());
         }
-        if (citationValidator != null
-                && ragProperties.getEvaluation().isCitationValidationEnabled()) {
-            CitationValidation validation = citationValidator.validate(
-                    command.mode(), answer, sources);
-            metadata.put("citationValidation", validation);
-            if (command.retrievalTraceSession() != null) {
-                command.retrievalTraceSession().setCitationValidation(
-                        citationMap(validation));
+        CitationValidation validation = null;
+        boolean evaluationUnavailable = false;
+        if (citationValidator != null) {
+            try {
+                validation = citationValidator.validate(
+                        command.mode(), modelAnswer, sources);
+            } catch (RuntimeException error) {
+                evaluationUnavailable = true;
+                log.warn("Deterministic citation evaluation failed: {}",
+                        error.getMessage());
             }
+        } else if (command.mode() != ChatMode.PLAIN) {
+            evaluationUnavailable = true;
         }
+        if (validation != null
+                && ragProperties.getEvaluation().isCitationValidationEnabled()) {
+            metadata.put("citationValidation", validation);
+        }
+        if (command.retrievalTraceSession() != null && validation != null) {
+            command.retrievalTraceSession().setCitationValidation(
+                    citationMap(validation));
+        }
+        boolean contextLimited = streamBufferExceeded
+                || contextBudgetLimited(command.executionBudget())
+                || retrievalContextLimited(retrievalSummary);
+        EvidenceAssessmentEvaluator evaluator = evidenceAssessmentEvaluator != null
+                ? evidenceAssessmentEvaluator : new EvidenceAssessmentEvaluator();
+        EvidenceAssessment assessment = evaluator.evaluate(
+                command.mode(),
+                sources,
+                retrievalExecuted,
+                contextLimited,
+                validation,
+                evaluationUnavailable);
+        boolean safeAnswer = ragProperties.getChat().getKnowledge()
+                .isEvidenceSafetyEnabled()
+                && evaluator.requiresSafeAnswer(command.mode(), assessment);
+        if (safeAnswer) {
+            answer = ragProperties.getChat().getKnowledge().getSafeAnswerText();
+            assessment = evaluator.withSafeAnswerApplied(assessment, true);
+        }
+        metadata.put("evidenceAssessment", assessment);
         metadata.put(
                 "citationRegistry",
                 attempt.retrievalContext().trace().citationRegistryMetadata(sources));
         return new ChatExecutionResult(
                 answer,
                 command.sessionId(),
-                MDC.get(RequestTraceFilter.TRACE_ID_KEY),
+                requestTraceId,
                 command.modelRef(),
                 attempt.candidate().ref(),
                 command.mode(),
@@ -1127,7 +1226,8 @@ public class ChatExecutionService {
                 usage,
                 finishReason,
                 List.of(),
-                metadata);
+                metadata,
+                assessment);
     }
 
     @SuppressWarnings("unchecked")
@@ -1235,7 +1335,8 @@ public class ChatExecutionService {
                 result.usage(),
                 result.finishReason(),
                 result.stepMetrics(),
-                metadata);
+                metadata,
+                result.evidenceAssessment());
     }
 
     private ChatExecutionBudget newBudget(
@@ -1258,7 +1359,9 @@ public class ChatExecutionService {
                 java.util.UUID.randomUUID(),
                 command.principal().id(),
                 command.sessionId(),
-                MDC.get(RequestTraceFilter.TRACE_ID_KEY),
+                command.requestTraceId() != null
+                        ? command.requestTraceId()
+                        : MDC.get(RequestTraceFilter.TRACE_ID_KEY),
                 command.mode());
     }
 
@@ -1574,6 +1677,44 @@ public class ChatExecutionService {
     private int tokenCount(Map<String, Object> usage) {
         Object value = usage.get("totalTokens");
         return value instanceof Number number ? number.intValue() : 0;
+    }
+
+    private boolean contextBudgetLimited(ChatExecutionBudget budget) {
+        if (budget == null) {
+            return false;
+        }
+        Map<String, Object> context = budget.contextPlan();
+        return positive(context.get("ragDroppedDocuments"))
+                || positive(context.get("ragTruncatedDocuments"))
+                || containsEvidenceDegradation(context.get("degradedReasons"));
+    }
+
+    private boolean retrievalContextLimited(Map<String, Object> retrieval) {
+        if (retrieval == null || retrieval.isEmpty()) {
+            return false;
+        }
+        Object assembly = retrieval.get("contextAssembly");
+        if (assembly instanceof Map<?, ?> values) {
+            return positive(values.get("budgetDropped"))
+                    || positive(values.get("budgetTruncated"));
+        }
+        return false;
+    }
+
+    private boolean containsEvidenceDegradation(Object value) {
+        if (!(value instanceof Iterable<?> values)) {
+            return false;
+        }
+        for (Object item : values) {
+            if (item != null && String.valueOf(item).toLowerCase().contains("evidence")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean positive(Object value) {
+        return value instanceof Number number && number.intValue() > 0;
     }
 
     private Map<String, Object> citationMap(CitationValidation validation) {

@@ -34,7 +34,7 @@ usage() {
 Usage: ./scripts/verify-release.sh [options]
 
 Default gates:
-  project documentation + shell syntax + diff/secret checks
+  project documentation + API contract helper + shell syntax + diff/secret checks
   mvn clean test
   WebUI npm ci, lint, Vitest, build
   Maven -Pwebui release package + embedded bundle integrity
@@ -357,6 +357,14 @@ runtime_e2e() {
   BASE_URL="$BASE_URL" bash scripts/e2e-test.sh
 }
 
+api_contract_runtime() {
+  API_CONTRACT_BASE_URL="$BASE_URL" \
+    API_CONTRACT_API_KEY="${API_CONTRACT_API_KEY:-}" \
+    API_CONTRACT_RUN_LIVE="${API_CONTRACT_RUN_LIVE:-0}" \
+    API_CONTRACT_QUERY="${API_CONTRACT_QUERY:-}" \
+    bash scripts/verify-api-compatibility.sh
+}
+
 goldenset() {
   BASE_URL="$BASE_URL" bash scripts/run-retrieval-goldenset.sh
 }
@@ -453,6 +461,7 @@ run_gate "Prerequisites" require_commands
 run_gate "Project documentation" ./scripts/verify-project-docs.sh
 run_gate "No explicit pessimistic locks" ./scripts/verify-no-pessimistic-locks.sh
 run_gate "Shell syntax" check_shell_syntax
+run_gate "API contract helper" node scripts/lib/api-contract-check.mjs --self-test
 run_gate "Git diff check" git diff --check
 run_gate "Release versions" check_release_versions
 run_gate "Secret scan" check_secrets
@@ -494,8 +503,10 @@ fi
 
 if [[ "$RUN_RUNTIME_E2E" == "1" ]]; then
   run_gate "Runtime HTTP E2E" runtime_e2e
+  run_gate "API compatibility black-box" api_contract_runtime
 else
   skip_gate "Runtime HTTP E2E" "enable with --with-runtime-e2e"
+  skip_gate "API compatibility black-box" "enable with --with-runtime-e2e"
 fi
 
 if [[ "$RUN_GOLDENSET" == "1" ]]; then
