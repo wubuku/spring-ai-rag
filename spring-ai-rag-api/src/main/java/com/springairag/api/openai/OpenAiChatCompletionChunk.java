@@ -14,7 +14,18 @@ public record OpenAiChatCompletionChunk(
         String object,
         long created,
         String model,
-        List<Choice> choices) {
+        List<Choice> choices,
+        OpenAiRagExtension rag) {
+
+    /** 保留现有五参数构造签名，确保 API 模块 Java 调用方兼容。 */
+    public OpenAiChatCompletionChunk(
+            String id,
+            String object,
+            long created,
+            String model,
+            List<Choice> choices) {
+        this(id, object, created, model, choices, null);
+    }
 
     public record Choice(
             int index,

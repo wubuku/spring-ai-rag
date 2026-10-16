@@ -15,7 +15,19 @@ public record OpenAiChatCompletionResponse(
         long created,
         String model,
         List<Choice> choices,
-        Usage usage) {
+        Usage usage,
+        OpenAiRagExtension rag) {
+
+    /** 保留现有六参数构造签名，确保 API 模块 Java 调用方兼容。 */
+    public OpenAiChatCompletionResponse(
+            String id,
+            String object,
+            long created,
+            String model,
+            List<Choice> choices,
+            Usage usage) {
+        this(id, object, created, model, choices, usage, null);
+    }
 
     public record Choice(
             int index,

@@ -1024,6 +1024,39 @@ covers ACLs, PostgreSQL quota, upstream 503, Native availability with `/v1`
 disabled, and idempotent provider call counts. Use
 `verify-release.sh --with-openai-sdk` during release acceptance.
 
+### Client SDK Quickstart And Recovery Acceptance
+
+The minimal Python/Node examples and offline secret-safety gate are independent
+of the WebUI:
+
+```bash
+./scripts/verify-client-sdk-quickstart.sh --self-test
+```
+
+For live HTTP acceptance against an already running service, explicitly provide
+the service root URL (without `/v1`) and an API key:
+
+```bash
+CLIENT_SDK_LIVE=1 \
+CLIENT_SDK_BASE_URL=http://127.0.0.1:18081 \
+CLIENT_SDK_API_KEY="$RAG_ROOT_API_KEY" \
+./scripts/verify-client-sdk-quickstart.sh
+```
+
+The recovery-readiness gate starts disposable PostgreSQL, runs every repository
+Flyway migration, compares the database's actual `flyway_schema_history` with
+the repository migration inventory, and runs the budget/governance PostgreSQL
+integration tests. It is not a backup, restore-point, or cloud disaster-recovery
+system:
+
+```bash
+./scripts/verify-recovery-readiness.sh
+```
+
+The release script does not run these extra gates by default. Opt in explicitly
+with `./scripts/verify-release.sh --with-client-sdk --with-recovery-readiness`.
+Neither offline nor Mock success is real-LLM quality evidence.
+
 ### Durable Embedding Jobs Acceptance Gate
 
 ```bash

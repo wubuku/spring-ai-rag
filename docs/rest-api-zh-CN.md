@@ -470,8 +470,45 @@ body 与 Header 同时出现时必须表示相同的 Collection key 集合。省
 [Chat turn 持久化幂等](#chat-turn-持久化幂等)。
 
 非流式返回 `chat.completion`。流式返回标准 `data: <chunk>`，最后发送
-`data: [DONE]`；项目专用 tool/source 事件不会泄漏到该协议。认证、限流和运行时错误
-同样使用 `{ "error": { "message", "type", "param", "code" } }` 信封。
+`data: [DONE]`；项目专用 event 名称不会泄漏到该协议。认证、限流和运行时错误同样使用
+`{ "error": { "message", "type", "param", "code" } }` 信封。
+
+### 增量 `rag` 响应扩展
+
+当执行结果产生可对外暴露的 RAG 证据时，非流式 JSON 可以增加一个顶层 `rag` 对象；旧
+Client 继续读取原有 `id`、`object`、`created`、`model`、`choices` 和 `usage` 即可。示例：
+
+```json
+{
+  "id": "chatcmpl-rag-example",
+  "object": "chat.completion",
+  "created": 1760000000,
+  "model": "rag-default",
+  "choices": [{"index": 0, "message": {"role": "assistant", "content": "..."}, "finish_reason": "stop"}],
+  "rag": {
+    "traceId": "trace-example",
+    "evidenceAssessment": {"status": "SUPPORTED", "reasonCode": "citation_supported"},
+    "sources": [{
+      "citationId": "S1",
+      "sourceHandle": "src-example",
+      "documentId": "42",
+      "chunkIndex": 0,
+      "title": "Visual tone guidelines",
+      "collectionKey": "brand:guides"
+    }],
+    "citationRegistry": {"S1": {"sourceHandle": "src-example"}}
+  }
+}
+```
+
+`rag.sources` 使用专用的 `OpenAiRagSource` 脱敏投影，只包含最终实际暴露且已授权来源的
+身份、排序和文件级信息；不包含 `chunkText` 或任意 `metadata`。需要完整来源正文时使用
+Native API。`rag` 不会重新执行检索或模型调用，JSON、普通 SSE 和 keyed replay 使用同一
+次执行结果。
+
+`stream=true` 时，`rag` 只出现在最后一个带 `finish_reason` 的 chunk；现有 role chunk、
+content chunk、finish chunk 和 `data: [DONE]` 顺序不变，也不会新增私有 SSE event。标准
+OpenAI SDK 通常会忽略这个未知顶层字段。
 
 该入口默认关闭，只定位为受控网络预览；公网、多实例生产 readiness 边界见
 [OpenAI 兼容就绪度](openai-compatibility-readiness-zh-CN.md)。

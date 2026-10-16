@@ -12,9 +12,9 @@
   和 OpenAI 标准 body 不删除、不改名、不改类型。
 - Native API 可以增量返回 `traceId`、`sources`、`evidenceAssessment` 等字段；旧 Client 应忽略
   不认识的新增字段，不应把它们作为解析失败条件。
-- OpenAI-compatible JSON/SSE 只返回标准 OpenAI 字段。RAG 诊断、引用和失败分类不进入 OpenAI
-  body；需要时通过 `X-Trace-Id`、`X-RAG-Failure-Class` 和 `X-RAG-Idempotent-Replay` 等
-  header 获取。
+- OpenAI-compatible JSON/SSE 保留所有标准 OpenAI 字段，并可增量增加顶层 `rag`。RAG 诊断、
+  引用和失败分类不会替换或重命名标准字段；调用方可忽略未知的 `rag`，并按情况使用
+  `X-Trace-Id`、`X-RAG-Failure-Class` 和 `X-RAG-Idempotent-Replay` 等 header。
 - `collectionId`、`collectionIds`、数字 Collection 路由和已登记的 deprecated 路径继续兼容，
   但新 Client 必须使用 `collectionKey`、`collectionKeys` 和对应的新路由。详见
   [`deprecations.json`](../testdata/api-contract/consumer/v1/deprecations.json)。
@@ -147,8 +147,14 @@ curl --fail-with-body -sS "$CLIENT_CONTRACT_BASE_URL/v1/chat/completions" \
   -d '{"model":"fixture-model","messages":[{"role":"user","content":"返回服务能力的简短摘要"}]}'
 ```
 
-流式请求增加 `"stream":true`，消费 `data:` JSON chunk，直到独立的 `data: [DONE]`。不要把
-`answer`、`sources`、`evidenceAssessment`、`traceId` 或 `rag` 当作 OpenAI response 字段。
+流式请求增加 `"stream":true`，消费 `data:` JSON chunk，直到独立的 `data: [DONE]`。
+`answer`、`sources`、`evidenceAssessment` 和 `traceId` 仍不是标准 OpenAI 字段；服务端
+可能在非流式响应或 finish chunk 增加可选的顶层 `rag`。标准 Client 可以忽略它；需要读取
+引用时只读取其中的脱敏 `sources`，不要期待 `chunkText` 或任意 metadata。
+
+`rag` 的字段包括 `traceId`、`evidenceAssessment`、`sources` 和 `citationRegistry`。
+`sources` 只来自当前请求已授权且最终实际暴露的来源；完整正文仍通过 Native API 获取。
+普通 SSE 的 `rag` 只在 finish chunk 出现，keyed replay 的 JSON/SSE 与原执行保持一致。
 
 Java `HttpClient` 最小骨架：
 

@@ -1014,6 +1014,29 @@ smoke 时才设置 `API_CONTRACT_RUN_LIVE=1`。
 服务执行 transport live probe；`mode=PLAIN` 只证明传输协议，不替代 KNOWLEDGE 证据验收。详细
 fixture、TypeScript/Java 示例和错误动作映射见 [Client Consumer Contract Kit](client-contract-kit-zh-CN.md)。
 
+### Client SDK 快速入门与恢复就绪门禁
+
+外部 Client 接入示例和恢复验收不依赖 WebUI：
+
+```bash
+./scripts/verify-client-sdk-quickstart.sh --self-test
+./scripts/verify-recovery-readiness.sh
+```
+
+对已启动服务执行 SDK 的真实 HTTP 检查时，显式设置 `CLIENT_SDK_LIVE=1`、服务根地址
+（不带 `/v1`）和 API Key。恢复脚本使用一次性 PostgreSQL，执行当前源码中的全部 Flyway
+迁移，并将数据库实际 `flyway_schema_history` 与源码清单对账；它只证明迁移/预算/治理验收
+可重复，不是备份或云灾备系统。
+
+发布流程默认不调用这两项额外门禁；发布时可显式运行：
+
+```bash
+./scripts/verify-release.sh --with-client-sdk --with-recovery-readiness
+```
+
+完整接入说明见 [Client SDK 快速入门](client-sdk-quickstart-zh-CN.md)，契约细节见
+[Client Consumer Contract Kit](client-contract-kit-zh-CN.md)。
+
 ## 8. Goldenset 与发布门禁
 
 检索 goldenset：

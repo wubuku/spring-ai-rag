@@ -16,7 +16,7 @@ Release date: `2026-07-21`
 - [x] Helm `version` and `appVersion` are `1.0.0`
 - [x] Docker/Helm default image tag is `1.0.0`
 - [x] Local, Docker, and Helm default port is `8081`
-- [x] Flyway inventory is V1-V62
+- [x] Flyway inventory is V1-V64
 - [x] JSONB structured-record API, payload snapshots, and collection lifecycle are covered
 - [x] `scripts/verify-jsonb-records.sh` records focused backend/database/frontend verification
 - [x] Document PATCH/disable/restore/permanent-delete and external triple identity are covered
@@ -39,7 +39,9 @@ For an OpenAI-compatible service release, explicitly run
 `scripts/verify-release.sh --with-openai-sdk` or the standalone
 `scripts/verify-openai-sdk-e2e.sh`. The gate starts isolated PostgreSQL/mock
 upstream and checks Core/Starter over real HTTP with official Python/Node SDKs;
-it incurs no real-LLM cost.
+it incurs no real-LLM cost. The additive SDK quickstart and disposable
+PostgreSQL/Flyway recovery checks are opt-in release gates:
+`scripts/verify-release.sh --with-client-sdk --with-recovery-readiness`.
 
 - [x] `mvn clean test`
 - [x] `mvn package -pl spring-ai-rag-core -am -Pwebui -DskipTests`

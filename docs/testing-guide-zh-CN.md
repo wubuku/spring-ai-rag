@@ -898,6 +898,35 @@ SDK runner 的 20 项正/负变异自测覆盖意外成功、缺少 `[DONE]`、�
 隔离 HTTP 验收额外覆盖 ACL、PostgreSQL quota、上游 503、关闭 `/v1` 后 Native API
 仍可用和幂等 provider 调用次数。发布时使用 `verify-release.sh --with-openai-sdk`。
 
+### Client SDK 快速入门与恢复验收
+
+外部 Client 的最小 Python/Node 示例和离线 secret-safety 门禁独立于 WebUI：
+
+```bash
+./scripts/verify-client-sdk-quickstart.sh --self-test
+```
+
+需要对已启动服务做真实 HTTP 检查时，必须显式提供服务根地址（不带 `/v1`）和 API Key：
+
+```bash
+CLIENT_SDK_LIVE=1 \
+CLIENT_SDK_BASE_URL=http://127.0.0.1:18081 \
+CLIENT_SDK_API_KEY="$RAG_ROOT_API_KEY" \
+./scripts/verify-client-sdk-quickstart.sh
+```
+
+恢复就绪门禁会启动一次性 PostgreSQL，执行仓库中的全部 Flyway 迁移，并用数据库实际的
+`flyway_schema_history` 与源码迁移清单对账，再运行预算/治理 PostgreSQL 集成测试；它不是
+备份、恢复点或云灾备系统：
+
+```bash
+./scripts/verify-recovery-readiness.sh
+```
+
+发布脚本默认不调用这两项额外门禁；需要时显式使用
+`./scripts/verify-release.sh --with-client-sdk --with-recovery-readiness`。这些门禁也不把
+Mock 或离线通过描述为真实 LLM 质量证据。
+
 ### 持久化 Embedding Jobs 验收门禁
 
 ```bash

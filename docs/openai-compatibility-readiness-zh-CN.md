@@ -107,9 +107,9 @@ Context 测试和 HTTP 黑盒验收已经覆盖“不主动扫描 `com.springair
 | 端点 | `GET /v1/models`、`GET /v1/models/{id}`、`POST /v1/chat/completions` | Responses、Embeddings、Files、Batches、旧 Completions 等其他 OpenAI API |
 | 消息 | `system`、`developer`、`user`、`assistant`；字符串或纯 text parts；最多 100 条、总计 1,000,000 字符 | image/audio/file parts、tool/function message、`name`、空白 content；请求必须至少有一条 user message |
 | 生成参数 | `model`、`stream`、`n=1` | `temperature`、`top_p`、token 上限、`n>1`、logprobs、tools/functions、`response_format`、`stream_options`；未知字段也 fail closed |
-| RAG 扩展 | `rag.scope`、`rag.document_ids`、`rag.filters`、受 alias 策略约束的 `rag.mode` / `rag.memory`；重复 `X-RAG-Collection-Key` | `PLAIN` 模式不接受检索 scope/filter；请求覆盖默认关闭；结构化 sources 不进入 OpenAI 响应 |
-| 非流式响应 | 标准 `chat.completion`、单 choice、assistant text、`finish_reason`、可选 usage | 不返回结构化 citation/source/tool-call 对象 |
-| 流式响应 | role chunk、content chunks、finish chunk、`data: [DONE]` | 不支持 `stream_options.include_usage`；运行中失败只能在已建立的 SSE 中发送 error envelope |
+| RAG 扩展 | `rag.scope`、`rag.document_ids`、`rag.filters`、受 alias 策略约束的 `rag.mode` / `rag.memory`；重复 `X-RAG-Collection-Key` | `PLAIN` 模式不接受检索 scope/filter；请求覆盖默认关闭 |
+| 非流式响应 | 标准 `chat.completion`、单 choice、assistant text、`finish_reason`、可选 usage；可选顶层 `rag`（trace、evidence、脱敏 sources、citation registry） | 不返回任意 chunk 正文、任意 metadata 或 tool-call 对象；旧 Client 可忽略 `rag` |
+| 流式响应 | role chunk、content chunks、finish chunk（可选 `rag`）、`data: [DONE]` | `rag` 只在 finish chunk；不支持 `stream_options.include_usage`；运行中失败只能在已建立的 SSE 中发送 error envelope |
 | 幂等 | 可选 `Idempotency-Key`、稳定 replay、`X-RAG-Turn-Id` 与 replay Header | keyed streaming 是完成后快照式 SSE，不是实时 token stream |
 | 会话 | 每个请求可携带完整 messages | 没有客户端可控 session ID；不同请求没有稳定的服务端 conversation 合同 |
 
@@ -128,6 +128,7 @@ Context 测试和 HTTP 黑盒验收已经覆盖“不主动扫描 `com.springair
 | model alias 与 mode/memory/candidate policy | `spring-ai-rag-core/.../openai/OpenAiModelAliasRegistry.java` |
 | Collection Header/body 合并与 ACL | `spring-ai-rag-core/.../openai/OpenAiRequestRetrievalScopeAdapter.java` |
 | OpenAI 错误信封 | `OpenAiCompatibilityExceptionHandler.java`、`OpenAiProtocolException.java` |
+| 结构化 RAG 证据投影 | `OpenAiRagExtension.java`、`OpenAiRagSource.java`、`OpenAiCompatibilityController.java` |
 | 认证、能力和配额 | `ApiKeyAuthFilter.java`、`ApiCapabilityFilter.java`、`RateLimitFilter.java` |
 | 共享 Chat 执行 | `ChatExecutionService.java`、`ChatTurnOperationService.java` |
 | 聚焦测试和一键门禁 | `OpenAi*Test.java`、`OpenAiCompatibilityControllerWebTest.java`、`scripts/verify-openai-compatibility.sh` |
@@ -184,11 +185,12 @@ Web 安全装配；随后 `test-compile`、脚本语法与 `git diff --check` �
 2. **已完成 P0：Starter 完整 Bean Graph。** 只引入 Starter 且不扫描 `com.springairag`
    的外部 Consumer 已有 PostgreSQL/Flyway Context 与 HTTP 黑盒证据；新增扫描默认启用，
    不改变已有端点、旧字段、SSE 事件或 `/v1` 默认开关。
-3. **P1：补齐面向业务开发者的最小 SDK 接入指南。** 当前 Contract Kit 和 runner 已提供
-   可执行验收；仍可补充更短的 Python/Node text-only 示例，集中说明 `base_url=/v1`、
-   model alias、完整 messages、Collection Header/body、错误处理和 keyed stream 语义。
-4. **P1：决定来源返回合同。** 当前 OpenAI 响应不含结构化 RAG sources；需要来源追溯的
-   客户应继续使用原生 API。只有确定跨 SDK 的扩展字段策略后，才考虑兼容层引用扩展。
+3. **已完成 P1：提供面向业务开发者的最小 SDK 接入指南。** 双语 quickstart 已提供固定版本的
+   Python/Node 示例、secret-safe 离线门禁和显式 live HTTP 选项，并与版本化 Client Consumer
+   Contract Kit 配套。
+4. **已完成 P1：定义增量来源返回合同。** OpenAI JSON 可以增加顶层 `rag`，普通 SSE 只在
+   finish chunk 增加它；投影只包含已授权、最终暴露且经过脱敏的来源，需要完整正文的 Client
+   继续使用 Native API。
 5. **P2：按真实 client 需求扩协议。** 优先基于客户端矩阵决定 sampling、structured output、
    tools 或多模态，不为追求字段数量而绕过 alias policy 或服务端工具授权。
 6. **独立生产工作流：** legacy 关闭、OAuth/OIDC、token/cost hard limit、TLS、网络隔离、

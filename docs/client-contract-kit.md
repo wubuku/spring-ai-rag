@@ -14,10 +14,11 @@ classes. The machine-readable package lives in
   not removed, renamed, or retyped.
 - Native responses may add `traceId`, `sources`, and `evidenceAssessment`.
   Older clients must ignore unknown additive fields.
-- OpenAI-compatible JSON/SSE contains standard OpenAI fields only. RAG
-  diagnostics, citations, and failure classification stay out of the OpenAI
-  body and use `X-Trace-Id`, `X-RAG-Failure-Class`, and
-  `X-RAG-Idempotent-Replay` headers where available.
+- OpenAI-compatible JSON/SSE retains all standard OpenAI fields and may add a
+  top-level `rag` object. RAG diagnostics, citations, and failure classification
+  never replace or rename standard fields; clients may ignore `rag` and use
+  `X-Trace-Id`, `X-RAG-Failure-Class`, and `X-RAG-Idempotent-Replay` headers where
+  available.
 - `collectionId`, `collectionIds`, numeric Collection routes, and registered
   deprecated paths remain compatible, but new clients use `collectionKey`,
   `collectionKeys`, and their replacement routes. See
@@ -164,8 +165,17 @@ curl --fail-with-body -sS "$CLIENT_CONTRACT_BASE_URL/v1/chat/completions" \
 ```
 
 Add `"stream":true` for streaming, consume JSON chunks, and stop at a separate
-`data: [DONE]`. Do not expect `answer`, `sources`, `evidenceAssessment`,
-`traceId`, or `rag` in the OpenAI response body.
+`data: [DONE]`. `answer`, `sources`, `evidenceAssessment`, and `traceId` remain
+non-standard fields; the service may add an optional top-level `rag` object to a
+non-stream response or the finish chunk. Standard clients may ignore it. If a
+client reads citations, it should use only its privacy-safe `sources` and should
+not expect `chunkText` or arbitrary metadata.
+
+The `rag` object contains `traceId`, `evidenceAssessment`, `sources`, and
+`citationRegistry`. Its sources come only from authorized sources finally exposed
+for the request; full source text remains available through the Native API.
+Ordinary SSE puts `rag` only on the finish chunk, while keyed JSON/SSE replay
+projects the same evidence as the original execution.
 
 Minimal Java `HttpClient` skeleton:
 

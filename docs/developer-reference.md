@@ -1152,6 +1152,30 @@ and provide `CLIENT_CONTRACT_BASE_URL`, `CLIENT_CONTRACT_API_KEY`, and
 acceptance. See the [Client Consumer Contract Kit](client-contract-kit.md) for
 fixtures, TypeScript/Java examples, and failure actions.
 
+### Client SDK Quickstart And Recovery-Readiness Gate
+
+The external-client examples and recovery acceptance do not depend on the WebUI:
+
+```bash
+./scripts/verify-client-sdk-quickstart.sh --self-test
+./scripts/verify-recovery-readiness.sh
+```
+
+For live SDK HTTP acceptance, explicitly set `CLIENT_SDK_LIVE=1`, a service root
+URL without `/v1`, and an API key. The recovery script uses disposable PostgreSQL,
+runs every migration in the source tree, and compares the database's actual
+`flyway_schema_history` with the repository inventory; it proves repeatable
+migration/budget/governance acceptance, not backup or cloud disaster recovery.
+
+The release flow does not run these extra gates by default. Opt in explicitly:
+
+```bash
+./scripts/verify-release.sh --with-client-sdk --with-recovery-readiness
+```
+
+See the [Client SDK Quickstart](client-sdk-quickstart.md) and the
+[Client Consumer Contract Kit](client-contract-kit.md) for client-facing details.
+
 ## 8. Goldenset And Release Gates
 
 Retrieval goldenset:

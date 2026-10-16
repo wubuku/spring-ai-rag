@@ -1,7 +1,9 @@
 package com.springairag.core.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.springairag.api.dto.ChatSource;
 import com.springairag.api.dto.ChatResponse;
+import com.springairag.api.dto.EvidenceAssessment;
 import com.springairag.api.enums.ChatMode;
 import com.springairag.core.chat.ChatEvent;
 import com.springairag.core.chat.ChatExecutionResult;
@@ -19,8 +21,10 @@ import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -122,6 +126,47 @@ class OpenAiCompatibilityEventMappingTailTest {
 
     @Test
     @SuppressWarnings("unchecked")
+    void mapEventCompletedProjectsSourcesAndEvidenceOnFinishChunk() throws Exception {
+        ChatSource source = new ChatSource();
+        source.setCitationId("S1");
+        source.setSourceHandle("c1");
+        source.setDocumentId("doc-1");
+        EvidenceAssessment assessment = new EvidenceAssessment(
+                EvidenceAssessment.SUPPORTED, true, 1, 1,
+                List.of(), false, false, "citation_supported");
+        AtomicReference<com.springairag.api.openai.OpenAiRagExtension> evidence =
+                new AtomicReference<>(new com.springairag.api.openai.OpenAiRagExtension(
+                        null, null, List.of(
+                                com.springairag.api.openai.OpenAiRagSource.from(source)),
+                        Map.of("version", 1, "handles", List.of("c1"))));
+
+        var flux = (reactor.core.publisher.Flux<String>) invoke(
+                "mapEvent",
+                new Class<?>[]{String.class, long.class, String.class,
+                        ChatEvent.class, AtomicReference.class},
+                "chatcmpl-1", 1_700_000_000L, "gpt-x",
+                new ChatEvent.Completed("trace-1", "session-1",
+                        "req-m", "res-m", ChatMode.KNOWLEDGE, Map.of(),
+                        "STOP", List.of(), Map.of(
+                                "evidenceAssessment", assessment,
+                                "citationRegistry", Map.of(
+                                        "version", 1,
+                                        "handles", List.of("c1")))),
+                evidence);
+
+        String json = flux.blockFirst();
+        var tree = new ObjectMapper().readTree(json);
+        assertEquals("trace-1", tree.path("rag").path("traceId").asText());
+        assertEquals("SUPPORTED",
+                tree.path("rag").path("evidenceAssessment").path("status").asText());
+        assertEquals("c1", tree.path("rag").path("citationRegistry")
+                .path("handles").get(0).asText());
+        assertEquals("doc-1", tree.path("rag").path("sources")
+                .get(0).path("documentId").asText());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
     void mapEventUnknownTypeReturnsEmptyFlux() throws Exception {
         var flux = (reactor.core.publisher.Flux<String>) invoke(
                 "mapEvent",
@@ -147,6 +192,37 @@ class OpenAiCompatibilityEventMappingTailTest {
         assertEquals("stop", response.choices().getFirst().finishReason());
         assertNotNull(response.usage());
         assertEquals(8, response.usage().totalTokens());
+    }
+
+    @Test
+    void toResponseAddsEvidenceAsAnAdditiveRagField() throws Exception {
+        ChatSource source = new ChatSource();
+        source.setCitationId("S1");
+        source.setSourceHandle("c1");
+        source.setDocumentId("doc-1");
+        EvidenceAssessment assessment = new EvidenceAssessment(
+                EvidenceAssessment.SUPPORTED, true, 1, 1,
+                List.of(), false, false, "citation_supported");
+        ChatExecutionResult result = new ChatExecutionResult(
+                "answer", "session-1", "trace-1", "alias", "resolved",
+                ChatMode.KNOWLEDGE, List.of(source), Map.of(), "STOP",
+                List.of(), Map.of("citationRegistry", Map.of(
+                        "version", 1, "handles", List.of("c1"))), assessment);
+
+        var response = (com.springairag.api.openai.OpenAiChatCompletionResponse)
+                invoke("toResponse",
+                        new Class<?>[]{String.class, long.class, String.class,
+                                ChatExecutionResult.class},
+                        "chatcmpl-1", 1_700_000_000L, "gpt-x", result);
+
+        assertEquals("answer", response.choices().getFirst().message().content());
+        assertNotNull(response.rag());
+        assertEquals("SUPPORTED", response.rag().evidenceAssessment().status());
+        assertEquals("c1", response.rag().citationRegistry()
+                .get("handles").toString().replace("[", "").replace("]", ""));
+        assertEquals("doc-1", response.rag().sources().getFirst().documentId());
+        assertFalse(new ObjectMapper().writeValueAsString(response.rag())
+                .contains("chunkText"));
     }
 
     @Test

@@ -15,7 +15,7 @@
 - [x] Helm `version` 与 `appVersion` 均为 `1.0.0`
 - [x] Docker/Helm 默认镜像 tag 为 `1.0.0`
 - [x] 本地、Docker 与 Helm 默认端口均为 `8081`
-- [x] Flyway 迁移范围为 V1-V62
+- [x] Flyway 迁移范围为 V1-V64
 - [x] JSONB 结构化记录 API、payload 快照和 Collection 生命周期已覆盖
 - [x] `scripts/verify-jsonb-records.sh` 固化后端/数据库/前端聚焦验证
 - [x] 文档 PATCH/禁用/恢复/永久删除与外部三元身份已覆盖
@@ -37,6 +37,8 @@
 OpenAI 兼容服务发布还应显式运行 `scripts/verify-release.sh --with-openai-sdk`，或独立
 运行 `scripts/verify-openai-sdk-e2e.sh`。该门禁启动隔离 PostgreSQL/Mock upstream，
 通过官方 Python/Node SDK 验证 Core/Starter 两种真实 HTTP 拓扑；不产生真实 LLM 费用。
+增量 SDK quickstart 与一次性 PostgreSQL/Flyway 恢复验收是显式附加门禁：
+`scripts/verify-release.sh --with-client-sdk --with-recovery-readiness`。
 
 - [x] `mvn clean test`
 - [x] `mvn package -pl spring-ai-rag-core -am -Pwebui -DskipTests`

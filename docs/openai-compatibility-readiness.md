@@ -127,9 +127,9 @@ not "fully OpenAI API compatible."
 | Endpoints | `GET /v1/models`, `GET /v1/models/{id}`, `POST /v1/chat/completions` | Responses, Embeddings, Files, Batches, legacy Completions, and every other OpenAI API |
 | Messages | `system`, `developer`, `user`, `assistant`; strings or text-only parts; at most 100 messages and 1,000,000 total characters | Image/audio/file parts, tool/function messages, `name`, blank content; at least one user message is required |
 | Generation parameters | `model`, `stream`, `n=1` | `temperature`, `top_p`, token limits, `n>1`, logprobs, tools/functions, `response_format`, `stream_options`; unknown fields also fail closed |
-| RAG extensions | `rag.scope`, `rag.document_ids`, `rag.filters`, alias-policy-controlled `rag.mode` / `rag.memory`, and repeated `X-RAG-Collection-Key` | `PLAIN` rejects retrieval scope/filter; request overrides are disabled by default; structured sources are not placed in the OpenAI response |
-| Non-streaming response | Standard `chat.completion`, one choice, assistant text, `finish_reason`, and optional usage | No structured citation/source/tool-call objects |
-| Streaming response | Role chunk, content chunks, finish chunk, and `data: [DONE]` | No `stream_options.include_usage`; failures after stream start can only be sent inside the established SSE response |
+| RAG extensions | `rag.scope`, `rag.document_ids`, `rag.filters`, alias-policy-controlled `rag.mode` / `rag.memory`, and repeated `X-RAG-Collection-Key` | `PLAIN` rejects retrieval scope/filter; request overrides are disabled by default |
+| Non-streaming response | Standard `chat.completion`, one choice, assistant text, `finish_reason`, optional usage, and an optional top-level `rag` (trace, evidence, privacy-safe sources, citation registry) | No arbitrary chunk text, arbitrary metadata, or tool-call objects; legacy clients may ignore `rag` |
+| Streaming response | Role chunk, content chunks, finish chunk (optionally carrying `rag`), and `data: [DONE]` | `rag` appears only on the finish chunk; no `stream_options.include_usage`; failures after stream start can only be sent inside the established SSE response |
 | Idempotency | Optional `Idempotency-Key`, stable replay, `X-RAG-Turn-Id`, and replay header | Keyed streaming is completion-then-snapshot SSE, not a live token stream |
 | Conversation | Complete messages can be sent on every request | No client-controlled session ID and no stable server-conversation contract across distinct requests |
 
@@ -150,6 +150,7 @@ a silent downgrade.
 | Model alias and mode/memory/candidate policy | `spring-ai-rag-core/.../openai/OpenAiModelAliasRegistry.java` |
 | Collection header/body merge and ACL | `spring-ai-rag-core/.../openai/OpenAiRequestRetrievalScopeAdapter.java` |
 | OpenAI error envelope | `OpenAiCompatibilityExceptionHandler.java`, `OpenAiProtocolException.java` |
+| Structured RAG evidence projection | `OpenAiRagExtension.java`, `OpenAiRagSource.java`, `OpenAiCompatibilityController.java` |
 | Authentication, capability, and quota | `ApiKeyAuthFilter.java`, `ApiCapabilityFilter.java`, `RateLimitFilter.java` |
 | Shared Chat execution | `ChatExecutionService.java`, `ChatTurnOperationService.java` |
 | Focused tests and gate | `OpenAi*Test.java`, `OpenAiCompatibilityControllerWebTest.java`, `scripts/verify-openai-compatibility.sh` |
@@ -214,13 +215,12 @@ This evidence does **not** yet prove:
    does not scan `com.springairag` now has PostgreSQL/Flyway context and HTTP black-box
    evidence. The new scan is enabled by default without changing existing endpoints,
    legacy fields, SSE events, or the `/v1` default flag.
-3. **P1: a minimal SDK integration guide for application developers.** The Contract Kit and
-   runners provide executable acceptance today; shorter Python/Node text-only examples can
-   still consolidate `base_url=/v1`, model aliases, complete messages, Collection headers/body,
-   error handling, and keyed-stream behavior.
-4. **P1: Decide the source-return contract.** OpenAI responses currently omit structured
-   RAG sources. Clients that require traceable sources should keep using the native API
-   until a cross-SDK extension-field policy is defined.
+3. **Completed P1: publish a minimal SDK integration guide.** The bilingual quickstart now ships
+   pinned Python/Node examples, a secret-safe offline gate, and an explicit live HTTP opt-in; it
+   complements the versioned Client Consumer Contract Kit.
+4. **Completed P1: define the additive source-return contract.** OpenAI JSON may add top-level
+   `rag`, and ordinary SSE adds it only to the finish chunk. The projection is authorized,
+   final-only, and privacy-safe; clients needing full source text continue to use the Native API.
 5. **P2: Expand only from real client demand.** Prioritize sampling, structured output,
    tools, or multimodal support based on a client matrix, without weakening alias policy
    or server-owned tool authorization.

@@ -527,10 +527,51 @@ latency should not use the idempotency header on that request. See
 reliability contract.
 
 Non-streaming requests return `chat.completion`. Streaming returns standard
-`data: <chunk>` records followed by `data: [DONE]`; project-specific tool and
-source events are not exposed on this protocol. Authentication, rate-limit,
-and runtime errors use the same
+`data: <chunk>` records followed by `data: [DONE]`; project-specific event names
+are not exposed on this protocol. Authentication, rate-limit, and runtime errors use the same
 `{"error":{"message","type","param","code"}}` envelope.
+
+### Additive `rag` response extension
+
+When the execution result has RAG evidence that can be exposed to the caller, a
+non-streaming JSON response may add a top-level `rag` object. Existing clients
+can continue reading only `id`, `object`, `created`, `model`, `choices`, and
+`usage`. Example:
+
+```json
+{
+  "id": "chatcmpl-rag-example",
+  "object": "chat.completion",
+  "created": 1760000000,
+  "model": "rag-default",
+  "choices": [{"index": 0, "message": {"role": "assistant", "content": "..."}, "finish_reason": "stop"}],
+  "rag": {
+    "traceId": "trace-example",
+    "evidenceAssessment": {"status": "SUPPORTED", "reasonCode": "citation_supported"},
+    "sources": [{
+      "citationId": "S1",
+      "sourceHandle": "src-example",
+      "documentId": "42",
+      "chunkIndex": 0,
+      "title": "Visual tone guidelines",
+      "collectionKey": "brand:guides"
+    }],
+    "citationRegistry": {"S1": {"sourceHandle": "src-example"}}
+  }
+}
+```
+
+`rag.sources` uses the dedicated privacy-safe `OpenAiRagSource` projection. It
+contains only authorized sources actually exposed in the final result, with
+identity, ranking, and file-level fields; it omits `chunkText` and arbitrary
+`metadata`. Use the Native API for full source text. The extension does not run
+retrieval or the model a second time; JSON, ordinary SSE, and keyed replay
+project the same execution result.
+
+With `stream=true`, `rag` appears only on the final chunk carrying
+`finish_reason`. The existing role, content, finish, and `data: [DONE]` order is
+unchanged and no private SSE event is added. Standard OpenAI SDKs should ignore
+the unknown additive top-level field.
 
 This endpoint is disabled by default and is a controlled-network preview. See
 [OpenAI compatibility readiness](openai-compatibility-readiness.md) for public

@@ -8,6 +8,8 @@ import com.springairag.api.openai.OpenAiChatCompletionRequest;
 import com.springairag.api.openai.OpenAiChatCompletionResponse;
 import com.springairag.api.openai.OpenAiErrorResponse;
 import com.springairag.api.openai.OpenAiModelResponse;
+import com.springairag.api.openai.OpenAiRagExtension;
+import com.springairag.api.openai.OpenAiRagSource;
 import com.springairag.core.chat.ChatCommand;
 import com.springairag.core.chat.ChatEvent;
 import com.springairag.core.chat.ChatExecutionResult;
@@ -18,6 +20,7 @@ import com.springairag.core.chat.ChatTurnOperationService;
 import com.springairag.core.chat.ChatPrincipal;
 import com.springairag.core.chat.IdempotencyKeyValidator;
 import com.springairag.api.dto.ChatResponse;
+import com.springairag.api.dto.EvidenceAssessment;
 import com.springairag.core.diagnostics.RetrievalDiagnosticsService;
 import com.springairag.core.diagnostics.RetrievalTraceSession;
 import com.springairag.core.retrieval.RetrievalTraceHeaders;
@@ -329,10 +332,20 @@ public class OpenAiCompatibilityController {
                                 new OpenAiChatCompletionChunk.Delta(
                                         "assistant", null),
                                 null))));
+        AtomicReference<OpenAiRagExtension> evidence = new AtomicReference<>();
         Flux<String> events =
                 executionService.stream(mapped.command())
+                        .doOnNext(event -> {
+                            if (event instanceof ChatEvent.SourcesAvailable sources) {
+                                evidence.set(new OpenAiRagExtension(
+                                        null,
+                                        null,
+                                        safeSources(sources.sources()),
+                                        sources.citationRegistry()));
+                            }
+                        })
                         .concatMap(event -> mapEvent(
-                                id, created, mapped.modelAlias(), event));
+                                id, created, mapped.modelAlias(), event, evidence));
         Flux<String> response = Flux.concat(
                         Flux.just(role),
                         events,
@@ -401,7 +414,8 @@ public class OpenAiCompatibilityController {
                 List.of(new OpenAiChatCompletionChunk.Choice(
                         0,
                         new OpenAiChatCompletionChunk.Delta(null, null),
-                        normalizeFinishReason(response.getFinishReason())))));
+                        normalizeFinishReason(response.getFinishReason()))),
+                rag(response)));
         SseEmitter emitter = new SseEmitter(0L);
         try {
             emitter.send(SseEmitter.event().data(utf8Frame(role)));
@@ -542,6 +556,15 @@ public class OpenAiCompatibilityController {
             long created,
             String model,
             ChatEvent event) {
+        return mapEvent(id, created, model, event, new AtomicReference<>());
+    }
+
+    private Flux<String> mapEvent(
+            String id,
+            long created,
+            String model,
+            ChatEvent event,
+            AtomicReference<OpenAiRagExtension> evidence) {
         if (event instanceof ChatEvent.ContentDelta delta) {
             return Flux.just(toJson(
                     new OpenAiChatCompletionChunk(
@@ -556,6 +579,12 @@ public class OpenAiCompatibilityController {
                                     null)))));
         }
         if (event instanceof ChatEvent.Completed completed) {
+            OpenAiRagExtension prior = evidence.get();
+            OpenAiRagExtension extension = ragOrNull(
+                    completed.traceId(),
+                    evidenceAssessment(completed.metadata()),
+                    prior == null ? List.of() : prior.sources(),
+                    citationRegistry(completed.metadata(), prior));
             return Flux.just(toJson(
                     new OpenAiChatCompletionChunk(
                             id,
@@ -567,7 +596,8 @@ public class OpenAiCompatibilityController {
                                     new OpenAiChatCompletionChunk.Delta(
                                             null, null),
                                     normalizeFinishReason(
-                                            completed.finishReason()))))));
+                                            completed.finishReason()))),
+                            extension)));
         }
         return Flux.empty();
     }
@@ -587,7 +617,8 @@ public class OpenAiCompatibilityController {
                         new OpenAiChatCompletionResponse.AssistantMessage(
                                 "assistant", result.answer()),
                         normalizeFinishReason(result.finishReason()))),
-                usage(result.usage()));
+                usage(result.usage()),
+                rag(result));
     }
 
     private OpenAiChatCompletionResponse toResponse(
@@ -605,7 +636,71 @@ public class OpenAiCompatibilityController {
                         new OpenAiChatCompletionResponse.AssistantMessage(
                                 "assistant", response.getAnswer()),
                         normalizeFinishReason(response.getFinishReason()))),
-                usage(response.getUsage()));
+                usage(response.getUsage()),
+                rag(response));
+    }
+
+    private OpenAiRagExtension rag(ChatExecutionResult result) {
+        return ragOrNull(
+                result.traceId(),
+                result.evidenceAssessment(),
+                safeSources(result.sources()),
+                citationRegistry(result.metadata(), null));
+    }
+
+    private OpenAiRagExtension rag(ChatResponse response) {
+        return ragOrNull(
+                response.getTraceId(),
+                response.getEvidenceAssessment(),
+                safeSources(response.getSources()),
+                citationRegistry(response.getMetadata(), null));
+    }
+
+    private OpenAiRagExtension ragOrNull(
+            String traceId,
+            EvidenceAssessment assessment,
+            List<OpenAiRagSource> sources,
+            Map<String, Object> citationRegistry) {
+        if ((traceId == null || traceId.isBlank())
+                && assessment == null
+                && (sources == null || sources.isEmpty())
+                && (citationRegistry == null || citationRegistry.isEmpty())) {
+            return null;
+        }
+        return new OpenAiRagExtension(
+                traceId, assessment, sources, citationRegistry);
+    }
+
+    private List<OpenAiRagSource> safeSources(
+            List<? extends com.springairag.api.dto.ChatSource> sources) {
+        if (sources == null || sources.isEmpty()) {
+            return List.of();
+        }
+        return sources.stream()
+                .map(OpenAiRagSource::from)
+                .filter(java.util.Objects::nonNull)
+                .toList();
+    }
+
+    private EvidenceAssessment evidenceAssessment(Map<String, Object> metadata) {
+        Object value = metadata == null ? null : metadata.get("evidenceAssessment");
+        return value instanceof EvidenceAssessment assessment ? assessment : null;
+    }
+
+    private Map<String, Object> citationRegistry(
+            Map<String, Object> metadata,
+            OpenAiRagExtension prior) {
+        Object value = metadata == null ? null : metadata.get("citationRegistry");
+        if (value instanceof Map<?, ?> registry) {
+            Map<String, Object> copy = new java.util.LinkedHashMap<>();
+            registry.forEach((key, entry) -> {
+                if (key != null) {
+                    copy.put(String.valueOf(key), entry);
+                }
+            });
+            return Map.copyOf(copy);
+        }
+        return prior == null ? Map.of() : prior.citationRegistry();
     }
 
     private OpenAiChatCompletionResponse.Usage usage(

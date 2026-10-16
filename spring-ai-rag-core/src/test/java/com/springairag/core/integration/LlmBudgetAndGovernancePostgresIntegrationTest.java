@@ -19,6 +19,7 @@ import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.mock.web.MockHttpServletRequest;
+import org.postgresql.ds.PGSimpleDataSource;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
 
@@ -47,6 +48,17 @@ class LlmBudgetAndGovernancePostgresIntegrationTest {
     static void startDatabase() {
         assumeTrue(Boolean.getBoolean("llm-budget-governance.it.enabled"),
                 "Set -Dllm-budget-governance.it.enabled=true to run this test");
+        String externalJdbcUrl = System.getProperty("llm-budget-governance.it.jdbc-url");
+        if (externalJdbcUrl != null && !externalJdbcUrl.isBlank()) {
+            PGSimpleDataSource source = new PGSimpleDataSource();
+            source.setUrl(externalJdbcUrl);
+            source.setUser(System.getProperty(
+                    "llm-budget-governance.it.username", "postgres"));
+            source.setPassword(System.getProperty(
+                    "llm-budget-governance.it.password", "postgres"));
+            dataSource = source;
+            return;
+        }
         String image = System.getProperty("testcontainers.pg.image",
                 System.getenv().getOrDefault("TESTCONTAINERS_PG_IMAGE", "pgvector/pgvector:pg16"));
         postgres = new PostgreSQLContainer<>(DockerImageName.parse(image)
