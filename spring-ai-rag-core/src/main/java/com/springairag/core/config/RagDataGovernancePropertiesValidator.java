@@ -16,5 +16,6 @@ public final class RagDataGovernancePropertiesValidator {
     @PostConstruct
     void validate() {
         properties.getDataGovernance().validate();
+        properties.getLlmBudget().validate();
     }
 }

@@ -31,6 +31,7 @@ class IntegrationObservationRecorderLifecycleTailTest {
 
     private IntegrationObservationRecorder recorder(boolean enabled) {
         properties = new RagProperties();
+        properties.getDataGovernance().setCentralCleanupEnabled(false);
         properties.getIntegrationObservability().setEnabled(enabled);
         properties.getIntegrationObservability().setQueueCapacity(10);
         properties.getIntegrationObservability().setFlushBatchSize(10);

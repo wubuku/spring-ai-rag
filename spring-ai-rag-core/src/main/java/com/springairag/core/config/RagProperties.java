@@ -84,6 +84,7 @@ public class RagProperties {
             new RagApiKeyExpiryAlertProperties();
     private final RagDataGovernanceProperties dataGovernance =
             new RagDataGovernanceProperties();
+    private final RagLlmBudgetProperties llmBudget = new RagLlmBudgetProperties();
 
     public RagEmbeddingProperties getEmbedding() {
         return embedding;
@@ -219,5 +220,9 @@ public class RagProperties {
 
     public RagDataGovernanceProperties getDataGovernance() {
         return dataGovernance;
+    }
+
+    public RagLlmBudgetProperties getLlmBudget() {
+        return llmBudget;
     }
 }

@@ -1349,6 +1349,41 @@ node scripts/lib/client-consumer-contract.mjs --self-test
 显式设置 `CLIENT_CONTRACT_LIVE=1` 后才会调用运行中的服务；缺少 live 环境变量时记录
 conditional skip，不伪造通过。完整示例见 [Client Consumer Contract Kit](client-contract-kit-zh-CN.md)。
 
+## LLM 预算与数据治理验收
+
+本批必须按服务契约验收，不能只看 WebUI。服务端最低矩阵包括：
+
+- 预算超限 `429`、预算存储不可用 `503`、`Retry-After`，以及 provider 未被调用的证明；
+- 同步、流式取消、query transform/expand、summary、fallback 和 AGENT 模型路径；
+- durable reservation 幂等、settle/release/expiry 恢复、并发 CAS，以及空库和已有 V63 数据库
+  上的 V64 Flyway 迁移；
+- 擦除 preview/status/apply 的权限、确认过期/不匹配、路径/正文 operation id 不匹配、终态
+  幂等重放、部分失败恢复、有界删除和审计日志保护；
+- 默认 central retention 只运行一次，旧清理入口仍可手工调用且不会重复调度。
+
+确定性的 PostgreSQL/Flyway 验收套件使用门控，因此普通 `mvn test` 不需要 Docker。调试套件时
+可直接执行，或通过聚合运行器执行（同时确保它仍在仓库的 gated inventory 中）：
+
+```bash
+TESTCONTAINERS_RYUK_DISABLED=true \
+TESTCONTAINERS_PG_IMAGE=pgvector/pgvector:pg16 \
+mvn -pl spring-ai-rag-core -am \
+  -Dllm-budget-governance.it.enabled=true \
+  -Dtest=LlmBudgetAndGovernancePostgresIntegrationTest \
+  -Dsurefire.failIfNoSpecifiedTests=false test
+```
+
+```bash
+TESTCONTAINERS_RYUK_DISABLED=true \
+TESTCONTAINERS_PG_IMAGE=pgvector/pgvector:pg16 \
+./scripts/verify-gated-it.sh LlmBudgetAndGovernancePostgresIntegrationTest
+```
+
+完成上述测试后仍必须通过外部 Client 门禁：`mvn test`、
+`scripts/verify-client-consumer-contract.sh`、OpenAPI additive-only 检查、Native/OpenAI
+JSON/SSE 探针，以及 `scripts/dev.sh` 启动/状态/停止。真实 LLM smoke 取决于凭据是否可用，
+但 mock provider 结果不能替代“超限时没有调用 provider”的证据。
+
 ## 编写新测试的规则
 
 1. **先写测试再写实现**（TDD 友好）

@@ -264,9 +264,22 @@ rag:
     client-error-retention-days: ${RAG_DATA_GOVERNANCE_CLIENT_ERROR_RETENTION_DAYS:30}
     evaluation-retention-days: ${RAG_DATA_GOVERNANCE_EVALUATION_RETENTION_DAYS:400}
     cleanup-enabled: ${RAG_DATA_GOVERNANCE_CLEANUP_ENABLED:true}
+    central-cleanup-enabled: ${RAG_DATA_GOVERNANCE_CENTRAL_CLEANUP_ENABLED:true}
     cleanup-batch-size: ${RAG_DATA_GOVERNANCE_CLEANUP_BATCH_SIZE:500}
     cleanup-max-batches: ${RAG_DATA_GOVERNANCE_CLEANUP_MAX_BATCHES:10}
     cleanup-cron: "${RAG_DATA_GOVERNANCE_CLEANUP_CRON:0 40 * * * *}"
+  llm-budget:
+    enabled: ${RAG_LLM_BUDGET_ENABLED:true}
+    daily-token-limit: ${RAG_LLM_BUDGET_DAILY_TOKEN_LIMIT:5000000}
+    monthly-token-limit: ${RAG_LLM_BUDGET_MONTHLY_TOKEN_LIMIT:50000000}
+    daily-cost-limit: ${RAG_LLM_BUDGET_DAILY_COST_LIMIT:}
+    monthly-cost-limit: ${RAG_LLM_BUDGET_MONTHLY_COST_LIMIT:}
+    max-request-tokens: ${RAG_LLM_BUDGET_MAX_REQUEST_TOKENS:200000}
+    max-request-cost: ${RAG_LLM_BUDGET_MAX_REQUEST_COST:}
+    reservation-ttl-seconds: ${RAG_LLM_BUDGET_RESERVATION_TTL_SECONDS:900}
+    retention-days: ${RAG_LLM_BUDGET_RETENTION_DAYS:30}
+    cleanup-batch-size: ${RAG_LLM_BUDGET_CLEANUP_BATCH_SIZE:200}
+    cleanup-cron: "${RAG_LLM_BUDGET_CLEANUP_CRON:0 */5 * * * *}"
   collection-purge:
     enabled: ${RAG_COLLECTION_PURGE_ENABLED:false}
     allow-auth-disabled: ${RAG_COLLECTION_PURGE_ALLOW_AUTH_DISABLED:false}

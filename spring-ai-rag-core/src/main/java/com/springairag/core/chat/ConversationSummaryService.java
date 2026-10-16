@@ -2,6 +2,7 @@ package com.springairag.core.chat;
 
 import com.springairag.api.dto.ChatHistoryResponse;
 import com.springairag.api.enums.ErrorCode;
+import com.springairag.core.budget.BudgetReservationService;
 import com.springairag.core.config.ChatModelRouter;
 import com.springairag.core.config.RagChatProperties;
 import com.springairag.core.config.RagProperties;
@@ -64,6 +65,7 @@ public final class ConversationSummaryService {
     private final PromptTokenEstimator estimator;
     private final LlmUsageRecorder usageRecorder;
     private final String usageCostUnit;
+    private final BudgetReservationService budgetReservationService;
     private final ExecutorService summaryExecutor = Executors.newCachedThreadPool(
             runnable -> {
                 Thread thread = new Thread(runnable, "rag-chat-summary");
@@ -76,7 +78,17 @@ public final class ConversationSummaryService {
             RagChatHistoryRepository historyRepository,
             ChatModelRouter modelRouter,
             com.springairag.core.config.RagProperties ragProperties) {
-        this(repository, historyRepository, modelRouter, ragProperties, null);
+        this(repository, historyRepository, modelRouter, ragProperties, null, null);
+    }
+
+    /** 保留旧测试/扩展构造签名。 */
+    public ConversationSummaryService(
+            RagChatMemorySummaryRepository repository,
+            RagChatHistoryRepository historyRepository,
+            ChatModelRouter modelRouter,
+            com.springairag.core.config.RagProperties ragProperties,
+            LlmUsageRecorder usageRecorder) {
+        this(repository, historyRepository, modelRouter, ragProperties, usageRecorder, null);
     }
 
     @org.springframework.beans.factory.annotation.Autowired
@@ -86,7 +98,8 @@ public final class ConversationSummaryService {
             ChatModelRouter modelRouter,
             com.springairag.core.config.RagProperties ragProperties,
             @org.springframework.beans.factory.annotation.Autowired(required = false)
-            LlmUsageRecorder usageRecorder) {
+            LlmUsageRecorder usageRecorder,
+            BudgetReservationService budgetReservationService) {
         this.repository = repository;
         this.historyRepository = historyRepository;
         this.modelRouter = modelRouter;
@@ -96,6 +109,7 @@ public final class ConversationSummaryService {
                 ? usageRecorder
                 : LlmUsageRecorder.NOOP;
         this.usageCostUnit = ragProperties.getUsage().getCostUnit();
+        this.budgetReservationService = budgetReservationService;
     }
 
     @PreDestroy
@@ -319,7 +333,8 @@ public final class ConversationSummaryService {
                         usageRecorder,
                         candidate.cost(),
                         usageCostUnit,
-                        candidate.ref()))
+                        candidate.ref(),
+                        budgetReservationService))
                 .build();
         String prompt = """
                 Summarize the following conversation for future turns.

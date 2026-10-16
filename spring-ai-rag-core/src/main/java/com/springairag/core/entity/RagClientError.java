@@ -43,6 +43,12 @@ public class RagClientError {
     @Column(name = "user_id", length = 64)
     private String userId;
 
+    @Column(name = "owner_principal_id", length = 128)
+    private String ownerPrincipalId;
+
+    @Column(name = "request_trace_id", length = 128)
+    private String requestTraceId;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -88,6 +94,12 @@ public class RagClientError {
 
     public String getUserId() { return userId; }
     public void setUserId(String userId) { this.userId = userId; }
+
+    public String getOwnerPrincipalId() { return ownerPrincipalId; }
+    public void setOwnerPrincipalId(String ownerPrincipalId) { this.ownerPrincipalId = ownerPrincipalId; }
+
+    public String getRequestTraceId() { return requestTraceId; }
+    public void setRequestTraceId(String requestTraceId) { this.requestTraceId = requestTraceId; }
 
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }

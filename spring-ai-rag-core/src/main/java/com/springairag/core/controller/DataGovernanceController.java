@@ -2,6 +2,11 @@ package com.springairag.core.controller;
 
 import com.springairag.api.dto.AuditLogPageResponse;
 import com.springairag.api.dto.AuditLogResponse;
+import com.springairag.api.dto.DataErasureApplyRequest;
+import com.springairag.api.dto.DataErasurePreviewRequest;
+import com.springairag.api.dto.DataErasurePreviewResponse;
+import com.springairag.api.dto.DataErasureResultResponse;
+import com.springairag.api.dto.DataErasureStatusResponse;
 import com.springairag.api.dto.DataGovernancePolicyResponse;
 import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.config.RagProperties;
@@ -14,6 +19,7 @@ import com.springairag.core.security.ApiRoutePolicy;
 import com.springairag.core.security.AuthenticatedApiPrincipal;
 import com.springairag.core.service.AuditLogService;
 import com.springairag.core.service.CollectionPurgeAuthorization;
+import com.springairag.core.service.DataErasureService;
 import com.springairag.core.versioning.ApiVersion;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -22,9 +28,14 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -35,6 +46,7 @@ import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Client-visible governance policy and management-only audit view.
@@ -54,14 +66,19 @@ public class DataGovernanceController {
     private final RagProperties properties;
     private final AuditLogService auditLogService;
     private final CollectionPurgeAuthorization collectionPurgeAuthorization;
+    private final DataErasureService dataErasureService; // optional-claim: WebMvc slice 可只装配既有治理依赖；擦除端点在服务缺失时显式返回 SERVICE_UNAVAILABLE，不影响旧 policy/audit 端点
 
+    @Autowired
     public DataGovernanceController(
             RagProperties properties,
             AuditLogService auditLogService,
-            CollectionPurgeAuthorization collectionPurgeAuthorization) {
+            CollectionPurgeAuthorization collectionPurgeAuthorization,
+            @Autowired(required = false)
+            DataErasureService dataErasureService) {
         this.properties = properties;
         this.auditLogService = auditLogService;
         this.collectionPurgeAuthorization = collectionPurgeAuthorization;
+        this.dataErasureService = dataErasureService;
     }
 
     @GetMapping("/data-governance/policy")
@@ -92,7 +109,7 @@ public class DataGovernanceController {
                                 "RETRIEVAL_DIAGNOSTICS",
                                 properties.getRetrievalDiagnostics().isEnabled()
                                         && properties.getRetrievalDiagnostics().isPersist(),
-                                properties.getRetrievalDiagnostics().getRetentionDays(), false),
+                                properties.getRetrievalDiagnostics().getRetentionDays(), automaticCleanup),
                         new DataGovernancePolicyResponse.RetentionPolicy(
                                 "LLM_USAGE", properties.getUsage().isEnabled(),
                                 properties.getUsage().getRetentionDays(),
@@ -100,7 +117,10 @@ public class DataGovernanceController {
                         new DataGovernancePolicyResponse.RetentionPolicy(
                                 "INTEGRATION_OBSERVABILITY",
                                 properties.getIntegrationObservability().isEnabled(),
-                                properties.getIntegrationObservability().retentionDays(), true)),
+                                properties.getIntegrationObservability().retentionDays(), automaticCleanup),
+                        new DataGovernancePolicyResponse.RetentionPolicy(
+                                "BUDGET_RESERVATION", properties.getLlmBudget().isEnabled(),
+                                properties.getLlmBudget().getRetentionDays(), automaticCleanup)),
                 new DataGovernancePolicyResponse.Capabilities(
                         isAuditManagementCaller(request),
                         true,
@@ -111,7 +131,55 @@ public class DataGovernanceController {
                         automaticCleanup,
                         governance.getCleanupBatchSize(),
                         governance.getCleanupMaxBatches(),
-                        governance.getCleanupCron()));
+                        governance.getCleanupCron()),
+                new DataGovernancePolicyResponse.Erasure(
+                        governance.isEnabled(),
+                        dataErasureService != null,
+                        dataErasureService != null,
+                        dataErasureService != null,
+                        "/api/v1/rag/data-governance/erasures/preview",
+                        "/api/v1/rag/data-governance/erasures/{operationId}/apply",
+                        "/api/v1/rag/data-governance/erasures/{operationId}"),
+                "central-retention-v1");
+    }
+
+    @PostMapping("/data-governance/erasures/preview")
+    @ApiRoutePolicy(access = ApiRoutePolicy.Access.WRITE)
+    @Operation(summary = "Preview owner-scoped data erasure",
+            description = "Creates a short-lived, content-free erasure confirmation preview.")
+    public DataErasurePreviewResponse previewErasure(
+            @Valid @RequestBody(required = false) DataErasurePreviewRequest request,
+            HttpServletRequest httpRequest) {
+        return requireDataErasureService().preview(request, httpRequest);
+    }
+
+    @GetMapping("/data-governance/erasures/{operationId}")
+    @Operation(summary = "Get data erasure status")
+    public DataErasureStatusResponse erasureStatus(
+            @PathVariable UUID operationId,
+            HttpServletRequest httpRequest) {
+        return requireDataErasureService().status(operationId, httpRequest);
+    }
+
+    @PostMapping("/data-governance/erasures/{operationId}/apply")
+    @ApiRoutePolicy(access = ApiRoutePolicy.Access.WRITE)
+    @Operation(summary = "Apply a confirmed data erasure")
+    public DataErasureResultResponse applyErasure(
+            @PathVariable UUID operationId,
+            @Valid @RequestBody DataErasureApplyRequest request,
+            HttpServletRequest httpRequest) {
+        if (request == null || !operationId.equals(request.operationId())) {
+            throw badRequest("operationId in the path and body must match");
+        }
+        return requireDataErasureService().apply(request, httpRequest);
+    }
+
+    private DataErasureService requireDataErasureService() {
+        if (dataErasureService == null) {
+            throw new RagException(ErrorCode.SERVICE_UNAVAILABLE,
+                    "Data erasure service is unavailable");
+        }
+        return dataErasureService;
     }
 
     @GetMapping("/audit-logs")

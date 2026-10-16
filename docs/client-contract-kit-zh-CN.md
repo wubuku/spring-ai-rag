@@ -159,6 +159,8 @@ String answer = body.path("answer").asText();
 | 信号 | 默认 Client 动作 |
 |---|---|
 | `RATE_LIMITED` + `Retry-After` | 有界退避后重试 |
+| `LLM_BUDGET_EXCEEDED` + `Retry-After` | 按响应头等待后重试，或切换到调用方自己的额度策略 |
+| `LLM_BUDGET_SERVICE_UNAVAILABLE` | 不重试 provider；按 trace 记录并进行有界基础设施重试 |
 | `CONFLICT` + `CHAT_TURN_IN_PROGRESS` | 查询状态或安全重放，不并发拼接回答 |
 | `DEPENDENCY_UNAVAILABLE` | 有界重试，超过上限降级或人工处理 |
 | `TIMEOUT` | 仅在请求可安全重放时重试，否则按 trace 查询 |

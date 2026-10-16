@@ -93,6 +93,14 @@ public class ChatHistoryCleanupService {
      */
     @Scheduled(cron = "${rag.memory.cleanup-cron:0 0 3 * * *}", zone = "${spring.task.scheduling.timezone:Asia/Shanghai}")
     public void cleanupExpiredChatHistory() {
+        if (ragProperties != null && ragProperties.getDataGovernance().isCentralCleanupEnabled()) {
+            return;
+        }
+        cleanupExpiredChatHistoryNow();
+    }
+
+    /** 供统一数据治理协调器调用。 */
+    public void cleanupExpiredChatHistoryNow() {
         int ttlDays = memoryProperties.getMessageTtlDays();
         if (ttlDays <= 0) {
             log.debug("Chat history TTL cleanup is disabled (ttlDays={})", ttlDays);

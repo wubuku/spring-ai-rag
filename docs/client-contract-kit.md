@@ -174,6 +174,8 @@ with `split("data:")`.
 | Signal | Default client action |
 |---|---|
 | `RATE_LIMITED` + `Retry-After` | Bounded backoff and retry |
+| `LLM_BUDGET_EXCEEDED` + `Retry-After` | Wait for the header, then retry or apply the client's own quota policy |
+| `LLM_BUDGET_SERVICE_UNAVAILABLE` | Do not retry the provider; record the trace and use bounded infrastructure retry |
 | `CONFLICT` + `CHAT_TURN_IN_PROGRESS` | Query state or safely replay; do not concatenate concurrent answers |
 | `DEPENDENCY_UNAVAILABLE` | Bounded retry, then degrade or escalate |
 | `TIMEOUT` | Retry only when safe to replay; otherwise query by trace |

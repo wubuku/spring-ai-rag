@@ -1564,8 +1564,8 @@ logging:
 
 ## 数据治理配置
 
-默认启用数据治理策略，并自动清理过期的审计日志、客户端错误和检索评估记录；不需要新增
-schema 迁移：
+默认启用数据治理策略，并自动清理过期的审计日志、客户端错误、检索评估、聊天历史、检索
+诊断、LLM 用量、集成观测和预算 reservation；V64 由 Flyway 自动迁移：
 
 ```yaml
 rag:
@@ -1575,6 +1575,7 @@ rag:
     client-error-retention-days: 30
     evaluation-retention-days: 400
     cleanup-enabled: true
+    central-cleanup-enabled: true
     cleanup-batch-size: 500
     cleanup-max-batches: 10
     cleanup-cron: "0 40 * * * *"
@@ -1582,7 +1583,31 @@ rag:
 
 对应环境变量使用 `RAG_DATA_GOVERNANCE_*` 前缀。清理任务有界、可重入，并为每个批次使用独立
 事务；某个类别失败时只记录脱敏日志，并在下一次调度重试，不阻塞 Chat 或 Search。已有的
-chat、retrieval-diagnostics、usage 和 integration-observability 清理任务仍分别负责自己的表。
+chat、retrieval-diagnostics、usage 和 integration-observability 清理任务仍保留公开手工入口，
+但默认不再重复调度；统一由 central coordinator 触发。设置 `central-cleanup-enabled: false`
+才恢复旧的分散 scheduler，通常只用于兼容性排障。
+
+V64 会由 Flyway 自动迁移，新增预算 reservation 和擦除 operation 表，不需要运维手工建表。
+LLM 调用默认在 provider 调用前持久化 token/cost reservation；超限返回 `429
+LLM_BUDGET_EXCEEDED`，预算存储不可用返回 `503 LLM_BUDGET_SERVICE_UNAVAILABLE`。预算账本只
+保存归因和 token/cost 摘要，不保存 prompt、回答或密钥：
+
+```yaml
+rag:
+  llm-budget:
+    enabled: true
+    daily-token-limit: 5000000
+    monthly-token-limit: 50000000
+    max-request-tokens: 200000
+    reservation-ttl-seconds: 900
+    retention-days: 30
+    cleanup-batch-size: 200
+    cleanup-cron: "0 */5 * * * *"
+```
+
+对应环境变量使用 `RAG_LLM_BUDGET_*` 前缀。旧 Chat、Search、Native/OpenAI 请求体不需要增加
+预算字段；只有显式 `enabled: false` 才关闭新 enforcement，不应把旧的 fail-open usage ledger
+当作默认实现。
 
 ## 配置继承
 

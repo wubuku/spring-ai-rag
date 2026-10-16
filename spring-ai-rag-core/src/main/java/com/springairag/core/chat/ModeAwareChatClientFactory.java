@@ -1,5 +1,6 @@
 package com.springairag.core.chat;
 
+import com.springairag.core.budget.BudgetReservationService;
 import com.springairag.api.enums.ChatMode;
 import com.springairag.api.service.AdvisorScope;
 import com.springairag.api.service.RagAdvisorProvider;
@@ -91,6 +92,7 @@ public class ModeAwareChatClientFactory {
     private final List<RagAdvisorProvider> customAdvisorProviders;
     private final ToolCallingManager toolCallingManager;
     private final LlmUsageRecorder usageRecorder;
+    private final BudgetReservationService budgetReservationService;
     private final PromptBudgetDocumentPostProcessor promptBudgetDocumentPostProcessor;
     private final ProjectDocumentJoiner documentJoiner =
             new ProjectDocumentJoiner();
@@ -112,6 +114,7 @@ public class ModeAwareChatClientFactory {
                 ragProperties,
                 customAdvisorProviders,
                 toolCallingManager,
+                null,
                 null);
     }
 
@@ -128,7 +131,8 @@ public class ModeAwareChatClientFactory {
             @org.springframework.beans.factory.annotation.Autowired(required = false)
             ToolCallingManager toolCallingManager,
             @org.springframework.beans.factory.annotation.Autowired(required = false)
-            LlmUsageRecorder usageRecorder) {
+            LlmUsageRecorder usageRecorder,
+            BudgetReservationService budgetReservationService) {
         this.documentRetriever = documentRetriever;
         this.compositeDocumentRetriever = compositeDocumentRetriever;
         this.rerankPostProcessor = rerankPostProcessor;
@@ -149,6 +153,7 @@ public class ModeAwareChatClientFactory {
         this.usageRecorder = usageRecorder != null
                 ? usageRecorder
                 : LlmUsageRecorder.NOOP;
+        this.budgetReservationService = budgetReservationService;
         this.promptBudgetDocumentPostProcessor =
                 new PromptBudgetDocumentPostProcessor(
                 new JTokkitPromptTokenEstimator(),
@@ -174,6 +179,29 @@ public class ModeAwareChatClientFactory {
                 ragProperties,
                 customAdvisorProviders,
                 toolCallingManager,
+                null,
+                null);
+    }
+
+    /** 保留未启用预算账本的旧构造签名；生产 Spring 装配走完整构造器。 */
+    public ModeAwareChatClientFactory(
+            ProjectDocumentRetriever documentRetriever,
+            CompositeChatDocumentRetriever compositeDocumentRetriever,
+            ProjectRerankPostProcessor rerankPostProcessor,
+            CitationQueryAugmenter queryAugmenter,
+            RagProperties ragProperties,
+            List<RagAdvisorProvider> customAdvisorProviders,
+            ToolCallingManager toolCallingManager,
+            LlmUsageRecorder usageRecorder) {
+        this(
+                documentRetriever,
+                compositeDocumentRetriever,
+                rerankPostProcessor,
+                queryAugmenter,
+                ragProperties,
+                customAdvisorProviders,
+                toolCallingManager,
+                usageRecorder,
                 null);
     }
 
@@ -500,7 +528,8 @@ public class ModeAwareChatClientFactory {
                 usageRecorder,
                 candidate.cost(),
                 ragProperties.getUsage().getCostUnit(),
-                candidate.ref());
+                candidate.ref(),
+                budgetReservationService);
     }
 
     public record Attempt(

@@ -982,7 +982,13 @@ SSE 的 error event 也携带同一分类。OpenAI-compatible 响应 body 不增
 `/api/v1/rag/data-governance/policy` 发布低敏的保留与脱敏元数据；`/api/v1/rag/audit-logs`
 只对 management caller 开放，并且只返回无正文的审计视图。审计、客户端错误和检索评估的
 清理使用有界主键删除和独立事务，不使用 `FOR UPDATE`、`SKIP LOCKED` 或 PostgreSQL advisory
-lock。聊天历史、检索诊断、用量和集成观测数据仍由各自已有清理任务负责。
+lock。默认 central coordinator 统一触发聊天历史、检索诊断、用量、集成观测和预算账本的
+保留清理，旧任务只保留兼容入口，不重复调度。V64 的预算 reservation 在 provider 调用前
+durable reserve，并通过状态条件/CAS 结算、释放和过期回收；额度不足在 provider 调用前
+返回稳定 `429`，预算存储故障返回 `503`。
+
+新增的 preview/apply 数据擦除操作只返回计数、状态和稳定错误，不返回正文；确认 token 只存
+hash，操作按 owner 隔离、可恢复且有界。审计日志不由普通擦除 API 删除。
 
 ---
 

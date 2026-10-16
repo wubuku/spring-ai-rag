@@ -29,7 +29,20 @@ public final class LlmUsageRetentionJob {
     }
 
     @Scheduled(cron = "${rag.usage.cleanup-cron:0 20 * * * *}")
+    void scheduledCleanup() {
+        if (properties.getDataGovernance().isCentralCleanupEnabled()) {
+            return;
+        }
+        cleanupNow();
+    }
+
+    /** 保留旧公开入口，供手工维护调用；central scheduler 不会重复调度它。 */
     public void cleanup() {
+        cleanupNow();
+    }
+
+    /** 供统一数据治理协调器调用。 */
+    public void cleanupNow() {
         var usage = properties.getUsage();
         if (!usage.isEnabled() || !usage.isCleanupEnabled()) {
             return;

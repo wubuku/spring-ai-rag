@@ -188,6 +188,7 @@ class IntegrationObservationRecorderTest {
 
     private RagProperties properties() {
         RagProperties properties = new RagProperties();
+        properties.getDataGovernance().setCentralCleanupEnabled(false);
         properties.getIntegrationObservability().setQueueCapacity(100);
         properties.getIntegrationObservability().setFlushBatchSize(10);
         return properties;

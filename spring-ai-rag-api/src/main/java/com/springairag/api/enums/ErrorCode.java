@@ -122,6 +122,7 @@ public enum ErrorCode {
     // second 429 under a name no client has ever seen, and it cannot break a
     // caller: the wire value never changes.
     TOO_MANY_REQUESTS(429, "Too Many Requests"),
+    LLM_BUDGET_EXCEEDED(429, "LLM Budget Exceeded"),
 
     // ==================== 500 Internal Server Error ====================
 
@@ -153,12 +154,19 @@ public enum ErrorCode {
     DOCUMENT_RELOCATION_DISABLED(503, "Document Relocation Disabled"),
     DERIVATION_REPAIR_DISABLED(503, "Derivation Repair Disabled"),
     RATE_LIMIT_STORE_UNAVAILABLE(503, "Rate Limit Store Unavailable"),
+    LLM_BUDGET_SERVICE_UNAVAILABLE(503, "LLM Budget Service Unavailable"),
     API_KEY_PROVISIONING_IDEMPOTENCY_DISABLED(503, "API Key Provisioning Idempotency Disabled"),
     COLLECTION_PROVISIONING_IDEMPOTENCY_DISABLED(
             503, "Collection Provisioning Idempotency Disabled"),
     INTEGRATION_OBSERVABILITY_DISABLED(
             503, "Integration Observability Disabled"),
     COLLECTION_PURGE_DISABLED(503, "Collection Purge Disabled"),
+
+    // ==================== 409 Data governance ====================
+
+    DATA_ERASURE_PREVIEW_EXPIRED(409, "Data Erasure Preview Expired"),
+    DATA_ERASURE_CONFIRMATION_INVALID(409, "Data Erasure Confirmation Invalid"),
+    DATA_ERASURE_OPERATION_IN_PROGRESS(409, "Data Erasure Operation In Progress"),
 
     // ==================== 504 Gateway Timeout ====================
 

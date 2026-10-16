@@ -57,7 +57,20 @@ public class DataGovernanceCleanupService {
     @Scheduled(
             cron = "${rag.data-governance.cleanup-cron:0 40 * * * *}",
             zone = "${spring.task.scheduling.timezone:Asia/Shanghai}")
+    void scheduledCleanupExpiredData() {
+        if (properties.isCentralCleanupEnabled()) {
+            return;
+        }
+        cleanupExpiredDataNow();
+    }
+
+    /** 供统一协调器调用；保留旧公开入口以兼容测试和运维手工触发。 */
     public void cleanupExpiredData() {
+        cleanupExpiredDataNow();
+    }
+
+    /** 供统一协调器调用。 */
+    public void cleanupExpiredDataNow() {
         if (!properties.isEnabled() || !properties.isCleanupEnabled()) {
             return;
         }

@@ -1130,8 +1130,14 @@ The `/api/v1/rag/data-governance/policy` endpoint publishes low-sensitivity rete
 metadata. `/api/v1/rag/audit-logs` is a management-only, content-free view. Audit, client-error,
 and retrieval-evaluation cleanup uses bounded primary-key deletion with independent transactions;
 it does not use `FOR UPDATE`, `SKIP LOCKED`, or PostgreSQL advisory locks. Existing table-specific
-cleanup workers remain responsible for chat history, retrieval diagnostics, usage, and observation
-data.
+cleanup workers remain available as compatible manual entry points, but a central coordinator is the
+only default scheduler for chat history, retrieval diagnostics, usage, observations, and terminal
+budget-ledger retention. V64 reserves durable budget before provider calls and settles/releases/expires
+it via conditional state transitions; limit exhaustion returns a stable 429 before the provider is
+called, while a budget-store failure returns 503.
+
+The preview/apply erasure API returns only counts, status, and stable errors. Confirmation tokens are
+stored only as hashes; operations are owner-scoped, resumable, bounded, and never delete audit logs.
 
 ---
 

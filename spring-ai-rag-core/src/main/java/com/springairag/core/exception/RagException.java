@@ -18,6 +18,7 @@ import com.springairag.api.enums.ErrorCode;
 public class RagException extends RuntimeException {
 
     private final ErrorCode errorCode;
+    private final Integer retryAfterSeconds;
 
     /**
      * @param errorCode typed error code (must not be null)
@@ -26,6 +27,7 @@ public class RagException extends RuntimeException {
     public RagException(ErrorCode errorCode, String message) {
         super(message);
         this.errorCode = errorCode;
+        this.retryAfterSeconds = null;
     }
 
     /**
@@ -36,6 +38,17 @@ public class RagException extends RuntimeException {
     public RagException(ErrorCode errorCode, String message, Throwable cause) {
         super(message, cause);
         this.errorCode = errorCode;
+        this.retryAfterSeconds = null;
+    }
+
+    protected RagException(ErrorCode errorCode, String message, Integer retryAfterSeconds) {
+        super(message);
+        this.errorCode = errorCode;
+        this.retryAfterSeconds = retryAfterSeconds;
+    }
+
+    public Integer getRetryAfterSeconds() {
+        return retryAfterSeconds;
     }
 
     /**

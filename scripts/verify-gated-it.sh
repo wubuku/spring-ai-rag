@@ -48,6 +48,7 @@ ALL_SUITES=(
   "hybrid-rrf:HybridRetrieverRrfPostgresIntegrationTest"
   "integration-observability:IntegrationObservabilityPostgresIntegrationTest"
   "jsonb:JsonbStructuredRecordsPostgresIntegrationTest"
+  "llm-budget-governance:LlmBudgetAndGovernancePostgresIntegrationTest"
   "llm-usage:LlmUsagePostgresIntegrationTest"
   "managed-api-principal:ManagedApiPrincipalPostgresIntegrationTest"
   "retrieval-filters:MetadataFiltersPostgresIntegrationTest"

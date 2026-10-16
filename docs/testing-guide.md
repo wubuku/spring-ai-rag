@@ -1554,6 +1554,44 @@ Only `CLIENT_CONTRACT_LIVE=1` probes a running service. Missing live variables a
 recorded as a conditional skip, not an invented pass. See the [Client Consumer
 Contract Kit](client-contract-kit.md) for complete examples.
 
+## LLM Budget And Data Governance Acceptance
+
+This batch must be tested as a service contract, not only through the WebUI. The minimum server-side
+matrix is:
+
+- budget limit `429` and unavailable-store `503`, with `Retry-After` and no provider invocation;
+- sync, stream cancellation, query transform/expand, summary, fallback, and AGENT model paths;
+- durable reservation idempotency, settle/release/expiry recovery, concurrent CAS, and V64 Flyway
+  migration on both an empty database and a pre-existing V63 database;
+- erasure preview/status/apply authorization, confirmation expiry/mismatch, path/body mismatch,
+  idempotent terminal replay, partial failure recovery, bounded deletion, and audit-log protection;
+- central retention runs exactly once by default while legacy cleanup entry points remain callable
+  without duplicate scheduling.
+
+The deterministic PostgreSQL/Flyway acceptance suite is gated so ordinary `mvn test` does not need
+Docker. Run it directly when debugging the suite, or through the aggregate runner (which also keeps
+it in the repository's gated inventory):
+
+```bash
+TESTCONTAINERS_RYUK_DISABLED=true \
+TESTCONTAINERS_PG_IMAGE=pgvector/pgvector:pg16 \
+mvn -pl spring-ai-rag-core -am \
+  -Dllm-budget-governance.it.enabled=true \
+  -Dtest=LlmBudgetAndGovernancePostgresIntegrationTest \
+  -Dsurefire.failIfNoSpecifiedTests=false test
+```
+
+```bash
+TESTCONTAINERS_RYUK_DISABLED=true \
+TESTCONTAINERS_PG_IMAGE=pgvector/pgvector:pg16 \
+./scripts/verify-gated-it.sh LlmBudgetAndGovernancePostgresIntegrationTest
+```
+
+The external-client gates remain mandatory after these tests: `mvn test`,
+`scripts/verify-client-consumer-contract.sh`, OpenAPI additive-only checks, native and OpenAI JSON/SSE
+probes, and `scripts/dev.sh` start/status/stop. A real LLM smoke is conditional on credentials, but
+a mock provider result never replaces the no-provider-call proof.
+
 ## Rules for Writing New Tests
 
 1. **Write tests before implementation** (TDD-friendly)

@@ -20,7 +20,23 @@ public record DataGovernancePolicyResponse(
         @Schema(description = "Capabilities available to the current caller")
         Capabilities capabilities,
         @Schema(description = "Bounded automatic cleanup limits")
-        Cleanup cleanup) {
+        Cleanup cleanup,
+        @Schema(description = "Data erasure capabilities")
+        Erasure erasure,
+        @Schema(description = "Coordinator implementation version")
+        String coordinatorVersion) {
+
+    /** 保留旧 Java 调用方使用的构造签名；新增字段仅作为响应增量。 */
+    public DataGovernancePolicyResponse(
+            String policyVersion,
+            String redactionVersion,
+            boolean enabled,
+            List<RetentionPolicy> retention,
+            Capabilities capabilities,
+            Cleanup cleanup) {
+        this(policyVersion, redactionVersion, enabled, retention, capabilities,
+                cleanup, null, null);
+    }
 
     public record RetentionPolicy(
             @Schema(description = "Stable data category name", example = "AUDIT_LOG")
@@ -46,5 +62,15 @@ public record DataGovernancePolicyResponse(
             int batchSize,
             int maxBatches,
             String cron) {
+    }
+
+    public record Erasure(
+            boolean enabled,
+            boolean preview,
+            boolean apply,
+            boolean status,
+            String previewEndpoint,
+            String applyEndpoint,
+            String statusEndpoint) {
     }
 }

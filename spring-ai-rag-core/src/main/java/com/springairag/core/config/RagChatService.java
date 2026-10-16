@@ -177,7 +177,6 @@ public class RagChatService {
             RetryTemplate retryTemplate,
             @org.springframework.beans.factory.annotation.Autowired(required = false)
             CollectionDocumentResolver collectionDocumentResolver,
-            @org.springframework.beans.factory.annotation.Autowired(required = false)
             ModeAwareChatClientFactory usageClientFactory) {
 
         this.chatClientBuilder = chatClientBuilder;

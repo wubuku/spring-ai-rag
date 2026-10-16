@@ -122,7 +122,10 @@ Key rules:
   recording, and retention deletes old rows in bounded batches. No prompt,
   answer, tool payload, credential, or exception body is stored. The
   principal-scoped `GET /api/v1/rag/usage` endpoint exposes aggregate token and
-  configured-cost estimates, not provider billing or hard-limit settlement.
+  configured-cost estimates, not provider billing. V64 adds a separate durable
+  reservation ledger: token/cost budget is reserved before every wrapped provider
+  call, hard-limit rejection is fail-closed, and terminal ledger retention is
+  coordinated with the other governance categories.
 
 ### Chat Sessions And Streaming
 
@@ -463,7 +466,7 @@ See [multi-model-external-config.md](multi-model-external-config.md).
 ### Database
 
 - PostgreSQL with pgvector.
-- Flyway is currently V1–V63.
+- Flyway is currently V1–V64.
 - V27/V28 add, backfill, validate, uniquely constrain, and make immutable the
   Collection business key; V29 adds JSONB structured records; V30 adds the
   external-document synchronization schema; V31 normalizes stored external

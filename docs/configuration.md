@@ -1720,8 +1720,9 @@ Production recommends `INFO` for `com.springairag`; switch to `DEBUG` for full R
 
 ## Data Governance Configuration
 
-The default data-governance policy is enabled and cleans expired audit logs, client errors, and
-retrieval evaluation records without a schema migration:
+The default data-governance policy is enabled and cleans expired audit logs, client errors, retrieval
+evaluations, chat history, retrieval diagnostics, LLM usage, integration observations, and terminal
+budget reservations; Flyway applies V64 automatically:
 
 ```yaml
 rag:
@@ -1731,6 +1732,7 @@ rag:
     client-error-retention-days: 30
     evaluation-retention-days: 400
     cleanup-enabled: true
+    central-cleanup-enabled: true
     cleanup-batch-size: 500
     cleanup-max-batches: 10
     cleanup-cron: "0 40 * * * *"
@@ -1739,8 +1741,32 @@ rag:
 The equivalent environment variables use the `RAG_DATA_GOVERNANCE_*` prefix. Cleanup is bounded,
 re-entrant, and uses independent transactions per batch. A failed category is logged in masked form
 and retried during the next scheduled run; it does not block Chat or Search. The existing chat,
-retrieval-diagnostics, usage, and integration-observability retention workers remain the owners of
-their respective tables.
+retrieval-diagnostics, usage, and integration-observability cleanup entry points remain available for
+manual and test invocation, but a central coordinator is the only default scheduler. Set
+`central-cleanup-enabled: false` only for compatibility troubleshooting.
+
+LLM calls now durably reserve token/cost budget before the provider call. Exceeded limits return
+`429 LLM_BUDGET_EXCEEDED`; an unavailable budget store returns `503
+LLM_BUDGET_SERVICE_UNAVAILABLE`. The budget ledger stores only attribution and token/cost summaries,
+never prompts, answers, or secrets:
+
+```yaml
+rag:
+  llm-budget:
+    enabled: true
+    daily-token-limit: 5000000
+    monthly-token-limit: 50000000
+    max-request-tokens: 200000
+    reservation-ttl-seconds: 900
+    retention-days: 30
+    cleanup-batch-size: 200
+    cleanup-cron: "0 */5 * * * *"
+```
+
+The corresponding environment-variable prefix is `RAG_LLM_BUDGET_*`. Existing Chat, Search,
+Native, and OpenAI-compatible request bodies do not gain budget fields; only an explicit
+`enabled: false` disables the new enforcement path. The legacy fail-open usage ledger is not the
+default enforcement implementation.
 
 ## Configuration Inheritance
 

@@ -1,7 +1,10 @@
 package com.springairag.core.chat;
 
 import com.springairag.api.enums.ErrorCode;
+import com.springairag.core.budget.BudgetReservationService;
+import com.springairag.core.budget.BudgetServiceUnavailableException;
 import com.springairag.core.exception.RagException;
+import com.springairag.core.usage.LlmUsageCostCalculator;
 import com.springairag.core.usage.LlmInvocationOutcome;
 import com.springairag.core.usage.LlmInvocationPurpose;
 import com.springairag.core.usage.LlmUsageEvent;
@@ -39,12 +42,13 @@ public final class BudgetedChatModel implements ChatModel {
     private final MultiModelProperties.ModelCost modelCost;
     private final String costUnit;
     private final String modelRef;
+    private final BudgetReservationService reservationService;
 
     public BudgetedChatModel(ChatModel delegate, ChatExecutionBudget budget) {
         this(delegate, budget, 0, 0, 0, Integer.MAX_VALUE,
                 new JTokkitPromptTokenEstimator(),
                 LlmInvocationPurpose.CHAT, LlmUsageRecorder.NOOP, null,
-                "CONFIGURED_MODEL_COST");
+                "CONFIGURED_MODEL_COST", null);
     }
 
     public BudgetedChatModel(
@@ -58,7 +62,7 @@ public final class BudgetedChatModel implements ChatModel {
         this(delegate, budget, contextWindow, outputReserveTokens,
                 safetyMarginTokens, maxToolSchemaTokens, estimator,
                 LlmInvocationPurpose.CHAT, LlmUsageRecorder.NOOP, null,
-                "CONFIGURED_MODEL_COST");
+                "CONFIGURED_MODEL_COST", null);
     }
 
     public BudgetedChatModel(
@@ -75,7 +79,7 @@ public final class BudgetedChatModel implements ChatModel {
                 summaryCall
                         ? LlmInvocationPurpose.SUMMARY
                         : LlmInvocationPurpose.CHAT,
-                LlmUsageRecorder.NOOP, null, "CONFIGURED_MODEL_COST");
+                LlmUsageRecorder.NOOP, null, "CONFIGURED_MODEL_COST", null);
     }
 
     public BudgetedChatModel(
@@ -102,6 +106,7 @@ public final class BudgetedChatModel implements ChatModel {
                 usageRecorder,
                 modelCost,
                 costUnit,
+                null,
                 null);
     }
 
@@ -118,6 +123,25 @@ public final class BudgetedChatModel implements ChatModel {
             MultiModelProperties.ModelCost modelCost,
             String costUnit,
             String modelRef) {
+        this(delegate, budget, contextWindow, outputReserveTokens, safetyMarginTokens,
+                maxToolSchemaTokens, estimator, purpose, usageRecorder, modelCost,
+                costUnit, modelRef, null);
+    }
+
+    public BudgetedChatModel(
+            ChatModel delegate,
+            ChatExecutionBudget budget,
+            int contextWindow,
+            int outputReserveTokens,
+            int safetyMarginTokens,
+            int maxToolSchemaTokens,
+            PromptTokenEstimator estimator,
+            LlmInvocationPurpose purpose,
+            LlmUsageRecorder usageRecorder,
+            MultiModelProperties.ModelCost modelCost,
+            String costUnit,
+            String modelRef,
+            BudgetReservationService reservationService) {
         this.delegate = Objects.requireNonNull(delegate, "delegate");
         this.budget = Objects.requireNonNull(budget, "budget");
         this.contextWindow = Math.max(0, contextWindow);
@@ -133,12 +157,14 @@ public final class BudgetedChatModel implements ChatModel {
         this.modelRef = modelRef != null && !modelRef.isBlank()
                 ? modelRef.trim()
                 : defaultModelRef(delegate);
+        this.reservationService = reservationService;
     }
 
     @Override
     public ChatResponse call(Prompt prompt) {
         validatePrompt(prompt);
         int ordinal = budget.reserveModelCall();
+        BudgetReservationService.Reservation reservation = reserve(ordinal, prompt);
         if (purpose == LlmInvocationPurpose.SUMMARY) {
             budget.recordSummaryCall();
         }
@@ -153,7 +179,8 @@ public final class BudgetedChatModel implements ChatModel {
                     usage(response),
                     startedAt,
                     startedNanos,
-                    true);
+                    true,
+                    reservation);
             return response;
         } catch (RuntimeException error) {
             record(
@@ -163,7 +190,8 @@ public final class BudgetedChatModel implements ChatModel {
                     LlmUsageSnapshot.unavailable(),
                     startedAt,
                     startedNanos,
-                    true);
+                    true,
+                    reservation);
             throw error;
         }
     }
@@ -173,6 +201,7 @@ public final class BudgetedChatModel implements ChatModel {
         return Flux.defer(() -> {
             validatePrompt(prompt);
             int ordinal = budget.reserveModelCall();
+            BudgetReservationService.Reservation reservation = reserve(ordinal, prompt);
             if (purpose == LlmInvocationPurpose.SUMMARY) {
                 budget.recordSummaryCall();
             }
@@ -196,7 +225,8 @@ public final class BudgetedChatModel implements ChatModel {
                         LlmUsageSnapshot.unavailable(),
                         startedAt,
                         startedNanos,
-                        true);
+                        true,
+                        reservation);
                 throw error;
             }
             return delegateFlux
@@ -217,7 +247,8 @@ public final class BudgetedChatModel implements ChatModel {
                             latestUsage.get(),
                             startedAt,
                             startedNanos,
-                            recorded.compareAndSet(false, true)));
+                            recorded.compareAndSet(false, true),
+                            reservation));
         });
     }
 
@@ -251,7 +282,8 @@ public final class BudgetedChatModel implements ChatModel {
             LlmUsageSnapshot usage,
             Instant startedAt,
             long startedNanos,
-            boolean shouldRecord) {
+            boolean shouldRecord,
+            BudgetReservationService.Reservation reservation) {
         if (!shouldRecord) {
             return;
         }
@@ -275,6 +307,12 @@ public final class BudgetedChatModel implements ChatModel {
                 startedAt,
                 completedAt,
                 costUnit);
+        LlmUsageCostCalculator.Result cost = LlmUsageCostCalculator.calculate(
+                usage, modelCost, costUnit);
+        if (reservationService != null) {
+            reservationService.settle(
+                    reservation, usage, cost.configuredCost(), cost.costAvailable());
+        }
         try {
             if (streaming) {
                 usageRecorder.recordAsync(event);
@@ -299,8 +337,8 @@ public final class BudgetedChatModel implements ChatModel {
         if (contextWindow < 1 || prompt == null) {
             return;
         }
-        int promptTokens = prompt.getInstructions().stream()
-                .mapToInt(estimator::estimate)
+        long promptTokens = prompt.getInstructions().stream()
+                .mapToLong(estimator::estimate)
                 .sum();
         int schemaTokens = 0;
         if (prompt.getOptions() instanceof ToolCallingChatOptions options
@@ -317,5 +355,52 @@ public final class BudgetedChatModel implements ChatModel {
                     ErrorCode.CHAT_CONTEXT_BUDGET_EXCEEDED,
                     "Chat prompt exceeds the resolved model context window");
         }
+    }
+
+    private BudgetReservationService.Reservation reserve(int ordinal, Prompt prompt) {
+        if (reservationService == null) {
+            return BudgetReservationService.Reservation.disabled();
+        }
+        long estimatedTokens = Math.max(1L,
+                estimatedPromptTokens(prompt) + outputReserveTokens + safetyMarginTokens);
+        BudgetReservationService.Reservation reservation = reservationService.reserve(
+                new BudgetReservationService.ReservationRequest(
+                        budget.principalId(), budget.logicalExecutionId(), ordinal,
+                        estimatedTokens, estimatedCost(estimatedTokens), budget.deadline()));
+        if (!reservation.reusable()) {
+            throw new BudgetServiceUnavailableException(
+                    "LLM invocation reservation has already been finalized", null);
+        }
+        return reservation;
+    }
+
+    private long estimatedPromptTokens(Prompt prompt) {
+        if (prompt == null) {
+            return 0;
+        }
+        long promptTokens = prompt.getInstructions().stream()
+                .mapToLong(estimator::estimate)
+                .sum();
+        long schemaTokens = 0;
+        if (prompt.getOptions() instanceof ToolCallingChatOptions options
+                && options.getToolCallbacks() != null) {
+            for (ToolCallback callback : options.getToolCallbacks()) {
+                schemaTokens += estimator.estimate(callback.getToolDefinition());
+            }
+        }
+        return Math.max(0L, promptTokens + schemaTokens);
+    }
+
+    private java.math.BigDecimal estimatedCost(long tokens) {
+        if (modelCost == null || !Double.isFinite(modelCost.input())
+                || !Double.isFinite(modelCost.output())) {
+            return java.math.BigDecimal.ZERO.setScale(LlmUsageCostCalculator.SCALE);
+        }
+        return java.math.BigDecimal.valueOf(tokens)
+                .multiply(java.math.BigDecimal.valueOf(
+                        Math.max(modelCost.input(), modelCost.output())))
+                .divide(java.math.BigDecimal.valueOf(1_000_000L),
+                        LlmUsageCostCalculator.SCALE,
+                        java.math.RoundingMode.HALF_UP);
     }
 }

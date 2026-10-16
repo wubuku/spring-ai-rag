@@ -112,6 +112,14 @@ public final class IntegrationObservationRecorder {
             fixedDelayString = "${rag.integration-observability.cleanup-interval:1h}",
             initialDelayString = "${rag.integration-observability.cleanup-interval:1h}")
     void scheduledCleanup() {
+        if (properties.getDataGovernance().isCentralCleanupEnabled()) {
+            return;
+        }
+        cleanupExpiredNow();
+    }
+
+    /** 供统一数据治理协调器调用。 */
+    public void cleanupExpiredNow() {
         if (!properties.getIntegrationObservability().isEnabled()) {
             return;
         }

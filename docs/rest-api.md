@@ -3618,9 +3618,32 @@ Returns a low-sensitivity policy for the current caller. The response reports th
 version, retention days, bounded cleanup limits, and caller-visible capabilities. It never includes
 provider credentials, database details, prompts, document content, or another principal's data.
 
-The default policy is enabled. The first-party cleanup categories retain audit logs for 400 days,
-client errors for 30 days, and retrieval evaluations for 400 days. Automatic cleanup runs hourly,
+The default policy is enabled. The response may add `erasure` and `coordinatorVersion`; older clients
+may ignore these fields. Default retention is 400 days for audit logs, 30 days for client errors,
+400 days for retrieval evaluations, `rag.memory.message-ttl-days` for chat history, 7 days for
+retrieval diagnostics, 400 days for LLM usage, 90 days for integration observations, and 30 days
+for terminal budget reservations. A single central coordinator triggers automatic cleanup; it
 deletes at most 500 rows per batch and at most 10 batches per category per run.
+
+### `POST /api/v1/rag/data-governance/erasures/preview`
+
+Creates a short-lived, content-free erasure preview for the current principal. The optional scope
+contains `targetPrincipalId` (other principals require management authorization), `sessionId`, and
+`traceId`. The response contains an `operationId`, category counts, a short-lived
+`confirmationToken`, a scope `fingerprint`, and expiry timestamps. It never returns prompts, answers,
+document bodies, or credentials.
+
+### `GET /api/v1/rag/data-governance/erasures/{operationId}`
+
+Returns the low-sensitivity status visible to the operation owner, including completed categories,
+remaining categories, and stable error codes.
+
+### `POST /api/v1/rag/data-governance/erasures/{operationId}/apply`
+
+The body contains `operationId`, `confirmationToken`, and `fingerprint`. The server validates owner,
+preview expiry, confirmation hash, and path/body operation identity. Repeated apply returns the same
+terminal result; a partial failure retries only incomplete categories. Ordinary erasure never deletes
+audit logs; audit data remains governed by retention.
 
 ### `GET /api/v1/rag/audit-logs`
 

@@ -3226,8 +3226,28 @@ provider 已启用、`baseUrl` 非空、`apiType` 受支持、声明的上下文
 返回当前调用方可见的低敏数据治理策略，包括脱敏规则版本、保留天数、有界清理上限和能力。
 响应不会包含 provider 凭据、数据库细节、Prompt、文档正文或其他 principal 的数据。
 
-该策略默认启用。首批治理清理类别默认保留：审计日志 400 天、客户端错误 30 天、检索评估
-400 天。自动清理每小时运行一次；每个批次最多删除 500 行，每个类别每次最多执行 10 批。
+该策略默认启用。策略还会以增量字段返回 `erasure` 和 `coordinatorVersion`；旧客户端可以忽略
+它们。默认保留：审计日志 400 天、客户端错误 30 天、检索评估 400 天、聊天历史按
+`rag.memory.message-ttl-days`、检索诊断 7 天、LLM 用量 400 天、集成观测 90 天、预算
+reservation 30 天。自动清理由唯一的 central coordinator 触发；每个批次最多删除 500 行，
+每个类别每次最多执行 10 批。
+
+### `POST /api/v1/rag/data-governance/erasures/preview`
+
+为当前 principal 创建短期、无正文的数据擦除预览。请求体可为空对象，也可以只指定一个受限
+范围：`targetPrincipalId`（仅管理员可指定其他 principal）、`sessionId`、`traceId`。响应返回
+`operationId`、各类别计数、短期 `confirmationToken`、scope `fingerprint` 和过期时间；不返回
+prompt、回答、文档正文或密钥。
+
+### `GET /api/v1/rag/data-governance/erasures/{operationId}`
+
+返回同一 owner 可见的低敏擦除状态，包括已完成类别、剩余类别和稳定错误码。
+
+### `POST /api/v1/rag/data-governance/erasures/{operationId}/apply`
+
+请求体：`operationId`、`confirmationToken`、`fingerprint`。服务端校验 owner、预览有效期、确认
+hash 和路径/正文 operation id；重复 apply 返回同一终态，部分失败只重试未完成类别。审计日志
+不由普通擦除 API 删除，仍按保留期清理。
 
 ### `GET /api/v1/rag/audit-logs`
 

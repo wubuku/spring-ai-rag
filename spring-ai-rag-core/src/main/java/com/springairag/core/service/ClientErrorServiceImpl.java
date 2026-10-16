@@ -1,13 +1,18 @@
 package com.springairag.core.service;
 
 import com.springairag.api.dto.ClientErrorRequest;
+import com.springairag.core.chat.ChatPrincipal;
 import com.springairag.core.entity.RagClientError;
+import com.springairag.core.filter.RequestTraceFilter;
 import com.springairag.core.logging.SensitiveDataMaskingConverter;
+import jakarta.servlet.http.HttpServletRequest;
 import com.springairag.core.repository.RagClientErrorRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 /**
  * Client Error Service Implementation
@@ -48,6 +53,8 @@ public class ClientErrorServiceImpl implements ClientErrorService {
         error.setSessionId(request.getSessionId());
         error.setUserId(request.getUserId());
         error.setUserAgent(mask(request.getUserAgent()));
+        error.setOwnerPrincipalId(ChatPrincipal.fromCurrentRequest().id());
+        error.setRequestTraceId(requestTraceId());
 
         clientErrorRepository.save(error);
 
@@ -60,6 +67,15 @@ public class ClientErrorServiceImpl implements ClientErrorService {
 
     private String mask(String value) {
         return SensitiveDataMaskingConverter.maskSensitiveData(value);
+    }
+
+    private String requestTraceId() {
+        if (!(RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes attributes)) {
+            return null;
+        }
+        HttpServletRequest request = attributes.getRequest();
+        Object traceId = request.getAttribute(RequestTraceFilter.REQUEST_TRACE_ID_ATTRIBUTE);
+        return traceId == null ? null : String.valueOf(traceId);
     }
 
     /**

@@ -97,12 +97,13 @@ class ErrorCodeTest {
     }
 
     @Test
-    @DisplayName("TOO_MANY_REQUESTS is the only 429, and it is the name the rate limit filter writes")
-    void tooManyRequestsIsTheOnlyRateLimitCode() {
+    @DisplayName("429 keeps the generic code and allows specialized budget errors")
+    void rateLimitCodesKeepGenericCodeAndAllowSpecializedErrors() {
         List<ErrorCode> rateLimits = Arrays.stream(ErrorCode.values())
                 .filter(code -> code.getHttpStatus() == 429)
                 .toList();
-        assertEquals(List.of(ErrorCode.TOO_MANY_REQUESTS), rateLimits);
+        assertTrue(rateLimits.contains(ErrorCode.TOO_MANY_REQUESTS));
+        assertTrue(rateLimits.contains(ErrorCode.LLM_BUDGET_EXCEEDED));
         // RateLimitFilter's literal, and the value three test classes read back
         // out of `body.get("error")`.
         assertEquals("TOO_MANY_REQUESTS", ErrorCode.TOO_MANY_REQUESTS.getCode());

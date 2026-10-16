@@ -11,6 +11,7 @@ public class RagDataGovernanceProperties {
     private int clientErrorRetentionDays = 30;
     private int evaluationRetentionDays = 400;
     private boolean cleanupEnabled = true;
+    private boolean centralCleanupEnabled = true;
     private int cleanupBatchSize = 500;
     private int cleanupMaxBatches = 10;
     private String cleanupCron = "0 40 * * * *";
@@ -25,6 +26,10 @@ public class RagDataGovernanceProperties {
     public void setEvaluationRetentionDays(int value) { this.evaluationRetentionDays = value; }
     public boolean isCleanupEnabled() { return cleanupEnabled; }
     public void setCleanupEnabled(boolean cleanupEnabled) { this.cleanupEnabled = cleanupEnabled; }
+    public boolean isCentralCleanupEnabled() { return centralCleanupEnabled; }
+    public void setCentralCleanupEnabled(boolean centralCleanupEnabled) {
+        this.centralCleanupEnabled = centralCleanupEnabled;
+    }
     public int getCleanupBatchSize() { return cleanupBatchSize; }
     public void setCleanupBatchSize(int cleanupBatchSize) { this.cleanupBatchSize = cleanupBatchSize; }
     public int getCleanupMaxBatches() { return cleanupMaxBatches; }

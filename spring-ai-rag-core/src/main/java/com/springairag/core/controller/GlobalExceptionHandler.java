@@ -238,6 +238,9 @@ public class GlobalExceptionHandler {
         if (e instanceof ChatTurnInProgressException inProgress) {
             builder.header(HttpHeaders.RETRY_AFTER,
                     Integer.toString(inProgress.retryAfterSeconds()));
+        } else if (e.getRetryAfterSeconds() != null) {
+            builder.header(HttpHeaders.RETRY_AFTER,
+                    Integer.toString(e.getRetryAfterSeconds()));
         }
         return builder.body(body);
     }

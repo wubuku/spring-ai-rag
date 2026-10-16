@@ -103,7 +103,9 @@ RagChatController
 - 用量记录对 Chat 正确性 fail-open：非流式事件使用有界同步确认，流式事件使用有界
   异步写入，保留任务按有界批次删除旧记录。不保存 prompt、answer、工具参数/结果、
   credential 或异常正文。按 principal 隔离的 `GET /api/v1/rag/usage` 只提供 token
-  与配置成本估算聚合，不是供应商账单或 hard-limit 结算源。
+  与配置成本估算聚合，不是供应商账单。V64 另增 durable reservation ledger：每次包装后的
+  provider 调用前先预留 token/cost，hard limit 拒绝采用 fail-closed，终态账本保留由统一治理
+  类别协调清理。
 
 ### Chat 会话与流式协议
 
@@ -361,7 +363,7 @@ job enqueue 分开提交，HTTP 不同步循环调用 provider。只读诊断默
 ### 数据库
 
 - PostgreSQL + pgvector。
-- Flyway 当前为 V1–V63。
+- Flyway 当前为 V1–V64。
 - V27/V28 负责新增、回填、校验、唯一约束及不可变 Collection 业务 key；V29 增加 JSONB
   结构化记录；V30 增加外部文档同步 schema；V31 在不改写已发布 V30 的前提下规范化
   已存储的外部文档身份；V32 增加按 principal 归属的 Chat history、来源快照、turn

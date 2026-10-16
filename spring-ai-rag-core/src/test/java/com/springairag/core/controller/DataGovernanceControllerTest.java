@@ -1,12 +1,15 @@
 package com.springairag.core.controller;
 
 import com.springairag.api.enums.ErrorCode;
+import com.springairag.api.dto.DataErasurePreviewRequest;
+import com.springairag.api.dto.DataErasurePreviewResponse;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.entity.RagAuditLog;
 import com.springairag.core.exception.RagException;
 import com.springairag.core.filter.ApiKeyAuthFilter;
 import com.springairag.core.service.AuditLogService;
 import com.springairag.core.service.CollectionPurgeAuthorization;
+import com.springairag.core.service.DataErasureService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -18,6 +21,8 @@ import org.springframework.mock.web.MockHttpServletRequest;
 
 import java.time.ZonedDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -30,6 +35,8 @@ class DataGovernanceControllerTest {
     private AuditLogService auditLogService;
     @Mock
     private CollectionPurgeAuthorization collectionPurgeAuthorization;
+    @Mock
+    private DataErasureService dataErasureService;
 
     private DataGovernanceController controller;
     private MockHttpServletRequest request;
@@ -37,8 +44,23 @@ class DataGovernanceControllerTest {
     @BeforeEach
     void setUp() {
         controller = new DataGovernanceController(
-                new RagProperties(), auditLogService, collectionPurgeAuthorization);
+                new RagProperties(), auditLogService, collectionPurgeAuthorization,
+                dataErasureService);
         request = new MockHttpServletRequest();
+    }
+
+    @Test
+    void erasurePreviewDelegatesWithoutChangingExistingPolicyContract() {
+        DataErasurePreviewRequest requestBody =
+                new DataErasurePreviewRequest(null, "session-1", null);
+        UUID operationId = UUID.randomUUID();
+        DataErasurePreviewResponse response = new DataErasurePreviewResponse(
+                operationId, "PREVIEWED", Map.of("CHAT_HISTORY", 2L),
+                "confirmation", "fingerprint", null, null);
+        when(dataErasureService.preview(requestBody, request)).thenReturn(response);
+
+        assertSame(response, controller.previewErasure(requestBody, request));
+        verify(dataErasureService).preview(requestBody, request);
     }
 
     @Test
