@@ -3,10 +3,14 @@ package com.springairag.starter;
 import com.springairag.api.service.DomainRagExtension;
 import com.springairag.core.config.ApiSloConfig;
 import com.springairag.core.config.ApiSloProperties;
+import com.springairag.core.config.MultiModelProperties;
 import com.springairag.core.config.RagAlertProperties;
 import com.springairag.core.config.RagProperties;
+import com.springairag.core.config.RagProxyProperties;
+import com.springairag.core.config.RagSseProperties;
 import com.springairag.core.config.RagTracingProperties;
 import com.springairag.core.config.RagWebSecurityConfiguration;
+import com.springairag.core.SpringAiRagApplication;
 import com.springairag.core.extension.DefaultDomainRagExtension;
 import com.springairag.core.filter.RequestTraceFilter;
 import com.springairag.core.metrics.CacheMetricsService;
@@ -15,11 +19,14 @@ import com.springairag.core.metrics.RagMetricsService;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.AutoConfigurationPackage;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.FilterType;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 
@@ -31,9 +38,26 @@ import org.springframework.context.annotation.Primary;
  * Explicitly registered as Bean, ensuring availability before any {@code @Service}.
  */
 @AutoConfiguration
+@AutoConfigurationPackage(basePackageClasses = SpringAiRagApplication.class)
 @ConditionalOnClass(name = "org.springframework.ai.chat.client.ChatClient")
 @ConditionalOnProperty(prefix = "general.rag", name = "enabled", havingValue = "true", matchIfMissing = true)
-@EnableConfigurationProperties({GeneralRagProperties.class, ApiSloProperties.class, RagAlertProperties.class})
+@ComponentScan(
+        basePackages = "com.springairag.core",
+        excludeFilters = @ComponentScan.Filter(
+                type = FilterType.ASSIGNABLE_TYPE,
+                classes = {
+                        SpringAiRagApplication.class,
+                        ApiSloConfig.class,
+                        RagWebSecurityConfiguration.class
+                }))
+@EnableConfigurationProperties({
+        GeneralRagProperties.class,
+        ApiSloProperties.class,
+        RagAlertProperties.class,
+        MultiModelProperties.class,
+        RagProxyProperties.class,
+        RagSseProperties.class
+})
 @Import({ApiSloConfig.class, RagWebSecurityConfiguration.class})
 public class GeneralRagAutoConfiguration {
 

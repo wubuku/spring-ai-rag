@@ -2,12 +2,23 @@ package com.springairag.starter;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.AutoConfigurationPackage;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import com.springairag.core.config.ApiSloProperties;
+import com.springairag.core.config.MultiModelProperties;
 import com.springairag.core.config.RagAlertProperties;
+import com.springairag.core.config.RagProxyProperties;
+import com.springairag.core.config.RagSseProperties;
+import com.springairag.core.config.ApiSloConfig;
+import com.springairag.core.config.RagWebSecurityConfiguration;
+import com.springairag.core.SpringAiRagApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.FilterType;
+import org.springframework.boot.autoconfigure.AutoConfigurations;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import com.springairag.core.controller.OpenAiCompatibilityController;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -19,8 +30,29 @@ import static org.junit.jupiter.api.Assertions.*;
 class GeneralRagAutoConfigurationTest {
 
     @Test
+    void disabledStarterDoesNotScanCoreOrRegisterRepositories() {
+        new ApplicationContextRunner()
+                .withConfiguration(AutoConfigurations.of(GeneralRagAutoConfiguration.class))
+                .withPropertyValues("general.rag.enabled=false")
+                .run(context -> {
+                    assertNull(context.getStartupFailure());
+                    assertTrue(context.getBeansOfType(OpenAiCompatibilityController.class).isEmpty());
+                    assertFalse(context.containsBean("ragProperties"));
+                    assertFalse(context.containsBean("ragCollectionRepository"));
+                });
+    }
+
+    @Test
     void class_hasAutoConfigurationAnnotation() {
         assertTrue(GeneralRagAutoConfiguration.class.isAnnotationPresent(AutoConfiguration.class));
+    }
+
+    @Test
+    void class_registersCoreAutoConfigurationPackage() {
+        AutoConfigurationPackage annotation = GeneralRagAutoConfiguration.class
+                .getAnnotation(AutoConfigurationPackage.class);
+        assertNotNull(annotation);
+        assertArrayEquals(new Class<?>[]{SpringAiRagApplication.class}, annotation.basePackageClasses());
     }
 
     @Test
@@ -47,13 +79,30 @@ class GeneralRagAutoConfigurationTest {
         EnableConfigurationProperties annotation = GeneralRagAutoConfiguration.class
                 .getAnnotation(EnableConfigurationProperties.class);
         assertNotNull(annotation);
-        // RagProperties 通过 @Bean ragProperties() 注册，@EnableConfigurationProperties 只绑定 GeneralRagProperties, ApiSloProperties, RagAlertProperties
-        assertArrayEquals(new Class<?>[]{GeneralRagProperties.class, ApiSloProperties.class, RagAlertProperties.class}, annotation.value());
+        // RagProperties 通过 @Bean ragProperties() 注册；其余配置属性由 Core 配置或本自动配置绑定。
+        assertArrayEquals(new Class<?>[]{
+                GeneralRagProperties.class,
+                ApiSloProperties.class,
+                RagAlertProperties.class,
+                MultiModelProperties.class,
+                RagProxyProperties.class,
+                RagSseProperties.class
+        }, annotation.value());
     }
 
     @Test
-    void class_hasNoComponentScan() {
+    void class_scansCoreAndExcludesApplicationEntrypoints() {
         ComponentScan annotation = GeneralRagAutoConfiguration.class.getAnnotation(ComponentScan.class);
-        assertNull(annotation);
+        assertNotNull(annotation);
+        assertArrayEquals(new String[]{"com.springairag.core"}, annotation.basePackages());
+        assertEquals(1, annotation.excludeFilters().length);
+        assertEquals(FilterType.ASSIGNABLE_TYPE, annotation.excludeFilters()[0].type());
+        assertArrayEquals(
+                new Class<?>[]{
+                        SpringAiRagApplication.class,
+                        ApiSloConfig.class,
+                        RagWebSecurityConfiguration.class
+                },
+                annotation.excludeFilters()[0].classes());
     }
 }

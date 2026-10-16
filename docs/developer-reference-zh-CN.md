@@ -583,6 +583,41 @@ SERVER_PORT=18181 \
 ./scripts/start-real-e2e-server.sh
 ```
 
+### 官方 OpenAI Python/Node SDK 黑盒门禁
+
+该门禁是面向外部 Client 的真实 HTTP 验收，不依赖 WebUI。默认启动隔离
+PostgreSQL、仓库 Mock 上游、Core standalone 和一个不扫描 `com.springairag` 的外部
+Starter Consumer；然后使用锁定版本的官方 Python SDK `2.14.0` 与 JavaScript SDK
+`7.34.0` 分别验证 `/v1/models`、非流式 JSON、SSE、`Idempotency-Key` 重放、无效模型
+错误信封和无效凭据：
+
+```bash
+./scripts/verify-openai-sdk-e2e.sh
+```
+
+脚本会把隔离 venv、Node lockfile 安装目录、服务日志和脱敏汇总写入
+`.verification/openai-sdk-e2e/<run-id>/`，结束时回收自己启动的进程和 PostgreSQL。
+普通门禁不调用真实模型；只有明确提供真实服务地址和密钥才执行 real-LLM 模式：
+
+```bash
+OPENAI_SDK_E2E_WITH_REAL_LLM=1 \
+OPENAI_SDK_E2E_REAL_BASE_URL=http://127.0.0.1:18081 \
+OPENAI_SDK_E2E_REAL_API_KEY="$RAG_ROOT_API_KEY" \
+./scripts/verify-openai-sdk-e2e.sh
+```
+
+这里的地址是已启用 `/v1`、正确配置模型 alias 的 **RAG 服务根地址**，不是上游模型
+provider；密钥也是该 RAG 服务凭据。真实模式不创建 Collection/API Key 或破坏上游。
+请为 transport 验收配置专用的 PLAIN/STATELESS alias，必要时用
+`OPENAI_SDK_E2E_MODEL` 指定；runner 不强制覆盖服务端 alias 策略，默认 alias 若为
+KNOWLEDGE 仍会触发检索和相应模型费用。隔离模式增加 ACL/quota、上游不可用、
+feature-disabled 和幂等调用计数；可用 `--topology core|starter` 缩小范围，
+`--self-test` 只准备 SDK 环境并执行 20 项正/负协议变异测试。
+
+不要把密钥、prompt、答案或完整异常正文写入文档和 Git。该门禁的通过只证明外部
+Client 可观察的 HTTP 契约；它不把 Mock 结果当作真实模型质量验收，也不替代
+`verify-api-compatibility.sh`、`verify-client-consumer-contract.sh` 或全量 Maven 回归。
+
 Collection 受保护清理的真实 provider 生命周期使用
 `scripts/real-collection-purge-e2e-smoke.sh`。它要求运行中的隔离服务和一次性数据库，
 并验证事件优先嵌入、真实检索/Chat、purge/replay、退役拒绝与 tombstone；完整命令和
@@ -659,9 +694,9 @@ CHAT_PLAYWRIGHT_PORT=4199 ./scripts/verify-chat-capability.sh
 `.verification/openai-compatibility/<run-id>/`。兼容 Controller 默认关闭；运行服务时
 需要显式设置 `RAG_OPENAI_COMPATIBILITY_ENABLED=true`。
 
-该专项门禁主要是 MockMvc 与单元级合同测试，不启动隔离的真实 Spring Boot HTTP 服务，
-也不调用官方 OpenAI SDK。它不能单独证明 Starter-only consumer 自动注册 `/v1`，或证明
-第三方 Agent/IDE 的默认参数全部受支持。当前证据边界和 P0 改进项见
+该专项门禁主要是 MockMvc 与单元级合同测试；真实 HTTP 与官方 SDK 验收由
+`scripts/verify-openai-sdk-e2e.sh` 补充。两者结合后已证明 Starter-only Consumer 自动注册
+`/v1`；仍不能据此宣称第三方 Agent/IDE 的默认参数全部受支持。当前证据边界见
 [OpenAI 兼容就绪度](openai-compatibility-readiness-zh-CN.md#44-当前验证证据与证据缺口)。
 
 ### 持久化 Embedding Jobs 一键验证

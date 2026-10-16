@@ -109,7 +109,14 @@ function mockChatResponse(body) {
 
 // ---------- request handlers ----------
 
+let chatRequests = 0;
+
 async function handleChatCompletions(req, res, body) {
+  chatRequests += 1;
+  if (process.env.MOCK_FAILURE_PROBE === 'true'
+      && body.messages?.at(-1)?.content === 'SDK failure probe') {
+    return errorResponse(res, 401, 'Mock upstream failure probe');
+  }
   await randomDelay();
 
   if (shouldError()) {
@@ -198,6 +205,11 @@ async function handleHealth(req, res) {
 async function route(req, res) {
   const url = new URL(req.url, `http://localhost:${PORT}`);
   const pathname = url.pathname;
+
+  if (pathname === '/stats' && req.method === 'GET') {
+    jsonResponse(res, 200, { chatRequests });
+    return;
+  }
 
   if (req.method === 'OPTIONS') {
     res.writeHead(204, {

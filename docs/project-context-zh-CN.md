@@ -552,9 +552,11 @@ RAG mode、memory 和后端候选链，不保存固定 Collection；请求通过
 非流式和标准 SSE 都复用 transport-neutral `ChatCommand` / `ChatExecutionService`。
 
 `/v1` 没有客户端可控的稳定 session ID；不同请求应按无状态 Chat Completions 使用并重传
-完整 `messages`。Core standalone 会完整扫描并注册兼容入口；Starter 当前只自动导入共享
-Web 安全配置，完整 `/v1` Bean 图仍依赖宿主扫描 `com.springairag` 或等价显式导入，因此
-Starter-only consumer 不是已验收的零配置入口。
+完整 `messages`。Core standalone 会完整扫描并注册兼容入口；Starter 默认通过限定 Core
+扫描、显式 properties 和传递的 Actuator 依赖自动装配完整 Bean Graph，无需宿主扫描
+`com.springairag`。`general.rag.enabled=false` 可关闭 Starter 装配；兼容入口仍需显式启用。
+该边界已有真实 PostgreSQL/Flyway 外部 Consumer 测试，以及 Python/Node 官方 SDK 的
+双拓扑 HTTP 验收；入口见 [Client Contract Kit](client-contract-kit-zh-CN.md)。
 
 该能力默认关闭，当前兼容子集为 `n=1`、text-only messages，不支持 tools、structured
 output 或采样参数。原生 `/api/v1/rag/chat/stream` 仍保留项目专用工具、来源和终态事件；

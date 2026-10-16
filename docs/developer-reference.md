@@ -658,6 +658,48 @@ SERVER_PORT=18181 \
 ./scripts/start-real-e2e-server.sh
 ```
 
+### Official OpenAI Python/Node SDK Black-Box Gate
+
+This is real HTTP acceptance for external clients; it does not depend on the WebUI.
+By default it starts isolated PostgreSQL, the repository mock upstream, a Core
+standalone service, and an external Starter consumer that does not scan
+`com.springairag`. It then uses pinned official Python SDK `2.14.0` and JavaScript
+SDK `7.34.0` to verify `/v1/models`, non-streaming JSON, SSE,
+`Idempotency-Key` replay, invalid-model error envelopes, and invalid credentials:
+
+```bash
+./scripts/verify-openai-sdk-e2e.sh
+```
+
+The script writes the isolated venv, the Node lockfile installation, service logs,
+and a redacted summary under `.verification/openai-sdk-e2e/<run-id>/`, then cleans up
+the processes and PostgreSQL container it started. The normal gate does not call a
+real model. Only an explicit real-LLM run uses a supplied service and key:
+
+```bash
+OPENAI_SDK_E2E_WITH_REAL_LLM=1 \
+OPENAI_SDK_E2E_REAL_BASE_URL=http://127.0.0.1:18081 \
+OPENAI_SDK_E2E_REAL_API_KEY="$RAG_ROOT_API_KEY" \
+./scripts/verify-openai-sdk-e2e.sh
+```
+
+This is the **RAG service root URL**, with `/v1` enabled and the chosen model
+alias configured, not an upstream provider URL; the key belongs to that RAG
+service. Real mode does not create Collections/API keys or interrupt the
+upstream. Configure a dedicated PLAIN/STATELESS alias for transport acceptance,
+selecting it with `OPENAI_SDK_E2E_MODEL` if needed. The runner does not override
+server alias policy: a KNOWLEDGE default still performs retrieval and incurs the
+associated model costs. Isolated mode
+also checks ACL/quota, upstream unavailability, feature-disabled behavior, and
+idempotent call counts. Use `--topology core|starter` to narrow a run;
+`--self-test` only prepares SDK environments and runs 20 protocol mutation checks.
+
+Never write keys, prompts, answers, or full exception bodies to docs or Git. Passing
+this gate proves the externally observable HTTP contract; it does not turn mock
+results into real-model quality evidence and does not replace
+`verify-api-compatibility.sh`, `verify-client-consumer-contract.sh`, or the full Maven
+regression suite.
+
 The guarded Collection purge real-provider lifecycle uses
 `scripts/real-collection-purge-e2e-smoke.sh`. It requires a running isolated
 service and disposable database, then verifies event-first embedding, real
@@ -744,12 +786,12 @@ syntax, and whitespace checks. Evidence is written under
 `.verification/openai-compatibility/<run-id>/`. The runtime controller remains
 disabled unless `RAG_OPENAI_COMPATIBILITY_ENABLED=true`.
 
-This focused gate is primarily MockMvc and unit-level contract coverage. It does not
-start an isolated real Spring Boot HTTP service or invoke an official OpenAI SDK. By
-itself, it does not prove automatic `/v1` registration in a Starter-only consumer or
+This focused gate is primarily MockMvc and unit-level contract coverage; real HTTP and
+official SDK acceptance are provided by `scripts/verify-openai-sdk-e2e.sh`. Together
+they prove automatic `/v1` registration in a Starter-only consumer. They do not prove
 compatibility with every default parameter emitted by third-party Agents and IDEs. See
 [OpenAI compatibility readiness](openai-compatibility-readiness.md#44-current-evidence-and-evidence-gaps)
-for the evidence boundary and P0 improvements.
+for the current evidence boundary.
 
 ### Durable Embedding Jobs Verification
 

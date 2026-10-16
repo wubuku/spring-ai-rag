@@ -1776,3 +1776,10 @@ Starter module users only need to configure:
 3. Embedding model (`rag.embedding.*`)
 
 All other configuration items have sensible defaults, override as needed.
+
+The Starter auto-configures the complete Core Bean Graph by default; an external
+consumer does not need to scan `com.springairag`. `general.rag.enabled=false` remains
+the complete disable boundary. The default value of
+`rag.openai-compatibility.enabled` is unchanged. Use
+`scripts/verify-openai-sdk-e2e.sh` for the external `/v1` client contract; do not
+infer service readiness from WebUI availability.

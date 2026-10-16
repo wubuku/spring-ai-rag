@@ -60,6 +60,26 @@ OpenAI compatibility is disabled, a `404`, `405`, or `501` from `/v1/models` is
 recorded as a conditional skip rather than invented as a pass. Missing live
 variables also produce a skip rather than a claim that live acceptance ran.
 
+### Official SDK HTTP acceptance
+
+```bash
+./scripts/verify-openai-sdk-e2e.sh
+./scripts/verify-openai-sdk-e2e.sh --self-test
+```
+
+The default run uses disposable PostgreSQL, a mock model, and two real HTTP
+topologies: Core standalone and an external Starter-only consumer. Official
+Python `2.14.0` and Node `7.34.0` SDKs check JSON, SSE role/content/finish order
+and raw `[DONE]`, errors, authentication, and idempotency. Isolated mode also
+checks Native Collection/API-key creation, ACLs, shared quota, upstream failure,
+and Native availability with `/v1` disabled. Negative runner mutations prevent
+false passes when invalid requests unexpectedly succeed. The release entry is
+`scripts/verify-release.sh --with-openai-sdk`; it requires Docker, Java/Maven,
+Node/npm, and Python. Use `--topology core` or `--topology starter` to narrow a run.
+Explicit real-model mode connects to a running **RAG service root URL**, not an
+upstream provider; see the
+[developer reference](developer-reference.md#official-openai-pythonnode-sdk-black-box-gate).
+
 ### KNOWLEDGE evidence acceptance
 
 For real knowledge bases, models, and authorization scopes, use the

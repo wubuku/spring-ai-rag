@@ -253,6 +253,9 @@ class OpenApiContractTest {
     @MockBean
     private RagClientErrorRepository ragClientErrorRepository;
 
+    @MockBean
+    private RagRetrievalEvaluationRepository ragRetrievalEvaluationRepository;
+
     // API Key Management
     @MockBean
     private com.springairag.core.repository.RagApiKeyRepository ragApiKeyRepository;

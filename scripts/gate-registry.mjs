@@ -128,6 +128,7 @@ export const GATES = [
   manual('scripts/verify-next-high-value-feature.sh'),
   manual('scripts/verify-next-high-value-features.sh'),
   manual('scripts/verify-openai-compatibility.sh'),
+  manual('scripts/verify-openai-sdk-e2e.sh'),
   manual('scripts/verify-quality-regression.sh'),
   manual('scripts/verify-release.sh'),
   manual('scripts/verify-rerank-document-diversity.sh'),

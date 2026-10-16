@@ -35,6 +35,12 @@ Release date: `2026-07-21`
 
 ## Verification Gates
 
+For an OpenAI-compatible service release, explicitly run
+`scripts/verify-release.sh --with-openai-sdk` or the standalone
+`scripts/verify-openai-sdk-e2e.sh`. The gate starts isolated PostgreSQL/mock
+upstream and checks Core/Starter over real HTTP with official Python/Node SDKs;
+it incurs no real-LLM cost.
+
 - [x] `mvn clean test`
 - [x] `mvn package -pl spring-ai-rag-core -am -Pwebui -DskipTests`
 - [x] WebUI lint, full Vitest, and production build

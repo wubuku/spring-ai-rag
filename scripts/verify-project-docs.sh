@@ -359,6 +359,7 @@ check_scripts_and_commands() {
       scripts/run-retrieval-regression.sh \
       scripts/verify-quality-regression.sh \
       scripts/verify-openai-compatibility.sh \
+      scripts/verify-openai-sdk-e2e.sh \
       scripts/verify-embedding-jobs.sh \
       scripts/verify-document-lifecycle.sh \
       scripts/verify-document-sync-runs.sh \

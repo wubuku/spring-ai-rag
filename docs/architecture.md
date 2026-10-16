@@ -811,6 +811,18 @@ ChatExecutionService
   +-- stream     -> chat.completion.chunk* -> data: [DONE]
 ```
 
+The Core standalone application scans the core package. When an external Spring Boot
+consumer only depends on `spring-ai-rag-starter`, `GeneralRagAutoConfiguration` now
+uses a constrained Core component scan by default to provide the same Bean Graph;
+the consumer does not need to scan `com.springairag`. The scan excludes the
+application entry point, `ApiSloConfig`, and Web security configuration to avoid
+duplicate configuration, while `general.rag.enabled=false` remains the complete
+disable boundary. Starter explicitly supplies Actuator, avoiding missing health/metrics
+classes when Core's optional dependency is not propagated.
+A real PostgreSQL/Flyway context test and Python/Node official SDK
+HTTP black-box gate verify this boundary; WebUI availability is not used as a proxy
+for client-service readiness.
+
 The compatibility controller is not registered by default. A model alias binds
 mode, memory, and internal model candidates, never a fixed Collection;
 Collection scope is resolved per request. It shares the execution core with

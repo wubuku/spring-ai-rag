@@ -991,6 +991,39 @@ The script also runs focused tests, `test-compile`, shell syntax, and whitespace
 checks, writing evidence under
 `.verification/openai-compatibility/<run-id>/`.
 
+### Official SDK External-Client Black-Box Acceptance
+
+The OpenAI compatibility layer must also pass real HTTP client acceptance; MockMvc,
+controller tests, or WebUI success alone are not sufficient:
+
+```bash
+./scripts/verify-openai-sdk-e2e.sh
+./scripts/verify-openai-sdk-e2e.sh --self-test
+TESTCONTAINERS_RYUK_DISABLED=true mvn -pl spring-ai-rag-starter -am test \
+  -Dtest=ExternalStarterConsumerContextTest -Dstarter-consumer.it.enabled=true \
+  -Dsurefire.failIfNoSpecifiedTests=false
+```
+
+The script starts isolated PostgreSQL, the mock upstream, a Core standalone service,
+and a Starter consumer that does not scan `com.springairag`. Official Python SDK
+`2.14.0` and Node SDK `7.34.0` verify models, JSON, SSE, idempotency replay, error
+envelopes, and authentication against both topologies. It also proves that the
+external Starter consumer can run Flyway V1–V64 and expose the same `/v1` client
+contract. Evidence is written to `.verification/openai-sdk-e2e/<run-id>/summary.md`;
+the default run does not incur real-model cost.
+
+Only an explicit real address and key enable real-LLM mode. A mock pass must never be
+reported as real-model quality evidence. This gate complements
+`verify-api-compatibility.sh`, `verify-client-consumer-contract.sh`, the full Maven
+regression, and `scripts/dev.sh` startup/health/stop acceptance.
+`verify-gated-it.sh` aggregates Core/Starter database suites; explicitly enabled
+Starter IT fails rather than skips when Docker is unavailable. The runners have
+20 positive/negative mutation checks for unexpected success, missing `[DONE]`,
+duplicate termination, ordering, and identity errors. Isolated HTTP acceptance also
+covers ACLs, PostgreSQL quota, upstream 503, Native availability with `/v1`
+disabled, and idempotent provider call counts. Use
+`verify-release.sh --with-openai-sdk` during release acceptance.
+
 ### Durable Embedding Jobs Acceptance Gate
 
 ```bash

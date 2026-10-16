@@ -32,6 +32,8 @@ relevant evergreen guide/reference, `docs/TODO*`, and the
 
 - OpenAI compatibility and API keys: `2026-07-21_OPENAI_*`,
   `2026-08-14_API_KEY_*`
+- Official Python/Node SDK external-client HTTP acceptance and complete Starter Bean Graph:
+  `2026-10-16_NEXT_BATCH_OPENAI_SDK_STARTER_P0_*`
 - Collections, retrieval scope, and Embedding Profiles:
   `2026-08-15_COLLECTION_*`, `2026-08-15_EMBEDDING_*`,
   `2026-08-16_MULTI_COLLECTION_*`

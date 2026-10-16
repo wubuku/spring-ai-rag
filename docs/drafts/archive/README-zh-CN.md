@@ -24,6 +24,8 @@
 ## 主要历史主题
 
 - OpenAI 兼容与 API Key：`2026-07-21_OPENAI_*`、`2026-08-14_API_KEY_*`
+- 官方 Python/Node SDK 外部 Client HTTP 验收与 Starter 完整 Bean Graph：
+  `2026-10-16_NEXT_BATCH_OPENAI_SDK_STARTER_P0_*`
 - Collection、检索范围与 Embedding Profile：`2026-08-15_COLLECTION_*`、
   `2026-08-15_EMBEDDING_*`、`2026-08-16_MULTI_COLLECTION_*`
 - JSONB、外部文档同步与文件可追溯：`2026-08-15_JSONB_*`、

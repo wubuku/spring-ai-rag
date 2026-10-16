@@ -1617,3 +1617,8 @@ Starter 模块使用者只需配置：
 3. 嵌入模型（`rag.embedding.*`）
 
 其余配置项均有合理默认值，按需覆盖即可。
+
+Starter 默认自动装配完整 Core Bean Graph；外部 Consumer 不需要主动扫描
+`com.springairag`。`general.rag.enabled=false` 仍可整体关闭该能力。兼容层的
+`rag.openai-compatibility.enabled` 默认值保持不变，外部 `/v1` 客户端契约的增量验收
+使用 `scripts/verify-openai-sdk-e2e.sh`，而不是通过 WebUI 可用性推断。

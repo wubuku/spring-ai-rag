@@ -56,6 +56,7 @@ ALL_SUITES=(
   "next-high-value:NextHighValueFeaturesPostgresIntegrationTest"
   "pdf-import:PdfImportPostgresIntegrationTest"
   "retrieval-diagnostics:RetrievalDiagnosticsPostgresIntegrationTest"
+  "starter-consumer:ExternalStarterConsumerContextTest"
 )
 
 SELECTED="${1:-}"
@@ -85,4 +86,4 @@ echo "Suites: ${CLASSES[*]}"
 exec mvn test "${TEST_FLAGS[@]}" \
   -Dtest="$(IFS=,; echo "${CLASSES[*]}")" \
   -Dsurefire.failIfNoSpecifiedTests=false \
-  -pl spring-ai-rag-core -am
+  -pl spring-ai-rag-starter -am
