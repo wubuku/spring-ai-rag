@@ -64,6 +64,51 @@ class ChatRequestFingerprintOpenAiTest {
     }
 
     @Test
+    void globalCoveragePreservesLegacyOpenAiFingerprint() throws Exception {
+        String baseRequest = """
+                {
+                  "model": "m",
+                  "messages": [{"role": "user", "content": "hi"}],
+                  "rag": {
+                    "mode": "KNOWLEDGE",
+                    "scope": {
+                      "mode": "SELECTED_COLLECTIONS",
+                      "collection_keys": ["kb-b", "kb-a"]
+                    }
+                  }
+                }
+                """;
+        ChatRequestFingerprint.Result legacy =
+                ChatRequestFingerprint.openAiRequest(
+                        request(baseRequest), objectMapper);
+        assertEquals(
+                "87ee00cfa0aa905b381df802790e833cf93291084e44af09d1c994203d1349fb",
+                legacy.sha256());
+        assertTrue(legacy.canonical().path("scope")
+                .path("coverageMode").isMissingNode());
+
+        ChatRequestFingerprint.Result explicitGlobal =
+                ChatRequestFingerprint.openAiRequest(
+                        request(baseRequest.replace(
+                                "\"mode\": \"SELECTED_COLLECTIONS\"",
+                                "\"mode\": \"SELECTED_COLLECTIONS\",\n"
+                                        + "                      \"coverage_mode\": \"GLOBAL\"")),
+                        objectMapper);
+        assertEquals(legacy.sha256(), explicitGlobal.sha256());
+
+        ChatRequestFingerprint.Result eachCollection =
+                ChatRequestFingerprint.openAiRequest(
+                        request(baseRequest.replace(
+                                "\"mode\": \"SELECTED_COLLECTIONS\"",
+                                "\"mode\": \"SELECTED_COLLECTIONS\",\n"
+                                        + "                      \"coverage_mode\": \"EACH_COLLECTION\"")),
+                        objectMapper);
+        assertEquals("EACH_COLLECTION", eachCollection.canonical()
+                .path("scope").path("coverageMode").asText());
+        assertNotEquals(legacy.sha256(), eachCollection.sha256());
+    }
+
+    @Test
     void declaredScopeFiltersAndDocumentIdsAreCanonicalized() throws Exception {
         ChatRequestFingerprint.Result result =
                 ChatRequestFingerprint.openAiRequest(request("""

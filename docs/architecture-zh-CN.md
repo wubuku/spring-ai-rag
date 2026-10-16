@@ -345,19 +345,19 @@ Collection 已经是实际检索边界，不只是管理页面中的文档分类
 ```text
 ChatRequest / SearchRequest
   collectionScopeMode? + collectionKeys? + deprecated collectionIds?
-  + documentIds?
+  + collectionCoverageMode? + documentIds?
         │
         ▼
 CollectionRetrievalScopeResolver
   - 省略 collectionScopeMode 时推导兼容模式
-  - 校验模式/列表组合及 100/1000 项上限
+  - 校验模式/列表/覆盖组合及 100/1000 项上限
   - 通过 CollectionIdentityResolver 批量解析 key -> Long ID
   - 先应用 ApiKeyCollectionAccess，再生成有效范围
         │
         ▼
 RetrievalScope
   collectionFilter = NONE | ANY_ASSIGNED | SELECTED
-  collectionIds + documentIds + 服务端 documentType + matchNone
+  collectionIds + coverageMode + documentIds + 服务端 documentType + matchNone
         │
         ├── Chat -> RagChatService -> HybridSearchAdvisor
         ├── Search -> RagSearchController
@@ -394,6 +394,17 @@ Vector、English FTS、pg_jieba、pg_trgm 使用同一组 predicate
 key 按原值、区分大小写地一次批量解析。不受限调用方的未知 key 返回 `404`；受限调用方
 统一返回 `403`，避免泄露范围外 Collection。deprecated 的未知数字 ID 保持兼容：
 对不受限调用方不匹配任何行，受限调用方返回 `403`。
+
+`collectionCoverageMode` 是独立于范围选择的可选策略：省略或 `GLOBAL` 保持原有全局
+top-k；`EACH_COLLECTION` 只接受显式 `SELECTED_COLLECTIONS`，最多 20 个授权 Collection，
+且 `limit/maxResults` 必须不小于 selected 数、不大于 100。执行时只计算一次 query
+embedding，并在共享 deadline 内对各 Collection 的 vector/full-text 分支并行召回；每个有命中
+Collection 至少保留一个候选，再按稳定排序填充最终上限。无命中的 Collection 不伪造结果。
+每分支最多 200 行、每请求融合前最多 8,000 行；embedding 使用 4 线程/32 队列隔离池，
+EACH 检索分支通过进程级许可限制最多 80 个在途任务。容量、超时和部分失败通过有界摘要报告。
+若 rerank 启用，则一次排序有界候选池后再执行覆盖选择；不完整排序回退到原候选池并保留覆盖。
+Native Search 仅在 EACH 时增量返回 `X-RAG-Collection-Coverage` header；Chat/OpenAI 将摘要放入
+既有 metadata/`rag` 扩展，不新增 SSE 事件。该功能无数据库迁移，旧请求默认仍走 GLOBAL。
 
 数据模型和当前边界：
 

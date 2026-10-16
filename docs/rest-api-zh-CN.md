@@ -332,9 +332,9 @@ Chat 和 Search 接受 `collectionScopeMode`：
    请求级 selected 范围用于表达本次业务意图，API Key allow-list 用作独立的权限上限。
 6. Chat、SSE Chat、GET/POST Search 应传递相同的 scope 语义。上线前先用 Search 端点
    观察直接召回结果，再验证 Chat 生成，便于区分检索问题和 LLM 生成问题。
-7. 多个 selected Collection 共享一个 global top-k，不保证每个 Collection 都返回结果。
-   需要逐 Collection 覆盖时不要把当前语义当作保证；后续设计边界见
-   [TODO：`EACH_COLLECTION`](TODO-zh-CN.md#each_collection-召回覆盖模式)。
+7. 多个 selected Collection 默认共享一个 global top-k，不保证每个 Collection 都返回结果。
+   需要逐 Collection 覆盖时可显式请求 `EACH_COLLECTION`；最多 20 个 Collection，结果上限
+   为 100。GLOBAL 默认继续保持原语义。
 8. 对 `400` 修正请求组合或上限；对 restricted caller 的 `403` 按未授权处理，不根据
    错误猜测 Collection 是否存在；不受限调用方的未知 key 返回 `404`。
 
@@ -429,6 +429,7 @@ model ID 是服务端配置的 RAG alias，例如 `rag-default`，表示 Chat mo
   "rag": {
     "scope": {
       "mode": "SELECTED_COLLECTIONS",
+      "coverage_mode": "EACH_COLLECTION",
       "collection_keys": ["brand:guides"]
     },
     "document_ids": [42]
@@ -449,6 +450,11 @@ curl http://localhost:8081/v1/chat/completions \
 
 body 与 Header 同时出现时必须表示相同的 Collection key 集合。省略两者时默认使用
 `CALLER_VISIBLE`；若 `RAG_OPENAI_REQUIRE_EXPLICIT_SCOPE=true`，省略范围返回 `400`。
+`rag.scope.coverage_mode` 默认为 `GLOBAL`；`EACH_COLLECTION` 仅允许与
+`rag.mode=KNOWLEDGE` 和显式 `mode=SELECTED_COLLECTIONS` 配合。最多选择 20 个
+Collection，服务端有效 `maxResults` 须在 selected 数量到 100 之间。PLAIN、AGENT
+和其他范围组合会在 `rag.scope.coverage_mode` 返回 `unsupported_parameter`。OpenAI
+请求未提供 maxResults 时使用服务端默认值，必要时向上调整到 selected 数量。
 
 当前兼容子集：
 
@@ -496,7 +502,18 @@ Client 继续读取原有 `id`、`object`、`created`、`model`、`choices` 和 
       "title": "Visual tone guidelines",
       "collectionKey": "brand:guides"
     }],
-    "citationRegistry": {"S1": {"sourceHandle": "src-example"}}
+    "citationRegistry": {"S1": {"sourceHandle": "src-example"}},
+    "collectionCoverage": {
+      "mode": "EACH_COLLECTION",
+      "requestedCount": 1,
+      "returnedCount": 1,
+      "missingCount": 0,
+      "missingCollectionIds": [],
+      "incompleteCollectionIds": [],
+      "degraded": false,
+      "degradationReasons": [],
+      "perCollectionResultCounts": {"42": 1}
+    }
   }
 }
 ```
@@ -504,7 +521,8 @@ Client 继续读取原有 `id`、`object`、`created`、`model`、`choices` 和 
 `rag.sources` 使用专用的 `OpenAiRagSource` 脱敏投影，只包含最终实际暴露且已授权来源的
 身份、排序和文件级信息；不包含 `chunkText` 或任意 `metadata`。需要完整来源正文时使用
 Native API。`rag` 不会重新执行检索或模型调用，JSON、普通 SSE 和 keyed replay 使用同一
-次执行结果。
+次执行结果。`collectionCoverage` 仅在显式 `EACH_COLLECTION` 时出现，统计授权后的最终
+Collection 检索列表，不包含 query、正文或凭据。
 
 `stream=true` 时，`rag` 只出现在最后一个带 `finish_reason` 的 chunk；现有 role chunk、
 content chunk、finish chunk 和 `data: [DONE]` 顺序不变，也不会新增私有 SSE event。标准
@@ -555,6 +573,7 @@ OpenAI SDK 通常会忽略这个未知顶层字段。
 | `domainId` | string | | 领域扩展 ID |
 | `model` | string | | `GET /rag/models` 返回的运行时模型引用；省略时使用默认链 |
 | `collectionScopeMode` | enum | | `CALLER_VISIBLE`、`ANY_COLLECTION` 或 `SELECTED_COLLECTIONS` |
+| `collectionCoverageMode` | enum | | `GLOBAL`（默认）或 `EACH_COLLECTION`；后者仅支持 `KNOWLEDGE` 且需显式 selected scope |
 | `collectionKeys` | string[] | | 推荐的稳定 Collection 范围 |
 | `collectionIds` | long[] | | deprecated 数字兼容范围 |
 | `documentIds` | long[] | | 仅检索这些文档；与集合范围取交集 |
@@ -569,6 +588,10 @@ OpenAI SDK 通常会忽略这个未知顶层字段。
 `maxResults`、`useHybridSearch` 与 `useRerank` 会真实覆盖 `KNOWLEDGE` 和
 `AGENT` 的执行参数。`PLAIN` 显式传入这些字段或任何 Collection/document 检索范围时
 返回 `400`。
+
+`PLAIN` 与 `collectionCoverageMode=EACH_COLLECTION` 组合也返回 HTTP `400 BAD_REQUEST`，沿用
+现有 problem+json `ErrorResponse`。校验在幂等键查询、回放/认领、模型调用和 SSE 响应开始前执行；
+`PLAIN` 省略该字段或显式使用 `GLOBAL` 时保持原有行为。
 
 `AGENT` 要求模型注册项声明 `capabilities.toolCalling=true`，且 Spring AI adapter
 提供工具选项。显式选择不兼容模型时返回 `MODEL_CAPABILITY_UNSUPPORTED`；默认路由会
@@ -1059,6 +1082,7 @@ curl "http://localhost:8081/api/v1/rag/search?query=Spring%20AI" \
 | `vectorWeight` | double | 0.5 | 向量检索权重 |
 | `fulltextWeight` | double | 0.5 | 全文检索权重 |
 | `collectionScopeMode` | enum | `CALLER_VISIBLE` | 显式 Collection 范围模式 |
+| `collectionCoverageMode` | enum | `GLOBAL` | 可选 `EACH_COLLECTION`；要求显式 `SELECTED_COLLECTIONS` |
 | `collectionKeys` | string[] | | 推荐的重复 Collection 范围参数 |
 | `collectionIds` | long[] | | deprecated 的重复数字范围参数 |
 
@@ -1125,6 +1149,7 @@ curl "http://localhost:8081/api/v1/rag/search?query=Spring%20AI" \
 {
   "query": "Spring AI",
   "collectionScopeMode": "SELECTED_COLLECTIONS",
+  "collectionCoverageMode": "EACH_COLLECTION",
   "collectionKeys": ["customer-42:manual:v3"],
   "documentIds": [1, 2, 3],
   "config": {
@@ -1144,6 +1169,11 @@ curl "http://localhost:8081/api/v1/rag/search?query=Spring%20AI" \
 `filters.metadataContains` / `filters.payloadContains` 必须是非空 JSON 对象，使用
 PostgreSQL `@>` 下推到全部候选 SQL。非法对象、超限或未知字段返回 `400`。
 响应头 `X-RAG-Retrieval-Trace-Id` 指向当前调用方可查询的诊断。
+`collectionCoverageMode` 缺省或为 `GLOBAL` 时保持原有全局 top-k。`EACH_COLLECTION` 要求
+显式 `collectionScopeMode=SELECTED_COLLECTIONS`、1–20 个授权 Collection，且
+`config.maxResults` 在 selected 数量到 100 之间。响应 body/envelope 不变；该模式增加
+`X-RAG-Collection-Coverage` JSON 响应头，启用 CORS 时浏览器可读取。摘要只计最终
+Collection-scoped 结果；完整无命中与分支不完整分别报告。旧请求不会收到该 header。
 
 ---
 

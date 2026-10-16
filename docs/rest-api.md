@@ -377,11 +377,10 @@ per-Collection quota/coverage (`EACH_COLLECTION`) is not supported.
 6. Carry the same scope semantics through Chat, SSE Chat, and GET/POST Search.
    Before release, inspect direct retrieval through Search and then validate
    Chat generation so retrieval defects can be separated from LLM behavior.
-7. Selected Collections share one global top-k; every Collection is not
-   guaranteed to contribute a result. Do not treat the current behavior as a
-   per-Collection coverage guarantee. See
-   [TODO: `EACH_COLLECTION`](TODO.md#each_collection-retrieval-coverage-mode)
-   for the deferred design boundary.
+7. Selected Collections share one global top-k by default, so every Collection
+   is not guaranteed to contribute. Request `EACH_COLLECTION` explicitly when
+   per-Collection coverage is needed; it is bounded to 20 Collections and 100
+   results. GLOBAL keeps its existing semantics.
 8. Correct invalid combinations or limits after a `400`. Treat `403` for a
    restricted caller as unauthorized without inferring whether the Collection
    exists. An unrestricted caller receives `404` for an unknown key.
@@ -481,6 +480,7 @@ with the current API-key ACL.
   "rag": {
     "scope": {
       "mode": "SELECTED_COLLECTIONS",
+      "coverage_mode": "EACH_COLLECTION",
       "collection_keys": ["brand:guides"]
     },
     "document_ids": [42]
@@ -502,6 +502,13 @@ curl http://localhost:8081/v1/chat/completions \
 When body and headers are both present, they must identify the same Collection
 key set. Omitting both uses `CALLER_VISIBLE`; setting
 `RAG_OPENAI_REQUIRE_EXPLICIT_SCOPE=true` makes omission a `400`.
+`rag.scope.coverage_mode` defaults to `GLOBAL`. `EACH_COLLECTION` is accepted
+only with `rag.mode=KNOWLEDGE` and explicit `mode=SELECTED_COLLECTIONS`. At most
+20 Collections may be selected, and effective `maxResults` must be between
+the selected count and 100. PLAIN, AGENT, and other scope combinations return
+`unsupported_parameter` at `rag.scope.coverage_mode`. OpenAI requests do not
+provide maxResults; the configured default is used and raised to the selected
+count when necessary.
 
 Current compatibility subset:
 
@@ -556,7 +563,18 @@ can continue reading only `id`, `object`, `created`, `model`, `choices`, and
       "title": "Visual tone guidelines",
       "collectionKey": "brand:guides"
     }],
-    "citationRegistry": {"S1": {"sourceHandle": "src-example"}}
+    "citationRegistry": {"S1": {"sourceHandle": "src-example"}},
+    "collectionCoverage": {
+      "mode": "EACH_COLLECTION",
+      "requestedCount": 1,
+      "returnedCount": 1,
+      "missingCount": 0,
+      "missingCollectionIds": [],
+      "incompleteCollectionIds": [],
+      "degraded": false,
+      "degradationReasons": [],
+      "perCollectionResultCounts": {"42": 1}
+    }
   }
 }
 ```
@@ -566,7 +584,9 @@ contains only authorized sources actually exposed in the final result, with
 identity, ranking, and file-level fields; it omits `chunkText` and arbitrary
 `metadata`. Use the Native API for full source text. The extension does not run
 retrieval or the model a second time; JSON, ordinary SSE, and keyed replay
-project the same execution result.
+project the same execution result. `collectionCoverage` appears only for
+explicit `EACH_COLLECTION`, summarizes final authorized Collection-scoped
+results, and contains no query text, document text, or credentials.
 
 With `stream=true`, `rag` appears only on the final chunk carrying
 `finish_reason`. The existing role, content, finish, and `data: [DONE]` order is
@@ -620,6 +640,7 @@ three explicit execution modes:
 | `domainId` | string | | Domain extension ID |
 | `model` | string | | Runtime model reference from `GET /rag/models`; omitted uses the default chain |
 | `collectionScopeMode` | enum | | `CALLER_VISIBLE`, `ANY_COLLECTION`, or `SELECTED_COLLECTIONS` |
+| `collectionCoverageMode` | enum | | `GLOBAL` (default) or `EACH_COLLECTION`; the latter is KNOWLEDGE-only and requires explicit selected scope |
 | `collectionKeys` | string[] | | Preferred stable Collection scope |
 | `collectionIds` | long[] | | Deprecated numeric compatibility scope |
 | `documentIds` | long[] | | Restrict retrieval to these documents; intersects with collections |
@@ -635,6 +656,12 @@ score.
 `maxResults`, `useHybridSearch`, and `useRerank` are effective execution
 overrides for `KNOWLEDGE` and `AGENT`. `PLAIN` rejects these fields and any
 Collection/document retrieval scope when explicitly supplied.
+
+`PLAIN` combined with `collectionCoverageMode=EACH_COLLECTION` also returns
+HTTP `400 BAD_REQUEST` using the existing problem+json `ErrorResponse`. The
+validation runs before idempotency lookup, replay/claim, model invocation, or
+SSE response start. PLAIN requests that omit the field or explicitly use
+`GLOBAL` preserve their existing behavior.
 
 `AGENT` requires a model whose registry entry has
 `capabilities.toolCalling=true` and whose Spring AI adapter exposes tool
@@ -1227,6 +1254,7 @@ curl "http://localhost:8081/api/v1/rag/search?query=Spring%20AI" \
 | `vectorWeight` | double | 0.5 | Vector search weight |
 | `fulltextWeight` | double | 0.5 | Full-text search weight |
 | `collectionScopeMode` | enum | `CALLER_VISIBLE` | Explicit Collection scope mode |
+| `collectionCoverageMode` | enum | `GLOBAL` | Optional `EACH_COLLECTION`; requires explicit `SELECTED_COLLECTIONS` |
 | `collectionKeys` | string[] | | Preferred repeated Collection scope parameter |
 | `collectionIds` | long[] | | Deprecated repeated numeric scope parameter |
 
@@ -1302,6 +1330,7 @@ Submit more complex retrieval configuration via request body.
 {
   "query": "Spring AI",
   "collectionScopeMode": "SELECTED_COLLECTIONS",
+  "collectionCoverageMode": "EACH_COLLECTION",
   "collectionKeys": ["customer-42:manual:v3"],
   "documentIds": [1, 2, 3],
   "config": {
@@ -1323,6 +1352,14 @@ objects and use PostgreSQL `@>` pushed into every candidate query. Invalid
 objects, oversized filters, or unknown fields return `400`. The
 `X-RAG-Retrieval-Trace-Id` response header identifies the caller-visible
 diagnostic.
+When omitted or set to `GLOBAL`, `collectionCoverageMode` preserves existing
+global top-k behavior. `EACH_COLLECTION` requires explicit
+`collectionScopeMode=SELECTED_COLLECTIONS`, 1–20 authorized Collections, and
+`config.maxResults` between the selected count and 100. The response body and
+envelope stay unchanged; the mode adds an `X-RAG-Collection-Coverage` JSON
+response header, exposed to browser clients when CORS is enabled. The summary
+counts only final Collection-scoped results and distinguishes a complete
+no-hit from an incomplete branch. Legacy requests do not receive the header.
 
 ---
 

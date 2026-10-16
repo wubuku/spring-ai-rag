@@ -2,6 +2,6 @@ data:{"id":"chatcmpl-consumer-fixture","object":"chat.completion.chunk","created
 
 data:{"id":"chatcmpl-consumer-fixture","object":"chat.completion.chunk","created":1760000000,"model":"fixture-model","choices":[{"index":0,"delta":{"content":"service scope"},"finish_reason":null}]}
 
-data:{"id":"chatcmpl-consumer-fixture","object":"chat.completion.chunk","created":1760000000,"model":"fixture-model","choices":[{"index":0,"delta":{"content":null},"finish_reason":"stop"}]}
+data:{"id":"chatcmpl-consumer-fixture","object":"chat.completion.chunk","created":1760000000,"model":"fixture-model","choices":[{"index":0,"delta":{"content":null},"finish_reason":"stop"}],"rag":{"traceId":"trace-fixture","collectionCoverage":{"mode":"EACH_COLLECTION","requestedCount":1,"returnedCount":1,"missingCount":0,"missingCollectionIds":[],"incompleteCount":0,"incompleteCollectionIds":[],"degraded":false,"perCollectionResultCounts":{"1":1}}}}
 
 data: [DONE]

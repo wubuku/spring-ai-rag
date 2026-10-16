@@ -228,6 +228,9 @@ const value = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
 for (const key of ['id', 'object', 'created', 'model', 'choices']) {
   if (!(key in value)) throw new Error(`OpenAI response missing ${key}`);
 }
+if (Object.prototype.hasOwnProperty.call(value.rag ?? {}, 'collectionCoverage')) {
+  throw new Error('OpenAI GLOBAL request must not return rag.collectionCoverage');
+}
 NODE
   check_trace_header "$live_chat_headers"
   echo "live Search/OpenAI smoke: 200"

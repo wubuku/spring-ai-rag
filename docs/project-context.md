@@ -198,9 +198,14 @@ Current boundaries:
   Collection, or `d.collection_id = ANY (?)` with a JDBC `bigint[]` parameter
   for selected Collections. Explicit document IDs use a separate `bigint[]`
   predicate.
-- Retrieval computes one global top-k across the effective Collection union.
-  It does not yet provide an `EACH_COLLECTION` mode that guarantees a result
-  contribution from every selected Collection.
+- Retrieval uses global top-k across the effective Collection union by
+  default. Explicit `collectionCoverageMode=EACH_COLLECTION` with
+  `SELECTED_COLLECTIONS` enables bounded per-Collection coverage (up to 20
+  Collections and 100 final results). It guarantees only that each Collection
+  with a retrieval hit gets a result; it never fabricates a no-hit result.
+  Search reports an additive `X-RAG-Collection-Coverage` header, while
+  Chat/OpenAI use additive metadata. GLOBAL compatibility semantics remain
+  unchanged and no database migration is required.
 
 See [architecture.md](architecture.md).
 

@@ -396,19 +396,19 @@ the administration UI.
 ```text
 ChatRequest / SearchRequest
   collectionScopeMode? + collectionKeys? + deprecated collectionIds?
-  + documentIds?
+  + collectionCoverageMode? + documentIds?
         |
         v
 CollectionRetrievalScopeResolver
   - infer the compatibility mode when collectionScopeMode is omitted
-  - validate the mode/list combination and 100/1000 item limits
+  - validate mode/list/coverage combinations and 100/1000 item limits
   - use CollectionIdentityResolver for batched key -> Long ID resolution
   - apply ApiKeyCollectionAccess before producing an effective scope
         |
         v
 RetrievalScope
   collectionFilter = NONE | ANY_ASSIGNED | SELECTED
-  collectionIds + documentIds + server-owned documentType + matchNone
+  collectionIds + coverageMode + documentIds + server-owned documentType + matchNone
         |
         +-- Chat -> RagChatService -> HybridSearchAdvisor
         +-- Search -> RagSearchController
@@ -449,6 +449,24 @@ returns `404` to an unrestricted caller and `403` to a restricted caller to
 avoid revealing out-of-scope Collections. Deprecated unknown numeric IDs keep
 their compatibility behavior: they match no rows for an unrestricted caller,
 while restricted retrieval returns `403`.
+
+`collectionCoverageMode` is an optional strategy separate from scope selection.
+Omission or `GLOBAL` preserves global top-k. `EACH_COLLECTION` requires an
+explicit `SELECTED_COLLECTIONS` scope, at most 20 authorized Collections, and
+`limit/maxResults` between the selected count and 100. It computes the query
+embedding once and fans vector/full-text branches out per Collection under a
+shared deadline. At least one candidate is retained from every Collection
+with a hit, then the remaining slots use deterministic ranking; no-hit
+Collections are never populated with synthetic results. Each branch is capped
+at 200 rows and each request at 8,000 pre-fusion rows. Embedding uses an
+isolated 4-thread/32-queue executor, and a process-wide permit caps in-flight
+EACH branches at 80. Capacity, timeout, and partial failures are reported in a
+bounded summary. When reranking is active, the bounded candidate pool is ranked
+once before coverage selection; incomplete ranking falls back to original
+candidates while preserving coverage. Native Search adds
+`X-RAG-Collection-Coverage` only for EACH. Chat/OpenAI add the summary to
+existing metadata/`rag` extensions without adding SSE events. No database
+migration is needed, and legacy requests remain on GLOBAL.
 
 Data model and current boundaries:
 

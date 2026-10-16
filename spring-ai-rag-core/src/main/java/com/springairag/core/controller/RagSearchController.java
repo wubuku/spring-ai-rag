@@ -1,17 +1,21 @@
 package com.springairag.core.controller;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.springairag.api.dto.ErrorResponse;
 import com.springairag.api.dto.RetrievalConfig;
 import com.springairag.api.dto.RetrievalResult;
 import com.springairag.api.dto.SearchRequest;
 import com.springairag.api.dto.SearchResponse;
 import com.springairag.api.enums.CollectionScopeMode;
+import com.springairag.api.enums.CollectionCoverageMode;
 import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.chat.ChatPrincipal;
 import com.springairag.core.diagnostics.RetrievalDiagnosticsService;
 import com.springairag.core.diagnostics.RetrievalTraceSession;
 import com.springairag.core.security.ApiAccessPolicy;
 import com.springairag.core.retrieval.HybridRetrieverService;
+import com.springairag.core.retrieval.CollectionCoverageReranker;
 import com.springairag.core.retrieval.ReRankingService;
 import com.springairag.core.retrieval.RetrievalBranchStage;
 import com.springairag.core.retrieval.RetrievalFilterValidator;
@@ -62,6 +66,9 @@ import java.util.List;
 public class RagSearchController {
 
     private static final Logger log = LoggerFactory.getLogger(RagSearchController.class);
+    private static final String COLLECTION_COVERAGE_HEADER =
+            "X-RAG-Collection-Coverage";
+    private static final ObjectMapper HEADER_MAPPER = new ObjectMapper();
 
     /** Maximum allowed results per search request */
     private static final int MAX_SEARCH_LIMIT = 1000;
@@ -113,6 +120,8 @@ public class RagSearchController {
             @RequestParam(defaultValue = "0.5") double fulltextWeight,
             @RequestParam(required = false)
             CollectionScopeMode collectionScopeMode,
+            @RequestParam(required = false)
+            CollectionCoverageMode collectionCoverageMode,
             @Parameter(description = "Deprecated numeric Collection scope; use collectionKeys",
                     deprecated = true)
             @RequestParam(required = false) List<Long> collectionIds,
@@ -149,13 +158,10 @@ public class RagSearchController {
 
         ApiAccessPolicy key = ApiKeyCollectionAccess.currentPolicy(httpRequest);
         List<RetrievalResult> results;
-        RetrievalScope scope = retrievalScopeResolver.resolve(
-                collectionScopeMode,
-                collectionIds,
-                collectionKeys,
-                null,
-                null,
-                key);
+        RetrievalScope scope = resolveScope(
+                collectionScopeMode, collectionCoverageMode,
+                collectionIds, collectionKeys, null, null, key);
+        retrievalScopeResolver.validateCoverageLimit(scope, limit);
         RetrievalOutcome outcome = hybridRetriever.searchInScopeDetailed(
                 query, scope, null, limit, config, resolveFilters(null));
         results = outcome != null && outcome.results() != null
@@ -174,7 +180,7 @@ public class RagSearchController {
     ResponseEntity<?> search(String query, int limit, boolean useHybrid,
                              double vectorWeight, double fulltextWeight) {
         return search(query, limit, useHybrid, vectorWeight, fulltextWeight,
-                null, null, null, null);
+                null, null, null, null, null);
     }
 
     ResponseEntity<?> search(
@@ -183,7 +189,19 @@ public class RagSearchController {
             List<Long> collectionIds, List<String> collectionKeys,
             HttpServletRequest httpRequest) {
         return search(query, limit, useHybrid, vectorWeight, fulltextWeight,
-                null, collectionIds, collectionKeys, httpRequest);
+                null, null, collectionIds, collectionKeys, httpRequest);
+    }
+
+    /** Preserves the pre-coverage package-private Java helper signature. */
+    ResponseEntity<?> search(
+            String query, int limit, boolean useHybrid,
+            double vectorWeight, double fulltextWeight,
+            CollectionScopeMode collectionScopeMode,
+            List<Long> collectionIds, List<String> collectionKeys,
+            HttpServletRequest httpRequest) {
+        return search(query, limit, useHybrid, vectorWeight, fulltextWeight,
+                collectionScopeMode, null, collectionIds, collectionKeys,
+                httpRequest);
     }
 
     /**
@@ -220,13 +238,12 @@ public class RagSearchController {
                 : RetrievalConfig.builder().build();
 
         List<RetrievalResult> results;
-        RetrievalScope scope = retrievalScopeResolver.resolve(
+        RetrievalScope scope = resolveScope(
                 request.getCollectionScopeMode(),
-                request.getCollectionIds(),
-                request.getCollectionKeys(),
-                request.getDocumentIds(),
-                null,
-                key);
+                request.getCollectionCoverageMode(),
+                request.getCollectionIds(), request.getCollectionKeys(),
+                request.getDocumentIds(), null, key);
+        retrievalScopeResolver.validateCoverageLimit(scope, config.getMaxResults());
         RetrievalFilters filters = resolveFilters(request.getFilters());
         RetrievalOutcome outcome = hybridRetriever.searchInScopeDetailed(
                 request.getQuery(), scope, null,
@@ -235,41 +252,67 @@ public class RagSearchController {
                 ? outcome.results() : List.of();
         if (config.isUseRerank() && !results.isEmpty()) {
             long startedAt = System.nanoTime();
-            try {
-                results = reRankingService.rerank(
-                        request.getQuery(), results, config.getMaxResults());
+            if (scope.coverageMode()
+                    == com.springairag.api.enums.CollectionCoverageMode.EACH_COLLECTION) {
+                CollectionCoverageReranker.Result rerankResult =
+                        CollectionCoverageReranker.rerank(
+                                request.getQuery(), results, scope.collectionIds(),
+                                config.getMaxResults(), reRankingService);
+                results = rerankResult.results();
                 if (outcome != null) {
                     outcome = outcome.withRerank(
                             new RetrievalBranchStage(
                                     RetrievalBranchStage.RERANK,
                                     "rerank",
-                                    RetrievalBranchStage.SUCCESS,
+                                    rerankResult.executed()
+                                            ? rerankResult.degraded()
+                                                    ? RetrievalBranchStage.ERROR
+                                                    : RetrievalBranchStage.SUCCESS
+                                            : RetrievalBranchStage.DISABLED,
                                     (System.nanoTime() - startedAt) / 1_000_000L,
                                     outcome.results().size(),
                                     results.size(),
-                                    null),
+                                    rerankResult.errorCode()),
                             results,
-                            false);
+                            rerankResult.degraded());
                 }
-            } catch (RuntimeException e) {
-                if (outcome != null) {
-                    List<RetrievalResult> fallbackResults =
-                            ReRankingService.limitResults(
-                                    outcome.results(), config.getMaxResults());
-                    outcome = outcome.withRerank(
-                            new RetrievalBranchStage(
-                                    RetrievalBranchStage.RERANK,
-                                    "rerank",
-                                    RetrievalBranchStage.ERROR,
-                                    (System.nanoTime() - startedAt) / 1_000_000L,
-                                    outcome.results().size(),
-                                    fallbackResults.size(),
-                                    e.getClass().getSimpleName()),
-                            fallbackResults,
-                            true);
-                    results = outcome.results();
-                } else {
-                    throw e;
+            } else {
+                try {
+                    results = reRankingService.rerank(
+                            request.getQuery(), results, config.getMaxResults());
+                    if (outcome != null) {
+                        outcome = outcome.withRerank(
+                                new RetrievalBranchStage(
+                                        RetrievalBranchStage.RERANK,
+                                        "rerank",
+                                        RetrievalBranchStage.SUCCESS,
+                                        (System.nanoTime() - startedAt) / 1_000_000L,
+                                        outcome.results().size(),
+                                        results.size(),
+                                        null),
+                                results,
+                                false);
+                    }
+                } catch (RuntimeException e) {
+                    if (outcome != null) {
+                        List<RetrievalResult> fallbackResults =
+                                ReRankingService.limitResults(
+                                        outcome.results(), config.getMaxResults());
+                        outcome = outcome.withRerank(
+                                new RetrievalBranchStage(
+                                        RetrievalBranchStage.RERANK,
+                                        "rerank",
+                                        RetrievalBranchStage.ERROR,
+                                        (System.nanoTime() - startedAt) / 1_000_000L,
+                                        outcome.results().size(),
+                                        fallbackResults.size(),
+                                        e.getClass().getSimpleName()),
+                                fallbackResults,
+                                true);
+                        results = outcome.results();
+                    } else {
+                        throw e;
+                    }
                 }
             }
         }
@@ -301,6 +344,25 @@ public class RagSearchController {
      * condition, so a 400 from an argument and a 400 from a thrown
      * IllegalArgumentException finally agree.
      */
+    private RetrievalScope resolveScope(
+            CollectionScopeMode mode,
+            CollectionCoverageMode coverageMode,
+            List<Long> collectionIds,
+            List<String> collectionKeys,
+            List<Long> documentIds,
+            String documentType,
+            ApiAccessPolicy caller) {
+        if (coverageMode == null
+                || coverageMode == CollectionCoverageMode.GLOBAL) {
+            return retrievalScopeResolver.resolve(
+                    mode, collectionIds, collectionKeys,
+                    documentIds, documentType, caller);
+        }
+        return retrievalScopeResolver.resolve(
+                mode, coverageMode, collectionIds, collectionKeys,
+                documentIds, documentType, caller);
+    }
+
     private ResponseEntity<ErrorResponse> badRequest(String detail, HttpServletRequest request) {
         return ResponseEntity.badRequest()
                 .body(ErrorResponse.of(
@@ -337,7 +399,7 @@ public class RagSearchController {
         if (diagnosticsService == null
                 || !diagnosticsService.isEnabled()
                 || outcome == null) {
-            return ResponseEntity.ok(body);
+            return okWithCoverage(body, outcome);
         }
         try {
             RetrievalTraceSession session = diagnosticsService.createSession(
@@ -355,13 +417,37 @@ public class RagSearchController {
             RetrievalOutcome tagged = outcome.withTraceId(session.traceId());
             diagnosticsService.persistSearch(
                     session, tagged, session.scopeSummary(), effective);
-            return ResponseEntity.ok()
-                    .header(RetrievalTraceHeaders.TRACE_ID, session.traceId().toString())
-                    .body(body);
+            ResponseEntity.BodyBuilder response = ResponseEntity.ok()
+                    .header(RetrievalTraceHeaders.TRACE_ID, session.traceId().toString());
+            addCoverageHeader(response, outcome);
+            return response.body(body);
         } catch (Exception e) {
             log.warn("Retrieval diagnostics failed; returning search results without trace: {}",
                     e.getMessage());
-            return ResponseEntity.ok(body);
+            return okWithCoverage(body, outcome);
+        }
+    }
+
+    private <T> ResponseEntity<T> okWithCoverage(
+            T body, RetrievalOutcome outcome) {
+        ResponseEntity.BodyBuilder response = ResponseEntity.ok();
+        addCoverageHeader(response, outcome);
+        return response.body(body);
+    }
+
+    private void addCoverageHeader(
+            ResponseEntity.BodyBuilder response, RetrievalOutcome outcome) {
+        Object coverage = outcome == null
+                ? null : outcome.scopeSummary().get("collectionCoverage");
+        if (!(coverage instanceof java.util.Map<?, ?>)) {
+            return;
+        }
+        try {
+            response.header(
+                    COLLECTION_COVERAGE_HEADER,
+                    HEADER_MAPPER.writeValueAsString(coverage));
+        } catch (JsonProcessingException e) {
+            log.warn("Unable to serialize Collection coverage response header", e);
         }
     }
 

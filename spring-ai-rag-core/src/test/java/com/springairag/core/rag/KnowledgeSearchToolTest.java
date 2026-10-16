@@ -3,6 +3,7 @@ package com.springairag.core.rag;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.springairag.api.dto.RetrievalResult;
+import com.springairag.api.enums.CollectionCoverageMode;
 import com.springairag.core.chat.AuthorizedRetrievalContext;
 import com.springairag.core.chat.ChatPrincipal;
 import com.springairag.core.chat.RetrievalOptions;
@@ -131,6 +132,30 @@ class KnowledgeSearchToolTest {
                 any());
         assertSame(scope, usedScope.getValue());
         assertEquals(1, trace.retrievalCalls());
+    }
+
+    @Test
+    void eachCollectionToolLimitIsRaisedToSelectedCountWithinCallerBudget()
+            throws Exception {
+        RetrievalScope scope = RetrievalScope.selectedCollections(
+                List.of(7L, 8L, 9L), List.of(), null,
+                CollectionCoverageMode.EACH_COLLECTION);
+        AuthorizedRetrievalContext authorized = new AuthorizedRetrievalContext(
+                scope,
+                new RetrievalOptions(5, 0.25, true, true, 0.55, 0.45),
+                new RetrievalTraceCollector(),
+                "session-tool-coverage",
+                ChatPrincipal.local());
+        when(hybridRetriever.searchInScopeDetailed(
+                eq("coverage"), same(scope), any(), eq(3), any(), any()))
+                .thenReturn(RetrievalOutcome.ofResults(List.of()));
+
+        tool.call(
+                "{\"query\":\"coverage\",\"maxResults\":1}",
+                new ToolContext(Map.of(KnowledgeSearchTool.CONTEXT_KEY, authorized)));
+
+        verify(hybridRetriever).searchInScopeDetailed(
+                eq("coverage"), same(scope), any(), eq(3), any(), any());
     }
 
     @Test

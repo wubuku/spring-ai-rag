@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.springairag.api.dto.ChatRequest;
 import com.springairag.api.openai.OpenAiChatCompletionRequest;
 import com.springairag.api.enums.ChatMode;
+import com.springairag.api.enums.CollectionCoverageMode;
 import com.springairag.api.enums.CollectionScopeMode;
 import com.springairag.core.exception.RagException;
 import com.springairag.api.enums.ErrorCode;
@@ -85,6 +86,11 @@ public final class ChatRequestFingerprint {
             scope.put("mode", scopeMode == null
                     ? inferredScopeMode(request)
                     : scopeMode.name());
+            if (request.getCollectionCoverageMode()
+                    == CollectionCoverageMode.EACH_COLLECTION) {
+                scope.put("coverageMode",
+                        CollectionCoverageMode.EACH_COLLECTION.name());
+            }
             scope.set("collectionIds", sortedNumbers(
                     objectMapper, request.getCollectionIds()));
             scope.set("collectionKeys", sortedStrings(
@@ -170,12 +176,24 @@ public final class ChatRequestFingerprint {
             scope.put("mode", "NOT_APPLICABLE");
         } else if (!normalizedHeaderKeys.isEmpty()) {
             scope.put("mode", CollectionScopeMode.SELECTED_COLLECTIONS.name());
+            if (request.getRag() != null
+                    && request.getRag().getScope() != null
+                    && request.getRag().getScope().getCoverageMode()
+                            == CollectionCoverageMode.EACH_COLLECTION) {
+                scope.put("coverageMode",
+                        CollectionCoverageMode.EACH_COLLECTION.name());
+            }
         } else if (request.getRag() != null
                 && request.getRag().getScope() != null) {
             var declared = request.getRag().getScope();
             scope.put("mode", declared.getMode() == null
                     ? CollectionScopeMode.CALLER_VISIBLE.name()
                     : declared.getMode().name());
+            if (declared.getCoverageMode()
+                    == CollectionCoverageMode.EACH_COLLECTION) {
+                scope.put("coverageMode",
+                        CollectionCoverageMode.EACH_COLLECTION.name());
+            }
             scope.set("collectionIds", sortedNumbers(
                     objectMapper, declared.getCollectionIds()));
             scope.set("collectionKeys", sortedStrings(

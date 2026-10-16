@@ -2,6 +2,7 @@ package com.springairag.core.openai;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.springairag.api.enums.ChatMode;
+import com.springairag.api.enums.CollectionCoverageMode;
 import com.springairag.api.openai.OpenAiChatCompletionRequest;
 import com.springairag.core.chat.ChatInputMessage;
 import com.springairag.core.chat.MemoryMode;
@@ -27,12 +28,13 @@ class OpenAiChatRequestMapperTest {
     private ObjectMapper objectMapper;
     private OpenAiRequestRetrievalScopeAdapter scopeAdapter;
     private OpenAiChatRequestMapper mapper;
+    private RagProperties properties;
 
     @BeforeEach
     void setUp() {
         objectMapper = new ObjectMapper();
         scopeAdapter = mock(OpenAiRequestRetrievalScopeAdapter.class);
-        RagProperties properties = new RagProperties();
+        properties = new RagProperties();
         RagOpenAiCompatibilityProperties.ModelAlias alias =
                 new RagOpenAiCompatibilityProperties.ModelAlias();
         properties.getOpenAiCompatibility().getModels()
@@ -83,6 +85,96 @@ class OpenAiChatRequestMapperTest {
                 mapped.command().inputMessages().stream()
                         .map(ChatInputMessage::role)
                         .toList());
+    }
+
+    @Test
+    void eachCollectionCoverageRaisesOpenAiDefaultLimitToSelectedCount()
+            throws Exception {
+        List<Long> ids = java.util.stream.LongStream.rangeClosed(1, 8)
+                .boxed().toList();
+        RetrievalScope scope = RetrievalScope.selectedCollections(
+                ids, List.of(), null, CollectionCoverageMode.EACH_COLLECTION);
+        when(scopeAdapter.resolve(
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any())).thenReturn(scope);
+        OpenAiChatCompletionRequest request = objectMapper.readValue("""
+                {
+                  "model": "rag-default",
+                  "rag": {"scope": {
+                    "mode": "SELECTED_COLLECTIONS",
+                    "coverage_mode": "EACH_COLLECTION",
+                    "collection_ids": [1,2,3,4,5,6,7,8]
+                  }},
+                  "messages": [{"role": "user", "content": "query"}]
+                }
+                """, OpenAiChatCompletionRequest.class);
+
+        OpenAiChatRequestMapper.MappedRequest mapped = mapper.map(
+                request, new MockHttpServletRequest());
+
+        assertEquals(CollectionCoverageMode.EACH_COLLECTION,
+                mapped.command().retrievalScope().coverageMode());
+        assertEquals(8, mapped.command().retrievalOptions().maxResults());
+    }
+
+    @Test
+    void plainModeRejectsEachCollectionCoverageAsUnsupportedParameter()
+            throws Exception {
+        properties.getOpenAiCompatibility().getModels()
+                .get("rag-default").setMode(ChatMode.PLAIN);
+        mapper = new OpenAiChatRequestMapper(
+                new OpenAiModelAliasRegistry(properties),
+                scopeAdapter,
+                properties);
+        OpenAiChatCompletionRequest request = objectMapper.readValue("""
+                {
+                  "model": "rag-default",
+                  "rag": {"scope": {
+                    "mode": "SELECTED_COLLECTIONS",
+                    "coverage_mode": "EACH_COLLECTION",
+                    "collection_keys": ["support"]
+                  }},
+                  "messages": [{"role": "user", "content": "query"}]
+                }
+                """, OpenAiChatCompletionRequest.class);
+
+        OpenAiProtocolException error = assertThrows(
+                OpenAiProtocolException.class,
+                () -> mapper.map(request, new MockHttpServletRequest()));
+
+        assertEquals("rag.scope.coverage_mode", error.getParam());
+        assertEquals("unsupported_parameter", error.getCode());
+        verifyNoInteractions(scopeAdapter);
+    }
+
+    @Test
+    void agentModeRejectsEachCollectionCoverageAsUnsupportedParameter()
+            throws Exception {
+        properties.getOpenAiCompatibility().getModels()
+                .get("rag-default").setMode(ChatMode.AGENT);
+        mapper = new OpenAiChatRequestMapper(
+                new OpenAiModelAliasRegistry(properties),
+                scopeAdapter,
+                properties);
+        OpenAiChatCompletionRequest request = objectMapper.readValue("""
+                {
+                  "model": "rag-default",
+                  "rag": {"scope": {
+                    "mode": "SELECTED_COLLECTIONS",
+                    "coverage_mode": "EACH_COLLECTION",
+                    "collection_keys": ["support"]
+                  }},
+                  "messages": [{"role": "user", "content": "query"}]
+                }
+                """, OpenAiChatCompletionRequest.class);
+
+        OpenAiProtocolException error = assertThrows(
+                OpenAiProtocolException.class,
+                () -> mapper.map(request, new MockHttpServletRequest()));
+
+        assertEquals("rag.scope.coverage_mode", error.getParam());
+        assertEquals("unsupported_parameter", error.getCode());
+        verifyNoInteractions(scopeAdapter);
     }
 
     @Test
@@ -172,6 +264,8 @@ class OpenAiChatRequestMapperTest {
         assertEquals(7, mapped.command().retrievalOptions().maxResults());
         assertEquals(List.of(9L), mapped.command().retrievalScope().collectionIds());
         assertEquals(List.of(20L), mapped.command().retrievalScope().documentIds());
+        assertEquals(CollectionCoverageMode.GLOBAL,
+                mapped.command().retrievalScope().coverageMode());
         verifyNoInteractions(scopeAdapter);
     }
 

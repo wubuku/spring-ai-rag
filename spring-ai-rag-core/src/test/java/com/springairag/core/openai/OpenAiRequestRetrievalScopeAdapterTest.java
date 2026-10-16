@@ -1,6 +1,7 @@
 package com.springairag.core.openai;
 
 import com.springairag.api.enums.CollectionScopeMode;
+import com.springairag.api.enums.CollectionCoverageMode;
 import com.springairag.api.openai.OpenAiChatCompletionRequest;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.entity.RagApiKey;
@@ -74,6 +75,32 @@ class OpenAiRequestRetrievalScopeAdapterTest {
                 caller)).thenReturn(expected);
 
         assertEquals(expected, adapter.resolve(rag, request));
+    }
+
+    @Test
+    void mapsExplicitCoverageModeThroughTheSharedAuthorizedResolver() {
+        OpenAiChatCompletionRequest.Scope requestScope =
+                new OpenAiChatCompletionRequest.Scope();
+        requestScope.setMode(CollectionScopeMode.SELECTED_COLLECTIONS);
+        requestScope.setCoverageMode(CollectionCoverageMode.EACH_COLLECTION);
+        requestScope.setCollectionIds(List.of(4L));
+        OpenAiChatCompletionRequest.RagOptions rag =
+                new OpenAiChatCompletionRequest.RagOptions();
+        rag.setScope(requestScope);
+        RetrievalScope expected = RetrievalScope.selectedCollections(
+                List.of(4L), List.of(), null,
+                CollectionCoverageMode.EACH_COLLECTION);
+        when(resolver.resolve(
+                CollectionScopeMode.SELECTED_COLLECTIONS,
+                CollectionCoverageMode.EACH_COLLECTION,
+                List.of(4L), null, null, null, null))
+                .thenReturn(expected);
+
+        assertEquals(expected, adapter.resolve(rag, new MockHttpServletRequest()));
+        verify(resolver).resolve(
+                CollectionScopeMode.SELECTED_COLLECTIONS,
+                CollectionCoverageMode.EACH_COLLECTION,
+                List.of(4L), null, null, null, null);
     }
 
     @Test

@@ -17,6 +17,7 @@ import com.springairag.core.retrieval.RetrievalFilterValidator;
 import com.springairag.core.retrieval.RetrievalFilters;
 import com.springairag.core.retrieval.RetrievalScope;
 import com.springairag.api.enums.ChatMode;
+import com.springairag.api.enums.CollectionCoverageMode;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
@@ -80,6 +81,16 @@ public class OpenAiChatRequestMapper {
                     "rag.filters",
                     "unsupported_parameter");
         }
+        if (alias.mode() != ChatMode.KNOWLEDGE
+                && rag != null
+                && rag.getScope() != null
+                && rag.getScope().getCoverageMode()
+                        == CollectionCoverageMode.EACH_COLLECTION) {
+            throw OpenAiProtocolException.invalid(
+                    "rag.scope.coverage_mode is only supported when mode is KNOWLEDGE",
+                    "rag.scope.coverage_mode",
+                    "unsupported_parameter");
+        }
         RetrievalScope scope = scopeAdapter.resolve(rag, httpRequest);
 
         ChatPrincipal principal = ChatPrincipal.from(httpRequest);
@@ -95,6 +106,17 @@ public class OpenAiChatRequestMapper {
                 false,
                 false,
                 false);
+        if (scope.coverageMode() == CollectionCoverageMode.EACH_COLLECTION
+                && retrievalOptions.maxResults() < scope.collectionIds().size()) {
+            retrievalOptions = new RetrievalOptions(
+                    scope.collectionIds().size(),
+                    retrievalOptions.minScore(),
+                    retrievalOptions.useHybridSearch(),
+                    retrievalOptions.useRerank(),
+                    retrievalOptions.vectorWeight(),
+                    retrievalOptions.fulltextWeight());
+        }
+        validateCoverageLimit(scope, retrievalOptions.maxResults());
         ChatCommand command = new ChatCommand(
                 declaration.latestUser(),
                 sessionId,
@@ -236,6 +258,7 @@ public class OpenAiChatRequestMapper {
                     snapshot.path("retrievalOptions"));
             RetrievalScope scope = retrievalScope(
                     snapshot.path("effectiveScope"));
+            validateCoverageLimit(scope, options.maxResults());
             String domainId = snapshot.path("domainId").asText(null);
             if (domainId != null && domainId.isBlank()) {
                 domainId = null;
@@ -315,6 +338,17 @@ public class OpenAiChatRequestMapper {
                 node.path("fulltextWeight").asDouble());
     }
 
+    private void validateCoverageLimit(RetrievalScope scope, int limit) {
+        if (scope != null
+                && scope.coverageMode() == CollectionCoverageMode.EACH_COLLECTION
+                && (limit < scope.collectionIds().size() || limit > 100)) {
+            throw OpenAiProtocolException.invalid(
+                    "EACH_COLLECTION coverage requires maxResults between selected Collection count and 100",
+                    "rag.scope.coverage_mode",
+                    "invalid_value");
+        }
+    }
+
     private RetrievalScope retrievalScope(JsonNode node) {
         if (node == null || !node.isObject()) {
             throw invalidSnapshot();
@@ -334,7 +368,10 @@ public class OpenAiChatRequestMapper {
                     collectionIds,
                     documentIds,
                     documentType,
-                    node.path("matchNone").asBoolean());
+                    node.path("matchNone").asBoolean(),
+                    CollectionCoverageMode.valueOf(
+                            node.path("coverageMode").asText(
+                                    CollectionCoverageMode.GLOBAL.name())));
         } catch (IllegalArgumentException e) {
             throw invalidSnapshot();
         }

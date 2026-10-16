@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.springairag.api.enums.CollectionScopeMode;
+import com.springairag.api.enums.CollectionCoverageMode;
 import com.springairag.core.config.EmbeddingProfile;
 
 import java.nio.charset.StandardCharsets;
@@ -75,6 +76,157 @@ public final class RetrievalScopeSummary {
         }
         summary.put("payloadContains", payloads);
         return Map.copyOf(summary);
+    }
+
+    /**
+     * Adds the privacy-safe result of an explicit per-Collection coverage run.
+     * Only authorized numeric IDs and counts are exposed; no document text or
+     * provider error payload is included.
+     */
+    public static Map<String, Object> withCollectionCoverage(
+            Map<String, Object> base,
+            CollectionCoverageMode mode,
+            List<Long> requestedCollectionIds,
+            Map<Long, Integer> perCollectionResultCounts) {
+        return withCollectionCoverage(
+                base, mode, requestedCollectionIds, perCollectionResultCounts,
+                List.of(), Map.of(), false);
+    }
+
+    public static Map<String, Object> withCollectionCoverage(
+            Map<String, Object> base,
+            CollectionCoverageMode mode,
+            List<Long> requestedCollectionIds,
+            Map<Long, Integer> perCollectionResultCounts,
+            List<Long> incompleteCollectionIds,
+            Map<Long, Map<String, String>> collectionBranchStatuses,
+            boolean degraded) {
+        Map<String, Object> summary = new LinkedHashMap<>();
+        if (base != null) {
+            summary.putAll(base);
+        }
+        if (mode != CollectionCoverageMode.EACH_COLLECTION) {
+            return Collections.unmodifiableMap(summary);
+        }
+        List<Long> requested = requestedCollectionIds == null
+                ? List.of() : List.copyOf(requestedCollectionIds);
+        Map<Long, Integer> counts = perCollectionResultCounts == null
+                ? Map.of() : perCollectionResultCounts;
+        List<Long> incomplete = incompleteCollectionIds == null
+                ? List.of() : List.copyOf(incompleteCollectionIds);
+        List<Long> missing = new ArrayList<>();
+        Map<String, Object> perCollection = new LinkedHashMap<>();
+        Map<String, Object> branchStatuses = new LinkedHashMap<>();
+        int returned = 0;
+        for (Long collectionId : requested) {
+            int count = Math.max(0, counts.getOrDefault(collectionId, 0));
+            perCollection.put(String.valueOf(collectionId), count);
+            Map<String, String> statuses = collectionBranchStatuses == null
+                    ? null : collectionBranchStatuses.get(collectionId);
+            if (statuses != null) {
+                branchStatuses.put(String.valueOf(collectionId), Map.copyOf(statuses));
+            }
+            if (count == 0) {
+                missing.add(collectionId);
+            } else {
+                returned++;
+            }
+        }
+        Map<String, Object> coverage = new LinkedHashMap<>();
+        coverage.put("mode", mode.name());
+        coverage.put("requestedCollectionIds", requested);
+        coverage.put("requestedCount", requested.size());
+        coverage.put("returnedCount", returned);
+        coverage.put("missingCount", missing.size());
+        coverage.put("missingCollectionIds", List.copyOf(missing));
+        coverage.put("incompleteCount", incomplete.size());
+        coverage.put("incompleteCollectionIds", incomplete);
+        coverage.put("degraded", degraded || !incomplete.isEmpty());
+        if (!branchStatuses.isEmpty()) {
+            coverage.put("collectionBranchStatuses", Map.copyOf(branchStatuses));
+        }
+        coverage.put("perCollectionResultCounts", Map.copyOf(perCollection));
+        summary.put("collectionCoverage", Map.copyOf(coverage));
+        return Collections.unmodifiableMap(summary);
+    }
+
+    public static Map<String, Object> withCollectionCoverageResults(
+            Map<String, Object> base,
+            List<com.springairag.api.dto.RetrievalResult> results,
+            boolean rerankDegraded) {
+        Object rawCoverage = base == null ? null : base.get("collectionCoverage");
+        if (!(rawCoverage instanceof Map<?, ?> coverage)
+                || !CollectionCoverageMode.EACH_COLLECTION.name()
+                        .equals(coverage.get("mode"))) {
+            return base == null ? Map.of() : base;
+        }
+        List<Long> requested = numberList(coverage.get("requestedCollectionIds"));
+        List<Long> incomplete = numberList(coverage.get("incompleteCollectionIds"));
+        Map<Long, Map<String, String>> statuses = new LinkedHashMap<>();
+        Object rawStatuses = coverage.get("collectionBranchStatuses");
+        if (rawStatuses instanceof Map<?, ?> statusMap) {
+            for (Map.Entry<?, ?> entry : statusMap.entrySet()) {
+                Long collectionId = parseLong(entry.getKey());
+                if (collectionId == null || !(entry.getValue() instanceof Map<?, ?> values)) {
+                    continue;
+                }
+                Map<String, String> converted = new LinkedHashMap<>();
+                for (Map.Entry<?, ?> status : values.entrySet()) {
+                    if (status.getKey() != null && status.getValue() != null) {
+                        converted.put(
+                                String.valueOf(status.getKey()),
+                                String.valueOf(status.getValue()));
+                    }
+                }
+                statuses.put(collectionId, Map.copyOf(converted));
+            }
+        }
+        Map<Long, Integer> counts = CollectionCoverageMerger.countByCollection(
+                requested, results == null ? List.of() : results);
+        boolean degraded = Boolean.TRUE.equals(coverage.get("degraded")) || rerankDegraded;
+        Map<String, Object> updated = new LinkedHashMap<>(withCollectionCoverage(
+                base,
+                CollectionCoverageMode.EACH_COLLECTION,
+                requested,
+                counts,
+                incomplete,
+                statuses,
+                degraded));
+        if (rerankDegraded) {
+            Map<String, Object> updatedCoverage = new LinkedHashMap<>(
+                    (Map<String, Object>) updated.get("collectionCoverage"));
+            updatedCoverage.put("rerankDegraded", true);
+            updated.put("collectionCoverage", Map.copyOf(updatedCoverage));
+        }
+        return Collections.unmodifiableMap(updated);
+    }
+
+    private static List<Long> numberList(Object value) {
+        if (!(value instanceof List<?> values)) {
+            return List.of();
+        }
+        List<Long> converted = new ArrayList<>();
+        for (Object item : values) {
+            Long number = parseLong(item);
+            if (number != null) {
+                converted.add(number);
+            }
+        }
+        return List.copyOf(converted);
+    }
+
+    private static Long parseLong(Object value) {
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        if (value != null) {
+            try {
+                return Long.parseLong(String.valueOf(value));
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
+        }
+        return null;
     }
 
     private static Map<String, Object> containmentSummary(JsonbContainmentFilter filter) {

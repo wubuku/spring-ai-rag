@@ -1092,6 +1092,22 @@ identity，检查 Hit Rate、MRR、Recall@K、nDCG、每 case minimum、相对 b
 Collection decoy 泄漏和 JSONB 明确空结果。外部 provider、数据库或 embedding 失败必须
 返回非零，不能伪装为质量通过。
 
+### `EACH_COLLECTION` 覆盖黑盒回归
+
+```bash
+./scripts/verify-collection-coverage.sh --self-test
+BASE_URL=http://127.0.0.1:18081 ./scripts/verify-collection-coverage.sh
+```
+
+第二条命令通过外部 HTTP API 幂等写入专用 `retrieval-collection-coverage-v1` 夹具，
+分别重复执行 GLOBAL 与 EACH Search。POST Search 必须保持既有裸 `RetrievalResult` 数组响应契约；
+它硬断言该数组形状、EACH 的每个预期
+有命中 Collection、授权范围隔离、禁止来源不泄漏、覆盖摘要字段一致及 GLOBAL 不新增覆盖
+header；另输出 Hit Rate、MRR、Recall@K、nDCG、结果数和 p95 延迟的对照报告。fixture 使用
+专用 key/sourceNamespace，不删除现有数据；真实 embedding、PostgreSQL 和服务必须可用，
+凭据从环境或 `.env` 读取。证据写入 `.verification/collection-coverage/`。发布脚本默认只跑
+本地自测，实时 HTTP 验收使用 `--with-collection-coverage`。
+
 ### KNOWLEDGE 检索后证据组装聚焦回归
 
 ```bash

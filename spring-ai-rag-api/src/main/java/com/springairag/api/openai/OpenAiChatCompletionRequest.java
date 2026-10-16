@@ -5,6 +5,7 @@ import com.fasterxml.jackson.annotation.JsonAnySetter;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.springairag.api.enums.ChatMode;
+import com.springairag.api.enums.CollectionCoverageMode;
 import com.springairag.api.enums.CollectionScopeMode;
 import io.swagger.v3.oas.annotations.media.Schema;
 
@@ -178,6 +179,9 @@ public class OpenAiChatCompletionRequest {
 
     public static class Scope {
         private CollectionScopeMode mode;
+        @JsonProperty("coverage_mode")
+        @JsonAlias("coverageMode")
+        private CollectionCoverageMode coverageMode;
         @JsonProperty("collection_ids")
         private List<Long> collectionIds;
         @JsonProperty("collection_keys")
@@ -186,6 +190,10 @@ public class OpenAiChatCompletionRequest {
 
         public CollectionScopeMode getMode() { return mode; }
         public void setMode(CollectionScopeMode mode) { this.mode = mode; }
+        public CollectionCoverageMode getCoverageMode() { return coverageMode; }
+        public void setCoverageMode(CollectionCoverageMode coverageMode) {
+            this.coverageMode = coverageMode;
+        }
         public List<Long> getCollectionIds() { return collectionIds; }
         public void setCollectionIds(List<Long> collectionIds) {
             this.collectionIds = collectionIds;

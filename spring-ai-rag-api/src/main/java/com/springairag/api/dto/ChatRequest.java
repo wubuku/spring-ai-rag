@@ -2,6 +2,7 @@ package com.springairag.api.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.springairag.api.enums.CollectionScopeMode;
+import com.springairag.api.enums.CollectionCoverageMode;
 import com.springairag.api.enums.ChatMode;
 import com.springairag.api.validation.ValidCollectionKey;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -56,6 +57,10 @@ public class ChatRequest {
             + "Collection fields imply SELECTED_COLLECTIONS; otherwise CALLER_VISIBLE.",
             example = "SELECTED_COLLECTIONS")
     private CollectionScopeMode collectionScopeMode;
+
+    @Schema(description = "Optional candidate coverage strategy. EACH_COLLECTION requires SELECTED_COLLECTIONS.",
+            example = "EACH_COLLECTION", defaultValue = "GLOBAL")
+    private CollectionCoverageMode collectionCoverageMode;
 
     @Size(max = 100, message = "At most 100 collection IDs may be selected")
     @Schema(description = "Deprecated compatibility field. Use collectionKeys.",
@@ -147,6 +152,14 @@ public class ChatRequest {
         this.collectionScopeMode = collectionScopeMode;
     }
 
+    public CollectionCoverageMode getCollectionCoverageMode() {
+        return collectionCoverageMode;
+    }
+
+    public void setCollectionCoverageMode(CollectionCoverageMode collectionCoverageMode) {
+        this.collectionCoverageMode = collectionCoverageMode;
+    }
+
     public List<Long> getCollectionIds() { return collectionIds; }
     public void setCollectionIds(List<Long> collectionIds) { this.collectionIds = collectionIds; }
 
@@ -176,6 +189,7 @@ public class ChatRequest {
                 && Objects.equals(domainId, that.domainId)
                 && Objects.equals(model, that.model)
                 && collectionScopeMode == that.collectionScopeMode
+                && collectionCoverageMode == that.collectionCoverageMode
                 && Objects.equals(collectionIds, that.collectionIds)
                 && Objects.equals(collectionKeys, that.collectionKeys)
                 && Objects.equals(documentIds, that.documentIds)
@@ -186,7 +200,7 @@ public class ChatRequest {
     @Override
     public int hashCode() {
         return Objects.hash(message, sessionId, maxResults, useHybridSearch, useRerank,
-                mode, domainId, model, collectionScopeMode, collectionIds, collectionKeys,
+                mode, domainId, model, collectionScopeMode, collectionCoverageMode, collectionIds, collectionKeys,
                 documentIds, metadata, filters);
     }
 
@@ -197,6 +211,7 @@ public class ChatRequest {
                 + ", useRerank=" + useRerank + ", mode=" + getMode()
                 + ", domainId=" + domainId
                 + ", model=" + model + ", collectionScopeMode=" + collectionScopeMode
+                + ", collectionCoverageMode=" + collectionCoverageMode
                 + ", collectionIds=" + collectionIds
                 + ", collectionKeys=" + collectionKeys
                 + ", documentIds=" + documentIds + ", metadata=" + metadata

@@ -6,6 +6,7 @@ import com.springairag.api.dto.ChatResponse;
 import com.springairag.api.dto.ChatTurnStatusResponse;
 import com.springairag.api.dto.ClearHistoryResponse;
 import com.springairag.api.enums.ChatMode;
+import com.springairag.api.enums.CollectionCoverageMode;
 import com.springairag.core.config.RagChatService;
 import com.springairag.core.config.RagSseProperties;
 import com.springairag.core.diagnostics.RetrievalDiagnosticsService;
@@ -219,6 +220,7 @@ public class RagChatController {
     private ResponseEntity<ChatResponse> executeNonStreamingJson(ChatRequest request,
                                                                  HttpServletRequest httpRequest,
                                                                  String endpointLabel) {
+        validateCollectionCoverageMode(request);
         ChatTurnOperationService.Prepared prepared =
                 prepareTurn(request, httpRequest);
         ChatTurnOperationService.Claim claim =
@@ -317,6 +319,7 @@ public class RagChatController {
     public SseEmitter stream(@Valid @RequestBody ChatRequest request,
                                HttpServletRequest httpRequest,
                                HttpServletResponse httpResponse) {
+        validateCollectionCoverageMode(request);
         ChatTurnOperationService.Prepared prepared =
                 prepareTurn(request, httpRequest);
         ChatTurnOperationService.Claim existing =
@@ -867,8 +870,18 @@ public class RagChatController {
         }
         ApiAccessPolicy key = ApiKeyCollectionAccess.currentPolicy(httpRequest);
         if (retrievalScopeResolver != null) {
+            if (request.getCollectionCoverageMode() == null
+                    || request.getCollectionCoverageMode()
+                    == com.springairag.api.enums.CollectionCoverageMode.GLOBAL) {
+                return retrievalScopeResolver.resolve(
+                        request.getCollectionScopeMode(),
+                        request.getCollectionIds(),
+                        request.getCollectionKeys(),
+                        request.getDocumentIds(), null, key);
+            }
             return retrievalScopeResolver.resolve(
                     request.getCollectionScopeMode(),
+                    request.getCollectionCoverageMode(),
                     request.getCollectionIds(),
                     request.getCollectionKeys(),
                     request.getDocumentIds(),
@@ -879,6 +892,15 @@ public class RagChatController {
         request.setCollectionIds(ApiKeyCollectionAccess.resolveCollectionIds(
                 request.getCollectionIds(), key));
         return null;
+    }
+
+    private void validateCollectionCoverageMode(ChatRequest request) {
+        if (request.getMode() == ChatMode.PLAIN
+                && request.getCollectionCoverageMode()
+                == CollectionCoverageMode.EACH_COLLECTION) {
+            throw new IllegalArgumentException(
+                    "collectionCoverageMode EACH_COLLECTION is not supported for PLAIN mode");
+        }
     }
 
     private RetrievalTraceSession beginChatTrace(

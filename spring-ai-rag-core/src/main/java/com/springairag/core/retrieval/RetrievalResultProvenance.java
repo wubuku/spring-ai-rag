@@ -18,6 +18,11 @@ public final class RetrievalResultProvenance {
 
     public static void applyDocumentFields(
             RetrievalResult result, Map<String, Object> row) {
+        Object collectionId = row.get("collection_id");
+        if (collectionId instanceof Number number) {
+            result.setCollectionId(number.longValue());
+        }
+        result.setCollectionKey(text(row.get("collection_key")));
         String source = text(row.get("document_source"));
         String originalFilename = text(row.get("original_filename"));
         String documentTitle = text(row.get("document_title"));
@@ -44,6 +49,8 @@ public final class RetrievalResultProvenance {
 
     public static void copy(
             RetrievalResult source, RetrievalResult target) {
+        target.setCollectionId(source.getCollectionId());
+        target.setCollectionKey(source.getCollectionKey());
         target.setSource(source.getSource());
         target.setOriginalFilename(source.getOriginalFilename());
         target.setFileDirectoryPath(source.getFileDirectoryPath());

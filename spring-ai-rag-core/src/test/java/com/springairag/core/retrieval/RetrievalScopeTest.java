@@ -1,6 +1,7 @@
 package com.springairag.core.retrieval;
 
 import org.junit.jupiter.api.Test;
+import com.springairag.api.enums.CollectionCoverageMode;
 
 import java.util.List;
 
@@ -47,5 +48,24 @@ class RetrievalScopeTest {
                 scope.collectionFilter());
         assertTrue(scope.documentIds().isEmpty());
         assertTrue(!scope.matchNone());
+    }
+
+    @Test
+    void eachCollectionCoverageRequiresSelectedScope() {
+        assertThrows(IllegalArgumentException.class,
+                () -> new RetrievalScope(
+                        RetrievalScope.CollectionFilter.ANY_ASSIGNED,
+                        List.of(), List.of(), null, false,
+                        CollectionCoverageMode.EACH_COLLECTION));
+    }
+
+    @Test
+    void selectedScopeCanCarryEachCollectionCoverage() {
+        RetrievalScope scope = RetrievalScope.selectedCollections(
+                List.of(1L, 2L), List.of(), null,
+                CollectionCoverageMode.EACH_COLLECTION);
+
+        assertEquals(CollectionCoverageMode.EACH_COLLECTION,
+                scope.coverageMode());
     }
 }

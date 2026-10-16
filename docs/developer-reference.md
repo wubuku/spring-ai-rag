@@ -693,6 +693,9 @@ associated model costs. Isolated mode
 also checks ACL/quota, upstream unavailability, feature-disabled behavior, and
 idempotent call counts. Use `--topology core|starter` to narrow a run;
 `--self-test` only prepares SDK environments and runs 20 protocol mutation checks.
+SDK HTTP requests time out after 30 seconds by default; set
+`OPENAI_SDK_E2E_REQUEST_TIMEOUT_SECONDS` (for example, `120`) for slower real models.
+The Python runner bypasses environment proxies for its local RAG HTTP connection.
 
 Never write keys, prompts, answers, or full exception bodies to docs or Git. Passing
 this gate proves the externally observable HTTP contract; it does not turn mock
@@ -1150,7 +1153,10 @@ and provide `CLIENT_CONTRACT_BASE_URL`, `CLIENT_CONTRACT_API_KEY`, and
 `CLIENT_CONTRACT_QUERY` to probe a running service. The native probe uses
 `mode=PLAIN` and proves transport only; it does not replace KNOWLEDGE evidence
 acceptance. See the [Client Consumer Contract Kit](client-contract-kit.md) for
-fixtures, TypeScript/Java examples, and failure actions.
+fixtures, TypeScript/Java examples, and failure actions. For a live EACH
+coverage probe, also set `CLIENT_CONTRACT_OPENAI_COVERAGE_MODE=EACH_COLLECTION`
+and provide authorized test keys through
+`CLIENT_CONTRACT_OPENAI_COLLECTION_KEYS`.
 
 ### Client SDK Quickstart And Recovery-Readiness Gate
 
@@ -1189,6 +1195,19 @@ Versioned live retrieval regression:
 ```bash
 BASE_URL=http://127.0.0.1:18081 ./scripts/verify-quality-regression.sh
 ```
+
+External HTTP coverage regression for `EACH_COLLECTION` (GLOBAL/EACH
+comparison with hard coverage, authorization-isolation, and additive-response
+assertions):
+
+```bash
+./scripts/verify-collection-coverage.sh --self-test
+BASE_URL=http://127.0.0.1:18081 ./scripts/verify-collection-coverage.sh
+```
+
+The live command writes only its dedicated versioned fixture and never deletes
+data. It requires a running PostgreSQL-profile service and usable embedding
+configuration; reports are written under `.verification/collection-coverage/`.
 
 Rerank document-diversity acceptance, including focused backend tests,
 PostgreSQL/pgvector, WebUI gates, isolated `dev.sh`, real Search/Playwright,

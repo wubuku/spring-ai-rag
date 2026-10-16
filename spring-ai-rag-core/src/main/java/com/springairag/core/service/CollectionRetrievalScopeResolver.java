@@ -1,6 +1,7 @@
 package com.springairag.core.service;
 
 import com.springairag.api.enums.CollectionScopeMode;
+import com.springairag.api.enums.CollectionCoverageMode;
 import com.springairag.api.validation.CollectionKeyValidator;
 import com.springairag.core.security.ApiAccessPolicy;
 import com.springairag.core.exception.RagException;
@@ -19,6 +20,7 @@ import java.util.Set;
 public class CollectionRetrievalScopeResolver {
 
     public static final int MAX_COLLECTIONS = 100;
+    public static final int MAX_COVERAGE_COLLECTIONS = 20;
     public static final int MAX_DOCUMENT_IDS = 1000;
 
     private final CollectionIdentityResolver identityResolver;
@@ -35,8 +37,28 @@ public class CollectionRetrievalScopeResolver {
             List<Long> documentIds,
             String documentType,
             ApiAccessPolicy caller) {
+        return resolve(
+                requestedMode,
+                CollectionCoverageMode.GLOBAL,
+                requestedIds,
+                requestedKeys,
+                documentIds,
+                documentType,
+                caller);
+    }
+
+    public RetrievalScope resolve(
+            CollectionScopeMode requestedMode,
+            CollectionCoverageMode requestedCoverageMode,
+            List<Long> requestedIds,
+            List<String> requestedKeys,
+            List<Long> documentIds,
+            String documentType,
+            ApiAccessPolicy caller) {
         boolean idsPresent = requestedIds != null;
         boolean keysPresent = requestedKeys != null;
+        CollectionCoverageMode coverageMode = requestedCoverageMode == null
+                ? CollectionCoverageMode.GLOBAL : requestedCoverageMode;
         List<Long> ids = validateIds(
                 requestedIds, MAX_COLLECTIONS, "collectionIds", true);
         List<String> keys = validateKeys(requestedKeys);
@@ -56,6 +78,16 @@ public class CollectionRetrievalScopeResolver {
             throw new IllegalArgumentException(
                     mode + " must not include collectionIds or collectionKeys");
         }
+        if (coverageMode == CollectionCoverageMode.EACH_COLLECTION
+                && requestedMode != CollectionScopeMode.SELECTED_COLLECTIONS) {
+            throw new IllegalArgumentException(
+                    "EACH_COLLECTION coverage requires explicit SELECTED_COLLECTIONS scope");
+        }
+        if (coverageMode == CollectionCoverageMode.EACH_COLLECTION
+                && mode != CollectionScopeMode.SELECTED_COLLECTIONS) {
+            throw new IllegalArgumentException(
+                    "EACH_COLLECTION coverage requires SELECTED_COLLECTIONS scope");
+        }
 
         return switch (mode) {
             case CALLER_VISIBLE -> callerVisible(documents, documentType, caller);
@@ -65,13 +97,36 @@ public class CollectionRetrievalScopeResolver {
                     throw new IllegalArgumentException(
                             "SELECTED_COLLECTIONS requires collectionIds or collectionKeys");
                 }
+                List<Long> resolved = resolveSelected(
+                        idsPresent ? ids : null,
+                        keysPresent ? keys : null,
+                        caller);
+                if (coverageMode == CollectionCoverageMode.EACH_COLLECTION
+                        && resolved.size() > MAX_COVERAGE_COLLECTIONS) {
+                    throw new IllegalArgumentException(
+                            "EACH_COLLECTION coverage must not contain more than "
+                                    + MAX_COVERAGE_COLLECTIONS + " Collections");
+                }
                 yield RetrievalScope.selectedCollections(
-                        resolveSelected(idsPresent ? ids : null,
-                                keysPresent ? keys : null, caller),
-                        documents,
-                        documentType);
+                        resolved, documents, documentType, coverageMode);
             }
         };
+    }
+
+    public void validateCoverageLimit(RetrievalScope scope, int limit) {
+        if (scope == null
+                || scope.coverageMode() != CollectionCoverageMode.EACH_COLLECTION) {
+            return;
+        }
+        if (scope.collectionIds().size() > MAX_COVERAGE_COLLECTIONS) {
+            throw new IllegalArgumentException(
+                    "EACH_COLLECTION coverage must not contain more than "
+                            + MAX_COVERAGE_COLLECTIONS + " Collections");
+        }
+        if (limit < scope.collectionIds().size() || limit > 100) {
+            throw new IllegalArgumentException(
+                    "EACH_COLLECTION coverage requires limit/maxResults between selected Collection count and 100");
+        }
     }
 
     private RetrievalScope callerVisible(

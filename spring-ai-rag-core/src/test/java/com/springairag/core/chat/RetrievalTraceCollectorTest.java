@@ -2,6 +2,8 @@ package com.springairag.core.chat;
 
 import com.springairag.api.dto.RetrievalResult;
 import com.springairag.core.diagnostics.RetrievalTraceSession;
+import com.springairag.api.enums.CollectionCoverageMode;
+import com.springairag.core.retrieval.RetrievalScopeSummary;
 import com.springairag.core.retrieval.RetrievalBranchStage;
 import com.springairag.core.retrieval.RetrievalOutcome;
 import org.junit.jupiter.api.Test;
@@ -124,6 +126,39 @@ class RetrievalTraceCollectorTest {
         assertThrows(
                 IllegalArgumentException.class,
                 () -> trace.recordDocumentJoin(2, 1, 2));
+    }
+
+    @Test
+    void summaryExposesFinalCollectionCoverageForChatResponses() {
+        RetrievalTraceCollector trace = new RetrievalTraceCollector();
+        Map<String, Object> scope = RetrievalScopeSummary.withCollectionCoverage(
+                Map.of("collectionScopeMode", "SELECTED_COLLECTIONS"),
+                CollectionCoverageMode.EACH_COLLECTION,
+                List.of(7L, 8L),
+                Map.of(7L, 2, 8L, 0));
+        RetrievalOutcome outcome = new RetrievalOutcome(
+                null, List.of(result("1")), "query", List.of(), scope,
+                Map.of(), List.of(), null, null,
+                "RESULTS_RETURNED", null, 0, 2);
+
+        trace.recordOutcome(outcome);
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> retrievalScope =
+                (Map<String, Object>) trace.summary().get("scope");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> coverage =
+                (Map<String, Object>) retrievalScope.get("collectionCoverage");
+        assertEquals("EACH_COLLECTION", coverage.get("mode"));
+        assertEquals(List.of(8L), coverage.get("missingCollectionIds"));
+    }
+
+    @Test
+    void globalRetrievalSummaryDoesNotAddCollectionCoverage() {
+        RetrievalTraceCollector trace = new RetrievalTraceCollector();
+        trace.recordOutcome(RetrievalOutcome.ofResults(List.of(result("1"))));
+
+        assertTrue(!trace.summary().containsKey("scope"));
     }
 
     private RetrievalResult result(String id) {

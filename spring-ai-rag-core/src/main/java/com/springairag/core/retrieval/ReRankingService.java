@@ -97,6 +97,33 @@ public class ReRankingService {
         return out;
     }
 
+    public boolean isProviderActive() {
+        if (!config.isEnabled()) {
+            return false;
+        }
+        String providerName = provider.getName() == null
+                ? "" : provider.getName().trim().toLowerCase(Locale.ROOT);
+        return !NO_OP_PROVIDER_NAMES.contains(providerName);
+    }
+
+    public List<RetrievalResult> rerankAllCandidates(
+            String query, List<RetrievalResult> candidates) {
+        if (!isProviderActive() || candidates == null || candidates.isEmpty()) {
+            return candidates;
+        }
+        if (candidates.size() > 100) {
+            throw new IllegalArgumentException(
+                    "Collection coverage rerank candidates must not exceed 100");
+        }
+        List<RetrievalResult> ranked = provider.rerank(
+                query, candidates, candidates.size());
+        if (ranked == null) {
+            throw new IllegalStateException(
+                    "Rerank provider '" + provider.getName() + "' returned null");
+        }
+        return ranked;
+    }
+
     private boolean isDocumentDiversificationActive(
             int candidateCount,
             int finalLimit) {

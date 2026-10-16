@@ -62,10 +62,21 @@ try {
       [python, [resolve("scripts/openai-sdk-e2e/python/runner.py")]],
       [process.execPath, [nodeRunner]],
     ]) {
+      const proxyMutation = command === python ? {
+        HTTP_PROXY: "http://127.0.0.1:1",
+        HTTPS_PROXY: "http://127.0.0.1:1",
+        ALL_PROXY: "http://127.0.0.1:1",
+        http_proxy: "http://127.0.0.1:1",
+        https_proxy: "http://127.0.0.1:1",
+        all_proxy: "http://127.0.0.1:1",
+        NO_PROXY: "",
+        no_proxy: "",
+      } : {};
       const code = await new Promise((done, reject) => {
         const child = spawn(command, args, { env: { ...process.env, BASE_URL: baseUrl,
           API_KEY: "self-test-key", MODEL: "rag-default", SDK_MANAGED_FIXTURES: "0",
-          SDK_EXPECT_UNAVAILABLE: "0", SDK_MOCK_BASE_URL: "", NO_PROXY: "127.0.0.1", no_proxy: "127.0.0.1" },
+          SDK_EXPECT_UNAVAILABLE: "0", SDK_MOCK_BASE_URL: "", NO_PROXY: "127.0.0.1", no_proxy: "127.0.0.1",
+          ...proxyMutation },
         stdio: ["ignore", "pipe", "pipe"], timeout: 15000 });
         child.stdout.resume();
         child.stderr.resume();

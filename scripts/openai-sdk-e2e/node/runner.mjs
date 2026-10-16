@@ -7,6 +7,10 @@ import { randomUUID } from "node:crypto";
 const baseUrl = (process.env.BASE_URL || "http://127.0.0.1:8081").replace(/\/$/, "");
 const apiKey = process.env.API_KEY || "";
 const model = process.env.MODEL || "rag-default";
+const requestTimeoutMs = Number(process.env.OPENAI_SDK_E2E_REQUEST_TIMEOUT_SECONDS || "30") * 1000;
+if (!Number.isFinite(requestTimeoutMs) || requestTimeoutMs <= 0) {
+  throw new Error("OPENAI_SDK_E2E_REQUEST_TIMEOUT_SECONDS must be positive");
+}
 
 class ContractFailure extends Error {}
 
@@ -36,7 +40,7 @@ async function expectError(operation, status, type) {
 
 async function run() {
   requireCondition(apiKey.trim() !== "", "API_KEY is required");
-  const client = new OpenAI({ baseURL: `${baseUrl}/v1`, apiKey, maxRetries: 0, timeout: 30000 });
+  const client = new OpenAI({ baseURL: `${baseUrl}/v1`, apiKey, maxRetries: 0, timeout: requestTimeoutMs });
 
   if (process.env.SDK_EXPECT_UNAVAILABLE === "1") {
     phase = "provider-unavailable";

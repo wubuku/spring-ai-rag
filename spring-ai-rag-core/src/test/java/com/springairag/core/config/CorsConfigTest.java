@@ -78,6 +78,8 @@ class CorsConfigTest {
                     pattern + " 的允许方法应按逗号切分");
             assertEquals(List.of("Content-Type", "Authorization"),
                     cors.getAllowedHeaders(), pattern);
+            assertEquals(List.of("X-RAG-Collection-Coverage"),
+                    cors.getExposedHeaders(), pattern);
             assertEquals(7200L, cors.getMaxAge(), pattern);
         }
     }

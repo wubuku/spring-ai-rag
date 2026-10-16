@@ -13,6 +13,8 @@ import org.springframework.cache.CacheManager;
 import org.springframework.cache.caffeine.CaffeineCacheManager;
 
 import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -22,6 +24,22 @@ import static org.mockito.Mockito.*;
  * PerformanceConfig Unit Test
  */
 class PerformanceConfigTest {
+
+    @Test
+    void collectionCoverageEmbeddingExecutorIsBoundedAndIsolated() {
+        ExecutorService executor = new PerformanceConfig().ragEmbeddingExecutor();
+        try {
+            assertInstanceOf(ThreadPoolExecutor.class, executor);
+            ThreadPoolExecutor pool = (ThreadPoolExecutor) executor;
+            assertEquals(4, pool.getCorePoolSize());
+            assertEquals(4, pool.getMaximumPoolSize());
+            assertEquals(32, pool.getQueue().remainingCapacity());
+            assertInstanceOf(ThreadPoolExecutor.AbortPolicy.class,
+                    pool.getRejectedExecutionHandler());
+        } finally {
+            executor.shutdownNow();
+        }
+    }
 
     @Test
     @DisplayName("ragSearchExecutor created successfully and is daemon thread")

@@ -20,6 +20,9 @@ from openai import OpenAI
 BASE_URL = os.environ.get("BASE_URL", "http://127.0.0.1:8081").rstrip("/")
 API_KEY = os.environ.get("API_KEY", "")
 MODEL = os.environ.get("MODEL", "rag-default")
+REQUEST_TIMEOUT_SECONDS = float(
+    os.environ.get("OPENAI_SDK_E2E_REQUEST_TIMEOUT_SECONDS", "30")
+)
 
 
 def fail(message: str) -> None:
@@ -51,10 +54,19 @@ def error_type(error: BaseException) -> str | None:
     return None
 
 
+def create_client(api_key: str) -> OpenAI:
+    return OpenAI(
+        base_url=f"{BASE_URL}/v1",
+        api_key=api_key,
+        max_retries=0,
+        http_client=httpx.Client(timeout=REQUEST_TIMEOUT_SECONDS, trust_env=False),
+    )
+
+
 def run() -> None:
     global phase
     require(API_KEY.strip() != "", "API_KEY is required")
-    client = OpenAI(base_url=f"{BASE_URL}/v1", api_key=API_KEY, max_retries=0, timeout=30)
+    client = create_client(API_KEY)
 
     if os.environ.get("SDK_EXPECT_UNAVAILABLE") == "1":
         phase = "provider-unavailable"
@@ -156,7 +168,7 @@ def run() -> None:
     print("error-envelope: PASS")
 
     phase = "authentication"
-    unauthenticated = OpenAI(base_url=f"{BASE_URL}/v1", api_key="invalid-sdk-key", max_retries=0)
+    unauthenticated = create_client("invalid-sdk-key")
     try:
         unauthenticated.models.list()
     except Exception as error:
@@ -182,8 +194,7 @@ def run() -> None:
                 "capabilities": ["RAG_READ"],
             })
             require(created.status_code == 201, "Native API key create failed")
-            restricted = OpenAI(base_url=f"{BASE_URL}/v1", api_key=created.json()["rawKey"],
-                                max_retries=0, timeout=30)
+            restricted = create_client(created.json()["rawKey"])
             expect_error(lambda: restricted.chat.completions.create(
                 **request, extra_body={"rag": {"scope": {
                     "mode": "SELECTED_COLLECTIONS", "collection_keys": [keys[1]],
