@@ -338,10 +338,11 @@ public class OpenAiCompatibilityController {
                         .doOnNext(event -> {
                             if (event instanceof ChatEvent.SourcesAvailable sources) {
                                 evidence.set(new OpenAiRagExtension(
-                                        null,
-                                        null,
-                                        safeSources(sources.sources()),
-                                        sources.citationRegistry()));
+                                null,
+                                null,
+                                safeSources(sources.sources()),
+                                        sources.citationRegistry(),
+                                        Map.of()));
                             }
                         })
                         .concatMap(event -> mapEvent(
@@ -584,7 +585,8 @@ public class OpenAiCompatibilityController {
                     completed.traceId(),
                     evidenceAssessment(completed.metadata()),
                     prior == null ? List.of() : prior.sources(),
-                    citationRegistry(completed.metadata(), prior));
+                    citationRegistry(completed.metadata(), prior),
+                    collectionCoverage(completed.metadata(), prior));
             return Flux.just(toJson(
                     new OpenAiChatCompletionChunk(
                             id,
@@ -645,7 +647,8 @@ public class OpenAiCompatibilityController {
                 result.traceId(),
                 result.evidenceAssessment(),
                 safeSources(result.sources()),
-                citationRegistry(result.metadata(), null));
+                citationRegistry(result.metadata(), null),
+                collectionCoverage(result.metadata(), null));
     }
 
     private OpenAiRagExtension rag(ChatResponse response) {
@@ -653,22 +656,58 @@ public class OpenAiCompatibilityController {
                 response.getTraceId(),
                 response.getEvidenceAssessment(),
                 safeSources(response.getSources()),
-                citationRegistry(response.getMetadata(), null));
+                citationRegistry(response.getMetadata(), null),
+                collectionCoverage(response.getMetadata(), null));
     }
 
     private OpenAiRagExtension ragOrNull(
             String traceId,
             EvidenceAssessment assessment,
             List<OpenAiRagSource> sources,
-            Map<String, Object> citationRegistry) {
+            Map<String, Object> citationRegistry,
+            Map<String, Object> collectionCoverage) {
         if ((traceId == null || traceId.isBlank())
                 && assessment == null
                 && (sources == null || sources.isEmpty())
-                && (citationRegistry == null || citationRegistry.isEmpty())) {
+                && (citationRegistry == null || citationRegistry.isEmpty())
+                && (collectionCoverage == null || collectionCoverage.isEmpty())) {
             return null;
         }
         return new OpenAiRagExtension(
-                traceId, assessment, sources, citationRegistry);
+                traceId, assessment, sources, citationRegistry, collectionCoverage);
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> collectionCoverage(
+            Map<String, Object> metadata,
+            OpenAiRagExtension prior) {
+        Object direct = metadata == null ? null : metadata.get("collectionCoverage");
+        if (direct instanceof Map<?, ?> map) {
+            Map<String, Object> copy = new java.util.LinkedHashMap<>();
+            map.forEach((key, value) -> {
+                if (key != null) {
+                    copy.put(String.valueOf(key), value);
+                }
+            });
+            return Map.copyOf(copy);
+        }
+        Object retrieval = metadata == null ? null : metadata.get("retrieval");
+        if (retrieval instanceof Map<?, ?> retrievalMap) {
+            Object scope = retrievalMap.get("scope");
+            if (scope instanceof Map<?, ?> scopeMap) {
+                Object coverage = scopeMap.get("collectionCoverage");
+                if (coverage instanceof Map<?, ?> coverageMap) {
+                    Map<String, Object> copy = new java.util.LinkedHashMap<>();
+                    coverageMap.forEach((key, value) -> {
+                        if (key != null) {
+                            copy.put(String.valueOf(key), value);
+                        }
+                    });
+                    return Map.copyOf(copy);
+                }
+            }
+        }
+        return prior == null ? Map.of() : prior.collectionCoverage();
     }
 
     private List<OpenAiRagSource> safeSources(

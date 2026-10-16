@@ -51,6 +51,11 @@ Native live probe 使用 `mode=PLAIN`，只验证 HTTP/JSON/SSE 消费协议，�
 不会伪造为通过。OpenAI live probe 默认发送标准 body；只有目标 alias 明确允许请求级覆盖时，才
 通过 `CLIENT_CONTRACT_OPENAI_RAG_MODE`（可选配 `CLIENT_CONTRACT_OPENAI_RAG_MEMORY`）加入既有
 `rag` 扩展。若显式启用了 live 但缺少必要环境变量，脚本也只输出 skip，不会声称完成 live 验收。
+需要真实验证覆盖摘要时，设置
+`CLIENT_CONTRACT_OPENAI_COVERAGE_MODE=EACH_COLLECTION`，并通过
+`CLIENT_CONTRACT_OPENAI_COLLECTION_KEYS` 提供逗号分隔的、已存在且已授权的测试 Collection key。
+探针会检查 JSON 与 SSE 的覆盖诊断，并拒绝越出所选范围的来源。未启用该选项时请求为 GLOBAL，响应不得包含
+`rag.collectionCoverage`。
 
 ### 官方 SDK HTTP 配套验收
 
@@ -152,9 +157,11 @@ curl --fail-with-body -sS "$CLIENT_CONTRACT_BASE_URL/v1/chat/completions" \
 可能在非流式响应或 finish chunk 增加可选的顶层 `rag`。标准 Client 可以忽略它；需要读取
 引用时只读取其中的脱敏 `sources`，不要期待 `chunkText` 或任意 metadata。
 
-`rag` 的字段包括 `traceId`、`evidenceAssessment`、`sources` 和 `citationRegistry`。
+`rag` 的字段包括 `traceId`、`evidenceAssessment`、`sources` 和 `citationRegistry`；显式
+`EACH_COLLECTION` 请求还可包含 `collectionCoverage`，`GLOBAL` 与旧请求不返回该字段。
 `sources` 只来自当前请求已授权且最终实际暴露的来源；完整正文仍通过 Native API 获取。
-普通 SSE 的 `rag` 只在 finish chunk 出现，keyed replay 的 JSON/SSE 与原执行保持一致。
+普通 SSE 的 `rag` 只在 finish chunk 出现，keyed replay 的 JSON/SSE 与原执行保持一致。版本化
+Client Consumer Contract Kit 只允许这些已文档化字段，并拒绝未声明的扩展字段。
 
 Java `HttpClient` 最小骨架：
 

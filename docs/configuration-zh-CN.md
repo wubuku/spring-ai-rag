@@ -483,6 +483,19 @@ rag:
 | `rag.retrieval.default-limit` | `10` | 默认返回结果数 |
 | `rag.retrieval.min-score` | `0.3` | 模糊全文提供者（如 `pg_trgm`）的最低相似度；`pg_jieba` / English FTS 以 `@@` 判定词法命中，再用 `ts_rank` 排序 |
 
+### 逐 Collection 覆盖检索
+
+该能力没有服务端开关：Client 通过 Search/Chat 请求中的
+`collectionCoverageMode=EACH_COLLECTION` 或 OpenAI `rag.scope.coverage_mode` 显式启用；
+缺省仍为 `GLOBAL`，以保持已有 Client 的排序语义。它仅支持显式
+`SELECTED_COLLECTIONS`，每次最多 20 个 Collection，`limit/maxResults` 至少等于
+selected 数、最多 100。Native Search/Chat 不会自动提高调用方明确提供的不足 limit；OpenAI
+协议没有 `maxResults` 字段，因此使用服务端默认值并在必要时提高到 selected 数。
+
+执行预算为每分支最多 200 行、融合前每请求最多 8,000 行；Embedding 隔离池固定为 4 线程、
+32 队列项，EACH 检索分支以进程级许可限制 80 个在途任务，并共享检索 deadline。容量拒绝、
+超时和失败会在覆盖摘要中显式报告。没有数据库 schema 或迁移要求。
+
 > 💡 `vector-weight + fulltext-weight` 建议和为 `1.0`；服务会分别校验两个权重必须是
 > 有限的 `0.0..1.0` 数值，但不会自动归一化权重之和。这样可以让缩放后的加权 RRF
 > 分数保持易于理解的量级。

@@ -18,11 +18,24 @@ public record OpenAiRagExtension(
         String traceId,
         EvidenceAssessment evidenceAssessment,
         List<OpenAiRagSource> sources,
-        Map<String, Object> citationRegistry) {
+        Map<String, Object> citationRegistry,
+        @JsonInclude(JsonInclude.Include.NON_EMPTY)
+        Map<String, Object> collectionCoverage) {
+
+    /** 保留已有 Java 调用方的四参数构造签名。 */
+    public OpenAiRagExtension(
+            String traceId,
+            EvidenceAssessment evidenceAssessment,
+            List<OpenAiRagSource> sources,
+            Map<String, Object> citationRegistry) {
+        this(traceId, evidenceAssessment, sources, citationRegistry, Map.of());
+    }
 
     public OpenAiRagExtension {
         sources = sources == null ? List.of() : List.copyOf(sources);
         citationRegistry = citationRegistry == null
                 ? Map.of() : Map.copyOf(citationRegistry);
+        collectionCoverage = collectionCoverage == null
+                ? Map.of() : Map.copyOf(collectionCoverage);
     }
 }

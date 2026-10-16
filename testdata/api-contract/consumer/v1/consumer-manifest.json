@@ -68,9 +68,37 @@
         "evidenceAssessment",
         "traceId",
         "failureClass",
-        "metadata",
-        "rag"
-      ]
+        "metadata"
+      ],
+      "responseExtensions": {
+        "rag": {
+          "fields": {
+            "traceId": "string",
+            "evidenceAssessment": "object",
+            "sources": "array",
+            "citationRegistry": "object",
+            "collectionCoverage": "object"
+          },
+          "nestedFields": {
+            "evidenceAssessment": [
+              "status", "retrievalExecuted", "sourceCount", "citedSourceCount",
+              "invalidCitationIds", "contextLimited", "safeAnswerApplied", "reasonCode"
+            ],
+            "sources": [
+              "citationId", "sourceHandle", "documentId", "chunkIndex", "title",
+              "score", "vectorScore", "fulltextScore", "originalFilename",
+              "documentType", "collectionKey", "sourceType"
+            ],
+            "citationRegistry": ["version", "handlePrefix", "sourceCount", "handles"],
+            "collectionCoverage": [
+              "mode", "requestedCollectionIds", "requestedCount", "returnedCount",
+              "missingCount", "missingCollectionIds", "incompleteCount",
+              "incompleteCollectionIds", "degraded", "collectionBranchStatuses",
+              "perCollectionResultCounts"
+            ]
+          }
+        }
+      }
     },
     "openaiSse": {
       "endpoint": "/v1/chat/completions",
@@ -85,9 +113,37 @@
         "evidenceAssessment",
         "traceId",
         "failureClass",
-        "metadata",
-        "rag"
-      ]
+        "metadata"
+      ],
+      "responseExtensions": {
+        "rag": {
+          "fields": {
+            "traceId": "string",
+            "evidenceAssessment": "object",
+            "sources": "array",
+            "citationRegistry": "object",
+            "collectionCoverage": "object"
+          },
+          "nestedFields": {
+            "evidenceAssessment": [
+              "status", "retrievalExecuted", "sourceCount", "citedSourceCount",
+              "invalidCitationIds", "contextLimited", "safeAnswerApplied", "reasonCode"
+            ],
+            "sources": [
+              "citationId", "sourceHandle", "documentId", "chunkIndex", "title",
+              "score", "vectorScore", "fulltextScore", "originalFilename",
+              "documentType", "collectionKey", "sourceType"
+            ],
+            "citationRegistry": ["version", "handlePrefix", "sourceCount", "handles"],
+            "collectionCoverage": [
+              "mode", "requestedCollectionIds", "requestedCount", "returnedCount",
+              "missingCount", "missingCollectionIds", "incompleteCount",
+              "incompleteCollectionIds", "degraded", "collectionBranchStatuses",
+              "perCollectionResultCounts"
+            ]
+          }
+        }
+      }
     }
   },
   "legacyClient": {

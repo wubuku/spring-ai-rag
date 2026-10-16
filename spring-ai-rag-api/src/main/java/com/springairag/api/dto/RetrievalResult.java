@@ -15,6 +15,12 @@ public class RetrievalResult {
     @Schema(description = "Source document ID", example = "doc-456")
     private String documentId;
 
+    @Schema(description = "Authorized Collection numeric ID when known", example = "42")
+    private Long collectionId;
+
+    @Schema(description = "Authorized Collection stable key when known", example = "manuals")
+    private String collectionKey;
+
     @Schema(description = "Matched text snippet")
     private String chunkText;
 
@@ -66,6 +72,12 @@ public class RetrievalResult {
 
     public String getDocumentId() { return documentId; }
     public void setDocumentId(String documentId) { this.documentId = documentId; }
+
+    public Long getCollectionId() { return collectionId; }
+    public void setCollectionId(Long collectionId) { this.collectionId = collectionId; }
+
+    public String getCollectionKey() { return collectionKey; }
+    public void setCollectionKey(String collectionKey) { this.collectionKey = collectionKey; }
 
     public String getChunkText() { return chunkText; }
     public void setChunkText(String chunkText) { this.chunkText = chunkText; }

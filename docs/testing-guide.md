@@ -1242,6 +1242,27 @@ minimums, baseline regression, Collection-decoy leakage, and an explicit-empty
 JSONB result. Provider, database, or embedding failures return nonzero and are
 never reported as quality passes.
 
+### `EACH_COLLECTION` Coverage Black-Box Regression
+
+```bash
+./scripts/verify-collection-coverage.sh --self-test
+BASE_URL=http://127.0.0.1:18081 ./scripts/verify-collection-coverage.sh
+```
+
+The live command idempotently upserts the dedicated
+`retrieval-collection-coverage-v1` fixture through external HTTP APIs, then
+repeats GLOBAL and EACH Search calls. POST Search must preserve its existing
+top-level `RetrievalResult` array contract. Hard assertions cover that response
+shape, every expected hit Collection in EACH, selected-scope isolation,
+forbidden-source exclusion, summary consistency, and the absence of a coverage
+header on GLOBAL. It also writes comparative Hit Rate, MRR, Recall@K, nDCG,
+result-count, and p95-latency evidence. The fixture uses reserved keys and a
+dedicated source namespace; existing data is not deleted. A live run requires
+the service, PostgreSQL, and real embedding configuration; credentials are
+read from the environment or `.env`. Evidence goes to
+`.verification/collection-coverage/`. Release verification runs only the local
+self-test by default; use `--with-collection-coverage` for live HTTP acceptance.
+
 ### KNOWLEDGE Post-Retrieval Evidence Assembly Focused Regression
 
 ```bash

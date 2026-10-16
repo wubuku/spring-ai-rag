@@ -4,6 +4,9 @@ import com.springairag.api.dto.RetrievalResult;
 import com.springairag.core.adapter.ApiAdapterFactory;
 import com.springairag.core.adapter.ApiCompatibilityAdapter;
 import com.springairag.core.retrieval.ReRankingService;
+import com.springairag.core.retrieval.CollectionCoverageReranker;
+import com.springairag.core.retrieval.RetrievalScope;
+import com.springairag.api.enums.CollectionCoverageMode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClientRequest;
@@ -103,7 +106,17 @@ public class RerankAdvisor extends AbstractRagAdvisor {
         String query = AdvisorUtils.extractRetrievalQuery(request);
 
         long startMs = System.currentTimeMillis();
-        List<RetrievalResult> reranked = rerankingService.rerank(query, results, maxResults);
+        Object scopeValue = request.context().get(
+                HybridSearchAdvisor.RETRIEVAL_SCOPE_KEY);
+        List<RetrievalResult> reranked;
+        if (scopeValue instanceof RetrievalScope scope
+                && scope.coverageMode() == CollectionCoverageMode.EACH_COLLECTION) {
+            reranked = CollectionCoverageReranker.rerank(
+                    query, results, scope.collectionIds(), maxResults,
+                    rerankingService).results();
+        } else {
+            reranked = rerankingService.rerank(query, results, maxResults);
+        }
         long elapsedMs = System.currentTimeMillis() - startMs;
 
         log.info("[RerankAdvisor] reranking complete: {} → {} results, {}ms", results.size(), reranked.size(), elapsedMs);

@@ -188,27 +188,75 @@ function validateNativeError(fixture) {
   assertThat(/^[0-9]+$/.test(String(fixture.headers['Retry-After'])), 'native error Retry-After must be seconds');
 }
 
-function walkKeys(value, visitor, location = '$') {
+function walkKeys(value, visitor, location = '$', skippedLocations = new Set()) {
   if (Array.isArray(value)) {
-    value.forEach((item, index) => walkKeys(item, visitor, `${location}[${index}]`));
+    value.forEach((item, index) => {
+      const itemLocation = `${location}[${index}]`;
+      if (!skippedLocations.has(itemLocation)) {
+        walkKeys(item, visitor, itemLocation, skippedLocations);
+      }
+    });
     return;
   }
   if (!isObject(value)) return;
   for (const [key, child] of Object.entries(value)) {
-    visitor(key, child, `${location}.${key}`);
-    walkKeys(child, visitor, `${location}.${key}`);
+    const childLocation = `${location}.${key}`;
+    visitor(key, child, childLocation);
+    if (!skippedLocations.has(childLocation)) {
+      walkKeys(child, visitor, childLocation, skippedLocations);
+    }
   }
 }
 
-function assertNoPrivateOpenAiFields(value, location) {
+function assertNoPrivateOpenAiFields(value, location, allowedExtensionLocations = new Set()) {
   walkKeys(value, (key, _child, childLocation) => {
-    assertThat(!PRIVATE_OPENAI_FIELDS.has(key), `${location} contains private field ${childLocation}`);
-  });
+    assertThat(allowedExtensionLocations.has(childLocation) || !PRIVATE_OPENAI_FIELDS.has(key),
+      `${location} contains private field ${childLocation}`);
+  }, '$', allowedExtensionLocations);
 }
 
-function validateOpenAiResponse(response) {
+function validateOpenAiResponseExtensions(value, transport, location = '$') {
+  const extensionPolicies = transport.responseExtensions ?? {};
+  assertThat(isObject(extensionPolicies), `${location} response extension policy must be an object`);
+  const allowedLocations = new Set();
+  for (const [field, policy] of Object.entries(extensionPolicies)) {
+    if (!Object.prototype.hasOwnProperty.call(value, field)) continue;
+    assertThat(isObject(policy) && isObject(policy.fields),
+      `${location}.${field} response extension policy is invalid`);
+    const extension = value[field];
+    assertThat(isObject(extension), `${location}.${field} must be an object`);
+    for (const [name, child] of Object.entries(extension)) {
+      const expectedType = policy.fields[name];
+      assertThat(typeof expectedType === 'string', `${location}.${field}.${name} is not an allowed extension field`);
+      assertThat(jsonType(child) === expectedType,
+        `${location}.${field}.${name} must be ${expectedType}, got ${jsonType(child)}`);
+    }
+    for (const [nestedField, allowedFields] of Object.entries(policy.nestedFields ?? {})) {
+      if (!Object.prototype.hasOwnProperty.call(extension, nestedField)) continue;
+      const nestedValue = extension[nestedField];
+      const nestedLocation = `${location}.${field}.${nestedField}`;
+      const assertAllowedKeys = (candidate, candidateLocation) => {
+        assertThat(isObject(candidate), `${candidateLocation} must be an object`);
+        for (const nestedKey of Object.keys(candidate)) {
+          assertThat(allowedFields.includes(nestedKey),
+            `${candidateLocation}.${nestedKey} is not an allowed extension field`);
+        }
+      };
+      if (Array.isArray(nestedValue)) {
+        nestedValue.forEach((item, index) => assertAllowedKeys(item, `${nestedLocation}[${index}]`));
+      } else {
+        assertAllowedKeys(nestedValue, nestedLocation);
+      }
+    }
+    allowedLocations.add(`${location}.${field}`);
+  }
+  return allowedLocations;
+}
+
+function validateOpenAiResponse(response, transport) {
   assertThat(isObject(response), 'OpenAI response must be an object');
-  assertNoPrivateOpenAiFields(response, 'OpenAI response');
+  const allowedExtensions = validateOpenAiResponseExtensions(response, transport);
+  assertNoPrivateOpenAiFields(response, 'OpenAI response', allowedExtensions);
   for (const field of ['id', 'object', 'model']) expectType(response, field, 'string', 'OpenAI response');
   expectType(response, 'created', 'integer', 'OpenAI response');
   expectType(response, 'choices', 'array', 'OpenAI response');
@@ -226,6 +274,39 @@ function validateOpenAiResponse(response) {
     assertThat(isObject(response.usage), 'OpenAI response.usage must be an object');
     for (const field of ['prompt_tokens', 'completion_tokens', 'total_tokens']) {
       expectType(response.usage, field, 'integer', `OpenAI response.usage`);
+    }
+  }
+}
+
+function validateOpenAiCoverage(response, coverageMode, collectionKeys, location) {
+  const coverage = response.rag?.collectionCoverage;
+  if (coverageMode !== 'EACH_COLLECTION') {
+    assertThat(!coverage, `${location} GLOBAL request must not return collectionCoverage`);
+    return;
+  }
+  assertThat(isObject(coverage), `${location} EACH_COLLECTION response is missing collectionCoverage`);
+  assertThat(coverage.mode === 'EACH_COLLECTION', `${location} coverage mode mismatch`);
+  expectType(coverage, 'requestedCollectionIds', 'array', `${location}.collectionCoverage`);
+  expectType(coverage, 'requestedCount', 'integer', `${location}.collectionCoverage`);
+  expectType(coverage, 'returnedCount', 'integer', `${location}.collectionCoverage`);
+  expectType(coverage, 'missingCount', 'integer', `${location}.collectionCoverage`);
+  expectType(coverage, 'missingCollectionIds', 'array', `${location}.collectionCoverage`);
+  expectType(coverage, 'incompleteCount', 'integer', `${location}.collectionCoverage`);
+  expectType(coverage, 'incompleteCollectionIds', 'array', `${location}.collectionCoverage`);
+  expectType(coverage, 'degraded', 'boolean', `${location}.collectionCoverage`);
+  expectType(coverage, 'perCollectionResultCounts', 'object', `${location}.collectionCoverage`);
+  assertThat(coverage.requestedCount === collectionKeys.length,
+    `${location} requested collection count mismatch`);
+  assertThat(coverage.requestedCollectionIds.length === collectionKeys.length,
+    `${location} requested collection IDs mismatch`);
+  assertThat(coverage.missingCount === coverage.missingCollectionIds.length,
+    `${location} missing collection count mismatch`);
+  assertThat(coverage.incompleteCount === coverage.incompleteCollectionIds.length,
+    `${location} incomplete collection count mismatch`);
+  for (const source of response.rag.sources ?? []) {
+    if (typeof source.collectionKey === 'string') {
+      assertThat(collectionKeys.includes(source.collectionKey),
+        `${location} exposed a source outside the selected collections`);
     }
   }
 }
@@ -330,7 +411,7 @@ function validateNativeSse(text, manifest) {
   return { events, accepted, duplicateCount };
 }
 
-function validateOpenAiSse(text) {
+function validateOpenAiSse(text, transport) {
   const events = parseSse(text);
   assertThat(events.length > 0, 'OpenAI SSE has no events');
   let done = false;
@@ -344,7 +425,8 @@ function validateOpenAiSse(text) {
     }
     assertThat(!done, 'OpenAI SSE emitted a chunk after [DONE]');
     const payload = parseEventData(event, `OpenAI SSE #${index + 1}`);
-    assertNoPrivateOpenAiFields(payload, `OpenAI SSE #${index + 1}`);
+    const allowedExtensions = validateOpenAiResponseExtensions(payload, transport);
+    assertNoPrivateOpenAiFields(payload, `OpenAI SSE #${index + 1}`, allowedExtensions);
     expectType(payload, 'id', 'string', `OpenAI SSE #${index + 1}`);
     expectType(payload, 'object', 'string', `OpenAI SSE #${index + 1}`);
     expectType(payload, 'created', 'integer', `OpenAI SSE #${index + 1}`);
@@ -471,8 +553,8 @@ function validatePackage(root) {
   validateNativeResponse(readJson(files.nativeJson));
   validateNativeError(readJson(files.nativeError));
   validateNativeSse(readText(files.nativeSse), manifest);
-  validateOpenAiResponse(readJson(files.openaiJson));
-  validateOpenAiSse(readText(files.openaiSse));
+  validateOpenAiResponse(readJson(files.openaiJson), manifest.transports.openaiJson);
+  validateOpenAiSse(readText(files.openaiSse), manifest.transports.openaiSse);
   validateDeprecations(readJson(files.deprecations), root);
   return packageData;
 }
@@ -499,6 +581,12 @@ function liveHeaders(apiKey) {
 async function liveProbe(packageData, options) {
   const baseUrl = options.baseUrl.replace(/\/+$/, '');
   const headers = liveHeaders(options.apiKey);
+  const coverageMode = options.openAiCoverageMode || null;
+  const collectionKeys = options.openAiCollectionKeys ?? [];
+  if (coverageMode !== null) {
+    assertThat(coverageMode === 'EACH_COLLECTION', 'live OpenAI coverage probe only supports EACH_COLLECTION');
+    assertThat(collectionKeys.length > 0, 'EACH_COLLECTION live probe requires selected collection keys');
+  }
   const apiDocs = await fetchResponse(`${baseUrl}/v3/api-docs`, { headers });
   assertThat(apiDocs.response.ok, `OpenAPI docs returned HTTP ${apiDocs.response.status} (trace ${apiDocs.traceId})`);
   validateOpenApiSurface(await apiDocs.response.json(), packageData.surface);
@@ -529,36 +617,46 @@ async function liveProbe(packageData, options) {
     model,
     messages: [{ role: 'user', content: options.query }],
   };
-  if (options.openAiRagMode) {
-    openAiRequest.rag = {
-      mode: options.openAiRagMode,
-      memory: options.openAiRagMemory || 'STATELESS',
+  const openAiRag = {};
+  if (options.openAiRagMode) openAiRag.mode = options.openAiRagMode;
+  if (options.openAiRagMemory) openAiRag.memory = options.openAiRagMemory;
+  if (coverageMode === 'EACH_COLLECTION') {
+    openAiRag.mode ||= 'KNOWLEDGE';
+    openAiRag.memory ||= 'STATELESS';
+    openAiRag.scope = {
+      mode: 'SELECTED_COLLECTIONS',
+      coverage_mode: coverageMode,
+      collection_keys: collectionKeys,
     };
   }
+  if (Object.keys(openAiRag).length > 0) openAiRequest.rag = openAiRag;
   const openAiPayload = JSON.stringify(openAiRequest);
   const openAiJson = await fetchResponse(`${baseUrl}/v1/chat/completions`, {
     method: 'POST', headers, body: openAiPayload,
   });
   assertThat(openAiJson.response.ok, `OpenAI JSON returned HTTP ${openAiJson.response.status} (trace ${openAiJson.traceId})`);
-  validateOpenAiResponse(await openAiJson.response.json());
+  const openAiJsonBody = await openAiJson.response.json();
+  validateOpenAiResponse(openAiJsonBody, packageData.manifest.transports.openaiJson);
+  validateOpenAiCoverage(openAiJsonBody, coverageMode, collectionKeys, 'OpenAI JSON');
 
   const openAiSseRequest = {
     model,
     stream: true,
     messages: [{ role: 'user', content: options.query }],
   };
-  if (options.openAiRagMode) {
-    openAiSseRequest.rag = {
-      mode: options.openAiRagMode,
-      memory: options.openAiRagMemory || 'STATELESS',
-    };
-  }
+  if (Object.keys(openAiRag).length > 0) openAiSseRequest.rag = openAiRag;
   const openAiSsePayload = JSON.stringify(openAiSseRequest);
   const openAiSse = await fetchResponse(`${baseUrl}/v1/chat/completions`, {
     method: 'POST', headers, body: openAiSsePayload,
   });
   assertThat(openAiSse.response.ok, `OpenAI SSE returned HTTP ${openAiSse.response.status} (trace ${openAiSse.traceId})`);
-  validateOpenAiSse(await openAiSse.response.text());
+  const openAiSseBody = await openAiSse.response.text();
+  const openAiSseEvents = validateOpenAiSse(
+    openAiSseBody, packageData.manifest.transports.openaiSse);
+  const finalEvent = [...openAiSseEvents].reverse()
+    .find((event) => event.data.trim() !== '[DONE]');
+  const finalChunk = parseEventData(finalEvent, 'OpenAI SSE final chunk');
+  validateOpenAiCoverage(finalChunk, coverageMode, collectionKeys, 'OpenAI SSE');
 }
 
 function parseArgs(argv) {
@@ -603,7 +701,8 @@ function runSelfTest() {
     fail(`${label} was accepted but must fail closed`);
   };
   mustFail('malformed JSON', () => validateNativeSse('event:content\ndata:{broken}\n\n', packageData.manifest));
-  mustFail('missing OpenAI field', () => validateOpenAiResponse({ id: 'x' }));
+  mustFail('missing OpenAI field', () => validateOpenAiResponse(
+    { id: 'x' }, packageData.manifest.transports.openaiJson));
   mustFail('terminal reordering', () => validateNativeSse(
     'event:done\ndata:{"status":"complete","sequence":1}\n\n'
     + 'event:sources\ndata:{"sources":[],"sequence":2}\n', packageData.manifest));
@@ -611,7 +710,36 @@ function runSelfTest() {
     id: 'x', object: 'chat.completion', created: 1, model: 'x',
     choices: [{ index: 0, message: { role: 'assistant', content: 'x' }, finish_reason: 'stop' }],
     traceId: 'must-not-leak',
-  }));
+  }, packageData.manifest.transports.openaiJson));
+  mustFail('undeclared RAG extension field', () => validateOpenAiResponse({
+    ...readJson(packageData.files.openaiJson),
+    rag: { ...readJson(packageData.files.openaiJson).rag, internalContext: 'must-not-leak' },
+  }, packageData.manifest.transports.openaiJson));
+  const coverageResponse = {
+    rag: {
+      sources: [{ collectionKey: 'collection-a' }],
+      collectionCoverage: {
+        mode: 'EACH_COLLECTION',
+        requestedCollectionIds: [1, 2],
+        requestedCount: 2,
+        returnedCount: 1,
+        missingCount: 1,
+        missingCollectionIds: [2],
+        incompleteCount: 0,
+        incompleteCollectionIds: [],
+        degraded: false,
+        perCollectionResultCounts: { '1': 1, '2': 0 },
+      },
+    },
+  };
+  validateOpenAiCoverage(coverageResponse, 'EACH_COLLECTION', ['collection-a', 'collection-b'], 'self-test');
+  mustFail('GLOBAL coverage leakage', () => validateOpenAiCoverage({
+    rag: { collectionCoverage: {} },
+  }, null, [], 'self-test'));
+  mustFail('out-of-scope OpenAI source', () => validateOpenAiCoverage({
+    ...coverageResponse,
+    rag: { ...coverageResponse.rag, sources: [{ collectionKey: 'forbidden' }] },
+  }, 'EACH_COLLECTION', ['collection-a', 'collection-b'], 'self-test'));
   console.log('Client consumer contract self-test passed (including fail-closed cases)');
 }
 
@@ -623,6 +751,9 @@ async function main() {
   args.model ??= process.env.CLIENT_CONTRACT_MODEL;
   args.openAiRagMode ??= process.env.CLIENT_CONTRACT_OPENAI_RAG_MODE;
   args.openAiRagMemory ??= process.env.CLIENT_CONTRACT_OPENAI_RAG_MEMORY;
+  args.openAiCoverageMode ??= process.env.CLIENT_CONTRACT_OPENAI_COVERAGE_MODE;
+  args.openAiCollectionKeys ??= (process.env.CLIENT_CONTRACT_OPENAI_COLLECTION_KEYS || '')
+    .split(',').map((key) => key.trim()).filter(Boolean);
   if (args.selfTest) {
     runSelfTest();
     return;

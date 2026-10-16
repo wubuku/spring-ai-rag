@@ -2,6 +2,7 @@ package com.springairag.core.retrieval;
 
 import com.springairag.api.dto.RetrievalConfig;
 import com.springairag.api.dto.RetrievalResult;
+import com.springairag.api.enums.CollectionCoverageMode;
 import com.springairag.core.config.EmbeddingProfile;
 import com.springairag.core.config.EmbeddingProfileProvider;
 import com.springairag.core.config.EmbeddingVectorColumns;
@@ -24,12 +25,21 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.LinkedHashMap;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.Comparator;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executor;
+import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Supplier;
 
 /**
  * Hybrid retrieval service.
@@ -45,11 +55,18 @@ import java.util.concurrent.TimeoutException;
 public class HybridRetrieverService {
 
     private static final Logger log = LoggerFactory.getLogger(HybridRetrieverService.class);
+    private static final int MAX_COVERAGE_IN_FLIGHT_BRANCHES = 80;
+    private static final int MAX_COVERAGE_BRANCH_ROWS = 200;
+    private static final int MAX_COVERAGE_COLLECTIONS = 20;
+    private static final int MAX_COVERAGE_RAW_ROWS = 8_000;
 
     private final EmbeddingModel embeddingModel;
     private final EmbeddingProfileProvider profileProvider;
     private final JdbcTemplate jdbcTemplate;
     private final Executor taskExecutor;
+    private volatile Executor embeddingExecutor = ForkJoinPool.commonPool();
+    private final Semaphore coverageBranchPermits =
+            new Semaphore(MAX_COVERAGE_IN_FLIGHT_BRANCHES);
     private final RagRetrievalProperties retrieval;
     private final RagRerankProperties rerank;
     private final FulltextSearchProviderFactory fulltextProviderFactory; // optional-claim: FulltextSearchProviderFactory 是无条件 @Component，null 臂只在不走 Spring 装配的构造路径可达；守卫真正的职责是全文检索的降级形态——拿不到 provider 时退回 NoOpFulltextSearchProvider 而不是让检索失败
@@ -82,6 +99,15 @@ public class HybridRetrieverService {
         log.info("HybridRetrieverService initialized, retrievalTimeout={}s, fulltextStrategy={}",
                 retrievalTimeoutSeconds,
                 fulltextProviderFactory != null ? "auto-detect" : "disabled (no factory)");
+    }
+
+    @Autowired(required = false)
+    void setCoverageEmbeddingExecutor(
+            @org.springframework.beans.factory.annotation.Qualifier("ragEmbeddingExecutor")
+            Executor embeddingExecutor) {
+        if (embeddingExecutor != null) {
+            this.embeddingExecutor = embeddingExecutor;
+        }
     }
 
     public HybridRetrieverService(
@@ -250,6 +276,14 @@ public class HybridRetrieverService {
         float vWeight = (config != null) ? (float) config.getVectorWeight() : retrieval.getVectorWeight();
         float fWeight = (config != null) ? (float) config.getFulltextWeight() : retrieval.getFulltextWeight();
         double minScore = config != null ? config.getMinScore() : retrieval.getMinScore();
+        if (scope.coverageMode() == CollectionCoverageMode.EACH_COLLECTION) {
+            validateCoverageBounds(scope, effectiveLimit);
+            return searchEachCollection(
+                    query, scope, excludeIds, effectiveLimit, retrievalLimit,
+                    config, effectiveFilters, profile, fulltextProvider,
+                    vWeight, fWeight, minScore, startedAt, scopeSummary,
+                    queryStats);
+        }
         RetrievalBranchStage vectorStage;
         RetrievalBranchStage fulltextStage;
         List<RetrievalResult> fused;
@@ -351,6 +385,464 @@ public class HybridRetrieverService {
                 resolved.emptyReasonCode(),
                 elapsedMs(startedAt),
                 rawCandidates);
+    }
+
+    private RetrievalOutcome searchEachCollection(
+            String query,
+            RetrievalScope scope,
+            List<Long> excludeIds,
+            int effectiveLimit,
+            int retrievalLimit,
+            RetrievalConfig config,
+            RetrievalFilters filters,
+            EmbeddingProfile profile,
+            FulltextSearchProvider fulltextProvider,
+            float vectorWeight,
+            float fulltextWeight,
+            double minScore,
+            long startedAt,
+            Map<String, Object> baseScopeSummary,
+            List<RetrievalOutcome.QueryStat> queryStats) {
+        long deadlineNanos = startedAt + TimeUnit.SECONDS.toNanos(
+                Math.max(1, retrievalTimeoutSeconds));
+        boolean fulltextAvailable = isFulltextAvailable(config, fulltextProvider);
+        int branchLimit = Math.min(
+                MAX_COVERAGE_BRANCH_ROWS, Math.max(1, retrievalLimit) * 2);
+        CompletableFuture<float[]> embeddingFuture = submitCoverageEmbedding(
+                query, profile, deadlineNanos);
+        Map<Long, List<RetrievalResult>> perCollectionResults = new LinkedHashMap<>();
+        List<RetrievalBranchStage> vectorStages = new ArrayList<>();
+        List<RetrievalBranchStage> fulltextStages = new ArrayList<>();
+        Map<Long, Map<String, String>> collectionBranchStatuses = new LinkedHashMap<>();
+        Map<Long, RetrievalScope> collectionScopes = new LinkedHashMap<>();
+        Map<Long, CompletableFuture<BranchExecution>> fulltextFutures =
+                new LinkedHashMap<>();
+        int rawCandidates = 0;
+
+        for (Long collectionId : scope.collectionIds()) {
+            RetrievalScope collectionScope = RetrievalScope.selectedCollections(
+                    List.of(collectionId), scope.documentIds(), scope.documentType(),
+                    CollectionCoverageMode.GLOBAL);
+            collectionScopes.put(collectionId, collectionScope);
+            CompletableFuture<BranchExecution> fulltextFuture = fulltextAvailable
+                    ? submitCoverageBranch(
+                            RetrievalBranchStage.FULLTEXT,
+                            fulltextProvider.getName(),
+                            collectionId,
+                            deadlineNanos,
+                            () -> runFulltext(
+                                    fulltextProvider, query, collectionScope,
+                                    excludeIds, branchLimit, minScore,
+                                    profile, filters))
+                    : CompletableFuture.completedFuture(disabledBranch(
+                            RetrievalBranchStage.FULLTEXT,
+                            fulltextProvider.getName()));
+            fulltextFutures.put(collectionId, fulltextFuture);
+        }
+
+        EmbeddingExecution embedding = awaitCoverageEmbedding(
+                embeddingFuture, deadlineNanos);
+        Map<Long, CompletableFuture<BranchExecution>> vectorFutures =
+                new LinkedHashMap<>();
+        for (Long collectionId : scope.collectionIds()) {
+            RetrievalScope collectionScope = collectionScopes.get(collectionId);
+            CompletableFuture<BranchExecution> vectorFuture = embedding.vector() != null
+                    ? submitCoverageBranch(
+                            RetrievalBranchStage.VECTOR,
+                            "embedding",
+                            collectionId,
+                            deadlineNanos,
+                            () -> runVectorWithVector(
+                                    collectionScope, excludeIds, branchLimit,
+                                    profile, minScore, filters, embedding.vector()))
+                    : CompletableFuture.completedFuture(vectorBranchForEmbedding(embedding));
+            vectorFutures.put(collectionId, vectorFuture);
+        }
+
+        for (Long collectionId : scope.collectionIds()) {
+            BranchExecution vector = awaitCoverageBranch(
+                    vectorFutures.get(collectionId),
+                    RetrievalBranchStage.VECTOR,
+                    "embedding",
+                    deadlineNanos,
+                    "Vector search [collection=" + collectionId + "]");
+            BranchExecution fulltext = awaitCoverageBranch(
+                    fulltextFutures.get(collectionId),
+                    RetrievalBranchStage.FULLTEXT,
+                    fulltextProvider.getName(),
+                    deadlineNanos,
+                    "Fulltext search [collection=" + collectionId + "]");
+            vectorStages.add(vector.stage());
+            fulltextStages.add(fulltext.stage());
+            rawCandidates += vector.stage().candidateCount()
+                    + fulltext.stage().candidateCount();
+
+            List<RetrievalResult> localResults = fulltextAvailable
+                    ? RetrievalUtils.fuseResults(
+                            vector.results(), fulltext.results(),
+                            retrievalLimit, vectorWeight, fulltextWeight)
+                    : vector.results();
+            for (RetrievalResult result : localResults) {
+                if (result != null && result.getCollectionId() == null) {
+                    result.setCollectionId(collectionId);
+                }
+            }
+            perCollectionResults.put(collectionId, sortCoverageResults(localResults));
+            Map<String, String> statuses = new LinkedHashMap<>();
+            statuses.put("vector", vector.stage().status());
+            statuses.put("fulltext", fulltext.stage().status());
+            collectionBranchStatuses.put(collectionId, Map.copyOf(statuses));
+        }
+
+        List<RetrievalResult> covered = selectCoverageResults(
+                perCollectionResults, retrievalLimit);
+        Map<Long, Integer> returnedCounts = countByCollection(
+                scope.collectionIds(), covered);
+        List<Long> incompleteCollectionIds = collectionBranchStatuses.entrySet().stream()
+                .filter(entry -> entry.getValue().values().stream()
+                        .anyMatch(HybridRetrieverService::isIncompleteBranchStatus))
+                .map(Map.Entry::getKey)
+                .toList();
+        Map<String, Object> scopeSummary = RetrievalScopeSummary.withCollectionCoverage(
+                baseScopeSummary, scope.coverageMode(), scope.collectionIds(),
+                returnedCounts, incompleteCollectionIds, collectionBranchStatuses,
+                !incompleteCollectionIds.isEmpty());
+        RetrievalBranchStage vectorStage = aggregateStages(
+                RetrievalBranchStage.VECTOR, "embedding", vectorStages);
+        RetrievalBranchStage fulltextStage = aggregateStages(
+                RetrievalBranchStage.FULLTEXT, fulltextProvider.getName(), fulltextStages);
+        RetrievalBranchStage fusionStage = new RetrievalBranchStage(
+                RetrievalBranchStage.FUSION,
+                "weighted-rrf-per-collection",
+                RetrievalBranchStage.SUCCESS,
+                0L,
+                Math.min(MAX_COVERAGE_RAW_ROWS, rawCandidates),
+                covered.size(),
+                null);
+
+        RetrievalEmptyReasonProbe.Eligibility eligibility =
+                RetrievalEmptyReasonProbe.Eligibility.unavailable();
+        if (covered.isEmpty() && emptyReasonProbe != null) {
+            eligibility = emptyReasonProbe.count(scope, filters, profile, probeTimeoutMs);
+        }
+        RetrievalOutcomeCodes.Resolved resolved = RetrievalOutcomeCodes.resolve(
+                false,
+                false,
+                false,
+                covered.size(),
+                vectorStage,
+                fulltextStage,
+                eligibility.enabledDocuments(),
+                eligibility.freshDocuments(),
+                eligibility.failed(),
+                Math.min(MAX_COVERAGE_RAW_ROWS, rawCandidates));
+        return new RetrievalOutcome(
+                UUID.randomUUID(),
+                covered,
+                query,
+                queryStats,
+                scopeSummary,
+                RetrievalScopeSummary.filterSummary(filters),
+                List.of(vectorStage, fulltextStage),
+                fusionStage,
+                null,
+                resolved.outcomeCode(),
+                resolved.emptyReasonCode(),
+                elapsedMs(startedAt),
+                Math.min(MAX_COVERAGE_RAW_ROWS, rawCandidates));
+    }
+
+    private void validateCoverageBounds(RetrievalScope scope, int limit) {
+        if (scope.collectionIds().size() > MAX_COVERAGE_COLLECTIONS) {
+            throw new IllegalArgumentException(
+                    "EACH_COLLECTION coverage supports at most "
+                            + MAX_COVERAGE_COLLECTIONS + " Collections");
+        }
+        if (limit < scope.collectionIds().size() || limit > 100) {
+            throw new IllegalArgumentException(
+                    "EACH_COLLECTION coverage requires limit between selected Collection count and 100");
+        }
+    }
+
+    private CompletableFuture<float[]> submitCoverageEmbedding(
+            String query, EmbeddingProfile profile, long deadlineNanos) {
+        try {
+            return CompletableFuture.supplyAsync(() -> {
+                if (remainingNanos(deadlineNanos) <= 0) {
+                    throw new CompletionException(
+                            new TimeoutException("Collection coverage deadline expired"));
+                }
+                float[] vector = embeddingModel.embed(query);
+                validateQueryVector(vector, profile);
+                return vector;
+            }, embeddingExecutor);
+        } catch (RejectedExecutionException e) {
+            CompletableFuture<float[]> rejected = new CompletableFuture<>();
+            rejected.completeExceptionally(e);
+            return rejected;
+        }
+    }
+
+    private EmbeddingExecution awaitCoverageEmbedding(
+            CompletableFuture<float[]> future, long deadlineNanos) {
+        try {
+            float[] vector = getBeforeDeadline(future, deadlineNanos);
+            return new EmbeddingExecution(vector, null, RetrievalBranchStage.SUCCESS, 0L);
+        } catch (TimeoutException e) {
+            return new EmbeddingExecution(
+                    null, e, RetrievalBranchStage.TIMEOUT,
+                    TimeUnit.SECONDS.toMillis(Math.max(1, retrievalTimeoutSeconds)));
+        } catch (ExecutionException e) {
+            Throwable cause = unwrap(e.getCause());
+            if (cause instanceof RejectedExecutionException) {
+                return new EmbeddingExecution(
+                        null, cause, RetrievalBranchStage.CAPACITY_LIMITED, 0L);
+            }
+            return new EmbeddingExecution(
+                    null, cause, RetrievalBranchStage.ERROR, 0L);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return new EmbeddingExecution(
+                    null, e, RetrievalBranchStage.ERROR, 0L);
+        }
+    }
+
+    private CompletableFuture<BranchExecution> submitCoverageBranch(
+            String branch,
+            String provider,
+            Long collectionId,
+            long deadlineNanos,
+            Supplier<BranchExecution> task) {
+        if (remainingNanos(deadlineNanos) <= 0) {
+            return CompletableFuture.completedFuture(terminalBranch(
+                    branch, provider, RetrievalBranchStage.TIMEOUT,
+                    "TIMEOUT", 0L));
+        }
+        if (!coverageBranchPermits.tryAcquire()) {
+            return CompletableFuture.completedFuture(terminalBranch(
+                    branch, provider, RetrievalBranchStage.CAPACITY_LIMITED,
+                    "BRANCH_CAPACITY", 0L));
+        }
+        try {
+            return CompletableFuture.supplyAsync(() -> {
+                try {
+                    if (remainingNanos(deadlineNanos) <= 0) {
+                        return terminalBranch(
+                                branch, provider, RetrievalBranchStage.TIMEOUT,
+                                "TIMEOUT", 0L);
+                    }
+                    return task.get();
+                } finally {
+                    coverageBranchPermits.release();
+                }
+            }, taskExecutor);
+        } catch (RejectedExecutionException e) {
+            coverageBranchPermits.release();
+            return CompletableFuture.completedFuture(terminalBranch(
+                    branch, provider, RetrievalBranchStage.CAPACITY_LIMITED,
+                    "EXECUTOR_REJECTED", 0L));
+        }
+    }
+
+    private BranchExecution awaitCoverageBranch(
+            CompletableFuture<BranchExecution> future,
+            String branch,
+            String provider,
+            long deadlineNanos,
+            String logPrefix) {
+        try {
+            return getBeforeDeadline(future, deadlineNanos);
+        } catch (TimeoutException e) {
+            return terminalBranch(
+                    branch, provider, RetrievalBranchStage.TIMEOUT,
+                    "TIMEOUT", TimeUnit.SECONDS.toMillis(
+                            Math.max(1, retrievalTimeoutSeconds)));
+        } catch (ExecutionException e) {
+            Throwable cause = unwrap(e.getCause());
+            log.warn("{} failed", logPrefix, cause);
+            return terminalBranch(
+                    branch, provider, RetrievalBranchStage.ERROR,
+                    normalizeErrorCode(cause), 0L);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return terminalBranch(
+                    branch, provider, RetrievalBranchStage.ERROR,
+                    "INTERRUPTED", 0L);
+        }
+    }
+
+    private <T> T getBeforeDeadline(
+            CompletableFuture<T> future, long deadlineNanos)
+            throws InterruptedException, ExecutionException, TimeoutException {
+        long remaining = remainingNanos(deadlineNanos);
+        if (remaining <= 0 && !future.isDone()) {
+            throw new TimeoutException("Collection coverage deadline expired");
+        }
+        return future.get(Math.max(0L, remaining), TimeUnit.NANOSECONDS);
+    }
+
+    private BranchExecution vectorBranchForEmbedding(EmbeddingExecution embedding) {
+        String status = embedding.status();
+        String errorCode = status.equals(RetrievalBranchStage.TIMEOUT)
+                ? "TIMEOUT"
+                : status.equals(RetrievalBranchStage.CAPACITY_LIMITED)
+                        ? "EMBEDDING_CAPACITY" : normalizeErrorCode(embedding.error());
+        return terminalBranch(
+                RetrievalBranchStage.VECTOR,
+                "embedding",
+                status,
+                errorCode,
+                embedding.elapsedMs());
+    }
+
+    private BranchExecution terminalBranch(
+            String branch, String provider, String status, String errorCode, long elapsedMs) {
+        return new BranchExecution(
+                new RetrievalBranchStage(
+                        branch, provider, status, elapsedMs, 0, 0, errorCode),
+                List.of());
+    }
+
+    private BranchExecution disabledBranch(String branch, String provider) {
+        return terminalBranch(branch, provider, RetrievalBranchStage.DISABLED, null, 0L);
+    }
+
+    private static long remainingNanos(long deadlineNanos) {
+        return deadlineNanos - System.nanoTime();
+    }
+
+    private static Throwable unwrap(Throwable error) {
+        Throwable current = error;
+        while ((current instanceof CompletionException
+                || current instanceof ExecutionException)
+                && current.getCause() != null) {
+            current = current.getCause();
+        }
+        return current;
+    }
+
+    private static boolean isIncompleteBranchStatus(String status) {
+        return RetrievalBranchStage.ERROR.equals(status)
+                || RetrievalBranchStage.TIMEOUT.equals(status)
+                || RetrievalBranchStage.CAPACITY_LIMITED.equals(status);
+    }
+
+    private BranchExecution runVectorWithVector(
+            RetrievalScope scope,
+            List<Long> excludeIds,
+            int limit,
+            EmbeddingProfile profile,
+            double minScore,
+            RetrievalFilters filters,
+            float[] queryVector) {
+        long startedAt = System.nanoTime();
+        try {
+            List<Map<String, Object>> rows = executeVectorQuery(
+                    queryVector, scope, limit, profile, filters);
+            MappedVector mapped = mapVectorResultsDetailed(
+                    rows, queryVector, excludeIds, minScore);
+            return new BranchExecution(
+                    new RetrievalBranchStage(
+                            RetrievalBranchStage.VECTOR,
+                            "embedding",
+                            RetrievalBranchStage.SUCCESS,
+                            elapsedMs(startedAt),
+                            mapped.candidateCount(),
+                            mapped.results().size(),
+                            null),
+                    mapped.results());
+        } catch (Exception error) {
+            log.warn("Vector search failed in collection coverage mode", error);
+            return failedVector(error, elapsedMs(startedAt));
+        }
+    }
+
+    private BranchExecution failedVector(Throwable error) {
+        return failedVector(error, 0L);
+    }
+
+    private BranchExecution failedVector(Throwable error, long elapsedMs) {
+        return new BranchExecution(
+                new RetrievalBranchStage(
+                        RetrievalBranchStage.VECTOR,
+                        "embedding",
+                        RetrievalBranchStage.ERROR,
+                        elapsedMs,
+                        0,
+                        0,
+                        normalizeErrorCode(error)),
+                List.of());
+    }
+
+    private List<RetrievalResult> selectCoverageResults(
+            Map<Long, List<RetrievalResult>> perCollectionResults,
+            int limit) {
+        return CollectionCoverageMerger.merge(perCollectionResults, limit);
+    }
+
+    private List<RetrievalResult> sortCoverageResults(List<RetrievalResult> results) {
+        if (results == null || results.isEmpty()) {
+            return List.of();
+        }
+        return results.stream()
+                .filter(java.util.Objects::nonNull)
+                .sorted(this::compareCoverageResults)
+                .toList();
+    }
+
+    private int compareCoverageResults(RetrievalResult left, RetrievalResult right) {
+        int byScore = Double.compare(right.getScore(), left.getScore());
+        if (byScore != 0) {
+            return byScore;
+        }
+        int byDocument = Comparator.nullsFirst(String::compareTo)
+                .compare(left.getDocumentId(), right.getDocumentId());
+        if (byDocument != 0) {
+            return byDocument;
+        }
+        return Integer.compare(left.getChunkIndex(), right.getChunkIndex());
+    }
+
+    private String coverageIdentity(RetrievalResult result) {
+        if (result.getDocumentId() != null && result.hasChunkIndex()) {
+            return result.getDocumentId() + ":" + result.getChunkIndex();
+        }
+        return "unidentified:" + System.identityHashCode(result);
+    }
+
+    private Map<Long, Integer> countByCollection(
+            List<Long> collectionIds, List<RetrievalResult> results) {
+        return CollectionCoverageMerger.countByCollection(collectionIds, results);
+    }
+
+    private RetrievalBranchStage aggregateStages(
+            String branch,
+            String provider,
+            List<RetrievalBranchStage> stages) {
+        if (stages.isEmpty()) {
+            return new RetrievalBranchStage(
+                    branch, provider, RetrievalBranchStage.DISABLED,
+                    0L, 0, 0, null);
+        }
+        int candidates = stages.stream()
+                .mapToInt(RetrievalBranchStage::candidateCount).sum();
+        int results = stages.stream()
+                .mapToInt(RetrievalBranchStage::resultCount).sum();
+        long elapsed = stages.stream()
+                .mapToLong(RetrievalBranchStage::elapsedMs).sum();
+        String status = stages.stream().anyMatch(RetrievalBranchStage::succeeded)
+                ? RetrievalBranchStage.SUCCESS
+                : stages.stream().anyMatch(RetrievalBranchStage::timedOut)
+                        ? RetrievalBranchStage.TIMEOUT
+                : stages.stream().anyMatch(RetrievalBranchStage::failed)
+                        ? RetrievalBranchStage.ERROR
+                        : stages.stream().anyMatch(RetrievalBranchStage::capacityLimited)
+                                ? RetrievalBranchStage.CAPACITY_LIMITED
+                                : RetrievalBranchStage.DISABLED;
+        String errorCode = status.equals(RetrievalBranchStage.ERROR)
+                ? "COLLECTION_BRANCH_FAILURE" : null;
+        return new RetrievalBranchStage(
+                branch, provider, status, elapsed, candidates, results, errorCode);
     }
 
     private int candidateRetrievalLimit(RetrievalConfig config, int requestedLimit) {
@@ -499,6 +991,8 @@ public class HybridRetrieverService {
         String select = "SELECT e.id, e.chunk_text, e." + vectorColumn
                 + "::text AS embedding, e.document_id, e.chunk_index, "
                 + currentMetadataSql() + ", "
+                + "d.collection_id AS collection_id, "
+                + "(SELECT c.collection_key FROM rag_collection c WHERE c.id = d.collection_id) AS collection_key, "
                 + "d.title AS document_title, d.source AS document_source, "
                 + "d.original_filename AS original_filename";
         String scope = EmbeddingProfileSqlScope.fromAndFreshness(
@@ -606,6 +1100,13 @@ public class HybridRetrieverService {
         private BranchExecution {
             results = results == null ? List.of() : List.copyOf(results);
         }
+    }
+
+    private record EmbeddingExecution(
+            float[] vector,
+            Throwable error,
+            String status,
+            long elapsedMs) {
     }
 
     private record MappedVector(int candidateCount, List<RetrievalResult> results) {

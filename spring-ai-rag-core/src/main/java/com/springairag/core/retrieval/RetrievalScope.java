@@ -1,5 +1,7 @@
 package com.springairag.core.retrieval;
 
+import com.springairag.api.enums.CollectionCoverageMode;
+
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
@@ -12,7 +14,8 @@ public record RetrievalScope(
         List<Long> collectionIds,
         List<Long> documentIds,
         String documentType,
-        boolean matchNone) {
+        boolean matchNone,
+        CollectionCoverageMode coverageMode) {
 
     public enum CollectionFilter {
         NONE,
@@ -22,6 +25,8 @@ public record RetrievalScope(
 
     public RetrievalScope {
         collectionFilter = Objects.requireNonNull(collectionFilter, "collectionFilter");
+        coverageMode = coverageMode == null
+                ? CollectionCoverageMode.GLOBAL : coverageMode;
         collectionIds = normalizeIds(collectionIds, "collectionIds");
         documentIds = normalizeIds(documentIds, "documentIds");
         if (documentType != null && documentType.isBlank()) {
@@ -34,6 +39,22 @@ public record RetrievalScope(
         if (collectionFilter == CollectionFilter.SELECTED && collectionIds.isEmpty()) {
             matchNone = true;
         }
+        if (coverageMode == CollectionCoverageMode.EACH_COLLECTION
+                && collectionFilter != CollectionFilter.SELECTED) {
+            throw new IllegalArgumentException(
+                    "EACH_COLLECTION coverage requires SELECTED collection scope");
+        }
+    }
+
+    /** Preserves the original Java constructor signature. */
+    public RetrievalScope(
+            CollectionFilter collectionFilter,
+            List<Long> collectionIds,
+            List<Long> documentIds,
+            String documentType,
+            boolean matchNone) {
+        this(collectionFilter, collectionIds, documentIds, documentType, matchNone,
+                CollectionCoverageMode.GLOBAL);
     }
 
     public static RetrievalScope unscoped() {
@@ -59,6 +80,16 @@ public record RetrievalScope(
         return new RetrievalScope(
                 CollectionFilter.SELECTED, collectionIds,
                 documentIds, documentType, false);
+    }
+
+    public static RetrievalScope selectedCollections(
+            List<Long> collectionIds,
+            List<Long> documentIds,
+            String documentType,
+            CollectionCoverageMode coverageMode) {
+        return new RetrievalScope(
+                CollectionFilter.SELECTED, collectionIds,
+                documentIds, documentType, false, coverageMode);
     }
 
     public static RetrievalScope forDocumentIds(List<Long> documentIds) {

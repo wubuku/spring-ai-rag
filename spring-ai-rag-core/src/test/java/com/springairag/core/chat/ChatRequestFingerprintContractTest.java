@@ -3,6 +3,7 @@ package com.springairag.core.chat;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.springairag.api.dto.ChatRequest;
 import com.springairag.api.enums.ChatMode;
+import com.springairag.api.enums.CollectionCoverageMode;
 import com.springairag.api.enums.CollectionScopeMode;
 import com.springairag.api.enums.ErrorCode;
 import com.springairag.api.openai.OpenAiChatCompletionRequest;
@@ -101,6 +102,34 @@ class ChatRequestFingerprintContractTest {
                 ChatRequestFingerprint.nativeRequest(plainish, objectMapper);
         assertTrue(fallback.canonical().path("scope").path("mode").asText()
                 .equals(CollectionScopeMode.CALLER_VISIBLE.name()));
+    }
+
+    @Test
+    void globalCoveragePreservesLegacyNativeFingerprint() {
+        ChatRequest request = chatRequest();
+        request.setCollectionScopeMode(CollectionScopeMode.SELECTED_COLLECTIONS);
+        request.setCollectionKeys(List.of("kb-b", "kb-a"));
+
+        ChatRequestFingerprint.Result legacy =
+                ChatRequestFingerprint.nativeRequest(request, objectMapper);
+        assertEquals(
+                "bec03db5facc9e047479bf94075ec1216ac5ade60a2722fc9a0a4d738f2be94e",
+                legacy.sha256());
+        assertTrue(legacy.canonical().path("scope")
+                .path("coverageMode").isMissingNode());
+
+        request.setCollectionCoverageMode(CollectionCoverageMode.GLOBAL);
+        ChatRequestFingerprint.Result explicitGlobal =
+                ChatRequestFingerprint.nativeRequest(request, objectMapper);
+        assertEquals(legacy.sha256(), explicitGlobal.sha256());
+
+        request.setCollectionCoverageMode(CollectionCoverageMode.EACH_COLLECTION);
+        ChatRequestFingerprint.Result eachCollection =
+                ChatRequestFingerprint.nativeRequest(request, objectMapper);
+        assertEquals(CollectionCoverageMode.EACH_COLLECTION.name(),
+                eachCollection.canonical().path("scope")
+                        .path("coverageMode").asText());
+        assertNotEquals(legacy.sha256(), eachCollection.sha256());
     }
 
     @Test

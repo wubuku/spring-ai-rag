@@ -17,5 +17,49 @@
     "prompt_tokens": 120,
     "completion_tokens": 18,
     "total_tokens": 138
+  },
+  "rag": {
+    "traceId": "trace-fixture",
+    "evidenceAssessment": {
+      "status": "SUPPORTED",
+      "retrievalExecuted": true,
+      "sourceCount": 1,
+      "citedSourceCount": 1,
+      "invalidCitationIds": [],
+      "contextLimited": false,
+      "safeAnswerApplied": false,
+      "reasonCode": "citation_supported"
+    },
+    "sources": [
+      {
+        "citationId": "S1",
+        "sourceHandle": "src-fixture-1",
+        "documentId": "doc-fixture-1",
+        "chunkIndex": 0,
+        "title": "Service capability guide",
+        "score": 0.91,
+        "documentType": "TEXT",
+        "collectionKey": "docs:service-guide",
+        "sourceType": "DOCUMENT"
+      }
+    ],
+    "citationRegistry": {
+      "version": 1,
+      "handlePrefix": "src-",
+      "sourceCount": 1,
+      "handles": [["S1", "src-fixture-1"]]
+    },
+    "collectionCoverage": {
+      "mode": "EACH_COLLECTION",
+      "requestedCollectionIds": [1, 2],
+      "requestedCount": 2,
+      "returnedCount": 1,
+      "missingCount": 1,
+      "missingCollectionIds": [2],
+      "incompleteCount": 0,
+      "incompleteCollectionIds": [],
+      "degraded": false,
+      "perCollectionResultCounts": {"1": 2, "2": 0}
+    }
   }
 }

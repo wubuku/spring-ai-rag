@@ -161,8 +161,11 @@ Collection 不是仅用于展示的分类字段，而是已经进入写入、检
   任意已归属 Collection 使用 `d.collection_id IS NOT NULL`，selected 使用
   `d.collection_id = ANY (?)` 和 JDBC `bigint[]` 参数；显式 document ID 使用独立的
   `bigint[]` predicate。
-- 检索在有效 Collection 并集上计算一次全局 top-k；尚未提供保证每个 selected
-  Collection 都贡献结果的 `EACH_COLLECTION` 模式。
+- 检索默认在有效 Collection 并集上计算全局 top-k；显式
+  `collectionCoverageMode=EACH_COLLECTION` + `SELECTED_COLLECTIONS` 时启用有界逐集合覆盖
+  （最多 20 个集合、最终最多 100 条）。该模式只保障有检索命中的集合获得结果，不制造伪结果；
+  Search 用可选 `X-RAG-Collection-Coverage`，Chat/OpenAI 用增量 metadata 报告覆盖与降级。
+  默认 GLOBAL 兼容语义不变，无数据库迁移。
 
 详细设计见 [architecture-zh-CN.md](architecture-zh-CN.md)。
 

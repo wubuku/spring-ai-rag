@@ -1,6 +1,20 @@
 package com.springairag.core.integration;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.springairag.api.dto.ChatRequest;
+import com.springairag.api.enums.ChatMode;
+import com.springairag.api.enums.CollectionScopeMode;
+import com.springairag.api.openai.OpenAiChatCompletionRequest;
+import com.springairag.core.chat.ChatAuthorizationService;
+import com.springairag.core.chat.ChatExecutionService;
+import com.springairag.core.chat.ChatObservabilityService;
+import com.springairag.core.chat.ChatPrincipal;
+import com.springairag.core.chat.ChatRequestFingerprint;
 import com.springairag.core.chat.ChatTurnOperation;
+import com.springairag.core.chat.ChatTurnOperationService;
+import com.springairag.core.chat.IdempotencyKeyValidator;
+import com.springairag.core.config.RagChatProperties;
+import com.springairag.core.config.RagProperties;
 import com.springairag.core.repository.ChatTurnOperationRepository;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
@@ -31,6 +45,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
+import static org.mockito.Mockito.mock;
 
 /**
  * V47 durable Chat operation 的真实 PostgreSQL 验收。
@@ -162,6 +177,108 @@ class ChatTurnOperationPostgresIntegrationTest {
                 WHERE conname = 'ck_rag_chat_turn_operation_lifecycle'
                 """,
                 Long.class));
+    }
+
+    @Test
+    void preUpgradeSuccessfulGlobalOperationReplaysWithLegacyFingerprint()
+            throws Exception {
+        ChatRequest request = new ChatRequest("hello", "session-1");
+        request.setMode(ChatMode.KNOWLEDGE);
+        request.setCollectionScopeMode(CollectionScopeMode.SELECTED_COLLECTIONS);
+        request.setCollectionKeys(List.of("kb-b", "kb-a"));
+        ChatRequestFingerprint.Result fingerprint =
+                ChatRequestFingerprint.nativeRequest(request, new ObjectMapper());
+        assertEquals(
+                "bec03db5facc9e047479bf94075ec1216ac5ade60a2722fc9a0a4d738f2be94e",
+                fingerprint.sha256());
+
+        String rawKey = "pre-upgrade-global-replay";
+        String keyHash = IdempotencyKeyValidator.hash(rawKey);
+        UUID turnId = UUID.randomUUID();
+        UUID token = UUID.randomUUID();
+        String executionSnapshot =
+                "{\"executionSnapshotVersion\":1,\"mode\":\"KNOWLEDGE\"}";
+        assertTrue(repository.insert(
+                OWNER, keyHash, fingerprint.sha256(), "session-1", turnId,
+                ChatTurnOperation.Transport.NATIVE_JSON, token, 30_000,
+                executionSnapshot, AUTHORIZATION));
+        ChatTurnOperation claimed = repository.find(OWNER, keyHash);
+        assertTrue(repository.completeSuccess(
+                claimed, executionSnapshot, "{\"answer\":\"legacy answer\"}"));
+
+        ChatTurnOperationService service = new ChatTurnOperationService(
+                repository,
+                new ObjectMapper(),
+                new RagChatProperties(),
+                new RagProperties(),
+                mock(ChatAuthorizationService.class),
+                mock(ChatObservabilityService.class),
+                mock(ChatExecutionService.class));
+        ChatTurnOperationService.Prepared prepared = service.prepare(
+                new ChatPrincipal(OWNER, "DATABASE_API_KEY", false),
+                List.of(rawKey),
+                fingerprint);
+        ChatTurnOperationService.Claim replay = service.claim(
+                prepared, "session-1", ChatTurnOperation.Transport.NATIVE_JSON);
+
+        assertTrue(replay.replay());
+        assertEquals("legacy answer", service.replay(replay).getAnswer());
+    }
+
+    @Test
+    void preUpgradeSuccessfulOpenAiGlobalOperationReplaysWithLegacyFingerprint()
+            throws Exception {
+        OpenAiChatCompletionRequest request = new ObjectMapper().readValue("""
+                {
+                  "model": "m",
+                  "messages": [{"role": "user", "content": "hi"}],
+                  "rag": {
+                    "mode": "KNOWLEDGE",
+                    "scope": {
+                      "mode": "SELECTED_COLLECTIONS",
+                      "collection_keys": ["kb-b", "kb-a"]
+                    }
+                  }
+                }
+                """, OpenAiChatCompletionRequest.class);
+        ChatRequestFingerprint.Result fingerprint =
+                ChatRequestFingerprint.openAiRequest(
+                        request, new ObjectMapper());
+        assertEquals(
+                "87ee00cfa0aa905b381df802790e833cf93291084e44af09d1c994203d1349fb",
+                fingerprint.sha256());
+
+        String rawKey = "pre-upgrade-openai-global-replay";
+        String keyHash = IdempotencyKeyValidator.hash(rawKey);
+        UUID turnId = UUID.randomUUID();
+        UUID token = UUID.randomUUID();
+        String executionSnapshot =
+                "{\"executionSnapshotVersion\":1,\"mode\":\"KNOWLEDGE\"}";
+        assertTrue(repository.insert(
+                OWNER, keyHash, fingerprint.sha256(), "session-1", turnId,
+                ChatTurnOperation.Transport.OPENAI_JSON, token, 30_000,
+                executionSnapshot, AUTHORIZATION));
+        ChatTurnOperation claimed = repository.find(OWNER, keyHash);
+        assertTrue(repository.completeSuccess(
+                claimed, executionSnapshot, "{\"answer\":\"legacy OpenAI answer\"}"));
+
+        ChatTurnOperationService service = new ChatTurnOperationService(
+                repository,
+                new ObjectMapper(),
+                new RagChatProperties(),
+                new RagProperties(),
+                mock(ChatAuthorizationService.class),
+                mock(ChatObservabilityService.class),
+                mock(ChatExecutionService.class));
+        ChatTurnOperationService.Prepared prepared = service.prepare(
+                new ChatPrincipal(OWNER, "DATABASE_API_KEY", false),
+                List.of(rawKey),
+                fingerprint);
+        ChatTurnOperationService.Claim replay = service.claim(
+                prepared, "session-1", ChatTurnOperation.Transport.OPENAI_JSON);
+
+        assertTrue(replay.replay());
+        assertEquals("legacy OpenAI answer", service.replay(replay).getAnswer());
     }
 
     @Test

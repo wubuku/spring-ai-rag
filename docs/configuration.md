@@ -530,6 +530,23 @@ rag:
 | `rag.retrieval.default-limit` | `10` | Default number of results to return |
 | `rag.retrieval.min-score` | `0.3` | Minimum similarity for fuzzy full-text providers such as `pg_trgm`; `pg_jieba` and English FTS use `@@` for lexical matching and `ts_rank` for ordering |
 
+### Per-Collection Coverage Retrieval
+
+There is no server-side feature switch. Clients explicitly opt in through
+`collectionCoverageMode=EACH_COLLECTION` on Search/Chat or
+`rag.scope.coverage_mode` on the OpenAI-compatible API. Omission remains
+`GLOBAL` to preserve existing client ranking semantics. The feature requires
+explicit `SELECTED_COLLECTIONS`, allows at most 20 Collections, and requires
+`limit/maxResults` between the selected count and 100. Native Search/Chat do not
+raise an explicitly undersized caller limit. OpenAI has no `maxResults` field,
+so it uses the server default and raises it to the selected count when needed.
+
+The fixed execution budgets cap each branch at 200 rows and each request at
+8,000 pre-fusion rows. Embedding uses an isolated 4-thread/32-queue executor;
+EACH retrieval branches share a process-wide 80-task permit budget and the
+configured retrieval deadline. Capacity rejection, timeout, and errors are
+reported in the coverage summary. No database schema or migration is required.
+
 > 💡 `vector-weight + fulltext-weight` is recommended to sum to `1.0`.
 > The service validates each weight independently as a finite value in
 > `0.0..1.0`; it does not normalize their sum. The recommendation keeps the

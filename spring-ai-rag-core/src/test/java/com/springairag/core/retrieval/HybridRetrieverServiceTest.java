@@ -2,6 +2,7 @@ package com.springairag.core.retrieval;
 
 import com.springairag.api.dto.RetrievalConfig;
 import com.springairag.api.dto.RetrievalResult;
+import com.springairag.api.enums.CollectionCoverageMode;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.retrieval.fulltext.FulltextSearchProviderFactory;
 import com.springairag.core.retrieval.fulltext.PgTrgmFulltextProvider;
@@ -475,6 +476,45 @@ class HybridRetrieverServiceTest {
         assertNotNull(result);
         assertNotNull(result.getMetadata());
         assertEquals("file.pdf", result.getMetadata().get("source"));
+    }
+
+    @Test
+    @DisplayName("Each-collection coverage embeds once and keeps every hit collection")
+    void eachCollectionCoverage_embedsOnceAndKeepsEveryHitCollection() {
+        float[] queryVec = mockEmbedding();
+        when(embeddingModel.embed("coverage")).thenReturn(queryVec);
+
+        Map<String, Object> collectionOne = mockDbRow(
+                1L, "doc-1", 0, "collection one", queryVec);
+        collectionOne.put("collection_id", 10L);
+        Map<String, Object> collectionTwo = mockDbRow(
+                2L, "doc-2", 0, "collection two", queryVec);
+        collectionTwo.put("collection_id", 20L);
+        when(jdbcTemplate.queryForList(contains("embedding_1024 <=>"), any(Object[].class)))
+                .thenReturn(List.of(collectionOne), List.of(), List.of(collectionTwo));
+
+        RetrievalScope scope = RetrievalScope.selectedCollections(
+                List.of(10L, 20L, 30L), List.of(), null,
+                CollectionCoverageMode.EACH_COLLECTION);
+        RetrievalConfig config = RetrievalConfig.builder()
+                .maxResults(3)
+                .useHybridSearch(false)
+                .useRerank(false)
+                .build();
+
+        RetrievalOutcome outcome = service.searchInScopeDetailed(
+                "coverage", scope, null, 3, config, RetrievalFilters.none());
+
+        assertEquals(List.of(10L, 20L),
+                outcome.results().stream()
+                        .map(RetrievalResult::getCollectionId)
+                        .toList());
+        assertEquals(2, outcome.results().size());
+        verify(embeddingModel, times(1)).embed("coverage");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> coverage = (Map<String, Object>) outcome.scopeSummary()
+                .get("collectionCoverage");
+        assertEquals(List.of(30L), coverage.get("missingCollectionIds"));
     }
 
     // ========== 边界情况 ==========

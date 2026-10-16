@@ -456,6 +456,13 @@ public class RetrievalTraceCollector {
         if (contextAssembly.get() != null) {
             result.put("contextAssembly", contextAssembly.get());
         }
+        RetrievalOutcome outcome = latestOutcome.get();
+        if (outcome != null) {
+            Object coverage = outcome.scopeSummary().get("collectionCoverage");
+            if (coverage instanceof Map<?, ?>) {
+                result.put("scope", Map.of("collectionCoverage", coverage));
+            }
+        }
         return result;
     }
 

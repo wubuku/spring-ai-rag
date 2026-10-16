@@ -6,6 +6,7 @@ import com.springairag.api.dto.RetrievalResult;
 import com.springairag.api.dto.SearchRequest;
 import com.springairag.api.dto.SearchResponse;
 import com.springairag.api.enums.CollectionScopeMode;
+import com.springairag.api.enums.CollectionCoverageMode;
 import com.springairag.core.diagnostics.RetrievalDiagnosticsService;
 import com.springairag.core.repository.RagDocumentRepository;
 import com.springairag.core.retrieval.HybridRetrieverService;
@@ -72,6 +73,47 @@ class RagSearchControllerTest {
         assertEquals(1, body.total());
         assertEquals(1, body.results().size());
         assertEquals("doc1", body.results().get(0).getDocumentId());
+        assertNull(response.getHeaders().getFirst("X-RAG-Collection-Coverage"));
+    }
+
+    @Test
+    void eachCollectionSearchAddsCoverageHeaderWithoutChangingBodyEnvelope() {
+        RetrievalScope scope = RetrievalScope.selectedCollections(
+                List.of(7L, 8L), List.of(), null,
+                CollectionCoverageMode.EACH_COLLECTION);
+        RetrievalOutcome outcome = mock(RetrievalOutcome.class);
+        Map<String, Object> coverage = Map.of(
+                "mode", "EACH_COLLECTION",
+                "requestedCollectionIds", List.of(7, 8),
+                "requestedCount", 2,
+                "returnedCount", 1,
+                "missingCollectionIds", List.of(8));
+        when(outcome.results()).thenReturn(List.of());
+        when(outcome.scopeSummary()).thenReturn(
+                Map.of("collectionCoverage", coverage));
+        when(scopeResolver.resolve(
+                eq(CollectionScopeMode.SELECTED_COLLECTIONS),
+                eq(CollectionCoverageMode.EACH_COLLECTION),
+                eq(List.of(7L, 8L)), isNull(), isNull(), isNull(), isNull()))
+                .thenReturn(scope);
+        when(hybridRetriever.searchInScopeDetailed(
+                eq("query"), same(scope), isNull(), eq(2),
+                any(RetrievalConfig.class), any()))
+                .thenReturn(outcome);
+        MockHttpServletRequest request = new MockHttpServletRequest();
+
+        ResponseEntity<?> response = controller.search(
+                "query", 2, true, 0.5, 0.5,
+                CollectionScopeMode.SELECTED_COLLECTIONS,
+                CollectionCoverageMode.EACH_COLLECTION,
+                List.of(7L, 8L), null, request);
+
+        assertEquals(200, response.getStatusCode().value());
+        assertInstanceOf(SearchResponse.class, response.getBody());
+        String header = response.getHeaders().getFirst("X-RAG-Collection-Coverage");
+        assertNotNull(header);
+        assertTrue(header.contains("\"mode\":\"EACH_COLLECTION\""));
+        assertTrue(header.contains("\"missingCollectionIds\":[8]"));
     }
 
     @Test

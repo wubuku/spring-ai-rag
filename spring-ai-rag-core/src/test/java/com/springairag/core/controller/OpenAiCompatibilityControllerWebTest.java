@@ -152,6 +152,64 @@ class OpenAiCompatibilityControllerWebTest {
     }
 
     @Test
+    void nonStreamingCompletionProjectsCollectionCoverageFromRetrievalMetadata()
+            throws Exception {
+        com.springairag.core.chat.ChatCommand command =
+                com.springairag.core.chat.ChatCommand.of(
+                        "hello",
+                        "session",
+                        com.springairag.api.enums.ChatMode.KNOWLEDGE,
+                        null,
+                        com.springairag.core.retrieval.RetrievalScope.unscoped(),
+                        new com.springairag.core.chat.RetrievalOptions(
+                                5, 0.3, true, true, 0.5, 0.5),
+                        Map.of());
+        Map<String, Object> coverage = Map.of(
+                "mode", "EACH_COLLECTION",
+                "requestedCount", 2,
+                "returnedCount", 1,
+                "missingCount", 1,
+                "missingCollectionIds", List.of(8L));
+        when(requestMapper.map(any(), any())).thenReturn(
+                new OpenAiChatRequestMapper.MappedRequest(
+                        "rag-default", false, command));
+        when(executionService.execute(command)).thenReturn(
+                new ChatExecutionResult(
+                        "answer",
+                        "session",
+                        "trace",
+                        null,
+                        "internal/model",
+                        com.springairag.api.enums.ChatMode.KNOWLEDGE,
+                        List.of(),
+                        Map.of(),
+                        "STOP",
+                        List.of(),
+                        Map.of("retrieval", Map.of("scope",
+                                Map.of("collectionCoverage", coverage)))));
+
+        MvcResult started = mockMvc.perform(post("/v1/chat/completions")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "model": "rag-default",
+                                  "messages": [
+                                    {"role": "user", "content": "hello"}
+                                  ]
+                                }
+                                """))
+                .andExpect(request().asyncStarted())
+                .andReturn();
+
+        mockMvc.perform(asyncDispatch(started))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.rag.collectionCoverage.mode")
+                        .value("EACH_COLLECTION"))
+                .andExpect(jsonPath("$.rag.collectionCoverage.missingCollectionIds[0]")
+                        .value(8));
+    }
+
+    @Test
     void protocolErrorsUseOpenAiEnvelope() throws Exception {
         when(requestMapper.map(any(), any())).thenThrow(
                 OpenAiProtocolException.modelNotFound("missing"));
@@ -306,6 +364,12 @@ class OpenAiCompatibilityControllerWebTest {
         when(requestMapper.map(any(), any())).thenReturn(
                 new OpenAiChatRequestMapper.MappedRequest(
                         "rag-default", true, command));
+        Map<String, Object> coverage = Map.of(
+                "mode", "EACH_COLLECTION",
+                "requestedCount", 1,
+                "returnedCount", 1,
+                "missingCount", 0,
+                "missingCollectionIds", List.of());
         when(executionService.stream(command)).thenReturn(Flux.just(
                 new ChatEvent.ContentDelta("hello"),
                 new ChatEvent.Completed(
@@ -313,10 +377,12 @@ class OpenAiCompatibilityControllerWebTest {
                         "session",
                         "requested",
                         "resolved",
-                        com.springairag.api.enums.ChatMode.PLAIN,
+                        com.springairag.api.enums.ChatMode.KNOWLEDGE,
                         Map.of(),
                         "STOP",
-                        List.of())));
+                        List.of(),
+                        Map.of("retrieval", Map.of("scope",
+                                Map.of("collectionCoverage", coverage))))));
 
         MvcResult started = mockMvc.perform(post("/v1/chat/completions")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -344,10 +410,12 @@ class OpenAiCompatibilityControllerWebTest {
         int roleIndex = body.indexOf("\"role\":\"assistant\"");
         int contentIndex = body.indexOf("\"content\":\"hello\"");
         int finishIndex = body.indexOf("\"finish_reason\":\"stop\"");
+        int coverageIndex = body.indexOf("\"collectionCoverage\"");
         int doneIndex = body.indexOf("data:[DONE]");
         assertTrue(roleIndex >= 0, body);
         assertTrue(contentIndex > roleIndex, body);
         assertTrue(finishIndex > contentIndex, body);
-        assertTrue(doneIndex > finishIndex, body);
+        assertTrue(coverageIndex > finishIndex, body);
+        assertTrue(doneIndex > coverageIndex, body);
     }
 }

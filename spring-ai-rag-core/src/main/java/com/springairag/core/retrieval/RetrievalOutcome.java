@@ -71,11 +71,16 @@ public record RetrievalOutcome(
             RetrievalBranchStage rerank,
             List<RetrievalResult> reranked,
             boolean degraded) {
+        List<RetrievalResult> effectiveResults = reranked == null
+                ? List.of() : reranked;
+        Map<String, Object> updatedScope = RetrievalScopeSummary
+                .withCollectionCoverageResults(
+                        scopeSummary, effectiveResults, degraded);
         RetrievalOutcomeCodes.Resolved resolved = RetrievalOutcomeCodes.resolve(
                 false,
                 false,
                 degraded,
-                reranked == null ? 0 : reranked.size(),
+                effectiveResults.size(),
                 vectorStage(),
                 fulltextStage(),
                 null,
@@ -84,10 +89,10 @@ public record RetrievalOutcome(
                 rawCandidateCount);
         return new RetrievalOutcome(
                 traceId,
-                reranked,
+                effectiveResults,
                 originalQuery,
                 effectiveQueries,
-                scopeSummary,
+                updatedScope,
                 filterSummary,
                 branchStages,
                 fusionStage,

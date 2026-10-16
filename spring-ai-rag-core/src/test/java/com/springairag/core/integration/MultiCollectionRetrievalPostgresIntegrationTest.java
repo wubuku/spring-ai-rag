@@ -2,6 +2,7 @@ package com.springairag.core.integration;
 
 import com.springairag.api.dto.RetrievalConfig;
 import com.springairag.api.dto.RetrievalResult;
+import com.springairag.api.enums.CollectionCoverageMode;
 import com.springairag.core.config.EmbeddingProfile;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.entity.RagDocument;
@@ -210,14 +211,58 @@ class MultiCollectionRetrievalPostgresIntegrationTest {
         assertFalse(callerVisible.contains(wrongProfile));
     }
 
+    @Test
+    void eachCollectionCoveragePreservesHitsBeyondGlobalTopK() {
+        long collectionA = insertCollection("coverage-a");
+        long collectionB = insertCollection("coverage-b");
+        for (int index = 1; index <= 3; index++) {
+            String hash = "coverage-a-" + index;
+            long documentId = insertDocument(
+                    collectionA, "Coverage A " + index, "document", true, hash);
+            insertEmbedding(
+                    documentId, activeProfile, hash, "COMPLETED", "document",
+                    vector(1.0f, 0.0f));
+        }
+        String hash = "coverage-b-1";
+        long collectionBDocumentId = insertDocument(
+                collectionB, "Coverage B", "document", true, hash);
+        insertEmbedding(
+                collectionBDocumentId, activeProfile, hash, "COMPLETED", "document",
+                vector(0.5f, (float) Math.sqrt(0.75)));
+
+        List<RetrievalResult> global = search(
+                RetrievalScope.selectedCollections(
+                        List.of(collectionA, collectionB), null, null),
+                2);
+        assertEquals(2, global.size());
+        assertTrue(global.stream().allMatch(
+                result -> result.getCollectionId().equals(collectionA)));
+
+        List<RetrievalResult> covered = search(
+                RetrievalScope.selectedCollections(
+                        List.of(collectionA, collectionB), null, null,
+                        CollectionCoverageMode.EACH_COLLECTION),
+                2);
+        assertEquals(2, covered.size());
+        assertEquals(
+                Set.of(collectionA, collectionB),
+                covered.stream()
+                        .map(RetrievalResult::getCollectionId)
+                        .collect(java.util.stream.Collectors.toSet()));
+    }
+
     private List<RetrievalResult> search(RetrievalScope scope) {
+        return search(scope, 50);
+    }
+
+    private List<RetrievalResult> search(RetrievalScope scope, int limit) {
         return retriever.searchInScope(
                 "scope query",
                 scope,
                 null,
-                50,
+                limit,
                 RetrievalConfig.builder()
-                        .maxResults(50)
+                        .maxResults(limit)
                         .useHybridSearch(false)
                         .build());
     }
@@ -294,10 +339,22 @@ class MultiCollectionRetrievalPostgresIntegrationTest {
             String stateContentHash,
             String status,
             String documentType) {
+        insertEmbedding(
+                documentId, profile, stateContentHash, status, documentType,
+                vector(1.0f));
+    }
+
+    private void insertEmbedding(
+            long documentId,
+            EmbeddingProfile profile,
+            String stateContentHash,
+            String status,
+            String documentType,
+            float[] embedding) {
         String chunkerVersion = RagDocument.JSON_RECORD.equals(documentType)
                 ? descriptors.jsonRecordDescriptor().chunkerVersion()
                 : descriptors.textDescriptor().chunkerVersion();
-        String vector = vectorText(vector(1.0f));
+        String vector = vectorText(embedding);
         jdbcTemplate.update(
                 "INSERT INTO rag_embeddings "
                         + "(document_id, chunk_text, chunk_index, embedding, "
@@ -321,8 +378,13 @@ class MultiCollectionRetrievalPostgresIntegrationTest {
     }
 
     private float[] vector(float firstValue) {
+        return vector(firstValue, 0.0f);
+    }
+
+    private float[] vector(float firstComponent, float secondComponent) {
         float[] vector = new float[1024];
-        vector[0] = firstValue;
+        vector[0] = firstComponent;
+        vector[1] = secondComponent;
         return vector;
     }
 

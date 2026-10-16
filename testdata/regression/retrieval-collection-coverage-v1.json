@@ -1,0 +1,95 @@
+{
+  "dataset": "retrieval-collection-coverage",
+  "version": 1,
+  "description": "Versioned black-box fixture for selected-Collection coverage, scope isolation, metadata, and GLOBAL comparison.",
+  "k": 3,
+  "retrievalConfig": {
+    "maxResults": 3,
+    "minScore": 0.0,
+    "useHybridSearch": true,
+    "useRerank": false,
+    "vectorWeight": 0.55,
+    "fulltextWeight": 0.45
+  },
+  "collections": [
+    {"collectionKey": "regression:collection-coverage:v1:alpha", "name": "Collection coverage regression alpha"},
+    {"collectionKey": "regression:collection-coverage:v1:bravo", "name": "Collection coverage regression bravo"},
+    {"collectionKey": "regression:collection-coverage:v1:charlie", "name": "Collection coverage regression charlie"},
+    {"collectionKey": "regression:collection-coverage:v1:forbidden", "name": "Collection coverage regression forbidden decoy"}
+  ],
+  "records": [
+    {
+      "collectionKey": "regression:collection-coverage:v1:alpha",
+      "externalId": "alpha-required-fact",
+      "title": "Alpha required fact",
+      "retrievalText": "CCOV-V1-SHARED-MARKER Alpha required fact: the service keeps a retrieval result from this Collection when EACH_COLLECTION coverage is selected.",
+      "jsonbPayload": {"fixture": "retrieval-collection-coverage-v1", "role": "relevant"}
+    },
+    {
+      "collectionKey": "regression:collection-coverage:v1:alpha",
+      "externalId": "alpha-distractor-1",
+      "title": "Alpha related note one",
+      "retrievalText": "CCOV-V1-SHARED-MARKER Alpha related note about search configuration and ranking behavior.",
+      "jsonbPayload": {"fixture": "retrieval-collection-coverage-v1", "role": "distractor"}
+    },
+    {
+      "collectionKey": "regression:collection-coverage:v1:alpha",
+      "externalId": "alpha-distractor-2",
+      "title": "Alpha related note two",
+      "retrievalText": "CCOV-V1-SHARED-MARKER Alpha related note about result limits and candidate pools.",
+      "jsonbPayload": {"fixture": "retrieval-collection-coverage-v1", "role": "distractor"}
+    },
+    {
+      "collectionKey": "regression:collection-coverage:v1:alpha",
+      "externalId": "alpha-distractor-3",
+      "title": "Alpha related note three",
+      "retrievalText": "CCOV-V1-SHARED-MARKER Alpha related note about score diagnostics and retrieval traces.",
+      "jsonbPayload": {"fixture": "retrieval-collection-coverage-v1", "role": "distractor"}
+    },
+    {
+      "collectionKey": "regression:collection-coverage:v1:bravo",
+      "externalId": "bravo-required-fact",
+      "title": "Bravo required fact",
+      "retrievalText": "CCOV-V1-SHARED-MARKER Bravo required fact: coverage selection reserves a result for each selected Collection with a hit.",
+      "jsonbPayload": {"fixture": "retrieval-collection-coverage-v1", "role": "relevant"}
+    },
+    {
+      "collectionKey": "regression:collection-coverage:v1:charlie",
+      "externalId": "charlie-required-fact",
+      "title": "Charlie required fact",
+      "retrievalText": "CCOV-V1-SHARED-MARKER Charlie required fact: coverage diagnostics report returned and missing selected Collections.",
+      "jsonbPayload": {"fixture": "retrieval-collection-coverage-v1", "role": "relevant"}
+    },
+    {
+      "collectionKey": "regression:collection-coverage:v1:forbidden",
+      "externalId": "forbidden-decoy",
+      "title": "Forbidden scope decoy",
+      "retrievalText": "CCOV-V1-SHARED-MARKER Forbidden decoy: this record must never escape the selected Collection scope.",
+      "jsonbPayload": {"fixture": "retrieval-collection-coverage-v1", "role": "forbidden"}
+    }
+  ],
+  "cases": [
+    {
+      "id": "shared-marker-three-collections",
+      "query": "CCOV-V1-SHARED-MARKER selected Collection coverage",
+      "collectionKeys": [
+        "regression:collection-coverage:v1:alpha",
+        "regression:collection-coverage:v1:bravo",
+        "regression:collection-coverage:v1:charlie"
+      ],
+      "expectedCollectionKeys": [
+        "regression:collection-coverage:v1:alpha",
+        "regression:collection-coverage:v1:bravo",
+        "regression:collection-coverage:v1:charlie"
+      ],
+      "relevant": [
+        {"collectionKey": "regression:collection-coverage:v1:alpha", "externalId": "alpha-required-fact"},
+        {"collectionKey": "regression:collection-coverage:v1:bravo", "externalId": "bravo-required-fact"},
+        {"collectionKey": "regression:collection-coverage:v1:charlie", "externalId": "charlie-required-fact"}
+      ],
+      "forbidden": [
+        {"collectionKey": "regression:collection-coverage:v1:forbidden", "externalId": "forbidden-decoy"}
+      ]
+    }
+  ]
+}

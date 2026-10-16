@@ -894,7 +894,9 @@ public class ChatTurnOperationService {
                     command.retrievalScope().documentType() == null
                             ? "" : command.retrievalScope().documentType(),
                     "matchNone",
-                    command.retrievalScope().matchNone()));
+                    command.retrievalScope().matchNone(),
+                    "coverageMode",
+                    command.retrievalScope().coverageMode().name()));
             String value = objectMapper.writeValueAsString(snapshot);
             if (value.getBytes(StandardCharsets.UTF_8).length
                     > properties.getIdempotency()

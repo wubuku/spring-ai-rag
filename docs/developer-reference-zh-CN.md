@@ -612,7 +612,9 @@ provider；密钥也是该 RAG 服务凭据。真实模式不创建 Collection/A
 `OPENAI_SDK_E2E_MODEL` 指定；runner 不强制覆盖服务端 alias 策略，默认 alias 若为
 KNOWLEDGE 仍会触发检索和相应模型费用。隔离模式增加 ACL/quota、上游不可用、
 feature-disabled 和幂等调用计数；可用 `--topology core|starter` 缩小范围，
-`--self-test` 只准备 SDK 环境并执行 20 项正/负协议变异测试。
+`--self-test` 只准备 SDK 环境并执行 20 项正/负协议变异测试。SDK HTTP 请求默认超时为 30 秒；
+真实模型较慢时可设置 `OPENAI_SDK_E2E_REQUEST_TIMEOUT_SECONDS`，例如 120。Python runner 访问本地
+RAG 服务时会绕过环境代理，避免 loopback 请求被机器代理改写。
 
 不要把密钥、prompt、答案或完整异常正文写入文档和 Git。该门禁的通过只证明外部
 Client 可观察的 HTTP 契约；它不把 Mock 结果当作真实模型质量验收，也不替代
@@ -1013,6 +1015,9 @@ smoke 时才设置 `API_CONTRACT_RUN_LIVE=1`。
 `CLIENT_CONTRACT_BASE_URL`、`CLIENT_CONTRACT_API_KEY`、`CLIENT_CONTRACT_QUERY` 后，才会对运行中
 服务执行 transport live probe；`mode=PLAIN` 只证明传输协议，不替代 KNOWLEDGE 证据验收。详细
 fixture、TypeScript/Java 示例和错误动作映射见 [Client Consumer Contract Kit](client-contract-kit-zh-CN.md)。
+真实验收 OpenAI EACH 覆盖时，还设置
+`CLIENT_CONTRACT_OPENAI_COVERAGE_MODE=EACH_COLLECTION` 和授权测试 key 列表
+`CLIENT_CONTRACT_OPENAI_COLLECTION_KEYS`。
 
 ### Client SDK 快速入门与恢复就绪门禁
 
@@ -1050,6 +1055,17 @@ BASE_URL=http://127.0.0.1:8081 ./scripts/run-retrieval-goldenset.sh
 ```bash
 BASE_URL=http://127.0.0.1:18081 ./scripts/verify-quality-regression.sh
 ```
+
+`EACH_COLLECTION` 外部 HTTP 覆盖回归（比较 GLOBAL/EACH，并硬断言覆盖、授权隔离和
+兼容响应摘要）：
+
+```bash
+./scripts/verify-collection-coverage.sh --self-test
+BASE_URL=http://127.0.0.1:18081 ./scripts/verify-collection-coverage.sh
+```
+
+实时命令写入专用版本化 fixture（不删除数据），需要运行中的 PostgreSQL profile 服务与
+可用 embedding 配置；报告写入 `.verification/collection-coverage/`。
 
 rerank 文档多样化专项验收会聚合后端测试、PostgreSQL/pgvector、WebUI 门禁、隔离
 `dev.sh`、真实 Search/Playwright、goldenset、版本化回归和真实 LLM：

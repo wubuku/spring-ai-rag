@@ -1,6 +1,7 @@
 package com.springairag.core.service;
 
 import com.springairag.api.enums.CollectionScopeMode;
+import com.springairag.api.enums.CollectionCoverageMode;
 import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.entity.ApiKeyRole;
 import com.springairag.core.entity.RagApiKey;
@@ -133,6 +134,32 @@ class CollectionRetrievalScopeResolverTest {
                 missing.getErrorCodeEnum());
         assertEquals(ErrorCode.COLLECTION_ALREADY_RETIRED,
                 retired.getErrorCodeEnum());
+    }
+
+    @Test
+    void eachCollectionRequiresCoverageLimitBetweenSelectedCountAndOneHundred() {
+        RetrievalScope scope = RetrievalScope.selectedCollections(
+                List.of(1L, 2L), List.of(), null,
+                CollectionCoverageMode.EACH_COLLECTION);
+
+        resolver.validateCoverageLimit(scope, 2);
+        resolver.validateCoverageLimit(scope, 100);
+        assertThrows(IllegalArgumentException.class,
+                () -> resolver.validateCoverageLimit(scope, 1));
+        assertThrows(IllegalArgumentException.class,
+                () -> resolver.validateCoverageLimit(scope, 101));
+    }
+
+    @Test
+    void eachCollectionCoverageCannotEscapeApiKeyAllowList() {
+        assertThrows(SecurityException.class, () -> resolver.resolve(
+                CollectionScopeMode.SELECTED_COLLECTIONS,
+                CollectionCoverageMode.EACH_COLLECTION,
+                List.of(2L, 5L),
+                null,
+                null,
+                null,
+                restricted(2L, 4L)));
     }
 
     @Test

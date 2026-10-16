@@ -42,11 +42,13 @@ public class CorsConfig implements WebMvcConfigurer {
                 .allowedOrigins(origins)
                 .allowedMethods(cors.getAllowedMethods().split(","))
                 .allowedHeaders(cors.getAllowedHeaders().split(","))
+                .exposedHeaders("X-RAG-Collection-Coverage")
                 .maxAge(cors.getMaxAge());
         registry.addMapping("/v1/**")
                 .allowedOrigins(origins)
                 .allowedMethods(cors.getAllowedMethods().split(","))
                 .allowedHeaders(cors.getAllowedHeaders().split(","))
+                .exposedHeaders("X-RAG-Collection-Coverage")
                 .maxAge(cors.getMaxAge());
     }
 }

@@ -8,6 +8,7 @@ import com.springairag.core.chat.AuthorizedRetrievalContext;
 import com.springairag.core.chat.RetrievalTraceCollector;
 import com.springairag.core.retrieval.HybridRetrieverService;
 import com.springairag.core.retrieval.ReRankingService;
+import com.springairag.core.retrieval.CollectionCoverageReranker;
 import com.springairag.core.retrieval.RetrievalBranchStage;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.ToolCallback;
@@ -94,6 +95,15 @@ public class KnowledgeSearchTool implements ToolCallback {
             int limit = Math.min(
                     Math.max(requested, 1),
                     context.options().maxResults());
+            if (context.scope().coverageMode()
+                    == com.springairag.api.enums.CollectionCoverageMode.EACH_COLLECTION) {
+                int selectedCount = context.scope().collectionIds().size();
+                if (selectedCount > context.options().maxResults()) {
+                    throw new IllegalStateException(
+                            "Authorized Collection coverage exceeds the caller result limit");
+                }
+                limit = Math.max(limit, selectedCount);
+            }
             results = trace.cachedResults(query, limit);
             if (results == null) {
                 if (!trace.tryBeginRetrieval(query)) {
@@ -120,20 +130,41 @@ public class KnowledgeSearchTool implements ToolCallback {
                         String errorCode = null;
                         List<RetrievalResult> reranked;
                         try {
-                            reranked = rerankingService.rerank(query, results, limit);
+                            if (context.scope().coverageMode()
+                                    == com.springairag.api.enums.CollectionCoverageMode.EACH_COLLECTION) {
+                                CollectionCoverageReranker.Result rerankResult =
+                                        CollectionCoverageReranker.rerank(
+                                                query,
+                                                results,
+                                                context.scope().collectionIds(),
+                                                limit,
+                                                rerankingService);
+                                reranked = rerankResult.results();
+                                degraded = rerankResult.degraded();
+                                errorCode = rerankResult.errorCode();
+                            } else {
+                                reranked = rerankingService.rerank(query, results, limit);
+                            }
                         } catch (RuntimeException e) {
                             reranked = ReRankingService.limitResults(results, limit);
                             degraded = true;
                             errorCode = e.getClass().getSimpleName();
                         }
-                        reranked = ReRankingService.limitResults(reranked, limit);
+                        if (context.scope().coverageMode()
+                                != com.springairag.api.enums.CollectionCoverageMode.EACH_COLLECTION) {
+                            reranked = ReRankingService.limitResults(reranked, limit);
+                        }
+                        String rerankStatus = context.scope().coverageMode()
+                                == com.springairag.api.enums.CollectionCoverageMode.EACH_COLLECTION
+                                        && !rerankingService.isProviderActive()
+                                ? RetrievalBranchStage.DISABLED
+                                : degraded ? RetrievalBranchStage.ERROR
+                                        : RetrievalBranchStage.SUCCESS;
                         trace.recordRerank(
                                 new RetrievalBranchStage(
                                         RetrievalBranchStage.RERANK,
                                         "rerank",
-                                        degraded
-                                                ? RetrievalBranchStage.ERROR
-                                                : RetrievalBranchStage.SUCCESS,
+                                        rerankStatus,
                                         (System.nanoTime() - rerankStartedAt) / 1_000_000L,
                                         results.size(),
                                         reranked.size(),

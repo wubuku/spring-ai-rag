@@ -1,6 +1,7 @@
 package com.springairag.core.openai;
 
 import com.springairag.api.enums.CollectionScopeMode;
+import com.springairag.api.enums.CollectionCoverageMode;
 import com.springairag.api.openai.OpenAiChatCompletionRequest;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.security.ApiAccessPolicy;
@@ -87,8 +88,17 @@ public class OpenAiRequestRetrievalScopeAdapter {
 
         ApiAccessPolicy caller = ApiKeyCollectionAccess.currentPolicy(request);
         try {
+            CollectionCoverageMode coverageMode = body != null
+                    ? body.getCoverageMode() : null;
+            if (coverageMode == null || coverageMode == CollectionCoverageMode.GLOBAL) {
+                return resolver.resolve(
+                        mode, ids, keys,
+                        rag != null ? rag.getDocumentIds() : null,
+                        null, caller);
+            }
             return resolver.resolve(
                     mode,
+                    coverageMode,
                     ids,
                     keys,
                     rag != null ? rag.getDocumentIds() : null,

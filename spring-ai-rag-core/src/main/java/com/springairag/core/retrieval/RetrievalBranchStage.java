@@ -25,6 +25,7 @@ public record RetrievalBranchStage(
     public static final String UNAVAILABLE = "UNAVAILABLE";
     public static final String TIMEOUT = "TIMEOUT";
     public static final String ERROR = "ERROR";
+    public static final String CAPACITY_LIMITED = "CAPACITY_LIMITED";
 
     public Map<String, Object> toMap() {
         Map<String, Object> map = new LinkedHashMap<>();
@@ -50,6 +51,10 @@ public record RetrievalBranchStage(
 
     public boolean failed() {
         return ERROR.equals(status);
+    }
+
+    public boolean capacityLimited() {
+        return CAPACITY_LIMITED.equals(status);
     }
 
     public boolean attempted() {

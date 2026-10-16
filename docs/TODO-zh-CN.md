@@ -87,7 +87,7 @@ limit/billing、多 embedding profile 路由与 `EACH_COLLECTION` 继续独立�
 
 | 项目 | 优先级 | 状态 |
 |------|--------|------|
-| 在显式选中的多个 Collection 中保证每个 Collection 都有机会贡献候选 | 非紧急 Backlog / 无目标版本 | 延后，暂不阻塞当前版本 |
+| 在显式选中的多个 Collection 中保证每个 Collection 都有机会贡献候选 | 当前批次 | 最新规划修订复核 `3/3`；实现修复及外部 API/集成验收未完成；发布前保持既有 API 契约 |
 
 ### 当前行为
 
@@ -104,8 +104,9 @@ limit/billing、多 embedding profile 路由与 `EACH_COLLECTION` 继续独立�
 
 因此，当前 API 不接受 `EACH_COLLECTION` 或类似的 `collectionCoverageMode` 字段。
 调用方不应自行假设每个 selected Collection 都会出现在结果中。
+有界覆盖能力现由当前活跃规划纳入实施范围；在完整验收并发布前，上述现状仍是外部 API 契约。
 
-### 为什么暂不实现
+### 为什么此前暂缓，以及本批边界
 
 这不是给现有范围过滤增加一个枚举值，而是独立的召回与排序策略：
 
@@ -118,10 +119,11 @@ limit/billing、多 embedding profile 路由与 `EACH_COLLECTION` 继续独立�
 
 当前直接下推 `d.collection_id` 的过滤已经解决了“多个大型 Collection 不应先展开全部
 document ID”的主要性能问题；普通的并集检索不需要 `EACH_COLLECTION` 才能正确工作。
-因此，在没有明确的产品覆盖需求和质量证据前，实现它会增加复杂度和性能风险，而不会
-解决当前范围检索的核心问题。
+因此，此前在没有明确的产品覆盖需求和质量证据时暂缓实现是合理的。本批按明确的当前范围
+实施该 opt-in 策略，但不声称普通 global top-k 有缺陷，也不把覆盖策略改成默认值；GLOBAL
+仍保持已发布语义。必须通过有界资源预算、ACL、goldenset 和外部 API 回归验收后才可发布。
 
-### 何时重新评估
+### 本批次启动依据
 
 满足以下任一条件时，可以为它单独立项：
 
@@ -131,7 +133,7 @@ document ID”的主要性能问题；普通的并集检索不需要 `EACH_COLLE
 - 调用方能够接受有限的 selected Collection 数量、额外延迟和候选预算；
 - 已经定义“没有相关内容时允许某个 Collection 返回零个结果，不强制填充”的产品语义。
 
-### 未来实施的硬约束
+### 实施硬约束
 
 后续实施时应保持以下边界，避免破坏当前 API：
 
@@ -145,8 +147,10 @@ document ID”的主要性能问题；普通的并集检索不需要 `EACH_COLLE
   去重和最终 top-k 必须有明确顺序。
 - 某个 Collection 无相关候选时返回“该 Collection 无命中”的事实，不强行制造低质量
   结果。
-- 增加 PostgreSQL 集成测试、延迟/候选数指标、质量 goldenset 和 WebUI 高级选项；
+- 增加 PostgreSQL 集成测试、延迟/候选数指标、质量 goldenset 和外部 API 契约验收；
   不将其作为默认模式。
+- 内置 WebUI 高级选项不属于当前服务端 API 批次的硬门槛；如有产品需求，可单独增加 UI，
+  但不能以 UI 替代 HTTP Client/API 验收。
 
 ### 关联文档
 

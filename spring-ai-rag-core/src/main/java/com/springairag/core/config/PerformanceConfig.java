@@ -17,6 +17,7 @@ import org.springframework.context.annotation.Primary;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
@@ -46,6 +47,26 @@ public class PerformanceConfig {
             t.setDaemon(true);
             return t;
         });
+    }
+
+    /**
+     * EACH_COLLECTION 专用 embedding 池，避免慢模型占用检索 worker。
+     */
+    @Bean("ragEmbeddingExecutor")
+    public ExecutorService ragEmbeddingExecutor() {
+        ThreadPoolExecutor pool = new ThreadPoolExecutor(
+                4,
+                4,
+                0L,
+                TimeUnit.MILLISECONDS,
+                new ArrayBlockingQueue<>(32),
+                r -> {
+                    Thread thread = new Thread(r, "rag-embedding");
+                    thread.setDaemon(true);
+                    return thread;
+                },
+                new ThreadPoolExecutor.AbortPolicy());
+        return pool;
     }
 
     /**

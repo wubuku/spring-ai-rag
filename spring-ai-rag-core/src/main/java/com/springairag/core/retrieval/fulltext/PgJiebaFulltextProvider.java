@@ -165,6 +165,8 @@ public class PgJiebaFulltextProvider implements FulltextSearchProvider {
         String select = "SELECT e.id AS local_chunk_id, v.id AS embedding_id, "
                 + "e.chunk_text, e.document_id, e.chunk_index, "
                 + currentMetadataSql() + ", "
+                + "d.collection_id AS collection_id, "
+                + "(SELECT c.collection_key FROM rag_collection c WHERE c.id = d.collection_id) AS collection_key, "
                 + "d.title AS document_title, d.source AS document_source, "
                 + "d.original_filename AS original_filename, "
                 + "ts_rank_cd(to_tsvector('" + TS_CONFIG + "', e.chunk_text), "

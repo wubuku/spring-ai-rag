@@ -1,6 +1,7 @@
 package com.springairag.api.dto;
 
 import com.springairag.api.enums.CollectionScopeMode;
+import com.springairag.api.enums.CollectionCoverageMode;
 import com.springairag.api.validation.ValidCollectionKey;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
@@ -30,6 +31,10 @@ public class SearchRequest {
             + "Collection fields imply SELECTED_COLLECTIONS; otherwise CALLER_VISIBLE.",
             example = "SELECTED_COLLECTIONS")
     private CollectionScopeMode collectionScopeMode;
+
+    @Schema(description = "Optional candidate coverage strategy. EACH_COLLECTION requires SELECTED_COLLECTIONS.",
+            example = "EACH_COLLECTION", defaultValue = "GLOBAL")
+    private CollectionCoverageMode collectionCoverageMode;
 
     @Size(max = 100, message = "At most 100 collection IDs may be selected")
     @Schema(description = "Deprecated compatibility field. Use collectionKeys.",
@@ -65,6 +70,14 @@ public class SearchRequest {
         this.collectionScopeMode = collectionScopeMode;
     }
 
+    public CollectionCoverageMode getCollectionCoverageMode() {
+        return collectionCoverageMode;
+    }
+
+    public void setCollectionCoverageMode(CollectionCoverageMode collectionCoverageMode) {
+        this.collectionCoverageMode = collectionCoverageMode;
+    }
+
     public List<Long> getCollectionIds() { return collectionIds; }
     public void setCollectionIds(List<Long> collectionIds) { this.collectionIds = collectionIds; }
 
@@ -85,6 +98,7 @@ public class SearchRequest {
         return Objects.equals(query, that.query) &&
                 Objects.equals(documentIds, that.documentIds) &&
                 collectionScopeMode == that.collectionScopeMode &&
+                collectionCoverageMode == that.collectionCoverageMode &&
                 Objects.equals(collectionIds, that.collectionIds) &&
                 Objects.equals(collectionKeys, that.collectionKeys) &&
                 Objects.equals(config, that.config) &&
@@ -94,7 +108,7 @@ public class SearchRequest {
     @Override
     public int hashCode() {
         return Objects.hash(query, documentIds, collectionScopeMode,
-                collectionIds, collectionKeys, config, filters);
+                collectionCoverageMode, collectionIds, collectionKeys, config, filters);
     }
 
     @Override

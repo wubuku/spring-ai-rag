@@ -24,6 +24,7 @@ RUN_NPM_CI=1
 RUN_RUNTIME_E2E=0
 RUN_GOLDENSET=0
 RUN_QUALITY_REGRESSION=0
+RUN_COLLECTION_COVERAGE=0
 RUN_REAL_LLM=0
 RUN_NEXT_HIGH_VALUE=0
 RUN_OPENAI_SDK=0
@@ -55,6 +56,8 @@ Options:
       --with-goldenset    Run retrieval goldenset against BASE_URL
       --with-quality-regression
                           Run the versioned retrieval regression gate
+      --with-collection-coverage
+                          Run the Collection coverage HTTP regression
       --with-real-llm     Run real LLM smoke against REAL_LLM_BASE_URL
       --with-next-high-value
                           Run the focused QA/workbench/PDF feature gate
@@ -89,6 +92,7 @@ while [[ $# -gt 0 ]]; do
     --with-runtime-e2e) RUN_RUNTIME_E2E=1; shift ;;
     --with-goldenset) RUN_GOLDENSET=1; shift ;;
     --with-quality-regression) RUN_QUALITY_REGRESSION=1; shift ;;
+    --with-collection-coverage) RUN_COLLECTION_COVERAGE=1; shift ;;
     --with-real-llm) RUN_REAL_LLM=1; shift ;;
     --with-next-high-value) RUN_NEXT_HIGH_VALUE=1; shift ;;
     --with-openai-sdk) RUN_OPENAI_SDK=1; shift ;;
@@ -99,6 +103,7 @@ while [[ $# -gt 0 ]]; do
       RUN_RUNTIME_E2E=1
       RUN_GOLDENSET=1
       RUN_QUALITY_REGRESSION=1
+      RUN_COLLECTION_COVERAGE=1
       RUN_REAL_LLM=1
       shift
       ;;
@@ -472,6 +477,7 @@ run_gate "Project documentation" ./scripts/verify-project-docs.sh
 run_gate "No explicit pessimistic locks" ./scripts/verify-no-pessimistic-locks.sh
 run_gate "Shell syntax" check_shell_syntax
 run_gate "API contract helper" node scripts/lib/api-contract-check.mjs --self-test
+run_gate "Collection coverage helper" ./scripts/verify-collection-coverage.sh --self-test
 run_gate "Client contract governance" ./scripts/verify-client-contract-governance.sh
 run_gate "Client consumer contract" ./scripts/verify-client-consumer-contract.sh
 run_gate "Git diff check" git diff --check
@@ -532,6 +538,14 @@ if [[ "$RUN_QUALITY_REGRESSION" == "1" ]]; then
 else
   skip_gate "Retrieval quality regression" \
     "enable with --with-quality-regression"
+fi
+
+if [[ "$RUN_COLLECTION_COVERAGE" == "1" ]]; then
+  run_gate "Collection coverage HTTP regression" \
+    env BASE_URL="$BASE_URL" ./scripts/verify-collection-coverage.sh
+else
+  skip_gate "Collection coverage HTTP regression" \
+    "enable with --with-collection-coverage"
 fi
 
 if [[ "$RUN_REAL_LLM" == "1" ]]; then

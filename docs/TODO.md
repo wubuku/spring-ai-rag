@@ -105,7 +105,7 @@ and batch ordering. Shipped contracts remain in the [REST API reference](rest-ap
 
 | Item | Priority | Status |
 |------|----------|--------|
-| Give every explicitly selected Collection an opportunity to contribute candidates | Non-urgent backlog / no target release | Deferred; not a current-release blocker |
+| Give every explicitly selected Collection an opportunity to contribute candidates | Current batch | Latest plan revision review `3/3`; implementation fixes and external API/integration acceptance remain pending; preserve the existing API contract until release |
 
 ### Current behavior
 
@@ -126,8 +126,10 @@ question from `EACH_COLLECTION`:
 Consequently, the current API does not accept `EACH_COLLECTION` or a similar
 `collectionCoverageMode` field. Clients must not assume that every selected
 Collection appears in the result set.
+The bounded coverage capability is now in the active implementation scope; until
+full acceptance and release, the behavior above remains the external API contract.
 
-### Why it is deferred
+### Why it was deferred and current-batch boundary
 
 This is not just another scope-filter enum. It is a separate retrieval and
 ranking policy:
@@ -147,9 +149,13 @@ performance problem of multi-Collection range filtering: large Collections
 are not expanded into all document IDs first. Ordinary union retrieval does
 not need `EACH_COLLECTION` to be correct. Without a clear product requirement
 and quality evidence, implementing it would add complexity and performance
-risk without solving the current scope-filtering problem.
+risk without solving the current scope-filtering problem. This batch now implements
+the opt-in strategy as an explicitly prioritized improvement; it does not claim
+that ordinary global top-k is defective or make coverage the default. GLOBAL
+retains its released semantics. Bounded resource budgets, ACL, goldenset, and
+external API regression remain release gates.
 
-### When to revisit
+### Current activation basis
 
 Open a dedicated implementation plan when one of these conditions holds:
 
@@ -163,7 +169,7 @@ Open a dedicated implementation plan when one of these conditions holds:
 - Product semantics define that a Collection with no relevant content may
   legitimately contribute zero results without forced padding.
 
-### Future implementation constraints
+### Implementation constraints
 
 Any later implementation should preserve the current API boundary:
 
@@ -180,7 +186,10 @@ Any later implementation should preserve the current API boundary:
 - If a Collection has no relevant candidates, report that fact rather than
   manufacturing a low-quality result.
 - Add PostgreSQL integration tests, latency/candidate metrics, quality
-  goldensets, and an advanced WebUI option; do not make it the default mode.
+  goldensets, and external API contract acceptance; do not make it the default mode.
+- A built-in WebUI advanced option is not a hard gate for this server/API batch.
+  Add it separately if product demand warrants it, and never use UI verification
+  as a substitute for external HTTP client/API acceptance.
 
 ### Related documents
 

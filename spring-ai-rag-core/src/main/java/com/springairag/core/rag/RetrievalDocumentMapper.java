@@ -36,6 +36,12 @@ public class RetrievalDocumentMapper {
         metadata.put("score", result.getScore());
         metadata.put("vectorScore", result.getVectorScore());
         metadata.put("fulltextScore", result.getFulltextScore());
+        if (result.getCollectionId() != null) {
+            metadata.put("collectionId", result.getCollectionId());
+        }
+        if (result.getCollectionKey() != null) {
+            metadata.put("collectionKey", result.getCollectionKey());
+        }
         if (result.getOriginalFilename() != null) {
             metadata.put("originalFilename", result.getOriginalFilename());
         }
@@ -71,7 +77,9 @@ public class RetrievalDocumentMapper {
         source.setFulltextScore(result.getFulltextScore());
         source.setOriginalFilename(result.getOriginalFilename());
         source.setDocumentType(stringValue(result.getMetadata(), "documentType"));
-        source.setCollectionKey(stringValue(result.getMetadata(), "collectionKey"));
+        source.setCollectionKey(result.getCollectionKey() != null
+                ? result.getCollectionKey()
+                : stringValue(result.getMetadata(), "collectionKey"));
         String sourceType = stringValue(result.getMetadata(), "sourceType");
         source.setSourceType(sourceType != null
                 ? sourceType
@@ -112,6 +120,8 @@ public class RetrievalDocumentMapper {
         result.setScore(numberValue(metadata, "score"));
         result.setVectorScore(numberValue(metadata, "vectorScore"));
         result.setFulltextScore(numberValue(metadata, "fulltextScore"));
+        result.setCollectionId(nullableLongValue(metadata, "collectionId"));
+        result.setCollectionKey(stringValue(metadata, "collectionKey"));
         result.setOriginalFilename(stringValue(metadata, "originalFilename", null));
         result.setSource(stringValue(metadata, "source", null));
         result.setMetadata(metadata);
@@ -160,6 +170,21 @@ public class RetrievalDocumentMapper {
         if (value != null) {
             try {
                 return Integer.valueOf(String.valueOf(value));
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    private Long nullableLongValue(Map<String, Object> values, String key) {
+        Object value = values != null ? values.get(key) : null;
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        if (value != null) {
+            try {
+                return Long.valueOf(String.valueOf(value));
             } catch (NumberFormatException ignored) {
                 return null;
             }

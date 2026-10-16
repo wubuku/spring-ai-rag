@@ -60,6 +60,12 @@ does `CLIENT_CONTRACT_OPENAI_RAG_MODE` (optionally with
 OpenAI compatibility is disabled, a `404`, `405`, or `501` from `/v1/models` is
 recorded as a conditional skip rather than invented as a pass. Missing live
 variables also produce a skip rather than a claim that live acceptance ran.
+For an explicit real coverage check, set
+`CLIENT_CONTRACT_OPENAI_COVERAGE_MODE=EACH_COLLECTION` and provide
+`CLIENT_CONTRACT_OPENAI_COLLECTION_KEYS` as a comma-separated list of existing,
+authorized test Collections. The probe checks JSON and SSE coverage diagnostics
+and rejects sources outside the selected scope. Without this option, the
+OpenAI request is GLOBAL and must omit `rag.collectionCoverage`.
 
 ### Official SDK HTTP acceptance
 
@@ -172,10 +178,13 @@ client reads citations, it should use only its privacy-safe `sources` and should
 not expect `chunkText` or arbitrary metadata.
 
 The `rag` object contains `traceId`, `evidenceAssessment`, `sources`, and
-`citationRegistry`. Its sources come only from authorized sources finally exposed
-for the request; full source text remains available through the Native API.
-Ordinary SSE puts `rag` only on the finish chunk, while keyed JSON/SSE replay
-projects the same evidence as the original execution.
+`citationRegistry`; explicit `EACH_COLLECTION` requests may also include
+`collectionCoverage`. That field is omitted for `GLOBAL` and legacy requests.
+Its sources come only from authorized sources finally exposed for the request;
+full source text remains available through the Native API. Ordinary SSE puts
+`rag` only on the finish chunk, while keyed JSON/SSE replay projects the same
+evidence as the original execution. The versioned Consumer Contract Kit allows
+only these documented `rag` members and rejects undeclared extension members.
 
 Minimal Java `HttpClient` skeleton:
 

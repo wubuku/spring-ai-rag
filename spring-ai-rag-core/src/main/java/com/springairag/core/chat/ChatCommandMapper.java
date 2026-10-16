@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.springairag.api.dto.ChatRequest;
 import com.springairag.api.dto.RetrievalConfig;
 import com.springairag.api.enums.ChatMode;
+import com.springairag.api.enums.CollectionCoverageMode;
 import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.exception.RagException;
@@ -80,6 +81,13 @@ public class ChatCommandMapper {
                 request.isUseHybridSearch(),
                 request.isUseRerankExplicitlySet(),
                 request.isUseRerank());
+        if (scope != null
+                && scope.coverageMode() == CollectionCoverageMode.EACH_COLLECTION
+                && options.maxResults() < scope.collectionIds().size()) {
+            throw new RagException(
+                    ErrorCode.BAD_REQUEST,
+                    "EACH_COLLECTION coverage requires maxResults >= selected Collection count");
+        }
         ChatPrincipal effectivePrincipal = principal != null ? principal : ChatPrincipal.local();
         String sessionId = SessionIdValidator.resolve(request.getSessionId());
         RetrievalFilters filters = filterValidator.validate(request.getFilters());
@@ -195,7 +203,10 @@ public class ChatCommandMapper {
                     longList(node.path("collectionIds")),
                     longList(node.path("documentIds")),
                     blankAsNull(node.path("documentType").asText(null)),
-                    node.path("matchNone").asBoolean());
+                    node.path("matchNone").asBoolean(),
+                    CollectionCoverageMode.valueOf(
+                            node.path("coverageMode").asText(
+                                    CollectionCoverageMode.GLOBAL.name())));
         } catch (IllegalArgumentException e) {
             throw invalidSnapshot();
         }
@@ -244,6 +255,7 @@ public class ChatCommandMapper {
                 || request.isUseHybridSearchExplicitlySet()
                 || request.isUseRerankExplicitlySet()
                 || request.getCollectionScopeMode() != null
+                || request.getCollectionCoverageMode() != null
                 || request.getCollectionIds() != null
                 || request.getCollectionKeys() != null
                 || request.getDocumentIds() != null
