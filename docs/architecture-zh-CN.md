@@ -445,8 +445,9 @@ Native Search 仅在 EACH 时增量返回 `X-RAG-Collection-Coverage` header；C
   `@>` 下推到同一候选 SQL（V36 GIN）。这不是查询语言；未知字段或空对象返回 `400`。
 - 检索诊断（V35）记录 outcome / empty-reason / 过滤器摘要，默认不存 query 明文。
   Search/Chat 空结果会返回 `X-RAG-Retrieval-Trace-Id`；写入失败 fail-open。
-- 结果是在有效 Collection 并集上计算一次全局 top-k；“每个选中 Collection 都必须贡献
-  结果”的独立 `EACH_COLLECTION` 行为尚未实现。
+- 默认结果是在有效 Collection 并集上计算一次全局 top-k；显式 `EACH_COLLECTION` 会在
+  可用候选上进行逐集合覆盖选择，最多 20 个授权 Collection、结果数不超过 100。分支
+  不完整会记录在 coverage 摘要中；见 [REST API 契约](rest-api-zh-CN.md#多-collection-检索与覆盖策略)。
 - WebUI Chat 与 Search 均提供三种模式；selected 模式支持服务端搜索、每页 50 项、
   跨页多选，最多选择 100 个 Collection key。
 

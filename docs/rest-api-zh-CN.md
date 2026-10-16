@@ -313,9 +313,10 @@ Chat 和 Search 接受 `collectionScopeMode`：
 
 向量、English FTS、pg_jieba 与 pg_trgm 检索会直接在 PostgreSQL 使用
 `d.collection_id = ANY (?)`、`d.collection_id IS NOT NULL` 和可选 JDBC
-`bigint[]` 文档过滤，不再把 Collection 展开为全部 document IDs。多个 Collection
-组成一个候选并集并统一竞争 global top-k；本次不支持按每个 Collection 保底召回的
-`EACH_COLLECTION`。
+`bigint[]` 文档过滤，不再把 Collection 展开为全部 document IDs。默认多个 Collection
+组成一个候选并集并统一竞争 global top-k；需要逐 Collection 覆盖选择时可显式请求
+`EACH_COLLECTION`，最多 20 个授权 Collection、结果数至少为所选数且不超过 100。
+分支不完整时通过 coverage 摘要报告，不保证失败分支仍有结果。
 
 #### 外部客户端最佳实践
 

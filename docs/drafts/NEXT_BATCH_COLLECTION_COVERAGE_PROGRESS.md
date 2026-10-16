@@ -9,8 +9,8 @@
 - Branch: `feat/collection-coverage`
 - Baseline: `b473b002` (pushed `main`)
 - Planning review: after adding bounded lifecycle readiness polling for asynchronous embedding, three fresh no-change reviews passed on 2026-10-17 03:24–03:26 (`3/3`); scopes/results are recorded below.
-- Implementation review: `3/3`; three consecutive read-only rounds completed without edits on 2026-10-17 05:27–05:36. Scope covered retrieval/ranking bounds, API/idempotency compatibility, authorization/recovery/resource limits, and acceptance tooling.
-- Phase: planning and implementation reviews, external Client API, database, real-model, SDK, startup, and supplementary WebUI acceptance are complete. Remaining work is local commit, sync with latest `origin/main`, merge/retest if needed, merge and push to `main`, then archive this plan and progress ledger.
+- Implementation review: `3/3`; after correcting stale architecture/REST status and passing the documentation gate, three consecutive read-only reviews completed without findings or edits on 2026-10-17 05:52–05:56.
+- Phase: the committed implementation at `f52f7849` passed its post-commit release gate. Remaining work is commit the bilingual documentation correction, sync latest `origin/main`, merge/retest if needed, merge and push to `main`, then archive this plan and progress ledger.
 
 ## Latest Planning Review Record
 
@@ -86,16 +86,17 @@ Any later substantive planning defect still requires repair and a fresh consecut
 
 ## Implementation Checkpoint
 
-- Overall batch progress: approximately `95%` (feature implementation and acceptance are complete; Git delivery remains). All external API gates ran independently of WebUI checks; WebUI is supplementary evidence and cannot replace external Client black-box or real SDK tests.
+- Overall batch progress: approximately `97%` (feature implementation, API/database/real-model/SDK acceptance, and final review are complete; documentation commit and Git delivery remain). All external API gates ran independently of WebUI checks; WebUI is supplementary evidence and cannot replace external Client black-box or real SDK tests.
 - Native Chat `/ask` and `/chat` share the non-streaming entry point; `/stream` has its own entry. All reject `PLAIN + EACH_COLLECTION` before idempotent `prepareTurn()` and use the existing `GlobalExceptionHandler` for HTTP `400 BAD_REQUEST`. PLAIN omitted/GLOBAL and KNOWLEDGE EACH retain their existing paths.
 - Added `RagChatControllerCoverageValidationWebTest` for the real `/api/v1` routes, ask/chat/stream errors, HTTP problem+json with SSE Accept, error fields, zero idempotency-service/model interactions, and positive PLAIN omitted/GLOBAL plus KNOWLEDGE EACH paths. `mvn -pl spring-ai-rag-core -am -Dtest=RagChatControllerCoverageValidationWebTest -Dsurefire.failIfNoSpecifiedTests=false test`: 6 passed.
 - The final release gate completed on 2026-10-17 at 05:26: `./scripts/verify-release.sh --skip-docker --skip-helm --skip-npm-ci` reported `18 passed, 0 failed, 13 skipped`. Full-reactor `mvn clean test`, WebUI lint/TypeScript, 1,030 Vitest tests, production build, 525 design-system tests, and 93 Mock Playwright tests passed. Docker, Helm, npm ci, and optional runtime gates were skipped by this invocation; this does not imply those gates passed. Relevant external API, collection-coverage, and SDK checks have separate live evidence below.
 - External Client API black-box acceptance passed against an isolated live service; evidence is under `.verification/api-contract/collection-coverage-live-20261017-050812/`. Collection coverage HTTP regression at `.verification/collection-coverage/20261017-050321/summary.md` reports GLOBAL and EACH_COLLECTION hit rate, MRR, Recall@K, and nDCG of `1.0000`, and checks source authorization plus the coverage summary.
 - Official Python and Node OpenAI SDK live HTTP acceptance passed for models list, JSON, SSE, idempotency, error envelopes, and authentication: `.verification/openai-sdk-e2e/collection-coverage-real-fixed-20261017-051508/summary.md`. The live Client Consumer contract, real-model Search/Chat/Agent/SSE, and isolated-port/database `scripts/dev.sh` lifecycle were also independently verified. UI results do not replace these API checks.
 - All 26 gated PostgreSQL/Testcontainers suites passed; isolated `scripts/dev.sh` startup and disposable database cleanup completed. Final release summary: `target/release-verification/collection-coverage-final-20261017/summary.md`.
+- The post-commit run `VERIFY_RUN_ID=collection-coverage-commit-f52f7849-final-20261017 ./scripts/verify-release.sh --skip-docker --skip-helm --skip-npm-ci` reported `18 passed, 0 failed, 13 skipped`; full Maven reactor and Playwright `93/93` passed. Summary: `target/release-verification/collection-coverage-commit-f52f7849-final-20261017/summary.md`. Docker, Helm, npm ci, and ten optional runtime gates were explicitly skipped in that invocation; relevant external API/coverage/SDK gates have separate live evidence.
 - Optional Native/OpenAI fields, authorized scope, legacy GLOBAL fingerprints, and legacy Java constructor signatures are covered by contract/integration tests and live Client checks. No data migration is needed; existing V1–V60 Flyway migrations remain unchanged.
 
-## Latest Implementation Review Rounds
+## Previous Implementation Review Rounds (Superseded)
 
 Three consecutive, non-overlapping, read-only reviews completed on 2026-10-17 with no file edits:
 
@@ -105,9 +106,32 @@ Three consecutive, non-overlapping, read-only reviews completed on 2026-10-17 wi
 | 05:31–05:34 | Native/OpenAI additive request/response contracts, SSE/error path, legacy GLOBAL idempotency fingerprints, legacy Java constructors | No material issue; a fixed SHA-256 test locks the legacy GLOBAL fingerprint; no edits | `2/3` |
 | 05:34–05:36 | API-key authorization, snapshot recovery, resource pools/timeouts, privacy-safe coverage summary, live HTTP runner, bilingual docs | No material issue; no schema migration is needed; no edits | `3/3` |
 
-No code, test, or plan-body edits occurred during the three rounds. Earlier findings and repairs remain in the historical record below.
+No code, test, or plan-body edits occurred during those three rounds. A later documentation finding below invalidated this `3/3` result.
 
-## Latest Implementation Review Finding
+## Latest Implementation Review Rounds
+
+After correcting the stale documentation and passing all 16 `./scripts/verify-project-docs.sh` checks, three
+consecutive, non-overlapping, read-only reviews completed on 2026-10-17 with no findings or edits:
+
+| Time (CST) | Scope | Findings and action | Result |
+|---|---|---|---|
+| 05:52–05:54 | Corrected architecture/REST semantics against code, GLOBAL default, explicit EACH constraints, incomplete-candidate wording | No new issue; correction is accurate; no edits | `1/3` |
+| 05:54–05:55 | All evergreen docs for stale status, Native/OpenAI consumer fixtures, legacy GLOBAL fingerprints, live Client evidence | No new issue; stale wording remains only in this ledger's historical record; no edits | `2/3` |
+| 05:55–05:56 | API-key authorization, operation snapshot defaults/recovery, bounded concurrency/timeouts, migration impact, release evidence, port state | No new issue; authorization/resource/delivery boundaries agree; no edits | `3/3` |
+
+No code, tests, evergreen docs, or plan text changed during these three rounds. Only this progress ledger was updated afterward.
+
+## Latest Review Restart
+
+At 2026-10-17 05:52, the third review found outdated statements in the canonical architecture and REST guides saying
+`EACH_COLLECTION` was “not implemented/not supported,” contradicting the implemented behavior, newer sections on the
+same pages, and live API acceptance. The bilingual `docs/architecture*` and `docs/rest-api*` passages now describe
+GLOBAL as the default, explicit EACH coverage, its 20-authorized-Collection/100-result limits, and incomplete-branch
+diagnostics. `./scripts/verify-project-docs.sh` passed all 16 checks. This material documentation-accuracy issue resets
+implementation review to `0/3`; no new clean review round has started. No product code changed, so the post-commit
+release gate and separate live Client API evidence remain valid.
+
+## Historical Implementation Review Finding
 
 At 2026-10-17 02:07:50, the first read-only implementation review found that `ChatRequestFingerprint`
 adds `coverageMode=GLOBAL` to every KNOWLEDGE request while `ChatTurnOperationService` compares the

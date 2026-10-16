@@ -522,9 +522,11 @@ Data model and current boundaries:
 - Retrieval diagnostics (V35) store outcome / empty-reason / filter summaries
   and omit query text by default. Empty Search/Chat responses include
   `X-RAG-Retrieval-Trace-Id`. Persist failures are fail-open.
-- Results use one global top-k across the effective Collection union. The
-  separate "each selected Collection must contribute results" behavior
-  (`EACH_COLLECTION`) is not implemented.
+- By default, results use one global top-k across the effective Collection
+  union. Explicit `EACH_COLLECTION` performs a per-Collection coverage
+  selection over available candidates, bounded to 20 authorized Collections
+  and 100 results. Incomplete branches are reported in the coverage summary;
+  see the [REST API contract](rest-api.md#multi-collection-retrieval-and-coverage-mode).
 - WebUI Chat and Search expose all three modes. Selected mode supports
   server-side search, 50-item pages, cross-page multi-selection, and at most
   100 Collection keys.

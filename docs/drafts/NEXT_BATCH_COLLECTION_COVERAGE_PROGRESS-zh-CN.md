@@ -8,10 +8,10 @@
 
 - 分支：`feat/collection-coverage`
 - 基线：`b473b002`（已推送的 `main`）
-- 工作区：本批次实现、双语文档与验收进度均已完成本地验证，尚未提交
+- 工作区：功能提交 `f52f7849` 已生成；刚修正正式架构/REST 文档中的过时状态，待复核后提交该文档修正
 - 规划检查：最新异步 embedding lifecycle 验收修订已于 2026-10-17 03:24–03:26 连续三轮无修改复核通过（`3/3`）；检查范围及结果见下文。
-- 实施检查：`3/3`；2026-10-17 05:27–05:36 连续三轮只读复核无修改，范围包含检索/排序边界、API/幂等兼容、授权/恢复/资源限制及验收工具。
-- 当前阶段：规划与实现复核、外部 Client API、数据库、真实模型、SDK、启动及补充 WebUI 验收均完成；仅剩本地提交、同步最新 `origin/main`、按需合并复验、合入并推送 `main`，然后归档本规划和进度。
+- 实施检查：`3/3`；修正过时架构/REST 状态并通过文档门禁后，于 2026-10-17 05:52–05:56 连续三轮只读复核，无新发现、无修改。
+- 当前阶段：特性提交 `f52f7849` 的发布门禁已再次通过；仅剩提交双语文档修正、同步最新 `origin/main`、按需合并复验、合入并推送 `main`，然后归档本规划和进度。
 
 ## 最新规划复核记录
 
@@ -69,7 +69,7 @@ upsert 的 `SYNC` 作业若先被后台 worker 抢占，可以合法返回 `INDE
 
 ## 实施检查点
 
-- 总体批次进度：约 `95%`（功能实现和验收已完成，剩余 Git 交付）。所有对外 API 相关门槛独立于 WebUI 验收执行；WebUI 仅作为补充证据，不能替代外部 Client 黑盒与真实 SDK 测试。
+- 总体批次进度：约 `97%`（功能实现、API/数据库/真实模型/SDK 验收和最终复核均完成；仅文档修正提交与 Git 交付待完成）。所有对外 API 相关门槛独立于 WebUI 验收执行；WebUI 仅作为补充证据，不能替代外部 Client 黑盒与真实 SDK 测试。
 - Native Chat `/ask`、`/chat` 共用非流式入口，`/stream` 独立入口，均在幂等 `prepareTurn()` 之前
   拒绝 `PLAIN + EACH_COLLECTION`，经既有 `GlobalExceptionHandler` 返回 `400 BAD_REQUEST`；PLAIN
   缺省/GLOBAL 与 KNOWLEDGE EACH 仍按原路径执行。
@@ -80,9 +80,10 @@ upsert 的 `SYNC` 作业若先被后台 worker 抢占，可以合法返回 `INDE
 - 外部 Client API 黑盒在隔离真实服务上通过，证据位于 `.verification/api-contract/collection-coverage-live-20261017-050812/`；覆盖召回 HTTP 回归 `.verification/collection-coverage/20261017-050321/summary.md` 中 GLOBAL 与 EACH_COLLECTION 均达到 hit rate、MRR、Recall@K、nDCG `1.0000`，并校验返回来源与 coverage 摘要。
 - 官方 Python/Node OpenAI SDK 真实 HTTP 验收均通过（模型列表、JSON、SSE、幂等、错误封套、认证）：`.verification/openai-sdk-e2e/collection-coverage-real-fixed-20261017-051508/summary.md`。此前独立完成的 Client Consumer 实时契约、真实模型 Search/Chat/Agent/SSE，以及隔离端口/数据库 `scripts/dev.sh` 启停验收仍是补充证据；不得用 WebUI 结果替代这些 API 证据。
 - PostgreSQL/Testcontainers 的 26 个门控套件、`scripts/dev.sh` 隔离启动和临时数据库清理均已完成；最终 Playwright 93/93 仅作为 UI 补充。最终门禁摘要：`target/release-verification/collection-coverage-final-20261017/summary.md`。
+- 提交后再运行 `VERIFY_RUN_ID=collection-coverage-commit-f52f7849-final-20261017 ./scripts/verify-release.sh --skip-docker --skip-helm --skip-npm-ci`，结果 `18 passed, 0 failed, 13 skipped`，完整 Maven reactor 和 Playwright `93/93` 通过；摘要 `target/release-verification/collection-coverage-commit-f52f7849-final-20261017/summary.md`。本调用显式跳过 Docker、Helm、npm ci 与 10 项可选 runtime gate；与本批相关的外部 API/覆盖回归/SDK 已通过独立真实验收。
 - Native/OpenAI 的可选字段、授权范围、GLOBAL 旧指纹与旧 Java 构造器兼容，以及错误封套已由契约/集成测试和真实 Client 检查；无需数据迁移，未修改既有 V1–V60 Flyway 脚本。
 
-## 最新实现复核记录
+## 上一轮实现复核记录（已因后续发现作废）
 
 2026-10-17 连续完成三轮互不重叠、只读且期间未修改文件的复核：
 
@@ -94,7 +95,28 @@ upsert 的 `SYNC` 作业若先被后台 worker 抢占，可以合法返回 `INDE
 
 三轮期间没有代码、测试或规划正文修改。旧复核发现和修复过程保留在下方历史记录中。
 
-## 最新实现复核发现
+## 最新实现复核记录
+
+修正文档矛盾并通过 `./scripts/verify-project-docs.sh` 16 项门禁后，2026-10-17 连续完成三轮
+互不重叠、只读且期间无修改的最终复核：
+
+| 时间（CST） | 检查范围 | 发现与处理 | 结果 |
+|---|---|---|---|
+| 05:52–05:54 | 修正后的架构/REST 语义与代码边界、默认 GLOBAL、显式 EACH 条件和候选不完整说明 | 无新问题；修复准确，未修改 | `1/3` |
+| 05:54–05:55 | 全部长青文档中的旧状态、Native/OpenAI Consumer 契约样例、GLOBAL 历史指纹和真实 Client 证据 | 无新问题；旧表述仅保留在本进度的历史复盘中，未修改 | `2/3` |
+| 05:55–05:56 | API Key 授权、operation snapshot 默认/恢复、超时与有界并发、迁移影响、发布门禁及端口状态 | 无新问题；授权/资源/交付边界一致，未修改 | `3/3` |
+
+三轮期间未修改代码、测试、正式文档或规划正文；完成后才更新本进度记录。
+
+## 最终复核重启记录
+
+2026-10-17 05:52 的第 3 轮复核发现，正式架构和 REST 文档仍残留“`EACH_COLLECTION` 尚未实现/不支持”
+的旧状态，和代码、同页新说明及真实 API 验收相矛盾。已同步修正中英文 `docs/architecture*` 与
+`docs/rest-api*`：说明 GLOBAL 默认 top-k、显式 EACH 覆盖策略、20 个授权 Collection/100 个结果上限及
+分支不完整诊断；`./scripts/verify-project-docs.sh` 16 项通过。该准确性问题使实现复核计数重置为 `0/3`；
+修复后尚未开始新的干净轮次。功能代码未修改，提交后发布门禁与此前的外部 Client API 真实验收仍有效。
+
+## 历史实现复核发现
 
 2026-10-17 02:07:50 的首次只读实现复核发现，`ChatRequestFingerprint` 为所有 KNOWLEDGE 请求都新增
 `coverageMode=GLOBAL` 字段，而 `ChatTurnOperationService` 以 SHA-256 精确比较已保存 fingerprint。

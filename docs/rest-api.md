@@ -353,8 +353,11 @@ Vector, English FTS, pg_jieba, and pg_trgm retrieval apply the effective scope
 directly in PostgreSQL with `d.collection_id = ANY (?)`,
 `d.collection_id IS NOT NULL`, and optional JDBC `bigint[]` document filters.
 They do not expand a Collection into all of its document IDs. Multiple
-Collections form one candidate union and compete for the global top-k;
-per-Collection quota/coverage (`EACH_COLLECTION`) is not supported.
+Collections form one candidate union and compete for the global top-k by
+default. Clients can explicitly request `EACH_COLLECTION` coverage selection,
+bounded to 20 authorized Collections and 100 results (the result limit must be
+at least the selected Collection count). Incomplete branches are reported in
+the coverage summary; a failed branch cannot contribute results.
 
 #### External-client best practices
 

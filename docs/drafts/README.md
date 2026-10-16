@@ -38,7 +38,7 @@ Active plans are listed here and in `docs/index*`.
 
 ## Current Active Plans
 
-- [Bounded Collection-Coverage Retrieval](NEXT_BATCH_COLLECTION_COVERAGE_PLAN.md): explicit, authorized, bounded fan-out for multi-Collection clients; planning and implementation reviews both passed `3/3`, external API/database/real SDK/model acceptance is complete, and Git delivery remains.
+- [Bounded Collection-Coverage Retrieval](NEXT_BATCH_COLLECTION_COVERAGE_PLAN.md): explicit, authorized, bounded fan-out for multi-Collection clients; external API/database/real SDK/model acceptance is complete, final implementation review passed `3/3` after correcting stale canonical docs, and Git delivery remains.
 
 - [WeKnora reference-project research and borrowing plan](WEKNORA_REFERENCE_RESEARCH.md)
   (Chinese; research draft, not an implementation commitment)

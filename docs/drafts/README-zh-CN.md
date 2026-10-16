@@ -32,7 +32,7 @@
 
 ## 当前活跃规划
 
-- [有界 Collection 覆盖召回](NEXT_BATCH_COLLECTION_COVERAGE_PLAN-zh-CN.md)：面向多知识库 Client 的显式、授权后、有限 fan-out 召回；规划和实现复核均 `3/3`，外部 API/数据库/真实 SDK/模型验收完成，剩余 Git 交付。
+- [有界 Collection 覆盖召回](NEXT_BATCH_COLLECTION_COVERAGE_PLAN-zh-CN.md)：面向多知识库 Client 的显式、授权后、有限 fan-out 召回；外部 API/数据库/真实 SDK/模型验收完成，修正正式文档后最终实现复核 `3/3`，剩余 Git 交付。
 
 - [WeKnora 参考项目调研与借鉴规划](WEKNORA_REFERENCE_RESEARCH.md)：记录对参考项目的代码级调研、
   与当前能力的差距判断和候选实施路线；仅为活跃调研草案，不代表已承诺实施。
