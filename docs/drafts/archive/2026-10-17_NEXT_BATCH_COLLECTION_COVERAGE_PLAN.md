@@ -1,6 +1,6 @@
 # Next-Batch Plan: Bounded Collection-Coverage Retrieval
 
-> [English](NEXT_BATCH_COLLECTION_COVERAGE_PLAN.md) | [中文](NEXT_BATCH_COLLECTION_COVERAGE_PLAN-zh-CN.md)
+> [English](2026-10-17_NEXT_BATCH_COLLECTION_COVERAGE_PLAN.md) | [中文](2026-10-17_NEXT_BATCH_COLLECTION_COVERAGE_PLAN-zh-CN.md)
 >
 > Status: planning review `3/3`, implementation, and final acceptance are complete; Git delivery is in progress. See the adjacent progress ledger for evidence.
 > Date: 2026-10-16

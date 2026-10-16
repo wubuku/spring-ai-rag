@@ -1,6 +1,6 @@
 # 下一批改进规划：有界 Collection 覆盖召回
 
-> [English](NEXT_BATCH_COLLECTION_COVERAGE_PLAN.md) | [中文](NEXT_BATCH_COLLECTION_COVERAGE_PLAN-zh-CN.md)
+> [English](2026-10-17_NEXT_BATCH_COLLECTION_COVERAGE_PLAN.md) | [中文](2026-10-17_NEXT_BATCH_COLLECTION_COVERAGE_PLAN-zh-CN.md)
 >
 > 状态：规划复核 `3/3`、实现与最终验收均已完成；Git 交付进行中。验收结果见相邻进度记录。
 > 日期：2026-10-16
@@ -429,7 +429,7 @@ metadata、credential 或 provider 异常。摘要进入现有 retrieval trace�
 ## 9. 规划/实施进度记录与检查规则
 
 实施进度写入相邻的
-[`NEXT_BATCH_COLLECTION_COVERAGE_PROGRESS-zh-CN.md`](NEXT_BATCH_COLLECTION_COVERAGE_PROGRESS-zh-CN.md)
+[`2026-10-17_NEXT_BATCH_COLLECTION_COVERAGE_PROGRESS-zh-CN.md`](2026-10-17_NEXT_BATCH_COLLECTION_COVERAGE_PROGRESS-zh-CN.md)
 和英文对应文件。每个 checkpoint 记录：分支/commit、工作区、已完成 slice、命令和结果、
 当前检查计数、已知问题、下一步和恢复入口。
 
