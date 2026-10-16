@@ -34,6 +34,10 @@
 
 ## 验证门禁
 
+OpenAI 兼容服务发布还应显式运行 `scripts/verify-release.sh --with-openai-sdk`，或独立
+运行 `scripts/verify-openai-sdk-e2e.sh`。该门禁启动隔离 PostgreSQL/Mock upstream，
+通过官方 Python/Node SDK 验证 Core/Starter 两种真实 HTTP 拓扑；不产生真实 LLM 费用。
+
 - [x] `mvn clean test`
 - [x] `mvn package -pl spring-ai-rag-core -am -Pwebui -DskipTests`
 - [x] WebUI lint、全量 Vitest 与生产构建

@@ -14,6 +14,7 @@ import assert from 'node:assert/strict';
 import {
   checkSwitches,
   collectGatedSuites,
+  collectRepositoryGatedSuites,
   collectRunPaths,
   parseGatedRunner,
   VIOLATION_KINDS,
@@ -444,10 +445,19 @@ test('an abstract base is not asked to be aggregated either', () => {
 
 // ── 6. the gate against the real repository ─────────────────────────────────
 
+test('the repository inventory includes Starter consumer suites', () => {
+  withRepo(dir => {
+    write(dir, 'spring-ai-rag-starter/src/test/java/example/ConsumerTest.java',
+      gatedClass('starter-consumer.it.enabled'));
+  }, dir => {
+    assert.equal(collectRepositoryGatedSuites(dir).get('starter-consumer.it.enabled').length, 1);
+  });
+});
+
 test('the real repository reconciles clean', () => {
   // Guards against a self-test that only ever exercises synthetic fixtures: if
   // the walkers drift away from the real tree layout, this is what notices.
-  const gated = collectGatedSuites(join(projectRoot, 'spring-ai-rag-core', 'src', 'test', 'java'));
+  const gated = collectRepositoryGatedSuites(projectRoot);
   const paths = collectRunPaths(projectRoot);
   assert.ok(gated.size >= 20, `expected the real gated inventory, found ${gated.size}`);
   assert.ok(paths.size >= 20, `expected the real run paths, found ${paths.size}`);

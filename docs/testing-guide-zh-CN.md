@@ -871,6 +871,33 @@ text-only messages、未知 alias 错误、非流式 JSON、SSE role/content/fin
 最终 `[DONE]`。脚本还执行 focused tests、`test-compile`、Shell 语法和空白检查，证据写入
 `.verification/openai-compatibility/<run-id>/`。
 
+### 官方 SDK 外部 Client 黑盒验收
+
+OpenAI 兼容层还必须经过真实 HTTP Client 验收，不能仅凭 MockMvc、Controller 测试或
+WebUI 判断可用：
+
+```bash
+./scripts/verify-openai-sdk-e2e.sh
+./scripts/verify-openai-sdk-e2e.sh --self-test
+TESTCONTAINERS_RYUK_DISABLED=true mvn -pl spring-ai-rag-starter -am test \
+  -Dtest=ExternalStarterConsumerContextTest -Dstarter-consumer.it.enabled=true \
+  -Dsurefire.failIfNoSpecifiedTests=false
+```
+
+脚本默认启动隔离 PostgreSQL、Mock 上游、Core standalone 和不主动扫描
+`com.springairag` 的 Starter Consumer，并用官方 Python SDK `2.14.0` 与 Node SDK
+`7.34.0` 在两种拓扑下验证 models、JSON、SSE、幂等重放、错误信封和认证。它还确认
+外部 Starter Consumer 执行 Flyway V1–V64 后可提供同一 `/v1` 客户端契约。结果位于
+`.verification/openai-sdk-e2e/<run-id>/summary.md`，默认不产生真实模型费用。
+
+只有显式提供真实地址和密钥才运行 real-LLM 模式；不能把 mock 通过当作真实模型质量
+证据。该门禁与 `verify-api-compatibility.sh`、`verify-client-consumer-contract.sh`、
+Maven 全量回归和 `scripts/dev.sh` 启停验收互补。`verify-gated-it.sh` 聚合 Core/Starter
+数据库套件；显式启用 Starter IT 时 Docker 不可用会失败而非 skip。
+SDK runner 的 20 项正/负变异自测覆盖意外成功、缺少 `[DONE]`、重复终态、顺序及身份错误；
+隔离 HTTP 验收额外覆盖 ACL、PostgreSQL quota、上游 503、关闭 `/v1` 后 Native API
+仍可用和幂等 provider 调用次数。发布时使用 `verify-release.sh --with-openai-sdk`。
+
 ### 持久化 Embedding Jobs 验收门禁
 
 ```bash

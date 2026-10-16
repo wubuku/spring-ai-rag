@@ -11,7 +11,6 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -26,11 +25,6 @@ import java.util.function.LongSupplier;
  * 不阻塞在线 API。删除始终通过主键和固定批量上限完成，不使用悲观锁或 advisory lock。
  */
 @Service
-@ConditionalOnBean({
-        RagAuditLogRepository.class,
-        RagClientErrorRepository.class,
-        RagRetrievalEvaluationRepository.class,
-        PlatformTransactionManager.class})
 public class DataGovernanceCleanupService {
 
     private static final Logger log = LoggerFactory.getLogger(DataGovernanceCleanupService.class);

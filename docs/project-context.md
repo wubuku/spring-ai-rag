@@ -718,10 +718,13 @@ transport-neutral `ChatCommand` / `ChatExecutionService`.
 
 `/v1` exposes no client-controlled stable session ID. Distinct requests should be used
 as stateless Chat Completions calls and resend the complete `messages` list. Core
-standalone scans and registers the complete compatibility entry point. The Starter
-currently auto-imports only shared Web security configuration; the complete `/v1` bean
-graph still depends on host scanning of `com.springairag` or equivalent explicit
-imports, so a Starter-only consumer is not an accepted zero-configuration entry point.
+standalone scans and registers the complete compatibility entry point. Starter now
+auto-configures the complete Bean Graph through scoped Core scanning, explicit
+properties, and a transitive Actuator dependency; the host need not scan
+`com.springairag`. `general.rag.enabled=false` disables Starter assembly; the
+compatibility entry still requires explicit enabling. Real PostgreSQL/Flyway consumer
+tests and official Python/Node SDK HTTP acceptance cover both topologies; see the
+[Client Contract Kit](client-contract-kit.md).
 
 The feature is disabled by default. Its current subset is text-only, `n=1`, and
 does not support tools, structured output, or sampling parameters. Native

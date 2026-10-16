@@ -4,9 +4,9 @@
 
 > **用途**：记录 OpenAI Chat Completions 服务端兼容层的当前实现、受控预览边界和
 > 公网/多实例生产仍需完成的安全工作。
-> **代码基线**：`main@f1cdcba1`，包含 Chat turn 可靠性、V48 受管 principal 加固与
-> V55 有界 staged credential rotation。
-> **最近复核**：2026-08-28
+> **代码范围**：当前实现包含 Chat turn 可靠性、预算/数据治理、Starter Bean Graph
+> 和官方 SDK 黑盒门禁；以本文链接的当前代码与验收脚本为准。
+> **最近复核**：2026-10-16
 > **状态**：`/v1/models` 与 `/v1/chat/completions` 已实现但默认关闭；本文不宣称公网生产就绪。
 
 文档总入口：[index-zh-CN.md](index-zh-CN.md)。当前可调用契约和配置以
@@ -41,7 +41,7 @@ fail-closed 已经落地。兼容层仍是受控预览而非全面公网生产�
 |------|----------|----------------|
 | `spring-ai-rag-api` | DTO、SPI | OpenAI DTO 位于独立 `openai` package，不污染现有 `ChatRequest` 契约 |
 | `spring-ai-rag-core` | RAG 实现和可运行应用 | 承载共享执行层、兼容 Controller、model alias registry 和错误映射 |
-| `spring-ai-rag-starter` | 自动配置 | 明确导入 `/v1` 共用的鉴权、限流和观测配置；兼容 Controller 与执行 Bean 仍依赖宿主扫描 `com.springairag` 或等价显式导入 |
+| `spring-ai-rag-starter` | 自动配置 | 默认通过限定 Core component scan 提供完整 `/v1` Bean Graph；外部 Consumer 不需要主动扫描 `com.springairag` |
 | `spring-ai-rag-documents` | 文档处理 | 不应依赖 OpenAI 协议 |
 | `spring-ai-rag-webui` | React 管理台 | root unlock 按 stable principal 管理 policy CAS、quota、staged/immediate credential 轮换、吊销和 shown-once secret |
 
@@ -50,12 +50,11 @@ fail-closed 已经落地。兼容层仍是受控预览而非全面公网生产�
 1. 直接运行 `spring-ai-rag-core` 中的应用。
 2. 由其他 Spring Boot 应用引入 `spring-ai-rag-starter`。
 
-Core 独立服务通过 `SpringAiRagApplication` 扫描 `com.springairag`，会完整注册兼容入口。
-Starter 的 `GeneralRagAutoConfiguration` 当前只显式导入共享 Web 安全配置，没有自动导入
-`OpenAiCompatibilityController`、mapper、alias registry 及其完整依赖；示例应用通过
-`scanBasePackages = "com.springairag"` 补足。因而不能把“只引入 Starter 依赖即可获得
-`/v1`”视为已验收事实。安全 Filter 的共享装配已有测试，但缺少不依赖额外组件扫描的
-Starter consumer `/v1` HTTP 集成测试。
+Core 独立服务通过 `SpringAiRagApplication` 扫描 `com.springairag`，Starter 则通过
+`GeneralRagAutoConfiguration` 的限定扫描和显式 properties 注册完成同一核心 Bean Graph。
+扫描排除了应用入口、`ApiSloConfig` 和 Web 安全配置，避免重复启动或重复 Bean；整体开关
+`general.rag.enabled=false` 仍是关闭边界。外部 Consumer 的真实 PostgreSQL/Flyway
+Context 测试和 HTTP 黑盒验收已经覆盖“不主动扫描 `com.springairag`”的产品边界。
 
 ---
 
@@ -84,17 +83,17 @@ Starter consumer `/v1` HTTP 集成测试。
 
 ---
 
-## 4. 2026-08-28 实现状态评估
+## 4. 实现状态评估
 
 ### 4.1 成熟度结论
 
 | 评估面 | 当前状态 | 结论 |
 |--------|----------|------|
 | Core 独立服务基本接入 | 已实现并有聚焦测试 | 可用于可信网络中的基本 OpenAI Chat Completions 客户端接入 |
-| 基础 SDK wire shape | 基本兼容 | 标准 JSON 字段可被 OpenAI Python SDK 解析；仓库尚无提交内 SDK HTTP 回归门禁 |
+| 基础 SDK wire shape | 已有 HTTP 门禁 | Python/Node 官方 SDK 验证两种拓扑的 JSON/SSE 子集；不承诺完整 OpenAI 协议 |
 | RAG 语义 | 已实现 | model alias、请求级 Collection/document scope、JSONB filter 和 API Key ACL 复用统一执行链 |
 | 安全数据面 | 已实现基础加固 | Bearer/Header API Key、能力、ACL、共享 quota、吊销和 rotation 已进入 `/v1` Filter 链 |
-| Starter consumer | 部分集成 | 安全配置会自动导入；完整 `/v1` 入口仍依赖宿主额外组件扫描，缺少真实 consumer HTTP 验收 |
+| Starter consumer | 完整自动装配 | 限定 Core scan、properties 与 Actuator 依赖随 Starter 提供；外部 Consumer 无需扫描核心包 |
 | 完整 Chat Completions 协议 | 未实现 | 仅 text-only、`n=1`；不支持采样、tools、structured output、多模态等 |
 | 公网生产服务 | 未宣称就绪 | 仍需关闭 legacy 边界，并完成身份、预算、TLS、网络、恢复和运营控制 |
 
@@ -138,7 +137,7 @@ Starter consumer `/v1` HTTP 集成测试。
 
 ### 4.4 当前验证证据与证据缺口
 
-2026-08-28 在 `main@f1cdcba1` 执行：
+2026-10-16 执行：
 
 ```bash
 ./scripts/verify-openai-compatibility.sh
@@ -146,27 +145,47 @@ Starter consumer `/v1` HTTP 集成测试。
 
 结果为 4 个步骤全部通过，其中 Maven 聚焦集合共 55 个测试，覆盖 alias、scope mapper、
 完整 text-only messages、非流式信封、协议错误、SSE 顺序、`[DONE]`、共享 Chat fallback 和
-Web 安全装配；随后 `test-compile`、脚本语法与 `git diff --check` 通过。一次性 wire-shape
-探测也确认标准非流式响应可由本机 OpenAI Python SDK 解析。
+Web 安全装配；随后 `test-compile`、脚本语法与 `git diff --check` 通过。另执行官方 SDK
+黑盒门禁：
+
+```bash
+./scripts/verify-openai-sdk-e2e.sh
+```
+
+隔离 PostgreSQL、仓库 Mock 上游、Core standalone 和外部 Starter Consumer 均成功启动；
+官方 OpenAI Python SDK `2.14.0` 与 JavaScript SDK `7.34.0` 在两种拓扑下都通过
+`/v1/models`、非流式 JSON、SSE、`Idempotency-Key` 重放、无效模型错误信封和无效凭据
+认证。该门禁默认不调用真实模型；只有显式 `OPENAI_SDK_E2E_WITH_REAL_LLM=1` 才使用
+指定的真实 HTTP 服务。完整结果写入 `.verification/`，不提交密钥、prompt、答案或完整
+异常正文。
+
+同日还使用隔离 PostgreSQL、真实 MiniMax 与 SiliconFlow provider，固定真实模型注册表，
+执行了官方 Python/Node SDK 的 real-LLM JSON/SSE/幂等/错误/认证验收；两套 SDK 均通过。
+同一服务上的 API Contract live、Client Consumer Contract live，以及完整真实模型冒烟
+（建库、嵌入、检索、KNOWLEDGE Chat、AGENT 工具/引用、SSE）也通过，冒烟结果为
+`PASS=11 FAIL=0`。这些结果证明了本批外部 Client 传输与当前 provider 组合可用，但不
+等于所有 provider、模型、网络条件或公网生产配置都已覆盖。
 
 这些证据**尚不能**证明以下事项：
 
-1. 从隔离 Spring Boot 服务出发，由官方 Python/JavaScript SDK 完成 JSON 与 SSE 的提交内
-   端到端回归；当前专项脚本主要是 MockMvc/单元级合同测试。
-2. 只引入 Starter、且不扫描 `com.springairag` 的普通 consumer 会自动拥有 `/v1` 端点。
-3. feature flag 关闭/开启、Bearer 鉴权、只读能力、Collection ACL、共享 quota 和真实 HTTP
-   流在同一专项矩阵中的完整组合。
-4. 常见第三方 Agent、IDE 和网关不会自动发送当前不支持的 OpenAI 参数。
+1. 本次真实运行只覆盖已配置的 MiniMax/SiliconFlow 组合和一次性隔离环境；费用、长期
+   延迟分布、provider 特有错误与生产网络策略仍需在目标部署中单独验收，不能由 Mock
+   或一次真实冒烟外推。
+2. Mock 门禁覆盖的 feature flag、Bearer、只读能力、Collection ACL、共享 quota 和
+   上游故障组合，不应被一次真实模型运行替代；发布前仍需执行对应专项门禁。
+3. 常见第三方 Agent、IDE 和网关不会自动发送当前不支持的 OpenAI 参数，仍需按客户矩阵
+   增量扩展协议。
 
 ### 4.5 后续改进优先级
 
-1. **P0：建立 SDK 级专项 E2E。** 启动隔离 PostgreSQL、Mock 上游模型和真实 Spring Boot
-   服务，使用官方 Python 与 JavaScript SDK 验证 models、JSON、SSE、错误、Bearer、只读
-   principal、Collection ACL、feature flag 和 `[DONE]`；测试只用 DOM/HTTP/JSON/数据库
-   只读断言，不依赖截图。
-2. **P0：明确 Starter 产品边界。** 二选一并固化测试：自动配置完整 `/v1` Bean 图，或明确
-   声明兼容服务只由 Core standalone 提供。不要继续依赖示例应用的宽包扫描掩盖边界。
-3. **P1：补齐客户端接入指南。** 提供官方 SDK 的最小 text-only 示例、`base_url=/v1`、
+1. **已完成 P0：官方 SDK 级专项 E2E。** 脚本通过真实 HTTP 验证 Python/Node 两套 SDK
+   的 models、JSON、SSE、错误、Bearer、幂等和 `[DONE]` 相关客户端行为，并区分 mock 与
+   显式 real-LLM 证据。
+2. **已完成 P0：Starter 完整 Bean Graph。** 只引入 Starter 且不扫描 `com.springairag`
+   的外部 Consumer 已有 PostgreSQL/Flyway Context 与 HTTP 黑盒证据；新增扫描默认启用，
+   不改变已有端点、旧字段、SSE 事件或 `/v1` 默认开关。
+3. **P1：补齐面向业务开发者的最小 SDK 接入指南。** 当前 Contract Kit 和 runner 已提供
+   可执行验收；仍可补充更短的 Python/Node text-only 示例，集中说明 `base_url=/v1`、
    model alias、完整 messages、Collection Header/body、错误处理和 keyed stream 语义。
 4. **P1：决定来源返回合同。** 当前 OpenAI 响应不含结构化 RAG sources；需要来源追溯的
    客户应继续使用原生 API。只有确定跨 SDK 的扩展字段策略后，才考虑兼容层引用扩展。
@@ -261,8 +280,8 @@ Web 安全装配；随后 `test-compile`、脚本语法与 `git diff --check` �
 8. credential 与 PostgreSQL quota store 故障均 fail closed；公网启用仍应移除 legacy
    static/query 兼容。
 9. 保持 `/api/v1/rag/**` 现有契约，兼容能力关闭后旧 API 仍独立工作。
-10. core standalone 已有聚焦合同测试；Starter 目前只锁定共享安全配置装配，完整 consumer
-    `/v1` HTTP Bean 图仍是待补 P0 验证项。
+10. core standalone 已有聚焦合同测试；Starter-only Consumer 的完整 `/v1` Bean 图已经由
+    PostgreSQL/Flyway Context 和官方 SDK HTTP 黑盒门禁验证，不要求宿主主动扫描核心包。
 11. V54/V55 混合 fleet 必须冻结 API Key 管理写和 staged prepare。只有全部实例运行 V55
     后才能启用 staged rotation；应用回滚到 V54 前，必须清零 enabled retiring
     credential 和 `PENDING` rotation operation，同时保留 V55 schema。

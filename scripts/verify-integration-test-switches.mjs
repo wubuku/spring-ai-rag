@@ -41,7 +41,6 @@ import { fileURLToPath } from 'node:url';
 import { isMainModule } from './lib/is-main-module.mjs';
 
 const projectRoot = fileURLToPath(new URL('..', import.meta.url));
-const TEST_ROOT = join(projectRoot, 'spring-ai-rag-core', 'src', 'test', 'java');
 const GATED_RUNNER = join(projectRoot, 'scripts', 'verify-gated-it.sh');
 const LEDGER_DIR = join('docs', 'drafts');
 
@@ -155,6 +154,16 @@ export function collectGatedSuites(testRoot) {
     }
   }
   return byProperty;
+}
+
+export function collectRepositoryGatedSuites(repoRoot) {
+  const suites = new Map();
+  for (const moduleName of ['spring-ai-rag-core', 'spring-ai-rag-starter']) {
+    for (const [property, entries] of collectGatedSuites(join(repoRoot, moduleName, 'src', 'test', 'java'))) {
+      suites.set(property, [...(suites.get(property) ?? []), ...entries]);
+    }
+  }
+  return suites;
 }
 
 /**
@@ -304,7 +313,7 @@ export function checkSwitches({
 }
 
 function main() {
-  const gatedSuites = collectGatedSuites(TEST_ROOT);
+  const gatedSuites = collectRepositoryGatedSuites(projectRoot);
   const runPaths = collectRunPaths(projectRoot);
   const runnerSuites = existsSync(GATED_RUNNER)
     ? parseGatedRunner(readFileSync(GATED_RUNNER, 'utf8'))

@@ -1,0 +1,11 @@
+{
+  "name": "spring-ai-rag-openai-sdk-e2e",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "openai": "7.34.0"
+  }
+}

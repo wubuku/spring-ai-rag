@@ -3,13 +3,18 @@ package com.springairag.starter;
 import com.springairag.api.service.DomainRagExtension;
 import com.springairag.core.config.ApiSloConfig;
 import com.springairag.core.config.ApiSloProperties;
+import com.springairag.core.config.MultiModelProperties;
 import com.springairag.core.config.RagAlertProperties;
+import com.springairag.core.config.RagProxyProperties;
+import com.springairag.core.config.RagSseProperties;
 import com.springairag.core.config.RagWebSecurityConfiguration;
+import com.springairag.core.SpringAiRagApplication;
 import com.springairag.core.extension.DefaultDomainRagExtension;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.AutoConfigurationPackage;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -43,6 +48,15 @@ class GeneralRagAutoConfigurationIntegrationTest {
         }
 
         @Test
+        @DisplayName("@AutoConfigurationPackage registers Core package for repositories and entities")
+        void autoConfigurationPackage() {
+            var ann = GeneralRagAutoConfiguration.class
+                    .getAnnotation(AutoConfigurationPackage.class);
+            assertNotNull(ann);
+            assertArrayEquals(new Class<?>[]{SpringAiRagApplication.class}, ann.basePackageClasses());
+        }
+
+        @Test
         @DisplayName("@ConditionalOnClass requires ChatClient")
         void conditionalOnClass() {
             var ann = GeneralRagAutoConfiguration.class
@@ -64,24 +78,41 @@ class GeneralRagAutoConfigurationIntegrationTest {
         }
 
         @Test
-        @DisplayName("@EnableConfigurationProperties binds GeneralRagProperties + ApiSloProperties + RagAlertProperties")
+        @DisplayName("@EnableConfigurationProperties binds all Starter-owned properties")
         void enableConfigurationProperties() {
             var ann = GeneralRagAutoConfiguration.class
                     .getAnnotation(EnableConfigurationProperties.class);
             assertNotNull(ann);
-            // RagProperties is registered via @Bean ragProperties(), not @EnableConfigurationProperties
-            // ApiSloProperties and RagAlertProperties are bound via @EnableConfigurationProperties
+            // RagProperties is registered via @Bean ragProperties(), not @EnableConfigurationProperties.
             assertArrayEquals(
-                    new Class<?>[]{GeneralRagProperties.class, ApiSloProperties.class, RagAlertProperties.class},
+                    new Class<?>[]{
+                            GeneralRagProperties.class,
+                            ApiSloProperties.class,
+                            RagAlertProperties.class,
+                            MultiModelProperties.class,
+                            RagProxyProperties.class,
+                            RagSseProperties.class
+                    },
                     ann.value());
         }
 
         @Test
-        @DisplayName("@ComponentScan not used (handled by Spring Boot main scan)")
+        @DisplayName("@ComponentScan scans Core and excludes nested application configs")
         void componentScan() {
             var ann = GeneralRagAutoConfiguration.class
                     .getAnnotation(ComponentScan.class);
-            assertNull(ann);
+            assertNotNull(ann);
+            assertArrayEquals(new String[]{"com.springairag.core"}, ann.basePackages());
+            assertEquals(1, ann.excludeFilters().length);
+            assertEquals(org.springframework.context.annotation.FilterType.ASSIGNABLE_TYPE,
+                    ann.excludeFilters()[0].type());
+            assertArrayEquals(
+                    new Class<?>[]{
+                            SpringAiRagApplication.class,
+                            ApiSloConfig.class,
+                            RagWebSecurityConfiguration.class
+                    },
+                    ann.excludeFilters()[0].classes());
         }
 
         @Test

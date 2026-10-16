@@ -705,6 +705,14 @@ ChatExecutionService
   └── stream     -> chat.completion.chunk* -> data: [DONE]
 ```
 
+Core standalone 由 `SpringAiRagApplication` 扫描核心包；外部 Spring Boot Consumer 只依赖
+`spring-ai-rag-starter` 时，`GeneralRagAutoConfiguration` 默认以限定的 Core component
+scan 补齐同一 Bean Graph，不要求 Consumer 主动扫描 `com.springairag`。该扫描排除应用入口、
+`ApiSloConfig` 和 Web 安全配置，避免重复配置；`general.rag.enabled=false` 仍可整体关闭。
+Starter 显式传递 Actuator，避免 Core optional 依赖令宿主缺少健康/指标类。
+这一边界由真实 PostgreSQL/Flyway Context 测试和 Python/Node 官方 SDK HTTP 黑盒门禁验证，
+而不是由 WebUI 可用性推断。
+
 兼容 Controller 默认不注册。model alias 只绑定 mode、memory 和内部模型候选链，不绑定
 固定 Collection；Collection 必须按请求解析。它与原生 `/api/v1/rag/chat/stream`
 共享执行内核，但使用独立 DTO、错误信封和标准 SSE 映射，不暴露原生 RAG

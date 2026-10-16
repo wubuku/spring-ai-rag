@@ -26,6 +26,7 @@ RUN_GOLDENSET=0
 RUN_QUALITY_REGRESSION=0
 RUN_REAL_LLM=0
 RUN_NEXT_HIGH_VALUE=0
+RUN_OPENAI_SDK=0
 START_LOCAL_RUNTIME=0
 USE_OFFICIAL_IMAGES=0
 
@@ -55,6 +56,7 @@ Options:
       --with-real-llm     Run real LLM smoke against REAL_LLM_BASE_URL
       --with-next-high-value
                           Run the focused QA/workbench/PDF feature gate
+      --with-openai-sdk   Run isolated official Python/Node SDK HTTP acceptance
       --with-local-runtime
                           Start a PostgreSQL-profile server, run all runtime
                           gates, then stop the server (requires .env keys)
@@ -84,6 +86,7 @@ while [[ $# -gt 0 ]]; do
     --with-quality-regression) RUN_QUALITY_REGRESSION=1; shift ;;
     --with-real-llm) RUN_REAL_LLM=1; shift ;;
     --with-next-high-value) RUN_NEXT_HIGH_VALUE=1; shift ;;
+    --with-openai-sdk) RUN_OPENAI_SDK=1; shift ;;
     --with-local-runtime)
       START_LOCAL_RUNTIME=1
       RUN_RUNTIME_E2E=1
@@ -534,6 +537,12 @@ if [[ "$RUN_NEXT_HIGH_VALUE" == "1" ]]; then
   run_gate "Next high-value feature gate" ./scripts/verify-next-high-value-features.sh
 else
   skip_gate "Next high-value feature gate" "enable with --with-next-high-value"
+fi
+
+if [[ "$RUN_OPENAI_SDK" == "1" ]]; then
+  run_gate "Official OpenAI SDK HTTP acceptance" ./scripts/verify-openai-sdk-e2e.sh
+else
+  skip_gate "Official OpenAI SDK HTTP acceptance" "enable with --with-openai-sdk"
 fi
 
 finalize

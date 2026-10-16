@@ -52,6 +52,23 @@ Native live probe 使用 `mode=PLAIN`，只验证 HTTP/JSON/SSE 消费协议，�
 通过 `CLIENT_CONTRACT_OPENAI_RAG_MODE`（可选配 `CLIENT_CONTRACT_OPENAI_RAG_MEMORY`）加入既有
 `rag` 扩展。若显式启用了 live 但缺少必要环境变量，脚本也只输出 skip，不会声称完成 live 验收。
 
+### 官方 SDK HTTP 配套验收
+
+```bash
+./scripts/verify-openai-sdk-e2e.sh
+./scripts/verify-openai-sdk-e2e.sh --self-test
+```
+
+默认启动可丢弃 PostgreSQL、Mock 模型和两种真实 HTTP 拓扑：Core standalone 与仅依赖
+Starter 的外部 Consumer。官方 Python `2.14.0`、Node `7.34.0` SDK 验证 JSON、SSE
+role/content/finish 顺序和原始 `[DONE]`、错误与鉴权、幂等重放；隔离模式额外验证 Native
+Collection/API Key 创建、ACL、共享配额、上游故障与 `/v1` 关闭时 Native API 仍可用。
+runner self-test 对协议变异执行负向断言，避免错误请求意外成功却报告通过。
+发布入口为 `scripts/verify-release.sh --with-openai-sdk`；该项需要 Docker、Java/Maven、
+Node/npm 和 Python。只跑单拓扑可加 `--topology core` 或 `--topology starter`。
+显式真实模型模式连接的是已启动的 **RAG 服务根地址**，不是上游 provider；配置见
+[开发者参考](developer-reference-zh-CN.md#官方-openai-pythonnode-sdk-黑盒门禁)。
+
 ### KNOWLEDGE 证据验收
 
 需要真实知识库、模型和授权范围时，使用 Evaluation/real-LLM 验收链。应检查最终答案、最终输入

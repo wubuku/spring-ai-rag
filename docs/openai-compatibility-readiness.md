@@ -5,9 +5,10 @@
 > **Purpose**: Record the current server-side OpenAI Chat Completions
 > implementation, controlled-preview boundary, and remaining public /
 > multi-instance production security work.
-> **Code baseline**: `main@f1cdcba1`, including Chat-turn reliability, V48
-> managed-principal hardening, and V55 bounded staged credential rotation.
-> **Last verified**: 2026-08-28
+> **Code scope**: The current implementation includes Chat-turn reliability,
+> budget/data governance, the Starter Bean Graph, and the official SDK gate.
+> The linked current source and acceptance scripts are authoritative.
+> **Last verified**: 2026-10-16
 > **Status**: `/v1/models` and `/v1/chat/completions` are implemented but
 > disabled by default. This document does not claim public production readiness.
 
@@ -52,7 +53,7 @@ module.
 |--------|------------------------|-----------------------------------|
 | `spring-ai-rag-api` | DTOs and SPIs | OpenAI DTOs live in an isolated `openai` package and do not change the existing `ChatRequest` contract |
 | `spring-ai-rag-core` | RAG implementation and runnable app | Owns the shared execution layer, compatibility controller, model-alias registry, and error mapping |
-| `spring-ai-rag-starter` | Auto-configuration | Explicitly imports the shared authentication, rate-limiting, and observability configuration for `/v1`; the compatibility controller and execution beans still require host scanning of `com.springairag` or equivalent explicit imports |
+| `spring-ai-rag-starter` | Auto-configuration | Provides the complete `/v1` Bean Graph through a constrained Core component scan by default; an external consumer does not need to scan `com.springairag` |
 | `spring-ai-rag-documents` | Document processing | Must remain independent of the OpenAI protocol |
 | `spring-ai-rag-webui` | React admin UI | Root unlock manages one row per stable principal, including policy CAS, quota, staged/immediate credential rotation, revocation, and shown-once secrets |
 
@@ -62,14 +63,13 @@ There are two runtime topologies:
 2. Add `spring-ai-rag-starter` to another Spring Boot application.
 
 The Core standalone service scans `com.springairag` through
-`SpringAiRagApplication` and therefore registers the full compatibility entry point.
-The Starter's `GeneralRagAutoConfiguration` currently imports only the shared Web
-security configuration; it does not auto-import `OpenAiCompatibilityController`, the
-mapper, the alias registry, or their complete dependency graph. The demos compensate
-with `scanBasePackages = "com.springairag"`. Therefore, "adding only the Starter
-dependency provides `/v1`" is not an accepted fact. Shared Filter assembly is tested,
-but there is no Starter-consumer `/v1` HTTP integration test that works without the
-extra component scan.
+`SpringAiRagApplication`; the Starter now provides the same core Bean Graph through
+`GeneralRagAutoConfiguration`'s constrained scan and explicit property registration.
+The scan excludes the application entry point, `ApiSloConfig`, and Web security
+configuration to avoid duplicate startup or beans. `general.rag.enabled=false` remains
+the complete disable boundary. A real PostgreSQL/Flyway external-consumer context test
+and HTTP black-box acceptance now prove that a consumer need not scan
+`com.springairag`.
 
 ---
 
@@ -102,17 +102,17 @@ See [architecture.md](architecture.md), [rest-api.md](rest-api.md), and
 
 ---
 
-## 4. Implementation Status Assessment, 2026-08-28
+## 4. Implementation Status Assessment
 
 ### 4.1 Maturity Summary
 
 | Area | Current state | Conclusion |
 |------|---------------|------------|
 | Core standalone basic integration | Implemented with focused tests | Usable for basic OpenAI Chat Completions client integration on a trusted network |
-| Basic SDK wire shape | Mostly compatible | Standard JSON fields parse in the OpenAI Python SDK; the repository has no committed SDK-over-HTTP regression gate |
+| Basic SDK wire shape | HTTP gate available | Official Python/Node SDKs verify the JSON/SSE subset in both topologies; this is not full OpenAI protocol compatibility |
 | RAG semantics | Implemented | Model aliases, request-scoped Collection/document selection, JSONB filters, and API-key ACLs reuse the shared execution path |
 | Security data plane | Baseline hardening implemented | Bearer/header API keys, capabilities, ACLs, shared quota, revocation, and rotation are in the `/v1` Filter chain |
-| Starter consumer | Partially integrated | Security config is auto-imported; the complete `/v1` entry point still depends on extra host scanning and lacks a real consumer HTTP acceptance test |
+| Starter consumer | Complete auto-configuration | Scoped Core scanning, properties, and Actuator ship with Starter; external consumers need not scan the Core package |
 | Complete Chat Completions protocol | Not implemented | Text-only and `n=1`; sampling, tools, structured output, and multimodal inputs are unsupported |
 | Public production service | Not claimed ready | Legacy boundaries, identity, budget, TLS, networking, recovery, and operational controls remain |
 
@@ -160,7 +160,7 @@ fast navigation aid, not a substitute for source search.
 
 ### 4.4 Current Evidence and Evidence Gaps
 
-On 2026-08-28 at `main@f1cdcba1`, the following command passed:
+On 2026-10-16, the following command passed:
 
 ```bash
 ./scripts/verify-openai-compatibility.sh
@@ -169,35 +169,54 @@ On 2026-08-28 at `main@f1cdcba1`, the following command passed:
 All four steps passed. The focused Maven set ran 55 tests across aliases, scope
 mapping, complete text-only messages, non-streaming envelopes, protocol errors, SSE
 ordering, `[DONE]`, shared Chat fallback, and Web-security assembly. `test-compile`,
-shell syntax, and `git diff --check` then passed. A one-off wire-shape probe also
-confirmed that the standard non-streaming response parses in the locally installed
-OpenAI Python SDK.
+shell syntax, and `git diff --check` then passed. The official SDK black-box gate also
+passed:
+
+```bash
+./scripts/verify-openai-sdk-e2e.sh
+```
+
+An isolated PostgreSQL instance, repository mock upstream, Core standalone service,
+and external Starter consumer all started successfully. OpenAI Python SDK `2.14.0`
+and JavaScript SDK `7.34.0` both passed against both topologies for `/v1/models`,
+non-streaming JSON, SSE, `Idempotency-Key` replay, invalid-model errors, and invalid
+credentials. The gate does not call a real model by default; only explicit
+`OPENAI_SDK_E2E_WITH_REAL_LLM=1` uses a configured real HTTP service. Evidence is kept
+under `.verification/` without committing keys, prompts, answers, or full exception text.
+
+On the same date, an isolated PostgreSQL run used the configured real MiniMax and
+SiliconFlow providers with a pinned real-model registry. The official Python and
+JavaScript SDKs both passed real-LLM JSON/SSE/idempotency/error/authentication probes.
+The same service also passed the live API Contract gate, live Client Consumer Contract
+gate, and the full real-model smoke (collection creation, embedding, retrieval,
+KNOWLEDGE Chat, AGENT tool/citation alignment, and SSE), with `PASS=11 FAIL=0`.
+This proves the external-client transport and the configured provider combination for
+this run; it is not a claim that every provider, model, network, or public deployment
+has been covered.
 
 This evidence does **not** yet prove:
 
-1. Committed end-to-end JSON and SSE tests from an isolated Spring Boot service through
-   the official Python and JavaScript SDKs; the focused gate is mainly MockMvc and unit
-   contract coverage.
-2. Automatic `/v1` availability in a normal Starter-only consumer that does not scan
-   `com.springairag`.
-3. The complete feature-flag, Bearer authentication, read-only capability, Collection
-   ACL, shared quota, and real HTTP-stream matrix in one dedicated gate.
-4. That common third-party Agents, IDEs, and gateways will not automatically send an
+1. Long-run cost, latency distributions, provider-specific errors, and production network
+   policy for every configured provider; the run covered only the configured
+   MiniMax/SiliconFlow combination in an isolated environment.
+2. The Mock gate's complete feature-flag, Bearer authentication, read-only capability,
+   Collection ACL, shared quota, and upstream-failure matrix is not replaced by one
+   real-model run; the dedicated gate remains required before release.
+3. That common third-party Agents, IDEs, and gateways will not automatically send an
    unsupported OpenAI parameter.
 
 ### 4.5 Improvement Priorities
 
-1. **P0: Add an SDK-level dedicated E2E gate.** Start isolated PostgreSQL, a mock
-   upstream model, and a real Spring Boot service. Use official Python and JavaScript
-   SDKs to verify models, JSON, SSE, errors, Bearer, a read-only principal, Collection
-   ACL, the feature flag, and `[DONE]`. Use HTTP/JSON/database read-only assertions,
-   never screenshots.
-2. **P0: Make the Starter product boundary explicit.** Either auto-configure the full
-   `/v1` bean graph or state that compatibility service endpoints are Core-standalone
-   only. Lock the decision with a consumer HTTP test; do not let broad demo scanning
-   hide the boundary.
-3. **P1: Add a client integration guide.** Include minimal official-SDK text-only
-   examples, `base_url=/v1`, model aliases, complete messages, Collection header/body,
+1. **Completed P0: establish an SDK-level dedicated E2E gate.** The gate uses real HTTP
+   to validate Python/Node models, JSON, SSE, errors, Bearer, idempotency, and `[DONE]`
+   client behavior, while distinguishing mock evidence from explicit real-LLM evidence.
+2. **Completed P0: define the Starter product boundary.** A Starter-only consumer that
+   does not scan `com.springairag` now has PostgreSQL/Flyway context and HTTP black-box
+   evidence. The new scan is enabled by default without changing existing endpoints,
+   legacy fields, SSE events, or the `/v1` default flag.
+3. **P1: a minimal SDK integration guide for application developers.** The Contract Kit and
+   runners provide executable acceptance today; shorter Python/Node text-only examples can
+   still consolidate `base_url=/v1`, model aliases, complete messages, Collection headers/body,
    error handling, and keyed-stream behavior.
 4. **P1: Decide the source-return contract.** OpenAI responses currently omit structured
    RAG sources. Clients that require traceable sources should keep using the native API
@@ -305,9 +324,9 @@ completed; live API and configuration facts are maintained in the references.
    enablement should still remove legacy static/query compatibility.
 9. Existing `/api/v1/rag/**` contracts remain independent and continue to work when
    compatibility is disabled.
-10. Core standalone has focused contract tests. The Starter currently locks only shared
-    security-config assembly; the complete consumer `/v1` HTTP bean graph remains a P0
-    verification gap.
+10. Core standalone has focused contract tests. The complete Starter-only consumer `/v1`
+    Bean Graph is now verified by PostgreSQL/Flyway context and official SDK HTTP black-box
+    acceptance; the host does not need to scan the core package.
 11. A mixed V54/V55 fleet must freeze API-key management writes and staged
     prepare. Staged rotation is enabled only after all instances run V55; before
     application rollback to V54, operators must clear enabled retiring
