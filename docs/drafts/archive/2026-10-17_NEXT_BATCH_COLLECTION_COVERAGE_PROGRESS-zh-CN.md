@@ -1,17 +1,19 @@
 # 下一批实施进度：有界 Collection 覆盖召回
 
-> [English](NEXT_BATCH_COLLECTION_COVERAGE_PROGRESS.md) | [中文](NEXT_BATCH_COLLECTION_COVERAGE_PROGRESS-zh-CN.md)
+> [English](2026-10-17_NEXT_BATCH_COLLECTION_COVERAGE_PROGRESS.md) | [中文](2026-10-17_NEXT_BATCH_COLLECTION_COVERAGE_PROGRESS-zh-CN.md)
 >
-> 对应规划：[中文](NEXT_BATCH_COLLECTION_COVERAGE_PLAN-zh-CN.md) · [English](NEXT_BATCH_COLLECTION_COVERAGE_PLAN.md)
+> 对应规划：[中文](2026-10-17_NEXT_BATCH_COLLECTION_COVERAGE_PLAN-zh-CN.md) · [English](2026-10-17_NEXT_BATCH_COLLECTION_COVERAGE_PLAN.md)
 
 ## 当前状态
 
 - 分支：`feat/collection-coverage`
 - 基线：`b473b002`（已推送的 `main`）
-- 工作区：功能提交 `f52f7849` 已生成；刚修正正式架构/REST 文档中的过时状态，待复核后提交该文档修正
+- 当前代码已在本地 `main` 合并，合并提交 `4f34ca70`；`origin/main` 仍为 `b473b002`，尚待归档文档提交及推送
+- 当前工作：归档双语规划与进度、运行文档门禁，然后将归档更新合入并推送 `main`
 - 规划检查：最新异步 embedding lifecycle 验收修订已于 2026-10-17 03:24–03:26 连续三轮无修改复核通过（`3/3`）；检查范围及结果见下文。
 - 实施检查：`3/3`；修正过时架构/REST 状态并通过文档门禁后，于 2026-10-17 05:52–05:56 连续三轮只读复核，无新发现、无修改。
-- 当前阶段：特性提交 `f52f7849` 的发布门禁已再次通过；仅剩提交双语文档修正、同步最新 `origin/main`、按需合并复验、合入并推送 `main`，然后归档本规划和进度。
+- 总体进度：约 `98%`。功能、回归、外部 Client API、真实 SDK、真实模型和发布门禁已完成；只剩本文件归档与最终 Git 交付。
+- 验收原则：对外 HTTP API、JSON/SSE、错误契约、授权和 SDK 是本批主要验收对象；WebUI 测试只作补充，不能替代外部 Client 黑盒、集成或兼容性验收。
 
 ## 最新规划复核记录
 
@@ -69,18 +71,20 @@ upsert 的 `SYNC` 作业若先被后台 worker 抢占，可以合法返回 `INDE
 
 ## 实施检查点
 
-- 总体批次进度：约 `97%`（功能实现、API/数据库/真实模型/SDK 验收和最终复核均完成；仅文档修正提交与 Git 交付待完成）。所有对外 API 相关门槛独立于 WebUI 验收执行；WebUI 仅作为补充证据，不能替代外部 Client 黑盒与真实 SDK 测试。
+- 总体批次进度：约 `98%`（功能实现、API/数据库/真实模型/SDK 验收和最终复核均完成；仅本规划归档与 Git 交付待完成）。所有对外 API 相关门槛独立于 WebUI 验收执行；WebUI 仅作为补充证据，不能替代外部 Client 黑盒与真实 SDK 测试。
 - Native Chat `/ask`、`/chat` 共用非流式入口，`/stream` 独立入口，均在幂等 `prepareTurn()` 之前
   拒绝 `PLAIN + EACH_COLLECTION`，经既有 `GlobalExceptionHandler` 返回 `400 BAD_REQUEST`；PLAIN
   缺省/GLOBAL 与 KNOWLEDGE EACH 仍按原路径执行。
 - 新增 `RagChatControllerCoverageValidationWebTest`：真实 `/api/v1` 路由覆盖 ask/chat/stream 错误、
   SSE Accept 下 HTTP problem+json、错误字段、无幂等服务交互/无模型调用，并覆盖 PLAIN 缺省/GLOBAL
   和 KNOWLEDGE EACH 正向路径。`mvn -pl spring-ai-rag-core -am -Dtest=RagChatControllerCoverageValidationWebTest -Dsurefire.failIfNoSpecifiedTests=false test`：6 项通过。
-- 最终发布门禁于 2026-10-17 05:26 完成：`./scripts/verify-release.sh --skip-docker --skip-helm --skip-npm-ci` 为 `18 passed, 0 failed, 13 skipped`；全 reactor `mvn clean test`、WebUI lint/TypeScript、1,030 项 Vitest、生产构建、525 项设计系统测试及 93 项 Mock Playwright 均通过。Docker、Helm、npm ci 及若干可选运行时 gate 在该命令中按参数跳过；本批相关外部 API、覆盖召回和 SDK 项另有下列独立真实验收，不能把 13 个 skip 误报为通过。
-- 外部 Client API 黑盒在隔离真实服务上通过，证据位于 `.verification/api-contract/collection-coverage-live-20261017-050812/`；覆盖召回 HTTP 回归 `.verification/collection-coverage/20261017-050321/summary.md` 中 GLOBAL 与 EACH_COLLECTION 均达到 hit rate、MRR、Recall@K、nDCG `1.0000`，并校验返回来源与 coverage 摘要。
-- 官方 Python/Node OpenAI SDK 真实 HTTP 验收均通过（模型列表、JSON、SSE、幂等、错误封套、认证）：`.verification/openai-sdk-e2e/collection-coverage-real-fixed-20261017-051508/summary.md`。此前独立完成的 Client Consumer 实时契约、真实模型 Search/Chat/Agent/SSE，以及隔离端口/数据库 `scripts/dev.sh` 启停验收仍是补充证据；不得用 WebUI 结果替代这些 API 证据。
-- PostgreSQL/Testcontainers 的 26 个门控套件、`scripts/dev.sh` 隔离启动和临时数据库清理均已完成；最终 Playwright 93/93 仅作为 UI 补充。最终门禁摘要：`target/release-verification/collection-coverage-final-20261017/summary.md`。
+- 最终发布门禁于 2026-10-17 完成：`./scripts/verify-release.sh --skip-docker --skip-helm --skip-npm-ci` 为 `18 passed, 0 failed, 13 skipped`；全 reactor Maven、WebUI lint/TypeScript/Vitest/构建、设计系统检查及 Mock Playwright 均通过。Docker、Helm、npm ci 和可选运行时 gate 按参数跳过，均不计为通过；本批 API、覆盖回归与 SDK 使用独立真实验收。
+- 外部 Client API 黑盒在真实 HTTP 服务上通过，最终复跑证据位于 `.verification/api-contract/collection-coverage-live-final-retry-20261017-062314/`，包括 OpenAPI、Native/OpenAI 请求、JSON 与 SSE、错误封套、审计/trace 路由及实际 KNOWLEDGE Chat。首次黑盒运行的 15 秒客户端超时不足以覆盖真实模型响应；将验收超时增至 90 秒后复跑通过，这是测试预算调整，不是生产 API 契约放宽。该测试进程的配置日志指向本机 `spring_ai_rag_dev`，因此这次运行不能称为使用隔离数据库。
+- 外部 Client 的 EACH_COLLECTION OpenAI JSON/SSE 消费契约通过：`.verification/collection-coverage/openai-each-contract-20261017-061823/client-consumer-contract-each.log`。真实 Chat 返回 alpha/bravo/charlie 三个集合的支持性引用，`evidenceAssessment.status=SUPPORTED`；真实覆盖 Search 回归 `.verification/collection-coverage/openai-each-contract-20261017-061823/coverage-regression/summary.md` 中 GLOBAL 与 EACH_COLLECTION 的 hit rate、MRR、Recall@K、nDCG 均为 `1.0000`。
+- 官方 Python/Node OpenAI SDK 真实 HTTP 验收 5 项通过（模型列表、JSON、SSE、幂等、错误封套与认证），见 `.verification/openai-sdk-e2e/collection-coverage-real-fixed-20261017-051508/summary.md`。这是外部 Client 证据；WebUI 与 Playwright 仅为补充。
+- PostgreSQL/Testcontainers 的 26 个门控套件及 `scripts/dev.sh` 隔离端口启动/停止均完成；最终 Playwright 93/93 仅作为 UI 补充。发布门禁摘要：`target/release-verification/collection-coverage-commit-f52f7849-final-20261017/summary.md`。
 - 提交后再运行 `VERIFY_RUN_ID=collection-coverage-commit-f52f7849-final-20261017 ./scripts/verify-release.sh --skip-docker --skip-helm --skip-npm-ci`，结果 `18 passed, 0 failed, 13 skipped`，完整 Maven reactor 和 Playwright `93/93` 通过；摘要 `target/release-verification/collection-coverage-commit-f52f7849-final-20261017/summary.md`。本调用显式跳过 Docker、Helm、npm ci 与 10 项可选 runtime gate；与本批相关的外部 API/覆盖回归/SDK 已通过独立真实验收。
+- 环境事故与清理：一次测试配置错误曾连接本机 `spring_ai_rag_dev`，创建 4 个本轮标记的 Collection（ID 110–113）和 7 个 Document（ID 218–224）。已核验创建时间与 `verify-collection-coverage` 标记，并在事务中精确删除这 4 个 Collection、7 个 Document、7 个 embedding 和 4 条对应小时聚合记录；复核残留数为零。正常请求/审计/模型用量遥测未手工删除；数据库序列保持前进。该次测试及后续最终运行不得描述为隔离数据库验收。
 - Native/OpenAI 的可选字段、授权范围、GLOBAL 旧指纹与旧 Java 构造器兼容，以及错误封套已由契约/集成测试和真实 Client 检查；无需数据迁移，未修改既有 V1–V60 Flyway 脚本。
 
 ## 上一轮实现复核记录（已因后续发现作废）

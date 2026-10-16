@@ -1,16 +1,19 @@
 # Next-Batch Progress: Bounded Collection-Coverage Retrieval
 
-> [English](NEXT_BATCH_COLLECTION_COVERAGE_PROGRESS.md) | [中文](NEXT_BATCH_COLLECTION_COVERAGE_PROGRESS-zh-CN.md)
+> [English](2026-10-17_NEXT_BATCH_COLLECTION_COVERAGE_PROGRESS.md) | [中文](2026-10-17_NEXT_BATCH_COLLECTION_COVERAGE_PROGRESS-zh-CN.md)
 >
-> Plan: [English](NEXT_BATCH_COLLECTION_COVERAGE_PLAN.md) | [中文](NEXT_BATCH_COLLECTION_COVERAGE_PLAN-zh-CN.md)
+> Plan: [English](2026-10-17_NEXT_BATCH_COLLECTION_COVERAGE_PLAN.md) | [中文](2026-10-17_NEXT_BATCH_COLLECTION_COVERAGE_PLAN-zh-CN.md)
 
 ## Current Status
 
 - Branch: `feat/collection-coverage`
 - Baseline: `b473b002` (pushed `main`)
+- The implementation is merged into local `main` at `4f34ca70`; `origin/main` remains `b473b002`, pending the archive-doc commit and push.
+- Current work: archive the bilingual plan/progress, run the documentation gate, then merge and push the archive update to `main`.
 - Planning review: after adding bounded lifecycle readiness polling for asynchronous embedding, three fresh no-change reviews passed on 2026-10-17 03:24–03:26 (`3/3`); scopes/results are recorded below.
 - Implementation review: `3/3`; after correcting stale architecture/REST status and passing the documentation gate, three consecutive read-only reviews completed without findings or edits on 2026-10-17 05:52–05:56.
-- Phase: the committed implementation at `f52f7849` passed its post-commit release gate. Remaining work is commit the bilingual documentation correction, sync latest `origin/main`, merge/retest if needed, merge and push to `main`, then archive this plan and progress ledger.
+- Overall progress: approximately `98%`. Feature work, regression, external Client API, real SDK/model, and release gates are complete; only archiving these records and final Git delivery remain.
+- Acceptance priority: external HTTP APIs, JSON/SSE, errors, authorization, and SDKs are the primary acceptance targets. WebUI tests are supplementary and cannot replace external-client black-box, integration, or compatibility evidence.
 
 ## Latest Planning Review Record
 
@@ -86,14 +89,16 @@ Any later substantive planning defect still requires repair and a fresh consecut
 
 ## Implementation Checkpoint
 
-- Overall batch progress: approximately `97%` (feature implementation, API/database/real-model/SDK acceptance, and final review are complete; documentation commit and Git delivery remain). All external API gates ran independently of WebUI checks; WebUI is supplementary evidence and cannot replace external Client black-box or real SDK tests.
+- Overall batch progress: approximately `98%` (feature implementation, API/database/real-model/SDK acceptance, and final review are complete; archiving these records and Git delivery remain). All external API gates ran independently of WebUI checks; WebUI is supplementary evidence and cannot replace external Client black-box or real SDK tests.
 - Native Chat `/ask` and `/chat` share the non-streaming entry point; `/stream` has its own entry. All reject `PLAIN + EACH_COLLECTION` before idempotent `prepareTurn()` and use the existing `GlobalExceptionHandler` for HTTP `400 BAD_REQUEST`. PLAIN omitted/GLOBAL and KNOWLEDGE EACH retain their existing paths.
 - Added `RagChatControllerCoverageValidationWebTest` for the real `/api/v1` routes, ask/chat/stream errors, HTTP problem+json with SSE Accept, error fields, zero idempotency-service/model interactions, and positive PLAIN omitted/GLOBAL plus KNOWLEDGE EACH paths. `mvn -pl spring-ai-rag-core -am -Dtest=RagChatControllerCoverageValidationWebTest -Dsurefire.failIfNoSpecifiedTests=false test`: 6 passed.
-- The final release gate completed on 2026-10-17 at 05:26: `./scripts/verify-release.sh --skip-docker --skip-helm --skip-npm-ci` reported `18 passed, 0 failed, 13 skipped`. Full-reactor `mvn clean test`, WebUI lint/TypeScript, 1,030 Vitest tests, production build, 525 design-system tests, and 93 Mock Playwright tests passed. Docker, Helm, npm ci, and optional runtime gates were skipped by this invocation; this does not imply those gates passed. Relevant external API, collection-coverage, and SDK checks have separate live evidence below.
-- External Client API black-box acceptance passed against an isolated live service; evidence is under `.verification/api-contract/collection-coverage-live-20261017-050812/`. Collection coverage HTTP regression at `.verification/collection-coverage/20261017-050321/summary.md` reports GLOBAL and EACH_COLLECTION hit rate, MRR, Recall@K, and nDCG of `1.0000`, and checks source authorization plus the coverage summary.
-- Official Python and Node OpenAI SDK live HTTP acceptance passed for models list, JSON, SSE, idempotency, error envelopes, and authentication: `.verification/openai-sdk-e2e/collection-coverage-real-fixed-20261017-051508/summary.md`. The live Client Consumer contract, real-model Search/Chat/Agent/SSE, and isolated-port/database `scripts/dev.sh` lifecycle were also independently verified. UI results do not replace these API checks.
-- All 26 gated PostgreSQL/Testcontainers suites passed; isolated `scripts/dev.sh` startup and disposable database cleanup completed. Final release summary: `target/release-verification/collection-coverage-final-20261017/summary.md`.
+- The final release gate on 2026-10-17 reported `18 passed, 0 failed, 13 skipped` for `./scripts/verify-release.sh --skip-docker --skip-helm --skip-npm-ci`; the full Maven reactor and WebUI lint/TypeScript/Vitest/build, design-system, and Mock Playwright checks passed. Docker, Helm, npm ci, and optional runtime gates were skipped and are not reported as passes; this batch's API, coverage, and SDK checks have separate live evidence.
+- External Client API black-box acceptance passed against a live HTTP service. Final retry evidence is `.verification/api-contract/collection-coverage-live-final-retry-20261017-062314/`, including OpenAPI, Native/OpenAI requests, JSON and SSE, error envelopes, audit/trace routes, and a real KNOWLEDGE Chat. The first black-box run's 15-second client timeout was insufficient for a real model response; increasing the acceptance timeout to 90 seconds made the retry pass. This adjusts the test budget, not the production API contract. The test process configuration pointed to the local `spring_ai_rag_dev` database, so this run must not be described as using an isolated database.
+- The OpenAI EACH_COLLECTION JSON/SSE external-consumer contract passed: `.verification/collection-coverage/openai-each-contract-20261017-061823/client-consumer-contract-each.log`. Real Chat returned supporting citations from alpha/bravo/charlie with `evidenceAssessment.status=SUPPORTED`; live GLOBAL/EACH_COLLECTION retrieval regression at `.verification/collection-coverage/openai-each-contract-20261017-061823/coverage-regression/summary.md` reported `1.0000` hit rate, MRR, Recall@K, and nDCG for both modes.
+- Official Python/Node OpenAI SDK live HTTP acceptance passed all five steps (model list, JSON, SSE, idempotency, error envelopes, and authentication): `.verification/openai-sdk-e2e/collection-coverage-real-fixed-20261017-051508/summary.md`. This is external-client evidence; WebUI and Playwright remain supplemental.
+- All 26 gated PostgreSQL/Testcontainers suites passed; isolated-port `scripts/dev.sh` startup/shutdown completed. Final Playwright 93/93 is supplementary UI evidence. Release summary: `target/release-verification/collection-coverage-commit-f52f7849-final-20261017/summary.md`.
 - The post-commit run `VERIFY_RUN_ID=collection-coverage-commit-f52f7849-final-20261017 ./scripts/verify-release.sh --skip-docker --skip-helm --skip-npm-ci` reported `18 passed, 0 failed, 13 skipped`; full Maven reactor and Playwright `93/93` passed. Summary: `target/release-verification/collection-coverage-commit-f52f7849-final-20261017/summary.md`. Docker, Helm, npm ci, and ten optional runtime gates were explicitly skipped in that invocation; relevant external API/coverage/SDK gates have separate live evidence.
+- Environment incident and cleanup: a misconfigured test connected to local `spring_ai_rag_dev`, creating four batch-marked Collections (IDs 110–113) and seven Documents (IDs 218–224). Their creation time and `verify-collection-coverage` marker were checked; one transaction precisely deleted those four Collections, seven Documents, seven embeddings, and four corresponding hourly aggregates, then verified zero residual records. Normal request/audit/model-usage telemetry was not manually deleted; DB sequences remain advanced. Do not describe that run or subsequent final run as isolated-database acceptance.
 - Optional Native/OpenAI fields, authorized scope, legacy GLOBAL fingerprints, and legacy Java constructor signatures are covered by contract/integration tests and live Client checks. No data migration is needed; existing V1–V60 Flyway migrations remain unchanged.
 
 ## Previous Implementation Review Rounds (Superseded)

@@ -30,6 +30,9 @@ relevant evergreen guide/reference, `docs/TODO*`, and the
 
 ## Main Historical Topics
 
+- Bounded Collection-coverage retrieval:
+  [plan](2026-10-17_NEXT_BATCH_COLLECTION_COVERAGE_PLAN.md) and
+  [implementation plus external Client API/SDK/live-retrieval acceptance](2026-10-17_NEXT_BATCH_COLLECTION_COVERAGE_PROGRESS.md).
 - OpenAI compatibility and API keys: `2026-07-21_OPENAI_*`,
   `2026-08-14_API_KEY_*`
 - Official Python/Node SDK external-client HTTP acceptance and complete Starter Bean Graph:

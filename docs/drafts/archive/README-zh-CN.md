@@ -23,6 +23,9 @@
 
 ## 主要历史主题
 
+- 有界 Collection 覆盖召回：
+  [规划](2026-10-17_NEXT_BATCH_COLLECTION_COVERAGE_PLAN-zh-CN.md) ·
+  [实施与外部 Client API/SDK/真实检索验收](2026-10-17_NEXT_BATCH_COLLECTION_COVERAGE_PROGRESS-zh-CN.md)。
 - OpenAI 兼容与 API Key：`2026-07-21_OPENAI_*`、`2026-08-14_API_KEY_*`
 - 官方 Python/Node SDK 外部 Client HTTP 验收与 Starter 完整 Bean Graph：
   `2026-10-16_NEXT_BATCH_OPENAI_SDK_STARTER_P0_*`
