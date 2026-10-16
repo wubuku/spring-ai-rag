@@ -6,13 +6,13 @@
 
 ## 当前状态
 
-- 分支：`feat/collection-coverage`
+- 交付分支：`main`；功能实施分支：`feat/collection-coverage`
 - 基线：`b473b002`（已推送的 `main`）
-- 当前代码已在本地 `main` 合并，合并提交 `4f34ca70`；`origin/main` 仍为 `b473b002`，尚待归档文档提交及推送
-- 当前工作：归档双语规划与进度、运行文档门禁，然后将归档更新合入并推送 `main`
+- 功能与归档提交已合入并推送 `origin/main`；归档合并提交为 `841ab8e1`
+- 本轮验收、双语归档、文档门禁及 Git 交付全部完成；工作区在最终状态同步提交后保持干净
 - 规划检查：最新异步 embedding lifecycle 验收修订已于 2026-10-17 03:24–03:26 连续三轮无修改复核通过（`3/3`）；检查范围及结果见下文。
 - 实施检查：`3/3`；修正过时架构/REST 状态并通过文档门禁后，于 2026-10-17 05:52–05:56 连续三轮只读复核，无新发现、无修改。
-- 总体进度：约 `98%`。功能、回归、外部 Client API、真实 SDK、真实模型和发布门禁已完成；只剩本文件归档与最终 Git 交付。
+- 总体进度：`100%`。功能、集成/回归/验收、外部 Client API、真实 SDK、真实模型、发布门禁、文档归档和推送均已完成。
 - 验收原则：对外 HTTP API、JSON/SSE、错误契约、授权和 SDK 是本批主要验收对象；WebUI 测试只作补充，不能替代外部 Client 黑盒、集成或兼容性验收。
 
 ## 最新规划复核记录
@@ -71,7 +71,7 @@ upsert 的 `SYNC` 作业若先被后台 worker 抢占，可以合法返回 `INDE
 
 ## 实施检查点
 
-- 总体批次进度：约 `98%`（功能实现、API/数据库/真实模型/SDK 验收和最终复核均完成；仅本规划归档与 Git 交付待完成）。所有对外 API 相关门槛独立于 WebUI 验收执行；WebUI 仅作为补充证据，不能替代外部 Client 黑盒与真实 SDK 测试。
+- 总体批次进度：`100%`（功能实现、API/数据库/真实模型/SDK 验收、规划归档与 Git 交付全部完成）。所有对外 API 相关门槛独立于 WebUI 验收执行；WebUI 仅作为补充证据，不能替代外部 Client 黑盒与真实 SDK 测试。
 - Native Chat `/ask`、`/chat` 共用非流式入口，`/stream` 独立入口，均在幂等 `prepareTurn()` 之前
   拒绝 `PLAIN + EACH_COLLECTION`，经既有 `GlobalExceptionHandler` 返回 `400 BAD_REQUEST`；PLAIN
   缺省/GLOBAL 与 KNOWLEDGE EACH 仍按原路径执行。

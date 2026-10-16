@@ -2,7 +2,7 @@
 
 > [English](2026-10-17_NEXT_BATCH_COLLECTION_COVERAGE_PLAN.md) | [中文](2026-10-17_NEXT_BATCH_COLLECTION_COVERAGE_PLAN-zh-CN.md)
 >
-> 状态：规划复核 `3/3`、实现与最终验收均已完成；Git 交付进行中。验收结果见相邻进度记录。
+> 状态：规划复核 `3/3`、实现、最终验收及 Git 交付均已完成；验收结果见相邻进度记录。
 > 日期：2026-10-16
 > 实施分支：`feat/collection-coverage`
 

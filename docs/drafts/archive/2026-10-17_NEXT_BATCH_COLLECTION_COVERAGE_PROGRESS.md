@@ -6,13 +6,13 @@
 
 ## Current Status
 
-- Branch: `feat/collection-coverage`
+- Delivery branch: `main`; implementation branch: `feat/collection-coverage`
 - Baseline: `b473b002` (pushed `main`)
-- The implementation is merged into local `main` at `4f34ca70`; `origin/main` remains `b473b002`, pending the archive-doc commit and push.
-- Current work: archive the bilingual plan/progress, run the documentation gate, then merge and push the archive update to `main`.
+- Feature and archive commits are merged and pushed to `origin/main`; the archive merge commit is `841ab8e1`.
+- Acceptance, bilingual archival, documentation gates, and Git delivery are complete; the worktree is clean after this final status synchronization.
 - Planning review: after adding bounded lifecycle readiness polling for asynchronous embedding, three fresh no-change reviews passed on 2026-10-17 03:24–03:26 (`3/3`); scopes/results are recorded below.
 - Implementation review: `3/3`; after correcting stale architecture/REST status and passing the documentation gate, three consecutive read-only reviews completed without findings or edits on 2026-10-17 05:52–05:56.
-- Overall progress: approximately `98%`. Feature work, regression, external Client API, real SDK/model, and release gates are complete; only archiving these records and final Git delivery remain.
+- Overall progress: `100%`. Feature work, integration/regression/acceptance, external Client API, real SDK/model, release gates, archival, and push are complete.
 - Acceptance priority: external HTTP APIs, JSON/SSE, errors, authorization, and SDKs are the primary acceptance targets. WebUI tests are supplementary and cannot replace external-client black-box, integration, or compatibility evidence.
 
 ## Latest Planning Review Record
@@ -89,7 +89,7 @@ Any later substantive planning defect still requires repair and a fresh consecut
 
 ## Implementation Checkpoint
 
-- Overall batch progress: approximately `98%` (feature implementation, API/database/real-model/SDK acceptance, and final review are complete; archiving these records and Git delivery remain). All external API gates ran independently of WebUI checks; WebUI is supplementary evidence and cannot replace external Client black-box or real SDK tests.
+- Overall batch progress: `100%` (feature implementation, API/database/real-model/SDK acceptance, final review, archival, and Git delivery are complete). All external API gates ran independently of WebUI checks; WebUI is supplementary evidence and cannot replace external Client black-box or real SDK tests.
 - Native Chat `/ask` and `/chat` share the non-streaming entry point; `/stream` has its own entry. All reject `PLAIN + EACH_COLLECTION` before idempotent `prepareTurn()` and use the existing `GlobalExceptionHandler` for HTTP `400 BAD_REQUEST`. PLAIN omitted/GLOBAL and KNOWLEDGE EACH retain their existing paths.
 - Added `RagChatControllerCoverageValidationWebTest` for the real `/api/v1` routes, ask/chat/stream errors, HTTP problem+json with SSE Accept, error fields, zero idempotency-service/model interactions, and positive PLAIN omitted/GLOBAL plus KNOWLEDGE EACH paths. `mvn -pl spring-ai-rag-core -am -Dtest=RagChatControllerCoverageValidationWebTest -Dsurefire.failIfNoSpecifiedTests=false test`: 6 passed.
 - The final release gate on 2026-10-17 reported `18 passed, 0 failed, 13 skipped` for `./scripts/verify-release.sh --skip-docker --skip-helm --skip-npm-ci`; the full Maven reactor and WebUI lint/TypeScript/Vitest/build, design-system, and Mock Playwright checks passed. Docker, Helm, npm ci, and optional runtime gates were skipped and are not reported as passes; this batch's API, coverage, and SDK checks have separate live evidence.

@@ -2,7 +2,7 @@
 
 > [English](2026-10-17_NEXT_BATCH_COLLECTION_COVERAGE_PLAN.md) | [中文](2026-10-17_NEXT_BATCH_COLLECTION_COVERAGE_PLAN-zh-CN.md)
 >
-> Status: planning review `3/3`, implementation, and final acceptance are complete; Git delivery is in progress. See the adjacent progress ledger for evidence.
+> Status: planning review `3/3`, implementation, final acceptance, and Git delivery are complete. See the adjacent progress ledger for evidence.
 > Date: 2026-10-16
 > Implementation branch: `feat/collection-coverage`
 
