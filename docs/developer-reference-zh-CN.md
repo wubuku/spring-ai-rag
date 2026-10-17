@@ -645,6 +645,9 @@ CLIENT_API_E2E_QUERY='return a short capability summary' \
 单一 variant 的定义文件运行两次并比较；确定性 case hard gate 和环境无漂移是硬门槛，
 judge 仅作为响应指标，不能单独宣布通过：
 
+其中 `INSUFFICIENT` 用例要求最终回答明确拒答且不包含禁止事实；即使检索返回了授权但与问题无关的来源，
+拒答也不要求伪造引用。若拒答中出现不存在的引用 ID，仍会被确定性门禁拒绝。
+
 ```bash
 KNOWLEDGE_QA_BASE_URL=http://127.0.0.1:18081 \
 KNOWLEDGE_QA_API_KEY="$RAG_ROOT_API_KEY" \

@@ -169,6 +169,10 @@ public class EmbeddingPersistenceService {
      * 提交时递增会让刚跑完的 job 认不出自己的状态行，随后每一次带该等值守卫的
      * 状态更新都会静默影响 0 行。这里写 {@code 1} 只针对"此前没有状态行"的新建分支，
      * 冲突分支保留既有代数，与 {@code allocateGeneration} 不矛盾。
+     * <p>同理，job 路径的冲突分支必须保留 {@code active_job_id}。它由 claim/activate
+     * 阶段绑定，随后由 {@code EmbeddingJobRepository.markSucceeded} 以 owner、lease
+     * 和 active-job 条件完成最终 CAS；在这里提前清空会把已经成功写入的向量误判为
+     * {@code STALE}。无 job 的同步路径本来就没有 active job，不需要额外清理。
      */
     @Transactional
     public void replace(
@@ -227,7 +231,7 @@ public class EmbeddingPersistenceService {
                         + "content_hash = EXCLUDED.content_hash, "
                         + "chunker_version = EXCLUDED.chunker_version, "
                         + "status = 'COMPLETED', chunk_count = EXCLUDED.chunk_count, "
-                        + "processing_error = NULL, active_job_id = NULL, "
+                        + "processing_error = NULL, "
                         + "completed_at = NOW(), updated_at = NOW()",
                 documentId,
                 profile.id(),

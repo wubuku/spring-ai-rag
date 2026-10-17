@@ -731,6 +731,11 @@ three-case, single-variant definition twice and compare it; deterministic case h
 gates and no environment drift are mandatory, while a judge is supporting evidence
 only and cannot declare a pass by itself:
 
+An `INSUFFICIENT` case must produce an explicit refusal without forbidden facts. It
+does not require a fabricated citation when retrieval returned an authorized but
+irrelevant source; an unknown citation ID in that refusal still fails the
+deterministic gate.
+
 ```bash
 KNOWLEDGE_QA_BASE_URL=http://127.0.0.1:18081 \
 KNOWLEDGE_QA_API_KEY="$RAG_ROOT_API_KEY" \

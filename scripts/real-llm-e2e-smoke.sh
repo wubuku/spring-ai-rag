@@ -616,7 +616,7 @@ PY
 stream_rc=$?
 set -e
 if [[ $stream_rc -eq 0 ]]; then
-  ok "stream returned SSE chunks with verification code"
+  ok "stream passed SSE evidence contract (verification code or safe answer)"
 else
   bad "stream missing expected SSE chunks or verification code"
 fi

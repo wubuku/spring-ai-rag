@@ -77,7 +77,11 @@ public class KnowledgeQaEvaluator {
         if ("INSUFFICIENT".equals(caseDef.evidenceExpectation()) && !refusal) {
             failures.add("INSUFFICIENT_EVIDENCE_NOT_DECLARED");
         }
-        if (!isCitationAcceptable(citation, response == null ? List.of() : response.sources())) {
+        if (!isCitationAcceptable(
+                caseDef.evidenceExpectation(),
+                refusal,
+                citation,
+                response == null ? List.of() : response.sources())) {
             failures.add("CITATION_INVALID");
         }
         if (response == null) {
@@ -109,9 +113,19 @@ public class KnowledgeQaEvaluator {
         return new Result(failures.isEmpty(), metrics, List.copyOf(failures));
     }
 
-    private boolean isCitationAcceptable(CitationValidation validation, List<ChatSource> sources) {
+    private boolean isCitationAcceptable(
+            String evidenceExpectation,
+            boolean refusal,
+            CitationValidation validation,
+            List<ChatSource> sources) {
         if (sources == null || sources.isEmpty()) {
             return CitationValidation.NOT_APPLICABLE.equals(validation.status());
+        }
+        if ("INSUFFICIENT".equals(evidenceExpectation)
+                && refusal
+                && (CitationValidation.MISSING_CITATION.equals(validation.status())
+                || CitationValidation.NOT_APPLICABLE.equals(validation.status()))) {
+            return true;
         }
         return CitationValidation.VALID.equals(validation.status());
     }

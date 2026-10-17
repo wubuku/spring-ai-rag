@@ -465,6 +465,77 @@ class EmbeddingJobsPostgresIntegrationTest {
     }
 
     @Test
+    void vectorCommitPreservesActiveJobUntilCompletionCas() {
+        long collectionId = jdbcTemplate.queryForObject(
+                "INSERT INTO rag_collection "
+                        + "(collection_key, name, dimensions) "
+                        + "VALUES (?, 'completion-cas', 1024) RETURNING id",
+                Long.class, "completion-cas-" + UUID.randomUUID());
+        String hash = "44444444444444444444444444444444"
+                + "44444444444444444444444444444444";
+        long documentId = jdbcTemplate.queryForObject(
+                "INSERT INTO rag_documents "
+                        + "(collection_id, title, content, content_hash, "
+                        + "processing_status, version) "
+                        + "VALUES (?, 'completion-cas', 'content', ?, 'PENDING', 1) "
+                        + "RETURNING id",
+                Long.class, collectionId, hash);
+        long profileId = jdbcTemplate.queryForObject(
+                "INSERT INTO rag_embedding_profiles "
+                        + "(profile_key, provider, model_name, model_revision, "
+                        + "dimensions, distance_metric, normalization) "
+                        + "VALUES (?, 'test', 'model', 'v1', 1024, 'COSINE', 'NONE') "
+                        + "RETURNING id",
+                Long.class, "completion-cas-" + UUID.randomUUID());
+        var created = repository.createOrCoalesce(
+                UUID.randomUUID(), documentId, profileId,
+                hash, 1L, false, 3);
+        jdbcTemplate.update("""
+                INSERT INTO rag_document_embedding_state (
+                    document_id, embedding_profile_id, content_hash,
+                    chunker_version, status, chunk_count, request_generation,
+                    active_job_id
+                ) VALUES (?, ?, ?, 'legacy-compatible', 'QUEUED', 0, 1, ?)
+                """,
+                documentId, profileId, hash, created.job().id());
+        assertEquals(1, repository.claim("completion-worker", 1, 60).size());
+
+        EmbeddingPersistenceService persistence =
+                new EmbeddingPersistenceService(jdbcTemplate);
+        EmbeddingProfile profile = new EmbeddingProfile(
+                profileId, "completion-profile", "test", "model", "v1",
+                1024, "COSINE", "NONE", true);
+        new TransactionTemplate(new DataSourceTransactionManager(dataSource))
+                .executeWithoutResult(status -> persistence.replace(
+                        documentId,
+                        1L,
+                        hash,
+                        profile,
+                        List.of(new TextChunk("content", 0, 7)),
+                        List.of(new EmbeddingBatchService.EmbeddingResult(
+                                "content", new float[1024], null)),
+                        () -> assertTrue(repository.claimCommitAllowed(
+                                created.job().id(),
+                                "completion-worker",
+                                profileId,
+                                60))));
+
+        assertEquals(created.job().id(), jdbcTemplate.queryForObject(
+                "SELECT active_job_id FROM rag_document_embedding_state "
+                        + "WHERE document_id = ? AND embedding_profile_id = ?",
+                UUID.class, documentId, profileId));
+        assertEquals(1, repository.markSucceeded(
+                created.job().id(), "completion-worker", true));
+        assertEquals(EmbeddingJobStatus.SUCCEEDED,
+                repository.find(created.job().id()).orElseThrow().status());
+        repository.refreshStateFromJob(created.job().id());
+        assertNull(jdbcTemplate.queryForObject(
+                "SELECT active_job_id FROM rag_document_embedding_state "
+                        + "WHERE document_id = ? AND embedding_profile_id = ?",
+                UUID.class, documentId, profileId));
+    }
+
+    @Test
     void listPageFiltersByCollectionBeforeLimitAndHeartbeatExtendsLease() {
         long visible = jdbcTemplate.queryForObject(
                 "INSERT INTO rag_collection (collection_key, name, dimensions) "

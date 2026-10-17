@@ -13,6 +13,7 @@ if not database.startswith("rag_chunk_real_"):
 root_key = os.environ.get("RAG_ROOT_API_KEY", "")
 collection_key = "chunk-goldenset-" + uuid.uuid4().hex
 session_id = str(uuid.uuid4())
+requested_model = os.environ.get("REAL_LLM_MODEL", "").strip()
 
 
 def request(path, body=None):
@@ -82,17 +83,32 @@ for name, content in fixtures:
         "keywordAndVectorMatchPreview": "PASS", "retrievalHit": "PASS"})
     print(json.dumps(evidence[-1]), flush=True)
     if name == "cjk":
-        answer = request("/chat/ask", {"mode": "KNOWLEDGE", "model": "minimax/MiniMax-M3",
+        chat_request = {"mode": "KNOWLEDGE",
             "message": "Using only the selected document Synthetic chunk cjk, return its release verification code exactly with a citation. The code starts with CHUNK_VERIFY_CJK_.",
             "sessionId": session_id, "collectionKeys": [collection_key], "documentIds": [document_id],
-            "maxResults": 5, "useRerank": False})
+            "maxResults": 5, "useRerank": False}
+        if requested_model:
+            chat_request["model"] = requested_model
+        answer = request("/chat/ask", chat_request)
         assert token in answer["answer"]
-        assert answer["resolvedModel"] == "minimax/MiniMax-M3"
+        assert answer.get("resolvedModel")
+        if requested_model:
+            assert answer["resolvedModel"] == requested_model
         assert answer["metadata"]["citationValidation"]["status"] == "VALID"
         assert answer["sources"]
         for source in answer["sources"]:
             assert int(source["documentId"]) == document_id
-            assert source["chunkText"] == preview["chunks"][source["chunkIndex"]]["text"]
+            source_text = source.get("chunkText") or ""
+            context_assembly = (source.get("metadata") or {}).get("contextAssembly")
+            if context_assembly:
+                ranges = context_assembly.get("ranges") or []
+                assert any(item.get("chunkIndex") == source["chunkIndex"] for item in ranges)
+                assert context_assembly.get("anchorChunkIndex") == source["chunkIndex"]
+                assert all(0 <= item.get("chunkIndex", -1) < preview["totalChunks"]
+                           for item in ranges)
+            else:
+                assert source_text == preview["chunks"][source["chunkIndex"]]["text"]
+            assert source_text
         print(json.dumps({"resolvedModel": answer["resolvedModel"], "citationValidation": "VALID",
             "citationChunkMatchesPreview": "PASS", "answerVerificationValue": "PASS"}), flush=True)
 print("CHUNKING_REAL_GOLDENSET_PASS fixtures=3")

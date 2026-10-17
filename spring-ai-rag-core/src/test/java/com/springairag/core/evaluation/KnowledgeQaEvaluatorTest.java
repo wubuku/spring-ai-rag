@@ -59,6 +59,54 @@ class KnowledgeQaEvaluatorTest {
     }
 
     @Test
+    void insufficientEvidenceRefusalMayKeepUncitedAuthorizedRetrievalSources() {
+        ChatSource source = new ChatSource();
+        source.setCitationId("c1");
+        source.setSourceHandle("src-1");
+        source.setDocumentId("1");
+        source.setChunkText("授权资料与问题无关。");
+        EvaluationSuiteDefinition.CaseDef definition = new EvaluationSuiteDefinition.CaseDef(
+                "qa", "未知问题", List.of("kb"), List.of(), null, null,
+                "KNOWLEDGE_QA", List.of(), List.of("秘密"), "INSUFFICIENT",
+                EvaluationSuiteDefinition.JudgeDef.disabled());
+        ChatExecutionResult response = new ChatExecutionResult(
+                "根据当前可用资料，无法确认该问题的答案。", "s", null, null, "model",
+                ChatMode.KNOWLEDGE, List.of(source), Map.of(), null, List.of(),
+                Map.of("retrievalExecuted", true));
+
+        KnowledgeQaEvaluator.Result result = evaluator.evaluate(
+                definition, response,
+                List.of(new EvaluationSuiteDefinition.Identity("kb", "unrelated")));
+
+        assertTrue(result.deterministicPass());
+        assertFalse(result.failureReasons().contains("CITATION_INVALID"));
+    }
+
+    @Test
+    void insufficientEvidenceRefusalWithInvalidCitationStillFails() {
+        ChatSource source = new ChatSource();
+        source.setCitationId("c1");
+        source.setSourceHandle("src-1");
+        source.setDocumentId("1");
+        source.setChunkText("授权资料与问题无关。");
+        EvaluationSuiteDefinition.CaseDef definition = new EvaluationSuiteDefinition.CaseDef(
+                "qa", "未知问题", List.of("kb"), List.of(), null, null,
+                "KNOWLEDGE_QA", List.of(), List.of(), "INSUFFICIENT",
+                EvaluationSuiteDefinition.JudgeDef.disabled());
+        ChatExecutionResult response = new ChatExecutionResult(
+                "根据当前可用资料，无法确认该问题的答案。[c999]", "s", null, null,
+                "model", ChatMode.KNOWLEDGE, List.of(source), Map.of(), null, List.of(),
+                Map.of("retrievalExecuted", true));
+
+        KnowledgeQaEvaluator.Result result = evaluator.evaluate(
+                definition, response,
+                List.of(new EvaluationSuiteDefinition.Identity("kb", "unrelated")));
+
+        assertFalse(result.deterministicPass());
+        assertTrue(result.failureReasons().contains("CITATION_INVALID"));
+    }
+
+    @Test
     void factMatchingIgnoresWhitespaceVariation() {
         ChatSource source = new ChatSource();
         source.setCitationId("c1");

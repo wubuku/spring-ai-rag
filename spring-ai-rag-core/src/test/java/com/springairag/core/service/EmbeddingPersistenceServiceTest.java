@@ -201,6 +201,8 @@ class EmbeddingPersistenceServiceTest {
                 eq(1L), eq(7L), eq("h3"), eq(TEXT_CHUNKER_VERSION), eq(2));
         verify(jdbc).update(contains("processing_status = 'COMPLETED'"),
                 eq("h3"), eq(1L), eq(3L));
+        org.mockito.Mockito.verify(jdbc, org.mockito.Mockito.never()).update(
+                contains("active_job_id = NULL"), any(Object[].class));
     }
 
     @Test
