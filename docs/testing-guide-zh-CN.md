@@ -887,7 +887,7 @@ TESTCONTAINERS_RYUK_DISABLED=true mvn -pl spring-ai-rag-starter -am test \
 脚本默认启动隔离 PostgreSQL、Mock 上游、Core standalone 和不主动扫描
 `com.springairag` 的 Starter Consumer，并用官方 Python SDK `2.14.0` 与 Node SDK
 `7.34.0` 在两种拓扑下验证 models、JSON、SSE、幂等重放、错误信封和认证。它还确认
-外部 Starter Consumer 执行 Flyway V1–V64 后可提供同一 `/v1` 客户端契约。结果位于
+外部 Starter Consumer 执行 Flyway V1–V65 后可提供同一 `/v1` 客户端契约。结果位于
 `.verification/openai-sdk-e2e/<run-id>/summary.md`，默认不产生真实模型费用。
 
 只有显式提供真实地址和密钥才运行 real-LLM 模式；不能把 mock 通过当作真实模型质量
@@ -1428,7 +1428,7 @@ conditional skip，不伪造通过。完整示例见 [Client Consumer Contract K
 - 预算超限 `429`、预算存储不可用 `503`、`Retry-After`，以及 provider 未被调用的证明；
 - 同步、流式取消、query transform/expand、summary、fallback 和 AGENT 模型路径；
 - durable reservation 幂等、settle/release/expiry 恢复、并发 CAS，以及空库和已有 V63 数据库
-  上的 V64 Flyway 迁移；
+  上的 V64/V65 Flyway 迁移；
 - 擦除 preview/status/apply 的权限、确认过期/不匹配、路径/正文 operation id 不匹配、终态
   幂等重放、部分失败恢复、有界删除和审计日志保护；
 - 默认 central retention 只运行一次，旧清理入口仍可手工调用且不会重复调度。

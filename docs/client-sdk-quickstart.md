@@ -47,7 +47,7 @@ Example: [`examples/client-sdk/node/chat-completion.mjs`](../examples/client-sdk
 
 ```bash
 cd examples/client-sdk/node
-npm install --ignore-scripts --no-audit --no-fund
+npm ci --ignore-scripts --no-audit --no-fund
 
 export RAG_BASE_URL=http://127.0.0.1:18081
 export RAG_API_KEY="$RAG_ROOT_API_KEY"
@@ -79,9 +79,11 @@ CLIENT_SDK_API_KEY="$RAG_ROOT_API_KEY" \
 
 The script never calls a real LLM by default. Without credentials it can report
 only the offline check; an offline or Mock pass is not real-model quality
-evidence. See the [Client Consumer Contract Kit](client-contract-kit.md) for the
-versioned contract, Native API, OpenAI JSON/SSE, failure actions, and KNOWLEDGE
-evidence acceptance.
+evidence. Live mode runs both JSON and SSE calls through the Python and Node
+clients, and installs the Node dependency from the committed lockfile. See the
+[Client Consumer Contract Kit](client-contract-kit.md) for the versioned
+contract, Native API, OpenAI JSON/SSE, failure actions, and KNOWLEDGE evidence
+acceptance.
 
 ## 5. Client recommendations
 

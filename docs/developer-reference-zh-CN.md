@@ -19,7 +19,7 @@
 | 真实 LLM E2E 端口 | `18081` |
 | Embedding | SiliconFlow `BAAI/bge-m3` |
 | 向量维度 | `1024` |
-| Flyway | V1–V64 |
+| Flyway | V1–V65 |
 
 OpenAI / Embedding 的 `base-url` **不要带 `/v1`**。Spring AI 会自行追加 `/v1/chat/completions` 或 `/v1/embeddings`。
 
@@ -619,6 +619,39 @@ RAG 服务时会绕过环境代理，避免 loopback 请求被机器代理改写
 不要把密钥、prompt、答案或完整异常正文写入文档和 Git。该门禁的通过只证明外部
 Client 可观察的 HTTP 契约；它不把 Mock 结果当作真实模型质量验收，也不替代
 `verify-api-compatibility.sh`、`verify-client-consumer-contract.sh` 或全量 Maven 回归。
+
+### 外部 Client API 统一黑盒门禁
+
+需要一次性执行外部 Client 契约、SDK 依赖与 Python/Node 协议自测时运行：
+
+```bash
+./scripts/verify-client-api-e2e.sh
+```
+
+该入口默认不调用模型；它会验证版本化 Consumer Contract、Native/OpenAI JSON/SSE
+fixture，以及官方 SDK 的负向协议自测。对已启动的隔离服务启用 live 模式时，必须显式
+提供服务根地址、服务 API Key 和查询词；live 会真实执行 Native/OpenAI JSON/SSE 以及
+Python/Node SDK 的 JSON/SSE，不以 WebUI 通过代替外部 API 证据：
+
+```bash
+CLIENT_API_E2E_LIVE=1 \
+CLIENT_API_E2E_BASE_URL=http://127.0.0.1:18081 \
+CLIENT_API_E2E_API_KEY="$RAG_ROOT_API_KEY" \
+CLIENT_API_E2E_QUERY='return a short capability summary' \
+./scripts/verify-client-api-e2e.sh --live
+```
+
+版本化 KNOWLEDGE 问答套件只有主动运行时才调用模型。使用三条 `KNOWLEDGE_QA` 用例、
+单一 variant 的定义文件运行两次并比较；确定性 case hard gate 和环境无漂移是硬门槛，
+judge 仅作为响应指标，不能单独宣布通过：
+
+```bash
+KNOWLEDGE_QA_BASE_URL=http://127.0.0.1:18081 \
+KNOWLEDGE_QA_API_KEY="$RAG_ROOT_API_KEY" \
+KNOWLEDGE_QA_DEFINITION=testdata/evaluation/knowledge-qa-v1.json \
+KNOWLEDGE_QA_SUITE_KEY="release-qa-$(date +%s)" \
+./scripts/run-knowledge-qa-evaluation.py
+```
 
 Collection 受保护清理的真实 provider 生命周期使用
 `scripts/real-collection-purge-e2e-smoke.sh`。它要求运行中的隔离服务和一次性数据库，

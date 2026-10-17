@@ -29,10 +29,14 @@ import com.springairag.core.security.ApiAccessPolicy;
 import com.springairag.core.exception.RagException;
 import com.springairag.core.security.ApiKeyCollectionAccess;
 import com.springairag.core.service.ApiKeyManagementService;
+import com.springairag.core.logging.SensitiveDataMaskingConverter;
 import com.springairag.core.service.CollectionRetrievalScopeResolver;
 import com.springairag.core.service.RetrievalEvaluationService;
+import com.springairag.core.retrieval.RetrievalFilterValidator;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -51,6 +55,8 @@ import java.util.concurrent.Future;
 
 @Service
 public class EvaluationSuiteService {
+
+    private static final Logger log = LoggerFactory.getLogger(EvaluationSuiteService.class);
 
     private final EvaluationSuiteRepository repository;
     private final EvaluationSuiteDefinitionValidator validator;
@@ -313,7 +319,8 @@ public class EvaluationSuiteService {
         }
         JsonNode after = objectMapper.valueToTree(
                 caseExecutor.collectionSnapshot(allCollectionKeys(definition)));
-        if (!before.equals(after)) {
+        if (!sameCollectionSnapshot(before, after)) {
+            log.warn("Evaluation corpus snapshot changed: before={}, after={}", before, after);
             corpusChanged = true;
         }
         Map<String, Object> aggregate = new LinkedHashMap<>();
@@ -443,6 +450,10 @@ public class EvaluationSuiteService {
         } catch (SecurityException e) {
             return new CaseOutcome("FAILED", List.of(), Map.of(), 0, null, "AUTHORIZATION_CHANGED");
         } catch (RuntimeException e) {
+            log.warn("Evaluation case failed before executor: caseId={}, variantKey={}, "
+                            + "errorType={}, error={}",
+                    caseDef.id(), variant.key(), e.getClass().getSimpleName(),
+                    safeDiagnostic(e.getMessage()));
             return new CaseOutcome("FAILED", List.of(), Map.of(), 0, null, "PROVIDER_OR_DATABASE");
         }
     }
@@ -456,29 +467,29 @@ public class EvaluationSuiteService {
             return new CaseOutcome("FAILED", List.of(), Map.of(), 0, null,
                     "QA_EXECUTOR_UNAVAILABLE");
         }
-        ChatPrincipal principal = ChatPrincipal.fromOwnerId(ownerPrincipalId);
-        String sessionId = "evaluation-" + UUID.randomUUID();
-        ChatCommand command = new ChatCommand(
-                caseDef.query(),
-                sessionId,
-                principal,
-                principal.memoryConversationId(sessionId),
-                ChatMode.KNOWLEDGE,
-                MemoryMode.STATELESS,
-                null,
-                null,
-                scope,
-                new RetrievalOptions(
-                        variant.config().getMaxResults(),
-                        variant.config().getMinScore(),
-                        variant.config().isUseHybridSearch(),
-                        variant.config().isUseRerank(),
-                        variant.config().getVectorWeight(),
-                        variant.config().getFulltextWeight()),
-                Map.of("evaluation", "managed-knowledge-qa"))
-                .withFilters(variant.filters());
         long started = System.nanoTime();
         try {
+            ChatPrincipal principal = ChatPrincipal.fromOwnerId(ownerPrincipalId);
+            String sessionId = "e-" + UUID.randomUUID().toString().replace("-", "");
+            ChatCommand command = new ChatCommand(
+                    caseDef.query(),
+                    sessionId,
+                    principal,
+                    principal.memoryConversationId(sessionId),
+                    ChatMode.KNOWLEDGE,
+                    MemoryMode.STATELESS,
+                    null,
+                    null,
+                    scope,
+                    new RetrievalOptions(
+                            variant.config().getMaxResults(),
+                            variant.config().getMinScore(),
+                            variant.config().isUseHybridSearch(),
+                            variant.config().isUseRerank(),
+                            variant.config().getVectorWeight(),
+                            variant.config().getFulltextWeight()),
+                    Map.of("evaluation", "managed-knowledge-qa"))
+                    .withFilters(variant.filters());
             ChatExecutionService.PreparedExecution prepared =
                     chatExecutionService.prepareForOperation(command, null, false);
             ChatExecutionResult result = prepared.result();
@@ -521,6 +532,9 @@ public class EvaluationSuiteService {
             return new CaseOutcome("FAILED", List.of(), Map.of(), 0, null,
                     "AUTHORIZATION_CHANGED");
         } catch (RuntimeException e) {
+            log.warn("Knowledge QA case failed: caseId={}, variantKey={}, errorType={}, error={}",
+                    caseDef.id(), variant.key(), e.getClass().getSimpleName(),
+                    safeDiagnostic(e.getMessage()));
             return new CaseOutcome("FAILED", List.of(), Map.of(), 0, null,
                     "QA_PROVIDER_OR_DATABASE");
         }
@@ -532,6 +546,17 @@ public class EvaluationSuiteService {
         } catch (IllegalArgumentException ignored) {
             return null;
         }
+    }
+
+    static boolean sameCollectionSnapshot(JsonNode left, JsonNode right) {
+        return RetrievalFilterValidator.toCanonicalJson(left)
+                .equals(RetrievalFilterValidator.toCanonicalJson(right));
+    }
+
+    private String safeDiagnostic(String value) {
+        String masked = SensitiveDataMaskingConverter.maskSensitiveData(
+                value == null || value.isBlank() ? "unspecified" : value);
+        return masked.length() <= 300 ? masked : masked.substring(0, 300);
     }
 
     private void addMetricDeltas(ObjectNode delta, JsonNode left, JsonNode right) {

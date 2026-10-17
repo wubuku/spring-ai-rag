@@ -41,6 +41,8 @@
   面向外部 Client 的 API 契约、数据治理和可靠性增量改进；规划已通过 `3/3`，正在实施。
 - [Client SDK、结构化证据与生产恢复验收](2026-10-16_CLIENT_SDK_EVIDENCE_READINESS_PLAN-zh-CN.md)：
   面向外部 Client 的最小 SDK 接入、OpenAI 增量证据字段和隔离数据库恢复验收；规划、实施与验收已完成，剩余 Git 交付。
+- [Client API 真实端到端、证据提交与验收可靠性改进](NEXT_BATCH_CLIENT_API_E2E_EVIDENCE_PLAN.md)：
+  修复未归属文档的默认范围提交、真实 E2E 清理与 SDK 依赖复现问题，并扩展版本化真实 QA 和外部 API 回归；规划、实施与验收已完成，剩余 Git 交付。
 
 前三批文档处理恢复、引用/流式安全、分块正确性与诊断、默认启用与自动升级、故障后无人值守恢复，以及补充真实 LLM 验收已归档至
 [历史规划归档](archive/README-zh-CN.md)。

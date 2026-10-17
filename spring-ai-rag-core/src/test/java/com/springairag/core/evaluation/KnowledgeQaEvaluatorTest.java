@@ -57,4 +57,28 @@ class KnowledgeQaEvaluatorTest {
         assertFalse(result.deterministicPass());
         assertTrue(result.failureReasons().contains("INSUFFICIENT_EVIDENCE_NOT_DECLARED"));
     }
+
+    @Test
+    void factMatchingIgnoresWhitespaceVariation() {
+        ChatSource source = new ChatSource();
+        source.setCitationId("c1");
+        source.setSourceHandle("src-1");
+        source.setDocumentId("1");
+        source.setChunkText("标准请求保留 30 天。");
+
+        EvaluationSuiteDefinition.CaseDef definition = new EvaluationSuiteDefinition.CaseDef(
+                "qa", "保留期限？", List.of("kb"),
+                List.of(new EvaluationSuiteDefinition.Identity("kb", "doc-1")),
+                null, null, "KNOWLEDGE_QA", List.of("30天"),
+                List.of(), "SUFFICIENT", EvaluationSuiteDefinition.JudgeDef.disabled());
+        ChatExecutionResult response = new ChatExecutionResult(
+                "标准请求保留 30 天。[c1]", "s", null, null, "model", ChatMode.KNOWLEDGE,
+                List.of(source), Map.of(), null, List.of(), Map.of("retrievalExecuted", true));
+
+        KnowledgeQaEvaluator.Result result = evaluator.evaluate(
+                definition, response,
+                List.of(new EvaluationSuiteDefinition.Identity("kb", "doc-1")));
+
+        assertTrue(result.deterministicPass());
+    }
 }

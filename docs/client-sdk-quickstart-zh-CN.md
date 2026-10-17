@@ -42,7 +42,7 @@ API Key、完整 prompt、答案、source 正文或异常全文。
 
 ```bash
 cd examples/client-sdk/node
-npm install --ignore-scripts --no-audit --no-fund
+npm ci --ignore-scripts --no-audit --no-fund
 
 export RAG_BASE_URL=http://127.0.0.1:18081
 export RAG_API_KEY="$RAG_ROOT_API_KEY"
@@ -72,7 +72,8 @@ CLIENT_SDK_API_KEY="$RAG_ROOT_API_KEY" \
 ```
 
 该脚本默认不调用真实 LLM；没有凭据时只能报告离线检查，不得把离线或 Mock 通过解释为
-真实模型质量证据。完整的版本化契约、Native API、OpenAI JSON/SSE、错误动作和
+真实模型质量证据。live 模式会分别执行 Python/Node 的 JSON 与 SSE 请求；Node 依赖通过
+提交的 lockfile 安装。完整的版本化契约、Native API、OpenAI JSON/SSE、错误动作和
 KNOWLEDGE 证据验收见 [Client Consumer Contract Kit](client-contract-kit-zh-CN.md)。
 
 ## 5. 调用方建议

@@ -51,13 +51,31 @@ mkdir -p "$run_dir/python" "$run_dir/node"
 python3 -m venv "$run_dir/python/venv"
 "$run_dir/python/venv/bin/python" -m pip install --disable-pip-version-check \
   --quiet -r examples/client-sdk/python/requirements.txt
-npm install --prefix "$run_dir/node" --ignore-scripts --no-audit --no-fund \
-  --package-lock=false examples/client-sdk/node >/dev/null
+cp examples/client-sdk/node/package.json "$run_dir/node/package.json"
+cp examples/client-sdk/node/package-lock.json "$run_dir/node/package-lock.json"
+npm ci --prefix "$run_dir/node" --ignore-scripts --no-audit --no-fund >/dev/null
 cp examples/client-sdk/node/chat-completion.mjs "$run_dir/node/chat-completion.mjs"
 
-env RAG_BASE_URL="$base_url" RAG_API_KEY="$api_key" \
-  "$run_dir/python/venv/bin/python" examples/client-sdk/python/chat_completion.py
-env RAG_BASE_URL="$base_url" RAG_API_KEY="$api_key" \
-  node "$run_dir/node/chat-completion.mjs"
+sdk_env=(
+  "RAG_BASE_URL=$base_url"
+  "RAG_API_KEY=$api_key"
+  "RAG_MODEL=${RAG_MODEL:-rag-default}"
+  "RAG_QUERY=${RAG_QUERY:-Return a short service-capability summary}"
+)
+if [[ -n "${RAG_COLLECTION_KEY:-}" ]]; then
+  sdk_env+=("RAG_COLLECTION_KEY=$RAG_COLLECTION_KEY")
+fi
+if [[ -n "${RAG_IDEMPOTENCY_KEY:-}" ]]; then
+  sdk_env+=("RAG_IDEMPOTENCY_KEY=$RAG_IDEMPOTENCY_KEY")
+fi
 
-echo "Client SDK quickstart live check passed."
+env "${sdk_env[@]}" \
+  "$run_dir/python/venv/bin/python" examples/client-sdk/python/chat_completion.py
+env "${sdk_env[@]}" \
+  "$run_dir/python/venv/bin/python" examples/client-sdk/python/chat_completion.py --stream
+env "${sdk_env[@]}" \
+  node "$run_dir/node/chat-completion.mjs"
+env "${sdk_env[@]}" \
+  node "$run_dir/node/chat-completion.mjs" --stream
+
+echo "Client SDK quickstart live JSON/SSE check passed."

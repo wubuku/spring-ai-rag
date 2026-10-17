@@ -42,13 +42,22 @@ for arg in "$@"; do
 done
 
 # Preserve caller overrides
+_PRESERVE_LLM_PROVIDER="${LLM_PROVIDER-}"
+_PRESERVE_APP_LLM_PROVIDER="${APP_LLM_PROVIDER-}"
+_PRESERVE_REAL_LLM_CHAT_PROVIDER="${REAL_LLM_CHAT_PROVIDER-}"
 _PRESERVE_EMBEDDING_KEY="${RAG_EMBEDDING_API_KEY-}"
 _PRESERVE_EMBEDDING_BASE="${RAG_EMBEDDING_BASE_URL-}"
 _PRESERVE_EMBEDDING_MODEL="${RAG_EMBEDDING_MODEL-}"
 _PRESERVE_EMBEDDING_DIMENSIONS="${RAG_EMBEDDING_DIMENSIONS-}"
 _PRESERVE_MM_KEY="${SPRING_AI_MINIMAX_API_KEY-}"
+_PRESERVE_MM_BASE="${SPRING_AI_MINIMAX_BASE_URL-}"
+_PRESERVE_MM_MODEL="${SPRING_AI_MINIMAX_CHAT_OPTIONS_MODEL-}"
 _PRESERVE_OPENAI_KEY="${SPRING_AI_OPENAI_API_KEY-}"
+_PRESERVE_OPENAI_BASE="${SPRING_AI_OPENAI_BASE_URL-}"
+_PRESERVE_OPENAI_MODEL="${SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL-}"
 _PRESERVE_ANTH_KEY="${ANTHROPIC_API_KEY-}"
+_PRESERVE_ANTH_BASE="${ANTHROPIC_BASE_URL-}"
+_PRESERVE_ANTH_MODEL="${ANTHROPIC_MODEL-}"
 _PRESERVE_ROOT_KEY="${RAG_ROOT_API_KEY-}"
 
 if [[ -f .env ]]; then
@@ -56,13 +65,22 @@ if [[ -f .env ]]; then
   export $(grep -v '^#' .env | grep -v '^$' | xargs) || true
 fi
 
+[[ -n "${_PRESERVE_LLM_PROVIDER}" ]] && export LLM_PROVIDER="${_PRESERVE_LLM_PROVIDER}"
+[[ -n "${_PRESERVE_APP_LLM_PROVIDER}" ]] && export APP_LLM_PROVIDER="${_PRESERVE_APP_LLM_PROVIDER}"
+[[ -n "${_PRESERVE_REAL_LLM_CHAT_PROVIDER}" ]] && export REAL_LLM_CHAT_PROVIDER="${_PRESERVE_REAL_LLM_CHAT_PROVIDER}"
 [[ -n "${_PRESERVE_EMBEDDING_KEY}" ]] && export RAG_EMBEDDING_API_KEY="${_PRESERVE_EMBEDDING_KEY}"
 [[ -n "${_PRESERVE_EMBEDDING_BASE}" ]] && export RAG_EMBEDDING_BASE_URL="${_PRESERVE_EMBEDDING_BASE}"
 [[ -n "${_PRESERVE_EMBEDDING_MODEL}" ]] && export RAG_EMBEDDING_MODEL="${_PRESERVE_EMBEDDING_MODEL}"
 [[ -n "${_PRESERVE_EMBEDDING_DIMENSIONS}" ]] && export RAG_EMBEDDING_DIMENSIONS="${_PRESERVE_EMBEDDING_DIMENSIONS}"
 [[ -n "${_PRESERVE_MM_KEY}" ]] && export SPRING_AI_MINIMAX_API_KEY="${_PRESERVE_MM_KEY}"
+[[ -n "${_PRESERVE_MM_BASE}" ]] && export SPRING_AI_MINIMAX_BASE_URL="${_PRESERVE_MM_BASE}"
+[[ -n "${_PRESERVE_MM_MODEL}" ]] && export SPRING_AI_MINIMAX_CHAT_OPTIONS_MODEL="${_PRESERVE_MM_MODEL}"
 [[ -n "${_PRESERVE_OPENAI_KEY}" ]] && export SPRING_AI_OPENAI_API_KEY="${_PRESERVE_OPENAI_KEY}"
+[[ -n "${_PRESERVE_OPENAI_BASE}" ]] && export SPRING_AI_OPENAI_BASE_URL="${_PRESERVE_OPENAI_BASE}"
+[[ -n "${_PRESERVE_OPENAI_MODEL}" ]] && export SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL="${_PRESERVE_OPENAI_MODEL}"
 [[ -n "${_PRESERVE_ANTH_KEY}" ]] && export ANTHROPIC_API_KEY="${_PRESERVE_ANTH_KEY}"
+[[ -n "${_PRESERVE_ANTH_BASE}" ]] && export ANTHROPIC_BASE_URL="${_PRESERVE_ANTH_BASE}"
+[[ -n "${_PRESERVE_ANTH_MODEL}" ]] && export ANTHROPIC_MODEL="${_PRESERVE_ANTH_MODEL}"
 [[ -n "${_PRESERVE_ROOT_KEY}" ]] && export RAG_ROOT_API_KEY="${_PRESERVE_ROOT_KEY}"
 
 ROOT_API_KEY="${RAG_ROOT_API_KEY:-${RAG_API_KEY:-}}"
@@ -75,25 +93,149 @@ export PROBE_TOKEN="REAL_E2E_$(date +%s)_$RANDOM"
 PASS=0
 FAIL=0
 DOC_ID=""
+DOC_REVISION=""
 COLLECTION_ID=""
 COLLECTION_KEY="real-e2e-${PROBE_TOKEN}"
+COLLECTION_CREATED=0
+DOCUMENT_CREATED=0
+RUN_DIR="${REAL_LLM_E2E_RUN_DIR:-.verification/real-llm-e2e/${PROBE_TOKEN}}"
+mkdir -p "$RUN_DIR"
+TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/spring-ai-rag-real-e2e.XXXXXX")"
 step() { echo; echo "=== $* ==="; }
 ok()   { echo "OK: $*"; PASS=$((PASS+1)); }
 bad()  { echo "FAIL: $*"; FAIL=$((FAIL+1)); }
 need() { command -v "$1" >/dev/null || { echo "need $1"; exit 2; }; }
 
 cleanup() {
+  local original_rc="$1"
+  local cleanup_failed=0
+  local document_cleanup_verified=0
   set +e
-  if [[ -n "$DOC_ID" ]]; then
-    curl -s ${API_AUTH_ARGS[@]+"${API_AUTH_ARGS[@]}"} \
-      -X DELETE "$API/documents/$DOC_ID" >/dev/null
+
+  if [[ "$DOCUMENT_CREATED" -eq 0 ]]; then
+    document_cleanup_verified=1
   fi
-  if [[ -n "$COLLECTION_KEY" ]]; then
-    curl -s ${API_AUTH_ARGS[@]+"${API_AUTH_ARGS[@]}"} -X DELETE \
-      "$API/collections/by-key?collectionKey=$COLLECTION_KEY" >/dev/null
+
+  if [[ "$DOCUMENT_CREATED" -eq 1 && -n "$DOC_ID" ]]; then
+    local latest_revision
+    latest_revision="$(curl -sS ${API_AUTH_ARGS[@]+"${API_AUTH_ARGS[@]}"} \
+      -o "$TMP_DIR/document-before-cleanup.json" \
+      -w '%{http_code}' "$API/documents/$DOC_ID" 2>"$TMP_DIR/document-before-cleanup.err")"
+    if [[ "$latest_revision" == "200" ]]; then
+      DOC_REVISION="$(python3 - "$TMP_DIR/document-before-cleanup.json" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding='utf-8') as stream:
+    value = json.load(stream).get('documentRevision')
+if not isinstance(value, int) or value <= 0:
+    raise SystemExit(1)
+print(value)
+PY
+      )"
+    elif [[ "$latest_revision" != "404" ]]; then
+      echo "CLEANUP FAIL: GET document $DOC_ID returned HTTP $latest_revision" >&2
+      cleanup_failed=1
+    fi
+
+    if [[ -n "$DOC_REVISION" ]]; then
+      local document_code
+      document_code="$(curl -sS ${API_AUTH_ARGS[@]+"${API_AUTH_ARGS[@]}"} \
+        -X DELETE "$API/documents/$DOC_ID?expectedDocumentRevision=$DOC_REVISION" \
+        -o "$TMP_DIR/delete-document.json" -w '%{http_code}' \
+        2>"$TMP_DIR/delete-document.err")"
+      if [[ "$document_code" != "200" && "$document_code" != "404" ]]; then
+        echo "CLEANUP FAIL: DELETE document $DOC_ID returned HTTP $document_code" >&2
+        cleanup_failed=1
+      fi
+    fi
+
+    local after_delete_code
+    after_delete_code="$(curl -sS ${API_AUTH_ARGS[@]+"${API_AUTH_ARGS[@]}"} \
+      -o "$TMP_DIR/document-after-cleanup.json" \
+      -w '%{http_code}' "$API/documents/$DOC_ID" 2>"$TMP_DIR/document-after-cleanup.err")"
+    if [[ "$after_delete_code" != "404" ]]; then
+      echo "CLEANUP FAIL: document $DOC_ID still visible after hard delete (HTTP $after_delete_code)" >&2
+      cleanup_failed=1
+    fi
+
+    local enabled_documents
+    enabled_documents="$(curl -sS ${API_AUTH_ARGS[@]+"${API_AUTH_ARGS[@]}"} \
+      -o "$TMP_DIR/enabled-documents.json" \
+      -w '%{http_code}' "$API/documents?enabled=true&offset=0&limit=1000" \
+      2>"$TMP_DIR/enabled-documents.err")"
+    if [[ "$enabled_documents" == "200" ]]; then
+      if ! python3 - "$TMP_DIR/enabled-documents.json" "$DOC_ID" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding='utf-8') as stream:
+    payload = json.load(stream)
+target = int(sys.argv[2])
+items = payload.get('content', payload.get('items', payload if isinstance(payload, list) else []))
+if not isinstance(items, list):
+    raise SystemExit(1)
+for item in items:
+    if isinstance(item, dict) and item.get('id') == target:
+        raise SystemExit(1)
+PY
+      then
+        echo "CLEANUP FAIL: document $DOC_ID remains in enabled document listing" >&2
+        cleanup_failed=1
+      fi
+    else
+      echo "CLEANUP FAIL: enabled document listing returned HTTP $enabled_documents" >&2
+      cleanup_failed=1
+    fi
+    if [[ "$after_delete_code" == "404" && "$enabled_documents" == "200" ]]; then
+      if python3 - "$TMP_DIR/enabled-documents.json" "$DOC_ID" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding='utf-8') as stream:
+    payload = json.load(stream)
+target = int(sys.argv[2])
+items = payload.get('content', payload.get('items', payload if isinstance(payload, list) else []))
+if not isinstance(items, list):
+    raise SystemExit(1)
+raise SystemExit(0 if not any(
+    isinstance(item, dict) and item.get('id') == target for item in items
+) else 1)
+PY
+      then
+        document_cleanup_verified=1
+      fi
+    fi
   fi
+
+  if [[ "$COLLECTION_CREATED" -eq 1 && -n "$COLLECTION_KEY" ]]; then
+    if [[ "$document_cleanup_verified" -ne 1 ]]; then
+      echo "CLEANUP HOLD: Collection $COLLECTION_KEY retained because document cleanup was not verified" >&2
+      cleanup_failed=1
+    else
+      local collection_code
+      collection_code="$(curl -sS ${API_AUTH_ARGS[@]+"${API_AUTH_ARGS[@]}"} -X DELETE \
+        "$API/collections/by-key?collectionKey=$COLLECTION_KEY" \
+        -o "$TMP_DIR/delete-collection.json" -w '%{http_code}' \
+        2>"$TMP_DIR/delete-collection.err")"
+      if [[ "$collection_code" != "200" && "$collection_code" != "404" ]]; then
+        echo "CLEANUP FAIL: DELETE collection $COLLECTION_KEY returned HTTP $collection_code" >&2
+        cleanup_failed=1
+      fi
+    fi
+  fi
+
+  if [[ "$cleanup_failed" -eq 1 ]]; then
+    echo "Cleanup evidence retained in $RUN_DIR (run=$PROBE_TOKEN)" >&2
+    cp -R "$TMP_DIR" "$RUN_DIR/cleanup" 2>/dev/null || true
+  fi
+  rm -rf "$TMP_DIR"
+  if [[ "$cleanup_failed" -eq 1 ]]; then
+    return 1
+  fi
+  return "$original_rc"
 }
-trap cleanup EXIT
+trap 'rc=$?; cleanup "$rc"; exit $?' EXIT
 
 need curl
 need python3
@@ -228,6 +370,7 @@ COLLECTION_ID=$(python3 -c "import json; print(json.load(open('/tmp/rag-e2e-coll
 RETURNED_COLLECTION_KEY=$(python3 -c "import json; print(json.load(open('/tmp/rag-e2e-collection.json')).get('collectionKey') or '')")
 [[ -n "$COLLECTION_ID" && "$RETURNED_COLLECTION_KEY" == "$COLLECTION_KEY" ]] \
   || { bad "create collection or collectionKey mismatch"; exit 1; }
+COLLECTION_CREATED=1
 ok "collection key=$COLLECTION_KEY id=$COLLECTION_ID"
 
 curl -s "${API_AUTH_ARGS[@]}" -X POST "$API/documents" \
@@ -238,6 +381,7 @@ head -c 400 /tmp/rag-e2e-create.json; echo
 DOC_ID=$(python3 -c "import json; print(json.load(open('/tmp/rag-e2e-create.json')).get('id') or '')")
 DOC_REVISION=$(python3 -c "import json; print(json.load(open('/tmp/rag-e2e-create.json')).get('documentRevision') or '')")
 [[ -n "$DOC_ID" && -n "$DOC_REVISION" ]] || { bad "create document or documentRevision missing"; exit 1; }
+DOCUMENT_CREATED=1
 export DOC_ID DOC_REVISION
 ok "document id=$DOC_ID revision=$DOC_REVISION"
 

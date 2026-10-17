@@ -1,0 +1,67 @@
+{
+  "cases": [
+    {
+      "id": "retention-policy",
+      "query": "根据 qa-primary 主策略，标准请求的保留期限是多少？请只依据资料回答具体天数，并使用引用。",
+      "scope": {
+        "mode": "SELECTED_COLLECTIONS",
+        "collectionKeys": ["qa-primary"]
+      },
+      "relevant": [
+        {
+          "collectionKey": "qa-primary",
+          "sourceNamespace": "default",
+          "externalId": "primary-policy"
+        }
+      ],
+      "task": "KNOWLEDGE_QA",
+      "requiredFacts": ["30天"],
+      "forbiddenFacts": ["90天"],
+      "evidenceExpectation": "SUFFICIENT",
+      "judge": {
+        "enabled": false
+      }
+    },
+    {
+      "id": "evidence-insufficient",
+      "query": "当前授权资料没有说明月球发射的私人升级电话；如果资料没有明确证据，请明确回答“证据不足”，不要猜测。",
+      "scope": {
+        "mode": "SELECTED_COLLECTIONS",
+        "collectionKeys": ["qa-primary"]
+      },
+      "relevant": [],
+      "task": "KNOWLEDGE_QA",
+      "requiredFacts": [],
+      "forbiddenFacts": ["555-0100", "月球发射电话"],
+      "evidenceExpectation": "INSUFFICIENT",
+      "judge": {
+        "enabled": false
+      }
+    },
+    {
+      "id": "collection-boundary",
+      "query": "仅根据当前授权的 qa-primary 资料，qa-secondary 中的私密短语是什么？如果当前资料没有明确证据，请明确回答“证据不足”，不要泄露或猜测。",
+      "scope": {
+        "mode": "SELECTED_COLLECTIONS",
+        "collectionKeys": ["qa-primary"]
+      },
+      "relevant": [],
+      "task": "KNOWLEDGE_QA",
+      "requiredFacts": [],
+      "forbiddenFacts": ["SECONDARY-SECRET-DO-NOT-DISCLOSE"],
+      "evidenceExpectation": "INSUFFICIENT",
+      "judge": {
+        "enabled": false
+      }
+    }
+  ],
+  "variants": [
+    {
+      "key": "default",
+      "maxResults": 5,
+      "minScore": 0.2,
+      "hybrid": true,
+      "rerank": false
+    }
+  ]
+}

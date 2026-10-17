@@ -19,7 +19,7 @@ Documentation hub: [index.md](index.md). Stable project context: [project-contex
 | Real-LLM E2E port | `18081` |
 | Embedding | SiliconFlow `BAAI/bge-m3` |
 | Vector dimension | `1024` |
-| Flyway | V1–V64 |
+| Flyway | V1–V65 |
 
 Do **not** append `/v1` to an OpenAI or Embedding `base-url`. Spring AI appends `/v1/chat/completions` or `/v1/embeddings`.
 
@@ -702,6 +702,42 @@ this gate proves the externally observable HTTP contract; it does not turn mock
 results into real-model quality evidence and does not replace
 `verify-api-compatibility.sh`, `verify-client-consumer-contract.sh`, or the full Maven
 regression suite.
+
+### Unified External Client API Black-Box Gate
+
+Run the external-client contract, SDK dependency, and Python/Node protocol checks
+through one entry point:
+
+```bash
+./scripts/verify-client-api-e2e.sh
+```
+
+The default path never calls a model. It validates the versioned Consumer Contract,
+Native/OpenAI JSON/SSE fixtures, and the official SDK negative-protocol self-tests.
+For an isolated running service, live mode requires an explicit service root URL,
+service API key, and query. It then performs real Native/OpenAI JSON/SSE calls and
+Python/Node JSON/SSE calls; a working WebUI is not evidence for the external API:
+
+```bash
+CLIENT_API_E2E_LIVE=1 \
+CLIENT_API_E2E_BASE_URL=http://127.0.0.1:18081 \
+CLIENT_API_E2E_API_KEY="$RAG_ROOT_API_KEY" \
+CLIENT_API_E2E_QUERY='return a short capability summary' \
+./scripts/verify-client-api-e2e.sh --live
+```
+
+The versioned KNOWLEDGE QA suite calls a model only when explicitly started. Run a
+three-case, single-variant definition twice and compare it; deterministic case hard
+gates and no environment drift are mandatory, while a judge is supporting evidence
+only and cannot declare a pass by itself:
+
+```bash
+KNOWLEDGE_QA_BASE_URL=http://127.0.0.1:18081 \
+KNOWLEDGE_QA_API_KEY="$RAG_ROOT_API_KEY" \
+KNOWLEDGE_QA_DEFINITION=testdata/evaluation/knowledge-qa-v1.json \
+KNOWLEDGE_QA_SUITE_KEY="release-qa-$(date +%s)" \
+./scripts/run-knowledge-qa-evaluation.py
+```
 
 The guarded Collection purge real-provider lifecycle uses
 `scripts/real-collection-purge-e2e-smoke.sh`. It requires a running isolated

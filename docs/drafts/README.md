@@ -52,6 +52,10 @@ Active plans are listed here and in `docs/index*`.
 - [Client SDK, structured evidence, and recovery readiness](2026-10-16_CLIENT_SDK_EVIDENCE_READINESS_PLAN.md):
   minimal external-client onboarding, additive OpenAI evidence fields, and disposable database recovery acceptance;
   planning, implementation, and acceptance are complete; Git delivery remains.
+- [Client API real end-to-end, evidence commit, and acceptance reliability](NEXT_BATCH_CLIENT_API_E2E_EVIDENCE_PLAN.md)
+  (Chinese): fixes unassigned-document scope commits, real E2E cleanup, and reproducible SDK dependencies;
+  expands versioned real QA and external API regression; planning, implementation, and acceptance are complete;
+  Git delivery remains.
 The processing/recovery, citation/streaming, chunking-correctness, and default-feature/automatic-upgrade/recovery batches,
 including supplemental real-LLM acceptance, are in the
 [historical archive](archive/README.md).

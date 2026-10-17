@@ -6,7 +6,9 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+from urllib.parse import urlparse
 
+import httpx
 from openai import OpenAI
 
 
@@ -15,6 +17,12 @@ def required(name: str) -> str:
     if not value:
         raise SystemExit(f"missing required environment variable: {name}")
     return value
+
+
+def trust_environment_for(root_url: str) -> bool:
+    """Keep local loopback probes independent from a machine proxy."""
+    host = (urlparse(root_url).hostname or "").lower()
+    return host not in {"127.0.0.1", "localhost", "::1"}
 
 
 def main() -> int:
@@ -30,6 +38,10 @@ def main() -> int:
     client = OpenAI(
         api_key=required("RAG_API_KEY"),
         base_url=f"{root_url}/v1",
+        http_client=httpx.Client(
+            timeout=120,
+            trust_env=trust_environment_for(root_url),
+        ),
     )
     headers = {}
     collection_key = os.environ.get("RAG_COLLECTION_KEY", "").strip()

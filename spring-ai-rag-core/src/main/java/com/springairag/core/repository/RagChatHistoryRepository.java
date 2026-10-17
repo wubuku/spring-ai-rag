@@ -197,10 +197,13 @@ public class RagChatHistoryRepository {
             return new DurableContentReferences(List.of(), Map.of());
         }
 
-        Map<Long, Long> initialCollections = loadActiveDocumentCollections(
-                documentIds);
+        Map<Long, DocumentReferenceRow> initialReferences =
+                loadActiveDocumentReferences(documentIds);
         TreeSet<Long> collectionIds = new TreeSet<>(
-                initialCollections.values());
+                initialReferences.values().stream()
+                        .map(DocumentReferenceRow::collectionId)
+                        .filter(Objects::nonNull)
+                        .toList());
         for (Long collectionId : collectionIds) {
             int updated = jdbcTemplate.update("""
                     UPDATE rag_collection
@@ -216,14 +219,44 @@ public class RagChatHistoryRepository {
             }
         }
 
-        Map<Long, Long> currentCollections = loadActiveDocumentCollections(
-                documentIds);
-        if (!initialCollections.equals(currentCollections)) {
+        TreeSet<Long> unassignedDocumentIds = new TreeSet<>();
+        for (DocumentReferenceRow reference : initialReferences.values()) {
+            if (reference.collectionId() == null) {
+                unassignedDocumentIds.add(reference.documentId());
+            }
+        }
+        for (Long documentId : unassignedDocumentIds) {
+            DocumentReferenceRow reference = initialReferences.get(documentId);
+            int updated = jdbcTemplate.update("""
+                    UPDATE rag_documents
+                    SET chat_commit_fence_version =
+                            chat_commit_fence_version + 1
+                    WHERE id = ?
+                      AND collection_id IS NULL
+                      AND enabled = TRUE
+                      AND source_deleted_at IS NULL
+                      AND document_revision = ?
+                    """, documentId, reference.documentRevision());
+            if (updated != 1) {
+                throw staleSourceReference();
+            }
+        }
+
+        Map<Long, DocumentReferenceRow> currentReferences =
+                loadActiveDocumentReferences(documentIds);
+        if (!initialReferences.equals(currentReferences)) {
             throw staleSourceReference();
+        }
+        Map<Long, Long> collectionIdsByDocument = new LinkedHashMap<>();
+        for (DocumentReferenceRow reference : currentReferences.values()) {
+            if (reference.collectionId() != null) {
+                collectionIdsByDocument.put(
+                        reference.documentId(), reference.collectionId());
+            }
         }
         return new DurableContentReferences(
                 List.copyOf(documentIds),
-                Map.copyOf(currentCollections));
+                Map.copyOf(collectionIdsByDocument));
     }
 
     /**
@@ -488,28 +521,45 @@ public class RagChatHistoryRepository {
         }
     }
 
-    private Map<Long, Long> loadActiveDocumentCollections(
+    private Map<Long, DocumentReferenceRow> loadActiveDocumentReferences(
             List<Long> documentIds) {
-        Map<Long, Long> result = new LinkedHashMap<>();
+        Map<Long, DocumentReferenceRow> result = new LinkedHashMap<>();
         for (Long documentId : documentIds) {
             List<DocumentReferenceRow> rows = jdbcTemplate.query("""
-                    SELECT d.id, d.collection_id
+                    SELECT d.id, d.collection_id, d.document_revision
                     FROM rag_documents d
-                    JOIN rag_collection c ON c.id = d.collection_id
+                    LEFT JOIN rag_collection c ON c.id = d.collection_id
                     WHERE d.id = ?
                       AND d.enabled = TRUE
-                      AND c.deleted = FALSE
-                      AND c.enabled = TRUE
-                      AND c.purged_at IS NULL
+                      AND d.source_deleted_at IS NULL
+                      AND (d.collection_id IS NULL OR (
+                          c.deleted = FALSE
+                          AND c.enabled = TRUE
+                          AND c.purged_at IS NULL
+                      ))
                     """,
-                    (resultSet, rowNum) -> new DocumentReferenceRow(
-                            resultSet.getLong("id"),
-                            resultSet.getLong("collection_id")),
+                    (resultSet, rowNum) -> {
+                        Object rawCollectionId = resultSet.getObject("collection_id");
+                        Long collectionId = rawCollectionId instanceof Number number
+                                ? number.longValue()
+                                : null;
+                        if (collectionId == null) {
+                            // Keeps existing Mockito-based repository tests compatible
+                            // while preserving SQL NULL for genuinely unassigned rows.
+                            long legacyCollectionId = resultSet.getLong("collection_id");
+                            collectionId = legacyCollectionId > 0
+                                    ? legacyCollectionId : null;
+                        }
+                        return new DocumentReferenceRow(
+                                resultSet.getLong("id"),
+                                collectionId,
+                                resultSet.getLong("document_revision"));
+                    },
                     documentId);
             if (rows.size() != 1) {
                 throw staleSourceReference();
             }
-            result.put(documentId, rows.get(0).collectionId());
+            result.put(documentId, rows.get(0));
         }
         return Map.copyOf(result);
     }
@@ -552,6 +602,9 @@ public class RagChatHistoryRepository {
         }
     }
 
-    private record DocumentReferenceRow(long documentId, long collectionId) {
+    private record DocumentReferenceRow(
+            long documentId,
+            Long collectionId,
+            long documentRevision) {
     }
 }

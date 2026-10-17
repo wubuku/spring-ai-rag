@@ -202,6 +202,20 @@ class EvaluationSuiteRunCompareTailTest {
     }
 
     @Test
+    void collectionSnapshotComparisonIgnoresJsonbNumberTypeAndFieldOrder() {
+        ObjectNode before = objectMapper.createObjectNode();
+        before.putObject("qa-primary")
+                .put("maxUpdatedAt", "2026-10-17T12:02:47.606981Z")
+                .put("enabledDocuments", 1);
+        ObjectNode after = objectMapper.createObjectNode();
+        after.putObject("qa-primary")
+                .put("enabledDocuments", 1L)
+                .put("maxUpdatedAt", "2026-10-17T12:02:47.606981Z");
+
+        assertTrue(EvaluationSuiteService.sameCollectionSnapshot(before, after));
+    }
+
+    @Test
     void compareReportsDriftWhenCodeRevisionDiffers() {
         UUID left = stubRun(
                 "suite-key", 3, "sha-abc", "profile-key", "rev-1",

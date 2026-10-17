@@ -127,8 +127,7 @@ public class KnowledgeQaEvaluator {
             return "";
         }
         return Normalizer.normalize(value, Normalizer.Form.NFKC)
-                .replaceAll("\\s+", " ")
-                .trim()
+                .replaceAll("\\s+", "")
                 .toLowerCase(Locale.ROOT);
     }
 

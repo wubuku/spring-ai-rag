@@ -1008,7 +1008,7 @@ The script starts isolated PostgreSQL, the mock upstream, a Core standalone serv
 and a Starter consumer that does not scan `com.springairag`. Official Python SDK
 `2.14.0` and Node SDK `7.34.0` verify models, JSON, SSE, idempotency replay, error
 envelopes, and authentication against both topologies. It also proves that the
-external Starter consumer can run Flyway V1–V64 and expose the same `/v1` client
+external Starter consumer can run Flyway V1–V65 and expose the same `/v1` client
 contract. Evidence is written to `.verification/openai-sdk-e2e/<run-id>/summary.md`;
 the default run does not incur real-model cost.
 
@@ -1648,7 +1648,7 @@ matrix is:
 
 - budget limit `429` and unavailable-store `503`, with `Retry-After` and no provider invocation;
 - sync, stream cancellation, query transform/expand, summary, fallback, and AGENT model paths;
-- durable reservation idempotency, settle/release/expiry recovery, concurrent CAS, and V64 Flyway
+- durable reservation idempotency, settle/release/expiry recovery, concurrent CAS, and V64/V65 Flyway
   migration on both an empty database and a pre-existing V63 database;
 - erasure preview/status/apply authorization, confirmation expiry/mismatch, path/body mismatch,
   idempotent terminal replay, partial failure recovery, bounded deletion, and audit-log protection;

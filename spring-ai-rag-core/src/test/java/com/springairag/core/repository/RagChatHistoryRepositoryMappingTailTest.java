@@ -26,6 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -90,6 +91,7 @@ class RagChatHistoryRepositoryMappingTailTest {
                     when(rs.getLong("id")).thenReturn(9L);
                     when(rs.getLong("collection_id"))
                             .thenReturn(collectionIdsPerCall[index]);
+                    when(rs.getLong("document_revision")).thenReturn(11L);
                     return List.of(mapper.mapRow(rs, 0));
                 });
     }
@@ -221,5 +223,22 @@ class RagChatHistoryRepositoryMappingTailTest {
         assertEquals(List.of(9L), refs.documentIds());
         assertEquals(7L, refs.collectionIdsByDocument().get(9L));
         assertEquals(1, refs.collectionIdsByDocument().size());
+    }
+
+    @Test
+    void unassignedDocumentUsesDocumentFenceWithoutCollectionFence() {
+        stubDocumentRow(0L);
+        when(jdbcTemplate.update(
+                contains("UPDATE rag_documents"), eq(9L), eq(11L)))
+                .thenReturn(1);
+
+        var refs = repository.reserveDurableContentReferences("[9]", List.of());
+
+        assertEquals(List.of(9L), refs.documentIds());
+        assertTrue(refs.collectionIdsByDocument().isEmpty());
+        verify(jdbcTemplate).update(
+                contains("UPDATE rag_documents"), eq(9L), eq(11L));
+        verify(jdbcTemplate, never()).update(
+                contains("UPDATE rag_collection"), anyLong());
     }
 }
