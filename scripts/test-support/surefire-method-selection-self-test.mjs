@@ -101,6 +101,10 @@ expectAccepted('a script that never invokes Maven', `
   echo "run the acceptance suite by hand"
 `);
 
+expectAccepted('a sed delimiter is not a surefire method selector', `
+  latest_migration="$(find migrations -name 'V*.sql' -print | sed -E 's#^.*/V([0-9]+)__.*#\\1#')"
+`);
+
 // ── the real repository ──────────────────────────────────────────────────────
 
 const violations = collectMethodSelections(join(root, 'scripts'), root);

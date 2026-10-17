@@ -102,7 +102,9 @@ export const GATES = [
   manual('scripts/verify-alert-notification-delivery.sh'),
   manual('scripts/verify-api-key-expiry-alerts.sh'),
   manual('scripts/verify-business-client-readiness.sh'),
+  manual('scripts/verify-client-api-e2e.sh'),
   manual('scripts/verify-client-contract-governance.sh'),
+  manual('scripts/verify-client-sdk-quickstart.sh'),
   manual('scripts/verify-api-compatibility.sh'),
   {
     gate: 'scripts/verify-client-consumer-contract.sh',
@@ -113,6 +115,7 @@ export const GATES = [
   manual('scripts/verify-chat-capability.sh'),
   manual('scripts/verify-chunking-quality.sh'),
   manual('scripts/verify-collection-provisioning.sh'),
+  manual('scripts/verify-collection-coverage.sh'),
   manual('scripts/verify-collection-purge.sh'),
   manual('scripts/verify-derivation-integrity.sh'),
   manual('scripts/verify-document-lifecycle.sh'),
@@ -132,6 +135,7 @@ export const GATES = [
   manual('scripts/verify-quality-regression.sh'),
   manual('scripts/verify-release.sh'),
   manual('scripts/verify-rerank-document-diversity.sh'),
+  manual('scripts/verify-recovery-readiness.sh'),
   manual('scripts/verify-retrieval-diagnostics.sh'),
   manual('scripts/verify-retrieval-filters.sh'),
 

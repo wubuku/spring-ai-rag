@@ -54,8 +54,10 @@ export const VIOLATION_KIND = 'unchecked-surefire-method-selection';
 export const METHOD_SELECTION_SOURCE = 'scripts/lib/surefire-method-selection.sh';
 
 /**
- * A surefire method selector: a quoted string that *begins* with an identifier
- * immediately followed by `#`.
+ * A surefire method selector: a quoted string that *begins* with a Java test
+ * class name immediately followed by `#`. Requiring an uppercase class-name
+ * start avoids treating shell tools' quoted delimiter expressions such as
+ * `sed -E 's#pattern#replacement#'` as Maven selectors.
  *
  * The anchoring is the whole rule, and getting it wrong is how the first version
  * of this gate reported nothing on the very script it was written for. That
@@ -70,7 +72,7 @@ export const METHOD_SELECTION_SOURCE = 'scripts/lib/surefire-method-selection.sh
  * `#` strips a prefix; it is an operator, not a separator, and a parameter
  * expansion always begins with `$`.
  */
-const METHOD_SELECTOR = /(?:["']|-Dtest=["']?)[A-Za-z_][\w$]*#/;
+const METHOD_SELECTOR = /(?:["']|-Dtest=["']?)[A-Z][\w$]*(?:Test|Tests|TestCase)#/;
 
 /**
  * @typedef {object} Violation

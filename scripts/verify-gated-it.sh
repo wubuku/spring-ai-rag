@@ -8,7 +8,8 @@
 # 这个清单现在是**全部**：逐个核实所有 `*.it.enabled` 门控类，
 # 每一个都只起一个 Testcontainers PostgreSQL 加一份 Flyway schema，没有一个
 # 需要模型 provider 或外部进程。在那之前这里只登记了 3 个，而上面那句"跑全部"
-# 已经写了不知道多久——20 个套件、137 个用例只能靠各自 feature 的脚本单独跑，
+# 已经写了不知道多久——此前只有少数套件能通过聚合命令运行，其余只能靠各自
+# feature 的脚本单独跑，
 # 没有一条命令能跑完整个门控清单，而 verify-integration-test-switches.mjs 是
 # 绿的：它只查开关有没有被某条 run path 点亮，不查有没有聚合入口。
 #
@@ -34,6 +35,7 @@ ALL_SUITES=(
   "api-principal-expiry-alert:ApiPrincipalExpiryAlertPostgresIntegrationTest"
   "chat:ChatSessionPostgresIntegrationTest"
   "chat.idempotency:ChatTurnOperationPostgresIntegrationTest"
+  "unassigned-chat-fence:UnassignedDocumentChatFencePostgresIntegrationTest"
   "chunking-upgrade:ChunkingUpgradePostgresIntegrationTest"
   "collection-key:CollectionKeyPostgresIntegrationTest"
   "collection-provisioning:CollectionProvisioningPostgresIntegrationTest"

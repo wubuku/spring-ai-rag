@@ -1125,11 +1125,12 @@ no run path, in either direction.
 ./scripts/verify-gated-it.sh ChatSessionPostgresIntegrationTest  # one suite
 ```
 
-Twenty-three classes / 153 test methods, each behind its own
-`<x>.it.enabled` switch so a plain `mvn test` never needs a Docker daemon.
-`verify-gated-it.sh` is the one command that turns all of them on, takes about
-nine minutes locally, and is what `ci.yml`'s "Gated PostgreSQL integration
-tests" step runs.
+The gated inventory is reconciled by `verify-integration-test-switches.mjs`
+against `verify-gated-it.sh`; the audit baseline is 28 gated classes and 208
+test methods, each behind its own `<x>.it.enabled` switch so a plain `mvn test`
+never needs a Docker daemon. `verify-gated-it.sh` is the one command that turns
+all of them on, takes about nine minutes locally, and is what `ci.yml`'s
+"Gated PostgreSQL integration tests" step runs.
 
 Two things about that inventory are worth stating plainly, because both were
 false until Batch 912:
@@ -1152,8 +1153,8 @@ false until Batch 912:
 `spring-ai-rag-core/target/surefire-reports`, and this script's output is the
 newer of the two: `verify-test-visibility.mjs` reconciles the test source tree
 against those reports in both directions, so a reports directory holding only
-23 gated classes makes it report hundreds of sources that "neither ran nor
-skipped". Twelve of the `scripts/verify-*.sh` acceptance scripts are a third
+a partial gated-class set makes it report hundreds of sources that "neither ran
+nor skipped". Twelve of the `scripts/verify-*.sh` acceptance scripts are a third
 way to lose them — each starts with a compilation gate like
 `mvn clean compile test-compile`, and `clean` takes the whole `target/`
 directory with it. Five of the twelve put the reports back by re-running an
@@ -1170,6 +1171,28 @@ mvn test                                  # full suite
 If a reports-reading gate reports *no surefire reports at all* rather than a
 count mismatch, something ran `clean` since your `mvn test` — that is a
 different failure from a stale report set, and the self-test now says so.
+
+### Unassigned-Document Chat Commit Fence
+
+`UnassignedDocumentChatFencePostgresIntegrationTest` verifies that after the V65
+migration an unassigned document can still reserve durable Chat source references
+under the default caller-visible scope, while revision/CAS and collection cleanup
+constraints remain enforced. Plain `mvn test` does not start Docker; run the
+focused acceptance explicitly when needed:
+
+```bash
+TESTCONTAINERS_RYUK_DISABLED=true \
+TESTCONTAINERS_PG_IMAGE=pgvector/pgvector:pg16 \
+mvn -pl spring-ai-rag-core -am \
+  -Dunassigned-chat-fence.it.enabled=true \
+  -Dtest=UnassignedDocumentChatFencePostgresIntegrationTest \
+  -Dsurefire.failIfNoSpecifiedTests=false test
+```
+
+It can also be run through
+`./scripts/verify-gated-it.sh UnassignedDocumentChatFencePostgresIntegrationTest`
+as part of the full gated inventory. The suite uses disposable PostgreSQL only;
+it does not call a real model provider.
 
 ### Path Traversal Probe (no gate — runs in the default test run)
 

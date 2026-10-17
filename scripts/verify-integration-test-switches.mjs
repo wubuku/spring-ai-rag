@@ -283,7 +283,7 @@ export function checkSwitches({
   // The fifth direction. `undiscoverable-switch` above is satisfied by *any*
   // run path, including the per-feature script that a single feature's own
   // `verify-*.sh` happens to ship — which is why this repository could hold
-  // twenty of twenty-three gated suites with no single command that runs them
+  // many gated suites with no single command that runs them
   // all, while every one of those switches was legitimately discoverable and
   // this gate stayed green. A per-feature run path answers "can I run this one
   // suite"; nothing in the tree answered "can I run the gated inventory".
@@ -371,7 +371,7 @@ const KNOWN_UNDISCOVERABLE = new Map();
  * annotates the violation instead of suppressing it. Also deliberately empty.
  *
  * Batch 912 measured the gated inventory before writing this rule: all
- * twenty-three classes build nothing but a Testcontainers PostgreSQL and a
+ * the repository's gated classes build nothing but a Testcontainers PostgreSQL and a
  * Flyway schema, so every one of them belongs in the aggregate runner. The
  * first version of the rule needed a classifier to decide "is this suite pure
  * DB?" — a classifier whose first draft reported eight suites as needing a

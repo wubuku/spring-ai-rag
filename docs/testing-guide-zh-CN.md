@@ -989,10 +989,11 @@ JPA flush 已经写下去的文件一并回滚。
 ./scripts/verify-gated-it.sh ChatSessionPostgresIntegrationTest  # 单个套件
 ```
 
-23 个类 / 153 个测试方法，每个都在自己的 `<x>.it.enabled` 开关后面，所以普通
-`mvn test` 永远不需要 Docker 守护进程。`verify-gated-it.sh` 是唯一一条把它们
-全部打开的命令，本地约 9 分钟，`ci.yml` 的 "Gated PostgreSQL integration tests"
-这一步跑的就是它。
+当前门控清单由 `verify-integration-test-switches.mjs` 与
+`verify-gated-it.sh` 交叉核对；本次审计基线为 28 个门控类、208 个测试方法，
+每个都在自己的 `<x>.it.enabled` 开关后面，所以普通 `mvn test` 永远不需要
+Docker 守护进程。`verify-gated-it.sh` 是唯一一条把它们全部打开的命令，本地约
+9 分钟，`ci.yml` 的 "Gated PostgreSQL integration tests" 这一步跑的就是它。
 
 关于这份清单，有两件事值得直说，因为它们在 Batch 912 之前**都是假的**：
 
@@ -1010,7 +1011,7 @@ JPA flush 已经写下去的文件一并回滚。
 **要跑在 `verify-test-visibility` 之前，不是之后。** 两者都写
 `spring-ai-rag-core/target/surefire-reports`，而这个脚本的产物是两者中较新的：
 `verify-test-visibility.mjs` 拿这些报告和测试源码树做**双向**对账，
-所以一个只装着 23 个门控类报告的目录，会让它报出几百个"既没跑也没跳过"的源。
+所以一个只装着部分门控类报告的目录，会让它报出几百个"既没跑也没跳过"的源。
 `scripts/verify-*.sh` 里有 **12 个**验收脚本是弄丢这些报告的第三条路——
 它们各自以 `mvn clean compile test-compile` 这样的编译门禁开头，
 而 `clean` 会把整个 `target/` 目录一起带走。这 12 个里有 5 个会补一次不限范围的
@@ -1027,6 +1028,24 @@ mvn test                                  # 全量
 如果一个读报告的门禁报的是**根本没有 surefire 报告**，而不是计数对不上，
 那说明你的 `mvn test` 之后有东西跑过 `clean`——这和报告过期是两种不同的失败，
 自测现在会把这一点说出来。
+
+### 未归属文档 Chat 提交栅栏验收
+
+`UnassignedDocumentChatFencePostgresIntegrationTest` 验证 V65 迁移后，未绑定
+Collection 的文档仍能在默认可见范围内完成 durable Chat 来源预留，同时受
+revision/CAS 和集合清理约束。普通 `mvn test` 不启动 Docker；需要单独验收时运行：
+
+```bash
+TESTCONTAINERS_RYUK_DISABLED=true \
+TESTCONTAINERS_PG_IMAGE=pgvector/pgvector:pg16 \
+mvn -pl spring-ai-rag-core -am \
+  -Dunassigned-chat-fence.it.enabled=true \
+  -Dtest=UnassignedDocumentChatFencePostgresIntegrationTest \
+  -Dsurefire.failIfNoSpecifiedTests=false test
+```
+
+也可以通过 `./scripts/verify-gated-it.sh UnassignedDocumentChatFencePostgresIntegrationTest`
+加入完整门控清单运行；该测试只使用一次性 PostgreSQL，不调用真实模型 provider。
 
 ### 路径穿越探测（不设门控 — 随默认测试跑）
 
