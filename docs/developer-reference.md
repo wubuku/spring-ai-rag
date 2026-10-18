@@ -1,5 +1,7 @@
 # Developer Reference
 
+Additive capabilities: [trustworthy assertions, active diagnostics and offline quality admission](trustworthy-evaluation-admission.md); existing API contracts and ordinary Chat evaluation costs are unchanged.
+
 ## Quality Stability And Production Recovery
 
 ```bash

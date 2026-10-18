@@ -319,6 +319,13 @@ def main() -> int:
         **quality_summary(runs, expected),
     }
     private_json(args.output_directory, "summary.json", summary)
+    if args.output_directory and args.profile == "quality":
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("quality_artifacts", Path(__file__).parent / "lib/knowledge_quality.py")
+        artifacts = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(artifacts)
+        private_json(args.output_directory, "definition.json", definition)
+        artifacts.manifest(args.output_directory, "KNOWLEDGE_QUALITY")
     print(json.dumps({key: value for key, value in summary.items()
                       if key not in ("caseResults", "aggregateMetrics")}, ensure_ascii=False))
     return 1 if failures else 0

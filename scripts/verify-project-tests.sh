@@ -54,6 +54,9 @@ pass "Backup bundle safety and fail-closed restore self-test"
 python3 scripts/test-support/knowledge-qa-quality-self-test.py
 pass "Versioned knowledge QA quality matrix fail-closed self-test"
 
+python3 scripts/test-support/trustworthy-evaluation-self-test.py
+pass "Structured assertions, private diagnostics and quality admission self-test"
+
 python3 scripts/test-support/rag-recovery-gate-self-test.py
 pass "Recovery privacy and authority checkpoint fail-closed self-test"
 

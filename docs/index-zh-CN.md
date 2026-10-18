@@ -1,5 +1,7 @@
 # 文档索引
 
+本批增量能力：[可信断言、主动诊断与离线质量发布准入](trustworthy-evaluation-admission-zh-CN.md)；既有 API 契约不变，普通 Chat 不增加评测费用。
+
 > 📖 [English](index.md) · 📖 [中文](index-zh-CN.md)
 
 > spring-ai-rag 文档导航。先读本页，再按任务下钻，避免一次加载全部细节。

@@ -199,6 +199,7 @@ public class EvaluationSuiteService {
         ObjectNode configuration = objectMapper.createObjectNode();
         configuration.set("collectionSnapshot", objectMapper.valueToTree(snapshot));
         configuration.set("variantKeys", objectMapper.valueToTree(selectedVariants));
+        configuration.set("collectionContentSha256", objectMapper.valueToTree(caseExecutor.collectionContentSnapshot(allCollectionKeys(definition))));
         for (int slot = 0; slot < Math.max(1, properties.getMaxConcurrentRuns()); slot++) {
             var run = repository.tryInsertRun(
                     version.id(),
@@ -227,6 +228,42 @@ public class EvaluationSuiteService {
         var suite = requireSuiteById(version.suiteId(), owner);
         authorizeDefinition(validator.parse(version.definition()), currentExecutionKey());
         return toRun(suite, version, run, repository.listCaseResults(runId));
+    }
+
+    public Map<String, Object> diagnose(String suiteKey, int versionNumber,
+            com.springairag.api.dto.EvaluationDiagnosticRequest request) {
+        requireEnabled();
+        if (!request.ackPaidModels() || !request.ackSensitiveContent()) throw new IllegalArgumentException("paid-model and sensitive-content acknowledgements required");
+        var suite = requireSuite(suiteKey);
+        var version = repository.findVersion(suite.id(), versionNumber)
+                .orElseThrow(() -> new RagException(ErrorCode.NOT_FOUND, "Suite version not found"));
+        var definition = validator.parse(version.definition());
+        authorizeDefinition(definition, currentExecutionKey());
+        var caseDef = definition.cases().stream().filter(item -> item.id().equals(request.caseId())).findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("unknown diagnostic case"));
+        var variant = definition.variants().stream().filter(item -> item.key().equals(request.variantKey())).findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("unknown diagnostic variant"));
+        if (!caseDef.isKnowledgeQa() || caseDef.judge().enabled()) throw new IllegalArgumentException("diagnostics requires KNOWLEDGE_QA with judge disabled");
+        try (var capture = EvaluationDiagnosticCapture.open()) {
+            var outcome = executeCase(caseDef, variant, currentExecutionKey(), ChatPrincipal.fromCurrentRequest().id());
+            authorizeDefinition(definition, currentExecutionKey());
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("formatVersion", 1);
+            result.put("executionKind", "NEW_PAID_EXECUTION_NOT_HISTORICAL_REPLAY");
+            result.put("suiteKey", suiteKey);
+            result.put("version", versionNumber);
+            result.put("definitionSha256", definition.sha256());
+            result.put("caseId", caseDef.id());
+            result.put("variantKey", variant.key());
+            result.put("status", outcome.status());
+            result.put("metrics", outcome.metrics());
+            result.put("retrievedIdentities", outcome.identities());
+            result.put("errorCode", outcome.errorCode());
+            result.put("traceId", outcome.traceId());
+            result.put("latencyMs", outcome.latencyMs());
+            result.put("capture", capture.snapshot());
+            return result;
+        }
     }
 
     public EvaluationCompareResponse compare(UUID leftRunId, UUID rightRunId) {
@@ -518,6 +555,7 @@ public class EvaluationSuiteService {
             ChatExecutionService.PreparedExecution prepared =
                     chatExecutionService.prepareForOperation(command, null, false);
             ChatExecutionResult result = prepared.result();
+            EvaluationDiagnosticCapture.result(result);
             List<EvaluationSuiteDefinition.Identity> sources = caseExecutor.lookupSources(result.sources());
             KnowledgeQaEvaluator.Result deterministic = knowledgeQaEvaluator.evaluate(
                     caseDef, result, sources);

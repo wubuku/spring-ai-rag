@@ -62,6 +62,15 @@ public class EvaluationSuiteController {
         return service.createRun(request);
     }
 
+    @PostMapping("/suites/{suiteKey}/versions/{version}/diagnose")
+    @com.springairag.core.security.ApiRoutePolicy(access = com.springairag.core.security.ApiRoutePolicy.Access.WRITE)
+    public org.springframework.http.ResponseEntity<java.util.Map<String, Object>> diagnose(
+            @PathVariable String suiteKey, @PathVariable int version,
+            @Valid @RequestBody com.springairag.api.dto.EvaluationDiagnosticRequest request) {
+        return org.springframework.http.ResponseEntity.ok().cacheControl(org.springframework.http.CacheControl.noStore())
+                .body(service.diagnose(suiteKey, version, request));
+    }
+
     @GetMapping("/runs/{runId}")
     public EvaluationRunResponse getRun(@PathVariable UUID runId) {
         return service.getRun(runId);

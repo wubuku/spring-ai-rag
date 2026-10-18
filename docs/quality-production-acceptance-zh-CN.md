@@ -1,5 +1,7 @@
 # 质量稳定性与生产恢复验收
 
+本批增量能力：[可信断言、主动诊断与离线质量发布准入](trustworthy-evaluation-admission-zh-CN.md)；既有 API 契约不变，普通 Chat 不增加评测费用。
+
 > [English](quality-production-acceptance.md) | [中文](quality-production-acceptance-zh-CN.md)
 
 本页定义主动执行的质量、双实例和恢复检查；不是新调度平台，也不会为普通 Chat 增加评测费用。

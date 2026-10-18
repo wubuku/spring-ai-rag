@@ -1,5 +1,7 @@
 # Quality Stability And Production Recovery Acceptance
 
+Additive capabilities: [trustworthy assertions, active diagnostics and offline quality admission](trustworthy-evaluation-admission.md); existing API contracts and ordinary Chat evaluation costs are unchanged.
+
 > [English](quality-production-acceptance.md) | [中文](quality-production-acceptance-zh-CN.md)
 
 These are explicitly invoked quality, two-node, and recovery checks, not a new scheduler or additional evaluation

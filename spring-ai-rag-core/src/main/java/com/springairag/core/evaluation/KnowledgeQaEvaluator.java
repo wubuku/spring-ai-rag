@@ -65,6 +65,13 @@ public class KnowledgeQaEvaluator {
         boolean refusal = response != null && Boolean.TRUE.equals(response.metadata().get("modelSafetyRefusal"))
                 || containsInsufficientMarker(normalizedAnswer);
         List<String> failures = new ArrayList<>();
+        boolean modelSafetyRefusal = response != null && Boolean.TRUE.equals(response.metadata().get("modelSafetyRefusal"));
+        String observedOutcome = modelSafetyRefusal ? "MODEL_SAFETY_REFUSAL" : refusal ? "INSUFFICIENT_EVIDENCE" : "ANSWER";
+        List<Map<String, Object>> assertions = StructuredAnswerAssertions.evaluate(caseDef.assertions(), answer).stream()
+                .map(item -> { Map<String, Object> metric = new LinkedHashMap<>(item); metric.remove("matchedText"); return metric; })
+                .toList();
+        if (assertions.stream().anyMatch(assertion -> !Boolean.TRUE.equals(assertion.get("passed")))) failures.add("STRUCTURED_ASSERTION_FAILED");
+        if (caseDef.expectedOutcome() != null && !caseDef.expectedOutcome().equals(observedOutcome)) failures.add("OUTCOME_MISMATCH");
         if ("SUFFICIENT".equals(caseDef.evidenceExpectation())
                 && matchedSources != expected.size()) {
             failures.add("EXPECTED_SOURCE_MISSING");
@@ -78,7 +85,7 @@ public class KnowledgeQaEvaluator {
         if ("INSUFFICIENT".equals(caseDef.evidenceExpectation()) && !refusal) {
             failures.add("INSUFFICIENT_EVIDENCE_NOT_DECLARED");
         }
-        if (!isCitationAcceptable(
+        if (!(modelSafetyRefusal && "MODEL_SAFETY_REFUSAL".equals(caseDef.expectedOutcome())) && !isCitationAcceptable(
                 caseDef.evidenceExpectation(),
                 refusal,
                 citation,
@@ -91,6 +98,8 @@ public class KnowledgeQaEvaluator {
         Map<String, Object> metrics = new LinkedHashMap<>();
         metrics.put("task", "KNOWLEDGE_QA");
         metrics.put("deterministicPass", failures.isEmpty());
+        metrics.put("observedOutcome", observedOutcome);
+        metrics.put("assertions", assertions);
         metrics.put("sourceCoverage", Map.of(
                 "expected", expected.size(),
                 "matched", matchedSources,

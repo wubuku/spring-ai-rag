@@ -23,7 +23,9 @@ public record EvaluationSuiteDefinition(
             List<String> requiredFacts,
             List<String> forbiddenFacts,
             String evidenceExpectation,
-            JudgeDef judge) {
+            JudgeDef judge,
+            List<StructuredAnswerAssertions.Rule> assertions,
+            String expectedOutcome) {
 
         public CaseDef {
             task = task == null || task.isBlank() ? "RETRIEVAL" : task;
@@ -32,6 +34,14 @@ public record EvaluationSuiteDefinition(
             evidenceExpectation = evidenceExpectation == null || evidenceExpectation.isBlank()
                     ? "SUFFICIENT" : evidenceExpectation;
             judge = judge == null ? JudgeDef.disabled() : judge;
+            assertions = assertions == null ? List.of() : List.copyOf(assertions);
+        }
+
+        public CaseDef(String id, String query, List<String> collectionKeys, List<Identity> relevant,
+                       Double minHitRate, Double minMrr, String task, List<String> requiredFacts,
+                       List<String> forbiddenFacts, String evidenceExpectation, JudgeDef judge) {
+            this(id, query, collectionKeys, relevant, minHitRate, minMrr, task, requiredFacts,
+                    forbiddenFacts, evidenceExpectation, judge, List.of(), null);
         }
 
         /** 保留旧版 Java 调用方和检索套件测试的构造签名。 */

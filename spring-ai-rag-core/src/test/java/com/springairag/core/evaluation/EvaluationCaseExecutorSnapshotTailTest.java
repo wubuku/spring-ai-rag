@@ -38,6 +38,41 @@ import static org.mockito.Mockito.when;
  */
 class EvaluationCaseExecutorSnapshotTailTest {
 
+    @Test
+    void oversizedCorpusLeavesAdmissionUnavailableWithoutBreakingOldRuns() {
+        when(jdbcTemplate.queryForList(Mockito.anyString(), eq(String.class), eq("large"), eq(100001)))
+                .thenReturn(java.util.Collections.nCopies(100001, "hash"));
+        var snapshot = executor().collectionContentSnapshot(List.of("large", "later"));
+        assertTrue(snapshot.containsKey("large"));
+        assertTrue(snapshot.containsKey("later"));
+        org.junit.jupiter.api.Assertions.assertNull(snapshot.get("large"));
+        org.junit.jupiter.api.Assertions.assertNull(snapshot.get("later"));
+        Mockito.verify(jdbcTemplate, Mockito.never()).queryForList(Mockito.anyString(), eq(String.class), eq("later"), anyInt());
+    }
+
+    @Test
+    void contentDigestIsDeterministicAndEmptyCollectionStillHasIdentity() {
+        when(jdbcTemplate.queryForList(Mockito.anyString(), eq(String.class), eq("kb"), eq(100001))).thenReturn(List.of("b", "a"));
+        when(jdbcTemplate.queryForList(Mockito.anyString(), eq(String.class), eq("empty"), eq(99999))).thenReturn(List.of());
+        var snapshot = executor().collectionContentSnapshot(List.of("kb", "empty"));
+        assertEquals(com.springairag.core.util.DigestUtils.sha256("a\nb"), snapshot.get("kb"));
+        assertEquals(com.springairag.core.util.DigestUtils.sha256(""), snapshot.get("empty"));
+    }
+
+    @Test
+    void contentDigestSharesOneReadBudgetAcrossCollections() {
+        var prefix = java.util.Collections.nCopies(100000, "fingerprint");
+        when(jdbcTemplate.queryForList(Mockito.anyString(), eq(String.class), eq("prefix"), eq(100001)))
+                .thenReturn(prefix);
+        when(jdbcTemplate.queryForList(Mockito.anyString(), eq(String.class), eq("overflow"), eq(1)))
+                .thenReturn(List.of("last"));
+        var snapshot = executor().collectionContentSnapshot(List.of("prefix", "overflow", "later"));
+        assertEquals(com.springairag.core.util.DigestUtils.sha256(String.join("\n", prefix)), snapshot.get("prefix"));
+        org.junit.jupiter.api.Assertions.assertNull(snapshot.get("overflow"));
+        org.junit.jupiter.api.Assertions.assertNull(snapshot.get("later"));
+        Mockito.verify(jdbcTemplate, Mockito.never()).queryForList(Mockito.anyString(), eq(String.class), eq("later"), anyInt());
+    }
+
     private JdbcTemplate jdbcTemplate;
     private HybridRetrieverService retrieverService;
 

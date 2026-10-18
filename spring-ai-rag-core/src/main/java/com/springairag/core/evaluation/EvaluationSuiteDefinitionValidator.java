@@ -119,9 +119,18 @@ public class EvaluationSuiteDefinitionValidator {
             throw new IllegalArgumentException(
                     "case " + id + " evidenceExpectation must be SUFFICIENT or INSUFFICIENT");
         }
+        if (node.hasNonNull("expectedOutcome") && (!node.get("expectedOutcome").isTextual() || node.get("expectedOutcome").asText().isBlank())) throw new IllegalArgumentException("expectedOutcome must be nonblank text");
+        String expectedOutcome = text(node, "expectedOutcome", false);
+        if (expectedOutcome != null && !java.util.Set.of("ANSWER", "INSUFFICIENT_EVIDENCE", "MODEL_SAFETY_REFUSAL").contains(expectedOutcome)) {
+            throw new IllegalArgumentException("invalid expectedOutcome");
+        }
+        List<StructuredAnswerAssertions.Rule> assertions = StructuredAnswerAssertions.parse(node.get("assertions"));
+        if ("RETRIEVAL".equals(task) && (expectedOutcome != null || !assertions.isEmpty())) {
+            throw new IllegalArgumentException("answer assertions require KNOWLEDGE_QA");
+        }
         JsonNode relevantNode = node.get("relevant");
         boolean allowEmptyRelevant = "KNOWLEDGE_QA".equals(task)
-                && "INSUFFICIENT".equals(evidenceExpectation);
+                && ("INSUFFICIENT".equals(evidenceExpectation) || "MODEL_SAFETY_REFUSAL".equals(expectedOutcome));
         if (relevantNode == null || !relevantNode.isArray()
                 || (!allowEmptyRelevant && relevantNode.isEmpty())) {
             throw new IllegalArgumentException("case " + id + " requires relevant identities");
@@ -181,7 +190,7 @@ public class EvaluationSuiteDefinitionValidator {
         }
         return new EvaluationSuiteDefinition.CaseDef(
                 id, query, List.copyOf(keys), List.copyOf(relevant), minHitRate, minMrr,
-                task, requiredFacts, forbiddenFacts, evidenceExpectation, judge);
+                task, requiredFacts, forbiddenFacts, evidenceExpectation, judge, assertions, expectedOutcome);
     }
 
     private List<String> facts(JsonNode node, String id, String field) {

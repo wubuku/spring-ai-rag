@@ -1,5 +1,7 @@
 # Testing Guide
 
+Additive capabilities: [trustworthy assertions, active diagnostics and offline quality admission](trustworthy-evaluation-admission.md); existing API contracts and ordinary Chat evaluation costs are unchanged.
+
 ## Repeated Real Quality And Two-Node Recovery
 
 Run the two Python self-tests, then `python3 scripts/verify-quality-production-e2e.py` for repeated24-case

@@ -1,5 +1,7 @@
 # Documentation Index
 
+Additive capabilities: [trustworthy assertions, active diagnostics and offline quality admission](trustworthy-evaluation-admission.md); existing API contracts and ordinary Chat evaluation costs are unchanged.
+
 > 📖 [English](index.md) · 📖 [中文](index-zh-CN.md)
 
 > Navigation hub for spring-ai-rag. Read this page first, then drill down by task — avoid loading every detail at once.

@@ -14,6 +14,28 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class KnowledgeQaEvaluatorTest {
 
     @Test
+    void structuredAssertionsAreAdditionalHardGatesAndSafetyOutcomeIsExplicit() {
+        var rule = new StructuredAnswerAssertions.Rule("zero", "QUANTITY", false, "0", "条", null, null, List.of());
+        var definition = new EvaluationSuiteDefinition.CaseDef("case", "问题", List.of("kb"),
+                List.of(), null, null, "KNOWLEDGE_QA", List.of(), List.of(), "SUFFICIENT",
+                EvaluationSuiteDefinition.JudgeDef.disabled(), List.of(rule), "ANSWER");
+        var response = new ChatExecutionResult("零条", "s", null, null, "model", ChatMode.KNOWLEDGE,
+                List.of(), Map.of(), null, List.of(), Map.of());
+        assertTrue(evaluator.evaluate(definition, response, List.of()).deterministicPass());
+        var wrong = new ChatExecutionResult("10条", "s", null, null, "model", ChatMode.KNOWLEDGE,
+                List.of(), Map.of(), null, List.of(), Map.of());
+        assertTrue(evaluator.evaluate(definition, wrong, List.of()).failureReasons().contains("STRUCTURED_ASSERTION_FAILED"));
+        var safety = new EvaluationSuiteDefinition.CaseDef("safety", "问题", List.of("kb"),
+                List.of(), null, null, "KNOWLEDGE_QA", List.of(), List.of(), "SUFFICIENT",
+                EvaluationSuiteDefinition.JudgeDef.disabled(), List.of(), "MODEL_SAFETY_REFUSAL");
+        var refusal = new ChatExecutionResult("安全策略拒答", "s", null, null, "model", ChatMode.KNOWLEDGE,
+                List.of(), Map.of(), null, List.of(), Map.of("modelSafetyRefusal", true));
+        assertTrue(evaluator.evaluate(safety, refusal, List.of()).deterministicPass());
+        assertTrue(evaluator.evaluate(definition, refusal, List.of()).failureReasons().contains("OUTCOME_MISMATCH"));
+        assertTrue(evaluator.evaluate(safety, response, List.of()).failureReasons().contains("OUTCOME_MISMATCH"));
+    }
+
+    @Test
     void explicitSafetyRefusalIsNormalInsufficientAnswerWithoutKeywordGuessing() {
         var definition = new EvaluationSuiteDefinition.CaseDef("safety", "敏感问题", List.of("kb"),
                 List.of(), null, null, "KNOWLEDGE_QA", List.of(), List.of(), "INSUFFICIENT",

@@ -16,6 +16,7 @@ final class SafetyRefusalChatModel implements ChatModel {
 
     @Override
     public ChatResponse call(Prompt prompt) {
+        com.springairag.core.evaluation.EvaluationDiagnosticCapture.prompt(prompt);
         return ModelSafetyRefusalNormalizer.normalize(delegate.call(prompt));
     }
 

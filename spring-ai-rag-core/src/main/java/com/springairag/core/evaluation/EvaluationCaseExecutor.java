@@ -190,6 +190,27 @@ public class EvaluationCaseExecutor {
         return snapshot;
     }
 
+    public Map<String, Object> collectionContentSnapshot(List<String> collectionKeys) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+        int count = 0;
+        for (String key : collectionKeys) {
+            if (count > 100000) {
+                snapshot.put(key, null);
+                continue;
+            }
+            List<String> hashes = jdbcTemplate.queryForList("""
+                    SELECT encode(sha256(convert_to(jsonb_build_array(d.source_namespace,d.external_id,
+                           d.title,d.content,d.metadata,d.enabled,d.source_deleted_at IS NOT NULL)::text,'UTF8')),'hex') AS fingerprint
+                    FROM rag_documents d JOIN rag_collection c ON c.id=d.collection_id
+                    WHERE c.collection_key=? LIMIT ?
+                    """, String.class, key, 100001 - count);
+            count += hashes.size();
+            snapshot.put(key, count > 100000 ? null : com.springairag.core.util.DigestUtils.sha256(
+                    String.join("\n", hashes.stream().sorted().toList())));
+        }
+        return snapshot;
+    }
+
     public record Executed(
             List<EvaluationSuiteDefinition.Identity> identities,
             java.util.UUID traceId,

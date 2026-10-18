@@ -109,8 +109,18 @@ def main():
                         if case["query"] in messages:
                             handles = reference_handles(messages)
                             citation = " [" + handles[0] + "]" if handles else ""
+                            facts = list(case["requiredFacts"])
+                            for rule in case.get("assertions", []):
+                                if rule.get("forbidden"):
+                                    continue
+                                if rule["type"] == "TEXT_ANY":
+                                    facts.append(rule["alternatives"][0])
+                                elif rule["type"] == "TOKEN":
+                                    facts.append(rule["value"])
+                                else:
+                                    facts.append(rule.get("value", rule.get("min", "")) + rule["unit"])
                             answer = ("资料不足，无法确认。" if case["evidenceExpectation"] == "INSUFFICIENT"
-                                      else "；".join(case["requiredFacts"]) + "。" + citation)
+                                      else "；".join(facts) + "。" + citation)
                             break
                     if fault.get("answerOverride") is not None:
                         answer = fault["answerOverride"]

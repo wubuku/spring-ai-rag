@@ -1284,6 +1284,9 @@ public class ChatExecutionService {
         if (mode == ChatMode.KNOWLEDGE) {
             Object value = response.context().get(
                     RetrievalAugmentationAdvisor.DOCUMENT_CONTEXT);
+            com.springairag.core.evaluation.EvaluationDiagnosticCapture.evidence(
+                    value instanceof List<?> values ? values.stream().filter(Document.class::isInstance)
+                            .map(Document.class::cast).toList() : List.of());
             if (value instanceof List<?> values) {
                 List<Document> documents = values.stream()
                         .filter(Document.class::isInstance)

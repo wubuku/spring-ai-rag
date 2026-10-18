@@ -1,5 +1,7 @@
 # 1.0 Release Checklist
 
+Additive capabilities: [trustworthy assertions, active diagnostics and offline quality admission](trustworthy-evaluation-admission.md); existing API contracts and ordinary Chat evaluation costs are unchanged.
+
 Incremental quality/recovery releases should execute [repeated real quality and two-node recovery](quality-production-acceptance.md),
 retaining every real failure rather than only the last passing run. SQL restore, checkpoint inventory verification and
 final traffic acceptance are distinct gates. Missing trusted recent authority, deletion/policy differences or absent

@@ -1,5 +1,7 @@
 # 测试指南
 
+本批增量能力：[可信断言、主动诊断与离线质量发布准入](trustworthy-evaluation-admission-zh-CN.md)；既有 API 契约不变，普通 Chat 不增加评测费用。
+
 ## 多轮真实质量与双实例恢复闭环
 
 先运行两个Python自测，再执行 `python3 scripts/verify-quality-production-e2e.py`，验证24例多轮

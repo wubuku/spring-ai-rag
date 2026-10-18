@@ -18,7 +18,7 @@ SPEC.loader.exec_module(QUALITY)
 
 
 class RealAcceptance(QUALITY.BASE.Acceptance):
-    def __init__(self, providers, repeats, definition=None):
+    def __init__(self, providers, repeats, definition=None, diagnostics=False):
         super().__init__()
         old_directory = self.directory
         self.directory = ROOT / ".verification/quality-real" / old_directory.name
@@ -28,6 +28,7 @@ class RealAcceptance(QUALITY.BASE.Acceptance):
         self.current_provider = providers[0]
         self.repeats = repeats
         self.definition = definition or QUALITY.FIXTURES / "definition.json"
+        self.diagnostics = diagnostics
 
     def start(self, database="rag_source"):
         environment = dict(self.environment, SERVER_PORT=str(self.http_port), SPRING_PROFILES_ACTIVE="postgresql",
@@ -82,6 +83,21 @@ class RealAcceptance(QUALITY.BASE.Acceptance):
                   + "; actualModels=" + ",".join(models), flush=True)
             if result.returncode:
                 failures.append(provider + ": deterministic quality gate failed (all results retained)")
+            if self.diagnostics:
+                diagnostic_root = self.directory / (provider + '-diagnostics')
+                with (self.directory / (provider + '-diagnostic.log')).open('wb') as log:
+                    diagnostic = subprocess.run([sys.executable, 'scripts/knowledge-qa-diagnostics.py', 'record',
+                        '--root', str(diagnostic_root), '--definition', str(self.definition),
+                        '--suite-key', environment['KNOWLEDGE_QA_SUITE_KEY'], '--version', '1',
+                        '--case-id', 'current-price', '--ack-paid-models', '--ack-sensitive-content'],
+                        cwd=ROOT, env=environment, stdout=log, stderr=log)
+                if diagnostic.returncode:
+                    failures.append(provider + ': diagnostic hard gate failed')
+                else:
+                    directory = next(diagnostic_root.iterdir())
+                    self.command([sys.executable, 'scripts/knowledge-qa-diagnostics.py', 'replay',
+                                  '--directory', str(directory)], provider + '-diagnostic-replay')
+                    self.results[-1]['diagnosticReplay'] = 'PASSED'
             if not traces or len(traces) != len(summary["caseResults"]):
                 failures.append(provider + ": QA diagnostics trace attribution missing")
             for trace_id in traces[:1] + traces[-1:]:
@@ -111,7 +127,11 @@ def main():
     parser.add_argument("--providers", default="openai,minimax")
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--definition", type=Path, default=QUALITY.FIXTURES / "definition.json")
+    parser.add_argument('--with-diagnostics', action='store_true')
+    parser.add_argument('--ack-sensitive-content', action='store_true')
     args = parser.parse_args()
+    if args.with_diagnostics and not args.ack_sensitive_content:
+        parser.error('diagnostics additionally requires explicit sensitive-content acknowledgement')
     providers = args.providers.split(",")
     if not args.ack_paid_models or not 2 <= args.repeats <= 10 or len(set(providers)) != len(providers):
         parser.error("explicit paid acknowledgement, unique providers and 2..10 repeats required")
@@ -121,7 +141,7 @@ def main():
     if any(not os.environ.get(name) for name in ("RAG_EMBEDDING_API_KEY", "RAG_EMBEDDING_BASE_URL", "RAG_EMBEDDING_MODEL")):
         parser.error("real embedding credentials/configuration missing")
     os.umask(0o077)
-    acceptance = RealAcceptance(providers, args.repeats, args.definition.resolve())
+    acceptance = RealAcceptance(providers, args.repeats, args.definition.resolve(), args.with_diagnostics)
     print("Evidence: " + str(acceptance.directory), flush=True)
     try:
         acceptance.setup()

@@ -24,6 +24,7 @@ RUN_NPM_CI=1
 RUN_RUNTIME_E2E=0
 RUN_GOLDENSET=0
 RUN_QUALITY_REGRESSION=0
+RUN_KNOWLEDGE_QUALITY=0
 RUN_COLLECTION_COVERAGE=0
 RUN_REAL_LLM=0
 RUN_NEXT_HIGH_VALUE=0
@@ -56,6 +57,8 @@ Options:
       --with-goldenset    Run retrieval goldenset against BASE_URL
       --with-quality-regression
                           Run the versioned retrieval regression gate
+      --with-knowledge-quality
+                          Verify candidate QA artifacts against an approved baseline (offline)
       --with-collection-coverage
                           Run the Collection coverage HTTP regression
       --with-real-llm     Run real LLM smoke against REAL_LLM_BASE_URL
@@ -73,6 +76,10 @@ Options:
 Environment:
   VERIFY_LOG_DIR          Override log directory
   VERIFY_GENERATED_AT     Override summary timestamp (useful for reproducible records)
+  KNOWLEDGE_QUALITY_CANDIDATE / KNOWLEDGE_QUALITY_BASELINE
+                          Private candidate and independently approved baseline artifact directories
+  KNOWLEDGE_QUALITY_BASELINE_SHA256
+                          Trusted manifest SHA256, required by --with-knowledge-quality
   PLAYWRIGHT_PORT         Preferred Vite preview port (default: 4173; falls back if busy)
   BASE_URL                Runtime E2E/goldenset URL (default: http://127.0.0.1:8081)
   REAL_LLM_BASE_URL       Real LLM server URL (default: http://127.0.0.1:18081)
@@ -92,6 +99,7 @@ while [[ $# -gt 0 ]]; do
     --with-runtime-e2e) RUN_RUNTIME_E2E=1; shift ;;
     --with-goldenset) RUN_GOLDENSET=1; shift ;;
     --with-quality-regression) RUN_QUALITY_REGRESSION=1; shift ;;
+    --with-knowledge-quality) RUN_KNOWLEDGE_QUALITY=1; shift ;;
     --with-collection-coverage) RUN_COLLECTION_COVERAGE=1; shift ;;
     --with-real-llm) RUN_REAL_LLM=1; shift ;;
     --with-next-high-value) RUN_NEXT_HIGH_VALUE=1; shift ;;
@@ -538,6 +546,12 @@ if [[ "$RUN_QUALITY_REGRESSION" == "1" ]]; then
 else
   skip_gate "Retrieval quality regression" \
     "enable with --with-quality-regression"
+fi
+
+if [[ "$RUN_KNOWLEDGE_QUALITY" == "1" ]]; then
+  run_gate "Knowledge QA quality admission (offline)" python3 scripts/verify-knowledge-quality-admission.py
+else
+  skip_gate "Knowledge QA quality admission (offline)" "enable with --with-knowledge-quality"
 fi
 
 if [[ "$RUN_COLLECTION_COVERAGE" == "1" ]]; then

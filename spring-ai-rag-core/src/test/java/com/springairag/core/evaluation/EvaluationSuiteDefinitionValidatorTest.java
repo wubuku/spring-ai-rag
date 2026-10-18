@@ -13,6 +13,21 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class EvaluationSuiteDefinitionValidatorTest {
 
+    @Test
+    void newRulesAreOptionalStrictAndOnlyAllowedForKnowledgeQa() throws Exception {
+        ObjectNode definition = validDefinition();
+        ObjectNode caseDef = (ObjectNode) definition.path("cases").get(0);
+        caseDef.putArray("assertions").addObject().put("id", "zero").put("type", "QUANTITY").put("value", "0").put("unit", "条");
+        caseDef.put("expectedOutcome", "ANSWER");
+        assertThrows(IllegalArgumentException.class, () -> validator.parse(definition));
+        caseDef.put("task", "KNOWLEDGE_QA");
+        assertEquals(1, validator.parse(definition).cases().get(0).assertions().size());
+        caseDef.put("expectedOutcome", "UNKNOWN");
+        assertThrows(IllegalArgumentException.class, () -> validator.parse(definition));
+        caseDef.putNull("expectedOutcome");
+        assertThrows(IllegalArgumentException.class, () -> validator.parse(definition));
+    }
+
     private final ObjectMapper mapper = new ObjectMapper();
     private final EvaluationSuiteDefinitionValidator validator =
             new EvaluationSuiteDefinitionValidator(
