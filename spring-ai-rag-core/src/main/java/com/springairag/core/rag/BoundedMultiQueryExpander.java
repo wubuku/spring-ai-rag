@@ -29,14 +29,26 @@ public final class BoundedMultiQueryExpander implements QueryExpander {
     private final QueryExpander delegate;
     private final int plannedQueries;
     private final boolean includeOriginal;
+    private final QueryEnhancementExecutor enhancements;
+    private final com.springairag.core.chat.ChatExecutionBudget budget;
+    private final java.time.Duration timeout;
 
     public BoundedMultiQueryExpander(
             QueryExpander delegate,
             int plannedQueries,
             boolean includeOriginal) {
+        this(delegate, plannedQueries, includeOriginal, null, null, java.time.Duration.ofSeconds(5));
+    }
+
+    public BoundedMultiQueryExpander(QueryExpander delegate, int plannedQueries, boolean includeOriginal,
+                                    QueryEnhancementExecutor enhancements, com.springairag.core.chat.ChatExecutionBudget budget,
+                                    java.time.Duration timeout) {
         this.delegate = Objects.requireNonNull(delegate, "delegate cannot be null");
         this.plannedQueries = Math.max(1, plannedQueries);
         this.includeOriginal = includeOriginal;
+        this.enhancements = enhancements;
+        this.budget = budget;
+        this.timeout = timeout;
     }
 
     @Override
@@ -46,9 +58,16 @@ public final class BoundedMultiQueryExpander implements QueryExpander {
         List<Query> expanded;
         boolean degraded = false;
         try {
-            expanded = delegate.expand(query);
+            if (enhancements != null) {
+                var outcome = enhancements.execute("QUERY_EXPAND", budget, timeout, () -> delegate.expand(query), List.of(query));
+                expanded = outcome.value();
+                degraded = !outcome.succeeded();
+            } else {
+                expanded = delegate.expand(query);
+            }
         } catch (RuntimeException ex) {
             com.springairag.core.admission.AdmissionRejectedException.propagate(ex);
+            if (ex instanceof com.springairag.core.exception.RagException || ex instanceof java.util.concurrent.CancellationException) throw ex;
             log.warn("Query expansion failed; using the input query unchanged");
             expanded = List.of(query);
             degraded = true;

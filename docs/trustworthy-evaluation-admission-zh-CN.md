@@ -1,5 +1,8 @@
 # 可信断言、主动诊断与质量准入
 
+字段级完整性及保守部分复核见[诊断完整性 §4](candidate-isolation-answer-contract-zh-CN.md#4-字段级诊断完整性)。
+整体不完整时仍为 INCONCLUSIVE；部分答案断言不证明证据或授权正确，且不升级原失败。
+
 > [English](trustworthy-evaluation-admission.md) | [中文](trustworthy-evaluation-admission-zh-CN.md)
 
 本能力默认可用，不改变已有 Chat、Search、Evaluation 的 URL、成功信封或必填参数。

@@ -79,7 +79,8 @@
             "citationRegistry": "object",
             "collectionCoverage": "object",
             "modelSafetyRefusal": "boolean",
-            "answerOutcome": "object"
+            "answerOutcome": "object",
+            "answerContract": "object"
           },
           "nestedFields": {
             "answerOutcome": ["status", "reasonCode"],
@@ -127,7 +128,8 @@
             "citationRegistry": "object",
             "collectionCoverage": "object",
             "modelSafetyRefusal": "boolean",
-            "answerOutcome": "object"
+            "answerOutcome": "object",
+            "answerContract": "object"
           },
           "nestedFields": {
             "answerOutcome": ["status", "reasonCode"],

@@ -104,7 +104,8 @@ public class ChatCommandMapper {
                 options,
                 request.getMetadata() != null ? request.getMetadata() : Map.of())
                 .withRequestTraceId(RequestTraceFilter.currentRequestTraceId())
-                .withFilters(filters);
+                .withFilters(filters)
+                .withAnswerRequirements(com.springairag.core.evaluation.AnswerContractValidator.parse(request.getAnswerRequirements()));
     }
 
     /**
@@ -165,7 +166,8 @@ public class ChatCommandMapper {
                             request.getMessage())),
                     candidates)
                     .withRequestTraceId(RequestTraceFilter.currentRequestTraceId())
-                    .withFilters(filters);
+                    .withFilters(filters)
+                    .withAnswerRequirements(com.springairag.core.evaluation.AnswerContractValidator.parse(request.getAnswerRequirements()));
         } catch (RagException e) {
             throw e;
         } catch (Exception e) {

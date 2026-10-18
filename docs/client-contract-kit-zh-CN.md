@@ -1,5 +1,8 @@
 # Client Consumer Contract Kit
 
+可选[回答契约及重放语义](candidate-isolation-answer-contract-zh-CN.md#3-请求级回答契约)：
+新 Client 校验 `answerContract`；旧服务可能忽略参数，不能只凭200宣称约束生效。旧请求不需升级。
+
 > [English](client-contract-kit.md) | [中文](client-contract-kit-zh-CN.md)
 
 本指南说明外部 Client 如何使用和验收 `spring-ai-rag` 的 HTTP 契约。它面向不依赖 WebUI、

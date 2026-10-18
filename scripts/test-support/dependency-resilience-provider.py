@@ -70,6 +70,9 @@ def main():
                         for name in ("answerOverride", "refusalOverride", "finishReasonOverride"):
                             if name in body:
                                 state[kind][name] = body[name]
+                        for name in ("modelFaults", "phaseFaults"):
+                            if name in body:
+                                state[kind][name] = body[name]
                 self.send_json(200, {"status": "configured"})
                 return
             kind = {"/v1/embeddings": "embeddings", "/v1/rerank": "rerank",
@@ -86,6 +89,14 @@ def main():
                     state[kind]["groundedActive"] += 1
                 state[kind]["peak"] = max(state[kind]["peak"], state[kind]["active"])
                 fault = dict(state[kind])
+                if kind == "chat":
+                    model = body.get("model", "controlled")
+                    counts = state[kind].setdefault("modelCalls", {})
+                    counts[model] = counts.get(model, 0) + 1
+                    fault.update(state[kind].get("modelFaults", {}).get(model, {}))
+                    phase = "expand" if any("information-retrieval query expansion component" in str(message.get("content", ""))
+                                               for message in body.get("messages", [])) else "answer"
+                    fault.update(state[kind].get("phaseFaults", {}).get(phase, {}))
             try:
                 time.sleep(fault["delayMs"] / 1000)
                 if fault["disconnect"]:

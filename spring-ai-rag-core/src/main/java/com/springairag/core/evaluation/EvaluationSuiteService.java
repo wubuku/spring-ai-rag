@@ -200,6 +200,15 @@ public class EvaluationSuiteService {
         configuration.set("collectionSnapshot", objectMapper.valueToTree(snapshot));
         configuration.set("variantKeys", objectMapper.valueToTree(selectedVariants));
         configuration.set("collectionContentSha256", objectMapper.valueToTree(caseExecutor.collectionContentSnapshot(allCollectionKeys(definition))));
+        ObjectNode enhancementPolicy = configuration.putObject("queryEnhancementPolicy");
+        enhancementPolicy.put("version", "SHARED_POOL_ANSWER_HEADROOM_V1");
+        enhancementPolicy.put("admissionEnabled", admissionProperties.isEnabled());
+        enhancementPolicy.put("maxBackgroundModelCalls", admissionProperties.getMaxBackgroundModelCalls());
+        enhancementPolicy.put("runConcurrency", properties.getRunConcurrency());
+        enhancementPolicy.put("maxConcurrentRuns", properties.getMaxConcurrentRuns());
+        enhancementPolicy.put("maxModelCalls", admissionProperties.getMaxModelCalls());
+        enhancementPolicy.put("maxModelCallsPerPrincipal", admissionProperties.getMaxModelCallsPerPrincipal());
+        enhancementPolicy.put("maxModelCallsPerProvider", admissionProperties.getMaxModelCallsPerProvider());
         for (int slot = 0; slot < Math.max(1, properties.getMaxConcurrentRuns()); slot++) {
             var run = repository.tryInsertRun(
                     version.id(),

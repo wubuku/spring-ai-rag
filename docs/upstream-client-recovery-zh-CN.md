@@ -1,5 +1,8 @@
 # 上游故障与 Client 恢复
 
+熔断现默认采用[候选模型隔离](candidate-isolation-answer-contract-zh-CN.md#1-候选模型故障隔离)，
+而非让单个故障拦住健康候选；拒答仍为正常结果，既有错误信封不变。
+
 > [English](upstream-client-recovery.md) | [中文](upstream-client-recovery-zh-CN.md)
 
 ## 兼容与默认行为

@@ -122,6 +122,12 @@ public class OpenAiChatCompletionRequest {
     }
 
     public static class RagOptions {
+        @JsonProperty("answer_requirements")
+        @JsonAlias("answerRequirements")
+        private JsonNode answerRequirements;
+
+        public JsonNode getAnswerRequirements() { return answerRequirements; }
+        public void setAnswerRequirements(JsonNode value) { answerRequirements = value; }
         private Scope scope;
         @JsonProperty("document_ids")
         private List<Long> documentIds;

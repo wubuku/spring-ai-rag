@@ -134,7 +134,9 @@ public class OpenAiChatRequestMapper {
                 declaration.inputMessages(),
                 alias.candidates())
                 .withRequestTraceId(RequestTraceFilter.currentRequestTraceId())
-                .withFilters(declaration.filters());
+                .withFilters(declaration.filters())
+                .withAnswerRequirements(com.springairag.core.evaluation.AnswerContractValidator.parse(
+                        request.getRag() == null ? null : request.getRag().getAnswerRequirements()));
         return new MappedRequest(
                 alias.alias(),
                 Boolean.TRUE.equals(request.getStream()),
@@ -279,7 +281,9 @@ public class OpenAiChatRequestMapper {
                     declaration.inputMessages(),
                     candidates)
                     .withRequestTraceId(RequestTraceFilter.currentRequestTraceId())
-                    .withFilters(declaration.filters());
+                    .withFilters(declaration.filters())
+                    .withAnswerRequirements(com.springairag.core.evaluation.AnswerContractValidator.parse(
+                            request.getRag() == null ? null : request.getRag().getAnswerRequirements()));
             return new MappedRequest(
                     declaredModel,
                     Boolean.TRUE.equals(request.getStream()),

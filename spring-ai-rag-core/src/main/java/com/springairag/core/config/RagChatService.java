@@ -110,6 +110,12 @@ public class RagChatService {
     private ChatExecutionService modeAwareExecutionService;
     private ChatCommandMapper chatCommandMapper;
     private RetrievalDiagnosticsService diagnosticsService;
+    private com.springairag.core.resilience.CandidateCircuitRegistry candidateCircuits;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setCandidateCircuitRegistry(com.springairag.core.resilience.CandidateCircuitRegistry registry) {
+        this.candidateCircuits = registry;
+    }
 
     /**
      * Returns the LLM circuit breaker instance (may be null when not enabled)
@@ -530,7 +536,10 @@ public class RagChatService {
                 response.setStepMetrics(callResult.pipelineMetrics);
                 return response;
             } catch (LlmCircuitOpenException e) {
-                // Do not try other models when circuit is open
+                if (candidateCircuits != null) {
+                    lastFailure = e;
+                    continue;
+                }
                 throw e;
             } catch (RuntimeException e) {
                 lastFailure = e;
@@ -557,6 +566,7 @@ public class RagChatService {
     }
 
     public void assertCircuitBreakerAllowsCall() {
+        if (candidateCircuits != null) return;
         if (circuitBreaker != null && !circuitBreaker.allowCall()) {
             log.warn("LLM circuit breaker is OPEN, rejecting request");
             throw new LlmCircuitOpenException();

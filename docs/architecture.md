@@ -1,5 +1,9 @@
 # Architecture Design
 
+Invocation reliability: `BudgetedChatModel` gates actual candidates, `QueryEnhancementExecutor` bounds optional
+stage waits, and `ChatExecutionService` validates optional output contracts before emission;
+[defaults, concurrency, streaming, and diagnostics](candidate-isolation-answer-contract.md).
+
 > 📖 [English](architecture.md) · 📖 [中文](architecture-zh-CN.md)
 
 > **spring-ai-rag** — A model-agnostic, domain-decoupled, componentized general-purpose RAG service framework.

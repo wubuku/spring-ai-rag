@@ -249,6 +249,10 @@ public class ChatExecutionService {
                             successfulAttempt.get(), response, baseline, index);
                 } catch (RagException e) {
                     markAttempt(command, successfulAttempt.get(), false);
+                    if (e instanceof com.springairag.core.exception.LlmCircuitOpenException) {
+                        lastFailure = e;
+                        continue;
+                    }
                     throw e;
                 } catch (RuntimeException e) {
                     markAttempt(command, successfulAttempt.get(), false);
@@ -315,6 +319,10 @@ public class ChatExecutionService {
                         successfulAttempt.get(), response);
             } catch (RagException error) {
                 markAttempt(request, successfulAttempt.get(), false);
+                if (error instanceof com.springairag.core.exception.LlmCircuitOpenException) {
+                    lastFailure = error;
+                    continue;
+                }
                 throw error;
             } catch (RuntimeException error) {
                 markAttempt(request, successfulAttempt.get(), false);
@@ -599,8 +607,9 @@ public class ChatExecutionService {
         return attempt.switchOnFirst((signal, flux) -> {
             boolean hasEvent = signal.hasValue();
             if (!hasEvent && signal.isOnError()
-                    && com.springairag.core.resilience.UpstreamFailureClassifier.dependencyFailure(
+                    && (com.springairag.core.resilience.UpstreamFailureClassifier.dependencyFailure(
                             reactor.core.Exceptions.unwrap(signal.getThrowable()))
+                        || reactor.core.Exceptions.unwrap(signal.getThrowable()) instanceof com.springairag.core.exception.LlmCircuitOpenException)
                     && index + 1 < candidates.size()) {
                 log.warn("Streaming chat candidate {}/{} failed before first event ({}), trying fallback",
                         index + 1, candidates.size(), candidate.ref(),
@@ -642,7 +651,7 @@ public class ChatExecutionService {
         AtomicReference<ChatClientResponse> lastResponse =
                 new AtomicReference<>();
         AtomicBoolean attemptFinished = new AtomicBoolean();
-        boolean deferKnowledgeContent = command.mode() == ChatMode.KNOWLEDGE;
+        boolean deferKnowledgeContent = command.mode() == ChatMode.KNOWLEDGE || command.answerRequirements() != null;
         AtomicBoolean streamBufferExceeded = new AtomicBoolean();
         Flux<ChatClientResponse> streamResponses = invokeStream(attempt, command);
         if (lease != null) {
@@ -796,7 +805,7 @@ public class ChatExecutionService {
         result = withExecutionBudgetMetadata(result, command.executionBudget());
         List<ChatEvent> events = new ArrayList<>(
                 attempt.retrievalContext().trace().drainToolEvents());
-        if (command.mode() == ChatMode.KNOWLEDGE
+        if ((command.mode() == ChatMode.KNOWLEDGE || command.answerRequirements() != null)
                 && result.answer() != null
                 && !result.answer().isEmpty()) {
             events.add(new ChatEvent.ContentDelta(result.answer()));
@@ -1262,7 +1271,15 @@ public class ChatExecutionService {
             }
         }
         metadata.put("evidenceAssessment", assessment);
-        metadata.put("answerOutcome", com.springairag.api.dto.AnswerOutcome.from(modelSafetyRefusal, assessment, finishReason));
+        var contract = com.springairag.core.evaluation.AnswerContractValidator.evaluate(
+                command.answerRequirements(), modelAnswer, modelSafetyRefusal, streamBufferExceeded);
+        if (!contract.isEmpty()) metadata.put("answerContract", contract);
+        boolean contractFailed = "FAILED".equals(contract.get("status"));
+        if (contractFailed && !safeAnswer) answer = com.springairag.core.evaluation.AnswerContractValidator.SAFE_ANSWER;
+        var outcome = contractFailed && !safeAnswer
+                ? new com.springairag.api.dto.AnswerOutcome("SAFE_FALLBACK", "answer_contract_failed")
+                : com.springairag.api.dto.AnswerOutcome.from(modelSafetyRefusal, assessment, finishReason);
+        metadata.put("answerOutcome", outcome);
         com.springairag.core.evaluation.EvaluationDiagnosticCapture.modelAnswer(modelAnswer, validation);
         metadata.put(
                 "citationRegistry",
@@ -1625,7 +1642,7 @@ public class ChatExecutionService {
                     "",
                     command.clientMetadata());
         }
-        return prompt;
+        return prompt + com.springairag.core.evaluation.AnswerContractValidator.prompt(command.answerRequirements());
     }
 
     private String mandatoryPromptText(ChatCommand command) {

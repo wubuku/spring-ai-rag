@@ -177,8 +177,10 @@ class LlmCircuitBreakerTest {
         @Test
         @DisplayName("Rejects second call in HALF_OPEN (single probing call only)")
         void secondCallRejectedInHalfOpen() {
-            assertTrue(breaker.allowCall()); // First call allowed
-            assertFalse(breaker.allowCall()); // Second rejected
+            assertFalse(breaker.allowCall());
+            breaker.recordIgnored();
+            assertTrue(breaker.allowCall());
+            assertFalse(breaker.allowCall());
         }
     }
 

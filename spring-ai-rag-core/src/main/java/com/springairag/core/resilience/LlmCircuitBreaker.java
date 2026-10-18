@@ -98,7 +98,7 @@ public class LlmCircuitBreaker {
     }
 
     /** Attempt to acquire execution permit */
-    public boolean allowCall() {
+    public synchronized boolean allowCall() {
         State current = state.get();
         if (current == State.CLOSED) {
             return true;
@@ -106,9 +106,9 @@ public class LlmCircuitBreaker {
         if (current == State.OPEN) {
             if (shouldAttemptReset()) {
                 if (state.compareAndSet(State.OPEN, State.HALF_OPEN)) {
-                    halfOpenAttempts.set(0);
+                    generation++;
                     log.info("Circuit breaker transitioning OPEN → HALF_OPEN");
-                    return true;
+                    return halfOpenAttempts.compareAndSet(0, 1);
                 }
             }
             return false;
@@ -121,11 +121,31 @@ public class LlmCircuitBreaker {
         return clock.millis() - lastFailureTime.get() >= waitDurationInOpenStateMillis;
     }
 
+    private long generation;
+
+    public synchronized long acquireGeneration() {
+        return allowCall() ? generation : -1;
+    }
+
+    public synchronized void recordGenerationSuccess(long expectedGeneration) {
+        if (generation == expectedGeneration) recordSuccess();
+    }
+
+    public synchronized void recordGenerationFailure(long expectedGeneration) {
+        if (generation == expectedGeneration) recordFailure();
+    }
+
+    public synchronized void recordGenerationIgnored(long expectedGeneration) {
+        if (generation == expectedGeneration) recordIgnored();
+    }
+
     /** Record success */
-    public void recordSuccess() {
+    public synchronized void recordSuccess() {
         State current = state.get();
         if (current == State.HALF_OPEN) {
             if (state.compareAndSet(State.HALF_OPEN, State.CLOSED)) {
+                generation++;
+                halfOpenAttempts.set(0);
                 resetWindow();
                 log.info("Circuit breaker HALF_OPEN → CLOSED (test call succeeded)");
             }
@@ -134,16 +154,21 @@ public class LlmCircuitBreaker {
         }
     }
 
-    public void recordIgnored() {
-        if (state.get() == State.HALF_OPEN) halfOpenAttempts.set(0);
+    public synchronized void recordIgnored() {
+        if (state.get() == State.HALF_OPEN) {
+            generation++;
+            halfOpenAttempts.set(0);
+        }
     }
 
     /** Record failure */
-    public void recordFailure() {
+    public synchronized void recordFailure() {
         lastFailureTime.set(clock.millis());
         State current = state.get();
         if (current == State.HALF_OPEN) {
             if (state.compareAndSet(State.HALF_OPEN, State.OPEN)) {
+                generation++;
+                halfOpenAttempts.set(0);
                 log.info("Circuit breaker HALF_OPEN → OPEN (test call failed)");
             }
         } else if (current == State.CLOSED) {
@@ -190,6 +215,7 @@ public class LlmCircuitBreaker {
         int rate = (failures.get() * 100) / total;
         if (rate >= failureRateThreshold) {
             if (state.compareAndSet(State.CLOSED, State.OPEN)) {
+                generation++;
                 log.warn("Circuit breaker CLOSED → OPEN (failure rate {}% >= {}%, {}/{} calls)",
                         rate, failureRateThreshold, failures.get(), total);
             }

@@ -1,5 +1,8 @@
 # Trustworthy Assertions, Active Diagnostics And Quality Admission
 
+See [field completeness and conservative partial verification §4](candidate-isolation-answer-contract.md#4-field-level-diagnostic-completeness).
+Incomplete overall capture remains INCONCLUSIVE; lexical checks prove neither evidence nor authorization and never upgrade original failures.
+
 > [English](trustworthy-evaluation-admission.md) | [中文](trustworthy-evaluation-admission-zh-CN.md)
 
 Available by default without changing existing Chat/Search/Evaluation URLs, success envelopes or required parameters.

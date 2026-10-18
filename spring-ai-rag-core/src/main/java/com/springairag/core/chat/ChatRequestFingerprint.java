@@ -99,6 +99,8 @@ public final class ChatRequestFingerprint {
                     objectMapper, request.getDocumentIds()));
         }
         root.set("clientMetadata", canonicalize(metadata));
+        var requirements = com.springairag.core.evaluation.AnswerContractValidator.parse(request.getAnswerRequirements());
+        if (requirements != null) root.set("answerRequirements", canonicalize(objectMapper.valueToTree(requirements)));
         JsonNode canonical = canonicalize(root);
         try {
             byte[] bytes = objectMapper.writeValueAsBytes(canonical);
@@ -203,6 +205,9 @@ public final class ChatRequestFingerprint {
         }
         scope.set("collectionKeyHeader", normalizedHeaderKeys);
         root.set("clientMetadata", objectMapper.createObjectNode());
+        var requirements = com.springairag.core.evaluation.AnswerContractValidator.parse(
+                request.getRag() == null ? null : request.getRag().getAnswerRequirements());
+        if (requirements != null) root.set("answerRequirements", canonicalize(objectMapper.valueToTree(requirements)));
         JsonNode canonical = canonicalize(root);
         try {
             byte[] bytes = objectMapper.writeValueAsBytes(canonical);

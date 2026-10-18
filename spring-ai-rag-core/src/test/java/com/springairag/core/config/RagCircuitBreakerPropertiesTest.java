@@ -10,9 +10,9 @@ import static org.junit.jupiter.api.Assertions.*;
 class RagCircuitBreakerPropertiesTest {
 
     @Test
-    void defaults_enabledIsFalse() {
+    void defaults_enabledIsTrue() {
         RagCircuitBreakerProperties props = new RagCircuitBreakerProperties();
-        assertFalse(props.isEnabled());
+        assertTrue(props.isEnabled());
     }
 
     @Test

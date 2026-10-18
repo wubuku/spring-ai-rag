@@ -100,6 +100,18 @@ public class ModeAwareChatClientFactory {
     private final PromptBudgetDocumentPostProcessor promptBudgetDocumentPostProcessor;
     private final ProjectDocumentJoiner documentJoiner =
             new ProjectDocumentJoiner();
+    private com.springairag.core.resilience.CandidateCircuitRegistry circuits;
+    private com.springairag.core.rag.QueryEnhancementExecutor enhancements;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setQueryEnhancementExecutor(com.springairag.core.rag.QueryEnhancementExecutor executor) {
+        this.enhancements = executor;
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setCandidateCircuitRegistry(com.springairag.core.resilience.CandidateCircuitRegistry registry) {
+        this.circuits = registry;
+    }
 
     public ModeAwareChatClientFactory(
             ProjectDocumentRetriever documentRetriever,
@@ -358,7 +370,7 @@ public class ModeAwareChatClientFactory {
                 null,
                 compression,
                 Duration.ofSeconds(
-                        Math.max(1, knowledge.getQueryTransformTimeoutSeconds())));
+                        Math.max(1, knowledge.getQueryTransformTimeoutSeconds())), enhancements, budget);
     }
 
     @org.springframework.beans.factory.annotation.Autowired
@@ -399,7 +411,8 @@ public class ModeAwareChatClientFactory {
         return new BoundedMultiQueryExpander(
                 delegate,
                 knowledge.getPlannedRetrievalQueries(),
-                knowledge.isQueryExpanderIncludeOriginal());
+                knowledge.isQueryExpanderIncludeOriginal(), enhancements, budget,
+                Duration.ofSeconds(knowledge.getQueryExpansionTimeoutSeconds()));
     }
 
     private List<Advisor> customAdvisors(
@@ -533,7 +546,7 @@ public class ModeAwareChatClientFactory {
                 candidate.cost(),
                 ragProperties.getUsage().getCostUnit(),
                 candidate.ref(),
-                budgetReservationService).withAdmission(admission);
+                budgetReservationService).withAdmission(admission).withCircuits(circuits);
     }
 
     public record Attempt(

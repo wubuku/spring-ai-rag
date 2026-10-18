@@ -1,5 +1,8 @@
 # REST API Reference
 
+Optional `answerRequirements` / `rag.answer_requirements`:
+[request/response, idempotency, and streaming compatibility §3](candidate-isolation-answer-contract.md#3-request-level-answer-contracts).
+
 See [upstream failures and client recovery](upstream-client-recovery.md) for additive error details and answer outcomes.
 
 Additive capabilities: [trustworthy assertions, active diagnostics and offline quality admission](trustworthy-evaluation-admission.md); existing API contracts and ordinary Chat evaluation costs are unchanged.

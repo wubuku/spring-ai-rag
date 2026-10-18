@@ -148,6 +148,51 @@ class LlmBudgetAndGovernancePostgresIntegrationTest {
                 Long.class));
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+    void lateInterruptedProviderSettlesRealReservationAndWritesUsage(boolean failed) {
+        var delegate = mock(org.springframework.ai.chat.model.ChatModel.class);
+        var repository = new com.springairag.core.usage.LlmUsageRepository(jdbc);
+        var failure = new IllegalStateException("late provider failure");
+        org.mockito.Mockito.when(delegate.call(org.mockito.ArgumentMatchers.any(org.springframework.ai.chat.prompt.Prompt.class)))
+                .thenAnswer(invocation -> {
+                    Thread.currentThread().interrupt();
+                    if (failed) throw failure;
+                    return new org.springframework.ai.chat.model.ChatResponse(java.util.List.of(),
+                            org.springframework.ai.chat.metadata.ChatResponseMetadata.builder()
+                                    .usage(new org.springframework.ai.chat.metadata.DefaultUsage(3, 5)).build());
+                });
+        var recorder = new com.springairag.core.usage.LlmUsageRecorder() {
+            @Override
+            public void record(com.springairag.core.usage.LlmUsageEvent event) {
+                org.junit.jupiter.api.Assertions.assertFalse(Thread.currentThread().isInterrupted());
+                assertTrue(repository.insert(event, 1_000));
+            }
+
+            @Override
+            public void recordAsync(com.springairag.core.usage.LlmUsageEvent event) { record(event); }
+        };
+        var budget = new com.springairag.core.chat.ChatExecutionBudget(Instant.now().plusSeconds(60), 2, 2, 1, 1, 1, 1_000);
+        var model = new com.springairag.core.chat.BudgetedChatModel(delegate, budget, 0, 0, 0, 100,
+                new com.springairag.core.chat.JTokkitPromptTokenEstimator(),
+                com.springairag.core.usage.LlmInvocationPurpose.QUERY_EXPAND, recorder, null,
+                "CONFIGURED_MODEL_COST", "test/late", budgetService);
+        try {
+            if (failed) {
+                assertEquals(failure, assertThrows(IllegalStateException.class,
+                        () -> model.call(new org.springframework.ai.chat.prompt.Prompt("late"))));
+            } else {
+                model.call(new org.springframework.ai.chat.prompt.Prompt("late"));
+            }
+            assertTrue(Thread.currentThread().isInterrupted());
+        } finally {
+            Thread.interrupted();
+        }
+        assertEquals("SETTLED", jdbc.queryForObject("SELECT state FROM rag_llm_budget_reservation", String.class));
+        assertEquals(failed ? "FAILED" : "SUCCEEDED", jdbc.queryForObject("SELECT outcome FROM rag_llm_usage_event", String.class));
+        assertEquals(0, jdbc.queryForObject("SELECT count(*) FROM rag_llm_budget_reservation WHERE state='RESERVED'", Integer.class));
+    }
+
     @Test
     void migrationKeepsLegacyOwnerColumnsNullable() {
         jdbc.update("INSERT INTO rag_client_error "

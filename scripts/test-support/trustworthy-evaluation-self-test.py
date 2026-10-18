@@ -131,6 +131,28 @@ class TrustworthyEvaluationTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 DIAG.replay(self.diagnostic(root, expires=time.time() - 2))
 
+    def test_partial_answer_recheck_never_upgrades_incomplete_capture_or_original_failure(self):
+        with tempfile.TemporaryDirectory() as root, patch('urllib.request.urlopen', side_effect=AssertionError('network forbidden')):
+            directory = self.diagnostic(root, status='FAILED', complete=False)
+            report = json.loads((directory / 'diagnostic.json').read_text())
+            complete = {'present': True, 'complete': True, 'truncated': False, 'redacted': False}
+            report['capture'].update(modelAnswer='零条', captureCompleteness={'answer': complete, 'modelAnswer': complete})
+            (directory / 'diagnostic.json').unlink()
+            (directory / 'manifest.json').unlink()
+            LIB.private_json(directory / 'diagnostic.json', report)
+            LIB.manifest(directory, 'KNOWLEDGE_DIAGNOSTIC', time.time() + 86400)
+            result = DIAG.replay(directory)
+            self.assertEqual(('INCONCLUSIVE', 0), (result['status'], result['networkCalls']))
+            self.assertEqual('PASSED', result['partialVerification']['status'])
+            self.assertEqual('FAILED', result['partialVerification']['originalStatus'])
+            self.assertIn('NOT_EVIDENCE_OR_AUTHORIZATION', result['partialVerification']['scope'])
+            report['capture']['captureCompleteness']['answer'] = {**complete, 'redacted': True}
+            (directory / 'diagnostic.json').unlink()
+            (directory / 'manifest.json').unlink()
+            LIB.private_json(directory / 'diagnostic.json', report)
+            LIB.manifest(directory, 'KNOWLEDGE_DIAGNOSTIC', time.time() + 86400)
+            self.assertNotIn('partialVerification', DIAG.replay(directory))
+
     def test_expiry_cleanup_is_bounded_and_does_not_touch_unowned_files(self):
         with tempfile.TemporaryDirectory() as root:
             directory = self.diagnostic(root, expires=time.time() - 2)

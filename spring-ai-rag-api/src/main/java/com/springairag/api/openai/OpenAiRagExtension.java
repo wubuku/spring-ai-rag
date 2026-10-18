@@ -22,7 +22,14 @@ public record OpenAiRagExtension(
         @JsonInclude(JsonInclude.Include.NON_EMPTY)
         Map<String, Object> collectionCoverage,
         Boolean modelSafetyRefusal,
-        com.springairag.api.dto.AnswerOutcome answerOutcome) {
+        com.springairag.api.dto.AnswerOutcome answerOutcome,
+        @JsonInclude(JsonInclude.Include.NON_EMPTY) Map<String, Object> answerContract) {
+
+    public OpenAiRagExtension(String traceId, EvidenceAssessment assessment, List<OpenAiRagSource> sources,
+                              Map<String, Object> registry, Map<String, Object> coverage, Boolean safetyRefusal,
+                              com.springairag.api.dto.AnswerOutcome outcome) {
+        this(traceId, assessment, sources, registry, coverage, safetyRefusal, outcome, Map.of());
+    }
 
     public OpenAiRagExtension(String traceId, EvidenceAssessment assessment, List<OpenAiRagSource> sources,
                               Map<String, Object> registry, Map<String, Object> coverage, Boolean safetyRefusal) {
@@ -53,5 +60,6 @@ public record OpenAiRagExtension(
                 ? Map.of() : Map.copyOf(citationRegistry);
         collectionCoverage = collectionCoverage == null
                 ? Map.of() : Map.copyOf(collectionCoverage);
+        answerContract = answerContract == null ? Map.of() : Map.copyOf(answerContract);
     }
 }

@@ -1,5 +1,8 @@
 # Upstream Failures and Client Recovery
 
+Circuits now default to [candidate isolation](candidate-isolation-answer-contract.md#1-candidate-fault-isolation),
+not a global gate blocking healthy models; refusals remain normal outcomes and existing error envelopes remain unchanged.
+
 > [English](upstream-client-recovery.md) | [中文](upstream-client-recovery-zh-CN.md)
 
 ## Compatibility and Defaults

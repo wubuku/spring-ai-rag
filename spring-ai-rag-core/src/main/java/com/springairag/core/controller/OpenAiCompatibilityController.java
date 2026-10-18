@@ -587,7 +587,7 @@ public class OpenAiCompatibilityController {
                     prior == null ? List.of() : prior.sources(),
                     citationRegistry(completed.metadata(), prior),
                     collectionCoverage(completed.metadata(), prior),
-                    modelSafetyRefusal(completed.metadata()), completed.finishReason());
+                    modelSafetyRefusal(completed.metadata()), completed.finishReason(), answerContract(completed.metadata()));
             return Flux.just(toJson(
                     new OpenAiChatCompletionChunk(
                             id,
@@ -650,7 +650,7 @@ public class OpenAiCompatibilityController {
                 safeSources(result.sources()),
                 citationRegistry(result.metadata(), null),
                 collectionCoverage(result.metadata(), null),
-                modelSafetyRefusal(result.metadata()), result.finishReason());
+                modelSafetyRefusal(result.metadata()), result.finishReason(), answerContract(result.metadata()));
     }
 
     private OpenAiRagExtension rag(ChatResponse response) {
@@ -660,7 +660,7 @@ public class OpenAiCompatibilityController {
                 safeSources(response.getSources()),
                 citationRegistry(response.getMetadata(), null),
                 collectionCoverage(response.getMetadata(), null),
-                modelSafetyRefusal(response.getMetadata()), response.getFinishReason());
+                modelSafetyRefusal(response.getMetadata()), response.getFinishReason(), answerContract(response.getMetadata()));
     }
 
     private OpenAiRagExtension ragOrNull(
@@ -669,18 +669,31 @@ public class OpenAiCompatibilityController {
             List<OpenAiRagSource> sources,
             Map<String, Object> citationRegistry,
             Map<String, Object> collectionCoverage,
-            Boolean modelSafetyRefusal, String finishReason) {
+            Boolean modelSafetyRefusal, String finishReason, Map<String, Object> contract) {
         if ((traceId == null || traceId.isBlank())
                 && assessment == null
                 && (sources == null || sources.isEmpty())
                 && (citationRegistry == null || citationRegistry.isEmpty())
                 && (collectionCoverage == null || collectionCoverage.isEmpty())
-                && !Boolean.TRUE.equals(modelSafetyRefusal)) {
+                && !Boolean.TRUE.equals(modelSafetyRefusal) && contract.isEmpty()) {
             return null;
         }
+        var outcome = "FAILED".equals(contract.get("status")) && !Boolean.TRUE.equals(modelSafetyRefusal)
+                && (assessment == null || !assessment.safeAnswerApplied())
+                ? new com.springairag.api.dto.AnswerOutcome("SAFE_FALLBACK", "answer_contract_failed")
+                : com.springairag.api.dto.AnswerOutcome.from(Boolean.TRUE.equals(modelSafetyRefusal), assessment, finishReason);
         return new OpenAiRagExtension(
                 traceId, assessment, sources, citationRegistry, collectionCoverage, modelSafetyRefusal,
-                com.springairag.api.dto.AnswerOutcome.from(Boolean.TRUE.equals(modelSafetyRefusal), assessment, finishReason));
+                outcome, contract);
+    }
+
+    private Map<String, Object> answerContract(Map<String, Object> metadata) {
+        if (metadata != null && metadata.get("answerContract") instanceof Map<?, ?> contract) {
+            Map<String, Object> result = new java.util.LinkedHashMap<>();
+            contract.forEach((key, value) -> result.put(String.valueOf(key), value));
+            return Map.copyOf(result);
+        }
+        return Map.of();
     }
 
     private Boolean modelSafetyRefusal(Map<String, Object> metadata) {
@@ -733,6 +746,11 @@ public class OpenAiCompatibilityController {
 
     private EvidenceAssessment evidenceAssessment(Map<String, Object> metadata) {
         Object value = metadata == null ? null : metadata.get("evidenceAssessment");
+        if (value instanceof Map<?, ?>) {
+            try {
+                return objectMapper.convertValue(value, EvidenceAssessment.class);
+            } catch (IllegalArgumentException ignored) { return null; }
+        }
         return value instanceof EvidenceAssessment assessment ? assessment : null;
     }
 

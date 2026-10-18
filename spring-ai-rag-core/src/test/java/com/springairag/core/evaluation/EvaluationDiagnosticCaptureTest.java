@@ -58,4 +58,26 @@ class EvaluationDiagnosticCaptureTest {
             assertFalse(capture.snapshot().containsKey("lastInvocationMessages"));
         }
     }
+
+    @Test
+    void fieldCompletenessSeparatesLongEvidenceFromCompleteAnswersAndUsesUtf8Boundaries() {
+        try (var capture = EvaluationDiagnosticCapture.open()) {
+            EvaluationDiagnosticCapture.prompt(new Prompt("汉".repeat(20000)));
+            EvaluationDiagnosticCapture.modelAnswer("零条", null);
+            EvaluationDiagnosticCapture.result(result("零条"));
+            EvaluationDiagnosticCapture.evidence(List.of(new org.springframework.ai.document.Document("证".repeat(5000))));
+            var snapshot = capture.snapshot();
+            var fields = (java.util.Map<?, ?>) snapshot.get("captureCompleteness");
+            var prompt = (java.util.Map<?, ?>) fields.get("lastInvocationMessages");
+            var answer = (java.util.Map<?, ?>) fields.get("answer");
+            assertEquals(false, snapshot.get("complete"));
+            assertEquals(true, prompt.get("truncated"));
+            assertEquals(60000L, prompt.get("originalBytes"));
+            assertEquals(32766L, prompt.get("capturedBytes"));
+            assertEquals(true, answer.get("complete"));
+            assertEquals(6L, answer.get("capturedBytes"));
+            assertEquals(true, ((java.util.Map<?, ?>) fields.get("evidence")).get("truncated"));
+            assertFalse(snapshot.toString().contains("\uFFFD"));
+        }
+    }
 }

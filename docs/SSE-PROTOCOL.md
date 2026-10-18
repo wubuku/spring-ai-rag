@@ -1,5 +1,9 @@
 # SSE 流式协议
 
+可选[回答契约](candidate-isolation-answer-contract-zh-CN.md#3-请求级回答契约)不增加事件类型或改变终态顺序；
+声明契约的所有mode在校验前不发正文，摘要随原completed/final rag投影，溢出/违约返回安全说明。
+无契约旧Client流行为不变；首事件后不切模型。
+
 > 状态：**已实现** | 最近复核：2026-10-15
 >
 > Chat HTTP 请求与非流式响应见

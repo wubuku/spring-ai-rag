@@ -1,5 +1,8 @@
 # Client Consumer Contract Kit
 
+Optional [answer contracts and replay](candidate-isolation-answer-contract.md#3-request-level-answer-contracts):
+new clients verify `answerContract`; older servers may ignore parameters, so200 alone does not prove enforcement. Old requests need no migration.
+
 See [upstream failures and client recovery](upstream-client-recovery.md) for additive failure details and conservative
 recovery decisions. Examples disable SDK automatic retries; transient causes do not prove replay safety.
 

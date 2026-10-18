@@ -28,13 +28,23 @@ public final class HistoryAwareQueryTransformer implements QueryTransformer {
     private final QueryTransformer firstTurnTransformer;
     private final QueryTransformer followUpTransformer;
     private final Duration timeout;
+    private final QueryEnhancementExecutor enhancements;
+    private final com.springairag.core.chat.ChatExecutionBudget budget;
 
     public HistoryAwareQueryTransformer(
             QueryTransformer firstTurnTransformer,
             QueryTransformer followUpTransformer,
             Duration timeout) {
+        this(firstTurnTransformer, followUpTransformer, timeout, null, null);
+    }
+
+    public HistoryAwareQueryTransformer(QueryTransformer firstTurnTransformer, QueryTransformer followUpTransformer,
+                                        Duration timeout, QueryEnhancementExecutor enhancements,
+                                        com.springairag.core.chat.ChatExecutionBudget budget) {
         this.firstTurnTransformer = firstTurnTransformer;
         this.followUpTransformer = followUpTransformer;
+        this.enhancements = enhancements;
+        this.budget = budget;
         this.timeout = timeout != null && !timeout.isNegative() && !timeout.isZero()
                 ? timeout
                 : Duration.ofSeconds(10);
@@ -52,6 +62,9 @@ public final class HistoryAwareQueryTransformer implements QueryTransformer {
                 : followUpTransformer;
         if (delegate == null) {
             return query;
+        }
+        if (enhancements != null) {
+            return enhancements.execute("QUERY_TRANSFORM", budget, timeout, () -> delegate.transform(input), query).value();
         }
         try {
             return CompletableFuture.supplyAsync(() -> delegate.transform(input))

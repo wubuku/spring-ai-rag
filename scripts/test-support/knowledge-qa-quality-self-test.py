@@ -41,6 +41,7 @@ class QualityGateTest(unittest.TestCase):
     def real_probe(self, root, count):
         acceptance = REAL.RealAcceptance.__new__(REAL.RealAcceptance)
         acceptance.diagnostics = False
+        acceptance.answer_contracts = False
         acceptance.directory = Path(root)
         acceptance.providers = ["openai"]
         acceptance.environment = {}

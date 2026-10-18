@@ -123,6 +123,9 @@ public class KnowledgeQaEvaluator {
         metrics.put("modelRef", response == null || response.resolvedModel() == null ? "UNKNOWN" : response.resolvedModel());
         metrics.put("modelAttribution", response == null ? "UNKNOWN" : response.metadata().getOrDefault("modelAttribution", "UNKNOWN"));
         metrics.put("modelDefaults", response == null ? Map.of() : response.metadata().getOrDefault("modelDefaults", Map.of()));
+        Object budget = response == null ? null : response.metadata().get("executionBudget");
+        metrics.put("queryEnhancements", budget instanceof Map<?, ?> executionBudget
+                && executionBudget.get("queryEnhancements") instanceof Map<?, ?> enhancements ? enhancements : Map.of());
         metrics.put("modelSafetyRefusal", response != null && Boolean.TRUE.equals(response.metadata().get("modelSafetyRefusal")));
         metrics.put("evidenceAssessment", response == null || response.evidenceAssessment() == null
                 ? Map.of() : response.evidenceAssessment());

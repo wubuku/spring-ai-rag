@@ -143,4 +143,65 @@ class AdmissionServiceTest {
     private ChatExecutionBudget budget() {
         return new ChatExecutionBudget(Instant.now().plusSeconds(30), 10, 10, 10, 10, 10, 1000);
     }
+
+    @Test
+    void optionalCallsSharePhysicalPoolsAndReserveFinalAnswerHeadroom() {
+        properties.getAdmission().setMaxModelCalls(4);
+        properties.getAdmission().setMaxModelCallsPerPrincipal(4);
+        properties.getAdmission().setMaxModelCallsPerProvider(4);
+        try (var first = service.optionalModel("one", "provider/model", false);
+             var second = service.optionalModel("one", "provider/model", false)) {
+            assertThrows(AdmissionService.OptionalModelCapacityException.class,
+                    () -> service.optionalModel("one", "provider/model", false));
+            try (var answer = service.model("one", "provider/model", false);
+                 var anotherAnswer = service.model("one", "provider/model", false)) {
+                assertEquals(4, service.active("model"));
+                assertThrows(AdmissionRejectedException.class, () -> service.model("one", "provider/model", false));
+            }
+        }
+        assertEquals(0, service.active("model"));
+        assertEquals(0, service.principalCount("model"));
+    }
+
+    @Test
+    void defaultBackgroundSlotsAreReservedForRealEvaluationAnswers() {
+        assertThrows(AdmissionService.OptionalModelCapacityException.class,
+                () -> service.optionalModel("one", "provider/model", true));
+        try (var first = service.model("one", "provider/model", true);
+             var second = service.model("one", "provider/model", true)) {
+            assertEquals(2, service.active("background"));
+        }
+        properties.getAdmission().setMaxBackgroundModelCalls(4);
+        properties.getEvaluation().setRunConcurrency(2);
+        try (var optional = service.optionalModel("one", "provider/model", true);
+             var otherOptional = service.optionalModel("one", "provider/model", true)) {
+            assertThrows(AdmissionService.OptionalModelCapacityException.class,
+                    () -> service.optionalModel("one", "provider/model", true));
+            try (var answer = service.model("one", "provider/model", true);
+                 var otherAnswer = service.model("one", "provider/model", true)) {
+                assertEquals(4, service.active("background"));
+            }
+        }
+        assertEquals(0, service.active("background"));
+    }
+
+    @Test
+    void skippedEnhancementDoesNotReserveMoneyOrCountAProviderCall() {
+        properties.getAdmission().setMaxModelCallsPerPrincipal(1);
+        ChatModel delegate = mock(ChatModel.class);
+        var budget = budget();
+        var reservations = mock(com.springairag.core.budget.BudgetReservationService.class);
+        var model = new BudgetedChatModel(delegate, budget, 0, 0, 0, 1000,
+                new com.springairag.core.chat.JTokkitPromptTokenEstimator(),
+                com.springairag.core.usage.LlmInvocationPurpose.QUERY_EXPAND,
+                com.springairag.core.usage.LlmUsageRecorder.NOOP, null, "TEST", "provider/model", reservations)
+                .withAdmission(service);
+        assertThrows(AdmissionService.OptionalModelCapacityException.class, () -> model.call(new Prompt("optional")));
+        assertThrows(AdmissionService.OptionalModelCapacityException.class, () -> model.stream(new Prompt("optional")).blockLast());
+        assertEquals(0, budget.modelCalls());
+        verifyNoInteractions(reservations);
+        verify(delegate, never()).call(any(Prompt.class));
+        verify(delegate, never()).stream(any(Prompt.class));
+        service.model("one", "provider/model", false).close();
+    }
 }

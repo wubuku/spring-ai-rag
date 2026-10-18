@@ -1,5 +1,8 @@
 📖 [English](rest-api.md) · 📖 [中文](rest-api-zh-CN.md)
 
+可选 `answerRequirements` / `rag.answer_requirements`：
+[完整请求、返回摘要、幂等及流式兼容 §3](candidate-isolation-answer-contract-zh-CN.md#3-请求级回答契约)。
+
 本批增量能力：[可信断言、主动诊断与离线质量发布准入](trustworthy-evaluation-admission-zh-CN.md)；既有 API 契约不变，普通 Chat 不增加评测费用。
 
 ---

@@ -1,5 +1,8 @@
 # Testing Guide
 
+See [candidate isolation, stage deadlines, contracts, and field-level diagnostic acceptance](candidate-isolation-answer-contract.md#5-acceptance).
+Controlled providers verify application behavior, not real model quality; retain API/PostgreSQL/SDK/real-model/dev.sh gates.
+
 Additive capabilities: [trustworthy assertions, active diagnostics and offline quality admission](trustworthy-evaluation-admission.md); existing API contracts and ordinary Chat evaluation costs are unchanged.
 
 ## Repeated Real Quality And Two-Node Recovery

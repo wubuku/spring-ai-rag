@@ -49,6 +49,19 @@ class KnowledgeQaEvaluatorTest {
             new KnowledgeQaEvaluator(new CitationValidator());
 
     @Test
+    void effectiveEnhancementDegradationRemainsVisibleWithoutChangingFactGates() {
+        var definition = new EvaluationSuiteDefinition.CaseDef("case", "问题", List.of("kb"), List.of(), null, null,
+                "KNOWLEDGE_QA", List.of("30天"), List.of(), "SUFFICIENT", EvaluationSuiteDefinition.JudgeDef.disabled());
+        var stages = Map.of("QUERY_EXPAND", Map.of("status", "SKIPPED_CAPACITY", "elapsedMs", 0));
+        var response = new ChatExecutionResult("7天", "s", null, null, "model", ChatMode.KNOWLEDGE,
+                List.of(), Map.of(), null, List.of(), Map.of("executionBudget", Map.of("queryEnhancements", stages)));
+        var result = evaluator.evaluate(definition, response, List.of());
+        org.junit.jupiter.api.Assertions.assertEquals(stages, result.metrics().get("queryEnhancements"));
+        assertFalse(result.deterministicPass());
+        assertTrue(result.failureReasons().contains("REQUIRED_FACT_MISSING"));
+    }
+
+    @Test
     void validCitationCannotHideWrongFactAndModelAttributionIsAdditive() {
         ChatSource source = new ChatSource();
         source.setCitationId("c1");

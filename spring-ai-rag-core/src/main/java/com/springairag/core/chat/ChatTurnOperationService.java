@@ -769,6 +769,11 @@ public class ChatTurnOperationService {
                     "retrievalTraceId",
                     "citationValidation",
                     "citationRegistry",
+                    "evidenceAssessment",
+                    "answerOutcome",
+                    "answerContract",
+                    "modelSafetyRefusal",
+                    "collectionCoverage",
                     "mode",
                     "memoryMode",
                     "requestedModel",
@@ -1011,23 +1016,7 @@ public class ChatTurnOperationService {
         if (sessionId.equals(command.sessionId())) {
             return sessionCoordinator.acquire(command, streaming);
         }
-        ChatCommand adjusted = new ChatCommand(
-                command.message(),
-                sessionId,
-                command.principal(),
-                command.principal().memoryConversationId(sessionId),
-                command.mode(),
-                command.memoryMode(),
-                command.modelRef(),
-                command.domainId(),
-                command.retrievalScope(),
-                command.retrievalOptions(),
-                command.clientMetadata(),
-                command.inputMessages(),
-                command.modelCandidates(),
-                command.retrievalTraceSession(),
-                command.retrievalFilters(),
-                command.executionBudget());
+        ChatCommand adjusted = command.withSessionId(sessionId);
         return sessionCoordinator.acquire(adjusted, streaming);
     }
 

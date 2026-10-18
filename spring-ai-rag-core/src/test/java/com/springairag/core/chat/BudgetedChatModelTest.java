@@ -30,6 +30,50 @@ import static org.mockito.Mockito.when;
 class BudgetedChatModelTest {
 
     @Test
+    void lateProviderInterruptIsClearedOnlyForAccountingAndRestoredAfterwards() {
+        ChatModel delegate = mock(ChatModel.class);
+        var recorder = mock(LlmUsageRecorder.class);
+        when(delegate.call(any(Prompt.class))).thenAnswer(invocation -> {
+            Thread.currentThread().interrupt();
+            return responseWithUsage(3, 5);
+        });
+        org.mockito.Mockito.doAnswer(invocation -> {
+            assertFalse(Thread.currentThread().isInterrupted());
+            return null;
+        }).when(recorder).record(any());
+        try {
+            assertEquals(8, model(delegate, budget(1), recorder).call(new Prompt("late")).getMetadata().getUsage().getTotalTokens());
+            assertTrue(Thread.currentThread().isInterrupted());
+            verify(recorder).record(any());
+        } finally {
+            Thread.interrupted();
+        }
+    }
+
+    @Test
+    void interruptedProviderFailureStillRecordsAndPropagatesOriginalFailure() {
+        ChatModel delegate = mock(ChatModel.class);
+        var recorder = mock(LlmUsageRecorder.class);
+        RuntimeException failure = new IllegalStateException("late failed provider");
+        when(delegate.call(any(Prompt.class))).thenAnswer(invocation -> {
+            Thread.currentThread().interrupt();
+            throw failure;
+        });
+        org.mockito.Mockito.doAnswer(invocation -> {
+            assertFalse(Thread.currentThread().isInterrupted());
+            return null;
+        }).when(recorder).record(any());
+        try {
+            assertEquals(failure, org.junit.jupiter.api.Assertions.assertThrows(RuntimeException.class,
+                    () -> model(delegate, budget(1), recorder).call(new Prompt("late"))));
+            assertTrue(Thread.currentThread().isInterrupted());
+            verify(recorder).record(any());
+        } finally {
+            Thread.interrupted();
+        }
+    }
+
+    @Test
     void callAndStreamSubscriptionShareTheSameModelBudgetAndRecordOnce() {
         ChatModel delegate = mock(ChatModel.class);
         ChatResponse response = responseWithUsage(3, 5);

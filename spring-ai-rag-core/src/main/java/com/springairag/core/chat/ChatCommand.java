@@ -28,7 +28,8 @@ public record ChatCommand(
         RetrievalTraceSession retrievalTraceSession,
         RetrievalFilters retrievalFilters,
         ChatExecutionBudget executionBudget,
-        String requestTraceId) {
+        String requestTraceId,
+        com.springairag.api.dto.AnswerRequirements answerRequirements) {
 
     public ChatCommand {
         message = message != null ? message : "";
@@ -114,12 +115,29 @@ public record ChatCommand(
                 executionBudget, null);
     }
 
+    public ChatCommand(String message, String sessionId, ChatPrincipal principal, String memoryConversationId,
+                       ChatMode mode, MemoryMode memoryMode, String modelRef, String domainId,
+                       RetrievalScope retrievalScope, RetrievalOptions retrievalOptions, Map<String, Object> clientMetadata,
+                       List<ChatInputMessage> inputMessages, List<String> modelCandidates,
+                       RetrievalTraceSession retrievalTraceSession, RetrievalFilters retrievalFilters,
+                       ChatExecutionBudget executionBudget, String requestTraceId) {
+        this(message, sessionId, principal, memoryConversationId, mode, memoryMode, modelRef, domainId,
+                retrievalScope, retrievalOptions, clientMetadata, inputMessages, modelCandidates, retrievalTraceSession,
+                retrievalFilters, executionBudget, requestTraceId, null);
+    }
+
+    public ChatCommand withAnswerRequirements(com.springairag.api.dto.AnswerRequirements value) {
+        return new ChatCommand(message, sessionId, principal, memoryConversationId, mode, memoryMode, modelRef, domainId,
+                retrievalScope, retrievalOptions, clientMetadata, inputMessages, modelCandidates, retrievalTraceSession,
+                retrievalFilters, executionBudget, requestTraceId, value);
+    }
+
     public ChatCommand withTraceSession(RetrievalTraceSession session) {
         return new ChatCommand(
                 message, sessionId, principal, memoryConversationId, mode, memoryMode,
                 modelRef, domainId, retrievalScope, retrievalOptions, clientMetadata,
                 inputMessages, modelCandidates, session, retrievalFilters,
-                executionBudget, requestTraceId);
+                executionBudget, requestTraceId, answerRequirements);
     }
 
     public ChatCommand withExecutionBudget(ChatExecutionBudget budget) {
@@ -127,7 +145,7 @@ public record ChatCommand(
                 message, sessionId, principal, memoryConversationId, mode, memoryMode,
                 modelRef, domainId, retrievalScope, retrievalOptions, clientMetadata,
                 inputMessages, modelCandidates, retrievalTraceSession, retrievalFilters,
-                budget, requestTraceId);
+                budget, requestTraceId, answerRequirements);
     }
 
     public ChatCommand withSessionId(String value) {
@@ -149,7 +167,7 @@ public record ChatCommand(
                 retrievalTraceSession,
                 retrievalFilters,
                 executionBudget,
-                requestTraceId);
+                requestTraceId, answerRequirements);
     }
 
     public ChatCommand withModelCandidates(List<String> candidates) {
@@ -170,7 +188,7 @@ public record ChatCommand(
                 retrievalTraceSession,
                 retrievalFilters,
                 executionBudget,
-                requestTraceId);
+                requestTraceId, answerRequirements);
     }
 
     public ChatCommand withFilters(RetrievalFilters filters) {
@@ -178,7 +196,7 @@ public record ChatCommand(
                 message, sessionId, principal, memoryConversationId, mode, memoryMode,
                 modelRef, domainId, retrievalScope, retrievalOptions, clientMetadata,
                 inputMessages, modelCandidates, retrievalTraceSession, filters,
-                executionBudget, requestTraceId);
+                executionBudget, requestTraceId, answerRequirements);
     }
 
     public ChatCommand withRequestTraceId(String value) {
@@ -186,7 +204,7 @@ public record ChatCommand(
                 message, sessionId, principal, memoryConversationId, mode, memoryMode,
                 modelRef, domainId, retrievalScope, retrievalOptions, clientMetadata,
                 inputMessages, modelCandidates, retrievalTraceSession, retrievalFilters,
-                executionBudget, value);
+                executionBudget, value, answerRequirements);
     }
 
     public static ChatCommand of(

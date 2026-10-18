@@ -8,6 +8,8 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import urllib.error
+import urllib.request
 import uuid
 
 
@@ -18,7 +20,7 @@ SPEC.loader.exec_module(QUALITY)
 
 
 class RealAcceptance(QUALITY.BASE.Acceptance):
-    def __init__(self, providers, repeats, definition=None, diagnostics=False):
+    def __init__(self, providers, repeats, definition=None, diagnostics=False, answer_contracts=False):
         super().__init__()
         old_directory = self.directory
         self.directory = ROOT / ".verification/quality-real" / old_directory.name
@@ -29,6 +31,47 @@ class RealAcceptance(QUALITY.BASE.Acceptance):
         self.repeats = repeats
         self.definition = definition or QUALITY.FIXTURES / "definition.json"
         self.diagnostics = diagnostics
+        self.answer_contracts = answer_contracts
+
+    def verify_answer_contracts(self, provider):
+        rules = {'rules': [{'id': 'code', 'type': 'TOKEN', 'value': 'VALID-42'},
+                           {'id': 'count', 'type': 'QUANTITY', 'value': '0', 'unit': '条'},
+                           {'id': 'shape', 'type': 'JSON_FIELD', 'field': 'count'}]}
+        results = []
+        for native in (True, False):
+            for stream in (False, True):
+                message = '格式测试，不需要查询知识。请严格仅返回这个JSON对象：{"count":"0条","code":"VALID-42"}'
+                payload = {'message': message, 'mode': 'PLAIN', 'sessionId': str(uuid.uuid4()),
+                           'answerRequirements': rules} if native else {
+                    'model': 'rag-default', 'stream': stream, 'messages': [{'role': 'user', 'content': message}],
+                    'rag': {'answer_requirements': rules}}
+                path = '/api/v1/rag/chat/' + ('stream' if stream else 'ask') if native else '/v1/chat/completions'
+                request = urllib.request.Request(self.base + path, json.dumps(payload).encode(), headers={
+                    'Content-Type': 'application/json', 'X-API-Key': QUALITY.BASE.ROOT_KEY})
+                try:
+                    response = urllib.request.urlopen(request, timeout=180)
+                except urllib.error.HTTPError as error:
+                    response = error
+                with response:
+                    body = response.read().decode()
+                    if response.status != 200:
+                        (self.directory / (provider + '-contract-http-error.json')).write_text(body)
+                    assert response.status == 200, (provider, native, stream, response.status)
+                frames = [json.loads(line[5:].strip()) for line in body.splitlines()
+                          if line.startswith('data:') and line[5:].strip() != '[DONE]'] if stream else [json.loads(body)]
+                summaries = [frame.get('metadata' if native else 'rag', {}).get('answerContract') for frame in frames]
+                contract = next((value for value in reversed(summaries) if value), None)
+                assert contract and contract['status'] in ('PASSED', 'FAILED', 'SKIPPED_SAFETY_REFUSAL'), (provider, native, stream)
+                if contract['status'] == 'PASSED':
+                    assert all(rule['passed'] for rule in contract['rules']) and 'VALID-42' in body and '0条' in body
+                elif contract['status'] == 'FAILED':
+                    assert 'answer_contract_failed' in body and 'VALID-42' not in body
+                else:
+                    assert 'MODEL_SAFETY_REFUSAL' in body
+                results.append({'native': native, 'stream': stream, 'contractStatus': contract['status']})
+        assert any(row['contractStatus'] == 'PASSED' for row in results), provider + ': no successful real contract observed'
+        self.results[-1]['answerContracts'] = results
+        print(provider + ': four real JSON/SSE answer-contract scenarios verified', flush=True)
 
     def start(self, database="rag_source"):
         environment = dict(self.environment, SERVER_PORT=str(self.http_port), SPRING_PROFILES_ACTIVE="postgresql",
@@ -107,6 +150,8 @@ class RealAcceptance(QUALITY.BASE.Acceptance):
                                       CLIENT_API_E2E_API_KEY=QUALITY.BASE.ROOT_KEY,
                                       CLIENT_API_E2E_QUERY="Reply briefly with the word READY.")
             self.command(["bash", "scripts/verify-client-api-e2e.sh", "--live"], provider + "-client", client_environment)
+            if self.answer_contracts:
+                self.verify_answer_contracts(provider)
             response = self.json("/api/v1/rag/search", {"query": "批量写入上限", "collectionKeys": ["quality-operations"],
                                  "config": {"minScore": 0, "maxResults": 3, "useRerank": True}})
             assert response, "real embedding/rerank search returned no evidence"
@@ -129,6 +174,7 @@ def main():
     parser.add_argument("--definition", type=Path, default=QUALITY.FIXTURES / "definition.json")
     parser.add_argument('--with-diagnostics', action='store_true')
     parser.add_argument('--ack-sensitive-content', action='store_true')
+    parser.add_argument('--with-answer-contracts', action='store_true')
     args = parser.parse_args()
     if args.with_diagnostics and not args.ack_sensitive_content:
         parser.error('diagnostics additionally requires explicit sensitive-content acknowledgement')
@@ -141,7 +187,7 @@ def main():
     if any(not os.environ.get(name) for name in ("RAG_EMBEDDING_API_KEY", "RAG_EMBEDDING_BASE_URL", "RAG_EMBEDDING_MODEL")):
         parser.error("real embedding credentials/configuration missing")
     os.umask(0o077)
-    acceptance = RealAcceptance(providers, args.repeats, args.definition.resolve(), args.with_diagnostics)
+    acceptance = RealAcceptance(providers, args.repeats, args.definition.resolve(), args.with_diagnostics, args.with_answer_contracts)
     print("Evidence: " + str(acceptance.directory), flush=True)
     try:
         acceptance.setup()

@@ -82,6 +82,10 @@ public class ChatRequest {
 
     @Schema(description = "Optional metadata/payload containment filters. Rejected in PLAIN mode.")
     private RetrievalFilterRequest filters;
+    private com.fasterxml.jackson.databind.JsonNode answerRequirements;
+
+    public com.fasterxml.jackson.databind.JsonNode getAnswerRequirements() { return answerRequirements; }
+    public void setAnswerRequirements(com.fasterxml.jackson.databind.JsonNode value) { answerRequirements = value; }
 
     @JsonIgnore
     private transient boolean maxResultsExplicitlySet;
@@ -194,14 +198,15 @@ public class ChatRequest {
                 && Objects.equals(collectionKeys, that.collectionKeys)
                 && Objects.equals(documentIds, that.documentIds)
                 && Objects.equals(metadata, that.metadata)
-                && Objects.equals(filters, that.filters);
+                && Objects.equals(filters, that.filters)
+                && Objects.equals(answerRequirements, that.answerRequirements);
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(message, sessionId, maxResults, useHybridSearch, useRerank,
                 mode, domainId, model, collectionScopeMode, collectionCoverageMode, collectionIds, collectionKeys,
-                documentIds, metadata, filters);
+                documentIds, metadata, filters, answerRequirements);
     }
 
     @Override

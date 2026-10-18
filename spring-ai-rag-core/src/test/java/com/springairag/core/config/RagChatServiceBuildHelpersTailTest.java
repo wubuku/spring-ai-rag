@@ -27,6 +27,10 @@ import static org.mockito.Mockito.verify;
 class RagChatServiceBuildHelpersTailTest {
 
     private RagChatService service() {
+        return service(new RagProperties());
+    }
+
+    private RagChatService service(RagProperties properties) {
         return new RagChatService(
                 mock(ChatClient.Builder.class,
                         org.mockito.Mockito.RETURNS_DEEP_STUBS),
@@ -38,7 +42,7 @@ class RagChatServiceBuildHelpersTailTest {
                 mock(com.springairag.core.repository.RagChatHistoryRepository.class),
                 mock(com.springairag.core.extension.DomainExtensionRegistry.class),
                 mock(com.springairag.core.extension.PromptCustomizerChain.class),
-                new RagProperties(),
+                properties,
                 null,
                 null,
                 null,
@@ -47,7 +51,14 @@ class RagChatServiceBuildHelpersTailTest {
 
     @Test
     void circuitBreakerIsNullWhenDisabled() {
-        assertNull(service().getCircuitBreaker());
+        var properties = new RagProperties();
+        properties.getCircuitBreaker().setEnabled(false);
+        assertNull(service(properties).getCircuitBreaker());
+    }
+
+    @Test
+    void circuitBreakerIsEnabledByDefault() {
+        assertNotNull(service().getCircuitBreaker());
     }
 
     @Test

@@ -12,6 +12,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @Component
 public class AdmissionService {
     private final RagAdmissionProperties properties;
+    private final com.springairag.core.config.RagEvaluationProperties evaluation;
     private final MeterRegistry metrics;
     private final Map<String, Pool> pools = Map.of(
             "request", new Pool(), "model", new Pool(), "background", new Pool(),
@@ -19,6 +20,7 @@ public class AdmissionService {
 
     public AdmissionService(RagProperties properties, MeterRegistry metrics) {
         this.properties = properties.getAdmission();
+        this.evaluation = properties.getEvaluation();
         this.metrics = metrics;
         pools.forEach((kind, pool) -> metrics.gauge("rag.admission.active",
                 io.micrometer.core.instrument.Tags.of("kind", kind), pool, value -> active(kind)));
@@ -47,6 +49,30 @@ public class AdmissionService {
             default -> throw new IllegalArgumentException("Unknown dependency kind");
         };
         return acquire(kind, "dependency", "", limit, limit, limit);
+    }
+
+    public synchronized Lease optionalModel(String principal, String modelRef, boolean background) {
+        if (!properties.isEnabled()) return model(principal, modelRef, background);
+        String kind = background ? "background" : "model";
+        Pool pool = pools.get(kind);
+        String provider = modelRef == null ? "UNKNOWN" : modelRef.split("/", 2)[0];
+        int answerSlots = Math.min(properties.getMaxBackgroundModelCalls(),
+                evaluation.getRunConcurrency() * evaluation.getMaxConcurrentRuns());
+        int totalLimit = background ? properties.getMaxBackgroundModelCalls() - answerSlots : properties.getMaxModelCalls() / 2;
+        boolean full = pool.total >= totalLimit;
+        if (!background) {
+            full |= pool.principals.getOrDefault(principal, 0) >= properties.getMaxModelCallsPerPrincipal() / 2
+                    || pool.providers.getOrDefault(provider, 0) >= properties.getMaxModelCallsPerProvider() / 2;
+        }
+        if (full) {
+            metrics.counter("rag.admission.optional.skipped", "kind", kind).increment();
+            throw new OptionalModelCapacityException();
+        }
+        return model(principal, modelRef, background);
+    }
+
+    public static final class OptionalModelCapacityException extends RuntimeException {
+        public OptionalModelCapacityException() { super("Optional model call skipped to reserve final-answer capacity"); }
     }
 
     private synchronized Lease acquire(String kind, String principal, String provider,

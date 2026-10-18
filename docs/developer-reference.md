@@ -1,5 +1,8 @@
 # Developer Reference
 
+Candidate/stage/contract HTTP acceptance: `python3 scripts/verify-candidate-contracts-e2e.py`;
+[scope, defaults, and diagnostics](candidate-isolation-answer-contract.md). Serialize with Maven/dev.sh.
+
 Additive capabilities: [trustworthy assertions, active diagnostics and offline quality admission](trustworthy-evaluation-admission.md); existing API contracts and ordinary Chat evaluation costs are unchanged.
 
 ## Quality Stability And Production Recovery

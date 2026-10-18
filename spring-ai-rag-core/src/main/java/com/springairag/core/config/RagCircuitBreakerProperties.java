@@ -16,7 +16,7 @@ package com.springairag.core.config;
  */
 public class RagCircuitBreakerProperties {
 
-    private boolean enabled = false;
+    private boolean enabled = true;
     private int failureRateThreshold = 50;
     private int minimumNumberOfCalls = 10;
     private int waitDurationInOpenStateSeconds = 30;

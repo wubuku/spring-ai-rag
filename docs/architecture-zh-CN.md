@@ -1,5 +1,8 @@
 # 架构设计详解
 
+调用可靠性边界：`BudgetedChatModel` 外层按真实候选隔离，`QueryEnhancementExecutor` 有界等待可选阶段，
+`ChatExecutionService` 在输出前执行可选回答契约；[默认值、并发、流式与诊断边界](candidate-isolation-answer-contract-zh-CN.md)。
+
 > 📖 [English](architecture.md) · 📖 [中文](architecture-zh-CN.md)
 
 > **spring-ai-rag** — 模型无关、领域解耦、组件化的通用 RAG 服务框架。

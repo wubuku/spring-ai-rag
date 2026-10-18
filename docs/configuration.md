@@ -1,5 +1,8 @@
 # Configuration Reference
 
+Candidate circuits are enabled by default; query enhancement adds a5-second expansion cap,10-second answer reserve,
+and8 zero-queue workers. See [configuration and cancellation boundaries §2](candidate-isolation-answer-contract.md#2-independent-optional-stage-deadlines).
+
 > 📖 English | 📖 中文
 
 Complete reference for all Spring AI RAG configuration items. All business configurations are managed uniformly under the `rag.*` prefix.

@@ -481,6 +481,9 @@ rag:
     knowledge:
       query-transformer: none
       query-transform-timeout-seconds: ${RAG_CHAT_QUERY_TRANSFORM_TIMEOUT_SECONDS:30}
+      query-expansion-timeout-seconds: ${RAG_CHAT_QUERY_EXPANSION_TIMEOUT_SECONDS:5}
+      query-enhancement-answer-reserve-seconds: ${RAG_CHAT_QUERY_ENHANCEMENT_ANSWER_RESERVE_SECONDS:10}
+      query-enhancement-max-concurrency: ${RAG_CHAT_QUERY_ENHANCEMENT_MAX_CONCURRENCY:8}
       query-expander-variants: ${RAG_CHAT_QUERY_EXPANDER_VARIANTS:2}
       query-expander-include-original: ${RAG_CHAT_QUERY_EXPANDER_INCLUDE_ORIGINAL:true}
       max-retrieval-queries: ${RAG_CHAT_KNOWLEDGE_MAX_RETRIEVAL_QUERIES:3}
@@ -589,10 +592,8 @@ rag:
   #   port: 7890
   #   no-proxy-hosts: localhost|127.0.0.1|*.internal
 
-  # LLM circuit breaker configuration (disabled by default)
-  # When enabled, prevents request pile-up during LLM API outages
-  # circuit-breaker:
-  #   enabled: true
+  circuit-breaker:
+    enabled: ${RAG_CIRCUIT_BREAKER_ENABLED:true}
   #   failure-rate-threshold: 50      # Failure rate threshold (%), trip when exceeded
   #   minimum-number-of-calls: 10     # Min calls in sliding window
   #   wait-duration-in-open-state: 30 # Seconds to stay in OPEN state

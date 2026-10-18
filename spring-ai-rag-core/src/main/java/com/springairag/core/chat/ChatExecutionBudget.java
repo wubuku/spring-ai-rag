@@ -51,6 +51,12 @@ public final class ChatExecutionBudget {
     private final AtomicInteger toolRounds = new AtomicInteger();
     private final AtomicInteger totalToolCalls = new AtomicInteger();
     private final AtomicInteger summaryCalls = new AtomicInteger();
+    private final java.util.concurrent.ConcurrentMap<String, Object> queryEnhancements = new java.util.concurrent.ConcurrentHashMap<>();
+
+    public void recordQueryEnhancement(String stage, String status, long elapsedMillis) {
+        if (!stage.equals("QUERY_TRANSFORM") && !stage.equals("QUERY_EXPAND")) throw new IllegalArgumentException("Unknown enhancement stage");
+        queryEnhancements.put(stage, Map.of("status", status, "elapsedMs", Math.max(0, elapsedMillis)));
+    }
     private final AtomicLong toolResultCharacters = new AtomicLong();
     private final AtomicLong toolResultTokens = new AtomicLong();
     private final Map<String, AtomicInteger> toolCallsByName =
@@ -380,6 +386,7 @@ public final class ChatExecutionBudget {
             result.put("httpResponseBytesRemaining", httpState.remainingBytes());
         }
         result.put("contextBudget", contextPlan());
+        if (!queryEnhancements.isEmpty()) result.put("queryEnhancements", Map.copyOf(queryEnhancements));
         return Map.copyOf(result);
     }
 

@@ -125,6 +125,12 @@ public class RagChatProperties {
     public void validate() {
         contextAssembly.validate();
         KnowledgeProperties knowledgeProperties = knowledge;
+        requirePositive("rag.chat.knowledge.query-expansion-timeout-seconds", knowledge.getQueryExpansionTimeoutSeconds());
+        requirePositive("rag.chat.knowledge.query-enhancement-answer-reserve-seconds", knowledge.getQueryEnhancementAnswerReserveSeconds());
+        if (knowledge.getQueryEnhancementMaxConcurrency() < 1 || knowledge.getQueryEnhancementMaxConcurrency() > 64
+                || knowledge.getQueryExpansionTimeoutSeconds() > 300 || knowledge.getQueryEnhancementAnswerReserveSeconds() > 300) {
+            throw invalid("Query enhancement concurrency must be 1–64 and time limits 1–300 seconds");
+        }
         if (knowledgeProperties.getSafeAnswerText() == null
                 || knowledgeProperties.getSafeAnswerText().isBlank()) {
             throw invalid("rag.chat.knowledge.safe-answer-text must not be blank");
@@ -668,6 +674,16 @@ public class RagChatProperties {
     public static class KnowledgeProperties {
         private String queryTransformer = "none";
         private int queryTransformTimeoutSeconds = 30;
+        private int queryExpansionTimeoutSeconds = 5;
+        private int queryEnhancementAnswerReserveSeconds = 10;
+        private int queryEnhancementMaxConcurrency = 8;
+
+        public int getQueryExpansionTimeoutSeconds() { return queryExpansionTimeoutSeconds; }
+        public void setQueryExpansionTimeoutSeconds(int value) { queryExpansionTimeoutSeconds = value; }
+        public int getQueryEnhancementAnswerReserveSeconds() { return queryEnhancementAnswerReserveSeconds; }
+        public void setQueryEnhancementAnswerReserveSeconds(int value) { queryEnhancementAnswerReserveSeconds = value; }
+        public int getQueryEnhancementMaxConcurrency() { return queryEnhancementMaxConcurrency; }
+        public void setQueryEnhancementMaxConcurrency(int value) { queryEnhancementMaxConcurrency = value; }
         private int queryExpanderVariants = 2;
         private boolean queryExpanderIncludeOriginal = true;
         private int maxRetrievalQueries = 3;

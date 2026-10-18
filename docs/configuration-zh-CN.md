@@ -1,5 +1,8 @@
 # 配置参考
 
+候选熔断默认启用；查询增强新增5秒扩展上限、10秒回答预留、8个零排队 worker。
+完整配置与物理取消边界见[候选隔离与回答契约 §2](candidate-isolation-answer-contract-zh-CN.md#2-可选查询增强的独立时限)。
+
 > 📖 English | 📖 中文
 
 完整的 Spring AI RAG 配置项说明。所有业务配置通过 `rag.*` 前缀统一管理。

@@ -1,5 +1,7 @@
 # 文档索引
 
+[候选隔离、阶段时限、可选回答契约与字段级诊断](candidate-isolation-answer-contract-zh-CN.md)：默认保护、增量API及验收。
+
 本批增量能力：[可信断言、主动诊断与离线质量发布准入](trustworthy-evaluation-admission-zh-CN.md)；既有 API 契约不变，普通 Chat 不增加评测费用。
 
 上游故障与恢复：[错误分类、重试决策和Client结果投影](upstream-client-recovery-zh-CN.md)。

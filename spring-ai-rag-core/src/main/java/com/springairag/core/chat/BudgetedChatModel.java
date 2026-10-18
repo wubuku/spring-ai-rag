@@ -44,6 +44,12 @@ public final class BudgetedChatModel implements ChatModel {
     private final String modelRef;
     private final BudgetReservationService reservationService;
     private com.springairag.core.admission.AdmissionService admission;
+    private com.springairag.core.resilience.CandidateCircuitRegistry circuits;
+
+    public BudgetedChatModel withCircuits(com.springairag.core.resilience.CandidateCircuitRegistry registry) {
+        this.circuits = registry;
+        return this;
+    }
 
     public BudgetedChatModel withAdmission(com.springairag.core.admission.AdmissionService service) {
         this.admission = service;
@@ -168,9 +174,16 @@ public final class BudgetedChatModel implements ChatModel {
 
     @Override
     public ChatResponse call(Prompt prompt) {
-        try (var lease = admission != null ? admission.model(budget.principalId(), modelRef,
-                budget.backgroundWorkload()) : null) {
-            return callAdmitted(prompt);
+        var permit = circuits != null ? circuits.acquire(delegate) : null;
+        try (permit) {
+            try (var lease = admissionLease()) {
+                ChatResponse response = callAdmitted(prompt);
+                if (permit != null) permit.success();
+                return response;
+            } catch (RuntimeException error) {
+                if (permit != null) permit.failure(error);
+                throw error;
+            }
         }
     }
 
@@ -211,11 +224,27 @@ public final class BudgetedChatModel implements ChatModel {
 
     @Override
     public Flux<ChatResponse> stream(Prompt prompt) {
+        if (circuits != null) {
+            return Flux.using(() -> circuits.acquire(delegate), permit -> streamWithAdmission(prompt)
+                    .doOnComplete(permit::success).doOnError(permit::failure),
+                    com.springairag.core.resilience.CandidateCircuitRegistry.Permit::close);
+        }
+        return streamWithAdmission(prompt);
+    }
+
+    private Flux<ChatResponse> streamWithAdmission(Prompt prompt) {
         if (admission != null) {
-            return Flux.using(() -> admission.model(budget.principalId(), modelRef, budget.backgroundWorkload()),
+            return Flux.using(this::admissionLease,
                     lease -> streamAdmitted(prompt), com.springairag.core.admission.AdmissionService.Lease::close);
         }
         return streamAdmitted(prompt);
+    }
+
+    private com.springairag.core.admission.AdmissionService.Lease admissionLease() {
+        if (admission == null) return null;
+        return purpose == LlmInvocationPurpose.QUERY_TRANSFORM || purpose == LlmInvocationPurpose.QUERY_EXPAND
+                ? admission.optionalModel(budget.principalId(), modelRef, budget.backgroundWorkload())
+                : admission.model(budget.principalId(), modelRef, budget.backgroundWorkload());
     }
 
     private Flux<ChatResponse> streamAdmitted(Prompt prompt) {
@@ -330,18 +359,23 @@ public final class BudgetedChatModel implements ChatModel {
                 costUnit);
         LlmUsageCostCalculator.Result cost = LlmUsageCostCalculator.calculate(
                 usage, modelCost, costUnit);
-        if (reservationService != null) {
-            reservationService.settle(
-                    reservation, usage, cost.configuredCost(), cost.costAvailable());
-        }
+        boolean interrupted = Thread.interrupted();
         try {
-            if (streaming) {
-                usageRecorder.recordAsync(event);
-            } else {
-                usageRecorder.record(event);
+            if (reservationService != null) {
+                reservationService.settle(
+                        reservation, usage, cost.configuredCost(), cost.costAvailable());
             }
-        } catch (RuntimeException ignored) {
-            // 记账故障不能替换原始模型结果或触发模型重试。
+            try {
+                if (streaming) {
+                    usageRecorder.recordAsync(event);
+                } else {
+                    usageRecorder.record(event);
+                }
+            } catch (RuntimeException ignored) {
+                // 记账故障不能替换原始模型结果或触发模型重试。
+            }
+        } finally {
+            if (interrupted) Thread.currentThread().interrupt();
         }
     }
 

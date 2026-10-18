@@ -25,9 +25,31 @@ def replay(directory):
     capture = report.get('capture', {})
     if not isinstance(capture, dict):
         raise ValueError('invalid diagnostic capture')
-    if capture.get('complete') is not True or capture.get('truncated') or capture.get('redacted'):
-        return {'status': 'INCONCLUSIVE', 'reason': 'INCOMPLETE_OR_REDACTED_CAPTURE'}
     case = next(item for item in definition['cases'] if item['id'] == report['caseId'])
+    if capture.get('complete') is not True or capture.get('truncated') or capture.get('redacted'):
+        result = {'status': 'INCONCLUSIVE', 'reason': 'INCOMPLETE_OR_REDACTED_CAPTURE', 'networkCalls': 0}
+        completeness = capture.get('captureCompleteness', {})
+        answer_state = completeness.get('answer', {}) if isinstance(completeness, dict) else {}
+        if (isinstance(answer_state, dict) and answer_state.get('complete') is True
+                and answer_state.get('present') is True and answer_state.get('truncated') is False
+                and answer_state.get('redacted') is False and isinstance(capture.get('answer'), str)
+                and case.get('assertions')):
+            assertions = [LIB.evaluate(rule, capture['answer']) for rule in case['assertions']]
+            original = report.get('metrics', {}).get('assertions', [])
+            comparable = lambda rows: [{key: value for key, value in row.items() if key != 'matchedText'} for row in rows]
+            if comparable(assertions) != original:
+                return {**result, 'reason': 'ASSERTION_ENGINE_OR_ARTIFACT_MISMATCH'}
+            result['partialVerification'] = {
+                'status': 'PASSED' if all(row['passed'] for row in assertions) else 'FAILED',
+                'scope': 'FINAL_ANSWER_LEXICAL_ONLY_NOT_EVIDENCE_OR_AUTHORIZATION',
+                'assertions': assertions, 'originalStatus': report.get('status'),
+            }
+            model_state = completeness.get('modelAnswer', {})
+            if (isinstance(model_state, dict) and model_state.get('complete') is True
+                    and model_state.get('present') is True and model_state.get('truncated') is False
+                    and model_state.get('redacted') is False and isinstance(capture.get('modelAnswer'), str)):
+                result['partialVerification']['modelAssertions'] = [LIB.evaluate(rule, capture['modelAnswer']) for rule in case['assertions']]
+        return result
     results = [LIB.evaluate(rule, capture['answer']) for rule in case.get('assertions', [])]
     prior = report.get('metrics', {}).get('assertions', [])
     if [{key: value for key, value in result.items() if key != 'matchedText'} for result in results] != prior:
