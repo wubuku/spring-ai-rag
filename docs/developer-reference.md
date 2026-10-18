@@ -638,13 +638,24 @@ RAG_API_KEY="$RAG_ROOT_API_KEY" \
 ```
 
 The flow performs provider preflight, unique-document creation, embedding, search, ask, and
-stream. When `RAG_ROOT_API_KEY` is configured, pass it through `RAG_API_KEY` (or the
-equivalent `X-API-Key` header); the script also loads the root key from `.env`. Mock
+stream. Positive-evidence JSON and SSE checks require the verification fact, a `SUPPORTED`
+evidence assessment, and `safeAnswerApplied=false`; a safe refusal cannot count as success. When
+the isolated service enables `RAG_OPENAI_COMPATIBILITY_ENABLED=true`, the same embedded
+fixture is also checked through OpenAI-compatible JSON/SSE for the fact, evidence status,
+authorized source handle, and source-text privacy; when the endpoint is disabled the script
+reports `SKIP`, not a pass. When
+`RAG_ROOT_API_KEY` is configured, pass it through `RAG_API_KEY` (or the equivalent
+`X-API-Key` header); the script also loads the root key from `.env`. Mock
 Playwright is not a substitute for real-LLM validation. The four
 `RAG_EMBEDDING_*` variables are required; retired `RAG_EMBEDDING_URL` and
 `SILICONFLOW_*` names are rejected rather than mapped. If `.env` sets
 `MODELS_CONFIG_FILE`, remember that the external file fully overrides the YAML
-model registry. A Knowledge answer that lacks a verifiable citation is expected to
+model registry. Provider preflight defaults to the launcher's `minimax` provider;
+when the service uses another provider, pass the same provider through
+`REAL_LLM_CHAT_PROVIDER` (or `LLM_PROVIDER`) to the smoke. If an external model
+registry changes the active primary model, explicitly set `REAL_LLM_CHAT_PROVIDER`
+to the provider actually selected by that route so preflight does not validate a
+different configured model. A Knowledge answer that lacks a verifiable citation is expected to
 be replaced by the default safe answer and still counts as a successful safety
 assertion; an `AGENT` capability rejection (`MODEL_CAPABILITY_UNSUPPORTED`) is
 reported as a capability-gated skip, not as provider success. The provider preflight
@@ -716,7 +727,15 @@ The default path never calls a model. It validates the versioned Consumer Contra
 Native/OpenAI JSON/SSE fixtures, and the official SDK negative-protocol self-tests.
 For an isolated running service, live mode requires an explicit service root URL,
 service API key, and query. It then performs real Native/OpenAI JSON/SSE calls and
-Python/Node JSON/SSE calls; a working WebUI is not evidence for the external API:
+Python/Node JSON/SSE calls; a working WebUI is not evidence for the external API.
+The service must enable `RAG_OPENAI_COMPATIBILITY_ENABLED=true`; the real-LLM
+launcher preserves that caller override when it loads `.env`. The gate checks
+`GET /v1/models` before SDK setup or any model calls and fails with a clear preflight
+error if the compatibility preview is disabled. Start it with:
+
+```bash
+RAG_OPENAI_COMPATIBILITY_ENABLED=true ./scripts/start-real-e2e-server.sh
+```
 
 ```bash
 CLIENT_API_E2E_LIVE=1 \

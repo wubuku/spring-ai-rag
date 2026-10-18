@@ -297,7 +297,7 @@ if [[ "$CODE" != "200" ]]; then
 fi
 ok "embedding API HTTP 200 (${EMB_BASE} ${EMB_MODEL})"
 
-PROVIDER="${REAL_LLM_CHAT_PROVIDER:-${LLM_PROVIDER:-${APP_LLM_PROVIDER:-openai}}}"
+PROVIDER="${REAL_LLM_CHAT_PROVIDER:-${LLM_PROVIDER:-${APP_LLM_PROVIDER:-minimax}}}"
 PROVIDER="$(printf '%s' "$PROVIDER" | tr '[:upper:]' '[:lower:]')"
 step "0c) Probe configured chat API provider=${PROVIDER}"
 CHAT_OK=0
@@ -449,7 +449,7 @@ ok "search returned only the isolated document"
 step "4) Chat ask (REAL LLM)"
 curl -s "${API_AUTH_ARGS[@]}" -X POST "$API/chat/ask" \
   -H 'Content-Type: application/json' \
-  -d "{\"message\":\"Using only the selected release-verification document, return the release verification code exactly. The code begins with REAL_E2E_.\",\"maxResults\":5,\"useHybridSearch\":true,\"useRerank\":true,\"collectionKeys\":[\"${COLLECTION_KEY}\"],\"documentIds\":[$DOC_ID]}" \
+  -d "{\"message\":\"Using only the selected release-verification document, return the release verification code exactly and cite it with the provided source handle, for example [c1]. The code begins with REAL_E2E_.\",\"maxResults\":5,\"useHybridSearch\":true,\"useRerank\":true,\"collectionKeys\":[\"${COLLECTION_KEY}\"],\"documentIds\":[$DOC_ID]}" \
   --max-time 180 \
   -o /tmp/rag-e2e-ask.json
 set +e
@@ -465,28 +465,22 @@ print('trace', d.get('traceId'))
 print('TOKEN_IN_ANSWER', token in a)
 assessment=d.get('evidenceAssessment') or {}
 status=assessment.get('status')
-safe_applied=assessment.get('safeAnswerApplied') is True
-if safe_applied:
-    print('EVIDENCE_SAFETY_STATUS', status)
-    print('SAFE_ANSWER_APPLIED', safe_applied)
-    sys.exit(0 if status != 'SUPPORTED' and a and d.get('sources') else 1)
-sys.exit(0 if token in a else 1)
+safe_applied=assessment.get('safeAnswerApplied')
+print('EVIDENCE_SAFETY_STATUS', status)
+print('SAFE_ANSWER_APPLIED', safe_applied)
+answer_verified = (
+    token in a
+    and status == 'SUPPORTED'
+    and safe_applied is False
+)
+sys.exit(0 if answer_verified else 1)
 PY
 ask_rc=$?
 set -e
 if [[ $ask_rc -eq 0 ]]; then
-  if [[ "$(python3 - <<'PY'
-import json
-d=json.load(open('/tmp/rag-e2e-ask.json'))
-print('safe' if (d.get('evidenceAssessment') or {}).get('safeAnswerApplied') is True else 'answer')
-PY
-)" == "safe" ]]; then
-    ok "chat evidence safety gate applied a controlled answer"
-  else
-    ok "chat answer contains verification code"
-  fi
+  ok "positive-evidence JSON answer returned the code with SUPPORTED assessment"
 else
-  bad "chat answer missing verification code or invalid evidence assessment"
+  bad "positive-evidence JSON answer did not return the code with SUPPORTED assessment"
 fi
 
 step "5) Agent chat with citation registry (REAL LLM, bounded)"
@@ -567,7 +561,7 @@ if [[ "$SKIP_STREAM" != "1" ]]; then
   set +e
   curl -s -N "${API_AUTH_ARGS[@]}" -X POST "$API/chat/stream" \
     -H 'Content-Type: application/json' \
-    -d "{\"message\":\"Using only the selected release-verification document, return the release verification code exactly. The code begins with REAL_E2E_.\",\"maxResults\":5,\"useHybridSearch\":true,\"useRerank\":true,\"collectionKeys\":[\"${COLLECTION_KEY}\"],\"documentIds\":[$DOC_ID]}" \
+    -d "{\"message\":\"Using only the selected release-verification document, return the release verification code exactly and cite it with the provided source handle, for example [c1]. The code begins with REAL_E2E_.\",\"maxResults\":5,\"useHybridSearch\":true,\"useRerank\":true,\"collectionKeys\":[\"${COLLECTION_KEY}\"],\"documentIds\":[$DOC_ID]}" \
     --max-time 180 \
     -o /tmp/rag-e2e-stream.txt
   python3 - <<'PY'
@@ -608,18 +602,152 @@ print('TOKEN_IN_STREAM', token in stream_content)
 print('EVIDENCE_SAFETY_STATUS', done_assessment.get('status'))
 print('SAFE_ANSWER_APPLIED', done_assessment.get('safeAnswerApplied'))
 looks_sse = data_events > 0 and len(chunks) > 0
-safe_answer = done_assessment.get('safeAnswerApplied') is True
-answer_verified = token in stream_content or (
-    safe_answer and done_assessment.get('status') != 'SUPPORTED')
+answer_verified = (
+    token in stream_content
+    and done_assessment.get('status') == 'SUPPORTED'
+    and done_assessment.get('safeAnswerApplied') is False
+)
 raise SystemExit(0 if looks_sse and answer_verified else 1)
 PY
 stream_rc=$?
 set -e
 if [[ $stream_rc -eq 0 ]]; then
-  ok "stream passed SSE evidence contract (verification code or safe answer)"
+  ok "positive-evidence stream returned the code with SUPPORTED assessment"
 else
-  bad "stream missing expected SSE chunks or verification code"
+  bad "positive-evidence stream did not return the code with SUPPORTED assessment"
 fi
+fi
+
+step "7) OpenAI-compatible KNOWLEDGE JSON/SSE (when enabled)"
+OPENAI_MODELS_STATUS="$(curl --silent --show-error --max-time 15 \
+  "${API_AUTH_ARGS[@]}" -H "Authorization: Bearer ${ROOT_API_KEY:-}" \
+  -o /tmp/rag-e2e-openai-models.json -w '%{http_code}' \
+  "$BASE_URL/v1/models" 2>/dev/null || true)"
+if [[ "$OPENAI_MODELS_STATUS" == "404" ]]; then
+  echo "SKIP: OpenAI-compatible endpoint is disabled; no positive-evidence OpenAI Chat assertion was run"
+elif [[ "$OPENAI_MODELS_STATUS" != "200" ]]; then
+  bad "OpenAI-compatible model discovery returned HTTP ${OPENAI_MODELS_STATUS:-unknown}"
+else
+  if ! python3 - <<'PY'
+import json
+d=json.load(open('/tmp/rag-e2e-openai-models.json'))
+assert any(model.get('id') == 'rag-default' for model in d.get('data', [])), d
+print('OpenAI model alias rag-default is available')
+PY
+  then
+    bad "OpenAI-compatible model discovery omitted rag-default"
+  else
+    OPENAI_JSON_CODE="$(curl --silent --show-error --max-time 180 \
+      "${API_AUTH_ARGS[@]}" -H "Authorization: Bearer ${ROOT_API_KEY:-}" \
+      -H "X-RAG-Collection-Key: ${COLLECTION_KEY}" \
+      -H 'Content-Type: application/json' \
+      -d "{\"model\":\"rag-default\",\"messages\":[{\"role\":\"user\",\"content\":\"Using only the selected release-verification collection, return the release verification code exactly and cite it with [c1]. The code begins with REAL_E2E_.\"}]}" \
+      -o /tmp/rag-e2e-openai-ask.json -w '%{http_code}' \
+      "$BASE_URL/v1/chat/completions" 2>/dev/null || true)"
+    set +e
+    OPENAI_JSON_HTTP="$OPENAI_JSON_CODE" python3 - <<'PY'
+import json
+import os
+import sys
+
+if os.environ.get('OPENAI_JSON_HTTP') != '200':
+    print('OPENAI_JSON_HTTP', os.environ.get('OPENAI_JSON_HTTP'))
+    raise SystemExit(1)
+d=json.load(open('/tmp/rag-e2e-openai-ask.json'))
+choices=d.get('choices') or []
+answer=(choices[0].get('message') or {}).get('content') if choices else ''
+rag=d.get('rag') or {}
+assessment=rag.get('evidenceAssessment') or {}
+sources=rag.get('sources') or []
+token=os.environ['PROBE_TOKEN']
+valid=(token in (answer or '')
+       and assessment.get('status') == 'SUPPORTED'
+       and assessment.get('safeAnswerApplied') is False
+       and bool(sources)
+       and any(source.get('sourceHandle') == 'c1' for source in sources)
+       and all('chunkText' not in source for source in sources))
+print('OPENAI_JSON_FACT', token in (answer or ''))
+print('OPENAI_JSON_EVIDENCE_STATUS', assessment.get('status'))
+print('OPENAI_JSON_SAFE_ANSWER_APPLIED', assessment.get('safeAnswerApplied'))
+print('OPENAI_JSON_AUTHORIZED_SOURCES', len(sources))
+raise SystemExit(0 if valid else 1)
+PY
+    OPENAI_JSON_RC=$?
+    set -e
+    if [[ "$OPENAI_JSON_RC" -eq 0 ]]; then
+      ok "OpenAI-compatible JSON returned supported evidence and the verification code"
+    else
+      bad "OpenAI-compatible JSON failed positive-evidence assertions"
+    fi
+
+    OPENAI_SSE_CODE="$(curl --silent --show-error --no-buffer --max-time 180 \
+      "${API_AUTH_ARGS[@]}" -H "Authorization: Bearer ${ROOT_API_KEY:-}" \
+      -H "X-RAG-Collection-Key: ${COLLECTION_KEY}" \
+      -H 'Content-Type: application/json' \
+      -d "{\"model\":\"rag-default\",\"stream\":true,\"messages\":[{\"role\":\"user\",\"content\":\"Using only the selected release-verification collection, return the release verification code exactly and cite it with [c1]. The code begins with REAL_E2E_.\"}]}" \
+      -o /tmp/rag-e2e-openai-stream.txt -w '%{http_code}' \
+      "$BASE_URL/v1/chat/completions" 2>/dev/null || true)"
+    set +e
+    OPENAI_SSE_HTTP="$OPENAI_SSE_CODE" python3 - <<'PY'
+import json
+import os
+
+if os.environ.get('OPENAI_SSE_HTTP') != '200':
+    print('OPENAI_SSE_HTTP', os.environ.get('OPENAI_SSE_HTTP'))
+    raise SystemExit(1)
+t=open('/tmp/rag-e2e-openai-stream.txt', errors='replace').read()
+content=[]
+final_rag={}
+data_events=0
+done=False
+for line in t.splitlines():
+    if not line.startswith('data:'):
+        continue
+    payload=line[5:].strip()
+    if payload == '[DONE]':
+        done=True
+        continue
+    if not payload:
+        continue
+    data_events += 1
+    try:
+        event=json.loads(payload)
+    except json.JSONDecodeError:
+        continue
+    rag=event.get('rag') or {}
+    if rag:
+        final_rag=rag
+    for choice in event.get('choices') or []:
+        delta=choice.get('delta') or {}
+        if isinstance(delta.get('content'), str):
+            content.append(delta['content'])
+answer=''.join(content)
+assessment=final_rag.get('evidenceAssessment') or {}
+sources=final_rag.get('sources') or []
+token=os.environ['PROBE_TOKEN']
+valid=(data_events > 0 and done and token in answer
+       and assessment.get('status') == 'SUPPORTED'
+       and assessment.get('safeAnswerApplied') is False
+       and bool(sources)
+       and any(source.get('sourceHandle') == 'c1' for source in sources)
+       and all('chunkText' not in source for source in sources))
+print('OPENAI_SSE_DATA_EVENTS', data_events)
+print('OPENAI_SSE_DONE', done)
+print('OPENAI_SSE_FACT', token in answer)
+print('OPENAI_SSE_EVIDENCE_STATUS', assessment.get('status'))
+print('OPENAI_SSE_SAFE_ANSWER_APPLIED', assessment.get('safeAnswerApplied'))
+print('OPENAI_SSE_AUTHORIZED_SOURCES', len(sources))
+print('OPENAI_SSE_SOURCE_TEXT_REDACTED', all('chunkText' not in source for source in sources))
+raise SystemExit(0 if valid else 1)
+PY
+    OPENAI_SSE_RC=$?
+    set -e
+    if [[ "$OPENAI_SSE_RC" -eq 0 ]]; then
+      ok "OpenAI-compatible SSE returned supported evidence and the verification code"
+    else
+      bad "OpenAI-compatible SSE failed positive-evidence assertions"
+    fi
+  fi
 fi
 
 echo

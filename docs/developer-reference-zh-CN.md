@@ -568,10 +568,18 @@ RAG_API_KEY="$RAG_ROOT_API_KEY" \
 ```
 
 该流程会执行 provider preflight、创建唯一文档、embedding、search、ask 和 stream。
+有证据的正向 JSON 与 SSE 用例都必须返回验证事实、`evidenceAssessment.status=SUPPORTED`
+且 `safeAnswerApplied=false`；安全拒答不能冒充正向答案通过。
+若隔离服务启用了 `RAG_OPENAI_COMPATIBILITY_ENABLED=true`，同一已嵌入文档还会经
+OpenAI-compatible JSON/SSE 再验证事实、证据状态、授权来源句柄与来源文本脱敏；入口关闭时明确记为
+`SKIP`，不冒充通过。
 如果配置了 `RAG_ROOT_API_KEY`，必须通过 `RAG_API_KEY` 或等价的 `X-API-Key` 传给
 数据面请求；脚本也会自动从 `.env` 读取 root key。四个 `RAG_EMBEDDING_*` 配置项
 均为必需项；退役的 `RAG_EMBEDDING_URL` 和 `SILICONFLOW_*` 不会被自动映射。
 如果 `.env` 设置了 `MODELS_CONFIG_FILE`，要注意外部文件会完整覆盖 YAML 模型注册表。
+provider preflight 默认跟随启动脚本的 `minimax`；若服务使用其他提供方，运行 smoke 时也要设置
+相同的 `REAL_LLM_CHAT_PROVIDER`（或 `LLM_PROVIDER`）。外部模型注册表改变了实际主模型时，
+应按实际路由显式指定 `REAL_LLM_CHAT_PROVIDER`，避免只探测到另一个配置中的可用模型。
 Knowledge 模式如果模型没有输出可验证引用，预期会被默认安全回答替换，这仍算证据安全断言成功；
 如果 `AGENT` 被 `MODEL_CAPABILITY_UNSUPPORTED` 拒绝，则记录为能力门控跳过，不能冒充真实 Agent 成功。
 provider preflight 超时可用 `REAL_LLM_PREFLIGHT_TIMEOUT_SECONDS` 限制。若要执行不使用外部注册表的直接 provider smoke，可显式指定不存在的文件：
@@ -632,6 +640,15 @@ Client 可观察的 HTTP 契约；它不把 Mock 结果当作真实模型质量�
 fixture，以及官方 SDK 的负向协议自测。对已启动的隔离服务启用 live 模式时，必须显式
 提供服务根地址、服务 API Key 和查询词；live 会真实执行 Native/OpenAI JSON/SSE 以及
 Python/Node SDK 的 JSON/SSE，不以 WebUI 通过代替外部 API 证据：
+服务端必须启用 `RAG_OPENAI_COMPATIBILITY_ENABLED=true`；真实 LLM 启动脚本加载 `.env`
+时会保留调用方显式覆盖。可这样启动：
+
+```bash
+RAG_OPENAI_COMPATIBILITY_ENABLED=true ./scripts/start-real-e2e-server.sh
+```
+
+门禁会在 SDK 初始化和模型调用前检查 `GET /v1/models`，若兼容预览未启用则立即给出明确
+失败，而不是把端点缺失记作条件跳过。
 
 ```bash
 CLIENT_API_E2E_LIVE=1 \

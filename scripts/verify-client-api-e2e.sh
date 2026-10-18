@@ -40,6 +40,47 @@ run_step() {
   echo "OK: $label"
 }
 
+LIVE_BASE_URL=""
+LIVE_API_KEY=""
+LIVE_QUERY=""
+if [[ "$LIVE" == "1" ]]; then
+  LIVE_BASE_URL="${CLIENT_API_E2E_BASE_URL:-}"
+  LIVE_API_KEY="${CLIENT_API_E2E_API_KEY:-}"
+  LIVE_QUERY="${CLIENT_API_E2E_QUERY:-}"
+  if [[ -z "$LIVE_BASE_URL" || -z "$LIVE_API_KEY" || -z "$LIVE_QUERY" || "$LIVE_BASE_URL" == */v1 ]]; then
+    echo "Live mode requires CLIENT_API_E2E_BASE_URL (service root without /v1)," >&2
+    echo "CLIENT_API_E2E_API_KEY and CLIENT_API_E2E_QUERY." >&2
+    exit 2
+  fi
+  if ! command -v curl >/dev/null 2>&1; then
+    echo "Live mode requires curl to preflight OpenAI compatibility." >&2
+    exit 2
+  fi
+  openai_models_status="$(curl --silent --show-error --connect-timeout 5 --max-time 15 \
+    -H "X-API-Key: $LIVE_API_KEY" \
+    -H "Authorization: Bearer $LIVE_API_KEY" \
+    -o /dev/null -w '%{http_code}' \
+    "$LIVE_BASE_URL/v1/models" || true)"
+  if [[ "$openai_models_status" != "200" ]]; then
+    echo "Live Client API E2E requires GET /v1/models (HTTP ${openai_models_status:-unknown})." >&2
+    case "$openai_models_status" in
+      404)
+        echo "Enable RAG_OPENAI_COMPATIBILITY_ENABLED=true on the isolated service." >&2
+        ;;
+      401|403)
+        echo "The endpoint rejected authentication; verify CLIENT_API_E2E_API_KEY and service authorization." >&2
+        ;;
+      000|"")
+        echo "The service could not be reached; verify its URL, availability, and TLS configuration." >&2
+        ;;
+      *)
+        echo "The service returned an unexpected status; inspect its health and API logs." >&2
+        ;;
+    esac
+    exit 2
+  fi
+fi
+
 if [[ "$SKIP_OFFLINE" -eq 0 ]]; then
   run_step "Consumer contract offline" ./scripts/verify-client-consumer-contract.sh
   run_step "SDK quickstart offline" ./scripts/verify-client-sdk-quickstart.sh --self-test
@@ -47,20 +88,11 @@ if [[ "$SKIP_OFFLINE" -eq 0 ]]; then
 fi
 
 if [[ "$LIVE" == "1" ]]; then
-  BASE_URL="${CLIENT_API_E2E_BASE_URL:-}"
-  API_KEY="${CLIENT_API_E2E_API_KEY:-}"
-  QUERY="${CLIENT_API_E2E_QUERY:-}"
-  if [[ -z "$BASE_URL" || -z "$API_KEY" || -z "$QUERY" || "$BASE_URL" == */v1 ]]; then
-    echo "Live mode requires CLIENT_API_E2E_BASE_URL (service root without /v1)," >&2
-    echo "CLIENT_API_E2E_API_KEY and CLIENT_API_E2E_QUERY." >&2
-    exit 2
-  fi
-
   run_step "Consumer contract live Native/OpenAI JSON/SSE" env \
     CLIENT_CONTRACT_LIVE=1 \
-    CLIENT_CONTRACT_BASE_URL="$BASE_URL" \
-    CLIENT_CONTRACT_API_KEY="$API_KEY" \
-    CLIENT_CONTRACT_QUERY="$QUERY" \
+    CLIENT_CONTRACT_BASE_URL="$LIVE_BASE_URL" \
+    CLIENT_CONTRACT_API_KEY="$LIVE_API_KEY" \
+    CLIENT_CONTRACT_QUERY="$LIVE_QUERY" \
     CLIENT_CONTRACT_MODEL="${CLIENT_API_E2E_MODEL:-}" \
     CLIENT_CONTRACT_OPENAI_RAG_MODE="${CLIENT_API_E2E_RAG_MODE:-}" \
     CLIENT_CONTRACT_OPENAI_RAG_MEMORY="${CLIENT_API_E2E_RAG_MEMORY:-}" \
@@ -68,10 +100,10 @@ if [[ "$LIVE" == "1" ]]; then
 
   run_step "Python/Node SDK live JSON/SSE" env \
     CLIENT_SDK_LIVE=1 \
-    CLIENT_SDK_BASE_URL="$BASE_URL" \
-    CLIENT_SDK_API_KEY="$API_KEY" \
+    CLIENT_SDK_BASE_URL="$LIVE_BASE_URL" \
+    CLIENT_SDK_API_KEY="$LIVE_API_KEY" \
     RAG_MODEL="${CLIENT_API_E2E_MODEL:-rag-default}" \
-    RAG_QUERY="$QUERY" \
+    RAG_QUERY="$LIVE_QUERY" \
     ./scripts/verify-client-sdk-quickstart.sh
 else
   echo
