@@ -1,5 +1,9 @@
 # Configuration Reference
 
+Budget TTL conservatively settles instead of refunding; late usage adjusts original windows. With cost
+caps, unknown model prices return503 before dispatch. V66 backfills legacy EXPIRED rows automatically.
+See [budget settlement safety](budget-settlement-safety.md).
+
 Candidate circuits are enabled by default; query enhancement adds a5-second expansion cap,10-second answer reserve,
 and8 zero-queue workers. See [configuration and cancellation boundaries §2](candidate-isolation-answer-contract.md#2-independent-optional-stage-deadlines).
 

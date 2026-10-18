@@ -128,10 +128,10 @@ class MultiModelPropertiesTest {
     }
 
     @Test
-    void modelCost_negativeValuesNormalizedToZero() {
+    void modelCost_invalidTokenPricesAreNotSilentlyTreatedAsFree() {
         MultiModelProperties.ModelCost cost = new MultiModelProperties.ModelCost(-1.0, -2.0, -3.0, -4.0);
-        assertEquals(0.0, cost.input());
-        assertEquals(0.0, cost.output());
+        assertEquals(-1.0, cost.input());
+        assertEquals(-2.0, cost.output());
         assertEquals(0.0, cost.cacheRead());
         assertEquals(0.0, cost.cacheWrite());
     }

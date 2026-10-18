@@ -29,6 +29,25 @@ import static org.mockito.Mockito.when;
 
 class BudgetedChatModelTest {
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.NullSource
+    @org.junit.jupiter.params.provider.ValueSource(doubles = {-1, Double.NaN, Double.POSITIVE_INFINITY, 0, 2})
+    void reservationDistinguishesUnknownPriceFromExplicitFreeModel(Double price) {
+        var delegate = mock(ChatModel.class);
+        var service = mock(com.springairag.core.budget.BudgetReservationService.class);
+        when(service.reserve(any())).thenReturn(com.springairag.core.budget.BudgetReservationService.Reservation.disabled());
+        when(delegate.call(any(Prompt.class))).thenReturn(responseWithUsage(3, 5));
+        var model = new BudgetedChatModel(delegate, budget(1), 0, 10, 0, 100,
+                new JTokkitPromptTokenEstimator(), LlmInvocationPurpose.CHAT, LlmUsageRecorder.NOOP,
+                price == null ? null : new MultiModelProperties.ModelCost(price, price, 0, 0), "CONFIGURED_MODEL_COST", "test/cost", service);
+        model.call(new Prompt("hello"));
+        var captured = org.mockito.ArgumentCaptor.forClass(com.springairag.core.budget.BudgetReservationService.ReservationRequest.class);
+        verify(service).reserve(captured.capture());
+        if (price == null || !Double.isFinite(price) || price < 0) org.junit.jupiter.api.Assertions.assertNull(captured.getValue().estimatedCost());
+        else assertEquals(price == 0 ? 0 : 1, captured.getValue().estimatedCost().signum());
+        verify(delegate).call(any(Prompt.class));
+    }
+
     @Test
     void lateProviderInterruptIsClearedOnlyForAccountingAndRestoredAfterwards() {
         ChatModel delegate = mock(ChatModel.class);

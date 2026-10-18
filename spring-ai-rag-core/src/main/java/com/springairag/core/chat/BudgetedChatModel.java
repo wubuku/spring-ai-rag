@@ -448,8 +448,9 @@ public final class BudgetedChatModel implements ChatModel {
 
     private java.math.BigDecimal estimatedCost(long tokens) {
         if (modelCost == null || !Double.isFinite(modelCost.input())
-                || !Double.isFinite(modelCost.output())) {
-            return java.math.BigDecimal.ZERO.setScale(LlmUsageCostCalculator.SCALE);
+                || !Double.isFinite(modelCost.output())
+                || modelCost.input() < 0 || modelCost.output() < 0) {
+            return null;
         }
         return java.math.BigDecimal.valueOf(tokens)
                 .multiply(java.math.BigDecimal.valueOf(

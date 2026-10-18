@@ -73,8 +73,12 @@ public class BudgetReservationService {
             return;
         }
         try {
-            transactionTemplate.executeWithoutResult(status -> settleInTransaction(
-                    reservation, usage, actualCost, costAvailable));
+            for (int attempt = 0; attempt < 3; attempt++) {
+                if (Boolean.TRUE.equals(transactionTemplate.execute(status -> settleInTransaction(
+                        reservation, usage, actualCost, costAvailable)))) {
+                    return;
+                }
+            }
         } catch (DataAccessException error) {
             // 调用方已经拿到模型结果；保留 RESERVED 让 TTL 恢复任务收敛。
         }
@@ -138,11 +142,11 @@ public class BudgetReservationService {
                 }
             }
             jdbcTemplate.update(
-                    "DELETE FROM rag_llm_budget_window window "
-                            + "WHERE window.updated_at < ? AND window.reserved_tokens=0 "
-                            + "AND window.reserved_cost=0 AND NOT EXISTS ("
+                    "DELETE FROM rag_llm_budget_window budget_window "
+                            + "WHERE budget_window.updated_at < ? AND budget_window.reserved_tokens=0 "
+                            + "AND budget_window.reserved_cost=0 AND NOT EXISTS ("
                             + "SELECT 1 FROM rag_llm_budget_reservation reservation "
-                            + "WHERE reservation.principal_id=window.principal_id "
+                            + "WHERE reservation.principal_id=budget_window.principal_id "
                             + "AND reservation.state='RESERVED')",
                     Timestamp.from(cutoff));
         } catch (DataAccessException ignored) {
@@ -161,6 +165,12 @@ public class BudgetReservationService {
             throw new BudgetLimitException(
                     "LLM invocation exceeds the per-request token budget", 1);
         }
+        if ((policy.dailyCostLimit() != null || policy.monthlyCostLimit() != null
+                || policy.maxRequestCost() != null)
+                && (request.estimatedCost() == null || request.estimatedCost().signum() < 0)) {
+            throw new BudgetServiceUnavailableException(
+                    "LLM cost limit requires a configured non-negative model price", null);
+        }
         BigDecimal estimatedCost = normalize(request.estimatedCost());
         if (policy.maxRequestCost() != null
                 && estimatedCost.compareTo(policy.maxRequestCost()) > 0) {
@@ -171,10 +181,7 @@ public class BudgetReservationService {
         ExistingReservation existing = findReservation(
                 request.logicalExecutionId(), request.callOrdinal());
         if (existing != null) {
-            if ("RESERVED".equals(existing.state())) {
-                return new Reservation(existing.reservationId(), true, true);
-            }
-            return new Reservation(existing.reservationId(), true, false);
+            return reuse(existing, request, estimatedCost);
         }
 
         Instant now = Instant.now();
@@ -182,6 +189,24 @@ public class BudgetReservationService {
                 .toLocalDate().atStartOfDay(ZoneOffset.UTC).toInstant();
         Instant monthStart = ZonedDateTime.ofInstant(now, ZoneOffset.UTC)
                 .withDayOfMonth(1).toLocalDate().atStartOfDay(ZoneOffset.UTC).toInstant();
+        UUID reservationId = UUID.randomUUID();
+        Instant expiresAt = now.plusSeconds(Math.min(
+                policy.reservationTtlSeconds(), request.deadline() == null
+                        ? policy.reservationTtlSeconds()
+                        : Math.max(1, Duration.between(now, request.deadline()).toSeconds())));
+        int inserted = jdbcTemplate.update(
+                "INSERT INTO rag_llm_budget_reservation "
+                        + "(reservation_id, principal_id, logical_execution_id, call_ordinal, "
+                        + "day_window_start, month_window_start, estimated_tokens, estimated_cost, "
+                        + "state, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'RESERVED', ?) "
+                        + "ON CONFLICT (logical_execution_id, call_ordinal) DO NOTHING",
+                reservationId, request.principalId(), request.logicalExecutionId(),
+                request.callOrdinal(), Timestamp.from(dayStart), Timestamp.from(monthStart),
+                request.estimatedTokens(), estimatedCost, Timestamp.from(expiresAt));
+        if (inserted == 0) {
+            return reuse(findReservation(request.logicalExecutionId(), request.callOrdinal()),
+                    request, estimatedCost);
+        }
         ensureWindow(request.principalId(), "DAY", dayStart);
         ensureWindow(request.principalId(), "MONTH", monthStart);
         BigDecimal costForLimit = estimatedCost;
@@ -196,32 +221,19 @@ public class BudgetReservationService {
             throw new BudgetLimitException("Monthly LLM budget exceeded", retryAfterSeconds(now, dayStart, monthStart));
         }
 
-        UUID reservationId = UUID.randomUUID();
-        Instant expiresAt = now.plusSeconds(Math.min(
-                policy.reservationTtlSeconds(), request.deadline() == null
-                        ? policy.reservationTtlSeconds()
-                        : Math.max(1, Duration.between(now, request.deadline()).toSeconds())));
-        try {
-            jdbcTemplate.update(
-                    "INSERT INTO rag_llm_budget_reservation "
-                            + "(reservation_id, principal_id, logical_execution_id, call_ordinal, "
-                            + "day_window_start, month_window_start, estimated_tokens, estimated_cost, "
-                            + "state, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'RESERVED', ?)",
-                    reservationId, request.principalId(), request.logicalExecutionId(),
-                    request.callOrdinal(), Timestamp.from(dayStart), Timestamp.from(monthStart),
-                    request.estimatedTokens(), estimatedCost, Timestamp.from(expiresAt));
-        } catch (DataAccessException error) {
-            ExistingReservation duplicate = findReservation(
-                    request.logicalExecutionId(), request.callOrdinal());
-            if (duplicate != null && "RESERVED".equals(duplicate.state())) {
-                return new Reservation(duplicate.reservationId(), true, true);
-            }
-            throw error;
-        }
         return new Reservation(reservationId, true, true);
     }
 
-    private void settleInTransaction(
+    private Reservation reuse(ExistingReservation row, ReservationRequest request, BigDecimal cost) {
+        if (row == null || !request.principalId().equals(row.principalId())
+                || request.estimatedTokens() != row.estimatedTokens()
+                || cost.compareTo(row.estimatedCost()) != 0) {
+            throw new BudgetServiceUnavailableException("LLM reservation identity mismatch", null);
+        }
+        return new Reservation(row.reservationId(), true, "RESERVED".equals(row.state()));
+    }
+
+    private boolean settleInTransaction(
             Reservation reservation,
             LlmUsageSnapshot usage,
             BigDecimal actualCost,
@@ -237,8 +249,8 @@ public class BudgetReservationService {
                         rs.getTimestamp("month_window_start").toInstant(),
                         rs.getLong("estimated_tokens"), rs.getBigDecimal("estimated_cost")),
                 reservation.reservationId()).stream().findFirst().orElse(null);
-        if (row == null || !"RESERVED".equals(row.state())) {
-            return;
+        if (row == null || !("RESERVED".equals(row.state()) || "EXPIRED".equals(row.state()))) {
+            return true;
         }
         long tokens = usage != null && usage.available()
                 ? Math.max(0, usage.totalTokens()) : row.estimatedTokens();
@@ -247,13 +259,19 @@ public class BudgetReservationService {
         int updated = jdbcTemplate.update(
                 "UPDATE rag_llm_budget_reservation SET state='SETTLED', actual_tokens=?, "
                         + "actual_cost=?, finalized_at=clock_timestamp(), updated_at=clock_timestamp(), "
-                        + "version=version+1 WHERE reservation_id=? AND state='RESERVED' AND version=?",
-                tokens, cost, reservation.reservationId(), row.version());
+                        + "version=version+1 WHERE reservation_id=? AND state=? AND version=?",
+                tokens, cost, reservation.reservationId(), row.state(), row.version());
         if (updated != 1) {
-            return;
+            return false;
         }
-        settleWindow(row.principalId(), "DAY", row.dayWindowStart(), tokens, cost, row.estimatedTokens(), row.estimatedCost());
-        settleWindow(row.principalId(), "MONTH", row.monthWindowStart(), tokens, cost, row.estimatedTokens(), row.estimatedCost());
+        boolean expired = "EXPIRED".equals(row.state());
+        long tokenDelta = expired ? tokens - row.estimatedTokens() : tokens;
+        BigDecimal costDelta = expired ? cost.subtract(row.estimatedCost()) : cost;
+        long reservedTokens = expired ? 0 : row.estimatedTokens();
+        BigDecimal reservedCost = expired ? ZERO : row.estimatedCost();
+        settleWindow(row.principalId(), "DAY", row.dayWindowStart(), tokenDelta, costDelta, reservedTokens, reservedCost);
+        settleWindow(row.principalId(), "MONTH", row.monthWindowStart(), tokenDelta, costDelta, reservedTokens, reservedCost);
+        return true;
     }
 
     private void releaseInTransaction(UUID reservationId, boolean expired) {
@@ -271,13 +289,21 @@ public class BudgetReservationService {
             return;
         }
         int updated = jdbcTemplate.update(
-                "UPDATE rag_llm_budget_reservation SET state=?, finalized_at=clock_timestamp(), "
+                "UPDATE rag_llm_budget_reservation SET state=?, "
+                        + "actual_tokens=CASE WHEN ? THEN estimated_tokens ELSE actual_tokens END, "
+                        + "actual_cost=CASE WHEN ? THEN estimated_cost ELSE actual_cost END, finalized_at=clock_timestamp(), "
                         + "updated_at=clock_timestamp(), version=version+1 "
-                        + "WHERE reservation_id=? AND state='RESERVED' AND version=?",
-                expired ? "EXPIRED" : "RELEASED", reservationId, row.version());
+                        + "WHERE reservation_id=? AND state='RESERVED' AND version=? "
+                        + "AND (NOT ? OR expires_at <= clock_timestamp())",
+                expired ? "EXPIRED" : "RELEASED", expired, expired, reservationId, row.version(), expired);
         if (updated == 1) {
-            releaseWindow(row.principalId(), "DAY", row.dayWindowStart(), row.estimatedTokens(), row.estimatedCost());
-            releaseWindow(row.principalId(), "MONTH", row.monthWindowStart(), row.estimatedTokens(), row.estimatedCost());
+            if (expired) {
+                settleWindow(row.principalId(), "DAY", row.dayWindowStart(), row.estimatedTokens(), row.estimatedCost(), row.estimatedTokens(), row.estimatedCost());
+                settleWindow(row.principalId(), "MONTH", row.monthWindowStart(), row.estimatedTokens(), row.estimatedCost(), row.estimatedTokens(), row.estimatedCost());
+            } else {
+                releaseWindow(row.principalId(), "DAY", row.dayWindowStart(), row.estimatedTokens(), row.estimatedCost());
+                releaseWindow(row.principalId(), "MONTH", row.monthWindowStart(), row.estimatedTokens(), row.estimatedCost());
+            }
         }
     }
 
@@ -315,11 +341,12 @@ public class BudgetReservationService {
 
     private ExistingReservation findReservation(UUID executionId, int ordinal) {
         return jdbcTemplate.query(
-                "SELECT reservation_id, state FROM rag_llm_budget_reservation "
+                "SELECT reservation_id, state, principal_id, estimated_tokens, estimated_cost FROM rag_llm_budget_reservation "
                         + "WHERE logical_execution_id=? AND call_ordinal=?",
                 (rs, rowNum) -> new ExistingReservation(
                         rs.getObject("reservation_id", UUID.class), rs.getString("state"),
-                        0, null, null, null, 0, ZERO), executionId, ordinal)
+                        0, rs.getString("principal_id"), null, null,
+                        rs.getLong("estimated_tokens"), rs.getBigDecimal("estimated_cost")), executionId, ordinal)
                 .stream().findFirst().orElse(null);
     }
 

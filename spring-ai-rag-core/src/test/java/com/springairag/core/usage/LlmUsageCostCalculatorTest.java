@@ -10,6 +10,14 @@ import static org.junit.jupiter.api.Assertions.*;
 class LlmUsageCostCalculatorTest {
 
     @Test
+    void negativeModelPriceIsUnavailableRatherThanFree() {
+        var result = LlmUsageCostCalculator.calculate(new LlmUsageSnapshot(10, 5, 15, true),
+                new ModelCost(-1, 0, 0, 0), "USD");
+        assertFalse(result.pricingAvailable());
+        assertFalse(result.costAvailable());
+    }
+
+    @Test
     void calculatesCostFromValidTokensAndPricing() {
         LlmUsageSnapshot usage = new LlmUsageSnapshot(1_000_000, 100_000, 1_100_000, true);
         var result = LlmUsageCostCalculator.calculate(usage, pricing(), "USD");

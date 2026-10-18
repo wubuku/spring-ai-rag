@@ -9,6 +9,9 @@
 
 # REST API 参考
 
+预算修复不改路由、envelope 或 SSE 顺序；费用上限下未知价格使用既有503错误码，超限沿用429。
+见[预算结算与兼容边界](budget-settlement-safety-zh-CN.md#3-自动迁移与兼容)。
+
 错误原因、重试与回答结果的增量契约见[上游故障与Client恢复](upstream-client-recovery-zh-CN.md)。
 
 📖 [English](rest-api.md) · 📖 [中文](rest-api-zh-CN.md)

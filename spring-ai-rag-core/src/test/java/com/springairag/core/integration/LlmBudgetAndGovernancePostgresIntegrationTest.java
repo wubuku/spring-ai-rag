@@ -26,6 +26,10 @@ import org.testcontainers.utility.DockerImageName;
 import javax.sql.DataSource;
 import java.time.Instant;
 import java.util.UUID;
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.concurrent.Callable;
+import java.util.concurrent.Executors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -244,5 +248,214 @@ class LlmBudgetAndGovernancePostgresIntegrationTest {
         return new BudgetReservationService.ReservationRequest(
                 principal, logicalExecution, ordinal, tokens, null,
                 Instant.now().plusSeconds(60));
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(longs = {15, 60, 85})
+    void expiryChargesEstimateAndLateUsageAdjustsExactlyOnce(long actual) {
+        var request = new BudgetReservationService.ReservationRequest("db:expiry", UUID.randomUUID(),
+                1, 60, new BigDecimal("0.6"), Instant.now().plusSeconds(60));
+        var reservation = budgetService.reserve(request);
+        jdbc.update("UPDATE rag_llm_budget_reservation SET expires_at=clock_timestamp()-interval '1 second'");
+        budgetService.expireReservations();
+        budgetService.expireReservations();
+        assertWindow("db:expiry", 0, 60, "0", "0.6");
+        assertEquals("EXPIRED", state(reservation));
+        org.junit.jupiter.api.Assertions.assertFalse(budgetService.reserve(request).reusable());
+        assertThrows(BudgetLimitException.class, () -> budgetService.reserve(
+                request("db:expiry", UUID.randomUUID(), 1, 41)));
+        budgetService.release(reservation);
+        assertWindow("db:expiry", 0, 60, "0", "0.6");
+        var cost = BigDecimal.valueOf(actual).movePointLeft(2);
+        budgetService.settle(reservation, new LlmUsageSnapshot(actual, 0, actual, true), cost, true);
+        budgetService.settle(reservation, new LlmUsageSnapshot(99, 0, 99, true), BigDecimal.TEN, true);
+        budgetService.expireReservations();
+        assertWindow("db:expiry", 0, actual, "0", cost.toPlainString());
+        assertEquals("SETTLED", state(reservation));
+    }
+
+    @Test
+    void expiryAndUnknownLateUsageRetainEstimateWithoutChangingOriginalWindows() {
+        var reservation = budgetService.reserve(request("db:old", UUID.randomUUID(), 1, 60));
+        jdbc.update("UPDATE rag_llm_budget_reservation SET day_window_start=day_window_start-interval '40 days', "
+                + "month_window_start=month_window_start-interval '2 months', expires_at=clock_timestamp()-interval '1 second'");
+        jdbc.update("UPDATE rag_llm_budget_window SET window_start=CASE WHEN window_kind='DAY' "
+                + "THEN window_start-interval '40 days' ELSE window_start-interval '2 months' END");
+        budgetService.expireReservations();
+        budgetService.settle(reservation, LlmUsageSnapshot.unavailable(), null, false);
+        assertWindow("db:old", 0, 60, "0", "0");
+        assertEquals(0, jdbc.queryForObject("SELECT count(*) FROM rag_llm_budget_window "
+                + "WHERE window_start >= date_trunc('day',clock_timestamp())", Integer.class));
+    }
+
+    @Test
+    void repeatedReleaseAndFutureExpiryDoNotChargeOrRefundTwice() {
+        var reservation = budgetService.reserve(request("db:release", UUID.randomUUID(), 1, 60));
+        budgetService.expireReservations();
+        assertWindow("db:release", 60, 0, "0", "0");
+        budgetService.release(reservation);
+        budgetService.release(reservation);
+        budgetService.settle(reservation, new LlmUsageSnapshot(1, 0, 1, true), null, false);
+        assertWindow("db:release", 0, 0, "0", "0");
+        assertEquals("RELEASED", state(reservation));
+    }
+
+    @Test
+    void duplicateReservationIdentityCannotChangeOwnerOrEstimate() {
+        UUID execution = UUID.randomUUID();
+        budgetService.reserve(request("db:identity", execution, 1, 60));
+        assertThrows(com.springairag.core.budget.BudgetServiceUnavailableException.class,
+                () -> budgetService.reserve(request("db:other", execution, 1, 60)));
+        assertThrows(com.springairag.core.budget.BudgetServiceUnavailableException.class,
+                () -> budgetService.reserve(request("db:identity", execution, 1, 61)));
+        assertThrows(com.springairag.core.budget.BudgetServiceUnavailableException.class,
+                () -> budgetService.reserve(new BudgetReservationService.ReservationRequest("db:identity", execution,
+                        1, 60, BigDecimal.ONE, null)));
+        assertWindow("db:identity", 60, 0, "0", "0");
+        assertEquals(1, jdbc.queryForObject("SELECT count(*) FROM rag_llm_budget_reservation", Integer.class));
+    }
+
+    @Test
+    void twoServiceInstancesReserveOneInvocationAndSettleExpiryRaceWithoutDoubleCounting() throws Exception {
+        var other = new BudgetReservationService(jdbc, new RagProperties(), new DataSourceTransactionManager(dataSource));
+        var request = request("db:race", UUID.randomUUID(), 1, 60);
+        try (var executor = Executors.newFixedThreadPool(8)) {
+            var calls = new ArrayList<Callable<BudgetReservationService.Reservation>>();
+            for (int index = 0; index < 16; index++) {
+                var service = index % 2 == 0 ? budgetService : other;
+                calls.add(() -> service.reserve(request));
+            }
+            var results = executor.invokeAll(calls);
+            var reservation = results.getFirst().get();
+            for (var result : results) assertEquals(reservation.reservationId(), result.get().reservationId());
+            assertWindow("db:race", 60, 0, "0", "0");
+            jdbc.update("UPDATE rag_llm_budget_reservation SET expires_at=clock_timestamp()-interval '1 second'");
+            var finishes = new ArrayList<Callable<Void>>();
+            for (int index = 0; index < 16; index++) {
+                boolean expire = index % 2 == 0;
+                finishes.add(() -> {
+                    if (expire) other.expireReservations();
+                    else budgetService.settle(reservation, new LlmUsageSnapshot(15, 0, 15, true), null, false);
+                    return null;
+                });
+            }
+            for (var result : executor.invokeAll(finishes)) result.get();
+            assertWindow("db:race", 0, 15, "0", "0");
+            assertEquals("SETTLED", state(reservation));
+        }
+    }
+
+    @Test
+    void concurrentDistinctInvocationsRespectSharedLimitAndRollbackRejectedPlaceholder() throws Exception {
+        try (var executor = Executors.newFixedThreadPool(8)) {
+            var calls = new ArrayList<Callable<Boolean>>();
+            for (int index = 0; index < 16; index++) calls.add(() -> {
+                try {
+                    budgetService.reserve(request("db:quota", UUID.randomUUID(), 1, 30));
+                    return true;
+                } catch (BudgetLimitException expected) { return false; }
+            });
+            int passed = 0;
+            for (var result : executor.invokeAll(calls)) if (result.get()) passed++;
+            assertEquals(3, passed);
+            assertWindow("db:quota", 90, 0, "0", "0");
+            assertEquals(3, jdbc.queryForObject("SELECT count(*) FROM rag_llm_budget_reservation", Integer.class));
+        }
+    }
+
+    @Test
+    void monthlyRejectionRollsBackDailyWindowAndInvocationPlaceholder() {
+        var first = budgetService.reserve(request("db:monthly", UUID.randomUUID(), 1, 1));
+        budgetService.release(first);
+        jdbc.update("UPDATE rag_llm_budget_window SET settled_tokens=980 WHERE window_kind='MONTH'");
+        UUID execution = UUID.randomUUID();
+        assertThrows(BudgetLimitException.class, () -> budgetService.reserve(request("db:monthly", execution, 1, 30)));
+        assertEquals(0L, jdbc.queryForObject("SELECT reserved_tokens FROM rag_llm_budget_window WHERE window_kind='DAY'", Long.class));
+        assertEquals(0, jdbc.queryForObject("SELECT count(*) FROM rag_llm_budget_reservation WHERE logical_execution_id=?", Integer.class, execution));
+        budgetService.reserve(request("db:monthly", execution, 1, 20));
+        assertEquals(20L, jdbc.queryForObject("SELECT reserved_tokens FROM rag_llm_budget_window WHERE window_kind='MONTH'", Long.class));
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"daily_cost_limit", "monthly_cost_limit", "max_request_cost"})
+    void costLimitRejectsUnknownPriceButAllowsExplicitFreeModels(String column) {
+        var bootstrap = budgetService.reserve(request("db:cost", UUID.randomUUID(), 1, 1));
+        budgetService.release(bootstrap);
+        jdbc.update("UPDATE rag_llm_budget_policy SET policy_source='MANAGED', " + column + "=0.1");
+        assertThrows(com.springairag.core.budget.BudgetServiceUnavailableException.class,
+                () -> budgetService.reserve(request("db:cost", UUID.randomUUID(), 1, 10)));
+        assertThrows(com.springairag.core.budget.BudgetServiceUnavailableException.class,
+                () -> budgetService.reserve(new BudgetReservationService.ReservationRequest("db:cost",
+                        UUID.randomUUID(), 1, 10, BigDecimal.ONE.negate(), null)));
+        assertThrows(BudgetLimitException.class,
+                () -> budgetService.reserve(new BudgetReservationService.ReservationRequest("db:cost",
+                        UUID.randomUUID(), 1, 10, BigDecimal.ONE, null)));
+        budgetService.reserve(new BudgetReservationService.ReservationRequest("db:cost",
+                UUID.randomUUID(), 1, 10, BigDecimal.ZERO, null));
+        assertWindow("db:cost", 10, 0, "0", "0");
+    }
+
+    @Test
+    void v65UpgradeBackfillsOnlyExpiredEstimatesAndIsNotAppliedTwice() {
+        var flyway = Flyway.configure().dataSource(dataSource).locations("classpath:db/migration")
+                .cleanDisabled(false).load();
+        flyway.clean();
+        Flyway.configure().dataSource(dataSource).locations("classpath:db/migration").target("65").load().migrate();
+        var expired = budgetService.reserve(new BudgetReservationService.ReservationRequest("db:migration",
+                UUID.randomUUID(), 1, 40, new BigDecimal("0.4"), null));
+        var settled = budgetService.reserve(request("db:migration", UUID.randomUUID(), 1, 20));
+        budgetService.settle(settled, new LlmUsageSnapshot(5, 0, 5, true), null, false);
+        var released = budgetService.reserve(request("db:migration", UUID.randomUUID(), 1, 10));
+        budgetService.release(released);
+        budgetService.reserve(request("db:migration", UUID.randomUUID(), 1, 10));
+        jdbc.update("UPDATE rag_llm_budget_reservation SET state='EXPIRED',finalized_at=clock_timestamp() WHERE reservation_id=?", expired.reservationId());
+        jdbc.update("UPDATE rag_llm_budget_window SET reserved_tokens=reserved_tokens-40,reserved_cost=reserved_cost-0.4");
+        assertWindow("db:migration", 10, 5, "0", "0");
+        var missing = budgetService.reserve(request("db:missing", UUID.randomUUID(), 1, 30));
+        jdbc.update("UPDATE rag_llm_budget_reservation SET state='EXPIRED' WHERE reservation_id=?", missing.reservationId());
+        jdbc.update("DELETE FROM rag_llm_budget_window WHERE principal_id='db:missing'");
+        flyway.migrate();
+        flyway.migrate();
+        assertWindow("db:migration", 10, 45, "0", "0.4");
+        assertWindow("db:missing", 0, 30, "0", "0");
+        budgetService.settle(expired, new LlmUsageSnapshot(12, 0, 12, true), new BigDecimal("0.12"), true);
+        assertWindow("db:migration", 10, 17, "0", "0.12");
+        assertEquals("RELEASED", state(released));
+        assertEquals("SETTLED", state(settled));
+    }
+
+    private String state(BudgetReservationService.Reservation reservation) {
+        return jdbc.queryForObject("SELECT state FROM rag_llm_budget_reservation WHERE reservation_id=?",
+                String.class, reservation.reservationId());
+    }
+
+    @Test
+    void retentionDeletesOldTerminalRowsAndWindowsButKeepsActiveAndRecentRecords() {
+        var terminal = budgetService.reserve(request("db:old-terminal", UUID.randomUUID(), 1, 10));
+        budgetService.settle(terminal, new LlmUsageSnapshot(5, 0, 5, true), null, false);
+        var active = budgetService.reserve(request("db:old-active", UUID.randomUUID(), 1, 10));
+        jdbc.update("UPDATE rag_llm_budget_reservation SET created_at=clock_timestamp()-interval '40 days'");
+        jdbc.update("UPDATE rag_llm_budget_window SET updated_at=clock_timestamp()-interval '40 days'");
+        var recent = budgetService.reserve(request("db:recent", UUID.randomUUID(), 1, 10));
+        budgetService.release(recent);
+        budgetService.cleanupTerminalReservations();
+        budgetService.cleanupTerminalReservations();
+        assertEquals(0, jdbc.queryForObject("SELECT count(*) FROM rag_llm_budget_reservation WHERE reservation_id=?", Integer.class, terminal.reservationId()));
+        assertEquals(0, jdbc.queryForObject("SELECT count(*) FROM rag_llm_budget_window WHERE principal_id='db:old-terminal'", Integer.class));
+        assertEquals("RESERVED", state(active));
+        assertWindow("db:old-active", 10, 0, "0", "0");
+        assertEquals("RELEASED", state(recent));
+        assertWindow("db:recent", 0, 0, "0", "0");
+    }
+
+    private void assertWindow(String owner, long reserved, long settled, String reservedCost, String settledCost) {
+        var windows = jdbc.queryForList("SELECT * FROM rag_llm_budget_window WHERE principal_id=?", owner);
+        assertEquals(2, windows.size());
+        for (var window : windows) {
+            assertEquals(reserved, ((Number) window.get("reserved_tokens")).longValue());
+            assertEquals(settled, ((Number) window.get("settled_tokens")).longValue());
+            assertEquals(0, new BigDecimal(reservedCost).compareTo((BigDecimal) window.get("reserved_cost")));
+            assertEquals(0, new BigDecimal(settledCost).compareTo((BigDecimal) window.get("settled_cost")));
+        }
     }
 }

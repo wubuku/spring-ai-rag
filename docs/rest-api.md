@@ -1,5 +1,8 @@
 # REST API Reference
 
+Budget safety preserves routes, envelopes and SSE ordering; unknown prices under cost caps use the
+existing503 error, and exhausted limits retain429. See [settlement compatibility](budget-settlement-safety.md#3-automatic-migration-and-compatibility).
+
 Optional `answerRequirements` / `rag.answer_requirements`:
 [request/response, idempotency, and streaming compatibility §3](candidate-isolation-answer-contract.md#3-request-level-answer-contracts).
 

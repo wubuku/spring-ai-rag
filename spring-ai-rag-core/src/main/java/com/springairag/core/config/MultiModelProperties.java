@@ -187,8 +187,6 @@ public class MultiModelProperties {
             double cacheWrite
     ) {
         public ModelCost {
-            if (input < 0) input = 0;
-            if (output < 0) output = 0;
             if (cacheRead < 0) cacheRead = 0;
             if (cacheWrite < 0) cacheWrite = 0;
         }

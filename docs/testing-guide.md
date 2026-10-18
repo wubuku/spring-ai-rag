@@ -1,5 +1,9 @@
 # Testing Guide
 
+[Budget settlement acceptance](budget-settlement-safety.md#4-verification-entry-points):
+real PostgreSQL migration/concurrency and `python3 scripts/verify-budget-settlement-e2e.py` for four protocols,
+in-flight TTL and crash recovery. Controlled providers do not replace real Embedding/LLM, SDK and dev.sh acceptance.
+
 See [candidate isolation, stage deadlines, contracts, and field-level diagnostic acceptance](candidate-isolation-answer-contract.md#5-acceptance).
 Controlled providers verify application behavior, not real model quality; retain API/PostgreSQL/SDK/real-model/dev.sh gates.
 

@@ -1,5 +1,8 @@
 # 配置参考
 
+预算 TTL 默认保守结算而不退款，迟到 usage 按原窗口校正；有费用上限时未知模型价格在调用前
+返回503。V66 自动回填历史 EXPIRED。见[预算结算安全](budget-settlement-safety-zh-CN.md)。
+
 候选熔断默认启用；查询增强新增5秒扩展上限、10秒回答预留、8个零排队 worker。
 完整配置与物理取消边界见[候选隔离与回答契约 §2](candidate-isolation-answer-contract-zh-CN.md#2-可选查询增强的独立时限)。
 

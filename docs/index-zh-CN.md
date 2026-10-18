@@ -1,5 +1,7 @@
 # 文档索引
 
+[LLM预算结算安全](budget-settlement-safety-zh-CN.md)：TTL不退款、迟到结算、费用上限、自动迁移与外部Client验收。
+
 [候选隔离、阶段时限、可选回答契约与字段级诊断](candidate-isolation-answer-contract-zh-CN.md)：默认保护、增量API及验收。
 
 本批增量能力：[可信断言、主动诊断与离线质量发布准入](trustworthy-evaluation-admission-zh-CN.md)；既有 API 契约不变，普通 Chat 不增加评测费用。
@@ -136,7 +138,7 @@ OpenClaw 的 `TOOLS.md`、`MEMORY.md`、`memory/`、`HEARTBEAT.md` 等本地状�
 | `spring-ai-rag-core/.../chat/`、`.../rag/` | 模式化 Chat 执行、Modular RAG 与 Tool Calling |
 | `spring-ai-rag-core/.../config/RagProperties.java` | `rag.*` 配置绑定 |
 | `spring-ai-rag-core/src/main/resources/application.yml` | 主配置（端口 8081） |
-| `spring-ai-rag-core/src/main/resources/db/migration/` | Flyway **V1–V65** |
+| `spring-ai-rag-core/src/main/resources/db/migration/` | Flyway **V1–V66** |
 | `spring-ai-rag-starter/` | 自动配置 `GeneralRagAutoConfiguration` |
 | `spring-ai-rag-documents/` | 分块 / 清洗 |
 | `spring-ai-rag-webui/` | React 管理台（独立 npm 工程） |

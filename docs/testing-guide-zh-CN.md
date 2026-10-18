@@ -1,5 +1,9 @@
 # 测试指南
 
+[预算结算安全验收](budget-settlement-safety-zh-CN.md#4-验证入口)：
+真实PG迁移/并发与`python3 scripts/verify-budget-settlement-e2e.py`四协议、在途TTL和崩溃恢复；
+受控provider不替代真实Embedding/LLM、SDK和dev.sh验收。
+
 新增[候选隔离、阶段时限、回答契约与字段级诊断验收](candidate-isolation-answer-contract-zh-CN.md#5-验收入口)。
 受控 provider 验证应用处置，不冒充真实模型质量；仍需后端 API、PostgreSQL、SDK、真实模型与 dev.sh 门槛。
 
