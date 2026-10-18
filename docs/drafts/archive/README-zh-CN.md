@@ -23,6 +23,10 @@
 
 ## 主要历史主题
 
+- 证据版本固定与在线容量隔离：
+  [规划](2026-10-18_EVIDENCE_SNAPSHOTS_ADMISSION_PLAN.md) ·
+  [实施、外部 Client 契约、真实模型与开发栈验收](2026-10-18_EVIDENCE_SNAPSHOTS_ADMISSION_PROGRESS.md)。
+
 - 有界 Collection 覆盖召回：
   [规划](2026-10-17_NEXT_BATCH_COLLECTION_COVERAGE_PLAN-zh-CN.md) ·
   [实施与外部 Client API/SDK/真实检索验收](2026-10-17_NEXT_BATCH_COLLECTION_COVERAGE_PROGRESS-zh-CN.md)。

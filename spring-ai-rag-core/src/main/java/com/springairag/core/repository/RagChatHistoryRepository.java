@@ -197,6 +197,7 @@ public class RagChatHistoryRepository {
             return new DurableContentReferences(List.of(), Map.of());
         }
 
+        new com.springairag.core.chat.EvidenceSnapshotGuard(jdbcTemplate).validate(sources);
         Map<Long, DocumentReferenceRow> initialReferences =
                 loadActiveDocumentReferences(documentIds);
         TreeSet<Long> collectionIds = new TreeSet<>(
@@ -244,6 +245,7 @@ public class RagChatHistoryRepository {
 
         Map<Long, DocumentReferenceRow> currentReferences =
                 loadActiveDocumentReferences(documentIds);
+        new com.springairag.core.chat.EvidenceSnapshotGuard(jdbcTemplate).validate(sources);
         if (!initialReferences.equals(currentReferences)) {
             throw staleSourceReference();
         }

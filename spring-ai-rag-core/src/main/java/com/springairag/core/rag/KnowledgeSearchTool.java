@@ -146,6 +146,7 @@ public class KnowledgeSearchTool implements ToolCallback {
                                 reranked = rerankingService.rerank(query, results, limit);
                             }
                         } catch (RuntimeException e) {
+                            com.springairag.core.admission.AdmissionRejectedException.propagate(e);
                             reranked = ReRankingService.limitResults(results, limit);
                             degraded = true;
                             errorCode = e.getClass().getSimpleName();

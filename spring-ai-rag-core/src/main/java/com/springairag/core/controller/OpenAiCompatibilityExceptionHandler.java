@@ -51,6 +51,8 @@ public class OpenAiCompatibilityExceptionHandler {
         if (error instanceof ChatTurnInProgressException inProgress) {
             builder.header("Retry-After",
                     Integer.toString(inProgress.retryAfterSeconds()));
+        } else if (error.getRetryAfterSeconds() != null) {
+            builder.header("Retry-After", Integer.toString(error.getRetryAfterSeconds()));
         }
         return builder.body(OpenAiErrorResponse.of(
                         error.getMessage(),

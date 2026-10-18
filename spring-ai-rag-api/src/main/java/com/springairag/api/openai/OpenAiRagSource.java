@@ -22,7 +22,17 @@ public record OpenAiRagSource(
         String originalFilename,
         String documentType,
         String collectionKey,
-        String sourceType) {
+        String sourceType,
+        com.springairag.api.dto.EvidenceSnapshot evidenceSnapshot) {
+
+    public OpenAiRagSource(String citationId, String sourceHandle, String documentId,
+            Integer chunkIndex, String title, Double score, Double vectorScore,
+            Double fulltextScore, String originalFilename, String documentType,
+            String collectionKey, String sourceType) {
+        this(citationId, sourceHandle, documentId, chunkIndex, title, score,
+                vectorScore, fulltextScore, originalFilename, documentType,
+                collectionKey, sourceType, null);
+    }
 
     public static OpenAiRagSource from(ChatSource source) {
         if (source == null) {
@@ -40,6 +50,7 @@ public record OpenAiRagSource(
                 source.getOriginalFilename(),
                 source.getDocumentType(),
                 source.getCollectionKey(),
-                source.getSourceType());
+                source.getSourceType(),
+                source.getEvidenceSnapshot());
     }
 }

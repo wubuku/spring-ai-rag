@@ -8,6 +8,11 @@
 
 ## 1. 协议边界
 
+来源的可选 `evidenceSnapshot` 记录检索版本和最终完整证据 digest，字段定义见
+[REST API](rest-api-zh-CN.md#证据版本快照与容量错误)。版本冲突发出
+`EVIDENCE_SNAPSHOT_CONFLICT` 错误而非成功 `done`，不提交成功历史；已发文本不可撤回。
+请求准入拒绝可在建立 SSE 前返回 HTTP 429 与 `Retry-After: 1`，模型阶段的拒绝则可能作为流错误发出。
+
 `POST /api/v1/rag/chat/stream` 返回 `text/event-stream`。文本增量沿用
 OpenAI-like `choices[].delta.content` 结构，但本端点不是标准
 `POST /v1/chat/completions`，还包含 RAG 专用事件。默认关闭的 OpenAI 兼容预览已经提供

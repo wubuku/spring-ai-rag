@@ -71,6 +71,7 @@ public class ProjectRerankPostProcessor implements DocumentPostProcessor {
                 reranked = rerankingService.rerank(
                         effectiveQuery, results, context.options().maxResults());
             } catch (RuntimeException e) {
+                com.springairag.core.admission.AdmissionRejectedException.propagate(e);
                 reranked = ReRankingService.limitResults(
                         results, context.options().maxResults());
                 degraded = true;

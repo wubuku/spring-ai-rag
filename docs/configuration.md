@@ -1785,6 +1785,33 @@ Native, and OpenAI-compatible request bodies do not gain budget fields; only an 
 `enabled: false` disables the new enforcement path. The legacy fail-open usage ledger is not the
 default enforcement implementation.
 
+## Online Admission
+
+`rag.admission` is enabled by default. Limits apply **per service instance**, not across replicas or to cost budgets.
+Excess work receives `429 TOO_MANY_REQUESTS` with `Retry-After: 1` without unbounded application queuing.
+
+| Property | Default | Scope |
+|---|---:|---|
+| `rag.admission.enabled` | `true` | Emergency capacity rollback switch |
+| `rag.admission.max-requests` | 64 | Native Chat/Search and OpenAI completions |
+| `rag.admission.max-requests-per-principal` | 16 | Stable authenticated identity, never raw keys |
+| `rag.admission.max-model-calls` | 32 | Online model invocations |
+| `rag.admission.max-model-calls-per-principal` | 8 | Online model invocations per identity |
+| `rag.admission.max-model-calls-per-provider` | 16 | Provider prefix of a model reference |
+| `rag.admission.max-background-model-calls` | 2 | Separate managed QA and explicit judge capacity |
+
+All limits must be positive integers. Async HTTP completion/error/timeout releases request permits idempotently;
+blocking providers retain model permits until they actually return, while streaming releases on termination or cancellation.
+Model rejection precedes invocation counting and cost reservation. Background identity is captured server-side in the budget;
+client metadata cannot bypass online limits. Health, status, history and management reads are excluded.
+Managed QA case concurrency within each run is capped by background capacity so default scheduling cannot
+overrun its own permits. Other concurrent runs or explicit judges still share that cap and may be rejected;
+there is no unbounded queue guarantee.
+The ordinary retrieval pool has four workers and 64 queued tasks; saturation is explicit rejection, not empty evidence.
+Low-cardinality metrics are `rag.admission.active` and `rag.admission.rejected`, tagged only with
+`kind=request|model|background`, never principal. Database Budget Reservation still enforces cost limits.
+No data migration is needed for this batch.
+
 ## Configuration Inheritance
 
 Starter module users only need to configure:

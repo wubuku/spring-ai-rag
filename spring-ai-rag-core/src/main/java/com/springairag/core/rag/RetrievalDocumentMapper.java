@@ -1,6 +1,7 @@
 package com.springairag.core.rag;
 
 import com.springairag.api.dto.ChatSource;
+import com.springairag.api.dto.EvidenceSnapshot;
 import com.springairag.api.dto.RetrievalResult;
 import org.springframework.ai.document.Document;
 import org.springframework.stereotype.Component;
@@ -25,6 +26,9 @@ public class RetrievalDocumentMapper {
             });
         }
         metadata.put("documentId", String.valueOf(result.getDocumentId()));
+        if (result.getEvidenceSnapshot() != null) {
+            metadata.put("evidenceSnapshot", result.getEvidenceSnapshot().withText(result.getChunkText()));
+        }
         if (result.hasChunkIndex()) {
             metadata.put("chunkIndex", result.getChunkIndex());
         } else {
@@ -72,6 +76,9 @@ public class RetrievalDocumentMapper {
         source.setChunkIndex(result.getChunkIndex());
         source.setTitle(result.getTitle() != null ? result.getTitle() : result.getDocumentId());
         source.setChunkText(truncate(result.getChunkText(), 2000));
+        if (result.getEvidenceSnapshot() != null) {
+            source.setEvidenceSnapshot(result.getEvidenceSnapshot().withText(result.getChunkText()));
+        }
         source.setScore(result.getScore());
         source.setVectorScore(result.getVectorScore());
         source.setFulltextScore(result.getFulltextScore());
@@ -110,6 +117,8 @@ public class RetrievalDocumentMapper {
     public RetrievalResult toRetrievalResult(Document document) {
         Map<String, Object> metadata = document.getMetadata();
         RetrievalResult result = new RetrievalResult();
+        EvidenceSnapshot snapshot = EvidenceSnapshot.from(metadata.get("evidenceSnapshot"));
+        result.setEvidenceSnapshot(snapshot != null ? snapshot.withText(document.getText()) : null);
         result.setDocumentId(stringValue(metadata, "documentId", document.getId()));
         Integer chunkIndex = nullableIntValue(metadata, "chunkIndex");
         if (chunkIndex != null) {

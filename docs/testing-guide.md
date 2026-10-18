@@ -1,5 +1,37 @@
 # Testing Guide
 
+## Evidence Snapshot and Admission Acceptance
+
+- `./scripts/verify-gated-it.sh UnassignedDocumentChatFencePostgresIntegrationTest`: real V1–V65 migrations,
+  revision/hash/disable/delete/generation/chunker races and commit fencing, keyword SQL, and rejection of
+  cross-revision neighbor expansion even when anchor text stays unchanged.
+- `AdmissionServiceTest`, `AdmissionWebConfigTest`, `EvidenceSnapshotTest`, and
+  `ChatExecutionServiceEvidenceSafetyIntegrationTest`: concurrency limits, background isolation, idempotent
+  release, rejection before budgeting, JSON/stream unsuccessful commits, and history compatibility.
+  `PerformanceConfigTest` covers four workers plus 64 queued tasks and explicit saturation rejection.
+- Start the controlled provider with
+  `python3 scripts/test-support/evidence-admission-provider-stub.py --port 18186`.
+  On a disposable backend only, route test model `fixture/controlled` to `http://127.0.0.1:18186`,
+  make it the default Chat model, configure KNOWLEDGE alias `rag-default` and PLAIN alias `rag-plain`,
+  set `rag.admission.max-model-calls=1` and `rag.admission.max-requests>=2`, and disable model retries
+  and query rewriting; set `rag.chat.knowledge.max-retrieval-queries=1` so query expansion cannot reach the provider
+  before retrieval. See the [external model registry](multi-model-external-config.md) for its format.
+  Set `EVIDENCE_ADMISSION_BASE_URL`, `EVIDENCE_ADMISSION_STUB_URL`, and `EVIDENCE_ADMISSION_API_KEY`
+  for that backend, then run `python3 scripts/verify-evidence-admission-e2e.py`.
+  It checks Native/OpenAI 429 with Retry-After, no rejected provider call, unaffected health/Search,
+  recovery after release, JSON/SSE conflicts during generation, absent successful history, and fixture cleanup.
+- To isolate HTTP request limits, configure a disposable backend with `rag.admission.max-requests=1`
+  and `rag.admission.max-model-calls>=2`, then run the same script with
+  `EVIDENCE_ADMISSION_REQUEST_LIMIT_ONLY=1`. It covers versioned Native routes, the legacy Chat alias,
+  Search, OpenAI, health/model-discovery bypass, and JSON/SSE release and recovery.
+  Do not share the work database between real Evaluation acceptance and a controlled-provider server:
+  another worker may claim the run, invalidating its attribution to the intended real model service.
+
+Controlled providers prove fault timing and protocol behavior, not real model quality. Separately run
+`scripts/real-llm-e2e-smoke.sh` with real BGE-M3 and LLMs, managed QA, and SDK live acceptance;
+run report-based gates only after the full `mvn test`. Operate only owned services, ports, and disposable
+databases; never stop another project's process to free a port.
+
 > 📖 [English](testing-guide.md) · 📖 [中文](testing-guide-zh-CN.md)
 
 > Spring AI RAG project philosophy on testing: "Tests are production code" — write tests alongside code, `mvn test` must pass before considering work done.

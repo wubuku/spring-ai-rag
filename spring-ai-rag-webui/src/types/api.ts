@@ -148,7 +148,19 @@ export interface CollectionListResponse {
 }
 
 // Chat API
+export interface EvidenceSnapshot {
+  documentRevision: number;
+  contentHash: string;
+  collectionId?: number | null;
+  indexKind: 'VECTOR' | 'KEYWORD';
+  embeddingProfileId?: number | null;
+  generation: number;
+  chunkerVersion: string;
+  evidenceDigest: string;
+}
+
 export interface ChatSource {
+  evidenceSnapshot?: EvidenceSnapshot | null;
   documentId: string | number;
   citationId?: string;
   sourceHandle?: string;
@@ -226,6 +238,7 @@ export interface ChatStreamEvent {
 
 // Search API
 export interface RetrievalResult {
+  evidenceSnapshot?: EvidenceSnapshot | null;
   documentId: number;
   title: string;
   content?: string;

@@ -1,5 +1,32 @@
 # 测试指南
 
+## 证据快照与容量隔离专项
+
+- `./scripts/verify-gated-it.sh UnassignedDocumentChatFencePostgresIntegrationTest`：真实 V1–V65 迁移、
+  revision/hash/禁用/删除/代次/chunker 竞争与提交栅栏、关键词 SQL 以及相同 anchor 文本跨 revision 拒绝 neighbor。
+- `AdmissionServiceTest`、`AdmissionWebConfigTest`、`EvidenceSnapshotTest` 和
+  `ChatExecutionServiceEvidenceSafetyIntegrationTest`：并发上限、后台隔离、幂等释放、预算前拒绝、
+  JSON/stream 无成功提交和历史兼容；`PerformanceConfigTest` 覆盖 4 worker + 64 队列饱和拒绝。
+- `python3 scripts/test-support/evidence-admission-provider-stub.py --port 18186` 启动受控 provider。
+  仅在隔离后端将测试模型 `fixture/controlled` 路由到 `http://127.0.0.1:18186`，
+  默认 Chat 指向该模型，OpenAI 配置 KNOWLEDGE alias `rag-default` 和 PLAIN alias `rag-plain`；
+  设置 `rag.admission.max-model-calls=1`、`rag.admission.max-requests>=2`，关闭模型重试与查询改写，
+  设置 `rag.chat.knowledge.max-retrieval-queries=1` 避免查询扩展先于检索进入 provider。
+  配置格式见 [外部模型注册表](multi-model-external-config-zh-CN.md#完整示例)。
+  对这个后端设置 `EVIDENCE_ADMISSION_BASE_URL`、`EVIDENCE_ADMISSION_STUB_URL`、
+  `EVIDENCE_ADMISSION_API_KEY`，执行 `python3 scripts/verify-evidence-admission-e2e.py`。
+  验收 Native/OpenAI 429 与 Retry-After、拒绝时无 provider 调用、健康/Search 不受模型容量影响、
+  释放后恢复，以及生成期间更新导致的 JSON/SSE 冲突、无成功历史、测试文档清理。
+- 请求容量单独验证：在同类隔离后端设置 `rag.admission.max-requests=1`、
+  `rag.admission.max-model-calls>=2`，以 `EVIDENCE_ADMISSION_REQUEST_LIMIT_ONLY=1` 执行同一脚本。
+  覆盖版本化 Native 路由、旧 Chat 别名、Search、OpenAI、健康/模型发现旁路与 JSON/SSE 释放恢复。
+  真实 Evaluation 验收不要与使用受控 provider 的服务共用工作数据库，否则其他 worker 可能领取 run，
+  使测试结果不再代表指定的真实模型服务。
+
+受控 provider 只证明故障时序与协议，不证明模型质量。仍需单独执行真实 BGE-M3 与 LLM 的
+`scripts/real-llm-e2e-smoke.sh`、受管 QA 与 SDK live 验收，并且全量 `mvn test` 后再执行报告型门禁。
+只操作本批拥有的服务、端口与临时数据库；不要因端口占用停止其他项目。
+
 > 📖 [English](testing-guide.md) · 📖 [中文](testing-guide-zh-CN.md)
 
 Spring AI RAG 项目对测试的态度是"测试是生产代码"——写代码必须同步写测试，`mvn test` 不通过就不算完成。

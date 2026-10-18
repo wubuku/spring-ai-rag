@@ -107,6 +107,15 @@ RagChatController
   provider 调用前先预留 token/cost，hard limit 拒绝采用 fail-closed，终态账本保留由统一治理
   类别协调清理。
 
+### 证据快照与容量隔离
+
+- 数据库检索在同一 SQL 中采集 `evidenceSnapshot`，贯穿上下文、引用与来源响应；最终结果和
+  durable 提交栅栏再次校验版本。变化返回 `409 EVIDENCE_SNAPSHOT_CONFLICT`，不提交成功历史。
+  旧历史和旧扩展缺省为空，不事后补写旧证据的当前版本；字段见 [REST API](rest-api-zh-CN.md#证据版本快照与容量错误)。
+- `rag.admission` 默认启用：实例级 HTTP 请求、在线模型和后台 Evaluation 分池准入，模型许可先于
+  次数/费用预留；普通检索采用有界线程池。它不代替数据库费用预算，也不承诺跨副本全局并发限额。
+  默认值、释放边界与指标见 [配置](configuration-zh-CN.md#在线容量准入)。
+
 ### Chat 会话与流式协议
 
 - 会话 history、导出、清空、Memory baseline 和活动 lease 都按认证 principal 隔离。

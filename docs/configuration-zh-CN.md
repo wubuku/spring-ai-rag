@@ -1622,6 +1622,30 @@ rag:
 预算字段；只有显式 `enabled: false` 才关闭新 enforcement，不应把旧的 fail-open usage ledger
 当作默认实现。
 
+## 在线容量准入
+
+`rag.admission` 默认启用，限额均为**每个服务实例**的并发上限，不是跨实例配额或费用预算。
+超限立即返回 `429 TOO_MANY_REQUESTS` 和 `Retry-After: 1`，不在应用层无限排队。
+
+| 配置 | 默认值 | 范围 |
+|---|---:|---|
+| `rag.admission.enabled` | `true` | 紧急容量回退开关 |
+| `rag.admission.max-requests` | 64 | Native Chat/Search、OpenAI completion |
+| `rag.admission.max-requests-per-principal` | 16 | 稳定认证身份，不使用原始 Key |
+| `rag.admission.max-model-calls` | 32 | 在线模型调用 |
+| `rag.admission.max-model-calls-per-principal` | 8 | 单身份在线模型调用 |
+| `rag.admission.max-model-calls-per-provider` | 16 | 模型引用的 provider 前缀 |
+| `rag.admission.max-background-model-calls` | 2 | 受管 QA 与主动 judge 的独立后台容量 |
+
+限额必须为正整数。HTTP 异步完成/超时/错误幂等释放请求许可；阻塞 provider 在实际返回前继续占用
+模型许可，流式调用在终态或取消时释放。模型拒绝发生在调用次数和费用预留之前。
+后台身份由服务端预算捕获，Client metadata 不能绕过在线限额。健康、状态、历史和管理查询不受本层影响。
+受管 QA 单次 run 的用例并行度自动取配置值与后台容量的较小值，避免默认调度自行挤爆许可；
+其他并行 run 或主动 judge 仍共享后台上限，饱和时明确拒绝，不宣称无限排队。
+普通检索池固定 4 worker、64 个等待任务，满载明确拒绝而不是返回空证据。
+低基数指标：`rag.admission.active`、`rag.admission.rejected`，`kind=request|model|background`；不标记 principal。
+费用硬上限仍由既有数据库 Budget Reservation 管理。本批无需数据迁移。
+
 ## 配置继承
 
 Starter 模块使用者只需配置：

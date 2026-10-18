@@ -44,6 +44,14 @@ class HistoryAwareQueryTransformerTest {
     }
 
     @Test
+    void admissionFailureCannotBecomeSuccessfulUnchangedQuery() {
+        when(firstTurn.transform(any(Query.class))).thenThrow(
+                new com.springairag.core.admission.AdmissionRejectedException());
+        assertThrows(com.springairag.core.admission.AdmissionRejectedException.class,
+                () -> transformer.transform(query("capacity")));
+    }
+
+    @Test
     void firstTurnDelegatesToFirstTurnTransformer() {
         Query q = query("what is RAG?");
         Query expected = Query.builder().text("transformed").build();

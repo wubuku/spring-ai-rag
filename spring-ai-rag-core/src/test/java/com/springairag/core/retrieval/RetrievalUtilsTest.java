@@ -1,6 +1,8 @@
 package com.springairag.core.retrieval;
 
 import com.springairag.api.dto.RetrievalResult;
+import com.springairag.api.dto.EvidenceSnapshot;
+import com.springairag.core.exception.RagException;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -11,6 +13,31 @@ import static org.junit.jupiter.api.Assertions.*;
  * RetrievalUtils Unit Tests
  */
 class RetrievalUtilsTest {
+
+    @Test
+    void fusionKeepsOriginalProvenanceWhenLegacyProviderHasNoSnapshot() {
+        var vectorResult = RetrievalUtils.createResult("42", "vector evidence", 0, 0.8);
+        var keywordResult = RetrievalUtils.createResult("42", "legacy evidence", 0, 100.0);
+        var snapshot = new EvidenceSnapshot(1, "hash", null, "VECTOR", 1L, 1, "v1", null)
+                .withText(vectorResult.getChunkText());
+        vectorResult.setEvidenceSnapshot(snapshot);
+        var fused = RetrievalUtils.fuseResults(List.of(vectorResult), List.of(keywordResult), 10, 0.5f, 0.5f);
+        assertEquals(snapshot, fused.getFirst().getEvidenceSnapshot());
+        assertEquals("vector evidence", fused.getFirst().getChunkText());
+
+        vectorResult.setEvidenceSnapshot(null);
+        keywordResult.setEvidenceSnapshot(snapshot.withText(keywordResult.getChunkText()));
+        fused = RetrievalUtils.fuseResults(List.of(vectorResult), List.of(keywordResult), 10, 0.5f, 0.5f);
+        assertNull(fused.getFirst().getEvidenceSnapshot());
+        assertEquals("vector evidence", fused.getFirst().getChunkText());
+
+        vectorResult.setEvidenceSnapshot(snapshot);
+        keywordResult.setEvidenceSnapshot(new EvidenceSnapshot(2, "new-hash", null,
+                "KEYWORD", null, 2, "v1", null));
+        assertEquals("EVIDENCE_SNAPSHOT_CONFLICT", assertThrows(RagException.class,
+                () -> RetrievalUtils.fuseResults(List.of(vectorResult), List.of(keywordResult),
+                        10, 0.5f, 0.5f)).getErrorCode());
+    }
 
     // ========== cosineSimilarity ==========
 

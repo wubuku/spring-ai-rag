@@ -48,6 +48,7 @@ public final class BoundedMultiQueryExpander implements QueryExpander {
         try {
             expanded = delegate.expand(query);
         } catch (RuntimeException ex) {
+            com.springairag.core.admission.AdmissionRejectedException.propagate(ex);
             log.warn("Query expansion failed; using the input query unchanged");
             expanded = List.of(query);
             degraded = true;

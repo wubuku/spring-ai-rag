@@ -137,6 +137,15 @@ an external client first. `PLAIN` and `AGENT` retain their existing semantics.
 The evaluator is deterministic and does not call an LLM judge, so normal Chat
 does not incur another model call.
 
+Database sources also carry an `EvidenceSnapshot` captured at retrieval time.
+`EvidenceSnapshotGuard` rechecks document identity and index generation before final results and
+inside the history commit fence, rejecting mixed-version commits. `AdmissionWebConfig` protects
+request concurrency; `BudgetedChatModel` acquires a model permit before budget reservation, while
+Evaluation uses a server-captured background identity and a separate pool. Request and model permits
+have independent lifetimes: HTTP completion cannot release a still-blocking model call early.
+See the [REST API](rest-api.md#evidence-snapshots-and-capacity-errors) and
+[capacity configuration](configuration.md#online-capacity-admission) for the contracts and per-instance boundaries.
+
 `ProjectDocumentRetriever` adapts the project's stronger retrieval stack to
 Spring AI's Modular RAG contract. Vector search, Chinese/English full text,
 RRF fusion, a bounded rerank candidate pool, reranking, Embedding Profile filtering,

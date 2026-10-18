@@ -132,6 +132,13 @@ Citation Registry 校验和上下文预算结果汇聚为 `evidenceAssessment`�
 答案再评估，避免在证据安全门完成前向外部 Client 泄漏内容；`PLAIN` 与 `AGENT` 保持各自
 既有语义。该评估不调用 LLM judge，不增加普通 Chat 的额外模型成本。
 
+数据库来源还携带检索时采集的 `EvidenceSnapshot`；`EvidenceSnapshotGuard` 在最终结果和
+history 事务栅栏中复核文档身份与索引代次，拒绝混版提交。`AdmissionWebConfig` 保护请求并发，
+`BudgetedChatModel` 在预算预留前取得模型许可，Evaluation 使用服务端捕获的后台身份分池。
+两层许可生命周期独立；HTTP 结束不会提前释放仍在阻塞调用中的模型许可。
+契约与实例级边界见 [REST API](rest-api-zh-CN.md#证据版本快照与容量错误)、
+[容量配置](configuration-zh-CN.md#在线容量准入)。
+
 `ProjectDocumentRetriever` 将项目更强的检索栈适配到 Spring AI Modular RAG
 契约。向量检索、中英文全文检索、RRF 融合、有界 rerank 候选池、rerank、Embedding Profile 过滤、
 Collection/API Key ACL、document type 和 document ID 范围因此由 Search、

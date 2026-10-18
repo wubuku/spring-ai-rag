@@ -43,6 +43,12 @@ public final class BudgetedChatModel implements ChatModel {
     private final String costUnit;
     private final String modelRef;
     private final BudgetReservationService reservationService;
+    private com.springairag.core.admission.AdmissionService admission;
+
+    public BudgetedChatModel withAdmission(com.springairag.core.admission.AdmissionService service) {
+        this.admission = service;
+        return this;
+    }
 
     public BudgetedChatModel(ChatModel delegate, ChatExecutionBudget budget) {
         this(delegate, budget, 0, 0, 0, Integer.MAX_VALUE,
@@ -162,6 +168,13 @@ public final class BudgetedChatModel implements ChatModel {
 
     @Override
     public ChatResponse call(Prompt prompt) {
+        try (var lease = admission != null ? admission.model(budget.principalId(), modelRef,
+                budget.backgroundWorkload()) : null) {
+            return callAdmitted(prompt);
+        }
+    }
+
+    private ChatResponse callAdmitted(Prompt prompt) {
         validatePrompt(prompt);
         int ordinal = budget.reserveModelCall();
         BudgetReservationService.Reservation reservation = reserve(ordinal, prompt);
@@ -198,6 +211,14 @@ public final class BudgetedChatModel implements ChatModel {
 
     @Override
     public Flux<ChatResponse> stream(Prompt prompt) {
+        if (admission != null) {
+            return Flux.using(() -> admission.model(budget.principalId(), modelRef, budget.backgroundWorkload()),
+                    lease -> streamAdmitted(prompt), com.springairag.core.admission.AdmissionService.Lease::close);
+        }
+        return streamAdmitted(prompt);
+    }
+
+    private Flux<ChatResponse> streamAdmitted(Prompt prompt) {
         return Flux.defer(() -> {
             validatePrompt(prompt);
             int ordinal = budget.reserveModelCall();

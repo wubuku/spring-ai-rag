@@ -600,6 +600,32 @@ This endpoint is disabled by default and is a controlled-network preview. See
 [OpenAI compatibility readiness](openai-compatibility-readiness.md) for public
 and multi-instance production boundaries.
 
+### Evidence Snapshots and Capacity Errors
+
+Database Search results, Native Chat `sources`, and OpenAI `rag.sources` add a nullable
+`evidenceSnapshot`: `documentRevision`, `contentHash`, `collectionId`, `indexKind`,
+`embeddingProfileId`, `generation`, `chunkerVersion`, and `evidenceDigest`.
+`indexKind` is `VECTOR` or `KEYWORD`; keyword evidence has no embedding profile ID.
+The digest is SHA-256 over the complete final evidence text in UTF-8, not the 2000-character
+`chunkText` display preview. Context expansion may switch to KEYWORD derivation identity.
+Old history, static knowledge, and legacy custom retrievers may omit snapshots; absence does
+not imply the current revision or a pinned-evidence guarantee.
+
+Document and derivation identity are collected in the retrieval SQL and revalidated after
+generation and inside durable/history commit. Updates, disablement, deletion, ownership changes,
+or derivation generation changes cause `409 EVIDENCE_SNAPSHOT_CONFLICT`, without automatic model
+regeneration or successful history/memory/replay commit. Model usage remains billable under the
+existing budget settlement rules. SSE emits an error rather than successful `done`; an OpenAI
+protocol terminator must not be interpreted as success. Already emitted text cannot be recalled;
+clients should treat it as provisional until a successful terminal event.
+
+Online admission is enabled by default. Excess Native Chat/Search and OpenAI completion work
+receives `429 TOO_MANY_REQUESTS` and `Retry-After: 1` in the existing respective error envelopes.
+This is per-instance concurrency protection, not exhausted account balance; retry with backoff.
+See [Online Admission](configuration.md#online-admission) for limits, background isolation and metrics.
+Only optional response fields and new error conditions are added; URLs, required parameters,
+and success envelopes remain compatible. No data migration is required.
+
 ## Chat — RAG Q&A
 
 ### `POST /api/v1/rag/chat/ask`

@@ -30,6 +30,10 @@ relevant evergreen guide/reference, `docs/TODO*`, and the
 
 ## Main Historical Topics
 
+- Evidence snapshots and online capacity isolation:
+  [plan](2026-10-18_EVIDENCE_SNAPSHOTS_ADMISSION_PLAN.md) ·
+  [implementation, external Client contracts, real models, and development-stack acceptance](2026-10-18_EVIDENCE_SNAPSHOTS_ADMISSION_PROGRESS.md) (Chinese).
+
 - Bounded Collection-coverage retrieval:
   [plan](2026-10-17_NEXT_BATCH_COLLECTION_COVERAGE_PLAN.md) and
   [implementation plus external Client API/SDK/live-retrieval acceptance](2026-10-17_NEXT_BATCH_COLLECTION_COVERAGE_PROGRESS.md).

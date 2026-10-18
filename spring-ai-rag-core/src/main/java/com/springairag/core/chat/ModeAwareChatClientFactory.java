@@ -48,6 +48,10 @@ import java.util.List;
  */
 @Component
 public class ModeAwareChatClientFactory {
+    private com.springairag.core.admission.AdmissionService admission;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setAdmission(com.springairag.core.admission.AdmissionService service) { this.admission = service; }
 
     private static final Logger log =
             LoggerFactory.getLogger(ModeAwareChatClientFactory.class);
@@ -529,7 +533,7 @@ public class ModeAwareChatClientFactory {
                 candidate.cost(),
                 ragProperties.getUsage().getCostUnit(),
                 candidate.ref(),
-                budgetReservationService);
+                budgetReservationService).withAdmission(admission);
     }
 
     public record Attempt(

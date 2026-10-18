@@ -22,6 +22,15 @@ import static org.mockito.Mockito.when;
 class BoundedMultiQueryExpanderTest {
 
     @Test
+    void admissionFailureCannotBecomeSuccessfulExpansionFallback() {
+        var delegate = mock(org.springframework.ai.rag.preretrieval.query.expansion.QueryExpander.class);
+        Query input = Query.builder().text("capacity").build();
+        when(delegate.expand(input)).thenThrow(new com.springairag.core.admission.AdmissionRejectedException());
+        org.junit.jupiter.api.Assertions.assertThrows(com.springairag.core.admission.AdmissionRejectedException.class,
+                () -> new BoundedMultiQueryExpander(delegate, 2, true).expand(input));
+    }
+
+    @Test
     void trimsDeduplicatesAndPreservesQueryContext() {
         RetrievalTraceCollector trace = new RetrievalTraceCollector();
         AuthorizedRetrievalContext context = new AuthorizedRetrievalContext(

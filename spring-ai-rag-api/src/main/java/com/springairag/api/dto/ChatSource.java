@@ -15,6 +15,13 @@ import java.util.Objects;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class ChatSource {
 
+    private EvidenceSnapshot evidenceSnapshot;
+
+    public EvidenceSnapshot getEvidenceSnapshot() { return evidenceSnapshot; }
+    public void setEvidenceSnapshot(EvidenceSnapshot evidenceSnapshot) {
+        this.evidenceSnapshot = evidenceSnapshot;
+    }
+
     private String citationId;
     private String sourceHandle;
     private String documentId;
@@ -92,14 +99,15 @@ public class ChatSource {
                 && Objects.equals(documentType, that.documentType)
                 && Objects.equals(collectionKey, that.collectionKey)
                 && Objects.equals(sourceType, that.sourceType)
-                && Objects.equals(metadata, that.metadata);
+                && Objects.equals(metadata, that.metadata)
+                && Objects.equals(evidenceSnapshot, that.evidenceSnapshot);
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(citationId, sourceHandle, documentId, chunkIndex, title, chunkText,
                 score, vectorScore, fulltextScore, originalFilename, documentType,
-                collectionKey, sourceType, metadata);
+                collectionKey, sourceType, metadata, evidenceSnapshot);
     }
 
     @Override

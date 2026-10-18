@@ -66,6 +66,7 @@ public class EvaluationSuiteService {
     private final EmbeddingProfileProvider profileProvider;
     private final ObjectMapper objectMapper;
     private final RagEvaluationProperties properties;
+    private final com.springairag.core.config.RagAdmissionProperties admissionProperties;
     private final ApiKeyManagementService apiKeyManagementService;  // Batch 853：`required = false` 已删——这个类里没有 null 守卫，它缺失时在鉴权取 principal 处抛裸 NPE
     private final ChatExecutionService chatExecutionService;
     private final SemanticEvaluationService semanticEvaluationService;
@@ -93,6 +94,7 @@ public class EvaluationSuiteService {
         this.profileProvider = profileProvider;
         this.objectMapper = objectMapper;
         this.properties = ragProperties.getEvaluation();
+        this.admissionProperties = ragProperties.getAdmission();
         this.apiKeyManagementService = apiKeyManagementService;
         this.chatExecutionService = chatExecutionService;
         this.semanticEvaluationService = semanticEvaluationService;
@@ -347,8 +349,8 @@ public class EvaluationSuiteService {
         if (pendingCases.isEmpty()) {
             return List.of();
         }
-        int concurrency = Math.min(
-                properties.getRunConcurrency(), pendingCases.size());
+        int concurrency = caseConcurrency(pendingCases.size(),
+                pendingCases.stream().anyMatch(item -> item.caseDef().isKnowledgeQa()));
         if (concurrency <= 1) {
             return pendingCases.stream()
                     .map(item -> new CompletedCase(
@@ -385,6 +387,14 @@ public class EvaluationSuiteService {
         } finally {
             executor.shutdownNow();
         }
+    }
+
+    int caseConcurrency(int caseCount, boolean knowledgeQa) {
+        int limit = properties.getRunConcurrency();
+        if (knowledgeQa && admissionProperties.isEnabled()) {
+            limit = Math.min(limit, admissionProperties.getMaxBackgroundModelCalls());
+        }
+        return Math.min(limit, caseCount);
     }
 
     private CaseOutcome executeCase(
@@ -468,7 +478,7 @@ public class EvaluationSuiteService {
                     "QA_EXECUTOR_UNAVAILABLE");
         }
         long started = System.nanoTime();
-        try {
+        try (var background = com.springairag.core.admission.BackgroundWorkScope.open()) {
             ChatPrincipal principal = ChatPrincipal.fromOwnerId(ownerPrincipalId);
             String sessionId = "e-" + UUID.randomUUID().toString().replace("-", "");
             ChatCommand command = new ChatCommand(

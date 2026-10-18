@@ -85,6 +85,17 @@ class EvaluationSuiteExecuteRunTest {
                 new ObjectMapper(), properties, apiKeyManagementService);
     }
 
+    @Test
+    void knowledgeQaConcurrencyFitsDefaultBackgroundCapacityWithoutReducingSearchOnlyRuns() {
+        assertEquals(2, service.caseConcurrency(10, true));
+        assertEquals(4, service.caseConcurrency(10, false));
+        properties.getAdmission().setMaxBackgroundModelCalls(1);
+        assertEquals(1, service.caseConcurrency(10, true));
+        properties.getAdmission().setEnabled(false);
+        assertEquals(4, service.caseConcurrency(10, true));
+        assertEquals(1, service.caseConcurrency(1, true));
+    }
+
     private EmbeddingProfile profile() {
         return new EmbeddingProfile(
                 1L, "profile-key", "provider", "model", "rev", 1024,

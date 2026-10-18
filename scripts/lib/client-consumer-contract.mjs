@@ -139,6 +139,29 @@ function validateEvidenceAssessment(value, location) {
   expectType(value, 'reasonCode', 'string', location);
 }
 
+function validateEvidenceSnapshot(snapshot, location) {
+  if (snapshot === null || snapshot === undefined) return;
+  assertThat(isObject(snapshot), `${location} must be an object or null`);
+  const fields = ['documentRevision', 'contentHash', 'collectionId', 'indexKind',
+    'embeddingProfileId', 'generation', 'chunkerVersion', 'evidenceDigest'];
+  for (const field of Object.keys(snapshot)) {
+    assertThat(fields.includes(field), `${location}.${field} is not an allowed snapshot field`);
+  }
+  for (const field of ['documentRevision', 'generation']) {
+    expectType(snapshot, field, 'integer', location);
+  }
+  for (const field of ['contentHash', 'indexKind', 'chunkerVersion', 'evidenceDigest']) {
+    expectType(snapshot, field, 'string', location);
+  }
+  for (const field of ['collectionId', 'embeddingProfileId']) {
+    if (snapshot[field] !== undefined && snapshot[field] !== null) {
+      expectType(snapshot, field, 'integer', location);
+    }
+  }
+  assertThat(['VECTOR', 'KEYWORD'].includes(snapshot.indexKind), `${location}.indexKind is invalid`);
+  assertThat(/^[a-f0-9]{64}$/.test(snapshot.evidenceDigest), `${location}.evidenceDigest must be SHA-256`);
+}
+
 function validateNativeResponse(response, { requireSources = true } = {}) {
   assertThat(isObject(response), 'native response must be an object');
   expectType(response, 'answer', 'string', 'native response');
@@ -149,6 +172,7 @@ function validateNativeResponse(response, { requireSources = true } = {}) {
       for (const field of ['citationId', 'sourceHandle', 'title']) {
         expectType(source, field, 'string', `native response.sources[${index}]`);
       }
+      validateEvidenceSnapshot(source.evidenceSnapshot, `native response.sources[${index}].evidenceSnapshot`);
     }
   }
   for (const field of ['traceId', 'sessionId', 'turnId', 'requestedModel', 'resolvedModel']) {
@@ -240,6 +264,9 @@ function validateOpenAiResponseExtensions(value, transport, location = '$') {
         for (const nestedKey of Object.keys(candidate)) {
           assertThat(allowedFields.includes(nestedKey),
             `${candidateLocation}.${nestedKey} is not an allowed extension field`);
+        }
+        if (nestedField === 'sources') {
+          validateEvidenceSnapshot(candidate.evidenceSnapshot, `${candidateLocation}.evidenceSnapshot`);
         }
       };
       if (Array.isArray(nestedValue)) {
@@ -715,6 +742,16 @@ function runSelfTest() {
     ...readJson(packageData.files.openaiJson),
     rag: { ...readJson(packageData.files.openaiJson).rag, internalContext: 'must-not-leak' },
   }, packageData.manifest.transports.openaiJson));
+  const snapshotResponse = readJson(packageData.files.openaiJson);
+  validateOpenAiResponse(snapshotResponse, packageData.manifest.transports.openaiJson);
+  const legacySnapshotResponse = structuredClone(snapshotResponse);
+  delete legacySnapshotResponse.rag.sources[0].evidenceSnapshot;
+  validateOpenAiResponse(legacySnapshotResponse, packageData.manifest.transports.openaiJson);
+  legacySnapshotResponse.rag.sources[0].evidenceSnapshot = null;
+  validateOpenAiResponse(legacySnapshotResponse, packageData.manifest.transports.openaiJson);
+  snapshotResponse.rag.sources[0].evidenceSnapshot.metadata = { secret: 'must-not-leak' };
+  mustFail('private nested snapshot field', () => validateOpenAiResponse(
+    snapshotResponse, packageData.manifest.transports.openaiJson));
   const coverageResponse = {
     rag: {
       sources: [{ collectionKey: 'collection-a' }],

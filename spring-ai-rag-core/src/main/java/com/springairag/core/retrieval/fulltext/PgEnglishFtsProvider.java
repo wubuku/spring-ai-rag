@@ -157,6 +157,9 @@ public class PgEnglishFtsProvider implements FulltextSearchProvider {
             int limit, long embeddingProfileId,
             RetrievalFilters filters) {
         String select = "SELECT e.id AS local_chunk_id, v.id AS embedding_id, "
+                + "d.document_revision AS evidence_revision, d.content_hash AS evidence_content_hash, "
+                + "'KEYWORD' AS evidence_index_kind, NULL::bigint AS evidence_profile_id, "
+                + "s.local_index_generation AS evidence_generation, s.chunker_version AS evidence_chunker, "
                 + "e.chunk_text, e.document_id, e.chunk_index, "
                 + currentMetadataSql() + ", "
                 + "d.collection_id AS collection_id, "

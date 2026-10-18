@@ -57,11 +57,13 @@ public final class HistoryAwareQueryTransformer implements QueryTransformer {
             return CompletableFuture.supplyAsync(() -> delegate.transform(input))
                     .orTimeout(timeout.toMillis(), TimeUnit.MILLISECONDS)
                     .exceptionally(error -> {
+                        com.springairag.core.admission.AdmissionRejectedException.propagate(error);
                         log.warn("Spring AI 查询转换失败，回退原查询: {}", error.getMessage());
                         return query;
                     })
                     .join();
         } catch (RuntimeException e) {
+            com.springairag.core.admission.AdmissionRejectedException.propagate(e);
             log.warn("Spring AI 查询转换失败，回退原查询: {}", e.getMessage());
             return query;
         }

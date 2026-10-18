@@ -68,6 +68,12 @@ import java.util.function.Supplier;
  */
 @Service
 public class ChatExecutionService {
+    private EvidenceSnapshotGuard evidenceSnapshotGuard;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setEvidenceSnapshotGuard(EvidenceSnapshotGuard guard) {
+        this.evidenceSnapshotGuard = guard;
+    }
 
     private static final Logger log =
             LoggerFactory.getLogger(ChatExecutionService.class);
@@ -588,6 +594,7 @@ public class ChatExecutionService {
         return attempt.switchOnFirst((signal, flux) -> {
             boolean hasEvent = signal.hasValue();
             if (!hasEvent && signal.isOnError()
+                    && !(reactor.core.Exceptions.unwrap(signal.getThrowable()) instanceof RagException)
                     && index + 1 < candidates.size()) {
                 log.warn("Streaming chat candidate {}/{} failed before first event ({}), trying fallback",
                         index + 1, candidates.size(), candidate.ref(),
@@ -1133,6 +1140,9 @@ public class ChatExecutionService {
         String modelAnswer = springResponse.getResult().getOutput().getText();
         String answer = bufferedAnswer != null ? bufferedAnswer : modelAnswer;
         List<ChatSource> sources = extractSources(command.mode(), attempt, response);
+        if (evidenceSnapshotGuard != null) {
+            evidenceSnapshotGuard.validate(sources);
+        }
         Map<String, Object> usage = usage(springResponse.getMetadata().getUsage());
         String finishReason = springResponse.getResult().getMetadata() != null
                 ? springResponse.getResult().getMetadata().getFinishReason()

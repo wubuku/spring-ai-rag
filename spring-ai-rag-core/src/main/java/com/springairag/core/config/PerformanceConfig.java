@@ -41,12 +41,12 @@ public class PerformanceConfig {
      * Does not use the default ForkJoinPool to avoid competing with other async tasks.
      */
     @Bean("ragSearchExecutor")
-    public Executor ragSearchExecutor() {
-        return Executors.newFixedThreadPool(4, r -> {
+    public ExecutorService ragSearchExecutor() {
+        return new ThreadPoolExecutor(4, 4, 0L, TimeUnit.MILLISECONDS, new ArrayBlockingQueue<>(64), r -> {
             Thread t = new Thread(r, "rag-search");
             t.setDaemon(true);
             return t;
-        });
+        }, (task, executor) -> { throw new com.springairag.core.admission.AdmissionRejectedException(); });
     }
 
     /**

@@ -162,6 +162,27 @@ class ChatExecutionServiceEvidenceSafetyIntegrationTest {
                         completed.metadata().get("evidenceAssessment")).status());
     }
 
+    @Test
+    void snapshotConflictPreventsJsonAndStreamSuccessAndHistoryCommit() {
+        var guard = mock(EvidenceSnapshotGuard.class);
+        org.mockito.Mockito.doThrow(EvidenceSnapshotGuard.conflict()).when(guard).validate(anyList());
+        service.setEvidenceSnapshotGuard(guard);
+        var context = retrievalContext(true);
+        stubExecuteClient(context, "[S1] outdated answer", documents());
+        var error = org.junit.jupiter.api.Assertions.assertThrows(com.springairag.core.exception.RagException.class,
+                () -> service.execute(command(ChatMode.KNOWLEDGE)));
+        assertEquals("EVIDENCE_SNAPSHOT_CONFLICT", error.getErrorCode());
+        var client = streamClient("[S1] outdated answer", documents());
+        when(clientFactory.create(any(), same(candidate), anyList()))
+                .thenReturn(new ModeAwareChatClientFactory.Attempt(client, candidate, context, null));
+        var events = new java.util.ArrayList<ChatEvent>();
+        var streamError = org.junit.jupiter.api.Assertions.assertThrows(com.springairag.core.exception.RagException.class,
+                () -> service.stream(command(ChatMode.KNOWLEDGE)).doOnNext(events::add).blockLast());
+        assertEquals("EVIDENCE_SNAPSHOT_CONFLICT", streamError.getErrorCode());
+        assertTrue(events.stream().noneMatch(ChatEvent.Completed.class::isInstance));
+        org.mockito.Mockito.verify(historyRepository, org.mockito.Mockito.never()).save(anyString(), anyString(), anyString(), anyString(), any());
+    }
+
     private ChatCommand command(ChatMode mode) {
         ChatPrincipal principal = ChatPrincipal.local();
         return new ChatCommand(

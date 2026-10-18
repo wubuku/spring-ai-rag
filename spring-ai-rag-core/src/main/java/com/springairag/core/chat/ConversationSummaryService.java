@@ -40,6 +40,10 @@ import java.util.concurrent.TimeoutException;
  */
 @Service
 public final class ConversationSummaryService {
+    private com.springairag.core.admission.AdmissionService admission;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setAdmission(com.springairag.core.admission.AdmissionService service) { this.admission = service; }
 
     /**
      * Internal marker for the synthetic summary message used only while
@@ -220,6 +224,7 @@ public final class ConversationSummaryService {
         } catch (TimeoutException e) {
             return CompactionResult.degraded("summary_timeout");
         } catch (RagException e) {
+            com.springairag.core.admission.AdmissionRejectedException.propagate(e);
             if (e.getErrorCodeEnum() == ErrorCode.CHAT_BUDGET_EXHAUSTED) {
                 return CompactionResult.degraded("summary_budget_skipped");
             }
@@ -334,7 +339,7 @@ public final class ConversationSummaryService {
                         candidate.cost(),
                         usageCostUnit,
                         candidate.ref(),
-                        budgetReservationService))
+                        budgetReservationService).withAdmission(admission))
                 .build();
         String prompt = """
                 Summarize the following conversation for future turns.

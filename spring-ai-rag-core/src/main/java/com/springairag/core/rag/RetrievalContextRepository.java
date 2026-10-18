@@ -39,6 +39,7 @@ public class RetrievalContextRepository {
             args.add(seed.documentId());
             args.add(seed.chunkIndex());
             args.add(seed.text());
+            args.add(seed.documentRevision());
         }
         var scope = RetrievalScopeSql.build(context.scope(), context.filters());
         args.addAll(scope.args());
@@ -48,10 +49,11 @@ public class RetrievalContextRepository {
         String freshness = KeywordIndexSqlScope.fromAndFreshness(profiles.getActiveProfile().id(),
                 descriptors.textDescriptor().chunkerVersion(), descriptors.jsonRecordDescriptor().chunkerVersion())
                 .replace("WHERE s.local_index_status", "JOIN seeds ON seeds.document_id = e.document_id "
-                        + "AND seeds.chunk_index = e.chunk_index AND seeds.text = e.chunk_text WHERE s.local_index_status");
-        String sql = "WITH seeds(ordinal, document_id, chunk_index, text) AS (VALUES "
+                        + "AND seeds.chunk_index = e.chunk_index AND seeds.text = e.chunk_text "
+                        + "AND (seeds.document_revision IS NULL OR seeds.document_revision = d.document_revision) WHERE s.local_index_status");
+        String sql = "WITH seeds(ordinal, document_id, chunk_index, text, document_revision) AS (VALUES "
                 + String.join(",", Collections.nCopies(seeds.size(),
-                        "(CAST(? AS integer), CAST(? AS bigint), CAST(? AS integer), CAST(? AS text))"))
+                        "(CAST(? AS integer), CAST(? AS bigint), CAST(? AS integer), CAST(? AS text), CAST(? AS bigint))"))
                 + "), anchors AS (SELECT seeds.ordinal, e.* "
                 + freshness
                 + "AND d.source_deleted_at IS NULL AND d.document_type IS DISTINCT FROM 'json-record' "
@@ -70,7 +72,11 @@ public class RetrievalContextRepository {
                 row.getString("chunk_text")), args.toArray());
     }
 
-    public record Seed(int ordinal, long documentId, int chunkIndex, String text) { }
+    public record Seed(int ordinal, long documentId, int chunkIndex, String text, Long documentRevision) {
+        public Seed(int ordinal, long documentId, int chunkIndex, String text) {
+            this(ordinal, documentId, chunkIndex, text, null);
+        }
+    }
     public record Chunk(int ordinal, long documentId, long generation, String hash, String chunker,
                         int index, int start, int end, String text) { }
 }

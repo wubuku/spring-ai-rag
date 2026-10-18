@@ -40,7 +40,17 @@
         "score": 0.91,
         "documentType": "TEXT",
         "collectionKey": "docs:service-guide",
-        "sourceType": "DOCUMENT"
+        "sourceType": "DOCUMENT",
+        "evidenceSnapshot": {
+          "documentRevision": 1,
+          "contentHash": "fixture-content-hash",
+          "collectionId": 1,
+          "indexKind": "VECTOR",
+          "embeddingProfileId": 1,
+          "generation": 2,
+          "chunkerVersion": "fixture-v1",
+          "evidenceDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
       }
     ],
     "citationRegistry": {

@@ -28,6 +28,10 @@ import java.util.concurrent.TimeUnit;
  */
 @Service
 public class SemanticEvaluationService {
+    private com.springairag.core.admission.AdmissionService admission;
+
+    @Autowired
+    void setAdmission(com.springairag.core.admission.AdmissionService service) { this.admission = service; }
 
     private static final Logger log = LoggerFactory.getLogger(SemanticEvaluationService.class);
     private static final int MAX_ERROR_LENGTH = 500;
@@ -98,7 +102,12 @@ public class SemanticEvaluationService {
             Method evaluate = evaluatorType.getMethod("evaluate", requestType);
             int timeout = ragProperties.getRetrieval().getAnswerQualityTimeoutSeconds();
             Object response = CompletableFuture.supplyAsync(
-                            () -> invoke(evaluate, evaluatorInstance, evaluationRequest))
+                            () -> {
+                                try (var lease = admission != null
+                                        ? admission.model("evaluation", reportedModel, true) : null) {
+                                    return invoke(evaluate, evaluatorInstance, evaluationRequest);
+                                }
+                            })
                     .get(timeout, TimeUnit.SECONDS);
             Method passed = response.getClass().getMethod("isPass");
             Method score = response.getClass().getMethod("getScore");

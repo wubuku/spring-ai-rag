@@ -26,6 +26,31 @@ import static org.mockito.Mockito.*;
 class PerformanceConfigTest {
 
     @Test
+    void searchQueueRejectsExplicitlyAndRecoversAfterWorkerRelease() throws Exception {
+        ExecutorService executor = new PerformanceConfig().ragSearchExecutor();
+        var pool = (ThreadPoolExecutor) executor;
+        var release = new java.util.concurrent.CountDownLatch(1);
+        try {
+            for (int index = 0; index < 68; index++) {
+                executor.execute(() -> {
+                    try { release.await(); }
+                    catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); }
+                });
+            }
+            assertEquals(64, pool.getQueue().size());
+            var rejected = assertThrows(com.springairag.core.admission.AdmissionRejectedException.class,
+                    () -> executor.execute(() -> { }));
+            assertEquals(1, rejected.getRetryAfterSeconds());
+            release.countDown();
+            executor.shutdown();
+            assertTrue(executor.awaitTermination(5, TimeUnit.SECONDS));
+        } finally {
+            release.countDown();
+            executor.shutdownNow();
+        }
+    }
+
+    @Test
     void collectionCoverageEmbeddingExecutorIsBoundedAndIsolated() {
         ExecutorService executor = new PerformanceConfig().ragEmbeddingExecutor();
         try {

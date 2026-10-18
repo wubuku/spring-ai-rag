@@ -532,6 +532,28 @@ OpenAI SDK 通常会忽略这个未知顶层字段。
 该入口默认关闭，只定位为受控网络预览；公网、多实例生产 readiness 边界见
 [OpenAI 兼容就绪度](openai-compatibility-readiness-zh-CN.md)。
 
+### 证据版本快照与容量错误
+
+数据库 Search 结果、Native Chat `sources` 和 OpenAI `rag.sources` 增量提供可空的
+`evidenceSnapshot`：`documentRevision`、`contentHash`、`collectionId`、`indexKind`、
+`embeddingProfileId`、`generation`、`chunkerVersion`、`evidenceDigest`。
+`indexKind` 为 `VECTOR` 或 `KEYWORD`；关键词来源的 `embeddingProfileId` 为空。
+digest 是最终完整来源文本 UTF-8 的 SHA-256，不是 `chunkText` 的 2000 字符展示预览摘要。
+上下文扩展后可能使用 KEYWORD 派生身份。旧历史、静态知识和旧自定义 retriever 可没有快照，
+缺失不表示当前版本，也不表示已经做过版本固定。
+
+检索时从同一 SQL 采集文档与派生身份；生成完成和 durable/history 提交时再次验证。
+生成期间文档更新、禁用、删除、归属或派生代次变化返回 `409 EVIDENCE_SNAPSHOT_CONFLICT`，
+不自动重调模型、不提交成功 history/memory/replay；已经产生的模型费用仍按原预算结算。
+SSE 只发送错误终态，不发送成功 `done`；OpenAI 流可能包含协议结束标记，但不能将其当作成功结果。
+已发出的文本不能撤回，Client 应在成功终态前把文本视为暂存内容。
+
+在线容量保护默认启用。Native Chat/Search 和 OpenAI completion 超限返回
+`429 TOO_MANY_REQUESTS`、`Retry-After: 1`，保持各自既有错误信封。
+这是实例本地并发限制，不是账户余额不足；可在退避后重试。
+限额、独立后台容量与监控指标见 [在线容量准入](configuration-zh-CN.md#在线容量准入)。
+本次只有可选响应字段和新增错误条件，不改变原 URL、必填参数和成功 envelope，无需数据迁移。
+
 ## Chat — RAG 问答
 
 ### `POST /api/v1/rag/chat/ask`

@@ -127,6 +127,19 @@ Key rules:
   call, hard-limit rejection is fail-closed, and terminal ledger retention is
   coordinated with the other governance categories.
 
+### Evidence Snapshots And Capacity Isolation
+
+- Database retrieval captures `evidenceSnapshot` in the retrieval SQL and carries it through context,
+  citations, and response sources. Final results and the durable commit fence revalidate the version;
+  changes return `409 EVIDENCE_SNAPSHOT_CONFLICT` without successful history. Old history and legacy
+  extensions may omit it; current identity is never backfilled onto old evidence.
+  See the [REST API](rest-api.md#evidence-snapshots-and-capacity-errors).
+- `rag.admission` is enabled by default: per-instance HTTP requests, online model calls, and background
+  Evaluation use separate admission pools, model permits precede call/cost reservations, and ordinary
+  retrieval uses a bounded executor. This does not replace database cost budgets or promise global
+  cross-replica concurrency limits. See [configuration](configuration.md#online-capacity-admission)
+  for defaults, release boundaries, and metrics.
+
 ### Chat Sessions And Streaming
 
 - Session history, export, clear, Memory baselines, and active leases are

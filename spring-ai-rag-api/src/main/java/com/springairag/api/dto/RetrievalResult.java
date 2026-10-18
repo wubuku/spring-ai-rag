@@ -12,6 +12,13 @@ import java.util.Objects;
 @Schema(description = "Single retrieval result")
 public class RetrievalResult {
 
+    private EvidenceSnapshot evidenceSnapshot;
+
+    public EvidenceSnapshot getEvidenceSnapshot() { return evidenceSnapshot; }
+    public void setEvidenceSnapshot(EvidenceSnapshot evidenceSnapshot) {
+        this.evidenceSnapshot = evidenceSnapshot;
+    }
+
     @Schema(description = "Source document ID", example = "doc-456")
     private String documentId;
 
@@ -142,12 +149,13 @@ public class RetrievalResult {
         return chunkIndex == that.chunkIndex
                 && Objects.equals(documentId, that.documentId)
                 && Objects.equals(chunkText, that.chunkText)
-                && Objects.equals(title, that.title);
+                && Objects.equals(title, that.title)
+                && Objects.equals(evidenceSnapshot, that.evidenceSnapshot);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(documentId, chunkIndex, chunkText, title);
+        return Objects.hash(documentId, chunkIndex, chunkText, title, evidenceSnapshot);
     }
 
     @Override

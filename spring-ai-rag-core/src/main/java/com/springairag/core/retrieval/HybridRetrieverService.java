@@ -988,7 +988,10 @@ public class HybridRetrieverService {
             RetrievalFilters filters) {
         String vectorStr = RetrievalUtils.vectorToString(queryVector);
         String vectorColumn = EmbeddingVectorColumns.columnFor(profile.dimensions());
-        String select = "SELECT e.id, e.chunk_text, e." + vectorColumn
+        String select = "SELECT e.id, e.chunk_text, d.document_revision AS evidence_revision, "
+                + "d.content_hash AS evidence_content_hash, 'VECTOR' AS evidence_index_kind, "
+                + "s.embedding_profile_id AS evidence_profile_id, s.request_generation AS evidence_generation, "
+                + "s.chunker_version AS evidence_chunker, e." + vectorColumn
                 + "::text AS embedding, e.document_id, e.chunk_index, "
                 + currentMetadataSql() + ", "
                 + "d.collection_id AS collection_id, "

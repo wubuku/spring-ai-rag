@@ -124,7 +124,9 @@ public class RetrievalContextAssemblyPostProcessor implements DocumentPostProces
                     || context.trace().sourceHandle(documentId + ":" + chunkIndex) == null) {
                 return null;
             }
-            return new Seed(ordinal, documentId, chunkIndex, document.getText());
+            var snapshot = com.springairag.api.dto.EvidenceSnapshot.from(metadata.get("evidenceSnapshot"));
+            return new Seed(ordinal, documentId, chunkIndex, document.getText(),
+                    snapshot != null ? snapshot.documentRevision() : null);
         } catch (NumberFormatException failure) {
             return null;
         }
@@ -141,6 +143,13 @@ public class RetrievalContextAssemblyPostProcessor implements DocumentPostProces
     }
 
     private Window combine(Window first, Window second, int limit) {
+        var firstSnapshot = com.springairag.api.dto.EvidenceSnapshot.from(
+                first.anchors().getFirst().getMetadata().get("evidenceSnapshot"));
+        var secondSnapshot = com.springairag.api.dto.EvidenceSnapshot.from(
+                second.anchors().getFirst().getMetadata().get("evidenceSnapshot"));
+        if (firstSnapshot == null ? secondSnapshot != null : !firstSnapshot.sameDocument(secondSnapshot)) {
+            return null;
+        }
         Chunk left = first.chunks().getFirst();
         Chunk right = second.chunks().getFirst();
         if (!sameIdentity(left, right)
@@ -211,6 +220,12 @@ public class RetrievalContextAssemblyPostProcessor implements DocumentPostProces
         Document anchor = window.anchors().getFirst();
         Chunk identity = window.chunks().getFirst();
         Map<String, Object> metadata = new LinkedHashMap<>(anchor.getMetadata());
+        var snapshot = com.springairag.api.dto.EvidenceSnapshot.from(metadata.get("evidenceSnapshot"));
+        if (snapshot != null) {
+            metadata.put("evidenceSnapshot", new com.springairag.api.dto.EvidenceSnapshot(
+                    snapshot.documentRevision(), identity.hash(), snapshot.collectionId(), "KEYWORD", null,
+                    identity.generation(), identity.chunker(), null).withText(window.text()));
+        }
         metadata.put("contextAssembly", Map.of("version", 1,
                 "anchorChunkIndex", anchor.getMetadata().get("chunkIndex"), "contentHash", identity.hash(),
                 "chunkerVersion", identity.chunker(), "localIndexGeneration", identity.generation(),

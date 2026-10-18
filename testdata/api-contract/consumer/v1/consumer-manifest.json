@@ -87,7 +87,7 @@
             "sources": [
               "citationId", "sourceHandle", "documentId", "chunkIndex", "title",
               "score", "vectorScore", "fulltextScore", "originalFilename",
-              "documentType", "collectionKey", "sourceType"
+              "documentType", "collectionKey", "sourceType", "evidenceSnapshot"
             ],
             "citationRegistry": ["version", "handlePrefix", "sourceCount", "handles"],
             "collectionCoverage": [
@@ -132,7 +132,7 @@
             "sources": [
               "citationId", "sourceHandle", "documentId", "chunkIndex", "title",
               "score", "vectorScore", "fulltextScore", "originalFilename",
-              "documentType", "collectionKey", "sourceType"
+              "documentType", "collectionKey", "sourceType", "evidenceSnapshot"
             ],
             "citationRegistry": ["version", "handlePrefix", "sourceCount", "handles"],
             "collectionCoverage": [

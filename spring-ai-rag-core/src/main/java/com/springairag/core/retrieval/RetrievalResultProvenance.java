@@ -19,6 +19,15 @@ public final class RetrievalResultProvenance {
     public static void applyDocumentFields(
             RetrievalResult result, Map<String, Object> row) {
         Object collectionId = row.get("collection_id");
+        if (row.get("evidence_revision") instanceof Number revision) {
+            result.setEvidenceSnapshot(new com.springairag.api.dto.EvidenceSnapshot(
+                    revision.longValue(), text(row.get("evidence_content_hash")),
+                    collectionId instanceof Number number ? number.longValue() : null,
+                    text(row.get("evidence_index_kind")),
+                    row.get("evidence_profile_id") instanceof Number number ? number.longValue() : null,
+                    ((Number) row.get("evidence_generation")).longValue(),
+                    text(row.get("evidence_chunker")), null).withText(result.getChunkText()));
+        }
         if (collectionId instanceof Number number) {
             result.setCollectionId(number.longValue());
         }
@@ -49,6 +58,7 @@ public final class RetrievalResultProvenance {
 
     public static void copy(
             RetrievalResult source, RetrievalResult target) {
+        target.setEvidenceSnapshot(source.getEvidenceSnapshot());
         target.setCollectionId(source.getCollectionId());
         target.setCollectionKey(source.getCollectionKey());
         target.setSource(source.getSource());

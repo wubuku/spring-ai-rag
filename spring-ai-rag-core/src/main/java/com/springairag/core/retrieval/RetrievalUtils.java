@@ -203,6 +203,11 @@ public final class RetrievalUtils {
             }
             MergedEntry entry = merged.computeIfAbsent(
                     key, ignored -> new MergedEntry(result));
+            var previous = entry.original.getEvidenceSnapshot();
+            var current = result.getEvidenceSnapshot();
+            if (previous != null && current != null && !previous.compatibleEvidence(current)) {
+                throw com.springairag.core.chat.EvidenceSnapshotGuard.conflict();
+            }
             if (vectorChannel) {
                 if (entry.vectorSeen) {
                     continue;

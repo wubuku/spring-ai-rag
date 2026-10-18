@@ -35,6 +35,11 @@ public final class CitationRegistry {
         }
         Entry existing = entries.get(sourceKey);
         if (existing != null) {
+            var previous = existing.result().getEvidenceSnapshot();
+            var current = result.getEvidenceSnapshot();
+            if (previous == null ? current != null : !previous.compatibleEvidence(current)) {
+                throw EvidenceSnapshotGuard.conflict();
+            }
             if (result.getScore() > existing.result().getScore()) {
                 entries.put(sourceKey, existing.withResult(result));
             }

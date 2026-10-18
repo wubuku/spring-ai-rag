@@ -67,6 +67,7 @@ public enum ErrorCode {
     DUPLICATE_RESOURCE(409, "Duplicate Resource"),
     STRUCTURED_RECORD_CONFLICT(409, "Structured Record Conflict"),
     DOCUMENT_REVISION_CONFLICT(409, "Document Revision Conflict"),
+    EVIDENCE_SNAPSHOT_CONFLICT(409, "Evidence Snapshot Conflict"),
     CONCURRENT_MODIFICATION(409, "Concurrent Modification"),
     SESSION_BUSY(409, "Chat Session Busy"),
     CHAT_SESSION_LEASE_LOST(409, "Chat Session Lease Lost"),

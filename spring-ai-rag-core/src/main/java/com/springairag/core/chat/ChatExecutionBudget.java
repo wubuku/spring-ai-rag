@@ -24,6 +24,9 @@ import java.util.concurrent.atomic.AtomicReference;
  * candidate、retry、模型辅助调用和工具循环必须共享同一个实例。</p>
  */
 public final class ChatExecutionBudget {
+    private final boolean backgroundWorkload = com.springairag.core.admission.BackgroundWorkScope.isActive();
+
+    public boolean backgroundWorkload() { return backgroundWorkload; }
 
     public static final String CONTEXT_KEY =
             "com.springairag.core.chat.execution-budget";

@@ -39,6 +39,7 @@ public final class CollectionCoverageReranker {
                     true,
                     null);
         } catch (RuntimeException e) {
+            com.springairag.core.admission.AdmissionRejectedException.propagate(e);
             return fallback(source, collectionIds, finalLimit, "RERANK_ERROR");
         }
     }
