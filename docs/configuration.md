@@ -255,7 +255,7 @@ rag:
     base-url: ${RAG_EMBEDDING_BASE_URL:https://api.siliconflow.cn}
     model: ${RAG_EMBEDDING_MODEL:BAAI/bge-m3}
     dimensions: ${RAG_EMBEDDING_DIMENSIONS:1024}
-    retry-max-attempts: ${RAG_EMBEDDING_RETRY_MAX_ATTEMPTS:10}
+    retry-max-attempts: ${RAG_EMBEDDING_RETRY_MAX_ATTEMPTS:3}
     profile-key: ${RAG_EMBEDDING_PROFILE_KEY:siliconflow-bge-m3-1024-v1}
     provider: ${RAG_EMBEDDING_PROVIDER:siliconflow}
     model-revision: ${RAG_EMBEDDING_MODEL_REVISION:unspecified}
@@ -272,7 +272,7 @@ rag:
 | `rag.embedding.base-url` | `https://api.siliconflow.cn` | API endpoint |
 | `rag.embedding.model` | `BAAI/bge-m3` | Embedding model name |
 | `rag.embedding.dimensions` | `1024` | Vector dimensions (must match model output) |
-| `rag.embedding.retry-max-attempts` | `10` | Maximum attempts inside one provider call, range 1–10; independent from durable-job attempts |
+| `rag.embedding.retry-max-attempts` | `3` | Maximum provider attempts, range 1–10; also bounded by the dependency deadline, independent from durable-job attempts |
 | `rag.embedding.profile-key` | `siliconflow-bge-m3-1024-v1` | Immutable model-space identity used by writes and retrieval |
 | `rag.embedding.provider` | `siliconflow` | Provider identity stored in the Profile |
 | `rag.embedding.model-revision` | `unspecified` | Explicit revision identity; changing model semantics requires a new Profile |
@@ -1799,6 +1799,11 @@ Excess work receives `429 TOO_MANY_REQUESTS` with `Retry-After: 1` without unbou
 | `rag.admission.max-model-calls-per-principal` | 8 | Online model invocations per identity |
 | `rag.admission.max-model-calls-per-provider` | 16 | Provider prefix of a model reference |
 | `rag.admission.max-background-model-calls` | 2 | Separate managed QA and explicit judge capacity |
+| `rag.admission.max-embedding-calls` | 16 | Online embedding; cache hits consume no permit |
+| `rag.admission.max-background-embedding-calls` | 4 | Separate document-job and explicit Evaluation embedding capacity |
+| `rag.admission.max-rerank-calls` | 8 | Remote HTTP rerank; heuristic/noop consumes no permit |
+| `rag.admission.dependency-timeout-ms` | 10000 | Online embedding/remote rerank total deadline, including waits/retries |
+| `rag.admission.background-embedding-timeout-ms` | 30000 | Background embedding total deadline |
 
 All limits must be positive integers. Async HTTP completion/error/timeout releases request permits idempotently;
 blocking providers retain model permits until they actually return, while streaming releases on termination or cancellation.
@@ -1808,8 +1813,14 @@ Managed QA case concurrency within each run is capped by background capacity so 
 overrun its own permits. Other concurrent runs or explicit judges still share that cap and may be rejected;
 there is no unbounded queue guarantee.
 The ordinary retrieval pool has four workers and 64 queued tasks; saturation is explicit rejection, not empty evidence.
-Low-cardinality metrics are `rag.admission.active` and `rag.admission.rejected`, tagged only with
-`kind=request|model|background`, never principal. Database Budget Reservation still enforces cost limits.
+Dependency pools have zero waiting queue. Retrieval submissions capture deadline/workload classification;
+expired tasks do not call upstream. Timeout/cancellation stops waiting and attempts interruption, but providers
+may ignore it: permits remain held until actual work ends. Embedding branch diagnostics retain
+`DEPENDENCY_TIMEOUT`, `DEPENDENCY_CANCELLED`, `EMBEDDING_CAPACITY`; empty results are not success.
+Remote rerank errors retain configured heuristic/original fallback. Disabling admission does not disable deadlines
+or physical thread bounds. `rag.dependency.calls` is tagged by kind/outcome only.
+Low-cardinality `rag.admission.active` and `rag.admission.rejected` add `embedding|backgroundEmbedding|rerank`
+to existing kinds, never principal. Database Budget Reservation still enforces cost limits.
 No data migration is needed for this batch.
 
 ## Configuration Inheritance

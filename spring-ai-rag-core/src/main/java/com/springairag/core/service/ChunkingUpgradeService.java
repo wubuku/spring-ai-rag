@@ -1,5 +1,6 @@
 package com.springairag.core.service;
 
+import com.springairag.core.admission.BackgroundWorkScope;
 import com.springairag.core.config.EmbeddingProfile;
 import com.springairag.core.config.EmbeddingProfileProvider;
 import com.springairag.core.config.RagProperties;
@@ -237,9 +238,12 @@ public class ChunkingUpgradeService implements ApplicationRunner {
                 deferForBudget(document.getId(), profile.id(), owner);
                 return;
             }
-            List<EmbeddingBatchService.EmbeddingResult> results = migrateVectors
-                    ? embeddings.createEmbeddingsBatch(prepared.chunks().stream().map(TextChunk::text).toList())
-                    : List.of();
+            List<EmbeddingBatchService.EmbeddingResult> results;
+            try (var scope = BackgroundWorkScope.open()) {
+                results = migrateVectors
+                        ? embeddings.createEmbeddingsBatch(prepared.chunks().stream().map(TextChunk::text).toList())
+                        : List.of();
+            }
             if (migrateVectors) {
                 validateResults(prepared.chunks(), results, profile);
             }

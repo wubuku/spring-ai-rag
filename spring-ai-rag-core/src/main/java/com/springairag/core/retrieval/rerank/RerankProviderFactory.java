@@ -17,6 +17,8 @@ public class RerankProviderFactory {
 
     private final RagRerankProperties rerankProperties;
     private final RagEmbeddingProperties embeddingProperties;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.springairag.core.admission.DependencyCallExecutor dependencyExecutor;
 
     public RerankProviderFactory(RagProperties ragProperties) {
         this.rerankProperties = ragProperties.getRerank();
@@ -33,6 +35,7 @@ public class RerankProviderFactory {
             case "http", "api", "siliconflow", "remote" -> {
                 ensureHttpCredentials();
                 HttpRerankProvider http = new HttpRerankProvider(rerankProperties);
+                http.setDependencyExecutor(dependencyExecutor);
                 log.info("Rerank provider: http (model={}, available={})",
                         rerankProperties.getModel(), http.isAvailable());
                 yield http;

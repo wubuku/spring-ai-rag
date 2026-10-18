@@ -143,6 +143,10 @@ inside the history commit fence, rejecting mixed-version commits. `AdmissionWebC
 request concurrency; `BudgetedChatModel` acquires a model permit before budget reservation, while
 Evaluation uses a server-captured background identity and a separate pool. Request and model permits
 have independent lifetimes: HTTP completion cannot release a still-blocking model call early.
+`DependencyCallExecutor` adds separate zero-queue online/background embedding and remote rerank capacity. The governed
+wrapper is inside the cache; hits do not call upstream. Retrieval explicitly propagates deadline/workload across
+executors, including background classification for synchronous imports. Deadlines include retries; cancellation does
+not release still-running work. See [Backup And Restore](backup-restore.md) for the explicitly invoked recovery tool.
 See the [REST API](rest-api.md#evidence-snapshots-and-capacity-errors) and
 [capacity configuration](configuration.md#online-capacity-admission) for the contracts and per-instance boundaries.
 

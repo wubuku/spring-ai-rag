@@ -74,6 +74,13 @@ public class HybridRetrieverService {
     private final DocumentDerivationDescriptorProvider descriptorProvider;
     private final int retrievalTimeoutSeconds;
     private final int probeTimeoutMs;
+    private final com.springairag.core.config.RagAdmissionProperties admissionProperties;
+
+    private <Result> Supplier<Result> dependencyTask(Supplier<Result> task) {
+        int timeout = com.springairag.core.admission.DependencyCallContext.background()
+                ? admissionProperties.getBackgroundEmbeddingTimeoutMs() : admissionProperties.getDependencyTimeoutMs();
+        return com.springairag.core.admission.DependencyCallContext.capture(task, timeout);
+    }
 
     @Autowired
     public HybridRetrieverService(
@@ -85,6 +92,7 @@ public class HybridRetrieverService {
             @Autowired(required = false) @org.springframework.beans.factory.annotation.Qualifier("ragSearchExecutor") Executor taskExecutor,
             @Autowired(required = false) RetrievalEmptyReasonProbe emptyReasonProbe) {
         this.embeddingModel = embeddingModel;
+        this.admissionProperties = ragProperties.getAdmission();
         this.profileProvider = profileProvider;
         this.jdbcTemplate = jdbcTemplate;
         this.retrieval = ragProperties.getRetrieval();
@@ -290,9 +298,9 @@ public class HybridRetrieverService {
         RetrievalBranchStage fusionStage = null;
         if (!isFulltextAvailable(config, fulltextProvider)) {
             BranchExecution vector = CompletableFuture
-                    .supplyAsync(() -> runVector(
+                    .supplyAsync(dependencyTask(() -> runVector(
                             query, scope, excludeIds, retrievalLimit, profile,
-                            minScore, effectiveFilters), taskExecutor)
+                            minScore, effectiveFilters)), taskExecutor)
                     .orTimeout(retrievalTimeoutSeconds, TimeUnit.SECONDS)
                     .handle((value, error) -> error == null
                             ? value
@@ -311,9 +319,9 @@ public class HybridRetrieverService {
             fused = vector.results();
         } else {
             CompletableFuture<BranchExecution> vectorFuture = CompletableFuture
-                    .supplyAsync(() -> runVector(
+                    .supplyAsync(dependencyTask(() -> runVector(
                             query, scope, excludeIds, retrievalLimit * 2, profile,
-                            minScore, effectiveFilters), taskExecutor)
+                            minScore, effectiveFilters)), taskExecutor)
                     .orTimeout(retrievalTimeoutSeconds, TimeUnit.SECONDS)
                     .handle((value, error) -> error == null
                             ? value
@@ -323,9 +331,9 @@ public class HybridRetrieverService {
                                     error,
                                     "Vector search"));
             CompletableFuture<BranchExecution> fulltextFuture = CompletableFuture
-                            .supplyAsync(() -> runFulltext(
+                            .supplyAsync(dependencyTask(() -> runFulltext(
                             fulltextProvider, query, scope, excludeIds,
-                            retrievalLimit * 2, minScore, profile, effectiveFilters), taskExecutor)
+                            retrievalLimit * 2, minScore, profile, effectiveFilters)), taskExecutor)
                     .orTimeout(retrievalTimeoutSeconds, TimeUnit.SECONDS)
                     .handle((value, error) -> error == null
                             ? value
@@ -567,7 +575,7 @@ public class HybridRetrieverService {
     private CompletableFuture<float[]> submitCoverageEmbedding(
             String query, EmbeddingProfile profile, long deadlineNanos) {
         try {
-            return CompletableFuture.supplyAsync(() -> {
+            return CompletableFuture.supplyAsync(dependencyTask(() -> {
                 if (remainingNanos(deadlineNanos) <= 0) {
                     throw new CompletionException(
                             new TimeoutException("Collection coverage deadline expired"));
@@ -575,7 +583,7 @@ public class HybridRetrieverService {
                 float[] vector = embeddingModel.embed(query);
                 validateQueryVector(vector, profile);
                 return vector;
-            }, embeddingExecutor);
+            }), embeddingExecutor);
         } catch (RejectedExecutionException e) {
             CompletableFuture<float[]> rejected = new CompletableFuture<>();
             rejected.completeExceptionally(e);
@@ -1094,6 +1102,12 @@ public class HybridRetrieverService {
             return "ERROR";
         }
         String name = current.getClass().getSimpleName();
+        if (current instanceof com.springairag.core.admission.DependencyCallException) {
+            return current.getMessage();
+        }
+        if (current instanceof com.springairag.core.admission.AdmissionRejectedException) {
+            return "EMBEDDING_CAPACITY";
+        }
         return name.isBlank() ? "ERROR" : name;
     }
 

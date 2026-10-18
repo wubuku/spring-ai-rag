@@ -14,7 +14,8 @@ public class AdmissionService {
     private final RagAdmissionProperties properties;
     private final MeterRegistry metrics;
     private final Map<String, Pool> pools = Map.of(
-            "request", new Pool(), "model", new Pool(), "background", new Pool());
+            "request", new Pool(), "model", new Pool(), "background", new Pool(),
+            "embedding", new Pool(), "backgroundEmbedding", new Pool(), "rerank", new Pool());
 
     public AdmissionService(RagProperties properties, MeterRegistry metrics) {
         this.properties = properties.getAdmission();
@@ -36,6 +37,16 @@ public class AdmissionService {
         String provider = modelRef == null ? "UNKNOWN" : modelRef.split("/", 2)[0];
         return acquire("model", principal, provider, properties.getMaxModelCalls(),
                 properties.getMaxModelCallsPerPrincipal(), properties.getMaxModelCallsPerProvider());
+    }
+
+    public Lease dependency(String kind) {
+        int limit = switch (kind) {
+            case "embedding" -> properties.getMaxEmbeddingCalls();
+            case "backgroundEmbedding" -> properties.getMaxBackgroundEmbeddingCalls();
+            case "rerank" -> properties.getMaxRerankCalls();
+            default -> throw new IllegalArgumentException("Unknown dependency kind");
+        };
+        return acquire(kind, "dependency", "", limit, limit, limit);
     }
 
     private synchronized Lease acquire(String kind, String principal, String provider,

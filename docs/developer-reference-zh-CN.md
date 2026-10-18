@@ -1,5 +1,16 @@
 # 开发者参考
 
+## 依赖治理与备份恢复验收
+
+```bash
+python3 scripts/test-support/rag-backup-self-test.py
+python3 scripts/verify-dependency-recovery-e2e.py
+```
+
+后者会编译并快照运行 classpath，创建/清理自己的容器和服务，实际执行故障/重启/备份恢复。
+前置条件、隐私与放流量边界见[数据备份与隔离恢复](backup-restore-zh-CN.md)，
+混载指标和可选 k6 profile 见[测试指南](testing-guide-zh-CN.md#依赖治理混合故障与真实恢复)。
+
 > [English](developer-reference.md) | [中文](developer-reference-zh-CN.md)
 
 > **用途**：提供可复制的构建、启动、数据库、模型、WebUI、E2E 和发布验证命令。
@@ -36,6 +47,11 @@ mvn clean package -DskipTests
 以及由它推导出的每一个覆盖率数字都被虚增。
 `scripts/verify-project-tests.sh` 会把源码树与报告双向对账，任一方向不匹配即失败，
 所以幽灵类过不了门禁。
+
+同一工作区的 Maven 命令必须串行，尤其不能把 SDK 验收的 `install/package` 与根 `mvn test`
+并发运行：重打包/安装会改变 reactor 产物，造成编译阶段错误地读取其他构建的 jar。
+运行 `clean` 前先停止依赖 `target/classes` 的自有服务；会打包的验收脚本结束后，重新执行
+clean 编译、全量测试和报告门禁，再进入最终 gated 检查。
 
 单模块和单测试（定向运行可用于调试，但**不满足**可见性门禁——门禁期望的是该模块的
 全量套件）：

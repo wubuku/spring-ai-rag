@@ -214,6 +214,11 @@ WebUI 使用 React Router `BrowserRouter`，生产 basename 为 `/webui`。能�
 ## 4. 检索与质量
 
 - Embedding 默认使用 SiliconFlow `BAAI/bge-m3`。
+- 实际 embedding/HTTP rerank 默认受独立容量与总时限治理，缓存命中不占上游许可；导入、自动升级、
+  主动 QA 的 embedding 与在线请求分池，超时不会提前释放仍在执行的调用。
+  边界与默认值见[容量配置](configuration-zh-CN.md#在线容量准入)。
+- 数据恢复使用显式的 PostgreSQL dump/隔离 restore，覆盖库内原件/向量/权限；不打包模型凭据或自动放流量。
+  旧备份删除状态须先核对，见[备份恢复](backup-restore-zh-CN.md)。
 - Embedding 使用不可变的 `rag_embedding_profiles` 身份和固定长度的
   `rag_embeddings.embedding_1024 VECTOR(1024)` 列。文档只有在活动 Profile 的状态为
   `COMPLETED` 且 content hash 与当前文档一致时才算新鲜可服务。

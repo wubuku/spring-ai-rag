@@ -5,7 +5,7 @@ import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.openai.OpenAiEmbeddingModel;
 import org.springframework.ai.openai.OpenAiEmbeddingOptions;
 import org.springframework.ai.openai.api.OpenAiApi;
-import org.springframework.ai.retry.RetryUtils;
+import com.springairag.core.admission.DependencyCallContext;
 import org.springframework.ai.retry.TransientAiException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -36,7 +36,7 @@ public class EmbeddingModelConfig {
     @Value("${rag.embedding.dimensions:1024}")
     private int dimensions;
 
-    @Value("${rag.embedding.retry-max-attempts:${RAG_EMBEDDING_RETRY_MAX_ATTEMPTS:10}}")
+    @Value("${rag.embedding.retry-max-attempts:${RAG_EMBEDDING_RETRY_MAX_ATTEMPTS:3}}")
     private int retryMaxAttempts;
 
     @Bean(name = "embeddingModel")
@@ -60,6 +60,17 @@ public class EmbeddingModelConfig {
         OpenAiApi openAiApi = OpenAiApi.builder()
                 .baseUrl(url)
                 .apiKey(apiKey)
+                .restClientBuilder(org.springframework.web.client.RestClient.builder()
+                        .requestFactory(new org.springframework.http.client.SimpleClientHttpRequestFactory() {
+                            @Override
+                            protected void prepareConnection(java.net.HttpURLConnection connection, String method)
+                                    throws java.io.IOException {
+                                super.prepareConnection(connection, method);
+                                int timeout = (int) Math.min(30000, DependencyCallContext.remainingMillis());
+                                connection.setConnectTimeout(timeout);
+                                connection.setReadTimeout(timeout);
+                            }
+                        }))
                 .build();
 
         // Some OpenAI-compatible embedding providers reject the dimensions parameter.
@@ -78,10 +89,7 @@ public class EmbeddingModelConfig {
             throw new IllegalArgumentException(
                     "rag.embedding.retry-max-attempts must be between 1 and 10");
         }
-        if (retryMaxAttempts == 10) {
-            return RetryUtils.DEFAULT_RETRY_TEMPLATE;
-        }
-        return RetryTemplate.builder()
+        RetryTemplate template = RetryTemplate.builder()
                 .maxAttempts(retryMaxAttempts)
                 .retryOn(TransientAiException.class)
                 .retryOn(ResourceAccessException.class)
@@ -90,5 +98,33 @@ public class EmbeddingModelConfig {
                         5.0,
                         Duration.ofMinutes(3))
                 .build();
+        org.springframework.retry.backoff.ExponentialBackOffPolicy backoff =
+                new org.springframework.retry.backoff.ExponentialBackOffPolicy();
+        backoff.setInitialInterval(2000);
+        backoff.setMultiplier(5);
+        backoff.setMaxInterval(180000);
+        backoff.setSleeper(interval -> {
+            long remaining = DependencyCallContext.remainingMillis();
+            Thread.sleep(Math.min(interval, remaining));
+            DependencyCallContext.remainingMillis();
+        });
+        template.setBackOffPolicy(backoff);
+        template.registerListener(new org.springframework.retry.RetryListener() {
+            @Override
+            public <Result, Failure extends Throwable> boolean open(
+                    org.springframework.retry.RetryContext context,
+                    org.springframework.retry.RetryCallback<Result, Failure> callback) {
+                DependencyCallContext.remainingMillis();
+                return true;
+            }
+
+            @Override
+            public <Result, Failure extends Throwable> void onError(
+                    org.springframework.retry.RetryContext context,
+                    org.springframework.retry.RetryCallback<Result, Failure> callback, Throwable failure) {
+                DependencyCallContext.remainingMillis();
+            }
+        });
+        return template;
     }
 }

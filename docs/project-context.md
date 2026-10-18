@@ -270,6 +270,11 @@ local.
 ## 4. Retrieval And Quality
 
 - Embedding defaults to SiliconFlow `BAAI/bge-m3`.
+- Actual embedding/HTTP rerank calls have separate capacity and total deadlines by default; cache hits consume no
+  upstream permits. Imports, automatic upgrades and explicit QA use background embedding capacity. Timeouts do not
+  release still-running calls. See [admission configuration](configuration.md#online-admission) for defaults and limits.
+- Explicit PostgreSQL dump/isolated restore covers in-database originals/vectors/permissions, not model credentials
+  or automatic traffic cutover. Reconcile deleted data before serving an older backup; see [Backup And Restore](backup-restore.md).
 - Embeddings use the immutable `rag_embedding_profiles` identity and the
   fixed-length `rag_embeddings.embedding_1024 VECTOR(1024)` column. A document
   is fresh for a Profile only when its state is `COMPLETED` and its content hash

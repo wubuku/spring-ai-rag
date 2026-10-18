@@ -182,7 +182,7 @@ public class DocumentEmbedService {
 
         List<String> texts = chunks.stream().map(TextChunk::text).toList();
         List<EmbeddingBatchService.EmbeddingResult> results;
-        try {
+        try (var background = com.springairag.core.admission.BackgroundWorkScope.open()) {
             results = embeddingBatchService.createEmbeddingsBatch(texts);
         } catch (RuntimeException e) {
             String error = safeError("Embedding provider call failed: " + e.getMessage());

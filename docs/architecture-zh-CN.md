@@ -136,6 +136,9 @@ Citation Registry 校验和上下文预算结果汇聚为 `evidenceAssessment`�
 history 事务栅栏中复核文档身份与索引代次，拒绝混版提交。`AdmissionWebConfig` 保护请求并发，
 `BudgetedChatModel` 在预算预留前取得模型许可，Evaluation 使用服务端捕获的后台身份分池。
 两层许可生命周期独立；HTTP 结束不会提前释放仍在阻塞调用中的模型许可。
+`DependencyCallExecutor` 增加在线/后台 embedding、远程 rerank 独立的零排队容量。治理包装位于缓存内部，
+缓存命中不打上游；检索跨 executor 显式传播 deadline/后台分类，同步导入也使用后台池。时限包含重试，
+取消不会提前释放底层任务许可。主动备份/恢复工具的边界见[数据恢复](backup-restore-zh-CN.md)。
 契约与实例级边界见 [REST API](rest-api-zh-CN.md#证据版本快照与容量错误)、
 [容量配置](configuration-zh-CN.md#在线容量准入)。
 

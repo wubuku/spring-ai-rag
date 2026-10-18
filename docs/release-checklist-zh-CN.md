@@ -40,6 +40,11 @@ OpenAI 兼容服务发布还应显式运行 `scripts/verify-release.sh --with-op
 增量 SDK quickstart 与一次性 PostgreSQL/Flyway 恢复验收是显式附加门禁：
 `scripts/verify-release.sh --with-client-sdk --with-recovery-readiness`。
 
+模型依赖治理/恢复相关发布还需运行 `python3 scripts/verify-dependency-recovery-e2e.py`，
+证明真实 HTTP 故障、混合负载、强杀/正常重启及真实 dump/restore。可用
+`DEPENDENCY_RECOVERY_K6_IMAGE` 加上 k6 正常负载硬门槛；不能用迁移就绪或 Mock 上游代替真实模型质量。
+备份隐私与隔离放流量边界见[备份恢复](backup-restore-zh-CN.md)，完整矩阵见[测试指南](testing-guide-zh-CN.md)。
+
 - [x] `mvn clean test`
 - [x] `mvn package -pl spring-ai-rag-core -am -Pwebui -DskipTests`
 - [x] WebUI lint、全量 Vitest 与生产构建

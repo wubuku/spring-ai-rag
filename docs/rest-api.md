@@ -622,6 +622,10 @@ clients should treat it as provisional until a successful terminal event.
 Online admission is enabled by default. Excess Native Chat/Search and OpenAI completion work
 receives `429 TOO_MANY_REQUESTS` and `Retry-After: 1` in the existing respective error envelopes.
 This is per-instance concurrency protection, not exhausted account balance; retry with backoff.
+Embedding has separate online/background capacity and remote rerank its own pool, with default total deadlines.
+Existing degradation contracts remain: vector failure may retain full-text results; compatible Search HTTP 200 may
+contain empty/partial results and is not proof of upstream health. Inspect diagnostics via `X-RAG-Retrieval-Trace-Id`.
+Remote rerank retains configured fallback, without new required fields or enabling a paid provider.
 See [Online Admission](configuration.md#online-admission) for limits, background isolation and metrics.
 Only optional response fields and new error conditions are added; URLs, required parameters,
 and success envelopes remain compatible. No data migration is required.

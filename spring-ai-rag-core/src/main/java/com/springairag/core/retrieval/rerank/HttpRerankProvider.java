@@ -32,10 +32,25 @@ public class HttpRerankProvider implements RerankProvider {
     private final RagRerankProperties config;
     private final RestClient restClient;
     private final HeuristicRerankProvider heuristicFallback;
+    private com.springairag.core.admission.DependencyCallExecutor dependencyExecutor;
+
+    void setDependencyExecutor(com.springairag.core.admission.DependencyCallExecutor executor) {
+        this.dependencyExecutor = executor;
+    }
 
     public HttpRerankProvider(RagRerankProperties config) {
         this.config = config != null ? config : new RagRerankProperties();
-        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory() {
+            @Override
+            protected void prepareConnection(java.net.HttpURLConnection connection, String method)
+                    throws java.io.IOException {
+                super.prepareConnection(connection, method);
+                int remaining = (int) Math.min(Math.max(1000, HttpRerankProvider.this.config.getTimeoutMs()),
+                        com.springairag.core.admission.DependencyCallContext.remainingMillis());
+                connection.setConnectTimeout(remaining);
+                connection.setReadTimeout(remaining);
+            }
+        };
         int timeout = Math.max(1000, this.config.getTimeoutMs());
         factory.setConnectTimeout(timeout);
         factory.setReadTimeout(timeout);
@@ -93,17 +108,22 @@ public class HttpRerankProvider implements RerankProvider {
             // Spring AI embedding uses base without /v1; rerank endpoint is typically /v1/rerank
             String url = base.endsWith("/v1") ? base + "/rerank" : base + "/v1/rerank";
 
-            String responseBody = restClient.post()
+            java.util.function.Supplier<String> request = () -> restClient.post()
                     .uri(url)
                     .contentType(MediaType.APPLICATION_JSON)
                     .header("Authorization", "Bearer " + config.getApiKey())
                     .body(body)
                     .retrieve()
                     .body(String.class);
+            String responseBody = dependencyExecutor == null ? request.get()
+                    : dependencyExecutor.execute("rerank", request);
 
             return mapResponse(responseBody, results, topN);
         } catch (Exception e) {
-            log.warn("HTTP rerank failed: {} — falling back", e.getMessage());
+            log.warn("HTTP rerank failed: {} — falling back", e.getClass().getSimpleName());
+            if (Thread.currentThread().isInterrupted()) {
+                throw new com.springairag.core.admission.DependencyCallException("DEPENDENCY_CANCELLED");
+            }
             return fallback(query, results, rankingDepth);
         }
     }

@@ -75,6 +75,12 @@ public class KnowledgeSearchTool implements ToolCallback {
     @Override
     public String call(String toolInput, ToolContext toolContext) {
         AuthorizedRetrievalContext context = context(toolContext);
+        try (var scope = com.springairag.core.admission.DependencyCallContext.forBudget(context.executionBudget())) {
+            return callAuthorized(toolInput, context);
+        }
+    }
+
+    private String callAuthorized(String toolInput, AuthorizedRetrievalContext context) {
         Map<String, Object> arguments = parse(toolInput);
         String query = context.trace().normalizeQuery(stringValue(arguments.get("query")));
         if (query.isBlank()) {

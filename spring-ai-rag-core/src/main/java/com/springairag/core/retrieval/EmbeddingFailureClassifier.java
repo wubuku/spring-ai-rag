@@ -21,6 +21,10 @@ public final class EmbeddingFailureClassifier {
         Kind fallback = Kind.UNKNOWN;
         Throwable current = failure;
         for (int depth = 0; current != null && depth < 16 && seen.add(current); depth++) {
+            if (current instanceof com.springairag.core.admission.DependencyCallException
+                    || current instanceof com.springairag.core.admission.AdmissionRejectedException) {
+                return Kind.TRANSIENT;
+            }
             if (current instanceof RestClientResponseException response) {
                 int status = response.getStatusCode().value();
                 if (status == 408 || status == 425 || status == 429 || status >= 500 && status <= 599) {

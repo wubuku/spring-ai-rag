@@ -247,6 +247,11 @@ class ChunkingUpgradePostgresIntegrationTest {
     @Test
     void upgradeFromV61PreservesSearchThenAtomicallyRebuildsBothIndexes() {
         seedVectors();
+        doAnswer(invocation -> {
+            assertTrue(com.springairag.core.admission.DependencyCallContext.background());
+            return invocation.<List<String>>getArgument(0).stream().map(text ->
+                    new EmbeddingBatchService.EmbeddingResult(text, new float[1024], null)).toList();
+        }).when(embeddings).createEmbeddingsBatch(anyList());
         assertEquals("hierarchical-v2:1000:100:100", document(true).getDerivationChunkerVersion());
         assertTrue(searchable(false) > 0);
         assertTrue(searchable(true) > 0);
@@ -262,6 +267,7 @@ class ChunkingUpgradePostgresIntegrationTest {
         long revision = document(true).getDocumentRevision();
         upgrade.scanOnce();
         assertEquals("COMPLETED", status());
+        assertFalse(com.springairag.core.admission.DependencyCallContext.background());
         assertNull(document(true).getDerivationChunkerVersion());
         assertEquals(revision, document(true).getDocumentRevision());
         assertEquals(content, document(true).getContent());

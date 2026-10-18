@@ -8,6 +8,22 @@ public class RagAdmissionProperties {
     private int maxModelCallsPerPrincipal = 8;
     private int maxModelCallsPerProvider = 16;
     private int maxBackgroundModelCalls = 2;
+    private int maxEmbeddingCalls = 16;
+    private int maxBackgroundEmbeddingCalls = 4;
+    private int maxRerankCalls = 8;
+    private int dependencyTimeoutMs = 10000;
+    private int backgroundEmbeddingTimeoutMs = 30000;
+
+    public int getMaxEmbeddingCalls() { return maxEmbeddingCalls; }
+    public void setMaxEmbeddingCalls(int value) { maxEmbeddingCalls = positive(value); }
+    public int getMaxBackgroundEmbeddingCalls() { return maxBackgroundEmbeddingCalls; }
+    public void setMaxBackgroundEmbeddingCalls(int value) { maxBackgroundEmbeddingCalls = positive(value); }
+    public int getMaxRerankCalls() { return maxRerankCalls; }
+    public void setMaxRerankCalls(int value) { maxRerankCalls = positive(value); }
+    public int getDependencyTimeoutMs() { return dependencyTimeoutMs; }
+    public void setDependencyTimeoutMs(int value) { dependencyTimeoutMs = positive(value); }
+    public int getBackgroundEmbeddingTimeoutMs() { return backgroundEmbeddingTimeoutMs; }
+    public void setBackgroundEmbeddingTimeoutMs(int value) { backgroundEmbeddingTimeoutMs = positive(value); }
 
     public boolean isEnabled() { return enabled; }
     public void setEnabled(boolean value) { enabled = value; }

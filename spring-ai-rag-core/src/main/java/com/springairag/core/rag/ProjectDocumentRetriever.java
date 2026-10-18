@@ -34,6 +34,12 @@ public class ProjectDocumentRetriever implements DocumentRetriever {
     @Override
     public List<Document> retrieve(Query query) {
         AuthorizedRetrievalContext context = context(query.context());
+        try (var scope = com.springairag.core.admission.DependencyCallContext.forBudget(context.executionBudget())) {
+            return retrieve(query, context);
+        }
+    }
+
+    private List<Document> retrieve(Query query, AuthorizedRetrievalContext context) {
         RetrievalTraceCollector trace = context.trace();
         String retrievalQuery = query.text();
         trace.setEffectiveQuery(retrievalQuery);

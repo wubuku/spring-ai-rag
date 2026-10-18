@@ -18,6 +18,7 @@
 | Change core architecture / pipeline | [architecture.md](architecture.md) | [IMPLEMENTATION_COMPARISON.md](IMPLEMENTATION_COMPARISON.md) |
 | Understand Chat memory, context budgets, RAG, and tool calling | [Chat Memory, RAG, And Tool Calling](chat-memory-rag-tool-calling.md) | [Architecture](architecture.md), [Configuration](configuration.md) |
 | Change configuration | [configuration.md](configuration.md) | `spring-ai-rag-core/src/main/resources/application.yml` |
+| Back up data and rehearse isolated recovery | [Backup And Restore](backup-restore.md) | [Testing Guide](testing-guide.md) |
 | Integrate / debug HTTP APIs | [rest-api.md](rest-api.md) | Swagger: `/swagger-ui.html` |
 | Connect a backend business service to the RAG data plane and complete production acceptance | [Business Service Integration Guide](business-client-integration.md) | [REST API: Authentication](rest-api.md#authentication), [one-command acceptance](developer-reference.md#business-service-integration-readiness-verification) |
 | Run versioned consumer contract acceptance and JSON/SSE client regression | [Client Consumer Contract Kit](client-contract-kit.md) | [Testing Guide: Client API](testing-guide.md#client-consumer-contract-kit) |

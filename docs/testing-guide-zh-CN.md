@@ -1,5 +1,29 @@
 # 测试指南
 
+## 依赖治理、混合故障与真实恢复
+
+```bash
+mvn clean compile test-compile
+python3 scripts/test-support/rag-backup-self-test.py
+python3 scripts/verify-dependency-recovery-e2e.py
+```
+
+专项启动真实服务和自有 pgvector 容器，覆盖 embedding/rerank 慢响应、429、503、断连、
+容量隔离、Search/Native/OpenAI JSON/SSE/导入/主动 QA 混载、强杀后 lease 接管、正常重启，
+实际 dump/restore、逐表内容对账、原件/向量/权限/删除/API 复验及损坏/非空/同库负例。
+受控 provider 不是实际模型质量证据；仍需执行下列真实 BGE-M3/LLM、SDK、API 契约门禁。
+证据在 `.verification/dependency-recovery/`，包含测试业务数据，不能提交。
+
+可选较长负载：`scripts/k6-load-test.js` 的 `K6_PROFILE=reliability` 要求 `K6_DOCUMENT_ID`
+指向已嵌入的可处置样本，不创建/删除调用方数据。`API_KEY` 通过安全环境注入。
+`RELIABILITY_P95_MS` 默认 30000，`RELIABILITY_P99_MS` 默认 60000，
+`RELIABILITY_MIN_SUCCESS_RATE` 默认 0.5，`K6_OPENAI_MODEL` 默认 rag-default。
+`RELIABILITY_VUS` 默认 8，`RELIABILITY_DURATION` 默认 30s。为上述隔离演练设置
+`DEPENDENCY_RECOVERY_K6_IMAGE`（例如 `grafana/k6:0.57.0`）可额外执行 2 VU/12s 的 k6 硬门槛，
+以 100% 成功率校验正常混载，导出 `k6-summary.json`；更大容量压力由受控并发阶段独立验证。
+成功延迟、成功比例、显式 429、非预期错误分开计量；空 Search 不算成功，不给真实 LLM 套 500ms。
+操作边界见[数据备份与隔离恢复](backup-restore-zh-CN.md)。
+
 ## 证据快照与容量隔离专项
 
 - `./scripts/verify-gated-it.sh UnassignedDocumentChatFencePostgresIntegrationTest`：真实 V1–V65 迁移、

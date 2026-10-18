@@ -1,5 +1,16 @@
 # Developer Reference
 
+## Dependency And Backup/Restore Acceptance
+
+```bash
+python3 scripts/test-support/rag-backup-self-test.py
+python3 scripts/verify-dependency-recovery-e2e.py
+```
+
+The latter compiles and snapshots its runtime classpath, owns/cleans its containers/services and actually exercises
+faults, restarts and backup/restore. See [Backup And Restore](backup-restore.md) for prerequisites/privacy/readiness,
+and the [Testing Guide](testing-guide.md#dependency-resilience-mixed-faults-and-real-restore) for load metrics/k6.
+
 > [English](developer-reference.md) | [中文](developer-reference-zh-CN.md)
 
 > **Purpose**: Provide copyable build, startup, database, model, WebUI, E2E, and release-verification commands.
@@ -37,6 +48,11 @@ and Surefire goes on executing them: the reported suite size and every coverage
 figure derived from it are then inflated. `scripts/verify-project-tests.sh`
 reconciles the source tree against the reports both ways and fails on either
 mismatch, so a ghost cannot survive a gate.
+
+Serialize Maven commands within one workspace, especially SDK acceptance `install/package` and root `mvn test`:
+repackaging/installing changes reactor artifacts and can make compilation consume another build's jar.
+Stop owned services using `target/classes` before `clean`. After packaging acceptance scripts finish, rerun
+clean compilation, the full test suite and report gates before the final gated matrix.
 
 One module or test (a focused run is fine for debugging, but it does **not**
 satisfy the visibility gate, which expects the module's full suite):

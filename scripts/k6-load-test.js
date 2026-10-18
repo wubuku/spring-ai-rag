@@ -42,9 +42,18 @@ const API_KEY = __ENV.API_KEY || 'test-api-key';
 const PROFILE = __ENV.K6_PROFILE || 'load';
 const ENV_LABEL = __ENV.K6_ENV || 'dev';
 const THRESHOLD_P95 = parseInt(__ENV.THRESHOLD_P95 || '500');
+const reliabilityLatency = new Trend('rag_reliability_success_latency', true);
+const reliabilitySuccess = new Rate('rag_reliability_success');
+const reliabilityUnexpected = new Rate('rag_reliability_unexpected');
+const reliabilityAdmission = new Rate('rag_reliability_admission');
 
 // Profile definitions
 const PROFILES = {
+  reliability: {
+    vus: parseInt(__ENV.RELIABILITY_VUS || '8'),
+    duration: __ENV.RELIABILITY_DURATION || '30s',
+    warmup: '0s',
+  },
   smoke: {
     vus: 1,
     duration: '10s',
@@ -72,7 +81,6 @@ const cfg = PROFILES[PROFILE] || PROFILES.load;
 // Custom Metrics
 // ─────────────────────────────────────────────────────────────────
 
-const httpReqDuration = new Trend('http_req_duration', true);  // true = rates show as time
 const searchLatency   = new Trend('rag_search_latency');
 const chatNonStreamLatency = new Trend('rag_chat_nonstream_latency');  // Non-streaming /chat/ask
 const chatStreamLatency    = new Trend('rag_chat_stream_latency');      // Streaming /chat/stream (total time to receive all SSE chunks)
@@ -120,6 +128,32 @@ function del(url, headers, tags) {
   return req('DELETE', url, null, { ...HEADERS_JSON, ...headers }, tags);
 }
 
+function validOpenAiStream(body) {
+  let completed = false;
+  let content = '';
+  for (const line of body.split(/\r?\n/)) {
+    if (line.trim() === 'event:error' || line.trim() === 'event: error') return false;
+    if (!line.startsWith('data:')) continue;
+    const payload = line.slice(5).trim();
+    if (!payload) continue;
+    if (completed) return false;
+    if (payload === '[DONE]') {
+      completed = true;
+      continue;
+    }
+    try {
+      const frame = JSON.parse(payload);
+      if (!frame || frame.error) return false;
+      for (const choice of frame.choices || []) {
+        const text = choice.delta?.content;
+        if (text != null && typeof text !== 'string') return false;
+        content += text || '';
+      }
+    } catch (_) { return false; }
+  }
+  return completed && content.trim().length > 0;
+}
+
 // ─────────────────────────────────────────────────────────────────
 // Test Data – shared across VUs via global
 // ─────────────────────────────────────────────────────────────────
@@ -155,6 +189,21 @@ const CHAT_BODY = {
 // ─────────────────────────────────────────────────────────────────
 
 export function setup() {
+  if (PROFILE === 'reliability') {
+    const contentFrame = 'data: {"choices":[{"delta":{"content":"ack"}}]}\n\n';
+    if (!validOpenAiStream(contentFrame + 'data: [DONE]\n\n')) fail('SSE success validator failed');
+    for (const invalid of ['data: [DONE]\n', contentFrame, 'data: invalid\ndata: [DONE]\n',
+      contentFrame + 'data: {"error":{"message":"content"}}\ndata: [DONE]\n',
+      contentFrame + 'data: [DONE]\n' + contentFrame,
+      'data: {"choices":[{"delta":{"content":""}}]}\ndata: [DONE]\n']) {
+      if (validOpenAiStream(invalid)) fail('SSE validator accepted an invalid or empty stream');
+    }
+    const documentId = Number(__ENV.K6_DOCUMENT_ID);
+    if (!Number.isSafeInteger(documentId) || documentId <= 0) fail('K6_DOCUMENT_ID must select an already embedded disposable fixture');
+    const result = get(`${BASE_URL}/api/v1/rag/documents/${documentId}`);
+    if (result.status !== 200) fail('Reliability fixture is not readable');
+    return { documentId };
+  }
   console.log(`\n[setup] Starting k6 load test — profile=${PROFILE} env=${ENV_LABEL} base=${BASE_URL}`);
 
   // 1. Wait for server readiness
@@ -250,6 +299,7 @@ export function setup() {
 // ─────────────────────────────────────────────────────────────────
 
 export function teardown(data) {
+  if (PROFILE === 'reliability') return;
   console.log('\n[teardown] Cleaning up test data...');
   const { collectionKey, sessionId } = data;
 
@@ -306,7 +356,15 @@ export const options = {
 
   vus: cfg.vus,
 
-  thresholds: {
+  thresholds: PROFILE === 'reliability' ? {
+    checks: ['rate==1'],
+    rag_reliability_success: [`rate>=${__ENV.RELIABILITY_MIN_SUCCESS_RATE || '0.5'}`],
+    rag_reliability_unexpected: ['rate==0'],
+    rag_reliability_success_latency: [
+      `p(95)<${__ENV.RELIABILITY_P95_MS || '30000'}`,
+      `p(99)<${__ENV.RELIABILITY_P99_MS || '60000'}`,
+    ],
+  } : {
     // All HTTP requests should finish within threshold
     http_req_duration: ['p(95)<' + THRESHOLD_P95],
     // No more than 1% errors
@@ -331,6 +389,42 @@ export const options = {
 // ─────────────────────────────────────────────────────────────────
 
 export default function(data) {
+  if (PROFILE === 'reliability') {
+    const operation = __ITER % 3;
+    let result;
+    if (operation === 0) {
+      result = post(`${BASE_URL}/api/v1/rag/search`, {
+        query: `reliability-${__VU}-${__ITER}`, documentIds: [data.documentId],
+        config: { maxResults: 3, minScore: 0, useHybridSearch: false, useRerank: true },
+      });
+    } else if (operation === 1) {
+      result = post(`${BASE_URL}/api/v1/rag/chat/ask`, {
+        message: 'Reply with one short acknowledgement.', mode: 'PLAIN',
+        sessionId: `rel-${__VU}-${__ITER}-${Date.now()}`,
+      });
+    } else {
+      result = post(`${BASE_URL}/v1/chat/completions`, {
+        model: __ENV.K6_OPENAI_MODEL || 'rag-default', stream: true,
+        messages: [{ role: 'user', content: 'Reply with one short acknowledgement.' }],
+      });
+    }
+    let valid = false;
+    if (result.status === 200) {
+      try {
+        valid = operation === 0 ? Array.isArray(result.json()) && result.json().length > 0
+          : operation === 1 ? Boolean(result.json().answer)
+          : validOpenAiStream(result.body);
+      } catch (_) { valid = false; }
+    }
+    const rejected = result.status === 429 && result.headers['Retry-After'] !== undefined;
+    reliabilitySuccess.add(valid);
+    reliabilityAdmission.add(rejected);
+    reliabilityUnexpected.add(!valid && !rejected);
+    if (valid) reliabilityLatency.add(result.timings.duration, { operation: String(operation) });
+    check(result, { 'valid success or explicit capacity rejection': () => valid || rejected });
+    sleep(0.1);
+    return;
+  }
   // Run test groups in sequence per VU iteration
   runHealthChecks(data);
   runCollectionRead(data);
@@ -863,6 +957,8 @@ export function handleSummary(data) {
 }
 
 function textSummary(data, opts) {
+  const profile = PROFILE;
+  const env = ENV_LABEL;
   const duration = (data.state.testRunDurationMs / 1000).toFixed(1);
   const passRate = data.metrics.http_errors_total
     ? ((1 - (data.metrics.http_errors_total.values?.rate || 0)) * 100).toFixed(2)
@@ -887,7 +983,7 @@ function textSummary(data, opts) {
     `║  Profile   : ${profile.padEnd(47)}║`,
     `║  Env       : ${env.padEnd(47)}║`,
     `║  Duration  : ${duration}s`.padEnd(57) + '║',
-    `║  VUs max   : ${data.run.config?.vus || cfg.vus}`.padEnd(57) + '║',
+    `║  VUs max   : ${data.metrics.vus_max?.values?.max || cfg.vus}`.padEnd(57) + '║',
     '╠══════════════════════════════════════════════════════════════╣',
     '║  HTTP Latency (all requests)                                ║',
     `║    p(95)   : ${http_p95}s`.padEnd(57) + '║',

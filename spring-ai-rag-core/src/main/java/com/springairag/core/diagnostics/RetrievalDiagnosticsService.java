@@ -90,7 +90,9 @@ public class RetrievalDiagnosticsService {
             return;
         }
         session.attachScope(scopeSummary, filters);
-        session.recordRetrieval(null, outcome);
+        session.newAttemptCollector("search", 1, 1, Math.max(1, outcome.results().size()));
+        session.recordRetrieval("search", outcome);
+        session.markAttemptFinished("search", !outcome.results().isEmpty(), null);
         persist(session);
     }
 

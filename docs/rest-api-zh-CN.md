@@ -551,6 +551,9 @@ SSE 只发送错误终态，不发送成功 `done`；OpenAI 流可能包含协�
 在线容量保护默认启用。Native Chat/Search 和 OpenAI completion 超限返回
 `429 TOO_MANY_REQUESTS`、`Retry-After: 1`，保持各自既有错误信封。
 这是实例本地并发限制，不是账户余额不足；可在退避后重试。
+Embedding 另按在线/后台分池，远程 rerank 单独分池，默认有总时限。保留既有降级契约：向量失败
+可保留全文结果；Search 的兼容成功信封可能为空或部分结果，不能只凭 HTTP 200 判断上游正常。
+通过 `X-RAG-Retrieval-Trace-Id` 查询诊断；远程 rerank 沿用配置的 fallback，不强制启用收费 provider。
 限额、独立后台容量与监控指标见 [在线容量准入](configuration-zh-CN.md#在线容量准入)。
 本次只有可选响应字段和新增错误条件，不改变原 URL、必填参数和成功 envelope，无需数据迁移。
 

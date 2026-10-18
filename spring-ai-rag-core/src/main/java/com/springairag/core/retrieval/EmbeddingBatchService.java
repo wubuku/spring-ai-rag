@@ -144,6 +144,10 @@ public class EmbeddingBatchService {
                 circuitBreaker.recordSuccess();
             }
         } catch (Exception batchError) { // Resilience: batch → sequential fallback
+            if (batchError instanceof com.springairag.core.admission.DependencyCallException
+                    || batchError instanceof com.springairag.core.admission.AdmissionRejectedException) {
+                throw (RuntimeException) batchError;
+            }
             if (circuitBreaker != null) {
                 circuitBreaker.recordFailure();
             }

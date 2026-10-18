@@ -98,7 +98,7 @@ public class EmbeddingJobExecutor {
                 heartbeatSeconds,
                 heartbeatSeconds,
                         TimeUnit.SECONDS);
-        try {
+        try (var background = com.springairag.core.admission.BackgroundWorkScope.open()) {
             long activeProfileId = profileProvider.getActiveProfile().id();
             if (activeProfileId != job.embeddingProfileId()
                     || !repository.isCommitAllowed(

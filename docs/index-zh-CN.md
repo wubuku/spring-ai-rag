@@ -18,6 +18,7 @@
 | 改核心架构 / Pipeline | [architecture-zh-CN.md](architecture-zh-CN.md) | [IMPLEMENTATION_COMPARISON.md](IMPLEMENTATION_COMPARISON.md) |
 | 理解 Chat 记忆、上下文预算、RAG 与工具调用 | [Chat 记忆、RAG 与工具调用](chat-memory-rag-tool-calling-zh-CN.md) | [架构文档](architecture-zh-CN.md)、[配置参考](configuration-zh-CN.md) |
 | 改配置项 | [configuration-zh-CN.md](configuration-zh-CN.md) | `spring-ai-rag-core/src/main/resources/application.yml` |
+| 备份数据与隔离恢复演练 | [数据备份与隔离恢复](backup-restore-zh-CN.md) | [测试指南](testing-guide-zh-CN.md) |
 | 对接 / 调试 HTTP API | [rest-api-zh-CN.md](rest-api-zh-CN.md) | Swagger：`/swagger-ui.html` |
 | 让后端业务服务安全接入 RAG 数据面并完成生产验收 | [业务服务接入指南](business-client-integration-zh-CN.md) | [REST API：认证](rest-api-zh-CN.md#认证)、[一键验收](developer-reference-zh-CN.md#业务服务接入就绪一键验证) |
 | 为外部 Client 做版本化契约验收和 JSON/SSE 消费回归 | [Client Consumer Contract Kit](client-contract-kit-zh-CN.md) | [测试指南：Client API](testing-guide-zh-CN.md#client-consumer-contract-kit) |

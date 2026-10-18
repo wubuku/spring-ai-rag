@@ -33,6 +33,8 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 @Configuration
 public class PerformanceConfig {
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.springairag.core.admission.DependencyCallExecutor dependencyExecutor;
 
     /**
      * Retrieval-dedicated thread pool
@@ -102,7 +104,9 @@ public class PerformanceConfig {
             @Qualifier("embeddingCacheManager") CacheManager embeddingCacheManager,
             MeterRegistry meterRegistry) {
 
-        return new CachingEmbeddingModel(delegate, embeddingCacheManager, meterRegistry);
+        EmbeddingModel governed = dependencyExecutor == null ? delegate
+                : new com.springairag.core.admission.GovernedEmbeddingModel(delegate, dependencyExecutor);
+        return new CachingEmbeddingModel(governed, embeddingCacheManager, meterRegistry);
     }
 
     /**

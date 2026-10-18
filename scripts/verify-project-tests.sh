@@ -48,6 +48,9 @@ pass() {
   echo "PASS: $1"
 }
 
+python3 scripts/test-support/rag-backup-self-test.py
+pass "Backup bundle safety and fail-closed restore self-test"
+
 if ! command -v node >/dev/null 2>&1; then
   echo "Missing required command: node" >&2
   echo "This gate cannot run; treat it as failed, not as passed." >&2

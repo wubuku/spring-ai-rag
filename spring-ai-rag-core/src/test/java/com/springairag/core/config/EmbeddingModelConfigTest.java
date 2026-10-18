@@ -18,6 +18,24 @@ import static org.junit.jupiter.api.Assertions.*;
  * Unit tests for EmbeddingModelConfig
  */
 class EmbeddingModelConfigTest {
+    @Test
+    void retryBudgetCannotContinueBeyondDependencyDeadline() {
+        EmbeddingModelConfig config = new EmbeddingModelConfig();
+        ReflectionTestUtils.setField(config, "apiKey", "fixture-key");
+        ReflectionTestUtils.setField(config, "retryMaxAttempts", 3);
+        var model = config.embeddingModel();
+        RetryTemplate template = (RetryTemplate) ReflectionTestUtils.getField(model, "retryTemplate");
+        AtomicInteger calls = new AtomicInteger();
+        long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(50);
+        try (var scope = com.springairag.core.admission.DependencyCallContext.open(deadline, false)) {
+            assertThrows(com.springairag.core.admission.DependencyCallException.class,
+                    () -> template.execute(context -> {
+                        calls.incrementAndGet();
+                        throw new TransientAiException("temporary");
+                    }));
+        }
+        assertEquals(1, calls.get());
+    }
 
     @Test
     @DisplayName("embeddingModel creates OpenAiEmbeddingModel with correct config")

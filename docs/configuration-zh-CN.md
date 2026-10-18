@@ -239,7 +239,7 @@ rag:
     base-url: ${RAG_EMBEDDING_BASE_URL:https://api.siliconflow.cn}
     model: ${RAG_EMBEDDING_MODEL:BAAI/bge-m3}
     dimensions: ${RAG_EMBEDDING_DIMENSIONS:1024}
-    retry-max-attempts: ${RAG_EMBEDDING_RETRY_MAX_ATTEMPTS:10}
+    retry-max-attempts: ${RAG_EMBEDDING_RETRY_MAX_ATTEMPTS:3}
     profile-key: ${RAG_EMBEDDING_PROFILE_KEY:siliconflow-bge-m3-1024-v1}
     provider: ${RAG_EMBEDDING_PROVIDER:siliconflow}
     model-revision: ${RAG_EMBEDDING_MODEL_REVISION:unspecified}
@@ -256,7 +256,7 @@ rag:
 | `rag.embedding.base-url` | `https://api.siliconflow.cn` | API 端点 |
 | `rag.embedding.model` | `BAAI/bge-m3` | 嵌入模型名称 |
 | `rag.embedding.dimensions` | `1024` | 向量维度（必须与模型输出一致） |
-| `rag.embedding.retry-max-attempts` | `10` | 单次 provider 调用的最大尝试次数，范围 1–10；独立于持久化 job 的尝试预算 |
+| `rag.embedding.retry-max-attempts` | `3` | 单次 provider 调用最大尝试次数，范围 1–10；还受依赖总时限约束，独立于持久化 job 预算 |
 | `rag.embedding.profile-key` | `siliconflow-bge-m3-1024-v1` | 写入和检索使用的不可变模型空间身份 |
 | `rag.embedding.provider` | `siliconflow` | Profile 中保存的提供商身份 |
 | `rag.embedding.model-revision` | `unspecified` | 显式模型版本身份；模型语义变化必须创建新 Profile |
@@ -1636,6 +1636,11 @@ rag:
 | `rag.admission.max-model-calls-per-principal` | 8 | 单身份在线模型调用 |
 | `rag.admission.max-model-calls-per-provider` | 16 | 模型引用的 provider 前缀 |
 | `rag.admission.max-background-model-calls` | 2 | 受管 QA 与主动 judge 的独立后台容量 |
+| `rag.admission.max-embedding-calls` | 16 | 在线 embedding；缓存命中不占许可 |
+| `rag.admission.max-background-embedding-calls` | 4 | 文档任务与主动 Evaluation 的独立 embedding 容量 |
+| `rag.admission.max-rerank-calls` | 8 | 远程 HTTP rerank；heuristic/noop 不占许可 |
+| `rag.admission.dependency-timeout-ms` | 10000 | 在线 embedding/远程 rerank 总时限，含等待/重试 |
+| `rag.admission.background-embedding-timeout-ms` | 30000 | 后台 embedding 总时限 |
 
 限额必须为正整数。HTTP 异步完成/超时/错误幂等释放请求许可；阻塞 provider 在实际返回前继续占用
 模型许可，流式调用在终态或取消时释放。模型拒绝发生在调用次数和费用预留之前。
@@ -1643,7 +1648,12 @@ rag:
 受管 QA 单次 run 的用例并行度自动取配置值与后台容量的较小值，避免默认调度自行挤爆许可；
 其他并行 run 或主动 judge 仍共享后台上限，饱和时明确拒绝，不宣称无限排队。
 普通检索池固定 4 worker、64 个等待任务，满载明确拒绝而不是返回空证据。
-低基数指标：`rag.admission.active`、`rag.admission.rejected`，`kind=request|model|background`；不标记 principal。
+依赖池零等待队列。检索入队捕获 deadline/后台分类，过期任务不访问上游。超时/取消停止等待并尝试中断，
+不假设自定义 provider 一定响应中断；实际任务结束前仍占许可。Embedding 失败保留分支诊断（包括
+`DEPENDENCY_TIMEOUT`、`DEPENDENCY_CANCELLED`、`EMBEDDING_CAPACITY`），空结果不代表成功；
+HTTP rerank 失败沿用配置的 heuristic/original fallback。关闭 admission 不关闭时限或线程池物理上限。
+低基数指标：`rag.admission.active`、`rag.admission.rejected` 的 kind 增加 `embedding|backgroundEmbedding|rerank`；
+`rag.dependency.calls` 按 kind/outcome 记录成功、错误、超时、取消、拒绝，不标记 principal 或输入内容。
 费用硬上限仍由既有数据库 Budget Reservation 管理。本批无需数据迁移。
 
 ## 配置继承

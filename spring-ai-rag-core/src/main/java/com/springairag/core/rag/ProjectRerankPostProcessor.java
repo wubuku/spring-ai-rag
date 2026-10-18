@@ -34,6 +34,12 @@ public class ProjectRerankPostProcessor implements DocumentPostProcessor {
     @Override
     public List<Document> process(Query query, List<Document> documents) {
         AuthorizedRetrievalContext context = context(query.context());
+        try (var scope = com.springairag.core.admission.DependencyCallContext.forBudget(context.executionBudget())) {
+            return process(query, documents, context);
+        }
+    }
+
+    private List<Document> process(Query query, List<Document> documents, AuthorizedRetrievalContext context) {
         if (!context.options().useRerank() || documents == null || documents.isEmpty()) {
             return documents;
         }

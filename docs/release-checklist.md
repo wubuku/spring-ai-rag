@@ -43,6 +43,12 @@ it incurs no real-LLM cost. The additive SDK quickstart and disposable
 PostgreSQL/Flyway recovery checks are opt-in release gates:
 `scripts/verify-release.sh --with-client-sdk --with-recovery-readiness`.
 
+Dependency-resilience/recovery releases additionally require `python3 scripts/verify-dependency-recovery-e2e.py`
+for actual HTTP faults, mixed load, hard/graceful restarts and real dump/restore. Set `DEPENDENCY_RECOVERY_K6_IMAGE`
+to include the k6 normal-load hard gate. Neither migration readiness nor a mock upstream proves real-model quality.
+See [Backup And Restore](backup-restore.md) for privacy and isolated traffic-cutover boundaries and
+the [Testing Guide](testing-guide.md) for the full matrix.
+
 - [x] `mvn clean test`
 - [x] `mvn package -pl spring-ai-rag-core -am -Pwebui -DskipTests`
 - [x] WebUI lint, full Vitest, and production build

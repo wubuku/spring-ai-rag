@@ -1,5 +1,30 @@
 # Testing Guide
 
+## Dependency Resilience, Mixed Faults And Real Restore
+
+```bash
+mvn clean compile test-compile
+python3 scripts/test-support/rag-backup-self-test.py
+python3 scripts/verify-dependency-recovery-e2e.py
+```
+
+This gate starts the actual service and its own pgvector container, covering embedding/rerank slow responses,
+429/503/disconnects, capacity isolation, mixed Search/Native/OpenAI JSON/SSE/import/explicit QA, hard-restart lease
+takeover, graceful restart, actual dump/restore, all-table equality, original bytes/vectors/permissions/deletions/API
+and corrupt/nonempty/same-source negatives. Controlled upstreams are not real-model quality evidence: still run
+the real BGE-M3/LLM, SDK and API-contract gates below. Private artifacts under `.verification/dependency-recovery/`
+include fixture business data and must not be committed.
+
+For optional longer load, `scripts/k6-load-test.js` adds `K6_PROFILE=reliability`, requiring `K6_DOCUMENT_ID`
+to select an embedded disposable fixture. It creates/deletes no caller data; supply `API_KEY` securely via environment.
+`RELIABILITY_P95_MS` defaults to 30000, `RELIABILITY_P99_MS` to 60000, `RELIABILITY_MIN_SUCCESS_RATE` to 0.5,
+and `K6_OPENAI_MODEL` to rag-default. `RELIABILITY_VUS` defaults to 8 and `RELIABILITY_DURATION` to 30s.
+Set `DEPENDENCY_RECOVERY_K6_IMAGE` (for example `grafana/k6:0.57.0`) on the isolated gate above to additionally
+run a 2-VU/12s k6 gate requiring 100% normal-load success and exporting `k6-summary.json`.
+The separate controlled-concurrency phase verifies higher-capacity pressure. Successful latency, success ratio, explicit 429 and unexpected errors are separate
+metrics; empty Search is not success and real LLM calls do not inherit a universal 500ms gate.
+See [Backup And Restore](backup-restore.md) for operational boundaries.
+
 ## Evidence Snapshot and Admission Acceptance
 
 - `./scripts/verify-gated-it.sh UnassignedDocumentChatFencePostgresIntegrationTest`: real V1–V65 migrations,

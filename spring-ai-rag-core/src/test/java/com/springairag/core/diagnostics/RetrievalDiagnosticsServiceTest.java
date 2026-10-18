@@ -31,6 +31,24 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class RetrievalDiagnosticsServiceTest {
+    @Test
+    void directSearchPersistsDependencyBranchFailureWithoutQueryText() throws Exception {
+        var repository = mock(RagRetrievalLogRepository.class);
+        var service = new RetrievalDiagnosticsService(repository, new RagProperties(), new ObjectMapper(),
+                mock(CollectionIdentityResolver.class));
+        var session = service.createSession(ChatPrincipal.local(), RetrievalTraceHeaders.OPERATION_SEARCH, null);
+        var stage = new com.springairag.core.retrieval.RetrievalBranchStage("VECTOR", "embedding", "ERROR",
+                1, 0, 0, "EMBEDDING_CAPACITY");
+        var outcome = new RetrievalOutcome(null, List.of(), "private fixture query", List.of(), Map.of(), Map.of(),
+                List.of(stage), null, null, "NO_CANDIDATES", "BRANCH_FAILED", 1, 0);
+        service.persistSearch(session, outcome, Map.of(), RetrievalFilters.none());
+        var saved = ArgumentCaptor.forClass(RagRetrievalLog.class);
+        verify(repository).save(saved.capture());
+        String metadata = new ObjectMapper().writeValueAsString(saved.getValue().getMetadata());
+        assertTrue(metadata.contains("EMBEDDING_CAPACITY"));
+        assertTrue(metadata.contains("branchStages"));
+        assertFalse(metadata.contains("private fixture query"));
+    }
 
     @Test
     void persistRedactsQueryAndUsesPositionalScores() {
