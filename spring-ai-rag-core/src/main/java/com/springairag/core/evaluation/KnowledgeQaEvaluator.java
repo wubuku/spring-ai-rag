@@ -62,7 +62,8 @@ public class KnowledgeQaEvaluator {
                 ChatMode.KNOWLEDGE,
                 answer,
                 response == null ? List.of() : response.sources());
-        boolean refusal = containsInsufficientMarker(normalizedAnswer);
+        boolean refusal = response != null && Boolean.TRUE.equals(response.metadata().get("modelSafetyRefusal"))
+                || containsInsufficientMarker(normalizedAnswer);
         List<String> failures = new ArrayList<>();
         if ("SUFFICIENT".equals(caseDef.evidenceExpectation())
                 && matchedSources != expected.size()) {
@@ -109,6 +110,13 @@ public class KnowledgeQaEvaluator {
         metrics.put("retrievalExecuted", response != null
                 && Boolean.TRUE.equals(response.metadata().get("retrievalExecuted")));
         metrics.put("usage", response == null ? Map.of() : response.usage());
+        metrics.put("actualModel", response == null ? "UNKNOWN" : response.metadata().getOrDefault("actualModel", "UNKNOWN"));
+        metrics.put("modelRef", response == null || response.resolvedModel() == null ? "UNKNOWN" : response.resolvedModel());
+        metrics.put("modelAttribution", response == null ? "UNKNOWN" : response.metadata().getOrDefault("modelAttribution", "UNKNOWN"));
+        metrics.put("modelDefaults", response == null ? Map.of() : response.metadata().getOrDefault("modelDefaults", Map.of()));
+        metrics.put("modelSafetyRefusal", response != null && Boolean.TRUE.equals(response.metadata().get("modelSafetyRefusal")));
+        metrics.put("evidenceAssessment", response == null || response.evidenceAssessment() == null
+                ? Map.of() : response.evidenceAssessment());
         metrics.put("failureReasons", List.copyOf(failures));
         return new Result(failures.isEmpty(), metrics, List.copyOf(failures));
     }

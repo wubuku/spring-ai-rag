@@ -120,6 +120,24 @@ class ChatExecutionServiceTest {
     }
 
     @Test
+    void usesConfiguredModelWithoutMislabelingRouteAliasAsProviderResponse() {
+        var candidate = candidate("provider-alias", true, false, true);
+        var client = clientFixture("answer", Map.of(), null);
+        when(candidate.model().getDefaultOptions()).thenReturn(
+                ToolCallingChatOptions.builder().model("configured-model-name").temperature(0.25).maxTokens(512).build());
+        when(modelRouter.orderedCandidateDescriptors(isNull())).thenReturn(List.of(candidate));
+        when(clientFactory.create(any(), same(candidate), anyList())).thenReturn(
+                new ModeAwareChatClientFactory.Attempt(client.client(), candidate, context(), null));
+
+        var result = service.execute(command(ChatMode.PLAIN, null));
+
+        assertEquals("provider-alias", result.resolvedModel());
+        assertEquals("configured-model-name", result.metadata().get("actualModel"));
+        assertEquals("CONFIGURED_DEFAULT", result.metadata().get("modelAttribution"));
+        assertEquals(Map.of("temperature", 0.25, "maxTokens", 512), result.metadata().get("modelDefaults"));
+    }
+
+    @Test
     @SuppressWarnings("unchecked")
     void knowledgeModeUsesAdvisorDocumentContextAndPersistsSources() {
         ChatModelRouter.ChatModelCandidate candidate =
@@ -157,6 +175,8 @@ class ChatExecutionServiceTest {
 
         assertEquals("[S1] 基于资料的回答", result.answer());
         assertEquals("knowledge-model", result.resolvedModel());
+        assertEquals("fixture-upstream-model", result.metadata().get("actualModel"));
+        assertEquals("PROVIDER_RESPONSE", result.metadata().get("modelAttribution"));
         assertEquals(1, result.sources().size());
         assertEquals("S1", result.sources().getFirst().getCitationId());
         assertEquals(true, result.metadata().get("retrievalExecuted"));
@@ -922,6 +942,14 @@ class ChatExecutionServiceTest {
     private ClientFixture clientFixture(
             String answer,
             Map<String, Object> context) {
+        return clientFixture(answer, context, "fixture-upstream-model");
+    }
+
+    @SuppressWarnings("unchecked")
+    private ClientFixture clientFixture(
+            String answer,
+            Map<String, Object> context,
+            String upstreamModel) {
         ChatClient client = mock(ChatClient.class);
         ChatClient.ChatClientRequestSpec spec =
                 mock(ChatClient.ChatClientRequestSpec.class);
@@ -930,7 +958,8 @@ class ChatExecutionServiceTest {
         org.springframework.ai.chat.model.ChatResponse springResponse =
                 new org.springframework.ai.chat.model.ChatResponse(
                         List.of(new Generation(new AssistantMessage(answer))),
-                        ChatResponseMetadata.builder().build());
+                        upstreamModel == null ? ChatResponseMetadata.builder().build()
+                                : ChatResponseMetadata.builder().model(upstreamModel).build());
 
         when(client.prompt()).thenReturn(spec);
         when(spec.system(anyString())).thenReturn(spec);

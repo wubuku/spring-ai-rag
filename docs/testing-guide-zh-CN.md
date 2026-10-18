@@ -1,5 +1,14 @@
 # 测试指南
 
+## 多轮真实质量与双实例恢复闭环
+
+先运行两个Python自测，再执行 `python3 scripts/verify-quality-production-e2e.py`，验证24例多轮
+正反例、跨节点一致性/公平性/lease接管，以及旧备份后的删除/吊销/擦除闸门。
+明确付费且安全注入模型环境后，运行 `python3 scripts/verify-quality-real-e2e.py --ack-paid-models`：
+默认两provider各24例×3轮，外加真实Client JSON/SSE/SDK和HTTP rerank。普通Chat不会自动触发评测。
+完整命令、结果归因、成本与信任边界见 [质量稳定性与生产恢复验收](quality-production-acceptance-zh-CN.md)。
+旧三例smoke与单实例恢复入口保持不变；受控通过不得冒充真实模型质量。
+
 ## 依赖治理、混合故障与真实恢复
 
 ```bash

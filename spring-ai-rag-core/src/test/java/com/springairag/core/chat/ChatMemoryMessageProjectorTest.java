@@ -15,6 +15,18 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ChatMemoryMessageProjectorTest {
 
     @Test
+    void explicitRefusalWithNullBodyIsPersistableVisibleMemory() {
+        AssistantMessage refusal = AssistantMessage.builder()
+                .content((String) null)
+                .properties(Map.of("refusal", "不能提供敏感凭据。", "finishReason", "stop"))
+                .build();
+        List<Message> projected = ChatMemoryMessageProjector.forPersistence(
+                List.of(new UserMessage("敏感问题"), refusal));
+        assertEquals("不能提供敏感凭据。", projected.get(1).getText());
+        assertTrue((Boolean) projected.get(1).getMetadata().get("modelSafetyRefusal"));
+    }
+
+    @Test
     void dropsToolMessagesFromJdbcMemoryProjection() {
         AssistantMessage validCall = call(
                 "call-1", "getWeather", "{\"city\":\"Shanghai\"}");

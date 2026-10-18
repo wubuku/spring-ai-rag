@@ -114,7 +114,8 @@ class ModeAwareChatClientFactoryTest {
 
         ArgumentCaptor<Prompt> prompt = ArgumentCaptor.forClass(Prompt.class);
         verify(model).call(prompt.capture());
-        assertTrue(prompt.getValue().getContents().contains("[S1]"));
+        assertTrue(prompt.getValue().getContents().contains("[c1] 风格基调应保持克制和清晰"));
+        assertTrue(!prompt.getValue().getContents().contains("[S1]"));
         assertTrue(prompt.getValue().getContents().contains("风格基调应保持克制和清晰"));
         assertTrue(prompt.getValue().getContents().contains("用户问题"));
         assertEquals(

@@ -903,7 +903,7 @@ public class ChatExecutionService {
             applyAgentTools(
                     spec, command, attempt.candidate(), attempt.retrievalContext());
         }
-        return spec.stream().chatClientResponse();
+        return spec.stream().chatClientResponse().map(ModelSafetyRefusalNormalizer::normalize);
     }
 
     private ChatClientResponse invoke(
@@ -926,7 +926,7 @@ public class ChatExecutionService {
             applyAgentTools(
                     spec, command, attempt.candidate(), attempt.retrievalContext());
         }
-        ChatClientResponse response = spec.call().chatClientResponse();
+        ChatClientResponse response = ModelSafetyRefusalNormalizer.normalize(spec.call().chatClientResponse());
         if (response == null
                 || response.chatResponse() == null
                 || response.chatResponse().getResult() == null
@@ -1149,6 +1149,32 @@ public class ChatExecutionService {
                 : null;
         Map<String, Object> metadata = new LinkedHashMap<>();
         metadata.put("sessionId", command.sessionId());
+        boolean modelSafetyRefusal = Boolean.TRUE.equals(springResponse.getResult().getOutput().getMetadata()
+                .get(ModelSafetyRefusalNormalizer.METADATA_KEY));
+        if (modelSafetyRefusal) {
+            metadata.put(ModelSafetyRefusalNormalizer.METADATA_KEY, true);
+        }
+        var modelOptions = attempt.candidate().model().getDefaultOptions();
+        Map<String, Object> modelDefaults = new LinkedHashMap<>();
+        if (modelOptions != null) {
+            putIfNotNull(modelDefaults, "temperature", modelOptions.getTemperature());
+            putIfNotNull(modelDefaults, "topP", modelOptions.getTopP());
+            putIfNotNull(modelDefaults, "topK", modelOptions.getTopK());
+            putIfNotNull(modelDefaults, "maxTokens", modelOptions.getMaxTokens());
+            putIfNotNull(modelDefaults, "frequencyPenalty", modelOptions.getFrequencyPenalty());
+            putIfNotNull(modelDefaults, "presencePenalty", modelOptions.getPresencePenalty());
+        }
+        metadata.put("modelDefaults", modelDefaults);
+        String actualModel = springResponse.getMetadata().getModel();
+        String modelAttribution = "PROVIDER_RESPONSE";
+        if (actualModel == null || actualModel.isBlank()) {
+            actualModel = modelOptions == null ? null : modelOptions.getModel();
+            modelAttribution = "CONFIGURED_DEFAULT";
+        }
+        if (actualModel != null && !actualModel.isBlank()) {
+            metadata.put("actualModel", actualModel);
+            metadata.put("modelAttribution", modelAttribution);
+        }
         String requestTraceId = command.requestTraceId() != null
                 ? command.requestTraceId()
                 : MDC.get(RequestTraceFilter.TRACE_ID_KEY);
@@ -1214,12 +1240,19 @@ public class ChatExecutionService {
                 contextLimited,
                 validation,
                 evaluationUnavailable);
-        boolean safeAnswer = ragProperties.getChat().getKnowledge()
+        boolean structuredKnowledgeRefusal = modelSafetyRefusal && command.mode() == ChatMode.KNOWLEDGE;
+        boolean safeAnswer = structuredKnowledgeRefusal || ragProperties.getChat().getKnowledge()
                 .isEvidenceSafetyEnabled()
                 && evaluator.requiresSafeAnswer(command.mode(), assessment);
         if (safeAnswer) {
-            answer = ragProperties.getChat().getKnowledge().getSafeAnswerText();
+            answer = structuredKnowledgeRefusal ? ModelSafetyRefusalNormalizer.FILTERED_ANSWER
+                    : ragProperties.getChat().getKnowledge().getSafeAnswerText();
             assessment = evaluator.withSafeAnswerApplied(assessment, true);
+            if (structuredKnowledgeRefusal) {
+                assessment = new EvidenceAssessment(assessment.status(), assessment.retrievalExecuted(),
+                        assessment.sourceCount(), assessment.citedSourceCount(), assessment.invalidCitationIds(),
+                        assessment.contextLimited(), true, "provider_safety_refusal");
+            }
         }
         metadata.put("evidenceAssessment", assessment);
         metadata.put(

@@ -1,5 +1,20 @@
 # Developer Reference
 
+## Quality Stability And Production Recovery
+
+```bash
+python3 scripts/test-support/knowledge-qa-quality-self-test.py
+python3 scripts/test-support/rag-recovery-gate-self-test.py
+python3 scripts/verify-quality-production-e2e.py
+# Explicitly paid; privately inject model configuration into the calling environment first:
+python3 scripts/verify-quality-real-e2e.py --ack-paid-models
+```
+
+Serialize Maven/SDK builds. Both runners use owned isolated databases and private artifacts under
+`.verification/quality-production/` and `.verification/quality-real/`. Never commit artifacts or keys.
+See [quality acceptance](quality-production-acceptance.md) and the
+[recovery gate](backup-restore.md#post-restore-deletion-and-authorization-gate) for24-case matrix and compatibility boundaries.
+
 ## Dependency And Backup/Restore Acceptance
 
 ```bash

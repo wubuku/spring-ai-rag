@@ -83,3 +83,38 @@ quality, off-site backup reachability or cloud failover.
 
 See the [Testing Guide](testing-guide.md) for other gates. The older `verify-recovery-readiness.sh` still establishes
 migration/governance readiness only and cannot replace this drill.
+
+## Post-Restore Deletion And Authorization Gate
+
+Backup-tool PASS never authorizes traffic: output adds `trafficReleaseAuthorized=false`.
+`rag-recovery-gate.py` is an automated read-only check, not database mutation or network isolation.
+Quiesce the latest authoritative source, use explicit libpq variables and an existing0700 private parent:
+
+```bash
+python3 scripts/rag-recovery-gate.py checkpoint /secure/recovery/latest.json --ack-quiesced
+# Switch libpq to the isolated restored database; obtain the digest through a trusted independent channel:
+python3 scripts/rag-recovery-gate.py verify /secure/recovery/latest.json \
+  --backup-directory /secure/backups/rag-20261018 \
+  --checkpoint-sha256 "$TRUSTED_CHECKPOINT_SHA256" --ack-authoritative-checkpoint
+```
+
+The non-overwriting0600 file contains identity/security-state SHA256 fingerprints, schema/inventory version and UTC
+time, not source text or keys. A digest is not a signature: retain it independently, never manufacture authority by hashing
+an unknown file afterward. The checkpoint remains sensitive and correlatable; never commit it.
+Checks require matching backup source/schema, a different target, complete inventory, no incomplete/failed erasure,
+and a checkpoint newer than the backup. Default freshness is one hour; `--max-age-seconds` permits at most86400,
+with30-second clock skew. Enlarging the window weakens freshness. Source/target each use one read-only REPEATABLE
+READ transaction; more than100000 entries/table fails rather than truncates.
+
+Inventory v1: document revision/hash/lifecycle, Collection, principal/credential policy, chat history/summary/turn
+operations, retrieval logs, LLM usage and Evaluation suites, with descendants relying on existing FK cascades.
+Authorization expires/retire deadlines remain; last_used/alert scanning and other non-policy activity are ignored.
+PREVIEWED/APPLYING/PARTIAL_FAILED erasure blocks the gate; newly created erasure UUIDs are not compared.
+Originals/vectors, external files, environment-root/legacy credentials and other tables still need existing recovery/API/configuration checks.
+
+Restored records cannot exceed authority or differ in security state. Records added after backup may be absent, so this
+is not RPO=0. Failure exits nonzero with table-level counts only. Reconcile through existing delete/revoke/erasure APIs,
+quiesce and verify again; do not forge SQL state around business fences. Keep isolated without trusted recent records.
+Gate PASS only establishes checkpoint-time inventory consistency: `trafficReleaseAuthorized=false` remains and
+does not replace runtime/API/external-resource checks or subsequent revocations.
+See [Quality And Production Acceptance](quality-production-acceptance.md) for the complete rehearsal.

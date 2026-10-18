@@ -586,7 +586,8 @@ public class OpenAiCompatibilityController {
                     evidenceAssessment(completed.metadata()),
                     prior == null ? List.of() : prior.sources(),
                     citationRegistry(completed.metadata(), prior),
-                    collectionCoverage(completed.metadata(), prior));
+                    collectionCoverage(completed.metadata(), prior),
+                    modelSafetyRefusal(completed.metadata()));
             return Flux.just(toJson(
                     new OpenAiChatCompletionChunk(
                             id,
@@ -648,7 +649,8 @@ public class OpenAiCompatibilityController {
                 result.evidenceAssessment(),
                 safeSources(result.sources()),
                 citationRegistry(result.metadata(), null),
-                collectionCoverage(result.metadata(), null));
+                collectionCoverage(result.metadata(), null),
+                modelSafetyRefusal(result.metadata()));
     }
 
     private OpenAiRagExtension rag(ChatResponse response) {
@@ -657,7 +659,8 @@ public class OpenAiCompatibilityController {
                 response.getEvidenceAssessment(),
                 safeSources(response.getSources()),
                 citationRegistry(response.getMetadata(), null),
-                collectionCoverage(response.getMetadata(), null));
+                collectionCoverage(response.getMetadata(), null),
+                modelSafetyRefusal(response.getMetadata()));
     }
 
     private OpenAiRagExtension ragOrNull(
@@ -665,16 +668,22 @@ public class OpenAiCompatibilityController {
             EvidenceAssessment assessment,
             List<OpenAiRagSource> sources,
             Map<String, Object> citationRegistry,
-            Map<String, Object> collectionCoverage) {
+            Map<String, Object> collectionCoverage,
+            Boolean modelSafetyRefusal) {
         if ((traceId == null || traceId.isBlank())
                 && assessment == null
                 && (sources == null || sources.isEmpty())
                 && (citationRegistry == null || citationRegistry.isEmpty())
-                && (collectionCoverage == null || collectionCoverage.isEmpty())) {
+                && (collectionCoverage == null || collectionCoverage.isEmpty())
+                && !Boolean.TRUE.equals(modelSafetyRefusal)) {
             return null;
         }
         return new OpenAiRagExtension(
-                traceId, assessment, sources, citationRegistry, collectionCoverage);
+                traceId, assessment, sources, citationRegistry, collectionCoverage, modelSafetyRefusal);
+    }
+
+    private Boolean modelSafetyRefusal(Map<String, Object> metadata) {
+        return metadata != null && Boolean.TRUE.equals(metadata.get("modelSafetyRefusal")) ? Boolean.TRUE : null;
     }
 
     @SuppressWarnings("unchecked")

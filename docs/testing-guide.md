@@ -1,5 +1,15 @@
 # Testing Guide
 
+## Repeated Real Quality And Two-Node Recovery
+
+Run the two Python self-tests, then `python3 scripts/verify-quality-production-e2e.py` for repeated24-case
+positive/negative gates, cross-node consistency/fairness/lease takeover and post-backup deletion/revocation/erasure gates.
+After explicit payment authorization and private model environment injection, run
+`python3 scripts/verify-quality-real-e2e.py --ack-paid-models`: two providers×24 cases×3 rounds by default,
+plus real Client JSON/SSE/SDK and HTTP rerank checks. Ordinary Chat does not start evaluation.
+See [Quality And Production Acceptance](quality-production-acceptance.md) for commands, attribution, costs and trust boundaries.
+Existing three-case smoke and single-node recovery entrypoints are unchanged; controlled success is not real-model quality.
+
 ## Dependency Resilience, Mixed Faults And Real Restore
 
 ```bash

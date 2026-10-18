@@ -788,6 +788,16 @@ failure returns the configured safe answer and sets `safeAnswerApplied` to
 `true`. `PLAIN` returns `NOT_APPLICABLE` and keeps its answer; `AGENT` only
 reports diagnostics in this batch and keeps its existing tool conclusion.
 
+Explicit structured safety refusals (`refusal` or `content_filter` upstream) are normal business results:
+visible refusal/controlled safe-answer text, optional `metadata.modelSafetyRefusal=true`, unchanged JSON success
+envelopes and unique SSE terminals, without retrying or switching models to bypass safety. Text refusals also
+return normally, but their policy origin is not inferred without structured evidence. This is not content moderation.
+KNOWLEDGE structured refusals use a controlled safety message and
+`evidenceAssessment.reasonCode=provider_safety_refusal`; quality outcomes are separate from execution failures,
+without weakening required-fact, forbidden-fact or authorization assertions.
+The OpenAI-compatible endpoint adds optional `rag.modelSafetyRefusal=true`; ordinary results omit it and
+the existing Java constructor signatures remain available.
+
 For `KNOWLEDGE`, `metadata.retrieval.documentJoin` is an additive,
 low-cardinality summary of the project join step before reranking. Its four
 fields are nonnegative integers. It does not contain query text, document IDs,
@@ -2855,6 +2865,12 @@ validity form the deterministic hard gate; judge status, model, score, and error
 metrics only. Case metrics also record `retrievalExecuted`, latency, usage, and failure reasons;
 compare returns numeric metric deltas for two runs of the same version. The response shape is
 additive: existing fields are not removed or renamed.
+
+QA case metrics additionally expose `actualModel` (provider-reported name, or configured name when absent),
+`modelRef` (route alias), `modelAttribution` (`PROVIDER_RESPONSE` / `CONFIGURED_DEFAULT` / `UNKNOWN`), `modelDefaults` (non-sensitive sampling/length defaults), and `evidenceAssessment` (including safe-answer
+application), plus the `modelSafetyRefusal` boolean, not answer text. The repeated quality gate additionally verifies actual model/full configuration identity;
+existing compare `environmentDrift` still covers code, embedding profile and corpus snapshots only.
+See [quality acceptance](quality-production-acceptance.md).
 
 ---
 

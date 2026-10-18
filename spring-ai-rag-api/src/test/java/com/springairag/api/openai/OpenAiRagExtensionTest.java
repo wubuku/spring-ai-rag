@@ -13,6 +13,15 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 class OpenAiRagExtensionTest {
 
+    @Test
+    void safetyRefusalIsOptionalAndLegacyJavaConstructorsRemainUsable() throws Exception {
+        var legacy = new OpenAiRagExtension("trace", null, List.of(), Map.of(), Map.of());
+        var explicit = new OpenAiRagExtension("trace", null, List.of(), Map.of(), Map.of(), true);
+        assertFalse(objectMapper.readTree(objectMapper.writeValueAsString(legacy)).has("modelSafetyRefusal"));
+        org.junit.jupiter.api.Assertions.assertTrue(objectMapper.readTree(
+                objectMapper.writeValueAsString(explicit)).path("modelSafetyRefusal").asBoolean());
+    }
+
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Test

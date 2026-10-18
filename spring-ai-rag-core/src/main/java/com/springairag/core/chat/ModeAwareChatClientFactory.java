@@ -294,7 +294,7 @@ public class ModeAwareChatClientFactory {
                 AdvisorScope.MODEL_CALL,
                 MODEL_CALL_ADVISOR_ORDER));
 
-        ChatClient.Builder builder = ChatClient.builder(executionModel)
+        ChatClient.Builder builder = ChatClient.builder(new SafetyRefusalChatModel(executionModel))
                 .defaultAdvisors(advisors);
         ChatOptions defaultOptions = candidate.model().getDefaultOptions();
         if (defaultOptions != null) {

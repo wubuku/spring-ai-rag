@@ -149,6 +149,11 @@ data:{
 若安全门未通过，唯一的 `content` 终态正文是受控安全回答。收到 `done` 后客户端应停止
 loading 状态；重复终态必须忽略。
 
+模型安全拒答是正常业务结果，不发送`error`终态，也不通过重试/切模型规避。上游明确以`refusal`
+字段或`content_filter`结束时，即使原始正文为空，也返回可见安全提示；Native终态metadata可包含
+`modelSafetyRefusal=true`，OpenAI兼容终帧在可选`rag.modelSafetyRefusal`投影同一信号。
+KNOWLEDGE的明确结构化拒答使用`evidenceAssessment.reasonCode=provider_safety_refusal`。
+
 ### 2.6 `error`
 
 ```text

@@ -75,3 +75,34 @@ python3 scripts/verify-dependency-recovery-e2e.py
 
 其他门槛见[测试指南](testing-guide-zh-CN.md)；旧 `verify-recovery-readiness.sh` 仍只证明迁移/治理就绪，
 不能替代本演练。
+
+## 恢复后的删除与权限闸门
+
+备份工具的PASS不代表可以放流量；输出增量字段 `trafficReleaseAuthorized=false`。
+`rag-recovery-gate.py` 是只读自动检查，不直接修改数据库或网络隔离。先在最新权威源停写/停worker，
+用显式libpq连接、预先创建0700私有父目录，再执行：
+
+```bash
+python3 scripts/rag-recovery-gate.py checkpoint /secure/recovery/latest.json --ack-quiesced
+# 改为隔离恢复库的libpq变量；摘要必须从独立可信渠道取得：
+python3 scripts/rag-recovery-gate.py verify /secure/recovery/latest.json \
+  --backup-directory /secure/backups/rag-20261018 \
+  --checkpoint-sha256 "$TRUSTED_CHECKPOINT_SHA256" --ack-authoritative-checkpoint
+```
+
+清单0600且不可覆盖，仅保存身份/安全状态SHA256、schema、inventory版本和UTC时间，不导出正文或key。
+摘要不是签名，必须独立可信保存，不能事后给未知文件算摘要冒充权威。清单仍敏感可关联，不能提交Git。
+工具要求与备份源/schema一致、目标不是源库、完整inventory、无未完成/失败擦除、清单不早于备份。
+默认新鲜度一小时，`--max-age-seconds`最多86400，允许30秒时钟偏差；扩大窗口会降低新鲜度保证。
+源/目标各用单个只读REPEATABLE READ事务，每表最多100000项，超限拒绝而非截断。
+
+inventory v1：文档revision/hash/生命周期，Collection，principal/credential授权，chat history/summary/
+turn operation，retrieval log，LLM usage，Evaluation suite；其子记录依赖既有FK级联。
+保留expires/retire等授权时限，忽略last_used/告警扫描等非授权运行信息。PREVIEWED/APPLYING/PARTIAL_FAILED
+擦除阻断，不比较重新发起擦除的UUID。原件/向量、外部文件、环境root/legacy凭据与其它表仍需原有恢复/API/配置验收。
+
+恢复记录不得比权威清单多，同身份安全状态必须一致；备份后新增而恢复缺少的记录可缺失（不是RPO=0）。
+失败非零，只输出表级差异计数。通过既有删除/吊销/擦除API对账，再停写核验；不要直接SQL绕过业务fence。
+没有可信较新记录就保持隔离。闸门PASS仅表示该checkpoint时点inventory通过，仍输出
+`trafficReleaseAuthorized=false`，不替代runtime/API/外部资源或后续新撤销的确认。
+完整演练见 [质量稳定性与生产恢复验收](quality-production-acceptance-zh-CN.md)。

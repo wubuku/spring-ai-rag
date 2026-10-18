@@ -130,7 +130,7 @@ def main():
     try:
         manifest = {"backup": backup, "restore": restore, "verify": validate_bundle}[args.action](args.directory)
         print(json.dumps({"status": "PASS", "action": args.action, "schemaVersion": manifest["schemaVersion"],
-                          "sha256": manifest["sha256"]}))
+                          "sha256": manifest["sha256"], "trafficReleaseAuthorized": False}))
     except (ValueError, OSError, subprocess.SubprocessError):
         print("Backup operation failed; no automatic database cleanup performed. "
               "Check manifest/checksum, empty isolated target and private database diagnostics.", file=sys.stderr)

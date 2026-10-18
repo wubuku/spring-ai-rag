@@ -697,6 +697,13 @@ Embedding 另按在线/后台分池，远程 rerank 单独分池，默认有总�
 服务返回配置的安全回答，并将 `safeAnswerApplied` 置为 `true`。`PLAIN` 返回
 `NOT_APPLICABLE` 且保留原回答；`AGENT` 本批只输出诊断，不改变既有工具结论。
 
+模型明确的结构化安全拒答（上游`refusal`或`content_filter`）是正常业务结果：返回可见拒答/受控安全回答，
+可选`metadata.modelSafetyRefusal=true`，JSON成功信封与SSE唯一终态不变，不自动重试或切模型绕过。
+文本拒答同样正常返回，但无结构化上游证据时不猜测其政策来源。此归一化不替代独立内容审核。
+KNOWLEDGE结构化拒答使用受控安全提示及`evidenceAssessment.reasonCode=provider_safety_refusal`；
+其质量结果与上游执行故障分别统计，不改变必要事实、禁止事实或授权断言。
+OpenAI兼容接口增量提供可选`rag.modelSafetyRefusal=true`；普通结果省略此字段，旧Java构造签名保留。
+
 对 `KNOWLEDGE`，`metadata.retrieval.documentJoin` 是 rerank 前项目 join 步骤的
 additive、低基数摘要，四个字段均为非负整数。它不包含 query 文本、Document ID、
 文档正文、metadata 值或模型输出。AGENT、PLAIN、直接 Search、Evaluation 和旧
@@ -2510,6 +2517,11 @@ citation 校验检查请求级 `[cN]` 与兼容 `[SN]` token。compare 在 embed
 只作为辅助 metrics，不能单独宣布通过。case metrics 还记录 `retrievalExecuted`、延迟、usage
 和失败原因；compare 对同一 version 的两次 run 返回数字指标 delta。返回结构采用增量扩展，
 不删除或改名既有字段。
+
+QA case metrics增量提供 `actualModel`（provider报告型号；缺失时采用配置型号）、`modelRef`（路由别名）、
+`modelAttribution`（`PROVIDER_RESPONSE` / `CONFIGURED_DEFAULT` / `UNKNOWN`）、`modelDefaults`（非敏感采样/长度配置默认值）与 `evidenceAssessment`（包括安全回答是否应用），
+同样提供`modelSafetyRefusal`布尔值，不包含答案正文。模型或完整配置是否一致由多轮质量门禁进一步检查；既有compare的
+`environmentDrift`仍只承诺代码、embedding profile和语料快照范围。见[质量验收](quality-production-acceptance-zh-CN.md)。
 
 ---
 

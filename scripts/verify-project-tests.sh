@@ -51,6 +51,12 @@ pass() {
 python3 scripts/test-support/rag-backup-self-test.py
 pass "Backup bundle safety and fail-closed restore self-test"
 
+python3 scripts/test-support/knowledge-qa-quality-self-test.py
+pass "Versioned knowledge QA quality matrix fail-closed self-test"
+
+python3 scripts/test-support/rag-recovery-gate-self-test.py
+pass "Recovery privacy and authority checkpoint fail-closed self-test"
+
 if ! command -v node >/dev/null 2>&1; then
   echo "Missing required command: node" >&2
   echo "This gate cannot run; treat it as failed, not as passed." >&2

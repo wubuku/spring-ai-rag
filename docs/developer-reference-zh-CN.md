@@ -1,5 +1,19 @@
 # 开发者参考
 
+## 质量稳定性与生产恢复闭环
+
+```bash
+python3 scripts/test-support/knowledge-qa-quality-self-test.py
+python3 scripts/test-support/rag-recovery-gate-self-test.py
+python3 scripts/verify-quality-production-e2e.py
+# 主动收费；调用环境已安全注入模型配置后执行：
+python3 scripts/verify-quality-real-e2e.py --ack-paid-models
+```
+
+Maven/SDK构建仍须串行。两演练只操作自有隔离库，分别将私有证据写入 `.verification/quality-production/`
+与 `.verification/quality-real/`；不要提交制品或密钥。恢复闸门、24例矩阵及默认/旧入口边界见
+[质量验收](quality-production-acceptance-zh-CN.md)与[备份恢复](backup-restore-zh-CN.md#恢复后的删除与权限闸门)。
+
 ## 依赖治理与备份恢复验收
 
 ```bash

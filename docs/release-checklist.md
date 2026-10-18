@@ -1,5 +1,10 @@
 # 1.0 Release Checklist
 
+Incremental quality/recovery releases should execute [repeated real quality and two-node recovery](quality-production-acceptance.md),
+retaining every real failure rather than only the last passing run. SQL restore, checkpoint inventory verification and
+final traffic acceptance are distinct gates. Missing trusted recent authority, deletion/policy differences or absent
+actual-model attribution must not be reported as passed.
+
 > 📖 [English](release-checklist.md) · 📖 [中文](release-checklist-zh-CN.md)
 >
 > Before a feature enters this release checklist, complete its planning, basic

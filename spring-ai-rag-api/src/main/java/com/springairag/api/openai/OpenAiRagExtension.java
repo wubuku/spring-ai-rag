@@ -20,7 +20,17 @@ public record OpenAiRagExtension(
         List<OpenAiRagSource> sources,
         Map<String, Object> citationRegistry,
         @JsonInclude(JsonInclude.Include.NON_EMPTY)
-        Map<String, Object> collectionCoverage) {
+        Map<String, Object> collectionCoverage,
+        Boolean modelSafetyRefusal) {
+
+    public OpenAiRagExtension(
+            String traceId,
+            EvidenceAssessment evidenceAssessment,
+            List<OpenAiRagSource> sources,
+            Map<String, Object> citationRegistry,
+            Map<String, Object> collectionCoverage) {
+        this(traceId, evidenceAssessment, sources, citationRegistry, collectionCoverage, null);
+    }
 
     /** 保留已有 Java 调用方的四参数构造签名。 */
     public OpenAiRagExtension(

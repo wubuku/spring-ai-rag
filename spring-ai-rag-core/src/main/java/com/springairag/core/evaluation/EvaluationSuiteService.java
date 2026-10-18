@@ -25,6 +25,8 @@ import com.springairag.core.chat.RetrievalOptions;
 import com.springairag.core.config.EmbeddingProfileProvider;
 import com.springairag.core.config.RagEvaluationProperties;
 import com.springairag.core.config.RagProperties;
+import com.springairag.core.diagnostics.RetrievalDiagnosticsService;
+import com.springairag.core.diagnostics.RetrievalTraceSession;
 import com.springairag.core.security.ApiAccessPolicy;
 import com.springairag.core.exception.RagException;
 import com.springairag.core.security.ApiKeyCollectionAccess;
@@ -33,6 +35,8 @@ import com.springairag.core.logging.SensitiveDataMaskingConverter;
 import com.springairag.core.service.CollectionRetrievalScopeResolver;
 import com.springairag.core.service.RetrievalEvaluationService;
 import com.springairag.core.retrieval.RetrievalFilterValidator;
+import com.springairag.core.retrieval.RetrievalScopeSummary;
+import com.springairag.core.retrieval.RetrievalTraceHeaders;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.slf4j.Logger;
@@ -71,6 +75,12 @@ public class EvaluationSuiteService {
     private final ChatExecutionService chatExecutionService;
     private final SemanticEvaluationService semanticEvaluationService;
     private final KnowledgeQaEvaluator knowledgeQaEvaluator;
+    private RetrievalDiagnosticsService diagnosticsService;
+
+    @Autowired
+    void setDiagnosticsService(RetrievalDiagnosticsService diagnosticsService) {
+        this.diagnosticsService = diagnosticsService;
+    }
 
     @Autowired
     public EvaluationSuiteService(
@@ -478,6 +488,7 @@ public class EvaluationSuiteService {
                     "QA_EXECUTOR_UNAVAILABLE");
         }
         long started = System.nanoTime();
+        RetrievalTraceSession trace = null;
         try (var background = com.springairag.core.admission.BackgroundWorkScope.open()) {
             ChatPrincipal principal = ChatPrincipal.fromOwnerId(ownerPrincipalId);
             String sessionId = "e-" + UUID.randomUUID().toString().replace("-", "");
@@ -500,6 +511,10 @@ public class EvaluationSuiteService {
                             variant.config().getFulltextWeight()),
                     Map.of("evaluation", "managed-knowledge-qa"))
                     .withFilters(variant.filters());
+            trace = beginKnowledgeQaTrace(command, caseDef.collectionKeys());
+            if (trace != null) {
+                command = command.withTraceSession(trace);
+            }
             ChatExecutionService.PreparedExecution prepared =
                     chatExecutionService.prepareForOperation(command, null, false);
             ChatExecutionResult result = prepared.result();
@@ -536,17 +551,41 @@ public class EvaluationSuiteService {
                     sources,
                     metrics,
                     latency,
-                    parseTraceId(result.traceId()),
+                    trace == null ? parseTraceId(result.traceId()) : trace.traceId(),
                     deterministic.deterministicPass() ? null : "QA_HARD_GATE");
         } catch (SecurityException e) {
-            return new CaseOutcome("FAILED", List.of(), Map.of(), 0, null,
+            return new CaseOutcome("FAILED", List.of(), Map.of(), 0, trace == null ? null : trace.traceId(),
                     "AUTHORIZATION_CHANGED");
         } catch (RuntimeException e) {
             log.warn("Knowledge QA case failed: caseId={}, variantKey={}, errorType={}, error={}",
                     caseDef.id(), variant.key(), e.getClass().getSimpleName(),
                     safeDiagnostic(e.getMessage()));
-            return new CaseOutcome("FAILED", List.of(), Map.of(), 0, null,
+            return new CaseOutcome("FAILED", List.of(), Map.of(), 0, trace == null ? null : trace.traceId(),
                     "QA_PROVIDER_OR_DATABASE");
+        } finally {
+            if (trace != null) {
+                try {
+                    diagnosticsService.persist(trace);
+                } catch (RuntimeException error) {
+                    log.warn("Knowledge QA diagnostics unavailable: {}", safeDiagnostic(error.getMessage()));
+                }
+            }
+        }
+    }
+
+    private RetrievalTraceSession beginKnowledgeQaTrace(ChatCommand command, List<String> collectionKeys) {
+        if (diagnosticsService == null || !diagnosticsService.isEnabled()) {
+            return null;
+        }
+        try {
+            RetrievalTraceSession trace = diagnosticsService.createSession(
+                    command.principal(), RetrievalTraceHeaders.OPERATION_CHAT, command.sessionId());
+            trace.attachScope(RetrievalScopeSummary.from(CollectionScopeMode.SELECTED_COLLECTIONS,
+                    command.retrievalScope(), collectionKeys, command.retrievalFilters(), null), command.retrievalFilters());
+            return trace;
+        } catch (RuntimeException error) {
+            log.warn("Knowledge QA diagnostics failed to start: {}", safeDiagnostic(error.getMessage()));
+            return null;
         }
     }
 

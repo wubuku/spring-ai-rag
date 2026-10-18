@@ -43,7 +43,13 @@ public final class ChatMemoryMessageProjector {
                     && !assistant.getToolCalls().isEmpty()) {
                 continue;
             }
-            result.add(message);
+            if (message instanceof AssistantMessage assistant) {
+                Object finishReason = assistant.getMetadata().get("finishReason");
+                result.add(ModelSafetyRefusalNormalizer.normalizeMessage(assistant,
+                        finishReason instanceof String reason ? reason : null));
+            } else {
+                result.add(message);
+            }
         }
         return List.copyOf(result);
     }

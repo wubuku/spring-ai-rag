@@ -13,8 +13,40 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class KnowledgeQaEvaluatorTest {
 
+    @Test
+    void explicitSafetyRefusalIsNormalInsufficientAnswerWithoutKeywordGuessing() {
+        var definition = new EvaluationSuiteDefinition.CaseDef("safety", "敏感问题", List.of("kb"),
+                List.of(), null, null, "KNOWLEDGE_QA", List.of(), List.of(), "INSUFFICIENT",
+                EvaluationSuiteDefinition.JudgeDef.disabled());
+        var response = new ChatExecutionResult("模型因安全策略未回答该请求。", "session", null, null, "model",
+                ChatMode.KNOWLEDGE, List.of(), Map.of(), "stop", List.of(), Map.of("modelSafetyRefusal", true));
+        assertTrue(evaluator.evaluate(definition, response, List.of()).deterministicPass());
+    }
+
     private final KnowledgeQaEvaluator evaluator =
             new KnowledgeQaEvaluator(new CitationValidator());
+
+    @Test
+    void validCitationCannotHideWrongFactAndModelAttributionIsAdditive() {
+        ChatSource source = new ChatSource();
+        source.setCitationId("c1");
+        source.setSourceHandle("src-1");
+        source.setDocumentId("1");
+        source.setChunkText("期限为30天。");
+        var identity = new EvaluationSuiteDefinition.Identity("kb", "doc-1");
+        var definition = new EvaluationSuiteDefinition.CaseDef("wrong", "期限？", List.of("kb"),
+                List.of(identity), null, null, "KNOWLEDGE_QA", List.of("30天"), List.of("7天"),
+                "SUFFICIENT", EvaluationSuiteDefinition.JudgeDef.disabled());
+        var response = new ChatExecutionResult("期限为7天。[c1]", "s", null, null, "provider-alias",
+                ChatMode.KNOWLEDGE, List.of(source), Map.of(), null, List.of(),
+                Map.of("retrievalExecuted", true, "actualModel", "actual-model", "modelAttribution", "PROVIDER_RESPONSE"));
+        var result = evaluator.evaluate(definition, response, List.of(identity));
+        assertFalse(result.deterministicPass());
+        assertTrue(result.failureReasons().containsAll(List.of("REQUIRED_FACT_MISSING", "FORBIDDEN_FACT_FOUND")));
+        org.junit.jupiter.api.Assertions.assertEquals("VALID", result.metrics().get("citationStatus"));
+        org.junit.jupiter.api.Assertions.assertEquals("actual-model", result.metrics().get("actualModel"));
+        org.junit.jupiter.api.Assertions.assertEquals("provider-alias", result.metrics().get("modelRef"));
+    }
 
     @Test
     void deterministicGateRequiresFactsSourcesAndCitations() {
