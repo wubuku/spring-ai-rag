@@ -9,7 +9,8 @@ import sys
 from urllib.parse import urlparse
 
 import httpx
-from openai import OpenAI
+from openai import APIError, OpenAI
+from recovery import recovery_action
 
 
 def required(name: str) -> str:
@@ -36,6 +37,7 @@ def main() -> int:
         raise SystemExit("RAG_BASE_URL must be the service root without /v1")
 
     client = OpenAI(
+        max_retries=0,
         api_key=required("RAG_API_KEY"),
         base_url=f"{root_url}/v1",
         http_client=httpx.Client(
@@ -59,22 +61,32 @@ def main() -> int:
         ],
         "stream": args.stream,
     }
-    response = client.chat.completions.create(
-        **request,
-        extra_headers=headers or None,
-    )
-    if args.stream:
-        chunks = []
-        for chunk in response:
-            text = chunk.choices[0].delta.content if chunk.choices else None
-            if text:
-                chunks.append(text)
-        print(f"stream_ok chunks={len(chunks)}")
-    else:
-        print(
-            f"json_ok id={response.id} model={response.model} "
-            f"choices={len(response.choices)} rag={getattr(response, 'rag', None) is not None}"
+    stream_started = False
+    try:
+        response = client.chat.completions.create(
+            **request,
+            extra_headers=headers or None,
         )
+        if args.stream:
+            chunks = []
+            for chunk in response:
+                stream_started = True
+                text = chunk.choices[0].delta.content if chunk.choices else None
+                if text:
+                    chunks.append(text)
+            print(f"stream_ok chunks={len(chunks)}")
+        else:
+            print(
+                f"json_ok id={response.id} model={response.model} "
+                f"choices={len(response.choices)} rag={getattr(response, 'rag', None) is not None}"
+            )
+    except APIError as error:
+        body = error.body if isinstance(error.body, dict) else {}
+        body = body.get("error", body)
+        details = body.get("failureDetails") if isinstance(body, dict) else None
+        action = recovery_action(details, stream_started=stream_started, keyed=bool(idempotency_key))
+        print(f"request_failed recovery={action}", file=sys.stderr)
+        return 1
     return 0
 
 

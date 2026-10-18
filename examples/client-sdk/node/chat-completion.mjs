@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import OpenAI from "openai";
+import { recoveryAction } from "./recovery.mjs";
 
 function required(name) {
   const value = (process.env[name] || "").trim();
@@ -13,6 +14,7 @@ if (rootUrl.endsWith("/v1")) {
 }
 
 const client = new OpenAI({
+  maxRetries: 0,
   apiKey: required("RAG_API_KEY"),
   baseURL: `${rootUrl}/v1`,
 });
@@ -25,22 +27,35 @@ if ((process.env.RAG_IDEMPOTENCY_KEY || "").trim()) {
 }
 
 const stream = process.argv.includes("--stream");
-const completion = await client.chat.completions.create({
-  model: process.env.RAG_MODEL || "rag-default",
-  messages: [{
-    role: "user",
-    content: process.env.RAG_QUERY || "Return a short service-capability summary",
-  }],
-  stream,
-}, { headers });
+let streamStarted = false;
+try {
+  const completion = await client.chat.completions.create({
+    model: process.env.RAG_MODEL || "rag-default",
+    messages: [{
+      role: "user",
+      content: process.env.RAG_QUERY || "Return a short service-capability summary",
+    }],
+    stream,
+  }, { headers });
 
-if (stream) {
-  let chunks = 0;
-  for await (const chunk of completion) {
-    if (chunk.choices?.length) chunks += 1;
+  if (stream) {
+    let chunks = 0;
+    for await (const chunk of completion) {
+      streamStarted = true;
+      if (chunk.choices?.length) chunks += 1;
+    }
+    console.log(`stream_ok chunks=${chunks}`);
+  } else {
+    console.log(`json_ok id=${completion.id} model=${completion.model} `
+      + `choices=${completion.choices.length} rag=${completion.rag != null}`);
   }
-  console.log(`stream_ok chunks=${chunks}`);
-} else {
-  console.log(`json_ok id=${completion.id} model=${completion.model} `
-    + `choices=${completion.choices.length} rag=${completion.rag != null}`);
+} catch (error) {
+  if (!(error instanceof OpenAI.APIError)) throw error;
+  const action = recoveryAction({
+    failureDetails: error.error?.failureDetails ?? error.error?.error?.failureDetails,
+    streamStarted,
+    keyed: Boolean(headers["Idempotency-Key"]),
+  });
+  console.error(`request_failed recovery=${action}`);
+  process.exitCode = 1;
 }

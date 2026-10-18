@@ -77,9 +77,12 @@
             "evidenceAssessment": "object",
             "sources": "array",
             "citationRegistry": "object",
-            "collectionCoverage": "object"
+            "collectionCoverage": "object",
+            "modelSafetyRefusal": "boolean",
+            "answerOutcome": "object"
           },
           "nestedFields": {
+            "answerOutcome": ["status", "reasonCode"],
             "evidenceAssessment": [
               "status", "retrievalExecuted", "sourceCount", "citedSourceCount",
               "invalidCitationIds", "contextLimited", "safeAnswerApplied", "reasonCode"
@@ -122,9 +125,12 @@
             "evidenceAssessment": "object",
             "sources": "array",
             "citationRegistry": "object",
-            "collectionCoverage": "object"
+            "collectionCoverage": "object",
+            "modelSafetyRefusal": "boolean",
+            "answerOutcome": "object"
           },
           "nestedFields": {
+            "answerOutcome": ["status", "reasonCode"],
             "evidenceAssessment": [
               "status", "retrievalExecuted", "sourceCount", "citedSourceCount",
               "invalidCitationIds", "contextLimited", "safeAnswerApplied", "reasonCode"

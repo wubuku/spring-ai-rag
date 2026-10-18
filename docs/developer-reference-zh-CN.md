@@ -18,6 +18,12 @@ Maven/SDK构建仍须串行。两演练只操作自有隔离库，分别将私�
 
 ## 依赖治理与备份恢复验收
 
+上游错误与 Client 恢复专项：`python3 scripts/verify-upstream-recovery-e2e.py`。
+该命令会构建服务、使用自有隔离 PostgreSQL/HTTP provider，验证 Native/OpenAI JSON/SSE、
+400/401/403/429/503/504、deadline、畸形响应、拒答、缺结束标记、失败 replay 和两种真实 SDK。
+断言每请求实际 provider 次数，防止框架/传输/SDK 隐式重试；与其他 Maven 构建严格串行。
+命令成功不代表真实模型质量已验证；详见[专项说明](upstream-client-recovery-zh-CN.md)。
+
 ```bash
 python3 scripts/test-support/rag-backup-self-test.py
 python3 scripts/verify-dependency-recovery-e2e.py

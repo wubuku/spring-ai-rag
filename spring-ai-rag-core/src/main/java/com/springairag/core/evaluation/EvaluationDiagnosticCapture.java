@@ -45,6 +45,7 @@ public final class EvaluationDiagnosticCapture implements AutoCloseable {
         var capture = ACTIVE.get();
         if (capture == null) return;
         capture.data.put("answer", capture.safe(result.answer(), 32768));
+        capture.data.put("answerOutcome", result.metadata().getOrDefault("answerOutcome", Map.of()));
         List<Map<String, Object>> evidence = new ArrayList<>();
         for (var source : result.sources()) {
             if (evidence.size() >= 16) { capture.truncated = true; break; }
@@ -73,7 +74,7 @@ public final class EvaluationDiagnosticCapture implements AutoCloseable {
         var result = new LinkedHashMap<>(data);
         result.put("truncated", truncated);
         result.put("redacted", redacted);
-        result.put("complete", !truncated && !redacted && data.containsKey("lastInvocationMessages") && data.containsKey("answer") && data.containsKey("evidence"));
+        result.put("complete", !truncated && !redacted && data.containsKey("lastInvocationMessages") && data.containsKey("answer") && data.containsKey("evidence") && data.containsKey("modelAnswer"));
         return result;
     }
 
@@ -92,6 +93,13 @@ public final class EvaluationDiagnosticCapture implements AutoCloseable {
         }
         masked = masked.substring(0, end);
         return masked;
+    }
+
+    public static void modelAnswer(String answer, com.springairag.api.dto.CitationValidation validation) {
+        var capture = ACTIVE.get();
+        if (capture == null) return;
+        capture.data.put("modelAnswer", capture.safe(answer, 32768));
+        if (validation != null) capture.data.put("citationValidation", validation);
     }
 
     @Override

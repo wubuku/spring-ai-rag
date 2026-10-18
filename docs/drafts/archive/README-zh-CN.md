@@ -23,6 +23,10 @@
 
 ## 主要历史主题
 
+- 上游错误分类、预算内重试、Client恢复与同次调用诊断：
+  [规划](2026-10-18_UPSTREAM_CLIENT_RECOVERY_PLAN.md) ·
+  [实施、API/SDK/双实例/dev验收与真实模型质量边界](2026-10-18_UPSTREAM_CLIENT_RECOVERY_PROGRESS.md)。
+
 - 证据版本固定与在线容量隔离：
   [规划](2026-10-18_EVIDENCE_SNAPSHOTS_ADMISSION_PLAN.md) ·
   [实施、外部 Client 契约、真实模型与开发栈验收](2026-10-18_EVIDENCE_SNAPSHOTS_ADMISSION_PROGRESS.md)。

@@ -134,7 +134,7 @@ class Acceptance:
         except OSError:
             return False
 
-    def start(self, database="rag_source"):
+    def start(self, database="rag_source", chat_attempts=1):
         environment = dict(self.environment, SERVER_PORT=str(self.http_port), SPRING_PROFILES_ACTIVE="postgresql",
                            SPRING_DATASOURCE_URL="jdbc:postgresql://127.0.0.1:" + str(self.db_port) + "/" + database,
                            SPRING_DATASOURCE_USERNAME="postgres", SPRING_DATASOURCE_PASSWORD="postgres",
@@ -148,7 +148,7 @@ class Acceptance:
         self.service = subprocess.Popen(["java", "-cp", self.classpath, "com.springairag.core.SpringAiRagApplication",
                                          "--rag.admission.max-embedding-calls=2", "--rag.admission.max-background-embedding-calls=4",
                                          "--rag.admission.max-rerank-calls=1", "--rag.admission.dependency-timeout-ms=3000",
-                                         "--rag.admission.background-embedding-timeout-ms=6000", "--rag.retry.max-attempts=1",
+                                         "--rag.admission.background-embedding-timeout-ms=6000", "--rag.retry.max-attempts=" + str(chat_attempts),
                                          "--rag.embedding-jobs.poll-interval-ms=10000", "--rag.embedding-jobs.lease-seconds=30",
                                          "--rag.rerank.enabled=true", "--rag.rerank.provider=http",
                                          "--rag.rerank.base-url=" + self.provider, "--rag.rerank.api-key=fixture-key",

@@ -145,7 +145,7 @@ class RagChatServiceLegacyFailoverTest {
     private ChatModel failingModel(String message) {
         ChatModel model = mock(ChatModel.class);
         when(model.call(any(Prompt.class)))
-                .thenThrow(new RuntimeException(message));
+                .thenThrow(new org.springframework.ai.retry.TransientAiException(message));
         return model;
     }
 
@@ -166,6 +166,7 @@ class RagChatServiceLegacyFailoverTest {
     @Test
     void firstCandidateFailureFallsBackToSecondCandidate() {
         ChatModel failing = failingModel("boom-A");
+        when(failing.call(any(Prompt.class))).thenThrow(new org.springframework.ai.retry.TransientAiException("boom-A"));
         ChatModel answering = answeringModel("fallback");
         when(chatModelRouter.orderedCandidateDescriptors("m"))
                 .thenReturn(List.of(candidate("m-a", failing),
@@ -229,6 +230,7 @@ class RagChatServiceLegacyFailoverTest {
         ragProperties.getCircuitBreaker().setMinimumNumberOfCalls(1);
         ragProperties.getCircuitBreaker().setFailureRateThreshold(1);
         ChatModel failing = failingModel("boom-A");
+        when(failing.call(any(Prompt.class))).thenThrow(new org.springframework.ai.retry.TransientAiException("boom-A"));
         when(chatModelRouter.orderedCandidateDescriptors("m"))
                 .thenReturn(List.of(candidate("m-a", failing)));
         // 14 参构造器委托路径。

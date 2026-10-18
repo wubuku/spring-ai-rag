@@ -239,7 +239,7 @@ public class ChatExecutionService {
                     Supplier<ChatClientResponse> retried = withRetries(
                             candidateInvocation(
                                     request, candidate, baseline,
-                                    selectedSummary, successfulAttempt));
+                                    selectedSummary, successfulAttempt), request.executionBudget());
                     ChatClientResponse response = sessionCoordinator != null
                             ? sessionCoordinator.invokeWithinDeadline(
                                     lease, retried)
@@ -256,6 +256,7 @@ public class ChatExecutionService {
                     recordCandidateFailure(
                             startedAt, index, candidates.size(),
                             candidate.ref(), e, "Chat candidate");
+                    if (!com.springairag.core.resilience.UpstreamFailureClassifier.dependencyFailure(e)) throw e;
                 }
             }
             if (lastFailure != null) {
@@ -303,7 +304,7 @@ public class ChatExecutionService {
                 Supplier<ChatClientResponse> retried = withRetries(
                         candidateInvocation(
                                 request, candidate, baseline,
-                                selectedSummary, successfulAttempt));
+                                selectedSummary, successfulAttempt), request.executionBudget());
                 ChatClientResponse response =
                         sessionCoordinator != null && lease != null
                                 ? sessionCoordinator.invokeWithinDeadline(
@@ -321,6 +322,7 @@ public class ChatExecutionService {
                 recordCandidateFailure(
                         startedAt, index, candidates.size(),
                         candidate.ref(), error, "Durable Chat candidate");
+                if (!com.springairag.core.resilience.UpstreamFailureClassifier.dependencyFailure(error)) throw error;
             }
         }
         if (lastFailure != null) {
@@ -371,9 +373,12 @@ public class ChatExecutionService {
     }
 
     private Supplier<ChatClientResponse> withRetries(
-            Supplier<ChatClientResponse> invocation) {
+            Supplier<ChatClientResponse> invocation, ChatExecutionBudget budget) {
         return () -> retryTemplate != null
-                ? retryTemplate.execute(context -> invocation.get())
+                ? retryTemplate.execute(context -> {
+                    context.setAttribute(com.springairag.core.config.UpstreamBackOffPolicy.DEADLINE_ATTRIBUTE, budget.deadline());
+                    return invocation.get();
+                })
                 : invocation.get();
     }
 
@@ -389,7 +394,7 @@ public class ChatExecutionService {
         }
         log.warn("{} {}/{} failed ({}): {}",
                 logLabel, index + 1, candidateCount, candidateRef,
-                failure.getMessage());
+                com.springairag.core.resilience.UpstreamFailureClassifier.safeMessage(failure));
         return failure;
     }
 
@@ -594,12 +599,13 @@ public class ChatExecutionService {
         return attempt.switchOnFirst((signal, flux) -> {
             boolean hasEvent = signal.hasValue();
             if (!hasEvent && signal.isOnError()
-                    && !(reactor.core.Exceptions.unwrap(signal.getThrowable()) instanceof RagException)
+                    && com.springairag.core.resilience.UpstreamFailureClassifier.dependencyFailure(
+                            reactor.core.Exceptions.unwrap(signal.getThrowable()))
                     && index + 1 < candidates.size()) {
                 log.warn("Streaming chat candidate {}/{} failed before first event ({}), trying fallback",
                         index + 1, candidates.size(), candidate.ref(),
                         signal.getThrowable() != null
-                                ? signal.getThrowable().getMessage()
+                                ? com.springairag.core.resilience.UpstreamFailureClassifier.safeMessage(signal.getThrowable())
                                 : "unknown error");
                 return streamCandidates(
                         command, baseline, selectedSummary,
@@ -643,7 +649,8 @@ public class ChatExecutionService {
             Duration remaining = Duration.between(
                     java.time.Instant.now(), lease.deadline());
             streamResponses = streamResponses.timeout(
-                    remaining.isPositive() ? remaining : Duration.ofMillis(1));
+                    remaining.isPositive() ? remaining : Duration.ofMillis(1),
+                    Flux.error(new RagException(ErrorCode.CHAT_TIMEOUT, "Chat stream deadline exhausted")));
         }
         final Flux<ChatClientResponse> responses = streamResponses;
 
@@ -1255,6 +1262,8 @@ public class ChatExecutionService {
             }
         }
         metadata.put("evidenceAssessment", assessment);
+        metadata.put("answerOutcome", com.springairag.api.dto.AnswerOutcome.from(modelSafetyRefusal, assessment, finishReason));
+        com.springairag.core.evaluation.EvaluationDiagnosticCapture.modelAnswer(modelAnswer, validation);
         metadata.put(
                 "citationRegistry",
                 attempt.retrievalContext().trace().citationRegistryMetadata(sources));

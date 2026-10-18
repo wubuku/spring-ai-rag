@@ -80,6 +80,8 @@ public class ErrorResponse {
     @Schema(description = "Stable client-facing failure classification", example = "CLIENT_REQUEST")
     private FailureClass failureClass;
 
+    private FailureDetails failureDetails;
+
     /** Default problem type URI prefix */
     private static final String PROBLEM_TYPE_PREFIX = "https://springairag.dev/problems/";
 
@@ -291,6 +293,8 @@ public class ErrorResponse {
     public String getPath() { return path; }
     public String getTraceId() { return traceId; }
     public FailureClass getFailureClass() { return failureClass; }
+    public FailureDetails getFailureDetails() { return failureDetails; }
+    public void setFailureDetails(FailureDetails failureDetails) { this.failureDetails = failureDetails; }
 
     public void setType(String type) { this.type = type; }
     public void setTitle(String title) { this.title = title; }
@@ -319,14 +323,15 @@ public class ErrorResponse {
                 Objects.equals(message, that.message) &&
                 Objects.equals(path, that.path) &&
                 Objects.equals(traceId, that.traceId) &&
-                Objects.equals(failureClass, that.failureClass);
+                Objects.equals(failureClass, that.failureClass) &&
+                Objects.equals(failureDetails, that.failureDetails);
     }
 
     @Override
     public int hashCode() {
         // timestamp intentionally excluded
         return Objects.hash(type, title, status, detail, instance, error, message, path,
-                traceId, failureClass);
+                traceId, failureClass, failureDetails);
     }
 
     @Override

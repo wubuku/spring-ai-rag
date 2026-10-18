@@ -186,6 +186,7 @@ public class GlobalExceptionHandler {
                 .build();
         body.setTitle(code.getTitle());
         body.setTraceId(requestTraceId(request));
+        body.setFailureDetails(com.springairag.core.resilience.UpstreamFailureClassifier.classify(e));
         ResponseEntity.BodyBuilder builder = ApiKeyRotationHttpPolicy.apply(
                         ResponseEntity.status(code.getHttpStatus()),
                         request)
@@ -230,6 +231,7 @@ public class GlobalExceptionHandler {
         // Set human-readable title without triggering the builder's title() side effect
         body.setTitle(code.getTitle());
         body.setTraceId(requestTraceId(request));
+        body.setFailureDetails(com.springairag.core.resilience.UpstreamFailureClassifier.classify(e));
         ResponseEntity.BodyBuilder builder = ApiKeyRotationHttpPolicy.apply(
                         ResponseEntity.status(code.getHttpStatus()),
                         request)
@@ -251,6 +253,8 @@ public class GlobalExceptionHandler {
         // Exception messages may contain internal paths, SQL errors, etc.; desensitize before returning to user
         String rawMessage = e.getMessage() != null ? e.getMessage() : "Unknown error";
         String safeMessage = SensitiveDataMaskingConverter.maskSensitiveData(rawMessage);
+        var details = com.springairag.core.resilience.UpstreamFailureClassifier.classify(e);
+        if ("UPSTREAM".equals(details.origin())) safeMessage = "Model provider request failed: " + details.reason();
         // Batch 920. The status is named in the line rather than left implicit.
         // It used to read `Request failed: {message}` and nothing else — and for
         // a provider that answers 401, the *message* begins with `401 - {…}`,
@@ -266,9 +270,11 @@ public class GlobalExceptionHandler {
         // would tell an API client its own key is bad when it is not. Whether
         // upstream failures deserve 502/503 instead is a contract question
         // tracked in the ledger rather than decided here.
-        log.error("Request failed: status={}, detail={}",
-                HttpStatus.INTERNAL_SERVER_ERROR.value(), safeMessage, e);
-        return buildResponse(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", safeMessage, request);
+        if ("UPSTREAM".equals(details.origin())) log.error("Request failed: status={}, detail={}", 500, safeMessage);
+        else log.error("Request failed: status={}, detail={}", 500, safeMessage, e);
+        ResponseEntity<ErrorResponse> response = buildResponse(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", safeMessage, request);
+        response.getBody().setFailureDetails(com.springairag.core.resilience.UpstreamFailureClassifier.classify(e));
+        return response;
     }
 
     // ==================== Helper ====================

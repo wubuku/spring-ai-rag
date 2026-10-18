@@ -664,7 +664,7 @@ class ChatExecutionServiceTest {
             HttpToolExecutionState.ResponseReservation reservation =
                     state.reserveUpTo(80);
             state.commit(reservation, 60);
-            throw new IllegalStateException("primary unavailable");
+            throw new org.springframework.ai.retry.TransientAiException("primary unavailable");
         });
         when(succeeded.spec().toolContext(any())).thenAnswer(invocation -> {
             fallbackToolContext.set(invocation.getArgument(0));
@@ -727,7 +727,7 @@ class ChatExecutionServiceTest {
         AuthorizedRetrievalContext primaryContext = context();
         AuthorizedRetrievalContext fallbackContext = context();
         StreamClientFixture failed = streamClientFixture(
-                Flux.error(new IllegalStateException("primary unavailable")));
+                Flux.error(new org.springframework.ai.retry.TransientAiException("primary unavailable")));
         StreamClientFixture succeeded = streamClientFixture(
                 Flux.just(streamResponse("fallback answer", Map.of())));
         when(modelRouter.orderedCandidateDescriptors(isNull()))

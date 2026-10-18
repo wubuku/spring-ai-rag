@@ -65,8 +65,10 @@ The native object response has Cache-Control:no-store, version checksum, case/va
 HTTP200 with status=FAILED is a failed diagnostic result, not successful model execution; validation/permission errors retain existing error envelopes.
 Capture includes lastInvocationMessages from the actual last model call, final answer, evidence from advisor DOCUMENT_CONTEXT and
 client sourceProjections. Projections are not full evidence. No actual prompt means capture cannot be complete.
-Prompt/answer are each32KiB UTF-8; evidence and source projections each allow16 items of4KiB. Text totals at most192KiB;
-JSON escaping may expand it. Redaction/truncation is explicit; complete requires prompt, answer and evidence without either condition.
+Same-call pre-safety modelAnswer, answerOutcome and citationValidation are additive; answer remains the delivered text.
+See [upstream/client recovery](upstream-client-recovery.md). Prompt/modelAnswer/answer are each32KiB UTF-8;
+evidence and source projections each allow16 items of4KiB. Text totals at most224KiB;
+JSON escaping may expand it. Redaction/truncation is explicit; complete requires prompt, modelAnswer, answer and evidence without either condition.
 No body is written to Evaluation case metrics or a new historical store. Existing usage/trace retention and erasure still apply.
 
 ## Private Recording And Offline Replay

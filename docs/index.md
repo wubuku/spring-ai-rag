@@ -1,5 +1,7 @@
 # Documentation Index
 
+Upstream failures and recovery: [classification, retry decisions and client outcomes](upstream-client-recovery.md).
+
 Additive capabilities: [trustworthy assertions, active diagnostics and offline quality admission](trustworthy-evaluation-admission.md); existing API contracts and ordinary Chat evaluation costs are unchanged.
 
 > 📖 [English](index.md) · 📖 [中文](index-zh-CN.md)

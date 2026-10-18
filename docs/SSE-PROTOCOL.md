@@ -8,6 +8,11 @@
 
 ## 1. 协议边界
 
+错误对象增量提供低敏 `failureDetails`；正常终态的 Native metadata/OpenAI rag 增量提供
+`answerOutcome`，区分安全拒答、证据兜底、截断和缺模型结束信号。旧事件顺序和错误码不变，
+HTTP 200 不能独立证明 SSE 成功；已发部分文本不得与重试结果自动拼接。
+字段与恢复语义见[上游故障与 Client 恢复](upstream-client-recovery-zh-CN.md)。
+
 来源的可选 `evidenceSnapshot` 记录检索版本和最终完整证据 digest，字段定义见
 [REST API](rest-api-zh-CN.md#证据版本快照与容量错误)。版本冲突发出
 `EVIDENCE_SNAPSHOT_CONFLICT` 错误而非成功 `done`，不提交成功历史；已发文本不可撤回。

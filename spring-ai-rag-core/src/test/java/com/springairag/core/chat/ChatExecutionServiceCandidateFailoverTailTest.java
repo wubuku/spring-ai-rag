@@ -111,7 +111,7 @@ class ChatExecutionServiceCandidateFailoverTailTest {
         when(spec.system(anyString())).thenReturn(spec);
         when(spec.user(anyString())).thenReturn(spec);
         when(spec.advisors(any(Consumer.class))).thenReturn(spec);
-        when(spec.call()).thenThrow(new IllegalStateException(reason));
+        when(spec.call()).thenThrow(new org.springframework.ai.retry.TransientAiException(reason));
         return client;
     }
 
@@ -158,6 +158,19 @@ class ChatExecutionServiceCandidateFailoverTailTest {
     }
 
     @Test
+    void unknownFailureDoesNotCallFallback() {
+        var primary = candidate("provider/primary");
+        var fallback = candidate("provider/fallback");
+        when(modelRouter.orderedCandidateDescriptors(isNull())).thenReturn(List.of(primary, fallback));
+        ChatClient client = failingClient("temporary");
+        var spec = client.prompt();
+        org.mockito.Mockito.doThrow(new IllegalStateException("application bug")).when(spec).call();
+        stubFactory(primary, client);
+        assertThrows(IllegalStateException.class, () -> service.execute(command(ChatMode.PLAIN)));
+        org.mockito.Mockito.verify(clientFactory, org.mockito.Mockito.never()).create(any(), eq(fallback), anyList());
+    }
+
+    @Test
     void firstCandidateFailureFallsOverToSecondCandidate() {
         var primary = candidate("provider/primary");
         var fallback = candidate("provider/fallback");
@@ -182,7 +195,7 @@ class ChatExecutionServiceCandidateFailoverTailTest {
         stubFactory(primary, failingClient("first down"));
         stubFactory(fallback, failingClient("second down"));
 
-        var error = assertThrows(IllegalStateException.class,
+        var error = assertThrows(org.springframework.ai.retry.TransientAiException.class,
                 () -> service.execute(command(ChatMode.KNOWLEDGE)));
 
         assertEquals("second down", error.getMessage());

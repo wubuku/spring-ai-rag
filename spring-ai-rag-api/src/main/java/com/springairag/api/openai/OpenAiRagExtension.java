@@ -21,7 +21,13 @@ public record OpenAiRagExtension(
         Map<String, Object> citationRegistry,
         @JsonInclude(JsonInclude.Include.NON_EMPTY)
         Map<String, Object> collectionCoverage,
-        Boolean modelSafetyRefusal) {
+        Boolean modelSafetyRefusal,
+        com.springairag.api.dto.AnswerOutcome answerOutcome) {
+
+    public OpenAiRagExtension(String traceId, EvidenceAssessment assessment, List<OpenAiRagSource> sources,
+                              Map<String, Object> registry, Map<String, Object> coverage, Boolean safetyRefusal) {
+        this(traceId, assessment, sources, registry, coverage, safetyRefusal, null);
+    }
 
     public OpenAiRagExtension(
             String traceId,

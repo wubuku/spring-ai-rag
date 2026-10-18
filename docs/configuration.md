@@ -1184,6 +1184,15 @@ rag:
 
 ## LLM API Timeout Configuration
 
+Chat uses [shared failure decisions](upstream-client-recovery.md#reasons-and-execution-decisions) by default:
+only explicit transient upstream failures enter existing retry/fallback budgets. Unknown errors, permanent
+rejections and normal safety refusals are not automatically retried. Default OpenAI/Anthropic/MiniMax and configured OpenAI/Anthropic
+synchronous transports explicitly use a request factory without automatic HTTP-status retries, and Spring AI
+model-internal retry is single-attempt to preserve application attempt, cost and deadline limits.
+Existing connection/read timeouts and proxy configuration remain applicable; Python/Node examples also disable
+SDK retries. Bounded Retry-After seconds or HTTP dates are capped at10 seconds. A requested wait reaching the
+configured bound or exceeding remaining time ends execution rather than retrying early. No new switch or migration.
+
 ```yaml
 rag:
   timeout:

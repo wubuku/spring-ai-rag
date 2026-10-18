@@ -186,6 +186,9 @@ String answer = body.path("answer").asText();
 
 ## 5. 错误动作映射
 
+新增详细原因与保守恢复决策见[上游故障与Client恢复](upstream-client-recovery-zh-CN.md)；
+示例关闭SDK默认自动重试，临时故障不等于请求可以安全重放。
+
 | 信号 | 默认 Client 动作 |
 |---|---|
 | `RATE_LIMITED` + `Retry-After` | 有界退避后重试 |

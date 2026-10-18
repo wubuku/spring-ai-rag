@@ -671,6 +671,8 @@ public class RagChatController {
         Map<String, Object> errorPayload = new LinkedHashMap<>();
         errorPayload.put("message", error.getMessage() != null
                 ? error.getMessage() : "Chat stream failed");
+        var details = com.springairag.core.resilience.UpstreamFailureClassifier.classify(error);
+        if ("UPSTREAM".equals(details.origin())) errorPayload.put("message", "Model provider request failed: " + details.reason());
         String errorCode = null;
         if (error instanceof ChatStreamFailure failure
                 && failure.code != null) {
@@ -681,6 +683,7 @@ public class RagChatController {
             errorPayload.put("code", errorCode);
         }
         errorPayload.put("failureClass", failureClassForCode(errorCode).name());
+        errorPayload.put("failureDetails", com.springairag.core.resilience.UpstreamFailureClassifier.classify(error));
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("error", errorPayload);
         putIfPresent(payload, "traceId", traceId);

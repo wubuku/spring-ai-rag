@@ -90,6 +90,7 @@ class Acceptance(QUALITY.BASE.Acceptance):
         LIB.private_json(self.directory / 'capture-response.json', report)
         assert capture['complete'] and capture['lastInvocationMessages'] and capture['evidence'] and capture['sourceProjections'], {key: capture.get(key) for key in ('complete', 'truncated', 'redacted')}
         assert '48' in capture['answer'] and any('48' in item['text'] for item in capture['evidence'])
+        assert '48' in capture['modelAnswer'] and capture['answerOutcome']['status'] == 'ANSWER'
         assert any('48' in item['content'] for item in capture['lastInvocationMessages']), 'captured query rewrite instead of final grounded prompt'
         assert self.sql('SELECT count(*) FROM rag_evaluation_case_results') == before, 'diagnostic wrote case metrics'
         assert self.sql("SELECT count(*) FROM rag_evaluation_case_results WHERE metrics::text LIKE '%lastInvocationMessages%' OR metrics::text LIKE '%matchedText%'") == '0'

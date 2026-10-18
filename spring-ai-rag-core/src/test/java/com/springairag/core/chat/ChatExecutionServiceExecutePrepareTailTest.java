@@ -353,7 +353,7 @@ class ChatExecutionServiceExecutePrepareTailTest {
         ChatModelRouter.ChatModelCandidate first = candidate("first", true);
         ModeAwareChatClientFactory.Attempt firstAttempt =
                 new ModeAwareChatClientFactory.Attempt(
-                        brokenClient(new IllegalStateException("首个候选失败")),
+                        brokenClient(new org.springframework.ai.retry.TransientAiException("首个候选失败")),
                         first, context(), null);
         stubCandidates(List.of(first, candidate("second", true)));
         when(clientFactory.create(any(), same(first), anyList()))
@@ -372,7 +372,7 @@ class ChatExecutionServiceExecutePrepareTailTest {
         ChatModelRouter.ChatModelCandidate healthy = candidate("healthy", true);
         ModeAwareChatClientFactory.Attempt brokenAttempt =
                 new ModeAwareChatClientFactory.Attempt(
-                        brokenClient(new IllegalStateException("掉线")),
+                        brokenClient(new org.springframework.ai.retry.TransientAiException("掉线")),
                         broken, context(), null);
         ModeAwareChatClientFactory.Attempt healthyAttempt =
                 new ModeAwareChatClientFactory.Attempt(
@@ -493,7 +493,7 @@ class ChatExecutionServiceExecutePrepareTailTest {
         ModeAwareChatClientFactory.Attempt brokenAttempt =
                 new ModeAwareChatClientFactory.Attempt(
                         streamingClient(Flux.error(
-                                new IllegalStateException("流式掉线"))),
+                                new org.springframework.ai.retry.TransientAiException("流式掉线"))),
                         broken, context(), null);
         ModeAwareChatClientFactory.Attempt healthyAttempt =
                 new ModeAwareChatClientFactory.Attempt(

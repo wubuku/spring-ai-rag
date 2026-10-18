@@ -329,9 +329,7 @@ public class RagChatService {
                 }
                 return toChatResponse(result);
             } catch (RuntimeException e) {
-                if (circuitBreaker != null) {
-                    circuitBreaker.recordFailure();
-                }
+                recordCircuitFailure(e);
                 throw e;
             }
         }
@@ -364,25 +362,31 @@ public class RagChatService {
                     "Mode-aware chat execution is not configured"));
         }
         assertCircuitBreakerAllowsCall();
-        ChatCommand command = attachDiagnostics(
-                chatCommandMapper.map(
-                        request,
-                        scope,
-                        ChatPrincipal.fromCurrentRequest()),
-                request,
-                scope,
-                session);
-        return modeAwareExecutionService.stream(command)
+        try {
+            ChatCommand command = attachDiagnostics(
+                    chatCommandMapper.map(
+                            request,
+                            scope,
+                            ChatPrincipal.fromCurrentRequest()),
+                    request,
+                    scope,
+                    session);
+            return modeAwareExecutionService.stream(command)
                 .doOnComplete(() -> {
                     if (circuitBreaker != null) {
                         circuitBreaker.recordSuccess();
                     }
                 })
                 .doOnError(error -> {
-                    if (circuitBreaker != null) {
-                        circuitBreaker.recordFailure();
-                    }
+                    recordCircuitFailure(error);
+                })
+                .doOnCancel(() -> {
+                    if (circuitBreaker != null) circuitBreaker.recordIgnored();
                 });
+        } catch (RuntimeException error) {
+            recordCircuitFailure(error);
+            throw error;
+        }
     }
 
     public Flux<ChatEvent> chatEvents(ChatRequest request) {
@@ -456,8 +460,6 @@ public class RagChatService {
     private ChatResponse executeChat(String userMessage, String sessionId, String domainId,
             Map<String, Object> metadata, String model,
             RetrievalScope scope, int maxResults) {
-        assertCircuitBreakerAllowsCall();
-
         String systemPrompt = buildSystemPrompt(domainId, metadata);
         String finalMessage = customizeUserMessage(userMessage, metadata);
         final RetrievalScope finalScope = scope != null ? scope : RetrievalScope.unscoped();
@@ -473,6 +475,7 @@ public class RagChatService {
                                 executionBudget,
                                 LlmInvocationPurpose.CHAT))
                         .toList();
+        assertCircuitBreakerAllowsCall();
         RuntimeException lastFailure = null;
 
         for (int i = 0; i < clients.size(); i++) {
@@ -508,7 +511,7 @@ public class RagChatService {
                                     : null));
                     return invokeChatClient(s, System.currentTimeMillis());
                 };
-                LlmCallResult callResult = invokeWithRetry(llmCall);
+                LlmCallResult callResult = invokeWithRetry(llmCall, executionBudget);
 
                 if (metricsService != null) {
                     metricsService.recordSuccess(callResult.elapsedMs, 0);
@@ -531,6 +534,7 @@ public class RagChatService {
                 throw e;
             } catch (RuntimeException e) {
                 lastFailure = e;
+                if (!com.springairag.core.resilience.UpstreamFailureClassifier.dependencyFailure(e)) throw e;
                 log.warn("Chat model candidate {}/{} failed after retries: {} — trying next fallback if any",
                         attemptIndex + 1, clients.size(), e.getMessage());
             }
@@ -546,6 +550,12 @@ public class RagChatService {
      * Applies the provider execution gate without affecting operation replay.
      * Durable Chat adapters call this only after an operation claim exists.
      */
+    private void recordCircuitFailure(Throwable error) {
+        if (circuitBreaker == null) return;
+        if (com.springairag.core.resilience.UpstreamFailureClassifier.dependencyFailure(error)) circuitBreaker.recordFailure();
+        else circuitBreaker.recordIgnored();
+    }
+
     public void assertCircuitBreakerAllowsCall() {
         if (circuitBreaker != null && !circuitBreaker.allowCall()) {
             log.warn("LLM circuit breaker is OPEN, rejecting request");
@@ -652,9 +662,14 @@ public class RagChatService {
      * Falls back to direct call if RetryTemplate is not available.
      */
     private LlmCallResult invokeWithRetry(Supplier<LlmCallResult> llmCall) {
+        return invokeWithRetry(llmCall, null);
+    }
+
+    private LlmCallResult invokeWithRetry(Supplier<LlmCallResult> llmCall, ChatExecutionBudget budget) {
         if (retryTemplate != null) {
             try {
                 return retryTemplate.execute(status -> {
+                    if (budget != null) status.setAttribute(UpstreamBackOffPolicy.DEADLINE_ATTRIBUTE, budget.deadline());
                     int attempt = status.getRetryCount() + 1;
                     if (attempt > 1) {
                         log.info("LLM call retry attempt {}", attempt);
@@ -690,9 +705,7 @@ public class RagChatService {
             if (metricsService != null) {
                 metricsService.recordFailure(elapsed);
             }
-            if (circuitBreaker != null) {
-                circuitBreaker.recordFailure();
-            }
+            recordCircuitFailure(e);
             throw e;
         }
     }

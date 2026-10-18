@@ -30,6 +30,11 @@ relevant evergreen guide/reference, `docs/TODO*`, and the
 
 ## Main Historical Topics
 
+- Upstream failure classification, budgeted retries, Client recovery, and same-call diagnostics:
+  [plan](2026-10-18_UPSTREAM_CLIENT_RECOVERY_PLAN.md) and
+  [implementation, API/SDK/two-node/dev acceptance, and real-model quality limits](2026-10-18_UPSTREAM_CLIENT_RECOVERY_PROGRESS.md)
+  (Chinese).
+
 - Evidence snapshots and online capacity isolation:
   [plan](2026-10-18_EVIDENCE_SNAPSHOTS_ADMISSION_PLAN.md) ·
   [implementation, external Client contracts, real models, and development-stack acceptance](2026-10-18_EVIDENCE_SNAPSHOTS_ADMISSION_PROGRESS.md) (Chinese).

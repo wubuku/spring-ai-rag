@@ -15,6 +15,40 @@ import static org.junit.jupiter.api.Assertions.*;
 class RetryConfigTest {
 
     @Test
+    void persistentTransientFailureStopsAtConfiguredAttempts() {
+        var properties = new RagRetryProperties();
+        properties.setMaxAttempts(3);
+        properties.setInitialBackoffMs(1);
+        properties.setMaxBackoffMs(2);
+        var template = new RetryConfig(properties).retryTemplate();
+        var attempts = new AtomicInteger();
+        assertThrows(org.springframework.ai.retry.TransientAiException.class, () -> template.execute(context -> {
+            if (attempts.incrementAndGet() > 3) throw new AssertionError("Retry exceeded configured attempts");
+            throw new org.springframework.ai.retry.TransientAiException("unavailable");
+        }));
+        assertEquals(3, attempts.get());
+    }
+
+    @Test
+    void differentTransientReasonsShareOneAttemptLimit() {
+        var properties = new RagRetryProperties();
+        properties.setMaxAttempts(3);
+        properties.setInitialBackoffMs(1);
+        properties.setMaxBackoffMs(2);
+        var template = new RetryConfig(properties).retryTemplate();
+        var attempts = new AtomicInteger();
+        assertThrows(org.springframework.web.client.ResourceAccessException.class, () -> template.execute(context -> {
+            int attempt = attempts.incrementAndGet();
+            if (attempt > 3) throw new AssertionError("Retry reasons must not reset the attempt budget");
+            if (attempt == 1) throw new org.springframework.ai.retry.TransientAiException("unavailable");
+            if (attempt == 2) throw new org.springframework.web.client.HttpClientErrorException(
+                    org.springframework.http.HttpStatus.TOO_MANY_REQUESTS);
+            throw new org.springframework.web.client.ResourceAccessException("disconnected");
+        }));
+        assertEquals(3, attempts.get());
+    }
+
+    @Test
     void retryTemplateIsCreatedWithCorrectDefaults() {
         RagRetryProperties props = new RagRetryProperties();
         props.setEnabled(true);

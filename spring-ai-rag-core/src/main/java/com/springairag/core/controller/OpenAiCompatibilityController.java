@@ -587,7 +587,7 @@ public class OpenAiCompatibilityController {
                     prior == null ? List.of() : prior.sources(),
                     citationRegistry(completed.metadata(), prior),
                     collectionCoverage(completed.metadata(), prior),
-                    modelSafetyRefusal(completed.metadata()));
+                    modelSafetyRefusal(completed.metadata()), completed.finishReason());
             return Flux.just(toJson(
                     new OpenAiChatCompletionChunk(
                             id,
@@ -650,7 +650,7 @@ public class OpenAiCompatibilityController {
                 safeSources(result.sources()),
                 citationRegistry(result.metadata(), null),
                 collectionCoverage(result.metadata(), null),
-                modelSafetyRefusal(result.metadata()));
+                modelSafetyRefusal(result.metadata()), result.finishReason());
     }
 
     private OpenAiRagExtension rag(ChatResponse response) {
@@ -660,7 +660,7 @@ public class OpenAiCompatibilityController {
                 safeSources(response.getSources()),
                 citationRegistry(response.getMetadata(), null),
                 collectionCoverage(response.getMetadata(), null),
-                modelSafetyRefusal(response.getMetadata()));
+                modelSafetyRefusal(response.getMetadata()), response.getFinishReason());
     }
 
     private OpenAiRagExtension ragOrNull(
@@ -669,7 +669,7 @@ public class OpenAiCompatibilityController {
             List<OpenAiRagSource> sources,
             Map<String, Object> citationRegistry,
             Map<String, Object> collectionCoverage,
-            Boolean modelSafetyRefusal) {
+            Boolean modelSafetyRefusal, String finishReason) {
         if ((traceId == null || traceId.isBlank())
                 && assessment == null
                 && (sources == null || sources.isEmpty())
@@ -679,7 +679,8 @@ public class OpenAiCompatibilityController {
             return null;
         }
         return new OpenAiRagExtension(
-                traceId, assessment, sources, citationRegistry, collectionCoverage, modelSafetyRefusal);
+                traceId, assessment, sources, citationRegistry, collectionCoverage, modelSafetyRefusal,
+                com.springairag.api.dto.AnswerOutcome.from(Boolean.TRUE.equals(modelSafetyRefusal), assessment, finishReason));
     }
 
     private Boolean modelSafetyRefusal(Map<String, Object> metadata) {
@@ -789,13 +790,15 @@ public class OpenAiCompatibilityController {
                             ? "server_error"
                             : "invalid_request_error",
                     null,
-                    e.getErrorCodeEnum().getCode());
+                    e.getErrorCodeEnum().getCode()).withFailureDetails(
+                            com.springairag.core.resilience.UpstreamFailureClassifier.classify(error));
         }
         return OpenAiErrorResponse.of(
                 "The RAG service could not complete the streaming request",
                 "server_error",
                 null,
-                "service_unavailable");
+                "service_unavailable").withFailureDetails(
+                        com.springairag.core.resilience.UpstreamFailureClassifier.classify(error));
     }
 
     private String toJson(Object value) {

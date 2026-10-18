@@ -12,7 +12,17 @@ plus real Client JSON/SSE/SDK and HTTP rerank checks. Ordinary Chat does not sta
 See [Quality And Production Acceptance](quality-production-acceptance.md) for commands, attribution, costs and trust boundaries.
 Existing three-case smoke and single-node recovery entrypoints are unchanged; controlled success is not real-model quality.
 
+Temporary nodes with different default-provider configurations must not share the database of an active
+evaluation: every application instance may claim pending Evaluation tasks, and shutting down a temporary
+node interrupts tasks it owns. Wait for evaluation completion or use an isolated database for extra diagnostics.
+Retain orchestration-induced interruption records; do not attribute them to model quality or overwrite prior results.
+
 ## Dependency Resilience, Mixed Faults And Real Restore
+
+Run `python3 scripts/verify-upstream-recovery-e2e.py` first to verify legacy envelopes, additive classification,
+call counts, failed replay, Python/Node SDK recovery decisions and reservation release over real HTTP/PostgreSQL.
+Refusals must be normal results; partial streams must not masquerade as complete answers. Controlled faults
+do not replace repeated real embedding/LLM quality runs. See [Upstream Failures and Client Recovery](upstream-client-recovery.md).
 
 ```bash
 mvn clean compile test-compile

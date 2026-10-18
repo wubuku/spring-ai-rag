@@ -281,7 +281,7 @@ class RagChatServiceLegacyPathTailTest {
 
         BudgetedChatModel failing = mock(BudgetedChatModel.class);
         when(failing.call(any(Prompt.class)))
-                .thenThrow(new IllegalStateException("首选掉线"));
+                .thenThrow(new org.springframework.ai.retry.TransientAiException("首选掉线"));
         BudgetedChatModel healthy = mock(BudgetedChatModel.class);
         when(healthy.call(any(Prompt.class)))
                 .thenReturn(new ChatResponse(List.of(new Generation(

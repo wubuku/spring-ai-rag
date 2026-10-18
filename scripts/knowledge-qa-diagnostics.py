@@ -34,6 +34,9 @@ def replay(directory):
         return {'status': 'INCONCLUSIVE', 'reason': 'ASSERTION_ENGINE_OR_ARTIFACT_MISMATCH'}
     passed = report.get('status') == 'PASSED' and all(row['passed'] for row in results)
     return {'status': 'PASSED' if passed else 'FAILED', 'assertions': results,
+            'modelAssertions': [LIB.evaluate(rule, capture['modelAnswer']) for rule in case.get('assertions', [])]
+                if isinstance(capture.get('modelAnswer'), str) else None,
+            'answerOutcome': capture.get('answerOutcome'),
             'originalStatus': report.get('status'), 'networkCalls': 0, 'scope': 'LEXICAL_ASSERTIONS_AND_ORIGINAL_HARD_GATE'}
 
 

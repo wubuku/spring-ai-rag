@@ -6,6 +6,8 @@
 
 # REST API 参考
 
+错误原因、重试与回答结果的增量契约见[上游故障与Client恢复](upstream-client-recovery-zh-CN.md)。
+
 📖 [English](rest-api.md) · 📖 [中文](rest-api-zh-CN.md)
 
 > 启动后可通过 `/swagger-ui.html` 访问 Swagger UI。

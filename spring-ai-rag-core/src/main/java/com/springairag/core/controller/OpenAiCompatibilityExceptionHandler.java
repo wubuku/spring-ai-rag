@@ -60,7 +60,8 @@ public class OpenAiCompatibilityExceptionHandler {
                                 ? "server_error"
                                 : "invalid_request_error",
                         null,
-                        error.getErrorCodeEnum().getCode()));
+                        error.getErrorCodeEnum().getCode()).withFailureDetails(
+                                com.springairag.core.resilience.UpstreamFailureClassifier.classify(error)));
     }
 
     @ExceptionHandler(SecurityException.class)
@@ -94,7 +95,8 @@ public class OpenAiCompatibilityExceptionHandler {
                         "The RAG service is temporarily unavailable",
                         "server_error",
                         null,
-                        "service_unavailable"));
+                        "service_unavailable").withFailureDetails(
+                                com.springairag.core.resilience.UpstreamFailureClassifier.classify(error)));
     }
 
     private ResponseEntity.BodyBuilder errorResponse(int status, String errorCode) {

@@ -19,6 +19,13 @@ See [quality acceptance](quality-production-acceptance.md) and the
 
 ## Dependency And Backup/Restore Acceptance
 
+Run `python3 scripts/verify-upstream-recovery-e2e.py` for upstream failure and Client recovery acceptance.
+It builds the service and owns isolated PostgreSQL/HTTP-provider fixtures, covering Native/OpenAI JSON/SSE,
+400/401/403/429/503/504, deadlines, malformed responses, refusal, missing finish signals, failed replay and both
+real SDKs. Actual provider-call counts detect framework/transport/SDK implicit retries. Serialize it with all
+other Maven builds. Passing this controlled gate is not real-model quality evidence;
+see [the dedicated guide](upstream-client-recovery.md).
+
 ```bash
 python3 scripts/test-support/rag-backup-self-test.py
 python3 scripts/verify-dependency-recovery-e2e.py

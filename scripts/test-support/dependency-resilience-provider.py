@@ -29,11 +29,13 @@ def main():
         def log_message(self, *_args):
             pass
 
-        def send_json(self, status, body):
+        def send_json(self, status, body, retry_after=None):
             encoded = json.dumps(body).encode()
             self.send_response(status)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(encoded)))
+            if retry_after is not None:
+                self.send_header("Retry-After", str(retry_after))
             self.end_headers()
             self.wfile.write(encoded)
 
@@ -61,7 +63,7 @@ def main():
             if self.path.startswith("/control/"):
                 kind = self.path.split("/")[-1]
                 with lock:
-                    for name in ("delayMs", "status", "disconnect"):
+                    for name in ("delayMs", "status", "disconnect", "retryAfter", "dropStreamTail", "badJson"):
                         if name in body:
                             state[kind][name] = body[name]
                     if kind == "chat":
@@ -90,7 +92,13 @@ def main():
                     self.close_connection = True
                     return
                 if fault["status"] != 200:
-                    self.send_json(fault["status"], {"error": {"message": "controlled dependency failure"}})
+                    self.send_json(fault["status"], {"error": {"message": "controlled dependency failure"}}, fault.get("retryAfter"))
+                elif fault.get("badJson"):
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json")
+                    self.send_header("Content-Length", "8")
+                    self.end_headers()
+                    self.wfile.write(b"not-json")
                 elif kind == "embeddings":
                     inputs = body.get("input", [])
                     inputs = inputs if isinstance(inputs, list) else [inputs]
@@ -138,6 +146,10 @@ def main():
                             frame = dict(common, object="chat.completion.chunk",
                                          choices=[{"index": 0, "delta": delta, "finish_reason": finish}])
                             self.wfile.write(("data: " + json.dumps(frame) + "\n\n").encode())
+                            if fault.get("dropStreamTail"):
+                                self.wfile.flush()
+                                self.close_connection = True
+                                return
                         self.wfile.write(b"data: [DONE]\n\n")
                         self.wfile.flush()
                     else:

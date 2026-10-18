@@ -192,7 +192,7 @@ class ChatExecutionServiceStreamTailTest {
                 candidate("snap-b", true);
         AtomicInteger created = new AtomicInteger();
         StreamClientFixture failed = streamClientFixture(
-                Flux.error(new IllegalStateException("snap-a down")));
+                Flux.error(new org.springframework.ai.retry.TransientAiException("snap-a down")));
         StreamClientFixture ok = streamClientFixture(Flux.just(
                 streamResponse("from-snapshot", Map.of())));
         // 快照候选经 resolveCandidateRequired 逐一解析。

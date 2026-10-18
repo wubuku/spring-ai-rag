@@ -55,6 +55,7 @@ cp examples/client-sdk/node/package.json "$run_dir/node/package.json"
 cp examples/client-sdk/node/package-lock.json "$run_dir/node/package-lock.json"
 npm ci --prefix "$run_dir/node" --ignore-scripts --no-audit --no-fund >/dev/null
 cp examples/client-sdk/node/chat-completion.mjs "$run_dir/node/chat-completion.mjs"
+cp examples/client-sdk/node/recovery.mjs "$run_dir/node/recovery.mjs"
 
 sdk_env=(
   "RAG_BASE_URL=$base_url"

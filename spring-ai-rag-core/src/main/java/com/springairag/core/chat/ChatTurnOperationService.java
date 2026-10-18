@@ -589,7 +589,8 @@ public class ChatTurnOperationService {
                     "errorSnapshotVersion", 1,
                     "httpStatus", code.getHttpStatus(),
                     "errorCode", code.getCode(),
-                    "retryable", false));
+                    "retryable", false,
+                    "failureDetails", com.springairag.core.resilience.UpstreamFailureClassifier.classify(error)));
         } catch (Exception e) {
             payload = "{\"errorSnapshotVersion\":1,\"httpStatus\":500,"
                     + "\"errorCode\":\"INTERNAL_ERROR\",\"retryable\":false}";
@@ -1043,6 +1044,14 @@ public class ChatTurnOperationService {
             code = ErrorCode.valueOf(operation.errorCode());
         } catch (Exception e) {
             code = ErrorCode.INTERNAL_ERROR;
+        }
+        try {
+            var snapshot = objectMapper.readTree(operation.errorPayload());
+            if (snapshot.hasNonNull("failureDetails")) {
+                return new com.springairag.core.resilience.ClassifiedRagException(code,
+                        objectMapper.treeToValue(snapshot.get("failureDetails"), com.springairag.api.dto.FailureDetails.class));
+            }
+        } catch (Exception ignored) {
         }
         return new RagException(code, "The Chat turn previously failed");
     }

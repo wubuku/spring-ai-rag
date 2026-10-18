@@ -11,7 +11,16 @@
 完整命令、结果归因、成本与信任边界见 [质量稳定性与生产恢复验收](quality-production-acceptance-zh-CN.md)。
 旧三例smoke与单实例恢复入口保持不变；受控通过不得冒充真实模型质量。
 
+不同provider默认配置的临时节点不要与正在评测的节点共用数据库：每个应用实例都可能claim
+同库的待执行Evaluation任务，临时节点退出会中断其已claim的任务。追加诊断应等待评测完成，
+或使用独立数据库；保留编排干扰导致的中断记录，不将它归因于模型质量或覆盖原结果。
+
 ## 依赖治理、混合故障与真实恢复
+
+先执行 `python3 scripts/verify-upstream-recovery-e2e.py`，通过真实 HTTP/PG 验证上游错误的
+旧信封兼容、增量分类、调用次数、失败 replay、Python/Node SDK 恢复决策和预算释放。
+拒答必须正常交付；部分流不得冒充完整答案；受控故障不替代多轮真实 Embedding/LLM 质量矩阵。
+专项覆盖及默认决策见[上游故障与 Client 恢复](upstream-client-recovery-zh-CN.md)。
 
 ```bash
 mvn clean compile test-compile

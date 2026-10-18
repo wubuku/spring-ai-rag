@@ -147,7 +147,7 @@ class ChatExecutionStreamBudgetTest {
         // 首个事件之前就 onError，switchOnFirst 的"无值错误"分支才触发回退；
         // 空流会发 Completed（有值信号），不回退——见下方全空流测试。
         streamAttempt(primary,
-                Flux.error(new IllegalStateException("primary down")));
+                Flux.error(new org.springframework.ai.retry.TransientAiException("primary down")));
         ChatClientResponse fallbackResponse = new ChatClientResponse(
                 new org.springframework.ai.chat.model.ChatResponse(
                         List.of(new Generation(new AssistantMessage("fallback content"))),
@@ -225,9 +225,9 @@ class ChatExecutionStreamBudgetTest {
         ChatModelRouter.ChatModelCandidate third = candidate("third");
         when(modelRouter.orderedCandidateDescriptors(isNull()))
                 .thenReturn(List.of(first, second, third));
-        streamAttempt(first, Flux.error(new IllegalStateException("e1")));
-        streamAttempt(second, Flux.error(new IllegalStateException("e2")));
-        streamAttempt(third, Flux.error(new IllegalStateException("e3")));
+        streamAttempt(first, Flux.error(new org.springframework.ai.retry.TransientAiException("e1")));
+        streamAttempt(second, Flux.error(new org.springframework.ai.retry.TransientAiException("e2")));
+        streamAttempt(third, Flux.error(new org.springframework.ai.retry.TransientAiException("e3")));
 
         RagException error = assertThrows(RagException.class,
                 () -> limitedService.stream(commandWithBudget(

@@ -166,7 +166,7 @@ class ChatExecutionPreparedOperationTest {
         when(modelRouter.orderedCandidateDescriptors(isNull()))
                 .thenReturn(List.of(primary, fallback));
         when(clientFactory.create(any(), same(primary), anyList()))
-                .thenThrow(new IllegalStateException("primary unavailable"));
+                .thenThrow(new org.springframework.ai.retry.TransientAiException("primary unavailable"));
         stubAttempt(fallback, "fallback answer");
 
         ChatExecutionService.PreparedExecution prepared =

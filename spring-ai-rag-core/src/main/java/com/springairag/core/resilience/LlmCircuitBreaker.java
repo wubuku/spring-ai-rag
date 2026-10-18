@@ -134,6 +134,10 @@ public class LlmCircuitBreaker {
         }
     }
 
+    public void recordIgnored() {
+        if (state.get() == State.HALF_OPEN) halfOpenAttempts.set(0);
+    }
+
     /** Record failure */
     public void recordFailure() {
         lastFailureTime.set(clock.millis());

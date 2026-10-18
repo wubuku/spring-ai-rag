@@ -201,7 +201,7 @@ class ChatExecutionServiceStreamMemoryTailTest {
         ModeAwareChatClientFactory.Attempt brokenAttempt =
                 new ModeAwareChatClientFactory.Attempt(
                         streamingClient(Flux.error(
-                                new IllegalStateException())),
+                                new org.springframework.ai.retry.TransientAiException(null))),
                         broken, context(), null);
         ModeAwareChatClientFactory.Attempt healthyAttempt =
                 new ModeAwareChatClientFactory.Attempt(

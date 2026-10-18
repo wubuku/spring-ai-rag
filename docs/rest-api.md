@@ -1,5 +1,7 @@
 # REST API Reference
 
+See [upstream failures and client recovery](upstream-client-recovery.md) for additive error details and answer outcomes.
+
 Additive capabilities: [trustworthy assertions, active diagnostics and offline quality admission](trustworthy-evaluation-admission.md); existing API contracts and ordinary Chat evaluation costs are unchanged.
 
 📖 [English](rest-api.md) · 📖 [中文](rest-api-zh-CN.md)

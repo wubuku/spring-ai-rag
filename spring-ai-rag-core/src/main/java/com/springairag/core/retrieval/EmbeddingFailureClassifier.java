@@ -17,6 +17,10 @@ public final class EmbeddingFailureClassifier {
     private EmbeddingFailureClassifier() { }
 
     public static Kind classify(Throwable failure) {
+        var shared = com.springairag.core.resilience.UpstreamFailureClassifier.classify(failure);
+        if ("UPSTREAM".equals(shared.origin()) && !Integer.valueOf(425).equals(shared.upstreamStatus())) {
+            return shared.retryable() ? Kind.TRANSIENT : Kind.REJECTED;
+        }
         Set<Throwable> seen = Collections.newSetFromMap(new IdentityHashMap<>());
         Kind fallback = Kind.UNKNOWN;
         Throwable current = failure;

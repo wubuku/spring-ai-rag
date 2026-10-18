@@ -132,11 +132,14 @@ public class SpringAiConfig {
         log.info("Creating OpenAI ChatModel: baseUrl={}, model={}", openAiBaseUrl, openAiModel);
 
         OpenAiApi openAiApi = OpenAiApi.builder()
+                .restClientBuilder(RestClient.builder().requestFactory(createRequestFactory(!ragProperties.getProxy().isEnabled())))
+                .responseErrorHandler(new com.springairag.core.resilience.UpstreamResponseErrorHandler())
                 .baseUrl(openAiBaseUrl)
                 .apiKey(openAiApiKey)
                 .build();
 
         return OpenAiChatModel.builder()
+                .retryTemplate(org.springframework.retry.support.RetryTemplate.builder().maxAttempts(1).build())
                 .openAiApi(openAiApi)
                 .defaultOptions(OpenAiChatOptions.builder()
                         .model(openAiModel)
@@ -154,7 +157,12 @@ public class SpringAiConfig {
         log.info("Creating Anthropic ChatModel: baseUrl={}, model={}", anthropicBaseUrl, anthropicModel);
 
         return AnthropicChatModel.builder()
+                .retryTemplate(org.springframework.retry.support.RetryTemplate.builder().maxAttempts(1).build())
                 .anthropicApi(AnthropicApi.builder()
+                        .webClientBuilder(WebClient.builder().filter(
+                                com.springairag.core.resilience.UpstreamResponseErrorHandler.webClientFilter()))
+                        .restClientBuilder(RestClient.builder().requestFactory(createRequestFactory(!ragProperties.getProxy().isEnabled())))
+                        .responseErrorHandler(new com.springairag.core.resilience.UpstreamResponseErrorHandler())
                         .baseUrl(anthropicBaseUrl)
                         .apiKey(anthropicApiKey)
                         .build())
@@ -177,14 +185,17 @@ public class SpringAiConfig {
         // Create RestClient with timeouts; NO_PROXY depends on rag.proxy.enabled
         RestClient.Builder restClientBuilder = RestClient.builder()
                 .requestFactory(createRequestFactory(!ragProperties.getProxy().isEnabled()));
-        MiniMaxApi miniMaxApi = new MiniMaxApi(minimaxBaseUrl, minimaxApiKey, restClientBuilder);
+        MiniMaxApi miniMaxApi = new MiniMaxApi(minimaxBaseUrl, minimaxApiKey, restClientBuilder,
+                new com.springairag.core.resilience.UpstreamResponseErrorHandler());
 
         MiniMaxChatOptions options = MiniMaxChatOptions.builder()
                 .model(minimaxModel)
                 .temperature(minimaxTemperature)
                 .build();
 
-        return new MiniMaxChatModel(miniMaxApi, options);
+        return new MiniMaxChatModel(miniMaxApi, options,
+                org.springframework.ai.model.tool.ToolCallingManager.builder().build(),
+                org.springframework.retry.support.RetryTemplate.builder().maxAttempts(1).build());
     }
 
     @Bean("chatModel")

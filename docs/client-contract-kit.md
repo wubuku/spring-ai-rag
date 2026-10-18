@@ -1,5 +1,8 @@
 # Client Consumer Contract Kit
 
+See [upstream failures and client recovery](upstream-client-recovery.md) for additive failure details and conservative
+recovery decisions. Examples disable SDK automatic retries; transient causes do not prove replay safety.
+
 > [English](client-contract-kit.md) | [中文](client-contract-kit-zh-CN.md)
 
 This guide describes how an external client consumes and accepts the

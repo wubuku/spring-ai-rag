@@ -1070,6 +1070,14 @@ rag:
 
 ## LLM API 超时配置
 
+Chat 默认使用[同源故障决策](upstream-client-recovery-zh-CN.md#原因与执行决策)：只有明确的暂时性
+上游故障进入已有重试/fallback预算，未知错误、永久拒绝和正常安全拒答不自动重试。
+默认 OpenAI/Anthropic/MiniMax 及配置型 OpenAI/Anthropic 的同步传输显式使用无自动 HTTP 状态重试的请求工厂，
+Spring AI 模型内部重试设为单次，避免绕过应用层次数、成本和 deadline 限额。
+连接/读取超时及代理仍沿用已有配置；Python/Node 示例也禁用 SDK 隐式重试。
+Retry-After 仅接受有界秒数或 HTTP 日期（最多10秒）；要求的等待达到配置上界或超出剩余期限时
+终止，不提前重试。无需新增开关或数据迁移。
+
 ```yaml
 rag:
   timeout:

@@ -407,7 +407,7 @@ class SseStreamE2ETest {
 
         assertContains(body, "正常");
         assertEmitted(body, "error");
-        assertContains(body, "连接断开");
+        assertContains(body, "UPSTREAM_CONNECTION");
     }
 
     // ==================== Large Chunk Handling ====================

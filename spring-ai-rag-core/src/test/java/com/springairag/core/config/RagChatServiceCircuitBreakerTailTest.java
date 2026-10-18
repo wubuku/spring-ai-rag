@@ -31,6 +31,8 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
@@ -120,7 +122,7 @@ class RagChatServiceCircuitBreakerTailTest {
         when(commandMapper.map(any(ChatRequest.class), any(),
                 any(ChatPrincipal.class))).thenReturn(mappedCommand());
         when(executionService.execute(any(ChatCommand.class)))
-                .thenThrow(new IllegalStateException("model down"));
+                .thenThrow(new org.springframework.ai.retry.TransientAiException("model down"));
     }
 
     @Test
@@ -142,10 +144,19 @@ class RagChatServiceCircuitBreakerTailTest {
     }
 
     @Test
+    void businessRejectionDoesNotOpenDependencyCircuit() {
+        stubSuccess();
+        when(executionService.execute(any(ChatCommand.class))).thenThrow(
+                new com.springairag.core.exception.RagException(com.springairag.api.enums.ErrorCode.FORBIDDEN, "denied"));
+        assertThrows(com.springairag.core.exception.RagException.class, () -> service.chat(request(), null, null));
+        assertEquals(LlmCircuitBreaker.State.CLOSED, service.getCircuitBreaker().getState());
+    }
+
+    @Test
     void modeAwareFailurePropagatesAndRecordsFailure() {
         stubFailure();
 
-        assertThrows(IllegalStateException.class,
+        assertThrows(org.springframework.ai.retry.TransientAiException.class,
                 () -> service.chat(request(), null, null));
 
         // failureRateThreshold=1 且 minCalls=1：一次失败即熔断。
@@ -154,10 +165,38 @@ class RagChatServiceCircuitBreakerTailTest {
     }
 
     @Test
+    void streamingMappingRejectionReleasesHalfOpenProbe() {
+        var breaker = service.getCircuitBreaker();
+        org.springframework.test.util.ReflectionTestUtils.setField(breaker, "waitDurationInOpenStateMillis", 0L);
+        breaker.recordFailure();
+        when(commandMapper.map(any(ChatRequest.class), any(), any(ChatPrincipal.class)))
+                .thenThrow(new com.springairag.core.exception.RagException(
+                        com.springairag.api.enums.ErrorCode.FORBIDDEN, "denied"));
+        assertThrows(com.springairag.core.exception.RagException.class,
+                () -> service.chatEvents(request(), null, null));
+        assertEquals(LlmCircuitBreaker.State.HALF_OPEN, breaker.getState());
+        assertTrue(breaker.allowCall());
+        assertFalse(breaker.allowCall());
+    }
+
+    @Test
+    void streamingConstructionFailureReleasesHalfOpenProbe() {
+        stubSuccess();
+        var breaker = service.getCircuitBreaker();
+        org.springframework.test.util.ReflectionTestUtils.setField(breaker, "waitDurationInOpenStateMillis", 0L);
+        breaker.recordFailure();
+        when(executionService.stream(any(ChatCommand.class)))
+                .thenThrow(new IllegalStateException("invalid command"));
+        assertThrows(IllegalStateException.class, () -> service.chatEvents(request(), null, null));
+        assertTrue(breaker.allowCall());
+        assertFalse(breaker.allowCall());
+    }
+
+    @Test
     void openCircuitRejectsSubsequentRequestsWithLlmCircuitOpen() {
         stubFailure();
 
-        assertThrows(IllegalStateException.class,
+        assertThrows(org.springframework.ai.retry.TransientAiException.class,
                 () -> service.chat(request(), null, null));
         var rejected = assertThrows(LlmCircuitOpenException.class,
                 () -> service.chat(request(), null, null));

@@ -51,6 +51,8 @@ public class CitationQueryAugmenter implements QueryAugmenter {
             references.add("[" + citation + "] " + document.getText());
         }
         String text = """
+                本请求可用的引用条目如下；只能逐字复制条目前方的方括号标记，不能自行重编号或使用其他示例ID。
+                允许的引用标记：%s
                 请仅依据以下参考资料回答用户问题。无法从资料确认的内容要明确说明。
                 每个有资料依据的事实必须紧跟下方资料条目开头真实存在的方括号引用标记。
                 不得省略、猜测或编造引用。引用合法不等于事实正确，必须核对原文中的数字、单位、否定和版本。
@@ -64,9 +66,12 @@ public class CitationQueryAugmenter implements QueryAugmenter {
                 %s
 
                 回答前再次核对：所问事实必须直接出现在资料中，有依据的回答必须保留对应条目的引用标记。
+                用户明确要求数值和单位时，数值后直接带原文单位；不要省略单位或擅自换算。
                 没有依据或冲突无法消解时，明确使用“无法从资料确认”说明，不能用带引用的背景介绍代替拒答。
                 引用要求不凌驾于安全规则；涉及敏感内容时可以安全拒答，不能为了满足引用要求而泄露信息。
-                """.formatted(String.join("\n\n", references), query.text());
+                """.formatted(String.join("、", references.stream()
+                        .map(reference -> reference.substring(0, reference.indexOf(']') + 1)).toList()),
+                        String.join("\n\n", references), query.text());
         return new Query(text, query.history(), query.context());
     }
 

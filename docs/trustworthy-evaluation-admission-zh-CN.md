@@ -62,8 +62,10 @@ scope 与所有权仍是现有服务的隔离机制，不是任意运维根身�
 执行失败可返回 HTTP200 的 `status=FAILED` 诊断结果，不表示模型执行成功；权限、校验等仍返回既有错误信封。
 capture 包含最后一次实际模型调用消息 `lastInvocationMessages`、最终 `answer`、真实 advisor `DOCUMENT_CONTEXT` 的 `evidence`、
 客户端来源投影 `sourceProjections`，二者不可混为全文。没有采集到实际 prompt 时不能标 complete。
-prompt和answer各32KiB UTF-8；evidence/来源投影分别最多16项，每项4KiB。文本总量最多192KiB，JSON转义后可能更大。
-敏感数据脱敏和截断明确标记；只有实际 prompt、answer、evidence 均采集到且未脱敏/截断才 `complete=true`。
+新增同次调用安全替换前的modelAnswer及answerOutcome、citationValidation；answer仍是最终回答，见
+[上游与Client恢复](upstream-client-recovery-zh-CN.md)。prompt、modelAnswer、answer各32KiB UTF-8；
+evidence/来源投影分别最多16项，每项4KiB。文本总量最多224KiB，JSON转义后可能更大。
+敏感数据脱敏和截断明确标记；只有实际prompt、modelAnswer、answer、evidence均采集到且未脱敏/截断才 `complete=true`。
 不写正文到 Evaluation case metrics，不新增历史正文存储；已有 usage/trace 按既有保留与擦除机制管理。
 
 ## 私有取证与纯本地重放

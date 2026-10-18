@@ -23,9 +23,11 @@ class EvaluationDiagnosticCaptureTest {
             assertFalse((Boolean) capture.snapshot().get("complete"));
             EvaluationDiagnosticCapture.prompt(new Prompt("context"));
             EvaluationDiagnosticCapture.result(result("零条"));
+            EvaluationDiagnosticCapture.modelAnswer("原始零条", null);
             EvaluationDiagnosticCapture.evidence(List.of(new org.springframework.ai.document.Document("实际输入证据")));
             assertTrue((Boolean) capture.snapshot().get("complete"));
             assertEquals("零条", capture.snapshot().get("answer"));
+            assertEquals("原始零条", capture.snapshot().get("modelAnswer"));
             assertThrows(IllegalStateException.class, EvaluationDiagnosticCapture::open);
         }
         try (var capture = EvaluationDiagnosticCapture.open()) {

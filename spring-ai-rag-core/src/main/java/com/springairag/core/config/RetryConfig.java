@@ -6,7 +6,6 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.retry.RetryContext;
-import org.springframework.retry.backoff.ExponentialBackOffPolicy;
 import org.springframework.retry.policy.ExceptionClassifierRetryPolicy;
 import org.springframework.retry.policy.SimpleRetryPolicy;
 import org.springframework.retry.support.RetryTemplate;
@@ -14,7 +13,6 @@ import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.ResourceAccessException;
 
-import java.util.Random;
 
 /**
  * Retry configuration for LLM API calls.
@@ -45,7 +43,6 @@ public class RetryConfig {
     private static final Logger log = LoggerFactory.getLogger(RetryConfig.class);
 
     private final RagRetryProperties properties;
-    private final Random random = new Random();
 
     public RetryConfig(RagRetryProperties properties) {
         this.properties = properties;
@@ -56,11 +53,7 @@ public class RetryConfig {
         RetryTemplate retryTemplate = new RetryTemplate();
 
         // Exponential backoff with jitter
-        ExponentialBackOffPolicy backOffPolicy = new ExponentialBackOffPolicy();
-        backOffPolicy.setInitialInterval(properties.getInitialBackoffMs());
-        backOffPolicy.setMultiplier(properties.getBackoffMultiplier());
-        backOffPolicy.setMaxInterval(properties.getMaxBackoffMs());
-        retryTemplate.setBackOffPolicy(backOffPolicy);
+        retryTemplate.setBackOffPolicy(new UpstreamBackOffPolicy(properties));
 
         // Exception-classifying retry policy
         ExceptionClassifierRetryPolicy retryPolicy =
@@ -81,58 +74,20 @@ public class RetryConfig {
     static ExceptionClassifierRetryPolicy exceptionClassifierRetryPolicy(
             RagRetryProperties properties) {
         ExceptionClassifierRetryPolicy retryPolicy = new ExceptionClassifierRetryPolicy();
+        SimpleRetryPolicy simple = new SimpleRetryPolicy(properties.getMaxAttempts());
         retryPolicy.setExceptionClassifier(throwable -> {
             if (!properties.isEnabled()) {
                 return notRetryable();
             }
 
-            SimpleRetryPolicy simple = new SimpleRetryPolicy(properties.getMaxAttempts());
+            var details = com.springairag.core.resilience.UpstreamFailureClassifier.classify(throwable);
+            if (!details.retryable()) return notRetryable();
+            if ("UPSTREAM_RATE_LIMITED".equals(details.reason())) return properties.isRetryOnRateLimit() ? simple : notRetryable();
+            if (Integer.valueOf(503).equals(details.upstreamStatus())) return properties.isRetryOnServiceUnavailable() ? simple : notRetryable();
+            if ("UPSTREAM_TIMEOUT".equals(details.reason())) return properties.isRetryOnReadTimeout() ? simple : notRetryable();
+            if ("UPSTREAM_CONNECTION".equals(details.reason())) return properties.isRetryOnConnectTimeout() ? simple : notRetryable();
+            if ("UPSTREAM_UNAVAILABLE".equals(details.reason())) return simple;
 
-            // Classify the exception
-            if (throwable instanceof ResourceAccessException) {
-                String msg = throwable.getMessage() != null ? throwable.getMessage() : "";
-                boolean isReadTimeout = msg.contains("Read timed out");
-                boolean isConnectTimeout = msg.contains("Connect timed out");
-
-                if (isReadTimeout && properties.isRetryOnReadTimeout()) {
-                    log.debug("Retryable: Read timeout");
-                    return simple;
-                }
-                if (isConnectTimeout && properties.isRetryOnConnectTimeout()) {
-                    log.debug("Retryable: Connect timeout");
-                    return simple;
-                }
-                if (properties.isRetryOnConnectTimeout()) {
-                    log.debug("Retryable: ResourceAccessException (generic network error)");
-                    return simple;
-                }
-            }
-
-            if (throwable instanceof HttpServerErrorException httpEx) {
-                int status = httpEx.getStatusCode().value();
-                if (status == 503) {
-                    // 503 只服从专属开关：不再落入通用 5xx 分支，避免遮蔽。
-                    if (properties.isRetryOnServiceUnavailable()) {
-                        log.debug("Retryable: HTTP 503 Service Unavailable");
-                        return simple;
-                    }
-                    return notRetryable();
-                }
-                if (status >= 500) {
-                    log.debug("Retryable: HTTP {} server error", status);
-                    return simple;
-                }
-            }
-
-            if (throwable instanceof HttpClientErrorException httpEx) {
-                int status = httpEx.getStatusCode().value();
-                if (status == 429 && properties.isRetryOnRateLimit()) {
-                    log.debug("Retryable: HTTP 429 Rate Limit");
-                    return simple;
-                }
-            }
-
-            // Not retryable
             return notRetryable();
         });
 

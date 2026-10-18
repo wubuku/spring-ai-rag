@@ -42,11 +42,18 @@ public class ConfiguredChatModelFactory {
 
     private final MultiModelProperties properties;
     private final Environment environment;
+    private final RagProperties ragProperties;
     private final ConcurrentMap<String, ChatModel> cache = new ConcurrentHashMap<>();
 
     public ConfiguredChatModelFactory(MultiModelProperties properties, Environment environment) {
+        this(properties, environment, new RagProperties());
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public ConfiguredChatModelFactory(MultiModelProperties properties, Environment environment, RagProperties ragProperties) {
         this.properties = properties;
         this.environment = environment;
+        this.ragProperties = ragProperties;
     }
 
     /**
@@ -143,7 +150,10 @@ public class ConfiguredChatModelFactory {
         }
 
         return OpenAiChatModel.builder()
+                .retryTemplate(org.springframework.retry.support.RetryTemplate.builder().maxAttempts(1).build())
                 .openAiApi(OpenAiApi.builder()
+                        .restClientBuilder(restClientBuilder())
+                        .responseErrorHandler(new com.springairag.core.resilience.UpstreamResponseErrorHandler())
                         .baseUrl(baseUrl)
                         .apiKey(apiKey)
                         .build())
@@ -163,12 +173,25 @@ public class ConfiguredChatModelFactory {
         }
 
         return AnthropicChatModel.builder()
+                .retryTemplate(org.springframework.retry.support.RetryTemplate.builder().maxAttempts(1).build())
                 .anthropicApi(AnthropicApi.builder()
+                        .webClientBuilder(org.springframework.web.reactive.function.client.WebClient.builder().filter(
+                                com.springairag.core.resilience.UpstreamResponseErrorHandler.webClientFilter()))
+                        .restClientBuilder(restClientBuilder())
+                        .responseErrorHandler(new com.springairag.core.resilience.UpstreamResponseErrorHandler())
                         .baseUrl(baseUrl)
                         .apiKey(apiKey)
                         .build())
                 .defaultOptions(options.build())
                 .build();
+    }
+
+    private org.springframework.web.client.RestClient.Builder restClientBuilder() {
+        var factory = new org.springframework.http.client.SimpleClientHttpRequestFactory();
+        if (!ragProperties.getProxy().isEnabled()) factory.setProxy(java.net.Proxy.NO_PROXY);
+        factory.setConnectTimeout(ragProperties.getTimeout().getConnectTimeoutMs());
+        factory.setReadTimeout(ragProperties.getTimeout().getReadTimeoutMs());
+        return org.springframework.web.client.RestClient.builder().requestFactory(factory);
     }
 
     private ModelSelection select(String modelRef) {

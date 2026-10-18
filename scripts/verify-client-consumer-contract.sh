@@ -12,6 +12,8 @@ SPEC_FILE="${CLIENT_CONTRACT_SPEC_FILE:-}"
 }
 
 node scripts/lib/client-consumer-contract.mjs --self-test
+node scripts/test-support/client-recovery-self-test.mjs
+python3 scripts/test-support/client-recovery-self-test.py
 
 offline_args=(--root "$ROOT")
 if [[ -n "$SPEC_FILE" ]]; then
