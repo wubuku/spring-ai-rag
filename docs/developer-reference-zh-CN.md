@@ -1,5 +1,9 @@
 # 开发者参考
 
+Chat验收分层：`python3 scripts/verify-chat-outcomes-e2e.py`验证三类拒答的真实浏览器/历史/记账处置；
+`python3 scripts/verify-dev-lifecycle-e2e.py --ack-paid-models`验证真实模型生命周期及独立正向Agent/
+KNOWLEDGE能力。拒答处置通过不替代正向事实/来源通过；见[测试分层](testing-guide-zh-CN.md#webui--real-端到端用例运行手册)。
+
 候选/阶段/契约真实HTTP专项：`python3 scripts/verify-candidate-contracts-e2e.py`；
 [范围、默认配置与诊断命令](candidate-isolation-answer-contract-zh-CN.md)。与其他 Maven/dev.sh 串行。
 

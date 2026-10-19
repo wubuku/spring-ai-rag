@@ -247,7 +247,24 @@ a direct-provider smoke.
 
 ### WebUI `-real` End-to-End Runbook
 
-`spring-ai-rag-webui/e2e/*-real.spec.ts` requires a full dev stack and real
+Report Chat acceptance in three layers instead of inferring business correctness from one browser pass rate:
+
+- `lifecycle:` checks SSE termination, normal rendering, persisted history and reload, not factual accuracy.
+- `positive-answer:` strictly checks the public observatory's opening time, real tool calls, sources and
+  retrieval diagnostics. Questions do not contain the answer or request verification codes/passwords.
+  Refusal cannot pass this layer; an Agent failure does not skip KNOWLEDGE.
+- `refusal-handling:` run `python3 scripts/verify-chat-outcomes-e2e.py` against owned PostgreSQL, a real
+  backend and Vite proxy. Text/structured/filtered refusal must use HTTP200, one done and no error, no extra
+  calls, recoverable history, a working same-session follow-up, and settled budget/usage. The controlled
+  provider proves handling, not real-model content quality.
+
+Only this runner supplies the loopback control address for `chat-outcomes-real.spec.ts`; it never injects
+faults into ordinary services or real providers. `verify-dev-lifecycle-e2e.py --ack-paid-models` separately
+runs real Embedding/LLM and the three split cases. Both runners disable Playwright automatic retries and
+retain first failures. Keep `verify-upstream-recovery-e2e.py` for errors/timeouts/SDKs and
+`verify-quality-production-e2e.py` for two-node refusal/recovery.
+
+Except for that controlled refusal gate, `spring-ai-rag-webui/e2e/*-real.spec.ts` requires a full dev stack and real
 credentials; plain Mock Playwright (`npm run test:e2e` without a `-real`
 filter) never executes them. Verified startup and requirements:
 
@@ -270,7 +287,8 @@ Per-spec extra requirements (verified 2026-09-06):
 |------|--------------------|----------|
 | `api-key-real` | `RAG_ROOT_API_KEY` (or `REAL_E2E_API_KEY`) | passes |
 | `alerts-real` | also `ALERT_DELIVERY_EXPECTED_ALERT_ID` and `ALERT_DELIVERY_EXPECTED_DELIVERY_ID` (ids of a pre-created alert/delivery) | fails without preset ids |
-| `chat-real` | `/models` must expose at least one available tool-calling model (verified: external models.json with SiliconFlow Qwen3.5-27B + `toolCalling: true`) | passes (~2 min, AGENT SSE + history recovery) |
+| `chat-real` | real Embedding/LLM; Agent additionally needs an available tool-calling model in `/models` | three independent cases: lifecycle, Agent positive answer, KNOWLEDGE positive answer; refusal is not positive success |
+| `chat-outcomes-real` | owned controlled stack from `verify-chat-outcomes-e2e.py` only | three refusal-handling cases, separate from real-model positive quality |
 | `files-real` | real Embedding + Chat LLM; KNOWLEDGE generation must finish within `rag.timeout.chat-ask-ms` (default 120s) | passes (with a slow local provider, relax via `RAG_TIMEOUT_CHATASKMS=300000` in `.env`) |
 | `rerank-document-diversity-real` | also `RERANK_DIVERSITY_FIXTURE_FILE` pointing at a fixture | fails without fixture |
 

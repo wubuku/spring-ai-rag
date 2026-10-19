@@ -1,5 +1,10 @@
 # Developer Reference
 
+Layered Chat acceptance: `python3 scripts/verify-chat-outcomes-e2e.py` checks real-browser refusal,
+history and accounting handling. `python3 scripts/verify-dev-lifecycle-e2e.py --ack-paid-models` checks
+real-model lifecycle plus independent Agent/KNOWLEDGE positive cases. Refusal handling cannot replace
+positive factual/source checks; see the [layered runbook](testing-guide.md#webui--real-end-to-end-runbook).
+
 Candidate/stage/contract HTTP acceptance: `python3 scripts/verify-candidate-contracts-e2e.py`;
 [scope, defaults, and diagnostics](candidate-isolation-answer-contract.md). Serialize with Maven/dev.sh.
 

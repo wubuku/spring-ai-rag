@@ -1,350 +1,173 @@
-import { test, expect, type APIRequestContext, type APIResponse } from '@playwright/test';
-
-const ROOT_API_KEY = process.env.RAG_ROOT_API_KEY ?? process.env.REAL_E2E_API_KEY;
-const API_PREFIX = '/api/v1/rag';
-const REQUEST_TIMEOUT = 180_000;
+import { test, expect, type APIRequestContext } from '@playwright/test';
+import {
+  API_PREFIX, REQUEST_TIMEOUT, apiJson, clearPageSession, completedTurn,
+  recoveredHistory, rootHeaders, unlockChat,
+} from './support/chat-lifecycle';
 
 type ProbeData = {
-  token: string;
-  collectionId: number;
   collectionKey: string;
-  collectionName: string;
   documentId: number;
   documentRevision: number;
   documentTitle: string;
+  openingTime: string;
 };
 
-test.describe.configure({ mode: 'serial' });
 test.setTimeout(REQUEST_TIMEOUT);
 
-test('uses the real WebUI proxy for bounded Agent SSE and history recovery', async ({
-  page,
-  request,
-}) => {
-  if (!ROOT_API_KEY) {
-    throw new Error(
-      'RAG_ROOT_API_KEY or REAL_E2E_API_KEY is required for chat-real.spec.ts',
-    );
-  }
-
-  const headers = {
-    'X-API-Key': ROOT_API_KEY,
-    'Content-Type': 'application/json',
-  };
-  let probe: ProbeData | undefined;
-  let sessionId: string | undefined;
-  let knowledgeSessionId: string | undefined;
-
-  const apiJson = async (
-    method: 'GET' | 'POST' | 'DELETE',
-    path: string,
-    data?: Record<string, unknown>,
-  ): Promise<any> => {
-    const response = await request.fetch(`${API_PREFIX}${path}`, {
-      method,
-      headers,
-      data,
-      timeout: REQUEST_TIMEOUT,
-    });
-    await expectApiSuccess(response, `${method} ${path}`);
-    return response.status() === 204 ? undefined : response.json();
-  };
-
+test('lifecycle: real PLAIN SSE completes, persists and recovers history', async ({ page, request }) => {
   try {
-    probe = await createProbe(request, headers);
+    await unlockChat(page);
+    await page.getByTestId('chat-mode-select').selectOption('PLAIN');
+    const record = await test.step('只验证业务生命周期，不宣称事实或检索成功', () =>
+      completedTurn(page, request, 'Write one short plain-text sentence about visiting a public library.', { mode: 'PLAIN' }));
+    await recoveredHistory(page, record);
+  } finally {
+    await clearPageSession(page, request);
+  }
+});
 
-    const modelList = await apiJson('GET', '/models');
+test('positive-answer: real Agent retrieves a public fact with sources', async ({ page, request }) => {
+  let probe: ProbeData | undefined;
+  try {
+    probe = await createProbe(request);
+    const modelList = await apiJson(request, 'GET', '/models');
     const agentModel = modelList.models?.find(
       (model: any) => model.available && model.capabilities?.toolCalling === true,
     );
-    if (!agentModel?.ref) {
-      throw new Error(
-        'No available tool-calling model is exposed by /models; real Agent browser acceptance cannot run',
-      );
-    }
-
-    await page.goto('/webui/chat', { waitUntil: 'networkidle' });
-    await expect(page).toHaveURL(/\/webui\/unlock$/);
-    await page.getByTestId('root-api-key').fill(ROOT_API_KEY);
-    await page.getByRole('button', { name: 'Unlock' }).click();
-    await expect(page).not.toHaveURL(/\/webui\/unlock$/);
-    await expect(page.getByRole('heading', { name: 'Chat' })).toBeVisible();
-
-    await expect(page.getByTestId('chat-model-select')).toBeVisible();
+    expect(agentModel?.ref, 'Agent正向验收需要可用的tool-calling模型').toBeTruthy();
+    await unlockChat(page);
     await page.getByTestId('chat-model-select').selectOption(agentModel.ref);
-    // Assert the select actually holds what we just chose. The mode select two
-    // lines up has always carried this assertion and the model select never
-    // did — and on 2026-10-05 that asymmetry was the whole failure: the run
-    // picked a model, drove the UI, and never learned that the value in the
-    // control was not the one the rest of the test was reasoning about. The
-    // request body assertion below already pins `model`, so this covers the
-    // gap between "asked the UI to change" and "the UI shows the change".
     await expect(page.getByTestId('chat-model-select')).toHaveValue(agentModel.ref);
     await page.getByTestId('chat-mode-select').selectOption('AGENT');
     await expect(page.getByTestId('chat-mode-select')).toHaveValue('AGENT');
-
     await page.getByTestId('chat-scope-SELECTED_COLLECTIONS').check();
-    const collectionOption = page.locator(
-      `input[type="checkbox"][value="${probe.collectionKey}"]`,
-    );
-    await expect(collectionOption).toBeVisible({ timeout: REQUEST_TIMEOUT });
-    await collectionOption.check();
+    await page.locator(`input[type="checkbox"][value="${probe.collectionKey}"]`).check();
 
-    const message =
-      `Use searchKnowledge on the selected collection and return the release verification code ` +
-      `exactly. The code is ${probe.token}.`;
-    const streamRequestPromise = page.waitForRequest(
-      request => request.url().includes(`${API_PREFIX}/chat/stream`),
-    );
-    // Match the response by URL only, then assert the status separately.
-    // Filtering inside the predicate (`&& response.status() === 200`) makes a
-    // prompt 500 and a hang indistinguishable: the wait simply never resolves,
-    // so the run reports "Test timeout of 180000ms exceeded" after three
-    // minutes and never says what the server actually answered. On 2026-10-05
-    // this cost a 25-minute acceptance run and a 600-second follow-up to learn
-    // something the UI showed in its first second — `Error: HTTP 500`, in a
-    // bubble, next to a 401 the backend had already logged. `expectApiSuccess`
-    // below has had this shape for every non-streaming call in this file; the
-    // stream path is the one that did not.
-    const streamResponsePromise = page.waitForResponse(response =>
-      response.url().includes(`${API_PREFIX}/chat/stream`),
-    );
-    await page.locator('textarea').fill(message);
-    await page.getByRole('button', { name: 'Send' }).click();
-
-    const streamRequest = await streamRequestPromise;
-    const requestBody = streamRequest.postDataJSON();
-    expect(requestBody).toMatchObject({
-      message,
-      mode: 'AGENT',
-      model: agentModel.ref,
-      collectionScopeMode: 'SELECTED_COLLECTIONS',
-      collectionKeys: [probe.collectionKey],
+    const record = await test.step('先确认请求终态、正常展示与持久化', () => completedTurn(
+      page, request,
+      'Use searchKnowledge on the selected collection. At what time does Cedar Observatory open to visitors? Give the time in HH:mm format and cite the guide.',
+      { mode: 'AGENT', model: agentModel.ref, collectionScopeMode: 'SELECTED_COLLECTIONS', collectionKeys: [probe!.collectionKey] },
+    ));
+    await recoveredHistory(page, record);
+    await test.step('严格验证正向事实、真实工具调用和来源；拒答不能替代成功', async () => {
+      const metadata = record.metadata as Record<string, any>;
+      expect(metadata?.answerOutcome?.status, '明确安全拒答不算检索成功').not.toBe('MODEL_SAFETY_REFUSAL');
+      expect(record.aiResponse).toContain(probe!.openingTime);
+      expect(record.sources).toEqual(expect.arrayContaining([
+        expect.objectContaining({ documentId: String(probe!.documentId) }),
+      ]));
+      expect(metadata?.executionBudget).toEqual(expect.objectContaining({
+        toolCalls: expect.any(Number), toolRounds: expect.any(Number), modelCalls: expect.any(Number),
+      }));
+      expect(metadata!.executionBudget.toolCalls).toBeGreaterThan(0);
+      expect(metadata!.executionBudget.toolRounds).toBeGreaterThan(0);
+      expect(metadata!.executionBudget.modelCalls).toBeGreaterThanOrEqual(2);
+      await expect(page.getByText(probe!.documentTitle, { exact: true })).toBeVisible();
     });
-    await streamResponsePromise.then(async response => {
-      if (!response.ok()) {
-        throw new Error(
-          `POST ${API_PREFIX}/chat/stream failed with HTTP ${response.status()}: `
-            + `${await response.text()}`,
-        );
-      }
-    });
-
-    // Keyed SSE completes the durable operation before projecting the bounded
-    // snapshot. The stable acceptance evidence is the answer, sources, and
-    // persisted execution budget; replay does not promise old tool activity.
-    await expect(page.getByText(probe.token, { exact: false }).last()).toBeVisible({
-      timeout: REQUEST_TIMEOUT,
-    });
-    await expect(page.getByText(probe.documentTitle, { exact: true })).toBeVisible({
-      timeout: REQUEST_TIMEOUT,
-    });
-    await expect(page).toHaveURL(/\/webui\/chat\/[^/]+$/);
-
-    sessionId = decodeURIComponent(new URL(page.url()).pathname.split('/').pop() ?? '');
-    expect(sessionId).toBeTruthy();
-
-    const history = await apiJson(
-      'GET',
-      `/chat/history/${encodeURIComponent(sessionId)}`,
-    );
-    expect(Array.isArray(history)).toBeTruthy();
-    const completedTurn = history.find(
-      (record: any) => record.userMessage === message,
-    );
-    expect(completedTurn).toBeTruthy();
-    expect(completedTurn.status).toBe('COMPLETE');
-    expect(completedTurn.sources).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          documentId: String(probe?.documentId),
-        }),
-      ]),
-    );
-    expect(completedTurn.metadata?.executionBudget).toEqual(
-      expect.objectContaining({
-        toolCalls: expect.any(Number),
-        toolRounds: expect.any(Number),
-        modelCalls: expect.any(Number),
-      }),
-    );
-    expect(completedTurn.metadata.executionBudget.toolCalls).toBeGreaterThan(0);
-    expect(completedTurn.metadata.executionBudget.toolRounds).toBeGreaterThan(0);
-    expect(completedTurn.metadata.executionBudget.modelCalls).toBeGreaterThanOrEqual(2);
-
-    const sessionUrl = page.url();
-    await page.reload({ waitUntil: 'domcontentloaded' });
-    await expect(page).toHaveURL(/\/webui\/(?:unlock|chat\/[^/]+)$/, {
-      timeout: REQUEST_TIMEOUT,
-    });
-    if (/\/webui\/unlock$/.test(page.url())) {
-      await expect(page.getByTestId('root-api-key')).toBeVisible({
-        timeout: REQUEST_TIMEOUT,
-      });
-      await page.getByTestId('root-api-key').fill(ROOT_API_KEY);
-      await Promise.all([
-        page.waitForURL(sessionUrl, { timeout: REQUEST_TIMEOUT }),
-        page.getByRole('button', { name: 'Unlock' }).click(),
-      ]);
+  } finally {
+    try {
+      await clearPageSession(page, request);
+    } finally {
+      if (probe) await deleteProbe(request, probe);
     }
-    await expect(page).toHaveURL(sessionUrl);
-    await expect(page.getByText(message, { exact: true })).toBeVisible({
-      timeout: REQUEST_TIMEOUT,
-    });
-    await expect(page.getByText(probe.token, { exact: false }).last()).toBeVisible({
-      timeout: REQUEST_TIMEOUT,
-    });
+  }
+});
 
-    const knowledgeMessage =
-      `Return the release verification code from the selected collection and cite the source. ` +
-      `The code is ${probe.token}.`;
-    const knowledgeResponse = await apiJson('POST', '/chat', {
-      message: knowledgeMessage,
-      mode: 'KNOWLEDGE',
-      model: agentModel.ref,
-      collectionScopeMode: 'SELECTED_COLLECTIONS',
-      collectionKeys: [probe.collectionKey],
-      maxResults: 5,
-      useHybridSearch: true,
-      useRerank: true,
+test('positive-answer: real KNOWLEDGE API returns grounded facts and retrieval diagnostics', async ({ request }) => {
+  let probe: ProbeData | undefined;
+  let sessionId: string | undefined;
+  try {
+    probe = await createProbe(request);
+    const response = await apiJson(request, 'POST', '/chat', {
+      message: 'At what time does Cedar Observatory open to visitors? Give the time in HH:mm format and cite the guide.',
+      mode: 'KNOWLEDGE', collectionScopeMode: 'SELECTED_COLLECTIONS', collectionKeys: [probe.collectionKey],
+      maxResults: 5, useHybridSearch: true, useRerank: true,
     });
-    knowledgeSessionId = knowledgeResponse.sessionId;
-    expect(knowledgeSessionId).toBeTruthy();
-    expect(knowledgeResponse.answer).toContain(probe.token);
-    expect(knowledgeResponse.sources).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          documentId: String(probe.documentId),
-        }),
-      ]),
-    );
-    expect(knowledgeResponse.metadata?.retrievalExecuted).toBe(true);
-
-    const documentJoin = knowledgeResponse.metadata?.retrieval?.documentJoin;
+    sessionId = response.sessionId;
+    expect(sessionId).toBeTruthy();
+    expect(response.answer).toContain(probe.openingTime);
+    expect(response.sources).toEqual(expect.arrayContaining([
+      expect.objectContaining({ documentId: String(probe.documentId) }),
+    ]));
+    expect(response.metadata?.retrievalExecuted).toBe(true);
+    const documentJoin = response.metadata?.retrieval?.documentJoin;
     expect(documentJoin).toBeTruthy();
     expect(Object.keys(documentJoin).sort()).toEqual([
-      'duplicateDocumentsRemoved',
-      'inputDocuments',
-      'scoreReplacements',
-      'uniqueDocuments',
+      'duplicateDocumentsRemoved', 'inputDocuments', 'scoreReplacements', 'uniqueDocuments',
     ]);
     for (const value of Object.values(documentJoin)) {
       expect(Number.isInteger(value)).toBe(true);
       expect(value).toBeGreaterThanOrEqual(0);
     }
-    expect(documentJoin.inputDocuments).toBeGreaterThanOrEqual(
-      documentJoin.uniqueDocuments,
-    );
-    expect(documentJoin.duplicateDocumentsRemoved).toBe(
-      documentJoin.inputDocuments - documentJoin.uniqueDocuments,
-    );
-    expect(documentJoin.scoreReplacements).toBeLessThanOrEqual(
-      documentJoin.duplicateDocumentsRemoved,
-    );
-
-    const serializedJoin = JSON.stringify(documentJoin);
-    expect(serializedJoin).not.toContain('documentId');
-    expect(serializedJoin).not.toContain(probe.token);
-    expect(serializedJoin).not.toContain(probe.collectionKey);
-    expect(serializedJoin).not.toContain(probe.documentTitle);
-
-    const citationStatus =
-      knowledgeResponse.metadata?.citationValidation?.status;
-    if (citationStatus) {
-      expect(citationStatus).not.toBe('INVALID_CITATION');
+    expect(documentJoin.inputDocuments).toBeGreaterThanOrEqual(documentJoin.uniqueDocuments);
+    expect(documentJoin.duplicateDocumentsRemoved).toBe(documentJoin.inputDocuments - documentJoin.uniqueDocuments);
+    expect(documentJoin.scoreReplacements).toBeLessThanOrEqual(documentJoin.duplicateDocumentsRemoved);
+    const serialized = JSON.stringify(documentJoin);
+    for (const privateValue of ['documentId', probe.collectionKey, probe.documentTitle]) {
+      expect(serialized).not.toContain(privateValue);
+    }
+    if (response.metadata?.citationValidation?.status) {
+      expect(response.metadata.citationValidation.status).not.toBe('INVALID_CITATION');
     }
   } finally {
-    if (knowledgeSessionId) {
-      await apiJson(
-        'DELETE',
-        `/chat/history/${encodeURIComponent(knowledgeSessionId)}`,
-      ).catch(() => {});
-    }
-    if (sessionId) {
-      await apiJson('DELETE', `/chat/history/${encodeURIComponent(sessionId)}`).catch(() => {});
-    }
-    if (probe) {
-      await apiJson(
-        'DELETE',
-        `/documents/${probe.documentId}?expectedDocumentRevision=${probe.documentRevision}`,
-      ).catch(() => {});
-      await apiJson(
-        'DELETE',
-        `/collections/by-key?collectionKey=${encodeURIComponent(probe.collectionKey)}`,
-      ).catch(() => {});
+    try {
+      if (sessionId) await apiJson(request, 'DELETE', `/chat/history/${encodeURIComponent(sessionId)}`);
+    } finally {
+      if (probe) await deleteProbe(request, probe);
     }
   }
 });
 
-async function createProbe(
-  request: APIRequestContext,
-  headers: Record<string, string>,
-): Promise<ProbeData> {
-  const token = `REAL_BROWSER_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-  const collectionKey = `real-browser-${token.toLowerCase()}`;
-  const collectionName = `Real Browser ${token}`;
-  const documentTitle = `Real Browser Chat ${token}`;
-
-  const collectionResponse = await request.post(`${API_PREFIX}/collections`, {
-    headers,
-    data: {
-      collectionKey,
-      name: collectionName,
-      description: 'Disposable real browser acceptance data',
-      domainId: 'default',
-    },
-    timeout: REQUEST_TIMEOUT,
+async function createProbe(request: APIRequestContext): Promise<ProbeData> {
+  const runId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const collectionKey = `real-browser-${runId}`;
+  const documentTitle = `Cedar Observatory visitor guide ${runId}`;
+  const openingTime = '09:40';
+  await apiJson(request, 'POST', '/collections', {
+    collectionKey, name: `Public visitor information ${runId}`,
+    description: 'Disposable public-information browser acceptance data', domainId: 'default',
   });
-  const collection = await expectApiSuccess(collectionResponse, 'POST /collections');
-
-  const documentResponse = await request.post(`${API_PREFIX}/documents`, {
-    headers,
-    data: {
+  let document: { id: number; documentRevision: number } | undefined;
+  try {
+    const created = await apiJson<{ id: number; documentRevision: number }>(request, 'POST', '/documents', {
       title: documentTitle,
-      content:
-        `This disposable acceptance document contains the release verification code ${token}. ` +
-        'Return the code verbatim when asked.',
+      content: `Cedar Observatory opens to visitors at ${openingTime} every day. The morning tour starts at 10:20. Ticket pickup is at the north entrance.`,
       collectionKey,
-    },
-    timeout: REQUEST_TIMEOUT,
-  });
-  const document = await expectApiSuccess(documentResponse, 'POST /documents');
-
-  const associateResponse = await request.post(
-    `${API_PREFIX}/collections/by-key/documents?collectionKey=${encodeURIComponent(collectionKey)}`,
-    {
-      headers,
-      data: {
-        documentId: document.id,
-        expectedDocumentRevision: document.documentRevision,
-      },
-      timeout: REQUEST_TIMEOUT,
-    },
-  );
-  await expectApiSuccess(associateResponse, 'POST /collections/by-key/documents');
-
-  const embedResponse = await request.post(
-    `${API_PREFIX}/documents/${document.id}/embed?force=true`,
-    { headers, timeout: REQUEST_TIMEOUT },
-  );
-  const embedded = await expectApiSuccess(embedResponse, 'POST /documents/{id}/embed');
-  expect(String(embedded.status ?? '').toUpperCase()).not.toBe('FAILED');
-  expect(Number(embedded.embeddingsStored ?? embedded.chunksCreated ?? 0)).toBeGreaterThan(0);
-
-  return {
-    token,
-    collectionId: Number(collection.id),
-    collectionKey,
-    collectionName,
-    documentId: Number(document.id),
-    documentRevision: Number(document.documentRevision),
-    documentTitle,
-  };
+    });
+    document = created;
+    await apiJson(request, 'POST', `/collections/by-key/documents?collectionKey=${encodeURIComponent(collectionKey)}`, {
+      documentId: created.id, expectedDocumentRevision: created.documentRevision,
+    });
+    const embedded = await apiJson(request, 'POST', `/documents/${created.id}/embed?force=true`);
+    expect(String(embedded.status ?? '').toUpperCase()).toMatch(/^(COMPLETED|CACHED)$/);
+    const current = await apiJson(request, 'GET', `/documents/${created.id}`);
+    expect(Number(current.documentRevision)).toBeGreaterThanOrEqual(1);
+    const search = await request.post(`${API_PREFIX}/search`, {
+      headers: rootHeaders(), timeout: REQUEST_TIMEOUT,
+      data: { query: 'Cedar Observatory opening time', documentIds: [Number(created.id)],
+        config: { maxResults: 3, minScore: 0, useHybridSearch: true, useRerank: true } },
+    });
+    expect(search.ok(), '真实Embedding索引必须能通过Search检索').toBe(true);
+    const result = await search.json();
+    expect(JSON.stringify(result)).toContain(openingTime);
+    return { collectionKey, documentId: Number(created.id), documentRevision: Number(current.documentRevision), documentTitle, openingTime };
+  } catch (error) {
+    const errors = [error];
+    if (document) {
+      try {
+        const current = await apiJson(request, 'GET', `/documents/${document.id}`);
+        await apiJson(request, 'DELETE', `/documents/${document.id}?expectedDocumentRevision=${current.documentRevision}`);
+      } catch (cleanupError) { errors.push(cleanupError); }
+    }
+    try {
+      await apiJson(request, 'DELETE', `/collections/by-key?collectionKey=${encodeURIComponent(collectionKey)}`);
+    } catch (cleanupError) { errors.push(cleanupError); }
+    if (errors.length > 1) throw new AggregateError(errors, '探针创建失败且清理未完成');
+    throw error;
+  }
 }
 
-async function expectApiSuccess(response: APIResponse, operation: string): Promise<any> {
-  if (!response.ok()) {
-    throw new Error(`${operation} failed with HTTP ${response.status()}: ${await response.text()}`);
-  }
-  return response.status() === 204 ? undefined : response.json();
+async function deleteProbe(request: APIRequestContext, probe: ProbeData) {
+  await apiJson(request, 'DELETE', `/documents/${probe.documentId}?expectedDocumentRevision=${probe.documentRevision}`);
+  await apiJson(request, 'DELETE', `/collections/by-key?collectionKey=${encodeURIComponent(probe.collectionKey)}`);
 }

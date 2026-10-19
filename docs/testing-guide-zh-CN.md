@@ -228,7 +228,21 @@ smoke 显式禁用该文件。
 
 ### WebUI `-real` 端到端用例运行手册
 
-`spring-ai-rag-webui/e2e/*-real.spec.ts` 需要完整 dev 栈与真实凭据，普通
+Chat验收分三层报告，不能只用浏览器总通过率推断业务是否正确：
+
+- `lifecycle:` 检查SSE终态、正常展示、历史持久化及刷新恢复，不宣称事实正确。
+- `positive-answer:` 严格检查公开观测站资料的开馆时间、真实工具调用、来源和检索统计；问题
+  不包含答案，不再用验证码/口令式探针。拒答不能算正向通过；Agent失败不跳过KNOWLEDGE。
+- `refusal-handling:` 通过`python3 scripts/verify-chat-outcomes-e2e.py`在隔离PG、真实后端和Vite
+  代理上验证普通文本/结构化/过滤三类拒答：HTTP200、唯一done、无error、无额外调用、历史恢复、
+  同会话后续请求、预算与usage收尾。受控provider只证明业务处置，不代表真实模型内容质量。
+
+`chat-outcomes-real.spec.ts`仅由上述运行器注入loopback控制地址，不对日常服务或真实provider注入
+故障。`verify-dev-lifecycle-e2e.py --ack-paid-models`独立运行真实Embedding/LLM与三个拆分用例；
+真实及受控验收均禁用Playwright自动重试，保留首次失败。上游错误/超时/SDK继续用
+`verify-upstream-recovery-e2e.py`，双实例拒答/恢复继续用`verify-quality-production-e2e.py`。
+
+除受控拒答专项外，`spring-ai-rag-webui/e2e/*-real.spec.ts` 需要完整 dev 栈与真实凭据，普通
 Mock Playwright（`npm run test:e2e` 不带 `-real` 过滤）不执行它们。已核实的
 启动与需求：
 
@@ -251,7 +265,8 @@ npx playwright test e2e/api-key-real.spec.ts
 |------|----------|----------|
 | `api-key-real` | `RAG_ROOT_API_KEY`（或 `REAL_E2E_API_KEY`） | 通过 |
 | `alerts-real` | 另需 `ALERT_DELIVERY_EXPECTED_ALERT_ID` 与 `ALERT_DELIVERY_EXPECTED_DELIVERY_ID`（预置的真实告警/投递 id） | 缺预置 id 则失败 |
-| `chat-real` | `/models` 须暴露至少一个**可用且支持 tool-calling** 的模型（实测通过：外部 models.json 配置 SiliconFlow Qwen3.5-27B + `toolCalling: true`） | 已跑通（~2 分钟，AGENT SSE + 历史恢复） |
+| `chat-real` | 真实Embedding/LLM；Agent项另需`/models`暴露可用tool-calling模型 | 三项独立：生命周期、Agent正向、KNOWLEDGE正向；拒答不替代正向成功 |
+| `chat-outcomes-real` | 仅通过`verify-chat-outcomes-e2e.py`启动隔离受控栈 | 三类拒答处置独立验收，不计入真实模型正向质量 |
 | `files-real` | 真实 Embedding + Chat LLM；KNOWLEDGE 长上下文生成须在 `rag.timeout.chat-ask-ms`（默认 120s）内完成 | 已通过（本地慢 provider 时在 `.env` 设 `RAG_TIMEOUT_CHATASKMS=300000` 放宽） |
 | `rerank-document-diversity-real` | 另需 `RERANK_DIVERSITY_FIXTURE_FILE` 指向 fixture 文件 | 缺 fixture 则失败 |
 

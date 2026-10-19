@@ -65,9 +65,11 @@ class Acceptance(BASE.Acceptance):
         self.record('live OpenAPI legacy Client compatibility baseline')
         browser_env = dict(self.environment, BASE_URL=f'http://127.0.0.1:{self.frontend_port}')
         self.command(['bash', '-c', 'cd spring-ai-rag-webui && npx playwright test e2e/chat-real.spec.ts '
-                      'e2e/api-key-real.spec.ts --project=chromium'], 'real-playwright', browser_env)
+                      'e2e/api-key-real.spec.ts --project=chromium --retries=0'], 'real-playwright', browser_env)
         assert all(self.state()[kind]['calls'] == 0 for kind in ('chat', 'embeddings', 'rerank'))
-        self.record('real WebUI proxy Agent/KNOWLEDGE SSE/history and API-principal lifecycle')
+        self.record('LIFECYCLE: real WebUI PLAIN SSE, persisted history and reload')
+        self.record('POSITIVE_ANSWER: real Agent tool/source facts and independent KNOWLEDGE API diagnostics')
+        self.record('API_CLIENT: real API-principal lifecycle; refusal handling is a separate controlled gate')
         self.stop()
         state = subprocess.check_output(['bash', 'scripts/dev.sh', '--status'], cwd=ROOT, env=self.environment).decode()
         assert 'running' not in state.lower()
