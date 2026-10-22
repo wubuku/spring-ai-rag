@@ -2,7 +2,7 @@
 
 > 对应规划：[NEXT_BATCH_ASYNC_EMBEDDING_CLIENT_QUALITY_PLAN.md](NEXT_BATCH_ASYNC_EMBEDDING_CLIENT_QUALITY_PLAN.md)
 >
-> 当前状态：规划检查历史记录 `3/3` 通过；最新工作树实施收敛 review 已连续 `3/3` 通过，整体约 `98%`。异步 Purge 主链、持久化 Profile Operation、PostgreSQL 并发/恢复、外部 HTTP/SDK、dev 栈双轮启停、Compose V66→V70 recreate 升级和 Chrome 门禁已有通过证据。三 Profile 真实矩阵及 JSON/SSE 场景已执行，路由断言全部通过；Profile A 合成语料真实向量/距离/过滤与 Profile HNSW 绑定诊断也已完成。仍保留真实质量/执行失败和真实模型拒答证据缺口；批次及 Goal 未完成。Git 交付已获用户明确授权，特性分支本地提交为 `3dac21da`，正在按流程合并并推送；提交不改变未通过/未观测验收结论。
+> 当前状态：规划检查历史记录 `3/3` 通过；最新工作树实施收敛 review 已连续 `3/3` 通过，整体约 `98%`。异步 Purge 主链、持久化 Profile Operation、PostgreSQL 并发/恢复、外部 HTTP/SDK、dev 栈双轮启停、Compose V66→V70 recreate 升级和 Chrome 门禁已有通过证据。三 Profile 真实矩阵及 JSON/SSE 场景已执行，路由断言全部通过；Profile A 合成语料真实向量/距离/过滤与 Profile HNSW 绑定诊断也已完成。仍保留真实质量/执行失败和真实模型拒答证据缺口；批次及 Goal 未完成。Git 交付已获用户明确授权：特性分支提交 `3dac21da` 和进度同步提交 `3423e782` 已合入本地 `main`（merge commit `29984927`）；提交不改变未通过/未观测验收结论。
 
 ## 替代 LLM 验收更新（2026-10-22）
 
