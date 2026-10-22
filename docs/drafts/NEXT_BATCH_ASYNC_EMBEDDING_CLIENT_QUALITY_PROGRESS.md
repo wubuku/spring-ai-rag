@@ -2,7 +2,7 @@
 
 > 对应规划：[NEXT_BATCH_ASYNC_EMBEDDING_CLIENT_QUALITY_PLAN.md](NEXT_BATCH_ASYNC_EMBEDDING_CLIENT_QUALITY_PLAN.md)
 >
-> 当前状态：规划检查历史记录 `3/3` 通过；最新工作树实施收敛 review 已连续 `3/3` 通过，整体约 `98%`。异步 Purge 主链、持久化 Profile Operation、PostgreSQL 并发/恢复、外部 HTTP/SDK、dev 栈双轮启停、Compose V66→V70 recreate 升级和 Chrome 门禁已有通过证据。三 Profile 真实矩阵及 JSON/SSE 场景已执行，路由断言全部通过；Profile A 合成语料真实向量/距离/过滤与 Profile HNSW 绑定诊断也已完成。仍保留真实质量/执行失败和真实模型拒答证据缺口；批次未完成，未提交/推送。
+> 当前状态：规划检查历史记录 `3/3` 通过；最新工作树实施收敛 review 已连续 `3/3` 通过，整体约 `98%`。异步 Purge 主链、持久化 Profile Operation、PostgreSQL 并发/恢复、外部 HTTP/SDK、dev 栈双轮启停、Compose V66→V70 recreate 升级和 Chrome 门禁已有通过证据。三 Profile 真实矩阵及 JSON/SSE 场景已执行，路由断言全部通过；Profile A 合成语料真实向量/距离/过滤与 Profile HNSW 绑定诊断也已完成。仍保留真实质量/执行失败和真实模型拒答证据缺口；批次及 Goal 未完成。Git 交付已获用户明确授权，特性分支本地提交为 `3dac21da`，正在按流程合并并推送；提交不改变未通过/未观测验收结论。
 
 ## 替代 LLM 验收更新（2026-10-22）
 
@@ -15,7 +15,7 @@
 
 - 已满足的本地验收项：审查 `3/3`；V67+ PostgreSQL 迁移/失败恢复；Purge 双实例、lease reclaim、重启、取消与真实 HTTP 生命周期；三 Embedding Profile 实际调用及 Grok A/B/C 各 `72/72`；Native/OpenAI JSON/SSE 与 Python/Node Client；`scripts/dev.sh` 双轮启停、V68 Recreate、Chrome 和当前树门禁。矩阵既有 `216/216` Grok 通过结果不重跑。
 - 唯一尚未证明的技术验收项是**真实 Provider 的结构化安全拒答经过产品 HTTP 边界被识别并返回 `MODEL_SAFETY_REFUSAL`**。一次性隔离库上的 Grok `PLAIN` HTTP 探针在正确带 root API key 后仍返回 HTTP `500`，没有 `modelSafetyRefusal`/`answerOutcome` 字段；先前直连 OpenAI-compatible 安全探针是 HTTP `403` 非 JSON。两者都不能算拒答通过，也不把网关/服务错误伪装成模型拒答。证据：`.verification/acceptance/20261022-grok-structured-refusal/attempt-note.txt`（初次运行未到 healthcheck，未启动应用）、`.verification/acceptance/20261022-grok-structured-refusal-r2/summary.txt`（未携带应用 root key，HTTP `401`，未形成模型拒答观察）、`.verification/acceptance/20261022-grok-structured-refusal-r3/summary.txt`（正确鉴权后 HTTP `500`）、`.verification/quality-real/20261022-060717-82d04ada/summary.json`（矩阵拒答结果为空）。临时 pgvector 容器和 Spring 进程均已清理，启动前后数据库身份断言匹配专属库，未连接共享库；响应正文未保存。
-- Git 交付项仍按此前明确的“不提交/不推送”指令保留为未执行；不擅自提交或推送。故当前不能声称整个 Goal 完成：验收剩余项是上条真实结构化拒答证据；Git 交付需遵守未撤销的用户约束。MiniMax 余额不再是 Grok 替代验收的前置条件。
+- Git 交付此前因旧指令未执行；用户随后明确授权提交、推送及合入 `main`，现已创建特性分支本地提交并进入合并/推送流程。该交付动作不代表剩余真实结构化拒答验收已通过，不能据此声称整个 Goal 完成。MiniMax 余额不再是 Grok 替代验收的前置条件。
 
 ## 最新补记（2026-10-22 01:31 CST）
 
