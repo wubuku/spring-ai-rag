@@ -46,6 +46,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
@@ -212,12 +213,16 @@ class EmbeddingJobsPostgresIntegrationTest {
         EmbeddingProfileProvider profileProvider =
                 mock(EmbeddingProfileProvider.class);
         when(profileProvider.getActiveProfile()).thenReturn(profile);
+        when(profileProvider.getProfileForCollection(collectionId))
+                .thenReturn(profile);
+        when(profileProvider.findRequiredById(profileId))
+                .thenReturn(profile);
         DocumentEmbedService embedService =
                 mock(DocumentEmbedService.class);
         when(embedService.hasFreshEmbedding(any(RagDocument.class)))
                 .thenReturn(false);
         when(embedService.embedDocumentForJob(
-                anyLong(), anyBoolean(), any()))
+                anyLong(), anyBoolean(), anyLong(), any(), isNull()))
                 .thenReturn(java.util.Map.of("status", "COMPLETED"));
         RagProperties properties = new RagProperties();
         properties.getEmbeddingJobs().setWorkerConcurrency(1);
@@ -268,7 +273,9 @@ class EmbeddingJobsPostgresIntegrationTest {
                     .embedDocumentForJob(
                             org.mockito.ArgumentMatchers.eq(documentId),
                             org.mockito.ArgumentMatchers.eq(false),
-                            any());
+                            org.mockito.ArgumentMatchers.eq(profileId),
+                            any(),
+                            isNull());
         } finally {
             worker.shutdown();
             executor.shutdown();

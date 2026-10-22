@@ -124,14 +124,13 @@ class EmbeddingProfileRegistryFindTailTest {
     }
 
     @Test
-    void initializeRejectsDisabledProfile() {
+    void initializeUsesRuntimeConfiguredProfileEnabledState() {
         stubQueryReturningProfile(
                 EmbeddingProfileRegistry.DEFAULT_PROFILE_KEY,
                 defaultProfile(false));
 
-        var error = assertThrows(IllegalStateException.class,
-                registry::getActiveProfile);
+        EmbeddingProfile active = registry.getActiveProfile();
 
-        assertTrue(error.getMessage().contains("Embedding profile is disabled"));
+        assertTrue(active.enabled());
     }
 }

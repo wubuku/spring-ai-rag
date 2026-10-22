@@ -170,7 +170,9 @@ allow-list。数据库业务 Key 不能用该端点查看其他 principal；WebU
       "documentSyncRunItemReceipts": false,
       "openAiCompatibility": false,
       "integrationObservability": true,
-      "collectionPurge": false
+      "collectionPurge": false,
+      "embeddingProfileRouting": true,
+      "embeddingProfileOperations": true
     },
     "credentialRotation": {
       "immediate": true,
@@ -230,6 +232,50 @@ allow-list。数据库业务 Key 不能用该端点查看其他 principal；WebU
 environment root、数据库 `ADMIN`，或显式允许的 auth-disabled 直接 loopback 调用时才为
 `true`。数据库 `NORMAL`、legacy static 和普通远程匿名调用始终看到 `false`。限制字段可
 用于提前判断同步清理上限，但不替代 preview 时的实时冲突和引用完整性检查。
+
+`features.optional.embeddingProfileRouting` 表示 Collection 检索与写入按其绑定的
+Embedding Profile 路由；`embeddingProfileOperations` 表示下面的 Collection Profile
+切换及 Operation 回执端点可用。它们不表示异步 Collection Purge 已开放。
+
+### 持久化 Collection Embedding Profile 切换
+
+`POST /api/v1/rag/collections/by-key/embedding-profile/operations` 接受一个长时间运行的
+Profile 切换。请求必须携带 `Idempotency-Key`，并以 Collection 当前 `version` 作并发保护：
+
+```http
+POST /api/v1/rag/collections/by-key/embedding-profile/operations
+Idempotency-Key: client-generated-operation-key
+Content-Type: application/json
+
+{"collectionKey":"customer-42:records:v1","targetProfileKey":"bge-m3-1024","expectedCollectionVersion":12}
+```
+
+首次接受返回 `202 Accepted`、`Location` 和 Operation 回执；相同 owner、key、操作类型、
+Collection 与请求内容重放时返回同一个 Operation。相同 key 搭配不同请求返回
+`409 IDEMPOTENCY_KEY_REUSED`。必须通过 Collection ACL，目标 Profile 必须已注册且启用；
+目标已是当前 Profile 时返回 `409 LONG_RUNNING_OPERATION_STATE_CONFLICT`。成功受理
+不表示重嵌入或 Profile 切换已经完成。
+owner 或全局 Operation 容量耗尽返回 `429 LONG_RUNNING_OPERATION_CAPACITY_EXCEEDED`，并带
+`Retry-After: 5` 秒作为建议等待时间；该提示不保证届时容量一定已释放。
+
+回执包含 `operationId`、`operationKind`、`status`、脱敏 `progress`、`statusUrl`、
+`resultUrl` 和时间字段。状态为 `QUEUED`、`RUNNING`、`RETRY_WAIT`、`SUCCEEDED`、
+`CANCELLED`、`STALE` 或 `DEGRADED`；`failure` 只暴露稳定错误码，不含异常正文或文档内容。
+使用回执提供的 URL 轮询：
+
+| 方法与路径 | 用途 | 成功状态 |
+|---|---|---|
+| `GET /api/v1/rag/operations/{operationId}` | 读取 Operation 状态与进度 | `200` |
+| `GET /api/v1/rag/operations/{operationId}/result` | 读取已完成结果 | `200` |
+| `POST /api/v1/rag/operations/{operationId}/cancel` | 请求协作式取消 | `202` |
+| `POST /api/v1/rag/operations/{operationId}/retry` | 重试 `DEGRADED` 或到期的 `RETRY_WAIT` | `202` |
+
+Operation 只对创建者可见，并再次校验该调用方仍有目标 Collection 访问权；未授权或不
+存在的资源不会泄漏给调用方。结果未就绪返回 `409 LONG_RUNNING_OPERATION_RESULT_NOT_READY`，
+结果超过保留期返回 `410 LONG_RUNNING_OPERATION_RESULT_EXPIRED`。只有可恢复状态可重试；
+终态不可取消。Profile 切换的取消是协作式的：服务停止派发新子任务，等待本操作拥有的
+处理中任务安全收敛；取消不回滚已经安全生成的目标 Profile 派生缓存，也绝不切换 Collection
+到目标 Profile。旧的单文档 Processing Run / Embedding Job API 与状态语义保持不变。
 
 #### `GET /api/v1/rag/integration-observability`
 
@@ -2302,6 +2348,53 @@ Collection 行保留为最小退役 tombstone：ID、永久 `collectionKey`、�
 - `409 COLLECTION_PURGE_CONFIRMATION_INVALID`
 - `409 COLLECTION_ALREADY_RETIRED`
 - `503 COLLECTION_PURGE_DISABLED`
+
+#### 大集合异步清理
+
+同步 preview/apply 路径和既有 `200` 响应保持不变。大集合使用单独的有界扫描与持久化
+Operation：
+
+```http
+POST /api/v1/rag/collections/by-key/purge/async/preview?collectionKey=customer-42%3Amanual%3Av3
+POST /api/v1/rag/collections/by-key/purge/async
+```
+
+异步 preview 仍是同步 HTTP 请求；默认最多扫描 1,000,000 个文档、10,000,000 条派生/引用行，
+默认 deadline 为 60 秒、单条 SQL timeout 为 10 秒。它只流式计数和计算 fingerprint，不把全部
+目标 ID 装入 JVM，也不会在部分扫描后签发 token。超限返回 `422
+COLLECTION_PURGE_ASYNC_PREVIEW_LIMIT_EXCEEDED`；全局/owner admission 满载返回 `429` 和
+`Retry-After`；扫描超过 deadline 返回 `503 COLLECTION_PURGE_PREVIEW_TIMEOUT` 和
+`Retry-After`。调用方须将该 endpoint 的 read/request timeout 设为实际配置的 preview deadline
+加至少 15 秒；默认配置示例使用 150 秒，不要提高其他请求的全局 timeout。
+
+Apply 使用与同步 API 相同的请求 JSON，额外要求单一 `Idempotency-Key` 请求头。对同一个逻辑
+请求重试必须复用同一 key；同 key 搭配不同请求返回 `409 IDEMPOTENCY_KEY_REUSED`。受理返回
+`202`、`Location`、`Retry-After` 和 `LongRunningOperationResponse`：
+
+```http
+POST /api/v1/rag/collections/by-key/purge/async
+Idempotency-Key: 4c695a13-8f0a-4e0c-92e0-ff2a59c26c43
+```
+
+```json
+{
+  "operationId": "33333333-3333-4333-8333-333333333333",
+  "operationKind": "COLLECTION_PURGE",
+  "status": "QUEUED",
+  "statusUrl": "/api/v1/rag/operations/33333333-3333-4333-8333-333333333333",
+  "resultUrl": "/api/v1/rag/operations/33333333-3333-4333-8333-333333333333/result"
+}
+```
+
+通过 receipt 的 `statusUrl` 轮询，通过 `resultUrl` 读取完成结果；也可调用
+`POST /api/v1/rag/operations/{operationId}/cancel`。只允许在 destructive Collection fence
+提交前取消；fence 后操作会继续恢复执行。旧同步 apply 收到异步 preview 时返回稳定的
+`409 COLLECTION_PURGE_ASYNC_PREVIEW_REQUIRES_ASYNC_APPLY`，不会误入同步删除事务。
+owner 隔离、确认 token、权限与 Collection 版本检查对异步路径同样生效。
+
+Python/Node 最小客户端示例位于 `examples/client-sdk/python/collection_purge_async.py` 和
+`examples/client-sdk/node/collection-purge-async.mjs`。示例为异步 preview 单独设置 150 秒超时，
+其他请求使用较短 timeout；不要打印或持久化明文 `confirmationToken`。
 
 ---
 

@@ -268,9 +268,6 @@ rag:
     model-revision: ${RAG_EMBEDDING_MODEL_REVISION:unspecified}
     distance-metric: COSINE
     normalization: PROVIDER_DEFAULT
-    migration-mode: ${RAG_EMBEDDING_MIGRATION_MODE:none}
-    migration-legacy-profile-key: ${RAG_EMBEDDING_MIGRATION_LEGACY_PROFILE_KEY:}
-    migration-confirm: ${RAG_EMBEDDING_MIGRATION_CONFIRM:}
 ```
 
 | Property | Default | Description |
@@ -279,15 +276,13 @@ rag:
 | `rag.embedding.base-url` | `https://api.siliconflow.cn` | API endpoint |
 | `rag.embedding.model` | `BAAI/bge-m3` | Embedding model name |
 | `rag.embedding.dimensions` | `1024` | Vector dimensions (must match model output) |
+| `rag.embedding.request-dimensions` | `false` | Explicitly send `dimensions` only for models verified to support it; environment variable `RAG_EMBEDDING_REQUEST_DIMENSIONS` |
 | `rag.embedding.retry-max-attempts` | `3` | Maximum provider attempts, range 1–10; also bounded by the dependency deadline, independent from durable-job attempts |
 | `rag.embedding.profile-key` | `siliconflow-bge-m3-1024-v1` | Immutable model-space identity used by writes and retrieval |
 | `rag.embedding.provider` | `siliconflow` | Provider identity stored in the Profile |
 | `rag.embedding.model-revision` | `unspecified` | Explicit revision identity; changing model semantics requires a new Profile |
 | `rag.embedding.distance-metric` | `COSINE` | Distance metric; only `COSINE` is supported in this release |
 | `rag.embedding.normalization` | `PROVIDER_DEFAULT` | Normalization semantics stored in the Profile |
-| `rag.embedding.migration-mode` | `none` | Startup migration mode for explicit Legacy adoption |
-| `rag.embedding.migration-legacy-profile-key` | `""` | Existing Profile key used for Legacy adoption |
-| `rag.embedding.migration-confirm` | `""` | Exact confirmation required by the Legacy adoption operation |
 
 Minimum `.env` example:
 
@@ -305,6 +300,12 @@ starting and refuses an incomplete configuration by default. Set
 not inject a mock embedding model or placeholder credential. The check is local
 shape validation, not proof that the remote provider accepts the key. Execute a
 real embedding request to verify provider availability.
+
+Each `rag.embedding.profiles.<key>` also accepts optional `request-dimensions`, defaulting to
+`false` so existing models receive no additional request field. For models supporting configurable
+output dimensions, opt in to send that Profile's `dimensions`; this never truncates vectors locally.
+The actual response must still match the fixed column dimension. Create a new Profile when changing
+the model space or output dimension rather than mutating an existing identity.
 
 `RAG_EMBEDDING_URL` and all `SILICONFLOW_*` embedding variables are retired names.
 They are not compatibility aliases and are never mapped automatically. If a local
@@ -488,6 +489,20 @@ rag:
     max-derived-rows: 250000
     max-affected-chat-sessions: 1000
     max-chat-rows: 50000
+    async-preview-deadline: ${RAG_COLLECTION_PURGE_ASYNC_PREVIEW_DEADLINE:60s}
+    async-preview-statement-timeout: ${RAG_COLLECTION_PURGE_ASYNC_PREVIEW_STATEMENT_TIMEOUT:10s}
+    async-preview-admission-lease: ${RAG_COLLECTION_PURGE_ASYNC_PREVIEW_ADMISSION_LEASE:180s}
+    async-preview-max-documents: ${RAG_COLLECTION_PURGE_ASYNC_PREVIEW_MAX_DOCUMENTS:1000000}
+    async-preview-max-derived-rows: ${RAG_COLLECTION_PURGE_ASYNC_PREVIEW_MAX_DERIVED_ROWS:10000000}
+    async-operation-lease: ${RAG_COLLECTION_PURGE_ASYNC_OPERATION_LEASE:120s}
+    async-operation-heartbeat: ${RAG_COLLECTION_PURGE_ASYNC_OPERATION_HEARTBEAT:20s}
+    async-batch-deadline: ${RAG_COLLECTION_PURGE_ASYNC_BATCH_DEADLINE:60s}
+    async-batch-statement-timeout: ${RAG_COLLECTION_PURGE_ASYNC_BATCH_STATEMENT_TIMEOUT:30s}
+    async-batch-max-documents: ${RAG_COLLECTION_PURGE_ASYNC_BATCH_MAX_DOCUMENTS:500}
+    async-batch-max-rows: ${RAG_COLLECTION_PURGE_ASYNC_BATCH_MAX_ROWS:5000}
+    async-worker-concurrency: ${RAG_COLLECTION_PURGE_ASYNC_WORKER_CONCURRENCY:2}
+    async-max-coordinator-attempts: ${RAG_COLLECTION_PURGE_ASYNC_MAX_COORDINATOR_ATTEMPTS:5}
+    async-manifest-batch-size: ${RAG_COLLECTION_PURGE_ASYNC_MANIFEST_BATCH_SIZE:5000}
 ```
 
 | Property | Default | Description |
@@ -507,6 +522,20 @@ rag:
 | `max-derived-rows` | `250000` | Other derived/control rows, range 1–2000000 |
 | `max-affected-chat-sessions` | `1000` | Affected owner/session pairs, range 1–10000 |
 | `max-chat-rows` | `50000` | Total history/memory/summary/turn-replay rows, range 1–500000 |
+| `async-preview-deadline` | `60s` | Async preview scan deadline, range 1s–120s |
+| `async-preview-statement-timeout` | `10s` | Per-query scan timeout, range 1s–30s |
+| `async-preview-admission-lease` | `180s` | Preview admission lease, range 150s–240s; must exceed deadline + SQL timeout + 30s |
+| `async-preview-max-documents` | `1000000` | Async preview document scan limit, maximum 1000000 |
+| `async-preview-max-derived-rows` | `10000000` | Async preview derived/reference scan limit, maximum 10000000 |
+| `async-operation-lease` | `120s` | Purge worker operation lease, range 30s–180s; must exceed batch deadline + 15s |
+| `async-operation-heartbeat` | `20s` | Worker heartbeat interval, range 1s–60s and no more than one third of the lease |
+| `async-batch-deadline` | `60s` | Hard wall-clock deadline per delete transaction, range 1s–120s |
+| `async-batch-statement-timeout` | `30s` | Per-statement delete timeout, range 1s–60s and no greater than the batch deadline |
+| `async-batch-max-documents` | `500` | Maximum documents processed per transaction, hard cap 500 |
+| `async-batch-max-rows` | `5000` | Maximum explicit dependency rows deleted per transaction, hard cap 10000 |
+| `async-worker-concurrency` | `2` | Concurrent async Purge workers, range 1–8 |
+| `async-max-coordinator-attempts` | `5` | Recoverable coordinator retry limit, range 1–10 |
+| `async-manifest-batch-size` | `5000` | PostgreSQL purge-target manifest page size, range 1–5000; targets are not fully loaded into JVM memory |
 
 Startup validation fails fast for invalid combinations. When enabled, the
 application also requires the durable Chat coordinator, transaction manager,

@@ -19,10 +19,7 @@ spec:
     matchLabels:
       {{- include "spring-ai-rag.selectorLabels" . | nindent 6 }}
   strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxUnavailable: 0       # zero-downtime rolling update
-      maxSurge: 1
+    type: Recreate
   template:
     metadata:
       labels:

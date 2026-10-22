@@ -3,7 +3,11 @@ package com.springairag.core.retrieval;
 import com.springairag.api.dto.RetrievalConfig;
 import com.springairag.api.dto.RetrievalResult;
 import com.springairag.api.enums.CollectionCoverageMode;
+import com.springairag.api.enums.ErrorCode;
+import com.springairag.core.exception.EmbeddingException;
+import com.springairag.core.exception.RagException;
 import com.springairag.core.config.EmbeddingProfile;
+import com.springairag.core.config.EmbeddingProfileModelResolver;
 import com.springairag.core.config.EmbeddingProfileProvider;
 import com.springairag.core.config.EmbeddingVectorColumns;
 import com.springairag.core.config.RagProperties;
@@ -62,6 +66,7 @@ public class HybridRetrieverService {
 
     private final EmbeddingModel embeddingModel;
     private final EmbeddingProfileProvider profileProvider;
+    private EmbeddingProfileModelResolver profileModelResolver;
     private final JdbcTemplate jdbcTemplate;
     private final Executor taskExecutor;
     private volatile Executor embeddingExecutor = ForkJoinPool.commonPool();
@@ -107,6 +112,11 @@ public class HybridRetrieverService {
         log.info("HybridRetrieverService initialized, retrievalTimeout={}s, fulltextStrategy={}",
                 retrievalTimeoutSeconds,
                 fulltextProviderFactory != null ? "auto-detect" : "disabled (no factory)");
+    }
+
+    @Autowired
+    void setProfileModelResolver(EmbeddingProfileModelResolver profileModelResolver) {
+        this.profileModelResolver = profileModelResolver;
     }
 
     @Autowired(required = false)
@@ -247,12 +257,66 @@ public class HybridRetrieverService {
             int limit,
             RetrievalConfig config,
             RetrievalFilters filters) {
+        RetrievalScope scope = requestedScope != null
+                ? requestedScope : RetrievalScope.unscoped();
+        if (profileModelResolver == null || scope.matchNone()) {
+            return searchInScopeDetailedForProfile(
+                    query, scope, excludeIds, limit, config, filters,
+                    profileProvider.getActiveProfile());
+        }
+        Map<Long, List<Long>> collectionIdsByProfile =
+                resolveEmbeddingProfiles(scope);
+        if (collectionIdsByProfile.size() > retrieval.getMaxEmbeddingProfileFanout()) {
+            throw new RagException(
+                    ErrorCode.EMBEDDING_PROFILE_FANOUT_LIMIT_EXCEEDED,
+                    "The authorized retrieval scope spans more embedding profiles than this request allows");
+        }
+        if (collectionIdsByProfile.isEmpty()) {
+            collectionIdsByProfile = Map.of(
+                    profileProvider.getActiveProfile().id(), List.of());
+        }
+        if (collectionIdsByProfile.size() == 1) {
+            EmbeddingProfile profile = profileProvider.findRequiredById(
+                    collectionIdsByProfile.keySet().iterator().next());
+            return searchInScopeDetailedForProfile(
+                    query, scope, excludeIds, limit, config, filters, profile);
+        }
+
+        List<RetrievalOutcome> outcomes = new ArrayList<>();
+        for (Map.Entry<Long, List<Long>> profileEntry : collectionIdsByProfile.entrySet()) {
+            EmbeddingProfile profile = profileProvider.findRequiredById(profileEntry.getKey());
+            RetrievalScope profileScope = scope;
+            if (scope.coverageMode() == CollectionCoverageMode.EACH_COLLECTION) {
+                profileScope = RetrievalScope.selectedCollections(
+                        profileEntry.getValue(), scope.documentIds(), scope.documentType(),
+                        CollectionCoverageMode.EACH_COLLECTION);
+            }
+            RetrievalOutcome outcome = searchInScopeDetailedForProfile(
+                    query, profileScope, excludeIds, limit, config, filters, profile);
+            if (hasIncompleteVectorBranch(outcome)) {
+                throw new EmbeddingException(
+                        "A required embedding profile could not complete retrieval: "
+                                + profile.profileKey());
+            }
+            outcomes.add(outcome);
+        }
+        return mergeProfileOutcomes(
+                outcomes, collectionIdsByProfile.keySet(), scope, limit);
+    }
+
+    private RetrievalOutcome searchInScopeDetailedForProfile(
+            String query,
+            RetrievalScope requestedScope,
+            List<Long> excludeIds,
+            int limit,
+            RetrievalConfig config,
+            RetrievalFilters filters,
+            EmbeddingProfile profile) {
         long startedAt = System.nanoTime();
         RetrievalScope scope = requestedScope != null
                 ? requestedScope
                 : RetrievalScope.unscoped();
         RetrievalFilters effectiveFilters = filters != null ? filters : RetrievalFilters.none();
-        EmbeddingProfile profile = profileProvider.getActiveProfile();
         Map<String, Object> scopeSummary = RetrievalScopeSummary.from(
                 null, scope, null, effectiveFilters, profile);
         List<RetrievalOutcome.QueryStat> queryStats = List.of(
@@ -560,6 +624,158 @@ public class HybridRetrieverService {
                 Math.min(MAX_COVERAGE_RAW_ROWS, rawCandidates));
     }
 
+    private Map<Long, List<Long>> resolveEmbeddingProfiles(RetrievalScope scope) {
+        EmbeddingProfile defaultProfile = profileProvider.getActiveProfile();
+        RetrievalScopeSql.Fragment fragment = RetrievalScopeSql.buildDocumentOnly(
+                scope, RetrievalFilters.none());
+        String sql = "SELECT DISTINCT CASE WHEN d.collection_id IS NULL THEN ? "
+                + "ELSE c.active_embedding_profile_id END AS profile_id, "
+                + "d.collection_id FROM rag_documents d "
+                + "LEFT JOIN rag_collection c ON c.id = d.collection_id "
+                + "WHERE d.enabled = TRUE " + fragment.sql()
+                + "AND (d.collection_id IS NULL OR c.active_embedding_profile_id IS NOT NULL) "
+                + "ORDER BY profile_id, d.collection_id";
+        List<Map<String, Object>> rows = jdbcTemplate.queryForList(
+                sql, prepend(defaultProfile.id(), fragment.args()));
+        Map<Long, List<Long>> result = new LinkedHashMap<>();
+        for (Map<String, Object> row : rows) {
+            Long profileId = ((Number) row.get("profile_id")).longValue();
+            Object collectionValue = row.get("collection_id");
+            Long collectionId = collectionValue instanceof Number number
+                    ? number.longValue() : null;
+            result.computeIfAbsent(profileId, ignored -> new ArrayList<>());
+            if (collectionId != null) {
+                result.get(profileId).add(collectionId);
+            }
+        }
+        if (scope.coverageMode() == CollectionCoverageMode.EACH_COLLECTION
+                && !scope.collectionIds().isEmpty()) {
+            List<Long> selectedIds = scope.collectionIds();
+            List<Map<String, Object>> selectedCollections = jdbcTemplate.queryForList(
+                    "SELECT id, active_embedding_profile_id FROM rag_collection "
+                            + "WHERE id = ANY (?) AND deleted = FALSE AND purged_at IS NULL "
+                            + "ORDER BY id",
+                    new org.springframework.jdbc.support.SqlArrayValue(
+                            "bigint", selectedIds.toArray()));
+            for (Map<String, Object> collection : selectedCollections) {
+                Object rawProfileId = collection.get("active_embedding_profile_id");
+                if (!(rawProfileId instanceof Number number)) {
+                    throw new IllegalStateException(
+                            "Collection embedding profile is not initialized");
+                }
+                long profileId = number.longValue();
+                Long collectionId = ((Number) collection.get("id")).longValue();
+                result.computeIfAbsent(profileId, ignored -> new ArrayList<>())
+                        .add(collectionId);
+            }
+        }
+        result.replaceAll((ignored, collectionIds) -> collectionIds.stream()
+                .distinct().toList());
+        return result;
+    }
+
+    private Object[] prepend(Object first, List<Object> rest) {
+        List<Object> args = new ArrayList<>(rest.size() + 1);
+        args.add(first);
+        args.addAll(rest);
+        return args.toArray();
+    }
+
+    private boolean hasIncompleteVectorBranch(RetrievalOutcome outcome) {
+        if (outcome.vectorStage() != null
+                && !RetrievalBranchStage.SUCCESS.equals(outcome.vectorStage().status())
+                && !RetrievalBranchStage.DISABLED.equals(outcome.vectorStage().status())) {
+            return true;
+        }
+        Object rawCoverage = outcome.scopeSummary().get("collectionCoverage");
+        if (!(rawCoverage instanceof Map<?, ?> coverage)) {
+            return false;
+        }
+        Object rawStatuses = coverage.get("collectionBranchStatuses");
+        if (!(rawStatuses instanceof Map<?, ?> statuses)) {
+            return false;
+        }
+        return statuses.values().stream().filter(Map.class::isInstance)
+                .map(Map.class::cast)
+                .map(status -> status.get("vector"))
+                .anyMatch(status -> status != null
+                        && !RetrievalBranchStage.SUCCESS.equals(status));
+    }
+
+    private RetrievalOutcome mergeProfileOutcomes(
+            List<RetrievalOutcome> outcomes,
+            Set<Long> profileIds,
+            RetrievalScope scope,
+            int requestedLimit) {
+        Map<String, RankedProfileResult> byIdentity = new LinkedHashMap<>();
+        List<RetrievalBranchStage> stages = new ArrayList<>();
+        int rawCount = 0;
+        long elapsed = 0;
+        for (RetrievalOutcome outcome : outcomes) {
+            stages.addAll(outcome.branchStages());
+            rawCount = Math.min(MAX_COVERAGE_RAW_ROWS,
+                    rawCount + outcome.rawCandidateCount());
+            elapsed += outcome.elapsedMs();
+            for (int rank = 0; rank < outcome.results().size(); rank++) {
+                RetrievalResult result = outcome.results().get(rank);
+                String key = result.getDocumentId() + ":" + result.getChunkIndex();
+                RankedProfileResult current = byIdentity.get(key);
+                double contribution = 1.0 / (60.0 + rank + 1);
+                if (current == null) {
+                    byIdentity.put(key, new RankedProfileResult(result, contribution));
+                } else {
+                    current.addContribution(contribution);
+                }
+            }
+        }
+        List<RetrievalResult> ranked = byIdentity.values().stream()
+                .sorted(Comparator.comparingDouble(RankedProfileResult::score).reversed()
+                        .thenComparing(value -> value.result().getDocumentId(),
+                                Comparator.nullsFirst(String::compareTo))
+                        .thenComparingInt(value -> value.result().getChunkIndex()))
+                .map(value -> {
+                    value.result().setScore(value.score() * 61.0 / profileIds.size());
+                    return value.result();
+                }).toList();
+        List<RetrievalResult> merged = scope.coverageMode() == CollectionCoverageMode.EACH_COLLECTION
+                ? CollectionCoverageMerger.retainCoverageInRankOrder(
+                        ranked, scope.collectionIds(), requestedLimit)
+                : ranked.stream().limit(Math.max(0, requestedLimit)).toList();
+        Map<String, Object> summary = new LinkedHashMap<>(
+                outcomes.isEmpty() ? Map.of() : outcomes.getFirst().scopeSummary());
+        summary.put("embeddingProfileFanoutCount", profileIds.size());
+        summary.put("embeddingProfileIds", profileIds.stream().sorted().toList());
+        RetrievalBranchStage fusion = new RetrievalBranchStage(
+                RetrievalBranchStage.FUSION, "reciprocal-rank-fusion-k60",
+                RetrievalBranchStage.SUCCESS, 0L, rawCount, merged.size(), null);
+        String outcomeCode = merged.isEmpty()
+                ? RetrievalOutcomeCodes.NO_CANDIDATES
+                : RetrievalOutcomeCodes.RESULTS_RETURNED;
+        return new RetrievalOutcome(
+                UUID.randomUUID(), merged,
+                outcomes.isEmpty() ? null : outcomes.getFirst().originalQuery(),
+                outcomes.isEmpty() ? List.of() : outcomes.getFirst().effectiveQueries(),
+                summary,
+                outcomes.isEmpty() ? Map.of() : outcomes.getFirst().filterSummary(),
+                stages, fusion, null, outcomeCode,
+                merged.isEmpty() ? outcomeCode : null,
+                elapsed, rawCount);
+    }
+
+    private static final class RankedProfileResult {
+        private final RetrievalResult result;
+        private double score;
+
+        private RankedProfileResult(RetrievalResult result, double score) {
+            this.result = result;
+            this.score = score;
+        }
+
+        private RetrievalResult result() { return result; }
+        private double score() { return score; }
+        private void addContribution(double contribution) { score += contribution; }
+    }
+
     private void validateCoverageBounds(RetrievalScope scope, int limit) {
         if (scope.collectionIds().size() > MAX_COVERAGE_COLLECTIONS) {
             throw new IllegalArgumentException(
@@ -580,7 +796,7 @@ public class HybridRetrieverService {
                     throw new CompletionException(
                             new TimeoutException("Collection coverage deadline expired"));
                 }
-                float[] vector = embeddingModel.embed(query);
+                float[] vector = modelFor(profile).embed(query);
                 validateQueryVector(vector, profile);
                 return vector;
             }), embeddingExecutor);
@@ -880,7 +1096,7 @@ public class HybridRetrieverService {
             RetrievalFilters filters) {
         long startedAt = System.nanoTime();
         try {
-            float[] queryVector = embeddingModel.embed(query);
+            float[] queryVector = modelFor(profile).embed(query);
             validateQueryVector(queryVector, profile);
             List<Map<String, Object>> rows =
                     executeVectorQuery(queryVector, scope, limit, profile, filters);
@@ -909,6 +1125,11 @@ public class HybridRetrieverService {
                             normalizeErrorCode(e)),
                     List.of());
         }
+    }
+
+    private EmbeddingModel modelFor(EmbeddingProfile profile) {
+        return profileModelResolver == null
+                ? embeddingModel : profileModelResolver.resolve(profile);
     }
 
     private BranchExecution runFulltext(

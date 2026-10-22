@@ -93,7 +93,8 @@ class DocumentEmbedServiceTest {
     void partialFailureDoesNotReplaceExistingVectors() {
         RagDocument document = document(2L, longContent(), "hash-2");
         when(documentRepository.findById(2L)).thenReturn(Optional.of(document));
-        when(embeddingBatchService.createEmbeddingsBatch(anyList())).thenAnswer(invocation -> {
+        when(embeddingBatchService.createEmbeddingsBatchForProfile(
+                anyList(), eq(PROFILE))).thenAnswer(invocation -> {
             List<String> texts = invocation.getArgument(0);
             return texts.stream()
                     .map(text -> new EmbeddingBatchService.EmbeddingResult(
@@ -121,7 +122,8 @@ class DocumentEmbedServiceTest {
     void dimensionMismatchIsRejectedBeforePersistence() {
         RagDocument document = document(3L, longContent(), "hash-3");
         when(documentRepository.findById(3L)).thenReturn(Optional.of(document));
-        when(embeddingBatchService.createEmbeddingsBatch(anyList())).thenAnswer(invocation -> {
+        when(embeddingBatchService.createEmbeddingsBatchForProfile(
+                anyList(), eq(PROFILE))).thenAnswer(invocation -> {
             List<String> texts = invocation.getArgument(0);
             return texts.stream()
                     .map(text -> new EmbeddingBatchService.EmbeddingResult(
@@ -204,7 +206,7 @@ class DocumentEmbedServiceTest {
         RagDocument changed = document(7L, longContent(), "hash-7");
         changed.setVersion(8L);
         when(documentRepository.findById(7L))
-                .thenReturn(Optional.of(captured), Optional.of(changed));
+                .thenReturn(Optional.of(captured), Optional.of(captured), Optional.of(changed));
         mockSuccessfulEmbeddings();
         doAnswer(invocation -> {
             EmbeddingCommitGuard guard = invocation.getArgument(6);
@@ -237,7 +239,8 @@ class DocumentEmbedServiceTest {
     }
 
     private void mockSuccessfulEmbeddings() {
-        when(embeddingBatchService.createEmbeddingsBatch(anyList())).thenAnswer(invocation -> {
+        when(embeddingBatchService.createEmbeddingsBatchForProfile(
+                anyList(), eq(PROFILE))).thenAnswer(invocation -> {
             List<String> texts = invocation.getArgument(0);
             return texts.stream()
                     .map(text -> new EmbeddingBatchService.EmbeddingResult(

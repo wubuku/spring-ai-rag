@@ -14,6 +14,7 @@ import com.springairag.api.dto.CollectionRestoreResponse;
 import com.springairag.api.dto.CollectionPurgeApplyRequest;
 import com.springairag.api.dto.CollectionPurgePreviewResponse;
 import com.springairag.api.dto.CollectionPurgeResultResponse;
+import com.springairag.api.dto.LongRunningOperationResponse;
 import com.springairag.api.dto.DocumentAddedResponse;
 import com.springairag.api.dto.DocumentSummary;
 import com.springairag.api.dto.DocumentUpdateRequest;
@@ -56,6 +57,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.context.request.RequestContextHolder;
@@ -141,6 +143,23 @@ public class RagCollectionController {
     }
 
     @Operation(
+            summary = "Preview asynchronous Collection purge",
+            description = "Scans a bounded large-Collection purge plan and returns a one-time token.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Async purge preview created"),
+            @ApiResponse(responseCode = "403", description = "Administrative caller required"),
+            @ApiResponse(responseCode = "422", description = "Async preview scan limit exceeded"),
+            @ApiResponse(responseCode = "429", description = "Preview scan capacity exhausted"),
+            @ApiResponse(responseCode = "503", description = "Preview timed out or purge is disabled")
+    })
+    @PostMapping("/by-key/purge/async/preview")
+    public CollectionPurgePreviewResponse previewAsyncPurge(
+            @RequestParam String collectionKey,
+            HttpServletRequest request) {
+        return collectionPurgeService.previewAsync(collectionKey, request);
+    }
+
+    @Operation(
             summary = "Permanently purge and retire a Collection",
             description = "Applies an unchanged purge preview in one transaction. "
                     + "The Collection key remains permanently reserved.")
@@ -155,6 +174,47 @@ public class RagCollectionController {
             @Valid @RequestBody CollectionPurgeApplyRequest requestBody,
             HttpServletRequest request) {
         return collectionPurgeService.apply(requestBody, request);
+    }
+
+    @Operation(
+            summary = "Submit asynchronous Collection purge",
+            description = "Admits a confirmed purge as a durable operation; reuse Idempotency-Key for retries.",
+            parameters = @Parameter(
+                    name = "Idempotency-Key",
+                    description = "Required key for safe retries of this request",
+                    in = ParameterIn.HEADER,
+                    required = true,
+                    schema = @Schema(type = "string")))
+    @ApiResponses({
+            @ApiResponse(responseCode = "202", description = "Purge operation accepted",
+                    headers = {
+                            @io.swagger.v3.oas.annotations.headers.Header(
+                                    name = "Location", description = "Operation status URL",
+                                    schema = @Schema(type = "string")),
+                            @io.swagger.v3.oas.annotations.headers.Header(
+                                    name = "Retry-After", description = "Suggested poll delay in seconds",
+                                    schema = @Schema(type = "integer"))
+                    },
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = LongRunningOperationResponse.class))),
+            @ApiResponse(responseCode = "403", description = "Administrative caller required"),
+            @ApiResponse(responseCode = "404", description = "Preview not found"),
+            @ApiResponse(responseCode = "409", description = "Preview or Collection state conflict"),
+            @ApiResponse(responseCode = "429", description = "Operation capacity exhausted",
+                    headers = @io.swagger.v3.oas.annotations.headers.Header(
+                            name = "Retry-After", description = "Suggested retry delay in seconds",
+                            schema = @Schema(type = "integer")))
+    })
+    @PostMapping("/by-key/purge/async")
+    public ResponseEntity<LongRunningOperationResponse> applyAsyncPurge(
+            @Valid @RequestBody CollectionPurgeApplyRequest requestBody,
+            HttpServletRequest request) {
+        LongRunningOperationResponse receipt = collectionPurgeService.applyAsync(
+                requestBody, Collections.list(request.getHeaders("Idempotency-Key")), request);
+        return ResponseEntity.accepted()
+                .location(java.net.URI.create(receipt.statusUrl()))
+                .header(HttpHeaders.RETRY_AFTER, "2")
+                .body(receipt);
     }
 
     /**

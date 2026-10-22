@@ -61,6 +61,7 @@ the [Testing Guide](testing-guide.md) for the full matrix.
 - [x] WebUI lint, full Vitest, and production build
 - [x] Full Playwright suite
 - [x] Helm lint/template and Docker image build
+- [x] Render default and production Helm values and assert every Deployment uses `Recreate`
 - [x] PostgreSQL-profile server startup and `scripts/e2e-test.sh`
 - [x] Retrieval goldenset run
 - [x] Versioned live retrieval regression is available through `--with-quality-regression` or `--with-local-runtime`

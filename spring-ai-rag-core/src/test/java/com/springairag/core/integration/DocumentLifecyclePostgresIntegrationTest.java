@@ -992,17 +992,30 @@ class DocumentLifecyclePostgresIntegrationTest {
             String chunkText,
             int start,
             int end) {
-        jdbcTemplate.update("""
-                INSERT INTO rag_embeddings (
-                    document_id, embedding_profile_id, chunk_text,
-                    chunk_index, embedding, embedding_1024,
-                    chunk_start_pos, chunk_end_pos
-                ) VALUES (?, ?, ?, ?,
-                    ('[' || repeat('0,', 1023) || '0]')::vector,
-                    ('[' || repeat('0,', 1023) || '0]')::vector,
-                    ?, ?)
-                """,
-                documentId, profileId, chunkText, chunkIndex, start, end);
+        if (columnExists("rag_embeddings", "embedding")) {
+            jdbcTemplate.update("""
+                    INSERT INTO rag_embeddings (
+                        document_id, embedding_profile_id, chunk_text,
+                        chunk_index, embedding, embedding_1024,
+                        chunk_start_pos, chunk_end_pos
+                    ) VALUES (?, ?, ?, ?,
+                        ('[' || repeat('0,', 1023) || '0]')::vector,
+                        ('[' || repeat('0,', 1023) || '0]')::vector,
+                        ?, ?)
+                    """,
+                    documentId, profileId, chunkText, chunkIndex, start, end);
+        } else {
+            jdbcTemplate.update("""
+                    INSERT INTO rag_embeddings (
+                        document_id, embedding_profile_id, chunk_text,
+                        chunk_index, embedding_1024,
+                        chunk_start_pos, chunk_end_pos
+                    ) VALUES (?, ?, ?, ?,
+                        ('[' || repeat('0,', 1023) || '0]')::vector,
+                        ?, ?)
+                    """,
+                    documentId, profileId, chunkText, chunkIndex, start, end);
+        }
     }
 
     private <T> T stateValue(

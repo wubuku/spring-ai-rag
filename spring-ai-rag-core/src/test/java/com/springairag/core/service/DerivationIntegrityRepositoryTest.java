@@ -15,6 +15,7 @@ import org.springframework.jdbc.core.RowMapper;
 
 import java.sql.ResultSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -22,10 +23,12 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -47,9 +50,13 @@ class DerivationIntegrityRepositoryTest {
 
     @BeforeEach
     void setUp() {
-        when(profileProvider.getActiveProfile()).thenReturn(new EmbeddingProfile(
+        lenient().when(profileProvider.getActiveProfile()).thenReturn(new EmbeddingProfile(
                 7L, "bge-m3", "vendor", "bge-m3", "rev-1", 1024,
                 "cosine", "normalize", true));
+        lenient().when(profileProvider.getProfileForCollection(anyLong())).thenReturn(
+                new EmbeddingProfile(
+                        8L, "collection-profile", "vendor", "model-384", "rev-1", 384,
+                        "cosine", "normalize", true));
         repository = new DerivationIntegrityRepository(
                 jdbcTemplate,
                 profileProvider,
@@ -97,6 +104,9 @@ class DerivationIntegrityRepositoryTest {
     @Test
     void inspectMapsFullRowAndFallsBackToMissingSnapshot() throws Exception {
         ResultSet full = fullRow();
+        when(jdbcTemplate.queryForList(
+                eq("SELECT collection_id FROM rag_documents WHERE id = ?"), eq(1L)))
+                .thenReturn(List.of(Map.of("collection_id", COLLECTION_ID)));
         when(jdbcTemplate.query(anyString(), any(RowMapper.class),
                 any(Object[].class)))
                 .thenAnswer(invocation -> {
@@ -123,8 +133,9 @@ class DerivationIntegrityRepositoryTest {
         assertEquals(4, snapshot.vectorActual());
 
         // 空结果 → missing 快照（DISABLED 桶 + DOCUMENT_MISSING 原因）。
-        when(jdbcTemplate.query(anyString(), any(RowMapper.class),
-                any(Object[].class))).thenReturn(List.of());
+        when(jdbcTemplate.queryForList(
+                eq("SELECT collection_id FROM rag_documents WHERE id = ?"), eq(99L)))
+                .thenReturn(List.of());
         DerivationIntegrityRepository.Snapshot missing = repository.inspect(99L);
         assertEquals(99L, missing.documentId());
         assertNull(missing.title());
@@ -145,6 +156,9 @@ class DerivationIntegrityRepositoryTest {
         when(empty.getBoolean(anyString())).thenReturn(false);
         when(empty.getString("title")).thenReturn("Doc B");
         when(empty.getLong("id")).thenReturn(2L);
+        when(jdbcTemplate.queryForList(
+                eq("SELECT collection_id FROM rag_documents WHERE id = ?"), eq(2L)))
+                .thenReturn(List.of(Map.of("collection_id", COLLECTION_ID)));
         when(jdbcTemplate.query(anyString(), any(RowMapper.class),
                 any(Object[].class)))
                 .thenAnswer(invocation -> {
@@ -187,7 +201,10 @@ class DerivationIntegrityRepositoryTest {
                 any(RowMapper.class), argsCaptor.capture());
         assertTrue(sqlCaptor.getValue().contains("document.collection_id = ?"));
         assertTrue(sqlCaptor.getValue().contains("ORDER BY document.id"));
+        assertTrue(sqlCaptor.getValue().contains("embedding_profile_id = ?"));
+        assertTrue(sqlCaptor.getValue().contains("embedding.embedding_384"));
         // query() 前 5 个参数为 chunker/profile 占位，集合谓词参数在下标 5。
+        assertEquals(8L, argsCaptor.getValue()[2]);
         assertEquals(COLLECTION_ID, argsCaptor.getValue()[5]);
     }
 

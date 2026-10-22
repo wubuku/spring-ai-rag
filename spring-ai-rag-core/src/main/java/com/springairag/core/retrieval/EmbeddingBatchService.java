@@ -2,6 +2,8 @@ package com.springairag.core.retrieval;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.springairag.core.config.RagProperties;
+import com.springairag.core.config.EmbeddingProfile;
+import com.springairag.core.config.EmbeddingProfileModelResolver;
 import com.springairag.core.resilience.LlmCircuitBreaker;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,23 +41,41 @@ public class EmbeddingBatchService {
     private static final int DEFAULT_BATCH_SIZE = 10;
 
     private final EmbeddingModel embeddingModel;
+    private final EmbeddingProfileModelResolver profileModelResolver;
     private final int batchSize;
     private final LlmCircuitBreaker circuitBreaker;
 
     @Autowired
-    public EmbeddingBatchService(EmbeddingModel embeddingModel, RagProperties ragProperties) {
+    public EmbeddingBatchService(
+            EmbeddingModel embeddingModel,
+            RagProperties ragProperties,
+            EmbeddingProfileModelResolver profileModelResolver) {
         this(embeddingModel, DEFAULT_BATCH_SIZE,
                 ragProperties.getEmbeddingCircuitBreaker().isEnabled()
                         ? new LlmCircuitBreaker(ragProperties.getEmbeddingCircuitBreaker())
-                        : null);
+                        : null,
+                profileModelResolver);
+    }
+
+    public EmbeddingBatchService(EmbeddingModel embeddingModel, RagProperties ragProperties) {
+        this(embeddingModel, ragProperties, null);
     }
 
     public EmbeddingBatchService(EmbeddingModel embeddingModel, int batchSize) {
-        this(embeddingModel, batchSize, null);
+        this(embeddingModel, batchSize, null, null);
     }
 
     public EmbeddingBatchService(EmbeddingModel embeddingModel, int batchSize, LlmCircuitBreaker circuitBreaker) {
+        this(embeddingModel, batchSize, circuitBreaker, null);
+    }
+
+    private EmbeddingBatchService(
+            EmbeddingModel embeddingModel,
+            int batchSize,
+            LlmCircuitBreaker circuitBreaker,
+            EmbeddingProfileModelResolver profileModelResolver) {
         this.embeddingModel = embeddingModel;
+        this.profileModelResolver = profileModelResolver;
         this.batchSize = batchSize > 0 ? batchSize : DEFAULT_BATCH_SIZE;
         this.circuitBreaker = circuitBreaker;
         if (this.circuitBreaker != null) {
@@ -73,6 +93,17 @@ public class EmbeddingBatchService {
         return createEmbeddingsBatch(texts, null);
     }
 
+    public List<EmbeddingResult> createEmbeddingsBatchForProfile(
+            List<String> texts, EmbeddingProfile profile) {
+        if (profile == null) {
+            throw new IllegalArgumentException("Embedding Profile is required");
+        }
+        EmbeddingModel selectedModel = profileModelResolver == null
+                ? requireLegacyProfile(profile)
+                : profileModelResolver.resolve(profile);
+        return createEmbeddingsBatch(texts, null, selectedModel);
+    }
+
     /**
      * Generate embeddings with a progress callback.
      *
@@ -82,6 +113,13 @@ public class EmbeddingBatchService {
      */
     public List<EmbeddingResult> createEmbeddingsBatch(List<String> texts,
                                                         ProgressCallback progressCallback) {
+        return createEmbeddingsBatch(texts, progressCallback, embeddingModel);
+    }
+
+    private List<EmbeddingResult> createEmbeddingsBatch(
+            List<String> texts,
+            ProgressCallback progressCallback,
+            EmbeddingModel selectedModel) {
         if (texts == null || texts.isEmpty()) {
             return List.of();
         }
@@ -95,7 +133,7 @@ public class EmbeddingBatchService {
             int end = Math.min(i + batchSize, total);
             List<String> batch = texts.subList(i, end);
 
-            processBatch(batch, results);
+            processBatch(batch, results, selectedModel);
 
             if (progressCallback != null) {
                 progressCallback.onProgress(end, total);
@@ -111,7 +149,8 @@ public class EmbeddingBatchService {
     /**
      * Process one batch: circuit breaker check → try batch API → sequential fallback on failure.
      */
-    private void processBatch(List<String> batch, List<EmbeddingResult> results) {
+    private void processBatch(
+            List<String> batch, List<EmbeddingResult> results, EmbeddingModel selectedModel) {
         // Circuit breaker: reject immediately if OPEN
         if (circuitBreaker != null && !circuitBreaker.allowCall()) {
             log.warn("Embedding circuit breaker is OPEN, rejecting batch of {} items", batch.size());
@@ -125,7 +164,7 @@ public class EmbeddingBatchService {
 
         try {
             EmbeddingRequest request = new EmbeddingRequest(batch, EmbeddingOptions.builder().build());
-            EmbeddingResponse response = embeddingModel.call(request);
+            EmbeddingResponse response = selectedModel.call(request);
 
             List<float[]> embeddings = response.getResults().stream()
                     .map(Embedding::getOutput)
@@ -156,7 +195,7 @@ public class EmbeddingBatchService {
                     EmbeddingFailureClassifier.classify(batchError));
             for (String text : batch) {
                 try {
-                    float[] embedding = embeddingModel.embed(text);
+                    float[] embedding = selectedModel.embed(text);
                     results.add(new EmbeddingResult(text, embedding, null));
                     if (circuitBreaker != null) {
                         circuitBreaker.recordSuccess();
@@ -171,6 +210,15 @@ public class EmbeddingBatchService {
                 }
             }
         }
+    }
+
+    private EmbeddingModel requireLegacyProfile(EmbeddingProfile profile) {
+        if (profileModelResolver == null) {
+            throw new IllegalStateException(
+                    "Profile-specific model routing is not configured for "
+                            + profile.profileKey());
+        }
+        return profileModelResolver.resolve(profile);
     }
 
     /**

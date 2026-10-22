@@ -44,6 +44,7 @@ import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -121,7 +122,11 @@ class DerivationRepairServiceFlowTest {
                 .thenReturn(collection(COLLECTION_ID, "kb"));
         when(collectionResolver.beginActiveWrite(eq(COLLECTION_ID)))
                 .thenReturn(new ActiveCollectionToken(COLLECTION_ID, 1L));
-        when(profileProvider.getActiveProfile()).thenReturn(profile());
+        when(profileProvider.getActiveProfile()).thenReturn(new EmbeddingProfile(
+                99L, "global-profile", "vendor", "global-model", "rev-1",
+                1024, "COSINE", "PROVIDER_DEFAULT", true));
+        lenient().when(profileProvider.getProfileForCollection(COLLECTION_ID))
+                .thenReturn(profile());
     }
 
     private EmbeddingProfile profile() {

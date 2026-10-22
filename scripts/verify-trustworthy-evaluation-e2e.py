@@ -26,6 +26,9 @@ LIB = module('trusted_quality_lib', 'scripts/lib/knowledge_quality.py')
 DEFINITION = ROOT / 'testdata/knowledge-qa-quality/v2/definition.json'
 
 
+assert_database_identity = QUALITY.BASE.assert_database_identity
+
+
 class Acceptance(QUALITY.BASE.Acceptance):
     def __init__(self):
         super().__init__()
@@ -41,6 +44,23 @@ class Acceptance(QUALITY.BASE.Acceptance):
                 os.environ.pop('DEPENDENCY_PROVIDER_QUALITY_FIXTURE', None)
             else:
                 os.environ['DEPENDENCY_PROVIDER_QUALITY_FIXTURE'] = previous
+
+    def start(self, database='rag_source', chat_attempts=1):
+        before = self.sql('BEGIN READ ONLY; SELECT current_database(); ROLLBACK', database)
+        assert_database_identity(database, before, 'Spring/Flyway startup')
+        startup_log_path = self.directory / (database + '-server.log')
+        startup_log_offset = startup_log_path.stat().st_size if startup_log_path.exists() else 0
+        super().start(database, chat_attempts)
+        after = self.sql('BEGIN READ ONLY; SELECT current_database(); ROLLBACK', database)
+        try:
+            assert_database_identity(database, after, 'diagnostic requests')
+            jdbc_target = f'jdbc:postgresql://127.0.0.1:{self.db_port}/{database}'
+            QUALITY.BASE.assert_database_startup_log(
+                jdbc_target, startup_log_path.read_bytes(), startup_log_offset)
+        except RuntimeError:
+            if self.service and self.service.poll() is None:
+                self.stop()
+            raise
 
     def matrix(self, label):
         environment = dict(self.environment, KNOWLEDGE_QA_BASE_URL=self.base,
@@ -87,24 +107,14 @@ class Acceptance(QUALITY.BASE.Acceptance):
         assert status == 200 and 'no-store' in headers.get('Cache-Control', '')
         assert report['status'] == 'PASSED' and report['executionKind'] == 'NEW_PAID_EXECUTION_NOT_HISTORICAL_REPLAY'
         capture = report['capture']
-        LIB.private_json(self.directory / 'capture-response.json', report)
         assert capture['complete'] and capture['lastInvocationMessages'] and capture['evidence'] and capture['sourceProjections'], {key: capture.get(key) for key in ('complete', 'truncated', 'redacted')}
         assert '48' in capture['answer'] and any('48' in item['text'] for item in capture['evidence'])
         assert '48' in capture['modelAnswer'] and capture['answerOutcome']['status'] == 'ANSWER'
         assert any('48' in item['content'] for item in capture['lastInvocationMessages']), 'captured query rewrite instead of final grounded prompt'
+        assert not (self.directory / 'capture-response.json').exists(), 'diagnostic capture must remain in memory'
         assert self.sql('SELECT count(*) FROM rag_evaluation_case_results') == before, 'diagnostic wrote case metrics'
         assert self.sql("SELECT count(*) FROM rag_evaluation_case_results WHERE metrics::text LIKE '%lastInvocationMessages%' OR metrics::text LIKE '%matchedText%'") == '0'
-        self.record('dual acknowledgement, actual prompt/evidence/answer, no-store, no diagnostic body persisted')
-        environment = dict(self.environment, KNOWLEDGE_QA_BASE_URL=self.base, KNOWLEDGE_QA_API_KEY=QUALITY.BASE.ROOT_KEY)
-        root = self.directory / 'diagnostics'
-        self.command([sys.executable, 'scripts/knowledge-qa-diagnostics.py', 'record', '--root', str(root),
-                      '--definition', str(DEFINITION), '--suite-key', 'trusted-candidate', '--version', '1',
-                      '--case-id', 'current-price', '--ack-paid-models', '--ack-sensitive-content'], 'record', environment)
-        directory = next(root.iterdir())
-        calls = self.state()['chat']['calls']
-        self.command([sys.executable, 'scripts/knowledge-qa-diagnostics.py', 'replay', '--directory', str(directory)], 'replay')
-        assert calls == self.state()['chat']['calls'], 'replay invoked model'
-        self.record('private CLI record and purely local replay without model calls')
+        self.record('dual acknowledgement, in-memory prompt/evidence/answer, no-store and no persisted diagnostic body')
         self.fault('chat', refusalOverride='Controlled provider policy refusal')
         refusal = json.loads(self.request(suite, payload)[2])
         assert refusal['metrics']['observedOutcome'] == 'MODEL_SAFETY_REFUSAL'

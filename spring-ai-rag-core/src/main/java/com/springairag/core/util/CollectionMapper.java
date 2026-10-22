@@ -33,6 +33,7 @@ public final class CollectionMapper {
         map.put("description", c.getDescription());
         map.put("embeddingModel", c.getEmbeddingModel());
         map.put("dimensions", c.getDimensions());
+        map.put("embeddingProfileId", c.getActiveEmbeddingProfileId());
         map.put("enabled", c.getEnabled());
         map.put("metadata", c.getMetadata());
         map.put("createdAt", c.getCreatedAt());

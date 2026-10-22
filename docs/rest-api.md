@@ -185,7 +185,9 @@ credential, but a database NORMAL principal does not need an additional
       "documentSyncRunItemReceipts": false,
       "openAiCompatibility": false,
       "integrationObservability": true,
-      "collectionPurge": false
+      "collectionPurge": false,
+      "embeddingProfileRouting": true,
+      "embeddingProfileOperations": true
     },
     "credentialRotation": {
       "immediate": true,
@@ -250,6 +252,61 @@ a database `ADMIN`, or an explicitly allowed auth-disabled direct-loopback
 caller. Database `NORMAL`, legacy static, and ordinary remote anonymous callers
 always see `false`. The published limits support early sizing, but do not
 replace preview-time conflict and reference-integrity checks.
+
+`features.optional.embeddingProfileRouting` indicates that Collection writes
+and retrievals route through the Profile bound to that Collection;
+`embeddingProfileOperations` indicates that the Collection Profile-switch and
+Operation-receipt endpoints below are available. Neither flag advertises
+asynchronous Collection Purge.
+
+### Durable Collection Embedding Profile Switch
+
+`POST /api/v1/rag/collections/by-key/embedding-profile/operations` accepts a
+long-running Profile switch. The request requires `Idempotency-Key` and uses
+the current Collection `version` for optimistic concurrency:
+
+```http
+POST /api/v1/rag/collections/by-key/embedding-profile/operations
+Idempotency-Key: client-generated-operation-key
+Content-Type: application/json
+
+{"collectionKey":"customer-42:records:v1","targetProfileKey":"bge-m3-1024","expectedCollectionVersion":12}
+```
+
+The first accepted request returns `202 Accepted`, `Location`, and an
+Operation receipt. Replaying the same owner, key, operation kind, Collection,
+and request returns the same Operation; reusing the key for different input
+returns `409 IDEMPOTENCY_KEY_REUSED`. Collection ACL is enforced and the target
+Profile must be registered and enabled. Selecting the current Profile returns
+`409 LONG_RUNNING_OPERATION_STATE_CONFLICT`. Acceptance does not mean
+re-embedding or the Profile switch has completed.
+Exhausted owner or global Operation capacity returns
+`429 LONG_RUNNING_OPERATION_CAPACITY_EXCEEDED` with `Retry-After: 5` seconds as
+a suggested delay; this does not guarantee capacity will be available then.
+
+The receipt includes `operationId`, `operationKind`, `status`, redacted
+`progress`, `statusUrl`, `resultUrl`, and timestamps. Status is one of
+`QUEUED`, `RUNNING`, `RETRY_WAIT`, `SUCCEEDED`, `CANCELLED`, `STALE`, or
+`DEGRADED`; `failure` exposes a stable error code only, never exception text
+or document content. Poll the supplied URLs:
+
+| Method and path | Purpose | Success |
+|---|---|---|
+| `GET /api/v1/rag/operations/{operationId}` | Read Operation status and progress | `200` |
+| `GET /api/v1/rag/operations/{operationId}/result` | Read a completed result | `200` |
+| `POST /api/v1/rag/operations/{operationId}/cancel` | Request cooperative cancellation | `202` |
+| `POST /api/v1/rag/operations/{operationId}/retry` | Retry `DEGRADED` or due `RETRY_WAIT` | `202` |
+
+An Operation is visible only to its creator, and current Collection access is
+checked again; missing and unauthorized resources are not disclosed. A result
+that is not ready returns `409 LONG_RUNNING_OPERATION_RESULT_NOT_READY`; an
+expired result returns `410 LONG_RUNNING_OPERATION_RESULT_EXPIRED`. Only
+recoverable states can be retried, and terminal states cannot be cancelled.
+Profile-switch cancellation is cooperative: the service stops dispatching new
+child work and waits for work owned by this Operation to quiesce safely. It does
+not roll back safely generated target-Profile derivations, and it never switches
+the Collection to the target Profile. Existing per-document Processing Run
+and Embedding Job APIs and state semantics remain unchanged.
 
 #### `GET /api/v1/rag/integration-observability`
 
@@ -2636,6 +2693,64 @@ Primary errors:
 - `409 COLLECTION_PURGE_CONFIRMATION_INVALID`
 - `409 COLLECTION_ALREADY_RETIRED`
 - `503 COLLECTION_PURGE_DISABLED`
+
+#### Asynchronous purge for large Collections
+
+The synchronous preview/apply routes and their existing `200` responses remain
+unchanged. Large Collections use a separate bounded scan and durable operation:
+
+```http
+POST /api/v1/rag/collections/by-key/purge/async/preview?collectionKey=customer-42%3Amanual%3Av3
+POST /api/v1/rag/collections/by-key/purge/async
+```
+
+The async preview is still a synchronous HTTP request. By default it scans at
+most 1,000,000 documents and 10,000,000 derived/reference rows, with a 60-second
+deadline and a 10-second per-statement timeout. It streams counts and a
+fingerprint instead of materializing every target ID in the JVM, and never
+issues a token for a partial scan. Limit errors return `422
+COLLECTION_PURGE_ASYNC_PREVIEW_LIMIT_EXCEEDED`; exhausted owner/global admission
+returns `429` with `Retry-After`; a deadline returns `503
+COLLECTION_PURGE_PREVIEW_TIMEOUT` with `Retry-After`. Set the caller's read/request
+timeout to the configured preview deadline plus at least 15 seconds. The sample
+clients use 150 seconds for this endpoint only; they do not increase the global
+timeout for ordinary requests.
+
+Apply uses the same JSON body as the synchronous API and requires one
+`Idempotency-Key` header. Reuse the same key when retrying the same logical
+request; a different request with that key returns `409 IDEMPOTENCY_KEY_REUSED`.
+Acceptance returns `202`, `Location`, `Retry-After`, and a
+`LongRunningOperationResponse` receipt:
+
+```http
+POST /api/v1/rag/collections/by-key/purge/async
+Idempotency-Key: 4c695a13-8f0a-4e0c-92e0-ff2a59c26c43
+```
+
+```json
+{
+  "operationId": "33333333-3333-4333-8333-333333333333",
+  "operationKind": "COLLECTION_PURGE",
+  "status": "QUEUED",
+  "statusUrl": "/api/v1/rag/operations/33333333-3333-4333-8333-333333333333",
+  "resultUrl": "/api/v1/rag/operations/33333333-3333-4333-8333-333333333333/result"
+}
+```
+
+Poll `statusUrl` and read the completed result from `resultUrl`; cancellation is
+available at `POST /api/v1/rag/operations/{operationId}/cancel`. Cancellation is
+accepted only before the destructive Collection fence commits. The operation
+continues recoverable execution after fencing. Applying an async preview through
+the legacy synchronous route returns `409
+COLLECTION_PURGE_ASYNC_PREVIEW_REQUIRES_ASYNC_APPLY` and never enters the
+synchronous deletion transaction. Owner isolation, confirmation, authorization,
+and Collection-version checks also apply to the async route.
+
+Minimal Python/Node clients are in
+`examples/client-sdk/python/collection_purge_async.py` and
+`examples/client-sdk/node/collection-purge-async.mjs`. They use a dedicated
+150-second timeout for async preview and shorter timeouts for other requests;
+never log or persist the plaintext `confirmationToken`.
 
 ---
 

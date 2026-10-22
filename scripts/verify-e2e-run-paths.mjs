@@ -71,12 +71,12 @@ const INVOCATION = /playwright\s+test/g;
 /** One spec named on a command line. */
 const SPEC_TOKEN = /e2e\/([A-Za-z0-9._-]+\.spec\.ts)/g;
 
-function shellScripts(dir) {
+function verificationScripts(dir) {
   const out = [];
   for (const entry of readdirSync(dir)) {
     const path = join(dir, entry);
-    if (statSync(path).isDirectory()) out.push(...shellScripts(path));
-    else if (entry.endsWith('.sh')) out.push(path);
+    if (statSync(path).isDirectory()) out.push(...verificationScripts(path));
+    else if (entry.endsWith('.sh') || /^verify-.+\.py$/u.test(entry)) out.push(path);
   }
   return out;
 }
@@ -88,7 +88,7 @@ export function collectSpecs(e2eDir = E2E_DIR) {
 }
 
 /**
- * The text of one shell command, starting at {@code from}.
+ * The text of one verification command, starting at {@code from}.
  *
  * <p>A backslash-continued command ends at the first line that does not end
  * with one. Scanning instead to the next `playwright test` would swallow
@@ -119,7 +119,7 @@ function commandTextAt(source, from) {
  */
 export function collectRunPaths(scriptDir = SCRIPT_DIR) {
   const bySpec = new Map();
-  for (const path of shellScripts(scriptDir)) {
+  for (const path of verificationScripts(scriptDir)) {
     const source = readFileSync(path, 'utf8');
     INVOCATION.lastIndex = 0;
     let match;

@@ -46,6 +46,11 @@ curl http://localhost:8081/actuator/health
 
 ### Upgrade
 
+The Deployment uses the `Recreate` strategy because database migrations can make
+old and new application binaries incompatible. Helm upgrades therefore include
+downtime while old Pods terminate before new Pods start; do not override this
+strategy with a rolling update.
+
 ```bash
 helm upgrade spring-ai-rag ./k8s \
   --namespace rag-system \

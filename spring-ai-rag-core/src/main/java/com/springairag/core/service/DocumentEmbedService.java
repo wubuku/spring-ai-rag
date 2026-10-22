@@ -94,14 +94,23 @@ public class DocumentEmbedService {
                 || document.getContentHash().isBlank()) {
             return false;
         }
+        return hasFreshEmbedding(document, profileForDocument(document));
+    }
+
+    public boolean hasFreshEmbedding(
+            RagDocument document, EmbeddingProfile profile) {
+        if (document == null || document.getId() == null
+                || document.getContentHash() == null
+                || document.getContentHash().isBlank()) {
+            return false;
+        }
         if (integrityRepository != null) {
-            return integrityRepository.inspect(document).vectorFresh();
+            return integrityRepository.inspect(document, profile).vectorFresh();
         }
         if (keywordIndexPersistenceService != null
                 && !keywordIndexPersistenceService.hasFreshLocalIndex(document)) {
             return false;
         }
-        EmbeddingProfile profile = profileProvider.getActiveProfile();
         return persistenceService.findCacheState(
                 document.getId(),
                 document.getDocumentType(),
@@ -124,6 +133,7 @@ public class DocumentEmbedService {
                 force,
                 progressCallback,
                 EmbeddingCommitGuard.allowAll(),
+                null,
                 true);
     }
 
@@ -147,11 +157,22 @@ public class DocumentEmbedService {
             boolean force,
             EmbeddingCommitGuard commitGuard,
             Consumer<EmbedProgressEvent> progressCallback) {
+        return embedDocumentForJob(
+                documentId, force, null, commitGuard, progressCallback);
+    }
+
+    public Map<String, Object> embedDocumentForJob(
+            Long documentId,
+            boolean force,
+            Long embeddingProfileId,
+            EmbeddingCommitGuard commitGuard,
+            Consumer<EmbedProgressEvent> progressCallback) {
         return embedDocumentInternal(
                 documentId,
                 force,
                 progressCallback,
                 Objects.requireNonNull(commitGuard),
+                embeddingProfileId,
                 false);
     }
 
@@ -160,16 +181,20 @@ public class DocumentEmbedService {
             boolean force,
             java.util.function.Consumer<EmbedProgressEvent> progressCallback,
             EmbeddingCommitGuard commitGuard,
+            Long embeddingProfileId,
             boolean recordProviderFailure) {
         Objects.requireNonNull(documentId);
-        EmbeddingProfile profile = profileProvider.getActiveProfile();
+        RagDocument document = findDocument(documentId);
+        EmbeddingProfile profile = embeddingProfileId == null
+                ? profileForDocument(document)
+                : profileProvider.findRequiredById(embeddingProfileId);
         log.info("Generating embeddings for document: id={}, force={}, profile={}",
                 documentId, force, profile.profileKey());
 
         maybeEmit(progressCallback, EmbedProgressEvent.preparing(documentId));
 
         if (keywordIndexPersistenceService != null) {
-            keywordIndexPersistenceService.ensureCurrent(findDocument(documentId));
+            keywordIndexPersistenceService.ensureCurrent(document);
         }
         EmbedPrepareResult prep = prepareForEmbedding(documentId, force, profile);
         if (prep.cached() != null) {
@@ -183,7 +208,7 @@ public class DocumentEmbedService {
         List<String> texts = chunks.stream().map(TextChunk::text).toList();
         List<EmbeddingBatchService.EmbeddingResult> results;
         try (var background = com.springairag.core.admission.BackgroundWorkScope.open()) {
-            results = embeddingBatchService.createEmbeddingsBatch(texts);
+            results = embeddingBatchService.createEmbeddingsBatchForProfile(texts, profile);
         } catch (RuntimeException e) {
             String error = safeError("Embedding provider call failed: " + e.getMessage());
             if (recordProviderFailure) {
@@ -228,6 +253,12 @@ public class DocumentEmbedService {
                 documentId, chunks.size(), profile.profileKey());
         return buildResult(
                 documentId, chunks.size(), chunks.size(), "COMPLETED", profile, null);
+    }
+
+    private EmbeddingProfile profileForDocument(RagDocument document) {
+        return document.getCollectionId() == null
+                ? profileProvider.getActiveProfile()
+                : profileProvider.getProfileForCollection(document.getCollectionId());
     }
 
     /** Safely emits a progress callback (null-safe) */

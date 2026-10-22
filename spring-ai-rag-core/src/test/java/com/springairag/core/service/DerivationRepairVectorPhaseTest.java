@@ -96,6 +96,8 @@ class DerivationRepairVectorPhaseTest {
         when(collectionResolver.beginActiveWrite(eq(COLLECTION_ID)))
                 .thenReturn(new ActiveCollectionToken(COLLECTION_ID, 1L));
         when(profileProvider.getActiveProfile()).thenReturn(profile());
+        when(profileProvider.getProfileForCollection(COLLECTION_ID))
+                .thenReturn(profile());
     }
 
     @Test
@@ -348,7 +350,7 @@ class DerivationRepairVectorPhaseTest {
                     ResultSet rs = mock(ResultSet.class);
                     when(rs.getObject("id", UUID.class)).thenReturn(repairId);
                     when(rs.getString("owner_principal_id"))
-                            .thenReturn("root:environment-root");
+                            .thenReturn("local:auth-disabled");
                     when(rs.getLong("collection_id")).thenReturn(COLLECTION_ID);
                     when(rs.getLong("active_embedding_profile_id"))
                             .thenReturn(PROFILE_ID);

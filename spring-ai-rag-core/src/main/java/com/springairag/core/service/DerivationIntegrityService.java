@@ -33,7 +33,8 @@ public class DerivationIntegrityService {
         DerivationIntegrityRepository.Aggregate aggregate =
                 repository.aggregateCollection(collection.getId());
         return new DerivationReadinessResponse(
-                collection.getCollectionKey(), profileProvider.getActiveProfile().profileKey(),
+                collection.getCollectionKey(), profileProvider
+                        .getProfileForCollection(collection.getId()).profileKey(),
                 aggregate.enabledDocuments(), aggregate.readyDocuments(),
                 aggregate.keywordOnlyDocuments(), aggregate.indexingDocuments(),
                 aggregate.localUnavailableDocuments(),
@@ -47,7 +48,8 @@ public class DerivationIntegrityService {
         DerivationIntegrityRepository.EmbeddingAggregate aggregate =
                 repository.aggregateEmbeddingReadiness(collection.getId());
         return new CollectionEmbeddingReadinessResponse(
-                collection.getCollectionKey(), profileProvider.getActiveProfile().profileKey(),
+                collection.getCollectionKey(), profileProvider
+                        .getProfileForCollection(collection.getId()).profileKey(),
                 aggregate.enabledDocuments(), aggregate.freshDocuments(),
                 aggregate.queuedDocuments(), aggregate.runningDocuments(),
                 aggregate.failedDocuments(), aggregate.staleDocuments());

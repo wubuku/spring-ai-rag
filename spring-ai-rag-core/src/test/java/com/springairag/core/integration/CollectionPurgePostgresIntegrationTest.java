@@ -15,6 +15,8 @@ import com.springairag.core.repository.RagCollectionRepository;
 import com.springairag.core.security.AuthenticatedApiPrincipal;
 import com.springairag.core.service.CollectionPurgeAuthorization;
 import com.springairag.core.service.CollectionPurgeService;
+import com.springairag.core.service.CollectionPurgeOperationWorker;
+import com.springairag.core.service.LongRunningOperationService;
 import org.flywaydb.core.Flyway;
 import org.hibernate.boot.model.naming.CamelCaseToUnderscoresNamingStrategy;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
@@ -37,9 +39,14 @@ import org.testcontainers.utility.DockerImageName;
 
 import javax.sql.DataSource;
 import java.time.LocalDateTime;
+import java.time.Duration;
 import java.util.Map;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -63,8 +70,12 @@ class CollectionPurgePostgresIntegrationTest {
     private static DataSource dataSource;
 
     private JdbcTemplate jdbc;
+    private RagProperties ragProperties;
     private LocalContainerEntityManagerFactoryBean entityManagerFactory;
+    private JpaTransactionManager transactionManager;
     private CollectionPurgeService service;
+    private LongRunningOperationService operationService;
+    private CollectionPurgeOperationWorker purgeWorker;
 
     @BeforeAll
     static void startDatabase() {
@@ -126,23 +137,30 @@ class CollectionPurgePostgresIntegrationTest {
 
         entityManagerFactory = entityManagerFactory(dataSource);
         entityManagerFactory.afterPropertiesSet();
-        JpaTransactionManager transactionManager =
-                new JpaTransactionManager(entityManagerFactory.getObject());
+        transactionManager = new JpaTransactionManager(entityManagerFactory.getObject());
         var entityManager = SharedEntityManagerCreator
                 .createSharedEntityManager(entityManagerFactory.getObject());
         RagCollectionRepository collectionRepository =
                 new JpaRepositoryFactory(entityManager)
                         .getRepository(RagCollectionRepository.class);
-        RagProperties properties = new RagProperties();
-        properties.getCollectionPurge().setEnabled(true);
-        properties.getCollectionPurge().setAllowAuthDisabled(true);
+        ragProperties = new RagProperties();
+        ragProperties.getCollectionPurge().setEnabled(true);
+        ragProperties.getCollectionPurge().setAllowAuthDisabled(true);
+        CollectionPurgeAuthorization authorization =
+                new CollectionPurgeAuthorization(ragProperties);
+        ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
+        operationService = new LongRunningOperationService(
+                jdbc, objectMapper, authorization, transactionManager);
         service = new CollectionPurgeService(
                 jdbc,
-                new ObjectMapper().findAndRegisterModules(),
+                objectMapper,
                 collectionRepository,
-                new CollectionPurgeAuthorization(properties),
-                properties,
-                transactionManager);
+                authorization,
+                ragProperties,
+                transactionManager,
+                operationService);
+        purgeWorker = new CollectionPurgeOperationWorker(
+                jdbc, service, ragProperties, transactionManager);
     }
 
     @AfterEach
@@ -200,6 +218,482 @@ class CollectionPurgePostgresIntegrationTest {
     }
 
     @Test
+    void v69SeedsTheBoundedPurgeWorkerSlotPool() {
+        assertEquals(8, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM rag_collection_purge_worker_slots",
+                Integer.class));
+        assertEquals(8, jdbc.queryForObject(
+                "SELECT MAX(slot_id) FROM rag_collection_purge_worker_slots",
+                Integer.class));
+        assertEquals(0, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM rag_collection_purge_worker_slots "
+                        + "WHERE operation_id IS NOT NULL OR lease_token IS NOT NULL",
+                Integer.class));
+    }
+
+    @Test
+    void asyncPreviewStreamsTargetsAndReleasesAdmissionLease() {
+        long collectionId = insertCollection("async-empty-purge");
+
+        CollectionPurgePreviewResponse preview = service.previewAsync(
+                "async-empty-purge", rootRequest());
+
+        assertEquals(collectionId, preview.collectionId());
+        assertEquals(0, preview.documentCount());
+        assertEquals(64, preview.fingerprint().length());
+        assertEquals("ASYNC", jdbc.queryForObject(
+                "SELECT execution_mode FROM rag_collection_purge_preview WHERE id = ?",
+                String.class, preview.previewId()));
+        assertEquals(0, jdbc.queryForObject(
+                "SELECT active_count FROM rag_collection_purge_preview_admission_global "
+                        + "WHERE singleton_id = 1", Integer.class));
+        assertEquals(0, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM rag_collection_purge_preview_admission_owner "
+                        + "WHERE lease_token IS NOT NULL", Integer.class));
+    }
+
+    @Test
+    void asyncApplyIsIdempotentAndReservesOperationCapacityAndCollectionSlot() {
+        long collectionId = insertCollection("async-apply-purge");
+        CollectionPurgePreviewResponse preview = service.previewAsync(
+                "async-apply-purge", rootRequest());
+        CollectionPurgeApplyRequest applyRequest = applyRequest(preview);
+
+        var accepted = service.applyAsync(
+                applyRequest, List.of("async-purge-key"), rootRequest());
+        var replay = service.applyAsync(
+                applyRequest, List.of("async-purge-key"), rootRequest());
+
+        assertEquals(accepted.operationId(), replay.operationId());
+        assertEquals("QUEUED", accepted.status());
+        assertEquals(1, jdbc.queryForObject(
+                "SELECT active_count FROM rag_long_running_operation_owner_capacity "
+                        + "WHERE owner_principal_id = 'root:environment-root'",
+                Integer.class));
+        assertEquals(1, jdbc.queryForObject(
+                "SELECT active_count FROM rag_long_running_operation_global_capacity "
+                        + "WHERE singleton_id = 1", Integer.class));
+        assertEquals("ASYNC_PURGE", jdbc.queryForObject(
+                "SELECT holder_kind FROM rag_collection_operation_slot "
+                        + "WHERE collection_id = ?", String.class, collectionId));
+        assertEquals("APPLYING", jdbc.queryForObject(
+                "SELECT status FROM rag_collection_purge_preview WHERE id = ?",
+                String.class, preview.previewId()));
+        assertEquals(1, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM rag_long_running_operations "
+                        + "WHERE source_preview_id = ?", Integer.class, preview.previewId()));
+    }
+
+    @Test
+    void asyncApplyRejectsIdempotencyKeyReuseForDifferentRequest() {
+        insertCollection("async-idempotency-purge");
+        CollectionPurgePreviewResponse preview = service.previewAsync(
+                "async-idempotency-purge", rootRequest());
+        CollectionPurgeApplyRequest original = applyRequest(preview);
+        service.applyAsync(original, List.of("async-purge-key"), rootRequest());
+
+        CollectionPurgeApplyRequest changed = new CollectionPurgeApplyRequest(
+                original.collectionKey(), original.previewId(),
+                original.confirmationToken(), original.fingerprint(),
+                original.expectedCollectionVersion() + 1,
+                original.expectedChatCommitFenceVersion());
+        RagException error = assertThrows(RagException.class,
+                () -> service.applyAsync(
+                        changed, List.of("async-purge-key"), rootRequest()));
+
+        assertEquals(ErrorCode.IDEMPOTENCY_KEY_REUSED,
+                error.getErrorCodeEnum());
+        assertEquals(1, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM rag_long_running_operations "
+                        + "WHERE source_preview_id = ?", Integer.class, preview.previewId()));
+    }
+
+    @Test
+    void asyncOperationStatusResultAndCancelAreHiddenFromOtherOwners() {
+        insertCollection("async-owner-isolation");
+        CollectionPurgePreviewResponse preview = service.previewAsync(
+                "async-owner-isolation", rootRequest());
+        var accepted = service.applyAsync(
+                applyRequest(preview), List.of("async-owner-isolation-key"), rootRequest());
+        MockHttpServletRequest otherOwner = databaseRequest(ApiKeyRole.ADMIN);
+
+        RagException statusDenied = assertThrows(RagException.class,
+                () -> operationService.get(accepted.operationId(), otherOwner));
+        assertEquals(ErrorCode.LONG_RUNNING_OPERATION_NOT_FOUND,
+                statusDenied.getErrorCodeEnum());
+        RagException resultDenied = assertThrows(RagException.class,
+                () -> operationService.getResult(accepted.operationId(), otherOwner));
+        assertEquals(ErrorCode.LONG_RUNNING_OPERATION_NOT_FOUND,
+                resultDenied.getErrorCodeEnum());
+        RagException cancelDenied = assertThrows(RagException.class,
+                () -> operationService.cancel(accepted.operationId(), otherOwner));
+        assertEquals(ErrorCode.LONG_RUNNING_OPERATION_NOT_FOUND,
+                cancelDenied.getErrorCodeEnum());
+        assertEquals("QUEUED", jdbc.queryForObject(
+                "SELECT status FROM rag_long_running_operations WHERE id = ?",
+                String.class, accepted.operationId()));
+    }
+
+    @Test
+    void asyncWorkerResumesBoundedPhasesAndRetiresCollection() {
+        long collectionId = insertCollection("async-worker-purge");
+        long profileId = insertProfile();
+        long documentId = insertDocument(collectionId, "worker target", null, "default");
+        seedDerivedRows(documentId, profileId);
+        completeProcessingWork(documentId);
+        CollectionPurgePreviewResponse preview = service.previewAsync(
+                "async-worker-purge", rootRequest());
+        var accepted = service.applyAsync(
+                applyRequest(preview), List.of("async-worker-purge-key"), rootRequest());
+        UUID expiredLeaseToken = UUID.randomUUID();
+        jdbc.update("""
+                UPDATE rag_long_running_operations
+                SET status = 'RUNNING', lease_owner = 'crashed-worker',
+                    lease_token = ?, lease_expires_at = clock_timestamp() - INTERVAL '1 second'
+                WHERE id = ?
+                """, expiredLeaseToken, accepted.operationId());
+        jdbc.update("""
+                UPDATE rag_collection_purge_worker_slots
+                SET operation_id = ?, lease_owner = 'crashed-worker', lease_token = ?,
+                    lease_expires_at = clock_timestamp() - INTERVAL '1 second'
+                WHERE slot_id = (SELECT MIN(slot_id) FROM rag_collection_purge_worker_slots)
+                """, accepted.operationId(), expiredLeaseToken);
+        CollectionPurgeOperationWorker restartedWorker = new CollectionPurgeOperationWorker(
+                jdbc, service, ragProperties, transactionManager);
+
+        for (int attempt = 0; attempt < 100; attempt++) {
+            String status = jdbc.queryForObject(
+                    "SELECT status FROM rag_long_running_operations WHERE id = ?",
+                    String.class, accepted.operationId());
+            if ("SUCCEEDED".equals(status)) {
+                break;
+            }
+            restartedWorker.processOneOperation();
+        }
+
+        assertEquals("SUCCEEDED", jdbc.queryForObject(
+                "SELECT status FROM rag_long_running_operations WHERE id = ?",
+                String.class, accepted.operationId()));
+        assertEquals(0, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM rag_documents WHERE id = ?", Integer.class, documentId));
+        assertEquals(0, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM rag_embeddings WHERE document_id = ?",
+                Integer.class, documentId));
+        assertNotNull(jdbc.queryForObject(
+                "SELECT purged_at FROM rag_collection WHERE id = ?",
+                LocalDateTime.class, collectionId));
+        assertEquals("COMPLETED", jdbc.queryForObject(
+                "SELECT status FROM rag_collection_purge_preview WHERE id = ?",
+                String.class, preview.previewId()));
+        assertEquals(0, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM rag_collection_operation_slot WHERE collection_id = ?",
+                Integer.class, collectionId));
+        assertEquals(0, jdbc.queryForObject(
+                "SELECT active_count FROM rag_long_running_operation_owner_capacity "
+                        + "WHERE owner_principal_id = 'root:environment-root'", Integer.class));
+        assertEquals(0, jdbc.queryForObject(
+                "SELECT active_count FROM rag_long_running_operation_global_capacity "
+                        + "WHERE singleton_id = 1", Integer.class));
+        assertEquals("RETIRED", operationService.getResult(
+                accepted.operationId(), rootRequest()).path("status").asText());
+    }
+
+    @Test
+    void competingWorkersFenceAndProcessOnePurgeExactlyOnce() throws Exception {
+        long collectionId = insertCollection("async-dual-worker-purge");
+        long profileId = insertProfile();
+        long documentId = insertDocument(
+                collectionId, "dual worker target", null, "default");
+        seedDerivedRows(documentId, profileId);
+        completeProcessingWork(documentId);
+        CollectionPurgePreviewResponse preview = service.previewAsync(
+                "async-dual-worker-purge", rootRequest());
+        var accepted = service.applyAsync(
+                applyRequest(preview), List.of("async-dual-worker-key"), rootRequest());
+        CollectionPurgeOperationWorker secondWorker =
+                new CollectionPurgeOperationWorker(
+                        jdbc, service, ragProperties, transactionManager);
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            var first = executor.submit(() -> {
+                ready.countDown();
+                assertTrue(start.await(10, TimeUnit.SECONDS));
+                purgeWorker.processOneOperation();
+                return null;
+            });
+            var second = executor.submit(() -> {
+                ready.countDown();
+                assertTrue(start.await(10, TimeUnit.SECONDS));
+                secondWorker.processOneOperation();
+                return null;
+            });
+            assertTrue(ready.await(10, TimeUnit.SECONDS));
+            start.countDown();
+            first.get(30, TimeUnit.SECONDS);
+            second.get(30, TimeUnit.SECONDS);
+        }
+
+        for (int attempt = 0; attempt < 100; attempt++) {
+            String status = jdbc.queryForObject(
+                    "SELECT status FROM rag_long_running_operations WHERE id = ?",
+                    String.class, accepted.operationId());
+            if ("SUCCEEDED".equals(status)) {
+                break;
+            }
+            purgeWorker.processOneOperation();
+            secondWorker.processOneOperation();
+        }
+
+        assertEquals("SUCCEEDED", jdbc.queryForObject(
+                "SELECT status FROM rag_long_running_operations WHERE id = ?",
+                String.class, accepted.operationId()));
+        assertEquals(0, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM rag_documents WHERE id = ?",
+                Integer.class, documentId));
+        assertEquals(0, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM rag_collection_purge_worker_slots "
+                        + "WHERE operation_id = ?", Integer.class,
+                accepted.operationId()));
+        assertEquals(0, jdbc.queryForObject(
+                "SELECT active_count FROM rag_long_running_operation_global_capacity "
+                        + "WHERE singleton_id = 1", Integer.class));
+    }
+
+    @Test
+    void queuedAsyncPurgeCanBeCancelledBeforeFenceAndReleasesReservations() {
+        long collectionId = insertCollection("async-cancel-purge");
+        CollectionPurgePreviewResponse preview = service.previewAsync(
+                "async-cancel-purge", rootRequest());
+        var accepted = service.applyAsync(
+                applyRequest(preview), List.of("async-cancel-key"), rootRequest());
+
+        var cancelled = operationService.cancel(accepted.operationId(), rootRequest());
+
+        assertEquals("CANCELLED", cancelled.status());
+        assertEquals(0, jdbc.queryForObject(
+                "SELECT active_count FROM rag_long_running_operation_owner_capacity "
+                        + "WHERE owner_principal_id = 'root:environment-root'",
+                Integer.class));
+        assertEquals(0, jdbc.queryForObject(
+                "SELECT active_count FROM rag_long_running_operation_global_capacity "
+                        + "WHERE singleton_id = 1", Integer.class));
+        assertEquals(0, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM rag_collection_operation_slot "
+                        + "WHERE collection_id = ?", Integer.class, collectionId));
+    }
+
+    @Test
+    void runningUnfencedPurgeCancellationConvergesAfterLeaseReclaim() {
+        long collectionId = insertCollection("async-running-cancel-purge");
+        long documentId = insertDocument(
+                collectionId, "preserve until cancellation converges", null, "default");
+        CollectionPurgePreviewResponse preview = service.previewAsync(
+                "async-running-cancel-purge", rootRequest());
+        var accepted = service.applyAsync(
+                applyRequest(preview), List.of("async-running-cancel-key"), rootRequest());
+        UUID oldToken = UUID.randomUUID();
+        jdbc.update("""
+                UPDATE rag_long_running_operations
+                SET status = 'RUNNING', lease_owner = 'cancel-race-worker',
+                    lease_token = ?, lease_expires_at = clock_timestamp() - INTERVAL '1 second'
+                WHERE id = ? AND purge_fence_completed_at IS NULL
+                """, oldToken, accepted.operationId());
+
+        var cancellation = operationService.cancel(
+                accepted.operationId(), rootRequest());
+        assertEquals("RUNNING", cancellation.status());
+        assertNotNull(jdbc.queryForObject(
+                "SELECT cancel_requested_at FROM rag_long_running_operations WHERE id = ?",
+                LocalDateTime.class, accepted.operationId()));
+
+        purgeWorker.processOneOperation();
+
+        assertEquals("CANCELLED", jdbc.queryForObject(
+                "SELECT status FROM rag_long_running_operations WHERE id = ?",
+                String.class, accepted.operationId()));
+        assertNull(jdbc.queryForObject(
+                "SELECT purged_at FROM rag_collection WHERE id = ?",
+                LocalDateTime.class, collectionId));
+        assertEquals(1, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM rag_documents WHERE id = ?",
+                Integer.class, documentId));
+        assertEquals(0, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM rag_collection_operation_slot WHERE collection_id = ?",
+                Integer.class, collectionId));
+        assertEquals(0, jdbc.queryForObject(
+                "SELECT active_count FROM rag_long_running_operation_global_capacity "
+                        + "WHERE singleton_id = 1", Integer.class));
+    }
+
+    @Test
+    void cancellationRacingWorkerFenceHasOneSafeOutcome() throws Exception {
+        long collectionId = insertCollection("async-cancel-fence-race");
+        long documentId = insertDocument(
+                collectionId, "cancel and destructive fence race", null, "default");
+        CollectionPurgePreviewResponse preview = service.previewAsync(
+                "async-cancel-fence-race", rootRequest());
+        var accepted = service.applyAsync(
+                applyRequest(preview), List.of("async-cancel-fence-race-key"), rootRequest());
+        CountDownLatch start = new CountDownLatch(1);
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            Future<?> worker = executor.submit(() -> {
+                await(start);
+                purgeWorker.processOneOperation();
+            });
+            Future<Object> cancellation = executor.submit(() -> {
+                await(start);
+                try {
+                    return operationService.cancel(accepted.operationId(), rootRequest());
+                } catch (RagException conflict) {
+                    return conflict;
+                }
+            });
+            start.countDown();
+            worker.get(15, TimeUnit.SECONDS);
+            Object cancellationResult = cancellation.get(15, TimeUnit.SECONDS);
+
+            jdbc.update("""
+                    UPDATE rag_long_running_operations
+                    SET lease_owner = NULL, lease_token = NULL, lease_expires_at = NULL
+                    WHERE id = ? AND status = 'RUNNING'
+                    """, accepted.operationId());
+            jdbc.update("""
+                    UPDATE rag_collection_purge_worker_slots
+                    SET operation_id = NULL, lease_owner = NULL,
+                        lease_token = NULL, lease_expires_at = NULL
+                    WHERE operation_id = ?
+                    """, accepted.operationId());
+            for (int attempt = 0; attempt < 64; attempt++) {
+                String status = jdbc.queryForObject(
+                        "SELECT status FROM rag_long_running_operations WHERE id = ?",
+                        String.class, accepted.operationId());
+                if ("SUCCEEDED".equals(status) || "CANCELLED".equals(status)) {
+                    break;
+                }
+                purgeWorker.processOneOperation();
+            }
+
+            String terminalStatus = jdbc.queryForObject(
+                    "SELECT status FROM rag_long_running_operations WHERE id = ?",
+                    String.class, accepted.operationId());
+            if (cancellationResult instanceof RagException conflict) {
+                assertEquals(ErrorCode.LONG_RUNNING_OPERATION_STATE_CONFLICT,
+                        conflict.getErrorCodeEnum());
+                assertEquals("SUCCEEDED", terminalStatus);
+                assertNotNull(jdbc.queryForObject(
+                        "SELECT purged_at FROM rag_collection WHERE id = ?",
+                        LocalDateTime.class, collectionId));
+                assertEquals(0, jdbc.queryForObject(
+                        "SELECT COUNT(*) FROM rag_documents WHERE id = ?",
+                        Integer.class, documentId));
+            } else {
+                assertEquals("CANCELLED", terminalStatus);
+                assertNull(jdbc.queryForObject(
+                        "SELECT purged_at FROM rag_collection WHERE id = ?",
+                        LocalDateTime.class, collectionId));
+                assertEquals(1, jdbc.queryForObject(
+                        "SELECT COUNT(*) FROM rag_documents WHERE id = ?",
+                        Integer.class, documentId));
+            }
+            assertEquals(0, jdbc.queryForObject(
+                    "SELECT COUNT(*) FROM rag_collection_operation_slot WHERE collection_id = ?",
+                    Integer.class, collectionId));
+            assertEquals(0, jdbc.queryForObject(
+                    "SELECT active_count FROM rag_long_running_operation_global_capacity "
+                            + "WHERE singleton_id = 1", Integer.class));
+        }
+    }
+
+    private static void await(CountDownLatch start) {
+        try {
+            if (!start.await(10, TimeUnit.SECONDS)) {
+                throw new IllegalStateException("Concurrent purge race did not start");
+            }
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Concurrent purge race was interrupted", interrupted);
+        }
+    }
+
+    @Test
+    void retryingDegradedOperationReacquiresOwnerAndGlobalCapacity() {
+        insertCollection("async-retry-capacity-purge");
+        CollectionPurgePreviewResponse preview = service.previewAsync(
+                "async-retry-capacity-purge", rootRequest());
+        var accepted = service.applyAsync(
+                applyRequest(preview), List.of("async-retry-capacity-key"), rootRequest());
+        jdbc.update("""
+                UPDATE rag_long_running_operations
+                SET status = 'DEGRADED', error_code = 'COLLECTION_PURGE_WORKER_FAILURE',
+                    error_payload = '{"code":"COLLECTION_PURGE_WORKER_FAILURE"}'::jsonb
+                WHERE id = ?
+                """, accepted.operationId());
+        jdbc.update("""
+                UPDATE rag_long_running_operation_owner_capacity
+                SET active_count = 0
+                WHERE owner_principal_id = 'root:environment-root'
+                """);
+
+        var retried = operationService.retry(accepted.operationId(), rootRequest());
+
+        assertEquals("QUEUED", retried.status());
+        assertEquals(1, jdbc.queryForObject(
+                "SELECT active_count FROM rag_long_running_operation_owner_capacity "
+                        + "WHERE owner_principal_id = 'root:environment-root'",
+                Integer.class));
+        assertEquals(1, jdbc.queryForObject(
+                "SELECT active_count FROM rag_long_running_operation_global_capacity "
+                        + "WHERE singleton_id = 1", Integer.class));
+    }
+
+    @Test
+    void asyncPreviewTimeoutDoesNotPersistPreviewAndReleasesAdmission() {
+        insertCollection("async-timeout-purge");
+        ragProperties.getCollectionPurge()
+                .setAsyncPreviewDeadline(Duration.ofMillis(1));
+
+        RagException error = assertThrows(RagException.class,
+                () -> service.previewAsync("async-timeout-purge", rootRequest()));
+
+        assertEquals(ErrorCode.COLLECTION_PURGE_PREVIEW_TIMEOUT,
+                error.getErrorCodeEnum());
+        assertNotNull(error.getRetryAfterSeconds());
+        assertEquals(0, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM rag_collection_purge_preview "
+                        + "WHERE collection_key = 'async-timeout-purge'", Integer.class));
+        assertEquals(0, jdbc.queryForObject(
+                "SELECT active_count FROM rag_collection_purge_preview_admission_global "
+                        + "WHERE singleton_id = 1", Integer.class));
+        assertEquals(0, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM rag_collection_purge_preview_admission_owner "
+                        + "WHERE lease_token IS NOT NULL", Integer.class));
+    }
+
+    @Test
+    void asyncPreviewLimitFailureDoesNotPersistPreviewAndReleasesAdmission() {
+        long collectionId = insertCollection("async-limit-purge");
+        insertDocument(collectionId, "limited document", null, "default");
+        ragProperties.getCollectionPurge().setAsyncPreviewMaxDocuments(0);
+
+        RagException error = assertThrows(RagException.class,
+                () -> service.previewAsync("async-limit-purge", rootRequest()));
+
+        assertEquals(ErrorCode.COLLECTION_PURGE_ASYNC_PREVIEW_LIMIT_EXCEEDED,
+                error.getErrorCodeEnum());
+        assertEquals(0, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM rag_collection_purge_preview "
+                        + "WHERE collection_key = 'async-limit-purge'", Integer.class));
+        assertEquals(0, jdbc.queryForObject(
+                "SELECT active_count FROM rag_collection_purge_preview_admission_global "
+                        + "WHERE singleton_id = 1", Integer.class));
+        assertEquals(0, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM rag_collection_purge_preview_admission_owner "
+                        + "WHERE lease_token IS NOT NULL", Integer.class));
+    }
+
+    @Test
     void populatedApplyDeletesContentAndPreservesUnrelatedControlFacts() {
         long targetCollection = insertCollection("purge-target");
         long unrelatedCollection = insertCollection("purge-unrelated");
@@ -217,6 +711,9 @@ class CollectionPurgePostgresIntegrationTest {
         seedDerivedRows(localDocument, profile);
         seedDerivedRows(externalDocument, profile);
         seedDerivedRows(unrelatedDocument, profile);
+        completeProcessingWork(localDocument);
+        completeProcessingWork(externalDocument);
+        completeProcessingWork(unrelatedDocument);
         long targetFeedback = insertFeedback(
                 "target-feedback", localDocument, externalDocument);
         long unrelatedFeedback = insertFeedback(
@@ -256,6 +753,24 @@ class CollectionPurgePostgresIntegrationTest {
                 VALUES ('/independent/source.md', TRUE, ?,
                         'independent file body', 'text/markdown', 21)
                 """, "independent file body".getBytes());
+
+        ragProperties.getCollectionPurge().setMaxDocuments(1);
+        CollectionPurgePreviewResponse asyncPreview =
+                service.previewAsync("purge-target", rootRequest());
+        ragProperties.getCollectionPurge().setMaxDocuments(10_000);
+        assertEquals(2, asyncPreview.documentCount());
+        assertEquals(2, asyncPreview.embeddingCount());
+        assertEquals(2, asyncPreview.embeddingJobCount());
+        assertEquals(1, asyncPreview.repairPreviewCount());
+        assertEquals(1, asyncPreview.feedbackCount());
+        assertEquals(2, asyncPreview.feedbackDocumentReferenceCount());
+        assertEquals(1, asyncPreview.documentAuditCount());
+        assertEquals(1, asyncPreview.collectionAuditCount());
+        assertEquals(1, asyncPreview.affectedChatSessionCount());
+        assertEquals(1, asyncPreview.chatHistoryCount());
+        assertEquals(2, asyncPreview.chatMemoryCount());
+        assertEquals(1, asyncPreview.chatSummaryCount());
+        assertEquals(1, asyncPreview.chatTurnOperationCount());
 
         CollectionPurgePreviewResponse preview =
                 service.preview("purge-target", rootRequest());
@@ -661,10 +1176,9 @@ class CollectionPurgePostgresIntegrationTest {
     private void seedDerivedRows(long documentId, long profileId) {
         jdbc.update("""
                 INSERT INTO rag_embeddings(
-                    document_id, chunk_text, chunk_index, embedding,
+                    document_id, chunk_text, chunk_index,
                     embedding_profile_id, embedding_1024)
                 VALUES (?, 'embedded secret', 0,
-                        array_fill(0::real, ARRAY[1024])::vector,
                         ?, array_fill(0::real, ARRAY[1024])::vector)
                 """, documentId, profileId);
         jdbc.update("""
@@ -701,6 +1215,22 @@ class CollectionPurgePostgresIntegrationTest {
                     chunker_version, local_index_generation, chunk_count)
                 VALUES (?, 'READY', ?, 'test-v1', 1, 1)
                 """, documentId, HASH);
+    }
+
+    private void completeProcessingWork(long documentId) {
+        jdbc.update("""
+                UPDATE rag_embedding_jobs
+                SET status = 'SUCCEEDED', lease_owner = NULL,
+                    lease_expires_at = NULL, finished_at = clock_timestamp(),
+                    updated_at = clock_timestamp()
+                WHERE document_id = ? AND status IN ('QUEUED', 'RUNNING')
+                """, documentId);
+        jdbc.update("""
+                UPDATE rag_document_processing_runs
+                SET status = 'COMPLETED', finished_at = clock_timestamp(),
+                    updated_at = clock_timestamp()
+                WHERE document_id = ? AND status IN ('QUEUED', 'RUNNING')
+                """, documentId);
     }
 
     private long insertFeedback(

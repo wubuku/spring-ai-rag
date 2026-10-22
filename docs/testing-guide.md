@@ -14,7 +14,8 @@ Additive capabilities: [trustworthy assertions, active diagnostics and offline q
 Run the two Python self-tests, then `python3 scripts/verify-quality-production-e2e.py` for repeated24-case
 positive/negative gates, cross-node consistency/fairness/lease takeover and post-backup deletion/revocation/erasure gates.
 After explicit payment authorization and private model environment injection, run
-`python3 scripts/verify-quality-real-e2e.py --ack-paid-models`: two providers×24 cases×3 rounds by default,
+`python3 scripts/verify-quality-real-e2e.py --ack-paid-models --embedding-profiles profile_a,profile_b,profile_c`:
+two providers each run 24 cases×3 rounds for three profiles (two different models at one dimension and one at another),
 plus real Client JSON/SSE/SDK and HTTP rerank checks. Ordinary Chat does not start evaluation.
 See [Quality And Production Acceptance](quality-production-acceptance.md) for commands, attribution, costs and trust boundaries.
 Existing three-case smoke and single-node recovery entrypoints are unchanged; controlled success is not real-model quality.
@@ -168,6 +169,28 @@ Search, error responses, ACL isolation, idempotent replay,
 startup plus external-client black-box checks are stronger completion evidence
 than a working WebUI page.
 
+Asynchronous Collection Purge also has a model-free black-box against a running service. The service
+must use a disposable PostgreSQL database with Collection Purge enabled and an environment Root API
+Key configured. Optionally provide a second authorized admin API key to verify owner isolation; the
+script creates and retires only one uniquely named empty Collection.
+
+```bash
+BASE_URL=http://127.0.0.1:8081 \
+RAG_ROOT_API_KEY="$RAG_ROOT_API_KEY" \
+OTHER_ADMIN_API_KEY="${OTHER_ADMIN_API_KEY:-}" \
+  ./scripts/async-collection-purge-http-smoke.sh
+```
+
+It exercises async preview, legacy synchronous-apply rejection, `202`/`Location`/`Retry-After`,
+idempotent replay and conflict, worker completion, and durable status/result reads over real HTTP.
+When `OTHER_ADMIN_API_KEY` is set, it also asserts foreign-owner reads return 404. This smoke does not
+replace real-model, Native/OpenAI JSON/SSE, full error-matrix, or PostgreSQL multi-instance recovery
+acceptance, and must never target a production service containing caller data.
+
+The same lifecycle has an isolated random-port HTTP + Testcontainers PostgreSQL integration test:
+`./scripts/verify-gated-it.sh CollectionPurgeHttpPostgresIntegrationTest`; its switch is
+`-Dcollection-purge-http.it.enabled=true`. The full gated suite also runs it.
+
 ## One-command Documentation Verification
 
 `scripts/verify-project-docs.sh` codifies the project-documentation checklist: OpenClaw local-state isolation, `.agents/skills/` trackability, relative links, EN/ZH heading structure, entry size limits, fixed project conventions, documented commands, shell syntax, whitespace, and added-line secret scanning.
@@ -244,6 +267,13 @@ retired `RAG_EMBEDDING_URL`/`SILICONFLOW_*` names. If the local `.env` points
 overrides YAML and can route Chat to a different provider; verify the effective
 model through logs and `/api/v1/rag/models`, or explicitly disable that file for
 a direct-provider smoke.
+
+Every real smoke that starts Spring/Flyway must explicitly inject a disposable or dedicated
+`SPRING_DATASOURCE_URL`; setting only `POSTGRES_DATABASE` is insufficient. The launcher performs a
+read-only `current_database()` assertion before migrations, repeats it after readiness, and verifies
+the JDBC target in the startup log. It refuses the shared default database `spring_ai_rag_dev`, an
+identity mismatch, or a mismatched logged target. This hard gate prevents `.env`'s
+`SPRING_DATASOURCE_URL` from redirecting a test intended for another database.
 
 ### WebUI `-real` End-to-End Runbook
 
@@ -837,10 +867,27 @@ mvn jacoco:report-aggregate
 
 ## Test Database
 
-Unit tests use mocks or H2-compatible paths. The Embedding Profile migration has
-an explicit PostgreSQL integration test because it requires pgvector and validates
-Flyway V1-V52, fixed vector columns, Profile-specific indexes, atomic replacement,
-Legacy adoption, retrieval freshness, and Spring Data repository queries.
+Unit tests use mocks or H2-compatible paths. Embedding Profile migration and lock
+contention have explicit PostgreSQL integration tests. `EmbeddingProfilePostgresIntegrationTest`
+covers fresh/V66 upgrades, fixed vector columns, Profile indexes, atomic replacement,
+and retrieval freshness; `EmbeddingProfileMigrationLockPostgresIntegrationTest`
+proves V67/V68 roll back completely on lock timeout and can retry after the lock is
+released. Both use isolated pgvector Testcontainers:
+
+```bash
+./scripts/verify-gated-it.sh EmbeddingProfilePostgresIntegrationTest,EmbeddingProfileMigrationLockPostgresIntegrationTest
+```
+
+To rerun only the migration-lock suite, enable its gate explicitly:
+
+```bash
+mvn test -pl spring-ai-rag-core -am \
+  -Dembedding-profile-migration.it.enabled=true \
+  -Dtest=EmbeddingProfileMigrationLockPostgresIntegrationTest \
+  -Dsurefire.failIfNoSpecifiedTests=false
+```
+
+The explicit PostgreSQL command below remains available to rerun only the base Profile suite.
 
 ```bash
 mvn -pl spring-ai-rag-core \
@@ -1113,8 +1160,11 @@ and a Starter consumer that does not scan `com.springairag`. Official Python SDK
 `2.14.0` and Node SDK `7.34.0` verify models, JSON, SSE, idempotency replay, error
 envelopes, and authentication against both topologies. It also proves that the
 external Starter consumer can run Flyway V1–V65 and expose the same `/v1` client
-contract. Evidence is written to `.verification/openai-sdk-e2e/<run-id>/summary.md`;
-the default run does not incur real-model cost.
+contract. The isolated topology additionally exercises the live Native/OpenAI
+consumer contract and async Collection Purge HTTP lifecycle against its temporary
+PostgreSQL database. Evidence is written to
+`.verification/openai-sdk-e2e/<run-id>/summary.md`; the default run does not incur
+real-model cost.
 
 Only an explicit real address and key enable real-LLM mode. A mock pass must never be
 reported as real-model quality evidence. This gate complements
@@ -1230,7 +1280,7 @@ no run path, in either direction.
 ```
 
 The gated inventory is reconciled by `verify-integration-test-switches.mjs`
-against `verify-gated-it.sh`; the audit baseline is 28 gated classes and 208
+against `verify-gated-it.sh`; the audit baseline is 29 gated classes and 209
 test methods, each behind its own `<x>.it.enabled` switch so a plain `mvn test`
 never needs a Docker daemon. `verify-gated-it.sh` is the one command that turns
 all of them on, takes about nine minutes locally, and is what `ci.yml`'s

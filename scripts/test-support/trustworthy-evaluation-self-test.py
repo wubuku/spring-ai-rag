@@ -25,10 +25,26 @@ def load(name, path):
 
 GATE = load('admission', 'scripts/verify-knowledge-quality-admission.py')
 DIAG = load('diagnostics', 'scripts/knowledge-qa-diagnostics.py')
+HTTP_E2E = load('diagnostic_http', 'scripts/verify-trustworthy-evaluation-e2e.py')
 LIB = GATE.LIB
 
 
 class TrustworthyEvaluationTest(unittest.TestCase):
+    def test_diagnostic_database_guard_fails_closed(self):
+        HTTP_E2E.assert_database_identity('rag_isolated', 'rag_isolated', 'startup')
+        for observed in ('spring_ai_rag_dev', '', None):
+            with self.subTest(observed=observed), self.assertRaises(RuntimeError):
+                HTTP_E2E.assert_database_identity('rag_isolated', observed, 'startup')
+
+    def test_diagnostic_startup_log_requires_fresh_target_bytes(self):
+        guard = HTTP_E2E.QUALITY.BASE.assert_database_startup_log
+        target = b'jdbc:postgresql://127.0.0.1:5432/rag_isolated'
+        guard(target.decode(), b'old=' + target + b'\nnew=' + target, len(b'old=' + target + b'\n'))
+        with self.assertRaises(RuntimeError):
+            guard(target.decode(), b'old=' + target + b'\n', len(b'old=' + target + b'\n'))
+        with self.assertRaises(RuntimeError):
+            guard(target.decode(), b'prefix', len(b'prefix') + 1)
+
     def test_shared_boundary_corpus(self):
         for case in json.loads((ROOT / 'testdata/answer-assertions/v1/cases.json').read_text()):
             with self.subTest(case=case['rule']['id']):

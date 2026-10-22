@@ -22,6 +22,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -196,5 +197,24 @@ class DocumentLifecycleServiceTest {
         assertEquals("READY", response.localIndexStatus());
         assertEquals("READY", response.embeddingStatus());
         assertNull(response.lastErrorCode());
+    }
+
+    @Test
+    void usesTheCollectionBoundProfileForLifecycleRead() {
+        EmbeddingProfile collectionProfile = new EmbeddingProfile(
+                19L, "collection-profile", "provider", "model-384", "rev-2",
+                384, "COSINE", "PROVIDER_DEFAULT", true);
+        when(profileProvider.getProfileForCollection(12L)).thenReturn(collectionProfile);
+        stubRow(readyRow());
+        RagDocument document = document(true);
+        document.setCollectionId(12L);
+
+        DocumentLifecycleResponse response = service.read(document);
+
+        assertEquals("collection-profile", response.activeEmbeddingProfileKey());
+        org.mockito.ArgumentCaptor<Object[]> args =
+                org.mockito.ArgumentCaptor.forClass(Object[].class);
+        verify(jdbcTemplate).queryForList(any(String.class), args.capture());
+        assertEquals(19L, args.getValue()[0]);
     }
 }

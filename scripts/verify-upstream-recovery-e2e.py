@@ -18,7 +18,7 @@ SPEC.loader.exec_module(BASE)
 class Acceptance(BASE.Acceptance):
     def __init__(self):
         super().__init__()
-        self.environment.update(RAG_TIMEOUT_CHAT_ASK_MS='1500', RAG_TIMEOUT_CHAT_STREAM_MS='1500',
+        self.environment.update(RAG_TIMEOUT_CHAT_ASK_MS='5000', RAG_TIMEOUT_CHAT_STREAM_MS='5000',
                                 RAG_CIRCUIT_BREAKER_ENABLED='false')
 
     def call_chat(self, native, stream):
@@ -67,7 +67,7 @@ class Acceptance(BASE.Acceptance):
                 assert self.state()['chat']['calls'] == before + 1, 'transport silently replayed a disconnected POST'
                 self.fault('chat', disconnect=False)
                 self.record(f'disconnected POST remains one provider invocation native={native} stream={stream}')
-                self.fault('chat', badJson=False, delayMs=2500)
+                self.fault('chat', badJson=False, delayMs=6500)
                 response_status, _, body = self.call_chat(native, stream)
                 assert response_status == (200 if stream else 504), body
                 assert 'REQUEST_DEADLINE' in body, body

@@ -24,7 +24,6 @@ class RagEmbeddingTest {
         assertEquals(0, entity.getChunkIndex());
         assertNull(entity.getChunkStartPos());
         assertNull(entity.getChunkEndPos());
-        assertNull(entity.getEmbedding());
         assertNull(entity.getMetadata());
         assertNull(entity.getCreatedAt());
 
@@ -34,9 +33,6 @@ class RagEmbeddingTest {
         entity.setChunkIndex(3);
         entity.setChunkStartPos(10);
         entity.setChunkEndPos(20);
-        float[] vec = new float[1024];
-        vec[0] = 0.1f;
-        entity.setEmbedding(vec);
         entity.setMetadata(Map.of("key", "value"));
         LocalDateTime now = LocalDateTime.now();
         entity.setCreatedAt(now);
@@ -47,7 +43,6 @@ class RagEmbeddingTest {
         assertEquals(3, entity.getChunkIndex());
         assertEquals(10, entity.getChunkStartPos());
         assertEquals(20, entity.getChunkEndPos());
-        assertSame(vec, entity.getEmbedding());
         assertEquals("value", entity.getMetadata().get("key"));
         assertEquals(now, entity.getCreatedAt());
     }

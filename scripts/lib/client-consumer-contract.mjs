@@ -477,7 +477,10 @@ function resolveOpenApiSchema(spec, schema) {
 
 function findJsonSchema(operation, spec, response) {
   if (response) {
-    const candidate = operation.responses?.['200'] ?? operation.responses?.default;
+    const responses = operation.responses ?? {};
+    const candidate = responses['200']
+      ?? Object.entries(responses).find(([status]) => /^2\d\d$/.test(status))?.[1]
+      ?? responses.default;
     const content = candidate?.content ?? {};
     const media = content['application/json'] ?? Object.values(content)[0];
     return resolveOpenApiSchema(spec, media?.schema);
@@ -521,6 +524,28 @@ function validateOpenApiSurface(spec, surface) {
       if (!operation) {
         if (expected.conditional) continue;
         fail(`OpenAPI surface operation disappeared: ${method.toUpperCase()} ${route}`);
+      }
+      for (const status of expected.responseStatuses ?? []) {
+        assertThat(Boolean(operation.responses?.[status]),
+          `OpenAPI ${method.toUpperCase()} ${route} lost response status ${status}`);
+      }
+      for (const header of expected.requestHeaders ?? []) {
+        const parameter = (operation.parameters ?? []).find((candidate) =>
+          candidate.name === header && candidate.in === 'header');
+        assertThat(parameter?.required === true,
+          `OpenAPI ${method.toUpperCase()} ${route} lost required header ${header}`);
+      }
+      for (const parameterName of expected.requestQueryParameters ?? []) {
+        const parameter = (operation.parameters ?? []).find((candidate) =>
+          candidate.name === parameterName && candidate.in === 'query');
+        assertThat(parameter?.required === true,
+          `OpenAPI ${method.toUpperCase()} ${route} lost required query parameter ${parameterName}`);
+      }
+      for (const [status, headers] of Object.entries(expected.responseHeaders ?? {})) {
+        for (const header of headers) {
+          assertThat(Boolean(operation.responses?.[status]?.headers?.[header]),
+            `OpenAPI ${method.toUpperCase()} ${route} ${status} lost response header ${header}`);
+        }
       }
       const requestSchema = findJsonSchema(operation, spec, false);
       for (const field of expected.requestRequired ?? []) {
@@ -728,6 +753,89 @@ function runSelfTest() {
     fail(`${label} was accepted but must fail closed`);
   };
   mustFail('malformed JSON', () => validateNativeSse('event:content\ndata:{broken}\n\n', packageData.manifest));
+  const operationSurface = {
+    paths: {
+      '/api/v1/rag/operations/{operationId}': {
+      get: { responseRequired: ['operationId'], responseTypes: { operationId: 'string' }, responseStatuses: ['200'] },
+      },
+    },
+  };
+  const querySurface = {
+    paths: {
+      '/api/v1/rag/collections/by-key/purge/async/preview': {
+        post: { requestQueryParameters: ['collectionKey'], responseStatuses: ['200'] },
+      },
+    },
+  };
+  const querySpec = {
+    paths: {
+      '/api/v1/rag/collections/by-key/purge/async/preview': {
+        post: {
+          parameters: [{ name: 'collectionKey', in: 'query', required: true }],
+          responses: { '200': {} },
+        },
+      },
+    },
+  };
+  validateOpenApiSurface(querySpec, querySurface);
+  mustFail('missing required query parameter', () => validateOpenApiSurface({
+    paths: {
+      '/api/v1/rag/collections/by-key/purge/async/preview': {
+        post: { parameters: [], responses: { '200': {} } },
+      },
+    },
+  }, querySurface));
+  const operationSpec = {
+    paths: {
+      '/api/v1/rag/operations/{operationId}': {
+        get: {
+          responses: {
+            '200': { content: { 'application/json': { schema: {
+              type: 'object', properties: { operationId: { type: 'string' } },
+            } } } },
+          },
+        },
+      },
+    },
+  };
+  validateOpenApiSurface(operationSpec, operationSurface);
+  mustFail('missing async response status', () => validateOpenApiSurface({
+    paths: { '/api/v1/rag/operations/{operationId}': { get: { responses: {} } } },
+  }, operationSurface));
+  const headerSurface = {
+    paths: {
+      '/api/v1/rag/operations': {
+        post: {
+          requestHeaders: ['Idempotency-Key'],
+          responseStatuses: ['202', '429'],
+          responseHeaders: { '202': ['Location'], '429': ['Retry-After'] },
+        },
+      },
+    },
+  };
+  const headerSpec = {
+    paths: {
+      '/api/v1/rag/operations': {
+        post: {
+          parameters: [{ name: 'Idempotency-Key', in: 'header', required: true }],
+          responses: {
+            '202': { headers: { Location: { schema: { type: 'string' } } } },
+            '429': { headers: { 'Retry-After': { schema: { type: 'integer' } } } },
+          },
+        },
+      },
+    },
+  };
+  validateOpenApiSurface(headerSpec, headerSurface);
+  mustFail('missing idempotency header', () => validateOpenApiSurface({
+    paths: { '/api/v1/rag/operations': { post: { responses: headerSpec.paths['/api/v1/rag/operations'].post.responses } } },
+  }, headerSurface));
+  mustFail('missing Location response header', () => validateOpenApiSurface({
+    paths: { '/api/v1/rag/operations': { post: {
+      parameters: headerSpec.paths['/api/v1/rag/operations'].post.parameters,
+      responses: { '202': { headers: {} }, '429': headerSpec.paths['/api/v1/rag/operations'].post.responses['429'] },
+    } } },
+  }, headerSurface));
   mustFail('missing OpenAI field', () => validateOpenAiResponse(
     { id: 'x' }, packageData.manifest.transports.openaiJson));
   mustFail('terminal reordering', () => validateNativeSse(

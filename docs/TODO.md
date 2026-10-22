@@ -2,7 +2,7 @@
 
 > 📖 [English](TODO.md) · [中文](TODO-zh-CN.md)
 >
-> Last reviewed: 2026-08-27. This file records follow-up work outside the
+> Last reviewed: 2026-10-20. This file records follow-up work outside the
 > current code and public API; it does not describe shipped capabilities.
 
 ## Delivered Integration Gates
@@ -52,9 +52,9 @@ present during migration; it does not guess unprovable family relationships
 among older rotation rows. Per-invocation usage and configured-cost
 observability is now implemented by V53 as a fail-open append-only ledger; it
 is not presented as a provider invoice or hard-limit settlement source.
-OAuth/OIDC, tenant hierarchy, Redis, token/cost hard limits and billing,
-per-Collection embedding-profile routing, and `EACH_COLLECTION` remain
-independent planning subjects.
+OAuth/OIDC, tenant hierarchy, Redis, and token/cost hard limits and billing
+remain independent planning subjects. Per-Collection Embedding Profile routing
+is part of the [current active plan](drafts/NEXT_BATCH_ASYNC_EMBEDDING_CLIENT_QUALITY_PLAN.md).
 
 ## Document Lifecycle And Derived-Index Follow-Ups
 
@@ -93,105 +93,28 @@ independent planning subjects.
   content, is bounded to 100 items, never stores clear tokens, and does not loop
   over synchronous embedding-provider calls in the HTTP request.
 - Collection purge is a bounded synchronous whole-knowledge-base operation,
-  not ordinary document retention or object-storage cleanup. Oversized plans
-  still need a future asynchronous design; the current implementation fails
-  closed and never truncates a deletion plan.
+  not ordinary document retention or object-storage cleanup. This batch adds a
+  durable, recoverable, idempotent asynchronous path for requests over the
+  synchronous safety limits; the synchronous path keeps its existing result
+  and error semantics and never truncates a deletion plan.
 
 See [current active plans](drafts/README.md) for remaining implementation scope
 and batch ordering. Shipped contracts remain in the [REST API reference](rest-api.md) and
 [External Document Sync Client Guide](external-document-sync-client-guide.md).
 
-## `EACH_COLLECTION` retrieval-coverage mode
+## `EACH_COLLECTION` retrieval-coverage mode (shipped)
 
-| Item | Priority | Status |
-|------|----------|--------|
-| Give every explicitly selected Collection an opportunity to contribute candidates | Current batch | Latest plan revision review `3/3`; implementation fixes and external API/integration acceptance remain pending; preserve the existing API contract until release |
+When `collectionCoverageMode=EACH_COLLECTION` is explicitly requested, the
+service gives each authorized selected Collection with relevant retrieval hits
+an opportunity to contribute results within bounded resource limits. A
+Collection with no relevant candidates may return zero results; the service does
+not pad the response with low-quality results. This mode is limited to
+`KNOWLEDGE + SELECTED_COLLECTIONS`, up to 20 Collections and 100 final results.
+Omitting the field or using `GLOBAL` preserves the existing global top-k behavior.
 
-### Current behavior
-
-The current `SELECTED_COLLECTIONS` mode is **scope filtering**: multiple
-`collectionKeys` form one candidate union, and all candidates compete in one
-hybrid-retrieval pipeline for the global top-k. A Collection with no content
-relevant enough to the query may contribute no result. This is intentional;
-see [REST API: Collection Retrieval Scope](rest-api.md#collection-retrieval-scope).
-
-`ANY_COLLECTION` is not per-Collection retrieval either. It means “search all
-retrievable documents that belong to some Collection.” It answers a different
-question from `EACH_COLLECTION`:
-
-- `ANY_COLLECTION`: what is the candidate scope?
-- `EACH_COLLECTION`: after the scope is known, must the result set provide
-  coverage for every Collection?
-
-Consequently, the current API does not accept `EACH_COLLECTION` or a similar
-`collectionCoverageMode` field. Clients must not assume that every selected
-Collection appears in the result set.
-The bounded coverage capability is now in the active implementation scope; until
-full acceptance and release, the behavior above remains the external API contract.
-
-### Why it was deferred and current-batch boundary
-
-This is not just another scope-filter enum. It is a separate retrieval and
-ranking policy:
-
-1. Each Collection needs its own candidate quota or per-Collection top-k.
-2. A multi-Collection request creates bounded fan-out; it must not turn into
-   an unbounded database/model call per Collection.
-3. Candidates from all Collections need deduplication, fusion, and reranking;
-   the result count cannot simply be added together.
-4. A Collection with no relevant content must not be padded with low-quality
-   results just to satisfy a coverage rule.
-5. Latency, candidate count, coverage, and quality metrics are needed to
-   evaluate whether the extra cost is justified.
-
-The current direct pushdown of `d.collection_id` already addresses the main
-performance problem of multi-Collection range filtering: large Collections
-are not expanded into all document IDs first. Ordinary union retrieval does
-not need `EACH_COLLECTION` to be correct. Without a clear product requirement
-and quality evidence, implementing it would add complexity and performance
-risk without solving the current scope-filtering problem. This batch now implements
-the opt-in strategy as an explicitly prioritized improvement; it does not claim
-that ordinary global top-k is defective or make coverage the default. GLOBAL
-retains its released semantics. Bounded resource budgets, ACL, goldenset, and
-external API regression remain release gates.
-
-### Current activation basis
-
-Open a dedicated implementation plan when one of these conditions holds:
-
-- The product explicitly requires every selected knowledge base to have an
-  opportunity to appear in the answer evidence.
-- A goldenset or production metric shows that global top-k is repeatedly
-  dominated by a few large Collections, systematically hiding useful results
-  from other Collections.
-- Callers can accept a bounded number of selected Collections, extra latency,
-  and an explicit candidate budget.
-- Product semantics define that a Collection with no relevant content may
-  legitimately contribute zero results without forced padding.
-
-### Implementation constraints
-
-Any later implementation should preserve the current API boundary:
-
-- Add a separate coverage field such as `collectionCoverageMode`; do not
-  redefine `collectionScopeMode`, which continues to express candidate scope.
-- Initially allow only `EACH_COLLECTION + SELECTED_COLLECTIONS`. Do not
-  expose `ANY_COLLECTION + EACH_COLLECTION`, which could implicitly fan out
-  across a large number of Collections.
-- Use a small, explicit Collection limit, recommended at no more than 20,
-  with bounded candidate and concurrency budgets.
-- Compute the query embedding once. Define the order of per-Collection
-  candidate retrieval, global fusion/reranking, deduplication, and final
-  top-k selection.
-- If a Collection has no relevant candidates, report that fact rather than
-  manufacturing a low-quality result.
-- Add PostgreSQL integration tests, latency/candidate metrics, quality
-  goldensets, and external API contract acceptance; do not make it the default mode.
-- A built-in WebUI advanced option is not a hard gate for this server/API batch.
-  Add it separately if product demand warrants it, and never use UI verification
-  as a substitute for external HTTP client/API acceptance.
-
-### Related documents
-
-- [Project context: Current Collection Semantics](project-context.md#current-collection-semantics)
-- [REST API: Collection Retrieval Scope](rest-api.md#collection-retrieval-scope)
+Search returns an optional `X-RAG-Collection-Coverage` summary; Chat/OpenAI
+include coverage and degradation details in additive metadata. External API,
+JSON/SSE, SDK, PostgreSQL, and retrieval-quality acceptance evidence is recorded
+in the [archived implementation record](drafts/archive/2026-10-17_NEXT_BATCH_COLLECTION_COVERAGE_PROGRESS.md).
+The current contract is documented in [REST API: Collection Retrieval Scope](rest-api.md#collection-retrieval-scope)
+and [Project Context: Current Collection Semantics](project-context.md#current-collection-semantics).

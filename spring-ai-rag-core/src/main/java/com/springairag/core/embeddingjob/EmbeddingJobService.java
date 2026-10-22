@@ -95,7 +95,6 @@ public class EmbeddingJobService {
             return new EmbeddingJobBatchResponse(
                     UUID.randomUUID(), 0, 0, 0, List.of());
         }
-        EmbeddingProfile profile = profileProvider.getActiveProfile();
         int maxAttempts = resolveMaxAttempts(request.maxAttempts());
         UUID requestedBatch = UUID.randomUUID();
         List<EmbeddingJobResponse> responses =
@@ -106,6 +105,9 @@ public class EmbeddingJobService {
             RagDocument document = documentRepository.findById(documentId)
                     .orElseThrow(() -> new DocumentNotFoundException(documentId));
             requireDocumentUsable(document);
+            EmbeddingProfile profile = document.getCollectionId() == null
+                    ? profileProvider.getActiveProfile()
+                    : profileProvider.getProfileForCollection(document.getCollectionId());
             DocumentDerivationDescriptorProvider.Descriptor descriptor =
                     descriptorProvider.describe(document);
             boolean fresh = documentEmbedService.hasFreshEmbedding(document);
@@ -250,7 +252,7 @@ public class EmbeddingJobService {
         if (collectionId == null) {
             throw new IllegalArgumentException("collectionKey is required");
         }
-        EmbeddingProfile profile = profileProvider.getActiveProfile();
+        EmbeddingProfile profile = profileProvider.getProfileForCollection(collectionId);
         return jobRepository.readiness(
                 collectionId,
                 collectionKey,

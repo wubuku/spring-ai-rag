@@ -22,6 +22,20 @@ ROOT = Path(__file__).resolve().parents[1]
 ROOT_KEY = "dependency-recovery-fixture-root-key-20261018"
 
 
+def assert_database_identity(expected, observed, phase):
+    if not isinstance(expected, str) or not expected or observed != expected:
+        raise RuntimeError("database identity assertion failed before " + phase)
+
+
+def assert_database_startup_log(expected_target, log_bytes, previous_byte_count):
+    if (not isinstance(expected_target, str) or not expected_target
+            or not isinstance(log_bytes, bytes)
+            or type(previous_byte_count) is not int
+            or previous_byte_count < 0 or previous_byte_count > len(log_bytes)
+            or expected_target.encode("utf-8") not in log_bytes[previous_byte_count:]):
+        raise RuntimeError("current startup JDBC target assertion failed")
+
+
 def port():
     with socket.socket() as listener:
         listener.bind(("127.0.0.1", 0))

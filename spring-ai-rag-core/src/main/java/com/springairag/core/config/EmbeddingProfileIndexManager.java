@@ -52,6 +52,24 @@ public class EmbeddingProfileIndexManager {
                 : lastFailure;
     }
 
+    public void dropIndex(EmbeddingProfile profile) {
+        if (profile == null || profile.id() <= 0) {
+            throw new IllegalArgumentException("Embedding profile ID must be positive");
+        }
+        String indexName = "idx_rag_emb_p_" + profile.id() + "_"
+                + profile.dimensions() + "_hnsw";
+        jdbcTemplate.execute((ConnectionCallback<Void>) connection -> {
+            boolean originalAutoCommit = connection.getAutoCommit();
+            connection.setAutoCommit(true);
+            try (Statement statement = connection.createStatement()) {
+                statement.execute("DROP INDEX CONCURRENTLY IF EXISTS " + indexName);
+                return null;
+            } finally {
+                connection.setAutoCommit(originalAutoCommit);
+            }
+        });
+    }
+
     private void ensureIndexOnce(String column, String indexName, long profileId) {
         jdbcTemplate.execute((ConnectionCallback<Void>) connection -> {
             boolean originalAutoCommit = connection.getAutoCommit();

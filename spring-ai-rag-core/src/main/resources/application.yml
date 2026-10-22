@@ -296,6 +296,20 @@ rag:
     max-derived-rows: 250000
     max-affected-chat-sessions: 1000
     max-chat-rows: 50000
+    async-preview-deadline: ${RAG_COLLECTION_PURGE_ASYNC_PREVIEW_DEADLINE:60s}
+    async-preview-statement-timeout: ${RAG_COLLECTION_PURGE_ASYNC_PREVIEW_STATEMENT_TIMEOUT:10s}
+    async-preview-admission-lease: ${RAG_COLLECTION_PURGE_ASYNC_PREVIEW_ADMISSION_LEASE:180s}
+    async-preview-max-documents: ${RAG_COLLECTION_PURGE_ASYNC_PREVIEW_MAX_DOCUMENTS:1000000}
+    async-preview-max-derived-rows: ${RAG_COLLECTION_PURGE_ASYNC_PREVIEW_MAX_DERIVED_ROWS:10000000}
+    async-operation-lease: ${RAG_COLLECTION_PURGE_ASYNC_OPERATION_LEASE:120s}
+    async-operation-heartbeat: ${RAG_COLLECTION_PURGE_ASYNC_OPERATION_HEARTBEAT:20s}
+    async-batch-deadline: ${RAG_COLLECTION_PURGE_ASYNC_BATCH_DEADLINE:60s}
+    async-batch-statement-timeout: ${RAG_COLLECTION_PURGE_ASYNC_BATCH_STATEMENT_TIMEOUT:30s}
+    async-batch-max-documents: ${RAG_COLLECTION_PURGE_ASYNC_BATCH_MAX_DOCUMENTS:500}
+    async-batch-max-rows: ${RAG_COLLECTION_PURGE_ASYNC_BATCH_MAX_ROWS:5000}
+    async-worker-concurrency: ${RAG_COLLECTION_PURGE_ASYNC_WORKER_CONCURRENCY:2}
+    async-max-coordinator-attempts: ${RAG_COLLECTION_PURGE_ASYNC_MAX_COORDINATOR_ATTEMPTS:5}
+    async-manifest-batch-size: ${RAG_COLLECTION_PURGE_ASYNC_MANIFEST_BATCH_SIZE:5000}
   security:
     # Dedicated deployment root for unlocking the Web console and managing business API keys.
     # When configured, /api/** requires this root key or a valid database-backed business key.
@@ -360,9 +374,6 @@ rag:
     model-revision: ${RAG_EMBEDDING_MODEL_REVISION:unspecified}
     distance-metric: COSINE
     normalization: PROVIDER_DEFAULT
-    migration-mode: ${RAG_EMBEDDING_MIGRATION_MODE:none}
-    migration-legacy-profile-key: ${RAG_EMBEDDING_MIGRATION_LEGACY_PROFILE_KEY:}
-    migration-confirm: ${RAG_EMBEDDING_MIGRATION_CONFIRM:}
 
   embedding-jobs:
     # 文档正文 mutation 的 SYNC/ASYNC 都依赖持久化任务，默认启用。
@@ -399,6 +410,7 @@ rag:
 
   # RAG retrieval configuration
   retrieval:
+    max-embedding-profile-fanout: ${RAG_RETRIEVAL_MAX_EMBEDDING_PROFILE_FANOUT:4}
     vector-weight: 0.5
     fulltext-weight: 0.5
     default-limit: 10

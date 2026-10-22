@@ -38,6 +38,20 @@ class RagCollectionPurgePropertiesTest {
         assertEquals(250_000, properties.getMaxDerivedRows());
         assertEquals(1_000, properties.getMaxAffectedChatSessions());
         assertEquals(50_000, properties.getMaxChatRows());
+        assertEquals(Duration.ofSeconds(60), properties.getAsyncPreviewDeadline());
+        assertEquals(Duration.ofSeconds(10), properties.getAsyncPreviewStatementTimeout());
+        assertEquals(Duration.ofSeconds(180), properties.getAsyncPreviewAdmissionLease());
+        assertEquals(1_000_000, properties.getAsyncPreviewMaxDocuments());
+        assertEquals(10_000_000, properties.getAsyncPreviewMaxDerivedRows());
+        assertEquals(Duration.ofSeconds(120), properties.getAsyncOperationLease());
+        assertEquals(Duration.ofSeconds(20), properties.getAsyncOperationHeartbeat());
+        assertEquals(Duration.ofSeconds(60), properties.getAsyncBatchDeadline());
+        assertEquals(Duration.ofSeconds(30), properties.getAsyncBatchStatementTimeout());
+        assertEquals(500, properties.getAsyncBatchMaxDocuments());
+        assertEquals(5_000, properties.getAsyncBatchMaxRows());
+        assertEquals(2, properties.getAsyncWorkerConcurrency());
+        assertEquals(5, properties.getAsyncMaxCoordinatorAttempts());
+        assertEquals(5_000, properties.getAsyncManifestBatchSize());
     }
 
     @Test
@@ -102,5 +116,52 @@ class RagCollectionPurgePropertiesTest {
         IllegalArgumentException interval = assertThrows(
                 IllegalArgumentException.class, properties::validate);
         assertTrue(interval.getMessage().contains("cleanup-interval"));
+    }
+
+    @Test
+    void asyncPreviewLeaseMustCoverDeadlineAndStatementCleanup() {
+        properties.setAsyncPreviewDeadline(Duration.ofSeconds(120));
+        properties.setAsyncPreviewAdmissionLease(Duration.ofSeconds(150));
+
+        IllegalArgumentException error = assertThrows(
+                IllegalArgumentException.class, properties::validate);
+
+        assertTrue(error.getMessage().contains("async-preview-admission-lease"));
+    }
+
+    @Test
+    void asyncPreviewLimitsCannotExceedHardBounds() {
+        properties.setAsyncPreviewMaxDocuments(1_000_001);
+
+        IllegalArgumentException error = assertThrows(
+                IllegalArgumentException.class, properties::validate);
+
+        assertTrue(error.getMessage().contains("async preview scan limits"));
+    }
+
+    @Test
+    void asyncWorkerLeaseAndBatchLimitsAreBounded() {
+        properties.setAsyncOperationLease(Duration.ofSeconds(75));
+        IllegalArgumentException lease = assertThrows(
+                IllegalArgumentException.class, properties::validate);
+        assertTrue(lease.getMessage().contains("async-operation-lease"));
+
+        properties.setAsyncOperationLease(Duration.ofSeconds(120));
+        properties.setAsyncOperationHeartbeat(Duration.ofSeconds(41));
+        IllegalArgumentException heartbeat = assertThrows(
+                IllegalArgumentException.class, properties::validate);
+        assertTrue(heartbeat.getMessage().contains("async-operation-heartbeat"));
+
+        properties.setAsyncOperationHeartbeat(Duration.ofSeconds(20));
+        properties.setAsyncBatchMaxRows(10_001);
+        IllegalArgumentException rows = assertThrows(
+                IllegalArgumentException.class, properties::validate);
+        assertTrue(rows.getMessage().contains("async-batch-max-rows"));
+
+        properties.setAsyncBatchMaxRows(5_000);
+        properties.setAsyncManifestBatchSize(5_001);
+        IllegalArgumentException manifest = assertThrows(
+                IllegalArgumentException.class, properties::validate);
+        assertTrue(manifest.getMessage().contains("async-manifest-batch-size"));
     }
 }

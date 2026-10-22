@@ -45,12 +45,13 @@ class EmbeddingJobWorkerTest {
         embedService = mock(DocumentEmbedService.class);
         profileProvider = mock(EmbeddingProfileProvider.class);
         RagProperties properties = new RagProperties();
+        EmbeddingProfile profile = new EmbeddingProfile(
+                9L, "test", "test", "test", "v1",
+                1024, "COSINE", "NONE", true);
         worker = new EmbeddingJobWorker(
                 repository, embedService, profileProvider, properties);
-        when(profileProvider.getActiveProfile()).thenReturn(
-                new EmbeddingProfile(
-                        9L, "test", "test", "test", "v1",
-                1024, "COSINE", "NONE", true));
+        when(profileProvider.getActiveProfile()).thenReturn(profile);
+        when(profileProvider.findRequiredById(9L)).thenReturn(profile);
     }
 
     @AfterEach
@@ -85,7 +86,8 @@ class EmbeddingJobWorkerTest {
                     first.id().equals(id) ? first : second);
         });
         when(embedService.embedDocumentForJob(
-                anyLong(), anyBoolean(), any(EmbeddingCommitGuard.class)))
+                anyLong(), anyBoolean(), anyLong(),
+                any(EmbeddingCommitGuard.class), any()))
                 .thenReturn(Map.of("status", "COMPLETED"));
         when(repository.markSucceeded(
                 any(UUID.class), anyString(), eq(true)))
@@ -130,7 +132,8 @@ class EmbeddingJobWorkerTest {
                     first.id().equals(id) ? first : second);
         });
         when(embedService.embedDocumentForJob(
-                anyLong(), anyBoolean(), any(EmbeddingCommitGuard.class)))
+                anyLong(), anyBoolean(), anyLong(),
+                any(EmbeddingCommitGuard.class), any()))
                 .thenReturn(Map.of("status", "COMPLETED"));
         when(repository.markSucceeded(
                 any(UUID.class), anyString(), eq(true)))
@@ -142,7 +145,9 @@ class EmbeddingJobWorkerTest {
                 .embedDocumentForJob(
                         anyLong(),
                         anyBoolean(),
-                        any(EmbeddingCommitGuard.class));
+                        anyLong(),
+                        any(EmbeddingCommitGuard.class),
+                        any());
         verify(repository, timeout(2000).atLeast(3))
                 .claim(anyString(), eq(1), anyInt());
     }
@@ -167,7 +172,8 @@ class EmbeddingJobWorkerTest {
         when(repository.find(job.id())).thenReturn(
                 java.util.Optional.of(job));
         when(embedService.embedDocumentForJob(
-                anyLong(), anyBoolean(), any(EmbeddingCommitGuard.class)))
+                anyLong(), anyBoolean(), anyLong(),
+                any(EmbeddingCommitGuard.class), any()))
                 .thenReturn(Map.of("status", "COMPLETED"));
         when(repository.markSucceeded(
                 any(UUID.class), anyString(), eq(true)))
@@ -182,7 +188,9 @@ class EmbeddingJobWorkerTest {
                 .embedDocumentForJob(
                         anyLong(),
                         anyBoolean(),
-                        any(EmbeddingCommitGuard.class));
+                        anyLong(),
+                        any(EmbeddingCommitGuard.class),
+                        any());
     }
 
     @Test
@@ -197,9 +205,10 @@ class EmbeddingJobWorkerTest {
         when(repository.find(job.id())).thenReturn(
                 java.util.Optional.of(job));
         when(embedService.embedDocumentForJob(
-                anyLong(), anyBoolean(), any(EmbeddingCommitGuard.class)))
+                anyLong(), anyBoolean(), anyLong(),
+                any(EmbeddingCommitGuard.class), any()))
                 .thenAnswer(invocation -> {
-                    EmbeddingCommitGuard guard = invocation.getArgument(2);
+                    EmbeddingCommitGuard guard = invocation.getArgument(3);
                     guard.verify();
                     return Map.of("status", "COMPLETED");
                 });
@@ -239,9 +248,10 @@ class EmbeddingJobWorkerTest {
         when(repository.isCancellationRequested(job.id()))
                 .thenReturn(true);
         when(embedService.embedDocumentForJob(
-                anyLong(), anyBoolean(), any(EmbeddingCommitGuard.class)))
+                anyLong(), anyBoolean(), anyLong(),
+                any(EmbeddingCommitGuard.class), any()))
                 .thenAnswer(invocation -> {
-                    EmbeddingCommitGuard guard = invocation.getArgument(2);
+                    EmbeddingCommitGuard guard = invocation.getArgument(3);
                     guard.verify();
                     throw new AssertionError("guard should reject");
                 });
@@ -271,12 +281,12 @@ class EmbeddingJobWorkerTest {
         when(embedService.embedDocumentForJob(
                 eq(original.documentId()),
                 eq(false),
-                any(EmbeddingCommitGuard.class)))
+                eq(9L), any(EmbeddingCommitGuard.class), any()))
                 .thenReturn(Map.of("status", "CACHED"));
         when(embedService.embedDocumentForJob(
                 eq(original.documentId()),
                 eq(true),
-                any(EmbeddingCommitGuard.class)))
+                eq(9L), any(EmbeddingCommitGuard.class), any()))
                 .thenReturn(Map.of("status", "COMPLETED"));
         when(repository.markSucceeded(
                 any(UUID.class), anyString(), eq(false)))
@@ -288,9 +298,9 @@ class EmbeddingJobWorkerTest {
         worker.process(original);
 
         verify(embedService).embedDocumentForJob(
-                eq(original.documentId()), eq(false), any());
+                eq(original.documentId()), eq(false), eq(9L), any(), any());
         verify(embedService).embedDocumentForJob(
-                eq(original.documentId()), eq(true), any());
+                eq(original.documentId()), eq(true), eq(9L), any(), any());
     }
 
     private EmbeddingJob job() {

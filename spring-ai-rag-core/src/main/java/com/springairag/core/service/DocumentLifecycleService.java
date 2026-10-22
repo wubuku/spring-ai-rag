@@ -52,7 +52,7 @@ public class DocumentLifecycleService {
                     "DISABLED",
                     "DISABLED",
                     "DISABLED",
-                    activeProfileKey(),
+                    profileKey(document),
                     null,
                     null,
                     null,
@@ -62,10 +62,11 @@ public class DocumentLifecycleService {
         if (integrityRepository != null) {
             return fromIntegrity(
                     integrityRepository.inspect(document),
+                    profileKey(document),
                     processingSummary(document));
         }
 
-        EmbeddingProfile profile = profileProvider.getActiveProfile();
+        EmbeddingProfile profile = profileFor(document);
         List<Map<String, Object>> rows = jdbcTemplate.queryForList(
                 """
                 SELECT local.local_index_status,
@@ -266,6 +267,7 @@ public class DocumentLifecycleService {
 
     private DocumentLifecycleResponse fromIntegrity(
             DerivationIntegrityRepository.Snapshot snapshot,
+            String profileKey,
             com.springairag.api.dto.DocumentProcessingSummary processing) {
         String searchability = switch (snapshot.bucket()) {
             case "READY" -> "READY";
@@ -285,7 +287,7 @@ public class DocumentLifecycleService {
                 ? snapshot.localError() : snapshot.vectorError();
         return new DocumentLifecycleResponse(
                 "ACTIVE", searchability, localStatus, embeddingStatus,
-                activeProfileKey(), snapshot.activeJobId(),
+                profileKey, snapshot.activeJobId(),
                 "READY".equals(searchability) ? null : snapshot.reasonCode(),
                 error, !"READY".equals(searchability), processing);
     }
@@ -304,9 +306,16 @@ public class DocumentLifecycleService {
                 true);
     }
 
-    private String activeProfileKey() {
+    private EmbeddingProfile profileFor(RagDocument document) {
+        if (document.getCollectionId() != null) {
+            return profileProvider.getProfileForCollection(document.getCollectionId());
+        }
+        return profileProvider.getActiveProfile();
+    }
+
+    private String profileKey(RagDocument document) {
         try {
-            return profileProvider.getActiveProfile().profileKey();
+            return profileFor(document).profileKey();
         } catch (RuntimeException ignored) {
             return null;
         }

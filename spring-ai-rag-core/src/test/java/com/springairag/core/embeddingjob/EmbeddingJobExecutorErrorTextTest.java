@@ -42,7 +42,8 @@ class EmbeddingJobExecutorErrorTextTest {
         com.springairag.core.documentprocessing.DocumentProcessingRunRepository processing =
                 mock(com.springairag.core.documentprocessing.DocumentProcessingRunRepository.class);
         executor.setProcessingRepository(processing);
-        when(embedService.embedDocumentForJob(eq(42L), eq(false), any(), any()))
+        when(embedService.embedDocumentForJob(
+                eq(42L), eq(false), eq(9L), any(), any()))
                 .thenThrow(new com.springairag.documents.chunk.ChunkingException("CHUNK_ATOMIC_BLOCK_TOO_LARGE"));
         executor.executeNow(JOB_ID);
         verify(processing).markStage(eq(job), anyString(),
@@ -106,7 +107,7 @@ class EmbeddingJobExecutorErrorTextTest {
         when(repository.claimById(eq(JOB_ID), anyString(), anyInt()))
                 .thenReturn(Optional.of(job));
         when(repository.find(JOB_ID)).thenReturn(Optional.of(job));
-        when(profileProvider.getActiveProfile()).thenReturn(profile(9L));
+        when(profileProvider.findRequiredById(9L)).thenReturn(profile(9L));
         // executeNow 每次生成随机 lease owner：桩需按任意 owner 匹配。
         when(repository.isCommitAllowed(eq(JOB_ID), anyString(), eq(9L)))
                 .thenReturn(true);
@@ -118,7 +119,7 @@ class EmbeddingJobExecutorErrorTextTest {
         stubClaimed(job);
         when(repository.find(JOB_ID)).thenReturn(Optional.of(job));
         when(embedService.embedDocumentForJob(
-                eq(42L), eq(false), any())).thenReturn(
+                eq(42L), eq(false), eq(9L), any(), any())).thenReturn(
                 Map.of("status", "FAILED", "error", "   "));
 
         executor.executeNow(JOB_ID);
@@ -137,13 +138,13 @@ class EmbeddingJobExecutorErrorTextTest {
         EmbeddingJob refreshed = job(9L, true);
         when(repository.find(JOB_ID)).thenReturn(Optional.of(refreshed));
         when(embedService.embedDocumentForJob(
-                eq(42L), eq(true), any())).thenReturn(
+                eq(42L), eq(true), eq(9L), any(), any())).thenReturn(
                 Map.of("status", "COMPLETED", "chunksCreated", 2));
 
         executor.executeNow(JOB_ID);
 
         verify(embedService).embedDocumentForJob(
-                eq(42L), eq(true), any());
+                eq(42L), eq(true), eq(9L), any(), any());
         verify(repository).markSucceeded(eq(JOB_ID), anyString(), eq(true));
     }
 
@@ -162,7 +163,7 @@ class EmbeddingJobExecutorErrorTextTest {
         EmbeddingJob job = job(9L, false);
         stubClaimed(job);
         when(embedService.embedDocumentForJob(
-                eq(42L), eq(false), any()))
+                eq(42L), eq(false), eq(9L), any(), any()))
                 .thenThrow(new DocumentNotFoundException(42L));
 
         executor.executeNow(JOB_ID);
@@ -178,7 +179,7 @@ class EmbeddingJobExecutorErrorTextTest {
         EmbeddingJob job = job(9L, false);
         stubClaimed(job);
         when(embedService.embedDocumentForJob(
-                eq(42L), eq(false), any())).thenReturn(
+                eq(42L), eq(false), eq(9L), any(), any())).thenReturn(
                 Map.of("status", "FAILED", "error",
                         "Embedding dimension mismatch at chunk 0"));
 
@@ -196,7 +197,7 @@ class EmbeddingJobExecutorErrorTextTest {
         EmbeddingJob job = job(9L, false);
         stubClaimed(job);
         when(embedService.embedDocumentForJob(
-                eq(42L), eq(false), any())).thenReturn(
+                eq(42L), eq(false), eq(9L), any(), any())).thenReturn(
                 Map.of("status", "FAILED", "error", "provider timeout"));
 
         executor.executeNow(JOB_ID);

@@ -30,8 +30,18 @@ public record CollectionResponse(
         @Schema(description = "Last update timestamp")
         ZonedDateTime updatedAt,
         @Schema(description = "Number of documents")
-        long documentCount
+        long documentCount,
+        @Schema(description = "Registered embedding Profile identifier")
+        Long embeddingProfileId
 ) {
+    public CollectionResponse(
+            Long id, String name, String description, String embeddingModel,
+            int dimensions, boolean enabled, Map<String, Object> metadata,
+            ZonedDateTime createdAt, ZonedDateTime updatedAt, long documentCount) {
+        this(id, name, description, embeddingModel, dimensions, enabled, metadata,
+                createdAt, updatedAt, documentCount, null);
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -44,6 +54,7 @@ public record CollectionResponse(
                 && Objects.equals(name, that.name)
                 && Objects.equals(description, that.description)
                 && Objects.equals(embeddingModel, that.embeddingModel)
+                && Objects.equals(embeddingProfileId, that.embeddingProfileId)
                 && Objects.equals(metadata, that.metadata)
                 && Objects.equals(createdAt, that.createdAt)
                 && Objects.equals(updatedAt, that.updatedAt);
@@ -51,7 +62,8 @@ public record CollectionResponse(
 
     @Override
     public int hashCode() {
-        return Objects.hash(id, name, description, embeddingModel, dimensions, enabled, metadata, createdAt, updatedAt, documentCount);
+        return Objects.hash(id, name, description, embeddingModel, dimensions, enabled,
+                metadata, createdAt, updatedAt, documentCount, embeddingProfileId);
     }
 
     @Override
@@ -62,6 +74,7 @@ public record CollectionResponse(
                 ", description='" + description + '\'' +
                 ", embeddingModel='" + embeddingModel + '\'' +
                 ", dimensions=" + dimensions +
+                ", embeddingProfileId=" + embeddingProfileId +
                 ", enabled=" + enabled +
                 ", metadata=" + metadata +
                 ", createdAt=" + createdAt +

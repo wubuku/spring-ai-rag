@@ -305,7 +305,8 @@ RAG_WEB_UI_ENABLED=false
 RAG_EMBEDDING_JOBS_ENABLED=false
 RAG_DOCUMENT_PROCESSING_ENABLED=false
 RAG_DOCUMENT_PROCESSING_HOUSEKEEPING_ENABLED=false
-RAG_COLLECTION_PROVISIONING_ENABLED=false
+RAG_COLLECTION_PROVISIONING_ENABLED=true
+RAG_COLLECTION_PURGE_ENABLED=true
 RAG_API_KEY_PROVISIONING_ENABLED=false
 RAG_INTEGRATION_OBSERVABILITY_ENABLED=false
 RAG_DATA_GOVERNANCE_CLEANUP_ENABLED=false
@@ -315,6 +316,7 @@ RAG_RATE_LIMIT_ENABLED=true
 RAG_RATE_LIMIT_BACKEND=postgresql
 RAG_RATE_LIMIT_STRATEGY=principal
 RAG_RATE_LIMIT_REQUESTS_PER_MINUTE=10000
+RAG_LONG_RUNNING_OPERATIONS_POLL_INTERVAL_MS=100
 EOF
 }
 
@@ -408,6 +410,18 @@ elif [[ "$FAIL_COUNT" -eq 0 && -z "$REAL_BASE_URL" ]]; then
       if run_step "${label} HTTP server" start_service "$label" "$main_class" "$port"; then
         run_sdk_pair "$label" "http://127.0.0.1:${port}" "$API_KEY" || true
         SDK_EXPECT_UNAVAILABLE=1 run_sdk_pair "${label}-provider-error" "http://127.0.0.1:${port}" "$API_KEY" || true
+        run_step "${label} Native/OpenAI consumer HTTP contract" env \
+          CLIENT_CONTRACT_LIVE=1 \
+          CLIENT_CONTRACT_BASE_URL="http://127.0.0.1:${port}" \
+          CLIENT_CONTRACT_API_KEY="$API_KEY" \
+          CLIENT_CONTRACT_QUERY="Explain the isolated client contract smoke." \
+          CLIENT_CONTRACT_MODEL="$MODEL" \
+          CLIENT_CONTRACT_OPENAI_RAG_MODE=PLAIN \
+          CLIENT_CONTRACT_OPENAI_RAG_MEMORY=STATELESS \
+          ./scripts/verify-client-consumer-contract.sh || true
+        run_step "${label} async Collection Purge HTTP lifecycle" env \
+          BASE_URL="http://127.0.0.1:${port}" RAG_ROOT_API_KEY="$API_KEY" \
+          ./scripts/async-collection-purge-http-smoke.sh || true
       fi
       stop_pid "$SERVICE_PID"
       SERVICE_PID=""

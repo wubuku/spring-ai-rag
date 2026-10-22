@@ -63,16 +63,22 @@ python3 scripts/verify-quality-production-e2e.py
 先运行离线与受控检查，再安全导出已授权的模型/embedding环境变量：
 
 ```bash
-python3 scripts/verify-quality-real-e2e.py --ack-paid-models
+python3 scripts/verify-quality-real-e2e.py --ack-paid-models --embedding-profiles profile_a,profile_b,profile_c
 ```
 
-默认依次使用 `openai,minimax`、每种24例×3轮，共144次QA，另有Client JSON/SSE/SDK与HTTP rerank检查。
+默认依次使用 `openai,minimax`；每个 LLM × 每个 Embedding Profile 执行24例×3轮，共432次QA，另有Client JSON/SSE/SDK与HTTP rerank检查。
+三个 Profile 必须包含两个同维不同模型与一个不同维模型。对每个 Profile，脚本建立独立 Collection 副本并改写同一评测定义，验证真实写入和检索路由。
 可用 `--providers openai` 或 `--repeats 2`缩小明确标注的验收范围；不能把单模型结果报告成双模型通过。
 `--definition /private/subset.json`可选择引用同一合成语料的版本化子集；结果数量以实际case为准，不能冒充完整24例矩阵。
 此执行器显式启用已有诊断持久化，要求case trace齐全，并抽查引用可读；不改变服务部署的诊断开关默认值。
-它不会读取或打印`.env`，由调用者向环境注入 `SPRING_AI_OPENAI_*`、`SPRING_AI_MINIMAX_*` 与
-`RAG_EMBEDDING_*`；外部models文件禁用，以明确被测provider。HTTP rerank凭据沿用现有工厂配置继承。
+它不会读取或打印`.env`，由调用者向环境注入 `SPRING_AI_OPENAI_*`、`SPRING_AI_MINIMAX_*`，以及每个 Profile 对应的
+`RAG_QUALITY_PROFILE_<KEY>_API_KEY`、`_BASE_URL`、`_PROVIDER`、`_MODEL`、`_DIMENSIONS`；base URL 不得包含 `/v1`。Profile 参数经私有进程环境传给 Spring，不写入命令行和结果摘要。外部models文件禁用，以明确被测provider。HTTP rerank凭据沿用现有工厂配置继承。
 真实执行在自有隔离库，日志/逐轮结果在 `.verification/quality-real/`，不是服务默认启动任务。
+
+支持可变输出维度的模型还可显式设置 `RAG_QUALITY_PROFILE_<KEY>_REQUEST_DIMENSIONS=true`，
+默认不发送该字段。执行器在启动数据库前逐 Profile 请求 `/v1/models` 和 `/v1/embeddings`，
+验证模型存在、真实返回维度及非零有限向量；失败仅记录脱敏状态，不进入矩阵。可用
+`--preflight-only` 单独执行该检查；通过预检不等于质量验收通过。
 
 真实质量失败与结构性/API失败分别报告；两者均不能靠review、换模型后重跑或删除原始run洗绿。
 组合执行器因任一模型质量门槛非零退出时，必须保留该失败结论；即使其Client API检查通过，

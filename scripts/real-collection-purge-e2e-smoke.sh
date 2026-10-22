@@ -124,6 +124,7 @@ request() {
   local url="$2"
   local expected_status="$3"
   local body="${4:-}"
+  local idempotency_key="${5:-}"
   local response
   local -a args=(
     --silent
@@ -132,8 +133,12 @@ request() {
     --max-time 240
     --request "$method"
     --header "$AUTH_HEADER"
+    --dump-header "$WORK_DIR/last-response.headers"
     --write-out $'\n%{http_code}'
   )
+  if [[ -n "$idempotency_key" ]]; then
+    args+=(--header "Idempotency-Key: $idempotency_key")
+  fi
   if [[ -n "$body" ]]; then
     args+=(--header "Content-Type: application/json" --data "$body")
   fi
@@ -141,9 +146,7 @@ request() {
   HTTP_STATUS="${response##*$'\n'}"
   HTTP_BODY="${response%$'\n'"$HTTP_STATUS"}"
   if [[ "$HTTP_STATUS" != "$expected_status" ]]; then
-    echo "Unexpected HTTP status for ${method} ${url}: ${HTTP_STATUS}, expected ${expected_status}" >&2
-    printf '%s' "$HTTP_BODY" \
-      | jq -c '{error, status, detail}' 2>/dev/null >&2 || true
+    echo "Unexpected HTTP status: method=${method}, got=${HTTP_STATUS}, expected=${expected_status}" >&2
     return 1
   fi
 }
@@ -466,6 +469,80 @@ jq -en --argjson original "$RESULT_BODY" --argjson replay "$HTTP_BODY" \
   '$original == $replay' >/dev/null
 unset PREVIEW_BODY RESULT_BODY apply_body
 pass "preview, apply and exact result replay retired the Collection"
+
+step "External Client async purge lifecycle"
+ASYNC_COLLECTION_KEY="${COLLECTION_KEY}-async"
+ASYNC_COLLECTION_ENCODED="$(jq -rn --arg value "$ASYNC_COLLECTION_KEY" '$value|@uri')"
+async_create_body="$(jq -nc --arg key "$ASYNC_COLLECTION_KEY" \
+  '{collectionKey: $key, name: "Async purge lifecycle", enabled: true}')"
+request POST "$API/collections" 200 "$async_create_body"
+request POST \
+  "$API/collections/by-key/purge/async/preview?collectionKey=$ASYNC_COLLECTION_ENCODED" 200
+ASYNC_PREVIEW_BODY="$HTTP_BODY"
+printf '%s' "$ASYNC_PREVIEW_BODY" | jq -e '
+  .status == "PREVIEWED"
+  and .documentCount == 0
+  and (.previewId | type == "string")
+  and (.confirmationToken | type == "string")
+  and (.fingerprint | type == "string")
+' >/dev/null
+pass "async preview contract validated"
+async_apply_body="$(printf '%s' "$ASYNC_PREVIEW_BODY" | jq -c '
+  {collectionKey, previewId, confirmationToken, fingerprint,
+   expectedCollectionVersion: .collectionVersion,
+   expectedChatCommitFenceVersion: .chatCommitFenceVersion}'
+)"
+request POST "$API/collections/by-key/purge" 409 "$async_apply_body"
+printf '%s' "$HTTP_BODY" | jq -e \
+  '.error == "COLLECTION_PURGE_ASYNC_PREVIEW_REQUIRES_ASYNC_APPLY" and .status == 409' \
+  >/dev/null
+pass "legacy synchronous apply rejects async preview without deleting data"
+ASYNC_IDEMPOTENCY_KEY="${TOKEN}-async-purge"
+request POST "$API/collections/by-key/purge/async" 202 \
+  "$async_apply_body" "$ASYNC_IDEMPOTENCY_KEY"
+ASYNC_RECEIPT="$HTTP_BODY"
+pass "async apply returned 202"
+grep -Eiq '^Location:[[:space:]]*[^[:space:]]' "$WORK_DIR/last-response.headers"
+grep -Eiq '^Retry-After:[[:space:]]*[1-9][0-9]*' "$WORK_DIR/last-response.headers"
+ASYNC_OPERATION_ID="$(printf '%s' "$ASYNC_RECEIPT" | jq -er '.operationId')"
+ASYNC_STATUS_PATH="$(printf '%s' "$ASYNC_RECEIPT" | jq -er '.statusUrl')"
+ASYNC_RESULT_PATH="$(printf '%s' "$ASYNC_RECEIPT" | jq -er '.resultUrl')"
+ASYNC_STATUS_URL="${BASE_URL}${ASYNC_STATUS_PATH}"
+ASYNC_RESULT_URL="${BASE_URL}${ASYNC_RESULT_PATH}"
+request POST "$API/collections/by-key/purge/async" 202 \
+  "$async_apply_body" "$ASYNC_IDEMPOTENCY_KEY"
+jq -en --argjson first "$ASYNC_RECEIPT" --argjson replay "$HTTP_BODY" \
+  '$first.operationId == $replay.operationId and $first.statusUrl == $replay.statusUrl' >/dev/null
+pass "async idempotent replay validated"
+async_conflict_body="$(printf '%s' "$async_apply_body" | jq -c \
+  '.expectedCollectionVersion += 1')"
+request POST "$API/collections/by-key/purge/async" 409 \
+  "$async_conflict_body" "$ASYNC_IDEMPOTENCY_KEY"
+printf '%s' "$HTTP_BODY" | jq -e \
+  '.error == "IDEMPOTENCY_KEY_REUSED" and .status == 409' >/dev/null
+pass "async idempotency conflict validated"
+for ((attempt = 0; attempt < 60; attempt++)); do
+  request GET "$ASYNC_STATUS_URL" 200
+  ASYNC_STATUS="$(printf '%s' "$HTTP_BODY" | jq -r '.status')"
+  case "$ASYNC_STATUS" in
+    SUCCEEDED) break ;;
+    QUEUED|RUNNING|RETRY_WAIT) sleep 1 ;;
+    *) echo "Async purge entered unexpected status: $ASYNC_STATUS" >&2; exit 1 ;;
+  esac
+done
+[[ "$ASYNC_STATUS" == "SUCCEEDED" ]] || {
+  echo "Async purge did not complete before the polling deadline." >&2
+  exit 1
+}
+request GET "$ASYNC_RESULT_URL" 200
+printf '%s' "$HTTP_BODY" | jq -e '
+  .status == "RETIRED"
+  and .purgedDocumentCount == 0
+  and .purgedAt != null
+' >/dev/null
+pass "async operation result validated"
+pass "async preview, 202 headers, idempotent replay, status polling and result retrieval"
+unset ASYNC_PREVIEW_BODY ASYNC_RECEIPT async_create_body async_apply_body
 
 step "Retired scope rejection and default-scope exclusion"
 request POST "$API/search" 409 "$search_body"

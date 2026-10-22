@@ -40,11 +40,13 @@ ALL_SUITES=(
   "collection-key:CollectionKeyPostgresIntegrationTest"
   "collection-provisioning:CollectionProvisioningPostgresIntegrationTest"
   "collection-purge:CollectionPurgePostgresIntegrationTest"
+  "collection-purge-http:CollectionPurgeHttpPostgresIntegrationTest"
   "document-lifecycle:DocumentLifecyclePostgresIntegrationTest"
   "document-sync-runs:DocumentSyncRunsPostgresIntegrationTest"
   "document-processing:DocumentProcessingRunPostgresIntegrationTest"
   "embedding-jobs:EmbeddingJobsPostgresIntegrationTest"
   "embedding-profile:EmbeddingProfilePostgresIntegrationTest"
+  "embedding-profile-migration:EmbeddingProfileMigrationLockPostgresIntegrationTest"
   "evaluation-suites:EvaluationSuitePostgresIntegrationTest"
   "external-document:ExternalDocumentSyncPostgresIntegrationTest"
   "hybrid-rrf:HybridRetrieverRrfPostgresIntegrationTest"
@@ -86,6 +88,7 @@ echo "Testcontainers: RYUK_DISABLED=$TESTCONTAINERS_RYUK_DISABLED PG_IMAGE=$TEST
 echo "Suites: ${CLASSES[*]}"
 
 exec mvn test "${TEST_FLAGS[@]}" \
+  -Djacoco.append=false \
   -Dtest="$(IFS=,; echo "${CLASSES[*]}")" \
   -Dsurefire.failIfNoSpecifiedTests=false \
   -pl spring-ai-rag-starter -am
