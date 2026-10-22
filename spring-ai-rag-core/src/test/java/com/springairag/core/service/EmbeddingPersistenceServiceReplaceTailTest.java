@@ -66,6 +66,7 @@ class EmbeddingPersistenceServiceReplaceTailTest {
 
     @Test
     void ensureContentHashSucceedsOnCasHit() {
+        stubSnapshot(3L, "hash-a", true);
         when(jdbcTemplate.update(
                 contains("SET content_hash"),
                 any(Object[].class)))
@@ -132,7 +133,7 @@ class EmbeddingPersistenceServiceReplaceTailTest {
 
         org.mockito.Mockito.verify(jdbcTemplate).update(
                 contains("INSERT INTO rag_embeddings"),
-                eq(41L), eq("text"), eq(0), anyString(), anyString(),
+                eq(41L), eq("text"), eq(0), anyString(),
                 eq(2L), eq(0), eq(4));
     }
 }

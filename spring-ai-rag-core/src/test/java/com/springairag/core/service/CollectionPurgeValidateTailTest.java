@@ -117,6 +117,11 @@ class CollectionPurgeValidateTailTest {
 
     private void stubPreviewRow(String fingerprint, String status,
                                 String resultPayload) {
+        stubPreviewRow(fingerprint, status, resultPayload, "SYNC");
+    }
+
+    private void stubPreviewRow(String fingerprint, String status,
+                                String resultPayload, String executionMode) {
         String tokenHash = com.springairag.core.util.DigestUtils
                 .sha256("token-1");
         Instant future = Instant.now().plusSeconds(3_600);
@@ -138,6 +143,7 @@ class CollectionPurgeValidateTailTest {
                             .thenReturn(tokenHash);
                     when(rs.getString("fingerprint")).thenReturn(fingerprint);
                     when(rs.getString("status")).thenReturn(status);
+                    when(rs.getString("execution_mode")).thenReturn(executionMode);
                     when(rs.getTimestamp("preview_deadline"))
                             .thenReturn(java.sql.Timestamp.from(future));
                     when(rs.getTimestamp("operation_deadline"))
@@ -164,6 +170,20 @@ class CollectionPurgeValidateTailTest {
                         request()));
         assertTrue(error.getMessage()
                 .contains("does not match the request"));
+    }
+
+    @Test
+    void synchronousApplyRejectsAsyncPreview() {
+        stubPreviewRow("unused-fingerprint", "PREVIEWED", null, "ASYNC");
+
+        RagException error = assertThrows(RagException.class,
+                () -> service.apply(
+                        applyRequest("unused-fingerprint", 5L), request()));
+
+        assertEquals(
+                com.springairag.api.enums.ErrorCode
+                        .COLLECTION_PURGE_ASYNC_PREVIEW_REQUIRES_ASYNC_APPLY,
+                error.getErrorCodeEnum());
     }
 
     @Test

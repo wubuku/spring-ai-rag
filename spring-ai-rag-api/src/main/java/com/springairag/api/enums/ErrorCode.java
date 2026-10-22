@@ -57,6 +57,7 @@ public enum ErrorCode {
     COLLECTION_NOT_FOUND(404, "Collection Not Found"),
     SESSION_NOT_FOUND(404, "Chat Session Not Found"),
     CHAT_TURN_NOT_FOUND(404, "Chat Turn Not Found"),
+    LONG_RUNNING_OPERATION_NOT_FOUND(404, "Long-Running Operation Not Found"),
 
     // ==================== 405 Method Not Allowed ====================
 
@@ -90,6 +91,7 @@ public enum ErrorCode {
     IDEMPOTENCY_OPERATION_IN_PROGRESS(409, "Idempotency Operation In Progress"),
     ACTIVE_SYNC_RUN_CONFLICT(409, "Active Sync Run Conflict"),
     DERIVATION_REPAIR_CONFLICT(409, "Derivation Repair Conflict"),
+    EMBEDDING_PROFILE_NOT_READY(409, "Embedding Profile Not Ready"),
     DERIVATION_REPAIR_EXPIRED(409, "Derivation Repair Expired"),
     VERSION_NOT_RESTORABLE(409, "Version Not Restorable"),
     RESTORE_NOT_ALLOWED(409, "Restore Not Allowed"),
@@ -103,17 +105,29 @@ public enum ErrorCode {
     COLLECTION_PURGE_CONFLICT(409, "Collection Purge Conflict"),
     COLLECTION_PURGE_PREVIEW_EXPIRED(409, "Collection Purge Preview Expired"),
     COLLECTION_PURGE_CONFIRMATION_INVALID(409, "Collection Purge Confirmation Invalid"),
+    LONG_RUNNING_OPERATION_RESULT_NOT_READY(409, "Long-Running Operation Result Not Ready"),
+    LONG_RUNNING_OPERATION_STATE_CONFLICT(409, "Long-Running Operation State Conflict"),
+    COLLECTION_OPERATION_IN_PROGRESS(409, "Collection Operation In Progress"),
+    COLLECTION_PURGE_ASYNC_PREVIEW_REQUIRES_ASYNC_APPLY(
+            409, "Async Collection Purge Preview Requires Async Apply"),
     COLLECTION_ALREADY_RETIRED(409, "Collection Already Retired"),
     ALERT_NOTIFICATION_DELIVERY_CONFLICT(
             409, "Alert Notification Delivery Conflict"),
 
     // ==================== 422 Unprocessable Entity ====================
 
+    COLLECTION_PURGE_ASYNC_PREVIEW_LIMIT_EXCEEDED(
+            422, "Collection Purge Async Preview Limit Exceeded"),
+
     UNPROCESSABLE_ENTITY(422, "Unprocessable Entity"),
     CHAT_BUDGET_EXHAUSTED(422, "Chat Execution Budget Exhausted"),
     CHAT_CONTEXT_BUDGET_EXCEEDED(422, "Chat Context Budget Exceeded"),
+    EMBEDDING_PROFILE_FANOUT_LIMIT_EXCEEDED(422, "Embedding Profile Fanout Limit Exceeded"),
 
     // ==================== 429 Too Many Requests ====================
+
+    LONG_RUNNING_OPERATION_CAPACITY_EXCEEDED(
+            429, "Long-Running Operation Capacity Exceeded"),
 
     // Batch 873. This used to be RATE_LIMIT_EXCEEDED, which nothing in the
     // repository ever emitted — RateLimitFilter has always written
@@ -133,6 +147,12 @@ public enum ErrorCode {
     EMBEDDING_FAILED(500, "Embedding Failed"),
 
     // ==================== 503 Service Unavailable ====================
+
+    COLLECTION_PURGE_PREVIEW_TIMEOUT(503, "Collection Purge Preview Timed Out"),
+
+    // ==================== 410 Gone ====================
+
+    LONG_RUNNING_OPERATION_RESULT_EXPIRED(410, "Long-Running Operation Result Expired"),
 
     SERVICE_UNAVAILABLE(503, "Service Unavailable"),
     // Batch 873: see MISSING_HEADER above — emitted by the handler, absent here.

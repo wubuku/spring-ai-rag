@@ -125,6 +125,8 @@ class IntegrationCapabilityCatalogTest {
         assertTrue(features.optional().documentSyncRunItemReceipts());
         assertTrue(features.optional().openAiCompatibility());
         assertTrue(features.optional().integrationObservability());
+        assertTrue(features.optional().embeddingProfileRouting());
+        assertTrue(features.optional().embeddingProfileOperations());
         assertTrue(features.credentialRotation().immediate());
         assertTrue(features.credentialRotation().staged());
         assertTrue(features.credentialRotation().cancel());

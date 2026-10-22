@@ -16,8 +16,8 @@ Additive capabilities: [trustworthy assertions, active diagnostics and offline q
 python3 scripts/test-support/knowledge-qa-quality-self-test.py
 python3 scripts/test-support/rag-recovery-gate-self-test.py
 python3 scripts/verify-quality-production-e2e.py
-# Explicitly paid; privately inject model configuration into the calling environment first:
-python3 scripts/verify-quality-real-e2e.py --ack-paid-models
+# Explicitly paid; privately inject two LLMs and three Embedding Profiles first:
+python3 scripts/verify-quality-real-e2e.py --ack-paid-models --embedding-profiles profile_a,profile_b,profile_c
 ```
 
 Serialize Maven/SDK builds. Both runners use owned isolated databases and private artifacts under
@@ -62,7 +62,7 @@ Documentation hub: [index.md](index.md). Stable project context: [project-contex
 | Real-LLM E2E port | `18081` |
 | Embedding | SiliconFlow `BAAI/bge-m3` |
 | Vector dimension | `1024` |
-| Flyway | V1–V66 |
+| Flyway | V1–V70 |
 
 Do **not** append `/v1` to an OpenAI or Embedding `base-url`. Spring AI appends `/v1/chat/completions` or `/v1/embeddings`.
 
@@ -709,6 +709,21 @@ assertion; an `AGENT` capability rejection (`MODEL_CAPABILITY_UNSUPPORTED`) is
 reported as a capability-gated skip, not as provider success. The provider preflight
 timeout can be bounded with `REAL_LLM_PREFLIGHT_TIMEOUT_SECONDS`. For a direct provider
 smoke, point it to a nonexistent file:
+
+Real-LLM startup must also use a disposable or dedicated database URL. `scripts/start-real-e2e-server.sh`
+preserves an explicitly supplied `SPRING_DATASOURCE_URL`, username, and password, asserts `current_database()`
+in a read-only transaction before Flyway runs, then repeats the identity check after readiness and verifies the
+JDBC target in the startup log. It refuses startup when the target is the shared default database
+`spring_ai_rag_dev`, the identity assertion fails, or the logged JDBC target differs. Do not rely on
+`POSTGRES_DATABASE` alone to override a URL loaded from `.env`; pass the complete URL explicitly:
+
+```bash
+SPRING_DATASOURCE_URL=jdbc:postgresql://127.0.0.1:61062/rag_openai_real_20261022 \
+SPRING_DATASOURCE_USERNAME=postgres \
+SPRING_DATASOURCE_PASSWORD="$POSTGRES_PASSWORD" \
+LLM_PROVIDER=openai \
+./scripts/start-real-e2e-server.sh
+```
 
 ```bash
 MODELS_CONFIG_FILE=/tmp/spring-ai-rag-no-external-models.json \

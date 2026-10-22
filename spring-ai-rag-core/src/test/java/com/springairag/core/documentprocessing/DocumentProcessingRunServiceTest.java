@@ -220,7 +220,7 @@ class DocumentProcessingRunServiceTest {
         assertNull(context.service.summaryForDocument(document(CONTENT_HASH, false)));
         verify(context.profileProvider, never()).getActiveProfile();
 
-        when(context.profileProvider.getActiveProfile())
+        when(context.profileProvider.getProfileForCollection(91L))
                 .thenThrow(new IllegalStateException("profile unavailable"));
         assertNull(context.service.summaryForDocument(document(CONTENT_HASH, true)));
 
@@ -617,6 +617,8 @@ class DocumentProcessingRunServiceTest {
         RagProperties properties = new RagProperties();
         properties.getDocumentProcessing().setEnabled(enabled);
         when(profileProvider.getActiveProfile()).thenReturn(profile());
+        when(profileProvider.getProfileForCollection(91L)).thenReturn(profile());
+        when(profileProvider.findRequiredById(PROFILE_ID)).thenReturn(profile());
         DocumentProcessingRunService service = new DocumentProcessingRunService(
                 repository,
                 jobRepository,

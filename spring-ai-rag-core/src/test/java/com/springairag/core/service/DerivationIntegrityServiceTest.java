@@ -24,6 +24,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -42,6 +43,10 @@ class DerivationIntegrityServiceTest {
         collectionResolver = mock(CollectionIdentityResolver.class);
         profileProvider = mock(EmbeddingProfileProvider.class);
         when(profileProvider.getActiveProfile()).thenReturn(profile());
+        lenient().when(profileProvider.getProfileForCollection(anyLong())).thenReturn(
+                new EmbeddingProfile(
+                        2L, "collection-profile", "provider", "model-384", "rev-2", 384,
+                        "COSINE", "PROVIDER_DEFAULT", true));
         service = new DerivationIntegrityService(
                 repository, collectionResolver, profileProvider);
         collection = new RagCollection();
@@ -79,7 +84,7 @@ class DerivationIntegrityServiceTest {
         DerivationReadinessResponse response = service.summary("kb");
 
         assertEquals("kb", response.collectionKey());
-        assertEquals("profile-key", response.activeEmbeddingProfileKey());
+        assertEquals("collection-profile", response.activeEmbeddingProfileKey());
         assertEquals(10, response.enabledDocuments());
         assertEquals(6, response.readyDocuments());
         assertEquals(5, response.notRequestedDocuments());
@@ -96,7 +101,7 @@ class DerivationIntegrityServiceTest {
                 service.embeddingReadiness("kb");
 
         assertEquals("kb", response.collectionKey());
-        assertEquals("profile-key", response.activeEmbeddingProfileKey());
+        assertEquals("collection-profile", response.activeEmbeddingProfileKey());
         assertEquals(6, response.freshDocuments());
         assertEquals(2, response.queuedDocuments());
         assertEquals(1, response.failedDocuments());

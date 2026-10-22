@@ -251,9 +251,6 @@ rag:
     model-revision: ${RAG_EMBEDDING_MODEL_REVISION:unspecified}
     distance-metric: COSINE
     normalization: PROVIDER_DEFAULT
-    migration-mode: ${RAG_EMBEDDING_MIGRATION_MODE:none}
-    migration-legacy-profile-key: ${RAG_EMBEDDING_MIGRATION_LEGACY_PROFILE_KEY:}
-    migration-confirm: ${RAG_EMBEDDING_MIGRATION_CONFIRM:}
 ```
 
 | 属性 | 默认值 | 说明 |
@@ -262,15 +259,13 @@ rag:
 | `rag.embedding.base-url` | `https://api.siliconflow.cn` | API 端点 |
 | `rag.embedding.model` | `BAAI/bge-m3` | 嵌入模型名称 |
 | `rag.embedding.dimensions` | `1024` | 向量维度（必须与模型输出一致） |
+| `rag.embedding.request-dimensions` | `false` | 显式向兼容服务发送 `dimensions`；仅对已验证支持该参数的模型开启，环境变量 `RAG_EMBEDDING_REQUEST_DIMENSIONS` |
 | `rag.embedding.retry-max-attempts` | `3` | 单次 provider 调用最大尝试次数，范围 1–10；还受依赖总时限约束，独立于持久化 job 预算 |
 | `rag.embedding.profile-key` | `siliconflow-bge-m3-1024-v1` | 写入和检索使用的不可变模型空间身份 |
 | `rag.embedding.provider` | `siliconflow` | Profile 中保存的提供商身份 |
 | `rag.embedding.model-revision` | `unspecified` | 显式模型版本身份；模型语义变化必须创建新 Profile |
 | `rag.embedding.distance-metric` | `COSINE` | 距离度量；本版本只支持 `COSINE` |
 | `rag.embedding.normalization` | `PROVIDER_DEFAULT` | 保存于 Profile 的归一化语义 |
-| `rag.embedding.migration-mode` | `none` | 显式 Legacy 认领的启动迁移模式 |
-| `rag.embedding.migration-legacy-profile-key` | `""` | Legacy 认领使用的既有 Profile key |
-| `rag.embedding.migration-confirm` | `""` | Legacy 认领操作要求的精确确认值 |
 
 最小 `.env` 示例：
 
@@ -287,6 +282,11 @@ RAG_EMBEDDING_DIMENSIONS=1024
 允许以诊断模式继续；该模式不会注入 mock embedding 或占位凭据。该检查只验证本地
 配置形状，不代表远程 provider 已接受 key；真实可用性仍需执行一次实际 embedding
 请求。
+
+每个 `rag.embedding.profiles.<key>` 也支持可选的 `request-dimensions`，默认 `false`，
+因此旧模型仍不接收该请求字段。使用支持可变输出维度的模型时，显式开启后发送该 Profile
+的 `dimensions`；这不是本地截断向量，实际响应仍须匹配固定列维度。更改模型空间或输出维度
+必须创建新 Profile，不得原地修改既有身份。
 
 `RAG_EMBEDDING_URL` 以及所有 `SILICONFLOW_*` 嵌入变量名都已经退役，不是兼容别名，
 脚本不会自动映射。如果本地 `.env` 仍保留这些变量，请在启动开发栈或真实 E2E 脚本前
@@ -443,6 +443,20 @@ rag:
     max-derived-rows: 250000
     max-affected-chat-sessions: 1000
     max-chat-rows: 50000
+    async-preview-deadline: ${RAG_COLLECTION_PURGE_ASYNC_PREVIEW_DEADLINE:60s}
+    async-preview-statement-timeout: ${RAG_COLLECTION_PURGE_ASYNC_PREVIEW_STATEMENT_TIMEOUT:10s}
+    async-preview-admission-lease: ${RAG_COLLECTION_PURGE_ASYNC_PREVIEW_ADMISSION_LEASE:180s}
+    async-preview-max-documents: ${RAG_COLLECTION_PURGE_ASYNC_PREVIEW_MAX_DOCUMENTS:1000000}
+    async-preview-max-derived-rows: ${RAG_COLLECTION_PURGE_ASYNC_PREVIEW_MAX_DERIVED_ROWS:10000000}
+    async-operation-lease: ${RAG_COLLECTION_PURGE_ASYNC_OPERATION_LEASE:120s}
+    async-operation-heartbeat: ${RAG_COLLECTION_PURGE_ASYNC_OPERATION_HEARTBEAT:20s}
+    async-batch-deadline: ${RAG_COLLECTION_PURGE_ASYNC_BATCH_DEADLINE:60s}
+    async-batch-statement-timeout: ${RAG_COLLECTION_PURGE_ASYNC_BATCH_STATEMENT_TIMEOUT:30s}
+    async-batch-max-documents: ${RAG_COLLECTION_PURGE_ASYNC_BATCH_MAX_DOCUMENTS:500}
+    async-batch-max-rows: ${RAG_COLLECTION_PURGE_ASYNC_BATCH_MAX_ROWS:5000}
+    async-worker-concurrency: ${RAG_COLLECTION_PURGE_ASYNC_WORKER_CONCURRENCY:2}
+    async-max-coordinator-attempts: ${RAG_COLLECTION_PURGE_ASYNC_MAX_COORDINATOR_ATTEMPTS:5}
+    async-manifest-batch-size: ${RAG_COLLECTION_PURGE_ASYNC_MANIFEST_BATCH_SIZE:5000}
 ```
 
 | 属性 | 默认值 | 说明 |
@@ -462,6 +476,20 @@ rag:
 | `max-derived-rows` | `250000` | 其他派生/控制行总上限，范围 1–2000000 |
 | `max-affected-chat-sessions` | `1000` | 受影响 owner/session 上限，范围 1–10000 |
 | `max-chat-rows` | `50000` | history/memory/summary/turn replay 总行上限，范围 1–500000 |
+| `async-preview-deadline` | `60s` | 异步 preview 扫描硬 deadline，范围 1s–120s |
+| `async-preview-statement-timeout` | `10s` | 单条扫描 SQL timeout，范围 1s–30s |
+| `async-preview-admission-lease` | `180s` | Preview admission lease，范围 150s–240s，必须覆盖 deadline 及 SQL timeout + 30s |
+| `async-preview-max-documents` | `1000000` | 异步 preview 文档扫描硬上限，最大 1000000 |
+| `async-preview-max-derived-rows` | `10000000` | 异步 preview 派生/引用行扫描硬上限，最大 10000000 |
+| `async-operation-lease` | `120s` | Purge worker operation lease，范围 30s–180s，必须大于批次 deadline + 15s |
+| `async-operation-heartbeat` | `20s` | Worker heartbeat 周期，范围 1s–60s，不能超过 lease 的三分之一 |
+| `async-batch-deadline` | `60s` | 单个删除事务硬 deadline，范围 1s–120s |
+| `async-batch-statement-timeout` | `30s` | 单条删除 SQL timeout，范围 1s–60s 且不大于 batch deadline |
+| `async-batch-max-documents` | `500` | 每个事务最多处理的文档数，硬上限 500 |
+| `async-batch-max-rows` | `5000` | 每个事务最多删除的显式依赖行数，硬上限 10000 |
+| `async-worker-concurrency` | `2` | 异步 Purge worker 并发数，范围 1–8 |
+| `async-max-coordinator-attempts` | `5` | 协调器可恢复重试次数，范围 1–10 |
+| `async-manifest-batch-size` | `5000` | 目标清单持久化批次大小，范围 1–5000；数据留在 PostgreSQL，不全量载入 JVM |
 
 所有配置在启动时 fail fast 校验。能力开启时还要求 Chat durable coordinator、事务管理器
 和必要引用索引可用；不能以放宽配置跳过完整性检查。超过任一上限时 preview 返回冲突，

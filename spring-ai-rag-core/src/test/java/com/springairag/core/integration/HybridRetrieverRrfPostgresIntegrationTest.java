@@ -811,14 +811,13 @@ class HybridRetrieverRrfPostgresIntegrationTest {
         jdbc.update(
                 """
                 INSERT INTO rag_embeddings (
-                    document_id, chunk_text, chunk_index, embedding,
+                    document_id, chunk_text, chunk_index,
                     embedding_1024, embedding_profile_id
-                ) VALUES (?, ?, ?, ?::vector, ?::vector, ?)
+                ) VALUES (?, ?, ?, ?::vector, ?)
                 """,
                 documentId,
                 chunkText,
                 chunkIndex,
-                vectorText(vector(1024, firstValue)),
                 vectorText(vector(1024, firstValue)),
                 profileId);
     }

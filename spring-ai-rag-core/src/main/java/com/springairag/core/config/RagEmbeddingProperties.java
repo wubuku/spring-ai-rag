@@ -1,5 +1,8 @@
 package com.springairag.core.config;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+
 /**
  * Embedding Model Configuration
  */
@@ -9,14 +12,13 @@ public class RagEmbeddingProperties {
     private String baseUrl = "https://api.siliconflow.cn";
     private String model = "BAAI/bge-m3";
     private int dimensions = 1024;
+    private boolean requestDimensions;
     private String profileKey = EmbeddingProfileRegistry.DEFAULT_PROFILE_KEY;
     private String provider = "siliconflow";
     private String modelRevision = "unspecified";
     private String distanceMetric = "COSINE";
     private String normalization = "PROVIDER_DEFAULT";
-    private String migrationMode = "none";
-    private String migrationLegacyProfileKey = "";
-    private String migrationConfirm = "";
+    private Map<String, RagEmbeddingProfileProperties> profiles = new LinkedHashMap<>();
 
     public String getApiKey() {
         return apiKey;
@@ -48,6 +50,14 @@ public class RagEmbeddingProperties {
 
     public void setDimensions(int dimensions) {
         this.dimensions = dimensions;
+    }
+
+    public boolean isRequestDimensions() {
+        return requestDimensions;
+    }
+
+    public void setRequestDimensions(boolean requestDimensions) {
+        this.requestDimensions = requestDimensions;
     }
 
     public String getProfileKey() {
@@ -90,27 +100,12 @@ public class RagEmbeddingProperties {
         this.normalization = normalization;
     }
 
-    public String getMigrationMode() {
-        return migrationMode;
+    public Map<String, RagEmbeddingProfileProperties> getProfiles() {
+        return profiles;
     }
 
-    public void setMigrationMode(String migrationMode) {
-        this.migrationMode = migrationMode;
+    public void setProfiles(Map<String, RagEmbeddingProfileProperties> profiles) {
+        this.profiles = profiles == null ? new LinkedHashMap<>() : new LinkedHashMap<>(profiles);
     }
 
-    public String getMigrationLegacyProfileKey() {
-        return migrationLegacyProfileKey;
-    }
-
-    public void setMigrationLegacyProfileKey(String migrationLegacyProfileKey) {
-        this.migrationLegacyProfileKey = migrationLegacyProfileKey;
-    }
-
-    public String getMigrationConfirm() {
-        return migrationConfirm;
-    }
-
-    public void setMigrationConfirm(String migrationConfirm) {
-        this.migrationConfirm = migrationConfirm;
-    }
 }

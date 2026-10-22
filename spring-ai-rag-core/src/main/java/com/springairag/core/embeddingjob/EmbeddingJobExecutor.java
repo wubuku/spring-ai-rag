@@ -99,10 +99,9 @@ public class EmbeddingJobExecutor {
                 heartbeatSeconds,
                         TimeUnit.SECONDS);
         try (var background = com.springairag.core.admission.BackgroundWorkScope.open()) {
-            long activeProfileId = profileProvider.getActiveProfile().id();
-            if (activeProfileId != job.embeddingProfileId()
-                    || !repository.isCommitAllowed(
-                    job.id(), leaseOwner, activeProfileId)) {
+            long jobProfileId = profileProvider
+                    .findRequiredById(job.embeddingProfileId()).id();
+            if (!repository.isCommitAllowed(job.id(), leaseOwner, jobProfileId)) {
                 terminalWithoutCommit(
                         job, leaseOwner, "Embedding job snapshot is stale");
                 return;
@@ -150,7 +149,8 @@ public class EmbeddingJobExecutor {
             boolean force,
             String leaseOwner) {
         EmbeddingCommitGuard guard = () -> {
-            long currentProfileId = profileProvider.getActiveProfile().id();
+            long currentProfileId = profileProvider
+                    .findRequiredById(job.embeddingProfileId()).id();
             if (!repository.claimCommitAllowed(
                     job.id(), leaseOwner, currentProfileId,
                     properties.getLeaseSeconds())) {
@@ -160,10 +160,10 @@ public class EmbeddingJobExecutor {
         };
         if (processingRepository == null && processingRunService == null) {
             return documentEmbedService.embedDocumentForJob(
-                    job.documentId(), force, guard);
+                    job.documentId(), force, job.embeddingProfileId(), guard, null);
         }
         return documentEmbedService.embedDocumentForJob(
-                job.documentId(), force, guard,
+                job.documentId(), force, job.embeddingProfileId(), guard,
                 event -> onProgress(job, leaseOwner, event));
     }
 
@@ -195,7 +195,8 @@ public class EmbeddingJobExecutor {
                 return;
             }
             EmbeddingJob current = repository.find(job.id()).orElse(job);
-            long activeProfileId = profileProvider.getActiveProfile().id();
+            long activeProfileId = profileProvider
+                    .findRequiredById(job.embeddingProfileId()).id();
             if (!force
                     && current.force()
                     && repository.isCommitAllowed(

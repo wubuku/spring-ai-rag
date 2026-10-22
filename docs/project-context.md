@@ -489,7 +489,7 @@ See [multi-model-external-config.md](multi-model-external-config.md).
 ### Database
 
 - PostgreSQL with pgvector.
-- Flyway is currently V1–V66; see [budget settlement safety](budget-settlement-safety.md) for expired-estimate backfill and late settlement.
+- Flyway is currently V1–V70; see [budget settlement safety](budget-settlement-safety.md) for expired-estimate backfill and late settlement.
 - V27/V28 add, backfill, validate, uniquely constrain, and make immutable the
   Collection business key; V29 adds JSONB structured records; V30 adds the
   external-document synchronization schema; V31 normalizes stored external

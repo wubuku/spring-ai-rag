@@ -788,10 +788,9 @@ class NextHighValueFeaturesPostgresIntegrationTest {
                 """, documentId, profileId, HASH, CHUNKER);
         jdbc.update("""
                 INSERT INTO rag_embeddings (
-                    document_id, chunk_text, chunk_index, embedding, embedding_1024,
+                    document_id, chunk_text, chunk_index, embedding_1024,
                     embedding_profile_id, chunk_start_pos, chunk_end_pos
                 ) VALUES (?, 'current text', 0,
-                    array_fill(0.0::real, ARRAY[1024])::vector,
                     array_fill(0.0::real, ARRAY[1024])::vector, ?, 0, 12)
                 """, documentId, profileId);
     }

@@ -14,6 +14,13 @@
 .git/
 .gitignore
 
+# 本地验收证据可能很大且不属于镜像输入
+.verification/
+**/.verification/
+
+# 前端依赖由镜像构建步骤之外单独管理
+**/node_modules/
+
 # Docker 文件本身
 docker/
 

@@ -40,6 +40,10 @@ class DerivationRepairHelperTailTest {
                 .thenReturn(new EmbeddingProfile(
                         7L, "bge-m3", "vendor", "bge-m3", "rev-1",
                         1024, "cosine", "normalize", true));
+        when(profileProvider.getProfileForCollection(10L))
+                .thenReturn(new EmbeddingProfile(
+                        7L, "bge-m3", "vendor", "bge-m3", "rev-1",
+                        1024, "cosine", "normalize", true));
         service = new DerivationRepairService(
                 mock(JdbcTemplate.class),
                 new ObjectMapper(),
@@ -96,18 +100,19 @@ class DerivationRepairHelperTailTest {
 
     @Test
     void requireActiveProfileRejectsProfileDrift() throws Exception {
-        when(profileProvider.getActiveProfile())
+        when(profileProvider.getProfileForCollection(10L))
                 .thenReturn(new EmbeddingProfile(
                         8L, "other", "vendor", "other", "rev-2",
                         1024, "cosine", "normalize", true));
         Method method = DerivationRepairService.class
-                .getDeclaredMethod("requireActiveProfile", long.class);
+                .getDeclaredMethod(
+                        "requireActiveProfile", long.class, long.class);
         method.setAccessible(true);
 
         RagException error = assertThrows(RagException.class,
                 () -> {
                     try {
-                        method.invoke(service, 7L);
+                        method.invoke(service, 10L, 7L);
                     } catch (java.lang.reflect.InvocationTargetException e) {
                         throw e.getCause();
                     }

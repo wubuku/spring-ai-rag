@@ -380,7 +380,7 @@ job enqueue 分开提交，HTTP 不同步循环调用 provider。只读诊断默
 ### 数据库
 
 - PostgreSQL + pgvector。
-- Flyway 当前为 V1–V66；预算过期估算回填及迟到结算见[预算结算安全](budget-settlement-safety-zh-CN.md)。
+- Flyway 当前为 V1–V70；预算过期估算回填及迟到结算见[预算结算安全](budget-settlement-safety-zh-CN.md)。
 - V27/V28 负责新增、回填、校验、唯一约束及不可变 Collection 业务 key；V29 增加 JSONB
   结构化记录；V30 增加外部文档同步 schema；V31 在不改写已发布 V30 的前提下规范化
   已存储的外部文档身份；V32 增加按 principal 归属的 Chat history、来源快照、turn

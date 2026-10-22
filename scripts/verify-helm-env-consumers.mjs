@@ -71,6 +71,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isMainModule } from './lib/is-main-module.mjs';
 import { stripConfigComments } from './lib/java-source.mjs';
+import { filterExistingTrackedPaths } from './lib/tracked-paths.mjs';
 import {
   isDocumentation,
   isGateFixture,
@@ -194,7 +195,7 @@ function trackedCorpus() {
     maxBuffer: 64 * 1024 * 1024,
   }).split('\0').filter(Boolean);
 
-  return paths
+  return filterExistingTrackedPaths(projectRoot, paths)
     .filter((p) => !/\.(png|jpg|jpeg|gif|ico|pdf|jar|zip|woff2?|ttf|svg)$/iu.test(p))
     .map((path) => ({
       path,

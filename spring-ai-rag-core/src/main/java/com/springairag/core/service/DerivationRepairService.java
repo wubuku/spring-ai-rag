@@ -96,7 +96,7 @@ public class DerivationRepairService {
         int max = request.maxDocuments() <= 0 ? MAX_DOCUMENTS
                 : Math.min(request.maxDocuments(), MAX_DOCUMENTS);
         RagCollection collection = integrityService.requireCollection(request.collectionKey());
-        long profileId = profileId();
+        long profileId = profileId(collection.getId());
         Set<String> buckets = upperSet(request.buckets());
         Set<String> vectorConditions = upperSet(request.vectorConditions());
         validateSelection(buckets, vectorConditions);
@@ -111,7 +111,7 @@ public class DerivationRepairService {
         String tokenHash = DigestUtils.sha256(token);
         List<PlanItem> plan = candidates.stream().map(this::plan)
                 .filter(Objects::nonNull).toList();
-        requireActiveProfile(profileId);
+        requireActiveProfile(collection.getId(), profileId);
         String fingerprint = fingerprint(collection.getId(), profileId, plan);
         Instant now = Instant.now();
         Instant previewDeadline = now.plusSeconds(15 * 60L);
@@ -167,7 +167,7 @@ public class DerivationRepairService {
         if ("COMPLETED".equals(preview.status())) {
             return status(request.repairId());
         }
-        requireActiveProfile(preview.profileId());
+        requireActiveProfile(preview.collectionId(), preview.profileId());
         requirePreviewNotExpired(preview);
         String leaseHash = claimApplyLease(preview);
         if (leaseHash == null) {
@@ -381,7 +381,7 @@ public class DerivationRepairService {
 
     private PhaseResult applyVectorPhase(
             PreviewRow preview, long documentId, String leaseHash) {
-        requireActiveProfile(preview.profileId());
+        requireActiveProfile(preview.collectionId(), preview.profileId());
         CollectionIdentityResolver.ActiveCollectionToken token =
                 collectionResolver.beginActiveWrite(preview.collectionId());
         if (!lockItemLease(preview.id(), documentId, leaseHash)) {
@@ -431,7 +431,7 @@ public class DerivationRepairService {
                         preview.id(), documentId, leaseHash);
                 EmbeddingDispatchService.Result queued = dispatchService.enqueueInCurrentTransaction(
                         document, false, true, "DERIVATION_REPAIR");
-                requireActiveProfile(preview.profileId());
+                requireActiveProfile(preview.collectionId(), preview.profileId());
                 jobId = queued.embeddingJobId();
                 jdbcTemplate.update(
                         "UPDATE rag_derivation_repair_items SET vector_action_status = 'SUCCEEDED', embedding_job_id = ? "
@@ -674,15 +674,15 @@ public class DerivationRepairService {
                 "items", plan)));
     }
 
-    private void requireActiveProfile(long expectedProfileId) {
-        if (profileId() != expectedProfileId) {
+    private void requireActiveProfile(long collectionId, long expectedProfileId) {
+        if (profileId(collectionId) != expectedProfileId) {
             throw new RagException(ErrorCode.DERIVATION_REPAIR_CONFLICT,
-                    "Active embedding Profile changed after repair preview");
+                    "Collection embedding Profile changed after repair preview");
         }
     }
 
-    private long profileId() {
-        return profileProvider.getActiveProfile().id();
+    private long profileId(long collectionId) {
+        return profileProvider.getProfileForCollection(collectionId).id();
     }
 
     private String json(Object value) {

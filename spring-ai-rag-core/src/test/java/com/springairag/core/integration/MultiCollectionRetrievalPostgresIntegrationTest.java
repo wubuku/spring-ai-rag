@@ -357,12 +357,10 @@ class MultiCollectionRetrievalPostgresIntegrationTest {
         String vector = vectorText(embedding);
         jdbcTemplate.update(
                 "INSERT INTO rag_embeddings "
-                        + "(document_id, chunk_text, chunk_index, embedding, "
+                        + "(document_id, chunk_text, chunk_index, "
                         + "embedding_profile_id, embedding_1024, metadata) "
-                        + "VALUES (?, 'scope query', 0, ?::vector, ?, "
-                        + "?::vector, '{}'::jsonb)",
+                        + "VALUES (?, 'scope query', 0, ?, ?::vector, '{}'::jsonb)",
                 documentId,
-                vector,
                 profile.id(),
                 vector);
         jdbcTemplate.update(

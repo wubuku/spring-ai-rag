@@ -6,11 +6,10 @@
 // the job that produced it — every job-side update is guarded by
 // `state.request_generation = job.request_generation`.
 //
-// Three production writers wrote the state row without naming the column:
+// Two production writers wrote the state row without naming the column:
 //
 //   EmbeddingPersistenceService.replace                   (INSERT, status COMPLETED)
 //   EmbeddingPersistenceService.recordFailureIfNoCompleted (INSERT, status FAILED)
-//   LegacyEmbeddingMigrationService                        (INSERT, status COMPLETED)
 //
 // On the update branch that is invisible: an existing row keeps the generation
 // its job allocated. On the insert branch the row takes the column default, and

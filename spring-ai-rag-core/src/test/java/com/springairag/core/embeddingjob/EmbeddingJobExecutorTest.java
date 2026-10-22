@@ -18,9 +18,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -46,6 +49,8 @@ class EmbeddingJobExecutorTest {
         embedService = mock(DocumentEmbedService.class);
         profileProvider = mock(EmbeddingProfileProvider.class);
         when(profileProvider.getActiveProfile()).thenReturn(profile(9L));
+        org.mockito.Mockito.when(profileProvider.findRequiredById(anyLong()))
+                .thenAnswer(invocation -> profile(invocation.getArgument(0)));
         executor = new EmbeddingJobExecutor(
                 repository, embedService, profileProvider, new RagProperties());
     }
@@ -99,7 +104,7 @@ class EmbeddingJobExecutorTest {
 
         assertThrows(IllegalArgumentException.class, () -> executor.executeNow(JOB_ID));
         verify(embedService, never()).embedDocumentForJob(
-                org.mockito.ArgumentMatchers.anyLong(), anyBoolean(), org.mockito.ArgumentMatchers.any());
+                anyLong(), anyBoolean(), anyLong(), any(), isNull());
     }
 
     @Test
@@ -120,7 +125,8 @@ class EmbeddingJobExecutorTest {
         EmbeddingJob job = job(9L, false);
         stubClaimed(job);
         when(repository.isCommitAllowed(eq(JOB_ID), anyString(), eq(9L))).thenReturn(true);
-        when(embedService.embedDocumentForJob(eq(42L), eq(false), org.mockito.ArgumentMatchers.any()))
+        when(embedService.embedDocumentForJob(
+                eq(42L), eq(false), eq(9L), any(), isNull()))
                 .thenReturn(Map.of("status", "COMPLETED"));
         when(repository.markSucceeded(eq(JOB_ID), anyString(), eq(true))).thenReturn(1);
 
@@ -144,7 +150,7 @@ class EmbeddingJobExecutorTest {
         executor.executeNow(JOB_ID);
 
         verify(embedService, never()).embedDocumentForJob(
-                org.mockito.ArgumentMatchers.anyLong(), anyBoolean(), org.mockito.ArgumentMatchers.any());
+                anyLong(), anyBoolean(), anyLong(), any(), isNull());
         verify(repository).markStale(
                 eq(JOB_ID), anyString(), argThat(reason -> reason.contains("stale")));
         verify(repository).refreshStateFromJob(JOB_ID);
@@ -171,7 +177,7 @@ class EmbeddingJobExecutorTest {
         executor.executeNow(JOB_ID);
 
         verify(embedService, never()).embedDocumentForJob(
-                org.mockito.ArgumentMatchers.anyLong(), anyBoolean(), org.mockito.ArgumentMatchers.any());
+                anyLong(), anyBoolean(), anyLong(), any(), isNull());
         verify(repository).markStale(eq(JOB_ID), anyString(), anyString());
     }
 
@@ -180,7 +186,8 @@ class EmbeddingJobExecutorTest {
         EmbeddingJob job = job(9L, false);
         stubClaimed(job);
         when(repository.isCommitAllowed(eq(JOB_ID), anyString(), eq(9L))).thenReturn(true);
-        when(embedService.embedDocumentForJob(eq(42L), eq(false), org.mockito.ArgumentMatchers.any()))
+        when(embedService.embedDocumentForJob(
+                eq(42L), eq(false), eq(9L), any(), isNull()))
                 .thenReturn(Map.of("status", "CACHED"));
         when(repository.markSucceeded(eq(JOB_ID), anyString(), eq(false))).thenReturn(1);
 
@@ -189,7 +196,7 @@ class EmbeddingJobExecutorTest {
         verify(repository).markSucceeded(eq(JOB_ID), anyString(), eq(false));
         verify(repository).refreshStateFromJob(JOB_ID);
         verify(embedService, org.mockito.Mockito.times(1)).embedDocumentForJob(
-                org.mockito.ArgumentMatchers.anyLong(), anyBoolean(), org.mockito.ArgumentMatchers.any());
+                anyLong(), anyBoolean(), anyLong(), any(), isNull());
     }
 
     @Test
@@ -200,9 +207,11 @@ class EmbeddingJobExecutorTest {
                 .thenReturn(Optional.of(job));
         when(repository.find(JOB_ID)).thenReturn(Optional.of(job), Optional.of(forced));
         when(repository.isCommitAllowed(eq(JOB_ID), anyString(), eq(9L))).thenReturn(true);
-        when(embedService.embedDocumentForJob(eq(42L), eq(false), org.mockito.ArgumentMatchers.any()))
+        when(embedService.embedDocumentForJob(
+                eq(42L), eq(false), eq(9L), any(), isNull()))
                 .thenReturn(Map.of("status", "CACHED"));
-        when(embedService.embedDocumentForJob(eq(42L), eq(true), org.mockito.ArgumentMatchers.any()))
+        when(embedService.embedDocumentForJob(
+                eq(42L), eq(true), eq(9L), any(), isNull()))
                 .thenReturn(Map.of("status", "COMPLETED"));
         when(repository.markSucceeded(eq(JOB_ID), anyString(), eq(false))).thenReturn(0);
         when(repository.markSucceeded(eq(JOB_ID), anyString(), eq(true))).thenReturn(1);
@@ -210,7 +219,7 @@ class EmbeddingJobExecutorTest {
         executor.executeNow(JOB_ID);
 
         verify(embedService).embedDocumentForJob(
-                eq(42L), eq(true), org.mockito.ArgumentMatchers.any());
+                eq(42L), eq(true), eq(9L), any(), isNull());
         verify(repository).markSucceeded(eq(JOB_ID), anyString(), eq(true));
         verify(repository, never()).markStale(eq(JOB_ID), anyString(), anyString());
     }
@@ -220,7 +229,8 @@ class EmbeddingJobExecutorTest {
         EmbeddingJob job = job(9L, false);
         stubClaimed(job);
         when(repository.isCommitAllowed(eq(JOB_ID), anyString(), eq(9L))).thenReturn(true);
-        when(embedService.embedDocumentForJob(eq(42L), eq(false), org.mockito.ArgumentMatchers.any()))
+        when(embedService.embedDocumentForJob(
+                eq(42L), eq(false), eq(9L), any(), isNull()))
                 .thenReturn(Map.of("status", "FAILED", "error", "provider down"));
 
         executor.executeNow(JOB_ID);
@@ -236,7 +246,8 @@ class EmbeddingJobExecutorTest {
         stubClaimed(job);
         when(repository.isCommitAllowed(eq(JOB_ID), anyString(), eq(9L))).thenReturn(true);
         String verbose = "provider exploded: password=super-secret-value-2026 ".repeat(40);
-        when(embedService.embedDocumentForJob(eq(42L), eq(false), org.mockito.ArgumentMatchers.any()))
+        when(embedService.embedDocumentForJob(
+                eq(42L), eq(false), eq(9L), any(), isNull()))
                 .thenThrow(new RuntimeException(verbose));
 
         executor.executeNow(JOB_ID);
@@ -254,7 +265,8 @@ class EmbeddingJobExecutorTest {
         EmbeddingJob job = job(9L, false);
         stubClaimed(job);
         when(repository.isCommitAllowed(eq(JOB_ID), anyString(), eq(9L))).thenReturn(true);
-        when(embedService.embedDocumentForJob(eq(42L), eq(false), org.mockito.ArgumentMatchers.any()))
+        when(embedService.embedDocumentForJob(
+                eq(42L), eq(false), eq(9L), any(), isNull()))
                 .thenThrow(new EmbeddingCommitRejectedException("lost commit eligibility"));
 
         executor.executeNow(JOB_ID);

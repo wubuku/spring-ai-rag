@@ -165,6 +165,24 @@ curl http://localhost:8081/api/v1/rag/search?query=example \
   验收，不能沿用升级前结果。命令见
   [testing-guide-zh-CN.md](testing-guide-zh-CN.md)。
 
+#### V68 固定向量列迁移
+
+V68 会删除无法可靠归属到 Embedding Profile 的旧单列向量。项目 Helm chart 将 Deployment
+固定为 `Recreate`：升级期间先终止旧 Pod，再由新版本启动并执行 Flyway，因此会有短暂停机；
+不得覆盖为 `RollingUpdate`，也不得让新旧二进制同时访问该数据库。外部编排部署必须自行先
+停止全部旧实例，再启动新版本。`scripts/verify-release.sh` 会分别渲染默认与 production
+values，并对每个 Deployment 检查 `strategy.type=Recreate`。
+
+单实例 Docker Compose 部署应先构建或获取新应用镜像，再仅重建应用服务；该命令会停止旧服务
+容器后才启动新容器并运行 Flyway，PostgreSQL 服务和数据卷保持不变：
+
+```bash
+docker compose -f docker/docker-compose.yml build rag-service
+docker compose -f docker/docker-compose.yml up -d --no-deps --force-recreate rag-service
+```
+
+如果应用镜像由外部流程提供，可跳过 `build`，但仍须保证旧应用容器停止后才启动新版本。
+
 ## 4. 构建与运行
 
 ### 4.1 构建

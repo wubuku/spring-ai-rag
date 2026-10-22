@@ -161,7 +161,9 @@ public class DocumentProcessingRunService {
         EmbeddingProfile profile;
         DocumentDerivationDescriptorProvider.Descriptor descriptor;
         try {
-            profile = profileProvider.getActiveProfile();
+            profile = document.getCollectionId() == null
+                    ? profileProvider.getActiveProfile()
+                    : profileProvider.getProfileForCollection(document.getCollectionId());
             descriptor = descriptorProvider.describe(document);
         } catch (RuntimeException ignored) {
             return null;
@@ -252,7 +254,8 @@ public class DocumentProcessingRunService {
             throw new RagException(ErrorCode.DOCUMENT_DISABLED,
                     "Disabled documents cannot be retried");
         }
-        EmbeddingProfile profile = profileProvider.getActiveProfile();
+        EmbeddingProfile profile = profileProvider.findRequiredById(
+                source.embeddingProfileId());
         DocumentDerivationDescriptorProvider.Descriptor descriptor =
                 descriptorProvider.describe(document);
         if (!retryable(source, document, profile, descriptor)) {

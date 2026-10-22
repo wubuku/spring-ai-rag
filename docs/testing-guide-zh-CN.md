@@ -13,8 +13,8 @@
 
 先运行两个Python自测，再执行 `python3 scripts/verify-quality-production-e2e.py`，验证24例多轮
 正反例、跨节点一致性/公平性/lease接管，以及旧备份后的删除/吊销/擦除闸门。
-明确付费且安全注入模型环境后，运行 `python3 scripts/verify-quality-real-e2e.py --ack-paid-models`：
-默认两provider各24例×3轮，外加真实Client JSON/SSE/SDK和HTTP rerank。普通Chat不会自动触发评测。
+明确付费且安全注入模型环境后，运行 `python3 scripts/verify-quality-real-e2e.py --ack-paid-models --embedding-profiles profile_a,profile_b,profile_c`：
+两provider分别对三个 Profile 各跑24例×3轮，Profile 需为两个同维不同模型及一个不同维模型；另含真实Client JSON/SSE/SDK和HTTP rerank。普通Chat不会自动触发评测。
 完整命令、结果归因、成本与信任边界见 [质量稳定性与生产恢复验收](quality-production-acceptance-zh-CN.md)。
 旧三例smoke与单实例恢复入口保持不变；受控通过不得冒充真实模型质量。
 
@@ -154,6 +154,26 @@ API_CONTRACT_QUERY='RAG' \
 `X-RAG-Retrieval-Trace-Id` 的不同语义。`scripts/dev.sh` 启动成功和外部 Client 黑盒通过，
 比 WebUI 页面可用更能证明本批完成。
 
+异步 Collection Purge 另有不调用模型的运行中服务黑盒：服务需连接可处置的测试 PostgreSQL，
+并配置 Collection Purge 与环境 Root API Key。可选提供另一个已授权的管理 API Key 验证 owner
+隔离；该脚本只创建并退役一个唯一、空 Collection。
+
+```bash
+BASE_URL=http://127.0.0.1:8081 \
+RAG_ROOT_API_KEY="$RAG_ROOT_API_KEY" \
+OTHER_ADMIN_API_KEY="${OTHER_ADMIN_API_KEY:-}" \
+  ./scripts/async-collection-purge-http-smoke.sh
+```
+
+它通过真实 HTTP 和后台 worker 检查异步 preview、旧同步 apply 的 409 隔离、202/`Location`/
+`Retry-After`、幂等重放与冲突、Operation 状态和结果读取；设置 `OTHER_ADMIN_API_KEY` 时还
+检查跨 owner 查询为 404。该 smoke 不替代真实模型、Native/OpenAI JSON/SSE、完整错误矩阵或 PostgreSQL
+双实例恢复验收，也不得指向含调用方数据的生产服务。
+
+同一生命周期也有隔离的随机端口 HTTP + Testcontainers PostgreSQL 集成测试，可单独运行：
+`./scripts/verify-gated-it.sh CollectionPurgeHttpPostgresIntegrationTest`；其门控属性为
+`-Dcollection-purge-http.it.enabled=true`，默认全量门禁也会执行。
+
 ## 一键文档验证
 
 `scripts/verify-project-docs.sh` 固化项目文档检查清单：OpenClaw 本地状态隔离、`.agents/skills/` 可跟踪性、相对链接、中英文标题结构、入口行数、项目固定约定、文档命令、Shell 语法、空白和新增行敏感信息扫描。
@@ -225,6 +245,12 @@ smoke；不要用高延迟真实调用代替基本执行路径覆盖。运行期
 `MODELS_CONFIG_FILE` 指向过期注册表，要记住它会完整覆盖 YAML，并可能把 Chat 路由到
 另一个 provider；应通过日志和 `/api/v1/rag/models` 核对生效模型，或为直接 provider
 smoke 显式禁用该文件。
+
+所有会启动 Spring/Flyway 的真实 smoke 都必须显式注入专属或一次性
+`SPRING_DATASOURCE_URL`，不能只设置 `POSTGRES_DATABASE`。启动脚本会在迁移前只读断言
+`current_database()`，就绪后再次断言并核对启动日志中的 JDBC 目标；默认共享库
+`spring_ai_rag_dev`、身份不匹配或日志目标不一致都会拒绝启动。该硬门用于避免 `.env` 中的
+`SPRING_DATASOURCE_URL` 覆盖测试库名导致误写共享库。
 
 ### WebUI `-real` 端到端用例运行手册
 
@@ -735,9 +761,26 @@ mvn jacoco:report-aggregate
 
 ## 测试数据库
 
-单元测试使用 Mock 或 H2 兼容路径。Embedding Profile 迁移使用显式 PostgreSQL 集成测试，
-因为它需要 pgvector，并验证 Flyway V1-V52、固定向量列、Profile 专属索引、原子替换、
-Legacy 认领、检索新鲜度和 Spring Data Repository 查询。
+单元测试使用 Mock 或 H2 兼容路径。Embedding Profile 迁移与锁竞争使用显式 PostgreSQL 集成测试：
+`EmbeddingProfilePostgresIntegrationTest` 验证 fresh/V66 upgrade、固定向量列、Profile 索引、
+原子替换和检索新鲜度；`EmbeddingProfileMigrationLockPostgresIntegrationTest` 验证 V67/V68
+获取锁超时后整条迁移回滚，并在释放锁后可重试。两者均由 Testcontainers 启动隔离 pgvector，
+统一运行：
+
+```bash
+./scripts/verify-gated-it.sh EmbeddingProfilePostgresIntegrationTest,EmbeddingProfileMigrationLockPostgresIntegrationTest
+```
+
+如需单独重跑迁移锁测试，可显式启用该门控套件：
+
+```bash
+mvn test -pl spring-ai-rag-core -am \
+  -Dembedding-profile-migration.it.enabled=true \
+  -Dtest=EmbeddingProfileMigrationLockPostgresIntegrationTest \
+  -Dsurefire.failIfNoSpecifiedTests=false
+```
+
+如需单独重跑 Profile 基础迁移测试，可使用后续显式 PostgreSQL 命令。
 
 启动 PostgreSQL 16 + pgvector 数据库后执行：
 
@@ -980,8 +1023,9 @@ TESTCONTAINERS_RYUK_DISABLED=true mvn -pl spring-ai-rag-starter -am test \
 脚本默认启动隔离 PostgreSQL、Mock 上游、Core standalone 和不主动扫描
 `com.springairag` 的 Starter Consumer，并用官方 Python SDK `2.14.0` 与 Node SDK
 `7.34.0` 在两种拓扑下验证 models、JSON、SSE、幂等重放、错误信封和认证。它还确认
-外部 Starter Consumer 执行 Flyway V1–V65 后可提供同一 `/v1` 客户端契约。结果位于
-`.verification/openai-sdk-e2e/<run-id>/summary.md`，默认不产生真实模型费用。
+外部 Starter Consumer 执行 Flyway V1–V65 后可提供同一 `/v1` 客户端契约；隔离服务还会
+实际运行 Native/OpenAI consumer HTTP contract 和基于临时 PostgreSQL 的异步 Collection
+Purge 生命周期。结果位于 `.verification/openai-sdk-e2e/<run-id>/summary.md`，默认不产生真实模型费用。
 
 只有显式提供真实地址和密钥才运行 real-LLM 模式；不能把 mock 通过当作真实模型质量
 证据。该门禁与 `verify-api-compatibility.sh`、`verify-client-consumer-contract.sh`、
@@ -1083,7 +1127,7 @@ JPA flush 已经写下去的文件一并回滚。
 ```
 
 当前门控清单由 `verify-integration-test-switches.mjs` 与
-`verify-gated-it.sh` 交叉核对；本次审计基线为 28 个门控类、208 个测试方法，
+`verify-gated-it.sh` 交叉核对；本次审计基线为 29 个门控类、209 个测试方法，
 每个都在自己的 `<x>.it.enabled` 开关后面，所以普通 `mvn test` 永远不需要
 Docker 守护进程。`verify-gated-it.sh` 是唯一一条把它们全部打开的命令，本地约
 9 分钟，`ci.yml` 的 "Gated PostgreSQL integration tests" 这一步跑的就是它。

@@ -15,8 +15,8 @@ KNOWLEDGE能力。拒答处置通过不替代正向事实/来源通过；见[测
 python3 scripts/test-support/knowledge-qa-quality-self-test.py
 python3 scripts/test-support/rag-recovery-gate-self-test.py
 python3 scripts/verify-quality-production-e2e.py
-# 主动收费；调用环境已安全注入模型配置后执行：
-python3 scripts/verify-quality-real-e2e.py --ack-paid-models
+# 主动收费；调用环境已安全注入两个 LLM 和三个 Embedding Profile 配置后执行：
+python3 scripts/verify-quality-real-e2e.py --ack-paid-models --embedding-profiles profile_a,profile_b,profile_c
 ```
 
 Maven/SDK构建仍须串行。两演练只操作自有隔离库，分别将私有证据写入 `.verification/quality-production/`
@@ -59,7 +59,7 @@ python3 scripts/verify-dependency-recovery-e2e.py
 | 真实 LLM E2E 端口 | `18081` |
 | Embedding | SiliconFlow `BAAI/bge-m3` |
 | 向量维度 | `1024` |
-| Flyway | V1–V66 |
+| Flyway | V1–V70 |
 
 OpenAI / Embedding 的 `base-url` **不要带 `/v1`**。Spring AI 会自行追加 `/v1/chat/completions` 或 `/v1/embeddings`。
 
@@ -628,6 +628,19 @@ provider preflight 默认跟随启动脚本的 `minimax`；若服务使用其他
 Knowledge 模式如果模型没有输出可验证引用，预期会被默认安全回答替换，这仍算证据安全断言成功；
 如果 `AGENT` 被 `MODEL_CAPABILITY_UNSUPPORTED` 拒绝，则记录为能力门控跳过，不能冒充真实 Agent 成功。
 provider preflight 超时可用 `REAL_LLM_PREFLIGHT_TIMEOUT_SECONDS` 限制。若要执行不使用外部注册表的直接 provider smoke，可显式指定不存在的文件：
+
+真实 LLM 启动还必须使用专属或一次性数据库 URL。`scripts/start-real-e2e-server.sh` 会保留调用方显式传入的
+`SPRING_DATASOURCE_URL`、用户名和密码，在 Flyway 之前以只读事务断言 `current_database()`，启动就绪后再次断言
+数据库身份并核对启动日志中的 JDBC 目标；目标为默认共享库 `spring_ai_rag_dev`、身份断言失败或 JDBC 目标不一致时会拒绝启动。
+不要只设置 `POSTGRES_DATABASE` 来覆盖 `.env` 中的 URL，必须显式传入完整 URL，例如：
+
+```bash
+SPRING_DATASOURCE_URL=jdbc:postgresql://127.0.0.1:61062/rag_openai_real_20261022 \
+SPRING_DATASOURCE_USERNAME=postgres \
+SPRING_DATASOURCE_PASSWORD="$POSTGRES_PASSWORD" \
+LLM_PROVIDER=openai \
+./scripts/start-real-e2e-server.sh
+```
 
 ```bash
 MODELS_CONFIG_FILE=/tmp/spring-ai-rag-no-external-models.json \

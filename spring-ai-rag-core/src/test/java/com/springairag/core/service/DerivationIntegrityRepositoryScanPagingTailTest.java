@@ -37,6 +37,10 @@ class DerivationIntegrityRepositoryScanPagingTailTest {
         when(profileProvider.getActiveProfile()).thenReturn(new EmbeddingProfile(
                 7L, "bge-m3", "vendor", "bge-m3", "rev-1", 1024,
                 "cosine", "normalize", true));
+        when(profileProvider.getProfileForCollection(10L))
+                .thenReturn(new EmbeddingProfile(
+                        7L, "bge-m3", "vendor", "bge-m3", "rev-1", 1024,
+                        "cosine", "normalize", true));
         repository = new DerivationIntegrityRepository(
                 jdbcTemplate,
                 profileProvider,

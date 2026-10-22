@@ -11,6 +11,11 @@ import org.springframework.retry.support.RetryTemplate;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
+import com.sun.net.httpserver.HttpServer;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -18,6 +23,69 @@ import static org.junit.jupiter.api.Assertions.*;
  * Unit tests for EmbeddingModelConfig
  */
 class EmbeddingModelConfigTest {
+    @Test
+    void profileDimensionsAreOmittedByDefault() throws Exception {
+        assertEmbeddingRequestDimensions(false, false);
+    }
+
+    @Test
+    void profileDimensionsAreSentOnlyWhenExplicitlyEnabled() throws Exception {
+        assertEmbeddingRequestDimensions(true, false);
+    }
+
+    @Test
+    void defaultModelSupportsExplicitDimensionsWithoutChangingOtherProfiles() throws Exception {
+        assertEmbeddingRequestDimensions(true, true);
+    }
+
+    private void assertEmbeddingRequestDimensions(boolean requestDimensions, boolean defaultModel) throws Exception {
+        AtomicReference<String> requestBody = new AtomicReference<>();
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/v1/embeddings", exchange -> {
+            requestBody.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+            byte[] response = """
+                    {"object":"list","model":"fixture","data":[{"object":"embedding","index":0,"embedding":[0.25,0.5]}],
+                    "usage":{"prompt_tokens":1,"total_tokens":1}}
+                    """.getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, response.length);
+            try (var output = exchange.getResponseBody()) {
+                output.write(response);
+            }
+        });
+        server.start();
+        try {
+            EmbeddingModelConfig config = new EmbeddingModelConfig();
+            String baseUrl = "http://127.0.0.1:" + server.getAddress().getPort();
+            EmbeddingModel model;
+            if (defaultModel) {
+                ReflectionTestUtils.setField(config, "apiKey", "fixture-key");
+                ReflectionTestUtils.setField(config, "baseUrl", baseUrl);
+                ReflectionTestUtils.setField(config, "model", "fixture");
+                ReflectionTestUtils.setField(config, "dimensions", 768);
+                ReflectionTestUtils.setField(config, "requestDimensions", requestDimensions);
+                ReflectionTestUtils.setField(config, "retryMaxAttempts", 1);
+                model = config.embeddingModel();
+            } else {
+                RagEmbeddingProfileProperties profile = new RagEmbeddingProfileProperties();
+                profile.setApiKey("fixture-key");
+                profile.setBaseUrl(baseUrl);
+                profile.setModel("fixture");
+                profile.setDimensions(768);
+                profile.setRequestDimensions(requestDimensions);
+                model = config.createModel(profile);
+            }
+            assertArrayEquals(new float[]{0.25f, 0.5f}, model.embed("fixture"));
+            var payload = new ObjectMapper().readTree(requestBody.get());
+            assertEquals(requestDimensions, payload.has("dimensions"));
+            if (requestDimensions) {
+                assertEquals(768, payload.get("dimensions").asInt());
+            }
+        } finally {
+            server.stop(0);
+        }
+    }
+
     @Test
     void retryBudgetCannotContinueBeyondDependencyDeadline() {
         EmbeddingModelConfig config = new EmbeddingModelConfig();
@@ -165,7 +233,6 @@ class EmbeddingModelConfigTest {
         IllegalStateException error = assertThrows(
                 IllegalStateException.class, config::embeddingModel);
 
-        assertTrue(error.getMessage().contains("RAG_EMBEDDING_API_KEY"));
-        assertTrue(error.getMessage().contains("rag.embedding.api-key"));
+        assertTrue(error.getMessage().contains("selected Profile"));
     }
 }

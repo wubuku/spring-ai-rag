@@ -58,6 +58,8 @@ class EmbeddingJobServiceTest {
                 new DocumentDerivationDescriptorProvider(properties);
         documentEmbedService = mock(DocumentEmbedService.class);
         wakeupPublisher = mock(EmbeddingJobWakeupPublisher.class);
+        when(profileProvider.getActiveProfile()).thenReturn(profile());
+        when(profileProvider.getProfileForCollection(anyLong())).thenReturn(profile());
     }
 
     @Test
@@ -81,7 +83,7 @@ class EmbeddingJobServiceTest {
         RagDocument second = document(2L);
         when(documentRepository.findById(1L)).thenReturn(Optional.of(first));
         when(documentRepository.findById(2L)).thenReturn(Optional.of(second));
-        when(profileProvider.getActiveProfile()).thenReturn(profile());
+        when(profileProvider.getProfileForCollection(5L)).thenReturn(profile());
         when(documentEmbedService.hasFreshEmbedding(any(RagDocument.class)))
                 .thenReturn(false);
         when(jobRepository.allocateGeneration(

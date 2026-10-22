@@ -72,7 +72,9 @@ public class IntegrationCapabilityCatalog {
                                 properties.getDocumentLifecycle().isSyncRunsEnabled(),
                                 properties.getOpenAiCompatibility().isEnabled(),
                                 properties.getIntegrationObservability().isEnabled(),
-                                collectionPurgeVisible(request)),
+                                collectionPurgeVisible(request),
+                                true,
+                                true),
                         new IntegrationCapabilitiesResponse.CredentialRotation(
                                 true,
                                 true,

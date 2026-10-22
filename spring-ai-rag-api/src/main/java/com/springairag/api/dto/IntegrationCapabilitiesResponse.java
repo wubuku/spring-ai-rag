@@ -217,21 +217,34 @@ public class IntegrationCapabilitiesResponse {
             boolean documentSyncRunItemReceipts,
             boolean openAiCompatibility,
             boolean integrationObservability,
-            boolean collectionPurge) {
+            boolean collectionPurge,
+            boolean embeddingProfileRouting,
+            boolean embeddingProfileOperations) {
+
+        public OptionalFeatures(
+                boolean documentSyncRuns,
+                boolean documentSyncRunItemReceipts,
+                boolean openAiCompatibility,
+                boolean integrationObservability,
+                boolean collectionPurge) {
+            this(documentSyncRuns, documentSyncRunItemReceipts,
+                    openAiCompatibility, integrationObservability,
+                    collectionPurge, false, false);
+        }
 
         public OptionalFeatures(
                 boolean documentSyncRuns,
                 boolean documentSyncRunItemReceipts,
                 boolean openAiCompatibility) {
             this(documentSyncRuns, documentSyncRunItemReceipts,
-                    openAiCompatibility, false, false);
+                    openAiCompatibility, false, false, false, false);
         }
 
         public OptionalFeatures(
                 boolean documentSyncRuns,
                 boolean openAiCompatibility) {
             this(documentSyncRuns, documentSyncRuns,
-                    openAiCompatibility, false, false);
+                    openAiCompatibility, false, false, false, false);
         }
 
         public OptionalFeatures(
@@ -240,7 +253,8 @@ public class IntegrationCapabilitiesResponse {
                 boolean openAiCompatibility,
                 boolean integrationObservability) {
             this(documentSyncRuns, documentSyncRunItemReceipts,
-                    openAiCompatibility, integrationObservability, false);
+                    openAiCompatibility, integrationObservability,
+                    false, false, false);
         }
     }
 

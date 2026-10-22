@@ -25,18 +25,27 @@ public class EmbeddingPersistenceService {
 
     private final JdbcTemplate jdbcTemplate;
     private final DocumentDerivationDescriptorProvider descriptors;
+    private final CollectionIdentityResolver collectionIdentityResolver;
     private DerivationIntegrityRepository integrityRepository; // optional-claim: DerivationIntegrityRepository 是无条件 @Repository，null 臂只在不走 Spring 装配的构造路径可达；守卫真正的职责是完整性快照缺席时走默认嵌入状态，而不是 NPE
 
     public EmbeddingPersistenceService(JdbcTemplate jdbcTemplate) {
-        this(jdbcTemplate, new DocumentDerivationDescriptorProvider(new RagProperties()));
+        this(jdbcTemplate, new DocumentDerivationDescriptorProvider(new RagProperties()), null);
     }
 
     @org.springframework.beans.factory.annotation.Autowired
     public EmbeddingPersistenceService(
             JdbcTemplate jdbcTemplate,
-            DocumentDerivationDescriptorProvider descriptors) {
+            DocumentDerivationDescriptorProvider descriptors,
+            CollectionIdentityResolver collectionIdentityResolver) {
         this.jdbcTemplate = jdbcTemplate;
         this.descriptors = descriptors;
+        this.collectionIdentityResolver = collectionIdentityResolver;
+    }
+
+    public EmbeddingPersistenceService(
+            JdbcTemplate jdbcTemplate,
+            DocumentDerivationDescriptorProvider descriptors) {
+        this(jdbcTemplate, descriptors, null);
     }
 
     @org.springframework.beans.factory.annotation.Autowired(required = false)
@@ -108,6 +117,8 @@ public class EmbeddingPersistenceService {
 
     @Transactional
     public void ensureContentHash(long documentId, long expectedVersion, String contentHash) {
+        Map<String, Object> document = readDocumentSnapshot(documentId);
+        requireActiveCollectionWrite(document);
         int updated = jdbcTemplate.update(
                 "UPDATE rag_documents SET content_hash = ?, version = version + 1, "
                         + "updated_at = NOW() WHERE id = ? AND version = ? "
@@ -183,9 +194,6 @@ public class EmbeddingPersistenceService {
             List<TextChunk> chunks,
             List<EmbeddingBatchService.EmbeddingResult> results,
             EmbeddingCommitGuard commitGuard) {
-        // The worker guard performs its conditional lease transition inside this
-        // transaction. Ordinary document writes are fenced by the final version CAS.
-        commitGuard.verify();
         Map<String, Object> document = readDocumentSnapshot(documentId);
         long actualVersion = ((Number) document.get("version")).longValue();
         String actualHash = (String) document.get("content_hash");
@@ -196,6 +204,8 @@ public class EmbeddingPersistenceService {
             throw new IllegalStateException(
                     "Document changed while embeddings were generated: " + documentId);
         }
+        requireActiveCollectionWrite(document);
+        commitGuard.verify();
         String chunkerVersion = effectiveChunkerVersion(document);
         String column = EmbeddingVectorColumns.columnFor(profile.dimensions());
         jdbcTemplate.update(
@@ -206,15 +216,14 @@ public class EmbeddingPersistenceService {
             TextChunk chunk = chunks.get(i);
             String vector = RetrievalUtils.vectorToString(results.get(i).getEmbedding());
             String sql = "INSERT INTO rag_embeddings "
-                    + "(document_id, chunk_text, chunk_index, embedding, " + column + ", "
+                    + "(document_id, chunk_text, chunk_index, " + column + ", "
                     + "embedding_profile_id, chunk_start_pos, chunk_end_pos, created_at) "
-                    + "VALUES (?, ?, ?, ?::vector, ?::vector, ?, ?, ?, NOW())";
+                    + "VALUES (?, ?, ?, ?::vector, ?, ?, ?, NOW())";
             jdbcTemplate.update(
                     sql,
                     documentId,
                     chunk.text(),
                     i,
-                    vector,
                     vector,
                     profile.id(),
                     chunk.startPos(),
@@ -278,6 +287,7 @@ public class EmbeddingPersistenceService {
         if (actualVersion != expectedVersion || !expectedContentHash.equals(actualHash)) {
             return;
         }
+        requireActiveCollectionWrite(document);
         jdbcTemplate.update(
                 "INSERT INTO rag_document_embedding_state "
                         + "(document_id, embedding_profile_id, content_hash, chunker_version, "
@@ -317,13 +327,25 @@ public class EmbeddingPersistenceService {
 
     private Map<String, Object> readDocumentSnapshot(long documentId) {
         List<Map<String, Object>> rows = jdbcTemplate.queryForList(
-                "SELECT version, content_hash, enabled, document_type, derivation_chunker_version FROM rag_documents "
+                "SELECT version, content_hash, enabled, document_type, derivation_chunker_version, collection_id FROM rag_documents "
                         + "WHERE id = ?",
                 documentId);
         if (rows.isEmpty()) {
             throw new IllegalStateException("Document not found during embedding commit: " + documentId);
         }
         return rows.getFirst();
+    }
+
+    private void requireActiveCollectionWrite(Map<String, Object> document) {
+        if (collectionIdentityResolver == null) {
+            return;
+        }
+        Object collectionId = document.get("collection_id");
+        if (!(collectionId instanceof Number number) || number.longValue() <= 0) {
+            throw new IllegalStateException(
+                    "Document has no active Collection during embedding persistence");
+        }
+        collectionIdentityResolver.beginActiveWrite(number.longValue());
     }
 
     /**

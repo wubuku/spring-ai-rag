@@ -20,6 +20,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -86,7 +87,6 @@ public class EmbeddingDispatchService {
             EmbeddingPolicy policy,
             boolean contentChanged,
             String origin) {
-        EmbeddingProfile profile = profileProvider.getActiveProfile();
         if (policy == EmbeddingPolicy.SKIP) {
             return markNotRequestedInCurrentTransaction(document);
         }
@@ -103,6 +103,58 @@ public class EmbeddingDispatchService {
             boolean contentChanged,
             boolean force,
             String origin) {
+        return enqueueInCurrentTransaction(
+                document, profileForDocument(document), contentChanged, force, origin, false);
+    }
+
+    @Transactional
+    public Result enqueueForProfileInCurrentTransaction(
+            RagDocument document,
+            EmbeddingProfile profile,
+            boolean contentChanged,
+            boolean force,
+            String origin) {
+        return enqueueForProfileInCurrentTransaction(
+                document, profile, contentChanged, force, origin, null);
+    }
+
+    @Transactional
+    public Result enqueueForProfileInCurrentTransaction(
+            RagDocument document,
+            EmbeddingProfile profile,
+            boolean contentChanged,
+            boolean force,
+            String origin,
+            String requestedByPrincipalId) {
+        Objects.requireNonNull(profile, "embedding profile must not be null");
+        if (!profile.enabled()) {
+            throw new IllegalArgumentException("An enabled embedding profile is required");
+        }
+        return enqueueInCurrentTransaction(
+                document, profile, contentChanged, force, origin, true,
+                requestedByPrincipalId);
+    }
+
+    private Result enqueueInCurrentTransaction(
+            RagDocument document,
+            EmbeddingProfile profile,
+            boolean contentChanged,
+            boolean force,
+            String origin,
+            boolean profileWasExplicit) {
+        return enqueueInCurrentTransaction(
+                document, profile, contentChanged, force, origin,
+                profileWasExplicit, null);
+    }
+
+    private Result enqueueInCurrentTransaction(
+            RagDocument document,
+            EmbeddingProfile profile,
+            boolean contentChanged,
+            boolean force,
+            String origin,
+            boolean profileWasExplicit,
+            String requestedByPrincipalId) {
         if (keywordIndexPersistenceService != null) {
             keywordIndexPersistenceService.ensureCurrent(document);
         }
@@ -111,7 +163,6 @@ public class EmbeddingDispatchService {
                     ErrorCode.EMBEDDING_JOBS_DISABLED,
                     "Persistent embedding jobs are disabled");
         }
-        EmbeddingProfile profile = profileProvider.getActiveProfile();
         DocumentDerivationDescriptorProvider.Descriptor descriptor =
                 descriptor(document);
         var active = jobRepository.findCurrentActive(
@@ -133,7 +184,9 @@ public class EmbeddingDispatchService {
                             force,
                             current.maxAttempts(),
                             origin,
-                            ChatPrincipal.fromCurrentRequest().id(),
+                            requestedByPrincipalId != null
+                                    ? requestedByPrincipalId
+                                    : ChatPrincipal.fromCurrentRequest().id(),
                             current.requestGeneration(),
                             descriptor.documentKind(),
                             descriptor.chunkerVersion());
@@ -151,7 +204,9 @@ public class EmbeddingDispatchService {
                     updated.job().batchId(),
                     null);
         }
-        boolean fresh = documentEmbedService.hasFreshEmbedding(document);
+        boolean fresh = profileWasExplicit
+                ? documentEmbedService.hasFreshEmbedding(document, profile)
+                : documentEmbedService.hasFreshEmbedding(document);
         if (!contentChanged && !force && fresh) {
             return Result.skipped(profile.profileKey());
         }
@@ -177,7 +232,9 @@ public class EmbeddingDispatchService {
                         force,
                         jobProperties.getDefaultMaxAttempts(),
                         origin,
-                        ChatPrincipal.fromCurrentRequest().id(),
+                        requestedByPrincipalId != null
+                                ? requestedByPrincipalId
+                                : ChatPrincipal.fromCurrentRequest().id(),
                         generation,
                         descriptor.documentKind(),
                         descriptor.chunkerVersion());
@@ -203,7 +260,7 @@ public class EmbeddingDispatchService {
         if (keywordIndexPersistenceService != null) {
             keywordIndexPersistenceService.markNotRequested(document);
         }
-        EmbeddingProfile profile = profileProvider.getActiveProfile();
+        EmbeddingProfile profile = profileForDocument(document);
         DocumentDerivationDescriptorProvider.Descriptor descriptor =
                 descriptor(document);
         jobRepository.markNotRequested(
@@ -219,6 +276,12 @@ public class EmbeddingDispatchService {
     @Transactional
     public int cancelActiveInCurrentTransaction(long documentId) {
         return jobRepository.cancelActiveForDocument(documentId);
+    }
+
+    private EmbeddingProfile profileForDocument(RagDocument document) {
+        return document.getCollectionId() == null
+                ? profileProvider.getActiveProfile()
+                : profileProvider.getProfileForCollection(document.getCollectionId());
     }
 
     public Result completeAfterCommit(Result queued) {

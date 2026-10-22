@@ -56,6 +56,7 @@ OpenAI 兼容服务发布还应显式运行 `scripts/verify-release.sh --with-op
 - [x] WebUI lint、全量 Vitest 与生产构建
 - [x] 全量 Playwright
 - [x] Helm lint/template 与 Docker 镜像构建
+- [x] Helm 默认与 production values 渲染后，所有 Deployment 均断言为 `Recreate`
 - [x] PostgreSQL profile 服务启动与 `scripts/e2e-test.sh`
 - [x] Retrieval goldenset
 - [x] 版本化真实检索回归可通过 `--with-quality-regression` 或 `--with-local-runtime` 执行

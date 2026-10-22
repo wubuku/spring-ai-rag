@@ -92,7 +92,8 @@ class DocumentEmbedProgressChainTest {
         when(documentRepository.findById(3L))
                 .thenReturn(Optional.of(document(3L,
                         "THIRD-DOC-MARKER ".repeat(30), "hash-3")));
-        when(embeddingBatchService.createEmbeddingsBatch(anyList()))
+        when(embeddingBatchService.createEmbeddingsBatchForProfile(
+                anyList(), eq(PROFILE)))
                 .thenAnswer(invocation -> {
                     List<String> texts = invocation.getArgument(0);
                     boolean thirdDoc = texts.get(0).startsWith("THIRD-DOC");

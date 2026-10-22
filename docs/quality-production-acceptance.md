@@ -70,18 +70,24 @@ for trusted recovery inputs, inventory and exclusions.
 Run offline/controlled checks first, then privately export authorized model/embedding environment variables:
 
 ```bash
-python3 scripts/verify-quality-real-e2e.py --ack-paid-models
+python3 scripts/verify-quality-real-e2e.py --ack-paid-models --embedding-profiles profile_a,profile_b,profile_c
 ```
 
-Defaults to `openai,minimax`,24 cases×3 rounds per provider:144 QA executions plus Client JSON/SSE/SDK and HTTP
-rerank checks. `--providers openai` or `--repeats 2` explicitly narrows coverage; never report one provider as two.
+Defaults to `openai,minimax`; each LLM×Embedding Profile runs 24 cases×3 rounds:432 QA executions plus Client JSON/SSE/SDK and HTTP
+rerank checks. The three profiles must include two different models at one dimension and one at another. The runner creates isolated Collection copies and rewrites the same evaluation definition per profile to exercise real embedding and retrieval routing. `--providers openai` or `--repeats 2` explicitly narrows coverage; never report one provider as two.
 `--definition /private/subset.json` selects a versioned subset referencing the same synthetic corpus;
 report its actual case count rather than presenting it as the full24-case matrix. This executor explicitly
 enables existing diagnostics persistence, requires complete case trace attribution, and probes trace readability;
 it does not change diagnostics defaults for service deployments.
-It neither reads nor prints `.env`. Inject `SPRING_AI_OPENAI_*`, `SPRING_AI_MINIMAX_*` and `RAG_EMBEDDING_*` into
-the environment. External models configuration is disabled to identify the selected provider; HTTP rerank uses existing
+It neither reads nor prints `.env`. Inject `SPRING_AI_OPENAI_*`, `SPRING_AI_MINIMAX_*` and, for each profile,
+`RAG_QUALITY_PROFILE_<KEY>_API_KEY`, `_BASE_URL`, `_PROVIDER`, `_MODEL` and `_DIMENSIONS` into the environment; base URLs must not include `/v1`. Profile settings reach Spring through its private process environment, not command-line arguments or result summaries. External models configuration is disabled to identify the selected provider; HTTP rerank uses existing
 credential inheritance. Runs use an owned isolated database and `.verification/quality-real/` artifacts, never normal startup.
+
+For models with configurable output dimensions, explicitly set optional
+`RAG_QUALITY_PROFILE_<KEY>_REQUEST_DIMENSIONS=true`; the field is omitted by default.
+Before starting the database, the runner checks `/v1/models` and `/v1/embeddings` per Profile,
+verifying model presence, actual dimensions and finite nonzero vectors. Failures expose only sanitized
+status and prevent matrix execution. Use `--preflight-only` for this check alone; preflight is not quality acceptance.
 
 Report real quality failures separately from structural/API failures. Neither can be erased through review, model switching,
 rerunning or deleting earlier results. Preserve a combined runner's nonzero result when any model misses its quality gate;

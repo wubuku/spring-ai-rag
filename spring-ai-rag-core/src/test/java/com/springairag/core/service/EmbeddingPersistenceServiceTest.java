@@ -131,6 +131,31 @@ class EmbeddingPersistenceServiceTest {
     }
 
     @Test
+    void ensureContentHashFencesCollectionBeforeDocumentMutation() {
+        CollectionIdentityResolver resolver = mock(CollectionIdentityResolver.class);
+        JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        EmbeddingPersistenceService fencedService = new EmbeddingPersistenceService(
+                jdbc,
+                new DocumentDerivationDescriptorProvider(new RagProperties()),
+                resolver);
+        when(jdbc.queryForList(anyString(), any(Object[].class)))
+                .thenReturn(List.of(Map.of(
+                        "version", 3L,
+                        "content_hash", "",
+                        "enabled", true,
+                        "document_type", "text",
+                        "derivation_chunker_version", "",
+                        "collection_id", 17L)));
+        when(jdbc.update(contains("SET content_hash"), any(Object[].class)))
+                .thenReturn(1);
+
+        fencedService.ensureContentHash(1L, 3L, "hash-a");
+
+        verify(resolver).beginActiveWrite(17L);
+        verify(jdbc).update(contains("SET content_hash"), any(Object[].class));
+    }
+
+    @Test
     void replaceRejectsWhenCommitGuardFails() {
         EmbeddingCommitGuard guard = mock(EmbeddingCommitGuard.class);
         doThrow(new IllegalStateException("lease lost")).when(guard).verify();
@@ -190,10 +215,12 @@ class EmbeddingPersistenceServiceTest {
                 eq(1L), eq(7L));
         verify(jdbc).update(contains("INSERT INTO rag_embeddings"),
                 eq(1L), eq("alpha"), eq(0),
-                eq("[0.1,0.2]"), eq("[0.1,0.2]"), eq(7L), eq(0), eq(5));
+                eq("[0.1,0.2]"), eq(7L), eq(0), eq(5));
         verify(jdbc).update(contains("INSERT INTO rag_embeddings"),
                 eq(1L), eq("beta"), eq(1),
-                eq("[0.3]"), eq("[0.3]"), eq(7L), eq(6), eq(10));
+                eq("[0.3]"), eq(7L), eq(6), eq(10));
+        verify(jdbc, org.mockito.Mockito.never()).update(
+                contains("embedding, embedding_1024"), any(Object[].class));
         // The chunker version is no longer passed in, so the assertion can no
         // longer name whatever the caller happened to type: it has to equal the
         // value the retrieval scope will filter on, derived from the document.

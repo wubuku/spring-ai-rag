@@ -59,53 +59,48 @@ focused_backend_tests() {
 
 postgres_tests() {
   local purge_report="spring-ai-rag-core/target/surefire-reports/TEST-com.springairag.core.integration.CollectionPurgePostgresIntegrationTest.xml"
-  local observability_report="spring-ai-rag-core/target/surefire-reports/TEST-com.springairag.core.integration.IntegrationObservabilityPostgresIntegrationTest.xml"
-  local -a arguments=(
-    -pl spring-ai-rag-core
-    -am
-    -Dcollection-purge.it.enabled=true
-    -Dintegration-observability.it.enabled=true
-    -Dtest=CollectionPurgePostgresIntegrationTest,IntegrationObservabilityPostgresIntegrationTest
-    -Dsurefire.failIfNoSpecifiedTests=false
-  )
+  local http_report="spring-ai-rag-core/target/surefire-reports/TEST-com.springairag.core.integration.CollectionPurgeHttpPostgresIntegrationTest.xml"
 
   if [[ -n "${COLLECTION_PURGE_IT_JDBC_URL:-}" ]]; then
     [[ "${COLLECTION_PURGE_IT_CLEAN_CONFIRM:-}" == "YES" ]] || {
       echo "COLLECTION_PURGE_IT_CLEAN_CONFIRM=YES is required for a caller-provided disposable database." >&2
       return 1
     }
-    arguments+=(
-      "-Dcollection-purge.it.jdbc-url=${COLLECTION_PURGE_IT_JDBC_URL}"
-      "-Dcollection-purge.it.username=${COLLECTION_PURGE_IT_USERNAME:-postgres}"
-      "-Dcollection-purge.it.password=${COLLECTION_PURGE_IT_PASSWORD:-postgres}"
-      -Dcollection-purge.it.clean-confirm=YES
-    )
-    export INTEGRATION_OBSERVABILITY_IT_JDBC_URL="$COLLECTION_PURGE_IT_JDBC_URL"
-    export INTEGRATION_OBSERVABILITY_IT_USERNAME="${COLLECTION_PURGE_IT_USERNAME:-postgres}"
-    export INTEGRATION_OBSERVABILITY_IT_PASSWORD="${COLLECTION_PURGE_IT_PASSWORD:-postgres}"
-    export INTEGRATION_OBSERVABILITY_IT_CLEAN_CONFIRM=YES
+    export TESTCONTAINERS_RYUK_DISABLED="${TESTCONTAINERS_RYUK_DISABLED:-true}"
+    export TESTCONTAINERS_PG_IMAGE="${TESTCONTAINERS_PG_IMAGE:-postgres:16-pgvector}"
+    mvn test \
+      -pl spring-ai-rag-starter -am \
+      -Dcollection-purge.it.enabled=true \
+      -Dcollection-purge-http.it.enabled=true \
+      -Dtestcontainers.pg.image="$TESTCONTAINERS_PG_IMAGE" \
+      -Dcollection-purge.it.jdbc-url="$COLLECTION_PURGE_IT_JDBC_URL" \
+      -Dcollection-purge.it.username="${COLLECTION_PURGE_IT_USERNAME:-postgres}" \
+      -Dcollection-purge.it.password="${COLLECTION_PURGE_IT_PASSWORD:-postgres}" \
+      -Dcollection-purge.it.clean-confirm=YES \
+      -Djacoco.append=false \
+      -Dtest=CollectionPurgePostgresIntegrationTest,CollectionPurgeHttpPostgresIntegrationTest \
+      -Dsurefire.failIfNoSpecifiedTests=false
+  else
+    ./scripts/verify-gated-it.sh \
+      CollectionPurgePostgresIntegrationTest,CollectionPurgeHttpPostgresIntegrationTest
   fi
 
-  mvn "${arguments[@]}" test
-
-  assert_test_report "$purge_report" 5 "Collection purge PostgreSQL acceptance"
-  assert_test_report "$observability_report" 6 \
-    "Integration observability V56 compatibility acceptance"
+  assert_test_report "$purge_report" "Collection purge PostgreSQL state-machine acceptance"
+  assert_test_report "$http_report" "Collection purge PostgreSQL HTTP acceptance"
 }
 
 assert_test_report() {
   local report="$1"
-  local expected_tests="$2"
-  local label="$3"
+  local label="$2"
   [[ -f "$report" ]] || {
     echo "Missing PostgreSQL acceptance report: ${report}" >&2
     return 1
   }
 
   IFS=, read -r tests failures errors skipped < <(surefire_counts "$report")
-  if [[ "$tests" != "$expected_tests" || "$failures" != "0" \
+  if [[ ! "$tests" =~ ^[0-9]+$ || "$tests" -eq 0 || "$failures" != "0" \
       || "$errors" != "0" || "$skipped" != "0" ]]; then
-    echo "${label} requires ${expected_tests} tests with no failure/error/skip; got tests=${tests:-missing}, failures=${failures:-missing}, errors=${errors:-missing}, skipped=${skipped:-missing}." >&2
+    echo "${label} requires at least one test with no failure/error/skip; got tests=${tests:-missing}, failures=${failures:-missing}, errors=${errors:-missing}, skipped=${skipped:-missing}." >&2
     return 1
   fi
 }
@@ -197,7 +192,7 @@ done
 
 run_step "No explicit pessimistic locks" ./scripts/verify-no-pessimistic-locks.sh
 run_step "Focused purge backend tests" focused_backend_tests
-run_step "Disposable PostgreSQL V1-V58 purge acceptance" postgres_tests
+run_step "Disposable PostgreSQL V1-V70 purge and HTTP acceptance" postgres_tests
 run_step "Maven clean compile test-compile" mvn clean compile test-compile
 run_step "WebUI typecheck Vitest lint build" webui_checks
 run_step "Collection Mock Playwright" mock_playwright

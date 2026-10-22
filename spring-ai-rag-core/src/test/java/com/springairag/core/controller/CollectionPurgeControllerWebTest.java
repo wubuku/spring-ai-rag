@@ -3,6 +3,7 @@ package com.springairag.core.controller;
 import com.springairag.api.dto.CollectionPurgeApplyRequest;
 import com.springairag.api.dto.CollectionPurgePreviewResponse;
 import com.springairag.api.dto.CollectionPurgeResultResponse;
+import com.springairag.api.dto.LongRunningOperationResponse;
 import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.exception.RagException;
 import com.springairag.core.repository.RagCollectionRepository;
@@ -29,6 +30,7 @@ import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.UUID;
+import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -37,6 +39,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -188,6 +191,57 @@ class CollectionPurgeControllerWebTest {
                 .andExpect(jsonPath("$.error")
                         .value("VALIDATION_FAILED"));
         verify(purgeService, times(1)).apply(any(), any());
+    }
+
+    @Test
+    void asyncPreviewAndApplyRoutesExposeStableReceiptHeaders() throws Exception {
+        UUID previewId = UUID.randomUUID();
+        OffsetDateTime deadline = OffsetDateTime.of(
+                2026, 8, 27, 12, 15, 0, 0, ZoneOffset.UTC);
+        when(purgeService.previewAsync(eq("knowledge-a"), any()))
+                .thenReturn(new CollectionPurgePreviewResponse(
+                        previewId, 7L, "knowledge-a", 3, 5, "PREVIEWED",
+                        10_001, 1, 10_000, 4, 2, 3, 6, 1, 2, 21, 1,
+                        1, 2, 1, 1, 1, 1, 2, 2, 1, 1,
+                        0, 0, 0, 0, 0, "confirm-once", "f".repeat(64),
+                        deadline, deadline.plusMinutes(45)));
+
+        mockMvc.perform(post("/api/v1/rag/collections/by-key/purge/async/preview")
+                        .queryParam("collectionKey", "knowledge-a"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.previewId").value(previewId.toString()))
+                .andExpect(jsonPath("$.documentCount").value(10001));
+
+        UUID operationId = UUID.randomUUID();
+        LongRunningOperationResponse receipt = new LongRunningOperationResponse(
+                operationId, "COLLECTION_PURGE", "COLLECTION", 7L,
+                "knowledge-a", "QUEUED", java.util.Map.of("phase", "FENCE"),
+                deadline, deadline, "/api/v1/rag/operations/" + operationId,
+                "/api/v1/rag/operations/" + operationId + "/result",
+                null, null, null, null, null);
+        when(purgeService.applyAsync(any(), any(), any())).thenReturn(receipt);
+
+        mockMvc.perform(post("/api/v1/rag/collections/by-key/purge/async")
+                        .header("Idempotency-Key", "purge-request-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "collectionKey": "knowledge-a",
+                                  "previewId": "%s",
+                                  "confirmationToken": "confirm-once",
+                                  "fingerprint": "%s",
+                                  "expectedCollectionVersion": 3,
+                                  "expectedChatCommitFenceVersion": 5
+                                }
+                                """.formatted(previewId, "f".repeat(64))))
+                .andExpect(status().isAccepted())
+                .andExpect(header().string("Location",
+                        "/api/v1/rag/operations/" + operationId))
+                .andExpect(header().string("Retry-After", "2"))
+                .andExpect(jsonPath("$.operationId").value(operationId.toString()))
+                .andExpect(jsonPath("$.operationKind").value("COLLECTION_PURGE"));
+
+        verify(purgeService).applyAsync(any(), eq(List.of("purge-request-1")), any());
     }
 
     @Test

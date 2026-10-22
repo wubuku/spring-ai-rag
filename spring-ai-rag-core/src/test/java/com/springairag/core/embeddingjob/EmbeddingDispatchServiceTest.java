@@ -19,6 +19,7 @@ import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -89,6 +90,30 @@ class EmbeddingDispatchServiceTest {
                         document, false, false, "TEST");
 
         assertEquals("NOT_REQUESTED", result.embeddingStatus());
+        verify(wakeupPublisher, never()).publishAfterCommit();
+    }
+
+    @Test
+    void profileSwitchDispatchUsesTheRequestedTargetProfile() {
+        RagDocument document = document();
+        EmbeddingProfile target = new EmbeddingProfile(
+                44L, "target-384", "provider", "model-384", "rev-2",
+                384, "COSINE", "PROVIDER_DEFAULT", true);
+        when(repository.findCurrentActive(
+                eq(document.getId()), eq(target.id()), eq(document.getContentHash()),
+                anyString(), anyString())).thenReturn(Optional.empty());
+        when(embedService.hasFreshEmbedding(document, target)).thenReturn(true);
+
+        EmbeddingDispatchService.Result result = service()
+                .enqueueForProfileInCurrentTransaction(
+                        document, target, false, false, "PROFILE_SWITCH");
+
+        assertEquals("target-384", result.embeddingProfileKey());
+        assertEquals("NOT_REQUESTED", result.embeddingStatus());
+        verify(embedService).hasFreshEmbedding(document, target);
+        verify(repository).findCurrentActive(
+                eq(document.getId()), eq(44L), eq(document.getContentHash()),
+                anyString(), anyString());
         verify(wakeupPublisher, never()).publishAfterCommit();
     }
 

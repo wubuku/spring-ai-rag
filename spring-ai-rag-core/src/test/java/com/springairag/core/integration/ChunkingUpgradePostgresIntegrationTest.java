@@ -171,12 +171,33 @@ class ChunkingUpgradePostgresIntegrationTest {
                 FROM rag_document_local_index_state WHERE document_id = ?
                 """, profile.id(), documentId);
         String vector = "[1" + ",0".repeat(1023) + "]";
-        jdbc.update("""
-                INSERT INTO rag_embeddings (document_id, embedding_profile_id, chunk_text, chunk_index,
-                    chunk_start_pos, chunk_end_pos, embedding, embedding_1024)
-                SELECT document_id, ?, chunk_text, chunk_index, chunk_start_pos, chunk_end_pos,
-                    CAST(? AS vector), CAST(? AS vector) FROM rag_document_chunks WHERE document_id = ?
-                """, profile.id(), vector, vector, documentId);
+        if (columnExists("rag_embeddings", "embedding")) {
+            jdbc.update("""
+                    INSERT INTO rag_embeddings (document_id, embedding_profile_id, chunk_text, chunk_index,
+                        chunk_start_pos, chunk_end_pos, embedding, embedding_1024)
+                    SELECT document_id, ?, chunk_text, chunk_index, chunk_start_pos, chunk_end_pos,
+                        CAST(? AS vector), CAST(? AS vector)
+                    FROM rag_document_chunks WHERE document_id = ?
+                    """, profile.id(), vector, vector, documentId);
+        } else {
+            jdbc.update("""
+                    INSERT INTO rag_embeddings (document_id, embedding_profile_id, chunk_text, chunk_index,
+                        chunk_start_pos, chunk_end_pos, embedding_1024)
+                    SELECT document_id, ?, chunk_text, chunk_index, chunk_start_pos, chunk_end_pos,
+                        CAST(? AS vector) FROM rag_document_chunks WHERE document_id = ?
+                    """, profile.id(), vector, documentId);
+        }
+    }
+
+    private boolean columnExists(String table, String column) {
+        Long count = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM information_schema.columns "
+                        + "WHERE table_schema = 'public' "
+                        + "AND table_name = ? AND column_name = ?",
+                Long.class,
+                table,
+                column);
+        return count != null && count == 1L;
     }
 
     private int searchable(boolean vector) {
@@ -422,8 +443,8 @@ class ChunkingUpgradePostgresIntegrationTest {
                 """, otherProfileId, profile.id());
         jdbc.update("""
                 INSERT INTO rag_embeddings (document_id, embedding_profile_id, chunk_text, chunk_index,
-                    chunk_start_pos, chunk_end_pos, embedding, embedding_1024)
-                SELECT document_id, ?, chunk_text, chunk_index, chunk_start_pos, chunk_end_pos, embedding, embedding_1024
+                    chunk_start_pos, chunk_end_pos, embedding_1024)
+                SELECT document_id, ?, chunk_text, chunk_index, chunk_start_pos, chunk_end_pos, embedding_1024
                 FROM rag_embeddings WHERE embedding_profile_id = ?
                 """, otherProfileId, profile.id());
         upgrade.scanOnce();

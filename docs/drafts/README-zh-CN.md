@@ -43,6 +43,8 @@
   面向外部 Client 的最小 SDK 接入、OpenAI 增量证据字段和隔离数据库恢复验收；规划、实施与验收已完成，剩余 Git 交付。
 - [Client API 真实端到端、证据提交与验收可靠性改进](NEXT_BATCH_CLIENT_API_E2E_EVIDENCE_PLAN.md)：
   修复未归属文档的默认范围提交、真实 E2E 清理与 SDK 依赖复现问题，并扩展版本化真实 QA 和外部 API 回归；规划、实施与验收已完成，剩余 Git 交付。
+- [持久化长任务、多 Embedding Profile、Client 契约与质量漂移](NEXT_BATCH_ASYNC_EMBEDDING_CLIENT_QUALITY_PLAN.md)：
+  规划连续 `3/3` 已通过，正在实施长任务资源治理、固定维度 Profile 路由、Client/OpenAI 契约治理和真实模型质量漂移基线；异步 Purge、外部实时验收及最终复核仍未完成。
 
 前三批文档处理恢复、引用/流式安全、分块正确性与诊断、默认启用与自动升级、故障后无人值守恢复，以及补充真实 LLM 验收已归档至
 [历史规划归档](archive/README-zh-CN.md)。

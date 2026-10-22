@@ -85,21 +85,6 @@ expectFlagged(
 );
 
 expectFlagged(
-  'the pre-fix LegacyEmbeddingMigrationService adoption insert',
-  `
-        jdbcTemplate.update(
-                "INSERT INTO \${STATE_TABLE} "
-                        + "(document_id, embedding_profile_id, content_hash, chunker_version, "
-                        + "status, chunk_count, completed_at, updated_at) "
-                        + "VALUES (?, ?, ?, 'legacy-adopted-unknown', 'COMPLETED', ?, NOW(), NOW()) "
-                        + "ON CONFLICT (document_id, embedding_profile_id) DO UPDATE SET "
-                        + "status = 'COMPLETED'",
-                documentId);
-`.replaceAll('${STATE_TABLE}', STATE_TABLE),
-  'without naming',
-);
-
-expectFlagged(
   'an insert that names the column but pairs it with a literal assignment elsewhere',
   `
         jdbcTemplate.update(

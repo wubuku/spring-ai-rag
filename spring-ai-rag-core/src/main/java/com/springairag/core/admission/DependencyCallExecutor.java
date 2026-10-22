@@ -9,7 +9,7 @@ import org.springframework.stereotype.Component;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.FutureTask;
-import java.util.concurrent.SynchronousQueue;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -32,7 +32,8 @@ public class DependencyCallExecutor implements AutoCloseable {
     }
 
     private ThreadPoolExecutor pool(String kind, int capacity) {
-        return new ThreadPoolExecutor(capacity, capacity, 30, TimeUnit.SECONDS, new SynchronousQueue<>(), task -> {
+        return new ThreadPoolExecutor(capacity, capacity, 30, TimeUnit.SECONDS,
+                new ArrayBlockingQueue<>(capacity), task -> {
             Thread thread = new Thread(task, "rag-dependency-" + kind);
             thread.setDaemon(true);
             return thread;

@@ -2,6 +2,7 @@ package com.springairag.core.controller;
 
 import com.springairag.api.dto.ErrorResponse;
 import com.springairag.core.exception.ChatTurnInProgressException;
+import com.springairag.core.exception.LongRunningOperationCapacityException;
 import com.springairag.core.exception.RagException;
 import com.springairag.core.security.ApiCapabilitySupport;
 import jakarta.servlet.http.HttpServletRequest;
@@ -91,6 +92,17 @@ class GlobalExceptionHandlerCoverageGapsTest {
 
         assertEquals("17",
                 response.getHeaders().getFirst(HttpHeaders.RETRY_AFTER));
+    }
+
+    @Test
+    void operationCapacityErrorAddsBoundedRetryAfterHeader() {
+        ResponseEntity<ErrorResponse> response = handler.handleRagException(
+                new LongRunningOperationCapacityException("capacity reached"), request);
+
+        assertEquals(HttpStatus.TOO_MANY_REQUESTS, response.getStatusCode());
+        assertEquals("LONG_RUNNING_OPERATION_CAPACITY_EXCEEDED",
+                response.getBody().getError());
+        assertEquals("5", response.getHeaders().getFirst(HttpHeaders.RETRY_AFTER));
     }
 
     @Test

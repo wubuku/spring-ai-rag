@@ -22,6 +22,8 @@ command -v node >/dev/null || { echo "Missing required command: node" >&2; exit 
 
 python3 -m py_compile examples/client-sdk/python/chat_completion.py
 node --check examples/client-sdk/node/chat-completion.mjs
+python3 -c "from pathlib import Path; compile(Path('examples/client-sdk/python/collection_purge_async.py').read_text(), 'collection_purge_async.py', 'exec')"
+node --check examples/client-sdk/node/collection-purge-async.mjs
 
 if rg -n "rag_sk_|sk-[A-Za-z0-9]|Bearer [A-Za-z0-9._-]{12,}" \
     examples/client-sdk docs/client-sdk-quickstart* 2>/dev/null; then

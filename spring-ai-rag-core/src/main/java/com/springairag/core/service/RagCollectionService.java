@@ -9,6 +9,8 @@ import com.springairag.api.enums.ErrorCode;
 import com.springairag.api.validation.CollectionKeyValidator;
 import com.springairag.core.entity.RagCollection;
 import com.springairag.core.entity.RagDocument;
+import com.springairag.core.config.EmbeddingProfile;
+import com.springairag.core.config.EmbeddingProfileProvider;
 import com.springairag.core.exception.DocumentRevisionConflictException;
 import com.springairag.core.exception.RagException;
 import com.springairag.core.repository.RagCollectionRepository;
@@ -39,6 +41,7 @@ public class RagCollectionService {
     private final RagCollectionRepository collectionRepository;
     private final RagDocumentRepository documentRepository;
     private final CollectionIdentityResolver identityResolver;
+    private EmbeddingProfileProvider embeddingProfileProvider;
 
     private final AuditLogService auditLogService;  // optional-claim: AuditLogService 是无条件 @Service，所以 null 分支只在测试里可达；守卫保留是因为审计写入失败不应让业务请求失败  // optional: null when audit log is unavailable
     private DocumentMutationService documentMutationService;  // optional-claim: 无条件 @Service，所以按"可能为 null"守卫的那两条 else 分支在运行的应用里走不到。Batch 837 记下的"同一字段两种假设"已在 Batch 838 消解：守卫随 else 分支一起删掉，现在全类统一按无条件处理
@@ -58,6 +61,12 @@ public class RagCollectionService {
     public void setDocumentMutationService(
             DocumentMutationService documentMutationService) {
         this.documentMutationService = documentMutationService;
+    }
+
+    @Autowired(required = false)
+    public void setEmbeddingProfileProvider(
+            EmbeddingProfileProvider embeddingProfileProvider) {
+        this.embeddingProfileProvider = embeddingProfileProvider;
     }
 
     /**
@@ -83,11 +92,19 @@ public class RagCollectionService {
         }
 
         RagCollection collection = new RagCollection();
+        EmbeddingProfile profile = resolveRequestedProfile(request.getEmbeddingProfileKey());
+        boolean explicitProfile = request.getEmbeddingProfileKey() != null
+                && !request.getEmbeddingProfileKey().isBlank();
         collection.setCollectionKey(key);
         collection.setName(request.getName());
         collection.setDescription(request.getDescription());
-        collection.setEmbeddingModel(request.getEmbeddingModel());
-        collection.setDimensions(request.getDimensions() != null ? request.getDimensions() : 1024);
+        collection.setEmbeddingModel(explicitProfile
+                ? profile.modelName() : request.getEmbeddingModel());
+        collection.setDimensions(explicitProfile ? profile.dimensions()
+                : request.getDimensions() != null ? request.getDimensions() : 1024);
+        if (profile != null) {
+            collection.setActiveEmbeddingProfileId(profile.id());
+        }
         collection.setEnabled(request.getEnabled() != null ? request.getEnabled() : true);
         collection.setMetadata(request.getMetadata());
         try {
@@ -169,13 +186,22 @@ public class RagCollectionService {
     public Optional<RestoreResult> restoreCollection(Long id) {
         Objects.requireNonNull(id, "id must not be null");
         log.info("Restoring collection: id={}", id);
-        collectionRepository.findById(id)
-                .filter(collection -> collection.getPurgedAt() != null)
-                .ifPresent(collection -> {
-                    throw new RagException(
-                            ErrorCode.COLLECTION_ALREADY_RETIRED,
-                            "Collection is permanently retired");
-                });
+        RagCollection restoring = collectionRepository.findById(id).orElse(null);
+        if (restoring != null && restoring.getActiveEmbeddingProfileId() != null
+                && embeddingProfileProvider != null) {
+            try {
+                embeddingProfileProvider.findRequiredById(
+                        restoring.getActiveEmbeddingProfileId());
+            } catch (RuntimeException unavailable) {
+                throw new RagException(ErrorCode.EMBEDDING_PROFILE_NOT_READY,
+                        "Collection embedding Profile is unavailable; restore was not applied");
+            }
+        }
+        if (restoring != null && restoring.getPurgedAt() != null) {
+            throw new RagException(
+                    ErrorCode.COLLECTION_ALREADY_RETIRED,
+                    "Collection is permanently retired");
+        }
 
         int updated = collectionRepository.restore(id);
         if (updated == 0) {
@@ -237,6 +263,8 @@ public class RagCollectionService {
                     cloned.setDescription(source.getDescription());
                     cloned.setEmbeddingModel(source.getEmbeddingModel());
                     cloned.setDimensions(source.getDimensions());
+                    cloned.setActiveEmbeddingProfileId(
+                            source.getActiveEmbeddingProfileId());
                     cloned.setEnabled(source.getEnabled());
                     cloned.setMetadata(source.getMetadata());
                     final RagCollection saved;
@@ -279,6 +307,19 @@ public class RagCollectionService {
                             source.getName(),
                             clonedCount);
                 });
+    }
+
+    private EmbeddingProfile resolveRequestedProfile(String profileKey) {
+        if (embeddingProfileProvider == null) {
+            if (profileKey != null && !profileKey.isBlank()) {
+                throw new IllegalStateException(
+                        "Embedding Profile registry is not available");
+            }
+            return null;
+        }
+        return profileKey == null || profileKey.isBlank()
+                ? embeddingProfileProvider.getActiveProfile()
+                : embeddingProfileProvider.findRequiredByKey(profileKey.trim());
     }
 
     private void rejectRetired(Long id) {

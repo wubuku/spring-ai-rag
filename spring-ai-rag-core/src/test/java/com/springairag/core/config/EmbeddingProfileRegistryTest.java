@@ -20,7 +20,7 @@ import static org.mockito.Mockito.when;
 
 /**
  * 覆盖 Embedding Profile 注册表的启动校验矩阵：身份字段、COSINE 限定、
- * 内置 profile key 保护、并发注册收敛、存储配置匹配与禁用拒绝。
+ * 内置 profile key 保护、并发注册收敛、存储配置匹配与配置投影。
  */
 class EmbeddingProfileRegistryTest {
 
@@ -146,7 +146,7 @@ class EmbeddingProfileRegistryTest {
     }
 
     @Test
-    void initializeRejectsDisabledProfile() {
+    void initializeProjectsConfiguredEnabledStateOverStoredDisabledState() {
         EmbeddingProfile disabled = new EmbeddingProfile(
                 7L, properties.getProfileKey(), properties.getProvider(),
                 properties.getModel(), properties.getModelRevision(),
@@ -154,10 +154,13 @@ class EmbeddingProfileRegistryTest {
                 properties.getNormalization(), false);
         stubQueryReturning(disabled);
 
-        IllegalStateException error = assertThrows(
-                IllegalStateException.class, registry::initialize);
-        assertEquals("Embedding profile is disabled: " + properties.getProfileKey(),
-                error.getMessage());
+        EmbeddingProfile initialized = registry.initialize();
+
+        assertEquals(properties.getProfileKey(), initialized.profileKey());
+        org.junit.jupiter.api.Assertions.assertTrue(initialized.enabled());
+        verify(jdbcTemplate).update(
+                "UPDATE rag_embedding_profiles SET enabled = ? WHERE id = ?",
+                true, disabled.id());
     }
 
     @Test

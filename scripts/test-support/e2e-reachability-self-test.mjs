@@ -199,6 +199,19 @@ test('runs one script in a second and are not confused by the first', () => {
   });
 });
 
+test('collects Playwright specs invoked by Python verification runners', () => {
+  withScripts({
+    'verify-browser.py': `#!/usr/bin/env python3
+subprocess.run(["bash", "-c", "cd spring-ai-rag-webui && npx playwright test e2e/refusal-real.spec.ts --project=chromium"])
+`,
+    'support.py': 'note = "npx playwright test e2e/not-a-run.spec.ts"\n',
+  }, (dir) => {
+    const runPaths = collectRunPaths(dir);
+    assert.ok(runPaths.has('refusal-real.spec.ts'), 'Python verification runner executes the spec');
+    assert.ok(!runPaths.has('not-a-run.spec.ts'), 'unclassified Python support file is ignored');
+  });
+});
+
 let failed = 0;
 for (const { title, fn } of cases) {
   try {

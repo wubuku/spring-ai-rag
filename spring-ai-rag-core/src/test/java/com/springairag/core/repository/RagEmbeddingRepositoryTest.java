@@ -31,7 +31,6 @@ class RagEmbeddingRepositoryTest {
         e.setDocumentId(documentId);
         e.setChunkText(chunkText);
         e.setChunkIndex(0);
-        e.setEmbedding(new float[]{0.1f, 0.2f, 0.3f});
         e.setMetadata(Map.of());
         return e;
     }

@@ -1,10 +1,14 @@
 package com.springairag.core.integration;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.springairag.api.dto.CollectionEmbeddingProfileOperationRequest;
 import com.springairag.api.dto.RetrievalResult;
 import com.springairag.core.config.EmbeddingProfile;
 import com.springairag.core.config.EmbeddingProfileIndexManager;
 import com.springairag.core.config.EmbeddingProfileRegistry;
 import com.springairag.core.config.RagProperties;
+import com.springairag.core.documentprocessing.DocumentProcessingRunService;
+import com.springairag.core.embeddingjob.EmbeddingDispatchService;
 import com.springairag.core.repository.RagDocumentRepository;
 import com.springairag.core.repository.RagEmbeddingRepository;
 import com.springairag.core.retrieval.EmbeddingBatchService;
@@ -12,8 +16,14 @@ import com.springairag.core.retrieval.HybridRetrieverService;
 import com.springairag.core.retrieval.fulltext.PgEnglishFtsProvider;
 import com.springairag.core.retrieval.EmbeddingProfileSqlScope;
 import com.springairag.core.service.EmbeddingPersistenceService;
+import com.springairag.core.service.EmbeddingProfileOperationService;
+import com.springairag.core.service.EmbeddingProfileOperationWorker;
+import com.springairag.core.service.LongRunningOperationService;
+import com.springairag.core.service.CollectionIdentityResolver;
+import com.springairag.core.service.CollectionPurgeAuthorization;
+import com.springairag.core.repository.RagCollectionRepository;
+import com.springairag.core.filter.ApiKeyAuthFilter;
 import com.springairag.core.service.DerivationIntegrityRepository;
-import com.springairag.core.service.LegacyEmbeddingMigrationService;
 import com.springairag.core.service.DocumentDerivationDescriptorProvider;
 import com.springairag.documents.chunk.TextChunk;
 import org.flywaydb.core.Flyway;
@@ -27,6 +37,7 @@ import org.postgresql.ds.PGSimpleDataSource;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.data.jpa.repository.support.JpaRepositoryFactory;
 import org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean;
 import org.springframework.orm.jpa.SharedEntityManagerCreator;
@@ -40,10 +51,14 @@ import jakarta.persistence.EntityManagerFactory;
 import javax.sql.DataSource;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
@@ -194,6 +209,311 @@ class EmbeddingProfilePostgresIntegrationTest {
                 Boolean.class,
                 "idx_rag_emb_p_" + profile.id() + "_1024_hnsw");
         assertEquals(Boolean.TRUE, valid);
+    }
+
+    @Test
+    void profileOperationResumesPersistedCursorAndCommitsProfileSwitchAtomically()
+            throws Exception {
+        EmbeddingProfile source = insertProfile(
+                "operation-source-" + System.nanoTime(), "test", "source-model");
+        EmbeddingProfile target = insertProfile(
+                "operation-target-" + System.nanoTime(), "test", "target-model");
+        String collectionKey = "profile-operation-" + System.nanoTime();
+        Long collectionId = jdbcTemplate.queryForObject("""
+                INSERT INTO rag_collection(
+                    name, embedding_model, dimensions, enabled, collection_key,
+                    active_embedding_profile_id)
+                VALUES ('Profile operation acceptance', ?, 1024, TRUE, ?, ?)
+                RETURNING id
+                """, Long.class, source.modelName(), collectionKey, source.id());
+        assertNotNull(collectionId);
+
+        java.util.UUID operationId = java.util.UUID.randomUUID();
+        String owner = "profile-operation-test-owner";
+        String progress = "{\"sourceProfileId\":" + source.id()
+                + ",\"targetProfileId\":" + target.id()
+                + ",\"phase\":\"SCAN\"}";
+        jdbcTemplate.update("""
+                INSERT INTO rag_long_running_operations(
+                    id, owner_principal_id, resource_type, collection_id,
+                    operation_kind, idempotency_key_sha256,
+                    request_fingerprint_sha256, status, progress_payload,
+                    target_embedding_profile_id, total_count)
+                VALUES (?, ?, 'COLLECTION', ?, 'EMBEDDING_PROFILE_SWITCH',
+                        ?, ?, 'QUEUED', ?::jsonb, ?, 0)
+                """, operationId, owner, collectionId,
+                "1".repeat(64), "2".repeat(64), progress, target.id());
+        jdbcTemplate.update("""
+                INSERT INTO rag_long_running_operation_owner_capacity(
+                    owner_principal_id, active_count)
+                VALUES (?, 1)
+                """, owner);
+        jdbcTemplate.update("""
+                UPDATE rag_long_running_operation_global_capacity
+                SET active_count = active_count + 1
+                WHERE singleton_id = 1
+                """);
+        jdbcTemplate.update("""
+                INSERT INTO rag_collection_operation_slot(
+                    collection_id, holder_kind, operation_id)
+                VALUES (?, 'PROFILE_SWITCH', ?)
+                """, collectionId, operationId);
+
+        EmbeddingProfileOperationWorker worker = new EmbeddingProfileOperationWorker(
+                jdbcTemplate,
+                new ObjectMapper(),
+                mock(RagDocumentRepository.class),
+                mock(EmbeddingDispatchService.class),
+                registry(),
+                mock(DocumentProcessingRunService.class),
+                new DataSourceTransactionManager(dataSource));
+
+        worker.processOneOperation();
+
+        assertEquals("RUNNING", jdbcTemplate.queryForObject(
+                "SELECT status FROM rag_long_running_operations WHERE id = ?",
+                String.class, operationId));
+        assertEquals("WAIT_CHILDREN", jdbcTemplate.queryForObject(
+                "SELECT progress_payload->>'phase' FROM rag_long_running_operations WHERE id = ?",
+                String.class, operationId));
+        assertNull(jdbcTemplate.queryForObject(
+                "SELECT lease_token FROM rag_long_running_operations WHERE id = ?",
+                java.util.UUID.class, operationId));
+        assertEquals(source.id(), jdbcTemplate.queryForObject(
+                "SELECT active_embedding_profile_id FROM rag_collection WHERE id = ?",
+                Long.class, collectionId));
+
+        java.util.UUID expiredLeaseToken = java.util.UUID.randomUUID();
+        jdbcTemplate.update("""
+                UPDATE rag_long_running_operations
+                SET status = 'RUNNING', lease_owner = 'crashed-profile-worker',
+                    lease_token = ?, lease_expires_at = clock_timestamp() - INTERVAL '1 second'
+                WHERE id = ? AND cursor_phase = 'WAIT_CHILDREN'
+                """, expiredLeaseToken, operationId);
+        EmbeddingProfileOperationWorker secondWorker = new EmbeddingProfileOperationWorker(
+                jdbcTemplate,
+                new ObjectMapper(),
+                mock(RagDocumentRepository.class),
+                mock(EmbeddingDispatchService.class),
+                registry(),
+                mock(DocumentProcessingRunService.class),
+                new DataSourceTransactionManager(dataSource));
+        CountDownLatch workersReady = new CountDownLatch(2);
+        CountDownLatch startWorkers = new CountDownLatch(1);
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            var firstWorkerRun = executor.submit(() -> {
+                workersReady.countDown();
+                assertTrue(startWorkers.await(10, TimeUnit.SECONDS));
+                worker.processOneOperation();
+                return null;
+            });
+            var secondWorkerRun = executor.submit(() -> {
+                workersReady.countDown();
+                assertTrue(startWorkers.await(10, TimeUnit.SECONDS));
+                secondWorker.processOneOperation();
+                return null;
+            });
+            assertTrue(workersReady.await(10, TimeUnit.SECONDS));
+            startWorkers.countDown();
+            firstWorkerRun.get(30, TimeUnit.SECONDS);
+            secondWorkerRun.get(30, TimeUnit.SECONDS);
+        } finally {
+            startWorkers.countDown();
+        }
+        worker.processOneOperation();
+
+        assertEquals("SUCCEEDED", jdbcTemplate.queryForObject(
+                "SELECT status FROM rag_long_running_operations WHERE id = ?",
+                String.class, operationId));
+        assertEquals(target.id(), jdbcTemplate.queryForObject(
+                "SELECT active_embedding_profile_id FROM rag_collection WHERE id = ?",
+                Long.class, collectionId));
+        assertEquals("COMPLETED", jdbcTemplate.queryForObject(
+                "SELECT progress_payload->>'phase' FROM rag_long_running_operations WHERE id = ?",
+                String.class, operationId));
+        assertEquals(0, jdbcTemplate.queryForObject(
+                "SELECT active_count FROM rag_long_running_operation_owner_capacity "
+                        + "WHERE owner_principal_id = ?", Integer.class, owner));
+        assertEquals(0, jdbcTemplate.queryForObject(
+                "SELECT active_count FROM rag_long_running_operation_global_capacity "
+                        + "WHERE singleton_id = 1", Integer.class));
+        assertEquals(0, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM rag_collection_operation_slot WHERE collection_id = ?",
+                Integer.class, collectionId));
+    }
+
+    @Test
+    void profileOperationAdmissionIsIdempotentAndConflictsOnChangedRequest() {
+        EmbeddingProfile source = registry().initialize();
+        EmbeddingProfile target = insertProfile(
+                "admission-target-" + System.nanoTime(), "test", "target-model");
+        EmbeddingProfile otherTarget = insertProfile(
+                "admission-other-" + System.nanoTime(), "test", "other-model");
+        String collectionKey = "profile-admission-" + System.nanoTime();
+        Long collectionId = jdbcTemplate.queryForObject("""
+                INSERT INTO rag_collection(
+                    name, embedding_model, dimensions, enabled, collection_key,
+                    active_embedding_profile_id)
+                VALUES ('Profile admission acceptance', ?, 1024, TRUE, ?, ?)
+                RETURNING id
+                """, Long.class, source.modelName(), collectionKey, source.id());
+        assertNotNull(collectionId);
+
+        var transactionManager = new DataSourceTransactionManager(dataSource);
+        try (EntityManagerFactory entityManagerFactory = entityManagerFactory()) {
+            JpaRepositoryFactory repositoryFactory = new JpaRepositoryFactory(
+                    SharedEntityManagerCreator.createSharedEntityManager(entityManagerFactory));
+            RagCollectionRepository collectionRepository =
+                    repositoryFactory.getRepository(RagCollectionRepository.class);
+            CollectionIdentityResolver identityResolver =
+                    new CollectionIdentityResolver(collectionRepository);
+            EmbeddingProfileRegistry profileRegistry = registry();
+            RagProperties properties = new RagProperties();
+            properties.getCollectionPurge().setAllowAuthDisabled(true);
+            LongRunningOperationService operationService = new LongRunningOperationService(
+                    jdbcTemplate, new ObjectMapper(),
+                    new CollectionPurgeAuthorization(properties), transactionManager);
+            EmbeddingProfileOperationService admission = new EmbeddingProfileOperationService(
+                    jdbcTemplate, new ObjectMapper(), profileRegistry, identityResolver,
+                    operationService, transactionManager);
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setAttribute(ApiKeyAuthFilter.AUTHENTICATED_PRINCIPAL_TYPE,
+                ApiKeyAuthFilter.PRINCIPAL_ENVIRONMENT_ROOT);
+
+        var first = admission.create(new CollectionEmbeddingProfileOperationRequest(
+                        collectionKey, target.profileKey(), 0L),
+                List.of("profile-admission-key"), request);
+        var replay = admission.create(new CollectionEmbeddingProfileOperationRequest(
+                        collectionKey, target.profileKey(), 0L),
+                List.of("profile-admission-key"), request);
+        assertEquals(first.operationId(), replay.operationId());
+
+        assertEquals(1, jdbcTemplate.queryForObject("""
+                SELECT COUNT(*) FROM rag_long_running_operations
+                WHERE owner_principal_id = 'root:environment-root'
+                  AND operation_kind = 'EMBEDDING_PROFILE_SWITCH'
+                  AND collection_id = ?
+                """, Integer.class, collectionId));
+        assertEquals(1, jdbcTemplate.queryForObject("""
+                SELECT active_count FROM rag_long_running_operation_owner_capacity
+                WHERE owner_principal_id = 'root:environment-root'
+                """, Integer.class));
+        assertEquals(1, jdbcTemplate.queryForObject("""
+                SELECT active_count FROM rag_long_running_operation_global_capacity
+                WHERE singleton_id = 1
+                """, Integer.class));
+        assertEquals(1, jdbcTemplate.queryForObject("""
+                SELECT COUNT(*) FROM rag_collection_operation_slot
+                WHERE collection_id = ? AND holder_kind = 'PROFILE_SWITCH'
+                """, Integer.class, collectionId));
+
+        var conflict = assertThrows(com.springairag.core.exception.RagException.class,
+                () -> admission.create(
+                new CollectionEmbeddingProfileOperationRequest(
+                        collectionKey, otherTarget.profileKey(), 0L),
+                List.of("profile-admission-key"), request));
+        assertEquals("IDEMPOTENCY_KEY_REUSED", conflict.getErrorCode());
+        assertEquals(1, jdbcTemplate.queryForObject("""
+                SELECT COUNT(*) FROM rag_long_running_operations
+                WHERE operation_kind = 'EMBEDDING_PROFILE_SWITCH' AND collection_id = ?
+                """, Integer.class, collectionId));
+
+        var cancelled = operationService.cancel(first.operationId(), request);
+        assertEquals("CANCELLED", cancelled.status());
+        assertEquals(0, jdbcTemplate.queryForObject("""
+                SELECT active_count FROM rag_long_running_operation_owner_capacity
+                WHERE owner_principal_id = 'root:environment-root'
+                """, Integer.class));
+        assertEquals(0, jdbcTemplate.queryForObject("""
+                SELECT active_count FROM rag_long_running_operation_global_capacity
+                WHERE singleton_id = 1
+                """, Integer.class));
+        assertEquals(0, jdbcTemplate.queryForObject("""
+                SELECT COUNT(*) FROM rag_collection_operation_slot WHERE collection_id = ?
+                """, Integer.class, collectionId));
+        }
+    }
+
+    @Test
+    void concurrentProfileOperationAdmissionWithSameKeyReservesCapacityOnce() throws Exception {
+        EmbeddingProfile source = registry().initialize();
+        EmbeddingProfile target = insertProfile(
+                "concurrent-admission-target-" + System.nanoTime(), "test", "target-model");
+        String collectionKey = "concurrent-profile-admission-" + System.nanoTime();
+        Long collectionId = jdbcTemplate.queryForObject("""
+                INSERT INTO rag_collection(
+                    name, embedding_model, dimensions, enabled, collection_key,
+                    active_embedding_profile_id)
+                VALUES ('Concurrent Profile admission', ?, 1024, TRUE, ?, ?)
+                RETURNING id
+                """, Long.class, source.modelName(), collectionKey, source.id());
+        assertNotNull(collectionId);
+
+        var transactionManager = new DataSourceTransactionManager(dataSource);
+        try (EntityManagerFactory entityManagerFactory = entityManagerFactory()) {
+            JpaRepositoryFactory repositoryFactory = new JpaRepositoryFactory(
+                    SharedEntityManagerCreator.createSharedEntityManager(entityManagerFactory));
+            CollectionIdentityResolver identityResolver = new CollectionIdentityResolver(
+                    repositoryFactory.getRepository(RagCollectionRepository.class));
+            EmbeddingProfileRegistry profileRegistry = registry();
+            RagProperties properties = new RagProperties();
+            properties.getCollectionPurge().setAllowAuthDisabled(true);
+            LongRunningOperationService operationService = new LongRunningOperationService(
+                    jdbcTemplate, new ObjectMapper(),
+                    new CollectionPurgeAuthorization(properties), transactionManager);
+            EmbeddingProfileOperationService admission = new EmbeddingProfileOperationService(
+                    jdbcTemplate, new ObjectMapper(), profileRegistry, identityResolver,
+                    operationService, transactionManager);
+            CountDownLatch ready = new CountDownLatch(2);
+            CountDownLatch start = new CountDownLatch(1);
+            var requestBody = new CollectionEmbeddingProfileOperationRequest(
+                    collectionKey, target.profileKey(), 0L);
+
+            try (var executor = Executors.newFixedThreadPool(2)) {
+                var first = executor.submit(() -> {
+                    ready.countDown();
+                    assertTrue(start.await(10, TimeUnit.SECONDS));
+                    return admission.create(requestBody, List.of("concurrent-profile-key"),
+                            rootRequest());
+                });
+                var second = executor.submit(() -> {
+                    ready.countDown();
+                    assertTrue(start.await(10, TimeUnit.SECONDS));
+                    return admission.create(requestBody, List.of("concurrent-profile-key"),
+                            rootRequest());
+                });
+                assertTrue(ready.await(10, TimeUnit.SECONDS));
+                start.countDown();
+                assertEquals(first.get(30, TimeUnit.SECONDS).operationId(),
+                        second.get(30, TimeUnit.SECONDS).operationId());
+            } finally {
+                start.countDown();
+            }
+
+            assertEquals(1, jdbcTemplate.queryForObject("""
+                    SELECT COUNT(*) FROM rag_long_running_operations
+                    WHERE operation_kind = 'EMBEDDING_PROFILE_SWITCH' AND collection_id = ?
+                    """, Integer.class, collectionId));
+            assertEquals(1, jdbcTemplate.queryForObject("""
+                    SELECT active_count FROM rag_long_running_operation_owner_capacity
+                    WHERE owner_principal_id = 'root:environment-root'
+                    """, Integer.class));
+            assertEquals(1, jdbcTemplate.queryForObject("""
+                    SELECT active_count FROM rag_long_running_operation_global_capacity
+                    WHERE singleton_id = 1
+                    """, Integer.class));
+            assertEquals(1, jdbcTemplate.queryForObject("""
+                    SELECT COUNT(*) FROM rag_collection_operation_slot
+                    WHERE collection_id = ? AND holder_kind = 'PROFILE_SWITCH'
+                    """, Integer.class, collectionId));
+        }
+    }
+
+    private MockHttpServletRequest rootRequest() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setAttribute(ApiKeyAuthFilter.AUTHENTICATED_PRINCIPAL_TYPE,
+                ApiKeyAuthFilter.PRINCIPAL_ENVIRONMENT_ROOT);
+        return request;
     }
 
     @Test
@@ -400,84 +720,40 @@ class EmbeddingProfilePostgresIntegrationTest {
     }
 
     @Test
-    void legacyAdoptionRequiresConfirmationAndBackfillsProfileState() {
-        EmbeddingProfile profile = registry().initialize();
-        long documentId = insertDocument(
-                "legacy", "legacy content", null);
+    void migrationRemovesLegacyVectorColumnWithoutLosingBackfillCandidates() {
+        flyway(MigrationVersion.fromVersion("66")).clean();
+        flyway(MigrationVersion.fromVersion("66")).migrate();
+        Long collectionId = jdbcTemplate.queryForObject(
+                "INSERT INTO rag_collection "
+                        + "(collection_key, name, dimensions, enabled) "
+                        + "VALUES ('legacy-backfill', 'legacy-backfill', 1024, true) "
+                        + "RETURNING id",
+                Long.class);
+        Long documentId = jdbcTemplate.queryForObject(
+                "INSERT INTO rag_documents "
+                        + "(collection_id, title, content, content_hash, enabled, processing_status) "
+                        + "VALUES (?, 'legacy', 'legacy content', ?, true, 'PENDING') RETURNING id",
+                Long.class, collectionId, HASH_A);
         jdbcTemplate.update(
                 "INSERT INTO rag_embeddings "
                         + "(document_id, chunk_text, chunk_index, embedding) "
                         + "VALUES (?, 'legacy chunk', 0, ?::vector)",
-                documentId,
-                vectorText(vector(1024, 0.25f)));
-        LegacyEmbeddingMigrationService migration = new LegacyEmbeddingMigrationService(
-                jdbcTemplate,
-                new DataSourceTransactionManager(dataSource),
-                registry());
+                documentId, vectorText(vector(1024, 0.25f)));
 
-        assertThrows(IllegalStateException.class,
-                () -> migration.adoptLegacy(profile.profileKey(), "wrong"));
-        assertEquals(1L, migration.countUnassigned());
+        flyway(null).migrate();
 
-        assertEquals(1, migration.adoptLegacy(
-                profile.profileKey(),
-                LegacyEmbeddingMigrationService.ADOPT_CONFIRMATION));
-        assertEquals(0L, migration.countUnassigned());
-        assertEquals(profile.id(), jdbcTemplate.queryForObject(
-                "SELECT embedding_profile_id FROM rag_embeddings "
-                        + "WHERE document_id = ?",
-                Long.class,
-                documentId));
-        assertEquals("COMPLETED", jdbcTemplate.queryForObject(
-                "SELECT status FROM rag_document_embedding_state "
-                        + "WHERE document_id = ? AND embedding_profile_id = ?",
-                String.class,
-                documentId,
-                profile.id()));
-        assertNotNull(jdbcTemplate.queryForObject(
-                "SELECT content_hash FROM rag_documents WHERE id = ?",
-                String.class,
-                documentId));
-        assertFalse(jdbcTemplate.queryForObject(
-                "SELECT embedding_1024 IS NULL FROM rag_embeddings "
-                        + "WHERE document_id = ?",
-                Boolean.class,
-                documentId));
-    }
-
-    @Test
-    void legacyAdoptionRejectsNonContinuousChunkIndexesWithoutMarkingCompleted() {
-        EmbeddingProfile profile = registry().initialize();
-        long documentId = insertDocument(
-                "legacy-invalid-chunks", "legacy content with invalid chunks", "hash-invalid-chunks");
-        jdbcTemplate.update(
-                "INSERT INTO rag_embeddings "
-                        + "(document_id, chunk_text, chunk_index, embedding) "
-                        + "VALUES (?, 'invalid chunk index', 1, ?::vector)",
-                documentId,
-                vectorText(vector(1024, 0.25f)));
-        LegacyEmbeddingMigrationService migration = new LegacyEmbeddingMigrationService(
-                jdbcTemplate,
-                new DataSourceTransactionManager(dataSource),
-                registry());
-
-        assertThrows(IllegalStateException.class,
-                () -> migration.adoptLegacy(
-                        profile.profileKey(),
-                        LegacyEmbeddingMigrationService.ADOPT_CONFIRMATION));
-        assertEquals(1L, migration.countUnassigned());
-        assertEquals(0L, jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM rag_document_embedding_state "
-                        + "WHERE document_id = ? AND embedding_profile_id = ? "
-                        + "AND status = 'COMPLETED'",
-                Long.class,
-                documentId,
-                profile.id()));
-        assertEquals(0L, jdbcTemplate.queryForObject(
+        assertFalse(columnExists("rag_embeddings", "embedding"));
+        assertEquals(1L, jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM rag_embeddings "
-                        + "WHERE document_id = ? AND embedding_profile_id IS NOT NULL",
-                Long.class,
-                documentId));
+                        + "WHERE document_id = ? AND embedding_profile_id IS NULL",
+                Long.class, documentId));
+        assertEquals("legacy chunk", jdbcTemplate.queryForObject(
+                "SELECT chunk_text FROM rag_embeddings WHERE document_id = ?",
+                String.class, documentId));
+        assertEquals("PENDING", jdbcTemplate.queryForObject(
+                "SELECT status FROM rag_embedding_backfill_control "
+                        + "WHERE migration_key = 'remove-legacy-embedding-v1'",
+                String.class));
     }
 
     @Test
@@ -706,49 +982,6 @@ class EmbeddingProfilePostgresIntegrationTest {
         return rows != null && rows > 0;
     }
 
-    /**
-     * The legacy adoption path writes the same state row and owed the same
-     * generation.
-     *
-     * <p>Separate from the commit path because it is a separate statement: a
-     * future fix that repairs one writer and not the other leaves the same
-     * document reported as failed, from a different service.
-     */
-    @Test
-    void legacyAdoptionRecordsAPositiveDerivationGeneration() {
-        EmbeddingProfile profile = registry().initialize();
-        long documentId = insertDocument("legacy-generation", "legacy content", null);
-        jdbcTemplate.update(
-                "INSERT INTO rag_embeddings "
-                        + "(document_id, chunk_text, chunk_index, embedding) "
-                        + "VALUES (?, 'legacy chunk', 0, ?::vector)",
-                documentId,
-                vectorText(vector(1024, 0.25f)));
-        LegacyEmbeddingMigrationService migration = new LegacyEmbeddingMigrationService(
-                jdbcTemplate,
-                new DataSourceTransactionManager(dataSource),
-                registry());
-
-        assertEquals(1, migration.adoptLegacy(
-                profile.profileKey(),
-                LegacyEmbeddingMigrationService.ADOPT_CONFIRMATION));
-
-        assertTrue(stateGeneration(documentId, profile.id()) > 0,
-                "an adopted derivation still happened, so its state row records a"
-                    + " generation; generation 0 is the value the schema now"
-                    + " refuses, and the value that made every adopted row read as"
-                    + " CORRUPT");
-    }
-
-    private long stateGeneration(long documentId, long profileId) {
-        Long generation = jdbcTemplate.queryForObject(
-                "SELECT request_generation FROM rag_document_embedding_state "
-                        + "WHERE document_id = ? AND embedding_profile_id = ?",
-                Long.class, documentId, profileId);
-        assertNotNull(generation);
-        return generation;
-    }
-
     private EmbeddingProfileRegistry registry() {
         return new EmbeddingProfileRegistry(jdbcTemplate, new RagProperties());
     }
@@ -814,6 +1047,16 @@ class EmbeddingProfilePostgresIntegrationTest {
             value.append(vector[i]);
         }
         return value.append(']').toString();
+    }
+
+    private boolean columnExists(String table, String column) {
+        return Boolean.TRUE.equals(jdbcTemplate.queryForObject("""
+                SELECT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_schema = current_schema()
+                      AND table_name = ? AND column_name = ?
+                )
+                """, Boolean.class, table, column));
     }
 
     private Flyway flyway(MigrationVersion target) {

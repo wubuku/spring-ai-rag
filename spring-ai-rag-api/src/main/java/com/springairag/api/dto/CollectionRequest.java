@@ -38,6 +38,10 @@ public class CollectionRequest {
     @Schema(description = "Embedding vector dimensions (must match the embedding model)", example = "1024", defaultValue = "1024")
     private Integer dimensions = 1024;
 
+    @Schema(description = "Optional registered embedding Profile key; defaults to the configured active Profile",
+            example = "bge-m3-768")
+    private String embeddingProfileKey;
+
     @Schema(description = "Whether the collection is active for retrieval", example = "true", defaultValue = "true")
     private Boolean enabled = true;
 
@@ -62,6 +66,11 @@ public class CollectionRequest {
     public Integer getDimensions() { return dimensions; }
     public void setDimensions(Integer dimensions) { this.dimensions = dimensions; }
 
+    public String getEmbeddingProfileKey() { return embeddingProfileKey; }
+    public void setEmbeddingProfileKey(String embeddingProfileKey) {
+        this.embeddingProfileKey = embeddingProfileKey;
+    }
+
     public Boolean getEnabled() { return enabled; }
     public void setEnabled(Boolean enabled) { this.enabled = enabled; }
 
@@ -78,13 +87,15 @@ public class CollectionRequest {
                 Objects.equals(description, that.description) &&
                 Objects.equals(embeddingModel, that.embeddingModel) &&
                 Objects.equals(dimensions, that.dimensions) &&
+                Objects.equals(embeddingProfileKey, that.embeddingProfileKey) &&
                 Objects.equals(enabled, that.enabled) &&
                 Objects.equals(metadata, that.metadata);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(collectionKey, name, description, embeddingModel, dimensions, enabled, metadata);
+        return Objects.hash(collectionKey, name, description, embeddingModel, dimensions,
+                embeddingProfileKey, enabled, metadata);
     }
 
     @Override
@@ -96,6 +107,7 @@ public class CollectionRequest {
                 ", description='" + description + '\'' +
                 ", embeddingModel='" + embeddingModel + '\'' +
                 ", dimensions=" + dimensions +
+                ", embeddingProfileKey='" + embeddingProfileKey + '\'' +
                 ", enabled=" + enabled +
                 ", metadata=" + metadata +
                 '}';

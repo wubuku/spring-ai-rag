@@ -19,6 +19,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -132,6 +133,51 @@ class CollectionPurgeServiceTest {
     }
 
     @Test
+    void asyncWorkerFailureSchedulesRetryAndReleasesOnlyItsWorkerSlot() throws Exception {
+        when(jdbcTemplate.query(contains("UPDATE rag_long_running_operations"),
+                any(RowMapper.class), any(Object[].class)))
+                .thenAnswer(invocation -> {
+                    RowMapper<?> mapper = invocation.getArgument(1);
+                    java.sql.ResultSet resultSet = mock(java.sql.ResultSet.class);
+                    when(resultSet.getString("owner_principal_id")).thenReturn("owner");
+                    when(resultSet.getString("status")).thenReturn("RETRY_WAIT");
+                    return List.of(mapper.mapRow(resultSet, 0));
+                });
+        CollectionPurgeOperationWorker.Claim claim =
+                new CollectionPurgeOperationWorker.Claim(UUID.randomUUID(), UUID.randomUUID(), 2);
+
+        service.recordAsyncWorkerFailure(claim);
+
+        verify(jdbcTemplate).update(contains("UPDATE rag_collection_purge_worker_slots"),
+                eq(2), eq(claim.operationId()), eq(claim.leaseToken()));
+        verify(jdbcTemplate, org.mockito.Mockito.never()).update(
+                contains("rag_long_running_operation_owner_capacity"), any(Object[].class));
+    }
+
+    @Test
+    void asyncWorkerFailureDegradesAfterAttemptLimitAndReleasesOwnerCapacity()
+            throws Exception {
+        when(jdbcTemplate.query(contains("UPDATE rag_long_running_operations"),
+                any(RowMapper.class), any(Object[].class)))
+                .thenAnswer(invocation -> {
+                    RowMapper<?> mapper = invocation.getArgument(1);
+                    java.sql.ResultSet resultSet = mock(java.sql.ResultSet.class);
+                    when(resultSet.getString("owner_principal_id")).thenReturn("owner");
+                    when(resultSet.getString("status")).thenReturn("DEGRADED");
+                    return List.of(mapper.mapRow(resultSet, 0));
+                });
+        CollectionPurgeOperationWorker.Claim claim =
+                new CollectionPurgeOperationWorker.Claim(UUID.randomUUID(), UUID.randomUUID(), 3);
+
+        service.recordAsyncWorkerFailure(claim);
+
+        verify(jdbcTemplate).update(contains("rag_long_running_operation_owner_capacity"),
+                eq("owner"));
+        verify(jdbcTemplate).update(contains("UPDATE rag_collection_purge_worker_slots"),
+                eq(3), eq(claim.operationId()), eq(claim.leaseToken()));
+    }
+
+    @Test
     void previewPersistsPreviewedRowAndReturnsBoundedResponse() {
         when(collectionRepository.findByCollectionKey("kb"))
                 .thenReturn(Optional.of(collection()));
@@ -157,7 +203,7 @@ class CollectionPurgeServiceTest {
     void scheduledCleanupRunsAllThreeMaintenanceStatements() {
         service.scheduledCleanup();
 
-        verify(jdbcTemplate, times(3)).update(anyString(), any(Object[].class));
+        verify(jdbcTemplate, times(6)).update(anyString(), any(Object[].class));
         verify(jdbcTemplate).update(contains("apply_lease_expires_at <"),
                 any(Object[].class));
         verify(jdbcTemplate).update(contains("operation_deadline <="),

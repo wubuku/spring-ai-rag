@@ -1119,6 +1119,46 @@ class OpenApiContractTest {
         }
 
         @Test
+        @DisplayName("Durable Profile Operation routes expose stable client contract")
+        void durableProfileOperationRoutesAreDocumented() throws Exception {
+            JsonNode paths = loadSpec().path("paths");
+            JsonNode create = findPath(paths,
+                    "/rag/collections/by-key/embedding-profile/operations").path("post");
+
+            assertThat(create.isMissingNode()).isFalse();
+            JsonNode idempotencyKey = findParameter(create, "Idempotency-Key");
+            assertThat(idempotencyKey.path("in").asText()).isEqualTo("header");
+            assertThat(idempotencyKey.path("required").asBoolean()).isTrue();
+            assertThat(create.path("responses").has("202")).isTrue();
+            assertThat(create.path("responses").path("202").path("headers")
+                    .has("Location")).isTrue();
+            assertThat(create.path("responses").path("202").path("content")
+                    .path("application/json").path("schema").path("$ref").asText())
+                    .endsWith("/LongRunningOperationResponse");
+
+            JsonNode asyncPurge = findPath(paths,
+                    "/rag/collections/by-key/purge/async").path("post");
+            assertThat(asyncPurge.isMissingNode()).isFalse();
+            JsonNode purgeIdempotencyKey = findParameter(asyncPurge, "Idempotency-Key");
+            assertThat(purgeIdempotencyKey.path("in").asText()).isEqualTo("header");
+            assertThat(purgeIdempotencyKey.path("required").asBoolean()).isTrue();
+            assertThat(asyncPurge.path("responses").has("202")).isTrue();
+            assertThat(asyncPurge.path("responses").path("202").path("headers")
+                    .has("Location")).isTrue();
+            assertThat(asyncPurge.path("responses").path("202").path("headers")
+                    .has("Retry-After")).isTrue();
+
+            JsonNode operations = findPath(paths, "/rag/operations/{operationId}");
+            assertThat(operations.path("get").path("responses").has("200")).isTrue();
+            assertThat(findPath(paths, "/rag/operations/{operationId}/result")
+                    .path("get").path("responses").has("200")).isTrue();
+            assertThat(findPath(paths, "/rag/operations/{operationId}/cancel")
+                    .path("post").path("responses").has("202")).isTrue();
+            assertThat(findPath(paths, "/rag/operations/{operationId}/retry")
+                    .path("post").path("responses").has("202")).isTrue();
+        }
+
+        @Test
         @DisplayName("Sync Run item receipt contract exposes bounded read semantics")
         void syncRunItemReceiptContractIsComplete() throws Exception {
             JsonNode receipt = findPath(

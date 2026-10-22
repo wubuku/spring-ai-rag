@@ -56,6 +56,9 @@ Active plans are listed here and in `docs/index*`.
   (Chinese): fixes unassigned-document scope commits, real E2E cleanup, and reproducible SDK dependencies;
   expands versioned real QA and external API regression; planning, implementation, and acceptance are complete;
   Git delivery remains.
+- [Durable long-running operations, Embedding Profiles, client contracts, and quality drift](NEXT_BATCH_ASYNC_EMBEDDING_CLIENT_QUALITY_PLAN.md)
+  (Chinese): planning review `3/3` is complete; implementation covers async resource governance, Profile routing,
+  Client/OpenAI contract governance, and real-model quality drift baselines. Async Purge and live acceptance remain incomplete.
 The processing/recovery, citation/streaming, chunking-correctness, and default-feature/automatic-upgrade/recovery batches,
 including supplemental real-LLM acceptance, are in the
 [historical archive](archive/README.md).

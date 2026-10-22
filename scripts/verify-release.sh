@@ -356,12 +356,50 @@ helm_verification() {
     echo "Missing required command: helm"
     return 1
   }
+
+  assert_recreate_deployments() {
+    local manifest="$1"
+    awk '
+      function finish_document() {
+        if (is_deployment) {
+          deployments++
+          if (has_recreate) recreate_deployments++
+        }
+      }
+      /^---[[:space:]]*$/ {
+        finish_document()
+        is_deployment = 0
+        has_recreate = 0
+        next
+      }
+      /^kind:[[:space:]]*Deployment[[:space:]]*$/ { is_deployment = 1 }
+      is_deployment && /^    type:[[:space:]]*Recreate[[:space:]]*$/ { has_recreate = 1 }
+      END {
+        finish_document()
+        if (deployments == 0 || recreate_deployments != deployments) {
+          printf "Expected every Deployment to use strategy.type=Recreate; found %d/%d\n", recreate_deployments, deployments > "/dev/stderr"
+          exit 1
+        }
+        printf "Verified strategy.type=Recreate on %d Deployment(s)\n", deployments
+      }
+    ' "$manifest"
+  }
+
   helm lint ./k8s
   helm template spring-ai-rag ./k8s \
     --set secrets.postgresPassword=verify \
     --set secrets.deepseekApiKey=verify \
     --set secrets.embeddingApiKey=verify \
-    > "$WORK_LOG_DIR/helm-template.yaml"
+    > "$WORK_LOG_DIR/helm-template-default.yaml"
+  assert_recreate_deployments "$WORK_LOG_DIR/helm-template-default.yaml"
+
+  helm template spring-ai-rag ./k8s \
+    --values ./k8s/values-production.yaml \
+    --set secrets.postgresPassword=verify \
+    --set secrets.deepseekApiKey=verify \
+    --set secrets.embeddingApiKey=verify \
+    > "$WORK_LOG_DIR/helm-template-production.yaml"
+  assert_recreate_deployments "$WORK_LOG_DIR/helm-template-production.yaml"
 }
 
 docker_verification() {

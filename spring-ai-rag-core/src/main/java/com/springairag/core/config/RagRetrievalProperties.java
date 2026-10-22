@@ -20,6 +20,7 @@ public class RagRetrievalProperties {
     private int evaluationK = 10;
     /** Timeout in seconds for LLM-based answer quality evaluation (default: 30) */
     private int answerQualityTimeoutSeconds = 30;
+    private int maxEmbeddingProfileFanout = 4;
 
     public float getVectorWeight() {
         return vectorWeight;
@@ -83,5 +84,17 @@ public class RagRetrievalProperties {
 
     public void setAnswerQualityTimeoutSeconds(int answerQualityTimeoutSeconds) {
         this.answerQualityTimeoutSeconds = answerQualityTimeoutSeconds;
+    }
+
+    public int getMaxEmbeddingProfileFanout() {
+        return maxEmbeddingProfileFanout;
+    }
+
+    public void setMaxEmbeddingProfileFanout(int maxEmbeddingProfileFanout) {
+        if (maxEmbeddingProfileFanout < 1 || maxEmbeddingProfileFanout > 8) {
+            throw new IllegalArgumentException(
+                    "rag.retrieval.max-embedding-profile-fanout must be between 1 and 8");
+        }
+        this.maxEmbeddingProfileFanout = maxEmbeddingProfileFanout;
     }
 }

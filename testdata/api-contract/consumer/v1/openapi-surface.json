@@ -36,12 +36,150 @@
         "responseContentTypes": ["text/event-stream"]
       }
     },
+    "/api/v1/rag/collections/by-key/purge/preview": {
+      "post": {
+        "requestQueryParameters": ["collectionKey"],
+        "responseRequired": ["previewId", "status", "confirmationToken", "fingerprint"],
+        "responseTypes": {
+          "previewId": "string",
+          "status": "string",
+          "confirmationToken": "string",
+          "fingerprint": "string"
+        },
+        "responseStatuses": ["200"]
+      }
+    },
+    "/api/v1/rag/collections/by-key/purge": {
+      "post": {
+        "requestRequired": ["collectionKey", "previewId", "confirmationToken", "fingerprint", "expectedCollectionVersion", "expectedChatCommitFenceVersion"],
+        "requestTypes": {
+          "collectionKey": "string",
+          "previewId": "string",
+          "confirmationToken": "string",
+          "fingerprint": "string",
+          "expectedCollectionVersion": "integer",
+          "expectedChatCommitFenceVersion": "integer"
+        },
+        "responseRequired": ["status", "collectionId", "collectionKey"],
+        "responseTypes": {
+          "status": "string",
+          "collectionId": "integer",
+          "collectionKey": "string"
+        },
+        "responseStatuses": ["200"]
+      }
+    },
+    "/api/v1/rag/collections/by-key/purge/async/preview": {
+      "post": {
+        "requestQueryParameters": ["collectionKey"],
+        "responseRequired": ["previewId", "status", "confirmationToken", "fingerprint"],
+        "responseTypes": {
+          "previewId": "string",
+          "status": "string",
+          "confirmationToken": "string",
+          "fingerprint": "string"
+        },
+        "responseStatuses": ["200"]
+      }
+    },
+    "/api/v1/rag/collections/by-key/purge/async": {
+      "post": {
+        "requestRequired": ["collectionKey", "previewId", "confirmationToken", "fingerprint", "expectedCollectionVersion", "expectedChatCommitFenceVersion"],
+        "requestTypes": {
+          "collectionKey": "string",
+          "previewId": "string",
+          "confirmationToken": "string",
+          "fingerprint": "string",
+          "expectedCollectionVersion": "integer",
+          "expectedChatCommitFenceVersion": "integer"
+        },
+        "requestHeaders": ["Idempotency-Key"],
+        "responseRequired": ["operationId", "operationKind", "status", "statusUrl", "resultUrl"],
+        "responseTypes": {
+          "operationId": "string",
+          "operationKind": "string",
+          "status": "string",
+          "statusUrl": "string",
+          "resultUrl": "string"
+        },
+        "responseStatuses": ["202", "429"],
+        "responseHeaders": {
+          "202": ["Location", "Retry-After"],
+          "429": ["Retry-After"]
+        }
+      }
+    },
     "/api/v1/rag/search": {
       "get": {
         "responseContentTypes": ["application/json"]
       },
       "post": {
         "responseContentTypes": ["application/json"]
+      }
+    },
+    "/api/v1/rag/collections/by-key/embedding-profile/operations": {
+      "post": {
+        "requestRequired": ["collectionKey", "targetProfileKey", "expectedCollectionVersion"],
+        "requestTypes": {
+          "collectionKey": "string",
+          "targetProfileKey": "string",
+          "expectedCollectionVersion": "integer"
+        },
+        "responseRequired": ["operationId", "operationKind", "status", "statusUrl", "resultUrl"],
+        "responseTypes": {
+          "operationId": "string",
+          "operationKind": "string",
+          "status": "string",
+          "statusUrl": "string",
+          "resultUrl": "string"
+        },
+        "requestHeaders": ["Idempotency-Key"],
+        "responseStatuses": ["202", "429"],
+        "responseHeaders": {
+          "202": ["Location"],
+          "429": ["Retry-After"]
+        }
+      }
+    },
+    "/api/v1/rag/operations/{operationId}": {
+      "get": {
+        "responseRequired": ["operationId", "operationKind", "status", "statusUrl", "resultUrl"],
+        "responseTypes": {
+          "operationId": "string",
+          "operationKind": "string",
+          "status": "string",
+          "statusUrl": "string",
+          "resultUrl": "string"
+        },
+        "responseStatuses": ["200"]
+      }
+    },
+    "/api/v1/rag/operations/{operationId}/result": {
+      "get": {
+        "responseStatuses": ["200"]
+      }
+    },
+    "/api/v1/rag/operations/{operationId}/cancel": {
+      "post": {
+        "responseRequired": ["operationId", "status"],
+        "responseTypes": {
+          "operationId": "string",
+          "status": "string"
+        },
+        "responseStatuses": ["202"]
+      }
+    },
+    "/api/v1/rag/operations/{operationId}/retry": {
+      "post": {
+        "responseRequired": ["operationId", "status"],
+        "responseTypes": {
+          "operationId": "string",
+          "status": "string"
+        },
+        "responseStatuses": ["202", "429"],
+        "responseHeaders": {
+          "429": ["Retry-After"]
+        }
       }
     },
     "/v1/models": {

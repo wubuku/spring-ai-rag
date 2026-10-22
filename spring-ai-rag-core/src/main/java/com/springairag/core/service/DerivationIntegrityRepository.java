@@ -39,18 +39,39 @@ public class DerivationIntegrityRepository {
     }
 
     public Snapshot inspect(RagDocument document) {
-        return inspect(document.getId());
+        EmbeddingProfile profile = document.getCollectionId() == null
+                ? profileProvider.getActiveProfile()
+                : profileProvider.getProfileForCollection(document.getCollectionId());
+        return inspect(document, profile);
+    }
+
+    public Snapshot inspect(RagDocument document, EmbeddingProfile profile) {
+        List<Snapshot> rows = query(
+                "document.id = ?", List.of(document.getId()), "document.id", null, null,
+                profile);
+        return rows.isEmpty() ? Snapshot.missing(document.getId()) : rows.getFirst();
     }
 
     public Snapshot inspect(long documentId) {
+        List<Map<String, Object>> documentRows = jdbcTemplate.queryForList(
+                "SELECT collection_id FROM rag_documents WHERE id = ?", documentId);
+        if (documentRows.isEmpty()) {
+            return Snapshot.missing(documentId);
+        }
+        Object rawCollectionId = documentRows.getFirst().get("collection_id");
+        EmbeddingProfile profile = rawCollectionId instanceof Number collectionId
+                ? profileProvider.getProfileForCollection(collectionId.longValue())
+                : profileProvider.getActiveProfile();
         List<Snapshot> rows = query(
-                "document.id = ?", List.of(documentId), "document.id", null, null);
+                "document.id = ?", List.of(documentId), "document.id", null, null,
+                profile);
         return rows.isEmpty() ? Snapshot.missing(documentId) : rows.getFirst();
     }
 
     public List<Snapshot> scanCollection(long collectionId) {
         return query("document.collection_id = ?", List.of(collectionId),
-                "document.id", null, null);
+                "document.id", null, null,
+                profileProvider.getProfileForCollection(collectionId));
     }
 
     public List<Snapshot> scanCollection(
@@ -60,7 +81,7 @@ public class DerivationIntegrityRepository {
             int size) {
         List<Long> ids = classifiedIds(collectionId, bucket, Set.of(), Set.of(),
                 false, offset, size);
-        return inspectIds(ids);
+        return inspectIds(ids, profileProvider.getProfileForCollection(collectionId));
     }
 
     public List<Snapshot> scanRepairCandidates(
@@ -70,7 +91,7 @@ public class DerivationIntegrityRepository {
             int size) {
         List<Long> ids = classifiedIds(collectionId, null, buckets, vectorConditions,
                 true, 0, size);
-        return inspectIds(ids);
+        return inspectIds(ids, profileProvider.getProfileForCollection(collectionId));
     }
 
     public long countRepairSelection(
@@ -220,17 +241,18 @@ public class DerivationIntegrityRepository {
         predicates.add("(" + String.join(" OR ", selected) + ")");
     }
 
-    private List<Snapshot> inspectIds(Collection<Long> ids) {
+    private List<Snapshot> inspectIds(
+            Collection<Long> ids, EmbeddingProfile profile) {
         if (ids.isEmpty()) {
             return List.of();
         }
         List<Long> stableIds = new ArrayList<>(new LinkedHashSet<>(ids));
         return query("document.id IN (" + placeholders(stableIds.size()) + ")",
-                new ArrayList<>(stableIds), "document.id", null, null);
+                new ArrayList<>(stableIds), "document.id", null, null, profile);
     }
 
     private ClassificationQuery classificationQuery(long collectionId) {
-        EmbeddingProfile profile = profileProvider.getActiveProfile();
+        EmbeddingProfile profile = profileProvider.getProfileForCollection(collectionId);
         String vectorColumn = EmbeddingVectorColumns.columnFor(profile.dimensions());
         String sql = """
                 WITH raw AS (
@@ -387,8 +409,8 @@ public class DerivationIntegrityRepository {
             List<Object> predicateArgs,
             String orderBy,
             Integer limit,
-            Integer offset) {
-        EmbeddingProfile profile = profileProvider.getActiveProfile();
+            Integer offset,
+            EmbeddingProfile profile) {
         String vectorColumn = EmbeddingVectorColumns.columnFor(profile.dimensions());
         String textChunker = descriptorProvider.textDescriptor().chunkerVersion();
         String jsonChunker = descriptorProvider.jsonRecordDescriptor().chunkerVersion();

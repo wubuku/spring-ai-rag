@@ -30,6 +30,7 @@ import {
   referencesVariable,
   TEMPLATE,
 } from '../verify-env-example-consumers.mjs';
+import { filterExistingTrackedPaths } from '../lib/tracked-paths.mjs';
 
 // `import.meta.url` is a *file*, so `join(import.meta.url, '..', '..')` resolves to
 // `scripts/`, not the repository root. The first draft of this file got that wrong
@@ -44,6 +45,14 @@ const test = (title, fn) => cases.push({ title, fn });
 
 /** Runs the pure check over a fixture template and a fixture corpus. */
 const check = (templateText, corpus) => findUnconsumedVariables(templateText, corpus);
+
+test('tracked paths deleted from the current worktree are skipped', () => {
+  assert.deepEqual(
+    filterExistingTrackedPaths('/repo', ['present.java', 'deleted.java'],
+      (path) => !path.endsWith('/deleted.java')),
+    ['present.java'],
+  );
+});
 
 test('the six variables that actually happened are reported', () => {
   // `ad026765` wrote these under "all current configuration variables". The block

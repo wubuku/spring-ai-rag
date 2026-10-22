@@ -51,6 +51,9 @@ public class RagCollection {
     @Column
     private Integer dimensions = 1024;
 
+    @Column(name = "active_embedding_profile_id")
+    private Long activeEmbeddingProfileId;
+
     @Column(nullable = false)
     private Boolean enabled = true;
 
@@ -103,6 +106,9 @@ public class RagCollection {
 
     public Integer getDimensions() { return dimensions; }
     public void setDimensions(Integer dimensions) { this.dimensions = dimensions; }
+
+    public Long getActiveEmbeddingProfileId() { return activeEmbeddingProfileId; }
+    public void setActiveEmbeddingProfileId(Long value) { activeEmbeddingProfileId = value; }
 
     public Boolean getEnabled() { return enabled; }
     public void setEnabled(Boolean enabled) { this.enabled = enabled; }

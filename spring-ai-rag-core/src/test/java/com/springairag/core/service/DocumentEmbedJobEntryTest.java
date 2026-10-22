@@ -86,7 +86,8 @@ class DocumentEmbedJobEntryTest {
     }
 
     private void mockSuccessfulEmbeddings() {
-        when(embeddingBatchService.createEmbeddingsBatch(anyList()))
+        when(embeddingBatchService.createEmbeddingsBatchForProfile(
+                anyList(), eq(PROFILE)))
                 .thenAnswer(invocation -> {
                     List<String> texts = invocation.getArgument(0);
                     return texts.stream()
@@ -134,7 +135,8 @@ class DocumentEmbedJobEntryTest {
     void jobEntryProviderCallFailureSkipsFailureRecording() {
         when(documentRepository.findById(2L))
                 .thenReturn(Optional.of(document(2L, longContent(), "hash-2")));
-        when(embeddingBatchService.createEmbeddingsBatch(anyList()))
+        when(embeddingBatchService.createEmbeddingsBatchForProfile(
+                anyList(), eq(PROFILE)))
                 .thenThrow(new IllegalStateException("provider offline"));
 
         Map<String, Object> result = service.embedDocumentForJob(
@@ -156,7 +158,8 @@ class DocumentEmbedJobEntryTest {
     void jobEntryValidationFailureSkipsFailureRecordingAndRedacts() {
         when(documentRepository.findById(3L))
                 .thenReturn(Optional.of(document(3L, longContent(), "hash-3")));
-        when(embeddingBatchService.createEmbeddingsBatch(anyList()))
+        when(embeddingBatchService.createEmbeddingsBatchForProfile(
+                anyList(), eq(PROFILE)))
                 .thenAnswer(invocation -> {
                     List<String> texts = invocation.getArgument(0);
                     return texts.stream()
