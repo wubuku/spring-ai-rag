@@ -118,9 +118,15 @@ let total = 0;
 for (const name of classes) {
   const starter = name.startsWith('ExternalStarterConsumer');
   const module = starter ? 'spring-ai-rag-starter' : 'spring-ai-rag-core';
-  const pkg = starter ? 'example.consumer' : 'com.springairag.core.integration';
-  const report = path.join(module, 'target', 'surefire-reports', `TEST-${pkg}.${name}.xml`);
-  if (!fs.existsSync(report)) {
+  const reportsDir = path.join(module, 'target', 'surefire-reports');
+  // 套件不一定都在 com.springairag.core.integration；按类名后缀查找报告，
+  // 避免把 alertdelivery 等真实执行过的套件误判为未运行。
+  const reportName = fs.existsSync(reportsDir)
+    ? fs.readdirSync(reportsDir)
+      .find((file) => file.startsWith('TEST-') && file.endsWith(`.${name}.xml`))
+    : undefined;
+  const report = reportName ? path.join(reportsDir, reportName) : '';
+  if (!reportName || !fs.existsSync(report)) {
     problems.push(`${name}: no surefire report (suite did not run)`);
     continue;
   }
