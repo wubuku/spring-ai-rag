@@ -130,33 +130,37 @@ jobs:
           set -o pipefail
           ./scripts/verify-project-docs.sh 2>&1 | tee .verification/ci/repo-doc-gates.log
 
-      - name: Flyway migration consistency check
+      # `mvn test` 不会启动数据库（契约测试显式关闭 Flyway），所以这里查
+      # `flyway_schema_history` 只会得到 “relation does not exist”，然后对一棵
+      # 健康的树报出 drift。迁移是否真的能应用由 nightly `gated-postgres` 证明
+      # （Spring Boot + Flyway + MigrationVersions）；PR 层只校验清单本身是否
+      # 结构正确，这一步既能早失败，也不会假装自己执行了迁移。
+      - name: Flyway migration inventory
         run: |
-          echo "## Flyway Migration Status" >> "$GITHUB_STEP_SUMMARY"
-          # Count migration scripts in the codebase
-          MIGRATION_COUNT=$(find spring-ai-rag-core/src/main/resources/db/migration -name "V*.sql" | wc -l | tr -d ' ')
-          echo "Migration scripts in codebase: $MIGRATION_COUNT" | tee -a "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo '```sql' >> "$GITHUB_STEP_SUMMARY"
-          # Show Flyway migration history (Flyway ran during mvn test via Spring Boot auto-config)
-          psql -h localhost -U postgres -d spring_ai_rag_test -c "SELECT version, description, type, installed_on, state FROM flyway_schema_history ORDER BY installed_rank;" 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
-          # Verify all migrations applied: installed_count must equal script count
-          INSTALLED_COUNT=$(psql -h localhost -U postgres -d spring_ai_rag_test -t -c "SELECT COUNT(*) FROM flyway_schema_history WHERE type='SQL' AND state='Success';" | tr -d ' ')
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          if [ "$INSTALLED_COUNT" != "$MIGRATION_COUNT" ]; then
-            echo "❌ MIGRATION DRIFT DETECTED: $INSTALLED_COUNT applied, but $MIGRATION_COUNT scripts exist" | tee -a "$GITHUB_STEP_SUMMARY"
-            echo "Pending or failed migrations found. Ensure all Flyway scripts are applied." | tee -a "$GITHUB_STEP_SUMMARY"
-            exit 1
-          else
-            echo "✅ Flyway migration consistency verified: $INSTALLED_COUNT/$MIGRATION_COUNT migrations applied" | tee -a "$GITHUB_STEP_SUMMARY"
-          fi
-          # Check for failed migrations
-          FAILED_COUNT=$(psql -h localhost -U postgres -d spring_ai_rag_test -t -c "SELECT COUNT(*) FROM flyway_schema_history WHERE state='Failed';" | tr -d ' ')
-          if [ "$FAILED_COUNT" -gt 0 ]; then
-            echo "❌ Failed migrations found in database" | tee -a "$GITHUB_STEP_SUMMARY"
+          set -euo pipefail
+          dir=spring-ai-rag-core/src/main/resources/db/migration
+          mapfile -t versions < <(find "$dir" -maxdepth 1 -name 'V*.sql' -printf '%f\n' \
+            | sed -E 's/^V([0-9]+)__.*$/\1/' | sort -n)
+          count=${#versions[@]}
+          {
+            echo "## Flyway Migration Inventory"
+            echo ""
+            echo "- scripts: ${count}"
+            echo "- earliest: ${versions[0]}"
+            echo "- latest: ${versions[$((count - 1))]}"
+          } >> "$GITHUB_STEP_SUMMARY"
+          unparseable="$(find "$dir" -maxdepth 1 -name 'V*.sql' -printf '%f\n' \
+            | grep -Ev '^V[0-9]+__[A-Za-z0-9_-]+\.sql$' || true)"
+          if [ -n "${unparseable}" ]; then
+            echo "::error::Flyway filenames not matching V<number>__<name>.sql: ${unparseable}"
             exit 1
           fi
+          duplicates="$(printf '%s\n' "${versions[@]}" | uniq -d)"
+          if [ -n "${duplicates}" ]; then
+            echo "::error::Duplicate Flyway versions: ${duplicates}"
+            exit 1
+          fi
+          echo "Flyway inventory OK: ${count} script(s), V${versions[0]}..V${versions[$((count - 1))]}"
 
       - name: Package
         run: mvn package -DskipTests -B
