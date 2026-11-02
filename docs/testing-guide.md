@@ -321,6 +321,45 @@ without that variable, they still scan the working tree).
   Download with `gh run list --workflow=nightly.yml` and
   `gh run download <run-id>`.
 
+### Nightly Failure Notification (Issue Automation)
+
+A red nightly run only shows up on the Actions page, which nobody checks daily.
+The `report` job runs after the four check jobs (`if: always()`) and folds the
+result into a single tracking issue with a fixed title:
+
+- The title is always `[Nightly] Long-running layer failing`. A failing run only
+  **updates** that issue's body and appends one comment; it never opens a new
+  issue per day.
+- The body contains the run link, the failed/passed job list, and the tails of
+  key logs from each failing job's artifacts (`summary.md`, `webui-summary.md`,
+  `model-usage.md`, smoke/goldenset/regression/soak logs), so triage can start
+  without downloading artifacts.
+- The next all-green run comments on that issue and closes it. When no tracking
+  issue is open, a green run does nothing.
+- Only `schedule` runs touch issues. A manual `workflow_dispatch` merely writes a
+  notice to the Step Summary, so debugging cannot open an issue by accident.
+- If the reporting script itself fails, the `report` job still creates/updates
+  the issue as a failure (with a minimal fallback body), so a broken reporter
+  never becomes a missing notification.
+
+### Cost Guard (Real-Model Job)
+
+The `real-llm` job's backend serves only this run (port 18081, stopped right
+after), so the `COUNT` of `/actuator/metrics/http.server.requests` is a
+reasonable proxy for the run's request volume. After the checks,
+`.github/scripts/nightly-model-usage.mjs` runs:
+
+- Hard cap of **300 backend HTTP requests per run** (`NIGHTLY_MAX_REQUESTS`,
+  including startup health polling). Exceeding it is `exit 1` and a red job.
+- If the metric cannot be read (endpoint unavailable or metric missing), the
+  job also exits 1 and states why. "Cannot verify the cap" is not a pass.
+- The usage table (total requests, `rag.requests.total`, `rag.llm.tokens.total`)
+  goes to the Step Summary and to `.verification/nightly/model-usage.md` inside
+  the artifact; the tracking issue body includes it too.
+- Retries themselves are bounded: the smoke JSON assertion retries at most once
+  and nightly real WebUI specs at most once; the workflow never re-runs a job
+  automatically, and job-level `timeout-minutes` is the outer bound.
+
 ### Coverage Trend
 
 Module-level JaCoCo line/branch coverage is written to the Step Summary, uploaded
@@ -346,18 +385,77 @@ npm run test:e2e:mock
 
 Real-model and real-WebUI commands are in
 [developer-reference.md](developer-reference.md)'s "CI Layers" section. Actions
-files can only be syntax-checked locally:
+files themselves can only be syntax-checked locally; their helper scripts have
+self-tests:
 
 ```bash
 ruby -ryaml -e 'ARGV.each { |f| YAML.load_file(f) }' .github/workflows/*.yml
+node .github/scripts/nightly-issue.mjs --self-test
+node .github/scripts/nightly-model-usage.mjs --self-test
 ```
+
+`--self-test` does not touch the network; it only exercises the aggregation and
+decision logic. Issue create/update/close paths can be exercised with a mocked
+`github` object; real API calls happen only in nightly's `report` job.
 
 Secret injection, service containers, cache hits and artifact upload are
 GitHub-environment only; reproduce step by step with the commands above and do
 not infer a green CI from "the YAML parses". If nightly has no
 `MINIMAX_API_KEY` (or `SPRING_AI_MINIMAX_API_KEY`), `RAG_EMBEDDING_API_KEY` and
 `RAG_ROOT_API_KEY`, the real-model, soak and real-WebUI jobs fail explicitly and
-name the missing secret instead of skipping silently.
+name the missing secret instead of skipping silently. Purposes, rotation and
+temporary disablement are covered in the next section.
+
+### Repository Secrets Runbook
+
+The real-model and real-WebUI layers depend on three repository secrets:
+
+| Secret | Purpose | When missing |
+|--------|---------|--------------|
+| `SPRING_AI_MINIMAX_API_KEY` (legacy alias `MINIMAX_API_KEY`) | Chat model for real-llm and webui-real | The `Verify required secrets` step fails and names it |
+| `RAG_EMBEDDING_API_KEY` | Embedding model for real-llm and webui-real | Same as above |
+| `RAG_ROOT_API_KEY` | Auth header for soak / real WebUI scripts | webui generates one temporarily; soak still fails |
+
+**Baseline fact**: the repository originally had no Actions secrets
+(`gh api repos/<owner>/<repo>/actions/secrets` returned `total_count: 0`). These
+three were configured later for the real-model nightly for the first time
+(2026-11-03). Adding a secret never writes it into a repository file; `.env`
+remains local-only.
+
+Rotate without echoing values (pipe the new value from `.env` or a password
+manager through stdin):
+
+```bash
+gh secret set SPRING_AI_MINIMAX_API_KEY --repo <owner>/<repo> < /path/to/minimax.key
+gh secret set RAG_EMBEDDING_API_KEY --repo <owner>/<repo> < /path/to/embedding.key
+gh secret set RAG_ROOT_API_KEY --repo <owner>/<repo> < /path/to/root.key
+```
+
+The next nightly picks up the new values; `gh workflow run nightly.yml` verifies
+immediately (a manual run never opens or closes the tracking issue).
+
+Temporary disablement (pick one):
+
+- Delete the secret: `gh secret delete <NAME> --repo <owner>/<repo>`. Nightly
+  then fails by design and names the missing secret instead of skipping.
+- Comment out the `schedule` block in `nightly.yml`, keeping
+  `workflow_dispatch` for manual runs.
+- Change the `cron` (UTC), e.g. weekly with `0 18 * * 0`.
+
+Cost note: as long as a secret exists, nightly makes real paid calls. To stop
+paid calls entirely, disable the schedule or delete the secret; ignoring the
+notifications saves nothing.
+
+### Schedule Timezone (cron Is UTC)
+
+`cron: '0 18 * * *'` in `nightly.yml` is **UTC**, not Asia/Shanghai:
+18:00 UTC is 02:00 the next day in Beijing. GitHub's cron never reads the
+repository or runner timezone; mainland China has no DST, so no seasonal
+adjustment is needed. If this moves to a maintainer in a DST timezone, recompute
+in UTC instead of copying a local wall-clock time. GitHub schedule triggers are
+commonly delayed by minutes to tens of minutes, so this is not a precise alarm;
+use `gh workflow run nightly.yml` when you need an immediate run.
+
 
 ### WebUI `-real` End-to-End Runbook
 

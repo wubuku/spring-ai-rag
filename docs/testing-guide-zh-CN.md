@@ -290,6 +290,36 @@ CI 的 backend checkout 使用 `fetch-depth: 0`，PR 上把 `DOCS_DIFF_BASE` 设
   `nightly-real-llm`、`nightly-soak`、`nightly-webui-real`。下载：
   `gh run list --workflow=nightly.yml`，然后 `gh run download <run-id>`。
 
+### Nightly 失败通知（Issue 自动化）
+
+nightly 的红色只出现在 Actions 页面，没人会每天看。`report` job 在四个检查 job
+之后运行（`if: always()`），把结果汇总到一个固定标题的追踪 issue：
+
+- 标题固定为 `[Nightly] Long-running layer failing`；失败的 run 只会**更新**这个
+  issue 的正文并追加一条评论，不会每天开新 issue。
+- 正文包含 run 链接、失败/通过的 job 列表，以及失败 job artifact 里的关键日志尾部
+  （`summary.md`、`webui-summary.md`、`model-usage.md`、smoke/goldenset/regression/soak
+  日志），不下载 artifact 也能先判断方向。
+- 下一次全绿时，`report` job 评论该 issue 并自动关闭；没有打开的追踪 issue 时什么也不做。
+- 只有 `schedule` 触发才动 issue；手动 `workflow_dispatch` 只在 Step Summary 写 notice，
+  避免调试时意外开 issue。
+- 如果汇总脚本自身失败，`report` job 仍按失败创建/更新 issue（正文退化为最小信息），
+  不会出现“报告挂了所以没通知”。
+
+### 成本护栏（真实模型 job）
+
+`real-llm` job 的后端只服务本次检查（18081，检查后立即停止），因此
+`/actuator/metrics/http.server.requests` 的 `COUNT` 就是本次 run 的请求量代理。
+检查之后运行 `.github/scripts/nightly-model-usage.mjs`：
+
+- 单次 run 硬上限 **300 个后端 HTTP 请求**（`NIGHTLY_MAX_REQUESTS`，含启动健康检查轮询）；
+  超限 → `exit 1`，job 变红。
+- 读不到指标（端点不可用/指标缺失）→ 同样 `exit 1` 并写明原因；“无法验证上限”不当作通过。
+- 用量表（总请求、`rag.requests.total`、`rag.llm.tokens.total`）写入 Step Summary，
+  同时保存为 artifact 内的 `.verification/nightly/model-usage.md`，issue 正文也会带上。
+- 重试本身是有界的：smoke 的 JSON 断言最多重试一次、nightly 真实 WebUI spec 最多一次，
+  workflow 不会自动重跑整个 job；job 级 `timeout-minutes` 再兜底。
+
 ### 覆盖率趋势
 
 JaCoCo 的模块级行/分支覆盖率写进 Step Summary 并上传，同时保留 Codecov 汇总；
@@ -312,17 +342,66 @@ npm run test:e2e:mock
 ```
 
 真实模型与真实 WebUI 的命令见 [developer-reference-zh-CN.md](developer-reference-zh-CN.md)
-的「CI 分层」。Actions 文件本地只能做 YAML 语法校验：
+的「CI 分层」。Actions 文件本身本地只能做 YAML 语法校验，配套脚本可以自检：
 
 ```bash
 ruby -ryaml -e 'ARGV.each { |f| YAML.load_file(f) }' .github/workflows/*.yml
+node .github/scripts/nightly-issue.mjs --self-test
+node .github/scripts/nightly-model-usage.mjs --self-test
 ```
 
+`--self-test` 不访问网络，只验证汇总/判定逻辑；issue 的创建、更新与关闭可以用
+mock `github` 对象演练，真实 API 调用只在 nightly 的 `report` job 里发生。
+
 Secret 注入、service container、缓存命中和 artifact 上传属于 GitHub 环境专属；
-本地按上面的命令逐步复现，不要用"YAML 能解析"推断 CI 一定通过。若 nightly 的
+本地按上面的命令逐步复现，不要用“YAML 能解析”推断 CI 一定通过。若 nightly 的
 `MINIMAX_API_KEY`（或 `SPRING_AI_MINIMAX_API_KEY`）、`RAG_EMBEDDING_API_KEY` 与
 `RAG_ROOT_API_KEY` 没有配置，真实模型 / soak / 真实 WebUI job 会明确失败并点名
-缺哪一项，而不是静默跳过。
+缺哪一项，而不是静默跳过。具体用途、轮换与停用方式见下节。
+
+### 仓库 Secrets 运维
+
+真实模型 / 真实 WebUI 依赖三个 repository secret：
+
+| Secret | 用途 | 缺失时 |
+|--------|------|--------|
+| `SPRING_AI_MINIMAX_API_KEY`（兼容旧名 `MINIMAX_API_KEY`） | real-llm 与 webui-real 的聊天模型 | `Verify required secrets` 步骤明确失败并点名 |
+| `RAG_EMBEDDING_API_KEY` | real-llm 与 webui-real 的嵌入模型 | 同上 |
+| `RAG_ROOT_API_KEY` | soak / 真实 WebUI 脚本的鉴权头 | webui job 会临时生成；soak 仍会失败 |
+
+**事实基线**：仓库最初没有任何 Actions secret（`gh api repos/<owner>/<repo>/actions/secrets`
+返回 `total_count: 0`），这三个值是后续为真实模型 nightly 首次配置的（2026-11-03）。
+新增 secret 不会写进仓库文件，`.env` 仍然只用于本地。
+
+轮换（值不落盘、不回显；把新值从 `.env` 或密码管理器读入 stdin）：
+
+```bash
+gh secret set SPRING_AI_MINIMAX_API_KEY --repo <owner>/<repo> < /path/to/minimax.key
+gh secret set RAG_EMBEDDING_API_KEY --repo <owner>/<repo> < /path/to/embedding.key
+gh secret set RAG_ROOT_API_KEY --repo <owner>/<repo> < /path/to/root.key
+```
+
+轮换后下一次 nightly 自动使用新值；也可以用 `gh workflow run nightly.yml` 立即验证
+（手动触发不会自动开/关追踪 issue）。
+
+临时停用（三选一）：
+
+- 删除 secret：`gh secret delete <NAME> --repo <owner>/<repo>`。nightly 会按设计
+  红着失败并点名缺失项，而不是静默跳过。
+- 注释 `nightly.yml` 的 `schedule` 块，保留 `workflow_dispatch` 以便手动跑。
+- 改 `cron`（UTC），例如改成每周一次 `0 18 * * 0`。
+
+成本提示：secret 存在就代表 nightly 会真实调用付费模型。想彻底停止付费调用，
+必须停用 schedule 或删除 secret；只是不看通知不会省钱。
+
+### schedule 时区（cron 是 UTC）
+
+`nightly.yml` 的 `cron: '0 18 * * *'` 是 **UTC**，不是 Asia/Shanghai：
+18:00 UTC = 次日 02:00 北京时间。GitHub 的 cron 不读取仓库或 runner 时区；
+中国无夏令时，所以不需要季节调整。若换到有夏令时的时区维护，必须按 UTC 重新换算，
+不能按本地墙上时间直接抄。GitHub 的 schedule 触发常见数分钟到数十分钟延迟
+（高峰时更久），不能当精确闹钟；需要立即验证时用 `gh workflow run nightly.yml`。
+
 
 ### WebUI `-real` 端到端用例运行手册
 

@@ -6,7 +6,9 @@ name: Nightly
 # `docs/testing-guide-zh-CN.md` 的「CI 分层」章节。
 on:
   schedule:
-    # 02:00 Asia/Shanghai (18:00 UTC)
+    # GitHub 的 cron 一律按 UTC 解释，不跟随仓库或 runner 时区。
+    # 这里 18:00 UTC = 次日 02:00 Asia/Shanghai；中国无夏令时，不需要季节调整。
+    # GitHub 的 schedule 常见数分钟到数十分钟延迟，不能当作精确闹钟。
     - cron: '0 18 * * *'
   workflow_dispatch:
 
@@ -101,6 +103,9 @@ jobs:
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: postgres
       BASE_URL: http://127.0.0.1:18081
+      # 单次 run 的硬上限。real-llm job 的后端只服务本次检查，计数包含启动
+      # 健康检查轮询，所以给足余量；超过说明出现了预期外的请求/重试循环。
+      NIGHTLY_MAX_REQUESTS: '300'
 
     steps:
       - uses: actions/checkout@v4
@@ -169,18 +174,22 @@ jobs:
             [ -z "$value" ] || printf '%s=%s\n' "$name" "$value" >> .env
           done
 
-      - name: Start backend and run real-model checks
+      # 后端独立成一步启动，检查、用量护栏、停止各自成步：这样即使检查失败，
+      # 护栏仍能读到指标并解释"本次 run 用掉了多少请求"，而不是和进程一起退出。
+      - name: Start backend
         run: |
           set -euo pipefail
-          mkdir -p .verification/nightly
           ./scripts/start-real-e2e-server.sh > "$RUNNER_TEMP/start-server.log" 2>&1
           SERVER_PID="$(sed -n 's/^PID //p' "$RUNNER_TEMP/start-server.log" | tail -1)"
-          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
           if [ -z "$SERVER_PID" ]; then
             echo "::error::Backend did not report a PID; see start-server.log artifact."
             exit 1
           fi
+          echo "SERVER_PID=$SERVER_PID" >> "$GITHUB_ENV"
           echo "Backend PID: $SERVER_PID"
+
+      - name: Run real-model checks
+        run: |
           set -o pipefail
           echo "::group::Real LLM smoke"
           ./scripts/real-llm-e2e-smoke.sh 2>&1 | tee "$RUNNER_TEMP/real-llm-smoke.log"
@@ -191,6 +200,25 @@ jobs:
           echo "::group::Retrieval quality regression"
           ./scripts/run-retrieval-regression.sh 2>&1 | tee "$RUNNER_TEMP/retrieval-regression.log"
           echo "::endgroup::"
+
+      # 成本护栏：读取后端 Actuator 的请求计数，超硬上限或读不到指标都 fail。
+      # 重试本身是有界的（smoke 的 JSON 断言最多一次、Playwright 最多一次），
+      # 这里是最后一道"请求量异常"的闸门，不会自动重跑整个 job。
+      - name: Model usage guard (hard cap)
+        if: always()
+        run: |
+          mkdir -p .verification/nightly
+          node .github/scripts/nightly-model-usage.mjs \
+            --base-url "$BASE_URL" \
+            --max-requests "$NIGHTLY_MAX_REQUESTS" \
+            --report-file .verification/nightly/model-usage.md
+
+      - name: Stop backend
+        if: always()
+        run: |
+          if [ -n "${SERVER_PID:-}" ]; then
+            kill "$SERVER_PID" 2>/dev/null || true
+          fi
 
       - name: Failure diagnostics summary
         if: always()
@@ -502,3 +530,113 @@ jobs:
             .dev/frontend.log
           if-no-files-found: warn
           retention-days: 30
+
+  # 失败可见性：GitHub 页面变红不会有人天天看，所以用一个固定标题的追踪 issue。
+  # 失败 → 创建或更新该 issue（附 run 链接、失败 job、artifact 里的关键日志尾部）；
+  # 恢复 → 评论并关闭。只在 schedule 触发时动 issue，手动 dispatch 只写 notice，
+  # 避免调试时意外开 issue。
+  report:
+    name: Nightly status report
+    needs: [gated-postgres, real-llm, soak, webui-real]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+      actions: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download nightly artifacts
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          path: .verification/artifacts
+          pattern: nightly-*
+          merge-multiple: false
+
+      - name: Build tracking issue body
+        id: issue
+        env:
+          RESULT_GATED: ${{ needs.gated-postgres.result }}
+          RESULT_REAL_LLM: ${{ needs.real-llm.result }}
+          RESULT_SOAK: ${{ needs.soak.result }}
+          RESULT_WEBUI: ${{ needs.webui-real.result }}
+        run: |
+          mkdir -p .verification/nightly
+          node .github/scripts/nightly-issue.mjs \
+            --artifact-dir .verification/artifacts \
+            --body-file .verification/nightly/issue-body.md
+
+      - name: Create, update or close tracking issue
+        if: always()
+        uses: actions/github-script@v7
+        env:
+          NIGHTLY_STATUS: ${{ steps.issue.outputs.status }}
+          NIGHTLY_FAILED_JOBS: ${{ steps.issue.outputs.failed_jobs }}
+          NIGHTLY_BODY_FILE: .verification/nightly/issue-body.md
+        with:
+          script: |
+            const fs = require('fs');
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
+            const title = '[Nightly] Long-running layer failing';
+            // 汇总脚本本身失败时也要让失败可见：把缺失的状态按 failure 处理。
+            const status = process.env.NIGHTLY_STATUS || 'failed';
+            const failed = process.env.NIGHTLY_FAILED_JOBS || 'report job could not build the body';
+            let body;
+            try {
+              body = fs.readFileSync(process.env.NIGHTLY_BODY_FILE, 'utf8');
+            } catch (error) {
+              body = [
+                '## Nightly status report failed',
+                '',
+                `- Run: ${runUrl}`,
+                '- The reporting job could not build the tracking body; check the run log.',
+              ].join('\n');
+            }
+
+            if (context.eventName !== 'schedule') {
+              core.notice(
+                `Nightly status: ${status}. Issue automation only runs on scheduled runs; ` +
+                'manual workflow_dispatch does not create, update or close issues.'
+              );
+              return;
+            }
+
+            const { data: openIssues } = await github.rest.issues.listForRepo({
+              owner, repo, state: 'open', per_page: 100,
+            });
+            const existing = openIssues.find(
+              (issue) => issue.title === title && !issue.pull_request
+            );
+
+            if (status === 'failed') {
+              if (existing) {
+                await github.rest.issues.update({
+                  owner, repo, issue_number: existing.number, body,
+                });
+                await github.rest.issues.createComment({
+                  owner, repo, issue_number: existing.number,
+                  body: `Nightly run [#${context.runNumber}](${runUrl}) failed again (${failed}).`,
+                });
+                core.notice(`Updated existing tracking issue #${existing.number}.`);
+              } else {
+                const created = await github.rest.issues.create({ owner, repo, title, body });
+                core.notice(`Opened tracking issue #${created.data.number}.`);
+              }
+            } else if (existing) {
+              await github.rest.issues.createComment({
+                owner, repo, issue_number: existing.number,
+                body: `Nightly recovered in run [#${context.runNumber}](${runUrl}); closing.`,
+              });
+              await github.rest.issues.update({
+                owner, repo, issue_number: existing.number, state: 'closed',
+              });
+              core.notice(`Closed tracking issue #${existing.number}.`);
+            } else {
+              core.notice('Nightly is green and there is no open tracking issue.');
+            }

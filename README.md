@@ -1,5 +1,8 @@
 # spring-ai-rag
 
+[![CI](https://github.com/wubuku/spring-ai-rag/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/wubuku/spring-ai-rag/actions/workflows/ci.yml)
+[![Nightly](https://github.com/wubuku/spring-ai-rag/actions/workflows/nightly.yml/badge.svg?branch=main)](https://github.com/wubuku/spring-ai-rag/actions/workflows/nightly.yml)
+
 📖 [English](README.md) · 📖 [中文](README-zh-CN.md)
 
 ---
