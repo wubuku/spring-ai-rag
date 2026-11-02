@@ -45,7 +45,8 @@ test('positive-answer: real Agent retrieves a public fact with sources', async (
 
     const record = await test.step('先确认请求终态、正常展示与持久化', () => completedTurn(
       page, request,
-      'Use searchKnowledge on the selected collection. At what time does Cedar Observatory open to visitors? Give the time in HH:mm format and cite the guide.',
+      'Call searchKnowledge once with a single query on the selected collection; do not repeat the tool. '
+        + 'At what time does Cedar Observatory open to visitors? Give the time in HH:mm format and cite the guide.',
       { mode: 'AGENT', model: agentModel.ref, collectionScopeMode: 'SELECTED_COLLECTIONS', collectionKeys: [probe!.collectionKey] },
     ));
     await recoveredHistory(page, record);

@@ -68,7 +68,12 @@ export async function completedTurn(
   await page.getByRole('button', { name: 'Send', exact: true }).click();
   expect((await outbound).postDataJSON()).toMatchObject({ message, ...expectedRequest });
   const response = await inbound;
-  expect(response.status(), '正常业务结果应使用HTTP200').toBe(200);
+  if (response.status() !== 200) {
+    // 业务拒绝（如 422 CHAT_BUDGET_EXHAUSTED）在这里以 HTTP 状态返回，响应体
+    // 才说明是模型多调用工具还是真实回归；只断言状态码会丢掉这条线索。
+    const failureBody = await response.text().catch(() => '');
+    expect(response.status(), `正常业务结果应使用HTTP200；响应体: ${failureBody.slice(0, 400)}`).toBe(200);
+  }
   expect(await response.finished(), 'SSE连接应正常结束').toBeNull();
   expect(response.headers()['x-rag-turn-id']).toBeTruthy();
   const body = await page.evaluate(async index => {
