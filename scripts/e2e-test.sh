@@ -11,6 +11,7 @@ API="${BASE_URL}/api/v1/rag"
 CHAT_TIMEOUT_SECONDS="${E2E_CHAT_TIMEOUT_SECONDS:-180}"
 PDF_TO_RAG_TIMEOUT_SECONDS="${E2E_PDF_TO_RAG_TIMEOUT_SECONDS:-180}"
 ADMIN_API_KEY="${E2E_ADMIN_API_KEY:-}"
+API_KEY="${E2E_API_KEY:-${RAG_API_KEY:-${RAG_ROOT_API_KEY:-}}}"
 PASS=0
 FAIL=0
 DOC_ID=""
@@ -22,6 +23,26 @@ GREEN='\033[0;32m'
 RED='\033[0;31m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
+
+# Root-key mode rejects unauthenticated reads, so every call must carry the key
+# when one is configured. Explicit X-API-Key headers (admin-key probes) win.
+curl_api() {
+    if [ -z "$API_KEY" ]; then
+        curl "$@"
+        return
+    fi
+    local arg has_key=0
+    for arg in "$@"; do
+        case "$arg" in
+            X-API-Key:*) has_key=1 ;;
+        esac
+    done
+    if [ "$has_key" -eq 1 ]; then
+        curl "$@"
+    else
+        curl -H "X-API-Key: $API_KEY" "$@"
+    fi
+}
 
 assert_status() {
     local desc="$1" expected="$2" actual="$3"
@@ -55,7 +76,7 @@ echo ""
 # 1. 健康检查
 # ────────────────────────────────────────
 echo "1️⃣  健康检查"
-RESP=$(curl -s -w "\n%{http_code}" "$API/health")
+RESP=$(curl_api -s -w "\n%{http_code}" "$API/health")
 CODE=$(echo "$RESP" | tail -1)
 BODY=$(echo "$RESP" | sed '$d')
 assert_status "GET /health" "200" "$CODE"
@@ -68,7 +89,7 @@ echo ""
 # ────────────────────────────────────────
 echo "2️⃣  Collection CRUD"
 # 2a. 创建 Collection
-RESP=$(curl -s -w "\n%{http_code}" -X POST "$API/collections" \
+RESP=$(curl_api -s -w "\n%{http_code}" -X POST "$API/collections" \
     -H "Content-Type: application/json" \
     -d "{\"collectionKey\":\"$COLLECTION_KEY\",\"name\":\"e2e-test-collection\",\"description\":\"E2E自动化测试Collection\",\"domainId\":\"default\"}")
 CODE=$(echo "$RESP" | tail -1)
@@ -81,7 +102,7 @@ COLLECTION_ID=$(echo "$BODY" | grep -o '"id":[0-9]*' | grep -o '[0-9]*')
 echo "  📦 创建的 Collection: key=$COLLECTION_KEY, id=$COLLECTION_ID"
 
 # 2b. 列出 Collections
-RESP=$(curl -s -w "\n%{http_code}" "$API/collections?offset=0&limit=10")
+RESP=$(curl_api -s -w "\n%{http_code}" "$API/collections?offset=0&limit=10")
 CODE=$(echo "$RESP" | tail -1)
 BODY=$(echo "$RESP" | sed '$d')
 assert_status "GET /collections" "200" "$CODE"
@@ -90,7 +111,7 @@ assert_contains "返回 total" "$BODY" '"total"'
 
 # 2c. 按稳定 key 获取单个 Collection
 if [ -n "$COLLECTION_KEY" ]; then
-    RESP=$(curl -s -w "\n%{http_code}" "$API/collections/by-key?collectionKey=$COLLECTION_KEY")
+    RESP=$(curl_api -s -w "\n%{http_code}" "$API/collections/by-key?collectionKey=$COLLECTION_KEY")
     CODE=$(echo "$RESP" | tail -1)
     BODY=$(echo "$RESP" | sed '$d')
     assert_status "GET /collections/by-key" "200" "$CODE"
@@ -103,7 +124,7 @@ fi
 
 # 2d. 更新 Collection
 if [ -n "$COLLECTION_KEY" ]; then
-    RESP=$(curl -s -w "\n%{http_code}" -X PUT "$API/collections/by-key?collectionKey=$COLLECTION_KEY" \
+    RESP=$(curl_api -s -w "\n%{http_code}" -X PUT "$API/collections/by-key?collectionKey=$COLLECTION_KEY" \
         -H "Content-Type: application/json" \
         -d '{"name":"e2e-updated-collection","description":"E2E 自动化测试 Collection（已更新）","domainId":"default"}')
     CODE=$(echo "$RESP" | tail -1)
@@ -116,7 +137,7 @@ fi
 
 # 2e. 获取 Collection 内的文档列表
 if [ -n "$COLLECTION_KEY" ]; then
-    RESP=$(curl -s -w "\n%{http_code}" "$API/collections/by-key/documents?collectionKey=$COLLECTION_KEY&offset=0&limit=10")
+    RESP=$(curl_api -s -w "\n%{http_code}" "$API/collections/by-key/documents?collectionKey=$COLLECTION_KEY&offset=0&limit=10")
     CODE=$(echo "$RESP" | tail -1)
     BODY=$(echo "$RESP" | sed '$d')
     assert_status "GET /collections/by-key/documents" "200" "$CODE"
@@ -130,7 +151,7 @@ echo ""
 # 3. 创建文档（含 JSONB metadata）
 # ────────────────────────────────────────
 echo "3️⃣  创建文档"
-RESP=$(curl -s -w "\n%{http_code}" -X POST "$API/documents" \
+RESP=$(curl_api -s -w "\n%{http_code}" -X POST "$API/documents" \
     -H "Content-Type: application/json" \
     -d "{\"title\":\"E2E自动化测试文档\",\"content\":\"这是端到端测试创建的文档，用于验证CRUD和嵌入向量生成。Spring AI RAG 提供混合检索、查询改写和结果重排能力。向量存储使用PostgreSQL的pgvector扩展，支持HNSW索引实现高效的相似度搜索。嵌入模型使用BGE-M3，输出1024维向量。对话记忆通过Spring AI的MessageChatMemoryAdvisor实现，支持短期和长期记忆。领域扩展通过DomainRagExtension接口实现，支持自定义Prompt模板和检索配置。文档分块使用HierarchicalTextChunker，支持Markdown标题和段落级别的智能分块。\",\"source\":\"e2e-test\",\"documentType\":\"text\",\"metadata\":{\"author\":\"e2e-script\",\"priority\":\"high\"},\"collectionKey\":\"$COLLECTION_KEY\"}")
 CODE=$(echo "$RESP" | tail -1)
@@ -145,7 +166,7 @@ echo "  📄 创建的文档ID: $DOC_ID, revision=$DOC_REVISION"
 
 # 3f. 将文档添加到 Collection
 if [ -n "$DOC_ID" ] && [ -n "$DOC_REVISION" ] && [ -n "$COLLECTION_KEY" ]; then
-    RESP=$(curl -s -w "\n%{http_code}" -X POST "$API/collections/by-key/documents?collectionKey=$COLLECTION_KEY" \
+    RESP=$(curl_api -s -w "\n%{http_code}" -X POST "$API/collections/by-key/documents?collectionKey=$COLLECTION_KEY" \
         -H "Content-Type: application/json" \
         -d "{\"documentId\":$DOC_ID,\"expectedDocumentRevision\":$DOC_REVISION}")
     CODE=$(echo "$RESP" | tail -1)
@@ -162,7 +183,7 @@ echo ""
 # 3. 获取文档详情
 # ────────────────────────────────────────
 echo "4️⃣  获取文档详情"
-RESP=$(curl -s -w "\n%{http_code}" "$API/documents/$DOC_ID")
+RESP=$(curl_api -s -w "\n%{http_code}" "$API/documents/$DOC_ID")
 CODE=$(echo "$RESP" | tail -1)
 BODY=$(echo "$RESP" | sed '$d')
 assert_status "GET /documents/$DOC_ID" "200" "$CODE"
@@ -175,7 +196,7 @@ echo ""
 # 4. 文档列表（分页）
 # ────────────────────────────────────────
 echo "5️⃣  文档列表"
-RESP=$(curl -s -w "\n%{http_code}" "$API/documents?offset=0&limit=5")
+RESP=$(curl_api -s -w "\n%{http_code}" "$API/documents?offset=0&limit=5")
 CODE=$(echo "$RESP" | tail -1)
 BODY=$(echo "$RESP" | sed '$d')
 assert_status "GET /documents" "200" "$CODE"
@@ -188,7 +209,7 @@ echo ""
 # ────────────────────────────────────────
 echo "6️⃣  生成嵌入向量"
 if [ -n "$DOC_ID" ]; then
-    RESP=$(curl -s -w "\n%{http_code}" -X POST "$API/documents/$DOC_ID/embed")
+    RESP=$(curl_api -s -w "\n%{http_code}" -X POST "$API/documents/$DOC_ID/embed")
     CODE=$(echo "$RESP" | tail -1)
     BODY=$(echo "$RESP" | sed '$d')
     assert_status "POST /documents/$DOC_ID/embed" "200" "$CODE"
@@ -203,7 +224,7 @@ echo ""
 # 6. 直接检索
 # ────────────────────────────────────────
 echo "7️⃣  直接检索"
-RESP=$(curl -s -w "\n%{http_code}" --get "$API/search" \
+RESP=$(curl_api -s -w "\n%{http_code}" --get "$API/search" \
     --data-urlencode "query=Spring AI" \
     --data-urlencode "maxResults=3" \
     --data-urlencode "collectionKeys=$COLLECTION_KEY")
@@ -218,7 +239,7 @@ echo ""
 # ────────────────────────────────────────
 echo "8️⃣  RAG 问答 (非流式)"
 set +e
-RESP=$(curl -s -w "\n%{http_code}" -X POST "$API/chat/ask" \
+RESP=$(curl_api -s -w "\n%{http_code}" -X POST "$API/chat/ask" \
     -H "Content-Type: application/json" \
     -d "{\"message\":\"Spring AI是什么？\",\"sessionId\":\"e2e-test-session\",\"maxResults\":3,\"collectionKeys\":[\"$COLLECTION_KEY\"]}" \
     --connect-timeout 10 --max-time "$CHAT_TIMEOUT_SECONDS")
@@ -245,7 +266,7 @@ echo ""
 # ────────────────────────────────────────
 echo "9️⃣  流式响应 (SSE)"
 set +e
-HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$API/chat/stream" \
+HTTP_CODE=$(curl_api -s -o /dev/null -w "%{http_code}" -X POST "$API/chat/stream" \
     -H "Content-Type: application/json" \
     -H "Accept: text/event-stream" \
     -d "{\"message\":\"你好\",\"sessionId\":\"e2e-stream-test\",\"collectionKeys\":[\"$COLLECTION_KEY\"]}" \
@@ -264,7 +285,7 @@ echo ""
 # 9. 对话历史
 # ────────────────────────────────────────
 echo "🔟 对话历史"
-RESP=$(curl -s -w "\n%{http_code}" "$API/chat/history/e2e-test-session?limit=10")
+RESP=$(curl_api -s -w "\n%{http_code}" "$API/chat/history/e2e-test-session?limit=10")
 CODE=$(echo "$RESP" | tail -1)
 BODY=$(echo "$RESP" | sed '$d')
 assert_status "GET /chat/history/{sessionId}" "200" "$CODE"
@@ -275,14 +296,17 @@ echo ""
 # ────────────────────────────────────────
 echo "1️⃣1️⃣ 删除文档"
 if [ -n "$DOC_ID" ]; then
-    RESP=$(curl -s -w "\n%{http_code}" -X DELETE "$API/documents/$DOC_ID")
+    DOC_REV=$(curl_api -s "$API/documents/$DOC_ID" \
+        | python3 -c "import json,sys; print(json.load(sys.stdin).get('documentRevision',''))" 2>/dev/null || true)
+    RESP=$(curl_api -s -w "\n%{http_code}" -X DELETE \
+        "$API/documents/$DOC_ID?expectedDocumentRevision=$DOC_REV")
     CODE=$(echo "$RESP" | tail -1)
     BODY=$(echo "$RESP" | sed '$d')
     assert_status "DELETE /documents/$DOC_ID" "200" "$CODE"
     assert_contains "确认删除" "$BODY" "deleted"
 
     # 验证已删除
-    RESP2=$(curl -s -w "\n%{http_code}" "$API/documents/$DOC_ID")
+    RESP2=$(curl_api -s -w "\n%{http_code}" "$API/documents/$DOC_ID")
     CODE2=$(echo "$RESP2" | tail -1)
     assert_status "GET 已删除文档返回404" "404" "$CODE2"
 else
@@ -294,7 +318,7 @@ echo ""
 # 1️⃣2️⃣ 缓存统计
 # ────────────────────────────────────────
 echo "1️⃣2️⃣ 缓存统计"
-RESP=$(curl -s -w "\n%{http_code}" "$API/cache/stats")
+RESP=$(curl_api -s -w "\n%{http_code}" "$API/cache/stats")
 CODE=$(echo "$RESP" | tail -1)
 BODY=$(echo "$RESP" | sed '$d')
 assert_status "GET /cache/stats" "200" "$CODE"
@@ -305,7 +329,7 @@ echo ""
 # 1️⃣3️⃣ RAG 指标概览
 # ────────────────────────────────────────
 echo "1️⃣3️⃣ RAG 指标概览"
-RESP=$(curl -s -w "\n%{http_code}" "$API/metrics")
+RESP=$(curl_api -s -w "\n%{http_code}" "$API/metrics")
 CODE=$(echo "$RESP" | tail -1)
 BODY=$(echo "$RESP" | sed '$d')
 assert_status "GET /metrics" "200" "$CODE"
@@ -317,7 +341,7 @@ echo ""
 # ────────────────────────────────────────
 echo "1️⃣4️⃣ 清理 Collection"
 if [ -n "$COLLECTION_KEY" ]; then
-    RESP=$(curl -s -w "\n%{http_code}" -X DELETE "$API/collections/by-key?collectionKey=$COLLECTION_KEY")
+    RESP=$(curl_api -s -w "\n%{http_code}" -X DELETE "$API/collections/by-key?collectionKey=$COLLECTION_KEY")
     CODE=$(echo "$RESP" | tail -1)
     BODY=$(echo "$RESP" | sed '$d')
     assert_status "DELETE /collections/by-key" "200" "$CODE"
@@ -332,11 +356,11 @@ echo ""
 # ────────────────────────────────────────
 echo "1️⃣5️⃣  API Key 管理"
 if [ -n "$ADMIN_API_KEY" ]; then
-    RESP=$(curl -s -w "\n%{http_code}" -H "X-API-Key: $ADMIN_API_KEY" "$API/api-keys")
+    RESP=$(curl_api -s -w "\n%{http_code}" -H "X-API-Key: $ADMIN_API_KEY" "$API/api-keys")
     CODE=$(echo "$RESP" | tail -1)
     assert_status "GET /api-keys with admin key" "200" "$CODE"
 
-    RESP=$(curl -s -w "\n%{http_code}" -X POST "$API/api-keys" \
+    RESP=$(curl_api -s -w "\n%{http_code}" -X POST "$API/api-keys" \
         -H "X-API-Key: $ADMIN_API_KEY" \
         -H "Content-Type: application/json" \
         -d '{"name":"e2e-test-key","expiresAt":"2027-01-01T00:00:00"}')
@@ -346,7 +370,7 @@ if [ -n "$ADMIN_API_KEY" ]; then
     KEY_ID=$(echo "$BODY" | grep -o '"keyId":"rag_k_[^"]*"' | head -1 | cut -d'"' -f4)
 
     if [ -n "$KEY_ID" ]; then
-        RESP=$(curl -s -w "\n%{http_code}" -X DELETE "$API/api-keys/$KEY_ID" \
+        RESP=$(curl_api -s -w "\n%{http_code}" -X DELETE "$API/api-keys/$KEY_ID" \
             -H "X-API-Key: $ADMIN_API_KEY")
         CODE=$(echo "$RESP" | tail -1)
         assert_status "DELETE /api-keys/{keyId} (revoke)" "204" "$CODE"
@@ -400,7 +424,7 @@ PDFEOF
 
 # 16a. POST /files/pdf - 上传测试 PDF，获取 UUID
 echo "- 16a. POST /files/pdf (upload test PDF, get UUID)"
-RESP=$(curl -s -w "\n%{http_code}" -X POST "$API/files/pdf" \
+RESP=$(curl_api -s -w "\n%{http_code}" -X POST "$API/files/pdf" \
     -F "file=@$TESTPDF")
 CODE=$(echo "$RESP" | tail -1)
 BODY=$(echo "$RESP" | sed '$d')
@@ -419,7 +443,7 @@ fi
 
 # 16b. GET /files/tree - 根目录（有 UUID 目录）
 echo "- 16b. GET /files/tree (should contain UUID dir)"
-RESP=$(curl -s -w "\n%{http_code}" "$API/files/tree")
+RESP=$(curl_api -s -w "\n%{http_code}" "$API/files/tree")
 CODE=$(echo "$RESP" | tail -1)
 assert_status "GET /files/tree" "200" "$CODE"
 if [ -n "$UUID" ] && echo "$RESP" | grep -q "$UUID"; then
@@ -433,7 +457,7 @@ fi
 # 16c. GET /files/tree?path={UUID}/ - UUID 目录内容
 echo "- 16c. GET /files/tree?path={UUID}/ (UUID dir contents)"
 if [ -n "$UUID" ]; then
-    RESP=$(curl -s -w "\n%{http_code}" "$API/files/tree?path=${UUID}/")
+    RESP=$(curl_api -s -w "\n%{http_code}" "$API/files/tree?path=${UUID}/")
     CODE=$(echo "$RESP" | tail -1)
     BODY=$(echo "$RESP" | sed '$d')
     assert_status "GET /files/tree?path={UUID}/" "200" "$CODE"
@@ -453,7 +477,7 @@ echo "- 16d. GET /files/preview/html?path={UUID}/original.pdf"
 if [ -n "$UUID" ]; then
     ORIG_PATH="${UUID}/original.pdf"
     ORIG_ENC=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$ORIG_PATH'))")
-    RESP=$(curl -s -w "\n%{http_code}" "$API/files/preview/html?path=$ORIG_ENC")
+    RESP=$(curl_api -s -w "\n%{http_code}" "$API/files/preview/html?path=$ORIG_ENC")
     CODE=$(echo "$RESP" | tail -1)
     BODY=$(echo "$RESP" | sed '$d')
     assert_status "GET /files/preview/html (rendered)" "200" "$CODE"
@@ -473,7 +497,7 @@ echo "- 16e. GET /files/raw?path={UUID}/default.md"
 if [ -n "$UUID" ]; then
     MD_PATH="${UUID}/default.md"
     MD_ENC=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$MD_PATH'))")
-    RESP=$(curl -s -w "\n%{http_code}" "$API/files/raw?path=$MD_ENC")
+    RESP=$(curl_api -s -w "\n%{http_code}" "$API/files/raw?path=$MD_ENC")
     CODE=$(echo "$RESP" | tail -1)
     assert_status "GET /files/raw (markdown)" "200" "$CODE"
     if echo "$RESP" | grep -q '#'; then
@@ -489,7 +513,7 @@ fi
 
 # 16f. GET /files/preview/html?path=nonexistent - 不存在的文件应返回 404
 echo "- 16f. GET /files/preview/html?path=nonexistent (expect 404)"
-RESP=$(curl -s -w "\n%{http_code}" "$API/files/preview/html?path=nonexistent-$$-file.pdf")
+RESP=$(curl_api -s -w "\n%{http_code}" "$API/files/preview/html?path=nonexistent-$$-file.pdf")
 CODE=$(echo "$RESP" | tail -1)
 assert_status "GET /files/preview/html (not found)" "404" "$CODE"
 echo -e "  ${GREEN}✅ PASS${NC} preview/html returns 404 for non-existent file"
@@ -497,7 +521,7 @@ PASS=$((PASS + 1))
 
 # 16g. GET /files/raw?path=nonexistent - 不存在的文件应返回 404
 echo "- 16g. GET /files/raw?path=nonexistent (expect 404)"
-RESP=$(curl -s -w "\n%{http_code}" "$API/files/raw?path=nonexistent-$$-file.pdf")
+RESP=$(curl_api -s -w "\n%{http_code}" "$API/files/raw?path=nonexistent-$$-file.pdf")
 CODE=$(echo "$RESP" | tail -1)
 assert_status "GET /files/raw (not found)" "404" "$CODE"
 echo -e "  ${GREEN}✅ PASS${NC} files/raw returns 404 for non-existent file"
@@ -507,7 +531,7 @@ PASS=$((PASS + 1))
 echo "- 16h. POST /files/pdf (non-PDF file, expect 400)"
 TMPFILE="/tmp/e2e-non-pdf-$$.txt"
 echo "not a pdf" > "$TMPFILE"
-RESP=$(curl -s -w "\n%{http_code}" -X POST "$API/files/pdf" \
+RESP=$(curl_api -s -w "\n%{http_code}" -X POST "$API/files/pdf" \
     -F "file=@$TMPFILE")
 rm -f "$TMPFILE"
 CODE=$(echo "$RESP" | tail -1)
@@ -517,7 +541,7 @@ PASS=$((PASS + 1))
 
 # 16i. POST /files/pdf - 无文件应返回 400
 echo "- 16i. POST /files/pdf (no file, expect 400)"
-RESP=$(curl -s -w "\n%{http_code}" -X POST "$API/files/pdf")
+RESP=$(curl_api -s -w "\n%{http_code}" -X POST "$API/files/pdf")
 CODE=$(echo "$RESP" | tail -1)
 assert_status "POST /files/pdf (no file)" "400" "$CODE"
 echo -e "  ${GREEN}✅ PASS${NC} files/pdf returns 400 when no file uploaded"
@@ -532,9 +556,18 @@ if [ -n "$UUID" ] && [ -f "$TESTPDF" ]; then
     SSE_OUTPUT="/tmp/e2e-pdf-to-rag-$$.sse"
     cp "$TESTPDF" "$TMPPDF"
 
+    # The main test collection is deleted earlier; embedding persistence
+    # requires an active collection, so create a dedicated one.
+    PDF_COLLECTION_KEY="e2e-pdf-$(date +%s)-$$-$RANDOM"
+    PDF_COLLECTION_RESP=$(curl_api -s -w "\n%{http_code}" -X POST "$API/collections" \
+        -H "Content-Type: application/json" \
+        -d "{\"collectionKey\":\"$PDF_COLLECTION_KEY\",\"name\":\"e2e-pdf-collection\",\"domainId\":\"default\"}")
+    PDF_COLLECTION_ID=$(echo "$PDF_COLLECTION_RESP" | sed '$d' \
+        | python3 -c "import json,sys; print(json.load(sys.stdin).get('id',''))" 2>/dev/null || true)
+
     set +e
-    CODE=$(curl -sS -N -o "$SSE_OUTPUT" -w "%{http_code}" -X POST \
-        "$API/files/pdf-to-rag?embed=true" \
+    CODE=$(curl_api -sS -N -o "$SSE_OUTPUT" -w "%{http_code}" -X POST \
+        "$API/files/pdf-to-rag?embed=true&collectionId=$PDF_COLLECTION_ID" \
         -H "Accept: text/event-stream" \
         -F "file=@$TMPPDF;type=application/pdf" \
         --connect-timeout 10 --max-time "$PDF_TO_RAG_TIMEOUT_SECONDS")
@@ -595,7 +628,7 @@ PY
 
             # 16k. 验证 RagDocument 在 /documents 中存在且有 chunks
             echo "- 16k. GET /documents/{id} - 验证 RagDocument 有 chunks"
-            DRESP=$(curl -s "$API/documents/$DOC_ID")
+            DRESP=$(curl_api -s "$API/documents/$DOC_ID")
             D_CHUNKS=$(echo "$DRESP" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('chunkCount',0))" 2>/dev/null)
             if [ -n "$D_CHUNKS" ] && [ "$D_CHUNKS" != "0" ] && [ "$D_CHUNKS" != "None" ]; then
                 echo -e "  ${GREEN}✅ PASS${NC} RagDocument id=$DOC_ID has $D_CHUNKS chunks (embed succeeded)"
@@ -623,7 +656,7 @@ rm -f "$TESTPDF"
 # ────────────────────────────────────────
 echo "1️⃣7️⃣  API Key 角色权限测试"
 
-# 检测 auth 是否开启：调用 /api-keys 不带 key，返回 401 则说明开启了认证
+# 检测 auth 是否开启：必须用裸 curl 探测，不能带当前 root key
 RESP_NO_AUTH=$(curl -s -w "\n%{http_code}" "$API/api-keys")
 CODE_NO_AUTH=$(echo "$RESP_NO_AUTH" | tail -1)
 
@@ -632,31 +665,32 @@ if [ -n "$ADMIN_API_KEY" ] && { [ "$CODE_NO_AUTH" = "401" ] || [ "$CODE_NO_AUTH"
     ADMIN_KEY="$ADMIN_API_KEY"
 
     # 1. Admin key 可列出所有 keys
-    RESP=$(curl -s -w "\n%{http_code}" -H "X-API-Key: $ADMIN_KEY" "$API/api-keys")
+    RESP=$(curl_api -s -w "\n%{http_code}" -H "X-API-Key: $ADMIN_KEY" "$API/api-keys")
     CODE=$(echo "$RESP" | tail -1)
     assert_status "GET /api-keys with admin key" "200" "$CODE"
 
-    # 2. Admin key 可创建新 key
-    RESP=$(curl -s -w "\n%{http_code}" -H "X-API-Key: $ADMIN_KEY" \
+    # 2. Admin key 可创建新 key（environment root 管理的 key 必须带未来 expiresAt）
+    EXPIRES_AT=$(python3 -c "import datetime; print((datetime.datetime.now() + datetime.timedelta(days=1)).strftime('%Y-%m-%dT%H:%M:%S'))")
+    RESP=$(curl_api -s -w "\n%{http_code}" -H "X-API-Key: $ADMIN_KEY" \
         -X POST "$API/api-keys" \
         -H "Content-Type: application/json" \
-        -d '{"name":"e2e-role-test-key"}')
+        -d "{\"name\":\"e2e-role-test-key\",\"expiresAt\":\"$EXPIRES_AT\"}")
     CODE=$(echo "$RESP" | tail -1)
     BODY=$(echo "$RESP" | sed '$d')
     assert_status "POST /api-keys with admin key (create key)" "201" "$CODE"
-    assert_contains "响应包含 role 字段" "$BODY" '"role"'
+    assert_contains "响应包含 keyId" "$BODY" '"keyId"'
     TEST_KEY_ID=$(echo "$BODY" | grep -o '"keyId":"rag_k_[^"]*"' | head -1 | cut -d'"' -f4)
     echo "  Created role-test keyId: $TEST_KEY_ID"
 
     # 3. Admin key 可删除 key
     if [ -n "$TEST_KEY_ID" ]; then
-        RESP=$(curl -s -w "\n%{http_code}" -H "X-API-Key: $ADMIN_KEY" \
+        RESP=$(curl_api -s -w "\n%{http_code}" -H "X-API-Key: $ADMIN_KEY" \
             -X DELETE "$API/api-keys/$TEST_KEY_ID")
         CODE=$(echo "$RESP" | tail -1)
         assert_status "DELETE /api-keys/{id} with admin key" "204" "$CODE"
     fi
 
-    # 4. 不带 key 访问 admin 端点 → 401
+    # 4. 不带 key 访问 admin 端点 → 401（必须是裸 curl，不能带 root key）
     RESP=$(curl -s -w "\n%{http_code}" "$API/api-keys")
     CODE=$(echo "$RESP" | tail -1)
     assert_status "GET /api-keys without key → 401" "401" "$CODE"

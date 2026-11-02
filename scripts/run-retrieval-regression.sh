@@ -188,8 +188,49 @@ def identity(value):
     return f"{value['collectionKey']}::{value['externalId']}"
 
 
+def embedded_status(response):
+    # Upsert responses expose embeddingStatus at the top level; the detail
+    # endpoint nests it under lifecycle.
+    status = response.get("embeddingStatus")
+    if status:
+        return status
+    return (response.get("lifecycle") or {}).get("embeddingStatus")
+
+
 def embedding_is_ready(response):
-    return response.get("embeddingStatus") in {"READY", "COMPLETED", "CACHED"}
+    return embedded_status(response) in {"READY", "COMPLETED", "CACHED"}
+
+
+def wait_for_embedding(record, response, timeout=120):
+    """Real embedding providers index asynchronously; poll the JSON record."""
+    deadline = time.monotonic() + timeout
+    params = {
+        "collectionKey": record["collectionKey"],
+        "externalId": record["externalId"],
+    }
+    if record.get("sourceNamespace"):
+        params["sourceNamespace"] = record["sourceNamespace"]
+    path = (
+        "/api/v1/rag/json-records/by-external-id?"
+        + urllib.parse.urlencode(params)
+    )
+    current = response
+    while not embedding_is_ready(current):
+        status = embedded_status(current)
+        if status == "FAILED":
+            lifecycle = current.get("lifecycle") or {}
+            raise RuntimeError(
+                f"Fixture {identity(record)} embedding failed: "
+                f"error={lifecycle.get('lastError') or current.get('error')}"
+            )
+        if time.monotonic() >= deadline:
+            raise TimeoutError(
+                f"Fixture {identity(record)} embedding not ready after "
+                f"{timeout}s: status={status}"
+            )
+        time.sleep(2)
+        _, current, _ = request("GET", path)
+    return current
 
 
 if self_test:
@@ -256,25 +297,29 @@ if not skip_fixtures:
                 "embed": True,
             },
         )
-        embedding_status = response.get("embeddingStatus")
         if not embedding_is_ready(response):
-            raise RuntimeError(
-                f"Fixture {identity(record)} embedding is not ready: "
-                f"status={embedding_status} error={response.get('error')}"
-            )
-        document_ids[identity(record)] = int(response["documentId"])
+            response = wait_for_embedding(record, response)
+        document_ids[identity(record)] = int(
+            response.get("documentId") or response["id"]
+        )
         if response.get("embeddingProfileKey"):
             embedding_profiles.add(response["embeddingProfileKey"])
 else:
     for record in dataset["records"]:
-        encoded_key = urllib.parse.quote(record["collectionKey"], safe="")
-        encoded_id = urllib.parse.quote(record["externalId"], safe="")
+        params = {
+            "collectionKey": record["collectionKey"],
+            "externalId": record["externalId"],
+        }
+        if record.get("sourceNamespace"):
+            params["sourceNamespace"] = record["sourceNamespace"]
         _, response, _ = request(
             "GET",
-            "/api/v1/rag/documents/by-external-id"
-            f"?collectionKey={encoded_key}&externalId={encoded_id}",
+            "/api/v1/rag/json-records/by-external-id?"
+            + urllib.parse.urlencode(params),
         )
-        document_ids[identity(record)] = int(response["id"])
+        document_ids[identity(record)] = int(
+            response.get("documentId") or response["id"]
+        )
 
 id_to_identity = {value: key for key, value in document_ids.items()}
 k = int(dataset["k"])

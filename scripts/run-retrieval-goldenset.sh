@@ -14,7 +14,22 @@ cd "$(dirname "$0")/.."
 
 BASE_URL="${BASE_URL:-http://127.0.0.1:18081}"
 GOLDEN="${GOLDENSET_FILE:-testdata/goldenset/retrieval-goldenset.json}"
-API_KEY="${API_KEY:-${RAG_API_KEY:-}}"
+API_KEY="${API_KEY:-${RAG_API_KEY:-${RAG_ROOT_API_KEY:-}}}"
+if [[ -z "$API_KEY" && -f .env ]]; then
+  API_KEY="$(python3 - .env <<'PY'
+import pathlib
+import sys
+values = {}
+for line in pathlib.Path(sys.argv[1]).read_text(encoding="utf-8").splitlines():
+    line = line.strip()
+    if not line or line.startswith("#") or "=" not in line:
+        continue
+    key, value = line.split("=", 1)
+    values[key.strip()] = value.strip().strip('"').strip("'")
+print(values.get("RAG_API_KEY") or values.get("RAG_ROOT_API_KEY") or "")
+PY
+)"
+fi
 SKIP_CREATE=0
 for a in "$@"; do [[ "$a" == "--skip-create" ]] && SKIP_CREATE=1; done
 
@@ -28,7 +43,7 @@ if ! curl -sf "$BASE_URL/actuator/health" >/dev/null; then
 fi
 
 python3 - "$BASE_URL" "$GOLDEN" "$SKIP_CREATE" "$API_KEY" <<'PY'
-import json, sys, urllib.request, urllib.parse
+import json, sys, time, urllib.request, urllib.parse
 
 base, golden_path, skip_create, api_key = (
     sys.argv[1], sys.argv[2], sys.argv[3] == "1", sys.argv[4]
@@ -54,10 +69,20 @@ def req(method, path, body=None):
 title_to_id = {}
 
 if not skip_create:
+    # Embedding persistence requires an active Collection; a fresh database has
+    # no implicit default, so the golden documents get their own disposable one.
+    collection_key = f"goldenset-{int(time.time())}"
+    req("POST", "/api/v1/rag/collections", {
+        "collectionKey": collection_key,
+        "name": "Retrieval goldenset",
+        "domainId": "default",
+    })
+    print("collection", collection_key)
     for doc in gs["documents"]:
         created = req("POST", "/api/v1/rag/documents", {
             "title": doc["title"],
             "content": doc["content"],
+            "collectionKey": collection_key,
         })
         doc_id = created.get("id")
         if not doc_id:

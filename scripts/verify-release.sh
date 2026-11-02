@@ -296,7 +296,9 @@ playwright_suite() {
 
   (
     cd spring-ai-rag-webui
-    exec ./node_modules/.bin/vite preview \
+    # NO_COLOR keeps the readiness grep below working on terminals where
+    # Vite emits ANSI escapes between "Local" and ":".
+    NO_COLOR=1 FORCE_COLOR=0 exec ./node_modules/.bin/vite preview \
       --host 127.0.0.1 \
       --port "$PLAYWRIGHT_PORT" \
       --strictPort
