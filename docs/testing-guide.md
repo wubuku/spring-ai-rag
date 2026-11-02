@@ -275,6 +275,81 @@ the JDBC target in the startup log. It refuses the shared default database `spri
 identity mismatch, or a mismatched logged target. This hard gate prevents `.env`'s
 `SPRING_DATASOURCE_URL` from redirecting a test intended for another database.
 
+## CI Layers: PR Fast Layer And Nightly Long-Running Layer
+
+Test capability is a mechanism only when every change runs it. This repository
+splits verification into two layers; the boundary lives in the workflows instead
+of in someone's memory:
+
+| Layer | Trigger | Workflow | Includes | Excludes |
+|-------|---------|----------|----------|----------|
+| PR fast | push to `main`/`develop`, PR to `main`; a newer commit cancels the stale run | `.github/workflows/ci.yml` | `mvn test` (including `OpenApiContractTest` and `WebUiRouteContract`), `verify-project-tests.sh`, `verify-project-docs.sh`, Flyway consistency, WebUI lint/unit/coverage thresholds/build/mock E2E | gated PostgreSQL, real models, goldenset, soak, `*-real.spec.ts` |
+| Long-running | daily 18:00 UTC (02:00 Asia/Shanghai) and manual `workflow_dispatch` | `.github/workflows/nightly.yml` | gated PostgreSQL (30 suites / 263 tests), real LLM smoke + goldenset + retrieval regression, bounded soak, real WebUI specs that need no manual fixtures | `alerts-real` (needs preset alert/delivery IDs) and `rerank-document-diversity-real` (needs a rerank fixture) |
+
+The PR layer is bounded by job-level `timeout-minutes` (backend 45, webui 30).
+Gated IT takes about 9–19 minutes locally; keeping it in the PR layer would push
+feedback past twenty minutes, so it runs only in nightly. Each nightly job has
+its own timeout (90/60/30/75 minutes) and they do not block each other.
+
+The backend checkout uses `fetch-depth: 0`, and on PRs `DOCS_DIFF_BASE` is set to
+`origin/<base>`; Git whitespace and the added-line secret scan therefore inspect
+the PR's real added lines instead of the empty diff of a clean checkout (locally,
+without that variable, they still scan the working tree).
+
+### Failure Diagnostics
+
+- `.github/scripts/ci-summary.mjs` reads surefire/failsafe XML, Playwright JSON
+  and JaCoCo XML and writes "module / suite / failing case / first error line"
+  to the Step Summary. Missing reports only produce a note; they never turn a
+  green job red.
+- Under `CI`, the Playwright config enables the `github` reporter (failures are
+  annotated on the PR file line) and always writes `test-results/results.json`
+  for the summary. Nightly `*-real` specs run with `--retries=0`, so the first
+  failure is the failure instead of being masked by a retry.
+- Artifacts are retained for 14–30 days: `backend-test-results`,
+  `backend-gate-logs`, `jacoco-reports`, `webui-playwright-report`,
+  `nightly-gated-it`, `nightly-real-llm`, `nightly-soak`, `nightly-webui-real`.
+  Download with `gh run list --workflow=nightly.yml` and
+  `gh run download <run-id>`.
+
+### Coverage Trend
+
+Module-level JaCoCo line/branch coverage is written to the Step Summary, uploaded
+as an artifact, and kept in Codecov. **No hard threshold is enforced**: the
+repository has no traceable coverage baseline, and an invented floor would fire
+on a refactor instead of a regression. The existing Vitest coverage thresholds
+stay unchanged.
+
+### Local Reproduction And GitHub-Only Differences
+
+```bash
+# PR backend
+mvn test -B && ./scripts/verify-project-tests.sh && ./scripts/verify-project-docs.sh
+
+# PR WebUI
+cd spring-ai-rag-webui
+npm ci && npm run lint && npm run test:run && npm run test:coverage && npm run build
+npm run test:e2e:mock
+
+# Nightly gated IT
+./scripts/verify-gated-it.sh
+```
+
+Real-model and real-WebUI commands are in
+[developer-reference.md](developer-reference.md)'s "CI Layers" section. Actions
+files can only be syntax-checked locally:
+
+```bash
+ruby -ryaml -e 'ARGV.each { |f| YAML.load_file(f) }' .github/workflows/*.yml
+```
+
+Secret injection, service containers, cache hits and artifact upload are
+GitHub-environment only; reproduce step by step with the commands above and do
+not infer a green CI from "the YAML parses". If nightly has no
+`MINIMAX_API_KEY` (or `SPRING_AI_MINIMAX_API_KEY`) and `RAG_EMBEDDING_API_KEY`,
+the real-model jobs fail explicitly and name the missing secret instead of
+skipping silently.
+
 ### WebUI `-real` End-to-End Runbook
 
 Report Chat acceptance in three layers instead of inferring business correctness from one browser pass rate:
@@ -1288,11 +1363,12 @@ no run path, in either direction.
 ```
 
 The gated inventory is reconciled by `verify-integration-test-switches.mjs`
-against `verify-gated-it.sh`; the audit baseline is 29 gated classes and 209
+against `verify-gated-it.sh`; the audit baseline is 30 gated classes and 263
 test methods, each behind its own `<x>.it.enabled` switch so a plain `mvn test`
 never needs a Docker daemon. `verify-gated-it.sh` is the one command that turns
-all of them on, takes about nine minutes locally, and is what `ci.yml`'s
-"Gated PostgreSQL integration tests" step runs.
+all of them on and takes about nine to nineteen minutes locally; nightly's
+`gated-postgres` job runs it. The PR layer no longer runs it, so feedback does
+not stay above twenty minutes.
 
 Two things about that inventory are worth stating plainly, because both were
 false until Batch 912:

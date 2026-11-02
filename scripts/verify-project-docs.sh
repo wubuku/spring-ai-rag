@@ -410,12 +410,33 @@ check_shell_syntax() {
   done < <(find scripts -type f -name '*.sh' -print | sort)
 }
 
+# CI 的 checkout 是干净工作树：`git diff HEAD` 在那里永远是空 diff，
+# 会让"新增行密钥扫描"变成一条永远通过的门禁。PR 上 workflow 把
+# DOCS_DIFF_BASE 指向 `origin/<base>`，这里据此比较 merge-base；本地没有该
+# 变量时仍扫工作树，保持 `git diff HEAD` 的原语义。
+diff_base() {
+  if [[ -n "${DOCS_DIFF_BASE:-}" ]] \
+      && git rev-parse --verify "${DOCS_DIFF_BASE}^{commit}" > /dev/null 2>&1; then
+    printf '%s' "$DOCS_DIFF_BASE"
+  else
+    printf 'HEAD'
+  fi
+}
+
 check_added_secrets() {
-  local added_lines
-  added_lines="$(
-    git diff HEAD --no-ext-diff --unified=0 -- . ':(exclude)*.lock' \
-      | sed -n 's/^+[^+]//p'
-  )"
+  local base added_lines
+  base="$(diff_base)"
+  if [[ "$base" == "HEAD" ]]; then
+    added_lines="$(
+      git diff HEAD --no-ext-diff --unified=0 -- . ':(exclude)*.lock' \
+        | sed -n 's/^+[^+]//p'
+    )"
+  else
+    added_lines="$(
+      git diff "${base}...HEAD" --no-ext-diff --unified=0 -- . ':(exclude)*.lock' \
+        | sed -n 's/^+[^+]//p'
+    )"
+  fi
 
   if printf '%s\n' "$added_lines" \
       | rg -n '(sk-[A-Za-z0-9_-]{20,}|gh[oprsu]_[A-Za-z0-9]{30,}|AIza[0-9A-Za-z_-]{30,}|Bearer[[:space:]]+[A-Za-z0-9._-]{32,})'; then
@@ -509,7 +530,16 @@ run_check "Business-client integration discoverability" check_business_client_di
 run_check "Project invariants" check_project_invariants
 run_check "Documented scripts and commands" check_scripts_and_commands
 run_check "Shell syntax" check_shell_syntax
-run_check "Git whitespace" git diff HEAD --check
+check_git_whitespace() {
+  local base
+  base="$(diff_base)"
+  if [[ "$base" == "HEAD" ]]; then
+    git diff HEAD --check
+  else
+    git diff "${base}...HEAD" --check
+  fi
+}
+run_check "Git whitespace" check_git_whitespace
 run_check "Added-line secret scan" check_added_secrets
 run_check "Pessimistic-lock gate self-test" check_pessimistic_lock_self_test
 run_check "Gates can fail closed" check_gates_can_fail

@@ -1364,6 +1364,8 @@
   第二版解析基准改成仓库根，并**在 token 数为 0 时 ABORT exit 3**。
 - **交接件搬进仓库**：`.github/pending/ci-repo-gates.patch`。
   > **把交接件存在操作系统有权清空的目录里，那就不是交接件。**
+  （2026-11-03 已应用并从仓库删除；CI 分层见
+  [testing-guide-zh-CN.md](../testing-guide-zh-CN.md)。）
   这是 b806 补丁消失的**实测原因**，不是推测。
 - **交接件只保留不可推导的那一半**（实测推出来的）：
   `gate-registry.mjs` 那 16 行豁免**不用**写进补丁——
@@ -8403,6 +8405,7 @@
   push 被远程拒绝：`refusing to allow an OAuth App to create or update workflow
   .github/workflows/ci.yml without workflow scope`。经用户决定，
   **本批改为只交付其余 13 个文件，`ci.yml` 留待手动应用**。
+  （2026-11-03 凭据已具备 `workflow` scope，CI 分层与仓库级门禁链已直接落地。）
   补丁已备好（48 行 diff），内容与下述方案完全一致、已实测通过：
   1. 在 `build` job 补 `actions/setup-node@v4`（node 24，与 webui job 对齐——
      该 job 原本不设 Node，会落到 ubuntu-latest 的预装版本上）；
@@ -22656,8 +22659,10 @@ equals/hashCode 往返 + 不等例（null、异类、字段差异），一次性
   （DeepSeek / Anthropic / MiniMax / Postgres password / Vision key）。
   已按用户选择从当前树取消跟踪 + 加 `.gitignore` + 加门禁，但
   **历史未清、密钥未轮换——轮换只能由用户做**。
-- 用带 `workflow` scope 的凭据应用 `.github/pending/ci-repo-gates.patch`
-  （贴完删掉）。在此之前 76 个门禁里 31 个在 CI 里一条都没跑。
+- ~~用带 `workflow` scope 的凭据应用 `.github/pending/ci-repo-gates.patch`
+  （贴完删掉）。在此之前 76 个门禁里 31 个在 CI 里一条都没跑。~~
+  **已完成（2026-11-03）**：仓库级门禁链进入 `ci.yml`，长跑层进入
+  `nightly.yml`，补丁文件已删除，过期豁免由 `verify-gate-wiring.mjs` 复核清除。
 
 ### 构建与门禁状态（收尾时实测，main @ `558247df`）
 

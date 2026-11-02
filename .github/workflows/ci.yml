@@ -1,14 +1,27 @@
 name: CI
 
+# PR 快层：单元/契约测试、仓库级静态门禁、WebUI Mock E2E 与构建。
+# 长跑层（gated PostgreSQL、真实 LLM、goldenset、有界 soak、真实 WebUI spec）
+# 在 `.github/workflows/nightly.yml`；两层的边界与本地复现命令见
+# `docs/testing-guide-zh-CN.md` 的「CI 分层」章节。
 on:
   push:
     branches: [ main, develop ]
   pull_request:
     branches: [ main ]
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
 jobs:
-  build:
+  backend:
+    name: Backend (unit, contract, static gates)
     runs-on: ubuntu-latest
+    timeout-minutes: 45
 
     services:
       postgres:
@@ -42,9 +55,14 @@ jobs:
       RAG_EMBEDDING_BASE_URL: https://api.siliconflow.cn
       RAG_EMBEDDING_MODEL: BAAI/bge-m3
       RAG_EMBEDDING_DIMENSIONS: 1024
+      # 干净 checkout 里 `git diff HEAD` 是空 diff；把仓库文档门禁的
+      # "新增行密钥扫描"指向 PR 的 merge-base，否则它在 CI 里永远通过。
+      DOCS_DIFF_BASE: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event.before }}
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
@@ -71,50 +89,73 @@ jobs:
           psql -h localhost -U postgres -d spring_ai_rag_test -c "CREATE EXTENSION IF NOT EXISTS vector"
           psql -h localhost -U postgres -d spring_ai_rag_test -c "CREATE EXTENSION IF NOT EXISTS pg_jieba"
 
+      # 仓库级门禁链需要 ripgrep；runner 镜像通常已带，缺失时再安装。
+      - name: Ensure gate dependencies
+        run: |
+          if ! command -v rg >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends ripgrep
+          fi
+
       - name: Install modules (skip tests, install to local Maven repo)
         run: mvn install -DskipTests -B -q
 
       - name: Build & Test with JaCoCo
-        run: mvn test -B
-
-      - name: Gated PostgreSQL integration tests (database-only suites)
-        env:
-          TESTCONTAINERS_RYUK_DISABLED: 'true'
-          TESTCONTAINERS_PG_IMAGE: postgres:16-pgvector
         run: |
-          docker pull postgres:16-pgvector || true
-          ./scripts/verify-gated-it.sh
+          set -o pipefail
+          mkdir -p .verification/ci
+          mvn test -B 2>&1 | tee .verification/ci/mvn-test.log
+
+      # 必须紧跟全量 `mvn test`：verify-test-visibility 读取这次运行产生的
+      # surefire 报告，而 gated IT 会覆盖同一批文件（gated IT 已移到 nightly）。
+      - name: Repository gate chain (visibility, wiring, inert tests)
+        run: |
+          set -o pipefail
+          ./scripts/verify-project-tests.sh 2>&1 | tee .verification/ci/repo-test-gates.log
+
+      - name: Documentation and i18n integrity
+        run: |
+          set -o pipefail
+          ./scripts/verify-project-docs.sh 2>&1 | tee .verification/ci/repo-doc-gates.log
 
       - name: Flyway migration consistency check
         run: |
-          echo "## Flyway Migration Status" >> $GITHUB_STEP_SUMMARY
+          echo "## Flyway Migration Status" >> "$GITHUB_STEP_SUMMARY"
           # Count migration scripts in the codebase
           MIGRATION_COUNT=$(find spring-ai-rag-core/src/main/resources/db/migration -name "V*.sql" | wc -l | tr -d ' ')
-          echo "Migration scripts in codebase: $MIGRATION_COUNT" | tee -a $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo '```sql' >> $GITHUB_STEP_SUMMARY
+          echo "Migration scripts in codebase: $MIGRATION_COUNT" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo '```sql' >> "$GITHUB_STEP_SUMMARY"
           # Show Flyway migration history (Flyway ran during mvn test via Spring Boot auto-config)
-          psql -h localhost -U postgres -d spring_ai_rag_test -c "SELECT version, description, type, installed_on, state FROM flyway_schema_history ORDER BY installed_rank;" 2>&1 | tee -a $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
+          psql -h localhost -U postgres -d spring_ai_rag_test -c "SELECT version, description, type, installed_on, state FROM flyway_schema_history ORDER BY installed_rank;" 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
           # Verify all migrations applied: installed_count must equal script count
           INSTALLED_COUNT=$(psql -h localhost -U postgres -d spring_ai_rag_test -t -c "SELECT COUNT(*) FROM flyway_schema_history WHERE type='SQL' AND state='Success';" | tr -d ' ')
-          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "" >> "$GITHUB_STEP_SUMMARY"
           if [ "$INSTALLED_COUNT" != "$MIGRATION_COUNT" ]; then
-            echo "❌ MIGRATION DRIFT DETECTED: $INSTALLED_COUNT applied, but $MIGRATION_COUNT scripts exist" | tee -a $GITHUB_STEP_SUMMARY
-            echo "Pending or failed migrations found. Ensure all Flyway scripts are applied." | tee -a $GITHUB_STEP_SUMMARY
+            echo "❌ MIGRATION DRIFT DETECTED: $INSTALLED_COUNT applied, but $MIGRATION_COUNT scripts exist" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "Pending or failed migrations found. Ensure all Flyway scripts are applied." | tee -a "$GITHUB_STEP_SUMMARY"
             exit 1
           else
-            echo "✅ Flyway migration consistency verified: $INSTALLED_COUNT/$MIGRATION_COUNT migrations applied" | tee -a $GITHUB_STEP_SUMMARY
+            echo "✅ Flyway migration consistency verified: $INSTALLED_COUNT/$MIGRATION_COUNT migrations applied" | tee -a "$GITHUB_STEP_SUMMARY"
           fi
           # Check for failed migrations
           FAILED_COUNT=$(psql -h localhost -U postgres -d spring_ai_rag_test -t -c "SELECT COUNT(*) FROM flyway_schema_history WHERE state='Failed';" | tr -d ' ')
           if [ "$FAILED_COUNT" -gt 0 ]; then
-            echo "❌ Failed migrations found in database" | tee -a $GITHUB_STEP_SUMMARY
+            echo "❌ Failed migrations found in database" | tee -a "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
 
       - name: Package
         run: mvn package -DskipTests -B
+
+      - name: Failure diagnostics summary
+        if: always()
+        continue-on-error: true
+        run: |
+          mkdir -p .verification/ci
+          node .github/scripts/ci-summary.mjs --surefire --jacoco \
+            | tee .verification/ci/summary.md
 
       - name: Upload JaCoCo coverage reports
         if: always()
@@ -122,6 +163,27 @@ jobs:
         with:
           name: jacoco-reports
           path: '**/target/site/jacoco/'
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-results
+          path: |
+            **/target/surefire-reports/
+            **/target/failsafe-reports/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload gate logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-gate-logs
+          path: .verification/ci/
+          if-no-files-found: warn
           retention-days: 14
 
       - name: Upload coverage to Codecov
@@ -134,29 +196,10 @@ jobs:
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
-      - name: Upload test results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-results
-          path: '**/target/surefire-reports/*.xml'
-          retention-days: 14
-
-      - name: Coverage summary
-        if: always()
-        run: |
-          echo "## JaCoCo Coverage Summary" >> $GITHUB_STEP_SUMMARY
-          echo "| Module | Status |" >> $GITHUB_STEP_SUMMARY
-          echo "|--------|--------|" >> $GITHUB_STEP_SUMMARY
-          for report in spring-ai-rag-*/target/site/jacoco/index.html; do
-            if [ -f "$report" ]; then
-              module=$(echo "$report" | cut -d/ -f1)
-              echo "| $module | ✅ Report generated |" >> $GITHUB_STEP_SUMMARY
-            fi
-          done
-
   webui:
+    name: WebUI (typecheck, lint, unit, mock E2E)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     defaults:
       run:
@@ -193,12 +236,27 @@ jobs:
       # Backend-free browser suite. `playwright.preview.config.ts` serves the
       # production build with `vite preview` on port 15174 and every API call is
       # intercepted via `page.route` (e2e/api-mocks.ts), so no Spring Boot instance
-      # is required. The `*-real.spec.ts` specs are excluded by that config.
+      # is required. The `*-real.spec.ts` specs are excluded by that config and run
+      # in nightly instead.
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('spring-ai-rag-webui/package-lock.json') }}
+
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium
 
       - name: Mock E2E (Playwright)
         run: npm run test:e2e:mock
+
+      - name: Failure diagnostics summary
+        if: always()
+        continue-on-error: true
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/.verification/ci"
+          node "$GITHUB_WORKSPACE/.github/scripts/ci-summary.mjs" --playwright \
+            | tee "$GITHUB_WORKSPACE/.verification/ci/webui-summary.md"
 
       - name: Upload WebUI coverage report
         if: always()
@@ -206,4 +264,17 @@ jobs:
         with:
           name: webui-coverage
           path: spring-ai-rag-webui/coverage/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload Playwright report and diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: webui-playwright-report
+          path: |
+            spring-ai-rag-webui/playwright-report/
+            spring-ai-rag-webui/test-results/
+            .verification/ci/
+          if-no-files-found: warn
           retention-days: 14

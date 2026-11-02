@@ -252,8 +252,7 @@ alike, silently received two fields instead of four. Consumers read it as
 ### Reading the active-alert list
 
 `verify-managed-api-principals.sh` is a manual gate — it starts two backends and
-four containers — so it is one of the sixteen gates in the standing CI gap and
-none of its readers ran anywhere. It holds sixty `jq -e` predicates over API
+four containers — so CI never runs it and none of its readers ran anywhere. It holds sixty `jq -e` predicates over API
 responses. Two of them read the active-alert list, and both were written as
 `any(...)` / `all(...)` one-liners inside a poll loop that treated every non-zero
 exit as "not yet". That is the right reading for a poll and the wrong one for a
@@ -326,17 +325,17 @@ protect is already enforced at every startup by `ddl-auto: validate` in
 and a `psql` + `grep` gate is invisible to it.
 
 CI status: the two repository entry points (`verify-project-docs.sh` and
-`verify-project-tests.sh`) are **not wired into CI** — editing `.github/workflows/`
-needs a token with the `workflow` scope, which Batch 899 measured by pushing the
-change and being refused, and the handoff is waiting on a human at
-`.github/pending/ci-repo-gates.patch`. Every path a standing-gap reason names is
-checked on disk by `verify-gate-wiring.mjs`, so that pointer cannot rot the way
-its predecessor in `/tmp` did. The nine WebUI checks
-and their self-tests do run in CI, because ci.yml's webui job executes
-`npm run lint`. The census prints the standing gap together with its reason on
-every run; once the patch lands those entries turn *stale* and the gate fails,
-naming the lines to delete. That is deliberate: a stale exemption is how a debt
-baseline rots.
+`verify-project-tests.sh`) are wired into `.github/workflows/ci.yml`'s backend
+job and run after the full `mvn test` on every PR/push; the batch of
+"not wired into CI" exemptions was deleted when that landed. The long-running
+layer (gated PostgreSQL, real LLM, goldenset, bounded soak, real WebUI specs)
+lives in `.github/workflows/nightly.yml`; see
+[testing-guide.md](testing-guide.md) for the boundary, triggers and local
+reproduction commands. The nine WebUI checks and their self-tests also run in
+CI, because ci.yml's webui job executes `npm run lint`. The census still prints
+gates CI cannot reach together with their reasons; once a reason stops being
+true the entry turns *stale* and the gate fails, naming the lines to delete.
+That is deliberate: a stale exemption is how a debt baseline rots.
 
 ### Documentation System
 
@@ -1403,6 +1402,64 @@ summary, per-stage logs and soak percentiles go to
 release script and skipped stages are marked in the summary. JDK 25 has been
 measured for a full package build, representative tests, and gated IT; CI and
 release remain pinned to JDK 21.
+
+### CI Layers: PR Fast Layer And Nightly Long-Running Layer
+
+| Layer | Trigger | Workflow | Contents | Timeout |
+|-------|---------|----------|----------|---------|
+| PR fast | push to `main`/`develop`, PR to `main` | `.github/workflows/ci.yml` | `mvn test` (including `OpenApiContractTest`), repository test/documentation gates, WebUI lint/unit/coverage/build/mock E2E | backend 45 min, webui 30 min |
+| Long-running | daily 18:00 UTC (02:00 Asia/Shanghai) and manual `workflow_dispatch` | `.github/workflows/nightly.yml` | gated PostgreSQL (90 min), real LLM smoke + goldenset + retrieval regression (60 min), bounded soak (30 min), real WebUI specs (75 min) | per-job timeouts |
+
+Reproduce the PR layer locally:
+
+```bash
+mvn test -B
+./scripts/verify-project-tests.sh
+./scripts/verify-project-docs.sh
+
+cd spring-ai-rag-webui
+npm ci && npm run lint && npm run test:run && npm run test:coverage && npm run build
+npm run test:e2e:mock
+```
+
+The nightly real-model and long-running jobs need PostgreSQL, pgvector and
+repository secrets (`MINIMAX_API_KEY` or `SPRING_AI_MINIMAX_API_KEY`,
+`RAG_EMBEDDING_API_KEY`; `RAG_ROOT_API_KEY` is optional and a one-time value is
+generated when absent). Missing secrets make nightly **fail explicitly** and name
+the missing item instead of silently skipping real-model coverage. Local
+equivalents:
+
+```bash
+./scripts/verify-gated-it.sh
+# Real LLM + retrieval quality: export an isolated database URL first
+./scripts/start-real-e2e-server.sh
+BASE_URL=http://127.0.0.1:18081 ./scripts/real-llm-e2e-smoke.sh
+BASE_URL=http://127.0.0.1:18081 ./scripts/run-retrieval-goldenset.sh
+BASE_URL=http://127.0.0.1:18081 ./scripts/run-retrieval-regression.sh
+# Real WebUI specs that need no manual fixtures
+./scripts/dev.sh start
+cd spring-ai-rag-webui
+BASE_URL=http://127.0.0.1:15173 npx playwright test --config=playwright.config.ts \
+  --retries=0 e2e/api-key-real.spec.ts e2e/chat-real.spec.ts e2e/files-real.spec.ts
+cd .. && ./scripts/dev.sh --stop
+```
+
+Failure diagnostics: CI keeps surefire/failsafe reports, Playwright HTML/JSON
+reports, gate logs, soak output and retrieval-quality evidence as artifacts for
+14–30 days; each failing job also writes which module/suite/case failed to the
+Step Summary. Download with:
+
+```bash
+gh run list --workflow=nightly.yml
+gh run download <run-id>
+```
+
+Locally you can only syntax-check the Actions files
+(`ruby -ryaml -e 'ARGV.each { |f| YAML.load_file(f) }' .github/workflows/*.yml`);
+secret injection, service containers and artifact upload are GitHub-environment
+only, so reproduce step by step with the commands above. See
+[testing-guide.md](testing-guide.md) for the detailed boundary and nightly
+skips.
 
 Logs and summaries are written to `target/release-verification/<run-id>/`. See [release-checklist.md](release-checklist.md).
 

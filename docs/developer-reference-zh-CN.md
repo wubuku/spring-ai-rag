@@ -296,13 +296,14 @@ all(.[];
 一个 `psql` + `grep` 的门禁对它是隐形的。
 
 CI 现状：仓库级的那两个入口（`verify-project-docs.sh` / `verify-project-tests.sh`）
-**尚未接入 CI**——编辑 `.github/workflows/` 需要带 `workflow` scope 的凭据
-（Batch 899 推送实测被远端拒绝），交接件在仓库内 `.github/pending/ci-repo-gates.patch`
-待人工应用。理由里点名的每个路径都会被 `verify-gate-wiring.mjs` 在磁盘上核对，
-所以这个指针不会像它在 `/tmp` 的前身那样腐烂。WebUI 的 9 个检查连同它们的自测已经在 CI 里跑（`ci.yml` 的
-webui job 执行 `npm run lint`）。普查门禁每次运行都会把这份缺口连同理由打印出来，
-补丁落地后对应行会变成 "stale" 而报错，提示删掉过期理由——**这是有意的**：
-过期的豁免正是债务基线腐烂的方式。
+已经接进 `.github/workflows/ci.yml` 的 backend job，在每次 PR/push 的全量 `mvn test`
+之后顺序执行；此前那批"未接入 CI"的豁免已因此全部删除。长跑层（gated PostgreSQL、
+真实 LLM、goldenset、有界 soak、真实 WebUI spec）在 `.github/workflows/nightly.yml`，
+两层的边界、触发方式与本地复现命令见
+[testing-guide-zh-CN.md](testing-guide-zh-CN.md)。WebUI 的 9 个检查连同它们的自测
+也在 `ci.yml` 的 webui job 里跑（`npm run lint`）。普查门禁每次运行仍会打印
+CI 到不了的门禁与理由；某个理由一旦不再成立就会变成 "stale" 而报错，提示删掉它
+——**这是有意的**：过期的豁免正是债务基线腐烂的方式。
 
 ### 文档体系
 
@@ -1234,6 +1235,59 @@ artifact 与 Markdown 汇总写入 `.verification/quality-regression/<run-id>/`�
 （`rag_baseline_<run>`），完成后删除；汇总、各阶段日志和 soak 分位数写入
 `.verification/baseline/<run-id>/`。`--skip-*` 会原样转发给发版脚本，跳过项在汇总中标注。
 JDK 25 已实测可完成全量打包、核心抽样测试与 gated IT；CI 与发版固定 JDK 21。
+
+### CI 分层：PR 快层与 nightly 长跑层
+
+| 层 | 触发 | 工作流 | 内容 | 超时 |
+|----|------|--------|------|------|
+| PR 快层 | push `main`/`develop`、PR → `main` | `.github/workflows/ci.yml` | `mvn test`（含 `OpenApiContractTest`）、仓库级测试与文档门禁、WebUI lint/单测/覆盖率/构建/Mock E2E | backend 45 分钟，webui 30 分钟 |
+| 长跑层 | 每日 18:00 UTC（北京时间 02:00）+ 手动 `workflow_dispatch` | `.github/workflows/nightly.yml` | gated PostgreSQL（90 分钟）、真实 LLM smoke + goldenset + 检索回归（60 分钟）、有界 soak（30 分钟）、真实 WebUI spec（75 分钟） | 分 job 独立超时 |
+
+本地复现同一条命令（PR 层）：
+
+```bash
+mvn test -B
+./scripts/verify-project-tests.sh
+./scripts/verify-project-docs.sh
+
+cd spring-ai-rag-webui
+npm ci && npm run lint && npm run test:run && npm run test:coverage && npm run build
+npm run test:e2e:mock
+```
+
+nightly 的真实模型与长跑 job 需要 PostgreSQL、pgvector 与仓库 Secrets
+（`MINIMAX_API_KEY` 或 `SPRING_AI_MINIMAX_API_KEY`、`RAG_EMBEDDING_API_KEY`；
+`RAG_ROOT_API_KEY` 可选，缺失时 job 生成一次性值）。缺 Secret 时 nightly 会**明确失败**
+并点名缺哪一项，不会静默跳过真实模型覆盖。本地等价命令：
+
+```bash
+./scripts/verify-gated-it.sh
+# 真实 LLM + 检索质量：先导出隔离库连接，再启动 18081 服务
+./scripts/start-real-e2e-server.sh
+BASE_URL=http://127.0.0.1:18081 ./scripts/real-llm-e2e-smoke.sh
+BASE_URL=http://127.0.0.1:18081 ./scripts/run-retrieval-goldenset.sh
+BASE_URL=http://127.0.0.1:18081 ./scripts/run-retrieval-regression.sh
+# 真实 WebUI spec（无需人工 fixture 的三个）
+./scripts/dev.sh start
+cd spring-ai-rag-webui
+BASE_URL=http://127.0.0.1:15173 npx playwright test --config=playwright.config.ts \
+  --retries=0 e2e/api-key-real.spec.ts e2e/chat-real.spec.ts e2e/files-real.spec.ts
+cd .. && ./scripts/dev.sh --stop
+```
+
+失败诊断：CI 把 surefire/failsafe、Playwright HTML/JSON、门禁日志、
+soak 与检索质量产物作为 artifact 保留 14–30 天；每个失败 job 还会在
+Step Summary 写出"哪个模块/套件/用例失败"。下载方式：
+
+```bash
+gh run list --workflow=nightly.yml
+gh run download <run-id>
+```
+
+Actions 文件本地只能做 YAML 语法校验（`ruby -ryaml -e 'ARGV.each { |f| YAML.load_file(f) }'
+.github/workflows/*.yml`）；Secret 注入、服务容器与 artifact 上传属于 GitHub 环境专属，
+本地以表中命令逐步复现。详细边界与 nightly 的跳过项见
+[testing-guide-zh-CN.md](testing-guide-zh-CN.md)。
 
 日志和汇总写入 `target/release-verification/<run-id>/`。门禁详情见 [release-checklist-zh-CN.md](release-checklist-zh-CN.md)。
 

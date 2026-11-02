@@ -25,6 +25,7 @@
 import assert from 'node:assert/strict';
 import {
   checkWiring,
+  CI_ROOTS,
   collectExecutedScripts,
   collectDocText,
   collectGateScripts,
@@ -95,10 +96,12 @@ function audit(root, registry) {
       return undefined;
     }
   };
+  // Mirror production: the checker follows CI_ROOTS, so the self-test must read
+  // exactly those roots (ci.yml, nightly.yml, webui package.json) plus runners.
+  // Hardcoding only ci.yml here made a gate moved to nightly look unreachable.
   const runnerPaths = [
-    '.github/workflows/ci.yml',
-    'spring-ai-rag-webui/package.json',
-    ...RUNNERS,
+    ...CI_ROOTS,
+    ...RUNNERS.filter((path) => !CI_ROOTS.includes(path)),
   ];
   const runnerTexts = {};
   for (const path of runnerPaths) {

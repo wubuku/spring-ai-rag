@@ -1,0 +1,458 @@
+name: Nightly
+
+# 长跑层：gated PostgreSQL 集成测试、真实 LLM 冒烟 + 检索质量、有界 soak、
+# 真实 WebUI spec（不含需要人工 fixture 的 alerts / rerank）。
+# PR 快层在 `.github/workflows/ci.yml`；边界与本地复现命令见
+# `docs/testing-guide-zh-CN.md` 的「CI 分层」章节。
+on:
+  schedule:
+    # 02:00 Asia/Shanghai (18:00 UTC)
+    - cron: '0 18 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: nightly-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  gated-postgres:
+    name: Gated PostgreSQL integration suites
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      # Testcontainers 自带 PostgreSQL；这里只预热镜像，避免首次拉取计入测试超时。
+      - name: Pre-pull Testcontainers image
+        run: docker pull postgres:16-pgvector || true
+
+      - name: Run gated PostgreSQL suites
+        run: |
+          set -o pipefail
+          mkdir -p .verification/nightly
+          ./scripts/verify-gated-it.sh 2>&1 | tee .verification/nightly/gated-it.log
+
+      - name: Failure diagnostics summary
+        if: always()
+        continue-on-error: true
+        run: |
+          mkdir -p .verification/nightly
+          node .github/scripts/ci-summary.mjs --surefire \
+            | tee .verification/nightly/summary.md
+
+      - name: Upload gated IT results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-gated-it
+          path: |
+            .verification/nightly/
+            **/target/surefire-reports/
+          if-no-files-found: warn
+          retention-days: 30
+
+  real-llm:
+    name: Real LLM smoke, goldenset and retrieval regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      LLM_PROVIDER: minimax
+      SPRING_AI_MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY || secrets.SPRING_AI_MINIMAX_API_KEY }}
+      SPRING_AI_MINIMAX_BASE_URL: ${{ vars.SPRING_AI_MINIMAX_BASE_URL || 'https://api.minimaxi.com' }}
+      SPRING_AI_MINIMAX_CHAT_OPTIONS_MODEL: ${{ vars.SPRING_AI_MINIMAX_CHAT_OPTIONS_MODEL || 'MiniMax-M3' }}
+      RAG_EMBEDDING_API_KEY: ${{ secrets.RAG_EMBEDDING_API_KEY }}
+      RAG_EMBEDDING_BASE_URL: ${{ vars.RAG_EMBEDDING_BASE_URL || 'https://api.siliconflow.cn' }}
+      RAG_EMBEDDING_MODEL: BAAI/bge-m3
+      RAG_EMBEDDING_DIMENSIONS: '1024'
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: 5432
+      POSTGRES_DATABASE: rag_nightly_llm
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/rag_nightly_llm
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      BASE_URL: http://127.0.0.1:18081
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Verify required secrets
+        run: |
+          missing=()
+          [ -n "${SPRING_AI_MINIMAX_API_KEY:-}" ] || missing+=("MINIMAX_API_KEY (or SPRING_AI_MINIMAX_API_KEY)")
+          [ -n "${RAG_EMBEDDING_API_KEY:-}" ] || missing+=("RAG_EMBEDDING_API_KEY")
+          if [ ${#missing[@]} -gt 0 ]; then
+            for name in "${missing[@]}"; do
+              echo "::error::Nightly real-LLM layer cannot run: missing repository secret '$name'."
+            done
+            {
+              echo "## Nightly real-LLM layer not run"
+              echo ""
+              echo "Missing repository secret(s):"
+              for name in "${missing[@]}"; do echo "- \`$name\`"; done
+              echo ""
+              echo "Configure the secrets in Settings → Secrets and variables → Actions, "
+              echo "or disable the schedule. Failing here is intentional: a nightly run that "
+              echo "silently skips real-model coverage is worse than a red run."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+      - name: Create isolated database
+        run: |
+          psql -h localhost -U postgres -d postgres -c "CREATE DATABASE rag_nightly_llm" 2>/dev/null || true
+          psql -h localhost -U postgres -d rag_nightly_llm -c "CREATE EXTENSION IF NOT EXISTS vector"
+          psql -h localhost -U postgres -d rag_nightly_llm -c "CREATE EXTENSION IF NOT EXISTS pg_jieba"
+
+      # 仓库脚本按约定从 `.env` 读取凭据；runner 是临时环境，文件不会进入制品。
+      - name: Materialize .env for repository scripts
+        run: |
+          umask 077
+          : > .env
+          for name in \
+            LLM_PROVIDER \
+            SPRING_AI_MINIMAX_API_KEY SPRING_AI_MINIMAX_BASE_URL SPRING_AI_MINIMAX_CHAT_OPTIONS_MODEL \
+            RAG_EMBEDDING_API_KEY RAG_EMBEDDING_BASE_URL RAG_EMBEDDING_MODEL RAG_EMBEDDING_DIMENSIONS \
+            POSTGRES_HOST POSTGRES_PORT POSTGRES_DATABASE POSTGRES_USER POSTGRES_PASSWORD \
+            SPRING_DATASOURCE_URL SPRING_DATASOURCE_USERNAME SPRING_DATASOURCE_PASSWORD; do
+            value="${!name:-}"
+            [ -z "$value" ] || printf '%s=%s\n' "$name" "$value" >> .env
+          done
+
+      - name: Start backend and run real-model checks
+        run: |
+          set -euo pipefail
+          mkdir -p .verification/nightly
+          ./scripts/start-real-e2e-server.sh > "$RUNNER_TEMP/start-server.log" 2>&1
+          SERVER_PID="$(sed -n 's/^PID //p' "$RUNNER_TEMP/start-server.log" | tail -1)"
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          if [ -z "$SERVER_PID" ]; then
+            echo "::error::Backend did not report a PID; see start-server.log artifact."
+            exit 1
+          fi
+          echo "Backend PID: $SERVER_PID"
+          set -o pipefail
+          echo "::group::Real LLM smoke"
+          ./scripts/real-llm-e2e-smoke.sh 2>&1 | tee "$RUNNER_TEMP/real-llm-smoke.log"
+          echo "::endgroup::"
+          echo "::group::Retrieval goldenset"
+          ./scripts/run-retrieval-goldenset.sh 2>&1 | tee "$RUNNER_TEMP/goldenset.log"
+          echo "::endgroup::"
+          echo "::group::Retrieval quality regression"
+          ./scripts/run-retrieval-regression.sh 2>&1 | tee "$RUNNER_TEMP/retrieval-regression.log"
+          echo "::endgroup::"
+
+      - name: Failure diagnostics summary
+        if: always()
+        continue-on-error: true
+        run: |
+          mkdir -p .verification/nightly
+          node .github/scripts/ci-summary.mjs --surefire \
+            | tee .verification/nightly/summary.md
+
+      - name: Upload real-LLM evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-real-llm
+          path: |
+            ${{ runner.temp }}/start-server.log
+            ${{ runner.temp }}/real-llm-smoke.log
+            ${{ runner.temp }}/goldenset.log
+            ${{ runner.temp }}/retrieval-regression.log
+            .verification/nightly/
+            .verification/retrieval-goldenset/
+            .verification/retrieval-regression/
+            /tmp/spring-ai-rag-real-e2e.log
+          if-no-files-found: warn
+          retention-days: 30
+
+  soak:
+    name: Bounded soak (mock provider, no paid calls)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      LLM_PROVIDER: openai
+      SPRING_AI_OPENAI_API_KEY: mock-key
+      SPRING_AI_OPENAI_BASE_URL: http://127.0.0.1:8086
+      SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL: mock-chat
+      RAG_EMBEDDING_API_KEY: mock-key
+      RAG_EMBEDDING_BASE_URL: http://127.0.0.1:8086
+      RAG_EMBEDDING_MODEL: mock-embedding
+      RAG_EMBEDDING_DIMENSIONS: '1024'
+      RAG_SECURITY_ENABLED: 'false'
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: 5432
+      POSTGRES_DATABASE: rag_nightly_soak
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/rag_nightly_soak
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      SERVER_PORT: '18082'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Set up Node (mock provider)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Create isolated database
+        run: |
+          psql -h localhost -U postgres -d postgres -c "CREATE DATABASE rag_nightly_soak" 2>/dev/null || true
+          psql -h localhost -U postgres -d rag_nightly_soak -c "CREATE EXTENSION IF NOT EXISTS vector"
+          psql -h localhost -U postgres -d rag_nightly_soak -c "CREATE EXTENSION IF NOT EXISTS pg_jieba"
+
+      # soak 验证的是 HTTP/DB/线程稳定性，不是模型质量：用仓库自带 mock provider，
+      # 避免 nightly 产生不受控的付费调用；真实模型质量由 real-llm job 覆盖。
+      - name: Run bounded soak
+        run: |
+          set -euo pipefail
+          mkdir -p .verification/nightly
+          ./scripts/run-mock-llm.sh --port 8086 > "$RUNNER_TEMP/mock-llm.log" 2>&1 &
+          MOCK_PID=$!
+          ./scripts/start-real-e2e-server.sh > "$RUNNER_TEMP/start-server.log" 2>&1
+          SERVER_PID="$(sed -n 's/^PID //p' "$RUNNER_TEMP/start-server.log" | tail -1)"
+          trap 'kill "$SERVER_PID" "$MOCK_PID" 2>/dev/null || true' EXIT
+          if [ -z "$SERVER_PID" ]; then
+            echo "::error::Backend did not report a PID; see start-server.log artifact."
+            exit 1
+          fi
+          echo "Backend PID: $SERVER_PID (mock PID: $MOCK_PID)"
+          python3 scripts/run-bounded-soak.py \
+            --base-url http://127.0.0.1:18082 \
+            --minutes 10 \
+            --concurrency 4 \
+            --output-dir .verification/soak/nightly 2>&1 | tee "$RUNNER_TEMP/soak.log"
+
+      - name: Upload soak evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-soak
+          path: |
+            .verification/soak/nightly/
+            ${{ runner.temp }}/soak.log
+            ${{ runner.temp }}/start-server.log
+            ${{ runner.temp }}/mock-llm.log
+          if-no-files-found: warn
+          retention-days: 30
+
+  webui-real:
+    name: Real WebUI specs (no manual fixtures)
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      LLM_PROVIDER: minimax
+      SPRING_AI_MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY || secrets.SPRING_AI_MINIMAX_API_KEY }}
+      SPRING_AI_MINIMAX_BASE_URL: ${{ vars.SPRING_AI_MINIMAX_BASE_URL || 'https://api.minimaxi.com' }}
+      SPRING_AI_MINIMAX_CHAT_OPTIONS_MODEL: ${{ vars.SPRING_AI_MINIMAX_CHAT_OPTIONS_MODEL || 'MiniMax-M3' }}
+      RAG_EMBEDDING_API_KEY: ${{ secrets.RAG_EMBEDDING_API_KEY }}
+      RAG_EMBEDDING_BASE_URL: ${{ vars.RAG_EMBEDDING_BASE_URL || 'https://api.siliconflow.cn' }}
+      RAG_EMBEDDING_MODEL: BAAI/bge-m3
+      RAG_EMBEDDING_DIMENSIONS: '1024'
+      RAG_ROOT_API_KEY: ${{ secrets.RAG_ROOT_API_KEY }}
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: 5432
+      POSTGRES_DATABASE: rag_nightly_webui
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/rag_nightly_webui
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: spring-ai-rag-webui/package-lock.json
+
+      - name: Verify required secrets
+        run: |
+          missing=()
+          [ -n "${SPRING_AI_MINIMAX_API_KEY:-}" ] || missing+=("MINIMAX_API_KEY (or SPRING_AI_MINIMAX_API_KEY)")
+          [ -n "${RAG_EMBEDDING_API_KEY:-}" ] || missing+=("RAG_EMBEDDING_API_KEY")
+          if [ ${#missing[@]} -gt 0 ]; then
+            for name in "${missing[@]}"; do
+              echo "::error::Nightly real WebUI layer cannot run: missing repository secret '$name'."
+            done
+            {
+              echo "## Nightly real WebUI layer not run"
+              echo ""
+              echo "Missing repository secret(s):"
+              for name in "${missing[@]}"; do echo "- \`$name\`"; done
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+      - name: Create isolated database
+        run: |
+          psql -h localhost -U postgres -d postgres -c "CREATE DATABASE rag_nightly_webui" 2>/dev/null || true
+          psql -h localhost -U postgres -d rag_nightly_webui -c "CREATE EXTENSION IF NOT EXISTS vector"
+          psql -h localhost -U postgres -d rag_nightly_webui -c "CREATE EXTENSION IF NOT EXISTS pg_jieba"
+
+      - name: Generate root API key when not configured
+        run: |
+          if [ -z "${RAG_ROOT_API_KEY:-}" ]; then
+            printf 'RAG_ROOT_API_KEY=%s\n' "$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+          fi
+
+      - name: Materialize .env for dev stack
+        run: |
+          umask 077
+          : > .env
+          for name in \
+            LLM_PROVIDER \
+            SPRING_AI_MINIMAX_API_KEY SPRING_AI_MINIMAX_BASE_URL SPRING_AI_MINIMAX_CHAT_OPTIONS_MODEL \
+            RAG_EMBEDDING_API_KEY RAG_EMBEDDING_BASE_URL RAG_EMBEDDING_MODEL RAG_EMBEDDING_DIMENSIONS \
+            RAG_ROOT_API_KEY \
+            POSTGRES_HOST POSTGRES_PORT POSTGRES_DATABASE POSTGRES_USER POSTGRES_PASSWORD \
+            SPRING_DATASOURCE_URL SPRING_DATASOURCE_USERNAME SPRING_DATASOURCE_PASSWORD; do
+            value="${!name:-}"
+            [ -z "$value" ] || printf '%s=%s\n' "$name" "$value" >> .env
+          done
+
+      - name: Install WebUI dependencies
+        working-directory: spring-ai-rag-webui
+        run: npm ci
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('spring-ai-rag-webui/package-lock.json') }}
+
+      - name: Install Playwright browser
+        working-directory: spring-ai-rag-webui
+        run: npx playwright install --with-deps chromium
+
+      - name: Start isolated dev stack
+        run: ./scripts/dev.sh start
+
+      # alerts-real 需要预置告警/投递 ID，rerank-document-diversity-real 需要
+      # rerank fixture；两者属于"需要人工 fixture"，不在 nightly 自动执行。
+      # 真实模型驱动的三个 spec 没有人工 fixture 依赖，首次失败即失败（--retries=0）。
+      - name: Run real WebUI specs
+        working-directory: spring-ai-rag-webui
+        env:
+          BASE_URL: http://127.0.0.1:15173
+        run: |
+          npx playwright test \
+            --config=playwright.config.ts \
+            --retries=0 \
+            e2e/api-key-real.spec.ts \
+            e2e/chat-real.spec.ts \
+            e2e/files-real.spec.ts
+
+      - name: Failure diagnostics summary
+        if: always()
+        continue-on-error: true
+        run: |
+          mkdir -p .verification/nightly
+          node "$GITHUB_WORKSPACE/.github/scripts/ci-summary.mjs" --playwright \
+            | tee .verification/nightly/webui-summary.md
+
+      - name: Stop dev stack
+        if: always()
+        run: ./scripts/dev.sh --stop || true
+
+      - name: Upload real WebUI evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-webui-real
+          path: |
+            spring-ai-rag-webui/playwright-report/
+            spring-ai-rag-webui/test-results/
+            .verification/nightly/
+            .dev/backend.log
+            .dev/frontend.log
+          if-no-files-found: warn
+          retention-days: 30

@@ -27,7 +27,11 @@ const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 
 /** Entry points CI executes. `package.json` is a root because ci.yml's webui
  *  job runs `npm run lint` / `npm run test:run`, which resolve to it. */
-export const CI_ROOTS = ['.github/workflows/ci.yml', 'spring-ai-rag-webui/package.json'];
+export const CI_ROOTS = [
+  '.github/workflows/ci.yml',
+  '.github/workflows/nightly.yml',
+  'spring-ai-rag-webui/package.json',
+];
 
 /** Scripts that exist to execute other gates. */
 export const RUNNERS = [

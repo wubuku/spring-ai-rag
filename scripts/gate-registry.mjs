@@ -38,9 +38,10 @@
 //     arbitrary shell semantics, so rule 3 catches "wired to nothing", not
 //     "wired to a lie".
 //   * A `noCiReason` is a claim about the world that the checker re-verifies
-//     against `.github/workflows/ci.yml` on every run. When the wiring lands, the
-//     reason becomes stale and the gate fails with the list of lines to delete.
-//     That is intentional: a stale exemption is how a debt baseline rots.
+//     against `.github/workflows/` (`ci.yml` and `nightly.yml`) on every run.
+//     When the wiring lands, the reason becomes stale and the gate fails with the
+//     list of lines to delete. That is intentional: a stale exemption is how a
+//     debt baseline rots.
 //   * Every path a `noCiReason` names must exist on disk. Batch 900 added this
 //     because the registry already checked its machine-readable path fields —
 //     `selfTest` at rule 2's neighbour — while exempting the one field whose
@@ -49,41 +50,16 @@
 //     pointer in it does not fail loudly; it just quietly never gets fixed.
 
 /**
- * Why the repository-level gate chain is not in CI, in the form a human can act
- * on. Everything reachable only through `verify-project-docs.sh` /
- * `verify-project-tests.sh` inherits this one blocker.
- *
- * Two things about this constant are load-bearing, and Batch 900 exists because
- * they were not.
- *
- * The blocker is a *tested* result, not an inherited assumption. Batch 806
- * recorded that editing `.github/workflows/` needs a token with the `workflow`
- * scope; Batch 899 pushed the change and the remote answered, verbatim,
- * "refusing to allow an OAuth App to create or update workflow
- * .github/workflows/ci.yml without workflow scope". The same batch measured
- * that `gh` is installed here (2.78.0) and merely not logged in — an earlier
- * version of this comment called the CLI unavailable, which was simply false,
- * and would have told the one person who could clear this to give up.
- *
- * The artifact this points at lives in the repository. It used to be
- * `/tmp/b806-ci-gates.patch`, and it no longer exists: a handoff parked in a
- * directory the operating system may empty is not a handoff. Every path a
- * `noCiReason` names is checked on disk by `verify-gate-wiring.mjs`, so a
- * pointer here cannot rot the way that one did.
- *
- * This block is the only place the claim is written down. It used to be
- * duplicated in the comment above, which is precisely how the two drifted into
- * disagreeing with the world.
+ * 仓库级门禁链（`verify-project-tests.sh` / `verify-project-docs.sh`）现在由
+ * `.github/workflows/ci.yml` 的 backend job 在每次 PR/push 时执行，因此
+ * "尚未接入 CI" 的批量豁免已经全部删除；再给某个门禁加 `noCiReason` 时，
+ * 理由必须指向一个仍然成立的具体事实（缺 Docker、需要付费模型等），
+ * 而不是"暂时没接"。
  */
-export const AWAITING_CI_WORKFLOW_SCOPE =
-  '仓库级门禁链尚未接入 CI：编辑 .github/workflows/ 需要带 workflow scope 的凭据，' +
-  '实测推送被远端拒绝；待人工应用 .github/pending/ci-repo-gates.patch，' +
-  '应用后跑 verify-gate-wiring.mjs 并删掉它列出的过期 noCiReason。';
-
 export const E2E_MOCK_NOT_IN_CI =
-  '前端 e2e mock 套件（15 spec / 93 用例）单次约 2.4 分钟' +
-  '（Batch 913 实测 93/93 全过，2 分 22 秒），刻意不挂在秒级门禁链上；' +
-  '是否进 CI 属于尚未拍板的成本取舍。';
+  'CI 的 webui job 通过 `npm run test:e2e:mock` 跑同一套 mock 验收' +
+  '（15 spec / 93 用例，Batch 913 实测 2 分 22 秒）；本脚本额外固定 ' +
+  '`--reporter=line`，只作为本地一条命令复现，避免覆盖 CI 的 github/json 诊断报告。';
 
 /**
  * A script a human runs on demand against a live system — a running server, real
@@ -110,7 +86,6 @@ export const GATES = [
     gate: 'scripts/verify-client-consumer-contract.sh',
     kind: 'gate',
     selfTest: 'scripts/lib/client-consumer-contract.mjs',
-    noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
   },
   manual('scripts/verify-chat-capability.sh'),
   manual('scripts/verify-chunking-quality.sh'),
@@ -134,6 +109,10 @@ export const GATES = [
   manual('scripts/verify-openai-sdk-e2e.sh'),
   manual('scripts/verify-quality-regression.sh'),
   manual('scripts/verify-release.sh'),
+  // 本地一键基线：把 soak、gated IT 与发版运行时串成一条可重复命令。
+  // 它需要 Docker、PostgreSQL 与真实凭据，且是人工在发版/大改前主动运行的
+  // 长命令，不放进 PR 层；nightly 用独立 job 组合同一条链路，避免两套逻辑。
+  manual('scripts/verify-baseline.sh'),
   manual('scripts/verify-rerank-document-diversity.sh'),
   manual('scripts/verify-recovery-readiness.sh'),
   manual('scripts/verify-retrieval-diagnostics.sh'),
@@ -147,49 +126,41 @@ export const GATES = [
     gate: 'scripts/verify-test-visibility.mjs',
     kind: 'gate',
     selfTest: 'scripts/test-support/test-visibility-self-test.mjs',
-    noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
   },
   {
     gate: 'scripts/verify-integration-test-switches.mjs',
     kind: 'gate',
     selfTest: 'scripts/test-support/integration-switch-self-test.mjs',
-    noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
   },
   {
     gate: 'scripts/verify-external-db-safety.mjs',
     kind: 'gate',
     selfTest: 'scripts/test-support/external-db-safety-self-test.mjs',
-    noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
   },
   {
     gate: 'scripts/verify-e2e-run-paths.mjs',
     kind: 'gate',
     selfTest: 'scripts/test-support/e2e-reachability-self-test.mjs',
-    noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
   },
   {
     gate: 'scripts/verify-slo-endpoint-coverage.mjs',
     kind: 'gate',
     selfTest: 'scripts/test-support/slo-endpoint-coverage-self-test.mjs',
-    noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
   },
   {
     gate: 'scripts/verify-test-expectations.mjs',
     kind: 'gate',
     selfTest: 'scripts/test-support/inert-test-self-test.mjs',
-    noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
   },
   {
     gate: 'scripts/verify-gate-wiring.mjs',
     kind: 'gate',
     selfTest: 'scripts/test-support/gate-wiring-self-test.mjs',
-    noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
   },
   {
     gate: 'scripts/verify-null-request-forwarding.mjs',
     kind: 'gate',
     selfTest: 'scripts/test-support/null-request-forwarding-self-test.mjs',
-    noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
   },
 
   // Batch 923. A script that selects Flyway's latest version and compares it
@@ -204,7 +175,6 @@ export const GATES = [
     gate: 'scripts/verify-flyway-version-pinning.mjs',
     kind: 'gate',
     selfTest: 'scripts/test-support/flyway-version-pinning-self-test.mjs',
-    noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
   },
 
   // Batch 924. The same failure as the rule above, one layer up: the server
@@ -224,7 +194,6 @@ export const GATES = [
     gate: 'scripts/verify-capability-protocol-pinning.mjs',
     kind: 'gate',
     selfTest: 'scripts/test-support/capability-protocol-pinning-self-test.mjs',
-    noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
   },
 
   // Batch 926. Seven scripts decided a port was free by *binding* a throwaway
@@ -239,7 +208,6 @@ export const GATES = [
     gate: 'scripts/verify-port-probe-authority.mjs',
     kind: 'gate',
     selfTest: 'scripts/test-support/port-probe-authority-self-test.mjs',
-    noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
   },
 
   // Batch 926. `playwright.config.ts` has no `testIgnore`; the two preview
@@ -256,7 +224,6 @@ export const GATES = [
     gate: 'scripts/verify-playwright-suite-selection.mjs',
     kind: 'gate',
     selfTest: 'scripts/test-support/playwright-suite-selection-self-test.mjs',
-    noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
   },
 
   // Batch 925. Surefire reads `-Dtest=Class#a+b` as "run whichever of a and b
@@ -276,7 +243,6 @@ export const GATES = [
     gate: 'scripts/verify-surefire-method-selection.mjs',
     kind: 'gate',
     selfTest: 'scripts/test-support/surefire-method-selection-self-test.mjs',
-    noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
   },
 
   // Batch 928. `DerivationIntegrityRepository` requires `vector_generation > 0`
@@ -296,7 +262,6 @@ export const GATES = [
     gate: 'scripts/verify-embedding-state-generation.mjs',
     kind: 'gate',
     selfTest: 'scripts/test-support/embedding-state-generation-self-test.mjs',
-    noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
   },
 
   // Batch 929. `DocumentLifecycleService` answers from
@@ -320,7 +285,6 @@ export const GATES = [
     gate: 'scripts/verify-lifecycle-truth-source-wiring.mjs',
     kind: 'gate',
     selfTest: 'scripts/test-support/lifecycle-truth-source-wiring-self-test.mjs',
-    noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
   },
 
   // Batch 873. ErrorCode declares itself the single source of truth, and six of
@@ -335,7 +299,6 @@ export const GATES = [
     gate: 'scripts/verify-error-code-catalog.mjs',
     kind: 'gate',
     selfTest: 'scripts/test-support/error-code-catalog-self-test.mjs',
-    noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
   },
 
   // Batch 896. Inside `all(...)` or `any(...)`, a negative assertion — a field
@@ -353,13 +316,11 @@ export const GATES = [
     gate: 'scripts/verify-gate-entry-points.mjs',
     kind: 'gate',
     selfTest: 'scripts/test-support/gate-entry-points-self-test.mjs',
-    noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
   },
   {
     gate: 'scripts/verify-json-assertions.mjs',
     kind: 'gate',
     selfTest: 'scripts/test-support/json-assertions-self-test.mjs',
-    noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
   },
 
   // Batch 908. A test assertion that cannot fail is worse than no assertion,
@@ -378,7 +339,6 @@ export const GATES = [
     gate: 'scripts/verify-tautological-assertions.mjs',
     kind: 'gate',
     selfTest: 'scripts/test-support/tautological-assertions-self-test.mjs',
-    noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
   },
 
   // Batch 820. A collaborator injected with @Autowired(required = false) claims
@@ -390,7 +350,6 @@ export const GATES = [
     gate: 'scripts/verify-false-optional-wiring.mjs',
     kind: 'gate',
     selfTest: 'scripts/test-support/false-optional-wiring-self-test.mjs',
-    noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
   },
 
   // Batch 823. Spring injects a controller through its @Autowired constructor,
@@ -404,7 +363,6 @@ export const GATES = [
     gate: 'scripts/verify-controller-constructor-count.mjs',
     kind: 'gate',
     selfTest: 'scripts/test-support/controller-constructor-count-self-test.mjs',
-    noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
   },
 
   // Batch 935. `.env.deepspeed` sat in the index with real provider keys, a
@@ -431,7 +389,6 @@ export const GATES = [
     gate: 'scripts/verify-tracked-env-files.mjs',
     kind: 'gate',
     selfTest: 'scripts/test-support/tracked-env-files-self-test.mjs',
-    noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
   },
 
   // Batch 935, second half. `.env.example` is what a new contributor copies to
@@ -459,7 +416,6 @@ export const GATES = [
     gate: 'scripts/verify-env-example-consumers.mjs',
     kind: 'gate',
     selfTest: 'scripts/test-support/env-example-consumers-self-test.mjs',
-    noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
   },
 
   // Batch 936. `k8s/templates/secret.yaml` feeds the container through
@@ -482,7 +438,6 @@ export const GATES = [
     gate: 'scripts/verify-helm-env-consumers.mjs',
     kind: 'gate',
     selfTest: 'scripts/test-support/helm-env-consumers-self-test.mjs',
-    noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
   },
 
   // Batch 937. `_helpers.tpl` defined three helpers that no template ever included,
@@ -506,7 +461,6 @@ export const GATES = [
     gate: 'scripts/verify-helm-helper-liveness.mjs',
     kind: 'gate',
     selfTest: 'scripts/test-support/helm-helper-liveness-self-test.mjs',
-    noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
   },
 
   // Batch 938. Nine places in the WebUI each called `toLocaleString()` /
@@ -653,13 +607,11 @@ export const GATES = [
     gate: 'scripts/verify-no-pessimistic-locks.sh',
     kind: 'gate',
     selfTest: 'scripts/test-support/pessimistic-locks-self-test.sh',
-    noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
   },
   {
     gate: 'scripts/verify-zh-translation.mjs',
     kind: 'gate',
     selfTest: 'scripts/test-support/zh-translation-self-test.mjs',
-    noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
   },
 
   // Entry points in their own right. Both aggregate the gates above, so the only
@@ -668,7 +620,6 @@ export const GATES = [
     gate: 'scripts/verify-project-docs.sh',
     kind: 'entrypoint',
     selfTest: 'scripts/test-support/docs-integrity-self-test.mjs',
-    noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
   },
   {
     gate: 'scripts/verify-project-tests.sh',
@@ -679,7 +630,6 @@ export const GATES = [
     noSelfTestReason:
       '聚合入口：它逐个运行上面五个门禁的自测，自测已由被测门禁承担；' +
       '为它再写一份只会测试副本。',
-    noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
   },
 
   // The only gate CI does reach today, at ci.yml's "Gated PostgreSQL integration
@@ -852,6 +802,5 @@ export const GATES = [
     gate: 'scripts/verify-interrupt-handling.mjs',
     kind: 'gate',
     selfTest: 'scripts/test-support/interrupt-handling-self-test.mjs',
-    noCiReason: AWAITING_CI_WORKFLOW_SCOPE,
   },
 ];

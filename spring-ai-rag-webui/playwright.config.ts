@@ -12,6 +12,10 @@ export default defineConfig({
   reporter: [
     ['list'],
     ['html', { open: 'never' }],
+    // CI 诊断：`github` 把失败直接标注到 PR 文件行；JSON 报告由
+    // `.github/scripts/ci-summary.mjs` 汇总成"哪个 spec 的哪个用例失败"。
+    ...(process.env.CI ? [['github'] as const] : []),
+    ['json', { outputFile: 'test-results/results.json' }],
   ],
   use: {
     baseURL,

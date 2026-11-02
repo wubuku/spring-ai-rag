@@ -252,6 +252,70 @@ smoke 显式禁用该文件。
 `spring_ai_rag_dev`、身份不匹配或日志目标不一致都会拒绝启动。该硬门用于避免 `.env` 中的
 `SPRING_DATASOURCE_URL` 覆盖测试库名导致误写共享库。
 
+## CI 分层：PR 快层与 nightly 长跑层
+
+测试能力只有在"每次改动都会被跑"时才是机制。本仓库把验证拆成两层，边界写在
+workflow 里，而不是靠人记得：
+
+| 层 | 触发 | 工作流 | 包含 | 不包含 |
+|----|------|--------|------|--------|
+| PR 快层 | push `main`/`develop`、PR → `main`；同分支新提交自动取消旧运行 | `.github/workflows/ci.yml` | `mvn test`（含 `OpenApiContractTest` 与 `WebUiRouteContract`）、`verify-project-tests.sh`、`verify-project-docs.sh`、Flyway 一致性、WebUI lint/单测/覆盖率阈值/构建/Mock E2E | gated PostgreSQL、真实模型、goldenset、soak、`*-real.spec.ts` |
+| 长跑层 | 每日 18:00 UTC（北京时间 02:00）与手动 `workflow_dispatch` | `.github/workflows/nightly.yml` | gated PostgreSQL（30 套件 / 263 用例）、真实 LLM smoke + goldenset + 检索回归、有界 soak、无需人工 fixture 的真实 WebUI spec | 需要预置告警/投递 ID 的 `alerts-real`、需要 rerank fixture 的 `rerank-document-diversity-real` |
+
+PR 层的时间预算由 job 级 `timeout-minutes` 固定（backend 45、webui 30）。gated IT
+本地约 9–19 分钟，放在 PR 层会把反馈时间拖到 20 分钟以上，所以它只在 nightly 跑；
+nightly 的每个 job 各自有超时（90/60/30/75 分钟），互相不阻塞。
+
+CI 的 backend checkout 使用 `fetch-depth: 0`，PR 上把 `DOCS_DIFF_BASE` 设为
+`origin/<base>`；因此 Git whitespace 与新增行密钥扫描检查的是 PR 的真实新增行，
+而不是干净 checkout 里的空 diff（本地不设该变量时仍扫工作树）。
+
+### 失败诊断
+
+- `.github/scripts/ci-summary.mjs` 读取 surefire/failsafe XML、Playwright JSON 与
+  JaCoCo XML，把"模块 / 套件 / 失败用例 / 首行错误"写进 Step Summary；报告缺失时
+  只提示，不会把绿色 job 变红。
+- Playwright 配置在 `CI` 下启用 `github` reporter（失败直接标注到 PR 文件行），
+  并始终写 `test-results/results.json` 供上面的脚本汇总；`--real` 用例在 nightly
+  使用 `--retries=0`，首次失败就是失败，不用重试掩盖抖动。
+- artifact 保留 14–30 天：`backend-test-results`、`backend-gate-logs`、
+  `jacoco-reports`、`webui-playwright-report`、`nightly-gated-it`、
+  `nightly-real-llm`、`nightly-soak`、`nightly-webui-real`。下载：
+  `gh run list --workflow=nightly.yml`，然后 `gh run download <run-id>`。
+
+### 覆盖率趋势
+
+JaCoCo 的模块级行/分支覆盖率写进 Step Summary 并上传，同时保留 Codecov 汇总；
+**不设硬阈值**——仓库没有可追溯的覆盖率基线，凭空定一个下限会在重构时误报，
+而不是在回归时报警。Vitest 已有的覆盖率阈值保持不变。
+
+### 本地复现与 GitHub 专属差异
+
+```bash
+# PR 层后端
+mvn test -B && ./scripts/verify-project-tests.sh && ./scripts/verify-project-docs.sh
+
+# PR 层 WebUI
+cd spring-ai-rag-webui
+npm ci && npm run lint && npm run test:run && npm run test:coverage && npm run build
+npm run test:e2e:mock
+
+# nightly 的 gated IT
+./scripts/verify-gated-it.sh
+```
+
+真实模型与真实 WebUI 的命令见 [developer-reference-zh-CN.md](developer-reference-zh-CN.md)
+的「CI 分层」。Actions 文件本地只能做 YAML 语法校验：
+
+```bash
+ruby -ryaml -e 'ARGV.each { |f| YAML.load_file(f) }' .github/workflows/*.yml
+```
+
+Secret 注入、service container、缓存命中和 artifact 上传属于 GitHub 环境专属；
+本地按上面的命令逐步复现，不要用"YAML 能解析"推断 CI 一定通过。若 nightly 的
+`MINIMAX_API_KEY`（或 `SPRING_AI_MINIMAX_API_KEY`）与 `RAG_EMBEDDING_API_KEY`
+没有配置，真实模型 job 会明确失败并点名缺哪一项，而不是静默跳过。
+
 ### WebUI `-real` 端到端用例运行手册
 
 Chat验收分三层报告，不能只用浏览器总通过率推断业务是否正确：
@@ -1132,10 +1196,11 @@ JPA flush 已经写下去的文件一并回滚。
 ```
 
 当前门控清单由 `verify-integration-test-switches.mjs` 与
-`verify-gated-it.sh` 交叉核对；本次审计基线为 29 个门控类、209 个测试方法，
+`verify-gated-it.sh` 交叉核对；本次审计基线为 30 个门控类、263 个测试方法，
 每个都在自己的 `<x>.it.enabled` 开关后面，所以普通 `mvn test` 永远不需要
 Docker 守护进程。`verify-gated-it.sh` 是唯一一条把它们全部打开的命令，本地约
-9 分钟，`ci.yml` 的 "Gated PostgreSQL integration tests" 这一步跑的就是它。
+9–19 分钟，nightly 的 `gated-postgres` job 跑的就是它；PR 层不再执行，
+以免把反馈时间拖到 20 分钟以上。
 
 关于这份清单，有两件事值得直说，因为它们在 Batch 912 之前**都是假的**：
 

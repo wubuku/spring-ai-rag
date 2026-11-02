@@ -146,10 +146,10 @@ pass "SLO endpoint coverage"
 # after finding it compared nothing, queried six table names that no longer exist,
 # and protected an invariant Hibernate already enforces at startup — and found
 # that between Batch 768 and then, not one of the gates below ran in CI while 208
-# WebUI gate self-tests ran nowhere. The census below cannot fix the CI gap (that
-# needs a workflow change this token cannot make), but it can make the gap a
-# recorded decision instead of a silence, and it stops the next gate from being
-# born unclassified, untested and unwired.
+# WebUI gate self-tests ran nowhere. The census below can no longer fix a missing
+# workflow by itself, but it now re-verifies CI reachability against
+# `.github/workflows/` and turns any exemption that has landed into a hard failure,
+# so the next gate cannot be born unclassified, untested and unwired.
 node scripts/test-support/gate-wiring-self-test.mjs >/dev/null || {
   echo "Gate-wiring self-test failed; the gate may no longer reject anything." >&2
   node scripts/test-support/gate-wiring-self-test.mjs >&2 || true
@@ -261,8 +261,8 @@ node scripts/test-support/surefire-report-self-test.mjs >/dev/null || {
 pass "Surefire-report self-test"
 
 # Batch 895. `verify-managed-api-principals.sh` is a manual gate — it starts two
-# backends and four containers, so it is in the standing CI gap and nothing ever
-# ran its readers. Two of its sixty `jq -e` predicates read the active-alert list
+# backends and four containers, so CI never runs it and nothing else ran its
+# readers. Two of its sixty `jq -e` predicates read the active-alert list
 # and both treated every non-zero exit as "not yet", which is right for a poll and
 # wrong for a reader: on a renamed `metrics.principalId` the "no alert is firing"
 # predicate returns true and the gate reports a firing alert as correctly absent.
