@@ -341,6 +341,12 @@ result into a single tracking issue with a fixed title:
 - If the reporting script itself fails, the `report` job still creates/updates
   the issue as a failure (with a minimal fallback body), so a broken reporter
   never becomes a missing notification.
+- Real rehearsal: `gh workflow run nightly.yml -f debug_report_failure=true`
+  runs only the `report` job, skips the four check jobs (no model calls), and
+  exercises the real create/update/comment path under the title
+  `[TEST] Nightly issue automation debug`. Close that TEST issue afterwards.
+  The switch never touches the real tracker, and a plain manual dispatch still
+  leaves issues alone.
 
 ### Cost Guard (Real-Model Job)
 

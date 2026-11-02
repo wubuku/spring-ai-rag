@@ -305,6 +305,10 @@ nightly 的红色只出现在 Actions 页面，没人会每天看。`report` job
   避免调试时意外开 issue。
 - 如果汇总脚本自身失败，`report` job 仍按失败创建/更新 issue（正文退化为最小信息），
   不会出现“报告挂了所以没通知”。
+- 真实演练：`gh workflow run nightly.yml -f debug_report_failure=true` 只跑 `report`
+  job，跳过四个检查 job（不产生模型调用），用 `[TEST] Nightly issue automation debug`
+  标题走完真实的创建/更新/评论路径；跑完后手动关闭该 TEST issue。该开关永远不会碰
+  真实追踪 issue，普通手动 dispatch 也仍然不动 issue。
 
 ### 成本护栏（真实模型 job）
 

@@ -1,0 +1,80 @@
+version: 2
+updates:
+  # Maven 多模块工程只在根目录声明依赖图；Dependabot 会沿 reactor 读取各模块 pom。
+  - package-ecosystem: maven
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '03:00'
+      timezone: Asia/Shanghai
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: deps
+    groups:
+      spring:
+        patterns:
+          - 'org.springframework*'
+        update-types: ['minor', 'patch']
+      testing:
+        patterns:
+          - 'org.junit*'
+          - 'org.testcontainers*'
+          - 'org.mockito*'
+          - 'org.assertj*'
+        update-types: ['minor', 'patch']
+      other:
+        patterns: ['*']
+        update-types: ['minor', 'patch']
+
+  # WebUI 是独立 npm 包；锁文件在 spring-ai-rag-webui/package-lock.json。
+  - package-ecosystem: npm
+    directory: /spring-ai-rag-webui
+    schedule:
+      interval: weekly
+      day: monday
+      time: '03:00'
+      timezone: Asia/Shanghai
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: deps(webui)
+    groups:
+      react:
+        patterns:
+          - 'react'
+          - 'react-dom'
+          - '@types/react'
+          - '@types/react-dom'
+        update-types: ['minor', 'patch']
+      testing:
+        patterns:
+          - '@playwright/*'
+          - 'vitest*'
+          - '@testing-library/*'
+        update-types: ['minor', 'patch']
+      tooling:
+        patterns:
+          - 'vite'
+          - '@vitejs/*'
+          - 'typescript'
+          - 'eslint*'
+          - '@typescript-eslint/*'
+        update-types: ['minor', 'patch']
+      other:
+        patterns: ['*']
+        update-types: ['minor', 'patch']
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '03:00'
+      timezone: Asia/Shanghai
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: deps(actions)
+    groups:
+      actions:
+        patterns: ['*']
+        update-types: ['minor', 'patch']

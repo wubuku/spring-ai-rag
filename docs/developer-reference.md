@@ -218,6 +218,47 @@ did not already know they existed.
 | `check-decorative-graphics.mjs` | An inline `<svg>` that has no `role`, no accessible name and no `<title>` is telling a screen reader nothing, and assistive technology still walks it. The whole tree holds one inline `<svg>` — the clock glyph in `Search`'s history toggle, whose `<button>` already carried an `aria-label`, so the glyph was pure decoration and was being announced anyway. The rule also refuses to report a graphic that **does** name itself: hiding meaningful content is the opposite error, and WCAG's own logic puts it out of bounds. Attributes are parsed by name rather than grepped, because a text search cannot tell an attribute from a string that looks like one — reading `data-note="aria-hidden='true'"` as a declaration would make the gate report the opposite error from the one it exists to catch | `__tests__/decorative-graphics.test.mjs` | `npm run lint` |
 | `scripts/lib/tsx-source.mjs` | The one way to strip comments and string literals from TSX, for gates that read it. Batch 910 and Batch 911 each added gates that read source text, and all of them wanted something that did not exist. The Java equivalent arrived in Batch 905 after four gates destroyed 316 string literals between them, so the third dialect of the same mistake is the one worth not writing. **Two entry points, because the two consumers need opposite treatments**: `stripTsxNoise` blanks string contents (a gate matching markup must not match a heading inside a string) and `stripTsxComments` leaves them (this file's decorative-graphic gate asks whether `aria-hidden="true"` is present, and blanking the value erases the very token it is looking for). Keeps length and newlines so a finding still maps to the line it is on, and tracks template-literal interpolations as real code | `__tests__/tsx-source.test.mjs` | `npm run lint` |
 
+### Dependency Updates, Supply-Chain Scanning and Static Analysis
+
+Dependabot is configured in `.github/dependabot.yml`, with one entry per
+ecosystem:
+
+| Ecosystem | Directory | Schedule | Groups (minor + patch) |
+|-----------|-----------|----------|------------------------|
+| Maven | `/` | Mondays 03:00 Asia/Shanghai | `spring` / `testing` / `other` |
+| npm | `/spring-ai-rag-webui` | same | `react` / `testing` / `tooling` / `other` |
+| GitHub Actions | `/` | same | all actions in one group |
+
+- Each ecosystem uses `open-pull-requests-limit: 5`; majors are not grouped and
+  arrive as individual PRs for a human decision.
+- Dependabot PRs run the `ci.yml` PR fast layer as usual; they need no
+  real-model secrets (mock E2E is enough).
+- The repository is public, so Dependabot alerts / security updates and CodeQL
+  are all free of charge and licensing.
+
+Supply-chain scanning uses CodeQL (`.github/workflows/codeql.yml`) for
+`java-kotlin` + `javascript-typescript`, on `push main`, Mondays 03:00 UTC, and
+manual dispatch only — **never on pull requests**. Java analysis needs a full
+build, and putting it on PRs would make the wait unusable; the PR fast layer
+remains the only required gate in `ci.yml`. CodeQL results appear in the
+repository Security tab and are not a required check.
+
+Static analysis today is JaCoCo (coverage) only; there is no SpotBugs / PMD /
+ErrorProne / ArchUnit. The decision is **not to add them**:
+
+- SpotBugs / PMD are noisy on Spring/Jackson code and need a maintained
+  exclusion list; a gate that gets switched off is worse than no gate.
+- ErrorProne changes the compiler plugin and interacts with the existing
+  Lombok / records / annotation processing; build risk outweighs the benefit.
+- ArchUnit adds a test dependency and layer rules to maintain; the existing
+  8800+ tests and contract tests already cover the main boundaries.
+- The current gates (`verify-project-tests.sh` rule chain, controller /
+  optional injection / error-code checks) already enforce part of this,
+  so adding more would only add noise.
+
+Revisit when real architecture drift appears, a dependency upgrade causes a
+security incident, or someone commits to maintaining an exclusion list.
+
 ### Reading a Surefire report
 
 Five acceptance gates — `verify-collection-purge.sh`, `verify-api-key-expiry-alerts.sh`,

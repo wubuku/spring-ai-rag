@@ -17,6 +17,8 @@ import { dirname, join, relative } from 'node:path';
 const args = new Set(process.argv.slice(2));
 
 const ISSUE_TITLE = '[Nightly] Long-running layer failing';
+// workflow_dispatch 的 debug_report_failure 用独立标题，绝不能碰真实追踪 issue。
+const DEBUG_ISSUE_TITLE = '[TEST] Nightly issue automation debug';
 
 const JOBS = [
   { key: 'gated', name: 'gated-postgres', env: 'RESULT_GATED', artifact: 'nightly-gated-it' },
@@ -89,7 +91,13 @@ function isFailure(result) {
   return result !== 'success' && result !== 'skipped';
 }
 
-export function buildBody({ results, runId, runNumber, serverUrl, repository, eventName, refName, artifactDir }) {
+export function issueTitle(debug) {
+  return debug ? DEBUG_ISSUE_TITLE : ISSUE_TITLE;
+}
+
+export function buildBody({
+  results, runId, runNumber, serverUrl, repository, eventName, refName, artifactDir, debug = false,
+}) {
   const failed = JOBS.filter((job) => isFailure(results[job.key]));
   const passed = JOBS.filter((job) => !isFailure(results[job.key]));
   const runUrl = `${serverUrl}/${repository}/actions/runs/${runId}`;
@@ -98,6 +106,16 @@ export function buildBody({ results, runId, runNumber, serverUrl, repository, ev
     '<!-- nightly-tracking -->',
     failed.length === 0 ? '## Nightly run recovered' : '## Nightly run failed',
     '',
+  ];
+  if (debug) {
+    lines.push(
+      '> Debug run: created by `workflow_dispatch` with `debug_report_failure=true`.',
+      '> All check jobs were skipped and the failure below is simulated. This is a',
+      '> `[TEST]` issue and never the real nightly tracker; close it when done.',
+      '',
+    );
+  }
+  lines.push(
     `- Run: [#${runNumber}](${runUrl})`,
     `- Event: \`${eventName || 'unknown'}\` · Ref: \`${refName || 'unknown'}\``,
     `- Failed jobs: ${failed.map((job) => `\`${job.name}\``).join(', ') || '(none reported)'}`,
@@ -112,7 +130,7 @@ export function buildBody({ results, runId, runNumber, serverUrl, repository, ev
     'This issue is the single nightly tracker: a new failure updates this body and',
     'adds one comment, and a green run closes it. It does not open a new issue per day.',
     '',
-  ];
+  );
 
   for (const job of failed) {
     lines.push(`### ${job.name}`, '');
@@ -134,22 +152,30 @@ export function buildBody({ results, runId, runNumber, serverUrl, repository, ev
   return `${lines.join('\n')}\n`;
 }
 
-function writeOutputs({ status, failedJobs }) {
+function writeOutputs({ status, failedJobs, issueTitle }) {
   const outputFile = process.env.GITHUB_OUTPUT;
   if (!outputFile) return;
   appendFileSync(outputFile, `status=${status}\n`);
   appendFileSync(outputFile, `failed_jobs=${failedJobs.join(',')}\n`);
+  appendFileSync(outputFile, `issue_title=${issueTitle}\n`);
 }
 
 function main() {
   const artifactDir = argValue('--artifact-dir', '.verification/artifacts');
   const bodyFile = argValue('--body-file', '.verification/nightly/issue-body.md');
+  const debug = (process.env.NIGHTLY_DEBUG ?? '') === 'true';
+  const forceFailure = (process.env.NIGHTLY_FORCE_FAILURE ?? '') === 'true';
 
   const results = Object.fromEntries(
     JOBS.map((job) => [job.key, jobResult(job.env)]),
   );
+  if (forceFailure) {
+    // debug 模式不跑检查 job，用一次模拟失败走完真实的 issue 创建/更新路径。
+    results['real-llm'] = 'failure';
+  }
   const failed = JOBS.filter((job) => isFailure(results[job.key]));
   const status = failed.length === 0 ? 'success' : 'failed';
+  const issueTitleValue = issueTitle(debug);
 
   const body = buildBody({
     results,
@@ -160,13 +186,17 @@ function main() {
     eventName: process.env.GITHUB_EVENT_NAME ?? '',
     refName: process.env.GITHUB_REF_NAME ?? '',
     artifactDir,
+    debug,
   });
 
   mkdirSync(dirname(bodyFile), { recursive: true });
   writeFileSync(bodyFile, body, 'utf8');
-  writeOutputs({ status, failedJobs: failed.map((job) => job.name) });
+  writeOutputs({ status, failedJobs: failed.map((job) => job.name), issueTitle: issueTitleValue });
 
-  console.log(`nightly issue: status=${status} failed=${failed.map((job) => job.name).join(',') || 'none'}`);
+  console.log(
+    `nightly issue: status=${status} title=${issueTitleValue} ` +
+    `failed=${failed.map((job) => job.name).join(',') || 'none'}`,
+  );
   process.stdout.write(body);
 }
 
@@ -205,6 +235,19 @@ function selfTest() {
   });
   if (allGreen.includes('## Nightly run failed')) {
     throw new Error('self-test: green run must not render a failure heading');
+  }
+
+  const debugBody = buildBody({
+    results: { gated: 'success', 'real-llm': 'failure', soak: 'success', webui: 'success' },
+    runId: '2', runNumber: '2', serverUrl: 'https://github.com',
+    repository: 'wubuku/spring-ai-rag', eventName: 'workflow_dispatch', refName: 'main',
+    artifactDir: '/nonexistent-artifact-dir', debug: true,
+  });
+  if (!debugBody.includes('Debug run') || !debugBody.includes('[TEST]')) {
+    throw new Error('self-test: debug body must be marked as TEST');
+  }
+  if (issueTitle(true) !== DEBUG_ISSUE_TITLE || issueTitle(false) !== ISSUE_TITLE) {
+    throw new Error('self-test: issue title selection is wrong');
   }
   console.log('nightly-issue self-test: PASS');
 }

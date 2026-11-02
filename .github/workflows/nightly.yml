@@ -11,6 +11,12 @@ on:
     # GitHub 的 schedule 常见数分钟到数十分钟延迟，不能当作精确闹钟。
     - cron: '0 18 * * *'
   workflow_dispatch:
+    inputs:
+      debug_report_failure:
+        description: '只跑 report job，并强制走失败分支（创建 [TEST] issue，不触发真实模型调用）'
+        required: false
+        type: boolean
+        default: false
 
 concurrency:
   group: nightly-${{ github.ref }}
@@ -22,6 +28,7 @@ permissions:
 jobs:
   gated-postgres:
     name: Gated PostgreSQL integration suites
+    if: github.event_name == 'schedule' || inputs.debug_report_failure != true
     runs-on: ubuntu-latest
     timeout-minutes: 90
 
@@ -66,6 +73,7 @@ jobs:
 
   real-llm:
     name: Real LLM smoke, goldenset and retrieval regression
+    if: github.event_name == 'schedule' || inputs.debug_report_failure != true
     runs-on: ubuntu-latest
     timeout-minutes: 60
 
@@ -247,6 +255,7 @@ jobs:
 
   soak:
     name: Bounded soak (mock provider, no paid calls)
+    if: github.event_name == 'schedule' || inputs.debug_report_failure != true
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -360,6 +369,7 @@ jobs:
 
   webui-real:
     name: Real WebUI specs (no manual fixtures)
+    if: github.event_name == 'schedule' || inputs.debug_report_failure != true
     runs-on: ubuntu-latest
     timeout-minutes: 75
 
@@ -533,12 +543,14 @@ jobs:
 
   # 失败可见性：GitHub 页面变红不会有人天天看，所以用一个固定标题的追踪 issue。
   # 失败 → 创建或更新该 issue（附 run 链接、失败 job、artifact 里的关键日志尾部）；
-  # 恢复 → 评论并关闭。只在 schedule 触发时动 issue，手动 dispatch 只写 notice，
+  # 恢复 → 评论并关闭。只在 schedule 触发时动 issue；手动 dispatch 默认只写 notice，
   # 避免调试时意外开 issue。
+  # 例外：workflow_dispatch 的 debug_report_failure 输入会只跑本 job、跳过四个检查
+  # job（不产生模型调用），用 [TEST] 标题走一遍真实的创建/更新/评论路径。
   report:
     name: Nightly status report
     needs: [gated-postgres, real-llm, soak, webui-real]
-    if: always()
+    if: always() && (github.event_name == 'schedule' || inputs.debug_report_failure == true)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -564,6 +576,8 @@ jobs:
           RESULT_REAL_LLM: ${{ needs.real-llm.result }}
           RESULT_SOAK: ${{ needs.soak.result }}
           RESULT_WEBUI: ${{ needs.webui-real.result }}
+          NIGHTLY_DEBUG: ${{ inputs.debug_report_failure == true }}
+          NIGHTLY_FORCE_FAILURE: ${{ inputs.debug_report_failure == true }}
         run: |
           mkdir -p .verification/nightly
           node .github/scripts/nightly-issue.mjs \
@@ -576,6 +590,8 @@ jobs:
         env:
           NIGHTLY_STATUS: ${{ steps.issue.outputs.status }}
           NIGHTLY_FAILED_JOBS: ${{ steps.issue.outputs.failed_jobs }}
+          NIGHTLY_ISSUE_TITLE: ${{ steps.issue.outputs.issue_title }}
+          NIGHTLY_ALLOW_DISPATCH: ${{ inputs.debug_report_failure == true }}
           NIGHTLY_BODY_FILE: .verification/nightly/issue-body.md
         with:
           script: |
@@ -583,7 +599,8 @@ jobs:
             const owner = context.repo.owner;
             const repo = context.repo.repo;
             const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
-            const title = '[Nightly] Long-running layer failing';
+            const title = process.env.NIGHTLY_ISSUE_TITLE || '[Nightly] Long-running layer failing';
+            const allowDispatch = process.env.NIGHTLY_ALLOW_DISPATCH === 'true';
             // 汇总脚本本身失败时也要让失败可见：把缺失的状态按 failure 处理。
             const status = process.env.NIGHTLY_STATUS || 'failed';
             const failed = process.env.NIGHTLY_FAILED_JOBS || 'report job could not build the body';
@@ -599,7 +616,7 @@ jobs:
               ].join('\n');
             }
 
-            if (context.eventName !== 'schedule') {
+            if (context.eventName !== 'schedule' && !allowDispatch) {
               core.notice(
                 `Nightly status: ${status}. Issue automation only runs on scheduled runs; ` +
                 'manual workflow_dispatch does not create, update or close issues.'

@@ -1,0 +1,10 @@
+# CodeQL 只扫描真实源码，避免构建产物、覆盖率报告和 E2E 证据拖慢分析。
+name: spring-ai-rag CodeQL config
+paths-ignore:
+  - '**/target'
+  - 'spring-ai-rag-webui/node_modules'
+  - 'spring-ai-rag-webui/dist'
+  - 'spring-ai-rag-webui/coverage'
+  - 'spring-ai-rag-webui/playwright-report'
+  - 'spring-ai-rag-webui/test-results'
+  - '.verification'

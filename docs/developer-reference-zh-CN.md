@@ -210,6 +210,37 @@ skipped；本门禁则保证今后再有类"闭嘴"就会失败。
 | `check-decorative-graphics.mjs` | 既有 `role`、又没有可访问名、也没有 `<title>` 的内联 `<svg>`，本来就在对屏幕阅读器说"什么也没有"，而辅助技术照样会走一遍。整棵树只有一个内联 `<svg>`：`Search` 历史开关里的时钟字形，而它的 `<button>` 本来就带着 `aria-label`——所以那个字形是纯装饰，却仍被念了出来。规则同样**拒绝**报告那些真的在给自己命名的图形：把有意义的内容藏起来是反方向的错误，WCAG 自己的判据也把它排除在外。属性按**名字解析**而不是文本搜索，因为文本搜索分不清属性和长得像属性的字符串——把 `data-note="aria-hidden='true'"` 读成一次声明，会让这道门禁报出与它存在目的正好相反的错误 | `__tests__/decorative-graphics.test.mjs` | `npm run lint` |
 | `scripts/lib/tsx-source.mjs` | 剥 TSX 注释与字符串字面量的**唯一**做法，供读源码的门禁使用。910 与 911 各自新增了读源码文本的门禁，而它们全都想要一个不存在的东西。Java 那一版是 905 建的——此前四个门禁合计摧毁了 316 个字符串字面量——所以这里第三次写同一种错误的方言，是最不该写的那一次。**两个入口，因为两个使用者需要相反的处理**：`stripTsxNoise` 会抹掉字符串内容（匹配标记的门禁不该匹配字符串里的标题），`stripTsxComments` 保留它们（本文件的装饰图形门禁问的正是 `aria-hidden="true"` 在不在，抹掉值就抹掉了它要找的那个记号）。保留长度与换行，于是发现仍能映射回它所在的那一行；模板串的插值按真代码处理 | `__tests__/tsx-source.test.mjs` | `npm run lint` |
 
+### 依赖更新、供应链扫描与静态分析
+
+依赖更新由 `.github/dependabot.yml` 管理，三类生态分开配置：
+
+| 生态 | 目录 | 频率 | 分组（minor + patch） |
+|------|------|------|----------------------|
+| Maven | `/` | 每周一 03:00 Asia/Shanghai | `spring` / `testing` / `other` |
+| npm | `/spring-ai-rag-webui` | 同上 | `react` / `testing` / `tooling` / `other` |
+| GitHub Actions | `/` | 同上 | 全部动作一个组 |
+
+- 每个生态 `open-pull-requests-limit: 5`；major 升级不自动分组，单独开 PR 由人判断。
+- Dependabot PR 照常跑 `ci.yml` 的 PR 快层；它不需要真实模型 secret（mock E2E 足够）。
+- 仓库是公开仓库，Dependabot alerts / security updates 与 CodeQL 都不需要付费或许可证。
+
+供应链扫描用 CodeQL（`.github/workflows/codeql.yml`）：`java-kotlin` +
+`javascript-typescript`，只在 `push main`、每周一 03:00 UTC 和手动触发时跑，**不挂 PR**。
+Java 分析必须完整构建，挂 PR 会把等待时间拉长到不可接受；PR 快层仍是 `ci.yml`
+唯一的必过门禁。CodeQL 结果看仓库 Security 页，不设为 required check。
+
+静态分析现状：仓库目前只有 JaCoCo（覆盖率），没有 SpotBugs / PMD / ErrorProne / ArchUnit。
+决策是**不引入**：
+
+- SpotBugs / PMD 在 Spring/Jackson 代码上噪声高，需要长期维护排除表；一旦被人关掉，
+  比从没加过更糟。
+- ErrorProne 要改编译插件，和现有 Lombok / record / 注解处理叠加，构建风险大于收益。
+- ArchUnit 需要新增测试依赖并维护分层规则；现有 8800+ 测试与契约测试已覆盖主要边界。
+- 现有门禁（`verify-project-tests.sh` 的规则链、controller / 可选注入 / 错误码等）已经在做
+  一部分静态约束，重复引入只会增加噪声。
+
+重新评估的条件：出现真实的架构漂移、依赖升级导致的安全事件，或有人愿意长期维护排除表。
+
 ### 读 Surefire 报告
 
 五道验收门禁——`verify-collection-purge.sh`、`verify-api-key-expiry-alerts.sh`、
