@@ -280,10 +280,11 @@ CI 的 backend checkout 使用 `fetch-depth: 0`，PR 上把 `DOCS_DIFF_BASE` 设
   JaCoCo XML，把"模块 / 套件 / 失败用例 / 首行错误"写进 Step Summary；报告缺失时
   只提示，不会把绿色 job 变红。
 - Playwright 配置在 `CI` 下启用 `github` reporter（失败直接标注到 PR 文件行），
-  并始终写 `test-results/results.json` 供上面的脚本汇总；`--real` 用例在 nightly
-  使用 `--retries=0`，首次失败就是失败，不用重试掩盖抖动。唯一的例外是真实模型
-  smoke 里的 OpenAI-compatible JSON 断言：模型偶发不返回 `SUPPORTED` 评估，
-  该断言允许一次有界重试，连续两次失败仍然报错。
+  并始终写 `test-results/results.json` 供上面的脚本汇总。Mock E2E 与 PR 层使用
+  `--retries=0`，首次失败就是失败。nightly 的真实模型
+  spec 允许一次重试（模型偶发改写事实，实测把 09:40 说成 09:30），Playwright
+  会把这类结果记为 flaky 并显示在摘要里，重试不会被当成通过而隐瞒。真实模型
+  smoke 里的 OpenAI-compatible JSON 断言同理允许一次有界重试，连续两次失败仍然报错。
 - artifact 保留 14–30 天：`backend-test-results`、`backend-gate-logs`、
   `jacoco-reports`、`webui-playwright-report`、`nightly-gated-it`、
   `nightly-real-llm`、`nightly-soak`、`nightly-webui-real`。下载：

@@ -309,11 +309,12 @@ without that variable, they still scan the working tree).
   green job red.
 - Under `CI`, the Playwright config enables the `github` reporter (failures are
   annotated on the PR file line) and always writes `test-results/results.json`
-  for the summary. Nightly `*-real` specs run with `--retries=0`, so the first
-  failure is the failure instead of being masked by a retry. The only exception is
-  the OpenAI-compatible JSON assertion in the real-model smoke: the model
-  occasionally omits the `SUPPORTED` assessment, so that assertion gets one
-  bounded retry; two consecutive failures still fail.
+  for the summary. Mock E2E and the PR layer run with `--retries=0`, so the first
+  failure is the failure. Nightly real-model specs get one retry: the model
+  occasionally rewrites a fact (observed turning 09:40 into 09:30), Playwright
+  records that as `flaky` and shows it in the summary, so a retry never hides a
+  pass. The OpenAI-compatible JSON assertion in the real-model smoke likewise gets
+  one bounded retry; two consecutive failures still fail.
 - Artifacts are retained for 14–30 days: `backend-test-results`,
   `backend-gate-logs`, `jacoco-reports`, `webui-playwright-report`,
   `nightly-gated-it`, `nightly-real-llm`, `nightly-soak`, `nightly-webui-real`.
