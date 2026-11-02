@@ -586,7 +586,7 @@ jobs:
 
       - name: Create, update or close tracking issue
         if: always()
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         env:
           NIGHTLY_STATUS: ${{ steps.issue.outputs.status }}
           NIGHTLY_FAILED_JOBS: ${{ steps.issue.outputs.failed_jobs }}
