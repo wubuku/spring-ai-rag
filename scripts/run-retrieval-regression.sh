@@ -241,6 +241,11 @@ if self_test:
     for status in (None, "INDEXING", "NOT_REQUESTED", "FAILED", "STALE"):
         if embedding_is_ready({"embeddingStatus": status}):
             failures.append(f"expected unsuccessful embedding status: {status}")
+    # The JSON record detail endpoint nests the status under lifecycle.
+    if not embedding_is_ready({"lifecycle": {"embeddingStatus": "READY"}}):
+        failures.append("expected lifecycle.embeddingStatus READY to be ready")
+    if embedding_is_ready({"lifecycle": {"embeddingStatus": "INDEXING"}}):
+        failures.append("expected lifecycle.embeddingStatus INDEXING to be pending")
     if failures:
         raise RuntimeError(
             "Retrieval regression response-contract self-test failed: "

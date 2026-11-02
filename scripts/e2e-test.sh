@@ -10,8 +10,9 @@ BASE_URL="${BASE_URL:-http://localhost:8081}"
 API="${BASE_URL}/api/v1/rag"
 CHAT_TIMEOUT_SECONDS="${E2E_CHAT_TIMEOUT_SECONDS:-180}"
 PDF_TO_RAG_TIMEOUT_SECONDS="${E2E_PDF_TO_RAG_TIMEOUT_SECONDS:-180}"
-ADMIN_API_KEY="${E2E_ADMIN_API_KEY:-}"
 API_KEY="${E2E_API_KEY:-${RAG_API_KEY:-${RAG_ROOT_API_KEY:-}}}"
+# In root-key mode the root credential is also the manageable admin credential.
+ADMIN_API_KEY="${E2E_ADMIN_API_KEY:-$API_KEY}"
 PASS=0
 FAIL=0
 DOC_ID=""
