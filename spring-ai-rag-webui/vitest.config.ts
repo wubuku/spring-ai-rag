@@ -11,6 +11,9 @@ export default defineConfig({
     coverage: {
       reporter: ['text', 'html'],
       include: ['src/hooks/**', 'src/components/**', 'src/api/**', 'src/pages/**'],
+      // macOS Finder 会在 `src/` 下留 `.DS_Store`；它们被 include 扫进来后 coverage
+      // 会逐个报 PARSE_ERROR（Linux CI 上不会出现，本机每次都要刷四屏）。它们不是源码。
+      exclude: ['**/.DS_Store'],
       // 2026-09-05 基线（Batch 1 实测）：stmts 65.19 / branch 64.54 / funcs 45.49 / lines 65.98。
       // 阈值略低于实测值，只防回退；提高覆盖率时同步上调。
       thresholds: {

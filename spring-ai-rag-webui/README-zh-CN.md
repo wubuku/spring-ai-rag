@@ -40,7 +40,7 @@
 
 ### 前置条件
 
-- Node.js 18+
+- Node.js `^20.19.0 || >=22.12.0`（Vite 8 的实际要求；CI 使用 Node 24）
 - spring-ai-rag 后端运行在 `http://localhost:8081`
 
 ### 开发模式
@@ -215,10 +215,22 @@ VITE_API_BASE=/api/v1/rag
 ```bash
 npm run dev          # 启动 Vite 开发服务器
 npm run build        # 生产构建（tsc + vite build）
-npm run lint         # ESLint 检查
+npm run lint         # ESLint + 类型检查 + 全部静态门禁（含设计系统自测）
 npm run lint:fix     # ESLint 自动修复
 npm run preview      # 本地预览生产构建
+npm run test:run     # Vitest 组件/单元测试
+npm run test:e2e:mock  # Playwright Mock 用例（不需要后端，CI 跑这条）
 ```
+
+### E2E 测试（Playwright）
+
+| 命令 | 是否需要后端 | 说明 |
+|------|------|------|
+| `npm run test:e2e:mock` | **不需要** | 构建后用 `vite preview` 起在 15174，所有 API 由 `e2e/api-mocks.ts` 的 `page.route` 拦截；执行全部非 `-real` 用例。CI 与日常回归用这条 |
+| `npm run test:e2e` | **需要** Spring Boot 在 `http://localhost:8081`（或 `BASE_URL` 指定的地址） | 对已运行实例执行同一批非 `-real` 用例。后端没起时只会得到连接被拒，不是页面缺陷 |
+| `npm run test:e2e -- e2e/*-real.spec.ts` | 需要后端 + 真实模型凭据 | 真实链路验收，按 [testing-guide](../docs/testing-guide-zh-CN.md) 的 `-real` 运行手册执行 |
+
+首次在本机跑 Playwright 需要安装浏览器：`npx playwright install chromium`。
 
 ## License
 

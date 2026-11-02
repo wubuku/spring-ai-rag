@@ -671,6 +671,13 @@ describe('Batch 880: the gate itself, not just the helper', () => {
   // would mean editing a source file or adding a production test hook. That
   // half is proved by the end-to-end probe instead — a real violation of the
   // real tree's most distinctive allowlist entry, gate exit 0 → 1.
+  // This gate walks the real tree and spawns a Node subprocess: 3.4s measured on
+  // an idle machine, against Vitest's 5s default. Running the design-system suite
+  // concurrently with `test:run` pushed one of these past 5s and reported a red
+  // that had nothing to do with the rule being tested. The headroom is for the
+  // subprocess, not for a slower assertion.
+  const REAL_TREE_GATE_TIMEOUT_MS = 20_000;
+
   it('passes on the real tree and reports entries and occurrences separately', () => {
     const result = spawnSync(
       process.execPath,
@@ -682,7 +689,7 @@ describe('Batch 880: the gate itself, not just the helper', () => {
     const occurrences = [...audit.used.values()].reduce((a, b) => a + b, 0);
     expect(result.stdout).toContain(`${audit.used.size} allowlist entr(y|ies)`);
     expect(result.stdout).toContain(`in use across ${occurrences} occurrence(s)`);
-  });
+  }, REAL_TREE_GATE_TIMEOUT_MS);
 
   it('does not report a stale entry on the real tree', () => {
     const result = spawnSync(
@@ -691,5 +698,5 @@ describe('Batch 880: the gate itself, not just the helper', () => {
       { encoding: 'utf8' },
     );
     expect(result.stderr).not.toContain('stale-allowlist-entry');
-  });
+  }, REAL_TREE_GATE_TIMEOUT_MS);
 });

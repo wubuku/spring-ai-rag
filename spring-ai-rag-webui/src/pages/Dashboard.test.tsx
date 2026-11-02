@@ -5,6 +5,7 @@ import { Dashboard } from './Dashboard';
 import { healthApi } from '../api/health';
 import { documentsApi } from '../api/documents';
 import { collectionsApi } from '../api/collections';
+import { TEST_LOCALE } from '../test/locale';
 
 const mockUseQuery = vi.fn();
 
@@ -295,7 +296,12 @@ describe('Dashboard when reads fail', () => {
     });
     render(<Dashboard />);
 
-    expect(screen.getByText(new Date(stamp).toLocaleString())).toBeInTheDocument();
+    // Dashboard formats through `formatAbsolute(..., i18n.language)`, and the shared
+    // i18next double reports `TEST_LOCALE`. Bare `toLocaleString()` reads the host
+    // locale instead, so this assertion only passed on machines whose default was
+    // en-US — on a zh-CN host the tile rendered `9/6/2026, 8:00:00 AM` while the
+    // expected string was `2026/9/6 08:00:00`.
+    expect(screen.getByText(new Date(stamp).toLocaleString(TEST_LOCALE))).toBeInTheDocument();
     expect(screen.queryByText('dashboard.systemUnreachable')).toBeNull();
   });
 

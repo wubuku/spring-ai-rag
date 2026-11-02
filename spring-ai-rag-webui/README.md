@@ -40,7 +40,7 @@
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js `^20.19.0 || >=22.12.0` (Vite 8's actual requirement; CI uses Node 24)
 - spring-ai-rag backend running at `http://localhost:8081`
 
 ### Run in development
@@ -218,10 +218,22 @@ VITE_API_BASE=/api/v1/rag
 ```bash
 npm run dev          # Start Vite dev server
 npm run build        # Production build (tsc + vite build)
-npm run lint         # ESLint
+npm run lint         # ESLint + typecheck + every static policy gate (incl. design-system self-tests)
 npm run lint:fix     # ESLint auto-fix
 npm run preview      # Preview production build locally
+npm run test:run     # Vitest component/unit tests
+npm run test:e2e:mock  # Playwright Mock suite (no backend; this is what CI runs)
 ```
+
+### E2E Tests (Playwright)
+
+| Command | Backend required? | Notes |
+|---------|-------------------|-------|
+| `npm run test:e2e:mock` | **No** | Builds, serves with `vite preview` on 15174 and intercepts every API call via `page.route` in `e2e/api-mocks.ts`; runs all non `-real` specs. This is what CI and day-to-day regression use |
+| `npm run test:e2e` | **Yes**, Spring Boot at `http://localhost:8081` (or the `BASE_URL` you set) | Runs the same non `-real` specs against a live instance. Without a backend you only get connection refusals — not page defects |
+| `npm run test:e2e -- e2e/*-real.spec.ts` | Yes, plus real model credentials | Real-path acceptance; follow the `-real` runbook in [testing-guide](../docs/testing-guide.md) |
+
+Install the browser once on a new machine: `npx playwright install chromium`.
 
 ## License
 

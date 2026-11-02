@@ -8,6 +8,8 @@
 #   - Chat provider:  minimax  (SPRING_AI_MINIMAX_* / MiniMax-M3 pay-as-you-go)
 #   - Embedding:      provider-neutral RAG_EMBEDDING_* settings
 #   - Security:       disabled for local smoke (RAG_SECURITY_ENABLED=true to enable)
+#   - OpenAI-compat:  enabled by default so smoke step 7 exercises /v1/**
+#                     (RAG_OPENAI_COMPATIBILITY_ENABLED=false to opt out)
 #
 # .env mapping used:
 #   LLM_PROVIDER / APP_LLM_PROVIDER          → app.llm.provider  (default: minimax)
@@ -215,7 +217,7 @@ JAVA_ENV=(
   "RAG_EMBEDDING_MODEL=${EMB_MODEL}"
   "RAG_EMBEDDING_DIMENSIONS=${EMB_DIMENSIONS}"
   "RAG_COLLECTION_PURGE_ENABLED=${RAG_COLLECTION_PURGE_ENABLED:-false}"
-  "RAG_OPENAI_COMPATIBILITY_ENABLED=${RAG_OPENAI_COMPATIBILITY_ENABLED:-false}"
+  "RAG_OPENAI_COMPATIBILITY_ENABLED=${RAG_OPENAI_COMPATIBILITY_ENABLED:-true}"
   "RAG_CHUNK_PROFILE=${RAG_CHUNK_PROFILE:-bounded-v3}"
   "RAG_CHUNK_AUTO_UPGRADE_ENABLED=${RAG_CHUNK_AUTO_UPGRADE_ENABLED:-true}"
   "RAG_CHUNK_MAX_INPUT_CHARS=${RAG_CHUNK_MAX_INPUT_CHARS:-1000000}"

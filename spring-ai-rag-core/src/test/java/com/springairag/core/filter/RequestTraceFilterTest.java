@@ -7,6 +7,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.slf4j.MDC;
+import org.springframework.core.annotation.Order;
 import org.springframework.mock.web.MockFilterChain;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
@@ -173,6 +174,18 @@ class RequestTraceFilterTest {
             assertNull(MDC.get(RequestTraceFilter.TRACE_ID_KEY),
                     "MDC should still be cleared after exception");
         }
+    }
+
+    @Test
+    @DisplayName("Runs before API-key authentication so rejected requests keep X-Trace-Id")
+    void runsBeforeAuthenticationFilter() {
+        Order order = RequestTraceFilter.class.getAnnotation(Order.class);
+
+        assertNotNull(order, "trace filter must declare an explicit order");
+        assertTrue(order.value() < -10,
+                "trace filter order " + order.value()
+                    + " must run before ApiKeyAuthFilter (-10); otherwise 401 responses "
+                    + "are written without X-Trace-Id");
     }
 
     // ==================== Sampling Strategy ====================

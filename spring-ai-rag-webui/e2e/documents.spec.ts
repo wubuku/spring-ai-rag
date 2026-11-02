@@ -27,11 +27,18 @@ test.describe('Documents', () => {
   test('shows table or empty state', async ({ page }) => {
     await mockAllApiCalls(page);
     await openProtectedPage(page, '/webui/documents');
-    const hasTable = await page.locator('table').isVisible().catch(() => false);
-    const hasEmpty = await page.getByText(/no documents|empty|no data/i).isVisible().catch(() => false);
-    const hasUpload = await page.locator('input[type="file"]').count().then(c => c > 0).catch(() => false);
-    const hasTitle = await page.getByRole('heading', { name: /documents/i }).isVisible().catch(() => false);
-    expect(hasTable || hasEmpty || hasUpload || hasTitle).toBeTruthy();
+    // Four point-in-time reads answered in the same tick raced the lazy route
+    // render: the suite failed here once on a cold `vite preview` (662ms) and
+    // passed on retry. `expect.poll` re-runs the same four probes until one is
+    // true, so the assertion keeps its meaning without depending on when React
+    // finished mounting.
+    await expect.poll(async () => {
+      const hasTable = await page.locator('table').isVisible().catch(() => false);
+      const hasEmpty = await page.getByText(/no documents|empty|no data/i).isVisible().catch(() => false);
+      const hasUpload = await page.locator('input[type="file"]').count().then(c => c > 0).catch(() => false);
+      const hasTitle = await page.getByRole('heading', { name: /documents/i }).isVisible().catch(() => false);
+      return hasTable || hasEmpty || hasUpload || hasTitle;
+    }).toBeTruthy();
   });
 
   test('does not search while the Documents keyword is in IME composition', async ({ page }) => {

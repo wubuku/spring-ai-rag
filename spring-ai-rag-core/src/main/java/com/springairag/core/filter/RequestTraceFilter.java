@@ -43,7 +43,7 @@ import java.util.concurrent.ThreadLocalRandom;
  * </pre>
  */
 @Component
-@Order(1)
+@Order(-30)
 public class RequestTraceFilter implements Filter {
 
     private static final Logger log = LoggerFactory.getLogger(RequestTraceFilter.class);

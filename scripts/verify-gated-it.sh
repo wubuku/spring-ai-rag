@@ -87,8 +87,64 @@ fi
 echo "Testcontainers: RYUK_DISABLED=$TESTCONTAINERS_RYUK_DISABLED PG_IMAGE=$TESTCONTAINERS_PG_IMAGE"
 echo "Suites: ${CLASSES[*]}"
 
-exec mvn test "${TEST_FLAGS[@]}" \
+# `failIfNoSpecifiedTests=false` is required because the -am reactor includes
+# modules that never see this class list. That leaves a hole: a renamed suite, a
+# removed `@EnabledIfSystemProperty` flag, or a suite that skips itself still
+# exits 0. The marker below makes each report prove it came from *this* run,
+# then the check requires every class to have executed real, non-skipped tests.
+REPORT_MARKER="$(mktemp)"
+trap 'rm -f "$REPORT_MARKER"' EXIT
+touch "$REPORT_MARKER"
+
+set +e
+mvn test "${TEST_FLAGS[@]}" \
   -Djacoco.append=false \
   -Dtest="$(IFS=,; echo "${CLASSES[*]}")" \
   -Dsurefire.failIfNoSpecifiedTests=false \
   -pl spring-ai-rag-starter -am
+STATUS=$?
+set -e
+if [[ $STATUS -ne 0 ]]; then
+  exit $STATUS
+fi
+
+node - "$REPORT_MARKER" "${CLASSES[@]}" <<'NODE'
+const fs = require('fs');
+const path = require('path');
+const markerMs = fs.statSync(process.argv[2]).mtimeMs;
+const classes = process.argv.slice(3);
+const problems = [];
+let total = 0;
+for (const name of classes) {
+  const starter = name.startsWith('ExternalStarterConsumer');
+  const module = starter ? 'spring-ai-rag-starter' : 'spring-ai-rag-core';
+  const pkg = starter ? 'example.consumer' : 'com.springairag.core.integration';
+  const report = path.join(module, 'target', 'surefire-reports', `TEST-${pkg}.${name}.xml`);
+  if (!fs.existsSync(report)) {
+    problems.push(`${name}: no surefire report (suite did not run)`);
+    continue;
+  }
+  if (fs.statSync(report).mtimeMs < markerMs) {
+    problems.push(`${name}: stale surefire report (not produced by this run)`);
+    continue;
+  }
+  const suiteTag = fs.readFileSync(report, 'utf8').match(/<testsuite\b[^>]*>/)?.[0] ?? '';
+  const attr = (key) => Number(suiteTag.match(new RegExp(`${key}="(\\d+)"`))?.[1] ?? 0);
+  const tests = attr('tests');
+  const skipped = attr('skipped');
+  const failures = attr('failures');
+  const errors = attr('errors');
+  total += tests;
+  if (tests <= 0) problems.push(`${name}: 0 tests (silently skipped)`);
+  if (skipped !== 0) problems.push(`${name}: ${skipped} skipped test(s)`);
+  if (failures !== 0 || errors !== 0) {
+    problems.push(`${name}: failures=${failures} errors=${errors}`);
+  }
+}
+if (problems.length) {
+  console.error('Gated-suite integrity check failed:');
+  for (const problem of problems) console.error(`  - ${problem}`);
+  process.exit(1);
+}
+console.log(`Gated suites verified: ${classes.length} classes, ${total} tests, 0 skipped`);
+NODE

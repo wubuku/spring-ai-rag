@@ -190,6 +190,16 @@ jobs:
       - name: Production build
         run: npm run build
 
+      # Backend-free browser suite. `playwright.preview.config.ts` serves the
+      # production build with `vite preview` on port 15174 and every API call is
+      # intercepted via `page.route` (e2e/api-mocks.ts), so no Spring Boot instance
+      # is required. The `*-real.spec.ts` specs are excluded by that config.
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Mock E2E (Playwright)
+        run: npm run test:e2e:mock
+
       - name: Upload WebUI coverage report
         if: always()
         uses: actions/upload-artifact@v4

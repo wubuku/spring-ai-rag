@@ -32,9 +32,12 @@ import '@testing-library/jest-dom';
  * The factory stays self-contained because vitest hoists `vi.mock` above the
  * imports, so it cannot close over a module-level constant.
  */
-vi.mock('react-i18next', () => {
+vi.mock('react-i18next', async () => {
+  // `TEST_LOCALE` is imported rather than inlined so a test asserting a
+  // formatted date can use the same value this double reports. See ./locale.ts.
+  const { TEST_LOCALE } = await import('./locale');
   const t = (key: string) => key;
-  const i18n = { language: 'en', changeLanguage: vi.fn() };
+  const i18n = { language: TEST_LOCALE, changeLanguage: vi.fn() };
   return {
     default: vi.fn(),
     useTranslation: () => ({ t, i18n }),
