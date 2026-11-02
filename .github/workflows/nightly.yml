@@ -35,7 +35,7 @@ jobs:
 
       # Testcontainers 自带 PostgreSQL；这里只预热镜像，避免首次拉取计入测试超时。
       - name: Pre-pull Testcontainers image
-        run: docker pull postgres:16-pgvector || true
+        run: docker pull pgvector/pgvector:pg16 || true
 
       - name: Run gated PostgreSQL suites
         run: |
@@ -133,6 +133,13 @@ jobs:
             } >> "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
+
+      # `start-real-e2e-server.sh` 用 `dependency:build-classpath` 解析模块
+      # jar；干净 checkout 的本地仓库里没有本项目产物时会去 central 拉取，
+      # 而 Maven 3.10+ 的 prefix 过滤会直接拒绝（ArtifactFilteredOutException）。
+      # 先 install 一遍即可让后续步骤全部从本地仓库解析。
+      - name: Build modules into local repository
+        run: mvn -q -B -DskipTests install
 
       - name: Create isolated database
         run: |
@@ -266,6 +273,11 @@ jobs:
         with:
           node-version: '24'
 
+      # 同 real-llm：先 install，避免 start-real-e2e-server.sh 在干净 checkout
+      # 里通过 dependency:build-classpath 去 central 拉本项目 jar。
+      - name: Build modules into local repository
+        run: mvn -q -B -DskipTests install
+
       - name: Create isolated database
         run: |
           psql -h localhost -U postgres -d postgres -c "CREATE DATABASE rag_nightly_soak" 2>/dev/null || true
@@ -343,6 +355,10 @@ jobs:
       RAG_EMBEDDING_MODEL: BAAI/bge-m3
       RAG_EMBEDDING_DIMENSIONS: '1024'
       RAG_ROOT_API_KEY: ${{ secrets.RAG_ROOT_API_KEY }}
+      # Agent 正向验收要求 /models 里存在 toolCalling=true 的可用模型；
+      # 默认 YAML 目录把 minimax 标为 false。这里显式打开，与
+      # `scripts/verify-chat-capability.sh` 的真实链路使用同一开关。
+      APP_MODELS_LEGACY_CAPABILITIES_MINIMAX_TOOL_CALLING: 'true'
       POSTGRES_HOST: localhost
       POSTGRES_PORT: 5432
       POSTGRES_DATABASE: rag_nightly_webui
@@ -415,6 +431,7 @@ jobs:
             SPRING_AI_MINIMAX_API_KEY SPRING_AI_MINIMAX_BASE_URL SPRING_AI_MINIMAX_CHAT_OPTIONS_MODEL \
             RAG_EMBEDDING_API_KEY RAG_EMBEDDING_BASE_URL RAG_EMBEDDING_MODEL RAG_EMBEDDING_DIMENSIONS \
             RAG_ROOT_API_KEY \
+            APP_MODELS_LEGACY_CAPABILITIES_MINIMAX_TOOL_CALLING \
             POSTGRES_HOST POSTGRES_PORT POSTGRES_DATABASE POSTGRES_USER POSTGRES_PASSWORD \
             SPRING_DATASOURCE_URL SPRING_DATASOURCE_USERNAME SPRING_DATASOURCE_PASSWORD; do
             value="${!name:-}"

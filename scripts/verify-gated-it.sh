@@ -2,8 +2,9 @@
 # gated PostgreSQL 集成测试（纯数据库型）一键回归门禁。
 #
 # 覆盖不依赖真实模型 provider、只依赖 PostgreSQL/Testcontainers 的 IT 套件。
-# 境内网络友好：默认禁用 Ryuk 并复用本地 postgres:16-pgvector 镜像，
-# 两者都可通过环境变量覆盖。
+# 境内网络友好：默认禁用 Ryuk，PostgreSQL 镜像可用 TESTCONTAINERS_PG_IMAGE 覆盖。
+# 默认值与其它脚本保持一致使用 pgvector 官方镜像；`postgres:16-pgvector` 只是
+# 个别开发机上的本地 tag，Docker Hub 上并不存在（CI 拉取会 404）。
 #
 # 这个清单现在是**全部**：逐个核实所有 `*.it.enabled` 门控类，
 # 每一个都只起一个 Testcontainers PostgreSQL 加一份 Flyway schema，没有一个
@@ -25,7 +26,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 export TESTCONTAINERS_RYUK_DISABLED="${TESTCONTAINERS_RYUK_DISABLED:-true}"
-export TESTCONTAINERS_PG_IMAGE="${TESTCONTAINERS_PG_IMAGE:-postgres:16-pgvector}"
+export TESTCONTAINERS_PG_IMAGE="${TESTCONTAINERS_PG_IMAGE:-pgvector/pgvector:pg16}"
 
 # 套件清单："<it 开关前缀>:<测试类名>"。新增纯 DB 型套件时在此登记；
 # scripts/verify-integration-test-switches.mjs 的 unaggregated-gated-suite 规则
