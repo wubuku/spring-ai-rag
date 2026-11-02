@@ -322,6 +322,14 @@ Per-spec extra requirements (verified 2026-09-06):
 | `files-real` | real Embedding + Chat LLM; KNOWLEDGE generation must finish within `rag.timeout.chat-ask-ms` (default 120s) | passes (with a slow local provider, relax via `RAG_TIMEOUT_CHATASKMS=300000` in `.env`) |
 | `rerank-document-diversity-real` | also `RERANK_DIVERSITY_FIXTURE_FILE` pointing at a fixture | fails without fixture |
 
+The `chat-real` Agent positive case asks the model to call `searchKnowledge`
+once with a single query. A real model can still issue more calls to the same
+tool than `rag.chat.agent.max-tool-calls-per-name` (default 3) in one turn;
+the request then returns `422 CHAT_BUDGET_EXHAUSTED` before the SSE stream
+starts. That is model nondeterminism, not a retrieval regression. The failure
+message now includes the response body; raise the tool budget instead of
+relaxing the status-code assertion.
+
 Do not edit served source files while the dev server is running: HMR and
 full-page reloads detach elements under running Playwright tests.
 Prefer the production-build preview server for the Mock suite (no file

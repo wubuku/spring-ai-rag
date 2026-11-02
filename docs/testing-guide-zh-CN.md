@@ -296,6 +296,11 @@ npx playwright test e2e/api-key-real.spec.ts
 | `files-real` | 真实 Embedding + Chat LLM；KNOWLEDGE 长上下文生成须在 `rag.timeout.chat-ask-ms`（默认 120s）内完成 | 已通过（本地慢 provider 时在 `.env` 设 `RAG_TIMEOUT_CHATASKMS=300000` 放宽） |
 | `rerank-document-diversity-real` | 另需 `RERANK_DIVERSITY_FIXTURE_FILE` 指向 fixture 文件 | 缺 fixture 则失败 |
 
+`chat-real` 的 Agent 正向用例在提示词中要求单次单查询调用 `searchKnowledge`。真实模型仍
+可能在一个回合内对同名工具发起超过 `rag.chat.agent.max-tool-calls-per-name`（默认 3）的
+调用，此时请求会在 SSE 建立前直接返回 `422 CHAT_BUDGET_EXHAUSTED`；这属于模型侧不确定性，
+不是检索回归。失败信息会附带响应体；需要更高工具预算时调大该配置，而不是放宽状态码断言。
+
 运行期间不要编辑被 dev server 服务的源文件：HMR/整页 reload 会让正在运行的
 Mock Playwright 用例出现元素 detach。
 推荐改用生产构建预览服务器跑 Mock 套件（无文件 watch，编辑零干扰，
