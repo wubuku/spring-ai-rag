@@ -637,15 +637,20 @@ PY
   then
     bad "OpenAI-compatible model discovery omitted rag-default"
   else
-    OPENAI_JSON_CODE="$(curl --silent --show-error --max-time 180 \
-      "${API_AUTH_ARGS[@]}" -H "Authorization: Bearer ${ROOT_API_KEY:-}" \
-      -H "X-RAG-Collection-Key: ${COLLECTION_KEY}" \
-      -H 'Content-Type: application/json' \
-      -d "{\"model\":\"rag-default\",\"messages\":[{\"role\":\"user\",\"content\":\"Using only the selected release-verification collection, return the release verification code exactly and cite it with [c1]. The code begins with REAL_E2E_.\"}]}" \
-      -o /tmp/rag-e2e-openai-ask.json -w '%{http_code}' \
-      "$BASE_URL/v1/chat/completions" 2>/dev/null || true)"
-    set +e
-    OPENAI_JSON_HTTP="$OPENAI_JSON_CODE" python3 - <<'PY'
+    # 真实模型在 JSON 模式下偶尔不给出 SUPPORTED 评估（同一提示上一轮通过、
+    # 下一轮失败，已在本仓库 nightly 实测）。这里允许一次有界重试：连续两次
+    # 失败仍然报错，避免把真实回归当成模型抖动。
+    OPENAI_JSON_RC=1
+    for attempt in 1 2; do
+      OPENAI_JSON_CODE="$(curl --silent --show-error --max-time 180 \
+        "${API_AUTH_ARGS[@]}" -H "Authorization: Bearer ${ROOT_API_KEY:-}" \
+        -H "X-RAG-Collection-Key: ${COLLECTION_KEY}" \
+        -H 'Content-Type: application/json' \
+        -d "{\"model\":\"rag-default\",\"messages\":[{\"role\":\"user\",\"content\":\"Using only the selected release-verification collection, return the release verification code exactly and cite it with [c1]. The code begins with REAL_E2E_.\"}]}" \
+        -o /tmp/rag-e2e-openai-ask.json -w '%{http_code}' \
+        "$BASE_URL/v1/chat/completions" 2>/dev/null || true)"
+      set +e
+      OPENAI_JSON_HTTP="$OPENAI_JSON_CODE" python3 - <<'PY'
 import json
 import os
 import sys
@@ -672,8 +677,15 @@ print('OPENAI_JSON_SAFE_ANSWER_APPLIED', assessment.get('safeAnswerApplied'))
 print('OPENAI_JSON_AUTHORIZED_SOURCES', len(sources))
 raise SystemExit(0 if valid else 1)
 PY
-    OPENAI_JSON_RC=$?
-    set -e
+      OPENAI_JSON_RC=$?
+      set -e
+      if [[ "$OPENAI_JSON_RC" -eq 0 ]]; then
+        break
+      fi
+      if [[ "$attempt" -eq 1 ]]; then
+        echo "RETRY: OpenAI-compatible JSON assertion failed, retrying once"
+      fi
+    done
     if [[ "$OPENAI_JSON_RC" -eq 0 ]]; then
       ok "OpenAI-compatible JSON returned supported evidence and the verification code"
     else

@@ -250,6 +250,8 @@ jobs:
       # EmbeddingProfileRegistry 会拒绝启动（这是有意的防串维度保护）。
       RAG_EMBEDDING_PROFILE_KEY: mock-soak-1024-v1
       RAG_SECURITY_ENABLED: 'false'
+      # soak 脚本自身要带鉴权头发请求；服务端虽关闭校验，脚本仍要求有 key。
+      RAG_ROOT_API_KEY: ${{ secrets.RAG_ROOT_API_KEY }}
       POSTGRES_HOST: localhost
       POSTGRES_PORT: 5432
       POSTGRES_DATABASE: rag_nightly_soak

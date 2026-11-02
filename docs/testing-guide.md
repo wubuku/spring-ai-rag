@@ -283,13 +283,18 @@ of in someone's memory:
 
 | Layer | Trigger | Workflow | Includes | Excludes |
 |-------|---------|----------|----------|----------|
-| PR fast | push to `main`/`develop`, PR to `main`; a newer commit cancels the stale run | `.github/workflows/ci.yml` | `mvn test` (including `OpenApiContractTest` and `WebUiRouteContract`), `verify-project-tests.sh`, `verify-project-docs.sh`, Flyway consistency, WebUI lint/unit/coverage thresholds/build/mock E2E | gated PostgreSQL, real models, goldenset, soak, `*-real.spec.ts` |
+| PR fast | push to `main`/`develop`, PR to `main`; a newer commit cancels the stale run | `.github/workflows/ci.yml` | `mvn test` (including `OpenApiContractTest` and `WebUiRouteContract`), `verify-project-tests.sh`, `verify-project-docs.sh`, Flyway migration inventory, WebUI lint/unit/coverage thresholds/build/mock E2E | gated PostgreSQL, real models, goldenset, soak, `*-real.spec.ts` |
 | Long-running | daily 18:00 UTC (02:00 Asia/Shanghai) and manual `workflow_dispatch` | `.github/workflows/nightly.yml` | gated PostgreSQL (30 suites / 263 tests), real LLM smoke + goldenset + retrieval regression, bounded soak, real WebUI specs that need no manual fixtures | `alerts-real` (needs preset alert/delivery IDs) and `rerank-document-diversity-real` (needs a rerank fixture) |
 
 The PR layer is bounded by job-level `timeout-minutes` (backend 45, webui 30).
 Gated IT takes about 9–19 minutes locally; keeping it in the PR layer would push
 feedback past twenty minutes, so it runs only in nightly. Each nightly job has
 its own timeout (90/60/30/75 minutes) and they do not block each other.
+
+Flyway **application** is verified in nightly's gated PostgreSQL, where Spring Boot
+actually starts and runs the migrations. The PR layer only checks the migration
+inventory (naming, duplicate versions), because `mvn test` starts no database and
+querying `flyway_schema_history` in an empty database only produces false alarms.
 
 The backend checkout uses `fetch-depth: 0`, and on PRs `DOCS_DIFF_BASE` is set to
 `origin/<base>`; Git whitespace and the added-line secret scan therefore inspect
@@ -305,7 +310,10 @@ without that variable, they still scan the working tree).
 - Under `CI`, the Playwright config enables the `github` reporter (failures are
   annotated on the PR file line) and always writes `test-results/results.json`
   for the summary. Nightly `*-real` specs run with `--retries=0`, so the first
-  failure is the failure instead of being masked by a retry.
+  failure is the failure instead of being masked by a retry. The only exception is
+  the OpenAI-compatible JSON assertion in the real-model smoke: the model
+  occasionally omits the `SUPPORTED` assessment, so that assertion gets one
+  bounded retry; two consecutive failures still fail.
 - Artifacts are retained for 14–30 days: `backend-test-results`,
   `backend-gate-logs`, `jacoco-reports`, `webui-playwright-report`,
   `nightly-gated-it`, `nightly-real-llm`, `nightly-soak`, `nightly-webui-real`.
@@ -346,9 +354,9 @@ ruby -ryaml -e 'ARGV.each { |f| YAML.load_file(f) }' .github/workflows/*.yml
 Secret injection, service containers, cache hits and artifact upload are
 GitHub-environment only; reproduce step by step with the commands above and do
 not infer a green CI from "the YAML parses". If nightly has no
-`MINIMAX_API_KEY` (or `SPRING_AI_MINIMAX_API_KEY`) and `RAG_EMBEDDING_API_KEY`,
-the real-model jobs fail explicitly and name the missing secret instead of
-skipping silently.
+`MINIMAX_API_KEY` (or `SPRING_AI_MINIMAX_API_KEY`), `RAG_EMBEDDING_API_KEY` and
+`RAG_ROOT_API_KEY`, the real-model, soak and real-WebUI jobs fail explicitly and
+name the missing secret instead of skipping silently.
 
 ### WebUI `-real` End-to-End Runbook
 

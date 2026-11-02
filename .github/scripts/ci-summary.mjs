@@ -56,9 +56,12 @@ function surefireRows() {
 
 function failingCases(text, suiteName) {
   const cases = [];
-  for (const match of text.matchAll(/<testcase\b([^>]*)>([\s\S]*?)<\/testcase>/g)) {
+  // surefire 会把无失败的用例写成自闭合 `<testcase .../>`；如果把这种标签
+  // 当成开始标签，后面的失败会被错误地挂到上一个通过的用例名上。
+  for (const match of text.matchAll(
+    /<testcase\b([^>]*?)(?:\/>|>([\s\S]*?)<\/testcase>)/g)) {
     const attrs = attributeMap(match[1]);
-    const body = match[2];
+    const body = match[2] ?? '';
     const failureTag = body.match(/<(?:failure|error)\b[^>]*>/)?.[0];
     if (!failureTag) continue;
     const failureAttrs = attributeMap(failureTag);
@@ -160,12 +163,31 @@ function addSurefireSection() {
     failures: sum.failures + row.failures,
     errors: sum.errors + row.errors,
     skipped: sum.skipped + row.skipped,
-  }), { tests: 0, failures: 0, errors: 0, skipped: 0 });
+    time: sum.time + row.time,
+  }), { tests: 0, failures: 0, errors: 0, skipped: 0, time: 0 });
+  // 逐套件列全表会把摘要淹掉（本仓库有 2000+ 个 surefire 报告）。摘要只给
+  // 模块总计，失败时再点名套件；完整清单在 `backend-test-results` artifact 里。
+  const byModule = new Map();
+  for (const row of rows) {
+    const entry = byModule.get(row.module) ?? {
+      module: row.module, suites: 0, tests: 0, failures: 0, errors: 0,
+      skipped: 0, time: 0,
+    };
+    entry.suites += 1;
+    entry.tests += row.tests;
+    entry.failures += row.failures;
+    entry.errors += row.errors;
+    entry.skipped += row.skipped;
+    entry.time += row.time;
+    byModule.set(row.module, entry);
+  }
+  const moduleRows = [...byModule.values()].sort(
+    (left, right) => left.module.localeCompare(right.module));
   write(table(
-    ['Module', 'Suite', 'Tests', 'Failures', 'Errors', 'Skipped', 'Time (s)'],
-    rows.map((row) => [
+    ['Module', 'Suites', 'Tests', 'Failures', 'Errors', 'Skipped', 'Time (s)'],
+    moduleRows.map((row) => [
       row.module,
-      row.suite,
+      String(row.suites),
       String(row.tests),
       String(row.failures),
       String(row.errors),
@@ -173,9 +195,11 @@ function addSurefireSection() {
       row.time.toFixed(2),
     ]),
   ));
-  write(`**Totals:** ${totals.tests} tests, ${totals.failures} failures, `
-    + `${totals.errors} errors, ${totals.skipped} skipped.`);
-  const failures = rows.flatMap((row) => row.failuresDetail);
+  write(`**Totals:** ${totals.tests} tests in ${rows.length} suites, `
+    + `${totals.failures} failures, ${totals.errors} errors, `
+    + `${totals.skipped} skipped.`);
+  const failingSuites = rows.filter((row) => row.failures + row.errors > 0);
+  const failures = failingSuites.flatMap((row) => row.failuresDetail);
   if (failures.length > 0) {
     write();
     write('**Failing cases:**');
@@ -187,6 +211,12 @@ function addSurefireSection() {
     write();
     write('A suite reports failures but no failing testcase body was found; '
       + 'open the uploaded surefire report for the stack trace.');
+  }
+  if (failingSuites.length > 0) {
+    write();
+    write(`**Suites with failures:** ${failingSuites
+      .map((row) => `\`${row.suite}\``)
+      .join(', ')}`);
   }
   write();
 }

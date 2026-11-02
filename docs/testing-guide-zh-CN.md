@@ -259,12 +259,16 @@ workflow 里，而不是靠人记得：
 
 | 层 | 触发 | 工作流 | 包含 | 不包含 |
 |----|------|--------|------|--------|
-| PR 快层 | push `main`/`develop`、PR → `main`；同分支新提交自动取消旧运行 | `.github/workflows/ci.yml` | `mvn test`（含 `OpenApiContractTest` 与 `WebUiRouteContract`）、`verify-project-tests.sh`、`verify-project-docs.sh`、Flyway 一致性、WebUI lint/单测/覆盖率阈值/构建/Mock E2E | gated PostgreSQL、真实模型、goldenset、soak、`*-real.spec.ts` |
+| PR 快层 | push `main`/`develop`、PR → `main`；同分支新提交自动取消旧运行 | `.github/workflows/ci.yml` | `mvn test`（含 `OpenApiContractTest` 与 `WebUiRouteContract`）、`verify-project-tests.sh`、`verify-project-docs.sh`、Flyway 迁移清单校验、WebUI lint/单测/覆盖率阈值/构建/Mock E2E | gated PostgreSQL、真实模型、goldenset、soak、`*-real.spec.ts` |
 | 长跑层 | 每日 18:00 UTC（北京时间 02:00）与手动 `workflow_dispatch` | `.github/workflows/nightly.yml` | gated PostgreSQL（30 套件 / 263 用例）、真实 LLM smoke + goldenset + 检索回归、有界 soak、无需人工 fixture 的真实 WebUI spec | 需要预置告警/投递 ID 的 `alerts-real`、需要 rerank fixture 的 `rerank-document-diversity-real` |
 
 PR 层的时间预算由 job 级 `timeout-minutes` 固定（backend 45、webui 30）。gated IT
 本地约 9–19 分钟，放在 PR 层会把反馈时间拖到 20 分钟以上，所以它只在 nightly 跑；
 nightly 的每个 job 各自有超时（90/60/30/75 分钟），互相不阻塞。
+
+Flyway 的**应用**校验放在 nightly 的 gated PostgreSQL：那里会真正启动 Spring Boot
+并执行迁移。PR 层只校验迁移清单结构（命名、重复版本号），因为 `mvn test` 不启动
+数据库，在空库里查 `flyway_schema_history` 只会得到假报警。
 
 CI 的 backend checkout 使用 `fetch-depth: 0`，PR 上把 `DOCS_DIFF_BASE` 设为
 `origin/<base>`；因此 Git whitespace 与新增行密钥扫描检查的是 PR 的真实新增行，
@@ -277,7 +281,9 @@ CI 的 backend checkout 使用 `fetch-depth: 0`，PR 上把 `DOCS_DIFF_BASE` 设
   只提示，不会把绿色 job 变红。
 - Playwright 配置在 `CI` 下启用 `github` reporter（失败直接标注到 PR 文件行），
   并始终写 `test-results/results.json` 供上面的脚本汇总；`--real` 用例在 nightly
-  使用 `--retries=0`，首次失败就是失败，不用重试掩盖抖动。
+  使用 `--retries=0`，首次失败就是失败，不用重试掩盖抖动。唯一的例外是真实模型
+  smoke 里的 OpenAI-compatible JSON 断言：模型偶发不返回 `SUPPORTED` 评估，
+  该断言允许一次有界重试，连续两次失败仍然报错。
 - artifact 保留 14–30 天：`backend-test-results`、`backend-gate-logs`、
   `jacoco-reports`、`webui-playwright-report`、`nightly-gated-it`、
   `nightly-real-llm`、`nightly-soak`、`nightly-webui-real`。下载：
@@ -313,8 +319,9 @@ ruby -ryaml -e 'ARGV.each { |f| YAML.load_file(f) }' .github/workflows/*.yml
 
 Secret 注入、service container、缓存命中和 artifact 上传属于 GitHub 环境专属；
 本地按上面的命令逐步复现，不要用"YAML 能解析"推断 CI 一定通过。若 nightly 的
-`MINIMAX_API_KEY`（或 `SPRING_AI_MINIMAX_API_KEY`）与 `RAG_EMBEDDING_API_KEY`
-没有配置，真实模型 job 会明确失败并点名缺哪一项，而不是静默跳过。
+`MINIMAX_API_KEY`（或 `SPRING_AI_MINIMAX_API_KEY`）、`RAG_EMBEDDING_API_KEY` 与
+`RAG_ROOT_API_KEY` 没有配置，真实模型 / soak / 真实 WebUI job 会明确失败并点名
+缺哪一项，而不是静默跳过。
 
 ### WebUI `-real` 端到端用例运行手册
 
