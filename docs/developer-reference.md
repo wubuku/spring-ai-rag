@@ -234,7 +234,8 @@ ecosystem:
 - Dependabot PRs run the `ci.yml` PR fast layer as usual; they need no
   real-model secrets (mock E2E is enough).
 - The repository is public, so Dependabot alerts / security updates and CodeQL
-  are all free of charge and licensing.
+  are all free of charge and licensing. All three were enabled on 2026-11-03;
+  secret scanning and push protection were already on.
 
 Supply-chain scanning uses CodeQL (`.github/workflows/codeql.yml`) for
 `java-kotlin` + `javascript-typescript`, on `push main`, Mondays 03:00 UTC, and

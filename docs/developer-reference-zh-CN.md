@@ -223,6 +223,7 @@ skipped；本门禁则保证今后再有类"闭嘴"就会失败。
 - 每个生态 `open-pull-requests-limit: 5`；major 升级不自动分组，单独开 PR 由人判断。
 - Dependabot PR 照常跑 `ci.yml` 的 PR 快层；它不需要真实模型 secret（mock E2E 足够）。
 - 仓库是公开仓库，Dependabot alerts / security updates 与 CodeQL 都不需要付费或许可证。
+  这三项已于 2026-11-03 启用；secret scanning 与 push protection 原本已开启。
 
 供应链扫描用 CodeQL（`.github/workflows/codeql.yml`）：`java-kotlin` +
 `javascript-typescript`，只在 `push main`、每周一 03:00 UTC 和手动触发时跑，**不挂 PR**。
