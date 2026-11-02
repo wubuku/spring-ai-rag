@@ -45,6 +45,9 @@ jobs:
       POSTGRES_DATABASE: spring_ai_rag_test
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
+      # psql 不会自动读取 POSTGRES_PASSWORD；服务容器要求密码认证，
+      # 缺 PGPASSWORD 时建库步骤会失败（fe_sendauth: no password supplied）。
+      PGPASSWORD: postgres
       SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/spring_ai_rag_test
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: postgres

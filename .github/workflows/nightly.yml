@@ -96,6 +96,7 @@ jobs:
       POSTGRES_DATABASE: rag_nightly_llm
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
+      PGPASSWORD: postgres
       SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/rag_nightly_llm
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: postgres
@@ -244,6 +245,7 @@ jobs:
       POSTGRES_DATABASE: rag_nightly_soak
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
+      PGPASSWORD: postgres
       SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/rag_nightly_soak
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: postgres
@@ -346,6 +348,7 @@ jobs:
       POSTGRES_DATABASE: rag_nightly_webui
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
+      PGPASSWORD: postgres
       SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/rag_nightly_webui
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: postgres
