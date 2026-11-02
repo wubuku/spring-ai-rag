@@ -87,7 +87,16 @@ jobs:
         run: |
           psql -h localhost -U postgres -c "CREATE DATABASE spring_ai_rag_test" 2>/dev/null || true
           psql -h localhost -U postgres -d spring_ai_rag_test -c "CREATE EXTENSION IF NOT EXISTS vector"
-          psql -h localhost -U postgres -d spring_ai_rag_test -c "CREATE EXTENSION IF NOT EXISTS pg_jieba"
+          psql -h localhost -U postgres -d spring_ai_rag_test -c "CREATE EXTENSION IF NOT EXISTS pg_trgm"
+          # pg_jieba 是可选扩展，pgvector 官方镜像不含它；V1 迁移和检索 provider
+          # 在缺失时会自动降级到 pg_trgm / 纯向量。这里只记录可用性，不把
+          # “装不上”当成失败，否则后端 job 会在建库阶段就红。
+          if psql -h localhost -U postgres -d spring_ai_rag_test \
+              -c "CREATE EXTENSION IF NOT EXISTS pg_jieba"; then
+            echo "pg_jieba: available"
+          else
+            echo "pg_jieba: unavailable (optional; fulltext falls back to pg_trgm)"
+          fi | tee -a "$GITHUB_STEP_SUMMARY"
 
       # 仓库级门禁链需要 ripgrep；runner 镜像通常已带，缺失时再安装。
       - name: Ensure gate dependencies

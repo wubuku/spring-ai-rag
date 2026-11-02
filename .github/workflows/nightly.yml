@@ -137,7 +137,14 @@ jobs:
         run: |
           psql -h localhost -U postgres -d postgres -c "CREATE DATABASE rag_nightly_llm" 2>/dev/null || true
           psql -h localhost -U postgres -d rag_nightly_llm -c "CREATE EXTENSION IF NOT EXISTS vector"
-          psql -h localhost -U postgres -d rag_nightly_llm -c "CREATE EXTENSION IF NOT EXISTS pg_jieba"
+          psql -h localhost -U postgres -d rag_nightly_llm -c "CREATE EXTENSION IF NOT EXISTS pg_trgm"
+          # pg_jieba 为可选扩展，pgvector 镜像不含它；迁移会降级到 pg_trgm。
+          if psql -h localhost -U postgres -d rag_nightly_llm \
+              -c "CREATE EXTENSION IF NOT EXISTS pg_jieba"; then
+            echo "pg_jieba: available"
+          else
+            echo "pg_jieba: unavailable (optional; fulltext falls back to pg_trgm)"
+          fi
 
       # 仓库脚本按约定从 `.env` 读取凭据；runner 是临时环境，文件不会进入制品。
       - name: Materialize .env for repository scripts
@@ -261,7 +268,13 @@ jobs:
         run: |
           psql -h localhost -U postgres -d postgres -c "CREATE DATABASE rag_nightly_soak" 2>/dev/null || true
           psql -h localhost -U postgres -d rag_nightly_soak -c "CREATE EXTENSION IF NOT EXISTS vector"
-          psql -h localhost -U postgres -d rag_nightly_soak -c "CREATE EXTENSION IF NOT EXISTS pg_jieba"
+          psql -h localhost -U postgres -d rag_nightly_soak -c "CREATE EXTENSION IF NOT EXISTS pg_trgm"
+          if psql -h localhost -U postgres -d rag_nightly_soak \
+              -c "CREATE EXTENSION IF NOT EXISTS pg_jieba"; then
+            echo "pg_jieba: available"
+          else
+            echo "pg_jieba: unavailable (optional; fulltext falls back to pg_trgm)"
+          fi
 
       # soak 验证的是 HTTP/DB/线程稳定性，不是模型质量：用仓库自带 mock provider，
       # 避免 nightly 产生不受控的付费调用；真实模型质量由 real-llm job 覆盖。
@@ -376,7 +389,13 @@ jobs:
         run: |
           psql -h localhost -U postgres -d postgres -c "CREATE DATABASE rag_nightly_webui" 2>/dev/null || true
           psql -h localhost -U postgres -d rag_nightly_webui -c "CREATE EXTENSION IF NOT EXISTS vector"
-          psql -h localhost -U postgres -d rag_nightly_webui -c "CREATE EXTENSION IF NOT EXISTS pg_jieba"
+          psql -h localhost -U postgres -d rag_nightly_webui -c "CREATE EXTENSION IF NOT EXISTS pg_trgm"
+          if psql -h localhost -U postgres -d rag_nightly_webui \
+              -c "CREATE EXTENSION IF NOT EXISTS pg_jieba"; then
+            echo "pg_jieba: available"
+          else
+            echo "pg_jieba: unavailable (optional; fulltext falls back to pg_trgm)"
+          fi
 
       - name: Generate root API key when not configured
         run: |
