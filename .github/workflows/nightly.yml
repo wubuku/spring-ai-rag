@@ -246,6 +246,9 @@ jobs:
       RAG_EMBEDDING_BASE_URL: http://127.0.0.1:8086
       RAG_EMBEDDING_MODEL: mock-embedding
       RAG_EMBEDDING_DIMENSIONS: '1024'
+      # 覆盖 embedding 身份时必须显式声明 profile key，否则
+      # EmbeddingProfileRegistry 会拒绝启动（这是有意的防串维度保护）。
+      RAG_EMBEDDING_PROFILE_KEY: mock-soak-1024-v1
       RAG_SECURITY_ENABLED: 'false'
       POSTGRES_HOST: localhost
       POSTGRES_PORT: 5432
