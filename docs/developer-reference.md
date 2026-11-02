@@ -1385,6 +1385,25 @@ One-command release verification:
 `BASE_URL`. `--with-local-runtime` includes HTTP E2E, goldenset, quality
 regression, and real-LLM smoke.
 
+One-click baseline (reuses those release gates and adds gated IT plus a
+bounded soak):
+
+```bash
+./scripts/verify-baseline.sh
+./scripts/verify-baseline.sh --soak-minutes 30
+./scripts/verify-baseline.sh --skip-soak --skip-docker --skip-helm
+```
+
+It preflights JDK >= 21, Docker, `.env` credentials and ports, then runs
+`scripts/run-bounded-soak.py`, `scripts/verify-gated-it.sh`, and finally
+`verify-release.sh --with-local-runtime`. The soak and release runtime share a
+disposable database (`rag_baseline_<run>`) that is dropped afterwards; the
+summary, per-stage logs and soak percentiles go to
+`.verification/baseline/<run-id>/`. `--skip-*` flags are forwarded to the
+release script and skipped stages are marked in the summary. JDK 25 has been
+measured for a full package build, representative tests, and gated IT; CI and
+release remain pinned to JDK 21.
+
 Logs and summaries are written to `target/release-verification/<run-id>/`. See [release-checklist.md](release-checklist.md).
 
 ## 9. Docker And Mainland-China Networking

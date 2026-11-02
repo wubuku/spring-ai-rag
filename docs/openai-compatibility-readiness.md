@@ -195,11 +195,28 @@ This proves the external-client transport and the configured provider combinatio
 this run; it is not a claim that every provider, model, network, or public deployment
 has been covered.
 
+On 2026-11-03, an additional OpenAI-compatible provider (LongCat) was verified.
+The service started against an isolated PostgreSQL instance with
+`SPRING_AI_OPENAI_BASE_URL=https://api.longcat.chat/openai` (no `/v1`, matching
+the repository rule) and `SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL=LongCat-2.5`; the
+backend log confirmed `Creating OpenAI ChatModel ... model=LongCat-2.5`.
+`GET /v1/models` returned the alias `rag-default`; non-streaming
+`POST /v1/chat/completions` returned `200` with `finish_reason=stop` and usage
+`83/113/196`; SSE returned four `data:` events and terminated with `[DONE]`
+(`/v1` runs in KNOWLEDGE mode, so a request without scope follows the existing
+grounded-refusal contract). The application's own PLAIN chat path returned
+`LONGCAT_OK` in about 2.3s, and the full `real-llm-e2e-smoke.sh` reported
+`PASS=13 FAIL=0`, including AGENT tool calls and citations. Embeddings remain on
+SiliconFlow BGE-M3 (1024 dimensions); LongCat embedding was not assumed.
+Unsupported parameters such as `max_tokens` still return `unsupported_parameter`
+as described in §4.2.
+
 This evidence does **not** yet prove:
 
 1. Long-run cost, latency distributions, provider-specific errors, and production network
-   policy for every configured provider; the run covered only the configured
-   MiniMax/SiliconFlow combination in an isolated environment.
+   policy for every configured provider; the runs covered the configured
+   MiniMax/SiliconFlow combination and the 2026-11-03 LongCat chat-only check, each in an
+   isolated environment.
 2. The Mock gate's complete feature-flag, Bearer authentication, read-only capability,
    Collection ACL, shared quota, and upstream-failure matrix is not replaced by one
    real-model run; the dedicated gate remains required before release.

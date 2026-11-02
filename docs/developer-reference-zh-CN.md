@@ -1220,6 +1220,21 @@ artifact 与 Markdown 汇总写入 `.verification/quality-regression/<run-id>/`�
 `--with-quality-regression` 对已经启动的 `BASE_URL` 追加版本化回归；
 `--with-local-runtime` 默认包含 HTTP E2E、goldenset、质量回归和真实 LLM smoke。
 
+一键基线（复用上面的发版门禁，并补 gated IT 与有界 soak）：
+
+```bash
+./scripts/verify-baseline.sh
+./scripts/verify-baseline.sh --soak-minutes 30
+./scripts/verify-baseline.sh --skip-soak --skip-docker --skip-helm
+```
+
+它先做前置检查（JDK ≥ 21、Docker、`.env` 凭据、端口），再运行
+`scripts/run-bounded-soak.py`、`scripts/verify-gated-it.sh`，最后调用
+`verify-release.sh --with-local-runtime`。soak 与发版运行时共用一次性隔离数据库
+（`rag_baseline_<run>`），完成后删除；汇总、各阶段日志和 soak 分位数写入
+`.verification/baseline/<run-id>/`。`--skip-*` 会原样转发给发版脚本，跳过项在汇总中标注。
+JDK 25 已实测可完成全量打包、核心抽样测试与 gated IT；CI 与发版固定 JDK 21。
+
 日志和汇总写入 `target/release-verification/<run-id>/`。门禁详情见 [release-checklist-zh-CN.md](release-checklist-zh-CN.md)。
 
 ## 9. Docker 与境内网络

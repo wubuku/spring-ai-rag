@@ -10,7 +10,7 @@
 
 | 依赖 | 版本 | 说明 |
 |------|------|------|
-| JDK | 21+ (LTS, 虚拟线程) | 必选 |
+| JDK | 21+（已在 21、25 上验证；编译目标 21） | 必选 |
 | Maven | 3.9+ | 构建工具 |
 | PostgreSQL | 15+ | 需安装 `vector` 和 `pg_trgm` 扩展 |
 | API Key | LLM + Embedding | DeepSeek/OpenAI + SiliconFlow |

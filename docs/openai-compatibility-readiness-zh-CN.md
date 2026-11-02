@@ -167,11 +167,22 @@ Web 安全装配；随后 `test-compile`、脚本语法与 `git diff --check` �
 `PASS=11 FAIL=0`。这些结果证明了本批外部 Client 传输与当前 provider 组合可用，但不
 等于所有 provider、模型、网络条件或公网生产配置都已覆盖。
 
+2026-11-03 追加 OpenAI-compatible provider（LongCat）真实验证。使用 `.env` 的
+`SPRING_AI_OPENAI_BASE_URL=https://api.longcat.chat/openai`（不带 `/v1`，符合仓库硬性规则）、
+`SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL=LongCat-2.5` 与一次性隔离 PostgreSQL 启动服务，后端日志
+确认 `Creating OpenAI ChatModel ... model=LongCat-2.5`。`GET /v1/models` 返回 alias `rag-default`；
+非流式 `POST /v1/chat/completions` 返回 `200`、`finish_reason=stop`、usage `83/113/196`，
+SSE 返回 4 个 `data:` 事件并以 `[DONE]` 结束（`/v1` 请求走 KNOWLEDGE，未带 scope 时按既有拒答
+契约返回）；经应用自身 PLAIN Chat 路径的直答返回 `LONGCAT_OK`（约 2.3s），完整
+`real-llm-e2e-smoke.sh` 为 `PASS=13 FAIL=0`（含 AGENT 工具调用/引用）。嵌入仍为 SiliconFlow
+BGE-M3（1024 维），未假设 LongCat 提供 embedding；`max_tokens` 等未支持参数仍按 §4.2 返回
+`unsupported_parameter`。
+
 这些证据**尚不能**证明以下事项：
 
-1. 本次真实运行只覆盖已配置的 MiniMax/SiliconFlow 组合和一次性隔离环境；费用、长期
-   延迟分布、provider 特有错误与生产网络策略仍需在目标部署中单独验收，不能由 Mock
-   或一次真实冒烟外推。
+1. 本次真实运行只覆盖已配置的 MiniMax/SiliconFlow 组合与 2026-11-03 的 LongCat 纯 Chat
+   验证，且均是一次性隔离环境；费用、长期延迟分布、provider 特有错误与生产网络策略仍需在
+   目标部署中单独验收，不能由 Mock 或一次真实冒烟外推。
 2. Mock 门禁覆盖的 feature flag、Bearer、只读能力、Collection ACL、共享 quota 和
    上游故障组合，不应被一次真实模型运行替代；发布前仍需执行对应专项门禁。
 3. 常见第三方 Agent、IDE 和网关不会自动发送当前不支持的 OpenAI 参数，仍需按客户矩阵

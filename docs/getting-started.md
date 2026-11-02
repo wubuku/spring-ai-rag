@@ -10,7 +10,7 @@
 
 | Dependency | Version | Notes |
 |------------|---------|-------|
-| JDK | 21+ (LTS, Virtual Threads) | Required |
+| JDK | 21+ (verified on 21 and 25; compiled for 21) | Required |
 | Maven | 3.9+ | Build tool |
 | PostgreSQL | 15+ | Requires `vector` and `pg_trgm` extensions |
 | API Keys | LLM + Embedding | DeepSeek/OpenAI + SiliconFlow |
