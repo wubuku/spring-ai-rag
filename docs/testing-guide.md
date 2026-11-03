@@ -462,6 +462,45 @@ JAVA_HOME=<jdk21> mvn -pl spring-ai-rag-core -Pmutation \
   test-compile org.pitest:pitest-maven:1.17.2:mutationCoverage
 ```
 
+### Visual Regression (Playwright Screenshot Baselines)
+
+Semantic E2E only proves elements exist and copy matches; changing design tokens,
+spacing, or layout will not turn any assertion red. `spring-ai-rag-webui/e2e/visual.spec.ts`
+captures two baselines each — desktop (1440×900) and mobile (390×844), ten images total —
+for Dashboard / Documents / Chat / Collections / Files, Chromium only:
+
+```bash
+cd spring-ai-rag-webui
+npm run test:visual
+```
+
+Comparison policy: a per-pixel color tolerance of `threshold=0.2` absorbs font
+anti-aliasing, while `maxDiffPixelRatio=0.0015` caps the number of differing pixels
+(about 1,900 at 1440×900). Anti-aliasing noise passes, but a 100×20 control shift
+fails. Baselines are platform-specific files (`*-chromium-darwin.png` /
+`*-chromium-linux.png`) because Chromium renders fonts and scrollbars differently
+per OS; CI runs the pinned official image `mcr.microsoft.com/playwright:v1.59.1-noble`
+that matches `@playwright/test`, so Linux baselines come from the same renderer.
+This suite is not part of `npm run test:e2e:mock`; both CI and local runs invoke
+`npm run test:visual` separately.
+
+Update procedure (only when the visual change is intended):
+
+1. On macOS: `npm run test:visual -- --update-snapshots` regenerates darwin baselines.
+2. Regenerate Linux baselines inside the official image (do not reuse macOS images):
+   ```bash
+   docker run --rm -v "$PWD:/work" -w /work -e HOME=/root -e CI=1 \
+     mcr.microsoft.com/playwright:v1.59.1-noble \
+     sh -c "npm ci --no-audit --no-fund && npm run test:visual -- --update-snapshots"
+   ```
+3. Review every `*-diff.png` and `test-results/` entry to confirm only expected changes.
+4. Run `npm run test:visual` twice without `--update-snapshots` to confirm no flake.
+5. Commit the baselines together with the change.
+
+Screenshot data all comes from `e2e/api-mocks.ts`. Before adding a page baseline,
+make sure the mocks contain no runtime timestamps or other non-deterministic fields
+(`health.timestamp` is already a constant).
+
 ### Local Reproduction And GitHub-Only Differences
 
 ```bash

@@ -405,6 +405,42 @@ JAVA_HOME=<jdk21> mvn -pl spring-ai-rag-core -Pmutation \
   test-compile org.pitest:pitest-maven:1.17.2:mutationCoverage
 ```
 
+### 视觉回归（Playwright 截图基准）
+
+语义 E2E 只验证“元素在、文案对”；改 design token、间距或布局不会触发任何断言变红。
+`spring-ai-rag-webui/e2e/visual.spec.ts` 对 Dashboard / Documents / Chat /
+Collections / Files 各拍桌面（1440×900）与移动（390×844）两档基准，共 10 张，
+仅 Chromium 执行：
+
+```bash
+cd spring-ai-rag-webui
+npm run test:visual
+```
+
+判定口径：单像素颜色容差 `threshold=0.2` 吸收字体抗锯齿；整图像素差上限
+`maxDiffPixelRatio=0.0015`（1440×900 约 1,900 像素）。抗锯齿噪声可以通过，
+但任意控件位移 100×20 就会超限。基准图按平台分文件
+（`*-chromium-darwin.png` / `*-chromium-linux.png`），因为 Chromium 的字体与
+滚动条渲染跨平台不同；CI 用与 `@playwright/test` 同版本的官方镜像
+`mcr.microsoft.com/playwright:v1.59.1-noble` 执行，保证与 Linux 基准同源。
+该套件不在 `npm run test:e2e:mock` 内，CI 与本地都通过 `npm run test:visual` 单独跑。
+
+更新流程（仅在外观变更属于预期时）：
+
+1. macOS 本地：`npm run test:visual -- --update-snapshots`，生成/更新 darwin 基准；
+2. Linux 基准必须在官方镜像内生成（不要用 macOS 图替代）：
+   ```bash
+   docker run --rm -v "$PWD:/work" -w /work -e HOME=/root -e CI=1 \
+     mcr.microsoft.com/playwright:v1.59.1-noble \
+     sh -c "npm ci --no-audit --no-fund && npm run test:visual -- --update-snapshots"
+   ```
+3. 逐张 review Playwright 输出的 `*-diff.png` 与 `test-results/`，确认只有预期变化；
+4. 不带 `--update-snapshots` 连跑两轮 `npm run test:visual`，确认不 flaky；
+5. 基准图入库，随改动一起提交。
+
+截图数据全部来自 `e2e/api-mocks.ts`。新增页面基准前先确认 mock 中没有运行时
+时间戳等非确定字段（`health.timestamp` 已固定为常量）。
+
 ### 本地复现与 GitHub 专属差异
 
 ```bash

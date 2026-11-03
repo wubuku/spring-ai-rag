@@ -249,7 +249,8 @@ export async function mockAllApiCalls(page: Page) {
           pgvector: 'UP',
           cache: 'HIT',
         },
-        timestamp: new Date().toISOString(),
+        // 固定时间戳：Dashboard 会把它渲染成 "Last Check"，视觉基准需要确定性。
+        timestamp: '2026-08-27T12:00:00Z',
       }),
     });
   });

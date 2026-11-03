@@ -34,6 +34,7 @@
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:report": "playwright show-report",
     "test:e2e:mock": "playwright test --config playwright.preview.config.ts",
+    "test:visual": "playwright test --config playwright.visual.config.ts --project=chromium e2e/visual.spec.ts",
     "check:page-shell": "node scripts/check-page-shell.mjs",
     "check:single-api-base": "node scripts/check-single-api-base.mjs",
     "check:time-formatting": "node scripts/check-time-formatting.mjs",

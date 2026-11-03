@@ -305,6 +305,19 @@ jobs:
       - name: Mock E2E (Playwright)
         run: npm run test:e2e:mock
 
+      # 视觉基准按平台分文件（*-chromium-linux.png）。为了让 CI 与生成基准时
+      # 的字体/渲染完全一致，这里固定使用与 package-lock 中 @playwright/test
+      # 同版本的官方镜像，而不是 runner 上临时安装的浏览器。
+      - name: Visual regression (Chromium)
+        run: |
+          docker run --rm --network host \
+            -v "$GITHUB_WORKSPACE:/work" \
+            -w /work/spring-ai-rag-webui \
+            -e HOME=/tmp \
+            -e CI=1 \
+            mcr.microsoft.com/playwright:v1.59.1-noble \
+            npm run test:visual
+
       - name: Failure diagnostics summary
         if: always()
         continue-on-error: true
