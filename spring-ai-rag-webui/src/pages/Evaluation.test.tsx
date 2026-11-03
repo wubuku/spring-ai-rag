@@ -88,6 +88,27 @@ describe('Evaluation page', () => {
     expect(screen.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', tab.id);
     expect(screen.getByText('evaluation.suitesHint')).toBeInTheDocument();
   });
+
+  it('pages evaluation history beyond the first 20 rows', async () => {
+    const user = userEvent.setup();
+    const rows = Array.from({ length: 20 }, (_, i) => ({
+      id: i + 1,
+      query: `history-${i + 1}`,
+      mrr: 0.5,
+      ndcg: 0.4,
+      hitRate: 1,
+      createdAt: '2026-11-04T00:00:00Z',
+    }));
+    vi.mocked(evaluationApi.getHistory).mockResolvedValue({ data: rows } as never);
+    renderPage('/?tab=history');
+
+    expect(await screen.findByText('history-1')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'common.next' }));
+
+    await waitFor(() => {
+      expect(evaluationApi.getHistory).toHaveBeenLastCalledWith({ page: 1, size: 20 });
+    });
+  });
 });
 
 describe('Evaluation interactions', () => {

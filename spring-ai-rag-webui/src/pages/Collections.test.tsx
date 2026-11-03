@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { BrowserRouter } from 'react-router-dom';
+import { BrowserRouter, MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   collectionsApi,
@@ -135,6 +135,45 @@ function renderPage() {
     </QueryClientProvider>,
   );
 }
+
+describe('Collections pagination', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockCapabilities(true);
+  });
+
+  it('requests the next page through the shared pager', async () => {
+    const user = userEvent.setup();
+    const pageItems = Array.from({ length: 20 }, (_, i) => ({
+      ...collection,
+      id: i + 1,
+      collectionKey: `page-collection-${i + 1}`,
+    }));
+    vi.mocked(collectionsApi.list).mockResolvedValue(response({
+      collections: pageItems,
+      total: 120,
+      offset: 0,
+      limit: 20,
+    }));
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={['/']}>
+          <Collections />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText('page-collection-1')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'common.next' }));
+
+    await waitFor(() => {
+      expect(collectionsApi.list).toHaveBeenLastCalledWith({ page: 1, size: 20 });
+    });
+  });
+});
 
 describe('Collections purge flow', () => {
   beforeEach(() => {

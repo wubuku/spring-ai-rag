@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import {
@@ -16,7 +16,7 @@ import { CreateCollectionModal } from '../components/CreateCollectionModal';
 import { Dialog } from '../components/Dialog';
 import { Card } from '../components/Card';
 import styles from './Collections.module.css';
-import { EmptyState, PageHeader, QueryErrorBanner } from '../components/ui';
+import { EmptyState, PageHeader, Pager, QueryErrorBanner } from '../components/ui';
 import { failureMessage, usableReason } from '../utils/failureReason';
 import { formatAbsolute } from '../utils/time';
 import { STALE_TIME_MS } from '../utils/timing';
@@ -35,8 +35,17 @@ function errorMessage(error: unknown, fallback: string): string {
 }
 
 export function Collections() {
+  const PAGE_SIZE = 20;
   const { t } = useTranslation();
-  const [page] = useState(0);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const rawPage = Number(searchParams.get('page') ?? 0);
+  const page = Number.isInteger(rawPage) && rawPage >= 0 ? rawPage : 0;
+  const handlePageChange = (nextPage: number) => {
+    const params = new URLSearchParams(searchParams);
+    if (nextPage > 0) params.set('page', String(nextPage));
+    else params.delete('page');
+    setSearchParams(params);
+  };
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [purgeTarget, setPurgeTarget] = useState<Collection | null>(null);
   // Purge on the same card already opens CollectionPurgeDialog; delete did
@@ -50,7 +59,7 @@ export function Collections() {
 
   const { data, isPending, isError, refetch } = useQuery({
     queryKey: ['collections', page],
-    queryFn: () => collectionsApi.list({ page, size: 20 }),
+    queryFn: () => collectionsApi.list({ page, size: PAGE_SIZE }),
   });
 
   // Fail-closed: capabilityData 失败时 purgeVisible 保持 false，破坏性操作被
@@ -126,53 +135,69 @@ export function Collections() {
           {t('collections.loadFailed')}
         </QueryErrorBanner>
       ) : (
-        <div className={styles.grid}>
-          {data?.data?.collections?.map(col => (
-            <Card key={col.collectionKey}>
-              <div className={styles.name}>{col.name}</div>
-              <div className={styles.meta} title={col.collectionKey}>{col.collectionKey}</div>
-              <div className={styles.meta}>
-                {col.embeddingModel} · {col.dimensions}D
-              </div>
-              <div className={styles.meta}>
-                {col.documentCount} {t('collections.documentCount')}
-              </div>
-              <div className={styles.actions}>
-                <button
-                  onClick={() => navigate(`/documents?collectionKey=${encodeURIComponent(col.collectionKey)}`)}
-                  className={styles.viewBtn}
-                >
-                  {t('collections.viewDocuments')}
-                </button>
-                <button
-                  onClick={() => navigate(`/embeddings?collectionKey=${encodeURIComponent(col.collectionKey)}`)}
-                  className={styles.viewBtn}
-                >
-                  {t('embeddings.openOperations')}
-                </button>
-                <button
-                  onClick={() => setDeleteTarget(col.collectionKey)}
-                  className={styles.deleteBtn}
-                  disabled={deleteMutation.isPending}
-                >
-                  {t('collections.delete')}
-                </button>
-                {purgeVisible && (
+        <>
+          <div className={styles.grid}>
+            {data?.data?.collections?.map(col => (
+              <Card key={col.collectionKey}>
+                <div className={styles.name}>{col.name}</div>
+                <div className={styles.meta} title={col.collectionKey}>{col.collectionKey}</div>
+                <div className={styles.meta}>
+                  {col.embeddingModel} · {col.dimensions}D
+                </div>
+                <div className={styles.meta}>
+                  {col.documentCount} {t('collections.documentCount')}
+                </div>
+                <div className={styles.actions}>
                   <button
-                    type="button"
-                    onClick={() => setPurgeTarget(col)}
-                    className={styles.purgeBtn}
+                    onClick={() => navigate(`/documents?collectionKey=${encodeURIComponent(col.collectionKey)}`)}
+                    className={styles.viewBtn}
                   >
-                    {t('collections.purge.action')}
+                    {t('collections.viewDocuments')}
                   </button>
-                )}
-              </div>
-            </Card>
-          ))}
-          {data?.data?.collections?.length === 0 && (
-            <EmptyState>{t('collections.noCollections')}</EmptyState>
+                  <button
+                    onClick={() => navigate(`/embeddings?collectionKey=${encodeURIComponent(col.collectionKey)}`)}
+                    className={styles.viewBtn}
+                  >
+                    {t('embeddings.openOperations')}
+                  </button>
+                  <button
+                    onClick={() => setDeleteTarget(col.collectionKey)}
+                    className={styles.deleteBtn}
+                    disabled={deleteMutation.isPending}
+                  >
+                    {t('collections.delete')}
+                  </button>
+                  {purgeVisible && (
+                    <button
+                      type="button"
+                      onClick={() => setPurgeTarget(col)}
+                      className={styles.purgeBtn}
+                    >
+                      {t('collections.purge.action')}
+                    </button>
+                  )}
+                </div>
+              </Card>
+            ))}
+            {data?.data?.collections?.length === 0 && (
+              <EmptyState>{t('collections.noCollections')}</EmptyState>
+            )}
+          </div>
+          {(data?.data?.total ?? 0) > 0 && (
+            <Pager
+              page={page}
+              hasNext={(page + 1) * PAGE_SIZE < (data?.data?.total ?? 0)}
+              onChange={handlePageChange}
+              summary={t('common.pageOf', {
+                page: page + 1,
+                total: Math.max(1, Math.ceil((data?.data?.total ?? 0) / PAGE_SIZE)),
+              })}
+              previousLabel={t('common.previous')}
+              nextLabel={t('common.next')}
+              label={t('collections.title')}
+            />
           )}
-        </div>
+        </>
       )}
       <CreateCollectionModal
         isOpen={showCreateModal}

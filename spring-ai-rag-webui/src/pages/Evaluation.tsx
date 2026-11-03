@@ -5,7 +5,7 @@ import { useSearchParams } from 'react-router-dom';
 import { evaluationApi, type EvaluationRunSnapshot } from '../api/evaluation';
 import { Card } from '../components/Card';
 import styles from './Evaluation.module.css';
-import { EmptyState, PageHeader, QueryErrorBanner, Tabs, tabDomIds } from '../components/ui';
+import { EmptyState, PageHeader, Pager, QueryErrorBanner, Tabs, tabDomIds } from '../components/ui';
 import { failureMessage } from '../utils/failureReason';
 import { resolveTabParam, tabSearchParams, toTabItems } from '../utils/urlParams';
 
@@ -87,11 +87,14 @@ function QaRunSummary({ run }: { run: EvaluationRunSnapshot }) {
 }
 
 export function Evaluation() {
+  const PAGE_SIZE = 20;
   const { t } = useTranslation();
   const qc = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get('tab');
   const tab = resolveTabParam(tabParam, EVALUATION_TABS, EVALUATION_DEFAULT_TAB);
+  const [historyPage, setHistoryPage] = useState(0);
+  const [feedbackPage, setFeedbackPage] = useState(0);
 
   const reportQ = useQuery({
     queryKey: ['evaluation-report'],
@@ -99,8 +102,11 @@ export function Evaluation() {
   });
 
   const historyQ = useQuery({
-    queryKey: ['evaluation-history'],
-    queryFn: async () => (await evaluationApi.getHistory({ page: 0, size: 20 })).data,
+    queryKey: ['evaluation-history', historyPage],
+    queryFn: async () => (await evaluationApi.getHistory({
+      page: historyPage,
+      size: PAGE_SIZE,
+    })).data,
     enabled: tab === 'history',
   });
 
@@ -111,8 +117,11 @@ export function Evaluation() {
   });
 
   const feedbackHistoryQ = useQuery({
-    queryKey: ['feedback-history'],
-    queryFn: async () => (await evaluationApi.getFeedbackHistory({ page: 0, size: 20 })).data,
+    queryKey: ['feedback-history', feedbackPage],
+    queryFn: async () => (await evaluationApi.getFeedbackHistory({
+      page: feedbackPage,
+      size: PAGE_SIZE,
+    })).data,
     enabled: tab === 'feedback',
   });
 
@@ -254,36 +263,49 @@ export function Evaluation() {
               // 失败时原来会显示"暂无历史记录"，把请求失败说成了没有数据。
               <QueryErrorBanner>{t('evaluation.historyLoadFailed')}</QueryErrorBanner>
             ) : (
-              <div className={styles.tableWrap}>
-                <table className={styles.table}>
-                  <caption className="sr-only">{t('evaluation.tabHistory')}</caption>
-                  <thead>
-                    <tr>
-                      <th>ID</th>
-                      <th>{t('evaluation.query')}</th>
-                      <th>MRR</th>
-                      <th>nDCG</th>
-                      <th>{t('evaluation.hit')}</th>
-                      <th>{t('evaluation.time')}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(historyQ.data ?? []).map((row, i) => (
-                      <tr key={row.id ?? i}>
-                        <td>{row.id ?? '—'}</td>
-                        <td className={styles.ellipsis}>{row.query ?? '—'}</td>
-                        <td>{fmt(row.mrr)}</td>
-                        <td>{fmt(row.ndcg)}</td>
-                        <td>{fmt(row.hitRate)}</td>
-                        <td>{row.createdAt ?? '—'}</td>
+              <>
+                <div className={styles.tableWrap}>
+                  <table className={styles.table}>
+                    <caption className="sr-only">{t('evaluation.tabHistory')}</caption>
+                    <thead>
+                      <tr>
+                        <th>ID</th>
+                        <th>{t('evaluation.query')}</th>
+                        <th>MRR</th>
+                        <th>nDCG</th>
+                        <th>{t('evaluation.hit')}</th>
+                        <th>{t('evaluation.time')}</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {(historyQ.data ?? []).length === 0 && (
-                  <EmptyState>{t('evaluation.emptyHistory')}</EmptyState>
+                    </thead>
+                    <tbody>
+                      {(historyQ.data ?? []).map((row, i) => (
+                        <tr key={row.id ?? i}>
+                          <td>{row.id ?? '—'}</td>
+                          <td className={styles.ellipsis}>{row.query ?? '—'}</td>
+                          <td>{fmt(row.mrr)}</td>
+                          <td>{fmt(row.ndcg)}</td>
+                          <td>{fmt(row.hitRate)}</td>
+                          <td>{row.createdAt ?? '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {(historyQ.data ?? []).length === 0 && (
+                    <EmptyState>{t('evaluation.emptyHistory')}</EmptyState>
+                  )}
+                </div>
+                {(historyQ.data ?? []).length > 0 && (
+                  <Pager
+                    page={historyPage}
+                    hasNext={(historyQ.data ?? []).length === PAGE_SIZE}
+                    onChange={setHistoryPage}
+                    summary={t('common.page', { page: historyPage + 1 })}
+                    previousLabel={t('common.previous')}
+                    nextLabel={t('common.next')}
+                    label={t('evaluation.tabHistory')}
+                  />
                 )}
-              </div>
+              </>
             )}
           </section>
         )}
@@ -322,6 +344,17 @@ export function Evaluation() {
                 </tbody>
               </table>
             </div>
+            {(feedbackHistoryQ.data ?? []).length > 0 && (
+              <Pager
+                page={feedbackPage}
+                hasNext={(feedbackHistoryQ.data ?? []).length === PAGE_SIZE}
+                onChange={setFeedbackPage}
+                summary={t('common.page', { page: feedbackPage + 1 })}
+                previousLabel={t('common.previous')}
+                nextLabel={t('common.next')}
+                label={t('evaluation.tabFeedback')}
+              />
+            )}
           </section>
         )}
 

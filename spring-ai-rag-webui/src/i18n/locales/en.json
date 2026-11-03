@@ -37,6 +37,8 @@
     "required": "(required)",
     "previous": "Previous",
     "next": "Next",
+    "page": "Page {{page}}",
+    "pageOf": "Page {{page}} of {{total}}",
     "preview": "Preview",
     "retry": "Retry",
     "somethingWentWrong": "Something went wrong",

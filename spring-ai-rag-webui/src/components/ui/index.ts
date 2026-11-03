@@ -6,6 +6,8 @@ export { IconButton } from './IconButton';
 export type { IconButtonProps, IconButtonSize, IconButtonVariant } from './IconButton';
 export { PageHeader } from './PageHeader';
 export type { PageHeaderProps } from './PageHeader';
+export { Pager } from './Pager';
+export type { PagerProps } from './Pager';
 export { QueryErrorBanner } from './QueryErrorBanner';
 export type { QueryErrorBannerProps } from './QueryErrorBanner';
 export { StatusBadge } from './StatusBadge';

@@ -85,8 +85,22 @@ export interface DocumentListResponse {
 }
 
 export const documentsApi = {
-  list: (params: { page?: number; size?: number; collectionId?: number; collectionKey?: string; title?: string }) =>
-    apiClient.get<DocumentListResponse>('/documents', { params }),
+  // The backend pages by `offset`/`limit`; sending `page` was silently ignored,
+  // so every page past the first returned the same 20 newest documents.
+  list: ({
+    page = 0,
+    size = 20,
+    ...filters
+  }: {
+    page?: number;
+    size?: number;
+    collectionId?: number;
+    collectionKey?: string;
+    title?: string;
+  }) =>
+    apiClient.get<DocumentListResponse>('/documents', {
+      params: { offset: page * size, limit: size, ...filters },
+    }),
 
   get: (id: number) => apiClient.get<Document>(`/documents/${id}`),
 

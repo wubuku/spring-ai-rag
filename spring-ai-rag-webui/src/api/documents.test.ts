@@ -9,11 +9,16 @@ vi.mock('./client', () => ({
 describe('documentsApi', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('lists documents with collection key and title filters', async () => {
+  it('translates page/size into the offset/limit the backend understands', async () => {
     vi.mocked(apiClient.get).mockResolvedValue({ data: {} } as never);
     documentsApi.list({ page: 0, size: 20, collectionKey: 'wiki', title: 'doc' });
     expect(apiClient.get).toHaveBeenCalledWith('/documents', {
-      params: { page: 0, size: 20, collectionKey: 'wiki', title: 'doc' },
+      params: { offset: 0, limit: 20, collectionKey: 'wiki', title: 'doc' },
+    });
+
+    documentsApi.list({ page: 3, size: 20, collectionKey: 'wiki' });
+    expect(apiClient.get).toHaveBeenLastCalledWith('/documents', {
+      params: { offset: 60, limit: 20, collectionKey: 'wiki' },
     });
   });
 

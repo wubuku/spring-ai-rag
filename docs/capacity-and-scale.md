@@ -184,6 +184,54 @@ delete, and no lock contention or long transactions were observed.
   launch WebKit, add an explicit `test.skip` with the reason and keep results from the
   other engines.
 
+### 3.8 WebUI at Scale (measured this round)
+
+Environment: production build (`npm run build`) behind a plain reverse proxy
+(**no gzip**, i.e. the worst-case transfer), Chromium at 1440×900; data was
+8000 documents / 80k vectors (two collections of 3k and 5k) plus 2000 evaluation
+history rows; search and chat used mock embedding / mock chat.
+
+- **Document list (pagination bug found and fixed)**: the WebUI sent `page`/`size`
+  while the backend only understands `offset`/`limit`, so every page after the
+  first returned the same newest 20 rows. Before the fix, `page=0` and `page=399`
+  both started with id 8000; after the fix, `page=399` starts with the oldest
+  167/202. The page still renders only 20 rows (510 DOM nodes, 9.5 MB JS heap);
+  a page turn is ready in ~83 ms.
+- **Collection list**: the page pinned its index to 0, so collections beyond the
+  first 20 were unreachable. A shared `Pager` plus `?page=` now exposes them; the
+  request remains 20 rows per page.
+- **Evaluation history**: 2000 rows are rendered 20 at a time; it also pinned
+  page 0, so pagination was added (feedback history included).
+- **Search**: the UI sends no `limit`, so the default 10 applies; hybrid retrieval
+  on 5k documents took 374 ms and 815 ms end to end. A 200-result injection
+  through the real render path took 53–70 ms, 1188 nodes, with no heap growth —
+  no virtual list is needed while the UI stays bounded at 10.
+- **Chat**: one live retrieval returned 4 citation chips; the 1.5 s end-to-end is
+  dominated by retrieval and the model, not rendering.
+- **Export**: the WebUI has **no export entry** today (only an API-client method).
+  A browser `fetch` stream of the 5k collection read 2.73 MB in 186–714 chunks,
+  first byte in 12–13 ms, total 75–78 ms. Boundary: wiring
+  `collectionsApi.export` (axios, full JSON body) to a button would buffer all
+  2.7 MB first; at 50k documents (~27 MB) that risks memory pressure and a
+  "nothing happened" freeze. Any future UI must use `fetch` + `ReadableStream`,
+  write incrementally, and show progress rather than reuse the axios method.
+
+Frontend performance budget vs measured:
+
+| Metric | Budget | Measured (2026-11) | Notes |
+|--------|--------|--------------------|-------|
+| Initial resources (gzip) | ≤160 KB | 148.8 KB | index 114.5 + ui 23.9 + rest |
+| Initial resources (uncompressed) | ≤500 KB | 471 KB | worst case, proxy without gzip |
+| Local FCP | ≤300 ms | 80 ms | — |
+| Slow 4G FCP (1.6 Mbps / 150 ms) | ≤3.0 s | 2.72 s | ~1.2–1.5 s projected with gzip |
+| Document list ready | ≤1.5 s | 1.48 s (unlock + 4 APIs) | page turn 83 ms |
+| Search end to end (10 rows) | ≤1.0 s | 815 ms | retrieval 374 ms |
+| 200 synthetic rows render | ≤100 ms | 53–70 ms | render path only, not a UI-reachable cap |
+| Export first byte | ≤100 ms | 12–13 ms | streamed response |
+
+Not covered: mock embedding/chat does not represent real model latency; the proxy
+did not enable gzip; only Chromium was measured.
+
 ## 4. Capacity Boundaries
 
 | Dimension | Current | Boundary / guidance |
@@ -193,6 +241,9 @@ delete, and no lock contention or long transactions were observed.
 | Index build | 4.7 s for 31k vectors | ~16 s projected for 100k; startup wait cap is 60 s, tune it or pre-warm asynchronously |
 | Retrieval | p50 ~50–90 ms | Dominated by the embedding call; SQL is near-constant. Candidate pool caps at 1000, so heavy staleness can reduce recall |
 | Lists | Fixed ≤20 rows per page | N+1 growth removed; processing summaries use 4 batched queries per page |
+| WebUI first paint | 149 KB gzip / 471 KB uncompressed; Slow 4G FCP 2.72 s | Budget in §3.8; enabling gzip on the proxy shortens it substantially |
+| WebUI lists | 20 rows per page, 510 DOM nodes, 9.5 MB heap | Documents, collections and evaluation history are paginated; 200 synthetic rows render in 53–70 ms |
+| WebUI export | No UI entry; browser stream read 2.73 MB with a 12–13 ms first byte | Any UI must use fetch streaming; axios buffers the whole body (~27 MB at 50k docs) |
 | Export | Streaming, 200 rows per batch, batch count in response headers | Memory does not grow with row count; limited by network and client consumption. Export very large collections off-peak |
 | Document-list keyword | `LOWER(title) LIKE '%kw%'`; uses `idx_rag_documents_title_trgm` when pg_trgm is available | At 5k docs: index SQL 0.103 ms / HTTP p50 4.2 ms; no index SQL 2.134 ms / HTTP p50 8.4 ms. **Keywords need ≥3 characters** for trigram extraction; 1–2 characters still scan. If `pg_trgm` is absent the migration logs NOTICE and degrades to a sequential scan without failing startup |
 | Fulltext search (retrieval path) | pg_jieba / English FTS / pg_trgm auto-selected by capability | Separate from the document-list keyword filter; fulltext-weighted p50 ~158 ms at 5k docs, dominated by the embedding call |
