@@ -96,6 +96,7 @@ version-override hooks):
 | `pdfbox` | 3.0.3 | **3.0.8** | CVE-2026-23907 / 33929 | Descriptions only cover examples, still upgraded within the patch line |
 | `swagger-ui` (webjar) | 5.18.2 | **5.34.1** | CVE-2026-116803 (10.0, DOMPurify 3.1.6) | springdoc 2.8.17 still pins 5.32.2 (DOMPurify 3.3.2), so the root `dependencyManagement` overrides it explicitly |
 | `commons-lang3` | 3.17.0 | **3.19.0** | CVE-2025-48924 (false positive) | The CVE actually belongs to a Jenkins plugin; a CPE mismatch. Moved to the newest 3.x anyway |
+| `jsoup` | 1.19.1 | **1.23.2** | Dependabot high (HTML parsing/sanitisation) | Same 1.x line; the project only uses `Jsoup.clean` + `Safelist`, API unchanged |
 | `springdoc-openapi` | 2.8.4 | **2.8.17** | DOMPurify advisory carried by swagger-ui | Same 2.8.x patch line; 3.x targets Spring Boot 4 and is a breaking change |
 | `swagger-annotations-jakarta` | 2.2.28 | **2.2.47** | None (version alignment) | springdoc 2.8.17 ships swagger-core 2.2.47; leaving annotations at 2.2.28 makes `/v3/api-docs` throw `NoSuchMethodError: Schema.$dynamicRef()` at runtime. Both explicit declarations (root `dependencyManagement` and the core-module dependency) must follow `swagger-api.version` |
 

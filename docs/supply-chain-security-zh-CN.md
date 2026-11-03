@@ -85,6 +85,7 @@ Spring Boot 3.5.16 已是 3.5.x 最新，Spring AI 1.1.8 已是 1.1.x 最新；�
 | `pdfbox` | 3.0.3 | **3.0.8** | CVE-2026-23907 / 33929 | 描述只涉及 examples，仍按补丁线升级 |
 | `swagger-ui`（webjar） | 5.18.2 | **5.34.1** | CVE-2026-116803（10.0，DOMPurify 3.1.6） | springdoc 2.8.17 仍锁 5.32.2（DOMPurify 3.3.2），故在根 `dependencyManagement` 显式覆盖 |
 | `commons-lang3` | 3.17.0 | **3.19.0** | CVE-2025-48924（误报） | CVE 实际属于 Jenkins 插件，是 CPE 匹配误报；顺手升到最新 3.x |
+| `jsoup` | 1.19.1 | **1.23.2** | Dependabot high（HTML 解析/清洗） | 同 1.x；项目只使用 `Jsoup.clean` + `Safelist`，API 未变 |
 | `springdoc-openapi` | 2.8.4 | **2.8.17** | 随 swagger-ui 带入的 DOMPurify 漏洞 | 同 2.8.x 补丁线；不升 3.x（面向 Spring Boot 4 的破坏性变更） |
 | `swagger-annotations-jakarta` | 2.2.28 | **2.2.47** | 无（版本对齐） | springdoc 2.8.17 的 swagger-core 是 2.2.47，注解停在 2.2.28 会让 `/v3/api-docs` 运行期抛 `NoSuchMethodError: Schema.$dynamicRef()`；两处显式声明（根 `dependencyManagement` 与 core 模块依赖）都必须跟随 `swagger-api.version` |
 
