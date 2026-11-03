@@ -187,7 +187,11 @@ of silently multiplying the quota by N.
 
 ## Verification
 
-Multi-instance semantics are verified by gated PostgreSQL suites that are not part of `mvn test`:
+Multi-instance semantics are verified by gated PostgreSQL suites that are not part of `mvn test`.
+Those suites create two independent component instances in one JVM (two stores, two cleanup
+services, two chat coordinators, two index managers) and exercise the database coordination
+layer directly; two real processes on different ports are covered by the HTTP acceptance in
+`verify-managed-api-principals.sh`.
 
 | Command | Coverage |
 |---------|----------|

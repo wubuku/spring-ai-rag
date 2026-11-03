@@ -159,7 +159,10 @@ rag:
 
 ## 验证
 
-多实例语义由 gated PostgreSQL 套件验证，默认不进入 `mvn test`：
+多实例语义由 gated PostgreSQL 套件验证，默认不进入 `mvn test`。这些套件在同一 JVM 内
+创建两个独立的组件实例（两个 store、两个清理服务、两个聊天协调器、两个索引管理器），
+直接验证数据库协调层；真实双进程、不同端口的 HTTP 验收由 `verify-managed-api-principals.sh`
+覆盖。
 
 | 命令 | 覆盖 |
 |------|------|
