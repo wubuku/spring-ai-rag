@@ -104,6 +104,10 @@ spec:
               value: {{ printf "-Xms512m -Xmx%s %s" (.Values.jvm.maxHeap | default "1536m") (.Values.jvm.extraOptions | default "") | quote }}
             - name: SERVER_PORT
               value: "8081"
+            # 多副本共享同一数据库：由副本数/HPA 自动声明，启动期拒绝
+            # rate-limit.enabled + backend=local 这类会被副本数放大的配置。
+            - name: RAG_MULTI_INSTANCE_ENABLED
+              value: {{ ternary "true" "false" (or (gt (int .Values.replicaCount) 1) .Values.autoscaling.enabled) | quote }}
             - name: SPRING_CONFIG_ADDITIONAL_LOCATION
               value: "optional:file:/config/"
 

@@ -1346,6 +1346,20 @@ JPA flush 已经写下去的文件一并回滚。
 `scripts/verify-integration-test-switches.mjs` 现在会在受门控的套件缺少运行路径时失败，
 两个方向都查。
 
+### 多实例并行验收门禁
+
+多副本共享同一个 PostgreSQL 的语义由 `MultiInstancePostgresIntegrationTest` 验证，开关
+`-Dmulti-instance.it.enabled=true`：
+
+```bash
+./scripts/verify-gated-it.sh MultiInstancePostgresIntegrationTest
+```
+
+它覆盖两个 store 实例共享限流配额、两个清理实例并发 TTL 删除每行只删一次、两个索引管理器
+并发启动只构建一次 HNSW，以及崩溃副本留下的无效索引被另一实例修复。聊天租约的跨实例
+抢占与崩溃接管在 `ChatSessionPostgresIntegrationTest`（`-Dchat.it.enabled=true`）中覆盖。
+语义说明见[多实例语义](multi-instance-semantics-zh-CN.md)。
+
 ### 跑完整个门控清单
 
 ```bash
@@ -1354,7 +1368,7 @@ JPA flush 已经写下去的文件一并回滚。
 ```
 
 当前门控清单由 `verify-integration-test-switches.mjs` 与
-`verify-gated-it.sh` 交叉核对；本次审计基线为 30 个门控类、263 个测试方法，
+`verify-gated-it.sh` 交叉核对；本次审计基线为 33 个门控类、249 个测试方法，
 每个都在自己的 `<x>.it.enabled` 开关后面，所以普通 `mvn test` 永远不需要
 Docker 守护进程。`verify-gated-it.sh` 是唯一一条把它们全部打开的命令，本地约
 9–19 分钟，nightly 的 `gated-postgres` job 跑的就是它；PR 层不再执行，

@@ -352,7 +352,7 @@ of in someone's memory:
 | Layer | Trigger | Workflow | Includes | Excludes |
 |-------|---------|----------|----------|----------|
 | PR fast | push to `main`/`develop`, PR to `main`; a newer commit cancels the stale run | `.github/workflows/ci.yml` | `mvn test` (including `OpenApiContractTest` and `WebUiRouteContract`), `verify-project-tests.sh`, `verify-project-docs.sh`, Flyway migration inventory, WebUI lint/unit/coverage thresholds/build/mock E2E | gated PostgreSQL, real models, goldenset, soak, `*-real.spec.ts` |
-| Long-running | daily 18:00 UTC (02:00 Asia/Shanghai) and manual `workflow_dispatch` | `.github/workflows/nightly.yml` | gated PostgreSQL (31 suites), upstream/embedding failure modes (controlled provider + isolated PG, no real models), real LLM smoke + goldenset + retrieval regression, bounded soak, real WebUI specs that need no manual fixtures | `alerts-real` (needs preset alert/delivery IDs) and `rerank-document-diversity-real` (needs a rerank fixture) |
+| Long-running | daily 18:00 UTC (02:00 Asia/Shanghai) and manual `workflow_dispatch` | `.github/workflows/nightly.yml` | gated PostgreSQL (33 suites), upstream/embedding failure modes (controlled provider + isolated PG, no real models), real LLM smoke + goldenset + retrieval regression, bounded soak, real WebUI specs that need no manual fixtures | `alerts-real` (needs preset alert/delivery IDs) and `rerank-document-diversity-real` (needs a rerank fixture) |
 
 The PR layer is bounded by job-level `timeout-minutes` (backend 45, webui 30).
 Gated IT takes about 9–19 minutes locally; keeping it in the PR layer would push
@@ -1549,6 +1549,21 @@ archived progress note, so both test methods had no documented way to run.
 `scripts/verify-integration-test-switches.mjs` now fails when a gated suite has
 no run path, in either direction.
 
+### Multi-Instance Acceptance Gate
+
+Replicas sharing one PostgreSQL are verified by `MultiInstancePostgresIntegrationTest`, gated
+by `-Dmulti-instance.it.enabled=true`:
+
+```bash
+./scripts/verify-gated-it.sh MultiInstancePostgresIntegrationTest
+```
+
+It covers two store instances sharing one rate-limit quota, two cleanup instances deleting each
+TTL row once, two index managers building one HNSW index at startup, and a crashed replica's
+invalid index being repaired by another instance. Cross-instance chat lease races and crash
+takeover are covered by `ChatSessionPostgresIntegrationTest` (`-Dchat.it.enabled=true`). See
+[Multi-Instance Semantics](multi-instance-semantics.md).
+
 ### Running the Whole Gated Inventory
 
 ```bash
@@ -1557,7 +1572,7 @@ no run path, in either direction.
 ```
 
 The gated inventory is reconciled by `verify-integration-test-switches.mjs`
-against `verify-gated-it.sh`; the audit baseline is 30 gated classes and 263
+against `verify-gated-it.sh`; the audit baseline is 33 gated classes and 249
 test methods, each behind its own `<x>.it.enabled` switch so a plain `mvn test`
 never needs a Docker daemon. `verify-gated-it.sh` is the one command that turns
 all of them on and takes about nine to nineteen minutes locally; nightly's

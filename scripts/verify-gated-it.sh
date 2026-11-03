@@ -57,6 +57,7 @@ ALL_SUITES=(
   "llm-budget-governance:LlmBudgetAndGovernancePostgresIntegrationTest"
   "llm-usage:LlmUsagePostgresIntegrationTest"
   "managed-api-principal:ManagedApiPrincipalPostgresIntegrationTest"
+  "multi-instance:MultiInstancePostgresIntegrationTest"
   "retrieval-filters:MetadataFiltersPostgresIntegrationTest"
   "multi.collection:MultiCollectionRetrievalPostgresIntegrationTest"
   "next-high-value:NextHighValueFeaturesPostgresIntegrationTest"

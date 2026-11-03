@@ -1596,6 +1596,11 @@ optional principal policy `requestsPerMinute` overrides the global default.
 Credential rotation does not reset usage. Store failures fail closed with
 `503`; there is no automatic local fallback.
 
+When replicas share one PostgreSQL, also declare `rag.multi-instance.enabled=true`.
+If `rate-limit.enabled=true` is combined with `backend=local`, the application
+refuses to start instead of silently multiplying the quota by replica count.
+See [Multi-Instance Semantics](multi-instance-semantics.md).
+
 Returns `429 Too Many Requests` when exceeded, with `Retry-After`, `X-RateLimit-Limit`, `X-RateLimit-Remaining` response headers.
 
 ## CORS Configuration

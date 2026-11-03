@@ -258,6 +258,9 @@ app:
 # Embedding Model Configuration (independent of Chat provider, always active)
 # ============================================
 rag:
+  multi-instance:
+    # 声明本进程与其他副本共享同一个 PostgreSQL；启动期拒绝会被副本数放大的本地限流配置。
+    enabled: ${RAG_MULTI_INSTANCE_ENABLED:false}
   data-governance:
     enabled: ${RAG_DATA_GOVERNANCE_ENABLED:true}
     audit-log-retention-days: ${RAG_DATA_GOVERNANCE_AUDIT_LOG_RETENTION_DAYS:400}

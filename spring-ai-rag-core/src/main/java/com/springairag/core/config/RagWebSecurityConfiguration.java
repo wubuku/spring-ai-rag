@@ -168,6 +168,7 @@ public class RagWebSecurityConfiguration {
             RateLimitObservability observability) {
         RagRateLimitProperties rateLimit = properties.getRateLimit();
         rateLimit.validateTopology();
+        properties.getMultiInstance().validate(rateLimit);
         PostgresRateLimitStore postgresStore = postgresStores.getIfAvailable();
         if ("postgresql".equals(rateLimit.getBackend()) && postgresStore == null) {
             throw new IllegalStateException(

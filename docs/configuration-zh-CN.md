@@ -1441,6 +1441,10 @@ PostgreSQL backend 只使用认证后的 stable principal。principal policy 中
 `requestsPerMinute` 覆盖全局默认值；credential 轮换不会重置用量。store 故障时 fail
 closed 返回 `503`，不会自动降级到 local。
 
+多副本共享同一 PostgreSQL 时还应声明 `rag.multi-instance.enabled=true`；若同时启用
+`rate-limit.enabled=true` 却使用 `backend=local`，应用会拒绝启动，而不是把配额按副本数
+静默放大。完整语义见[多实例语义](multi-instance-semantics-zh-CN.md)。
+
 超限返回 `429 Too Many Requests`，响应头包含 `Retry-After`、`X-RateLimit-Limit`、`X-RateLimit-Remaining`。
 
 ## CORS 跨域配置

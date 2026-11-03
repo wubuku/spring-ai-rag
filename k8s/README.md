@@ -105,6 +105,18 @@ The chart keeps `secrets.securityEnabled: "true"` and the `postgresql,prod` prof
 for any internet-reachable deployment. See `docs/DEPLOYMENT.md` for the V71 upgrade
 and historical-data backfill steps.
 
+### Multiple Replicas
+
+The chart supports steady-state `replicas > 1` and autoscaling. Persistent work,
+leases, budgets, chat sessions, and PostgreSQL rate-limit buckets are coordinated
+through the shared database. When `replicaCount > 1` or autoscaling is enabled, the
+Deployment injects `RAG_MULTI_INSTANCE_ENABLED=true`; startup then rejects
+`rag.rate-limit.backend=local` instead of multiplying quotas per Pod.
+
+Admission concurrency is per Pod, cleanup jobs run on every Pod with idempotent
+effects, and the `Recreate` update strategy still takes all Pods down during an
+upgrade. See `docs/multi-instance-semantics.md` for the full matrix.
+
 ### All Configuration Options
 
 See `values.yaml` for the complete reference. Key sections:

@@ -50,6 +50,7 @@ Additive capabilities: [trustworthy assertions, active diagnostics and offline q
 | Write / run tests | [testing-guide.md](testing-guide.md) | [developer-reference.md](developer-reference.md) E2E section |
 | Plan, implement, accept, and deliver substantial work | [Planning, Implementation, And Acceptance Workflow](delivery-workflow.md) | [Current active plans](drafts/README.md), [Testing guide](testing-guide.md) |
 | Production deploy | [DEPLOYMENT.md](DEPLOYMENT.md) | `docker/`, `k8s/` |
+| Run multiple replicas / understand cross-instance semantics | [Multi-instance semantics](multi-instance-semantics.md) | [DEPLOYMENT.md](DEPLOYMENT.md), [Testing guide](testing-guide.md) |
 | Troubleshooting | [troubleshooting.md](troubleshooting.md) | “Common pitfalls” below |
 | Agent / Claude collaboration | [AGENTS.md](../AGENTS.md) → this page | [project-context.md](project-context.md), [developer-reference.md](developer-reference.md) |
 | Use grok-4.5 with Claude Code | [claude-grok-proxy.md](claude-grok-proxy.md) | `scripts/run-claude-grok.sh` |
@@ -115,6 +116,7 @@ Chinese counterparts use the same basename with a `-zh-CN` suffix where availabl
 | [china-network-guide.md](china-network-guide.md) | Mainland China Docker / Maven / npm / Playwright network pitfalls |
 | [troubleshooting.md](troubleshooting.md) | Symptom-based troubleshooting |
 | [DEPLOYMENT.md](DEPLOYMENT.md) | Deployment |
+| [multi-instance-semantics.md](multi-instance-semantics.md) | Which state is shared when replicas use one PostgreSQL, which is process-local, and the deployment guard |
 | `docs/prometheus/`, `docs/grafana/` | Metrics & dashboards |
 
 ### Agent / project collaboration

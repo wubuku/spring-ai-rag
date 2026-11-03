@@ -92,6 +92,28 @@ App:        {{ .Chart.Name }} {{ .Chart.AppVersion }}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+🔁 Multi-replica mode:
+
+{{- if or (gt (int .Values.replicaCount) 1) .Values.autoscaling.enabled }}
+
+  This release can run more than one replica (replicaCount={{ .Values.replicaCount }},
+  autoscaling={{ .Values.autoscaling.enabled }}). Durable jobs, chat leases, quota
+  windows and postgres-backed rate limits are shared through PostgreSQL.
+
+  Keep rag.rate-limit.backend=postgresql if you enable application rate limiting:
+  the local backend is per-process and would multiply the configured quota by the
+  number of replicas. Admission concurrency limits are per-replica by design.
+  See docs/multi-instance-semantics.md.
+
+{{- else }}
+
+  Single replica. Multi-replica claim/lease semantics are documented in
+  docs/multi-instance-semantics.md.
+
+{{- end }}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 📋 Namespace setup (one-time):
 
   # Create namespace

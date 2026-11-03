@@ -49,6 +49,10 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -391,6 +395,83 @@ class ChatSessionPostgresIntegrationTest {
     }
 
     @Test
+    void twoReplicaInstancesCannotAcquireTheSameSessionConcurrently() throws Exception {
+        ChatCommand command = command(principal("replica-a"), "cross-replica-session");
+        ChatSessionCoordinator replicaB = newCoordinatorInstance();
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        CountDownLatch start = new CountDownLatch(1);
+        try {
+            Future<AcquireOutcome> first = pool.submit(() -> {
+                start.await(5, TimeUnit.SECONDS);
+                return tryAcquire(coordinator, command);
+            });
+            Future<AcquireOutcome> second = pool.submit(() -> {
+                start.await(5, TimeUnit.SECONDS);
+                return tryAcquire(replicaB, command);
+            });
+            start.countDown();
+            AcquireOutcome winner = first.get(20, TimeUnit.SECONDS);
+            AcquireOutcome loser = second.get(20, TimeUnit.SECONDS);
+            if (winner.handle() == null || loser.handle() != null) {
+                AcquireOutcome swap = winner;
+                winner = loser;
+                loser = swap;
+            }
+            assertNotNull(winner.handle(), "one replica should acquire the lease");
+            assertEquals(ErrorCode.SESSION_BUSY.name(),
+                    loser.failure().getErrorCode());
+
+            winner.coordinator().commit(
+                    winner.handle(), command, result(command), messages(), "[]");
+            winner.coordinator().release(winner.handle());
+
+            assertEquals(1L, historyCount(command));
+            assertEquals(2L, memoryCount(command));
+        } finally {
+            shutdown(replicaB);
+            pool.shutdownNow();
+        }
+    }
+
+    @Test
+    void crashedReplicaLeaseIsTakenOverByAnotherInstanceWithoutLosingHistory() {
+        ChatCommand command = command(
+                principal("crashed-replica"), "crash-takeover");
+        seedRecentHistory(command, "old question", "old answer");
+        ChatSessionCoordinator replicaB = newCoordinatorInstance();
+        try {
+            ChatSessionCoordinator.LeaseHandle crashed =
+                    replicaB.acquire(command, false);
+            jdbcTemplate.update(
+                    "UPDATE rag_chat_session_lease "
+                            + "SET acquired_at = now() - interval '3 seconds', "
+                            + "expires_at = now() - interval '1 second' "
+                            + "WHERE owner_principal_id = ? AND session_id = ?",
+                    command.principal().id(), command.sessionId());
+
+            ChatSessionCoordinator.LeaseHandle takeover =
+                    coordinator.acquire(command, false);
+            assertNotNull(takeover);
+
+            RagException fenced = assertThrows(RagException.class,
+                    () -> replicaB.commit(
+                            crashed, command, result(command), messages(), "[]"));
+            assertEquals(ErrorCode.CHAT_SESSION_LEASE_LOST.name(),
+                    fenced.getErrorCode());
+
+            coordinator.commit(takeover, command, result(command), messages(), "[]");
+            coordinator.release(takeover);
+
+            // 崩溃实例遗留的一轮不能丢，接管实例的新一轮也不能被覆盖。
+            assertEquals(2L, historyCount(command));
+            assertEquals(2L, memoryCount(command));
+            assertEquals(0L, leaseCount(command));
+        } finally {
+            shutdown(replicaB);
+        }
+    }
+
+    @Test
     void clearReturnsBusyWhileGenerationOwnsTheSession() {
         ChatCommand command = command(principal("key-a"), "busy-clear");
         ChatSessionCoordinator.LeaseHandle handle =
@@ -721,6 +802,36 @@ class ChatSessionPostgresIntegrationTest {
         assertEquals(0L, memoryCount(command));
         assertEquals(1L, leaseCount(command));
         coordinator.release(handle);
+    }
+
+    private static ChatSessionCoordinator newCoordinatorInstance() {
+        RagProperties properties = new RagProperties();
+        properties.getMemory().setMaxMessages(20);
+        properties.getChat().getHistory().setLeaseTtlSeconds(30);
+        properties.getChat().getHistory().setLeaseRenewIntervalSeconds(10);
+        return new ChatSessionCoordinator(
+                jdbcTemplate,
+                historyRepository,
+                memoryRepository,
+                transactionManager,
+                properties);
+    }
+
+    private record AcquireOutcome(
+            ChatSessionCoordinator coordinator,
+            ChatSessionCoordinator.LeaseHandle handle,
+            RagException failure) {
+    }
+
+    private static AcquireOutcome tryAcquire(
+            ChatSessionCoordinator target,
+            ChatCommand command) {
+        try {
+            return new AcquireOutcome(
+                    target, target.acquire(command, false), null);
+        } catch (RagException busy) {
+            return new AcquireOutcome(target, null, busy);
+        }
     }
 
     private static void buildPersistence() {

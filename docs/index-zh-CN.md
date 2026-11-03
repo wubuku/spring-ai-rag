@@ -50,6 +50,7 @@
 | 写测试 / 跑回归 | [testing-guide-zh-CN.md](testing-guide-zh-CN.md) | [developer-reference-zh-CN.md](developer-reference-zh-CN.md) E2E 段 |
 | 规划、实施、验收并交付复杂功能 | [规划、实施与验收工作流](delivery-workflow-zh-CN.md) | [当前活跃规划](drafts/README-zh-CN.md)、[测试指南](testing-guide-zh-CN.md) |
 | 线上部署 | [DEPLOYMENT.md](DEPLOYMENT.md) | `docker/`、`k8s/` |
+| 运行多副本 / 理解跨实例语义 | [多实例语义](multi-instance-semantics-zh-CN.md) | [DEPLOYMENT.md](DEPLOYMENT.md)、[测试指南](testing-guide-zh-CN.md) |
 | 出问题排查 | [troubleshooting-zh-CN.md](troubleshooting-zh-CN.md) | 下文「常见陷阱」 |
 | Agent / Claude 协作 | [AGENTS.md](../AGENTS.md) → 本页 | [project-context-zh-CN.md](project-context-zh-CN.md)、[developer-reference-zh-CN.md](developer-reference-zh-CN.md) |
 | Claude Code 使用 grok-4.5 | [claude-grok-proxy-zh-CN.md](claude-grok-proxy-zh-CN.md) | `scripts/run-claude-grok.sh` |
@@ -115,6 +116,7 @@
 | [china-network-guide-zh-CN.md](china-network-guide-zh-CN.md) | 中国境内 Docker / Maven / npm / Playwright 网络避坑 |
 | [troubleshooting-zh-CN.md](troubleshooting-zh-CN.md) | 按症状排障 |
 | [DEPLOYMENT.md](DEPLOYMENT.md) | 部署 |
+| [multi-instance-semantics-zh-CN.md](multi-instance-semantics-zh-CN.md) | 多副本共享 PostgreSQL 时哪些状态共享、哪些是进程本地，以及部署模板保护 |
 | `docs/prometheus/`、`docs/grafana/` | 监控看板与采集 |
 
 ### Agent / 项目协作

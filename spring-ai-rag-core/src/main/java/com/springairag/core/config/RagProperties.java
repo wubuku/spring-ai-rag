@@ -37,8 +37,12 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "rag")
 public class RagProperties {
     private final RagAdmissionProperties admission = new RagAdmissionProperties();
+    private final RagMultiInstanceProperties multiInstance =
+            new RagMultiInstanceProperties();
 
     public RagAdmissionProperties getAdmission() { return admission; }
+
+    public RagMultiInstanceProperties getMultiInstance() { return multiInstance; }
 
     private final RagEmbeddingProperties embedding = new RagEmbeddingProperties();
     private final RagRetrievalProperties retrieval = new RagRetrievalProperties();
