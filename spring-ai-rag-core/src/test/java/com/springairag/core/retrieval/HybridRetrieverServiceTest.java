@@ -196,13 +196,13 @@ class HybridRetrieverServiceTest {
         assertTrue(sql.contains("d.enabled = true"));
 
         Object[] args = argsCaptor.getValue();
-        assertEquals(5, args.length);
+        assertEquals(9, args.length);
         assertInstanceOf(
                 org.springframework.jdbc.support.SqlArrayValue.class, args[0]);
         assertInstanceOf(
                 org.springframework.jdbc.support.SqlArrayValue.class, args[1]);
         assertEquals("json-record", args[2]);
-        assertEquals(7, args[4]);
+        assertEquals(7, args[8]);
     }
 
     @Test

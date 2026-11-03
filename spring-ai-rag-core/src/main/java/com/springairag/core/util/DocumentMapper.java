@@ -181,11 +181,26 @@ public final class DocumentMapper {
         if (doc == null) {
             throw new IllegalArgumentException("Document must not be null");
         }
+        long chunkCount = embeddingRepository.countFreshChunksByDocumentIdAndProfileId(
+                doc.getId(), embeddingProfileId);
+        return toSummary(doc, collectionNameMap, collectionKeyMap,
+                chunkCount, lifecycle);
+    }
+
+    /**
+     * 列表页批量读取 chunk 数后的转换入口，避免逐文档查询。
+     */
+    public static DocumentSummary toSummary(RagDocument doc,
+                                           Map<Long, String> collectionNameMap,
+                                           Map<Long, String> collectionKeyMap,
+                                           long chunkCount,
+                                           DocumentLifecycleResponse lifecycle) {
+        if (doc == null) {
+            throw new IllegalArgumentException("Document must not be null");
+        }
         Long collectionId = doc.getCollectionId();
         String collectionName = collectionId != null ? collectionNameMap.get(collectionId) : null;
         String collectionKey = collectionId != null ? collectionKeyMap.get(collectionId) : null;
-        long chunkCount = embeddingRepository.countFreshChunksByDocumentIdAndProfileId(
-                doc.getId(), embeddingProfileId);
 
         return new DocumentSummary(
                 doc.getId(),

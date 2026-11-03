@@ -494,13 +494,31 @@ public class RagDocumentController {
     private List<DocumentSummary> toDocumentSummaries(
             org.springframework.data.domain.Page<RagDocument> pageResult,
             CollectionMetadata metadata) {
-        return pageResult.getContent().stream()
-                .map(doc -> DocumentMapper.toSummary(
-                        doc, metadata.names(), metadata.keys(), embeddingRepository,
-                        activeEmbeddingProfileId(),
-                        documentLifecycleService == null
-                                ? null : documentLifecycleService.read(doc)))
+        List<RagDocument> documents = pageResult.getContent();
+        if (documents.isEmpty()) {
+            return List.of();
+        }
+        long profileId = activeEmbeddingProfileId();
+        List<Long> documentIds = documents.stream()
+                .map(RagDocument::getId)
                 .toList();
+        Map<Long, Long> chunkCounts = embeddingRepository
+                .countFreshChunksByDocumentIdsAndProfileId(documentIds, profileId)
+                .stream()
+                .collect(Collectors.toMap(
+                        row -> ((Number) row[0]).longValue(),
+                        row -> ((Number) row[1]).longValue()));
+        var lifecycles = documentLifecycleService == null
+                ? null : documentLifecycleService.readAll(documents);
+        List<DocumentSummary> summaries = new ArrayList<>(documents.size());
+        for (int index = 0; index < documents.size(); index++) {
+            RagDocument document = documents.get(index);
+            summaries.add(DocumentMapper.toSummary(
+                    document, metadata.names(), metadata.keys(),
+                    chunkCounts.getOrDefault(document.getId(), 0L),
+                    lifecycles == null ? null : lifecycles.get(index)));
+        }
+        return summaries;
     }
 
     @Operation(summary = "Document statistics", description = "Get document count statistics by processing status.")

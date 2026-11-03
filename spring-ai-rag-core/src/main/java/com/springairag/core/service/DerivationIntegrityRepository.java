@@ -241,7 +241,8 @@ public class DerivationIntegrityRepository {
         predicates.add("(" + String.join(" OR ", selected) + ")");
     }
 
-    private List<Snapshot> inspectIds(
+    /** 批量完整性快照：列表页按 Collection/Profile 分组调用，一次查完整页。 */
+    public List<Snapshot> inspectIds(
             Collection<Long> ids, EmbeddingProfile profile) {
         if (ids.isEmpty()) {
             return List.of();

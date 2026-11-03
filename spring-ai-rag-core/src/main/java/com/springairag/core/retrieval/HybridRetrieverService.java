@@ -64,6 +64,10 @@ public class HybridRetrieverService {
     private static final int MAX_COVERAGE_BRANCH_ROWS = 200;
     private static final int MAX_COVERAGE_COLLECTIONS = 20;
     private static final int MAX_COVERAGE_RAW_ROWS = 8_000;
+    /** ANN 候选池：先按向量取候选，再在外层做新鲜度过滤，避免 JOIN 让 HNSW 失效。 */
+    private static final int VECTOR_CANDIDATE_MULTIPLIER = 10;
+    private static final int VECTOR_MIN_CANDIDATES = 100;
+    private static final int VECTOR_MAX_CANDIDATES = 1_000;
 
     private final EmbeddingModel embeddingModel;
     private final EmbeddingProfileProvider profileProvider;
@@ -645,6 +649,11 @@ public class HybridRetrieverService {
 
     private Map<Long, List<Long>> resolveEmbeddingProfiles(RetrievalScope scope) {
         EmbeddingProfile defaultProfile = profileProvider.getActiveProfile();
+        if (scope.collectionFilter() == RetrievalScope.CollectionFilter.SELECTED
+                && !scope.collectionIds().isEmpty()) {
+            return resolveProfilesForSelectedCollections(
+                    scope.collectionIds(), scope.coverageMode());
+        }
         RetrievalScopeSql.Fragment fragment = RetrievalScopeSql.buildDocumentOnly(
                 scope, RetrievalFilters.none());
         String sql = "SELECT DISTINCT CASE WHEN d.collection_id IS NULL THEN ? "
@@ -667,29 +676,35 @@ public class HybridRetrieverService {
                 result.get(profileId).add(collectionId);
             }
         }
-        if (scope.coverageMode() == CollectionCoverageMode.EACH_COLLECTION
-                && !scope.collectionIds().isEmpty()) {
-            List<Long> selectedIds = scope.collectionIds();
-            List<Map<String, Object>> selectedCollections = jdbcTemplate.queryForList(
-                    "SELECT id, active_embedding_profile_id FROM rag_collection "
-                            + "WHERE id = ANY (?) AND deleted = FALSE AND purged_at IS NULL "
-                            + "ORDER BY id",
-                    new org.springframework.jdbc.support.SqlArrayValue(
-                            "bigint", selectedIds.toArray()));
-            for (Map<String, Object> collection : selectedCollections) {
-                Object rawProfileId = collection.get("active_embedding_profile_id");
-                if (!(rawProfileId instanceof Number number)) {
+        result.replaceAll((ignored, collectionIds) -> collectionIds.stream()
+                .distinct().toList());
+        return result;
+    }
+
+    /** 已授权到具体 Collection 时，Profile 归属以 collection 表为准，无需扫描文档表。 */
+    private Map<Long, List<Long>> resolveProfilesForSelectedCollections(
+            List<Long> selectedIds,
+            CollectionCoverageMode coverageMode) {
+        List<Map<String, Object>> collections = jdbcTemplate.queryForList(
+                "SELECT id, active_embedding_profile_id FROM rag_collection "
+                        + "WHERE id = ANY (?) ORDER BY id",
+                new org.springframework.jdbc.support.SqlArrayValue(
+                        "bigint", selectedIds.toArray()));
+        Map<Long, List<Long>> result = new LinkedHashMap<>();
+        for (Map<String, Object> collection : collections) {
+            Object rawProfileId = collection.get("active_embedding_profile_id");
+            if (!(rawProfileId instanceof Number number)) {
+                if (coverageMode == CollectionCoverageMode.EACH_COLLECTION) {
                     throw new IllegalStateException(
                             "Collection embedding profile is not initialized");
                 }
-                long profileId = number.longValue();
-                Long collectionId = ((Number) collection.get("id")).longValue();
-                result.computeIfAbsent(profileId, ignored -> new ArrayList<>())
-                        .add(collectionId);
+                continue;
             }
+            long profileId = number.longValue();
+            Long collectionId = ((Number) collection.get("id")).longValue();
+            result.computeIfAbsent(profileId, ignored -> new ArrayList<>())
+                    .add(collectionId);
         }
-        result.replaceAll((ignored, collectionIds) -> collectionIds.stream()
-                .distinct().toList());
         return result;
     }
 
@@ -1260,24 +1275,52 @@ public class HybridRetrieverService {
         String select = "SELECT e.id, e.chunk_text, d.document_revision AS evidence_revision, "
                 + "d.content_hash AS evidence_content_hash, 'VECTOR' AS evidence_index_kind, "
                 + "s.embedding_profile_id AS evidence_profile_id, s.request_generation AS evidence_generation, "
-                + "s.chunker_version AS evidence_chunker, e." + vectorColumn
+                + "s.chunker_version AS evidence_chunker, e.embedding_vector"
                 + "::text AS embedding, e.document_id, e.chunk_index, "
                 + currentMetadataSql() + ", "
                 + "d.collection_id AS collection_id, "
                 + "(SELECT c.collection_key FROM rag_collection c WHERE c.id = d.collection_id) AS collection_key, "
                 + "d.title AS document_title, d.source AS document_source, "
                 + "d.original_filename AS original_filename";
-        String scope = EmbeddingProfileSqlScope.fromAndFreshness(
-                        profile.id(),
-                        descriptorProvider.textDescriptor().chunkerVersion(),
-                        descriptorProvider.jsonRecordDescriptor().chunkerVersion())
-                + "AND e." + vectorColumn + " IS NOT NULL ";
         RetrievalScopeSql.Fragment fragment =
                 RetrievalScopeSql.build(retrievalScope, filters);
-        String sql = select + scope + fragment.sql()
-                + "ORDER BY e." + vectorColumn
-                + " <=> CAST(? AS vector), e.document_id, e.chunk_index LIMIT ?";
-        List<Object> args = new ArrayList<>(fragment.args());
+        String candidateScope = fragment.sql().isEmpty()
+                ? ""
+                : "AND e.document_id IN (SELECT d.id FROM rag_documents d "
+                        + "WHERE d.enabled = TRUE " + fragment.sql() + ") ";
+        String textChunker = descriptorProvider.textDescriptor().chunkerVersion();
+        String jsonChunker = descriptorProvider.jsonRecordDescriptor().chunkerVersion();
+        // 关键：ANN 排序必须留在只含 rag_embeddings 的 CTE 内，HNSW 才会被使用；
+        // 新鲜度 JOIN 放到外层，仅对候选集（≤ VECTOR_MAX_CANDIDATES）求值。
+        String sql = "WITH candidates AS MATERIALIZED ("
+                + "SELECT e.id, e.document_id, e.chunk_index, e.chunk_text, e.metadata, "
+                + "e.embedding_profile_id, e." + vectorColumn + " AS embedding_vector "
+                + "FROM rag_embeddings e "
+                + "WHERE e.embedding_profile_id = " + profile.id() + " "
+                + "AND e." + vectorColumn + " IS NOT NULL "
+                + candidateScope
+                + "ORDER BY e." + vectorColumn + " <=> CAST(? AS vector) "
+                + "LIMIT ?) "
+                + select
+                + " FROM candidates e "
+                + "JOIN rag_document_embedding_state s ON s.document_id = e.document_id "
+                + "AND s.embedding_profile_id = e.embedding_profile_id "
+                + "JOIN rag_documents d ON d.id = e.document_id "
+                + "WHERE s.status = 'COMPLETED' "
+                + "AND s.content_hash = d.content_hash "
+                + "AND s.chunker_version = CASE WHEN d.document_type = 'json-record' "
+                + "THEN ? ELSE COALESCE(d.derivation_chunker_version, ?) END "
+                + "AND d.enabled = true "
+                + "ORDER BY e.embedding_vector <=> CAST(? AS vector), "
+                + "e.document_id, e.chunk_index LIMIT ?";
+        int candidateLimit = Math.min(VECTOR_MAX_CANDIDATES,
+                Math.max(VECTOR_MIN_CANDIDATES, limit * VECTOR_CANDIDATE_MULTIPLIER));
+        List<Object> args = new ArrayList<>();
+        args.addAll(fragment.args());
+        args.add(vectorStr);
+        args.add(candidateLimit);
+        args.add(textChunker);
+        args.add(jsonChunker);
         args.add(vectorStr);
         args.add(limit);
         return jdbcTemplate.queryForList(sql, args.toArray());

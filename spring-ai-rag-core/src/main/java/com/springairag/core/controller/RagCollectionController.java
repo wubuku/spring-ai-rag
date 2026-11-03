@@ -366,11 +366,19 @@ public class RagCollectionController {
                 .orElseGet(() -> collectionRepository.searchCollections(
                         name, query, enabled, pageable));
 
-        List<Map<String, Object>> items = pageResult.getContent().stream()
-                .map(c -> {
-                    long docCount = documentRepository.countByCollectionId(c.getId());
-                    return CollectionMapper.toMap(c, docCount);
-                })
+        List<RagCollection> collections = pageResult.getContent();
+        Map<Long, Long> docCounts = collections.isEmpty()
+                ? Map.of()
+                : documentRepository
+                        .countGroupedByCollectionIds(
+                                collections.stream().map(RagCollection::getId).toList())
+                        .stream()
+                        .collect(java.util.stream.Collectors.toMap(
+                                row -> ((Number) row[0]).longValue(),
+                                row -> ((Number) row[1]).longValue()));
+        List<Map<String, Object>> items = collections.stream()
+                .map(c -> CollectionMapper.toMap(
+                        c, docCounts.getOrDefault(c.getId(), 0L)))
                 .toList();
 
         return ResponseEntity.ok(Map.of(

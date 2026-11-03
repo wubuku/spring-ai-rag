@@ -55,4 +55,21 @@ public interface RagEmbeddingRepository extends JpaRepository<RagEmbedding, Long
     long countFreshChunksByDocumentIdAndProfileId(
             @Param("documentId") Long documentId,
             @Param("embeddingProfileId") long embeddingProfileId);
+
+    /**
+     * 批量版本：一次取回整页文档的新鲜 chunk 数，避免列表页逐文档 N+1。
+     */
+    @Query(value = "SELECT s.document_id, COALESCE(MAX(s.chunk_count), 0) AS chunk_count "
+            + "FROM rag_document_embedding_state s "
+            + "JOIN rag_documents d ON d.id = s.document_id "
+            + "WHERE s.document_id IN (:documentIds) "
+            + "AND s.embedding_profile_id = :embeddingProfileId "
+            + "AND s.status = 'COMPLETED' "
+            + "AND s.content_hash = d.content_hash "
+            + "AND d.enabled = true "
+            + "GROUP BY s.document_id",
+            nativeQuery = true)
+    List<Object[]> countFreshChunksByDocumentIdsAndProfileId(
+            @Param("documentIds") List<Long> documentIds,
+            @Param("embeddingProfileId") long embeddingProfileId);
 }

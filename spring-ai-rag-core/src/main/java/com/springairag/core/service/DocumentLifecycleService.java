@@ -8,6 +8,9 @@ import com.springairag.core.entity.RagDocument;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -125,6 +128,55 @@ public class DocumentLifecycleService {
                 derived.error(),
                 !"READY".equals(derived.searchability()),
                 processingSummary(document));
+    }
+
+    /**
+     * 批量读取生命周期：整页文档一次完整性查询，避免列表页逐文档 N+1。
+     */
+    public List<DocumentLifecycleResponse> readAll(List<RagDocument> documents) {
+        if (documents == null || documents.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, DerivationIntegrityRepository.Snapshot> snapshots = new HashMap<>();
+        if (integrityRepository != null) {
+            Map<Long, List<Long>> idsByCollection = new LinkedHashMap<>();
+            for (RagDocument document : documents) {
+                if (!Boolean.TRUE.equals(document.getEnabled())
+                        || document.getId() == null) {
+                    continue;
+                }
+                idsByCollection
+                        .computeIfAbsent(document.getCollectionId(),
+                                ignored -> new ArrayList<>())
+                        .add(document.getId());
+            }
+            for (Map.Entry<Long, List<Long>> entry : idsByCollection.entrySet()) {
+                EmbeddingProfile profile = entry.getKey() == null
+                        ? profileProvider.getActiveProfile()
+                        : profileProvider.getProfileForCollection(entry.getKey());
+                integrityRepository.inspectIds(entry.getValue(), profile)
+                        .forEach(snapshot -> snapshots.put(
+                                snapshot.documentId(), snapshot));
+            }
+        }
+        List<DocumentLifecycleResponse> responses =
+                new ArrayList<>(documents.size());
+        for (RagDocument document : documents) {
+            if (!Boolean.TRUE.equals(document.getEnabled())
+                    || integrityRepository == null) {
+                responses.add(read(document));
+                continue;
+            }
+            DerivationIntegrityRepository.Snapshot snapshot =
+                    snapshots.get(document.getId());
+            if (snapshot == null) {
+                snapshot = DerivationIntegrityRepository.Snapshot
+                        .missing(document.getId());
+            }
+            responses.add(fromIntegrity(snapshot, profileKey(document),
+                    processingSummary(document)));
+        }
+        return responses;
     }
 
     private record DerivedLifecycle(
