@@ -67,6 +67,10 @@ RAG_EMBEDDING_MODEL=BAAI/bge-m3
 RAG_EMBEDDING_DIMENSIONS=1024
 ```
 
+> Do not enable the commented-out `SPRING_DATASOURCE_URL` from `.env.example` at
+> the same time: when set it overrides `POSTGRES_DATABASE`, silently pointing the
+> service at a different database.
+
 Without real credentials, use the bundled mock provider to exercise the pipeline
 (it validates the flow, not answer quality):
 

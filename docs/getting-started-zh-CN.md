@@ -67,6 +67,9 @@ RAG_EMBEDDING_MODEL=BAAI/bge-m3
 RAG_EMBEDDING_DIMENSIONS=1024
 ```
 
+> `.env.example` 里注释掉的 `SPRING_DATASOURCE_URL` 不要同时启用：它一旦生效会覆盖
+> `POSTGRES_DATABASE`，让服务静默连到另一个库。
+
 没有真实凭据时，可以用仓库自带的 mock provider 跑通链路（只验证流程，
 不验证回答质量）：
 
