@@ -11,6 +11,7 @@ import com.springairag.core.filter.ApiKeyAuthFilter;
 import com.springairag.core.repository.RagCollectionRepository;
 import com.springairag.core.security.EnvironmentRootCredentialResolver;
 import com.springairag.core.security.ProvisioningOwnerResolver;
+import com.springairag.core.service.CollectionExportService;
 import com.springairag.core.service.CollectionIdentityResolver;
 import com.springairag.core.service.CollectionProvisioningService;
 import com.springairag.core.service.CollectionPurgeAuthorization;
@@ -371,6 +372,7 @@ class CollectionPurgeHttpPostgresIntegrationTest {
             GlobalExceptionHandler.class,
             CollectionPurgeAuthorization.class,
             CollectionPurgeService.class,
+            CollectionExportService.class,
             LongRunningOperationService.class,
             CollectionPurgeOperationWorker.class,
             CollectionIdentityResolver.class,

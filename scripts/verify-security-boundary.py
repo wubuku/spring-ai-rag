@@ -191,10 +191,10 @@ def main() -> int:
                  "POST", f"{base}/api/v1/rag/chat",
                  {"message": "security", "collectionKeys": ["sec-a"]},
                  api_key=key_b_raw), 403),
-            ("Collections 读取他人详情",
+            ("Collections 读取他人详情（枚举防护）",
              lambda: json_request(
                  "GET", f"{base}/api/v1/rag/collections/{collection_a_id}",
-                 {}, api_key=key_b_raw), 403),
+                 {}, api_key=key_b_raw), 404),
             ("Collections 列出他人文档",
              lambda: json_request(
                  "GET", f"{base}/api/v1/rag/collections/{collection_a_id}/documents",

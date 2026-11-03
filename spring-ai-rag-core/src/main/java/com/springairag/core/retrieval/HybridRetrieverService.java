@@ -1319,8 +1319,10 @@ public class HybridRetrieverService {
         args.addAll(fragment.args());
         args.add(vectorStr);
         args.add(candidateLimit);
-        args.add(textChunker);
+        // 占位符顺序必须与 SQL 一致：CASE 的 THEN 分支是 json-record（jsonChunker），
+        // ELSE 分支是普通文档（textChunker）。
         args.add(jsonChunker);
+        args.add(textChunker);
         args.add(vectorStr);
         args.add(limit);
         return jdbcTemplate.queryForList(sql, args.toArray());

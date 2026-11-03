@@ -109,7 +109,10 @@ class Acceptance:
         (self.directory / "summary.json").write_text(json.dumps(self.results, indent=2) + "\n")
 
     def setup(self):
-        self.command(["mvn", "-q", "-pl", "spring-ai-rag-core", "-am", "-DskipTests", "compile"], "compile")
+        # 用 install 而不是 compile：dependency:build-classpath 从本地仓库解析
+        # reactor 内的兄弟模块（spring-ai-rag-api 等），只 compile 不会产出可解析的 jar，
+        # 在干净 CI 上会因 Maven prefix 过滤报 "is not a valid version"。
+        self.command(["mvn", "-q", "-pl", "spring-ai-rag-core", "-am", "-DskipTests", "install"], "install")
         self.command(["mvn", "-q", "-pl", "spring-ai-rag-core", "-am", "dependency:build-classpath",
                       "-Dmdep.outputFile=" + str(self.directory / "dependencies.txt"), "-DincludeScope=runtime"], "classpath")
         classpaths = []

@@ -594,11 +594,13 @@ class RetrievalCorrectnessPostgresIntegrationTest {
 
     private long insertCollection(String key) {
         return jdbcTemplate.queryForObject(
-                "INSERT INTO rag_collection (collection_key, name) "
-                        + "VALUES (?, ?) RETURNING id",
+                "INSERT INTO rag_collection "
+                        + "(collection_key, name, active_embedding_profile_id) "
+                        + "VALUES (?, ?, ?) RETURNING id",
                 Long.class,
                 key,
-                key);
+                key,
+                activeProfile.id());
     }
 
     private long insertDocument(
