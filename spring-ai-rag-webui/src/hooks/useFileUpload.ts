@@ -1,6 +1,15 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { getCredentialHeaders } from '../auth/credentialStore';
 import { BASE_URL } from '../api/client';
+import {
+  FAILURE_CLASS_HEADER,
+  canAppendServerReason,
+  failureClassForStatus,
+  failureCopy,
+  parseFailureClass,
+} from '../utils/failureClass';
+import { usableReason } from '../utils/failureReason';
 
 interface UploadProgress {
   fileName: string;
@@ -23,8 +32,12 @@ interface UseFileUploadReturn {
   isUploading: boolean;
 }
 
+/** 上传被服务端拒绝时抛出的错误，message 已经是本地化文案。 */
+class UploadRejected extends Error {}
+
 export function useFileUpload(options: UseFileUploadOptions): UseFileUploadReturn {
   const { onProgress, onComplete, onError } = options;
+  const { t } = useTranslation();
   const [uploads, setUploads] = useState<UploadProgress[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const uploadAbortRef = useRef<AbortController | null>(null);
@@ -90,8 +103,22 @@ export function useFileUpload(options: UseFileUploadOptions): UseFileUploadRetur
         });
 
         if (!response.ok) {
-          const errorData = await response.json().catch(() => ({ detail: 'Upload failed' }));
-          throw new Error(errorData.detail ?? `HTTP ${response.status}`);
+          const errorData: { detail?: unknown; message?: unknown } =
+            await response.json().catch(() => ({}));
+          // 上传走原生 fetch，不经过 api/client 的拦截器，所以失败分类要
+          // 在这里自己读：否则限流/上游故障只会变成一句 `HTTP 503`。
+          const failureClass = parseFailureClass(
+            response.headers?.get(FAILURE_CLASS_HEADER))
+            ?? failureClassForStatus(response.status);
+          const detail = typeof errorData.detail === 'string'
+            ? errorData.detail
+            : typeof errorData.message === 'string' ? errorData.message : undefined;
+          const reason = canAppendServerReason({ failureClass })
+            ? usableReason(detail)
+            : '';
+          const copy = failureCopy(t, { failureClass }, 'documents.uploadFailed');
+          throw new UploadRejected(
+            reason && !/^HTTP \d{3}$/i.test(reason) ? `${copy} ${reason}` : copy);
         }
 
         // All uploads completed
@@ -101,9 +128,14 @@ export function useFileUpload(options: UseFileUploadOptions): UseFileUploadRetur
         });
       } catch (err) {
         const cancelled = err instanceof DOMException && err.name === 'AbortError';
+        // `UploadRejected` 已经带本地化文案（可能附了业务校验原因）；
+        // fetch 自身的 TypeError（"Failed to fetch"）和未知抛出都退到
+        // 本地化通用文案，避免把浏览器英文异常当用户提示。
         const errorMsg = cancelled
-          ? 'Upload cancelled'
-          : err instanceof Error ? err.message : 'Upload failed';
+          ? t('documents.uploadCancelled')
+          : err instanceof UploadRejected
+            ? err.message
+            : t('documents.uploadFailed');
         newUploads.forEach(u => {
           updateUpload(u.fileName, { status: 'failed', error: errorMsg });
           onError?.(u.fileName, errorMsg);
@@ -113,7 +145,7 @@ export function useFileUpload(options: UseFileUploadOptions): UseFileUploadRetur
         setIsUploading(false);
       }
     },
-    [updateUpload, onComplete, onError]
+    [updateUpload, onComplete, onError, t]
   );
 
   // Abort any in-flight upload on unmount. The real thing; unlike the SSE

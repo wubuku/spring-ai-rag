@@ -21,6 +21,12 @@ import { useImeComposition } from '../utils/ime';
 import styles from './Documents.module.css';
 import { EmptyState, IconButton, QueryErrorBanner } from '../components/ui';
 import { failureMessage, usableReason } from '../utils/failureReason';
+import {
+  failureCopy,
+  failureCopyWithDetail,
+  failureSignalOf,
+  parseFailureClass,
+} from '../utils/failureClass';
 import { Upload, X } from 'lucide-react';
 import { formatDate, UNREADABLE } from '../utils/time';
 import { capLength, SHORT_ID_LENGTH, truncate } from '../utils/text';
@@ -85,13 +91,22 @@ export function Documents() {
   // 409 branch is the one case where a *specific* sentence beats the raw reason,
   // so it keeps winning; everything else appends what the server said.
   const handleMutationError = (error: unknown, fallbackKey: string) => {
-    const status = (error as { response?: { status?: number } })?.response?.status;
+    // `ApiRequestError` 把状态码放在根上；旧测试传入的 axios 风格对象仍带
+    // `response.status`，两者都要认，否则 409 的刷新提示会静默消失。
+    const signal = failureSignalOf(error);
+    const status = signal.status
+      ?? (error as { response?: { status?: number } })?.response?.status;
     if (status === 409) {
       queryClient.invalidateQueries({ queryKey: ['documents'] });
       showToast(t('documents.revisionConflict'), 'error');
       return;
     }
-    showToast(failureMessage(t, fallbackKey, error), 'error');
+    showToast(failureCopyWithDetail(
+      t,
+      signal,
+      fallbackKey,
+      error instanceof Error ? error.message : undefined,
+    ), 'error');
   };
 
   const updateMutation = useMutation({
@@ -189,12 +204,32 @@ export function Documents() {
   const embedMutation = useMutation({
     mutationFn: ({ id, force }: { id: number; force: boolean }) =>
       documentsApi.embed(id, force),
-    onSuccess: () => {
+    onSuccess: response => {
       queryClient.invalidateQueries({ queryKey: ['documents'] });
+      // 后端对同步嵌入的上游失败使用 200 + status=FAILED 的软失败，
+      // axios 不会抛错。只看 HTTP 状态会把它当成功并提示"已开始重试"，
+      // 用户于是以为向量已经有了。
+      const body = response?.data as {
+        status?: string;
+        failureClass?: string;
+        failureDetails?: { reason?: string };
+      } | null;
+      if (body?.status === 'FAILED') {
+        showToast(failureCopy(t, {
+          failureClass: parseFailureClass(body.failureClass),
+          reason: body.failureDetails?.reason,
+        }, 'documents.embeddingRetryError'), 'error');
+        return;
+      }
       showToast(t('documents.embeddingRetried'), 'success');
     },
     onError: (error) => {
-      showToast(failureMessage(t, 'documents.embeddingRetryError', error), 'error');
+      showToast(failureCopyWithDetail(
+        t,
+        failureSignalOf(error),
+        'documents.embeddingRetryError',
+        error instanceof Error ? error.message : undefined,
+      ), 'error');
     },
   });
 

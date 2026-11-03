@@ -78,6 +78,8 @@
     "retryEmbedding": "重试嵌入",
     "embeddingRetried": "已开始重试嵌入",
     "embeddingRetryError": "嵌入重试失败",
+    "uploadFailed": "上传失败，请重试。",
+    "uploadCancelled": "已取消上传。",
     "processingRuns": "处理记录",
     "processingRunsTitle": "文档处理记录",
     "noProcessingRuns": "暂无处理记录",
@@ -278,7 +280,21 @@
     "modelSubstituted": "你保存的模型 {{previous}} 已不可用，这条消息将改由 {{model}} 回答。",
     "feedbackError": "反馈提交失败，请重试。",
     "exportError": "导出对话失败",
-    "subtitle": "在会话中向语料提问。历史按你的凭据隔离，换一个密钥一条都看不到。"
+    "subtitle": "在会话中向语料提问。历史按你的凭据隔离，换一个密钥一条都看不到。",
+    "incompleteBadge": "回答不完整",
+    "incompleteHint": "回答在结束信号前中断，可能被截断。可以重试以获取完整回答。",
+    "streamFailed": "回答流在完成前中断。"
+  },
+  "failures": {
+    "rateLimited": "当前请求太多，已被限流。请稍等片刻再重试。",
+    "dependencyUnavailable": "模型或向量服务暂时不可用，请稍后重试。",
+    "connection": "与模型或向量服务的连接中断了。请检查网络后重试。",
+    "timeout": "模型或向量服务响应超时，请重试。",
+    "invalidResponse": "模型或向量服务返回了无法识别的响应，重复相同请求大概率不会成功。",
+    "conflict": "该资源正在被另一个请求修改，请稍后重试。",
+    "authentication": "服务端的上游凭据被拒绝，需要运维修复配置。",
+    "authorization": "当前凭据没有执行该操作的权限。",
+    "clientRequest": "服务端拒绝了这次请求，请检查输入后重试。"
   },
   "search": {
     "title": "文档检索",
@@ -661,7 +677,7 @@
     "embedding": "嵌入中…",
     "embedSuccess": "嵌入完成 — 已创建 {{chunks}} 个文本块",
     "embedCached": "文档已嵌入（缓存）",
-    "embedFailed": "嵌入失败：{{message}}",
+    "embedFailedGeneric": "嵌入失败，请稍后重试。",
     "embedError": "触发嵌入失败",
     "collectionsLoadFailed": "无法加载集合列表",
     "subtitle": "浏览导入的产物、预览转换结果，并把目录提升为 RAG 语料。"

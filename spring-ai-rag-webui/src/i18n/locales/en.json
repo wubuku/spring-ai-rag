@@ -78,6 +78,8 @@
     "retryEmbedding": "Retry embedding",
     "embeddingRetried": "Embedding retry started",
     "embeddingRetryError": "Embedding retry failed",
+    "uploadFailed": "Upload failed. Try again.",
+    "uploadCancelled": "Upload cancelled.",
     "processingRuns": "Processing runs",
     "processingRunsTitle": "Document processing runs",
     "noProcessingRuns": "No processing runs found",
@@ -278,7 +280,21 @@
     "modelSubstituted": "Your saved model {{previous}} is no longer available, so this message will be sent to {{model}} instead.",
     "feedbackError": "Could not submit your feedback. Please try again.",
     "exportError": "Could not export the conversation",
-    "subtitle": "Ask the corpus inside a session. History is scoped to your credential, so another key sees none of it."
+    "subtitle": "Ask the corpus inside a session. History is scoped to your credential, so another key sees none of it.",
+    "incompleteBadge": "Incomplete",
+    "incompleteHint": "The answer stream ended without a finish signal. This reply may be cut off — retry to get a complete answer.",
+    "streamFailed": "The answer stream stopped before it finished."
+  },
+  "failures": {
+    "rateLimited": "Too many requests right now. Wait a moment, then try again.",
+    "dependencyUnavailable": "The model or embedding service is unavailable right now. Try again in a moment.",
+    "connection": "Lost the connection to the model or embedding service. Check your network, then try again.",
+    "timeout": "The model or embedding service took too long to answer. Try again.",
+    "invalidResponse": "The model or embedding service returned a response this app cannot read. Repeating the same request is unlikely to help.",
+    "conflict": "This resource was being changed by another request. Wait a moment, then retry.",
+    "authentication": "The server's upstream provider credential was rejected. An operator needs to fix the configuration.",
+    "authorization": "This credential is not allowed to perform that action.",
+    "clientRequest": "The server rejected this request. Check the input and try again."
   },
   "search": {
     "title": "Search",
@@ -661,7 +677,7 @@
     "embedding": "Embedding…",
     "embedSuccess": "Embedding completed — {{chunks}} chunks created",
     "embedCached": "Document already embedded (cached)",
-    "embedFailed": "Embedding failed: {{message}}",
+    "embedFailedGeneric": "Embedding failed. Try again later.",
     "embedError": "Failed to trigger embedding",
     "collectionsLoadFailed": "Could not load the collection list",
     "subtitle": "Browse imported artifacts, preview conversions, and promote a folder into the RAG corpus."

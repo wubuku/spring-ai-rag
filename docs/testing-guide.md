@@ -584,6 +584,11 @@ timing can mask):
 cd spring-ai-rag-webui
 npm run test:e2e:mock   # build + vite preview (15174) + all non -real specs
 ```
+The mock suite's `e2e/failure-modes.spec.ts` guards failure presentation: when
+`/chat`, `/search`, `/embed` or upload receives `DEPENDENCY_UNAVAILABLE`,
+`RATE_LIMITED`, `TIMEOUT` or a mid-stream SSE truncation / `done.status=incomplete`,
+the WebUI must show readable copy, offer a retry entry, leave loading, and never
+report a soft failure (HTTP 200 + `status=FAILED`) as success.
  The root
 cause investigation lives in the hardening loop ledger, Batches 23/25
 ([drafts/HARDENING_LOOP_PLAN.md](drafts/HARDENING_LOOP_PLAN.md)).

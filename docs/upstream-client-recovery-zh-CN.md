@@ -82,6 +82,23 @@ job表记录`last_error`，不会留下半写向量。
 `embedding.job`、`retrieval.embedding`；结构化日志包含`provider`、`reason`、
 `retryable`以及`jobId/documentId/profileId/traceId`，可直接定位失败调用。
 
+## WebUI 失败呈现
+
+WebUI 不直接展示 `X-RAG-Failure-Class`、`HTTP 503` 或供应商英文正文；
+`spring-ai-rag-webui/src/utils/failureClass.ts` 是唯一解释层：
+
+- 分类与 `failureDetails.reason` 映射到中英文案（`failures.*`），reason 优先于粗分类。
+  响应没带分类头时按 HTTP 状态兜底：409→冲突、429→限流、502/503→上游不可用、504→超时。
+- 只有 `CLIENT_REQUEST`/`CONFLICT`/`NOT_FOUND` 把服务端 reason 附在文案后；
+  限流/上游不可用/超时/鉴权只给本地化解释，避免把技术栈贴到用户脸上。
+- `AUTHENTICATION`/`AUTHORIZATION`/`CLIENT_REQUEST`/`NOT_FOUND` 不给重试入口；
+  其余分类与未知分类都可重试。
+- Chat 的 `done.status=incomplete` 与 SSE 中途断流都是终态：显示不完整标记与重试入口，
+  不渲染成正常完成，也不残留 loading 光标；重试复用同一 prompt。
+- `/embed` 的 HTTP 200 + `status=FAILED` 按失败提示，上传失败读分类而不是展示 HTTP 状态。
+
+对应 Mock Playwright 见 `spring-ai-rag-webui/e2e/failure-modes.spec.ts`（[测试指南](testing-guide-zh-CN.md)）。
+
 ## 私有诊断与验收
 
 [双确认主动诊断](trustworthy-evaluation-admission-zh-CN.md)增量提供modelAnswer（安全替换前同次输出）、

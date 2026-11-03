@@ -155,8 +155,8 @@ describe('useFileUpload', () => {
     });
 
     expect(result.current.uploads[0].status).toBe('failed');
-    expect(result.current.uploads[0].error).toBe('Upload cancelled');
-    expect(onError).toHaveBeenCalledWith('test.txt', 'Upload cancelled');
+    expect(result.current.uploads[0].error).toBe('documents.uploadCancelled');
+    expect(onError).toHaveBeenCalledWith('test.txt', 'documents.uploadCancelled');
     expect(result.current.isUploading).toBe(false);
     fetchSpy.mockRestore();
   });
@@ -240,9 +240,9 @@ describe('useFileUpload success, failure and fallback branches', () => {
 
     expect(result.current.uploads[0]).toMatchObject({
       status: 'failed',
-      error: 'File too large',
+      error: 'documents.uploadFailed File too large',
     });
-    expect(onError).toHaveBeenCalledWith('test.txt', 'File too large');
+    expect(onError).toHaveBeenCalledWith('test.txt', 'documents.uploadFailed File too large');
     fetchSpy.mockRestore();
   });
 
@@ -263,8 +263,33 @@ describe('useFileUpload success, failure and fallback branches', () => {
     });
 
     expect(result.current.uploads[0].status).toBe('failed');
-    expect(result.current.uploads[0].error).toBe('Upload failed');
-    expect(onError).toHaveBeenCalledWith('test.txt', 'Upload failed');
+    expect(result.current.uploads[0].error).toBe('documents.uploadFailed');
+    expect(onError).toHaveBeenCalledWith('test.txt', 'documents.uploadFailed');
+    fetchSpy.mockRestore();
+  });
+
+  it('prefers the failure class over the raw provider detail', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ detail: 'upstream exploded' }), {
+        status: 429,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-RAG-Failure-Class': 'RATE_LIMITED',
+        },
+      }),
+    );
+    const onError = vi.fn();
+    const { result } = renderHook(() =>
+      useFileUpload({ onProgress: vi.fn(), onComplete: vi.fn(), onError }),
+    );
+
+    await act(async () => {
+      await result.current.uploadFiles(oneFile());
+    });
+
+    // 限流是用户能理解且可重试的状态；供应商原文不该出现在提示里。
+    expect(result.current.uploads[0].error).toBe('failures.rateLimited');
+    expect(onError).toHaveBeenCalledWith('test.txt', 'failures.rateLimited');
     fetchSpy.mockRestore();
   });
 
@@ -279,8 +304,8 @@ describe('useFileUpload success, failure and fallback branches', () => {
       await result.current.uploadFiles(oneFile());
     });
 
-    expect(result.current.uploads[0].error).toBe('Upload failed');
-    expect(onError).toHaveBeenCalledWith('test.txt', 'Upload failed');
+    expect(result.current.uploads[0].error).toBe('documents.uploadFailed');
+    expect(onError).toHaveBeenCalledWith('test.txt', 'documents.uploadFailed');
     fetchSpy.mockRestore();
   });
 

@@ -928,6 +928,49 @@ describe('useChatSSE race guards', () => {
     expect(onError).not.toHaveBeenCalled();
   });
 
+  it('treats an incomplete done event as a terminal, not as success', async () => {
+    // 后端在模型没有正常结束时会发 status=incomplete 的 done。页面必须
+    // 停止 streaming 并拿到这个终态，否则 loading 骨架永远不消失。
+    mockFetch.mockResolvedValue(streamResponse([
+      'event: message\ndata: {"content":"partial"}\n\n',
+      `event: done\ndata: {"status":"incomplete","turnId":"${TURN_R}"}\n\n`,
+    ]));
+    const onDone = vi.fn();
+    const onError = vi.fn();
+    const { result } = renderHook(() => useChatSSE({ onDone, onError }));
+
+    await act(async () => {
+      result.current.send('Hello');
+    });
+
+    expect(onError).not.toHaveBeenCalled();
+    expect(onDone).toHaveBeenCalledTimes(1);
+    expect(onDone.mock.calls[0][0].status).toBe('incomplete');
+  });
+
+  it('carries the failure class from a rejected stream response', async () => {
+    // 非 2xx 时页面需要分类来选文案；只留下 HTTP 状态会把限流和上游
+    // 故障都压成同一句"出错了"。
+    mockFetch.mockResolvedValue({
+      ok: false,
+      status: 503,
+      headers: new Headers({ 'X-RAG-Failure-Class': 'DEPENDENCY_UNAVAILABLE' }),
+      json: async () => ({ detail: 'provider exploded' }),
+    });
+    const onError = vi.fn();
+    const { result } = renderHook(() => useChatSSE({ onError }));
+
+    await act(async () => {
+      result.current.send('Hello');
+    });
+
+    expect(onError).toHaveBeenCalled();
+    expect(onError.mock.calls.at(-1)![1]).toMatchObject({
+      status: 503,
+      failureClass: 'DEPENDENCY_UNAVAILABLE',
+    });
+  });
+
   it('stops silently when abort interrupts the in-flight stream read', async () => {
     // fetch 捕获 abort signal：中止时让挂起的 read 以 AbortError 拒绝。
     let rejectRead: ((reason: unknown) => void) | undefined;

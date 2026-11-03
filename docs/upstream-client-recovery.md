@@ -85,6 +85,27 @@ Observability: `rag.upstream.failures` is tagged by `operation/provider/reason/r
 covering `chat`, `chat.stream`, `embedding.document`, `embedding.job` and `retrieval.embedding`.
 Structured logs carry `provider`, `reason`, `retryable` plus `jobId/documentId/profileId/traceId`.
 
+## WebUI Failure Presentation
+
+The WebUI never renders `X-RAG-Failure-Class`, `HTTP 503` or provider English text directly;
+`spring-ai-rag-webui/src/utils/failureClass.ts` is the single interpretation layer:
+
+- Classes and `failureDetails.reason` map to paired EN/ZH copy (`failures.*`), with the reason
+  preferred over the coarse class. Without a class header, HTTP status is the fallback:
+  409 conflict, 429 rate limit, 502/503 upstream unavailable, 504 timeout.
+- Only `CLIENT_REQUEST`/`CONFLICT`/`NOT_FOUND` append the server reason; rate limits, upstream
+  outages, timeouts and auth failures get localized copy only, never a technical stack string.
+- `AUTHENTICATION`/`AUTHORIZATION`/`CLIENT_REQUEST`/`NOT_FOUND` offer no retry entry; every
+  other class, including unknown ones, does.
+- Chat treats `done.status=incomplete` and a truncated SSE stream as terminal: it shows an
+  incomplete marker plus a retry entry, never renders the reply as a clean completion or leaves
+  a loading cursor, and reuses the same prompt on retry.
+- An `/embed` HTTP 200 with `status=FAILED` is reported as a failure, and upload failures read
+  the class instead of surfacing the HTTP status.
+
+The matching Mock Playwright coverage is
+`spring-ai-rag-webui/e2e/failure-modes.spec.ts` (see the [testing guide](testing-guide.md)).
+
 ## Private Diagnostics and Acceptance
 
 [Dual-acknowledged diagnostics](trustworthy-evaluation-admission.md) add modelAnswer (same invocation before

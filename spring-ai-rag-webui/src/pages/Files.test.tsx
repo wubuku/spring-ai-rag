@@ -539,11 +539,11 @@ describe('Files embedding outcomes and raw opening', () => {
 
     await waitFor(() => {
       expect(mockShowToast).toHaveBeenCalledWith(
-        'files.embedFailed',
+        'files.embedFailedGeneric provider down',
         'error',
       );
     });
-    expect(screen.getByText('provider down')).toBeInTheDocument();
+    expect(screen.getByText('files.embedFailedGeneric provider down')).toBeInTheDocument();
   });
 
   it('reports an embedding request failure through the alert role', async () => {

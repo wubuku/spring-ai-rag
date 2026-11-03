@@ -13,6 +13,11 @@ import { useSearchHistory } from '../hooks/useSearchHistory';
 import { useBlobUrlOpener } from '../hooks/useBlobUrlOpener';
 import { IconButton, QueryErrorBanner } from '../components/ui';
 import { X } from 'lucide-react';
+import {
+  canAppendServerReason,
+  failureCopy,
+  failureSignalOf,
+} from '../utils/failureClass';
 import type { CollectionScopeMode } from '../types/api';
 import {
   readWorkspaceState,
@@ -344,9 +349,13 @@ export function Search() {
         <QueryErrorBanner
           onRetry={() => void refetch()}
           retryLabel={t('common.retry')}
-          detail={error instanceof Error ? error.message : undefined}
+          // 限流/上游故障的 reason 是供应商内部细节，不往用户脸上贴；
+          // 只有请求本身有问题时才把服务端原话附上。
+          detail={canAppendServerReason(failureSignalOf(error))
+            ? (error instanceof Error ? error.message : undefined)
+            : undefined}
         >
-          {t('search.loadFailed')}
+          {failureCopy(t, failureSignalOf(error), 'search.loadFailed')}
         </QueryErrorBanner>
       )}
 

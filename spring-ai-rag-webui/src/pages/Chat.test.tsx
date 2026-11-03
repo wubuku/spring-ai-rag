@@ -730,8 +730,33 @@ describe('Chat streaming callbacks (deep interactions)', () => {
     });
 
     expect(
-      screen.getByText('Error: connection dropped'),
-    ).toBeInTheDocument();
+      screen.getAllByText('chat.streamFailed').length,
+    ).toBeGreaterThan(0);
+  });
+
+  it('marks an incomplete answer and keeps a retry action', async () => {
+    renderChat();
+
+    const textarea = screen.getByPlaceholderText(/chat.placeholder/);
+    await act(async () => {
+      fireEvent.change(textarea, { target: { value: 'Hello' } });
+      fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false });
+    });
+    await act(async () => {
+      const opts = vi.mocked(useChatSSE).mock.calls[0][0] as Record<string, unknown>;
+      (opts.onChunk as (content: string) => void)('partial answer');
+    });
+    await act(async () => {
+      const opts = vi.mocked(useChatSSE).mock.calls[0][0] as Record<string, unknown>;
+      (opts.onDone as (d: { status: string; turnId?: string }) => void)({
+        status: 'incomplete',
+        turnId: 'turn-1',
+      });
+    });
+
+    expect(screen.getByText('partial answer')).toBeInTheDocument();
+    expect(screen.getByText('chat.incompleteBadge')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /common\.retry/ })).toBeInTheDocument();
   });
 
   it('renders tool activity when a tool start event arrives', async () => {
@@ -843,13 +868,19 @@ describe('Chat SSE callbacks', () => {
     expect(screen.getByText(/test query/)).toBeInTheDocument();
   });
 
-  it('onError shows error message to user', async () => {
+  it('onError shows a localized message and a retry action', async () => {
     renderChatForCallbacks();
     const opts = getOptions();
     await act(async () => {
-      (opts.onError as ((m: string) => void))('LLM provider failed');
+      (opts.onError as ((m: string, e?: { failureClass?: string }) => void))(
+        'LLM provider failed',
+        { failureClass: 'DEPENDENCY_UNAVAILABLE' },
+      );
     });
-    expect(screen.getByText(/Error.*LLM provider failed/)).toBeInTheDocument();
+    expect(screen.getAllByText('failures.dependencyUnavailable').length)
+      .toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: /common\.retry/ })).toBeInTheDocument();
+    expect(screen.queryByText(/LLM provider failed/)).not.toBeInTheDocument();
   });
   it('onToolResult completes the matching running activity', async () => {
     renderChatForCallbacks();
@@ -908,18 +939,19 @@ describe('Chat SSE callbacks', () => {
     expect(screen.queryByText('partial answer')).not.toBeInTheDocument();
   });
 
-  it('onError with 409 restores the prompt into the input', async () => {
+  it('onError with a conflict keeps the prompt retryable without leaking the server text', async () => {
     renderChatForCallbacks();
     const opts = getOptions();
-    const textarea = screen.getByPlaceholderText(/chat.placeholder/);
 
     await act(async () => {
-      (opts.onError as ((m: string, e?: { status?: number }) => void))(
-        'conflict', { status: 409 },
-      );
+      (opts.onError as ((m: string, e?: {
+        status?: number;
+        failureClass?: string;
+      }) => void))('conflict', { status: 409, failureClass: 'CONFLICT' });
     });
-    expect(textarea).toHaveValue('test query');
-    expect(screen.getByText(/Error.*conflict/)).toBeInTheDocument();
+    expect(screen.getAllByText('failures.conflict').length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: /common\.retry/ })).toBeInTheDocument();
+    expect(screen.queryByText(/Error.*conflict/)).not.toBeInTheDocument();
   });
 
   it('onDone with a new session id navigates to the conversation', async () => {

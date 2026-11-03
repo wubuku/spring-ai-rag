@@ -512,6 +512,10 @@ Mock Playwright 用例出现元素 detach。
 cd spring-ai-rag-webui
 npm run test:e2e:mock   # build + vite preview（15174）+ 全部非 -real 用例
 ```
+Mock 套件里的 `e2e/failure-modes.spec.ts` 专门守失败呈现：`/chat`、`/search`、
+`/embed` 与上传收到 `DEPENDENCY_UNAVAILABLE`、`RATE_LIMITED`、`TIMEOUT` 等分类，
+或 SSE 中途断流、`done.status=incomplete` 时，必须显示可读文案、给出重试入口、
+退出 loading，并且软失败（HTTP 200 + `status=FAILED`）不能被提示成成功。
 根因排查记录见
 [加固循环账本](drafts/HARDENING_LOOP_PLAN.md) Batch 23/25。
 为 `chat-real` 配置 tool-calling 模型时推荐使用外部 `models.json`

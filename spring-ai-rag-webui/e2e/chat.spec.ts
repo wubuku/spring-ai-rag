@@ -269,18 +269,28 @@ test.describe('Chat', () => {
     await page.getByRole('button', { name: 'Send' }).click();
 
     await expect(page.getByRole('button', { name: 'Send' })).toBeVisible();
-    await expect(page.locator('textarea')).toHaveValue('Keep this prompt');
+    // 失败后 prompt 不再被塞回输入框：它由重试入口保留，用户点一下就能重发，
+    // 不会既看到一个"重发"按钮、又看到同一句话躺在输入框里等着被二次提交。
+    await expect(page.locator('textarea')).toHaveValue('');
     // Batch 922. This read `Error: HTTP 409` and the hook only ever produced
     // that, because it took the status off the response and dropped the body.
     // The mock above has been carrying `message: "Chat turn is still running"`
     // the whole time — the reason the client never showed. Batch 921 taught the
     // hook to read it, so the bubble now says what the server actually said,
     // which is the only part of this a user can act on.
-    await expect(page.getByText('Error: Chat turn is still running')).toBeVisible();
+    await expect(page.getByText(
+      'This resource was being changed by another request. Wait a moment, then retry.',
+    ).first()).toBeVisible();
+    await expect(page.getByText(/Chat turn is still running/)).toHaveCount(0);
     await expect.poll(() => requests.length).toBe(2);
     expect(requests[0].key).toBeTruthy();
     expect(requests[1].key).toBe(requests[0].key);
     expect(requests[1].body).toBe(requests[0].body);
+
+    // 重试入口复用同一句 prompt：请求体与第一次逐字一致。
+    await page.getByRole('button', { name: 'Retry' }).click();
+    await expect.poll(() => requests.length).toBe(3);
+    expect(requests[2].body).toBe(requests[0].body);
   });
 
   test('replays a partial SSE attempt without duplicating the assistant bubble', async ({ page }) => {

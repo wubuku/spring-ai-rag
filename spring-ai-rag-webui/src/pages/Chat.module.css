@@ -141,6 +141,23 @@
   word-break: break-word;
 }
 
+/* 失败轮次的内容是本地化错误解释，不是回答，用错误色与正常回答区分。 */
+.failedContent {
+  color: var(--color-error-text);
+}
+
+/* 不完整回答的标记：回答本身还在，但必须让用户知道它可能被截断。 */
+.incompleteBadge {
+  display: inline-block;
+  margin-top: 0.5rem;
+  padding: 0.1rem 0.45rem;
+  border: 1px solid var(--color-warning-border);
+  border-radius: 6px;
+  background: var(--color-warning-bg);
+  color: var(--color-warning-text);
+  font-size: 0.75rem;
+}
+
 .sources {
   margin-top: 0.5rem;
   font-size: 0.8rem;

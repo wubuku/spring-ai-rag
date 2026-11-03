@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getCredentialHeaders } from '../auth/credentialStore';
 import { usableReason } from '../utils/failureReason';
+import {
+  FAILURE_CLASS_HEADER,
+  canRetryFailure,
+  failureClassForStatus,
+  parseFailureClass,
+  type FailureClass,
+} from '../utils/failureClass';
 import type {
   ChatMode,
   ChatSource,
@@ -23,7 +30,8 @@ export interface ChatToolResultEvent {
 
 export interface ChatDoneEvent {
   traceId?: string;
-  status: 'complete';
+  /** `incomplete` 表示流在没有正常结束信号的情况下收尾，回答可能被截断。 */
+  status: 'complete' | 'incomplete';
   turnId?: string;
   idempotentReplay?: boolean;
   sessionId?: string;
@@ -38,6 +46,11 @@ export interface ChatDoneEvent {
 export interface ChatErrorEvent {
   message: string;
   code?: string;
+  /** 后端失败分类，供页面翻成本地化文案。 */
+  failureClass?: FailureClass;
+  /** 上游失败原因码，例如 `UPSTREAM_TIMEOUT`；比分类更具体。 */
+  reason?: string;
+  retryable?: boolean;
   traceId?: string;
   sessionId?: string;
   status?: number;
@@ -209,12 +222,17 @@ export function useChatSSE(options: UseChatSSEOptions): UseChatSSEReturn {
               signal: attemptController.signal,
             });
             if (!response.ok) {
-              const retryAfter = retryAfterMs(response);
+              const failure = await readStreamFailure(response);
               throw new RetryableChatError(
-                await streamFailureMessage(response),
-                response.status === 409 || response.status === 429,
-                retryAfter,
+                failure.message,
+                failure.retryable
+                  ?? (failure.failureClass
+                    ? canRetryFailure({ failureClass: failure.failureClass })
+                    : response.status === 409 || response.status === 429),
+                retryAfterMs(response),
                 response.status,
+                failure.failureClass,
+                failure.reason,
               );
             }
             if (!response.body) {
@@ -283,7 +301,8 @@ export function useChatSSE(options: UseChatSSEOptions): UseChatSSEReturn {
             }
             if (!doneEvent) {
               throw new RetryableChatError(
-                'Chat stream ended before the done event', true, 0);
+                'Chat stream ended before the done event', true, 0,
+                undefined, undefined, undefined, 'STREAM_TRUNCATED');
             }
             completed = true;
             break;
@@ -329,13 +348,18 @@ export function useChatSSE(options: UseChatSSEOptions): UseChatSSEReturn {
           && !terminalEvent
           && generation === generationRef.current
           && !terminalRef.current) {
+          const retryableError = lastError instanceof RetryableChatError
+            ? lastError
+            : undefined;
           const event: ChatErrorEvent = {
             message: lastError instanceof Error
               ? lastError.message
               : 'Connection error',
-            status: lastError instanceof RetryableChatError
-              ? lastError.status
-              : undefined,
+            code: retryableError?.code,
+            failureClass: retryableError?.failureClass,
+            reason: retryableError?.reason,
+            retryable: retryableError?.retryable,
+            status: retryableError?.status,
           };
           onErrorRef.current?.(event.message, event);
         }
@@ -390,7 +414,10 @@ export function useChatSSE(options: UseChatSSEOptions): UseChatSSEReturn {
         }
         if (event.type === 'done') {
           const done = asDone(payload);
-          if (done && done.status === 'complete') {
+          // `incomplete` 同样是终态：后端在模型没有正常结束时就收尾，页面必须
+          // 停止 loading 并把这条回答标成不完整，不能等一个永远不会来的
+          // `complete`。未知 status 仍然当作惰性事件，避免协议演进造成误判。
+          if (done && (done.status === 'complete' || done.status === 'incomplete')) {
             if (!responseTurnId || !done.turnId
               || responseTurnId !== done.turnId) {
               throw new RetryableChatError(
@@ -422,17 +449,26 @@ class RetryableChatError extends Error {
   readonly retryable: boolean;
   readonly retryAfterMs: number;
   readonly status?: number;
+  readonly failureClass?: FailureClass;
+  readonly reason?: string;
+  readonly code?: string;
 
   constructor(
     message: string,
     retryable: boolean,
     retryAfterMs: number,
     status?: number,
+    failureClass?: FailureClass,
+    reason?: string,
+    code?: string,
   ) {
     super(message);
     this.retryable = retryable;
     this.retryAfterMs = retryAfterMs;
     this.status = status;
+    this.failureClass = failureClass;
+    this.reason = reason;
+    this.code = code;
   }
 }
 
@@ -446,40 +482,53 @@ function retryAfterMs(response: Response): number {
 }
 
 /**
- * What the failure is called, in the user's terms.
+ * 读一次非 2xx 流请求的失败信息。
  *
- * Batch 921. The keyed stream path answers a provider failure with a real HTTP
- * status and a body that already says what went wrong — Batch 920 traced
- * exactly this: `INTERNAL_ERROR` with `detail: "401 - {…Token is invalid…}"`.
- * The hook was reading `HTTP 500` off the status and discarding the rest, so
- * the only thing a user saw for a rejected provider credential was five
- * characters and no cause. `usableReason` is the same judgement
- * `QueryErrorBanner` already makes, and its header names the failure exactly:
- * "the status code is not the server's reason; it is the transport, wearing a
- * server's clothes."
+ * The keyed stream path answers a provider failure with a real HTTP status and a
+ * body that already says what went wrong. `usableReason` keeps the same
+ * judgement `QueryErrorBanner` makes, so a parsed provider reason survives while
+ * Spring's `{timestamp, status, error, path}` bodies fall back to `HTTP <status>`.
  *
- * Falls back to `HTTP <status>` whenever the body carries nothing usable, which
- * is the common case for Spring's own `{timestamp, status, error, path}` bodies.
- * A parse failure is caught rather than propagated for the same reason: a dead
- * connection rejects, and a half-written body rejects, and neither is a reason
- * worth replacing the status with.
- *
- * `detail ?? message` mirrors `api/client.ts`, so the two places that read this
- * problem document cannot drift apart about which field carries the reason.
+ * 除此之外这里必须把 `X-RAG-Failure-Class` 头带出来：页面靠它区分"限流"、
+ * "上游不可用"、"超时"，否则用户只能看到一句 `HTTP 503`——既不知道发生了
+ * 什么，也不知道该不该重试。`detail ?? message` mirrors `api/client.ts`, so
+ * the two places that read this problem document cannot drift apart.
  */
-async function streamFailureMessage(response: Response): Promise<string> {
+interface StreamFailure {
+  message: string;
+  failureClass?: FailureClass;
+  reason?: string;
+  retryable?: boolean;
+}
+
+async function readStreamFailure(response: Response): Promise<StreamFailure> {
   const fallback = `HTTP ${response.status}`;
-  let payload: { detail?: unknown; message?: unknown } | null = null;
+  const headerClass = parseFailureClass(
+    response.headers?.get(FAILURE_CLASS_HEADER))
+    ?? failureClassForStatus(response.status);
+  let payload: {
+    detail?: unknown;
+    message?: unknown;
+    failureClass?: unknown;
+    failureDetails?: { reason?: unknown; retryable?: unknown } | null;
+  } | null = null;
   try {
     payload = await response.json();
   } catch {
-    return fallback;
+    return { message: fallback, failureClass: headerClass };
   }
   const carried =
     typeof payload?.detail === 'string' ? payload.detail
       : typeof payload?.message === 'string' ? payload.message
       : undefined;
-  return usableReason(carried) || fallback;
+  const reason = payload?.failureDetails?.reason;
+  const retryable = payload?.failureDetails?.retryable;
+  return {
+    message: usableReason(carried) || fallback,
+    failureClass: parseFailureClass(payload?.failureClass) ?? headerClass,
+    reason: typeof reason === 'string' ? reason : undefined,
+    retryable: typeof retryable === 'boolean' ? retryable : undefined,
+  };
 }
 
 function asUuid(value: string | null | undefined): string | undefined {
@@ -601,9 +650,13 @@ function asDone(payload: any): ChatDoneEvent | null {
 
 function asError(payload: any): ChatErrorEvent {
   const nested = payload?.error;
+  const details = nested?.failureDetails ?? payload?.failureDetails;
   return {
     message: asString(nested?.message) ?? asString(payload?.message) ?? 'Chat stream failed',
     code: asString(nested?.code),
+    failureClass: parseFailureClass(nested?.failureClass ?? payload?.failureClass),
+    reason: asString(details?.reason),
+    retryable: typeof details?.retryable === 'boolean' ? details.retryable : undefined,
     traceId: asString(payload?.traceId),
     sessionId: asString(payload?.sessionId),
   };

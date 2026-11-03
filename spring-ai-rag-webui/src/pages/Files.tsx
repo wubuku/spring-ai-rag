@@ -24,7 +24,11 @@ import { useImeComposition } from '../utils/ime';
 import { capLength } from '../utils/text';
 import { useDebouncedCommit } from '../utils/debounce';
 import { STALE_TIME_MS } from '../utils/timing';
-import { failureMessage } from '../utils/failureReason';
+import { failureMessage, usableReason } from '../utils/failureReason';
+import {
+  failureCopyWithDetail,
+  failureSignalOf,
+} from '../utils/failureClass';
 import styles from './Files.module.css';
 import { IconButton, PageHeader, QueryErrorBanner } from '../components/ui';
 import {
@@ -493,7 +497,12 @@ export function Files() {
       // render that difference as two kinds of text in the same sentence.
       setUploadError(err);
       setUploadState('error');
-      showToast(failureMessage(t, 'files.importError', err), 'error');
+      showToast(failureCopyWithDetail(
+        t,
+        failureSignalOf(err),
+        'files.importError',
+        err instanceof Error ? err.message : undefined,
+      ), 'error');
     }
   }, [navigateTo, queryClient, showToast, t]);
 
@@ -555,13 +564,23 @@ export function Files() {
       } else if (result.embedStatus === 'CACHED') {
         showToast(t('files.embedCached'), 'info');
       } else {
-        showToast(t('files.embedFailed', { message: result.embedMessage }), 'error');
+        // 软失败时后端只回一个 embedStatus，不保证有分类头；供应商原文可能
+        // 是英文技术细节，因此给一句本地化解释，原文只在不含技术外壳时展示。
+        const reason = usableReason(result.embedMessage);
+        const copy = t('files.embedFailedGeneric');
+        const shown = reason && !/^HTTP \d{3}$/i.test(reason) ? `${copy} ${reason}` : copy;
+        showToast(shown, 'error');
+        setEmbeddingMessage(shown);
       }
-      setEmbeddingMessage(result.embedMessage || '');
     } catch (err) {
       setEmbeddingState('error');
       setEmbeddingMessage(err instanceof Error ? err.message : String(err));
-      showToast(failureMessage(t, 'files.embedError', err), 'error');
+      showToast(failureCopyWithDetail(
+        t,
+        failureSignalOf(err),
+        'files.embedError',
+        err instanceof Error ? err.message : undefined,
+      ), 'error');
     }
   }, [canAddToRag, ragImportId, selectedCollectionKey, t, showToast]);
 

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import axios, { AxiosError, AxiosHeaders } from 'axios';
-import { apiClient } from './client';
+import { apiClient, ApiRequestError } from './client';
 import { clearCredential, getCredential } from '../auth/credentialStore';
 
 vi.mock('../auth/credentialStore', () => ({
@@ -14,7 +14,15 @@ interface RequestHandler {
 
 interface ResponseHandler {
   rejected: (error: {
-    response?: { status?: number; data?: { detail?: string; message?: string } };
+    response?: {
+      status?: number;
+      headers?: AxiosHeaders;
+      data?: {
+        detail?: string;
+        message?: string;
+        failureDetails?: { reason?: string; retryable?: boolean };
+      };
+    };
     message?: string;
   }) => Promise<never>;
 }
@@ -124,6 +132,48 @@ describe('apiClient error normalization', () => {
 
     expect((withAxiosMessage as Error).message).toBe('Network Error');
     expect(clearCredential).not.toHaveBeenCalled();
+  });
+
+  it('carries the failure class and retry-after into the normalized error', async () => {
+    const headers = new AxiosHeaders({
+      'X-RAG-Failure-Class': 'RATE_LIMITED',
+      'Retry-After': '2',
+    });
+
+    const error = await responseRejectionHandler().rejected({
+      response: {
+        status: 429,
+        headers,
+        data: {
+          detail: 'slow down',
+          failureDetails: { reason: 'UPSTREAM_RATE_LIMITED', retryable: true },
+        },
+      },
+      message: 'Request failed',
+    }).catch((caught: unknown) => caught);
+
+    // 页面靠这些字段选本地化文案与重试入口；只保留 message 会把
+    // "限流，稍后重试"压成一句通用错误。
+    expect(error).toBeInstanceOf(ApiRequestError);
+    expect(error).toMatchObject({
+      status: 429,
+      failureClass: 'RATE_LIMITED',
+      reason: 'UPSTREAM_RATE_LIMITED',
+      retryable: true,
+      retryAfterMs: 2000,
+    });
+  });
+
+  it('ignores an unknown failure class instead of failing to normalize', async () => {
+    const headers = new AxiosHeaders({ 'X-RAG-Failure-Class': 'SOMETHING_NEW' });
+
+    const error = await responseRejectionHandler().rejected({
+      response: { status: 500, headers, data: {} },
+      message: 'Network Error',
+    }).catch((caught: unknown) => caught);
+
+    expect((error as Error).message).toBe('Network Error');
+    expect((error as { failureClass?: string }).failureClass).toBeUndefined();
   });
 });
 

@@ -12,9 +12,14 @@ import { getSelectedModel, saveSelectedModel } from '../utils/modelPreference';
 import type { ChatMode, ChatSource, CollectionScopeMode } from '../types/api';
 import type {
   ChatDoneEvent,
+  ChatErrorEvent,
   ChatToolResultEvent,
   ChatToolStartEvent,
 } from '../hooks/useSSE';
+import {
+  canRetryFailure,
+  failureCopy,
+} from '../utils/failureClass';
 import {
   readWorkspaceState,
   removeWorkspaceState,
@@ -35,6 +40,10 @@ interface Message {
   mode?: ChatMode;
   toolActivity?: ChatToolActivity[];
   isStreaming?: boolean;
+  /** `incomplete` 表示这条回答没有收到正常的结束信号，不能渲染成完整回答。 */
+  outcome?: 'complete' | 'incomplete';
+  /** 整轮失败（不是"回答被截断"），内容区是本地化错误文案。 */
+  failed?: boolean;
 }
 
 interface ChatToolActivity {
@@ -44,6 +53,28 @@ interface ChatToolActivity {
   resultCount?: number;
   elapsedMs?: number;
   status: 'running' | 'complete';
+}
+
+/**
+ * 一次失败的可复述摘要，供重试横幅使用。
+ *
+ * 只有分类文案：聊天流失败时服务端原文不是给终端用户看的（供应商内部
+ * 错误、`HTTP 503` 之类的传输字符串），因此没有分类时统一退到一句
+ * 本地化的"流中断了"，而不是把原始 message 贴在气泡里。
+ */
+interface TurnFailure {
+  message: string;
+  retryable: boolean;
+}
+
+function describeTurnFailure(
+  t: (key: string) => string,
+  event?: ChatErrorEvent,
+): string {
+  return failureCopy(t, {
+    failureClass: event?.failureClass,
+    reason: event?.reason,
+  }, 'chat.streamFailed');
 }
 
 function readChatContext(search: string) {
@@ -99,6 +130,7 @@ export function Chat() {
   const addSessionRef = useRef(addSession);
   addSessionRef.current = addSession;
   const { showToast } = useToast();
+  const [turnFailure, setTurnFailure] = useState<TurnFailure | null>(null);
 
   const { data: modelsData, isError: modelsError, refetch: refetchModels } = useQuery({
     queryKey: ['chat-models'],
@@ -207,20 +239,23 @@ export function Chat() {
           ? { ...msg, content: '', sources: undefined, toolActivity: undefined }
           : msg));
     },
-    onError: (error, event) => {
+    onError: (_error, event) => {
       // A bounded idempotency conflict is safe to retry manually. Keep the
-      // original prompt visible so the user does not have to reconstruct it.
-      if (event?.status === 409 && lastSentMessageRef.current) {
-        setInput(lastSentMessageRef.current);
-      } else {
+      // original prompt so the retry入口 does not make the user retype it.
+      if (!canRetryFailure({ failureClass: event?.failureClass })) {
         lastSentMessageRef.current = undefined;
       }
+      const copy = describeTurnFailure(t, event);
+      setTurnFailure({
+        message: copy,
+        retryable: canRetryFailure({ failureClass: event?.failureClass }),
+      });
       setMessages(prev => {
         const lastMsg = prev[prev.length - 1];
         if (lastMsg?.isStreaming) {
           return [
             ...prev.slice(0, -1),
-            { ...lastMsg, content: `Error: ${error}`, isStreaming: false },
+            { ...lastMsg, content: copy, isStreaming: false, failed: true },
           ];
         }
         return prev;
@@ -228,8 +263,18 @@ export function Chat() {
     },
     onDone: (event: ChatDoneEvent) => {
       setMessages(prev =>
-        prev.map(msg => (msg.isStreaming ? { ...msg, isStreaming: false } : msg))
+        prev.map(msg => (msg.isStreaming
+          ? { ...msg, isStreaming: false, outcome: event.status }
+          : msg))
       );
+      // 不完整回答不是成功：保留重试入口，并且不清掉 lastSentMessageRef，
+      // 用户点一下就能重发同一轮问题。
+      if (event.status === 'incomplete') {
+        setTurnFailure({ message: t('chat.incompleteHint'), retryable: true });
+      } else {
+        setTurnFailure(null);
+        lastSentMessageRef.current = undefined;
+      }
       if (event.sessionId && event.sessionId !== conversationId) {
         skipHistoryLoadForSessionRef.current = event.sessionId;
         navigate(
@@ -238,7 +283,6 @@ export function Chat() {
         );
       }
       activeTurnIdRef.current = undefined;
-      lastSentMessageRef.current = undefined;
     },
   });
 
@@ -338,6 +382,18 @@ export function Chat() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversationId, messages.length]);
 
+  /** 本轮请求的固定选项；重发同一问题时必须逐字一致。 */
+  const turnRequest = (message: string) => ({
+    message,
+    sessionId: conversationId,
+    model: effectiveSelectedModel || undefined,
+    mode,
+    collectionScopeMode: mode !== 'PLAIN' ? scopeMode : undefined,
+    collectionKeys: mode !== 'PLAIN' && scopeMode === 'SELECTED_COLLECTIONS'
+      ? [...selectedCollectionKeys].sort()
+      : undefined,
+  });
+
   const handleSend = () => {
     if (!input.trim()
         || isConnected
@@ -349,6 +405,7 @@ export function Chat() {
     const userMsg = input.trim();
     setInput('');
     removeWorkspaceState(draftKey);
+    setTurnFailure(null);
     lastSentMessageRef.current = userMsg;
     const newId = crypto.randomUUID();
     setMessages(prev => [
@@ -356,16 +413,29 @@ export function Chat() {
       { id: newId, role: 'user', content: userMsg },
       { id: crypto.randomUUID(), role: 'assistant', content: '', isStreaming: true },
     ]);
-    send({
-      message: userMsg,
-      sessionId: conversationId,
-      model: effectiveSelectedModel || undefined,
-      mode,
-      collectionScopeMode: mode !== 'PLAIN' ? scopeMode : undefined,
-      collectionKeys: mode !== 'PLAIN' && scopeMode === 'SELECTED_COLLECTIONS'
-        ? [...selectedCollectionKeys].sort()
-        : undefined,
+    send(turnRequest(userMsg));
+  };
+
+  /**
+   * 重试入口：把失败/不完整的那条回答换成一个新的流式占位，重发同一轮问题。
+   * 用户消息保留在原地，因此不会出现同一个问题被复制两遍。
+   */
+  const handleRetryTurn = () => {
+    const prompt = lastSentMessageRef.current;
+    if (!prompt || isConnected) return;
+    setTurnFailure(null);
+    setMessages(prev => {
+      const next = [...prev];
+      const last = next[next.length - 1];
+      if (last?.role === 'assistant' && (last.failed || last.outcome === 'incomplete')) {
+        next.pop();
+      }
+      return [
+        ...next,
+        { id: crypto.randomUUID(), role: 'assistant', content: '', isStreaming: true },
+      ];
     });
+    send(turnRequest(prompt));
   };
 
   const handleStop = () => {
@@ -543,10 +613,15 @@ export function Chat() {
               className={`${styles.msg} ${msg.role === 'user' ? styles.user : styles.assistant}`}
             >
               <div className={styles.role}>{msg.role === 'user' ? t('common.you') : t('common.assistant')}</div>
-              <div className={styles.content}>
+              <div className={`${styles.content} ${msg.failed ? styles.failedContent : ''}`}>
                 {msg.content}
                 {msg.isStreaming && <span className={styles.cursor}>|</span>}
               </div>
+              {msg.outcome === 'incomplete' && (
+                <span className={styles.incompleteBadge} role="status">
+                  {t('chat.incompleteBadge')}
+                </span>
+              )}
               {msg.sources && msg.sources.length > 0 && (
                 <div className={styles.sources}>
                   <strong>{t('chat.sources')}:</strong>
@@ -580,7 +655,11 @@ export function Chat() {
                   ))}
                 </div>
               )}
-              {msg.role === 'assistant' && !msg.isStreaming && msg.content && (
+              {msg.role === 'assistant'
+                && !msg.isStreaming
+                && !msg.failed
+                && msg.outcome !== 'incomplete'
+                && msg.content && (
                 <div className={styles.feedbackRow}>
                   <button
                     type="button"
@@ -614,6 +693,14 @@ export function Chat() {
         </div>
 
         <div className={styles.composer}>
+          {turnFailure && (
+            <QueryErrorBanner
+              onRetry={turnFailure.retryable ? handleRetryTurn : undefined}
+              retryLabel={t('common.retry')}
+            >
+              {turnFailure.message}
+            </QueryErrorBanner>
+          )}
           {/* 失败时 availableModels 是空数组，模型下拉框会静默地变成禁用
               且没有任何说明：用户看到的是一个灰掉的控件，分不清是"没配
               模型"还是"模型列表没加载出来"。
