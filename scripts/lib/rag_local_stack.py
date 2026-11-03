@@ -46,7 +46,7 @@ def read_env(key: str, default: str = "") -> str:
         if len(candidate) >= 2 and candidate[0] == candidate[-1] and candidate[0] in "\"'":
             candidate = candidate[1:-1]
         value = candidate
-    return default if value is None else value
+    return os.environ.get(key) or (default if value is None else value)
 
 
 class LocalStack:
