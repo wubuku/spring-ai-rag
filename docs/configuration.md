@@ -263,6 +263,7 @@ rag:
     model: ${RAG_EMBEDDING_MODEL:BAAI/bge-m3}
     dimensions: ${RAG_EMBEDDING_DIMENSIONS:1024}
     retry-max-attempts: ${RAG_EMBEDDING_RETRY_MAX_ATTEMPTS:3}
+    request-timeout-ms: ${RAG_EMBEDDING_REQUEST_TIMEOUT_MS:30000}
     profile-key: ${RAG_EMBEDDING_PROFILE_KEY:siliconflow-bge-m3-1024-v1}
     provider: ${RAG_EMBEDDING_PROVIDER:siliconflow}
     model-revision: ${RAG_EMBEDDING_MODEL_REVISION:unspecified}
@@ -278,6 +279,7 @@ rag:
 | `rag.embedding.dimensions` | `1024` | Vector dimensions (must match model output) |
 | `rag.embedding.request-dimensions` | `false` | Explicitly send `dimensions` only for models verified to support it; environment variable `RAG_EMBEDDING_REQUEST_DIMENSIONS` |
 | `rag.embedding.retry-max-attempts` | `3` | Maximum provider attempts, range 1–10; also bounded by the dependency deadline, independent from durable-job attempts |
+| `rag.embedding.request-timeout-ms` | `30000` | Per-call provider HTTP timeout, range 100–120000; further tightened by the dependency deadline so a slow upstream cannot hold threads |
 | `rag.embedding.profile-key` | `siliconflow-bge-m3-1024-v1` | Immutable model-space identity used by writes and retrieval |
 | `rag.embedding.provider` | `siliconflow` | Provider identity stored in the Profile |
 | `rag.embedding.model-revision` | `unspecified` | Explicit revision identity; changing model semantics requires a new Profile |

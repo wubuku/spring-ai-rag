@@ -71,6 +71,50 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
+  failure-modes:
+    name: Upstream and embedding failure modes (mock provider, isolated PostgreSQL)
+    if: github.event_name == 'schedule' || inputs.debug_report_failure != true
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Pre-pull isolated PostgreSQL image
+        run: docker pull pgvector/pgvector:pg16 || true
+
+      # 两个验收脚本都自带隔离 PostgreSQL 容器 + controlled provider，
+      # 不读取任何真实模型密钥。chat 侧覆盖 5xx/429/超时/连接中断/畸形响应/SSE 断流，
+      # embedding 侧覆盖上传/导入/检索的降级与调用上限。
+      - name: Chat upstream failure modes
+        run: |
+          set -o pipefail
+          mkdir -p .verification/nightly
+          python3 scripts/verify-upstream-recovery-e2e.py 2>&1 | tee .verification/nightly/upstream-recovery.log
+
+      - name: Embedding failure modes
+        run: |
+          set -o pipefail
+          python3 scripts/verify-embedding-failure-e2e.py 2>&1 | tee .verification/nightly/embedding-failure.log
+
+      - name: Upload failure-mode evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-failure-modes
+          path: |
+            .verification/nightly/
+            .verification/dependency-recovery/
+          if-no-files-found: warn
+          retention-days: 30
+
   real-llm:
     name: Real LLM smoke, goldenset and retrieval regression
     if: github.event_name == 'schedule' || inputs.debug_report_failure != true
@@ -632,7 +676,7 @@ jobs:
   # job（不产生模型调用），用 [TEST] 标题走一遍真实的创建/更新/评论路径。
   report:
     name: Nightly status report
-    needs: [gated-postgres, real-llm, soak, webui-real]
+    needs: [gated-postgres, failure-modes, real-llm, soak, webui-real]
     if: always() && (github.event_name == 'schedule' || inputs.debug_report_failure == true)
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -656,6 +700,7 @@ jobs:
         id: issue
         env:
           RESULT_GATED: ${{ needs.gated-postgres.result }}
+          RESULT_FAILURE_MODES: ${{ needs.failure-modes.result }}
           RESULT_REAL_LLM: ${{ needs.real-llm.result }}
           RESULT_SOAK: ${{ needs.soak.result }}
           RESULT_WEBUI: ${{ needs.webui-real.result }}

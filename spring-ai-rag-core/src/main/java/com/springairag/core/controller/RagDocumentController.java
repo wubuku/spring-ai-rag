@@ -52,6 +52,8 @@ import com.springairag.core.service.DocumentMutationService;
 import com.springairag.core.service.DocumentDerivationDescriptorProvider;
 import com.springairag.core.service.CollectionIdentityResolver;
 import com.springairag.api.enums.EmbeddingPolicy;
+import com.springairag.api.enums.FailureClass;
+import com.springairag.core.filter.FailureClassHttpSupport;
 import com.springairag.core.embeddingjob.EmbeddingDispatchService;
 import com.springairag.core.embeddingjob.EmbeddingPolicyResolver;
 import com.springairag.core.embeddingjob.EmbeddingPolicySupport;
@@ -75,6 +77,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 
@@ -556,10 +559,30 @@ public class RagDocumentController {
                     Map.of("chunks", result.getOrDefault("chunks", 0),
                             "embeddings", result.getOrDefault("embeddings", 0)));
 
-            return ResponseEntity.ok(result);
+            return embedResponse(result);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(ErrorResponse.of(e.getMessage()));
+        } catch (IllegalStateException e) {
+            // 向量提交阶段的版本/集合围栏失败是并发冲突，不是实现错误：
+            // 返回 409 + 分类头，避免客户端拿到堆栈型 500。
+            log.warn("Embedding commit conflict documentId={} reason={}", id, e.getMessage());
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .header(FailureClassHttpSupport.HEADER, FailureClass.CONFLICT.name())
+                    .body(ErrorResponse.of(e.getMessage()));
         }
+    }
+
+    /**
+     * 同步 embedding 的"软失败"仍是 200 + 失败详情；补上 {@code X-RAG-Failure-Class}
+     * 头，让客户端可以用与错误响应相同的方式判断分类。
+     */
+    private ResponseEntity<Object> embedResponse(Map<String, Object> result) {
+        Object failureClass = result.get("failureClass");
+        ResponseEntity.BodyBuilder builder = ResponseEntity.ok();
+        if (failureClass != null) {
+            builder.header(FailureClassHttpSupport.HEADER, String.valueOf(failureClass));
+        }
+        return builder.body(result);
     }
 
     /**

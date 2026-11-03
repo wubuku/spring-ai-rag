@@ -53,11 +53,37 @@ Native metadata.answerOutcome and OpenAI rag.answerOutcome provide status/reason
 - SAFE_FALLBACK: evidence protection replaced output; the factual question was not necessarily answered.
 - OUTPUT_TRUNCATED: length/max_tokens completion; original finishReason remains.
 - OUTPUT_INCOMPLETE: missing model finishReason; do not claim an incomplete output is a complete answer.
+  Native SSE may still send `done`, but `status=incomplete` so it never masquerades as `complete`.
 - ANSWER: other completed responses; neither this status nor a valid citation proves factual correctness.
 
 Precedence is refusal, safe fallback, truncation/incompleteness, answer. Failures/cancellation keep existing error
 paths, not fabricated business answers. Existing empty-stream behavior remains; the Consumer Kit rejects
 streams without a terminal event.
+
+## Embedding Failure Degradation
+
+Upload/import (SYNC/ASYNC job) and explicit `POST /rag/documents/{id}/embed` return `FAILED` instead of a
+500 stack trace for provider 5xx/429/timeouts/connection drops/malformed responses. The `/embed` body adds
+`failureClass`, `failureDetails` and `retryable`, and mirrors the class in `X-RAG-Failure-Class`. Commit-time
+version/Collection races return 409 with `CONFLICT` and no stack trace.
+
+Retrieval degrades to full-text search when the query embedding fails (hybrid search still returns full-text
+results), recorded as `operation=retrieval.embedding`. Whole-batch upstream failures no longer fan out per
+chunk, so provider calls do not scale with chunk count; per-item business errors still retry individually.
+
+Retries are bounded: the transport `RetryTemplate` defaults to 3 attempts with exponential backoff
+(2s base, 10s cap, Retry-After respected), and the job layer defaults to `default-max-attempts=3`.
+Each provider call is bounded by `rag.embedding.request-timeout-ms` (default 30000, range 100-120000),
+so a call never waits forever even without an admission deadline. The per-document worst case is
+`ceil(chunks/batchSize) × transport attempts × job attempts`.
+
+Documents without a Collection (`collection_id IS NULL`) can still generate/replace vectors; submission is
+rejected only when the Collection is not writable. Failed commits leave `rag_embeddings` untouched and record
+`last_error` on the job, so no half-written vectors survive.
+
+Observability: `rag.upstream.failures` is tagged by `operation/provider/reason/retryable`, with `operation`
+covering `chat`, `chat.stream`, `embedding.document`, `embedding.job` and `retrieval.embedding`.
+Structured logs carry `provider`, `reason`, `retryable` plus `jobId/documentId/profileId/traceId`.
 
 ## Private Diagnostics and Acceptance
 
@@ -69,7 +95,9 @@ logs. Local replay adds original/final assertion summaries but preserves the ori
 Citation prompts list request-local IDs without repairing invalid citations. Numeric units are required only
 when the question explicitly asks for them, using source units.
 
-Run `python3 scripts/verify-upstream-recovery-e2e.py` for isolated PostgreSQL/real HTTP with a controlled
-provider, and `bash scripts/verify-client-consumer-contract.sh` for offline contracts and both recovery helpers.
-Controlled fault tests are not real-model quality evidence. Real embedding/LLM, two-node recovery and dev
-lifecycle are accepted separately.
+Run `python3 scripts/verify-upstream-recovery-e2e.py` for the chat failure matrix (isolated PostgreSQL, real
+HTTP, controlled provider), `python3 scripts/verify-embedding-failure-e2e.py` for embedding upload/import/
+retrieval degradation, call bounds, metrics and logs, and `bash scripts/verify-client-consumer-contract.sh`
+for offline contracts and both recovery helpers. Both failure scripts run without real models in the nightly
+`failure-modes` job. Controlled fault tests are not real-model quality evidence. Real embedding/LLM, two-node
+recovery and dev lifecycle are accepted separately.

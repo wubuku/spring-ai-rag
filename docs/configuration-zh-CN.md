@@ -246,6 +246,7 @@ rag:
     model: ${RAG_EMBEDDING_MODEL:BAAI/bge-m3}
     dimensions: ${RAG_EMBEDDING_DIMENSIONS:1024}
     retry-max-attempts: ${RAG_EMBEDDING_RETRY_MAX_ATTEMPTS:3}
+    request-timeout-ms: ${RAG_EMBEDDING_REQUEST_TIMEOUT_MS:30000}
     profile-key: ${RAG_EMBEDDING_PROFILE_KEY:siliconflow-bge-m3-1024-v1}
     provider: ${RAG_EMBEDDING_PROVIDER:siliconflow}
     model-revision: ${RAG_EMBEDDING_MODEL_REVISION:unspecified}
@@ -261,6 +262,7 @@ rag:
 | `rag.embedding.dimensions` | `1024` | 向量维度（必须与模型输出一致） |
 | `rag.embedding.request-dimensions` | `false` | 显式向兼容服务发送 `dimensions`；仅对已验证支持该参数的模型开启，环境变量 `RAG_EMBEDDING_REQUEST_DIMENSIONS` |
 | `rag.embedding.retry-max-attempts` | `3` | 单次 provider 调用最大尝试次数，范围 1–10；还受依赖总时限约束，独立于持久化 job 预算 |
+| `rag.embedding.request-timeout-ms` | `30000` | 单次 provider HTTP 调用超时，范围 100–120000；还会被依赖总时限进一步收紧，避免慢上游挂住线程 |
 | `rag.embedding.profile-key` | `siliconflow-bge-m3-1024-v1` | 写入和检索使用的不可变模型空间身份 |
 | `rag.embedding.provider` | `siliconflow` | Profile 中保存的提供商身份 |
 | `rag.embedding.model-revision` | `unspecified` | 显式模型版本身份；模型语义变化必须创建新 Profile |

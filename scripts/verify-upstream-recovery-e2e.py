@@ -21,17 +21,25 @@ class Acceptance(BASE.Acceptance):
         self.environment.update(RAG_TIMEOUT_CHAT_ASK_MS='5000', RAG_TIMEOUT_CHAT_STREAM_MS='5000',
                                 RAG_CIRCUIT_BREAKER_ENABLED='false')
 
-    def call_chat(self, native, stream):
+    def call_chat(self, native, stream, session=None):
         path = '/api/v1/rag/chat/' + ('stream' if stream else 'ask') if native else '/v1/chat/completions'
-        payload = {'message': 'Reply READY.', 'mode': 'PLAIN', 'sessionId': str(uuid.uuid4())} if native else {
+        payload = {'message': 'Reply READY.', 'mode': 'PLAIN',
+                   'sessionId': session or str(uuid.uuid4())} if native else {
             'model': 'rag-default', 'stream': stream, 'messages': [{'role': 'user', 'content': 'Reply READY.'}]}
         return self.request(path, payload)
 
     def exercise(self):
+        # 先建立一个可计数的成功会话，后续失败不能往历史表里留半条。
+        residue_session = uuid.uuid4().hex
+        assert self.call_chat(True, False, residue_session)[0] == 200
+        history_before = int(self.sql(
+            "SELECT count(*) FROM rag_chat_history WHERE session_id='%s'" % residue_session))
+
         for native in (True, False):
             for stream in (False, True):
                 for status, reason in ((400, 'UPSTREAM_REJECTED'), (401, 'UPSTREAM_AUTHENTICATION'),
                                        (403, 'UPSTREAM_AUTHENTICATION'), (429, 'UPSTREAM_RATE_LIMITED'),
+                                       (500, 'UPSTREAM_UNAVAILABLE'),
                                        (503, 'UPSTREAM_UNAVAILABLE'), (504, 'UPSTREAM_TIMEOUT')):
                     self.fault('chat', status=status, retryAfter='2' if status == 429 else None)
                     before = self.state()['chat']['calls']
@@ -48,7 +56,7 @@ class Acceptance(BASE.Acceptance):
                         report = json.loads(body)
                         details = report['failureDetails'] if native else report['error']['failureDetails']
                     assert details['reason'] == reason and details['upstreamStatus'] == status, details
-                    assert details['retryable'] == (status in (429, 503, 504)), details
+                    assert details['retryable'] == (status in (429, 500, 503, 504)), details
                     assert self.state()['chat']['calls'] == before + 1, 'provider-level retry escaped application budget'
                     if status == 429:
                         assert details['retryAfterMs'] == 2000
@@ -84,6 +92,17 @@ class Acceptance(BASE.Acceptance):
         for native in (True, False):
             status, _, body = self.call_chat(native, True)
             assert status == 200 and 'OUTPUT_INCOMPLETE' in body, body
+            if native:
+                # 已发出的增量保持可见，但终态不能宣称 complete；缺失结束信号
+                # 必须以 incomplete 状态暴露给客户端。
+                terminal = [line[5:].strip() for line in body.splitlines()
+                            if line.startswith('data:') and 'OUTPUT_INCOMPLETE' in line]
+                assert terminal, body
+                done_frame = json.loads(terminal[0])
+                assert done_frame.get('status') == 'incomplete', done_frame
+                deltas = [line for line in body.splitlines()
+                          if line.startswith('data:') and 'OUTPUT_INCOMPLETE' not in line]
+                assert deltas, body
         self.fault('chat', dropStreamTail=False)
         payload = json.dumps({'message': 'Reply READY.', 'mode': 'PLAIN', 'sessionId': str(uuid.uuid4())}).encode()
         identity = 'failure-' + uuid.uuid4().hex
@@ -122,7 +141,22 @@ class Acceptance(BASE.Acceptance):
                 assert self.state()['chat']['calls'] == before + 1, 'SDK silently retried failed model call'
         self.fault('chat', status=200)
         assert self.sql("SELECT count(*) FROM rag_llm_budget_reservation WHERE state='RESERVED'") == '0'
-        self.record('refusal is normal, partial streams are visible, SDK recovery is bounded, reservations converge')
+        self.fault('chat', status=503)
+        assert self.call_chat(True, False, residue_session)[0] == 500
+        history_after = int(self.sql(
+            "SELECT count(*) FROM rag_chat_history WHERE session_id='%s'" % residue_session))
+        assert history_after == history_before, 'failed turn wrote a partial chat history row'
+        self.fault('chat', status=200)
+        metrics_status, _, metrics_body = self.request('/actuator/metrics/rag.upstream.failures')
+        assert metrics_status == 200, metrics_body
+        measurements = json.loads(metrics_body)['measurements']
+        assert any(item['value'] > 0 for item in measurements), metrics_body
+        server_log = (self.directory / 'rag_source-server.log').read_text()
+        assert 'Upstream failure operation=chat provider=' in server_log, 'missing provider/operation tags in failure log'
+        assert 'reason=UPSTREAM_RATE_LIMITED' in server_log, 'missing failure reason in structured log'
+        assert 'operation=chat.stream provider=' in server_log and 'traceId=' in server_log, \
+            'streaming failure log cannot be correlated to trace/provider'
+        self.record('failed turns leave no history residue; failure metrics and provider/trace logs are emitted')
 
     def retry_budget(self):
         self.stop()

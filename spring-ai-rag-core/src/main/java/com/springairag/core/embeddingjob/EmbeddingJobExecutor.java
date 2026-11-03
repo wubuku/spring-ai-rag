@@ -9,11 +9,15 @@ import com.springairag.core.config.RagProperties;
 import com.springairag.core.documentprocessing.DocumentProcessingRunRepository;
 import com.springairag.core.documentprocessing.DocumentProcessingRunService;
 import com.springairag.core.logging.SensitiveDataMaskingConverter;
+import com.springairag.core.metrics.RagMetricsService;
+import com.springairag.core.resilience.UpstreamFailureClassifier;
 import com.springairag.core.service.DocumentEmbedService;
 import com.springairag.core.service.EmbeddingCommitGuard;
 import com.springairag.core.service.EmbeddingCommitRejectedException;
 import com.springairag.core.exception.DocumentNotFoundException;
 import jakarta.annotation.PreDestroy;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.util.Map;
@@ -29,6 +33,8 @@ import java.util.concurrent.TimeUnit;
 @Service
 public class EmbeddingJobExecutor {
 
+    private static final Logger log = LoggerFactory.getLogger(EmbeddingJobExecutor.class);
+
     private static final int MAX_ERROR_LENGTH = 500;
 
     private final EmbeddingJobRepository repository;
@@ -37,6 +43,7 @@ public class EmbeddingJobExecutor {
     private final RagEmbeddingJobProperties properties;
     private DocumentProcessingRunRepository processingRepository; // optional-claim: 兼容不装配 V61 账本的旧测试构造路径
     private DocumentProcessingRunService processingRunService; // optional-claim: 兼容不装配 V61 账本的旧测试构造路径
+    private RagMetricsService metricsService; // optional-claim: 旧测试直接构造执行器时没有指标组件
     private final ScheduledExecutorService heartbeats =
             Executors.newSingleThreadScheduledExecutor(r -> {
                 Thread thread = new Thread(r, "embedding-job-heartbeat");
@@ -65,6 +72,11 @@ public class EmbeddingJobExecutor {
     void setProcessingRunService(
             DocumentProcessingRunService processingRunService) {
         this.processingRunService = processingRunService;
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setMetricsService(RagMetricsService metricsService) {
+        this.metricsService = metricsService;
     }
 
     public EmbeddingJob executeNow(UUID jobId) {
@@ -121,6 +133,7 @@ public class EmbeddingJobExecutor {
         } catch (RuntimeException e) {
             String error = safeError(e.getMessage());
             boolean nonRetryable = isNonRetryableException(e);
+            recordFailedAttempt(job, e, error, null);
             if (e instanceof com.springairag.documents.chunk.ChunkingException chunkingError) {
                 markStage(job, leaseOwner, DocumentProcessingStageName.PARSING,
                         DocumentProcessingStageStatus.SUCCEEDED, null, null);
@@ -213,6 +226,10 @@ public class EmbeddingJobExecutor {
         String error = safeError(String.valueOf(result.getOrDefault(
                 "error", "Embedding provider failed")));
         boolean nonRetryable = isNonRetryableResult(error);
+        Object details = result.get("failureDetails");
+        recordFailedAttempt(job, null, error,
+                details instanceof com.springairag.api.dto.FailureDetails failureDetails
+                        ? failureDetails : null);
         markCurrentStageFailed(job, leaseOwner,
                 nonRetryable ? "NON_RETRYABLE" : "EMBEDDING_FAILED", error);
         if (nonRetryable) {
@@ -329,6 +346,37 @@ public class EmbeddingJobExecutor {
             processingRepository.markCurrentStageFailed(
                     job, leaseOwner, errorCode, error);
         }
+    }
+
+    /**
+     * 记录一次失败尝试，让"job 静默重试"在日志和指标里可见。
+     *
+     * <p>此前的失败分支只写 DB 的 last_error，没有结构化日志也没有指标：
+     * 一个坏 provider 会在 {@code retry-backoff-seconds} 的节奏上反复调用，
+     * 运维只能靠翻 job 表猜原因。
+     */
+    private void recordFailedAttempt(EmbeddingJob job, Throwable error, String errorMessage,
+                                     com.springairag.api.dto.FailureDetails knownDetails) {
+        String provider;
+        try {
+            provider = profileProvider
+                    .findRequiredById(job.embeddingProfileId()).provider();
+        } catch (RuntimeException profileError) {
+            provider = "unknown";
+        }
+        var details = knownDetails != null
+                ? knownDetails
+                : error != null
+                ? UpstreamFailureClassifier.classify(error)
+                : UpstreamFailureClassifier.classify(
+                        new IllegalStateException(errorMessage));
+        if (metricsService != null) {
+            metricsService.recordUpstreamFailure("embedding.job", provider, details);
+        }
+        log.warn("Embedding job attempt failed operation=embedding.job provider={} "
+                        + "jobId={} documentId={} profileId={} reason={} retryable={} error={}",
+                provider, job.id(), job.documentId(), job.embeddingProfileId(),
+                details.reason(), details.retryable(), errorMessage);
     }
 
     private boolean isNonRetryableException(RuntimeException error) {

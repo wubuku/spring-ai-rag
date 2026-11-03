@@ -50,10 +50,37 @@ Native `metadata.answerOutcome`、OpenAI `rag.answerOutcome`提供status和reaso
 - SAFE_FALLBACK：应用证据保护替换了输出；不意味着已经回答事实问题。
 - OUTPUT_TRUNCATED：provider以length/max_tokens结束；保留原finishReason。
 - OUTPUT_INCOMPLETE：缺少模型finishReason，不把缺失结束信号的输出称为完整回答。
+  此时Native终态仍可发送`done`，但`status=incomplete`，不会伪装成`complete`。
 - ANSWER：其他已完成响应；不保证事实正确，引用合法也不等于事实正确。
 
 优先级为拒答→安全兜底→截断/不完整→回答；失败/取消仍走原有错误路径，不伪造业务回答。
 不改变既有空流兼容行为；Consumer Kit继续拒绝缺少终态的流。
+
+## Embedding 故障降级
+
+上传/导入（SYNC/ASYNC job）与显式`POST /rag/documents/{id}/embed`在provider
+5xx/429/超时/连接中断/畸形响应时都返回`FAILED`而不是500堆栈；`/embed`响应体带
+`failureClass`、`failureDetails`、`retryable`，并回写`X-RAG-Failure-Class`头。
+提交阶段遇到版本/Collection并发冲突返回409+`CONFLICT`，不泄露堆栈。
+
+检索侧query embedding失败时降级到全文检索（混合检索开启时仍返回全文结果），
+指标记为`operation=retrieval.embedding`。整批上游故障不再逐条fan-out，
+避免provider调用量随chunk数放大；批内局部错误仍逐条回退。
+
+重试是有界的：transport层`RetryTemplate`默认3次、指数退避（2s起、最多10s、
+尊重Retry-After），job层`default-max-attempts`默认3次。单次provider调用受
+`rag.embedding.request-timeout-ms`约束（默认30000，范围100–120000），没有
+deadline时也不会无限等待。可用`ceil(chunks/batchSize) × transport × job`
+估算单文档故障的调用上限。
+
+未归属Collection的文档（`collection_id IS NULL`）仍可生成/替换向量；只有
+Collection处于不可写状态时才拒绝提交。失败时`rag_embeddings`保持不变，
+job表记录`last_error`，不会留下半写向量。
+
+可观测性：`rag.upstream.failures`指标按`operation/provider/reason/retryable`
+打标签，`operation`覆盖`chat`、`chat.stream`、`embedding.document`、
+`embedding.job`、`retrieval.embedding`；结构化日志包含`provider`、`reason`、
+`retryable`以及`jobId/documentId/profileId/traceId`，可直接定位失败调用。
 
 ## 私有诊断与验收
 
@@ -63,6 +90,8 @@ answer（最终交付内容）、answerOutcome和citationValidation。modelAnswe
 本地replay分别给出原始/最终断言摘要，但仍以原运行硬门槛决定通过，不恢复或覆盖历史。
 引用prompt明确列出请求内标识，不修补无效引用；仅用户要求单位时约束数值+原文单位。
 
-验收命令：`python3 scripts/verify-upstream-recovery-e2e.py`（隔离PG、真实HTTP、受控provider）；
+验收命令：`python3 scripts/verify-upstream-recovery-e2e.py`（chat故障矩阵：隔离PG、真实HTTP、受控provider）；
+`python3 scripts/verify-embedding-failure-e2e.py`（embedding上传/导入/检索降级、调用上限、指标与日志）；
 `bash scripts/verify-client-consumer-contract.sh`（离线契约与两语言恢复决策）。
+两条故障脚本不需要真实模型，已在nightly的`failure-modes`job中执行。
 受控故障不能冒充真实模型质量；真实Embedding/LLM、双实例恢复和dev启停分别验收。

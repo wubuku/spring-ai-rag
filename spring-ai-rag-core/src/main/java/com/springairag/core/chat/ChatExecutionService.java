@@ -397,11 +397,14 @@ public class ChatExecutionService {
             String candidateRef,
             RuntimeException failure,
             String logLabel) {
+        var details = com.springairag.core.resilience.UpstreamFailureClassifier.classify(failure);
         if (metricsService != null) {
             metricsService.recordFailure(System.currentTimeMillis() - startedAt);
+            metricsService.recordUpstreamFailure("chat", candidateRef, details);
         }
-        log.warn("{} {}/{} failed ({}): {}",
+        log.warn("{} {}/{} failed ({}) reason={} retryable={}: {}",
                 logLabel, index + 1, candidateCount, candidateRef,
+                details.reason(), details.retryable(),
                 com.springairag.core.resilience.UpstreamFailureClassifier.safeMessage(failure));
         return failure;
     }
@@ -722,6 +725,16 @@ public class ChatExecutionService {
             if (attemptFinished.compareAndSet(false, true)) {
                 markAttempt(command, attempt, false);
             }
+            var unwrapped = reactor.core.Exceptions.unwrap(error);
+            var details = com.springairag.core.resilience.UpstreamFailureClassifier.classify(unwrapped);
+            if (metricsService != null) {
+                metricsService.recordUpstreamFailure("chat.stream", candidate.ref(), details);
+            }
+            var traceSession = command.retrievalTraceSession();
+            log.warn("Streaming chat attempt failed operation=chat.stream provider={} traceId={} "
+                            + "reason={} retryable={}",
+                    candidate.ref(), traceSession == null ? null : traceSession.traceId(),
+                    details.reason(), details.retryable());
         });
     }
 

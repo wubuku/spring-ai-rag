@@ -156,6 +156,54 @@ class EmbeddingPersistenceServiceTest {
     }
 
     @Test
+    void replaceAllowsUnassignedDocumentsWithoutCollectionFence() {
+        CollectionIdentityResolver resolver = mock(CollectionIdentityResolver.class);
+        JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        EmbeddingPersistenceService fencedService = new EmbeddingPersistenceService(
+                jdbc,
+                new DocumentDerivationDescriptorProvider(new RagProperties()),
+                resolver);
+        // collection_id 缺失即"未归属 Collection"，不是错误：这类文档必须能写向量，
+        // 否则 job 会一直重试并且永远失败。
+        when(jdbc.queryForList(anyString(), any(Object[].class)))
+                .thenReturn(List.of(documentRow(3L, "h3", true)));
+        when(jdbc.update(anyString(), any(Object[].class))).thenReturn(1);
+
+        fencedService.replace(1L, 3L, "h3", PROFILE,
+                List.of(new TextChunk("alpha", 0, 5)),
+                List.of(result("alpha", new float[] {0.1f})),
+                EmbeddingCommitGuard.allowAll());
+
+        verify(resolver, never()).beginActiveWrite(
+                org.mockito.ArgumentMatchers.anyLong());
+        verify(jdbc).update(contains("processing_status = 'COMPLETED'"),
+                eq("h3"), eq(1L), eq(3L));
+    }
+
+    @Test
+    void replaceRejectsInvalidCollectionId() {
+        CollectionIdentityResolver resolver = mock(CollectionIdentityResolver.class);
+        JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        EmbeddingPersistenceService fencedService = new EmbeddingPersistenceService(
+                jdbc,
+                new DocumentDerivationDescriptorProvider(new RagProperties()),
+                resolver);
+        java.util.Map<String, Object> row = new java.util.HashMap<>(
+                documentRow(3L, "h3", true));
+        row.put("collection_id", 0L);
+        when(jdbc.queryForList(anyString(), any(Object[].class)))
+                .thenReturn(List.of(row));
+
+        assertThrows(IllegalStateException.class,
+                () -> fencedService.replace(1L, 3L, "h3", PROFILE,
+                        List.of(new TextChunk("alpha", 0, 5)),
+                        List.of(result("alpha", new float[] {0.1f})),
+                        EmbeddingCommitGuard.allowAll()));
+        verify(resolver, never()).beginActiveWrite(
+                org.mockito.ArgumentMatchers.anyLong());
+    }
+
+    @Test
     void replaceRejectsWhenCommitGuardFails() {
         EmbeddingCommitGuard guard = mock(EmbeddingCommitGuard.class);
         doThrow(new IllegalStateException("lease lost")).when(guard).verify();

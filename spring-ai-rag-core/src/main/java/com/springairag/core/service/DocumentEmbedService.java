@@ -2,19 +2,24 @@ package com.springairag.core.service;
 
 import com.springairag.api.dto.BatchEmbedProgressEvent;
 import com.springairag.api.dto.EmbedProgressEvent;
+import com.springairag.api.dto.FailureDetails;
+import com.springairag.api.enums.FailureClass;
 import com.springairag.core.config.EmbeddingProfile;
 import com.springairag.core.config.EmbeddingProfileProvider;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.exception.DocumentNotFoundException;
 import com.springairag.core.logging.SensitiveDataMaskingConverter;
+import com.springairag.core.metrics.RagMetricsService;
 import com.springairag.core.repository.RagDocumentRepository;
+import com.springairag.core.resilience.UpstreamFailureClassifier;
 
 import java.util.Objects;
 import com.springairag.core.retrieval.EmbeddingBatchService;
 import com.springairag.documents.chunk.TextChunk;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.HashMap;
@@ -33,6 +38,14 @@ public class DocumentEmbedService {
 
     private static final Logger log = LoggerFactory.getLogger(DocumentEmbedService.class);
     private static final int MAX_ERROR_LENGTH = 500;
+
+    /** 可选注入：单元测试直接 new 该服务时不依赖 Micrometer。 */
+    private RagMetricsService metricsService; // optional-claim: 兼容按旧构造器手写实例化的单测
+
+    @Autowired(required = false)
+    public void setMetricsService(RagMetricsService metricsService) {
+        this.metricsService = metricsService;
+    }
 
     private final RagProperties ragProperties;
     private final RagDocumentRepository documentRepository;
@@ -211,6 +224,7 @@ public class DocumentEmbedService {
             results = embeddingBatchService.createEmbeddingsBatchForProfile(texts, profile);
         } catch (RuntimeException e) {
             String error = safeError("Embedding provider call failed: " + e.getMessage());
+            FailureDetails details = UpstreamFailureClassifier.classify(e);
             if (recordProviderFailure) {
                 persistenceService.recordFailureIfNoCompleted(
                         documentId,
@@ -220,9 +234,18 @@ public class DocumentEmbedService {
                         prep.documentType(),
                         error);
             }
-            log.warn("Document {} embedding provider call failed without replacing old vectors",
-                    documentId, e);
-            return buildResult(documentId, 0, 0, "FAILED", profile, error);
+            if (metricsService != null) {
+                metricsService.recordUpstreamFailure("embedding.document", profile.provider(), details);
+            }
+            log.warn("Embedding provider failure operation=embedding.document provider={} profile={} "
+                            + "documentId={} reason={} retryable={}",
+                    profile.provider(), profile.profileKey(), documentId,
+                    details.reason(), details.retryable(), e);
+            Map<String, Object> result = buildResult(documentId, 0, 0, "FAILED", profile, error);
+            result.put("failureClass", failureClass(details).name());
+            result.put("failureDetails", details);
+            result.put("retryable", details.retryable());
+            return result;
         }
         emitEmbeddingProgress(
                 progressCallback, documentId, results == null ? 0 : results.size());
@@ -230,6 +253,7 @@ public class DocumentEmbedService {
         String validationError = validateEmbeddingResults(chunks, results, profile);
         if (validationError != null) {
             validationError = safeError(validationError);
+            FailureDetails details = firstFailureDetails(results);
             if (recordProviderFailure) {
                 persistenceService.recordFailureIfNoCompleted(
                         documentId,
@@ -239,9 +263,23 @@ public class DocumentEmbedService {
                         prep.documentType(),
                         validationError);
             }
-            log.warn("Document {} embedding failed without replacing old vectors: {}",
-                    documentId, validationError);
-            return buildResult(documentId, 0, 0, "FAILED", profile, validationError);
+            if (details != null && metricsService != null) {
+                metricsService.recordUpstreamFailure(
+                        "embedding.document", profile.provider(), details);
+            }
+            log.warn("Document {} embedding failed without replacing old vectors: {} "
+                            + "operation=embedding.document provider={} reason={} retryable={}",
+                    documentId, validationError, profile.provider(),
+                    details == null ? "UNCLASSIFIED" : details.reason(),
+                    details != null && details.retryable());
+            Map<String, Object> result = buildResult(
+                    documentId, 0, 0, "FAILED", profile, validationError);
+            if (details != null) {
+                result.put("failureClass", failureClass(details).name());
+                result.put("failureDetails", details);
+                result.put("retryable", details.retryable());
+            }
+            return result;
         }
 
         maybeEmit(progressCallback,
@@ -259,6 +297,20 @@ public class DocumentEmbedService {
         return document.getCollectionId() == null
                 ? profileProvider.getActiveProfile()
                 : profileProvider.getProfileForCollection(document.getCollectionId());
+    }
+
+    /** 取第一个带 provider 分类的失败结果；没有分类时返回 null，由调用方降级处理。 */
+    private FailureDetails firstFailureDetails(
+            List<EmbeddingBatchService.EmbeddingResult> results) {
+        if (results == null) {
+            return null;
+        }
+        return results.stream()
+                .filter(result -> result != null && !result.isSuccess()
+                        && result.getFailureDetails() != null)
+                .map(EmbeddingBatchService.EmbeddingResult::getFailureDetails)
+                .findFirst()
+                .orElse(null);
     }
 
     /** Safely emits a progress callback (null-safe) */
@@ -642,6 +694,17 @@ public class DocumentEmbedService {
 
     private String buildChunkerVersion(RagDocument doc) {
         return chunkingService.chunkerVersionFor(doc);
+    }
+
+    /**
+     * 把上游失败归类映射为对外稳定枚举；非 HTTP 上游失败（连接/超时）不应退化成 INTERNAL。
+     */
+    private static FailureClass failureClass(FailureDetails details) {
+        FailureClass resolved = FailureClass.from(details.upstreamStatus(), details.reason());
+        if (resolved == FailureClass.INTERNAL && "UPSTREAM".equals(details.origin())) {
+            return FailureClass.DEPENDENCY_UNAVAILABLE;
+        }
+        return resolved;
     }
 
     private Map<String, Object> buildResult(

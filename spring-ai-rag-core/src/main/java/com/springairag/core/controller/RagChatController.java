@@ -562,7 +562,7 @@ public class RagChatController {
                             ? claim.operation().turnId().toString()
                             : response.getTurnId());
             done.put("idempotentReplay", replay);
-            done.put("status", "complete");
+            done.put("status", terminalStatus(response.getMetadata()));
             putSequence(done, sequence);
             SseEmitters.sendProgress(emitter, "done", done, "chat done");
             emitter.complete();
@@ -635,7 +635,7 @@ public class RagChatController {
             }
             payload.put("stepMetrics", completed.stepMetrics());
             payload.put("metadata", completed.metadata());
-            payload.put("status", "complete");
+            payload.put("status", terminalStatus(completed.metadata()));
             if (completed.metadata() != null
                     && completed.metadata().get("retrievalTraceId") != null) {
                 payload.put("retrievalTraceId",
@@ -735,6 +735,26 @@ public class RagChatController {
 
     private String firstNonBlank(String preferred, String fallback) {
         return preferred != null && !preferred.isBlank() ? preferred : fallback;
+    }
+
+    /**
+     * 终态 {@code status} 必须和 {@code answerOutcome} 一致：缺失模型结束信号时
+     * 回答是不完整的，不能对客户端宣称 {@code complete}。
+     */
+    private static String terminalStatus(Map<String, Object> metadata) {
+        if (metadata == null) {
+            return "complete";
+        }
+        Object outcome = metadata.get("answerOutcome");
+        if (outcome instanceof com.springairag.api.dto.AnswerOutcome answerOutcome) {
+            return "OUTPUT_INCOMPLETE".equals(answerOutcome.status())
+                    ? "incomplete" : "complete";
+        }
+        if (outcome instanceof Map<?, ?> map
+                && "OUTPUT_INCOMPLETE".equals(map.get("status"))) {
+            return "incomplete";
+        }
+        return "complete";
     }
 
     private static final class ChatStreamFailure extends RuntimeException {

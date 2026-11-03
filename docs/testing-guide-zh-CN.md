@@ -301,11 +301,17 @@ workflow 里，而不是靠人记得：
 | 层 | 触发 | 工作流 | 包含 | 不包含 |
 |----|------|--------|------|--------|
 | PR 快层 | push `main`/`develop`、PR → `main`；同分支新提交自动取消旧运行 | `.github/workflows/ci.yml` | `mvn test`（含 `OpenApiContractTest` 与 `WebUiRouteContract`）、`verify-project-tests.sh`、`verify-project-docs.sh`、Flyway 迁移清单校验、WebUI lint/单测/覆盖率阈值/构建/Mock E2E | gated PostgreSQL、真实模型、goldenset、soak、`*-real.spec.ts` |
-| 长跑层 | 每日 18:00 UTC（北京时间 02:00）与手动 `workflow_dispatch` | `.github/workflows/nightly.yml` | gated PostgreSQL（30 套件 / 263 用例）、真实 LLM smoke + goldenset + 检索回归、有界 soak、无需人工 fixture 的真实 WebUI spec | 需要预置告警/投递 ID 的 `alerts-real`、需要 rerank fixture 的 `rerank-document-diversity-real` |
+| 长跑层 | 每日 18:00 UTC（北京时间 02:00）与手动 `workflow_dispatch` | `.github/workflows/nightly.yml` | gated PostgreSQL（30 套件 / 263 用例）、上游/Embedding 故障模式（受控 provider + 隔离 PG，无需真实模型）、真实 LLM smoke + goldenset + 检索回归、有界 soak、无需人工 fixture 的真实 WebUI spec | 需要预置告警/投递 ID 的 `alerts-real`、需要 rerank fixture 的 `rerank-document-diversity-real` |
 
 PR 层的时间预算由 job 级 `timeout-minutes` 固定（backend 45、webui 30）。gated IT
 本地约 9–19 分钟，放在 PR 层会把反馈时间拖到 20 分钟以上，所以它只在 nightly 跑；
-nightly 的每个 job 各自有超时（90/60/30/75 分钟），互相不阻塞。
+nightly 的每个 job 各自有超时（90/60/60/30/75 分钟），互相不阻塞。
+
+故障模式 job（`failure-modes`）跑两条脚本：
+`python3 scripts/verify-upstream-recovery-e2e.py`（chat 500/429/超时/连接中断/畸形响应/SSE 断流、
+历史残留、指标与日志）和 `python3 scripts/verify-embedding-failure-e2e.py`
+（上传/导入/检索降级、有界调用、无半写向量）。两者都自带隔离 PostgreSQL 容器和
+controlled provider，不读取真实模型密钥，因此不需要放在 PR 层，也不需要 secret。
 
 Flyway 的**应用**校验放在 nightly 的 gated PostgreSQL：那里会真正启动 Spring Boot
 并执行迁移。PR 层只校验迁移清单结构（命名、重复版本号），因为 `mvn test` 不启动
@@ -328,12 +334,12 @@ CI 的 backend checkout 使用 `fetch-depth: 0`，PR 上把 `DOCS_DIFF_BASE` 设
   smoke 里的 OpenAI-compatible JSON 断言同理允许一次有界重试，连续两次失败仍然报错。
 - artifact 保留 14–30 天：`backend-test-results`、`backend-gate-logs`、
   `jacoco-reports`、`webui-playwright-report`、`nightly-gated-it`、
-  `nightly-real-llm`、`nightly-soak`、`nightly-webui-real`。下载：
+  `nightly-failure-modes`、`nightly-real-llm`、`nightly-soak`、`nightly-webui-real`。下载：
   `gh run list --workflow=nightly.yml`，然后 `gh run download <run-id>`。
 
 ### Nightly 失败通知（Issue 自动化）
 
-nightly 的红色只出现在 Actions 页面，没人会每天看。`report` job 在四个检查 job
+nightly 的红色只出现在 Actions 页面，没人会每天看。`report` job 在五个检查 job
 之后运行（`if: always()`），把结果汇总到一个固定标题的追踪 issue：
 
 - 标题固定为 `[Nightly] Long-running layer failing`；失败的 run 只会**更新**这个

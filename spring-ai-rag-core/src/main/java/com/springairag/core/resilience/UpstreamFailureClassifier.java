@@ -31,6 +31,13 @@ public final class UpstreamFailureClassifier {
                 if ("CHAT_TIMEOUT".equals(rag.getErrorCode())) return detail("REQUEST", "REQUEST_DEADLINE", false, null, null);
                 return detail(rag.getErrorCodeEnum().getHttpStatus() < 500 ? "REQUEST" : "SERVICE", "BUSINESS_REJECTED", false, null, null);
             }
+            if (error instanceof com.springairag.core.admission.DependencyCallException dependency) {
+                String code = dependency.getMessage() == null ? "" : dependency.getMessage();
+                if (code.contains("TIMEOUT")) {
+                    return detail("UPSTREAM", "UPSTREAM_TIMEOUT", true, null, null);
+                }
+                return detail("REQUEST", "CANCELLED", false, null, null);
+            }
             if (error instanceof CancellationException || error instanceof InterruptedException) {
                 return detail("REQUEST", "CANCELLED", false, null, null);
             }

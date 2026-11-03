@@ -22,14 +22,15 @@ def main():
     args = parser.parse_args()
     quality_cases = json.loads(args.quality_fixture.read_text())["cases"] if args.quality_fixture else []
     lock = threading.Lock()
-    state = {kind: {"calls": 0, "active": 0, "peak": 0, "delayMs": 0, "status": 200,
-                    "disconnect": False, "groundedActive": 0} for kind in ("embeddings", "rerank", "chat")}
+    state = {kind: {"calls": 0, "active": 0, "peak": 0, "delayMs": 0, "bodyDelayMs": 0,
+                    "status": 200, "disconnect": False, "groundedActive": 0}
+             for kind in ("embeddings", "rerank", "chat")}
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *_args):
             pass
 
-        def send_json(self, status, body, retry_after=None):
+        def send_json(self, status, body, retry_after=None, body_delay_ms=0):
             encoded = json.dumps(body).encode()
             self.send_response(status)
             self.send_header("Content-Type", "application/json")
@@ -37,6 +38,11 @@ def main():
             if retry_after is not None:
                 self.send_header("Retry-After", str(retry_after))
             self.end_headers()
+            if body_delay_ms:
+                # 先发响应头再延迟响应体：客户端会命中 read timeout，
+                # 而不是"服务端还没开始响应"的连接类失败。
+                self.wfile.flush()
+                time.sleep(body_delay_ms / 1000)
             self.wfile.write(encoded)
 
         def do_GET(self):
@@ -63,7 +69,7 @@ def main():
             if self.path.startswith("/control/"):
                 kind = self.path.split("/")[-1]
                 with lock:
-                    for name in ("delayMs", "status", "disconnect", "retryAfter", "dropStreamTail", "badJson"):
+                    for name in ("delayMs", "bodyDelayMs", "status", "disconnect", "retryAfter", "dropStreamTail", "badJson"):
                         if name in body:
                             state[kind][name] = body[name]
                     if kind == "chat":
@@ -117,7 +123,8 @@ def main():
                                          "data": [{"object": "embedding", "index": index,
                                                    "embedding": [1.0] + [0.0] * 1023}
                                                   for index, _ in enumerate(inputs)],
-                                         "usage": {"prompt_tokens": len(inputs), "total_tokens": len(inputs)}})
+                                         "usage": {"prompt_tokens": len(inputs), "total_tokens": len(inputs)}},
+                                   body_delay_ms=fault.get("bodyDelayMs", 0))
                 elif kind == "rerank":
                     self.send_json(200, {"results": [{"index": index, "relevance_score": 0.99 - index * 0.01}
                                                      for index in range(len(body.get("documents", [])))]})

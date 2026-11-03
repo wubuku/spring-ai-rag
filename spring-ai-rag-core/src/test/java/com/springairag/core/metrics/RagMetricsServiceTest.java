@@ -3,6 +3,7 @@ package com.springairag.core.metrics;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import com.springairag.api.dto.FailureDetails;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -168,6 +169,27 @@ class RagMetricsServiceTest {
         assertNotNull(meterRegistry.find("rag.requests.total").counter());
         assertNotNull(meterRegistry.find("rag.retrieval.results.total").gauge());
         assertNotNull(meterRegistry.find("rag.response.time").timer());
+    }
+
+    @Test
+    @DisplayName("Upstream failure counter carries bounded operation/provider/reason tags")
+    void recordUpstreamFailure_tagsFailureReasonAndProvider() {
+        var details = new FailureDetails("UPSTREAM", "UPSTREAM_RATE_LIMITED", true, 2_000L, 429);
+
+        ragMetricsService.recordUpstreamFailure("embedding.document", "siliconflow", details);
+        ragMetricsService.recordUpstreamFailure("embedding.document", "siliconflow", details);
+        ragMetricsService.recordUpstreamFailure("chat", "primary", details);
+
+        var counter = meterRegistry.find("rag.upstream.failures")
+                .tags("operation", "embedding.document",
+                        "provider", "siliconflow",
+                        "reason", "UPSTREAM_RATE_LIMITED",
+                        "retryable", "true")
+                .counter();
+        assertNotNull(counter);
+        assertEquals(2.0, counter.count());
+        assertEquals(1.0, meterRegistry.find("rag.upstream.failures")
+                .tags("operation", "chat", "provider", "primary").counter().count());
     }
 
     @Test

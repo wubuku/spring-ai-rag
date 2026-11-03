@@ -1,5 +1,6 @@
 package com.springairag.core.metrics;
 
+import com.springairag.api.dto.FailureDetails;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
@@ -24,6 +25,8 @@ import java.util.concurrent.atomic.AtomicLong;
  *   <li>rag.response.time — request response time distribution</li>
  *   <li>rag.retrieval.results — total retrieval results count</li>
  *   <li>rag.llm.tokens — LLM token consumption</li>
+ *   <li>rag.upstream.failures — upstream dependency failures, tagged by
+ *       operation / provider / reason / retryable</li>
  * </ul>
  *
  * <p>Query via endpoints such as `/actuator/metrics/rag.requests.total`.
@@ -37,10 +40,12 @@ public class RagMetricsService {
     private final Counter successRequestCounter;
     private final Counter failedRequestCounter;
     private final Timer responseTimer;
+    private final MeterRegistry meterRegistry;
     private final AtomicLong totalRetrievalResults;
     private final AtomicLong totalLlmTokens;
 
     public RagMetricsService(MeterRegistry meterRegistry) {
+        this.meterRegistry = meterRegistry;
         this.totalRequestCounter = Counter.builder("rag.requests.total")
                 .description("Total RAG request count")
                 .register(meterRegistry);
@@ -89,6 +94,43 @@ public class RagMetricsService {
         failedRequestCounter.increment();
         responseTimer.record(durationMs, TimeUnit.MILLISECONDS);
         log.debug("RAG failure: {}ms", durationMs);
+    }
+
+    /**
+     * 记录一次上游依赖失败。
+     *
+     * <p>标签值是**有界**的：operation 来自固定调用点，provider 来自已配置的
+     * 模型/Profile 标识，reason 来自 {@code FailureDetails} 的枚举式原因。
+     * traceId 不进标签（会造成时间序列爆炸），只保留在结构化日志与响应中。
+     *
+     * @param operation 调用点（chat / embedding.document / retrieval.embedding）
+     * @param provider  模型候选 ref 或 Embedding Profile provider
+     * @param details   上游失败分类
+     */
+    public void recordUpstreamFailure(String operation, String provider, FailureDetails details) {
+        String safeOperation = tagValue(operation, "unknown");
+        String safeProvider = tagValue(provider, "unknown");
+        String reason = details == null ? "UNCLASSIFIED" : tagValue(details.reason(), "UNCLASSIFIED");
+        boolean retryable = details != null && details.retryable();
+        Counter.builder("rag.upstream.failures")
+                .description("Upstream dependency failures by operation, provider and reason")
+                .tags("operation", safeOperation,
+                        "provider", safeProvider,
+                        "reason", reason,
+                        "retryable", Boolean.toString(retryable))
+                .register(meterRegistry)
+                .increment();
+        log.warn("Upstream failure operation={} provider={} reason={} retryable={}",
+                safeOperation, safeProvider, reason, retryable);
+    }
+
+    private static String tagValue(String value, String fallback) {
+        if (value == null || value.isBlank()) {
+            return fallback;
+        }
+        String trimmed = value.trim();
+        // 标签不是用户可见文本，只做长度约束；远短于 Micrometer/Prometheus 的常规上限。
+        return trimmed.length() <= 64 ? trimmed : trimmed.substring(0, 64);
     }
 
     /**

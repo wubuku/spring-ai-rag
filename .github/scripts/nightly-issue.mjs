@@ -22,6 +22,7 @@ const DEBUG_ISSUE_TITLE = '[TEST] Nightly issue automation debug';
 
 const JOBS = [
   { key: 'gated', name: 'gated-postgres', env: 'RESULT_GATED', artifact: 'nightly-gated-it' },
+  { key: 'failure-modes', name: 'failure-modes', env: 'RESULT_FAILURE_MODES', artifact: 'nightly-failure-modes' },
   { key: 'real-llm', name: 'real-llm', env: 'RESULT_REAL_LLM', artifact: 'nightly-real-llm' },
   { key: 'soak', name: 'soak', env: 'RESULT_SOAK', artifact: 'nightly-soak' },
   { key: 'webui', name: 'webui-real', env: 'RESULT_WEBUI', artifact: 'nightly-webui-real' },
@@ -201,7 +202,7 @@ function main() {
 }
 
 function selfTest() {
-  const results = { gated: 'success', 'real-llm': 'failure', soak: 'success', webui: 'success' };
+  const results = { gated: 'success', 'failure-modes': 'success', 'real-llm': 'failure', soak: 'success', webui: 'success' };
   const body = buildBody({
     results,
     runId: '12345',
@@ -224,7 +225,7 @@ function selfTest() {
   }
 
   const allGreen = buildBody({
-    results: { gated: 'success', 'real-llm': 'success', soak: 'skipped', webui: 'success' },
+    results: { gated: 'success', 'failure-modes': 'success', 'real-llm': 'success', soak: 'skipped', webui: 'success' },
     runId: '1',
     runNumber: '1',
     serverUrl: 'https://github.com',
@@ -238,7 +239,7 @@ function selfTest() {
   }
 
   const debugBody = buildBody({
-    results: { gated: 'success', 'real-llm': 'failure', soak: 'success', webui: 'success' },
+    results: { gated: 'success', 'failure-modes': 'success', 'real-llm': 'failure', soak: 'success', webui: 'success' },
     runId: '2', runNumber: '2', serverUrl: 'https://github.com',
     repository: 'wubuku/spring-ai-rag', eventName: 'workflow_dispatch', refName: 'main',
     artifactDir: '/nonexistent-artifact-dir', debug: true,

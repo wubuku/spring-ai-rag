@@ -10,7 +10,11 @@ import org.springframework.ai.embedding.Embedding;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.embedding.EmbeddingRequest;
 import org.springframework.ai.embedding.EmbeddingResponse;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.client.HttpServerErrorException;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -89,6 +93,27 @@ class EmbeddingBatchServiceTest {
         // Verify batch API tried first, then degraded to sequential
         verify(embeddingModel, times(1)).call(any(EmbeddingRequest.class));
         verify(embeddingModel, times(2)).embed(anyString());
+    }
+
+    @Test
+    @DisplayName("Transient provider failure does not fan out into per-item embedding calls")
+    void createEmbeddingsBatch_transientProviderFailure_doesNotFanOut() {
+        when(embeddingModel.call(any(EmbeddingRequest.class)))
+                .thenThrow(HttpServerErrorException.create(HttpStatus.SERVICE_UNAVAILABLE,
+                        "upstream unavailable", HttpHeaders.EMPTY, new byte[0],
+                        StandardCharsets.UTF_8));
+
+        List<EmbeddingBatchService.EmbeddingResult> results =
+                service.createEmbeddingsBatch(List.of("a", "b", "c", "d"));
+
+        assertEquals(4, results.size());
+        results.forEach(result -> {
+            assertFalse(result.isSuccess());
+            assertEquals(EmbeddingFailureClassifier.Kind.TRANSIENT, result.getFailureKind());
+        });
+        // 1 次批量调用封顶；provider 整体不可用时不会再逐条放大。
+        verify(embeddingModel, times(1)).call(any(EmbeddingRequest.class));
+        verify(embeddingModel, never()).embed(anyString());
     }
 
     @Test

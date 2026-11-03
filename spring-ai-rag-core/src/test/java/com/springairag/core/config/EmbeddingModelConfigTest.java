@@ -5,15 +5,20 @@ import org.junit.jupiter.api.Test;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.openai.OpenAiEmbeddingModel;
 import org.springframework.ai.retry.TransientAiException;
-import org.springframework.retry.backoff.ExponentialBackOffPolicy;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.retry.backoff.NoBackOffPolicy;
 import org.springframework.retry.support.RetryTemplate;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.HttpServerErrorException;
+import org.springframework.web.client.ResourceAccessException;
 
+import java.net.SocketTimeoutException;
+import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.net.InetSocketAddress;
-import java.nio.charset.StandardCharsets;
 import com.sun.net.httpserver.HttpServer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -193,7 +198,7 @@ class EmbeddingModelConfigTest {
         AtomicInteger transientAttempts = new AtomicInteger();
         AtomicInteger permanentAttempts = new AtomicInteger();
 
-        assertTrue(backOffPolicy instanceof ExponentialBackOffPolicy);
+        assertTrue(backOffPolicy instanceof EmbeddingModelConfig.EmbeddingBackOffPolicy);
         retryTemplate.setBackOffPolicy(new NoBackOffPolicy());
         assertThrows(TransientAiException.class, () ->
                 retryTemplate.execute(context -> {
@@ -234,5 +239,37 @@ class EmbeddingModelConfigTest {
                 IllegalStateException.class, config::embeddingModel);
 
         assertTrue(error.getMessage().contains("selected Profile"));
+    }
+
+    @Test
+    @DisplayName("embedding retry policy retries rate limits and 5xx but not auth failures")
+    void embeddingRetryPolicy_usesFailureClassification() {
+        assertTrue(EmbeddingModelConfig.isRetryableUpstreamFailure(rateLimited()));
+        assertTrue(EmbeddingModelConfig.isRetryableUpstreamFailure(
+                HttpServerErrorException.create(HttpStatus.SERVICE_UNAVAILABLE, "unavailable",
+                        HttpHeaders.EMPTY, new byte[0], StandardCharsets.UTF_8)));
+        assertTrue(EmbeddingModelConfig.isRetryableUpstreamFailure(
+                new ResourceAccessException("timeout", new SocketTimeoutException("read timed out"))));
+        assertFalse(EmbeddingModelConfig.isRetryableUpstreamFailure(
+                HttpClientErrorException.create(HttpStatus.UNAUTHORIZED, "unauthorized",
+                        HttpHeaders.EMPTY, new byte[0], StandardCharsets.UTF_8)));
+        assertFalse(EmbeddingModelConfig.isRetryableUpstreamFailure(
+                new IllegalStateException("permanent")));
+    }
+
+    @Test
+    @DisplayName("embedding backoff honours provider Retry-After as a lower bound")
+    void embeddingBackOff_honoursRetryAfter() {
+        assertEquals(2_000, EmbeddingModelConfig.EmbeddingBackOffPolicy.computeDelay(1, null));
+        assertEquals(10_000, EmbeddingModelConfig.EmbeddingBackOffPolicy.computeDelay(2, null));
+        assertEquals(8_000, EmbeddingModelConfig.EmbeddingBackOffPolicy.computeDelay(1, 8_000L));
+        assertEquals(10_000, EmbeddingModelConfig.EmbeddingBackOffPolicy.computeDelay(2, 3_000L));
+        // 超过最大退避窗口时不继续拉长等待。
+        assertEquals(10_000, EmbeddingModelConfig.EmbeddingBackOffPolicy.computeDelay(1, 60_000L));
+    }
+
+    private static HttpClientErrorException rateLimited() {
+        return HttpClientErrorException.create(HttpStatus.TOO_MANY_REQUESTS, "rate limited",
+                new HttpHeaders(), new byte[0], StandardCharsets.UTF_8);
     }
 }

@@ -341,9 +341,17 @@ public class EmbeddingPersistenceService {
             return;
         }
         Object collectionId = document.get("collection_id");
+        // collection_id 为 NULL 表示文档未归属任何 Collection（历史上的本地/公共文档），
+        // 不是"默认 Collection"，也没有可围栏的收集目标。此前这里把 NULL 当成错误，
+        // 这类文档因此永远写不进向量：job 每次重试都重新调用 provider，最后停在 FAILED，
+        // 生命周期长期 INDEXING。非 NULL 但非法（<=0）才是真正的数据异常。
+        if (collectionId == null) {
+            return;
+        }
         if (!(collectionId instanceof Number number) || number.longValue() <= 0) {
             throw new IllegalStateException(
-                    "Document has no active Collection during embedding persistence");
+                    "Document has an invalid Collection id during embedding persistence: "
+                            + collectionId);
         }
         collectionIdentityResolver.beginActiveWrite(number.longValue());
     }

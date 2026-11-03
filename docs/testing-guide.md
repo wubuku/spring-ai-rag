@@ -332,12 +332,19 @@ of in someone's memory:
 | Layer | Trigger | Workflow | Includes | Excludes |
 |-------|---------|----------|----------|----------|
 | PR fast | push to `main`/`develop`, PR to `main`; a newer commit cancels the stale run | `.github/workflows/ci.yml` | `mvn test` (including `OpenApiContractTest` and `WebUiRouteContract`), `verify-project-tests.sh`, `verify-project-docs.sh`, Flyway migration inventory, WebUI lint/unit/coverage thresholds/build/mock E2E | gated PostgreSQL, real models, goldenset, soak, `*-real.spec.ts` |
-| Long-running | daily 18:00 UTC (02:00 Asia/Shanghai) and manual `workflow_dispatch` | `.github/workflows/nightly.yml` | gated PostgreSQL (30 suites / 263 tests), real LLM smoke + goldenset + retrieval regression, bounded soak, real WebUI specs that need no manual fixtures | `alerts-real` (needs preset alert/delivery IDs) and `rerank-document-diversity-real` (needs a rerank fixture) |
+| Long-running | daily 18:00 UTC (02:00 Asia/Shanghai) and manual `workflow_dispatch` | `.github/workflows/nightly.yml` | gated PostgreSQL (30 suites / 263 tests), upstream/embedding failure modes (controlled provider + isolated PG, no real models), real LLM smoke + goldenset + retrieval regression, bounded soak, real WebUI specs that need no manual fixtures | `alerts-real` (needs preset alert/delivery IDs) and `rerank-document-diversity-real` (needs a rerank fixture) |
 
 The PR layer is bounded by job-level `timeout-minutes` (backend 45, webui 30).
 Gated IT takes about 9–19 minutes locally; keeping it in the PR layer would push
 feedback past twenty minutes, so it runs only in nightly. Each nightly job has
-its own timeout (90/60/30/75 minutes) and they do not block each other.
+its own timeout (90/60/60/30/75 minutes) and they do not block each other.
+
+The failure-modes job runs `python3 scripts/verify-upstream-recovery-e2e.py`
+(chat 500/429/timeout/connection drop/malformed response/SSE truncation, history
+residue, metrics and logs) and `python3 scripts/verify-embedding-failure-e2e.py`
+(upload/import/retrieval degradation, bounded calls, no half-written vectors).
+Both bring their own isolated PostgreSQL container and controlled provider, so
+they need no real-model secrets and stay out of the PR layer.
 
 Flyway **application** is verified in nightly's gated PostgreSQL, where Spring Boot
 actually starts and runs the migrations. The PR layer only checks the migration
@@ -365,14 +372,15 @@ without that variable, they still scan the working tree).
   one bounded retry; two consecutive failures still fail.
 - Artifacts are retained for 14–30 days: `backend-test-results`,
   `backend-gate-logs`, `jacoco-reports`, `webui-playwright-report`,
-  `nightly-gated-it`, `nightly-real-llm`, `nightly-soak`, `nightly-webui-real`.
+  `nightly-gated-it`, `nightly-failure-modes`, `nightly-real-llm`,
+  `nightly-soak`, `nightly-webui-real`.
   Download with `gh run list --workflow=nightly.yml` and
   `gh run download <run-id>`.
 
 ### Nightly Failure Notification (Issue Automation)
 
 A red nightly run only shows up on the Actions page, which nobody checks daily.
-The `report` job runs after the four check jobs (`if: always()`) and folds the
+The `report` job runs after the five check jobs (`if: always()`) and folds the
 result into a single tracking issue with a fixed title:
 
 - The title is always `[Nightly] Long-running layer failing`. A failing run only
@@ -390,7 +398,7 @@ result into a single tracking issue with a fixed title:
   the issue as a failure (with a minimal fallback body), so a broken reporter
   never becomes a missing notification.
 - Real rehearsal: `gh workflow run nightly.yml -f debug_report_failure=true`
-  runs only the `report` job, skips the four check jobs (no model calls), and
+  runs only the `report` job, skips the five check jobs (no model calls), and
   exercises the real create/update/comment path under the title
   `[TEST] Nightly issue automation debug`. Close that TEST issue afterwards.
   The switch never touches the real tracker, and a plain manual dispatch still

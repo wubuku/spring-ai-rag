@@ -158,6 +158,10 @@ data:{
 若安全门未通过，唯一的 `content` 终态正文是受控安全回答。收到 `done` 后客户端应停止
 loading 状态；重复终态必须忽略。
 
+`status` 为 `complete` 或 `incomplete`。当模型流缺少结束信号（`answerOutcome.status`
+为 `OUTPUT_INCOMPLETE`）时，终态为 `done` 但 `status` 是 `incomplete`，客户端不能把
+它当作完整回答；上游显式错误仍走 `error` 终态。
+
 模型安全拒答是正常业务结果，不发送`error`终态，也不通过重试/切模型规避。上游明确以`refusal`
 字段或`content_filter`结束时，即使原始正文为空，也返回可见安全提示；Native终态metadata可包含
 `modelSafetyRefusal=true`，OpenAI兼容终帧在可选`rag.modelSafetyRefusal`投影同一信号。

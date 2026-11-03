@@ -13,6 +13,7 @@ import com.springairag.core.config.EmbeddingVectorColumns;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.config.RagRetrievalProperties;
 import com.springairag.core.config.RagRerankProperties;
+import com.springairag.core.metrics.RagMetricsService;
 import com.springairag.core.retrieval.fulltext.FulltextSearchProvider;
 import com.springairag.core.retrieval.fulltext.FulltextSearchProviderFactory;
 import com.springairag.core.retrieval.fulltext.NoOpFulltextSearchProvider;
@@ -78,6 +79,14 @@ public class HybridRetrieverService {
     private final RetrievalEmptyReasonProbe emptyReasonProbe; // optional-claim: RetrievalEmptyReasonProbe 是无条件 @Component，null 臂只在不走 Spring 装配的构造路径可达；守卫真正的职责是"融合结果非空就不必探针"——探针只为归因而存在，是额外开销
     private final DocumentDerivationDescriptorProvider descriptorProvider;
     private final int retrievalTimeoutSeconds;
+
+    /** 可选注入：单元测试直接 new 该服务时不依赖 Micrometer。 */
+    private RagMetricsService metricsService; // optional-claim: 兼容按旧构造器手写实例化的单测
+
+    @Autowired(required = false)
+    public void setMetricsService(RagMetricsService metricsService) {
+        this.metricsService = metricsService;
+    }
     private final int probeTimeoutMs;
     private final com.springairag.core.config.RagAdmissionProperties admissionProperties;
 
@@ -366,13 +375,18 @@ public class HybridRetrieverService {
                             query, scope, excludeIds, retrievalLimit, profile,
                             minScore, effectiveFilters)), taskExecutor)
                     .orTimeout(retrievalTimeoutSeconds, TimeUnit.SECONDS)
-                    .handle((value, error) -> error == null
-                            ? value
-                            : timeoutOrError(
-                                    RetrievalBranchStage.VECTOR,
-                                    "embedding",
-                                    error,
-                                    "Vector search"))
+                    .handle((value, error) -> {
+                        if (error != null) {
+                            recordEmbeddingFailure(error, profile);
+                        }
+                        return error == null
+                                ? value
+                                : timeoutOrError(
+                                        RetrievalBranchStage.VECTOR,
+                                        "embedding",
+                                        error,
+                                        "Vector search");
+                    })
                     .join();
             vectorStage = vector.stage();
             fulltextStage = new RetrievalBranchStage(
@@ -387,13 +401,18 @@ public class HybridRetrieverService {
                             query, scope, excludeIds, retrievalLimit * 2, profile,
                             minScore, effectiveFilters)), taskExecutor)
                     .orTimeout(retrievalTimeoutSeconds, TimeUnit.SECONDS)
-                    .handle((value, error) -> error == null
-                            ? value
-                            : timeoutOrError(
-                                    RetrievalBranchStage.VECTOR,
-                                    "embedding",
-                                    error,
-                                    "Vector search"));
+                    .handle((value, error) -> {
+                        if (error != null) {
+                            recordEmbeddingFailure(error, profile);
+                        }
+                        return error == null
+                                ? value
+                                : timeoutOrError(
+                                        RetrievalBranchStage.VECTOR,
+                                        "embedding",
+                                        error,
+                                        "Vector search");
+                    });
             CompletableFuture<BranchExecution> fulltextFuture = CompletableFuture
                             .supplyAsync(dependencyTask(() -> runFulltext(
                             fulltextProvider, query, scope, excludeIds,
@@ -513,7 +532,7 @@ public class HybridRetrieverService {
         }
 
         EmbeddingExecution embedding = awaitCoverageEmbedding(
-                embeddingFuture, deadlineNanos);
+                embeddingFuture, deadlineNanos, profile);
         Map<Long, CompletableFuture<BranchExecution>> vectorFutures =
                 new LinkedHashMap<>();
         for (Long collectionId : scope.collectionIds()) {
@@ -808,11 +827,12 @@ public class HybridRetrieverService {
     }
 
     private EmbeddingExecution awaitCoverageEmbedding(
-            CompletableFuture<float[]> future, long deadlineNanos) {
+            CompletableFuture<float[]> future, long deadlineNanos, EmbeddingProfile profile) {
         try {
             float[] vector = getBeforeDeadline(future, deadlineNanos);
             return new EmbeddingExecution(vector, null, RetrievalBranchStage.SUCCESS, 0L);
         } catch (TimeoutException e) {
+            recordEmbeddingFailure(e, profile);
             return new EmbeddingExecution(
                     null, e, RetrievalBranchStage.TIMEOUT,
                     TimeUnit.SECONDS.toMillis(Math.max(1, retrievalTimeoutSeconds)));
@@ -822,13 +842,33 @@ public class HybridRetrieverService {
                 return new EmbeddingExecution(
                         null, cause, RetrievalBranchStage.CAPACITY_LIMITED, 0L);
             }
+            recordEmbeddingFailure(cause, profile);
             return new EmbeddingExecution(
                     null, cause, RetrievalBranchStage.ERROR, 0L);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+            recordEmbeddingFailure(e, profile);
             return new EmbeddingExecution(
                     null, e, RetrievalBranchStage.ERROR, 0L);
         }
+    }
+
+    /**
+     * 检索侧 embedding 失败的结构化日志与指标。
+     *
+     * <p>降级本身由分支状态（{@code TIMEOUT}/{@code ERROR}）表达，客户端仍拿到
+     * 全文检索结果；这里补齐“哪个 provider、哪个调用点、哪个失败分类”，
+     * traceId 由日志 MDC 携带。
+     */
+    private void recordEmbeddingFailure(Throwable error, EmbeddingProfile profile) {
+        Throwable cause = unwrap(error);
+        var details = com.springairag.core.resilience.UpstreamFailureClassifier.classify(cause);
+        if (metricsService != null) {
+            metricsService.recordUpstreamFailure("retrieval.embedding", profile.provider(), details);
+        }
+        log.warn("Retrieval embedding failed operation=retrieval.embedding provider={} profile={} "
+                        + "reason={} retryable={}",
+                profile.provider(), profile.profileKey(), details.reason(), details.retryable());
     }
 
     private CompletableFuture<BranchExecution> submitCoverageBranch(

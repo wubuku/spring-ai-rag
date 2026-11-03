@@ -6,14 +6,20 @@ import org.springframework.ai.openai.OpenAiEmbeddingModel;
 import org.springframework.ai.openai.OpenAiEmbeddingOptions;
 import org.springframework.ai.openai.api.OpenAiApi;
 import com.springairag.core.admission.DependencyCallContext;
-import org.springframework.ai.retry.TransientAiException;
+import com.springairag.core.admission.DependencyCallException;
+import com.springairag.core.resilience.UpstreamFailureClassifier;
+import com.springairag.core.resilience.UpstreamResponseErrorHandler;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.retry.RetryContext;
+import org.springframework.retry.backoff.BackOffContext;
+import org.springframework.retry.backoff.BackOffInterruptedException;
+import org.springframework.retry.backoff.BackOffPolicy;
+import org.springframework.retry.backoff.Sleeper;
+import org.springframework.retry.policy.ExceptionClassifierRetryPolicy;
+import org.springframework.retry.policy.SimpleRetryPolicy;
 import org.springframework.retry.support.RetryTemplate;
-import org.springframework.web.client.ResourceAccessException;
-
-import java.time.Duration;
 
 /**
  * EmbeddingModel Configuration
@@ -42,9 +48,13 @@ public class EmbeddingModelConfig {
     @Value("${rag.embedding.retry-max-attempts:${RAG_EMBEDDING_RETRY_MAX_ATTEMPTS:3}}")
     private int retryMaxAttempts;
 
+    @Value("${rag.embedding.request-timeout-ms:${RAG_EMBEDDING_REQUEST_TIMEOUT_MS:30000}}")
+    private int requestTimeoutMs = 30_000;
+
     @Bean(name = "embeddingModel")
     public EmbeddingModel embeddingModel() {
-        return createModel(baseUrl, apiKey, model, dimensions, requestDimensions, retryMaxAttempts);
+        return createModel(baseUrl, apiKey, model, dimensions, requestDimensions,
+                retryMaxAttempts, requestTimeoutMs);
     }
 
     public EmbeddingModel createModel(RagEmbeddingProfileProperties profile) {
@@ -57,7 +67,8 @@ public class EmbeddingModelConfig {
                 profile.getModel(),
                 profile.getDimensions(),
                 profile.isRequestDimensions(),
-                profile.getRetryMaxAttempts());
+                profile.getRetryMaxAttempts(),
+                requestTimeoutMs);
     }
 
     private EmbeddingModel createModel(
@@ -66,7 +77,8 @@ public class EmbeddingModelConfig {
             String configuredModel,
             int configuredDimensions,
             boolean configuredRequestDimensions,
-            int configuredRetryMaxAttempts) {
+            int configuredRetryMaxAttempts,
+            int configuredRequestTimeoutMs) {
         // base-url must NOT include /v1 (OpenAiApi appends /v1/embeddings)
         String url = configuredBaseUrl != null
                 ? configuredBaseUrl.replaceAll("/+$", "").replaceAll("/v1$", "")
@@ -81,6 +93,10 @@ public class EmbeddingModelConfig {
             throw new IllegalStateException(
                     "Embedding API key is not configured for the selected Profile");
         }
+        if (configuredRequestTimeoutMs < 100 || configuredRequestTimeoutMs > 120_000) {
+            throw new IllegalArgumentException(
+                    "rag.embedding.request-timeout-ms must be between 100 and 120000");
+        }
 
         OpenAiApi openAiApi = OpenAiApi.builder()
                 .baseUrl(url)
@@ -91,11 +107,17 @@ public class EmbeddingModelConfig {
                             protected void prepareConnection(java.net.HttpURLConnection connection, String method)
                                     throws java.io.IOException {
                                 super.prepareConnection(connection, method);
-                                int timeout = (int) Math.min(30000, DependencyCallContext.remainingMillis());
+                                int timeout = (int) Math.max(1, Math.min(
+                                        configuredRequestTimeoutMs,
+                                        DependencyCallContext.remainingMillis()));
                                 connection.setConnectTimeout(timeout);
                                 connection.setReadTimeout(timeout);
                             }
                         }))
+                // 与 chat 路径共用同一错误映射：429/401/403 不能被 Spring AI 默认
+                // handler 压成 NonTransientAiException，否则会被误判成“请求被拒绝”，
+                // 拿不到 Retry-After，也无法区分限流。
+                .responseErrorHandler(new UpstreamResponseErrorHandler())
                 .build();
 
         // Some OpenAI-compatible embedding providers reject the dimensions parameter.
@@ -117,42 +139,94 @@ public class EmbeddingModelConfig {
             throw new IllegalArgumentException(
                     "rag.embedding.retry-max-attempts must be between 1 and 10");
         }
-        RetryTemplate template = RetryTemplate.builder()
-                .maxAttempts(configuredRetryMaxAttempts)
-                .retryOn(TransientAiException.class)
-                .retryOn(ResourceAccessException.class)
-                .exponentialBackoff(
-                        Duration.ofSeconds(2),
-                        5.0,
-                        Duration.ofMinutes(3))
-                .build();
-        org.springframework.retry.backoff.ExponentialBackOffPolicy backoff =
-                new org.springframework.retry.backoff.ExponentialBackOffPolicy();
-        backoff.setInitialInterval(2000);
-        backoff.setMultiplier(5);
-        backoff.setMaxInterval(180000);
-        backoff.setSleeper(interval -> {
-            long remaining = DependencyCallContext.remainingMillis();
-            Thread.sleep(Math.min(interval, remaining));
-            DependencyCallContext.remainingMillis();
-        });
-        template.setBackOffPolicy(backoff);
-        template.registerListener(new org.springframework.retry.RetryListener() {
-            @Override
-            public <Result, Failure extends Throwable> boolean open(
-                    org.springframework.retry.RetryContext context,
-                    org.springframework.retry.RetryCallback<Result, Failure> callback) {
-                DependencyCallContext.remainingMillis();
-                return true;
-            }
-
-            @Override
-            public <Result, Failure extends Throwable> void onError(
-                    org.springframework.retry.RetryContext context,
-                    org.springframework.retry.RetryCallback<Result, Failure> callback, Throwable failure) {
-                DependencyCallContext.remainingMillis();
-            }
-        });
+        RetryTemplate template = new RetryTemplate();
+        template.setRetryPolicy(embeddingRetryPolicy(configuredRetryMaxAttempts));
+        template.setBackOffPolicy(new EmbeddingBackOffPolicy());
+        template.setThrowLastExceptionOnExhausted(true);
         return template;
+    }
+
+    /**
+     * 只重试 {@link UpstreamFailureClassifier} 判定为可重试的上游失败。
+     *
+     * <p>Spring AI 的默认错误处理器会把 429 归为 {@code NonTransientAiException}，
+     * 如果沿用“按异常类型重试”，限流反而不会重试、而 5xx 会。这里统一按仓库的
+     * 失败分类决策，包私有便于单测直接驱动。
+     */
+    static ExceptionClassifierRetryPolicy embeddingRetryPolicy(int maxAttempts) {
+        ExceptionClassifierRetryPolicy policy = new ExceptionClassifierRetryPolicy();
+        SimpleRetryPolicy retryable = new SimpleRetryPolicy(maxAttempts);
+        policy.setExceptionClassifier(throwable ->
+                isRetryableUpstreamFailure(throwable) ? retryable : noRetry());
+        return policy;
+    }
+
+    static boolean isRetryableUpstreamFailure(Throwable throwable) {
+        return UpstreamFailureClassifier.classify(throwable).retryable();
+    }
+
+    private static SimpleRetryPolicy noRetry() {
+        return new SimpleRetryPolicy() {
+            @Override
+            public boolean canRetry(RetryContext context) {
+                return false;
+            }
+        };
+    }
+
+    /** 指数退避，并把 provider 的 Retry-After 作为下限；总等待受调用 deadline 约束。 */
+    static final class EmbeddingBackOffPolicy implements BackOffPolicy {
+        static final long INITIAL_INTERVAL_MS = 2_000;
+        static final long MAX_INTERVAL_MS = 10_000;
+        static final double MULTIPLIER = 5.0;
+
+        private final Sleeper sleeper;
+
+        EmbeddingBackOffPolicy() {
+            this(Thread::sleep);
+        }
+
+        EmbeddingBackOffPolicy(Sleeper sleeper) {
+            this.sleeper = sleeper;
+        }
+
+        @Override
+        public BackOffContext start(RetryContext context) {
+            return new State(context);
+        }
+
+        @Override
+        public void backOff(BackOffContext backOffContext) {
+            RetryContext context = ((State) backOffContext).context();
+            long delay = computeDelay(context.getRetryCount(),
+                    UpstreamFailureClassifier.classify(context.getLastThrowable()).retryAfterMs());
+            long remaining = DependencyCallContext.remainingMillis();
+            if (remaining <= delay) {
+                // 不在 deadline 内等待完整退避；让上层按超时语义失败。
+                throw new DependencyCallException("DEPENDENCY_TIMEOUT");
+            }
+            try {
+                sleeper.sleep(delay);
+            } catch (InterruptedException error) {
+                Thread.currentThread().interrupt();
+                throw new BackOffInterruptedException("Retry wait interrupted", error);
+            }
+            DependencyCallContext.remainingMillis();
+        }
+
+        static long computeDelay(int retryCount, Long retryAfterMs) {
+            long exponential = (long) (INITIAL_INTERVAL_MS
+                    * Math.pow(MULTIPLIER, Math.max(0, retryCount - 1)));
+            long delay = Math.min(MAX_INTERVAL_MS, exponential);
+            if (retryAfterMs != null) {
+                if (retryAfterMs >= MAX_INTERVAL_MS) {
+                    return MAX_INTERVAL_MS;
+                }
+                delay = Math.max(delay, retryAfterMs);
+            }
+            return delay;
+        }
+
+        private record State(RetryContext context) implements BackOffContext { }
     }
 }
