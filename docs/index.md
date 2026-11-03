@@ -26,6 +26,7 @@ Additive capabilities: [trustworthy assertions, active diagnostics and offline q
 | Change core architecture / pipeline | [architecture.md](architecture.md) | [IMPLEMENTATION_COMPARISON.md](IMPLEMENTATION_COMPARISON.md) |
 | Understand Chat memory, context budgets, RAG, and tool calling | [Chat Memory, RAG, And Tool Calling](chat-memory-rag-tool-calling.md) | [Architecture](architecture.md), [Configuration](configuration.md) |
 | Change configuration | [configuration.md](configuration.md) | `spring-ai-rag-core/src/main/resources/application.yml` |
+| Decide when a wrong configuration should fail, and with what message | [Configuration failure matrix](config-validation.md) | [Configuration](configuration.md), [Troubleshooting](troubleshooting.md) |
 | Back up data and rehearse isolated recovery | [Backup And Restore](backup-restore.md) | [Testing Guide](testing-guide.md) |
 | Delete documents/collections/sessions, or decide orphans and retention | [Deletion Semantics and Data Retention](deletion-and-retention.md) | [Testing guide](testing-guide.md), [Configuration](configuration.md#permanent-collection-purge-and-retirement) |
 | Review data-plane authorization, file ownership and tenant isolation | [Security Boundaries and Tenant Isolation](security-boundary.md) | [REST API: Authentication](rest-api.md#authentication), [Testing Guide](testing-guide.md) |
@@ -99,6 +100,7 @@ Chinese counterparts use the same basename with a `-zh-CN` suffix where availabl
 | Doc | Description |
 |-----|-------------|
 | [configuration.md](configuration.md) | Configuration reference |
+| [config-validation.md](config-validation.md) | Failure timing, message, and silent-degradation inventory per configuration class |
 | [rest-api.md](rest-api.md) | REST API reference |
 | [SSE-PROTOCOL.md](SSE-PROTOCOL.md) | Streaming protocol & heartbeat |
 | [api-versioning.md](api-versioning.md) | `/api/v1` versioning |

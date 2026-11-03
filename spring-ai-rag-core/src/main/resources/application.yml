@@ -317,6 +317,9 @@ rag:
     # Dedicated deployment root for unlocking the Web console and managing business API keys.
     # When configured, /api/** requires this root key or a valid database-backed business key.
     root-api-key: ${RAG_ROOT_API_KEY:}
+    # 是否允许对远程主机使用明文 http 的模型端点。默认拒绝（避免 key 明文出网），
+    # 仅可信内网可显式打开。回环地址（localhost/127.0.0.1）始终允许。
+    allow-insecure-upstream: ${RAG_ALLOW_INSECURE_UPSTREAM:false}
 
   api-key-provisioning:
     enabled: ${RAG_API_KEY_PROVISIONING_ENABLED:true}

@@ -4,6 +4,9 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+/**
+ * 线程池参数默认值与启动期校验。
+ */
 class RagAsyncPropertiesTest {
 
     @Test
@@ -13,6 +16,7 @@ class RagAsyncPropertiesTest {
         assertEquals(16, props.getMaxPoolSize(), "Default max pool size should be 16");
         assertEquals(100, props.getQueueCapacity(), "Default queue capacity should be 100");
         assertEquals(5, props.getRetrievalTimeoutSeconds(), "Default retrieval timeout should be 5 seconds");
+        assertDoesNotThrow(props::validate);
     }
 
     @Test
@@ -30,13 +34,44 @@ class RagAsyncPropertiesTest {
     }
 
     @Test
-    void corePoolSizeShouldNotExceedMaxPoolSize() {
-        RagAsyncProperties props = new RagAsyncProperties();
-        // This class does not enforce the invariant; it is the caller's responsibility.
-        // We simply verify the setter accepts the value.
-        props.setCorePoolSize(32);
-        props.setMaxPoolSize(8);
-        assertEquals(32, props.getCorePoolSize());
-        assertEquals(8, props.getMaxPoolSize());
+    void corePoolSizeMustBePositive() {
+        RagAsyncProperties properties = new RagAsyncProperties();
+        properties.setCorePoolSize(0);
+        IllegalStateException error = assertThrows(IllegalStateException.class,
+                properties::validate);
+        assertTrue(error.getMessage().contains("rag.async.core-pool-size"));
+    }
+
+    @Test
+    void maxPoolSizeMustNotBeBelowCorePoolSize() {
+        RagAsyncProperties properties = new RagAsyncProperties();
+        properties.setCorePoolSize(32);
+        properties.setMaxPoolSize(8);
+        // setter 仍接受该值，但启动期校验会显式拒绝。
+        assertEquals(32, properties.getCorePoolSize());
+        assertEquals(8, properties.getMaxPoolSize());
+
+        IllegalStateException error = assertThrows(IllegalStateException.class,
+                properties::validate);
+        assertTrue(error.getMessage().contains("rag.async.max-pool-size"));
+    }
+
+    @Test
+    void queueCapacityMustBePositive() {
+        RagAsyncProperties properties = new RagAsyncProperties();
+        properties.setQueueCapacity(0);
+        IllegalStateException error = assertThrows(IllegalStateException.class,
+                properties::validate);
+        assertTrue(error.getMessage().contains("rag.async.queue-capacity"));
+    }
+
+    @Test
+    void retrievalTimeoutMustStayInRange() {
+        RagAsyncProperties properties = new RagAsyncProperties();
+        properties.setRetrievalTimeoutSeconds(0);
+        assertThrows(IllegalStateException.class, properties::validate);
+
+        properties.setRetrievalTimeoutSeconds(301);
+        assertThrows(IllegalStateException.class, properties::validate);
     }
 }

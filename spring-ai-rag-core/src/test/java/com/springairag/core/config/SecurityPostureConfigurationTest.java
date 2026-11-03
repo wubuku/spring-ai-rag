@@ -55,6 +55,26 @@ class SecurityPostureConfigurationTest {
     }
 
     @Test
+    void enabledSecurityWithoutStaticKeyOnlyWarnsAndStaysUp() {
+        SecurityPostureConfiguration configuration = new SecurityPostureConfiguration();
+        MockEnvironment environment = new MockEnvironment();
+        environment.setActiveProfiles("postgresql");
+        RagProperties properties = properties(true);
+        // apiKey / rootApiKey 默认都是空串：请求会 fail closed，但启动不失败。
+        assertTrue(SecurityPostureConfiguration.hasNoStaticKey(properties));
+
+        var runner = configuration.securityPostureStartupCheck(properties, environment);
+        assertDoesNotThrow(() -> runner.run(null));
+    }
+
+    @Test
+    void configuredStaticKeyDisablesTheNoKeyWarningCondition() {
+        RagProperties properties = properties(true);
+        properties.getSecurity().setRootApiKey("root-key");
+        assertFalse(SecurityPostureConfiguration.hasNoStaticKey(properties));
+    }
+
+    @Test
     void healthIndicatorExposesHighRiskWhenDisabled() {
         HealthIndicator indicator =
                 new SecurityPostureConfiguration().ragSecurityPostureHealthIndicator(

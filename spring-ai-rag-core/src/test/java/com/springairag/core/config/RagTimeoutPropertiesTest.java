@@ -5,7 +5,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * RagTimeoutProperties Unit Tests
+ * 超时配置默认值与启动期范围校验。
  */
 class RagTimeoutPropertiesTest {
 
@@ -20,6 +20,7 @@ class RagTimeoutPropertiesTest {
         assertEquals(30_000, props.getSearchMs());
         assertEquals(60_000, props.getEmbedMs());
         assertEquals(90_000, props.getModelCompareMs());
+        assertDoesNotThrow(props::validate);
     }
 
     @Test
@@ -55,5 +56,53 @@ class RagTimeoutPropertiesTest {
         RagTimeoutProperties props = new RagTimeoutProperties();
         // Search is typically faster than embedding large documents
         assertTrue(props.getSearchMs() < props.getEmbedMs());
+    }
+
+    @Test
+    void connectTimeoutBelowMinimumFailsWithPropertyName() {
+        RagTimeoutProperties properties = new RagTimeoutProperties();
+        properties.setConnectTimeoutMs(0);
+        IllegalStateException error = assertThrows(IllegalStateException.class,
+                properties::validate);
+        assertTrue(error.getMessage().contains("rag.timeout.connect-timeout-ms"));
+    }
+
+    @Test
+    void readTimeoutAboveMaximumFailsWithPropertyName() {
+        RagTimeoutProperties properties = new RagTimeoutProperties();
+        properties.setReadTimeoutMs(600_001);
+        IllegalStateException error = assertThrows(IllegalStateException.class,
+                properties::validate);
+        assertTrue(error.getMessage().contains("rag.timeout.read-timeout-ms"));
+    }
+
+    @Test
+    void chatTimeoutsAreBounded() {
+        RagTimeoutProperties properties = new RagTimeoutProperties();
+        properties.setChatAskMs(0);
+        assertThrows(IllegalStateException.class, properties::validate);
+
+        properties = new RagTimeoutProperties();
+        properties.setChatStreamMs(1_800_001);
+        assertThrows(IllegalStateException.class, properties::validate);
+    }
+
+    @Test
+    void searchEmbedAndCompareTimeoutsAreBounded() {
+        assertRangeFailure(properties -> properties.setSearchMs(0),
+                "rag.timeout.search-ms");
+        assertRangeFailure(properties -> properties.setEmbedMs(600_001),
+                "rag.timeout.embed-ms");
+        assertRangeFailure(properties -> properties.setModelCompareMs(0),
+                "rag.timeout.model-compare-ms");
+    }
+
+    private void assertRangeFailure(java.util.function.Consumer<RagTimeoutProperties> mutation,
+                                    String propertyKey) {
+        RagTimeoutProperties properties = new RagTimeoutProperties();
+        mutation.accept(properties);
+        IllegalStateException error = assertThrows(IllegalStateException.class,
+                properties::validate);
+        assertTrue(error.getMessage().contains(propertyKey));
     }
 }

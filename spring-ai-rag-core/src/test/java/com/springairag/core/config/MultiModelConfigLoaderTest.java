@@ -51,12 +51,16 @@ class MultiModelConfigLoaderTest {
     }
 
     @Test
-    @DisplayName("Skips loading when configFile points to non-existent file")
-    void loadExternalJsonIfPresent_fileNotFound_skips() {
+    @DisplayName("Fails fast when configFile points to a non-existent file")
+    void loadExternalJsonIfPresent_fileNotFound_failsFast() {
         MultiModelProperties props = createProperties("/nonexistent/path/models.json");
         MultiModelConfigLoader loader = new MultiModelConfigLoader(props);
-        loader.loadExternalJsonIfPresent();
 
+        IllegalStateException error = assertThrows(IllegalStateException.class,
+                loader::loadExternalJsonIfPresent);
+
+        assertTrue(error.getMessage().contains("app.models.config-file"));
+        assertTrue(error.getMessage().contains("/nonexistent/path/models.json"));
         assertTrue(props.getProviders().isEmpty());
     }
 

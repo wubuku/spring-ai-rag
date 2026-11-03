@@ -51,10 +51,13 @@ public class EmbeddingModelConfig {
     @Value("${rag.embedding.request-timeout-ms:${RAG_EMBEDDING_REQUEST_TIMEOUT_MS:30000}}")
     private int requestTimeoutMs = 30_000;
 
+    @Value("${rag.security.allow-insecure-upstream:false}")
+    private boolean allowInsecureUpstream;
+
     @Bean(name = "embeddingModel")
     public EmbeddingModel embeddingModel() {
-        return createModel(baseUrl, apiKey, model, dimensions, requestDimensions,
-                retryMaxAttempts, requestTimeoutMs);
+        return createModel("rag.embedding.base-url", baseUrl, apiKey, model, dimensions,
+                requestDimensions, retryMaxAttempts, requestTimeoutMs);
     }
 
     public EmbeddingModel createModel(RagEmbeddingProfileProperties profile) {
@@ -62,6 +65,7 @@ public class EmbeddingModelConfig {
             throw new IllegalArgumentException("Embedding Profile configuration is required");
         }
         return createModel(
+                "rag.embedding.profiles.*.base-url",
                 profile.getBaseUrl(),
                 profile.getApiKey(),
                 profile.getModel(),
@@ -72,6 +76,7 @@ public class EmbeddingModelConfig {
     }
 
     private EmbeddingModel createModel(
+            String propertyKey,
             String configuredBaseUrl,
             String configuredApiKey,
             String configuredModel,
@@ -79,9 +84,11 @@ public class EmbeddingModelConfig {
             boolean configuredRequestDimensions,
             int configuredRetryMaxAttempts,
             int configuredRequestTimeoutMs) {
-        // base-url must NOT include /v1 (OpenAiApi appends /v1/embeddings)
-        String url = configuredBaseUrl != null
-                ? configuredBaseUrl.replaceAll("/+$", "").replaceAll("/v1$", "")
+        // Spring AI 会自动追加 /v1/embeddings；这里统一归一化并校验远端明文 http。
+        String normalizedBaseUrl = UpstreamEndpointPolicy.normalizeAndValidate(
+                propertyKey, configuredBaseUrl, allowInsecureUpstream);
+        String url = normalizedBaseUrl != null && !normalizedBaseUrl.isBlank()
+                ? normalizedBaseUrl
                 : "https://api.siliconflow.cn";
         boolean apiKeyConfigured = configuredApiKey != null && !configuredApiKey.isBlank();
 

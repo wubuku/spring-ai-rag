@@ -14,6 +14,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -84,25 +85,25 @@ class MultiModelConfigLoaderCoverageTailTest {
             """;
 
     @Test
-    void invalidFilePathFallsBackToYamlOnly() {
+    void invalidFilePathFailsFastWithConfigPropertyName() {
         props.setConfigFile("file://\u0000invalid");
 
-        new MultiModelConfigLoader(props).loadExternalJsonIfPresent();
+        IllegalStateException error = assertThrows(IllegalStateException.class,
+                () -> new MultiModelConfigLoader(props).loadExternalJsonIfPresent());
 
-        assertTrue(props.getProviders() == null
-                || props.getProviders().isEmpty());
+        assertTrue(error.getMessage().contains("app.models.config-file"));
     }
 
     @Test
-    void directoryConfigFileLogsIoFailureAndFallsBack() throws IOException {
+    void directoryConfigFileFailsFastInsteadOfFallingBack() throws IOException {
         Path directory = tempDir.resolve("config-dir");
         Files.createDirectories(directory);
         props.setConfigFile(directory.toString());
 
-        new MultiModelConfigLoader(props).loadExternalJsonIfPresent();
+        IllegalStateException error = assertThrows(IllegalStateException.class,
+                () -> new MultiModelConfigLoader(props).loadExternalJsonIfPresent());
 
-        assertTrue(props.getProviders() == null
-                || props.getProviders().isEmpty());
+        assertTrue(error.getMessage().contains("app.models.config-file"));
     }
 
     @Test

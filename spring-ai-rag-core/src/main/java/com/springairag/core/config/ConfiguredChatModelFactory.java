@@ -1,5 +1,6 @@
 package com.springairag.core.config;
 
+import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.anthropic.AnthropicChatModel;
@@ -54,6 +55,107 @@ public class ConfiguredChatModelFactory {
         this.properties = properties;
         this.environment = environment;
         this.ragProperties = ragProperties;
+    }
+
+    /**
+     * 启动期校验：provider 地址、路由里引用的模型都必须真实存在。
+     *
+     * <p>这些错误以前要等到第一次聊天/检索才暴露，错误消息也不指出配置项。
+     */
+    @PostConstruct
+    void validateConfiguredEndpoints() {
+        boolean allowInsecureUpstream =
+                ragProperties.getSecurity().isAllowInsecureUpstream();
+        for (Map.Entry<String, MultiModelProperties.ProviderConfig> entry : sortedProviders()) {
+            MultiModelProperties.ProviderConfig provider = entry.getValue();
+            if (!provider.enabled() || provider.baseUrl() == null
+                    || provider.baseUrl().isBlank()) {
+                continue;
+            }
+            UpstreamEndpointPolicy.normalizeAndValidate(
+                    "app.models.providers." + entry.getKey() + ".base-url",
+                    provider.baseUrl(), allowInsecureUpstream);
+        }
+        validateChatRouting(properties.getChatModel());
+        validateEmbeddingRouting(properties.getEmbeddingModel());
+    }
+
+    private void validateChatRouting(MultiModelProperties.ModelRouting routing) {
+        if (routing == null) {
+            return;
+        }
+        requireChatModelReference("app.models.chat-model.primary", routing.primary());
+        if (routing.fallbacks() != null) {
+            for (String fallback : routing.fallbacks()) {
+                requireChatModelReference("app.models.chat-model.fallbacks", fallback);
+            }
+        }
+    }
+
+    private void requireChatModelReference(String propertyKey, String reference) {
+        if (reference == null || reference.isBlank()) {
+            return;
+        }
+        if (select(reference) == null) {
+            throw new IllegalStateException(
+                    propertyKey + " references '" + reference
+                            + "' but no matching chat model exists under app.models.providers; "
+                            + "use the 'providerId/modelId' format and check the provider is enabled.");
+        }
+    }
+
+    private void validateEmbeddingRouting(MultiModelProperties.ModelRouting routing) {
+        if (routing == null) {
+            return;
+        }
+        requireEmbeddingModelReference("app.models.embedding-model.primary", routing.primary());
+        if (routing.fallbacks() != null) {
+            for (String fallback : routing.fallbacks()) {
+                requireEmbeddingModelReference("app.models.embedding-model.fallbacks", fallback);
+            }
+        }
+    }
+
+    private void requireEmbeddingModelReference(String propertyKey, String reference) {
+        if (reference == null || reference.isBlank()) {
+            return;
+        }
+        if (!hasEmbeddingModel(reference)) {
+            throw new IllegalStateException(
+                    propertyKey + " references '" + reference
+                            + "' but no matching embedding model exists under "
+                            + "app.models.providers; use the 'providerId/modelId' format.");
+        }
+    }
+
+    private boolean hasEmbeddingModel(String reference) {
+        String requested = reference.trim();
+        int separator = requested.indexOf('/');
+        if (separator > 0 && separator < requested.length() - 1) {
+            String providerId = requested.substring(0, separator);
+            String modelId = requested.substring(separator + 1);
+            Map.Entry<String, MultiModelProperties.ProviderConfig> provider =
+                    findProvider(providerId);
+            if (provider != null) {
+                MultiModelProperties.ModelItem model = provider.getValue().findModel(modelId);
+                return model != null && model.isEmbedding();
+            }
+            return false;
+        }
+        Map.Entry<String, MultiModelProperties.ProviderConfig> providerOnly =
+                findProvider(requested);
+        if (providerOnly != null) {
+            return !providerOnly.getValue().embeddingModels().isEmpty();
+        }
+        int matches = 0;
+        for (Map.Entry<String, MultiModelProperties.ProviderConfig> entry : sortedProviders()) {
+            for (MultiModelProperties.ModelItem model : entry.getValue().embeddingModels()) {
+                if (requested.equalsIgnoreCase(model.id())) {
+                    matches++;
+                }
+            }
+        }
+        return matches == 1;
     }
 
     /**
@@ -117,7 +219,10 @@ public class ConfiguredChatModelFactory {
 
     private ChatModel build(ModelSelection selection) {
         String apiType = normalizedApiType(selection.provider().apiType());
-        String baseUrl = normalizeBaseUrl(selection.provider().baseUrl());
+        String baseUrl = UpstreamEndpointPolicy.normalizeAndValidate(
+                "app.models.providers." + selection.providerId() + ".base-url",
+                normalizeBaseUrl(selection.provider().baseUrl()),
+                ragProperties.getSecurity().isAllowInsecureUpstream());
         String apiKey = resolveApiKey(selection.provider().apiKey());
         MultiModelProperties.ModelItem item = selection.model();
 

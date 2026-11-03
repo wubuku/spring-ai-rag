@@ -55,12 +55,14 @@ public class MultiModelConfigLoader {
                     ? Path.of(URI.create(configFile))
                     : Path.of(configFile);
         } catch (IllegalArgumentException e) {
-            log.error("Invalid external models.json path '{}': {}", configFile, e.getMessage());
-            return;
+            throw new IllegalStateException(
+                    "app.models.config-file is not a valid path: '" + configFile + "'", e);
         }
         if (!Files.exists(path)) {
-            log.info("External models.json not found at '{}'; using YAML config only", configFile);
-            return;
+            throw new IllegalStateException(
+                    "app.models.config-file points to a file that does not exist: '"
+                            + configFile + "'. Remove the property to use YAML config, "
+                            + "or fix the path.");
         }
 
         try {
@@ -80,8 +82,14 @@ public class MultiModelConfigLoader {
 
             log.info("External models.json loaded from '{}'; YAML config overridden", configFile);
 
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            throw new IllegalStateException(
+                    "app.models.config-file '" + configFile + "' is not valid JSON: "
+                            + e.getOriginalMessage(), e);
         } catch (IOException e) {
-            log.error("Failed to load external models.json from '{}': {}", configFile, e.getMessage());
+            throw new IllegalStateException(
+                    "Failed to read app.models.config-file '" + configFile + "': "
+                            + e.getMessage(), e);
         }
     }
 

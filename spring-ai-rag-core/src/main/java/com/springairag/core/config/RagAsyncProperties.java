@@ -42,4 +42,28 @@ public class RagAsyncProperties {
     public void setRetrievalTimeoutSeconds(int retrievalTimeoutSeconds) {
         this.retrievalTimeoutSeconds = retrievalTimeoutSeconds;
     }
+
+    /**
+     * 启动期校验线程池参数，避免 JDK 抛出不含配置项名的参数异常。
+     */
+    public void validate() {
+        if (corePoolSize < 1) {
+            throw new IllegalStateException(
+                    "rag.async.core-pool-size must be >= 1 but was " + corePoolSize);
+        }
+        if (maxPoolSize < corePoolSize) {
+            throw new IllegalStateException(
+                    "rag.async.max-pool-size must be >= rag.async.core-pool-size (core="
+                            + corePoolSize + ", max=" + maxPoolSize + ")");
+        }
+        if (queueCapacity < 1) {
+            throw new IllegalStateException(
+                    "rag.async.queue-capacity must be >= 1 but was " + queueCapacity);
+        }
+        if (retrievalTimeoutSeconds < 1 || retrievalTimeoutSeconds > 300) {
+            throw new IllegalStateException(
+                    "rag.async.retrieval-timeout-seconds must be between 1 and 300 but was "
+                            + retrievalTimeoutSeconds);
+        }
+    }
 }

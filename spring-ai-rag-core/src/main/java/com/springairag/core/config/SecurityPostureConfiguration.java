@@ -38,6 +38,11 @@ public class SecurityPostureConfiguration {
                     + "只应在本地开发或隔离环境使用；公网部署请设置 RAG_SECURITY_ENABLED=true "
                     + "并配置 RAG_ROOT_API_KEY。";
 
+    static final String NO_STATIC_KEY_WARNING =
+            "rag.security.enabled=true 但 rag.security.api-key 与 rag.security.root-api-key "
+                    + "都为空：所有 /api/** 请求会被拒绝（fail closed），只有数据库中已登记的 "
+                    + "managed API key 可用。若这不是本意，请设置 RAG_ROOT_API_KEY。";
+
     static boolean isProductionProfile(Environment environment) {
         return Arrays.stream(environment.getActiveProfiles())
                 .map(profile -> profile.toLowerCase(Locale.ROOT))
@@ -48,11 +53,25 @@ public class SecurityPostureConfiguration {
         return !properties.getSecurity().isEnabled();
     }
 
+    static boolean hasNoStaticKey(RagProperties properties) {
+        return isBlank(properties.getSecurity().getApiKey())
+                && isBlank(properties.getSecurity().getRootApiKey());
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.isBlank();
+    }
+
     @Bean
     public ApplicationRunner securityPostureStartupCheck(
             RagProperties properties, Environment environment) {
         return args -> {
             if (!isSecurityDisabled(properties)) {
+                if (hasNoStaticKey(properties)) {
+                    log.warn("==============================================================");
+                    log.warn(NO_STATIC_KEY_WARNING);
+                    log.warn("==============================================================");
+                }
                 return;
             }
             if (isProductionProfile(environment)) {

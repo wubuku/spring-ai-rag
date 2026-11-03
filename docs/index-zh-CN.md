@@ -26,6 +26,7 @@
 | 改核心架构 / Pipeline | [architecture-zh-CN.md](architecture-zh-CN.md) | [IMPLEMENTATION_COMPARISON.md](IMPLEMENTATION_COMPARISON.md) |
 | 理解 Chat 记忆、上下文预算、RAG 与工具调用 | [Chat 记忆、RAG 与工具调用](chat-memory-rag-tool-calling-zh-CN.md) | [架构文档](architecture-zh-CN.md)、[配置参考](configuration-zh-CN.md) |
 | 改配置项 | [configuration-zh-CN.md](configuration-zh-CN.md) | `spring-ai-rag-core/src/main/resources/application.yml` |
+| 配置写错时判断失败时机与消息 | [配置错误快速失败矩阵](config-validation-zh-CN.md) | [配置参考](configuration-zh-CN.md)、[排障](troubleshooting-zh-CN.md) |
 | 备份数据与隔离恢复演练 | [数据备份与隔离恢复](backup-restore-zh-CN.md) | [测试指南](testing-guide-zh-CN.md) |
 | 删除文档/集合/会话，或判断孤儿与保留策略 | [删除语义与数据保留](deletion-and-retention-zh-CN.md) | [测试指南](testing-guide-zh-CN.md)、[配置参考](configuration-zh-CN.md#collection-永久清理与退役) |
 | 审查数据面授权、文件归属与跨租户隔离 | [安全边界与租户隔离](security-boundary-zh-CN.md) | [REST API：认证](rest-api-zh-CN.md#认证)、[测试指南](testing-guide-zh-CN.md) |
@@ -99,6 +100,7 @@
 | 文档 | 说明 |
 |------|------|
 | [configuration-zh-CN.md](configuration-zh-CN.md) | 配置项参考 |
+| [config-validation-zh-CN.md](config-validation-zh-CN.md) | 每类配置错误的失败时机、消息与静默降级清单 |
 | [rest-api-zh-CN.md](rest-api-zh-CN.md) | REST API 参考 |
 | [SSE-PROTOCOL.md](SSE-PROTOCOL.md) | 流式协议与心跳 |
 | [api-versioning.md](api-versioning.md) | `/api/v1` 版本策略 |

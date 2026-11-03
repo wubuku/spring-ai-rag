@@ -11,6 +11,8 @@ and8 zero-queue workers. See [configuration and cancellation boundaries §2](can
 
 Complete reference for all Spring AI RAG configuration items. All business configurations are managed uniformly under the `rag.*` prefix.
 
+See the [configuration failure matrix](config-validation.md) for failure timing, messages, and the silent-degradation inventory when configuration is wrong.
+
 ## Quick Configuration
 
 ### Minimum Startup Configuration

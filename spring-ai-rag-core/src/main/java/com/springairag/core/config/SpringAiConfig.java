@@ -101,6 +101,23 @@ public class SpringAiConfig {
 
     @PostConstruct
     public void initProxySettings() {
+        ragProperties.getTimeout().validate();
+        boolean allowInsecureUpstream =
+                ragProperties.getSecurity().isAllowInsecureUpstream();
+        switch (provider) {
+            case "openai" -> openAiBaseUrl = UpstreamEndpointPolicy.normalizeAndValidate(
+                    "spring.ai.openai.base-url", openAiBaseUrl, allowInsecureUpstream);
+            case "anthropic" -> anthropicBaseUrl = UpstreamEndpointPolicy.normalizeAndValidate(
+                    "spring.ai.anthropic.base-url", anthropicBaseUrl, allowInsecureUpstream);
+            case "minimax" -> minimaxBaseUrl = UpstreamEndpointPolicy.normalizeAndValidate(
+                    "spring.ai.minimax.base-url", minimaxBaseUrl, allowInsecureUpstream);
+            case "none" -> {
+                // 无内置聊天模型（由外部提供 ChatModel Bean），无需校验地址。
+            }
+            default -> throw new IllegalStateException(
+                    "app.llm.provider must be one of openai, anthropic, minimax, none but was '"
+                            + provider + "'");
+        }
         ProxySelectorFactory.installDefault(ragProperties.getProxy());
     }
 

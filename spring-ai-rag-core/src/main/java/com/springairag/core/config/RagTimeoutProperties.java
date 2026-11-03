@@ -106,4 +106,25 @@ public class RagTimeoutProperties {
     public void setModelCompareMs(int modelCompareMs) {
         this.modelCompareMs = modelCompareMs;
     }
+
+    /**
+     * 启动期校验超时范围；非法值会让 RestClient 在首次调用时才炸，且消息不含配置项。
+     */
+    public void validate() {
+        requireRange("rag.timeout.connect-timeout-ms", connectTimeoutMs, 1, 60_000);
+        requireRange("rag.timeout.read-timeout-ms", readTimeoutMs, 1, 600_000);
+        requireRange("rag.timeout.chat-ask-ms", chatAskMs, 1, 1_800_000);
+        requireRange("rag.timeout.chat-stream-ms", chatStreamMs, 1, 1_800_000);
+        requireRange("rag.timeout.search-ms", searchMs, 1, 600_000);
+        requireRange("rag.timeout.embed-ms", embedMs, 1, 600_000);
+        requireRange("rag.timeout.model-compare-ms", modelCompareMs, 1, 1_800_000);
+    }
+
+    private static void requireRange(String propertyKey, int value, int min, int max) {
+        if (value < min || value > max) {
+            throw new IllegalStateException(
+                    propertyKey + " must be between " + min + " and " + max
+                            + " milliseconds but was " + value);
+        }
+    }
 }

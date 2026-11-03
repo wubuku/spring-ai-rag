@@ -242,6 +242,38 @@ class EmbeddingModelConfigTest {
     }
 
     @Test
+    @DisplayName("embeddingModel rejects remote plaintext http at startup")
+    void embeddingModel_rejectsRemotePlaintextHttp() {
+        EmbeddingModelConfig config = new EmbeddingModelConfig();
+        ReflectionTestUtils.setField(config, "apiKey", "test-key");
+        ReflectionTestUtils.setField(config, "baseUrl", "http://api.example.com");
+        ReflectionTestUtils.setField(config, "model", "BAAI/bge-m3");
+        ReflectionTestUtils.setField(config, "dimensions", 1024);
+        ReflectionTestUtils.setField(config, "retryMaxAttempts", 1);
+
+        IllegalStateException error = assertThrows(
+                IllegalStateException.class, config::embeddingModel);
+
+        assertTrue(error.getMessage().contains("rag.embedding.base-url"));
+        assertTrue(error.getMessage().contains("rag.security.allow-insecure-upstream"));
+    }
+
+    @Test
+    @DisplayName("embeddingModel normalization drops /v1 like the chat path")
+    void embeddingModel_normalizesTrailingV1() {
+        EmbeddingModelConfig config = new EmbeddingModelConfig();
+        ReflectionTestUtils.setField(config, "apiKey", "test-key");
+        ReflectionTestUtils.setField(config, "baseUrl", "https://api.example.com/v1/");
+        ReflectionTestUtils.setField(config, "model", "BAAI/bge-m3");
+        ReflectionTestUtils.setField(config, "dimensions", 1024);
+        ReflectionTestUtils.setField(config, "retryMaxAttempts", 1);
+
+        EmbeddingModel model = config.embeddingModel();
+        assertNotNull(model);
+        assertTrue(model instanceof OpenAiEmbeddingModel);
+    }
+
+    @Test
     @DisplayName("embedding retry policy retries rate limits and 5xx but not auth failures")
     void embeddingRetryPolicy_usesFailureClassification() {
         assertTrue(EmbeddingModelConfig.isRetryableUpstreamFailure(rateLimited()));

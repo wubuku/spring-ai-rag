@@ -146,6 +146,21 @@ class EmbeddingProfileRegistryTest {
     }
 
     @Test
+    void initializeRejectsStoredDimensionsMismatch() {
+        EmbeddingProfile mismatched = new EmbeddingProfile(
+                7L, properties.getProfileKey(), properties.getProvider(),
+                properties.getModel(), properties.getModelRevision(),
+                768, properties.getDistanceMetric(),
+                properties.getNormalization(), true);
+        stubQueryReturning(mismatched);
+
+        IllegalStateException error = assertThrows(
+                IllegalStateException.class, registry::initialize);
+        assertEquals("Embedding profile identity mismatch for dimensions: "
+                + "configured=1024, stored=768", error.getMessage());
+    }
+
+    @Test
     void initializeProjectsConfiguredEnabledStateOverStoredDisabledState() {
         EmbeddingProfile disabled = new EmbeddingProfile(
                 7L, properties.getProfileKey(), properties.getProvider(),
