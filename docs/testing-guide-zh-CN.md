@@ -143,6 +143,13 @@ mvn clean package -DskipTests
 `RAG_RETRIEVAL_MIN_SCORE=0`，并让 Embedding Profile 与 V25 播种的默认值对齐，
 否则 Active Collection 会因“引用了没有运行时配置的 Profile”拒绝写入。
 
+验收脚本读取数据库连接参数时的优先级是：**进程环境变量 → 工作区 `.env` → 脚本默认值**。
+CI 是干净检出、没有 `.env`，所以 `POSTGRES_HOST/PORT/USER/PASSWORD` 只能靠 job env 注入；
+把 `.env` 存在与否当作前置条件会让这些变量静默退回默认值（nightly soak 曾因此以
+`SCRAM-based authentication, but no password was provided` 启动失败）。
+该优先级由 `scripts/test-support/local-stack-env-self-test.py` 固定，并随
+`scripts/verify-project-tests.sh` 在 PR 快层运行。
+
 Flyway 脚本只创建/删除 `rag_flyway_*` 临时库；默认较早版本 V30，可用 `--early` 指定。
 schema 比对前忽略注释、`SET`、owner/ACL 与 `\restrict` 行。
 

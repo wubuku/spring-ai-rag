@@ -24,11 +24,18 @@ ROOT_API_KEY = "verify-root-key-0123456789abcdefghij"
 
 
 def read_env(key: str, default: str = "") -> str:
-    """只读取键值，不 wholesale source 工作区 .env。
+    """先读进程环境变量，再回退到工作区 .env，最后才用默认值。
 
     工作区 .env 可能导出 SPRING_DATASOURCE_URL，它会覆盖 demo 的 POSTGRES_*
-    配置，让“临时库验收”悄悄连到日常开发库。
+    配置，让“临时库验收”悄悄连到日常开发库；因此这里只读取需要的键。
+
+    进程环境必须排在最前：CI 是干净检出、没有 .env，密码一类只存在于
+    job env 的键如果先判断 `.env` 是否存在，就会被静默替换成默认值
+    （Batch 947 的 nightly soak 就因此以“SCRAM no password”失败）。
     """
+    env_value = os.environ.get(key)
+    if env_value:
+        return env_value
     env_file = PROJECT_DIR / ".env"
     if not env_file.exists():
         return default
@@ -46,7 +53,7 @@ def read_env(key: str, default: str = "") -> str:
         if len(candidate) >= 2 and candidate[0] == candidate[-1] and candidate[0] in "\"'":
             candidate = candidate[1:-1]
         value = candidate
-    return os.environ.get(key) or (default if value is None else value)
+    return default if value is None else value
 
 
 class LocalStack:

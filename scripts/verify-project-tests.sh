@@ -51,6 +51,12 @@ pass() {
 python3 scripts/test-support/rag-backup-self-test.py
 pass "Backup bundle safety and fail-closed restore self-test"
 
+# Batch 947. 验收栈的 read_env 在 `.env` 不存在时直接返回默认值，跳过了进程
+# 环境——而 CI 是干净检出，于是 nightly soak 的 POSTGRES_PASSWORD 被解析为空，
+# demo 启动时以 “SCRAM no password” 失败，本地因为存在 `.env` 完全看不到。
+python3 scripts/test-support/local-stack-env-self-test.py
+pass "Local stack environment precedence self-test"
+
 python3 scripts/test-support/knowledge-qa-quality-self-test.py
 pass "Versioned knowledge QA quality matrix fail-closed self-test"
 

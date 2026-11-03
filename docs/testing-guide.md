@@ -155,6 +155,15 @@ proves the pipeline runs, not real-model answer quality. With the mock you need
 `RAG_RETRIEVAL_MIN_SCORE=0` and an Embedding Profile matching the V25 seed, otherwise
 the Active Collection rejects writes because its profile has no runtime configuration.
 
+Verification scripts resolve database connection settings in this order: **process
+environment → workspace `.env` → script default**. CI does a clean checkout with no
+`.env`, so `POSTGRES_HOST/PORT/USER/PASSWORD` must arrive through the job environment.
+Treating the presence of `.env` as a precondition silently collapses those variables to
+their defaults — the nightly soak once failed startup with
+`SCRAM-based authentication, but no password was provided` for exactly that reason.
+The precedence is pinned by `scripts/test-support/local-stack-env-self-test.py`, which
+runs with `scripts/verify-project-tests.sh` in the PR fast layer.
+
 The Flyway script only creates/drops `rag_flyway_*` temporary databases; the early
 version defaults to V30 and can be changed with `--early`. Before comparison it ignores
 comments, `SET`, owner/ACL, and `\restrict` lines.

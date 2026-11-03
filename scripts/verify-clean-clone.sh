@@ -78,8 +78,14 @@ trap cleanup EXIT
 # 从本工作区 .env 读取数据库连接信息，但不要 wholesale source：
 # 工作区 .env 可能导出 SPRING_DATASOURCE_URL，它会覆盖 demo 的 POSTGRES_* 配置，
 # 让“临时库验收”悄悄连到日常开发库。
+# 进程环境优先：CI 干净检出没有 .env，只存在于 job env 的连接参数必须仍然生效。
 read_env() {
   local key=$1
+  local env_value="${!key:-}"
+  if [[ -n "$env_value" ]]; then
+    printf '%s\n' "$env_value"
+    return 0
+  fi
   [[ -f "$PROJECT_DIR/.env" ]] || return 0
   grep -E "^${key}=" "$PROJECT_DIR/.env" | tail -1 | cut -d= -f2- \
     | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//"
