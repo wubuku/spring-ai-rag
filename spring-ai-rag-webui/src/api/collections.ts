@@ -158,8 +158,6 @@ export const collectionsApi = {
   // contract coverage while verifying nothing about the server. The route
   // contract test in OpenApiContractTest is what caught it.
 
-  export: (id: number) => apiClient.get(`/collections/${id}/export`),
-
   importCollection: (data: { name: string; [key: string]: unknown }) =>
     apiClient.post('/collections/import', data),
 };

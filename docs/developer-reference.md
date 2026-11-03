@@ -264,6 +264,15 @@ build, and putting it on PRs would make the wait unusable; the PR fast layer
 remains the only required gate in `ci.yml`. CodeQL results appear in the
 repository Security tab and are not a required check.
 
+Dependency-version vulnerabilities are a separate lane (CodeQL looks at code
+patterns, not dependency versions): run `bash scripts/security-dependency-scan.sh`.
+It runs `npm audit --omit=dev` (production dependencies must be zero), `npm audit`
+(dev findings are recorded only), and
+`mvn -Psecurity-scan org.owasp:dependency-check-maven:aggregate` (CVSS >= 7 fails).
+Like CodeQL it runs manually or nightly, never on PRs. The override list, false
+positives, and the majors deliberately not taken are in
+[Supply Chain Security](supply-chain-security.md).
+
 Static analysis today is JaCoCo (coverage) only; there is no SpotBugs / PMD /
 ErrorProne / ArchUnit. The decision is **not to add them**:
 

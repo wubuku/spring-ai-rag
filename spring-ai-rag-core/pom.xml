@@ -127,11 +127,13 @@
             <version>${springdoc.version}</version>
         </dependency>
 
-        <!-- Force swagger-annotations-jakarta to match springdoc 2.8.x requirement (resolves SchemaResolution conflict with jsonschema-module-swagger-2) -->
+        <!-- 显式声明与 springdoc 2.8.17 的 swagger-core 2.2.47 对齐；版本号由根 pom
+             的 swagger-api.version 统一管理（注解与 core 不同版本会在 /v3/api-docs
+             运行期抛 NoSuchMethodError）。 -->
         <dependency>
             <groupId>io.swagger.core.v3</groupId>
             <artifactId>swagger-annotations-jakarta</artifactId>
-            <version>2.2.28</version>
+            <version>${swagger-api.version}</version>
         </dependency>
 
         <!-- Spring Boot Actuator (metrics + health checks) -->
@@ -238,7 +240,7 @@
         <dependency>
             <groupId>org.apache.pdfbox</groupId>
             <artifactId>pdfbox</artifactId>
-            <version>3.0.3</version>
+            <version>${pdfbox.version}</version>
         </dependency>
     </dependencies>
 

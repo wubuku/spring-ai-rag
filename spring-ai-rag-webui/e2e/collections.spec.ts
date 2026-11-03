@@ -212,6 +212,125 @@ test.describe('Collection purge', () => {
     });
 });
 
+test.describe('Collection export streaming', () => {
+  test('reports growing progress while a large export is still arriving',
+    async ({ page }) => {
+      await mockAllApiCalls(page);
+      await openProtectedPage(page, '/webui/collections');
+      await installStreamingExport(page, {
+        chunks: 64,
+        chunkSize: 128 * 1024,
+        delayMs: 50,
+      });
+
+      let downloads = 0;
+      page.on('download', () => {
+        downloads += 1;
+      });
+
+      const downloadPromise = page.waitForEvent('download');
+      await page.getByRole('button', { name: 'Export' }).first().click();
+
+      const status = page.getByRole('status');
+      await expect(status).toBeVisible();
+      const firstProgress = await status.textContent();
+      // 关键断言：流还没走完，字节数已经在变。一次性缓冲的实现这里会停在 0。
+      await expect.poll(() => status.textContent(), { timeout: 2000 })
+        .not.toBe(firstProgress);
+      expect(firstProgress).toMatch(/\d/);
+      expect(downloads).toBe(0);
+
+      const download = await downloadPromise;
+      expect(download.suggestedFilename()).toBe('sample-collection.json');
+      await expect(status).toHaveCount(0);
+    });
+
+  test('cancels an in-flight export without producing a partial download',
+    async ({ page }) => {
+      await mockAllApiCalls(page);
+      await openProtectedPage(page, '/webui/collections');
+      await installStreamingExport(page, {
+        chunks: 80,
+        chunkSize: 128 * 1024,
+        delayMs: 50,
+      });
+
+      let downloads = 0;
+      page.on('download', () => {
+        downloads += 1;
+      });
+
+      await page.getByRole('button', { name: 'Export' }).first().click();
+      const status = page.getByRole('status');
+      await expect(status).toBeVisible();
+      await expect.poll(() => status.textContent(), { timeout: 2000 })
+        .toMatch(/\d/);
+
+      await page.getByRole('button', { name: 'Cancel export' }).click();
+
+      await expect(status).toHaveCount(0);
+      await expect(page.getByRole('button', { name: 'Export', exact: true }).first())
+        .toBeEnabled();
+      // 取消之后不能有半截文件落盘。
+      await page.waitForTimeout(300);
+      expect(downloads).toBe(0);
+    });
+});
+
+/**
+ * 用一段可控的 ReadableStream 替代导出端点的 fetch。
+ *
+ * Playwright 的 `route.fulfill` 只能一次性给完整 body，无法让分块按时间到达，
+ * 也就无法区分"边收边写"和"整体缓冲"。这里直接替身 fetch，把字节按
+ * `delayMs` 的节奏推进；页面侧完全走真实的下载实现。
+ */
+async function installStreamingExport(
+  page: import('@playwright/test').Page,
+  options: { chunks: number; chunkSize: number; delayMs: number },
+) {
+  await page.evaluate(({ chunks, chunkSize, delayMs }) => {
+    Object.defineProperty(window, 'showSaveFilePicker', {
+      configurable: true,
+      value: undefined,
+    });
+    const originalFetch = window.fetch.bind(window);
+    window.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string'
+        ? input
+        : input instanceof Request ? input.url : input.toString();
+      if (!url.includes('/collections/by-key/export')) {
+        return originalFetch(input, init);
+      }
+      const signal = init?.signal;
+      const stream = new ReadableStream<Uint8Array>({
+        async start(controller) {
+          try {
+            for (let index = 0; index < chunks; index += 1) {
+              if (signal?.aborted) {
+                throw new DOMException('Aborted', 'AbortError');
+              }
+              await new Promise(resolve => setTimeout(resolve, delayMs));
+              const payload = new Uint8Array(chunkSize);
+              payload.fill(32);
+              controller.enqueue(payload);
+            }
+            controller.close();
+          } catch (error) {
+            controller.error(error);
+          }
+        },
+      });
+      return new Response(stream, {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': String(chunks * chunkSize),
+        },
+      });
+    }) as typeof fetch;
+  }, options);
+}
+
 async function createCollection(
   page: import('@playwright/test').Page,
   collectionKey: string,

@@ -116,6 +116,7 @@ Chinese counterparts use the same basename with a `-zh-CN` suffix where availabl
 | [testing-guide.md](testing-guide.md) | Unit / integration / E2E / coverage |
 | [capacity-and-scale.md](capacity-and-scale.md) / [Chinese](capacity-and-scale-zh-CN.md) | Degradation curve at scale, N+1/full-scan fixes, and capacity boundaries |
 | [mutation-testing.md](mutation-testing.md) / [Chinese](mutation-testing-zh-CN.md) | Mutation-testing record: surviving mutants and hollow-test risk in critical packages |
+| [supply-chain-security.md](supply-chain-security.md) / [Chinese](supply-chain-security-zh-CN.md) | Dependency scan results, version overrides, and majors deliberately not taken |
 | [developer-reference.md](developer-reference.md) | Copyable build, start, database, model, E2E, and release commands |
 | [quality-defaults.md](quality-defaults.md) | Production retrieval defaults and goldenset measurement |
 | [release-checklist.md](release-checklist.md) | 1.0 release gates and artifact checklist |

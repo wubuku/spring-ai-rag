@@ -183,12 +183,15 @@ Chromium 1440×900；数据为 8000 文档 / 80k 向量（3k 与 5k 两个 Colle
   说明 UI 有界的 10 条无需虚拟列表。
 - **聊天**：一次真实检索返回 4 个引用 chip；端到端 1.5 s 主要来自检索与模型，
   渲染可忽略。
-- **导出**：WebUI 当前**没有导出入口**（只有 API client 方法）。用浏览器
-  `fetch` 流式读取 5k Collection：2.73 MB、分块 186–714 个、首字节 12–13 ms、
-  总耗时 75–78 ms。边界：若把 `collectionsApi.export`（axios，默认整体 JSON）
-  直接接到按钮上，2.7 MB 会先完整缓冲；50k 文档约 27 MB，存在内存压力和
-  “点了没反应”的风险。接入时必须用 `fetch` + `ReadableStream` 边读边落盘并显示
-  进度，不能复用 axios 的整体响应方法。
+- **导出（已接入 UI，流式落盘）**：Collection 卡片新增“导出”。实现用
+  `fetch` + `ReadableStream` 边收边写：支持 File System Access API 的浏览器
+  （Chrome / Edge）逐块写入用户选定的文件，内存占用与 Collection 大小无关；
+  不支持写盘 API 的浏览器（Firefox / Safari）只能退回 Blob，这是平台边界而
+  不是实现选择。进度按**已写出字节**上报——服务端是 chunked 响应、没有
+  `Content-Length` 时只显示已下载字节，有总量时才显示比例；取消用
+  `AbortController` 中断读取并丢弃已收分块，不产出半截文件。5k Collection：
+  2.73 MB、首字节 12–13 ms、总耗时 75–78 ms。Mock E2E 用 8 MB 分块流验证
+  进度在流结束前递增，并验证取消后没有下载落盘。
 
 前端性能预算与实测：
 
@@ -217,7 +220,7 @@ Chromium 1440×900；数据为 8000 文档 / 80k 向量（3k 与 5k 两个 Colle
 | 列表 | 页面固定 ≤20 行 | 已消除随数据量增长的 N+1；处理摘要每页 4 次批量查询 |
 | WebUI 首屏 | 初始资源 gzip 149 KB、未压缩 471 KB；Slow 4G FCP 2.72 s | 预算见 §3.8；代理开启 gzip 可显著缩短 |
 | WebUI 列表 | 每页 20 行，DOM 510 节点、heap 9.5 MB | 文档/Collection/评估历史均已可分页；200 条合成渲染 53–70 ms |
-| WebUI 导出 | 无 UI 入口；浏览器流式读取 2.73 MB，首字节 12–13 ms | 接入时必须用 fetch 流式读取，axios 会整体缓冲；50k 文档约 27 MB |
+| WebUI 导出 | Collection 卡片内置；fetch + ReadableStream 边收边写，支持进度与取消；5k 文档 2.73 MB、首字节 12–13 ms | 无写盘 API 的浏览器退回 Blob（平台边界）；50k 文档约 27 MB |
 | 导出 | 流式，单批 200 行，响应头给出批次数 | 内存不随行数线性增长；受网络与客户端消费速度限制。超大 Collection 建议在低峰导出 |
 | 文档列表关键词 | `LOWER(title) LIKE '%kw%'`；pg_trgm 可用时走 `idx_rag_documents_title_trgm` | 5k 文档：有索引 SQL 0.103 ms、HTTP p50 4.2 ms；无索引 SQL 2.134 ms、HTTP p50 8.4 ms。**关键词 ≥3 字符**才能被 trigram 提取；1–2 字符仍全表扫描。`pg_trgm` 缺失时迁移只记 NOTICE 并降级为顺序扫描，不阻塞启动 |
 | 全文检索（检索链路） | pg_jieba / English FTS / pg_trgm 按能力自动选择 | 与上面的文档列表关键词是不同路径；5k 文档全文加权 p50 约 158 ms，主要成本是 embedding 调用 |

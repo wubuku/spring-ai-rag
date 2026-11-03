@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { BrowserRouter, MemoryRouter } from 'react-router-dom';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   collectionsApi,
   type Collection,
@@ -684,5 +684,58 @@ describe('Collections purge in-flight lock', () => {
     expect(within(dialog).queryByRole('button', {
       name: 'collections.purge.confirmAction',
     })).not.toBeInTheDocument();
+  });
+});
+
+describe('Collections export', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockList(collection);
+    mockCapabilities(true);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('shows streaming progress and cancels without reporting an error', async () => {
+    const user = userEvent.setup();
+    let abortSignal: AbortSignal | undefined;
+    let controller!: ReadableStreamDefaultController<Uint8Array>;
+    const stream = new ReadableStream<Uint8Array>({
+      start(c) {
+        controller = c;
+      },
+    });
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init?: RequestInit) => {
+      abortSignal = init?.signal ?? undefined;
+      abortSignal?.addEventListener('abort', () => {
+        controller.error(new DOMException('Aborted', 'AbortError'));
+      });
+      return new Response(stream, { status: 200 });
+    }));
+
+    renderPage();
+    await user.click(await screen.findByRole('button', {
+      name: 'collections.export',
+    }));
+
+    // 状态行在流还没结束时就已经出现——这正是"边收边写"的可见证据。
+    expect(await screen.findByRole('status'))
+      .toHaveTextContent('collections.exportProgress');
+
+    controller.enqueue(new Uint8Array([1, 2, 3]));
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole('button', {
+      name: 'collections.exportCancel',
+    }));
+    await waitFor(() => {
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    });
+    expect(abortSignal?.aborted).toBe(true);
+    expect(showToast).not.toHaveBeenCalled();
   });
 });

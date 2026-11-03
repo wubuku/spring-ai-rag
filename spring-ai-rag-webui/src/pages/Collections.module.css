@@ -57,9 +57,20 @@
 }
 
 .deleteBtn:disabled,
-.purgeBtn:disabled {
+.purgeBtn:disabled,
+.viewBtn:disabled {
   cursor: not-allowed;
   opacity: 0.55;
+}
+
+.exportStatus {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
 }
 
 .viewBtn {

@@ -248,6 +248,12 @@ skipped；本门禁则保证今后再有类"闭嘴"就会失败。
 Java 分析必须完整构建，挂 PR 会把等待时间拉长到不可接受；PR 快层仍是 `ci.yml`
 唯一的必过门禁。CodeQL 结果看仓库 Security 页，不设为 required check。
 
+依赖版本漏洞是另一条线（CodeQL 看代码模式，不看依赖版本）：运行
+`bash scripts/security-dependency-scan.sh`，它会分别跑 `npm audit --omit=dev`（生产依赖必须为 0）、
+`npm audit`（开发依赖只记录）和 `mvn -Psecurity-scan org.owasp:dependency-check-maven:aggregate`
+（CVSS ≥ 7 失败）。同样只在手动 / 夜间执行，不进 PR。版本覆盖清单、误报与不升大版本的
+取舍见[供应链安全](supply-chain-security-zh-CN.md)。
+
 静态分析现状：仓库目前只有 JaCoCo（覆盖率），没有 SpotBugs / PMD / ErrorProne / ArchUnit。
 决策是**不引入**：
 

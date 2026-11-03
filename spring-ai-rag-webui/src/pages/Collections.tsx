@@ -9,6 +9,8 @@ import {
   type CollectionPurgeResult,
 } from '../api/collections';
 import { useApiKeyAuth } from '../auth/ApiKeyAuthContext';
+import { downloadCollectionExport, isExportAborted, type ExportProgress } from '../api/collectionExport';
+import { formatCount } from '../utils/number';
 import { useToast } from '../components/Toast';
 import { Skeleton } from '../components/Skeleton';
 import { ConfirmDialog } from '../components/Dialog/ConfirmDialog';
@@ -36,7 +38,7 @@ function errorMessage(error: unknown, fallback: string): string {
 
 export function Collections() {
   const PAGE_SIZE = 20;
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
   const rawPage = Number(searchParams.get('page') ?? 0);
   const page = Number.isInteger(rawPage) && rawPage >= 0 ? rawPage : 0;
@@ -56,6 +58,48 @@ export function Collections() {
   const queryClient = useQueryClient();
   const { showToast } = useToast();
   const { identity } = useApiKeyAuth();
+
+  // 一次只允许一个导出：并发写两个文件会把进度和取消目标都搅乱。
+  const [exportState, setExportState] = useState<
+    (ExportProgress & { collectionKey: string }) | null
+  >(null);
+  const exportAbortRef = useRef<AbortController | null>(null);
+
+  // 页面卸载时中断仍在进行的下载，否则 chunk 会继续读、闭包继续持有 setState。
+  useEffect(() => () => exportAbortRef.current?.abort(), []);
+
+  const handleExport = async (collection: Collection) => {
+    if (exportAbortRef.current) return;
+    const controller = new AbortController();
+    exportAbortRef.current = controller;
+    setExportState({
+      collectionKey: collection.collectionKey,
+      bytesReceived: 0,
+      totalBytes: null,
+    });
+    try {
+      const result = await downloadCollectionExport({
+        collectionKey: collection.collectionKey,
+        fileName: `${collection.collectionKey}.json`,
+        signal: controller.signal,
+        onProgress: progress => setExportState({
+          ...progress,
+          collectionKey: collection.collectionKey,
+        }),
+      });
+      showToast(t('collections.exportSuccess', {
+        bytes: formatCount(result.bytesReceived, i18n.language),
+      }), 'success');
+    } catch (error) {
+      // 取消是用户动作，不是失败；只有真正的传输/服务端错误才需要解释。
+      if (!isExportAborted(error)) {
+        showToast(failureMessage(t, 'collections.exportError', error), 'error');
+      }
+    } finally {
+      if (exportAbortRef.current === controller) exportAbortRef.current = null;
+      setExportState(null);
+    }
+  };
 
   const { data, isPending, isError, refetch } = useQuery({
     queryKey: ['collections', page],
@@ -161,6 +205,16 @@ export function Collections() {
                     {t('embeddings.openOperations')}
                   </button>
                   <button
+                    type="button"
+                    onClick={() => void handleExport(col)}
+                    className={styles.viewBtn}
+                    disabled={exportState !== null}
+                  >
+                    {exportState?.collectionKey === col.collectionKey
+                      ? t('collections.exporting')
+                      : t('collections.export')}
+                  </button>
+                  <button
                     onClick={() => setDeleteTarget(col.collectionKey)}
                     className={styles.deleteBtn}
                     disabled={deleteMutation.isPending}
@@ -177,6 +231,27 @@ export function Collections() {
                     </button>
                   )}
                 </div>
+                {exportState?.collectionKey === col.collectionKey && (
+                  <div className={styles.exportStatus} role="status" aria-live="polite">
+                    <span>
+                      {exportState.totalBytes !== null
+                        ? t('collections.exportProgressTotal', {
+                            bytes: formatCount(exportState.bytesReceived, i18n.language),
+                            total: formatCount(exportState.totalBytes, i18n.language),
+                          })
+                        : t('collections.exportProgress', {
+                            bytes: formatCount(exportState.bytesReceived, i18n.language),
+                          })}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => exportAbortRef.current?.abort()}
+                      className={styles.viewBtn}
+                    >
+                      {t('collections.exportCancel')}
+                    </button>
+                  </div>
+                )}
               </Card>
             ))}
             {data?.data?.collections?.length === 0 && (

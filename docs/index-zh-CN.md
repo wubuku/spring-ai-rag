@@ -116,6 +116,7 @@
 | [testing-guide-zh-CN.md](testing-guide-zh-CN.md) | 单元 / 集成 / E2E / 覆盖率 |
 | [capacity-and-scale-zh-CN.md](capacity-and-scale-zh-CN.md) / [English](capacity-and-scale.md) | 数据量放大后的退化曲线、N+1/全表扫描修复与容量边界 |
 | [mutation-testing-zh-CN.md](mutation-testing-zh-CN.md) / [English](mutation-testing.md) | 变异测试记录：关键判定包的存活变异体与“测试假绿”风险 |
+| [supply-chain-security-zh-CN.md](supply-chain-security-zh-CN.md) / [English](supply-chain-security.md) | 依赖漏洞扫描结果、版本覆盖清单与不升大版本的取舍 |
 | [developer-reference-zh-CN.md](developer-reference-zh-CN.md) | 可复制的构建、启动、数据库、模型、E2E 与发布命令 |
 | [quality-defaults-zh-CN.md](quality-defaults-zh-CN.md) | 生产检索默认值与 goldenset 度量 |
 | [release-checklist-zh-CN.md](release-checklist-zh-CN.md) | 1.0 发布门禁与产物清单 |

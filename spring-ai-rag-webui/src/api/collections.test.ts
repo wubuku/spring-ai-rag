@@ -135,9 +135,6 @@ describe('collectionsApi query variants and purge flow', () => {
       '/collections/by-key',
       { params: { collectionKey: 'k1' } },
     ]);
-
-    collectionsApi.export(4);
-    expect(vi.mocked(apiClient.get).mock.calls[2][0]).toBe('/collections/4/export');
   });
 
   it('updates and deletes through both id and key variants', async () => {

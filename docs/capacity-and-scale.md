@@ -208,13 +208,19 @@ history rows; search and chat used mock embedding / mock chat.
   no virtual list is needed while the UI stays bounded at 10.
 - **Chat**: one live retrieval returned 4 citation chips; the 1.5 s end-to-end is
   dominated by retrieval and the model, not rendering.
-- **Export**: the WebUI has **no export entry** today (only an API-client method).
-  A browser `fetch` stream of the 5k collection read 2.73 MB in 186–714 chunks,
-  first byte in 12–13 ms, total 75–78 ms. Boundary: wiring
-  `collectionsApi.export` (axios, full JSON body) to a button would buffer all
-  2.7 MB first; at 50k documents (~27 MB) that risks memory pressure and a
-  "nothing happened" freeze. Any future UI must use `fetch` + `ReadableStream`,
-  write incrementally, and show progress rather than reuse the axios method.
+- **Export (wired into the UI, streamed to disk)**: each Collection card now has
+  an Export action built on `fetch` + `ReadableStream`, consuming and writing
+  chunk by chunk. Browsers that expose the File System Access API (Chrome /
+  Edge) write straight to the file the user picks, so memory stays independent
+  of collection size; browsers without a write API (Firefox / Safari) fall back
+  to a Blob, which is a platform boundary rather than an implementation choice.
+  Progress reports bytes **already written**: the response is chunked and has no
+  `Content-Length`, so the UI shows bytes downloaded and only shows a ratio
+  when a total is available. Cancel aborts the read through `AbortController`
+  and discards received chunks, so no partial file is produced. A 5k collection
+  measured 2.73 MB, 12–13 ms to first byte and 75–78 ms total. Mock E2E drives
+  an 8 MB chunked stream and asserts progress grows before the stream ends and
+  that cancelling produces no download.
 
 Frontend performance budget vs measured:
 
@@ -243,7 +249,7 @@ did not enable gzip; only Chromium was measured.
 | Lists | Fixed ≤20 rows per page | N+1 growth removed; processing summaries use 4 batched queries per page |
 | WebUI first paint | 149 KB gzip / 471 KB uncompressed; Slow 4G FCP 2.72 s | Budget in §3.8; enabling gzip on the proxy shortens it substantially |
 | WebUI lists | 20 rows per page, 510 DOM nodes, 9.5 MB heap | Documents, collections and evaluation history are paginated; 200 synthetic rows render in 53–70 ms |
-| WebUI export | No UI entry; browser stream read 2.73 MB with a 12–13 ms first byte | Any UI must use fetch streaming; axios buffers the whole body (~27 MB at 50k docs) |
+| WebUI export | Built into Collection cards; fetch + ReadableStream writes as it reads, with progress and cancel; 2.73 MB / 12–13 ms first byte at 5k docs | Browsers without a write API fall back to a Blob (platform boundary); ~27 MB at 50k docs |
 | Export | Streaming, 200 rows per batch, batch count in response headers | Memory does not grow with row count; limited by network and client consumption. Export very large collections off-peak |
 | Document-list keyword | `LOWER(title) LIKE '%kw%'`; uses `idx_rag_documents_title_trgm` when pg_trgm is available | At 5k docs: index SQL 0.103 ms / HTTP p50 4.2 ms; no index SQL 2.134 ms / HTTP p50 8.4 ms. **Keywords need ≥3 characters** for trigram extraction; 1–2 characters still scan. If `pg_trgm` is absent the migration logs NOTICE and degrades to a sequential scan without failing startup |
 | Fulltext search (retrieval path) | pg_jieba / English FTS / pg_trgm auto-selected by capability | Separate from the document-list keyword filter; fulltext-weighted p50 ~158 ms at 5k docs, dominated by the embedding call |
