@@ -246,7 +246,7 @@ describe('useFileUpload success, failure and fallback branches', () => {
     fetchSpy.mockRestore();
   });
 
-  it('falls back to a generic message when the error body is unparseable', async () => {
+  it('falls back to a status-derived message when the error body is unparseable', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response('<html>gateway</html>', {
         status: 502,
@@ -263,8 +263,10 @@ describe('useFileUpload success, failure and fallback branches', () => {
     });
 
     expect(result.current.uploads[0].status).toBe('failed');
-    expect(result.current.uploads[0].error).toBe('documents.uploadFailed');
-    expect(onError).toHaveBeenCalledWith('test.txt', 'documents.uploadFailed');
+    // 没有分类头、响应体也不是 JSON：502 仍足以说明上游不可用，比笼统的
+    // "上传失败" 更接近用户需要知道的事。
+    expect(result.current.uploads[0].error).toBe('failures.dependencyUnavailable');
+    expect(onError).toHaveBeenCalledWith('test.txt', 'failures.dependencyUnavailable');
     fetchSpy.mockRestore();
   });
 
