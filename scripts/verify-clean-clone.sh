@@ -133,7 +133,7 @@ ENV
 pass ".env 已按 .env.example 变量名生成（mock provider）"
 
 # mock provider 只依赖 node，不依赖仓库构建产物。
-info "启动 mock provider（端口 $MOCK_PORT）"
+info "启动 mock provider（端口 ${MOCK_PORT}）"
 "$CLONE_DIR/scripts/run-mock-llm.sh" --port "$MOCK_PORT" >"$LOG_DIR/mock.log" 2>&1 &
 MOCK_PID=$!
 for _ in $(seq 1 30); do
@@ -163,7 +163,7 @@ set +a
 pass "mvn install 完成"
 
 # 文档第 5 步：启动 demo。
-info "启动 demo-basic-rag（端口 $APP_PORT）"
+info "启动 demo-basic-rag（端口 ${APP_PORT}）"
 (
   cd "$CLONE_DIR/demos/demo-basic-rag"
   set -a; source "$CLONE_DIR/.env"; set +a
