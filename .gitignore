@@ -63,7 +63,10 @@ application-local.yml
 .dev/
 
 # E2E 测试临时文件
-.mvn/
+# .mvn/maven.config 可能含本机密钥，保持忽略；Maven Wrapper 必须提交。
+.mvn/*
+!.mvn/wrapper/
+!.mvn/wrapper/maven-wrapper.properties
 e2e-start.sh
 e2e-test.properties
 test-results
