@@ -53,10 +53,14 @@ services:
       RAG_EMBEDDING_BASE_URL: ${RAG_EMBEDDING_BASE_URL:-https://api.siliconflow.cn}
       RAG_EMBEDDING_MODEL: ${RAG_EMBEDDING_MODEL:-BAAI/bge-m3}
       RAG_EMBEDDING_DIMENSIONS: ${RAG_EMBEDDING_DIMENSIONS:-1024}
-      # Profiles: postgresql for pgvector; prod enables API key auth + circuit breakers
-      # Override with SPRING_PROFILES_ACTIVE=postgresql for open local compose without auth
+      # Profiles: postgresql for pgvector; prod enables API key auth + circuit breakers.
+      # `prod` refuses to start when RAG_SECURITY_ENABLED=false.
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-postgresql,prod}
-      # Optional static API key (bootstrap DB admin key is also created if table empty)
+      # Authentication stays on by default. For an isolated local demo without
+      # auth, set both SPRING_PROFILES_ACTIVE=postgresql and RAG_SECURITY_ENABLED=false.
+      RAG_SECURITY_ENABLED: ${RAG_SECURITY_ENABLED:-true}
+      # Recommended: environment root API key. Optional legacy static key also works.
+      RAG_ROOT_API_KEY: ${RAG_ROOT_API_KEY:-}
       RAG_API_KEY: ${RAG_API_KEY:-}
 
 volumes:

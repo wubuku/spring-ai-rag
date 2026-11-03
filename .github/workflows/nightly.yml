@@ -361,6 +361,19 @@ jobs:
           set -euo pipefail
           python3 scripts/verify-security-boundary.py 2>&1 | tee "$RUNNER_TEMP/security-boundary.log"
 
+      # V71 升级路径：构造 V70 历史数据后升级，验证 fail-closed / root 可见 /
+      # 新写入归属，并跑一遍回填脚本的 dry-run 与 --apply。
+      - name: Run security upgrade path regression
+        run: |
+          set -euo pipefail
+          python3 scripts/verify-security-upgrade-path.py 2>&1 | tee "$RUNNER_TEMP/security-upgrade.log"
+
+      # 部署态：prod + 认证关闭必须拒绝启动；认证开启可启动；非 prod 仅告警。
+      - name: Run security deployment posture regression
+        run: |
+          set -euo pipefail
+          python3 scripts/verify-security-deployment-posture.py 2>&1 | tee "$RUNNER_TEMP/security-posture.log"
+
       - name: Upload soak evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -370,6 +383,8 @@ jobs:
             .verification/soak/nightly/
             ${{ runner.temp }}/soak.log
             ${{ runner.temp }}/security-boundary.log
+            ${{ runner.temp }}/security-upgrade.log
+            ${{ runner.temp }}/security-posture.log
             ${{ runner.temp }}/start-server.log
             ${{ runner.temp }}/mock-llm.log
           if-no-files-found: warn

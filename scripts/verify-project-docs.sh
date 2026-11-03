@@ -377,6 +377,9 @@ check_scripts_and_commands() {
       scripts/verify-concurrency-idempotency.py \
       scripts/verify-backup-restore-drill.py \
       scripts/verify-security-boundary.py \
+      scripts/verify-security-upgrade-path.py \
+      scripts/verify-security-deployment-posture.py \
+      scripts/backfill-security-ownership.py \
       scripts/verify-openapi-breaking-change.mjs \
       scripts/verify-no-pessimistic-locks.sh \
       scripts/run-claude-grok.sh; do

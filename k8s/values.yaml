@@ -180,6 +180,14 @@ secrets:
   # Spring profile override
   springProfile: "postgresql,prod"
 
+  # API authentication. The `prod` profile refuses to start when authentication
+  # is disabled, so this must stay "true" for any deployment reachable beyond
+  # localhost. Set it to "false" only for an isolated local demo.
+  securityEnabled: "true"
+  # Recommended environment root API key (32+ printable ASCII characters).
+  # When empty, the service falls back to legacy static/bootstrap database keys.
+  rootApiKey: ""
+
   # PostgreSQL connection
   postgresHost: "postgres"
   postgresPort: "5432"

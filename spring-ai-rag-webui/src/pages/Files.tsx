@@ -810,7 +810,7 @@ export function Files() {
                 ))}
               </>
             ) : error ? (
-              <div className={styles.errorBox} style={{ margin: '0.5rem' }}>
+              <div className={styles.errorBox} data-testid="files-error" style={{ margin: '0.5rem' }}>
                 {String(error)}
               </div>
             ) : (

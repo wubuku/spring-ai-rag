@@ -16,6 +16,27 @@ actual-model attribution must not be reported as passed.
 Release candidate: `1.0.0`
 Release date: `2026-07-21`
 
+## V71 Upgrade Notes (Security Ownership)
+
+- The `prod` / `production` profile **refuses to start** when
+  `rag.security.enabled=false`. Helm adds `secrets.securityEnabled` (default `"true"`)
+  and injects `RAG_SECURITY_ENABLED` explicitly; Docker Compose defaults it to `true`.
+  Both shipped templates now enable authentication explicitly.
+- Production prerequisite: `RAG_SECURITY_ENABLED=true` plus a random
+  `RAG_ROOT_API_KEY` (or managed database keys). A template with authentication
+  disabled must not be exposed to the internet.
+- V71 only adds nullable columns (`owner_principal_id` / `collection_id`) and
+  performs no automatic backfill. Root and deployments with auth disabled behave
+  exactly as before.
+- After upgrade, restricted keys cannot see legacy ownerless files, feedback, or
+  evaluations (fail-closed); root still can; the WebUI file list shows the empty
+  state instead of an error.
+- Controlled backfill is opt-in: run the dry-run first, then `--apply`:
+  `scripts/backfill-security-ownership.py --owner-principal-id <principal>`.
+  Details in [security-boundary.md](security-boundary.md#7-v71-upgrade-and-backfill).
+- Acceptance commands: `scripts/verify-security-upgrade-path.py` (V70 data → V71) and
+  `scripts/verify-security-deployment-posture.py` (prod refusal).
+
 ## Metadata and Artifacts
 
 - [x] Root modules and standalone demos use Maven version `1.0.0`
@@ -23,7 +44,7 @@ Release date: `2026-07-21`
 - [x] Helm `version` and `appVersion` are `1.0.0`
 - [x] Docker/Helm default image tag is `1.0.0`
 - [x] Local, Docker, and Helm default port is `8081`
-- [x] Flyway inventory is V1-V65
+- [x] Flyway inventory is V1-V71
 - [x] JSONB structured-record API, payload snapshots, and collection lifecycle are covered
 - [x] `scripts/verify-jsonb-records.sh` records focused backend/database/frontend verification
 - [x] Document PATCH/disable/restore/permanent-delete and external triple identity are covered

@@ -183,6 +183,40 @@ docker compose -f docker/docker-compose.yml up -d --no-deps --force-recreate rag
 
 如果应用镜像由外部流程提供，可跳过 `build`，但仍须保证旧应用容器停止后才启动新版本。
 
+#### V71 安全归属与 `prod` 拒绝启动
+
+V71 为 `fs_files`、`fs_import_batches`、`rag_user_feedback`、`rag_retrieval_evaluations`
+增加可空归属列（`owner_principal_id`，文件另有 `collection_id`），随启动自动迁移，
+不自动回填历史数据。升级后：
+
+- root / `ADMIN` / 未启用认证的部署仍看到全量数据；
+- 受限 API key 看不到历史无归属数据（fail-closed），WebUI 文件列表显示空态；
+- 新上传、PDF-to-RAG、评估与反馈写入当前 principal。
+
+从本版本起，`prod` / `production` profile 与 `rag.security.enabled=false` 组合会
+**拒绝启动**。官方模板已显式开启认证：
+
+- Helm：`secrets.securityEnabled` 默认 `"true"`，并注入 `RAG_SECURITY_ENABLED`；
+  生产环境应同时设置 `secrets.rootApiKey`。若改成 `"false"`，Pod 会在启动时退出。
+- Docker Compose：默认 `postgresql,prod` 与 `RAG_SECURITY_ENABLED=true`。仅在隔离环境
+  关闭认证时，必须同时设置 `SPRING_PROFILES_ACTIVE=postgresql` 与
+  `RAG_SECURITY_ENABLED=false`。
+
+升级步骤：
+
+1. 备份数据库（见 [backup-restore-zh-CN.md](backup-restore-zh-CN.md)）。
+2. 设置 `RAG_SECURITY_ENABLED=true` 与随机 `RAG_ROOT_API_KEY`（或已有受管 key）。
+3. 部署新版本，等待 Flyway 到 V71；用 root key 验证数据面可读。
+4. 如需让历史数据对某个 principal 可见，先 dry-run，再显式 `--apply`：
+
+```bash
+python3 scripts/backfill-security-ownership.py --owner-principal-id <principal>
+python3 scripts/backfill-security-ownership.py --owner-principal-id <principal> --apply
+```
+
+回填默认不执行，只更新 `owner_principal_id IS NULL` 的行，不覆盖已有归属；
+完整语义见 [security-boundary-zh-CN.md](security-boundary-zh-CN.md#7-v71-升级与回填)。
+
 ## 4. 构建与运行
 
 ### 4.1 构建

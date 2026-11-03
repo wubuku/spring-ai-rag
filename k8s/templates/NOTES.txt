@@ -79,9 +79,16 @@ App:        {{ .Chart.Name }} {{ .Chart.AppVersion }}
     secrets.deepseekApiKey      — DeepSeek API key (LLM)
     secrets.embeddingApiKey      — Embedding provider API key
 
+  Recommended:
+    secrets.rootApiKey          — Environment root API key for data-plane access
+
   Optional secrets:
     secrets.anthropicApiKey     — Anthropic API key
     secrets.minimaxApiKey        — MiniMax API key
+
+  The default profile is `postgresql,prod`, which refuses to start when
+  `secrets.securityEnabled` is not "true". Do not disable authentication on an
+  internet-reachable deployment.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 

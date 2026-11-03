@@ -92,8 +92,10 @@ RAG_ROOT_API_KEY=<random long secret>
 
 | Layer | Content | Entry |
 |-------|---------|-------|
-| PR fast layer | file ACL decision table, path traversal, feedback/evaluation scoping, disabled-security protection | `SecurityBoundaryAccessTest`, `SecurityPostureConfigurationTest`, `UserFeedbackServiceScopingTest`, `RetrievalEvaluationServiceScopingTest` |
+| PR fast layer | file ACL decision table, path traversal, feedback/evaluation scoping, disabled-security protection, restricted-key empty tree | `SecurityBoundaryAccessTest`, `SecurityPostureConfigurationTest`, `PdfImportControllerTest.listTree_restrictedKeyReturns200EmptyWhenNothingIsVisible`, `UserFeedbackServiceScopingTest`, `RetrievalEvaluationServiceScopingTest` |
 | gated layer | real PostgreSQL + mock provider, full cross-Collection / cross-principal matrix over HTTP | `scripts/verify-security-boundary.py` (nightly `soak` job) |
+| gated layer | V70 legacy data → V71: fail-closed, root visibility, new-write ownership, backfill script | `scripts/verify-security-upgrade-path.py` (nightly `soak` job) |
+| gated layer | deployment posture: `prod` refusal, auth-enabled boot, non-prod warning | `scripts/verify-security-deployment-posture.py` (nightly `soak` job) |
 
 The matrix covers `search`, `chat`, `collections` (detail/documents/export), `documents upload`, `files/pdf-to-rag`, `files tree/raw/preview`, `evaluation history/report/metrics`, and `feedback stats/history/type`.
 
@@ -112,3 +114,69 @@ The script creates a temporary database and mock provider and deletes both on ex
 - Legacy `fs_files` / feedback / evaluation rows have no ownership and are invisible to restricted keys. Making historical data visible to a specific principal requires a controlled backfill, not a relaxed query.
 - Logs and audit exports (for example `logs/*.jsonl`) are out of scope here and remain governed by deployment permissions.
 - With authentication disabled there is no principal concept; internal paths (plugins/tools) operate globally. That is the established behavior for isolated environments.
+
+---
+
+## 7. V71 Upgrade And Backfill
+
+### 7.1 Upgrade behavior
+
+- V71 adds **nullable columns** and runs automatically on startup; no manual switch
+  or re-index is required.
+- Legacy files, feedback, and evaluations stay at `owner_principal_id IS NULL`.
+  Restricted keys cannot see them; root / `ADMIN` / deployments with auth disabled
+  still see everything. This is a deliberate fail-closed choice, not an omission.
+- New writes after upgrade (upload, PDF-to-RAG, evaluation, feedback) record the
+  current principal; a restricted key only sees its own new data.
+
+### 7.2 Deployment templates
+
+- The Helm chart defaults to `postgresql,prod` and now exposes
+  `secrets.securityEnabled` (default `"true"`), injected explicitly as
+  `RAG_SECURITY_ENABLED`. `secrets.rootApiKey` is the recommended production
+  prerequisite. Setting `securityEnabled` to `"false"` makes `prod` refuse to start.
+- Docker Compose defaults to `SPRING_PROFILES_ACTIVE=postgresql,prod` and
+  `RAG_SECURITY_ENABLED=true`. To fully disable auth in an isolated environment,
+  set both `SPRING_PROFILES_ACTIVE=postgresql` and
+  `RAG_SECURITY_ENABLED=false`; either one alone is not enough.
+- With auth disabled, startup logs and the `ragSecurityPosture` health component
+  report `risk=HIGH`.
+
+### 7.3 Controlled backfill (never automatic)
+
+Assigning ownership of historical data is an operator decision. The script is not
+run on startup, by migrations, or by any gate:
+
+```bash
+# 1) Default dry-run: count and sample only, no writes
+python3 scripts/backfill-security-ownership.py --owner-principal-id <principal>
+
+# 2) Review the impact, then write explicitly
+python3 scripts/backfill-security-ownership.py --owner-principal-id <principal> --apply
+
+# 3) Files only, also assign legacy files without a Collection
+python3 scripts/backfill-security-ownership.py \
+  --owner-principal-id <principal> --only files --files-collection-id 12 --apply
+```
+
+Semantics:
+
+- Updates only rows with `owner_principal_id IS NULL`; it never overwrites an
+  existing owner.
+- `--only` accepts `files` / `feedback` / `evaluations`; all three by default.
+- Connection settings come from `POSTGRES_HOST/PORT/USER/PASSWORD`; the database
+  comes from `--database` or `POSTGRES_DATABASE`.
+- Backfill only changes visibility, not content; the root view is unaffected.
+- Back up first: the operation is one-way and has no automatic rollback script.
+
+### 7.4 Acceptance
+
+```bash
+python3 scripts/verify-security-upgrade-path.py
+python3 scripts/verify-security-deployment-posture.py
+```
+
+Both scripts use a temporary database and mock provider and delete them on exit.
+The upgrade script first constructs V70-shaped data (ownerless files/feedback/
+evaluation), upgrades to V71, and verifies fail-closed, root visibility, new-write
+ownership, and the backfill script's dry-run/apply behavior.

@@ -14,6 +14,23 @@
 是不同门槛。没有可信新清单、存在权限/删除差异或实际模型归因缺失时不得宣布通过。
 发布日期：`2026-07-21`
 
+## V71 升级注意事项（安全归属）
+
+- `prod` / `production` profile 且 `rag.security.enabled=false` 时**拒绝启动**；
+  Helm 新增 `secrets.securityEnabled`（默认 `"true"`）并显式注入 `RAG_SECURITY_ENABLED`，
+  Docker Compose 默认 `RAG_SECURITY_ENABLED=true`，官方模板已显式开启认证。
+- 生产部署前置条件：`RAG_SECURITY_ENABLED=true`，并配置随机 `RAG_ROOT_API_KEY`
+  （或受管 principal 的数据库 key）；未启用认证的模板不得暴露到公网。
+- V71 只增加可空列（`owner_principal_id` / `collection_id`），不自动回填；
+  root 与未启用认证的部署行为不变。
+- 升级后受限 key 看不到历史无归属的文件、反馈与评估（fail-closed）；root 仍可见；
+  WebUI 文件列表对受限 key 显示“此目录为空”，不报错。
+- 受控回填默认不执行，需运维显式 dry-run 后再 `--apply`：
+  `scripts/backfill-security-ownership.py --owner-principal-id <principal>`，
+  细节见 [security-boundary-zh-CN.md](security-boundary-zh-CN.md#7-v71-升级与回填)。
+- 验收命令：`scripts/verify-security-upgrade-path.py`（V70 数据 → V71）、
+  `scripts/verify-security-deployment-posture.py`（prod 拒绝启动）。
+
 ## 元数据与产物
 
 - [x] 根模块、子模块与独立 Demo 的 Maven 版本均为 `1.0.0`
@@ -21,7 +38,7 @@
 - [x] Helm `version` 与 `appVersion` 均为 `1.0.0`
 - [x] Docker/Helm 默认镜像 tag 为 `1.0.0`
 - [x] 本地、Docker 与 Helm 默认端口均为 `8081`
-- [x] Flyway 迁移范围为 V1-V65
+- [x] Flyway 迁移范围为 V1-V71
 - [x] JSONB 结构化记录 API、payload 快照和 Collection 生命周期已覆盖
 - [x] `scripts/verify-jsonb-records.sh` 固化后端/数据库/前端聚焦验证
 - [x] 文档 PATCH/禁用/恢复/永久删除与外部三元身份已覆盖

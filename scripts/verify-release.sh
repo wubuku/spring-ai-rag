@@ -387,6 +387,20 @@ helm_verification() {
     ' "$manifest"
   }
 
+  assert_security_enabled() {
+    local manifest="$1"
+    # `prod` refuses to start when authentication is disabled; the shipped
+    # chart must explicitly enable it so the default install keeps booting.
+    grep -q 'RAG_SECURITY_ENABLED: "true"' "$manifest" || {
+      echo "Rendered chart does not explicitly enable RAG_SECURITY_ENABLED" >&2
+      return 1
+    }
+    grep -q 'SPRING_PROFILES_ACTIVE: "postgresql,prod"' "$manifest" || {
+      echo "Rendered chart does not activate the prod profile" >&2
+      return 1
+    }
+  }
+
   helm lint ./k8s
   helm template spring-ai-rag ./k8s \
     --set secrets.postgresPassword=verify \
@@ -394,6 +408,7 @@ helm_verification() {
     --set secrets.embeddingApiKey=verify \
     > "$WORK_LOG_DIR/helm-template-default.yaml"
   assert_recreate_deployments "$WORK_LOG_DIR/helm-template-default.yaml"
+  assert_security_enabled "$WORK_LOG_DIR/helm-template-default.yaml"
 
   helm template spring-ai-rag ./k8s \
     --values ./k8s/values-production.yaml \
@@ -402,6 +417,7 @@ helm_verification() {
     --set secrets.embeddingApiKey=verify \
     > "$WORK_LOG_DIR/helm-template-production.yaml"
   assert_recreate_deployments "$WORK_LOG_DIR/helm-template-production.yaml"
+  assert_security_enabled "$WORK_LOG_DIR/helm-template-production.yaml"
 }
 
 docker_verification() {

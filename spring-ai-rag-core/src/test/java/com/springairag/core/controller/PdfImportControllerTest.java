@@ -255,6 +255,22 @@ class PdfImportControllerTest {
     }
 
     @Test
+    void listTree_restrictedKeyReturns200EmptyWhenNothingIsVisible() {
+        // 受限 key 下历史文件因无归属被过滤：tree 返回 200 + 空 entries，
+        // 而不是 403 或 500，WebUI 据此展示空态。
+        authenticateRestrictedKey("10");
+        when(pdfImportService.listVisibleChildren(eq("/"), any())).thenReturn(List.of());
+
+        ResponseEntity<FileTreeResponse> response = controller.listTree(null);
+
+        assertEquals(200, response.getStatusCode().value());
+        assertNotNull(response.getBody());
+        assertEquals(0, response.getBody().total());
+        assertTrue(response.getBody().entries().isEmpty());
+        verify(pdfImportService, never()).listChildren(anyString());
+    }
+
+    @Test
     void listTree_nullPath_defaultsToRoot() {
         when(pdfImportService.listChildren("/")).thenReturn(List.of());
         when(pdfImportService.getImportBatches(any())).thenReturn(Map.of());

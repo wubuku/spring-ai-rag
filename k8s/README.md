@@ -71,6 +71,8 @@ helm upgrade spring-ai-rag ./k8s \
 | `secrets.postgresPassword` | Yes | — | PostgreSQL password |
 | `secrets.deepseekApiKey` | Yes | — | DeepSeek API key |
 | `secrets.embeddingApiKey` | Yes | — | Embedding provider API key |
+| `secrets.securityEnabled` | No | `"true"` | Injected as `RAG_SECURITY_ENABLED`; the `prod` profile refuses to start when `"false"` |
+| `secrets.rootApiKey` | Recommended | `""` | Root API key for data-plane access; recommended for every production install |
 | `replicaCount` | No | `1` | Number of replicas |
 | `image.repository` | No | `ghcr.io/wubuku/spring-ai-rag` | Docker image repository |
 | `image.tag` | No | `1.0.0` | Immutable Docker image tag |
@@ -89,6 +91,7 @@ helm upgrade --install spring-ai-rag ./k8s \
   --set secrets.postgresPassword=xxx \
   --set secrets.deepseekApiKey=xxx \
   --set secrets.embeddingApiKey=xxx \
+  --set secrets.rootApiKey=xxx \
   \
   --set ingress.enabled=true \
   --set ingress.hosts[0].host=rag.yourdomain.com \
@@ -96,6 +99,11 @@ helm upgrade --install spring-ai-rag ./k8s \
 ```
 
 Production profile sets: 3 replicas, HPA, resource limits (4 CPU / 4 GiB), PDB minAvailable=2, readiness/liveness probes, TLS via cert-manager.
+
+The chart keeps `secrets.securityEnabled: "true"` and the `postgresql,prod` profile.
+`prod` refuses to start when authentication is disabled, so do not set it to `"false"`
+for any internet-reachable deployment. See `docs/DEPLOYMENT.md` for the V71 upgrade
+and historical-data backfill steps.
 
 ### All Configuration Options
 

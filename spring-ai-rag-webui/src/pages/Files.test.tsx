@@ -348,6 +348,22 @@ describe('Files', () => {
     expect(screen.getByText('files.noMatches')).toBeVisible();
   });
 
+  it('shows the empty-directory state when a restricted key sees no files', () => {
+    // 受限 API key 下 V70 历史文件因无归属而被过滤，接口返回 200 + 空 entries；
+    // 页面必须显示空态而不是报错。
+    mockUseQuery.mockImplementation((options: { queryKey: unknown[] }) => {
+      if (options.queryKey[0] === 'files-collections') {
+        return { data: { data: { collections: [] } } };
+      }
+      return { data: { data: { path: '', entries: [] } } };
+    });
+
+    renderFiles();
+
+    expect(screen.getByText('files.empty')).toBeVisible();
+    expect(screen.queryByTestId('files-error')).toBeNull();
+  });
+
   it('commits one navigation for a burst of typing, not one per character', () => {
     // Batch 939. `onChange` used to call `commitQuery` directly, so six letters meant six
     // `navigateTo` calls: six history replacements and six `rememberRoute` writes, each a
