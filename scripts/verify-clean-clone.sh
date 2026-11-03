@@ -217,10 +217,10 @@ DOC_ID="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["id"])
 IN_TEMP_DB="$(psql -h "$PG_HOST" -p "$PG_PORT" -U "$PG_USER" -d "$DB_NAME" -tAc \
   "SELECT count(*) FROM rag_documents WHERE id=$DOC_ID")"
 [[ "$IN_TEMP_DB" == "1" ]] || {
-  fail "文档 id=$DOC_ID 不在临时库 $DB_NAME（疑似连接到了其他数据库）"
+  fail "文档 id=$DOC_ID 不在临时库 ${DB_NAME}（疑似连接到了其他数据库）"
   exit 1
 }
-pass "创建文档 id=$DOC_ID（已确认落在临时库）"
+pass "创建文档 id=${DOC_ID}（已确认落在临时库）"
 
 curl -sf -X POST "$BASE_URL/api/v1/rag/documents/$DOC_ID/embed" >"$LOG_DIR/embed.json"
 python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); assert d.get("embeddings",0) >= 1, d' "$LOG_DIR/embed.json"
