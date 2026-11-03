@@ -9,10 +9,13 @@ import com.springairag.core.config.EmbeddingProfileRegistry;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.documentprocessing.DocumentProcessingRunService;
 import com.springairag.core.embeddingjob.EmbeddingDispatchService;
+import com.springairag.core.entity.RagDocument;
 import com.springairag.core.repository.RagDocumentRepository;
 import com.springairag.core.repository.RagEmbeddingRepository;
 import com.springairag.core.retrieval.EmbeddingBatchService;
 import com.springairag.core.retrieval.HybridRetrieverService;
+import com.springairag.core.retrieval.RetrievalBranchStage;
+import com.springairag.core.retrieval.RetrievalOutcome;
 import com.springairag.core.retrieval.fulltext.PgEnglishFtsProvider;
 import com.springairag.core.retrieval.EmbeddingProfileSqlScope;
 import com.springairag.core.service.EmbeddingPersistenceService;
@@ -62,7 +65,11 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -340,6 +347,211 @@ class EmbeddingProfilePostgresIntegrationTest {
         assertEquals(0, jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM rag_collection_operation_slot WHERE collection_id = ?",
                 Integer.class, collectionId));
+    }
+
+    @Test
+    void profileSwitchFrom1024To768WritesTargetVectorsAndRollsBack() {
+        EmbeddingProfile source = registry().initialize();
+        EmbeddingProfile target = insertProfile(
+                "target-768-" + System.nanoTime(), "test", "target-768-model", 768);
+        new EmbeddingProfileIndexManager(jdbcTemplate).ensureIndex(source);
+        new EmbeddingProfileIndexManager(jdbcTemplate).ensureIndex(target);
+
+        String collectionKey = "profile-768-" + System.nanoTime();
+        Long collectionId = jdbcTemplate.queryForObject("""
+                INSERT INTO rag_collection(
+                    name, embedding_model, dimensions, enabled, collection_key,
+                    active_embedding_profile_id)
+                VALUES ('Profile 768 migration', ?, 1024, TRUE, ?, ?)
+                RETURNING id
+                """, Long.class, source.modelName(), collectionKey, source.id());
+        assertNotNull(collectionId);
+
+        long documentId = insertDocument(
+                "re-embed me", "re-embed me", HASH_A);
+        jdbcTemplate.update(
+                "UPDATE rag_documents SET collection_id = ? WHERE id = ?",
+                collectionId, documentId);
+        EmbeddingPersistenceService persistence =
+                new EmbeddingPersistenceService(jdbcTemplate);
+        transactionTemplate.executeWithoutResult(status -> persistence.replace(
+                documentId, 0L, HASH_A, source,
+                List.of(new TextChunk("re-embed me", 0, 11)),
+                List.of(result("re-embed me", vector(1024, 1.0f)))));
+        assertEquals(1L, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM rag_embeddings "
+                        + "WHERE document_id = ? AND embedding_1024 IS NOT NULL",
+                Long.class, documentId));
+        assertEquals(0L, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM rag_embeddings "
+                        + "WHERE document_id = ? AND embedding_768 IS NOT NULL",
+                Long.class, documentId));
+
+        String owner = "profile-768-owner";
+        java.util.UUID operationId = createProfileSwitchOperation(
+                collectionId, source, target, owner, "WAIT_CHILDREN");
+        EmbeddingProfileOperationWorker firstWorker = new EmbeddingProfileOperationWorker(
+                jdbcTemplate, new ObjectMapper(),
+                mock(RagDocumentRepository.class),
+                mock(EmbeddingDispatchService.class),
+                registry(), mock(DocumentProcessingRunService.class),
+                new DataSourceTransactionManager(dataSource));
+
+        // 目标 profile 还没有任何向量：不能切换，必须退回 SCAN 重试，源数据保持可用。
+        firstWorker.processOneOperation();
+        assertEquals("SCAN", jdbcTemplate.queryForObject(
+                "SELECT progress_payload->>'phase' FROM rag_long_running_operations WHERE id = ?",
+                String.class, operationId));
+        assertEquals(source.id(), jdbcTemplate.queryForObject(
+                "SELECT active_embedding_profile_id FROM rag_collection WHERE id = ?",
+                Long.class, collectionId));
+
+        RagDocumentRepository documentRepository = mock(RagDocumentRepository.class);
+        RagDocument document = mock(RagDocument.class);
+        when(document.getId()).thenReturn(documentId);
+        when(document.getEnabled()).thenReturn(true);
+        when(documentRepository.findById(documentId))
+                .thenReturn(java.util.Optional.of(document));
+        EmbeddingDispatchService dispatch = mock(EmbeddingDispatchService.class);
+        when(dispatch.enqueueForProfileInCurrentTransaction(
+                any(), any(), anyBoolean(), anyBoolean(),
+                any(String.class), any(String.class)))
+                .thenReturn(new EmbeddingDispatchService.Result(
+                        com.springairag.api.enums.EmbeddingAction.SKIPPED,
+                        "NOT_REQUESTED", target.profileKey(), null, null, null));
+        EmbeddingProfileOperationWorker scanWorker = new EmbeddingProfileOperationWorker(
+                jdbcTemplate, new ObjectMapper(), documentRepository, dispatch,
+                registry(), mock(DocumentProcessingRunService.class),
+                new DataSourceTransactionManager(dataSource));
+
+        scanWorker.processOneOperation();
+        verify(dispatch).enqueueForProfileInCurrentTransaction(
+                any(), org.mockito.ArgumentMatchers.argThat(
+                        profile -> profile.id() == target.id()),
+                anyBoolean(), anyBoolean(),
+                any(String.class), any(String.class));
+        assertEquals("WAIT_CHILDREN", jdbcTemplate.queryForObject(
+                "SELECT progress_payload->>'phase' FROM rag_long_running_operations WHERE id = ?",
+                String.class, operationId));
+        assertEquals(1, jdbcTemplate.queryForObject(
+                "SELECT (progress_payload->>'documentsScanned')::int FROM rag_long_running_operations WHERE id = ?",
+                Integer.class, operationId));
+
+        // 模拟后台重嵌入完成：同一文档在目标 profile 下写入 768 维向量。
+        transactionTemplate.executeWithoutResult(status -> persistence.replace(
+                documentId, 1L, HASH_A, target,
+                List.of(new TextChunk("re-embed me", 0, 11)),
+                List.of(result("re-embed me", vector(768, 1.0f)))));
+        assertEquals(1L, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM rag_embeddings "
+                        + "WHERE document_id = ? AND embedding_768 IS NOT NULL",
+                Long.class, documentId));
+
+        scanWorker.processOneOperation();
+        assertEquals("SUCCEEDED", jdbcTemplate.queryForObject(
+                "SELECT status FROM rag_long_running_operations WHERE id = ?",
+                String.class, operationId));
+        assertEquals(target.id(), jdbcTemplate.queryForObject(
+                "SELECT active_embedding_profile_id FROM rag_collection WHERE id = ?",
+                Long.class, collectionId));
+        assertEquals(768, jdbcTemplate.queryForObject(
+                "SELECT dimensions FROM rag_collection WHERE id = ?",
+                Integer.class, collectionId));
+        // 切换后两种向量并存：旧 1024 维仍在，供回滚使用。
+        assertEquals(1L, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM rag_embeddings "
+                        + "WHERE document_id = ? AND embedding_1024 IS NOT NULL",
+                Long.class, documentId));
+        assertEquals(0L, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM rag_embeddings "
+                        + "WHERE embedding_768 IS NOT NULL AND vector_dims(embedding_768) <> 768",
+                Long.class));
+        assertEquals(0L, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM rag_embeddings "
+                        + "WHERE embedding_1024 IS NOT NULL AND vector_dims(embedding_1024) <> 1024",
+                Long.class));
+
+        assertEquals(Boolean.TRUE, jdbcTemplate.queryForObject(
+                "SELECT i.indisvalid FROM pg_class c "
+                        + "JOIN pg_index i ON i.indexrelid = c.oid WHERE c.relname = ?",
+                Boolean.class,
+                "idx_rag_emb_p_" + source.id() + "_1024_hnsw"));
+        assertEquals(Boolean.TRUE, jdbcTemplate.queryForObject(
+                "SELECT i.indisvalid FROM pg_class c "
+                        + "JOIN pg_index i ON i.indexrelid = c.oid WHERE c.relname = ?",
+                Boolean.class,
+                "idx_rag_emb_p_" + target.id() + "_768_hnsw"));
+
+        // 回滚：目标 profile 的向量已就绪，反向操作可直接把活动 profile 切回 1024。
+        java.util.UUID rollbackOperationId = createProfileSwitchOperation(
+                collectionId, target, source, owner + "-rollback", "WAIT_CHILDREN");
+        new EmbeddingProfileOperationWorker(
+                jdbcTemplate, new ObjectMapper(),
+                mock(RagDocumentRepository.class),
+                mock(EmbeddingDispatchService.class),
+                registry(), mock(DocumentProcessingRunService.class),
+                new DataSourceTransactionManager(dataSource))
+                .processOneOperation();
+
+        assertEquals("SUCCEEDED", jdbcTemplate.queryForObject(
+                "SELECT status FROM rag_long_running_operations WHERE id = ?",
+                String.class, rollbackOperationId));
+        assertEquals(source.id(), jdbcTemplate.queryForObject(
+                "SELECT active_embedding_profile_id FROM rag_collection WHERE id = ?",
+                Long.class, collectionId));
+        assertEquals(1024, jdbcTemplate.queryForObject(
+                "SELECT dimensions FROM rag_collection WHERE id = ?",
+                Integer.class, collectionId));
+        assertEquals(1L, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM rag_embeddings "
+                        + "WHERE document_id = ? AND embedding_1024 IS NOT NULL",
+                Long.class, documentId));
+        assertEquals(1L, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM rag_embeddings "
+                        + "WHERE document_id = ? AND embedding_768 IS NOT NULL",
+                Long.class, documentId));
+    }
+
+    @Test
+    void queryEmbeddingDimensionMustMatchTheActiveProfile() {
+        EmbeddingProfile profile = insertProfile(
+                "query-dim-" + System.nanoTime(), "test", "query-dim-model", 768);
+        RagProperties properties = new RagProperties();
+        properties.getRetrieval().setFulltextEnabled(false);
+        EmbeddingModel embeddingModel = mock(EmbeddingModel.class);
+        when(embeddingModel.embed("wrong shape")).thenReturn(vector(1024, 1.0f));
+        HybridRetrieverService retriever = new HybridRetrieverService(
+                embeddingModel, () -> profile, jdbcTemplate, properties,
+                null, Runnable::run);
+
+        RetrievalOutcome outcome = retriever.searchInScopeDetailed(
+                "wrong shape", null, null, 5, null, null);
+        assertTrue(outcome.results().isEmpty());
+        RetrievalBranchStage vector = outcome.branchStages().stream()
+                .filter(stage -> RetrievalBranchStage.VECTOR.equals(stage.branch()))
+                .findFirst().orElseThrow();
+        // 维度不匹配被当作向量分支失败，不会拿 1024 维向量去查 768 维列。
+        assertEquals(RetrievalBranchStage.ERROR, vector.status());
+        assertEquals("IllegalStateException", vector.errorCode());
+    }
+
+    @Test
+    void changingDimensionsWithoutAnExplicitProfileKeyIsRejectedAtStartup() {
+        EmbeddingProfile stored = registry().initialize();
+        RagProperties changed = new RagProperties();
+        changed.getEmbedding().setDimensions(768);
+        EmbeddingProfileRegistry mismatched =
+                new EmbeddingProfileRegistry(jdbcTemplate, changed);
+
+        IllegalStateException error = assertThrows(
+                IllegalStateException.class, mismatched::initialize);
+        assertTrue(error.getMessage().contains("must be explicit"));
+        assertEquals(1024, jdbcTemplate.queryForObject(
+                "SELECT dimensions FROM rag_embedding_profiles WHERE id = ?",
+                Integer.class, stored.id()));
+        assertEquals(0L, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM rag_embeddings WHERE embedding_768 IS NOT NULL",
+                Long.class));
     }
 
     @Test
@@ -997,20 +1209,68 @@ class EmbeddingProfilePostgresIntegrationTest {
 
     private EmbeddingProfile insertProfile(
             String key, String provider, String model) {
+        return insertProfile(key, provider, model, 1024);
+    }
+
+    private EmbeddingProfile insertProfile(
+            String key, String provider, String model, int dimensions) {
         Long id = jdbcTemplate.queryForObject(
                 "INSERT INTO rag_embedding_profiles "
                         + "(profile_key, provider, model_name, model_revision, dimensions, "
                         + "distance_metric, normalization, enabled) "
-                        + "VALUES (?, ?, ?, 'v1', 1024, 'COSINE', 'PROVIDER_DEFAULT', true) "
+                        + "VALUES (?, ?, ?, 'v1', ?, 'COSINE', 'PROVIDER_DEFAULT', true) "
                         + "RETURNING id",
                 Long.class,
                 key,
                 provider,
-                model);
+                model,
+                dimensions);
         assertNotNull(id);
         return new EmbeddingProfile(
-                id, key, provider, model, "v1", 1024,
+                id, key, provider, model, "v1", dimensions,
                 "COSINE", "PROVIDER_DEFAULT", true);
+    }
+
+    private java.util.UUID createProfileSwitchOperation(
+            long collectionId,
+            EmbeddingProfile source,
+            EmbeddingProfile target,
+            String owner,
+            String phase) {
+        java.util.UUID operationId = java.util.UUID.randomUUID();
+        String progress = "{\"sourceProfileId\":" + source.id()
+                + ",\"targetProfileId\":" + target.id()
+                + ",\"phase\":\"" + phase + "\"}";
+        String fingerprint = operationId.toString().replace("-", "").repeat(2);
+        String reversedFingerprint = new StringBuilder(fingerprint).reverse().toString();
+        jdbcTemplate.update("""
+                INSERT INTO rag_long_running_operations(
+                    id, owner_principal_id, resource_type, collection_id,
+                    operation_kind, idempotency_key_sha256,
+                    request_fingerprint_sha256, status, progress_payload,
+                    target_embedding_profile_id, total_count)
+                VALUES (?, ?, 'COLLECTION', ?, 'EMBEDDING_PROFILE_SWITCH',
+                        ?, ?, 'QUEUED', ?::jsonb, ?, 0)
+                """, operationId, owner, collectionId,
+                fingerprint, reversedFingerprint, progress, target.id());
+        jdbcTemplate.update("""
+                INSERT INTO rag_long_running_operation_owner_capacity(
+                    owner_principal_id, active_count)
+                VALUES (?, 1)
+                ON CONFLICT (owner_principal_id) DO UPDATE
+                SET active_count = rag_long_running_operation_owner_capacity.active_count + 1
+                """, owner);
+        jdbcTemplate.update("""
+                UPDATE rag_long_running_operation_global_capacity
+                SET active_count = active_count + 1
+                WHERE singleton_id = 1
+                """);
+        jdbcTemplate.update("""
+                INSERT INTO rag_collection_operation_slot(
+                    collection_id, holder_kind, operation_id)
+                VALUES (?, 'PROFILE_SWITCH', ?)
+                """, collectionId, operationId);
+        return operationId;
     }
 
     private long insertDocument(

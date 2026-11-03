@@ -261,7 +261,7 @@ rag:
 | `rag.embedding.api-key` | `""` | 嵌入服务 API Key；推荐由 `RAG_EMBEDDING_API_KEY` 提供 |
 | `rag.embedding.base-url` | `https://api.siliconflow.cn` | API 端点 |
 | `rag.embedding.model` | `BAAI/bge-m3` | 嵌入模型名称 |
-| `rag.embedding.dimensions` | `1024` | 向量维度（必须与模型输出一致） |
+| `rag.embedding.dimensions` | `1024` | 向量维度（必须与模型输出一致）；仅支持 `384` / `768` / `1024` / `1536` |
 | `rag.embedding.request-dimensions` | `false` | 显式向兼容服务发送 `dimensions`；仅对已验证支持该参数的模型开启，环境变量 `RAG_EMBEDDING_REQUEST_DIMENSIONS` |
 | `rag.embedding.retry-max-attempts` | `3` | 单次 provider 调用最大尝试次数，范围 1–10；还受依赖总时限约束，独立于持久化 job 预算 |
 | `rag.embedding.request-timeout-ms` | `30000` | 单次 provider HTTP 调用超时，范围 100–120000；还会被依赖总时限进一步收紧，避免慢上游挂住线程 |
@@ -296,11 +296,59 @@ RAG_EMBEDDING_DIMENSIONS=1024
 脚本不会自动映射。如果本地 `.env` 仍保留这些变量，请在启动开发栈或真实 E2E 脚本前
 改名为对应的 `RAG_EMBEDDING_*`；脚本会明确提示迁移，而不是静默使用默认值。
 
-活动 Profile 注册在 `rag_embedding_profiles` 中，创建后身份不可变。当前支持的维度为
-`1024`，存储在固定长度的 `rag_embeddings.embedding_1024 VECTOR(1024)` 列中。兼容窗口
-内新向量还会双写旧 `embedding` 列。更换模型必须创建新 Profile 并完整重嵌入，不能只改
-`dimensions`、把旧向量 cast 成新向量，或在一次检索中混用多个 Profile。Legacy 向量只能
-通过显式认领并提供正确确认值接入。
+活动 Profile 注册在 `rag_embedding_profiles` 中，创建后身份不可变。支持的维度为
+`384` / `768` / `1024` / `1536`，分别存储在固定长度的
+`rag_embeddings.embedding_384 / embedding_768 / embedding_1024 / embedding_1536`
+列中；其他维度在启动注册时即被拒绝。兼容窗口内新向量还会双写旧 `embedding` 列。
+更换模型必须创建新 Profile 并完整重嵌入，不能只改 `dimensions`、把旧向量 cast 成
+新向量，或在一次检索中混用多个 Profile。Legacy 向量只能通过显式认领并提供正确确认值接入。
+
+#### 换 Embedding Profile：迁移、回滚与已知限制
+
+该路径由 gated PostgreSQL 集成测试覆盖（`EmbeddingProfilePostgresIntegrationTest`
+中的 `profileSwitchFrom1024To768WritesTargetVectorsAndRollsBack`、
+`queryEmbeddingDimensionMustMatchTheActiveProfile`、
+`changingDimensionsWithoutAnExplicitProfileKeyIsRejectedAtStartup`）：1024 维 → 768 维
+新 Profile、目标向量补齐、Collection 切换、切回旧 Profile，以及只改维度的拒绝。
+
+迁移是**在线、无停机**的，前提是目标 Profile 已在启动时注册：
+
+1. **预配置目标 Profile**：在 `rag.embedding.profiles.<new-key>` 中填写目标 provider /
+   model / `dimensions`，重启服务。启动注册会写入 `rag_embedding_profiles`，并为它建立
+   专属 HNSW 索引（`idx_rag_emb_p_<profileId>_<dimensions>_hnsw`）。
+   **不要复用旧 profile key**：沿用默认 key 只改维度会在启动时报
+   `RAG_EMBEDDING_PROFILE_KEY must be explicit when overriding embedding identity`；
+   自定义 key 但身份不一致会报 `Embedding profile identity mismatch`。两种情况都会在
+   启动阶段失败，不会写入或污染向量数据。
+2. **提交切换 Operation**：`POST /api/v1/rag/collections/by-key/embedding-profile/operations`，
+   带 `Idempotency-Key`、`expectedCollectionVersion` 与 `targetProfileKey`。受理返回
+   `202`，切换异步执行。目标 Profile 必须已注册且启用。
+3. **观察进度**：`GET /api/v1/rag/operations/{operationId}`。阶段依次为
+   `SCAN → WAIT_CHILDREN → COMPLETED`；`progress.documentsScanned` 可查。`SCAN` 为每个
+   文档排入目标 Profile 的 embedding job；`WAIT_CHILDREN` 校验目标 Profile 的 state、
+   content hash 与 chunk 数都齐全后才允许切换。
+4. **失败与重试**：目标数据不完整时 worker 退回 `SCAN` 继续派发；持久失败的任务按
+   `embedding-jobs` 的 attempt/backoff 重试。Operation 可用 `POST .../retry` 重试
+   `DEGRADED` 或到期的 `RETRY_WAIT`。
+5. **切换期间的检索行为**：目标向量全部就绪前，Collection 的
+   `active_embedding_profile_id` **保持旧 Profile**，旧向量继续可查；目标向量写入相邻
+   维度列（如 `embedding_768`），属于**只双写、不双读**。检索只读活动 Profile 对应的
+   列，不会把旧 Profile 的向量当作新 Profile 使用；查询向量维度与活动 Profile 不一致
+   时，向量分支失败并标记 `ERROR`（错误码 `IllegalStateException`），不会静默查错列。
+6. **完成切换**：目标 Profile 通过完整性校验后，Collection 的活动 Profile 与维度原子
+   切换，旧列数据保留。
+7. **回滚**：对同一 Collection 再提交一次以旧 Profile 为 `targetProfileKey` 的
+   Operation。旧 Profile 的 state 与向量在切换期间未被删除，回滚不需要重新嵌入，但仍走
+   `SCAN → WAIT_CHILDREN` 完整性校验。
+
+已知限制：
+
+- 目标 Profile 必须先在 `rag.embedding.profiles` 中配置并在启动时注册；只向
+  `rag_embedding_profiles` 插一行不足以让运行时解析模型或建立索引。
+- 切换按 Collection 进行，不是全局一次性切换；多 Collection 需要各自提交 Operation。
+- 不同维度的列会并存（保留旧向量用于回滚与审计），不会自动清理，存储成本由运维评估。
+- 若手工删除了旧 Profile 的向量或 state，回滚会退化为一次完整重嵌入，不再是零成本。
+- 取消切换不会回滚已生成的目标 Profile 向量，也不会把 Collection 切到目标 Profile。
 
 `rag.embedding.retry-max-attempts` 控制一次 worker/provider 调用内部的 Spring Retry
 预算；只重试 Spring AI transient 异常和网络访问异常，并保留默认指数退避。它与下方

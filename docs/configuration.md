@@ -278,7 +278,7 @@ rag:
 | `rag.embedding.api-key` | `""` | Embedding provider API key; preferably from `RAG_EMBEDDING_API_KEY` |
 | `rag.embedding.base-url` | `https://api.siliconflow.cn` | API endpoint |
 | `rag.embedding.model` | `BAAI/bge-m3` | Embedding model name |
-| `rag.embedding.dimensions` | `1024` | Vector dimensions (must match model output) |
+| `rag.embedding.dimensions` | `1024` | Vector dimensions (must match model output); only `384` / `768` / `1024` / `1536` are supported |
 | `rag.embedding.request-dimensions` | `false` | Explicitly send `dimensions` only for models verified to support it; environment variable `RAG_EMBEDDING_REQUEST_DIMENSIONS` |
 | `rag.embedding.retry-max-attempts` | `3` | Maximum provider attempts, range 1–10; also bounded by the dependency deadline, independent from durable-job attempts |
 | `rag.embedding.request-timeout-ms` | `30000` | Per-call provider HTTP timeout, range 100–120000; further tightened by the dependency deadline so a slow upstream cannot hold threads |
@@ -318,12 +318,71 @@ variable before starting the development stack or real E2E scripts; the scripts
 fail with a migration hint instead of silently selecting a default.
 
 The active Profile is registered in `rag_embedding_profiles` and is immutable after creation.
-The current supported dimension is `1024`, stored in the fixed-length
-`rag_embeddings.embedding_1024 VECTOR(1024)` column. New vectors are also written to the
-legacy `embedding` column during the compatibility window. Changing models requires a new
+Supported dimensions are `384` / `768` / `1024` / `1536`, stored in the fixed-length
+`rag_embeddings.embedding_384 / embedding_768 / embedding_1024 / embedding_1536` columns;
+any other dimension is rejected during startup registration. New vectors are also written to
+the legacy `embedding` column during the compatibility window. Changing models requires a new
 Profile and a complete re-embedding; do not change only `dimensions`, cast old vectors, or
 mix Profiles in one retrieval query. Legacy vector adoption is explicit and requires the
 configured confirmation value.
+
+#### Switching an Embedding Profile: Migration, Rollback, and Known Limitations
+
+This path is covered by gated PostgreSQL integration tests in
+`EmbeddingProfilePostgresIntegrationTest`: `profileSwitchFrom1024To768WritesTargetVectorsAndRollsBack`,
+`queryEmbeddingDimensionMustMatchTheActiveProfile`, and
+`changingDimensionsWithoutAnExplicitProfileKeyIsRejectedAtStartup`. They exercise a 1024→768
+target Profile, target-vector completion, the Collection switch, rollback to the old Profile,
+and rejection of a dimensions-only change.
+
+Migration is **online and requires no downtime**, provided the target Profile is registered at
+startup:
+
+1. **Pre-configure the target Profile**: add the target provider / model / `dimensions` under
+   `rag.embedding.profiles.<new-key>` and restart. Startup registration writes
+   `rag_embedding_profiles` and creates the Profile-specific HNSW index
+   (`idx_rag_emb_p_<profileId>_<dimensions>_hnsw`).
+   **Do not reuse the old profile key.** Changing only the dimension under the default key fails
+   startup with `RAG_EMBEDDING_PROFILE_KEY must be explicit when overriding embedding identity`; a
+   custom key with mismatched identity fails with `Embedding profile identity mismatch`. Both
+   cases fail during startup and never write or pollute vector data.
+2. **Submit the switch Operation**: `POST /api/v1/rag/collections/by-key/embedding-profile/operations`
+   with `Idempotency-Key`, `expectedCollectionVersion`, and `targetProfileKey`. It returns `202`
+   and runs asynchronously. The target Profile must be registered and enabled.
+3. **Observe progress**: `GET /api/v1/rag/operations/{operationId}`. Phases are
+   `SCAN → WAIT_CHILDREN → COMPLETED`; `progress.documentsScanned` is queryable. `SCAN` enqueues a
+   target-Profile embedding job for each document; `WAIT_CHILDREN` verifies that the target
+   Profile's state, content hash, and chunk count are all complete before the switch.
+4. **Failure and retry**: when target data is incomplete the worker returns to `SCAN` and keeps
+   dispatching; task-level failures follow the `embedding-jobs` attempt/backoff budget. An
+   Operation can be retried with `POST .../retry` for `DEGRADED` or an expired `RETRY_WAIT`.
+5. **Retrieval during the switch**: until all target vectors are ready, the Collection's
+   `active_embedding_profile_id` **stays on the old Profile**, so old vectors remain queryable.
+   Target vectors are written into the adjacent dimension column (for example `embedding_768`);
+   this is **dual-write only, never dual-read**. Retrieval reads only the active Profile's column
+   and never treats old-Profile vectors as the new Profile's. If the query vector's dimension
+   does not match the active Profile, the vector branch fails with `ERROR`
+   (error code `IllegalStateException`) instead of silently querying the wrong column.
+6. **Complete the switch**: once the target Profile passes the completeness checks, the
+   Collection's active Profile and dimension switch atomically; old column data is retained.
+7. **Rollback**: submit another Operation on the same Collection with the old Profile as
+   `targetProfileKey`. The old Profile's state and vectors were never deleted during the switch,
+   so rollback requires no re-embedding, though it still runs the `SCAN → WAIT_CHILDREN`
+   completeness checks.
+
+Known limitations:
+
+- The target Profile must be configured in `rag.embedding.profiles` and registered at startup;
+  inserting a row into `rag_embedding_profiles` alone does not let the runtime resolve the model
+  or create its index.
+- Switching is per Collection, not a single global switch; multiple Collections each need their
+  own Operation.
+- Columns for different dimensions coexist (old vectors are retained for rollback and audit) and
+  are never cleaned up automatically; storage cost is an operational decision.
+- If old-Profile vectors or state were deleted manually, rollback degrades to a full re-embedding
+  instead of being free.
+- Cancelling a switch does not roll back target-Profile vectors and never switches the Collection
+  to the target Profile.
 
 `rag.embedding.retry-max-attempts` bounds Spring Retry inside one
 worker/provider call. It retries only Spring AI transient exceptions and
