@@ -6,9 +6,9 @@ spring:
     name: component-level-rag-demo
 
   datasource:
-    url: jdbc:postgresql://localhost:5432/spring_ai_rag_dev
-    username: ${DB_USER:postgres}
-    password: ${DB_PASSWORD:postgres}
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DATABASE:spring_ai_rag_dev}
+    username: ${POSTGRES_USER:${DB_USER:postgres}}
+    password: ${POSTGRES_PASSWORD:${DB_PASSWORD:postgres}}
     driver-class-name: org.postgresql.Driver
 
   # Manually manage Flyway (not via Starter auto-configuration)
@@ -40,6 +40,7 @@ rag:
     base-url: ${RAG_EMBEDDING_BASE_URL:https://api.siliconflow.cn}
     model: ${RAG_EMBEDDING_MODEL:BAAI/bge-m3}
     dimensions: ${RAG_EMBEDDING_DIMENSIONS:1024}
+    profile-key: ${RAG_EMBEDDING_PROFILE_KEY:siliconflow-bge-m3-1024-v1}
 
 # ================================================================
 # RAG Configuration
@@ -53,6 +54,10 @@ rag:
     min-score: 0.3
   memory:
     max-messages: 20
+  security:
+    # demo 配置会遮蔽 core 的同名文件，必须显式声明占位符。
+    enabled: ${RAG_SECURITY_ENABLED:false}
+    root-api-key: ${RAG_ROOT_API_KEY:}
 
 logging:
   level:

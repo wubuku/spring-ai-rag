@@ -8,9 +8,9 @@ server:
 spring:
   # DataSource (PostgreSQL + pgvector)
   datasource:
-    url: jdbc:postgresql://localhost:5432/spring_ai_rag_dev
-    username: postgres
-    password: postgres
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DATABASE:spring_ai_rag_dev}
+    username: ${POSTGRES_USER:postgres}
+    password: ${POSTGRES_PASSWORD:postgres}
 
   # Flyway auto-migration
   flyway:
@@ -41,8 +41,13 @@ rag:
     base-url: ${RAG_EMBEDDING_BASE_URL:https://api.siliconflow.cn}
     model: ${RAG_EMBEDDING_MODEL:BAAI/bge-m3}
     dimensions: ${RAG_EMBEDDING_DIMENSIONS:1024}
+    profile-key: ${RAG_EMBEDDING_PROFILE_KEY:siliconflow-bge-m3-1024-v1}
   memory:
     max-messages: 20
+  security:
+    # demo 配置会遮蔽 core 的同名文件，必须显式声明占位符。
+    enabled: ${RAG_SECURITY_ENABLED:false}
+    root-api-key: ${RAG_ROOT_API_KEY:}
 
 # ============================================================
 # Monitoring Configuration

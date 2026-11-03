@@ -1522,6 +1522,34 @@ rag:
 | `messages_en.properties` | 英文 |
 | `messages_zh_CN.properties` | 中文（简体） |
 
+## 配置文件遮蔽与环境变量生效规则
+
+demo 模块自带 `application.yml`，与 `spring-ai-rag-core` jar 内的同名文件冲突。
+fat jar 中 `BOOT-INF/classes` 优先于依赖 jar，**core 的基础配置会被整体遮蔽**（
+`application-postgresql.yml` 等 profile 文件不受影响）。因此：
+
+- 变量名与属性路径一致的变量（如 `RAG_SECURITY_ENABLED` → `rag.security.enabled`、
+  `RAG_EMBEDDING_MODEL` → `rag.embedding.model`）通过 relaxed binding 直接生效；
+- 变量名与属性路径**不一致**的变量（如 `RAG_ROOT_API_KEY`、`POSTGRES_*`）只能在
+  demo 的 `application.yml` 中用 `${...}` 占位符映射，否则会静默失效。
+
+| 环境变量 | 目标属性 | 是否需要 demo 占位符 | 判定 |
+|----------|----------|---------------------|------|
+| `RAG_SECURITY_ENABLED` | `rag.security.enabled` | 否（relaxed） | 生效 |
+| `RAG_ROOT_API_KEY` | `rag.security.root-api-key` | **是** | 生效（四个 demo 均已声明） |
+| `POSTGRES_HOST` / `PORT` / `DATABASE` / `USER` / `PASSWORD` | `spring.datasource.*` | **是** | 生效（四个 demo 均已声明） |
+| `SPRING_DATASOURCE_URL` | `spring.datasource.url` | 否（relaxed） | 生效（但会覆盖 `POSTGRES_*`） |
+| `RAG_EMBEDDING_API_KEY` / `BASE_URL` / `MODEL` / `DIMENSIONS` / `PROFILE_KEY` | `rag.embedding.*` | 否（relaxed） | 生效；`profile-key` 另显式声明以避免默认值随遮蔽丢失 |
+
+`spring-ai-rag-starter` 与 `spring-ai-rag-documents` 不含 `application.yml`，不参与遮蔽。
+Helm 的 ConfigMap 以 `SPRING_CONFIG_ADDITIONAL_LOCATION` 加载，优先级高于 classpath，
+其中已给出完整 `spring.datasource.url`；但 `RAG_ROOT_API_KEY` 仍依赖镜像内 demo 配置的
+占位符。新增 demo 或新增 `RAG_*` 变量时，必须同步检查这一层。
+
+回归测试：
+`demos/demo-basic-rag/src/test/java/com/springairag/demo/ApplicationEnvironmentBindingTest.java`
+在 CI 快层执行，断言安全 root key、数据源、embedding profile 三类变量都能解析。
+
 ## 数据库配置
 
 ```yaml

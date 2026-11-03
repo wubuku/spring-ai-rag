@@ -52,6 +52,7 @@ rag:
     base-url: ${RAG_EMBEDDING_BASE_URL:https://api.siliconflow.cn}
     model: ${RAG_EMBEDDING_MODEL:BAAI/bge-m3}
     dimensions: ${RAG_EMBEDDING_DIMENSIONS:1024}
+    profile-key: ${RAG_EMBEDDING_PROFILE_KEY:siliconflow-bge-m3-1024-v1}
   retrieval:
     fulltext-enabled: true
     fulltext-strategy: auto

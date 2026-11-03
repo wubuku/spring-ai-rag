@@ -1678,6 +1678,40 @@ Error messages are internationalized via Spring `MessageSource`, auto-selecting 
 | `messages_en.properties` | English |
 | `messages_zh_CN.properties` | Chinese (Simplified) |
 
+## Config-file shadowing and environment-variable resolution
+
+Demo modules ship their own `application.yml`, which collides with the same file inside
+the `spring-ai-rag-core` jar. In a fat jar, `BOOT-INF/classes` wins over dependency jars,
+so **the core base configuration is shadowed entirely** (profile files such as
+`application-postgresql.yml` are still loaded). As a result:
+
+- variables whose names match the property path (`RAG_SECURITY_ENABLED` →
+  `rag.security.enabled`, `RAG_EMBEDDING_MODEL` → `rag.embedding.model`) bind directly
+  through relaxed binding;
+- variables whose names do **not** match (`RAG_ROOT_API_KEY`, `POSTGRES_*`) only work
+  when the demo `application.yml` maps them with `${...}` placeholders; otherwise they
+  fail silently.
+
+| Environment variable | Target property | Demo placeholder needed | Verdict |
+|----------------------|-----------------|-------------------------|---------|
+| `RAG_SECURITY_ENABLED` | `rag.security.enabled` | No (relaxed) | Works |
+| `RAG_ROOT_API_KEY` | `rag.security.root-api-key` | **Yes** | Works (declared in all four demos) |
+| `POSTGRES_HOST` / `PORT` / `DATABASE` / `USER` / `PASSWORD` | `spring.datasource.*` | **Yes** | Works (declared in all four demos) |
+| `SPRING_DATASOURCE_URL` | `spring.datasource.url` | No (relaxed) | Works (overrides `POSTGRES_*`) |
+| `RAG_EMBEDDING_API_KEY` / `BASE_URL` / `MODEL` / `DIMENSIONS` / `PROFILE_KEY` | `rag.embedding.*` | No (relaxed) | Works; `profile-key` is also declared so its default is not lost to shadowing |
+
+`spring-ai-rag-starter` and `spring-ai-rag-documents` contain no `application.yml` and do
+not participate in shadowing. The Helm ConfigMap is loaded via
+`SPRING_CONFIG_ADDITIONAL_LOCATION` (higher precedence than the classpath) and already
+provides a full `spring.datasource.url`; `RAG_ROOT_API_KEY` still depends on the placeholder
+in the demo config baked into the image. When adding a demo or a new `RAG_*` variable, audit
+this layer as well.
+
+Regression test:
+`demos/demo-basic-rag/src/test/java/com/springairag/demo/ApplicationEnvironmentBindingTest.java`
+runs in the CI fast layer and asserts that security root key, datasource, and embedding
+profile variables resolve.
+
 ## Database Configuration
 
 ```yaml

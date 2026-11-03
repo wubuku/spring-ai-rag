@@ -227,7 +227,9 @@ test('the gate turns red on the real chart when a key comes back', () => {
 test('the floor assertion is above the real count and the parser agrees with it', () => {
   const declared = parseHelmSecretEnv(readFileSync(DECLARER_PATH, 'utf8'));
   assert.ok(declared.length >= MIN_DECLARED, `${declared.length} declared, floor ${MIN_DECLARED}`);
-  assert.equal(declared.length, 16, 'eighteen minus the two that nothing read');
+  assert.equal(declared.length, 18,
+    'removed unread keys were replaced by RAG_SECURITY_ENABLED / RAG_ROOT_API_KEY, '
+    + 'both read by the demo config baked into the image');
   assert.deepEqual(parseHelmSecretEnv(''), [], 'an empty chart declares nothing');
 });
 

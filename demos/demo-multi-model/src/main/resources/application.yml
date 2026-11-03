@@ -16,7 +16,7 @@ spring:
 
   # PostgreSQL configuration
   datasource:
-    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:spring_ai_rag_dev}
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DATABASE:${POSTGRES_DB:spring_ai_rag_dev}}
     username: ${POSTGRES_USER:postgres}
     password: ${POSTGRES_PASSWORD:postgres}
     driver-class-name: org.postgresql.Driver
@@ -58,6 +58,11 @@ rag:
     base-url: ${RAG_EMBEDDING_BASE_URL:https://api.siliconflow.cn}
     model: ${RAG_EMBEDDING_MODEL:BAAI/bge-m3}
     dimensions: ${RAG_EMBEDDING_DIMENSIONS:1024}
+    profile-key: ${RAG_EMBEDDING_PROFILE_KEY:siliconflow-bge-m3-1024-v1}
+  security:
+    # 与 core application.yml 对齐：demo 配置会遮蔽依赖 jar 的同名文件。
+    enabled: ${RAG_SECURITY_ENABLED:false}
+    root-api-key: ${RAG_ROOT_API_KEY:}
   retrieval:
     default-limit: 5
     vector-weight: 0.7

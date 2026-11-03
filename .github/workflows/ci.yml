@@ -118,6 +118,14 @@ jobs:
           mkdir -p .verification/ci
           mvn test -B 2>&1 | tee .verification/ci/mvn-test.log
 
+      # demo 不在根 reactor 中，`mvn test` 不会覆盖它；这里单独跑配置绑定测试，
+      # 防止 demo 的 application.yml 遮蔽 core 配置后环境变量静默失效。
+      - name: Demo environment binding tests
+        run: |
+          set -o pipefail
+          mvn -B -f demos/demo-basic-rag/pom.xml test 2>&1 \
+            | tee .verification/ci/demo-binding-test.log
+
       # 必须紧跟全量 `mvn test`：verify-test-visibility 读取这次运行产生的
       # surefire 报告，而 gated IT 会覆盖同一批文件（gated IT 已移到 nightly）。
       - name: Repository gate chain (visibility, wiring, inert tests)
