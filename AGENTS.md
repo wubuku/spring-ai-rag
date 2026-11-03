@@ -62,6 +62,7 @@
 | 外部后端业务服务接入 / Binding / 验收 | [business-client-integration-zh-CN.md](docs/business-client-integration-zh-CN.md)（[EN](docs/business-client-integration.md)） |
 | 文件管理 / PDF 导入 / 添加到 RAG | [file-management-and-pdf-rag-zh-CN.md](docs/file-management-and-pdf-rag-zh-CN.md)（[EN](docs/file-management-and-pdf-rag.md)） |
 | 外部文档同步 / 重索引 | [rest-api-zh-CN.md](docs/rest-api-zh-CN.md#external-documents-idempotent-synchronization) § 外部文档：幂等同步 · [project-context-zh-CN.md](docs/project-context-zh-CN.md#external-document-synchronization) |
+| 并发/幂等、备份恢复、接口兼容 | [testing-guide-zh-CN.md](docs/testing-guide-zh-CN.md) · [backup-restore-zh-CN.md](docs/backup-restore-zh-CN.md) · [api-compatibility-zh-CN.md](docs/api-compatibility-zh-CN.md) |
 | 后续改进 TODO | [TODO-zh-CN.md](docs/TODO-zh-CN.md)（[EN](docs/TODO.md)） |
 | 多模型与外部 `models.json` | [multi-model-external-config-zh-CN.md](docs/multi-model-external-config-zh-CN.md) |
 | 测试 / 质量默认 / 发版 | [testing-guide-zh-CN.md](docs/testing-guide-zh-CN.md) · [quality-defaults-zh-CN.md](docs/quality-defaults-zh-CN.md) · [release-checklist-zh-CN.md](docs/release-checklist-zh-CN.md) |

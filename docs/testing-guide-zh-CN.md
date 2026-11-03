@@ -124,14 +124,17 @@ mvn test -pl spring-ai-rag-core -Dtest=RagDocumentControllerTest
 mvn clean package -DskipTests
 ```
 
-## 底座验收：干净冷启动、Flyway 升级路径与构建可复现性
+## 底座验收：干净冷启动、Flyway 升级路径、并发幂等、备份恢复与接口兼容
 
-这三项各有可重复入口；改动构建、迁移或上手文档后至少跑一次。
+这五项各有可重复入口；改动构建、迁移、并发路径、备份脚本或 HTTP 契约后至少跑一次。
 
 | 项目 | 命令 | 覆盖 |
 |------|------|------|
 | 干净环境冷启动 | `./scripts/verify-clean-clone.sh` | 临时目录 clone → 临时库 → `.env`(mock) → `mvn -B -DskipTests install` → demo health → collection → documents → embed → search → chat；结束自动清理 |
 | Flyway 双路径 | `./scripts/verify-flyway-schema-paths.sh` | 空库→最新 vs 空库→V30→最新 schema 逐字一致；早期数据升级后仍在；最新库重跑 migrate 不丢数据 |
+| 并发与幂等 | `./scripts/verify-concurrency-idempotency.py` | 同一 collectionKey 并发创建、同一外部文档并发同步、同一文件并发上传（同一 Idempotency-Key）、同一文档并发 reindex、同一 principal 并发配额扣减；断言无重复行、无丢更新、除 409/429 外无 5xx，并验证唯一约束/条件写入 |
+| 备份恢复演练 | `./scripts/verify-backup-restore-drill.py` | 真实数据写入 → 停写 → `rag-backup.py backup` → 校验 → 恢复到全新库 → 文档/向量/collection/迁移历史/内容指纹比对 → 恢复库直接 health+search |
+| 接口兼容 | `node scripts/verify-openapi-breaking-change.mjs --self-test`；`./scripts/verify-api-compatibility.sh` | 删除 operation/字段/响应、改类型、改必填、删枚举值算破坏；新增可选字段不算；基线在 `testdata/api-contract/openapi-baseline.json` |
 | 构建可复现 | `./mvnw -v`（钉住 3.9.14）、`mvn -o -B -DskipTests compile`、`cd spring-ai-rag-webui && npm ci --dry-run` | Wrapper 版本、离线构建、lockfile 一致性 |
 
 冷启动脚本使用仓库自带 mock provider（`scripts/run-mock-llm.sh`），只证明链路可跑通，
@@ -141,6 +144,13 @@ mvn clean package -DskipTests
 
 Flyway 脚本只创建/删除 `rag_flyway_*` 临时库；默认较早版本 V30，可用 `--early` 指定。
 schema 比对前忽略注释、`SET`、owner/ACL 与 `\restrict` 行。
+
+并发/幂等脚本只创建 `rag_concurrency_*` 临时库，默认端口 18086，结束即删除；
+它用真实 PostgreSQL 与 HTTP 并发请求，不依赖悲观锁。备份恢复脚本只创建
+`rag_backup_drill_*` 与 `*_restore` 两个临时库，`--keep` 可保留现场排查。
+当 `pg_dump/pg_restore` 客户端主版本高于服务端（例如客户端 17、服务端 16）时，
+`rag-backup.py` 会自动退回纯 SQL 恢复并去掉服务端不支持的
+`SET transaction_timeout` 与 `\restrict` 指令；同一主版本仍走原生 `pg_restore`。
 
 Maven Wrapper 的 `distributionUrl` 保持官方地址；境内网络可临时覆盖：
 `MVNW_REPOURL=https://maven.aliyun.com/repository/public ./mvnw ...`，不把区域镜像写死。

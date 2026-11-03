@@ -29,6 +29,7 @@
 | 备份数据与隔离恢复演练 | [数据备份与隔离恢复](backup-restore-zh-CN.md) | [测试指南](testing-guide-zh-CN.md) |
 | 多轮真实问答、双实例与恢复发布闸门 | [质量稳定性与生产恢复验收](quality-production-acceptance-zh-CN.md) | [备份恢复](backup-restore-zh-CN.md) |
 | 对接 / 调试 HTTP API | [rest-api-zh-CN.md](rest-api-zh-CN.md) | Swagger：`/swagger-ui.html` |
+| 防止 HTTP 契约破坏性变更 | [接口兼容门禁](api-compatibility-zh-CN.md) | 基线 `testdata/api-contract/openapi-baseline.json` |
 | 让后端业务服务安全接入 RAG 数据面并完成生产验收 | [业务服务接入指南](business-client-integration-zh-CN.md) | [REST API：认证](rest-api-zh-CN.md#认证)、[一键验收](developer-reference-zh-CN.md#业务服务接入就绪一键验证) |
 | 为外部 Client 做版本化契约验收和 JSON/SSE 消费回归 | [Client Consumer Contract Kit](client-contract-kit-zh-CN.md) | [测试指南：Client API](testing-guide-zh-CN.md#client-consumer-contract-kit) |
 | 用 Python/Node 官方 SDK 快速接入 OpenAI 兼容预览 | [Client SDK 快速入门](client-sdk-quickstart-zh-CN.md) | [REST API：OpenAI 兼容预览](rest-api-zh-CN.md#openai-chat-completions-兼容预览) |

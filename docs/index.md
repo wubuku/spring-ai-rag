@@ -29,6 +29,7 @@ Additive capabilities: [trustworthy assertions, active diagnostics and offline q
 | Back up data and rehearse isolated recovery | [Backup And Restore](backup-restore.md) | [Testing Guide](testing-guide.md) |
 | Repeated real QA, two nodes and recovery gates | [Quality And Production Acceptance](quality-production-acceptance.md) | [Backup And Restore](backup-restore.md) |
 | Integrate / debug HTTP APIs | [rest-api.md](rest-api.md) | Swagger: `/swagger-ui.html` |
+| Prevent breaking HTTP contract changes | [API Compatibility Gate](api-compatibility.md) | Baseline `testdata/api-contract/openapi-baseline.json` |
 | Connect a backend business service to the RAG data plane and complete production acceptance | [Business Service Integration Guide](business-client-integration.md) | [REST API: Authentication](rest-api.md#authentication), [one-command acceptance](developer-reference.md#business-service-integration-readiness-verification) |
 | Run versioned consumer contract acceptance and JSON/SSE client regression | [Client Consumer Contract Kit](client-contract-kit.md) | [Testing Guide: Client API](testing-guide.md#client-consumer-contract-kit) |
 | Onboard an external Python/Node client to the OpenAI compatibility preview | [Client SDK Quickstart](client-sdk-quickstart.md) | [REST API: OpenAI compatibility preview](rest-api.md#openai-chat-completions-compatibility-preview) |

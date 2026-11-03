@@ -66,7 +66,13 @@ Scoped API Key 读写和 Collection 隔离、历史、Native/OpenAI JSON/SSE，�
 mvn clean compile test-compile
 python3 scripts/test-support/rag-backup-self-test.py
 python3 scripts/verify-dependency-recovery-e2e.py
+python3 scripts/verify-backup-restore-drill.py   # 真实数据 + pg_dump/pg_restore 单轮演练
 ```
+
+`verify-backup-restore-drill.py` 用 demo + mock provider 在临时库写入真实文档与向量，
+停写后调用 `scripts/rag-backup.py` 做全量备份，恢复到另一个全新库，逐项比对文档数、
+向量数与维度、collection、迁移历史和内容指纹，再用恢复库启动应用跑 health 与 search。
+默认结束即删除两个临时库，`--keep` 保留现场。临时库固定前缀 `rag_backup_drill_*`。
 
 演练只创建自己的 PostgreSQL 容器/临时库，使用受控上游，真实执行 dump/restore、逐表内容对账、
 文件/向量/权限/删除与外部 HTTP 检查；额外覆盖故障、混合负载、强杀/正常重启和恢复负例。

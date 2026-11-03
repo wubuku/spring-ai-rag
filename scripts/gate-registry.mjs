@@ -78,6 +78,7 @@ export const GATES = [
   manual('scripts/verify-alert-notification-delivery.sh'),
   manual('scripts/verify-clean-clone.sh'),
   manual('scripts/verify-flyway-schema-paths.sh'),
+  manual('scripts/verify-openapi-breaking-change.mjs'),
   manual('scripts/verify-api-key-expiry-alerts.sh'),
   manual('scripts/verify-business-client-readiness.sh'),
   manual('scripts/verify-client-api-e2e.sh'),

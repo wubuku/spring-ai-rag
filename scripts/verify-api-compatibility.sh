@@ -50,6 +50,19 @@ node scripts/lib/api-contract-check.mjs \
   --manifest "$MANIFEST" \
   | tee "$LOG_DIR/static-contract.json"
 
+node scripts/verify-openapi-breaking-change.mjs --self-test \
+  >"$LOG_DIR/openapi-breaking-change-self-test.log"
+
+OPENAPI_BASELINE="testdata/api-contract/openapi-baseline.json"
+[[ -f "$OPENAPI_BASELINE" ]] || {
+  echo "Missing OpenAPI baseline: $OPENAPI_BASELINE" >&2
+  exit 2
+}
+node scripts/verify-openapi-breaking-change.mjs \
+  --baseline "$OPENAPI_BASELINE" \
+  --current "$SPEC_FILE" \
+  | tee "$LOG_DIR/openapi-breaking-change.log"
+
 request() {
   local method="$1" url="$2" body_file="$3" header_file="$4" response_file="$5"
   local args=("${curl_args[@]}" --request "$method" --dump-header "$header_file" --output "$response_file" --write-out '%{http_code}')

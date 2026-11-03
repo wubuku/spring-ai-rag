@@ -162,6 +162,37 @@ jobs:
           fi
           echo "Flyway inventory OK: ${count} script(s), V${versions[0]}..V${versions[$((count - 1))]}"
 
+      # 接口兼容门禁：启动 demo 取真实 /v3/api-docs，与提交的基线比对。
+      # 只验证契约形状，不调用真实模型；新增可选字段不算破坏。
+      - name: OpenAPI breaking-change gate
+        run: |
+          set -euo pipefail
+          mvn -B -DskipTests -f demos/demo-basic-rag/pom.xml package -q
+          jar="$(ls demos/demo-basic-rag/target/demo-basic-rag-*.jar | head -1)"
+          RAG_EMBEDDING_PROFILE_KEY=siliconflow-bge-m3-1024-v1 \
+          RAG_RETRIEVAL_MIN_SCORE=0 \
+            java -jar "$jar" --server.port=18090 --rag.security.enabled=false \
+            > /tmp/openapi-app.log 2>&1 &
+          app_pid=$!
+          trap 'kill "$app_pid" 2>/dev/null || true' EXIT
+          ready=0
+          for _ in $(seq 1 90); do
+            if curl -fsS http://127.0.0.1:18090/actuator/health >/dev/null 2>&1; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" != "1" ]; then
+            echo "::error::demo did not become healthy for OpenAPI gate"
+            tail -n 40 /tmp/openapi-app.log || true
+            exit 1
+          fi
+          curl -fsS http://127.0.0.1:18090/v3/api-docs -o /tmp/openapi-current.json
+          node scripts/verify-openapi-breaking-change.mjs --self-test
+          node scripts/verify-openapi-breaking-change.mjs \
+            --current /tmp/openapi-current.json
+
       - name: Package
         run: mvn package -DskipTests -B
 

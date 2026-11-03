@@ -85,6 +85,46 @@ def backup(directory):
     return manifest
 
 
+def tool_major(binary):
+    output = subprocess.run([binary, "--version"], capture_output=True, check=False,
+                            text=True).stdout
+    match = re.search(r"\(PostgreSQL\)\s+(\d+)", output)
+    return int(match.group(1)) if match else 0
+
+
+def server_major():
+    return int(sql("SHOW server_version_num")) // 10000
+
+
+def restore_custom(directory):
+    """pg_restore 缺失版本兼容时退回纯 SQL 路径。
+
+    pg_restore 17 在恢复前无条件执行 `SET transaction_timeout = 0`，而
+    PostgreSQL 16 及以下不识别该参数；pg_restore 16 又读不了 1.16 版归档。
+    两边都不换版本时，唯一可行路径是把归档转成 SQL，去掉服务端不支持的
+    GUC 与 psql 17 的 `\\restrict` 指令，再用 psql 单事务执行。
+    """
+    plain = directory / "database.plain.sql"
+    try:
+        run(["pg_restore", "--no-owner", "--no-privileges",
+             "--file", str(plain), str(directory / "database.dump")])
+        kept = []
+        for line in plain.read_text().splitlines():
+            stripped = line.strip()
+            if stripped == "SET transaction_timeout = 0;":
+                continue
+            if stripped.startswith("\\restrict ") or stripped.startswith("\\unrestrict "):
+                continue
+            kept.append(line)
+        plain.write_text("\n".join(kept) + "\n")
+        plain.chmod(0o600)
+        run(["psql", "-X", "-q", "-v", "ON_ERROR_STOP=1",
+             "--single-transaction", "-f", str(plain)])
+    finally:
+        if plain.exists():
+            plain.unlink()
+
+
 def restore(directory):
     target_identity = identity()
     manifest = validate_bundle(directory)
@@ -105,8 +145,11 @@ def restore(directory):
     if empty != "t":
         raise ValueError("Restore target must be a new empty database; no cleanup will be attempted")
     run(["pg_restore", "--list", str(directory / "database.dump")])
-    run(["pg_restore", "--dbname", os.environ["PGDATABASE"], "--no-owner", "--no-privileges",
-         "--exit-on-error", "--single-transaction", str(directory / "database.dump")])
+    if tool_major("pg_restore") > server_major():
+        restore_custom(directory)
+    else:
+        run(["pg_restore", "--dbname", os.environ["PGDATABASE"], "--no-owner", "--no-privileges",
+             "--exit-on-error", "--single-transaction", str(directory / "database.dump")])
     version = sql("SELECT version FROM public.flyway_schema_history WHERE success "
                   "ORDER BY installed_rank DESC LIMIT 1")
     if version != manifest["schemaVersion"]:

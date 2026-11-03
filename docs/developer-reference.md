@@ -101,20 +101,25 @@ mvn clean test jacoco:report
 open spring-ai-rag-core/target/site/jacoco/index.html
 ```
 
-Foundation acceptance for clean environment, upgrade paths, and build reproducibility:
+Foundation acceptance for clean environment / upgrade paths / concurrency and
+idempotency / backup and restore / API compatibility / build reproducibility:
 
 ```bash
-./scripts/verify-clean-clone.sh          # clean clone in a temp dir; mock provider exercises the full pipeline
-./scripts/verify-flyway-schema-paths.sh  # empty vs V30 incremental schema equality + rerun preserves data
-./mvnw -v                                # Maven Wrapper pinned to 3.9.14
-mvn -o -B -DskipTests compile            # offline build after dependencies were warmed once
-cd spring-ai-rag-webui && npm ci --dry-run  # lockfile/package.json consistency
+./scripts/verify-clean-clone.sh           # clean clone in a temp dir; mock provider exercises the full pipeline
+./scripts/verify-flyway-schema-paths.sh   # empty vs V30 incremental schema equality + rerun preserves data
+./scripts/verify-concurrency-idempotency.py  # five concurrency/idempotency races on real PostgreSQL
+./scripts/verify-backup-restore-drill.py  # full backup → fresh restore → counts/fingerprint/search checks
+node scripts/verify-openapi-breaking-change.mjs --self-test  # contract-breaking rule self-test
+./mvnw -v                                 # Maven Wrapper pinned to 3.9.14
+mvn -o -B -DskipTests compile             # offline build after dependencies were warmed once
+cd spring-ai-rag-webui && npm ci --dry-run   # lockfile/package.json consistency
 ```
 
 In restricted networks override only the wrapper repository for that run:
 `MVNW_REPOURL=https://maven.aliyun.com/repository/public ./mvnw ...`; do not edit
 `distributionUrl`. Details in
-[testing-guide.md](testing-guide.md#foundation-acceptance-clean-cold-start-flyway-upgrade-paths-and-build-reproducibility).
+[testing-guide.md](testing-guide.md#foundation-acceptance-cold-start-flyway-upgrade-paths-concurrency-and-idempotency-backuprestore-and-api-compatibility),
+and see [api-compatibility.md](api-compatibility.md) for the contract rules.
 
 See [testing-guide.md](testing-guide.md) for the test strategy.
 

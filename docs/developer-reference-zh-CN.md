@@ -97,19 +97,23 @@ mvn clean test jacoco:report
 open spring-ai-rag-core/target/site/jacoco/index.html
 ```
 
-干净环境 / 升级路径 / 构建可复现性三项底座验收：
+干净环境 / 升级路径 / 并发幂等 / 备份恢复 / 接口兼容 / 构建可复现性底座验收：
 
 ```bash
-./scripts/verify-clean-clone.sh          # 临时目录干净 clone，mock provider 跑通全链路
-./scripts/verify-flyway-schema-paths.sh  # 空库与 V30 增量升级 schema 一致 + 重跑不丢数据
-./mvnw -v                                # Maven Wrapper 钉住 3.9.14
-mvn -o -B -DskipTests compile            # 依赖已预热后的离线构建
-cd spring-ai-rag-webui && npm ci --dry-run  # lockfile 与 package.json 一致性
+./scripts/verify-clean-clone.sh           # 临时目录干净 clone，mock provider 跑通全链路
+./scripts/verify-flyway-schema-paths.sh   # 空库与 V30 增量升级 schema 一致 + 重跑不丢数据
+./scripts/verify-concurrency-idempotency.py  # 真实 PostgreSQL 五类并发/幂等竞态
+./scripts/verify-backup-restore-drill.py  # 全量备份 → 新库恢复 → 计数/指纹/检索校验
+node scripts/verify-openapi-breaking-change.mjs --self-test  # 契约破坏规则自检
+./mvnw -v                                 # Maven Wrapper 钉住 3.9.14
+mvn -o -B -DskipTests compile             # 依赖已预热后的离线构建
+cd spring-ai-rag-webui && npm ci --dry-run   # lockfile 与 package.json 一致性
 ```
 
 境内网络需要镜像时，只临时覆盖 Wrapper 仓库地址：
 `MVNW_REPOURL=https://maven.aliyun.com/repository/public ./mvnw ...`，不要改
-`distributionUrl`。细节见 [testing-guide-zh-CN.md](testing-guide-zh-CN.md#底座验收干净冷启动flyway-升级路径与构建可复现性)。
+`distributionUrl`。细节见 [testing-guide-zh-CN.md](testing-guide-zh-CN.md#底座验收干净冷启动flyway-升级路径并发幂等备份恢复与接口兼容)，
+接口兼容规则见 [api-compatibility-zh-CN.md](api-compatibility-zh-CN.md)。
 
 测试策略和更多命令见 [testing-guide-zh-CN.md](testing-guide-zh-CN.md)。
 

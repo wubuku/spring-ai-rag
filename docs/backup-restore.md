@@ -73,7 +73,16 @@ consumer contracts. Define RPO from the backup schedule and measure RTO in drill
 mvn clean compile test-compile
 python3 scripts/test-support/rag-backup-self-test.py
 python3 scripts/verify-dependency-recovery-e2e.py
+python3 scripts/verify-backup-restore-drill.py   # real data + pg_dump/pg_restore single pass
 ```
+
+`verify-backup-restore-drill.py` seeds real documents and vectors through the demo with
+the mock provider, quiesces the app, runs a full backup via `scripts/rag-backup.py`,
+restores into a second fresh database, compares document count, vector count and
+dimensions, collections, migration history, and a content fingerprint, then starts the
+app on the restored database and runs health and search. It drops both temporary
+databases on exit; `--keep` retains them. All temporary databases use the
+`rag_backup_drill_*` prefix.
 
 The drill creates only its own PostgreSQL container/databases, uses controlled upstreams, actually dumps/restores,
 compares all table contents and checks files/vectors/permissions/deletions and external HTTP. It also exercises faults,

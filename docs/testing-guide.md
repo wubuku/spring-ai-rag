@@ -135,15 +135,18 @@ mvn test -pl spring-ai-rag-core -Dtest=RagDocumentControllerTest
 mvn clean package -DskipTests
 ```
 
-## Foundation Acceptance: Clean Cold Start, Flyway Upgrade Paths, And Build Reproducibility
+## Foundation Acceptance: Clean Cold Start, Flyway Upgrade Paths, Concurrency And Idempotency, Backup/Restore, And API Compatibility
 
 Each item has a repeatable entry point; run at least one after changing builds,
-migrations, or onboarding docs.
+migrations, concurrency paths, backup tooling, or HTTP contracts.
 
 | Item | Command | Coverage |
 |------|---------|----------|
 | Clean-environment cold start | `./scripts/verify-clean-clone.sh` | clone into a temp dir → temp DB → `.env`(mock) → `mvn -B -DskipTests install` → demo health → collection → documents → embed → search → chat; auto-cleanup |
 | Flyway dual paths | `./scripts/verify-flyway-schema-paths.sh` | empty→latest vs empty→V30→latest produce byte-identical schema; early data survives; re-running migrate on the latest DB preserves data |
+| Concurrency and idempotency | `./scripts/verify-concurrency-idempotency.py` | parallel create of one collectionKey, parallel sync of one external document, parallel upload with one Idempotency-Key, parallel reindex, parallel quota consumption; asserts no duplicate rows, no lost updates, no 5xx except 409/429, and checks unique constraints/conditional writes |
+| Backup/restore drill | `./scripts/verify-backup-restore-drill.py` | seed real data → quiesce → `rag-backup.py backup` → verify → restore into a fresh DB → compare documents/vectors/collections/migration history/content fingerprint → health+search on the restored DB |
+| API compatibility | `node scripts/verify-openapi-breaking-change.mjs --self-test`; `./scripts/verify-api-compatibility.sh` | removed operation/field/response, type change, newly required, removed enum value are breaking; added optional fields are not; baseline is `testdata/api-contract/openapi-baseline.json` |
 | Build reproducibility | `./mvnw -v` (pinned 3.9.14), `mvn -o -B -DskipTests compile`, `cd spring-ai-rag-webui && npm ci --dry-run` | wrapper version, offline build, lockfile consistency |
 
 The cold-start script uses the bundled mock provider (`scripts/run-mock-llm.sh`); it
@@ -154,6 +157,15 @@ the Active Collection rejects writes because its profile has no runtime configur
 The Flyway script only creates/drops `rag_flyway_*` temporary databases; the early
 version defaults to V30 and can be changed with `--early`. Before comparison it ignores
 comments, `SET`, owner/ACL, and `\restrict` lines.
+
+The concurrency/idempotency script creates only `rag_concurrency_*` temporary databases
+on port 18086 and drops them on exit. It drives real PostgreSQL with concurrent HTTP
+requests and never relies on pessimistic locks. The backup/restore drill creates
+`rag_backup_drill_*` and `*_restore` databases; `--keep` retains the scene for debugging.
+When the client major version is newer than the server (for example client 17 against
+server 16), `rag-backup.py` falls back to plain-SQL restore and strips the unsupported
+`SET transaction_timeout` and `\restrict` directives; matching majors keep native
+`pg_restore`.
 
 The Maven Wrapper keeps the official `distributionUrl`; in restricted networks override
 it per run with `MVNW_REPOURL=https://maven.aliyun.com/repository/public ./mvnw ...`

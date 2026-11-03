@@ -374,6 +374,9 @@ check_scripts_and_commands() {
       scripts/verify-alert-notification-delivery.sh \
       scripts/verify-clean-clone.sh \
       scripts/verify-flyway-schema-paths.sh \
+      scripts/verify-concurrency-idempotency.py \
+      scripts/verify-backup-restore-drill.py \
+      scripts/verify-openapi-breaking-change.mjs \
       scripts/verify-no-pessimistic-locks.sh \
       scripts/run-claude-grok.sh; do
     [[ -x "$script" ]] || {
