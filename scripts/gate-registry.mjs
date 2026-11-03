@@ -671,6 +671,17 @@ export const GATES = [
     noCiReason: E2E_MOCK_NOT_IN_CI,
   },
 
+  // 视觉回归入口：5 个关键页面 × 桌面/移动各一份截图基准。CI 的 webui job 在
+  // 官方 Playwright 容器里直接执行本脚本，与本地同一条命令；基准按平台分文件
+  // （*-chromium-darwin.png / *-chromium-linux.png），因此必须由 CI 同一镜像渲染。
+  {
+    gate: 'scripts/verify-visual-regression.sh',
+    kind: 'entrypoint',
+    noSelfTestReason:
+      '它本身就是像素比对（10 个用例即其自测）；再写一份自测要么复制基准，' +
+      '要么在没有渲染环境的地方假装验证。失败路径由阈值内/外的截图差异直接证明。',
+  },
+
   // ------------------------------------------------------- WebUI gate chain --
   // All ten run from `npm run lint`, which ci.yml's webui job executes — the one
   // gate layer CI has always covered. Batch 809 appended the self-test suite to

@@ -413,8 +413,7 @@ Collections / Files 各拍桌面（1440×900）与移动（390×844）两档基�
 仅 Chromium 执行：
 
 ```bash
-cd spring-ai-rag-webui
-npm run test:visual
+./scripts/verify-visual-regression.sh
 ```
 
 判定口径：单像素颜色容差 `threshold=0.2` 吸收字体抗锯齿；整图像素差上限
@@ -423,7 +422,8 @@ npm run test:visual
 （`*-chromium-darwin.png` / `*-chromium-linux.png`），因为 Chromium 的字体与
 滚动条渲染跨平台不同；CI 用与 `@playwright/test` 同版本的官方镜像
 `mcr.microsoft.com/playwright:v1.59.1-noble` 执行，保证与 Linux 基准同源。
-该套件不在 `npm run test:e2e:mock` 内，CI 与本地都通过 `npm run test:visual` 单独跑。
+该套件不在 `npm run test:e2e:mock` 内，CI 与本地都通过 `scripts/verify-visual-regression.sh`
+单独跑（内部等价于 `npx playwright test --config playwright.visual.config.ts <spec>`）。
 
 更新流程（仅在外观变更属于预期时）：
 

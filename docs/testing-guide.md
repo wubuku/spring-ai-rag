@@ -470,8 +470,7 @@ captures two baselines each — desktop (1440×900) and mobile (390×844), ten i
 for Dashboard / Documents / Chat / Collections / Files, Chromium only:
 
 ```bash
-cd spring-ai-rag-webui
-npm run test:visual
+./scripts/verify-visual-regression.sh
 ```
 
 Comparison policy: a per-pixel color tolerance of `threshold=0.2` absorbs font
@@ -482,7 +481,8 @@ fails. Baselines are platform-specific files (`*-chromium-darwin.png` /
 per OS; CI runs the pinned official image `mcr.microsoft.com/playwright:v1.59.1-noble`
 that matches `@playwright/test`, so Linux baselines come from the same renderer.
 This suite is not part of `npm run test:e2e:mock`; both CI and local runs invoke
-`npm run test:visual` separately.
+`scripts/verify-visual-regression.sh` separately (equivalent to
+`npx playwright test --config playwright.visual.config.ts <spec>`).
 
 Update procedure (only when the visual change is intended):
 
