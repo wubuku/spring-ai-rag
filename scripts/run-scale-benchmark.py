@@ -388,16 +388,25 @@ def seed_corpus(dsn, collection_key, documents, chunks_per_doc, fixture):
             timings["state_ms"] = timer.ms()
 
             timer = Timer()
-            cursor.execute("ANALYZE rag_documents")
-            cursor.execute("ANALYZE rag_document_chunks")
             cursor.execute("ANALYZE rag_embeddings")
             cursor.execute("ANALYZE rag_document_embedding_state")
             timings["analyze_ms"] = timer.ms()
 
         connection.commit()
+        # GIN 的 fastupdate pending list 必须由 VACUUM 落盘；只做 ANALYZE 时
+        # 刚批量导入的 trigram 条目仍在 pending list，关键词查询看不出索引收益。
+        timer = Timer()
+        connection.autocommit = True
+        with connection.cursor() as vacuum_cursor:
+            vacuum_cursor.execute("VACUUM ANALYZE rag_documents")
+            vacuum_cursor.execute("VACUUM ANALYZE rag_document_chunks")
+        connection.autocommit = False
+        timings["vacuum_ms"] = timer.ms()
+
         timings["total_ms"] = round(
             timings["documents_ms"] + timings["chunks_ms"] + timings["vectors_ms"]
-            + timings["state_ms"] + timings["analyze_ms"], 2)
+            + timings["state_ms"] + timings["analyze_ms"]
+            + timings["vacuum_ms"], 2)
         return {
             "collection_id": collection_id,
             "profile_id": profile_id,
@@ -560,6 +569,43 @@ def diff_table_stats(before, after):
     return result
 
 
+def keyword_query_plan(dsn, collection_key, keyword):
+    """记录公开文档列表关键词查询的实际计划，证明命中/未命中 trigram 索引。"""
+    if psycopg2 is None:
+        return None
+    connection = psycopg2.connect(dsn)
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT id FROM rag_collection WHERE collection_key = %s",
+                (collection_key,))
+            row = cursor.fetchone()
+            if row is None:
+                return None
+            collection_id = row[0]
+            cursor.execute(
+                "EXPLAIN (FORMAT JSON) "
+                "SELECT id FROM rag_documents "
+                "WHERE collection_id = %s "
+                "AND lower(title) LIKE lower(concat('%%', %s, '%%')) "
+                "ORDER BY created_at DESC LIMIT 20",
+                (collection_id, keyword))
+            plan = json.dumps(cursor.fetchone()[0])
+            cursor.execute(
+                "SELECT EXISTS (SELECT 1 FROM pg_indexes "
+                "WHERE tablename = 'rag_documents' "
+                "AND indexname = 'idx_rag_documents_title_trgm')")
+            index_present = bool(cursor.fetchone()[0])
+            return {
+                "index_present": index_present,
+                "uses_title_trgm_index":
+                    "idx_rag_documents_title_trgm" in plan,
+                "plan": plan,
+            }
+    finally:
+        connection.close()
+
+
 def bench_http(client, collection_key, documents, chunk_count, args):
     result = {}
     result["documents_first_page"] = measure(
@@ -570,6 +616,12 @@ def bench_http(client, collection_key, documents, chunk_count, args):
         client, "GET", "/api/v1/rag/documents",
         {"collectionKey": collection_key,
          "offset": max(0, documents - 20), "limit": 20},
+        requests=args.requests, warmup=args.warmup)
+    # 唯一标题片段（>=3 字符，可被 pg_trgm 提取）用于观察索引命中。
+    result["documents_keyword_search"] = measure(
+        client, "GET", "/api/v1/rag/documents",
+        {"collectionKey": collection_key, "title": f"doc {documents - 1:05d}",
+         "offset": 0, "limit": 20},
         requests=args.requests, warmup=args.warmup)
     result["collections_list"] = measure(
         client, "GET", "/api/v1/rag/collections",
@@ -668,6 +720,8 @@ def run(args):
             bench = bench_http(client, key, documents,
                                documents * args.chunks_per_doc, args)
             output["scales"][str(documents)]["http"] = bench
+            output["scales"][str(documents)]["keyword_plan"] = keyword_query_plan(
+                args.dsn, key, f"doc {documents - 1:05d}")
         output["table_stats_delta"] = diff_table_stats(before, table_stats(args.dsn))
 
     if args.seed_ttl_rows and not args.skip_http:

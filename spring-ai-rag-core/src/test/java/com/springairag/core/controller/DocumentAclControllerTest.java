@@ -76,13 +76,16 @@ class DocumentAclControllerTest {
     }
 
     @Test
-    void restrictedKeyCannotReadDocumentFromAnotherCollection() {
+    void restrictedKeyGets404ForDocumentInAnotherCollection() {
         RagDocument document = new RagDocument();
         document.setId(10L);
         document.setCollectionId(9L);
         when(documentRepository.findById(10L)).thenReturn(Optional.of(document));
 
-        assertThrows(SecurityException.class, () -> controller.getDocument(10L));
+        // 存在但不可见的 documentId 与不存在一样返回 404，阻断越权枚举。
+        assertThrows(
+                com.springairag.core.exception.DocumentNotFoundException.class,
+                () -> controller.getDocument(10L));
     }
 
     @Test

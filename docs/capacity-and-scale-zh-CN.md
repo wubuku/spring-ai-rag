@@ -75,6 +75,8 @@ python3 scripts/run-scale-benchmark.py --ack-write \
 | 全文加权检索 | 143.5 / 164.0 | 211.0 / 252.2 | 1.47x |
 | 文档列表（首页/深页） | 36.4 / 54.6 · 19.2 / 36.7 | 17.5 / 26.7 · 23.8 / 36.1 | 0.48x / 1.24x |
 | Collection 列表 | 7.1 / 11.4 | 5.5 / 14.8 | 0.78x（绝对值小） |
+| 文档列表关键词检索（trigram 索引） | 未测 | 4.2 / 6.0 | — |
+| 文档列表关键词检索（无索引） | 未测 | 8.4 / 21.1 | — |
 | 流式导出 | 82.3 / 92.4 | 58.6 / 59.1 | 0.71x |
 | 评估 | 7.9 / 11.4 | 5.5 / 6.4 | 0.70x |
 
@@ -82,6 +84,13 @@ python3 scripts/run-scale-benchmark.py --ack-write \
 p50 从 255→451 ms 的线性退化已消失。本轮 3k→5k（文档 1.67x）的 p50 全部
 低于 1.47x，导出与列表甚至随缓存/批量优化下降；纯向量 p95 的 455 ms 是
 10 个样本中的单点冷查询，p50 持平。
+
+文档列表关键词（`title` 参数）单独验证：`V73` 在 `pg_trgm` 可用时创建
+`idx_rag_documents_title_trgm`（`GIN (lower(title) gin_trgm_ops)`）。5k 文档下
+同一查询的执行计划从 `Seq Scan`（2.134 ms）变为 `Bitmap Index Scan`
+（0.103 ms）；HTTP p50 从 8.4 ms 降到 4.2 ms。批量导入后必须
+`VACUUM ANALYZE rag_documents`，否则新写入的 trigram 条目还在 GIN pending
+list 里，查询仍可能走顺序扫描——压测脚本已把这一步纳入 seed 流程。
 
 **关键发现（已修复）**：原向量检索 SQL 把 `rag_embeddings`、新鲜度状态表和
 `rag_documents` 放在同一个 `ORDER BY <=> LIMIT` 查询里，规划器无法使用部分 HNSW
@@ -166,7 +175,8 @@ JOIN 和最终排序。同一数据量下 p50 稳定在 50–60 ms，×2 比值�
 | 检索 | p50 约 50–90 ms | 主要成本是 embedding 调用；SQL 部分已近常数。候选池上限 1000，过期向量过多时召回可能不足 |
 | 列表 | 页面固定 ≤20 行 | 已消除随数据量增长的 N+1；处理摘要每页 4 次批量查询 |
 | 导出 | 流式，单批 200 行，响应头给出批次数 | 内存不随行数线性增长；受网络与客户端消费速度限制。超大 Collection 建议在低峰导出 |
-| 全文检索 | 关键词通道按 `ILIKE` 扫描 `rag_documents` | 5k 文档下 p50 约 210 ms；关键字查询的代价随集合大小增长，暂无 trigram 索引 |
+| 文档列表关键词 | `LOWER(title) LIKE '%kw%'`；pg_trgm 可用时走 `idx_rag_documents_title_trgm` | 5k 文档：有索引 SQL 0.103 ms、HTTP p50 4.2 ms；无索引 SQL 2.134 ms、HTTP p50 8.4 ms。**关键词 ≥3 字符**才能被 trigram 提取；1–2 字符仍全表扫描。`pg_trgm` 缺失时迁移只记 NOTICE 并降级为顺序扫描，不阻塞启动 |
+| 全文检索（检索链路） | pg_jieba / English FTS / pg_trgm 按能力自动选择 | 与上面的文档列表关键词是不同路径；5k 文档全文加权 p50 约 158 ms，主要成本是 embedding 调用 |
 | 连接池 | 默认 max=10 | 高并发检索/导入会先耗尽连接；需按并发调大并压测 |
 | TTL 清理 | 1 万行 287 ms，分批 | 行数线性增长但批次有界；百万级建议缩短调度间隔而非单次放大批次 |
 

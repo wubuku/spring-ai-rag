@@ -335,8 +335,13 @@ public class RagCollectionController {
     @GetMapping("/{id}")
     @Timed(value = "rag.collection.get", description = "Get collection details", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<Map<String, Object>> getById(@PathVariable Long id) {
-        ApiKeyCollectionAccess.requireCollectionId(
-                id, ApiKeyCollectionAccess.currentPolicy());
+        try {
+            ApiKeyCollectionAccess.requireCollectionId(
+                    id, ApiKeyCollectionAccess.currentPolicy());
+        } catch (SecurityException denied) {
+            // 越权枚举防护：不在 allow-list 的 collectionId 与不存在的 id 一样返回 404。
+            return ResponseEntity.notFound().build();
+        }
         log.info("Getting collection: id={}", id);
 
         return findActiveCollection(id)

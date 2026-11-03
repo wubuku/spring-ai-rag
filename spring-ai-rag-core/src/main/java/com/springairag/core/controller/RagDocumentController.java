@@ -317,29 +317,33 @@ public class RagDocumentController {
     public ResponseEntity<DocumentDetailResponse> getDocument(@PathVariable Long id) {
         log.info("Getting document: id={}", id);
 
-        return documentRepository.findById(id)
-            .map(doc -> {
-                    ApiKeyCollectionAccess.requireDocumentAccess(
-                            doc, ApiKeyCollectionAccess.currentPolicy());
-                    Long collectionId = doc.getCollectionId();
-                    Map<Long, String> collectionNameMap = collectionId != null
-                            ? collectionRepository.findById(collectionId)
-                                    .map(collection -> Map.of(collectionId, collection.getName()))
-                                    .orElseGet(Map::of)
-                            : Map.of();
-                    Map<Long, String> collectionKeyMap = collectionId != null
-                            ? collectionRepository.findById(collectionId)
-                                    .map(collection -> Map.of(collectionId, collection.getCollectionKey()))
-                                    .orElseGet(Map::of)
-                            : Map.of();
-                    DocumentDetailResponse result = DocumentMapper.toDetailResponse(
-                            doc, collectionNameMap, collectionKeyMap, embeddingRepository,
-                            activeEmbeddingProfileId(),
-                            documentLifecycleService == null
-                                    ? null : documentLifecycleService.read(doc));
-                    return ResponseEntity.ok(result);
-                })
+        RagDocument doc = documentRepository.findById(id)
                 .orElseThrow(() -> new DocumentNotFoundException(id));
+        try {
+            ApiKeyCollectionAccess.requireDocumentAccess(
+                    doc, ApiKeyCollectionAccess.currentPolicy());
+        } catch (SecurityException denied) {
+            // 越权枚举防护：存在但不在 allow-list 的文档与不存在的文档返回同样的 404，
+            // 避免受限 key 通过 403/404 差异探测其他 Collection 里的 documentId。
+            throw new DocumentNotFoundException(id);
+        }
+        Long collectionId = doc.getCollectionId();
+        Map<Long, String> collectionNameMap = collectionId != null
+                ? collectionRepository.findById(collectionId)
+                        .map(collection -> Map.of(collectionId, collection.getName()))
+                        .orElseGet(Map::of)
+                : Map.of();
+        Map<Long, String> collectionKeyMap = collectionId != null
+                ? collectionRepository.findById(collectionId)
+                        .map(collection -> Map.of(collectionId, collection.getCollectionKey()))
+                        .orElseGet(Map::of)
+                : Map.of();
+        DocumentDetailResponse result = DocumentMapper.toDetailResponse(
+                doc, collectionNameMap, collectionKeyMap, embeddingRepository,
+                activeEmbeddingProfileId(),
+                documentLifecycleService == null
+                        ? null : documentLifecycleService.read(doc));
+        return ResponseEntity.ok(result);
     }
 
     @Operation(summary = "Delete document", description = "Delete document and its associated embedding vectors (cascading delete).")

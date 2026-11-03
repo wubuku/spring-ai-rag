@@ -80,6 +80,8 @@ the dominant cost.
 | Fulltext-weighted search | 143.5 / 164.0 | 211.0 / 252.2 | 1.47x |
 | Document list (first/deep) | 36.4 / 54.6 · 19.2 / 36.7 | 17.5 / 26.7 · 23.8 / 36.1 | 0.48x / 1.24x |
 | Collection list | 7.1 / 11.4 | 5.5 / 14.8 | 0.78x (tiny absolute) |
+| Document-list keyword (trigram index) | not measured | 4.2 / 6.0 | — |
+| Document-list keyword (no index) | not measured | 8.4 / 21.1 | — |
 | Streaming export | 82.3 / 92.4 | 58.6 / 59.1 | 0.71x |
 | Evaluation | 7.9 / 11.4 | 5.5 / 6.4 | 0.70x |
 
@@ -88,6 +90,14 @@ candidate CTE fix, the 255→451 ms p50 linear degradation disappeared. In this
 3k→5k run (1.67x documents) every p50 ratio is below 1.47x, and export/list p50
 even dropped with batching/cache effects. The 455 ms vector p95 is a single cold
 query among 10 samples; p50 stayed flat.
+
+The document-list `title` keyword filter was verified separately: `V73` creates
+`idx_rag_documents_title_trgm` (`GIN (lower(title) gin_trgm_ops)`) when `pg_trgm`
+exists. At 5k docs the same query moved from `Seq Scan` (2.134 ms) to
+`Bitmap Index Scan` (0.103 ms); HTTP p50 dropped from 8.4 ms to 4.2 ms. After a
+bulk import run `VACUUM ANALYZE rag_documents`, otherwise new trigram entries sit
+in the GIN pending list and queries may still scan sequentially — the benchmark
+seed flow now performs this step.
 
 **Key finding (fixed)**: the original vector SQL put `rag_embeddings`, the freshness
 state table, and `rag_documents` into one `ORDER BY <=> LIMIT` query. The planner could
@@ -184,7 +194,8 @@ delete, and no lock contention or long transactions were observed.
 | Retrieval | p50 ~50–90 ms | Dominated by the embedding call; SQL is near-constant. Candidate pool caps at 1000, so heavy staleness can reduce recall |
 | Lists | Fixed ≤20 rows per page | N+1 growth removed; processing summaries use 4 batched queries per page |
 | Export | Streaming, 200 rows per batch, batch count in response headers | Memory does not grow with row count; limited by network and client consumption. Export very large collections off-peak |
-| Fulltext search | Keyword channel scans `rag_documents` with `ILIKE` | p50 ~210 ms at 5k docs; keyword cost grows with collection size, no trigram index yet |
+| Document-list keyword | `LOWER(title) LIKE '%kw%'`; uses `idx_rag_documents_title_trgm` when pg_trgm is available | At 5k docs: index SQL 0.103 ms / HTTP p50 4.2 ms; no index SQL 2.134 ms / HTTP p50 8.4 ms. **Keywords need ≥3 characters** for trigram extraction; 1–2 characters still scan. If `pg_trgm` is absent the migration logs NOTICE and degrades to a sequential scan without failing startup |
+| Fulltext search (retrieval path) | pg_jieba / English FTS / pg_trgm auto-selected by capability | Separate from the document-list keyword filter; fulltext-weighted p50 ~158 ms at 5k docs, dominated by the embedding call |
 | Connection pool | default max=10 | Concurrent search/import will exhaust it first; size it for expected concurrency and load-test |
 | TTL cleanup | 10k rows in 287 ms, batched | Rows grow linearly but batches stay bounded; for millions, shorten the schedule instead of enlarging batches |
 

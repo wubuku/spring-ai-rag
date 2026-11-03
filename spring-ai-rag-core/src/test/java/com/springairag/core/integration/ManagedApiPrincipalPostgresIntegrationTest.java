@@ -9,6 +9,7 @@ import com.springairag.core.entity.ApiKeyRotationStatus;
 import com.springairag.core.entity.RagApiKey;
 import com.springairag.core.entity.RagApiPrincipal;
 import com.springairag.core.exception.RagException;
+import com.springairag.core.filter.ApiKeyAuthFilter;
 import com.springairag.core.ratelimit.PostgresRateLimitStore;
 import com.springairag.core.repository.RagApiKeyRepository;
 import com.springairag.core.repository.RagApiPrincipalRepository;
@@ -36,6 +37,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.orm.jpa.JpaTransactionManager;
 import org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.orm.jpa.vendor.HibernateJpaVendorAdapter;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
@@ -43,9 +46,11 @@ import org.testcontainers.DockerClientFactory;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
 
+import jakarta.servlet.FilterChain;
 import javax.sql.DataSource;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -615,6 +620,54 @@ class ManagedApiPrincipalPostgresIntegrationTest {
         assertEquals(0, jdbc.queryForObject(
                 "SELECT COUNT(*) FROM rag_api_key WHERE principal_id=? AND enabled=TRUE",
                 Integer.class, first.getPrincipalId()));
+    }
+
+    @Test
+    void documentTitleTrigramIndexExistsExactlyWhenPgTrgmIsAvailable() {
+        Boolean trgm = jdbc.queryForObject(
+                "SELECT EXISTS (SELECT 1 FROM pg_extension WHERE extname='pg_trgm')",
+                Boolean.class);
+        Boolean index = jdbc.queryForObject("""
+                SELECT EXISTS (
+                    SELECT 1 FROM pg_indexes
+                    WHERE tablename='rag_documents'
+                      AND indexname='idx_rag_documents_title_trgm')
+                """, Boolean.class);
+        assertEquals(Boolean.TRUE.equals(trgm), Boolean.TRUE.equals(index),
+                "trigram 索引必须可选：pg_trgm 可用才创建，缺失时迁移不得失败");
+    }
+
+    @Test
+    void authFilterRejectsRotatedAndRevokedCredentialsImmediately() throws Exception {
+        ApiKeyCreatedResponse first = service.generateManagedKey(
+                request("Filter rotation", 40));
+        ApiKeyAuthFilter filter = new ApiKeyAuthFilter("", true, service);
+
+        assertChainInvoked(filter, first.getRawKey(), true);
+
+        ApiKeyCreatedResponse second = service.rotateManagedKey(first.getKeyId());
+        // 轮换完成后旧 key 在下一次请求就必须 401，不能等到缓存过期。
+        assertChainInvoked(filter, first.getRawKey(), false);
+        assertChainInvoked(filter, second.getRawKey(), true);
+
+        assertTrue(service.revokeManagedKey(second.getKeyId()));
+        assertChainInvoked(filter, second.getRawKey(), false);
+    }
+
+    private void assertChainInvoked(ApiKeyAuthFilter filter, String rawKey,
+                                    boolean expected) throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest(
+                "GET", "/api/v1/rag/documents");
+        request.setRequestURI("/api/v1/rag/documents");
+        request.addHeader("X-API-Key", rawKey);
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        AtomicBoolean invoked = new AtomicBoolean();
+        FilterChain chain = (req, res) -> invoked.set(true);
+        filter.doFilter(request, response, chain);
+        assertEquals(expected, invoked.get());
+        if (!expected) {
+            assertEquals(401, response.getStatus());
+        }
     }
 
     @Test

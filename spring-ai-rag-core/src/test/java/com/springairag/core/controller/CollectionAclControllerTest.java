@@ -20,6 +20,7 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -68,10 +69,11 @@ class CollectionAclControllerTest {
     }
 
     @Test
-    void restrictedKeyCannotReadAnotherCollection() {
+    void restrictedKeyGets404ForAnotherCollection() {
         authenticateRestrictedKey(2L);
 
-        assertThrows(SecurityException.class, () -> controller.getById(9L));
+        // 越权枚举防护：未授权 collectionId 与不存在 id 都返回 404。
+        assertEquals(404, controller.getById(9L).getStatusCode().value());
         verifyNoInteractions(collectionRepository);
     }
 

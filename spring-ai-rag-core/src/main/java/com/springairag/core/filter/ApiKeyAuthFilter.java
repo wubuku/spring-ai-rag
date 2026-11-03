@@ -222,7 +222,15 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
                 return new CredentialResult(null,
                         "Authorization header must use the Bearer scheme.");
             }
-            bearer = normalize(authorization.substring(BEARER_PREFIX.length()));
+            String credentialPart = authorization.substring(BEARER_PREFIX.length());
+            if (credentialPart.isBlank()
+                    || Character.isWhitespace(credentialPart.charAt(0))) {
+                // 严格只接受 "Bearer" + 单个 SP + credential。多空格/制表符等
+                // 歧义形态直接拒绝，避免不同代理与解析器对同一请求给出不同身份。
+                return new CredentialResult(null,
+                        "Authorization Bearer credential must not contain whitespace.");
+            }
+            bearer = normalize(credentialPart);
             if (bearer == null) {
                 return new CredentialResult(null,
                         "Authorization Bearer credential must not be blank.");

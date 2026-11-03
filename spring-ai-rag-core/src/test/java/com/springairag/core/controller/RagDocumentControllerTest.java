@@ -19,9 +19,12 @@ import com.springairag.api.dto.ReembedResultResponse;
 import com.springairag.api.dto.VersionHistoryResponse;
 import com.springairag.core.config.EmbeddingProfile;
 import com.springairag.core.config.EmbeddingProfileProvider;
+import com.springairag.core.entity.ApiKeyRole;
+import com.springairag.core.entity.RagApiKey;
 import com.springairag.core.entity.RagCollection;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.exception.DocumentNotFoundException;
+import com.springairag.core.filter.ApiKeyAuthFilter;
 import com.springairag.core.repository.RagCollectionRepository;
 import com.springairag.core.service.DocumentDerivationDescriptorProvider;
 import com.springairag.core.repository.RagDocumentRepository;
@@ -39,6 +42,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.data.domain.*;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.time.LocalDateTime;
 import java.util.*;
@@ -272,6 +278,29 @@ class RagDocumentControllerTest {
         when(documentRepository.findById(999L)).thenReturn(Optional.empty());
 
         assertThrows(DocumentNotFoundException.class, () -> controller.getDocument(999L));
+    }
+
+    @Test
+    void getDocument_deniedCollectionIsIndistinguishableFromMissing() {
+        RagDocument doc = createDoc(1L, "越权文档", "内容");
+        doc.setCollectionId(9L);
+        when(documentRepository.findById(1L)).thenReturn(Optional.of(doc));
+
+        RagApiKey key = new RagApiKey();
+        key.setRole(ApiKeyRole.NORMAL);
+        key.setAllowedCollectionIds("2");
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setAttribute(
+                ApiKeyAuthFilter.AUTHENTICATED_API_KEY_ENTITY, key);
+        RequestContextHolder.setRequestAttributes(
+                new ServletRequestAttributes(request));
+        try {
+            // 存在但不在 allow-list 的文档与不存在文档统一返回 404。
+            assertThrows(DocumentNotFoundException.class,
+                    () -> controller.getDocument(1L));
+        } finally {
+            RequestContextHolder.resetRequestAttributes();
+        }
     }
 
     @Test

@@ -1814,7 +1814,8 @@ Collection 身份的位置增加 `collectionKey`。
 按内部 ID 返回正文、metadata、`documentRevision` 和 lifecycle。`lifecycle.searchability`
 为 `READY`、`KEYWORD_ONLY`、`INDEXING`、`FAILED`、`NOT_REQUESTED` 或 `DISABLED`。
 请分别检查 `localIndexStatus` 和 `embeddingStatus`；`embeddingFresh=false` 不等于
-关键词检索不可用。
+关键词检索不可用。受限 Key 若不拥有该文档所属 Collection，返回与“文档不存在”相同的
+`404`（不是 `403` 或 `200`），避免通过状态码探测其他 Collection 的 `documentId`。
 
 ---
 
@@ -2535,7 +2536,8 @@ GET /api/v1/rag/collections/by-key/export?collectionKey=customer-42%3Amanual%3Av
 - `POST /api/v1/rag/collections/{id}/documents`
 - `GET /api/v1/rag/collections/{id}/export`
 
-这些路由与推荐路由使用相同的 ACL、不可变、软删除和目标 key 规则。
+这些路由与推荐路由使用相同的 ACL、不可变、软删除和目标 key 规则。`GET /{id}`
+对受限 Key 的不可见 ID 返回 `404`（与不存在 ID 一致），用于阻断数字 ID 枚举。
 
 ---
 

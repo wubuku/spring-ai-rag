@@ -236,6 +236,54 @@ class SecurityPathTraversalProbeTest {
                         + authenticated.observedUri() + ")");
     }
 
+    @Test
+    @DisplayName("path case variation cannot reach the protected endpoint")
+    void uppercasePathIsNotServedWithoutCredentials() throws IOException {
+        // Tomcat 的 url-pattern 匹配区分大小写；Spring MVC 的 handler 映射也区分大小写。
+        // 若未来任一环节变成大小写不敏感，这里会先看到 2xx 而不是 401/404。
+        Probe anonymous = rawGet("/API/v1/rag/probe-protected", null);
+        Probe authenticated = rawGet("/API/v1/rag/probe-protected", API_KEY);
+
+        assertNotEquals(2, anonymous.status() / 100,
+                () -> "uppercase path was served without credentials: "
+                        + anonymous.status());
+        assertNotEquals(2, authenticated.status() / 100,
+                () -> "uppercase path was served: " + authenticated.status());
+    }
+
+    @Test
+    @DisplayName("a trailing slash cannot bypass authentication")
+    void trailingSlashIsStillChallenged() throws IOException {
+        Probe anonymous = rawGet(PROTECTED + "/", null);
+        Probe authenticated = rawGet(PROTECTED + "/", API_KEY);
+
+        assertNotEquals(2, anonymous.status() / 100,
+                () -> "trailing-slash path was served without credentials: "
+                        + anonymous.status());
+        // 认证后是否 200/404 由 Spring MVC 的尾斜杠策略决定；关键是不能匿名 2xx。
+        assertNotEquals(2, anonymous.status() / 100);
+        assertNotNull(authenticated);
+    }
+
+    @Test
+    @DisplayName("the legacy /files/** surface is not a route at all")
+    void filesPrefixIsNotAnUnauthenticatedRoute() throws IOException {
+        Probe anonymous = rawGet("/files/raw/probe", null);
+        Probe authenticated = rawGet("/files/raw/probe", API_KEY);
+
+        assertEquals(404, anonymous.status());
+        assertEquals(404, authenticated.status());
+    }
+
+    @Test
+    @DisplayName("actuator is intentionally outside the API authentication filter")
+    void actuatorPrefixIsPublicByDesign() throws IOException {
+        // 生产文件端点都在 /api/v1/rag/files 下，受 API Key 保护；这里的 /actuator
+        // 探针用于固定“actuator 前缀被排除”这一既有设计，而不是数据面路由。
+        Probe anonymous = rawGet("/actuator/probe-health", null);
+        assertEquals(200, anonymous.status());
+    }
+
     /** Sends the request line verbatim; no client-side URI normalisation is involved. */
     private Probe rawGet(String rawPath, String apiKey) throws IOException {
         // Record where the queue ends before this request, so the observation
@@ -344,6 +392,11 @@ class SecurityPathTraversalProbeTest {
         @GetMapping(PROTECTED)
         public Map<String, Object> protectedEndpoint() {
             return Map.of("served", true);
+        }
+
+        @GetMapping("/actuator/probe-health")
+        public Map<String, Object> actuatorProbe() {
+            return Map.of("status", "UP");
         }
     }
 
