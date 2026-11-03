@@ -27,6 +27,7 @@
 | 理解 Chat 记忆、上下文预算、RAG 与工具调用 | [Chat 记忆、RAG 与工具调用](chat-memory-rag-tool-calling-zh-CN.md) | [架构文档](architecture-zh-CN.md)、[配置参考](configuration-zh-CN.md) |
 | 改配置项 | [configuration-zh-CN.md](configuration-zh-CN.md) | `spring-ai-rag-core/src/main/resources/application.yml` |
 | 备份数据与隔离恢复演练 | [数据备份与隔离恢复](backup-restore-zh-CN.md) | [测试指南](testing-guide-zh-CN.md) |
+| 审查数据面授权、文件归属与跨租户隔离 | [安全边界与租户隔离](security-boundary-zh-CN.md) | [REST API：认证](rest-api-zh-CN.md#认证)、[测试指南](testing-guide-zh-CN.md) |
 | 多轮真实问答、双实例与恢复发布闸门 | [质量稳定性与生产恢复验收](quality-production-acceptance-zh-CN.md) | [备份恢复](backup-restore-zh-CN.md) |
 | 对接 / 调试 HTTP API | [rest-api-zh-CN.md](rest-api-zh-CN.md) | Swagger：`/swagger-ui.html` |
 | 防止 HTTP 契约破坏性变更 | [接口兼容门禁](api-compatibility-zh-CN.md) | 基线 `testdata/api-contract/openapi-baseline.json` |
@@ -139,7 +140,7 @@ OpenClaw 的 `TOOLS.md`、`MEMORY.md`、`memory/`、`HEARTBEAT.md` 等本地状�
 | `spring-ai-rag-core/.../chat/`、`.../rag/` | 模式化 Chat 执行、Modular RAG 与 Tool Calling |
 | `spring-ai-rag-core/.../config/RagProperties.java` | `rag.*` 配置绑定 |
 | `spring-ai-rag-core/src/main/resources/application.yml` | 主配置（端口 8081） |
-| `spring-ai-rag-core/src/main/resources/db/migration/` | Flyway **V1–V70** |
+| `spring-ai-rag-core/src/main/resources/db/migration/` | Flyway **V1–V71** |
 | `spring-ai-rag-starter/` | 自动配置 `GeneralRagAutoConfiguration` |
 | `spring-ai-rag-documents/` | 分块 / 清洗 |
 | `spring-ai-rag-webui/` | React 管理台（独立 npm 工程） |

@@ -14,8 +14,8 @@
 
 import { readFileSync } from 'node:fs';
 import process from 'node:process';
-import { pathToFileURL } from 'node:url';
 import { compareSpecs } from './lib/openapi-breaking-change.mjs';
+import { isMainModule } from './lib/is-main-module.mjs';
 
 const DEFAULT_BASELINE = new URL('../testdata/api-contract/openapi-baseline.json', import.meta.url);
 
@@ -179,7 +179,7 @@ async function main() {
   process.exit(1);
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (isMainModule(import.meta.url)) {
   main().catch((error) => {
     console.error(`ERROR ${error.message}`);
     process.exit(1);

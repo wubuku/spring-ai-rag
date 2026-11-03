@@ -5,6 +5,8 @@ import com.springairag.core.entity.FsFile;
 import com.springairag.core.entity.FsImportBatch;
 import com.springairag.core.repository.FsFileRepository;
 import com.springairag.core.repository.FsImportBatchRepository;
+import com.springairag.core.security.ApiAccessPolicy;
+import com.springairag.core.security.ApiKeyCollectionAccess;
 import com.springairag.core.service.pdf.PdfConverter;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
@@ -88,6 +90,18 @@ public class PdfImportService {
      */
     @Transactional
     public PdfImportResult importPdf(MultipartFile pdfFile, String collection) throws IOException {
+        return importPdf(pdfFile, collection, null, null);
+    }
+
+    /**
+     * 导入 PDF 并记录归属。
+     *
+     * @param ownerPrincipalId 当前调用 principal；未启用认证时为 null
+     * @param collectionId     PDF-to-RAG 的目标 Collection；仅存储文件时为 null
+     */
+    @Transactional
+    public PdfImportResult importPdf(MultipartFile pdfFile, String collection,
+                                     String ownerPrincipalId, Long collectionId) throws IOException {
         if (!pdfProperties.isEnabled()) {
             throw new IllegalStateException("PDF import is disabled (rag.pdf.enabled=false)");
         }
@@ -141,11 +155,15 @@ public class PdfImportService {
             byte[] pdfBytes = Files.readAllBytes(tempPdfPath);
             List<FsFile> records =
                     collectOutputRecords(uuid, markerOutputDir, pdfBytes, pdfProperties);
+            records.forEach(record -> {
+                record.setOwnerPrincipalId(ownerPrincipalId);
+                record.setCollectionId(collectionId);
+            });
             String originalPath = uuid + "/original.pdf";
             String entryMarkdownPath = uuid + "/default.md";
 
             fsFileRepository.saveAllAndFlush(records);
-            fsImportBatchRepository.save(new FsImportBatch(
+            FsImportBatch batch = new FsImportBatch(
                     importId,
                     "PDF",
                     originalFilename,
@@ -153,7 +171,10 @@ public class PdfImportService {
                     entryMarkdownPath,
                     originalPath,
                     records.size()
-            ));
+            );
+            batch.setOwnerPrincipalId(ownerPrincipalId);
+            batch.setCollectionId(collectionId);
+            fsImportBatchRepository.save(batch);
 
             log.info("PDF import completed: uuid={}, entryMarkdown={}, files={}",
                     uuid, entryMarkdownPath, records.size());
@@ -354,6 +375,14 @@ public class PdfImportService {
         return fsImportBatchRepository.findById(importId);
     }
 
+    /** 受限调用方只能读取其可见文件对应的导入批次元数据。 */
+    public Optional<FsImportBatch> getVisibleImportBatch(
+            UUID importId, ApiAccessPolicy policy) {
+        return fsImportBatchRepository.findById(importId)
+                .filter(batch -> ApiKeyCollectionAccess.canAccessFile(
+                        policy, batch.getOwnerPrincipalId(), batch.getCollectionId()));
+    }
+
     public Map<UUID, FsImportBatch> getImportBatches(Collection<UUID> importIds) {
         if (importIds == null || importIds.isEmpty()) {
             return Map.of();
@@ -373,50 +402,106 @@ public class PdfImportService {
     }
 
     /**
+     * Get a file only when the calling policy may see it.
+     *
+     * <p>受限 key 对不可见文件返回 empty（映射为 404），避免暴露文件是否存在。
+     */
+    public Optional<FsFile> getVisibleFile(String path, ApiAccessPolicy policy) {
+        return fsFileRepository.findById(path)
+                .filter(file -> ApiKeyCollectionAccess.canAccessFile(
+                        policy, file.getOwnerPrincipalId(), file.getCollectionId()));
+    }
+
+    /**
      * List direct children (files) under a virtual path prefix.
      */
     public List<FsFile> listChildren(String virtualPath) {
-        String normalizedRaw = (virtualPath == null || virtualPath.isBlank()) ? "/" : virtualPath.replace('\\', '/');
+        Listing listing = normalizeListing(virtualPath);
+        List<FsFile> files = listing.root()
+                ? fsFileRepository.findAll()
+                : fsFileRepository.findByPathStartingWithOrderByPathAsc(listing.queryPrefix());
+        return listing.root() ? files : filterDirectChildren(files, listing.normalized());
+    }
 
-        // Root "/" or empty — DB paths lack leading "/", so findAll() and let
-        // buildTreeEntries synthesize directory entries from file paths
-        if (normalizedRaw.equals("/") || normalizedRaw.isEmpty()) {
-            return fsFileRepository.findAll();
+    /**
+     * 受限 key 下的目录列举：只返回本人上传或允许 Collection 内的文件。
+     * root/不受限调用方与 {@link #listChildren(String)} 完全一致。
+     */
+    public List<FsFile> listVisibleChildren(String virtualPath, ApiAccessPolicy policy) {
+        if (ApiKeyCollectionAccess.isUnrestricted(policy)) {
+            return listChildren(virtualPath);
         }
+        Listing listing = normalizeListing(virtualPath);
+        List<Long> allowed = ApiKeyCollectionAccess
+                .restrictedCollectionIds(policy).orElseThrow().stream().toList();
+        String owner = policy == null ? null : policy.getPrincipalId();
+        List<FsFile> files = listing.root()
+                ? fsFileRepository.findVisibleRootFiles(owner, allowed)
+                : fsFileRepository.findVisibleByPathPrefix(
+                        owner, allowed, listing.queryPrefix());
+        return listing.root() ? files : filterDirectChildren(files, listing.normalized());
+    }
 
-        // Strip trailing "/" then any whitespace; also strip leading "/" from the
-        // normalized path to build a clean DB query prefix (handles legacy paths)
-        final String normalized = normalizedRaw.endsWith("/")
-                ? normalizedRaw.substring(0, normalizedRaw.length() - 1).trim()
-                : normalizedRaw.trim();
-
-        // Defensive: query prefix strips leading "/" to match DB paths (e.g.
-        // DB has " e2242d5d..." with a leading space, so we strip "/" to match)
-        final String queryPrefix = normalized.startsWith("/")
-                ? normalized.substring(1).trim()
-                : normalized;
-
-        return fsFileRepository.findByPathStartingWithOrderByPathAsc(queryPrefix)
-                .stream()
+    private List<FsFile> filterDirectChildren(List<FsFile> files, String normalized) {
+        return files.stream()
                 .filter(f -> {
                     // Handle leading whitespace in DB paths (legacy data)
                     String cleanPath = f.getPath().trim();
                     String remainder = cleanPath.substring(normalized.length());
                     // A direct child has no "/" in remainder (e.g. "default.md")
                     // or remainder starts with "/" and has no more "/" (e.g. "/default.md")
-                    // The latter case is a direct file in the directory (e.g. "uuid/default.md")
                     if (remainder.indexOf('/') == -1) {
                         return true;
                     }
-                    // If remainder starts with "/" (direct child), check if it's truly direct
-                    // e.g. "/subdir/file.md" has more "/" so it's not direct
-                    // but "/default.md" has no more "/" so it IS direct
                     if (remainder.startsWith("/")) {
                         return remainder.indexOf('/', 1) == -1;
                     }
                     return false;
                 })
                 .toList();
+    }
+
+    private record Listing(boolean root, String normalized, String queryPrefix) {
+    }
+
+    private static Listing normalizeListing(String virtualPath) {
+        String normalizedRaw = (virtualPath == null || virtualPath.isBlank())
+                ? "/" : virtualPath.replace('\\', '/');
+        if (normalizedRaw.equals("/") || normalizedRaw.isEmpty()) {
+            return new Listing(true, "/", "");
+        }
+        final String normalized = normalizedRaw.endsWith("/")
+                ? normalizedRaw.substring(0, normalizedRaw.length() - 1).trim()
+                : normalizedRaw.trim();
+        final String queryPrefix = normalized.startsWith("/")
+                ? normalized.substring(1).trim()
+                : normalized;
+        return new Listing(false, normalized, queryPrefix);
+    }
+
+    /**
+     * 校验虚拟路径：拒绝空字节、控制字符以及 "." / ".." 片段。
+     *
+     * <p>路径只用于查询数据库，不会拼接真实文件系统路径；这里的拒绝是为了
+     * 让穿越尝试稳定失败（400），而不是依赖“数据库里恰好没有这一行”。
+     */
+    public static String validateVirtualPath(String path) {
+        if (path == null || path.isEmpty()) {
+            return "";
+        }
+        String normalized = path.replace('\\', '/');
+        for (int i = 0; i < normalized.length(); i++) {
+            char character = normalized.charAt(i);
+            if (character == 0 || character < 32 || character == 127) {
+                throw new IllegalArgumentException("Path contains control characters");
+            }
+        }
+        for (String segment : normalized.split("/", -1)) {
+            if (".".equals(segment) || "..".equals(segment)) {
+                throw new IllegalArgumentException("Path traversal is not allowed");
+            }
+        }
+        return normalized;
     }
 
     /**
@@ -430,7 +515,9 @@ public class PdfImportService {
                         if (filename.isEmpty()) {
                             filename = "file";
                         }
-                        Path tempFile = Files.createTempFile("fsfile-", "-" + filename);
+                        // 临时文件名只使用安全字符，避免路径分隔符进入文件系统。
+                        String safeSuffix = filename.replaceAll("[^A-Za-z0-9._-]", "_");
+                        Path tempFile = Files.createTempFile("fsfile-", "-" + safeSuffix);
                         tempFile.toFile().deleteOnExit();
                         Files.write(tempFile, file.getContentBin());
                         return new UrlResource(tempFile.toUri());

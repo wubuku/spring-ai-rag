@@ -6,6 +6,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.entity.RagRetrievalEvaluation;
 import com.springairag.core.repository.RagRetrievalEvaluationRepository;
+import com.springairag.core.security.ApiAccessPolicy;
+import com.springairag.core.security.ApiKeyCollectionAccess;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
@@ -125,6 +127,7 @@ public class RetrievalEvaluationServiceImpl implements RetrievalEvaluationServic
         evaluation.setHitRate(metrics.getHitRate());
         evaluation.setEvaluationMethod(evaluationMethod);
         evaluation.setEvaluatorId(evaluatorId);
+        evaluation.setOwnerPrincipalId(currentPrincipalId());
         Map<String, Object> evalResult = new HashMap<>();
         int k = ragProperties.getRetrieval().getEvaluationK();
         evalResult.put("precisionAt" + k, metrics.getPrecisionAtK().getOrDefault(k, 0.0));
@@ -230,8 +233,12 @@ public class RetrievalEvaluationServiceImpl implements RetrievalEvaluationServic
     @Override
     @Transactional(readOnly = true)
     public EvaluationReport getReport(ZonedDateTime startDate, ZonedDateTime endDate) {
-        List<RagRetrievalEvaluation> evaluations =
-                evaluationRepository.findByCreatedAtBetweenOrderByCreatedAtDesc(startDate, endDate);
+        String owner = restrictedOwnerPrincipalId();
+        List<RagRetrievalEvaluation> evaluations = owner == null
+                ? evaluationRepository.findByCreatedAtBetweenOrderByCreatedAtDesc(startDate, endDate)
+                : evaluationRepository
+                        .findByOwnerPrincipalIdAndCreatedAtBetweenOrderByCreatedAtDesc(
+                                owner, startDate, endDate);
         return buildReport(evaluations);
     }
 
@@ -256,15 +263,24 @@ public class RetrievalEvaluationServiceImpl implements RetrievalEvaluationServic
     @Override
     @Transactional(readOnly = true)
     public List<RagRetrievalEvaluation> getHistory(int page, int size) {
-        return evaluationRepository.findAllByOrderByCreatedAtDesc(PageRequest.of(page, size))
-                .getContent();
+        String owner = restrictedOwnerPrincipalId();
+        if (owner == null) {
+            return evaluationRepository.findAllByOrderByCreatedAtDesc(
+                    PageRequest.of(page, size)).getContent();
+        }
+        return evaluationRepository.findByOwnerPrincipalIdOrderByCreatedAtDesc(
+                owner, PageRequest.of(page, size)).getContent();
     }
 
     @Override
     @Transactional(readOnly = true)
     public AggregatedMetrics getAggregatedMetrics(ZonedDateTime startDate, ZonedDateTime endDate) {
-        List<RagRetrievalEvaluation> evaluations =
-                evaluationRepository.findByCreatedAtBetweenOrderByCreatedAtDesc(startDate, endDate);
+        String owner = restrictedOwnerPrincipalId();
+        List<RagRetrievalEvaluation> evaluations = owner == null
+                ? evaluationRepository.findByCreatedAtBetweenOrderByCreatedAtDesc(startDate, endDate)
+                : evaluationRepository
+                        .findByOwnerPrincipalIdAndCreatedAtBetweenOrderByCreatedAtDesc(
+                                owner, startDate, endDate);
         AggregatedMetrics metrics = new AggregatedMetrics();
         metrics.setTotalEvaluations((long) evaluations.size());
         if (evaluations.isEmpty()) {
@@ -410,6 +426,22 @@ public class RetrievalEvaluationServiceImpl implements RetrievalEvaluationServic
         Map<Integer, Double> avgRecall = new HashMap<>();
         stats.sumRecallAtK().forEach((k, v) -> avgRecall.put(k, v / c));
         metrics.setAvgRecallAtK(avgRecall);
+    }
+
+    /** 受限 key 返回其 principal；root/不受限返回 null（表示全局视图）。 */
+    private String restrictedOwnerPrincipalId() {
+        ApiAccessPolicy policy = ApiKeyCollectionAccess.currentPolicy();
+        if (ApiKeyCollectionAccess.isUnrestricted(policy)) {
+            return null;
+        }
+        return Objects.requireNonNull(policy.getPrincipalId(),
+                "Restricted API key must carry a principal id");
+    }
+
+    /** 写入行时记录发起评估的 principal；未启用认证或 root 为 null。 */
+    private String currentPrincipalId() {
+        ApiAccessPolicy policy = ApiKeyCollectionAccess.currentPolicy();
+        return policy == null ? null : policy.getPrincipalId();
     }
 
     private String toJson(List<Long> list) {

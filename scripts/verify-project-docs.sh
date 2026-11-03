@@ -376,6 +376,7 @@ check_scripts_and_commands() {
       scripts/verify-flyway-schema-paths.sh \
       scripts/verify-concurrency-idempotency.py \
       scripts/verify-backup-restore-drill.py \
+      scripts/verify-security-boundary.py \
       scripts/verify-openapi-breaking-change.mjs \
       scripts/verify-no-pessimistic-locks.sh \
       scripts/run-claude-grok.sh; do

@@ -75,6 +75,13 @@ public class RagUserFeedback {
     @Column(name = "created_at", nullable = false)
     private ZonedDateTime createdAt = ZonedDateTime.now();
 
+    /**
+     * 提交反馈的 principal。受限 API key 只能看到自己的反馈；
+     * 历史数据与未启用安全认证的部署为 null。
+     */
+    @Column(name = "owner_principal_id", length = 128)
+    private String ownerPrincipalId;
+
     // ==================== Constructors ====================
 
     public RagUserFeedback() {
@@ -110,4 +117,8 @@ public class RagUserFeedback {
     }
     public ZonedDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(ZonedDateTime createdAt) { this.createdAt = createdAt; }
+    public String getOwnerPrincipalId() { return ownerPrincipalId; }
+    public void setOwnerPrincipalId(String ownerPrincipalId) {
+        this.ownerPrincipalId = ownerPrincipalId;
+    }
 }

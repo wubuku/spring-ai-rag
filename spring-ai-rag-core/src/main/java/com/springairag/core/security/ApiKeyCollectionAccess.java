@@ -306,6 +306,38 @@ public final class ApiKeyCollectionAccess {
         requireCollectionId(document.getCollectionId(), key);
     }
 
+    /**
+     * 文件子系统的可见性规则。
+     *
+     * <p>不受限调用方（root/ADMIN/未启用认证）保持原有全量视图；受限 key 只能
+     * 看到自己上传的文件，或属于其允许 Collection 的文件。历史行两者都为空时
+     * 对受限 key 不可见（fail-closed）。
+     */
+    public static boolean canAccessFile(
+            ApiAccessPolicy key,
+            String ownerPrincipalId,
+            Long collectionId) {
+        if (isUnrestricted(key)) {
+            return true;
+        }
+        if (ownerPrincipalId != null && key != null
+                && ownerPrincipalId.equals(key.getPrincipalId())) {
+            return true;
+        }
+        return collectionId != null
+                && restrictedCollectionIds(key).orElseThrow().contains(collectionId);
+    }
+
+    /** 文件访问失败时抛出 SecurityException（由全局异常处理映射为 403）。 */
+    public static void requireFileAccess(
+            ApiAccessPolicy key,
+            String ownerPrincipalId,
+            Long collectionId) {
+        if (!canAccessFile(key, ownerPrincipalId, collectionId)) {
+            throw new SecurityException("File is not authorized for this API key");
+        }
+    }
+
     public static void requireCollectionCreationAllowed(ApiAccessPolicy key) {
         if (!isUnrestricted(key)) {
             throw new SecurityException(

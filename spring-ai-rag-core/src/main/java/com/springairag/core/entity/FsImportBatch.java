@@ -41,6 +41,14 @@ public class FsImportBatch {
     @Column(name = "file_count", nullable = false)
     private Integer fileCount;
 
+    /** 上传该批次的 principal；历史数据为 null。 */
+    @Column(name = "owner_principal_id", length = 128)
+    private String ownerPrincipalId;
+
+    /** 批次目标 Collection；仅存储到文件子系统时为 null。 */
+    @Column(name = "collection_id")
+    private Long collectionId;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
@@ -82,6 +90,12 @@ public class FsImportBatch {
     public void setOriginalPath(String originalPath) { this.originalPath = originalPath; }
     public Integer getFileCount() { return fileCount; }
     public void setFileCount(Integer fileCount) { this.fileCount = fileCount; }
+    public String getOwnerPrincipalId() { return ownerPrincipalId; }
+    public void setOwnerPrincipalId(String ownerPrincipalId) {
+        this.ownerPrincipalId = ownerPrincipalId;
+    }
+    public Long getCollectionId() { return collectionId; }
+    public void setCollectionId(Long collectionId) { this.collectionId = collectionId; }
     public OffsetDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(OffsetDateTime createdAt) { this.createdAt = createdAt; }
     public OffsetDateTime getUpdatedAt() { return updatedAt; }

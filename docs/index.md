@@ -27,6 +27,7 @@ Additive capabilities: [trustworthy assertions, active diagnostics and offline q
 | Understand Chat memory, context budgets, RAG, and tool calling | [Chat Memory, RAG, And Tool Calling](chat-memory-rag-tool-calling.md) | [Architecture](architecture.md), [Configuration](configuration.md) |
 | Change configuration | [configuration.md](configuration.md) | `spring-ai-rag-core/src/main/resources/application.yml` |
 | Back up data and rehearse isolated recovery | [Backup And Restore](backup-restore.md) | [Testing Guide](testing-guide.md) |
+| Review data-plane authorization, file ownership and tenant isolation | [Security Boundaries and Tenant Isolation](security-boundary.md) | [REST API: Authentication](rest-api.md#authentication), [Testing Guide](testing-guide.md) |
 | Repeated real QA, two nodes and recovery gates | [Quality And Production Acceptance](quality-production-acceptance.md) | [Backup And Restore](backup-restore.md) |
 | Integrate / debug HTTP APIs | [rest-api.md](rest-api.md) | Swagger: `/swagger-ui.html` |
 | Prevent breaking HTTP contract changes | [API Compatibility Gate](api-compatibility.md) | Baseline `testdata/api-contract/openapi-baseline.json` |
@@ -139,7 +140,7 @@ OpenClaw local state such as `TOOLS.md`, `MEMORY.md`, `memory/`, and `HEARTBEAT.
 | `spring-ai-rag-core/.../chat/`, `.../rag/` | Mode-aware Chat execution, Modular RAG, and Tool Calling |
 | `spring-ai-rag-core/.../config/RagProperties.java` | `rag.*` binding |
 | `spring-ai-rag-core/src/main/resources/application.yml` | Main config (port 8081) |
-| `spring-ai-rag-core/src/main/resources/db/migration/` | Flyway **V1–V70** |
+| `spring-ai-rag-core/src/main/resources/db/migration/` | Flyway **V1–V71** |
 | `spring-ai-rag-starter/` | Auto-config `GeneralRagAutoConfiguration` |
 | `spring-ai-rag-documents/` | Chunking / cleaning |
 | `spring-ai-rag-webui/` | React admin UI (standalone npm) |

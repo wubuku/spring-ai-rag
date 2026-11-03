@@ -65,6 +65,20 @@ public class FsFile {
     private Long fileSize;
 
     /**
+     * 上传该文件的 principal。用于在受限 API key 下限制文件可见范围。
+     * 历史数据与未启用安全认证的部署为 null。
+     */
+    @Column(name = "owner_principal_id", length = 128)
+    private String ownerPrincipalId;
+
+    /**
+     * 文件所属 Collection。PDF-to-RAG 导入时写入目标 Collection；
+     * 仅存储到文件子系统时为 null。
+     */
+    @Column(name = "collection_id")
+    private Long collectionId;
+
+    /**
      * Creation timestamp.
      */
     @CreationTimestamp
@@ -110,6 +124,14 @@ public class FsFile {
 
     public Long getFileSize() { return fileSize; }
     public void setFileSize(Long fileSize) { this.fileSize = fileSize; }
+
+    public String getOwnerPrincipalId() { return ownerPrincipalId; }
+    public void setOwnerPrincipalId(String ownerPrincipalId) {
+        this.ownerPrincipalId = ownerPrincipalId;
+    }
+
+    public Long getCollectionId() { return collectionId; }
+    public void setCollectionId(Long collectionId) { this.collectionId = collectionId; }
 
     public OffsetDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(OffsetDateTime createdAt) { this.createdAt = createdAt; }

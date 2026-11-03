@@ -60,6 +60,20 @@ class PdfImportServiceImportGateTailTest {
     }
 
     @Test
+    void importPdfRejectsOversizedUploadBeforeReading() {
+        pdfProperties.setMaxUploadBytes(10L);
+        var oversized = new MockMultipartFile(
+                "file", "bomb.pdf", "application/pdf",
+                new byte[64]);
+        var service = new PdfImportService(
+                fsFileRepository, fsImportBatchRepository, pdfProperties, List.of());
+
+        var error = assertThrows(IllegalArgumentException.class,
+                () -> service.importPdf(oversized, null));
+        assertEquals(true, error.getMessage().contains("max-upload-bytes"));
+    }
+
+    @Test
     void importPdfWithConverterReturnsResult() throws Exception {
         var service = new PdfImportService(
                 fsFileRepository, fsImportBatchRepository, pdfProperties, List.of());

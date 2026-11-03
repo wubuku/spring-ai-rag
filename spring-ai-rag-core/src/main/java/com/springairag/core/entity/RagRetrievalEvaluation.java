@@ -78,6 +78,13 @@ public class RagRetrievalEvaluation {
     @Column(name = "created_at", nullable = false)
     private ZonedDateTime createdAt = ZonedDateTime.now();
 
+    /**
+     * 发起评估的 principal。受限 API key 只能看到自己的评估记录；
+     * 历史数据与未启用安全认证的部署为 null。
+     */
+    @Column(name = "owner_principal_id", length = 128)
+    private String ownerPrincipalId;
+
     // ==================== Constructors ====================
 
     public RagRetrievalEvaluation() {
@@ -195,5 +202,13 @@ public class RagRetrievalEvaluation {
 
     public void setCreatedAt(ZonedDateTime createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public String getOwnerPrincipalId() {
+        return ownerPrincipalId;
+    }
+
+    public void setOwnerPrincipalId(String ownerPrincipalId) {
+        this.ownerPrincipalId = ownerPrincipalId;
     }
 }

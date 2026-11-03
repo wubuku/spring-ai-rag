@@ -28,4 +28,21 @@ public interface RagUserFeedbackRepository extends JpaRepository<RagUserFeedback
 
     /** Count feedback by type within time range */
     long countByFeedbackTypeAndCreatedAtBetween(String feedbackType, ZonedDateTime start, ZonedDateTime end);
+
+    /** 受限 principal 的反馈类型计数 */
+    long countByFeedbackTypeAndOwnerPrincipalIdAndCreatedAtBetween(
+            String feedbackType, String ownerPrincipalId,
+            ZonedDateTime start, ZonedDateTime end);
+
+    /** 受限 principal 的时间范围内反馈 */
+    List<RagUserFeedback> findByOwnerPrincipalIdAndCreatedAtBetweenOrderByCreatedAtDesc(
+            String ownerPrincipalId, ZonedDateTime start, ZonedDateTime end);
+
+    /** 受限 principal 的反馈历史（分页） */
+    List<RagUserFeedback> findByOwnerPrincipalIdOrderByCreatedAtDesc(
+            String ownerPrincipalId, Pageable pageable);
+
+    /** 受限 principal 按类型的反馈历史 */
+    List<RagUserFeedback> findByFeedbackTypeAndOwnerPrincipalIdOrderByCreatedAtDesc(
+            String feedbackType, String ownerPrincipalId, Pageable pageable);
 }

@@ -134,6 +134,7 @@ mvn clean package -DskipTests
 | Flyway 双路径 | `./scripts/verify-flyway-schema-paths.sh` | 空库→最新 vs 空库→V30→最新 schema 逐字一致；早期数据升级后仍在；最新库重跑 migrate 不丢数据 |
 | 并发与幂等 | `./scripts/verify-concurrency-idempotency.py` | 同一 collectionKey 并发创建、同一外部文档并发同步、同一文件并发上传（同一 Idempotency-Key）、同一文档并发 reindex、同一 principal 并发配额扣减；断言无重复行、无丢更新、除 409/429 外无 5xx，并验证唯一约束/条件写入 |
 | 备份恢复演练 | `./scripts/verify-backup-restore-drill.py` | 真实数据写入 → 停写 → `rag-backup.py backup` → 校验 → 恢复到全新库 → 文档/向量/collection/迁移历史/内容指纹比对 → 恢复库直接 health+search |
+| 安全边界全入口回归 | `./scripts/verify-security-boundary.py` | 真实 PostgreSQL + mock provider：受限 NORMAL key 对 search/chat/collections/upload/PDF-to-RAG/files tree·raw·preview/evaluation/feedback 的跨 Collection 与跨 principal 断言；路径穿越拒绝；root 全局视图不变 |
 | 接口兼容 | `node scripts/verify-openapi-breaking-change.mjs --self-test`；`./scripts/verify-api-compatibility.sh` | 删除 operation/字段/响应、改类型、改必填、删枚举值算破坏；新增可选字段不算；基线在 `testdata/api-contract/openapi-baseline.json` |
 | 构建可复现 | `./mvnw -v`（钉住 3.9.14）、`mvn -o -B -DskipTests compile`、`cd spring-ai-rag-webui && npm ci --dry-run` | Wrapper 版本、离线构建、lockfile 一致性 |
 

@@ -354,6 +354,13 @@ jobs:
             --concurrency 4 \
             --output-dir .verification/soak/nightly 2>&1 | tee "$RUNNER_TEMP/soak.log"
 
+      # 安全边界全入口回归：自建临时库 + mock provider + demo jar，
+      # 覆盖受限 key 的跨 Collection / 跨 principal 读取。
+      - name: Run security boundary regression
+        run: |
+          set -euo pipefail
+          python3 scripts/verify-security-boundary.py 2>&1 | tee "$RUNNER_TEMP/security-boundary.log"
+
       - name: Upload soak evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -362,6 +369,7 @@ jobs:
           path: |
             .verification/soak/nightly/
             ${{ runner.temp }}/soak.log
+            ${{ runner.temp }}/security-boundary.log
             ${{ runner.temp }}/start-server.log
             ${{ runner.temp }}/mock-llm.log
           if-no-files-found: warn

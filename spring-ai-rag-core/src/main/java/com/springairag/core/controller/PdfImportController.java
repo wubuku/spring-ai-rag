@@ -17,6 +17,7 @@ import com.springairag.core.service.MarkdownRendererService;
 import com.springairag.core.service.PdfImportService;
 import com.springairag.core.service.PdfToRagService;
 import com.springairag.core.service.CollectionIdentityResolver;
+import com.springairag.core.security.ApiAccessPolicy;
 import com.springairag.core.security.ApiKeyCollectionAccess;
 import com.springairag.core.util.SseEmitters;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -34,6 +35,8 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+
+import java.io.IOException;
 
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
@@ -118,7 +121,8 @@ public class PdfImportController {
         String filename = file.getOriginalFilename();
         try {
             filename = PdfImportService.normalizeOriginalFilename(file);
-            PdfImportService.PdfImportResult result = pdfImportService.importPdf(file, collection);
+            PdfImportService.PdfImportResult result = importForCaller(
+                    file, collection, null);
 
             log.info("PDF imported: uuid={}, entryMarkdown={}, files={}",
                     result.uuid(), result.entryMarkdown(), result.filesStored());
@@ -214,7 +218,8 @@ public class PdfImportController {
             requirePdfFilename(file);
             Long effectiveCollectionId = resolveWritableCollectionId(
                     collectionId, collectionKey);
-            PdfImportService.PdfImportResult importResult = pdfImportService.importPdf(file, null);
+            PdfImportService.PdfImportResult importResult = importForCaller(
+                    file, null, effectiveCollectionId);
             log.info("PDF-to-RAG step 1 complete: uuid={}, entryMarkdown={}, files={}",
                     importResult.uuid(), importResult.entryMarkdown(), importResult.filesStored());
             PdfToRagService.PdfToRagResult ragResult =
@@ -311,7 +316,8 @@ public class PdfImportController {
             requirePdfFilename(file);
             Long effectiveCollectionId = resolveWritableCollectionId(
                     collectionId, collectionKey);
-            PdfImportService.PdfImportResult importResult = pdfImportService.importPdf(file, null);
+            PdfImportService.PdfImportResult importResult = importForCaller(
+                    file, null, effectiveCollectionId);
             PdfToRagService.PdfToRagResult ragResult = pdfToRagService.importPdfToRag(
                     importResult.entryMarkdown(),
                     importResult.originalFilename(),
@@ -365,7 +371,8 @@ public class PdfImportController {
         String filename = requirePdfFilename(file);
         Long effectiveCollectionId = resolveWritableCollectionId(collectionId, collectionKey);
         try {
-            PdfImportService.PdfImportResult importResult = pdfImportService.importPdf(file, null);
+            PdfImportService.PdfImportResult importResult = importForCaller(
+                    file, null, effectiveCollectionId);
             log.info("PDF-to-RAG step 1 complete: uuid={}, entryMarkdown={}, files={}",
                     importResult.uuid(), importResult.entryMarkdown(), importResult.filesStored());
             return streamPdfToRagWithEmbedding(
@@ -533,6 +540,7 @@ public class PdfImportController {
         }
         Long effectiveCollectionId = resolveWritableCollectionId(
                 collectionId, collectionKey);
+        requireImportVisible(uuid, ApiKeyCollectionAccess.currentPolicy());
 
         try {
             PdfToRagService.PdfToRagResult result = pdfToRagService.triggerEmbedding(
@@ -577,6 +585,7 @@ public class PdfImportController {
         }
         Long effectiveCollectionId = resolveWritableCollectionId(
                 collectionId, collectionKey);
+        requireImportVisible(uuid, ApiKeyCollectionAccess.currentPolicy());
         PdfToRagService.PdfToRagResult result = pdfToRagService.triggerEmbedding(
                 uuid, effectiveCollectionId, policy, forceReembed);
         return ResponseEntity.ok(new PdfToRagResponse(
@@ -636,6 +645,7 @@ public class PdfImportController {
         }
         Long effectiveCollectionId = resolveWritableCollectionId(
                 collectionId, collectionKey);
+        requireImportVisible(uuid, ApiKeyCollectionAccess.currentPolicy());
         return streamEmbeddingWithProgress(uuid, effectiveCollectionId, forceReembed);
     }
 
@@ -723,8 +733,9 @@ public class PdfImportController {
 
         String markdownPath = uuid + "/default.md";
         log.debug("Preview requested: uuid={}, markdownPath={}", uuid, markdownPath);
+        validateUuidSegment(uuid);
 
-        Optional<FsFile> markdownFile = pdfImportService.getFile(markdownPath);
+        Optional<FsFile> markdownFile = resolveFile(markdownPath);
         if (markdownFile.isEmpty()) {
             return ResponseEntity.notFound().build();
         }
@@ -756,13 +767,14 @@ public class PdfImportController {
             @Parameter(description = "Virtual path of the imported PDF (URL-encoded)")
             @RequestParam("path") String path) {
 
-        String decodedPath = urlDecode(path);
+        String decodedPath = PdfImportService.validateVirtualPath(urlDecode(path));
         String markdownPath = deriveMarkdownPath(decodedPath);
         log.debug("Legacy preview requested: pdfPath={}, markdownPath={}", decodedPath, markdownPath);
 
-        Optional<FsFile> markdownFile = pdfImportService.getFile(markdownPath);
+        Optional<FsFile> markdownFile = resolveFile(markdownPath);
         if (markdownFile.isEmpty()) {
-            markdownFile = pdfImportService.getFile(replaceLast(decodedPath, ".pdf", ".md", 1));
+            markdownFile = resolveFile(
+                    replaceLast(decodedPath, ".pdf", ".md", 1));
         }
         if (markdownFile.isEmpty()) {
             return ResponseEntity.notFound().build();
@@ -796,13 +808,14 @@ public class PdfImportController {
             @Parameter(description = "Virtual path of the imported PDF (URL-encoded)")
             @RequestParam("path") String path) {
 
-        String decodedPath = urlDecode(path);
+        String decodedPath = PdfImportService.validateVirtualPath(urlDecode(path));
         String markdownPath = deriveMarkdownPath(decodedPath);
         log.debug("Preview HTML fragment requested: pdfPath={}, markdownPath={}", decodedPath, markdownPath);
 
-        Optional<FsFile> markdownFile = pdfImportService.getFile(markdownPath);
+        Optional<FsFile> markdownFile = resolveFile(markdownPath);
         if (markdownFile.isEmpty()) {
-            markdownFile = pdfImportService.getFile(replaceLast(decodedPath, ".pdf", ".md", 1));
+            markdownFile = resolveFile(
+                    replaceLast(decodedPath, ".pdf", ".md", 1));
         }
         if (markdownFile.isEmpty()) {
             return ResponseEntity.notFound().build();
@@ -847,8 +860,9 @@ public class PdfImportController {
 
         String path = uuid + "/" + filename;
         log.debug("Raw file requested (path param): uuid={}, filename={}, path={}", uuid, filename, path);
+        PdfImportService.validateVirtualPath(path);
 
-        Optional<FsFile> file = pdfImportService.getFile(path);
+        Optional<FsFile> file = resolveFile(path);
         if (file.isEmpty()) {
             return ResponseEntity.notFound().build();
         }
@@ -884,10 +898,10 @@ public class PdfImportController {
             @Parameter(description = "Virtual path of the file (URL-encoded)", example = "papers%2F%E8%AE%BA%E6%96%87.md")
             @RequestParam("path") String path) {
 
-        String decodedPath = urlDecode(path);
+        String decodedPath = PdfImportService.validateVirtualPath(urlDecode(path));
         log.debug("Raw file requested (query param): path={}", decodedPath);
 
-        Optional<FsFile> file = pdfImportService.getFile(decodedPath);
+        Optional<FsFile> file = resolveFile(decodedPath);
         if (file.isEmpty()) {
             return ResponseEntity.notFound().build();
         }
@@ -923,13 +937,15 @@ public class PdfImportController {
                                     + "Omit or use empty string to list root.")
             @RequestParam(value = "path", required = false) String path) {
 
-        String normalized = (path == null || path.isBlank()) ? "" : urlDecode(path);
+        String normalized = (path == null || path.isBlank())
+                ? "" : PdfImportService.validateVirtualPath(urlDecode(path));
         normalized = normalized.replace('\\', '/');
         if (!normalized.isEmpty() && !normalized.endsWith("/")) {
             normalized += "/";
         }
 
-        List<FsFile> children = pdfImportService.listChildren(normalized.isEmpty() ? "/" : normalized);
+        List<FsFile> children = resolveChildren(
+                normalized.isEmpty() ? "/" : normalized);
 
         // Distinguish files from directories: a "directory" entry ends with "/" and has no stored content
         // But since we store flat files, we synthesize directory entries from paths
@@ -947,7 +963,7 @@ public class PdfImportController {
         List<FileTreeEntryResponse> entries = buildTreeEntries(children, normalized, batches);
         String displayPath = normalized.isEmpty() ? "/" : normalized;
         FileImportMetadataResponse currentImportMetadata = currentImportId(normalized)
-                .flatMap(pdfImportService::getImportBatch)
+                .flatMap(this::resolveImportBatch)
                 .map(this::toImportMetadata)
                 .orElse(null);
 
@@ -956,6 +972,67 @@ public class PdfImportController {
     }
 
     // ==================== Internal Helpers ====================
+
+    /**
+     * 不受限调用方继续走原来的查询（root/关闭认证行为完全不变）；
+     * 受限调用方走带归属过滤的查询。
+     */
+    private Optional<FsFile> resolveFile(String path) {
+        ApiAccessPolicy policy = ApiKeyCollectionAccess.currentPolicy();
+        return ApiKeyCollectionAccess.isUnrestricted(policy)
+                ? pdfImportService.getFile(path)
+                : pdfImportService.getVisibleFile(path, policy);
+    }
+
+    private List<FsFile> resolveChildren(String virtualPath) {
+        ApiAccessPolicy policy = ApiKeyCollectionAccess.currentPolicy();
+        return ApiKeyCollectionAccess.isUnrestricted(policy)
+                ? pdfImportService.listChildren(virtualPath)
+                : pdfImportService.listVisibleChildren(virtualPath, policy);
+    }
+
+    private Optional<FsImportBatch> resolveImportBatch(UUID importId) {
+        ApiAccessPolicy policy = ApiKeyCollectionAccess.currentPolicy();
+        return ApiKeyCollectionAccess.isUnrestricted(policy)
+                ? pdfImportService.getImportBatch(importId)
+                : pdfImportService.getVisibleImportBatch(importId, policy);
+    }
+
+    /**
+     * 关闭认证时保持两参数导入（不写归属）；启用认证时写入 principal 与 Collection。
+     */
+    private PdfImportService.PdfImportResult importForCaller(
+            MultipartFile file,
+            String collection, Long collectionId) throws IOException {
+        ApiAccessPolicy policy = ApiKeyCollectionAccess.currentPolicy();
+        if (policy == null) {
+            return pdfImportService.importPdf(file, collection);
+        }
+        return pdfImportService.importPdf(
+                file, collection, policy.getPrincipalId(), collectionId);
+    }
+
+    /**
+     * 受限 key 触发 embedding 前，必须能看到该导入批次；否则拒绝读取他人文件。
+     * 不受限调用方保持原有行为（由 PdfToRagService 返回 404）。
+     */
+    private void requireImportVisible(String uuid, ApiAccessPolicy policy) {
+        if (ApiKeyCollectionAccess.isUnrestricted(policy)) {
+            return;
+        }
+        Optional<UUID> importId = parseUuid(uuid);
+        if (importId.isEmpty()
+                || pdfImportService.getVisibleImportBatch(importId.get(), policy).isEmpty()) {
+            throw new SecurityException("PDF import is not authorized for this API key");
+        }
+    }
+
+    private void validateUuidSegment(String uuid) {
+        if (uuid == null || uuid.isBlank()) {
+            throw new IllegalArgumentException("UUID must not be blank");
+        }
+        PdfImportService.validateVirtualPath(uuid);
+    }
 
     private String deriveMarkdownPath(String pdfPath) {
         // pdfPath can be:

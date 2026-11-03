@@ -72,4 +72,34 @@ public interface FsFileRepository extends JpaRepository<FsFile, String> {
     List<FsFile> findDirectChildren(@Param("basePrefix") String basePrefix,
                                      @Param("likePrefix") String likePrefix,
                                      @Param("recursivePrefix") String recursivePrefix);
+
+    /**
+     * 受限 API key 可见的根级文件：本人上传的文件，或属于其可访问 Collection 的文件。
+     *
+     * <p>历史行（owner 与 collection 均为 null）对受限 key 不可见，符合 fail-closed。
+     */
+    @Query("""
+        SELECT f FROM FsFile f
+        WHERE f.ownerPrincipalId = :ownerPrincipalId
+           OR f.collectionId IN :collectionIds
+        ORDER BY f.path ASC
+        """)
+    List<FsFile> findVisibleRootFiles(
+            @Param("ownerPrincipalId") String ownerPrincipalId,
+            @Param("collectionIds") List<Long> collectionIds);
+
+    /**
+     * 受限 API key 在指定前缀下可见的文件。
+     */
+    @Query("""
+        SELECT f FROM FsFile f
+        WHERE (f.ownerPrincipalId = :ownerPrincipalId
+               OR f.collectionId IN :collectionIds)
+          AND f.path LIKE CONCAT(:prefix, '%')
+        ORDER BY f.path ASC
+        """)
+    List<FsFile> findVisibleByPathPrefix(
+            @Param("ownerPrincipalId") String ownerPrincipalId,
+            @Param("collectionIds") List<Long> collectionIds,
+            @Param("prefix") String prefix);
 }

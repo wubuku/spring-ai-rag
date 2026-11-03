@@ -71,6 +71,7 @@ public class UserFeedbackServiceImpl implements UserFeedbackService {
         feedback.setSelectedDocumentIds(toJson(selectedIds));
         feedback.setDwellTimeMs(dwellTimeMs);
         feedback.setContentReferenceIndexComplete(true);
+        feedback.setOwnerPrincipalId(currentPrincipalId());
 
         RagUserFeedback saved = feedbackRepository.saveAndFlush(feedback);
         if (!referenceIds.isEmpty()) {
@@ -146,11 +147,23 @@ public class UserFeedbackServiceImpl implements UserFeedbackService {
     @Override
     @Transactional(readOnly = true)
     public FeedbackStats getStats(ZonedDateTime startDate, ZonedDateTime endDate) {
-        long thumbsUp = feedbackRepository.countByFeedbackTypeAndCreatedAtBetween("THUMBS_UP", startDate, endDate);
-        long thumbsDown = feedbackRepository.countByFeedbackTypeAndCreatedAtBetween("THUMBS_DOWN", startDate, endDate);
+        String owner = restrictedOwnerPrincipalId();
+        long thumbsUp = owner == null
+                ? feedbackRepository.countByFeedbackTypeAndCreatedAtBetween(
+                        "THUMBS_UP", startDate, endDate)
+                : feedbackRepository.countByFeedbackTypeAndOwnerPrincipalIdAndCreatedAtBetween(
+                        "THUMBS_UP", owner, startDate, endDate);
+        long thumbsDown = owner == null
+                ? feedbackRepository.countByFeedbackTypeAndCreatedAtBetween(
+                        "THUMBS_DOWN", startDate, endDate)
+                : feedbackRepository.countByFeedbackTypeAndOwnerPrincipalIdAndCreatedAtBetween(
+                        "THUMBS_DOWN", owner, startDate, endDate);
         long total = thumbsUp + thumbsDown;
 
-        List<RagUserFeedback> allFeedbacks = feedbackRepository.findByCreatedAtBetweenOrderByCreatedAtDesc(startDate, endDate);
+        List<RagUserFeedback> allFeedbacks = owner == null
+                ? feedbackRepository.findByCreatedAtBetweenOrderByCreatedAtDesc(startDate, endDate)
+                : feedbackRepository.findByOwnerPrincipalIdAndCreatedAtBetweenOrderByCreatedAtDesc(
+                        owner, startDate, endDate);
 
         // Aggregate RATING type
         List<RagUserFeedback> ratings = allFeedbacks.stream()
@@ -186,14 +199,40 @@ public class UserFeedbackServiceImpl implements UserFeedbackService {
     @Override
     @Transactional(readOnly = true)
     public List<RagUserFeedback> getHistory(int page, int size) {
-        return feedbackRepository.findAll(PageRequest.of(page, size))
-                .getContent();
+        String owner = restrictedOwnerPrincipalId();
+        if (owner == null) {
+            return feedbackRepository.findAll(PageRequest.of(page, size)).getContent();
+        }
+        return feedbackRepository.findByOwnerPrincipalIdOrderByCreatedAtDesc(
+                owner, PageRequest.of(page, size));
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<RagUserFeedback> getByType(String feedbackType, int page, int size) {
-        return feedbackRepository.findByFeedbackTypeOrderByCreatedAtDesc(feedbackType, PageRequest.of(page, size));
+        String owner = restrictedOwnerPrincipalId();
+        if (owner == null) {
+            return feedbackRepository.findByFeedbackTypeOrderByCreatedAtDesc(
+                    feedbackType, PageRequest.of(page, size));
+        }
+        return feedbackRepository.findByFeedbackTypeAndOwnerPrincipalIdOrderByCreatedAtDesc(
+                feedbackType, owner, PageRequest.of(page, size));
+    }
+
+    /** 受限 key 返回其 principal；root/不受限返回 null（表示全局视图）。 */
+    private String restrictedOwnerPrincipalId() {
+        ApiAccessPolicy policy = ApiKeyCollectionAccess.currentPolicy();
+        if (ApiKeyCollectionAccess.isUnrestricted(policy)) {
+            return null;
+        }
+        return Objects.requireNonNull(policy.getPrincipalId(),
+                "Restricted API key must carry a principal id");
+    }
+
+    /** 写入行时记录提交者；未启用认证或 root 为 null。 */
+    private String currentPrincipalId() {
+        ApiAccessPolicy policy = ApiKeyCollectionAccess.currentPolicy();
+        return policy == null ? null : policy.getPrincipalId();
     }
 
     private List<Long> normalizeIds(List<Long> values, String field) {

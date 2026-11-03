@@ -29,6 +29,14 @@ public interface RagRetrievalEvaluationRepository extends JpaRepository<RagRetri
      */
     Page<RagRetrievalEvaluation> findAllByOrderByCreatedAtDesc(Pageable pageable);
 
+    /** 受限 principal 的时间范围内评估记录。 */
+    List<RagRetrievalEvaluation> findByOwnerPrincipalIdAndCreatedAtBetweenOrderByCreatedAtDesc(
+            String ownerPrincipalId, ZonedDateTime startDate, ZonedDateTime endDate);
+
+    /** 受限 principal 的评估历史（分页）。 */
+    Page<RagRetrievalEvaluation> findByOwnerPrincipalIdOrderByCreatedAtDesc(
+            String ownerPrincipalId, Pageable pageable);
+
     /**
      * Count evaluations in the specified time range.
      */

@@ -513,16 +513,35 @@ class PdfImportControllerTest {
     @Test
     void triggerEmbedding_restrictedSingleCollectionDefaultsToAllowedCollection() {
         authenticateRestrictedKey("10");
+        String importId = UUID.randomUUID().toString();
+        FsImportBatch batch = new FsImportBatch(
+                UUID.fromString(importId), "PDF", "paper.pdf", "paper.pdf",
+                importId + "/default.md", importId + "/original.pdf", 1);
+        batch.setCollectionId(10L);
+        when(pdfImportService.getVisibleImportBatch(
+                eq(UUID.fromString(importId)), any())).thenReturn(Optional.of(batch));
         PdfToRagService.PdfToRagResult ragResult =
                 new PdfToRagService.PdfToRagResult(7L, "Doc", false, "CACHED", "already done", 3);
-        when(pdfToRagService.triggerEmbedding(eq("uuid-789"), eq(10L), eq(false)))
+        when(pdfToRagService.triggerEmbedding(eq(importId), eq(10L), eq(false)))
                 .thenReturn(ragResult);
 
-        Object response = controller.triggerEmbedding("uuid-789", null, "sync", false);
+        Object response = controller.triggerEmbedding(importId, null, "sync", false);
 
         assertTrue(response instanceof ResponseEntity);
         assertEquals(200, ((ResponseEntity<?>) response).getStatusCode().value());
-        verify(pdfToRagService).triggerEmbedding("uuid-789", 10L, false);
+        verify(pdfToRagService).triggerEmbedding(importId, 10L, false);
+    }
+
+    @Test
+    void triggerEmbedding_restrictedKeyCannotEmbedAnotherPrincipalsImport() {
+        authenticateRestrictedKey("10");
+        String importId = UUID.randomUUID().toString();
+        when(pdfImportService.getVisibleImportBatch(
+                eq(UUID.fromString(importId)), any())).thenReturn(Optional.empty());
+
+        assertThrows(SecurityException.class,
+                () -> controller.triggerEmbedding(importId, null, "sync", false));
+        verifyNoInteractions(pdfToRagService);
     }
 
     private void authenticateRestrictedKey(String allowedCollectionIds) {
