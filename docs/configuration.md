@@ -1703,8 +1703,9 @@ so **the core base configuration is shadowed entirely** (profile files such as
 
 **What shadowing does not carry over**: the core `application.yml` also declares groups
 whose variable names do not match their property paths. They work in the main application
-(the starter depends on the core config directly) but have no placeholder in demo
-deployments (including the container image), so they do not take effect there:
+(`mvn spring-boot:run -pl spring-ai-rag-core`, or a starter-based app whose classpath has
+no same-named demo file) but have no placeholder in demo deployments (including the
+container image), so they do not take effect there:
 `RAG_DOCUMENT_*` (document lifecycle), `RAG_NOTIFICATION_DELIVERY_*`, `RAG_CHAT_COMPACTION_*`,
 `RAG_CHUNK_UPGRADE_*`, `RERANK_BASE_URL/API_KEY/MODEL`, `MODELS_CONFIG_FILE`,
 `OPENROUTER_API_KEY`, `ZHIPU_API_KEY`, `ANTHROPIC_*`, `MINIMAX_*`. Decide per variable by

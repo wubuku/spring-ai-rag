@@ -1543,8 +1543,8 @@ fat jar 中 `BOOT-INF/classes` 优先于依赖 jar，**core 的基础配置会�
 | `RAG_EMBEDDING_API_KEY` / `BASE_URL` / `MODEL` / `DIMENSIONS` / `PROFILE_KEY` | `rag.embedding.*` | 否（relaxed） | 生效；`profile-key` 另显式声明以避免默认值随遮蔽丢失 |
 
 **不会随遮蔽保留的部分**：core `application.yml` 里还有一些变量名与属性路径不一致的配置组，
-它们在主应用（starter 直接依赖 core 配置）中有效，但在 demo 部署（包括容器镜像）里没有对应
-占位符，因此不会生效：`RAG_DOCUMENT_*`（文档生命周期）、`RAG_NOTIFICATION_DELIVERY_*`、
+它们在主应用（`mvn spring-boot:run -pl spring-ai-rag-core` 或基于 starter 的应用，classpath
+上没有 demo 的同名文件）中有效，但在 demo 部署（包括容器镜像）里没有对应占位符，因此不会生效：`RAG_DOCUMENT_*`（文档生命周期）、`RAG_NOTIFICATION_DELIVERY_*`、
 `RAG_CHAT_COMPACTION_*`、`RAG_CHUNK_UPGRADE_*`、`RERANK_BASE_URL/API_KEY/MODEL`、
 `MODELS_CONFIG_FILE`、`OPENROUTER_API_KEY`、`ZHIPU_API_KEY`、`ANTHROPIC_*`、`MINIMAX_*`。
 判定方法是算 canonical 名：把属性路径的 `.` 和 `-` 都换成 `_` 再大写，若与环境变量名相同，
