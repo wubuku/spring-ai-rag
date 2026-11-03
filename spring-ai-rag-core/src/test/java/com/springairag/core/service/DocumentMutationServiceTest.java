@@ -41,6 +41,8 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -236,6 +238,10 @@ class DocumentMutationServiceTest {
         assertEquals(3L, deleted.embeddingsRemoved());
         verify(dispatchService).cancelActiveInCurrentTransaction(41L);
         verify(embeddingRepository).deleteByDocumentId(41L);
+        verify(jdbcTemplate).update(
+                contains("rag_chat_history_source_document"), eq(41L));
+        verify(jdbcTemplate).update(
+                contains("rag_user_feedback_document"), eq(41L));
         verify(documentRepository).delete(document);
         verify(documentRepository).flush();
     }

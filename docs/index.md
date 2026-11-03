@@ -27,6 +27,7 @@ Additive capabilities: [trustworthy assertions, active diagnostics and offline q
 | Understand Chat memory, context budgets, RAG, and tool calling | [Chat Memory, RAG, And Tool Calling](chat-memory-rag-tool-calling.md) | [Architecture](architecture.md), [Configuration](configuration.md) |
 | Change configuration | [configuration.md](configuration.md) | `spring-ai-rag-core/src/main/resources/application.yml` |
 | Back up data and rehearse isolated recovery | [Backup And Restore](backup-restore.md) | [Testing Guide](testing-guide.md) |
+| Delete documents/collections/sessions, or decide orphans and retention | [Deletion Semantics and Data Retention](deletion-and-retention.md) | [Testing guide](testing-guide.md), [Configuration](configuration.md#permanent-collection-purge-and-retirement) |
 | Review data-plane authorization, file ownership and tenant isolation | [Security Boundaries and Tenant Isolation](security-boundary.md) | [REST API: Authentication](rest-api.md#authentication), [Testing Guide](testing-guide.md) |
 | Repeated real QA, two nodes and recovery gates | [Quality And Production Acceptance](quality-production-acceptance.md) | [Backup And Restore](backup-restore.md) |
 | Integrate / debug HTTP APIs | [rest-api.md](rest-api.md) | Swagger: `/swagger-ui.html` |
@@ -76,6 +77,7 @@ Chinese counterparts use the same basename with a `-zh-CN` suffix where availabl
 | [chat-memory-rag-tool-calling.md](chat-memory-rag-tool-calling.md) / [中文](chat-memory-rag-tool-calling-zh-CN.md) | Current Spring AI Chat Memory, Modular RAG, and Tool Calling boundaries, gaps, and direction |
 | [project-context.md](project-context.md) | Stable modules, runtime behavior, security boundaries, and 1.0 baseline |
 | [file-management-and-pdf-rag.md](file-management-and-pdf-rag.md) | Files versus Documents, PDF conversion artifacts, Add to RAG, and current lifecycle boundaries |
+| [deletion-and-retention.md](deletion-and-retention.md) | Permanent/soft delete semantics, orphan definition, concurrent deletion, retention cleanup, and decision record |
 | [rest-api.md](rest-api.md#external-documents-idempotent-synchronization) § External Documents — Idempotent Synchronization | External-client upsert, CAS, deletion/recovery, and synchronization best practices |
 | [external-document-sync-client-guide.md](external-document-sync-client-guide.md) | External-client triple identity, incremental CRUD, retry/checkpoint, and search-readiness guidance |
 | [business-client-integration.md](business-client-integration.md) / [中文](business-client-integration-zh-CN.md) | Credentials, binding, JSON Records, rotation, upgrades, and the contract gate for backend business services |

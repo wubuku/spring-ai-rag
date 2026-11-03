@@ -42,6 +42,7 @@ ALL_SUITES=(
   "collection-provisioning:CollectionProvisioningPostgresIntegrationTest"
   "collection-purge:CollectionPurgePostgresIntegrationTest"
   "collection-purge-http:CollectionPurgeHttpPostgresIntegrationTest"
+  "deletion-consistency:DeletionConsistencyPostgresIntegrationTest"
   "document-lifecycle:DocumentLifecyclePostgresIntegrationTest"
   "document-sync-runs:DocumentSyncRunsPostgresIntegrationTest"
   "document-processing:DocumentProcessingRunPostgresIntegrationTest"

@@ -27,6 +27,7 @@
 | 理解 Chat 记忆、上下文预算、RAG 与工具调用 | [Chat 记忆、RAG 与工具调用](chat-memory-rag-tool-calling-zh-CN.md) | [架构文档](architecture-zh-CN.md)、[配置参考](configuration-zh-CN.md) |
 | 改配置项 | [configuration-zh-CN.md](configuration-zh-CN.md) | `spring-ai-rag-core/src/main/resources/application.yml` |
 | 备份数据与隔离恢复演练 | [数据备份与隔离恢复](backup-restore-zh-CN.md) | [测试指南](testing-guide-zh-CN.md) |
+| 删除文档/集合/会话，或判断孤儿与保留策略 | [删除语义与数据保留](deletion-and-retention-zh-CN.md) | [测试指南](testing-guide-zh-CN.md)、[配置参考](configuration-zh-CN.md#collection-永久清理与退役) |
 | 审查数据面授权、文件归属与跨租户隔离 | [安全边界与租户隔离](security-boundary-zh-CN.md) | [REST API：认证](rest-api-zh-CN.md#认证)、[测试指南](testing-guide-zh-CN.md) |
 | 多轮真实问答、双实例与恢复发布闸门 | [质量稳定性与生产恢复验收](quality-production-acceptance-zh-CN.md) | [备份恢复](backup-restore-zh-CN.md) |
 | 对接 / 调试 HTTP API | [rest-api-zh-CN.md](rest-api-zh-CN.md) | Swagger：`/swagger-ui.html` |
@@ -76,6 +77,7 @@
 | [chat-memory-rag-tool-calling-zh-CN.md](chat-memory-rag-tool-calling-zh-CN.md) / [English](chat-memory-rag-tool-calling.md) | Spring AI Chat Memory、Modular RAG、Tool Calling 的当前边界、缺口与演进方向 |
 | [project-context-zh-CN.md](project-context-zh-CN.md) | 稳定模块、运行行为、安全边界与 1.0 基线 |
 | [file-management-and-pdf-rag-zh-CN.md](file-management-and-pdf-rag-zh-CN.md) | 文件管理与文档管理的区别、PDF 转换产物、添加到 RAG 和当前生命周期边界 |
+| [deletion-and-retention-zh-CN.md](deletion-and-retention-zh-CN.md) | 永久/软删除语义、孤儿定义、并发删除、保留清理与决策记录 |
 | [rest-api-zh-CN.md](rest-api-zh-CN.md#external-documents-idempotent-synchronization) § 外部文档：幂等同步 | 外部客户的 upsert、CAS、删除恢复和同步最佳实践 |
 | [external-document-sync-client-guide-zh-CN.md](external-document-sync-client-guide-zh-CN.md) | 外部 client 的三元身份、增量 CRUD、重试/checkpoint 与可检索就绪指引 |
 | [business-client-integration-zh-CN.md](business-client-integration-zh-CN.md) / [English](business-client-integration.md) | 后端业务服务的 credential、binding、JSON Record、轮换、升级与接入合同 |

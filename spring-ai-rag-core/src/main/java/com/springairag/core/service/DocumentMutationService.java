@@ -631,11 +631,31 @@ public class DocumentMutationService {
             long embeddings = embeddingRepository.countByDocumentId(documentId);
             dispatchService.cancelActiveInCurrentTransaction(documentId);
             embeddingRepository.deleteByDocumentId(documentId);
+            deleteContentReferences(documentId);
             documentRepository.delete(document);
             documentRepository.flush();
             return new DeletedLocal(
                     documentId, expectedRevision, embeddings);
         }));
+    }
+
+    /**
+     * 删除指向该文档的会话来源与反馈索引。
+     *
+     * <p>这两张表刻意没有指向 {@code rag_documents} 的外键：集合级 purge 需要
+     * 先按引用定位并删除会话/反馈，再删除内容。因此单篇文档永久删除时必须
+     * 显式清理，否则会留下指向不存在文档的孤儿引用行，后续按文档回溯来源
+     * 或按集合清理都会读到脏数据。
+     */
+    public void deleteContentReferences(long documentId) {
+        jdbcTemplate.update(
+                "DELETE FROM rag_chat_history_source_document "
+                        + "WHERE document_id = ?",
+                documentId);
+        jdbcTemplate.update(
+                "DELETE FROM rag_user_feedback_document "
+                        + "WHERE document_id = ?",
+                documentId);
     }
 
     public ExternalDocumentUpsertResponse upsertExternal(

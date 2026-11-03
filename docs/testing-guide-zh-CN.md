@@ -215,6 +215,13 @@ OTHER_ADMIN_API_KEY="${OTHER_ADMIN_API_KEY:-}" \
 `./scripts/verify-gated-it.sh CollectionPurgeHttpPostgresIntegrationTest`；其门控属性为
 `-Dcollection-purge-http.it.enabled=true`，默认全量门禁也会执行。
 
+删除语义与孤儿判定的隔离 PostgreSQL 套件：
+
+`./scripts/verify-gated-it.sh DeletionConsistencyPostgresIntegrationTest`；门控属性为
+`-Ddeletion-consistency.it.enabled=true`。覆盖永久删除后的 chunks/向量/版本/引用/
+幂等一致性、会话删除引用、删除后检索不命中，以及并发删除 vs 检索、并发 purge vs
+导入的无孤儿/无死锁终态。语义与保留决策见[删除语义与数据保留](deletion-and-retention-zh-CN.md)。
+
 ## 一键文档验证
 
 `scripts/verify-project-docs.sh` 固化项目文档检查清单：OpenClaw 本地状态隔离、`.agents/skills/` 可跟踪性、相对链接、中英文标题结构、入口行数、项目固定约定、文档命令、Shell 语法、空白和新增行敏感信息扫描。
@@ -301,7 +308,7 @@ workflow 里，而不是靠人记得：
 | 层 | 触发 | 工作流 | 包含 | 不包含 |
 |----|------|--------|------|--------|
 | PR 快层 | push `main`/`develop`、PR → `main`；同分支新提交自动取消旧运行 | `.github/workflows/ci.yml` | `mvn test`（含 `OpenApiContractTest` 与 `WebUiRouteContract`）、`verify-project-tests.sh`、`verify-project-docs.sh`、Flyway 迁移清单校验、WebUI lint/单测/覆盖率阈值/构建/Mock E2E | gated PostgreSQL、真实模型、goldenset、soak、`*-real.spec.ts` |
-| 长跑层 | 每日 18:00 UTC（北京时间 02:00）与手动 `workflow_dispatch` | `.github/workflows/nightly.yml` | gated PostgreSQL（30 套件 / 263 用例）、上游/Embedding 故障模式（受控 provider + 隔离 PG，无需真实模型）、真实 LLM smoke + goldenset + 检索回归、有界 soak、无需人工 fixture 的真实 WebUI spec | 需要预置告警/投递 ID 的 `alerts-real`、需要 rerank fixture 的 `rerank-document-diversity-real` |
+| 长跑层 | 每日 18:00 UTC（北京时间 02:00）与手动 `workflow_dispatch` | `.github/workflows/nightly.yml` | gated PostgreSQL（31 套件）、上游/Embedding 故障模式（受控 provider + 隔离 PG，无需真实模型）、真实 LLM smoke + goldenset + 检索回归、有界 soak、无需人工 fixture 的真实 WebUI spec | 需要预置告警/投递 ID 的 `alerts-real`、需要 rerank fixture 的 `rerank-document-diversity-real` |
 
 PR 层的时间预算由 job 级 `timeout-minutes` 固定（backend 45、webui 30）。gated IT
 本地约 9–19 分钟，放在 PR 层会把反馈时间拖到 20 分钟以上，所以它只在 nightly 跑；

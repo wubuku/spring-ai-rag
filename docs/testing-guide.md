@@ -239,6 +239,14 @@ The same lifecycle has an isolated random-port HTTP + Testcontainers PostgreSQL 
 `./scripts/verify-gated-it.sh CollectionPurgeHttpPostgresIntegrationTest`; its switch is
 `-Dcollection-purge-http.it.enabled=true`. The full gated suite also runs it.
 
+Deletion semantics and orphan criteria have an isolated PostgreSQL suite:
+`./scripts/verify-gated-it.sh DeletionConsistencyPostgresIntegrationTest`, gated by
+`-Ddeletion-consistency.it.enabled=true`. It covers chunks/vectors/versions/references/
+idempotency consistency after permanent delete, session-delete references, no retrieval
+hits after deletion, and concurrent delete-vs-retrieval / purge-vs-import end states with
+no orphans or deadlocks. Semantics and the retention decision live in
+[Deletion Semantics and Data Retention](deletion-and-retention.md).
+
 ## One-command Documentation Verification
 
 `scripts/verify-project-docs.sh` codifies the project-documentation checklist: OpenClaw local-state isolation, `.agents/skills/` trackability, relative links, EN/ZH heading structure, entry size limits, fixed project conventions, documented commands, shell syntax, whitespace, and added-line secret scanning.
@@ -332,7 +340,7 @@ of in someone's memory:
 | Layer | Trigger | Workflow | Includes | Excludes |
 |-------|---------|----------|----------|----------|
 | PR fast | push to `main`/`develop`, PR to `main`; a newer commit cancels the stale run | `.github/workflows/ci.yml` | `mvn test` (including `OpenApiContractTest` and `WebUiRouteContract`), `verify-project-tests.sh`, `verify-project-docs.sh`, Flyway migration inventory, WebUI lint/unit/coverage thresholds/build/mock E2E | gated PostgreSQL, real models, goldenset, soak, `*-real.spec.ts` |
-| Long-running | daily 18:00 UTC (02:00 Asia/Shanghai) and manual `workflow_dispatch` | `.github/workflows/nightly.yml` | gated PostgreSQL (30 suites / 263 tests), upstream/embedding failure modes (controlled provider + isolated PG, no real models), real LLM smoke + goldenset + retrieval regression, bounded soak, real WebUI specs that need no manual fixtures | `alerts-real` (needs preset alert/delivery IDs) and `rerank-document-diversity-real` (needs a rerank fixture) |
+| Long-running | daily 18:00 UTC (02:00 Asia/Shanghai) and manual `workflow_dispatch` | `.github/workflows/nightly.yml` | gated PostgreSQL (31 suites), upstream/embedding failure modes (controlled provider + isolated PG, no real models), real LLM smoke + goldenset + retrieval regression, bounded soak, real WebUI specs that need no manual fixtures | `alerts-real` (needs preset alert/delivery IDs) and `rerank-document-diversity-real` (needs a rerank fixture) |
 
 The PR layer is bounded by job-level `timeout-minutes` (backend 45, webui 30).
 Gated IT takes about 9–19 minutes locally; keeping it in the PR layer would push
