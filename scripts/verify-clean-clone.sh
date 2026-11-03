@@ -75,18 +75,22 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# 读取本工作区 .env 中的数据库连接信息（只取 POSTGRES_*，不读取密钥用于应用启动）。
-if [[ -f "$PROJECT_DIR/.env" ]]; then
-  set -a
-  # shellcheck disable=SC1091
-  source "$PROJECT_DIR/.env"
-  set +a
-fi
+# 从本工作区 .env 读取数据库连接信息，但不要 wholesale source：
+# 工作区 .env 可能导出 SPRING_DATASOURCE_URL，它会覆盖 demo 的 POSTGRES_* 配置，
+# 让“临时库验收”悄悄连到日常开发库。
+read_env() {
+  local key=$1
+  [[ -f "$PROJECT_DIR/.env" ]] || return 0
+  grep -E "^${key}=" "$PROJECT_DIR/.env" | tail -1 | cut -d= -f2- \
+    | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//"
+}
+unset SPRING_DATASOURCE_URL SPRING_DATASOURCE_USERNAME SPRING_DATASOURCE_PASSWORD \
+  SPRING_DATASOURCE_DRIVER_CLASS_NAME 2>/dev/null || true
 
-PG_HOST="${POSTGRES_HOST:-localhost}"
-PG_PORT="${POSTGRES_PORT:-5432}"
-PG_USER="${POSTGRES_USER:-postgres}"
-PG_PASSWORD="${POSTGRES_PASSWORD:-}"
+PG_HOST="$(read_env POSTGRES_HOST)"; PG_HOST="${PG_HOST:-localhost}"
+PG_PORT="$(read_env POSTGRES_PORT)"; PG_PORT="${PG_PORT:-5432}"
+PG_USER="$(read_env POSTGRES_USER)"; PG_USER="${PG_USER:-postgres}"
+PG_PASSWORD="$(read_env POSTGRES_PASSWORD)"
 PGADMIN_OPTS=(-h "$PG_HOST" -p "$PG_PORT" -U "$PG_USER" -d postgres)
 if [[ -n "$PG_PASSWORD" ]]; then
   export PGPASSWORD="$PG_PASSWORD"
@@ -156,6 +160,8 @@ set -a
 # shellcheck disable=SC1091
 source "$CLONE_DIR/.env"
 set +a
+unset SPRING_DATASOURCE_URL SPRING_DATASOURCE_USERNAME SPRING_DATASOURCE_PASSWORD \
+  SPRING_DATASOURCE_DRIVER_CLASS_NAME 2>/dev/null || true
 (
   cd "$CLONE_DIR"
   mvn -B -DskipTests install
@@ -171,6 +177,8 @@ info "启动 demo-basic-rag（端口 ${APP_PORT}）"
 (
   cd "$CLONE_DIR/demos/demo-basic-rag"
   set -a; source "$CLONE_DIR/.env"; set +a
+  unset SPRING_DATASOURCE_URL SPRING_DATASOURCE_USERNAME SPRING_DATASOURCE_PASSWORD \
+    SPRING_DATASOURCE_DRIVER_CLASS_NAME 2>/dev/null || true
   exec mvn -B spring-boot:run -Dspring-boot.run.arguments="--server.port=$APP_PORT"
 ) >"$LOG_DIR/demo.log" 2>&1 &
 APP_PID=$!
@@ -205,7 +213,14 @@ curl -sf -X POST "$BASE_URL/api/v1/rag/documents" \
   > "$DOC_JSON"
 DOC_ID="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["id"])' "$DOC_JSON")"
 [[ -n "$DOC_ID" && "$DOC_ID" != "None" ]]
-pass "创建文档 id=$DOC_ID"
+# 确认数据真的落在临时库，而不是被环境里的 SPRING_DATASOURCE_URL 劫持到日常库。
+IN_TEMP_DB="$(psql -h "$PG_HOST" -p "$PG_PORT" -U "$PG_USER" -d "$DB_NAME" -tAc \
+  "SELECT count(*) FROM rag_documents WHERE id=$DOC_ID")"
+[[ "$IN_TEMP_DB" == "1" ]] || {
+  fail "文档 id=$DOC_ID 不在临时库 $DB_NAME（疑似连接到了其他数据库）"
+  exit 1
+}
+pass "创建文档 id=$DOC_ID（已确认落在临时库）"
 
 curl -sf -X POST "$BASE_URL/api/v1/rag/documents/$DOC_ID/embed" >"$LOG_DIR/embed.json"
 python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); assert d.get("embeddings",0) >= 1, d' "$LOG_DIR/embed.json"

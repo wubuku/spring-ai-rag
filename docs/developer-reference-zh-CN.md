@@ -97,6 +97,20 @@ mvn clean test jacoco:report
 open spring-ai-rag-core/target/site/jacoco/index.html
 ```
 
+干净环境 / 升级路径 / 构建可复现性三项底座验收：
+
+```bash
+./scripts/verify-clean-clone.sh          # 临时目录干净 clone，mock provider 跑通全链路
+./scripts/verify-flyway-schema-paths.sh  # 空库与 V30 增量升级 schema 一致 + 重跑不丢数据
+./mvnw -v                                # Maven Wrapper 钉住 3.9.14
+mvn -o -B -DskipTests compile            # 依赖已预热后的离线构建
+cd spring-ai-rag-webui && npm ci --dry-run  # lockfile 与 package.json 一致性
+```
+
+境内网络需要镜像时，只临时覆盖 Wrapper 仓库地址：
+`MVNW_REPOURL=https://maven.aliyun.com/repository/public ./mvnw ...`，不要改
+`distributionUrl`。细节见 [testing-guide-zh-CN.md](testing-guide-zh-CN.md#底座验收干净冷启动flyway-升级路径与构建可复现性)。
+
 测试策略和更多命令见 [testing-guide-zh-CN.md](testing-guide-zh-CN.md)。
 
 ### 测试可见性
