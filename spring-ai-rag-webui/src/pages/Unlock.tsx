@@ -58,8 +58,13 @@ export function Unlock() {
             autoFocus
             className={styles.input}
             aria-invalid={Boolean(error)}
+            aria-describedby={error ? 'unlock-error' : undefined}
           />
-          {error && <div className={styles.error} role="alert">{error}</div>}
+          {error && (
+            <div id="unlock-error" className={styles.error} role="alert">
+              {error}
+            </div>
+          )}
           <button
             type="submit"
             className={styles.submit}

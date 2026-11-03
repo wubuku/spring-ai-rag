@@ -73,7 +73,7 @@ export function Documents() {
     queryFn: () => collectionsApi.list({ page: 0, size: 1000 }),
   });
 
-  const { data, isPending, error } = useQuery({
+  const { data, isPending, error, refetch } = useQuery({
     queryKey: ['documents', page, keyword, selectedCollection],
     queryFn: () =>
       documentsApi.list({
@@ -521,18 +521,22 @@ export function Documents() {
       </div>
 
       {isPending ? (
-        <div className={styles.tableWrapper}>
+        <div className={styles.tableWrapper} data-testid="documents-loading">
           <Skeleton width="100%" height="400px" borderRadius="8px" />
         </div>
       ) : error ? (
-        <div className={styles.error}>
+        <QueryErrorBanner
+          onRetry={() => void refetch()}
+          retryLabel={t('common.retry')}
+        >
           {t('documents.loadError')}:{' '}
           {usableReason(error) || t('common.unknownError')}
-        </div>
+        </QueryErrorBanner>
       ) : (
         <>
           <div className={styles.tableWrapper}>
             <table className={styles.table}>
+              <caption className="sr-only">{t('documents.title')}</caption>
               <thead>
                 <tr>
                   <th>{t('documents.documentId')}</th>

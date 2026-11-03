@@ -120,7 +120,11 @@ export function Layout() {
         <div className={styles.overlay} onClick={() => setSidebarOpen(false)} aria-hidden="true" />
       )}
 
-      <aside className={`${styles.sidebar} ${isMobile && sidebarOpen ? styles.sidebarOpen : ''}`}>
+      <aside
+        id="app-sidebar"
+        inert={isMobile && !sidebarOpen}
+        className={`${styles.sidebar} ${isMobile && sidebarOpen ? styles.sidebarOpen : ''}`}
+      >
         <div className={styles.sidebarHeader}>
           <div className={styles.logo}>spring-ai-rag</div>
           {isMobile && (
@@ -164,6 +168,8 @@ export function Layout() {
               className={styles.menuBtn}
               label={t('nav.openSidebar', 'Open sidebar')}
               variant="secondary"
+              aria-expanded={sidebarOpen}
+              aria-controls="app-sidebar"
               onClick={() => setSidebarOpen(true)}
             >
               <Menu size={18} aria-hidden="true" />

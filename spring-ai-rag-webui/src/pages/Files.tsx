@@ -800,11 +800,11 @@ export function Files() {
                     ? 'files.sortNewestFirstTitle'
                     : 'files.sortOldestFirstTitle',
                 )}
-                aria-label={t(
+                aria-label={`${t('files.sortImportedAt')}: ${t(
                   importTimeSortDirection === 'desc'
                     ? 'files.sortNewestFirstTitle'
                     : 'files.sortOldestFirstTitle',
-                )}
+                )}`}
               >
                 <span>{t('files.sortImportedAt')}</span>
                 <span aria-hidden="true">

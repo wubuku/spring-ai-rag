@@ -241,13 +241,18 @@
   min-width: 80px;
 }
 
-.sendBtn:disabled {
+.sendBtn[aria-disabled='true'] {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
-.sendBtn:hover:not(:disabled) {
+.sendBtn:hover:not([aria-disabled='true']) {
   background: var(--color-primary-hover);
+}
+
+.input[readonly] {
+  opacity: 0.7;
+  cursor: not-allowed;
 }
 
 .composer {

@@ -47,6 +47,7 @@ Additive capabilities: [trustworthy assertions, active diagnostics and offline q
 | Run durable embedding jobs / quality regression | [Developer reference](developer-reference.md) | [Testing guide](testing-guide.md) |
 | Govern or modify WebUI horizontal alignment | [WebUI horizontal-alignment guidelines](webui-alignment-guidelines.md) | [Testing guide](testing-guide.md) |
 | Add a token, icon, or shared UI primitive, or trip the design-system gate | [WebUI design language](webui-design-language.md) | [Testing guide](testing-guide.md), `spring-ai-rag-webui/scripts/check-design-system.mjs` |
+| Run the accessibility/responsive baseline, or trip axe, keyboard, or viewport specs | [WebUI accessibility and responsive baseline](webui-accessibility.md) | [WebUI design language](webui-design-language.md), `spring-ai-rag-webui/e2e/` |
 | Domain customization | [extension-guide.md](extension-guide.md) | `demos/demo-domain-extension` |
 | Write / run tests | [testing-guide.md](testing-guide.md) | [developer-reference.md](developer-reference.md) E2E section |
 | Plan, implement, accept, and deliver substantial work | [Planning, Implementation, And Acceptance Workflow](delivery-workflow.md) | [Current active plans](drafts/README.md), [Testing guide](testing-guide.md) |
@@ -92,6 +93,7 @@ Chinese counterparts use the same basename with a `-zh-CN` suffix where availabl
 | [OpenAI compatibility readiness and codebase context](openai-compatibility-readiness.md) | Disabled-by-default preview, protocol matrix, code navigation, verification evidence, Starter boundary, and improvement priorities |
 | [WebUI horizontal-alignment guidelines](webui-alignment-guidelines.md) / [中文](webui-alignment-guidelines-zh-CN.md) | WebUI defaults, justified centering exceptions, the `alignment-policy` gate, and verification commands |
 | [WebUI design language](webui-design-language.md) / [中文](webui-design-language-zh-CN.md) | Token single source, icon rules, shared primitive contracts, the ten design-system gate violations, and why the gate must be able to fail |
+| [WebUI accessibility and responsive baseline](webui-accessibility.md) / [中文](webui-accessibility-zh-CN.md) | axe WCAG 2.1 AA baseline, keyboard access, 375/768/1440 layout assertions, reduced motion, and screen-reader labels |
 | [Current active plans](drafts/README.md) | Lists only work still being prepared or implemented; code and evergreen docs remain authoritative |
 | [Historical plan and implementation archive](drafts/archive/README.md) | Design and verification provenance only; not a default reading path for Agents |
 

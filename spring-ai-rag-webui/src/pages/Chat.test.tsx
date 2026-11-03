@@ -154,7 +154,8 @@ describe('Chat', () => {
   it('send button is disabled when input is empty', () => {
     renderChat();
     const sendBtn = screen.getByRole('button', { name: /chat.send/ });
-    expect(sendBtn).toBeDisabled();
+    // aria-disabled 而不是 disabled：按钮保持可聚焦，流式结束后焦点不会丢。
+    expect(sendBtn).toHaveAttribute('aria-disabled', 'true');
   });
 
   it('send button is enabled when input has text', () => {
@@ -162,7 +163,7 @@ describe('Chat', () => {
     const textarea = screen.getByPlaceholderText(/chat.placeholder/);
     fireEvent.change(textarea, { target: { value: 'Hello world' } });
     const sendBtn = screen.getByRole('button', { name: /chat.send/ });
-    expect(sendBtn).not.toBeDisabled();
+    expect(sendBtn).not.toHaveAttribute('aria-disabled', 'true');
   });
 
   it('restores an unsent draft after the route component is remounted', () => {
@@ -518,7 +519,9 @@ describe('Chat', () => {
       target: { value: 'Blocked until a collection is selected' },
     });
 
-    expect(screen.getByRole('button', { name: /chat.send/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /chat.send/ }))
+      .toHaveAttribute('aria-disabled', 'true');
+    fireEvent.click(screen.getByRole('button', { name: /chat.send/ }));
     expect(mockSend).not.toHaveBeenCalled();
   });
 

@@ -4,6 +4,7 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  type KeyboardEvent as ReactKeyboardEvent,
 } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
@@ -97,6 +98,41 @@ export function DocumentActionsMenu({
     if (open) updatePosition();
   }, [open, provenanceOpen, updatePosition]);
 
+  // role="menu" 期望打开后焦点进入第一项，并支持方向键在菜单项之间移动。
+  useEffect(() => {
+    if (!open) return;
+    const frame = requestAnimationFrame(() => {
+      const first = menuRef.current?.querySelector<HTMLElement>(
+        '[role="menuitem"]:not([disabled])',
+      );
+      first?.focus();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [open]);
+
+  const handleMenuKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+    const items = menuRef.current?.querySelectorAll<HTMLElement>(
+      '[role="menuitem"]:not([disabled])',
+    );
+    if (!items?.length) return;
+    event.preventDefault();
+    const currentIndex = Array.from(items).indexOf(
+      document.activeElement as HTMLElement,
+    );
+    let nextIndex = currentIndex;
+    if (event.key === 'ArrowDown') {
+      nextIndex = (currentIndex + 1 + items.length) % items.length;
+    } else if (event.key === 'ArrowUp') {
+      nextIndex = (currentIndex - 1 + items.length) % items.length;
+    } else if (event.key === 'Home') {
+      nextIndex = 0;
+    } else if (event.key === 'End') {
+      nextIndex = items.length - 1;
+    }
+    items[nextIndex]?.focus();
+  };
+
   useEffect(() => {
     if (!open) return;
 
@@ -157,6 +193,7 @@ export function DocumentActionsMenu({
           className={styles.menu}
           role="menu"
           aria-label={t('documents.actionMenu', { title: ragDocument.title })}
+          onKeyDown={handleMenuKeyDown}
           style={{
             top: position?.top ?? 0,
             left: position?.left ?? 0,

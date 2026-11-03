@@ -613,7 +613,16 @@ export function Chat() {
               className={`${styles.msg} ${msg.role === 'user' ? styles.user : styles.assistant}`}
             >
               <div className={styles.role}>{msg.role === 'user' ? t('common.you') : t('common.assistant')}</div>
-              <div className={`${styles.content} ${msg.failed ? styles.failedContent : ''}`}>
+              <div
+                className={`${styles.content} ${msg.failed ? styles.failedContent : ''}`}
+                aria-live={msg.role === 'assistant' && msg.isStreaming ? 'polite' : undefined}
+                aria-atomic={msg.role === 'assistant' && msg.isStreaming ? false : undefined}
+                data-testid={
+                  msg.role === 'assistant' && msg.isStreaming
+                    ? 'chat-streaming-content'
+                    : undefined
+                }
+              >
                 {msg.content}
                 {msg.isStreaming && <span className={styles.cursor}>|</span>}
               </div>
@@ -803,13 +812,17 @@ export function Chat() {
               onKeyDown={handleKeyDown}
               placeholder={t('chat.placeholder')}
               aria-label={t('chat.inputLabel')}
-              disabled={isConnected}
+              // 流式期间用 readOnly 而不是 disabled：disabled 元素不可聚焦，
+              // 回车发送后焦点会掉回 body，键盘用户会在回答生成中途"失联"。
+              readOnly={isConnected}
               className={styles.input}
               rows={1}
             />
             <button
               onClick={isConnected ? handleStop : handleSend}
-              disabled={
+              // 同理，流式结束瞬间按钮会从"停止"变回禁用的"发送"；用
+              // aria-disabled 保留在 Tab 顺序里，焦点不会被浏览器丢弃。
+              aria-disabled={
                 isConnected
                   ? false
                   : !input.trim()

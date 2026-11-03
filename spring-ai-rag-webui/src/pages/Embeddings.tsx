@@ -272,6 +272,7 @@ export function Embeddings() {
             </p>
             <div className={styles.tableWrap}>
               <table className={styles.table}>
+                <caption className="sr-only">{t('embeddings.repairPreview')}</caption>
                 <thead>
                   <tr>
                     <th>{t('embeddings.documentId')}</th>
@@ -313,6 +314,7 @@ export function Embeddings() {
         ) : (
           <div className={styles.tableWrap}>
             <table className={styles.table}>
+              <caption className="sr-only">{t('embeddings.jobs')}</caption>
               <thead>
                 <tr>
                   <th>{t('embeddings.jobId')}</th>

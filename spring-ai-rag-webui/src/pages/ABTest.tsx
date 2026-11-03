@@ -294,7 +294,10 @@ function ExperimentDetail({ experimentId, onBack }: { experimentId: number; onBa
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="name" />
                   <YAxis />
-                  <Tooltip formatter={(v, key) => [v, key]} />
+                  <Tooltip
+                    formatter={(v, key) => [v, key]}
+                    itemStyle={{ color: 'var(--color-text)' }}
+                  />
                   <Legend />
                   <Bar dataKey="samples" fill={palette.primary} name={t('abtest.samples')} />
                   <Bar dataKey="mean" fill={palette.success} name={t('abtest.meanValue')} />

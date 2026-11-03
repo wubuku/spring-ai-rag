@@ -609,7 +609,11 @@ The mock suite's `e2e/failure-modes.spec.ts` guards failure presentation: when
 `RATE_LIMITED`, `TIMEOUT` or a mid-stream SSE truncation / `done.status=incomplete`,
 the WebUI must show readable copy, offer a retry entry, leave loading, and never
 report a soft failure (HTTP 200 + `status=FAILED`) as success.
- The root
+The standalone accessibility and responsive baseline (axe WCAG 2.1 AA, keyboard,
+375/768/1440, reduced motion) lives in `e2e/accessibility.spec.ts`,
+`e2e/keyboard.spec.ts`, `e2e/responsive.spec.ts` and `e2e/reduced-motion.spec.ts`;
+see [WebUI accessibility and responsive baseline](webui-accessibility.md).
+The root
 cause investigation lives in the hardening loop ledger, Batches 23/25
 ([drafts/HARDENING_LOOP_PLAN.md](drafts/HARDENING_LOOP_PLAN.md)).
 To configure a tool-calling model for `chat-real`, prefer the external

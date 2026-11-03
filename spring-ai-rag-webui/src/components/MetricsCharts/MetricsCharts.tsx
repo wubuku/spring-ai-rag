@@ -98,6 +98,10 @@ export function MetricsCharts({ data }: MetricsChartsProps) {
     borderRadius: 8,
   };
 
+  // 工具提示的项目文字继承系列颜色（默认 Recharts 行为），#3b82f6 在白底上
+  // 只有 3.67:1。改用正文色，避免把图表系列色当成正文。
+  const tooltipItemStyle = { color: 'var(--color-text)' };
+
   return (
     <div className={styles.container}>
       {omitted > 0 && (
@@ -133,6 +137,7 @@ export function MetricsCharts({ data }: MetricsChartsProps) {
                 <YAxis {...axisStyle} />
                 <Tooltip
                   contentStyle={tooltipStyle}
+                  itemStyle={tooltipItemStyle}
                 />
                 <Bar dataKey="value" fill={palette.primary} radius={[4, 4, 0, 0]} />
               </BarChart>
@@ -143,6 +148,7 @@ export function MetricsCharts({ data }: MetricsChartsProps) {
                 <YAxis {...axisStyle} />
                 <Tooltip
                   contentStyle={tooltipStyle}
+                  itemStyle={tooltipItemStyle}
                 />
                 <Line type="monotone" dataKey="value" stroke={palette.primary} strokeWidth={2} dot={{ r: 4 }} />
               </LineChart>
@@ -185,6 +191,7 @@ export function MetricsCharts({ data }: MetricsChartsProps) {
               <Tooltip
                 contentStyle={tooltipStyle}
                 formatter={(value) => [`${value}%`, t('metrics.cacheHitRate')]}
+                itemStyle={tooltipItemStyle}
               />
               <Bar dataKey="value" fill={palette.success} radius={[4, 4, 0, 0]} />
             </BarChart>

@@ -256,6 +256,7 @@ export function Evaluation() {
             ) : (
               <div className={styles.tableWrap}>
                 <table className={styles.table}>
+                  <caption className="sr-only">{t('evaluation.tabHistory')}</caption>
                   <thead>
                     <tr>
                       <th>ID</th>
@@ -300,6 +301,7 @@ export function Evaluation() {
             )}
             <div className={styles.tableWrap}>
               <table className={styles.table}>
+                <caption className="sr-only">{t('evaluation.tabFeedback')}</caption>
                 <thead>
                   <tr>
                     <th>ID</th>
@@ -524,6 +526,7 @@ function CitationsPanel() {
       )}
       <div className={styles.tableWrap}>
         <table className={styles.table}>
+          <caption className="sr-only">{t('evaluation.tabCitations')}</caption>
           <thead>
             <tr>
               <th>{t('evaluation.traceId')}</th>
