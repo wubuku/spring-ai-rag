@@ -129,6 +129,7 @@ RAG_EMBEDDING_DIMENSIONS=1024
 RAG_EMBEDDING_PROFILE_KEY=clean-verify-1024-v1
 RAG_RETRIEVAL_MIN_SCORE=0
 RAG_SECURITY_ENABLED=false
+RAG_ROOT_API_KEY=mock-root-key
 ENV
 pass ".env 已按 .env.example 变量名生成（mock provider）"
 
@@ -167,7 +168,7 @@ info "启动 demo-basic-rag（端口 ${APP_PORT}）"
 (
   cd "$CLONE_DIR/demos/demo-basic-rag"
   set -a; source "$CLONE_DIR/.env"; set +a
-  exec mvn -B spring-boot:run -Dserver.port="$APP_PORT"
+  exec mvn -B spring-boot:run -Dspring-boot.run.arguments="--server.port=$APP_PORT"
 ) >"$LOG_DIR/demo.log" 2>&1 &
 APP_PID=$!
 
