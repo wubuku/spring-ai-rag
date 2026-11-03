@@ -6,6 +6,11 @@
 
 # Base images are overridable for mainland-China mirrors and private registries.
 # Official defaults keep CI and third-party builds portable.
+#
+# 基线约束：只允许显式版本标签（禁止 `latest`），需要完全确定的发布时通过
+# 构建参数传入带 digest 的引用，例如
+# `--build-arg RUNTIME_IMAGE=eclipse-temurin:21-jre-alpine@sha256:<digest>`。
+# 不要把临时镜像站或单架构 digest 写死在这里。
 ARG MAVEN_IMAGE=maven:3.9-eclipse-temurin-21
 ARG RUNTIME_IMAGE=eclipse-temurin:21-jre-alpine
 ARG MAVEN_MIRROR_URL=""
@@ -76,5 +81,10 @@ ENV JAVA_TOOL_OPTIONS="-XX:+UseG1GC \
 EXPOSE 8081
 
 USER springairag
+
+# 运行时自检：只依赖 Alpine busybox 自带的 wget，镜像里不装 curl。
+# 编排器可用同一端点做 liveness/readiness；`--start-period` 覆盖首次 Flyway 迁移。
+HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
+  CMD wget -q -O - http://127.0.0.1:8081/actuator/health >/dev/null 2>&1 || exit 1
 
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]

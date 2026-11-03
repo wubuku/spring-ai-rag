@@ -35,6 +35,21 @@ services:
         condition: service_healthy
     ports:
       - "${APP_PORT:-8081}:8081"
+    # 容器安全基线：根文件系统只读，唯一可写目录挂在临时内存盘；
+    # 进程不获得新权限，并丢弃全部 Linux capabilities（Java 运行不需要）。
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8081/actuator/health >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 90s
+      retries: 3
     environment:
       # Database connection
       POSTGRES_HOST: postgres

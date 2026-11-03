@@ -390,6 +390,61 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
+  container-smoke:
+    name: Container image build and delivery smoke
+    if: github.event_name == 'schedule' || inputs.debug_report_failure != true
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node (mock provider)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      # 与本地 `verify-container-image.sh` 的一致性：用同一 Dockerfile 构建，
+      # 再交给脚本做安全基线 / 健康 / 认证 / 只读文件系统断言。
+      # GHA 层缓存只复用未变化的构建层；源码变化仍会产生新镜像。
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image (with GHA layer cache)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          load: true
+          tags: spring-ai-rag:nightly-smoke
+          build-args: |
+            MAVEN_IMAGE=maven:3.9-eclipse-temurin-21
+            RUNTIME_IMAGE=eclipse-temurin:21-jre-alpine
+          cache-from: type=gha,scope=container-smoke
+          cache-to: type=gha,mode=max,scope=container-smoke
+
+      - name: Run container delivery smoke
+        run: |
+          set -euo pipefail
+          mkdir -p .verification/nightly
+          ./scripts/verify-container-image.sh \
+            --skip-build \
+            --keep \
+            --image spring-ai-rag:nightly-smoke \
+            --project rag-container-smoke-ci 2>&1 \
+            | tee .verification/nightly/container-smoke.log
+
+      - name: Upload container smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-container-smoke
+          path: |
+            .verification/nightly/container-smoke.log
+            /tmp/rag-container-smoke*/
+          if-no-files-found: warn
+          retention-days: 30
+
   webui-real:
     name: Real WebUI specs (no manual fixtures)
     if: github.event_name == 'schedule' || inputs.debug_report_failure != true

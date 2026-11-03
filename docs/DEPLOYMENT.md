@@ -270,6 +270,42 @@ MIRROR_BASE_URL=your.registry.example \
 
 更多网络、架构与回退说明见 [china-network-guide-zh-CN.md](china-network-guide-zh-CN.md)。
 
+### 4.5 容器镜像基线
+
+官方 Dockerfile 与 Compose 模板提供以下基线，修改时必须保持：
+
+| 约束 | 实现位置 | 说明 |
+|------|---------|------|
+| 非 root 运行 | `docker/Dockerfile` `USER springairag` | 运行时 UID 非 0 |
+| 无内置密钥 | 镜像只 `COPY` jar | API Key / Token 只能运行时注入 |
+| 不打进 `.env` | `.dockerignore` 排除 `.env*` | 最终镜像也不含 `/app/.env` |
+| 基础镜像显式版本 | `MAVEN_IMAGE` / `RUNTIME_IMAGE` ARG | 禁止 `latest`；需要完全确定性时传 `@sha256:` |
+| 内置健康检查 | Dockerfile `HEALTHCHECK` | 命中 `/actuator/health`，不依赖额外安装 curl |
+| 只读根文件系统 | compose `read_only: true` + `tmpfs: /tmp` | 唯一可写目录是内存临时盘 |
+| 最小权限 | compose `security_opt: no-new-privileges` + `cap_drop: ALL` | 进程不能提权或使用 Linux capabilities |
+
+本地复现 nightly 的同一条烟测（默认用当前源码 `--no-cache` 全新构建，记录耗时与体积）：
+
+```bash
+./scripts/verify-container-image.sh
+```
+
+CI 里先由 Buildx 带层缓存构建，再复用镜像跑同一脚本：
+
+```bash
+./scripts/verify-container-image.sh --skip-build --image spring-ai-rag:nightly-smoke
+```
+
+脚本断言：非 root、无内置密钥/`.env`、基础镜像非 `latest`、HEALTHCHECK 存在；
+按官方 compose 默认配置（`postgresql,prod` + `RAG_SECURITY_ENABLED=true`）启动后
+健康检查 UP、未认证 `search` 401、root key `search` 200，且只读文件系统、
+`/tmp` 临时盘、`no-new-privileges`、`cap_drop=ALL` 生效。`--keep` 保留构建与
+容器日志。该烟测已接入 nightly 的 `container-smoke` job（GHA 层缓存，不重复付费调用）。
+
+镜像基线不包含 registry 推送与集群部署：这两步需要额外凭据/环境，发布流程另行执行。
+快速入门与境内构建见 [docker/README.md](../docker/README.md)
+（[English](../docker/README-en.md)）。
+
 ## 5. 监控
 
 ### 5.1 健康检查

@@ -121,6 +121,19 @@ export const GATES = [
   manual('scripts/verify-retrieval-diagnostics.sh'),
   manual('scripts/verify-retrieval-filters.sh'),
 
+  // 容器交付烟测：Dockerfile 构建 + 官方 compose 起栈 + 运行时安全基线。
+  // 由 nightly 的 container-smoke job 执行（先 Buildx 带层缓存构建镜像），
+  // 本地可用同一条脚本 `--skip-build` 复现。
+  {
+    gate: 'scripts/verify-container-image.sh',
+    kind: 'gate',
+    noSelfTestReason:
+      '端到端容器烟测需要 Docker、一次完整镜像构建和真实 compose 起栈；'
+      + '把它移植成纯函数自测只能模拟 shell 分支，无法证明非 root、只读文件系统、'
+      + '认证 401 这些真实运行时约束。失败路径由 nightly container-smoke job 与'
+      + '本地 `--skip-build` 复现覆盖。',
+  },
+
   // ----------------------------------------------------- backend gate chain --
   // Run by scripts/verify-project-tests.sh, which must be the step right after a
   // full `mvn test`: verify-test-visibility.mjs reads the surefire reports that

@@ -62,7 +62,11 @@ rag:
   memory:
     max-messages: 20
   security:
-    enabled: false
+    # demo 的 application.yml 会遮蔽 core jar 内的同名文件（fat jar 中 BOOT-INF/classes
+    # 优先于依赖 jar），因此必须在本地重复声明这两个占位符；否则容器里注入的
+    # RAG_ROOT_API_KEY 会被静默忽略，认证开启后没有任何可用凭据。
+    enabled: ${RAG_SECURITY_ENABLED:false}
+    root-api-key: ${RAG_ROOT_API_KEY:}
 
 management:
   endpoints:
