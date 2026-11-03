@@ -148,11 +148,17 @@ def main() -> int:
         prepare_v70_data(stack)
 
         # ---------- 升级到 V71 ----------
+        # 只断言 V71 这条迁移已成功应用。后续迁移（V72、V73…）仍会继续执行，
+        # 把 flyway_schema_history 的最新版本号写死成 71，会在此后每加一个迁移时误报。
         base = stack.start_app()
-        schema_version = stack.sql(
+        v71_applied = stack.sql(
+            "SELECT COUNT(*) FROM flyway_schema_history "
+            "WHERE version = '71' AND success")
+        latest_version = stack.sql(
             "SELECT version FROM flyway_schema_history "
             "ORDER BY installed_rank DESC LIMIT 1")
-        check("数据库已升级到 V71", schema_version == "71", f"version={schema_version}")
+        check("数据库已升级到 V71", v71_applied == "1",
+              f"latest={latest_version}")
 
         status, collection = json_request(
             "POST", f"{base}/api/v1/rag/collections",
