@@ -1697,8 +1697,21 @@ so **the core base configuration is shadowed entirely** (profile files such as
 | `RAG_SECURITY_ENABLED` | `rag.security.enabled` | No (relaxed) | Works |
 | `RAG_ROOT_API_KEY` | `rag.security.root-api-key` | **Yes** | Works (declared in all four demos) |
 | `POSTGRES_HOST` / `PORT` / `DATABASE` / `USER` / `PASSWORD` | `spring.datasource.*` | **Yes** | Works (declared in all four demos) |
+| `DB_POOL_SIZE` / `DB_POOL_MIN_IDLE` | `spring.datasource.hikari.maximum-pool-size` / `minimum-idle` | **Yes** | Works (declared in all four demos and the Helm ConfigMap) |
 | `SPRING_DATASOURCE_URL` | `spring.datasource.url` | No (relaxed) | Works (overrides `POSTGRES_*`) |
 | `RAG_EMBEDDING_API_KEY` / `BASE_URL` / `MODEL` / `DIMENSIONS` / `PROFILE_KEY` | `rag.embedding.*` | No (relaxed) | Works; `profile-key` is also declared so its default is not lost to shadowing |
+
+**What shadowing does not carry over**: the core `application.yml` also declares groups
+whose variable names do not match their property paths. They work in the main application
+(the starter depends on the core config directly) but have no placeholder in demo
+deployments (including the container image), so they do not take effect there:
+`RAG_DOCUMENT_*` (document lifecycle), `RAG_NOTIFICATION_DELIVERY_*`, `RAG_CHAT_COMPACTION_*`,
+`RAG_CHUNK_UPGRADE_*`, `RERANK_BASE_URL/API_KEY/MODEL`, `MODELS_CONFIG_FILE`,
+`OPENROUTER_API_KEY`, `ZHIPU_API_KEY`, `ANTHROPIC_*`, `MINIMAX_*`. Decide per variable by
+computing the canonical name: replace `.` and `-` in the property path with `_` and
+upper-case it; if that equals the environment variable name, relaxed binding applies
+directly, otherwise a `${...}` placeholder is required. Audit new `RAG_*` variables
+against this rule.
 
 `spring-ai-rag-starter` and `spring-ai-rag-documents` contain no `application.yml` and do
 not participate in shadowing. The Helm ConfigMap is loaded via
@@ -1709,8 +1722,8 @@ this layer as well.
 
 Regression test:
 `demos/demo-basic-rag/src/test/java/com/springairag/demo/ApplicationEnvironmentBindingTest.java`
-runs in the CI fast layer and asserts that security root key, datasource, and embedding
-profile variables resolve.
+runs in the CI fast layer and asserts that security root key, datasource (including the
+connection pool), and embedding profile variables resolve.
 
 ## Database Configuration
 

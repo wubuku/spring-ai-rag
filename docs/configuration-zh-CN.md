@@ -1538,8 +1538,17 @@ fat jar 中 `BOOT-INF/classes` 优先于依赖 jar，**core 的基础配置会�
 | `RAG_SECURITY_ENABLED` | `rag.security.enabled` | 否（relaxed） | 生效 |
 | `RAG_ROOT_API_KEY` | `rag.security.root-api-key` | **是** | 生效（四个 demo 均已声明） |
 | `POSTGRES_HOST` / `PORT` / `DATABASE` / `USER` / `PASSWORD` | `spring.datasource.*` | **是** | 生效（四个 demo 均已声明） |
+| `DB_POOL_SIZE` / `DB_POOL_MIN_IDLE` | `spring.datasource.hikari.maximum-pool-size` / `minimum-idle` | **是** | 生效（四个 demo 与 Helm ConfigMap 均已声明） |
 | `SPRING_DATASOURCE_URL` | `spring.datasource.url` | 否（relaxed） | 生效（但会覆盖 `POSTGRES_*`） |
 | `RAG_EMBEDDING_API_KEY` / `BASE_URL` / `MODEL` / `DIMENSIONS` / `PROFILE_KEY` | `rag.embedding.*` | 否（relaxed） | 生效；`profile-key` 另显式声明以避免默认值随遮蔽丢失 |
+
+**不会随遮蔽保留的部分**：core `application.yml` 里还有一些变量名与属性路径不一致的配置组，
+它们在主应用（starter 直接依赖 core 配置）中有效，但在 demo 部署（包括容器镜像）里没有对应
+占位符，因此不会生效：`RAG_DOCUMENT_*`（文档生命周期）、`RAG_NOTIFICATION_DELIVERY_*`、
+`RAG_CHAT_COMPACTION_*`、`RAG_CHUNK_UPGRADE_*`、`RERANK_BASE_URL/API_KEY/MODEL`、
+`MODELS_CONFIG_FILE`、`OPENROUTER_API_KEY`、`ZHIPU_API_KEY`、`ANTHROPIC_*`、`MINIMAX_*`。
+判定方法是算 canonical 名：把属性路径的 `.` 和 `-` 都换成 `_` 再大写，若与环境变量名相同，
+relaxed binding 直接生效；不同就必须有 `${...}` 占位符。新增 `RAG_*` 变量时按这条规则检查。
 
 `spring-ai-rag-starter` 与 `spring-ai-rag-documents` 不含 `application.yml`，不参与遮蔽。
 Helm 的 ConfigMap 以 `SPRING_CONFIG_ADDITIONAL_LOCATION` 加载，优先级高于 classpath，
@@ -1548,7 +1557,7 @@ Helm 的 ConfigMap 以 `SPRING_CONFIG_ADDITIONAL_LOCATION` 加载，优先级高
 
 回归测试：
 `demos/demo-basic-rag/src/test/java/com/springairag/demo/ApplicationEnvironmentBindingTest.java`
-在 CI 快层执行，断言安全 root key、数据源、embedding profile 三类变量都能解析。
+在 CI 快层执行，断言安全 root key、数据源（含连接池）、embedding profile 三类变量都能解析。
 
 ## 数据库配置
 

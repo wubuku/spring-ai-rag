@@ -10,6 +10,10 @@ spring:
     username: ${POSTGRES_USER:${DB_USER:postgres}}
     password: ${POSTGRES_PASSWORD:${DB_PASSWORD:postgres}}
     driver-class-name: org.postgresql.Driver
+    hikari:
+      # DB_POOL_* 的变量名与 spring.datasource.hikari.* 不一致，必须显式映射。
+      maximum-pool-size: ${DB_POOL_SIZE:10}
+      minimum-idle: ${DB_POOL_MIN_IDLE:10}
 
   # Manually manage Flyway (not via Starter auto-configuration)
   flyway:

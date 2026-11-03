@@ -55,20 +55,23 @@ class ApplicationEnvironmentBindingTest {
         MockEnvironment environment = new MockEnvironment();
         environment.getPropertySources().addFirst(new SystemEnvironmentPropertySource(
                 "test-env",
-                Map.of(
+                Map.ofEntries(
                         // 安全 root key 的变量名与属性路径不一致，只能通过占位符映射。
-                        "RAG_ROOT_API_KEY", ROOT_KEY,
-                        "RAG_SECURITY_ENABLED", "true",
+                        Map.entry("RAG_ROOT_API_KEY", ROOT_KEY),
+                        Map.entry("RAG_SECURITY_ENABLED", "true"),
                         // 数据库变量名同样与 spring.datasource.* 不一致。
-                        "POSTGRES_HOST", "db.binding.test",
-                        "POSTGRES_PORT", "5442",
-                        "POSTGRES_DATABASE", "rag_binding_test",
-                        "POSTGRES_USER", "rag_binding_user",
-                        "POSTGRES_PASSWORD", "rag_binding_password",
+                        Map.entry("POSTGRES_HOST", "db.binding.test"),
+                        Map.entry("POSTGRES_PORT", "5442"),
+                        Map.entry("POSTGRES_DATABASE", "rag_binding_test"),
+                        Map.entry("POSTGRES_USER", "rag_binding_user"),
+                        Map.entry("POSTGRES_PASSWORD", "rag_binding_password"),
+                        // 连接池调优变量名与 spring.datasource.hikari.* 不一致。
+                        Map.entry("DB_POOL_SIZE", "7"),
+                        Map.entry("DB_POOL_MIN_IDLE", "3"),
                         // embedding profile 走 relaxed 绑定，但占位符缺失时默认值会丢。
-                        "RAG_EMBEDDING_PROFILE_KEY", "custom-bge-m3-1024-v2",
-                        "RAG_EMBEDDING_DIMENSIONS", "1024",
-                        "RAG_EMBEDDING_MODEL", "BAAI/bge-m3-custom")));
+                        Map.entry("RAG_EMBEDDING_PROFILE_KEY", "custom-bge-m3-1024-v2"),
+                        Map.entry("RAG_EMBEDDING_DIMENSIONS", "1024"),
+                        Map.entry("RAG_EMBEDDING_MODEL", "BAAI/bge-m3-custom"))));
 
         List<PropertySource<?>> yamlSources = new YamlPropertySourceLoader()
                 .load(demo, new FileSystemResource(configFile));
@@ -89,6 +92,10 @@ class ApplicationEnvironmentBindingTest {
                 demo + ": POSTGRES_USER 必须解析到数据源用户名");
         assertEquals("rag_binding_password", environment.getProperty("spring.datasource.password"),
                 demo + ": POSTGRES_PASSWORD 必须解析到数据源口令");
+        assertEquals("7", environment.getProperty("spring.datasource.hikari.maximum-pool-size"),
+                demo + ": DB_POOL_SIZE 必须解析到连接池上限");
+        assertEquals("3", environment.getProperty("spring.datasource.hikari.minimum-idle"),
+                demo + ": DB_POOL_MIN_IDLE 必须解析到连接池空闲下限");
 
         // 3) Embedding profile 与模型维度
         assertEquals("custom-bge-m3-1024-v2",

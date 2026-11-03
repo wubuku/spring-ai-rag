@@ -11,6 +11,10 @@ spring:
     url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DATABASE:spring_ai_rag_dev}
     username: ${POSTGRES_USER:postgres}
     password: ${POSTGRES_PASSWORD:postgres}
+    hikari:
+      # DB_POOL_* 的变量名与 spring.datasource.hikari.* 不一致，必须显式映射。
+      maximum-pool-size: ${DB_POOL_SIZE:10}
+      minimum-idle: ${DB_POOL_MIN_IDLE:10}
 
   # Flyway auto-migration
   flyway:
