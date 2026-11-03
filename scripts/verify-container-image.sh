@@ -63,6 +63,14 @@ check() {
 }
 
 cleanup() {
+  # 应用日志先落盘再拆栈：健康检查失败时 compose 的进度输出不含容器 stdout，
+  # 没有这份日志就只能看到 "health: starting" 而无法定位启动异常。
+  if [[ -f "$WORK_DIR/override.yml" ]]; then
+    docker compose -p "$PROJECT" \
+      -f docker/docker-compose.yml \
+      -f "$WORK_DIR/override.yml" logs --no-color --tail=200 \
+      > "$LOG_DIR/app.log" 2>&1 || true
+  fi
   docker compose -p "$PROJECT" \
     -f docker/docker-compose.yml \
     -f "$WORK_DIR/override.yml" down -v >/dev/null 2>&1 || true
@@ -185,6 +193,10 @@ services:
       RAG_EMBEDDING_MODEL: BAAI/bge-m3
       RAG_EMBEDDING_DIMENSIONS: "1024"
       RAG_ROOT_API_KEY: "${ROOT_KEY}"
+      # mock provider 跑在宿主机上，容器只能经 host-gateway 用明文 http 访问它。
+      # 启动校验默认拒绝远程明文 http；这里是脚本自己起的可信内网端点，
+      # 显式打开逃生阀（RAG_ALLOW_INSECURE_UPSTREAM），而不是放宽生产默认值。
+      RAG_ALLOW_INSECURE_UPSTREAM: "true"
 EOF
 
 if ! docker compose -p "$PROJECT" \
