@@ -117,16 +117,21 @@ curl -N -X POST http://localhost:8081/api/v1/rag/chat/stream \
   -H "Content-Type: application/json" \
   -d '{"message": "Explain how RAG works in detail"}'
 
+# Create a collection (documents must belong to one)
+curl -X POST http://localhost:8081/api/v1/rag/collections \
+  -H "Content-Type: application/json" \
+  -d '{"collectionKey":"quickstart","name":"Quick Start","embeddingModel":"BAAI/bge-m3","dimensions":1024}'
+
 # Upload document
 curl -X POST http://localhost:8081/api/v1/rag/documents \
   -H "Content-Type: application/json" \
-  -d '{"title": "RAG Introduction", "content": "RAG stands for Retrieval-Augmented Generation..."}'
+  -d '{"title": "RAG Introduction", "content": "RAG stands for Retrieval-Augmented Generation...", "collectionKey": "quickstart"}'
 
 # Embed document
 curl -X POST http://localhost:8081/api/v1/rag/documents/1/embed
 
 # Search (no LLM)
-curl "http://localhost:8081/api/v1/rag/search?query=RAG&limit=5"
+curl "http://localhost:8081/api/v1/rag/search?query=RAG&limit=5&collectionKeys=quickstart"
 ```
 
 After starting, visit `http://localhost:8081/swagger-ui.html` for the full API reference.

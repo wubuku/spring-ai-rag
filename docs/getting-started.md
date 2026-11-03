@@ -78,9 +78,16 @@ Without real credentials, use the bundled mock provider to exercise the pipeline
 # SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL=mock-chat
 # RAG_EMBEDDING_API_KEY=mock-key
 # RAG_EMBEDDING_BASE_URL=http://127.0.0.1:8086
-# RAG_EMBEDDING_MODEL=mock-embedding
+# RAG_EMBEDDING_MODEL=BAAI/bge-m3
+# RAG_EMBEDDING_DIMENSIONS=1024
+# RAG_EMBEDDING_PROFILE_KEY=siliconflow-bge-m3-1024-v1
+# RAG_EMBEDDING_PROVIDER=siliconflow
 # RAG_RETRIEVAL_MIN_SCORE=0
 ```
+
+With the mock, keep the Embedding Profile aligned with the V25 seed; an arbitrary
+`RAG_EMBEDDING_PROFILE_KEY` makes the Active Collection reject writes because its
+runtime configuration cannot be resolved.
 
 ## 4. Build & Test
 
@@ -113,6 +120,17 @@ curl -sf http://localhost:8081/actuator/health
 
 ## 6. First RAG Q&A
 
+### Create a Collection
+
+Documents must belong to a Collection; otherwise embedding fails with
+`Document has no active Collection during embedding persistence`.
+
+```bash
+curl -X POST http://localhost:8081/api/v1/rag/collections \
+  -H "Content-Type: application/json" \
+  -d '{"collectionKey":"quickstart","name":"Quick Start","embeddingModel":"BAAI/bge-m3","dimensions":1024}'
+```
+
 ### Import a Document
 
 ```bash
@@ -121,16 +139,17 @@ curl -X POST http://localhost:8081/api/v1/rag/documents \
   -d '{
     "title": "Introduction to Spring AI",
     "content": "Spring AI is Spring's AI application framework, providing ChatClient, VectorStore, Advisor, and other abstractions.",
-    "source": "manual"
+    "source": "manual",
+    "collectionKey": "quickstart"
   }'
 ```
 
 The `id` in the response is the document ID (do not assume it is 1):
 
 ```bash
+POST_BODY='{"title":"Introduction to Spring AI","content":"Spring AI is Spring AI application framework.","source":"manual","collectionKey":"quickstart"}'
 DOC_ID=$(curl -s -X POST http://localhost:8081/api/v1/rag/documents \
-  -H "Content-Type: application/json" \
-  -d '{"title":"Introduction to Spring AI","content":"Spring AI is Spring AI application framework.","source":"manual"}' \
+  -H "Content-Type: application/json" -d "$POST_BODY" \
   | python3 -c 'import sys,json; print(json.load(sys.stdin)["id"])')
 ```
 
@@ -143,7 +162,7 @@ curl -X POST "http://localhost:8081/api/v1/rag/documents/${DOC_ID}/embed"
 ### Search (no LLM)
 
 ```bash
-curl -s "http://localhost:8081/api/v1/rag/search?query=Spring%20AI&limit=3"
+curl -s "http://localhost:8081/api/v1/rag/search?query=Spring%20AI&limit=3&collectionKeys=quickstart"
 ```
 
 ### RAG Q&A
@@ -151,7 +170,7 @@ curl -s "http://localhost:8081/api/v1/rag/search?query=Spring%20AI&limit=3"
 ```bash
 curl -X POST http://localhost:8081/api/v1/rag/chat/ask \
   -H "Content-Type: application/json" \
-  -d '{"message": "What is Spring AI?"}'
+  -d '{"message": "What is Spring AI?", "collectionKeys": ["quickstart"]}'
 ```
 
 ### Streaming Q&A
@@ -159,7 +178,7 @@ curl -X POST http://localhost:8081/api/v1/rag/chat/ask \
 ```bash
 curl -N -X POST http://localhost:8081/api/v1/rag/chat/stream \
   -H "Content-Type: application/json" \
-  -d '{"message": "Explain how RAG works"}'
+  -d '{"message": "Explain how RAG works", "collectionKeys": ["quickstart"]}'
 ```
 
 > The whole flow is codified in `scripts/verify-clean-clone.sh`: it clones into a

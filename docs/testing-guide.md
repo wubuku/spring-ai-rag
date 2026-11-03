@@ -123,7 +123,7 @@ Doc hub: [index.md](index.md) · Commands: [developer-reference.md](developer-re
 
 ```bash
 # Run all unit + integration tests
-export $(cat .env | grep -v '^#' | xargs) && mvn test
+set -a; source .env; set +a; mvn test
 
 # Test only a specific module
 mvn test -pl spring-ai-rag-core
@@ -134,6 +134,32 @@ mvn test -pl spring-ai-rag-core -Dtest=RagDocumentControllerTest
 # Skip tests during build
 mvn clean package -DskipTests
 ```
+
+## Foundation Acceptance: Clean Cold Start, Flyway Upgrade Paths, And Build Reproducibility
+
+Each item has a repeatable entry point; run at least one after changing builds,
+migrations, or onboarding docs.
+
+| Item | Command | Coverage |
+|------|---------|----------|
+| Clean-environment cold start | `./scripts/verify-clean-clone.sh` | clone into a temp dir → temp DB → `.env`(mock) → `mvn -B -DskipTests install` → demo health → collection → documents → embed → search → chat; auto-cleanup |
+| Flyway dual paths | `./scripts/verify-flyway-schema-paths.sh` | empty→latest vs empty→V30→latest produce byte-identical schema; early data survives; re-running migrate on the latest DB preserves data |
+| Build reproducibility | `./mvnw -v` (pinned 3.9.14), `mvn -o -B -DskipTests compile`, `cd spring-ai-rag-webui && npm ci --dry-run` | wrapper version, offline build, lockfile consistency |
+
+The cold-start script uses the bundled mock provider (`scripts/run-mock-llm.sh`); it
+proves the pipeline runs, not real-model answer quality. With the mock you need
+`RAG_RETRIEVAL_MIN_SCORE=0` and an Embedding Profile matching the V25 seed, otherwise
+the Active Collection rejects writes because its profile has no runtime configuration.
+
+The Flyway script only creates/drops `rag_flyway_*` temporary databases; the early
+version defaults to V30 and can be changed with `--early`. Before comparison it ignores
+comments, `SET`, owner/ACL, and `\restrict` lines.
+
+The Maven Wrapper keeps the official `distributionUrl`; in restricted networks override
+it per run with `MVNW_REPOURL=https://maven.aliyun.com/repository/public ./mvnw ...`
+instead of hardcoding a regional mirror. `mvn -o` proves an offline build after dependencies
+were warmed once online; it is not a zero-cache offline install. The WebUI lockfile is
+fixed by `package-lock.json` (lockfileVersion 3) plus `packageManager: npm@10.9.2`.
 
 ## Client API, Evidence Safety, And Trace Acceptance
 

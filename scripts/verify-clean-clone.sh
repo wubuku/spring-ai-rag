@@ -132,7 +132,7 @@ RAG_EMBEDDING_PROFILE_KEY=siliconflow-bge-m3-1024-v1
 RAG_EMBEDDING_PROVIDER=siliconflow
 RAG_RETRIEVAL_MIN_SCORE=0
 RAG_SECURITY_ENABLED=false
-RAG_ROOT_API_KEY=mock-root-key
+RAG_ROOT_API_KEY=clean-clone-verify-root-key-0123456789
 ENV
 pass ".env 已按 .env.example 变量名生成（mock provider）"
 
@@ -190,11 +190,18 @@ fi
 curl -sf "$BASE_URL/actuator/health" | python3 -c 'import sys,json; d=json.load(sys.stdin); assert d.get("status")=="UP", d; print("health="+d["status"])'
 pass "健康检查通过"
 
-# 文档第 6 步：documents -> embed -> search -> chat。
+# 文档第 6 步：collection -> documents -> embed -> search -> chat。
+COLLECTION_KEY="clean-verify"
+curl -sf -X POST "$BASE_URL/api/v1/rag/collections" \
+  -H "Content-Type: application/json" \
+  -d "{\"collectionKey\":\"$COLLECTION_KEY\",\"name\":\"Clean Clone Verify\",\"embeddingModel\":\"BAAI/bge-m3\",\"dimensions\":1024}" \
+  > "$LOG_DIR/collection.json"
+pass "创建知识库 collectionKey=$COLLECTION_KEY"
+
 DOC_JSON="$LOG_DIR/document.json"
 curl -sf -X POST "$BASE_URL/api/v1/rag/documents" \
   -H "Content-Type: application/json" \
-  -d '{"title":"Clean Clone Verify","content":"Spring AI RAG clean clone verification document with unique marker clean-clone-marker-42.","source":"manual"}' \
+  -d "{\"title\":\"Clean Clone Verify\",\"content\":\"Spring AI RAG clean clone verification document with unique marker clean-clone-marker-42.\",\"source\":\"manual\",\"collectionKey\":\"$COLLECTION_KEY\"}" \
   > "$DOC_JSON"
 DOC_ID="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["id"])' "$DOC_JSON")"
 [[ -n "$DOC_ID" && "$DOC_ID" != "None" ]]
@@ -204,13 +211,13 @@ curl -sf -X POST "$BASE_URL/api/v1/rag/documents/$DOC_ID/embed" >"$LOG_DIR/embed
 python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); assert d.get("embeddings",0) >= 1, d' "$LOG_DIR/embed.json"
 pass "嵌入完成：$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print("chunks=%s embeddings=%s" % (d.get("chunks"), d.get("embeddings")))' "$LOG_DIR/embed.json")"
 
-curl -sf "$BASE_URL/api/v1/rag/search?query=clean-clone-marker-42&limit=3" >"$LOG_DIR/search.json"
+curl -sf "$BASE_URL/api/v1/rag/search?query=clean-clone-marker-42&limit=3&collectionKeys=$COLLECTION_KEY" >"$LOG_DIR/search.json"
 python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); results=d.get("results", d if isinstance(d,list) else []); assert len(results) >= 1, d' "$LOG_DIR/search.json"
 pass "检索返回 $(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(len(d.get("results", d if isinstance(d,list) else [])))' "$LOG_DIR/search.json") 条结果"
 
 curl -sf -X POST "$BASE_URL/api/v1/rag/chat/ask" \
   -H "Content-Type: application/json" \
-  -d '{"message":"What is Spring AI?"}' >"$LOG_DIR/chat.json"
+  -d "{\"message\":\"What is Spring AI?\",\"collectionKeys\":[\"$COLLECTION_KEY\"]}" >"$LOG_DIR/chat.json"
 python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); assert d.get("answer"), d' "$LOG_DIR/chat.json"
 pass "RAG 问答返回 answer"
 

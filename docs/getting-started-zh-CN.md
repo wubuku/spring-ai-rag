@@ -78,9 +78,15 @@ RAG_EMBEDDING_DIMENSIONS=1024
 # SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL=mock-chat
 # RAG_EMBEDDING_API_KEY=mock-key
 # RAG_EMBEDDING_BASE_URL=http://127.0.0.1:8086
-# RAG_EMBEDDING_MODEL=mock-embedding
+# RAG_EMBEDDING_MODEL=BAAI/bge-m3
+# RAG_EMBEDDING_DIMENSIONS=1024
+# RAG_EMBEDDING_PROFILE_KEY=siliconflow-bge-m3-1024-v1
+# RAG_EMBEDDING_PROVIDER=siliconflow
 # RAG_RETRIEVAL_MIN_SCORE=0
 ```
+
+mock 场景下 Profile 仍要与 V25 迁移播种的默认值一致；如果随意改
+`RAG_EMBEDDING_PROFILE_KEY`，Active Collection 会因“找不到运行时配置”拒绝写入。
 
 ## 4. 构建 & 测试
 
@@ -112,6 +118,17 @@ curl -sf http://localhost:8081/actuator/health
 
 ## 6. 第一次 RAG 问答
 
+### 创建知识库（Collection）
+
+文档必须归属一个 Collection，否则嵌入时会报
+`Document has no active Collection during embedding persistence`。
+
+```bash
+curl -X POST http://localhost:8081/api/v1/rag/collections \
+  -H "Content-Type: application/json" \
+  -d '{"collectionKey":"quickstart","name":"Quick Start","embeddingModel":"BAAI/bge-m3","dimensions":1024}'
+```
+
 ### 导入文档
 
 ```bash
@@ -120,16 +137,17 @@ curl -X POST http://localhost:8081/api/v1/rag/documents \
   -d '{
     "title": "Spring AI 介绍",
     "content": "Spring AI 是 Spring 生态的 AI 应用框架，提供 ChatClient、VectorStore、Advisor 等抽象。",
-    "source": "manual"
+    "source": "manual",
+    "collectionKey": "quickstart"
   }'
 ```
 
 响应里的 `id` 就是文档 ID（不要假设它一定是 1）：
 
 ```bash
-DOC_ID=$(curl -s -X POST http://localhost:8081/api/v1/rag/documents \
-  -H "Content-Type: application/json" \
-  -d '{"title":"Spring AI 介绍","content":"Spring AI 是 Spring 生态的 AI 应用框架，提供 ChatClient、VectorStore、Advisor 等抽象。","source":"manual"}' \
+DOC_ID=$(POST_BODY='{"title":"Spring AI 介绍","content":"Spring AI 是 Spring 生态的 AI 应用框架，提供 ChatClient、VectorStore、Advisor 等抽象。","source":"manual","collectionKey":"quickstart"}'
+curl -s -X POST http://localhost:8081/api/v1/rag/documents \
+  -H "Content-Type: application/json" -d "$POST_BODY" \
   | python3 -c 'import sys,json; print(json.load(sys.stdin)["id"])')
 ```
 
@@ -142,7 +160,7 @@ curl -X POST "http://localhost:8081/api/v1/rag/documents/${DOC_ID}/embed"
 ### 检索（不经过 LLM）
 
 ```bash
-curl -s "http://localhost:8081/api/v1/rag/search?query=Spring%20AI&limit=3"
+curl -s "http://localhost:8081/api/v1/rag/search?query=Spring%20AI&limit=3&collectionKeys=quickstart"
 ```
 
 ### RAG 问答
@@ -150,7 +168,7 @@ curl -s "http://localhost:8081/api/v1/rag/search?query=Spring%20AI&limit=3"
 ```bash
 curl -X POST http://localhost:8081/api/v1/rag/chat/ask \
   -H "Content-Type: application/json" \
-  -d '{"message": "什么是 Spring AI？"}'
+  -d '{"message": "什么是 Spring AI？", "collectionKeys": ["quickstart"]}'
 ```
 
 ### 流式问答
@@ -158,7 +176,7 @@ curl -X POST http://localhost:8081/api/v1/rag/chat/ask \
 ```bash
 curl -N -X POST http://localhost:8081/api/v1/rag/chat/stream \
   -H "Content-Type: application/json" \
-  -d '{"message": "解释 RAG 的工作原理"}'
+  -d '{"message": "解释 RAG 的工作原理", "collectionKeys": ["quickstart"]}'
 ```
 
 > 上述完整流程已固化在 `scripts/verify-clean-clone.sh`：它在临时目录做干净 clone、

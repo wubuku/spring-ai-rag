@@ -117,16 +117,21 @@ curl -N -X POST http://localhost:8081/api/v1/rag/chat/stream \
   -H "Content-Type: application/json" \
   -d '{"message": "详细解释 RAG 工作原理"}'
 
+# 创建知识库（文档必须归属 Collection）
+curl -X POST http://localhost:8081/api/v1/rag/collections \
+  -H "Content-Type: application/json" \
+  -d '{"collectionKey":"quickstart","name":"Quick Start","embeddingModel":"BAAI/bge-m3","dimensions":1024}'
+
 # 上传文档
 curl -X POST http://localhost:8081/api/v1/rag/documents \
   -H "Content-Type: application/json" \
-  -d '{"title": "RAG 简介", "content": "RAG 是检索增强生成..."}'
+  -d '{"title": "RAG 简介", "content": "RAG 是检索增强生成...", "collectionKey": "quickstart"}'
 
 # 文档嵌入
 curl -X POST http://localhost:8081/api/v1/rag/documents/1/embed
 
 # 检索（不经过 LLM）
-curl "http://localhost:8081/api/v1/rag/search?query=RAG&limit=5"
+curl "http://localhost:8081/api/v1/rag/search?query=RAG&limit=5&collectionKeys=quickstart"
 ```
 
 启动后访问 `http://localhost:8081/swagger-ui.html` 查看完整 API 文档。

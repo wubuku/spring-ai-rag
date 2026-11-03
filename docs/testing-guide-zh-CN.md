@@ -112,7 +112,7 @@ SSE `sequence` 顺序、幂等重放去重和 OpenAI 兼容流隔离。重点证
 
 ```bash
 # 运行全部单元测试 + 集成测试
-export $(cat .env | grep -v '^#' | xargs) && mvn test
+set -a; source .env; set +a; mvn test
 
 # 只测试特定模块
 mvn test -pl spring-ai-rag-core
@@ -123,6 +123,29 @@ mvn test -pl spring-ai-rag-core -Dtest=RagDocumentControllerTest
 # 跳过测试构建
 mvn clean package -DskipTests
 ```
+
+## 底座验收：干净冷启动、Flyway 升级路径与构建可复现性
+
+这三项各有可重复入口；改动构建、迁移或上手文档后至少跑一次。
+
+| 项目 | 命令 | 覆盖 |
+|------|------|------|
+| 干净环境冷启动 | `./scripts/verify-clean-clone.sh` | 临时目录 clone → 临时库 → `.env`(mock) → `mvn -B -DskipTests install` → demo health → collection → documents → embed → search → chat；结束自动清理 |
+| Flyway 双路径 | `./scripts/verify-flyway-schema-paths.sh` | 空库→最新 vs 空库→V30→最新 schema 逐字一致；早期数据升级后仍在；最新库重跑 migrate 不丢数据 |
+| 构建可复现 | `./mvnw -v`（钉住 3.9.14）、`mvn -o -B -DskipTests compile`、`cd spring-ai-rag-webui && npm ci --dry-run` | Wrapper 版本、离线构建、lockfile 一致性 |
+
+冷启动脚本使用仓库自带 mock provider（`scripts/run-mock-llm.sh`），只证明链路可跑通，
+不证明真实模型质量；真实模型见 WebUI / 真实端到端手册。mock 下需要
+`RAG_RETRIEVAL_MIN_SCORE=0`，并让 Embedding Profile 与 V25 播种的默认值对齐，
+否则 Active Collection 会因“引用了没有运行时配置的 Profile”拒绝写入。
+
+Flyway 脚本只创建/删除 `rag_flyway_*` 临时库；默认较早版本 V30，可用 `--early` 指定。
+schema 比对前忽略注释、`SET`、owner/ACL 与 `\restrict` 行。
+
+Maven Wrapper 的 `distributionUrl` 保持官方地址；境内网络可临时覆盖：
+`MVNW_REPOURL=https://maven.aliyun.com/repository/public ./mvnw ...`，不把区域镜像写死。
+`mvn -o` 验证的是“依赖已在线预热过一次”的离线构建，不是零缓存离线安装。
+WebUI 锁文件由 `package-lock.json`（lockfileVersion 3）和 `packageManager: npm@10.9.2` 固定。
 
 ## Client API、证据安全与 Trace 验收
 
