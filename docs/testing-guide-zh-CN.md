@@ -393,6 +393,18 @@ JaCoCo 的模块级行/分支覆盖率写进 Step Summary 并上传，同时保�
 **不设硬阈值**——仓库没有可追溯的覆盖率基线，凭空定一个下限会在重构时误报，
 而不是在回归时报警。Vitest 已有的覆盖率阈值保持不变。
 
+### 变异测试（测试有效性）
+
+覆盖率证明“代码被执行”，变异测试才回答“断言是否真的生效”。
+关键判定包的 PIT 结果、存活变异体分类与刻意不强测项见
+[变异测试记录](mutation-testing-zh-CN.md)（[English](mutation-testing.md)）。
+默认不进入 `mvn test`；需要 JDK 21：
+
+```bash
+JAVA_HOME=<jdk21> mvn -pl spring-ai-rag-core -Pmutation \
+  test-compile org.pitest:pitest-maven:1.17.2:mutationCoverage
+```
+
 ### 本地复现与 GitHub 专属差异
 
 ```bash

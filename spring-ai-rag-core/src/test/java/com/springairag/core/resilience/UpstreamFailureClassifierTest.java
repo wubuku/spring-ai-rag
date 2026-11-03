@@ -22,7 +22,7 @@ class UpstreamFailureClassifierTest {
     @CsvSource({"401,UPSTREAM_AUTHENTICATION,false", "403,UPSTREAM_AUTHENTICATION,false",
             "400,UPSTREAM_REJECTED,false", "404,UPSTREAM_REJECTED,false", "429,UPSTREAM_RATE_LIMITED,true",
             "408,UPSTREAM_TIMEOUT,true", "504,UPSTREAM_TIMEOUT,true", "502,UPSTREAM_UNAVAILABLE,true",
-            "503,UPSTREAM_UNAVAILABLE,true"})
+            "503,UPSTREAM_UNAVAILABLE,true", "500,UPSTREAM_UNAVAILABLE,true"})
     void wrappedHttpStatusIsAuthoritative(int status, String reason, boolean retryable) {
         var failure = new RestClientResponseException("secret must not leak", HttpStatusCode.valueOf(status),
                 "", new HttpHeaders(), new byte[0], StandardCharsets.UTF_8);
@@ -54,6 +54,101 @@ class UpstreamFailureClassifierTest {
         var error = new com.fasterxml.jackson.core.JsonParseException(null, "invalid provider payload");
         assertEquals("UPSTREAM_RESPONSE_INVALID", UpstreamFailureClassifier.classify(error).reason());
         assertFalse(UpstreamFailureClassifier.dependencyFailure(error));
+    }
+
+    @Test
+    void dependencyFailureOnlyTreatsRetryableUpstreamErrorsAsDependencies() {
+        assertTrue(UpstreamFailureClassifier.dependencyFailure(
+                new ResourceAccessException("opaque", new SocketTimeoutException())));
+        assertTrue(UpstreamFailureClassifier.dependencyFailure(
+                new RestClientResponseException("fixture", HttpStatusCode.valueOf(503),
+                        "", new HttpHeaders(), new byte[0], StandardCharsets.UTF_8)));
+    }
+
+    @Test
+    void classifiedDetailsAndDependencyCodesArePreserved() {
+        var classified = new ClassifiedRagException(ErrorCode.RETRIEVAL_FAILED,
+                new com.springairag.api.dto.FailureDetails(
+                        "UPSTREAM", "UPSTREAM_RATE_LIMITED", true, 1000L, 429));
+        assertEquals("UPSTREAM_RATE_LIMITED",
+                UpstreamFailureClassifier.classify(classified).reason());
+
+        assertEquals("UPSTREAM_TIMEOUT", UpstreamFailureClassifier.classify(
+                new com.springairag.core.admission.DependencyCallException(
+                        "UPSTREAM_TIMEOUT")).reason());
+        var cancelled = UpstreamFailureClassifier.classify(
+                new com.springairag.core.admission.DependencyCallException(
+                        "CANCELLED"));
+        assertEquals("REQUEST", cancelled.origin());
+        assertEquals("CANCELLED", cancelled.reason());
+    }
+
+    @Test
+    void reactiveWebClientErrorsReuseStatusClassification() {
+        var failure = org.springframework.web.reactive.function.client
+                .WebClientResponseException.create(
+                        503, "unavailable", new HttpHeaders(), new byte[0],
+                        StandardCharsets.UTF_8);
+
+        var details = UpstreamFailureClassifier.classify(failure);
+        assertEquals("UPSTREAM_UNAVAILABLE", details.reason());
+        assertTrue(details.retryable());
+        assertEquals(503, details.upstreamStatus());
+    }
+
+    @Test
+    void causeInspectionStopsAtSixteenLevels() {
+        var deep = new ClassifiedRagException(ErrorCode.RETRIEVAL_FAILED,
+                new com.springairag.api.dto.FailureDetails(
+                        "UPSTREAM", "UPSTREAM_TIMEOUT", true, null, null));
+        Throwable error = deep;
+        for (int depth = 0; depth < 16; depth++) {
+            error = new RuntimeException("wrapper-" + depth, error);
+        }
+
+        assertEquals("UNCLASSIFIED", UpstreamFailureClassifier.classify(error).reason());
+    }
+
+    @Test
+    @SuppressWarnings("ThrowableNotThrown")
+    void safeMessageFallsBackForMessagelessErrors() {
+        assertEquals("Request failed",
+                UpstreamFailureClassifier.safeMessage(new IllegalStateException()));
+        String masked = UpstreamFailureClassifier.safeMessage(new IllegalStateException(
+                "{\"password\":\"hunter2\",\"note\":\"denied\"}"));
+        assertTrue(masked.contains("denied"));
+        assertFalse(masked.contains("hunter2"));
+    }
+
+    @Test
+    void serverErrorRagExceptionIsServiceFailureAndClientErrorIsRejected() {
+        var server = UpstreamFailureClassifier.classify(
+                new RagException(ErrorCode.RETRIEVAL_FAILED, "boom"));
+        assertEquals("SERVICE", server.origin());
+        assertEquals("BUSINESS_REJECTED", server.reason());
+        assertFalse(server.retryable());
+
+        var client = UpstreamFailureClassifier.classify(
+                new RagException(ErrorCode.BAD_REQUEST, "bad"));
+        assertEquals("REQUEST", client.origin());
+    }
+
+    @Test
+    void timeoutWinsOverLaterConnectionWrappers() {
+        java.net.SocketTimeoutException error =
+                new java.net.SocketTimeoutException("timeout");
+        error.initCause(new java.io.IOException("later connection"));
+
+        assertEquals("UPSTREAM_TIMEOUT", UpstreamFailureClassifier.classify(error).reason());
+    }
+
+    @Test
+    void safeMessageNeverExposesUpstreamPayloadAndMasksRequestText() {
+        assertEquals("UPSTREAM_TIMEOUT",
+                UpstreamFailureClassifier.safeMessage(new SocketTimeoutException()));
+        String masked = UpstreamFailureClassifier.safeMessage(new IllegalStateException(
+                "{\"password\":\"hunter2\",\"note\":\"denied\"}"));
+        assertFalse(masked.contains("hunter2"));
     }
 
     @Test

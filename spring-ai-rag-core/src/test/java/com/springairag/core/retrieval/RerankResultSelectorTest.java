@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -68,6 +69,29 @@ class RerankResultSelectorTest {
         assertEquals(
                 List.of(nullOne, nullTwo, blank, exact, spaced),
                 selected);
+    }
+
+    @Test
+    void selectReturnsInputUnchangedWhenThereIsNothingToTrim() {
+        List<RetrievalResult> ranked = List.of(result("A", 0, 0.99));
+
+        assertNull(RerankResultSelector.select(null, 2, 1));
+        List<RetrievalResult> empty = List.of();
+        assertSame(empty, RerankResultSelector.select(empty, 2, 1));
+        assertSame(ranked, RerankResultSelector.select(ranked, 2, 1));
+        assertSame(ranked, RerankResultSelector.select(ranked, 0, 1));
+        assertSame(ranked, RerankResultSelector.select(ranked, -1, 1));
+    }
+
+    @Test
+    void selectWithoutDocumentCapUsesProviderOrderPrefix() {
+        RetrievalResult a0 = result("A", 0, 0.99);
+        RetrievalResult a1 = result("A", 1, 0.98);
+        RetrievalResult b0 = result("B", 0, 0.97);
+
+        assertEquals(
+                List.of(a0, a1),
+                RerankResultSelector.select(List.of(a0, a1, b0), 2, 0));
     }
 
     @Test

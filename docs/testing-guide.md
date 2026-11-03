@@ -450,6 +450,18 @@ repository has no traceable coverage baseline, and an invented floor would fire
 on a refactor instead of a regression. The existing Vitest coverage thresholds
 stay unchanged.
 
+### Mutation Testing (Test Effectiveness)
+
+Coverage proves code was executed; mutation testing proves assertions actually bite.
+See the [mutation-testing record](mutation-testing.md) ([Chinese](mutation-testing-zh-CN.md))
+for PIT results on critical decision packages, surviving-mutant categories, and
+deliberately untested items. It is not part of `mvn test` and requires JDK 21:
+
+```bash
+JAVA_HOME=<jdk21> mvn -pl spring-ai-rag-core -Pmutation \
+  test-compile org.pitest:pitest-maven:1.17.2:mutationCoverage
+```
+
 ### Local Reproduction And GitHub-Only Differences
 
 ```bash

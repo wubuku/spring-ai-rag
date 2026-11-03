@@ -9,6 +9,8 @@ import org.springframework.mock.web.MockHttpServletResponse;
 import java.io.IOException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class FailureClassResponseHeaderFilterTest {
 
@@ -24,5 +26,23 @@ class FailureClassResponseHeaderFilterTest {
 
         assertEquals("DEPENDENCY_UNAVAILABLE",
                 response.getHeader(FailureClassHttpSupport.HEADER));
+    }
+
+    @Test
+    void appliesOnlyToErrorStatusesAndNeverOverwritesAnExistingHeader() {
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        FailureClassHttpSupport.apply(response, 399, null);
+        assertFalse(response.containsHeader(FailureClassHttpSupport.HEADER));
+
+        FailureClassHttpSupport.apply(response, 400, null);
+        assertTrue(response.containsHeader(FailureClassHttpSupport.HEADER));
+
+        MockHttpServletResponse preset = new MockHttpServletResponse();
+        preset.setHeader(FailureClassHttpSupport.HEADER, "EXISTING");
+        FailureClassHttpSupport.apply(preset, 503, null);
+        assertEquals("EXISTING", preset.getHeader(FailureClassHttpSupport.HEADER));
+
+        FailureClassHttpSupport.apply(null, 503, null);
     }
 }

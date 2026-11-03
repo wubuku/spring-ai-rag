@@ -254,6 +254,69 @@
 
     <profiles>
         <!--
+            Mutation profile（默认关闭，不参与日常 mvn test）：
+            对少数关键判定类跑 PIT mutation testing，用来发现“测试假绿”。
+            用法：
+              JAVA_HOME=<jdk21> mvn -pl spring-ai-rag-core -am -Pmutation \
+                test-compile org.pitest:pitest-maven:mutationCoverage
+            报告：spring-ai-rag-core/target/pit-reports/
+        -->
+        <profile>
+            <id>mutation</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.pitest</groupId>
+                        <artifactId>pitest-maven</artifactId>
+                        <version>1.17.2</version>
+                        <dependencies>
+                            <dependency>
+                                <groupId>org.pitest</groupId>
+                                <artifactId>pitest-junit5-plugin</artifactId>
+                                <version>1.2.3</version>
+                            </dependency>
+                        </dependencies>
+                        <configuration>
+                            <!-- 只变异关键判定类；其余包由普通单测覆盖，不纳入变异范围。 -->
+                            <targetClasses>
+                                <param>com.springairag.core.retrieval.RetrievalScope*</param>
+                                <param>com.springairag.core.retrieval.RerankResultSelector</param>
+                                <param>com.springairag.core.retrieval.EmbeddingFailureClassifier</param>
+                                <param>com.springairag.core.ratelimit.PostgresRateLimitStore</param>
+                                <param>com.springairag.core.chat.ChatSessionCoordinator</param>
+                                <param>com.springairag.core.chat.ChatExecutionBudget</param>
+                                <param>com.springairag.core.service.DocumentLifecycleService</param>
+                                <param>com.springairag.core.resilience.UpstreamFailureClassifier</param>
+                                <param>com.springairag.core.filter.FailureClassHttpSupport</param>
+                            </targetClasses>
+                            <targetTests>
+                                <param>com.springairag.core.retrieval.RetrievalScope*Test</param>
+                                <param>com.springairag.core.retrieval.RerankResultSelectorTest</param>
+                                <param>com.springairag.core.retrieval.EmbeddingFailureClassifierTest</param>
+                                <param>com.springairag.core.ratelimit.*Test</param>
+                                <param>com.springairag.core.chat.ChatSessionCoordinator*Test</param>
+                                <param>com.springairag.core.chat.ChatExecutionBudget*Test</param>
+                                <param>com.springairag.core.service.DocumentLifecycle*Test</param>
+                                <param>com.springairag.core.resilience.UpstreamFailureClassifierTest</param>
+                                <param>com.springairag.core.filter.FailureClass*Test</param>
+                            </targetTests>
+                            <threads>4</threads>
+                            <outputFormats>
+                                <outputFormat>XML</outputFormat>
+                                <outputFormat>HTML</outputFormat>
+                            </outputFormats>
+                            <timestampedReports>false</timestampedReports>
+                            <mutationThreshold>0</mutationThreshold>
+                            <coverageThreshold>0</coverageThreshold>
+                            <failWhenNoMutations>false</failWhenNoMutations>
+                            <verbose>false</verbose>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
+        <!--
             WebUI profile: builds the spring-ai-rag-webui frontend
             and copies dist/ to spring-ai-rag-core/src/main/resources/static/webui/
             Usage: mvn spring-boot:run -Pwebui

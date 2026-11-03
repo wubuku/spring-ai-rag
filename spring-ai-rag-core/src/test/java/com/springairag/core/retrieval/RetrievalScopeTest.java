@@ -51,6 +51,25 @@ class RetrievalScopeTest {
     }
 
     @Test
+    void rejectsNonPositiveDocumentAndCollectionIds() {
+        assertThrows(IllegalArgumentException.class,
+                () -> RetrievalScope.forDocumentIds(List.of(0L)));
+        assertThrows(IllegalArgumentException.class,
+                () -> RetrievalScope.selectedCollections(
+                        List.of(-1L), List.of(), null));
+    }
+
+    @Test
+    void noMatchesScopeIsUsableAndFailsClosed() {
+        RetrievalScope scope = RetrievalScope.noMatches();
+
+        assertEquals(RetrievalScope.CollectionFilter.NONE,
+                scope.collectionFilter());
+        assertTrue(scope.matchNone());
+        assertTrue(scope.documentIds().isEmpty());
+    }
+
+    @Test
     void eachCollectionCoverageRequiresSelectedScope() {
         assertThrows(IllegalArgumentException.class,
                 () -> new RetrievalScope(

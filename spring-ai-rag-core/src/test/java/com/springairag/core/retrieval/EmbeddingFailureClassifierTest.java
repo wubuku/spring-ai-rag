@@ -50,6 +50,25 @@ class EmbeddingFailureClassifierTest {
     }
 
     @Test
+    void firstAiWrapperClassificationWinsOverLaterCauses() {
+        assertEquals(EmbeddingFailureClassifier.Kind.REJECTED,
+                EmbeddingFailureClassifier.classify(
+                        new NonTransientAiException("fixture",
+                                new TransientAiException("nested"))));
+        assertEquals(EmbeddingFailureClassifier.Kind.TRANSIENT,
+                EmbeddingFailureClassifier.classify(
+                        new TransientAiException("fixture",
+                                new NonTransientAiException("nested"))));
+    }
+
+    @Test
+    void admissionRejectionsAreTreatedAsTransientCapacityPressure() {
+        assertEquals(EmbeddingFailureClassifier.Kind.TRANSIENT,
+                EmbeddingFailureClassifier.classify(
+                        new com.springairag.core.admission.AdmissionRejectedException()));
+    }
+
+    @Test
     void cyclicAndDeepCausesAreBounded() {
         RuntimeException first = new RuntimeException("first");
         RuntimeException second = new RuntimeException("second");

@@ -77,6 +77,7 @@ class ChatSessionCoordinatorCommitOperationTest {
     private StubJdbc jdbc;
     private RagChatHistoryRepository historyRepository;
     private ChatMemoryRepository memoryRepository;
+    private JdbcChatMemoryRepository jdbcChatMemoryRepository;
     private ChatTurnOperationRepository operationRepository;
     private ChatSessionCoordinator coordinator;
 
@@ -97,10 +98,11 @@ class ChatSessionCoordinatorCommitOperationTest {
                 mock(PlatformTransactionManager.class);
         when(transactionManager.getTransaction(any()))
                 .thenReturn(new SimpleTransactionStatus());
+        jdbcChatMemoryRepository = mock(JdbcChatMemoryRepository.class);
         coordinator = new ChatSessionCoordinator(
                 jdbc,
                 historyRepository,
-                mock(JdbcChatMemoryRepository.class),
+                jdbcChatMemoryRepository,
                 transactionManager,
                 new RagProperties());
         coordinator.setOperationRepository(operationRepository);
@@ -162,6 +164,8 @@ class ChatSessionCoordinatorCommitOperationTest {
                 eq(PRINCIPAL), eq("session-1"), eq("latest question"),
                 eq("final answer"), eq("[41]"), any(),
                 eq("COMPLETE"), any(), eq(operation.turnId()), any());
+        verify(jdbcChatMemoryRepository).deleteByConversationId(anyString());
+        verify(jdbcChatMemoryRepository).saveAll(anyString(), anyList());
         assertTrue(jdbc.seenSql.stream()
                 .anyMatch(sql -> sql.contains("UPDATE rag_chat_session_lease")));
     }

@@ -155,6 +155,38 @@ class DocumentLifecycleDerivationTailTest {
     }
 
     @Test
+    void localNotRequestedWithoutEmbeddingRowStaysNotRequested() throws Exception {
+        Map<String, Object> row = fullRow();
+        row.put("local_index_status", "NOT_REQUESTED");
+        row.put("embedding_status", null);
+        Object derived = derive(row);
+        assertEquals("NOT_REQUESTED", field(derived, "localStatus"));
+        assertEquals("NOT_REQUESTED", field(derived, "embeddingStatus"));
+        assertEquals("NOT_REQUESTED", field(derived, "searchability"));
+    }
+
+    @Test
+    void localReadyWithNotRequestedEmbeddingIsKeywordOnly() throws Exception {
+        Map<String, Object> row = fullRow();
+        row.put("embedding_status", "NOT_REQUESTED");
+        Object derived = derive(row);
+        assertEquals("READY", field(derived, "localStatus"));
+        assertEquals("NOT_REQUESTED", field(derived, "embeddingStatus"));
+        assertEquals("KEYWORD_ONLY", field(derived, "searchability"));
+    }
+
+    @Test
+    void zeroLocalChunkCountIsNotPositiveAndFailsLocal() throws Exception {
+        Map<String, Object> row = fullRow();
+        row.put("local_index_generation", 1);
+        row.put("local_chunk_count", 0);
+        row.put("local_actual_chunk_count", 0);
+        Object derived = derive(row);
+        assertEquals("FAILED", field(derived, "localStatus"));
+        assertEquals("FAILED", field(derived, "searchability"));
+    }
+
+    @Test
     void embeddingOnlyProcessingYieldsIndexing() throws Exception {
         Map<String, Object> row = fullRow();
         row.put("local_index_status", null);

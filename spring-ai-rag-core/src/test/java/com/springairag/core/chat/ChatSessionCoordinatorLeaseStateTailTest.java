@@ -26,6 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
@@ -43,6 +44,7 @@ class ChatSessionCoordinatorLeaseStateTailTest {
 
     private JdbcTemplate jdbcTemplate;
     private RagChatHistoryRepository historyRepository;
+    private org.springframework.ai.chat.memory.repository.jdbc.JdbcChatMemoryRepository chatMemoryRepository;
     private ChatTurnOperationRepository operationRepository;
     private ChatSessionCoordinator coordinator;
     private ScheduledExecutorService reflectedRenewExecutor;
@@ -56,10 +58,12 @@ class ChatSessionCoordinatorLeaseStateTailTest {
         var transactionManager = mock(PlatformTransactionManager.class);
         when(transactionManager.getTransaction(any()))
                 .thenReturn(mock(TransactionStatus.class));
+        chatMemoryRepository = mock(
+                org.springframework.ai.chat.memory.repository.jdbc.JdbcChatMemoryRepository.class);
         coordinator = new ChatSessionCoordinator(
                 jdbcTemplate,
                 historyRepository,
-                mock(org.springframework.ai.chat.memory.repository.jdbc.JdbcChatMemoryRepository.class),
+                chatMemoryRepository,
                 transactionManager,
                 new RagProperties());
         coordinator.setOperationRepository(operationRepository);
@@ -167,6 +171,8 @@ class ChatSessionCoordinatorLeaseStateTailTest {
         // SERVER 模式收敛共享内存：durable 历史以 COMPLETE 状态落库。
         verify(historyRepository).reserveDurableContentReferences(
                 anyString(), any());
+        verify(chatMemoryRepository).deleteByConversationId(anyString());
+        verify(chatMemoryRepository).saveAll(anyString(), anyList());
     }
 
     @Test
