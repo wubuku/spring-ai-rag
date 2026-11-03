@@ -201,4 +201,37 @@ class RagMetricsServiceTest {
         assertNotNull(timer);
         assertEquals(0L, timer.count());
     }
+
+    @Test
+    @DisplayName("Response latency separates success from failure via outcome tag")
+    void responseLatencySeparatesOutcome() {
+        ragMetricsService.recordSuccess(120, 4);
+        ragMetricsService.recordFailure(900);
+
+        assertEquals(1L, meterRegistry.find("rag.response.time")
+                .tags("outcome", "success").timer().count(),
+                "成功延迟必须单独可查");
+        assertEquals(1L, meterRegistry.find("rag.response.time")
+                .tags("outcome", "failure").timer().count(),
+                "失败延迟必须单独可查，否则无法判断是慢还是错");
+    }
+
+    @Test
+    @DisplayName("Metric labels stay low-cardinality")
+    void metricLabelsStayLowCardinality() {
+        ragMetricsService.recordSuccess(120, 4);
+        ragMetricsService.recordFailure(900);
+        ragMetricsService.recordUpstreamFailure("chat", "primary",
+                new FailureDetails("UPSTREAM", "UPSTREAM_TIMEOUT", true, null, 504));
+
+        String highCardinalityKeys = meterRegistry.getMeters().stream()
+                .flatMap(meter -> meter.getId().getTags().stream())
+                .map(tag -> tag.getKey())
+                .filter(key -> Set.of("traceId", "spanId", "sessionId", "principalId",
+                        "requestId", "query", "documentId").contains(key))
+                .collect(Collectors.toSet())
+                .toString();
+        assertEquals("[]", highCardinalityKeys,
+                "traceId/sessionId/documentId 等高基数值不得进入指标标签");
+    }
 }

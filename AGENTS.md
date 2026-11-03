@@ -68,6 +68,7 @@
 | 测试 / 质量默认 / 发版 | [testing-guide-zh-CN.md](docs/testing-guide-zh-CN.md) · [quality-defaults-zh-CN.md](docs/quality-defaults-zh-CN.md) · [release-checklist-zh-CN.md](docs/release-checklist-zh-CN.md) |
 | 规划 / 实施 / 验收 / Git 交付 | [delivery-workflow-zh-CN.md](docs/delivery-workflow-zh-CN.md)（[EN](docs/delivery-workflow.md)） |
 | 部署 / 境内网络 / 排障 | [DEPLOYMENT.md](docs/DEPLOYMENT.md) · [china-network-guide-zh-CN.md](docs/china-network-guide-zh-CN.md) · [troubleshooting-zh-CN.md](docs/troubleshooting-zh-CN.md) |
+| 线上出问题先看什么 | [可观测性 Runbook](docs/observability-runbook-zh-CN.md)（[EN](docs/observability-runbook.md)） |
 | 多副本 / 多实例语义 | [multi-instance-semantics-zh-CN.md](docs/multi-instance-semantics-zh-CN.md) · [DEPLOYMENT.md](docs/DEPLOYMENT.md) |
 | Claude Code / grok 代理 | [CLAUDE.md](CLAUDE.md) · [claude-grok-proxy-zh-CN.md](docs/claude-grok-proxy-zh-CN.md) |
 | 文档治理 | [.agents/skills/project-docs/SKILL.md](.agents/skills/project-docs/SKILL.md) |

@@ -22,7 +22,7 @@
     <!-- Include postgresql/local so local runs always have a root appender (not only default/dev). -->
     <springProfile name="default,dev,local,postgresql,verification">
         <property name="LOG_PATTERN"
-                  value="%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] [%X{traceId:-no-trace}] %-5level %logger{36} - %maskedMsg%n"/>
+                  value="%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] [%X{traceId:-no-trace}:%X{spanId:-no-span}] %-5level %logger{36} - %maskedMsg%n"/>
 
         <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
             <encoder>
@@ -51,9 +51,13 @@
               logger      - Logger name
               thread      - Thread name
               stack_trace - Stack trace (optional)
-              traceId     - Request trace ID (MDC)
+              traceId     - Request trace ID / scheduled job trace ID (MDC)
+              spanId      - Span ID when span-id-enabled (MDC)
+              principalId - Stable authenticated principal id (MDC)
               domainId    - Collection ID (MDC)
               userId      - User ID (MDC)
+              sessionId   - Chat session ID (MDC)
+              job         - Scheduled job marker (MDC)
               application - Application name (customFields)
 
             Sensitive data masking patterns (auto-processed):
@@ -67,9 +71,12 @@
             <!-- MaskingLogstashEncoder applies sensitive data masking before JSON encoding -->
             <encoder class="com.springairag.core.logging.MaskingLogstashEncoder">
                 <includeMdcKeyName>traceId</includeMdcKeyName>
+                <includeMdcKeyName>spanId</includeMdcKeyName>
+                <includeMdcKeyName>principalId</includeMdcKeyName>
                 <includeMdcKeyName>domainId</includeMdcKeyName>
                 <includeMdcKeyName>userId</includeMdcKeyName>
                 <includeMdcKeyName>sessionId</includeMdcKeyName>
+                <includeMdcKeyName>job</includeMdcKeyName>
                 <customFields>{"application":"${appName}"}</customFields>
                 <fieldNames>
                     <timestamp>@timestamp</timestamp>

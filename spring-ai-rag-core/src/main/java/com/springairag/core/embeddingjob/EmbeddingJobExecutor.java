@@ -374,9 +374,9 @@ public class EmbeddingJobExecutor {
             metricsService.recordUpstreamFailure("embedding.job", provider, details);
         }
         log.warn("Embedding job attempt failed operation=embedding.job provider={} "
-                        + "jobId={} documentId={} profileId={} reason={} retryable={} error={}",
+                        + "jobId={} documentId={} profileId={} attempt={} reason={} retryable={} error={}",
                 provider, job.id(), job.documentId(), job.embeddingProfileId(),
-                details.reason(), details.retryable(), errorMessage);
+                job.attemptCount(), details.reason(), details.retryable(), errorMessage);
     }
 
     private boolean isNonRetryableException(RuntimeException error) {

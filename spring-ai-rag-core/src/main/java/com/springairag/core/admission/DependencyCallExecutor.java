@@ -2,6 +2,7 @@ package com.springairag.core.admission;
 
 import com.springairag.core.config.RagAdmissionProperties;
 import com.springairag.core.config.RagProperties;
+import com.springairag.core.logging.MdcContext;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.annotation.PreDestroy;
 import org.springframework.stereotype.Component;
@@ -50,12 +51,13 @@ public class DependencyCallExecutor implements AutoCloseable {
             DependencyCallContext.remainingMillis();
         }
         AdmissionService.Lease lease = admission.dependency(kind);
-        FutureTask<Result> future = new FutureTask<>(() -> {
+        // 依赖调用在独立线程池执行；复制提交方 MDC，保证 provider 日志仍带 traceId。
+        FutureTask<Result> future = new FutureTask<>(MdcContext.wrap(() -> {
             try (var scope = DependencyCallContext.open(deadline, background)) {
                 DependencyCallContext.remainingMillis();
                 return operation.get();
             }
-        }) {
+        })) {
             @Override
             public void run() {
                 try {

@@ -3,6 +3,7 @@ package com.springairag.core.config;
 import com.springairag.core.filter.ApiKeyAuthFilter;
 import com.springairag.core.filter.ApiCapabilityFilter;
 import com.springairag.core.filter.FailureClassResponseHeaderFilter;
+import com.springairag.core.filter.PrincipalMdcFilter;
 import com.springairag.core.filter.RateLimitFilter;
 import com.springairag.core.filter.TrustedProxyResolver;
 import com.springairag.core.security.ApiRoutePolicyRegistry;
@@ -83,6 +84,19 @@ public class RagWebSecurityConfiguration {
         registration.addUrlPatterns("/api/*", "/v1/*");
         // 认证先于限流，确保限流只使用稳定 principal ID，不接触 root 明文。
         registration.setOrder(-10);
+        return registration;
+    }
+
+    /**
+     * 认证之后把稳定 principal id 写入 MDC（order -9），供日志回答「谁」。
+     */
+    @Bean
+    @ConditionalOnMissingBean(name = "principalMdcFilterRegistration")
+    public FilterRegistrationBean<Filter> principalMdcFilterRegistration() {
+        FilterRegistrationBean<Filter> registration =
+                new FilterRegistrationBean<>(new PrincipalMdcFilter());
+        registration.addUrlPatterns("/api/*", "/v1/*");
+        registration.setOrder(-9);
         return registration;
     }
 

@@ -39,7 +39,8 @@ public class RagMetricsService {
     private final Counter totalRequestCounter;
     private final Counter successRequestCounter;
     private final Counter failedRequestCounter;
-    private final Timer responseTimer;
+    private final Timer successResponseTimer;
+    private final Timer failureResponseTimer;
     private final MeterRegistry meterRegistry;
     private final AtomicLong totalRetrievalResults;
     private final AtomicLong totalLlmTokens;
@@ -58,16 +59,26 @@ public class RagMetricsService {
                 .description("Failed RAG request count")
                 .register(meterRegistry);
 
-        this.responseTimer = Timer.builder("rag.response.time")
-                .description("RAG request response time")
-                .publishPercentiles(0.5, 0.95, 0.99)
-                .register(meterRegistry);
+        // outcome 标签让同一份延迟直方图能区分「慢但成功」与「错误」；
+        // 只放固定枚举值，不放 traceId/sessionId 等高基数维度。
+        this.successResponseTimer = responseTimer("success");
+        this.failureResponseTimer = responseTimer("failure");
 
         this.totalRetrievalResults = new AtomicLong(0);
         meterRegistry.gauge("rag.retrieval.results.total", totalRetrievalResults);
 
         this.totalLlmTokens = new AtomicLong(0);
         meterRegistry.gauge("rag.llm.tokens.total", totalLlmTokens);
+    }
+
+    private Timer responseTimer(String outcome) {
+        return Timer.builder("rag.response.time")
+                .description("RAG request response time by outcome")
+                .tag("outcome", outcome)
+                .publishPercentiles(0.5, 0.95, 0.99)
+                // Prometheus 侧用直方图聚合跨实例分位数，客户端 percentile 只做本实例参考。
+                .publishPercentileHistogram()
+                .register(meterRegistry);
     }
 
     /**
@@ -79,7 +90,7 @@ public class RagMetricsService {
     public void recordSuccess(long durationMs, int resultCount) {
         totalRequestCounter.increment();
         successRequestCounter.increment();
-        responseTimer.record(durationMs, TimeUnit.MILLISECONDS);
+        successResponseTimer.record(durationMs, TimeUnit.MILLISECONDS);
         totalRetrievalResults.addAndGet(resultCount);
         log.debug("RAG success: {}ms, {} results", durationMs, resultCount);
     }
@@ -92,7 +103,7 @@ public class RagMetricsService {
     public void recordFailure(long durationMs) {
         totalRequestCounter.increment();
         failedRequestCounter.increment();
-        responseTimer.record(durationMs, TimeUnit.MILLISECONDS);
+        failureResponseTimer.record(durationMs, TimeUnit.MILLISECONDS);
         log.debug("RAG failure: {}ms", durationMs);
     }
 
