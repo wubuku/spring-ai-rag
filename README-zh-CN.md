@@ -51,7 +51,7 @@ psql spring_ai_rag_dev -c "CREATE EXTENSION IF NOT EXISTS pg_trgm;"
 # psql spring_ai_rag_dev -c "CREATE EXTENSION IF NOT EXISTS pg_jieba;"
 ```
 
-应用启动时 Flyway 自动执行 V1-V34 迁移（建表 + Embedding Profile + 固定维度 HNSW 索引 + 全文检索 GIN 索引 + JSONB 结构化记录与 containment 索引 + 外部文档同步 + 按 principal 隔离的 Chat 历史/来源快照/会话 lease + 持久化 embedding jobs）。
+应用启动时 Flyway 自动执行 V1 到最新版本的迁移（建表 + Embedding Profile + 固定维度 HNSW 索引 + 全文检索 GIN 索引 + JSONB 结构化记录与 containment 索引 + 外部文档同步 + 按 principal 隔离的 Chat 历史/来源快照/会话 lease + 持久化 embedding jobs）。当前版本号以 `spring-ai-rag-core/src/main/resources/db/migration/` 为准，不要在文档里写死。
 
 ### 2. 添加依赖
 
@@ -72,7 +72,7 @@ spring:
     username: postgres
     password: ${DB_PASSWORD}
 
-  # Flyway 自动迁移（V1-V34）
+  # Flyway 自动迁移（V1 到最新）
   flyway:
     enabled: true
 
@@ -210,20 +210,21 @@ spring-ai-rag/
 ## 构建与测试
 
 ```bash
-# 编译
-mvn clean compile
+# 先安装全部模块（demos 依赖本地仓库中的
+# com.springairag:spring-ai-rag-starter:1.0.0）
+mvn -B -DskipTests install
 
-# 测试（真实数据库，964 个测试）
+# 测试（真实数据库）
 # `clean` 不是可选项：不带它，Maven 会保留已从源码删除的测试类在
 # `target/test-classes` 里的产物，Surefire 继续执行这些幽灵用例，
 # 虚增报告出来的套件规模与覆盖率。
-export $(cat .env | grep -v '^#' | xargs)
+set -a; source .env; set +a
 mvn clean test
 
 # 打包
 mvn clean package -DskipTests
 
-# 单独测试 demo
+# 单独测试 demo（需先执行上面的 install）
 cd demos/demo-basic-rag && mvn test
 ```
 

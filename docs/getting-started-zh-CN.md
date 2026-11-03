@@ -20,63 +20,95 @@
 ## 1. 克隆项目
 
 ```bash
-git clone https://github.com/your-org/spring-ai-rag.git
+git clone https://github.com/wubuku/spring-ai-rag.git
 cd spring-ai-rag
 ```
 
 ## 2. 数据库准备
 
-```sql
-CREATE DATABASE spring_ai_rag;
-
--- 连接到新数据库后执行
-CREATE EXTENSION IF NOT EXISTS vector;
-CREATE EXTENSION IF NOT EXISTS pg_trgm;
+```bash
+createdb spring_ai_rag_dev
+psql spring_ai_rag_dev -c "CREATE EXTENSION IF NOT EXISTS vector;"
+psql spring_ai_rag_dev -c "CREATE EXTENSION IF NOT EXISTS pg_trgm;"
+# 可选：中文分词
+# psql spring_ai_rag_dev -c "CREATE EXTENSION IF NOT EXISTS pg_jieba;"
 ```
 
-Flyway 会自动创建表结构（首次启动时）。
+Flyway 会在首次启动时自动创建表结构（V1 到最新版本）。
 
 ## 3. 配置环境变量
 
-在项目根目录创建 `.env`：
+`.env` 已在 `.gitignore` 中，不会被提交。以 `.env.example` 为模板：
 
 ```bash
-# LLM（默认 DeepSeek，OpenAI 兼容）
-OPENAI_API_KEY=sk-xxx
-OPENAI_BASE_URL=https://api.deepseek.com
+cp .env.example .env
+```
+
+至少替换下面几项（变量名必须与 `.env.example` 一致；旧的
+`OPENAI_API_KEY` / `OPENAI_BASE_URL` / `OPENAI_MODEL` 仍可作为回退）：
+
+```bash
+# 数据库（对应 createdb 的库名）
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5432
+POSTGRES_DATABASE=spring_ai_rag_dev
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=yourpassword
+
+# LLM（默认 DeepSeek，OpenAI 兼容；base-url 不要带 /v1）
+SPRING_AI_OPENAI_API_KEY=sk-xxx
+SPRING_AI_OPENAI_BASE_URL=https://api.deepseek.com
+SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL=deepseek-chat
 
 # 嵌入模型（示例：SiliconFlow BGE-M3）
 RAG_EMBEDDING_API_KEY=sk-xxx
 RAG_EMBEDDING_BASE_URL=https://api.siliconflow.cn
 RAG_EMBEDDING_MODEL=BAAI/bge-m3
 RAG_EMBEDDING_DIMENSIONS=1024
-
-# 数据库
-DB_URL=jdbc:postgresql://localhost:5432/spring_ai_rag
-DB_USERNAME=postgres
-DB_PASSWORD=yourpassword
 ```
 
-## 4. 编译 & 测试
+没有真实凭据时，可以用仓库自带的 mock provider 跑通链路（只验证流程，
+不验证回答质量）：
 
 ```bash
-# 加载环境变量并编译
-export $(cat .env | grep -v '^#' | xargs)
-mvn clean compile
+./scripts/run-mock-llm.sh --port 8086 &
+# 然后在 .env 中设置：
+# SPRING_AI_OPENAI_API_KEY=mock-key
+# SPRING_AI_OPENAI_BASE_URL=http://127.0.0.1:8086
+# SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL=mock-chat
+# RAG_EMBEDDING_API_KEY=mock-key
+# RAG_EMBEDDING_BASE_URL=http://127.0.0.1:8086
+# RAG_EMBEDDING_MODEL=mock-embedding
+# RAG_RETRIEVAL_MIN_SCORE=0
+```
 
-# 运行全部测试（700+ 个）
-mvn test
+## 4. 构建 & 测试
+
+```bash
+# 加载 .env（值里含空格或引号时也比 export $(cat ...) 可靠）
+set -a; source .env; set +a
+
+# 先安装本仓库模块：demos 依赖 com.springairag:spring-ai-rag-starter:1.0.0，
+# 该构件不在 Maven Central，必须先从源码 install 到本地仓库。
+mvn -B -DskipTests install
+
+# 运行全部后端测试（需要 .env 里的真实数据库）
+mvn clean test
 ```
 
 ## 5. 启动 Demo
 
 ```bash
 cd demos/demo-basic-rag
-export $(cat ../../.env | grep -v '^#' | xargs)
+set -a; source ../../.env; set +a
 mvn spring-boot:run
 ```
 
-服务启动在 `http://localhost:8081`。
+服务启动在 `http://localhost:8081`。先确认健康检查通过：
+
+```bash
+curl -sf http://localhost:8081/actuator/health
+```
 
 ## 6. 第一次 RAG 问答
 
@@ -92,11 +124,25 @@ curl -X POST http://localhost:8081/api/v1/rag/documents \
   }'
 ```
 
+响应里的 `id` 就是文档 ID（不要假设它一定是 1）：
+
+```bash
+DOC_ID=$(curl -s -X POST http://localhost:8081/api/v1/rag/documents \
+  -H "Content-Type: application/json" \
+  -d '{"title":"Spring AI 介绍","content":"Spring AI 是 Spring 生态的 AI 应用框架，提供 ChatClient、VectorStore、Advisor 等抽象。","source":"manual"}' \
+  | python3 -c 'import sys,json; print(json.load(sys.stdin)["id"])')
+```
+
 ### 嵌入向量
 
 ```bash
-# 假设文档 ID 是 1
-curl -X POST http://localhost:8081/api/v1/rag/documents/1/embed
+curl -X POST "http://localhost:8081/api/v1/rag/documents/${DOC_ID}/embed"
+```
+
+### 检索（不经过 LLM）
+
+```bash
+curl -s "http://localhost:8081/api/v1/rag/search?query=Spring%20AI&limit=3"
 ```
 
 ### RAG 问答
@@ -114,6 +160,10 @@ curl -N -X POST http://localhost:8081/api/v1/rag/chat/stream \
   -H "Content-Type: application/json" \
   -d '{"message": "解释 RAG 的工作原理"}'
 ```
+
+> 上述完整流程已固化在 `scripts/verify-clean-clone.sh`：它在临时目录做干净 clone、
+> 建临时数据库、用 mock provider 跑通 health → documents → embed → search → chat，
+> 结束时清理。可随时执行：`./scripts/verify-clean-clone.sh`。
 
 ---
 

@@ -32,12 +32,14 @@ spring:
 
   ai:
     openai:
-      api-key: ${OPENAI_API_KEY:}
-      base-url: ${OPENAI_BASE_URL:}
+      # 与根目录 .env.example 对齐；同时保留 OPENAI_* 旧变量名回退，
+      # 避免既有本地 .env 因变量改名而静默失效。
+      api-key: ${SPRING_AI_OPENAI_API_KEY:${OPENAI_API_KEY:}}
+      base-url: ${SPRING_AI_OPENAI_BASE_URL:${OPENAI_BASE_URL:}}
       chat:
         enabled: false
         options:
-          model: ${OPENAI_MODEL:}
+          model: ${SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL:${OPENAI_MODEL:}}
           temperature: 0.7
 
 app:

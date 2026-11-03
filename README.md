@@ -211,20 +211,21 @@ service guide when integrating an independent backend over HTTP:
 ## Build & Test
 
 ```bash
-# Compile
-mvn clean compile
+# Install all modules first (the demos consume
+# com.springairag:spring-ai-rag-starter:1.0.0 from the local repository)
+mvn -B -DskipTests install
 
-# Test (real database, 1000+ tests)
+# Test (real database)
 # `clean` is not optional: without it Maven keeps `target/test-classes` entries
 # for test classes that were deleted from source, and Surefire goes on
 # executing those ghosts, inflating the reported suite size and coverage.
-export $(cat .env | grep -v '^#' | xargs)
+set -a; source .env; set +a
 mvn clean test
 
 # Package
 mvn clean package -DskipTests
 
-# Run demo tests
+# Run demo tests (after the install above)
 cd demos/demo-basic-rag && mvn test
 ```
 
