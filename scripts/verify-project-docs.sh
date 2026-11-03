@@ -372,6 +372,8 @@ check_scripts_and_commands() {
       scripts/verify-llm-usage-ledger.sh \
       scripts/verify-api-key-expiry-alerts.sh \
       scripts/verify-alert-notification-delivery.sh \
+      scripts/verify-clean-clone.sh \
+      scripts/verify-flyway-schema-paths.sh \
       scripts/verify-no-pessimistic-locks.sh \
       scripts/run-claude-grok.sh; do
     [[ -x "$script" ]] || {

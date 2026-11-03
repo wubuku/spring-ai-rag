@@ -223,8 +223,8 @@ IN_TEMP_DB="$(psql -h "$PG_HOST" -p "$PG_PORT" -U "$PG_USER" -d "$DB_NAME" -tAc 
 pass "创建文档 id=${DOC_ID}（已确认落在临时库）"
 
 curl -sf -X POST "$BASE_URL/api/v1/rag/documents/$DOC_ID/embed" >"$LOG_DIR/embed.json"
-python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); assert d.get("embeddings",0) >= 1, d' "$LOG_DIR/embed.json"
-pass "嵌入完成：$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print("chunks=%s embeddings=%s" % (d.get("chunks"), d.get("embeddings")))' "$LOG_DIR/embed.json")"
+python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); assert d.get("embeddingsStored", d.get("embeddings", 0)) >= 1, d' "$LOG_DIR/embed.json"
+pass "嵌入完成：$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print("chunks=%s embeddings=%s" % (d.get("chunksCreated"), d.get("embeddingsStored")))' "$LOG_DIR/embed.json")"
 
 curl -sf "$BASE_URL/api/v1/rag/search?query=clean-clone-marker-42&limit=3&collectionKeys=$COLLECTION_KEY" >"$LOG_DIR/search.json"
 python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); results=d.get("results", d if isinstance(d,list) else []); assert len(results) >= 1, d' "$LOG_DIR/search.json"
