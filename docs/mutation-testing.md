@@ -86,3 +86,76 @@ When refactoring this state machine, add an integration assertion that "renewal 
   have effective assertions on their decision branches.
 - The real gap is `ChatSessionCoordinator`'s internal state machine: the tests are not wrong, they simply **cannot see** it.
   Such changes must run the gated integration suite; `mvn test` alone is not evidence.
+
+## WebUI: Stryker mutation testing (off by default)
+
+The backend uses PIT to prove its decision tests are not hollow; the frontend uses
+Stryker 10.1.1 with `@stryker-mutator/vitest-runner` on the four modules most likely
+to stay green after a branch is deleted.
+
+| Module | Mutants | killed | survived | timeout | no coverage | Score |
+|--------|---------|--------|----------|---------|-------------|-------|
+| `src/utils/failureClass.ts` | 173 | 163 | 10 | 0 | 0 | **94.22%** |
+| `src/hooks/useFileUpload.ts` | 103 | 98 | 5 | 0 | 0 | **95.15%** |
+| `src/hooks/useSSE.ts` | 583 | 415 | 153 | 7 | 8 | **72.38%** |
+| `src/pages/Chat.tsx:165-287` | 127 | 109 | 17 | 0 | 1 | **85.83%** |
+
+Config lives in [spring-ai-rag-webui/stryker.config.mjs](../spring-ai-rag-webui/stryker.config.mjs).
+`test:mutation` is not part of `lint` / `test:run` / the default CI path; `thresholds.break: null`
+because this is a diagnostic tool, not a gate.
+
+```bash
+cd spring-ai-rag-webui
+npm run test:mutation
+# single module: npx stryker run --mutate src/hooks/useSSE.ts
+# report: spring-ai-rag-webui/coverage/mutation/index.html
+```
+
+### Cost trade-offs (recorded honestly)
+
+- `useSSE` and `Chat` ran with `--ignoreStatic`: each module-scope static mutant reruns the whole
+  test file, giving little information at high cost. `failureClass` keeps its ~15 static mutants
+  (cheap enough).
+- The 7 `useSSE` timeouts come from jsdom + streaming reader + fake timers waiting on the 30s cap;
+  they count as detected, not killed. Raising that score would require refactoring the SSE parser's
+  testable boundary, at a cost that outweighs the benefit.
+- `Chat.tsx` mutates only lines 165–287 (SSE callbacks and state transitions); layout/style mutants
+  carry no behavioural meaning.
+
+### Real gaps closed in this round
+
+Mutation testing exposed branches that stayed green when deleted. Assertions were added for:
+
+- `failureClass`: status→class, reason→copy key, case/whitespace normalisation, `failureSignalOf`
+  type filtering, `parseRetryAfterMs` boundaries (`2.5`, `' 2 '`, `-1`, `Infinity`), exact
+  `HTTP 503` copy filtering.
+- `useFileUpload`: real `isUploading` observation, multi-file multipart, `message`/`detail`
+  precedence, header-less 502 fallback, idempotency-key fallback without `randomUUID`,
+  cancellation semantics, completion without callbacks.
+- `useSSE`: exact Retry-After 2000 ms boundary and `Infinity`, missing body/invalid turn/duplicate
+  claim, generation guard after `close()`, `done` without turnId, error-response precedence,
+  safe `data: null` handling.
+- `Chat.tsx`: non-streaming callback suppression, source replacement, same/different tool activity
+  matching, retry clearing sources and tool activity, retryable prompt retention, incomplete hint,
+  empty session not navigating.
+
+### Surviving mutants
+
+1. **Equivalent**: all 10 `failureClass` survivors — `typeof status !== 'number'`,
+   `default: return undefined`, `if (!cls) return true`, the `typeof` check after `!error`,
+   `value.trim() === ''`, `seconds > 0 → >= 0` (zero and negatives both return `0`).
+2. **Dependency arrays**: 3 in `useFileUpload` (47/157/161) and most refs/deps in `Chat`.
+   Removing them does not change rendered output in current tests; that is React lifecycle,
+   not a business branch.
+3. **Defensive optional chaining**: many `?.` and field fallbacks in `useSSE`; real inputs are never `null`.
+4. **Not observable in the frontend**: the single-file `map` ternary in `useFileUpload`
+   (state update and callback are equivalent); `prev.length + 1`, `msg.id !== lastMsg.id`, and
+   retry prompt clearing in `Chat` are invisible through the UI.
+5. **Shadowed by earlier classification**: `response.status === 409 || 429` in `useSSE` is
+   unreachable when the failure class header is present; the `attempt < MAX_ATTEMPTS` boundary
+   is equivalent to the retry count.
+
+**Conclusion**: all four modules have assertions that can fail on their decision branches.
+`useSSE`'s 72% comes mostly from defensive parser branches and static-mutant filtering, not from
+missing assertions. If the SSE parser is refactored, split reader/event parsing into pure
+functions first, then run full mutation coverage on the pure functions.

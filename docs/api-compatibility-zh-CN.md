@@ -24,6 +24,25 @@
 判定面向 `/api/v1` 的既有消费者；真正需要不兼容升级时，应新增 `/api/v2`，
 而不是改写 v1 的形状。
 
+## 已显式接受的语义变更
+
+### 2026-11：详情端点不可见 ID 由 `403` 改为 `404`
+
+- **端点**：`GET /api/v1/rag/documents/{id}`、`GET /api/v1/rag/collections/{id}`
+  （deprecated 数字路由；`GET /api/v1/rag/collections/{key}` 推荐路由行为不变）。
+- **变更**：受限 Key 读取 allow-list 之外的 ID 时，不再返回 `403`，而是与不存在 ID
+  相同的 `404`，用于阻断数字 ID 枚举。
+- **影响面**：只有依赖 `403` 区分“存在但无权”与“不存在”的受限调用方受影响；
+  它们必须把 `404` 统一视为“不存在或不可见”。不受限 Key、root/`ADMIN`、
+  未启用认证的部署行为不变。
+- **门禁结论**：这两个 operation 的声明响应一直是 `200/400/404/500`，`403` 从未
+  出现在 OpenAPI 基线里，所以形状门禁对该变更返回 PASS。比对器本身能识别这类
+  变更：若基线声明了 `403` 而实际只有 `404`，会报告“响应码被删除”（破坏）。
+  本次属于运行时语义收紧，按“显式接受”记录，不更新基线。
+- **回归证据**：`DocumentAclControllerTest.restrictedKeyGets404ForDocumentInAnotherCollection`、
+  `CollectionAclControllerTest.restrictedKeyGets404ForAnotherCollection`；本地 demo 实例的
+  `/v3/api-docs` 与基线比对无差异。
+
 ## 本地使用
 
 ```bash

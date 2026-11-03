@@ -969,6 +969,227 @@ describe('Chat SSE callbacks', () => {
     expect(screen.getByTestId('loc-probe'))
       .toHaveTextContent('/chat/session-42');
   });
+
+  it('ignores stream callbacks once the last message is no longer streaming', async () => {
+    renderChatForCallbacks();
+    const opts = getOptions();
+
+    await act(async () => {
+      (opts.onDone as ((d: Record<string, unknown>) => void))({ status: 'complete' });
+    });
+    await act(async () => {
+      (opts.onChunk as (c: string) => void)('late chunk');
+      (opts.onSources as (s: unknown) => void)([{ documentId: 2, title: 'late' }]);
+      (opts.onToolStart as ((e: unknown) => void))({ tool: 'late-tool' });
+      (opts.onToolResult as ((e: unknown) => void))({ tool: 'late-tool', resultCount: 1, elapsedMs: 1 });
+    });
+
+    expect(screen.queryByText(/late chunk/)).not.toBeInTheDocument();
+    expect(screen.queryByText('late')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('chat.toolActivity')).not.toBeInTheDocument();
+  });
+
+  it('renders and replaces the sources of the streaming message', async () => {
+    renderChatForCallbacks();
+    const opts = getOptions();
+
+    await act(async () => {
+      (opts.onSources as (s: unknown, next?: string) => void)(
+        [{ citationId: 'S1', documentId: 1, title: 'first-source' }],
+        undefined,
+      );
+    });
+    expect(screen.getByText(/chat\.sources/)).toBeInTheDocument();
+    expect(screen.getByText('first-source')).toBeInTheDocument();
+
+    await act(async () => {
+      (opts.onSources as (s: unknown, next?: string) => void)(
+        [{ citationId: 'S2', documentId: 2, title: 'second-source' }],
+        undefined,
+      );
+    });
+    expect(screen.queryByText('first-source')).not.toBeInTheDocument();
+    expect(screen.getByText('second-source')).toBeInTheDocument();
+  });
+
+  it('completes only the running activity that matches the result', async () => {
+    renderChatForCallbacks();
+    const opts = getOptions();
+
+    await act(async () => {
+      (opts.onToolStart as ((e: unknown) => void))({
+        toolCallId: 'tc-done', tool: 'searchKnowledge',
+      });
+      (opts.onToolStart as ((e: unknown) => void))({
+        toolCallId: 'tc-live', tool: 'searchKnowledge',
+      });
+    });
+    await act(async () => {
+      (opts.onToolResult as ((e: unknown) => void))({
+        tool: 'searchKnowledge', toolCallId: 'tc-done', resultCount: 1, elapsedMs: 10,
+      });
+    });
+    expect(screen.getAllByText(/chat\.toolSearching/).length).toBe(1);
+
+    await act(async () => {
+      (opts.onToolResult as ((e: unknown) => void))({
+        tool: 'searchKnowledge', resultCount: 2, elapsedMs: 20,
+      });
+    });
+    expect(screen.queryByText(/chat\.toolSearching/)).not.toBeInTheDocument();
+    expect(screen.getAllByText(/chat\.toolFinished/).length).toBe(2);
+  });
+
+  it('does not complete activities belonging to a different tool', async () => {
+    renderChatForCallbacks();
+    const opts = getOptions();
+
+    await act(async () => {
+      (opts.onToolStart as ((e: unknown) => void))({
+        toolCallId: 'b', tool: 'toolB', query: 'toolB-query',
+      });
+      (opts.onToolStart as ((e: unknown) => void))({
+        toolCallId: 'a', tool: 'toolA', query: 'toolA-query',
+      });
+    });
+    // 没有 toolCallId 时只能按 tool 名找，必须跳过更早的 toolB。
+    await act(async () => {
+      (opts.onToolResult as ((e: unknown) => void))({
+        tool: 'toolA', resultCount: 1, elapsedMs: 5,
+      });
+    });
+
+    expect(screen.getByText(/chat\.toolSearching: toolB-query/)).toBeInTheDocument();
+    expect(screen.queryByText(/chat\.toolSearching: toolA-query/)).not.toBeInTheDocument();
+    expect(screen.getByText(/chat\.toolFinished: toolA-query/)).toBeInTheDocument();
+  });
+
+  it('ignores a result with no matching running activity', async () => {
+    renderChatForCallbacks();
+    const opts = getOptions();
+
+    await act(async () => {
+      (opts.onToolStart as ((e: unknown) => void))({ toolCallId: 'a', tool: 'toolA' });
+      (opts.onToolResult as ((e: unknown) => void))({
+        tool: 'toolA', toolCallId: 'a', resultCount: 1, elapsedMs: 5,
+      });
+    });
+
+    await act(async () => {
+      (opts.onToolResult as ((e: unknown) => void))({
+        tool: 'toolC', resultCount: 9, elapsedMs: 90,
+      });
+    });
+
+    expect(screen.getAllByText(/chat\.toolFinished/).length).toBe(1);
+    expect(screen.queryByText(/chat\.toolSearching/)).not.toBeInTheDocument();
+  });
+
+  it('onRetry also clears sources and tool activity', async () => {
+    renderChatForCallbacks();
+    const opts = getOptions();
+
+    await act(async () => {
+      (opts.onChunk as (c: string) => void)('partial');
+      (opts.onSources as (s: unknown) => void)([
+        { citationId: 'S1', documentId: 1, title: 'retry-source' },
+      ]);
+      (opts.onToolStart as ((e: unknown) => void))({ tool: 'retry-tool' });
+    });
+    expect(screen.getByText('retry-source')).toBeInTheDocument();
+    expect(screen.getByLabelText('chat.toolActivity')).toBeInTheDocument();
+
+    await act(async () => {
+      (opts.onRetry as () => void)();
+    });
+
+    expect(screen.queryByText('retry-source')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('chat.toolActivity')).not.toBeInTheDocument();
+  });
+
+  it('keeps the prompt available for a retryable failure', async () => {
+    renderChatForCallbacks();
+    const opts = getOptions();
+
+    await act(async () => {
+      (opts.onError as ((m: string, e?: { failureClass?: string }) => void))(
+        'temporary outage', { failureClass: 'DEPENDENCY_UNAVAILABLE' },
+      );
+    });
+    expect(screen.getByRole('button', { name: /common\.retry/ })).toBeInTheDocument();
+    // 失败后必须结束流式状态，否则页面会一直显示光标并吞掉后续事件。
+    expect(screen.queryByText('|')).not.toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /common\.retry/ }));
+    });
+
+    expect(mockSend).toHaveBeenCalledTimes(2);
+    expect(mockSend.mock.calls[1][0]).toMatchObject({ message: 'test query' });
+  });
+
+  it('drops the prompt after a non-retryable failure', async () => {
+    renderChatForCallbacks();
+    const opts = getOptions();
+
+    await act(async () => {
+      (opts.onError as ((m: string, e?: { failureClass?: string }) => void))(
+        'bad request', { failureClass: 'CLIENT_REQUEST' },
+      );
+    });
+    expect(screen.queryByRole('button', { name: /common\.retry/ })).not.toBeInTheDocument();
+    expect(mockSend).toHaveBeenCalledTimes(1);
+  });
+
+  it('clears a previous failure when the turn completes', async () => {
+    renderChatForCallbacks();
+    const opts = getOptions();
+
+    await act(async () => {
+      (opts.onError as ((m: string, e?: { failureClass?: string }) => void))(
+        'temporary outage', { failureClass: 'DEPENDENCY_UNAVAILABLE' },
+      );
+    });
+    expect(screen.getByRole('button', { name: /common\.retry/ })).toBeInTheDocument();
+
+    await act(async () => {
+      (opts.onDone as ((d: Record<string, unknown>) => void))({ status: 'complete' });
+    });
+
+    expect(screen.queryByRole('button', { name: /common\.retry/ })).not.toBeInTheDocument();
+    expect(screen.queryByText('chat.incompleteHint')).not.toBeInTheDocument();
+  });
+
+  it('marks an incomplete answer and offers a retry', async () => {
+    renderChatForCallbacks();
+    const opts = getOptions();
+
+    await act(async () => {
+      (opts.onDone as ((d: Record<string, unknown>) => void))({ status: 'incomplete' });
+    });
+
+    expect(screen.getByText('chat.incompleteHint')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /common\.retry/ })).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /common\.retry/ }));
+    });
+    expect(mockSend).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not navigate for an empty session id', async () => {
+    renderChat('/chat/session-1');
+    const textarea = screen.getByPlaceholderText(/chat.placeholder/);
+    fireEvent.change(textarea, { target: { value: 'test query' } });
+    fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false });
+    const opts = getOptions();
+
+    await act(async () => {
+      (opts.onDone as ((d: { sessionId?: string }) => void))({ sessionId: '' });
+    });
+
+    expect(screen.getByTestId('loc-probe')).toHaveTextContent('/chat/session-1');
+  });
 });
 
 // ─── Coverage: stop flow, exports, feedback, guards (Batch 152) ──────

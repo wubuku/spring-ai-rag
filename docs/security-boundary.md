@@ -53,6 +53,22 @@ Legacy rows without ownership become invisible to restricted keys; root can stil
 - restricted keys: can only see **less** data, never more.
 - no manual switch on upgrade; nullable V71 migration applies automatically at startup.
 
+### 2.4 Numeric ID enumeration on detail endpoints (403 → 404)
+
+**Problem**: When a restricted key requested a `documentId` / `collectionId` outside its
+allow-list, the implementation returned `403`. That differed from the `404` for a missing
+ID and let a caller confirm that the numeric ID exists.
+
+**Fix**: `GET /api/v1/rag/documents/{id}` and `GET /api/v1/rag/collections/{id}` (the
+deprecated numeric route) now return the same `404` as a missing ID when the ACL rejects.
+The `collectionKey` resolver keeps its existing semantics: a restricted caller explicitly
+asking for an unknown or unauthorized key still receives `403`, because the key is a
+caller-supplied namespace rather than a numeric ID probe.
+
+**Compatibility**: Only restricted keys are affected, and only toward **less** exposure.
+Unrestricted keys, root/`ADMIN`, and deployments with authentication disabled are unchanged.
+See §5 for regression entry points.
+
 ---
 
 ## 3. Input Attack Surface Conclusions
@@ -62,6 +78,7 @@ Legacy rows without ownership become invisible to restricted keys; root can stil
 | Path traversal (`../`, URL encoding, backslashes, NUL) | paths are only used for DB queries, never concatenated into filesystem paths; still rejected explicitly | `PdfImportService.validateVirtualPath` rejects `.`/`..`/control characters after decoding (400); temp filenames are sanitized with a character allowlist |
 | Oversized upload / upload bomb | size is checked before reading, streaming copy is bounded, Spring multipart rejects oversized requests first | keep `rag.pdf.max-upload-bytes` (20MB default) and multipart limits; tests cover 400 for oversize |
 | Invalid `collectionKey` | unknown key returns 403 for restricted callers and 404 for unrestricted | no data beyond existence is returned; covered by the regression matrix |
+| Numeric ID enumeration on detail endpoints | restricted keys receive `404` (formerly `403`) for invisible `documentId` / `collectionId` | same as a missing ID, blocking existence probes; see §2.4 |
 | SSRF (external document sync URL) | **not applicable**: sync is push-based (`POST /documents/upsert` receives content); the server never downloads a client-supplied URL | no `java.net.URL` / `RestClient` external-fetch path exists. If one is added later, it must allow only `http/https` and reject internal addresses after DNS resolution (including rebinding) |
 
 ---

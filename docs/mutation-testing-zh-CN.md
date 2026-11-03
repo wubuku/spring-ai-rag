@@ -84,3 +84,64 @@ Test strength（killed / (killed + survived)）= **90.9%**。
 - 检索范围、限流、预算边界、删除推导、失败分类的**判分支路**已有有效断言。
 - 最需要警惕的是 `ChatSessionCoordinator` 的内部状态机：不是测试写错，而是测试**看不见**。
   这类代码改动必须跑 gated 集成，不能只看 `mvn test`。
+
+## WebUI：Stryker 变异测试（默认关闭）
+
+后端用 PIT 证明判定测试不是假绿；前端用 Stryker 10.1.1 + `@stryker-mutator/vitest-runner`
+对四个最容易"分支删掉测试还绿"的模块做同样的事。
+
+| 模块 | 变异体 | killed | survived | timeout | no coverage | 分数 |
+|------|--------|--------|----------|---------|-------------|------|
+| `src/utils/failureClass.ts` | 173 | 163 | 10 | 0 | 0 | **94.22%** |
+| `src/hooks/useFileUpload.ts` | 103 | 98 | 5 | 0 | 0 | **95.15%** |
+| `src/hooks/useSSE.ts` | 583 | 415 | 153 | 7 | 8 | **72.38%** |
+| `src/pages/Chat.tsx:165-287` | 127 | 109 | 17 | 0 | 1 | **85.83%** |
+
+配置在 [spring-ai-rag-webui/stryker.config.mjs](../spring-ai-rag-webui/stryker.config.mjs)，
+`test:mutation` 不在 `lint` / `test:run` / CI 默认路径里；`thresholds.break: null`，
+因为它只是诊断工具，不作为门禁。
+
+```bash
+cd spring-ai-rag-webui
+npm run test:mutation
+# 单模块：npx stryker run --mutate src/hooks/useSSE.ts
+# 报告：spring-ai-rag-webui/coverage/mutation/index.html
+```
+
+### 成本取舍（如实记录）
+
+- `useSSE` 与 `Chat` 使用 `--ignoreStatic`：模块级静态变异体每个都要重跑整份测试文件，
+  信息量低、成本高；`failureClass` 的静态变异体约 15 个，成本可接受，因此保留。
+- `useSSE` 的 7 个 timeout 是 jsdom + 流式 reader + 假定时器互相等待触发的 30s 上限，
+  计为"已检出"，不是 killed。继续压这个分数需要重构 SSE 解析的可测边界，收益低于成本。
+- `Chat.tsx` 只变异 165–287 行（SSE 回调与状态推进），整页布局/样式变异没有行为意义。
+
+### 本轮补出的真实缺口
+
+变异测试暴露了"删掉分支测试仍绿"的位置，已补有意义的断言：
+
+- `failureClass`：状态码→分类、reason→文案 key、大小写/空白归一、`failureSignalOf`
+  类型过滤、`parseRetryAfterMs` 的 `2.5`/`' 2 '`/`-1`/`Infinity` 边界、精确 `HTTP 503` 文案过滤。
+- `useFileUpload`：`isUploading` 真实观测、多文件 multipart、`message`/`detail` 优先级、
+  无 headers 的 502 回退、无 `randomUUID` 的幂等键回退、取消语义、无回调也能完成。
+- `useSSE`：Retry-After 精确 2000ms 边界与 `Infinity`、无 body/无效 turn/重复 claim、
+  `close()` 后的 generation 守卫、`done` 丢 turnId、错误响应解析优先级、`data: null` 安全忽略。
+- `Chat.tsx`：非 streaming 回调忽略、sources 替换、同/不同 tool 的活动匹配、
+  retry 清理 sources 与 tool 活动、retryable 保留 prompt、incomplete 提示、空 session 不导航。
+
+### 存活变异体分类
+
+1. **等价变异**：`failureClass` 的 10 个全部属于此类——`typeof status !== 'number'`、
+   `default: return undefined`、`if (!cls) return true`、`!error` 后的 `typeof` 判断、
+   `value.trim() === ''`、`seconds > 0 → >= 0`（`0` 与负值都返回 `0`）。
+2. **依赖数组**：`useFileUpload` 3 个（47/157/161），`Chat` 多数 ref/依赖项。
+   删掉依赖项在当前测试里不改变渲染结果，属于 React 生命周期而非业务分支。
+3. **防御性 optional chaining**：`useSSE` 大量 `?.` 与字段兜底；真实输入不会为 `null`。
+4. **前端不可观测**：`useFileUpload` 的单文件 `map` 三元（前端状态更新与回调等价）；
+   `Chat` 的 `prev.length + 1`、`msg.id !== lastMsg.id`、retry 时清 prompt 在 UI 上不可见。
+5. **已被前置分类遮蔽**：`useSSE` 的 `response.status === 409 || 429` 在带分类头时不可达；
+   `attempt < MAX_ATTEMPTS` 的边界与重试次数等价。
+
+**结论**：四个模块的判定分支都有可失败的测试；`useSSE` 的 72% 主要来自解析器的
+防御性分支与静态变异体过滤，不是断言缺失。若重构 SSE 解析，应优先把 reader/事件解析
+拆成纯函数，再对纯函数跑完整变异。

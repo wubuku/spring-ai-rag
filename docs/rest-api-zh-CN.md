@@ -1817,6 +1817,9 @@ Collection 身份的位置增加 `collectionKey`。
 关键词检索不可用。受限 Key 若不拥有该文档所属 Collection，返回与“文档不存在”相同的
 `404`（不是 `403` 或 `200`），避免通过状态码探测其他 Collection 的 `documentId`。
 
+**兼容性**：受限调用方原先可能收到 `403`；现在必须把 `404` 视为“不存在或不可见”。
+不受限调用方与未启用认证的部署行为不变。见 [接口兼容门禁](api-compatibility-zh-CN.md#已显式接受的语义变更)。
+
 ---
 
 ### `GET /api/v1/rag/documents/{id}/chunks/preview`
@@ -2538,6 +2541,8 @@ GET /api/v1/rag/collections/by-key/export?collectionKey=customer-42%3Amanual%3Av
 
 这些路由与推荐路由使用相同的 ACL、不可变、软删除和目标 key 规则。`GET /{id}`
 对受限 Key 的不可见 ID 返回 `404`（与不存在 ID 一致），用于阻断数字 ID 枚举。
+受限调用方原先可能收到 `403`，现在必须把 `404` 视为“不存在或不可见”；不受限
+调用方与未启用认证的部署行为不变。
 
 ---
 

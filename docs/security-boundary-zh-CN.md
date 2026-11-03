@@ -53,6 +53,19 @@
 - 受限 key：只会**变少**可见数据，不会新增可见数据。
 - 升级不需要手工开关；V71 可空迁移随启动自动应用。
 
+### 2.4 详情端点数字 ID 枚举（403 → 404）
+
+**问题**：受限 Key 请求不属于自己 allow-list 的 `documentId` / `collectionId` 时，
+原实现返回 `403`；这与不存在 ID 的 `404` 形成差异，可用于确认“该数字 ID 存在”。
+
+**修复**：`GET /api/v1/rag/documents/{id}` 与 `GET /api/v1/rag/collections/{id}`
+（deprecated 数字路由）在 ACL 拒绝时，返回与不存在 ID 相同的 `404`。
+`collectionKey` 解析保持既有语义：受限调用方显式请求未知或未授权 key 仍返回 `403`，
+因为 key 是调用方提供的命名空间，不构成数字 ID 枚举。
+
+**兼容性**：只有受限 Key 受影响，且只会**少**暴露信息；不受限 Key、root/`ADMIN`、
+未启用认证的部署行为不变。回归入口见 §5。
+
 ---
 
 ## 3. 输入攻击面结论
@@ -62,6 +75,7 @@
 | 路径穿越（`../`、URL 编码、反斜杠、NUL） | 路径只用于数据库查询，不拼接真实文件系统路径；但仍显式拒绝 | `PdfImportService.validateVirtualPath` 解码后拒绝 `.`/`..`/控制字符，返回 400；临时文件名再做字符白名单清洗 |
 | 超大文件 / 上传炸弹 | 服务端在读取前检查 `contentLength`，流式拷贝有上限，Spring multipart 先拒超大请求 | 保持 `rag.pdf.max-upload-bytes`（默认 20MB）与 multipart 上限；测试覆盖超限返回 400 |
 | 非法 `collectionKey` | 受限 key 解析未知 key 时返回 403，不受限返回 404 | 不返回“存在/不存在”以外的数据，回归矩阵覆盖 |
+| 详情端点数字 ID 枚举 | 受限 key 对不可见 `documentId` / `collectionId` 返回 404（原 403） | 与不存在 ID 一致，阻断存在性探测；见 §2.4 |
 | SSRF（外部文档同步 URL） | **不适用**：外部同步是 push 模型（`POST /documents/upsert` 接收内容），服务端不下载客户端提供的 URL | 仓库内不存在 `java.net.URL` / `RestClient` 型的外部拉取入口；如未来新增 URL 拉取，必须只允许 `http/https` 并在解析后校验内网地址（含 DNS rebinding） |
 
 ---

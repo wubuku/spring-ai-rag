@@ -24,6 +24,26 @@ OpenAPI baseline with the normalized `/v3/api-docs` of a running instance.
 The gate targets existing `/api/v1` consumers. When an incompatible upgrade is truly
 required, add `/api/v2` instead of reshaping v1.
 
+## Explicitly Accepted Semantic Changes
+
+### 2026-11: Detail endpoints return `404` instead of `403` for invisible IDs
+
+- **Endpoints**: `GET /api/v1/rag/documents/{id}` and `GET /api/v1/rag/collections/{id}`
+  (the deprecated numeric route; `GET /api/v1/rag/collections/{key}` is unchanged).
+- **Change**: A restricted key reading an ID outside its allow-list now receives the same
+  `404` as a missing ID instead of `403`, which blocks numeric ID enumeration.
+- **Impact**: Only restricted callers that relied on `403` to distinguish "exists but
+  forbidden" from "missing" are affected; they must treat `404` as "missing or invisible".
+  Unrestricted keys, root/`ADMIN`, and deployments with authentication disabled are unchanged.
+- **Gate result**: These operations have always declared `200/400/404/500`; `403` was never
+  in the OpenAPI baseline, so the shape gate reports PASS. The comparator does detect this
+  kind of change: a baseline with `403` against an implementation that only returns `404`
+  reports "response code removed" (breaking). This is a runtime semantic tightening, recorded
+  as an explicit acceptance rather than a baseline update.
+- **Regression evidence**: `DocumentAclControllerTest.restrictedKeyGets404ForDocumentInAnotherCollection`,
+  `CollectionAclControllerTest.restrictedKeyGets404ForAnotherCollection`; the `/v3/api-docs`
+  of a local demo instance compares cleanly against the baseline.
+
 ## Local Usage
 
 ```bash

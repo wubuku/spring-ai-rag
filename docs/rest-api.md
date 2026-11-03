@@ -2108,6 +2108,10 @@ does not own the document's Collection, the response is the same `404` as a
 missing document (never `403` or `200`), so `documentId` probing cannot reveal
 other Collections.
 
+**Compatibility**: Restricted callers may previously have received `403`; they must now
+treat `404` as "missing or invisible". Unrestricted callers and deployments with
+authentication disabled are unchanged. See [API compatibility](api-compatibility.md#explicitly-accepted-semantic-changes).
+
 ---
 
 ### `GET /api/v1/rag/documents/{id}/chunks/preview`
@@ -2910,6 +2914,9 @@ OpenAPI:
 They have the same ACL, immutability, soft-delete, and target-key rules as the
 preferred routes. For a restricted key, `GET /{id}` returns `404` for an
 invisible ID, matching a missing ID and blocking numeric-ID enumeration.
+Restricted callers may previously have received `403`; they must now treat
+`404` as "missing or invisible". Unrestricted callers and deployments with
+authentication disabled are unchanged.
 
 ---
 

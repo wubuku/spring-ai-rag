@@ -67,18 +67,14 @@ describe('useFileUpload', () => {
       useFileUpload({ onProgress: vi.fn(), onComplete: vi.fn(), onError: vi.fn() })
     );
 
-    const dt = new DataTransfer();
-    dt.items.add(new File(['hello'], 'test.txt', { type: 'text/plain' }));
-
-    let isUploadingDuringUpload = false;
-    act(() => {
-      result.current.uploadFiles(dt.files);
-      isUploadingDuringUpload = result.current.isUploading;
-      // Don't await - we just want to check the state DURING the upload
+    await act(async () => {
+      void result.current.uploadFiles(oneFile());
+      // Don't await the upload itself - just let React flush the state it set
+      // before the hanging fetch.
+      await Promise.resolve();
     });
 
-    // At this point, isUploading should be true (or already false if fetch hung)
-    expect(typeof isUploadingDuringUpload).toBe('boolean');
+    expect(result.current.isUploading).toBe(true);
     fetchSpy.mockRestore();
   });
 
@@ -334,6 +330,255 @@ describe('useFileUpload success, failure and fallback branches', () => {
       vi.unstubAllGlobals();
       fetchSpy.mockRestore();
     }
+  });
+
+  it('clears a completed batch back to an empty list', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response('{}', { status: 200 }),
+    );
+    const { result } = renderHook(() => useFileUpload({}));
+
+    await act(async () => {
+      await result.current.uploadFiles(oneFile());
+    });
+    expect(result.current.uploads).toHaveLength(1);
+
+    act(() => {
+      result.current.clearUploads();
+    });
+
+    expect(result.current.uploads).toEqual([]);
+    fetchSpy.mockRestore();
+  });
+
+  it('only reports progress for the file names in the current batch', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response('{}', { status: 200 }))
+      .mockImplementation(() => new Promise(() => {}));
+    const onProgress = vi.fn();
+    const { result } = renderHook(() => useFileUpload({ onProgress }));
+
+    await act(async () => {
+      await result.current.uploadFiles(oneFile('first.txt'));
+    });
+    onProgress.mockClear();
+
+    act(() => {
+      void result.current.uploadFiles(oneFile('second.txt'));
+    });
+
+    // updateUpload 的闭包里仍是上一批的 uploads，second.txt 不在其中，
+    // 所以不能凭空回调一个进度。
+    expect(onProgress).not.toHaveBeenCalled();
+    fetchSpy.mockRestore();
+  });
+
+  it('puts every selected file into the multipart body under files', async () => {
+    const first = new File(['a'], 'a.txt', { type: 'text/plain' });
+    const second = new File(['b'], 'b.txt', { type: 'text/plain' });
+    const files = {
+      0: first,
+      1: second,
+      length: 2,
+      item: (index: number) => [first, second][index] ?? null,
+      [Symbol.iterator]: function* () {
+        yield first;
+        yield second;
+      },
+    } as unknown as FileList;
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response('{}', { status: 200 }),
+    );
+    const { result } = renderHook(() => useFileUpload({}));
+
+    await act(async () => {
+      await result.current.uploadFiles(files);
+    });
+
+    const body = fetchSpy.mock.calls[0][1]?.body as FormData;
+    expect(body.getAll('files')).toEqual([first, second]);
+    expect(result.current.uploads.map(upload => upload.fileName))
+      .toEqual(['a.txt', 'b.txt']);
+    fetchSpy.mockRestore();
+  });
+
+  it('surfaces the backend message field when detail is absent', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ message: 'Unsupported type' }), { status: 400 }),
+    );
+    const { result } = renderHook(() => useFileUpload({}));
+
+    await act(async () => {
+      await result.current.uploadFiles(oneFile());
+    });
+
+    expect(result.current.uploads[0].error).toBe('failures.clientRequest Unsupported type');
+    fetchSpy.mockRestore();
+  });
+
+  it('prefers message over a non-string detail', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ detail: 42, message: 'Fallback message' }), { status: 400 }),
+    );
+    const { result } = renderHook(() => useFileUpload({}));
+
+    await act(async () => {
+      await result.current.uploadFiles(oneFile());
+    });
+
+    expect(result.current.uploads[0].error).toBe('failures.clientRequest Fallback message');
+    fetchSpy.mockRestore();
+  });
+
+  it('suppresses a bare status reason but keeps one with context', async () => {
+    const bare = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(JSON.stringify({ detail: 'HTTP 400' }), { status: 400 }),
+    );
+    const { result } = renderHook(() => useFileUpload({}));
+
+    await act(async () => {
+      await result.current.uploadFiles(oneFile());
+    });
+    expect(result.current.uploads[0].error).toBe('failures.clientRequest');
+    bare.mockRestore();
+
+    const withContext = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(JSON.stringify({ detail: 'HTTP 400 from the proxy' }), { status: 400 }),
+    );
+    await act(async () => {
+      await result.current.uploadFiles(oneFile());
+    });
+    expect(result.current.uploads[0].error)
+      .toBe('failures.clientRequest HTTP 400 from the proxy');
+    withContext.mockRestore();
+
+    const prefixed = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(JSON.stringify({ detail: 'Gateway replied HTTP 400' }), { status: 400 }),
+    );
+    await act(async () => {
+      await result.current.uploadFiles(oneFile());
+    });
+    expect(result.current.uploads[0].error)
+      .toBe('failures.clientRequest Gateway replied HTTP 400');
+    prefixed.mockRestore();
+  });
+
+  it('drops non-string error details and bare HTTP status messages', async () => {
+    const noDetail = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(JSON.stringify({ detail: 42, message: { text: 'nope' } }), { status: 400 }),
+    );
+    const { result } = renderHook(() => useFileUpload({}));
+
+    await act(async () => {
+      await result.current.uploadFiles(oneFile());
+    });
+    expect(result.current.uploads[0].error).toBe('failures.clientRequest');
+    noDetail.mockRestore();
+
+    const bareStatus = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(JSON.stringify({ detail: 'HTTP 503' }), { status: 503 }),
+    );
+    await act(async () => {
+      await result.current.uploadFiles(oneFile());
+    });
+    expect(result.current.uploads[0].error).toBe('failures.dependencyUnavailable');
+    bareStatus.mockRestore();
+
+    const statusWithContext = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(JSON.stringify({ detail: 'HTTP 503 from the proxy' }), { status: 503 }),
+    );
+    await act(async () => {
+      await result.current.uploadFiles(oneFile());
+    });
+    // 上游故障原文默认不展示，但带上下文的业务细节仍是可行动信息。
+    expect(result.current.uploads[0].error).toBe('failures.dependencyUnavailable');
+    statusWithContext.mockRestore();
+  });
+
+  it('falls back to the status when the response has no headers object', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: false,
+      status: 502,
+      json: async () => ({}),
+    } as Response);
+    const { result } = renderHook(() => useFileUpload({}));
+
+    await act(async () => {
+      await result.current.uploadFiles(oneFile());
+    });
+
+    expect(result.current.uploads[0].error).toBe('failures.dependencyUnavailable');
+    fetchSpy.mockRestore();
+  });
+
+  it('falls back to the timestamp key when randomUUID is unavailable', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response('{}', { status: 200 }),
+    );
+    vi.stubGlobal('crypto', {});
+    try {
+      const { result } = renderHook(() => useFileUpload({}));
+      await act(async () => {
+        await result.current.uploadFiles(oneFile());
+      });
+      expect(fetchSpy).toHaveBeenCalledWith(
+        '/api/v1/rag/documents/upload',
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            'Idempotency-Key': expect.stringMatching(/^\d+-[0-9a-f]+$/),
+          }),
+        }),
+      );
+    } finally {
+      vi.unstubAllGlobals();
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it('completes without requiring an onComplete callback', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response('{}', { status: 200 }),
+    );
+    const { result } = renderHook(() => useFileUpload({}));
+
+    await act(async () => {
+      await result.current.uploadFiles(oneFile());
+    });
+
+    expect(result.current.uploads[0]).toMatchObject({ status: 'completed', progress: 100 });
+    fetchSpy.mockRestore();
+  });
+
+  it('treats only a real DOMException as a cancelled upload', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockRejectedValue(
+      Object.assign(new Error('Aborted'), { name: 'AbortError' }),
+    );
+    const onError = vi.fn();
+    const { result } = renderHook(() => useFileUpload({ onError }));
+
+    await act(async () => {
+      await result.current.uploadFiles(oneFile());
+    });
+
+    expect(result.current.uploads[0].error).toBe('documents.uploadFailed');
+    expect(onError).toHaveBeenCalledWith('test.txt', 'documents.uploadFailed');
+    fetchSpy.mockRestore();
+
+    const otherDomException = vi.spyOn(globalThis, 'fetch').mockRejectedValue(
+      new DOMException('Other failure', 'NetworkError'),
+    );
+    const { result: otherResult } = renderHook(() => useFileUpload({}));
+    await act(async () => {
+      await otherResult.current.uploadFiles(oneFile());
+    });
+    expect(otherResult.current.uploads[0].error).toBe('documents.uploadFailed');
+    otherDomException.mockRestore();
+  });
+
+  it('ignores a cancellation when no upload is in flight', () => {
+    const { result } = renderHook(() => useFileUpload({}));
+    expect(() => result.current.cancelUpload()).not.toThrow();
+    expect(result.current.isUploading).toBe(false);
   });
 
   it('re-emits progress callbacks for known uploads on a second run', async () => {

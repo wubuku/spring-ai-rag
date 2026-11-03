@@ -119,6 +119,14 @@ function selfTest() {
   delete removedResponse.paths['/items'].get.responses[200];
   cases.push(['删除响应码算破坏', removedResponse, true]);
 
+  // 403 → 404：新增 404 是允许的，但删除基线声明过的 403 仍然是破坏。
+  const baselineWith403 = clone(baseline);
+  baselineWith403.paths['/items'].get.responses[403] = { content: null };
+  const replaced403 = clone(baselineWith403);
+  delete replaced403.paths['/items'].get.responses[403];
+  replaced403.paths['/items'].get.responses[404] = { content: null };
+  cases.push(['响应码 403 被 404 替换算破坏', replaced403, true, baselineWith403]);
+
   const removedEnum = clone(baseline);
   removedEnum.paths['/items'].get.parameters[1].schema.enum = ['fast'];
   cases.push(['删除枚举值算破坏', removedEnum, true]);
@@ -128,8 +136,8 @@ function selfTest() {
   cases.push(['参数变必填算破坏', relaxedParameter, true]);
 
   let failures = 0;
-  for (const [label, current, breaking] of cases) {
-    const findings = compareSpecs(baseline, current);
+  for (const [label, current, breaking, caseBaseline] of cases) {
+    const findings = compareSpecs(caseBaseline ?? baseline, current);
     const ok = breaking ? findings.length > 0 : findings.length === 0;
     console.log(`${ok ? 'PASS' : 'FAIL'} ${label}（findings=${findings.length}）`);
     if (!ok) {

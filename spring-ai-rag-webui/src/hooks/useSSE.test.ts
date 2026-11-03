@@ -1149,3 +1149,454 @@ describe('useChatSSE retry deadline exhaustion and tail retry', () => {
     );
   });
 });
+
+describe('useChatSSE protocol guards', () => {
+  const TURN = '55555555-5555-4555-8555-555555555555';
+  let mockFetch: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    clearCredential();
+    mockFetch = vi.fn();
+    vi.stubGlobal('fetch', mockFetch);
+  });
+
+  afterEach(() => {
+    clearCredential();
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  const stream = (chunks: string[], turnId = TURN) => ({
+    ok: true,
+    status: 200,
+    headers: new Headers({ 'X-RAG-Turn-Id': turnId }),
+    body: new ReadableStream({
+      start(controller) {
+        chunks.forEach(chunk => controller.enqueue(new TextEncoder().encode(chunk)));
+        controller.close();
+      },
+    }),
+  });
+
+  const done = (turnId = TURN) =>
+    `event: done\ndata: {"status":"complete","turnId":"${turnId}"}\n\n`;
+
+  it('honors the exact Retry-After deadline before the next attempt', async () => {
+    vi.useFakeTimers();
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 429,
+        headers: new Headers({ 'Retry-After': '2' }),
+      })
+      .mockResolvedValueOnce(stream([done()]));
+    const { result } = renderHook(() => useChatSSE({}));
+
+    let sendPromise!: Promise<void>;
+    act(() => {
+      sendPromise = Promise.resolve(result.current.send('Hello'));
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_999);
+    });
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+    });
+    await act(async () => {
+      await sendPromise;
+    });
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('retries immediately when Retry-After is not finite', async () => {
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 429,
+        headers: new Headers({ 'Retry-After': 'Infinity' }),
+      })
+      .mockResolvedValueOnce(stream([done()]));
+    const { result } = renderHook(() => useChatSSE({}));
+
+    await act(async () => {
+      result.current.send('Hello');
+    });
+
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('reports a missing body instead of silently completing', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'X-RAG-Turn-Id': TURN }),
+    });
+    const onError = vi.fn();
+    const { result } = renderHook(() => useChatSSE({ onError }));
+
+    await act(async () => {
+      result.current.send('Hello');
+    });
+
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(onError).toHaveBeenCalledWith(
+      'Chat stream response has no body',
+      expect.objectContaining({ message: 'Chat stream response has no body' }),
+    );
+  });
+
+  it('does not retry a response without a valid turn ID', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'X-RAG-Turn-Id': 'not-a-uuid' }),
+      body: new ReadableStream({ start(controller) { controller.close(); } }),
+    });
+    const onError = vi.fn();
+    const onDone = vi.fn();
+    const { result } = renderHook(() => useChatSSE({ onError, onDone }));
+
+    await act(async () => {
+      result.current.send('Hello');
+    });
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(onDone).not.toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledWith(
+      'Chat response did not provide a valid turn ID',
+      expect.objectContaining({ message: 'Chat response did not provide a valid turn ID' }),
+    );
+  });
+
+  it('rejects a turn ID with leading or trailing characters', async () => {
+    const onError = vi.fn();
+    for (const turn of [`${TURN}z`, `z${TURN}`]) {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'X-RAG-Turn-Id': turn }),
+        body: new ReadableStream({ start(controller) { controller.close(); } }),
+      });
+      const { result } = renderHook(() => useChatSSE({ onError }));
+      await act(async () => {
+        result.current.send('Hello');
+      });
+    }
+
+    expect(onError).toHaveBeenCalledTimes(2);
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('claims the turn only once when a body-less attempt is retried', async () => {
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'X-RAG-Turn-Id': TURN }),
+      })
+      .mockResolvedValueOnce(stream([done()]));
+    const onTurnClaimed = vi.fn();
+    const { result } = renderHook(() => useChatSSE({ onTurnClaimed }));
+
+    await act(async () => {
+      result.current.send('Hello');
+    });
+
+    expect(onTurnClaimed).toHaveBeenCalledTimes(1);
+    expect(onTurnClaimed).toHaveBeenCalledWith(TURN);
+  });
+
+  it('does not surface an error when close happens before the stream settles', async () => {
+    mockFetch.mockImplementation(() => new Promise(() => {}));
+    const onError = vi.fn();
+    const { result } = renderHook(() => useChatSSE({ onError }));
+
+    act(() => {
+      void result.current.send('Hello');
+      result.current.close();
+    });
+
+    expect(onError).not.toHaveBeenCalled();
+    expect(result.current.isConnected).toBe(false);
+  });
+
+  it('stops dispatching events after close moves the generation on', async () => {
+    let stop: () => void = () => {};
+    const onChunk = vi.fn();
+    const onDone = vi.fn();
+    const { result } = renderHook(() => useChatSSE({
+      onChunk: content => {
+        onChunk(content);
+        stop();
+      },
+      onDone,
+    }));
+    stop = result.current.close;
+    mockFetch.mockResolvedValue(stream([
+      'event: content\ndata: {"content":"first"}\n\n',
+      'event: content\ndata: {"content":"second"}\n\n',
+      done(),
+    ]));
+
+    await act(async () => {
+      result.current.send('Hello');
+    });
+
+    expect(onChunk).toHaveBeenCalledTimes(1);
+    expect(onDone).not.toHaveBeenCalled();
+  });
+
+  it('ignores empty content and malformed tool/source payloads', async () => {
+    mockFetch.mockResolvedValue(stream([
+      'event: content\ndata: {"content":""}\n\n',
+      'event: content\ndata: {"choices":[{"delta":{}}]}\n\n',
+      'event: tool_start\ndata: {"tool":42}\n\n',
+      'event: tool_result\ndata: {"tool":42}\n\n',
+      'event: sources\ndata: {"sources":"not-an-array"}\n\n',
+      'event: content\ndata: {"content":"real"}\n\n',
+      done(),
+    ]));
+    const onChunk = vi.fn();
+    const onToolStart = vi.fn();
+    const onToolResult = vi.fn();
+    const onSources = vi.fn();
+    const onDone = vi.fn();
+    const { result } = renderHook(() => useChatSSE({
+      onChunk, onToolStart, onToolResult, onSources, onDone,
+    }));
+
+    await act(async () => {
+      result.current.send('Hello');
+    });
+
+    expect(onChunk).toHaveBeenCalledTimes(1);
+    expect(onChunk).toHaveBeenCalledWith('real');
+    expect(onToolStart).not.toHaveBeenCalled();
+    expect(onToolResult).not.toHaveBeenCalled();
+    expect(onSources).not.toHaveBeenCalled();
+    expect(onDone).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects a done event that loses the claimed turn ID', async () => {
+    mockFetch.mockResolvedValue(stream([
+      'event: done\ndata: {"status":"complete"}\n\n',
+    ]));
+    const onDone = vi.fn();
+    const onError = vi.fn();
+    const { result } = renderHook(() => useChatSSE({ onDone, onError }));
+
+    await act(async () => {
+      result.current.send('Hello');
+    });
+
+    expect(onDone).not.toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledWith(
+      'Chat turn identity changed during replay',
+      expect.objectContaining({ message: 'Chat turn identity changed during replay' }),
+    );
+  });
+
+  it('prefers message over detail and keeps flat failure details', async () => {
+    mockFetch.mockResolvedValue({
+      ok: false,
+      status: 400,
+      headers: new Headers(),
+      json: async () => ({
+        message: 'Bad request',
+        failureDetails: { reason: 'UPSTREAM_TIMEOUT', retryable: false },
+      }),
+    });
+    const onError = vi.fn();
+    const { result } = renderHook(() => useChatSSE({ onError }));
+
+    await act(async () => {
+      result.current.send('Hello');
+    });
+
+    expect(onError).toHaveBeenCalledWith(
+      'Bad request',
+      expect.objectContaining({
+        message: 'Bad request',
+        failureClass: 'CLIENT_REQUEST',
+        reason: 'UPSTREAM_TIMEOUT',
+        retryable: false,
+      }),
+    );
+  });
+
+  it('drops non-string failure details from a rejected response', async () => {
+    mockFetch.mockResolvedValue({
+      ok: false,
+      status: 400,
+      headers: new Headers(),
+      json: async () => ({
+        detail: 'Provider down',
+        failureClass: 'DEPENDENCY_UNAVAILABLE',
+        failureDetails: { reason: 42, retryable: 'yes' },
+      }),
+    });
+    const onError = vi.fn();
+    const { result } = renderHook(() => useChatSSE({ onError }));
+
+    await act(async () => {
+      result.current.send('Hello');
+    });
+
+    const event = onError.mock.calls[0][1];
+    // 非字符串 reason 被丢弃；非布尔 retryable 不能原样透传，
+    // 只能由 failureClass 推导（DEPENDENCY_UNAVAILABLE → true）。
+    expect(event.reason).toBeUndefined();
+    expect(event.retryable).toBe(true);
+    expect(event.failureClass).toBe('DEPENDENCY_UNAVAILABLE');
+  });
+
+  it('uses a flat message and nested code for error events', async () => {
+    mockFetch.mockResolvedValue(stream([
+      'event: error\ndata: {"message":"flat","error":{"message":"nested","code":"E_NESTED"}}\n\n',
+    ]));
+    const onError = vi.fn();
+    const { result } = renderHook(() => useChatSSE({ onError }));
+
+    await act(async () => {
+      result.current.send('Hello');
+    });
+
+    expect(onError).toHaveBeenCalledWith(
+      'nested',
+      expect.objectContaining({ message: 'nested', code: 'E_NESTED' }),
+    );
+  });
+
+  it('falls back to a generic error message when the payload has none', async () => {
+    mockFetch.mockResolvedValue(stream([
+      'event: error\ndata: {"error":{}}\n\n',
+    ]));
+    const onError = vi.fn();
+    const { result } = renderHook(() => useChatSSE({ onError }));
+
+    await act(async () => {
+      result.current.send('Hello');
+    });
+
+    expect(onError).toHaveBeenCalledWith(
+      'Chat stream failed',
+      expect.objectContaining({ message: 'Chat stream failed' }),
+    );
+  });
+
+  it('ignores null payloads for every event type without breaking the stream', async () => {
+    mockFetch.mockResolvedValue(stream([
+      'event: content\ndata: null\n\n',
+      'event: tool_start\ndata: null\n\n',
+      'event: tool_result\ndata: null\n\n',
+      'event: sources\ndata: null\n\n',
+      'event: done\ndata: null\n\n',
+      'event: content\ndata: {"content":"real"}\n\n',
+      done(),
+    ]));
+    const onChunk = vi.fn();
+    const onToolStart = vi.fn();
+    const onToolResult = vi.fn();
+    const onSources = vi.fn();
+    const onError = vi.fn();
+    const onDone = vi.fn();
+    const { result } = renderHook(() => useChatSSE({
+      onChunk, onToolStart, onToolResult, onSources, onError, onDone,
+    }));
+
+    await act(async () => {
+      result.current.send('Hello');
+    });
+
+    expect(onError).not.toHaveBeenCalled();
+    expect(onChunk).toHaveBeenCalledTimes(1);
+    expect(onChunk).toHaveBeenCalledWith('real');
+    expect(onToolStart).not.toHaveBeenCalled();
+    expect(onToolResult).not.toHaveBeenCalled();
+    expect(onSources).not.toHaveBeenCalled();
+    expect(onDone).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries when the done sequence is not a positive integer', async () => {
+    mockFetch
+      .mockResolvedValueOnce(stream([
+        'event: content\ndata: {"sequence":1,"content":"Hello"}\n\n',
+        'event: done\ndata: {"sequence":1.5,"status":"complete"}\n\n',
+      ]))
+      .mockResolvedValueOnce(stream([
+        'event: content\ndata: {"sequence":1,"content":"Hello"}\n\n',
+        done(),
+      ]));
+    const onDone = vi.fn();
+    const onRetry = vi.fn();
+    const { result } = renderHook(() => useChatSSE({ onDone, onRetry }));
+
+    await act(async () => {
+      result.current.send('Hello');
+    });
+
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(onRetry).toHaveBeenCalledTimes(1);
+    expect(onDone).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a data value after the colon when it has no separator', async () => {
+    mockFetch.mockResolvedValue(stream([
+      'data:{"content":" leading and trailing "}\n\n',
+      done(),
+    ]));
+    const onChunk = vi.fn();
+    const { result } = renderHook(() => useChatSSE({ onChunk }));
+
+    await act(async () => {
+      result.current.send('Hello');
+    });
+
+    expect(onChunk).toHaveBeenCalledWith(' leading and trailing ');
+  });
+
+  it('trims whitespace around a structured event name', async () => {
+    mockFetch.mockResolvedValue(stream([
+      'event: done \ndata: {"status":"complete","turnId":"' + TURN + '"}\n\n',
+    ]));
+    const onDone = vi.fn();
+    const onRetry = vi.fn();
+    const { result } = renderHook(() => useChatSSE({ onDone, onRetry }));
+
+    await act(async () => {
+      result.current.send('Hello');
+    });
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(onDone).toHaveBeenCalledTimes(1);
+    expect(onRetry).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the HTTP status when the error JSON is null', async () => {
+    mockFetch.mockResolvedValue({
+      ok: false,
+      status: 400,
+      headers: new Headers(),
+      json: async () => null,
+    });
+    const onError = vi.fn();
+    const { result } = renderHook(() => useChatSSE({ onError }));
+
+    await act(async () => {
+      result.current.send('Hello');
+    });
+
+    expect(onError).toHaveBeenCalledWith(
+      'HTTP 400',
+      expect.objectContaining({ message: 'HTTP 400', failureClass: 'CLIENT_REQUEST' }),
+    );
+  });
+});
