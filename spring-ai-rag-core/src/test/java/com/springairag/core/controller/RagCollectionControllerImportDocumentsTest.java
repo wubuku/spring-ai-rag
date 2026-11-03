@@ -65,7 +65,8 @@ class RagCollectionControllerImportDocumentsTest {
                 auditLogService,
                 documentMutationService,
                 mock(CollectionProvisioningService.class),
-                new ProvisioningOwnerResolver());
+                new ProvisioningOwnerResolver(),
+                null);
         when(collectionService.createCollection(any()))
                 .thenReturn(collection(1L, "kb"));
     }

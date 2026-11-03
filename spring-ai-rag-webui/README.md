@@ -233,7 +233,9 @@ npm run test:e2e:mock  # Playwright Mock suite (no backend; this is what CI runs
 | `npm run test:e2e` | **Yes**, Spring Boot at `http://localhost:8081` (or the `BASE_URL` you set) | Runs the same non `-real` specs against a live instance. Without a backend you only get connection refusals — not page defects |
 | `npm run test:e2e -- e2e/*-real.spec.ts` | Yes, plus real model credentials | Real-path acceptance; follow the `-real` runbook in [testing-guide](../docs/testing-guide.md) |
 
-Install the browser once on a new machine: `npx playwright install chromium`.
+Install browsers once on a new machine:
+`npx playwright install chromium firefox webkit`. Chromium runs every spec;
+Firefox and WebKit run the safety suite (accessibility, keyboard, responsive).
 
 ## License
 

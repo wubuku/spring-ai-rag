@@ -43,7 +43,8 @@ class RagCollectionControllerCreateImportTailTest {
                 null,
                 mock(DocumentMutationService.class),
                 mock(CollectionProvisioningService.class),
-                new ProvisioningOwnerResolver());
+                new ProvisioningOwnerResolver(),
+                null);
     }
 
     private CollectionRequest createRequest() {

@@ -2852,6 +2852,21 @@ GET /api/v1/rag/collections/by-key/export?collectionKey=customer-42%3Amanual%3Av
 }
 ```
 
+Export is a **streaming response**: the server reads batches of 200 rows with a
+`(collection_id, id)` cursor and writes them as it goes, so memory does not grow
+linearly with `documents`. The payload shape is unchanged, so existing clients need
+no update. Auxiliary headers:
+
+| Header | Meaning |
+|--------|---------|
+| `X-Rag-Export-Batch-Size` | Always `200` |
+| `X-Rag-Export-Documents` | Document count measured before streaming (snapshot) |
+| `X-Rag-Export-Planned-Batches` | `ceil(documentCount / 200)` |
+
+Both counts are start-time snapshots. If documents are deleted concurrently, the
+emitted `documents` array can be slightly shorter, but the response is always valid
+JSON.
+
 ---
 
 ### `POST /api/v1/rag/collections/import`

@@ -10,6 +10,7 @@ import com.springairag.core.repository.RagCollectionRepository;
 import com.springairag.core.repository.RagDocumentRepository;
 import com.springairag.core.security.ProvisioningOwnerResolver;
 import com.springairag.core.service.AuditLogService;
+import com.springairag.core.service.CollectionExportService;
 import com.springairag.core.service.CollectionIdentityResolver;
 import com.springairag.core.service.CollectionProvisioningService;
 import com.springairag.core.service.CollectionPurgeService;
@@ -87,6 +88,10 @@ class CollectionPurgeControllerWebTest {
 
     @MockitoBean
     private CollectionPurgeService purgeService;
+
+    /** 流式导出服务是构造器必填依赖；Web 切片只关心控制器映射。 */
+    @MockitoBean
+    private CollectionExportService exportService;
 
     @TestConfiguration
     static class RagPropertiesTestConfig {

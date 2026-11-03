@@ -2488,6 +2488,19 @@ GET /api/v1/rag/collections/by-key/export?collectionKey=customer-42%3Amanual%3Av
 }
 ```
 
+导出是**流式响应**：服务端按 `(collection_id, id)` 游标每 200 条分批读取并边写边发，
+内存占用不随 `documents` 行数线性增长。响应结构与上例一致，客户端无需改动。
+辅助响应头：
+
+| Header | 含义 |
+|--------|------|
+| `X-Rag-Export-Batch-Size` | 固定 `200` |
+| `X-Rag-Export-Documents` | 流开始前统计的文档数（快照） |
+| `X-Rag-Export-Planned-Batches` | `ceil(documentCount / 200)` |
+
+`documentCount` 与 `X-Rag-Export-Documents` 都是开始时刻的快照；导出期间并发删除
+文档时，实际写出的 `documents` 可能略少，但响应始终是完整合法的 JSON。
+
 ---
 
 ### `POST /api/v1/rag/collections/import`

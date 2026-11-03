@@ -215,6 +215,80 @@ class DocumentProcessingRunServiceTest {
     }
 
     @Test
+    void summariesForDocumentsUsesBatchQueriesInsteadOfPerDocumentLookups() {
+        Context context = context();
+        RagDocument first = document(42L, CONTENT_HASH, true);
+        RagDocument second = document(43L, CONTENT_HASH, true);
+        DocumentProcessingRun failed = runForDocument(42L,
+                DocumentProcessingRunStatus.FAILED, CONTENT_HASH, false);
+        DocumentProcessingRun completed = runForDocument(43L,
+                DocumentProcessingRunStatus.COMPLETED, CONTENT_HASH, false);
+        when(context.jobRepository.findCurrentGenerations(
+                List.of(42L, 43L), PROFILE_ID))
+                .thenReturn(Map.of(42L, 4L, 43L, 5L));
+        when(context.repository.findExactBatch(any(), eq(PROFILE_ID)))
+                .thenReturn(List.of(failed, completed));
+        when(context.repository.findLatestPerDocument(
+                List.of(42L, 43L), PROFILE_ID)).thenReturn(Map.of());
+        when(context.jobRepository.findCurrentActiveBatch(
+                any(), eq(PROFILE_ID))).thenReturn(Map.of());
+
+        Map<Long, DocumentProcessingSummary> summaries =
+                context.service.summariesForDocuments(List.of(first, second));
+
+        assertEquals(2, summaries.size());
+        assertEquals(DocumentProcessingRunStatus.FAILED,
+                summaries.get(42L).status());
+        assertEquals(DocumentProcessingRunStatus.COMPLETED,
+                summaries.get(43L).status());
+        verify(context.repository, never()).findCurrent(
+                anyLong(), anyLong(), anyLong(), anyString(), anyString());
+        verify(context.repository, never()).findByDocumentLatest(
+                anyLong(), anyLong());
+        verify(context.jobRepository, never()).findCurrentGeneration(
+                anyLong(), anyLong());
+        verify(context.jobRepository, never()).findCurrentActive(
+                anyLong(), anyLong(), any(), any(), any());
+    }
+
+    @Test
+    void summariesForDocumentsFailsClosedWhenBatchQueryFails() {
+        Context context = context();
+        RagDocument document = document(42L, CONTENT_HASH, true);
+        when(context.jobRepository.findCurrentGenerations(
+                List.of(42L), PROFILE_ID)).thenReturn(Map.of(42L, 4L));
+        when(context.repository.findExactBatch(any(), eq(PROFILE_ID)))
+                .thenThrow(new IllegalStateException("database unavailable"));
+
+        assertTrue(context.service.summariesForDocuments(List.of(document))
+                .isEmpty());
+    }
+
+    @Test
+    void summariesForDocumentsSkipsDisabledDocuments() {
+        Context context = context();
+        RagDocument disabled = document(42L, CONTENT_HASH, false);
+        RagDocument enabled = document(43L, CONTENT_HASH, true);
+        DocumentProcessingRun completed = runForDocument(43L,
+                DocumentProcessingRunStatus.COMPLETED, CONTENT_HASH, false);
+        when(context.jobRepository.findCurrentGenerations(
+                List.of(43L), PROFILE_ID)).thenReturn(Map.of(43L, 4L));
+        when(context.repository.findExactBatch(any(), eq(PROFILE_ID)))
+                .thenReturn(List.of(completed));
+        when(context.repository.findLatestPerDocument(
+                List.of(43L), PROFILE_ID)).thenReturn(Map.of());
+        when(context.jobRepository.findCurrentActiveBatch(
+                any(), eq(PROFILE_ID))).thenReturn(Map.of());
+
+        Map<Long, DocumentProcessingSummary> summaries =
+                context.service.summariesForDocuments(List.of(disabled, enabled));
+
+        assertEquals(1, summaries.size());
+        assertNull(summaries.get(42L));
+        assertEquals(completed.id(), summaries.get(43L).runId());
+    }
+
+    @Test
     void summaryFailsClosedForDisabledDocumentsProviderErrorsAndMissingRuns() {
         Context context = context();
         assertNull(context.service.summaryForDocument(document(CONTENT_HASH, false)));
@@ -638,8 +712,12 @@ class DocumentProcessingRunServiceTest {
     }
 
     private RagDocument document(String contentHash, boolean enabled) {
+        return document(DOCUMENT_ID, contentHash, enabled);
+    }
+
+    private RagDocument document(long id, String contentHash, boolean enabled) {
         RagDocument document = new RagDocument();
-        document.setId(DOCUMENT_ID);
+        document.setId(id);
         document.setCollectionId(91L);
         document.setVersion(2L);
         document.setContentHash(contentHash);
@@ -689,6 +767,30 @@ class DocumentProcessingRunServiceTest {
                 DocumentProcessingRunOrigin.API, ChatPrincipal.AUTH_DISABLED_ID,
                 supersedesRunId, legacyBridge, NOW.minusMinutes(2), startedAt,
                 finishedAt, NOW);
+    }
+
+    private DocumentProcessingRun runForDocument(
+            long documentId,
+            DocumentProcessingRunStatus status,
+            String contentHash,
+            boolean legacyBridge) {
+        return new DocumentProcessingRun(
+                UUID.randomUUID(), documentId, PROFILE_ID, UUID.randomUUID(),
+                4L, 2L, contentHash, "TEXT", CHUNKER_VERSION,
+                1, 2, 3, status,
+                status == DocumentProcessingRunStatus.RUNNING ? "EMBEDDING" : null,
+                null, NOW, null, null, null,
+                status == DocumentProcessingRunStatus.FAILED ? "MODEL_ERROR" : null,
+                status == DocumentProcessingRunStatus.FAILED
+                        ? "temporary failure" : null,
+                DocumentProcessingRunOrigin.API, ChatPrincipal.AUTH_DISABLED_ID,
+                null, legacyBridge, NOW.minusMinutes(2),
+                status == DocumentProcessingRunStatus.RUNNING
+                        ? NOW.minusMinutes(1) : null,
+                status == DocumentProcessingRunStatus.COMPLETED
+                        || status == DocumentProcessingRunStatus.FAILED
+                        ? NOW : null,
+                NOW);
     }
 
     private EmbeddingJob job(UUID id, EmbeddingJobStatus status) {

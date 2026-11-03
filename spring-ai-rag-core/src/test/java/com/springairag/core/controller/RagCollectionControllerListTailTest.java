@@ -52,7 +52,8 @@ class RagCollectionControllerListTailTest {
                 mock(AuditLogService.class),
                 mock(DocumentMutationService.class),
                 mock(CollectionProvisioningService.class),
-                new ProvisioningOwnerResolver());
+                new ProvisioningOwnerResolver(),
+                null);
         when(collectionRepository.findByIdAndDeletedFalse(1L))
                 .thenReturn(Optional.of(collection(1L)));
         // 无请求上下文时 currentPolicy 为 null → 视为 unrestricted。
@@ -154,7 +155,8 @@ class RagCollectionControllerListTailTest {
                 mock(AuditLogService.class),
                 mock(DocumentMutationService.class),
                 mock(CollectionProvisioningService.class),
-                new ProvisioningOwnerResolver());
+                new ProvisioningOwnerResolver(),
+                null);
         org.springframework.test.util.ReflectionTestUtils.setField(
                 controller, "identityResolver", resolver);
         when(resolver.mapKeys(List.of(1L))).thenReturn(java.util.Map.of(1L, "kb"));

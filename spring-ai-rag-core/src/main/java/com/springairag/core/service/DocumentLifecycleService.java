@@ -159,6 +159,10 @@ public class DocumentLifecycleService {
                                 snapshot.documentId(), snapshot));
             }
         }
+        Map<Long, com.springairag.api.dto.DocumentProcessingSummary> summaries =
+                processingRunService == null
+                        ? Map.of()
+                        : processingRunService.summariesForDocuments(documents);
         List<DocumentLifecycleResponse> responses =
                 new ArrayList<>(documents.size());
         for (RagDocument document : documents) {
@@ -174,7 +178,7 @@ public class DocumentLifecycleService {
                         .missing(document.getId());
             }
             responses.add(fromIntegrity(snapshot, profileKey(document),
-                    processingSummary(document)));
+                    summaries.get(document.getId())));
         }
         return responses;
     }

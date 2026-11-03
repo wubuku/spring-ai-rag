@@ -6,13 +6,15 @@
 
 ## 1. 验证口径
 
-- 语料：`scale-bench-1000`（1,000 文档 / 10,000 chunk）与 `scale-bench-2000`
-  （2,000 文档 / 20,000 chunk），加既有基础语料后共 **3,200 文档 / 31,000 向量**。
+- 语料：`scale-bench-1000` / `scale-bench-2000` / `scale-bench-3000` /
+  `scale-bench-5000`，单 Collection 最大 **5,000 文档 / 50,000 chunk**；
+  连同既有基础语料，本轮库内共约 **11.2k 文档 / 112k 向量**。
 - 向量：确定性假 embedding（1024 维，32 个归一化向量循环），不调用真实模型。
 - 环境：Apple M4 Pro / 64 GB，PostgreSQL 16.8 + pgvector 0.8.2。
 - 检索请求走真实 HTTP 入口；每次请求都包含一次 mock embedding 调用（约 30–50 ms，
   与数据量无关），因此绝对值主要由该固定开销构成，比较时看**比值**。
-- `requests=50`、`warmup=8`；p50 比 p95 更稳定，结论以 p50 为主、p95 作参考。
+- 放大验证用 `requests=10`、`warmup=2`（p95 只有 10 个样本，仅作参考）；上一轮
+  1k→2k 使用 `requests=50`、`warmup=8`。结论以 p50 与 SQL 执行计划为主。
 
 ## 2. 复现
 
@@ -30,8 +32,8 @@ python3 scripts/run-scale-benchmark.py --ack-write \
   --dsn 'postgresql://postgres:postgres@localhost:5432/spring_ai_rag_scale' \
   --base-url http://127.0.0.1:18095 \
   --api-key '32-ascii-chars-placeholder-key-000' \
-  --docs 1000 --scale-docs 2000 --chunks-per-doc 10 \
-  --requests 50 --warmup 8 --output /tmp/scale.json
+  --docs 3000 --scale-docs 5000 --chunks-per-doc 10 \
+  --requests 10 --warmup 2 --output /tmp/scale.json
 
 # 3) 只测导入吞吐（不测 HTTP）
 # 加 --skip-http；只测 TTL 可先停应用，再用 --seed-ttl-rows 10000
@@ -66,15 +68,20 @@ python3 scripts/run-scale-benchmark.py --ack-write \
 
 ### 3.3 检索延迟与退化曲线
 
-| 接口（p50 / p95，ms） | 1k 文档 | 2k 文档 | p50 比值 | 修复前 p50 |
-|----------------------|---------|---------|----------|------------|
-| 纯向量检索 | 52.5 / 118.9 | 59.2 / 90.1 | 1.13x | 255 → 451（1.77x） |
-| 混合检索 | 57.0 / 99.4 | 82.8 / 109.4 | 1.45x | 251 → 439（1.75x） |
-| 全文加权检索 | 58.7 / 90.0 | 80.0 / 109.1 | 1.36x | 244 → 446（1.83x） |
-| 文档列表（首页/深页） | 23.2 / 24.9 | 29.4 / 31.4 | 1.27x | 近似持平 |
-| Collection 列表 | 3.2 / 6.0 | 6.0 / 10.5 | 1.88x（绝对值小） | 近似持平 |
-| 导出（单 Collection） | 10.4 | 11.4 | 1.10x | 近似持平 |
-| 评估 | 10.3 | 5.2 | 0.50x | 近似持平 |
+| 接口（p50 / p95，ms） | 3k 文档（3 万 chunk） | 5k 文档（5 万 chunk） | p50 比值 |
+|----------------------|----------------------|----------------------|----------|
+| 纯向量检索 | 105.2 / 163.2 | 101.7 / 455.4 | 0.97x |
+| 混合检索 | 150.8 / 206.7 | 203.1 / 277.5 | 1.35x |
+| 全文加权检索 | 143.5 / 164.0 | 211.0 / 252.2 | 1.47x |
+| 文档列表（首页/深页） | 36.4 / 54.6 · 19.2 / 36.7 | 17.5 / 26.7 · 23.8 / 36.1 | 0.48x / 1.24x |
+| Collection 列表 | 7.1 / 11.4 | 5.5 / 14.8 | 0.78x（绝对值小） |
+| 流式导出 | 82.3 / 92.4 | 58.6 / 59.1 | 0.71x |
+| 评估 | 7.9 / 11.4 | 5.5 / 6.4 | 0.70x |
+
+1k→2k 的旧结果保留在 git 历史与本轮 3k→5k 的对照中：修复 HNSW 候选 CTE 后，
+p50 从 255→451 ms 的线性退化已消失。本轮 3k→5k（文档 1.67x）的 p50 全部
+低于 1.47x，导出与列表甚至随缓存/批量优化下降；纯向量 p95 的 455 ms 是
+10 个样本中的单点冷查询，p50 持平。
 
 **关键发现（已修复）**：原向量检索 SQL 把 `rag_embeddings`、新鲜度状态表和
 `rag_documents` 放在同一个 `ORDER BY <=> LIMIT` 查询里，规划器无法使用部分 HNSW
@@ -92,26 +99,74 @@ JOIN 和最终排序。同一数据量下 p50 稳定在 50–60 ms，×2 比值�
 改为一次 `GROUP BY collection_id` 查询。
 - 文档列表：原实现每篇文档各查一次 chunk 数、一次完整性快照；改为一次分组 count
 + 按 Profile 分组的一次 `inspectIds` 批量查询。
-- 仍存在的有界查询：处理运行摘要（processing summary）仍按文档逐条查，但页面大小
-固定（≤20），不会随语料增长；如需进一步压缩可后续批量。
+- 处理运行摘要：`summaryForDocument` 原按文档逐条查询（generation、当前 Run、
+  最新 Run、活动 job）。本轮新增 `summariesForDocuments`，按 Embedding Profile
+  分组后每页只做 **4 次批量查询**（`findCurrentGenerations` /
+  `findExactBatch` / `findLatestPerDocument` / `findCurrentActiveBatch`），
+  语义与单条读取一致。仍保留的逐条写入只有「无 Run 但有活动 job」时的
+  `ensureBridgeForJob`：数量受活动 job 限制，正常稳态为 0。
 
-### 3.5 TTL 清理
+### 3.5 流式导出（已改造）
+
+- 旧实现 `findAllByCollectionId` 把整个 Collection 读进内存再序列化，内存随
+  文档数线性增长，且响应开始前无法释放。
+- 新实现 `CollectionExportService` 用 **主键游标** `id > afterId ORDER BY id
+  LIMIT 200` 分批读取、边读边用 Jackson 写 JSON；输出结构与
+  `CollectionExportResponse` 完全一致，现有客户端无需改动。
+- 内存上界 = 单批 200 行 + 当前 JsonGenerator 缓冲，**与 Collection 总行数无关**。
+  `documentCount` 在流开始前由 `countByCollectionId` 取得，属于开始时刻的快照：
+  并发删除时实际写出可能略少，不会因此报错或无限循环。
+- 新增 Flyway `V72__document_export_keyset_index.sql`：
+  `(collection_id, id)` 复合索引。没有它时每批会沿主键扫描并丢弃不属于该
+  Collection 的行（实测首批 10 ms、丢弃 6,200 行）；有索引后后续批次
+  0.37 ms、只读 20 个 buffer。
+- 响应头（便于压测与运维断言）：
+  `X-Rag-Export-Batch-Size: 200`、`X-Rag-Export-Documents`、
+  `X-Rag-Export-Planned-Batches = ceil(documentCount / 200)`。
+- 压测结果：3k 文档 1.63 MB / 15 批，p50 82.3 ms；5k 文档 2.73 MB / 25 批，
+  p50 58.6 ms。`scripts/run-scale-benchmark.py` 的 `measure_export` 会把响应
+  **流式落盘**并断言分块数与 JSON 文档数；断言失败时脚本非零退出。
+
+### 3.6 TTL 清理
 
 - 10,000 行过期会话（100 个 session）：候选 session 查询 4.2 ms，分批 DELETE
 **287 ms**（约 29 µs/行）。
 - 清理按 session 批次（50）和行批次（500）推进，没有全表一次性删除；未观察到
 锁竞争或长事务。
 
+### 3.7 跨浏览器验证
+
+- `playwright.config.ts` 新增 `firefox` / `webkit` project，只跑安全相关套件
+  `accessibility.spec.ts`、`keyboard.spec.ts`、`responsive.spec.ts`；其余业务
+  spec 仍只跑 Chromium（依赖 Mock 时序，跨引擎收益低）。这是显式 `testMatch`，
+  不是静默跳过。
+- 三个引擎各 61 条，共 182 条通过。WebKit 唯一差异是「鼠标点击按钮不会让按钮
+  获得焦点」的平台默认行为；键盘用例改为先 `focus()` 再按 Enter，测的是真实
+  键盘路径，产品焦点策略未变。
+- Mock 页面导航从 `networkidle` 改为 `domcontentloaded`：后台轮询时
+  `networkidle` 可能永远不到达，三引擎并行会偶发超时；页面就绪由后续 URL /
+  元素断言保证。
+- WebKit 在单个进程内跑完 61 条安全套件时，约第 50 个 context 之后偶发整页导航
+  卡死（`goto` 超时，`browserContext.close` 也超时）；Chromium / Firefox 从未出现，
+  同一用例单独跑或 responsive 单独跑均通过。`openProtectedPage` 对 WebKit 增加
+  「换一个新 Page 重试一次」，能恢复部分场景；若整个 context 已卡死，则保留原始
+  错误交给 Playwright 测试级重试（CI `retries=2`）恢复，不掩盖首因。WebKit
+  project 的单次导航预算为 20s、用例超时 90s。
+- 结论：这是 Playwright + WebKit 的浏览器进程/导航稳定性边界，不是页面实现缺陷；
+  没有登记静默 skip，用例仍然执行，失败会以 flaky 形式显式出现在报告里。
+  若某环境无法启动 WebKit，应写显式 `test.skip` 与原因，并保留其他引擎的结果。
+
 ## 4. 容量边界
 
 | 维度 | 现状 | 边界与建议 |
 |------|------|-----------|
-| 已验证规模 | 3.2k 文档 / 31k 向量 | 脚本硬上限 5k 文档；更大规模未实测，结论不外推 |
+| 已验证规模 | 单 Collection 5k 文档 / 50k chunk；库内约 11.2k 文档 / 112k 向量 | 脚本硬上限 5k 文档；更大规模未实测，结论不外推 |
 | 写入吞吐 | 约 950 向量/秒（HNSW 在位） | 100k chunk ≈ 105 s 纯写入；批量导入需预留时间窗 |
 | 索引构建 | 31k 向量 4.7 s | 100k 向量预计约 16 s；启动等待上限 60 s，接近时需调大或异步预热 |
 | 检索 | p50 约 50–90 ms | 主要成本是 embedding 调用；SQL 部分已近常数。候选池上限 1000，过期向量过多时召回可能不足 |
-| 列表 | 页面固定 ≤20 行 | 已消除随数据量增长的 N+1；处理摘要仍为有界逐条查询 |
-| 导出 | `GET /rag/collections/by-key/export` 一次加载整个 Collection | **O(n) 内存/响应**，没有分页；大 Collection（数千文档或大正文）不适合在线导出 |
+| 列表 | 页面固定 ≤20 行 | 已消除随数据量增长的 N+1；处理摘要每页 4 次批量查询 |
+| 导出 | 流式，单批 200 行，响应头给出批次数 | 内存不随行数线性增长；受网络与客户端消费速度限制。超大 Collection 建议在低峰导出 |
+| 全文检索 | 关键词通道按 `ILIKE` 扫描 `rag_documents` | 5k 文档下 p50 约 210 ms；关键字查询的代价随集合大小增长，暂无 trigram 索引 |
 | 连接池 | 默认 max=10 | 高并发检索/导入会先耗尽连接；需按并发调大并压测 |
 | TTL 清理 | 1 万行 287 ms，分批 | 行数线性增长但批次有界；百万级建议缩短调度间隔而非单次放大批次 |
 

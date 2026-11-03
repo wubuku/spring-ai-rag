@@ -17,6 +17,7 @@ import com.springairag.core.repository.RagCollectionRepository;
 import com.springairag.core.repository.RagDocumentRepository;
 import com.springairag.core.security.ApiKeyCollectionAccess;
 import com.springairag.core.service.AuditLogService;
+import com.springairag.core.service.CollectionExportService;
 import com.springairag.core.service.CollectionProvisioningService;
 import com.springairag.core.service.RagCollectionService;
 import com.springairag.core.service.CollectionIdentityResolver;
@@ -27,6 +28,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.data.domain.*;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
@@ -50,6 +52,10 @@ class RagCollectionControllerTest {
     private AuditLogService auditLogService;
     private RagCollectionController controller;
     private DocumentMutationService documentMutationService;
+    private CollectionExportService exportService;
+    private final List<CollectionExportService.ExportRow> exportRows =
+            new ArrayList<>();
+    private com.fasterxml.jackson.databind.ObjectMapper exportMapper;
 
     @AfterEach
     void tearDown() {
@@ -58,6 +64,23 @@ class RagCollectionControllerTest {
 
     @BeforeEach
     void setUp() {
+        exportMapper = new com.fasterxml.jackson.databind.ObjectMapper()
+                .findAndRegisterModules()
+                .disable(com.fasterxml.jackson.databind.SerializationFeature
+                        .WRITE_DATES_AS_TIMESTAMPS);
+        exportRows.clear();
+        exportService = new CollectionExportService(
+                mock(org.springframework.jdbc.core.JdbcTemplate.class),
+                exportMapper) {
+            @Override
+            protected List<ExportRow> readBatch(
+                    long collectionId, long afterId, int limit) {
+                return exportRows.stream()
+                        .filter(row -> row.id() > afterId)
+                        .limit(limit)
+                        .toList();
+            }
+        };
         collectionRepository = mock(RagCollectionRepository.class);
         documentRepository = mock(RagDocumentRepository.class);
         collectionService = mock(RagCollectionService.class);
@@ -74,7 +97,8 @@ class RagCollectionControllerTest {
                 auditLogService,
                 documentMutationService,
                 collectionProvisioningService,
-                new ProvisioningOwnerResolver());
+                new ProvisioningOwnerResolver(),
+                exportService);
     }
 
     private RagCollection createCollection(Long id, String name) {
@@ -462,23 +486,21 @@ class RagCollectionControllerTest {
         RagCollection c = createCollection(1L, "知识库A");
         when(collectionRepository.findByIdAndDeletedFalse(1L)).thenReturn(Optional.of(c));
 
-        RagDocument doc = new RagDocument();
-        doc.setTitle("文档1");
-        doc.setSource("test.txt");
-        doc.setContent("内容");
-        doc.setSize(100L);
-        when(documentRepository.findAllByCollectionId(1L)).thenReturn(List.of(doc));
+        exportRows.add(new CollectionExportService.ExportRow(11L,
+                exportSummary("文档1", "test.txt", "内容", null, 100L)));
+        when(documentRepository.countByCollectionId(1L)).thenReturn(1L);
 
-        ResponseEntity<CollectionExportResponse> response = controller.exportCollection(1L);
+        ResponseEntity<StreamingResponseBody> response =
+                controller.exportCollection(1L);
 
         assertEquals(200, response.getStatusCode().value());
-        CollectionExportResponse body = response.getBody();
-        assertNotNull(body);
+        CollectionExportResponse body = readExportBody(response);
         assertEquals("知识库A", body.name());
         assertEquals(1, body.documentCount());
         assertNotNull(body.exportedAt());
-
         assertEquals("文档1", body.documents().get(0).title());
+        assertEquals("1", response.getHeaders()
+                .getFirst("X-Rag-Export-Documents"));
     }
 
     @Test
@@ -486,33 +508,22 @@ class RagCollectionControllerTest {
         RagCollection c = createCollection(1L, "多文档知识库");
         when(collectionRepository.findByIdAndDeletedFalse(1L)).thenReturn(Optional.of(c));
 
-        RagDocument doc1 = new RagDocument();
-        doc1.setTitle("文档A");
-        doc1.setSource("a.txt");
-        doc1.setContent("内容A");
-        doc1.setDocumentType("PDF");
-        doc1.setMetadata(Map.of("author", "Alice"));
-        doc1.setSize(200L);
+        exportRows.add(new CollectionExportService.ExportRow(11L,
+                exportSummary("文档A", "a.txt", "内容A", "PDF", 200L)));
+        exportRows.add(new CollectionExportService.ExportRow(12L,
+                exportSummary("文档B", "b.txt", "内容B", null, 150L)));
+        when(documentRepository.countByCollectionId(1L)).thenReturn(2L);
 
-        RagDocument doc2 = new RagDocument();
-        doc2.setTitle("文档B");
-        doc2.setSource("b.txt");
-        doc2.setContent("内容B");
-        doc2.setSize(150L);
-
-        when(documentRepository.findAllByCollectionId(1L)).thenReturn(List.of(doc1, doc2));
-
-        ResponseEntity<CollectionExportResponse> response = controller.exportCollection(1L);
+        ResponseEntity<StreamingResponseBody> response =
+                controller.exportCollection(1L);
 
         assertEquals(200, response.getStatusCode().value());
-        CollectionExportResponse body = response.getBody();
-        assertNotNull(body);
+        CollectionExportResponse body = readExportBody(response);
         assertEquals(2, body.documentCount());
 
         assertEquals(2, body.documents().size());
         assertEquals("文档A", body.documents().get(0).title());
-        assertEquals("PDF", body.documents().get(0).documentType());
-        assertEquals("Alice", body.documents().get(0).metadata().get("author"));
+        assertEquals("b.txt", body.documents().get(1).source());
         assertEquals("文档B", body.documents().get(1).title());
     }
 
@@ -520,9 +531,30 @@ class RagCollectionControllerTest {
     void exportCollection_deletedCollection_returns404() {
         when(collectionRepository.findByIdAndDeletedFalse(1L)).thenReturn(Optional.empty());
 
-        ResponseEntity<CollectionExportResponse> response = controller.exportCollection(1L);
+        ResponseEntity<StreamingResponseBody> response =
+                controller.exportCollection(1L);
 
         assertEquals(404, response.getStatusCode().value());
+    }
+
+    private CollectionExportResponse readExportBody(
+            ResponseEntity<StreamingResponseBody> response) {
+        try {
+            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+            response.getBody().writeTo(out);
+            return exportMapper.readValue(out.toByteArray(),
+                    CollectionExportResponse.class);
+        } catch (java.io.IOException error) {
+            throw new IllegalStateException(error);
+        }
+    }
+
+    private static CollectionExportResponse.ExportedDocumentSummary exportSummary(
+            String title, String source, String content,
+            String documentType, Long size) {
+        return new CollectionExportResponse.ExportedDocumentSummary(
+                title, source, content, documentType, null, size,
+                null, null, null, null, null, null, true);
     }
 
     @Test

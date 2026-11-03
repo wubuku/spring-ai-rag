@@ -35,7 +35,7 @@ for (const target of PAGES) {
     if (target.unlock) {
       await page.goto(target.path, { waitUntil: 'networkidle' });
     } else {
-      await openProtectedPage(page, target.path);
+      page = await openProtectedPage(page, target.path);
     }
     await expect(page.getByText('Loading…', { exact: true })).toHaveCount(0);
 

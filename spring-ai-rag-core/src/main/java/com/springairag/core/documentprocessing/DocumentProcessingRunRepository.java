@@ -288,6 +288,92 @@ public class DocumentProcessingRunRepository {
                 profileId).stream().findFirst();
     }
 
+    /**
+     * 批量读取“当前快照”候选 Run：整页文档的 generation/contentHash/chunkerVersion
+     * 通过 VALUES 连接一次查询完成，避免列表页逐文档查询。
+     *
+     * <p>同一文档可能有多条同快照 Run（例如同一代重复尝试），排序与
+     * {@link #findCurrent} 保持一致：活动状态优先，其次 created_at/id 倒序。
+     */
+    public List<DocumentProcessingRun> findExactBatch(
+            List<SnapshotKey> keys,
+            long profileId) {
+        if (keys == null || keys.isEmpty()) {
+            return List.of();
+        }
+        StringBuilder values = new StringBuilder();
+        List<Object> args = new ArrayList<>(keys.size() * 5);
+        for (SnapshotKey key : keys) {
+            if (values.length() > 0) {
+                values.append(',');
+            }
+            values.append("(CAST(? AS BIGINT), CAST(? AS BIGINT), "
+                    + "CAST(? AS VARCHAR), CAST(? AS VARCHAR), CAST(? AS BIGINT))");
+            args.add(key.documentId());
+            args.add(key.generation());
+            args.add(key.contentHash());
+            args.add(key.chunkerVersion());
+            args.add(profileId);
+        }
+        return jdbcTemplate.query(
+                "SELECT run." + RUN_COLUMNS.replace(",", ", run.")
+                        + " FROM rag_document_processing_runs run"
+                        + " JOIN (VALUES " + values + ") AS expected("
+                        + "document_id, request_generation, content_hash,"
+                        + " chunker_version, embedding_profile_id)"
+                        + " ON run.document_id = expected.document_id"
+                        + " AND run.request_generation = expected.request_generation"
+                        + " AND run.content_hash = expected.content_hash"
+                        + " AND run.chunker_version = expected.chunker_version"
+                        + " AND run.embedding_profile_id = expected.embedding_profile_id"
+                        + " ORDER BY run.document_id,"
+                        + " CASE WHEN run.status IN ('QUEUED','RUNNING')"
+                        + " THEN 0 ELSE 1 END, run.created_at DESC, run.id DESC",
+                runMapper,
+                args.toArray());
+    }
+
+    /**
+     * 每页文档各取一条“最新 Run”，供快照不匹配时的回退路径使用。
+     */
+    public Map<Long, DocumentProcessingRun> findLatestPerDocument(
+            List<Long> documentIds,
+            long profileId) {
+        if (documentIds == null || documentIds.isEmpty()) {
+            return Map.of();
+        }
+        String placeholders = "?,".repeat(documentIds.size());
+        placeholders = placeholders.substring(0, placeholders.length() - 1);
+        List<Object> args = new ArrayList<>(documentIds.size() + 1);
+        args.add(profileId);
+        args.addAll(documentIds);
+        Map<Long, DocumentProcessingRun> result = new LinkedHashMap<>();
+        jdbcTemplate.query(
+                "SELECT DISTINCT ON (run.document_id) run."
+                        + RUN_COLUMNS.replace(",", ", run.")
+                        + " FROM rag_document_processing_runs run"
+                        + " WHERE run.embedding_profile_id = ?"
+                        + " AND run.document_id IN (" + placeholders + ")"
+                        + " ORDER BY run.document_id, run.request_generation DESC,"
+                        + " run.created_at DESC, run.id DESC",
+                rs -> {
+                    while (rs.next()) {
+                        DocumentProcessingRun run = mapRun(rs);
+                        result.put(run.documentId(), run);
+                    }
+                },
+                args.toArray());
+        return result;
+    }
+
+    /** 批量查询的输入：一条文档的当前派生快照。 */
+    public record SnapshotKey(
+            long documentId,
+            long generation,
+            String contentHash,
+            String chunkerVersion) {
+    }
+
     public List<DocumentProcessingStage> stages(UUID runId) {
         return jdbcTemplate.query("""
                 SELECT run_id, stage_name, stage_order, status,

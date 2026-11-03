@@ -10,6 +10,7 @@ import com.springairag.core.exception.RagException;
 import com.springairag.core.repository.RagCollectionRepository;
 import com.springairag.core.repository.RagDocumentRepository;
 import com.springairag.core.service.AuditLogService;
+import com.springairag.core.service.CollectionExportService;
 import com.springairag.core.service.CollectionIdentityResolver;
 import com.springairag.core.service.RagCollectionService;
 import com.springairag.core.service.DocumentMutationService;
@@ -18,8 +19,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
 import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -54,9 +57,17 @@ class RagCollectionControllerByKeyTailTest {
     private AuditLogService auditLogService;
     private RagCollectionController controller;
     private RagCollection collection;
+    private final List<CollectionExportService.ExportRow> exportRows =
+            new ArrayList<>();
+    private final com.fasterxml.jackson.databind.ObjectMapper exportMapper =
+            new com.fasterxml.jackson.databind.ObjectMapper()
+                    .findAndRegisterModules()
+                    .disable(com.fasterxml.jackson.databind.SerializationFeature
+                            .WRITE_DATES_AS_TIMESTAMPS);
 
     @BeforeEach
     void setUp() {
+        exportRows.clear();
         collectionRepository = mock(RagCollectionRepository.class);
         documentRepository = mock(RagDocumentRepository.class);
         identityResolver = mock(CollectionIdentityResolver.class);
@@ -70,7 +81,19 @@ class RagCollectionControllerByKeyTailTest {
                 auditLogService,
                 mock(DocumentMutationService.class),
                 mock(CollectionProvisioningService.class),
-                new ProvisioningOwnerResolver());
+                new ProvisioningOwnerResolver(),
+                new CollectionExportService(
+                        mock(org.springframework.jdbc.core.JdbcTemplate.class),
+                        exportMapper) {
+                    @Override
+                    protected List<ExportRow> readBatch(
+                            long collectionId, long afterId, int limit) {
+                        return exportRows.stream()
+                                .filter(row -> row.id() > afterId)
+                                .limit(limit)
+                                .toList();
+                    }
+                });
 
         collection = new RagCollection();
         collection.setId(5L);
@@ -127,15 +150,27 @@ class RagCollectionControllerByKeyTailTest {
     }
 
     @Test
-    void exportCollectionByKeyMapsDocuments() {
-        when(documentRepository.findAllByCollectionId(5L))
-                .thenReturn(List.of(document(9L), document(10L)));
+    void exportCollectionByKeyMapsDocuments() throws Exception {
+        exportRows.add(new CollectionExportService.ExportRow(9L, summary(9L)));
+        exportRows.add(new CollectionExportService.ExportRow(10L, summary(10L)));
+        when(documentRepository.countByCollectionId(5L)).thenReturn(2L);
 
-        ResponseEntity<CollectionExportResponse> response =
+        ResponseEntity<StreamingResponseBody> response =
                 controller.exportCollectionByKey("kb:manual:v1");
 
         assertEquals(200, response.getStatusCode().value());
-        assertEquals(2, response.getBody().documents().size());
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        response.getBody().writeTo(out);
+        CollectionExportResponse body = exportMapper.readValue(
+                out.toByteArray(), CollectionExportResponse.class);
+        assertEquals(2, body.documents().size());
+        assertEquals("Doc 9", body.documents().get(0).title());
+    }
+
+    private static CollectionExportResponse.ExportedDocumentSummary summary(long id) {
+        return new CollectionExportResponse.ExportedDocumentSummary(
+                "Doc " + id, null, "body", null, null, null,
+                null, null, null, null, null, null, true);
     }
 
     @Test

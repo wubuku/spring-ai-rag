@@ -175,6 +175,7 @@ class RagControllerIntegrationTest {
     // ——它只是被可选注解掩护着。真正把这类遗漏逼出来的是把注解改成必填，
     // 而不是补一条断言。
     @MockBean private com.springairag.core.service.CollectionProvisioningService collectionProvisioningService;
+    @MockBean private com.springairag.core.service.CollectionExportService collectionExportService;
     @MockBean private com.springairag.core.security.ProvisioningOwnerResolver provisioningOwnerResolver;
 
     // ==================== AB Test ====================

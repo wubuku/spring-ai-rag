@@ -618,9 +618,9 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('spring-ai-rag-webui/package-lock.json') }}
 
-      - name: Install Playwright browser
+      - name: Install Playwright browsers
         working-directory: spring-ai-rag-webui
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install --with-deps chromium firefox webkit
 
       - name: Start isolated dev stack
         run: ./scripts/dev.sh start

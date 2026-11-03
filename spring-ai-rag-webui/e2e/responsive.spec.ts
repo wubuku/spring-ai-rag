@@ -33,7 +33,7 @@ for (const width of WIDTHS) {
       test(`${target.name} does not overflow the page or trap table content`, async ({ page }) => {
         await page.setViewportSize({ width, height: 812 });
         await mockAllApiCalls(page);
-        await openProtectedPage(page, target.path);
+        page = await openProtectedPage(page, target.path);
         await expect(page.getByText('Loading…', { exact: true })).toHaveCount(0);
 
         const layout = await page.evaluate(() => {
@@ -73,7 +73,7 @@ for (const width of WIDTHS) {
 test('375px primary controls meet the 24px target size', async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 812 });
   await mockAllApiCalls(page);
-  await openProtectedPage(page, '/webui/dashboard');
+  page = await openProtectedPage(page, '/webui/dashboard');
 
   const tooSmall = await page.evaluate(() =>
     Array.from(document.querySelectorAll('button, select'))
@@ -98,12 +98,12 @@ test('documents loading state survives a slow network and resolves', async ({ pa
   const gate = new Promise<void>(resolve => {
     release = resolve;
   });
-  await page.route(/\/api\/v1\/rag\/documents.*/, async route => {
+  await page.context().route(/\/api\/v1\/rag\/documents.*/, async route => {
     await gate;
     await route.fallback();
   });
 
-  await openProtectedPage(page, '/webui/documents');
+  page = await openProtectedPage(page, '/webui/documents');
   const loading = page.getByTestId('documents-loading');
   await expect(loading).toBeVisible();
 
@@ -114,9 +114,9 @@ test('documents loading state survives a slow network and resolves', async ({ pa
 
 test('offline documents request ends in an error with a retry action', async ({ page }) => {
   await mockAllApiCalls(page);
-  await page.route(/\/api\/v1\/rag\/documents.*/, route => route.abort('internetdisconnected'));
+  await page.context().route(/\/api\/v1\/rag\/documents.*/, route => route.abort('internetdisconnected'));
 
-  await openProtectedPage(page, '/webui/documents');
+  page = await openProtectedPage(page, '/webui/documents');
 
   // axios 对网络错误重试 3 次（1s/2s/3s），React Query 再重试 1 次，所以断网时
   // 失败态在 10s 量级出现，不是"立刻"但也不会永远挂着。这里断言它有界地结束，

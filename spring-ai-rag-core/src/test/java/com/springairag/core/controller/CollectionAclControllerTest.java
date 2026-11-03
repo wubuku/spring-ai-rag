@@ -43,7 +43,8 @@ class CollectionAclControllerTest {
                 null,
                 mock(DocumentMutationService.class),
                 mock(CollectionProvisioningService.class),
-                new ProvisioningOwnerResolver());
+                new ProvisioningOwnerResolver(),
+                null);
     }
 
     @AfterEach

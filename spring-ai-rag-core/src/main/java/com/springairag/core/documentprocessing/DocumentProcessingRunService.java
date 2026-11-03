@@ -186,10 +186,135 @@ public class DocumentProcessingRunService {
             current = new OptionalRun(ensureBridgeForJob(activeJob.get()));
         }
         DocumentProcessingRun run = current.run();
+        return toSummary(run, document, profile, descriptor,
+                retryable(run, document, profile, descriptor));
+    }
+
+    /**
+     * 批量组装整页文档的处理摘要：每个 Embedding Profile 只做 4 次批量查询
+     * （generation、当前 Run、最新 Run、活动 job），替代逐文档 N+1。
+     *
+     * <p>语义与 {@link #summaryForDocument} 一致：disabled / Profile 解析失败 /
+     * 无 Run 且无活动 job 的文档不出现在结果 Map 中（调用方按“无摘要”处理）。
+     * 批量查询失败时整组 fail-closed，不让列表页整体 500。
+     */
+    public Map<Long, DocumentProcessingSummary> summariesForDocuments(
+            List<RagDocument> documents) {
+        if (!enabled() || documents == null || documents.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, EmbeddingProfile> profileCache = new java.util.HashMap<>();
+        Map<Long, EmbeddingProfile> profileById = new java.util.LinkedHashMap<>();
+        Map<Long, List<RagDocument>> documentsByProfile =
+                new java.util.LinkedHashMap<>();
+        for (RagDocument document : documents) {
+            if (document == null || document.getId() == null
+                    || !Boolean.TRUE.equals(document.getEnabled())) {
+                continue;
+            }
+            EmbeddingProfile profile;
+            try {
+                profile = profileCache.computeIfAbsent(document.getCollectionId(),
+                        collectionId -> collectionId == null
+                                ? profileProvider.getActiveProfile()
+                                : profileProvider.getProfileForCollection(collectionId));
+            } catch (RuntimeException ignored) {
+                continue;
+            }
+            profileById.put(profile.id(), profile);
+            documentsByProfile
+                    .computeIfAbsent(profile.id(), ignored -> new java.util.ArrayList<>())
+                    .add(document);
+        }
+
+        Map<Long, DocumentProcessingSummary> summaries = new java.util.HashMap<>();
+        for (Map.Entry<Long, List<RagDocument>> entry
+                : documentsByProfile.entrySet()) {
+            try {
+                loadSummaries(entry.getKey(), profileById.get(entry.getKey()),
+                        entry.getValue(), summaries);
+            } catch (RuntimeException ignored) {
+                // fail-closed：该 Profile 分组的文档不带处理摘要。
+            }
+        }
+        return summaries;
+    }
+
+    private void loadSummaries(
+            long profileId,
+            EmbeddingProfile profile,
+            List<RagDocument> documents,
+            Map<Long, DocumentProcessingSummary> summaries) {
+        List<Long> documentIds = documents.stream()
+                .map(RagDocument::getId)
+                .toList();
+        Map<Long, Long> generations = jobRepository
+                .findCurrentGenerations(documentIds, profileId);
+
+        Map<Long, DocumentDerivationDescriptorProvider.Descriptor> descriptors =
+                new java.util.HashMap<>();
+        List<DocumentProcessingRunRepository.SnapshotKey> runKeys =
+                new java.util.ArrayList<>(documents.size());
+        List<EmbeddingJobRepository.SnapshotKey> jobKeys =
+                new java.util.ArrayList<>(documents.size());
+        for (RagDocument document : documents) {
+            DocumentDerivationDescriptorProvider.Descriptor descriptor =
+                    descriptorProvider.describe(document);
+            descriptors.put(document.getId(), descriptor);
+            runKeys.add(new DocumentProcessingRunRepository.SnapshotKey(
+                    document.getId(),
+                    generations.getOrDefault(document.getId(), 0L),
+                    document.getContentHash(),
+                    descriptor.chunkerVersion()));
+            jobKeys.add(new EmbeddingJobRepository.SnapshotKey(
+                    document.getId(),
+                    document.getContentHash(),
+                    descriptor.documentKind(),
+                    descriptor.chunkerVersion()));
+        }
+
+        Map<Long, DocumentProcessingRun> exact = new java.util.HashMap<>();
+        for (DocumentProcessingRun run
+                : repository.findExactBatch(runKeys, profileId)) {
+            exact.putIfAbsent(run.documentId(), run);
+        }
+        Map<Long, DocumentProcessingRun> latest =
+                repository.findLatestPerDocument(documentIds, profileId);
+        Map<Long, EmbeddingJob> activeJobs =
+                jobRepository.findCurrentActiveBatch(jobKeys, profileId);
+
+        for (RagDocument document : documents) {
+            DocumentProcessingRun run = exact.get(document.getId());
+            if (run == null) {
+                run = latest.get(document.getId());
+            }
+            if (run == null) {
+                EmbeddingJob activeJob = activeJobs.get(document.getId());
+                if (activeJob == null) {
+                    continue;
+                }
+                run = ensureBridgeForJob(activeJob);
+                if (run == null) {
+                    continue;
+                }
+            }
+            summaries.put(document.getId(), toSummary(run, document, profile,
+                    descriptors.get(document.getId()),
+                    retryable(run, document, profile,
+                            descriptors.get(document.getId()),
+                            activeJobs.containsKey(document.getId()))));
+        }
+    }
+
+    private DocumentProcessingSummary toSummary(
+            DocumentProcessingRun run,
+            RagDocument document,
+            EmbeddingProfile profile,
+            DocumentDerivationDescriptorProvider.Descriptor descriptor,
+            boolean retryable) {
         return new DocumentProcessingSummary(
                 run.id(), run.status(), run.activeStage(), run.executionAttempt(),
-                run.maxAttempts(), run.nextRetryAt(),
-                retryable(run, document, profile, descriptor),
+                run.maxAttempts(), run.nextRetryAt(), retryable,
                 run.status() == DocumentProcessingRunStatus.DEAD_LETTERED,
                 !run.legacyBridge(), run.updatedAt(), run.lastErrorCode(),
                 run.lastError());
@@ -341,16 +466,7 @@ public class DocumentProcessingRunService {
             RagDocument document,
             EmbeddingProfile profile,
             DocumentDerivationDescriptorProvider.Descriptor descriptor) {
-        if (run.status() == DocumentProcessingRunStatus.QUEUED
-                || run.status() == DocumentProcessingRunStatus.RUNNING
-                || run.status() == DocumentProcessingRunStatus.COMPLETED
-                || !Boolean.TRUE.equals(document.getEnabled())) {
-            return false;
-        }
-        boolean sameSnapshot = run.embeddingProfileId() == profile.id()
-                && run.contentHash().equals(document.getContentHash())
-                && run.chunkerVersion().equals(descriptor.chunkerVersion());
-        if (!sameSnapshot) {
+        if (!retryableSnapshot(run, document, profile, descriptor)) {
             return false;
         }
         if (run.status() == DocumentProcessingRunStatus.STALE) {
@@ -359,6 +475,38 @@ public class DocumentProcessingRunService {
                     descriptor.documentKind(), descriptor.chunkerVersion()).isEmpty();
         }
         return true;
+    }
+
+    /** 批量路径：活动 job 已随整页一次性查出，避免逐 Run 再查一次。 */
+    private boolean retryable(
+            DocumentProcessingRun run,
+            RagDocument document,
+            EmbeddingProfile profile,
+            DocumentDerivationDescriptorProvider.Descriptor descriptor,
+            boolean activeJobPresent) {
+        if (!retryableSnapshot(run, document, profile, descriptor)) {
+            return false;
+        }
+        if (run.status() == DocumentProcessingRunStatus.STALE) {
+            return !activeJobPresent;
+        }
+        return true;
+    }
+
+    private boolean retryableSnapshot(
+            DocumentProcessingRun run,
+            RagDocument document,
+            EmbeddingProfile profile,
+            DocumentDerivationDescriptorProvider.Descriptor descriptor) {
+        if (run.status() == DocumentProcessingRunStatus.QUEUED
+                || run.status() == DocumentProcessingRunStatus.RUNNING
+                || run.status() == DocumentProcessingRunStatus.COMPLETED
+                || !Boolean.TRUE.equals(document.getEnabled())) {
+            return false;
+        }
+        return run.embeddingProfileId() == profile.id()
+                && run.contentHash().equals(document.getContentHash())
+                && run.chunkerVersion().equals(descriptor.chunkerVersion());
     }
 
     private long currentGeneration(long documentId, long profileId) {

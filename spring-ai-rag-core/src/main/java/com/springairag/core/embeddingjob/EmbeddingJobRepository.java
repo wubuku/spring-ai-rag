@@ -9,7 +9,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -989,6 +992,95 @@ public class EmbeddingJobRepository {
                 """, (rs, rowNum) -> rs.getLong("request_generation"),
                 documentId, profileId);
         return generations.isEmpty() ? 0L : generations.getFirst();
+    }
+
+    /** 批量读取整页文档的当前 generation，供列表页批量组装处理摘要。 */
+    public Map<Long, Long> findCurrentGenerations(
+            List<Long> documentIds,
+            long profileId) {
+        if (documentIds == null || documentIds.isEmpty()) {
+            return Map.of();
+        }
+        String placeholders = "?,".repeat(documentIds.size());
+        placeholders = placeholders.substring(0, placeholders.length() - 1);
+        List<Object> args = new ArrayList<>(documentIds.size() + 1);
+        args.add(profileId);
+        args.addAll(documentIds);
+        Map<Long, Long> result = new LinkedHashMap<>();
+        jdbcTemplate.query(
+                "SELECT document_id, request_generation"
+                        + " FROM rag_document_embedding_state"
+                        + " WHERE embedding_profile_id = ?"
+                        + " AND document_id IN (" + placeholders + ")",
+                rs -> {
+                    while (rs.next()) {
+                        result.put(rs.getLong("document_id"),
+                                rs.getLong("request_generation"));
+                    }
+                },
+                args.toArray());
+        return result;
+    }
+
+    /**
+     * 批量读取整页文档的当前活动 job：VALUES 连接一次完成，
+     * 用于列表页批量处理摘要与 bridge 判定。
+     */
+    public Map<Long, EmbeddingJob> findCurrentActiveBatch(
+            List<SnapshotKey> keys,
+            long profileId) {
+        if (keys == null || keys.isEmpty()) {
+            return Map.of();
+        }
+        StringBuilder values = new StringBuilder();
+        List<Object> args = new ArrayList<>(keys.size() * 5);
+        for (SnapshotKey key : keys) {
+            if (values.length() > 0) {
+                values.append(',');
+            }
+            values.append("(CAST(? AS BIGINT), CAST(? AS BIGINT),"
+                    + " CAST(? AS VARCHAR), CAST(? AS VARCHAR), CAST(? AS VARCHAR))");
+            args.add(key.documentId());
+            args.add(profileId);
+            args.add(key.contentHash());
+            args.add(key.documentKind());
+            args.add(key.chunkerVersion());
+        }
+        Map<Long, EmbeddingJob> result = new LinkedHashMap<>();
+        jdbcTemplate.query(
+                "SELECT " + prefixedColumns("job")
+                        + " FROM rag_embedding_jobs job"
+                        + " JOIN rag_document_embedding_state state"
+                        + " ON state.document_id = job.document_id"
+                        + " AND state.embedding_profile_id = job.embedding_profile_id"
+                        + " AND state.request_generation = job.request_generation"
+                        + " JOIN (VALUES " + values + ") AS expected("
+                        + "document_id, embedding_profile_id, content_hash,"
+                        + " document_kind, chunker_version)"
+                        + " ON job.document_id = expected.document_id"
+                        + " AND job.embedding_profile_id = expected.embedding_profile_id"
+                        + " AND job.content_hash = expected.content_hash"
+                        + " AND job.document_kind = expected.document_kind"
+                        + " AND job.chunker_version = expected.chunker_version"
+                        + " WHERE job.status IN ('QUEUED', 'RUNNING')"
+                        + " AND job.cancel_requested_at IS NULL"
+                        + " ORDER BY job.document_id, job.created_at, job.id",
+                rs -> {
+                    while (rs.next()) {
+                        EmbeddingJob job = mapJob(rs);
+                        result.putIfAbsent(job.documentId(), job);
+                    }
+                },
+                args.toArray());
+        return result;
+    }
+
+    /** 批量活动 job 查询的输入：一条文档的当前派生快照。 */
+    public record SnapshotKey(
+            long documentId,
+            String contentHash,
+            String documentKind,
+            String chunkerVersion) {
     }
 
     @Transactional

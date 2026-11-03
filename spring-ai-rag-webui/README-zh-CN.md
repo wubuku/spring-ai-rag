@@ -230,7 +230,9 @@ npm run test:e2e:mock  # Playwright Mock 用例（不需要后端，CI 跑这条
 | `npm run test:e2e` | **需要** Spring Boot 在 `http://localhost:8081`（或 `BASE_URL` 指定的地址） | 对已运行实例执行同一批非 `-real` 用例。后端没起时只会得到连接被拒，不是页面缺陷 |
 | `npm run test:e2e -- e2e/*-real.spec.ts` | 需要后端 + 真实模型凭据 | 真实链路验收，按 [testing-guide](../docs/testing-guide-zh-CN.md) 的 `-real` 运行手册执行 |
 
-首次在本机跑 Playwright 需要安装浏览器：`npx playwright install chromium`。
+首次在本机跑 Playwright 需要安装浏览器：
+`npx playwright install chromium firefox webkit`。Chromium 跑全部用例；
+Firefox 与 WebKit 跑安全相关套件（可访问性、键盘、响应式）。
 
 ## License
 

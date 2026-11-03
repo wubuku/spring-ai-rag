@@ -4,18 +4,49 @@ export const MOCK_ROOT_API_KEY = 'root_test_0123456789_abcdefghijklmnopqrstuvwxy
 export const MOCK_BUSINESS_API_KEY = 'rag_sk_business_test_0123456789abcdefghijklmnopqrstuvwxyz';
 export const MOCK_CHAT_TURN_ID = '22222222-2222-4222-8222-222222222222';
 
-export async function openProtectedPage(page: Page, path: string) {
-  await page.goto(path, { waitUntil: 'networkidle' });
+export async function openProtectedPage(page: Page, path: string): Promise<Page> {
+  // 不用 networkidle：页面有后台轮询时它可能永远等不到，跨引擎并行跑会偶发超时。
+  // 随后的 URL / 元素断言都会自动等待，足以判断应用已就绪。
+  //
+  // WebKit 在长套件（约 50 个上下文之后）首次并发加载大 bundle 时会偶发整页
+  // 导航卡死：`goto` 超时，且同一页面立即重试仍然超时（Chromium / Firefox 不会）。
+  // 换一个全新的 Page（同一 BrowserContext，Mock 路由挂在 context 上）即可恢复，
+  // 这说明卡住的是单个 WebKit Page 的导航状态，不是应用实现缺陷。
+  // 因此这里在 WebKit 上换页重试一次，并把实际使用的 Page 返回给调用方。
+  const isWebKit = page.context().browser()?.browserType().name() === 'webkit';
+  try {
+    await page.goto(path, { waitUntil: 'domcontentloaded' });
+  } catch (error) {
+    if (!isWebKit) throw error;
+    try {
+      const viewport = page.viewportSize();
+      const stuck = page;
+      page = await stuck.context().newPage();
+      await stuck.close();
+      if (viewport) {
+        await page.setViewportSize(viewport);
+      }
+      await page.goto(path, { waitUntil: 'domcontentloaded' });
+    } catch {
+      // 换页也失败：说明整个 WebKit context 已卡死，保留原始错误，
+      // 由 Playwright 测试级重试（CI retries=2）恢复，不掩盖首因。
+      throw error;
+    }
+  }
   await expect(page).toHaveURL(/\/webui\/unlock$/);
   await page.getByTestId('root-api-key').fill(MOCK_ROOT_API_KEY);
   await page.getByRole('button', { name: 'Unlock' }).click();
   await expect(page).not.toHaveURL(/\/webui\/unlock$/);
   await expect(page.getByText('Loading…', { exact: true })).toHaveCount(0);
+  return page;
 }
 
-// Shared API mocks for all tests
+// Shared API mocks for all tests.
+// 路由挂在 BrowserContext 上（而不是单个 Page）：`openProtectedPage` 在 WebKit
+// 导航卡死时会换一个新 Page 重试，context 级路由仍然生效。
 export async function mockAllApiCalls(page: Page) {
-  await page.route('/api/v1/rag/auth/me', async route => {
+  const context = page.context();
+  await context.route('/api/v1/rag/auth/me', async route => {
     const credential = route.request().headers()['x-api-key'];
     if (credential === MOCK_ROOT_API_KEY) {
       await route.fulfill({
@@ -207,7 +238,7 @@ export async function mockAllApiCalls(page: Page) {
   });
 
   // Mock health endpoint
-  page.route('/api/v1/rag/health', route => {
+  context.route('/api/v1/rag/health', route => {
     route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -224,7 +255,7 @@ export async function mockAllApiCalls(page: Page) {
   });
 
   // Mock document lifecycle APIs.
-  page.route(/\/api\/v1\/rag\/documents.*/, async route => {
+  context.route(/\/api\/v1\/rag\/documents.*/, async route => {
     const request = route.request();
     const method = request.method();
     const path = new URL(request.url()).pathname;
@@ -504,7 +535,7 @@ export async function mockAllApiCalls(page: Page) {
   });
 
   // Mock collections list
-  page.route(/\/api\/v1\/rag\/collections.*/, async route => {
+  context.route(/\/api\/v1\/rag\/collections.*/, async route => {
     const path = new URL(route.request().url()).pathname;
     if (path.endsWith('/embedding-readiness')) {
       await route.fulfill({
@@ -678,7 +709,7 @@ export async function mockAllApiCalls(page: Page) {
     });
   });
 
-  page.route('**/api/v1/rag/models', route => {
+  context.route('**/api/v1/rag/models', route => {
     route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -721,7 +752,7 @@ export async function mockAllApiCalls(page: Page) {
   });
 
   // Mock search endpoint
-  page.route(/\/api\/v1\/rag\/search(?:\?.*)?$/, route => {
+  context.route(/\/api\/v1\/rag\/search(?:\?.*)?$/, route => {
     route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -733,7 +764,7 @@ export async function mockAllApiCalls(page: Page) {
     });
   });
 
-  page.route(/\/api\/v1\/rag\/files\/tree.*/, route => {
+  context.route(/\/api\/v1\/rag\/files\/tree.*/, route => {
     const path = new URL(route.request().url()).searchParams.get('path') ?? '';
     const importedPdfEntries = [
       {
@@ -805,7 +836,7 @@ export async function mockAllApiCalls(page: Page) {
     });
   });
 
-  page.route(/\/api\/v1\/rag\/files\/preview.*/, route => {
+  context.route(/\/api\/v1\/rag\/files\/preview.*/, route => {
     route.fulfill({
       status: 200,
       contentType: 'text/html',
@@ -813,7 +844,7 @@ export async function mockAllApiCalls(page: Page) {
     });
   });
 
-  page.route(/\/api\/v1\/rag\/files\/raw.*/, route => {
+  context.route(/\/api\/v1\/rag\/files\/raw.*/, route => {
     route.fulfill({
       status: 200,
       contentType: 'application/pdf',
@@ -821,7 +852,7 @@ export async function mockAllApiCalls(page: Page) {
     });
   });
 
-  page.route(/\/api\/v1\/rag\/files\/sample-pdf\/embed.*/, route => {
+  context.route(/\/api\/v1\/rag\/files\/sample-pdf\/embed.*/, route => {
     route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -839,7 +870,7 @@ export async function mockAllApiCalls(page: Page) {
   });
 
   // Mock metrics endpoint
-  page.route('/api/v1/rag/metrics', route => {
+  context.route('/api/v1/rag/metrics', route => {
     route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -853,7 +884,7 @@ export async function mockAllApiCalls(page: Page) {
   });
 
   // Mock durable model usage endpoint
-  page.route('/api/v1/rag/usage', route => {
+  context.route('/api/v1/rag/usage', route => {
     route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -956,7 +987,7 @@ export async function mockAllApiCalls(page: Page) {
   });
 
   // Mock alerts endpoints
-  page.route(/\/api\/v1\/rag\/alerts.*/, route => {
+  context.route(/\/api\/v1\/rag\/alerts.*/, route => {
     const pathname = new URL(route.request().url()).pathname;
     const body = pathname.endsWith('/notification-deliveries')
       ? {
@@ -981,7 +1012,7 @@ export async function mockAllApiCalls(page: Page) {
   });
 
   // Mock A/B experiment endpoints
-  page.route(/\/api\/v1\/rag\/ab\/experiments(?:\/.*)?(?:\?.*)?$/, route => {
+  context.route(/\/api\/v1\/rag\/ab\/experiments(?:\/.*)?(?:\?.*)?$/, route => {
     const pathname = new URL(route.request().url()).pathname;
     const experiment = {
       id: 1,
@@ -1004,7 +1035,7 @@ export async function mockAllApiCalls(page: Page) {
   });
 
   // Mock chat SSE endpoint
-  page.route('/api/v1/rag/chat/stream', route => {
+  context.route('/api/v1/rag/chat/stream', route => {
     route.fulfill({
       status: 200,
       contentType: 'text/event-stream',
@@ -1030,7 +1061,7 @@ export async function mockAllApiCalls(page: Page) {
   });
 
   // Mock non-streaming chat endpoint
-  page.route('/api/v1/rag/chat', route => {
+  context.route('/api/v1/rag/chat', route => {
     if (route.request().method() === 'POST') {
       route.fulfill({
         status: 200,
@@ -1047,7 +1078,7 @@ export async function mockAllApiCalls(page: Page) {
   });
 
   // Mock chat history endpoint (GET and DELETE)
-  page.route(/\/api\/v1\/rag\/chat\/history\/.*/, route => {
+  context.route(/\/api\/v1\/rag\/chat\/history\/.*/, route => {
     const method = route.request().method();
     if (method === 'GET') {
       route.fulfill({

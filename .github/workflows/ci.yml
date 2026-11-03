@@ -299,8 +299,8 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('spring-ai-rag-webui/package-lock.json') }}
 
-      - name: Install Playwright browser
-        run: npx playwright install --with-deps chromium
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium firefox webkit
 
       - name: Mock E2E (Playwright)
         run: npm run test:e2e:mock

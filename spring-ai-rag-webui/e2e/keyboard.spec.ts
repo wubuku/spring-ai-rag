@@ -8,7 +8,7 @@ import { mockAllApiCalls, openProtectedPage } from './api-mocks';
 test.describe('keyboard accessibility', () => {
   test('tab stops are visible and every stop has an accessible name', async ({ page }) => {
     await mockAllApiCalls(page);
-    await openProtectedPage(page, '/webui/dashboard');
+    page = await openProtectedPage(page, '/webui/dashboard');
 
     const stops: Array<{ name: string; outline: string; shadow: string }> = [];
     for (let i = 0; i < 20 && stops.length < 6; i += 1) {
@@ -44,7 +44,7 @@ test.describe('keyboard accessibility', () => {
 
   test('modal traps focus and Escape restores it to the trigger', async ({ page }) => {
     await mockAllApiCalls(page);
-    await openProtectedPage(page, '/webui/collections');
+    page = await openProtectedPage(page, '/webui/collections');
 
     const trigger = page.getByRole('button', { name: /创建集合|Create collection/i });
     await trigger.click();
@@ -73,7 +73,7 @@ test.describe('keyboard accessibility', () => {
 
   test('document actions menu supports arrow keys and Escape', async ({ page }) => {
     await mockAllApiCalls(page);
-    await openProtectedPage(page, '/webui/documents');
+    page = await openProtectedPage(page, '/webui/documents');
 
     const trigger = page
       .getByRole('button', { name: /操作菜单|Open actions/i })
@@ -99,7 +99,7 @@ test.describe('keyboard accessibility', () => {
   test('mobile sidebar is inert while closed and keyboard operable', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
     await mockAllApiCalls(page);
-    await openProtectedPage(page, '/webui/dashboard');
+    page = await openProtectedPage(page, '/webui/dashboard');
 
     const toggle = page.getByRole('button', {
       name: /打开侧边栏|Open sidebar/i,
@@ -118,16 +118,19 @@ test.describe('keyboard accessibility', () => {
     await mockAllApiCalls(page);
     // 在默认 mock 之前拦一下请求，延迟 2500ms 后交回默认处理器，
     // 模拟慢速流式响应且不改变响应内容。
-    await page.route('/api/v1/rag/chat/stream', async route => {
+    await page.context().route('/api/v1/rag/chat/stream', async route => {
       await new Promise(resolve => setTimeout(resolve, 2500));
       await route.fallback();
     });
 
-    await openProtectedPage(page, '/webui/chat');
+    page = await openProtectedPage(page, '/webui/chat');
     const input = page.getByRole('textbox', { name: /输入|message/i });
     await input.fill('What is RAG?');
     const send = page.getByRole('button', { name: /发送|Send/i });
-    await send.click();
+    // 用键盘激活而不是鼠标点击：Safari/WebKit 按平台默认不会在鼠标点击时
+    // 把焦点移到按钮上，那会让本用例测到浏览器默认行为而不是我们的焦点策略。
+    await send.focus();
+    await page.keyboard.press('Enter');
 
     const stop = page.getByRole('button', { name: /停止|Stop/i });
     await expect(stop).toBeVisible();

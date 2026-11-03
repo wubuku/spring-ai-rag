@@ -65,7 +65,8 @@ class RagCollectionControllerAddDocumentTailTest {
                 mock(AuditLogService.class),
                 documentMutationService,
                 mock(CollectionProvisioningService.class),
-                new ProvisioningOwnerResolver());
+                new ProvisioningOwnerResolver(),
+                null);
 
         collection = new RagCollection();
         collection.setId(5L);

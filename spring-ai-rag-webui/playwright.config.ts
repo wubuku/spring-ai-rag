@@ -21,11 +21,31 @@ export default defineConfig({
     baseURL,
     trace: 'on-first-retry',
     screenshot: 'off',
+    // 三引擎连续跑时，vite preview 首次加载大 bundle 在 WebKit 上偶尔超过 30s；
+    // 45s 是加载预算，不是断言放宽（所有内容断言仍按默认超时）。
+    navigationTimeout: 45_000,
   },
   projects: [
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
+    },
+    // 安全相关套件（可访问性 / 键盘 / 响应式）在非 Chromium 引擎上再跑一遍。
+    // 其余业务 spec 仍只跑 Chromium：它们依赖 Mock API 时序，跨引擎重跑
+    // 收益低而成本高。这里用显式 testMatch，而不是静默 skip。
+    {
+      name: 'firefox',
+      testMatch: /(accessibility|keyboard|responsive)\.spec\.ts/,
+      use: { ...devices['Desktop Firefox'] },
+    },
+    {
+      name: 'webkit',
+      testMatch: /(accessibility|keyboard|responsive)\.spec\.ts/,
+      // WebKit 首次并发加载大 bundle 偶发导航卡住（Chromium / Firefox 不出现），
+      // `openProtectedPage` 会换页重试一次；单次导航预算 20s、整条用例 45s，
+      // 即使 context 已卡死也能快速失败并交给测试级重试，而不是长时间挂住。
+      timeout: 45_000,
+      use: { ...devices['Desktop Safari'], navigationTimeout: 20_000 },
     },
   ],
   // E2E tests expect Spring Boot backend already running on port 8081

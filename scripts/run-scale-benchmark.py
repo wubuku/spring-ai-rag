@@ -30,6 +30,10 @@
 默认是有界版本：1000 / 2000 文档 × 10 chunk（约 1 万 / 2 万向量行），
 可用 --docs / --chunks-per-doc / --scale-docs 放大。脚本只写 `scale-bench-*`
 fixture 集合，并在 --cleanup 时删除它们。
+
+导出走流式接口：客户端把响应落盘而不是整体读入内存，并断言
+`X-Rag-Export-Batch-Size` / `X-Rag-Export-Planned-Batches` 与文档数匹配；
+断言失败时脚本以非零退出码结束。
 """
 
 import argparse
@@ -38,8 +42,10 @@ import json
 import math
 import os
 import random
+import shutil
 import statistics
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.parse
@@ -144,6 +150,83 @@ class HttpClient:
             ) from error
         except urllib.error.URLError as error:
             raise RuntimeError(f"{method} {url} failed: {error}") from error
+
+
+def stream_response(response, target):
+    """把响应体写入文件而不是读进内存，模拟真实导出客户端。"""
+    with open(target, 'wb') as handle:
+        shutil.copyfileobj(response, handle)
+        return handle.tell()
+
+
+def measure_export(client, collection_key, documents, requests=3, warmup=1):
+    """流式导出：断言服务端按批写出，且 JSON 结构与文档数不变。
+
+    服务端内存是否随行数线性增长无法从客户端直接观测，因此用响应头里的
+    `X-Rag-Export-Batch-Size` / `X-Rag-Export-Planned-Batches` 做确定性断言：
+    分块数 = ceil(documents / batchSize)，客户端只按流落盘、不整体驻留。
+    """
+    failures = []
+    latencies = []
+    last = {}
+    with tempfile.TemporaryDirectory(prefix="rag-export-") as directory:
+        target = os.path.join(directory, "export.json")
+        for index in range(warmup + requests):
+            started = time.perf_counter()
+            url = (client.base_url
+                   + "/api/v1/rag/collections/by-key/export?"
+                   + urllib.parse.urlencode({"collectionKey": collection_key}))
+            request = urllib.request.Request(url, method="GET")
+            request.add_header("X-API-Key", client.api_key)
+            try:
+                with urllib.request.urlopen(request, timeout=client.timeout) as response:
+                    headers = {key.lower(): value for key, value
+                               in response.headers.items()}
+                    size = stream_response(response, target)
+                    status = response.status
+            except urllib.error.HTTPError as error:
+                raise RuntimeError(
+                    f"GET {url} -> HTTP {error.code}: {error.read()[:300]!r}"
+                ) from error
+            elapsed = (time.perf_counter() - started) * 1000
+            if index >= warmup:
+                latencies.append(elapsed)
+            last = {"status": status, "bytes": size, "headers": headers,
+                    "path": target}
+
+        batch_size = last["headers"].get("x-rag-export-batch-size")
+        planned = last["headers"].get("x-rag-export-planned-batches")
+        reported = last["headers"].get("x-rag-export-documents")
+        expected_batches = math.ceil(documents / 200) if documents else 0
+        if last["status"] != 200:
+            failures.append(f"status={last['status']}")
+        if batch_size != "200":
+            failures.append(f"batch_size={batch_size}")
+        if reported != str(documents):
+            failures.append(f"documents_header={reported} expected={documents}")
+        if planned != str(expected_batches):
+            failures.append(f"planned_batches={planned} expected={expected_batches}")
+        try:
+            with open(last["path"], "r", encoding="utf-8") as handle:
+                body = json.load(handle)
+        except (OSError, ValueError) as error:
+            failures.append(f"invalid json: {error}")
+            body = {}
+        if body.get("documentCount") != documents:
+            failures.append(
+                f"documentCount={body.get('documentCount')} expected={documents}")
+        if len(body.get("documents") or []) != documents:
+            failures.append(
+                f"documents={len(body.get('documents') or [])} expected={documents}")
+
+        return {
+            **percentiles(latencies),
+            "bytes": last["bytes"],
+            "batch_size": None if batch_size is None else int(batch_size),
+            "planned_batches": None if planned is None else int(planned),
+            "expected_batches": expected_batches,
+            "assertion": {"ok": not failures, "failures": failures},
+        }
 
 
 def measure(client, method, path, params=None, body=None, requests=10, warmup=2):
@@ -509,9 +592,8 @@ def bench_http(client, collection_key, documents, chunk_count, args):
          "vectorWeight": 0.0, "fulltextWeight": 1.0,
          "collectionKeys": collection_key},
         requests=args.requests, warmup=args.warmup)
-    result["export_collection"] = measure(
-        client, "GET", "/api/v1/rag/collections/by-key/export",
-        {"collectionKey": collection_key},
+    result["export_collection"] = measure_export(
+        client, collection_key, documents,
         requests=max(3, args.requests // 4), warmup=1)
     evaluation_body = {
         "query": "alpha bravo",
@@ -617,6 +699,16 @@ def run(args):
             for name in ("documents_ms", "chunks_ms", "vectors_ms")
         }
 
+    # 导出断言失败时以非零退出码结束，避免压测"看起来跑完了"。
+    export_failures = {}
+    for documents, scale in output["scales"].items():
+        export = (scale.get("http") or {}).get("export_collection") or {}
+        assertion = export.get("assertion")
+        if assertion and not assertion.get("ok"):
+            export_failures[documents] = assertion.get("failures")
+    if export_failures:
+        output["export_assertion_failures"] = export_failures
+
     output["wall_seconds"] = round(time.perf_counter() - started, 1)
     text = json.dumps(output, indent=2, ensure_ascii=False)
     print(text)
@@ -624,7 +716,7 @@ def run(args):
         with open(args.output, "w", encoding="utf-8") as handle:
             handle.write(text + "\n")
         print(f"wrote {args.output}", file=sys.stderr)
-    return 0
+    return 1 if export_failures else 0
 
 
 def parse_args():

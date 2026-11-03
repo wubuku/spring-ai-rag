@@ -63,7 +63,8 @@ class RagCollectionByKeyTest {
                 auditLogService,
                 mock(DocumentMutationService.class),
                 mock(CollectionProvisioningService.class),
-                new ProvisioningOwnerResolver());
+                new ProvisioningOwnerResolver(),
+                null);
         collection = new RagCollection();
         collection.setId(7L);
         collection.setCollectionKey(KEY);

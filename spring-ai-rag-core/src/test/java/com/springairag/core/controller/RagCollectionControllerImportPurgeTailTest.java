@@ -55,7 +55,8 @@ class RagCollectionControllerImportPurgeTailTest {
                 mock(AuditLogService.class),
                 mock(DocumentMutationService.class),
                 mock(CollectionProvisioningService.class),
-                new ProvisioningOwnerResolver());
+                new ProvisioningOwnerResolver(),
+                null);
     }
 
     private CollectionImportRequest importRequest(String name, String key) {

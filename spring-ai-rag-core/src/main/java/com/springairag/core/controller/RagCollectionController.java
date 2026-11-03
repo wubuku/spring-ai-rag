@@ -4,7 +4,6 @@ import com.springairag.api.dto.CollectionCloneResponse;
 import com.springairag.api.dto.CollectionCloneRequest;
 import com.springairag.api.dto.CollectionCreatedResponse;
 import com.springairag.api.dto.CollectionDeleteResponse;
-import com.springairag.api.dto.CollectionExportResponse;
 import com.springairag.api.dto.CollectionDocumentListResponse;
 import com.springairag.api.dto.CollectionImportResponse;
 import com.springairag.api.dto.CollectionImportRequest;
@@ -35,6 +34,7 @@ import com.springairag.core.service.AuditLogService;
 import com.springairag.core.service.CollectionProvisioningService;
 import com.springairag.core.service.RagCollectionService;
 import com.springairag.core.service.CollectionIdentityResolver;
+import com.springairag.core.service.CollectionExportService;
 import com.springairag.core.service.CollectionPurgeService;
 import com.springairag.core.service.DocumentMutationService;
 import com.springairag.core.util.DigestUtils;
@@ -58,7 +58,9 @@ import org.springframework.data.domain.Sort;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
@@ -100,6 +102,7 @@ public class RagCollectionController {
     private CollectionProvisioningService collectionProvisioningService; // Batch 853：`required = false` 已删。Batch 822 移除了守卫，210 行无条件使用它，缺失时抛裸 NPE
     private CollectionPurgeService collectionPurgeService;
     private ProvisioningOwnerResolver provisioningOwnerResolver;
+    private final CollectionExportService exportService;
 
     @Autowired
     public void setCollectionPurgeService(CollectionPurgeService service) {
@@ -114,7 +117,8 @@ public class RagCollectionController {
                                     @Autowired(required = false) AuditLogService auditLogService,
                                     DocumentMutationService documentMutationService,
                                     CollectionProvisioningService collectionProvisioningService,
-                                    ProvisioningOwnerResolver provisioningOwnerResolver) {
+                                    ProvisioningOwnerResolver provisioningOwnerResolver,
+                                    CollectionExportService exportService) {
         this.collectionRepository = collectionRepository;
         this.documentRepository = documentRepository;
         this.collectionService = collectionService;
@@ -123,6 +127,7 @@ public class RagCollectionController {
         this.documentMutationService = documentMutationService;
         this.collectionProvisioningService = collectionProvisioningService;
         this.provisioningOwnerResolver = provisioningOwnerResolver;
+        this.exportService = exportService;
     }
 
     @Operation(
@@ -731,59 +736,42 @@ public class RagCollectionController {
             deprecated = true)
     @GetMapping("/{id}/export")
     @Timed(value = "rag.collection.export", description = "Export collection", percentiles = {0.5, 0.95, 0.99})
-    public ResponseEntity<CollectionExportResponse> exportCollection(@PathVariable Long id) {
+    public ResponseEntity<StreamingResponseBody> exportCollection(@PathVariable Long id) {
         ApiKeyCollectionAccess.requireCollectionId(
                 id, ApiKeyCollectionAccess.currentPolicy());
         log.info("Exporting collection: id={}", id);
 
         return findActiveCollection(id)
                 .map(collection -> {
-                    List<RagDocument> docs = documentRepository.findAllByCollectionId(id);
-                    CollectionExportResponse response = buildExportResponse(collection, docs);
-                    log.info("Collection exported: id={}, documents={}", id, docs.size());
-                    return ResponseEntity.ok(response);
+                    long documentCount = documentRepository.countByCollectionId(id);
+                    log.info("Collection export started: id={}, documents={}, batchSize={}",
+                            id, documentCount, CollectionExportService.EXPORT_BATCH_SIZE);
+                    StreamingResponseBody body = outputStream -> {
+                        exportService.write(collection, documentCount, outputStream);
+                        log.info("Collection exported: id={}, documents={}", id, documentCount);
+                    };
+                    return ResponseEntity.ok()
+                            .contentType(MediaType.APPLICATION_JSON)
+                            // 便于压测脚本断言"确实按批流式写出"，而不是一次性加载。
+                            .header("X-Rag-Export-Batch-Size",
+                                    String.valueOf(CollectionExportService.EXPORT_BATCH_SIZE))
+                            .header("X-Rag-Export-Documents",
+                                    String.valueOf(documentCount))
+                            .header("X-Rag-Export-Planned-Batches",
+                                    String.valueOf(CollectionExportService
+                                            .plannedBatchCount(documentCount)))
+                            .body(body);
                 })
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     @GetMapping("/by-key/export")
-    public ResponseEntity<CollectionExportResponse> exportCollectionByKey(
+    public ResponseEntity<StreamingResponseBody> exportCollectionByKey(
             @RequestParam String collectionKey) {
         RagCollection collection = requireAccessibleActiveCollection(collectionKey);
         ApiKeyCollectionAccess.requireCollectionId(
                 collection.getId(), ApiKeyCollectionAccess.currentPolicy());
         return exportCollection(collection.getId());
-    }
-
-    private CollectionExportResponse buildExportResponse(RagCollection collection, List<RagDocument> docs) {
-        List<CollectionExportResponse.ExportedDocumentSummary> docList = docs.stream()
-                .map(doc -> new CollectionExportResponse.ExportedDocumentSummary(
-                        doc.getTitle(),
-                        doc.getSource(),
-                        doc.getContent(),
-                        doc.getDocumentType(),
-                        doc.getMetadata(),
-                        doc.getSize(),
-                        doc.getExternalId(),
-                        doc.getSourceNamespace(),
-                        doc.getSourceRevision(),
-                        doc.getSourceDeletedAt(),
-                        doc.getJsonbPayload(),
-                        doc.getOriginalFilename(),
-                        doc.getEnabled()))
-                .toList();
-
-        return new CollectionExportResponse(
-                collection.getName(),
-                collection.getCollectionKey(),
-                collection.getDescription(),
-                collection.getEmbeddingModel(),
-                collection.getDimensions(),
-                collection.getEnabled(),
-                collection.getMetadata(),
-                docList,
-                Instant.now(),
-                docs.size());
     }
 
 
