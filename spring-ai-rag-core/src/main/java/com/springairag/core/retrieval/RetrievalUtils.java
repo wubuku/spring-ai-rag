@@ -175,8 +175,13 @@ public final class RetrievalUtils {
         if (fulltextResults == null) fulltextResults = List.of();
 
         Map<String, MergedEntry> merged = new LinkedHashMap<>();
-        mergeChannel(merged, vectorResults, vectorWeight, true);
-        mergeChannel(merged, fulltextResults, fulltextWeight, false);
+        // 权重为 0 表示该通道不参与融合：不能把它的候选以 0 分带入结果集。
+        if (vectorWeight > 0.0f) {
+            mergeChannel(merged, vectorResults, vectorWeight, true);
+        }
+        if (fulltextWeight > 0.0f) {
+            mergeChannel(merged, fulltextResults, fulltextWeight, false);
+        }
 
         return merged.values().stream()
                 .sorted(FUSED_ORDER)

@@ -247,6 +247,18 @@ hits after deletion, and concurrent delete-vs-retrieval / purge-vs-import end st
 no orphans or deadlocks. Semantics and the retention decision live in
 [Deletion Semantics and Data Retention](deletion-and-retention.md).
 
+Retrieval correctness is verified by an isolated PostgreSQL suite driven by deterministic
+fake embeddings:
+
+`./scripts/verify-gated-it.sh RetrievalCorrectnessPostgresIntegrationTest`, gated by
+`-Dretrieval-correctness.it.enabled=true` and also run by the nightly full gated layer. It
+does not depend on real model quality and covers collection/metadata/tag/`documentId`
+intersection with `minScore`, weighted RRF over the real `pg_trgm` keyword channel plus
+single-sided/empty degradation, zero-weight channel semantics, vector fallback when the
+keyword index fails, heuristic/HTTP rerank degradation with provenance preserved, citations
+that only reference actually recalled chunks and never cross collections, no citations after
+deletion, and deterministic repeated searches.
+
 ## One-command Documentation Verification
 
 `scripts/verify-project-docs.sh` codifies the project-documentation checklist: OpenClaw local-state isolation, `.agents/skills/` trackability, relative links, EN/ZH heading structure, entry size limits, fixed project conventions, documented commands, shell syntax, whitespace, and added-line secret scanning.

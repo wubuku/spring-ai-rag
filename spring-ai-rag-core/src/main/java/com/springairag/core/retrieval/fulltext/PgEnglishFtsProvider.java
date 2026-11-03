@@ -177,7 +177,7 @@ public class PgEnglishFtsProvider implements FulltextSearchProvider {
         String sql = select + scope + fragment.sql()
                 + "AND e.search_vector_en @@ websearch_to_tsquery('"
                 + TS_CONFIG + "', ?) "
-                + "ORDER BY rank DESC LIMIT ?";
+                + "ORDER BY rank DESC, e.document_id, e.chunk_index LIMIT ?";
         List<Object> args = new ArrayList<>();
         args.add(query);
         args.addAll(fragment.args());

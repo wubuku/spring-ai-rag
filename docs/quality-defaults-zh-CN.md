@@ -35,6 +35,29 @@ BASE_URL=http://127.0.0.1:18081 ./scripts/run-retrieval-goldenset.sh
 两轮结果均通过 `POST /api/v1/rag/evaluation/evaluate` 持久化。脚本输出平均
 Precision@K、MRR、nDCG 及其差值；MRR 或 nDCG 回退时返回失败。
 
+## 检索结果可复现性
+
+检索正确性由 gated 套件 `RetrievalCorrectnessPostgresIntegrationTest` 固定，使用
+1024 维确定性假 embedding 与固定语料，不依赖真实模型质量：
+
+```bash
+./scripts/verify-gated-it.sh RetrievalCorrectnessPostgresIntegrationTest
+```
+
+可复现边界：
+
+- 当前活动 1024 维 Profile 的向量列 `embedding_1024` **没有**近似索引，检索走精确扫描；
+  同一语料、同一参数重复检索得到相同的文档集合、顺序与分数。
+- 向量通道、`pg_trgm`/英文全文通道以及最终融合都使用 `documentId`、`chunkIndex` 作为
+  同分 tie-break，因此通道内与融合后的顺序都是确定的。
+- 只有在运维显式给活动向量列新增 HNSW/IVFFlat 索引后，才可能出现近似检索抖动：
+  此时只能保证同参数下的文档集合落在分数容差内，top-k 边界和同分顺序不保证一致。
+  新增近似索引必须同步更新 gated 断言与本节容忍说明，不能沿用当前“完全一致”契约。
+- goldenset 在 nightly 使用全新隔离数据库与真实 embedding 提供方，同一
+  provider/model/revision 下可稳定复现；跨 provider 或换模型版本时绝对分数不可比，
+  回归只比较同一次运行内 `useRerank=false/true` 的相对差值。脚本每次使用带时间戳的
+  新 collection，重复运行不会污染已有数据。
+
 ## 版本化真实检索回归
 
 Goldenset 用于比较重排开关；版本化回归用于阻止真实检索能力在后续提交中退化：

@@ -418,6 +418,40 @@ class RetrievalUtilsTest {
     }
 
     @Test
+    void fuseResults_zeroVectorWeightExcludesVectorOnlyCandidates() {
+        List<RetrievalResult> fused = RetrievalUtils.fuseResults(
+                List.of(RetrievalUtils.createResult("doc-v", "vector", 0, 0.9)),
+                List.of(RetrievalUtils.createResult("doc-f", "fulltext", 0, 0.6)),
+                10, 0.0f, 1.0f);
+
+        assertEquals(List.of("doc-f"),
+                fused.stream().map(RetrievalResult::getDocumentId).toList());
+        assertEquals(1.0, fused.get(0).getScore(), 1e-9);
+    }
+
+    @Test
+    void fuseResults_zeroFulltextWeightExcludesFulltextOnlyCandidates() {
+        List<RetrievalResult> fused = RetrievalUtils.fuseResults(
+                List.of(RetrievalUtils.createResult("doc-v", "vector", 0, 0.9)),
+                List.of(RetrievalUtils.createResult("doc-f", "fulltext", 0, 0.6)),
+                10, 1.0f, 0.0f);
+
+        assertEquals(List.of("doc-v"),
+                fused.stream().map(RetrievalResult::getDocumentId).toList());
+        assertEquals(1.0, fused.get(0).getScore(), 1e-9);
+    }
+
+    @Test
+    void fuseResults_bothWeightsZeroReturnsEmpty() {
+        List<RetrievalResult> fused = RetrievalUtils.fuseResults(
+                List.of(RetrievalUtils.createResult("doc-v", "vector", 0, 0.9)),
+                List.of(RetrievalUtils.createResult("doc-f", "fulltext", 0, 0.6)),
+                10, 0.0f, 0.0f);
+
+        assertTrue(fused.isEmpty());
+    }
+
+    @Test
     void fuseResults_sameScoreUsesStableDocumentAndChunkOrder() {
         List<RetrievalResult> fused = RetrievalUtils.fuseResults(
                 List.of(

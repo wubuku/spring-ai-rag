@@ -1412,6 +1412,12 @@ Score semantics:
   retrieval, or both; they are not directly interchangeable.
 - Ties in the final fused score use deterministic `documentId`, then
   `chunkIndex` ordering.
+- A channel with weight `0` does not participate in fusion: its candidates
+  never enter the result set with a `0` score. Setting `fulltextWeight` to `0`
+  therefore yields pure vector results, and vice versa.
+- Ordering inside a channel is deterministic as well: equal vector cosine or
+  full-text raw scores are ordered by `documentId`, then `chunkIndex` ascending,
+  so identical corpora and parameters reproduce the same order.
 
 Provenance fields:
 

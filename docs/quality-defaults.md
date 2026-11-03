@@ -35,6 +35,35 @@ It persists both evaluations through `POST /api/v1/rag/evaluation/evaluate`,
 prints average Precision@K, MRR, and nDCG plus the delta, and fails if MRR or
 nDCG regresses.
 
+## Retrieval Result Reproducibility
+
+Retrieval correctness is pinned by the gated
+`RetrievalCorrectnessPostgresIntegrationTest`, which uses deterministic 1024-dimensional
+fake embeddings and a fixed corpus, independent of real model quality:
+
+```bash
+./scripts/verify-gated-it.sh RetrievalCorrectnessPostgresIntegrationTest
+```
+
+Reproducibility boundaries:
+
+- The active 1024-dimensional profile's vector column `embedding_1024` has **no**
+  approximate index, so retrieval performs an exact scan. Repeated searches over the
+  same corpus and parameters return the same document set, order, and scores.
+- The vector channel, the `pg_trgm`/English full-text channels, and fusion all use
+  `documentId`, then `chunkIndex` as the equal-score tie-break, so both in-channel and
+  fused order are deterministic.
+- Jitter only becomes possible if an operator explicitly adds an HNSW/IVFFlat index on
+  the active vector column. In that case only the document set within a score tolerance
+  is guaranteed; top-k boundaries and tie order are not. Adding such an index requires
+  updating the gated assertions and this tolerance note instead of keeping the current
+  exact-equality contract.
+- Goldenset runs in nightly against a fresh isolated database and a real embedding
+  provider; it reproduces reliably within the same provider/model/revision. Absolute
+  scores are not comparable across providers or model versions, and the regression gate
+  compares only the relative `useRerank=false/true` delta within one run. Each run uses a
+  timestamped collection, so repeated runs do not pollute existing data.
+
 ## Versioned Live Retrieval Regression
 
 The goldenset compares reranking modes. The versioned regression gate prevents

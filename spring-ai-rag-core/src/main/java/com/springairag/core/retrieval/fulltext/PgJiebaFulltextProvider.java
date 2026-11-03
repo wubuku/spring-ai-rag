@@ -184,7 +184,7 @@ public class PgJiebaFulltextProvider implements FulltextSearchProvider {
                 + "AND to_tsvector('" + TS_CONFIG + "', e.chunk_text) "
                 + "@@ websearch_to_tsquery('"
                 + TS_CONFIG + "', ?) "
-                + "ORDER BY rank DESC LIMIT ?";
+                + "ORDER BY rank DESC, e.document_id, e.chunk_index LIMIT ?";
         List<Object> args = new ArrayList<>();
         args.add(query);
         args.addAll(fragment.args());

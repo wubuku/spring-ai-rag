@@ -222,6 +222,15 @@ OTHER_ADMIN_API_KEY="${OTHER_ADMIN_API_KEY:-}" \
 幂等一致性、会话删除引用、删除后检索不命中，以及并发删除 vs 检索、并发 purge vs
 导入的无孤儿/无死锁终态。语义与保留决策见[删除语义与数据保留](deletion-and-retention-zh-CN.md)。
 
+检索正确性由确定性假 embedding 驱动的隔离 PostgreSQL 套件验证：
+
+`./scripts/verify-gated-it.sh RetrievalCorrectnessPostgresIntegrationTest`；门控属性为
+`-Dretrieval-correctness.it.enabled=true`，nightly 的全量 gated 层也会执行。它不依赖真实
+模型质量，覆盖 collection/元数据/标签/`documentId` 求交与 `minScore` 组合过滤、
+`pg_trgm` 真实关键词通道的加权 RRF 与单边命中/空结果退化、零权重通道语义、
+关键词索引失败时的向量降级、heuristic/HTTP rerank 不可用降级与候选来源保持、
+引用只指向实际召回且跨 collection 不串、删除后不再产生引用，以及重复检索的确定性。
+
 ## 一键文档验证
 
 `scripts/verify-project-docs.sh` 固化项目文档检查清单：OpenClaw 本地状态隔离、`.agents/skills/` 可跟踪性、相对链接、中英文标题结构、入口行数、项目固定约定、文档命令、Shell 语法、空白和新增行敏感信息扫描。

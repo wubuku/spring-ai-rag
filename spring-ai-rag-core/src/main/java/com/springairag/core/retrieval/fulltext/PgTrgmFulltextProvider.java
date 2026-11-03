@@ -213,7 +213,7 @@ public class PgTrgmFulltextProvider implements FulltextSearchProvider {
                 + "OR POSITION(LOWER(?) IN LOWER(COALESCE(d.title, ''))) > 0 "
                 + "OR similarity(e.chunk_text, ?) >= ?"
                 + ") "
-                + "ORDER BY score_trgm DESC LIMIT ?";
+                + "ORDER BY score_trgm DESC, e.document_id, e.chunk_index LIMIT ?";
         List<Object> args = new ArrayList<>();
         args.add(query);
         args.add(query);

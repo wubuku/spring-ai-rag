@@ -62,6 +62,7 @@ ALL_SUITES=(
   "next-high-value:NextHighValueFeaturesPostgresIntegrationTest"
   "pdf-import:PdfImportPostgresIntegrationTest"
   "retrieval-diagnostics:RetrievalDiagnosticsPostgresIntegrationTest"
+  "retrieval-correctness:RetrievalCorrectnessPostgresIntegrationTest"
   "starter-consumer:ExternalStarterConsumerContextTest"
 )
 

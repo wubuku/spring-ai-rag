@@ -1276,7 +1276,7 @@ public class HybridRetrieverService {
                 RetrievalScopeSql.build(retrievalScope, filters);
         String sql = select + scope + fragment.sql()
                 + "ORDER BY e." + vectorColumn
-                + " <=> CAST(? AS vector) LIMIT ?";
+                + " <=> CAST(? AS vector), e.document_id, e.chunk_index LIMIT ?";
         List<Object> args = new ArrayList<>(fragment.args());
         args.add(vectorStr);
         args.add(limit);
