@@ -320,6 +320,11 @@ jobs:
       - name: Build modules into local repository
         run: mvn -q -B -DskipTests install
 
+      # 安全回归脚本用 LocalStack 启动 demo JVM；demo 不在根 reactor，
+      # 只 install 根模块拿不到 demo jar，必须在这里单独打包。
+      - name: Build demo jar for security regressions
+        run: mvn -q -B -DskipTests -f demos/demo-basic-rag/pom.xml package
+
       - name: Create isolated database
         run: |
           psql -h localhost -U postgres -d postgres -c "CREATE DATABASE rag_nightly_soak" 2>/dev/null || true
