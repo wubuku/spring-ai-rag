@@ -19,12 +19,44 @@ OpenAPI baseline with the normalized `/v3/api-docs` of a running instance.
 | Enum value removed | Yes |
 | New optional request field | No |
 | New response field or relaxed required | No |
+| Field widened to nullable (`T → T|null`) | No |
 | New operation / parameter / response code | No |
 
 The gate targets existing `/api/v1` consumers. When an incompatible upgrade is truly
 required, add `/api/v2` instead of reshaping v1.
 
 ## Explicitly Accepted Semantic Changes
+
+### 2026-11: springdoc 2.8.17 rendering change and streaming export baseline refresh
+
+- **Trigger**: `springdoc-openapi` 2.8.4 → 2.8.17 (with swagger-core 2.2.34 → 2.2.47),
+  clearing the swagger-ui webjar DOMPurify advisory. No Java type or controller signature changed.
+- **Rendering change (not a runtime change)**:
+  - The `JsonNode` component moved from `{"type":"object"}` to `{}` (no type constraint).
+    An untyped schema accepts any JSON, which is a **widening**: payloads valid before
+    remain valid. The eight affected request fields (`answerRequirements`, `jsonbPayload`,
+    `metadataContains`, `payloadContains`, `definition`) are still Jackson `JsonNode`
+    at runtime.
+  - Wrapper types annotated `@Schema(nullable = true)` (for example
+    `ApiKeyRotationPrepareRequest.overlapSeconds`) render as `type: ["integer","null"]`
+    instead of `type: integer`. The comparator now normalizes `T → T|null` as
+    nullability widening and a self-test case covers it.
+  - `Map<String, JsonNode>` collections render `additionalProperties` as `{}`
+    instead of `{"type":"object"}` (the same widening).
+  - A few parameters and response headers now document constraints already expressed
+    by annotations: `exclusiveMinimum`, a parameter `default`, and a typed
+    `Retry-After` header. Runtime validation and defaults are unchanged.
+- **Pre-existing change also captured by the refresh**: the collection export response
+  moved from the JSON `CollectionExportResponse` schema to `StreamingResponseBody`
+  (streaming export, commit `1163acd5`). The comparator only checks operations, fields
+  and response codes, not media-type top-level `$ref`s, so that drift was not reported
+  when it landed; this refresh aligns the baseline with the actual output.
+- **Consumer impact**: No operation, request/response field, response code or required
+  entry was removed; `JsonNode` fields still carry free-form JSON. Only the OpenAPI type
+  annotation is widened.
+- **Regression evidence**: `node scripts/verify-openapi-breaking-change.mjs --self-test`
+  passes in full; a freshly generated local demo `/v3/api-docs` compares as
+  `PASS OpenAPI 无破坏性变更` against the refreshed baseline.
 
 ### 2026-11: Detail endpoints return `404` instead of `403` for invisible IDs
 

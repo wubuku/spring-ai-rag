@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Spring AI RAG Service API",
-    "description": "General-purpose RAG (Retrieval-Augmented Generation) service framework API.\n\n## Core Capabilities\n- **Document Management**: CRUD, batch operations, chunking, embedding vector generation\n- **Retrieval**: Vector search + full-text hybrid retrieval with configurable weights\n- **Q&A**: Non-streaming + SSE streaming, multi-turn conversation memory\n- **Evaluation**: Precision@K / MRR / NDCG retrieval quality metrics\n- **A/B Testing**: Experiment framework for comparing retrieval strategies\n- **Monitoring**: Alerts, SLO checks, performance benchmarks\n\n## Model-Agnostic\nSupports OpenAI, DeepSeek, Anthropic, and other LLMs \u2014 switch via configuration.\n\n## API Versioning\nAll endpoints are prefixed with `/api/v1/`. Breaking changes will be introduced in `/api/v2/`.\n\n## Try It Out\nUse the **Try it out** button in Swagger UI to make live API calls.\n",
+    "description": "General-purpose RAG (Retrieval-Augmented Generation) service framework API.\n\n## Core Capabilities\n- **Document Management**: CRUD, batch operations, chunking, embedding vector generation\n- **Retrieval**: Vector search + full-text hybrid retrieval with configurable weights\n- **Q&A**: Non-streaming + SSE streaming, multi-turn conversation memory\n- **Evaluation**: Precision@K / MRR / NDCG retrieval quality metrics\n- **A/B Testing**: Experiment framework for comparing retrieval strategies\n- **Monitoring**: Alerts, SLO checks, performance benchmarks\n\n## Model-Agnostic\nSupports OpenAI, DeepSeek, Anthropic, and other LLMs — switch via configuration.\n\n## API Versioning\nAll endpoints are prefixed with `/api/v1/`. Breaking changes will be introduced in `/api/v2/`.\n\n## Try It Out\nUse the **Try it out** button in Swagger UI to make live API calls.\n",
     "contact": {
       "name": "Spring AI RAG",
       "url": "https://github.com/yangjiefeng/spring-ai-rag"
@@ -132,12 +132,13 @@
               "*/*": {
                 "schema": {
                   "type": "object",
-                  "additionalProperties": {
-                    "type": "object"
-                  }
+                  "additionalProperties": {}
                 }
               }
             }
+          },
+          "400": {
+            "description": "Request validation error (RFC 7807 Problem Details)"
           },
           "404": {
             "description": "Collection not found or deleted",
@@ -145,15 +146,10 @@
               "*/*": {
                 "schema": {
                   "type": "object",
-                  "additionalProperties": {
-                    "type": "object"
-                  }
+                  "additionalProperties": {}
                 }
               }
             }
-          },
-          "400": {
-            "description": "Request validation error (RFC 7807 Problem Details)"
           },
           "500": {
             "description": "Internal server error (RFC 7807 Problem Details)"
@@ -196,9 +192,7 @@
               "*/*": {
                 "schema": {
                   "type": "object",
-                  "additionalProperties": {
-                    "type": "object"
-                  }
+                  "additionalProperties": {}
                 }
               }
             }
@@ -231,32 +225,6 @@
           }
         ],
         "responses": {
-          "409": {
-            "description": "Collection contains external-managed documents",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Collection not found",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          },
           "200": {
             "description": "Collection soft-deleted",
             "content": {
@@ -272,6 +240,32 @@
           },
           "400": {
             "description": "Request validation error (RFC 7807 Problem Details)"
+          },
+          "404": {
+            "description": "Collection not found",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Collection contains external-managed documents",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
           },
           "500": {
             "description": "Internal server error (RFC 7807 Problem Details)"
@@ -305,9 +299,7 @@
               "*/*": {
                 "schema": {
                   "type": "object",
-                  "additionalProperties": {
-                    "type": "object"
-                  }
+                  "additionalProperties": {}
                 }
               }
             }
@@ -352,9 +344,7 @@
               "*/*": {
                 "schema": {
                   "type": "object",
-                  "additionalProperties": {
-                    "type": "object"
-                  }
+                  "additionalProperties": {}
                 }
               }
             }
@@ -470,16 +460,6 @@
           }
         ],
         "responses": {
-          "404": {
-            "description": "SLO config not found",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/RagSloConfig"
-                }
-              }
-            }
-          },
           "200": {
             "description": "SLO config found",
             "content": {
@@ -492,6 +472,16 @@
           },
           "400": {
             "description": "Request validation error (RFC 7807 Problem Details)"
+          },
+          "404": {
+            "description": "SLO config not found",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/RagSloConfig"
+                }
+              }
+            }
           },
           "500": {
             "description": "Internal server error (RFC 7807 Problem Details)"
@@ -536,6 +526,9 @@
               }
             }
           },
+          "400": {
+            "description": "Request validation error (RFC 7807 Problem Details)"
+          },
           "404": {
             "description": "SLO config not found",
             "content": {
@@ -545,9 +538,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Request validation error (RFC 7807 Problem Details)"
           },
           "500": {
             "description": "Internal server error (RFC 7807 Problem Details)"
@@ -572,14 +562,14 @@
           }
         ],
         "responses": {
-          "404": {
-            "description": "SLO config not found"
-          },
           "204": {
             "description": "SLO config deleted"
           },
           "400": {
             "description": "Request validation error (RFC 7807 Problem Details)"
+          },
+          "404": {
+            "description": "SLO config not found"
           },
           "500": {
             "description": "Internal server error (RFC 7807 Problem Details)"
@@ -606,16 +596,6 @@
           }
         ],
         "responses": {
-          "404": {
-            "description": "Silence schedule not found",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/RagSilenceSchedule"
-                }
-              }
-            }
-          },
           "200": {
             "description": "Silence schedule found",
             "content": {
@@ -628,6 +608,16 @@
           },
           "400": {
             "description": "Request validation error (RFC 7807 Problem Details)"
+          },
+          "404": {
+            "description": "Silence schedule not found",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/RagSilenceSchedule"
+                }
+              }
+            }
           },
           "500": {
             "description": "Internal server error (RFC 7807 Problem Details)"
@@ -662,16 +652,6 @@
           "required": true
         },
         "responses": {
-          "404": {
-            "description": "Silence schedule not found",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/RagSilenceSchedule"
-                }
-              }
-            }
-          },
           "200": {
             "description": "Silence schedule updated",
             "content": {
@@ -684,6 +664,16 @@
           },
           "400": {
             "description": "Request validation error (RFC 7807 Problem Details)"
+          },
+          "404": {
+            "description": "Silence schedule not found",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/RagSilenceSchedule"
+                }
+              }
+            }
           },
           "500": {
             "description": "Internal server error (RFC 7807 Problem Details)"
@@ -708,14 +698,14 @@
           }
         ],
         "responses": {
-          "404": {
-            "description": "Silence schedule not found"
-          },
           "204": {
             "description": "Silence schedule deleted"
           },
           "400": {
             "description": "Request validation error (RFC 7807 Problem Details)"
+          },
+          "404": {
+            "description": "Silence schedule not found"
           },
           "500": {
             "description": "Internal server error (RFC 7807 Problem Details)"
@@ -752,6 +742,9 @@
               }
             }
           },
+          "400": {
+            "description": "Request validation error (RFC 7807 Problem Details)"
+          },
           "404": {
             "description": "Experiment not found",
             "content": {
@@ -761,9 +754,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Request validation error (RFC 7807 Problem Details)"
           },
           "500": {
             "description": "Internal server error (RFC 7807 Problem Details)"
@@ -798,17 +788,17 @@
           "required": true
         },
         "responses": {
-          "409": {
-            "description": "Experiment status does not allow update"
-          },
           "200": {
             "description": "Experiment updated successfully"
+          },
+          "400": {
+            "description": "Request validation error (RFC 7807 Problem Details)"
           },
           "404": {
             "description": "Experiment not found"
           },
-          "400": {
-            "description": "Request validation error (RFC 7807 Problem Details)"
+          "409": {
+            "description": "Experiment status does not allow update"
           },
           "500": {
             "description": "Internal server error (RFC 7807 Problem Details)"
@@ -954,16 +944,6 @@
           }
         ],
         "responses": {
-          "400": {
-            "description": "vectorWeight or fulltextWeight out of range [0.0, 1.0], limit out of range [1, 1000], or query is blank",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            }
-          },
           "200": {
             "description": "Returns retrieval results list",
             "content": {
@@ -976,6 +956,16 @@
                     "summary": "Example 200 response",
                     "value": "{ \"results\": [\n    { \"documentId\": 1, \"content\": \"Spring AI provides a consistent API...\", \"score\": 0.92, \"highlights\": [\"Spring AI provides <em>a consistent API</em>\"] },\n    { \"documentId\": 2, \"content\": \"Getting started with Spring AI RAG...\", \"score\": 0.85, \"highlights\": [] }\n  ], \"query\": \"What is Spring AI?\", \"totalResults\": 2, \"traceId\": \"xyz789\" }"
                   }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "vectorWeight or fulltextWeight out of range [0.0, 1.0], limit out of range [1, 1000], or query is blank",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
                 }
               }
             }
@@ -1003,10 +993,10 @@
           "required": true
         },
         "responses": {
-          "400": {
-            "description": "Request parameter validation failed",
+          "200": {
+            "description": "Returns retrieval results list",
             "content": {
-              "*/*": {
+              "application/json": {
                 "schema": {
                   "type": "array",
                   "items": {
@@ -1016,10 +1006,10 @@
               }
             }
           },
-          "200": {
-            "description": "Returns retrieval results list",
+          "400": {
+            "description": "Request parameter validation failed",
             "content": {
-              "application/json": {
+              "*/*": {
                 "schema": {
                   "type": "array",
                   "items": {
@@ -1054,16 +1044,6 @@
           }
         ],
         "responses": {
-          "409": {
-            "description": "Operation state conflict",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/LongRunningOperationResponse"
-                }
-              }
-            }
-          },
           "202": {
             "description": "Retry accepted",
             "content": {
@@ -1074,15 +1054,11 @@
               }
             }
           },
-          "429": {
-            "description": "Operation capacity exhausted",
-            "headers": {
-              "Retry-After": {
-                "description": "Suggested retry delay in seconds",
-                "style": "simple",
-                "schema": {}
-              }
-            },
+          "400": {
+            "description": "Request validation error (RFC 7807 Problem Details)"
+          },
+          "403": {
+            "description": "Operation access denied",
             "content": {
               "*/*": {
                 "schema": {
@@ -1101,8 +1077,8 @@
               }
             }
           },
-          "403": {
-            "description": "Operation access denied",
+          "409": {
+            "description": "Operation state conflict",
             "content": {
               "*/*": {
                 "schema": {
@@ -1111,8 +1087,24 @@
               }
             }
           },
-          "400": {
-            "description": "Request validation error (RFC 7807 Problem Details)"
+          "429": {
+            "description": "Operation capacity exhausted",
+            "headers": {
+              "Retry-After": {
+                "description": "Suggested retry delay in seconds",
+                "style": "simple",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/LongRunningOperationResponse"
+                }
+              }
+            }
           },
           "500": {
             "description": "Internal server error (RFC 7807 Problem Details)"
@@ -1139,20 +1131,23 @@
           }
         ],
         "responses": {
-          "409": {
-            "description": "Operation state conflict",
+          "202": {
+            "description": "Cancellation accepted",
             "content": {
-              "*/*": {
+              "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/LongRunningOperationResponse"
                 }
               }
             }
           },
-          "202": {
-            "description": "Cancellation accepted",
+          "400": {
+            "description": "Request validation error (RFC 7807 Problem Details)"
+          },
+          "403": {
+            "description": "Operation access denied",
             "content": {
-              "application/json": {
+              "*/*": {
                 "schema": {
                   "$ref": "#/components/schemas/LongRunningOperationResponse"
                 }
@@ -1169,8 +1164,8 @@
               }
             }
           },
-          "403": {
-            "description": "Operation access denied",
+          "409": {
+            "description": "Operation state conflict",
             "content": {
               "*/*": {
                 "schema": {
@@ -1178,9 +1173,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Request validation error (RFC 7807 Problem Details)"
           },
           "500": {
             "description": "Internal server error (RFC 7807 Problem Details)"
@@ -1252,6 +1244,16 @@
           "required": true
         },
         "responses": {
+          "200": {
+            "description": "Record persisted",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/JsonRecordUpsertResponse"
+                }
+              }
+            }
+          },
           "400": {
             "description": "Invalid JSON record",
             "content": {
@@ -1264,16 +1266,6 @@
           },
           "403": {
             "description": "Collection access denied",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/JsonRecordUpsertResponse"
-                }
-              }
-            }
-          },
-          "200": {
-            "description": "Record persisted",
             "content": {
               "*/*": {
                 "schema": {
@@ -1317,26 +1309,6 @@
           "required": true
         },
         "responses": {
-          "400": {
-            "description": "Invalid search request",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/JsonRecordSearchResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Collection access denied",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/JsonRecordSearchResponse"
-                }
-              }
-            }
-          },
           "200": {
             "description": "Search results returned",
             "content": {
@@ -1354,6 +1326,26 @@
                     "summary": "Example 200 response",
                     "value": "{ \"results\": [\n    { \"documentId\": 1, \"content\": \"Spring AI provides a consistent API...\", \"score\": 0.92, \"highlights\": [\"Spring AI provides <em>a consistent API</em>\"] },\n    { \"documentId\": 2, \"content\": \"Getting started with Spring AI RAG...\", \"score\": 0.85, \"highlights\": [] }\n  ], \"query\": \"What is Spring AI?\", \"totalResults\": 2, \"traceId\": \"xyz789\" }"
                   }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid search request",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/JsonRecordSearchResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Collection access denied",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/JsonRecordSearchResponse"
                 }
               }
             }
@@ -1487,8 +1479,8 @@
               }
             }
           },
-          "500": {
-            "description": "Internal error during embedding",
+          "400": {
+            "description": "UUID not found or Markdown has no content",
             "content": {
               "application/json": {
                 "schema": {
@@ -1497,8 +1489,8 @@
               }
             }
           },
-          "400": {
-            "description": "UUID not found or Markdown has no content",
+          "500": {
+            "description": "Internal error during embedding",
             "content": {
               "application/json": {
                 "schema": {
@@ -1666,8 +1658,8 @@
               }
             }
           },
-          "500": {
-            "description": "Internal error during import or embedding",
+          "400": {
+            "description": "Invalid request",
             "content": {
               "application/json": {
                 "schema": {
@@ -1676,8 +1668,8 @@
               }
             }
           },
-          "400": {
-            "description": "Invalid request",
+          "500": {
+            "description": "Internal error during import or embedding",
             "content": {
               "application/json": {
                 "schema": {
@@ -1840,9 +1832,7 @@
               "*/*": {
                 "schema": {
                   "type": "object",
-                  "additionalProperties": {
-                    "type": "object"
-                  }
+                  "additionalProperties": {}
                 }
               }
             }
@@ -1991,8 +1981,8 @@
           "required": true
         },
         "responses": {
-          "400": {
-            "description": "Invalid request parameters",
+          "200": {
+            "description": "Feedback submitted successfully",
             "content": {
               "*/*": {
                 "schema": {
@@ -2001,8 +1991,8 @@
               }
             }
           },
-          "200": {
-            "description": "Feedback submitted successfully",
+          "400": {
+            "description": "Invalid request parameters",
             "content": {
               "*/*": {
                 "schema": {
@@ -2523,8 +2513,8 @@
           "required": true
         },
         "responses": {
-          "400": {
-            "description": "Request parameter validation failed",
+          "200": {
+            "description": "Document created (or duplicate detected)",
             "content": {
               "*/*": {
                 "schema": {
@@ -2533,8 +2523,8 @@
               }
             }
           },
-          "200": {
-            "description": "Document created (or duplicate detected)",
+          "400": {
+            "description": "Request parameter validation failed",
             "content": {
               "*/*": {
                 "schema": {
@@ -2590,6 +2580,19 @@
           "required": true
         },
         "responses": {
+          "200": {
+            "description": "Version restored",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentMutationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request validation error (RFC 7807 Problem Details)"
+          },
           "404": {
             "description": "Document or version not found",
             "content": {
@@ -2609,19 +2612,6 @@
                 }
               }
             }
-          },
-          "200": {
-            "description": "Version restored",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/DocumentMutationResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Request validation error (RFC 7807 Problem Details)"
           },
           "500": {
             "description": "Internal server error (RFC 7807 Problem Details)"
@@ -2730,6 +2720,9 @@
               }
             }
           },
+          "400": {
+            "description": "Request validation error (RFC 7807 Problem Details)"
+          },
           "404": {
             "description": "Document not found",
             "content": {
@@ -2739,9 +2732,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Request validation error (RFC 7807 Problem Details)"
           },
           "500": {
             "description": "Internal server error (RFC 7807 Problem Details)"
@@ -2789,6 +2779,9 @@
               }
             }
           },
+          "400": {
+            "description": "Request validation error (RFC 7807 Problem Details)"
+          },
           "404": {
             "description": "Document not found",
             "content": {
@@ -2798,9 +2791,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Request validation error (RFC 7807 Problem Details)"
           },
           "500": {
             "description": "Internal server error (RFC 7807 Problem Details)"
@@ -2885,8 +2875,8 @@
               }
             }
           },
-          "409": {
-            "description": "Source revision conflict",
+          "400": {
+            "description": "Invalid request",
             "content": {
               "*/*": {
                 "schema": {
@@ -2905,8 +2895,8 @@
               }
             }
           },
-          "400": {
-            "description": "Invalid request",
+          "409": {
+            "description": "Source revision conflict",
             "content": {
               "*/*": {
                 "schema": {
@@ -3151,16 +3141,6 @@
           "required": true
         },
         "responses": {
-          "400": {
-            "description": "Invalid request parameters (ids empty or exceeds limit)",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/BatchCreateResponse"
-                }
-              }
-            }
-          },
           "200": {
             "description": "Creation results returned",
             "content": {
@@ -3178,6 +3158,16 @@
                     "summary": "Example 200 response",
                     "value": "{ \"successful\": 3, \"failed\": 0,\n  \"results\": [\n    { \"id\": 1, \"title\": \"doc1.txt\", \"status\": \"CREATED\", \"message\": null },\n    { \"id\": 2, \"title\": \"doc2.txt\", \"status\": \"CREATED\", \"message\": null },\n    { \"id\": 3, \"title\": \"doc3.txt\", \"status\": \"CREATED\", \"message\": null }\n  ], \"traceId\": \"batch-123\" }"
                   }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request parameters (ids empty or exceeds limit)",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchCreateResponse"
                 }
               }
             }
@@ -3355,8 +3345,8 @@
           "required": true
         },
         "responses": {
-          "400": {
-            "description": "Invalid request parameters",
+          "200": {
+            "description": "Creation and embedding results returned",
             "content": {
               "*/*": {
                 "schema": {
@@ -3365,8 +3355,8 @@
               }
             }
           },
-          "200": {
-            "description": "Creation and embedding results returned",
+          "400": {
+            "description": "Invalid request parameters",
             "content": {
               "*/*": {
                 "schema": {
@@ -3411,8 +3401,8 @@
               }
             }
           },
-          "403": {
-            "description": "Collection access denied",
+          "400": {
+            "description": "Invalid request",
             "content": {
               "*/*": {
                 "schema": {
@@ -3421,8 +3411,8 @@
               }
             }
           },
-          "400": {
-            "description": "Invalid request",
+          "403": {
+            "description": "Collection access denied",
             "content": {
               "*/*": {
                 "schema": {
@@ -3544,15 +3534,8 @@
               }
             }
           },
-          "503": {
-            "description": "Sync runs are disabled",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/DocumentSyncRunResponse"
-                }
-              }
-            }
+          "400": {
+            "description": "Request validation error (RFC 7807 Problem Details)"
           },
           "409": {
             "description": "Lease or active-run conflict",
@@ -3564,11 +3547,18 @@
               }
             }
           },
-          "400": {
-            "description": "Request validation error (RFC 7807 Problem Details)"
-          },
           "500": {
             "description": "Internal server error (RFC 7807 Problem Details)"
+          },
+          "503": {
+            "description": "Sync runs are disabled",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentSyncRunResponse"
+                }
+              }
+            }
           }
         }
       }
@@ -4008,9 +3998,7 @@
               "*/*": {
                 "schema": {
                   "type": "object",
-                  "additionalProperties": {
-                    "type": "object"
-                  }
+                  "additionalProperties": {}
                 }
               }
             }
@@ -4053,25 +4041,34 @@
           "required": true
         },
         "responses": {
-          "400": {
-            "description": "Invalid request or Idempotency-Key",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
           "200": {
             "description": "Unkeyed create succeeded or keyed result replayed",
             "content": {
               "*/*": {
                 "schema": {
                   "type": "object",
-                  "additionalProperties": {
-                    "type": "object"
-                  }
+                  "additionalProperties": {}
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Keyed Collection create succeeded",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {}
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or Idempotency-Key",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -4086,6 +4083,9 @@
               }
             }
           },
+          "500": {
+            "description": "Internal server error (RFC 7807 Problem Details)"
+          },
           "503": {
             "description": "Collection provisioning idempotency is disabled or unavailable",
             "content": {
@@ -4095,22 +4095,6 @@
                 }
               }
             }
-          },
-          "201": {
-            "description": "Keyed Collection create succeeded",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "object"
-                  }
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal server error (RFC 7807 Problem Details)"
           }
         }
       }
@@ -4145,6 +4129,9 @@
               }
             }
           },
+          "400": {
+            "description": "Request validation error (RFC 7807 Problem Details)"
+          },
           "404": {
             "description": "Collection not found or not deleted",
             "content": {
@@ -4154,9 +4141,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Request validation error (RFC 7807 Problem Details)"
           },
           "500": {
             "description": "Internal server error (RFC 7807 Problem Details)"
@@ -4302,6 +4286,9 @@
               }
             }
           },
+          "400": {
+            "description": "Request validation error (RFC 7807 Problem Details)"
+          },
           "404": {
             "description": "Collection not found",
             "content": {
@@ -4311,9 +4298,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Request validation error (RFC 7807 Problem Details)"
           },
           "500": {
             "description": "Internal server error (RFC 7807 Problem Details)"
@@ -4350,6 +4334,16 @@
           }
         ],
         "responses": {
+          "200": {
+            "description": "Collection cloned successfully",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionCloneResponse"
+                }
+              }
+            }
+          },
           "400": {
             "description": "Invalid or missing target collectionKey",
             "content": {
@@ -4360,8 +4354,8 @@
               }
             }
           },
-          "409": {
-            "description": "Target collectionKey already exists",
+          "403": {
+            "description": "Caller cannot clone collections",
             "content": {
               "*/*": {
                 "schema": {
@@ -4380,18 +4374,8 @@
               }
             }
           },
-          "200": {
-            "description": "Collection cloned successfully",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/CollectionCloneResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Caller cannot clone collections",
+          "409": {
+            "description": "Target collectionKey already exists",
             "content": {
               "*/*": {
                 "schema": {
@@ -4426,28 +4410,24 @@
           "required": true
         },
         "responses": {
+          "200": {
+            "description": "Collection imported",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {}
+                }
+              }
+            }
+          },
           "400": {
             "description": "Invalid import data or collectionKey",
             "content": {
               "*/*": {
                 "schema": {
                   "type": "object",
-                  "additionalProperties": {
-                    "type": "object"
-                  }
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "collectionKey already exists",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "object"
-                  }
+                  "additionalProperties": {}
                 }
               }
             }
@@ -4458,22 +4438,18 @@
               "*/*": {
                 "schema": {
                   "type": "object",
-                  "additionalProperties": {
-                    "type": "object"
-                  }
+                  "additionalProperties": {}
                 }
               }
             }
           },
-          "200": {
-            "description": "Collection imported",
+          "409": {
+            "description": "collectionKey already exists",
             "content": {
               "*/*": {
                 "schema": {
                   "type": "object",
-                  "additionalProperties": {
-                    "type": "object"
-                  }
+                  "additionalProperties": {}
                 }
               }
             }
@@ -4575,8 +4551,18 @@
           "required": true
         },
         "responses": {
-          "409": {
-            "description": "Target collectionKey already exists",
+          "200": {
+            "description": "Collection cloned successfully",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionCloneResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid or missing Collection key",
             "content": {
               "*/*": {
                 "schema": {
@@ -4605,18 +4591,8 @@
               }
             }
           },
-          "200": {
-            "description": "Collection cloned successfully",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/CollectionCloneResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid or missing Collection key",
+          "409": {
+            "description": "Target collectionKey already exists",
             "content": {
               "*/*": {
                 "schema": {
@@ -4686,38 +4662,8 @@
           "required": true
         },
         "responses": {
-          "409": {
-            "description": "Preview or lifecycle conflict",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/CollectionPurgeResultResponse"
-                }
-              }
-            }
-          },
           "200": {
             "description": "Collection retired",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/CollectionPurgeResultResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Administrative caller required",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/CollectionPurgeResultResponse"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Collection purge is disabled",
             "content": {
               "*/*": {
                 "schema": {
@@ -4729,8 +4675,38 @@
           "400": {
             "description": "Request validation error (RFC 7807 Problem Details)"
           },
+          "403": {
+            "description": "Administrative caller required",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionPurgeResultResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Preview or lifecycle conflict",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionPurgeResultResponse"
+                }
+              }
+            }
+          },
           "500": {
             "description": "Internal server error (RFC 7807 Problem Details)"
+          },
+          "503": {
+            "description": "Collection purge is disabled",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionPurgeResultResponse"
+                }
+              }
+            }
           }
         }
       }
@@ -4754,38 +4730,8 @@
           }
         ],
         "responses": {
-          "409": {
-            "description": "Collection is busy or plan is unsafe",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/CollectionPurgePreviewResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Administrative caller required",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/CollectionPurgePreviewResponse"
-                }
-              }
-            }
-          },
           "200": {
             "description": "Purge preview created",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/CollectionPurgePreviewResponse"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Collection purge is disabled",
             "content": {
               "*/*": {
                 "schema": {
@@ -4797,8 +4743,38 @@
           "400": {
             "description": "Request validation error (RFC 7807 Problem Details)"
           },
+          "403": {
+            "description": "Administrative caller required",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionPurgePreviewResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Collection is busy or plan is unsafe",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionPurgePreviewResponse"
+                }
+              }
+            }
+          },
           "500": {
             "description": "Internal server error (RFC 7807 Problem Details)"
+          },
+          "503": {
+            "description": "Collection purge is disabled",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionPurgePreviewResponse"
+                }
+              }
+            }
           }
         }
       }
@@ -4839,16 +4815,43 @@
               "Retry-After": {
                 "description": "Suggested poll delay in seconds",
                 "style": "simple",
-                "schema": {}
+                "schema": {
+                  "type": "integer"
+                }
               },
               "Location": {
                 "description": "Operation status URL",
                 "style": "simple",
-                "schema": {}
+                "schema": {
+                  "type": "string"
+                }
               }
             },
             "content": {
               "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LongRunningOperationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request validation error (RFC 7807 Problem Details)"
+          },
+          "403": {
+            "description": "Administrative caller required",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/LongRunningOperationResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Preview not found",
+            "content": {
+              "*/*": {
                 "schema": {
                   "$ref": "#/components/schemas/LongRunningOperationResponse"
                 }
@@ -4871,7 +4874,9 @@
               "Retry-After": {
                 "description": "Suggested retry delay in seconds",
                 "style": "simple",
-                "schema": {}
+                "schema": {
+                  "type": "integer"
+                }
               }
             },
             "content": {
@@ -4881,29 +4886,6 @@
                 }
               }
             }
-          },
-          "404": {
-            "description": "Preview not found",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/LongRunningOperationResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Administrative caller required",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/LongRunningOperationResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Request validation error (RFC 7807 Problem Details)"
           },
           "500": {
             "description": "Internal server error (RFC 7807 Problem Details)"
@@ -4940,28 +4922,21 @@
               }
             }
           },
-          "422": {
-            "description": "Async preview scan limit exceeded",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/CollectionPurgePreviewResponse"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Preview timed out or purge is disabled",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/CollectionPurgePreviewResponse"
-                }
-              }
-            }
+          "400": {
+            "description": "Request validation error (RFC 7807 Problem Details)"
           },
           "403": {
             "description": "Administrative caller required",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionPurgePreviewResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Async preview scan limit exceeded",
             "content": {
               "*/*": {
                 "schema": {
@@ -4980,11 +4955,18 @@
               }
             }
           },
-          "400": {
-            "description": "Request validation error (RFC 7807 Problem Details)"
-          },
           "500": {
             "description": "Internal server error (RFC 7807 Problem Details)"
+          },
+          "503": {
+            "description": "Preview timed out or purge is disabled",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionPurgePreviewResponse"
+                }
+              }
+            }
           }
         }
       }
@@ -5015,25 +4997,27 @@
           "required": true
         },
         "responses": {
-          "400": {
-            "description": "Invalid request or idempotency key",
+          "202": {
+            "description": "Operation accepted",
+            "headers": {
+              "Location": {
+                "description": "URL of the durable operation receipt",
+                "style": "simple",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
             "content": {
-              "*/*": {
+              "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/LongRunningOperationResponse"
                 }
               }
             }
           },
-          "429": {
-            "description": "Operation capacity exhausted",
-            "headers": {
-              "Retry-After": {
-                "description": "Suggested retry delay in seconds",
-                "style": "simple",
-                "schema": {}
-              }
-            },
+          "400": {
+            "description": "Invalid request or idempotency key",
             "content": {
               "*/*": {
                 "schema": {
@@ -5062,17 +5046,19 @@
               }
             }
           },
-          "202": {
-            "description": "Operation accepted",
+          "429": {
+            "description": "Operation capacity exhausted",
             "headers": {
-              "Location": {
-                "description": "URL of the durable operation receipt",
+              "Retry-After": {
+                "description": "Suggested retry delay in seconds",
                 "style": "simple",
-                "schema": {}
+                "schema": {
+                  "type": "integer"
+                }
               }
             },
             "content": {
-              "application/json": {
+              "*/*": {
                 "schema": {
                   "$ref": "#/components/schemas/LongRunningOperationResponse"
                 }
@@ -5242,11 +5228,11 @@
           "required": true
         },
         "responses": {
-          "400": {
-            "description": "Invalid request body"
-          },
           "202": {
             "description": "Error accepted and recorded"
+          },
+          "400": {
+            "description": "Invalid request body"
           },
           "500": {
             "description": "Internal server error (RFC 7807 Problem Details)"
@@ -5273,8 +5259,8 @@
           "required": true
         },
         "responses": {
-          "400": {
-            "description": "Request parameter validation failed",
+          "200": {
+            "description": "Q&A succeeded, returns complete answer",
             "content": {
               "*/*": {
                 "schema": {
@@ -5283,8 +5269,8 @@
               }
             }
           },
-          "200": {
-            "description": "Q&A succeeded, returns complete answer",
+          "400": {
+            "description": "Request parameter validation failed",
             "content": {
               "*/*": {
                 "schema": {
@@ -5363,8 +5349,8 @@
           "required": true
         },
         "responses": {
-          "400": {
-            "description": "Request parameter validation failed",
+          "200": {
+            "description": "Q&A succeeded, returns complete answer",
             "content": {
               "*/*": {
                 "schema": {
@@ -5373,8 +5359,8 @@
               }
             }
           },
-          "200": {
-            "description": "Q&A succeeded, returns complete answer",
+          "400": {
+            "description": "Request parameter validation failed",
             "content": {
               "*/*": {
                 "schema": {
@@ -5408,6 +5394,9 @@
               }
             }
           },
+          "400": {
+            "description": "Request validation error (RFC 7807 Problem Details)"
+          },
           "403": {
             "description": "Not an ADMIN key",
             "content": {
@@ -5417,9 +5406,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Request validation error (RFC 7807 Problem Details)"
           },
           "500": {
             "description": "Internal server error (RFC 7807 Problem Details)"
@@ -5456,6 +5442,16 @@
           "required": true
         },
         "responses": {
+          "200": {
+            "description": "Existing provisioning result replayed",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiKeyCreatedResponse"
+                }
+              }
+            }
+          },
           "201": {
             "description": "API key created successfully",
             "content": {
@@ -5486,15 +5482,8 @@
               }
             }
           },
-          "200": {
-            "description": "Existing provisioning result replayed",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiKeyCreatedResponse"
-                }
-              }
-            }
+          "500": {
+            "description": "Internal server error (RFC 7807 Problem Details)"
           },
           "503": {
             "description": "Provisioning idempotency ledger unavailable or disabled",
@@ -5505,9 +5494,6 @@
                 }
               }
             }
-          },
-          "500": {
-            "description": "Internal server error (RFC 7807 Problem Details)"
           }
         }
       }
@@ -5576,16 +5562,6 @@
           }
         ],
         "responses": {
-          "404": {
-            "description": "Key not found",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
           "201": {
             "description": "New key created, old key disabled",
             "content": {
@@ -5598,6 +5574,16 @@
           },
           "400": {
             "description": "Request validation error (RFC 7807 Problem Details)"
+          },
+          "404": {
+            "description": "Key not found",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           },
           "500": {
             "description": "Internal server error (RFC 7807 Problem Details)"
@@ -5694,7 +5680,8 @@
             "required": true,
             "schema": {
               "type": "integer",
-              "format": "int64"
+              "format": "int64",
+              "exclusiveMinimum": 0
             }
           }
         ],
@@ -5709,16 +5696,6 @@
           "required": true
         },
         "responses": {
-          "404": {
-            "description": "Alert not found",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/AlertActionResponse"
-                }
-              }
-            }
-          },
           "200": {
             "description": "Alert resolved",
             "content": {
@@ -5731,6 +5708,16 @@
           },
           "400": {
             "description": "Request validation error (RFC 7807 Problem Details)"
+          },
+          "404": {
+            "description": "Alert not found",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlertActionResponse"
+                }
+              }
+            }
           },
           "500": {
             "description": "Internal server error (RFC 7807 Problem Details)"
@@ -5765,8 +5752,8 @@
           }
         ],
         "responses": {
-          "400": {
-            "description": "Invalid date format",
+          "200": {
+            "description": "Returns all SLO statuses",
             "content": {
               "*/*": {
                 "schema": {
@@ -5778,8 +5765,8 @@
               }
             }
           },
-          "200": {
-            "description": "Returns all SLO statuses",
+          "400": {
+            "description": "Invalid date format",
             "content": {
               "*/*": {
                 "schema": {
@@ -5814,16 +5801,6 @@
           "required": true
         },
         "responses": {
-          "409": {
-            "description": "SLO config with this name already exists",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/RagSloConfig"
-                }
-              }
-            }
-          },
           "201": {
             "description": "SLO config created",
             "content": {
@@ -5836,6 +5813,16 @@
           },
           "400": {
             "description": "Invalid request",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/RagSloConfig"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "SLO config with this name already exists",
             "content": {
               "*/*": {
                 "schema": {
@@ -5983,8 +5970,8 @@
               }
             }
           },
-          "409": {
-            "description": "Schedule with this name already exists",
+          "400": {
+            "description": "Invalid request",
             "content": {
               "*/*": {
                 "schema": {
@@ -5993,8 +5980,8 @@
               }
             }
           },
-          "400": {
-            "description": "Invalid request",
+          "409": {
+            "description": "Schedule with this name already exists",
             "content": {
               "*/*": {
                 "schema": {
@@ -6158,8 +6145,8 @@
           "required": true
         },
         "responses": {
-          "400": {
-            "description": "Invalid request parameters",
+          "200": {
+            "description": "Experiment created successfully",
             "content": {
               "*/*": {
                 "schema": {
@@ -6168,8 +6155,8 @@
               }
             }
           },
-          "200": {
-            "description": "Experiment created successfully",
+          "400": {
+            "description": "Invalid request parameters",
             "content": {
               "*/*": {
                 "schema": {
@@ -6206,11 +6193,11 @@
           "200": {
             "description": "Experiment stopped successfully"
           },
-          "404": {
-            "description": "Experiment not found"
-          },
           "400": {
             "description": "Request validation error (RFC 7807 Problem Details)"
+          },
+          "404": {
+            "description": "Experiment not found"
           },
           "500": {
             "description": "Internal server error (RFC 7807 Problem Details)"
@@ -6240,14 +6227,14 @@
           "200": {
             "description": "Experiment started successfully"
           },
-          "409": {
-            "description": "Experiment status does not allow starting"
+          "400": {
+            "description": "Request validation error (RFC 7807 Problem Details)"
           },
           "404": {
             "description": "Experiment not found"
           },
-          "400": {
-            "description": "Request validation error (RFC 7807 Problem Details)"
+          "409": {
+            "description": "Experiment status does not allow starting"
           },
           "500": {
             "description": "Internal server error (RFC 7807 Problem Details)"
@@ -6294,19 +6281,6 @@
           }
         ],
         "responses": {
-          "404": {
-            "description": "Experiment not found",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/ExperimentResult"
-                  }
-                }
-              }
-            }
-          },
           "200": {
             "description": "Returns paginated experiment results list",
             "content": {
@@ -6322,6 +6296,19 @@
           },
           "400": {
             "description": "Request validation error (RFC 7807 Problem Details)"
+          },
+          "404": {
+            "description": "Experiment not found",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ExperimentResult"
+                  }
+                }
+              }
+            }
           },
           "500": {
             "description": "Internal server error (RFC 7807 Problem Details)"
@@ -6359,11 +6346,11 @@
           "200": {
             "description": "Result recorded successfully"
           },
-          "404": {
-            "description": "Experiment not found"
-          },
           "400": {
             "description": "Request validation error (RFC 7807 Problem Details)"
+          },
+          "404": {
+            "description": "Experiment not found"
           },
           "500": {
             "description": "Internal server error (RFC 7807 Problem Details)"
@@ -6393,11 +6380,11 @@
           "200": {
             "description": "Experiment paused successfully"
           },
-          "404": {
-            "description": "Experiment not found"
-          },
           "400": {
             "description": "Request validation error (RFC 7807 Problem Details)"
+          },
+          "404": {
+            "description": "Experiment not found"
           },
           "500": {
             "description": "Internal server error (RFC 7807 Problem Details)"
@@ -6435,6 +6422,9 @@
               }
             }
           },
+          "400": {
+            "description": "Request validation error (RFC 7807 Problem Details)"
+          },
           "404": {
             "description": "Document not found",
             "content": {
@@ -6444,9 +6434,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Request validation error (RFC 7807 Problem Details)"
           },
           "500": {
             "description": "Internal server error (RFC 7807 Problem Details)"
@@ -6481,16 +6468,6 @@
           }
         ],
         "responses": {
-          "404": {
-            "description": "Document not found",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/DocumentDeleteResponse"
-                }
-              }
-            }
-          },
           "200": {
             "description": "Document deleted",
             "content": {
@@ -6503,6 +6480,16 @@
           },
           "400": {
             "description": "Request validation error (RFC 7807 Problem Details)"
+          },
+          "404": {
+            "description": "Document not found",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentDeleteResponse"
+                }
+              }
+            }
           },
           "500": {
             "description": "Internal server error (RFC 7807 Problem Details)"
@@ -6823,6 +6810,16 @@
           }
         ],
         "responses": {
+          "200": {
+            "description": "Returns durable usage aggregation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LlmUsageResponse"
+                }
+              }
+            }
+          },
           "400": {
             "description": "Invalid date or principal",
             "content": {
@@ -6835,16 +6832,6 @@
           },
           "403": {
             "description": "Principal is not allowed to query the requested scope",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/LlmUsageResponse"
-                }
-              }
-            }
-          },
-          "200": {
-            "description": "Returns durable usage aggregation",
             "content": {
               "application/json": {
                 "schema": {
@@ -7113,16 +7100,6 @@
           }
         ],
         "responses": {
-          "404": {
-            "description": "Provider not found or unavailable",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/ModelDetailResponse"
-                }
-              }
-            }
-          },
           "200": {
             "description": "Returns model details",
             "content": {
@@ -7135,6 +7112,16 @@
           },
           "400": {
             "description": "Request validation error (RFC 7807 Problem Details)"
+          },
+          "404": {
+            "description": "Provider not found or unavailable",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelDetailResponse"
+                }
+              }
+            }
           },
           "500": {
             "description": "Internal server error (RFC 7807 Problem Details)"
@@ -7303,15 +7290,8 @@
               }
             }
           },
-          "404": {
-            "description": "JSON record not found",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/JsonRecordDetailResponse"
-                }
-              }
-            }
+          "400": {
+            "description": "Request validation error (RFC 7807 Problem Details)"
           },
           "403": {
             "description": "Document access denied",
@@ -7323,8 +7303,15 @@
               }
             }
           },
-          "400": {
-            "description": "Request validation error (RFC 7807 Problem Details)"
+          "404": {
+            "description": "JSON record not found",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/JsonRecordDetailResponse"
+                }
+              }
+            }
           },
           "500": {
             "description": "Internal server error (RFC 7807 Problem Details)"
@@ -7359,6 +7346,7 @@
             "required": false,
             "schema": {
               "type": "string",
+              "default": "default",
               "maxLength": 128,
               "minLength": 0,
               "pattern": "^(?:\\s*|[\\x20-\\x7e]+)$"
@@ -7421,6 +7409,7 @@
             "required": false,
             "schema": {
               "type": "string",
+              "default": "default",
               "maxLength": 128,
               "minLength": 0,
               "pattern": "^(?:\\s*|[\\x20-\\x7e]+)$"
@@ -7555,8 +7544,8 @@
               }
             }
           },
-          "503": {
-            "description": "Observability is disabled or the current authorization scope cannot be resolved",
+          "400": {
+            "description": "Invalid query window or filter",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -7575,8 +7564,11 @@
               }
             }
           },
-          "400": {
-            "description": "Invalid query window or filter",
+          "500": {
+            "description": "Internal server error (RFC 7807 Problem Details)"
+          },
+          "503": {
+            "description": "Observability is disabled or the current authorization scope cannot be resolved",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -7584,9 +7576,6 @@
                 }
               }
             }
-          },
-          "500": {
-            "description": "Internal server error (RFC 7807 Problem Details)"
           }
         }
       }
@@ -7600,16 +7589,6 @@
         "description": "Returns the versioned capabilities and limits visible to the current caller.",
         "operationId": "capabilities",
         "responses": {
-          "503": {
-            "description": "Capability contract unavailable",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
           "200": {
             "description": "Capability contract",
             "content": {
@@ -7619,6 +7598,9 @@
                 }
               }
             }
+          },
+          "400": {
+            "description": "Request validation error (RFC 7807 Problem Details)"
           },
           "401": {
             "description": "Authentication required",
@@ -7630,11 +7612,18 @@
               }
             }
           },
-          "400": {
-            "description": "Request validation error (RFC 7807 Problem Details)"
-          },
           "500": {
             "description": "Internal server error (RFC 7807 Problem Details)"
+          },
+          "503": {
+            "description": "Capability contract unavailable",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           }
         }
       }
@@ -7658,6 +7647,9 @@
               }
             }
           },
+          "400": {
+            "description": "Request validation error (RFC 7807 Problem Details)"
+          },
           "500": {
             "description": "Internal server error",
             "content": {
@@ -7667,9 +7659,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Request validation error (RFC 7807 Problem Details)"
           }
         }
       }
@@ -7693,6 +7682,9 @@
               }
             }
           },
+          "400": {
+            "description": "Request validation error (RFC 7807 Problem Details)"
+          },
           "500": {
             "description": "Internal server error",
             "content": {
@@ -7702,9 +7694,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Request validation error (RFC 7807 Problem Details)"
           }
         }
       }
@@ -7780,6 +7769,9 @@
               }
             }
           },
+          "400": {
+            "description": "Request validation error (RFC 7807 Problem Details)"
+          },
           "404": {
             "description": "File not found",
             "content": {
@@ -7790,9 +7782,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Request validation error (RFC 7807 Problem Details)"
           },
           "500": {
             "description": "Internal server error (RFC 7807 Problem Details)"
@@ -7841,6 +7830,9 @@
               }
             }
           },
+          "400": {
+            "description": "Request validation error (RFC 7807 Problem Details)"
+          },
           "404": {
             "description": "File not found",
             "content": {
@@ -7851,9 +7843,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Request validation error (RFC 7807 Problem Details)"
           },
           "500": {
             "description": "Internal server error (RFC 7807 Problem Details)"
@@ -7881,16 +7870,6 @@
           }
         ],
         "responses": {
-          "404": {
-            "description": "Entry Markdown file not found",
-            "content": {
-              "text/html": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
           "200": {
             "description": "HTML preview rendered",
             "content": {
@@ -7903,6 +7882,16 @@
           },
           "400": {
             "description": "Request validation error (RFC 7807 Problem Details)"
+          },
+          "404": {
+            "description": "Entry Markdown file not found",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "Internal server error (RFC 7807 Problem Details)"
@@ -7931,16 +7920,6 @@
           }
         ],
         "responses": {
-          "404": {
-            "description": "Entry Markdown file not found",
-            "content": {
-              "text/html": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
           "200": {
             "description": "HTML preview rendered",
             "content": {
@@ -7953,6 +7932,16 @@
           },
           "400": {
             "description": "Request validation error (RFC 7807 Problem Details)"
+          },
+          "404": {
+            "description": "Entry Markdown file not found",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "Internal server error (RFC 7807 Problem Details)"
@@ -7990,6 +7979,9 @@
               }
             }
           },
+          "400": {
+            "description": "Request validation error (RFC 7807 Problem Details)"
+          },
           "404": {
             "description": "Entry Markdown file not found",
             "content": {
@@ -7999,9 +7991,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Request validation error (RFC 7807 Problem Details)"
           },
           "500": {
             "description": "Internal server error (RFC 7807 Problem Details)"
@@ -8604,16 +8593,6 @@
           }
         ],
         "responses": {
-          "404": {
-            "description": "Document not found",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/VersionHistoryResponse"
-                }
-              }
-            }
-          },
           "200": {
             "description": "Version history returned",
             "content": {
@@ -8626,6 +8605,16 @@
           },
           "400": {
             "description": "Request validation error (RFC 7807 Problem Details)"
+          },
+          "404": {
+            "description": "Document not found",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/VersionHistoryResponse"
+                }
+              }
+            }
           },
           "500": {
             "description": "Internal server error (RFC 7807 Problem Details)"
@@ -8674,6 +8663,9 @@
               }
             }
           },
+          "400": {
+            "description": "Request validation error (RFC 7807 Problem Details)"
+          },
           "404": {
             "description": "Version not found",
             "content": {
@@ -8683,9 +8675,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Request validation error (RFC 7807 Problem Details)"
           },
           "500": {
             "description": "Internal server error (RFC 7807 Problem Details)"
@@ -8698,7 +8687,7 @@
         "tags": [
           "document-chunk-preview-controller"
         ],
-        "summary": "\u53ea\u8bfb\u9884\u89c8\u5f53\u524d\u6587\u6863\u7684\u5206\u5757\u53ca\u8bca\u65ad",
+        "summary": "只读预览当前文档的分块及诊断",
         "operationId": "preview_2",
         "parameters": [
           {
@@ -8965,16 +8954,6 @@
               }
             }
           },
-          "409": {
-            "description": "Source revision conflict",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/ExternalDocumentDeleteResponse"
-                }
-              }
-            }
-          },
           "400": {
             "description": "Invalid query",
             "content": {
@@ -8997,6 +8976,16 @@
           },
           "404": {
             "description": "Document not found",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalDocumentDeleteResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Source revision conflict",
             "content": {
               "*/*": {
                 "schema": {
@@ -9061,6 +9050,9 @@
               }
             }
           },
+          "400": {
+            "description": "Request validation error (RFC 7807 Problem Details)"
+          },
           "404": {
             "description": "Run not found",
             "content": {
@@ -9070,9 +9062,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Request validation error (RFC 7807 Problem Details)"
           },
           "500": {
             "description": "Internal server error (RFC 7807 Problem Details)"
@@ -9155,8 +9144,8 @@
           }
         ],
         "responses": {
-          "503": {
-            "description": "Sync runs are disabled",
+          "200": {
+            "description": "Item receipt page returned",
             "content": {
               "*/*": {
                 "schema": {
@@ -9167,26 +9156,6 @@
           },
           "400": {
             "description": "Invalid page parameter or cursor",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/DocumentSyncRunItemPageResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Bound sync run not found",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/DocumentSyncRunItemPageResponse"
-                }
-              }
-            }
-          },
-          "200": {
-            "description": "Item receipt page returned",
             "content": {
               "*/*": {
                 "schema": {
@@ -9215,8 +9184,28 @@
               }
             }
           },
+          "404": {
+            "description": "Bound sync run not found",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentSyncRunItemPageResponse"
+                }
+              }
+            }
+          },
           "500": {
             "description": "Internal server error (RFC 7807 Problem Details)"
+          },
+          "503": {
+            "description": "Sync runs are disabled",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentSyncRunItemPageResponse"
+                }
+              }
+            }
           }
         }
       }
@@ -9441,7 +9430,7 @@
             "content": {
               "*/*": {
                 "schema": {
-                  "$ref": "#/components/schemas/CollectionExportResponse"
+                  "$ref": "#/components/schemas/StreamingResponseBody"
                 }
               }
             }
@@ -9651,7 +9640,7 @@
             "content": {
               "*/*": {
                 "schema": {
-                  "$ref": "#/components/schemas/CollectionExportResponse"
+                  "$ref": "#/components/schemas/StreamingResponseBody"
                 }
               }
             }
@@ -9898,16 +9887,6 @@
         "description": "Returns embedding cache hit/miss counts and hit rate.",
         "operationId": "getCacheStats",
         "responses": {
-          "500": {
-            "description": "Internal server error",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
           "200": {
             "description": "Returns cache statistics",
             "content": {
@@ -9931,6 +9910,16 @@
           },
           "400": {
             "description": "Request validation error (RFC 7807 Problem Details)"
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           }
         }
       }
@@ -9943,16 +9932,6 @@
         "summary": "Inspect the current authenticated API principal",
         "operationId": "currentIdentity",
         "responses": {
-          "401": {
-            "description": "Missing or invalid API credential",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
           "200": {
             "description": "Current principal and its effective Collection access",
             "content": {
@@ -9963,6 +9942,22 @@
               }
             }
           },
+          "400": {
+            "description": "Request validation error (RFC 7807 Problem Details)"
+          },
+          "401": {
+            "description": "Missing or invalid API credential",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error (RFC 7807 Problem Details)"
+          },
           "503": {
             "description": "The current principal policy cannot be resolved completely",
             "content": {
@@ -9972,12 +9967,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Request validation error (RFC 7807 Problem Details)"
-          },
-          "500": {
-            "description": "Internal server error (RFC 7807 Problem Details)"
           }
         }
       }
@@ -10055,8 +10044,8 @@
           }
         ],
         "responses": {
-          "400": {
-            "description": "Invalid pagination or time range",
+          "200": {
+            "description": "Audit page returned",
             "content": {
               "*/*": {
                 "schema": {
@@ -10065,8 +10054,8 @@
               }
             }
           },
-          "200": {
-            "description": "Audit page returned",
+          "400": {
+            "description": "Invalid pagination or time range",
             "content": {
               "*/*": {
                 "schema": {
@@ -10242,8 +10231,8 @@
           }
         ],
         "responses": {
-          "400": {
-            "description": "Invalid date format",
+          "200": {
+            "description": "Returns SLO status",
             "content": {
               "*/*": {
                 "schema": {
@@ -10252,8 +10241,8 @@
               }
             }
           },
-          "200": {
-            "description": "Returns SLO status",
+          "400": {
+            "description": "Invalid date format",
             "content": {
               "*/*": {
                 "schema": {
@@ -10329,7 +10318,8 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "format": "int64"
+              "format": "int64",
+              "exclusiveMinimum": 0
             }
           },
           {
@@ -10509,16 +10499,6 @@
           }
         ],
         "responses": {
-          "404": {
-            "description": "Experiment not found",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/VariantResponse"
-                }
-              }
-            }
-          },
           "200": {
             "description": "Returns variant assignment result",
             "content": {
@@ -10531,6 +10511,16 @@
           },
           "400": {
             "description": "Request validation error (RFC 7807 Problem Details)"
+          },
+          "404": {
+            "description": "Experiment not found",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/VariantResponse"
+                }
+              }
+            }
           },
           "500": {
             "description": "Internal server error (RFC 7807 Problem Details)"
@@ -10567,6 +10557,9 @@
               }
             }
           },
+          "400": {
+            "description": "Request validation error (RFC 7807 Problem Details)"
+          },
           "404": {
             "description": "Experiment not found",
             "content": {
@@ -10576,9 +10569,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Request validation error (RFC 7807 Problem Details)"
           },
           "500": {
             "description": "Internal server error (RFC 7807 Problem Details)"
@@ -10661,6 +10651,9 @@
               }
             }
           },
+          "400": {
+            "description": "Request validation error (RFC 7807 Problem Details)"
+          },
           "500": {
             "description": "Internal server error",
             "content": {
@@ -10670,9 +10663,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Request validation error (RFC 7807 Problem Details)"
           }
         }
       }
@@ -10696,26 +10686,6 @@
           }
         ],
         "responses": {
-          "404": {
-            "description": "Key not found",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Not an ADMIN key",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
           "204": {
             "description": "Key revoked successfully",
             "content": {
@@ -10728,6 +10698,26 @@
           },
           "400": {
             "description": "Request validation error (RFC 7807 Problem Details)"
+          },
+          "403": {
+            "description": "Not an ADMIN key",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Key not found",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           },
           "500": {
             "description": "Internal server error (RFC 7807 Problem Details)"
@@ -10754,8 +10744,8 @@
           }
         ],
         "responses": {
-          "400": {
-            "description": "Invalid alert key",
+          "200": {
+            "description": "Alert unsilenced or was not silenced",
             "content": {
               "*/*": {
                 "schema": {
@@ -10764,8 +10754,8 @@
               }
             }
           },
-          "200": {
-            "description": "Alert unsilenced or was not silenced",
+          "400": {
+            "description": "Invalid alert key",
             "content": {
               "*/*": {
                 "schema": {
@@ -10814,9 +10804,7 @@
           },
           "metadata": {
             "type": "object",
-            "additionalProperties": {
-              "type": "object"
-            },
+            "additionalProperties": {},
             "description": "Additional metadata"
           }
         }
@@ -10879,23 +10867,26 @@
           "sloName": {
             "type": "string",
             "description": "SLO name (unique)",
-            "example": "availability_p99"
+            "example": "availability_p99",
+            "minLength": 1
           },
           "sloType": {
             "type": "string",
             "description": "SLO type: AVAILABILITY / LATENCY / QUALITY / ERROR_RATE",
-            "example": "LATENCY"
+            "example": "LATENCY",
+            "minLength": 1
           },
           "targetValue": {
             "type": "number",
             "format": "double",
             "description": "Target value",
-            "example": 200.0
+            "example": 200
           },
           "unit": {
             "type": "string",
             "description": "Unit: ms / % / score",
-            "example": "ms"
+            "example": "ms",
+            "minLength": 1
           },
           "description": {
             "type": "string",
@@ -10909,9 +10900,7 @@
           },
           "metadata": {
             "type": "object",
-            "additionalProperties": {
-              "type": "object"
-            },
+            "additionalProperties": {},
             "description": "Additional metadata"
           }
         },
@@ -10950,9 +10939,7 @@
           },
           "metadata": {
             "type": "object",
-            "additionalProperties": {
-              "type": "object"
-            }
+            "additionalProperties": {}
           },
           "createdAt": {
             "type": "string",
@@ -10971,7 +10958,8 @@
           "name": {
             "type": "string",
             "description": "Silence schedule name (unique)",
-            "example": "weekend-maintenance"
+            "example": "weekend-maintenance",
+            "minLength": 1
           },
           "alertKey": {
             "type": "string",
@@ -10981,17 +10969,20 @@
           "silenceType": {
             "type": "string",
             "description": "Silence type: ONE_TIME or RECURRING",
-            "example": "RECURRING"
+            "example": "RECURRING",
+            "minLength": 1
           },
           "startTime": {
             "type": "string",
             "description": "Start time: ISO datetime for ONE_TIME or Cron expression for RECURRING",
-            "example": "2026-04-10T02:00:00+08:00"
+            "example": "2026-04-10T02:00:00+08:00",
+            "minLength": 1
           },
           "endTime": {
             "type": "string",
             "description": "End time: ISO datetime for ONE_TIME or Cron expression end for RECURRING",
-            "example": "2026-04-10T04:00:00+08:00"
+            "example": "2026-04-10T04:00:00+08:00",
+            "minLength": 1
           },
           "description": {
             "type": "string",
@@ -11005,9 +10996,7 @@
           },
           "metadata": {
             "type": "object",
-            "additionalProperties": {
-              "type": "object"
-            },
+            "additionalProperties": {},
             "description": "Additional metadata"
           }
         },
@@ -11048,9 +11037,7 @@
           },
           "metadata": {
             "type": "object",
-            "additionalProperties": {
-              "type": "object"
-            }
+            "additionalProperties": {}
           },
           "createdAt": {
             "type": "string",
@@ -11126,9 +11113,7 @@
           },
           "usage": {
             "type": "object",
-            "additionalProperties": {
-              "type": "object"
-            }
+            "additionalProperties": {}
           },
           "finishReason": {
             "type": "string"
@@ -11139,9 +11124,7 @@
           },
           "metadata": {
             "type": "object",
-            "additionalProperties": {
-              "type": "object"
-            },
+            "additionalProperties": {},
             "description": "Response metadata (contains sessionId, etc.)"
           },
           "stepMetrics": {
@@ -11205,9 +11188,7 @@
           },
           "metadata": {
             "type": "object",
-            "additionalProperties": {
-              "type": "object"
-            }
+            "additionalProperties": {}
           }
         }
       },
@@ -11321,16 +11302,14 @@
       },
       "CollectionScopeMode": {
         "type": "string",
-        "description": "Collection \u68c0\u7d22\u8303\u56f4\u6a21\u5f0f",
+        "description": "Collection 检索范围模式",
         "enum": [
           "CALLER_VISIBLE",
           "ANY_COLLECTION",
           "SELECTED_COLLECTIONS"
         ]
       },
-      "JsonNode": {
-        "type": "object"
-      },
+      "JsonNode": {},
       "RetrievalConfig": {
         "type": "object",
         "description": "Retrieval configuration parameters",
@@ -11338,7 +11317,7 @@
           "maxResults": {
             "type": "integer",
             "format": "int32",
-            "default": "10",
+            "default": 10,
             "description": "Maximum number of results",
             "example": 10,
             "maximum": 100,
@@ -11350,18 +11329,18 @@
             "default": "0.3",
             "description": "Minimum relevance score threshold",
             "example": 0.3,
-            "maximum": 1.0,
-            "minimum": 0.0
+            "maximum": 1,
+            "minimum": 0
           },
           "useHybridSearch": {
             "type": "boolean",
-            "default": "true",
+            "default": true,
             "description": "Whether to use hybrid search",
             "example": true
           },
           "useRerank": {
             "type": "boolean",
-            "default": "true",
+            "default": true,
             "description": "Whether to use reranking",
             "example": true
           },
@@ -11371,8 +11350,8 @@
             "default": "0.5",
             "description": "Vector search weight",
             "example": 0.5,
-            "maximum": 1.0,
-            "minimum": 0.0
+            "maximum": 1,
+            "minimum": 0
           },
           "fulltextWeight": {
             "type": "number",
@@ -11380,8 +11359,8 @@
             "default": "0.5",
             "description": "Fulltext search weight",
             "example": 0.5,
-            "maximum": 1.0,
-            "minimum": 0.0
+            "maximum": 1,
+            "minimum": 0
           }
         }
       },
@@ -11560,9 +11539,7 @@
           },
           "metadata": {
             "type": "object",
-            "additionalProperties": {
-              "type": "object"
-            },
+            "additionalProperties": {},
             "description": "Additional metadata"
           }
         }
@@ -11592,9 +11569,7 @@
           },
           "progress": {
             "type": "object",
-            "additionalProperties": {
-              "type": "object"
-            }
+            "additionalProperties": {}
           },
           "createdAt": {
             "type": "string",
@@ -11626,9 +11601,7 @@
           },
           "failure": {
             "type": "object",
-            "additionalProperties": {
-              "type": "object"
-            }
+            "additionalProperties": {}
           }
         }
       },
@@ -11636,7 +11609,8 @@
         "type": "object",
         "properties": {
           "query": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1
           },
           "providers": {
             "type": "array",
@@ -11718,13 +11692,11 @@
           },
           "metadata": {
             "type": "object",
-            "additionalProperties": {
-              "type": "object"
-            }
+            "additionalProperties": {}
           },
           "embed": {
             "type": "boolean",
-            "default": "true",
+            "default": true,
             "description": "Generate embedding after persistence"
           },
           "embeddingPolicy": {
@@ -12019,9 +11991,7 @@
           },
           "metadata": {
             "type": "object",
-            "additionalProperties": {
-              "type": "object"
-            }
+            "additionalProperties": {}
           }
         }
       },
@@ -12033,7 +12003,8 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/JsonRecordUpsertRequest"
-            }
+            },
+            "minItems": 1
           }
         },
         "required": [
@@ -12088,7 +12059,10 @@
         "type": "object",
         "properties": {
           "timeout": {
-            "type": "integer",
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int64"
           }
         }
@@ -12204,19 +12178,24 @@
         "type": "object",
         "properties": {
           "evaluator": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1
           },
           "query": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1
           },
           "context": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1
           },
           "answer": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1
           },
           "model": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1
           }
         },
         "required": [
@@ -12258,7 +12237,8 @@
         "type": "object",
         "properties": {
           "suiteKey": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1
           },
           "version": {
             "type": "integer",
@@ -12363,7 +12343,8 @@
         "properties": {
           "sessionId": {
             "type": "string",
-            "description": "Session ID"
+            "description": "Session ID",
+            "minLength": 1
           },
           "query": {
             "type": "string",
@@ -12375,7 +12356,8 @@
           "feedbackType": {
             "type": "string",
             "description": "Feedback type: THUMBS_UP / THUMBS_DOWN / RATING",
-            "example": "THUMBS_UP"
+            "example": "THUMBS_UP",
+            "minLength": 1
           },
           "rating": {
             "type": "integer",
@@ -12458,9 +12440,7 @@
           },
           "metadata": {
             "type": "object",
-            "additionalProperties": {
-              "type": "object"
-            }
+            "additionalProperties": {}
           },
           "contentReferenceIndexComplete": {
             "type": "boolean"
@@ -12468,6 +12448,9 @@
           "createdAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "ownerPrincipalId": {
+            "type": "string"
           }
         }
       },
@@ -12488,7 +12471,8 @@
             "items": {
               "type": "integer",
               "format": "int64"
-            }
+            },
+            "minItems": 1
           },
           "relevantDocIds": {
             "type": "array",
@@ -12496,7 +12480,8 @@
             "items": {
               "type": "integer",
               "format": "int64"
-            }
+            },
+            "minItems": 1
           },
           "evaluationMethod": {
             "type": "string",
@@ -12532,9 +12517,7 @@
           },
           "evaluationResult": {
             "type": "object",
-            "additionalProperties": {
-              "type": "object"
-            }
+            "additionalProperties": {}
           },
           "precisionAtK": {
             "type": "object",
@@ -12570,13 +12553,14 @@
           },
           "metadata": {
             "type": "object",
-            "additionalProperties": {
-              "type": "object"
-            }
+            "additionalProperties": {}
           },
           "createdAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "ownerPrincipalId": {
+            "type": "string"
           }
         }
       },
@@ -12834,9 +12818,7 @@
           },
           "metadata": {
             "type": "object",
-            "additionalProperties": {
-              "type": "object"
-            },
+            "additionalProperties": {},
             "description": "Additional metadata (JSON object)"
           },
           "collectionId": {
@@ -13041,7 +13023,8 @@
         "properties": {
           "collectionKey": {
             "type": "string",
-            "description": "Stable target Collection key"
+            "description": "Stable target Collection key",
+            "minLength": 1
           },
           "externalId": {
             "type": "string",
@@ -13090,13 +13073,11 @@
           },
           "metadata": {
             "type": "object",
-            "additionalProperties": {
-              "type": "object"
-            }
+            "additionalProperties": {}
           },
           "embed": {
             "type": "boolean",
-            "default": "true",
+            "default": true,
             "description": "Generate embedding after persistence"
           },
           "embeddingPolicy": {
@@ -13270,10 +13251,12 @@
         "type": "object",
         "properties": {
           "sourceCollectionKey": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1
           },
           "targetCollectionKey": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1
           },
           "sourceNamespace": {
             "type": "string",
@@ -13436,7 +13419,7 @@
           },
           "embeddingPolicy": {
             "type": "string",
-            "description": "Embedding policy. When provided it overrides embed. Omitted keeps legacy embed=true\u2192SYNC / embed=false\u2192SKIP.",
+            "description": "Embedding policy. When provided it overrides embed. Omitted keeps legacy embed=true→SYNC / embed=false→SKIP.",
             "enum": [
               "SYNC",
               "ASYNC",
@@ -13898,7 +13881,8 @@
         "type": "object",
         "properties": {
           "previewToken": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1
           },
           "confirmMissingCount": {
             "type": "integer",
@@ -13975,9 +13959,7 @@
           },
           "metadata": {
             "type": "object",
-            "additionalProperties": {
-              "type": "object"
-            }
+            "additionalProperties": {}
           },
           "embeddingPolicy": {
             "type": "string",
@@ -14265,10 +14247,12 @@
             "format": "uuid"
           },
           "confirmationToken": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1
           },
           "fingerprint": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1
           }
         },
         "required": [
@@ -14396,7 +14380,7 @@
           "dimensions": {
             "type": "integer",
             "format": "int32",
-            "default": "1024",
+            "default": 1024,
             "description": "Embedding vector dimensions (must match the embedding model)",
             "example": 1024
           },
@@ -14407,15 +14391,13 @@
           },
           "enabled": {
             "type": "boolean",
-            "default": "true",
+            "default": true,
             "description": "Whether the collection is active for retrieval",
             "example": true
           },
           "metadata": {
             "type": "object",
-            "additionalProperties": {
-              "type": "object"
-            },
+            "additionalProperties": {},
             "description": "Additional metadata as key-value pairs"
           }
         },
@@ -14620,10 +14602,12 @@
         "type": "object",
         "properties": {
           "name": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1
           },
           "collectionKey": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1
           },
           "description": {
             "type": "string"
@@ -14640,9 +14624,7 @@
           },
           "metadata": {
             "type": "object",
-            "additionalProperties": {
-              "type": "object"
-            }
+            "additionalProperties": {}
           },
           "documents": {
             "type": "array",
@@ -14660,10 +14642,12 @@
         "type": "object",
         "properties": {
           "title": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1
           },
           "content": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1
           },
           "source": {
             "type": "string"
@@ -14673,9 +14657,7 @@
           },
           "metadata": {
             "type": "object",
-            "additionalProperties": {
-              "type": "object"
-            }
+            "additionalProperties": {}
           },
           "size": {
             "type": "integer",
@@ -14713,13 +14695,15 @@
         "type": "object",
         "properties": {
           "collectionKey": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1
           },
           "buckets": {
             "type": "array",
             "items": {
               "type": "string"
-            }
+            },
+            "minItems": 1
           },
           "vectorConditions": {
             "type": "array",
@@ -14801,13 +14785,16 @@
             "format": "uuid"
           },
           "collectionKey": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1
           },
           "previewToken": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1
           },
           "previewFingerprint": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1
           }
         },
         "required": [
@@ -14876,17 +14863,20 @@
         "type": "object",
         "properties": {
           "collectionKey": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1
           },
           "previewId": {
             "type": "string",
             "format": "uuid"
           },
           "confirmationToken": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1
           },
           "fingerprint": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1
           },
           "expectedCollectionVersion": {
             "type": "integer",
@@ -15098,10 +15088,12 @@
         "type": "object",
         "properties": {
           "collectionKey": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1
           },
           "targetProfileKey": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1
           },
           "expectedCollectionVersion": {
             "type": "integer",
@@ -15194,7 +15186,7 @@
           "maxResults": {
             "type": "integer",
             "format": "int32",
-            "default": "5",
+            "default": 5,
             "description": "Maximum number of retrieval results",
             "example": 5,
             "maximum": 50,
@@ -15202,13 +15194,13 @@
           },
           "useHybridSearch": {
             "type": "boolean",
-            "default": "true",
+            "default": true,
             "description": "Whether to use hybrid search (vector + fulltext)",
             "example": true
           },
           "useRerank": {
             "type": "boolean",
-            "default": "true",
+            "default": true,
             "description": "Whether to use reranking",
             "example": true
           },
@@ -15287,9 +15279,7 @@
           },
           "metadata": {
             "type": "object",
-            "additionalProperties": {
-              "type": "object"
-            },
+            "additionalProperties": {},
             "description": "Additional metadata (passed through to domain extension)"
           },
           "filters": {
@@ -15379,7 +15369,7 @@
       },
       "ApiKeyCreatedResponse": {
         "type": "object",
-        "description": "New API key created. The raw key is shown ONLY here \u2014 save it securely.",
+        "description": "New API key created. The raw key is shown ONLY here — save it securely.",
         "properties": {
           "keyId": {
             "type": "string",
@@ -15387,7 +15377,10 @@
             "example": "rag_k_abc123def456"
           },
           "rawKey": {
-            "type": "string",
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Raw credential. Present only in the first successful create/rotate response; null on an idempotent replay.",
             "example": "rag_sk_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
           },
@@ -15465,7 +15458,10 @@
         "description": "Prepare a bounded staged API credential rotation",
         "properties": {
           "overlapSeconds": {
-            "type": "integer",
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int32",
             "description": "Requested overlap window in seconds. Omit to use the server default.",
             "maximum": 86400,
@@ -15529,7 +15525,8 @@
           "resolution": {
             "type": "string",
             "description": "Resolution description",
-            "example": "Service restarted"
+            "example": "Service restarted",
+            "minLength": 1
           }
         },
         "required": [
@@ -15538,7 +15535,7 @@
       },
       "AlertActionResponse": {
         "type": "object",
-        "description": "Alert action result \u2014 indicates whether the operation succeeded",
+        "description": "Alert action result — indicates whether the operation succeeded",
         "properties": {
           "success": {
             "type": "boolean",
@@ -15671,9 +15668,7 @@
           },
           "metrics": {
             "type": "object",
-            "additionalProperties": {
-              "type": "object"
-            },
+            "additionalProperties": {},
             "description": "Associated metrics"
           }
         },
@@ -15816,9 +15811,7 @@
           },
           "metadata": {
             "type": "object",
-            "additionalProperties": {
-              "type": "object"
-            }
+            "additionalProperties": {}
           },
           "collectionKey": {
             "type": "string"
@@ -16169,15 +16162,11 @@
           },
           "resultScores": {
             "type": "object",
-            "additionalProperties": {
-              "type": "object"
-            }
+            "additionalProperties": {}
           },
           "metadata": {
             "type": "object",
-            "additionalProperties": {
-              "type": "object"
-            }
+            "additionalProperties": {}
           },
           "requestTraceId": {
             "type": "string"
@@ -16230,9 +16219,7 @@
             "description": "Detailed information for each available model",
             "items": {
               "type": "object",
-              "additionalProperties": {
-                "type": "object"
-              }
+              "additionalProperties": {}
             }
           }
         }
@@ -16248,9 +16235,7 @@
           },
           "details": {
             "type": "object",
-            "additionalProperties": {
-              "type": "object"
-            },
+            "additionalProperties": {},
             "description": "Model details (provider, name, displayName, etc.)"
           }
         }
@@ -16576,9 +16561,7 @@
           },
           "metadata": {
             "type": "object",
-            "additionalProperties": {
-              "type": "object"
-            }
+            "additionalProperties": {}
           },
           "sourceNamespace": {
             "type": "string"
@@ -16707,7 +16690,7 @@
       },
       "CollectionAccessMode": {
         "type": "string",
-        "description": "\u5f53\u524d API principal \u7684 Collection \u8bbf\u95ee\u6a21\u5f0f",
+        "description": "当前 API principal 的 Collection 访问模式",
         "enum": [
           "RESTRICTED",
           "UNRESTRICTED"
@@ -17190,9 +17173,7 @@
             "type": "object",
             "additionalProperties": {
               "type": "object",
-              "additionalProperties": {
-                "type": "object"
-              }
+              "additionalProperties": {}
             },
             "description": "Per-component health status map (component name -> status details)"
           }
@@ -17259,7 +17240,10 @@
             "example": "file"
           },
           "mimeType": {
-            "type": "string",
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "MIME type (null for directories)",
             "example": "text/markdown"
           },
@@ -17270,25 +17254,40 @@
             "example": 2048
           },
           "createdAt": {
-            "type": "string",
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time",
             "description": "Storage creation time. For a synthetic directory, the latest creation time among its descendant files.",
             "example": "2026-08-16T09:30:00+08:00"
           },
           "displayName": {
-            "type": "string",
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Readable display name for a known import root"
           },
           "originalFilename": {
-            "type": "string",
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Normalized original filename for a known import root"
           },
           "importId": {
-            "type": "string",
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Stable import UUID for a known import root"
           },
           "sourceType": {
-            "type": "string",
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Import source type for a known import root"
           }
         }
@@ -17316,6 +17315,7 @@
             "example": 2
           },
           "importMetadata": {
+            "type": "null",
             "$ref": "#/components/schemas/FileImportMetadataResponse",
             "description": "Readable metadata for the current UUID import directory"
           }
@@ -17387,17 +17387,13 @@
           },
           "distribution": {
             "type": "object",
-            "additionalProperties": {
-              "type": "object"
-            }
+            "additionalProperties": {}
           },
           "trend": {
             "type": "array",
             "items": {
               "type": "object",
-              "additionalProperties": {
-                "type": "object"
-              }
+              "additionalProperties": {}
             }
           }
         }
@@ -17641,9 +17637,7 @@
           },
           "metadata": {
             "type": "object",
-            "additionalProperties": {
-              "type": "object"
-            },
+            "additionalProperties": {},
             "description": "Additional metadata"
           },
           "collectionKey": {
@@ -17757,9 +17751,7 @@
           },
           "metadata": {
             "type": "object",
-            "additionalProperties": {
-              "type": "object"
-            },
+            "additionalProperties": {},
             "description": "Additional metadata"
           },
           "collectionKey": {
@@ -18278,7 +18270,7 @@
           "policyVersion": {
             "type": "string",
             "description": "Stable policy version",
-            "example": 1
+            "example": "1"
           },
           "redactionVersion": {
             "type": "string",
@@ -18409,132 +18401,7 @@
           }
         }
       },
-      "CollectionExportResponse": {
-        "type": "object",
-        "description": "Export collection response",
-        "properties": {
-          "name": {
-            "type": "string",
-            "description": "Collection name",
-            "example": "My Knowledge Base"
-          },
-          "collectionKey": {
-            "type": "string",
-            "description": "Stable collection key"
-          },
-          "description": {
-            "type": "string",
-            "description": "Collection description",
-            "example": "RAG documents for Q&A"
-          },
-          "embeddingModel": {
-            "type": "string",
-            "description": "Embedding model used by this collection"
-          },
-          "dimensions": {
-            "type": "integer",
-            "format": "int32",
-            "description": "Vector dimensions",
-            "example": 1024
-          },
-          "enabled": {
-            "type": "boolean",
-            "description": "Whether the collection is enabled"
-          },
-          "metadata": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "object"
-            },
-            "description": "Additional metadata"
-          },
-          "documents": {
-            "type": "array",
-            "description": "List of exported documents",
-            "items": {
-              "$ref": "#/components/schemas/ExportedDocumentSummary"
-            }
-          },
-          "exportedAt": {
-            "type": "string",
-            "format": "date-time",
-            "description": "Export timestamp"
-          },
-          "documentCount": {
-            "type": "integer",
-            "format": "int32",
-            "description": "Number of documents",
-            "example": 42
-          }
-        }
-      },
-      "ExportedDocumentSummary": {
-        "type": "object",
-        "description": "Exported document summary with content",
-        "properties": {
-          "title": {
-            "type": "string",
-            "description": "Document title",
-            "example": "Introduction to RAG"
-          },
-          "source": {
-            "type": "string",
-            "description": "Document source URL",
-            "example": "https://example.com/doc.pdf"
-          },
-          "content": {
-            "type": "string",
-            "description": "Full text content"
-          },
-          "documentType": {
-            "type": "string",
-            "description": "Document type",
-            "example": "PDF"
-          },
-          "metadata": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "object"
-            },
-            "description": "Additional metadata"
-          },
-          "size": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Document size in bytes",
-            "example": 4096
-          },
-          "externalId": {
-            "type": "string",
-            "description": "Structured-record external identity"
-          },
-          "sourceNamespace": {
-            "type": "string",
-            "description": "External connector identity namespace"
-          },
-          "sourceRevision": {
-            "type": "string",
-            "description": "Opaque source revision for external synchronization"
-          },
-          "sourceDeletedAt": {
-            "type": "string",
-            "format": "date-time",
-            "description": "Source-managed tombstone timestamp"
-          },
-          "jsonbPayload": {
-            "$ref": "#/components/schemas/JsonNode",
-            "description": "Structured JSONB payload"
-          },
-          "originalFilename": {
-            "type": "string",
-            "description": "Original uploaded filename"
-          },
-          "enabled": {
-            "type": "boolean",
-            "description": "Whether the document is enabled"
-          }
-        }
-      },
+      "StreamingResponseBody": {},
       "CollectionDocumentListResponse": {
         "type": "object",
         "description": "List documents in collection response",
@@ -18859,9 +18726,7 @@
           },
           "metadata": {
             "type": "object",
-            "additionalProperties": {
-              "type": "object"
-            },
+            "additionalProperties": {},
             "description": "Additional metadata about this exchange."
           },
           "sources": {
@@ -18931,9 +18796,7 @@
           },
           "details": {
             "type": "object",
-            "additionalProperties": {
-              "type": "object"
-            },
+            "additionalProperties": {},
             "description": "Detailed statistics per collection or content hash"
           }
         }
@@ -18969,7 +18832,10 @@
             "format": "int64"
           },
           "principalRole": {
-            "type": "string",
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Database principal role. Null for environment-root and legacy-static principals.",
             "enum": [
               "NORMAL",
@@ -18982,7 +18848,10 @@
             "description": "Effective Collection access mode for the current principal."
           },
           "allowedCollectionKeys": {
-            "type": "array",
+            "type": [
+              "array",
+              "null"
+            ],
             "description": "Stable Collection keys allowed for a restricted principal. Null means unrestricted.",
             "example": [
               "customer-42:records:v1"
@@ -19185,9 +19054,7 @@
           },
           "metrics": {
             "type": "object",
-            "additionalProperties": {
-              "type": "object"
-            }
+            "additionalProperties": {}
           },
           "status": {
             "type": "string"

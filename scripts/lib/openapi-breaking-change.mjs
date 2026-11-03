@@ -82,10 +82,18 @@ function normalizeShape(schema) {
   if (!isObject(schema)) return { type: 'unknown' };
   const name = refName(schema);
   if (name) return { ref: name };
+  // swagger-core 2.2.47 起可空包装类型渲染为 `type: ["integer", "null"]`，而旧版
+  // 只输出 `type: integer`。两者描述的是同一个字段：null 是放宽而非收紧，
+  // 按已有的 `nullable` 口径归一，避免把“允许 null”误报成类型变更。
+  const nullableType = Array.isArray(schema.type)
+    && schema.type.length === 2
+    && schema.type.includes('null')
+    ? schema.type.find((value) => value !== 'null')
+    : null;
   const output = {
-    type: schema.type ?? (schema.properties ? 'object' : schema.items ? 'array' : 'unknown'),
+    type: nullableType ?? schema.type ?? (schema.properties ? 'object' : schema.items ? 'array' : 'unknown'),
   };
-  if (schema.nullable) output.nullable = true;
+  if (schema.nullable || nullableType) output.nullable = true;
   if (Array.isArray(schema.enum)) output.enum = [...schema.enum].sort();
   if (isObject(schema.properties)) {
     output.properties = {};

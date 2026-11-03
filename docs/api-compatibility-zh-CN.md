@@ -19,12 +19,40 @@
 | 枚举值被删除 | 是 |
 | 新增可选请求字段 | 否 |
 | 新增响应字段或放宽必填 | 否 |
+| 字段放宽为可空（`T → T|null`） | 否 |
 | 新增 operation / 参数 / 响应码 | 否 |
 
 判定面向 `/api/v1` 的既有消费者；真正需要不兼容升级时，应新增 `/api/v2`，
 而不是改写 v1 的形状。
 
 ## 已显式接受的语义变更
+
+### 2026-11：springdoc 2.8.17 渲染变化与流式导出响应的基线刷新
+
+- **触发**：`springdoc-openapi` 2.8.4 → 2.8.17（连带 swagger-core 2.2.34 → 2.2.47，
+  用于清除 swagger-ui webjar 的 DOMPurify 告警）。Java 类型与控制器签名未改。
+- **呈现变化（不是运行时变更）**：
+  - `JsonNode` 组件从 `{"type":"object"}` 变成 `{}`（无类型约束）。无类型 schema
+    接受任意 JSON，属于**放宽**：原先合法的请求仍然合法。涉及的 8 处请求字段
+    （`answerRequirements`、`jsonbPayload`、`metadataContains`、`payloadContains`、
+    `definition`）在运行时仍是 Jackson `JsonNode`。
+  - 带 `@Schema(nullable = true)` 的包装类型（如
+    `ApiKeyRotationPrepareRequest.overlapSeconds`）从 `type: integer` 变成
+    `type: ["integer","null"]`。比对器已把 `T → T|null` 归一为可空化（放宽），
+    并新增自检用例「类型可空化不算破坏」。
+  - `Map<String, JsonNode>` 集合的 `additionalProperties` 同样从
+    `{"type":"object"}` 变成 `{}`（同一类放宽）。
+  - 少数参数/响应头把注解表达的约束补全为文档：`exclusiveMinimum`、
+    参数 `default`、`Retry-After` 响应头的 `type: integer`。运行时校验与默认值未改。
+- **同时纳入基线的既有变更**：集合导出端点的响应由 JSON
+  `CollectionExportResponse` 改为 `StreamingResponseBody`（流式导出，
+  见 `1163acd5`）。比对器只比对 operation/字段/响应码，不比较媒体类型顶层
+  `$ref`，因此这项漂移在改动落地时未被报出；本次刷新把基线对齐到实际输出。
+- **消费者影响**：没有 operation、请求/响应字段、响应码或必填项的删除；
+  JsonNode 字段仍按自由 JSON 收发。仅 OpenAPI 文档的类型标注放宽。
+- **回归证据**：`node scripts/verify-openapi-breaking-change.mjs --self-test`
+  全部 PASS；本地 demo 重新生成 `/v3/api-docs` 与刷新后的基线比对为
+  `PASS OpenAPI 无破坏性变更`。
 
 ### 2026-11：详情端点不可见 ID 由 `403` 改为 `404`
 

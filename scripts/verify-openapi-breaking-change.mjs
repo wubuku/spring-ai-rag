@@ -135,6 +135,13 @@ function selfTest() {
   relaxedParameter.paths['/items'].get.parameters[0].required = true;
   cases.push(['参数变必填算破坏', relaxedParameter, true]);
 
+  // 可空化是放宽：原来只接受 integer，现在额外接受 null，旧请求全部仍然合法。
+  // swagger-core 2.2.47 把 `@Schema(nullable = true)` 渲染成 type 数组，工具升级
+  // 不应被读成契约破坏。
+  const widenedNullable = clone(baseline);
+  widenedNullable.components.schemas.Item.properties.id.type = ['integer', 'null'];
+  cases.push(['类型可空化不算破坏', widenedNullable, false]);
+
   let failures = 0;
   for (const [label, current, breaking, caseBaseline] of cases) {
     const findings = compareSpecs(caseBaseline ?? baseline, current);
