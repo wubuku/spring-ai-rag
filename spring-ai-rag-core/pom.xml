@@ -215,7 +215,7 @@
         <dependency>
             <groupId>org.commonmark</groupId>
             <artifactId>commonmark</artifactId>
-            <version>0.22.0</version>
+            <version>0.31.0</version>
         </dependency>
 
         <!--
@@ -227,7 +227,7 @@
         <dependency>
             <groupId>org.jsoup</groupId>
             <artifactId>jsoup</artifactId>
-            <version>1.19.1</version>
+            <version>1.23.2</version>
         </dependency>
 
         <!-- YAML frontmatter for server-owned runtime Skills -->
@@ -270,7 +270,7 @@
                     <plugin>
                         <groupId>org.pitest</groupId>
                         <artifactId>pitest-maven</artifactId>
-                        <version>1.17.2</version>
+                        <version>1.30.1</version>
                         <dependencies>
                             <dependency>
                                 <groupId>org.pitest</groupId>
@@ -331,7 +331,7 @@
                     <plugin>
                         <groupId>org.codehaus.mojo</groupId>
                         <artifactId>exec-maven-plugin</artifactId>
-                        <version>3.2.0</version>
+                        <version>3.6.4</version>
                         <executions>
                             <execution>
                                 <id>build-webui</id>
@@ -350,7 +350,7 @@
                     </plugin>
                     <plugin>
                         <artifactId>maven-clean-plugin</artifactId>
-                        <version>3.2.0</version>
+                        <version>3.5.0</version>
                         <executions>
                             <execution>
                                 <id>clean-webui-static</id>
@@ -378,7 +378,7 @@
                     </plugin>
                     <plugin>
                         <artifactId>maven-resources-plugin</artifactId>
-                        <version>3.3.1</version>
+                        <version>3.5.0</version>
                         <executions>
                             <execution>
                                 <id>copy-webui</id>
