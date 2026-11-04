@@ -37,6 +37,14 @@ public class CollectionIdentityResolver {
     private static final Logger log =
             LoggerFactory.getLogger(CollectionIdentityResolver.class);
 
+    /**
+     * Collection 写版本 CAS 的有界重试次数。
+     *
+     * <p>并发写同一 Collection 时每轮只有一个事务能推进版本，其余需要在下一轮
+     * 读取最新版本后重试；16 轮足以覆盖常规并发写入，又保持失败有界。
+     */
+    private static final int MAX_ACTIVE_WRITE_CAS_ATTEMPTS = 16;
+
     private final RagCollectionRepository repository;
 
     public CollectionIdentityResolver(RagCollectionRepository repository) {
@@ -94,14 +102,21 @@ public class CollectionIdentityResolver {
         }
         // 同一事务里重复预留（例如 Collection 导入逐篇写文档）时，实体的一级缓存
         // 版本落后于批量 UPDATE 后的数据库版本；CAS 必须基于数据库当前值。
-        long version = repository.findActiveVersion(id)
-                .orElseThrow(() -> new ObjectOptimisticLockingFailureException(
-                        RagCollection.class, id));
-        if (repository.advanceActiveVersion(id, version) != 1) {
-            throw new ObjectOptimisticLockingFailureException(
-                    RagCollection.class, id);
+        //
+        // 不同文档的并发写入会同时争抢同一个 Collection 的版本号：事务 A 提交后
+        // 事务 B 手里的旧版本必然 CAS 失败。这不是业务冲突，重试读取最新版本即可
+        // 收敛；只有有界重试全部落空（Collection 被并发禁用/删除或极端争抢）才
+        // 以乐观锁失败返回 409。禁止用悲观锁，因此这里是条件写入 + 有界重试。
+        for (int attempt = 0; attempt < MAX_ACTIVE_WRITE_CAS_ATTEMPTS; attempt++) {
+            long version = repository.findActiveVersion(id)
+                    .orElseThrow(() -> new ObjectOptimisticLockingFailureException(
+                            RagCollection.class, id));
+            if (repository.advanceActiveVersion(id, version) == 1) {
+                return new ActiveCollectionToken(id, version + 1);
+            }
         }
-        return new ActiveCollectionToken(id, version + 1);
+        throw new ObjectOptimisticLockingFailureException(
+                RagCollection.class, id);
     }
 
     /**

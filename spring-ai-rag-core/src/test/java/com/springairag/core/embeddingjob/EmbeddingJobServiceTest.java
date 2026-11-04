@@ -86,7 +86,7 @@ class EmbeddingJobServiceTest {
         when(profileProvider.getProfileForCollection(5L)).thenReturn(profile());
         when(documentEmbedService.hasFreshEmbedding(any(RagDocument.class)))
                 .thenReturn(false);
-        when(jobRepository.allocateGeneration(
+        when(jobRepository.allocateGenerationForCoalescedRequest(
                 anyLong(), anyLong(), anyString(), anyString(), anyBoolean()))
                 .thenAnswer(invocation -> invocation.<Long>getArgument(0) + 10L);
         when(jobRepository.createOrCoalesce(
@@ -183,7 +183,7 @@ class EmbeddingJobServiceTest {
 
         assertEquals(0, response.created());
         assertEquals(1, response.coalesced());
-        verify(jobRepository, never()).allocateGeneration(
+        verify(jobRepository, never()).allocateGenerationForCoalescedRequest(
                 anyLong(), anyLong(), anyString(), anyString(), anyBoolean());
         verify(jobRepository).updateDocumentProcessing(
                 1L, "PENDING", null);

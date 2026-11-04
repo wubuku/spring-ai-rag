@@ -210,7 +210,7 @@ public class EmbeddingDispatchService {
         if (!contentChanged && !force && fresh) {
             return Result.skipped(profile.profileKey());
         }
-        long generation = jobRepository.allocateGeneration(
+        long generation = jobRepository.allocateGenerationForCoalescedRequest(
                 document.getId(),
                 profile.id(),
                 document.getContentHash(),

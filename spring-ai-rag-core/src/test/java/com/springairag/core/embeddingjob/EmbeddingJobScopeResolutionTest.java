@@ -180,7 +180,7 @@ class EmbeddingJobScopeResolutionTest {
                 eq(documentId), eq(9L), eq(contentHash), eq("TEXT"),
                 eq(chunker)))
                 .thenReturn(Optional.empty());
-        when(jobRepository.allocateGeneration(
+        when(jobRepository.allocateGenerationForCoalescedRequest(
                 eq(documentId), eq(9L), eq(contentHash), eq(chunker),
                 eq(false)))
                 .thenReturn(1L);

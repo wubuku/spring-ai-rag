@@ -107,7 +107,7 @@ class EmbeddingDispatchResidualTest {
         when(repository.findCurrentActive(anyLong(), anyLong(),
                 anyString(), anyString(), anyString()))
                 .thenReturn(Optional.empty());
-        when(repository.allocateGeneration(anyLong(), anyLong(),
+        when(repository.allocateGenerationForCoalescedRequest(anyLong(), anyLong(),
                 anyString(), anyString(), anyBoolean())).thenReturn(1L);
         when(repository.createOrCoalesce(any(UUID.class), anyLong(),
                 anyLong(), anyString(), anyLong(), anyBoolean(), anyInt(),
@@ -129,7 +129,7 @@ class EmbeddingDispatchResidualTest {
         when(repository.findCurrentActive(anyLong(), anyLong(),
                 anyString(), anyString(), anyString()))
                 .thenReturn(Optional.empty());
-        when(repository.allocateGeneration(anyLong(), anyLong(),
+        when(repository.allocateGenerationForCoalescedRequest(anyLong(), anyLong(),
                 anyString(), anyString(), anyBoolean())).thenReturn(1L);
         when(repository.createOrCoalesce(any(UUID.class), anyLong(),
                 anyLong(), anyString(), anyLong(), anyBoolean(), anyInt(),
@@ -154,7 +154,7 @@ class EmbeddingDispatchResidualTest {
         when(repository.findCurrentActive(anyLong(), anyLong(),
                 anyString(), anyString(), anyString()))
                 .thenReturn(Optional.empty());
-        when(repository.allocateGeneration(anyLong(), anyLong(),
+        when(repository.allocateGenerationForCoalescedRequest(anyLong(), anyLong(),
                 anyString(), anyString(), anyBoolean())).thenReturn(1L);
         ArgumentCaptor<Long> versionCaptor = ArgumentCaptor.forClass(Long.class);
         when(repository.createOrCoalesce(any(UUID.class), anyLong(),
@@ -174,7 +174,7 @@ class EmbeddingDispatchResidualTest {
         when(repository.findCurrentActive(anyLong(), anyLong(),
                 anyString(), anyString(), anyString()))
                 .thenReturn(Optional.empty());
-        when(repository.allocateGeneration(anyLong(), anyLong(),
+        when(repository.allocateGenerationForCoalescedRequest(anyLong(), anyLong(),
                 anyString(), anyString(), anyBoolean())).thenReturn(1L);
         when(repository.createOrCoalesce(any(UUID.class), anyLong(),
                 anyLong(), anyString(), anyLong(), anyBoolean(), anyInt(),
@@ -201,7 +201,7 @@ class EmbeddingDispatchResidualTest {
         when(repository.findCurrentActive(anyLong(), anyLong(),
                 anyString(), anyString(), anyString()))
                 .thenReturn(Optional.empty());
-        when(repository.allocateGeneration(anyLong(), anyLong(),
+        when(repository.allocateGenerationForCoalescedRequest(anyLong(), anyLong(),
                 anyString(), anyString(), anyBoolean())).thenReturn(1L);
         when(repository.createOrCoalesce(any(UUID.class), anyLong(),
                 anyLong(), anyString(), anyLong(), anyBoolean(), anyInt(),

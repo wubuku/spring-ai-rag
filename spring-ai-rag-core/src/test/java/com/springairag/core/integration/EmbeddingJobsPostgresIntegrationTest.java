@@ -190,6 +190,92 @@ class EmbeddingJobsPostgresIntegrationTest {
     }
 
     @Test
+    void concurrentRequestsThatMissedTheActiveJobCoalesceIntoOneJob()
+            throws Exception {
+        long collectionId = jdbcTemplate.queryForObject(
+                "INSERT INTO rag_collection "
+                        + "(collection_key, name, dimensions) "
+                        + "VALUES (?, 'coalesce', 1024) RETURNING id",
+                Long.class, "coalesce-" + UUID.randomUUID());
+        String hash = "55555555555555555555555555555555"
+                + "55555555555555555555555555555555";
+        long documentId = jdbcTemplate.queryForObject(
+                "INSERT INTO rag_documents "
+                        + "(collection_id, title, content, content_hash, "
+                        + "processing_status, version) "
+                        + "VALUES (?, 'coalesce', 'content', ?, 'PENDING', 1) "
+                        + "RETURNING id",
+                Long.class, collectionId, hash);
+        long profileId = jdbcTemplate.queryForObject(
+                "INSERT INTO rag_embedding_profiles "
+                        + "(profile_key, provider, model_name, model_revision, "
+                        + "dimensions, distance_metric, normalization) "
+                        + "VALUES (?, 'test', 'model', 'v1', 1024, "
+                        + "'COSINE', 'NONE') RETURNING id",
+                Long.class, "coalesce-" + UUID.randomUUID());
+        var transactions = new TransactionTemplate(
+                new DataSourceTransactionManager(dataSource));
+        CountDownLatch firstAllocated = new CountDownLatch(1);
+        CountDownLatch releaseFirst = new CountDownLatch(1);
+        var executor = Executors.newFixedThreadPool(2);
+        try {
+            var first = executor.submit(() -> transactions.execute(status -> {
+                long generation = repository
+                        .allocateGenerationForCoalescedRequest(
+                                documentId, profileId, hash, "legacy-compatible",
+                                false);
+                assertEquals(1L, generation);
+                var created = repository.createOrCoalesce(
+                        UUID.randomUUID(), documentId, profileId, hash, 1L,
+                        false, 3, "TEST", "it", generation,
+                        "TEXT", "legacy-compatible");
+                repository.activateJob(
+                        documentId, profileId, generation, created.job().id());
+                firstAllocated.countDown();
+                await(releaseFirst);
+                return created.job().id();
+            }));
+            assertTrue(firstAllocated.await(10, TimeUnit.SECONDS));
+            // 第二个事务在状态行上与第一个串行化；无论它先阻塞还是稍后开始，
+            // 都应该看到同内容快照的活动 job 并复用同一个 generation。
+            var second = executor.submit(() -> transactions.execute(status -> {
+                long generation = repository
+                        .allocateGenerationForCoalescedRequest(
+                                documentId, profileId, hash, "legacy-compatible",
+                                false);
+                var created = repository.createOrCoalesce(
+                        UUID.randomUUID(), documentId, profileId, hash, 1L,
+                        false, 3, "TEST", "it", generation,
+                        "TEXT", "legacy-compatible");
+                assertTrue(created.coalesced());
+                repository.activateJob(
+                        documentId, profileId, generation, created.job().id());
+                return created.job().id();
+            }));
+            releaseFirst.countDown();
+            UUID firstJobId = first.get(10, TimeUnit.SECONDS);
+            UUID secondJobId = second.get(10, TimeUnit.SECONDS);
+            assertEquals(firstJobId, secondJobId);
+            assertEquals(1L, jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) FROM rag_embedding_jobs "
+                            + "WHERE document_id = ? AND embedding_profile_id = ?",
+                    Long.class, documentId, profileId));
+            assertEquals(1L, jdbcTemplate.queryForObject(
+                    "SELECT request_generation "
+                            + "FROM rag_document_embedding_state "
+                            + "WHERE document_id = ? AND embedding_profile_id = ?",
+                    Long.class, documentId, profileId));
+            assertEquals(firstJobId, jdbcTemplate.queryForObject(
+                    "SELECT active_job_id FROM rag_document_embedding_state "
+                            + "WHERE document_id = ? AND embedding_profile_id = ?",
+                    UUID.class, documentId, profileId));
+        } finally {
+            releaseFirst.countDown();
+            executor.shutdownNow();
+        }
+    }
+
+    @Test
     void afterCommitEventProcessesJobWithoutRecoveryPoll() {
         long collectionId = jdbcTemplate.queryForObject(
                 "INSERT INTO rag_collection "

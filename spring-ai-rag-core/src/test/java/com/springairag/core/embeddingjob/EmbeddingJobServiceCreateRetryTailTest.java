@@ -176,7 +176,7 @@ class EmbeddingJobServiceCreateRetryTailTest {
         when(jobRepository.findCurrentActive(anyLong(), anyLong(),
                 anyString(), anyString(), anyString()))
                 .thenReturn(Optional.empty());
-        when(jobRepository.allocateGeneration(anyLong(), anyLong(),
+        when(jobRepository.allocateGenerationForCoalescedRequest(anyLong(), anyLong(),
                 anyString(), anyString(), anyBoolean())).thenReturn(11L);
         when(jobRepository.createOrCoalesce(
                 any(UUID.class), anyLong(), anyLong(), anyString(),

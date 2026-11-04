@@ -1134,6 +1134,116 @@ public class EmbeddingJobRepository {
         return generation == null ? 1L : generation;
     }
 
+    /**
+     * 为"可能已与并发请求合并"的重索引分配 generation。
+     *
+     * <p>调用方在读取活动 job 之后才调用本方法；两个并发请求都可能在活动 job
+     * 提交之前读到空。此时直接 {@link #allocateGeneration} 会各自递增 generation，
+     * 产生两个 generation 和两个 job（后一个把前一个取消），既不是合并，也浪费
+     * 一次 provider 调用。
+     *
+     * <p>这里在同一个 {@code ON CONFLICT DO UPDATE} 里判断：状态行已经指向一个
+     * 同内容快照的活动 job（{@code QUEUED}/{@code PROCESSING}）时保留 generation
+     * 与 active_job_id，随后 {@code createOrCoalesce} 会命中 partial unique index，
+     * 合并到同一行；否则才递增 generation。数据库行锁保证后来者能看到先提交者
+     * 的活动 job，不依赖应用层锁。
+     */
+    @Transactional
+    public long allocateGenerationForCoalescedRequest(
+            long documentId,
+            long profileId,
+            String contentHash,
+            String chunkerVersion,
+            boolean preserveCompleted) {
+        Long generation = jdbcTemplate.queryForObject("""
+                INSERT INTO rag_document_embedding_state (
+                    document_id, embedding_profile_id, content_hash,
+                    chunker_version, status, chunk_count,
+                    request_generation, active_job_id, updated_at
+                ) VALUES (?, ?, ?, ?, 'QUEUED', 0, 1, NULL, CURRENT_TIMESTAMP)
+                ON CONFLICT (document_id, embedding_profile_id) DO UPDATE SET
+                    content_hash = EXCLUDED.content_hash,
+                    chunker_version = EXCLUDED.chunker_version,
+                    status = CASE
+                        WHEN rag_document_embedding_state.active_job_id IS NOT NULL
+                         AND rag_document_embedding_state.content_hash =
+                             EXCLUDED.content_hash
+                         AND rag_document_embedding_state.chunker_version =
+                             EXCLUDED.chunker_version
+                         AND rag_document_embedding_state.status IN
+                             ('QUEUED', 'PROCESSING')
+                            THEN rag_document_embedding_state.status
+                        WHEN ?
+                         AND rag_document_embedding_state.status = 'COMPLETED'
+                         AND rag_document_embedding_state.content_hash = EXCLUDED.content_hash
+                         AND rag_document_embedding_state.chunker_version =
+                             EXCLUDED.chunker_version
+                            THEN 'COMPLETED'
+                        ELSE 'QUEUED'
+                    END,
+                    chunk_count = CASE
+                        WHEN rag_document_embedding_state.active_job_id IS NOT NULL
+                         AND rag_document_embedding_state.content_hash =
+                             EXCLUDED.content_hash
+                         AND rag_document_embedding_state.chunker_version =
+                             EXCLUDED.chunker_version
+                         AND rag_document_embedding_state.status IN
+                             ('QUEUED', 'PROCESSING')
+                            THEN rag_document_embedding_state.chunk_count
+                        WHEN ?
+                         AND rag_document_embedding_state.status = 'COMPLETED'
+                         AND rag_document_embedding_state.content_hash = EXCLUDED.content_hash
+                         AND rag_document_embedding_state.chunker_version =
+                             EXCLUDED.chunker_version
+                            THEN rag_document_embedding_state.chunk_count
+                        ELSE 0
+                    END,
+                    processing_error = CASE
+                        WHEN rag_document_embedding_state.active_job_id IS NOT NULL
+                         AND rag_document_embedding_state.content_hash =
+                             EXCLUDED.content_hash
+                         AND rag_document_embedding_state.chunker_version =
+                             EXCLUDED.chunker_version
+                         AND rag_document_embedding_state.status IN
+                             ('QUEUED', 'PROCESSING')
+                            THEN rag_document_embedding_state.processing_error
+                        ELSE NULL
+                    END,
+                    request_generation = CASE
+                        WHEN rag_document_embedding_state.active_job_id IS NOT NULL
+                         AND rag_document_embedding_state.content_hash =
+                             EXCLUDED.content_hash
+                         AND rag_document_embedding_state.chunker_version =
+                             EXCLUDED.chunker_version
+                         AND rag_document_embedding_state.status IN
+                             ('QUEUED', 'PROCESSING')
+                            THEN rag_document_embedding_state.request_generation
+                        ELSE rag_document_embedding_state.request_generation + 1
+                    END,
+                    active_job_id = CASE
+                        WHEN rag_document_embedding_state.active_job_id IS NOT NULL
+                         AND rag_document_embedding_state.content_hash =
+                             EXCLUDED.content_hash
+                         AND rag_document_embedding_state.chunker_version =
+                             EXCLUDED.chunker_version
+                         AND rag_document_embedding_state.status IN
+                             ('QUEUED', 'PROCESSING')
+                            THEN rag_document_embedding_state.active_job_id
+                        ELSE NULL
+                    END,
+                    updated_at = CURRENT_TIMESTAMP
+                RETURNING request_generation
+                """,
+                Long.class,
+                documentId,
+                profileId,
+                contentHash,
+                chunkerVersion,
+                preserveCompleted,
+                preserveCompleted);
+        return generation == null ? 1L : generation;
+    }
+
     @Transactional
     public long markNotRequested(
             long documentId,

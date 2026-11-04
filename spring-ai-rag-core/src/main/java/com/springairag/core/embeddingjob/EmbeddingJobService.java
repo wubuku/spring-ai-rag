@@ -138,12 +138,13 @@ public class EmbeddingJobService {
                 processingRun = ensureProcessingRun(
                         result.job(), result.coalesced());
             } else {
-                long generation = jobRepository.allocateGeneration(
-                        document.getId(),
-                        profile.id(),
-                        document.getContentHash(),
-                        descriptor.chunkerVersion(),
-                        fresh);
+                long generation =
+                        jobRepository.allocateGenerationForCoalescedRequest(
+                                document.getId(),
+                                profile.id(),
+                                document.getContentHash(),
+                                descriptor.chunkerVersion(),
+                                fresh);
                 jobRepository.cancelSuperseded(
                         document.getId(), profile.id(), generation);
                 if (processingRunService != null) {

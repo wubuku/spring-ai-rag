@@ -138,7 +138,7 @@ mvn clean package -DskipTests
 |------|------|------|
 | 干净环境冷启动 | `./scripts/verify-clean-clone.sh` | 临时目录 clone → 临时库 → `.env`(mock) → `mvn -B -DskipTests install` → demo health → collection → documents → embed → search → chat；结束自动清理 |
 | Flyway 双路径 | `./scripts/verify-flyway-schema-paths.sh` | 空库→最新 vs 空库→V30→最新 schema 逐字一致；早期数据升级后仍在；最新库重跑 migrate 不丢数据 |
-| 并发与幂等 | `./scripts/verify-concurrency-idempotency.py` | 同一 collectionKey 并发创建、同一外部文档并发同步、同一文件并发上传（同一 Idempotency-Key）、同一文档并发 reindex、同一 principal 并发配额扣减、同一 Idempotency-Key 并发建 Collection/Document、同一外部标识并发 JSON upsert；断言无重复行、无丢更新、除 409/429 外无 5xx，并验证唯一约束/条件写入（Document 同 key 并发时可能因 Collection 写入位 CAS 或同 key 处理中返回 409，用同一 key 重试即重放）。写端点登记见 `scripts/testdata/write-endpoints.json` |
+| 并发与幂等 | `./scripts/verify-concurrency-idempotency.py` | 同一 collectionKey 并发创建、同一文档并发更新/删除与读取交错、同一文件名并发上传（带/不带 Idempotency-Key）、不同幂等键隔离、同一外部文档同/不同 revision 并发 upsert、同一文档并发 ASYNC reindex 合并、keyset 流式导出边写边读、同一 principal 并发配额扣减、同一外部标识并发 JSON upsert；断言无重复行、无丢更新、除 409/429 外无 5xx，导出不重不漏，并验证唯一约束/条件写入。默认连跑 3 次作为稳定性门槛。写端点登记见 `scripts/testdata/write-endpoints.json` |
 | SSE 并发资源边界 | `./scripts/verify-sse-concurrency.py --burst 20` | 真实 PostgreSQL + Spring Boot + mock：单 key 16 / 全局 64 的上限、第 17 条起 HTTP 429 `TOO_MANY_REQUESTS` 不排队、峰值心跳线程固定 2 条与 RSS 增量、客户端断开与上游空闲超时后的 lease 回收；脚本拒绝 `--burst > 64` |
 | 备份恢复演练 | `./scripts/verify-backup-restore-drill.py` | 真实数据写入 → 停写 → `rag-backup.py backup` → 校验 → 恢复到全新库 → 文档/向量/collection/迁移历史/内容指纹比对 → 恢复库直接 health+search |
 | 安全边界全入口回归 | `./scripts/verify-security-boundary.py` | 真实 PostgreSQL + mock provider：受限 NORMAL key 对 search/chat/collections/upload/PDF-to-RAG/files tree·raw·preview/evaluation/feedback 的跨 Collection 与跨 principal 断言；路径穿越拒绝；root 全局视图不变 |
@@ -175,6 +175,38 @@ schema 比对前忽略注释、`SET`、owner/ACL 与 `\restrict` 行。
 当 `pg_dump/pg_restore` 客户端主版本高于服务端（例如客户端 17、服务端 16）时，
 `rag-backup.py` 会自动退回纯 SQL 恢复并去掉服务端不支持的
 `SET transaction_timeout` 与 `\restrict` 指令；同一主版本仍走原生 `pg_restore`。
+
+### 并发与幂等语义（真实 PostgreSQL）
+
+`verify-concurrency-idempotency.py --repeat 3` 连跑三轮作为稳定性门槛（脚本默认 1 轮）；
+`EmbeddingJobsPostgresIntegrationTest` 在真实 PostgreSQL 上用多连接验证 job 租约与抢占。
+禁止悲观锁，协调手段只有唯一约束、条件写入/CAS、版本号与有界重试：
+
+| 场景 | 归一化结果 | 冲突边界 |
+|------|------------|----------|
+| 同一 collectionKey 并发创建 | 唯一约束只允许一行，恰好一个 2xx | 其余 409 `DUPLICATE_RESOURCE` |
+| 同一文档并发 PATCH（带 expectedDocumentRevision） | 恰好一次成功，revision 只 +1，最终内容等于成功请求 | 其余 409 `CONCURRENT_MODIFICATION`（写入时乐观锁）或 `DOCUMENT_REVISION_CONFLICT`（读到新 revision 后校验失败）；客户端重读 revision 后重试 |
+| 删除与读取交错 / 并发重复删除 | 删除成功一次；读取只出现 200/404 且 200 内容不撕裂；删除后读取 404 | 重复删除 404/409；不会 5xx |
+| 同一文件并发上传（带同一 Idempotency-Key） | 收敛到同一个 documentId 和一行幂等记录 | 同键处理中 409 |
+| 同一文件并发上传（不带 key） | 每次请求都是独立文档，8 次写入全部落库 | 上传按 `DeduplicationScope.NONE` 设计，不做内容唯一化；需要去重必须由调用方提供幂等键 |
+| 不同 Idempotency-Key 并发 | 每个键各自收敛到一个文档，互不串扰；串行重放 `REPLAYED` | 同键不同载荷 409 `DOCUMENT_REVISION_CONFLICT`（现有契约未单独区分 key reuse） |
+| 同一文档并发 reindex | 活动 job 合并为同一 generation；chunk/向量按唯一约束各一份 | 已有终态 job 之后的请求会合法地开启新 generation |
+| 同一外部文档同 revision 并发 upsert | 只有一行、一个历史版本，重复请求稳定 `UNCHANGED` | — |
+| 同一外部文档不同 revision 并发（带 expectedSourceRevision） | 只收敛到一个候选；先提交者为准，最终状态与其完全一致 | 另一个候选全部 409 `DOCUMENT_REVISION_CONFLICT` |
+| keyset 流式导出边写边读 | 每行只出现一次；返回行数与快照计数一致；请求开始时仍存在且读取时未被删除的行不会漏 | 导出计数是请求开始时的快照，不是事务快照：并发删除的行可能缺席，并发新增的行通常因 keyset 顺序/计数上限不出现 |
+
+已知边界：
+
+- 外部文档 upsert 不传 `expectedSourceRevision` 时没有 CAS 保护，并发写按提交顺序
+  last-write-wins；需要确定性收敛时必须带 expected。
+- Collection 的业务唯一键是 `collectionKey`（`uk_rag_collection_collection_key`）；
+  `name` 不唯一，同名不同 key 的 Collection 可以同时存在。
+- Collection 写版本 CAS 采用 16 次有界重试；极端争抢超过上限仍返回 409
+  `CONCURRENT_MODIFICATION`，由客户端重试。
+- Embedding job 租约过期/抢占由
+  `EmbeddingJobsPostgresIntegrationTest#expiredLeaseCannotHeartbeatOrWriteAfterAnotherExecutionReclaimsJob`
+  等用例在真实 PostgreSQL 上覆盖：旧执行失去租约后不能提交，重新认领的执行最终
+  `SUCCEEDED`，向量行不重复。
 
 Maven Wrapper 的 `distributionUrl` 保持官方地址；境内网络可临时覆盖：
 `MVNW_REPOURL=https://maven.aliyun.com/repository/public ./mvnw ...`，不把区域镜像写死。

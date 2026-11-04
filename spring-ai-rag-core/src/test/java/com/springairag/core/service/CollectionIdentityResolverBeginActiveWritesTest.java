@@ -89,6 +89,24 @@ class CollectionIdentityResolverBeginActiveWritesTest {
     }
 
     @Test
+    void concurrentVersionAdvanceRetriesWithFreshVersion() {
+        when(repository.findByIdAndDeletedFalse(6L))
+                .thenReturn(java.util.Optional.of(collection(6L, 1L, true)));
+        // 两次 CAS 都被并发事务抢先，第三次读取到最新版本后成功。
+        when(repository.findActiveVersion(6L)).thenReturn(
+                java.util.Optional.of(2L),
+                java.util.Optional.of(3L),
+                java.util.Optional.of(4L));
+        when(repository.advanceActiveVersion(6L, 2L)).thenReturn(0);
+        when(repository.advanceActiveVersion(6L, 3L)).thenReturn(0);
+        when(repository.advanceActiveVersion(6L, 4L)).thenReturn(1);
+
+        var token = resolver.beginActiveWrite(6L);
+
+        assertEquals(5L, token.version());
+    }
+
+    @Test
     void nonPositiveCollectionIdRejected() {
         assertThrows(IllegalArgumentException.class,
                 () -> resolver.beginActiveWrites(List.of(0L)));

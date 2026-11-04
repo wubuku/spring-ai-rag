@@ -153,7 +153,7 @@ migrations, concurrency paths, backup tooling, or HTTP contracts.
 |------|---------|----------|
 | Clean-environment cold start | `./scripts/verify-clean-clone.sh` | clone into a temp dir → temp DB → `.env`(mock) → `mvn -B -DskipTests install` → demo health → collection → documents → embed → search → chat; auto-cleanup |
 | Flyway dual paths | `./scripts/verify-flyway-schema-paths.sh` | empty→latest vs empty→V30→latest produce byte-identical schema; early data survives; re-running migrate on the latest DB preserves data |
-| Concurrency and idempotency | `./scripts/verify-concurrency-idempotency.py` | parallel create of one collectionKey, parallel sync of one external document, parallel upload with one Idempotency-Key, parallel reindex, parallel quota consumption, parallel same-key Collection/Document create, and parallel JSON upsert of one external identity; asserts no duplicate rows, no lost updates, no 5xx except 409/429, and checks unique constraints/conditional writes. Registry: `scripts/testdata/write-endpoints.json` |
+| Concurrency and idempotency | `./scripts/verify-concurrency-idempotency.py` | parallel create of one collectionKey; parallel update/delete and interleaved reads of one document; parallel same-name uploads with and without an Idempotency-Key; different-key isolation; parallel same/different-revision external upserts; parallel ASYNC reindex coalescing; keyset streaming export under concurrent writes; parallel quota consumption; parallel JSON upsert of one external identity; asserts no duplicate rows, no lost updates, no 5xx except 409/429, and no missed/duplicated export rows, and checks unique constraints/conditional writes. Runs three times by default as the stability gate. Registry: `scripts/testdata/write-endpoints.json` |
 | SSE concurrency resource boundaries | `./scripts/verify-sse-concurrency.py --burst 20` | real PostgreSQL + Spring Boot + mock: 16 per key / 64 globally, request 17 gets HTTP 429 `TOO_MANY_REQUESTS` without queueing, exactly 2 heartbeat threads at peak plus RSS delta, admission lease reclaimed after client disconnect and upstream idle timeout; refuses `--burst > 64` |
 | Backup/restore drill | `./scripts/verify-backup-restore-drill.py` | seed real data → quiesce → `rag-backup.py backup` → verify → restore into a fresh DB → compare documents/vectors/collections/migration history/content fingerprint → health+search on the restored DB |
 | Security boundary full-entry regression | `./scripts/verify-security-boundary.py` | real PostgreSQL + mock provider: restricted NORMAL key cannot cross Collections or principals across search/chat/collections/upload/PDF-to-RAG/files tree·raw·preview/evaluation/feedback; path traversal rejected; root keeps the global view |
@@ -197,6 +197,42 @@ When the client major version is newer than the server (for example client 17 ag
 server 16), `rag-backup.py` falls back to plain-SQL restore and strips the unsupported
 `SET transaction_timeout` and `\restrict` directives; matching majors keep native
 `pg_restore`.
+
+### Concurrency and idempotency semantics (real PostgreSQL)
+
+`verify-concurrency-idempotency.py --repeat 3` runs three rounds as the stability gate
+(the script defaults to one round);
+`EmbeddingJobsPostgresIntegrationTest` exercises job leases and preemption over multiple
+real PostgreSQL connections. Pessimistic locks are forbidden: coordination relies only on
+unique constraints, conditional writes/CAS, version columns, and bounded retries.
+
+| Scenario | Normalized outcome | Conflict boundary |
+|----------|--------------------|-------------------|
+| Parallel create of one collectionKey | the unique constraint allows one row and exactly one 2xx | the rest get 409 `DUPLICATE_RESOURCE` |
+| Parallel PATCH of one document with expectedDocumentRevision | exactly one success, revision advances by 1, final content equals the winner | the rest get 409 `CONCURRENT_MODIFICATION` (optimistic lock at write time) or `DOCUMENT_REVISION_CONFLICT` (check fails after reading a newer revision); the client re-reads and retries |
+| Delete interleaved with reads / repeated deletes | delete succeeds once; reads see only 200/404 with no torn 200 content; a read after delete is 404 | repeated deletes get 404/409; never 5xx |
+| Parallel upload with the same Idempotency-Key | converges to one documentId and one idempotency record | 409 while the same key is in progress |
+| Parallel upload without a key | each request is an independent document and all 8 writes persist | upload uses `DeduplicationScope.NONE` by design; callers must send an idempotency key if they need deduplication |
+| Different Idempotency-Keys in parallel | each key converges to its own document with no cross-talk; serial replay returns `REPLAYED` | same key with a different payload gets 409 `DOCUMENT_REVISION_CONFLICT` (the current contract does not distinguish key reuse) |
+| Parallel reindex of one document | active jobs coalesce into one generation; chunks/vectors exist once under their unique constraints | a request arriving after a terminal job legitimately starts a new generation |
+| Parallel same-revision external upsert | one row and one history version; repeated requests stay `UNCHANGED` | — |
+| Parallel different-revision external upsert with expectedSourceRevision | converges on one candidate; the first committer wins and the final state matches it exactly | every request for the other candidate gets 409 `DOCUMENT_REVISION_CONFLICT` |
+| Keyset streaming export under concurrent writes | every returned row appears once; row count equals the snapshot count; rows that exist at request start and are not deleted during traversal are never missed | the export count is a request-start snapshot, not a transaction snapshot: concurrently deleted rows may be absent and concurrently inserted rows usually do not appear because of keyset order and the count cap |
+
+Known boundaries:
+
+- External upserts without `expectedSourceRevision` have no CAS protection and concurrent
+  writes are last-write-wins in commit order; pass the expected revision when deterministic
+  convergence is required.
+- The business unique key of a Collection is `collectionKey`
+  (`uk_rag_collection_collection_key`); `name` is not unique, so same-name collections
+  with different keys may coexist.
+- Collection write-version CAS uses 16 bounded retries; extreme contention beyond that
+  still returns 409 `CONCURRENT_MODIFICATION` and the client retries.
+- Embedding job lease expiry/preemption is covered on real PostgreSQL by
+  `EmbeddingJobsPostgresIntegrationTest#expiredLeaseCannotHeartbeatOrWriteAfterAnotherExecutionReclaimsJob`
+  and related tests: a stale execution cannot commit, the reclaiming execution ends
+  `SUCCEEDED`, and vector rows are not duplicated.
 
 The Maven Wrapper keeps the official `distributionUrl`; in restricted networks override
 it per run with `MVNW_REPOURL=https://maven.aliyun.com/repository/public ./mvnw ...`
