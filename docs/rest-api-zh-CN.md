@@ -544,6 +544,7 @@ X-RateLimit-Remaining: 0
 | 单文件或单请求超过 multipart 上限 | 413 | `PAYLOAD_TOO_LARGE` | `CLIENT_REQUEST` | 无 |
 | multipart 临时目录满/只读 | 503 | `UPLOAD_STORAGE_UNAVAILABLE` | `DEPENDENCY_UNAVAILABLE` | `5` |
 | multipart 结构非法（非大小/存储问题） | 400 | `BAD_REQUEST` | `CLIENT_REQUEST` | 无 |
+| 文档损坏/加密/无文字层/伪造扩展名 | 422 | `DOCUMENT_EXTRACTION_FAILED` | `CLIENT_REQUEST` | 无 |
 
 池耗尽请求是**有界排队**：最多等待 `DB_CONNECTION_TIMEOUT_MS`（默认 10 s），
 不是读完再拒，也不是无限挂死。超限上传在解析阶段被容器拒绝，控制器不会收到文件。

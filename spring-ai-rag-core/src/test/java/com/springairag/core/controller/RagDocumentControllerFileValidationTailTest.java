@@ -123,7 +123,7 @@ class RagDocumentControllerFileValidationTailTest {
                 file("empty.md", "text/plain", "  ".getBytes()),
                 "empty.md");
         assertNull(field(blank, "title"));
-        assertEquals("File content is empty", field(blank, "errorMessage"));
+        assertEquals("No extractable text was found in empty", field(blank, "errorMessage"));
     }
 
     @Test

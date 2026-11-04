@@ -120,6 +120,9 @@ public enum ErrorCode {
             422, "Collection Purge Async Preview Limit Exceeded"),
 
     UNPROCESSABLE_ENTITY(422, "Unprocessable Entity"),
+    // 文档已上传但内容无法可信抽取（损坏/加密/无文字层/编码不支持）。
+    // 这是用户可修正的输入问题，不能退化成 500。
+    DOCUMENT_EXTRACTION_FAILED(422, "Document Extraction Failed"),
     CHAT_BUDGET_EXHAUSTED(422, "Chat Execution Budget Exhausted"),
     CHAT_CONTEXT_BUDGET_EXCEEDED(422, "Chat Context Budget Exceeded"),
     EMBEDDING_PROFILE_FANOUT_LIMIT_EXCEEDED(422, "Embedding Profile Fanout Limit Exceeded"),

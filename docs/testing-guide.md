@@ -1744,6 +1744,24 @@ archived progress note, so both test methods had no documented way to run.
 `scripts/verify-integration-test-switches.mjs` now fails when a gated suite has
 no run path, in either direction.
 
+### Document Parsing Corpus Acceptance (deterministic, no Docker or model)
+
+```bash
+mvn -pl spring-ai-rag-core -am \
+  -Dtest=DocumentParsingCorpusAcceptanceTest \
+  -Dsurefire.failIfNoSpecifiedTests=false test
+```
+
+`DocumentParsingCorpus` generates the fixed corpus deterministically at test
+runtime: multi-column PDF, table PDF, a scanned PDF with no text layer, DOCX,
+HTML with script/style noise, Markdown, UTF-8/GBK/UTF-16 text, an ultra-long
+single line, and corrupt/encrypted/fake-extension files. The test asserts
+reading order, table rows staying on one output line, noise removal, correct
+decoding, and `NO_EXTRACTABLE_TEXT` for scanned PDFs. Chunks are validated with
+a fixed-hash fake embedding to prove each one is non-empty, bounded, and
+embeddable. This suite runs in plain `mvn test` and consumes no Docker daemon
+or model quota.
+
 ### Multi-Instance Acceptance Gate
 
 Replicas sharing one PostgreSQL are verified by `MultiInstancePostgresIntegrationTest`, gated

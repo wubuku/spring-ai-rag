@@ -217,7 +217,7 @@ class RagDocumentControllerUploadAccessTailTest {
         FileUploadResponse response = upload(
                 new MultipartFile[]{file}, 7L, null);
 
-        assertEquals("File content is empty",
+        assertEquals("No extractable text was found in note",
                 response.results().getFirst().error());
     }
 

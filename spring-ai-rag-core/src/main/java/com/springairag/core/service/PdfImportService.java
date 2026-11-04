@@ -1,5 +1,6 @@
 package com.springairag.core.service;
 
+import com.springairag.core.exception.DocumentExtractionException;
 import com.springairag.core.properties.RagPdfProperties;
 import com.springairag.core.entity.FsFile;
 import com.springairag.core.entity.FsImportBatch;
@@ -7,6 +8,7 @@ import com.springairag.core.repository.FsFileRepository;
 import com.springairag.core.repository.FsImportBatchRepository;
 import com.springairag.core.security.ApiAccessPolicy;
 import com.springairag.core.security.ApiKeyCollectionAccess;
+import com.springairag.core.service.pdf.PdfConversionException;
 import com.springairag.core.service.pdf.PdfConverter;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
@@ -140,10 +142,18 @@ public class PdfImportService {
 
             log.info("Using converter: {}", converter.getName());
 
-            // Convert PDF to Markdown + images
-            boolean success = converter.convert(tempPdfPath, tempWorkDir);
+            // Convert PDF to Markdown + images. 转换器用类型化异常表达损坏/加密/
+            // 无文字层等客户端问题，这里统一改写为 422，避免落到 500。
+            boolean success;
+            try {
+                success = converter.convert(tempPdfPath, tempWorkDir);
+            } catch (PdfConversionException e) {
+                throw mapConversionFailure(e);
+            }
             if (!success) {
-                throw new RuntimeException("PDF conversion failed using " + converter.getName());
+                throw new DocumentExtractionException(
+                        DocumentExtractionException.Reason.CONVERSION_FAILED,
+                        "PDF conversion failed using " + converter.getName());
             }
 
             Path markerOutputDir = tempWorkDir.resolve("source");
@@ -316,6 +326,29 @@ public class PdfImportService {
                 output.write(buffer, 0, read);
             }
         }
+    }
+
+    private DocumentExtractionException mapConversionFailure(PdfConversionException failure) {
+        return switch (failure.getReason()) {
+            case ENCRYPTED_PDF -> new DocumentExtractionException(
+                    DocumentExtractionException.Reason.ENCRYPTED_DOCUMENT,
+                    "PDF is encrypted and text cannot be extracted");
+            case NO_EXTRACTABLE_TEXT -> new DocumentExtractionException(
+                    DocumentExtractionException.Reason.NO_EXTRACTABLE_TEXT,
+                    "PDF has no extractable text (possibly a scanned image PDF)");
+            case TOO_MANY_PAGES -> new DocumentExtractionException(
+                    DocumentExtractionException.Reason.TOO_MANY_PAGES,
+                    "PDF exceeds the max-pages limit");
+            case OUTPUT_TOO_LARGE -> new DocumentExtractionException(
+                    DocumentExtractionException.Reason.OUTPUT_TOO_LARGE,
+                    "PDF extracted text exceeds the output limit");
+            case INVALID_PDF -> new DocumentExtractionException(
+                    DocumentExtractionException.Reason.INVALID_PDF,
+                    "PDF is corrupt or not readable");
+            case CONVERSION_FAILED -> new DocumentExtractionException(
+                    DocumentExtractionException.Reason.CONVERSION_FAILED,
+                    "PDF conversion failed");
+        };
     }
 
     private void validatePageCount(Path pdfPath) throws IOException {

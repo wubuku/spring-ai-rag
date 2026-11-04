@@ -38,7 +38,9 @@ import com.springairag.core.config.EmbeddingProfileProvider;
 import com.springairag.core.entity.RagCollection;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.entity.RagDocumentVersion;
+import com.springairag.core.exception.DocumentExtractionException;
 import com.springairag.core.exception.DocumentNotFoundException;
+import com.springairag.core.exception.RagException;
 import com.springairag.core.security.ApiKeyCollectionAccess;
 import com.springairag.core.service.AuditLogService;
 import com.springairag.core.service.BatchDocumentService;
@@ -58,6 +60,7 @@ import com.springairag.core.embeddingjob.EmbeddingPolicySupport;
 import com.springairag.core.service.ExternalDocumentService;
 import com.springairag.core.service.DocumentRelocationService;
 import com.springairag.core.service.DocumentMapper;
+import com.springairag.core.service.DocumentTextExtractor;
 import com.springairag.core.util.SseEmitters;
 import com.springairag.core.versioning.ApiVersion;
 import io.micrometer.core.annotation.Timed;
@@ -1152,9 +1155,11 @@ public class RagDocumentController {
                 contentType.equals("application/json") ||
                 contentType.equals("application/xml") ||
                 contentType.equals("application/javascript") ||
+                contentType.equals("application/vnd.openxmlformats-officedocument.wordprocessingml.document") ||
                 extension.equals("txt") || extension.equals("md") ||
                 extension.equals("markdown") || extension.equals("json") ||
                 extension.equals("xml") || extension.equals("html") ||
+                extension.equals("htm") || extension.equals("docx") ||
                 extension.equals("csv") || extension.equals("log")
         );
 
@@ -1165,7 +1170,8 @@ public class RagDocumentController {
             // rejection is purely metadata-based, so the bytes never need to be
             // materialised.
             return new FileValidationResult(false, extension,
-                    "Unsupported file type: " + contentType + ", only text files supported (txt/md/json/xml/html/csv/log)");
+                    "Unsupported file type: " + contentType
+                            + ", only text files supported (txt/md/json/xml/html/csv/log/docx)");
         }
         return new FileValidationResult(isText, extension, null);
     }
@@ -1174,16 +1180,14 @@ public class RagDocumentController {
 
     private FileContentResult readFileContent(MultipartFile file, String filename) {
         try {
-            String content = new String(file.getBytes(), java.nio.charset.StandardCharsets.UTF_8);
-            if (content.isBlank()) {
-                return new FileContentResult(null, null, "File content is empty");
-            }
-
-            String title = filename;
-            if (title.toLowerCase().endsWith(".txt") || title.toLowerCase().endsWith(".md")) {
-                title = title.substring(0, title.lastIndexOf('.'));
-            }
-            return new FileContentResult(title, content, null);
+            // 编码探测、HTML 噪声剔除、DOCX 结构与伪造扩展名校验都在抽取层完成。
+            DocumentTextExtractor.ExtractedDocument extracted =
+                    DocumentTextExtractor.extract(filename, file.getBytes());
+            return new FileContentResult(extracted.title(), extracted.text(), null);
+        } catch (DocumentExtractionException e) {
+            return new FileContentResult(null, null, e.getMessage());
+        } catch (RagException e) {
+            return new FileContentResult(null, null, e.getMessage());
         } catch (Exception e) { // best-effort: error already sent via completeWithError
             return new FileContentResult(null, null, "Failed to read file: " + e.getMessage());
         }

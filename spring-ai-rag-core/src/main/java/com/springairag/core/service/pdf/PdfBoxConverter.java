@@ -1,9 +1,6 @@
 package com.springairag.core.service.pdf;
 
 import com.springairag.core.properties.RagPdfProperties;
-import org.apache.pdfbox.Loader;
-import org.apache.pdfbox.pdmodel.PDDocument;
-import org.apache.pdfbox.text.PDFTextStripper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -47,6 +44,10 @@ public class PdfBoxConverter implements PdfConverter {
             log.error("outputDir must not be null");
             return false;
         }
+        if (!Files.isRegularFile(pdfPath)) {
+            log.error("PDF file does not exist: {}", pdfPath);
+            return false;
+        }
         String pdfName = pdfPath.getFileName().toString();
         // Strip .pdf suffix
         if (pdfName.toLowerCase().endsWith(".pdf")) {
@@ -60,35 +61,30 @@ public class PdfBoxConverter implements PdfConverter {
         try {
             Files.createDirectories(outputSubDir);
 
-            // Read PDF
-            try (PDDocument document = Loader.loadPDF(pdfPath.toFile())) {
-                if (document.getNumberOfPages() > pdfProperties.getMaxPages()) {
-                    log.warn("PDF exceeds max pages: {} > {}", document.getNumberOfPages(),
-                            pdfProperties.getMaxPages());
-                    return false;
-                }
-                PDFTextStripper stripper = new PDFTextStripper();
-                stripper.setSortByPosition(true);
-                String text = stripper.getText(document);
+            // 抽取器负责加密、损坏、无文字层与页数预算；失败原因原样上抛，
+            // 由 PdfImportService 映射为 4xx，而不是落到通用 500。
+            String text = PdfTextExtractor.extractText(pdfPath, pdfProperties.getMaxPages());
 
-                // Build Markdown
-                String markdown = buildMarkdown(pdfName, text);
-                if (markdown.getBytes(StandardCharsets.UTF_8).length
-                        > pdfProperties.getMaxInMemoryBytes()) {
-                    log.warn("PDFBox output exceeds max in-memory bytes");
-                    return false;
-                }
-
-                // Write Markdown file
-                Files.writeString(outputMdFile, markdown, StandardCharsets.UTF_8);
-
-                log.info("PDFBox extracted text to: {}", outputMdFile);
-                return true;
+            // Build Markdown
+            String markdown = buildMarkdown(pdfName, text);
+            if (markdown.getBytes(StandardCharsets.UTF_8).length
+                    > pdfProperties.getMaxInMemoryBytes()) {
+                throw new PdfConversionException(
+                        PdfConversionException.Reason.OUTPUT_TOO_LARGE,
+                        "PDFBox output exceeds max in-memory bytes");
             }
+
+            // Write Markdown file
+            Files.writeString(outputMdFile, markdown, StandardCharsets.UTF_8);
+
+            log.info("PDFBox extracted text to: {}", outputMdFile);
+            return true;
 
         } catch (IOException e) {
             log.error("PDFBox conversion failed for {}: {}", pdfPath, e.getMessage());
-            return false;
+            throw new PdfConversionException(
+                    PdfConversionException.Reason.INVALID_PDF,
+                    "PDF conversion failed", e);
         }
     }
 
@@ -111,19 +107,15 @@ public class PdfBoxConverter implements PdfConverter {
         md.append("*Extracted from PDF automatically. Layout may not be preserved.*\n\n");
         md.append("## Content\n\n");
 
-        if (extractedText == null || extractedText.isBlank()) {
-            md.append("*No text content could be extracted from this PDF.*\n");
-        } else {
-            // Split by double newlines (paragraphs)
-            String[] paragraphs = extractedText.split("\n\\s*\n");
-            for (String para : paragraphs) {
-                String trimmed = para.trim();
-                if (trimmed.isEmpty()) continue;
-                if (trimmed.contains("\n") || trimmed.length() > 80) {
-                    md.append(trimmed.replaceAll("\\n", "  \n")).append("\n\n");
-                } else {
-                    md.append(trimmed).append("\n\n");
-                }
+        // Split by double newlines (paragraphs)
+        String[] paragraphs = extractedText.split("\n\\s*\n");
+        for (String para : paragraphs) {
+            String trimmed = para.trim();
+            if (trimmed.isEmpty()) continue;
+            if (trimmed.contains("\n") || trimmed.length() > 80) {
+                md.append(trimmed.replaceAll("\\n", "  \n")).append("\n\n");
+            } else {
+                md.append(trimmed).append("\n\n");
             }
         }
 

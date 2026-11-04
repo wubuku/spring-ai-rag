@@ -1,10 +1,12 @@
 package com.springairag.core.service;
 
+import com.springairag.core.exception.DocumentExtractionException;
 import com.springairag.core.properties.RagPdfProperties;
 import com.springairag.core.entity.FsFile;
 import com.springairag.core.entity.FsImportBatch;
 import com.springairag.core.repository.FsFileRepository;
 import com.springairag.core.repository.FsImportBatchRepository;
+import com.springairag.core.service.pdf.PdfConversionException;
 import com.springairag.core.service.pdf.PdfConverter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -26,6 +28,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -49,6 +52,7 @@ class PdfImportServiceTest {
         final boolean available;
         boolean convertResult = true;
         IOException convertError;
+        PdfConversionException convertFailure;
         List<String> outputFiles = List.of("default.md");
         Path seenOutputDir;
 
@@ -60,6 +64,9 @@ class PdfImportServiceTest {
         @Override
         public boolean convert(Path pdfPath, Path outputDir) {
             seenOutputDir = outputDir;
+            if (convertFailure != null) {
+                throw convertFailure;
+            }
             if (convertError != null) {
                 throw new RuntimeException(convertError);
             }
@@ -202,5 +209,43 @@ class PdfImportServiceTest {
 
         assertThrows(IllegalStateException.class,
                 () -> service.importPdf(upload("a.pdf"), null));
+    }
+
+    @Test
+    void scannedPdfFailureIsClientErrorAndPersistsNothing() {
+        FakeConverter converter = new FakeConverter("fake", true);
+        converter.convertFailure = new PdfConversionException(
+                PdfConversionException.Reason.NO_EXTRACTABLE_TEXT,
+                "PDF has no extractable text");
+        PdfImportService service = service(converter);
+
+        DocumentExtractionException error = assertThrows(
+                DocumentExtractionException.class,
+                () -> service.importPdf(upload("scan.pdf"), null));
+
+        assertEquals(DocumentExtractionException.Reason.NO_EXTRACTABLE_TEXT,
+                error.getReason());
+        assertEquals(422, error.getErrorCodeEnum().getHttpStatus());
+        // 抽取失败必须在任何 fs_files / import batch 写入之前发生。
+        verify(fsFileRepository, never()).saveAllAndFlush(anyList());
+        verify(fsImportBatchRepository, never()).save(
+                org.mockito.ArgumentMatchers.any(FsImportBatch.class));
+    }
+
+    @Test
+    void corruptPdfFailureIsClientErrorAndPersistsNothing() {
+        FakeConverter converter = new FakeConverter("fake", true);
+        converter.convertFailure = new PdfConversionException(
+                PdfConversionException.Reason.INVALID_PDF,
+                "PDF is corrupt or not readable");
+        PdfImportService service = service(converter);
+
+        DocumentExtractionException error = assertThrows(
+                DocumentExtractionException.class,
+                () -> service.importPdf(upload("broken.pdf"), null));
+
+        assertEquals(DocumentExtractionException.Reason.INVALID_PDF,
+                error.getReason());
+        verify(fsFileRepository, never()).saveAllAndFlush(anyList());
     }
 }

@@ -2,6 +2,8 @@ package com.springairag.core.controller;
 
 import com.springairag.api.dto.ErrorResponse;
 import com.springairag.core.exception.ChatTurnInProgressException;
+import com.springairag.api.enums.FailureClass;
+import com.springairag.core.exception.DocumentExtractionException;
 import com.springairag.core.exception.LongRunningOperationCapacityException;
 import com.springairag.core.exception.RagException;
 import com.springairag.core.security.ApiCapabilitySupport;
@@ -36,6 +38,21 @@ class GlobalExceptionHandlerCoverageGapsTest {
         handler = new GlobalExceptionHandler();
         request = new MockHttpServletRequest();
         ((MockHttpServletRequest) request).setRequestURI("/api/v1/rag/test");
+    }
+
+    @Test
+    void documentExtractionFailureReturns422AsClientRequest() {
+        ResponseEntity<ErrorResponse> response = handler.handleRagException(
+                new DocumentExtractionException(
+                        DocumentExtractionException.Reason.NO_EXTRACTABLE_TEXT,
+                        "PDF has no extractable text"),
+                request);
+
+        assertEquals(HttpStatus.UNPROCESSABLE_ENTITY, response.getStatusCode());
+        assertEquals("DOCUMENT_EXTRACTION_FAILED", response.getBody().getError());
+        assertEquals(422, response.getBody().getStatus());
+        assertEquals(FailureClass.CLIENT_REQUEST, response.getBody().getFailureClass());
+        assertTrue(response.getBody().getDetail().contains("no extractable text"));
     }
 
     @Test

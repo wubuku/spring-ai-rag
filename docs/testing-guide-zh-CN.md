@@ -1508,6 +1508,21 @@ JPA flush 已经写下去的文件一并回滚。
 `scripts/verify-integration-test-switches.mjs` 现在会在受门控的套件缺少运行路径时失败，
 两个方向都查。
 
+### 文档解析语料验收（确定性，无需 Docker 或真实模型）
+
+```bash
+mvn -pl spring-ai-rag-core -am \
+  -Dtest=DocumentParsingCorpusAcceptanceTest \
+  -Dsurefire.failIfNoSpecifiedTests=false test
+```
+
+`DocumentParsingCorpus` 在测试运行时确定性生成固定语料：多栏 PDF、表格 PDF、
+无文字层扫描件 PDF、DOCX、含脚本/样式噪声的 HTML、Markdown、UTF-8/GBK/UTF-16
+纯文本、超长单行，以及损坏/加密/伪造扩展名文件。测试断言阅读顺序、表格行不串列、
+噪声被剔除、编码正确、扫描件返回 `NO_EXTRACTABLE_TEXT`；并用固定哈希假 embedding
+验证每个 chunk 非空、有界、可嵌入。该套件属于普通 `mvn test`，不消耗 Docker 或模型
+配额。
+
 ### 多实例并行验收门禁
 
 多副本共享同一个 PostgreSQL 的语义由 `MultiInstancePostgresIntegrationTest` 验证，开关

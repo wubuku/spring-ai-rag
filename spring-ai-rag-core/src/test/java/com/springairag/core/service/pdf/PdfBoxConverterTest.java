@@ -102,16 +102,15 @@ class PdfBoxConverterTest {
     }
 
     @Test
-    @DisplayName("convert marks an empty PDF as having no extractable content")
-    void convert_emptyPdf_marksNoContent(@TempDir Path tempDir) throws Exception {
+    @DisplayName("convert rejects a PDF without a text layer instead of writing a placeholder")
+    void convert_emptyPdf_failsWithNoExtractableText(@TempDir Path tempDir) throws Exception {
         Path pdf = writePdf(tempDir, "blank.pdf", false);
 
-        assertTrue(converter.convert(pdf, tempDir));
-
-        String text = Files.readString(
-                tempDir.resolve("blank").resolve("blank.md"));
-        assertTrue(text.contains(
-                "*No text content could be extracted from this PDF.*"));
+        PdfConversionException failure = assertThrows(
+                PdfConversionException.class, () -> converter.convert(pdf, tempDir));
+        assertEquals(PdfConversionException.Reason.NO_EXTRACTABLE_TEXT,
+                failure.getReason());
+        assertFalse(Files.exists(tempDir.resolve("blank").resolve("blank.md")));
     }
 
     @Test

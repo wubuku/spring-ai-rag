@@ -48,6 +48,11 @@ similar to:
 The UUID directory is synthetic. Only files are persisted in `fs_files`;
 `GET /api/v1/rag/files/tree` reconstructs directory entries from their paths.
 
+Before conversion, the PDF must be readable and contain a text layer. Scanned
+PDFs without text, encrypted PDFs, and corrupt PDFs fail with 422
+`DOCUMENT_EXTRACTION_FAILED` and never write a placeholder `default.md`, so
+there is no silent "import succeeded but Search returns nothing" outcome.
+
 At this point:
 
 - preview and raw-file access work;
@@ -111,15 +116,42 @@ This combines PDF conversion, artifact storage, RAG document creation, and
 optional embedding. See [REST API](rest-api.md#pdf-and-file-artifact-apis) for
 JSON versus SSE behavior.
 
-For text-family files (`txt`, `md`, `json`, `xml`, `html`, `csv`, `log`), the
-Documents page uses:
+For text-family files (`txt`, `md`, `markdown`, `json`, `xml`, `html/htm`, `csv`,
+`log`, `docx`), the Documents page uses:
 
 ```http
 POST /api/v1/rag/documents/upload
 ```
 
 That path creates and embeds logical RAG documents directly. It does not
-create a browsable `fs_files` directory.
+create a browsable `fs_files` directory. Every upload goes through a
+deterministic extraction layer: HTML removes `script/style/noscript` noise,
+Markdown keeps code blocks and tables, plain text probes UTF-8 then GB18030,
+and DOCX keeps paragraph and table row/column structure.
+
+### 4.1 Extraction Quality, Failure Semantics, And Reproducible Acceptance
+
+- **Scanned PDF without a text layer**: `/files/pdf` returns 422
+  `DOCUMENT_EXTRACTION_FAILED`. It never writes a placeholder Markdown file or
+  produces empty chunks.
+- **Corrupt/encrypted PDF, corrupt DOCX, fake extensions** (for example a ZIP
+  renamed to `.pdf`, or a PNG renamed to `.docx`): also 422 with a stable
+  reason in the error body; never a generic 500.
+- **Zero-byte files**: PDF import returns 400; batch document upload reports an
+  explicit per-file error.
+- **Files above the 20 MB extraction budget or the container multipart limit**:
+  413 `PAYLOAD_TOO_LARGE`.
+- **Failure side effects**: extraction completes before any `fs_files`, import
+  batch, quota, or `rag_documents` write. Failed requests leave no half-written
+  directory and no orphan files.
+
+The deterministic acceptance suite is
+[DocumentParsingCorpusAcceptanceTest](../spring-ai-rag-core/src/test/java/com/springairag/core/service/extract/DocumentParsingCorpusAcceptanceTest.java);
+[DocumentParsingCorpus](../spring-ai-rag-core/src/test/java/com/springairag/core/service/extract/DocumentParsingCorpus.java)
+generates the fixtures at test runtime: multi-column PDF, table PDF, scanned
+PDF, DOCX, noisy HTML, Markdown, UTF-8/GBK/UTF-16 text, an ultra-long single
+line, plus corrupt/encrypted/fake-extension files. Chunks are validated with a
+fixed-hash fake embedding; no real model or external service is required.
 
 For externally managed content that can change over time, prefer
 `POST /api/v1/rag/documents/upsert` with stable

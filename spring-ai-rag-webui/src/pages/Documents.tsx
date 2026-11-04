@@ -453,7 +453,7 @@ export function Documents() {
         <input
           type="file"
           multiple
-          accept=".txt,.md,.json,.xml,.html,.csv,.log"
+          accept=".txt,.md,.markdown,.json,.xml,.html,.htm,.csv,.log,.docx"
           onChange={e => handleFiles(e.target.files)}
           className={styles.fileInput}
           disabled={isUploading}
@@ -466,7 +466,7 @@ export function Documents() {
           </span>
           <span className={styles.uploadHint}>
                 {t('documents.supportedFormats', {
-                  formats: 'txt, md, json, xml, html, csv, log',
+                  formats: 'txt, md, json, xml, html, csv, log, docx',
                 })}
               </span>
         </label>

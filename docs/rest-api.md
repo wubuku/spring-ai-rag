@@ -626,6 +626,7 @@ All of these use the same `ErrorResponse` envelope and carry
 | Single file or whole request over the multipart limit | 413 | `PAYLOAD_TOO_LARGE` | `CLIENT_REQUEST` | none |
 | Multipart temp directory full/read-only | 503 | `UPLOAD_STORAGE_UNAVAILABLE` | `DEPENDENCY_UNAVAILABLE` | `5` |
 | Malformed multipart (not size/storage) | 400 | `BAD_REQUEST` | `CLIENT_REQUEST` | none |
+| Corrupt/encrypted/no-text-layer/fake-extension document | 422 | `DOCUMENT_EXTRACTION_FAILED` | `CLIENT_REQUEST` | none |
 
 Pool exhaustion is **bounded queueing**: at most `DB_CONNECTION_TIMEOUT_MS`
 (10 s default), never "read everything then reject" and never an unbounded hang.

@@ -140,6 +140,8 @@ public class PdfImportController {
                     result.displayName()
             ));
 
+        } catch (RagException e) {
+            throw e;
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(ErrorResponse.of(e.getMessage()));
         } catch (Exception e) { // Resilience: convert
@@ -240,10 +242,12 @@ public class PdfImportController {
                     importResult.uuid(),
                     importResult.entryMarkdown()
             ));
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(ErrorResponse.of(e.getMessage()));
         } catch (SecurityException e) {
             throw e;
+        } catch (RagException e) {
+            throw e;
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(ErrorResponse.of(e.getMessage()));
         } catch (Exception e) { // Resilience: import
             log.error("PDF-to-RAG import failed: {}", e.getMessage(), e);
             return ResponseEntity.internalServerError()
@@ -282,10 +286,12 @@ public class PdfImportController {
             return embed
                     ? importPdfToRagWithEmbedding(file, collectionId, null)
                     : importPdfToRagWithoutEmbedding(file, collectionId, null);
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(ErrorResponse.of(e.getMessage()));
         } catch (SecurityException e) {
             throw e;
+        } catch (RagException e) {
+            throw e;
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(ErrorResponse.of(e.getMessage()));
         } catch (Exception e) {
             return ResponseEntity.internalServerError()
                     .body(ErrorResponse.of("PDF-to-RAG import failed: " + e.getMessage()));
@@ -341,6 +347,8 @@ public class PdfImportController {
                     ragResult.embeddingAction(),
                     ragResult.embeddingJobId(),
                     ragResult.embeddingBatchId()));
+        } catch (RagException e) {
+            throw e;
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(ErrorResponse.of(e.getMessage()));
         } catch (Exception e) {
@@ -382,7 +390,7 @@ public class PdfImportController {
                     importResult.uuid(), importResult.entryMarkdown(), importResult.filesStored());
             return streamPdfToRagWithEmbedding(
                     importResult, effectiveCollectionId);
-        } catch (IllegalArgumentException | SecurityException e) {
+        } catch (IllegalArgumentException | SecurityException | RagException e) {
             throw e;
         } catch (Exception e) {
             log.error("PDF-to-RAG import failed: {}", e.getMessage(), e);
@@ -660,10 +668,12 @@ public class PdfImportController {
             return "sync".equalsIgnoreCase(embed)
                     ? triggerEmbeddingSync(uuid, collectionId, null, forceReembed)
                     : triggerEmbeddingSse(uuid, collectionId, null, forceReembed);
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(ErrorResponse.of(e.getMessage()));
         } catch (SecurityException e) {
             throw e;
+        } catch (RagException e) {
+            throw e;
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(ErrorResponse.of(e.getMessage()));
         } catch (Exception e) {
             return ResponseEntity.internalServerError()
                     .body(ErrorResponse.of("Embedding trigger failed: " + e.getMessage()));

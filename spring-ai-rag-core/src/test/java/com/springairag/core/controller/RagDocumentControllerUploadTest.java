@@ -1,6 +1,7 @@
 package com.springairag.core.controller;
 
 import com.springairag.api.dto.BatchCreateResponse;
+import com.springairag.api.dto.DocumentRequest;
 import com.springairag.api.dto.FileUploadResponse;
 import com.springairag.api.enums.EmbeddingPolicy;
 import com.springairag.core.repository.RagCollectionRepository;
@@ -12,8 +13,10 @@ import com.springairag.core.service.CollectionIdentityResolver;
 import com.springairag.core.service.DocumentEmbedService;
 import com.springairag.core.service.DocumentVersionService;
 import com.springairag.core.config.EmbeddingProfileProvider;
+import com.springairag.core.service.extract.DocumentParsingCorpus;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.web.multipart.MultipartFile;
@@ -22,6 +25,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -193,7 +197,109 @@ class RagDocumentControllerUploadTest {
         assertEquals(200, response.getStatusCode().value());
         FileUploadResponse body = response.getBody();
         assertEquals(1, body.failed());
-        assertEquals("File content is empty",
-                body.results().get(0).error());
+        assertTrue(body.results().get(0).error().contains("No extractable text"));
+    }
+
+    @Test
+    void gbkTextFileIsDecodedBeforeStoring() {
+        stubSuccessfulCreate();
+        MultipartFile gbk = new MockMultipartFile(
+                "files", "gbk.txt", "text/plain", DocumentParsingCorpus.gbkText());
+
+        ResponseEntity<FileUploadResponse> response = controller.uploadAndEmbed(
+                new MultipartFile[]{gbk}, COLLECTION_ID, null, false, null, null);
+
+        assertEquals(1, response.getBody().success());
+        DocumentRequest captured = captureSingleRequest();
+        assertEquals("中文编码测试：你好，世界。", captured.getContent());
+        assertEquals("gbk", captured.getTitle());
+    }
+
+    @Test
+    void htmlNoiseIsRemovedBeforeStoring() {
+        stubSuccessfulCreate();
+        MultipartFile html = new MockMultipartFile(
+                "files", "page.html", "text/html", DocumentParsingCorpus.htmlWithNoise());
+
+        ResponseEntity<FileUploadResponse> response = controller.uploadAndEmbed(
+                new MultipartFile[]{html}, COLLECTION_ID, null, false, null, null);
+
+        assertEquals(200, response.getStatusCode().value());
+        assertEquals(1, response.getBody().success());
+        DocumentRequest captured = captureSingleRequest();
+        assertTrue(captured.getContent().contains("这是可见段落。"));
+        assertFalse(captured.getContent().contains("IGNORE_ME"));
+        assertFalse(captured.getContent().contains("SECRET_NOISE"));
+    }
+
+    @Test
+    void docxTableStructureIsPreservedBeforeStoring() throws Exception {
+        stubSuccessfulCreate();
+        // DOCX 必须从真实二进制 ZIP 读取，构造器声明 IOException。
+        MultipartFile docx = new MockMultipartFile(
+                "files", "corpus.docx",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                DocumentParsingCorpus.docx());
+
+        ResponseEntity<FileUploadResponse> response = controller.uploadAndEmbed(
+                new MultipartFile[]{docx}, COLLECTION_ID, null, false, null, null);
+
+        assertEquals(200, response.getStatusCode().value());
+        assertEquals(1, response.getBody().success());
+        DocumentRequest captured = captureSingleRequest();
+        assertTrue(captured.getContent().contains("| 姓名 | 年龄 |"));
+        assertTrue(captured.getContent().contains("| 张三 | 30 |"));
+    }
+
+    @Test
+    void fakeExtensionIsRejectedWithExplicitError() {
+        MultipartFile fakeMarkdown = new MockMultipartFile(
+                "files", "fake.md", "text/markdown", DocumentParsingCorpus.pngBytes());
+
+        ResponseEntity<FileUploadResponse> response = controller.uploadAndEmbed(
+                new MultipartFile[]{fakeMarkdown}, COLLECTION_ID, null, false, null, null);
+
+        assertEquals(200, response.getStatusCode().value());
+        assertEquals(1, response.getBody().failed());
+        String error = response.getBody().results().get(0).error();
+        assertTrue(error.contains("binary"), "unexpected error: " + error);
+        verify(documentMutationService, never()).createLocal(
+                any(), any(), any(), anyBoolean(), anyString(), any(), any(), any(), any());
+    }
+
+    @Test
+    void zeroByteFileIsRejectedWithoutMutation() {
+        MultipartFile empty = new MockMultipartFile(
+                "files", "empty.md", "text/markdown", new byte[0]);
+
+        ResponseEntity<FileUploadResponse> response = controller.uploadAndEmbed(
+                new MultipartFile[]{empty}, COLLECTION_ID, null, false, null, null);
+
+        assertEquals(1, response.getBody().failed());
+        assertTrue(response.getBody().results().get(0).error().contains("empty"));
+        verify(documentMutationService, never()).createLocal(
+                any(), any(), any(), anyBoolean(), anyString(), any(), any(), any(), any());
+    }
+
+    private void stubSuccessfulCreate() {
+        com.springairag.core.entity.RagDocument created =
+                new com.springairag.core.entity.RagDocument();
+        created.setId(41L);
+        com.springairag.api.dto.DocumentMutationResponse okMutation =
+                new com.springairag.api.dto.DocumentMutationResponse(
+                        41L, "CREATED", 1L, 1, true, false, false,
+                        "ASYNC_QUEUED", UUID.randomUUID(), UUID.randomUUID(), null);
+        when(documentMutationService.createLocal(
+                any(), any(), any(), anyBoolean(), anyString(), any(), any(), any(), any()))
+                .thenReturn(new com.springairag.core.service.DocumentMutationService.CreatedLocal(
+                        created, okMutation));
+    }
+
+    private DocumentRequest captureSingleRequest() {
+        ArgumentCaptor<DocumentRequest> captor = ArgumentCaptor.forClass(DocumentRequest.class);
+        verify(documentMutationService).createLocal(
+                captor.capture(), any(), any(), anyBoolean(), anyString(),
+                any(), any(), any(), any());
+        return captor.getValue();
     }
 }

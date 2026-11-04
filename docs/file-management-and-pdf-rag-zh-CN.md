@@ -44,6 +44,10 @@ POST /api/v1/rag/files/pdf
 UUID 目录是合成目录。数据库只在 `fs_files` 中保存文件，
 `GET /api/v1/rag/files/tree` 根据路径重建目录项。
 
+转换前会校验 PDF 可读且有文字层。无文字层的扫描件、加密 PDF、损坏 PDF 会直接失败
+（422 `DOCUMENT_EXTRACTION_FAILED`），不会写入 `default.md` 占位文件，因此不会出现
+“导入成功但检索为空”的静默结果。
+
 完成这一步后：
 
 - 可以预览或读取原始文件；
@@ -99,14 +103,34 @@ POST /api/v1/rag/files/pdf-to-rag
 它把 PDF 转换、文件产物存储、RAG 文档创建和可选 embedding 合并在一次请求中。
 JSON 与 SSE 行为见 [REST API](rest-api-zh-CN.md#pdf-与文件产物-api)。
 
-对于 `txt`、`md`、`json`、`xml`、`html`、`csv`、`log` 等文本类文件，
-文档管理页面使用：
+对于 `txt`、`md`、`markdown`、`json`、`xml`、`html/htm`、`csv`、`log`、`docx`
+等文本类文件，文档管理页面使用：
 
 ```http
 POST /api/v1/rag/documents/upload
 ```
 
 这条路径直接创建并嵌入 RAG 逻辑文档，不会创建可在文件管理中浏览的 `fs_files` 目录。
+上传前统一经过确定性抽取层：HTML 剔除 `script/style/noscript` 噪声，Markdown 保留代码块
+与表格，纯文本按 UTF-8 → GB18030 顺序探测编码，DOCX 保留段落与表格行列结构。
+
+### 4.1 抽取质量、失败语义与可复现验收
+
+- **扫描件 PDF（无文字层）**：`/files/pdf` 明确返回 422
+  `DOCUMENT_EXTRACTION_FAILED`，不会写入占位 Markdown、不会生成空 chunk。
+- **损坏/加密 PDF、损坏 DOCX、伪造扩展名（如 `.pdf` 实为 ZIP、`.docx` 实为 PNG）**：
+  同样返回 422，响应 body 的 `error` 带稳定原因；不会落到通用 500。
+- **零字节文件**：PDF 导入返回 400；批量文档上传在单文件结果中返回明确错误。
+- **超过 20 MB 或容器 multipart 上限**：返回 413 `PAYLOAD_TOO_LARGE`。
+- **失败副作用**：抽取在 `fs_files`、import batch、配额和 `rag_documents` 写入之前完成；
+  失败请求不产生半成品目录或孤儿文件。
+
+确定性验收位于
+[DocumentParsingCorpusAcceptanceTest](../spring-ai-rag-core/src/test/java/com/springairag/core/service/extract/DocumentParsingCorpusAcceptanceTest.java)，
+语料由 [DocumentParsingCorpus](../spring-ai-rag-core/src/test/java/com/springairag/core/service/extract/DocumentParsingCorpus.java)
+在测试运行时生成：多栏 PDF、表格 PDF、扫描件 PDF、DOCX、带脚本/样式噪声的 HTML、
+Markdown、UTF-8/GBK/UTF-16 文本、超长单行，以及损坏/加密/伪造扩展名。切分后使用固定
+哈希假 embedding 验证每个 chunk 有界、非空且可嵌入，不依赖真实模型或外部服务。
 
 对于会持续更新的外部内容，推荐使用 `POST /api/v1/rag/documents/upsert`，并提供稳定的
 `collectionKey + sourceNamespace + externalId` 与 opaque `sourceRevision`。详见
