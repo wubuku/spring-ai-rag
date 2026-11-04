@@ -1,0 +1,1 @@
+import{t as e}from"./jsx-runtime-CIqBrmNq.js";var t={card:`_card_p3u7h_1`},n=e();function r({className:e,...r}){return(0,n.jsx)(`div`,{className:[t.card,e].filter(Boolean).join(` `),...r})}export{r as t};

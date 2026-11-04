@@ -681,8 +681,11 @@ class RagChatControllerTest {
 
         assertEquals(200, response.getStatusCode().value());
         assertNotNull(response.getBody());
-        assertEquals("attachment; filename=\"export-session-001.json\"",
-                response.getHeaders().getFirst("Content-Disposition"));
+        org.springframework.http.ContentDisposition disposition =
+                org.springframework.http.ContentDisposition.parse(
+                        response.getHeaders().getFirst("Content-Disposition"));
+        assertEquals("attachment", disposition.getType());
+        assertEquals("export-session-001.json", disposition.getFilename());
         assertTrue(response.getHeaders().getFirst("Content-Type").contains("application/json"));
         verify(chatExportService).exportAsJson(
                 any(ChatPrincipal.class), eq(sessionId), eq(0));
@@ -702,8 +705,11 @@ class RagChatControllerTest {
 
         assertEquals(200, response.getStatusCode().value());
         assertNotNull(response.getBody());
-        assertEquals("attachment; filename=\"export-session-002.md\"",
-                response.getHeaders().getFirst("Content-Disposition"));
+        org.springframework.http.ContentDisposition disposition =
+                org.springframework.http.ContentDisposition.parse(
+                        response.getHeaders().getFirst("Content-Disposition"));
+        assertEquals("attachment", disposition.getType());
+        assertEquals("export-session-002.md", disposition.getFilename());
         assertTrue(response.getHeaders().getFirst("Content-Type").contains("text/markdown"));
         verify(chatExportService).exportAsMarkdown(
                 any(ChatPrincipal.class), eq(sessionId), eq(50));

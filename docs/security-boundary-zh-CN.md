@@ -188,3 +188,63 @@ python3 scripts/verify-security-deployment-posture.py
 两个脚本都使用临时数据库与 mock provider，结束时删除；升级脚本会先构造
 V70 形态数据（无归属文件/反馈/评估），再启动到 V71 验证 fail-closed、
 root 可见、新写入归属与回填脚本 dry-run/apply。
+
+---
+
+## 8. 浏览器安全响应头与注入面
+
+### 8.1 响应头（应用统一下发）
+
+`SecurityHeadersFilter`（order `-100`，覆盖 `/*`）对 WebUI 静态产物、`/api/**`、
+SSE 与错误响应统一下发：
+
+| 头 | 值 |
+|----|----|
+| `Content-Security-Policy` | `default-src 'self'; base-uri 'self'; script-src 'self'; style-src 'self'; style-src-attr 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; media-src 'self' blob:; object-src 'self' blob:; frame-src 'self'; worker-src 'self'; manifest-src 'self'; form-action 'self'; frame-ancestors 'none'` |
+| `X-Content-Type-Options` | `nosniff` |
+| `Referrer-Policy` | `no-referrer` |
+| `X-Frame-Options` | `DENY`（与 `frame-ancestors 'none'` 双保险） |
+| `Permissions-Policy` | `camera=(), microphone=(), geolocation=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=(), interest-cohort=()` |
+| `Strict-Transport-Security` | `max-age=31536000; includeSubDomains`，**仅 HTTPS** |
+
+为什么这样而不是更严：
+
+- **脚本必须外置**：WebUI 唯一的行内主题引导脚本已移到
+  `public/assets/theme-init.js`，因此 `script-src` 不需要 `'unsafe-inline'`；
+  新增行内脚本会直接违反策略。
+- **`style-src-attr 'unsafe-inline'` 是唯一让步**：React 会在元素上写 `style`
+  属性（Vite 产物与运行期计算样式），完全禁用会破坏布局；样式表本身仍是
+  `style-src 'self'`。没有引入 nonce/hash 是因为静态产物由构建期生成，
+  运行期注入 nonce 会把静态文件变成模板渲染。
+- **`blob:` 只给 `img` / `media` / `object`**：文件预览用 `blob:` URL 展示
+  PDF/图片；脚本与连接仍只允许 `'self'`。
+- **`connect-src 'self'` 覆盖同源 API 与 SSE**：不依赖 CDN、不使用跨域
+  WebSocket。
+- **HSTS 只在 HTTPS 下发**：直连 `request.isSecure()` 或可信代理的
+  `X-Forwarded-Proto: https`。Helm 在 Ingress 终止 TLS 时默认
+  `server.forward-headers-strategy: framework`；Docker Compose 直连默认不启用，
+  避免客户端伪造 `X-Forwarded-*` 影响安全判定与客户端 IP。
+
+### 8.2 注入面结论
+
+| 面 | 结论 |
+|----|------|
+| 聊天回答 / 引用 | 前端以 React 文本插值渲染，HTML 被转义；CSP 作为第二道防线，实测内联 `<script>` 与行内事件处理器均被拒绝 |
+| 富文本预览 | 仅 `FilePreview` 使用 `dangerouslySetInnerHTML`，内容来自服务端 `MarkdownRendererService` 的 jsoup Safelist（移除 `script/style/iframe/object/embed/form` 与 `on*`） |
+| 文档标题 / 文件名 | API 原样保留引号、中文与 HTML 字符；前端按文本渲染，不做 HTML 解释 |
+| 下载头 | `Content-Disposition` 统一用 `ContentDisposition.inline()/attachment().filename(name, UTF_8)`（RFC 5987），并对裸 CR/LF 做清洗；文件名含引号不会破坏头结构 |
+| 聊天导出 | HTTP 只支持 `json` / `md`，没有 NDJSON 端点；内部 CSV 生成对 `=` `+` `-` `@`、tab/CR 以及“前导空白 + 触发符”的单元格前缀 `'`，防止表格公式注入 |
+
+### 8.3 验收
+
+```bash
+python3 scripts/verify-browser-security-headers-e2e.py
+```
+
+真实进程 + 真实 Chromium：`/webui/`、API、SSE、404 的响应头矩阵；HTTP 无 HSTS、
+`X-Forwarded-Proto: https` 有 HSTS；页面加载、聊天 SSE、上传、搜索、导出不被 CSP
+阻断；页面内构造的内联 `<script>` 与 `onclick` 注入被拒绝且触发
+`securitypolicyviolation`；含 `<script>` 的模型输出以文本呈现。
+
+单元层：`SecurityHeadersFilterTest`、`ChatExportServiceTest`（CSV 公式注入）、
+`PdfImportControllerContentTypeTest`（RFC 5987 头）。

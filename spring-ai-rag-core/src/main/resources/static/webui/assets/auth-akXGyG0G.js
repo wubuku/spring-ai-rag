@@ -1,0 +1,1 @@
+import{n as e}from"./client-BckIjk4X.js";var t={currentIdentity:t=>e.get(`/auth/me`,{headers:{"X-API-Key":t}})};export{t as authApi};

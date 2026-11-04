@@ -1152,6 +1152,12 @@ file. Unknown and foreign sessions return `404 SESSION_NOT_FOUND`.
 `text/markdown; charset=utf-8`, with
 `Content-Disposition: attachment; filename="{sessionId}.{format}"`.
 
+The download header is RFC 5987 encoded (`filename*=UTF-8''...`); quotes, CJK,
+and control characters in the session id cannot break the header. The internal
+`ChatExportService` can also render CSV, but no HTTP endpoint exposes it; CSV
+cells starting with `=` `+` `-` `@` (or leading whitespace followed by such a
+character) are prefixed with `'` to prevent spreadsheet formula injection.
+
 **JSON format response body:**
 ```json
 {

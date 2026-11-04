@@ -151,6 +151,28 @@ describe('Chat', () => {
     expect(exportButton).toHaveAttribute('aria-expanded', 'true');
   });
 
+  it('renders HTML-like history content as text instead of injecting it', async () => {
+    const payload = '<script>window.__ragInjected = true</script>';
+    (chatApi.getHistory as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: [{
+        id: 1,
+        sessionId: 'session-inject',
+        userMessage: 'question',
+        aiResponse: payload,
+        createdAt: '2026-08-17T08:00:00',
+      }],
+    });
+
+    const { container } = renderChat('/chat/session-inject');
+    await screen.findByText(payload);
+
+    // 回答中的 <script> 必须是文本节点，不能变成可执行元素。
+    expect(container.querySelectorAll('script')).toHaveLength(0);
+    expect(container.innerHTML).toContain('&lt;script&gt;');
+    expect((window as unknown as { __ragInjected?: boolean })
+      .__ragInjected).toBeUndefined();
+  });
+
   it('send button is disabled when input is empty', () => {
     renderChat();
     const sendBtn = screen.getByRole('button', { name: /chat.send/ });

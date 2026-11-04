@@ -197,3 +197,66 @@ Both scripts use a temporary database and mock provider and delete them on exit.
 The upgrade script first constructs V70-shaped data (ownerless files/feedback/
 evaluation), upgrades to V71, and verifies fail-closed, root visibility, new-write
 ownership, and the backfill script's dry-run/apply behavior.
+
+---
+
+## 8. Browser Security Headers And Injection Surface
+
+### 8.1 Response headers (issued by the application)
+
+`SecurityHeadersFilter` (order `-100`, mapped to `/*`) applies the same headers to
+the WebUI static assets, `/api/**`, SSE, and error responses:
+
+| Header | Value |
+|--------|-------|
+| `Content-Security-Policy` | `default-src 'self'; base-uri 'self'; script-src 'self'; style-src 'self'; style-src-attr 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; media-src 'self' blob:; object-src 'self' blob:; frame-src 'self'; worker-src 'self'; manifest-src 'self'; form-action 'self'; frame-ancestors 'none'` |
+| `X-Content-Type-Options` | `nosniff` |
+| `Referrer-Policy` | `no-referrer` |
+| `X-Frame-Options` | `DENY` (belt and braces with `frame-ancestors 'none'`) |
+| `Permissions-Policy` | `camera=(), microphone=(), geolocation=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=(), interest-cohort=()` |
+| `Strict-Transport-Security` | `max-age=31536000; includeSubDomains`, **HTTPS only** |
+
+Why it is not stricter:
+
+- **Scripts are external**: the only inline theme bootstrap script moved to
+  `public/assets/theme-init.js`, so `script-src` does not need
+  `'unsafe-inline'`. A new inline script violates the policy immediately.
+- **`style-src-attr 'unsafe-inline'` is the only concession**: React writes
+  `style` attributes (both in the Vite output and at runtime); disabling them
+  breaks layout. Stylesheets themselves remain `style-src 'self'`. No nonce/hash
+  is used because the static artifacts are generated at build time; runtime nonce
+  injection would turn static files into template rendering.
+- **`blob:` only for `img` / `media` / `object`**: file preview shows PDFs/images
+  through `blob:` URLs; scripts and connections remain `'self'` only.
+- **`connect-src 'self'` covers same-origin API and SSE**: no CDN and no
+  cross-origin WebSocket.
+- **HSTS only over HTTPS**: direct `request.isSecure()` or a trusted proxy's
+  `X-Forwarded-Proto: https`. The Helm chart sets
+  `server.forward-headers-strategy: framework` by default when an Ingress
+  terminates TLS. Docker Compose runs directly and keeps it disabled to avoid
+  client-spoofed `X-Forwarded-*` affecting security decisions and client IP.
+
+### 8.2 Injection surface conclusions
+
+| Surface | Conclusion |
+|---------|------------|
+| Chat answers / citations | Rendered through React text interpolation, so HTML is escaped; CSP is the second line of defense and tests show inline `<script>` and inline event handlers are rejected |
+| Rich text preview | Only `FilePreview` uses `dangerouslySetInnerHTML`, fed by the server-side `MarkdownRendererService` jsoup Safelist (removes `script/style/iframe/object/embed/form` and `on*`) |
+| Document titles / filenames | The API preserves quotes, CJK, and HTML characters verbatim; the frontend renders them as text, never as HTML |
+| Download headers | `Content-Disposition` always uses `ContentDisposition.inline()/attachment().filename(name, UTF_8)` (RFC 5987) and strips bare CR/LF; quoted filenames cannot break the header structure |
+| Chat export | HTTP supports `json` / `md` only and exposes no NDJSON endpoint; the internal CSV writer prefixes `'` to cells starting with `=` `+` `-` `@`, tab/CR, or leading whitespace followed by a trigger character to prevent spreadsheet formula injection |
+
+### 8.3 Acceptance
+
+```bash
+python3 scripts/verify-browser-security-headers-e2e.py
+```
+
+Real process plus real Chromium: header matrix for `/webui/`, API, SSE, and 404;
+no HSTS over HTTP and HSTS with `X-Forwarded-Proto: https`; page load, chat SSE,
+upload, search, and export remain usable under CSP; inline `<script>` and
+`onclick` injections created inside the page are rejected and raise
+`securitypolicyviolation`; model output containing `<script>` renders as text.
+
+Unit level: `SecurityHeadersFilterTest`, `ChatExportServiceTest` (CSV formula
+injection), `PdfImportControllerContentTypeTest` (RFC 5987 headers).

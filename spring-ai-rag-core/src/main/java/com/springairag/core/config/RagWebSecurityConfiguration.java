@@ -6,6 +6,7 @@ import com.springairag.core.filter.ApiCapabilityFilter;
 import com.springairag.core.filter.FailureClassResponseHeaderFilter;
 import com.springairag.core.filter.PrincipalMdcFilter;
 import com.springairag.core.filter.RateLimitFilter;
+import com.springairag.core.filter.SecurityHeadersFilter;
 import com.springairag.core.filter.TrustedProxyResolver;
 import com.springairag.core.security.ApiRoutePolicyRegistry;
 import com.springairag.core.ratelimit.PostgresRateLimitStore;
@@ -202,6 +203,19 @@ public class RagWebSecurityConfiguration {
                 new FilterRegistrationBean<>(filter);
         registration.addUrlPatterns("/api/*", "/v1/*");
         registration.setOrder(0);
+        return registration;
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(name = "securityHeadersFilterRegistration")
+    public FilterRegistrationBean<SecurityHeadersFilter>
+    securityHeadersFilterRegistration() {
+        FilterRegistrationBean<SecurityHeadersFilter> registration =
+                new FilterRegistrationBean<>(new SecurityHeadersFilter());
+        // 覆盖 API、SSE、/webui 静态产物与错误页；比鉴权/限流更早执行，
+        // 保证 401/403/429 也能带上安全头。
+        registration.addUrlPatterns("/*");
+        registration.setOrder(-100);
         return registration;
     }
 

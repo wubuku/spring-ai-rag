@@ -1008,6 +1008,11 @@ cleanup 删除后，原 key 才允许重新使用。
 中的 assistant 消息都会保留完成 turn 时保存的来源快照；CSV 不属于该 HTTP 端点支持的
 格式。
 
+下载头使用 RFC 5987（`Content-Disposition: attachment; filename*=UTF-8''...`），
+`sessionId` 中的引号、中文与控制字符不会破坏响应头。内部 `ChatExportService`
+虽提供 CSV 渲染，但未暴露 HTTP 端点；CSV 单元格会文本化 `=` `+` `-` `@`
+等公式触发符（前缀 `'`），防止表格公式注入。
+
 ---
 ## API 密钥管理
 

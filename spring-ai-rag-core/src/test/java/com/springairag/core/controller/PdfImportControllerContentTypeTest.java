@@ -14,6 +14,7 @@ import java.util.Optional;
 import java.util.function.Function;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import com.springairag.core.service.CollectionIdentityResolver;
@@ -119,5 +120,44 @@ class PdfImportControllerContentTypeTest {
 
         assertEquals("text/markdown",
                 response.getHeaders().getContentType().toString());
+    }
+
+    @Test
+    void contentDispositionEncodesQuotesAndNonAsciiFilename() {
+        // 文件名含引号与中文：必须按 RFC 5987 编码，不能破坏头结构。
+        String filename = "报告\"final\".pdf";
+        stubFile("uuid-1/" + filename, "application/pdf");
+
+        ResponseEntity<org.springframework.core.io.Resource> response =
+                controller.getRawFilePath("uuid-1", filename);
+
+        String header = response.getHeaders()
+                .getFirst(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION);
+        org.springframework.http.ContentDisposition disposition =
+                org.springframework.http.ContentDisposition.parse(header);
+
+        assertEquals("inline", disposition.getType());
+        assertEquals(filename, disposition.getFilename());
+        assertFalse(header.contains("\r"), "头中不得出现裸 CR");
+        assertFalse(header.contains("\n"), "头中不得出现裸 LF");
+    }
+
+    @Test
+    void legacyDownloadEndpointAlsoEncodesFilename() {
+        String filename = "报告\"final\".pdf";
+        String path = "uuid-1/" + filename;
+        stubFile(path, "application/pdf");
+
+        ResponseEntity<org.springframework.core.io.Resource> response =
+                controller.getRawFile(path);
+
+        String header = response.getHeaders()
+                .getFirst(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION);
+        org.springframework.http.ContentDisposition disposition =
+                org.springframework.http.ContentDisposition.parse(header);
+
+        assertEquals(filename, disposition.getFilename());
+        assertFalse(header.contains("\r"));
+        assertFalse(header.contains("\n"));
     }
 }

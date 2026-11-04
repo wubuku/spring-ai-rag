@@ -176,6 +176,9 @@ config:
   # Production-quality pipeline switches
   queryRewriteEnabled: true
   rerankEnabled: true
+  # server.forward-headers-strategy；Ingress 终止 TLS 时设为 framework，
+  # 让 HSTS 等 HTTPS 语义基于 X-Forwarded-Proto 生效。
+  forwardHeadersStrategy: framework
 
 # ── Secrets (sensitive, stored in Secret) ──────────────────────────────────
 # Provide via --set or a pre-created Secret named {{ include "spring-ai-rag.fullname" . }}-env

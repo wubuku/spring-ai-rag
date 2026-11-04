@@ -32,6 +32,7 @@ import jakarta.validation.constraints.Min;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.io.Resource;
+import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -882,7 +883,9 @@ public class PdfImportController {
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(contentType))
                 .header(HttpHeaders.CONTENT_DISPOSITION,
-                        "inline; filename=\"" + filename + "\"")
+                        ContentDisposition.inline()
+                                .filename(headerFilename(filename), StandardCharsets.UTF_8)
+                                .build().toString())
                 .body(resource.get());
     }
 
@@ -922,8 +925,24 @@ public class PdfImportController {
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(contentType))
                 .header(HttpHeaders.CONTENT_DISPOSITION,
-                        "inline; filename=\"" + filename + "\"")
+                        ContentDisposition.inline()
+                                .filename(headerFilename(filename), StandardCharsets.UTF_8)
+                                .build().toString())
                 .body(resource.get());
+    }
+
+    /**
+     * 清理不允许进入响应头的控制字符。
+     *
+     * <p>文件名来自路径/查询参数，可能包含引号或 CR/LF；后者不是合法
+     * HTTP 头字符。这里只替换换行，引号与非 ASCII 由
+     * {@link ContentDisposition} 的 RFC 5987 编码处理。
+     */
+    private static String headerFilename(String filename) {
+        if (filename == null || filename.isBlank()) {
+            return "file";
+        }
+        return filename.replace('\r', '_').replace('\n', '_');
     }
 
     // ==================== Directory Tree Listing ====================

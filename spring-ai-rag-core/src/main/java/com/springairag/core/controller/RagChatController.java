@@ -52,6 +52,7 @@ import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.io.ByteArrayResource;
+import org.springframework.http.ContentDisposition;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -952,7 +953,9 @@ public class RagChatController {
 
         ByteArrayResource resource = new ByteArrayResource(content);
         return ResponseEntity.ok()
-                .header("Content-Disposition", "attachment; filename=\"" + filename + "\"")
+                .header("Content-Disposition", ContentDisposition.attachment()
+                        .filename(filename, java.nio.charset.StandardCharsets.UTF_8)
+                        .build().toString())
                 .contentType(org.springframework.http.MediaType.parseMediaType(contentType))
                 .body(resource);
     }

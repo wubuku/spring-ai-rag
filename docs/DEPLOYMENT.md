@@ -132,6 +132,11 @@ curl http://localhost:8081/api/v1/rag/search?query=example \
   V55 分阶段轮换以 PostgreSQL 为多实例共同真相源；本地 quota backend 仍只适合显式的
   单实例兼容环境。
 - 数据面必须使用 TLS；WebUI 只部署在本地或受控管理网络。
+- 浏览器安全响应头（CSP、`X-Content-Type-Options`、`Referrer-Policy`、
+  `X-Frame-Options`、`Permissions-Policy`）由应用统一下发；HSTS 仅在 HTTPS 生效。
+  Ingress 终止 TLS 时 Helm 默认 `server.forward-headers-strategy: framework`，
+  Compose 直连默认不启用，避免伪造 `X-Forwarded-*`。详见
+  [security-boundary-zh-CN.md §8](security-boundary-zh-CN.md#8-浏览器安全响应头与注入面)。
 - root 通过 Secret 管理系统或环境变量注入，不写入镜像、YAML、日志或 Git。
 - 修改 root 后重启实例生效；没有 WebUI 修改 root 的接口。
 - root 模式拒绝 `?apiKey=`，只接受 Bearer 或 `X-API-Key` Header。

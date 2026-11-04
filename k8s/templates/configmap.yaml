@@ -15,6 +15,11 @@ metadata:
   {{- end }}
 data:
   application.yml: |
+    server:
+      # Ingress 通常终止 TLS 并以 HTTP 转发到 Pod；framework 策略让
+      # request.isSecure() 读取 X-Forwarded-Proto，HSTS 才会在 HTTPS 入口生效。
+      forward-headers-strategy: {{ .Values.config.forwardHeadersStrategy }}
+
     spring:
       application:
         name: spring-ai-rag
@@ -140,4 +145,4 @@ data:
         com.springairag: INFO
         org.springframework.ai: INFO
       pattern:
-        console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] [%X{traceId}] %-5level %logger{36} - %msg%n"
+        console: "%d{yyyy-MM-dd HH:mm:ss.SSSXXX} [%thread] [%X{traceId}] %-5level %logger{36} - %msg%n"

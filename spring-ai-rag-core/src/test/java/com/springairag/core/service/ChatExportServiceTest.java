@@ -497,6 +497,82 @@ class ChatExportServiceTest {
         assertEquals(5, lines.length, "header + 2*(user+assistant)");
     }
 
+    // ==================== CSV formula injection ====================
+
+    @Test
+    void exportAsCsv_formulaTriggerContents_areNeutralized() {
+        // OWASP CSV injection：= + - @ 与 tab/CR 开头的单元格会被表格软件当公式执行。
+        List<RagChatHistory> records = List.of(
+                createRecord(1L, "s1", "=1+1", null, now()),
+                createRecord(2L, "s1", "+SUM(A1:A2)", null, now()),
+                createRecord(3L, "s1", "-2+3", null, now()),
+                createRecord(4L, "s1", "@SUM(A1:A2)", null, now()));
+        when(historyRepository.findTopNBySessionIdNewestFirst("s1", ChatExportService.MAX_EXPORT_RECORDS))
+                .thenReturn(records);
+
+        String csv = new String(service.exportAsCsv("s1", 0), StandardCharsets.UTF_8);
+
+        assertTrue(csv.contains("user,'=1+1"), "= 开头应以单引号前缀文本化");
+        assertTrue(csv.contains("user,'+SUM(A1:A2)"));
+        assertTrue(csv.contains("user,'-2+3"));
+        assertTrue(csv.contains("user,'@SUM(A1:A2)"));
+    }
+
+    @Test
+    void exportAsCsv_leadingWhitespaceBeforeTrigger_alsoNeutralized() {
+        // 部分表格软件会忽略前导空格后执行公式。
+        List<RagChatHistory> records = List.of(
+                createRecord(1L, "s1", "  =1+1", null, now()),
+                createRecord(2L, "s1", "\u00A0@SUM(A1:A2)", null, now()));
+        when(historyRepository.findTopNBySessionIdNewestFirst("s1", ChatExportService.MAX_EXPORT_RECORDS))
+                .thenReturn(records);
+
+        String csv = new String(service.exportAsCsv("s1", 0), StandardCharsets.UTF_8);
+
+        assertTrue(csv.contains("user,'  =1+1"));
+        assertTrue(csv.contains("user,'\u00A0@SUM(A1:A2)"));
+    }
+
+    @Test
+    void exportAsCsv_triggerNeutralizationCombinesWithQuoting() {
+        // 触发符 + 逗号：既要文本化也要按 RFC 4180 加引号。
+        RagChatHistory record = createRecord(1L, "s1", "=1,2", null, now());
+        when(historyRepository.findTopNBySessionIdNewestFirst("s1", ChatExportService.MAX_EXPORT_RECORDS))
+                .thenReturn(List.of(record));
+
+        String csv = new String(service.exportAsCsv("s1", 0), StandardCharsets.UTF_8);
+
+        assertTrue(csv.contains(",\"'=1,2\""), "输出应为 \"'=1,2\"");
+    }
+
+    @Test
+    void neutralizeCsvFormula_prefixesTriggerCharacters() {
+        assertEquals("'=1+1", ChatExportService.neutralizeCsvFormula("=1+1"));
+        assertEquals("'+1", ChatExportService.neutralizeCsvFormula("+1"));
+        assertEquals("'-1", ChatExportService.neutralizeCsvFormula("-1"));
+        assertEquals("'@SUM(A1:A2)", ChatExportService.neutralizeCsvFormula("@SUM(A1:A2)"));
+        assertEquals("'\tvalue", ChatExportService.neutralizeCsvFormula("\tvalue"));
+        assertEquals("'\rvalue", ChatExportService.neutralizeCsvFormula("\rvalue"));
+    }
+
+    @Test
+    void neutralizeCsvFormula_handlesLeadingWhitespaceOnlyOnce() {
+        assertEquals("'  =1+1", ChatExportService.neutralizeCsvFormula("  =1+1"));
+        assertEquals("'\u00A0=1+1", ChatExportService.neutralizeCsvFormula("\u00A0=1+1"));
+        // 纯空白没有触发符，保持原样。
+        assertEquals("   ", ChatExportService.neutralizeCsvFormula("   "));
+        assertEquals("", ChatExportService.neutralizeCsvFormula(""));
+        assertEquals("", ChatExportService.neutralizeCsvFormula(null));
+    }
+
+    @Test
+    void neutralizeCsvFormula_leavesNormalTextUntouched() {
+        assertEquals("Hello", ChatExportService.neutralizeCsvFormula("Hello"));
+        // 触发符不在开头时不改写。
+        assertEquals("1+1", ChatExportService.neutralizeCsvFormula("1+1"));
+        assertEquals("a=b", ChatExportService.neutralizeCsvFormula("a=b"));
+    }
+
     // ==================== JSON boundary ====================
 
     @Test

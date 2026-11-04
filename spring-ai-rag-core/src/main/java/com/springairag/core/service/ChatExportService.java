@@ -362,9 +362,43 @@ public class ChatExportService {
 
     private String escapeCsv(String s) {
         if (s == null) return "";
-        boolean needsQuotes = s.contains(",") || s.contains("\"") || s.contains("\n") || s.contains("\r");
-        String escaped = s.replace("\"", "\"\"");
+        // 公式注入：Excel/Sheets 把以 = + - @ 或 tab/CR 开头的单元格当公式执行。
+        // 加前缀单引号让内容按文本显示；再按 RFC 4180 处理引号与分隔符。
+        String value = neutralizeCsvFormula(s);
+        boolean needsQuotes = value.contains(",") || value.contains("\"")
+                || value.contains("\n") || value.contains("\r");
+        String escaped = value.replace("\"", "\"\"");
         return needsQuotes ? "\"" + escaped + "\"" : escaped;
+    }
+
+    /**
+     * 阻断 CSV 公式注入（CSV injection / formula injection）。
+     *
+     * <p>除了首字符，前导空白后的公式触发符也要处理：部分表格软件会忽略
+     * 前导空格后执行公式。前缀 {@code '} 是 OWASP 推荐的文本化方式。
+     */
+    static String neutralizeCsvFormula(String value) {
+        if (value == null || value.isEmpty()) {
+            return value == null ? "" : value;
+        }
+        char first = value.charAt(0);
+        if (isFormulaTrigger(first)) {
+            return "'" + value;
+        }
+        int index = 0;
+        while (index < value.length()
+                && (value.charAt(index) == ' ' || value.charAt(index) == '\u00A0')) {
+            index++;
+        }
+        if (index > 0 && index < value.length()
+                && isFormulaTrigger(value.charAt(index))) {
+            return "'" + value;
+        }
+        return value;
+    }
+
+    private static boolean isFormulaTrigger(char c) {
+        return c == '=' || c == '+' || c == '-' || c == '@' || c == '\t' || c == '\r';
     }
 
     /**
