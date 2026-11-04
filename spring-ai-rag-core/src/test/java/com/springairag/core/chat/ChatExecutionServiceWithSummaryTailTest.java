@@ -1,5 +1,6 @@
 package com.springairag.core.chat;
 
+import com.springairag.api.dto.ChatSource;
 import com.springairag.api.enums.ChatMode;
 import com.springairag.core.chat.ChatExecutionResult;
 import com.springairag.core.chat.ConversationSummaryService;
@@ -71,6 +72,26 @@ class ChatExecutionServiceWithSummaryTailTest {
     void nullCompactionReturnsSameResult() throws Exception {
         ChatExecutionResult base = result("answer");
         assertSame(base, withSummary(base, null));
+    }
+
+    @Test
+    void summaryMetadataNeverChangesCitationSources() throws Exception {
+        ChatSource source = new ChatSource();
+        source.setCitationId("c1");
+        source.setDocumentId("doc-1");
+        ChatExecutionResult base = new ChatExecutionResult(
+                "answer", "session-1", "trace-1", "requested-m",
+                "resolved-m", ChatMode.PLAIN,
+                List.of(source), Map.of("model", "m1"), null, List.of(),
+                Map.of("model", "m1"));
+
+        ChatExecutionResult enriched = withSummary(
+                base, compaction(true, true, false, "updated", 5L, 64));
+
+        assertEquals(base.sources(), enriched.sources(),
+                "摘要只进入 metadata，不能替换或追加引用来源");
+        assertSame(source, enriched.sources().getFirst());
+        assertEquals(base.mode(), enriched.mode());
     }
 
     @Test

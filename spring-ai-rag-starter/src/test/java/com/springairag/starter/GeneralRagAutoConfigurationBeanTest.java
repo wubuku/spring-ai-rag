@@ -6,7 +6,7 @@ import com.springairag.core.config.RagChatService;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.extension.DefaultDomainRagExtension;
 import com.springairag.core.metrics.CacheMetricsService;
-import com.springairag.core.metrics.CircuitBreakerHealthIndicator;
+import com.springairag.core.resilience.CircuitBreakerHealthIndicator;
 import com.springairag.core.metrics.ComponentHealthService;
 import com.springairag.core.metrics.RagLivenessIndicator;
 import com.springairag.core.metrics.RagMetricsService;

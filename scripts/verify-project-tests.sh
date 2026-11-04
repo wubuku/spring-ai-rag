@@ -201,8 +201,8 @@ pass "Null-request forwarding self-test"
 node scripts/verify-null-request-forwarding.mjs
 pass "Null-request forwarding"
 
-# 架构边界：模块依赖方向、跨模块 import、core 包分层。只收“当前零违规”的硬规则；
-# 包级循环与 controller 直连 repository 的测量结论留在脚本头部，不落地为门禁。
+# 架构边界：模块依赖方向、跨模块 import、core 包分层、controller 不依赖 repository，
+# 以及包级循环棘轮（基线见 testdata/architecture/package-cycles-baseline.json，只降不升）。
 node scripts/test-support/architecture-boundaries-self-test.mjs >/dev/null || {
   echo "Architecture-boundaries self-test failed; the gate may no longer reject anything." >&2
   node scripts/test-support/architecture-boundaries-self-test.mjs >&2 || true

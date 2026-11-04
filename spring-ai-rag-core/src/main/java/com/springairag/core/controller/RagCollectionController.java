@@ -26,7 +26,7 @@ import com.springairag.core.exception.DocumentRevisionConflictException;
 import com.springairag.core.exception.RagException;
 import com.springairag.core.security.ApiKeyCollectionAccess;
 import com.springairag.core.security.ProvisioningOwnerResolver;
-import com.springairag.core.util.CollectionMapper;
+import com.springairag.core.service.CollectionMapper;
 import org.springframework.data.domain.Page;
 import com.springairag.core.service.AuditLogService;
 import com.springairag.core.service.CollectionProvisioningService;

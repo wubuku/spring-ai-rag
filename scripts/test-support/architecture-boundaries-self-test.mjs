@@ -3,6 +3,7 @@
 // 覆盖：模块依赖反向、源码 import 反向、controller 被非 controller 依赖、
 // controller→repository、repository→service、entity→repository，以及三类“不该误报”的写法
 // （注释里的 import、test scope 依赖、同层内部 import）。
+// 包级循环棘轮单独覆盖：新边被拒、删边要求下调基线、基线只允许降不允许升。
 // 最后用真实 CLI 跑一次“干净通过 / 违规退出 1”，证明退出码生效。
 
 import assert from 'node:assert/strict';
@@ -11,7 +12,12 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { collectViolations } from '../verify-architecture-boundaries.mjs';
+import {
+  collectViolations,
+  collectPackageGraph,
+  comparePackageGraph,
+  packageBaselineOf,
+} from '../verify-architecture-boundaries.mjs';
 
 const SCRIPT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'verify-architecture-boundaries.mjs');
 
@@ -80,6 +86,32 @@ function rulesOf(root) {
 function assertOnly(root, rule, message) {
   const rules = rulesOf(root);
   assert.ok(rules.includes(rule), `${message}：期望命中 ${rule}，实际 ${JSON.stringify(rules)}`);
+}
+
+const CORE_SRC = 'spring-ai-rag-core/src/main/java/com/springairag/core';
+
+/** 在 fixture 里造一个 service ↔ chat 的双边环；它不触碰任何已有分层规则。 */
+function addCycle(root) {
+  write(
+    root,
+    `${CORE_SRC}/chat/Chat.java`,
+    java('com.springairag.core.chat', 'import com.springairag.core.service.Svc;'),
+  );
+  write(
+    root,
+    `${CORE_SRC}/service/Svc.java`,
+    java('com.springairag.core.service', 'import com.springairag.core.chat.Chat;'),
+  );
+}
+
+function writePackageBaseline(root, graph = collectPackageGraph(root)) {
+  const file = path.join(root, 'package-baseline.json');
+  fs.writeFileSync(file, JSON.stringify(packageBaselineOf(graph), null, 2));
+  return file;
+}
+
+function packageRulesOf(root, baseline) {
+  return comparePackageGraph(collectPackageGraph(root), baseline).map((v) => v.rule);
 }
 
 const cases = {
@@ -193,11 +225,65 @@ const cases = {
     );
     assert.deepEqual(rulesOf(root), []);
   },
+  '包级循环：基线一致时通过': () => {
+    const root = baseRoot();
+    addCycle(root);
+    const baseline = packageBaselineOf(collectPackageGraph(root));
+    assert.deepEqual(comparePackageGraph(collectPackageGraph(root), baseline), []);
+  },
+  '包级循环：新增跨包边被拦': () => {
+    const root = baseRoot();
+    addCycle(root);
+    const baseline = packageBaselineOf(collectPackageGraph(root));
+    write(root, `${CORE_SRC}/config/Conf.java`, java('com.springairag.core.config'));
+    write(
+      root,
+      `${CORE_SRC}/chat/Chat.java`,
+      java('com.springairag.core.chat', 'import com.springairag.core.service.Svc;\nimport com.springairag.core.config.Conf;'),
+    );
+    assert.ok(
+      packageRulesOf(root, baseline).includes('package-edge-added'),
+      `新增边应命中 package-edge-added，实际 ${JSON.stringify(packageRulesOf(root, baseline))}`,
+    );
+  },
+  '包级循环：删除基线里的边被拦': () => {
+    const root = baseRoot();
+    addCycle(root);
+    const baseline = packageBaselineOf(collectPackageGraph(root));
+    write(
+      root,
+      `${CORE_SRC}/service/Svc.java`,
+      java('com.springairag.core.service'),
+    );
+    assert.ok(
+      packageRulesOf(root, baseline).includes('package-edge-removed'),
+      `删边应命中 package-edge-removed，实际 ${JSON.stringify(packageRulesOf(root, baseline))}`,
+    );
+  },
+  '包级循环：SCC 扩大被拦': () => {
+    const root = baseRoot();
+    addCycle(root);
+    const baseline = packageBaselineOf(collectPackageGraph(root));
+    write(root, `${CORE_SRC}/config/Conf.java`, java('com.springairag.core.config', 'import com.springairag.core.chat.Chat;'));
+    write(
+      root,
+      `${CORE_SRC}/chat/Chat.java`,
+      java('com.springairag.core.chat', 'import com.springairag.core.service.Svc;\nimport com.springairag.core.config.Conf;'),
+    );
+    assert.ok(
+      packageRulesOf(root, baseline).includes('package-cycle-grown'),
+      `SCC 扩大应命中 package-cycle-grown，实际 ${JSON.stringify(packageRulesOf(root, baseline))}`,
+    );
+  },
 };
 
-function runCli(root) {
-  return spawnSync(process.execPath, [SCRIPT], {
-    env: { ...process.env, ARCH_BOUNDARY_ROOT: root },
+function runCli(root, baseline, extraArgs = []) {
+  return spawnSync(process.execPath, [SCRIPT, ...extraArgs], {
+    env: {
+      ...process.env,
+      ARCH_BOUNDARY_ROOT: root,
+      ARCH_PACKAGE_BASELINE: baseline,
+    },
     encoding: 'utf8',
   });
 }
@@ -208,18 +294,65 @@ for (const [name, fn] of Object.entries(cases)) {
   passed += 1;
 }
 
-const clean = runCli(baseRoot());
+const cleanRoot = baseRoot();
+addCycle(cleanRoot);
+const clean = runCli(cleanRoot, writePackageBaseline(cleanRoot));
 assert.equal(clean.status, 0, `干净树应退出 0，实际 ${clean.status}\n${clean.stderr}`);
 assert.match(clean.stdout, /架构边界通过/);
+assert.match(clean.stdout, /包级循环棘轮/);
 
-const broken = baseRoot();
+const brokenRoot = baseRoot();
+const brokenBaseline = writePackageBaseline(brokenRoot);
 write(
-  broken,
+  brokenRoot,
   'spring-ai-rag-core/src/main/java/com/springairag/core/repository/Repo.java',
   java('com.springairag.core.repository', 'import com.springairag.core.service.Svc;'),
 );
-const bad = runCli(broken);
+const bad = runCli(brokenRoot, brokenBaseline);
 assert.equal(bad.status, 1, `违规应退出 1，实际 ${bad.status}`);
 assert.match(bad.stderr, /repository-layer-direction/);
 
-console.log(`架构边界自测通过：${passed} 个 fixture 场景 + CLI 退出码 2 例。`);
+const addedRoot = baseRoot();
+addCycle(addedRoot);
+const addedBaseline = writePackageBaseline(addedRoot);
+write(addedRoot, `${CORE_SRC}/config/Conf.java`, java('com.springairag.core.config'));
+write(
+  addedRoot,
+  `${CORE_SRC}/chat/Chat.java`,
+  java('com.springairag.core.chat', 'import com.springairag.core.service.Svc;\nimport com.springairag.core.config.Conf;'),
+);
+const added = runCli(addedRoot, addedBaseline);
+assert.equal(added.status, 1, `新增跨包边应退出 1，实际 ${added.status}`);
+assert.match(added.stderr, /package-edge-added/);
+
+// 删边先被拦，下调基线后才通过；这个顺序证明基线只会往下走。
+const removedRoot = baseRoot();
+addCycle(removedRoot);
+const removedBaseline = writePackageBaseline(removedRoot);
+write(removedRoot, `${CORE_SRC}/service/Svc.java`, java('com.springairag.core.service'));
+const stale = runCli(removedRoot, removedBaseline);
+assert.equal(stale.status, 1, `删边后旧基线应退出 1，实际 ${stale.status}`);
+assert.match(stale.stderr, /package-edge-removed/);
+
+const lowered = runCli(removedRoot, removedBaseline, ['--update-package-baseline']);
+assert.equal(lowered.status, 0, `下调基线应退出 0，实际 ${lowered.status}\n${lowered.stderr}`);
+assert.match(lowered.stdout, /包图基线已下调/);
+
+const afterLower = runCli(removedRoot, removedBaseline);
+assert.equal(afterLower.status, 0, `下调基线后应退出 0，实际 ${afterLower.status}\n${afterLower.stderr}`);
+
+// 反方向：新增边时 --update 必须拒绝，不能“跑一下就绿”。
+const grownRoot = baseRoot();
+addCycle(grownRoot);
+const grownBaseline = writePackageBaseline(grownRoot);
+write(grownRoot, `${CORE_SRC}/config/Conf.java`, java('com.springairag.core.config'));
+write(
+  grownRoot,
+  `${CORE_SRC}/chat/Chat.java`,
+  java('com.springairag.core.chat', 'import com.springairag.core.service.Svc;\nimport com.springairag.core.config.Conf;'),
+);
+const refused = runCli(grownRoot, grownBaseline, ['--update-package-baseline']);
+assert.equal(refused.status, 1, `新增边不应被基线更新接受，实际 ${refused.status}\n${refused.stdout}`);
+assert.match(refused.stderr, /拒绝更新包图基线/);
+
+console.log(`架构边界自测通过：${passed} 个 fixture 场景 + CLI 退出码与基线更新场景。`);

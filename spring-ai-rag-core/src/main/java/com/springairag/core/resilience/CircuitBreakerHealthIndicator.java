@@ -1,7 +1,6 @@
-package com.springairag.core.metrics;
+package com.springairag.core.resilience;
 
 import com.springairag.core.config.RagChatService;
-import com.springairag.core.resilience.LlmCircuitBreaker;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.actuate.health.Health;

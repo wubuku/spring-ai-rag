@@ -1,4 +1,4 @@
-package com.springairag.core.util;
+package com.springairag.core.service;
 
 import com.springairag.api.dto.DocumentDetailResponse;
 import com.springairag.api.dto.DocumentLifecycleResponse;

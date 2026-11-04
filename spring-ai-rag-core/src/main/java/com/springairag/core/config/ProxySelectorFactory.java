@@ -1,6 +1,5 @@
-package com.springairag.core.util;
+package com.springairag.core.config;
 
-import com.springairag.core.config.RagProxyProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

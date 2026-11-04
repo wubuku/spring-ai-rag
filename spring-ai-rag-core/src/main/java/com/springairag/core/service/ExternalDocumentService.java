@@ -15,7 +15,6 @@ import com.springairag.core.repository.RagCollectionRepository;
 import com.springairag.core.repository.RagDocumentRepository;
 import com.springairag.core.repository.RagEmbeddingRepository;
 import com.springairag.core.security.ApiKeyCollectionAccess;
-import com.springairag.core.util.DocumentMapper;
 import com.springairag.core.logging.SensitiveDataMaskingConverter;
 import org.springframework.stereotype.Service;
 

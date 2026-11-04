@@ -57,7 +57,7 @@ import com.springairag.core.embeddingjob.EmbeddingPolicyResolver;
 import com.springairag.core.embeddingjob.EmbeddingPolicySupport;
 import com.springairag.core.service.ExternalDocumentService;
 import com.springairag.core.service.DocumentRelocationService;
-import com.springairag.core.util.DocumentMapper;
+import com.springairag.core.service.DocumentMapper;
 import com.springairag.core.util.SseEmitters;
 import com.springairag.core.versioning.ApiVersion;
 import io.micrometer.core.annotation.Timed;

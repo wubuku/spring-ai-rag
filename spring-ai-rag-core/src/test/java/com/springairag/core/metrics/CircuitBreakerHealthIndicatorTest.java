@@ -2,6 +2,7 @@ package com.springairag.core.metrics;
 
 import com.springairag.core.config.RagChatService;
 import com.springairag.core.config.RagCircuitBreakerProperties;
+import com.springairag.core.resilience.CircuitBreakerHealthIndicator;
 import com.springairag.core.resilience.LlmCircuitBreaker;
 import com.springairag.core.testsupport.MutableClock;
 import org.junit.jupiter.api.Test;

@@ -1,5 +1,6 @@
 package com.springairag.core.util;
 
+import com.springairag.core.config.ProxySelectorFactory;
 import com.springairag.core.config.RagProxyProperties;
 import org.junit.jupiter.api.Test;
 

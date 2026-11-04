@@ -163,7 +163,7 @@ public class GeneralRagAutoConfiguration {
     @ConditionalOnMissingBean(name = "llmCircuitBreaker")
     public Object llmCircuitBreakerIndicator(
             com.springairag.core.config.RagChatService ragChatService) {
-        return new com.springairag.core.metrics.CircuitBreakerHealthIndicator(ragChatService);
+        return new com.springairag.core.resilience.CircuitBreakerHealthIndicator(ragChatService);
     }
 
     /**

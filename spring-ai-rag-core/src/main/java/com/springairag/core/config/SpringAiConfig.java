@@ -2,7 +2,6 @@ package com.springairag.core.config;
 
 import com.springairag.core.adapter.ApiAdapterFactory;
 import com.springairag.core.adapter.ApiCompatibilityAdapter;
-import com.springairag.core.util.ProxySelectorFactory;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
