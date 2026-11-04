@@ -742,6 +742,17 @@ export const GATES = [
       '若这里新增套件而开关没被登记，那道门禁的 unaggregated-gated-suite 规则会变红。',
   },
 
+  // 真实容器版本矩阵：全量迁移 + HNSW / CONCURRENTLY / SET NOT NULL / RLS 事实。
+  // nightly 的 postgres-version-matrix job 直接执行它；它的失败路径由“某版本迁移
+  // 或关键 DDL 失败”本身触发，自测需要再启动四个数据库，成本高于门禁本身。
+  {
+    gate: 'scripts/verify-postgres-version-matrix.sh',
+    kind: 'gate',
+    noSelfTestReason:
+      '失败路径由真实 PostgreSQL 版本差异触发；自测需为每个版本再启动数据库，' +
+      '成本高于门禁本身。nightly matrix job 执行它，检索/生命周期路径由核心 gated 套件覆盖。',
+  },
+
   {
     gate: 'scripts/verify-webui-e2e-mock.sh',
     kind: 'entrypoint',

@@ -50,6 +50,7 @@ Additive capabilities: [trustworthy assertions, active diagnostics and offline q
 | Run the accessibility/responsive baseline, or trip axe, keyboard, or viewport specs | [WebUI accessibility and responsive baseline](webui-accessibility.md) | [WebUI design language](webui-design-language.md), `spring-ai-rag-webui/e2e/` |
 | Domain customization | [extension-guide.md](extension-guide.md) | `demos/demo-domain-extension` |
 | Write / run tests | [testing-guide.md](testing-guide.md) | [developer-reference.md](developer-reference.md) E2E section |
+| Confirm supported PostgreSQL / pgvector versions and upgrade targets | [PostgreSQL support matrix](postgres-support-matrix.md) | [Testing guide](testing-guide.md), `scripts/verify-postgres-version-matrix.sh` |
 | Answer “what has this repo actually proven?” or triage a red gate | [Verification Baseline](verification-baseline.md) ([Chinese](verification-baseline-zh-CN.md)) | [scripts/gate-registry.mjs](../scripts/gate-registry.mjs), `.github/workflows/` |
 | Plan, implement, accept, and deliver substantial work | [Planning, Implementation, And Acceptance Workflow](delivery-workflow.md) | [Current active plans](drafts/README.md), [Testing guide](testing-guide.md) |
 | Production deploy | [DEPLOYMENT.md](DEPLOYMENT.md) | `docker/`, `k8s/` |

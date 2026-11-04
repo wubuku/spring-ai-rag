@@ -64,7 +64,7 @@ class ChunkingUpgradePostgresIntegrationTest {
     @BeforeAll
     static void startDatabase() {
         postgres = new PostgreSQLContainer<>(DockerImageName.parse(System.getenv().getOrDefault(
-                "TESTCONTAINERS_PG_IMAGE", "postgres:16-pgvector")).asCompatibleSubstituteFor("postgres"));
+                "TESTCONTAINERS_PG_IMAGE", "pgvector/pgvector:pg16")).asCompatibleSubstituteFor("postgres"));
         postgres.start();
     }
 

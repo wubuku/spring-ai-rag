@@ -21,6 +21,7 @@ import {
   writeWorkspaceState,
 } from '../utils/workspaceState';
 import { useImeComposition } from '../utils/ime';
+import { beginBackgroundActivity } from '../utils/backgroundActivity';
 import { capLength } from '../utils/text';
 import { useDebouncedCommit } from '../utils/debounce';
 import { STALE_TIME_MS } from '../utils/timing';
@@ -238,6 +239,12 @@ export function Files() {
   const [dragOver, setDragOver] = useState(false);
   const [uploadState, setUploadState] = useState<'idle' | 'uploading' | 'done' | 'error'>('idle');
   const [uploadError, setUploadError] = useState<unknown>(null);
+
+  // 上传期间不展示“有新版本，点击刷新”：刷新会丢掉这次上传。
+  useEffect(() => {
+    if (uploadState !== 'uploading') return;
+    return beginBackgroundActivity();
+  }, [uploadState]);
   const [selectedCollectionKey, setSelectedCollectionKey] = useState(
     () => readWorkspaceState(FILES_COLLECTION_STATE_KEY, isFilesCollectionState)
       ?.collectionKey ?? '',

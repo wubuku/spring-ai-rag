@@ -50,6 +50,7 @@
 | 跑可访问性/响应式基线，或被 axe、键盘、三档宽度用例拦下 | [WebUI 可访问性与响应式基线](webui-accessibility-zh-CN.md) | [WebUI 设计语言](webui-design-language-zh-CN.md)、`spring-ai-rag-webui/e2e/` |
 | 做领域定制 | [extension-guide-zh-CN.md](extension-guide-zh-CN.md) | `demos/demo-domain-extension` |
 | 写测试 / 跑回归 | [testing-guide-zh-CN.md](testing-guide-zh-CN.md) | [developer-reference-zh-CN.md](developer-reference-zh-CN.md) E2E 段 |
+| 确认 PostgreSQL / pgvector 支持范围与升级目标 | [PostgreSQL 支持矩阵](postgres-support-matrix-zh-CN.md) | [测试指南](testing-guide-zh-CN.md)、`scripts/verify-postgres-version-matrix.sh` |
 | 查「这个仓被哪些门禁证明过」、某条门禁红了先看哪里 | [验证基线总览](verification-baseline-zh-CN.md)（[EN](verification-baseline.md)） | [scripts/gate-registry.mjs](../scripts/gate-registry.mjs)、`.github/workflows/` |
 | 规划、实施、验收并交付复杂功能 | [规划、实施与验收工作流](delivery-workflow-zh-CN.md) | [当前活跃规划](drafts/README-zh-CN.md)、[测试指南](testing-guide-zh-CN.md) |
 | 线上部署 | [DEPLOYMENT.md](DEPLOYMENT.md) | `docker/`、`k8s/` |

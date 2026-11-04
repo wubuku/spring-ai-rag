@@ -1,0 +1,39 @@
+/* In-flow notice above the page content: it must never cover a control or the
+   top of a streaming answer. A user who does not want to refresh can keep
+   working with the banner present. */
+.banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 16px;
+  background: var(--color-surface-2);
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text);
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+
+.message {
+  min-width: 0;
+}
+
+.refresh {
+  flex-shrink: 0;
+  padding: 6px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.refresh:hover {
+  background: var(--color-surface-hover);
+}
+
+.refresh:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}

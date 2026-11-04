@@ -741,11 +741,43 @@ upgrade, offline, and compression):
   `index.html`.
 - Upgrade semantics: a tab still holding the old index requests a removed chunk on
   lazy navigation, gets 404, and fails to mount — the real cause of a white screen.
-  There is **no** Service Worker, offline fallback, or version prompt; users must
-  refresh after an upgrade, and index `no-cache` guarantees a refresh picks up the
-  new entry point.
+  There is **no** Service Worker or offline fallback; a tab whose JavaScript
+  already started discovers the new build through the version prompt below, while
+  a page that never started can only be refreshed manually.
 - Only gzip is enabled (`text/html`, `text/javascript`, `text/css`, JSON, ≥1 KiB)
   with `Vary: Accept-Encoding`; the server does not support Brotli.
+
+#### Update prompt (`webui-build-version`)
+
+- At build time `vite.config.ts` injects
+  `<meta name="webui-build-version" content="…">` into `index.html`. The value is a
+  SHA-256 prefix of the index **before** the tag is inserted; asset names in that
+  index are content hashes, so the version changes with any bundle change and stays
+  stable for identical sources, preserving the reproducibility check.
+- A running page makes **no** request at startup: at that moment it is necessarily
+  the newest build, and a check would spend first-paint budget. The first check runs
+  after 5 minutes (`BUILD_VERSION_POLL_INTERVAL_MS`), then every 5 minutes; a tab
+  that becomes visible again also checks if at least one minute
+  (`BUILD_VERSION_REVISIT_MIN_GAP_MS`) has passed since the last check. The check
+  reads the currently served index with `cache: 'no-store'` plus a cache-busting
+  query parameter and parses only the meta tag — it never executes fetched script.
+- Failures are silent: offline, 404, timeout, and non-app HTML all mean “no news”,
+  with no error toast and no retry storm. Only a readable, different version turns
+  the prompt on, after which polling stops.
+- The banner offers a manual “Refresh now” button and **never** reloads by itself.
+  It stays hidden while a chat stream or upload is active (`backgroundActivity`
+  counter non-zero) and appears when that work finishes. Once visible it does not
+  disappear when new work starts, avoiding flicker. The banner sits before the page
+  content and never covers a control.
+- Boundary: the mechanism only works in a tab where JavaScript **already started**.
+  If the entry chunk referenced by an old index has been deleted, the page never
+  starts and no in-page code can prompt — an inherent limit of deleting hashed
+  artifacts from static hosting; the user must refresh manually, and index
+  `no-cache` guarantees that refresh fetches the new entry point. The dev server
+  injects no meta, so the prompt is automatically off under `npm run dev`.
+- Acceptance: `spring-ai-rag-webui/e2e/update-banner.spec.ts` simulates a new
+  deployment in real Chromium and verifies “prompt appears → click loads the new
+  build”, “no prompt when unchanged”, and “failed checks stay silent”.
 
 ### IME-safe input behavior
 

@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getCredentialHeaders } from '../auth/credentialStore';
 import { BASE_URL } from '../api/baseUrl';
+import { beginBackgroundActivity } from '../utils/backgroundActivity';
 import {
   FAILURE_CLASS_HEADER,
   canAppendServerReason,
@@ -41,6 +42,12 @@ export function useFileUpload(options: UseFileUploadOptions): UseFileUploadRetur
   const [uploads, setUploads] = useState<UploadProgress[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const uploadAbortRef = useRef<AbortController | null>(null);
+
+  // 上传期间不展示“有新版本，点击刷新”：刷新会丢掉这次上传。
+  useEffect(() => {
+    if (!isUploading) return;
+    return beginBackgroundActivity();
+  }, [isUploading]);
 
   const clearUploads = useCallback(() => {
     setUploads([]);

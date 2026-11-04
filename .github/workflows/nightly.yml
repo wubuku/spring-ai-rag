@@ -71,6 +71,57 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
+  postgres-version-matrix:
+    name: PostgreSQL ${{ matrix.pg }} version matrix
+    if: github.event_name == 'schedule' || inputs.debug_report_failure != true
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        # pg16 的完整 gated 套件由上面的 gated-postgres 覆盖；这里补 15/17/18，
+        # 每个版本跑全量迁移探针 + 检索/生命周期核心套件。
+        pg: ['15', '17', '18']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Pre-pull pgvector image
+        run: docker pull pgvector/pgvector:pg${{ matrix.pg }} || true
+
+      - name: Schema and version probe (full V1–V73 migrations)
+        run: |
+          mkdir -p .verification/nightly
+          ./scripts/verify-postgres-version-matrix.sh \
+            --versions ${{ matrix.pg }} \
+            --json .verification/nightly/pg${{ matrix.pg }}-probe.json \
+            2>&1 | tee .verification/nightly/postgres-matrix-${{ matrix.pg }}.log
+
+      - name: Core gated suites
+        env:
+          TESTCONTAINERS_PG_IMAGE: pgvector/pgvector:pg${{ matrix.pg }}
+        run: |
+          set -o pipefail
+          ./scripts/verify-gated-it.sh \
+            RetrievalCorrectnessPostgresIntegrationTest,HybridRetrieverRrfPostgresIntegrationTest,MetadataFiltersPostgresIntegrationTest,MultiCollectionRetrievalPostgresIntegrationTest,RetrievalDiagnosticsPostgresIntegrationTest,DocumentLifecyclePostgresIntegrationTest,CollectionPurgePostgresIntegrationTest,EmbeddingProfileMigrationLockPostgresIntegrationTest,JsonbStructuredRecordsPostgresIntegrationTest \
+            2>&1 | tee -a .verification/nightly/postgres-matrix-${{ matrix.pg }}.log
+
+      - name: Upload PostgreSQL matrix evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-postgres-${{ matrix.pg }}
+          path: .verification/nightly/postgres-matrix-${{ matrix.pg }}.log
+          if-no-files-found: warn
+          retention-days: 30
+
   failure-modes:
     name: Upstream and embedding failure modes (mock provider, isolated PostgreSQL)
     if: github.event_name == 'schedule' || inputs.debug_report_failure != true

@@ -100,3 +100,23 @@ export const DOCUMENT_LIST_STALE_TIME_MS = 10_000;
  * is not still claiming success when you have moved on to something else.
  */
 export const SAVED_FEEDBACK_MS = 2_000;
+
+/**
+ * How often an open tab re-reads the served `index.html` build version.
+ *
+ * An upgrade can leave a long-lived tab pointing at chunks that no longer exist;
+ * the tab only finds out when it asks. Five minutes is the trade-off between
+ * noticing a deployment during a work session and asking a server that changes
+ * on a release cadence, not on a data cadence. This is deliberately unrelated to
+ * {@link POLL_INTERVAL_MS}, which exists for data freshness.
+ */
+export const BUILD_VERSION_POLL_INTERVAL_MS = 5 * 60 * 1000;
+
+/**
+ * Minimum gap between two version checks triggered by tab visibility changes.
+ *
+ * Alt-tabbing is not a deployment signal. Without this floor, a user switching
+ * windows ten times a minute would issue ten checks; with it, at most one per
+ * minute is spent on a question whose answer changes per release.
+ */
+export const BUILD_VERSION_REVISIT_MIN_GAP_MS = 60 * 1000;

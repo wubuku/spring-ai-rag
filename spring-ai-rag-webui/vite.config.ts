@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import type { Plugin } from 'vite'
@@ -32,6 +33,38 @@ function webuiDevMiddleware(): Plugin {
   };
 }
 
+/**
+ * Stamp the built index with a version the running page can read.
+ *
+ * The digest is computed over the index *before* the meta tag is inserted, so
+ * the same sources always produce the same version (the existing reproducibility
+ * check depends on that). Because the index references content-hashed assets,
+ * any change to the bundle changes this value; between releases it is stable,
+ * which is exactly what the stale-tab banner compares.
+ */
+function webuiBuildVersion(): Plugin {
+  return {
+    name: 'webui-build-version',
+    apply: 'build',
+    transformIndexHtml: {
+      order: 'post',
+      handler(html) {
+        const version = createHash('sha256').update(html).digest('hex').slice(0, 16);
+        return {
+          html,
+          tags: [
+            {
+              tag: 'meta',
+              attrs: { name: 'webui-build-version', content: version },
+              injectTo: 'head-prepend',
+            },
+          ],
+        };
+      },
+    },
+  };
+}
+
 // https://vite.dev/config/
 // base '/webui/' is set for production (assets at /webui/...).
 // In dev, strip /webui prefix so Vite serves the SPA under /webui/.
@@ -42,7 +75,7 @@ export default defineConfig(() => {
 
   return {
     base: '/webui/',
-    plugins: [react(), webuiDevMiddleware()],
+    plugins: [react(), webuiDevMiddleware(), webuiBuildVersion()],
     server: {
       host: '127.0.0.1',
       origin,

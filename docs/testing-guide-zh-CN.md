@@ -1331,6 +1331,9 @@ mvn -pl spring-ai-rag-core -am \
   test
 ```
 
+`pg16` 只是默认基线；15/17/18 的已验证范围、pgvector 最低版本与复跑命令见
+[PostgreSQL / pgvector 支持矩阵](postgres-support-matrix-zh-CN.md)。
+
 该矩阵验证：不受限 `CALLER_VISIBLE` 包含未归属文档；`ANY_COLLECTION` 排除未归属文档；
 selected A+B 不会返回其他 Collection；空 selected Collection 保持空结果；selected
 Collection 与显式 document ID 在 SQL 中取交集；JSON record 遵守 `document_type`；

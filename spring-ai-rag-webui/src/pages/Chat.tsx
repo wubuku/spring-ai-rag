@@ -26,6 +26,7 @@ import {
   writeWorkspaceState,
 } from '../utils/workspaceState';
 import { useImeComposition } from '../utils/ime';
+import { beginBackgroundActivity } from '../utils/backgroundActivity';
 import { CHAT_TITLE_PREVIEW_LENGTH, truncate } from '../utils/text';
 import styles from './Chat.module.css';
 import { ChevronDown, PanelLeft, ThumbsUp, ThumbsDown } from 'lucide-react';
@@ -286,6 +287,12 @@ export function Chat() {
       activeTurnIdRef.current = undefined;
     },
   });
+
+  // 更新提示不在流式回答中途出现：此刻点“刷新”正是唯一会丢失这轮回答的操作。
+  useEffect(() => {
+    if (!isConnected) return;
+    return beginBackgroundActivity();
+  }, [isConnected]);
 
   useEffect(() => {
     let active = true;

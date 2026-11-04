@@ -1539,6 +1539,10 @@ mvn -pl spring-ai-rag-core -am \
   test
 ```
 
+`pg16` is only the default baseline; the verified coverage for 15/17/18, the
+minimum pgvector version, and reproduction commands are in the
+[PostgreSQL / pgvector support matrix](postgres-support-matrix.md).
+
 The matrix verifies that unrestricted `CALLER_VISIBLE` includes unassigned
 documents, `ANY_COLLECTION` excludes them, selected A+B cannot return another
 Collection, an empty selected Collection stays empty, selected Collections and

@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { ErrorBoundary } from '../ErrorBoundary';
 import { ThemeToggle } from '../ThemeToggle';
+import { UpdateAvailableBanner } from '../UpdateAvailableBanner/UpdateAvailableBanner';
 import { IconButton } from '../ui/IconButton';
 import { Tooltip } from '../ui/Tooltip';
 import { useApiKeyAuth } from '../../auth/ApiKeyAuthContext';
@@ -200,6 +201,7 @@ export function Layout() {
             </IconButton>
           </Tooltip>
         )}
+        <UpdateAvailableBanner />
         <main ref={mainRef} className={styles.main}>
           <ErrorBoundary resetKey={location.pathname}>
             <Outlet />

@@ -14,8 +14,10 @@
    服务端不支持 Brotli（`Accept-Encoding: br` 仍返回 identity）；
 6. 真实 Chromium 二次导航会对 index 发送 `If-None-Match`，页面正常挂载；
 7. 模拟“旧 index.html 指向已被删除的 chunk”：浏览器请求得到 404，应用无法
-   挂载（即升级后台页白屏的真实成因）；
-8. 没有 Service Worker：不存在离线回退，也不存在版本提示/强制刷新机制。
+   挂载。这是机制边界：JS 从未启动的页面无法自己提示；已启动的旧标签页由
+   `webui-build-version` 轮询横幅负责（见 e2e/update-banner.spec.ts）；
+8. `index.html` 带构建版本 meta，供运行中的页面比较新版本；
+9. 没有 Service Worker：不存在离线回退。
 
 运行（需要本机 PostgreSQL、Maven 与 Playwright Python）：
 
@@ -114,6 +116,9 @@ def server_checks(base: str) -> str:
     check("/webui/ 引用 hash 资源", "/webui/assets/" in text)
     check("/webui/ 引用未 hash 主题脚本", "/webui/theme-init.js" in text)
     check("/webui/ 引用 svg favicon", "/webui/favicon.svg" in text)
+    check("/webui/ 带构建版本 meta",
+          bool(re.search(r'name="webui-build-version" content="[^"]+"', text)),
+          text[:400])
 
     assert_conditional(f"{base}/webui/", headers, "index.html")
     weak = "W/" + headers["etag"]
@@ -279,7 +284,9 @@ def browser_checks(base: str, index_html: str) -> None:
               stale_page.evaluate(
                   "() => document.querySelector('#root')?.children.length === 0"),
               stale_page.content()[:300])
-        check("旧 index 没有内置版本提示",
+        # 边界：入口 JS 404 时应用从未启动，页面内没有任何代码能提示刷新。
+        # 已有标签页（JS 已运行）的升级提示由 update-banner 机制覆盖。
+        check("入口 404 时页面无法自行提示（机制边界）",
               not re.search(
                   r"new (?:version|release)|update available|refresh to update",
                   stale_page.locator("body").inner_text(), re.IGNORECASE),

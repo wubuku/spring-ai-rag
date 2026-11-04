@@ -657,10 +657,32 @@ spring-ai-rag-core/src/main/resources/static/webui/
 - SPA fallback 只匹配单段路径，并排除上面三个未 hash 的文件名。已删除的 hash
   chunk 返回 404（`problem+json`），**不会**回退成 `index.html`。
 - 升级语义：旧标签页仍持有旧 index 时，懒加载已删除的 chunk 会得到 404，应用无法
-  挂载，也就是白屏的真实成因。项目**没有** Service Worker、离线回退或版本提示；
-  升级后需要用户刷新页面，index 的 `no-cache` 保证刷新即拿到新入口。
+  挂载，也就是白屏的真实成因。项目**没有** Service Worker、离线回退；已启动的旧
+  标签页通过构建版本提示自行发现新版本（见下节），从未启动的页面只能手动刷新。
 - 压缩只启用 gzip（`text/html`、`text/javascript`、`text/css`、JSON 等，≥1 KiB），
   服务端不支持 Brotli，响应带 `Vary: Accept-Encoding`。
+
+#### 升级提示（`webui-build-version`）
+
+- 构建期 `vite.config.ts` 在 `index.html` 注入
+  `<meta name="webui-build-version" content="…">`。值是对**注入前** index 内容计算的
+  SHA-256 前缀；index 引用的 asset 名本身是内容 hash，因此构建变化则版本变化，同样的
+  源码重复构建则版本稳定，现有可复现产物校验不受影响。
+- 运行中的页面启动时**不**发请求：此刻它必然是最新版本，检查只会占用首屏预算。首个
+  检查在 5 分钟后（`BUILD_VERSION_POLL_INTERVAL_MS`），之后每 5 分钟一次；标签页重新
+  可见且距上次检查超过 1 分钟（`BUILD_VERSION_REVISIT_MIN_GAP_MS`）时也会检查。检查
+  使用 `cache: 'no-store'` 加查询参数读取服务端当前 index，只解析 meta，不执行脚本。
+- 失败一律静默：断网、404、超时、返回非应用 HTML 都视为“没有新消息”，不弹错误、
+  不重试轰炸；只有读到不同版本才显示横幅。发现新版本后停止轮询。
+- 横幅只提供“立即刷新”按钮，**从不自动刷新**。流式回答或上传进行中
+  （`backgroundActivity` 计数非零）不显示；活动结束后才出现。一旦出现不会因为新的
+  活动而消失，避免闪烁。横幅位于页面内容之前，不覆盖任何控件。
+- 边界：该机制只对 **JS 已成功启动**的旧标签页有效。如果旧 index 的入口 chunk 已被
+  删除，页面从未启动，任何页面内代码都无法提示——这是静态托管删除 hash 产物的固有限
+  制，只能由用户手动刷新；index 的 `no-cache` 保证刷新即拿到新入口。开发服务器不注入
+  meta，因此本地 `npm run dev` 下该提示自动关闭。
+- 验收：`spring-ai-rag-webui/e2e/update-banner.spec.ts` 用真实 Chromium 模拟新部署，
+  验证“出现提示 → 点击后加载新版本”“版本未变不提示”“检查失败静默”。
 
 ### 输入法（IME）安全交互
 

@@ -51,6 +51,10 @@
     "unknownError": "未知错误",
     "draftNotSavedCredential": "草稿未保存：内容里像是有 API 密钥或令牌，为安全起见没有存进这个浏览器。"
   },
+  "update": {
+    "available": "有新版本可用，准备好后刷新即可。",
+    "refresh": "立即刷新"
+  },
   "notFound": {
     "title": "页面不存在",
     "subtitle": "管理控制台中没有这个地址。",

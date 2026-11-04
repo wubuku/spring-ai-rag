@@ -67,7 +67,7 @@ postgres_tests() {
       return 1
     }
     export TESTCONTAINERS_RYUK_DISABLED="${TESTCONTAINERS_RYUK_DISABLED:-true}"
-    export TESTCONTAINERS_PG_IMAGE="${TESTCONTAINERS_PG_IMAGE:-postgres:16-pgvector}"
+    export TESTCONTAINERS_PG_IMAGE="${TESTCONTAINERS_PG_IMAGE:-pgvector/pgvector:pg16}"
     mvn test \
       -pl spring-ai-rag-starter -am \
       -Dcollection-purge.it.enabled=true \
