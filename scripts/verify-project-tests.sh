@@ -271,6 +271,20 @@ pass "Controller-constructor-count self-test"
 node scripts/verify-controller-constructor-count.mjs
 pass "Controller constructor count"
 
+# 2026-11. 第三方版本曾散落在各模块 pom：core 把 `hibernate-vector` 写死
+# 6.6.5.Final，而同一 classpath 上的 `hibernate-core` 由 Spring Boot 管到
+# 6.6.53.Final。构建和测试都不会报这种漂移，只有把"版本只有一个声明位置"
+# 变成可执行规则才拦得住。
+node scripts/test-support/dependency-version-self-test.mjs >/dev/null || {
+  echo "Dependency-version self-test failed; the gate may no longer reject anything." >&2
+  node scripts/test-support/dependency-version-self-test.mjs >&2 || true
+  exit 1
+}
+pass "Dependency-version self-test"
+
+node scripts/verify-dependency-versions.mjs
+pass "Dependency versions"
+
 # Batch 873. ErrorCode calls itself the single source of truth, and six of the
 # codes the API actually returns were never declared in it — so no title or
 # problem-type URI could be derived, and the same exception grew two different

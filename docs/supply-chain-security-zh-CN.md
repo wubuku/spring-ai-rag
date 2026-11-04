@@ -46,8 +46,9 @@ mvn -B -Psecurity-scan -DskipTests -DautoUpdate=false \
 
 | 状态 | 生产依赖 | 全部依赖（含 dev） |
 |------|----------|--------------------|
-| 本轮开始 | 5（4 high / 1 moderate） | 33 |
-| 本轮结束 | **0** | 15（全部 moderate） |
+| 2026-10 清债 | 5（4 high / 1 moderate） | 33 |
+| 2026-10 结束 | **0** | 15（全部 moderate） |
+| 2026-11 结束 | **0** | **0** |
 
 处理方式：`npm audit fix` 在 semver 范围内更新 `package-lock.json`，没有改 `package.json`
 里的版本区间，因此没有跨大版本：
@@ -55,17 +56,37 @@ mvn -B -Psecurity-scan -DskipTests -DautoUpdate=false \
 - `axios`、`follow-redirects`、`form-data`：传输层补丁版本。
 - `react-router` / `react-router-dom`：升到 7.18.x 线内，避开 8.x（loader / route API 变更）。
 
-剩下的 15 条全部收敛到同一个根因：
+2026-10 剩下的 15 条全部收敛到同一个根因：**`minimatch` glob 放大导致的 ReDoS**，
+经由 ESLint（`@eslint/eslintrc`、`@typescript-eslint/*`）与 Stryker 的传递依赖进入。
 
-- **`minimatch` glob 放大导致的 ReDoS**，经由 ESLint 9（`@eslint/eslintrc`、
-  `@typescript-eslint/*`）与 Stryker 10 传递依赖进入。
-- 修复要求 `minimatch >= 11`，而 ESLint 9 / typescript-eslint 8 / Stryker 10 依赖 3.x / 9.x
-  的 API；npm 给出的"修复"实际是把 `typescript-eslint` **降级**到 8.36.0，属于假修复。
-- 风险面：glob 模式由仓库作者在配置里写死，不接受外部输入；只影响开发机与 CI 构建期，
-  不进产物。**接受该风险并记录**，等 ESLint / Stryker 上游迁移到 minimatch 11 再清零。
+2026-11 的处理：先确认"升级工具链"并不是可用选项——实测（`npm view`，2026-11-04）
+ESLint 10.14.0、`@eslint/config-array` 0.23.5、`@typescript-eslint/typescript-estree`
+8.72.1、`@stryker-mutator/core` 10.1.1 仍分别依赖 `minimatch ^10.2.6` / `^3.1.5`，
+而公告的修复线是 **`>= 11.0.1`**，10.x 也在受影响区间。也就是说，换任何"最新工具链"
+都清不掉这条告警；npm 给出的"修复"（把 `typescript-eslint` 降级到 8.36.0）是假修复。
 
-没有为了清零而升级到 major：`react-router` 8、ESLint 10、Stryker 11 都需要单独评估和改配置，
-不在本轮范围内。
+因此在 `spring-ai-rag-webui/package.json` 用 `overrides` 把 **所有** minimatch 统一到
+`^11.0.1`（实际锁定 11.0.4）：
+
+```json
+"overrides": { "minimatch": "^11.0.1" }
+```
+
+强制跨 major 的可行性与验证成本（实测，不是推断）：
+
+- minimatch 11 同时提供 CJS 与 ESM 入口，调用方都是稳定的 `minimatch()` /
+  `new Minimatch(pattern, { dot, matchBase, flipNegate })` API，11.x 仍接受这些选项。
+- 升级前后的 `npx eslint . -f json` 结果**逐文件、逐消息完全一致**（文件数、错误/告警数、
+  每个文件的 messages 无差异），说明 ESLint 的 glob 语义没有改变。
+- `npm run lint`（含 525 项门禁自测、类型检查、设计语言检查）通过；
+  `npm run test:run` 1115 个用例通过；`npx stryker run --dryRunOnly` 完成文件选择与
+  初始测试运行（623 个候选文件），Stryker 的 glob 匹配未受影响。
+- `npm audit`（含 dev）与 `npm audit --omit=dev` 均为 **0**；Dependabot 告警 110 随之下线。
+
+残余风险：若后续上游按 `minimatch 10` 的新 API 写法迁移，`overrides` 会把它按 11 解析，
+可能表现为工具启动即报错——这类失败是**显式**的，不会静默改变 lint 结果；届时改回
+上游要求的版本区间并重新评估即可。ESLint 10 / Stryker 11 本身没有为此升级：
+它们的新版本仍锁在受影响区间，单升工具链清不掉告警，只会增加配置迁移成本。
 
 ---
 
@@ -87,7 +108,7 @@ Spring Boot 3.5.16 已是 3.5.x 最新，Spring AI 1.1.8 已是 1.1.x 最新；�
 | `commons-lang3` | 3.17.0 | **3.19.0** | CVE-2025-48924（误报） | CVE 实际属于 Jenkins 插件，是 CPE 匹配误报；顺手升到最新 3.x |
 | `jsoup` | 1.19.1 | **1.23.2** | Dependabot high（HTML 解析/清洗） | 同 1.x；项目只使用 `Jsoup.clean` + `Safelist`，API 未变 |
 | `springdoc-openapi` | 2.8.4 | **2.8.17** | 随 swagger-ui 带入的 DOMPurify 漏洞 | 同 2.8.x 补丁线；不升 3.x（面向 Spring Boot 4 的破坏性变更） |
-| `swagger-annotations-jakarta` | 2.2.28 | **2.2.47** | 无（版本对齐） | springdoc 2.8.17 的 swagger-core 是 2.2.47，注解停在 2.2.28 会让 `/v3/api-docs` 运行期抛 `NoSuchMethodError: Schema.$dynamicRef()`；两处显式声明（根 `dependencyManagement` 与 core 模块依赖）都必须跟随 `swagger-api.version` |
+| `swagger-annotations-jakarta` | 2.2.28 | **2.2.47** | 无（版本对齐） | springdoc 2.8.17 的 swagger-core 是 2.2.47，注解停在 2.2.28 会让 `/v3/api-docs` 运行期抛 `NoSuchMethodError: Schema.$dynamicRef()`；版本只在根 `dependencyManagement` 声明一次，core 模块不再写 `<version>` |
 
 结果：覆盖后 `dependency-check` 在 CVSS ≥ 7 上 **0 条**（本地缓存 NVD 数据截止
 2026-08-12；夜间任务带 key 更新后应复核一次）。
@@ -103,6 +124,27 @@ Spring Boot 3.5.16 已是 3.5.x 最新，Spring AI 1.1.8 已是 1.1.x 最新；�
 | ESLint 10 / Stryker 11 | 暂不升 | 仅为清 minimatch 的 dev 风险，收益低于配置与规则迁移成本 |
 
 **原则**：不为清零而升 breaking 版本；能同线补丁升级的直接升，不能的逐条记录取舍。
+
+### 版本收敛（2026-11）
+
+上一轮清债是逐模块改 pom，代价是版本散落：core 把 `hibernate-vector` 写死
+`6.6.5.Final`，而 Spring Boot 管理同一 classpath 上的 `hibernate-core` 为
+`6.6.53.Final`，构建和测试都不会报这种漂移。本轮把第三方版本全部收进根
+`pom.xml` 的 `dependencyManagement`：
+
+- `hibernate-vector` 改用 `${hibernate.version}`，与 `hibernate-core` 同版本；
+- `springdoc`、`logstash-logback-encoder`、`commonmark`、`jsoup`、`pdfbox`、
+  `testcontainers`、`rest-assured` 的版本从模块 pom 移到根 pom，模块只保留坐标；
+- 门禁 `scripts/verify-dependency-versions.mjs`：模块 pom 不得写 BOM / 根
+  `dependencyManagement` 已管理的版本，不得写第三方字面量版本，同一
+  `groupId:artifactId` 在不同模块解析出不同版本即失败。项目自身的 reactor
+  模块用 `${project.version}` 表达同版本，属于例外。
+
+前端同样检查了间接依赖分叉：`package-lock.json` 中有 21 个包存在多个版本，
+均为不同工具链的大版本并存（Babel 7/8、chalk 4/5、ajv 6/8 等）；`npm dedupe`
+实测无法再合并（父级声明的区间彼此不兼容），因此不做强制覆盖，只记录该结论。
+同大版本内的 6 处分叉（Babel 8.0.x/8.1.0、fsevents 2.3.2/2.3.3 等）由父级 pin
+造成，强行提升会违反其声明区间。
 
 ---
 

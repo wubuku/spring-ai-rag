@@ -43,6 +43,17 @@
         <httpcore5.version>5.4.4</httpcore5.version>
         <swagger-ui.version>5.34.1</swagger-ui.version>
         <pdfbox.version>3.0.8</pdfbox.version>
+        <!--
+          以下第三方版本不在 Spring Boot / Spring AI BOM 内，但同样只在本文件
+          声明：模块 pom 一律不写 <version>（scripts/verify-dependency-versions.mjs
+          会拒绝模块里出现字面量版本）。hibernate-vector 必须跟随 hibernate.version，
+          否则它会和 hibernate-core 变成同一 classpath 上的两个版本。
+        -->
+        <logstash-logback-encoder.version>7.4</logstash-logback-encoder.version>
+        <commonmark.version>0.22.0</commonmark.version>
+        <jsoup.version>1.23.2</jsoup.version>
+        <testcontainers.version>1.20.4</testcontainers.version>
+        <rest-assured.version>5.4.0</rest-assured.version>
     </properties>
 
     <modules>
@@ -73,6 +84,41 @@
                 <artifactId>swagger-annotations-jakarta</artifactId>
                 <version>${swagger-api.version}</version>
             </dependency>
+            <dependency>
+                <groupId>org.springdoc</groupId>
+                <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+                <version>${springdoc.version}</version>
+            </dependency>
+            <!--
+              hibernate-vector 不在 Spring Boot BOM 内，但必须与 hibernate-core
+              使用同一个 hibernate.version；此前 core 模块写死 6.6.5.Final，
+              而 hibernate-core 是 6.6.53.Final，同一 classpath 上并存两个版本。
+            -->
+            <dependency>
+                <groupId>org.hibernate.orm</groupId>
+                <artifactId>hibernate-vector</artifactId>
+                <version>${hibernate.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>net.logstash.logback</groupId>
+                <artifactId>logstash-logback-encoder</artifactId>
+                <version>${logstash-logback-encoder.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.commonmark</groupId>
+                <artifactId>commonmark</artifactId>
+                <version>${commonmark.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.jsoup</groupId>
+                <artifactId>jsoup</artifactId>
+                <version>${jsoup.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.pdfbox</groupId>
+                <artifactId>pdfbox</artifactId>
+                <version>${pdfbox.version}</version>
+            </dependency>
             <!-- Project module version management -->
             <dependency>
                 <groupId>com.springairag</groupId>
@@ -98,7 +144,7 @@
             <dependency>
                 <groupId>org.testcontainers</groupId>
                 <artifactId>testcontainers-bom</artifactId>
-                <version>1.20.4</version>
+                <version>${testcontainers.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
@@ -137,7 +183,7 @@
             <dependency>
                 <groupId>io.rest-assured</groupId>
                 <artifactId>rest-assured</artifactId>
-                <version>5.4.0</version>
+                <version>${rest-assured.version}</version>
                 <scope>test</scope>
             </dependency>
         </dependencies>

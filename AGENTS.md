@@ -44,6 +44,7 @@
 18. **外部 Client 边界**：把外部项目需求改写为本仓自包含的通用能力、契约和测试；跟踪代码与文档不得依赖外部项目名称、私有协议或背景知识。见 [delivery-workflow-zh-CN.md](docs/delivery-workflow-zh-CN.md) §2。
 19. **不要用破坏性 git 操作**：本仓库可能有他人的未提交 WIP。`git reset --hard` 会**删掉已暂存但未提交的文件**（Batch 900 实测踩过，`git add` 过也照样丢）；**不要 `git stash`**。要切分支重做，就 `git checkout -b` 先把当前改动提交在分支上。
 20. **删除符号链接用 `unlink`，不要 `rm`**：`rm` 会跟随链接，指向仓库根的链接会**把整个仓库删掉**。可恢复删除的保护会拦下并报错，但这属于险情不是方案（Batch 901）。同理，任何"指向仓库自身"的链接都不能留在工作区里。
+21. **依赖版本只有一个声明位置**：第三方版本只写在根 `pom.xml` 的 `dependencyManagement`（或交给 Spring Boot / Spring AI BOM），模块 pom 不写 `<version>`；`hibernate-vector` 这类不在 BOM 内的依赖必须跟随对应 property（如 `${hibernate.version}`）。`scripts/verify-dependency-versions.mjs` 会拒绝模块里的手写版本与跨模块版本分叉。前端不做强制覆盖，lockfile 多版本现状与理由见 [supply-chain-security-zh-CN.md](docs/supply-chain-security-zh-CN.md)。
 
 更全的陷阱列表：[docs/index-zh-CN.md](docs/index-zh-CN.md) §4、[docs/troubleshooting-zh-CN.md](docs/troubleshooting-zh-CN.md)。
 

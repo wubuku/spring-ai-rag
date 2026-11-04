@@ -410,6 +410,16 @@ export const GATES = [
     selfTest: 'scripts/test-support/controller-constructor-count-self-test.mjs',
   },
 
+  // 2026-11 依赖版本收敛。第三方版本曾散落在各模块 pom：`hibernate-vector`
+  // 在 core 写死 6.6.5.Final，而同一 classpath 的 `hibernate-core` 由 BOM 管到
+  // 6.6.53.Final，构建和测试都不报错。规则要求版本只出现在根 pom 的
+  // dependencyManagement（或 BOM），并拒绝跨模块版本分叉。
+  {
+    gate: 'scripts/verify-dependency-versions.mjs',
+    kind: 'gate',
+    selfTest: 'scripts/test-support/dependency-version-self-test.mjs',
+  },
+
   // Batch 935. `.env.deepspeed` sat in the index with real provider keys, a
   // database password and two absolute paths into a developer's home directory,
   // and it had reached the `main` of a **public** repository. `.gitignore` listed

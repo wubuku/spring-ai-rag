@@ -50,8 +50,9 @@ the runtime attack surface.
 
 | State | Production dependencies | All dependencies (incl. dev) |
 |-------|-------------------------|------------------------------|
-| Start of this round | 5 (4 high / 1 moderate) | 33 |
-| End of this round | **0** | 15 (all moderate) |
+| Start of the October cleanup | 5 (4 high / 1 moderate) | 33 |
+| End of the October cleanup | **0** | 15 (all moderate) |
+| End of the November cleanup | **0** | **0** |
 
 `npm audit fix` updated `package-lock.json` within semver ranges without touching
 the ranges in `package.json`, so nothing crossed a major version:
@@ -60,21 +61,47 @@ the ranges in `package.json`, so nothing crossed a major version:
 - `react-router` / `react-router-dom`: moved within the 7.18.x line, staying off
   8.x (loader / route API changes).
 
-The remaining 15 advisories collapse to one root cause:
+The 15 advisories left in October all collapsed to one root cause: a
+**`minimatch` glob-amplification ReDoS** pulled in through ESLint
+(`@eslint/eslintrc`, `@typescript-eslint/*`) and Stryker.
 
-- **`minimatch` glob-amplification ReDoS**, pulled in through ESLint 9
-  (`@eslint/eslintrc`, `@typescript-eslint/*`) and Stryker 10.
-- The fix requires `minimatch >= 11`, while ESLint 9 / typescript-eslint 8 /
-  Stryker 10 depend on the 3.x / 9.x API. npm's suggested "fix" actually
-  **downgrades** `typescript-eslint` to 8.36.0 — a false fix.
-- Exposure: glob patterns are authored in repository config, never taken from
-  external input, and only affect developer machines and CI builds, never the
-  shipped artifact. **Accepted and recorded**, until ESLint / Stryker migrate to
-  minimatch 11 upstream.
+The November resolution started by checking whether upgrading the toolchain was
+an option at all. It is not: measuring with `npm view` (2026-11-04) shows ESLint
+10.14.0, `@eslint/config-array` 0.23.5, `@typescript-eslint/typescript-estree`
+8.72.1 and `@stryker-mutator/core` 10.1.1 still asking for `minimatch ^10.2.6` /
+`^3.1.5`, while the advisory's first patched version is **11.0.1** — 10.x is
+affected too. No "latest toolchain" clears the alert; npm's suggested fix
+(downgrading `typescript-eslint` to 8.36.0) is a false one.
 
-Nothing was upgraded to a major just to reach zero: `react-router` 8, ESLint 10,
-and Stryker 11 each require a separate migration and configuration review, which
-is out of scope here.
+So `spring-ai-rag-webui/package.json` pins **every** minimatch copy through
+`overrides`:
+
+```json
+"overrides": { "minimatch": "^11.0.1" }
+```
+
+(locked to 11.0.4). The feasibility and verification cost of forcing a major
+were measured, not assumed:
+
+- minimatch 11 ships both CJS and ESM entry points, and every consumer here uses
+  the stable `minimatch()` / `new Minimatch(pattern, { dot, matchBase,
+  flipNegate })` API, which 11.x still accepts.
+- `npx eslint . -f json` before and after is **identical file by file and message
+  by message** (same file count, same error/warning counts, no message diff),
+  so ESLint glob semantics did not change.
+- `npm run lint` (including 525 gate self-tests, typecheck and the design-system
+  check) passes; `npm run test:run` passes 1115 cases; `npx stryker run
+  --dryRunOnly` completes file selection and the initial test run (623 candidate
+  files), so Stryker glob matching is unaffected.
+- Both `npm audit` and `npm audit --omit=dev` report **0**; Dependabot alert 110
+  closes as a result.
+
+Residual risk: if upstream later writes against a minimatch 10-only API, the
+override resolves it to 11 and the tool fails loudly at startup — an explicit
+failure, never a silent change in lint results. At that point, drop the override
+and re-evaluate. ESLint 10 / Stryker 11 were not taken for this alone: their
+releases still sit below the patched line, so a toolchain bump clears nothing and
+only adds configuration migration cost.
 
 ---
 
@@ -98,7 +125,7 @@ version-override hooks):
 | `commons-lang3` | 3.17.0 | **3.19.0** | CVE-2025-48924 (false positive) | The CVE actually belongs to a Jenkins plugin; a CPE mismatch. Moved to the newest 3.x anyway |
 | `jsoup` | 1.19.1 | **1.23.2** | Dependabot high (HTML parsing/sanitisation) | Same 1.x line; the project only uses `Jsoup.clean` + `Safelist`, API unchanged |
 | `springdoc-openapi` | 2.8.4 | **2.8.17** | DOMPurify advisory carried by swagger-ui | Same 2.8.x patch line; 3.x targets Spring Boot 4 and is a breaking change |
-| `swagger-annotations-jakarta` | 2.2.28 | **2.2.47** | None (version alignment) | springdoc 2.8.17 ships swagger-core 2.2.47; leaving annotations at 2.2.28 makes `/v3/api-docs` throw `NoSuchMethodError: Schema.$dynamicRef()` at runtime. Both explicit declarations (root `dependencyManagement` and the core-module dependency) must follow `swagger-api.version` |
+| `swagger-annotations-jakarta` | 2.2.28 | **2.2.47** | None (version alignment) | springdoc 2.8.17 ships swagger-core 2.2.47; leaving annotations at 2.2.28 makes `/v3/api-docs` throw `NoSuchMethodError: Schema.$dynamicRef()` at runtime. The version is declared once, in the root `dependencyManagement`; the core module no longer carries a `<version>` |
 
 Result: after the overrides, `dependency-check` reports **zero** findings at
 CVSS >= 7 (local NVD cache last modified 2026-08-12; re-check once the nightly
@@ -116,6 +143,31 @@ job updates with a key).
 
 **Principle**: never upgrade to a breaking version just to reach zero. Take
 same-line patches where possible and record the trade-off where not.
+
+### Version convergence (November 2026)
+
+The previous cleanup edited one module pom at a time, and that is how versions
+drifted: `core` pinned `hibernate-vector` to `6.6.5.Final` while Spring Boot
+managed `hibernate-core` to `6.6.53.Final` on the same classpath — neither the
+build nor the tests report that. Every third-party version now lives in the root
+`pom.xml` `dependencyManagement`:
+
+- `hibernate-vector` uses `${hibernate.version}` so it matches `hibernate-core`;
+- `springdoc`, `logstash-logback-encoder`, `commonmark`, `jsoup`, `pdfbox`,
+  `testcontainers` and `rest-assured` moved their versions from the module poms
+  to the root pom; modules keep coordinates only;
+- `scripts/verify-dependency-versions.mjs` fails when a module pom writes a
+  version that the BOM or root `dependencyManagement` already manages, writes a
+  literal third-party version, or resolves the same `groupId:artifactId` to
+  different versions across modules. Reactor modules using `${project.version}`
+  for their own artifacts are exempt.
+
+The frontend was audited for the same kind of split: `package-lock.json` holds
+multiple versions for 21 packages, all of them major lines that distinct
+toolchains require (Babel 7/8, chalk 4/5, ajv 6/8, ...). `npm dedupe` produces no
+change (the parents' ranges conflict), so nothing is force-overridden. Six
+same-major splits (Babel 8.0.x/8.1.0, fsevents 2.3.2/2.3.3, ...) come from parent
+pins; lifting them would violate the declared ranges.
 
 ---
 

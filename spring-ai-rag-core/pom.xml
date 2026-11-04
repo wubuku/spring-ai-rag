@@ -60,10 +60,10 @@
             <artifactId>spring-boot-starter-data-jpa</artifactId>
         </dependency>
 
+        <!-- 版本由根 pom 的 dependencyManagement 统一管理（必须跟随 hibernate.version） -->
         <dependency>
             <groupId>org.hibernate.orm</groupId>
             <artifactId>hibernate-vector</artifactId>
-            <version>6.6.5.Final</version>
         </dependency>
 
         <!-- Spring AI OpenAI library (no auto-config, manually managed by SpringAiConfig) -->
@@ -124,7 +124,6 @@
         <dependency>
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
-            <version>${springdoc.version}</version>
         </dependency>
 
         <!-- 显式声明与 springdoc 2.8.17 的 swagger-core 2.2.47 对齐；版本号由根 pom
@@ -133,7 +132,6 @@
         <dependency>
             <groupId>io.swagger.core.v3</groupId>
             <artifactId>swagger-annotations-jakarta</artifactId>
-            <version>${swagger-api.version}</version>
         </dependency>
 
         <!-- Spring Boot Actuator (metrics + health checks) -->
@@ -201,7 +199,6 @@
         <dependency>
             <groupId>net.logstash.logback</groupId>
             <artifactId>logstash-logback-encoder</artifactId>
-            <version>7.4</version>
         </dependency>
 
         <!-- OpenAPI Contract Testing -->
@@ -215,7 +212,6 @@
         <dependency>
             <groupId>org.commonmark</groupId>
             <artifactId>commonmark</artifactId>
-            <version>0.22.0</version>
         </dependency>
 
         <!--
@@ -227,7 +223,6 @@
         <dependency>
             <groupId>org.jsoup</groupId>
             <artifactId>jsoup</artifactId>
-            <version>1.23.2</version>
         </dependency>
 
         <!-- YAML frontmatter for server-owned runtime Skills -->
@@ -240,7 +235,6 @@
         <dependency>
             <groupId>org.apache.pdfbox</groupId>
             <artifactId>pdfbox</artifactId>
-            <version>${pdfbox.version}</version>
         </dependency>
     </dependencies>
 
