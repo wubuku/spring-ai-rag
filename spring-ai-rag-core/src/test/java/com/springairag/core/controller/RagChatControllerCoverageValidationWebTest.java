@@ -124,6 +124,31 @@ class RagChatControllerCoverageValidationWebTest {
         verify(ragChatService).chat(any(), eq(expectedScope), isNull());
     }
 
+    @Test
+    void nulAndOversizedMessagesAreRejectedAs400WithoutModelWork() throws Exception {
+        // NUL 在 PostgreSQL text 列不可存；必须在 API 边界转成 400，
+        // 不能落到持久化层再变成 500。
+        mockMvc.perform(post("/api/v1/rag/chat/ask")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"message\":\"bad\\u0000payload\",\"mode\":\"PLAIN\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.message").value(
+                        org.hamcrest.Matchers.containsString("NUL")));
+
+        mockMvc.perform(post("/api/v1/rag/chat/ask")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"message":"%s","mode":"PLAIN"}
+                                """.formatted("a".repeat(10_001))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.message").value(
+                        org.hamcrest.Matchers.containsString("10000")));
+
+        verifyNoInteractions(turnOperationService, ragChatService, scopeResolver);
+    }
+
     private void assertPlainCoverageRejected(String path, boolean stream) throws Exception {
         var request = post(path)
                 .contentType(MediaType.APPLICATION_JSON)

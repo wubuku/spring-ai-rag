@@ -35,9 +35,10 @@ public class JsonRecordSearchTool implements ToolCallback {
             .name(NAME)
             .description("Search authorized JSON records by natural-language evidence "
                     + "and an optional exact JSON object containment filter. Cite returned "
-                    + "records with their sourceHandle (preferred) or citationId.")
+                    + "records with their sourceHandle (preferred) or citationId. "
+                    + KnowledgeSearchTool.BOUNDARY_INSTRUCTION)
             .inputSchema("""
-                    {"type":"object","properties":{"query":{"type":"string","description":"Concise standalone natural-language query"},"payloadContains":{"type":"object","description":"Optional exact JSON subtree that each payload must contain"},"maxResults":{"type":"integer","description":"Optional result count, capped by server policy","minimum":1}},"required":["query"],"additionalProperties":false}
+                    {"type":"object","properties":{"query":{"type":"string","description":"Concise standalone natural-language query","maxLength":2000},"payloadContains":{"type":"object","description":"Optional exact JSON subtree that each payload must contain"},"maxResults":{"type":"integer","description":"Optional result count, capped by server policy","minimum":1}},"required":["query"],"additionalProperties":false}
                     """)
             .build();
 
@@ -80,8 +81,8 @@ public class JsonRecordSearchTool implements ToolCallback {
         }
         AuthorizedRetrievalContext context = context(toolContext);
         JsonNode arguments = parse(toolInput);
-        String query = context.trace().normalizeQuery(
-                text(arguments.get("query")));
+        String query = ToolTextBounds.truncateQuery(context.trace().normalizeQuery(
+                text(arguments.get("query"))));
         if (query.isBlank()) {
             throw new IllegalArgumentException(
                     "searchJsonRecords.query must not be blank");
@@ -105,6 +106,8 @@ public class JsonRecordSearchTool implements ToolCallback {
                 return serialize(Map.of(
                         "query", query,
                         "resultCount", 0,
+                        "contentBoundary", KnowledgeSearchTool.CONTENT_BOUNDARY,
+                        "boundaryInstruction", KnowledgeSearchTool.BOUNDARY_INSTRUCTION,
                         "records", List.of(),
                         "budgetExhausted", true));
             }
@@ -146,6 +149,8 @@ public class JsonRecordSearchTool implements ToolCallback {
                 output.put("payloadContains", payloadContains);
             }
             output.put("resultCount", records.size());
+            output.put("contentBoundary", KnowledgeSearchTool.CONTENT_BOUNDARY);
+            output.put("boundaryInstruction", KnowledgeSearchTool.BOUNDARY_INSTRUCTION);
             output.put("records", records);
 
             int maxCharacters = context.maxToolResultCharacters();
@@ -161,6 +166,8 @@ public class JsonRecordSearchTool implements ToolCallback {
                 exposed.clear();
                 json = serialize(Map.of(
                         "resultCount", 0,
+                        "contentBoundary", KnowledgeSearchTool.CONTENT_BOUNDARY,
+                        "boundaryInstruction", KnowledgeSearchTool.BOUNDARY_INSTRUCTION,
                         "records", List.of(),
                         "truncated", true,
                         "error", "tool result exceeded the configured character budget"));

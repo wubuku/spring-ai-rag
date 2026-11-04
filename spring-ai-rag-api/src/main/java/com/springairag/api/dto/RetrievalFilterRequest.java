@@ -1,6 +1,7 @@
 package com.springairag.api.dto;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.springairag.api.validation.NoNulInJsonTree;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.util.Objects;
@@ -11,9 +12,11 @@ import java.util.Objects;
 @Schema(description = "Retrieval eligibility filters using JSONB containment")
 public class RetrievalFilterRequest {
 
+    @NoNulInJsonTree(message = "metadataContains must not contain NUL (U+0000) characters")
     @Schema(description = "Non-empty JSON object matched against rag_documents.metadata with PostgreSQL @>")
     private JsonNode metadataContains;
 
+    @NoNulInJsonTree(message = "payloadContains must not contain NUL (U+0000) characters")
     @Schema(description = "Non-empty JSON object matched against rag_documents.jsonb_payload with PostgreSQL @>")
     private JsonNode payloadContains;
 

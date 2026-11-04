@@ -1,5 +1,7 @@
 package com.springairag.api.dto;
 
+import com.springairag.api.validation.NoNulCharacter;
+import com.springairag.api.validation.NoNulInJsonTree;
 import com.springairag.api.validation.ValidCollectionKey;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
@@ -22,6 +24,7 @@ public class ExternalDocumentUpsertRequest {
 
     @NotBlank
     @Size(max = 255)
+    @NoNulCharacter(message = "externalId must not contain NUL (U+0000) characters")
     @Schema(description = "Caller-supplied stable document identity", requiredMode = Schema.RequiredMode.REQUIRED)
     private String externalId;
 
@@ -31,27 +34,34 @@ public class ExternalDocumentUpsertRequest {
 
     @NotBlank
     @Size(max = 255)
+    @NoNulCharacter(message = "sourceRevision must not contain NUL (U+0000) characters")
     @Schema(description = "Opaque source revision token", requiredMode = Schema.RequiredMode.REQUIRED)
     private String sourceRevision;
 
     @Size(max = 255)
+    @NoNulCharacter(message = "expectedSourceRevision must not contain NUL (U+0000) characters")
     @Schema(description = "Expected current source revision for compare-and-set")
     private String expectedSourceRevision;
 
     @NotBlank
     @Size(max = 255)
+    @NoNulCharacter(message = "Document title must not contain NUL (U+0000) characters")
     private String title;
 
     @NotBlank
     @Size(max = 1_000_000)
+    @NoNulCharacter(message = "Document content must not contain NUL (U+0000) characters")
     private String content;
 
     @Size(max = 255)
+    @NoNulCharacter(message = "Document source must not contain NUL (U+0000) characters")
     private String source;
 
     @Size(max = 50)
+    @NoNulCharacter(message = "Document type must not contain NUL (U+0000) characters")
     private String documentType = "text";
 
+    @NoNulInJsonTree(message = "Document metadata must not contain NUL (U+0000) characters")
     private Map<String, Object> metadata;
 
     @Schema(description = "Generate embedding after persistence", defaultValue = "true")

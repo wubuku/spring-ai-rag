@@ -1,10 +1,13 @@
 package com.springairag.api.dto;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.springairag.api.validation.NoNulCharacter;
+import com.springairag.api.validation.NoNulInJsonTree;
 import com.springairag.api.validation.ValidCollectionKey;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -16,16 +19,23 @@ import java.util.Map;
 public class CollectionImportRequest {
 
     @NotBlank
+    @Size(max = 255)
+    @NoNulCharacter(message = "Collection name must not contain NUL (U+0000) characters")
     private String name;
 
     @NotBlank
     @ValidCollectionKey
     private String collectionKey;
 
+    @Size(max = 2000)
+    @NoNulCharacter(message = "Collection description must not contain NUL (U+0000) characters")
     private String description;
+    @Size(max = 255)
+    @NoNulCharacter(message = "embeddingModel must not contain NUL (U+0000) characters")
     private String embeddingModel;
     private Integer dimensions;
     private Boolean enabled;
+    @NoNulInJsonTree(message = "Collection metadata must not contain NUL (U+0000) characters")
     private Map<String, Object> metadata;
 
     @Valid
@@ -50,18 +60,33 @@ public class CollectionImportRequest {
 
     public static class ImportedDocument {
         @NotBlank
+        @Size(max = 255, message = "Document title must not exceed 255 characters")
+        @NoNulCharacter(message = "Document title must not contain NUL (U+0000) characters")
         private String title;
         @NotBlank
+        @Size(max = 1_000_000, message = "Document content must not exceed 1 million characters")
+        @NoNulCharacter(message = "Document content must not contain NUL (U+0000) characters")
         private String content;
+        @Size(max = 255)
+        @NoNulCharacter(message = "Document source must not contain NUL (U+0000) characters")
         private String source;
+        @Size(max = 50)
+        @NoNulCharacter(message = "Document type must not contain NUL (U+0000) characters")
         private String documentType;
+        @NoNulInJsonTree(message = "Document metadata must not contain NUL (U+0000) characters")
         private Map<String, Object> metadata;
         private Long size;
+        @Size(max = 255)
+        @NoNulCharacter(message = "externalId must not contain NUL (U+0000) characters")
         private String externalId;
         private String sourceNamespace = "default";
+        @Size(max = 255)
+        @NoNulCharacter(message = "sourceRevision must not contain NUL (U+0000) characters")
         private String sourceRevision;
         private LocalDateTime sourceDeletedAt;
         private JsonNode jsonbPayload;
+        @Size(max = 255)
+        @NoNulCharacter(message = "originalFilename must not contain NUL (U+0000) characters")
         private String originalFilename;
         private Boolean enabled;
 

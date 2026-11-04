@@ -26,13 +26,16 @@ import java.util.Map;
 public final class StaticKnowledgeSearchTool implements ToolCallback {
 
     public static final String NAME = "searchStaticKnowledge";
+    private static final java.util.Set<String> ALLOWED_ARGUMENTS =
+            java.util.Set.of("query", "maxResults");
     private static final ToolDefinition DEFINITION = ToolDefinition.builder()
             .name(NAME)
             .description("Search deployment-provided static knowledge without using embeddings. "
                     + "Results are bounded and marked as STATIC_KNOWLEDGE. Cite returned "
-                    + "sources with their sourceHandle (preferred) or citationId.")
+                    + "sources with their sourceHandle (preferred) or citationId. "
+                    + KnowledgeSearchTool.BOUNDARY_INSTRUCTION)
             .inputSchema("""
-                    {"type":"object","properties":{"query":{"type":"string","description":"Concise search query"},"maxResults":{"type":"integer","minimum":1}},"required":["query"],"additionalProperties":false}
+                    {"type":"object","properties":{"query":{"type":"string","description":"Concise search query","maxLength":2000},"maxResults":{"type":"integer","minimum":1}},"required":["query"],"additionalProperties":false}
                     """)
             .build();
 
@@ -74,8 +77,15 @@ public final class StaticKnowledgeSearchTool implements ToolCallback {
     public String call(String toolInput, ToolContext toolContext) {
         AuthorizedRetrievalContext context = context(toolContext);
         Map<String, Object> arguments = parse(toolInput);
-        String query = context.trace().normalizeQuery(
-                String.valueOf(arguments.getOrDefault("query", "")));
+        String argumentError = validateArguments(arguments);
+        if (argumentError != null) {
+            return json(Map.of(
+                    "error", "invalid_tool_arguments",
+                    "argument", argumentError,
+                    "allowed", List.of("query", "maxResults")));
+        }
+        String query = ToolTextBounds.truncateQuery(context.trace().normalizeQuery(
+                arguments.get("query") instanceof String text ? text : ""));
         if (query.isBlank()) {
             throw new IllegalArgumentException(
                     "searchStaticKnowledge.query must not be blank");
@@ -91,6 +101,8 @@ public final class StaticKnowledgeSearchTool implements ToolCallback {
             return json(Map.of(
                     "query", query,
                     "resultCount", 0,
+                    "contentBoundary", KnowledgeSearchTool.CONTENT_BOUNDARY,
+                    "boundaryInstruction", KnowledgeSearchTool.BOUNDARY_INSTRUCTION,
                     "sources", List.of(),
                     "budgetExhausted", true));
         }
@@ -124,6 +136,8 @@ public final class StaticKnowledgeSearchTool implements ToolCallback {
         Map<String, Object> output = new LinkedHashMap<>();
         output.put("query", query);
         output.put("resultCount", sources.size());
+        output.put("contentBoundary", KnowledgeSearchTool.CONTENT_BOUNDARY);
+        output.put("boundaryInstruction", KnowledgeSearchTool.BOUNDARY_INSTRUCTION);
         output.put("sources", sources);
         int maxCharacters = context.maxToolResultCharacters();
         if (json(output).length() > maxCharacters) {
@@ -150,6 +164,8 @@ public final class StaticKnowledgeSearchTool implements ToolCallback {
             exposed.clear();
             output.clear();
             output.put("resultCount", 0);
+            output.put("contentBoundary", KnowledgeSearchTool.CONTENT_BOUNDARY);
+            output.put("boundaryInstruction", KnowledgeSearchTool.BOUNDARY_INSTRUCTION);
             output.put("sources", List.of());
             output.put("truncated", true);
             output.put("error", "tool result exceeded the configured character budget");
@@ -191,13 +207,31 @@ public final class StaticKnowledgeSearchTool implements ToolCallback {
 
     private Map<String, Object> parse(String value) {
         try {
-            return objectMapper.readValue(
+            Map<String, Object> parsed = objectMapper.readValue(
                     value == null || value.isBlank() ? "{}" : value,
                     new TypeReference<>() {});
+            if (parsed == null) {
+                throw new IllegalArgumentException(
+                        "searchStaticKnowledge arguments must be a JSON object");
+            }
+            return parsed;
         } catch (Exception e) {
             throw new IllegalArgumentException(
                     "Invalid searchStaticKnowledge arguments", e);
         }
+    }
+
+    private String validateArguments(Map<String, Object> arguments) {
+        for (String key : arguments.keySet()) {
+            if (!ALLOWED_ARGUMENTS.contains(key)) {
+                return key;
+            }
+        }
+        Object query = arguments.get("query");
+        if (query != null && !(query instanceof String)) {
+            return "query";
+        }
+        return null;
     }
 
     private String json(Object value) {

@@ -1,6 +1,7 @@
 package com.springairag.api.dto;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.springairag.api.validation.NoNulCharacter;
 import com.springairag.api.validation.ValidCollectionKey;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
@@ -18,6 +19,7 @@ public class JsonRecordSearchRequest {
 
     @NotBlank
     @Size(max = 10000)
+    @NoNulCharacter(message = "Query text must not contain NUL (U+0000) characters")
     private String query;
 
     @Size(max = 50)

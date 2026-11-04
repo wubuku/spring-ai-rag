@@ -27,6 +27,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -149,7 +150,7 @@ class JsonRecordSearchToolResidualTest {
         JsonRecordSearchResponse response = new JsonRecordSearchResponse(
                 "sofa", List.of());
         when(service.searchAuthorizedDetailed(
-                eq(giantQuery), any(), any(), any(), any()))
+                anyString(), any(), any(), any(), any()))
                 .thenReturn(detailed(response));
 
         String json = tool.call(

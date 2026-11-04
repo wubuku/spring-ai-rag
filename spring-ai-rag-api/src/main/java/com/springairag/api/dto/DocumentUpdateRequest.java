@@ -2,9 +2,12 @@ package com.springairag.api.dto;
 
 import com.fasterxml.jackson.annotation.JsonAnySetter;
 import com.springairag.api.enums.EmbeddingPolicy;
+import com.springairag.api.validation.NoNulCharacter;
+import com.springairag.api.validation.ValidCollectionKey;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -19,10 +22,17 @@ public class DocumentUpdateRequest {
     @NotNull
     @Positive
     private Long expectedDocumentRevision;
+    @Size(max = 255, message = "Document title must not exceed 255 characters")
+    @NoNulCharacter(message = "Document title must not contain NUL (U+0000) characters")
     private String title;
+    @Size(max = 1_000_000, message = "Document content must not exceed 1 million characters")
+    @NoNulCharacter(message = "Document content must not contain NUL (U+0000) characters")
     private String content;
+    @Size(max = 255, message = "Document source must not exceed 255 characters")
+    @NoNulCharacter(message = "Document source must not contain NUL (U+0000) characters")
     private String source;
     private Map<String, Object> metadata;
+    @ValidCollectionKey
     private String collectionKey;
     private EmbeddingPolicy embeddingPolicy = EmbeddingPolicy.ASYNC;
 

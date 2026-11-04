@@ -296,7 +296,7 @@ class KnowledgeSearchToolTest {
         result.setScore(0.8);
         String query = "\\\"".repeat(2500);
         when(hybridRetriever.searchInScopeDetailed(
-                eq(query),
+                anyString(),
                 any(),
                 any(),
                 eq(1),
@@ -314,6 +314,8 @@ class KnowledgeSearchToolTest {
         JsonNode json = objectMapper.readTree(output);
         assertTrue(json.path("truncated").asBoolean());
         assertTrue(json.path("query").asText().length() < query.length());
+        assertTrue(json.path("query").asText().length()
+                <= ToolTextBounds.MAX_QUERY_CHARACTERS);
     }
 
     @Test

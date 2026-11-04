@@ -1,6 +1,8 @@
 package com.springairag.api.dto;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.springairag.api.validation.NoNulCharacter;
+import com.springairag.api.validation.NoNulInJsonTree;
 import com.springairag.api.validation.ValidCollectionKey;
 import com.springairag.api.validation.ValidSourceNamespace;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -31,6 +33,7 @@ public class JsonRecordUpsertRequest {
 
     @NotBlank
     @Size(max = 255)
+    @NoNulCharacter(message = "externalId must not contain NUL (U+0000) characters")
     @Schema(description = "Caller-supplied stable record identity", requiredMode = Schema.RequiredMode.REQUIRED)
     private String externalId;
 
@@ -40,32 +43,39 @@ public class JsonRecordUpsertRequest {
     private String sourceNamespace = "default";
 
     @Size(max = 255)
+    @NoNulCharacter(message = "sourceRevision must not contain NUL (U+0000) characters")
     @Schema(description = "Opaque source revision token")
     private String sourceRevision;
 
     @Size(max = 255)
+    @NoNulCharacter(message = "expectedSourceRevision must not contain NUL (U+0000) characters")
     @Schema(description = "Expected current source revision for compare-and-set")
     private String expectedSourceRevision;
 
     @NotBlank
     @Size(max = 255)
+    @NoNulCharacter(message = "Record title must not contain NUL (U+0000) characters")
     @Schema(description = "Record title", requiredMode = Schema.RequiredMode.REQUIRED)
     private String title;
 
     @NotBlank
     @Size(max = 1_000_000)
+    @NoNulCharacter(message = "retrievalText must not contain NUL (U+0000) characters")
     @Schema(description = "Caller-supplied natural-language retrieval description",
             requiredMode = Schema.RequiredMode.REQUIRED)
     private String retrievalText;
 
     @NotNull
+    @NoNulInJsonTree(message = "JSON payload must not contain NUL (U+0000) characters")
     @Schema(description = "Business JSON payload; it is stored as JSONB and is not embedded",
             requiredMode = Schema.RequiredMode.REQUIRED)
     private JsonNode jsonbPayload;
 
     @Size(max = 255)
+    @NoNulCharacter(message = "Record source must not contain NUL (U+0000) characters")
     private String source;
 
+    @NoNulInJsonTree(message = "Record metadata must not contain NUL (U+0000) characters")
     private Map<String, Object> metadata;
 
     @Schema(description = "Generate embedding after persistence", defaultValue = "true")

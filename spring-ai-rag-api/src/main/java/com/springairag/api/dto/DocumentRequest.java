@@ -5,6 +5,8 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import com.springairag.api.enums.DocumentDeduplicationScope;
 import com.springairag.api.enums.EmbeddingPolicy;
+import com.springairag.api.validation.NoNulCharacter;
+import com.springairag.api.validation.NoNulInJsonTree;
 import com.springairag.api.validation.ValidCollectionKey;
 import java.util.Map;
 import java.util.Objects;
@@ -17,22 +19,27 @@ public class DocumentRequest {
 
     @NotBlank(message = "Document title must not be blank")
     @Size(max = 255, message = "Document title must not exceed 255 characters")
+    @NoNulCharacter(message = "Document title must not contain NUL (U+0000) characters")
     @Schema(description = "Document title", example = "Product Manual", requiredMode = Schema.RequiredMode.REQUIRED)
     private String title;
 
     @NotBlank(message = "Document content must not be blank")
     @Size(max = 1_000_000, message = "Document content must not exceed 1 million characters")
+    @NoNulCharacter(message = "Document content must not contain NUL (U+0000) characters")
     @Schema(description = "Document body content", example = "This document describes how to use the product...", requiredMode = Schema.RequiredMode.REQUIRED)
     private String content;
 
     @Size(max = 255, message = "Document source must not exceed 255 characters")
+    @NoNulCharacter(message = "Document source must not contain NUL (U+0000) characters")
     @Schema(description = "Document source identifier", example = "manual-upload")
     private String source;
 
     @Size(max = 50, message = "Document type must not exceed 50 characters")
+    @NoNulCharacter(message = "Document type must not contain NUL (U+0000) characters")
     @Schema(description = "Document type", example = "markdown")
     private String documentType;
 
+    @NoNulInJsonTree(message = "Document metadata must not contain NUL (U+0000) characters")
     @Schema(description = "Additional metadata (JSON object)")
     private Map<String, Object> metadata;
 

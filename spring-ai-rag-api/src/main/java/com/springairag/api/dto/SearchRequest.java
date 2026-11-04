@@ -2,6 +2,7 @@ package com.springairag.api.dto;
 
 import com.springairag.api.enums.CollectionScopeMode;
 import com.springairag.api.enums.CollectionCoverageMode;
+import com.springairag.api.validation.NoNulCharacter;
 import com.springairag.api.validation.ValidCollectionKey;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
@@ -20,6 +21,7 @@ public class SearchRequest {
 
     @NotBlank(message = "Query text must not be blank")
     @Size(max = 10000, message = "Query text must not exceed 10000 characters")
+    @NoNulCharacter(message = "Query text must not contain NUL (U+0000) characters")
     @Schema(description = "Query text", example = "What is Spring AI?", requiredMode = Schema.RequiredMode.REQUIRED)
     private String query;
 

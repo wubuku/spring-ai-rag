@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.springairag.api.enums.CollectionScopeMode;
 import com.springairag.api.enums.CollectionCoverageMode;
 import com.springairag.api.enums.ChatMode;
+import com.springairag.api.validation.NoNulCharacter;
 import com.springairag.api.validation.ValidCollectionKey;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Max;
@@ -24,6 +25,7 @@ public class ChatRequest {
 
     @NotBlank(message = "Message content must not be blank")
     @Size(max = 10000, message = "Message content must not exceed 10000 characters")
+    @NoNulCharacter(message = "Message content must not contain NUL (U+0000) characters")
     @Schema(description = "User message content", example = "What is the return policy?", requiredMode = Schema.RequiredMode.REQUIRED)
     private String message;
 
