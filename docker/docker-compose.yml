@@ -35,6 +35,8 @@ services:
         condition: service_healthy
     ports:
       - "${APP_PORT:-8081}:8081"
+    # 应用启用 server.shutdown=graceful，默认 30s 等待在途请求；容器停止窗口需覆盖它。
+    stop_grace_period: 30s
     # 容器安全基线：根文件系统只读，唯一可写目录挂在临时内存盘；
     # 进程不获得新权限，并丢弃全部 Linux capabilities（Java 运行不需要）。
     read_only: true

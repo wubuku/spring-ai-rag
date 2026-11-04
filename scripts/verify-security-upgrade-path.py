@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -133,6 +134,15 @@ def prepare_v70_data(stack: LocalStack) -> None:
 
     print("[INFO] V70 历史数据已写入（无 owner_principal_id）")
 
+    baseline_max = stack.sql(
+        "SELECT max(version::int) FROM flyway_schema_history")
+    check("V70 基线只应用迁移到 V70", baseline_max == "70",
+          f"max_version={baseline_max}")
+    baseline_failed = stack.sql(
+        "SELECT count(*) FROM flyway_schema_history WHERE NOT success")
+    check("V70 基线无失败迁移记录", baseline_failed == "0",
+          f"failed={baseline_failed}")
+
 
 def main() -> int:
     parser = argparse.ArgumentParser()
@@ -159,6 +169,30 @@ def main() -> int:
             "ORDER BY installed_rank DESC LIMIT 1")
         check("数据库已升级到 V71", v71_applied == "1",
               f"latest={latest_version}")
+
+        # 升级必须一次把 V71..最新版本全部应用完，不能停在半迁移状态。
+        migration_versions = sorted(
+            int(match.group(1))
+            for path in (PROJECT_DIR / "spring-ai-rag-core/src/main/resources"
+                         / "db/migration").glob("V*__*.sql")
+            if (match := re.match(r"V(\d+)__", path.name))
+        )
+        history = stack.sql_rows(
+            "SELECT installed_rank, version, success FROM flyway_schema_history "
+            "ORDER BY installed_rank")
+        ranks = [int(row[0]) for row in history]
+        applied_versions = [int(row[1]) for row in history if row[1]]
+        failed_migrations = [row for row in history if row[2] != "t"]
+        check("升级后 Flyway 无失败迁移记录", not failed_migrations,
+              str(failed_migrations[:3]))
+        check("升级后 Flyway installed_rank 连续无缺口",
+              ranks == list(range(1, len(ranks) + 1)), str(ranks[:5]))
+        check("升级后 V1..最新版本全部按序应用",
+              applied_versions == migration_versions,
+              f"applied={applied_versions[-3:]} expected={migration_versions[-3:]}")
+        check("升级后没有重复版本或回滚残留",
+              len(applied_versions) == len(set(applied_versions)),
+              str(applied_versions[-5:]))
 
         status, collection = json_request(
             "POST", f"{base}/api/v1/rag/collections",

@@ -1543,6 +1543,15 @@ One-command release verification:
 `BASE_URL`. `--with-local-runtime` includes HTTP E2E, goldenset, quality
 regression, and real-LLM smoke.
 
+The release-artifact contract is also runnable on its own:
+`python3 scripts/verify-release-artifact.py --build` checks the fat-jar
+manifest, zip CRCs, `SHA256SUMS`, nested module jars against local `target`
+bytes, runtime coordinate convergence, and byte equality across WebUI `dist/`,
+the committed embedded bundle, and the jar. `verify-release.sh
+--with-jar-blackbox` then boots that jar against real PostgreSQL (Flyway order,
+health, key APIs, static content types, SIGTERM graceful shutdown) and needs a
+local `psql` plus a reachable PostgreSQL.
+
 One-click baseline (reuses those release gates and adds gated IT plus a
 bounded soak):
 

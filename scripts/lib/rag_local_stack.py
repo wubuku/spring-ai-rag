@@ -105,7 +105,8 @@ class LocalStack:
 
     def sql_rows(self, statement: str, db: str | None = None) -> list[list[str]]:
         output = self.sql(statement, db)
-        return [line.split("\t") for line in output.splitlines() if line]
+        # psql -tA 的默认字段分隔符是 '|'，不是制表符。
+        return [line.split("|") for line in output.splitlines() if line]
 
     def execute(self, statement: str, db: str | None = None) -> None:
         """执行无返回值语句（INSERT/UPDATE），失败即抛异常。"""

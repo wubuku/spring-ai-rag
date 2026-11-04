@@ -1345,6 +1345,13 @@ artifact 与 Markdown 汇总写入 `.verification/quality-regression/<run-id>/`�
 `--with-quality-regression` 对已经启动的 `BASE_URL` 追加版本化回归；
 `--with-local-runtime` 默认包含 HTTP E2E、goldenset、质量回归和真实 LLM smoke。
 
+发版产物契约单独可跑：`python3 scripts/verify-release-artifact.py --build` 校验
+fat jar 的 manifest、zip CRC、`SHA256SUMS`、内嵌模块 jar 与本地 `target` 字节一致、
+运行时依赖坐标收敛，以及 WebUI `dist/`、已提交内嵌产物与 jar 三者逐字节一致。
+`verify-release.sh --with-jar-blackbox` 会在此基础上用打包 jar 对真实 PostgreSQL
+做黑盒启动（Flyway 顺序、健康检查、关键 API、静态资源 content-type、SIGTERM
+优雅停机），需要本机 `psql` 与可用的 PostgreSQL。
+
 一键基线（复用上面的发版门禁，并补 gated IT 与有界 soak）：
 
 ```bash

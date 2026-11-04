@@ -33,6 +33,7 @@ RUN_CLIENT_SDK=0
 RUN_RECOVERY_READINESS=0
 START_LOCAL_RUNTIME=0
 USE_OFFICIAL_IMAGES=0
+RUN_JAR_BLACKBOX=0
 
 usage() {
   cat <<'EOF'
@@ -40,9 +41,11 @@ Usage: ./scripts/verify-release.sh [options]
 
 Default gates:
   project documentation + API contract helper + shell syntax + diff/secret checks
-  mvn clean test
+  mvn clean verify (tests + packaging)
+  dependency version convergence
   WebUI npm ci, lint, Vitest, build
   Maven -Pwebui release package + embedded bundle integrity
+  release artifact contract (manifest/checksums/convergence/embedded WebUI)
   full Playwright suite
   Helm lint/template
   Docker image build (mainland-China mirror first)
@@ -53,6 +56,8 @@ Options:
       --skip-helm         Skip Helm lint/template
       --skip-docker       Skip Docker image build
       --official-images   Use official Docker Hub base images
+      --with-jar-blackbox Start the packaged fat jar against real PostgreSQL
+                          + mock provider (Flyway/health/APIs/static/graceful)
       --with-runtime-e2e  Run scripts/e2e-test.sh against BASE_URL
       --with-goldenset    Run retrieval goldenset against BASE_URL
       --with-quality-regression
@@ -106,6 +111,7 @@ while [[ $# -gt 0 ]]; do
     --with-openai-sdk) RUN_OPENAI_SDK=1; shift ;;
     --with-client-sdk) RUN_CLIENT_SDK=1; shift ;;
     --with-recovery-readiness) RUN_RECOVERY_READINESS=1; shift ;;
+    --with-jar-blackbox) RUN_JAR_BLACKBOX=1; shift ;;
     --with-local-runtime)
       START_LOCAL_RUNTIME=1
       RUN_RUNTIME_E2E=1
@@ -188,7 +194,7 @@ skip_gate() {
 
 require_commands() {
   local command_name
-  for command_name in git mvn npm npx node curl bash rg; do
+  for command_name in git mvn npm npx node curl bash rg python3 java; do
     command -v "$command_name" >/dev/null || {
       echo "Missing required command: $command_name"
       return 1
@@ -248,6 +254,7 @@ webui_build() {
 
 check_embedded_webui_bundle() {
   local bundle_dir="spring-ai-rag-core/src/main/resources/static/webui"
+  local dist_dir="spring-ai-rag-webui/dist"
   local index_file="$bundle_dir/index.html"
   local public_path relative_path asset_path
   local referenced=0
@@ -256,6 +263,18 @@ check_embedded_webui_bundle() {
     echo "Missing embedded WebUI index: $index_file"
     return 1
   }
+
+  # dist 是构建事实来源；只检查 index 引用会让过期 hash chunk、缺失的字体等
+  # 历史残留混进 jar。这里要求整棵树逐字节一致。
+  [[ -d "$dist_dir" ]] || {
+    echo "Missing WebUI dist build: $dist_dir"
+    return 1
+  }
+  if ! diff -r "$dist_dir" "$bundle_dir" >"$WORK_LOG_DIR/embedded-webui.diff" 2>&1; then
+    echo "Embedded WebUI bundle differs from dist:"
+    head -20 "$WORK_LOG_DIR/embedded-webui.diff"
+    return 1
+  fi
 
   while IFS= read -r public_path; do
     referenced=1
@@ -547,7 +566,8 @@ run_gate "Client consumer contract" ./scripts/verify-client-consumer-contract.sh
 run_gate "Git diff check" git diff --check
 run_gate "Release versions" check_release_versions
 run_gate "Secret scan" check_secrets
-run_gate "Maven full test" mvn clean test
+run_gate "Maven full verify" mvn -B clean verify
+run_gate "Dependency versions" node scripts/verify-dependency-versions.mjs
 
 if [[ "$RUN_NPM_CI" == "1" ]]; then
   run_gate "WebUI npm ci" webui_npm_ci
@@ -560,6 +580,14 @@ run_gate "WebUI build" webui_build
 run_gate "Maven webui package" \
   mvn package -pl spring-ai-rag-core -am -Pwebui -DskipTests
 run_gate "Embedded WebUI bundle" check_embedded_webui_bundle
+run_gate "Release artifact contract" python3 scripts/verify-release-artifact.py --build
+
+if [[ "$RUN_JAR_BLACKBOX" == "1" ]]; then
+  run_gate "Jar black-box startup" \
+    python3 scripts/verify-release-artifact.py --blackbox --skip-convergence
+else
+  skip_gate "Jar black-box startup" "enable with --with-jar-blackbox"
+fi
 
 if [[ "$RUN_PLAYWRIGHT" == "1" ]]; then
   run_gate "Playwright full suite" playwright_suite

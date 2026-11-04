@@ -71,14 +71,37 @@ it incurs no real-LLM cost. The additive SDK quickstart and disposable
 PostgreSQL/Flyway recovery checks are opt-in release gates:
 `scripts/verify-release.sh --with-client-sdk --with-recovery-readiness`.
 
+The release artifact itself is a gate, not just “it compiles”:
+
+- `scripts/verify-release.sh` runs `mvn clean verify`, `verify-dependency-versions.mjs`,
+  the `-Pwebui` package, and `scripts/verify-release-artifact.py --build`. The latter
+  checks fat-jar zip CRCs, the manifest (`Main-Class` / `Start-Class` /
+  `Implementation-Version`), `SHA256SUMS`, nested module jars against local `target`
+  bytes, unique runtime coordinates, and byte equality across WebUI `dist/`, the
+  committed embedded bundle, and the jar; stale hashed assets left in the jar fail.
+- `--with-jar-blackbox` starts the packaged fat jar (not an IDE or
+  `spring-boot:run`) against real PostgreSQL + a mock provider: Flyway V1..V73 applied
+  in order with no failures, `/actuator/health` UP, Collection/Document/embedding/search
+  usable, `/webui` serving the entry page, `theme-init.js`/favicon with correct
+  content types and bodies (static scripts never degrade to HTML), and graceful
+  shutdown on SIGTERM. Requires local PostgreSQL (`psql`).
+- `scripts/verify-container-image.sh` additionally asserts in-container Flyway order
+  and latest version, WebUI static content types, and `docker stop` completing
+  gracefully within `stop_grace_period`.
+- `scripts/verify-security-upgrade-path.py` also asserts the V70 baseline stops at
+  V70 and the upgrade applies V1..latest in order with contiguous `installed_rank`,
+  no failures, and no duplicates, ruling out half-migrated states.
+
 Dependency-resilience/recovery releases additionally require `python3 scripts/verify-dependency-recovery-e2e.py`
 for actual HTTP faults, mixed load, hard/graceful restarts and real dump/restore. Set `DEPENDENCY_RECOVERY_K6_IMAGE`
 to include the k6 normal-load hard gate. Neither migration readiness nor a mock upstream proves real-model quality.
 See [Backup And Restore](backup-restore.md) for privacy and isolated traffic-cutover boundaries and
 the [Testing Guide](testing-guide.md) for the full matrix.
 
-- [x] `mvn clean test`
+- [x] `mvn clean verify`
 - [x] `mvn package -pl spring-ai-rag-core -am -Pwebui -DskipTests`
+- [x] `scripts/verify-release-artifact.py --build` (manifest/checksums/embedded WebUI/convergence)
+- [x] `scripts/verify-release-artifact.py --blackbox` (packaged-jar black-box startup)
 - [x] WebUI lint, full Vitest, and production build
 - [x] Full Playwright suite
 - [x] Helm lint/template and Docker image build

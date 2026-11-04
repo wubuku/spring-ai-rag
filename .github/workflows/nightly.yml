@@ -220,10 +220,21 @@ jobs:
       # demo 不在根 reactor：先 install 根模块，再单独打包 demo jar。
       # `rag_local_stack` 发现 jar 比源码新会跳过这一步，所以这里的构建是
       # 幂等的预热，而不是另一条真值来源。
-      - name: Build modules and demo jar
+      # -Pwebui 同时重建 WebUI，让后续发版产物门禁校验 jar 内资源与 dist/源码一致。
+      - name: Build modules, WebUI and demo jar
         run: |
-          mvn -q -B -DskipTests install
+          npm --prefix spring-ai-rag-webui ci --no-audit --no-fund
+          mvn -q -B -DskipTests -Pwebui install
           mvn -q -B -DskipTests -f demos/demo-basic-rag/pom.xml package
+
+      # 发版产物契约 + 打包 fat jar 黑盒启动：manifest/checksums/依赖收敛/
+      # 内嵌 WebUI 一致性、Flyway V1..V73、health/API/静态 content-type/优雅停机。
+      - name: Release artifact contract and jar black-box startup
+        run: |
+          set -o pipefail
+          mkdir -p .verification/nightly
+          python3 scripts/verify-release-artifact.py --blackbox 2>&1 \
+            | tee .verification/nightly/release-artifact.log
 
       # 四个场景：摄入/嵌入任务 SIGKILL、批量上传 SIGKILL、聊天 SSE SIGKILL、
       # 聊天幂等 SIGKILL。每个场景都断言最终收敛（任务不永久 INDEXING、

@@ -6,7 +6,9 @@
 #   2. 运行时非 root、无内置密钥、无 .env、基础镜像非 latest、内置 HEALTHCHECK；
 #   3. compose 默认配置（postgresql,prod + RAG_SECURITY_ENABLED=true）下：
 #      健康检查 UP、未认证 401、带 root key 的 search 成功；
-#   4. 只读根文件系统、/tmp 临时盘、no-new-privileges、cap_drop=ALL 生效。
+#   4. 容器内 Flyway 顺序/最新版本、WebUI 静态 content-type；
+#   5. 只读根文件系统、/tmp 临时盘、no-new-privileges、cap_drop=ALL 生效；
+#   6. docker stop 在 stop_grace_period 内优雅退出。
 #
 # 用法：
 #   ./scripts/verify-container-image.sh                # 全新构建并烟测
@@ -245,8 +247,58 @@ check "带 root key 的 search 成功" \
 READONLY=$(docker inspect "${PROJECT}-app" --format '{{.HostConfig.ReadonlyRootfs}}')
 check "根文件系统只读" "$([[ "$READONLY" == "true" ]] && echo 0 || echo 1)" "$READONLY"
 
+# ---------- 静态资源：容器内 WebUI 不能退化成 HTML/JSON ----------
 TMPFS=$(docker inspect "${PROJECT}-app" --format '{{json .HostConfig.Tmpfs}}')
 check "/tmp 临时盘已挂载" "$([[ "$TMPFS" == *"/tmp"* ]] && echo 0 || echo 1)" "$TMPFS"
+
+LATEST_MIGRATION_VERSION=$(ls spring-ai-rag-core/src/main/resources/db/migration/V*__*.sql \
+  | sed -E 's/.*V([0-9]+)__.*/\1/' | sort -n | tail -1)
+
+FLYWAY_FAILED=$(docker exec "${PROJECT}-db" bash -c \
+  'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "SELECT count(*) FROM flyway_schema_history WHERE NOT success"' \
+  2>/dev/null | tr -d '[:space:]')
+FLYWAY_COUNT=$(docker exec "${PROJECT}-db" bash -c \
+  'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "SELECT count(*) FROM flyway_schema_history"' \
+  2>/dev/null | tr -d '[:space:]')
+FLYWAY_MAX_RANK=$(docker exec "${PROJECT}-db" bash -c \
+  'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "SELECT max(installed_rank) FROM flyway_schema_history"' \
+  2>/dev/null | tr -d '[:space:]')
+FLYWAY_MAX_VERSION=$(docker exec "${PROJECT}-db" bash -c \
+  'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "SELECT max(version::int) FROM flyway_schema_history"' \
+  2>/dev/null | tr -d '[:space:]')
+check "容器内 Flyway 无失败迁移" \
+  "$([[ "$FLYWAY_FAILED" == "0" ]] && echo 0 || echo 1)" "failed=$FLYWAY_FAILED"
+check "容器内 Flyway installed_rank 连续" \
+  "$([[ "$FLYWAY_COUNT" == "$FLYWAY_MAX_RANK" ]] && echo 0 || echo 1)" \
+  "count=$FLYWAY_COUNT max_rank=$FLYWAY_MAX_RANK"
+check "容器内 Flyway 已应用最新迁移 V${LATEST_MIGRATION_VERSION}" \
+  "$([[ "$FLYWAY_MAX_VERSION" == "$LATEST_MIGRATION_VERSION" ]] && echo 0 || echo 1)" \
+  "db=$FLYWAY_MAX_VERSION source=$LATEST_MIGRATION_VERSION"
+
+WEBUI_CODE=$(curl -s -o "$LOG_DIR/webui-index.html" -w '%{http_code}' \
+  "http://127.0.0.1:$APP_PORT/webui/")
+WEBUI_BODY=$(cat "$LOG_DIR/webui-index.html" 2>/dev/null || true)
+check "容器 /webui/ 返回真实入口页" \
+  "$([[ "$WEBUI_CODE" == "200" && "$WEBUI_BODY" == *"<title>spring-ai-rag WebUI</title>"* ]] \
+    && echo 0 || echo 1)" "code=$WEBUI_CODE body=${WEBUI_BODY:0:80}"
+
+curl -s -D "$LOG_DIR/theme-init.headers" -o "$LOG_DIR/theme-init.js" \
+  "http://127.0.0.1:$APP_PORT/webui/theme-init.js"
+THEME_TYPE=$(grep -i '^content-type:' "$LOG_DIR/theme-init.headers" \
+  | head -1 | tr -d '\r' | cut -d' ' -f2-)
+THEME_BODY=$(cat "$LOG_DIR/theme-init.js" 2>/dev/null || true)
+check "容器 theme-init.js 以 JS 返回且不是 HTML" \
+  "$([[ "$THEME_TYPE" == *javascript* && "$THEME_BODY" != *"<!DOCTYPE html>"* ]] \
+    && echo 0 || echo 1)" "type=$THEME_TYPE body=${THEME_BODY:0:60}"
+
+curl -s -D "$LOG_DIR/favicon.headers" -o "$LOG_DIR/favicon.svg" \
+  "http://127.0.0.1:$APP_PORT/webui/favicon.svg"
+FAVICON_TYPE=$(grep -i '^content-type:' "$LOG_DIR/favicon.headers" \
+  | head -1 | tr -d '\r' | cut -d' ' -f2-)
+FAVICON_BODY=$(cat "$LOG_DIR/favicon.svg" 2>/dev/null || true)
+check "容器 favicon.svg 以 SVG 返回" \
+  "$([[ "$FAVICON_TYPE" == *"image/svg+xml"* && "$FAVICON_BODY" == "<svg"* ]] \
+    && echo 0 || echo 1)" "type=$FAVICON_TYPE body=${FAVICON_BODY:0:40}"
 
 SECURITY_OPT=$(docker inspect "${PROJECT}-app" --format '{{json .HostConfig.SecurityOpt}}')
 check "no-new-privileges 生效" \
@@ -265,6 +317,20 @@ for _ in $(seq 1 60); do
 done
 check "容器 healthcheck 状态 healthy" \
   "$([[ "$HEALTH_STATUS" == "healthy" ]] && echo 0 || echo 1)" "$HEALTH_STATUS"
+
+# ---------- 优雅停机：compose 的 stop_grace_period 必须覆盖 graceful shutdown ----------
+STOP_START=$(date +%s)
+docker stop -t 35 "${PROJECT}-app" > "$LOG_DIR/docker-stop.log" 2>&1
+STOP_SECONDS=$(( $(date +%s) - STOP_START ))
+STOP_EXIT=$(docker inspect "${PROJECT}-app" --format '{{.State.ExitCode}}' 2>/dev/null || echo "")
+STOP_LOG=$(docker logs "${PROJECT}-app" 2>&1 | tail -60 || true)
+check "容器 STOP 后优雅退出（exit 0/143，未超时强杀）" \
+  "$([[ "$STOP_EXIT" == "0" || "$STOP_EXIT" == "143" ]] && echo 0 || echo 1)" \
+  "exit=$STOP_EXIT elapsed=${STOP_SECONDS}s"
+check "容器日志确认进入优雅停机" \
+  "$([[ "$STOP_LOG" == *"Commencing graceful shutdown"* \
+      || "$STOP_LOG" == *"Graceful shutdown complete"* ]] && echo 0 || echo 1)" \
+  "tail=${STOP_LOG: -160}"
 
 echo
 if [[ "$FAILED" -gt 0 ]]; then

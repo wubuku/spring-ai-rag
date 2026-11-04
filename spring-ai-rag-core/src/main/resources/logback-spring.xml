@@ -37,6 +37,9 @@
         </root>
 
         <logger name="org.springframework" level="WARN"/>
+        <!-- 优雅停机事件是发版验收/运维证据，避免被 org.springframework 的 WARN 静默。 -->
+        <logger name="org.springframework.boot.web.embedded.tomcat.GracefulShutdown" level="INFO"/>
+        <logger name="org.springframework.boot.web.embedded.netty.GracefulShutdown" level="INFO"/>
         <logger name="org.hibernate" level="WARN"/>
         <logger name="com.springairag" level="INFO"/>
     </springProfile>
@@ -103,6 +106,8 @@
 
         <!-- Spring/JPA framework log noise reduction (WARN and above only) -->
         <logger name="org.springframework" level="WARN"/>
+        <logger name="org.springframework.boot.web.embedded.tomcat.GracefulShutdown" level="INFO"/>
+        <logger name="org.springframework.boot.web.embedded.netty.GracefulShutdown" level="INFO"/>
         <logger name="org.hibernate" level="WARN"/>
         <!-- RAG business logs at INFO level -->
         <logger name="com.springairag" level="INFO"/>

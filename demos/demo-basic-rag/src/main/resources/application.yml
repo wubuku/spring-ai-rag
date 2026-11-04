@@ -5,6 +5,7 @@
 
 server:
   port: 8081
+  shutdown: graceful
   tomcat:
     max-swallow-size: ${SERVER_MAX_SWALLOW_SIZE:100MB}
   compression:
@@ -15,6 +16,9 @@ server:
 spring:
   application:
     name: customer-service-bot
+
+  lifecycle:
+    timeout-per-shutdown-phase: ${SHUTDOWN_TIMEOUT_PER_PHASE:30s}
 
   main:
     allow-bean-definition-overriding: true
