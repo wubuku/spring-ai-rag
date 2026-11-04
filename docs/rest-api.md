@@ -614,6 +614,25 @@ Executable gate: `node scripts/verify-error-response-contract.mjs` censuses ever
 error exit in source (rules R1–R5); the live-process acceptance run is documented
 in [testing-guide.md](testing-guide.md).
 
+#### Failure codes for dependency saturation and upload boundaries
+
+All of these use the same `ErrorResponse` envelope and carry
+`X-RAG-Failure-Class`:
+
+| Condition | Status | `error` | `failureClass` | `Retry-After` |
+|-----------|--------|---------|----------------|---------------|
+| Pool exhaustion / database temporarily unreachable | 503 | `DATABASE_UNAVAILABLE` | `DEPENDENCY_UNAVAILABLE` | `5` |
+| Statement cancelled by `statement_timeout` | 504 | `DATABASE_TIMEOUT` | `TIMEOUT` | `1` |
+| Single file or whole request over the multipart limit | 413 | `PAYLOAD_TOO_LARGE` | `CLIENT_REQUEST` | none |
+| Multipart temp directory full/read-only | 503 | `UPLOAD_STORAGE_UNAVAILABLE` | `DEPENDENCY_UNAVAILABLE` | `5` |
+| Malformed multipart (not size/storage) | 400 | `BAD_REQUEST` | `CLIENT_REQUEST` | none |
+
+Pool exhaustion is **bounded queueing**: at most `DB_CONNECTION_TIMEOUT_MS`
+(10 s default), never "read everything then reject" and never an unbounded hang.
+An oversize upload is rejected by the container while parsing, so the controller
+never receives the file. Measured evidence is in
+[capacity-and-scale.md](capacity-and-scale.md#310-saturation-and-degradation-semantics-measured-2026-11).
+
 ---
 
 ## OpenAI Chat Completions Compatibility Preview

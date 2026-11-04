@@ -65,6 +65,38 @@ Streaming chat attempt failed operation=chat.stream provider=primary traceId=...
 | 租户越权 | `RAG business error: [FORBIDDEN]` / `[ACCESS_DENIED]`，日志带 `principalId` | `rag.integration.requests{status="403"}`（如已开启集成观测） |
 | 索引失败 | `Embedding job attempt failed ... jobId/documentId/profileId/attempt` | `rag.upstream.failures{operation="embedding.job"}`、`rag.document-processing.stuck` |
 | 检索变慢 | `operation=embedding.retrieval` 耗时日志 | `rag.advisor.*.duration`、`rag.slow_query.duration`、`rag.response.time{outcome="success"}` |
+| 连接池耗尽 | `Database unavailable:`、`hikaricp.connections.active` 达上限、`Connection is not available` | `hikaricp.connections.pending` > 0、`hikaricp.connections.active` = max；响应 503 + `Retry-After: 5` |
+| 慢查询/锁等待 | `Database query timed out:`、`canceling statement due to statement timeout` | 响应 504 `DATABASE_TIMEOUT`；`pg_stat_activity` 中 `state=active` 且 `wait_event_type=Lock` |
+| 数据库不可达 | `Connection refused` / `Could not open JPA EntityManager` | `/actuator/health` DOWN；请求 503 `DATABASE_UNAVAILABLE` |
+| 上传被拒 | `Upload rejected by multipart size limit` | 413 `PAYLOAD_TOO_LARGE`，`Retry-After` 不设置 |
+| 上传存储不可写 | `Multipart temp storage failed` | 503 `UPLOAD_STORAGE_UNAVAILABLE` + `Retry-After: 5`；检查 multipart location 所在磁盘 |
+
+### 4.1 数据库饱和与不可达
+
+**预期语义**（2026-11 实测，详见 [capacity-and-scale-zh-CN.md](capacity-and-scale-zh-CN.md#310-资源饱和与降级语义2026-11-实测)）：
+
+- 池耗尽：请求在 Hikari 队列中最多等待 `DB_CONNECTION_TIMEOUT_MS`（默认 10 s），
+  然后返回 **503 `DATABASE_UNAVAILABLE`**、`X-RAG-Failure-Class: DEPENDENCY_UNAVAILABLE`、
+  `Retry-After: 5`。**不会变成 500，也不会无限挂起。**
+- 慢查询/锁等待：被 `DB_STATEMENT_TIMEOUT_MS`（默认 30 s）截断，返回
+  **504 `DATABASE_TIMEOUT`**、`Retry-After: 1`。
+- 数据库临时不可达：同样 503；数据库恢复后**无需重启**，连接池自动重建连接。
+- 健康检查：`/actuator/health` 因 `db` 指标 DOWN；Helm `readiness` 会摘流量，
+  `liveness` 只含 `livenessState`，**不会因此重启 Pod**。readiness 探针超时必须
+  大于 `DB_CONNECTION_TIMEOUT_MS`（Helm 默认 12 s vs 10 s）。
+
+**排查顺序**：
+
+1. 看响应：503 说明“依赖暂时不可用”，504 说明“单条语句超时”。不要按 500 处理。
+2. 看 `hikaricp.connections.active/pending`：pending 持续增长 = 池太小或连接被占住。
+3. 查 `pg_stat_activity`：确认是连接数、锁等待（`wait_event_type=Lock`）还是查询本身慢。
+4. 慢查询占住连接时，先定位持锁会话；**不要**盲目重启应用（重启会丢掉正在执行的请求，
+   且不解决数据库侧持锁）。
+5. 数据库恢复后确认 `/actuator/health` 自动回 UP；若仍 DOWN，检查 Hikari 是否被
+   `max-lifetime` 之外的配置卡住（如错误凭据）。
+
+**禁止**：把 `DB_STATEMENT_TIMEOUT_MS=0` 当作常规修复；这会恢复“慢查询永久占用连接”。
+维护窗口临时关闭后应改回。
 
 ## 5. 跨线程与调度
 

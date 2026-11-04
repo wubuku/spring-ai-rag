@@ -65,6 +65,47 @@ Streaming chat attempt failed operation=chat.stream provider=primary traceId=...
 | Tenant forbidden | `RAG business error: [FORBIDDEN]` / `[ACCESS_DENIED]`, log carries `principalId` | `rag.integration.requests{status="403"}` (when integration observation is enabled) |
 | Indexing failure | `Embedding job attempt failed ... jobId/documentId/profileId/attempt` | `rag.upstream.failures{operation="embedding.job"}`, `rag.document-processing.stuck` |
 | Retrieval slow | `operation=embedding.retrieval` latency logs | `rag.advisor.*.duration`, `rag.slow_query.duration`, `rag.response.time{outcome="success"}` |
+| Pool exhaustion | `Database unavailable:`, `hikaricp.connections.active` at max, `Connection is not available` | `hikaricp.connections.pending` > 0, `hikaricp.connections.active` = max; response 503 + `Retry-After: 5` |
+| Slow query / lock wait | `Database query timed out:`, `canceling statement due to statement timeout` | Response 504 `DATABASE_TIMEOUT`; `pg_stat_activity` rows with `state=active` and `wait_event_type=Lock` |
+| Database unreachable | `Connection refused` / `Could not open JPA EntityManager` | `/actuator/health` DOWN; requests 503 `DATABASE_UNAVAILABLE` |
+| Upload rejected | `Upload rejected by multipart size limit` | 413 `PAYLOAD_TOO_LARGE`, no `Retry-After` |
+| Upload storage unavailable | `Multipart temp storage failed` | 503 `UPLOAD_STORAGE_UNAVAILABLE` + `Retry-After: 5`; check the disk behind the multipart location |
+
+### 4.1 Database Saturation And Unavailability
+
+**Expected semantics** (measured 2026-11; see
+[capacity-and-scale.md](capacity-and-scale.md#310-saturation-and-degradation-semantics-measured-2026-11)):
+
+- Pool exhaustion: a request waits at most `DB_CONNECTION_TIMEOUT_MS` (10 s default)
+  in the Hikari queue, then returns **503 `DATABASE_UNAVAILABLE`**,
+  `X-RAG-Failure-Class: DEPENDENCY_UNAVAILABLE`, `Retry-After: 5`. It **does not become
+  500 and does not hang forever**.
+- Slow query / lock wait: cancelled by `DB_STATEMENT_TIMEOUT_MS` (30 s default) and
+  returns **504 `DATABASE_TIMEOUT`**, `Retry-After: 1`.
+- Database temporarily unreachable: also 503; when it returns, the pool reconnects
+  **without an application restart**.
+- Health: `/actuator/health` is DOWN because of the `db` indicator; Helm `readiness`
+  removes the pod from the Service, while `liveness` contains only `livenessState` and
+  **does not restart the pod**. The readiness probe timeout must exceed
+  `DB_CONNECTION_TIMEOUT_MS` (Helm default 12 s vs 10 s).
+
+**Triage order**:
+
+1. Read the status: 503 means "dependency temporarily unavailable", 504 means "one
+   statement timed out". Do not treat either as a 500.
+2. Check `hikaricp.connections.active/pending`: pending growing means the pool is too
+   small or connections are held.
+3. Inspect `pg_stat_activity`: distinguish connection count, lock waits
+   (`wait_event_type=Lock`) and genuinely slow queries.
+4. When a slow query holds the connection, find the lock-holding session first. **Do not**
+   blindly restart the app: that drops in-flight requests and does not release a
+   database-side lock.
+5. After the database recovers, confirm `/actuator/health` returns UP automatically. If
+   it stays DOWN, check for non-retryable configuration such as wrong credentials.
+
+**Do not** treat `DB_STATEMENT_TIMEOUT_MS=0` as a routine fix; it restores "slow query
+holds the connection forever". Turn it off only for a maintenance window and restore it
+afterwards.
 
 ## 5. Cross-Thread And Scheduling
 

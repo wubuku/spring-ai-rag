@@ -2,6 +2,7 @@ package com.springairag.core.controller;
 
 import com.springairag.api.dto.ErrorResponse;
 import com.springairag.api.enums.ErrorCode;
+import com.springairag.core.exception.DatabaseFailureClassifier;
 import com.springairag.core.exception.RagException;
 import com.springairag.core.exception.ChatTurnInProgressException;
 import com.springairag.core.filter.RequestTraceFilter;
@@ -20,6 +21,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.transaction.CannotCreateTransactionException;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -29,10 +31,14 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.MultipartException;
 import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
+import java.io.IOException;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Global exception handler — RFC 7807 Problem Detail.
@@ -199,9 +205,115 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(DataAccessException.class)
     public ResponseEntity<ErrorResponse> handleDataAccess(DataAccessException e,
                                                           HttpServletRequest request) {
-        log.error("Database error: {}", e.getMessage(), e);
-        return buildResponse(HttpStatus.INTERNAL_SERVER_ERROR, "DATABASE_ERROR",
-                "Database operation failed", request);
+        return buildDatabaseFailureResponse(e, request);
+    }
+
+    /**
+     * Spring's transaction manager wraps a failure to borrow a connection as a
+     * {@link org.springframework.transaction.CannotCreateTransactionException},
+     * which is a {@code TransactionException}, <em>not</em> a
+     * {@code DataAccessException}. Pool exhaustion therefore bypassed the
+     * data-access branch entirely and was reported as an internal 500
+     * ("Could not open JPA EntityManager for transaction"). Routing it through
+     * the same classifier gives saturation the same 503 contract as any other
+     * unavailable database.
+     */
+    @ExceptionHandler(CannotCreateTransactionException.class)
+    public ResponseEntity<ErrorResponse> handleCannotCreateTransaction(
+            CannotCreateTransactionException e, HttpServletRequest request) {
+        return buildDatabaseFailureResponse(e, request);
+    }
+
+    private ResponseEntity<ErrorResponse> buildDatabaseFailureResponse(
+            Throwable error, HttpServletRequest request) {
+        // A database that is unreachable or has no free pool connection is a
+        // dependency outage, not a bug in this request. Answering 500 here made
+        // clients stop retrying exactly when retrying was the correct action,
+        // and made saturation look like an internal error in the metrics.
+        DatabaseFailureClassifier.Kind kind = DatabaseFailureClassifier.classify(error);
+        switch (kind) {
+            case UNAVAILABLE -> {
+                log.warn("Database unavailable: {}", ErrorMessageSanitizer.sanitize(error.getMessage()));
+                return buildResponse(HttpStatus.SERVICE_UNAVAILABLE, "DATABASE_UNAVAILABLE",
+                        "Database temporarily unavailable; retry later", request, 5);
+            }
+            case TIMEOUT -> {
+                log.warn("Database query timed out: {}", ErrorMessageSanitizer.sanitize(error.getMessage()));
+                return buildResponse(HttpStatus.GATEWAY_TIMEOUT, "DATABASE_TIMEOUT",
+                        "Database query timed out", request, 1);
+            }
+            default -> {
+                log.error("Database operation failed: {}", error.getMessage(), error);
+                return buildResponse(HttpStatus.INTERNAL_SERVER_ERROR, "DATABASE_ERROR",
+                        "Database operation failed", request);
+            }
+        }
+    }
+
+    // ==================== Multipart limits / upload storage ====================
+
+    /**
+     * A body larger than {@code spring.servlet.multipart.max-file-size} or
+     * {@code max-request-size}; the container rejects it while parsing, before
+     * any controller sees the file. 413 is the status clients already retry for
+     * payload limits, and it must not be reported as an internal error.
+     */
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ErrorResponse> handleMaxUploadSize(MaxUploadSizeExceededException e,
+                                                             HttpServletRequest request) {
+        log.warn("Upload rejected by multipart size limit: {}", e.getMessage());
+        return buildResponse(HttpStatus.PAYLOAD_TOO_LARGE, "PAYLOAD_TOO_LARGE",
+                "Uploaded payload exceeds the configured multipart size limit", request);
+    }
+
+    /**
+     * Any other multipart parse failure.
+     *
+     * <p>Two very different causes arrive here: a malformed request (client
+     * error) and a temp directory that is full or read-only (server storage
+     * outage). Reporting both as 500 hid the second from operators, and
+     * retrying could never fix it.</p>
+     */
+    @ExceptionHandler(MultipartException.class)
+    public ResponseEntity<ErrorResponse> handleMultipart(MultipartException e,
+                                                         HttpServletRequest request) {
+        if (isUploadStorageFailure(e)) {
+            log.error("Multipart temp storage failed: {}", e.getMessage(), e);
+            return buildResponse(HttpStatus.SERVICE_UNAVAILABLE, "UPLOAD_STORAGE_UNAVAILABLE",
+                    "Upload storage is temporarily unavailable; retry later", request, 5);
+        }
+        log.warn("Malformed multipart request: {}", e.getMessage());
+        return buildResponse(HttpStatus.BAD_REQUEST, "BAD_REQUEST",
+                "Malformed multipart request", request);
+    }
+
+    /**
+     * Walks the cause chain for the IO failures that mean the temp store cannot
+     * accept bytes. Message matching is confined to {@link IOException}s, where
+     * these strings come from the JDK/OS; anything else stays a client 400.
+     */
+    private static boolean isUploadStorageFailure(Throwable throwable) {
+        Throwable current = throwable;
+        int depth = 0;
+        while (current != null && depth++ < 16) {
+            if (current instanceof IOException) {
+                String message = current.getMessage();
+                if (message != null) {
+                    String normalized = message.toLowerCase(Locale.ROOT);
+                    if (normalized.contains("no space left")
+                            || normalized.contains("read-only")
+                            || normalized.contains("permission denied")
+                            || normalized.contains("not a directory")
+                            || normalized.contains("too many open files")
+                            || normalized.contains("disk quota")
+                            || normalized.contains("file system is full")) {
+                        return true;
+                    }
+                }
+            }
+            current = current.getCause();
+        }
+        return false;
     }
 
     @ExceptionHandler(ApiCapabilitySupport.InvalidPersistedCapabilitiesException.class)
@@ -295,6 +407,17 @@ public class GlobalExceptionHandler {
      */
     private ResponseEntity<ErrorResponse> buildResponse(HttpStatus status, String error,
                                                          String detail, HttpServletRequest request) {
+        return buildResponse(status, error, detail, request, null);
+    }
+
+    /**
+     * @param retryAfterSeconds when non-null, advertises the dependency-recovery
+     *     window on retryable failures; {@code Retry-After} is what lets a
+     *     saturated client back off instead of hammering the pool.
+     */
+    private ResponseEntity<ErrorResponse> buildResponse(HttpStatus status, String error,
+                                                         String detail, HttpServletRequest request,
+                                                         Integer retryAfterSeconds) {
         ErrorResponse body = ErrorResponse.builder()
                 .error(error)
                 .status(status.value())
@@ -322,9 +445,13 @@ public class GlobalExceptionHandler {
             body.setTitle(code.getTitle());
         }
 
-        return ApiKeyRotationHttpPolicy.apply(
-                        ResponseEntity.status(status),
-                        request)
+        ResponseEntity.BodyBuilder builder = ApiKeyRotationHttpPolicy.apply(
+                ResponseEntity.status(status),
+                request);
+        if (retryAfterSeconds != null) {
+            builder.header(HttpHeaders.RETRY_AFTER, String.valueOf(retryAfterSeconds));
+        }
+        return builder
                 .contentType(PROBLEM_JSON)
                 .body(body);
     }

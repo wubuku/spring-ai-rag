@@ -284,6 +284,52 @@ Spring Boot 进程 + mock provider，默认端口 18088/18089，有界并发，�
    同时把 emitter 超时从 `0`（永不超时）改为 `rag.timeout.chat-stream-ms`，避免上游
    静默时连接、上游 socket 与 admission 名额被无限占用。
 
+### 3.10 资源饱和与降级语义（2026-11 实测）
+
+复现：`python3 scripts/verify-resource-saturation-e2e.py`（一次性 pgvector 容器 + 真实
+Spring Boot 进程 + mock provider；`DB_POOL_SIZE=2`、`DB_CONNECTION_TIMEOUT_MS=1500`、
+`DB_STATEMENT_TIMEOUT_MS=3000` 把等待窗口压缩到可测尺度）。
+
+| 场景 | 实测语义 |
+|------|----------|
+| 连接池耗尽（两个请求占满池） | 第 3 个请求在 **1.51 s** 后返回 **503 `DATABASE_UNAVAILABLE`**，`X-RAG-Failure-Class: DEPENDENCY_UNAVAILABLE`，`Retry-After: 5`；**有界排队，不是 500、不是挂死** |
+| 慢查询/锁等待 | 单个请求在 **3.02 s** 被 `statement_timeout` 截断，返回 **504 `DATABASE_TIMEOUT`**，`X-RAG-Failure-Class: TIMEOUT`，`Retry-After: 1` |
+| 池释放后恢复 | 无需重启；请求回到 200，健康检查 UP，`hikaricp.connections.active=0`（无泄漏） |
+| 数据库临时不可达 | **1.51 s** 返回 503 `DATABASE_UNAVAILABLE`；`/actuator/health` 为 DOWN |
+| 数据库恢复 | 无需重启自动恢复：请求 200、健康检查 UP；日志无 `Apparent connection leak detected` |
+
+**健康检查分工**：Helm 的 `liveness` 组只含 `livenessState`，数据库饱和/不可达不会触发
+重启；`readiness` 组包含 `db`，池耗尽或数据库不可达时会 DOWN 并从 Service 摘流量。
+readiness 探针 `timeoutSeconds` 必须大于 `DB_CONNECTION_TIMEOUT_MS`（默认 10 s），
+否则被提前掐断的探针会在 Hikari 里留下等待者，反而加重饱和。
+
+**关键修复**（本轮）：
+
+1. 池耗尽经 `CannotCreateTransactionException` 抛出，原先绕过 `DataAccessException`
+   处理器、落到通用 500（`Could not open JPA EntityManager for transaction`）；
+   现在与数据库不可达共用同一分类器，统一 503 + `Retry-After`。
+2. 增加 `connection-init-sql: SET statement_timeout`，锁等待/慢查询不再永久占用连接。
+3. multipart 超限/临时目录不可写不再落 500：见 §3.11 与
+   [rest-api-zh-CN.md](rest-api-zh-CN.md#错误响应rfc-7807-problem-detail)。
+
+### 3.11 上传与存储边界（2026-11 实测）
+
+复现：`python3 scripts/verify-upload-boundaries-e2e.py`（真实进程，`max-file-size=2MB`、
+`max-request-size=2.5MB`、multipart location 指向可控临时目录）。
+
+| 场景 | 实测语义 |
+|------|----------|
+| 单文件超过 `max-file-size` | 容器在解析阶段拒绝，**0.01 s** 返回 **413 `PAYLOAD_TOO_LARGE`**，`X-RAG-Failure-Class: CLIENT_REQUEST`；控制器未收到文件 |
+| 单请求总量超过 `max-request-size` | **0.00 s** 返回 413 `PAYLOAD_TOO_LARGE` |
+| 5 路并发上传 | 全部 200，multipart 临时目录无残留 |
+| 客户端中断上传 | 2 s 内无残留临时文件，服务健康保持 UP |
+| multipart 临时目录不可写 | **503 `UPLOAD_STORAGE_UNAVAILABLE`**，`RETRY_AFTER: 5`，错误体不泄漏路径/内部类 |
+| PDF 超过 `rag.pdf.max-upload-bytes` | 在拷贝/转换前返回 400；4 路并发失败后 `pdf-import-*` 临时目录全部清理 |
+
+`server.tomcat.max-swallow-size` 默认抬到 100MB（与 `max-request-size` 一致），让常见
+超限请求仍能收到结构化 413，而不是被直接断连；吞掉的是丢弃字节，不占堆内存，但会
+消耗带宽。文本上传的拒绝路径只依赖文件元数据，不再用 `getBytes()` 先读完整文件。
+
 ## 4. 容量边界
 
 | 维度 | 现状 | 边界与建议 |
@@ -300,7 +346,7 @@ Spring Boot 进程 + mock provider，默认端口 18088/18089，有界并发，�
 | 导出 | 流式，单批 200 行，响应头给出批次数 | 内存不随行数线性增长；受网络与客户端消费速度限制。超大 Collection 建议在低峰导出 |
 | 文档列表关键词 | `LOWER(title) LIKE '%kw%'`；pg_trgm 可用时走 `idx_rag_documents_title_trgm` | 5k 文档：有索引 SQL 0.103 ms、HTTP p50 4.2 ms；无索引 SQL 2.134 ms、HTTP p50 8.4 ms。**关键词 ≥3 字符**才能被 trigram 提取；1–2 字符仍全表扫描。`pg_trgm` 缺失时迁移只记 NOTICE 并降级为顺序扫描，不阻塞启动 |
 | 全文检索（检索链路） | pg_jieba / English FTS / pg_trgm 按能力自动选择 | 与上面的文档列表关键词是不同路径；5k 文档全文加权 p50 约 158 ms，主要成本是 embedding 调用 |
-| 连接池 | 默认 max=10 | 高并发检索/导入会先耗尽连接；需按并发调大并压测 |
+| 连接池 | core 默认 max=20 / min=5；四个 demo 默认 max=10 | 池耗尽时请求最多排队 `DB_CONNECTION_TIMEOUT_MS`（默认 10 s），随后 503 `DATABASE_UNAVAILABLE` + `Retry-After`；慢查询被 `DB_STATEMENT_TIMEOUT_MS`（默认 30 s）截断为 504。详见 §3.10 |
 | TTL 清理 | 1 万行 287 ms，分批 | 行数线性增长但批次有界；百万级建议缩短调度间隔而非单次放大批次 |
 
 ## 5. 已知限制

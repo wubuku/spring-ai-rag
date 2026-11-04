@@ -1596,6 +1596,7 @@ fat jar 中 `BOOT-INF/classes` 优先于依赖 jar，**core 的基础配置会�
 | `RAG_ROOT_API_KEY` | `rag.security.root-api-key` | **是** | 生效（四个 demo 均已声明） |
 | `POSTGRES_HOST` / `PORT` / `DATABASE` / `USER` / `PASSWORD` | `spring.datasource.*` | **是** | 生效（四个 demo 均已声明） |
 | `DB_POOL_SIZE` / `DB_POOL_MIN_IDLE` | `spring.datasource.hikari.maximum-pool-size` / `minimum-idle` | **是** | 生效（四个 demo 与 Helm ConfigMap 均已声明） |
+| `DB_CONNECTION_TIMEOUT_MS` / `DB_STATEMENT_TIMEOUT_MS` | `spring.datasource.hikari.connection-timeout` / `connection-init-sql` | **是** | 生效（四个 demo 均已声明） |
 | `SPRING_DATASOURCE_URL` | `spring.datasource.url` | 否（relaxed） | 生效（但会覆盖 `POSTGRES_*`） |
 | `RAG_EMBEDDING_API_KEY` / `BASE_URL` / `MODEL` / `DIMENSIONS` / `PROFILE_KEY` | `rag.embedding.*` | 否（relaxed） | 生效；`profile-key` 另显式声明以避免默认值随遮蔽丢失 |
 
@@ -1630,7 +1631,9 @@ spring:
       minimum-idle: ${DB_POOL_MIN_IDLE:5}
       idle-timeout: 300000
       max-lifetime: 1800000
-      connection-timeout: 10000
+      connection-timeout: ${DB_CONNECTION_TIMEOUT_MS:10000}
+      # 每条池连接初始化时设置语句上限；0 表示不限制（长迁移/大索引维护时使用）。
+      connection-init-sql: "SET statement_timeout = ${DB_STATEMENT_TIMEOUT_MS:30000}"
       leak-detection-threshold: 60000
       pool-name: rag-hikari
   flyway:
@@ -1645,8 +1648,17 @@ spring:
 | `minimum-idle` | `5` | 最小空闲连接 |
 | `idle-timeout` | `300000` | 空闲连接回收时间（ms） |
 | `max-lifetime` | `1800000` | 连接最大存活时间（ms） |
-| `connection-timeout` | `10000` | 获取连接超时（ms） |
+| `connection-timeout` | `10000` | 获取连接超时（ms）；池耗尽时请求最多排队这么久，随后 503 |
+| `connection-init-sql` | `SET statement_timeout = 30000` | 单条语句上限（ms），锁等待/慢查询不会无限挂起 |
 | `leak-detection-threshold` | `60000` | 连接泄漏检测时间（ms） |
+
+`connection-init-sql` 对池中每条连接生效，也包括 Flyway 启动迁移。大表索引构建等
+维护操作如果可能超过默认 30s，应在升级时设置 `DB_STATEMENT_TIMEOUT_MS=0`（关闭上限）
+或调大；日常请求路径不建议关闭。
+
+饱和下的响应语义（503/504、`Retry-After`、健康检查）见
+[capacity-and-scale-zh-CN.md](capacity-and-scale-zh-CN.md#310-资源饱和与降级语义2026-11-实测)
+与 [observability-runbook-zh-CN.md](observability-runbook-zh-CN.md#41-数据库饱和与不可达)。
 
 ## PostgreSQL 向量存储
 

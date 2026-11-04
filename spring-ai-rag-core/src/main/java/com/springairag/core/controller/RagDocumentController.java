@@ -1158,12 +1158,13 @@ public class RagDocumentController {
         );
 
         if (!isText && !file.isEmpty()) {
-            try {
-                file.getBytes();
-            } catch (Exception e) { // Best-effort: non-text files throw in getBytes(); mark as invalid
-                return new FileValidationResult(false, extension,
-                        "Unsupported file type: " + contentType + ", only text files supported (txt/md/json/xml/html/csv/log)");
-            }
+            // Do not call file.getBytes() here. It read the whole part into heap
+            // just to discover that a binary upload is unsupported; a 20 MB
+            // request therefore allocated 20 MB before being rejected. The
+            // rejection is purely metadata-based, so the bytes never need to be
+            // materialised.
+            return new FileValidationResult(false, extension,
+                    "Unsupported file type: " + contentType + ", only text files supported (txt/md/json/xml/html/csv/log)");
         }
         return new FileValidationResult(isText, extension, null);
     }

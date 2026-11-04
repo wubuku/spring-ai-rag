@@ -157,6 +157,8 @@ migrations, concurrency paths, backup tooling, or HTTP contracts.
 | SSE concurrency resource boundaries | `./scripts/verify-sse-concurrency.py --burst 20` | real PostgreSQL + Spring Boot + mock: 16 per key / 64 globally, request 17 gets HTTP 429 `TOO_MANY_REQUESTS` without queueing, exactly 2 heartbeat threads at peak plus RSS delta, admission lease reclaimed after client disconnect and upstream idle timeout; refuses `--burst > 64` |
 | Backup/restore drill | `./scripts/verify-backup-restore-drill.py` | seed real data → quiesce → `rag-backup.py backup` → verify → restore into a fresh DB → compare documents/vectors/collections/migration history/content fingerprint → health+search on the restored DB |
 | Security boundary full-entry regression | `./scripts/verify-security-boundary.py` | real PostgreSQL + mock provider: restricted NORMAL key cannot cross Collections or principals across search/chat/collections/upload/PDF-to-RAG/files tree·raw·preview/evaluation/feedback; path traversal rejected; root keeps the global view |
+| Resource saturation and degradation | `./scripts/verify-resource-saturation-e2e.py` | disposable pgvector container + real process: pool exhaustion → 503 `DATABASE_UNAVAILABLE` + `Retry-After: 5` (bounded queueing, not a hang), slow query → 504 `DATABASE_TIMEOUT`, database stop/start recovers to 200 without a restart, no connection leak, health DOWN→UP |
+| Upload and storage boundaries | `./scripts/verify-upload-boundaries-e2e.py` | real process: per-file/whole-request oversize → 413 `PAYLOAD_TOO_LARGE` (rejected while parsing), concurrent and aborted uploads leave no temp files, unwritable multipart directory → 503 `UPLOAD_STORAGE_UNAVAILABLE`, PDF over-limit 400 before reading plus `pdf-import-*` cleanup on failure |
 | API compatibility | `node scripts/verify-openapi-breaking-change.mjs --self-test`; `./scripts/verify-api-compatibility.sh` | removed operation/field/response, type change, newly required, removed enum value are breaking; added optional fields are not; baseline is `testdata/api-contract/openapi-baseline.json` |
 | Build reproducibility | `./mvnw -v` (pinned 3.9.14), `mvn -o -B -DskipTests compile`, `cd spring-ai-rag-webui && npm ci --dry-run` | wrapper version, offline build, lockfile consistency |
 
@@ -173,6 +175,12 @@ their defaults — the nightly soak once failed startup with
 `SCRAM-based authentication, but no password was provided` for exactly that reason.
 The precedence is pinned by `scripts/test-support/local-stack-env-self-test.py`, which
 runs with `scripts/verify-project-tests.sh` in the PR fast layer.
+
+The saturation script starts its own disposable `pgvector/pgvector:pg16` container on a
+random port and explicitly overrides the LocalStack connection settings, so its
+database stop/start drill never touches the day-to-day database referenced by `.env`.
+The upload script uses only a `rag_upload_*` temporary database and a controlled
+multipart temp directory, and cleans both up.
 
 The Flyway script only creates/drops `rag_flyway_*` temporary databases; the early
 version defaults to V30 and can be changed with `--early`. Before comparison it ignores

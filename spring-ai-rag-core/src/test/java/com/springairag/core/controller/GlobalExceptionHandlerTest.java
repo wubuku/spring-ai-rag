@@ -10,18 +10,24 @@ import jakarta.validation.ConstraintViolationException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataAccessException;
-import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.dao.QueryTimeoutException;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.jdbc.CannotGetJdbcConnectionException;
 import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.transaction.CannotCreateTransactionException;
 import org.springframework.validation.BeanPropertyBindingResult;
 import org.springframework.validation.FieldError;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.MultipartException;
 import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
@@ -238,6 +244,82 @@ class GlobalExceptionHandlerTest {
         assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
         assertEquals("DATABASE_ERROR", response.getBody().getError());
         assertEquals("Database operation failed", response.getBody().getMessage());
+    }
+
+    @Test
+    void handleDataAccess_poolExhaustion_returns503WithRetryAfter() {
+        CannotGetJdbcConnectionException e = new CannotGetJdbcConnectionException(
+                "Connection is not available, request timed out after 1000ms",
+                new java.sql.SQLTransientConnectionException("pool exhausted"));
+
+        ResponseEntity<ErrorResponse> response = handler.handleDataAccess(e, request);
+
+        assertEquals(HttpStatus.SERVICE_UNAVAILABLE, response.getStatusCode());
+        assertEquals("DATABASE_UNAVAILABLE", response.getBody().getError());
+        assertEquals("Database temporarily unavailable; retry later",
+                response.getBody().getMessage());
+        assertEquals("5", response.getHeaders().getFirst(HttpHeaders.RETRY_AFTER));
+    }
+
+    @Test
+    void handleDataAccess_queryTimeout_returns504WithRetryAfter() {
+        QueryTimeoutException e = new QueryTimeoutException(
+                "canceling statement due to statement timeout",
+                new java.sql.SQLException("cancel", "57014"));
+
+        ResponseEntity<ErrorResponse> response = handler.handleDataAccess(e, request);
+
+        assertEquals(HttpStatus.GATEWAY_TIMEOUT, response.getStatusCode());
+        assertEquals("DATABASE_TIMEOUT", response.getBody().getError());
+        assertEquals("Database query timed out", response.getBody().getMessage());
+        assertEquals("1", response.getHeaders().getFirst(HttpHeaders.RETRY_AFTER));
+    }
+
+    @Test
+    void handleCannotCreateTransaction_poolExhaustion_returns503() {
+        CannotCreateTransactionException e = new CannotCreateTransactionException(
+                "Could not open JPA EntityManager for transaction",
+                new CannotGetJdbcConnectionException("Connection is not available",
+                        new java.sql.SQLTransientConnectionException("pool exhausted")));
+
+        ResponseEntity<ErrorResponse> response = handler.handleCannotCreateTransaction(e, request);
+
+        assertEquals(HttpStatus.SERVICE_UNAVAILABLE, response.getStatusCode());
+        assertEquals("DATABASE_UNAVAILABLE", response.getBody().getError());
+        assertEquals("5", response.getHeaders().getFirst(HttpHeaders.RETRY_AFTER));
+    }
+
+    @Test
+    void handleMaxUploadSize_returns413Not500() {
+        MaxUploadSizeExceededException e = new MaxUploadSizeExceededException(20L * 1024 * 1024);
+
+        ResponseEntity<ErrorResponse> response = handler.handleMaxUploadSize(e, request);
+
+        assertEquals(HttpStatus.PAYLOAD_TOO_LARGE, response.getStatusCode());
+        assertEquals("PAYLOAD_TOO_LARGE", response.getBody().getError());
+    }
+
+    @Test
+    void handleMultipart_malformedRequest_returns400() {
+        MultipartException e = new MultipartException("the request was rejected because no multipart boundary was found");
+
+        ResponseEntity<ErrorResponse> response = handler.handleMultipart(e, request);
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        assertEquals("BAD_REQUEST", response.getBody().getError());
+    }
+
+    @Test
+    void handleMultipart_tempStorageFull_returns503() {
+        MultipartException e = new MultipartException(
+                "Failed to parse multipart servlet request",
+                new java.io.IOException("No space left on device"));
+
+        ResponseEntity<ErrorResponse> response = handler.handleMultipart(e, request);
+
+        assertEquals(HttpStatus.SERVICE_UNAVAILABLE, response.getStatusCode());
+        assertEquals("UPLOAD_STORAGE_UNAVAILABLE", response.getBody().getError());
+        assertEquals("5", response.getHeaders().getFirst(HttpHeaders.RETRY_AFTER));
     }
 
     @Test

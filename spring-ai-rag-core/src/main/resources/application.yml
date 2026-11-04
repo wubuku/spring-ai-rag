@@ -40,8 +40,15 @@ spring:
       minimum-idle: ${DB_POOL_MIN_IDLE:5}
       idle-timeout: 300000              # Idle connections evicted after 5 minutes
       max-lifetime: 1800000             # Connection max lifetime 30 minutes
-      connection-timeout: 10000         # Connection acquisition timeout 10 seconds
-      validation-timeout: 5000          # Connection validation timeout 5 seconds
+      # Pool acquisition is a bounded queue: a saturated pool makes the request
+      # wait up to this long and then fail with 503 DATABASE_UNAVAILABLE, never
+      # hang forever. Make it shorter than the readiness probe timeout.
+      connection-timeout: ${DB_CONNECTION_TIMEOUT_MS:10000}
+      validation-timeout: ${DB_VALIDATION_TIMEOUT_MS:5000}
+      # Bounds every statement on every pooled connection. Without it, a query
+      # blocked on a lock waits forever and pins its connection, which is how
+      # one slow query turns into pool exhaustion. 0 disables the bound.
+      connection-init-sql: "SET statement_timeout = ${DB_STATEMENT_TIMEOUT_MS:30000}"
       initialization-fail-timeout: 10000 # Fail fast: abort startup if pool init fails within 10s
       leak-detection-threshold: 60000   # Leak detection after 60 seconds
       pool-name: rag-hikari
@@ -716,6 +723,10 @@ server:
   port: 8081
   tomcat:
     protocol-handler: NIO
+    # 上传超限时容器会在解析中途中止。默认只吞掉 2MB 剩余体，超过就直接断连，
+    # 客户端拿不到 413。把吞掉上限抬到与 multipart 总量一致，让常见超限请求
+    # 仍能收到结构化 413；吞掉是丢弃字节，不占内存，但会消耗带宽。
+    max-swallow-size: ${SERVER_MAX_SWALLOW_SIZE:100MB}
   # Gzip compression for API responses
   compression:
     enabled: true

@@ -533,6 +533,22 @@ X-RateLimit-Remaining: 0
 出口（规则 R1–R5），真实进程验收见
 [testing-guide-zh-CN.md](testing-guide-zh-CN.md)。
 
+#### 依赖饱和与上传边界的失败码
+
+这些出口都在同一 `ErrorResponse` 信封内，并带 `X-RAG-Failure-Class`：
+
+| 条件 | 状态 | `error` | `failureClass` | `Retry-After` |
+|------|------|---------|----------------|---------------|
+| 连接池耗尽 / 数据库临时不可达 | 503 | `DATABASE_UNAVAILABLE` | `DEPENDENCY_UNAVAILABLE` | `5` |
+| 语句被 `statement_timeout` 截断 | 504 | `DATABASE_TIMEOUT` | `TIMEOUT` | `1` |
+| 单文件或单请求超过 multipart 上限 | 413 | `PAYLOAD_TOO_LARGE` | `CLIENT_REQUEST` | 无 |
+| multipart 临时目录满/只读 | 503 | `UPLOAD_STORAGE_UNAVAILABLE` | `DEPENDENCY_UNAVAILABLE` | `5` |
+| multipart 结构非法（非大小/存储问题） | 400 | `BAD_REQUEST` | `CLIENT_REQUEST` | 无 |
+
+池耗尽请求是**有界排队**：最多等待 `DB_CONNECTION_TIMEOUT_MS`（默认 10 s），
+不是读完再拒，也不是无限挂死。超限上传在解析阶段被容器拒绝，控制器不会收到文件。
+实测证据见 [capacity-and-scale-zh-CN.md](capacity-and-scale-zh-CN.md#310-资源饱和与降级语义2026-11-实测)。
+
 ---
 
 ## OpenAI Chat Completions 兼容预览

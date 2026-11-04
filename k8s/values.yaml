@@ -131,7 +131,10 @@ readinessProbe:
     port: 8081
   initialDelaySeconds: 30
   periodSeconds: 5
-  timeoutSeconds: 3
+  # Must exceed DB_CONNECTION_TIMEOUT_MS (default 10s): a probe aborted early
+  # leaves its request waiting in the Hikari pool, so a 3s probe under
+  # saturation adds waiters instead of measuring the real state.
+  timeoutSeconds: 12
   failureThreshold: 3
 
 # ── Startup probe (slow-start protection) ─────────────────────────────────

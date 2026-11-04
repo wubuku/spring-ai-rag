@@ -4,6 +4,8 @@
 
 server:
   port: 8081
+  tomcat:
+    max-swallow-size: ${SERVER_MAX_SWALLOW_SIZE:100MB}
 
 spring:
   # DataSource (PostgreSQL + pgvector)
@@ -15,6 +17,8 @@ spring:
       # DB_POOL_* 的变量名与 spring.datasource.hikari.* 不一致，必须显式映射。
       maximum-pool-size: ${DB_POOL_SIZE:10}
       minimum-idle: ${DB_POOL_MIN_IDLE:10}
+      connection-timeout: ${DB_CONNECTION_TIMEOUT_MS:10000}
+      connection-init-sql: "SET statement_timeout = ${DB_STATEMENT_TIMEOUT_MS:30000}"
 
   # Flyway auto-migration
   flyway:

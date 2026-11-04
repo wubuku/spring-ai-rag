@@ -330,6 +330,60 @@ Tomcat's default 200 threads is not the first limit reached.
    `0` (never) to `rag.timeout.chat-stream-ms`, so a silent upstream cannot
    hold the connection, upstream socket and admission slot forever.
 
+### 3.10 Saturation and Degradation Semantics (measured 2026-11)
+
+Reproduce: `python3 scripts/verify-resource-saturation-e2e.py` (disposable pgvector
+container + real Spring Boot process + mock provider; `DB_POOL_SIZE=2`,
+`DB_CONNECTION_TIMEOUT_MS=1500`, `DB_STATEMENT_TIMEOUT_MS=3000` shrink the wait window
+to a measurable size).
+
+| Scenario | Measured semantics |
+|----------|--------------------|
+| Pool exhaustion (two requests occupy the pool) | The third request returns **503 `DATABASE_UNAVAILABLE`** after **1.51 s**, `X-RAG-Failure-Class: DEPENDENCY_UNAVAILABLE`, `Retry-After: 5`; **bounded queueing, not 500 and not a hang** |
+| Slow query / lock wait | A single request is cancelled by `statement_timeout` at **3.02 s** with **504 `DATABASE_TIMEOUT`**, `X-RAG-Failure-Class: TIMEOUT`, `Retry-After: 1` |
+| Recovery after release | No restart needed; requests return 200, health is UP, `hikaricp.connections.active=0` (no leak) |
+| Database temporarily unreachable | **1.51 s** returns 503 `DATABASE_UNAVAILABLE`; `/actuator/health` is DOWN |
+| Database back | Recovers automatically without a restart: 200 and health UP; no `Apparent connection leak detected` in the log |
+
+**Health split**: the Helm `liveness` group contains only `livenessState`, so database
+saturation/unavailability never triggers a restart; the `readiness` group includes `db`,
+so exhaustion or an unreachable database turns readiness DOWN and removes the pod from
+the Service. The readiness probe `timeoutSeconds` must exceed
+`DB_CONNECTION_TIMEOUT_MS` (10 s default); a probe aborted early leaves a waiter inside
+Hikari and makes saturation worse.
+
+**Fixes this round**:
+
+1. Pool exhaustion arrives as `CannotCreateTransactionException`, which previously
+   bypassed the `DataAccessException` handler and became a generic 500
+   (`Could not open JPA EntityManager for transaction`). It now shares the same
+   classifier as an unreachable database and returns 503 + `Retry-After`.
+2. `connection-init-sql: SET statement_timeout` bounds lock waits and slow queries so
+   they cannot hold a connection forever.
+3. Multipart oversize/unwritable temp storage no longer becomes 500: see §3.11 and
+   [rest-api.md](rest-api.md#error-responses-rfc-7807-problem-detail).
+
+### 3.11 Upload and Storage Boundaries (measured 2026-11)
+
+Reproduce: `python3 scripts/verify-upload-boundaries-e2e.py` (real process,
+`max-file-size=2MB`, `max-request-size=2.5MB`, multipart location in a controlled temp
+directory).
+
+| Scenario | Measured semantics |
+|----------|--------------------|
+| Single file over `max-file-size` | The container rejects it while parsing: **413 `PAYLOAD_TOO_LARGE`** in **0.01 s**, `X-RAG-Failure-Class: CLIENT_REQUEST`; the controller never receives the file |
+| Request over `max-request-size` | **413 `PAYLOAD_TOO_LARGE`** in **0.00 s** |
+| 5 concurrent uploads | All 200; multipart temp directory has no residue |
+| Client aborts an upload | No temp residue within 2 s; service health stays UP |
+| Multipart temp directory not writable | **503 `UPLOAD_STORAGE_UNAVAILABLE`**, `Retry-After: 5`; error body leaks no path or internal class |
+| PDF over `rag.pdf.max-upload-bytes` | 400 before copy/conversion; after 4 concurrent failures all `pdf-import-*` temp directories are cleaned |
+
+`server.tomcat.max-swallow-size` defaults to 100MB (matching `max-request-size`) so a
+typical oversize request still receives a structured 413 instead of a reset connection;
+swallowed bytes are discarded, not buffered, but they do consume bandwidth. The text
+upload rejection path now uses file metadata only and no longer calls `getBytes()` to
+read the whole part before rejecting it.
+
 ## 4. Capacity Boundaries
 
 | Dimension | Current | Boundary / guidance |
@@ -346,7 +400,7 @@ Tomcat's default 200 threads is not the first limit reached.
 | Export | Streaming, 200 rows per batch, batch count in response headers | Memory does not grow with row count; limited by network and client consumption. Export very large collections off-peak |
 | Document-list keyword | `LOWER(title) LIKE '%kw%'`; uses `idx_rag_documents_title_trgm` when pg_trgm is available | At 5k docs: index SQL 0.103 ms / HTTP p50 4.2 ms; no index SQL 2.134 ms / HTTP p50 8.4 ms. **Keywords need ≥3 characters** for trigram extraction; 1–2 characters still scan. If `pg_trgm` is absent the migration logs NOTICE and degrades to a sequential scan without failing startup |
 | Fulltext search (retrieval path) | pg_jieba / English FTS / pg_trgm auto-selected by capability | Separate from the document-list keyword filter; fulltext-weighted p50 ~158 ms at 5k docs, dominated by the embedding call |
-| Connection pool | default max=10 | Concurrent search/import will exhaust it first; size it for expected concurrency and load-test |
+| Connection pool | core default max=20/min=5; four demos default max=10 | A saturated request queues at most `DB_CONNECTION_TIMEOUT_MS` (10 s default), then gets 503 `DATABASE_UNAVAILABLE` + `Retry-After`; slow queries are bounded by `DB_STATEMENT_TIMEOUT_MS` (30 s default) and return 504. See §3.10 |
 | TTL cleanup | 10k rows in 287 ms, batched | Rows grow linearly but batches stay bounded; for millions, shorten the schedule instead of enlarging batches |
 
 ## 5. Known Limitations

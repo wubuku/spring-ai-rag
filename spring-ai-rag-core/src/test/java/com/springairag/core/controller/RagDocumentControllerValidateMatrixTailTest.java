@@ -18,6 +18,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.lang.reflect.Method;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
@@ -105,8 +106,9 @@ class RagDocumentControllerValidateMatrixTailTest {
     @Test
     void nullContentTypeIsAlwaysNonTextRegardlessOfExtension()
             throws Exception {
-        // 扩展名判定嵌套在 contentType != null 守卫内：
-        // 类型缺失时 isText 恒为 false（可读时无错误信息）。
+        // 扩展名判定嵌套在 contentType != null 守卫内：类型缺失时 isText 恒为 false。
+        // 拒绝路径只依赖元数据，因此必须明确给出“不支持的类型”，不能返回
+        // errorMessage=null —— 那会让调用方把非文本内容继续送进 readFileContent。
         for (String extension : new String[]{
                 "txt", "md", "markdown", "json", "xml", "html", "csv",
                 "log"}) {
@@ -115,7 +117,9 @@ class RagDocumentControllerValidateMatrixTailTest {
                     "file." + extension);
             assertEquals(Boolean.FALSE, field(result, "isText"),
                     () -> "null 类型时 ." + extension + " 应为非文本");
-            assertNull(field(result, "errorMessage"));
+            String message = (String) field(result, "errorMessage");
+            assertNotNull(message);
+            assertTrue(message.contains("Unsupported file type"));
         }
     }
 
@@ -126,13 +130,14 @@ class RagDocumentControllerValidateMatrixTailTest {
         when(multipart.getOriginalFilename()).thenReturn(null);
         when(multipart.getContentType()).thenReturn(null);
         when(multipart.isEmpty()).thenReturn(false);
-        when(multipart.getBytes()).thenReturn("x".getBytes());
 
         Object result = validate(multipart, "any");
 
         assertEquals("", field(result, "extension"));
         assertEquals(Boolean.FALSE, field(result, "isText"));
-        assertNull(field(result, "errorMessage"));
+        String message = (String) field(result, "errorMessage");
+        assertNotNull(message);
+        assertTrue(message.contains("Unsupported file type"));
     }
 
     @Test

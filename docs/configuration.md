@@ -1766,6 +1766,7 @@ so **the core base configuration is shadowed entirely** (profile files such as
 | `RAG_ROOT_API_KEY` | `rag.security.root-api-key` | **Yes** | Works (declared in all four demos) |
 | `POSTGRES_HOST` / `PORT` / `DATABASE` / `USER` / `PASSWORD` | `spring.datasource.*` | **Yes** | Works (declared in all four demos) |
 | `DB_POOL_SIZE` / `DB_POOL_MIN_IDLE` | `spring.datasource.hikari.maximum-pool-size` / `minimum-idle` | **Yes** | Works (declared in all four demos and the Helm ConfigMap) |
+| `DB_CONNECTION_TIMEOUT_MS` / `DB_STATEMENT_TIMEOUT_MS` | `spring.datasource.hikari.connection-timeout` / `connection-init-sql` | **Yes** | Works (declared in all four demos) |
 | `SPRING_DATASOURCE_URL` | `spring.datasource.url` | No (relaxed) | Works (overrides `POSTGRES_*`) |
 | `RAG_EMBEDDING_API_KEY` / `BASE_URL` / `MODEL` / `DIMENSIONS` / `PROFILE_KEY` | `rag.embedding.*` | No (relaxed) | Works; `profile-key` is also declared so its default is not lost to shadowing |
 
@@ -1808,7 +1809,10 @@ spring:
       minimum-idle: ${DB_POOL_MIN_IDLE:5}
       idle-timeout: 300000
       max-lifetime: 1800000
-      connection-timeout: 10000
+      connection-timeout: ${DB_CONNECTION_TIMEOUT_MS:10000}
+      # Applied to every pooled connection; 0 disables the bound for long
+      # migrations or large index maintenance.
+      connection-init-sql: "SET statement_timeout = ${DB_STATEMENT_TIMEOUT_MS:30000}"
       leak-detection-threshold: 60000
       pool-name: rag-hikari
   flyway:
@@ -1823,8 +1827,18 @@ spring:
 | `minimum-idle` | `5` | Min idle connections |
 | `idle-timeout` | `300000` | Idle connection eviction time (ms) |
 | `max-lifetime` | `1800000` | Connection max lifetime (ms) |
-| `connection-timeout` | `10000` | Connection acquisition timeout (ms) |
+| `connection-timeout` | `10000` | Connection acquisition timeout (ms); a saturated request queues this long, then gets 503 |
+| `connection-init-sql` | `SET statement_timeout = 30000` | Per-statement bound (ms); lock waits and slow queries cannot hang forever |
 | `leak-detection-threshold` | `60000` | Connection leak detection time (ms) |
+
+`connection-init-sql` applies to every pooled connection, including Flyway startup
+migrations. If an upgrade may run a large index build beyond the default 30s, set
+`DB_STATEMENT_TIMEOUT_MS=0` (disable) or raise it for that run; do not disable it for
+the normal request path.
+
+Saturation response semantics (503/504, `Retry-After`, health checks) are in
+[capacity-and-scale.md](capacity-and-scale.md#310-saturation-and-degradation-semantics-measured-2026-11)
+and [observability-runbook.md](observability-runbook.md#41-database-saturation-and-unavailability).
 
 ## PostgreSQL Vector Storage
 

@@ -5,6 +5,8 @@
 
 server:
   port: 8081
+  tomcat:
+    max-swallow-size: ${SERVER_MAX_SWALLOW_SIZE:100MB}
 
 spring:
   application:
@@ -24,6 +26,10 @@ spring:
     hikari:
       maximum-pool-size: ${DB_POOL_SIZE:10}
       minimum-idle: ${DB_POOL_MIN_IDLE:2}
+      # 与 core 配置保持一致：池耗尽在 connection-timeout 后快速失败，
+      # statement_timeout 让慢查询/锁等待不会永久占住连接。
+      connection-timeout: ${DB_CONNECTION_TIMEOUT_MS:10000}
+      connection-init-sql: "SET statement_timeout = ${DB_STATEMENT_TIMEOUT_MS:30000}"
 
   flyway:
     enabled: true

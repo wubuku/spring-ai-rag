@@ -139,6 +139,14 @@ public enum ErrorCode {
     TOO_MANY_REQUESTS(429, "Too Many Requests"),
     LLM_BUDGET_EXCEEDED(429, "LLM Budget Exceeded"),
 
+    // ==================== 413 Payload Too Large ====================
+
+    // Servlet-level multipart limits reject a body while it is still being
+    // parsed. That is a client-correctable request, not an internal failure;
+    // before this code existed the container's exception fell through to the
+    // generic 500 branch.
+    PAYLOAD_TOO_LARGE(413, "Payload Too Large"),
+
     // ==================== 500 Internal Server Error ====================
 
     INTERNAL_ERROR(500, "Internal Server Error"),
@@ -155,6 +163,15 @@ public enum ErrorCode {
     LONG_RUNNING_OPERATION_RESULT_EXPIRED(410, "Long-Running Operation Result Expired"),
 
     SERVICE_UNAVAILABLE(503, "Service Unavailable"),
+    // The database is a dependency, not the service itself. Pool exhaustion and
+    // a temporarily unreachable database are retryable capacity conditions; a
+    // 500 told clients to stop retrying and hid the fact that nothing was
+    // wrong with their request or with this process.
+    DATABASE_UNAVAILABLE(503, "Database Temporarily Unavailable"),
+    // The multipart temp store is full or read-only. Retrying the same request
+    // will not help until an operator intervenes, but the fault is server-side
+    // storage, so it must not be reported as an internal logic error.
+    UPLOAD_STORAGE_UNAVAILABLE(503, "Upload Storage Unavailable"),
     // Batch 873: see MISSING_HEADER above — emitted by the handler, absent here.
     POLICY_SERVICE_UNAVAILABLE(503, "API Principal Policy Service Unavailable"),
     // The third leg of the same family: a dependency the request needs is down,
@@ -192,7 +209,11 @@ public enum ErrorCode {
     // ==================== 504 Gateway Timeout ====================
 
     GATEWAY_TIMEOUT(504, "Gateway Timeout"),
-    CHAT_TIMEOUT(504, "Chat Timeout");
+    CHAT_TIMEOUT(504, "Chat Timeout"),
+    // Distinct from GATEWAY_TIMEOUT because the timeout is bounded locally by
+    // `statement_timeout`; it names the dependency so an operator can tell a
+    // lock wait from an upstream model timeout.
+    DATABASE_TIMEOUT(504, "Database Query Timeout");
 
     private final int httpStatus;
     private final String title;
