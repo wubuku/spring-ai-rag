@@ -24,16 +24,62 @@
 # Or: BASE_URL=http://127.0.0.1:18081 ./scripts/run-retrieval-goldenset.sh
 ```
 
-Goldenset file: `testdata/goldenset/retrieval-goldenset.json`
+Goldenset file: `testdata/goldenset/retrieval-goldenset.json` — **40 cases over
+28 documents in 3 collections**, plus 2 decoy documents; `deterministic: true`.
 
-The runner executes the same cases twice through `POST /api/v1/rag/search`:
+Coverage (the count is the regression signal, not a couple of examples):
 
-- `baseline`: `useRerank=false`
-- `quality`: `useRerank=true`
+| Category | Cases | What it pins |
+| --- | --- | --- |
+| `zh-semantic` | 6 | Chinese pure-semantic hits (query wording differs from the document) |
+| `en-semantic` | 8 | English pure-semantic hits |
+| `keyword` | 6 | Exact keyword hits (half Chinese, half English) |
+| `hybrid` | 6 | Hybrid retrieval fusion ordering |
+| `multi-collection` | 4 | Search across all 3 collections and ordering inside each |
+| `metadata-filter` | 4 | `metadataContains` filters (`lang`, `product`, `version`) |
+| `forbidden` | 2 | Retired/unsafe documents must not outrank the answer |
+| `no-answer` | 4 | No answer in corpus; score must stay below `noAnswerMaxScore` |
 
-It persists both evaluations through `POST /api/v1/rag/evaluation/evaluate`,
-prints average Precision@K, MRR, and nDCG plus the delta, and fails if MRR or
-nDCG regresses.
+Determinism: fixed corpus, fixed queries, only `POST /api/v1/rag/search`, no chat
+model call, no sampled metric. With the same embedding provider two runs produce
+identical per-case numbers (measured twice at `mrr=0.9583 ndcg=0.9710`).
+
+The runner executes the same cases twice: `baseline` (`useRerank=false`) and
+`quality` (`useRerank=true`). `quality` may not regress MRR/nDCG against
+`baseline`; the default configuration ships `rag.rerank.enabled=false`, so the two
+passes coincide — that is a configuration fact, not evidence that rerank is
+useless. Results are printed only; they are no longer persisted through
+`POST /api/v1/rag/evaluation/evaluate`.
+
+Floors and calibration (stored in the dataset, the runner only reads them):
+
+- **Only MRR and nDCG@5 gate.** They are order-sensitive, so a shuffled top-k must
+  turn red. P@5 is still computed and printed but not gated: with one target
+  document per case its structural maximum is `1/5 = 0.20`, and it is blind to
+  re-ordering, so it cannot carry the sensitivity check.
+- Floors = measured value minus 0.07–0.10: `overall` MRR 0.82 / nDCG 0.84;
+  `zh-semantic`, `keyword`, `hybrid`, `metadata-filter` 0.90/0.90;
+  `en-semantic`, `multi-collection` 0.75/0.78; `forbidden` 0.85/0.85.
+- The enforceable `forbidden` contract is "a decoy must not outrank the answer".
+  With `maxResults > 0` the API always returns top-k, so "the decoy never appears"
+  is not a constructible assertion.
+- `no-answer`: at most `noAnswerMaxHits` (1) hit may exceed `noAnswerMaxScore`
+  (0.62) inside top-5.
+
+Sensitivity check (proves the gate can fail instead of being always green):
+
+```bash
+BASE_URL=http://127.0.0.1:18081 ./scripts/run-retrieval-goldenset.sh \
+  --skip-create --mutation=all
+```
+
+`--mutation` applies three deterministic degradations to the real retrieved
+lists — `shuffle` (reverse top-k), `demote` (move relevant hits to the end),
+`drop` (remove relevant hits) — and reuses the same floors. All three must be
+rejected or the script exits 1; success prints `MUTATION_DETECTED_OK`. Measured:
+`shuffle` MRR 0.2218 / nDCG 0.4171, `demote` 0.2167 / 0.4127, `drop` 0/0, all
+below their floors. The mutation only reorders in-memory results, so there is no
+corpus to roll back.
 
 ## Retrieval Result Reproducibility
 
@@ -61,8 +107,9 @@ Reproducibility boundaries:
 - Goldenset runs in nightly against a fresh isolated database and a real embedding
   provider; it reproduces reliably within the same provider/model/revision. Absolute
   scores are not comparable across providers or model versions, and the regression gate
-  compares only the relative `useRerank=false/true` delta within one run. Each run uses a
-  timestamped collection, so repeated runs do not pollute existing data.
+  compares only the relative `useRerank=false/true` delta within one run (identical when
+  rerank is not enabled). Each run uses a timestamped collection, so repeated runs do not
+  pollute existing data; local debugging can reuse one corpus with `--skip-create`.
 
 ## Versioned Live Retrieval Regression
 

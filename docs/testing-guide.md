@@ -421,12 +421,16 @@ without that variable, they still scan the working tree).
   green job red.
 - Under `CI`, the Playwright config enables the `github` reporter (failures are
   annotated on the PR file line) and always writes `test-results/results.json`
-  for the summary. Mock E2E and the PR layer run with `--retries=0`, so the first
-  failure is the failure. Nightly real-model specs get one retry: the model
-  occasionally rewrites a fact (observed turning 09:40 into 09:30), Playwright
-  records that as `flaky` and shows it in the summary, so a retry never hides a
-  pass. The OpenAI-compatible JSON assertion in the real-model smoke likewise gets
-  one bounded retry; two consecutive failures still fail.
+  for the summary. **Mock E2E, the PR layer and the nightly real-model specs all
+  run `--retries=0`**: the first failure is the failure, and `flaky` is no longer
+  treated as acceptable background noise. WebKit used to hang on its first
+  navigation after roughly the 58th BrowserContext in one browser process; the
+  root cause is process-level, not an assertion, and it is now removed by
+  sharding WebKit into separate projects that restart the browser (see
+  "WebKit sharding"). The `openProtectedPage` page-swap retry and the CI
+  `retries` setting are gone. The OpenAI-compatible JSON assertion in the
+  real-model smoke still gets one bounded retry — that is network jitter, not
+  test infrastructure.
 - Artifacts are retained for 14–30 days: `backend-test-results`,
   `backend-gate-logs`, `jacoco-reports`, `webui-playwright-report`,
   `nightly-gated-it`, `nightly-failure-modes`, `nightly-resilience`,
@@ -475,9 +479,41 @@ reasonable proxy for the run's request volume. After the checks,
 - The usage table (total requests, `rag.requests.total`, `rag.llm.tokens.total`)
   goes to the Step Summary and to `.verification/nightly/model-usage.md` inside
   the artifact; the tracking issue body includes it too.
-- Retries themselves are bounded: the smoke JSON assertion retries at most once
-  and nightly real WebUI specs at most once; the workflow never re-runs a job
-  automatically, and job-level `timeout-minutes` is the outer bound.
+- Retries themselves are bounded: the smoke JSON assertion retries at most once,
+  and nightly real WebUI specs do not retry at all (five `--retries=0` baseline
+  rounds passed all 25 cases on the first attempt; if the model really rewrites a
+  fact the gate must turn red instead of recording it as flaky). The workflow
+  never re-runs a job automatically, and job-level `timeout-minutes` is the
+  outer bound.
+
+### WebKit sharding (long-suite reliability)
+
+Symptom: in the three-engine Mock E2E, one `responsive.spec.ts` case on WebKit
+timed out in `goto` (`Test timeout of 45000ms exceeded`) and passed when re-run.
+Five `--retries=0` baseline rounds quantified it:
+
+| Engine | Case executions | Failures | Position |
+| --- | --- | --- | --- |
+| Chromium | 825 | 0 | — |
+| Firefox | 305 | 0 | — |
+| WebKit (old single project) | 305 | 1 (1 of 5 rounds) | 58th context, `api-keys` at 375px |
+
+The root cause is WebKit browser-process context accumulation: after roughly 58
+`BrowserContext`s inside one `project`, that process's first navigation hangs
+permanently. Retrying the same page still hangs; a fresh page recovers. Chromium
+and Firefox never show it, so it is neither an application defect nor an
+assertion problem. Any page-swap retry or CI `retries` only turns red into green.
+
+Fix (executable isolation, not a documented exemption): WebKit is split into five
+Playwright projects (`webkit-accessibility-keyboard`,
+`webkit-responsive-375/768/1440/network`). Switching projects makes Playwright
+rebuild the worker and close/reopen the browser process — an effective forced
+restart — so no shard exceeds 19 contexts (about one third of the observed
+threshold) while assertion count and coverage (61 cases) stay identical.
+
+Re-verification: five consecutive
+`npx playwright test --config playwright.preview.config.ts --retries=0` rounds
+after the fix, each with 287 cases, `unexpected=0`, `flaky=0`.
 
 ### Coverage Trend
 

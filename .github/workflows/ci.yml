@@ -292,7 +292,9 @@ jobs:
       # production build with `vite preview` on port 15174 and every API call is
       # intercepted via `page.route` (e2e/api-mocks.ts), so no Spring Boot instance
       # is required. The `*-real.spec.ts` specs are excluded by that config and run
-      # in nightly instead.
+      # in nightly instead. `playwright.config.ts` sets `retries: 0` on purpose:
+      # the suite must be green on the first try, and a failure here is a real
+      # signal rather than a candidate for an automatic re-run.
       - name: Cache Playwright browsers
         uses: actions/cache@v4
         with:

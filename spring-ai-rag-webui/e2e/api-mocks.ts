@@ -8,31 +8,10 @@ export async function openProtectedPage(page: Page, path: string): Promise<Page>
   // 不用 networkidle：页面有后台轮询时它可能永远等不到，跨引擎并行跑会偶发超时。
   // 随后的 URL / 元素断言都会自动等待，足以判断应用已就绪。
   //
-  // WebKit 在长套件（约 50 个上下文之后）首次并发加载大 bundle 时会偶发整页
-  // 导航卡死：`goto` 超时，且同一页面立即重试仍然超时（Chromium / Firefox 不会）。
-  // 换一个全新的 Page（同一 BrowserContext，Mock 路由挂在 context 上）即可恢复，
-  // 这说明卡住的是单个 WebKit Page 的导航状态，不是应用实现缺陷。
-  // 因此这里在 WebKit 上换页重试一次，并把实际使用的 Page 返回给调用方。
-  const isWebKit = page.context().browser()?.browserType().name() === 'webkit';
-  try {
-    await page.goto(path, { waitUntil: 'domcontentloaded' });
-  } catch (error) {
-    if (!isWebKit) throw error;
-    try {
-      const viewport = page.viewportSize();
-      const stuck = page;
-      page = await stuck.context().newPage();
-      await stuck.close();
-      if (viewport) {
-        await page.setViewportSize(viewport);
-      }
-      await page.goto(path, { waitUntil: 'domcontentloaded' });
-    } catch {
-      // 换页也失败：说明整个 WebKit context 已卡死，保留原始错误，
-      // 由 Playwright 测试级重试（CI retries=2）恢复，不掩盖首因。
-      throw error;
-    }
-  }
+  // 这里刻意不做"换页重试"。WebKit 上曾用换页掩盖少数导航卡死，但那会让
+  // 一条本该红掉的用例变绿；真正的根因是单个 WebKit 浏览器进程累积过多
+  // BrowserContext，已在 playwright.config.ts 里按 project 分片强制重启解决。
+  await page.goto(path, { waitUntil: 'domcontentloaded' });
   await expect(page).toHaveURL(/\/webui\/unlock$/);
   await page.getByTestId('root-api-key').fill(MOCK_ROOT_API_KEY);
   await page.getByRole('button', { name: 'Unlock' }).click();
@@ -42,8 +21,8 @@ export async function openProtectedPage(page: Page, path: string): Promise<Page>
 }
 
 // Shared API mocks for all tests.
-// 路由挂在 BrowserContext 上（而不是单个 Page）：`openProtectedPage` 在 WebKit
-// 导航卡死时会换一个新 Page 重试，context 级路由仍然生效。
+// 路由挂在 BrowserContext 上（而不是单个 Page），一次调用即可覆盖该用例
+// 后续打开的所有页面。
 export async function mockAllApiCalls(page: Page) {
   const context = page.context();
   await context.route('/api/v1/rag/auth/me', async route => {

@@ -1,53 +1,272 @@
 {
-  "name": "spring-ai-rag-retrieval-goldenset-v1",
-  "description": "Small retrieval goldenset for Precision@K / MRR / nDCG. Docs are created by run-retrieval-goldenset.sh with stable titles; relevantDocIds resolved by title after create.",
+  "version": "2",
+  "description": "Retrieval quality goldenset. Deterministic: search only, no chat LLM, fixed corpus, fixed queries. Thresholds are calibrated floors, not aspirations.",
+  "deterministic": true,
+  "collections": [
+    { "key": "gs-core", "name": "Goldenset core (EN)", "domainId": "default" },
+    { "key": "gs-ops", "name": "Goldenset operations (EN)", "domainId": "default" },
+    { "key": "gs-zh", "name": "Goldenset 中文", "domainId": "default" }
+  ],
   "documents": [
     {
-      "title": "GOLDENSET_DOC_SPRING_AI",
-      "content": "Spring AI is a Spring Framework project that provides abstractions for chat models, embedding models, and vector stores. It supports OpenAI-compatible APIs and Advisor chains for RAG pipelines."
+      "id": "core-embedding",
+      "collection": "gs-core",
+      "title": "Embedding profiles and vector dimensions",
+      "metadata": { "lang": "en", "tier": "public", "product": "core", "version": "v2" },
+      "content": "An embedding profile pins the provider, model and output dimensions together. Vectors are stored in a fixed-width column, so changing the model or its dimensions requires a new profile and a re-embedding pass; editing the dimension in place silently breaks cosine comparisons."
     },
     {
-      "title": "GOLDENSET_DOC_PGVECTOR",
-      "content": "pgvector is a PostgreSQL extension for vector similarity search. HNSW indexes accelerate approximate nearest neighbor queries used by hybrid retrieval in RAG systems."
+      "id": "core-hnsw",
+      "collection": "gs-core",
+      "title": "HNSW index tuning",
+      "metadata": { "lang": "en", "tier": "public", "product": "core", "version": "v2" },
+      "content": "Nearest-neighbour lookups use an HNSW graph. Raising m improves recall but increases build time and memory; raising ef_search improves recall at query time and costs latency. The defaults target 1024-dimensional pgvector columns."
     },
     {
-      "title": "GOLDENSET_DOC_RERANK",
-      "content": "Reranking improves RAG quality by reordering retrieved chunks. Heuristic rerank uses keyword and diversity scores; cross-encoder models such as bge-reranker provide higher precision."
+      "id": "core-hybrid",
+      "collection": "gs-core",
+      "title": "Hybrid retrieval with Reciprocal Rank Fusion",
+      "metadata": { "lang": "en", "tier": "public", "product": "core", "version": "v2" },
+      "content": "Dense and full-text channels are fused with Reciprocal Rank Fusion. Each channel contributes 1/(K+rank) with K=60, and the weights decide how much a channel can move a candidate; overlapping candidates sum both contributions."
     },
     {
-      "title": "GOLDENSET_DOC_COLLECTION_ACL",
-      "content": "Collection isolation and API key ACLs restrict which knowledge bases a client may query. Allowed collection IDs are enforced on search and chat retrieval paths."
+      "id": "core-rerank",
+      "collection": "gs-core",
+      "title": "Cross-encoder reranking of the shortlist",
+      "metadata": { "lang": "en", "tier": "public", "product": "core", "version": "v2" },
+      "content": "A second stage rescoring model reads the query and each candidate chunk together, so it can demote lexical near-misses that the first stage ranked too high. The documented default is bge-reranker-v2-m3 and it only ever sees the shortlist."
     },
     {
-      "title": "GOLDENSET_DOC_UNRELATED",
-      "content": "Cooking recipes for pasta carbonara use eggs, pecorino cheese, guanciale, and black pepper. This document is intentionally unrelated to enterprise RAG topics."
+      "id": "core-chunking",
+      "collection": "gs-core",
+      "title": "Chunking long articles",
+      "metadata": { "lang": "en", "tier": "public", "product": "core", "version": "v2" },
+      "content": "Long articles are split on paragraph boundaries with a target size and an overlap window, so a sentence is never cut in half. Each chunk keeps a pointer back to its parent document for citation."
+    },
+    {
+      "id": "core-acl",
+      "collection": "gs-core",
+      "title": "Collection isolation and access control",
+      "metadata": { "lang": "en", "tier": "internal", "product": "core", "version": "v2" },
+      "content": "Every retrieval is scoped to the collections the caller is authorised for, and an unauthenticated or unscoped call is never widened to everything. The internal policy forbids falling back to a shared default when the scope is missing."
+    },
+    {
+      "id": "core-sse",
+      "collection": "gs-core",
+      "title": "Streaming answers over SSE",
+      "metadata": { "lang": "en", "tier": "public", "product": "core", "version": "v2" },
+      "content": "Chat answers stream as server-sent events. The client receives incremental delta frames, a terminal done frame, and a reconnect hint; the history row is written only after the terminal frame, so a dropped connection cannot leave half a message."
+    },
+    {
+      "id": "core-lease",
+      "collection": "gs-core",
+      "title": "Leases and crash recovery for background jobs",
+      "metadata": { "lang": "en", "tier": "public", "product": "core", "version": "v2" },
+      "content": "Background jobs hold a time-bounded lease. If the process dies the lease expires and another instance claims the work, so a job is never stuck in a running state forever; attempts are counted and bounded."
+    },
+    {
+      "id": "core-observability",
+      "collection": "gs-core",
+      "title": "Stuck job detection",
+      "metadata": { "lang": "en", "tier": "public", "product": "core", "version": "v2" },
+      "content": "A job that has held its lease past its expected duration shows up as an ageing gauge and raises a warning, so an operator learns about a stalled queue before users do."
+    },
+    {
+      "id": "core-auth",
+      "collection": "gs-core",
+      "title": "API key authentication",
+      "metadata": { "lang": "en", "tier": "public", "product": "core", "version": "v2" },
+      "content": "Clients send X-API-Key on every data-plane call. Keys are hashed at rest, carry a role and a collection scope, and can be revoked or rotated; missing credentials are answered with 401 before any retrieval runs."
+    },
+    {
+      "id": "ops-backup",
+      "collection": "gs-ops",
+      "title": "Backup verification and restore",
+      "metadata": { "lang": "en", "tier": "public", "product": "ops", "version": "v2" },
+      "content": "A backup bundle is only trusted after a restore rehearsal against a scratch database: row counts, migration state and a sample retrieval must all match, and a bundle that fails verification is rejected rather than restored."
+    },
+    {
+      "id": "ops-migration",
+      "collection": "gs-ops",
+      "title": "Zero-downtime migration of embedding data",
+      "metadata": { "lang": "en", "tier": "internal", "product": "ops", "version": "v2" },
+      "content": "Rolling out a new embedding model is a backfill, not a switch: write the new profile alongside the old one, re-embed in batches, compare quality, and only then cut reads over. Old vectors stay readable until the cutover completes."
+    },
+    {
+      "id": "ops-rotation",
+      "collection": "gs-ops",
+      "title": "Credential rotation",
+      "metadata": { "lang": "en", "tier": "internal", "product": "ops", "version": "v2" },
+      "content": "Rotation is a two-phase handshake: prepare a successor credential, let callers move over, then revoke the predecessor after a grace window. An idempotency key makes a retried prepare return the same successor instead of minting another."
+    },
+    {
+      "id": "ops-alerting",
+      "collection": "gs-ops",
+      "title": "Alerting and maintenance silences",
+      "metadata": { "lang": "en", "tier": "public", "product": "ops", "version": "v2" },
+      "content": "Alerts fire on threshold and SLO breaches. During planned maintenance an operator silences a named alert for a bounded window; the silence expires by itself so nobody forgets to unsilence it."
+    },
+    {
+      "id": "ops-multi-instance",
+      "collection": "gs-ops",
+      "title": "Multi-instance semantics",
+      "metadata": { "lang": "en", "tier": "public", "product": "ops", "version": "v2" },
+      "content": "Several application instances share one database. Coordination uses conditional writes, version numbers and leases, never explicit pessimistic locks or advisory locks, so a stalled instance cannot block the others."
+    },
+    {
+      "id": "ops-datasource",
+      "collection": "gs-ops",
+      "title": "Datasource sizing",
+      "metadata": { "lang": "en", "tier": "public", "product": "ops", "version": "v2" },
+      "content": "The connection pool is sized per instance against the database maximum, and the sum across instances must leave headroom for migrations and operators. Oversubscription shows up as timeouts under load, not as errors at startup."
+    },
+    {
+      "id": "ops-erasure",
+      "collection": "gs-ops",
+      "title": "Data erasure requests",
+      "metadata": { "lang": "en", "tier": "internal", "product": "ops", "version": "v2" },
+      "content": "An erasure request removes a principal's data across categories. It is two-phase: the request records which categories remain, and a confirmation token is required before the destructive step; deleting everything without that confirmation is refused by design."
+    },
+    {
+      "id": "ops-audit",
+      "collection": "gs-ops",
+      "title": "Audit logging",
+      "metadata": { "lang": "en", "tier": "public", "product": "ops", "version": "v2" },
+      "content": "Management actions append to an audit log with actor, entity and a low-sensitivity summary. Auditing is best-effort and can never be the reason a request fails."
+    },
+    {
+      "id": "zh-vector",
+      "collection": "gs-zh",
+      "title": "向量检索的基本原理",
+      "metadata": { "lang": "zh", "tier": "public", "product": "core", "version": "v2" },
+      "content": "把文本编码成向量后，意思相近的句子在空间中距离更近。检索时用同样的方式编码提问，再找距离最近的片段，所以用词完全不同的表述也能命中。"
+    },
+    {
+      "id": "zh-hybrid",
+      "collection": "gs-zh",
+      "title": "混合检索的融合排序",
+      "metadata": { "lang": "zh", "tier": "public", "product": "core", "version": "v2" },
+      "content": "两路通道各自给候选排名，再用倒数排名融合把两个名次合成一个分数，重合的候选会累加两边的贡献，通道权重决定谁的话语权更大。"
+    },
+    {
+      "id": "zh-rerank",
+      "collection": "gs-zh",
+      "title": "重排序的作用",
+      "metadata": { "lang": "zh", "tier": "public", "product": "core", "version": "v2" },
+      "content": "初检给出的名次只看粗粒度相似度，第二名之后的候选需要用更精细的模型同时读问题和片段，把字面接近但答非所问的条目压下去。"
+    },
+    {
+      "id": "zh-chunking",
+      "collection": "gs-zh",
+      "title": "分块策略与边界",
+      "metadata": { "lang": "zh", "tier": "public", "product": "core", "version": "v2" },
+      "content": "长文档按自然段切开，控制单块长度并保留少量重叠，避免把一句话拦腰截断；每块都保留指回原文的引用信息。"
+    },
+    {
+      "id": "zh-collection",
+      "collection": "gs-zh",
+      "title": "集合隔离与权限",
+      "metadata": { "lang": "zh", "tier": "internal", "product": "core", "version": "v2" },
+      "content": "每个检索都限定在调用方被授权的集合内，缺少范围时不会退化成全局可见；不同业务的数据因此互不可见。"
+    },
+    {
+      "id": "zh-idempotency",
+      "collection": "gs-zh",
+      "title": "幂等同步",
+      "metadata": { "lang": "zh", "tier": "public", "product": "core", "version": "v2" },
+      "content": "同一个同步请求重复发送时，只保留一条幂等记录并复用第一次的结果，不会重复写入，也不会因为进程中断留下永远处理中的占位。"
+    },
+    {
+      "id": "zh-embedding",
+      "collection": "gs-zh",
+      "title": "嵌入模型与维度变更",
+      "metadata": { "lang": "zh", "tier": "public", "product": "core", "version": "v2" },
+      "content": "嵌入配置把提供方、模型和输出维度绑定在一起，向量列宽度固定，换模型必须新建配置并重新灌入数据，不能只改维度数字。"
+    },
+    {
+      "id": "zh-observability",
+      "collection": "gs-zh",
+      "title": "后台任务的可观测性",
+      "metadata": { "lang": "zh", "tier": "public", "product": "ops", "version": "v2" },
+      "content": "后台任务持有时长有限的租约，超期未完成会在监控里表现为持续增长的指标并触发告警，让任务卡住这件事在用户察觉之前就被发现。"
+    },
+    {
+      "id": "decoy-anonymous",
+      "collection": "gs-core",
+      "title": "Legacy anonymous read mode (retired)",
+      "metadata": { "lang": "en", "tier": "internal", "product": "core", "version": "v1" },
+      "content": "A retired mode once allowed reads without a key so that local demos were faster. It was removed because it widened every query to all collections; the name survives only in old release notes."
+    },
+    {
+      "id": "decoy-shortcut",
+      "collection": "gs-ops",
+      "title": "Dangerous bulk delete shortcut (retired)",
+      "metadata": { "lang": "en", "tier": "internal", "product": "ops", "version": "v1" },
+      "content": "An old maintenance script deleted a tenant's rows in one statement with no confirmation token and no category tracking. It is documented only so operators recognise it in logs, never to be used."
     }
   ],
   "cases": [
-    {
-      "id": "q-spring-ai",
-      "query": "What is Spring AI and how does it support RAG?",
-      "relevantTitles": ["GOLDENSET_DOC_SPRING_AI"]
+    { "id": "zh-semantic-1", "category": "zh-semantic", "query": "怎样让意思相近但用词完全不同的内容被搜到", "relevantTitles": ["向量检索的基本原理"], "collectionKeys": ["gs-zh"] },
+    { "id": "zh-semantic-2", "category": "zh-semantic", "query": "多个检索通道的结果如何合并成一个名次", "relevantTitles": ["混合检索的融合排序"], "collectionKeys": ["gs-zh"] },
+    { "id": "zh-semantic-3", "category": "zh-semantic", "query": "第二名候选还要不要重新打分", "relevantTitles": ["重排序的作用"], "collectionKeys": ["gs-zh"] },
+    { "id": "zh-semantic-4", "category": "zh-semantic", "query": "不同业务的数据怎么彼此隔离", "relevantTitles": ["集合隔离与权限"], "collectionKeys": ["gs-zh"] },
+    { "id": "zh-semantic-5", "category": "zh-semantic", "query": "长文档切成小段时按什么边界切", "relevantTitles": ["分块策略与边界"], "collectionKeys": ["gs-zh"] },
+    { "id": "zh-semantic-6", "category": "zh-semantic", "query": "同一个同步请求重复发送会不会写两遍", "relevantTitles": ["幂等同步"], "collectionKeys": ["gs-zh"] },
+
+    { "id": "en-semantic-1", "category": "en-semantic", "query": "what keeps answers stable when the underlying model is replaced", "relevantTitles": ["Embedding profiles and vector dimensions"], "collectionKeys": ["gs-core"] },
+    { "id": "en-semantic-2", "category": "en-semantic", "query": "what stops one tenant from reading another tenant's content", "relevantTitles": ["Collection isolation and access control"], "collectionKeys": ["gs-core"] },
+    { "id": "en-semantic-3", "category": "en-semantic", "query": "when should a second stage reorder the shortlist", "relevantTitles": ["Cross-encoder reranking of the shortlist"], "collectionKeys": ["gs-core"] },
+    { "id": "en-semantic-4", "category": "en-semantic", "query": "how are long articles broken into searchable pieces", "relevantTitles": ["Chunking long articles"], "collectionKeys": ["gs-core"] },
+    { "id": "en-semantic-5", "category": "en-semantic", "query": "what happens to a background job if the machine dies", "relevantTitles": ["Leases and crash recovery for background jobs"], "collectionKeys": ["gs-core"] },
+    { "id": "en-semantic-6", "category": "en-semantic", "query": "which index structure makes nearest neighbour lookups fast", "relevantTitles": ["HNSW index tuning"], "collectionKeys": ["gs-core"] },
+    { "id": "en-semantic-7", "category": "en-semantic", "query": "how do partial results reach the browser before the answer finishes", "relevantTitles": ["Streaming answers over SSE"], "collectionKeys": ["gs-core"] },
+    { "id": "en-semantic-8", "category": "en-semantic", "query": "how can I tell whether a saved copy can be restored", "relevantTitles": ["Backup verification and restore"], "collectionKeys": ["gs-ops"] },
+
+    { "id": "keyword-1", "category": "keyword", "query": "HNSW", "relevantTitles": ["HNSW index tuning"], "collectionKeys": ["gs-core"] },
+    { "id": "keyword-2", "category": "keyword", "query": "bge-reranker-v2-m3", "relevantTitles": ["Cross-encoder reranking of the shortlist"], "collectionKeys": ["gs-core"] },
+    { "id": "keyword-3", "category": "keyword", "query": "Reciprocal Rank Fusion", "relevantTitles": ["Hybrid retrieval with Reciprocal Rank Fusion"], "collectionKeys": ["gs-core"] },
+    { "id": "keyword-4", "category": "keyword", "query": "X-API-Key", "relevantTitles": ["API key authentication"], "collectionKeys": ["gs-core"] },
+    { "id": "keyword-5", "category": "keyword", "query": "pgvector 1024", "relevantTitles": ["Embedding profiles and vector dimensions", "HNSW index tuning"], "collectionKeys": ["gs-core"] },
+    { "id": "keyword-6", "category": "keyword", "query": "倒数排名融合", "relevantTitles": ["混合检索的融合排序"], "collectionKeys": ["gs-zh"] },
+
+    { "id": "hybrid-1", "category": "hybrid", "query": "RRF 的两个通道权重怎么调", "relevantTitles": ["混合检索的融合排序"], "collectionKeys": ["gs-zh", "gs-core"] },
+    { "id": "hybrid-2", "category": "hybrid", "query": "HNSW 参数 m 调大有什么代价", "relevantTitles": ["HNSW index tuning"], "collectionKeys": ["gs-core"] },
+    { "id": "hybrid-3", "category": "hybrid", "query": "SSE 断线以后客户端怎么续", "relevantTitles": ["Streaming answers over SSE"], "collectionKeys": ["gs-core"] },
+    { "id": "hybrid-4", "category": "hybrid", "query": "pgvector 换嵌入模型要重新灌数据吗", "relevantTitles": ["Embedding profiles and vector dimensions", "嵌入模型与维度变更"], "collectionKeys": ["gs-core", "gs-zh"] },
+    { "id": "hybrid-5", "category": "hybrid", "query": "collection 的 ACL 怎么配", "relevantTitles": ["Collection isolation and access control"], "collectionKeys": ["gs-core"] },
+    { "id": "hybrid-6", "category": "hybrid", "query": "租约 lease 到期后任务会不会永远卡住", "relevantTitles": ["Leases and crash recovery for background jobs", "后台任务的可观测性"], "collectionKeys": ["gs-core", "gs-zh"] },
+
+    { "id": "multi-collection-1", "category": "multi-collection", "query": "how do I roll out a new embedding model without downtime", "relevantTitles": ["Zero-downtime migration of embedding data", "Embedding profiles and vector dimensions"], "collectionKeys": ["gs-core", "gs-ops"] },
+    { "id": "multi-collection-2", "category": "multi-collection", "query": "what should I verify before trusting a restore", "relevantTitles": ["Backup verification and restore"], "collectionKeys": ["gs-core", "gs-ops"] },
+    { "id": "multi-collection-3", "category": "multi-collection", "query": "how do I rotate credentials safely", "relevantTitles": ["Credential rotation", "API key authentication"], "collectionKeys": ["gs-core", "gs-ops"] },
+    { "id": "multi-collection-4", "category": "multi-collection", "query": "how do I know a background job is stuck", "relevantTitles": ["Stuck job detection", "后台任务的可观测性"], "collectionKeys": ["gs-core", "gs-zh"] },
+
+    { "id": "metadata-filter-1", "category": "metadata-filter", "query": "what policy limits who can read a collection", "relevantTitles": ["Collection isolation and access control"], "collectionKeys": ["gs-core"], "metadataContains": { "tier": "internal" } },
+    { "id": "metadata-filter-2", "category": "metadata-filter", "query": "文档切片", "relevantTitles": ["分块策略与边界"], "collectionKeys": ["gs-zh"], "metadataContains": { "lang": "zh" } },
+    { "id": "metadata-filter-3", "category": "metadata-filter", "query": "how are alerts silenced during maintenance", "relevantTitles": ["Alerting and maintenance silences"], "collectionKeys": ["gs-ops"], "metadataContains": { "product": "ops" } },
+    { "id": "metadata-filter-4", "category": "metadata-filter", "query": "what does the reranker do with the shortlist", "relevantTitles": ["Cross-encoder reranking of the shortlist"], "collectionKeys": ["gs-core"], "metadataContains": { "version": "v2" } },
+
+    { "id": "forbidden-1", "category": "forbidden", "query": "keeping one tenant from reading another tenant's collections", "relevantTitles": ["Collection isolation and access control"], "forbiddenTitles": ["Legacy anonymous read mode (retired)"], "collectionKeys": ["gs-core"] },
+    { "id": "forbidden-2", "category": "forbidden", "query": "confirming a destructive data erasure request", "relevantTitles": ["Data erasure requests"], "forbiddenTitles": ["Dangerous bulk delete shortcut (retired)"], "collectionKeys": ["gs-ops"] },
+
+    { "id": "no-answer-1", "category": "no-answer", "query": "如何用 Kubernetes 部署 Redis 集群", "expectedEmpty": true, "collectionKeys": ["gs-core", "gs-ops", "gs-zh"] },
+    { "id": "no-answer-2", "category": "no-answer", "query": "what is the boiling point of mercury", "expectedEmpty": true, "collectionKeys": ["gs-core", "gs-ops", "gs-zh"] },
+    { "id": "no-answer-3", "category": "no-answer", "query": "个人所得税专项附加扣除怎么申报", "expectedEmpty": true, "collectionKeys": ["gs-core", "gs-ops", "gs-zh"] },
+    { "id": "no-answer-4", "category": "no-answer", "query": "how do I bake sourdough bread at home", "expectedEmpty": true, "collectionKeys": ["gs-core", "gs-ops", "gs-zh"] }
+  ],
+  "thresholds": {
+    "comment": "Calibrated floors: measured value minus a 0.07-0.10 margin on the shipped corpus. MRR and nDCG@5 are the gates because they are order-sensitive (a shuffled top-k must turn red). P@5 is reported but not gated: with one target document per case its structural maximum is 1/5 and it cannot detect re-ordering.",
+    "overall": { "mrr": 0.82, "ndcg": 0.84 },
+    "perCategory": {
+      "zh-semantic": { "mrr": 0.90, "ndcg": 0.90 },
+      "en-semantic": { "mrr": 0.75, "ndcg": 0.78 },
+      "keyword": { "mrr": 0.90, "ndcg": 0.90 },
+      "hybrid": { "mrr": 0.90, "ndcg": 0.90 },
+      "multi-collection": { "mrr": 0.75, "ndcg": 0.78 },
+      "metadata-filter": { "mrr": 0.90, "ndcg": 0.90 },
+      "forbidden": { "mrr": 0.85, "ndcg": 0.85 }
     },
-    {
-      "id": "q-pgvector",
-      "query": "How does pgvector HNSW help vector search in PostgreSQL?",
-      "relevantTitles": ["GOLDENSET_DOC_PGVECTOR"]
-    },
-    {
-      "id": "q-rerank",
-      "query": "Why use reranking or bge-reranker after retrieval?",
-      "relevantTitles": ["GOLDENSET_DOC_RERANK"]
-    },
-    {
-      "id": "q-acl",
-      "query": "How do API keys restrict access to collections?",
-      "relevantTitles": ["GOLDENSET_DOC_COLLECTION_ACL"]
-    },
-    {
-      "id": "q-hybrid",
-      "query": "vector store embedding model advisor chain",
-      "relevantTitles": ["GOLDENSET_DOC_SPRING_AI", "GOLDENSET_DOC_PGVECTOR"]
-    }
-  ]
+    "noAnswerMaxScore": 0.62,
+    "noAnswerMaxHits": 1
+  }
 }

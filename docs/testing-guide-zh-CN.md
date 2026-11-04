@@ -371,11 +371,13 @@ CI 的 backend checkout 使用 `fetch-depth: 0`，PR 上把 `DOCS_DIFF_BASE` 设
   JaCoCo XML，把"模块 / 套件 / 失败用例 / 首行错误"写进 Step Summary；报告缺失时
   只提示，不会把绿色 job 变红。
 - Playwright 配置在 `CI` 下启用 `github` reporter（失败直接标注到 PR 文件行），
-  并始终写 `test-results/results.json` 供上面的脚本汇总。Mock E2E 与 PR 层使用
-  `--retries=0`，首次失败就是失败。nightly 的真实模型
-  spec 允许一次重试（模型偶发改写事实，实测把 09:40 说成 09:30），Playwright
-  会把这类结果记为 flaky 并显示在摘要里，重试不会被当成通过而隐瞒。真实模型
-  smoke 里的 OpenAI-compatible JSON 断言同理允许一次有界重试，连续两次失败仍然报错。
+  并始终写 `test-results/results.json` 供上面的脚本汇总。**Mock E2E、PR 层与
+  nightly 真实模型 spec 一律 `--retries=0`**：首次失败就是失败，`flaky` 计数不再
+  被当作可接受的常态。WebKit 曾出现"一个浏览器进程跑到约第 58 个 BrowserContext
+  时首次导航永久卡死"，根因在进程级资源而非断言，已用 project 分片强制重启浏览器
+  进程消除（见「WebKit 分片」）；`openProtectedPage` 的换页重试与 CI `retries`
+  都已删除，不再用重试掩盖。真实模型 smoke 里的 OpenAI-compatible JSON 断言仍允许
+  一次有界重试——那是网络抖动，不是测试基建。
 - artifact 保留 14–30 天：`backend-test-results`、`backend-gate-logs`、
   `jacoco-reports`、`webui-playwright-report`、`nightly-gated-it`、
   `nightly-failure-modes`、`nightly-resilience`、`nightly-real-llm`、`nightly-soak`、
@@ -413,8 +415,35 @@ nightly 的红色只出现在 Actions 页面，没人会每天看。`report` job
 - 读不到指标（端点不可用/指标缺失）→ 同样 `exit 1` 并写明原因；“无法验证上限”不当作通过。
 - 用量表（总请求、`rag.requests.total`、`rag.llm.tokens.total`）写入 Step Summary，
   同时保存为 artifact 内的 `.verification/nightly/model-usage.md`，issue 正文也会带上。
-- 重试本身是有界的：smoke 的 JSON 断言最多重试一次、nightly 真实 WebUI spec 最多一次，
+- 重试本身是有界的：smoke 的 JSON 断言最多重试一次，nightly 真实 WebUI spec
+  不重试（5 轮 `--retries=0` 基线 25 个用例一次通过；模型若真的改写事实，应当
+  亮红灯而不是被重试记成 flaky），
   workflow 不会自动重跑整个 job；job 级 `timeout-minutes` 再兜底。
+
+### WebKit 分片（长套件可靠性）
+
+故障现象：Mock E2E 三引擎连续跑，WebKit 的 `responsive.spec.ts` 里某条用例
+`goto` 超时（`Test timeout of 45000ms exceeded`），同一条用例重跑又通过。5 轮
+`--retries=0` 基线量化结果：
+
+| 引擎 | 用例执行数 | 失败 | 位置 |
+| --- | --- | --- | --- |
+| Chromium | 825 | 0 | — |
+| Firefox | 305 | 0 | — |
+| WebKit（旧单 project） | 305 | 1（1/5 轮） | 第 58 个上下文，`api-keys` 375px |
+
+根因是 WebKit 浏览器进程级的上下文堆积：单个 `project` 内连续创建约 58 个
+`BrowserContext` 后，该进程的首次导航会永久卡死；同一 Page 重试仍卡，换新 Page
+可恢复，Chromium/Firefox 不出现——不是应用实现缺陷，也不是断言问题。任何形式的
+换页重试或 CI `retries` 都只是把红灯变绿灯。
+
+修法（可执行隔离，不做文档豁免）：把 WebKit 拆成 5 个 Playwright project
+（`webkit-accessibility-keyboard`、`webkit-responsive-375/768/1440/network`）。
+Playwright 在 project 切换时会重建 worker 并关闭、重开浏览器进程，等效"强制重启"，
+单片最多 19 个上下文（约为观测阈值的 1/3），断言与覆盖用例数（61）完全不变。
+
+复验：修复后连续 5 轮 `npx playwright test --config playwright.preview.config.ts
+--retries=0`，每轮 287 个用例、`unexpected=0`、`flaky=0`。
 
 ### 覆盖率趋势
 

@@ -243,7 +243,10 @@ jobs:
       BASE_URL: http://127.0.0.1:18081
       # 单次 run 的硬上限。real-llm job 的后端只服务本次检查，计数包含启动
       # 健康检查轮询，所以给足余量；超过说明出现了预期外的请求/重试循环。
-      NIGHTLY_MAX_REQUESTS: '300'
+      # 40 例 goldenset 会建 28 个文档（创建 + 强制嵌入各一次）并按 2s 批量轮询
+      # 嵌入就绪，再各跑 baseline/quality 两轮 search（40×2），合计约 150 次；
+      # 加上 smoke 与 retrieval-regression 才是整个 job 的量。
+      NIGHTLY_MAX_REQUESTS: '600'
 
     steps:
       - uses: actions/checkout@v4
@@ -713,9 +716,9 @@ jobs:
 
       # alerts-real 需要预置告警/投递 ID，rerank-document-diversity-real 需要
       # rerank fixture；两者属于"需要人工 fixture"，不在 nightly 自动执行。
-      # 真实模型驱动的三个 spec 没有人工 fixture 依赖。允许一次重试：模型
-      # 偶发改写事实（已实测把 09:40 说成 09:30），Playwright 会把这类结果
-      # 记为 flaky 并显示在摘要里，所以重试不会被当成通过而隐瞒。
+      # 真实模型驱动的三个 spec 没有人工 fixture 依赖。这里同样不加重试：
+      # 5 轮 `--retries=0` 基线（25 个用例执行）全部一次通过，模型改写事实
+      # 若真的发生，应该作为红灯暴露，而不是被重试记录成 flaky。
       - name: Run real WebUI specs
         working-directory: spring-ai-rag-webui
         env:
@@ -723,7 +726,7 @@ jobs:
         run: |
           npx playwright test \
             --config=playwright.config.ts \
-            --retries=1 \
+            --retries=0 \
             e2e/api-key-real.spec.ts \
             e2e/chat-real.spec.ts \
             e2e/files-real.spec.ts

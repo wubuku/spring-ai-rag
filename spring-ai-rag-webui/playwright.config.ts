@@ -7,7 +7,10 @@ export default defineConfig({
   testDir: './e2e',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 2 : 0,
+  // 不用重试掩盖偶发失败：5 轮 `--retries=0` 基线里唯一的失败是 WebKit
+  // 长套件的上下文堆积（见下方 webkit 分片），已由测试基建隔离；其余用例
+  // 必须一次通过。失败就是失败，`flaky` 计数不应成为常态。
+  retries: 0,
   workers: 1,
   reporter: [
     ['list'],
@@ -19,7 +22,8 @@ export default defineConfig({
   ],
   use: {
     baseURL,
-    trace: 'on-first-retry',
+    // 没有重试就没有 "first retry"，用保留失败 trace 才拿得到现场。
+    trace: 'retain-on-failure',
     screenshot: 'off',
     // 三引擎连续跑时，vite preview 首次加载大 bundle 在 WebKit 上偶尔超过 30s；
     // 45s 是加载预算，不是断言放宽（所有内容断言仍按默认超时）。
@@ -38,12 +42,49 @@ export default defineConfig({
       testMatch: /(accessibility|keyboard|responsive)\.spec\.ts/,
       use: { ...devices['Desktop Firefox'] },
     },
+    // WebKit 的故障形态是"单浏览器进程内的上下文堆积"：一个 project 连续跑完
+    // 61 个用例（即 61 个 BrowserContext）时，约第 58 个用例的首次导航会永久
+    // 卡死——`goto` 超时，同页重试仍超时，而紧接着的下一个用例又恢复正常。
+    // 5 轮 `--retries=0` 基线测得 1/5 轮、1/305 个 WebKit 用例翻车，Chromium
+    // 与 Firefox 的 1130 个用例 0 失败，说明不是应用实现缺陷。
+    //
+    // 根因在进程级资源，不在单条断言，所以修法是"强制重启"：把 WebKit 拆成
+    // 5 个 project。Playwright 在切换 project 时会重建 worker、关闭并重开
+    // 浏览器进程，每个分片的上下文数因此不超过 19 个（约为观测阈值的 1/3），
+    // 而不是靠 `openProtectedPage` 换页重试或 CI `retries` 掩盖。
+    // 分片按"文件 + 宽度组"切，保持每片内部语义完整，不改变任何断言。
     {
-      name: 'webkit',
-      testMatch: /(accessibility|keyboard|responsive)\.spec\.ts/,
-      // WebKit 首次并发加载大 bundle 偶发导航卡住（Chromium / Firefox 不出现），
-      // `openProtectedPage` 会换页重试一次；单次导航预算 20s、整条用例 45s，
-      // 即使 context 已卡死也能快速失败并交给测试级重试，而不是长时间挂住。
+      name: 'webkit-accessibility-keyboard',
+      testMatch: /(accessibility|keyboard)\.spec\.ts/,
+      timeout: 45_000,
+      use: { ...devices['Desktop Safari'], navigationTimeout: 20_000 },
+    },
+    {
+      name: 'webkit-responsive-375',
+      testMatch: /responsive\.spec\.ts/,
+      grep: /375px/,
+      timeout: 45_000,
+      use: { ...devices['Desktop Safari'], navigationTimeout: 20_000 },
+    },
+    {
+      name: 'webkit-responsive-768',
+      testMatch: /responsive\.spec\.ts/,
+      grep: /768px/,
+      timeout: 45_000,
+      use: { ...devices['Desktop Safari'], navigationTimeout: 20_000 },
+    },
+    {
+      name: 'webkit-responsive-1440',
+      testMatch: /responsive\.spec\.ts/,
+      grep: /1440px/,
+      timeout: 45_000,
+      use: { ...devices['Desktop Safari'], navigationTimeout: 20_000 },
+    },
+    {
+      // 慢网 / 断网两条用例的标题不带宽度，用 grepInvert 保留它们。
+      name: 'webkit-responsive-network',
+      testMatch: /responsive\.spec\.ts/,
+      grepInvert: /375px|768px|1440px/,
       timeout: 45_000,
       use: { ...devices['Desktop Safari'], navigationTimeout: 20_000 },
     },

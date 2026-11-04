@@ -25,15 +25,56 @@
 BASE_URL=http://127.0.0.1:18081 ./scripts/run-retrieval-goldenset.sh
 ```
 
-样例集：`testdata/goldenset/retrieval-goldenset.json`
+样例集：`testdata/goldenset/retrieval-goldenset.json`（**40 例 / 28 文档 / 3 集合**，
+另含 2 个诱饵文档；`deterministic: true`）。
 
-脚本会对同一批用例执行两轮 `POST /api/v1/rag/search`：
+覆盖类别（数量即回归信号强度，不是"一两个例子"）：
 
-- `baseline`：`useRerank=false`
-- `quality`：`useRerank=true`
+| 类别 | 例数 | 说明 |
+| --- | --- | --- |
+| `zh-semantic` | 6 | 中文纯语义命中（查询词与正文不同词） |
+| `en-semantic` | 8 | 英文纯语义命中 |
+| `keyword` | 6 | 精确关键词命中（中英各半） |
+| `hybrid` | 6 | 混合检索融合排序 |
+| `multi-collection` | 4 | 跨 3 个集合检索与集合内排序 |
+| `metadata-filter` | 4 | `metadataContains` 过滤（`lang`/`product`/`version`） |
+| `forbidden` | 2 | 退役/不安全文档不得排在同题答案之上 |
+| `no-answer` | 4 | 语料无答案，分数必须低于 `noAnswerMaxScore` |
 
-两轮结果均通过 `POST /api/v1/rag/evaluation/evaluate` 持久化。脚本输出平均
-Precision@K、MRR、nDCG 及其差值；MRR 或 nDCG 回退时返回失败。
+确定性：固定语料、固定 query、只调 `POST /api/v1/rag/search`，不调用聊天模型，
+指标不依赖采样；同一 embedding 提供方下两次运行逐用例数值一致（实测两轮
+`mrr=0.9583 ndcg=0.9710` 完全相同）。
+
+脚本会对同一批用例执行两轮：`baseline`（`useRerank=false`）与 `quality`
+（`useRerank=true`）。`quality` 的 MRR/nDCG 不得低于 `baseline`；默认配置
+`rag.rerank.enabled=false`，此时两轮数值相同，这是配置事实而不是"重排无效"的证据。
+结果只打印到 stdout/日志，不再写 `POST /api/v1/rag/evaluation/evaluate`。
+
+门槛与校准（`thresholds` 写在数据集里，脚本只读）：
+
+- **门禁只用 MRR 与 nDCG@5**（对顺序敏感，打乱 top-k 必然变红）。P@5 仍然计算并
+  打印，但不设门槛：每例只有一个目标文档，P@5 的结构上限是 `1/5=0.20`，且对
+  "同一批结果换顺序"完全不敏感，不能承担灵敏度验证。
+- 门槛 = 实测值下浮 0.07–0.10：`overall` MRR 0.82 / nDCG 0.84；`zh-semantic`、
+  `keyword`、`hybrid`、`metadata-filter` 0.90/0.90；`en-semantic`、
+  `multi-collection` 0.75/0.78；`forbidden` 0.85/0.85。
+- `forbidden` 的可执行契约是"诱饵不得排在正确答案之上"：`maxResults>0` 时接口
+  总会返回 top-k，要求诱饵完全不出现是不可构造的断言。
+- `no-answer`：top-5 中超过 `noAnswerMaxScore`（0.62）的命中数不得超过
+  `noAnswerMaxHits`（1）。
+
+灵敏度验证（证明门禁会红，而不是永远绿）：
+
+```bash
+BASE_URL=http://127.0.0.1:18081 ./scripts/run-retrieval-goldenset.sh \
+  --skip-create --mutation=all
+```
+
+`--mutation` 对真实检索结果做三种确定性恶化——`shuffle`（反转 top-k）、
+`demote`（把相关文档移到末尾）、`drop`（移除相关文档）——再用同一套门槛判定；
+三种都必须被拒绝，脚本打印 `MUTATION_DETECTED_OK`，否则 `exit 1`。实测：
+`shuffle` MRR 0.2218 / nDCG 0.4171，`demote` 0.2167 / 0.4127，`drop` 0/0，全部
+低于门槛。变异只作用于内存中的排序，不写语料，无需回滚。
 
 ## 检索结果可复现性
 
@@ -55,8 +96,9 @@ Precision@K、MRR、nDCG 及其差值；MRR 或 nDCG 回退时返回失败。
   新增近似索引必须同步更新 gated 断言与本节容忍说明，不能沿用当前“完全一致”契约。
 - goldenset 在 nightly 使用全新隔离数据库与真实 embedding 提供方，同一
   provider/model/revision 下可稳定复现；跨 provider 或换模型版本时绝对分数不可比，
-  回归只比较同一次运行内 `useRerank=false/true` 的相对差值。脚本每次使用带时间戳的
-  新 collection，重复运行不会污染已有数据。
+  回归比较同一次运行内 `useRerank=false/true` 的相对差值（重排未启用时两者相同）。
+  脚本每次使用带时间戳的新 collection，重复运行不会污染已有数据；本地调试可用
+  `--skip-create` 复用同一批语料。
 
 ## 版本化真实检索回归
 
