@@ -47,6 +47,7 @@ import static org.mockito.Mockito.when;
 import com.springairag.core.service.ExternalDocumentService;
 import com.springairag.core.service.DocumentDerivationDescriptorProvider;
 import com.springairag.core.service.DocumentRelocationService;
+import com.springairag.core.service.DocumentQueryService;
 
 /**
  * batchEmbedDocuments 的 ASYNC/SYNC 双路与废弃
@@ -82,9 +83,7 @@ class RagDocumentControllerBatchEmbedTest {
         RagCollectionRepository collectionRepository =
                 mock(RagCollectionRepository.class);
         controller = new RagDocumentController(
-                documentRepository,
-                mock(RagEmbeddingRepository.class),
-                collectionRepository,
+                new DocumentQueryService(documentRepository, collectionRepository, mock(RagEmbeddingRepository.class)),
                 documentEmbedService,
                 batchDocumentService,
                 mock(DocumentVersionService.class),

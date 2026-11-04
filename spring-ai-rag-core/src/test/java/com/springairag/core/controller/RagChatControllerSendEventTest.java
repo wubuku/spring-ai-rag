@@ -15,6 +15,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.mockito.Mockito.mock;
+import com.springairag.core.service.ChatHistoryService;
 
 /**
  * SSE 事件分派残余（Batch 375）：ContentDelta/ToolStarted/
@@ -32,7 +33,7 @@ class RagChatControllerSendEventTest {
     void setUp() throws Exception {
         controller = new RagChatController(
                 mock(com.springairag.core.config.RagChatService.class),
-                mock(com.springairag.core.repository.RagChatHistoryRepository.class),
+                new ChatHistoryService(mock(com.springairag.core.repository.RagChatHistoryRepository.class)),
                 mock(com.springairag.core.service.ChatExportService.class),
                 null,
                 mock(com.springairag.core.service.CollectionRetrievalScopeResolver.class),

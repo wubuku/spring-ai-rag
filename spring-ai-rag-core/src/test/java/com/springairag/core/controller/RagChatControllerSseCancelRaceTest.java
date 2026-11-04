@@ -34,6 +34,7 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import com.springairag.core.service.ChatHistoryService;
 
 /**
  * RagChatController SSE 取消竞态（Batch 771）。
@@ -84,7 +85,7 @@ class RagChatControllerSseCancelRaceTest {
         sseProperties.setHeartbeatIntervalSeconds(30);
         controller = new RagChatController(
                 ragChatService,
-                mock(RagChatHistoryRepository.class),
+                new ChatHistoryService(mock(RagChatHistoryRepository.class)),
                 mock(ChatExportService.class),
                 sseProperties,
                 mock(CollectionRetrievalScopeResolver.class),

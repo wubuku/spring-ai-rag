@@ -26,6 +26,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import com.springairag.core.security.ProvisioningOwnerResolver;
 import com.springairag.core.service.CollectionProvisioningService;
+import static org.mockito.Mockito.spy;
 
 /**
  * RagCollectionController 导入与清理守卫长尾（Batch 491，JaCoCo
@@ -48,8 +49,6 @@ class RagCollectionControllerImportPurgeTailTest {
         identityResolver = mock(CollectionIdentityResolver.class);
         collectionService = mock(RagCollectionService.class);
         controller = new RagCollectionController(
-                collectionRepository,
-                documentRepository,
                 collectionService,
                 identityResolver,
                 mock(AuditLogService.class),

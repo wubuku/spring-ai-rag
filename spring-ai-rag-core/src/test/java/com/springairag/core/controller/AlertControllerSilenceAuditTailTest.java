@@ -3,8 +3,6 @@ package com.springairag.core.controller;
 import com.springairag.api.dto.AlertActionResponse;
 import com.springairag.core.service.AlertService;
 import com.springairag.core.service.AuditLogService;
-import com.springairag.core.repository.RagSilenceScheduleRepository;
-import com.springairag.core.repository.SloConfigRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.ResponseEntity;
@@ -33,8 +31,6 @@ class AlertControllerSilenceAuditTailTest {
         alertService = mock(AlertService.class);
         controller = new AlertController(
                 alertService,
-                mock(SloConfigRepository.class),
-                mock(RagSilenceScheduleRepository.class),
                 auditLogService = mock(AuditLogService.class), null);
     }
 

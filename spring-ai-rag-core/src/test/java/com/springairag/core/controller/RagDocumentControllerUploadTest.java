@@ -38,6 +38,7 @@ import com.springairag.core.service.ExternalDocumentService;
 import com.springairag.core.service.DocumentDerivationDescriptorProvider;
 import com.springairag.core.service.DocumentRelocationService;
 import com.springairag.core.service.DocumentMutationService;
+import com.springairag.core.service.DocumentQueryService;
 
 /**
  * uploadAndEmbed 批量上传语义：空文件 400 占位结果、逐文件成功/
@@ -71,9 +72,7 @@ class RagDocumentControllerUploadTest {
                 mock(EmbeddingProfileProvider.class);
         AuditLogService auditLogService = mock(AuditLogService.class);
         controller = new RagDocumentController(
-                documentRepository,
-                embeddingRepository,
-                collectionRepository,
+                new DocumentQueryService(documentRepository, collectionRepository, embeddingRepository),
                 documentEmbedService,
                 batchDocumentService,
                 documentVersionService,

@@ -44,6 +44,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import com.springairag.core.service.ChatHistoryService;
 
 /**
  * RagChatController /stream 键控回合 SSE 语义：幂等重放快照流、
@@ -70,7 +71,7 @@ class RagChatControllerKeyedSseTest {
 
     @BeforeEach
     void setUp() {
-        controller = new RagChatController(ragChatService, historyRepository, chatExportService, new RagSseProperties(), null, auditLogService);
+        controller = new RagChatController(ragChatService, new ChatHistoryService(historyRepository), chatExportService, new RagSseProperties(), null, auditLogService);
         controller.configureTurnOperationService(turnOperationService);
         controller.configureModeAwareExecution(commandMapper, chatExecutionService);
     }

@@ -28,6 +28,7 @@ import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.spy;
 
 /**
  * RagCollectionController.listDocuments 长尾（Batch 436）：过滤
@@ -38,24 +39,22 @@ class RagCollectionControllerListTailTest {
 
     private RagCollectionRepository collectionRepository;
     private RagDocumentRepository documentRepository;
+    private RagCollectionService collectionService;
     private RagCollectionController controller;
 
     @BeforeEach
     void setUp() {
         collectionRepository = mock(RagCollectionRepository.class);
         documentRepository = mock(RagDocumentRepository.class);
+        collectionService = mock(RagCollectionService.class);
         controller = new RagCollectionController(
-                collectionRepository,
-                documentRepository,
-                mock(RagCollectionService.class),
+                collectionService,
                 new CollectionIdentityResolver(collectionRepository),
                 mock(AuditLogService.class),
                 mock(DocumentMutationService.class),
                 mock(CollectionProvisioningService.class),
                 new ProvisioningOwnerResolver(),
                 null);
-        when(collectionRepository.findByIdAndDeletedFalse(1L))
-                .thenReturn(Optional.of(collection(1L)));
         // 无请求上下文时 currentPolicy 为 null → 视为 unrestricted。
         RequestContextHolder.resetRequestAttributes();
     }
@@ -84,58 +83,59 @@ class RagCollectionControllerListTailTest {
     }
 
     @Test
-    void keywordFilterRoutesToSearchAndTrimsKeyword() {
+    void keywordIsForwardedToCollectionService() {
         setCurrentRequest();
-        when(documentRepository.searchDocumentsByCollectionId(
-                any(), any(), any(), any(), any())).thenReturn(emptyPage());
-        when(documentRepository.findByCollectionId(any(), any()))
-                .thenReturn(emptyPage());
+        when(collectionService.findDocuments(
+                eq(1L), any(), any(), any(), any()))
+                .thenReturn(java.util.Optional.of(emptyPage()));
 
         controller.listDocuments(1L, 0, 20, "  spring  ", null, null);
 
         ArgumentCaptor<String> keyword = ArgumentCaptor.forClass(String.class);
-        verify(documentRepository).searchDocumentsByCollectionId(
+        verify(collectionService).findDocuments(
                 eq(1L), keyword.capture(), isNull(), isNull(), any());
-        assertEquals("spring", keyword.getValue());
-        verify(documentRepository, org.mockito.Mockito.never())
-                .findByCollectionId(any(), any());
+        // 控制器只透传原始 keyword；trim 与路由由 service 负责。
+        assertEquals("  spring  ", keyword.getValue());
     }
 
     @Test
-    void blankKeywordWithDocumentTypeStillRoutesToSearch() {
+    void blankKeywordWithDocumentTypeIsForwardedUnchanged() {
         setCurrentRequest();
-        when(documentRepository.searchDocumentsByCollectionId(
-                any(), any(), any(), any(), any())).thenReturn(emptyPage());
+        when(collectionService.findDocuments(
+                eq(1L), any(), any(), any(), any()))
+                .thenReturn(java.util.Optional.of(emptyPage()));
 
         controller.listDocuments(1L, 0, 20, "   ", "pdf", null);
 
-        // 既有语义：空白 keyword trim 为空串透传（不转 null）。
-        verify(documentRepository).searchDocumentsByCollectionId(
-                eq(1L), eq(""), eq("pdf"), isNull(), any());
+        verify(collectionService).findDocuments(
+                eq(1L), eq("   "), eq("pdf"), isNull(), any());
     }
 
     @Test
-    void processingStatusOnlyFilterRoutesToSearch() {
+    void processingStatusOnlyFilterIsForwarded() {
         setCurrentRequest();
-        when(documentRepository.searchDocumentsByCollectionId(
-                any(), any(), any(), any(), any())).thenReturn(emptyPage());
+        when(collectionService.findDocuments(
+                eq(1L), any(), any(), any(), any()))
+                .thenReturn(java.util.Optional.of(emptyPage()));
 
         controller.listDocuments(1L, 0, 20, null, null, "COMPLETED");
 
-        verify(documentRepository).searchDocumentsByCollectionId(
+        verify(collectionService).findDocuments(
                 eq(1L), isNull(), isNull(), eq("COMPLETED"), any());
     }
 
     @Test
     void offsetIsConvertedIntoPageNumber() {
         setCurrentRequest();
-        when(documentRepository.findByCollectionId(any(), any()))
-                .thenReturn(emptyPage());
+        when(collectionService.findDocuments(
+                eq(1L), any(), any(), any(), any()))
+                .thenReturn(java.util.Optional.of(emptyPage()));
 
         controller.listDocuments(1L, 40, 20, null, null, null);
 
         ArgumentCaptor<Pageable> pageable = ArgumentCaptor.forClass(Pageable.class);
-        verify(documentRepository).findByCollectionId(eq(1L), pageable.capture());
+        verify(collectionService).findDocuments(
+                eq(1L), isNull(), isNull(), isNull(), pageable.capture());
         // offset 40 / limit 20 → 第 2 页（0 基）。
         assertEquals(2, pageable.getValue().getPageNumber());
         assertEquals(20, pageable.getValue().getPageSize());
@@ -148,9 +148,7 @@ class RagCollectionControllerListTailTest {
                 com.springairag.core.service.CollectionIdentityResolver.class);
         // mapKeys 需要返回键映射：重建 controller 注入 resolver。
         controller = new RagCollectionController(
-                collectionRepository,
-                documentRepository,
-                mock(RagCollectionService.class),
+                collectionService,
                 new CollectionIdentityResolver(collectionRepository),
                 mock(AuditLogService.class),
                 mock(DocumentMutationService.class),
@@ -160,8 +158,9 @@ class RagCollectionControllerListTailTest {
         org.springframework.test.util.ReflectionTestUtils.setField(
                 controller, "identityResolver", resolver);
         when(resolver.mapKeys(List.of(1L))).thenReturn(java.util.Map.of(1L, "kb"));
-        when(documentRepository.findByCollectionId(any(), any()))
-                .thenReturn(emptyPage());
+        when(collectionService.findDocuments(
+                eq(1L), any(), any(), any(), any()))
+                .thenReturn(java.util.Optional.of(emptyPage()));
 
         var response = controller.listDocuments(1L, 0, 20, null, null, null);
 

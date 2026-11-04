@@ -2,11 +2,10 @@ package com.springairag.core.controller;
 
 import com.springairag.api.dto.DocumentChunkPreviewResponse;
 import com.springairag.core.entity.RagDocument;
-import com.springairag.core.exception.DocumentNotFoundException;
-import com.springairag.core.repository.RagDocumentRepository;
 import com.springairag.core.security.ApiKeyCollectionAccess;
 import com.springairag.core.service.DocumentChunkingService;
 import com.springairag.core.service.DocumentDerivationDescriptorProvider;
+import com.springairag.core.service.DocumentQueryService;
 import com.springairag.core.versioning.ApiVersion;
 import com.springairag.core.security.ApiRoutePolicy;
 import com.springairag.documents.chunk.ChunkDiagnostics;
@@ -29,13 +28,13 @@ import java.util.List;
 @ApiRoutePolicy
 @RequestMapping("/rag/documents")
 public class DocumentChunkPreviewController {
-    private final RagDocumentRepository repository;
+    private final DocumentQueryService documentQueryService;
     private final DocumentChunkingService chunkingService;
     private final DocumentDerivationDescriptorProvider descriptorProvider;
 
-    public DocumentChunkPreviewController(RagDocumentRepository repository,
+    public DocumentChunkPreviewController(DocumentQueryService documentQueryService,
             DocumentChunkingService chunkingService, DocumentDerivationDescriptorProvider descriptorProvider) {
-        this.repository = repository;
+        this.documentQueryService = documentQueryService;
         this.chunkingService = chunkingService;
         this.descriptorProvider = descriptorProvider;
     }
@@ -48,7 +47,7 @@ public class DocumentChunkPreviewController {
         if (offset < 0 || limit < 1 || limit > 100) {
             throw new ChunkingException("CHUNK_PREVIEW_INVALID_PAGE");
         }
-        RagDocument document = repository.findById(id).orElseThrow(() -> new DocumentNotFoundException(id));
+        RagDocument document = documentQueryService.requireDocument(id);
         ApiKeyCollectionAccess.requireDocumentAccess(document, ApiKeyCollectionAccess.currentPolicy());
         ChunkingResult result = chunkingService.preview(document);
         List<DocumentChunkPreviewResponse.Chunk> page = new ArrayList<>();

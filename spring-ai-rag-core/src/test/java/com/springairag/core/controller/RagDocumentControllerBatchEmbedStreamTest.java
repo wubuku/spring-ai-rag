@@ -43,6 +43,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.springairag.core.service.ExternalDocumentService;
 import com.springairag.core.service.DocumentDerivationDescriptorProvider;
 import com.springairag.core.service.DocumentRelocationService;
+import com.springairag.core.service.DocumentQueryService;
 
 /**
  * batchEmbedDocumentsStream 的 SSE 流（Batch 318）：经 standalone
@@ -71,9 +72,7 @@ class RagDocumentControllerBatchEmbedStreamTest {
         RagCollectionRepository collectionRepository =
                 mock(RagCollectionRepository.class);
         controller = new RagDocumentController(
-                mock(RagDocumentRepository.class),
-                mock(RagEmbeddingRepository.class),
-                collectionRepository,
+                new DocumentQueryService(mock(RagDocumentRepository.class), collectionRepository, mock(RagEmbeddingRepository.class)),
                 documentEmbedService,
                 mock(BatchDocumentService.class),
                 mock(DocumentVersionService.class),

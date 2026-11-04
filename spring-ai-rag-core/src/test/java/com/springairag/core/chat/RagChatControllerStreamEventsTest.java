@@ -37,6 +37,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import com.springairag.core.service.ChatHistoryService;
 
 /**
  * RagChatController.stream 未键控 SSE 长尾（Batch 502，JaCoCo 驱
@@ -92,7 +93,7 @@ class RagChatControllerStreamEventsTest {
                 .thenReturn(RetrievalScope.unscoped());
         controller = new RagChatController(
                 ragChatService,
-                mock(RagChatHistoryRepository.class),
+                new ChatHistoryService(mock(RagChatHistoryRepository.class)),
                 mock(ChatExportService.class),
                 new RagSseProperties(),
                 scopeResolver,

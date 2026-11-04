@@ -29,6 +29,7 @@ import {
 } from '../utils/failureClass';
 import { Upload, X } from 'lucide-react';
 import { formatDate, UNREADABLE } from '../utils/time';
+import { formatCount } from '../utils/number';
 import { capLength, SHORT_ID_LENGTH, truncate } from '../utils/text';
 import { useDebouncedCommit } from '../utils/debounce';
 import { DOCUMENT_LIST_STALE_TIME_MS } from '../utils/timing';
@@ -639,7 +640,7 @@ export function Documents() {
               {t('common.previous')}
             </button>
             <span className={styles.pageInfo}>
-              Page {page + 1} — {t('documents.totalDocuments')}: {data?.data?.total ?? 0}
+              {t('common.page', { page: page + 1 })} — {t('documents.totalDocuments')}: {formatCount(data?.data?.total, i18n.language)}
             </span>
             <button
               onClick={() => handlePageChange(page + 1)}

@@ -6,9 +6,9 @@ import com.springairag.core.entity.ApiKeyRole;
 import com.springairag.core.entity.RagApiKey;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.filter.ApiKeyAuthFilter;
-import com.springairag.core.repository.RagDocumentRepository;
 import com.springairag.core.service.DocumentChunkingService;
 import com.springairag.core.service.DocumentDerivationDescriptorProvider;
+import com.springairag.core.service.DocumentQueryService;
 import com.springairag.core.versioning.ApiVersionConfig;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,7 +34,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         DocumentChunkPreviewControllerTest.Config.class})
 class DocumentChunkPreviewControllerTest {
     @Autowired private MockMvc mvc;
-    @MockBean private RagDocumentRepository repository;
+    @MockBean private DocumentQueryService documentQueryService;
 
     @TestConfiguration
     static class Config {
@@ -57,7 +57,7 @@ class DocumentChunkPreviewControllerTest {
 
     @Test
     void versionedRoutePaginatesSameProductionChunksWithoutWrites() throws Exception {
-        when(repository.findById(41L)).thenReturn(Optional.of(document("x".repeat(500))));
+        when(documentQueryService.requireDocument(41L)).thenReturn(document("x".repeat(500)));
         mvc.perform(get("/api/v1/rag/documents/41/chunks/preview").param("offset", "1").param("limit", "2"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.profile").value("bounded-v3"))
                 .andExpect(jsonPath("$.documentRevision").value(1))
@@ -66,7 +66,6 @@ class DocumentChunkPreviewControllerTest {
                 .andExpect(jsonPath("$.hasMore").value(true))
                 .andExpect(jsonPath("$.diagnostics.valid").value(true))
                 .andExpect(jsonPath("$.diagnostics.coveredNonWhitespaceChars").value(500));
-        verify(repository, never()).save(any());
     }
 
     @Test
@@ -75,9 +74,11 @@ class DocumentChunkPreviewControllerTest {
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.error").value("CHUNK_PREVIEW_INVALID_PAGE"));
         mvc.perform(get("/api/v1/rag/documents/41/chunks/preview").param("offset", "-1"))
                 .andExpect(status().isBadRequest());
-        when(repository.findById(41L)).thenReturn(Optional.empty());
+        when(documentQueryService.requireDocument(41L))
+                .thenThrow(new com.springairag.core.exception.DocumentNotFoundException(41L));
         mvc.perform(get("/api/v1/rag/documents/41/chunks/preview")).andExpect(status().isNotFound());
-        when(repository.findById(41L)).thenReturn(Optional.of(document("SECRET_BODY_".repeat(100))));
+        doReturn(document("SECRET_BODY_".repeat(100)))
+                .when(documentQueryService).requireDocument(41L);
         mvc.perform(get("/api/v1/rag/documents/41/chunks/preview"))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.error").value("CHUNK_PREVIEW_INPUT_LIMIT"))
                 .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("SECRET_BODY_"))));
@@ -88,7 +89,8 @@ class DocumentChunkPreviewControllerTest {
         RagApiKey key = new RagApiKey();
         key.setRole(ApiKeyRole.NORMAL);
         key.setAllowedCollectionIds("2");
-        when(repository.findById(41L)).thenReturn(Optional.of(document("SECRET_BODY_".repeat(100))));
+        when(documentQueryService.requireDocument(41L))
+                .thenReturn(document("SECRET_BODY_".repeat(100)));
         mvc.perform(get("/api/v1/rag/documents/41/chunks/preview")
                 .requestAttr(ApiKeyAuthFilter.AUTHENTICATED_API_KEY_ENTITY, key))
                 .andExpect(status().isForbidden());
@@ -99,7 +101,7 @@ class DocumentChunkPreviewControllerTest {
         RagApiKey key = new RagApiKey();
         key.setRole(ApiKeyRole.NORMAL);
         key.setAllowedCollectionIds("1");
-        when(repository.findById(41L)).thenReturn(Optional.of(document("short")));
+        when(documentQueryService.requireDocument(41L)).thenReturn(document("short"));
         mvc.perform(get("/api/v1/rag/documents/41/chunks/preview").param("offset", "2147483647")
                 .requestAttr(ApiKeyAuthFilter.AUTHENTICATED_API_KEY_ENTITY, key))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.chunks.length()").value(0))

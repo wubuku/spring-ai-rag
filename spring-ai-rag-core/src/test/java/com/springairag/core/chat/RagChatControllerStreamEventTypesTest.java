@@ -36,6 +36,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
+import com.springairag.core.service.ChatHistoryService;
 
 /**
  * RagChatController.stream SSE 事件类型映射长尾（Batch 508，JaCoCo
@@ -80,7 +81,7 @@ class RagChatControllerStreamEventTypesTest {
         sse.setHeartbeatIntervalSeconds(1);
         controller = new RagChatController(
                 ragChatService,
-                mock(RagChatHistoryRepository.class),
+                new ChatHistoryService(mock(RagChatHistoryRepository.class)),
                 mock(ChatExportService.class),
                 sse,
                 scopeResolver,

@@ -41,6 +41,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import com.springairag.core.security.ProvisioningOwnerResolver;
 import com.springairag.core.service.CollectionProvisioningService;
+import static org.mockito.Mockito.spy;
 
 /**
  * RagCollectionController by-key 路由长尾（Batch 549，JaCoCo 驱
@@ -74,8 +75,6 @@ class RagCollectionControllerByKeyTailTest {
         collectionService = mock(RagCollectionService.class);
         auditLogService = mock(AuditLogService.class);
         controller = new RagCollectionController(
-                collectionRepository,
-                documentRepository,
                 collectionService,
                 identityResolver,
                 auditLogService,
@@ -124,9 +123,9 @@ class RagCollectionControllerByKeyTailTest {
 
     @Test
     void listDocumentsByKeyReturnsPagedDocuments() {
-        when(documentRepository.findByCollectionId(
-                eq(5L), any(Pageable.class)))
-                .thenReturn(new PageImpl<>(List.of(document(9L))));
+        when(collectionService.findDocuments(
+                eq(5L), isNull(), isNull(), isNull(), any(Pageable.class)))
+                .thenReturn(Optional.of(new PageImpl<>(List.of(document(9L)))));
 
         ResponseEntity<CollectionDocumentListResponse> response =
                 controller.listDocumentsByKey("kb:manual:v1", 0, 20,
@@ -139,8 +138,6 @@ class RagCollectionControllerByKeyTailTest {
 
     @Test
     void listDocumentsByKeyWithUnknownKeySurfacesNotFound() {
-        when(collectionRepository.findByIdAndDeletedFalse(99L))
-                .thenReturn(Optional.empty());
         when(identityResolver.mapKeys(List.of(99L)))
                 .thenReturn(Map.of(99L, "kb:ghost:v1"));
 
@@ -153,7 +150,9 @@ class RagCollectionControllerByKeyTailTest {
     void exportCollectionByKeyMapsDocuments() throws Exception {
         exportRows.add(new CollectionExportService.ExportRow(9L, summary(9L)));
         exportRows.add(new CollectionExportService.ExportRow(10L, summary(10L)));
-        when(documentRepository.countByCollectionId(5L)).thenReturn(2L);
+        when(collectionService.findActiveCollection(5L))
+                .thenReturn(Optional.of(collection));
+        when(collectionService.countDocuments(5L)).thenReturn(2L);
 
         ResponseEntity<StreamingResponseBody> response =
                 controller.exportCollectionByKey("kb:manual:v1");
@@ -175,8 +174,6 @@ class RagCollectionControllerByKeyTailTest {
 
     @Test
     void cloneCollectionByKeyReturns404WhenSourceMissing() {
-        when(collectionRepository.findByIdAndDeletedFalse(5L))
-                .thenReturn(Optional.of(collection));
         when(collectionService.cloneCollection(5L, "kb:copy:v1"))
                 .thenReturn(Optional.empty());
 

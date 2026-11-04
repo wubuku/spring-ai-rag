@@ -32,6 +32,7 @@ import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
+import com.springairag.core.service.ChatHistoryService;
 
 /**
  * SSE 流式响应 E2E 测试
@@ -60,7 +61,7 @@ class SseStreamE2ETest {
         scopeResolver = mock(CollectionRetrievalScopeResolver.class);
         when(scopeResolver.resolve(any(), any(), any(), any(), any(), any()))
                 .thenReturn(RetrievalScope.unscoped());
-        controller = new RagChatController(ragChatService, historyRepository, chatExportService, sseProperties, scopeResolver, auditLogService);
+        controller = new RagChatController(ragChatService, new ChatHistoryService(historyRepository), chatExportService, sseProperties, scopeResolver, auditLogService);
         mockMvc = org.springframework.test.web.servlet.setup.MockMvcBuilders
                 .standaloneSetup(controller)
                 .build();

@@ -50,6 +50,7 @@ import static org.mockito.Mockito.when;
 import com.springairag.core.service.ExternalDocumentService;
 import com.springairag.core.service.DocumentDerivationDescriptorProvider;
 import com.springairag.core.service.DocumentRelocationService;
+import com.springairag.core.service.DocumentQueryService;
 
 /**
  * RagDocumentController 列表统计与嵌入端点残余（Batch 386）：
@@ -60,6 +61,7 @@ class RagDocumentControllerListingStatsTest {
 
     private RagDocumentRepository documentRepository;
     private RagCollectionRepository collectionRepository;
+    private DocumentQueryService documentQueryService;
     private DocumentEmbedService documentEmbedService;
     private EmbeddingDispatchService dispatchService;
     private RagDocumentController controller;
@@ -68,12 +70,12 @@ class RagDocumentControllerListingStatsTest {
     void setUp() {
         documentRepository = mock(RagDocumentRepository.class);
         collectionRepository = mock(RagCollectionRepository.class);
+        documentQueryService = new DocumentQueryService(
+                documentRepository, collectionRepository, mock(RagEmbeddingRepository.class));
         documentEmbedService = mock(DocumentEmbedService.class);
         dispatchService = mock(EmbeddingDispatchService.class);
         controller = new RagDocumentController(
-                documentRepository,
-                mock(RagEmbeddingRepository.class),
-                collectionRepository,
+                documentQueryService,
                 documentEmbedService,
                 mock(BatchDocumentService.class),
                 mock(DocumentVersionService.class),
@@ -144,8 +146,7 @@ class RagDocumentControllerListingStatsTest {
     }
 
     @Test
-    void searchDocumentsForCallerSelectsRestrictedOrUnrestrictedQuery()
-            throws Exception {
+    void searchForCallerSelectsRestrictedOrUnrestrictedQuery() {
         Page<RagDocument> page = mock(Page.class);
         when(documentRepository.searchDocumentsByCollectionIds(
                 any(), eq("t"), any(), any(), any(),
@@ -154,27 +155,16 @@ class RagDocumentControllerListingStatsTest {
                 eq("t"), any(), any(), any(), eq(7L), any(), any(),
                 any(Pageable.class))).thenReturn(page);
 
-        Method method = RagDocumentController.class.getDeclaredMethod(
-                "searchDocumentsForCaller",
-                java.util.Optional.class, Long.class, String.class,
-                String.class, String.class, Boolean.class,
-                LocalDateTime.class, LocalDateTime.class, Pageable.class);
-        method.setAccessible(true);
-
-        assertSame(page, method.invoke(controller,
+        assertSame(page, documentQueryService.searchForCaller(
                 Optional.of(Set.of(1L)), null, "t", null, null,
                 null, null, null, Pageable.ofSize(10)));
-        assertSame(page, method.invoke(controller,
+        assertSame(page, documentQueryService.searchForCaller(
                 Optional.empty(), 7L, "t", null, null,
                 null, null, null, Pageable.ofSize(10)));
     }
 
-    private static java.util.List<Long> anyListOrNull() {
-        return isNull();
-    }
-
     @Test
-    void collectionMetadataBatchesNamesAndKeysAndHandlesEmpty() throws Exception {
+    void collectionMetadataBatchesNamesAndKeysAndHandlesEmpty() {
         RagDocument doc = new RagDocument();
         doc.setCollectionId(7L);
         Page<RagDocument> page = mock(Page.class);
@@ -187,64 +177,24 @@ class RagDocumentControllerListingStatsTest {
         when(collectionRepository.findAllById(List.of(7L)))
                 .thenReturn(List.of(collection));
 
-        Method metadata = RagDocumentController.class.getDeclaredMethod(
-                "collectionMetadata", Page.class);
-        metadata.setAccessible(true);
-        try {
-            Object result = metadata.invoke(controller, page);
-            // 原来只有 assertNotNull(result) —— 无论两个 map 里装的是
-            // name 还是 collectionKey、是空的还是全错的，这条都绿。
-            // 名字与 key 分装两个 map，装反了正是这里该抓的。
-            assertEquals(Map.of(7L, "KB"), namesOf(result));
-            assertEquals(Map.of(7L, "kb"), keysOf(result));
-        } catch (Exception e) {
-            throw new IllegalStateException(e);
-        }
+        DocumentQueryService.CollectionMetadata result =
+                documentQueryService.collectionMetadata(page);
+        // 名字与 key 分装两个 map，装反了正是这里该抓的。
+        assertEquals(Map.of(7L, "KB"), result.names());
+        assertEquals(Map.of(7L, "kb"), result.keys());
 
         // 方法上的 Javadoc 承诺"批量取回…避免逐文档 N+1 查询"，
         // 而夹具只放一个集合：发两遍还是发一遍，只有这条能分。
-        // （Batch 959 顺带修掉了生产侧把同一次 findAllById 调两遍的问题，
-        //  当时 names 与 keys 各查一次，每次列表请求白多一个来回。）
         verify(collectionRepository, times(1)).findAllById(List.of(7L));
 
         // 空页 → 空 metadata，且一次集合查询都不该发。
         Page<RagDocument> emptyPage = mock(Page.class);
         when(emptyPage.getContent()).thenReturn(List.of());
         clearInvocations(collectionRepository);
-        assertDoesNotThrowEmptyMetadata(emptyPage);
-        assertEquals(Map.of(), namesOf(invokeMetadata(emptyPage)));
-        assertEquals(Map.of(), keysOf(invokeMetadata(emptyPage)));
+        DocumentQueryService.CollectionMetadata empty =
+                documentQueryService.collectionMetadata(emptyPage);
+        assertEquals(Map.of(), empty.names());
+        assertEquals(Map.of(), empty.keys());
         verify(collectionRepository, never()).findAllById(any());
-    }
-
-    private Object invokeMetadata(Page<RagDocument> page) throws Exception {
-        Method metadata = RagDocumentController.class.getDeclaredMethod(
-                "collectionMetadata", Page.class);
-        metadata.setAccessible(true);
-        return metadata.invoke(controller, page);
-    }
-
-    @SuppressWarnings("unchecked")
-    private static Map<Long, String> namesOf(Object metadata) throws Exception {
-        return (Map<Long, String>) readAccessor(metadata, "names");
-    }
-
-    @SuppressWarnings("unchecked")
-    private static Map<Long, String> keysOf(Object metadata) throws Exception {
-        return (Map<Long, String>) readAccessor(metadata, "keys");
-    }
-
-    /** CollectionMetadata 是控制器里的 private record，访问器也要放开。 */
-    private static Object readAccessor(Object metadata, String accessor)
-            throws Exception {
-        Method method = metadata.getClass().getDeclaredMethod(accessor);
-        method.setAccessible(true);
-        return method.invoke(metadata);
-    }
-
-    private void assertDoesNotThrowEmptyMetadata(Page<RagDocument> emptyPage)
-            throws Exception {
-        Object result = invokeMetadata(emptyPage);
-        assertNotNull(result);
     }
 }

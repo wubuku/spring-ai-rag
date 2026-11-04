@@ -31,6 +31,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import com.springairag.core.service.ExternalDocumentService;
 import com.springairag.core.service.DocumentRelocationService;
+import com.springairag.core.service.DocumentQueryService;
 
 /**
  * reembedMissing 端点层（Batch 387 补充）：无缺失时空响应、有缺
@@ -70,9 +71,7 @@ class RagDocumentControllerReembedEndpointTest {
                 new DocumentDerivationDescriptorProvider(new com.springairag.core.config.RagProperties());
 
         controller = new RagDocumentController(
-                documentRepository,
-                mock(RagEmbeddingRepository.class),
-                mock(RagCollectionRepository.class),
+                new DocumentQueryService(documentRepository, mock(RagCollectionRepository.class), mock(RagEmbeddingRepository.class)),
                 documentEmbedService,
                 mock(BatchDocumentService.class),
                 mock(DocumentVersionService.class),

@@ -50,6 +50,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.springairag.core.service.ExternalDocumentService;
 import com.springairag.core.service.DocumentDerivationDescriptorProvider;
 import com.springairag.core.service.DocumentRelocationService;
+import com.springairag.core.service.DocumentQueryService;
 
 /**
  * RagDocumentController ACL 列举/统计/批量嵌入流长尾（Batch 697，
@@ -76,9 +77,7 @@ class RagDocumentControllerAclListTailTest {
         RagCollectionRepository collectionRepository =
                 mock(RagCollectionRepository.class);
         controller = new RagDocumentController(
-                documentRepository,
-                mock(RagEmbeddingRepository.class),
-                collectionRepository,
+                new DocumentQueryService(documentRepository, collectionRepository, mock(RagEmbeddingRepository.class)),
                 documentEmbedService,
                 mock(BatchDocumentService.class),
                 mock(DocumentVersionService.class),

@@ -44,6 +44,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import com.springairag.core.service.ChatHistoryService;
 
 /**
  * 键控 chat 的<b>首次调用</b>路径（Batch 774）。
@@ -104,7 +105,7 @@ class RagChatKeyedFirstCallTest {
 
     @BeforeEach
     void setUp() {
-        controller = new RagChatController(ragChatService, historyRepository, chatExportService, new RagSseProperties(), null, auditLogService);
+        controller = new RagChatController(ragChatService, new ChatHistoryService(historyRepository), chatExportService, new RagSseProperties(), null, auditLogService);
         controller.configureTurnOperationService(turnOperationService);
         controller.configureModeAwareExecution(commandMapper, chatExecutionService);
         when(ragChatService.chat(any(ChatRequest.class)))

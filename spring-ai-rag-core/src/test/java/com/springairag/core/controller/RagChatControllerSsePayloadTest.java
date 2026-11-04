@@ -22,6 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
+import com.springairag.core.service.ChatHistoryService;
 
 /**
  * SSE 载荷真值表（Batch 778）。
@@ -89,7 +90,7 @@ class RagChatControllerSsePayloadTest {
     void setUp() throws Exception {
         controller = new RagChatController(
                 mock(com.springairag.core.config.RagChatService.class),
-                mock(com.springairag.core.repository.RagChatHistoryRepository.class),
+                new ChatHistoryService(mock(com.springairag.core.repository.RagChatHistoryRepository.class)),
                 mock(com.springairag.core.service.ChatExportService.class),
                 null,
                 mock(com.springairag.core.service.CollectionRetrievalScopeResolver.class),

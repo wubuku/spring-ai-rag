@@ -34,6 +34,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import com.springairag.core.service.ChatHistoryService;
 
 /**
  * RagChatController 清史/幂等响应长尾（Batch 540，JaCoCo 驱动）：
@@ -68,7 +69,7 @@ class RagChatControllerHeartbeatClearTailTest {
         sseProperties = new RagSseProperties();
         controller = new RagChatController(
                 mock(RagChatService.class),
-                mock(RagChatHistoryRepository.class),
+                new ChatHistoryService(mock(RagChatHistoryRepository.class)),
                 mock(ChatExportService.class),
                 sseProperties,
                 mock(CollectionRetrievalScopeResolver.class),

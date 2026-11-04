@@ -39,9 +39,6 @@ import com.springairag.core.entity.RagCollection;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.entity.RagDocumentVersion;
 import com.springairag.core.exception.DocumentNotFoundException;
-import com.springairag.core.repository.RagCollectionRepository;
-import com.springairag.core.repository.RagDocumentRepository;
-import com.springairag.core.repository.RagEmbeddingRepository;
 import com.springairag.core.security.ApiKeyCollectionAccess;
 import com.springairag.core.service.AuditLogService;
 import com.springairag.core.service.BatchDocumentService;
@@ -50,6 +47,7 @@ import com.springairag.core.service.DocumentVersionService;
 import com.springairag.core.service.DocumentLifecycleService;
 import com.springairag.core.service.DocumentMutationService;
 import com.springairag.core.service.DocumentDerivationDescriptorProvider;
+import com.springairag.core.service.DocumentQueryService;
 import com.springairag.core.service.CollectionIdentityResolver;
 import com.springairag.api.enums.EmbeddingPolicy;
 import com.springairag.api.enums.FailureClass;
@@ -111,9 +109,7 @@ public class RagDocumentController {
 
     private static final Logger log = LoggerFactory.getLogger(RagDocumentController.class);
 
-    private final RagDocumentRepository documentRepository;
-    private final RagEmbeddingRepository embeddingRepository;
-    private final RagCollectionRepository collectionRepository;
+    private final DocumentQueryService documentQueryService;
     private final DocumentEmbedService documentEmbedService;
     private final BatchDocumentService batchDocumentService;
     private final DocumentVersionService documentVersionService;
@@ -143,9 +139,7 @@ public class RagDocumentController {
     private DocumentRelocationService documentRelocationService; // Batch 852：同上，`required = false` 已删——它在 relocate 端点上无条件使用
 
     @Autowired
-    public RagDocumentController(RagDocumentRepository documentRepository,
-                                  RagEmbeddingRepository embeddingRepository,
-                                  RagCollectionRepository collectionRepository,
+    public RagDocumentController(DocumentQueryService documentQueryService,
                                   @Lazy DocumentEmbedService documentEmbedService,
                                   @Lazy BatchDocumentService batchDocumentService,
                                   DocumentVersionService documentVersionService,
@@ -156,9 +150,7 @@ public class RagDocumentController {
                                   ExternalDocumentService externalDocumentService,
                                   DocumentDerivationDescriptorProvider derivationDescriptorProvider,
                                   DocumentRelocationService documentRelocationService) {
-        this.documentRepository = documentRepository;
-        this.embeddingRepository = embeddingRepository;
-        this.collectionRepository = collectionRepository;
+        this.documentQueryService = documentQueryService;
         this.documentEmbedService = documentEmbedService;
         this.batchDocumentService = batchDocumentService;
         this.documentVersionService = documentVersionService;
@@ -317,8 +309,7 @@ public class RagDocumentController {
     public ResponseEntity<DocumentDetailResponse> getDocument(@PathVariable Long id) {
         log.info("Getting document: id={}", id);
 
-        RagDocument doc = documentRepository.findById(id)
-                .orElseThrow(() -> new DocumentNotFoundException(id));
+        RagDocument doc = documentQueryService.requireDocument(id);
         try {
             ApiKeyCollectionAccess.requireDocumentAccess(
                     doc, ApiKeyCollectionAccess.currentPolicy());
@@ -328,19 +319,17 @@ public class RagDocumentController {
             throw new DocumentNotFoundException(id);
         }
         Long collectionId = doc.getCollectionId();
-        Map<Long, String> collectionNameMap = collectionId != null
-                ? collectionRepository.findById(collectionId)
-                        .map(collection -> Map.of(collectionId, collection.getName()))
-                        .orElseGet(Map::of)
-                : Map.of();
-        Map<Long, String> collectionKeyMap = collectionId != null
-                ? collectionRepository.findById(collectionId)
-                        .map(collection -> Map.of(collectionId, collection.getCollectionKey()))
-                        .orElseGet(Map::of)
-                : Map.of();
+        RagCollection collection = collectionId == null
+                ? null
+                : documentQueryService.findCollection(collectionId).orElse(null);
+        Map<Long, String> collectionNameMap = collection == null
+                ? Map.of() : Map.of(collectionId, collection.getName());
+        Map<Long, String> collectionKeyMap = collection == null
+                ? Map.of() : Map.of(collectionId, collection.getCollectionKey());
+        long chunkCount = documentQueryService.freshChunkCount(
+                doc.getId(), activeEmbeddingProfileId());
         DocumentDetailResponse result = DocumentMapper.toDetailResponse(
-                doc, collectionNameMap, collectionKeyMap, embeddingRepository,
-                activeEmbeddingProfileId(),
+                doc, collectionNameMap, collectionKeyMap, chunkCount,
                 documentLifecycleService == null
                         ? null : documentLifecycleService.read(doc));
         return ResponseEntity.ok(result);
@@ -426,13 +415,14 @@ public class RagDocumentController {
         var restrictedIds = ApiKeyCollectionAccess.restrictedCollectionIds(currentKey);
         collectionId = resolveOptionalCollectionId(collectionId, collectionKey, currentKey);
         final Long resolvedCollectionId = collectionId;
-        var pageResult = searchDocumentsForCaller(
+        var pageResult = documentQueryService.searchForCaller(
                 restrictedIds, resolvedCollectionId,
                 title, documentType, processingStatus, enabled,
                 parseDateParam(createdAfter), parseDateParam(createdBefore),
                 pageable);
 
-        CollectionMetadata metadata = collectionMetadata(pageResult);
+        DocumentQueryService.CollectionMetadata metadata =
+                documentQueryService.collectionMetadata(pageResult);
         List<DocumentSummary> docs = toDocumentSummaries(pageResult, metadata);
 
         return ResponseEntity.ok(new DocumentListResponse(
@@ -443,57 +433,9 @@ public class RagDocumentController {
         ));
     }
 
-    /** 按 ACL 分支选择仓库查询：受限调用方走 allow-list 集合查询。 */
-    private org.springframework.data.domain.Page<RagDocument> searchDocumentsForCaller(
-            java.util.Optional<java.util.Set<Long>> restrictedIds,
-            Long resolvedCollectionId,
-            String title,
-            String documentType,
-            String processingStatus,
-            Boolean enabled,
-            LocalDateTime createdAfterDt,
-            LocalDateTime createdBeforeDt,
-            org.springframework.data.domain.Pageable pageable) {
-        return restrictedIds.isPresent()
-                ? documentRepository.searchDocumentsByCollectionIds(
-                        resolvedCollectionId != null
-                                ? List.of(resolvedCollectionId)
-                                : List.copyOf(restrictedIds.orElseThrow()),
-                        title, documentType, processingStatus, enabled,
-                        createdAfterDt, createdBeforeDt, pageable)
-                : documentRepository.searchDocuments(
-                        title, documentType, processingStatus, enabled, resolvedCollectionId,
-                        createdAfterDt, createdBeforeDt, pageable);
-    }
-
-    private record CollectionMetadata(
-            Map<Long, String> names,
-            Map<Long, String> keys) {
-    }
-
-    /** 批量取回集合名称与 key，避免逐文档 N+1 查询。 */
-    private CollectionMetadata collectionMetadata(
-            org.springframework.data.domain.Page<RagDocument> pageResult) {
-        List<Long> collectionIds = pageResult.getContent().stream()
-                .map(RagDocument::getCollectionId)
-                .filter(Objects::nonNull)
-                .distinct()
-                .toList();
-        if (collectionIds.isEmpty()) {
-            return new CollectionMetadata(Map.of(), Map.of());
-        }
-        List<RagCollection> collections =
-                collectionRepository.findAllById(collectionIds);
-        Map<Long, String> names = collections.stream()
-                .collect(Collectors.toMap(RagCollection::getId, RagCollection::getName));
-        Map<Long, String> keys = collections.stream()
-                .collect(Collectors.toMap(RagCollection::getId, RagCollection::getCollectionKey));
-        return new CollectionMetadata(names, keys);
-    }
-
     private List<DocumentSummary> toDocumentSummaries(
             org.springframework.data.domain.Page<RagDocument> pageResult,
-            CollectionMetadata metadata) {
+            DocumentQueryService.CollectionMetadata metadata) {
         List<RagDocument> documents = pageResult.getContent();
         if (documents.isEmpty()) {
             return List.of();
@@ -502,12 +444,8 @@ public class RagDocumentController {
         List<Long> documentIds = documents.stream()
                 .map(RagDocument::getId)
                 .toList();
-        Map<Long, Long> chunkCounts = embeddingRepository
-                .countFreshChunksByDocumentIdsAndProfileId(documentIds, profileId)
-                .stream()
-                .collect(Collectors.toMap(
-                        row -> ((Number) row[0]).longValue(),
-                        row -> ((Number) row[1]).longValue()));
+        Map<Long, Long> chunkCounts =
+                documentQueryService.freshChunkCounts(documentIds, profileId);
         var lifecycles = documentLifecycleService == null
                 ? null : documentLifecycleService.readAll(documents);
         List<DocumentSummary> summaries = new ArrayList<>(documents.size());
@@ -525,11 +463,9 @@ public class RagDocumentController {
     @GetMapping("/stats")
     @Timed(value = "rag.documents.stats", description = "Get document statistics by processing status", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<DocumentStatsResponse> getDocumentStats() {
-        List<Object[]> statusCounts = ApiKeyCollectionAccess.restrictedCollectionIds(
-                        ApiKeyCollectionAccess.currentPolicy())
-                .map(ids -> documentRepository.countByProcessingStatusAndCollectionIds(
-                        List.copyOf(ids)))
-                .orElseGet(documentRepository::countByProcessingStatus);
+        List<Object[]> statusCounts = documentQueryService.processingStatusCounts(
+                ApiKeyCollectionAccess.restrictedCollectionIds(
+                        ApiKeyCollectionAccess.currentPolicy()));
         Map<String, Long> counts = new HashMap<>();
         long total = 0;
         for (Object[] row : statusCounts) {
@@ -561,8 +497,7 @@ public class RagDocumentController {
             Map<String, Object> result;
             if (policy == EmbeddingPolicy.ASYNC) {
                 EmbeddingPolicySupport.requireJobsEnabled(dispatchService);
-                RagDocument document = documentRepository.findById(id)
-                        .orElseThrow(() -> new DocumentNotFoundException(id));
+                RagDocument document = documentQueryService.requireDocument(id);
                 EmbeddingDispatchService.Result queued =
                         dispatchService.enqueueInCurrentTransaction(
                                 document, false, force, "DOCUMENT_EMBED");
@@ -613,9 +548,7 @@ public class RagDocumentController {
         long embeddingProfileId = activeEmbeddingProfileId();
         var restrictedIds = ApiKeyCollectionAccess.restrictedCollectionIds(
                 ApiKeyCollectionAccess.currentPolicy());
-        long total = restrictedIds
-                .map(ids -> documentRepository.countByCollectionIdIn(List.copyOf(ids)))
-                .orElseGet(documentRepository::count);
+        long total = documentQueryService.countDocuments(restrictedIds);
         long withoutEmbedding = countDocumentsWithoutCurrentEmbedding(
                 restrictedIds, embeddingProfileId);
         long withEmbedding = total - withoutEmbedding;
@@ -721,14 +654,8 @@ public class RagDocumentController {
                 .textDescriptor().chunkerVersion();
         String jsonVersion = derivationDescriptorProvider
                 .jsonRecordDescriptor().chunkerVersion();
-        return restrictedIds
-                .map(ids -> documentRepository
-                        .countDocumentsWithoutCurrentEmbeddingsByCollectionIds(
-                                List.copyOf(ids), embeddingProfileId,
-                                textVersion, jsonVersion))
-                .orElseGet(() -> documentRepository
-                        .countDocumentsWithoutCurrentEmbeddings(
-                                embeddingProfileId, textVersion, jsonVersion));
+        return documentQueryService.countDocumentsWithoutCurrentEmbedding(
+                restrictedIds, embeddingProfileId, textVersion, jsonVersion);
     }
 
     private List<RagDocument> findDocumentsWithoutCurrentEmbedding(
@@ -738,14 +665,8 @@ public class RagDocumentController {
                 .textDescriptor().chunkerVersion();
         String jsonVersion = derivationDescriptorProvider
                 .jsonRecordDescriptor().chunkerVersion();
-        return restrictedIds
-                .map(ids -> documentRepository
-                        .findDocumentsWithoutCurrentEmbeddingsByCollectionIds(
-                                List.copyOf(ids), embeddingProfileId,
-                                textVersion, jsonVersion))
-                .orElseGet(() -> documentRepository
-                        .findDocumentsWithoutCurrentEmbeddings(
-                                embeddingProfileId, textVersion, jsonVersion));
+        return documentQueryService.findDocumentsWithoutCurrentEmbedding(
+                restrictedIds, embeddingProfileId, textVersion, jsonVersion);
     }
 
     /**
@@ -935,7 +856,7 @@ public class RagDocumentController {
     /** ASYNC 批量嵌入：持久化 job 入队，立即返回逐文档排队结果。 */
     private ResponseEntity<BatchEmbedResponse> embedBatchAsync(List<Long> ids) {
         EmbeddingPolicySupport.requireJobsEnabled(dispatchService);
-        List<RagDocument> documents = documentRepository.findAllById(ids);
+        List<RagDocument> documents = documentQueryService.findAllById(ids);
         List<BatchEmbedResponse.BatchEmbedResultItem> items = new ArrayList<>();
         int queued = 0;
         for (RagDocument document : documents) {
@@ -1278,7 +1199,7 @@ public class RagDocumentController {
             @Parameter(description = "Page size") @RequestParam(defaultValue = "20") int size) {
         requireDocumentAccess(id);
 
-        if (!documentRepository.existsById(id)) {
+        if (!documentQueryService.existsById(id)) {
             return ResponseEntity.notFound().build();
         }
 
@@ -1346,7 +1267,7 @@ public class RagDocumentController {
     }
 
     private void requireDocumentAccess(Long id) {
-        documentRepository.findById(id).ifPresent(doc ->
+        documentQueryService.findById(id).ifPresent(doc ->
                 ApiKeyCollectionAccess.requireDocumentAccess(
                         doc, ApiKeyCollectionAccess.currentPolicy()));
     }
@@ -1356,7 +1277,7 @@ public class RagDocumentController {
                 ApiKeyCollectionAccess.currentPolicy())) {
             return;
         }
-        Map<Long, RagDocument> documents = documentRepository.findAllById(ids).stream()
+        Map<Long, RagDocument> documents = documentQueryService.findAllById(ids).stream()
                 .collect(Collectors.toMap(RagDocument::getId, doc -> doc));
         for (Long id : ids) {
             RagDocument document = documents.get(id);

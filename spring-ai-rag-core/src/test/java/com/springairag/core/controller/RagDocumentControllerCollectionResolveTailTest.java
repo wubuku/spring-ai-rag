@@ -25,6 +25,7 @@ import static org.mockito.Mockito.when;
 import com.springairag.core.service.ExternalDocumentService;
 import com.springairag.core.service.DocumentDerivationDescriptorProvider;
 import com.springairag.core.service.DocumentRelocationService;
+import com.springairag.core.service.DocumentQueryService;
 
 /**
  * RagDocumentController 集合解析长尾（Batch 564，JaCoCo 驱动）：
@@ -41,9 +42,7 @@ class RagDocumentControllerCollectionResolveTailTest {
     void setUp() {
         identityResolver = mock(CollectionIdentityResolver.class);
         controller = new RagDocumentController(
-                mock(RagDocumentRepository.class),
-                mock(RagEmbeddingRepository.class),
-                mock(RagCollectionRepository.class),
+                new DocumentQueryService(mock(RagDocumentRepository.class), mock(RagCollectionRepository.class), mock(RagEmbeddingRepository.class)),
                 mock(DocumentEmbedService.class),
                 mock(BatchDocumentService.class),
                 mock(DocumentVersionService.class),

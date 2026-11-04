@@ -40,6 +40,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import com.springairag.core.service.ExternalDocumentService;
 import com.springairag.core.service.DocumentRelocationService;
+import com.springairag.core.service.DocumentQueryService;
 
 /**
  * RagDocumentController 嵌入守卫（Batch 382）：reembed 结果的
@@ -67,9 +68,7 @@ derivationDescriptorProvider = mock(DocumentDerivationDescriptorProvider.class);
         dispatchService = mock(EmbeddingDispatchService.class);
         profileProvider = mock(EmbeddingProfileProvider.class);
         controller = new RagDocumentController(
-                documentRepository,
-                mock(RagEmbeddingRepository.class),
-                mock(RagCollectionRepository.class),
+                new DocumentQueryService(documentRepository, mock(RagCollectionRepository.class), mock(RagEmbeddingRepository.class)),
                 documentEmbedService,
                 mock(BatchDocumentService.class),
                 mock(DocumentVersionService.class),

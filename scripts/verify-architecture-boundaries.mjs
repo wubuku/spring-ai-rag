@@ -4,15 +4,14 @@
 // --------------
 // 1. Maven 模块依赖方向：api ← documents ← core ← starter。当前 pom 与源码均无反向依赖。
 // 2. 源码跨模块 import 方向：与 pom 同向，防止“能编译但绕过模块边界”的静态 import。
-// 3. core 包分层：controller 不被非 controller 包 import；repository 不 import
-//    service/controller；entity 不 import repository/service/controller。
+// 3. core 包分层：controller 不被非 controller 包 import；controller 不 import
+//    repository；repository 不 import service/controller；entity 不 import
+//    repository/service/controller。
 // 4. 以上规则都已在真实源码树验证为零违规，并可被自测注入的违规拦住。
 //
 // 明确不落地的规则（测量后判定高噪声，见 docs/developer-reference-zh-CN.md）：
 // - 包级循环依赖：2026-11-04 实测 core 30 个包落在同一个强连通分量，落地即全红，
 //   需要先做跨包重构，不是一条门禁能解决的。
-// - “web 层不得直接访问 repository”：当前 5 个 controller 直接 import repository，
-//   属于既有架构债，需先抽 service；直接落地会把存量债务变成永久红灯。
 //
 // 环境变量 ARCH_BOUNDARY_ROOT 指向被测根目录，自测用它注入 fixture。
 
@@ -147,6 +146,15 @@ export function collectViolations(root) {
           });
         }
 
+        if (isUnder(pkg, CORE_CONTROLLER) && isUnder(imp.target, CORE_REPOSITORY)) {
+          violations.push({
+            rule: 'controller-repository-dependency',
+            module: mod.name,
+            file: `${path.relative(root, file)}:${imp.line}`,
+            detail: `${pkg} 不得依赖 repository 层 ${imp.target}；请把查询搬进 service`,
+          });
+        }
+
         if (
           isUnder(pkg, CORE_REPOSITORY) &&
           (isUnder(imp.target, CORE_SERVICE) || isUnder(imp.target, CORE_CONTROLLER))
@@ -196,11 +204,10 @@ function main() {
 
   console.log(
     `架构边界通过：${stats.javaFiles} 个 Java 文件、${stats.projectDeps} 条项目内 Maven 依赖，` +
-      '模块方向 / import 方向 / core 包分层均无违规。',
+      '模块方向 / import 方向 / core 包分层 / controller 不依赖 repository 均无违规。',
   );
   console.log(
-    '未覆盖（测量后判定高噪声）：包级循环依赖（core 30 个包同一 SCC）、' +
-      'controller 直连 repository（存量 5 个 controller，需先抽 service）。',
+    '未覆盖（测量后判定高噪声）：包级循环依赖（core 30 个包同一 SCC）。',
   );
 }
 

@@ -42,6 +42,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import com.springairag.core.service.ChatHistoryService;
 
 /**
  * RagChatController /ask 与 /chat 别名的键控 JSON 语义：幂等重放、
@@ -67,7 +68,7 @@ class RagChatControllerKeyedAskTest {
 
     @BeforeEach
     void setUp() {
-        controller = new RagChatController(ragChatService, historyRepository, chatExportService, new RagSseProperties(), null, auditLogService);
+        controller = new RagChatController(ragChatService, new ChatHistoryService(historyRepository), chatExportService, new RagSseProperties(), null, auditLogService);
         controller.configureTurnOperationService(turnOperationService);
         controller.configureModeAwareExecution(commandMapper, chatExecutionService);
     }

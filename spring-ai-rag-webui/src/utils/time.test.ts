@@ -92,6 +92,16 @@ describe('formatAbsolute / formatDate / formatTime', () => {
     }
   });
 
+  it('renders zh-CN without the English 12-hour AM/PM marker', () => {
+    // The defect this pins: the page can be Chinese while `toLocaleString()`
+    // uses the host default (`en-US` on a developer machine), putting
+    // `9/6/2026, 8:00:00 AM` under a Chinese heading. Passing the active
+    // locale is the fix; this asserts the difference is observable.
+    expect(formatAbsolute(stamp, 'zh-CN')).not.toMatch(/\b(?:AM|PM)\b/u);
+    expect(formatDate(stamp, 'zh-CN')).not.toMatch(/\b(?:AM|PM)\b/u);
+    expect(formatAbsolute(stamp, 'en-US')).toMatch(/\b(?:AM|PM)\b/u);
+  });
+
   it('keeps date-only and time-only genuinely different', () => {
     // `Documents.tsx` shows a date column and `Search.tsx` a time column; if both
     // collapsed to the same string the columns would stop meaning anything.

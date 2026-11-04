@@ -39,6 +39,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
@@ -84,7 +85,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
         EvaluationController.class,
         AlertController.class
 })
-@Import({GlobalExceptionHandler.class, ApiVersionConfig.class, RagControllerIntegrationTest.RagPropertiesTestConfig.class})
+@Import({
+        GlobalExceptionHandler.class,
+        ApiVersionConfig.class,
+        // 控制器现在依赖这两个查询服务；它们只做仓储拼装，保留真实实现才能让既有
+        // repository stub 继续生效（而不是把服务整个 mock 掉、断言失去意义）。
+        com.springairag.core.service.ChatHistoryService.class,
+        com.springairag.core.service.DocumentQueryService.class,
+        RagControllerIntegrationTest.RagPropertiesTestConfig.class
+})
 @TestPropertySource(properties = {
         "spring.mvc.throw-exception-if-no-handler-found=true",
         "spring.mvc.static-path-pattern=/static-never-match"
@@ -668,8 +677,8 @@ class RagControllerIntegrationTest {
             RagCollection collection = new RagCollection();
             collection.setId(1L);
             collection.setName("我的知识库");
-            when(collectionRepository.findByIdAndDeletedFalse(1L)).thenReturn(Optional.of(collection));
-            when(documentRepository.countByCollectionId(1L)).thenReturn(5L);
+            when(ragCollectionService.findActiveCollection(1L)).thenReturn(Optional.of(collection));
+            when(ragCollectionService.countDocuments(1L)).thenReturn(5L);
 
             mockMvc.perform(get("/api/v1/rag/collections/{id}", 1))
                     .andExpect(status().isOk())
@@ -679,7 +688,7 @@ class RagControllerIntegrationTest {
 
         @Test
         void getCollection_notFound() throws Exception {
-            when(collectionRepository.findByIdAndDeletedFalse(999L)).thenReturn(Optional.empty());
+            when(ragCollectionService.findActiveCollection(999L)).thenReturn(Optional.empty());
 
             mockMvc.perform(get("/api/v1/rag/collections/{id}", 999))
                     .andExpect(status().isNotFound());
@@ -717,10 +726,10 @@ class RagControllerIntegrationTest {
             RagCollection collection = new RagCollection();
             collection.setId(1L);
             collection.setName("集合A");
-            when(collectionRepository.searchCollections(
-                    isNull(), isNull(), isNull(), any(PageRequest.class)))
+            when(ragCollectionService.searchCollections(
+                    eq(Optional.empty()), isNull(), isNull(), isNull(), any(Pageable.class)))
                     .thenReturn(new PageImpl<>(List.of(collection)));
-            when(documentRepository.countByCollectionId(1L)).thenReturn(0L);
+            when(ragCollectionService.countDocumentsGrouped(any())).thenReturn(Map.of(1L, 0L));
 
             mockMvc.perform(get("/api/v1/rag/collections"))
                     .andExpect(status().isOk())
@@ -731,9 +740,9 @@ class RagControllerIntegrationTest {
         @Test
         void listCollections_queryIsForwardedForNameOrKeySearch()
                 throws Exception {
-            when(collectionRepository.searchCollections(
-                    isNull(), eq("manual:v3"), isNull(),
-                    any(PageRequest.class)))
+            when(ragCollectionService.searchCollections(
+                    eq(Optional.empty()), isNull(), eq("manual:v3"), isNull(),
+                    any(Pageable.class)))
                     .thenReturn(new PageImpl<>(List.of()));
 
             mockMvc.perform(get("/api/v1/rag/collections")
@@ -741,9 +750,9 @@ class RagControllerIntegrationTest {
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.collections").isArray());
 
-            verify(collectionRepository).searchCollections(
-                    isNull(), eq("manual:v3"), isNull(),
-                    any(PageRequest.class));
+            verify(ragCollectionService).searchCollections(
+                    eq(Optional.empty()), isNull(), eq("manual:v3"), isNull(),
+                    any(Pageable.class));
         }
 
         @Test

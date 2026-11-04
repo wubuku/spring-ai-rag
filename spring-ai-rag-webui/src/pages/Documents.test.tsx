@@ -217,7 +217,7 @@ describe('Documents', () => {
     });
 
     renderDocuments();
-    expect(screen.getByText(/Page 1 — documents\.totalDocuments: 50/)).toBeInTheDocument();
+    expect(screen.getByText(/common\.page — documents\.totalDocuments: 50/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /common.previous/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /common.next/ })).toBeInTheDocument();
   });

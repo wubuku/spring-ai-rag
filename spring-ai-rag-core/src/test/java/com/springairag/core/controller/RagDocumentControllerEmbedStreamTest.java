@@ -38,6 +38,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.springairag.core.service.ExternalDocumentService;
 import com.springairag.core.service.DocumentDerivationDescriptorProvider;
 import com.springairag.core.service.DocumentRelocationService;
+import com.springairag.core.service.DocumentQueryService;
 import jakarta.servlet.ServletException;
 
 /**
@@ -68,9 +69,7 @@ class RagDocumentControllerEmbedStreamTest {
     void setUp() {
         documentEmbedService = mock(DocumentEmbedService.class);
         controller = new RagDocumentController(
-                mock(RagDocumentRepository.class),
-                mock(RagEmbeddingRepository.class),
-                mock(RagCollectionRepository.class),
+                new DocumentQueryService(mock(RagDocumentRepository.class), mock(RagCollectionRepository.class), mock(RagEmbeddingRepository.class)),
                 documentEmbedService,
                 mock(BatchDocumentService.class),
                 mock(DocumentVersionService.class),

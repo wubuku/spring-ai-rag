@@ -54,6 +54,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 import com.springairag.core.service.ExternalDocumentService;
 import com.springairag.core.service.DocumentRelocationService;
+import com.springairag.core.service.DocumentQueryService;
 
 /**
  * RagDocumentController Unit Tests
@@ -109,9 +110,7 @@ class RagDocumentControllerTest {
                 new DocumentDerivationDescriptorProvider(
                         new com.springairag.core.config.RagProperties());
         controller = new RagDocumentController(
-                documentRepository,
-                embeddingRepository,
-                collectionRepository,
+                new DocumentQueryService(documentRepository, collectionRepository, embeddingRepository),
                 documentEmbedService,
                 batchDocumentService,
                 documentVersionService,

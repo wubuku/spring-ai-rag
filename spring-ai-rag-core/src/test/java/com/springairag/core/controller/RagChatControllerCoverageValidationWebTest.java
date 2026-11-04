@@ -46,7 +46,7 @@ class RagChatControllerCoverageValidationWebTest {
     private RagChatService ragChatService;
 
     @MockitoBean
-    private RagChatHistoryRepository historyRepository;
+    private com.springairag.core.service.ChatHistoryService chatHistoryService;
 
     @MockitoBean
     private ChatExportService chatExportService;

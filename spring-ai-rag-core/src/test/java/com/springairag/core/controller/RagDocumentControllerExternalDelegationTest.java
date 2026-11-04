@@ -24,6 +24,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import com.springairag.core.service.DocumentDerivationDescriptorProvider;
+import com.springairag.core.service.DocumentQueryService;
 
 /**
  * RagDocumentController 的外部文档/版本恢复委托路径。
@@ -56,9 +57,7 @@ class RagDocumentControllerExternalDelegationTest {
         documentVersionService = mock(DocumentVersionService.class);
         mutationService = mock(DocumentMutationService.class);
         controller = new RagDocumentController(
-                mock(RagDocumentRepository.class),
-                mock(RagEmbeddingRepository.class),
-                mock(RagCollectionRepository.class),
+                new DocumentQueryService(mock(RagDocumentRepository.class), mock(RagCollectionRepository.class), mock(RagEmbeddingRepository.class)),
                 mock(DocumentEmbedService.class),
                 mock(BatchDocumentService.class),
                 documentVersionService,

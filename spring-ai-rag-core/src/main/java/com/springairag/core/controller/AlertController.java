@@ -9,8 +9,6 @@ import com.springairag.api.dto.SilenceScheduleRequest;
 import com.springairag.api.dto.SloConfigRequest;
 import com.springairag.core.entity.RagSilenceSchedule;
 import com.springairag.core.entity.RagSloConfig;
-import com.springairag.core.repository.RagSilenceScheduleRepository;
-import com.springairag.core.repository.SloConfigRepository;
 import com.springairag.core.service.AlertService;
 import com.springairag.core.service.AlertManagementAuthorization;
 import com.springairag.core.service.AuditLogService;
@@ -47,21 +45,15 @@ import org.springframework.beans.factory.annotation.Autowired;
 public class AlertController {
 
     private final AlertService alertService;
-    private final SloConfigRepository sloConfigRepository;
-    private final RagSilenceScheduleRepository silenceScheduleRepository;
     private final AlertManagementAuthorization managementAuthorization;
     private AuditLogService auditLogService;  // optional-claim: unconditional @Service; the audit helpers are null-tolerant on purpose so auditing can never be the reason a request fails
 
     @Autowired
     public AlertController(
             AlertService alertService,
-            SloConfigRepository sloConfigRepository,
-            RagSilenceScheduleRepository silenceScheduleRepository,
             @Autowired(required = false) AuditLogService auditLogService,
             AlertManagementAuthorization managementAuthorization) {
         this.alertService = alertService;
-        this.sloConfigRepository = sloConfigRepository;
-        this.silenceScheduleRepository = silenceScheduleRepository;
         this.auditLogService = auditLogService;
         this.managementAuthorization = managementAuthorization;
     }
@@ -276,19 +268,10 @@ public class AlertController {
     })
     @PostMapping("/slos")
     public ResponseEntity<RagSloConfig> createSloConfig(@Valid @RequestBody SloConfigRequest request) {
-        if (sloConfigRepository.findBySloName(request.getSloName()).isPresent()) {
+        RagSloConfig saved = alertService.createSloConfig(request).orElse(null);
+        if (saved == null) {
             return ResponseEntity.status(409).build();
         }
-        RagSloConfig config = new RagSloConfig();
-        config.setSloName(request.getSloName());
-        config.setSloType(request.getSloType());
-        config.setTargetValue(request.getTargetValue());
-        config.setUnit(request.getUnit());
-        config.setDescription(request.getDescription());
-        config.setEnabled(request.getEnabled() != null ? request.getEnabled() : true);
-        config.setMetadata(request.getMetadata());
-        config.setCreatedAt(ZonedDateTime.now());
-        RagSloConfig saved = sloConfigRepository.save(config);
 
         auditCreate(AuditLogService.ENTITY_SLO_CONFIG,
                 request.getSloName(),
@@ -300,7 +283,7 @@ public class AlertController {
     @Operation(summary = "List all SLO configs", description = "List all SLO configurations.")
     @GetMapping("/slos/configs")
     public ResponseEntity<List<RagSloConfig>> listSloConfigs() {
-        return ResponseEntity.ok(sloConfigRepository.findAll());
+        return ResponseEntity.ok(alertService.listSloConfigs());
     }
 
     @Operation(summary = "Get SLO config by name", description = "Get a specific SLO configuration by its name.")
@@ -310,7 +293,7 @@ public class AlertController {
     })
     @GetMapping("/slos/configs/{sloName}")
     public ResponseEntity<RagSloConfig> getSloConfig(@PathVariable String sloName) {
-        return sloConfigRepository.findBySloName(sloName)
+        return alertService.findSloConfig(sloName)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
@@ -324,19 +307,8 @@ public class AlertController {
     public ResponseEntity<RagSloConfig> updateSloConfig(
             @PathVariable String sloName,
             @Valid @RequestBody SloConfigRequest request) {
-        return sloConfigRepository.findBySloName(sloName)
-                .map(existing -> {
-                    existing.setSloType(request.getSloType());
-                    existing.setTargetValue(request.getTargetValue());
-                    existing.setUnit(request.getUnit());
-                    existing.setDescription(request.getDescription());
-                    if (request.getEnabled() != null) {
-                        existing.setEnabled(request.getEnabled());
-                    }
-                    existing.setMetadata(request.getMetadata());
-                    existing.setUpdatedAt(ZonedDateTime.now());
-                    RagSloConfig saved = sloConfigRepository.save(existing);
-
+        return alertService.updateSloConfig(sloName, request)
+                .map(saved -> {
                     auditUpdate(AuditLogService.ENTITY_SLO_CONFIG,
                             sloName,
                             "SLO config updated: " + sloName);
@@ -353,10 +325,9 @@ public class AlertController {
     })
     @DeleteMapping("/slos/configs/{sloName}")
     public ResponseEntity<Void> deleteSloConfig(@PathVariable String sloName) {
-        if (!sloConfigRepository.findBySloName(sloName).isPresent()) {
+        if (!alertService.deleteSloConfig(sloName)) {
             return ResponseEntity.notFound().build();
         }
-        sloConfigRepository.deleteBySloName(sloName);
 
         auditDelete(AuditLogService.ENTITY_SLO_CONFIG,
                 sloName,
@@ -376,20 +347,10 @@ public class AlertController {
     @PostMapping("/silence-schedules")
     public ResponseEntity<RagSilenceSchedule> createSilenceSchedule(
             @Valid @RequestBody SilenceScheduleRequest request) {
-        if (silenceScheduleRepository.findByName(request.getName()).isPresent()) {
+        RagSilenceSchedule saved = alertService.createSilenceSchedule(request).orElse(null);
+        if (saved == null) {
             return ResponseEntity.status(409).build();
         }
-        RagSilenceSchedule schedule = new RagSilenceSchedule();
-        schedule.setName(request.getName());
-        schedule.setAlertKey(request.getAlertKey());
-        schedule.setSilenceType(request.getSilenceType());
-        schedule.setStartTime(request.getStartTime());
-        schedule.setEndTime(request.getEndTime());
-        schedule.setDescription(request.getDescription());
-        schedule.setEnabled(request.getEnabled() != null ? request.getEnabled() : true);
-        schedule.setMetadata(request.getMetadata());
-        schedule.setCreatedAt(ZonedDateTime.now());
-        RagSilenceSchedule saved = silenceScheduleRepository.save(schedule);
 
         auditCreate(AuditLogService.ENTITY_SILENCE_SCHEDULE,
                 request.getName(),
@@ -401,7 +362,7 @@ public class AlertController {
     @Operation(summary = "List all silence schedules", description = "List all configured silence schedules.")
     @GetMapping("/silence-schedules")
     public ResponseEntity<List<RagSilenceSchedule>> listSilenceSchedules() {
-        return ResponseEntity.ok(silenceScheduleRepository.findAll());
+        return ResponseEntity.ok(alertService.listSilenceSchedules());
     }
 
     @Operation(summary = "Get silence schedule by name", description = "Get a specific silence schedule by its name.")
@@ -411,7 +372,7 @@ public class AlertController {
     })
     @GetMapping("/silence-schedules/{name}")
     public ResponseEntity<RagSilenceSchedule> getSilenceSchedule(@PathVariable String name) {
-        return silenceScheduleRepository.findByName(name)
+        return alertService.findSilenceSchedule(name)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
@@ -425,20 +386,8 @@ public class AlertController {
     public ResponseEntity<RagSilenceSchedule> updateSilenceSchedule(
             @PathVariable String name,
             @Valid @RequestBody SilenceScheduleRequest request) {
-        return silenceScheduleRepository.findByName(name)
-                .map(existing -> {
-                    existing.setAlertKey(request.getAlertKey());
-                    existing.setSilenceType(request.getSilenceType());
-                    existing.setStartTime(request.getStartTime());
-                    existing.setEndTime(request.getEndTime());
-                    existing.setDescription(request.getDescription());
-                    if (request.getEnabled() != null) {
-                        existing.setEnabled(request.getEnabled());
-                    }
-                    existing.setMetadata(request.getMetadata());
-                    existing.setUpdatedAt(ZonedDateTime.now());
-                    RagSilenceSchedule saved = silenceScheduleRepository.save(existing);
-
+        return alertService.updateSilenceSchedule(name, request)
+                .map(saved -> {
                     auditUpdate(AuditLogService.ENTITY_SILENCE_SCHEDULE,
                             name,
                             "Silence schedule updated: " + name);
@@ -455,10 +404,9 @@ public class AlertController {
     })
     @DeleteMapping("/silence-schedules/{name}")
     public ResponseEntity<Void> deleteSilenceSchedule(@PathVariable String name) {
-        if (!silenceScheduleRepository.findByName(name).isPresent()) {
+        if (!alertService.deleteSilenceSchedule(name)) {
             return ResponseEntity.notFound().build();
         }
-        silenceScheduleRepository.deleteByName(name);
 
         auditDelete(AuditLogService.ENTITY_SILENCE_SCHEDULE,
                 name,

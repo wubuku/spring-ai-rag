@@ -38,6 +38,7 @@ import static org.mockito.Mockito.when;
 import com.springairag.core.service.ExternalDocumentService;
 import com.springairag.core.service.DocumentDerivationDescriptorProvider;
 import com.springairag.core.service.DocumentRelocationService;
+import com.springairag.core.service.DocumentQueryService;
 
 /**
  * 批量端点守卫与委派（Batch 387）：批量删除空列表守卫与委派、
@@ -58,9 +59,7 @@ class RagDocumentControllerBatchOpsTest {
         dispatchService = mock(EmbeddingDispatchService.class);
         batchDocumentService = mock(BatchDocumentService.class);
         controller = new RagDocumentController(
-                documentRepository,
-                mock(RagEmbeddingRepository.class),
-                mock(RagCollectionRepository.class),
+                new DocumentQueryService(documentRepository, mock(RagCollectionRepository.class), mock(RagEmbeddingRepository.class)),
                 documentEmbedService,
                 batchDocumentService,
                 mock(DocumentVersionService.class),

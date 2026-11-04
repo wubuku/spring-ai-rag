@@ -28,6 +28,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import com.springairag.core.service.ChatHistoryService;
 
 /**
  * /chat/stream 在**上游失败于 emitter 提交之后**时，客户端实际收到什么。
@@ -67,7 +68,7 @@ class ChatStreamUpstreamFailureContractTest {
                 .thenReturn(RetrievalScope.unscoped());
         RagChatController controller = new RagChatController(
                 ragChatService,
-                mock(RagChatHistoryRepository.class),
+                new ChatHistoryService(mock(RagChatHistoryRepository.class)),
                 mock(ChatExportService.class),
                 new RagSseProperties(),
                 scopeResolver,

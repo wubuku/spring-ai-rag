@@ -15,6 +15,10 @@ describe('formatCount', () => {
     expect(formatCount(999, 'en-US')).toBe('999');
     expect(formatCount(0, 'en-US')).toBe('0');
     expect(formatCount(-4200, 'en-US')).toBe('-4,200');
+    // zh-CN groups with the same comma. Pinned separately so a formatter cache
+    // keyed only by options — but not by locale — cannot pass unnoticed.
+    expect(formatCount(1234567, 'zh-CN')).toBe('1,234,567');
+    expect(formatCount(999, 'zh-CN')).toBe('999');
   });
 
   it('keeps a whole precision the wire sent as a string', () => {

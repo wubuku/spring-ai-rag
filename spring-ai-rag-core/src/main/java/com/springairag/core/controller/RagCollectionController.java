@@ -24,8 +24,6 @@ import com.springairag.core.entity.RagCollection;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.exception.DocumentRevisionConflictException;
 import com.springairag.core.exception.RagException;
-import com.springairag.core.repository.RagCollectionRepository;
-import com.springairag.core.repository.RagDocumentRepository;
 import com.springairag.core.security.ApiKeyCollectionAccess;
 import com.springairag.core.security.ProvisioningOwnerResolver;
 import com.springairag.core.util.CollectionMapper;
@@ -87,8 +85,6 @@ public class RagCollectionController {
 
     private static final Logger log = LoggerFactory.getLogger(RagCollectionController.class);
 
-    private final RagCollectionRepository collectionRepository;
-    private final RagDocumentRepository documentRepository;
     private final RagCollectionService collectionService;
     private final CollectionIdentityResolver identityResolver;
     // Batch 820. Same finding as RagDocumentController: these four are injected with
@@ -110,17 +106,13 @@ public class RagCollectionController {
     }
 
     @Autowired
-    public RagCollectionController(RagCollectionRepository collectionRepository,
-                                    RagDocumentRepository documentRepository,
-                                    RagCollectionService collectionService,
+    public RagCollectionController(RagCollectionService collectionService,
                                     CollectionIdentityResolver identityResolver,
                                     @Autowired(required = false) AuditLogService auditLogService,
                                     DocumentMutationService documentMutationService,
                                     CollectionProvisioningService collectionProvisioningService,
                                     ProvisioningOwnerResolver provisioningOwnerResolver,
                                     CollectionExportService exportService) {
-        this.collectionRepository = collectionRepository;
-        this.documentRepository = documentRepository;
         this.collectionService = collectionService;
         this.identityResolver = identityResolver;
         this.auditLogService = auditLogService;
@@ -308,7 +300,7 @@ public class RagCollectionController {
         RagCollection collection = requireAccessibleActiveCollection(collectionKey);
         ApiKeyCollectionAccess.requireCollectionId(
                 collection.getId(), ApiKeyCollectionAccess.currentPolicy());
-        long docCount = documentRepository.countByCollectionId(collection.getId());
+        long docCount = collectionService.countDocuments(collection.getId());
         return ResponseEntity.ok(CollectionMapper.toMap(collection, docCount));
     }
 
@@ -344,9 +336,9 @@ public class RagCollectionController {
         }
         log.info("Getting collection: id={}", id);
 
-        return findActiveCollection(id)
+        return collectionService.findActiveCollection(id)
                 .map(c -> {
-                    long docCount = documentRepository.countByCollectionId(id);
+                    long docCount = collectionService.countDocuments(id);
                     return ResponseEntity.ok(CollectionMapper.toMap(c, docCount));
                 })
                 .orElseGet(() -> ResponseEntity.notFound().build());
@@ -370,22 +362,12 @@ public class RagCollectionController {
 
         var restrictedIds = ApiKeyCollectionAccess.restrictedCollectionIds(
                 ApiKeyCollectionAccess.currentPolicy());
-        var pageResult = restrictedIds
-                .map(ids -> collectionRepository.searchCollectionsByIds(
-                        List.copyOf(ids), name, query, enabled, pageable))
-                .orElseGet(() -> collectionRepository.searchCollections(
-                        name, query, enabled, pageable));
+        var pageResult = collectionService.searchCollections(
+                restrictedIds, name, query, enabled, pageable);
 
         List<RagCollection> collections = pageResult.getContent();
-        Map<Long, Long> docCounts = collections.isEmpty()
-                ? Map.of()
-                : documentRepository
-                        .countGroupedByCollectionIds(
-                                collections.stream().map(RagCollection::getId).toList())
-                        .stream()
-                        .collect(java.util.stream.Collectors.toMap(
-                                row -> ((Number) row[0]).longValue(),
-                                row -> ((Number) row[1]).longValue()));
+        Map<Long, Long> docCounts = collectionService.countDocumentsGrouped(
+                collections.stream().map(RagCollection::getId).toList());
         List<Map<String, Object>> items = collections.stream()
                 .map(c -> CollectionMapper.toMap(
                         c, docCounts.getOrDefault(c.getId(), 0L)))
@@ -419,27 +401,14 @@ public class RagCollectionController {
                 id, ApiKeyCollectionAccess.currentPolicy());
         log.info("Updating collection: id={}", id);
 
-        return findActiveCollection(id)
-                .map(existing -> {
-                    existing.setName(request.getName());
-                    existing.setDescription(request.getDescription());
-                    existing.setEmbeddingModel(request.getEmbeddingModel());
-                    if (request.getDimensions() != null) {
-                        existing.setDimensions(request.getDimensions());
-                    }
-                    if (request.getEnabled() != null) {
-                        existing.setEnabled(request.getEnabled());
-                    }
-                    existing.setMetadata(request.getMetadata());
-
-                    RagCollection saved = collectionRepository.save(existing);
-                    long docCount = documentRepository.countByCollectionId(id);
-
+        return collectionService.updateCollection(id, request)
+                .map(result -> {
                     log.info("Collection updated: id={}", id);
                     audit(AuditLogService.AuditAction.UPDATE, AuditLogService.ENTITY_COLLECTION,
                             String.valueOf(id),
-                            "Collection updated: " + existing.getName());
-                    return ResponseEntity.ok(CollectionMapper.toMap(saved, docCount));
+                            "Collection updated: " + result.collection().getName());
+                    return ResponseEntity.ok(CollectionMapper.toMap(
+                            result.collection(), result.documentCount()));
                 })
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
@@ -499,7 +468,7 @@ public class RagCollectionController {
 
         return collectionService.restoreCollection(id)
                 .map(result -> {
-                    long docCount = documentRepository.countByCollectionId(result.collection().getId());
+                    long docCount = collectionService.countDocuments(result.collection().getId());
                     return ResponseEntity.ok(CollectionRestoreResponse.of(
                             result.collection().getId(),
                             result.collection().getCollectionKey(),
@@ -594,27 +563,13 @@ public class RagCollectionController {
         ApiKeyCollectionAccess.requireCollectionId(
                 id, ApiKeyCollectionAccess.currentPolicy());
 
-        if (findActiveCollection(id).isEmpty()) {
-            return ResponseEntity.notFound().build();
-        }
-
         int page = offset / limit;
         var pageable = PageRequest.of(page, limit, Sort.by(Sort.Direction.DESC, "createdAt"));
-        Page<RagDocument> pageResult;
-
-        boolean hasFilters = (keyword != null && !keyword.isBlank())
-                || (documentType != null && !documentType.isBlank())
-                || (processingStatus != null && !processingStatus.isBlank());
-
-        if (hasFilters) {
-            pageResult = documentRepository.searchDocumentsByCollectionId(
-                    id,
-                    keyword != null ? keyword.trim() : null,
-                    documentType,
-                    processingStatus,
-                    pageable);
-        } else {
-            pageResult = documentRepository.findByCollectionId(id, pageable);
+        Page<RagDocument> pageResult = collectionService.findDocuments(
+                        id, keyword, documentType, processingStatus, pageable)
+                .orElse(null);
+        if (pageResult == null) {
+            return ResponseEntity.notFound().build();
         }
 
         String collectionKey = identityResolver.mapKeys(List.of(id)).get(id);
@@ -689,11 +644,11 @@ public class RagCollectionController {
             throw new IllegalArgumentException("documentId is required");
         }
 
-        if (findActiveCollection(id).isEmpty()) {
+        if (collectionService.findActiveCollection(id).isEmpty()) {
             return ResponseEntity.notFound().build();
         }
 
-        return documentRepository.findById(documentId)
+        return collectionService.findDocument(documentId)
                 .map(doc -> {
                     ApiKeyCollectionAccess.requireDocumentAccess(doc, currentKey);
                     if (doc.getExternalId() != null && !doc.getExternalId().isBlank()) {
@@ -746,9 +701,9 @@ public class RagCollectionController {
                 id, ApiKeyCollectionAccess.currentPolicy());
         log.info("Exporting collection: id={}", id);
 
-        return findActiveCollection(id)
+        return collectionService.findActiveCollection(id)
                 .map(collection -> {
-                    long documentCount = documentRepository.countByCollectionId(id);
+                    long documentCount = collectionService.countDocuments(id);
                     log.info("Collection export started: id={}, documents={}, batchSize={}",
                             id, documentCount, CollectionExportService.EXPORT_BATCH_SIZE);
                     StreamingResponseBody body = outputStream -> {
@@ -915,21 +870,6 @@ public class RagCollectionController {
                 collectionKey,
                 ApiKeyCollectionAccess.currentPolicy(),
                 identityResolver);
-    }
-
-    private java.util.Optional<RagCollection> findActiveCollection(Long id) {
-        java.util.Optional<RagCollection> active =
-                collectionRepository.findByIdAndDeletedFalse(id);
-        if (active.isEmpty()) {
-            collectionRepository.findById(id)
-                    .filter(collection -> collection.getPurgedAt() != null)
-                    .ifPresent(collection -> {
-                        throw new RagException(
-                                ErrorCode.COLLECTION_ALREADY_RETIRED,
-                                "Collection is permanently retired");
-                    });
-        }
-        return active;
     }
 
     // Null-safe generic audit helper (AuditLogService is optional)

@@ -1,9 +1,15 @@
 package com.springairag.core.service;
 
+import com.springairag.api.dto.SilenceScheduleRequest;
+import com.springairag.api.dto.SloConfigRequest;
+import com.springairag.core.entity.RagSilenceSchedule;
+import com.springairag.core.entity.RagSloConfig;
+
 import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * Alert service interface.
@@ -129,6 +135,44 @@ public interface AlertService {
      * @return SLO status
      */
     SloStatus checkSlo(String sloName, ZonedDateTime startDate, ZonedDateTime endDate);
+
+    // ==================== SLO 配置与静默计划 CRUD ====================
+
+    /**
+     * 创建 SLO 配置；同名配置已存在时返回空，让调用方保持 409 语义。
+     */
+    Optional<RagSloConfig> createSloConfig(SloConfigRequest request);
+
+    /** 全部 SLO 配置。 */
+    List<RagSloConfig> listSloConfigs();
+
+    /** 按名称查询 SLO 配置。 */
+    Optional<RagSloConfig> findSloConfig(String sloName);
+
+    /** 更新 SLO 配置；不存在时返回空。 */
+    Optional<RagSloConfig> updateSloConfig(String sloName, SloConfigRequest request);
+
+    /** 删除 SLO 配置；返回是否真的删除了一行。 */
+    boolean deleteSloConfig(String sloName);
+
+    /**
+     * 创建静默计划；同名计划已存在时返回空，让调用方保持 409 语义。
+     */
+    Optional<RagSilenceSchedule> createSilenceSchedule(
+            SilenceScheduleRequest request);
+
+    /** 全部静默计划。 */
+    List<RagSilenceSchedule> listSilenceSchedules();
+
+    /** 按名称查询静默计划。 */
+    Optional<RagSilenceSchedule> findSilenceSchedule(String name);
+
+    /** 更新静默计划；不存在时返回空。 */
+    Optional<RagSilenceSchedule> updateSilenceSchedule(
+            String name, SilenceScheduleRequest request);
+
+    /** 删除静默计划；返回是否真的删除了一行。 */
+    boolean deleteSilenceSchedule(String name);
 
     // ==================== Data classes ====================
 

@@ -4,9 +4,6 @@ import com.springairag.api.dto.DocumentLifecycleResponse;
 import com.springairag.api.dto.DocumentMutationResponse;
 import com.springairag.core.config.EmbeddingProfileProvider;
 import com.springairag.core.entity.RagDocument;
-import com.springairag.core.repository.RagCollectionRepository;
-import com.springairag.core.repository.RagDocumentRepository;
-import com.springairag.core.repository.RagEmbeddingRepository;
 import com.springairag.core.service.BatchDocumentService;
 import com.springairag.core.service.CollectionIdentityResolver;
 import com.springairag.core.service.DocumentEmbedService;
@@ -65,11 +62,7 @@ class DocumentLifecycleControllerWebTest {
     @MockBean
     private DocumentRelocationService documentRelocationService;
     @MockBean
-    private RagDocumentRepository documentRepository;
-    @MockBean
-    private RagEmbeddingRepository embeddingRepository;
-    @MockBean
-    private RagCollectionRepository collectionRepository;
+    private com.springairag.core.service.DocumentQueryService documentQueryService;
     @MockBean
     private DocumentEmbedService documentEmbedService;
     @MockBean
@@ -168,7 +161,7 @@ class DocumentLifecycleControllerWebTest {
         RagDocument document = new RagDocument();
         document.setId(41L);
         document.setEnabled(true);
-        when(documentRepository.findById(41L))
+        when(documentQueryService.findById(41L))
                 .thenReturn(Optional.of(document));
 
         mockMvc.perform(delete("/api/v1/rag/documents/41"))

@@ -52,6 +52,7 @@ import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import com.springairag.core.service.ChatHistoryService;
 
 /**
  * RagChatController 非键控与 SSE 追踪长尾（Batch 632，JaCoCo 驱动）：
@@ -90,7 +91,7 @@ class RagChatControllerNonKeyedSseTailTest {
         diagnosticsService = mock(RetrievalDiagnosticsService.class);
         controller = new RagChatController(
                 ragChatService,
-                mock(RagChatHistoryRepository.class),
+                new ChatHistoryService(mock(RagChatHistoryRepository.class)),
                 mock(ChatExportService.class),
                 new RagSseProperties(),
                 scopeResolver,
@@ -234,7 +235,7 @@ class RagChatControllerNonKeyedSseTailTest {
 
     @Test
     void nonKeyedAskWithoutResolverUsesPlainChatOverload() {
-        RagChatController legacy = new RagChatController(ragChatService, mock(RagChatHistoryRepository.class), mock(ChatExportService.class), new RagSseProperties(), null, null);
+        RagChatController legacy = new RagChatController(ragChatService, new ChatHistoryService(mock(RagChatHistoryRepository.class)), mock(ChatExportService.class), new RagSseProperties(), null, null);
         legacy.configureTurnOperationService(turnOperationService);
         when(turnOperationService.prepare(any(), anyList(), any()))
                 .thenReturn(nonKeyedPrepared());
@@ -301,7 +302,7 @@ class RagChatControllerNonKeyedSseTailTest {
         disabled.setHeartbeatIntervalSeconds(0);
         RagChatController noHeartbeat = new RagChatController(
                 ragChatService,
-                mock(RagChatHistoryRepository.class),
+                new ChatHistoryService(mock(RagChatHistoryRepository.class)),
                 mock(ChatExportService.class),
                 disabled,
                 scopeResolver,
@@ -322,7 +323,7 @@ class RagChatControllerNonKeyedSseTailTest {
 
     @Test
     void clearHistoryWithoutAuditServiceSkipsAuditLogging() {
-        RagChatController legacy = new RagChatController(ragChatService, mock(RagChatHistoryRepository.class), mock(ChatExportService.class), new RagSseProperties(), null, null);
+        RagChatController legacy = new RagChatController(ragChatService, new ChatHistoryService(mock(RagChatHistoryRepository.class)), mock(ChatExportService.class), new RagSseProperties(), null, null);
         legacy.configureSessionCoordinator(coordinator);
         when(coordinator.clearSession(any(ChatPrincipal.class), anyString()))
                 .thenReturn(2);

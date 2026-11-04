@@ -29,6 +29,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import com.springairag.core.service.ChatHistoryService;
 
 /**
  * RagChatController stream SSE lambda 长尾（Batch 569，JaCoCo 驱
@@ -47,7 +48,7 @@ class RagChatControllerStreamLambdaTailTest {
         turnOperationService = mock(ChatTurnOperationService.class);
         controller = new RagChatController(
                 ragChatService,
-                mock(RagChatHistoryRepository.class),
+                new ChatHistoryService(mock(RagChatHistoryRepository.class)),
                 mock(ChatExportService.class),
                 new RagSseProperties(),
                 mock(CollectionRetrievalScopeResolver.class),

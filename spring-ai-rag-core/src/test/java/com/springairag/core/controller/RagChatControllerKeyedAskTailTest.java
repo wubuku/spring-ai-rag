@@ -41,6 +41,7 @@ import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import com.springairag.core.service.ChatHistoryService;
 
 /**
  * RagChatController keyed /ask 长尾（Batch 496，JaCoCo 驱动）：
@@ -74,7 +75,7 @@ class RagChatControllerKeyedAskTailTest {
         lease = mock(ChatSessionCoordinator.LeaseHandle.class);
         controller = new RagChatController(
                 ragChatService,
-                mock(com.springairag.core.repository.RagChatHistoryRepository.class),
+                new ChatHistoryService(mock(com.springairag.core.repository.RagChatHistoryRepository.class)),
                 mock(ChatExportService.class),
                 new RagSseProperties(),
                 mock(CollectionRetrievalScopeResolver.class),
@@ -139,7 +140,7 @@ class RagChatControllerKeyedAskTailTest {
         // mapper 未配置：重新构造仅带 execution 的 controller。
         RagChatController bare = new RagChatController(
                 ragChatService,
-                mock(com.springairag.core.repository.RagChatHistoryRepository.class),
+                new ChatHistoryService(mock(com.springairag.core.repository.RagChatHistoryRepository.class)),
                 mock(ChatExportService.class),
                 new RagSseProperties(),
                 mock(CollectionRetrievalScopeResolver.class),
@@ -160,7 +161,7 @@ class RagChatControllerKeyedAskTailTest {
             throws Exception {
         RagChatController bare = new RagChatController(
                 ragChatService,
-                mock(com.springairag.core.repository.RagChatHistoryRepository.class),
+                new ChatHistoryService(mock(com.springairag.core.repository.RagChatHistoryRepository.class)),
                 mock(ChatExportService.class),
                 new RagSseProperties(),
                 mock(CollectionRetrievalScopeResolver.class),

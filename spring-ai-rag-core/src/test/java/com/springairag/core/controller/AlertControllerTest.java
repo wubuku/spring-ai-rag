@@ -9,8 +9,6 @@ import com.springairag.api.dto.SilenceScheduleRequest;
 import com.springairag.api.dto.SloConfigRequest;
 import com.springairag.core.entity.RagSilenceSchedule;
 import com.springairag.core.entity.RagSloConfig;
-import com.springairag.core.repository.RagSilenceScheduleRepository;
-import com.springairag.core.repository.SloConfigRepository;
 import com.springairag.core.service.AlertService;
 import com.springairag.core.service.AuditLogService;
 import org.junit.jupiter.api.BeforeEach;
@@ -31,18 +29,14 @@ import static org.mockito.Mockito.*;
 class AlertControllerTest {
 
     private AlertService alertService;
-    private SloConfigRepository sloConfigRepository;
-    private RagSilenceScheduleRepository silenceScheduleRepository;
     private AuditLogService auditLogService;
     private AlertController controller;
 
     @BeforeEach
     void setUp() {
         alertService = mock(AlertService.class);
-        sloConfigRepository = mock(SloConfigRepository.class);
-        silenceScheduleRepository = mock(RagSilenceScheduleRepository.class);
         auditLogService = mock(AuditLogService.class);
-        controller = new AlertController(alertService, sloConfigRepository, silenceScheduleRepository, auditLogService, null);
+        controller = new AlertController(alertService, auditLogService, null);
     }
 
     // ==================== getActiveAlerts ====================
@@ -295,8 +289,8 @@ class AlertControllerTest {
         saved.setTargetValue(200.0);
         saved.setUnit("ms");
 
-        when(sloConfigRepository.findBySloName("latency_p99")).thenReturn(java.util.Optional.empty());
-        when(sloConfigRepository.save(any(RagSloConfig.class))).thenReturn(saved);
+        when(alertService.createSloConfig(any(SloConfigRequest.class)))
+                .thenReturn(java.util.Optional.of(saved));
 
         ResponseEntity<RagSloConfig> response = controller.createSloConfig(request);
 
@@ -313,14 +307,12 @@ class AlertControllerTest {
         request.setTargetValue(99.9);
         request.setUnit("%");
 
-        RagSloConfig existing = new RagSloConfig();
-        existing.setSloName("existing_slo");
-        when(sloConfigRepository.findBySloName("existing_slo")).thenReturn(java.util.Optional.of(existing));
+        when(alertService.createSloConfig(any(SloConfigRequest.class)))
+                .thenReturn(java.util.Optional.empty());
 
         ResponseEntity<RagSloConfig> response = controller.createSloConfig(request);
 
         assertEquals(409, response.getStatusCode().value());
-        verify(sloConfigRepository, never()).save(any());
     }
 
     @Test
@@ -330,7 +322,7 @@ class AlertControllerTest {
         RagSloConfig c2 = new RagSloConfig();
         c2.setSloName("slo2");
 
-        when(sloConfigRepository.findAll()).thenReturn(List.of(c1, c2));
+        when(alertService.listSloConfigs()).thenReturn(List.of(c1, c2));
 
         ResponseEntity<List<RagSloConfig>> response = controller.listSloConfigs();
 
@@ -343,7 +335,7 @@ class AlertControllerTest {
         RagSloConfig config = new RagSloConfig();
         config.setSloName("latency");
         config.setTargetValue(500.0);
-        when(sloConfigRepository.findBySloName("latency")).thenReturn(java.util.Optional.of(config));
+        when(alertService.findSloConfig("latency")).thenReturn(java.util.Optional.of(config));
 
         ResponseEntity<RagSloConfig> response = controller.getSloConfig("latency");
 
@@ -353,7 +345,7 @@ class AlertControllerTest {
 
     @Test
     void getSloConfig_notFound_returns404() {
-        when(sloConfigRepository.findBySloName("nonexistent")).thenReturn(java.util.Optional.empty());
+        when(alertService.findSloConfig("nonexistent")).thenReturn(java.util.Optional.empty());
 
         ResponseEntity<RagSloConfig> response = controller.getSloConfig("nonexistent");
 
@@ -362,25 +354,21 @@ class AlertControllerTest {
 
     @Test
     void deleteSloConfig_existing_returns204() {
-        RagSloConfig config = new RagSloConfig();
-        config.setSloName("to_delete");
-        when(sloConfigRepository.findBySloName("to_delete")).thenReturn(java.util.Optional.of(config));
-        doNothing().when(sloConfigRepository).deleteBySloName("to_delete");
+        when(alertService.deleteSloConfig("to_delete")).thenReturn(true);
 
         ResponseEntity<Void> response = controller.deleteSloConfig("to_delete");
 
         assertEquals(204, response.getStatusCode().value());
-        verify(sloConfigRepository).deleteBySloName("to_delete");
+        verify(alertService).deleteSloConfig("to_delete");
     }
 
     @Test
     void deleteSloConfig_notFound_returns404() {
-        when(sloConfigRepository.findBySloName("nonexistent")).thenReturn(java.util.Optional.empty());
+        when(alertService.deleteSloConfig("nonexistent")).thenReturn(false);
 
         ResponseEntity<Void> response = controller.deleteSloConfig("nonexistent");
 
         assertEquals(404, response.getStatusCode().value());
-        verify(sloConfigRepository, never()).deleteBySloName(any());
     }
 
     // ==================== Silence Schedule CRUD ====================
@@ -400,8 +388,8 @@ class AlertControllerTest {
         saved.setAlertKey("high-latency");
         saved.setSilenceType("ONE_TIME");
 
-        when(silenceScheduleRepository.findByName("weekend_maint")).thenReturn(java.util.Optional.empty());
-        when(silenceScheduleRepository.save(any(RagSilenceSchedule.class))).thenReturn(saved);
+        when(alertService.createSilenceSchedule(any(SilenceScheduleRequest.class)))
+                .thenReturn(java.util.Optional.of(saved));
 
         ResponseEntity<RagSilenceSchedule> response = controller.createSilenceSchedule(request);
 
@@ -417,14 +405,12 @@ class AlertControllerTest {
         request.setStartTime("2026-04-10T02:00:00+08:00");
         request.setEndTime("2026-04-10T04:00:00+08:00");
 
-        RagSilenceSchedule existing = new RagSilenceSchedule();
-        existing.setName("existing_schedule");
-        when(silenceScheduleRepository.findByName("existing_schedule")).thenReturn(java.util.Optional.of(existing));
+        when(alertService.createSilenceSchedule(any(SilenceScheduleRequest.class)))
+                .thenReturn(java.util.Optional.empty());
 
         ResponseEntity<RagSilenceSchedule> response = controller.createSilenceSchedule(request);
 
         assertEquals(409, response.getStatusCode().value());
-        verify(silenceScheduleRepository, never()).save(any());
     }
 
     @Test
@@ -434,7 +420,7 @@ class AlertControllerTest {
         RagSilenceSchedule s2 = new RagSilenceSchedule();
         s2.setName("schedule2");
 
-        when(silenceScheduleRepository.findAll()).thenReturn(List.of(s1, s2));
+        when(alertService.listSilenceSchedules()).thenReturn(List.of(s1, s2));
 
         ResponseEntity<List<RagSilenceSchedule>> response = controller.listSilenceSchedules();
 
@@ -447,7 +433,7 @@ class AlertControllerTest {
         RagSilenceSchedule schedule = new RagSilenceSchedule();
         schedule.setName("maintenance");
         schedule.setSilenceType("ONE_TIME");
-        when(silenceScheduleRepository.findByName("maintenance")).thenReturn(java.util.Optional.of(schedule));
+        when(alertService.findSilenceSchedule("maintenance")).thenReturn(java.util.Optional.of(schedule));
 
         ResponseEntity<RagSilenceSchedule> response = controller.getSilenceSchedule("maintenance");
 
@@ -457,7 +443,7 @@ class AlertControllerTest {
 
     @Test
     void getSilenceSchedule_notFound_returns404() {
-        when(silenceScheduleRepository.findByName("nonexistent")).thenReturn(java.util.Optional.empty());
+        when(alertService.findSilenceSchedule("nonexistent")).thenReturn(java.util.Optional.empty());
 
         ResponseEntity<RagSilenceSchedule> response = controller.getSilenceSchedule("nonexistent");
 
@@ -466,25 +452,21 @@ class AlertControllerTest {
 
     @Test
     void deleteSilenceSchedule_existing_returns204() {
-        RagSilenceSchedule schedule = new RagSilenceSchedule();
-        schedule.setName("to_delete");
-        when(silenceScheduleRepository.findByName("to_delete")).thenReturn(java.util.Optional.of(schedule));
-        doNothing().when(silenceScheduleRepository).deleteByName("to_delete");
+        when(alertService.deleteSilenceSchedule("to_delete")).thenReturn(true);
 
         ResponseEntity<Void> response = controller.deleteSilenceSchedule("to_delete");
 
         assertEquals(204, response.getStatusCode().value());
-        verify(silenceScheduleRepository).deleteByName("to_delete");
+        verify(alertService).deleteSilenceSchedule("to_delete");
     }
 
     @Test
     void deleteSilenceSchedule_notFound_returns404() {
-        when(silenceScheduleRepository.findByName("nonexistent")).thenReturn(java.util.Optional.empty());
+        when(alertService.deleteSilenceSchedule("nonexistent")).thenReturn(false);
 
         ResponseEntity<Void> response = controller.deleteSilenceSchedule("nonexistent");
 
         assertEquals(404, response.getStatusCode().value());
-        verify(silenceScheduleRepository, never()).deleteByName(any());
     }
 
     // ==================== updateSloConfig ====================
@@ -498,16 +480,14 @@ class AlertControllerTest {
         request.setDescription("Updated SLO");
         request.setEnabled(Boolean.FALSE);
 
-        RagSloConfig existing = new RagSloConfig();
-        existing.setSloName("latency_p99");
-        existing.setSloType("LATENCY");
-        existing.setTargetValue(200.0);
-        existing.setUnit("ms");
-        existing.setEnabled(Boolean.TRUE);
-        when(sloConfigRepository.findBySloName("latency_p99"))
-                .thenReturn(java.util.Optional.of(existing));
-        when(sloConfigRepository.save(any(RagSloConfig.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+        RagSloConfig updated = new RagSloConfig();
+        updated.setSloName("latency_p99");
+        updated.setSloType("AVAILABILITY");
+        updated.setTargetValue(99.9);
+        updated.setUnit("%");
+        updated.setEnabled(Boolean.FALSE);
+        when(alertService.updateSloConfig(eq("latency_p99"), any(SloConfigRequest.class)))
+                .thenReturn(java.util.Optional.of(updated));
 
         ResponseEntity<RagSloConfig> response =
                 controller.updateSloConfig("latency_p99", request);
@@ -522,7 +502,7 @@ class AlertControllerTest {
 
     @Test
     void updateSloConfig_missing_returns404() {
-        when(sloConfigRepository.findBySloName("ghost"))
+        when(alertService.updateSloConfig(eq("ghost"), any(SloConfigRequest.class)))
                 .thenReturn(java.util.Optional.empty());
 
         ResponseEntity<RagSloConfig> response =
@@ -543,15 +523,14 @@ class AlertControllerTest {
         request.setDescription("Holiday freeze");
         request.setEnabled(Boolean.FALSE);
 
-        RagSilenceSchedule existing = new RagSilenceSchedule();
-        existing.setName("weekend_maint");
-        existing.setAlertKey("old-key");
-        existing.setSilenceType("ONE_TIME");
-        existing.setEnabled(Boolean.TRUE);
-        when(silenceScheduleRepository.findByName("weekend_maint"))
-                .thenReturn(java.util.Optional.of(existing));
-        when(silenceScheduleRepository.save(any(RagSilenceSchedule.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+        RagSilenceSchedule updated = new RagSilenceSchedule();
+        updated.setName("weekend_maint");
+        updated.setAlertKey("high-latency");
+        updated.setSilenceType("RECURRING");
+        updated.setEnabled(Boolean.FALSE);
+        when(alertService.updateSilenceSchedule(
+                eq("weekend_maint"), any(SilenceScheduleRequest.class)))
+                .thenReturn(java.util.Optional.of(updated));
 
         ResponseEntity<RagSilenceSchedule> response =
                 controller.updateSilenceSchedule("weekend_maint", request);
@@ -565,7 +544,8 @@ class AlertControllerTest {
 
     @Test
     void updateSilenceSchedule_missing_returns404() {
-        when(silenceScheduleRepository.findByName("ghost"))
+        when(alertService.updateSilenceSchedule(
+                eq("ghost"), any(SilenceScheduleRequest.class)))
                 .thenReturn(java.util.Optional.empty());
 
         ResponseEntity<RagSilenceSchedule> response =

@@ -26,6 +26,7 @@ import static org.mockito.Mockito.when;
 import com.springairag.core.service.ExternalDocumentService;
 import com.springairag.core.service.DocumentDerivationDescriptorProvider;
 import com.springairag.core.service.DocumentRelocationService;
+import com.springairag.core.service.DocumentQueryService;
 
 /**
  * RagDocumentController 校验矩阵长尾（Batch 637，JaCoCo 驱动）：
@@ -43,9 +44,7 @@ class RagDocumentControllerValidateMatrixTailTest {
     void setUp() {
         auditLogService = mock(AuditLogService.class);
         controller = new RagDocumentController(
-                mock(RagDocumentRepository.class),
-                mock(RagEmbeddingRepository.class),
-                mock(RagCollectionRepository.class),
+                new DocumentQueryService(mock(RagDocumentRepository.class), mock(RagCollectionRepository.class), mock(RagEmbeddingRepository.class)),
                 mock(DocumentEmbedService.class),
                 mock(BatchDocumentService.class),
                 mock(DocumentVersionService.class),

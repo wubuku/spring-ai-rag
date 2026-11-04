@@ -42,6 +42,7 @@ import static org.mockito.Mockito.when;
 import com.springairag.core.service.ExternalDocumentService;
 import com.springairag.core.service.DocumentDerivationDescriptorProvider;
 import com.springairag.core.service.DocumentRelocationService;
+import com.springairag.core.service.DocumentQueryService;
 
 /**
  * createDocument 协调器分支（Batch 346）：documentMutationService
@@ -70,9 +71,7 @@ class RagDocumentControllerCoordinatorCreateTest {
         RagCollectionRepository collectionRepository =
                 mock(RagCollectionRepository.class);
         controller = new RagDocumentController(
-                documentRepository,
-                mock(RagEmbeddingRepository.class),
-                collectionRepository,
+                new DocumentQueryService(documentRepository, collectionRepository, mock(RagEmbeddingRepository.class)),
                 mock(DocumentEmbedService.class),
                 mock(BatchDocumentService.class),
                 mock(DocumentVersionService.class),

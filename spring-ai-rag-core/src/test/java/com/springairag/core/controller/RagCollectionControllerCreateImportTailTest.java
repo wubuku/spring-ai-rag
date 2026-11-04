@@ -25,6 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 import com.springairag.core.security.ProvisioningOwnerResolver;
 import com.springairag.core.service.CollectionProvisioningService;
+import static org.mockito.Mockito.spy;
 
 /**
  * RagCollectionController 创建守卫与导入构建长尾（Batch 559，JaCoCo
@@ -36,8 +37,6 @@ class RagCollectionControllerCreateImportTailTest {
 
     private RagCollectionController controllerWithoutProvisioning() {
         return new RagCollectionController(
-                mock(RagCollectionRepository.class),
-                mock(RagDocumentRepository.class),
                 mock(RagCollectionService.class),
                 mock(CollectionIdentityResolver.class),
                 null,

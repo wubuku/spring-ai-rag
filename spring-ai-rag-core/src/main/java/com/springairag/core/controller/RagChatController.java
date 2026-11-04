@@ -32,11 +32,11 @@ import com.springairag.core.security.ApiAccessPolicy;
 import com.springairag.api.enums.ErrorCode;
 import com.springairag.api.enums.FailureClass;
 import com.springairag.core.exception.RagException;
-import com.springairag.core.repository.RagChatHistoryRepository;
 import com.springairag.core.retrieval.RetrievalScope;
 import com.springairag.core.security.ApiKeyCollectionAccess;
 import com.springairag.core.service.AuditLogService;
 import com.springairag.core.service.ChatExportService;
+import com.springairag.core.service.ChatHistoryService;
 import com.springairag.core.service.CollectionRetrievalScopeResolver;
 import com.springairag.core.util.SseEmitters;
 import com.springairag.core.versioning.ApiVersion;
@@ -100,7 +100,7 @@ public class RagChatController {
     private static final Logger log = LoggerFactory.getLogger(RagChatController.class);
 
     private final RagChatService ragChatService;
-    private final RagChatHistoryRepository historyRepository;
+    private final ChatHistoryService chatHistoryService;
     private final ChatExportService chatExportService;
     private final RagSseProperties sseProperties;
     private final AuditLogService auditLogService;  // optional-claim: AuditLogService 是无条件 @Service，所以 null 分支只在测试里可达；守卫保留是因为审计写入失败不应让业务请求失败（Batch 825 替换掉了一句过时且不成立的注释：它说 null 来自 RagAuditLogRepository 不可用，而那已经不是注入路径）
@@ -114,13 +114,13 @@ public class RagChatController {
 
     @Autowired
     public RagChatController(RagChatService ragChatService,
-                             RagChatHistoryRepository historyRepository,
+                             ChatHistoryService chatHistoryService,
                              ChatExportService chatExportService,
                              RagSseProperties sseProperties,
                              CollectionRetrievalScopeResolver retrievalScopeResolver,
                              @Autowired(required = false) AuditLogService auditLogService) {
         this.ragChatService = ragChatService;
-        this.historyRepository = historyRepository;
+        this.chatHistoryService = chatHistoryService;
         this.chatExportService = chatExportService;
         this.sseProperties = sseProperties;
         this.retrievalScopeResolver = retrievalScopeResolver;
@@ -780,7 +780,7 @@ public class RagChatController {
             HttpServletRequest httpRequest) {
         String validSession = SessionIdValidator.resolve(sessionId);
         List<ChatHistoryResponse> history =
-                historyRepository.findByPrincipalAndSession(
+                chatHistoryService.findHistory(
                         ChatPrincipal.from(httpRequest),
                         validSession,
                         limit);
@@ -807,8 +807,7 @@ public class RagChatController {
         log.info("Clearing chat history for session: {}", validSession);
         int deleted = sessionCoordinator != null
                 ? sessionCoordinator.clearSession(principal, validSession)
-                : historyRepository.deleteByPrincipalAndSession(
-                        principal, validSession);
+                : chatHistoryService.clearSession(principal, validSession);
         if (deleted == 0) {
             throw new RagException(
                     ErrorCode.SESSION_NOT_FOUND,
@@ -823,7 +822,7 @@ public class RagChatController {
     }
 
     ResponseEntity<ClearHistoryResponse> clearHistory(String sessionId) {
-        int deleted = historyRepository.deleteBySessionId(sessionId);
+        int deleted = chatHistoryService.clearSession(sessionId);
         auditDelete(AuditLogService.ENTITY_CHAT_HISTORY,
                 sessionId,
                 "Chat history cleared: " + deleted + " messages");

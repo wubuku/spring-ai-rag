@@ -33,6 +33,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import com.springairag.core.security.ProvisioningOwnerResolver;
 import com.springairag.core.service.CollectionProvisioningService;
+import static org.mockito.Mockito.spy;
 
 /**
  * RagCollectionController 关联文档长尾（Batch 483，JaCoCo 驱动）：
@@ -46,6 +47,7 @@ class RagCollectionControllerAddDocumentTailTest {
     private RagDocumentRepository documentRepository;
     private CollectionIdentityResolver identityResolver;
     private DocumentMutationService documentMutationService;
+    private RagCollectionService collectionService;
     private RagCollectionController controller;
     private RagCollection collection;
     private RagDocument document;
@@ -56,11 +58,10 @@ class RagCollectionControllerAddDocumentTailTest {
         documentRepository = mock(RagDocumentRepository.class);
         identityResolver = mock(CollectionIdentityResolver.class);
         documentMutationService = mock(DocumentMutationService.class);
+        collectionService = mock(RagCollectionService.class);
 
         controller = new RagCollectionController(
-                collectionRepository,
-                documentRepository,
-                mock(RagCollectionService.class),
+                collectionService,
                 identityResolver,
                 mock(AuditLogService.class),
                 documentMutationService,
@@ -92,7 +93,7 @@ class RagCollectionControllerAddDocumentTailTest {
     }
 
     private void stubActiveCollection() {
-        when(collectionRepository.findByIdAndDeletedFalse(5L))
+        when(collectionService.findActiveCollection(5L))
                 .thenReturn(Optional.of(collection));
         when(identityResolver.mapKeys(java.util.List.of(5L)))
                 .thenReturn(Map.of(5L, "kb:manual:v1"));
@@ -105,7 +106,7 @@ class RagCollectionControllerAddDocumentTailTest {
     @Test
     void mutationServiceMovesDocumentViaUpdateLocal() {
         stubActiveCollection();
-        when(documentRepository.findById(9L))
+        when(collectionService.findDocument(9L))
                 .thenReturn(Optional.of(document));
 
         ResponseEntity<DocumentAddedResponse> response =
@@ -125,7 +126,7 @@ class RagCollectionControllerAddDocumentTailTest {
     @Test
     void mutationServiceRequiresExpectedRevision() {
         stubActiveCollection();
-        when(documentRepository.findById(9L))
+        when(collectionService.findDocument(9L))
                 .thenReturn(Optional.of(document));
 
         assertThrows(IllegalArgumentException.class,
@@ -136,7 +137,7 @@ class RagCollectionControllerAddDocumentTailTest {
     void externalManagedDocumentIsRejected() {
         stubActiveCollection();
         document.setExternalId("ext-1");
-        when(documentRepository.findById(9L))
+        when(collectionService.findDocument(9L))
                 .thenReturn(Optional.of(document));
 
         assertThrows(DocumentRevisionConflictException.class,
@@ -153,9 +154,7 @@ class RagCollectionControllerAddDocumentTailTest {
 
     @Test
     void missingCollectionReturns404() {
-        when(collectionRepository.findByIdAndDeletedFalse(5L))
-                .thenReturn(Optional.empty());
-        when(collectionRepository.findById(5L))
+        when(collectionService.findActiveCollection(5L))
                 .thenReturn(Optional.empty());
 
         ResponseEntity<DocumentAddedResponse> response =
@@ -182,7 +181,7 @@ class RagCollectionControllerAddDocumentTailTest {
                                 .ServletRequestAttributes(httpRequest));
         stubActiveCollection();
         document.setCollectionId(9L);
-        when(documentRepository.findById(9L))
+        when(collectionService.findDocument(9L))
                 .thenReturn(Optional.of(document));
 
         assertThrows(SecurityException.class,
@@ -194,7 +193,7 @@ class RagCollectionControllerAddDocumentTailTest {
         stubActiveCollection();
         when(identityResolver.requireActive(null, "kb:manual:v1"))
                 .thenReturn(collection);
-        when(documentRepository.findById(9L))
+        when(collectionService.findDocument(9L))
                 .thenReturn(Optional.of(document));
 
         ResponseEntity<DocumentAddedResponse> response =

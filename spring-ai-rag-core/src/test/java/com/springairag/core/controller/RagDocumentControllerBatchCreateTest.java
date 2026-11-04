@@ -33,6 +33,7 @@ import static org.mockito.Mockito.when;
 import com.springairag.core.service.ExternalDocumentService;
 import com.springairag.core.service.DocumentDerivationDescriptorProvider;
 import com.springairag.core.service.DocumentRelocationService;
+import com.springairag.core.service.DocumentQueryService;
 
 /**
  * batchCreateDocuments 委派（Batch 383）：单参重载、批次集合解析
@@ -47,9 +48,7 @@ class RagDocumentControllerBatchCreateTest {
     void setUp() {
         batchDocumentService = mock(BatchDocumentService.class);
         controller = new RagDocumentController(
-                mock(RagDocumentRepository.class),
-                mock(RagEmbeddingRepository.class),
-                mock(RagCollectionRepository.class),
+                new DocumentQueryService(mock(RagDocumentRepository.class), mock(RagCollectionRepository.class), mock(RagEmbeddingRepository.class)),
                 mock(DocumentEmbedService.class),
                 batchDocumentService,
                 mock(DocumentVersionService.class),

@@ -32,6 +32,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import com.springairag.core.security.ProvisioningOwnerResolver;
 import com.springairag.core.service.CollectionProvisioningService;
+import static org.mockito.Mockito.spy;
 
 /**
  * importCollection → importDocuments 分支（Batch 315）：空文档列
@@ -58,8 +59,6 @@ class RagCollectionControllerImportDocumentsTest {
         auditLogService = mock(AuditLogService.class);
         documentMutationService = mock(DocumentMutationService.class);
         controller = new RagCollectionController(
-                collectionRepository,
-                documentRepository,
                 collectionService,
                 new CollectionIdentityResolver(collectionRepository),
                 auditLogService,

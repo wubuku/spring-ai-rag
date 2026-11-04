@@ -55,6 +55,7 @@ import static org.mockito.Mockito.when;
 import com.springairag.core.service.ExternalDocumentService;
 import com.springairag.core.service.DocumentDerivationDescriptorProvider;
 import com.springairag.core.service.DocumentRelocationService;
+import com.springairag.core.service.DocumentQueryService;
 
 /**
  * RagDocumentController 上传与访问守卫长尾（Batch 474，JaCoCo
@@ -77,9 +78,7 @@ class RagDocumentControllerUploadAccessTailTest {
         batchDocumentService = mock(BatchDocumentService.class);
         documentMutationService = mock(DocumentMutationService.class);
         controller = new RagDocumentController(
-                documentRepository,
-                mock(RagEmbeddingRepository.class),
-                mock(RagCollectionRepository.class),
+                new DocumentQueryService(documentRepository, mock(RagCollectionRepository.class), mock(RagEmbeddingRepository.class)),
                 mock(DocumentEmbedService.class),
                 batchDocumentService,
                 mock(DocumentVersionService.class),

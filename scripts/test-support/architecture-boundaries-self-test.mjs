@@ -1,7 +1,7 @@
 // verify-architecture-boundaries 的自测：每个断言都注入一类违规，证明门禁能拦住。
 //
 // 覆盖：模块依赖反向、源码 import 反向、controller 被非 controller 依赖、
-// repository→service、entity→repository，以及三类“不该误报”的写法
+// controller→repository、repository→service、entity→repository，以及三类“不该误报”的写法
 // （注释里的 import、test scope 依赖、同层内部 import）。
 // 最后用真实 CLI 跑一次“干净通过 / 违规退出 1”，证明退出码生效。
 
@@ -121,6 +121,15 @@ const cases = {
       java('com.springairag.core.service', 'import com.springairag.core.controller.Ctl;'),
     );
     assertOnly(root, 'controller-imported-by-non-controller', 'service→controller');
+  },
+  'controller 直连 repository': () => {
+    const root = baseRoot();
+    write(
+      root,
+      'spring-ai-rag-core/src/main/java/com/springairag/core/controller/Ctl.java',
+      java('com.springairag.core.controller', 'import com.springairag.core.repository.Repo;'),
+    );
+    assertOnly(root, 'controller-repository-dependency', 'controller→repository');
   },
   'repository 依赖 service': () => {
     const root = baseRoot();

@@ -2,6 +2,7 @@ package com.springairag.core.service;
 
 import com.springairag.api.dto.CollectionCloneResponse;
 import com.springairag.api.dto.CollectionRequest;
+import com.springairag.api.dto.CollectionUpdateRequest;
 import com.springairag.api.dto.DocumentRequest;
 import com.springairag.api.enums.DocumentDeduplicationScope;
 import com.springairag.api.enums.EmbeddingPolicy;
@@ -16,6 +17,8 @@ import com.springairag.core.exception.RagException;
 import com.springairag.core.repository.RagCollectionRepository;
 import com.springairag.core.repository.RagDocumentRepository;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,8 +26,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Service layer for RagCollection operations.
@@ -77,6 +83,115 @@ public class RagCollectionService {
                                 AuditLogService auditLogService) {
         this(collectionRepository, documentRepository,
                 new CollectionIdentityResolver(collectionRepository), auditLogService);
+    }
+
+    /**
+     * 按 ACL 分支查询集合列表；受限调用方只查 allow-list 集合。
+     */
+    @Transactional(readOnly = true)
+    public Page<RagCollection> searchCollections(Optional<Set<Long>> restrictedIds,
+                                                 String name,
+                                                 String query,
+                                                 Boolean enabled,
+                                                 Pageable pageable) {
+        return restrictedIds
+                .map(ids -> collectionRepository.searchCollectionsByIds(
+                        List.copyOf(ids), name, query, enabled, pageable))
+                .orElseGet(() -> collectionRepository.searchCollections(
+                        name, query, enabled, pageable));
+    }
+
+    /** 批量统计每个集合的文档数。 */
+    @Transactional(readOnly = true)
+    public Map<Long, Long> countDocumentsGrouped(List<Long> collectionIds) {
+        if (collectionIds.isEmpty()) {
+            return Map.of();
+        }
+        return documentRepository.countGroupedByCollectionIds(collectionIds).stream()
+                .collect(Collectors.toMap(
+                        row -> ((Number) row[0]).longValue(),
+                        row -> ((Number) row[1]).longValue()));
+    }
+
+    @Transactional(readOnly = true)
+    public long countDocuments(Long collectionId) {
+        return documentRepository.countByCollectionId(collectionId);
+    }
+
+    /**
+     * 查找存活集合；已永久回收（purged）的集合保持原来的 410 语义。
+     */
+    @Transactional(readOnly = true)
+    public Optional<RagCollection> findActiveCollection(Long id) {
+        Optional<RagCollection> active =
+                collectionRepository.findByIdAndDeletedFalse(id);
+        if (active.isEmpty()) {
+            collectionRepository.findById(id)
+                    .filter(collection -> collection.getPurgedAt() != null)
+                    .ifPresent(collection -> {
+                        throw new RagException(
+                                ErrorCode.COLLECTION_ALREADY_RETIRED,
+                                "Collection is permanently retired");
+                    });
+        }
+        return active;
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<RagDocument> findDocument(Long documentId) {
+        return documentRepository.findById(documentId);
+    }
+
+    /**
+     * 集合文档列表：有关键字/类型/状态筛选时走搜索，否则走按集合分页。
+     */
+    @Transactional(readOnly = true)
+    public Optional<Page<RagDocument>> findDocuments(Long collectionId,
+                                                     String keyword,
+                                                     String documentType,
+                                                     String processingStatus,
+                                                     Pageable pageable) {
+        if (findActiveCollection(collectionId).isEmpty()) {
+            return Optional.empty();
+        }
+        boolean hasFilters = (keyword != null && !keyword.isBlank())
+                || (documentType != null && !documentType.isBlank())
+                || (processingStatus != null && !processingStatus.isBlank());
+        return Optional.of(hasFilters
+                ? documentRepository.searchDocumentsByCollectionId(
+                        collectionId,
+                        keyword != null ? keyword.trim() : null,
+                        documentType,
+                        processingStatus,
+                        pageable)
+                : documentRepository.findByCollectionId(collectionId, pageable));
+    }
+
+    /**
+     * 更新集合可变字段并返回更新后的集合与文档数；不存在时返回空。
+     */
+    @Transactional
+    public Optional<UpdateResult> updateCollection(
+            Long id, CollectionUpdateRequest request) {
+        return findActiveCollection(id).map(existing -> {
+            existing.setName(request.getName());
+            existing.setDescription(request.getDescription());
+            existing.setEmbeddingModel(request.getEmbeddingModel());
+            if (request.getDimensions() != null) {
+                existing.setDimensions(request.getDimensions());
+            }
+            if (request.getEnabled() != null) {
+                existing.setEnabled(request.getEnabled());
+            }
+            existing.setMetadata(request.getMetadata());
+
+            RagCollection saved = collectionRepository.save(existing);
+            return new UpdateResult(saved, documentRepository.countByCollectionId(id));
+        });
+    }
+
+    /** 更新集合的结果。 */
+    public record UpdateResult(RagCollection collection, long documentCount) {
     }
 
     @Transactional

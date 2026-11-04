@@ -43,6 +43,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 import org.mockito.ArgumentCaptor;
+import com.springairag.core.service.ChatHistoryService;
 
 /**
  * RagChatController Unit Tests
@@ -66,9 +67,9 @@ class RagChatControllerTest {
         sseProperties = new RagSseProperties();
         auditLogService = mock(AuditLogService.class);
         scopeResolver = mock(CollectionRetrievalScopeResolver.class);
-        controller = new RagChatController(ragChatService, historyRepository, chatExportService, sseProperties, null, auditLogService);
+        controller = new RagChatController(ragChatService, new ChatHistoryService(historyRepository), chatExportService, sseProperties, null, auditLogService);
         productionController = new RagChatController(
-                ragChatService, historyRepository, chatExportService,
+                ragChatService, new ChatHistoryService(historyRepository), chatExportService,
                 sseProperties, scopeResolver, auditLogService);
     }
 

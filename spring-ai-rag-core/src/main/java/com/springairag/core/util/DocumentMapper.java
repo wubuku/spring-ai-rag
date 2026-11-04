@@ -262,11 +262,27 @@ public final class DocumentMapper {
         if (doc == null) {
             throw new IllegalArgumentException("Document must not be null");
         }
+        long chunkCount = embeddingRepository.countFreshChunksByDocumentIdAndProfileId(
+                doc.getId(), embeddingProfileId);
+        return toDetailResponse(
+                doc, collectionNameMap, collectionKeyMap, chunkCount, lifecycle);
+    }
+
+    /**
+     * service 层已取回 chunk 数时的转换入口，避免 controller 再触碰 repository。
+     */
+    public static DocumentDetailResponse toDetailResponse(
+                                                          RagDocument doc,
+                                                          Map<Long, String> collectionNameMap,
+                                                          Map<Long, String> collectionKeyMap,
+                                                          long chunkCount,
+                                                          DocumentLifecycleResponse lifecycle) {
+        if (doc == null) {
+            throw new IllegalArgumentException("Document must not be null");
+        }
         Long collectionId = doc.getCollectionId();
         String collectionName = collectionId != null ? collectionNameMap.get(collectionId) : null;
         String collectionKey = collectionId != null ? collectionKeyMap.get(collectionId) : null;
-        long chunkCount = embeddingRepository.countFreshChunksByDocumentIdAndProfileId(
-                doc.getId(), embeddingProfileId);
 
         return new DocumentDetailResponse(
                 doc.getId(),

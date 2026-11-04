@@ -58,7 +58,7 @@
  */
 export const E2E_MOCK_NOT_IN_CI =
   'CI 的 webui job 通过 `npm run test:e2e:mock` 跑同一套 mock 验收' +
-  '（22 spec / 165 用例 Chromium，三引擎合计 287 次执行，5 轮 `--retries=0` 实测约 5.5 分钟）；本脚本额外固定 ' +
+  '（23 spec / 170 用例 Chromium，三引擎合计 292 次执行，5 轮 `--retries=0` 实测约 5.5 分钟）；本脚本额外固定 ' +
   '`--reporter=line`，只作为本地一条命令复现，避免覆盖 CI 的 github/json 诊断报告。';
 
 /**
@@ -692,7 +692,7 @@ export const GATES = [
     gate: 'scripts/verify-webui-e2e-mock.sh',
     kind: 'entrypoint',
     noSelfTestReason:
-      '它跑的是 Playwright 套件本身（22 spec / 165 用例 Chromium 即其自测），' +
+      '它跑的是 Playwright 套件本身（23 spec / 170 用例 Chromium 即其自测），' +
       '再套一层自测只会把约 5.5 分钟变成 11 分钟。',
     noCiReason: E2E_MOCK_NOT_IN_CI,
   },

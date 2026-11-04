@@ -28,6 +28,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
+import com.springairag.core.service.ChatHistoryService;
 
 /**
  * nativeSnapshotEmitter 残余（Batch 376）：keyed claim 响应头、
@@ -71,7 +72,7 @@ class RagChatControllerNativeSnapshotTest {
         when(chatResponse.getTraceId()).thenReturn("trace-1");
         controller = new RagChatController(
                 mock(com.springairag.core.config.RagChatService.class),
-                mock(com.springairag.core.repository.RagChatHistoryRepository.class),
+                new ChatHistoryService(mock(com.springairag.core.repository.RagChatHistoryRepository.class)),
                 mock(com.springairag.core.service.ChatExportService.class),
                 null,
                 scopeResolver(),

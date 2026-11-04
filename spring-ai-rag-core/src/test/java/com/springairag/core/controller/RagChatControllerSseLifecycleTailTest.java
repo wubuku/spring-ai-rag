@@ -56,6 +56,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
+import com.springairag.core.service.ChatHistoryService;
 
 /**
  * RagChatController SSE 生命周期长尾（Batch 639，JaCoCo 驱动）：
@@ -122,7 +123,7 @@ class RagChatControllerSseLifecycleTailTest {
         sseProperties.setHeartbeatIntervalSeconds(30);
         controller = new RagChatController(
                 ragChatService,
-                mock(RagChatHistoryRepository.class),
+                new ChatHistoryService(mock(RagChatHistoryRepository.class)),
                 mock(ChatExportService.class),
                 sseProperties,
                 scopeResolver,
@@ -351,7 +352,7 @@ class RagChatControllerSseLifecycleTailTest {
         fast.setHeartbeatIntervalSeconds(1);
         RagChatController fastController = new RagChatController(
                 ragChatService,
-                mock(RagChatHistoryRepository.class),
+                new ChatHistoryService(mock(RagChatHistoryRepository.class)),
                 mock(ChatExportService.class),
                 fast,
                 scopeResolver,
@@ -391,7 +392,7 @@ class RagChatControllerSseLifecycleTailTest {
         off.setHeartbeatIntervalSeconds(0);
         RagChatController noHeartbeat = new RagChatController(
                 ragChatService,
-                mock(RagChatHistoryRepository.class),
+                new ChatHistoryService(mock(RagChatHistoryRepository.class)),
                 mock(ChatExportService.class),
                 off,
                 scopeResolver,

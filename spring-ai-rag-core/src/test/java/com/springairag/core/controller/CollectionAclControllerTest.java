@@ -30,16 +30,15 @@ import com.springairag.core.service.CollectionProvisioningService;
 class CollectionAclControllerTest {
 
     private RagCollectionRepository collectionRepository;
+    private RagCollectionService collectionService;
     private RagCollectionController controller;
 
     @BeforeEach
     void setUp() {
         collectionRepository = mock(RagCollectionRepository.class);
-        RagDocumentRepository documentRepository = mock(RagDocumentRepository.class);
+        collectionService = mock(RagCollectionService.class);
         controller = new RagCollectionController(
-                collectionRepository,
-                documentRepository,
-                mock(RagCollectionService.class),
+                collectionService,
                 new CollectionIdentityResolver(collectionRepository),
                 null,
                 mock(DocumentMutationService.class),
@@ -56,16 +55,18 @@ class CollectionAclControllerTest {
     @Test
     void restrictedKeyListsOnlyAllowedCollections() {
         authenticateRestrictedKey(2L, 4L);
-        when(collectionRepository.searchCollectionsByIds(
-                eq(List.of(2L, 4L)), isNull(), isNull(), isNull(), any()))
+        when(collectionService.searchCollections(
+                eq(java.util.Optional.of(java.util.Set.of(2L, 4L))),
+                isNull(), isNull(), isNull(), any()))
                 .thenReturn(new PageImpl<>(List.of()));
 
         controller.list(0, 20, null, null);
 
-        verify(collectionRepository).searchCollectionsByIds(
-                eq(List.of(2L, 4L)), isNull(), isNull(), isNull(), any());
-        verify(collectionRepository, never())
-                .searchCollections(any(), any(), any(), any());
+        verify(collectionService).searchCollections(
+                eq(java.util.Optional.of(java.util.Set.of(2L, 4L))),
+                isNull(), isNull(), isNull(), any());
+        verify(collectionService, never()).searchCollections(
+                eq(java.util.Optional.empty()), any(), any(), any(), any());
     }
 
     @Test
@@ -74,7 +75,8 @@ class CollectionAclControllerTest {
 
         // 越权枚举防护：未授权 collectionId 与不存在 id 都返回 404。
         assertEquals(404, controller.getById(9L).getStatusCode().value());
-        verifyNoInteractions(collectionRepository);
+        verifyNoInteractions(collectionService);
+        verify(collectionRepository, never()).findById(any());
     }
 
     @Test
@@ -117,7 +119,8 @@ class CollectionAclControllerTest {
         // Handing the request over keeps this test asserting the ACL instead of
         // asserting that the ambient holder happened to be populated.
         assertThrows(SecurityException.class, () -> controller.create(body, request));
-        verifyNoInteractions(collectionRepository);
+        verifyNoInteractions(collectionService);
+        verify(collectionRepository, never()).save(any());
     }
 
     private MockHttpServletRequest authenticateRestrictedKey(Long... ids) {

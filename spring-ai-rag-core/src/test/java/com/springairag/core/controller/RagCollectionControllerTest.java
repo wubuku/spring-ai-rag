@@ -90,8 +90,6 @@ class RagCollectionControllerTest {
         // 所以 mock 必须在构造之前就位。
         documentMutationService = mock(DocumentMutationService.class);
         controller = new RagCollectionController(
-                collectionRepository,
-                documentRepository,
                 collectionService,
                 new CollectionIdentityResolver(collectionRepository),
                 auditLogService,
@@ -211,8 +209,8 @@ class RagCollectionControllerTest {
     @Test
     void getById_existingCollection_returnsCollection() {
         RagCollection c = createCollection(1L, "知识库A");
-        when(collectionRepository.findByIdAndDeletedFalse(1L)).thenReturn(Optional.of(c));
-        when(documentRepository.countByCollectionId(1L)).thenReturn(5L);
+        when(collectionService.findActiveCollection(1L)).thenReturn(Optional.of(c));
+        when(collectionService.countDocuments(1L)).thenReturn(5L);
 
         ResponseEntity<Map<String, Object>> response = controller.getById(1L);
 
@@ -223,7 +221,7 @@ class RagCollectionControllerTest {
 
     @Test
     void getById_nonExisting_returns404() {
-        when(collectionRepository.findByIdAndDeletedFalse(999L)).thenReturn(Optional.empty());
+        when(collectionService.findActiveCollection(999L)).thenReturn(Optional.empty());
 
         ResponseEntity<Map<String, Object>> response = controller.getById(999L);
 
@@ -236,8 +234,7 @@ class RagCollectionControllerTest {
         RagCollection c = createCollection(1L, "Deleted Collection");
         c.setDeleted(true);
         c.setDeletedAt(LocalDateTime.now());
-        when(collectionRepository.findById(1L)).thenReturn(Optional.of(c));
-        when(collectionRepository.findByIdAndDeletedFalse(1L)).thenReturn(Optional.empty());
+        when(collectionService.findActiveCollection(1L)).thenReturn(Optional.empty());
 
         ResponseEntity<Map<String, Object>> response = controller.getById(1L);
 
@@ -250,11 +247,11 @@ class RagCollectionControllerTest {
         RagCollection c2 = createCollection(2L, "知识库B");
         Page<RagCollection> page = new PageImpl<>(List.of(c1, c2));
 
-        when(collectionRepository.searchCollections(
-                isNull(), isNull(), isNull(), any(Pageable.class)))
+        when(collectionService.searchCollections(
+                any(), isNull(), isNull(), isNull(), any(Pageable.class)))
                 .thenReturn(page);
-        when(documentRepository.countByCollectionId(1L)).thenReturn(3L);
-        when(documentRepository.countByCollectionId(2L)).thenReturn(7L);
+        when(collectionService.countDocumentsGrouped(any()))
+                .thenReturn(Map.of(1L, 3L, 2L, 7L));
 
         ResponseEntity<Map<String, Object>> response = controller.list(0, 20, null, null);
 
@@ -269,10 +266,11 @@ class RagCollectionControllerTest {
         RagCollection c = createCollection(1L, "RAG 知识库");
         Page<RagCollection> page = new PageImpl<>(List.of(c));
 
-        when(collectionRepository.searchCollections(
-                eq("RAG"), isNull(), isNull(), any(Pageable.class)))
+        when(collectionService.searchCollections(
+                any(), eq("RAG"), isNull(), isNull(), any(Pageable.class)))
                 .thenReturn(page);
-        when(documentRepository.countByCollectionId(1L)).thenReturn(0L);
+        when(collectionService.countDocumentsGrouped(any()))
+                .thenReturn(Map.of(1L, 0L));
 
         ResponseEntity<Map<String, Object>> response = controller.list(0, 20, "RAG", null);
 
@@ -286,25 +284,27 @@ class RagCollectionControllerTest {
         RagCollection collection = createCollection(1L, "Manual");
         collection.setCollectionKey("customer-42:manual:v3");
         Page<RagCollection> page = new PageImpl<>(List.of(collection));
-        when(collectionRepository.searchCollections(
-                isNull(), eq("manual:v3"), isNull(), any(Pageable.class)))
+        when(collectionService.searchCollections(
+                any(), isNull(), eq("manual:v3"), isNull(), any(Pageable.class)))
                 .thenReturn(page);
-        when(documentRepository.countByCollectionId(1L)).thenReturn(0L);
+        when(collectionService.countDocumentsGrouped(any()))
+                .thenReturn(Map.of(1L, 0L));
 
         ResponseEntity<Map<String, Object>> response =
                 controller.list(0, 20, null, "manual:v3", null);
 
         assertEquals(200, response.getStatusCode().value());
-        verify(collectionRepository).searchCollections(
-                isNull(), eq("manual:v3"), isNull(), any(Pageable.class));
+        verify(collectionService).searchCollections(
+                any(), isNull(), eq("manual:v3"), isNull(), any(Pageable.class));
     }
 
     @Test
     void update_existingCollection_updatesFields() {
-        RagCollection existing = createCollection(1L, "旧名称");
-        when(collectionRepository.findByIdAndDeletedFalse(1L)).thenReturn(Optional.of(existing));
-        when(collectionRepository.save(any(RagCollection.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(documentRepository.countByCollectionId(1L)).thenReturn(0L);
+        RagCollection updated = createCollection(1L, "新名称");
+        updated.setDescription("新描述");
+        when(collectionService.updateCollection(eq(1L), any()))
+                .thenReturn(Optional.of(
+                        new com.springairag.core.service.RagCollectionService.UpdateResult(updated, 0L)));
 
         CollectionUpdateRequest req = new CollectionUpdateRequest();
         req.setName("新名称");
@@ -319,7 +319,7 @@ class RagCollectionControllerTest {
 
     @Test
     void update_nonExisting_returns404() {
-        when(collectionRepository.findByIdAndDeletedFalse(999L)).thenReturn(Optional.empty());
+        when(collectionService.updateCollection(eq(999L), any())).thenReturn(Optional.empty());
 
         CollectionUpdateRequest req = new CollectionUpdateRequest();
         req.setName("test");
@@ -379,8 +379,8 @@ class RagCollectionControllerTest {
         // The restored collection's id is used to count documents
         when(collectionService.restoreCollection(1L))
                 .thenReturn(Optional.of(new com.springairag.core.service.RagCollectionService.RestoreResult(restored, 3L)));
-        // The controller also calls documentRepository.countByCollectionId for the response map
-        when(documentRepository.countByCollectionId(1L)).thenReturn(3L);
+        // The controller also asks the service for the document count
+        when(collectionService.countDocuments(1L)).thenReturn(3L);
 
         ResponseEntity<CollectionRestoreResponse> response = controller.restore(1L);
 
@@ -403,7 +403,7 @@ class RagCollectionControllerTest {
 
     @Test
     void listDocuments_collectionExists_returnsPagedDocs() {
-        when(collectionRepository.findByIdAndDeletedFalse(1L))
+        when(collectionService.findActiveCollection(1L))
                 .thenReturn(Optional.of(createCollection(1L, "Collection")));
 
         RagDocument doc = new RagDocument();
@@ -412,7 +412,8 @@ class RagCollectionControllerTest {
         doc.setCreatedAt(LocalDateTime.now());
         Page<RagDocument> page = new PageImpl<>(List.of(doc));
 
-        when(documentRepository.findByCollectionId(eq(1L), any(Pageable.class))).thenReturn(page);
+        when(collectionService.findDocuments(eq(1L), isNull(), isNull(), isNull(), any(Pageable.class)))
+                .thenReturn(Optional.of(page));
 
         ResponseEntity<CollectionDocumentListResponse> response = controller.listDocuments(1L, 0, 20, null, null, null);
 
@@ -423,7 +424,7 @@ class RagCollectionControllerTest {
 
     @Test
     void listDocuments_collectionNotExists_returns404() {
-        when(collectionRepository.findByIdAndDeletedFalse(999L))
+        when(collectionService.findDocuments(eq(999L), any(), any(), any(), any()))
                 .thenReturn(Optional.empty());
 
         ResponseEntity<CollectionDocumentListResponse> response = controller.listDocuments(999L, 0, 20, null, null, null);
@@ -433,11 +434,11 @@ class RagCollectionControllerTest {
 
     @Test
     void addDocument_collectionAndDocExist_linksDocument() {
-        when(collectionRepository.findByIdAndDeletedFalse(1L))
+        when(collectionService.findActiveCollection(1L))
                 .thenReturn(Optional.of(createCollection(1L, "Collection")));
         RagDocument doc = new RagDocument();
         doc.setId(10L);
-        when(documentRepository.findById(10L)).thenReturn(Optional.of(doc));
+        when(collectionService.findDocument(10L)).thenReturn(Optional.of(doc));
 
         // Batch 847：关联集合走变更层的 CAS 更新，revision 是前置条件；
         // controller 不再自己 setCollectionId + save。
@@ -449,7 +450,6 @@ class RagCollectionControllerTest {
         assertEquals(1L, response.getBody().collectionId());
         assertEquals(10L, response.getBody().documentId());
         verify(documentMutationService).updateLocal(eq(10L), any());
-        verify(documentRepository, never()).save(any(RagDocument.class));
     }
 
     @Test
@@ -460,7 +460,7 @@ class RagCollectionControllerTest {
 
     @Test
     void addDocument_collectionNotExists_returns404() {
-        when(collectionRepository.findByIdAndDeletedFalse(999L))
+        when(collectionService.findActiveCollection(999L))
                 .thenReturn(Optional.empty());
 
         ResponseEntity<DocumentAddedResponse> response = controller.addDocument(999L, Map.of("documentId", 10L));
@@ -470,9 +470,9 @@ class RagCollectionControllerTest {
 
     @Test
     void addDocument_documentNotExists_returns404() {
-        when(collectionRepository.findByIdAndDeletedFalse(1L))
+        when(collectionService.findActiveCollection(1L))
                 .thenReturn(Optional.of(createCollection(1L, "Collection")));
-        when(documentRepository.findById(999L)).thenReturn(Optional.empty());
+        when(collectionService.findDocument(999L)).thenReturn(Optional.empty());
 
         ResponseEntity<DocumentAddedResponse> response = controller.addDocument(1L, Map.of("documentId", 999L));
 
@@ -484,11 +484,11 @@ class RagCollectionControllerTest {
     @Test
     void exportCollection_returnsCollectionAndDocuments() {
         RagCollection c = createCollection(1L, "知识库A");
-        when(collectionRepository.findByIdAndDeletedFalse(1L)).thenReturn(Optional.of(c));
+        when(collectionService.findActiveCollection(1L)).thenReturn(Optional.of(c));
 
         exportRows.add(new CollectionExportService.ExportRow(11L,
                 exportSummary("文档1", "test.txt", "内容", null, 100L)));
-        when(documentRepository.countByCollectionId(1L)).thenReturn(1L);
+        when(collectionService.countDocuments(1L)).thenReturn(1L);
 
         ResponseEntity<StreamingResponseBody> response =
                 controller.exportCollection(1L);
@@ -506,13 +506,13 @@ class RagCollectionControllerTest {
     @Test
     void exportCollection_multipleDocuments_exportsAllCorrectly() {
         RagCollection c = createCollection(1L, "多文档知识库");
-        when(collectionRepository.findByIdAndDeletedFalse(1L)).thenReturn(Optional.of(c));
+        when(collectionService.findActiveCollection(1L)).thenReturn(Optional.of(c));
 
         exportRows.add(new CollectionExportService.ExportRow(11L,
                 exportSummary("文档A", "a.txt", "内容A", "PDF", 200L)));
         exportRows.add(new CollectionExportService.ExportRow(12L,
                 exportSummary("文档B", "b.txt", "内容B", null, 150L)));
-        when(documentRepository.countByCollectionId(1L)).thenReturn(2L);
+        when(collectionService.countDocuments(1L)).thenReturn(2L);
 
         ResponseEntity<StreamingResponseBody> response =
                 controller.exportCollection(1L);
@@ -529,7 +529,7 @@ class RagCollectionControllerTest {
 
     @Test
     void exportCollection_deletedCollection_returns404() {
-        when(collectionRepository.findByIdAndDeletedFalse(1L)).thenReturn(Optional.empty());
+        when(collectionService.findActiveCollection(1L)).thenReturn(Optional.empty());
 
         ResponseEntity<StreamingResponseBody> response =
                 controller.exportCollection(1L);
@@ -659,9 +659,9 @@ class RagCollectionControllerTest {
         document.setId(10L);
         document.setCollectionId(1L);
         document.setExternalId("cms:article:10");
-        when(collectionRepository.findByIdAndDeletedFalse(2L))
+        when(collectionService.findActiveCollection(2L))
                 .thenReturn(Optional.of(createCollection(2L, "Target")));
-        when(documentRepository.findById(10L)).thenReturn(Optional.of(document));
+        when(collectionService.findDocument(10L)).thenReturn(Optional.of(document));
 
         assertThrows(com.springairag.core.exception.DocumentRevisionConflictException.class,
                 () -> controller.addDocument(2L, Map.of("documentId", 10L)));
@@ -676,14 +676,12 @@ class RagCollectionControllerTest {
         document.setId(10L);
         document.setCollectionId(3L);
         document.setExternalId("cms:article:10");
-        when(collectionRepository.findByIdAndDeletedFalse(2L))
+        when(collectionService.findActiveCollection(2L))
                 .thenReturn(Optional.of(createCollection(2L, "Target")));
-        when(documentRepository.findById(10L)).thenReturn(Optional.of(document));
+        when(collectionService.findDocument(10L)).thenReturn(Optional.of(document));
 
         assertThrows(SecurityException.class,
                 () -> controller.addDocument(2L, Map.of("documentId", 10L)));
-
-        verify(documentRepository, never()).save(any(RagDocument.class));
     }
 
     @Test
@@ -691,14 +689,12 @@ class RagCollectionControllerTest {
         setRestrictedKey(2L);
         RagDocument document = new RagDocument();
         document.setId(10L);
-        when(collectionRepository.findByIdAndDeletedFalse(2L))
+        when(collectionService.findActiveCollection(2L))
                 .thenReturn(Optional.of(createCollection(2L, "Target")));
-        when(documentRepository.findById(10L)).thenReturn(Optional.of(document));
+        when(collectionService.findDocument(10L)).thenReturn(Optional.of(document));
 
         assertThrows(SecurityException.class,
                 () -> controller.addDocument(2L, Map.of("documentId", 10L)));
-
-        verify(documentRepository, never()).save(any(RagDocument.class));
     }
 
     @Test
@@ -774,14 +770,13 @@ class RagCollectionControllerTest {
 
     @Test
     void retiredCollectionIsRejectedByNumericReadAndContentRoutes() {
-        RagCollection retired = createCollection(7L, "Retired");
-        retired.setDeleted(true);
-        retired.setDeletedAt(LocalDateTime.now());
-        retired.setPurgedAt(LocalDateTime.now());
-        when(collectionRepository.findByIdAndDeletedFalse(7L))
-                .thenReturn(Optional.empty());
-        when(collectionRepository.findById(7L))
-                .thenReturn(Optional.of(retired));
+        com.springairag.core.exception.RagException retiredError =
+                new com.springairag.core.exception.RagException(
+                        com.springairag.api.enums.ErrorCode.COLLECTION_ALREADY_RETIRED,
+                        "Collection is permanently retired");
+        when(collectionService.findActiveCollection(7L)).thenThrow(retiredError);
+        when(collectionService.findDocuments(eq(7L), any(), any(), any(), any()))
+                .thenThrow(retiredError);
 
         for (org.junit.jupiter.api.function.Executable call
                 : List.<org.junit.jupiter.api.function.Executable>of(

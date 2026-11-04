@@ -32,6 +32,7 @@ import static org.mockito.Mockito.*;
 import com.springairag.core.service.ExternalDocumentService;
 import com.springairag.core.service.DocumentDerivationDescriptorProvider;
 import com.springairag.core.service.DocumentRelocationService;
+import com.springairag.core.service.DocumentQueryService;
 
 class DocumentAclControllerTest {
 
@@ -48,9 +49,7 @@ class DocumentAclControllerTest {
                 1L, "test-profile", "test", "test-model", "v1",
                 1024, "COSINE", "PROVIDER_DEFAULT", true));
         controller = new RagDocumentController(
-                documentRepository,
-                mock(RagEmbeddingRepository.class),
-                collectionRepository,
+                new DocumentQueryService(documentRepository, collectionRepository, mock(RagEmbeddingRepository.class)),
                 mock(DocumentEmbedService.class),
                 mock(BatchDocumentService.class),
                 mock(DocumentVersionService.class),

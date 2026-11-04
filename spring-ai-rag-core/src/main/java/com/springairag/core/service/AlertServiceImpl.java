@@ -1,13 +1,17 @@
 package com.springairag.core.service;
 
+import com.springairag.api.dto.SilenceScheduleRequest;
+import com.springairag.api.dto.SloConfigRequest;
 import com.springairag.core.alertdelivery.AlertNotificationOutboxService;
 import com.springairag.core.config.RagAlertProperties;
 import com.springairag.core.entity.RagAlert;
 import com.springairag.core.entity.RagSilenceSchedule;
+import com.springairag.core.entity.RagSloConfig;
 import com.springairag.core.repository.AlertRepository;
 import com.springairag.core.repository.RagRetrievalEvaluationRepository;
 import com.springairag.core.repository.RagRetrievalLogRepository;
 import com.springairag.core.repository.RagSilenceScheduleRepository;
+import com.springairag.core.repository.SloConfigRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -56,6 +60,7 @@ public class AlertServiceImpl implements AlertService {
     private final List<NotificationService> notificationServices;
     private final RagAlertProperties alertProperties;
     private final AlertNotificationOutboxService notificationOutboxService;
+    private SloConfigRepository sloConfigRepository; // optional-claim: 无条件 @Repository；setter 只为不打断既有手工构造测试，运行期总是被 Spring 注入
 
     public AlertServiceImpl(AlertRepository alertRepository,
                            RagRetrievalLogRepository retrievalLogRepository,
@@ -83,6 +88,11 @@ public class AlertServiceImpl implements AlertService {
         this.notificationServices = notificationServices != null ? notificationServices : List.of();
         this.alertProperties = alertProperties;
         this.notificationOutboxService = notificationOutboxService;
+    }
+
+    @Autowired
+    public void setSloConfigRepository(SloConfigRepository sloConfigRepository) {
+        this.sloConfigRepository = sloConfigRepository;
     }
 
     @Override
@@ -277,6 +287,129 @@ public class AlertServiceImpl implements AlertService {
                 yield unknown;
             }
         };
+    }
+
+    // ==================== SLO 配置与静默计划 CRUD ====================
+
+    @Override
+    @Transactional
+    public java.util.Optional<RagSloConfig> createSloConfig(SloConfigRequest request) {
+        if (sloConfigRepository.findBySloName(request.getSloName()).isPresent()) {
+            return java.util.Optional.empty();
+        }
+        RagSloConfig config = new RagSloConfig();
+        config.setSloName(request.getSloName());
+        config.setSloType(request.getSloType());
+        config.setTargetValue(request.getTargetValue());
+        config.setUnit(request.getUnit());
+        config.setDescription(request.getDescription());
+        config.setEnabled(request.getEnabled() != null ? request.getEnabled() : true);
+        config.setMetadata(request.getMetadata());
+        config.setCreatedAt(ZonedDateTime.now());
+        return java.util.Optional.of(sloConfigRepository.save(config));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<RagSloConfig> listSloConfigs() {
+        return sloConfigRepository.findAll();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public java.util.Optional<RagSloConfig> findSloConfig(String sloName) {
+        return sloConfigRepository.findBySloName(sloName);
+    }
+
+    @Override
+    @Transactional
+    public java.util.Optional<RagSloConfig> updateSloConfig(
+            String sloName, SloConfigRequest request) {
+        return sloConfigRepository.findBySloName(sloName)
+                .map(existing -> {
+                    existing.setSloType(request.getSloType());
+                    existing.setTargetValue(request.getTargetValue());
+                    existing.setUnit(request.getUnit());
+                    existing.setDescription(request.getDescription());
+                    if (request.getEnabled() != null) {
+                        existing.setEnabled(request.getEnabled());
+                    }
+                    existing.setMetadata(request.getMetadata());
+                    existing.setUpdatedAt(ZonedDateTime.now());
+                    return sloConfigRepository.save(existing);
+                });
+    }
+
+    @Override
+    @Transactional
+    public boolean deleteSloConfig(String sloName) {
+        if (sloConfigRepository.findBySloName(sloName).isEmpty()) {
+            return false;
+        }
+        sloConfigRepository.deleteBySloName(sloName);
+        return true;
+    }
+
+    @Override
+    @Transactional
+    public java.util.Optional<RagSilenceSchedule> createSilenceSchedule(
+            SilenceScheduleRequest request) {
+        if (silenceScheduleRepository.findByName(request.getName()).isPresent()) {
+            return java.util.Optional.empty();
+        }
+        RagSilenceSchedule schedule = new RagSilenceSchedule();
+        schedule.setName(request.getName());
+        schedule.setAlertKey(request.getAlertKey());
+        schedule.setSilenceType(request.getSilenceType());
+        schedule.setStartTime(request.getStartTime());
+        schedule.setEndTime(request.getEndTime());
+        schedule.setDescription(request.getDescription());
+        schedule.setEnabled(request.getEnabled() != null ? request.getEnabled() : true);
+        schedule.setMetadata(request.getMetadata());
+        schedule.setCreatedAt(ZonedDateTime.now());
+        return java.util.Optional.of(silenceScheduleRepository.save(schedule));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<RagSilenceSchedule> listSilenceSchedules() {
+        return silenceScheduleRepository.findAll();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public java.util.Optional<RagSilenceSchedule> findSilenceSchedule(String name) {
+        return silenceScheduleRepository.findByName(name);
+    }
+
+    @Override
+    @Transactional
+    public java.util.Optional<RagSilenceSchedule> updateSilenceSchedule(
+            String name, SilenceScheduleRequest request) {
+        return silenceScheduleRepository.findByName(name)
+                .map(existing -> {
+                    existing.setAlertKey(request.getAlertKey());
+                    existing.setSilenceType(request.getSilenceType());
+                    existing.setStartTime(request.getStartTime());
+                    existing.setEndTime(request.getEndTime());
+                    existing.setDescription(request.getDescription());
+                    if (request.getEnabled() != null) {
+                        existing.setEnabled(request.getEnabled());
+                    }
+                    existing.setMetadata(request.getMetadata());
+                    existing.setUpdatedAt(ZonedDateTime.now());
+                    return silenceScheduleRepository.save(existing);
+                });
+    }
+
+    @Override
+    @Transactional
+    public boolean deleteSilenceSchedule(String name) {
+        if (silenceScheduleRepository.findByName(name).isEmpty()) {
+            return false;
+        }
+        silenceScheduleRepository.deleteByName(name);
+        return true;
     }
 
     // ==================== Internal methods ====================

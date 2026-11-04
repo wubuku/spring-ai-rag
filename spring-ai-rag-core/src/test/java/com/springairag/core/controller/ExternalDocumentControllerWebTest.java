@@ -5,9 +5,6 @@ import com.springairag.api.dto.ExternalDocumentDeleteResponse;
 import com.springairag.api.dto.ExternalDocumentUpsertResponse;
 import com.springairag.core.config.EmbeddingProfileProvider;
 import com.springairag.core.exception.DocumentRevisionConflictException;
-import com.springairag.core.repository.RagCollectionRepository;
-import com.springairag.core.repository.RagDocumentRepository;
-import com.springairag.core.repository.RagEmbeddingRepository;
 import com.springairag.core.service.BatchDocumentService;
 import com.springairag.core.service.CollectionIdentityResolver;
 import com.springairag.core.service.DocumentEmbedService;
@@ -57,11 +54,7 @@ class ExternalDocumentControllerWebTest {
     @MockBean
     private DocumentRelocationService documentRelocationService;
     @MockBean
-    private RagDocumentRepository documentRepository;
-    @MockBean
-    private RagEmbeddingRepository embeddingRepository;
-    @MockBean
-    private RagCollectionRepository collectionRepository;
+    private com.springairag.core.service.DocumentQueryService documentQueryService;
     @MockBean
     private DocumentEmbedService documentEmbedService;
     @MockBean

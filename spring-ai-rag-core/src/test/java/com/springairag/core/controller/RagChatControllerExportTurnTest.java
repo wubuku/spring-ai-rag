@@ -29,6 +29,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import com.springairag.core.service.ChatHistoryService;
 
 /**
  * 会话导出下载与轮次状态查询端点：JSON/Markdown 的 Content-Type 与
@@ -49,7 +50,7 @@ class RagChatControllerExportTurnTest {
         historyRepository = mock(RagChatHistoryRepository.class);
         chatExportService = mock(ChatExportService.class);
         auditLogService = mock(AuditLogService.class);
-        controller = new RagChatController(ragChatService, historyRepository, chatExportService, new RagSseProperties(), null, auditLogService);
+        controller = new RagChatController(ragChatService, new ChatHistoryService(historyRepository), chatExportService, new RagSseProperties(), null, auditLogService);
     }
 
     private MockHttpServletRequest request() {

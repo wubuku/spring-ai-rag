@@ -28,6 +28,7 @@ import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import com.springairag.core.service.ChatHistoryService;
 
 /**
  * beginChatTrace 的追踪会话装配与韧性（Batch 329）：诊断关闭或
@@ -59,7 +60,7 @@ class RagChatControllerBeginTraceTest {
             RetrievalDiagnosticsService diagnostics) {
         RagChatController controller = new RagChatController(
                 ragChatService,
-                mock(RagChatHistoryRepository.class),
+                new ChatHistoryService(mock(RagChatHistoryRepository.class)),
                 mock(ChatExportService.class),
                 new RagSseProperties(),
                 scopeResolver,

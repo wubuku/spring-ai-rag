@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { lazy, Suspense } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Layout } from './components/Layout/Layout';
 import { ToastProvider } from './components/Toast';
 import { ApiKeyAuthProvider } from './auth/ApiKeyAuthProvider';
@@ -40,6 +41,7 @@ const queryClient = new QueryClient({
  * Simple spinner for minimal JS overhead during initial load.
  */
 function PageFallback() {
+  const { t } = useTranslation();
   return (
     <div
       style={{
@@ -52,7 +54,7 @@ function PageFallback() {
         gap: '0.5rem',
       }}
     >
-      <span>Loading…</span>
+      <span>{t('common.loading')}</span>
     </div>
   );
 }

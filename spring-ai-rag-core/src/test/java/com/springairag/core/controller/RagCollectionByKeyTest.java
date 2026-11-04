@@ -34,6 +34,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import com.springairag.core.security.ProvisioningOwnerResolver;
 import com.springairag.core.service.CollectionProvisioningService;
+import static org.mockito.Mockito.spy;
 
 /**
  * by-key 路由语义：以 collectionKey 解析活跃集合后委托数字路由，
@@ -56,8 +57,6 @@ class RagCollectionByKeyTest {
     @BeforeEach
     void setUp() {
         controller = new RagCollectionController(
-                collectionRepository,
-                documentRepository,
                 collectionService,
                 identityResolver,
                 auditLogService,
@@ -84,7 +83,7 @@ class RagCollectionByKeyTest {
 
     @Test
     void getByKeyReturnsCollectionMapWithDocumentCount() {
-        when(documentRepository.countByCollectionId(7L)).thenReturn(5L);
+        when(collectionService.countDocuments(7L)).thenReturn(5L);
 
         ResponseEntity<Map<String, Object>> response =
                 controller.getByKey(KEY);
@@ -97,11 +96,13 @@ class RagCollectionByKeyTest {
     @Test
     void updateByKeyDelegatesToNumericUpdateWithResolvedId() {
         collection.setDeleted(false);
-        when(documentRepository.countByCollectionId(7L)).thenReturn(1L);
-        when(collectionRepository.findByIdAndDeletedFalse(7L))
-                .thenReturn(Optional.of(collection));
-        when(collectionRepository.save(any(RagCollection.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+        RagCollection renamed = new RagCollection();
+        renamed.setId(7L);
+        renamed.setName("Renamed");
+        renamed.setCollectionKey(KEY);
+        when(collectionService.updateCollection(eq(7L), any()))
+                .thenReturn(Optional.of(
+                        new RagCollectionService.UpdateResult(renamed, 1L)));
         CollectionUpdateRequest request = new CollectionUpdateRequest();
         request.setName("Renamed");
 
@@ -110,7 +111,7 @@ class RagCollectionByKeyTest {
 
         assertEquals(200, response.getStatusCode().value());
         assertEquals("Renamed", response.getBody().get("name"));
-        verify(collectionRepository).save(any(RagCollection.class));
+        verify(collectionService).updateCollection(eq(7L), any());
     }
 
     @Test
@@ -139,7 +140,7 @@ class RagCollectionByKeyTest {
         when(collectionService.restoreCollection(7L))
                 .thenReturn(Optional.of(
                         new RagCollectionService.RestoreResult(restored, 3L)));
-        when(documentRepository.countByCollectionId(7L)).thenReturn(3L);
+        when(collectionService.countDocuments(7L)).thenReturn(3L);
 
         ResponseEntity<com.springairag.api.dto.CollectionRestoreResponse>
                 response = controller.restoreByKey(KEY);
