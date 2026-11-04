@@ -641,6 +641,27 @@ npm run dev
 spring-ai-rag-core/src/main/resources/static/webui/
 ```
 
+### 6.3 静态资源缓存与升级语义
+
+策略由 `WebUiConfig` 固定，`./scripts/verify-webui-cache-e2e.py` 用真实进程 + Chromium
+断言（服务端头、条件请求、旧页面升级、离线与压缩）：
+
+| 资源 | `Cache-Control` | 校验器 |
+|------|-----------------|--------|
+| `/webui/`（`index.html`） | `no-cache, must-revalidate` | 内容 SHA-256 派生的 ETag，`If-None-Match` 命中返回 304 |
+| `/webui/assets/**`（hash 化 JS/CSS/字体/图片） | `public, max-age=31536000, immutable` | 资源 `Last-Modified`，`If-Modified-Since` 命中返回 304 |
+| `/webui/theme-init.js`、`favicon.svg`、`icons.svg` | `no-cache, must-revalidate` | `Last-Modified`，命中返回 304 |
+
+- index 每次导航都向服务端校验，旧标签页不会静默复用旧入口；hash 资源在一年内
+  不再回源，chunk 名随内容变化，新版本不会被旧缓存污染。
+- SPA fallback 只匹配单段路径，并排除上面三个未 hash 的文件名。已删除的 hash
+  chunk 返回 404（`problem+json`），**不会**回退成 `index.html`。
+- 升级语义：旧标签页仍持有旧 index 时，懒加载已删除的 chunk 会得到 404，应用无法
+  挂载，也就是白屏的真实成因。项目**没有** Service Worker、离线回退或版本提示；
+  升级后需要用户刷新页面，index 的 `no-cache` 保证刷新即拿到新入口。
+- 压缩只启用 gzip（`text/html`、`text/javascript`、`text/css`、JSON 等，≥1 KiB），
+  服务端不支持 Brotli，响应带 `Vary: Accept-Encoding`。
+
 ### 输入法（IME）安全交互
 
 所有会搜索、提交、保存、改写 URL、启动 debounce 请求，或在 Enter 时触发其他动作的
@@ -679,9 +700,11 @@ npx vite preview --host 127.0.0.1 --port 4173
 BASE_URL=http://127.0.0.1:4173 npx playwright test
 ```
 
-Mock 套件中的 `e2e/i18n-zh.spec.ts` 用真实浏览器切到 `zh-CN`，验证列表、分页、
-搜索、错误态、聊天 SSE 以及中文日期/数字/相对时间；可复用断言在
-`e2e/support/chinese-ui.ts`（未翻译 key、英文 12 小时制、英文月日顺序、残留英文 UI）。
+Mock 套件中的 `e2e/i18n-zh.spec.ts` 与 `e2e/i18n-en.spec.ts` 用真实浏览器分别切到
+`zh-CN` 与 `en`，对称验证仪表盘、列表分页、搜索空结果、错误态、上传提示、聊天 SSE，
+以及各自的日期/数字/相对时间习惯。可复用断言分别在 `e2e/support/chinese-ui.ts`
+（未翻译 key、英文 12 小时制、英文月日顺序、残留英文 UI）与
+`e2e/support/english-ui.ts`（未翻译 key、中文残留、年-月-日顺序、24 小时制、残留中文 UI）。
 
 ### 真实 LLM
 

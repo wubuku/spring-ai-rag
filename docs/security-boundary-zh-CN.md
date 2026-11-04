@@ -210,7 +210,7 @@ SSE 与错误响应统一下发：
 为什么这样而不是更严：
 
 - **脚本必须外置**：WebUI 唯一的行内主题引导脚本已移到
-  `public/assets/theme-init.js`，因此 `script-src` 不需要 `'unsafe-inline'`；
+  `public/theme-init.js`，因此 `script-src` 不需要 `'unsafe-inline'`；
   新增行内脚本会直接违反策略。
 - **`style-src-attr 'unsafe-inline'` 是唯一让步**：React 会在元素上写 `style`
   属性（Vite 产物与运行期计算样式），完全禁用会破坏布局；样式表本身仍是

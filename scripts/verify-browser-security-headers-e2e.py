@@ -289,7 +289,7 @@ def main() -> int:
         check("/webui/ 返回 200", status == 200, f"status={status}")
         assert_security_headers("/webui/", headers)
         check("/webui/ 页面引用外置主题脚本",
-              "/webui/assets/theme-init.js" in body, body[:200])
+              "/webui/theme-init.js" in body, body[:200])
         check("/webui/ 页面没有内联 script",
               not re.search(r"<script(?![^>]*\bsrc=)[^>]*>", body),
               body[:200])

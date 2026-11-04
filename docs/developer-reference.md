@@ -721,6 +721,32 @@ The release build embeds assets under:
 spring-ai-rag-core/src/main/resources/static/webui/
 ```
 
+### 6.3 Static asset caching and upgrade semantics
+
+`WebUiConfig` fixes the policy, and `./scripts/verify-webui-cache-e2e.py` asserts it
+against a real process and Chromium (server headers, conditional requests, stale-tab
+upgrade, offline, and compression):
+
+| Resource | `Cache-Control` | Validator |
+|----------|-----------------|-----------|
+| `/webui/` (`index.html`) | `no-cache, must-revalidate` | SHA-256 content ETag; `If-None-Match` returns 304 |
+| `/webui/assets/**` (hashed JS/CSS/fonts/images) | `public, max-age=31536000, immutable` | Resource `Last-Modified`; `If-Modified-Since` returns 304 |
+| `/webui/theme-init.js`, `favicon.svg`, `icons.svg` | `no-cache, must-revalidate` | `Last-Modified`; returns 304 on revalidation |
+
+- Every index navigation revalidates with the server, so an old tab never silently
+  reuses a stale entry point. Hashed assets do not revalidate for a year, and their
+  names change with content, so a new release cannot be poisoned by old caches.
+- The SPA fallback matches a single path segment and excludes the three unhashed
+  filenames above. A removed hashed chunk returns 404 (`problem+json`), **never**
+  `index.html`.
+- Upgrade semantics: a tab still holding the old index requests a removed chunk on
+  lazy navigation, gets 404, and fails to mount — the real cause of a white screen.
+  There is **no** Service Worker, offline fallback, or version prompt; users must
+  refresh after an upgrade, and index `no-cache` guarantees a refresh picks up the
+  new entry point.
+- Only gzip is enabled (`text/html`, `text/javascript`, `text/css`, JSON, ≥1 KiB)
+  with `Vary: Accept-Encoding`; the server does not support Brotli.
+
 ### IME-safe input behavior
 
 All WebUI inputs that search, submit, save, update the URL, start a debounced
@@ -767,10 +793,14 @@ npx vite preview --host 127.0.0.1 --port 4173
 BASE_URL=http://127.0.0.1:4173 npx playwright test
 ```
 
-The mock suite's `e2e/i18n-zh.spec.ts` switches a real browser to `zh-CN` and asserts
-lists, pagination, search, error states, chat SSE, and Chinese date/number/relative-time
-formatting. The reusable assertions live in `e2e/support/chinese-ui.ts` (untranslated
-keys, English 12-hour clocks, English month-day order, residual English chrome).
+The mock suite's `e2e/i18n-zh.spec.ts` and `e2e/i18n-en.spec.ts` switch a real browser
+to `zh-CN` and `en` respectively and symmetrically assert the dashboard, list
+pagination, empty search, error states, upload hints, and chat SSE, plus each locale's
+date/number/relative-time conventions. Reusable assertions live in
+`e2e/support/chinese-ui.ts` (untranslated keys, English 12-hour clocks, English
+month-day order, residual English chrome) and `e2e/support/english-ui.ts`
+(untranslated keys, residual Chinese, year-first dates, 24-hour clocks, residual
+Chinese chrome).
 
 ### Real LLM
 

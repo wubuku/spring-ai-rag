@@ -11,6 +11,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.hamcrest.Matchers.containsString;
 
 /**
@@ -100,5 +101,40 @@ class WebUiConfigTest {
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith("text/html"))
                 .andExpect(content().string(containsString("<!doctype html")));
+    }
+
+    @Test
+    void index_hasNoCachePolicyAndEtag() throws Exception {
+        mockMvc.perform(get("/webui/"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", containsString("no-cache")))
+                .andExpect(header().string("Cache-Control", containsString("must-revalidate")))
+                .andExpect(header().exists("ETag"));
+    }
+
+    @Test
+    void index_returns304WhenEtagMatches() throws Exception {
+        String etag = mockMvc.perform(get("/webui/"))
+                .andReturn().getResponse().getHeader("ETag");
+
+        mockMvc.perform(get("/webui/").header("If-None-Match", etag))
+                .andExpect(status().isNotModified())
+                .andExpect(header().string("ETag", etag))
+                .andExpect(header().string("Cache-Control", containsString("no-cache")));
+    }
+
+    @Test
+    void unhashedStaticFile_isNotInterceptedBySpaFallback() throws Exception {
+        mockMvc.perform(get("/webui/theme-init.js"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith("text/javascript"))
+                .andExpect(header().string("Cache-Control", containsString("no-cache")))
+                .andExpect(content().string(containsString("data-theme")));
+    }
+
+    @Test
+    void missingHasAsset_returns404InsteadOfIndexHtml() throws Exception {
+        mockMvc.perform(get("/webui/assets/missing-chunk.js"))
+                .andExpect(status().isNotFound());
     }
 }

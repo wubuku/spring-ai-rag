@@ -219,7 +219,7 @@ the WebUI static assets, `/api/**`, SSE, and error responses:
 Why it is not stricter:
 
 - **Scripts are external**: the only inline theme bootstrap script moved to
-  `public/assets/theme-init.js`, so `script-src` does not need
+  `public/theme-init.js`, so `script-src` does not need
   `'unsafe-inline'`. A new inline script violates the policy immediately.
 - **`style-src-attr 'unsafe-inline'` is the only concession**: React writes
   `style` attributes (both in the Vite output and at runtime); disabling them

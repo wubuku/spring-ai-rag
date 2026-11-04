@@ -14,7 +14,7 @@ import java.io.IOException;
  * <p>策略按本仓实际能力取最严：同源 API/SSE、无 CDN、无第三方脚本，因此
  * {@code script-src} 只允许同源，不保留 {@code 'unsafe-inline'}。WebUI 的主题
  * 预热脚本已从 {@code index.html} 内联块移到
- * {@code /webui/assets/theme-init.js}，所以内联脚本被 CSP 拦截属于预期行为。
+ * {@code /webui/theme-init.js}，所以内联脚本被 CSP 拦截属于预期行为。
  *
  * <p>React 组件使用 {@code style} 属性（design tokens 之外的一次性布局），
  * 这类内联样式由 {@code style-src-attr} 放行，而 {@code <style>} 块仍只允许

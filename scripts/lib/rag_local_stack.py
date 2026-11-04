@@ -208,11 +208,17 @@ class LocalStack:
             "spring-ai-rag-documents", "spring-ai-rag-starter",
         )]
         roots.append(DEMO_DIR / "src")
+        # 静态产物（index.html / hash chunk / svg）不是 .java/.yml，但同样会被
+        # 打进 jar；漏掉它们会让验收跑在上一版前端上。这里把它们纳入新鲜度判断。
+        static_suffixes = {
+            ".java", ".yml", ".yaml", ".properties",
+            ".html", ".js", ".css", ".svg",
+        }
         for root in roots:
             if not root.exists():
                 continue
             for path in root.rglob("*"):
-                if path.suffix in {".java", ".yml", ".yaml", ".properties"} \
+                if path.suffix in static_suffixes \
                         and path.stat().st_mtime > jar_mtime:
                     return True
         return False

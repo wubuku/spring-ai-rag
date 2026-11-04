@@ -7,6 +7,10 @@ server:
   port: 8081
   tomcat:
     max-swallow-size: ${SERVER_MAX_SWALLOW_SIZE:100MB}
+  compression:
+    enabled: true
+    mime-types: application/json,application/xml,text/html,text/plain,text/css,text/javascript
+    min-response-size: 1024
 
 spring:
   application:
